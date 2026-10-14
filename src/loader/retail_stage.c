@@ -5,6 +5,9 @@
 #include "retail_storage.h"
 #include "retail_display.h"
 #include "retail_boot.h"
+#if KUI_RETAIL_OBSERVE
+#include "kui/retail_observe.h"
+#endif
 #ifdef KUI_RETAIL_SD_BENCH
 #include "retail_sd_bench.h"
 #endif
@@ -15,6 +18,76 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include "kui/skies_read_diagnostic.h"
+#if KUI_ARMADA_CE_AUDIO_STAGE
+#if KUI_ARMADA_CE_AUDIO_STAGE != 1 || !defined(KUI_RETAIL_CE) || KUI_RETAIL_TOY_PILOT || KUI_RETAIL_LOW_RESIDENT
+#error Armada audio admission belongs only to its isolated Windows CE stage
+#endif
+#include "kui/armada_ce_audio_admission.h"
+#include "kui/hash.h"
+#endif
+#if KUI_ARMADA_CE_RAM_BIND_STAGE
+#if KUI_ARMADA_CE_RAM_BIND_STAGE != 1 || !KUI_ARMADA_CE_AUDIO_STAGE
+#error Armada RAM bindings require the isolated exact-kernel audio stage
+#endif
+#include "kui/armada_ce_bind_probe.h"
+extern const uint8_t __armada_bind_blob_start[] __asm__("__armada_bind_blob_start");
+extern const uint8_t __armada_bind_blob_end[] __asm__("__armada_bind_blob_end");
+const uint32_t kui_armada_ce_bind_stage_contract
+    __attribute__((used,section(".armada_bind_stage_contract")))=0x43454231u;
+#if KUI_ARMADA_CE_STREAM
+#if KUI_ARMADA_CE_STREAM != 1 || !KUI_ARMADA_CE_EXCERPT_STAGE
+#error Armada stream placement requires the reserved-pool excerpt stage
+#endif
+#define ARMADA_BIND_INSTALL_ADDRESS UINT32_C(0x8cfa7000)
+#define ARMADA_BIND_INSTALL_LIMIT UINT32_C(0x8cfbf000)
+#define ARMADA_STREAM_CONTRACT_MAGIC UINT32_C(0x31444341)
+#define ARMADA_STREAM_CONTRACT_BYTES 32u
+#else
+#define ARMADA_BIND_INSTALL_ADDRESS KUI_ARMADA_CE_BIND_ADDRESS
+#define ARMADA_BIND_INSTALL_LIMIT KUI_ARMADA_CE_BIND_LIMIT
+#endif
+#endif
+#if KUI_ARMADA_CE_EXCERPT_STAGE
+#if KUI_ARMADA_CE_EXCERPT_STAGE != 1 || !KUI_ARMADA_CE_RAM_BIND_STAGE
+#error Armada excerpt reservation requires the isolated admitted binding stage
+#endif
+#include "kui/armada_ce_excerpt_pool.h"
+#if KUI_ARMADA_CE_STREAM
+#include "kui/armada_ce_stream_seed.h"
+#include "kui/armada_ce_stream_transport.h"
+#endif
+extern const uint8_t __retail_stage_binary_end[] __asm__("__retail_stage_binary_end");
+extern const uint8_t __retail_stage_bss_end[] __asm__("__retail_stage_bss_end");
+/* Launcher fills this private, uniquely typed seed from the selected image.
+ * The distributed payload contains no game audio. Keep zeros in the file,
+ * rather than BSS, so source bytes survive the stage's state initialization. */
+#if KUI_ARMADA_CE_STREAM
+static struct kui_armada_ce_stream_seed armada_excerpt_seed
+    __attribute__((used,section(".armada_excerpt_seed"),aligned(4)))={
+    KUI_ARMADA_CE_STREAM_BLANK_WORDS,{0}
+};
+static struct kui_retail_manifest armada_stream_manifest;
+#else
+struct armada_excerpt_seed {
+    uint32_t words[KUI_ARMADA_CE_EXCERPT_SEED_WORDS];
+    uint8_t pcm[KUI_ARMADA_CE_EXCERPT_PCM_BYTES];
+};
+static struct armada_excerpt_seed armada_excerpt_seed
+    __attribute__((used,section(".armada_excerpt_seed"),aligned(4)))={
+    {KUI_ARMADA_CE_EXCERPT_MAGIC,KUI_ARMADA_CE_EXCERPT_VERSION,
+     KUI_ARMADA_CE_EXCERPT_PCM_BYTES,0,KUI_ARMADA_CE_EXCERPT_SECTORS,
+     KUI_ARMADA_CE_EXCERPT_START_LBA}, {0}
+};
+#endif
+const uint32_t kui_armada_ce_excerpt_stage_contract
+    __attribute__((used,section(".armada_excerpt_stage_contract")))=
+#if KUI_ARMADA_CE_STREAM
+    0x43455832u;
+#else
+    0x43455831u;
+#endif
+#endif
 
 extern const uint8_t __retail_resident_scif_blob_start[] __asm__("__retail_resident_scif_blob_start");
 extern const uint8_t __retail_resident_scif_blob_end[] __asm__("__retail_resident_scif_blob_end");
@@ -427,6 +500,128 @@ static const uint16_t ce_entry_code[15][2]={
     {0x8900,0xff00},{0x8802,0xffff},{0x8900,0xff00},
 };
 static uint32_t ce_kernel[KUI_RETAIL_CE_KERNEL_WORDS];
+#if KUI_ARMADA_CE_STREAM
+/* Last initialized bytes of the independently linked high controller.
+ * The package envelope authenticates the source bytes before launch; these
+ * fixed fields admit only this reserved budget and the exact linked BSS.
+ * No caller-supplied destination or arbitrary high-RAM allocation is used. */
+static bool armada_stream_controller_valid(size_t bytes) {
+    if(bytes<ARMADA_STREAM_CONTRACT_BYTES || (bytes&3u) ||
+       bytes>ARMADA_BIND_INSTALL_LIMIT-ARMADA_BIND_INSTALL_ADDRESS) return false;
+    const uint8_t *footer=__armada_bind_blob_start+bytes-ARMADA_STREAM_CONTRACT_BYTES;
+    uint32_t binary_end=ARMADA_BIND_INSTALL_ADDRESS+(uint32_t)bytes;
+    uint32_t bss_begin=word(footer+16u),bss_end=word(footer+20u);
+    return word(footer)==ARMADA_STREAM_CONTRACT_MAGIC && word(footer+4u)==1u &&
+        word(footer+8u)==ARMADA_BIND_INSTALL_ADDRESS && word(footer+12u)==binary_end &&
+        bss_begin==binary_end && !(bss_end&3u) && bss_end>=bss_begin &&
+        bss_end<=ARMADA_BIND_INSTALL_LIMIT && word(footer+24u)==ARMADA_BIND_INSTALL_LIMIT &&
+        word(footer+28u)==ARMADA_BIND_INSTALL_ADDRESS;
+}
+#endif
+#if KUI_ARMADA_CE_EXCERPT_STAGE
+static uint8_t armada_original_romhdr[KUI_ARMADA_CE_EXCERPT_ROMHDR_BYTES];
+#if !KUI_ARMADA_CE_STREAM
+static uint32_t armada_excerpt_crc;
+#endif
+static void relay_stopped(const char *,uint32_t) __attribute__((noreturn));
+/* Original whole-kernel admission has already passed. Reserve main RAM
+ * before NK constructs its page allocator; never substitute a live mapping
+ * or a hard-coded AICA voice. Only ROMHDR's RAMend word changes. */
+static void armada_excerpt_reserve(void) {
+    const uint8_t *header=(const uint8_t *)(uintptr_t)KUI_ARMADA_CE_EXCERPT_ROMHDR;
+    memcpy(armada_original_romhdr,header,sizeof(armada_original_romhdr));
+#if KUI_ARMADA_CE_STREAM
+    struct kui_armada_ce_excerpt_pool_limits limits={
+        (uint32_t)(uintptr_t)__retail_stage_binary_end,
+        (uint32_t)(uintptr_t)__retail_stage_bss_end,true};
+    if(kui_armada_ce_excerpt_pool_limits_valid(&limits)!=KUI_ARMADA_CE_EXCERPT_POOL_OK ||
+       !kui_armada_ce_excerpt_pool_header_valid(header,sizeof(armada_original_romhdr)) ||
+       !kui_armada_ce_stream_seed_header_valid(armada_excerpt_seed.words) ||
+       armada_excerpt_seed.words[KUI_ARMADA_CE_STREAM_MAP_CRC_WORD]!=word(armada_excerpt_seed.wire+16u) ||
+       kui_retail_manifest_decode(armada_excerpt_seed.wire,&armada_stream_manifest)!=KUI_GAME_OK ||
+       !kui_armada_ce_stream_map_valid(&armada_stream_manifest) ||
+       !kui_armada_ce_stream_maps_match(&armada_stream_manifest,&manifest))
+        stopped("ARMADA STREAM SOURCE CONTRACT FAILED",0);
+    memcpy((void *)(uintptr_t)KUI_ARMADA_CE_EXCERPT_POOL_BEGIN,
+        armada_excerpt_seed.words,sizeof(armada_excerpt_seed.words));
+    memset((void *)(uintptr_t)KUI_ARMADA_CE_STREAM_SOURCE_BEGIN,0,KUI_ARMADA_CE_STREAM_SOURCE_BYTES);
+    memcpy((void *)(uintptr_t)KUI_ARMADA_CE_STREAM_MAP_BEGIN,
+        armada_excerpt_seed.wire,sizeof(armada_excerpt_seed.wire));
+    memset((void *)(uintptr_t)KUI_ARMADA_CE_STREAM_WORK_BEGIN,0,
+        KUI_ARMADA_CE_STREAM_GUARD_END-KUI_ARMADA_CE_STREAM_WORK_BEGIN);
+    if(memcmp((const void *)(uintptr_t)KUI_ARMADA_CE_STREAM_MAP_BEGIN,
+        armada_excerpt_seed.wire,sizeof(armada_excerpt_seed.wire)))
+        stopped("ARMADA STREAM MAP COPY CHANGED",0);
+    *(volatile uint32_t *)(uintptr_t)KUI_ARMADA_CE_EXCERPT_RAM_END_WORD=
+        KUI_ARMADA_CE_EXCERPT_POOL_BEGIN;
+    for(unsigned i=0;i<sizeof(armada_original_romhdr);i++) {
+        uint8_t expected=i>=28u && i<32u ?
+            (uint8_t)(KUI_ARMADA_CE_EXCERPT_POOL_BEGIN>>((i-28u)*8u)):armada_original_romhdr[i];
+        if(header[i]!=expected) stopped("ARMADA ROM HEADER PATCH CHANGED",i);
+    }
+    retail_display_line("ARMADA CE FULL CD MUSIC TEST");
+    retail_display_hex("AUDIO MAP CRC32",word(armada_excerpt_seed.wire+16u));
+#else
+    struct kui_armada_ce_excerpt_pool_inputs inputs={
+        armada_original_romhdr,sizeof(armada_original_romhdr),
+        armada_excerpt_seed.words,sizeof(armada_excerpt_seed.words),
+        sizeof(armada_excerpt_seed.pcm),
+        kui_armada_ce_excerpt_crc32(armada_excerpt_seed.pcm,sizeof(armada_excerpt_seed.pcm)),
+        {(uint32_t)(uintptr_t)__retail_stage_binary_end,
+         (uint32_t)(uintptr_t)__retail_stage_bss_end,true},false
+    };
+    struct kui_armada_ce_excerpt_pool_plan plan;
+    enum kui_armada_ce_excerpt_pool_status status=
+        kui_armada_ce_excerpt_pool_prepare(&inputs,&plan);
+    if(status!=KUI_ARMADA_CE_EXCERPT_POOL_OK)
+        stopped("ARMADA EXCERPT RESERVATION REFUSED",(uint32_t)status);
+    memcpy((void *)(uintptr_t)plan.pool_begin,armada_excerpt_seed.words,
+           sizeof(armada_excerpt_seed.words));
+    memcpy((void *)(uintptr_t)plan.pcm_begin,armada_excerpt_seed.pcm,plan.pcm_bytes);
+    armada_excerpt_crc=kui_armada_ce_excerpt_crc32(
+        (const uint8_t *)(uintptr_t)plan.pcm_begin,plan.pcm_bytes);
+    if(armada_excerpt_crc!=plan.pcm_crc32 || memcmp(
+       (const void *)(uintptr_t)plan.pool_begin,armada_excerpt_seed.words,
+       sizeof(armada_excerpt_seed.words)))
+        stopped("ARMADA EXCERPT COPY CHANGED",armada_excerpt_crc);
+    *(volatile uint32_t *)(uintptr_t)plan.patch_address=plan.reserved_ram_end;
+    for(unsigned i=0;i<sizeof(armada_original_romhdr);i++) {
+        uint8_t expected=i>=28u && i<32u ?
+            (uint8_t)(plan.reserved_ram_end>>((i-28u)*8u)):armada_original_romhdr[i];
+        if(header[i]!=expected) stopped("ARMADA ROM HEADER PATCH CHANGED",i);
+    }
+    retail_display_line("ARMADA CE CD MUSIC EXCERPT TEST");
+    retail_display_hex("EXCERPT PCM CRC32",armada_excerpt_crc);
+#endif
+}
+static void armada_excerpt_relay_check(void) {
+    const volatile uint8_t *header=(const volatile uint8_t *)(uintptr_t)
+        (KUI_ARMADA_CE_EXCERPT_ROMHDR|0x20000000u);
+    for(unsigned i=0;i<sizeof(armada_original_romhdr);i++) {
+        uint8_t expected=i>=28u && i<32u ?
+            (uint8_t)(KUI_ARMADA_CE_EXCERPT_POOL_BEGIN>>((i-28u)*8u)):
+            armada_original_romhdr[i];
+        if(header[i]!=expected) relay_stopped("BOOTSTRAP ALTERED CE RAM RESERVATION",i);
+    }
+#if KUI_ARMADA_CE_STREAM
+    if(memcmp((const void *)(uintptr_t)(KUI_ARMADA_CE_EXCERPT_POOL_BEGIN|0x20000000u),
+              armada_excerpt_seed.words,sizeof(armada_excerpt_seed.words)) ||
+       memcmp((const void *)(uintptr_t)(KUI_ARMADA_CE_STREAM_MAP_BEGIN|0x20000000u),
+              armada_excerpt_seed.wire,sizeof(armada_excerpt_seed.wire)))
+        relay_stopped("BOOTSTRAP ALTERED STREAM SOURCE MAP",0);
+    const volatile uint32_t *source=(const volatile uint32_t *)(uintptr_t)
+        (KUI_ARMADA_CE_STREAM_SOURCE_BEGIN|0x20000000u);
+    for(unsigned i=0;i<KUI_ARMADA_CE_STREAM_SOURCE_BYTES/4u;i++)
+        if(source[i]) relay_stopped("BOOTSTRAP ALTERED AUDIO SOURCE BANK",i);
+#else
+    const uint8_t *pcm=(const uint8_t *)(uintptr_t)(KUI_ARMADA_CE_EXCERPT_PCM_BEGIN|0x20000000u);
+    if(memcmp((const void *)(uintptr_t)(KUI_ARMADA_CE_EXCERPT_POOL_BEGIN|0x20000000u),
+              armada_excerpt_seed.words,sizeof(armada_excerpt_seed.words)) ||
+       kui_armada_ce_excerpt_crc32(pcm,KUI_ARMADA_CE_EXCERPT_PCM_BYTES)!=armada_excerpt_crc)
+        relay_stopped("BOOTSTRAP ALTERED EXCERPT PCM",armada_excerpt_crc);
+#endif
+}
+#endif
 static uint32_t ce_literal(uint32_t at) {
     uint16_t code=*(const uint16_t *)(uintptr_t)at;
     return word((const uint8_t *)(uintptr_t)(((at&~3u)+4u)+(code&0xffu)*4u));
@@ -479,6 +674,17 @@ static uint32_t ce_load(const uint8_t *ip) {
     memcpy(prefix,ce_prefix,sizeof(ce_prefix));
     uint32_t prefix_crc=kui_retail_crc32(0,prefix,plan.prefix.bytes);
     uint32_t body_crc=kui_retail_crc32(0,body,plan.body.bytes);
+#if KUI_ARMADA_CE_AUDIO_STAGE
+    struct kui_sha256 sha;
+    uint8_t digest[32];
+    kui_sha256_init(&sha);
+    kui_sha256_update(&sha,ce_prefix,sizeof(ce_prefix));
+    kui_sha256_update(&sha,body,plan.body.bytes);
+    kui_sha256_digest(&sha,digest);
+    if(!kui_armada_ce_audio_admit(&manifest,kui_retail_crc32(0,ip,KUI_RETAIL_IP_BYTES),
+            prefix_crc,body_crc,digest))
+        stopped("ARMADA AUDIO TEST PROFILE MISMATCH",body_crc);
+#endif
     if(prefix_crc!=kui_retail_crc32(0,ce_prefix,sizeof(ce_prefix)))
         stopped("CE PREFIX CHANGED IN PLACE",prefix_crc);
     /* A CE ROM image normally carries "ECEC" and its ROM header's address at
@@ -494,6 +700,17 @@ static uint32_t ce_load(const uint8_t *ip) {
     uint32_t placed[4]={plan.body.address,plan.body.bytes,plan.body.sector_count,plan.entry_address};
     retail_display_restore(&display);
     retail_display_line(manifest.title);
+#if KUI_ARMADA_CE_AUDIO_STAGE
+#if KUI_ARMADA_CE_EXCERPT_STAGE
+    retail_display_line("ARMADA CE CD MUSIC EXCERPT TEST");
+#else
+#if KUI_ARMADA_CE_RAM_BIND_STAGE
+    retail_display_line("ARMADA SOUND RAM BINDING OBSERVER");
+#else
+    retail_display_line("ARMADA AUDIO REQUEST OBSERVER");
+#endif
+#endif
+#endif
     retail_display_hex("PREFIX CRC32",prefix_crc);
     retail_display_hex("BODY CRC32",body_crc);
     retail_display_hex("PREFIX AT",plan.prefix.address);
@@ -503,6 +720,12 @@ static uint32_t ce_load(const uint8_t *ip) {
     else retail_display_line("NO CE ROM HEADER AT BODY OFFSET 40");
     /* Where the reader raises CE's disc interrupts for stream reads. */
     ce_find_kernel(plan.body.address,plan.body.bytes);
+#if KUI_ARMADA_CE_AUDIO_STAGE
+    static const uint32_t armada_kernel[4]={
+        0x8c145b40u,0x8c145aa8u,0x8c145884u,0x8c145c04u};
+    if(memcmp(ce_kernel,armada_kernel,sizeof(armada_kernel)))
+        stopped("ARMADA AUDIO CE IRQ BINDING MISMATCH",ce_kernel[3]);
+#endif
     if(ce_kernel[0])
         retail_display_values("CE PEND  CE RING  RESCHED  ISR TABLE",ce_kernel,4);
     else retail_display_line("CE KERNEL INTERRUPTS NOT FOUND");
@@ -520,6 +743,11 @@ static uint32_t ce_load(const uint8_t *ip) {
         stopped("CE ENTRY IS NOT THE BODY START",plan.entry_address);
     if(manifest.storage_transport!=KUI_STORAGE_SCI)
         stopped("THE CE BOOT TEST NEEDS SCI MICROSD",manifest.storage_transport);
+#if KUI_ARMADA_CE_EXCERPT_STAGE
+    if(manifest.reader==KUI_RETAIL_READER_STANDARD)
+        stopped("ARMADA EXCERPT NEEDS BACKGROUND READER",manifest.reader);
+    armada_excerpt_reserve();
+#endif
     return plan.body.bytes;
 }
 #endif
@@ -528,7 +756,7 @@ void kui_retail_boot_returned(void) {
     stopped("OWNER BOOTSTRAP RETURNED",KUI_RETAIL_BOOT2_ADDRESS);
 }
 
-#if KUI_RETAIL_LOW_RESIDENT && !defined(KUI_RETAIL_CE)
+#if (KUI_RETAIL_LOW_RESIDENT && !defined(KUI_RETAIL_CE)) || (KUI_ARMADA_CE_RAM_BIND_STAGE && !KUI_ARMADA_CE_STREAM)
 /* DreamShell's pinned native layout places its loader at RAM+4000 and loads
  * firmware/syscalls only below it. K-UI retains font/flash/sysinfo and the
  * original system entry, so reject an unsupported target before the first
@@ -553,7 +781,11 @@ static void low_firmware_preflight(uint32_t firmware) {
             stopped("LOW RESIDENT FIRMWARE VECTOR UNSUPPORTED",entry);
         }
     }
+#if KUI_ARMADA_CE_RAM_BIND_STAGE
+    retail_display_line("CE LOW WINDOW VECTORS CHECKED");
+#else
     retail_display_line("NATIVE LOW RESIDENT");
+#endif
 }
 #endif
 
@@ -567,6 +799,27 @@ static void install_resident(void) {
         stopped("UNSUPPORTED FIRMWARE GD VECTOR",firmware);
 #if KUI_RETAIL_LOW_RESIDENT && !defined(KUI_RETAIL_CE)
     low_firmware_preflight(firmware);
+#endif
+#if KUI_ARMADA_CE_RAM_BIND_STAGE
+    /* Immutable exact-kernel admission has passed. The low excerpt retains
+     * its BIOS-vector preflight; the stream owns a typed high-pool budget.
+     * Only this candidate installs the extra controller. */
+#if !KUI_ARMADA_CE_STREAM
+    low_firmware_preflight(firmware);
+#endif
+    size_t bind_bytes=(size_t)(__armada_bind_blob_end-__armada_bind_blob_start);
+    if(!bind_bytes || bind_bytes>ARMADA_BIND_INSTALL_LIMIT-ARMADA_BIND_INSTALL_ADDRESS)
+        stopped("ARMADA BINDING PROBE BOUNDS FAILED",(uint32_t)bind_bytes);
+#if KUI_ARMADA_CE_STREAM
+    if(!armada_stream_controller_valid(bind_bytes))
+        stopped("ARMADA STREAM CODE CONTRACT FAILED",(uint32_t)bind_bytes);
+#endif
+    /* Clear only this fixed controller budget, including its linked BSS and
+     * zero guard tail. Stream code lies after the separately owned PCM ring. */
+    memset((void *)(uintptr_t)ARMADA_BIND_INSTALL_ADDRESS,0,
+           ARMADA_BIND_INSTALL_LIMIT-ARMADA_BIND_INSTALL_ADDRESS);
+    memcpy((void *)(uintptr_t)ARMADA_BIND_INSTALL_ADDRESS,
+           __armada_bind_blob_start,bind_bytes);
 #endif
     memcpy((void *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS,
            resident_blob,bytes);
@@ -585,6 +838,15 @@ void kui_retail_stage_main(const uint8_t *wire) {
     memcpy(wire_copy,wire,sizeof(wire_copy));
     enum kui_game_result result=kui_retail_manifest_decode(wire_copy,&manifest);
     if(result!=KUI_GAME_OK) stopped("INVALID RETAIL MAP",(uint32_t)result);
+#if KUI_RETAIL_TOY_PILOT
+    /* The separate Toy translation unit supplies this check. Unsupported
+     * launcher options must stop before resident selection or storage I/O. */
+    toy_launch_options_check();
+#endif
+#if KUI_RETAIL_OBSERVE
+    if(!kui_retail_observe_admit(&manifest)) stopped("14 TOY SCI MAP REFUSED",manifest.gdi_crc32);
+    retail_display_line("14 TOY RESOURCE OBSERVATION / NO CDDA");
+#endif
     select_resident();
     if(manifest.boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES ||
        manifest.boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES ||
@@ -625,6 +887,9 @@ void kui_retail_stage_main(const uint8_t *wire) {
     read_sectors(manifest.session_lba,16,KUI_GAME_SECTOR_MODE1,ip);
     uint32_t crc=kui_retail_crc32(0,ip,KUI_RETAIL_IP_BYTES);
     if(crc!=manifest.ip_crc32) stopped("IP CHECKSUM CHANGED",crc);
+#if KUI_RETAIL_OBSERVE
+    if(!kui_retail_observe_native_ip(ip)) stopped("14 NATIVE GD IP REFUSED",crc);
+#endif
     /* Raw maps retain the fast header/address validation. Cooked data has
      * discarded those headers, so preparation fingerprints the executable
      * and the stage checks its exact file bytes after this mapped read. */
@@ -1435,6 +1700,32 @@ void kui_retail_startup_trace_checkpoint(const uint32_t *frame,
     startup_trace.passed|=1u<<point;
 }
 #endif
+#if KUI_RETAIL_SKIES_READ_DIAGNOSTIC
+/* The relay has already verified the complete original executable CRC and
+ * every resident byte. This diagnostic changes one fatal-call literal only
+ * for the exact owner/reader. Cache is disabled here; the assembly relay
+ * invalidates it before restoring the owner's original cache mode. */
+static void skies_read_arm(void) {
+    if(exec_bytes!=5460080u || manifest.ip_crc32!=0x6f55b5c0u ||
+       boot_crc!=0x91008b03u || manifest.storage_transport!=KUI_STORAGE_SCI ||
+       manifest.reader!=KUI_RETAIL_READER_STANDARD || resident_bytes<40u ||
+       resident_limit<KUI_RETAIL_RESIDENT_ADDRESS+46u ||
+       resident_bytes>resident_limit-KUI_RETAIL_RESIDENT_ADDRESS) return;
+    const uint32_t *entry=(const uint32_t *)(uintptr_t)(KUI_RETAIL_RESIDENT_ADDRESS+KUI_SKIES_READ_ENTRY_SLOT);
+    uint32_t target=*entry;
+    if((target&3u) || target<KUI_RETAIL_RESIDENT_ADDRESS+40u ||
+       target-KUI_RETAIL_RESIDENT_ADDRESS>resident_bytes-6u || target>resident_limit-6u) return;
+    const uint16_t *capture=(const uint16_t *)(uintptr_t)target;
+    if(capture[0]!=0x6403u || capture[1]!=0x052au || capture[2]!=0x66f3u) return;
+    const uint16_t *first=(const uint16_t *)(uintptr_t)0x8c0237a0u;
+    const uint16_t *second=(const uint16_t *)(uintptr_t)0x8c0237e0u;
+    uint32_t *literal=(uint32_t *)(uintptr_t)0x8c0237f4u;
+    if(first[0]!=0xd114u || first[1]!=0x410bu || first[2]!=0x0009u ||
+       second[0]!=0xd204u || second[1]!=0x420bu || second[2]!=0x0009u ||
+       *literal!=0x8c028db8u) return;
+    *literal=target;
+}
+#endif
 void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #ifdef KUI_RETAIL_CE
     retail_display_restore(&display);
@@ -1482,6 +1773,48 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
         /* Detail: the offset of the first changed byte. */
         if(resident[i]!=resident_blob[i]) relay_stopped("BOOTSTRAP ALTERED RESIDENT",(uint32_t)i);
     }
+#if KUI_ARMADA_CE_RAM_BIND_STAGE
+    /* Bootstrap 2 has completed; caches are clean and disabled here. Prove
+     * both the extra code and cleared state survived before the first CE
+     * call can enter it. A changed controller budget stops without repair. */
+    const volatile uint8_t *bind=(const volatile uint8_t *)(uintptr_t)
+        (ARMADA_BIND_INSTALL_ADDRESS|0x20000000u);
+    size_t bind_bytes=(size_t)(__armada_bind_blob_end-__armada_bind_blob_start);
+#if KUI_ARMADA_CE_STREAM
+    if(!armada_stream_controller_valid(bind_bytes))
+        relay_stopped("BOOTSTRAP ALTERED STREAM CONTRACT",(uint32_t)bind_bytes);
+#endif
+    for(size_t i=0;i<bind_bytes;i++)
+        if(bind[i]!=__armada_bind_blob_start[i])
+            relay_stopped("BOOTSTRAP ALTERED ARMADA BIND CODE",(uint32_t)i);
+    for(size_t i=bind_bytes;i<ARMADA_BIND_INSTALL_LIMIT-ARMADA_BIND_INSTALL_ADDRESS;i++)
+        if(bind[i]) relay_stopped("BOOTSTRAP ALTERED ARMADA BIND RAM",(uint32_t)i);
+#endif
+#if KUI_ARMADA_CE_EXCERPT_STAGE
+    armada_excerpt_relay_check();
+#endif
+#if KUI_ARMADA_CE_STREAM
+    /* Every bootstrap, immutable controller, zero state and source-pool
+     * check is complete. Only now permit authored transport/mailbox writes.
+     * The exact resident blob supplies this STREAM-only entry pointer; its
+     * whole image was compared above, including this word. */
+    const size_t bus_slot=KUI_RETAIL_CE_STREAM_BUS-KUI_RETAIL_RESIDENT_ADDRESS;
+    if(bytes<bus_slot+sizeof(uint32_t))
+        relay_stopped("STREAM BUS ENTRY MISSING",(uint32_t)bytes);
+    uint32_t bus=word(resident_blob+bus_slot);
+    if((bus&3u) || bus<KUI_RETAIL_RESIDENT_ADDRESS ||
+       bus>KUI_RETAIL_RESIDENT_ADDRESS+bytes-sizeof(struct kui_armada_ce_stream_bus) ||
+       word(resident+bus_slot)!=bus)
+        relay_stopped("STREAM BUS ENTRY INVALID",bus);
+    uintptr_t (*attach)(uint32_t,uint32_t,int32_t,uint32_t)=
+        (uintptr_t (*)(uint32_t,uint32_t,int32_t,uint32_t))
+        (uintptr_t)ARMADA_BIND_INSTALL_ADDRESS;
+    if(attach(KUI_ARMADA_CE_STREAM_BUS_EVENT,KUI_ARMADA_CE_STREAM_BUS_ATTACH,0,bus)!=1u)
+        relay_stopped("STREAM BUS ATTACH FAILED",bus);
+#endif
+#if KUI_RETAIL_SKIES_READ_DIAGNOSTIC
+    skies_read_arm();
+#endif
 #if defined(KUI_RETAIL_STARTUP_TRACE) && KUI_RETAIL_STARTUP_TRACE && !defined(KUI_RETAIL_CE)
     /* Intentional RAM-only patches follow the unmodified owner CRC check. */
     startup_trace_arm();

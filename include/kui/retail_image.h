@@ -12,10 +12,24 @@
 /* A map holds up to 99 tracks, GD-ROM's limit, and its storage is a table of
  * 12-byte slots shared by tracks and extents: track i (number i + 1) in slot
  * i, then every track's extents in track order. A disc with many tracks and
- * a card with many fragments both fit, within the readers' unchanged memory
- * (the 16 tracks and 128 extents they used to hold). */
+ * a card with many fragments both fit. Ordinary readers retain their
+ * existing 160-slot allocation; the leased MDK2 map uses the wire index limit. */
 #define KUI_RETAIL_IMAGE_TRACKS 99u
 #define KUI_RETAIL_IMAGE_SLOTS 160u
+/* Extended launch preparation/MDK2 keeps the same 4096-byte wire form but
+ * uses its full 8-bit slot index range. Reader admission still selects the
+ * ordinary 160-slot, Toy 64-slot, or owned MDK2 map capacity separately. */
+#ifndef KUI_RETAIL_EXTENDED_MAP
+#define KUI_RETAIL_EXTENDED_MAP 0
+#endif
+#if KUI_RETAIL_EXTENDED_MAP != 0 && KUI_RETAIL_EXTENDED_MAP != 1
+#error "KUI_RETAIL_EXTENDED_MAP must be zero or one"
+#endif
+#if KUI_RETAIL_EXTENDED_MAP || KUI_RETAIL_MDK2_CDDA
+#define KUI_RETAIL_WIRE_SLOTS 256u
+#else
+#define KUI_RETAIL_WIRE_SLOTS KUI_RETAIL_IMAGE_SLOTS
+#endif
 /* Which low resident the stage installs (wire offset 264). The background
  * reader streams SCI microSD from its own interrupt and holds at most
  * KUI_RETAIL_ASYNC_SLOTS slots; validation enforces both. Its EXEC and
@@ -30,7 +44,7 @@ enum kui_retail_reader { KUI_RETAIL_READER_STANDARD, KUI_RETAIL_READER_ASYNC,
  * using no more slots than that is valid. Such a build has no wire
  * encode/decode/validate. */
 #ifndef KUI_RETAIL_MANIFEST_SLOTS
-#define KUI_RETAIL_MANIFEST_SLOTS KUI_RETAIL_IMAGE_SLOTS
+#define KUI_RETAIL_MANIFEST_SLOTS KUI_RETAIL_WIRE_SLOTS
 #endif
 #define KUI_RETAIL_IMAGE_MAX_SECTORS 64u
 #define KUI_RETAIL_IMAGE_BOOT_MAX (12u * 1024u * 1024u)

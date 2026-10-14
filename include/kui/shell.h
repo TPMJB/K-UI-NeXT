@@ -10,6 +10,7 @@
 #include "kui/clock.h"
 #include "kui/cd_audio.h"
 #include "kui/games.h"
+#include "kui/game_launch_settings.h"
 #include "kui/games_covers.h"
 #include "kui/files.h"
 #include "kui/ftp.h"
@@ -47,7 +48,17 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_FILES, KUI_SHELL_FILES_ACTIONS, KUI_SHELL_FILES_PICK,
     KUI_SHELL_FILES_CONFIRM, KUI_SHELL_FILES_INFO, KUI_SHELL_FILES_VIEW,
     KUI_SHELL_FTP, KUI_SHELL_STORAGE_TESTS, KUI_SHELL_STORAGE_TEST_HISTORY,
-    KUI_SHELL_SCI_ASYNC_PROBE, KUI_SHELL_GAMES_VARIANTS, KUI_SHELL_WIFI };
+    KUI_SHELL_SCI_ASYNC_PROBE, KUI_SHELL_GAMES_VARIANTS, KUI_SHELL_WIFI,
+    KUI_SHELL_GAMES_LAUNCH_OPTIONS, KUI_SHELL_GAMES_EXTRA_OPTIONS,
+    KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO };
+enum kui_shell_game_option {
+    KUI_SHELL_GAME_OPTION_READER, KUI_SHELL_GAME_OPTION_CDDA,
+    KUI_SHELL_GAME_OPTION_ADVANCED, KUI_SHELL_GAME_OPTION_COUNT
+};
+enum kui_shell_game_tool {
+    KUI_SHELL_GAME_TOOL_ENCODING, KUI_SHELL_GAME_TOOL_SPEED,
+    KUI_SHELL_GAME_TOOL_INFO, KUI_SHELL_GAME_TOOL_TESTS, KUI_SHELL_GAME_TOOL_COUNT
+};
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
     KUI_SHELL_DISC_PROBE, KUI_SHELL_STORAGE_PROBE, KUI_SHELL_SAVE_LOG,
@@ -76,7 +87,7 @@ enum kui_shell_action {
     KUI_SHELL_TEST_BASELINE, KUI_SHELL_SCI_ASYNC_RUN, KUI_SHELL_SCI_ASYNC_STRESS,
     KUI_SHELL_SCI_ASYNC_SCREEN, KUI_SHELL_SCI_ASYNC_SPEED,
     KUI_SHELL_WIFI_REFRESH, KUI_SHELL_WIFI_JOIN, KUI_SHELL_WIFI_FORGET,
-    KUI_SHELL_WIFI_BAND
+    KUI_SHELL_WIFI_BAND, KUI_SHELL_SAVE_GAME_LAUNCH
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -122,10 +133,17 @@ struct kui_shell {
     /* Explicit refresh rebuilds worker-owned directory discovery; entering,
      * page and view changes reuse its read-only snapshot. */
     bool games_refresh;
-    /* The launch's reader (enum kui_retail_reader): A launches with the
-     * standard one, X with the background SCI reader under test. */
+    /* Reader enum plus explicit launch options from games_retail.h.
+     * Each accepted launch replaces the preceding choice. */
     unsigned games_retail_reader;
-    bool games_retail_scrambled; /* Native CD boot encoding chosen at confirmation. */
+    /* Saved choices belong to the exact inspected image. The dispatched
+     * flags above are built afresh when the owner explicitly launches. */
+    unsigned games_launch_reader, games_launch_selected;
+    unsigned games_launch_encoding, game_tools_selected, game_tests_selected;
+    bool games_tests_from_options;
+    char games_launch_notice[128];
+    bool games_launch_cdda, games_retail_scrambled;
+    bool games_probe_from_options; /* Independent probe's return destination. */
     struct kui_games_page games_listing;
     struct kui_games_detail games_detail;
     /* Destination is committed only by a successful worker load/save. Browsing
@@ -235,6 +253,17 @@ const char *kui_shell_games_variant_label(const struct kui_shell *shell);
 /* Exact initial test profile only; preparation revalidates files and metadata. */
 bool kui_shell_games_retail_ready(const struct kui_shell *shell);
 bool kui_shell_games_encoding_ready(const struct kui_shell *shell);
+/* Represented playable audio allows an opt-in; the backend still admits only
+ * its exact supported title and GDI profiles. */
+bool kui_shell_games_cdda_ready(const struct kui_shell *shell);
+bool kui_shell_games_launch_ready(const struct kui_shell *shell);
+bool kui_shell_game_launch_settings(const struct kui_shell *shell,
+                                    struct kui_game_launch_settings *out);
+void kui_shell_set_game_launch_settings(struct kui_shell *shell,const char *path,
+                                       const struct kui_game_launch_settings *settings,bool loaded);
+void kui_shell_game_launch_saved(struct kui_shell *shell,const char *path,bool ok);
+bool kui_shell_games_option_ready(const struct kui_shell *shell, unsigned row);
+const char *kui_shell_games_reader_label(const struct kui_shell *shell);
 /* A Windows CE image the CE boot test can take: it loads the CE kernel,
  * starts it, and stops at the first disc request K-UI cannot serve. */
 bool kui_shell_games_ce_probe_ready(const struct kui_shell *shell);

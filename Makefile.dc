@@ -33,6 +33,7 @@ RUNTIME_OBJECTS += build/dc/src/core/storage_test_model.o build/dc/src/core/stor
 RUNTIME_OBJECTS += build/dc/src/dreamcast/capture.o
 RUNTIME_OBJECTS += build/dc/src/dreamcast/memory.o
 RUNTIME_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recovery_scan.o build/dc/src/core/recovery_sector.o
+RUNTIME_OBJECTS += build/dc/src/core/game_launch_settings.o
 RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadata.o
 RUNTIME_OBJECTS += build/dc/src/core/game_cover.o build/dc/src/core/pvr_texture.o
 RUNTIME_OBJECTS += build/dc/src/core/files_path.o
@@ -55,6 +56,7 @@ all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf bu
 include $(KOS_BASE)/Makefile.rules
 
 CPPFLAGS += -Iinclude -Isrc/dreamcast -Isrc/loader -I.deps/fatfs/source -Ifirmware/kui-wifi/components/kwlink/include -DKUI_BUILD_ID='"$(BUILD_ID)"'
+CPPFLAGS += -DKUI_RETAIL_EXTENDED_MAP=1
 CPPFLAGS += -Ithird_party/miniz -Ithird_party/minilzo -DMINIZ_NO_ARCHIVE_APIS \
     -DMINIZ_NO_STDIO -DMINIZ_NO_TIME -DMINIZ_NO_ZLIB_APIS -DMINIZ_NO_MALLOC -DLZO_CFG_NO_UNALIGNED=1
 # Shared freestanding buses also serve the CD bootstrap/runtime. Keep the
@@ -176,6 +178,34 @@ KUI_RETAIL_SONIC_STACK_TEST ?= 0
 # Hardware-confirmed native placement is the normal build. Historical owner
 # trace/stack diagnostics use their original layout unless explicitly overridden.
 KUI_RETAIL_LOW_RESIDENT ?= $(if $(filter-out 0,$(KUI_RETAIL_STARTUP_TRACE) $(KUI_RETAIL_SONIC_STACK_TEST)),0,1)
+KUI_GENERAL_SCI_RESUME_FIX ?= 0
+KUI_CE_SCI_RESUME_FIX ?= 0
+KUI_RETAIL_RETURN_TRACE ?= 0
+KUI_RETAIL_NATIVE_DISC_CHECK ?= 0
+KUI_RETAIL_NATIVE_DRIVE_STATE ?= 0
+ifneq ($(KUI_RETAIL_NATIVE_DRIVE_STATE),0)
+ifneq ($(KUI_RETAIL_NATIVE_DRIVE_STATE),1)
+$(error KUI_RETAIL_NATIVE_DRIVE_STATE must be 0 or 1)
+endif
+endif
+ifneq ($(KUI_RETAIL_NATIVE_DISC_CHECK),0)
+ifneq ($(KUI_RETAIL_NATIVE_DISC_CHECK),1)
+$(error KUI_RETAIL_NATIVE_DISC_CHECK must be 0 or 1)
+endif
+endif
+ifneq ($(filter $(KUI_RETAIL_RETURN_TRACE),0 1 2 3),$(KUI_RETAIL_RETURN_TRACE))
+$(error KUI_RETAIL_RETURN_TRACE must be 0, 1, 2 or 3)
+endif
+ifneq ($(KUI_GENERAL_SCI_RESUME_FIX),0)
+ifneq ($(KUI_GENERAL_SCI_RESUME_FIX),1)
+$(error KUI_GENERAL_SCI_RESUME_FIX must be 0 or 1)
+endif
+endif
+ifneq ($(KUI_CE_SCI_RESUME_FIX),0)
+ifneq ($(KUI_CE_SCI_RESUME_FIX),1)
+$(error KUI_CE_SCI_RESUME_FIX must be 0 or 1)
+endif
+endif
 RETAIL_FLAGS := -std=c11 -Os -g -Wall -Wextra -Werror $(RETAIL_CPU) -DKUI_RETAIL_FAST_IO=1 -ffreestanding \
     -DKUI_RETAIL_STARTUP_TRACE=$(KUI_RETAIL_STARTUP_TRACE) \
     -DKUI_RETAIL_SONIC_STACK_TEST=$(KUI_RETAIL_SONIC_STACK_TEST) \
@@ -191,17 +221,22 @@ RETAIL_LEGACY_FLAGS := $(filter-out -DKUI_RETAIL_LOW_RESIDENT=%,$(RETAIL_FLAGS))
 force-retail-layout:
 build/retail/layout-config: force-retail-layout
 	@mkdir -p $(@D)
-	@printf '%s\n' 'LOW=$(KUI_RETAIL_LOW_RESIDENT) TRACE=$(KUI_RETAIL_STARTUP_TRACE) SONIC=$(KUI_RETAIL_SONIC_STACK_TEST) BUILD=$(BUILD_ID)' > $@.new
+	@printf '%s\n' 'LOW=$(KUI_RETAIL_LOW_RESIDENT) TRACE=$(KUI_RETAIL_STARTUP_TRACE) SONIC=$(KUI_RETAIL_SONIC_STACK_TEST) BUILD=$(BUILD_ID)$(if $(filter 1,$(KUI_GENERAL_SCI_RESUME_FIX)), SCI_RESUME_FIX=1)$(if $(filter 1 2 3,$(KUI_RETAIL_RETURN_TRACE)), RETURN_TRACE=$(KUI_RETAIL_RETURN_TRACE))$(if $(filter 3,$(KUI_RETAIL_RETURN_TRACE)), SKIES_READ_DIAGNOSTIC=1)$(if $(filter 1,$(KUI_RETAIL_NATIVE_DISC_CHECK)), NATIVE_DISC_CHECK=1)$(if $(filter 1,$(KUI_RETAIL_NATIVE_DRIVE_STATE)), NATIVE_DRIVE_STATE=1)' > $@.new
 	@if ! cmp -s $@.new $@; then mv $@.new $@; else rm $@.new; fi
 build/retail-ce/layout-config: force-retail-layout
 	@mkdir -p $(@D)
-	@printf '%s\n' 'LOW=$(KUI_RETAIL_LOW_RESIDENT) TRACE=$(KUI_RETAIL_STARTUP_TRACE) SONIC=$(KUI_RETAIL_SONIC_STACK_TEST) BUILD=$(BUILD_ID)' > $@.new
+	@printf '%s\n' 'LOW=$(KUI_RETAIL_LOW_RESIDENT) TRACE=$(KUI_RETAIL_STARTUP_TRACE) SONIC=$(KUI_RETAIL_SONIC_STACK_TEST) BUILD=$(BUILD_ID)$(if $(filter 1,$(KUI_CE_SCI_RESUME_FIX)), CE_SCI_RESUME_FIX=1)' > $@.new
 	@if ! cmp -s $@.new $@; then mv $@.new $@; else rm $@.new; fi
 # SCI's DMA reader shares the original protected low-memory reservation.
 # Cross-unit optimization and SH call relaxation recover code space without
 # changing the stack boundary. Keep audited entry points and compiler-emitted
 # memory helpers visible; audit the actual LTO-generated stack frames below.
 RETAIL_SCI_FLAGS := -flto -mrelax
+# The optional disc check and logical drive state serve the native residents.
+# Terminal return trace remains confined to the standard native SCI resident.
+RETAIL_NATIVE_DEFS := -DKUI_RETAIL_NATIVE_DISC_CHECK=$(KUI_RETAIL_NATIVE_DISC_CHECK) -DKUI_RETAIL_NATIVE_DRIVE_STATE=$(KUI_RETAIL_NATIVE_DRIVE_STATE)
+RETAIL_NATIVE_SCI_DEFS := $(RETAIL_NATIVE_DEFS) -DKUI_RETAIL_RETURN_TRACE=$(KUI_RETAIL_RETURN_TRACE)
+RETAIL_SKIES_DEFS := $(if $(filter 3,$(KUI_RETAIL_RETURN_TRACE)),-DKUI_RETAIL_SKIES_READ_DIAGNOSTIC=1)
 RETAIL_SCI_LINK := $(RETAIL_SCI_FLAGS) -Os -fstack-usage -save-temps=obj -Wl,--relax \
     -Wl,-u,_memcpy -Wl,-u,_memset -Wl,-u,_kui_retail_resident_init \
     -Wl,-u,_kui_retail_resident_dispatch -Wl,-u,_kui_retail_gd_dispatch \
@@ -227,6 +262,9 @@ RETAIL_IDE_SRC := $(RETAIL_RESIDENT_COMMON_SRC) src/core/ata.c src/dreamcast/ata
 # (tools/check_retail_stack.py), not a frame sum.
 RETAIL_SCIA_DEFS := -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_ASYNC=1 -DKUI_RETAIL_GD_ASYNC=1 \
     -DKUI_SCI_SD_NO_BLOCK=1 -DKUI_RETAIL_MANIFEST_SLOTS=64
+# Native and CE resume repairs have separate opt-in definitions.
+RETAIL_NATIVE_SCIA_DEFS := $(RETAIL_SCIA_DEFS) $(RETAIL_NATIVE_DEFS) $(if $(filter 1,$(KUI_GENERAL_SCI_RESUME_FIX)),-DKUI_GENERAL_SCI_RESUME_FIX=1)
+RETAIL_CE_SCIA_DEFS := $(RETAIL_SCIA_DEFS) -DKUI_RETAIL_CE=1 $(if $(filter 1,$(KUI_CE_SCI_RESUME_FIX)),-DKUI_CE_SCI_RESUME_FIX=1)
 RETAIL_SCIA_SRC := src/loader/retail_resident.c src/core/retail_gd.c src/loader/minic.c \
     src/core/retail_image.c src/loader/retail_display.c src/loader/sci_sd_bus.c \
     src/core/retail_cursor.c src/loader/sci_stream.c src/loader/retail_async.c
@@ -252,16 +290,19 @@ RETAIL_CE_STAGE := build/retail-ce/retail_stage_asm.o build/retail-ce/retail_sta
 build/retail/%.o: %.c
 	@mkdir -p $(@D)
 	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@
+build/retail/src/loader/retail_stage.o: src/loader/retail_stage.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SKIES_DEFS) -MMD -MP -c $< -o $@
 build/retail/%_asm.o: %.S
 	@mkdir -p $(@D)
 	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@
 build/retail/src/loader/retail_display.o: force-build-id
 build/retail/scif/%.o: %.c
 	@mkdir -p $(@D)
-	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=0 -MMD -MP -c $< -o $@
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_NATIVE_DEFS) -DKUI_RETAIL_TRANSPORT=0 -MMD -MP -c $< -o $@
 build/retail/scif/%_asm.o: %.S
 	@mkdir -p $(@D)
-	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=0 -MMD -MP -c $< -o $@
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_NATIVE_DEFS) -DKUI_RETAIL_TRANSPORT=0 -MMD -MP -c $< -o $@
 build/retail/scif/src/loader/retail_display.o: force-build-id
 build/retail/resident-scif.elf: $(RETAIL_SCIF) $(RETAIL_RESIDENT_LD)
 	sh-elf-gcc $(RETAIL_LINK) -T$(RETAIL_RESIDENT_LD) -Wl,-Map,build/retail/resident-scif.map -o $@ $(RETAIL_SCIF) -lgcc
@@ -269,10 +310,10 @@ build/retail/resident-scif.bin: build/retail/resident-scif.elf
 	sh-elf-objcopy -O binary $< $@
 build/retail/sci/%.o: %.c
 	@mkdir -p $(@D)
-	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) -DKUI_RETAIL_TRANSPORT=1 -MMD -MP -c $< -o $@
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) $(RETAIL_NATIVE_SCI_DEFS) -DKUI_RETAIL_TRANSPORT=1 -MMD -MP -c $< -o $@
 build/retail/sci/%_asm.o: %.S
 	@mkdir -p $(@D)
-	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) -DKUI_RETAIL_TRANSPORT=1 -MMD -MP -c $< -o $@
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) $(RETAIL_NATIVE_SCI_DEFS) -DKUI_RETAIL_TRANSPORT=1 -MMD -MP -c $< -o $@
 build/retail/sci/src/loader/retail_display.o: force-build-id
 build/retail/resident-sci.elf: $(RETAIL_SCI) $(RETAIL_RESIDENT_LD)
 	@mkdir -p build/retail/sci/lto
@@ -283,10 +324,10 @@ build/retail/resident-sci.bin: build/retail/resident-sci.elf
 	sh-elf-objcopy -O binary $< $@
 build/retail/ide/%.o: %.c
 	@mkdir -p $(@D)
-	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=2 -MMD -MP -c $< -o $@
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_NATIVE_DEFS) -DKUI_RETAIL_TRANSPORT=2 -MMD -MP -c $< -o $@
 build/retail/ide/%_asm.o: %.S
 	@mkdir -p $(@D)
-	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_TRANSPORT=2 -MMD -MP -c $< -o $@
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_NATIVE_DEFS) -DKUI_RETAIL_TRANSPORT=2 -MMD -MP -c $< -o $@
 build/retail/ide/src/loader/retail_display.o: force-build-id
 build/retail/resident-ide.elf: $(RETAIL_IDE) $(RETAIL_RESIDENT_LD)
 	sh-elf-gcc $(RETAIL_LINK) -T$(RETAIL_RESIDENT_LD) -Wl,-Map,build/retail/resident-ide.map -o $@ $(RETAIL_IDE) -lgcc
@@ -294,10 +335,10 @@ build/retail/resident-ide.bin: build/retail/resident-ide.elf
 	sh-elf-objcopy -O binary $< $@
 build/retail/scia/%.o: %.c
 	@mkdir -p $(@D)
-	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) $(RETAIL_SCIA_DEFS) -MMD -MP -c $< -o $@
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) $(RETAIL_NATIVE_SCIA_DEFS) -MMD -MP -c $< -o $@
 build/retail/scia/%_asm.o: %.S
 	@mkdir -p $(@D)
-	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) $(RETAIL_SCIA_DEFS) -MMD -MP -c $< -o $@
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) $(RETAIL_NATIVE_SCIA_DEFS) -MMD -MP -c $< -o $@
 build/retail/scia/src/loader/retail_display.o: force-build-id
 build/retail/resident-scia.elf: $(RETAIL_SCIA) $(RETAIL_ASYNC_LD)
 	@mkdir -p build/retail/scia/lto
@@ -388,10 +429,10 @@ build/retail-ce/resident-sci.bin: build/retail-ce/resident-sci.elf
 RETAIL_CE_SCIA := $(patsubst %.c,build/retail-ce/scia/%.o,$(RETAIL_SCIA_SRC)) build/retail-ce/scia/src/loader/retail_resident_asm.o
 build/retail-ce/scia/%.o: %.c
 	@mkdir -p $(@D)
-	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) $(RETAIL_SCIA_DEFS) -DKUI_RETAIL_CE=1 -MMD -MP -c $< -o $@
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) $(RETAIL_CE_SCIA_DEFS) -MMD -MP -c $< -o $@
 build/retail-ce/scia/%_asm.o: %.S
 	@mkdir -p $(@D)
-	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) $(RETAIL_SCIA_DEFS) -DKUI_RETAIL_CE=1 -MMD -MP -c $< -o $@
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SCI_FLAGS) $(RETAIL_CE_SCIA_DEFS) -MMD -MP -c $< -o $@
 build/retail-ce/scia/src/loader/retail_display.o: force-build-id
 build/retail-ce/resident-scia.elf: $(RETAIL_CE_SCIA) src/loader/retail_resident_ce_async.ld
 	@mkdir -p build/retail-ce/scia/lto

@@ -1,5 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/retail_loader_layout.h"
+#ifndef KUI_RETAIL_CE_SCIF_BIN
+#define KUI_RETAIL_CE_SCIF_BIN "build/retail-ce/resident-scif.bin"
+#define KUI_RETAIL_CE_SCI_BIN "build/retail-ce/resident-sci.bin"
+#define KUI_RETAIL_CE_IDE_BIN "build/retail-ce/resident-ide.bin"
+#define KUI_RETAIL_CE_SCIA_BIN "build/retail-ce/resident-scia.bin"
+#endif
 #define JOIN_(a,b) a##b
 #define JOIN(a,b) JOIN_(a,b)
 #define C(name) JOIN(__USER_LABEL_PREFIX__,name)
@@ -792,12 +798,33 @@ C(kui_retail_startup_gd_return):
 .Lstartup_gd_after: .long C(kui_retail_startup_gd_after)+0x20000000
 #endif
 #endif
+#if KUI_RETAIL_TOY_PILOT
+    /* The Toy pilot has one synchronous SCI resident. Keep the ordinary
+     * selector's symbols as aliases, without embedding four identical copies.
+     * Its stage rejects unsupported launch options before selecting a blob. */
+    .section .resident_blob,"a"
+    .align 2
+    .global __retail_resident_scif_blob_start,__retail_resident_scif_blob_end
+    .global __retail_resident_sci_blob_start,__retail_resident_sci_blob_end
+    .global __retail_resident_ide_blob_start,__retail_resident_ide_blob_end
+    .global __retail_resident_scia_blob_start,__retail_resident_scia_blob_end
+__retail_resident_scif_blob_start:
+__retail_resident_sci_blob_start:
+__retail_resident_ide_blob_start:
+__retail_resident_scia_blob_start:
+    .incbin "build/retail/resident-sci.bin"
+    .align 2
+__retail_resident_scif_blob_end:
+__retail_resident_sci_blob_end:
+__retail_resident_ide_blob_end:
+__retail_resident_scia_blob_end:
+#else
     .section .resident_blob,"a"
     .align 2
     .global __retail_resident_scif_blob_start,__retail_resident_scif_blob_end
 __retail_resident_scif_blob_start:
 #ifdef KUI_RETAIL_CE
-    .incbin "build/retail-ce/resident-scif.bin"
+    .incbin KUI_RETAIL_CE_SCIF_BIN
 #else
     .incbin "build/retail/resident-scif.bin"
 #endif
@@ -809,7 +836,7 @@ __retail_resident_scif_blob_end:
 __retail_resident_sci_blob_start:
 #ifdef KUI_RETAIL_CE
     /* The Windows CE boot test's CE-safe SCI resident. */
-    .incbin "build/retail-ce/resident-sci.bin"
+    .incbin KUI_RETAIL_CE_SCI_BIN
 #else
     .incbin "build/retail/resident-sci.bin"
 #endif
@@ -820,7 +847,7 @@ __retail_resident_sci_blob_end:
     .global __retail_resident_ide_blob_start,__retail_resident_ide_blob_end
 __retail_resident_ide_blob_start:
 #ifdef KUI_RETAIL_CE
-    .incbin "build/retail-ce/resident-ide.bin"
+    .incbin KUI_RETAIL_CE_IDE_BIN
 #else
     .incbin "build/retail/resident-ide.bin"
 #endif
@@ -832,12 +859,23 @@ __retail_resident_ide_blob_end:
 __retail_resident_scia_blob_start:
 #ifdef KUI_RETAIL_CE
     /* The Windows CE boot test's background reader. */
-    .incbin "build/retail-ce/resident-scia.bin"
+    .incbin KUI_RETAIL_CE_SCIA_BIN
 #else
     .incbin "build/retail/resident-scia.bin"
 #endif
     .align 2
 __retail_resident_scia_blob_end:
+#endif
+
+#if KUI_ARMADA_CE_RAM_BIND_STAGE
+    .section .armada_bind_blob,"a"
+    .align 2
+    .global __armada_bind_blob_start,__armada_bind_blob_end
+__armada_bind_blob_start:
+    .incbin KUI_ARMADA_CE_RAM_BIND_BIN
+    .align 2
+__armada_bind_blob_end:
+#endif
 
 #ifdef KUI_RETAIL_CE
 /* Windows CE boot test: the exception table bootstrap 2 runs under, matching

@@ -22,7 +22,70 @@ include config/lwext4.mk
 LWEXT4_HOST_OBJECTS := $(patsubst %.c,build/host/%.o,$(LWEXT4_SOURCES))
 
 .PHONY: test test-recovery test-images deps diagnostic clean
+.PHONY: test-armada-ce-excerpt
+.PHONY: test-armada-ce-stream
+test-armada-ce-stream: build/test-armada-ce-stream-model build/test-armada-ce-stream-native build/test-armada-ce-stream-api build/test-armada-ce-stream-transport build/test-armada-ce-stream-boot build/test-armada-ce-stream-entry build/test-armada-ce-stream-player build/test-armada-ce-stream-owner-word build/test-armada-ce-excerpt-prepare
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-stream-model
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-stream-native
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-stream-api
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-stream-transport
+	./build/test-armada-ce-stream-boot
+	./build/test-armada-ce-stream-entry
+	./build/test-armada-ce-stream-player
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-stream-owner-word
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-excerpt-prepare
+.PHONY: test-armada-ce-stream-owner-word
+test-armada-ce-stream-owner-word: build/test-armada-ce-stream-owner-word
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-stream-owner-word
+build/test-armada-ce-stream-owner-word: tests/test_armada_ce_stream_owner_word.c include/kui/armada_ce_stream_owner_word.h include/kui/armada_ce_ram_bind.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
+build/test-armada-ce-stream-model: tests/test_armada_ce_stream_model.c src/loader/armada_ce_stream_model.c include/kui/armada_ce_stream_model.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_armada_ce_stream_model.c src/loader/armada_ce_stream_model.c -o $@
+build/test-armada-ce-stream-native: tests/test_armada_ce_stream_native.c src/loader/armada_ce_stream_native.c include/kui/armada_ce_stream_native.h include/kui/armada_ce_live_sound.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_RETAIL_CE=1 -DKUI_ARMADA_CE_STREAM=1 tests/test_armada_ce_stream_native.c src/loader/armada_ce_stream_native.c -o $@
+build/test-armada-ce-stream-api: tests/test_armada_ce_stream_api.c tests/test_armada_ce_live_sound.c include/kui/armada_ce_live_sound.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
+build/test-armada-ce-stream-transport: tests/test_armada_ce_stream_transport.c src/loader/armada_ce_stream_transport.c include/kui/armada_ce_stream_transport.h src/core/retail_cursor.c src/core/retail_image.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/loader -DKUI_RETAIL_CE=1 -DKUI_RETAIL_ASYNC=1 -DKUI_ARMADA_CE_STREAM=1 -DKUI_ARMADA_CE_STREAM_TRANSPORT_TEST=1 tests/test_armada_ce_stream_transport.c src/loader/armada_ce_stream_transport.c src/core/retail_cursor.c src/core/retail_image.c -o $@
+build/test-armada-ce-stream-boot: tests/test_armada_ce_stream_boot.c tests/test_retail_async_ce.c tests/sci_stream_model.h src/loader/retail_async.c src/loader/retail_async.h src/loader/armada_ce_audio_observe.inc src/loader/armada_ce_excerpt_entry.c include/kui/armada_ce_stream_transport.h src/loader/armada_ce_stream_transport.c src/loader/sci_stream.c src/core/retail_cursor.c src/core/retail_image.c src/core/retail_gd.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) -fsanitize=undefined -fno-omit-frame-pointer -fno-pie -no-pie $(INCLUDES) -Isrc/loader -DKUI_RETAIL_ASYNC_TEST=1 -DKUI_SCI_STREAM_TEST=1 -DKUI_RETAIL_CE=1 -DKUI_RETAIL_ASYNC=1 -DKUI_RETAIL_GD_ASYNC=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_ARMADA_CE_EXCERPT=1 -DKUI_ARMADA_CE_STREAM=1 -DKUI_ARMADA_CE_STREAM_TRANSPORT_TEST=1 tests/test_armada_ce_stream_boot.c src/loader/retail_async.c src/loader/sci_stream.c src/core/retail_cursor.c src/core/retail_image.c src/core/retail_gd.c -o $@
+build/test-armada-ce-stream-entry: tests/test_armada_ce_stream_entry.c src/loader/armada_ce_excerpt_entry.c src/loader/armada_ce_audio_observe.inc include/kui/armada_ce_stream_transport.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) -fsanitize=undefined -fno-omit-frame-pointer $(INCLUDES) -Isrc/loader $< -o $@
+build/test-armada-ce-stream-player: tests/test_armada_ce_stream_player.c src/loader/armada_ce_stream_player.c src/loader/armada_ce_stream_model.c include/kui/armada_ce_stream_model.h include/kui/armada_ce_stream_native.h include/kui/armada_ce_stream_transport.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) -fsanitize=undefined -fno-omit-frame-pointer -fno-pie -no-pie $(INCLUDES) -Isrc/loader tests/test_armada_ce_stream_player.c src/loader/armada_ce_stream_model.c -o $@
+test-armada-ce-excerpt: build/test-armada-ce-excerpt-pool build/test-armada-ce-live-sound build/test-armada-ce-excerpt-prepare build/test-armada-ce-excerpt-entry build/test-armada-ce-excerpt
+	./build/test-armada-ce-excerpt-pool
+	./build/test-armada-ce-live-sound
+	./build/test-armada-ce-excerpt-prepare
+	./build/test-armada-ce-excerpt-entry
+	./build/test-armada-ce-excerpt
+
+build/test-armada-ce-excerpt-pool: tests/test_armada_ce_excerpt_pool.c include/kui/armada_ce_excerpt_pool.h src/core/data.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< src/core/data.c -o $@
+build/test-armada-ce-live-sound: tests/test_armada_ce_live_sound.c include/kui/armada_ce_live_sound.h include/kui/armada_ce_ram_bind.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
+ARMADA_PREPARE_TEST_SOURCES := src/core/game_image.c src/core/hash.c src/core/data.c src/core/destination.c src/core/retail_image.c
+build/test-armada-ce-excerpt-prepare: tests/test_armada_ce_excerpt_prepare.c src/apps/games_retail.c $(ARMADA_PREPARE_TEST_SOURCES) include/kui/armada_ce_excerpt_pool.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -ffunction-sections -fdata-sections tests/test_armada_ce_excerpt_prepare.c $(ARMADA_PREPARE_TEST_SOURCES) -Wl,--gc-sections -o $@
+build/test-armada-ce-excerpt-entry: tests/test_armada_ce_excerpt_entry.c src/loader/armada_ce_excerpt_entry.c include/kui/armada_ce_excerpt_entry.h src/loader/armada_ce_audio_observe.inc
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) -fsanitize=undefined -fno-omit-frame-pointer $(INCLUDES) $< -o $@
+build/test-armada-ce-excerpt: tests/test_armada_ce_excerpt.c src/loader/armada_ce_excerpt.c include/kui/armada_ce_excerpt.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -fno-pie -no-pie $< -o $@
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek build/music-asset-check
+test: build/test-game-launch-settings build/test-game-launch-settings-file
 test: build/test-capture-export
 test: build/test-game-image build/test-game-metadata build/test-loader-probe build/test-loader-sd build/loader-probe.dat
 test: build/test-pvr-texture build/test-game-cover build/test-cover-image build/test-files
@@ -126,6 +189,8 @@ test: build/test-storage-errors build/test-cd-audio build/test-network-probe bui
 	./build/test-crc16
 	./build/test-destination
 	./build/test-settings
+	./build/test-game-launch-settings
+	./build/test-game-launch-settings-file
 	./build/test-shell
 	./build/test-shell-font
 	./build/test-capture-adapter
@@ -162,6 +227,53 @@ build/test-storage-policy: tests/test_storage_policy.c src/core/storage_policy.c
 build/test-sci-sd-bus: tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_bus.c -o $@
+
+.PHONY: test-sci-read-compare
+test-sci-read-compare: build/test-sci-read-pio build/test-sci-read-dma build/test-retail-observe-fault
+	./build/test-sci-read-pio
+	./build/test-sci-read-dma
+	./build/test-retail-observe-fault
+
+build/test-sci-read-pio: tests/test_sci_sd_read_compare.c tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST -DKUI_SCI_SD_PIO_ONLY=1 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_read_compare.c -o $@
+
+build/test-sci-read-dma: tests/test_sci_sd_read_compare.c tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST -DKUI_SCI_SD_PIO_ONLY=0 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_read_compare.c -o $@
+
+.PHONY: test-sci-fault
+test-sci-fault: build/test-sci-fault build/test-sci-dma-pacing-baseline build/test-sci-dma-pacing-paced build/test-sci-dma-pacing-reuse build/test-retail-sci-fault build/test-retail-sci-paced
+	./build/test-sci-fault
+	./build/test-sci-dma-pacing-baseline
+	./build/test-sci-dma-pacing-paced
+	./build/test-sci-dma-pacing-reuse
+	./build/test-retail-sci-fault
+	./build/test-retail-sci-paced
+
+build/test-sci-fault: tests/test_sci_sd_fault.c tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST=1 -DKUI_RETAIL_SCI_DIAGNOSTIC=1 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_fault.c -o $@
+
+build/test-sci-dma-pacing-baseline: tests/test_sci_sd_dma_pacing.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_SCI_DIAGNOSTIC=1 -DKUI_SCI_DMA_PACED=0 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_dma_pacing.c -o $@
+
+build/test-sci-dma-pacing-paced: tests/test_sci_sd_dma_pacing.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_SCI_DIAGNOSTIC=1 -DKUI_SCI_DMA_PACED=1 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_dma_pacing.c -o $@
+
+build/test-sci-dma-pacing-reuse: tests/test_sci_sd_dma_pacing.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_SD_TEST=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_SCI_DIAGNOSTIC=1 -DKUI_SCI_DMA_PACED=1 -DKUI_SCI_DMA_REUSE_TDRE=1 -Iinclude -Isrc/loader src/loader/sci_sd_bus.c tests/test_sci_sd_dma_pacing.c -o $@
+
+build/test-retail-sci-fault: tests/test_retail_sci_fault.c src/loader/retail_sci_observe.inc src/loader/sci_sd_bus.h include/kui/retail_image.h include/kui/retail_gd.h include/kui/retail_loader_layout.h src/loader/retail_display.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader tests/test_retail_sci_fault.c -o $@
+
+build/test-retail-sci-paced: tests/test_retail_sci_fault.c src/loader/retail_sci_observe.inc src/loader/sci_sd_bus.h include/kui/retail_image.h include/kui/retail_gd.h include/kui/retail_loader_layout.h src/loader/retail_display.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_SCI_DMA_PACED=1 -Iinclude -Isrc/loader tests/test_retail_sci_fault.c -o $@
 
 build/test-retail-storage: tests/test_retail_storage.c src/loader/retail_storage.c src/loader/retail_storage.h src/loader/retail_storage_impl.h src/loader/sci_sd_bus.h include/kui/ata.h include/kui/storage.h
 	@mkdir -p $(@D)
@@ -300,6 +412,19 @@ build/test-retail-gd: tests/test_retail_gd.c src/core/retail_gd.c include/kui/re
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/retail_gd.c tests/test_retail_gd.c -o $@
 
+.PHONY: test-retail-observe
+test-retail-observe: build/test-retail-observe build/test-retail-observe-fault
+	./build/test-retail-observe
+	./build/test-retail-observe-fault
+
+build/test-retail-observe: tests/test_retail_observe.c src/core/retail_observe.c include/kui/retail_observe.h include/kui/retail_image.h
+	@mkdir -p build
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude src/core/retail_observe.c tests/test_retail_observe.c -o $@
+
+build/test-retail-observe-fault: tests/test_retail_observe_fault.c src/loader/retail_observe.inc src/core/retail_observe.c include/kui/retail_observe.h include/kui/retail_image.h include/kui/retail_gd.h include/kui/retail_loader_layout.h src/loader/retail_display.h src/loader/sd_reader.h
+	@mkdir -p build
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Isrc/loader src/core/retail_observe.c tests/test_retail_observe_fault.c -o $@
+
 build/test-retail-gd-async: tests/test_retail_gd.c src/core/retail_gd.c include/kui/retail_gd.h include/kui/retail_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_RETAIL_GD_ASYNC=1 src/core/retail_gd.c tests/test_retail_gd.c -o $@
@@ -334,7 +459,7 @@ build/games-image-probe: tests/games_image_probe.c $(GAMES_IMAGE_PROBE) $(CORE) 
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast tests/games_image_probe.c $(GAMES_IMAGE_PROBE) $(CORE) $(FATFS) $(GAMES_IMAGE_PROBE_WRAP) -o $@
 
-GAMES_RETAIL = src/apps/games_retail.c src/core/retail_image.c src/core/retail_cursor.c src/core/game_image.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c
+GAMES_RETAIL = src/apps/games_retail.c src/core/hash.c src/core/retail_image.c src/core/retail_cursor.c src/core/game_image.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c
 build/games-retail: tests/games_retail.c $(GAMES_RETAIL) $(CORE) $(FATFS) include/kui/games_retail.h include/kui/ce_load_plan.h include/kui/retail_image.h include/kui/retail_loader_layout.h include/kui/game_image.h include/kui/game_metadata.h include/kui/runtime.h include/kui/destination.h include/kui/media.h src/dreamcast/platform.h config/ffconf.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast tests/games_retail.c $(GAMES_RETAIL) $(CORE) $(FATFS) $(GAMES_IMAGE_PROBE_WRAP) -o $@
@@ -379,17 +504,17 @@ build/test-settings: tests/test_settings.c src/core/settings.c src/core/data.c i
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/settings.c src/core/data.c tests/test_settings.c -o $@
 
-build/test-shell: src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h
+build/test-shell: include/kui/game_launch_settings.h src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/game_launch_settings.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/game_launch_settings.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
 
 build/test-shell-font: tests/test_shell_font.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc include/kui/shell_font.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/dreamcast/shell_font.c tests/test_shell_font.c -o $@
 
-build/render-shell: src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h
+build/render-shell: include/kui/game_launch_settings.h src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/game_launch_settings.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/data.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c tests/render_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/data.c src/core/game_launch_settings.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c tests/render_shell.c -o $@
 
 build/test-capture-adapter: src/core/destination.c src/core/data.c include/kui/destination.h tests/test_capture_adapter.c src/dreamcast/capture.c src/dreamcast/platform.h include/kui/capture.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
@@ -725,3 +850,12 @@ build/boot-recovery: tests/boot_recovery.c $(CORE) $(BOOT_RECOVERY_SOURCES) $(FA
 build/test-storage-errors: tests/test_storage_errors.c src/dreamcast/sd.c src/core/storage_error.c src/core/storage_policy.c include/kui/storage_error.h src/dreamcast/sci_sd_storage.h src/loader/sci_sd_bus.h tests/storage_stubs/dc/sd.h tests/storage_stubs/kos/sem.h include/kui/ata.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Itests/storage_stubs -Itests/stubs -Itests/apps_stubs $(INCLUDES) src/dreamcast/sd.c src/core/storage_error.c src/core/storage_policy.c tests/test_storage_errors.c -o $@
+
+# Saved per-image launch choices and dual-slot write-failure recovery.
+build/test-game-launch-settings: tests/test_game_launch_settings.c src/core/game_launch_settings.c include/kui/game_launch_settings.h src/core/data.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/data.c src/core/game_launch_settings.c tests/test_game_launch_settings.c -o $@
+
+build/test-game-launch-settings-file: tests/test_game_launch_settings_file.c src/apps/game_launch_settings_file.c src/core/game_launch_settings.c src/core/data.c include/kui/game_launch_settings.h .deps/fatfs/source/ff.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/data.c src/core/game_launch_settings.c src/apps/game_launch_settings_file.c tests/test_game_launch_settings_file.c -o $@

@@ -2,6 +2,12 @@
 #ifndef KUI_SCI_SD_BUS_H
 #define KUI_SCI_SD_BUS_H
 #include "sd_reader.h"
+#if KUI_SCI_DMA_PACED && !KUI_RETAIL_SCI_DIAGNOSTIC
+#error "Receive pacing is an isolated SCI diagnostic variant only"
+#endif
+#if KUI_RETAIL_SCI_DIAGNOSTIC && !KUI_RETAIL_OBSERVE && !defined(KUI_SCI_SD_TEST)
+#error "SCI first-fault capture is an isolated retail observer or host test only"
+#endif
 
 /* Retail Dreamcast SCI: TXD1=MOSI, RXD1=MISO, SCK1=clock, PA7=CS.
  * One device only, with bounded optional channel-1 DMA for aligned sectors.
@@ -25,6 +31,28 @@ struct kui_sci_sd_port {
 };
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void);
 bool kui_sci_sd_healthy(void);
+#if KUI_RETAIL_SCI_DIAGNOSTIC
+/* Isolated retail test only. The first failing bus branch is captured before
+ * SCR/CHCR cleanup. Register words are read-only samples at capture, not a
+ * promise that an active DMA channel stopped between those reads. Counters
+ * last for this linked bus instance; successful acquire clears phase only.
+ * A started DMA failure never turns into a programmed retry. */
+enum kui_sci_sd_phase {
+    KUI_SCI_PHASE_FLAG=1, KUI_SCI_PHASE_FEED, KUI_SCI_PHASE_COMPLETE,
+    KUI_SCI_PHASE_POST, KUI_SCI_PHASE_PACE
+};
+enum kui_sci_sd_reason {
+    KUI_SCI_REASON_TIMEOUT=1, KUI_SCI_REASON_SCI, KUI_SCI_REASON_DMAOR,
+    KUI_SCI_REASON_COUNT
+};
+struct kui_sci_sd_diagnostic {
+    uint32_t phase, reason, expected, polls;
+    uint32_t ssr, scr, smr, brr;
+    uint32_t chcr1, tcr1, dmaor, chcr2, tcr2;
+    uint32_t started, success, fallback;
+};
+const struct kui_sci_sd_diagnostic *kui_sci_sd_diagnostic_get(void);
+#endif
 #ifndef KUI_RETAIL_TRANSPORT
 /* Resynchronize this lease's cached baud choice after a serialized runtime
  * borrower restores SCI registers. Caller holds IRQ masking and has verified

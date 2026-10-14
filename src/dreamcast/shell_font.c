@@ -11,16 +11,22 @@ static const struct glyph *glyph_for(unsigned char code,bool large) {
     if(large) return &large_glyphs[code-32];
     return &small_glyphs[code-32];
 }
-unsigned kui_shell_font_width(const char *text,bool large) {
+static unsigned font_width(const char *text,bool large,unsigned spacing) {
     if(!text) return 0;
     unsigned width=0;
     for(const unsigned char *p=(const unsigned char *)text;*p;p++) {
         unsigned step=glyph_for(*p,large)->advance;
-        if(p!=(const unsigned char *)text) step+=KUI_SHELL_FONT_LETTER_SPACING;
+        if(p!=(const unsigned char *)text) step+=spacing;
         if(width>UINT_MAX-step) return UINT_MAX;
         width+=step;
     }
     return width;
+}
+unsigned kui_shell_font_width(const char *text,bool large) {
+    return font_width(text,large,KUI_SHELL_FONT_LETTER_SPACING);
+}
+unsigned kui_shell_font_width_crisp(const char *text,bool large) {
+    return font_width(text,large,0);
 }
 static uint16_t blend(uint16_t background,uint16_t color,unsigned alpha) {
     unsigned inverse=15-alpha;
@@ -29,8 +35,8 @@ static uint16_t blend(uint16_t background,uint16_t color,unsigned alpha) {
     unsigned b=((color&31u)*alpha+(background&31u)*inverse+7u)/15u;
     return (uint16_t)((r<<11)|(g<<5)|b);
 }
-void kui_shell_font_draw(uint16_t *frame,int x,int y,uint16_t color,
-                         const char *text,bool large) {
+static void font_draw(uint16_t *frame,int x,int y,uint16_t color,
+                      const char *text,bool large,bool crisp) {
     unsigned height=large?KUI_SHELL_FONT_LARGE_HEIGHT:KUI_SHELL_FONT_SMALL_HEIGHT;
     if(!frame || !text || x>=640 || y>=480 || (int64_t)y+height<=0) return;
     const uint8_t *pixels=large?large_pixels:small_pixels;
@@ -46,12 +52,20 @@ void kui_shell_font_draw(uint16_t *frame,int x,int y,uint16_t color,
                 const uint8_t *mask=pixels+g->offset+row*g->stride;
                 for(unsigned col=first;col<last;col++) {
                     unsigned alpha=(mask[col/2]>>((col&1)?0:4))&15u;
-                    if(!alpha) continue;
+                    if(!alpha || (crisp && alpha<8u)) continue;
                     uint16_t *target=frame+(size_t)dy*640+(size_t)(pen+col);
-                    *target=alpha==15?color:blend(*target,color,alpha);
+                    *target=crisp || alpha==15?color:blend(*target,color,alpha);
                 }
             }
         }
-        pen+=g->advance+KUI_SHELL_FONT_LETTER_SPACING;
+        pen+=g->advance+(crisp?0:KUI_SHELL_FONT_LETTER_SPACING);
     }
+}
+void kui_shell_font_draw(uint16_t *frame,int x,int y,uint16_t color,
+                         const char *text,bool large) {
+    font_draw(frame,x,y,color,text,large,false);
+}
+void kui_shell_font_draw_crisp(uint16_t *frame,int x,int y,uint16_t color,
+                               const char *text,bool large) {
+    font_draw(frame,x,y,color,text,large,true);
 }

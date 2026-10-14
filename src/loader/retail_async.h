@@ -163,6 +163,9 @@ extern struct kui_retail_async_region kui_retail_async_region;
 /* Once, at resident init: install nothing yet, copy the vectors; the
  * manifest's reader chooses how long GD calls may wait for blocks. */
 void kui_retail_async_init(const struct kui_retail_manifest *);
+/* KUI_ARMADA_CE_STREAM adds a checked static SCI descriptor and bounded
+ * arbitration visits. The GD engine/cursor/token/spill remain DATA-owned;
+ * the high controller owns audio jobs and any parked checked blocks. */
 /* Every GD call, masked on the private stack, before the service runs it. */
 void kui_retail_async_call(uint32_t function);
 /* After the service ran it: start a new read, or stop an abandoned one. */

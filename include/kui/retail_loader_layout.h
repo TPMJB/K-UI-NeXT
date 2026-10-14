@@ -51,6 +51,13 @@
 #define KUI_RETAIL_LOW_STANDARD_LIMIT 0x8c007800
 #define KUI_RETAIL_LOW_ASYNC_LIMIT 0x8c007ba0
 #define KUI_RETAIL_LOW_HOOK_STACK 0x8c007d00
+#if KUI_RETAIL_MDK2_CDDA
+#include "kui/mdk2_cdda_layout.h"
+#undef KUI_RETAIL_LOW_STANDARD_LIMIT
+#undef KUI_RETAIL_LOW_HOOK_STACK
+#define KUI_RETAIL_LOW_STANDARD_LIMIT KUI_MDK2_CDDA_LOW_LIMIT
+#define KUI_RETAIL_LOW_HOOK_STACK KUI_MDK2_CDDA_HOOK_STACK
+#endif
 #define KUI_RETAIL_LEGACY_RESIDENT_ADDRESS 0x8c008300
 #define KUI_RETAIL_LEGACY_STANDARD_LIMIT 0x8c00bb00
 #define KUI_RETAIL_LEGACY_ASYNC_LIMIT 0x8c00bea0
@@ -82,6 +89,9 @@
  * flag and interrupt handler table (retail_resident.S, kui_retail_ce_kernel). */
 #define KUI_RETAIL_CE_KERNEL 0x8c008324
 #define KUI_RETAIL_CE_KERNEL_WORDS 4
+/* STREAM only: immutable entry word naming the checked SCI bus descriptor.
+ * The stage attaches it after bootstrap/controller/pool checks pass. */
+#define KUI_RETAIL_CE_STREAM_BUS 0x8c008334
 #if KUI_RETAIL_LOW_RESIDENT && !defined(KUI_RETAIL_CE)
 #undef KUI_RETAIL_RESIDENT_ADDRESS
 #undef KUI_RETAIL_STANDARD_LIMIT

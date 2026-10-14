@@ -16,6 +16,7 @@
 #include "kui/apps.h"
 #include "kui/music_player.h"
 #include "kui/games.h"
+#include "kui/game_launch_settings.h"
 #include "kui/games_probe.h"
 #include "kui/games_image_probe.h"
 #include "kui/games_retail.h"
@@ -132,6 +133,10 @@ static char music_path_pending[256];
 static struct kui_games_page games_listing;
 static struct kui_games_detail games_detail;
 static unsigned games_listing_generation,games_detail_generation;
+static struct kui_game_launch_settings games_detail_launch_settings,games_launch_settings_pending;
+static bool games_detail_launch_loaded,games_launch_saved;
+static char games_launch_path_pending[KUI_GAMES_FILE_CAP],games_launch_result_path[KUI_GAMES_FILE_CAP];
+static unsigned games_launch_result_generation;
 static unsigned games_offset_pending,games_result_offset;
 static unsigned games_epoch_pending,games_result_epoch,games_result_view;
 static char games_path_pending[KUI_GAMES_FILE_CAP];
@@ -353,6 +358,48 @@ static void settings_operation(bool save) {
                 "Could not load preferences. See Diagnostics."));
     mutex_unlock(&lock);
     kui_log("Settings %s: %s", save ? "save" : "load", ok ? "complete" : "failed or stopped");
+}
+/* Inspection releases its filesystem before this is called. Reconnect on the
+ * same storage worker; menu callbacks only publish or copy these values. */
+static bool game_launch_settings_load(const struct kui_games_detail *detail,
+                                      struct kui_game_launch_settings *value) {
+    kui_game_launch_settings_default(value);
+    if(!detail->valid || detail->stopped || kui_cancelled()) return false;
+    bool ok=false;
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    if(kui_sd_connect()) {
+        FATFS fs;
+        if(kui_mount(&fs,kui_log)) {
+            if(!kui_cancelled()) ok=kui_game_launch_settings_load(detail->path,value,kui_log);
+            if(f_mount(NULL,"0:",0)!=FR_OK) ok=false;
+        }
+        kui_sd_disconnect();
+    }
+    if(!ok) kui_game_launch_settings_default(value);
+    return ok;
+}
+static void game_launch_settings_save(void) {
+    char path[KUI_GAMES_FILE_CAP];
+    struct kui_game_launch_settings value;
+    mutex_lock(&lock);
+    memcpy(path,games_launch_path_pending,sizeof(path));value=games_launch_settings_pending;
+    mutex_unlock(&lock);
+    bool ok=false;
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    if(!kui_cancelled() && kui_game_launch_settings_valid(&value) && kui_sd_connect()) {
+        FATFS fs;
+        if(kui_mount(&fs,kui_log)) {
+            /* Once begun, the bounded save finishes sync, close and verify
+             * before the worker admits another storage operation. */
+            if(!kui_cancelled()) ok=kui_game_launch_settings_save(path,&value,kui_log);
+            if(f_mount(NULL,"0:",0)!=FR_OK) ok=false;
+        }
+        kui_sd_disconnect();
+    }
+    mutex_lock(&lock);
+    memcpy(games_launch_result_path,path,sizeof(games_launch_result_path));
+    games_launch_saved=ok;++games_launch_result_generation;
+    mutex_unlock(&lock);
 }
 /* Independent system preferences: capture choices stay in the ripper record. */
 static void publish_music(void) {
@@ -1457,7 +1504,8 @@ static bool games_page(enum kui_shell_page page) {
     return page==KUI_SHELL_GAMES || page==KUI_SHELL_GAMES_ADVANCED ||
         page==KUI_SHELL_GAMES_DETAIL || page==KUI_SHELL_GAMES_VARIANTS ||
         page==KUI_SHELL_GAMES_PROBE_CONFIRM || page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
-        page==KUI_SHELL_GAMES_RETAIL_CONFIRM;
+        page==KUI_SHELL_GAMES_RETAIL_CONFIRM || page==KUI_SHELL_GAMES_LAUNCH_OPTIONS ||
+        page==KUI_SHELL_GAMES_EXTRA_OPTIONS || page==KUI_SHELL_GAMES_TESTS || page==KUI_SHELL_GAMES_INFO;
 }
 static void games_cache_invalidate(void) {
     kui_games_cache_clear();kui_games_covers_cache_clear();games_warm_done=false;
@@ -1728,7 +1776,12 @@ static void *worker(void *unused) {
                 memset(&games_detail,0,sizeof(games_detail));games_detail.stopped=true;
                 strcpy(games_detail.path,games_path_pending);
                 snprintf(games_detail.message,sizeof(games_detail.message),"Games inspection stopped before starting");
+                kui_game_launch_settings_default(&games_detail_launch_settings);games_detail_launch_loaded=false;
                 ++games_detail_generation;
+            }
+            if(action==76) {
+                memcpy(games_launch_result_path,games_launch_path_pending,sizeof(games_launch_result_path));
+                games_launch_saved=false;++games_launch_result_generation;
             }
             if(action==56 || action==57 || action==58) {
                 probe_status=(struct kui_app_status){.stopped=true};
@@ -1945,8 +1998,14 @@ static void *worker(void *unused) {
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_games_detail detail;
                 kui_games_inspect_cover(games_path_pending,&detail,games_detail_cover,kui_log,kui_cancelled);
-                mutex_lock(&lock);games_detail=detail;++games_detail_generation;mutex_unlock(&lock);
+                struct kui_game_launch_settings value;
+                bool loaded=game_launch_settings_load(&detail,&value);
+                mutex_lock(&lock);
+                games_detail=detail;games_detail_launch_settings=value;games_detail_launch_loaded=loaded;
+                ++games_detail_generation;
+                mutex_unlock(&lock);
             }
+            if(action==76) game_launch_settings_save();
             if(action==56 || action==57 || action==58) {
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 bool prepared=action==58?
@@ -2314,7 +2373,9 @@ static void draw_shell(void) {
         shell.page==KUI_SHELL_GAMES?games_scan_status:
         shell.page==KUI_SHELL_MEMORY?memory_test_status:
         (shell.page==KUI_SHELL_GAMES_PROBE_CONFIRM || shell.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
-         shell.page==KUI_SHELL_GAMES_RETAIL_CONFIRM)?probe_status:
+         shell.page==KUI_SHELL_GAMES_RETAIL_CONFIRM || shell.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS ||
+         shell.page==KUI_SHELL_GAMES_EXTRA_OPTIONS || shell.page==KUI_SHELL_GAMES_TESTS ||
+         shell.page==KUI_SHELL_GAMES_INFO)?probe_status:
         shell.page==KUI_SHELL_NETWORK?network_test_status:
         shell.page==KUI_SHELL_MUSIC?player_status:
         shell.page==KUI_SHELL_CRC_SCAN?scan_status:
@@ -2427,6 +2488,7 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_WIFI_JOIN: return 73;
         case KUI_SHELL_WIFI_FORGET: return 74;
         case KUI_SHELL_WIFI_BAND: return 75;
+        case KUI_SHELL_SAVE_GAME_LAUNCH: return 76;
         default: return 0;
     }
 }
@@ -2597,7 +2659,7 @@ int main(void) {
     unsigned seen_clock_generation=0,seen_vmu_backups=0,seen_vmu_restore=0;
     unsigned seen_storage_test=0,seen_storage_history=0;
     unsigned seen_vmu_delete=0,seen_vmu_copy=0,seen_cd_audio=0;
-    unsigned seen_games_listing=0,seen_games_detail=0;
+    unsigned seen_games_listing=0,seen_games_detail=0,seen_games_launch_result=0;
     unsigned seen_files_listing=0,seen_files_preview=0,seen_files_result=0,seen_files_picture=0;
     unsigned seen_wifi_generation=0;
     bool startup_routed=false;
@@ -2678,7 +2740,14 @@ int main(void) {
         }
         if(seen_games_detail!=games_detail_generation) {
             kui_shell_set_games_detail(&shell,&games_detail);
+            kui_shell_set_game_launch_settings(&shell,games_detail.path,
+                &games_detail_launch_settings,games_detail_launch_loaded);
             seen_games_detail=games_detail_generation;
+            games_ui_changed=true;
+        }
+        if(seen_games_launch_result!=games_launch_result_generation) {
+            kui_shell_game_launch_saved(&shell,games_launch_result_path,games_launch_saved);
+            seen_games_launch_result=games_launch_result_generation;
             games_ui_changed=true;
         }
         if(seen_clock_generation!=clock_generation) {
@@ -2795,6 +2864,14 @@ int main(void) {
             capture_outcome = KUI_SHELL_OUTCOME_FAILED;
             kui_shell_destination_error(&shell, "Destination unavailable. Start > Destination to choose a folder.");
             action = 0;
+        }
+        if(action==76 && !busy) {
+            if(kui_shell_game_launch_settings(&shell,&games_launch_settings_pending))
+                snprintf(games_launch_path_pending,sizeof(games_launch_path_pending),"%s",shell.games_selected_path);
+            else {
+                kui_shell_game_launch_saved(&shell,shell.games_selected_path,false);
+                action=0;
+            }
         }
         if(action && !busy) {
             if(action>=68 && action<=71) {

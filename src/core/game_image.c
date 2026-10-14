@@ -163,6 +163,40 @@ enum kui_game_result kui_game_image_open(const void *gdi, size_t size,
     return KUI_GAME_OK;
 }
 
+enum kui_game_result kui_game_image_audio_info(const struct kui_game_image *image,
+    struct kui_game_audio_info *out) {
+    if(!image || !out || !image->count || image->count > KUI_GAME_TRACK_MAX ||
+       image->format < KUI_GAME_IMAGE_GDI || image->format > KUI_GAME_IMAGE_RAW)
+        return KUI_GAME_INVALID;
+    struct kui_game_audio_info info = {KUI_GAME_AUDIO_NONE, 0, 0, 0};
+    for(unsigned i = 0; i < image->count; ++i) {
+        const struct kui_game_image_track *track = &image->tracks[i];
+        if(track->number != i + 1u || track->start_lba >= KUI_GAME_LBA_LIMIT ||
+           (track->control != 0u && track->control != 4u) ||
+           (i && track->start_lba <= image->tracks[i - 1u].start_lba))
+            return KUI_GAME_INVALID;
+        if(track->control == 0u) {
+            ++info.audio_tracks;
+            if(image->cd_image || track->start_lba >= 45000u)
+                ++info.candidate_tracks;
+            else ++info.warning_tracks;
+        }
+    }
+    if(image->format == KUI_GAME_IMAGE_ISO || image->format == KUI_GAME_IMAGE_RAW) {
+        /* The parser publishes one data track for these formats; a bare data
+         * file cannot preserve the original disc's audio-track inventory. */
+        if(image->count != 1u || info.audio_tracks) return KUI_GAME_INVALID;
+        info.classification = KUI_GAME_AUDIO_UNKNOWN;
+    } else if(info.candidate_tracks) {
+        info.classification = image->cd_image ? KUI_GAME_AUDIO_CD :
+            KUI_GAME_AUDIO_GD_HIGH_DENSITY;
+    } else if(info.warning_tracks) {
+        info.classification = KUI_GAME_AUDIO_GD_LOW_DENSITY_ONLY;
+    }
+    *out = info;
+    return KUI_GAME_OK;
+}
+
 /* Public structs make metadata inspection cheap; guard structural invariants
  * here too, so a damaged/uninitialized descriptor cannot cause out-of-bounds
  * accesses in this module. Callers must retain an unchanged opened image. */
