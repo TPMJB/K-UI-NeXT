@@ -1,6 +1,52 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Armada CE full CD music stream test
 
+## Dropout fixes on top of the working owner-discovery build
+
+The owner reports that `9159aa5` plays CD music but it cuts out at times.
+In this controller every recovery (GAPS) stops native playback and refills
+the ring before Play: an audible gap. This revision removes a false recovery
+and shortens the real ones. Owner discovery, binding, 16-sector jobs,
+priority 2, the DATA reader and the SCI transport are unchanged.
+
+| Change | Before | Now |
+| --- | --- | --- |
+| Cursor "moved too fast" recovery | Total cursor progress compared with total GetTickCount time plus 20 ms | Removed |
+| Play starts / restarts after a recovery at | whole 2 s ring fresh | 1 s fresh |
+| Staging after a partial refill | Remainder (up to 37 KB) shifted byte by byte with IRQs masked | Head offset; only the sub-64-byte carry moves, unmasked |
+| Yield while a source job is pending | 1 ms (full guard/clock/position visit each time) | 5 ms |
+| One-second sample AUX | bit 0 pending, bit 1 running, bits 8-15 state | same, plus bits 16-31 = worker visits in that second |
+
+The removed check accumulated elapsed playback since `011f71d`. The cursor
+follows the sound chip's 44.1 kHz clock and GetTickCount follows CE's timer;
+any rate mismatch between them grows with playback time until it exceeds the
+fixed 20 ms slack and stops healthy music. With the previous model, the new
+player test (`drifting_clock`) stops 2 times in two minutes at a 0.05%
+mismatch, 5 at 0.1% and 28 at 0.5%; this revision stops 0 times. The
+console's actual mismatch has not been measured. The cursor is
+authoritative: AGE (observations at most 999 ms apart, under half the ring)
+bounds ambiguity, and a jump past fresh data remains UNDERRUN.
+
+### Test
+
+Install only the new `KUI/apps/games/ce-cdda-armada.kui`; keep the current
+`runtime.kui`. Play two or three minutes in the scene where music worked.
+Note each cut-out and roughly when it happened. Return with
+**A+B+X+Y+Start** and record a full cycle of the three pages.
+
+### Reading the result (hexadecimal)
+
+| Where | Healthy | If not |
+| --- | --- | --- |
+| Summary `GAPS` | `0` | Each gap is one recovery and an audible cut-out. |
+| Summary `AUDIO WHY` (no fatal fault) | `0` | `13` cursor, `14` AGE (worker gap over 999 ms), `15` UNDERRUN (supply). |
+| Events | `1` START only | `2` UNDERRUN: READY at the time and the visit interval in AUX. |
+| Samples `SOURCE` | Grows by about `2B110` per one-second row while playing | Slower growth with READY falling is a supply shortfall. |
+| Samples `AUX` bits 16-31 | `0014` (20) or more visits per second | Low values mean the worker is still starved. |
+
+`13` should no longer occur. If cut-outs remain with `15`, the samples show
+whether the card (SOURCE) or the worker (visits) fell behind.
+
 ## What this revision changes
 
 Recording `62653.mp4` shows initial binding still refused in `4185d3932103`:

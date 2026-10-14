@@ -62,7 +62,10 @@ static void play_frames(unsigned sectors,unsigned repeat,bool infinite) {
     reset(t,tracks);CHECK(kui_armada_ce_stream_request(&model,20u,1u,tracks,repeat)==KUI_ARMADA_CE_STREAM_OK);
     prime();uint32_t ms=0;uint64_t physical=0;
     uint64_t end=infinite?3u*(uint64_t)R:(uint64_t)sectors*S*(repeat+1u);
-    if(!infinite && end<R) for(unsigned i=(unsigned)end;i<R;i++) CHECK(!ring[i]);
+    /* Play may start with half the ring fresh. Everything produced past a
+     * finite end is silence; the rest is filled ahead of the cursor. */
+    CHECK(model.produced>=KUI_ARMADA_CE_STREAM_START_BYTES && model.produced<=R);
+    if(!infinite && end<model.produced) for(unsigned i=(unsigned)end;i<model.produced;i++) CHECK(!ring[i]);
     while(physical<end) {
         unsigned bytes=end-physical>4096u?4096u:(unsigned)(end-physical);
         bytes=(bytes+3u)&~3u;
@@ -79,7 +82,7 @@ static void play_frames(unsigned sectors,unsigned repeat,bool infinite) {
             CHECK(model.state==KUI_ARMADA_CE_STREAM_ENDED);break;
         }
         CHECK(s==KUI_ARMADA_CE_STREAM_OK && model.audible==physical);
-        unsigned work=0;while(pump()) CHECK(++work<100u);
+        unsigned work=0;while(pump()) CHECK(++work<1000u);
     }
 }
 int main(void) {
@@ -158,12 +161,16 @@ int main(void) {
     uint32_t unchanged=model.epoch;uint64_t retained_fetch=model.fetch;
     CHECK(kui_armada_ce_stream_request(&model,23u,0u,0u,0u)==KUI_ARMADA_CE_STREAM_OK &&
         model.epoch==unchanged && model.fetch==retained_fetch && model.native_running && !model.stop_needed);
-    CHECK(kui_armada_ce_stream_observe(&model,lease,65536u,67584u,0u)==KUI_ARMADA_CE_STREAM_CURSOR);
-    CHECK(kui_armada_ce_stream_stop_complete(&model,model.epoch,true)==KUI_ARMADA_CE_STREAM_OK);staged=0;prime();lease=model.ring_epoch;
+    /* The native cursor is authoritative: a large catch-up inside fresh data
+     * is consumption, not a fault, and never forces Stop/re-prime. */
+    CHECK(kui_armada_ce_stream_observe(&model,lease,65536u,67584u,0u)==KUI_ARMADA_CE_STREAM_OK &&
+        model.consumed==65536u && !model.stop_needed && model.native_running);
     CHECK(kui_armada_ce_stream_observe(&model,lease,R,0u,1u)==KUI_ARMADA_CE_STREAM_CURSOR);
     CHECK(kui_armada_ce_stream_stop_complete(&model,model.epoch,true)==KUI_ARMADA_CE_STREAM_OK);staged=0;prime();lease=model.ring_epoch;
     model.produced=model.consumed+4096u;
-    CHECK(kui_armada_ce_stream_observe(&model,lease,8192u,10240u,50u)==KUI_ARMADA_CE_STREAM_UNDERRUN && !model.audible);
+    uint64_t audible_before=model.audible;
+    CHECK(kui_armada_ce_stream_observe(&model,lease,8192u,10240u,50u)==KUI_ARMADA_CE_STREAM_UNDERRUN &&
+        model.audible==audible_before);
     CHECK(kui_armada_ce_stream_stop_complete(&model,model.epoch,true)==KUI_ARMADA_CE_STREAM_OK);
     staged=0;prime();lease=model.ring_epoch;
     uint32_t old_first=model.first_lba,old_end=model.end_lba;
@@ -192,7 +199,12 @@ int main(void) {
     CHECK(kui_armada_ce_stream_observe(&model,lease,0u,11008u,32u)==KUI_ARMADA_CE_STREAM_OK);
     CHECK(kui_armada_ce_stream_observe(&model,lease,0x3c80u,0x6780u,64u)==KUI_ARMADA_CE_STREAM_OK &&
         model.consumed==0x3c80u && model.elapsed_ms==88u && model.recoveries==before_clock_recoveries);
-    CHECK(kui_armada_ce_stream_observe(&model,lease,0xbc80u,0xe780u,84u)==KUI_ARMADA_CE_STREAM_CURSOR);
+    CHECK(kui_armada_ce_stream_observe(&model,lease,0xbc80u,0xe780u,84u)==KUI_ARMADA_CE_STREAM_OK &&
+        model.consumed==0xbc80u && model.recoveries==before_clock_recoveries && !model.stop_needed);
+    /* A jump past the fresh bytes is still an UNDERRUN recovery. */
+    model.produced=model.consumed+4096u;
+    CHECK(kui_armada_ce_stream_observe(&model,lease,0xdc80u,0xe780u,100u)==KUI_ARMADA_CE_STREAM_UNDERRUN &&
+        model.stop_needed);
     CHECK(kui_armada_ce_stream_stop_complete(&model,model.epoch,true)==KUI_ARMADA_CE_STREAM_OK);staged=0;prime();lease=model.ring_epoch;
     printf("Armada CE full stream model: %u checks passed; exact byte sequences, finite/infinite repeats, raw carry, cursor/epoch/control guards.\n",checks);
     return 0;

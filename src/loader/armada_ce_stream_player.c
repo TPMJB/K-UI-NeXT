@@ -30,7 +30,11 @@
 #define DEVICE_CS_OFFSET 88u
 #define WORKER_TOKEN UINT32_C(0x5354524d)
 #define STEP_MS 20u
-#define SOURCE_STEP_MS 1u
+/* A 16-sector job spends tens of milliseconds on the card. Polling it every
+ * 1ms at above-normal priority repeats the full guard, clock and position
+ * calls (and their sound locks) dozens of times per job; 5ms adds at most
+ * 5ms to a 213ms job. */
+#define SOURCE_STEP_MS 5u
 #define COPY_PAGES ((KUI_ARMADA_CE_STREAM_STAGE_BYTES+4095u)/4096u+1u)
 _Static_assert(RAW_BYTES+KUI_ARMADA_CE_STREAM_STAGE_BYTES<=KUI_ARMADA_CE_STREAM_SOURCE_BYTES,
     "raw batch and carry staging must fit the already reserved source bank");
@@ -60,6 +64,7 @@ struct stream_player {
     uint32_t callback_info[3],applied_epoch,applied_play_epoch,applied_stop_epoch;
     uint32_t initialized,read_active,read_bus_epoch,device_page,buffer_page,frontier_page;
     uint32_t now_ms,copied_frontier,last_model_result,source_total,cleanup_epoch;
+    uint32_t stage_head; /* Offset of the model's first staged byte. */
     uint32_t fault[5],mapping_status,mapping_address;
     struct kui_armada_ce_stream_read read;
     uint32_t recovery[5];
@@ -521,7 +526,7 @@ static bool refill(void) {
         }
         if(ok && mail_current()) {
             volatile uint8_t *target=(volatile uint8_t *)(uintptr_t)regions[0];
-            const volatile uint8_t *stage=(const volatile uint8_t *)(uintptr_t)STAGE_BEGIN;
+            const volatile uint8_t *stage=(const volatile uint8_t *)(uintptr_t)(STAGE_BEGIN+player.stage_head);
             for(uint32_t i=0;i<ticket.audio_bytes;i++) target[i]=stage[i];
             for(uint32_t i=ticket.audio_bytes;i<ticket.bytes;i++) target[i]=0;
             for(uint32_t i=0;i<pages;i++) {
@@ -540,11 +545,13 @@ static bool refill(void) {
      * advances. A newer mailbox epoch revokes this ticket before commit. */
     uint32_t sr=mask_begin();bool current=mail_current();
     if(ok && current) {
-        uint32_t remaining=player.model.staged-ticket.audio_bytes;
-        uint8_t *stage=(uint8_t *)(uintptr_t)STAGE_BEGIN;
-        copy_bytes(stage,stage+ticket.audio_bytes,remaining);
         player.last_model_result=kui_armada_ce_stream_refill_complete(&player.model,&ticket,true);
         ok=player.last_model_result==KUI_ARMADA_CE_STREAM_OK;
+        /* Advance past the drained bytes. Shifting the remainder (up to a
+         * whole 16-sector job, byte by byte) here kept IRQs masked for most
+         * of a millisecond after every partial refill. source() moves only
+         * the sub-64-byte carry, unmasked, before appending the next job. */
+        if(ok) player.stage_head=player.model.staged?player.stage_head+ticket.audio_bytes:0u;
     }
     mask_end(sr);
     bool released=kui_armada_ce_stream_native_write_end(&player.native,NULL);
@@ -586,6 +593,15 @@ static bool source(void) {
        progress.bytes!=player.read.sectors*KUI_ARMADA_CE_STREAM_SECTOR_BYTES) return false;
     if(!mail_current()) {cancel_read();return true;}
     if(kui_armada_ce_stream_read_validate(&player.model,&player.read)!=KUI_ARMADA_CE_STREAM_OK) return false;
+    /* Only this worker writes staging. read_plan admits a job only while
+     * fewer than 64 bytes remain, so the carry moved here is tiny. A reset
+     * model (staged 0) simply restarts at the beginning. */
+    if(player.stage_head) {
+        if(player.model.staged)
+            copy_bytes((void *)(uintptr_t)STAGE_BEGIN,
+                (const void *)(uintptr_t)(STAGE_BEGIN+player.stage_head),player.model.staged);
+        player.stage_head=0;
+    }
     copy_bytes((void *)(uintptr_t)(STAGE_BEGIN+player.model.staged),
         (const void *)(uintptr_t)(RAW_BEGIN+player.read.skip),player.read.bytes);
     sr=mask_begin();

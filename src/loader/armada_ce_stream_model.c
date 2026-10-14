@@ -197,7 +197,8 @@ enum kui_armada_ce_stream_result kui_armada_ce_stream_refill_complete(
 }
 bool kui_armada_ce_stream_can_start(const struct kui_armada_ce_stream_model *m) {
     return valid(m) && m->state==KUI_ARMADA_CE_STREAM_PREFILL &&
-        !m->native_running && m->produced==R && !m->read.id && !m->refill.id;
+        !m->native_running && m->produced>=KUI_ARMADA_CE_STREAM_START_BYTES &&
+        m->produced<=R && !m->read.id && !m->refill.id;
 }
 enum kui_armada_ce_stream_result kui_armada_ce_stream_start_complete(
     struct kui_armada_ce_stream_model *m,uint32_t epoch,uint32_t now,bool success) {
@@ -231,14 +232,15 @@ enum kui_armada_ce_stream_result kui_armada_ce_stream_observe(
     if(now-m->last_ms>KUI_ARMADA_CE_STREAM_MAX_OBSERVE_MS) return recover(m,KUI_ARMADA_CE_STREAM_AGE);
     uint32_t delta=play>=m->last_play?play-m->last_play:R-m->last_play+play;
     if(delta>R/2u) return recover(m,KUI_ARMADA_CE_STREAM_CURSOR);
-    /* Native position can remain unchanged across several polls then catch
-     * up. Preserve their elapsed time and compare consumption to the whole
-     * playback lease, retaining the same20ms phase allowance. Resetting the
-     * budget at each unchanged poll falsely rejects that normal catch-up. */
+    /* The native cursor is the authority on what has been played. It moves in
+     * coarse driver blocks, so comparing it with GetTickCount stopped audible
+     * playback for no fault (console a2659555: 0x3C80 moved, 0x39E0 allowed),
+     * and every such stop re-primes the ring: an audible dropout. Ambiguity
+     * is already bounded: observations are at most 999ms apart (AGE), under
+     * R/2 of audio, and any jump past fresh data is UNDERRUN.
+     * kui_armada_ce_stream_cursor_allowance() remains a diagnostic only. */
     uint32_t age=now-m->last_ms;
     if(m->elapsed_ms>UINT64_MAX/176400u-age-20u) return KUI_ARMADA_CE_STREAM_OVERFLOW;
-    uint32_t maximum=kui_armada_ce_stream_cursor_allowance(m,now);
-    if(delta>maximum) return recover(m,KUI_ARMADA_CE_STREAM_CURSOR);
     uint64_t ready=m->produced-m->consumed;
     if(delta>ready) return recover(m,KUI_ARMADA_CE_STREAM_UNDERRUN);
     if(m->consumed>UINT64_MAX-delta || m->origin>UINT64_MAX-(m->consumed+delta))
