@@ -84,8 +84,11 @@ struct kui_armada_ce_live_workspace {
     struct kui_armada_ce_live_link link[KUI_ARMADA_CE_LIVE_MODULE_LIMIT];
     struct kui_armada_ce_live_page page[KUI_ARMADA_CE_LIVE_PAGE_LIMIT];
     struct kui_armada_ce_live_module dsound,sndcore,coredll;
-    /* Set only by the verified native worker's explicit binder entry. */
+    /* Set only by a verified restored caller or native worker binder. */
     bool native_values;
+    /* Scoped to a field-admitted external candidate's section/CRC reads.
+     * Never retained after those checks or published as a module identity. */
+    const struct kui_armada_ce_live_module *native_candidate;
 };
 static inline void kui_armada_ce_live_witness(
     struct kui_armada_ce_live_workspace *w,uint32_t reason,uint32_t node,
@@ -357,10 +360,14 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_
                 status=kui_armada_ce_live_module_fields(w,node,&candidate_module,profile,2u);
                 if(status==KUI_ARMADA_CE_LIVE_MODULE) {memset(w->fault,0,sizeof(w->fault));node=link->next;continue;}
                 if(status!=KUI_ARMADA_CE_LIVE_OK) goto done;
+                w->native_candidate=&candidate_module;
                 status=kui_armada_ce_live_sections(w,&candidate_module,profile,false);
+                w->native_candidate=NULL;
                 if(status==KUI_ARMADA_CE_LIVE_MODULE) {memset(w->fault,0,sizeof(w->fault));node=link->next;continue;}
                 if(status!=KUI_ARMADA_CE_LIVE_OK) goto done;
+                w->native_candidate=&candidate_module;
                 status=kui_armada_ce_live_disk_identity(w,&candidate_module,profile);
+                w->native_candidate=NULL;
                 if(status==KUI_ARMADA_CE_LIVE_IDENTITY) {node=link->next;continue;}
                 if(status!=KUI_ARMADA_CE_LIVE_OK) goto done;
                 m=profile==0u?&w->dsound:&w->sndcore;

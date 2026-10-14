@@ -123,13 +123,16 @@ int main(void) {
     assert(!memcmp(s->fault,audio_fault,sizeof(audio_fault)) && !binds);
     assert(!kui_armada_ce_stream_bind_deferred(NULL) && !binds);
     struct kui_armada_ce_excerpt_binding binding_out;
-    /* This restored-context helper is the first permitted full bind. Its
-     * guarded CPU words would be accessed on target; synthesize those pages. */
+    /* This restored-context helper is the first permitted full bind. A host
+     * has no privileged native SR; initial context refusal must precede both
+     * full binding and any native value read. Synthesize its CPU words. */
     void *cpu=(void *)(uintptr_t)0xff000000u;
     assert(mmap(cpu,0x1000u,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED,-1,0)==cpu);
     void *process=(void *)(uintptr_t)0x8c145000u;
     assert(mmap(process,0x1000u,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED,-1,0)==process);
-    assert(!kui_armada_ce_stream_bind_deferred(&binding_out) && binds==1u);
+    assert(!kui_armada_ce_stream_bind_deferred(&binding_out) && !binds);
+    assert(snapshot.binding[1]==KUI_ARMADA_CE_LIVE_OWNER &&
+        snapshot.fault[2]==KUI_ARMADA_CE_STREAM_OWNER_PROCESS);
     puts("PASS Armada full-stream entry: scalar masked queue, retained PIO priority, bootstrap retry, bus dispatch and deferred-only binding");
     return 0;
 }

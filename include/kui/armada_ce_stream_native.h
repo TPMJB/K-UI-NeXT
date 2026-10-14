@@ -7,7 +7,7 @@
 
 #define KUI_ARMADA_CE_STREAM_VENEER_BYTES 72u
 #define KUI_ARMADA_CE_STREAM_VENEER_PUBLISH_BYTES 96u
-#define KUI_ARMADA_CE_STREAM_PRIORITY 4u /* Exact kernel normal=3, range0..7. */
+#define KUI_ARMADA_CE_STREAM_PRIORITY 2u /* Above kernel normal3; below priority1 sound service. */
 
 /* Testable boundary. All read32/write32 addresses are canonical P1 main RAM;
  * publish_code may OCBP only the newly allocated caller-owned code lines.

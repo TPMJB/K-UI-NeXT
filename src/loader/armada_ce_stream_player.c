@@ -724,7 +724,8 @@ uint32_t kui_armada_ce_stream_worker(uint32_t argument) {
                 kui_armada_ce_excerpt_owner_deferred(0);
                 publish();player.worker_step=0;
                 kui_armada_ce_stream_trace_sample(player.now_ms,player.source_total,
-                    ready_bytes(),player.read_active);
+                    ready_bytes(),player.read_active | (player.model.native_running?2u:0u) |
+                    ((uint32_t)player.model.state<<8));
             }
         }
         if(player.disabled) continue;
