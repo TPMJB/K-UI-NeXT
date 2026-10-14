@@ -43,6 +43,7 @@ struct kui_armada_ce_stream_model {
     bool infinite,native_running,stop_needed,initialized,pending_play;
     struct kui_armada_ce_stream_read read;
     struct kui_armada_ce_stream_refill refill;
+    uint64_t elapsed_ms;
 };
 enum kui_armada_ce_stream_result kui_armada_ce_stream_init(
     struct kui_armada_ce_stream_model *,const struct kui_armada_ce_stream_track *,uint32_t);
@@ -80,6 +81,7 @@ enum kui_armada_ce_stream_result kui_armada_ce_stream_start_complete(
  * even when a newer control epoch has asked that lease to stop. */
 enum kui_armada_ce_stream_result kui_armada_ce_stream_observe(
     struct kui_armada_ce_stream_model *,uint32_t ring_epoch,uint32_t play,uint32_t write,uint32_t now_ms);
+uint32_t kui_armada_ce_stream_cursor_allowance(const struct kui_armada_ce_stream_model *,uint32_t now_ms);
 enum kui_armada_ce_stream_result kui_armada_ce_stream_stop_complete(
     struct kui_armada_ce_stream_model *,uint32_t epoch,bool);
 #endif

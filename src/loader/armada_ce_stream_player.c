@@ -231,7 +231,13 @@ void kui_armada_ce_stream_progress(uint32_t out[3]) {
     out[0]=player.source_total;out[1]=player.model.recoveries;out[2]=player.native.status;
 }
 void kui_armada_ce_stream_fault(uint32_t out[5]) {
-    if(out) copy_bytes(out,player.fault[0]?player.fault:player.recovery,sizeof(player.fault));
+    if(!out) return;
+    /* A previous recoverable cursor event must not hide a later failed
+     * binder admission. Its precise fatal reason remains in the entry. */
+    if(player.fault[0]) copy_bytes(out,player.fault,sizeof(player.fault));
+    else if(player.stats.status==KUI_ARMADA_CE_EXCERPT_IDENTITY)
+        for(unsigned i=0;i<5u;i++) out[i]=0;
+    else copy_bytes(out,player.recovery,sizeof(player.recovery));
 }
 int kui_armada_ce_excerpt_queue(const struct kui_armada_ce_excerpt_binding *unused,
     uint32_t command,uint32_t first,uint32_t last,uint32_t repeat) {
@@ -378,12 +384,13 @@ static bool observe(void) {
         uint32_t elapsed=now-player.model.last_ms;
         uint32_t delta=positions[0]>=player.model.last_play?positions[0]-player.model.last_play:
             KUI_ARMADA_CE_STREAM_RING_BYTES-player.model.last_play+positions[0];
+        uint32_t allowance=kui_armada_ce_stream_cursor_allowance(&player.model,now);
         player.last_model_result=kui_armada_ce_stream_observe(&player.model,player.model.ring_epoch,
             positions[0],frontier.value,now);
         if(player.last_model_result>=KUI_ARMADA_CE_STREAM_CURSOR &&
            player.last_model_result<=KUI_ARMADA_CE_STREAM_UNDERRUN) {
             player.recovery[1]=positions[0];player.recovery[2]=delta;
-            player.recovery[3]=((elapsed+20u)*176400u/1000u)&~3u;
+            player.recovery[3]=allowance;
             player.recovery[4]=elapsed;publish();
             player.recovery[0]=11u+player.last_model_result;
         }
@@ -559,6 +566,11 @@ static bool start(void) {
     if(!kui_armada_ce_stream_can_start(&player.model) || !mail_current()) return true;
     player.stats.last_hresult=call(player.native.api.buffer_set_position,player.stats.buffer,0,0,0);
     if(player.stats.last_hresult) {refuse(KUI_ARMADA_CE_EXCERPT_PLAY);return false;}
+    /* Play may start hardware before its native call returns. Anchor at a
+     * fresh pre-call time, after position preparation, rather than treating
+     * already played audio as an impossible jump after the return. */
+    uint32_t started_ms;
+    if(!clock_now(&started_ms)) return false;
     (void)call(player.binding.enter_cs,player.binding.device+DEVICE_CS_OFFSET,0,0,0);
     player.stats.free_voices=0;
     bool owners_valid=true;
@@ -575,10 +587,8 @@ static bool start(void) {
         if(!owners_valid) {refuse(KUI_ARMADA_CE_EXCERPT_IDENTITY);return false;}
         refuse(KUI_ARMADA_CE_EXCERPT_VOICES);return true;
     }
-    uint32_t now;
-    if(!clock_now(&now)) return false;
     player.last_model_result=kui_armada_ce_stream_start_complete(&player.model,player.model.epoch,
-        now,player.stats.last_hresult==0);
+        started_ms,player.stats.last_hresult==0);
     if(player.stats.last_hresult || player.last_model_result!=KUI_ARMADA_CE_STREAM_OK) {
         refuse(KUI_ARMADA_CE_EXCERPT_PLAY);return false;
     }

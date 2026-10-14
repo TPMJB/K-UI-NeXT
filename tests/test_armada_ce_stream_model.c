@@ -173,6 +173,19 @@ int main(void) {
     reset(&t,1u);CHECK(kui_armada_ce_stream_request(&model,20u,1u,1u,0u)==KUI_ARMADA_CE_STREAM_OK);
     CHECK(kui_armada_ce_stream_read_plan(&model,4u,&rd)==KUI_ARMADA_CE_STREAM_OK);
     CHECK(kui_armada_ce_stream_read_complete(&model,&rd,false,0u)==KUI_ARMADA_CE_STREAM_IO && model.state==KUI_ARMADA_CE_STREAM_FAULT);
+    reset(&t,1u);CHECK(kui_armada_ce_stream_request(&model,20u,1u,1u,15u)==KUI_ARMADA_CE_STREAM_OK);
+    prime();lease=model.ring_epoch;
+    /* A cached native cursor catches up after several unchanged polls.
+     * The pre-Play clock crosses32-bit wrap here; no elapsed time is lost. */
+    uint32_t before_clock_recoveries=model.recoveries;
+    model.last_ms=UINT32_MAX-23u;
+    CHECK(kui_armada_ce_stream_observe(&model,lease,0u,11008u,0u)==KUI_ARMADA_CE_STREAM_OK);
+    CHECK(kui_armada_ce_stream_observe(&model,lease,0u,11008u,16u)==KUI_ARMADA_CE_STREAM_OK);
+    CHECK(kui_armada_ce_stream_observe(&model,lease,0u,11008u,32u)==KUI_ARMADA_CE_STREAM_OK);
+    CHECK(kui_armada_ce_stream_observe(&model,lease,0x3c80u,0x6780u,64u)==KUI_ARMADA_CE_STREAM_OK &&
+        model.consumed==0x3c80u && model.elapsed_ms==88u && model.recoveries==before_clock_recoveries);
+    CHECK(kui_armada_ce_stream_observe(&model,lease,0xbc80u,0xe780u,84u)==KUI_ARMADA_CE_STREAM_CURSOR);
+    CHECK(kui_armada_ce_stream_stop_complete(&model,model.epoch,true)==KUI_ARMADA_CE_STREAM_OK);staged=0;prime();lease=model.ring_epoch;
     printf("Armada CE full stream model: %u checks passed; exact byte sequences, finite/infinite repeats, raw carry, cursor/epoch/control guards.\n",checks);
     return 0;
 }

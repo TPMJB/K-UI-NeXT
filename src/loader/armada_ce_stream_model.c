@@ -204,7 +204,7 @@ enum kui_armada_ce_stream_result kui_armada_ce_stream_start_complete(
     if(epoch!=m->epoch) return KUI_ARMADA_CE_STREAM_STALE;
     if(!kui_armada_ce_stream_can_start(m)) return KUI_ARMADA_CE_STREAM_STATE;
     if(!success) return fault(m);
-    m->ring_epoch=epoch;m->last_ms=now;m->last_play=m->write_cursor=0;
+    m->ring_epoch=epoch;m->last_ms=now;m->last_play=m->write_cursor=0;m->elapsed_ms=0;
     m->native_running=true;m->state=KUI_ARMADA_CE_STREAM_PLAYING;return KUI_ARMADA_CE_STREAM_OK;
 }
 static enum kui_armada_ce_stream_result recover(struct kui_armada_ce_stream_model *m,
@@ -214,6 +214,14 @@ static enum kui_armada_ce_stream_result recover(struct kui_armada_ce_stream_mode
     ++m->epoch;++m->recoveries;cancel(m);m->after_stop=KUI_ARMADA_CE_STREAM_PREFILL;
     m->state=KUI_ARMADA_CE_STREAM_QUIESCING;m->stop_needed=true;return why;
 }
+uint32_t kui_armada_ce_stream_cursor_allowance(const struct kui_armada_ce_stream_model *m,uint32_t now) {
+    uint64_t elapsed=m->elapsed_ms+(uint32_t)(now-m->last_ms)+20u;
+    if(elapsed>UINT64_MAX/176400u) return 0;
+    uint64_t maximum=(elapsed*176400u/1000u)&~UINT64_C(3);
+    if(maximum<=m->consumed) return 0;
+    maximum-=m->consumed;
+    return maximum>UINT32_MAX?UINT32_MAX:(uint32_t)maximum;
+}
 enum kui_armada_ce_stream_result kui_armada_ce_stream_observe(
     struct kui_armada_ce_stream_model *m,uint32_t lease,uint32_t play,uint32_t write,uint32_t now) {
     if(!valid(m)) return KUI_ARMADA_CE_STREAM_ARGUMENT;
@@ -222,9 +230,13 @@ enum kui_armada_ce_stream_result kui_armada_ce_stream_observe(
     if(now-m->last_ms>KUI_ARMADA_CE_STREAM_MAX_OBSERVE_MS) return recover(m,KUI_ARMADA_CE_STREAM_AGE);
     uint32_t delta=play>=m->last_play?play-m->last_play:R-m->last_play+play;
     if(delta>R/2u) return recover(m,KUI_ARMADA_CE_STREAM_CURSOR);
-    /* Permit20ms of native scheduling/tick quantization, but never use a
-     * wildly inconsistent cursor jump as a consumed-space certificate. */
-    uint32_t maximum=((now-m->last_ms+20u)*176400u/1000u)&~3u;
+    /* Native position can remain unchanged across several polls then catch
+     * up. Preserve their elapsed time and compare consumption to the whole
+     * playback lease, retaining the same20ms phase allowance. Resetting the
+     * budget at each unchanged poll falsely rejects that normal catch-up. */
+    uint32_t age=now-m->last_ms;
+    if(m->elapsed_ms>UINT64_MAX/176400u-age-20u) return KUI_ARMADA_CE_STREAM_OVERFLOW;
+    uint32_t maximum=kui_armada_ce_stream_cursor_allowance(m,now);
     if(delta>maximum) return recover(m,KUI_ARMADA_CE_STREAM_CURSOR);
     uint64_t ready=m->produced-m->consumed;
     if(delta>ready) return recover(m,KUI_ARMADA_CE_STREAM_UNDERRUN);
@@ -232,7 +244,7 @@ enum kui_armada_ce_stream_result kui_armada_ce_stream_observe(
         return KUI_ARMADA_CE_STREAM_OVERFLOW;
     m->consumed+=delta;m->audible=m->origin+m->consumed;
     if(!m->infinite && m->audible>m->finite_end) m->audible=m->finite_end;
-    m->last_play=play;m->write_cursor=write;m->last_ms=now;
+    m->last_play=play;m->write_cursor=write;m->last_ms=now;m->elapsed_ms+=age;
     if(!m->infinite && m->audible==m->finite_end && m->state!=KUI_ARMADA_CE_STREAM_QUIESCING) {
         if(m->epoch==UINT32_MAX) return KUI_ARMADA_CE_STREAM_OVERFLOW;
         ++m->epoch;cancel(m);m->state=KUI_ARMADA_CE_STREAM_QUIESCING;

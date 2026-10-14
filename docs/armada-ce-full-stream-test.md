@@ -1,23 +1,46 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Armada CE full CD music stream test
 
+## Coarse cursor observation correction
+
+Console build `a2659555d4bb` still had silent CD music. The user reported
+acceptable FMVs, GAPS `2`, last cursor delta `00003C80`, allowance `000039E0`
+and elapsed `00000040` milliseconds. The native clock/cursor rejection was
+still occurring. This is a failed CD music test.
+
+Timing now uses cumulative elapsed time from the playback call, rather than
+restarting the allowance after every unchanged cursor poll. A native cursor
+that updates in blocks can catch up without losing the elapsed time of its
+unchanged polls. Ring bounds, source availability, stale observations and
+real cursor failures remain checked. The last recovery no longer replaces a
+new fatal sound-binding failure on the return screen.
+
+Main-menu CD music has not been verified for Armada. Test by entering the
+same in-game scene where the earlier excerpt was audible. Listen for about
+30 seconds there and return with A+B+X+Y+Start if music is absent. Do not wait
+at the main menu as a CD music test. The new build remains unverified on the
+console; no long test is requested.
+
 ## Playback clock correction
 
 Console build `6f7a47ced587` returned SOURCE `001A82E0`, GAPS `3`, PLAY `3`,
 HR `0` and no identity fault. The user heard only a brief sound and reported
 heavy, unintelligible FMV echo. This is a failed hardware test.
 
-Cursor observations now use a fresh clock reading after the native position
-call returns. Playback start also records time after native Play returns.
-Previously both used the earlier worker-entry time, so a delayed native call
-could falsely trigger a stop and full refill. Idle refill visits no longer
-acquire the shared native sound-service lock.
+Cursor observations use a fresh clock reading after the native position
+call returns. Playback start records a fresh time before native Play: hardware
+may begin while that call is still waiting to return. The model retains elapsed
+time across unchanged cursor polls and checks total consumption against the
+whole playback lease, with the original20ms allowance. This prevents a cached
+cursor catch-up from falsely triggering repeated stops and full refills. Idle
+refill visits no longer acquire the shared native sound-service lock.
 
 The return screen retains the last recovery when there is no actual audio
 fault. AUDIO WHY `13` means cursor inconsistency, `14` observation age and
 `15` underrun; NODE is cursor, VALUE is cursor delta, EXPECT is allowed delta
 and DETAIL is elapsed milliseconds. Actual identity/context faults take
-precedence. These are hexadecimal values.
+precedence, including a fatal binder refusal after an earlier recoverable
+cursor event. These are hexadecimal values.
 
 Only a focused delayed-call regression and the console compilation/package
 checks were run for this change. Console audio and FMV behavior remain
@@ -44,8 +67,8 @@ without new source requests, and the worker exits after releasing its SCI
 lease. Invalid sound identity prevents further native sound calls. The
 return screen preserves the first precise audio failure in **AUDIO WHY**.
 
-First run a short check: cold boot with CD music On, listen at the menu for
-30 seconds, and note whether FMV speech remains intelligible. If music is
+First run a short check: cold boot with CD music On, enter gameplay where
+the earlier excerpt was audible, and listen there for 30 seconds. If music is
 still absent or speech echoes, return immediately and capture the full
 screen. Longer playback is useful only after this check succeeds. The
 console result of this correction remains unverified.
@@ -90,9 +113,9 @@ establish hardware playback, uninterrupted sound or FMV performance.
    files**, and cold boot. The menu and optional audio loader show the same
    new build ID.
 3. Select **Original Armada → Y Options → CD music On → START**.
-4. Listen for **two minutes at the main menu**. Check that music progresses
-   beyond the old short sample. Note any silence, repeated short segment,
-   gap, crackle or unexpected track restart.
+4. Enter the **in-game scene where the earlier excerpt was audible**. Listen
+   there for 30 seconds. Check whether music progresses beyond the old loop.
+   Return immediately if it remains silent.
 5. Play for **five minutes**, firing guns and checking other effects. Open
    and leave menus, pause and resume gameplay, and note how the music behaves
    during those transitions. Report missing effects, audio cutouts, disc

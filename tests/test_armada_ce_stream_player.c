@@ -157,8 +157,11 @@ uint32_t kui_armada_ce_excerpt_ce_call(uint32_t target,const uint32_t args[8]) {
             !player.model.read.id && !player.model.refill.id);
         const uint8_t *host=(const uint8_t *)(uintptr_t)HOST;
         for(unsigned i=0;i<KUI_ARMADA_CE_STREAM_RING_BYTES;i++) CHECK(host[i]==expected_byte(player.model.origin+i));
-        bus.now+=bus.play_delay_ms;bus.play_delay_ms=0;
-        ++bus.plays;bus.frontier=11008u;return 0;
+        bus.now+=bus.play_delay_ms;
+        bus.cursor=(bus.cursor+((bus.play_delay_ms*176400u/1000u)&~3u))%
+            KUI_ARMADA_CE_STREAM_RING_BYTES;
+        bus.play_delay_ms=0;
+        ++bus.plays;bus.frontier=(bus.cursor+11008u)%KUI_ARMADA_CE_STREAM_RING_BYTES;return 0;
     }
     if(target==player.binding.stop) {CHECK(!bus.consumer && !bus.control);++bus.stops;return 0;}
     if(target==player.binding.get_position) {
@@ -312,18 +315,24 @@ int main(void) {
     reset(true,1u);prime();++cases;
     /* Native calls may wait after the worker entry timestamp. A delayed
      * cursor is checked against a clock captured after that call, and Play
-     * records its completion time after releasing the native control lock. */
+     * records a fresh pre-call time because hardware may start while Play
+     * is still blocked before its successful return. */
     reset(true,128u);bus.play_delay_ms=80u;prime();
-    CHECK(player.model.last_ms==80u && bus.now==80u);
+    CHECK(player.model.last_ms==0u && bus.now==80u && bus.cursor==14112u);
     bus.now+=20u;bus.cursor+=3528u;bus.position_delay_ms=80u;visit();
     CHECK(!player.disabled && player.model.recoveries==0u &&
-        player.model.last_ms==180u && player.model.consumed==17640u);++cases;
+        player.model.last_ms==180u && player.model.consumed==31752u);++cases;
     bus.now+=20u;bus.cursor+=35280u;visit();
     uint32_t recovery[5];kui_armada_ce_stream_fault(recovery);
     CHECK(player.model.recoveries==1u && recovery[0]==11u+KUI_ARMADA_CE_STREAM_CURSOR &&
         recovery[2]==35280u && recovery[3]==7056u && recovery[4]==20u);
     bus.bad_object_page=true;visit();kui_armada_ce_stream_fault(recovery);
     CHECK(recovery[0]==STREAM_FAULT_DEVICE);++cases;
+    reset(true,128u);prime();
+    player.recovery[0]=11u+KUI_ARMADA_CE_STREAM_CURSOR;
+    player.stats.status=KUI_ARMADA_CE_EXCERPT_IDENTITY;
+    kui_armada_ce_stream_fault(recovery);
+    CHECK(!recovery[0] && !recovery[1] && !recovery[2] && !recovery[3] && !recovery[4]);++cases;
     reset(true,1u);prime();
     /* A synthetic one-sector selection verifies the2352/64 carry at a
      * consumption rate below its one-request-per-step source service bound.

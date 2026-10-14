@@ -443,15 +443,13 @@ with verified native-owner virtual reads and releases audio reads on failure.
 It now timestamps cursors after native position calls and playback after Play
 returns, and skips shared sound-lock acquisition on idle refill visits.
 
-First confirm that Armada starts and listen at the menu for **30 seconds**.
-Check whether opening FMV speech is intelligible. If music is absent or speech
-echoes, return immediately and capture the full screen; the AUDIO WHY row now
-preserves the first specific failure, or the last cursor/age/underrun recovery. If this short check succeeds, listen for
-**two minutes at the main menu**, then play for
-**five minutes**. Check music progression, guns and other effects, pause/resume,
-and menu transitions. If practical, compare the same FMV with **CD music Off**.
-Return with **A+B+X+Y+Start** and send a full diagnostic photograph. Report
-silence, cutouts, repeats, disc errors, freezing or missing sound effects.
+Enter the same **in-game scene where the earlier loop was audible** and listen
+there for **30 seconds**. Main-menu CD music has not been verified for Armada.
+If music is absent, return immediately with **A+B+X+Y+Start** and capture the
+full screen. Do not wait at the main menu as an audio test. This revision
+retains elapsed time across unchanged cursor polls and preserves a real
+binding failure instead of replacing it with an earlier cursor recovery.
+No long playtest is requested until this short gameplay test succeeds.
 
 This is a console test of the corrected full-stream path. Build and host checks
 do not establish hardware playback; other CE games are not admitted. No new
@@ -520,7 +518,7 @@ def main():
     parser.add_argument("--elf", type=Path, default=ROOT / "build/kui-runtime.elf")
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     parser.add_argument("--evidence", action="append", default=[], metavar="NAME=PATH")
-    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-Armada-CE-Playback-Clock-Fix.zip")
+    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-Armada-CE-Cumulative-Cursor-Fix.zip")
     args = parser.parse_args()
     try:
         build(args)

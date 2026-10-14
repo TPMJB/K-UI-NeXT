@@ -149,9 +149,9 @@ STREAM_OWNER_BODIES = {
         '00000000'
     ),
     '_mapped_word': bytes.fromhex(
-        '862f01e1962f5368a62fb62fc62fd62f00ede62f224f21dbe07f21d0f366491b1c76181bd215d115d2250b4004e508201cdc'
+        '862f01e1962f5368a62fb62fc62fd62f00ede62f224f21dbe07f21d0f3664b1b1c761a1bd215d115d2250b4004e508201cdc'
         '29891cd00b400900061f02091bda93651bd2a26e231f1ad2e364851f221ff752d41f211f18d218d02252222fc1570b40c266'
-        '0202a261e031038f2a2914d11829048900e112180ae011181228081bf6510e4108202900207f264ff66ef66df66cf66bf66a'
+        '0202a261e031038f2a2914d11829048900e112180ae0111812280a1bf6510e4108202900207f264ff66ef66df66cf66bf66a'
         'f6690b00f66800000000000000000000000000000000080000ff00000000000000000000000000000000f0000070'
     ),
     "___movmemSI12_i4": bytes.fromhex('526051515252022411140b002214'),
@@ -289,9 +289,12 @@ STREAM_BOOT_RELOCS = {
         (0x1b0, "_kui_armada_ce_excerpt_queue", 0)),
     ("controller", "_kui_armada_ce_stream_transport_attached"): ((0xc, "_t", 124),),
     ("controller", "_kui_armada_ce_stream_transport_event"): (
-        (0x1a0, "_t", 124), (0x1a4, "_t", 0),
+        (0x19c, "_bus_valid", 0), (0x1a0, "_t", 124), (0x1a4, "_t", 0),
         (0x1b0, "_t", 1212), (0x1bc, "_t", 636),
-        (0x1c4, "_kui_retail_cursor_feed", 0), (0x284, "_t", 1212)),
+        (0x1b4, "_refresh_holds", 0), (0x1c0, "_finish", 0),
+        (0x1c4, "_kui_retail_cursor_feed", 0), (0x1c8, "_release_audio", 0),
+        (0x1cc, "_audio_failure", 0), (0x284, "_t", 1212),
+        (0x288, "_kui_armada_ce_stream_transport_pump", 0), (0x28c, "_data_active", 0)),
     # The stage embeds the complete controller, so its existing subsequent
     # state/seed literals move with the controller's verified byte length.
     ("stage", "_kui_retail_stage_relay"): (
