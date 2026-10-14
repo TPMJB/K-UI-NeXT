@@ -105,7 +105,8 @@ static bool source_eof(const struct kui_armada_ce_stream_model *m) {
 }
 enum kui_armada_ce_stream_result kui_armada_ce_stream_read_plan(
     struct kui_armada_ce_stream_model *m,uint32_t max,struct kui_armada_ce_stream_read *out) {
-    if(!valid(m) || !out || !max || max>4u) return KUI_ARMADA_CE_STREAM_ARGUMENT;
+    if(!valid(m) || !out || !max || max>KUI_ARMADA_CE_STREAM_BATCH_SECTORS)
+        return KUI_ARMADA_CE_STREAM_ARGUMENT;
     if(!filling(m)) return KUI_ARMADA_CE_STREAM_STATE;
     if(m->read.id || m->refill.id) return KUI_ARMADA_CE_STREAM_BUSY;
     if(m->staged>=64u || source_eof(m)) return KUI_ARMADA_CE_STREAM_NOTHING;

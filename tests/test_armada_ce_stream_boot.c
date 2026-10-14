@@ -171,7 +171,7 @@ int main(void) {
     CHECK(kui_retail_ce_deferred[0]==(uint32_t)(uintptr_t)kui_armada_ce_excerpt_deferred);
     armada_ce_audio_report();CHECK(rows==6u);
     armada_ce_audio_history(0u);armada_ce_audio_history(1u);
-    CHECK(rows==20u && lines==2u);
+    CHECK(rows==20u && lines==5u);
 
     /* The adopted SCI descriptor still reads full audio bytes after the
      * delayed handoff. No detached synthetic bus or separate card model. */

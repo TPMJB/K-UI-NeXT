@@ -271,7 +271,7 @@ static void capture_audio(void) {
         "BUFFER CAPS BYTES VOICES CRC", "CMD FIRST LAST PLAYCUR WRITECUR",
         "EVENTS SAMPLES VISIT-MS JOB-MS JOBS", "LAST SIX PLAYBACK EVENTS",
         "LAST SIX ONE-SECOND SAMPLES", "CODE MS SOURCE READY AUX",
-        "1 START 2 UNDERRUN 3 FAULT 4 SAMPLE"};
+        "5S PER PAGE - POWER OFF TO EXIT"};
     for(unsigned i=0;i<11u;i++) snapshot.report_labels[i]=(uint32_t)(uintptr_t)labels[i];
 #endif
 }

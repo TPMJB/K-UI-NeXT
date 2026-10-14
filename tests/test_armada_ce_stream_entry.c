@@ -116,7 +116,7 @@ int main(void) {
     assert(kui_retail_ce_deferred[0]==(uint32_t)(uintptr_t)kui_armada_ce_excerpt_deferred);
     unsigned before=samples;armada_ce_audio_report();assert(samples==before+1u && rows==6u && !binds);
     armada_ce_audio_history(0u);armada_ce_audio_history(1u);
-    assert(samples==before+3u && rows==20u && lines==2u && !binds);
+    assert(samples==before+3u && rows==20u && lines==5u && !binds);
     audio_fault[0]=7u;audio_fault[1]=0x0c2789b4u;
     audio_fault[2]=0x0dcd116cu;audio_fault[3]=0x0dcd116cu;audio_fault[4]=10u;
     s=kui_armada_ce_bind_probe(UINT32_MAX,0,0,0);

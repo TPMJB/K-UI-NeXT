@@ -236,7 +236,7 @@ static void complete_bus(void) {
 }
 enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_submit(
     uint32_t epoch,uint32_t lba,uint32_t sectors,uintptr_t destination,uint32_t capacity) {
-    CHECK(!bus.consumer && !bus.control && epoch && sectors && sectors<=4u &&
+    CHECK(!bus.consumer && !bus.control && epoch && sectors && sectors<=KUI_ARMADA_CE_STREAM_BATCH_SECTORS &&
         destination==RAW_BEGIN && capacity==RAW_BYTES && bus.submits<4096u);
     bus.submit_epoch[bus.submits++]=epoch;
     if(bus.busy_submits) {--bus.busy_submits;return KUI_ARMADA_CE_STREAM_TRANSPORT_BUSY;}
@@ -313,6 +313,35 @@ static void advance(uint32_t bytes) {
     bus.now+=20u;bus.cursor=(bus.cursor+bytes)%KUI_ARMADA_CE_STREAM_RING_BYTES;
     bus.frontier=(bus.cursor+11008u)%KUI_ARMADA_CE_STREAM_RING_BYTES;visit();
 }
+static void sustained_async(void) {
+    /* Real native visits observed82ms apart. Completion needs multiple
+     * bounded pumps, so a job takes164ms after the replacement is issued.
+     * Assert finite-time native Play and then check consumed PCM at44100Hz,
+     * across four complete rings; a four-sector job cannot sustain this. */
+    reset(true,128u);bus.read_latency_pumps=2u;
+    unsigned visits=0;
+    while(!bus.plays && visits<32u && !player.disabled) {
+        bus.now+=82u;visit();++visits;
+    }
+    CHECK(bus.plays==1u && visits<32u && !player.disabled &&
+        player.model.state==KUI_ARMADA_CE_STREAM_PLAYING);
+    uint64_t physical=0;
+    for(unsigned i=1;i<=120u;i++) {
+        uint64_t next=((uint64_t)i*82u*176400u/1000u)&~UINT64_C(3);
+        uint32_t bytes=(uint32_t)(next-physical);
+        const uint8_t *host=(const uint8_t *)(uintptr_t)HOST;
+        for(uint32_t n=0;n<bytes;n++)
+            CHECK(host[(bus.cursor+n)%KUI_ARMADA_CE_STREAM_RING_BYTES]==
+                expected_byte(player.model.origin+physical+n));
+        bus.now+=82u;bus.cursor=(bus.cursor+bytes)%KUI_ARMADA_CE_STREAM_RING_BYTES;
+        bus.frontier=(bus.cursor+11008u)%KUI_ARMADA_CE_STREAM_RING_BYTES;
+        visit();physical=next;
+        CHECK(!player.disabled && player.model.native_running &&
+            player.model.recoveries==0u && player.model.consumed==physical);
+    }
+    CHECK(physical>4u*KUI_ARMADA_CE_STREAM_RING_BYTES && bus.plays==1u && !bus.stops);
+    ++cases;
+}
 int main(void) {
     void *source_mapping=mmap((void *)(uintptr_t)KUI_ARMADA_CE_EXCERPT_POOL_BEGIN,512u*1024u,
         PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0);
@@ -367,7 +396,7 @@ int main(void) {
     visit();
     CHECK(bus.submits==1u && player.read_active && step_delay()==SOURCE_STEP_MS);
     bus.now+=20u;visit();CHECK(bus.submits==1u && player.source_total==0u);
-    bus.now+=20u;visit();CHECK(player.source_total==9408u && bus.submits==2u &&
+    bus.now+=20u;visit();CHECK(player.source_total==RAW_BYTES && bus.submits==2u &&
         player.read_active && bus.pending && player.model.staged<64u &&
         step_delay()==SOURCE_STEP_MS);
     kui_armada_ce_stream_trace_snapshot(&history);
@@ -382,10 +411,7 @@ int main(void) {
     reset(true,128u);bus.read_latency_pumps=8u;bus.sleep_visits=0u;
     CHECK(kui_armada_ce_stream_worker((uint32_t)(uintptr_t)&player)==UINT32_MAX);
     CHECK(player.read_active && bus.last_sleep_ms==SOURCE_STEP_MS);++cases;
-    reset(true,128u);prime();
-    reset(true,128u);prime();
-    for(unsigned i=0;i<360u;i++) {advance(3528u);CHECK(!player.disabled && player.model.native_running);}
-    CHECK(player.model.consumed>3u*KUI_ARMADA_CE_STREAM_RING_BYTES && player.model.recoveries==0u);++cases;
+    sustained_async();
     /* Mailbox STOP dominates an immediately following RELEASE. */
     uint32_t progress[3],source_total=player.source_total;
     (void)kui_armada_ce_excerpt_queue(NULL,33u,0,0,0);
@@ -436,14 +462,14 @@ int main(void) {
     CHECK(player.disabled && player.stats.status==KUI_ARMADA_CE_EXCERPT_IDENTITY && bus.stops==0u);
     uint32_t failure[5];kui_armada_ce_stream_fault(failure);
     CHECK(failure[0]==STREAM_FAULT_DEVICE && failure[1]==DEVICE && failure[2]!=failure[3]);++cases;
-    /* Reproduce the screenshot's twenty four-sector jobs before a fatal
-     * identity failure. An already-issued next reception is revoked, fenced
+    /* Revoke a partially primed stream before native playback. An
+     * already-issued next reception is revoked, fenced
      * over bounded worker visits, and never promoted to native playback. */
     reset(true,128u);
     CHECK(create_buffer());
-    for(unsigned i=0;i<20u;i++) {CHECK(source());CHECK(refill());}
-    CHECK(player.source_total==20u*4u*2352u && bus.submits==20u && !bus.plays && !player.read_active);
-    bus.pending_pumps=8u;visit();CHECK(player.read_active && bus.pending && bus.submits==21u);
+    for(unsigned i=0;i<8u;i++) {CHECK(source());CHECK(refill());}
+    CHECK(player.source_total==8u*RAW_BYTES && bus.submits==8u && !bus.plays && !player.read_active);
+    bus.pending_pumps=8u;visit();CHECK(player.read_active && bus.pending && bus.submits==9u);
     bus.cancel_pumps=5u;bus.bad_object_page=true;visit();
     CHECK(player.disabled && !player.read_active && player.cleanup_epoch && bus.cancelled && !bus.plays && !bus.stops);
     unsigned revoked_submits=bus.submits,revoked_pumps=bus.pumps;
@@ -451,7 +477,7 @@ int main(void) {
     CHECK(kui_armada_ce_stream_worker((uint32_t)(uintptr_t)&player)==UINT32_MAX);
     CHECK(!player.cleanup_epoch && !bus.pending && !bus.cancelled && bus.cancels==1u &&
         bus.submits==revoked_submits && bus.pumps==revoked_pumps+5u && !bus.plays && !bus.stops && !bus.releases);
-    CHECK(player.source_total==20u*4u*2352u);
+    CHECK(player.source_total==8u*RAW_BYTES);
     kui_armada_ce_stream_fault(failure);
     CHECK(failure[0]==STREAM_FAULT_DEVICE && failure[1]==DEVICE && failure[2]!=failure[3]);++cases;
     /* Caller SR/FPSCR refusal must take the same storage-revocation path,
@@ -480,6 +506,17 @@ int main(void) {
     reset(true,4u);CHECK(create_buffer());CHECK(source());produced=player.model.produced;
     bus.bad_copy_page=true;bus.copy_page_address=HOST;bus.copy_page_flip=2u;
     CHECK(!refill());CHECK(player.model.produced==produced && !bus.consumer && bus.unlocks==1u);++cases;
+    /* A full16-sector refill beginning at page offset4032 reaches eleven
+     * pages. The last page must be witnessed before and after copying. */
+    reset(true,128u);CHECK(create_buffer());
+    player.model.origin=672u;player.model.produced=4032u;
+    player.model.fetch=player.model.origin+player.model.produced;
+    CHECK(source() && player.model.staged==RAW_BYTES);produced=player.model.produced;
+    bus.bad_copy_page=true;bus.copy_page_address=HOST+10u*4096u;bus.copy_page_flip=2u;
+    CHECK(!refill());
+    CHECK(bus.last_lock_offset==4032u && bus.last_lock_bytes==RAW_BYTES &&
+        bus.copy_page_hits==2u && player.model.produced==produced &&
+        player.model.staged==RAW_BYTES && !bus.consumer && bus.unlocks==1u);++cases;
     /* Bootstrap initializes state before handing its entry to nativeThreadBase. */
     reset(true,1u);player.worker_started=0u;player.dispatching=1u;
     kui_armada_ce_excerpt_attempt(SR_REQUIRED,0x40000u);

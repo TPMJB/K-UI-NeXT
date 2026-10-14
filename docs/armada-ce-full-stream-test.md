@@ -1,6 +1,32 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Armada CE full CD music stream test
 
+## Sixteen-sector audio supply
+
+The user confirms the last build boots. Recording62651.mp4 (81.9seconds,
+569eb18f045a) shows the opening video, menus and gameplay. Its return screen
+records SOURCE69A80, worker1, QUEUED1, attempts3, native PLAY0, refusals0,
+HRESULT0 and no binding/cursor recovery. This run did not reach native Play;
+it must not be described as a confirmed playback underrun. The recording ends
+before the two history pages. The earlier0c0318266201 run did reach Play and
+underrun, so both initial filling and sustained supply need verification.
+
+Audio jobs now fetch16raw sectors (37,632bytes, about213ms PCM) rather than
+four (9,408bytes, about53ms). Raw input plus staging occupy75,328bytes inside
+the already reserved352,800-byte source bank. The native ring and overall
+reservation remain unchanged. Native refills can admit a whole audio batch;
+page witnesses cover the worst-case unaligned span. This reduces source job,
+Lock/Unlock and worker handoffs per second, rather than merely enlarging the
+native loop buffer. It is a substantive audio-path change. Hardware audibility
+and the duration of native lock holds remain unverified.
+
+Test by entering the gameplay scene where music was previously audible and
+listen for30seconds. Record the onset or loss of music and all three return
+pages (one15-second cycle) after A+B+X+Y+Start. There is no main-menu wait or
+separate boot-only test. Existing saved UI options and exact excerpt rollback
+remain included. FMV echo is still unresolved; this change does not establish
+its cause or promise movie improvement.
+
 ## Restore the booting DATA reader
 
 Console build `c1818d47492b` froze at ENTERING WINDOWS CE after the bootstrap

@@ -326,6 +326,7 @@ STREAM_BOOT_RELOCS = {
         (0x256, "_kui_retail_async_region", 3516),
         (0x272, "_kui_retail_original_menu", 0),
         (0x276, "_kui_retail_hook_caller", 0),
+        (0x27a, "__retail_resident_bss_end", 0),
     ),
     # The stage embeds the complete controller, so its existing subsequent
     # state/seed literals move with the controller's verified byte length.
@@ -741,7 +742,14 @@ def audit_stream_boot_arm(controller, controller_spans, resident, resident_spans
         code = bytearray(region(image["payload"], address - image_base, count, name))
         for offset, target_name, addend in STREAM_BOOT_RELOCS.get((image_name, name), ()):
             target = image["symbols"].get(target_name, 0) + addend
-            if not image_base <= target < image["memory_end"]:
+            # The initializer's exclusive BSS boundary is a checked bound,
+            # not a dereferenced object or call target. Keep its literal tied
+            # exactly to this image's audited end, within the service stack.
+            exclusive_end = (image_name == "resident" and
+                name == "_kui_retail_resident_init" and offset == 0x27a and
+                target_name == "__retail_resident_bss_end" and addend == 0 and
+                target == image["memory_end"] <= 0x8c00d800)
+            if not (image_base <= target < image["memory_end"] or exclusive_end):
                 raise ValueError("Missing stream bootstrap relocation: " + target_name)
             if code[offset:offset + 4] != struct.pack("<I", target):
                 raise ValueError("Stream bootstrap body targets an unexpected address: " + name)

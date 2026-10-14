@@ -20,7 +20,7 @@ static void reset(const struct kui_armada_ce_stream_track *t,unsigned count) {
 }
 static bool pump(void) {
     struct kui_armada_ce_stream_refill f;
-    enum kui_armada_ce_stream_result result=kui_armada_ce_stream_refill_plan(&model,16384u,&f);
+    enum kui_armada_ce_stream_result result=kui_armada_ce_stream_refill_plan(&model,KUI_ARMADA_CE_STREAM_STAGE_BYTES,&f);
     if(result==KUI_ARMADA_CE_STREAM_OK) {
         CHECK(!(f.ring_offset&63u) && !(f.bytes&63u) && f.ring_offset+f.bytes<=R);
         CHECK(f.audio_bytes<=staged && f.audio_bytes+f.pad_bytes==f.bytes);
@@ -35,9 +35,10 @@ static bool pump(void) {
     if(model.produced-model.consumed>=R-KUI_ARMADA_CE_STREAM_GUARD_BYTES && model.native_running)
         return false;
     struct kui_armada_ce_stream_read read;
-    result=kui_armada_ce_stream_read_plan(&model,4u,&read);
+    result=kui_armada_ce_stream_read_plan(&model,KUI_ARMADA_CE_STREAM_BATCH_SECTORS,&read);
     if(result==KUI_ARMADA_CE_STREAM_NOTHING) return false;
-    CHECK(result==KUI_ARMADA_CE_STREAM_OK && read.sectors>=1u && read.sectors<=4u);
+    CHECK(result==KUI_ARMADA_CE_STREAM_OK && read.sectors>=1u &&
+        read.sectors<=KUI_ARMADA_CE_STREAM_BATCH_SECTORS);
     CHECK(read.skip<S && read.bytes+read.skip<=read.sectors*S);
     CHECK(staged+read.bytes<=sizeof(stage));
     CHECK(kui_armada_ce_stream_read_validate(&model,&read)==KUI_ARMADA_CE_STREAM_OK);
@@ -99,6 +100,8 @@ int main(void) {
     CHECK(kui_armada_ce_stream_request(&model,23u,0u,0u,0u)==KUI_ARMADA_CE_STREAM_OK &&
         model.state==KUI_ARMADA_CE_STREAM_PREFILL && model.selection==selection && !model.audible);
     struct kui_armada_ce_stream_read rd,forged;
+    CHECK(kui_armada_ce_stream_read_plan(&model,KUI_ARMADA_CE_STREAM_BATCH_SECTORS+1u,&rd)==
+        KUI_ARMADA_CE_STREAM_ARGUMENT && !model.read.id);
     CHECK(kui_armada_ce_stream_read_plan(&model,4u,&rd)==KUI_ARMADA_CE_STREAM_OK);
     for(unsigned field=0;field<8u;field++) {
         forged=rd;((uint32_t *)(void *)&forged)[field]^=1u;
@@ -118,7 +121,12 @@ int main(void) {
      * every repeat above is checked byte-for-byte against an independent
      * generated sample sequence, across native ring boundaries. */
     struct kui_armada_ce_stream_track t={1u,0u,1000u,1200u};
-    reset(&t,1u);CHECK(kui_armada_ce_stream_request(&model,20u,1u,1u,15u)==KUI_ARMADA_CE_STREAM_OK);prime();
+    reset(&t,1u);CHECK(kui_armada_ce_stream_request(&model,20u,1u,1u,15u)==KUI_ARMADA_CE_STREAM_OK);
+    CHECK(kui_armada_ce_stream_read_plan(&model,KUI_ARMADA_CE_STREAM_BATCH_SECTORS,&rd)==
+        KUI_ARMADA_CE_STREAM_OK && rd.sectors==16u && rd.bytes==37632u);
+    CHECK(kui_armada_ce_stream_request(&model,33u,0u,0u,0u)==KUI_ARMADA_CE_STREAM_OK);
+    CHECK(kui_armada_ce_stream_read_complete(&model,&rd,true,rd.bytes)==KUI_ARMADA_CE_STREAM_STALE);
+    CHECK(kui_armada_ce_stream_request(&model,20u,1u,1u,15u)==KUI_ARMADA_CE_STREAM_OK);prime();
     uint32_t lease=model.ring_epoch;
     CHECK(kui_armada_ce_stream_observe(&model,lease,8192u,10240u,50u)==KUI_ARMADA_CE_STREAM_OK);
     CHECK(kui_armada_ce_stream_request(&model,22u,0u,0u,0u)==KUI_ARMADA_CE_STREAM_OK && model.stop_needed);

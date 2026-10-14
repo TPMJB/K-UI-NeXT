@@ -21,7 +21,7 @@
 #define CALLBACK_TOKEN UINT32_C(0x4b554943)
 #define CALLBACK_DONE UINT32_C(0x43454453)
 #define FPSCR_NONSCALAR UINT32_C(0x00180000)
-#define RAW_BYTES (4u*KUI_ARMADA_CE_STREAM_SECTOR_BYTES)
+#define RAW_BYTES KUI_ARMADA_CE_STREAM_BATCH_BYTES
 #define RAW_BEGIN KUI_ARMADA_CE_STREAM_SOURCE_BEGIN
 #define STAGE_BEGIN (RAW_BEGIN+RAW_BYTES)
 #define BUFFER_SOFTWARE 8u
@@ -31,7 +31,11 @@
 #define WORKER_TOKEN UINT32_C(0x5354524d)
 #define STEP_MS 20u
 #define SOURCE_STEP_MS 1u
-#define COPY_PAGES 4u
+#define COPY_PAGES ((KUI_ARMADA_CE_STREAM_STAGE_BYTES+4095u)/4096u+1u)
+_Static_assert(RAW_BYTES+KUI_ARMADA_CE_STREAM_STAGE_BYTES<=KUI_ARMADA_CE_STREAM_SOURCE_BYTES,
+    "raw batch and carry staging must fit the already reserved source bank");
+_Static_assert(COPY_PAGES*4096u>=KUI_ARMADA_CE_STREAM_STAGE_BYTES+4095u,
+    "copy witnesses must cover every page of an unaligned refill");
 #ifndef KUI_ARMADA_CE_STREAM_PLAYER_TEST
 #define KUI_ARMADA_CE_STREAM_PLAYER_TEST 0
 #endif
@@ -68,8 +72,8 @@ static uint32_t ready_bytes(void) {
         (uint32_t)(player.model.produced-player.model.consumed):0u;
 }
 static uint32_t step_delay(void) {
-    /* Four raw sectors carry only53ms of PCM. Do not add a20ms handoff
-     * delay while that small source job is pending or staging can accept
+    /* A16-sector job carries213ms of PCM. Keep its native yield short
+     * while source work is pending or staging can accept
      * another. A full staged block awaiting ring room keeps the idle rate. */
     bool filling=player.model.state==KUI_ARMADA_CE_STREAM_PREFILL ||
         player.model.state==KUI_ARMADA_CE_STREAM_PLAYING;
@@ -548,7 +552,7 @@ static bool source(void) {
     if(!player.read_active) {
         enum kui_armada_ce_stream_result planned=player.model.read.id?
             kui_armada_ce_stream_read_validate(&player.model,&player.read):
-            kui_armada_ce_stream_read_plan(&player.model,4u,&player.read);
+            kui_armada_ce_stream_read_plan(&player.model,KUI_ARMADA_CE_STREAM_BATCH_SECTORS,&player.read);
         if(planned==KUI_ARMADA_CE_STREAM_NOTHING || planned==KUI_ARMADA_CE_STREAM_STATE ||
            planned==KUI_ARMADA_CE_STREAM_BUSY) return true;
         if(planned!=KUI_ARMADA_CE_STREAM_OK) return false;

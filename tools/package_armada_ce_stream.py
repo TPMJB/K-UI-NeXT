@@ -436,29 +436,27 @@ onto the SCI microSD card with the console off, replacing **both**
 
 Select **Original Armada → Y Options → CD music On → START**. This test streams
 the requested audio tracks from your image; it is not the earlier two-second
-excerpt loop. This build keeps the native-owner binding correction and removes
-an idle gap between small source reads. Pending source work yields for1ms;
-full staging awaiting ring space retains the20ms idle yield. The foreground
-DATA visit limit from failed console build c1818d47492b has been withdrawn.
-The DATA reader is restored to the exact source from the booting0c0318266201
-build, including its existing IRQ-only limit. The bootstrap passed in the
-failed build, but CE startup froze; this is a boot regression, not audio evidence.
-First confirm Armada reaches its title screen; if it stops again, return that
-screen immediately rather than spending time on the playback test.
+excerpt loop. This build changes the audio supply to16-sector reads, providing
+about213ms of stereo PCM per job instead of53ms. Raw input plus staging fit
+inside the existing reserved source bank; the native ring is unchanged.
+Native refills admit larger batches to reduce job and Lock/Unlock handoffs.
+The last build booted in the supplied video but never reached native Play in
+that run. This revision tests actual playback admission and sustained supply.
 
 Enter the same **in-game scene where the earlier loop was audible** and listen
 there for **30 seconds**. Main-menu CD music has not been verified for Armada.
-Record a short **video with sound**, roughly2–3minutes or separate clips,
-covering the echoing opening speech, the music starting/stopping in gameplay,
-and the three return pages after **A+B+X+Y+Start**. The summary remains15seconds,
-then playback events10seconds and buffer samples10seconds. A still photograph
+Record a short **video with sound** of30seconds in that gameplay scene,
+then press **A+B+X+Y+Start** and continue through the three diagnostic pages.
+A complete page cycle takes15seconds; keep recording until all three are
+captured, then power-cycle. No additional intro/menu wait is needed. The three pages repeat every5seconds until power-off. Record one complete
+15-second cycle, then power-cycle the console. A still photograph
 alone cannot establish when a gap happened or explain repeated FMV speech.
 If music fails sooner, return then. No long playtest is required.
 
 The history records native timestamps, admitted source bytes and fresh ring
 bytes. It also retains start/underrun/fault events and longest worker/source-job
-intervals. The latest prior console run reached native Play but underruns
-continued; sustained audio and the FMV effect remain unverified in this build.
+intervals. Earlier console runs reached native Play and underruns; the supplied569eb
+video recorded zero Play calls. Playback and the FMV effect remain unverified.
 
 This is a console test of the corrected full-stream path. Build and host checks
 do not establish hardware playback; other CE games are not admitted. No new
@@ -527,7 +525,7 @@ def main():
     parser.add_argument("--elf", type=Path, default=ROOT / "build/kui-runtime.elf")
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     parser.add_argument("--evidence", action="append", default=[], metavar="NAME=PATH")
-    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-Armada-CE-Boot-Reader-Restore.zip")
+    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-Armada-CE-Audio-Batch-Fix.zip")
     args = parser.parse_args()
     try:
         build(args)

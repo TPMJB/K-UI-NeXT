@@ -53,6 +53,7 @@ static void armada_ce_audio_report(void) {
     for(unsigned i=0;i<6u;i++)
         retail_display_values((const char *)(uintptr_t)s->report_labels[i],
             (const uint32_t *)(const void *)s+order[i]*5u,5);
+    retail_display_line((const char *)(uintptr_t)s->report_labels[10]);
 #else
     retail_display_values("GD BIND READ QUEUE PIO SKIP",s->binding,5);
     retail_display_values("BIND WHY NODE VALUE EXPECT DETAIL",s->fault,5);
@@ -73,6 +74,7 @@ static void armada_ce_audio_history(unsigned samples) {
     for(unsigned i=0;i<KUI_ARMADA_CE_STREAM_TRACE_ROWS;i++)
         retail_display_values((const char *)(uintptr_t)s->report_labels[9],
             samples?s->trace.samples[i]:s->trace.events[i],5);
+    retail_display_line((const char *)(uintptr_t)s->report_labels[10]);
 }
 #endif
 #elif KUI_ARMADA_CE_RAM_BIND
