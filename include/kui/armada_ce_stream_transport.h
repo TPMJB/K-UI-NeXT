@@ -62,6 +62,12 @@ uint32_t kui_armada_ce_stream_transport_event(uint32_t event,uintptr_t argument)
 /* Read-only bootstrap gate. Attachment is authorized by the stage only
  * after the controller's code, zero state and source pool are verified. */
 bool kui_armada_ce_stream_transport_attached(void);
+/* Masked authored-state update only. Enter urgency at one second of fresh
+ * PCM, leave at1.5 seconds, and clear when inactive. A changed priority
+ * applies at the next AUDIO grant; DATA's16-block allowance and its
+ * synchronous one-reception preemption remain unchanged. */
+void kui_armada_ce_stream_transport_priority(uint32_t fresh_bytes,bool active);
+bool kui_armada_ce_stream_transport_urgent(void);
 enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_submit(
     uint32_t epoch,uint32_t raw_lba,uint32_t sectors,uintptr_t destination,uint32_t capacity);
 /* At most one received block is copied and one reception started per pump.

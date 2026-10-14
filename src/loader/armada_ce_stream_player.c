@@ -105,6 +105,13 @@ static void mask_end(uint32_t sr) {
     (void)sr;
 #endif
 }
+static void update_priority(bool active) {
+    /* Only authored arbitration state changes here. Publish it through the
+     * same short integer mask as the worker's transport bridge. */
+    uint32_t saved=mask_begin();
+    kui_armada_ce_stream_transport_priority(ready_bytes(),active);
+    mask_end(saved);
+}
 static void copy_bytes(void *to,const void *from,uint32_t bytes) {
     volatile uint8_t *dst=to;const volatile uint8_t *src=from;
     for(uint32_t i=0;i<bytes;i++) dst[i]=src[i];
@@ -380,6 +387,7 @@ static bool drain_cancelled_read(void) {
     mask_end(sr);return !player.cleanup_epoch;
 }
 static void cancel_read(void) {
+    update_priority(false);
     if(player.read_active) {
         uint32_t sr=mask_begin();
         player.cleanup_epoch=player.read_bus_epoch;
@@ -652,6 +660,8 @@ static void step(uint32_t sr,uint32_t fpscr) {
     }
     native_allowed=true;
     if(!observe() || !control() || !stopped()) goto failed;
+    update_priority(player.model.state==KUI_ARMADA_CE_STREAM_PREFILL ||
+        player.model.state==KUI_ARMADA_CE_STREAM_PLAYING);
     if(!mail_current()) return;
     if(player.model.state==KUI_ARMADA_CE_STREAM_PREFILL || player.model.state==KUI_ARMADA_CE_STREAM_PLAYING) {
         if(!player.stats.buffer && !create_buffer()) goto failed;
@@ -734,6 +744,7 @@ uint32_t kui_armada_ce_stream_worker(uint32_t argument) {
                 publish();player.worker_step=0;
                 kui_armada_ce_stream_trace_sample(player.now_ms,player.source_total,
                     ready_bytes(),player.read_active | (player.model.native_running?2u:0u) |
+                    (kui_armada_ce_stream_transport_urgent()?4u:0u) |
                     ((uint32_t)player.model.state<<8));
             }
         }

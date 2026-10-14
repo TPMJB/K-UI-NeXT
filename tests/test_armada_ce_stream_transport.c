@@ -14,7 +14,7 @@
 #include <string.h>
 
 #define CARD_BLOCKS 2048u
-#define AUDIO_BYTES (8u * KUI_GAME_RAW_BYTES)
+#define AUDIO_BYTES (16u * KUI_GAME_RAW_BYTES)
 static unsigned checks;
 #define CHECK(x) do { ++checks; if(!(x)) { \
     fprintf(stderr, "line %d: %s\n", __LINE__, #x); abort(); \
@@ -55,7 +55,7 @@ static void fixture(void) {
     strcpy(manifest.title, "Armada SCI ownership test");
     strcpy(manifest.bootfile, "0WINCEOS.BIN");
     static const uint32_t start[4] = {0u, 3u, 45000u, 45002u};
-    static const uint32_t end[4] = {3u, 7u, 45002u, 45010u};
+    static const uint32_t end[4] = {3u, 7u, 45002u, 45018u};
     static const uint32_t offset[4] = {0u, 509u, 0u, 257u};
     for(unsigned i = 0; i < 4u; ++i) {
         struct kui_retail_track *t = &manifest.slots[i].track;
@@ -253,7 +253,7 @@ static void test_admission(void) {
     bad=bus;bad.region=NULL;CHECK(!kui_armada_ce_stream_transport_event(KUI_ARMADA_CE_STREAM_BUS_ATTACH,(uintptr_t)&bad));
     CHECK(kui_armada_ce_stream_transport_event(KUI_ARMADA_CE_STREAM_BUS_ATTACH,(uintptr_t)&bus)==1u);
     static const uint32_t args[][3]={{0u,3u,1u},{1u,3u,0u},{1u,3u,65u},{1u,0u,1u},
-        {1u,45000u,1u},{1u,7u,1u},{1u,6u,2u},{1u,45009u,2u},{1u,UINT32_MAX,2u}};
+        {1u,45000u,1u},{1u,7u,1u},{1u,6u,2u},{1u,45017u,2u},{1u,UINT32_MAX,2u}};
     for(unsigned i=0;i<sizeof(args)/sizeof(args[0]);i++)
         CHECK(kui_armada_ce_stream_transport_submit(args[i][0],args[i][1],args[i][2],
             (uintptr_t)output.bytes,sizeof(output.bytes))==KUI_ARMADA_CE_STREAM_TRANSPORT_ARGUMENT);
@@ -346,9 +346,12 @@ static void test_parked_data(void) {
 /* Keep delivering real DATA cursors while AUDIO is pending. This oracle
  * checks every DATA byte before dispatching the actual DATA_BLOCK callback;
  * credit calls here are consequences of checked deliveries, not clock ticks. */
-static void test_continuous_data(void) {
+static void test_continuous_data(bool urgent) {
     setup();data_active(100u);region.engine.in_irq=1u;
-    submit(1u,45002u,8u);wire.latency=2u;
+    kui_armada_ce_stream_transport_priority(0u,urgent);
+    CHECK(kui_armada_ce_stream_transport_urgent()==urgent);
+    uint32_t count=urgent?16u:8u,quantum=urgent?64u:8u;
+    submit(1u,45002u,count);wire.latency=2u;
     unsigned jobs=0u,delivered=0u;
     for(unsigned cycle=0;cycle<20u && snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING;cycle++) {
         CHECK(kui_armada_ce_stream_transport_event(KUI_ARMADA_CE_STREAM_BUS_DATA_ENTER,0u));
@@ -372,16 +375,57 @@ static void test_continuous_data(void) {
             if(n<15u) CHECK(snap(1u).owner==1u && !wire.busy);
         }
         CHECK(snap(1u).owner==2u && wire.busy && !wire.waits);
-        for(unsigned n=0;n<80u && snap(1u).owner==2u;n++) pump_one(1u,true);
-        CHECK(snap(1u).audio_blocks>before && snap(1u).audio_blocks-before<=8u);
+        for(unsigned n=0;n<260u && snap(1u).owner==2u;n++) pump_one(1u,true);
+        CHECK(snap(1u).audio_blocks>before && snap(1u).audio_blocks-before<=quantum);
+        if(!cycle) CHECK(snap(1u).audio_blocks-before==quantum);
         CHECK(!region.engine.failed && region.engine.active && region.shared.service.pending);
     }
     CHECK(snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_DONE);
-    CHECK(snap(1u).data_blocks==delivered && delivered>=64u && jobs>=4u);
-    exact_audio(45002u,8u);CHECK(!wire.waits);intact();
+    CHECK(snap(1u).data_blocks==delivered && delivered>=(urgent?32u:64u) && jobs>=(urgent?2u:4u));
+    exact_audio(45002u,count);CHECK(!wire.waits);intact();
+}
+static void test_priority(void) {
+    setup();
+    CHECK(!kui_armada_ce_stream_transport_urgent());
+    kui_armada_ce_stream_transport_priority(176401u,true);
+    CHECK(!kui_armada_ce_stream_transport_urgent());
+    kui_armada_ce_stream_transport_priority(176400u,true);
+    CHECK(kui_armada_ce_stream_transport_urgent());
+    kui_armada_ce_stream_transport_priority(264599u,true);
+    CHECK(kui_armada_ce_stream_transport_urgent());
+    kui_armada_ce_stream_transport_priority(264600u,true);
+    CHECK(!kui_armada_ce_stream_transport_urgent());
+    /* Change priority inside a live grant. Only its replacement may use
+     * the new allowance: first8, then64, then normal8 on the next job. */
+    data_active(101u);region.engine.in_irq=1u;submit(1u,45002u,16u);
+    credits(16u);CHECK(snap(1u).owner==2u);
+    kui_armada_ce_stream_transport_priority(0u,true);
+    for(unsigned n=0;n<16u && snap(1u).owner==2u;n++) pump_one(1u,true);
+    CHECK(snap(1u).audio_blocks==8u && snap(1u).owner==0u);
+    credits(15u);pump_one(1u,false);CHECK(snap(1u).owner!=2u);
+    credits(1u);CHECK(snap(1u).owner==2u);
+    kui_armada_ce_stream_transport_priority(264600u,true);
+    for(unsigned n=0;n<80u && snap(1u).owner==2u;n++) pump_one(1u,true);
+    CHECK(snap(1u).audio_blocks==72u && snap(1u).owner==0u &&
+        snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING);
+    credits(16u);
+    for(unsigned n=0;n<16u && snap(1u).owner==2u;n++) pump_one(1u,true);
+    CHECK(snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_DONE);exact_audio(45002u,16u);
+    uint32_t before=snap(1u).audio_blocks;
+    memset(&output,0xa5,sizeof(output));submit(2u,45002u,16u);credits(16u);
+    for(unsigned n=0;n<16u && snap(2u).owner==2u;n++) pump_one(2u,true);
+    CHECK(snap(2u).audio_blocks==before+8u && snap(2u).owner==0u &&
+        snap(2u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING);
+    kui_armada_ce_stream_transport_priority(0u,true);
+    CHECK(kui_armada_ce_stream_transport_urgent());
+    kui_armada_ce_stream_transport_priority(0u,false);
+    CHECK(!kui_armada_ce_stream_transport_urgent());
+    CHECK(kui_armada_ce_stream_transport_cancel(2u)==KUI_ARMADA_CE_STREAM_TRANSPORT_CANCELLED);
+    CHECK(!wire.waits && !wire.busy);intact();
 }
 static void test_fences(void) {
-    setup();wire.latency=100u;submit(1u,45002u,8u);pump_one(1u,false);
+    setup();kui_armada_ce_stream_transport_priority(0u,true);
+    wire.latency=100u;submit(1u,45002u,8u);pump_one(1u,false);
     CHECK(wire.busy && snap(1u).bytes==0u);
     CHECK(!kui_armada_ce_stream_transport_event(KUI_ARMADA_CE_STREAM_BUS_DATA_ENTER,0u));
     CHECK(!wire.waits && wire.busy);
@@ -444,7 +488,8 @@ static void test_audio_errors(void) {
     CHECK(snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_IO && wire.opens==1u && !wire.fetches);intact();
 }
 static void test_cancel(void) {
-    setup();wire.latency=4u;submit(11u,45002u,8u);pump_one(11u,false);
+    setup();kui_armada_ce_stream_transport_priority(0u,true);
+    wire.latency=4u;submit(11u,45002u,8u);pump_one(11u,false);
     CHECK(wire.busy);uint8_t untouched[AUDIO_BYTES];memcpy(untouched,output.bytes,sizeof(untouched));
     CHECK(kui_armada_ce_stream_transport_cancel(11u)==KUI_ARMADA_CE_STREAM_TRANSPORT_CANCELLED);
     CHECK(kui_armada_ce_stream_transport_submit(12u,3u,1u,(uintptr_t)output.bytes,sizeof(output.bytes))==KUI_ARMADA_CE_STREAM_TRANSPORT_BUSY);
@@ -458,7 +503,8 @@ static void test_cancel(void) {
     CHECK(kui_armada_ce_stream_transport_snapshot(11u,&(struct kui_armada_ce_stream_transport_snapshot){0})==KUI_ARMADA_CE_STREAM_TRANSPORT_STALE);
     /* Cancellation after checked prefix delivery preserves that prefix and
      * never copies the next completed bank into the abandoned source ticket. */
-    setup();submit(1u,45002u,8u);pump_one(1u,false);pump_one(1u,false);
+    setup();kui_armada_ce_stream_transport_priority(0u,true);
+    submit(1u,45002u,8u);pump_one(1u,false);pump_one(1u,false);
     CHECK(snap(1u).bytes && wire.busy);uint32_t bytes=snap(1u).bytes;
     memcpy(untouched,output.bytes,sizeof(untouched));
     CHECK(kui_armada_ce_stream_transport_cancel(1u)==KUI_ARMADA_CE_STREAM_TRANSPORT_CANCELLED);
@@ -466,7 +512,8 @@ static void test_cancel(void) {
     CHECK(!wire.busy && !wire.waits);intact();
 }
 int main(void) {
-    test_raw_mapping();test_admission();test_parked_data();test_continuous_data();test_fences();
+    test_raw_mapping();test_admission();test_parked_data();test_continuous_data(false);
+    test_continuous_data(true);test_priority();test_fences();
     test_token_holds_and_errors();test_audio_errors();test_cancel();
     printf("Armada CE production SCI transport: %u checks passed\n",checks);
     return 0;

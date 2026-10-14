@@ -7,6 +7,9 @@
 
 #define DATA_QUANTUM 16u
 #define AUDIO_QUANTUM 8u
+#define AUDIO_URGENT_QUANTUM 64u
+#define AUDIO_URGENT_ENTER_BYTES 176400u
+#define AUDIO_URGENT_EXIT_BYTES 264600u
 #define TOKEN_LIMIT 65536u
 #define RETRIES 8u
 #define OWNER_NONE 0u
@@ -20,11 +23,17 @@ static struct {
     struct kui_retail_cursor cursor;
     struct kui_armada_ce_stream_transport_snapshot stats;
     struct held_block held[2];
-    uint32_t initialized,generation,data_token,data_credit,audio_credit,cancelled,early_polled;
+    uint32_t initialized,generation,data_token,data_credit,audio_credit,cancelled,early_polled,urgent;
 } t;
 #ifdef KUI_ARMADA_CE_STREAM_TRANSPORT_TEST
 void kui_armada_ce_stream_transport_test_reset(void) { memset(&t,0,sizeof(t)); }
 #endif
+
+void kui_armada_ce_stream_transport_priority(uint32_t fresh_bytes,bool active) {
+    if(!active || fresh_bytes>=AUDIO_URGENT_EXIT_BYTES) t.urgent=0u;
+    else if(fresh_bytes<=AUDIO_URGENT_ENTER_BYTES) t.urgent=1u;
+}
+bool kui_armada_ce_stream_transport_urgent(void) { return t.urgent!=0u; }
 
 static bool span(uintptr_t address,uintptr_t first,uintptr_t end,size_t bytes) {
     return address>=first && address<end && bytes<=end-address;
@@ -119,7 +128,7 @@ enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_submit
     t.destination=destination;t.generation=epoch;t.cancelled=t.early_polled=0;
     t.stats.epoch=epoch;t.stats.bytes=0;t.stats.total=sectors*2352u;
     t.stats.retries=0;t.stats.status=KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING;
-    t.audio_credit=AUDIO_QUANTUM;return KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING;
+    return KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING;
 }
 /* End at most one reception. The synchronous DATA fence may wait for that
  * block only. The worker and IRQ never call wait. */
@@ -157,7 +166,8 @@ static bool audio_grant(void) {
     enum kui_sci_stream_result result=(enum kui_sci_stream_result)finish(false);
     if(t.bus.busy()) return false;
     park_data(result);t.bus.discard();
-    t.stats.owner=OWNER_AUDIO;t.audio_credit=AUDIO_QUANTUM;t.data_credit=0;
+    t.stats.owner=OWNER_AUDIO;
+    t.audio_credit=t.urgent?AUDIO_URGENT_QUANTUM:AUDIO_QUANTUM;t.data_credit=0;
     return true;
 }
 static void release_audio(void) {

@@ -28,14 +28,15 @@ static unsigned checks,cases;
 
 struct authored_bus {
     unsigned consumer,control,locks,unlocks,plays,stops,releases;
-    unsigned submits,pumps,cancels,waits,starts,owner_admissions;
+    unsigned submits,pumps,cancels,waits,starts,owner_admissions,priority_updates;
+    uint32_t priority_fresh;
     uint32_t cursor,frontier,now,epoch,lba,sectors,bytes,raw;
     uint32_t position_delay_ms,play_delay_ms;
     uint32_t submit_epoch[4096],last_lock_offset,last_lock_bytes;
     unsigned pending_pumps,read_latency_pumps,cancel_pumps,busy_submits,sleep_visits;
     uint32_t last_sleep_ms;
     bool pending,cancelled,revoked,stale_unlock,stale_source,bad_unlock,fail_end;
-    bool bad_current,fail_ticks,driver_context,fail_owner_admission;
+    bool bad_current,fail_ticks,driver_context,fail_owner_admission,urgent,priority_active;
     bool bad_object_page,bad_copy_page,lock_held;
     uint32_t copy_page_address;
     unsigned copy_page_hits,copy_page_flip;
@@ -289,6 +290,13 @@ enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_cancel
     CHECK(!bus.control && epoch==bus.epoch);++bus.cancels;bus.cancelled=bus.revoked=true;
     return KUI_ARMADA_CE_STREAM_TRANSPORT_CANCELLED;
 }
+void kui_armada_ce_stream_transport_priority(uint32_t fresh,bool active) {
+    /* Transport's own tests verify hysteresis and grants. This seam checks
+     * the real worker publishes fresh readiness and clears on control/fault. */
+    ++bus.priority_updates;bus.priority_fresh=fresh;bus.priority_active=active;
+    bus.urgent=active && fresh<=176400u;
+}
+bool kui_armada_ce_stream_transport_urgent(void) {return bus.urgent;}
 enum kui_game_result kui_retail_manifest_decode(const uint8_t wire[KUI_RETAIL_IMAGE_WIRE_BYTES],struct kui_retail_manifest *out) {
     (void)wire;(void)out;return KUI_GAME_INVALID; /* Seed decoder has its separate actual tests. */
 }
@@ -379,6 +387,16 @@ int main(void) {
         history.events[1][0]==KUI_ARMADA_CE_STREAM_TRACE_UNDERRUN &&
         history.events[1][1]==20u && history.events[1][2]==fetched_before &&
         history.events[1][3]==64u && history.events[1][4]==20u);++cases;
+    /* The real worker publishes post-observation readiness while a source
+     * job is delayed, then withdraws urgency when gameplay is paused. */
+    reset(true,128u);prime();bus.pending_pumps=1000u;
+    for(unsigned i=0;i<5u;i++) {bus.now+=230u;advance(44100u);}
+    CHECK(!player.disabled && player.model.native_running && bus.urgent &&
+        bus.priority_active && bus.priority_fresh==ready_bytes() &&
+        bus.priority_fresh<=176400u);
+    (void)kui_armada_ce_excerpt_queue(NULL,22u,0,0,0);visit();
+    CHECK(!bus.urgent && !bus.priority_active &&
+        player.model.state==KUI_ARMADA_CE_STREAM_PAUSED);++cases;
     /* Native calls may wait after the worker entry timestamp. A delayed
      * cursor is checked against a clock captured after that call, and Play
      * records a fresh pre-call time because hardware may start while Play

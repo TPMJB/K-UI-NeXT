@@ -3,28 +3,33 @@
 
 ## What this revision changes
 
-Recording `62653.mp4` shows initial binding still refused in `4185d3932103`:
-BIND `A`, WHY `10`, address `03CC6198`, read status `1` (ARGUMENT), current
-process `8C14E8B4` (disc driver index 3). Armada's sound owner is process 5.
-SOURCE, WORKER, PLAY and all running history remain zero. A focused authored
-fixture reproduces the exact refusal; the last reader wrongly required the
-sound DLL to be attached to the current driver before the owner callback.
+Recording `62654.mp4` confirms audible gameplay music in `1ae245a365d8`.
+The return summary records WORKER 1, PLAY `B` (11), REFUSED 0 and HRESULT 0,
+with nine recoveries. The retained error is a real UNDERRUN; recorded playback
+events also show buffer depletion. Startup binding now succeeds.
 
-Startup now discovers only the destination process from bounded kernel
-module/process metadata. It repeats module links, exact profile fields,
-attachment/ref counts and the selected process/index/slot/handle. It reads
-no virtual DLL, game, object or API word in this phase. The existing pinned
-kernel callback then enters that process and runs the complete native sound
-binder. Game/module CRCs, sections, references, objects, methods and mapping
-proofs must all pass before sound or thread APIs are used. An ambiguous owner
-or changed generation is refused. Native values are never read through the
-foreign driver's access-key context.
+While playing, samples at 109,400 and 111,400 ms show SOURCE increasing from
+`00669780` to `0068E3B0`: 150,576 bytes in two seconds, or 75,288 B/s.
+Stereo CD audio consumes 176,400 B/s. READY falls from 254,208 to 50,944 bytes.
+The longest source job is 1,050 ms, although a 16-sector job carries only
+213 ms of audio. The longest worker visit is 56 ms. These measurements identify
+insufficient source supply in this run, rather than a startup or native Play
+refusal. They do not by themselves prove where every job's delay occurred.
 
-Worker priority changes from `4` to `2`, above kernel normal priority `3`.
-SNDCORE explicitly requests priority `1`, so native sound service keeps
-precedence. Existing 16-sector jobs carry 37,632 bytes, about 213 ms of stereo
-PCM, inside the same reserved source bank. The shared GD/DATA reader and
-native ring size are unchanged.
+Audio arbitration now enters urgency at one second of fresh PCM or less and
+leaves at 1.5 seconds; pause, stop and failure clear it. An urgent audio grant
+allows 64 card blocks instead of eight. DATA retains 16 blocks, permitting an
+80% audio share in contended asynchronous turns instead of one third. Each
+pump still handles at most one received block. Synchronous foreground DATA
+retains immediate preemption after the in-flight block, and the shared DATA
+reader is unchanged. This is a source-scheduling change, not a larger native
+ring or an alteration to cursor/underrun recovery.
+
+The working driver-to-game callback, full native identity admission, worker
+priority 2, 16-sector reads and source reservations are retained. Startup
+still uses metadata-only discovery followed by full binding inside Armada's
+owner process before any sound/thread API. Hardware sustained supply remains
+to be confirmed; host tests cannot establish CE scheduling or audibility.
 
 ## Console test
 
@@ -51,8 +56,8 @@ exists yet, and AUX carries the admission/start status (zero means success).
 Thus initial refusals no longer leave the event page empty; periodic samples
 correctly stay zero until the worker starts. Rows contain
 code, native milliseconds, cumulative source bytes, fresh ring bytes and AUX.
-Sample AUX bit 0 means pending read, bit 1 means native playback running;
-bits 8 onward contain model state. Counts include maximum worker visit and
+Sample AUX bit 0 means pending read, bit 1 means native playback running,
+bit 2 means urgent audio grants; bits 8 onward contain model state. Counts include maximum worker visit and
 source-job intervals, and completed jobs. Source-job duration is approximate.
 
 While playback runs uninterrupted, required source growth is

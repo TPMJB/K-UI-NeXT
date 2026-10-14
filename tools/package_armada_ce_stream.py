@@ -436,13 +436,13 @@ onto the SCI microSD card with the console off, replacing **both**
 
 Select **Original Armada → Y Options → CD music On → START**. This test streams
 the requested audio tracks from your image; it is not the earlier two-second
-excerpt loop. Recording62653 reproduces a startup error in4185d3932103:
-the native reader tried to admit Armada's sound DLL from the disc driver's
-process before entering the game's sound owner. Startup now performs bounded
-metadata-only owner discovery, enters that owner through the existing kernel
-callback, then performs full native sound identity binding before using any
-sound/thread API. Worker priority2 and16-sector reads remain. The shared
-GD/DATA reader is unchanged.
+excerpt loop. Recording62654 confirms repeated native Play with audible music,
+but the measured source supply is about75kB/s where176.4kB/s is required.
+This build gives low-buffer music an urgent64-block audio grant instead of8,
+then restores normal grants after1.5seconds of fresh PCM is available. DATA
+keeps its16-block grant and immediate foreground preemption. Each pump still
+handles one block. The working startup, priority2,16-sector reads, recovery
+and shared DATA reader are retained.
 
 Use the same in-game scene where the earlier loop was audible. No main-menu
 wait or gameplay video is requested. Return with **A+B+X+Y+Start** after music
@@ -452,9 +452,12 @@ The pages repeat every five seconds until power-off.
 
 The event page now also records discovery5, owner binding6 and worker start7,
 even before streaming starts. These startup rows have MS0; AUX0 means success.
-Running history records native timestamps, source bytes and fresh ring bytes. It also retains start/underrun/fault events and longest worker/source-job
-intervals. Earlier console runs reached Play and underruns; recordings62652/62653
-failed initial binding. Playback and FMV behavior remain hardware-unverified.
+Running history records native timestamps, source bytes and fresh ring bytes.
+Sample AUX bit2 marks urgent audio grants, so the next trace shows whether
+priority engaged while the source budget and fresh buffer changed. It also retains start/underrun/fault events and longest worker/source-job
+intervals. Recording62654 reached native playback with no native refusals and measured
+underruns. Sustained playback with this new arbitration remains unverified;
+FMV echo is still unresolved.
 
 This is a console test of the corrected full-stream path. Build and host checks
 do not establish hardware playback; other CE games are not admitted. No new
@@ -523,7 +526,7 @@ def main():
     parser.add_argument("--elf", type=Path, default=ROOT / "build/kui-runtime.elf")
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     parser.add_argument("--evidence", action="append", default=[], metavar="NAME=PATH")
-    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-Armada-CE-Owner-Callback-Audio-Fix.zip")
+    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-Armada-CE-Low-Buffer-Audio-Fix.zip")
     args = parser.parse_args()
     try:
         build(args)
