@@ -155,8 +155,10 @@ static void directories(void) {
         for(unsigned i = 0; i < page.count; ++i) {
             listed[offset + i] = page.entries[i];
             if(page.entries[i].disabled) {
-                assert(!strcmp(page.entries[i].name, "[Name too long]")); ++disabled;
+                assert(!strcmp(page.entries[i].name, "[Name too long]"));
+                assert(!page.entries[i].job_selectable); ++disabled;
             } else {
+                assert(page.entries[i].job_selectable);
                 assert(strcmp(prior_name, page.entries[i].name) < 0);
                 strcpy(prior_name, page.entries[i].name);
                 unsigned found = expected_count;
@@ -179,11 +181,13 @@ static void directories(void) {
     for(unsigned i = 0; i < page.count; ++i) {
         assert(!strcmp(page.entries[i].name, listed[3 + i].name));
         assert(page.entries[i].disabled == listed[3 + i].disabled);
+        assert(page.entries[i].job_selectable == listed[3 + i].job_selectable);
     }
     assert(kui_destination_list("/Browse", 22, &page, log_line)); assert(page.count == 3 && !page.has_more);
     for(unsigned i = 0; i < page.count; ++i) {
         assert(!strcmp(page.entries[i].name, listed[22 + i].name));
         assert(page.entries[i].disabled == listed[22 + i].disabled);
+        assert(page.entries[i].job_selectable == listed[22 + i].job_selectable);
     }
     assert(kui_destination_list("/Browse/Deep/Nested", 0, &page, log_line)); assert(!page.count && !page.has_more);
     assert(!kui_destination_list("/Browse/occupied.dat", 0, &page, log_line));
@@ -191,7 +195,7 @@ static void directories(void) {
     assert(kui_destination_list("/", 0, &page, log_line));
     bool root_has_kui = false, root_has_browse = false;
     for(unsigned i = 0; i < page.count; ++i) {
-        assert(!page.entries[i].disabled);
+        assert(!page.entries[i].disabled && page.entries[i].job_selectable);
         root_has_kui |= !strcmp(page.entries[i].name, "KUI");
         root_has_browse |= !strcmp(page.entries[i].name, "Browse");
     }
@@ -208,13 +212,28 @@ static void directories(void) {
     assert(kui_destination_mkdirs(long_root, log_line));
     snprintf(full, sizeof(full), "0:%s/ExtendsTooFar", long_root); assert(f_mkdir(full) == FR_OK);
     snprintf(full, sizeof(full), "0:%s/ok", long_root); assert(f_mkdir(full) == FR_OK);
+    before = test.writes;
     assert(kui_destination_list(long_root, 0, &page, log_line)); assert(page.count == 2 && !page.has_more);
     bool saw_blocked = false, saw_ok = false;
     for(unsigned i = 0; i < page.count; ++i) {
+        assert(page.entries[i].job_selectable);
         if(!strcmp(page.entries[i].name, "ExtendsTooFar")) { assert(page.entries[i].disabled); saw_blocked = true; }
         else { assert(!strcmp(page.entries[i].name, "ok") && !page.entries[i].disabled); saw_ok = true; }
     }
-    assert(saw_blocked && saw_ok);
+    assert(saw_blocked && saw_ok && test.writes == before);
+
+    /* A representable leaf can exceed even the longer qualified job bound.
+     * Keep the actual name visible, but enable neither navigation nor use. */
+    char maximum_root[KUI_DEST_ROOT_CAP], maximum_leaf[KUI_DEST_NAME_CAP];
+    maximum_root[0]='/';memset(maximum_root+1,'a',63);maximum_root[64]='/';
+    memset(maximum_root+65,'b',62);maximum_root[127]=0;
+    memset(maximum_leaf,'c',sizeof(maximum_leaf)-1u);maximum_leaf[sizeof(maximum_leaf)-1u]=0;
+    assert(kui_destination_mkdirs(maximum_root,log_line));
+    snprintf(full,sizeof(full),"0:%s/%s",maximum_root,maximum_leaf);assert(f_mkdir(full)==FR_OK);
+    before=test.writes;
+    assert(kui_destination_list(maximum_root,0,&page,log_line));assert(page.count==1 && !page.has_more);
+    assert(!strcmp(page.entries[0].name,maximum_leaf) && page.entries[0].disabled && !page.entries[0].job_selectable);
+    assert(test.writes==before);
 }
 int main(int argc, char **argv) {
     if(argc != 3) return 2;

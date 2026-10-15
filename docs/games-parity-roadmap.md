@@ -15,8 +15,8 @@ for reuse.
 | 2 — first slice implemented; console acceptance pending | Independent standard LZ4 ZSO block reader, inspection and dedicated native launch path | Development capability only: native SCI Standard, one cooked track, 2048-byte blocks, 32 map slots/31 physical fragments. Separate package/audit gates must pass before a test package is supplied. The development Play route requests an unvalidated-on-console capability; it does not establish compatibility or final-release acceptance. See [ZSO scope](games-zso.md). |
 | 3a — planned | CSO v1 DEFLATE, then CSO v2 mixed methods; explicit LZO dialect later | Each decoder needs its own bounded workspace and malformed-input tests. Keep offline import working for all unsupported sizes/codecs. |
 | 3b — planned | Direct CHD: portable hunk/track reader, then a protected native runtime | Common CHDv5 CD/GD needs `cdlz`/`cdzl`/`cdfl`, hunk/map decoding and metadata normalization. Default 19584-byte hunks plus codec state exceed the whole low reservation. K-UI's own CHDv4 exports are a distinct first prototype. Prove hunk decoding with MAME oracles before choosing runtime memory; no enabled Play claim or unchecked game-RAM reservation. See [CHD design](games-chd.md). |
-| 4 | Emulated VMU prototype | Prove Maple command interception and a safe writable backing store; the existing VMU Manager is not gameplay emulation. First prototype must not depend on unreserved game RAM or KOS after handoff. |
-| 5 | Runtime screenshots | Prove input trigger, framebuffer interpretation and safe output ownership. No full-frame allocation in the current low resident. Enable only the demonstrated video/reader profiles. |
+| 4 — deferred by user | Emulated VMU prototype | Not part of the current Tyrfing preparation. Future work needs Maple command interception and a safe writable backing store; the existing VMU Manager is not gameplay emulation. No use of unreserved game RAM or KOS after handoff. |
+| 5 — planned separately; not implemented | Runtime screenshots and configurable hotkeys | Needs input observation, framebuffer interpretation and safe output ownership before a working screenshot option can be offered. No full-frame allocation in the current low resident. Scope each proven video/reader profile independently. |
 | 6 | Last-game selection, category/library improvements, shortcuts, optional game previews | These can be separate shell changes; they need not wait for runtime milestones. Keep a shortcut bound to an inspected image and saved settings. Audio previews must yield to foreground I/O. |
 | As needed | Region override, alternate executable/boot modes, placement controls | Start from a concrete failing game and independently established requirements. Old DreamShell numeric options are not equivalent parameters for this loader. |
 
@@ -106,8 +106,16 @@ stored bytes can still lose to decode cost, index seeks or short card streams.
 
 ## VMU and screenshot architecture
 
-Both need a new independently specified Maple service. The current resident
-hooks GD calls and menu return; native async interrupt handling is active for
+**VMU emulation is deferred at the user's request.** Its design below is a
+future reference, not active implementation scope for Tyrfing. Runtime
+screenshots and their hotkeys remain a separate planned feature; the current
+Games options do not implement them. The two manual executable RAM-patch slots
+are independent of either feature and are not a patch database or hotkey system.
+
+VMU emulation needs a new independently specified Maple service. Resumable
+screenshot hotkeys need reliable controller-condition observation and safe
+capture/output scheduling. The current resident hooks GD calls and menu
+return; native async interrupt handling is active for
 its reader, while CE owns its VBR and admits specific SCI handlers
 (`src/loader/retail_resident.c`, `src/loader/retail_async.c`). Neither is an
 always-on controller observer or a Maple emulator. `src/apps/vmu.c` uses KOS
@@ -116,7 +124,7 @@ for physical VMU management and cannot run after `arch_exec` tears KOS down
 read-only storage: runtime output needs a checked freestanding writer and bus
 arbitration, not a call back into FatFs.
 
-VMU sequence:
+Deferred VMU sequence:
 
 1. Use an owned homebrew harness to observe controller/VMU commands, then test
    an independent block protocol backend: device info, media info, block read,
@@ -131,7 +139,7 @@ VMU sequence:
    Start without CDDA/background/CE, which require separate bus and interrupt
    ownership proofs.
 
-Screenshot sequence:
+Planned screenshot sequence:
 
 1. In an owned runtime, validate framebuffer base/size/stride/pixel format and
    implement bounded BMP output. Check VRAM ranges, double buffers and the

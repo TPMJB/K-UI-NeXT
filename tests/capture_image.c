@@ -68,6 +68,8 @@ static void exhaust_space(void) {
 }
 static void progress(void *p,const struct kui_capture_progress *status) {
     (void)p;test.phase=status->phase;
+    if(fault("stop-identify") && status->phase==KUI_IDENTIFY && status->done) test.stop=true;
+    if(fault("stop-prefix") && status->phase==KUI_PREFIX_CHECK && status->done>=KUI_RAW_BYTES) test.stop=true;
     if(status->phase==KUI_CAPTURING) {
         if((fault("stop-early") && status->done>=128*2352) ||
            (fault("stop-middle") && status->done>=5000*2352) ||
@@ -148,6 +150,12 @@ static bool first_job(char path[512]) {
         if((info.fattrib&AM_DIR) && strlen(info.fname)==22 && strcmp(info.fname,name)>0) strcpy(name,info.fname);
     bool ok=r==FR_OK && name[0];if(f_closedir(&d)!=FR_OK) ok=false;
     snprintf(path,512,"0:/KUI/dumps/%s",name);return ok;
+}
+static void job_alias(void) {
+    char path[512];FILINFO info;assert(first_job(path));
+    assert(f_stat(path,&info)==FR_OK && (info.fattrib&AM_DIR) && info.altname[0]);
+    char *slash=strrchr(path,'/');assert(slash);*slash=0;
+    printf("JOB_ALIAS %s/%s\n",path,info.altname);
 }
 static void export_file(const char *source,const char *dest) {
     FIL file;assert(f_open(&file,source,FA_READ)==FR_OK);FILE *output=fopen(dest,"wb");assert(output);
@@ -265,8 +273,10 @@ static struct kui_capture_options test_options(void) {
     if(parent) {
         output.parent=parent;
         const char *names=getenv("KUI_TEST_GAME_NAMES");output.game_names=names && !strcmp(names,"1");
+        output.folder_label=getenv("KUI_TEST_FOLDER_LABEL");
         o.output=&output;
     }
+    o.job_directory=getenv("KUI_TEST_SELECTED_JOB");
     if(!env) return o;
     if(strstr(env,"cue")) {output.format=KUI_CAPTURE_FORMAT_BIN_CUE;o.output=&output;}
     else if(strstr(env,"cso")) {output.format=KUI_CAPTURE_FORMAT_CSO;o.output=&output;}
@@ -311,12 +321,13 @@ int main(int argc,char **argv) {
         printf("RESULT %u\n",r);print_stats(&stats);
         assert(fclose(test.image)==0);return r==KUI_CAPTURE_COMPLETE?0:1;
     }
-    if(!strcmp(argv[2],"export") || !strcmp(argv[2],"mutate") || !strcmp(argv[2],"seed") || !strcmp(argv[2],"put") || !strcmp(argv[2],"mkdir")) {
+    if(!strcmp(argv[2],"export") || !strcmp(argv[2],"mutate") || !strcmp(argv[2],"seed") || !strcmp(argv[2],"put") || !strcmp(argv[2],"mkdir") || !strcmp(argv[2],"alias")) {
         FATFS fs;assert(kui_mount(&fs,log_line));
         if(!strcmp(argv[2],"put")) {assert(argc==5);put_file(argv[3],argv[4]);}
         else if(!strcmp(argv[2],"export")) {assert(argc==4);export_all(argv[3]);}
         else if(!strcmp(argv[2],"mutate")) {assert(argc==4);mutate(argv[3]);}
         else if(!strcmp(argv[2],"mkdir")) {assert(argc==4);assert(f_mkdir(argv[3])==FR_OK);}
+        else if(!strcmp(argv[2],"alias")) {assert(argc==3);job_alias();}
         else assert(kui_write_new_file("0:/keep.txt","KEEP THIS FILE\n",15,log_line));
         assert(f_mount(NULL,"0:",0)==FR_OK);
     } else {

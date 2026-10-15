@@ -27,12 +27,26 @@ static bool cancelled(void *ctx) { (void)ctx;return kui_cancelled(); }
 static uint64_t now(void *ctx) { (void)ctx;return timer_ms_gettime64(); }
 static uint64_t now_us(void *ctx) { (void)ctx;return timer_us_gettime64(); }
 static enum kui_capture_result capture_start(enum kui_capture_mode mode,const char *build,
-    const char *destination,bool quick_resume) {
+    const char *destination,bool quick_resume,const char *job_directory,const char *folder_label) {
     memset(&last_stats,0,sizeof(last_stats));
     char parent[KUI_DEST_ROOT_CAP];
     if(!kui_destination_normalize(parent,destination)) {
         kui_log("Capture refused: invalid or too-long destination; no dump writes");
         return kui_cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
+    }
+    char selected[KUI_DEST_JOB_CAP]={0},label[KUI_DEST_TITLE_CAP]={0};
+    if(job_directory && *job_directory) {
+        if(mode==KUI_CAPTURE_NEW || !kui_destination_job_normalize(selected,job_directory)) {
+            kui_log("Capture refused: invalid exact saved job; no dump writes");
+            return kui_cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
+        }
+    }
+    if(mode==KUI_CAPTURE_NEW && folder_label && *folder_label) {
+        if(!memchr(folder_label,0,KUI_DEST_TITLE_CAP)) {
+            kui_log("Capture refused: folder label too long; no dump writes");
+            return kui_cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
+        }
+        kui_destination_title(label,folder_label);
     }
     /* These local values live through the synchronous capture call; the engine
      * never borrows the UI's mutable destination buffer. */
@@ -43,7 +57,8 @@ static enum kui_capture_result capture_start(enum kui_capture_mode mode,const ch
         kui_log("Capture refused: preferences or bench.cfg could not be loaded; no dump writes");
         return kui_cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
     }
-    const struct kui_capture_output output={parent,true,kui_options.capture_format};
+    const struct kui_capture_output output={.parent=parent,.game_names=true,
+        .format=kui_options.capture_format,.folder_label=label[0]?label:NULL};
     kui_disc_timing_reset();
     if(!kui_disc_prepare(sessions) || kui_cancelled())
         return kui_cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
@@ -57,7 +72,8 @@ static enum kui_capture_result capture_start(enum kui_capture_mode mode,const ch
         .crc_only=kui_options.capture_crc_only[0],.skip_end_readback=!kui_options.end_readback[0],
         .resume_size_only=(quick_resume && mode==KUI_CAPTURE_RESUME)||kui_options.resume_size[0],
         .sample_every=kui_options.sample_readback[0],
-        .read_dma=kui_options.capture_dma[0],.output=&output};
+        .read_dma=kui_options.capture_dma[0],.output=&output,
+        .job_directory=selected[0]?selected:NULL};
     struct kui_capture_ops ops={NULL,kui_disc_read_raw,cancelled,now,kui_capture_status,
         kui_log,build,now_us,kui_disc_timing_phase,KUI_CAPTURE_DMA_OPS,&options,&last_stats};
     /* Whole-operation CPU split: how much of this capture the UI thread took. */
@@ -72,11 +88,20 @@ static enum kui_capture_result capture_start(enum kui_capture_mode mode,const ch
 }
 enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build,
     const char *destination) {
-    return capture_start(mode,build,destination,false);
+    return capture_start(mode,build,destination,false,NULL,NULL);
+}
+enum kui_capture_result kui_capture_start_selected(enum kui_capture_mode mode,const char *build,
+    const char *destination,const char *job_directory,const char *folder_label,bool quick_resume) {
+    if(quick_resume && mode!=KUI_CAPTURE_RESUME) {
+        memset(&last_stats,0,sizeof(last_stats));
+        kui_log("Capture refused: Quick Resume requires Resume mode; no dump writes");
+        return kui_cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
+    }
+    return capture_start(mode,build,destination,quick_resume,job_directory,folder_label);
 }
 enum kui_capture_result kui_capture_resume_quick(const char *build,const char *destination) {
     /* This opt-in changes only this call's local options. Checkpoint identity,
      * size checks and SHA-256 job compatibility stay with the existing engine;
      * no preferences or bench.cfg values are rewritten. */
-    return capture_start(KUI_CAPTURE_RESUME,build,destination,true);
+    return capture_start(KUI_CAPTURE_RESUME,build,destination,true,NULL,NULL);
 }

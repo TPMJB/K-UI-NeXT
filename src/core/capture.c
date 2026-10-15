@@ -21,7 +21,8 @@ static struct {
     _Alignas(32) uint8_t data_b[KUI_CAPTURE_CHUNK*KUI_RAW_BYTES];
     uint8_t record[KUI_CHECKPOINT_BYTES];
     unsigned dma_chunks,pio_chunks;   /* how this run read the disc, reported at the end */
-    char dir[KUI_DEST_JOB_CAP], path[KUI_DEST_PATH_CAP], title[129], identity[65], text[32768];
+    char dir[KUI_DEST_JOB_CAP], exact_dir[KUI_DEST_JOB_CAP];
+    char path[KUI_DEST_PATH_CAP], title[129], identity[65], text[32768];
     char gdi_name[KUI_DEST_TITLE_CAP+5u];
     char output_name[KUI_DEST_TITLE_CAP+5u];
     bool cue_layout_bad;
@@ -298,13 +299,93 @@ static bool candidate_matches(const char *directory,bool *matches) {
     }
     return true;
 }
+static unsigned char ascii_lower(unsigned char c) {return c>='A' && c<='Z'?(unsigned char)(c+32u):c;}
+static bool same_ascii_name(const char *a,const char *b) {
+    while(*a && *b)if(ascii_lower((unsigned char)*a++)!=ascii_lower((unsigned char)*b++))return false;
+    return !*a && !*b;
+}
+/* This namespace is reserved for the older unnamed jobs. A partial job has
+ * no manifest/descriptor yet, so its path must unambiguously retain layout. */
+static bool legacy_job_path(const char *directory,unsigned *index) {
+    static const char parent[]="0:/KUI/dumps/";
+    size_t prefix=sizeof(parent)-1u;
+    if(strlen(directory)!=prefix+22u)return false;
+    for(size_t i=0;i<prefix;i++)if(ascii_lower((unsigned char)directory[i])!=ascii_lower((unsigned char)parent[i]))return false;
+    const char *name=directory+prefix;
+    if(ascii_lower((unsigned char)name[0])!='d' || name[17]!='-')return false;
+    for(unsigned i=1;i<=16;i++) {
+        unsigned char c=ascii_lower((unsigned char)name[i]);
+        if(!((c>='0' && c<='9') || (c>='a' && c<='f')))return false;
+    }
+    unsigned number=0;
+    for(unsigned i=18;i<22;i++) {
+        if(name[i]<'0' || name[i]>'9')return false;
+        number=number*10u+(unsigned)(name[i]-'0');
+    }
+    if(index)*index=number;
+    return true;
+}
+static bool canonical_legacy_path(char out[KUI_DEST_JOB_CAP]) {
+    static const char parent[]="0:/KUI/dumps/";
+    const char *leaf=strrchr(job.exact_dir,'/')+1u;
+    size_t prefix=(size_t)(leaf-job.exact_dir);
+    snprintf(out,KUI_DEST_JOB_CAP,"%s",job.exact_dir);
+    if(prefix!=sizeof(parent)-1u)return true;
+    for(size_t i=0;i<prefix;i++)if(ascii_lower((unsigned char)job.exact_dir[i])!=ascii_lower((unsigned char)parent[i]))return true;
+    if(legacy_job_path(job.exact_dir,NULL))return true;
+    /* f_stat looked up through an SFN does not necessarily recover the LFN.
+     * Enumeration retains both names. Read only the legacy parent, using
+     * constant memory, and fail on cancellation/errors rather than guessing. */
+    DIR directory;FILINFO info;FRESULT r=f_opendir(&directory,"0:/KUI/dumps");
+    if(r!=FR_OK) {job.ops->log("Cannot resolve selected legacy-parent job: FatFs=%u",(unsigned)r);return false;}
+    bool found=false,ok=true;
+    for(;;) {
+        if(cancelled()) {ok=false;break;}
+        r=f_readdir(&directory,&info);
+        if(r!=FR_OK || !info.fname[0])break;
+        if(!(info.fattrib&AM_DIR) || !(same_ascii_name(leaf,info.fname) || (info.altname[0] && same_ascii_name(leaf,info.altname))))continue;
+        size_t size=strlen(info.fname);
+        if(found || prefix+size>=KUI_DEST_JOB_CAP) {ok=false;break;}
+        memcpy(out,parent,prefix);memcpy(out+prefix,info.fname,size+1u);found=true;
+    }
+    FRESULT closed=f_closedir(&directory);
+    if(!ok || !found || r!=FR_OK || closed!=FR_OK || cancelled()) {
+        job.ops->log("Selected legacy-parent job could not be resolved safely; no other job selected");return false;
+    }
+    return true;
+}
+static bool choose_exact_dir(void) {
+    FILINFO info;FRESULT r=f_stat(job.exact_dir,&info);
+    if(r!=FR_OK || !(info.fattrib&AM_DIR)) {
+        job.ops->log("Selected job folder is missing/unreadable: FatFs=%u; no other job selected",(unsigned)r);
+        return false;
+    }
+    char canonical[KUI_DEST_JOB_CAP];if(!canonical_legacy_path(canonical))return false;
+    unsigned number=0;bool legacy=legacy_job_path(canonical,&number);
+    if(legacy) {
+        const char *name=strrchr(canonical,'/')+1u;
+        bool matches=number!=0;
+        for(unsigned i=0;i<16u;i++)if(ascii_lower((unsigned char)name[i+1u])!=(unsigned char)job.identity[i])matches=false;
+        if(!matches) {
+            job.ops->log("Selected legacy job name does not match this disc; no other job selected");return false;
+        }
+    } else {
+        char title[KUI_DEST_TITLE_CAP];kui_destination_title(title,job.title);
+        snprintf(job.gdi_name,sizeof(job.gdi_name),"%s.gdi",title);job.named_output=true;
+    }
+    snprintf(job.dir,sizeof(job.dir),"%s",job.exact_dir);
+    job.ops->log("Selected job: %s; optical identity and checkpoints still required",job.dir+2);
+    return true;
+}
 static bool choose_named_dir(enum kui_capture_mode mode) {
-    char root[KUI_DEST_ROOT_CAP],title[KUI_DEST_TITLE_CAP],folder[KUI_DEST_NAME_CAP];
+    char root[KUI_DEST_ROOT_CAP],title[KUI_DEST_TITLE_CAP],label[KUI_DEST_TITLE_CAP],folder[KUI_DEST_NAME_CAP];
     char qualified[KUI_DEST_ROOT_CAP+2u],best[KUI_DEST_JOB_CAP]={0};
     if(!kui_destination_normalize(root,job.opt->output->parent)) {
         job.ops->log("Invalid or too-long destination; existing files preserved");return false;
     }
     kui_destination_title(title,job.title);
+    const char *requested=mode==KUI_CAPTURE_NEW?job.opt->output->folder_label:NULL;
+    kui_destination_title(label,requested && requested[0]?requested:job.title);
     snprintf(qualified,sizeof(qualified),"0:%s",root);
     DIR directory;FILINFO info;unsigned highest=0,matching=0;
     FRESULT r=f_opendir(&directory,qualified);
@@ -314,7 +395,7 @@ static bool choose_named_dir(enum kui_capture_mode mode) {
             r=f_readdir(&directory,&info);
             if(r!=FR_OK || !info.fname[0] || cancelled()) break;
             unsigned index;
-            if(!kui_destination_folder_index(info.fname,title,&index)) continue;
+            if(!kui_destination_folder_index(info.fname,label,&index)) continue;
             /* Files also occupy names on FAT, even though only directories can
              * contain resumable jobs. A different release can share a title. */
             if(index>highest) highest=index;
@@ -337,9 +418,12 @@ static bool choose_named_dir(enum kui_capture_mode mode) {
         snprintf(job.dir,sizeof(job.dir),"%s",best);
     } else {
         if(highest>=KUI_DEST_INDEX_MAX ||
-           !kui_destination_folder_name(folder,title,highest+1u) ||
+           !kui_destination_folder_name(folder,label,highest+1u) ||
            !kui_destination_job_path(job.dir,root,folder)) {
             job.ops->log("Cannot allocate another game folder; existing files preserved");return false;
+        }
+        if(legacy_job_path(job.dir,NULL)) {
+            job.dir[0]=0;job.ops->log("This folder label is reserved for legacy jobs; choose another label");return false;
         }
         if(!kui_destination_mkdirs(root,job.ops->log)) {job.dir[0]=0;return false;}
         if(cancelled()) {job.dir[0]=0;return false;}
@@ -356,6 +440,7 @@ static bool choose_named_dir(enum kui_capture_mode mode) {
 }
 static bool choose_dir(enum kui_capture_mode mode) {
     snprintf(job.gdi_name,sizeof(job.gdi_name),"disc.gdi");
+    if(job.exact_dir[0])return choose_exact_dir();
     /* Bench output remains byte-for-byte compatible with the accepted harness,
      * even if the caller carried normal application output preferences. */
     return !job.bench && job.opt->output && job.opt->output->game_names?
@@ -827,9 +912,20 @@ enum kui_capture_result kui_capture(const struct kui_capture_plan *plan,
     for(unsigned i=0;i<12;i++) if(!((ops->build[i]>='0'&&ops->build[i]<='9') ||
                                   (ops->build[i]>='a'&&ops->build[i]<='f'))) return KUI_CAPTURE_FAILED;
     memset(&job,0,sizeof(job));job.plan=plan;job.ops=ops;
+    if(ops->stats)memset(ops->stats,0,sizeof(*ops->stats));
     static const struct kui_capture_options defaults={0};
     job.opt=ops->options?ops->options:&defaults;
     job.bench=job.opt->bench;job.sample_every=job.opt->sample_every;
+    if(job.opt->job_directory && job.opt->job_directory[0]) {
+        if(job.bench || mode==KUI_CAPTURE_NEW) {
+            ops->log("An exact job folder is valid only for normal Resume or Verify; no I/O performed");return KUI_CAPTURE_FAILED;
+        }
+        char selected[KUI_DEST_JOB_CAP];
+        if(!kui_destination_job_normalize(selected,job.opt->job_directory)) {
+            ops->log("Invalid or too-long selected job folder; no I/O performed");return KUI_CAPTURE_FAILED;
+        }
+        snprintf(job.exact_dir,sizeof(job.exact_dir),"0:%.*s",(int)KUI_DEST_JOB_CAP-3,selected);
+    }
     if(!job.bench && job.opt->output && (job.opt->output->format<KUI_CAPTURE_FORMAT_GDI ||
        job.opt->output->format>=KUI_CAPTURE_FORMAT_COUNT))
         return KUI_CAPTURE_FAILED;
@@ -841,7 +937,8 @@ enum kui_capture_result kui_capture(const struct kui_capture_plan *plan,
     for(unsigned i=0;i<plan->count;i++) kui_sha256_init(&job.hashes[i]);
     FATFS fs;enum kui_capture_result result=KUI_CAPTURE_FAILED;
     ops->log("%s: guarded raw reads, data EDC, no zero-fill",mode==KUI_CAPTURE_NEW?"NEW CAPTURE":
-        mode==KUI_CAPTURE_RESUME?"RESUME LATEST MATCHING JOB":"VERIFY LATEST MATCHING JOB");
+        mode==KUI_CAPTURE_RESUME?(job.exact_dir[0]?"RESUME SELECTED JOB":"RESUME LATEST MATCHING JOB"):
+        job.exact_dir[0]?"VERIFY SELECTED JOB":"VERIFY LATEST MATCHING JOB");
     if(cancelled() || !identify()) {
         result=cancelled()?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED;
         report_timing();publish_stats();return result;
