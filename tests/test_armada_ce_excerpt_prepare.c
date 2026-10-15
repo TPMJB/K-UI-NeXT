@@ -5,6 +5,14 @@
 #include "../src/apps/games_retail.c"
 #include <assert.h>
 
+/* These helpers deliberately use the legacy read-only preparation API. The
+ * shell's reporting API has separate real-filesystem coverage. */
+bool kui_game_launch_report_save(const struct kui_game_launch_report *report,
+        kui_log_fn log,kui_cancel_fn cancelled) {
+    (void)report;(void)log;(void)cancelled;
+    assert(!"read-only preparation attempted to write a launch report");return false;
+}
+
 #define SEED_AT (KUI_RETAIL_STAGE_BLOB_OFFSET+128u)
 #define SEED_TOTAL (KUI_ARMADA_CE_EXCERPT_SEED_BYTES+KUI_ARMADA_CE_EXCERPT_PCM_BYTES)
 #define GUARD_BYTES 32u

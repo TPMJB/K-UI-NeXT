@@ -381,6 +381,17 @@ int main(int argc,char **argv) {
         strcpy(d->path,shell.games_selected_path);
         d->valid=strcmp(argv[1],"games-error")!=0;d->bytes=1185765648;d->tracks=3;d->data_tracks=2;d->audio_tracks=1;
         d->boot_bytes=123456;d->boot_lba=45166;d->native_gd=true;
+        if(!strcmp(argv[1],"games-options-advanced") || !strcmp(argv[1],"games-patches") || !strcmp(argv[1],"games-patches-edit")) {
+            strcpy(shell.games_selected_path,"/Games/Generated sample/disc.gdi");strcpy(d->path,shell.games_selected_path);
+            strcpy(d->title,"GENERATED UI SAMPLE");shell.games_launch_reader=KUI_GAME_READER_BACKGROUND;
+            shell.page=!strcmp(argv[1],"games-options-advanced")?KUI_SHELL_GAMES_EXTRA_OPTIONS:KUI_SHELL_GAMES_PATCHES;
+            shell.game_tools_selected=KUI_SHELL_GAME_TOOL_PATCHES;
+            shell.games_launch_patches.entries[0]=(struct kui_game_ram_patch){0x8c010000u,0u,true};
+            shell.games_launch_patches.entries[1]=(struct kui_game_ram_patch){0x8c010004u,0x12345678u,false};
+            shell.games_patch_selected=1;shell.games_patch_editing=!strcmp(argv[1],"games-patches-edit");
+            shell.games_patch_draft=0x8c010000u;shell.games_patch_digit=4;
+            strcpy(shell.games_launch_notice,"Saved for this image.");
+        }
         strcpy(d->title,"DEAD OR ALIVE 2");strcpy(d->product,"T-3601N");strcpy(d->region,"JUE");
         strcpy(d->boot_file,"1ST_READ.BIN");strcpy(d->message,"Track file missing: track03.bin");
         if(!strcmp(argv[1],"games-detail-art")) {d->cover=true;make_cover(detail_cover,KUI_COVER_LARGE,1);}
@@ -405,13 +416,25 @@ int main(int argc,char **argv) {
     else if(!strcmp(argv[1],"games-retail") || !strcmp(argv[1],"games-retail-loading") ||
             !strcmp(argv[1],"games-retail-invalid") || !strcmp(argv[1],"games-ce-probe") ||
             !strcmp(argv[1],"games-retail-2048") || !strcmp(argv[1],"games-retail-cd-plain") ||
-            !strcmp(argv[1],"games-retail-cd-scrambled")) {
+            !strcmp(argv[1],"games-retail-cd-scrambled") || !strcmp(argv[1],"games-options-advanced") ||
+            !strcmp(argv[1],"games-patches") || !strcmp(argv[1],"games-patches-edit")) {
         shell.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;
         strcpy(shell.games_selected_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
         struct kui_games_detail *d=&shell.games_detail;
         strcpy(d->path,shell.games_selected_path);d->valid=true;d->tracks=3;
         strcpy(d->title,"DEAD OR ALIVE 2");strcpy(d->boot_file,"1ST_READ.BIN");
         d->boot_bytes=123456;d->boot_lba=45166;d->native_gd=true;
+        if(!strcmp(argv[1],"games-options-advanced") || !strcmp(argv[1],"games-patches") || !strcmp(argv[1],"games-patches-edit")) {
+            strcpy(shell.games_selected_path,"/Games/Generated sample/disc.gdi");strcpy(d->path,shell.games_selected_path);
+            strcpy(d->title,"GENERATED UI SAMPLE");shell.games_launch_reader=KUI_GAME_READER_BACKGROUND;
+            shell.page=!strcmp(argv[1],"games-options-advanced")?KUI_SHELL_GAMES_EXTRA_OPTIONS:KUI_SHELL_GAMES_PATCHES;
+            shell.game_tools_selected=KUI_SHELL_GAME_TOOL_PATCHES;
+            shell.games_launch_patches.entries[0]=(struct kui_game_ram_patch){0x8c010000u,0u,true};
+            shell.games_launch_patches.entries[1]=(struct kui_game_ram_patch){0x8c010004u,0x12345678u,false};
+            shell.games_patch_selected=1;shell.games_patch_editing=!strcmp(argv[1],"games-patches-edit");
+            shell.games_patch_draft=0x8c010000u;shell.games_patch_digit=4;
+            strcpy(shell.games_launch_notice,"Saved for this image.");
+        }
         if(!strcmp(argv[1],"games-retail-cd-plain") || !strcmp(argv[1],"games-retail-cd-scrambled")) {
             strcpy(shell.games_selected_path,"/Games/CD sample/disc.cue");strcpy(d->path,shell.games_selected_path);
             strcpy(d->title,"CD SAMPLE");d->native_gd=false;d->native_cd=d->cd_image=true;

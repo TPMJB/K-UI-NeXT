@@ -50,14 +50,15 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_FTP, KUI_SHELL_STORAGE_TESTS, KUI_SHELL_STORAGE_TEST_HISTORY,
     KUI_SHELL_SCI_ASYNC_PROBE, KUI_SHELL_GAMES_VARIANTS, KUI_SHELL_WIFI,
     KUI_SHELL_GAMES_LAUNCH_OPTIONS, KUI_SHELL_GAMES_EXTRA_OPTIONS,
-    KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO };
+    KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES };
 enum kui_shell_game_option {
     KUI_SHELL_GAME_OPTION_READER, KUI_SHELL_GAME_OPTION_CDDA,
     KUI_SHELL_GAME_OPTION_ADVANCED, KUI_SHELL_GAME_OPTION_COUNT
 };
 enum kui_shell_game_tool {
     KUI_SHELL_GAME_TOOL_ENCODING, KUI_SHELL_GAME_TOOL_SPEED,
-    KUI_SHELL_GAME_TOOL_INFO, KUI_SHELL_GAME_TOOL_TESTS, KUI_SHELL_GAME_TOOL_COUNT
+    KUI_SHELL_GAME_TOOL_INFO, KUI_SHELL_GAME_TOOL_TESTS,
+    KUI_SHELL_GAME_TOOL_PATCHES, KUI_SHELL_GAME_TOOL_DEFAULTS, KUI_SHELL_GAME_TOOL_COUNT
 };
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
@@ -144,6 +145,10 @@ struct kui_shell {
     bool games_tests_from_options;
     char games_launch_notice[128];
     bool games_launch_cdda, games_retail_scrambled;
+    struct kui_game_ram_patches games_launch_patches;
+    unsigned games_patch_selected, games_patch_digit;
+    bool games_patch_editing;
+    uint32_t games_patch_draft;
     bool games_probe_from_options; /* Independent probe's return destination. */
     struct kui_games_page games_listing;
     struct kui_games_detail games_detail;
@@ -258,6 +263,7 @@ bool kui_shell_games_encoding_ready(const struct kui_shell *shell);
  * its exact supported title and GDI profiles. */
 bool kui_shell_games_cdda_ready(const struct kui_shell *shell);
 bool kui_shell_games_launch_ready(const struct kui_shell *shell);
+bool kui_shell_games_patches_ready(const struct kui_shell *shell);
 bool kui_shell_game_launch_settings(const struct kui_shell *shell,
                                     struct kui_game_launch_settings *out);
 void kui_shell_set_game_launch_settings(struct kui_shell *shell,const char *path,

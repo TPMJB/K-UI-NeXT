@@ -43,6 +43,21 @@ CE_ASYNC_RESIDENT_LIMIT = 0x8C00D800
 CE_ASYNC_HOOK_STACK = 0x8C00E000
 TRAMPOLINE_BYTES = 128
 HEADER = struct.Struct("<8s14I")
+RAM_PATCH_MAGIC = b"KUIRAMP1"
+RAM_PATCH_SEED = struct.pack("<8s14I", RAM_PATCH_MAGIC, 1, 64, *([0] * 12))
+
+
+def inspect_ram_patch_seed(payload, required=False):
+    """Shipped stages contain a blank capability, never owner patch values."""
+    # Comparison literal pools may also contain the two magic words. The
+    # complete typed header identifies the data capability.
+    offsets = [at for at in range(STAGE_BLOB_OFFSET, len(payload) - 15, 4)
+               if payload[at:at + 16] == RAM_PATCH_SEED[:16]]
+    if len(offsets) > 1 or (required and not offsets):
+        raise ValueError("Retail stage requires exactly one blank RAM patch capability")
+    if offsets and payload[offsets[0]:offsets[0] + 64] != RAM_PATCH_SEED:
+        raise ValueError("Retail RAM patch capability must ship blank")
+    return bool(offsets)
 
 
 def stage_address(ce=False):
@@ -102,6 +117,8 @@ def inspect_retail(package, ce=False, formats=False):
         raise ValueError("Invalid retail relocation header")
     if any(payload[MAP_OFFSET:MAP_OFFSET + MAP_BYTES]):
         raise ValueError("Retail package must ship with a blank card-specific manifest")
+    if inspect_ram_patch_seed(payload) and ce:
+        raise ValueError("Windows CE package cannot contain native RAM patches")
     return {
         **info,
         "stage_bytes": stage_bytes,

@@ -87,6 +87,14 @@ static bool verify_saved(unsigned target,const uint8_t *record,size_t bytes,kui_
     }
     return true;
 }
+static bool settings_equal(const struct kui_game_launch_settings *a,const struct kui_game_launch_settings *b) {
+    if(a->reader!=b->reader || a->cdda!=b->cdda || a->encoding!=b->encoding) return false;
+    for(unsigned i=0;i<2;i++) {
+        const struct kui_game_ram_patch *left=&a->patches.entries[i],*right=&b->patches.entries[i];
+        if(left->address!=right->address || left->value!=right->value || left->enabled!=right->enabled) return false;
+    }
+    return true;
+}
 bool kui_game_launch_settings_save(const char *image_path,const struct kui_game_launch_settings *settings,kui_log_fn log) {
     char key[KUI_GAME_LAUNCH_SETTINGS_PATH_CAP];
     if(!kui_game_launch_settings_valid(settings) || !kui_game_launch_settings_normalize(key,image_path)) return false;
@@ -94,8 +102,7 @@ bool kui_game_launch_settings_save(const char *image_path,const struct kui_game_
     struct slot slots[2];int current;bool ok=load_table(&w,slots,&current,log);
     if(!ok) goto done;
     struct kui_game_launch_settings old;
-    if(kui_game_launch_table_find(w.table,key,&old) && old.reader==settings->reader &&
-       old.cdda==settings->cdda && old.encoding==settings->encoding) goto done;
+    if(kui_game_launch_table_find(w.table,key,&old) && settings_equal(&old,settings)) goto done;
     if(current>=0 && slots[current].sequence==UINT64_MAX) {
         if(log) log("Game launch settings sequence exhausted; save refused");
         ok=false;goto done;

@@ -73,9 +73,27 @@ static uint32_t independent_crc(const uint8_t *bytes,size_t count) {
     }
     return ~crc;
 }
+#if KUI_GAME_RAM_PATCHES_STAGE
+#define LAST_PATCH_OFFSET ((EXEC_BYTES-4u)&~3u)
+static const struct kui_game_ram_patches user_patches={{{KUI_RETAIL_EXEC_ADDRESS,0x12345678u,true},
+    {KUI_RETAIL_EXEC_ADDRESS+LAST_PATCH_OFFSET,0xabcdef01u,true}}};
+static void patch_put(uint8_t *p,uint32_t value) {
+    for(unsigned i=0;i<4;i++) p[i]=(uint8_t)(value>>(8*i));
+}
+static void patch_reseal(void) {
+    uint8_t *seed=(void *)&ram_patch_seed;patch_put(seed+40,0);
+    patch_put(seed+40,independent_crc(seed,sizeof(ram_patch_seed)));
+}
+static void enable_patches(void) {
+    assert(kui_game_ram_patch_seed_encode(&ram_patch_seed,sizeof(ram_patch_seed),&user_patches,EXEC_BYTES));
+}
+#endif
 static uint32_t *fixture(void) {
     memset((void *)(uintptr_t)RAM_ADDRESS,0xa5,RAM_BYTES);
     memset(&calls,0,sizeof(calls));expect_stop=false;
+#if KUI_GAME_RAM_PATCHES_STAGE
+    ram_patch_seed=(struct kui_game_ram_patch_seed){KUI_GAME_RAM_PATCH_SEED_BLANK_WORDS};
+#endif
     for(size_t i=0;i<sizeof(executable);i++) executable[i]=(uint8_t)(i*73u+(i>>8)*19u+5u);
 #ifdef KUI_RETAIL_CE
     memcpy(executable+0x40,"ECEC",4);
@@ -154,6 +172,10 @@ enum fault {BAD_EXEC,BAD_RESIDENT_FIRST,BAD_RESIDENT_LAST,BAD_STACK_LOW,
 };
 static void failure(enum fault fault) {
     uint32_t *frame=fixture();
+#if KUI_GAME_RAM_PATCHES_STAGE
+    /* An active valid patch request must never bypass any old relay guard. */
+    enable_patches();
+#endif
     const uint32_t *entered_frame=frame;
     const char *message=NULL;uint32_t detail=0;
     bool restored_entry=false;
@@ -202,8 +224,51 @@ static void failure(enum fault fault) {
     const uint8_t *boot=(const uint8_t *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS;
     if(restored_entry) assert(!memcmp(boot,original_entry,ENTRY_PATCH_BYTES));
     else for(unsigned i=0;i<ENTRY_PATCH_BYTES;i++) assert(boot[i]==0xcc);
+#if KUI_GAME_RAM_PATCHES_STAGE
+    assert(!memcmp(boot+LAST_PATCH_OFFSET,executable+LAST_PATCH_OFFSET,4));
+#endif
     ++cases;
 }
+#if KUI_GAME_RAM_PATCHES_STAGE
+static void patches_success(void) {
+    uint32_t *frame=fixture();enable_patches();
+    uint8_t expected[sizeof(executable)];memcpy(expected,executable,sizeof(expected));
+    patch_put(expected,0x12345678u);patch_put(expected+LAST_PATCH_OFFSET,0xabcdef01u);
+    kui_retail_stage_relay(frame,CCR_VALUE);
+    assert(!memcmp((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,expected,sizeof(expected)));
+    assert(!memcmp(frame,saved_frame,sizeof(saved_frame)));
+    assert(!memcmp((const void *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS,reader_blob,sizeof(reader_blob)));
+    assert(!memcmp(&video,&before_video,sizeof(video)));
+    assert(!calls.restores && !calls.lines && !calls.hexes && calls.pauses==1);
+    ++cases;
+}
+static void patches_rejected_case(unsigned fault) {
+        uint32_t *frame=fixture();enable_patches();uint8_t *seed=(void *)&ram_patch_seed;
+        switch(fault) {
+        case 0:seed[28]^=0x20u;break; /* Correct fields with a bad/torn checksum. */
+        case 1:memset(seed+32,0,sizeof(ram_patch_seed)-32);break;
+        case 2:patch_put(seed+32,KUI_RETAIL_EXEC_ADDRESS);patch_reseal();break; /* duplicate */
+        case 3:patch_put(seed+32,KUI_RETAIL_EXEC_ADDRESS+0x20000000u);patch_reseal();break; /* duplicate alias */
+        case 4:patch_put(seed+32,KUI_RETAIL_EXEC_ADDRESS+LAST_PATCH_OFFSET+4u);patch_reseal();break;
+        case 5:patch_put(seed+20,EXEC_BYTES+4u);patch_reseal();break; /* stale plan for different bytes */
+        }
+        expect_stop=true;
+        if(!setjmp(stopped_screen)) {
+            kui_retail_stage_relay(frame,CCR_VALUE);
+            assert(!"invalid user RAM patches reached game entry");
+        }
+        /* The original entry was restored and verified, but not one user
+         * patch changed any loaded byte, even when only the second is bad. */
+        assert(!memcmp((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,executable,sizeof(executable)));
+        assert(!memcmp(frame,saved_frame,sizeof(saved_frame)));
+        assert(!memcmp((const void *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS,reader_blob,sizeof(reader_blob)));
+        assert(has_line("USER RAM PATCH PLAN REFUSED") && calls.restores==1 && !calls.pauses);
+        ++cases;
+}
+static void patches_rejected(void) {
+    for(unsigned fault=0;fault<6;fault++) patches_rejected_case(fault);
+}
+#endif
 int main(void) {
     /* Dreamcast's P1 RAM lies in AddressSanitizer's own shadow on 64-bit
      * Linux. This fixed-address execution target uses UBSan instead. */
@@ -216,6 +281,10 @@ int main(void) {
     success(true);
 #endif
     for(enum fault fault=BAD_EXEC;fault<=BAD_SR;fault++) failure(fault);
+#if KUI_GAME_RAM_PATCHES_STAGE
+    patches_success();patches_rejected();
+    puts("PASS native RAM patch relay: first/last aligned word only; CRC/resident guards precede patches; invalid/torn/stale plans make no user writes");
+#endif
 #ifdef KUI_RETAIL_CE
     failure(BAD_KERNEL);
     printf("PASS CE relay: %u executed cases; status writes and VBR repair preserved, faults visible\n",cases);

@@ -2,6 +2,7 @@
 #ifndef KUI_GAME_LAUNCH_SETTINGS_H
 #define KUI_GAME_LAUNCH_SETTINGS_H
 #include "kui/probe.h"
+#include "kui/game_ram_patches.h"
 
 enum kui_game_reader {
     KUI_GAME_READER_STANDARD, KUI_GAME_READER_BACKGROUND, KUI_GAME_READER_EAGER,
@@ -11,11 +12,14 @@ enum kui_game_encoding {
     KUI_GAME_ENCODING_AUTO, KUI_GAME_ENCODING_PLAIN, KUI_GAME_ENCODING_SCRAMBLED,
     KUI_GAME_ENCODING_COUNT
 };
-struct kui_game_launch_settings {unsigned reader;bool cdda;unsigned encoding;};
+struct kui_game_launch_settings {
+    unsigned reader;bool cdda;unsigned encoding;
+    struct kui_game_ram_patches patches;
+};
 #define KUI_GAME_LAUNCH_SETTINGS_ENTRIES 128u
 #define KUI_GAME_LAUNCH_SETTINGS_PATH_CAP 512u
 #define KUI_GAME_LAUNCH_SETTINGS_HEADER_SIZE 32u
-#define KUI_GAME_LAUNCH_SETTINGS_RECORD_MAX (36u + KUI_GAME_LAUNCH_SETTINGS_ENTRIES * (8u + KUI_GAME_LAUNCH_SETTINGS_PATH_CAP - 1u))
+#define KUI_GAME_LAUNCH_SETTINGS_RECORD_MAX (36u + KUI_GAME_LAUNCH_SETTINGS_ENTRIES * (24u + KUI_GAME_LAUNCH_SETTINGS_PATH_CAP - 1u))
 #define KUI_GAME_LAUNCH_SETTINGS_PATH_A "0:/KUI/apps/games/launch-settings-a.bin"
 #define KUI_GAME_LAUNCH_SETTINGS_PATH_B "0:/KUI/apps/games/launch-settings-b.bin"
 struct kui_game_launch_entry {
@@ -41,9 +45,14 @@ bool kui_game_launch_table_find(const struct kui_game_launch_table *table,const 
  * Invalid input leaves the collection unchanged. */
 bool kui_game_launch_table_upsert(struct kui_game_launch_table *table,const char *path,
                                   const struct kui_game_launch_settings *settings);
-/* Little-endian v1: 32-byte header, count variable-length entries and CRC32.
- * Each entry is {u16 path bytes,u8 reader,u8 CDDA,u8 encoding,3 reserved zero},
- * then canonical non-NUL path bytes. Header has sequence at16, count at24.
+/* Little-endian records: 32-byte header, variable-length entries and CRC32.
+ * Read v1 entries {u16 path bytes,u8 reader,u8 CDDA,u8 encoding,3 reserved zero}
+ * with patches disabled. Write v2 entries {u16 path bytes,u8 reader,u8 CDDA,
+ * u8 encoding,u8 patch-enable mask,u16 reserved zero,u32 address0,u32 value0,
+ * u32 address1,u32 value1}; mask bits0/1 select the two patches, other bits fail.
+ * Both entries end in canonical non-NUL path bytes. Disabled patch tuples are
+ * retained, so an edited patch can be disabled and reenabled without reentry.
+ * Header has version at8, sequence at16, count at24 and reserved zero at28.
  * Sequence0/unknown fields/duplicate keys/truncation/trailing bytes fail.
  * Encode/decode failure preserves caller outputs and sequence. */
 bool kui_game_launch_settings_encode(void *record,size_t capacity,size_t *size,
