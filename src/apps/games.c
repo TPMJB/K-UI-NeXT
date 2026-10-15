@@ -113,8 +113,9 @@ static bool same_component(const char *a,const char *b) {
 #define SELECTOR_PAYLOADS 128u
 struct selector_index {
     char names[SELECTOR_PAYLOADS][KUI_DEST_NAME_CAP];
-    unsigned count;
-    bool cue,retry,manifest,capture;
+    char aliases[SELECTOR_DESCRIPTORS][KUI_DEST_NAME_CAP];
+    unsigned count,alias_count;
+    bool retry,manifest,capture;
 };
 struct descriptor_names {char names[SELECTOR_DESCRIPTORS][KUI_DEST_NAME_CAP];unsigned count;};
 struct selector_names {char (*names)[KUI_DEST_NAME_CAP];unsigned count,capacity;bool complete;};
@@ -123,14 +124,14 @@ static void descriptor_payloads(const char *root,const struct descriptor_names *
 static bool selected_image(const char *name,const struct selector_index *index) {
     if(!image_name(name)) return false;
     if(index->capture && (!strcmp(name,"checkpoint-a.bin") || !strcmp(name,"checkpoint-b.bin"))) return false;
-    if(index->cue && (extension(name,".bin") || extension(name,".img"))) return false;
     for(unsigned i=0;i<index->count;i++) if(same_component(name,index->names[i])) return false;
+    for(unsigned i=0;i<index->alias_count;i++) if(same_component(name,index->aliases[i])) return false;
     return true;
 }
 /* Descriptor payloads must not become extra games, including cooked GDI .iso
- * tracks. Read bounded descriptors only when standalone payload types coexist.
- * A visible CUE owns BIN/IMG selection; ISO suppression needs a parsed track
- * reference. Failed directory discovery hides nothing and retries next list. */
+ * tracks. Read bounded descriptors when payloads or competing selectors coexist.
+ * Every payload needs a parsed FILE/track reference. Equivalent visible
+ * descriptors share one row; I/O failure hides nothing and retries. */
 static bool index_selectors(DIR *dir,const char *root,unsigned budget,struct selector_index *index,
     struct selector_names *saved,kui_cancel_fn cancel) {
     struct descriptor_names *sources=NULL;bool complete=false,payloads=false,overflow=false;
@@ -157,14 +158,13 @@ static bool index_selectors(DIR *dir,const char *root,unsigned budget,struct sel
         }
         if(payload_name(info.fname)) payloads=true;
         if(!gdi_name(info.fname) && !extension(info.fname,".cue")) continue;
-        if(extension(info.fname,".cue")) index->cue=true;
         if(strlen(info.fname)>=KUI_DEST_NAME_CAP) {overflow=true;continue;}
         if(!sources) {sources=calloc(1,sizeof(*sources));if(!sources) {index->retry=true;overflow=true;continue;}}
         if(sources->count==SELECTOR_DESCRIPTORS) {overflow=true;continue;}
         strcpy(sources->names[sources->count++],info.fname);
     }
-    if(!complete || index->retry) {index->cue=false;index->count=0;}
-    else if(payloads && sources && !overflow) descriptor_payloads(root,sources,index,cancel);
+    if(!complete || index->retry) index->count=0;
+    else if(sources && !overflow && (payloads || sources->count>1u)) descriptor_payloads(root,sources,index,cancel);
     free(sources);
     if(stopped(cancel)) return false;
     if(saved) {saved->complete=complete;return complete;}
@@ -571,11 +571,13 @@ static enum kui_game_result read_layout(const char *path,struct kui_game_image *
 static bool add_payload(struct selector_index *index,const char *name) {
     if(!payload_name(name)) return true;
     for(unsigned i=0;i<index->count;i++) if(same_component(name,index->names[i])) return true;
-    if(index->count==SELECTOR_PAYLOADS) {index->count=0;index->cue=index->capture=false;return false;}
+    if(index->count==SELECTOR_PAYLOADS) {index->count=0;index->capture=false;return false;}
     strcpy(index->names[index->count++],name);return true;
 }
 static bool cue_payloads(const uint8_t *data,size_t bytes,struct selector_index *index) {
-    size_t at=0;
+    /* A valid BINARY FILE line owns its payload even when later TRACK geometry
+     * is unsupported. Alias suppression below requires a fully valid layout. */
+    size_t at=bytes>=3u && data[0]==0xefu && data[1]==0xbbu && data[2]==0xbfu?3u:0u;
     while(at<bytes) {
         size_t end=at;while(end<bytes && data[end]!='\n') ++end;
         size_t p=at;while(p<end && (data[p]==' ' || data[p]=='\t')) ++p;
@@ -594,16 +596,80 @@ static bool cue_payloads(const uint8_t *data,size_t bytes,struct selector_index 
             bool binary=end-p>=6u && (data[p]|32)=='b' && (data[p+1]|32)=='i' &&
                 (data[p+2]|32)=='n' && (data[p+3]|32)=='a' && (data[p+4]|32)=='r' && (data[p+5]|32)=='y' &&
                 (end-p==6u || data[p+6]==' ' || data[p+6]=='\t' || data[p+6]=='\r');
-            if(finished && binary && kui_destination_name_valid(name) && !add_payload(index,name)) return false;
+            if(binary) {
+                p+=6u;
+                while(p<end && (data[p]==' ' || data[p]=='\t' || data[p]=='\r')) ++p;
+            }
+            if(finished && binary && p==end && kui_destination_name_valid(name) && !add_payload(index,name)) return false;
         }
         at=end==bytes?bytes:end+1u;
     }
     return true;
 }
+static bool same_track_map(const struct kui_game_image *a,const struct kui_game_image *b) {
+    if(a->count!=b->count || a->data_lba!=b->data_lba ||
+       a->scrambled!=b->scrambled || a->cd_image!=b->cd_image) return false;
+    for(unsigned i=0;i<a->count;i++) {
+        const struct kui_game_image_track *x=&a->tracks[i],*y=&b->tracks[i];
+        if(x->number!=y->number || x->start_lba!=y->start_lba || x->end_lba!=y->end_lba ||
+           x->control!=y->control || x->sector_bytes!=y->sector_bytes ||
+           x->sector_mode!=y->sector_mode || x->data_offset!=y->data_offset ||
+           x->file_offset!=y->file_offset || x->file_bytes!=y->file_bytes ||
+           !same_component(x->name,y->name)) return false;
+    }
+    return true;
+}
+static bool preferred_descriptor(const char *a,const char *b) {
+    if(gdi_name(a)!=gdi_name(b)) return gdi_name(a);
+    return strcmp(a,b)<0;
+}
+/* A converted GDI beside its original CUE is one image, provided both describe
+ * exactly the same bytes, TOC and media flags. Never group by title or merely
+ * by shared filenames. GDI maps already contain absolute offsets/LBAs; equal
+ * references imply equal lengths without statting their payloads. A CUE needs
+ * file lengths to resolve its relative clock, so mixed scans stat files but
+ * never read game payloads. The one-descriptor path stays cheap.
+ * At most sixteen layouts are retained until this directory scan finishes. */
+static void descriptor_aliases(const struct descriptor_names *sources,
+    struct selector_index *index,struct image_files *files) {
+    unsigned visible=0;bool cue=false;
+    for(unsigned i=0;i<sources->count;i++) if(strcmp(sources->names[i],".capture.gdi")) {
+        ++visible;cue=cue || extension(sources->names[i],".cue");
+    }
+    if(visible<2u) return;
+    struct kui_game_image *images=calloc(sources->count,sizeof(*images));
+    if(!images) {index->retry=true;return;}
+    bool valid[SELECTOR_DESCRIPTORS]={0},hidden[SELECTOR_DESCRIPTORS]={0};
+    const struct kui_game_file_ops ops={files,image_stat,image_read};
+    for(unsigned i=0;i<sources->count;i++) {
+        if(!strcmp(sources->names[i],".capture.gdi")) continue;
+        enum kui_game_result result;
+        if(cue) result=kui_game_image_open_named(sources->names[i],&ops,&images[i]);
+        else {
+            char path[KUI_GAMES_FILE_CAP];bool retry=false;
+            result=file_join(path,files->root,sources->names[i])?
+                read_layout(path,&images[i],files,&retry):KUI_GAME_INVALID;
+            if(retry) result=KUI_GAME_IO;
+        }
+        if(result==KUI_GAME_IO || result==KUI_GAME_CANCELLED || result==KUI_GAME_NOT_FOUND) {
+            /* A transient or incomplete view must not hide another selector. */
+            index->count=index->alias_count=0;index->capture=false;index->retry=true;
+            free(images);return;
+        }
+        valid[i]=result==KUI_GAME_OK;
+        for(unsigned j=0;valid[i] && j<i;j++) if(valid[j] && same_track_map(&images[i],&images[j])) {
+            if(preferred_descriptor(sources->names[i],sources->names[j])) hidden[j]=true;
+            else hidden[i]=true;
+        }
+    }
+    for(unsigned i=0;i<sources->count;i++) if(hidden[i])
+        strcpy(index->aliases[index->alias_count++],sources->names[i]);
+    free(images);
+}
 static void descriptor_payloads(const char *root,const struct descriptor_names *sources,
     struct selector_index *index,kui_cancel_fn cancel) {
     struct kui_game_image *image=malloc(sizeof(*image));
-    if(!image) {index->cue=false;index->retry=true;return;}
+    if(!image) {index->retry=true;return;}
     struct image_files files={.cancel=cancel};strcpy(files.root,root);
     for(unsigned source=0;source<sources->count;source++) {
         const char *name=sources->names[source];uint64_t bytes=0;
@@ -622,11 +688,12 @@ static void descriptor_payloads(const char *root,const struct descriptor_names *
         }
         free(descriptor);
         if(result==KUI_GAME_IO || result==KUI_GAME_CANCELLED || result==KUI_GAME_NOT_FOUND) {
-            index->count=0;index->cue=index->capture=false;index->retry=true;break;
+            index->count=0;index->capture=false;index->retry=true;break;
         }
         if(!complete) break;
     }
     free(image);
+    if(!index->retry) descriptor_aliases(sources,index,&files);
 }
 static bool variant_pair(const char *root,struct variant *pair,kui_cancel_fn cancel,const char **reason,bool *retry) {
     if(!pair->original[0]) {*reason="matching original folder not visible";return false;}

@@ -102,6 +102,12 @@ FRESULT __wrap_f_read(FIL *file, void *buffer, UINT bytes, UINT *read) {
         if((fault("pair-read-once") || fault("reverse-pair-read-once") || fault("cache-pair-read-once")) && !test.injected) {test.injected=true;return FR_DISK_ERR;}
         if(fault("short-read") && *read) { --*read; test.injected = true; }
         if(fault("cancel-read") && file == test.track) { test.cancelled = true; test.injected = true; }
+        if(!strcmp(test.fault,"format-alias-read-once") && test.read_calls==3u && !test.injected) {
+            test.injected=true;return FR_DISK_ERR;
+        }
+        if(!strcmp(test.fault,"format-alias-cancel") && test.read_calls==3u && !test.injected) {
+            test.cancelled=true;test.injected=true;
+        }
         if(fault("cancel-pair")) { test.cancelled = true; test.injected = true; }
     }
     return result;
@@ -334,6 +340,42 @@ static void seed_iso(const char *host,const char *target,bool cd,bool raw,bool m
 }
 static void seed_formats(const char *host) {
     assert(f_mkdir("0:/Games")==FR_OK);
+    if(!strncmp(test.fault,"format-alias-",13)) {
+        seed_fixture(host,folder,false);
+        uint8_t data[200000];size_t bytes=load_file("0:/Games/Reader Test/track03.bin",data,sizeof(data));
+        data[16u+62u]='1'; /* Synthetic Windows CE peripheral bit, no retail code. */
+        write_file("0:/Games/Reader Test/track03.bin",data,bytes);
+        uint8_t audio[4u*2352u]={0};write_file("0:/Games/Reader Test/track04.raw",audio,sizeof(audio));
+        const char *gdi="4\n1 0 4 2352 track01.bin 0\n2 4 0 2352 track02.raw 0\n3 45000 4 2352 track03.bin 0\n4 45064 0 2352 track04.raw 0\n";
+        write_file("0:/Games/Reader Test/disc.gdi",gdi,strlen(gdi));
+        const char *cue="REM SINGLE-DENSITY AREA\nFILE \"track01.bin\" BINARY\n TRACK 01 MODE1/2352\n INDEX 01 00:00:00\n"
+            "FILE \"track02.raw\" BINARY\n TRACK 02 AUDIO\n INDEX 01 00:00:00\nREM HIGH-DENSITY AREA\n"
+            "FILE \"track03.bin\" BINARY\n TRACK 03 MODE1/2352\n INDEX 01 00:00:00\n"
+            "FILE \"track04.raw\" BINARY\n TRACK 04 AUDIO\n INDEX 01 00:00:00\n";
+        if(!strcmp(test.fault,"format-alias-gdi")) write_file("0:/Games/Reader Test/second.GDI",gdi,strlen(gdi));
+        else {
+            char text[1024];snprintf(text,sizeof(text),"%s%s",cue,
+                !strcmp(test.fault,"format-alias-scrambled")?"REM KUI SCRAMBLED 1\n":"");
+            if(!strcmp(test.fault,"format-alias-cue")) {
+                for(char *name=text;(name=strstr(name,"track"));name+=5u) memcpy(name,"TRACK",5u);
+            }
+            if(!strcmp(test.fault,"format-alias-media")) {
+                char *area=strstr(text,"REM SINGLE-DENSITY AREA");assert(area);memset(area,' ',strlen("REM SINGLE-DENSITY AREA"));
+            }
+            if(!strcmp(test.fault,"format-alias-layout")) {
+                char *last=strrchr(text,'\n');assert(last);*last=0;
+                char *index=strrchr(text,'0');assert(index);*index='1';
+            }
+            if(!strcmp(test.fault,"format-alias-malformed")) strcpy(text,"FILE \"track03.bin\" BINARY\n TRACK nonsense\n");
+            write_file("0:/Games/Reader Test/original.CUE",text,strlen(text));
+            if(!strcmp(test.fault,"format-alias-reverse")) {
+                assert(f_unlink("0:/Games/Reader Test/disc.gdi")==FR_OK);
+                write_file("0:/Games/Reader Test/disc.gdi",gdi,strlen(gdi));
+            }
+        }
+        if(!strcmp(test.fault,"format-alias-independent")) seed_iso(host,"0:/Games/Reader Test/Independent.bin",true,true,false);
+        return;
+    }
     if(!strncmp(test.fault,"format-capture-",15)) {
         seed_fixture(host,folder,false);
         bool visible=!strcmp(test.fault,"format-capture-gdi") || !strcmp(test.fault,"format-capture-gdi-malformed");
@@ -341,8 +383,13 @@ static void seed_formats(const char *host) {
         else {
             assert(f_rename("0:/Games/Reader Test/disc.gdi","0:/Games/Reader Test/.capture.gdi")==FR_OK);
             const char *name=!strcmp(test.fault,"format-capture-zso")?"Reader Test.zso":
-                !strcmp(test.fault,"format-capture-chd")?"Reader Test.chd":"Reader Test.cso";
-            char path[128];snprintf(path,sizeof(path),"%s/%s",folder,name);write_file(path,"container",9);
+                !strcmp(test.fault,"format-capture-chd")?"Reader Test.chd":
+                !strcmp(test.fault,"format-capture-cue")?"Reader Test.cue":"Reader Test.cso";
+            const char *cue="REM SINGLE-DENSITY AREA\nFILE \"track01.bin\" BINARY\n TRACK 01 MODE1/2352\n INDEX 01 00:00:00\n"
+                "FILE \"track02.raw\" BINARY\n TRACK 02 AUDIO\n INDEX 01 00:00:00\nREM HIGH-DENSITY AREA\n"
+                "FILE \"track03.bin\" BINARY\n TRACK 03 MODE1/2352\n INDEX 01 00:00:00\n";
+            char path[128];snprintf(path,sizeof(path),"%s/%s",folder,name);
+            write_file(path,!strcmp(test.fault,"format-capture-cue")?cue:"container",!strcmp(test.fault,"format-capture-cue")?strlen(cue):9u);
         }
         write_file("0:/Games/Reader Test/checkpoint-a.bin","state",5);
         write_file("0:/Games/Reader Test/checkpoint-b.bin","state",5);
@@ -392,6 +439,8 @@ static void seed_formats(const char *host) {
         write_file("0:/Games/Reader Test/disc.CUE",cue,strlen(cue));
     }
     if(!strcmp(test.fault,"format-cue-listing")) {
+        const char *cue="\xef\xbb\xbf fIlE \"PAYLOAD.BIN\" bInArY\r\n TRACK 01 MODE1/2048\r\n INDEX 01 00:00:00\r\n";
+        write_file("0:/Games/Reader Test/disc.CUE",cue,strlen(cue));
         write_file("0:/Games/Reader Test/unrelated.bin","bad",3);write_file("0:/Games/Reader Test/unrelated.img","bad",3);
     }
     if(!strcmp(test.fault,"format-folder-ambiguous")) seed_iso(host,"0:/Games/Reader Test/Independent.ISO",true,false,false);
@@ -730,8 +779,58 @@ static void check_variants(void) {
     }
     if(original_only || converted_only) assert(test.read_bytes<4096u);
 }
+static bool alias_visit(void *ctx,const char *name,bool directory) {
+    unsigned *count=ctx;assert(!directory);
+    assert(!strcmp(name,"disc.gdi") || !strcmp(name,"original.CUE") || !strcmp(name,"Independent.bin"));
+    ++*count;return true;
+}
+static void alias_mounted(void *ctx,kui_log_fn log,kui_cancel_fn cancelled) {
+    (void)log;assert(kui_games_visit_images("/Games/Reader Test",alias_visit,ctx,cancelled));
+}
 static void check_formats(void) {
     struct kui_games_page page;
+    if(!strncmp(test.fault,"format-alias-",13)) {
+        bool different=!strcmp(test.fault,"format-alias-scrambled") || !strcmp(test.fault,"format-alias-media") ||
+            !strcmp(test.fault,"format-alias-layout") || !strcmp(test.fault,"format-alias-malformed");
+        bool independent=!strcmp(test.fault,"format-alias-independent");
+        bool transient=!strcmp(test.fault,"format-alias-read-once"),cancelled=!strcmp(test.fault,"format-alias-cancel");
+        bool ok=kui_games_list("/Games",0,&page,log_line,cancel);
+        if(cancelled) {
+            assert(!ok && test.injected && !page.count);test.cancelled=false;
+            assert(kui_games_list("/Games",0,&page,log_line,cancel));
+        } else {
+            assert(ok && page.count==1u);
+            if(transient) {
+                assert(test.injected && page.entries[0].directory);
+                assert(kui_games_list("/Games",0,&page,log_line,cancel));
+            }
+        }
+        assert(page.count==1u && page.entries[0].directory==(different || independent));
+        if(!different && !independent) assert(!strcmp(page.entries[0].path,"/Games/Reader Test/disc.gdi"));
+        assert(!test.track_bytes && (test.track_stats || !strcmp(test.fault,"format-alias-gdi")) && test.read_bytes<16384u);
+        assert(kui_games_list("/Games/Reader Test",0,&page,log_line,cancel));
+        assert(page.count==(different || independent?2u:1u) && page.total==page.count);
+        bool gdi=false,other=false;
+        for(unsigned i=0;i<page.count;i++) {
+            if(!strcmp(page.entries[i].name,"disc.gdi")) gdi=true;
+            else {
+                assert(!strcmp(page.entries[i].name,independent?"Independent.bin":"original.CUE"));other=true;
+            }
+        }
+        assert(gdi && other==(different || independent) && !test.track_bytes);
+        unsigned reads=test.block_reads,dirs=test.dir_calls;
+        assert(kui_games_list("/Games/Reader Test",0,&page,log_line,cancel));
+        assert(test.block_reads==reads && test.dir_calls==dirs);
+        unsigned visited=0;
+        assert(kui_games_list_with("/Games/Reader Test",0,&page,alias_mounted,&visited,log_line,cancel));
+        assert(visited==page.count && !test.track_bytes);
+        if(!different) {
+            struct kui_games_detail detail;assert(kui_games_inspect("/Games/Reader Test/disc.gdi",&detail,log_line,cancel));
+            assert(detail.windows_ce && detail.format==KUI_GAME_IMAGE_GDI && detail.tracks==4u &&
+                detail.audio_tracks==2u && detail.audio.candidate_tracks==1u);
+        }
+        return;
+    }
     if(!strncmp(test.fault,"format-capture-",15)) {
         bool malformed=strstr(test.fault,"malformed")!=NULL,unrelated=!strcmp(test.fault,"format-capture-unrelated-bin");
         assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.count==1u);
@@ -739,7 +838,8 @@ static void check_formats(void) {
         if(!malformed && !unrelated) {
             const char *name=!strcmp(test.fault,"format-capture-zso")?"Reader Test.zso":
                 !strcmp(test.fault,"format-capture-chd")?"Reader Test.chd":
-                !strcmp(test.fault,"format-capture-gdi")?"disc.gdi":"Reader Test.cso";
+                !strcmp(test.fault,"format-capture-gdi")?"disc.gdi":
+                !strcmp(test.fault,"format-capture-cue")?"Reader Test.cue":"Reader Test.cso";
             char expected[128];snprintf(expected,sizeof(expected),"/Games/Reader Test/%s",name);
             assert(!strcmp(page.entries[0].path,expected));
         }
@@ -787,6 +887,17 @@ static void check_formats(void) {
         assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.count==1 && page.entries[0].directory);
         assert(kui_games_list("/Games/Reader Test",0,&page,log_line,cancel) && page.count==2 && page.total==2);return;
     }
+    if(!strcmp(test.fault,"format-cue-listing")) {
+        assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.count==1u && page.entries[0].directory);
+        assert(kui_games_list("/Games/Reader Test",0,&page,log_line,cancel) && page.count==3u && page.total==3u);
+        bool cue=false,bin=false,img=false;
+        for(unsigned i=0;i<page.count;i++) {
+            if(!strcmp(page.entries[i].name,"disc.CUE")) cue=true;
+            else if(!strcmp(page.entries[i].name,"unrelated.bin")) bin=true;
+            else {assert(!strcmp(page.entries[i].name,"unrelated.img"));img=true;}
+        }
+        assert(cue && bin && img);return;
+    }
     if(!strcmp(test.fault,"format-inspect-cdi-invalid")) {
         struct kui_games_detail detail;
         assert(!kui_games_inspect("/Games/Reader Test/disc.cdi",&detail,log_line,cancel) && !detail.valid);return;
@@ -798,7 +909,6 @@ static void check_formats(void) {
     unsigned dirs=test.dir_calls,reads=test.block_reads;
     assert(kui_games_list("/Games",0,&page,log_line,cancel));assert(test.dir_calls==dirs && test.block_reads==reads);
     assert(kui_games_list("/Games/Reader Test",0,&page,log_line,cancel) && page.count==1 && page.total==1);
-    if(!strcmp(test.fault,"format-cue-listing")) return;
     struct kui_games_detail detail;bool bad=!strcmp(test.fault,"format-bad-boot");
     assert(kui_games_inspect(expected,&detail,log_line,cancel)==!bad && detail.valid==!bad);
     if(bad) return;
