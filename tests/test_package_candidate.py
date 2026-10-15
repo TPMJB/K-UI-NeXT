@@ -182,7 +182,9 @@ class CandidateInstallation(unittest.TestCase):
         self.assertIn("release candidate", (bundle / "SOURCE.txt").read_text())
         self.assertNotIn("final release", (bundle / "SOURCE.txt").read_text())
         self.assertNotIn("ATA readiness", (bundle / "SOURCE.txt").read_text())
-        self.assertFalse((bundle / "release-banner.jpg").exists())
+        self.assertEqual((bundle / "release-banner.jpg").read_bytes(),
+                         (ROOT / "resources/branding/release-v2.0-banner.jpg").read_bytes())
+        self.assertTrue((bundle / "RC-TEST-PLAN.md").is_file())
         self.assertFalse((bundle / "ANNOUNCEMENTS.md").exists())
         self.assertEqual({path.name for path in (bundle / "boot-cd").iterdir()},
                          {rc["artifact_prefix"] + ".cdi"})

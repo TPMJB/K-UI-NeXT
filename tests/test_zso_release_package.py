@@ -81,7 +81,8 @@ class ZsoReleaseInstallation(unittest.TestCase):
             sums = dict(reversed(line.split("  ", 1)) for line in install.read("SHA256SUMS").decode().splitlines())
             self.assertEqual(sums["KUI/apps/games/zso-boot.kui"], hashlib.sha256(self.expected).hexdigest())
             self.assertEqual(sums["GAMES-ZSO.md"], hashlib.sha256(self.guide).hexdigest())
-            self.assertNotIn("release-banner.jpg", install.namelist())
+            self.assertIn("release-banner.jpg", install.namelist())
+            self.assertIn("RC-TEST-PLAN.md", install.namelist())
         with zipfile.ZipFile(assets / (release["artifact_prefix"] + "-source.zip")) as source:
             record = json.loads(source.read("build.json"))
             self.assertEqual((record["commit"], record["release"], record["kind"]),

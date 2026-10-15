@@ -12,8 +12,8 @@ import wave
 import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
-PNG_BLOB = "943c815fcff5884857c2f772a6329649e6725e6f"
-BOOT_PNG_BLOB = "943c815fcff5884857c2f772a6329649e6725e6f"
+PNG_BLOB = "a851c7eee7f32cc8340f72de93e9c0030fce1b97"
+BOOT_PNG_BLOB = "a851c7eee7f32cc8340f72de93e9c0030fce1b97"
 STARTUP_RATE = 44100
 STARTUP_FRAMES = STARTUP_RATE * 265 // 100
 # The runtime embeds this Ogg Vorbis encoding of startup_samples() instead of
