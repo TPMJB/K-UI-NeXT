@@ -141,6 +141,8 @@ struct kui_options {
     unsigned capture_sectors, capture_fad;   /* capture_fad 0 = optical_fad */
     bool capture_audio;
     enum kui_capture_format capture_format;
+    unsigned capture_retry_limit;
+    bool capture_strict_sectors;
 };
 
 void kui_options_default(struct kui_options *out);

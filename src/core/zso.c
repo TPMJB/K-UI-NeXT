@@ -1,10 +1,14 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/zso.h"
+#if KUI_ZSO_CODECS & 2
+#include "kui/lzo1x.h"
+#endif
 #include <string.h>
 
 /* Independent implementation of the ZSO container and LZ4 block formats:
  * unknownbrackets/maxcso README_ZSO.md; lz4/lz4 doc/lz4_Block_format.md.
- * No frame decoder, dependent dictionary, LZO dialect or codec guessing. */
+ * No frame decoder, dependent dictionary or codec guessing. The historical
+ * LZO1X dialect uses its own independently implemented streaming decoder. */
 static uint32_t little32(const uint8_t *p) {
     return (uint32_t)p[0] | (uint32_t)p[1] << 8 |
         (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
@@ -14,22 +18,30 @@ static int valid(const struct kui_zso_info *info) {
         !(info->total_bytes % KUI_ZSO_BLOCK_BYTES) &&
         info->block_count == info->total_bytes / KUI_ZSO_BLOCK_BYTES &&
         info->index_bytes == (info->block_count + 1u) * 4u &&
-        info->shift <= KUI_ZSO_MAX_SHIFT &&
+        info->shift <= KUI_ZSO_MAX_SHIFT && info->codec <= KUI_ZSO_LZO1X &&
+        (KUI_ZSO_CODECS & (1u << info->codec)) &&
         info->file_bytes >= KUI_ZSO_HEADER_BYTES + info->index_bytes;
 }
 enum kui_zso_result kui_zso_header_parse(const uint8_t header[KUI_ZSO_HEADER_BYTES],
     uint64_t file_bytes, struct kui_zso_info *info) {
+    return kui_zso_header_parse_codec(header, file_bytes, KUI_ZSO_LZ4, info);
+}
+enum kui_zso_result kui_zso_header_parse_codec(const uint8_t header[KUI_ZSO_HEADER_BYTES],
+    uint64_t file_bytes, enum kui_zso_codec codec, struct kui_zso_info *info) {
     if(!header || !info) return KUI_ZSO_INVALID;
-    if(memcmp(header, "ZISO", 4) || little32(header + 4) != KUI_ZSO_HEADER_BYTES ||
-       header[20] != 1u || little32(header + 16) != KUI_ZSO_BLOCK_BYTES ||
+    if((unsigned)codec > KUI_ZSO_LZO1X || !(KUI_ZSO_CODECS & (1u << codec)))
+        return KUI_ZSO_UNSUPPORTED;
+    if(memcmp(header, "ZISO", 4) || header[20] > 1u ||
+       (codec == KUI_ZSO_LZ4 && (little32(header + 4) != KUI_ZSO_HEADER_BYTES || header[20] != 1u)) ||
+       little32(header + 16) != KUI_ZSO_BLOCK_BYTES ||
        header[21] > KUI_ZSO_MAX_SHIFT) return KUI_ZSO_UNSUPPORTED;
-    if(header[22] || header[23]) return KUI_ZSO_INVALID;
+    if(codec == KUI_ZSO_LZ4 && (header[22] || header[23])) return KUI_ZSO_INVALID;
     uint64_t total = (uint64_t)little32(header + 8) | (uint64_t)little32(header + 12) << 32;
     if(!total || total % KUI_ZSO_BLOCK_BYTES) return KUI_ZSO_INVALID;
     if(total > KUI_ZSO_MAX_BYTES || file_bytes > UINT32_MAX) return KUI_ZSO_RANGE;
     struct kui_zso_info candidate = {
         .file_bytes = (uint32_t)file_bytes, .total_bytes = (uint32_t)total,
-        .block_count = (uint32_t)(total / KUI_ZSO_BLOCK_BYTES), .shift = header[21]
+        .block_count = (uint32_t)(total / KUI_ZSO_BLOCK_BYTES), .shift = header[21], .codec = (uint8_t)codec
     };
     candidate.index_bytes = (candidate.block_count + 1u) * 4u;
     if(!valid(&candidate)) return KUI_ZSO_RANGE;
@@ -84,6 +96,7 @@ enum kui_zso_result kui_zso_validate_index(const struct kui_zso_info *info,
     }
     return info->file_bytes - terminal < (1u << info->shift) ? KUI_ZSO_OK : KUI_ZSO_RANGE;
 }
+#if KUI_ZSO_CODECS & 1
 struct input {
     kui_zso_read_fn read;
     void *context;
@@ -110,6 +123,7 @@ static enum kui_zso_result length(struct input *input, uint32_t base, uint32_t *
     *out = value;
     return KUI_ZSO_OK;
 }
+#endif
 enum kui_zso_result kui_zso_read_block(const struct kui_zso_info *info,
     uint32_t block, kui_zso_read_fn read, void *context, uint8_t out[KUI_ZSO_BLOCK_BYTES]) {
     if(!valid(info) || !read || !out) return KUI_ZSO_INVALID;
@@ -122,6 +136,15 @@ enum kui_zso_result kui_zso_read_block(const struct kui_zso_info *info,
     result = pair(info, entry, little32(entries + 4), &start, &end);
     if(result != KUI_ZSO_OK) return result;
     if(entry & UINT32_C(0x80000000)) return read(context, start, out, KUI_ZSO_BLOCK_BYTES);
+#if KUI_ZSO_CODECS & 2
+    if(info->codec == KUI_ZSO_LZO1X) {
+        uint32_t consumed;
+        result = kui_lzo1x_decode(read, context, start, end, out, &consumed);
+        if(result != KUI_ZSO_OK) return result;
+        return end - start - consumed < (1u << info->shift) ? KUI_ZSO_OK : KUI_ZSO_INVALID;
+    }
+#endif
+#if KUI_ZSO_CODECS & 1
     struct input input = {read, context, start, end};
     uint32_t done = 0, last_match = UINT32_MAX;
     for(;;) {
@@ -153,12 +176,15 @@ enum kui_zso_result kui_zso_read_block(const struct kui_zso_info *info,
         /* Byte order implements overlapping matches, including distance1. */
         while(count--) { out[done] = out[done - distance]; ++done; }
     }
+#else
+    return KUI_ZSO_UNSUPPORTED;
+#endif
 }
 const char *kui_zso_result_name(enum kui_zso_result result) {
     switch(result) {
     case KUI_ZSO_OK: return "OK";
-    case KUI_ZSO_INVALID: return "Invalid standard LZ4 ZSO block or header";
-    case KUI_ZSO_UNSUPPORTED: return "Unsupported ZSO format; standard LZ4 v1 with 2048-byte blocks required";
+    case KUI_ZSO_INVALID: return "Invalid block/header for selected ZSO codec";
+    case KUI_ZSO_UNSUPPORTED: return "Unsupported ZSO format or selected codec; independent 2048-byte blocks required";
     case KUI_ZSO_IO: return "ZSO read failed";
     case KUI_ZSO_CANCELLED: return "Cancelled";
     case KUI_ZSO_RANGE: return "ZSO container outside admitted bounds";

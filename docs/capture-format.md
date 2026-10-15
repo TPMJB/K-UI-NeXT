@@ -1,7 +1,10 @@
 # Capture format and invariants
 
-Profile: `gdi-raw2352-typegap150-v1`. This is a declared logical GDI capture
-profile, not a subchannel or forensic image of every physical region.
+The default retail GD profile is `gdi-raw2352-typegap150-v1`. This is a
+declared logical GDI capture profile, not a subchannel or forensic image of every
+physical region. Confirmed single-session CD/CD-R/audio uses the separate
+[BIN/CUE CD profile](cd-capture.md); its actual TOC intervals never use the GD
+type-change tail convention below.
 
 ## Track plan
 
@@ -44,8 +47,13 @@ high-density boot metadata, whose Dreamcast signature is required. Full hashes
 are still necessary to establish whole-disc identity against a reference.
 
 A failing batch shrinks to single-sector reads for the affected window. The
-budget is ten additional attempts after the initial failed request; shrinking
-does not replenish it. Capture attempts use one guarded raw PIO read, check the
+default budget is ten additional attempts after the initial failed request;
+shrinking does not replenish it. The optional per-run retry limit admits
+1/5/10/20/50 additional attempts. Optional strict acquisition adds Mode 1
+sync/address/reserved/P/Q checks; it explicitly refuses Mode 2 while ordinary
+Mode 2 Form 1 capture remains supported. See
+[CD capture and acquisition checks](cd-capture.md). Capture attempts use one
+guarded raw PIO read, check the
 firmware's transferred-byte count and retain data-sector EDC validation. The
 small identification samples and diagnostic probes still use paired reads.
 Capture services PIO continuously with a runnable scheduler yield every 2 ms,

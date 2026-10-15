@@ -16,8 +16,8 @@ LWEXT4_OBJECTS := $(patsubst %.c,build/dc/%.o,$(LWEXT4_SOURCES))
 LOADER_OBJECTS := build/dc/src/core/runtime_image.o build/dc/src/core/runtime_file.o build/dc/src/dreamcast/bootstrap.o
 LOADER_OBJECTS += build/dc/src/core/boot_volume.o build/dc/src/core/boot_image.o build/dc/src/core/ext4_boot.o $(LWEXT4_OBJECTS)
 # The CD recovery menu uses the same benchmark runner as SD Diagnostics.
-BENCH_OBJECTS := build/dc/src/core/hash.o build/dc/src/core/capture_plan.o build/dc/src/core/capture.o \
-    build/dc/src/core/capture_export.o build/dc/src/core/capture_export_file.o build/dc/src/core/capture_chd.o \
+BENCH_OBJECTS := build/dc/src/core/hash.o build/dc/src/core/capture_plan.o build/dc/src/core/capture.o build/dc/src/core/recovery_sector.o \
+    build/dc/src/core/capture_export.o build/dc/src/core/capture_export_file.o build/dc/src/core/capture_cooked.o build/dc/src/core/capture_chd.o \
     build/dc/third_party/miniz/miniz.o build/dc/third_party/minilzo/minilzo.o \
     build/dc/src/core/timing.o build/dc/src/core/destination.o build/dc/src/core/destination_file.o \
     build/dc/src/core/known_dumps.o build/dc/src/core/crc16.o \
@@ -32,10 +32,11 @@ RUNTIME_OBJECTS += $(BENCH_OBJECTS)
 RUNTIME_OBJECTS += build/dc/src/core/storage_test_model.o build/dc/src/core/storage_test.o build/dc/src/core/storage_test_store.o
 RUNTIME_OBJECTS += build/dc/src/dreamcast/capture.o
 RUNTIME_OBJECTS += build/dc/src/dreamcast/memory.o
-RUNTIME_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recovery_scan.o build/dc/src/core/recovery_sector.o
-RUNTIME_OBJECTS += build/dc/src/core/game_launch_settings.o build/dc/src/core/game_ram_patches.o
+RUNTIME_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recovery_scan.o build/dc/src/core/repair_copy.o
+RUNTIME_OBJECTS += build/dc/src/core/network_rip.o
+RUNTIME_OBJECTS += build/dc/src/core/games_selection.o build/dc/src/core/game_launch_settings.o build/dc/src/core/game_ram_patches.o
 RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadata.o
-RUNTIME_OBJECTS += build/dc/src/core/zso.o build/dc/src/core/retail_zso.o
+RUNTIME_OBJECTS += build/dc/src/core/zso.o build/dc/src/core/lzo1x.o build/dc/src/core/retail_zso.o
 RUNTIME_OBJECTS += build/dc/src/core/game_cover.o build/dc/src/core/pvr_texture.o
 RUNTIME_OBJECTS += build/dc/src/core/files_path.o
 RUNTIME_OBJECTS += build/dc/src/core/w5500.o build/dc/src/dreamcast/w5500_sci.o build/dc/src/core/ftp_protocol.o
@@ -54,7 +55,7 @@ BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 
 .PHONY: all force-build-id wince-cdda
 all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf build/retail/entry.elf build/retail-bench/entry.elf build/retail-ce/entry.elf wince-cdda
-all: native-zso
+all: native-zso native-lzo
 # These separately linked, opt-in music modules retain their tested CE layout
 # even when the ordinary native loader uses its lower firmware reservation.
 # Explicit arguments also isolate them from a requested native diagnostic.
@@ -491,7 +492,7 @@ $(filter-out $(RETAIL_COMMON),$(RETAIL_CE_STAGE)) $(RETAIL_CE_SCI) $(RETAIL_CE_S
 ZSO_DIR := build/retail-zso
 ZSO_FLAGS := $(filter-out -DKUI_RETAIL_LOW_RESIDENT=% -DKUI_RETAIL_STARTUP_TRACE=% -DKUI_RETAIL_SONIC_STACK_TEST=%,$(RETAIL_FLAGS)) \
     -DKUI_RETAIL_LOW_RESIDENT=1 -DKUI_RETAIL_STARTUP_TRACE=0 -DKUI_RETAIL_SONIC_STACK_TEST=0 \
-    -DKUI_RETAIL_ZSO=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_MANIFEST_SLOTS=32 -DKUI_GAME_RAM_PATCHES_STAGE=0
+    -DKUI_ZSO_CODECS=1 -DKUI_RETAIL_ZSO=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_MANIFEST_SLOTS=32 -DKUI_GAME_RAM_PATCHES_STAGE=0
 ZSO_RESIDENT_SRC := $(filter-out src/core/retail_image.c,$(RETAIL_SCI_SRC)) src/core/retail_zso.c src/core/zso.c
 ZSO_RESIDENT := $(patsubst %.c,$(ZSO_DIR)/resident/%.o,$(ZSO_RESIDENT_SRC)) $(ZSO_DIR)/resident/retail_resident_asm.o
 ZSO_STAGE_SRC := src/loader/retail_stage.c src/loader/sd_reader.c src/loader/retail_sd.c \
@@ -537,3 +538,54 @@ $(ZSO_DIR)/entry.elf: $(ZSO_DIR)/retail_entry_asm.o src/loader/retail_entry.ld
 	python3 tools/record_build.py $@
 $(ZSO_RESIDENT) $(ZSO_STAGE) $(ZSO_DIR)/retail_entry_asm.o: $(ZSO_DIR)/layout-config
 -include $(ZSO_RESIDENT:.o=.d) $(ZSO_STAGE:.o=.d) $(ZSO_DIR)/retail_entry_asm.d
+
+# Independently decoded historical LZO1X; the existing LZ4 target stays separate.
+LZO_DIR := build/retail-lzo
+LZO_FLAGS := $(filter-out -DKUI_RETAIL_LOW_RESIDENT=% -DKUI_RETAIL_STARTUP_TRACE=% -DKUI_RETAIL_SONIC_STACK_TEST=%,$(RETAIL_FLAGS)) \
+    -DKUI_RETAIL_LOW_RESIDENT=1 -DKUI_RETAIL_STARTUP_TRACE=0 -DKUI_RETAIL_SONIC_STACK_TEST=0 \
+    -DKUI_ZSO_CODECS=2 -DKUI_RETAIL_ZSO=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_MANIFEST_SLOTS=32 -DKUI_GAME_RAM_PATCHES_STAGE=0
+LZO_RESIDENT_SRC := $(filter-out src/core/retail_image.c,$(RETAIL_SCI_SRC)) src/core/retail_zso.c src/core/zso.c src/core/lzo1x.c
+LZO_RESIDENT := $(patsubst %.c,$(LZO_DIR)/resident/%.o,$(LZO_RESIDENT_SRC)) $(LZO_DIR)/resident/retail_resident_asm.o
+LZO_STAGE_SRC := src/loader/retail_stage.c src/loader/sd_reader.c src/loader/retail_sd.c \
+    src/loader/sci_sd_bus.c src/loader/minic.c src/loader/retail_display.c \
+    src/core/retail_image.c src/core/retail_zso.c src/core/zso.c src/core/lzo1x.c
+LZO_STAGE := $(patsubst %.c,$(LZO_DIR)/stage/%.o,$(LZO_STAGE_SRC)) $(LZO_DIR)/stage/retail_stage_asm.o
+.PHONY: native-lzo
+native-lzo: $(LZO_DIR)/entry.elf
+$(LZO_DIR)/layout-config: force-retail-layout
+	@mkdir -p $(@D)
+	@printf '%s\n' 'ZSO=1 CODEC=1 LOW=1 TRANSPORT=1 READER=0 SLOTS=32 PATCHES=0 BUILD=$(BUILD_ID)' > $@.new
+	@if ! cmp -s $@.new $@; then mv $@.new $@; else rm $@.new; fi
+$(LZO_DIR)/resident/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(LZO_FLAGS) $(RETAIL_SCI_FLAGS) -fcallgraph-info=su -MMD -MP -c $< -o $@
+$(LZO_DIR)/resident/retail_resident_asm.o: src/loader/retail_resident.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(LZO_FLAGS) $(RETAIL_SCI_FLAGS) -MMD -MP -c $< -o $@
+$(LZO_DIR)/resident/src/loader/retail_display.o: force-build-id
+$(LZO_DIR)/resident-sci.elf: $(LZO_RESIDENT) src/loader/retail_resident_low.ld
+	@mkdir -p $(LZO_DIR)/sci/lto
+	rm -f $(LZO_DIR)/resident-sci.elf.ltrans* $(LZO_DIR)/sci/lto/*
+	sh-elf-gcc $(RETAIL_LINK) $(RETAIL_SCI_FLAGS) -Os -fstack-usage -fcallgraph-info=su -save-temps=obj -Wl,--relax -Wl,-u,_memcpy -Wl,-u,_memset -Wl,-u,_kui_retail_resident_init -Wl,-u,_kui_retail_resident_dispatch -Wl,-u,_kui_retail_gd_dispatch -Wl,-u,_kui_retail_zso_image_read -Wl,-u,_kui_zso_read_block -Wl,-u,_kui_lzo1x_decode -Wl,-u,_kui_loader_sd_stream_next -Wl,-u,_kui_sci_sd_acquire -Wl,-u,_kui_sci_sd_release -Tsrc/loader/retail_resident_low.ld -Wl,-Map,$(LZO_DIR)/resident-sci.map -o $@ $(LZO_RESIDENT) -lgcc
+	cp $(LZO_DIR)/resident-sci.elf.ltrans*.su $(LZO_DIR)/resident-sci.elf.ltrans*.ci $(LZO_DIR)/sci/lto/
+$(LZO_DIR)/resident-sci.bin: $(LZO_DIR)/resident-sci.elf
+	sh-elf-objcopy -O binary $< $@
+$(LZO_DIR)/stage/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(LZO_FLAGS) -MMD -MP -c $< -o $@
+$(LZO_DIR)/stage/src/loader/retail_display.o: force-build-id
+$(LZO_DIR)/stage/retail_stage_asm.o: src/loader/retail_stage.S $(LZO_DIR)/resident-sci.bin
+	@mkdir -p $(@D)
+	sh-elf-gcc $(LZO_FLAGS) -DKUI_RETAIL_ZSO_RESIDENT_BIN='"$(LZO_DIR)/resident-sci.bin"' -MMD -MP -c $< -o $@
+$(LZO_DIR)/stage.elf: $(LZO_STAGE) src/loader/retail_stage.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_stage.ld -Wl,-Map,$(LZO_DIR)/stage.map -o $@ $(LZO_STAGE) -lgcc
+$(LZO_DIR)/stage.bin: $(LZO_DIR)/stage.elf
+	sh-elf-objcopy -O binary $< $@
+$(LZO_DIR)/retail_entry_asm.o: src/loader/retail_entry.S $(LZO_DIR)/stage.bin
+	sh-elf-gcc $(LZO_FLAGS) -DKUI_RETAIL_STAGE_BIN='"$(LZO_DIR)/stage.bin"' -MMD -MP -c $< -o $@
+$(LZO_DIR)/entry.elf: $(LZO_DIR)/retail_entry_asm.o src/loader/retail_entry.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,$(LZO_DIR)/entry.map -o $@ $<
+	python3 tools/check_zso_loader.py --codec lzo $(LZO_DIR)
+	python3 tools/record_build.py $@
+$(LZO_RESIDENT) $(LZO_STAGE) $(LZO_DIR)/retail_entry_asm.o: $(LZO_DIR)/layout-config
+-include $(LZO_RESIDENT:.o=.d) $(LZO_STAGE:.o=.d) $(LZO_DIR)/retail_entry_asm.d

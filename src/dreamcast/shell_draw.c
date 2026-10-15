@@ -163,6 +163,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
             kui_shell_games_image_ready(s)?
             (s->games_from_files?"Y Options   X Inspect   B Files":kui_shell_games_variant_label(s)?
                 "Y Options   X Inspect   B Versions":"Y Options   X Inspect   B Games"):
+            kui_shell_games_zso_selected(s)?"Y ZSO codec   X Inspect again   B Back":
             s->games_from_files?"X Inspect again   B Files":kui_shell_games_variant_label(s)?
                 "X Inspect again   B Versions":"X Inspect again   B Games") :
         s->page==KUI_SHELL_FILES ? "B Up   START Home   LEFT/RIGHT Page" :
@@ -193,6 +194,8 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_GAMES_PATCHES ? (s->games_patch_editing?"LEFT/RIGHT Digit   UP/DOWN Change   A Save   B Cancel":"D-pad Select   A Toggle/edit   B Advanced") :
         s->page==KUI_SHELL_GAMES_TESTS ? "D-pad Select   A Open test   B Back" :
         s->page==KUI_SHELL_GAMES_INFO ? "B Advanced" :
+        s->page==KUI_SHELL_GAMES_CHECK ? "A Check again   B Advanced" :
+        s->page==KUI_SHELL_GAMES_CODEC ? "D-pad Select   A Save and inspect   B Details" :
         s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
     words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU||s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM||s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS||s->page==KUI_SHELL_GAMES_EXTRA_OPTIONS||s->page==KUI_SHELL_GAMES_PATCHES||s->page==KUI_SHELL_GAMES_TESTS||s->page==KUI_SHELL_GAMES_INFO?608:500,MUTED,controls,false);
@@ -285,7 +288,7 @@ static void ripper(struct paint *p, const struct kui_shell *s,
     if(s->capture_job[0]) {
         label(p,40,158,MUTED,"Resume/Verify job:");path_words(p,200,158,608,CYAN,s->capture_job);
     } else {
-        snprintf(destination,sizeof(destination),"Destination: %s",s->destination);
+        snprintf(destination,sizeof(destination),"Destination: %s%s",s->capture_network?"PC ":"",s->destination);
         label(p,40,158,MUTED,destination);
     }
     panel(p,32,182,576,122,PANEL);
@@ -455,7 +458,8 @@ static void keyboard(struct paint *p,const struct kui_shell *s) {
 static void advanced(struct paint *p,const struct kui_shell *s) {
     static const char *names[]={"Verify saved files","Resume interrupted dump","Capture settings",
         "Quick resume (sizes only)","Destination folder","Advanced CRC scan","Damaged disc salvage",
-        "Saved job for Resume/Verify","New dump folder label"};
+        "Saved job for Resume/Verify","New dump folder label","Repair to a separate copy",
+        "Suspect-sector reread evidence","Rip destination: local / PC","Single-session CD source"};
     static const char *details[KUI_SHELL_RIPPER_TOOL_COUNT][3]={
         {"Reread saved tracks and check their recorded hashes.",
          "This checks the card; the stream CRC badge compares",
@@ -483,40 +487,60 @@ static void advanced(struct paint *p,const struct kui_shell *s) {
          "LEFT on Disc Ripper restores Automatic latest."},
         {"Choose the folder label for new dumps only.",
          "Auto uses the disc title; existing jobs keep their names.",
-         "The label stays in memory until this launcher restarts."}};
+         "The label stays in memory until this launcher restarts."},
+        {"Choose a raw saved dump and insert its matching disc.",
+         "Repair supported bad sectors into a separate copy.",
+         "Original files stay intact; unresolved copies stay partial."},
+        {"Reopen suspect saved sectors and compare repeat reads.",
+         "Save byte differences and raw samples for diagnosis.",
+         "No optical reads; original dump files stay intact."},
+        {"A switches between local storage and a PC volume.",
+         "PC needs /KUI/network-rip.cfg and the receiver tool.",
+         "Resume and Verify use the same selected destination."},
+        {"Enable only for a known single-session CD or audio CD.",
+         "Captures firmware TOC INDEX01 intervals as BIN/CUE.",
+         "Session count, INDEX00 and subchannels are not measured."}};
     unsigned selected=s->advanced_selected<KUI_SHELL_RIPPER_TOOL_COUNT?s->advanced_selected:0;
     title(p,40,108,"Advanced disc tools");
     label(p,40,138,MUTED,"Choose an operation for your disc or saved dump.");
-    for(unsigned i=0;i<KUI_SHELL_RIPPER_TOOL_COUNT;i++) {
-        unsigned y=156+i*22;
+    char position[16];snprintf(position,sizeof(position),"%u/%u",selected+1u,KUI_SHELL_RIPPER_TOOL_COUNT);
+    label(p,552,138,CYAN,position);
+    unsigned first=selected>=8u?selected-7u:0u;
+    for(unsigned i=first;i<KUI_SHELL_RIPPER_TOOL_COUNT && i<first+8u;i++) {
+        unsigned y=156+(i-first)*22;
         panel(p,32,y,576,20,selected==i?SELECTED:PANEL);
         if(selected==i) box(p,32,y+3,3,14,PINK);
         label(p,48,y+2,selected==i?WHITE:MUTED,names[i]);
     }
-    for(unsigned i=0;i<3;i++) label(p,40,365+i*18,MUTED,details[selected][i]);
+    for(unsigned i=0;i<3;i++) label(p,40,344+i*18,MUTED,details[selected][i]);
     if(selected==KUI_SHELL_RIPPER_TOOL_JOB) {
         panel(p,32,397,576,22,PANEL);
         path_words(p,40,401,608,CYAN,s->capture_job[0]?s->capture_job:"Automatic latest matching job");
     } else if(selected==KUI_SHELL_RIPPER_TOOL_LABEL) {
         panel(p,32,397,576,22,PANEL);
         label(p,40,401,CYAN,s->capture_folder_label[0]?s->capture_folder_label:"Auto (disc title)");
+    } else if(selected==KUI_SHELL_RIPPER_TOOL_NETWORK) {
+        label(p,40,401,CYAN,s->capture_network?"Selected: PC volume":"Selected: local storage");
+    } else if(selected==KUI_SHELL_RIPPER_TOOL_CD_SOURCE) {
+        label(p,40,401,CYAN,s->capture_cd_toc?"CD source: enabled (declared single session)":"CD source: disabled");
     }
 }
 static void ripper_settings(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
     title(p,40,108,"Ripper settings");
     label(p,40,134,MUTED,"UP/DOWN Choose   LEFT/RIGHT Change");
-    const char *names[]={"Capture hashes","Read back saved files","Output format"};
+    const char *names[]={"Capture hashes","Read back saved files","Output format","Read retries","Strict sector checks"};
+    char retries[16];snprintf(retries,sizeof(retries),"%u",s->draft.retry_limit?s->draft.retry_limit:10u);
     const char *values[]={s->draft.crc_only?"CRC32":"CRC32 + SHA-256",
         s->draft.capture_format>=KUI_CAPTURE_FORMAT_CSO?"ON (export required)":
         !s->draft.crc_only?"ON (SHA required)":s->draft.end_readback?"ON":"OFF",
-        kui_capture_format_name(s->draft.capture_format)};
-    for(unsigned i=0;i<3;i++) {
-        unsigned y=174+i*48;
-        panel(p,32,y,576,40,i==s->setting_selected?SELECTED:PANEL);
-        box(p,32,y,4,40,i==s->setting_selected?CYAN:EDGE);
-        label(p,48,y+12,WHITE,names[i]);
-        label(p,416,y+12,i==s->setting_selected?CYAN:MUTED,values[i]);
+        kui_capture_format_name(s->draft.capture_format),retries,s->draft.strict_sectors?"ON":"OFF"};
+    for(unsigned i=0;i<5;i++) {
+        unsigned y=164+i*30;
+        panel(p,32,y,576,27,i==s->setting_selected?SELECTED:PANEL);
+        box(p,32,y,4,27,i==s->setting_selected?CYAN:EDGE);
+        label(p,48,y+6,WHITE,names[i]);
+        label(p,416,y+6,i==s->setting_selected?CYAN:MUTED,values[i]);
     }
     const char *first,*second;
     if(s->setting_selected==0) {
@@ -527,6 +551,15 @@ static void ripper_settings(struct paint *p, const struct kui_shell *s,
             "Compressed exports require a full raw readback.":"Full readback checks every saved byte; it takes time.";
         second=s->draft.capture_format>=KUI_CAPTURE_FORMAT_CSO?
             "Raw files are verified before the export starts.":"With it off, use Verify later or check on a PC.";
+    } else if(s->setting_selected==3) {
+        first="Additional attempts after an unreadable sector.";
+        second="Choose 1, 5, 10, 20 or 50; default is 10.";
+    } else if(s->setting_selected==4) {
+        first="Check Mode1 address, EDC and P/Q during capture.";
+        second="Strict mode refuses unsupported sector layouts.";
+    } else if(s->draft.capture_format==KUI_CAPTURE_FORMAT_GDI_2048) {
+        first="Create verified 2048-byte data tracks and a GDI.";
+        second="Original raw data and audio tracks are retained.";
     } else {
         first=s->draft.capture_format>=KUI_CAPTURE_FORMAT_CSO?"Verify raw rip, then create the compressed export.":
             "Both keep raw tracks; only the descriptor changes.";
@@ -727,9 +760,12 @@ static void vmu_restore(struct paint *p,const struct kui_shell *s,const struct k
     label(p,40,396,MUTED,"Adds a new save only. Existing names are refused.");
 }
 static void crc_scan(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
-    title(p,40,108,"Advanced CRC scan");
+    title(p,40,108,s->recovery_operation==1u?"Repair to a separate copy":s->recovery_operation==2u?
+        "Suspect-sector reread evidence":"Advanced CRC scan");
     words(p,40,138,608,CYAN,s->browse_path,false);
-    label(p,40,160,MUTED,"Mode1 EDC/parity + saved hashes + catalogue; no disc reads.");
+    label(p,40,160,MUTED,s->recovery_operation==1u?"Matching disc required; original dump files are read-only.":
+        s->recovery_operation==2u?"Repeat saved-sector reads; no optical reads or dump changes.":
+        "Mode1 EDC/parity + saved hashes + catalogue; no disc reads.");
     panel(p,32,190,576,214,PANEL);
     const struct kui_app_status *status=v->app_status;
     app_status(p,status,v->busy,200);
@@ -1343,7 +1379,7 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
         words(p,48,256,right,MUTED,line,false);
         words(p,48,282,right,MUTED,s->games_launch_cdda?"CD music: On":"CD music: Off",false);
         words(p,48,322,right,CYAN,"A Launch game   Y Options",false);
-        words(p,48,350,right,MUTED,"Options are saved for this image.",false);
+        words(p,48,350,right,MUTED,s->games_baseline?"Temporary baseline: options are not saved.":"Options are saved for this image.",false);
         words(p,48,378,right,MUTED,"Keep the SD card inserted while playing.",false);
     } else {
         words(p,48,218,right,AMBER,d->message[0]?d->message:
@@ -1352,7 +1388,7 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
             d->valid && d->format==KUI_GAME_IMAGE_ZSO?"Image information remains available in Options.":
             "Check the image files and inspect again.",false);
         words(p,48,294,right,MUTED,kui_shell_games_image_ready(s)?
-            "Y Options   X Inspect again":"X Inspect again",false);
+            "Y Options   X Inspect again":kui_shell_games_zso_selected(s)?"Y Select ZSO codec   X Inspect again":"X Inspect again",false);
     }
 }
 static void games_information(struct paint *p,const struct kui_shell *s) {
@@ -1370,8 +1406,9 @@ static void games_information(struct paint *p,const struct kui_shell *s) {
         snprintf(line,sizeof(line),"Tracks: %u   Data: %u   Audio: unknown",d->tracks,d->data_tracks);
     else snprintf(line,sizeof(line),"Tracks: %u   Data: %u   Audio: %u",d->tracks,d->data_tracks,d->audio_tracks);
     label(p,48,258,WHITE,line);
-    static const char *const formats[]={"GDI","ISO","CUE/BIN","CDI","BIN/IMG","ZSO (standard LZ4)"};
+    static const char *const formats[]={"GDI","ISO","CUE/BIN","CDI","BIN/IMG","ZSO"};
     const char *format=(unsigned)d->format<sizeof(formats)/sizeof(formats[0])?formats[d->format]:"Unknown";
+    if(d->format==KUI_GAME_IMAGE_ZSO)format=d->zso_codec==KUI_ZSO_LZO1X?"ZSO (LZO1X)":"ZSO (standard LZ4)";
     snprintf(line,sizeof(line),"Format: %s   %llu bytes",format,(unsigned long long)d->bytes);
     label(p,48,286,MUTED,line);
     snprintf(line,sizeof(line),"Boot file starts at LBA %lu",(unsigned long)d->boot_lba);
@@ -1445,14 +1482,14 @@ static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
     label(p,48,246,WHITE,s->games_launch_cdda?"CD music: On (experimental)":"CD music: Off");
     label(p,48,278,kui_game_ram_patches_enabled(&s->games_launch_patches)?AMBER:MUTED,
         kui_game_ram_patches_enabled(&s->games_launch_patches)?"RAM patches: On (one-time boot writes)":"RAM patches: Off");
-    label(p,48,316,WHITE,"Keep the SD card inserted while playing.");
+    label(p,48,316,s->games_baseline?CYAN:WHITE,s->games_baseline?"Temporary baseline: options are not saved.":"Keep the SD card inserted while playing.");
     label(p,48,342,AMBER,"Power cycle to return to the launcher.");
     if(v->busy && v->app_status && v->app_status->message[0])
         label(p,48,380,CYAN,v->app_status->message);
     else label(p,48,380,MUTED,"Y opens saved game options.");
 }
 static void game_options_notice(struct paint *p,const struct kui_shell *s) {
-    const char *notice=s->games_launch_notice;
+    const char *notice=s->games_baseline?"Temporary baseline: these choices are not saved.":s->games_launch_notice;
     bool failed=strncmp(notice,"Not saved",9)==0 || strstr(notice,"could not")!=NULL;
     words(p,40,398,608,failed?AMBER:CYAN,notice,false);
 }
@@ -1460,11 +1497,11 @@ static void games_launch_options(struct paint *p,const struct kui_shell *s) {
     title(p,40,108,"Games / Options");
     words(p,40,140,608,CYAN,s->games_detail.title[0]?s->games_detail.title:s->games_selected_path,false);
     games_variant_line(p,s,160);
-    const char *names[]={"Background loading","CD music","Advanced"};
+    const char *names[]={"Background loading","CD music","Advanced","ZSO codec"};
     const char *values[]={game_background(s),
-        kui_shell_games_cdda_ready(s)?(s->games_launch_cdda?"On":"Off"):"Unavailable","Open"};
-    for(unsigned i=0;i<KUI_SHELL_GAME_OPTION_COUNT;i++) {
-        unsigned y=192+i*48;bool ready=kui_shell_games_option_ready(s,i);
+        kui_shell_games_cdda_ready(s)?(s->games_launch_cdda?"On":"Off"):"Unavailable","Open",s->games_launch_codec==KUI_ZSO_LZO1X?"LZO1X":"Standard LZ4"};
+    for(unsigned i=0;i<(kui_shell_games_zso_selected(s)?KUI_SHELL_GAME_OPTION_COUNT:KUI_SHELL_GAME_OPTION_COUNT-1u);i++) {
+        unsigned y=178+i*44;bool ready=kui_shell_games_option_ready(s,i);
         panel(p,32,y,576,42,s->games_launch_selected==i?SELECTED:PANEL);
         label(p,48,y+12,ready?WHITE:MUTED,names[i]);
         words(p,350,y+12,592,ready?CYAN:MUTED,values[i],false);
@@ -1475,6 +1512,8 @@ static void games_launch_options(struct paint *p,const struct kui_shell *s) {
             kui_shell_games_ce_probe_ready(s)?"This Windows CE game requires background loading.":
             s->games_launch_cdda?"Changing background loading turns CD music off.":
             "Load from SD while the game continues working.";
+    else if(s->games_launch_selected==KUI_SHELL_GAME_OPTION_CODEC)
+        hint="Explicit codec selection. ZSO headers do not identify LZ4 versus LZO1X.";
     else if(s->games_launch_selected==KUI_SHELL_GAME_OPTION_CDDA)
         hint=kui_shell_games_cdda_ready(s)?(s->games_detail.windows_ce?
             "Experimental. Play music from this game's audio tracks. Compatible WinCE runtime required.":
@@ -1483,30 +1522,59 @@ static void games_launch_options(struct paint *p,const struct kui_shell *s) {
     words(p,40,374,608,MUTED,hint,false);
     game_options_notice(p,s);
 }
+static void games_check(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    title(p,40,108,"Games / Check executable");
+    words(p,40,140,608,CYAN,s->games_selected_path,false);
+    panel(p,32,182,576,220,PANEL);
+    const struct kui_app_status *status=v->app_status;
+    words(p,48,204,592,status && status->passed?CYAN:AMBER,status && status->message[0]?status->message:
+        "Check the selected executable without starting the game.",false);
+    label(p,48,264,WHITE,"Uses your current options, including temporary baseline.");
+    label(p,48,308,MUTED,"Checks layout, exact boot bytes, package and mapping.");
+    label(p,48,332,MUTED,"Does not verify every sector or prove compatibility.");
+    label(p,48,372,MUTED,"Preparation details are logged in Diagnostics.");
+}
+static void games_codec(struct paint *p,const struct kui_shell *s) {
+    title(p,40,108,"Games / ZSO codec");
+    words(p,40,140,608,CYAN,s->games_selected_path,false);
+    const char *names[]={"Standard LZ4","Historical LZO1X"};
+    const char *details[]={"Standard ZSO files, including maxcso ZSO output.",
+        "Legacy LZO1X ZSO files, including older GD ripper output."};
+    for(unsigned i=0;i<2;i++) {
+        unsigned y=184+i*78;panel(p,32,y,576,66,s->games_codec_selected==i?SELECTED:PANEL);
+        label(p,48,y+10,WHITE,names[i]);words(p,48,y+34,592,MUTED,details[i],false);
+    }
+    label(p,40,354,MUTED,"Both dialects share the ZISO header. Select the known codec.");
+    label(p,40,376,MUTED,"Failed data is never retried with another decoder.");
+    game_options_notice(p,s);
+}
 static void games_extra_options(struct paint *p,const struct kui_shell *s) {
     title(p,40,108,"Games / Advanced");
     words(p,40,140,608,CYAN,s->games_detail.title[0]?s->games_detail.title:s->games_selected_path,false);
     games_variant_line(p,s,158);
-    const char *names[]={"Boot encoding","Background speed","Image information","Developer tests","RAM patches","Restore defaults"};
+    const char *names[]={"Boot encoding","Background speed","Image information","Developer tests","RAM patches","Restore defaults","Check executable","Temporary baseline"};
     const char *encodings[]={"Automatic","Plain","Scrambled"};
     bool encoding=kui_shell_games_encoding_ready(s);
     bool speed=kui_shell_games_background_ready(s) && !s->games_launch_cdda &&
         s->games_launch_reader!=KUI_GAME_READER_STANDARD;
     const char *values[]={encoding?encodings[s->games_launch_encoding<KUI_GAME_ENCODING_COUNT?s->games_launch_encoding:0]:"Automatic",
         speed?(s->games_launch_reader==KUI_GAME_READER_EAGER?"Aggressive":"Normal"):"Unavailable","Open","Open",
-        kui_shell_games_patches_ready(s)?(kui_game_ram_patches_enabled(&s->games_launch_patches)?"On":"Off"):"Unavailable","Apply"};
+        kui_shell_games_patches_ready(s)?(kui_game_ram_patches_enabled(&s->games_launch_patches)?"On":"Off"):"Unavailable","Apply",kui_shell_games_launch_ready(s)?"Run":"Unavailable",s->games_baseline?"On (unsaved)":"Off"};
     for(unsigned i=0;i<KUI_SHELL_GAME_TOOL_COUNT;i++) {
-        unsigned y=178+i*31;bool ready=i==KUI_SHELL_GAME_TOOL_ENCODING?encoding:i==KUI_SHELL_GAME_TOOL_SPEED?speed:
-            i==KUI_SHELL_GAME_TOOL_PATCHES?kui_shell_games_patches_ready(s):true;
-        panel(p,32,y,576,27,s->game_tools_selected==i?SELECTED:PANEL);
-        label(p,48,y+5,ready?WHITE:MUTED,names[i]);
-        words(p,350,y+5,592,ready?CYAN:MUTED,values[i],false);
+        unsigned y=174+i*24;bool ready=i==KUI_SHELL_GAME_TOOL_ENCODING?encoding:i==KUI_SHELL_GAME_TOOL_SPEED?speed:
+            i==KUI_SHELL_GAME_TOOL_PATCHES?kui_shell_games_patches_ready(s):
+            (i==KUI_SHELL_GAME_TOOL_CHECK || i==KUI_SHELL_GAME_TOOL_BASELINE)?kui_shell_games_launch_ready(s):true;
+        panel(p,32,y,576,22,s->game_tools_selected==i?SELECTED:PANEL);
+        label(p,48,y+4,ready?WHITE:MUTED,names[i]);
+        words(p,350,y+4,592,ready?CYAN:MUTED,values[i],false);
     }
     const char *hints[]={"Automatic uses the inspected CD boot encoding.",
         "Aggressive gives the background reader more work per step.",
         "Disc tracks, image format and boot file details.","Read tests run separately from normal game launches.",
         "Two one-time boot patches. Native games with CD music Off only.",
-        "Save detected defaults for this image, including turning RAM patches Off."};
+        "Save detected defaults for this image, including turning RAM patches Off.",
+        "Check the executable and launch package without starting the game.",
+        "Use defaults without saving. Select again to restore choices."};
     const char *hint=hints[s->game_tools_selected<KUI_SHELL_GAME_TOOL_COUNT?s->game_tools_selected:0];
     if(s->games_detail.format==KUI_GAME_IMAGE_ZSO) {
         if(s->game_tools_selected==KUI_SHELL_GAME_TOOL_SPEED)
@@ -2033,6 +2101,8 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_GAMES_RETAIL_CONFIRM: games_retail_confirmation(&p,s,v); break;
     case KUI_SHELL_GAMES_LAUNCH_OPTIONS: games_launch_options(&p,s); break;
     case KUI_SHELL_GAMES_EXTRA_OPTIONS: games_extra_options(&p,s); break;
+    case KUI_SHELL_GAMES_CHECK: games_check(&p,s,v); break;
+    case KUI_SHELL_GAMES_CODEC: games_codec(&p,s); break;
     case KUI_SHELL_GAMES_PATCHES: games_patches(&p,s); break;
     case KUI_SHELL_GAMES_TESTS: games_tests(&p,s); break;
     case KUI_SHELL_GAMES_INFO: games_information(&p,s); break;

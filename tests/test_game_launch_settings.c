@@ -8,7 +8,7 @@ static struct kui_game_launch_table table, decoded, before;
 static uint8_t record[KUI_GAME_LAUNCH_SETTINGS_RECORD_MAX + 1u], damaged[sizeof(record)];
 
 static void same(struct kui_game_launch_settings a, struct kui_game_launch_settings b) {
-    assert(a.reader == b.reader && a.cdda == b.cdda && a.encoding == b.encoding);
+    assert(a.reader == b.reader && a.cdda == b.cdda && a.encoding == b.encoding && a.codec == b.codec);
     for(unsigned i=0;i<2;i++) {
         assert(a.patches.entries[i].address==b.patches.entries[i].address);
         assert(a.patches.entries[i].value==b.patches.entries[i].value);
@@ -111,7 +111,8 @@ static void wire_contract(void) {
     kui_game_launch_table_clear(&table);assert(kui_game_launch_table_upsert(&table,"/games/a.gdi",&choice));
     size_t size=0;
     assert(kui_game_launch_settings_encode(record,sizeof(record),&size,&table,UINT64_C(0x0807060504030201)));
-    assert(size==sizeof(fixture) && !memcmp(record,fixture,size));
+    memcpy(damaged,fixture,sizeof(fixture));damaged[8]=3;reseal(damaged,sizeof(fixture));
+    assert(size==sizeof(fixture) && !memcmp(record,damaged,size));
     assert(kui_game_launch_settings_decode(&decoded,&sequence,fixture,sizeof(fixture)));
     assert(sequence==UINT64_C(0x0807060504030201) && decoded.count==1);
     same(decoded.entries[0].settings,choice);
@@ -122,12 +123,25 @@ static void wire_contract(void) {
     for(size_t n=0;n<sizeof(fixture);n++) rejects(fixture,n);
     memcpy(damaged,fixture,sizeof(fixture));damaged[sizeof(fixture)]=0;rejects(damaged,sizeof(fixture)+1);
     const unsigned offsets[]={0,8,12,16,24,28,32,34,35,36,37,38,39,40,56};
-    const uint8_t values[]={'X',3,71,0,129,1,0,KUI_GAME_READER_COUNT,2,KUI_GAME_ENCODING_COUNT,4,1,1,0x51,'G'};
+    const uint8_t values[]={'X',4,71,0,129,1,0,KUI_GAME_READER_COUNT,2,KUI_GAME_ENCODING_COUNT,4,1,1,0x51,'G'};
     for(unsigned i=0;i<sizeof(offsets)/sizeof(offsets[0]);i++) {
         memcpy(damaged,fixture,sizeof(fixture));
         if(offsets[i]==16) memset(damaged+16,0,8);else damaged[offsets[i]]=values[i];
         reseal(damaged,sizeof(fixture));rejects(damaged,sizeof(fixture));
     }
+    /* A v3 codec is explicit, preserved by round trip, and never guessed from
+     * a v1/v2 record. Both defined values work; reserved/unknown values fail. */
+    choice.codec=KUI_ZSO_LZO1X;
+    assert(kui_game_launch_table_upsert(&table,"/games/a.gdi",&choice));
+    assert(kui_game_launch_settings_encode(record,sizeof(record),&size,&table,2));
+    assert(record[8]==3 && record[38]==1 && record[39]==0);
+    assert(kui_game_launch_settings_decode(&decoded,&sequence,record,size));
+    same(decoded.entries[0].settings,choice);
+    memcpy(damaged,record,size);damaged[38]=2;reseal(damaged,size);rejects(damaged,size);
+    memcpy(damaged,record,size);damaged[39]=1;reseal(damaged,size);rejects(damaged,size);
+    choice.codec=2;assert(!kui_game_launch_settings_valid(&choice));
+    assert(!kui_game_launch_table_upsert(&table,"/games/a.gdi",&choice));
+    choice.codec=KUI_ZSO_LZ4;assert(kui_game_launch_table_upsert(&table,"/games/a.gdi",&choice));
     /* Both patch slots independently validate addresses, and aliases cannot
      * make two enabled entries target the same physical word. */
     memcpy(damaged,fixture,sizeof(fixture));put32(damaged+40,UINT32_C(0xa05f8000));
@@ -148,7 +162,7 @@ static void wire_contract(void) {
     assert(!kui_game_launch_settings_encode(record,sizeof(record),&size,&table,1));
     assert(size==123 && !memcmp(record,damaged,sizeof(record)));
     rejects(NULL,sizeof(fixture));
-    puts("PASS launch record: independent v1 migration/v2 endian fixtures, patch validation, corruption and output atomicity");
+    puts("PASS launch record: independent v1/v2 migration fixtures and v3 explicit codecs, patch validation, corruption and output atomicity");
 }
 static void maximum_record(void) {
     kui_game_launch_table_clear(&table);
@@ -168,7 +182,7 @@ static void maximum_record(void) {
     memcpy(damaged,record,sizeof(record));size=123;
     assert(!kui_game_launch_settings_encode(record,KUI_GAME_LAUNCH_SETTINGS_RECORD_MAX-1u,&size,&table,15));
     assert(size==123 && !memcmp(record,damaged,sizeof(record)));
-    puts("PASS launch record: 128 maximum-length image paths with two patches fit the bounded v2 record");
+    puts("PASS launch record: 128 maximum-length image paths with two patches fit the bounded v3 record");
 }
 int main(void) {
     struct kui_game_launch_settings defaults;memset(&defaults,0xa5,sizeof(defaults));kui_game_launch_settings_default(&defaults);

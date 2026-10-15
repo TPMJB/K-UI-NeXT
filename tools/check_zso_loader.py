@@ -144,7 +144,7 @@ def check_init_domain(directory, images):
             "runtime_incoming_edges": 0}
 
 
-def check_stack_usage(directory, symbols, init_proof):
+def check_stack_usage(directory, symbols, init_proof, codec="lz4"):
     """Count every final LTO row, including local clones and initialization.
 
     The one independently proven high-stack initialization frame is charged
@@ -174,7 +174,8 @@ def check_stack_usage(directory, symbols, init_proof):
             rows += 1
             if function_base(name) == "kui_retail_resident_init":
                 init_frames.append((name, frame))
-    for name in REQUIRED_FRAMES:
+    required = REQUIRED_FRAMES + (("kui_lzo1x_decode",) if codec == "lzo" else ())
+    for name in required:
         if name not in frames or "_" + name not in symbols:
             raise ValueError(f"Missing ZSO runtime stack-usage frame: {name}")
     if init_frames != [("kui_retail_resident_init", init_proof["frame_bytes"])]:
@@ -222,10 +223,11 @@ def check_instructions(directory):
     return {"instructions": count, "bootstrap_fpscr_setups": 1, "integer_only": True}
 
 
-def check_directory(directory):
+def check_directory(directory, codec="lz4"):
     directory = Path(directory)
     profile = (directory / "layout-config").read_text().strip()
-    if not re.fullmatch(r"ZSO=1 LOW=1 TRANSPORT=1 READER=0 SLOTS=32 PATCHES=0 BUILD=[0-9a-f]{12}", profile):
+    codec_profile = " CODEC=1" if codec == "lzo" else ""
+    if not re.fullmatch(r"ZSO=1" + codec_profile + r" LOW=1 TRANSPORT=1 READER=0 SLOTS=32 PATCHES=0 BUILD=[0-9a-f]{12}", profile):
         raise ValueError("ZSO build profile must be native SCI Standard, low, 32 slots and no RAM patches")
     images = {
         "resident-sci": inspect_elf((directory / "resident-sci.elf").read_bytes(),
@@ -247,7 +249,8 @@ def check_directory(directory):
             raise ValueError(f"ZSO {name}.bin differs from linked ELF bytes")
         check_bss(images[name], base, prefix)
     rs, ss, es = resident["symbols"], stage["symbols"], entry["symbols"]
-    for symbol in REQUIRED_RESIDENT:
+    required = REQUIRED_RESIDENT + (("_kui_lzo1x_decode",) if codec == "lzo" else ())
+    for symbol in required:
         code_symbol(resident, symbol, layout.RESIDENT_ADDRESS)
     if (rs.get("__retail_hook_stack") != layout.HOOK_STACK or
             rs.get("__retail_hook_stack_bottom") != layout.RESIDENT_LIMIT):
@@ -283,10 +286,10 @@ def check_directory(directory):
             entry["payload"][layout.STAGE_BLOB_OFFSET:] != high_blob or
             entry["memory_end"] != layout.EXEC_ADDRESS + len(entry["payload"])):
         raise ValueError("Invalid packed ZSO stage/manifest layout")
-    contract = layout.inspect_payload(entry["payload"], entry["memory_end"] - layout.EXEC_ADDRESS)
+    contract = layout.inspect_payload(entry["payload"], entry["memory_end"] - layout.EXEC_ADDRESS, codec)
     instructions = check_instructions(directory)
     init_proof = check_init_domain(directory, images)
-    stacks = check_stack_usage(directory, rs, init_proof)
+    stacks = check_stack_usage(directory, rs, init_proof, codec)
     result = {name: {"payload_bytes": len(image["payload"]),
                      "memory_end": f"0x{image['memory_end']:08x}", "unresolved_symbols": 0}
               for name, image in images.items()}
@@ -297,9 +300,10 @@ def check_directory(directory):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", nargs="?", type=Path, default=Path("build/retail-zso"))
+    parser.add_argument("--codec", choices=layout.CODECS, default="lz4")
     args = parser.parse_args()
     try:
-        print(json.dumps(check_directory(args.directory), sort_keys=True))
+        print(json.dumps(check_directory(args.directory, args.codec), sort_keys=True))
     except (OSError, ValueError, UnicodeError, struct.error) as error:
         parser.exit(1, f"ZSO loader check failed: {error}\n")
 

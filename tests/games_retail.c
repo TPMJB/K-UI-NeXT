@@ -71,8 +71,9 @@ static bool audio_unmapped(void) {
 static bool fault(const char *name) { return test.active && !strcmp(test.fault, name); }
 static bool launch_case(void) {return !strncmp(test.fault,"launch-",7);}
 static bool zso_case(void) {return !strncmp(test.fault,"zso-",4);}
+static bool lzo_case(void) {return strstr(test.fault,"-lzo-") || !strcmp(test.fault,"zso-lz4-as-lzo");}
 static bool launch_success(void) {
-    return !strcmp(test.fault,"launch-report") || !strcmp(test.fault,"launch-patches") ||
+    return !strcmp(test.fault,"launch-check") || !strcmp(test.fault,"launch-report") || !strcmp(test.fault,"launch-patches") ||
         !strcmp(test.fault,"launch-report-readonly") || !strcmp(test.fault,"launch-report-full") || source_directory_case();
 }
 static bool report_path(const char *path) {
@@ -311,10 +312,12 @@ static void put32(uint8_t *p, uint32_t value) {
 static void seed_zso(const char *directory) {
     size_t bytes;uint8_t *data=host_file(directory,"zso-boot.kui",&bytes);
     write_file(KUI_GAMES_RETAIL_ZSO_PACKAGE,data,bytes);free(data);
+    data=host_file(directory,"lzo-boot.kui",&bytes);
+    write_file(KUI_GAMES_RETAIL_LZO_PACKAGE,data,bytes);free(data);
     data=host_file(directory,"selected.zso",&bytes);
     const char *path="0:/Games/Reader Test/selected.zso";
-    if(!strcmp(test.fault,"zso-fragments31") || !strcmp(test.fault,"zso-fragments32")) {
-        unsigned splits=!strcmp(test.fault,"zso-fragments31")?30u:31u;
+    if(strstr(test.fault,"fragments31") || strstr(test.fault,"fragments32")) {
+        unsigned splits=strstr(test.fault,"fragments31")?30u:31u;
         size_t chunk=(size_t)fs.csize*512u;assert(bytes>(splits+1u)*chunk);
         uint8_t *blocker=malloc(chunk);assert(blocker);memset(blocker,0xe7,chunk);
         FIL file;assert(f_open(&file,path,FA_WRITE|FA_CREATE_NEW)==FR_OK);
@@ -726,6 +729,7 @@ static void export_launch_files(const char *directory) {
 static void export_zso_files(const char *directory) {
     unsigned writes=test.writes;test.active=false;kui_media_set(&media);assert(kui_mount(&fs,log_line));
     export_file(directory,KUI_GAMES_RETAIL_ZSO_PACKAGE,"after-zso-boot.kui",false);
+    export_file(directory,KUI_GAMES_RETAIL_LZO_PACKAGE,"after-lzo-boot.kui",false);
     export_file(directory,"0:/Games/Reader Test/selected.zso","after-selected.zso",false);
     export_file(directory,KUI_GAME_LAUNCH_REPORT_PATH_A,"after-last-launch-a.txt",true);
     export_file(directory,KUI_GAME_LAUNCH_REPORT_PATH_B,"after-last-launch-b.txt",true);
@@ -750,6 +754,7 @@ static void check_zso(const char *directory) {
     assert(fscanf(expect,"%u %u %u %u %u %u %u %x %x",&prepared,&session,&boot_bytes,&sectors,
         &file_bytes,&shift,&extents,&ip_crc,&boot_crc)==9 && !fclose(expect));
     uint32_t reader=KUI_RETAIL_READER_STANDARD;
+    if(lzo_case() && !fault("zso-lzo-wrong-codec"))reader|=KUI_GAMES_RETAIL_LZO;
     if(fault("zso-cdda")) reader|=KUI_GAMES_RETAIL_CDDA;
     if(fault("zso-background")) reader=KUI_RETAIL_READER_ASYNC;
     struct kui_game_ram_patches patches={0};
@@ -763,6 +768,7 @@ static void check_zso(const char *directory) {
         assert(kui_retail_zso_manifest_decode((const uint8_t *)image.data+0x1000u,map)==KUI_GAME_OK);
         assert(map->zso.file_bytes==file_bytes && map->zso.total_bytes==sectors*2048u &&
             map->zso.block_count==sectors && map->zso.shift==shift);
+        assert(map->zso.codec==(lzo_case()?KUI_ZSO_LZO1X:KUI_ZSO_LZ4));
         assert(map->manifest.track_count==1 && map->manifest.extent_count<=31u);
         assert(map->manifest.session_lba==session && map->manifest.boot_lba==session+21u && map->manifest.boot_bytes==boot_bytes);
         assert(map->manifest.ip_crc32==ip_crc && map->manifest.boot_crc32==boot_crc);
@@ -809,7 +815,7 @@ static void check_launch(const char *directory) {
     test.hash_begin[0]=0;test.hash_end[0]=16u*2352u;
     test.hash_begin[1]=21u*2352u;test.hash_end[1]=23u*2352u;test.hash_bounded=true;
     bool patched=strcmp(test.fault,"launch-report") && strcmp(test.fault,"launch-report-readonly") &&
-        strcmp(test.fault,"launch-report-full") && !source_directory_case();
+        strcmp(test.fault,"launch-report-full") && strcmp(test.fault,"launch-check") && !source_directory_case();
     if(patched) {
         patches.entries[0]=(struct kui_game_ram_patch){0x0c010004u,0x12345678u,true};
         /* Last aligned word entirely inside 3001 exact bytes; sector padding
@@ -817,10 +823,20 @@ static void check_launch(const char *directory) {
         patches.entries[1]=(struct kui_game_ram_patch){0xac010bb4u,0xa1b2c3d4u,true};
     }
     if(fault("launch-patch-duplicate")) patches.entries[1].address=0x8c010004u;
-    if(fault("launch-patch-range")) patches.entries[1].address=0x8c010bb8u;
+    if(fault("launch-patch-range") || fault("launch-check-range")) patches.entries[1].address=0x8c010bb8u;
     uint32_t reader=KUI_RETAIL_READER_STANDARD;
     if(fault("launch-patch-ce")) reader|=KUI_GAMES_RETAIL_CE_PROBE;
     if(fault("launch-patch-cdda")) reader|=KUI_GAMES_RETAIL_CDDA;
+    if(!strncmp(test.fault,"launch-check",12)) {
+        if(fault("launch-check-cancel"))test.cancelled=true;
+        bool result=kui_games_retail_check_launch(selected,reader,&patches,log_line,cancel);
+        assert(result==launch_success());
+        if(result)assert(test.hash_reads[0]==16u && test.hash_reads[1]==2u && test.boot_read);
+        else assert(!test.writes);
+        export_launch_files(directory);
+        puts("Executable check PASS: package released, no handoff image returned; only preparation report writes");
+        return;
+    }
     unsigned runs=!strcmp(test.fault,"launch-report")?2u:1u;
     for(unsigned run=0;run<runs;run++) {
         struct kui_runtime_image image={0};

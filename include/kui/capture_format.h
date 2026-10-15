@@ -3,7 +3,8 @@
 #define KUI_CAPTURE_FORMAT_H
 enum kui_capture_format {
     KUI_CAPTURE_FORMAT_GDI, KUI_CAPTURE_FORMAT_BIN_CUE, KUI_CAPTURE_FORMAT_CSO,
-    KUI_CAPTURE_FORMAT_ZSO, KUI_CAPTURE_FORMAT_CHD, KUI_CAPTURE_FORMAT_COUNT
+    KUI_CAPTURE_FORMAT_ZSO, KUI_CAPTURE_FORMAT_CHD, KUI_CAPTURE_FORMAT_GDI_2048,
+    KUI_CAPTURE_FORMAT_COUNT
 };
 static inline const char *kui_capture_format_name(enum kui_capture_format format) {
     switch(format) {
@@ -12,6 +13,7 @@ static inline const char *kui_capture_format_name(enum kui_capture_format format
     case KUI_CAPTURE_FORMAT_CSO:return "CSO";
     case KUI_CAPTURE_FORMAT_ZSO:return "ZSO";
     case KUI_CAPTURE_FORMAT_CHD:return "CHD";
+    case KUI_CAPTURE_FORMAT_GDI_2048:return "GDI 2048";
     default:return "Unknown";
     }
 }
@@ -22,6 +24,7 @@ static inline const char *kui_capture_format_extension(enum kui_capture_format f
     case KUI_CAPTURE_FORMAT_CSO:return ".cso";
     case KUI_CAPTURE_FORMAT_ZSO:return ".zso";
     case KUI_CAPTURE_FORMAT_CHD:return ".chd";
+    case KUI_CAPTURE_FORMAT_GDI_2048:return ".gdi";
     default:return "";
     }
 }

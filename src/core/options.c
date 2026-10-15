@@ -257,10 +257,16 @@ static bool apply(struct kui_options *o, const char *key, size_t klen,
         else if(length==3u && !memcmp(v,"cso",3u)) o->capture_format=KUI_CAPTURE_FORMAT_CSO;
         else if(length==3u && !memcmp(v,"zso",3u)) o->capture_format=KUI_CAPTURE_FORMAT_ZSO;
         else if(length==3u && !memcmp(v,"chd",3u)) o->capture_format=KUI_CAPTURE_FORMAT_CHD;
+        else if(length==8u && !memcmp(v,"gdi_2048",8u)) o->capture_format=KUI_CAPTURE_FORMAT_GDI_2048;
         else return false;
         return true;
     }
     if(KEY("capture_read")) return parse_two_words(v, vend, "pio", "dma", o->capture_dma, &o->capture_read_count);
+    if(KEY("capture_retry_limit")) {
+        if(!parse_unsigned(v,vend,1,50,&n) || (n!=1 && n!=5 && n!=10 && n!=20 && n!=50))return false;
+        o->capture_retry_limit=(unsigned)n;return true;
+    }
+    if(KEY("capture_strict_sectors"))return parse_bool(v,vend,&o->capture_strict_sectors);
     if(KEY("end_readback")) return parse_sd_list(v, vend, o->end_readback, &o->end_readback_count, true);
     if(KEY("resume_check")) return parse_two_words(v, vend, "full", "size", o->resume_size, &o->resume_check_count);
     if(KEY("sample_readback")) return parse_ulist(v, vend, 0, 1024, 1, KUI_OPT_CAPTURE_MAX,
@@ -433,7 +439,7 @@ void kui_options_log(const struct kui_options *o, kui_log_fn log) {
     log("OPTIONS capture_hash=%s end_readback=%s resume_check=%s capture_read=%s capture_format=%s",
         hashes, ends, checks, reads, o->capture_format==KUI_CAPTURE_FORMAT_BIN_CUE?"bin_cue":
         o->capture_format==KUI_CAPTURE_FORMAT_CSO?"cso":o->capture_format==KUI_CAPTURE_FORMAT_ZSO?"zso":
-        o->capture_format==KUI_CAPTURE_FORMAT_CHD?"chd":"gdi");
+        o->capture_format==KUI_CAPTURE_FORMAT_CHD?"chd":o->capture_format==KUI_CAPTURE_FORMAT_GDI_2048?"gdi_2048":"gdi");
     log("OPTIONS sample_readback=%s capture_sectors=%u capture_type=%s", samples, o->capture_sectors,
         o->capture_audio ? "audio" : "data");
     if(o->capture_fad) log("OPTIONS capture_fad=%u", o->capture_fad);

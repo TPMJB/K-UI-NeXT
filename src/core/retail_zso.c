@@ -30,6 +30,7 @@ enum kui_game_result kui_retail_zso_manifest_validate(const struct kui_retail_zs
        !m->card_sectors || m->card_sectors>UINT64_C(0x100000000) || m->partition_start>=m->partition_end || m->partition_end>m->card_sectors ||
        !z->total_bytes || z->total_bytes>KUI_ZSO_MAX_BYTES || z->total_bytes%2048u || z->block_count!=z->total_bytes/2048u ||
        z->index_bytes!=(z->block_count+1u)*4u || z->file_bytes<KUI_ZSO_HEADER_BYTES+z->index_bytes || z->shift>KUI_ZSO_MAX_SHIFT ||
+       z->codec>KUI_ZSO_LZO1X || !(KUI_ZSO_CODECS&(1u<<z->codec)) ||
        !text(m->title,sizeof(m->title),false) || !text(m->product,sizeof(m->product),false) ||
        !text(m->bootfile,sizeof(m->bootfile),true) || !text(m->region,sizeof(m->region),false))return KUI_GAME_INVALID;
     const struct kui_retail_track *t=&m->slots[0].track;
@@ -54,7 +55,7 @@ enum kui_game_result kui_retail_zso_manifest_encode(const struct kui_retail_zso_
     if(!out)return KUI_GAME_INVALID;
     enum kui_game_result r=kui_retail_zso_manifest_validate(map);if(r!=KUI_GAME_OK)return r;
     const struct kui_retail_manifest *m=&map->manifest;const struct kui_zso_info *z=&map->zso;
-    memset(out,0,4096);memcpy(out,KUI_RETAIL_ZSO_WIRE_MAGIC,8);put(out+8,1);put(out+12,4096);
+    memset(out,0,4096);memcpy(out,z->codec==KUI_ZSO_LZO1X?KUI_RETAIL_LZO_WIRE_MAGIC:KUI_RETAIL_ZSO_WIRE_MAGIC,8);put(out+8,1);put(out+12,4096);
     put(out+20,1);put(out+24,m->extent_count);put(out+28,m->storage_transport);putwide(out+32,m->card_sectors);putwide(out+40,m->partition_start);putwide(out+48,m->partition_end);
     put(out+56,m->session_lba);put(out+60,m->boot_lba);put(out+64,m->boot_bytes);put(out+68,m->gdi_crc32);
     memcpy(out+72,m->title,128);memcpy(out+200,m->product,16);memcpy(out+216,m->bootfile,24);memcpy(out+240,m->region,16);
@@ -67,10 +68,13 @@ enum kui_game_result kui_retail_zso_manifest_encode(const struct kui_retail_zso_
 enum kui_game_result kui_retail_zso_manifest_decode(const uint8_t wire[4096],struct kui_retail_zso_manifest *map) {
     if(!map)return KUI_GAME_INVALID;
     memset(map,0,sizeof(*map));
-    if(!wire || memcmp(wire,KUI_RETAIL_ZSO_WIRE_MAGIC,8) || word(wire+8)!=1 || word(wire+12)!=4096 || word(wire+16)!=wire_crc(wire) ||
+    if(!wire || word(wire+8)!=1 || word(wire+12)!=4096 || word(wire+16)!=wire_crc(wire) ||
        word(wire+20)!=1 || !word(wire+24) || word(wire+24)>KUI_RETAIL_ZSO_EXTENTS || !zero(wire+292,28) || !zero(wire+330,2))return KUI_GAME_INVALID;
     uint32_t used=1+word(wire+24);if(!zero(wire+320+used*12,4096-320-used*12))return KUI_GAME_INVALID;
     struct kui_retail_manifest *m=&map->manifest;struct kui_zso_info *z=&map->zso;
+    if((KUI_ZSO_CODECS&1) && !memcmp(wire,KUI_RETAIL_ZSO_WIRE_MAGIC,8))z->codec=KUI_ZSO_LZ4;
+    else if((KUI_ZSO_CODECS&2) && !memcmp(wire,KUI_RETAIL_LZO_WIRE_MAGIC,8))z->codec=KUI_ZSO_LZO1X;
+    else goto invalid;
     m->track_count=1;m->extent_count=word(wire+24);m->storage_transport=word(wire+28);m->card_sectors=wide(wire+32);m->partition_start=wide(wire+40);m->partition_end=wide(wire+48);
     m->session_lba=word(wire+56);m->boot_lba=word(wire+60);m->boot_bytes=word(wire+64);m->gdi_crc32=word(wire+68);
     memcpy(m->title,wire+72,128);memcpy(m->product,wire+200,16);memcpy(m->bootfile,wire+216,24);memcpy(m->region,wire+240,16);
@@ -116,7 +120,7 @@ enum kui_game_result kui_retail_zso_verify_source(struct kui_retail_zso_image *i
     if(!image || !image->map || !image->read_block)return KUI_GAME_INVALID;
     uint8_t header[KUI_ZSO_HEADER_BYTES];struct kui_zso_info actual;
     enum kui_zso_result z=file_read(image,0,header,sizeof(header));
-    if(z==KUI_ZSO_OK)z=kui_zso_header_parse(header,image->map->zso.file_bytes,&actual);
+    if(z==KUI_ZSO_OK)z=kui_zso_header_parse_codec(header,image->map->zso.file_bytes,(enum kui_zso_codec)image->map->zso.codec,&actual);
     const struct kui_zso_info *expected=&image->map->zso;
     if(z==KUI_ZSO_OK && (actual.file_bytes!=expected->file_bytes || actual.total_bytes!=expected->total_bytes || actual.block_count!=expected->block_count || actual.index_bytes!=expected->index_bytes || actual.shift!=expected->shift))z=KUI_ZSO_INVALID;
     if(z==KUI_ZSO_OK)z=kui_zso_validate_index(expected,file_read,image);

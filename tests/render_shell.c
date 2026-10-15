@@ -266,7 +266,7 @@ static void storage_tests(struct kui_shell *s,struct kui_shell_view *v,const cha
 }
 int main(int argc,char **argv) {
     if(argc!=3) return 2;
-    struct kui_settings preferences={true,false,true,KUI_CAPTURE_FORMAT_GDI};
+    struct kui_settings preferences={true,false,true,KUI_CAPTURE_FORMAT_GDI,0,false};
     struct kui_shell shell; kui_shell_init(&shell,&preferences);
     const char *logs[]={"SD exFAT, 249997312 sectors, cluster=131072 bytes",
         "Volume start=2048 (MBR)","Disc: MDK2", "Track 04: audio",
@@ -668,9 +668,13 @@ int main(int argc,char **argv) {
     }
     else if(!strcmp(argv[1],"diagnostics")) shell.page=KUI_SHELL_DIAGNOSTICS;
     else if(!strcmp(argv[1],"advanced") || !strcmp(argv[1],"advanced-destination") ||
-            !strcmp(argv[1],"advanced-saved-job") || !strcmp(argv[1],"advanced-label")) {
+            !strcmp(argv[1],"advanced-saved-job") || !strcmp(argv[1],"advanced-label") ||
+            !strcmp(argv[1],"advanced-repair") || !strcmp(argv[1],"advanced-network") || !strcmp(argv[1],"advanced-cd")) {
         shell.page=KUI_SHELL_ADVANCED;
         if(!strcmp(argv[1],"advanced-destination")) shell.advanced_selected=4;
+        if(!strcmp(argv[1],"advanced-repair")) shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_REPAIR;
+        if(!strcmp(argv[1],"advanced-network")) {shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_NETWORK;shell.capture_network=true;}
+        if(!strcmp(argv[1],"advanced-cd")) {shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_CD_SOURCE;shell.capture_cd_toc=true;}
         if(!strcmp(argv[1],"advanced-saved-job")) {
             shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_JOB;
             strcpy(shell.capture_job,"/Games/Generated sample (2)");
@@ -733,6 +737,20 @@ int main(int argc,char **argv) {
             view.message="Capture timed out; drive abort failed. Restart required.";
         } else if(!strcmp(argv[1],"stopped")) view.outcome=KUI_SHELL_OUTCOME_STOPPED;
         else view.busy=true;
+    }
+    if(!strcmp(argv[1],"games-codec") || !strcmp(argv[1],"games-check") || !strcmp(argv[1],"games-baseline")) {
+        strcpy(shell.games_selected_path,"/Games/Generated ZSO/disc.zso");
+        strcpy(shell.games_detail.path,shell.games_selected_path);
+        shell.games_detail.valid=true;shell.games_detail.native_gd=true;shell.games_detail.zso_launch=true;
+        shell.games_detail.format=KUI_GAME_IMAGE_ZSO;shell.games_detail.zso_codec=KUI_ZSO_LZO1X;
+        shell.games_detail.tracks=1;shell.games_detail.boot_bytes=3001;
+        strcpy(shell.games_detail.boot_file,"1ST_READ.BIN");strcpy(shell.games_detail.title,"INDEPENDENT GAMES FIXTURE");
+        view.busy=false;shell.games_launch_codec=KUI_ZSO_LZO1X;
+        if(!strcmp(argv[1],"games-codec")) {shell.page=KUI_SHELL_GAMES_CODEC;shell.games_codec_selected=KUI_ZSO_LZO1X;}
+        else if(!strcmp(argv[1],"games-check")) {
+            shell.page=KUI_SHELL_GAMES_CHECK;view.app_status=&status;
+            strcpy(status.message,"Executable preparation passed. The game was not started.");
+        } else {shell.page=KUI_SHELL_GAMES_EXTRA_OPTIONS;shell.games_baseline=true;shell.game_tools_selected=KUI_SHELL_GAME_TOOL_BASELINE;}
     }
     view.game_covers=(const uint16_t (*)[KUI_COVER_PIXELS])covers;view.game_detail_cover=detail_cover;
     view.files_picture=picture;

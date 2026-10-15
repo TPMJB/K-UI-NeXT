@@ -22,7 +22,11 @@ static uint32_t crc(const uint8_t *p,size_t bytes) {
 }
 static void reseal(uint8_t wire[4096]) {put(wire+16,0);put(wire+16,crc(wire,4096));}
 static size_t extension(uint8_t *out,unsigned n) {
+#if KUI_TEST_LZO
+    size_t used=0;while(n>255){out[used++]=0;n-=255;}out[used++]=(uint8_t)n;return used;
+#else
     size_t used=0;while(n>=255){out[used++]=255;n-=255;}out[used++]=(uint8_t)n;return used;
+#endif
 }
 static void fixture(uint32_t session,bool all_raw,unsigned requested_extents) {
     memset(&map,0,sizeof(map));memset(&storage,0,sizeof(storage));
@@ -34,18 +38,36 @@ static void fixture(uint32_t session,bool all_raw,unsigned requested_extents) {
         put(file+24u+block*4u,at|(raw?UINT32_C(0x80000000):0));
         if(raw || block==LOGICAL_BLOCKS-1u) {
             for(unsigned i=0;i<2048;i++)expected[block][i]=(uint8_t)(block*11u+i*37u+(i>>8)*19u);
-            if(!raw){file[at++]=0xf0;at+=(uint32_t)extension(file+at,2048-15);}
+            if(!raw){
+#if KUI_TEST_LZO
+                file[at++]=0;at+=(uint32_t)extension(file+at,2048-18);
+#else
+                file[at++]=0xf0;at+=(uint32_t)extension(file+at,2048-15);
+#endif
+            }
             memcpy(file+at,expected[block],2048);at+=2048;
+#if KUI_TEST_LZO
+            if(!raw){file[at++]=17;file[at++]=0;file[at++]=0;}
+#endif
         } else {
             uint8_t value=(uint8_t)(block+17u);memset(expected[block],value,2048);
+#if KUI_TEST_LZO
+            file[at++]=18;file[at++]=value;file[at++]=32;
+            at+=(uint32_t)extension(file+at,2048-1-33);
+            file[at++]=0;file[at++]=0;file[at++]=17;file[at++]=0;file[at++]=0;
+#else
             file[at++]=0x1f;file[at++]=value;file[at++]=1;file[at++]=0;
             at+=(uint32_t)extension(file+at,2048-1-5-19);
             file[at++]=0x50;memset(file+at,value,5);at+=5;
+#endif
         }
     }
     put(file+24u+LOGICAL_BLOCKS*4u,at);file_bytes=at;
     map.zso=(struct kui_zso_info){.file_bytes=at,.total_bytes=LOGICAL_BLOCKS*2048u,
         .block_count=LOGICAL_BLOCKS,.index_bytes=(LOGICAL_BLOCKS+1u)*4u,.shift=0};
+#if KUI_TEST_LZO
+    map.zso.codec=KUI_ZSO_LZO1X;
+#endif
     struct kui_retail_manifest *m=&map.manifest;
     m->track_count=1;m->storage_transport=KUI_STORAGE_SCI;m->reader=KUI_RETAIL_READER_STANDARD;
     m->card_sectors=CARD_BLOCKS;m->partition_start=64;m->partition_end=CARD_BLOCKS;
@@ -101,7 +123,13 @@ static int read_run(void *context,uint32_t lba,uint32_t available,uint8_t out[51
 }
 static void independent_wire(uint8_t wire[4096]) {
     const struct kui_retail_manifest *m=&map.manifest;
-    memset(wire,0,4096);memcpy(wire,"KUIRZS01",8);put(wire+8,1);put(wire+12,4096);
+    memset(wire,0,4096);
+#if KUI_TEST_LZO
+    memcpy(wire,"KUIRLS01",8);
+#else
+    memcpy(wire,"KUIRZS01",8);
+#endif
+    put(wire+8,1);put(wire+12,4096);
     put(wire+20,1);put(wire+24,m->extent_count);put(wire+28,KUI_STORAGE_SCI);
     wide(wire+32,CARD_BLOCKS);wide(wire+40,64);wide(wire+48,CARD_BLOCKS);
     put(wire+56,m->session_lba);put(wire+60,m->boot_lba);put(wire+64,3001);put(wire+68,m->gdi_crc32);
@@ -124,6 +152,7 @@ static void wire_and_maps(void) {
     assert(kui_retail_zso_manifest_encode(&map,wire)==KUI_GAME_OK && !memcmp(wire,expected_wire,4096));
     assert(kui_retail_zso_manifest_decode(wire,&decoded)==KUI_GAME_OK);
     assert(decoded.zso.file_bytes==file_bytes && decoded.manifest.session_lba==11700);
+    assert(decoded.zso.codec==map.zso.codec);
     assert(!memcmp(&decoded.manifest,&map.manifest,sizeof(map.manifest)));
     assert(!memcmp(decoded.manifest.slots,map.manifest.slots,(1u+map.manifest.extent_count)*12u));
     const unsigned offsets[]={8,12,20,24,24,28,48,264,268,268,272,276,280,284,288,288,292,324,328,330};
@@ -132,6 +161,9 @@ static void wire_and_maps(void) {
         memcpy(bad,wire,4096);put(bad+offsets[i],values[i]);reseal(bad);wire_reject(bad);
     }
     memcpy(bad,wire,4096);memcpy(bad,"KUIRTI03",8);reseal(bad);wire_reject(bad);
+#if KUI_TEST_LZO
+    memcpy(bad,wire,4096);memcpy(bad,"KUIRZS01",8);reseal(bad);wire_reject(bad);
+#endif
     memcpy(bad,wire,4096);bad[320u+(1u+map.manifest.extent_count)*12u]=1;reseal(bad);wire_reject(bad);
     memcpy(bad,wire,4096);bad[80]^=1;wire_reject(bad);wire_reject(NULL);
     struct kui_retail_zso_manifest saved=map;
@@ -221,10 +253,11 @@ static void failure_and_reset(void) {
     /* After explicit reset, changed source metadata and malformed selected
      * blocks cannot reuse data from the previous physical-sector cache. */
     uint32_t compressed_start=24u+(LOGICAL_BLOCKS+1u)*4u+2048u;
+    uint8_t saved_token=file[compressed_start+2];
     change_file_byte(compressed_start+2,0);
     assert(kui_retail_zso_image_init(&image,&map,read_card,&storage)==KUI_GAME_OK);
     assert(kui_retail_zso_image_read(&image,45001,1,KUI_GAME_SECTOR_MODE1,out,2048)!=KUI_GAME_OK && !image.cache_valid);
-    change_file_byte(compressed_start+2,1);
+    change_file_byte(compressed_start+2,saved_token);
     assert(kui_retail_zso_image_init(&image,&map,read_card,&storage)==KUI_GAME_OK && !image.blocks_read && !image.cache_valid && !image.read_run);
     assert(kui_retail_zso_verify_source(&image)==KUI_GAME_OK);
     assert(kui_retail_zso_image_read(&image,45001,1,KUI_GAME_SECTOR_MODE1,out,2048)==KUI_GAME_OK && !memcmp(out,expected[1],2048));

@@ -9,6 +9,7 @@ import unittest
 import zlib
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"))
 import verify_dump as v
+from make_recovery_vectors import sector, edc
 
 
 class DumpVerifierTests(unittest.TestCase):
@@ -141,3 +142,85 @@ class DumpVerifierTests(unittest.TestCase):
             with self.assertRaises(ValueError) as caught:
                 v.load_json(link)
             self.assertIn("symbolic link", str(caught.exception))
+
+    def cooked_fixture(self):
+        for p in self.path.iterdir():
+            p.unlink()
+        tracks = []
+        raw_lines, cooked_lines = ["3"], ["3"]
+        for n, session, control, fad, mode, tail in ((1, 0, 4, 150, 1, 150),
+                (2, 0, 0, 301, 0, 0), (3, 1, 4, 45150, 2, 0)):
+            raw = sector(fad, n)
+            if mode == 2:
+                raw[15] = 2
+                raw[16:24] = bytes(8)
+                raw[2072:2076] = edc(raw[16:2072]).to_bytes(4, "little")
+            if not control:
+                raw = bytes((i * 17) & 255 for i in range(2352))
+            raw = bytes(raw)
+            name = f'track{n:02}.{"bin" if control else "raw"}'
+            (self.path / name).write_bytes(raw)
+            tracks.append(dict(number=n, session=session, control=control, start_fad=fad,
+                end_fad=fad+1, toc_end_fad=fad+1+tail, excluded_tail_sectors=tail,
+                file=name, bytes=2352, crc32=f"{zlib.crc32(raw):08x}",
+                sha256=hashlib.sha256(raw).hexdigest(), sector_mode=mode))
+            raw_lines.append(f"{n} {fad-150} {control} 2352 {name} 0")
+            cooked_name = f"track{n:02}.iso" if control else name
+            cooked_lines.append(f"{n} {fad-150} {control} {2048 if control else 2352} {cooked_name} 0")
+            if control:
+                offset = 16 if mode == 1 else 24
+                (self.path / cooked_name).write_bytes(raw[offset:offset+2048])
+        descriptor = ("\n".join(cooked_lines)+"\n").encode()
+        (self.path / ".capture.gdi").write_text("\n".join(raw_lines)+"\n")
+        (self.path / "Game.gdi").write_bytes(descriptor)
+        self.m = dict(schema=1, complete=True, saved_data_verified=True, profile=v.PROFILE,
+            identity="0"*64, sector_bytes=2352, tracks=tracks, output_format="gdi_2048",
+            gdi_file=".capture.gdi", output_file="Game.gdi", output_bytes=len(descriptor),
+            output_crc32=f"{zlib.crc32(descriptor):08x}", output_sha256=hashlib.sha256(descriptor).hexdigest(),
+            output_logical_bytes=4096, output_data_track=0)
+        self.write()
+
+    def test_cooked_gdi_all_data_payloads_and_both_modes(self):
+        self.cooked_fixture()
+        self.assertEqual(len(v.verify(self.path)), 3)
+        self.m = self.crc_only();self.write()
+        self.assertEqual(len(v.verify(self.path)), 3)
+        # The descriptor hash cannot vouch for ISO contents: every byte is
+        # independently compared to the corresponding EDC-checked raw source.
+        iso = self.path / "track03.iso"
+        data = iso.read_bytes();iso.write_bytes(data[:-1]+bytes([data[-1]^1]))
+        with self.assertRaisesRegex(ValueError, "cooked payload differs"):
+            v.verify(self.path)
+
+    def test_cooked_gdi_rejects_raw_edc_even_with_matching_saved_hashes(self):
+        self.cooked_fixture()
+        source = self.path / "track01.bin"
+        raw = bytearray(source.read_bytes());raw[2064] ^= 1;source.write_bytes(raw)
+        self.m["tracks"][0].update(crc32=f"{zlib.crc32(raw):08x}", sha256=hashlib.sha256(raw).hexdigest())
+        self.write()
+        with self.assertRaisesRegex(ValueError, "source sector EDC"):
+            v.verify(self.path)
+
+    def test_cooked_gdi_geometry_descriptor_and_selectors(self):
+        self.cooked_fixture()
+        original = copy.deepcopy(self.m)
+        for key, value in (("output_logical_bytes", 2048), ("output_data_track", 1),
+                           ("output_file", "disc.iso")):
+            self.m=copy.deepcopy(original);self.m[key]=value;self.write()
+            with self.assertRaises(ValueError):v.verify(self.path)
+        self.m=original;self.write()
+        extra=self.path/"extra.iso";extra.write_bytes(b"extra")
+        with self.assertRaisesRegex(ValueError,"ambiguous"):
+            v.verify(self.path)
+        extra.unlink()
+        iso=self.path/"track01.iso";data=iso.read_bytes();iso.unlink();iso.symlink_to(self.path/"track03.iso")
+        with self.assertRaisesRegex(ValueError,"unsafe cooked"):
+            v.verify(self.path)
+        iso.unlink();iso.write_bytes(data)
+        output=self.path/"Game.gdi"
+        descriptor=output.read_bytes().replace(b"1 0 4 2048",b"1 1 4 2048")
+        output.write_bytes(descriptor)
+        self.m.update(output_crc32=f"{zlib.crc32(descriptor):08x}",output_sha256=hashlib.sha256(descriptor).hexdigest())
+        self.write()
+        with self.assertRaisesRegex(ValueError,"Cooked GDI descriptor"):
+            v.verify(self.path)

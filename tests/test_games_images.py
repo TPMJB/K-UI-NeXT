@@ -46,8 +46,10 @@ CASES += ("format-capture-zso", "format-capture-chd", "format-capture-gdi", "for
 CASES += ("format-alias-cue", "format-alias-reverse", "format-alias-gdi", "format-alias-independent",
           "format-alias-scrambled", "format-alias-media", "format-alias-layout",
           "format-alias-malformed", "format-alias-read-once", "format-alias-cancel")
-ZSO_INSPECT_CASES = ("inspect-zso-sci", "inspect-zso-scif", "inspect-zso-ce")
+ZSO_INSPECT_CASES = ("inspect-zso-sci", "inspect-zso-scif", "inspect-zso-ce", "inspect-zso-lzo")
 CASES += ZSO_INSPECT_CASES
+ORDERING_CASES = ("sort-cache", "sort-overflow")
+CASES += ORDERING_CASES
 
 
 def digest(path):
@@ -58,6 +60,7 @@ def digest(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--zso-only", action="store_true", help="Only direct-ZSO inspection and compressed-format refusals")
+    parser.add_argument("--ordering-only", action="store_true", help="Only sorted listing and exact row lookup checks")
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="kui-games-") as temp:
         base = Path(temp)
@@ -73,11 +76,12 @@ def main():
                 run("mkfs.fat", "-F", "32", str(clean))
             else:
                 run("mkfs.exfat", str(clean))
-            for case in (ZSO_INSPECT_CASES + ("format-compressed",) if args.zso_only else CASES):
+            selected_cases = ORDERING_CASES if args.ordering_only else ZSO_INSPECT_CASES + ("format-compressed",) if args.zso_only else CASES
+            for case in selected_cases:
                 selected_fixture = fixture
                 if case in ZSO_INSPECT_CASES:
                     selected_fixture = base / "zso-inspect"
-                    make_zso_fixture(selected_fixture, "zso-windows-ce" if case == "inspect-zso-ce" else "zso-gd-shift0")
+                    make_zso_fixture(selected_fixture, "zso-windows-ce" if case == "inspect-zso-ce" else "zso-lzo-gd-shift0" if case == "inspect-zso-lzo" else "zso-gd-shift0")
                 image = base / f"{kind}-{case}.img"
                 shutil.copyfile(clean, image)
                 run(BINARY, str(image), str(selected_fixture), "seed", case)
@@ -87,7 +91,7 @@ def main():
                 assert digest(image) == before, f"Games changed {kind} card image in {case}"
                 if case in ZSO_INSPECT_CASES:
                     physical_bytes = (selected_fixture / "selected.zso").stat().st_size
-                    assert f"physical bytes={physical_bytes}, native SCI admission={int(case == 'inspect-zso-sci')}, Windows CE={int(case == 'inspect-zso-ce')}" in output
+                    assert f"physical bytes={physical_bytes}, native SCI admission={int(case in ('inspect-zso-sci', 'inspect-zso-lzo'))}, Windows CE={int(case == 'inspect-zso-ce')}" in output
                 run("fsck.fat" if kind == "fat32" else "fsck.exfat", "-n", str(image))
                 image.unlink()
                 print(f"PASS {kind} Games: {case}; whole-card SHA256 unchanged", flush=True)

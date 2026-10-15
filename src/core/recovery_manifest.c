@@ -142,7 +142,11 @@ bool kui_recovery_manifest_parse(const void *data,size_t size,struct kui_scan_ma
         switch(id) {
         case 0: if(!number(&p,&schema)) return false;break;
         case 1: case 11: if(!yes(&p)) return false;break;
-        case 2: if(!string(&p,value,sizeof(value)) || strcmp(value,KUI_CAPTURE_PROFILE)) return false;break;
+        case 2:
+            if(!string(&p,value,sizeof(value))) return false;
+            if(!strcmp(value,KUI_CAPTURE_CD_PROFILE)) out->plan.profile=KUI_CAPTURE_PROFILE_CD_TOC;
+            else if(strcmp(value,KUI_CAPTURE_PROFILE)) return false;
+            break;
         case 3: if(!hex_bytes(&p,out->identity,32)) return false;break;
         case 4:
             if(!string(&p,value,sizeof(value)) || strlen(value)!=12) return false;
@@ -164,6 +168,7 @@ bool kui_recovery_manifest_parse(const void *data,size_t size,struct kui_scan_ma
             else if(!strcmp(value,"cso")) out->format=KUI_CAPTURE_FORMAT_CSO;
             else if(!strcmp(value,"zso")) out->format=KUI_CAPTURE_FORMAT_ZSO;
             else if(!strcmp(value,"chd")) out->format=KUI_CAPTURE_FORMAT_CHD;
+            else if(!strcmp(value,"gdi_2048")) out->format=KUI_CAPTURE_FORMAT_GDI_2048;
             else return false;
             break;
         case 14:
@@ -196,6 +201,8 @@ bool kui_recovery_manifest_parse(const void *data,size_t size,struct kui_scan_ma
            strcmp(out->gdi,KUI_CAPTURE_INTERNAL_GDI) ||
            !descriptor(out->output,kui_capture_format_extension(out->format))) return false;
     } else if((seen&((1u<<13)|(1u<<14)|exported)) || !strcmp(out->gdi,KUI_CAPTURE_INTERNAL_GDI)) return false;
+    const bool cd=out->plan.profile==KUI_CAPTURE_PROFILE_CD_TOC;
+    if(cd && out->format!=KUI_CAPTURE_FORMAT_BIN_CUE) return false;
     bool high=false;
     for(unsigned i=0;i<out->plan.count;++i) {
         const struct kui_capture_track *t=&out->plan.tracks[i];
@@ -203,7 +210,7 @@ bool kui_recovery_manifest_parse(const void *data,size_t size,struct kui_scan_ma
             if(!out->track[i].mode_recorded || (t->control==0u?out->track[i].sector_mode!=0u:
                (out->track[i].sector_mode!=1u && out->track[i].sector_mode!=2u))) return false;
         } else if(out->track[i].mode_recorded) return false;
-        if(!i && (t->start!=150 || t->session!=0)) return false;
+        if(!i && ((!cd && t->start!=150) || t->session!=0)) return false;
         if(i) {
             const struct kui_capture_track *prev=&out->plan.tracks[i-1];
             if(t->session<prev->session || t->start<prev->toc_end) return false;
@@ -213,7 +220,7 @@ bool kui_recovery_manifest_parse(const void *data,size_t size,struct kui_scan_ma
             if(t->start!=45150 || t->control!=4) return false;
             high=true;
         }
-        uint32_t gap=(i+1<out->plan.count && t->session==out->plan.tracks[i+1].session &&
+        uint32_t gap=(!cd && i+1<out->plan.count && t->session==out->plan.tracks[i+1].session &&
                       t->control!=out->plan.tracks[i+1].control)?150u:0u;
         if(t->toc_end-t->end!=gap) return false;
     }
@@ -225,7 +232,13 @@ bool kui_recovery_manifest_parse(const void *data,size_t size,struct kui_scan_ma
         }
         if(data!=1u) return false;
     } else if(out->format==KUI_CAPTURE_FORMAT_CHD && (out->data_track || out->logical_bytes%2448u)) return false;
-    return high;
+    else if(out->format==KUI_CAPTURE_FORMAT_GDI_2048) {
+        uint64_t cooked=0;
+        for(unsigned i=0;i<out->plan.count;i++)if(out->plan.tracks[i].control==4u)
+            cooked+=(uint64_t)(out->plan.tracks[i].end-out->plan.tracks[i].start)*2048u;
+        if(out->data_track || out->logical_bytes!=cooked)return false;
+    }
+    return cd?kui_capture_profile_name(&out->plan)!=NULL:high;
 }
 
 /* Deliberately separate from the JSON parser: GDI is a line-oriented format.

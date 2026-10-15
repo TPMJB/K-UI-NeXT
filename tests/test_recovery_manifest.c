@@ -95,6 +95,18 @@ int main(int argc,char **argv) {
     assert(argc==2);FILE *file=fopen(argv[1],"rb");assert(file);
     size_t size=fread(source,1,sizeof(source)-1,file);assert(!ferror(file) && !fclose(file));
     assert(kui_recovery_manifest_parse(source,size,&parsed));
+    if(parsed.plan.profile==KUI_CAPTURE_PROFILE_CD_TOC) {
+        assert(parsed.format==KUI_CAPTURE_FORMAT_BIN_CUE && parsed.plan.count>=1u &&
+               !strcmp(parsed.gdi,KUI_CAPTURE_INTERNAL_GDI));
+        for(unsigned i=0;i<parsed.plan.count;i++) assert(parsed.plan.tracks[i].session==0u &&
+            parsed.plan.tracks[i].end==parsed.plan.tracks[i].toc_end);
+        reject(KUI_CAPTURE_CD_PROFILE,KUI_CAPTURE_PROFILE);
+        reject(KUI_CAPTURE_CD_PROFILE,"unsupported-cd-profile");
+        reject("\"output_format\":\"bin_cue\"","\"output_format\":\"cso\"");
+        reject("\"session\":0","\"session\":1");
+        puts("PASS completed CD manifest profile, exact TOC intervals and GD/session/format confusion rejection");
+        return 0;
+    }
     if(parsed.format==KUI_CAPTURE_FORMAT_BIN_CUE) {
         assert(!strcmp(parsed.gdi,KUI_CAPTURE_INTERNAL_GDI) && strstr(parsed.cue,".cue"));
         assert(parsed.plan.count==6u && parsed.track[0].mode_recorded &&

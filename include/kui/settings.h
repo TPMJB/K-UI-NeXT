@@ -9,6 +9,8 @@ struct kui_settings {
     bool end_readback;
     bool show_memory;
     enum kui_capture_format capture_format;
+    unsigned retry_limit; /* 0 retains ten additional retries. */
+    bool strict_sectors;
 };
 #define KUI_SETTINGS_RECORD_SIZE 32u
 #define KUI_SETTINGS_PATH_A "0:/KUI/settings-a.bin"

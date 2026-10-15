@@ -46,6 +46,7 @@ enum kui_runtime_result kui_bootstrap_start(unsigned transport_filter,
 enum kui_runtime_result kui_bootstrap_measure(unsigned transport_filter,
     kui_cancel_fn cancelled);
 bool kui_disc_prepare(struct kui_toc sessions[2]);
+bool kui_disc_prepare_capture(struct kui_toc sessions[2],bool *is_cd);
 enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out);
 /* Normal capture uses a normalized card-root destination (for example /Games)
  * and game-named output. Invalid paths fail before preference or drive I/O. */
@@ -55,6 +56,8 @@ enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char 
  * Resume/Verify; folder label applies only to New. NULL/empty uses defaults. */
 enum kui_capture_result kui_capture_start_selected(enum kui_capture_mode mode,const char *build,
     const char *destination,const char *job_directory,const char *folder_label,bool quick_resume);
+enum kui_capture_result kui_capture_start_target(enum kui_capture_mode mode,const char *build,
+    const char *destination,const char *job_directory,const char *folder_label,bool quick_resume,bool network,bool cd_toc);
 /* Explicit one-operation size-only resume. CRC32 jobs continue the checkpoint's
  * CRC without rereading committed bytes, so same-size corruption is not checked.
  * SHA-256 jobs still require the engine's full prefix reread. This does not

@@ -1,9 +1,10 @@
 # Games image and ripper formats — K-UI 1.8.5
 
-**2.0 preparation update:** current source adds an experimental direct
-[standard LZ4 ZSO reader](games-zso.md) for native SCI Standard launches.
+**2.0 preparation update:** current source adds experimental direct
+[LZ4/LZO1X ZSO readers with explicit codec selection](games-zso.md) for native SCI Standard launches.
 Console acceptance is pending. The 1.8.5 boundaries recorded below remain
-historical; CSO, CHD and the ripper's LZO ZSO still require PC import.
+historical; CSO and CHD still require PC import. Historical LZO ZSO requires an explicit
+codec selection before inspection and its separate native SCI/Standard package.
 
 Games supports the direct-launch layouts below, the Original/2048 picker,
 RAM-cached lists and selected-game artwork. Disc Ripper also offers multiple
@@ -210,5 +211,7 @@ Format references, independently implemented:
 - [MAME chdman](https://docs.mamedev.org/tools/chdman.html)
 - [Historical DreamShell LZO reader](https://github.com/DC-SWAT/DreamShell/blob/4a2b898cbc244b2fb9bd1698b45e5325056232fb/modules/isofs/ciso.c)
 
-No current DreamShell loader code is imported. LZO tests use a temporary
-historical miniLZO oracle outside the repository; that oracle is not shipped.
+No current DreamShell loader code is imported. The detached LZO1X decoder is
+independently implemented. Host tests use the
+already bundled public miniLZO compressor and safe decoder as an oracle;
+miniLZO is not linked into the resident reader.

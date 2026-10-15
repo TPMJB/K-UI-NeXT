@@ -19,7 +19,7 @@ from boot_badge import BADGE, inspect_badge, verify_cdi_badge
 ROOT = Path(__file__).resolve().parents[1]
 WINCE_CDDA_PROFILES = {"armada": "armada-us", "bam4": "bam4-us", "worms": "worms-us"}
 WINCE_CDDA_FILES = tuple("ce-cdda-" + name + ".kui" for name in WINCE_CDDA_PROFILES)
-GAME_FILES = ("probe.kui", "image-probe.kui", "retail-boot.kui", "zso-boot.kui", "ce-probe.kui", "probe.dat", *WINCE_CDDA_FILES)
+GAME_FILES = ("probe.kui", "image-probe.kui", "retail-boot.kui", "zso-boot.kui", "lzo-boot.kui", "ce-probe.kui", "probe.dat", *WINCE_CDDA_FILES)
 
 
 def run(*args):
@@ -211,8 +211,11 @@ def write_game_tools(bundle):
     """Ship the independently authored PC converters beside their usage guides."""
     tools = bundle / "tools"
     tools.mkdir(exist_ok=True)
-    for name in ("gdi_optimize.py", "game_image_import.py"):
+    for name in ("gdi_optimize.py", "game_image_import.py", "network_rip_server.py"):
         shutil.copyfile(ROOT / "tools" / name, tools / name)
+    for source, target in (("network-rip.md", "NETWORK-RIP.md"),
+                           ("repair-copy.md", "REPAIR-COPY.md"), ("cd-capture.md", "CD-CAPTURE.md")):
+        shutil.copyfile(ROOT / "docs" / source, bundle / target)
 
 
 def audit_wince_cdda(directory, data, profile):
@@ -405,6 +408,7 @@ def main():
     retail_bench = ROOT / "build/retail-bench/entry.elf"
     retail_ce = ROOT / "build/retail-ce/entry.elf"
     retail_zso = ROOT / "build/retail-zso/entry.elf"
+    retail_lzo = ROOT / "build/retail-lzo/entry.elf"
     run("python3", "tools/check_loader_layout.py")
     run("python3", "tools/check_image_loader_layout.py")
     run("python3", "tools/check_retail_loader_layout.py")
@@ -414,7 +418,8 @@ def main():
     run("python3", "tools/check_retail_loader_layout.py", "--ce", "build/retail-ce")
     run("python3", "tools/check_retail_instructions.py", "build/retail-ce")
     run("python3", "tools/check_zso_loader.py", "build/retail-zso")
-    for image in (elf, runtime, probe, image_probe, retail, retail_bench, retail_ce, retail_zso):
+    run("python3", "tools/check_zso_loader.py", "--codec", "lzo", "build/retail-lzo")
+    for image in (elf, runtime, probe, image_probe, retail, retail_bench, retail_ce, retail_zso, retail_lzo):
         compiled = json.loads(image.with_suffix(".compile.json").read_text())
         if (compiled["source_dirty"] or compiled["commit"] != commit or
                 compiled["elf_sha256"] != hashlib.sha256(image.read_bytes()).hexdigest()):
@@ -466,6 +471,10 @@ def main():
     zso_package = envelope(zso_payload, zso_memory, commit[:12])
     zso_info = inspect_zso(zso_package)
     (games / "zso-boot.kui").write_bytes(zso_package)
+    lzo_payload, lzo_memory = flatten_elf(retail_lzo.read_bytes())
+    lzo_package = envelope(lzo_payload, lzo_memory, commit[:12])
+    lzo_info = inspect_zso(lzo_package, "lzo")
+    (games / "lzo-boot.kui").write_bytes(lzo_package)
     bench_payload, bench_memory = flatten_elf(retail_bench.read_bytes())
     bench_package = envelope(bench_payload, bench_memory, commit[:12])
     bench_info = inspect_retail(bench_package)
@@ -490,6 +499,11 @@ def main():
                     ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
     (dist / "retail-zso-build/linked-audit.json").write_text(
         subprocess.check_output(["python3", "tools/check_zso_loader.py", "build/retail-zso"],
+                                cwd=ROOT, text=True), encoding="utf-8")
+    shutil.copytree(ROOT / "build/retail-lzo", dist / "retail-lzo-build",
+                    ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+    (dist / "retail-lzo-build/linked-audit.json").write_text(
+        subprocess.check_output(["python3", "tools/check_zso_loader.py", "--codec", "lzo", "build/retail-lzo"],
                                 cwd=ROOT, text=True), encoding="utf-8")
     # Menu music ships as the committed Ogg encodings recorded in the manifest.
     # A fresh folder cannot carry WAVs from an earlier local package.
@@ -574,7 +588,7 @@ def main():
               "kind": package_kind(release, candidate),
               "runtime": runtime_info, "loader_probe": probe_info,
               "image_probe": image_probe_info,
-              "retail_boot": retail_info, "zso_boot": zso_info, "ce_probe": ce_info,
+              "retail_boot": retail_info, "zso_boot": zso_info, "lzo_boot": lzo_info, "ce_probe": ce_info,
               "wince_cdda_profiles": wince_profiles,
               "hardware_tested": False,
               "host_os": Path("/etc/os-release").read_text() if Path("/etc/os-release").exists() else os.name}

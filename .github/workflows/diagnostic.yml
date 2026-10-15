@@ -273,6 +273,9 @@ jobs:
           python3 tests/test_games_image_probe.py
           python3 tests/test_capture_cue_images.py
           python3 tests/test_capture_compressed_images.py
+          python3 tests/test_capture_cooked_images.py
+          python3 tests/test_capture_cd_images.py
+          make test-repair-copy
           python3 tests/test_capture_chd_oracle.py
           python3 tests/test_capture_images.py
           python3 tests/test_capture_options.py

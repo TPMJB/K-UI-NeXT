@@ -4,6 +4,7 @@
 #include "kui/media.h"
 #include "kui/storage.h"
 #include <assert.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,7 +19,7 @@ static struct {
     FIL *track;
     DIR *lazy_dir,*root_dir;
     unsigned writes, connects, disconnects, files, dirs, read_calls;
-    unsigned dir_calls,stat_calls,track_stats,block_reads,variant_summaries,variant_failures,callbacks,root_rewinds;
+    unsigned dir_calls,stat_calls,track_stats,block_reads,variant_summaries,variant_failures,callbacks,root_rewinds,child_opens;
     bool active, connected, injected, cancelled;
 } test;
 static FATFS fs;
@@ -51,7 +52,7 @@ static int sync_image(void *ctx) {
 }
 static const struct kui_media_ops media = {NULL, blocks, read_image, write_image, sync_image};
 unsigned kui_storage_active(void) {
-    return !strcmp(test.fault,"inspect-zso-sci") || !strcmp(test.fault,"inspect-zso-ce")?
+    return !strcmp(test.fault,"inspect-zso-sci") || !strcmp(test.fault,"inspect-zso-ce") || !strcmp(test.fault,"inspect-zso-lzo")?
         KUI_STORAGE_SCI:KUI_STORAGE_SCIF;
 }
 bool kui_sd_connect(void) {
@@ -132,6 +133,7 @@ FRESULT __real_f_opendir(DIR *dir, const TCHAR *path);
 FRESULT __wrap_f_opendir(DIR *dir, const TCHAR *path) {
     FRESULT result = __real_f_opendir(dir, path);
     if(test.active && result == FR_OK) ++test.dirs;
+    if(test.active && result==FR_OK && strncmp(path,"0:/Games/",9)==0) ++test.child_opens;
     if(test.active && result==FR_OK && strstr(path,"/Original Only")) test.lazy_dir=dir;
     if(test.active && result==FR_OK && !strcmp(path,"0:/Games")) test.root_dir=dir;
     return result;
@@ -310,6 +312,23 @@ static void seed_variants(const char *host) {
         write_file("0:/Games/Reader Test-2048/conversion.json","not trusted metadata",20);
     }
 }
+static void seed_ordering(const char *host) {
+    assert(f_mkdir("0:/Games")==FR_OK);
+    unsigned count=!strcmp(test.fault,"sort-overflow")?2057u:24u;
+    /* Reverse FAT insertion order and mixed ASCII case across every page. */
+    for(unsigned i=count;i;--i) {
+        unsigned index=i-1u;char path[96];
+        snprintf(path,sizeof(path),"0:/Games/%s %04u",index%2u?"folder":"Folder",index);
+        if(index==5u && count==24u) seed_fixture(host,path,false);
+        else assert(f_mkdir(path)==FR_OK);
+    }
+    static const char *const names[]={"Zulu.zso","delta.ISO","charlie.cdi","bravo.CHD","Alpha.gdi"};
+    for(unsigned i=0;i<sizeof(names)/sizeof(names[0]);i++) {
+        char path[96];snprintf(path,sizeof(path),"0:/Games/%s",names[i]);write_file(path,"1\n",2);
+    }
+    /* A newly added row must land before the existing folders, not at the end. */
+    assert(f_mkdir("0:/Games/First new game")==FR_OK);
+}
 static void little32(uint8_t *out,uint32_t value) {for(unsigned i=0;i<4;i++) out[i]=(uint8_t)(value>>(i*8));}
 static uint32_t get32(const uint8_t *in) {return (uint32_t)in[0]|(uint32_t)in[1]<<8|(uint32_t)in[2]<<16|(uint32_t)in[3]<<24;}
 static void both32(uint8_t *out,uint32_t value) {
@@ -449,6 +468,7 @@ static void seed_formats(const char *host) {
     }
 }
 static void seed(const char *host) {
+    if(!strncmp(test.fault,"sort-",5)) {seed_ordering(host);return;}
     if(!strncmp(test.fault,"inspect-zso-",12)) {
         assert(f_mkdir("0:/Games")==FR_OK && f_mkdir(folder)==FR_OK);
         char path[1024];assert(snprintf(path,sizeof(path),"%s/selected.zso",host)<(int)sizeof(path));
@@ -570,18 +590,22 @@ static void cached_mounted(void *ctx,kui_log_fn log,kui_cancel_fn stop) {
 }
 static void check_cache(void) {
     struct kui_games_page page;
+    bool lazy_fault=!strcmp(test.fault,"variant-cache-dir-read-once") ||
+        !strcmp(test.fault,"variant-cache-dir-close-once") || !strcmp(test.fault,"variant-cache-cancel-lazy");
     if(fault("cache-pair-read-once") || fault("cache-pair-close-once") || fault("cache-index-read-once")) {
         unsigned initial_total=fault("cache-index-read-once")?24u:15u;
         assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.total==initial_total && test.injected);
         unsigned dirs=test.dir_calls,reads=test.read_calls;
         assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.total==14u);
         assert(test.dir_calls>dirs && test.read_calls>reads && test.variant_summaries==1);
-        for(unsigned i=0;i<page.count;i++) assert(page.entries[i].variant_2048_path[0]);
+        for(unsigned i=0;i<page.count;i++)
+            assert((page.entries[i].variant_2048_path[0]!=0)==!strncmp(page.entries[i].name,"Pair ",5));
         dirs=test.dir_calls;reads=test.read_calls;
         assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.total==14u);
         assert(test.dir_calls==dirs && test.read_calls==reads);return;
     }
-    assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.count==8 && page.total==14);
+    assert(kui_games_list("/Games",lazy_fault?8u:0u,&page,log_line,cancel) &&
+        page.count==(lazy_fault?6u:8u) && page.total==14);
     assert(test.variant_summaries==1 && !test.track_bytes && !test.track_stats);
     unsigned first_reads=test.read_calls;
     if(!strcmp(test.fault,"variant-cache-refresh")) {
@@ -622,12 +646,10 @@ static void check_cache(void) {
         assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.count==8 && page.total==14);
         assert(test.connects==connects+1 && test.variant_summaries==1);return;
     }
-    bool lazy_fault=!strcmp(test.fault,"variant-cache-dir-read-once") ||
-        !strcmp(test.fault,"variant-cache-dir-close-once") || !strcmp(test.fault,"variant-cache-cancel-lazy");
     if(lazy_fault) {
         assert(!test.injected);
         bool cancelled=!strcmp(test.fault,"variant-cache-cancel-lazy");
-        bool result=kui_games_list("/Games",8,&page,log_line,cancel);
+        bool result=kui_games_list("/Games",0,&page,log_line,cancel);
         assert(result==!cancelled && test.injected);
         if(cancelled) {assert(!page.count && !page.has_more);test.cancelled=false;}
         else {
@@ -636,7 +658,7 @@ static void check_cache(void) {
             assert(folder);
         }
         unsigned dirs=test.dir_calls;
-        assert(kui_games_list("/Games",8,&page,log_line,cancel));
+        assert(kui_games_list("/Games",0,&page,log_line,cancel));
         assert(test.dir_calls>dirs);
         for(unsigned i=0;i<page.count;i++) if(!strcmp(page.entries[i].name,"Original Only"))
             assert(!page.entries[i].directory && !strcmp(page.entries[i].path,"/Games/Original Only/disc.gdi"));
@@ -695,6 +717,9 @@ static void check_variants(void) {
     if(!strcmp(test.fault,"variant-index-overflow")) {
         assert(kui_games_list("/Games",0,&page,log_line,cancel));
         assert(page.count==KUI_GAMES_ROWS && page.total==514 && page.has_more);
+        unsigned original=0;
+        assert(kui_games_find("/Games","Reader Test",&original,log_line,cancel) && original==512u);
+        assert(kui_games_list("/Games",original,&page,log_line,cancel) && page.count==2u);
         assert(!strcmp(page.entries[0].name,"Reader Test") && !page.entries[0].variant_2048_path[0]);
         assert(!strcmp(page.entries[1].name,"Reader Test-2048") && !page.entries[1].variant_2048_path[0]);
         assert(kui_games_list("/Games",513,&page,log_line,cancel));
@@ -866,7 +891,7 @@ static void check_formats(void) {
         for(unsigned i=0;i<3;i++) {
             char path[96];snprintf(path,sizeof(path),"/Games/%s",names[i]);struct kui_games_detail detail;
             assert(!kui_games_inspect(path,&detail,log_line,cancel) && !detail.valid && !detail.stopped);
-            if(i==1) assert(strstr(detail.message,"standard LZ4 ZSO") && strstr(detail.message,"LZO ZSO needs offline import"));
+            if(i==1) assert(strstr(detail.message,"selected codec") && strstr(detail.message,"LZ4 or LZO1X"));
             else assert(strstr(detail.message,"offline import") && strstr(detail.message,"direct launch unavailable"));
         }
         assert(!test.read_calls);return;
@@ -921,13 +946,77 @@ static void check_formats(void) {
     assert(detail.format==(iso?KUI_GAME_IMAGE_ISO:raw?KUI_GAME_IMAGE_RAW:cdi?KUI_GAME_IMAGE_CDI:KUI_GAME_IMAGE_CUE));
 }
 
+static void check_ordering(void) {
+    bool overflow=!strcmp(test.fault,"sort-overflow");
+    unsigned folders=overflow?2057u:24u,total=folders+6u,index=UINT_MAX;
+    assert(kui_games_find("/Games","fOlDeR 0017",&index,log_line,cancel) && index==22u);
+    assert(!test.child_opens && !test.track_bytes && !test.track_stats);
+    unsigned connects=test.connects,dirs=test.dir_calls,reads=test.read_calls,blocks=test.block_reads;
+    index=UINT_MAX;
+    assert(!kui_games_find("/Games","Missing game",&index,log_line,cancel) && index==UINT_MAX);
+    assert(kui_games_find("/Games","ALPHA.GDI",&index,log_line,cancel) && index==0u);
+    index=UINT_MAX;
+    assert(!kui_games_find("/Games/../escape","Alpha.gdi",&index,log_line,cancel) && index==UINT_MAX);
+    assert(!kui_games_find("/Games","../Alpha.gdi",&index,log_line,cancel) && index==UINT_MAX);
+    test.cancelled=true;
+    assert(!kui_games_find("/Games","Alpha.gdi",&index,log_line,cancel) && index==UINT_MAX);
+    test.cancelled=false;
+    if(!overflow) assert(test.connects==connects && test.dir_calls==dirs &&
+        test.read_calls==reads && test.block_reads==blocks);
+    struct kui_games_page page;
+    static const char *const images[]={"Alpha.gdi","bravo.CHD","charlie.cdi","delta.ISO","Zulu.zso"};
+    for(unsigned offset=0;offset<total;offset+=KUI_GAMES_ROWS) {
+        assert(kui_games_list("/Games",offset,&page,log_line,cancel));
+        unsigned count=total-offset<KUI_GAMES_ROWS?total-offset:KUI_GAMES_ROWS;
+        assert(page.total==total && page.count==count && page.has_more==(offset+count<total));
+        for(unsigned i=0;i<count;i++) {
+            unsigned row=offset+i;char expected[96];
+            if(row<4u)strcpy(expected,images[row]);
+            else if(row==4u)strcpy(expected,"First new game");
+            else if(row<folders+5u) {
+                unsigned number=row-5u;
+                snprintf(expected,sizeof(expected),"%s %04u",number%2u?"folder":"Folder",number);
+            } else strcpy(expected,"Zulu.zso");
+            assert(!strcmp(page.entries[i].name,expected));
+            bool directory=row>=4u && row<folders+5u && !(row==10u && !overflow);
+            assert(page.entries[i].directory==directory && !page.entries[i].disabled);
+        }
+    }
+    /* Arbitrary offsets exercise a page spanning a bounded-window boundary. */
+    unsigned offsets[]={3u,folders-3u,total,overflow?1015u:8u};
+    for(unsigned i=0;i<sizeof(offsets)/sizeof(offsets[0]);i++) {
+        unsigned offset=offsets[i];
+        assert(kui_games_list("/Games",offset,&page,log_line,cancel) && page.total==total);
+        unsigned count=total-offset<KUI_GAMES_ROWS?total-offset:KUI_GAMES_ROWS;
+        assert(page.count==count && page.has_more==(offset+count<total));
+        if(offset>=5u && offset<folders+5u) {
+            char expected[96];unsigned number=offset-5u;
+            snprintf(expected,sizeof(expected),"%s %04u",number%2u?"folder":"Folder",number);
+            assert(!strcmp(page.entries[0].name,expected));
+        }
+    }
+    connects=test.connects;dirs=test.dir_calls;reads=test.read_calls;blocks=test.block_reads;
+    assert(kui_games_find("/Games","First new game",&index,log_line,cancel) && index==4u);
+    assert(kui_games_list("/Games",8,&page,log_line,cancel));
+    if(!overflow) assert(test.connects==connects && test.dir_calls==dirs &&
+        test.read_calls==reads && test.block_reads==blocks);
+    kui_games_cache_clear();
+    assert(kui_games_find("/Games","folder 0017",&index,log_line,cancel) && index==22u);
+    assert(kui_games_list("/Games",0,&page,log_line,cancel) && !strcmp(page.entries[0].name,"Alpha.gdi"));
+    assert(!test.track_bytes && !test.track_stats);
+    printf("PASS alphabetical ordering and exact row lookup: %u rows, cold/warm/refresh and every page\n",total);
+}
 static void check(void) {
+    if(!strncmp(test.fault,"sort-",5)) {check_ordering();return;}
     if(!strncmp(test.fault,"inspect-zso-",12)) {
         struct kui_games_page page;
         assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.count==1 && !page.entries[0].directory);
         assert(!strcmp(page.entries[0].path,"/Games/Reader Test/selected.zso"));
-        struct kui_games_detail detail;assert(kui_games_inspect(page.entries[0].path,&detail,log_line,cancel));
-        bool ce=!strcmp(test.fault,"inspect-zso-ce"),sci=!strcmp(test.fault,"inspect-zso-sci");
+        struct kui_games_detail detail;bool lzo=!strcmp(test.fault,"inspect-zso-lzo");
+        if(lzo)assert(!kui_games_inspect(page.entries[0].path,&detail,log_line,cancel) && !detail.valid);
+        assert(kui_games_inspect_codec(page.entries[0].path,lzo?KUI_ZSO_LZO1X:KUI_ZSO_LZ4,&detail,log_line,cancel));
+        assert(detail.zso_codec==(unsigned)(lzo?KUI_ZSO_LZO1X:KUI_ZSO_LZ4));
+        bool ce=!strcmp(test.fault,"inspect-zso-ce"),sci=!strcmp(test.fault,"inspect-zso-sci") || lzo;
         assert(detail.valid && !detail.stopped && detail.format==KUI_GAME_IMAGE_ZSO && detail.zso_launch==sci);
         assert(detail.windows_ce==ce && !detail.cd_image && detail.tracks==1 && detail.data_tracks==1 && !detail.audio_tracks);
         assert(detail.boot_lba==45021u && detail.boot_bytes==3001u && detail.bytes && detail.bytes<64u*2048u);

@@ -116,5 +116,39 @@ class ZsoReleaseInstallation(unittest.TestCase):
             publish_release.verify_assets(self.fixture.dist / "release-assets", release, self.fixture.commit)
 
 
+class LzoReleaseInstallation(unittest.TestCase):
+    def setUp(self):
+        self.fixture = candidate.CandidateInstallation(methodName="runTest")
+        self.addCleanup(self.fixture.doCleanups)
+        self.fixture.setUp()
+        metadata = patch("package.release_metadata", return_value=TYRFING)
+        metadata.start()
+        self.addCleanup(metadata.stop)
+        self.path = self.fixture.sd / "apps/games/lzo-boot.kui"
+        payload = bytearray(STAGE_BLOB_OFFSET + 64)
+        payload[HEADER_OFFSET:HEADER_OFFSET + HEADER_BYTES] = relocation_header(64, "lzo")
+        payload[STAGE_BLOB_OFFSET:STAGE_BLOB_OFFSET + 4] = b"\x09\0\x09\0"
+        self.expected = envelope(payload, len(payload), self.fixture.commit[:12])
+        self.path.write_bytes(self.expected)
+
+    def test_typed_lzo_payload_is_required_and_survives_all_install_archives(self):
+        bundle, release = self.fixture.assemble(False)
+        self.assertEqual((bundle / "KUI/apps/games/lzo-boot.kui").read_bytes(), self.expected)
+        self.assertEqual(inspect_zso(self.expected, "lzo")["manifest_magic"], "KUIRLS01")
+        with self.assertRaisesRegex(ValueError, "relocation header"):
+            inspect_zso(self.expected)
+        assets = self.fixture.dist / "release-assets"
+        with zipfile.ZipFile(assets / (release["artifact_prefix"] + "-release.zip")) as install:
+            self.assertEqual(install.read("KUI/apps/games/lzo-boot.kui"), self.expected)
+        self.fixture.assert_checksums(bundle, "SHA256SUMS")
+        self.fixture.assert_checksums(assets, "SHA256SUMS.txt")
+
+    def test_missing_lzo_refuses_normal_install_assembly(self):
+        self.path.unlink()
+        with self.assertRaises(FileNotFoundError) as failure:
+            self.fixture.assemble(False)
+        self.assertEqual(Path(failure.exception.filename), self.path)
+
+
 if __name__ == "__main__":
     unittest.main()
