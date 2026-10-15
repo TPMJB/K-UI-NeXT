@@ -79,8 +79,11 @@ The supplied US Bust-A-Move 4 runtime (T-8117N, 26 tracks) shares Armada's
 SNDCORE, audio firmware and kernel instructions. A separate BAM4 profile
 selects its rebased kernel globals, DirectSound method addresses and verified
 game device holder. Its first console candidate reuses the RC9 streaming
-engine; see [the BAM4 test guide](bam4-ce-cdda-test.md). It has not yet passed
-a physical playback test.
+engine; see [the BAM4 test guide](bam4-ce-cdda-test.md). On 2026-10-15 the
+owner reported successful audible playback with build `ed0a2c809bda`. Recording
+`62683.mp4` shows ten successful starts, zero refusals/HRESULT, and one
+recovered underrun. Keep that build as the working BAM4 baseline; it is not
+a claim of zero-dropout operation or other-revision compatibility.
 
 The supplied Worms Armageddon runtime uses a different DirectSound callback
 that does not take Armada's refill critical section. Reusing that lock would

@@ -3,8 +3,10 @@
 
 This is the first experimental console candidate for the original US
 **Bust-A-Move 4**, product **T-8117N**, with its original **26-track GDI**.
-It has not yet been tested on Dreamcast hardware. Host checks establish build,
-layout and guarded code behavior; they do not establish audible playback.
+The owner tested build `ed0a2c809bda` on Dreamcast hardware on 2026-10-15
+and reported that BAM4 worked perfectly as far as they could tell. This is
+the working BAM4 baseline; the recording still contains one recovered underrun.
+It does not establish compatibility with other regions or revisions.
 
 ## Install and launch
 
@@ -68,4 +70,25 @@ The ZIP includes complete current source as a tar archive, verified dependency
 source archives and licenses from the pinned Armada RC9
 delivery, build/audit records, and complete member SHA256/CRC manifests.
 It does not replay the inherited historical corruption-test suites or ship
-an Armada rebuild. The first hardware result remains the acceptance test.
+an Armada rebuild. The first hardware result and its limits are recorded below.
+
+## First hardware result — 2026-10-15
+
+Build `ed0a2c809bda`, recording `62683.mp4`, original US T-8117N profile.
+The owner reported: “BAM4 worked perfectly as far as I can tell.” The recording
+contains the event, sample and summary pages. This listening report is the
+evidence for audible playback; the diagnostic video has not been used to
+independently assess the sound.
+
+The terminal snapshot reports ten successful native Play calls, zero refused
+attempts, zero HRESULT, and one recovery. The retained event history includes
+one UND event at native clock `0x1150d` (70,925 ms), followed by successful
+playback starts. At that observation, 8,448 bytes were consumed against
+8,320 fresh bytes, a 128-byte shortfall (about 0.73 ms of stereo PCM). That
+shortfall does not measure the audible gap or the recovery duration. The
+recording does not establish whether the owner heard this event.
+
+Keep this console candidate as the working BAM4 baseline. No playback
+retuning or replacement binary is justified by this successful listening
+report alone. A residual recovered underrun remains documented; zero-dropout
+operation, every track, and a long-duration soak have not been established.
