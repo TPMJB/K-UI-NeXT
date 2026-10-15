@@ -4,6 +4,16 @@
 #include <stdint.h>
 #include "kui/retail_loader_layout.h"
 
+/* Optional terminal-only report: 1=GD state, 2=bounded caller/stack RAM,
+ * 3=exact-owner fatal-read stop before its cleanup.
+ * Neither mode adds game-time sampling or state. */
+#ifndef KUI_RETAIL_RETURN_TRACE
+#define KUI_RETAIL_RETURN_TRACE 0
+#endif
+#if KUI_RETAIL_RETURN_TRACE < 0 || KUI_RETAIL_RETURN_TRACE > 3
+#error "KUI_RETAIL_RETURN_TRACE must be 0, 1, 2 or 3"
+#endif
+
 struct retail_display_state;
 struct kui_retail_manifest;
 struct kui_retail_storage;

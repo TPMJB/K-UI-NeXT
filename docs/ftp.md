@@ -1,16 +1,20 @@
-# FTP server (W5500 on the SCI port)
+# FTP server (W5500 or Wi-Fi board on the SCI port)
 
 K-UI can share the SD card over your home network with FTP, so games,
 music and pictures can be copied to and from a computer without taking the
-card out. It needs a WIZnet W5500 Ethernet module wired to the console's
-SCI port (a modification). It is new since K-UI 1.5.1. On the owner's
-console it uploads at about 520 KiB/s and downloads at about 380 KiB/s
-(2026-09-30).
+card out. It needs a network adapter wired to the console's SCI port (a
+modification): a WIZnet W5500 Ethernet module, or K-UI's Wi-Fi board (see
+[Wi-Fi](wifi.md)). It is new since K-UI 1.5.1. On the owner's console,
+over the W5500, it uploads at about 520 KiB/s and downloads at about
+380 KiB/s in that historical build (2026-09-30). Earlier owner reports also
+confirm Wi-Fi FTP use; this merged 1.8.5 source has no new wireless throughput
+measurement. See [Wi-Fi hardware scope](wifi.md).
 
 It is independent K-UI code. The W5500 driver is written from WIZnet's
 W5500 datasheet and uses KallistiOS's SCI driver (`dc/sci.h`) only to move
 bytes; it does not use KallistiOS's own W5500 network driver, which also
-probes the serial port the SD adapter uses. No DreamShell code is involved.
+probes the serial port the SD adapter uses. The Wi-Fi board runs K-UI's own
+firmware. No DreamShell code is involved.
 
 ## The hardware
 
@@ -22,27 +26,34 @@ on the SH-4's other serial interface, SCI, run as SPI:
 | MOSI | SCI TXD |
 | MISO | SCI RXD |
 | SCLK | SCI SCK |
-| SCSn (chip select) | SH-4 port A, pin 7 (PA7) |
+| SCSn (chip select) | SH-4 port A, pin 7 (PA7), or pin 6 (PA6) |
 | 3.3 V and GND | 3.3 V and ground |
 | RSTn | held high (or to a reset line) |
 
-Chip select on PA7 is how KallistiOS's SCI driver drives it on a retail
-console; K-UI uses that driver unchanged. The W5500's interrupt pin is not
-used.
-
-Planning to add a microSD card or a Wi-Fi board on the same port? See
-[the SCI connector plan](sci-connector.md). There the SD card takes PA7 and
-the W5500 moves to its own chip select, which needs a K-UI update first.
+Chip select on PA7 (at RA101, the usual point) is how KallistiOS's SCI
+driver drives it on a retail console; K-UI uses that driver unchanged. PA6
+is the network connector's select in [the SCI connector plan](sci-connector.md),
+which leaves PA7 for a microSD card; K-UI drives PA6 itself. The W5500's
+interrupt pin is not used.
 
 K-UI looks for the W5500 only when asked (Network, or the FTP server),
 never at start-up. It resets the chip, checks its version, and writes and
 reads back 64 test patterns and a 1 KB block before using it. It starts at
-12.5 MHz with DMA reads (K-UI's own, on DMA channel 1; they work on the
-owner's console) and, if the check fails, tries 12.5 MHz without DMA, then 6.25,
-3.125 and 1.5625 MHz. If every speed fails, it says the W5500 was found but
-its wiring check failed. A DMA read that does not finish within a couple of
-milliseconds is read again without DMA; after four such reads in a row, DMA
-stays off and the screen says "DMA failed".
+12.5 MHz with DMA reads (K-UI's own, on DMA channel 1, in `sci_port.c`;
+they work on the owner's console) with the select on PA7, and, if the check
+fails, tries 12.5 MHz without DMA, then 6.25, 3.125 and 1.5625 MHz, then
+the same with the select on PA6 ("select GPIO6" in its messages). If every
+speed fails, it says the W5500 was found but its wiring check failed. A DMA
+read that does not finish within a couple of milliseconds is read again
+without DMA; after four such reads in a row, DMA stays off and the screen
+says "DMA failed".
+
+With no W5500, the FTP server and the Network app look for the Wi-Fi board
+next (see [Wi-Fi](wifi.md)).
+
+Network probing is refused when the storage card reserves SCI, even if the
+adapter uses a different chip select. Use SCIF storage for the first Wi-Fi
+test; simultaneous SCI storage and networking is still a separate project.
 
 At 12.5 MHz with DMA, the check also moves 1 KB each way by DMA with no
 help from the CPU (reads in the SCI's receive-only mode, whose clock runs on
@@ -80,10 +91,12 @@ sees one device).
 
 ## Using it
 
-1. Connect the W5500 to your router with a network cable.
+1. Connect the W5500 to your router with a network cable, or set up the
+   Wi-Fi board on the Wi-Fi page (Network, START).
 2. Open **Network** on Home and press **Y (FTP server)**.
-3. K-UI finds the W5500, opens the SD card, waits for the cable link and asks
-   the router for an address (DHCP). Then it shows:
+3. K-UI finds the adapter, opens the SD card, and waits for the cable link
+   and asks the router for an address (DHCP), or waits for the Wi-Fi board
+   to be online (it keeps its own address). Then it shows:
    - the address, such as `ftp://192.168.1.50`;
    - the user (`kui`; any name works) and the password.
 4. Connect an FTP client to that address on port 21 with that password.
@@ -165,9 +178,9 @@ files can be added to those folders. Update K-UI itself on a computer.
 - File times are the console clock's local time; clients that read `MLSD`
   as UTC may show them shifted by your time zone.
 - Speed: the SD card on the serial port reads at about 0.7 MB/s and writes
-  at about 1.1 MB/s, and the W5500's link adds its own time. On the owner's
-  console (SPI at 12.5 MHz, a 100 Mbit/s full-duplex cable link), the build
-  of 2026-09-28 uploaded to the card at about 304 KiB/s and downloaded at
+  at about 1.1 MB/s, and the adapter's link adds its own time. On the owner's
+  console, over the W5500 (SPI at 12.5 MHz, a 100 Mbit/s full-duplex cable
+  link), the build of 2026-09-28 uploaded to the card at about 304 KiB/s and downloaded at
   260 to 320 KiB/s, in bursts. That build slept about 8 ms each time a
   transfer waited for the network. The build that keeps transfers moving
   (`a911dc9`) does about 370 KiB/s each way. Downloads still arrive in
@@ -177,10 +190,10 @@ files can be added to those folders. Update K-UI itself on a computer.
   500 KiB/s; downloads are unchanged. A tighter DMA loop and 32 KB card
   transfers (`56fd05d`) bring uploads to about 520 KiB/s (about 550 with
   the music off) and downloads to about 380 KiB/s. The first overlapped
-  build (`6f83189`: the network and the card at the same time, and
-  KallistiOS's scheduler at 1000 Hz while the server runs, so the card's
-  busy time after each write costs at most a millisecond instead of up to
-  ten) said "overlapped" on the console but stayed at about 500 KiB/s. It
+  build (`6f83189`: over the W5500, the network and the card at the same
+  time, and KallistiOS's scheduler at 1000 Hz while the server runs, so the
+  card's busy time after each write costs at most a millisecond instead of
+  up to ten) said "overlapped" on the console but stayed at about 500 KiB/s. It
   gave the first data socket 8 KB buffers and the other two 2 KB, and a
   transfer often lands on a small one: a listing just before leaves socket
   0 closing for a moment. All three have 4 KB again (`0234c29`). That
@@ -232,33 +245,37 @@ files can be added to those folders. Update K-UI itself on a computer.
   speeds while each worked, and the share of the data the network moved
   while the card was busy (near 100% when they worked at once, 0% when
   they took turns), then the share of DMA pieces tried again (rounded up,
-  so a single one shows as 0.1%). Instead of the overlap it says "DMA off"
-  or "DMA in use" (another transfer had it), or "then no DMA" after it
-  when the stream gave up partway. The log also gets the stream's socket,
+  so a single one shows as 0.1%). Instead of the overlap it says "DMA off",
+  "DMA in use" (another transfer had it) or "no DMA (Wi-Fi)", or "then no
+  DMA" after it when the stream gave up partway. The log also gets the stream's socket,
   average piece, how often it waited for the card or the network, and
   how many pieces were tried again. A computer with a card reader is much
   faster for whole game libraries.
 - A client that goes quiet for ten minutes, or does not log in within a
   minute, is disconnected. A transfer with no progress for a minute is
   stopped.
-- The address lease is renewed at half its time. If the router refuses, or
-  the lease runs out, the server stops and says why.
+- The W5500's address lease is renewed at half its time. If the router
+  refuses, or the lease runs out, the server stops and says why. The Wi-Fi
+  board keeps its own lease; if its Wi-Fi drops, the server keeps running,
+  says so, and shows a new address if the router gives it one.
 
 ## Network app
 
 **A (Inspect adapter)** and **X (Test network)** also look for a W5500 on the
-SCI port when no Broadband or LAN adapter is found. Inspection reports the
-chip, the SPI speed that passed the wiring check, the cable link and the MAC
-address. The network test runs the same DHCP, address-conflict, gateway ARP
-and ping checks as with a BBA (see [the connection test](network-connection-test.md)),
-through the W5500's raw Ethernet socket.
+SCI port when no Broadband or LAN adapter is found, then for the Wi-Fi board
+(see [Wi-Fi](wifi.md)). Inspection reports the chip, the SPI speed that
+passed the wiring check, the cable link and the MAC address. The network
+test runs the same DHCP, address-conflict, gateway ARP and ping checks as
+with a BBA (see [the connection test](network-connection-test.md)), through
+the W5500's raw Ethernet socket.
 
 ## How it is built
 
 - `src/core/w5500.c`: the W5500 driver: SPI frames, registers, sockets,
   TCP, UDP and MACRAW, over any SPI link (`struct kui_w5500_bus`).
 - `src/dreamcast/w5500_sci.c`: that link on the console, through KOS's SCI
-  driver; the four speeds and the MAC address from the console ID.
+  driver (`src/dreamcast/sci_port.c` adds the PA6 select); the four speeds
+  at each select and the MAC address from the console ID.
 - `src/apps/network_w5500.c`: finding the chip, the cable link, DHCP through
   the existing network probe (raw frames on socket 0), lease renewal over
   UDP, and the Network app's inspection and test.
@@ -266,10 +283,13 @@ through the W5500's raw Ethernet socket.
   lines.
 - `src/apps/ftp_server.c`: the server loop on the storage worker: sessions,
   data connections, the card through FatFs, and the status the screen draws.
-  It uses the W5500's own TCP sockets: 0-2 carry data (socket 0 is used for
-  DHCP first), 3-6 listen for control connections. One
-  upload or download at a time streams (`kui_w5500_stream` in
-  `src/core/w5500.c`) while the loop writes or reads the card.
+  It uses the adapter's TCP sockets through `kui/net.h`: 0-2 carry data (on
+  the W5500, socket 0 is used for DHCP first), 3-6
+  listen for control connections. `src/apps/network_w5500.c` and
+  `src/apps/network_wifi.c` provide them. Over the W5500, one upload or
+  download at a time streams (`kui_w5500_stream` in `src/core/w5500.c`, the
+  async frames in `src/dreamcast/sci_port.c`) while the loop writes or
+  reads the card.
 - `src/core/shell.c`, `src/dreamcast/shell_draw.c`, `src/dreamcast/main.c`:
   the FTP Server page, Y on the Network page, and worker action 64.
 
@@ -303,24 +323,28 @@ through the W5500's raw Ethernet socket.
   renames and moves, deletes, protected files, unsafe names, a closed data
   connection, `ABOR`, an upload cut off by a reset, files in use, the
   three-client limit, a full card, stopping with a client connected, no
-  W5500 and an unusable password file. Transfers stream through the model's
-  async frames (the adapter line must say "overlapped") and leave their
-  "Last up" and "Last down" lines; a frame that fails partway through an
-  upload, then a download, is tried again and the line says "0.1% retried"; 64
-  failures in a row, and then a frame that never ends, must leave the
-  transfer to finish the plain way with the same data ("then no DMA", and
-  "DMA off" for the next). A restart without async frames checks the
-  plain way. With 1 ms of network latency in the
-  model, 2 MB each way must pass without the server sleeping while it waits
-  for the client (a sleep lasts about 8 ms on the console). `fsck` checks
-  every image, and on FAT32 mtools reads the uploads back independently.
-  Every run must leave no file or folder open.
+  W5500 and an unusable password file. Over the W5500, transfers stream
+  through the model's async frames (the adapter line must say
+  "overlapped") and leave their "Last up" and "Last down" lines; a frame
+  that fails partway through an upload, then a download, is tried again
+  and the line says "0.1% retried"; 64 failures in a row, and then a frame
+  that never ends, must leave the transfer to finish the plain way with the
+  same data ("then no DMA", and "DMA off" for the next). A restart without
+  async frames checks the plain way. With 1 ms of network latency in the
+  W5500 model, 2 MB each way must pass without the server sleeping while it
+  waits for the client (a sleep lasts about 8 ms on the console). On FAT32
+  all of it runs again over the Wi-Fi board model (`tests/wifi_model.c`,
+  the firmware's own bridge core), with Wi-Fi dropping and coming back and
+  the board restarting; no adapter at all, and the board with no network
+  set up, are reported. `fsck` checks every image, and on FAT32 mtools
+  reads the uploads back independently. Every run must leave no file or
+  folder open.
 - `test-shell`: Y on Network, Stop, restart and back, and every state of the
   FTP page.
 
 These run on the host. They check the protocol, the driver's register and
-socket handling, and the card; they cannot check the SCI wiring or the
-W5500 itself.
+socket handling, and the card; they cannot check the SCI wiring, the W5500
+or the Wi-Fi board themselves.
 
 ## Console test
 

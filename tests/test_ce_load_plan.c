@@ -9,11 +9,12 @@ static unsigned assertions;
 #define CHECK(x) do { ++assertions; assert(x); } while(0)
 static uint8_t header[KUI_CE_LOAD_PREFIX_BYTES];
 static struct kui_ce_load_plan plan;
-/* A candidate placement-only stage, not linked code or a verified CE layout.
- * The complete low system/IP area and high stack allocation remain live. */
+/* The CE placement probe stage (retail_stage.c with KUI_RETAIL_CE), not a
+ * verified CE boot layout. The complete low system/IP area and high stack
+ * allocation remain live. */
 static const struct kui_ce_live_range candidate[] = {
     {0x8c000000u, 0x10000u},
-    {0x8ce10000u, KUI_RETAIL_STAGE_MEMORY_END - 0x8ce10000u},
+    {KUI_RETAIL_CE_STAGE_ADDRESS, KUI_RETAIL_STAGE_MEMORY_END - KUI_RETAIL_CE_STAGE_ADDRESS},
     {KUI_RETAIL_STAGE_MEMORY_END, KUI_RETAIL_RAM_END - KUI_RETAIL_STAGE_MEMORY_END}
 };
 static void put32(size_t offset, uint32_t value) {

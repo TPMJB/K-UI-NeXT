@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #define _DEFAULT_SOURCE
 #include "kui/games_covers.h"
+#include "kui/game_launch_settings.h"
 #include "kui/media.h"
+#include "kui/storage.h"
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -15,18 +17,22 @@ static struct {
     FILE *image;
     uint64_t blocks;
     const char *fault;
-    unsigned writes, connects, disconnects, files, dirs, progress, cancel_after;
-    bool active, connected, cancelled;
+    unsigned writes, connects, disconnects, files, dirs, progress, cancel_after, imports;
+    unsigned block_reads,record_opens,opened;
+    bool active, connected, cancelled,art_open_fail,art_close_fail,art_cancel_open;
+    FIL *art_file;
 } test;
 static FATFS fs;
 static uint16_t pixels[KUI_GAMES_ROWS][KUI_COVER_PIXELS];
 
 static void log_line(const char *format, ...) {
+    if(strstr(format,"compressed image requires offline import")) ++test.imports;
     va_list args; va_start(args, format); vprintf(format, args); va_end(args); puts("");
 }
 static uint64_t blocks(void *ctx) { (void)ctx; return test.blocks; }
 static int read_image(void *ctx, uint32_t block, size_t count, uint8_t *data) {
     (void)ctx;
+    if(test.active) ++test.block_reads;
     return fseeko(test.image, (off_t)block * 512, SEEK_SET) || fread(data, 512, count, test.image) != count ? -1 : 0;
 }
 static int write_image(void *ctx, uint32_t block, size_t count, const uint8_t *data) {
@@ -35,6 +41,7 @@ static int write_image(void *ctx, uint32_t block, size_t count, const uint8_t *d
 }
 static int sync_image(void *ctx) { (void)ctx; return fflush(test.image) || fsync(fileno(test.image)) ? -1 : 0; }
 static const struct kui_media_ops media = {NULL, blocks, read_image, write_image, sync_image};
+unsigned kui_storage_active(void) { return KUI_STORAGE_SCIF; }
 bool kui_sd_connect(void) {
     assert(!test.connected); ++test.connects;
     test.connected = true; kui_media_set(&media); return true;
@@ -51,14 +58,27 @@ static void progress(const struct kui_app_status *status) {
 
 FRESULT __real_f_open(FIL *file, const TCHAR *path, BYTE flags);
 FRESULT __wrap_f_open(FIL *file, const TCHAR *path, BYTE flags) {
+    if(test.active && (flags&FA_WRITE)) assert(!strncmp(path,"0:/KUI/",7));
+    if(test.active && flags==FA_READ && strstr(path,".kcv")) {
+        ++test.record_opens;
+        if(test.art_open_fail) {test.art_open_fail=false;return FR_DISK_ERR;}
+    }
     FRESULT result = __real_f_open(file, path, flags);
-    if(test.active && result == FR_OK) ++test.files;
+    if(test.active && result == FR_OK) {++test.files;++test.opened;}
+    if(test.active && flags==FA_READ && strstr(path,".kcv") && result==FR_OK) {
+        test.art_file=file;
+        if(test.art_cancel_open) {test.cancelled=true;test.art_cancel_open=false;}
+    }
     return result;
 }
 FRESULT __real_f_close(FIL *file);
 FRESULT __wrap_f_close(FIL *file) {
     FRESULT result = __real_f_close(file);
     if(test.active) { assert(test.files); --test.files; }
+    if(file==test.art_file) {
+        test.art_file=NULL;
+        if(test.art_close_fail) {test.art_close_fail=false;return FR_DISK_ERR;}
+    }
     return result;
 }
 FRESULT __real_f_opendir(DIR *dir, const TCHAR *path);
@@ -118,6 +138,14 @@ static void seed(const char *host) {
         free(data);
     }
     assert(!fclose(list));
+    if(!strcmp(test.fault,"format-legacy-empty")) {
+        FILINFO info;assert(f_stat("0:/Games/Format Game/selected.iso",&info)==FR_OK);
+        struct kui_cover_record old={0};old.source=KUI_COVER_SOURCE_NONE;
+        strcpy(old.gdi_path,"/Games/Format Game/selected.iso");
+        old.gdi.bytes=info.fsize;old.gdi.date=info.fdate;old.gdi.time=info.ftime;
+        uint8_t header[KUI_COVER_HEADER_BYTES];assert(kui_cover_header_encode(header,&old));
+        write_file("0:/KUI/covers/Format Game.kcv",header,sizeof(header));
+    }
 }
 
 static uint16_t rgb565(unsigned r, unsigned g, unsigned b) {
@@ -165,8 +193,44 @@ static const struct kui_games_entry *entry(const struct kui_games_page *page, co
 }
 static void list(unsigned view, struct kui_games_page *page) {
     memset(pixels, 0, sizeof(pixels));
-    assert(kui_games_list_covers("/Games", 0, view, page, pixels, log_line, cancel));
-    assert(page->count == 7 && page->total == 7 && !page->has_more && page->artwork);
+    unsigned opened=test.record_opens;
+    assert(kui_games_list_rows("/Games", 0, view, page, log_line, cancel));
+    assert(page->count == 7 && page->total == 7 && !page->has_more && test.record_opens==opened);
+    for(unsigned row=0;row<page->count;row++) assert(!page->entries[row].cover);
+    for(unsigned row=0;row<KUI_GAMES_ROWS;row++) for(unsigned i=0;i<KUI_COVER_PIXELS;i++) assert(!pixels[row][i]);
+}
+static void selected(struct kui_games_page *page,const char *name,enum kui_cover_size size) {
+    unsigned row;entry(page,name,&row);
+    struct kui_games_entry *e=&page->entries[row];struct kui_games_cover_result cover;
+    assert(kui_games_selected_cover(e,size,pixels[row],&cover,log_line,cancel));
+    assert(!strcmp(cover.path,e->path) && !strcmp(cover.name,e->name) && cover.size==size && !cover.stopped);
+    e->cover=cover.cover;strcpy(e->title,cover.title);
+}
+static void art_cache_checks(struct kui_games_page *page) {
+    unsigned row;const struct kui_games_entry *e=entry(page,"Twiddled Game",&row);
+    struct kui_games_cover_result cover;
+    unsigned reads=test.block_reads,opens=test.record_opens,connects=test.connects;
+    memset(pixels[row],0,sizeof(pixels[row]));
+    assert(kui_games_selected_cover(e,KUI_COVER_SIZE_LARGE,pixels[row],&cover,log_line,cancel));
+    assert(cover.cover && !strcmp(cover.title,"TWIDDLED GAME"));check_split(pixels[row],KUI_COVER_LARGE);
+    assert(reads==test.block_reads && opens==test.record_opens && connects==test.connects);
+    e=entry(page,"Plain Game",&row);
+    assert(kui_games_selected_cover(e,KUI_COVER_SIZE_LARGE,pixels[row],&cover,log_line,cancel) && !cover.cover);
+    reads=test.block_reads;opens=test.record_opens;connects=test.connects;
+    assert(kui_games_selected_cover(e,KUI_COVER_SIZE_LARGE,pixels[row],&cover,log_line,cancel) && !cover.cover);
+    assert(reads==test.block_reads && opens==test.record_opens && connects==test.connects);
+    /* Directory/folder selections never mount or read artwork. */
+    e=entry(page,"Fighting",&row);
+    assert(kui_games_selected_cover(e,KUI_COVER_SIZE_LARGE,pixels[row],&cover,log_line,cancel) && !cover.cover);
+    assert(reads==test.block_reads && opens==test.record_opens && connects==test.connects);
+    for(unsigned repeat=0;repeat<12;repeat++) {
+        struct kui_games_page warm;
+        assert(kui_games_list_rows("/Games",0,KUI_GAMES_VIEW_SAVED,&warm,log_line,cancel));
+        const struct kui_games_entry *known=entry(&warm,"Twiddled Game",&row);
+        assert(!known->cover && !strcmp(known->title,"TWIDDLED GAME"));
+    }
+    assert(reads==test.block_reads && opens==test.record_opens && connects==test.connects);
+    puts("PASS selected positive/negative artwork and warm rows: zero media/open/connect work");
 }
 static void scan(struct kui_games_scan_counts *counts, bool expect_ok) {
     struct kui_app_status status;
@@ -188,19 +252,25 @@ static void check_scan(const char *host) {
     e = entry(&page, "Pair", &row);
     assert(e->directory && !e->cover);
     e = entry(&page, "Twiddled Game", &row);
+    selected(&page,"Twiddled Game",KUI_COVER_SIZE_LARGE);
     assert(e->cover && !strcmp(e->title, "TWIDDLED GAME"));
     check_split(pixels[row], KUI_COVER_LARGE);
     e = entry(&page, "VQ Game", &row);
+    selected(&page,"VQ Game",KUI_COVER_SIZE_LARGE);
     assert(e->cover && !strcmp(e->title, "VQ GAME") && at(pixels[row], 160, 80, 80) == green);
     e = entry(&page, "Loose.gdi", &row);
+    selected(&page,"Loose.gdi",KUI_COVER_SIZE_LARGE);
     assert(e->cover && !strcmp(e->title, "LOOSE GAME"));
     assert(at(pixels[row], 160, 80, 80) == magenta && at(pixels[row], 160, 80, 20) == navy);
     e = entry(&page, "User Art", &row);
+    selected(&page,"User Art",KUI_COVER_SIZE_LARGE);
     assert(e->cover && !strcmp(e->title, "USER ART GAME"));
     assert(at(pixels[row], 160, 80, 80) == rgb565(30, 60, 200) && at(pixels[row], 160, 5, 80) == navy);
     /* The name's record belongs to the category's game, not this one. */
     e = entry(&page, "Plain Game", &row);
+    selected(&page,"Plain Game",KUI_COVER_SIZE_LARGE);
     assert(!e->cover && !strcmp(e->title, "Plain Game"));
+    art_cache_checks(&page);
     /* Listing with the saved view writes nothing; a new view is saved. */
     test.writes = 0;
     list(KUI_GAMES_VIEW_LIST, &page);
@@ -208,12 +278,14 @@ static void check_scan(const char *host) {
     list(KUI_GAMES_VIEW_GALLERY, &page);
     assert(test.writes && page.view == KUI_GAMES_VIEW_GALLERY);
     entry(&page, "Twiddled Game", &row);
+    selected(&page,"Twiddled Game",KUI_COVER_SIZE_MEDIUM);
     check_split(pixels[row], KUI_COVER_MEDIUM);
     test.writes = 0;
     list(KUI_GAMES_VIEW_SAVED, &page);
     assert(!test.writes && page.view == KUI_GAMES_VIEW_GALLERY);
     list(KUI_GAMES_VIEW_COMPACT, &page);
     entry(&page, "Twiddled Game", &row);
+    selected(&page,"Twiddled Game",KUI_COVER_SIZE_SMALL);
     check_split(pixels[row], KUI_COVER_SMALL);
     assert(page.view == KUI_GAMES_VIEW_COMPACT);
     /* Image details show the large cover for exactly that GDI. */
@@ -243,6 +315,7 @@ static void check_scan(const char *host) {
     assert(c.user == 1 && c.unchanged == 7);
     list(KUI_GAMES_VIEW_LIST, &page);
     entry(&page, "User Art", &row);
+    selected(&page,"User Art",KUI_COVER_SIZE_LARGE);
     assert(at(pixels[row], 160, 80, 80) == rgb565(200, 60, 30));
     test.active = false; mounted(true);
     assert(f_unlink(KUI_GAMES_COVERS_FOLDER "/User Art.png") == FR_OK);
@@ -251,11 +324,111 @@ static void check_scan(const char *host) {
     assert(c.none == 1 && c.unchanged == 7);
     list(KUI_GAMES_VIEW_LIST, &page);
     e = entry(&page, "User Art", &row);
+    selected(&page,"User Art",KUI_COVER_SIZE_LARGE);
     assert(!e->cover && !strcmp(e->title, "USER ART GAME"));
     assert(records() == 8);
 }
+static void check_selected_cache(void) {
+    struct kui_games_scan_counts counts;scan(&counts,true);
+    struct kui_games_page page;list(KUI_GAMES_VIEW_SAVED,&page);
+    unsigned row;const struct kui_games_entry *base=entry(&page,"Twiddled Game",&row);
+    struct kui_games_cover_result result;
+    /* A record-open fault and a failed close must not cache missing artwork. */
+    for(unsigned fault_kind=0;fault_kind<3;fault_kind++) {
+        kui_games_covers_cache_clear();
+        if(fault_kind==0) test.art_open_fail=true;
+        if(fault_kind==1) test.art_close_fail=true;
+        if(fault_kind==2) test.art_cancel_open=true;
+        assert(!kui_games_selected_cover(base,KUI_COVER_SIZE_LARGE,pixels[0],&result,log_line,cancel));
+        assert(!result.cover && result.stopped==(fault_kind==2) && !test.files && !test.connected);
+        test.cancelled=false;
+        unsigned opens=test.record_opens;
+        assert(kui_games_selected_cover(base,KUI_COVER_SIZE_LARGE,pixels[0],&result,log_line,cancel));
+        assert(result.cover && test.record_opens==opens+1u);check_split(pixels[0],KUI_COVER_LARGE);
+    }
+    /* A genuinely absent record is a negative hit; explicit refresh retries. */
+    struct kui_games_entry missing=*base;strcpy(missing.name,"Not scanned");
+    assert(kui_games_selected_cover(&missing,KUI_COVER_SIZE_LARGE,pixels[0],&result,log_line,cancel) && !result.cover);
+    unsigned reads=test.block_reads,opens=test.record_opens,connects=test.connects;
+    assert(kui_games_selected_cover(&missing,KUI_COVER_SIZE_LARGE,pixels[0],&result,log_line,cancel) && !result.cover);
+    assert(reads==test.block_reads && opens==test.record_opens && connects==test.connects);
+    kui_games_covers_cache_clear();
+    assert(kui_games_selected_cover(&missing,KUI_COVER_SIZE_LARGE,pixels[0],&result,log_line,cancel) && !result.cover);
+    assert(test.record_opens==opens+1u);
+    /* Independent records exercise the pixel budget rather than slot count.
+     * Their image identity remains a real game; each record has actual pixels. */
+    uint8_t *data=malloc(KUI_COVER_FILE_BYTES);assert(data);
+    test.active=false;mounted(true);
+    FIL file;UINT got;
+    assert(f_open(&file,KUI_GAMES_COVERS_FOLDER "/Twiddled Game.kcv",FA_READ)==FR_OK);
+    assert(f_read(&file,data,KUI_COVER_FILE_BYTES,&got)==FR_OK && got==KUI_COVER_FILE_BYTES);
+    assert(f_close(&file)==FR_OK);
+    for(unsigned i=0;i<15;i++) {
+        char path[128];snprintf(path,sizeof(path),KUI_GAMES_COVERS_FOLDER "/Cache %02u.kcv",i);
+        write_file(path,data,KUI_COVER_FILE_BYTES);
+    }
+    mounted(false);test.active=true;free(data);kui_games_covers_cache_clear();
+    struct kui_games_entry chosen=*base;
+    for(unsigned i=0;i<15;i++) {
+        snprintf(chosen.name,sizeof(chosen.name),"Cache %02u",i);
+        assert(kui_games_selected_cover(&chosen,KUI_COVER_SIZE_LARGE,pixels[0],&result,log_line,cancel) && result.cover);
+        check_split(pixels[0],KUI_COVER_LARGE);
+    }
+    opens=test.record_opens;reads=test.block_reads;connects=test.connects;
+    assert(kui_games_selected_cover(&chosen,KUI_COVER_SIZE_LARGE,pixels[0],&result,log_line,cancel) && result.cover);
+    assert(opens==test.record_opens && reads==test.block_reads && connects==test.connects);
+    strcpy(chosen.name,"Cache 00");
+    assert(kui_games_selected_cover(&chosen,KUI_COVER_SIZE_LARGE,pixels[0],&result,log_line,cancel) && result.cover);
+    assert(test.record_opens==opens+1u);check_split(pixels[0],KUI_COVER_LARGE);
+    kui_games_covers_cache_clear();
+    for(unsigned i=0;i<40;i++) {
+        snprintf(chosen.name,sizeof(chosen.name),"Missing %02u",i);
+        assert(kui_games_selected_cover(&chosen,KUI_COVER_SIZE_SMALL,pixels[0],&result,log_line,cancel) && !result.cover);
+    }
+    opens=test.record_opens;reads=test.block_reads;connects=test.connects;
+    assert(kui_games_selected_cover(&chosen,KUI_COVER_SIZE_SMALL,pixels[0],&result,log_line,cancel) && !result.cover);
+    assert(opens==test.record_opens && reads==test.block_reads && connects==test.connects);
+    strcpy(chosen.name,"Missing 00");
+    assert(kui_games_selected_cover(&chosen,KUI_COVER_SIZE_SMALL,pixels[0],&result,log_line,cancel) && !result.cover);
+    assert(test.record_opens==opens+1u);
+    puts("PASS selected artwork failures/cancellation, negative refresh and bounded positive eviction");
+}
 
 static void check(const char *host) {
+    if(!strcmp(test.fault,"selected-cache")) {check_selected_cache();return;}
+    if(!strncmp(test.fault,"format-",7)) {
+        struct kui_games_scan_counts c;scan(&c,true);
+        if(!strcmp(test.fault,"format-compressed")) {
+            assert(c.games==1 && c.failed==1 && !c.disc && !c.none && !c.user && records()==0 && test.imports==1);return;
+        }
+        bool ambiguous=!strcmp(test.fault,"format-payloads"),lzo=!strcmp(test.fault,"format-zso-lzo");unsigned count=ambiguous?2u:1u;
+        assert(c.games==count && c.disc==count && !c.none && !c.user && !c.failed && !c.duplicates && records()==count);
+        struct kui_games_page page;
+        assert(kui_games_list_covers(ambiguous?"/Games/Ambiguous":"/Games",0,KUI_GAMES_VIEW_LIST,&page,pixels,log_line,cancel));
+        assert(page.count==count && page.total==count && !page.has_more);
+        for(unsigned i=0;i<page.count;i++) {
+            selected(&page,page.entries[i].name,KUI_COVER_SIZE_LARGE);
+            assert(!page.entries[i].directory && page.entries[i].cover && !strcmp(page.entries[i].title,"GENERIC BOX ART"));
+            check_split(pixels[i],KUI_COVER_LARGE);
+            struct kui_games_detail detail;static uint16_t large[KUI_COVER_PIXELS];
+            assert(kui_games_inspect_cover_codec(page.entries[i].path,lzo?KUI_ZSO_LZO1X:KUI_ZSO_LZ4,&detail,large,log_line,cancel));
+            assert(detail.valid && detail.cover && detail.native_cd && detail.cd_image);
+            check_split(large,KUI_COVER_LARGE);
+        }
+        test.writes=0;scan(&c,true);
+        if(lzo) {
+            assert(c.disc==1 && !c.unchanged && !c.failed && test.writes);
+            /* Same image/stamp: a changed explicit preference must be reread,
+             * and a wrong codec must not trigger fallback to the working one. */
+            struct kui_game_launch_settings choice={0};mounted(true);
+            assert(kui_game_launch_settings_save("/Games/Format Game/selected.zso",&choice,log_line));mounted(false);
+            scan(&c,true);assert(c.none==1 && !c.disc && !c.failed);
+            choice.codec=KUI_ZSO_LZO1X;mounted(true);
+            assert(kui_game_launch_settings_save("/Games/Format Game/selected.zso",&choice,log_line));mounted(false);
+            scan(&c,true);assert(c.disc==1 && !c.none && !c.failed);
+        } else assert(c.unchanged==count && !c.disc && !c.failed && !test.writes);
+        return;
+    }
     if(!strcmp(test.fault, "scan")) { check_scan(host); return; }
     struct kui_games_scan_counts c;
     if(!strcmp(test.fault, "cancel")) {
@@ -289,6 +462,8 @@ int main(int argc, char **argv) {
         test.active = true; check(argv[2]);
         assert(!test.files && !test.dirs && !test.connected && test.connects == test.disconnects);
     }
+    kui_games_cache_clear();
+    kui_games_covers_cache_clear();
     assert(!fclose(test.image));
     printf("PASS Games covers %s %s\n", argv[3], test.fault);
     return 0;

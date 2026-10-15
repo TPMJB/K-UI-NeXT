@@ -28,10 +28,16 @@ void kui_disc_identity_init(struct kui_disc_identity *id) {
     memset(id,0,sizeof(*id));id->disc_type=-1;id->armed=true;
     id->last_status=id->last_status_result=id->last_disc_type=-1;
 }
+void kui_disc_identity_park(struct kui_disc_identity *id) {
+    if(!id) return;
+    id->parked=true;id->armed=false;id->needs_identification=false;
+    id->startup_attempted=true;id->insertion_pending=false;
+    if(id->state==KUI_DISC_IDENTITY_UNKNOWN || id->state==KUI_DISC_IDENTITY_PENDING ||
+       id->state==KUI_DISC_IDENTITY_READING) id->state=KUI_DISC_IDENTITY_STOPPED;
+}
 void kui_disc_identity_invalidate(struct kui_disc_identity *id) {
     if(!id) return;
-    bool started=id->startup_attempted;
-    kui_disc_identity_init(id);id->startup_attempted=started;
+    kui_disc_identity_init(id);kui_disc_identity_park(id);
 }
 static int observe(struct kui_disc_identity *id,const struct kui_disc_identity_ops *ops,
                    int *status,int *type) {
@@ -45,7 +51,7 @@ static void accept_status(struct kui_disc_identity *id,int status,int type) {
      * previous status error must not prevent seeing the next lid transition. */
     if(status==DRIVE_OPEN || status==DRIVE_EMPTY) {
         clear(id,status==DRIVE_OPEN?KUI_DISC_IDENTITY_OPEN:KUI_DISC_IDENTITY_EMPTY);
-        id->disc_type=-1;id->armed=true;id->insertion_pending=true;return;
+        id->disc_type=-1;id->armed=true;id->insertion_pending=true;id->parked=false;return;
     }
     if(status==DRIVE_FATAL) {
         clear(id,KUI_DISC_IDENTITY_RESET_REQUIRED);id->armed=false;return;
@@ -54,7 +60,8 @@ static void accept_status(struct kui_disc_identity *id,int status,int type) {
         /* Before INIT the old/unknown type may still be CDDA/CDROM. Requiring
          * GD here prevents the very initialization which discovers GD media.
          * One guarded attempt is allowed per insertion, not once per poll. */
-        if(id->armed) {id->disc_type=type;request(id);}
+        if(id->parked) id->state=id->title[0]?KUI_DISC_IDENTITY_READY:KUI_DISC_IDENTITY_STOPPED;
+        else if(id->armed) {id->disc_type=type;request(id);}
         else clear(id,KUI_DISC_IDENTITY_ERROR);
         return;
     }
@@ -68,7 +75,17 @@ static void accept_status(struct kui_disc_identity *id,int status,int type) {
         id->state=KUI_DISC_IDENTITY_WAITING;id->needs_identification=false;return;
     }
     if(id->disc_type!=type) {
-        id->title[0]=0;id->armed=true;id->disc_type=type;
+        if(!id->parked) {id->title[0]=0;id->armed=true;}
+        id->disc_type=type;
+    }
+    /* A BIOS type change by itself is not evidence of a different disc. In
+     * particular STOP/RETRY may expose a stale type; never spin up again merely
+     * to rediscover the current medium. Real lid/empty observations unpark it. */
+    if(id->parked) {
+        id->needs_identification=false;
+        id->state=id->title[0]?KUI_DISC_IDENTITY_READY:
+            type!=DISC_GD?KUI_DISC_IDENTITY_NON_GD:KUI_DISC_IDENTITY_STOPPED;
+        return;
     }
     /* KOS reinitializes after a disc change. A settled status can still
      * carry the previous boot CD type until INIT; observed removal authorizes
@@ -93,7 +110,7 @@ bool kui_disc_identity_poll(struct kui_disc_identity *id,
      * After this one attempt, only a real insertion or explicit optical action
      * rearms a title read; negative status polling alone cannot keep retrying. */
     bool absent=rv>=0 && (status==DRIVE_OPEN || status==DRIVE_EMPTY);
-    if((!id->startup_attempted || id->insertion_pending) && !absent &&
+    if(!id->parked && (!id->startup_attempted || id->insertion_pending) && !absent &&
        (rv<0 || status<0 || status==DRIVE_FATAL || type<0 || type==DISC_FAIL)) {
         id->disc_type=type;request(id);
     } else if(rv<0) clear(id,KUI_DISC_IDENTITY_ERROR);
@@ -119,6 +136,7 @@ void kui_disc_identity_read(struct kui_disc_identity *id,
     const struct kui_disc_identity_ops *ops) {
     if(!id || !id->needs_identification || id->state!=KUI_DISC_IDENTITY_PENDING) return;
     id->startup_attempted=true;id->insertion_pending=false;
+    id->parked=true;
     id->armed=false;clear(id,KUI_DISC_IDENTITY_READING);
     uint8_t raw[KUI_RAW_BYTES];
     if(!usable(ops) || ops->cancelled(ops->ctx) || !ops->prepare(ops->ctx) ||
@@ -155,6 +173,7 @@ const char *kui_disc_identity_text(enum kui_disc_identity_state state) {
     case KUI_DISC_IDENTITY_READY:return "Retail GD-ROM";
     case KUI_DISC_IDENTITY_ERROR:return "Disc title unavailable";
     case KUI_DISC_IDENTITY_RESET_REQUIRED:return "Drive status unavailable - open the lid or reboot";
+    case KUI_DISC_IDENTITY_STOPPED:return "Disc stopped - insert a new disc or open a disc app";
     default:return "Checking disc...";
     }
 }

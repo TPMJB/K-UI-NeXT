@@ -7,6 +7,7 @@ from pathlib import Path
 import struct
 
 from check_loader_layout import inspect_elf, padded, region
+import check_retail_stack
 import retail_package as layout
 
 FORBIDDEN_PREFIXES = (
@@ -27,7 +28,6 @@ FORBIDDEN_SYMBOLS = {
 INIT_ONLY = {
     "kui_retail_resident_init", "kui_retail_manifest_decode",
     "kui_retail_image_init", "kui_retail_gd_init", "kui_retail_gd_init_validated", "kui_retail_sd_init",
-    "kui_retail_gd_init_manifest_validated", "init_validated",
     "kui_loader_sd_init_bus", "capacity",
     "kui_retail_sd_adopt",  # Called only by resident_init on the high stage stack.
     "kui_retail_storage_adopt",  # Rebinds the prepared transport before game entry.
@@ -36,6 +36,40 @@ ASSEMBLY_STACK_BYTES = 256
 STACK_GUARD_BYTES = 16
 STACK_ALIGNMENT_GAP = 32
 TRANSPORTS = ("scif", "sci", "ide")
+# The background SCI reader's resident (manifest reader 1).
+ASYNC = "scia"
+RESIDENTS = TRANSPORTS + (ASYNC,)
+
+
+def resident_limit(transport, ce=False, low=False):
+    if ce and transport == "sci":
+        return layout.CE_RESIDENT_LIMIT
+    if ce and transport == ASYNC:
+        return layout.CE_ASYNC_RESIDENT_LIMIT
+    if low:
+        return layout.LOW_ASYNC_RESIDENT_LIMIT if transport == ASYNC else layout.LOW_RESIDENT_LIMIT
+    return layout.ASYNC_RESIDENT_LIMIT if transport == ASYNC else layout.RESIDENT_LIMIT
+
+
+def stack_bottom(transport, ce=False, low=False):
+    return resident_limit(transport, ce, low)
+
+
+def stack_top(transport, ce=False, low=False):
+    """The Windows CE package's SCI readers have their own, larger stacks."""
+    if ce and transport == "sci":
+        return layout.CE_HOOK_STACK
+    if ce and transport == ASYNC:
+        return layout.CE_ASYNC_HOOK_STACK
+    return layout.LOW_HOOK_STACK if low else layout.HOOK_STACK
+
+
+def check_async_stack(directory, ce=False, low=False):
+    available = (stack_top(ASYNC, ce, low) - stack_bottom(ASYNC, ce, low) -
+                 STACK_GUARD_BYTES - STACK_ALIGNMENT_GAP)
+    result = check_retail_stack.check(Path(directory), available, ce)
+    return {"worst_bytes": result["worst_bytes"], "available_bytes": available,
+            "margin": result["margin"], "call_graph": True}
 
 
 def code_symbol(image, name, base):
@@ -57,7 +91,7 @@ def check_bss(image, base, prefix):
         raise ValueError(f"Invalid {prefix} BSS bounds")
 
 
-def check_stack_usage(directory, symbols, transport="scif"):
+def check_stack_usage(directory, symbols, transport="scif", ce=False, low=False):
     # LTO may rename clones differently in .su and ELF, and distinct local
     # functions can share a name. Count every emitted row, including init,
     # instead of filtering by symbols or collapsing names. Only these final
@@ -85,10 +119,10 @@ def check_stack_usage(directory, symbols, transport="scif"):
             emitted_frames.append(frame)
     for name in ("kui_retail_resident_dispatch", "kui_retail_gd_dispatch",
                  "kui_retail_image_read",
-                 "kui_ata_read" if transport == "ide" else "kui_loader_sd_stream_next"):
+                 "kui_ata_read_run" if transport == "ide" else "kui_loader_sd_stream_next"):
         if name not in frames or "_" + name not in symbols:
             raise ValueError(f"Missing runtime stack-usage frame: {name}")
-    available = (layout.HOOK_STACK - layout.HOOK_STACK_BOTTOM -
+    available = (stack_top(transport, ce, low) - stack_bottom(transport, ce, low) -
                  STACK_GUARD_BYTES - STACK_ALIGNMENT_GAP)
     maximum = sum(emitted_frames if lto else frames.values()) + ASSEMBLY_STACK_BYTES
     if maximum > available:
@@ -98,20 +132,36 @@ def check_stack_usage(directory, symbols, transport="scif"):
             "retained_c_frames": len(emitted_frames) if lto else len(frames)}
 
 
-def check_directory(directory):
+def inspect_entry(directory):
+    return inspect_elf((Path(directory) / "entry.elf").read_bytes(),
+                       layout.EXEC_ADDRESS,
+                       layout.EXEC_ADDRESS + layout.STAGE_BLOB_OFFSET + layout.STAGE_MAX_BYTES)
+
+
+def entry_placement(entry, ce=False):
+    header = region(entry["payload"], layout.HEADER_OFFSET, layout.HEADER_BYTES, "header")
+    try:
+        return layout.resident_layout(header, ce)
+    except ValueError as error:
+        raise ValueError("Retail relocation header mismatch") from error
+
+
+def check_directory(directory, ce=False):
+    """ce: the Windows CE probe package, whose stage is linked higher."""
     directory = Path(directory)
+    stage_address = layout.stage_address(ce)
+    entry = inspect_entry(directory)
+    placement = entry_placement(entry, ce)
+    low, resident_address = placement["low"], placement["address"]
     images = {
         "stage": inspect_elf((directory / "stage.elf").read_bytes(),
-                             layout.STAGE_ADDRESS, layout.STAGE_MEMORY_END),
-        "entry": inspect_elf((directory / "entry.elf").read_bytes(),
-                             layout.EXEC_ADDRESS,
-                             layout.EXEC_ADDRESS + layout.STAGE_BLOB_OFFSET +
-                             layout.STAGE_MAX_BYTES),
+                             stage_address, layout.STAGE_MEMORY_END),
+        "entry": entry,
     }
-    for transport in TRANSPORTS:
+    for transport in RESIDENTS:
         name = "resident-" + transport
         images[name] = inspect_elf((directory / (name + ".elf")).read_bytes(),
-                                  layout.RESIDENT_ADDRESS, layout.RESIDENT_LIMIT)
+                                  resident_address, resident_limit(transport, ce, low))
     for name, image in images.items():
         forbidden = [s for s in image["symbols"] if
                      s.startswith(FORBIDDEN_PREFIXES) or s in FORBIDDEN_SYMBOLS]
@@ -120,49 +170,78 @@ def check_directory(directory):
     stage, entry = images["stage"], images["entry"]
     if padded((directory / "stage.bin").read_bytes()) != padded(stage["payload"]):
         raise ValueError("stage.bin differs from linked ELF bytes")
-    check_bss(stage, layout.STAGE_ADDRESS, "__retail_stage")
+    check_bss(stage, stage_address, "__retail_stage")
     ss, es = stage["symbols"], entry["symbols"]
     stacks = {}
-    for transport in TRANSPORTS:
+    for transport in RESIDENTS:
         name = "resident-" + transport
         resident = images[name]
         low_blob = padded((directory / (name + ".bin")).read_bytes())
         if low_blob != padded(resident["payload"]):
             raise ValueError(f"{name}.bin differs from linked ELF bytes")
-        check_bss(resident, layout.RESIDENT_ADDRESS, "__retail_resident")
+        check_bss(resident, resident_address, "__retail_resident")
         required = ["_kui_retail_resident_init", "_kui_retail_resident_hook",
-                    "_kui_retail_resident_dispatch", "_kui_retail_gd_dispatch",
-                    "_kui_retail_image_read"]
-        if transport == "ide":
-            required += ["_kui_ata_read"]
+                    "_kui_retail_resident_dispatch", "_kui_retail_gd_dispatch"]
+        if transport == ASYNC and ce:
+            # Windows CE's: reached through CE's handler table (its entry and
+            # handler), and its PIO stream reads through the reader.
+            required += ["_kui_retail_async_irq", "_kui_retail_ce_isr", "_kui_retail_ce_irq",
+                         "_kui_retail_async_read_part"]
+        elif transport == ASYNC:
+            # Its SCI bus claim is inlined into the reader: the interrupt
+            # entry, vectors and handler identify this resident instead.
+            required += ["_kui_retail_async_irq", "_kui_retail_irq_entry",
+                         "_kui_retail_vector_forward", "_kui_retail_vector_interrupt",
+                         "_kui_retail_release_100", "_kui_retail_release_400",
+                         "_kui_retail_release_600", "_kui_retail_rehook"]
+        else:
+            required += ["_kui_retail_image_read"]
+        if transport == ASYNC:
+            pass
+        elif transport == "ide":
+            required += ["_kui_ata_read_run", "_kui_ata_read_stop"]
         else:
             required += ["_kui_loader_sd_stream_next"]
             prefix = "_kui_retail_sd_" if transport == "scif" else "_kui_sci_sd_"
             required += [prefix + "acquire", prefix + "release"]
         for symbol in required:
-            code_symbol(resident, symbol, layout.RESIDENT_ADDRESS)
+            code_symbol(resident, symbol, resident_address)
         rs = resident["symbols"]
-        if (rs.get("__retail_hook_stack") != layout.HOOK_STACK or
-                rs.get("__retail_hook_stack_bottom") != layout.HOOK_STACK_BOTTOM):
-            raise ValueError(f"{name} hook stack is outside the reserved retired IP area")
+        if (rs.get("__retail_hook_stack") != stack_top(transport, ce, low) or
+                rs.get("__retail_hook_stack_bottom") != stack_bottom(transport, ce, low)):
+            raise ValueError(f"{name} hook stack is outside its resident reservation")
         for symbol in ("_kui_retail_hook_active", "_kui_retail_hook_fault"):
-            if not layout.RESIDENT_ADDRESS <= rs.get(symbol, 0) < resident["memory_end"]:
+            if not resident_address <= rs.get(symbol, 0) < resident["memory_end"]:
                 raise ValueError(f"Missing resident-owned hook guard: {symbol}")
         blob = "__retail_resident_" + transport + "_blob_"
         begin, end = ss.get(blob + "start", 0), ss.get(blob + "end", 0)
-        if (begin % 4 or begin < layout.STAGE_ADDRESS or end - begin != len(low_blob) or
-                region(stage["payload"], begin - layout.STAGE_ADDRESS,
+        if (begin % 4 or begin < stage_address or end - begin != len(low_blob) or
+                region(stage["payload"], begin - stage_address,
                        len(low_blob), "embedded low resident") != low_blob):
             raise ValueError(f"Stage contains a different/invalid low resident: {transport}")
-        stacks[transport] = check_stack_usage(directory / transport, rs, transport)
+        if transport == ASYNC and ce:
+            # No vectors: its receive areas need only cache-line alignment.
+            region_symbol = rs.get("_kui_retail_async_region", 0)
+            if region_symbol % 32 or not (resident_address <= region_symbol and
+                                          region_symbol + 0x440 <= resident["memory_end"]):
+                raise ValueError("Background reader's region is misplaced")
+            stacks[transport] = check_async_stack(directory / transport, ce, low)
+        elif transport == ASYNC:
+            region_symbol = rs.get("_kui_retail_async_region", 0)
+            if region_symbol % 32 or not (resident_address + 0x100 <= region_symbol and
+                                          region_symbol + 0x760 <= resident["memory_end"]):
+                raise ValueError("Background reader's vector region is misplaced")
+            stacks[transport] = check_async_stack(directory / transport, low=low)
+        else:
+            stacks[transport] = check_stack_usage(directory / transport, rs, transport, ce, low)
 
     for name in ("_kui_retail_stage_main", "_kui_retail_stage_relay",
                  "_kui_retail_bootstrap_enter", "_kui_retail_game_resume"):
-        code_symbol(stage, name, layout.STAGE_ADDRESS)
+        code_symbol(stage, name, stage_address)
     begin, end = ss.get("__retail_trampoline_start", 0), ss.get("__retail_trampoline_end", 0)
     if begin % 4 or end - begin != layout.TRAMPOLINE_BYTES:
         raise ValueError("Invalid bounded executable-entry trampoline")
-    trampoline = region(stage["payload"], begin - layout.STAGE_ADDRESS,
+    trampoline = region(stage["payload"], begin - stage_address,
                         layout.TRAMPOLINE_BYTES, "entry trampoline")
     # The assembly relay saves CPU state before entering the C relay body.
     relay = ss["_kui_retail_game_resume"] | 0x20000000
@@ -182,7 +261,7 @@ def check_directory(directory):
     if any(region(entry["payload"], layout.MAP_OFFSET, layout.MAP_BYTES, "manifest")):
         raise ValueError("Packaged retail manifest must be blank")
     if (region(entry["payload"], layout.HEADER_OFFSET, layout.HEADER_BYTES, "header") !=
-            layout.relocation_header(len(high_blob))):
+            layout.relocation_header(len(high_blob), ce, low)):
         raise ValueError("Retail relocation header mismatch")
     result = {name: {"payload_bytes": len(image["payload"]),
                      "memory_end": f"0x{image['memory_end']:08x}",
@@ -195,9 +274,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", nargs="?", type=Path,
                         default=Path(__file__).resolve().parents[1] / "build/retail")
+    parser.add_argument("--ce", action="store_true",
+                        help="Check the Windows CE probe package's higher stage")
     args = parser.parse_args()
     try:
-        print(json.dumps(check_directory(args.directory), sort_keys=True))
+        print(json.dumps(check_directory(args.directory, args.ce), sort_keys=True))
     except (ValueError, OSError, UnicodeError, struct.error) as error:
         raise SystemExit(f"Retail loader layout check failed: {error}") from error
 

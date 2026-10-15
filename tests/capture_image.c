@@ -11,7 +11,8 @@
 #include <unistd.h>
 
 static struct {
-    FILE *image;uint64_t blocks,ticks,profile_ticks;unsigned writes,reads,failures,bad_attempts;
+    FILE *image,*disc;uint64_t blocks,ticks,profile_ticks;unsigned writes,reads,failures,bad_attempts;
+    uint32_t first_fad,bad_fad;
     const char *fault;bool stop,injected;enum kui_capture_phase phase;
     /* Split DMA. `pend` is a read in flight; the harness asserts it is always ended. */
     bool pend;uint32_t pend_fad;unsigned pend_n;uint8_t *pend_out;
@@ -36,6 +37,9 @@ static int read_image(void *p,uint32_t sector,size_t count,uint8_t *data) {
 static int write_image(void *p,uint32_t sector,size_t count,const uint8_t *data) {
     (void)p;++test.writes;test.profile_ticks+=3100;
     if(fault("manifest-write-fail") && contains(data,count*512,"\"profile\":\"" KUI_CAPTURE_PROFILE "\"")) {
+        test.injected=true;return -1;
+    }
+    if(fault("cue-write-fail") && contains(data,count*512,"REM CAPTURE_PROFILE " KUI_CAPTURE_PROFILE)) {
         test.injected=true;return -1;
     }
     if(fault("write-fail") && test.phase==KUI_CAPTURING && test.ticks>24) return -1;
@@ -65,6 +69,8 @@ static void exhaust_space(void) {
 }
 static void progress(void *p,const struct kui_capture_progress *status) {
     (void)p;test.phase=status->phase;
+    if(fault("stop-identify") && status->phase==KUI_IDENTIFY && status->done) test.stop=true;
+    if(fault("stop-prefix") && status->phase==KUI_PREFIX_CHECK && status->done>=KUI_RAW_BYTES) test.stop=true;
     if(status->phase==KUI_CAPTURING) {
         if((fault("stop-early") && status->done>=128*2352) ||
            (fault("stop-middle") && status->done>=5000*2352) ||
@@ -72,22 +78,35 @@ static void progress(void *p,const struct kui_capture_progress *status) {
         if(fault("full-during") && !test.injected) {test.injected=true;exhaust_space();}
     }
     if(fault("stop-verify") && status->phase==KUI_VERIFYING && status->done>=1024*1024) test.stop=true;
+    if(fault("stop-export") && status->phase==KUI_EXPORTING && status->done>=status->total/4u) test.stop=true;
+    if(fault("stop-export-verify") && status->phase==KUI_VERIFYING && !status->track && status->done>=status->total/4u)
+        test.stop=true;
 }
 static void put32(uint8_t *p,uint32_t n) {for(unsigned i=0;i<4;i++) p[i]=(uint8_t)(n>>(i*8));}
 static void sector(uint32_t fad,bool data,uint8_t *out) {
+    if(test.disc) {
+        assert(fad>=test.first_fad && fseeko(test.disc,(off_t)(fad-test.first_fad)*KUI_RAW_BYTES,SEEK_SET)==0);
+        assert(fread(out,1,KUI_RAW_BYTES,test.disc)==KUI_RAW_BYTES);
+        return;
+    }
     kui_pattern(out,(uint64_t)fad*KUI_RAW_BYTES,KUI_RAW_BYTES);
     if(fault("wrong-disc")) out[123]^=0x42;
     const char *variant=getenv("KUI_TEST_DISC_VARIANT");
     if(variant) out[124]^=(uint8_t)strtoul(variant,NULL,10);
     if(data) {
-        out[0]=out[11]=0;memset(out+1,255,10);out[12]=0x10;out[13]=out[14]=0;out[15]=1;
+        const char *setting=getenv("KUI_TEST_DATA_MODE");
+        unsigned mode=(setting && !strcmp(setting,"2")) || (fault("mixed-mode") && fad==45250u)?2u:1u;
+        unsigned offset=mode==2u?24u:16u;
+        out[0]=out[11]=0;memset(out+1,255,10);out[12]=0x10;out[13]=out[14]=0;out[15]=(uint8_t)mode;
+        if(mode==2u) memset(out+16,0,8);
         if(fad==45150) {
-            memcpy(out+16,"SEGA SEGAKATANA",14);memset(out+16+128,' ',128);
+            memcpy(out+offset,"SEGA SEGAKATANA",14);memset(out+offset+128,' ',128);
             const char *title=getenv("KUI_TEST_TITLE");
-            if(title) {assert(strlen(title)<=128);memcpy(out+16+128,title,strlen(title));}
-            else memcpy(out+16+128,"KUI SYNTHETIC SIX TRACK DISC",28);
+            if(title) {assert(strlen(title)<=128);memcpy(out+offset+128,title,strlen(title));}
+            else memcpy(out+offset+128,"KUI SYNTHETIC SIX TRACK DISC",28);
         }
-        put32(out+2064,kui_cd_edc(out,2064));
+        if(mode==2u) put32(out+2072,kui_cd_edc(out+16,2056));
+        else put32(out+2064,kui_cd_edc(out,2064));
     }
 }
 static enum kui_read_result read_disc(void *p,uint32_t fad,unsigned count,uint8_t *out) {
@@ -97,16 +116,16 @@ static enum kui_read_result read_disc(void *p,uint32_t fad,unsigned count,uint8_
     for(unsigned i=0;i<test.plan.count;i++)
         if(fad>=test.plan.tracks[i].start && fad<test.plan.tracks[i].end) track=&test.plan.tracks[i];
     assert(track && count<=track->end-fad);
-    bool hits=fad<=45250 && fad+count>45250;
+    bool hits=fad<=test.bad_fad && fad+count>test.bad_fad;
     if(hits) {
-        if(fad==45250) ++test.bad_attempts;
+        if(fad==test.bad_fad) ++test.bad_attempts;
         if(fault("disc-fail")) return KUI_READ_RETRY;
         if(fault("disc-change")) {++test.failures;return KUI_READ_FATAL;}
         if(fault("transient") && test.failures++<2) return KUI_READ_RETRY;
     }
     for(unsigned i=0;i<count;i++) {
         sector(fad+i,track->control==4,out+i*KUI_RAW_BYTES);
-        if(fault("edc-fail") && fad+i==45250) out[i*KUI_RAW_BYTES+40]^=1;
+        if(fault("edc-fail") && fad+i==test.bad_fad) out[i*KUI_RAW_BYTES+40]^=1;
     }
     return KUI_READ_OK;
 }
@@ -137,6 +156,12 @@ static bool first_job(char path[512]) {
         if((info.fattrib&AM_DIR) && strlen(info.fname)==22 && strcmp(info.fname,name)>0) strcpy(name,info.fname);
     bool ok=r==FR_OK && name[0];if(f_closedir(&d)!=FR_OK) ok=false;
     snprintf(path,512,"0:/KUI/dumps/%s",name);return ok;
+}
+static void job_alias(void) {
+    char path[512];FILINFO info;assert(first_job(path));
+    assert(f_stat(path,&info)==FR_OK && (info.fattrib&AM_DIR) && info.altname[0]);
+    char *slash=strrchr(path,'/');assert(slash);*slash=0;
+    printf("JOB_ALIAS %s/%s\n",path,info.altname);
 }
 static void export_file(const char *source,const char *dest) {
     FIL file;assert(f_open(&file,source,FA_READ)==FR_OK);FILE *output=fopen(dest,"wb");assert(output);
@@ -203,6 +228,29 @@ static void mutate(const char *kind) {
     char dir[512],path[1024];assert(first_job(dir));
     if(!strcmp(kind,"prefix")) {snprintf(path,sizeof(path),"%s/track01.bin",dir);flip_byte(path,123);}
     else if(!strcmp(kind,"manifest")) {snprintf(path,sizeof(path),"%s/manifest.json",dir);flip_byte(path,123);}
+    else if(!strcmp(kind,"cue")) {
+        DIR entries;FILINFO info;bool found=false;assert(f_opendir(&entries,dir)==FR_OK);
+        while(f_readdir(&entries,&info)==FR_OK && info.fname[0]) {
+            size_t n=strlen(info.fname);
+            if(n>4u && !strcmp(info.fname+n-4u,".cue")) {
+                assert(n<128u);snprintf(path,sizeof(path),"%s/%.127s",dir,info.fname);found=true;break;
+            }
+        }
+        assert(f_closedir(&entries)==FR_OK && found);flip_byte(path,12);
+    }
+    else if(!strcmp(kind,"gdi-internal")) {snprintf(path,sizeof(path),"%s/%s",dir,KUI_CAPTURE_INTERNAL_GDI);flip_byte(path,12);}
+    else if(!strcmp(kind,"gdi-cooked")) {snprintf(path,sizeof(path),"%s/disc.gdi",dir);flip_byte(path,12);}
+    else if(!strcmp(kind,"cooked-track")) {snprintf(path,sizeof(path),"%s/track03.iso",dir);flip_byte(path,12);}
+    else if(!strcmp(kind,"output")) {
+        DIR entries;FILINFO info;bool found=false;assert(f_opendir(&entries,dir)==FR_OK);
+        while(f_readdir(&entries,&info)==FR_OK && info.fname[0]) {
+            size_t n=strlen(info.fname);
+            if(n>4u && (!strcmp(info.fname+n-4u,".cso") || !strcmp(info.fname+n-4u,".zso") || !strcmp(info.fname+n-4u,".chd"))) {
+                assert(n<128u);snprintf(path,sizeof(path),"%s/%.127s",dir,info.fname);found=true;break;
+            }
+        }
+        assert(f_closedir(&entries)==FR_OK && found);flip_byte(path,12);
+    }
     else if(!strcmp(kind,"tail")) {
         snprintf(path,sizeof(path),"%s/track03.bin",dir);FIL f;UINT done;uint8_t junk[4704];memset(junk,0x35,sizeof(junk));
         assert(f_open(&f,path,FA_WRITE)==FR_OK && f_lseek(&f,f_size(&f))==FR_OK);
@@ -229,16 +277,26 @@ static struct kui_capture_options test_options(void) {
     struct kui_capture_options o={0};const char *env=getenv("KUI_TEST_OPTS");
     const char *parent=getenv("KUI_TEST_OUTPUT_ROOT");
     static struct kui_capture_output output;
+    memset(&output,0,sizeof(output));
     if(parent) {
         output.parent=parent;
         const char *names=getenv("KUI_TEST_GAME_NAMES");output.game_names=names && !strcmp(names,"1");
+        output.folder_label=getenv("KUI_TEST_FOLDER_LABEL");
         o.output=&output;
     }
+    o.job_directory=getenv("KUI_TEST_SELECTED_JOB");
     if(!env) return o;
+    if(strstr(env,"cue")) {output.format=KUI_CAPTURE_FORMAT_BIN_CUE;o.output=&output;}
+    else if(strstr(env,"cso")) {output.format=KUI_CAPTURE_FORMAT_CSO;o.output=&output;}
+    else if(strstr(env,"zso")) {output.format=KUI_CAPTURE_FORMAT_ZSO;o.output=&output;}
+    else if(strstr(env,"chd")) {output.format=KUI_CAPTURE_FORMAT_CHD;o.output=&output;}
+    else if(strstr(env,"cooked")) {output.format=KUI_CAPTURE_FORMAT_GDI_2048;o.output=&output;}
     o.crc_only=strstr(env,"crc32")!=NULL;o.skip_end_readback=strstr(env,"noend")!=NULL;
     o.resume_size_only=strstr(env,"size")!=NULL;
     const char *sample=strstr(env,"sample=");if(sample) o.sample_every=(unsigned)atoi(sample+7);
     o.read_dma=strstr(env,"dma")!=NULL;
+    o.strict_sectors=strstr(env,"strict")!=NULL;
+    const char *retry=strstr(env,"retry=");if(retry) o.retry_limit=(unsigned)strtoul(retry+6,NULL,10);
     return o;
 }
 static void print_stats(const struct kui_capture_stats *st) {
@@ -247,6 +305,7 @@ static void print_stats(const struct kui_capture_stats *st) {
         (unsigned long long)st->phase_us[KUI_TIME_SETUP],(unsigned long long)st->phase_us[KUI_TIME_RESUME],
         (unsigned long long)st->phase_us[KUI_TIME_CAPTURE],(unsigned long long)st->phase_us[KUI_TIME_VERIFY],st->job_dir);
     printf("DISC_TITLE %s\nGDI_NAME %s\n",st->disc_title,st->gdi_name);
+    printf("OUTPUT_NAME %s\nOUTPUT_FORMAT %u\n",st->output_name,(unsigned)st->format);
     printf("REFERENCE checked=%u result=%d catalog=%s\nREFERENCE_NAME %s\n",
         st->reference_checked?1u:0u,st->reference.result,st->reference.catalog,st->reference.name);
 }
@@ -258,7 +317,21 @@ int main(int argc,char **argv) {
     struct kui_media_ops media={NULL,blocks,read_image,write_image,sync_image};kui_media_set(&media);
     struct kui_toc sessions[2]={ {.tracks={{1,4,150,650},{2,0,650,950}},.count=2},
         {.tracks={{3,4,45150,50000},{4,0,50000,50400},{5,0,50400,51000},{6,4,51000,51813}},.count=4} };
-    assert(kui_plan_tracks(sessions,&test.plan));
+    const char *layout=getenv("KUI_TEST_LAYOUT");
+    if(layout && !strcmp(layout,"single-data")) {
+        sessions[1].count=1u;sessions[1].tracks[0].end=51813u;
+    }
+    if(layout && !strncmp(layout,"cd-",3u)) {
+        struct kui_toc cd={.tracks={{1,4,150,790}},.count=1};
+        if(!strcmp(layout,"cd-audio")) cd=(struct kui_toc){.tracks={{1,0,150,470},{2,0,470,790}},.count=2};
+        else if(!strcmp(layout,"cd-mixed")) cd=(struct kui_toc){.tracks={{1,4,150,390},{2,0,390,550},{3,4,550,790}},.count=3};
+        else if(!strcmp(layout,"cd-offset")) cd=(struct kui_toc){.tracks={{1,4,225,865}},.count=1};
+        else assert(!strcmp(layout,"cd-data"));
+        assert(kui_plan_cd_tracks(&cd,&test.plan));
+    } else assert(kui_plan_tracks(sessions,&test.plan));
+    test.first_fad=test.plan.tracks[0].start;
+    test.bad_fad=test.plan.profile==KUI_CAPTURE_PROFILE_CD_TOC?test.first_fad+100u:45250u;
+    const char *disc=getenv("KUI_TEST_DISC_FILE");if(disc) {test.disc=fopen(disc,"rb");assert(test.disc);}
     int result=0;
     if(!strcmp(argv[2],"bench")) {   /* bench new|resume <sectors>: the benchmark entry point, real engine */
         assert(argc==5);
@@ -269,12 +342,13 @@ int main(int argc,char **argv) {
         printf("RESULT %u\n",r);print_stats(&stats);
         assert(fclose(test.image)==0);return r==KUI_CAPTURE_COMPLETE?0:1;
     }
-    if(!strcmp(argv[2],"export") || !strcmp(argv[2],"mutate") || !strcmp(argv[2],"seed") || !strcmp(argv[2],"put") || !strcmp(argv[2],"mkdir")) {
+    if(!strcmp(argv[2],"export") || !strcmp(argv[2],"mutate") || !strcmp(argv[2],"seed") || !strcmp(argv[2],"put") || !strcmp(argv[2],"mkdir") || !strcmp(argv[2],"alias")) {
         FATFS fs;assert(kui_mount(&fs,log_line));
         if(!strcmp(argv[2],"put")) {assert(argc==5);put_file(argv[3],argv[4]);}
         else if(!strcmp(argv[2],"export")) {assert(argc==4);export_all(argv[3]);}
         else if(!strcmp(argv[2],"mutate")) {assert(argc==4);mutate(argv[3]);}
         else if(!strcmp(argv[2],"mkdir")) {assert(argc==4);assert(f_mkdir(argv[3])==FR_OK);}
+        else if(!strcmp(argv[2],"alias")) {assert(argc==3);job_alias();}
         else assert(kui_write_new_file("0:/keep.txt","KEEP THIS FILE\n",15,log_line));
         assert(f_mount(NULL,"0:",0)==FR_OK);
     } else {
@@ -283,11 +357,12 @@ int main(int argc,char **argv) {
         struct kui_capture_options opts=test_options();struct kui_capture_stats stats;
         struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us,NULL,read_begin_fake,read_end_fake,&opts,&stats};
         enum kui_capture_result r=kui_capture(&test.plan,&ops,mode);
-        printf("RESULT %u WRITES %u BAD_ATTEMPTS %u FATAL %u\n",r,test.writes,test.bad_attempts,test.failures);
+        printf("RESULT %u WRITES %u BAD_ATTEMPTS %u FATAL %u OPTICAL_READS %llu\n",r,test.writes,test.bad_attempts,test.failures,(unsigned long long)test.ticks);
         /* Every begun read must have been ended: an unfinished one still owns its buffer. */
         printf("DMA BEGINS %u ENDS %u PENDING %u\n",test.begins,test.ends,test.pend?1u:0u);
         print_stats(&stats);
         result=r==KUI_CAPTURE_COMPLETE?0:r==KUI_CAPTURE_STOPPED?3:1;
     }
+    if(test.disc) assert(fclose(test.disc)==0);
     assert(fclose(test.image)==0);return result;
 }

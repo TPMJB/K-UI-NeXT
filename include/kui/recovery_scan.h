@@ -45,8 +45,14 @@ struct kui_scan_manifest {
     struct kui_capture_plan plan;
     uint8_t identity[32];
     bool crc_only;
+    enum kui_capture_format format;
     char gdi[KUI_DEST_TITLE_CAP+5u];
-    struct { uint32_t crc32; uint8_t sha256[32]; } track[99];
+    char cue[KUI_DEST_TITLE_CAP+5u];
+    char output[KUI_DEST_TITLE_CAP+5u];
+    uint64_t output_bytes,logical_bytes;
+    uint32_t output_crc32,data_track;
+    uint8_t output_sha256[32];
+    struct { uint32_t crc32; uint8_t sha256[32], sector_mode; bool mode_recorded; } track[99];
 };
 bool kui_recovery_manifest_parse(const void *data,size_t size,
     struct kui_scan_manifest *out);

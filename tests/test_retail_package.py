@@ -9,7 +9,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import retail_package as layout
-from check_retail_loader_layout import check_directory, check_stack_usage, TRANSPORTS
+from check_retail_loader_layout import check_directory, check_stack_usage, RESIDENTS, TRANSPORTS
+import check_retail_stack
 from image_probe_package import inspect_image_probe
 from loader_package import inspect_probe
 from package import release_metadata
@@ -28,6 +29,34 @@ class RetailPackage(unittest.TestCase):
     def packaged(data):
         return envelope(data, len(data), "012345abcdef")
 
+    def test_ram_patch_capability_is_blank_unique_and_native_only(self):
+        blank = b"KUIRAMP1" + struct.pack("<14I", 1, 64, *([0] * 12))
+        data = self.payload(256)
+        at = layout.STAGE_BLOB_OFFSET + 64
+        data[at:at + 64] = blank
+        self.assertTrue(layout.inspect_ram_patch_seed(data, required=True))
+        data[at + 128:at + 136] = b"KUIRAMP1"  # unrelated comparison literals
+        layout.inspect_retail(self.packaged(data))
+        for byte in range(64):
+            changed = bytearray(data)
+            changed[at + byte] ^= 1
+            with self.subTest(byte=byte), self.assertRaises(ValueError):
+                layout.inspect_ram_patch_seed(changed, required=True)
+        duplicate = bytearray(data)
+        duplicate[at + 64:at + 128] = blank
+        with self.assertRaises(ValueError):
+            layout.inspect_retail(self.packaged(duplicate))
+        truncated = data[:at + 63]
+        with self.assertRaises(ValueError):
+            layout.inspect_ram_patch_seed(truncated, required=True)
+        old = self.payload()
+        self.assertFalse(layout.inspect_ram_patch_seed(old))
+        with self.assertRaises(ValueError):
+            layout.inspect_ram_patch_seed(old, required=True)
+        data[layout.HEADER_OFFSET:layout.HEADER_OFFSET + layout.HEADER_BYTES] = layout.relocation_header(256, ce=True)
+        with self.assertRaises(ValueError):
+            layout.inspect_retail(self.packaged(data), ce=True)
+
     def test_constants_match_native_contract(self):
         source = (ROOT / "include/kui/retail_loader_layout.h").read_text()
         names = {
@@ -37,8 +66,14 @@ class RetailPackage(unittest.TestCase):
             "STAGE_ADDRESS": layout.STAGE_ADDRESS, "STAGE_MAX_BYTES": layout.STAGE_MAX_BYTES,
             "STAGE_MEMORY_END": layout.STAGE_MEMORY_END, "STAGE_STACK": layout.STAGE_STACK,
             "EXEC_ADDRESS": layout.EXEC_ADDRESS, "EXEC_MAX_BYTES": layout.EXEC_MAX_BYTES,
-            "RESIDENT_ADDRESS": layout.RESIDENT_ADDRESS, "RESIDENT_LIMIT": layout.RESIDENT_LIMIT,
-            "HOOK_STACK_BOTTOM": layout.HOOK_STACK_BOTTOM, "HOOK_STACK": layout.HOOK_STACK,
+            "LEGACY_RESIDENT_ADDRESS": layout.RESIDENT_ADDRESS,
+            "LEGACY_STANDARD_LIMIT": layout.RESIDENT_LIMIT,
+            "LEGACY_ASYNC_LIMIT": layout.ASYNC_RESIDENT_LIMIT,
+            "LEGACY_HOOK_STACK": layout.HOOK_STACK,
+            "LOW_RESIDENT_ADDRESS": layout.LOW_RESIDENT_ADDRESS,
+            "LOW_STANDARD_LIMIT": layout.LOW_RESIDENT_LIMIT,
+            "LOW_ASYNC_LIMIT": layout.LOW_ASYNC_RESIDENT_LIMIT,
+            "LOW_HOOK_STACK": layout.LOW_HOOK_STACK,
             "TRAMPOLINE_BYTES": layout.TRAMPOLINE_BYTES,
         }
         for suffix, value in names.items():
@@ -47,6 +82,54 @@ class RetailPackage(unittest.TestCase):
                 self.assertIsNotNone(found)
                 self.assertEqual(int(found.group(1), 0), value)
         self.assertIn('#define KUI_RETAIL_PACKAGE_MAGIC "KUIRBT01"', source)
+        self.assertIn('#define KUI_RETAIL_CE_PACKAGE_MAGIC "KUIRCE01"', source)
+        self.assertEqual(layout.CE_MAGIC, b"KUIRCE01")
+        found = re.search(r"^#define KUI_RETAIL_CE_STAGE_ADDRESS\s+(\w+)\s*$", source, re.M)
+        self.assertEqual(int(found.group(1), 0), layout.CE_STAGE_ADDRESS)
+        # The CE probe stage clears CE's 2 KiB boot prefix at 0x8ce01000.
+        plan = (ROOT / "include/kui/ce_load_plan.h").read_text()
+        prefix = int(re.search(r"^#define KUI_CE_LOAD_PREFIX_ADDRESS\s+(\w+)u\s*$", plan, re.M).group(1), 0)
+        self.assertLessEqual(layout.STAGE_ADDRESS, prefix)
+        self.assertLessEqual(prefix + 0x800, layout.CE_STAGE_ADDRESS)
+        script = (ROOT / "src/loader/retail_stage_ce.ld").read_text()
+        self.assertIn(f". = 0x{layout.CE_STAGE_ADDRESS:08x};", script)
+        # Each resident's stack sits directly above its image limit.
+        self.assertIn("#define KUI_RETAIL_HOOK_STACK_BOTTOM KUI_RETAIL_RESIDENT_LIMIT", source)
+        self.assertEqual(layout.HOOK_STACK_BOTTOM, layout.RESIDENT_LIMIT)
+        self.assertEqual(layout.ASYNC_HOOK_STACK_BOTTOM, layout.ASYNC_RESIDENT_LIMIT)
+        script = (ROOT / "src/loader/retail_resident_async.ld").read_text()
+        self.assertIn(f"__retail_hook_stack_bottom = 0x{layout.ASYNC_HOOK_STACK_BOTTOM:08x};", script)
+        self.assertIn(f"__retail_resident_bss_end <= 0x{layout.ASYNC_RESIDENT_LIMIT:08x},", script)
+        # The Windows CE reader: its own limit and larger stack, below the
+        # bootstrap 2 it enters CE through.
+        for suffix, value in (("CE_LIMIT", layout.CE_RESIDENT_LIMIT),
+                              ("CE_HOOK_STACK", layout.CE_HOOK_STACK),
+                              ("BOOT2_ADDRESS", 0x8C00E000)):
+            with self.subTest(suffix=suffix):
+                found = re.search(r"^#define KUI_RETAIL_" + suffix + r"\s+(\w+)\s*$", source, re.M)
+                self.assertEqual(int(found.group(1), 0), value)
+        self.assertLess(layout.CE_HOOK_STACK, 0x8C00E000)
+        script = (ROOT / "src/loader/retail_resident_ce.ld").read_text()
+        self.assertIn(f"__retail_hook_stack_bottom = 0x{layout.CE_RESIDENT_LIMIT:08x};", script)
+        self.assertIn(f"__retail_hook_stack = 0x{layout.CE_HOOK_STACK:08x};", script)
+        self.assertIn(f"__retail_resident_bss_end <= 0x{layout.CE_RESIDENT_LIMIT:08x},", script)
+        # Its background reader: a larger image, its 2 KiB stack ending where
+        # bootstrap 2 begins.
+        for suffix, value in (("CE_ASYNC_LIMIT", layout.CE_ASYNC_RESIDENT_LIMIT),
+                              ("CE_ASYNC_HOOK_STACK", layout.CE_ASYNC_HOOK_STACK)):
+            with self.subTest(suffix=suffix):
+                found = re.search(r"^#define KUI_RETAIL_" + suffix + r"\s+(\w+)\s*$", source, re.M)
+                self.assertEqual(int(found.group(1), 0), value)
+        self.assertEqual(layout.CE_ASYNC_HOOK_STACK, 0x8C00E000)
+        self.assertEqual(layout.CE_ASYNC_HOOK_STACK - layout.CE_ASYNC_RESIDENT_LIMIT, 0x800)
+        script = (ROOT / "src/loader/retail_resident_ce_async.ld").read_text()
+        self.assertIn(f"__retail_hook_stack_bottom = 0x{layout.CE_ASYNC_RESIDENT_LIMIT:08x};", script)
+        self.assertIn(f"__retail_hook_stack = 0x{layout.CE_ASYNC_HOOK_STACK:08x};", script)
+        self.assertIn(f"__retail_resident_bss_end <= 0x{layout.CE_ASYNC_RESIDENT_LIMIT:08x},", script)
+        self.assertIn("ASSERT(_kui_retail_ce_kernel == 0x8c008324", script)
+        # Both packages' headers record the standard reader limit.
+        entry = (ROOT / "src/loader/retail_entry.S").read_text()
+        self.assertIn(".long KUI_RETAIL_STANDARD_LIMIT", entry)
 
     def test_valid_minimum_normal_and_maximum(self):
         for size in (4, 16, layout.STAGE_MAX_BYTES):
@@ -56,6 +139,49 @@ class RetailPackage(unittest.TestCase):
                 self.assertEqual(result["resident_address"], "0x8c008300")
                 self.assertEqual(result["resident_limit"], "0x8c00bb00")
                 self.assertIn("title compatibility requires console testing", result["abi"])
+
+    def test_formats_test_label_preserves_the_same_validated_native_contract(self):
+        package = self.packaged(self.payload())
+        ordinary = layout.inspect_retail(package)
+        formats = layout.inspect_retail(package, formats=True)
+        self.assertIn("Native CD/GD image formats test (GDI, ISO, BIN/CUE, CDI, BIN/IMG)", formats["abi"])
+        self.assertIn("title compatibility requires console testing", formats["abi"])
+        self.assertEqual({key: value for key, value in formats.items() if key != "abi"},
+                         {key: value for key, value in ordinary.items() if key != "abi"})
+
+    def test_native_low_header_is_an_exact_known_tuple(self):
+        for size in (4, 16, layout.STAGE_MAX_BYTES):
+            data = self.payload(size)
+            data[layout.HEADER_OFFSET:layout.HEADER_OFFSET + layout.HEADER_BYTES] = \
+                layout.relocation_header(size, low=True)
+            result = layout.inspect_retail(self.packaged(data))
+            self.assertEqual(result["resident_address"], "0x8c004000")
+            self.assertEqual(result["resident_limit"], "0x8c007800")
+            with self.assertRaisesRegex(ValueError, "relocation header"):
+                layout.inspect_retail(self.packaged(data), ce=True)
+        for base, limit in ((layout.LOW_RESIDENT_ADDRESS, layout.RESIDENT_LIMIT),
+                            (layout.RESIDENT_ADDRESS, layout.LOW_RESIDENT_LIMIT),
+                            (layout.LOW_RESIDENT_ADDRESS, layout.LOW_ASYNC_RESIDENT_LIMIT),
+                            (layout.LOW_RESIDENT_ADDRESS + 4, layout.LOW_RESIDENT_LIMIT),
+                            (layout.LOW_RESIDENT_ADDRESS, layout.LOW_RESIDENT_LIMIT + 4)):
+            data = self.payload()
+            struct.pack_into("<II", data, layout.HEADER_OFFSET + 52, base, limit)
+            with self.subTest(base=base, limit=limit), self.assertRaisesRegex(ValueError, "relocation header"):
+                layout.inspect_retail(self.packaged(data))
+        with self.assertRaisesRegex(ValueError, "Windows CE"):
+            layout.relocation_header(16, ce=True, low=True)
+
+    def test_ce_probe_package_needs_its_own_header(self):
+        data = bytearray(layout.STAGE_BLOB_OFFSET + 16)
+        data[layout.HEADER_OFFSET:layout.HEADER_OFFSET + layout.HEADER_BYTES] = \
+            layout.relocation_header(16, ce=True)
+        result = layout.inspect_retail(self.packaged(data), ce=True)
+        self.assertEqual(result["stage_address"], "0x8ce10000")
+        self.assertIn("stops before CE runs", result["abi"])
+        with self.assertRaisesRegex(ValueError, "relocation header"):
+            layout.inspect_retail(self.packaged(data))
+        with self.assertRaisesRegex(ValueError, "relocation header"):
+            layout.inspect_retail(self.packaged(self.payload()), ce=True)
 
     def test_every_inner_header_byte_is_checked(self):
         clean = self.payload()
@@ -100,26 +226,48 @@ class RetailPackage(unittest.TestCase):
 
 
 class ReleaseMetadata(unittest.TestCase):
-    def test_canonical_names_preserve_accent_and_match_artifact_version(self):
+    # Parser rejection fixtures must stay independent of the current release;
+    # otherwise a version bump can silently turn a corruption into a no-op.
+    fixture = r'''#define KUI_VERSION "1.8.5"
+#define KUI_RELEASE_NAME "K-UI V1.8.5 \"Dáinsleif\""
+#define KUI_RELEASE_SHORT "K-UI V1.8.5"
+#define KUI_ARTIFACT_PREFIX "kui-1.8.5-dainsleif"
+'''
+
+    def test_current_tyrfing_candidate_names_match_artifact_version(self):
         release = release_metadata()
-        self.assertEqual(release["version"], "1.5.1")
-        self.assertIn("Dáinsleif", release["name"])
+        self.assertEqual(release, {
+            "version": "2.0-rc10",
+            "name": 'K-UI V2.0 RC10 "Tyrfing"',
+            "short_name": "K-UI V2.0 RC10",
+            "artifact_prefix": "kui-2.0-rc10-tyrfing",
+        })
+
+    def test_canonical_fixture_preserves_accent_and_ascii_console_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            header = Path(tmp) / "version.h"
+            header.write_text(self.fixture, encoding="utf-8")
+            release = release_metadata(header)
+        self.assertEqual(release["version"], "1.8.5")
+        self.assertEqual(release["name"], 'K-UI V1.8.5 "Dáinsleif"')
+        self.assertEqual(release["short_name"], "K-UI V1.8.5")
         self.assertTrue(release["short_name"].isascii())
-        self.assertEqual(release["artifact_prefix"], "kui-1.5.1-dainsleif")
+        self.assertEqual(release["artifact_prefix"], "kui-1.8.5-dainsleif")
 
     def test_missing_duplicate_control_character_and_unsafe_artifact_names_reject(self):
-        source = (ROOT / "include/kui/version.h").read_text(encoding="utf-8")
+        source = self.fixture
         invalid = (
-            (source.replace('#define KUI_VERSION "1.5.1"', ''), "Missing"),
-            (source + '\n#define KUI_VERSION "1.5.1"\n', "repeated"),
-            (source.replace('"1.5.1"', '"1.5.1\\n"'), "Invalid"),
-            (source.replace('"kui-1.5.1-dainsleif"', '"../escape"'), "artifact prefix"),
-            (source.replace('"kui-1.5.1-dainsleif"', '"kui-1.4.0-dainsleif"'), "canonical version"),
+            (source.replace('#define KUI_VERSION "1.8.5"', ''), "Missing"),
+            (source + '\n#define KUI_VERSION "1.7"\n', "repeated"),
+            (source.replace('"1.8.5"', '"1.7\\n"'), "Invalid"),
+            (source.replace('"kui-1.8.5-dainsleif"', '"../escape"'), "artifact prefix"),
+            (source.replace('"kui-1.8.5-dainsleif"', '"kui-1.4.0-dainsleif"'), "canonical version"),
         )
         with tempfile.TemporaryDirectory() as tmp:
             header = Path(tmp) / "version.h"
             for text, error in invalid:
                 with self.subTest(error=error):
+                    self.assertNotEqual(text, source, "rejection fixture must alter the valid header")
                     header.write_text(text, encoding="utf-8")
                     with self.assertRaisesRegex(ValueError, error):
                         release_metadata(header)
@@ -210,6 +358,99 @@ class ResidentStackReports(unittest.TestCase):
                 check_stack_usage(tmp, symbols, "sci")
 
 
+class CallGraphStack(unittest.TestCase):
+    """The background reader's stack bound from GCC -fcallgraph-info=su."""
+    frames = {"kui_retail_resident_dispatch": 48, "kui_retail_gd_dispatch": 172,
+              "guest": 0, "kui_retail_async_irq": 16, "deliver": 64,
+              "kui_sci_stream_fetch.constprop.0": 40, "byte": 0, "kui_retail_menu_return": 12,
+              "retail_display_line": 48, "map_guest": 8, "check_sectors": 4,
+              "transfer": 24, "select_card": 16, "write_out": 12, "reverse.lto_priv.0": 0}
+    calls = [("kui_retail_resident_dispatch", "kui_retail_gd_dispatch", ""),
+             ("kui_retail_resident_dispatch", "deliver", ""),
+             ("kui_retail_gd_dispatch", "guest", ""),
+             ("guest", "__indirect_call", "retail_gd.c:35:12"),
+             ("kui_retail_gd_dispatch", "__indirect_call", "retail_gd.c:131:16"),
+             ("kui_retail_async_irq", "deliver", ""),
+             ("deliver", "kui_sci_stream_fetch.constprop.0", ""),
+             ("deliver", "__indirect_call", "retail_cursor.c:57:9"),
+             ("deliver", "reverse.lto_priv.1", ""),
+             ("write_out", "__indirect_call", "retail_async.c:111:20"),
+             ("kui_sci_stream_fetch.constprop.0", "byte", ""),
+             ("byte", "__indirect_call", "sci_stream.c:72:45"),
+             ("kui_retail_menu_return", "retail_display_line", ""),
+             ("kui_retail_menu_return", "__indirect_call", "retail_resident.c:214:5"),
+             ("deliver", "__udivsi3", "")]
+
+    @staticmethod
+    def graph(frames, calls, kind="static"):
+        prefix = "/tmp/x/resident.elf.ltrans0.o:"
+        title = lambda f: f if f.startswith("__") or f.startswith("kui_retail_") else prefix + f
+        lines = ['graph: { title: "x"']
+        for function, frame in frames.items():
+            lines.append(f'node: {{ title: "{title(function)}" label: "{function.split(".")[0]}'
+                         f'\\n../src/x.c:1:1\\n{frame} bytes ({kind})" }}')
+        lines.append('node: { title: "__indirect_call" label: "Indirect Call Placeholder" shape : ellipse }')
+        for source, target, label in calls:
+            lines.append(f'edge: {{ sourcename: "{title(source)}" targetname: "{title(target)}" '
+                         f'label: "../../src/loader/{label or "x.c:1:1"}" }}')
+        return "\n".join(lines) + "\n}\n"
+
+    @classmethod
+    def ce_graph(cls):
+        """Windows CE's: CE's dispatch enters kui_retail_ce_irq, and a PIO
+        stream's transfer reads through the reader (read_part)."""
+        frames = dict(cls.frames, kui_retail_ce_irq=12, kui_retail_async_read_part=24)
+        calls = cls.calls + [("kui_retail_ce_irq", "kui_retail_async_irq", ""),
+                             ("kui_retail_async_read_part", "deliver", "")]
+        return frames, calls
+
+    def check(self, frames=None, calls=None, kind="static", available=464, ce=False):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "lto").mkdir()
+            (Path(tmp) / "lto/r.ltrans0.ltrans.ci").write_text(
+                self.graph(frames or self.frames, calls or self.calls, kind))
+            return check_retail_stack.check(tmp, available, ce)
+
+    def test_windows_ce_entry_and_read_part(self):
+        frames, calls = self.ce_graph()
+        result = self.check(frames, calls, ce=True)
+        # entry 28 + ce_irq 12 + irq 16 + deliver 64 + fetch 40 + transfer 24.
+        self.assertEqual(result["paths"]["kui_retail_ce_irq"]["bytes"], 184)
+        # dispatch 48 + gd 172 + guest 0 + read_part 24 + deliver 64 + fetch 40
+        # + transfer 24: the GD service's indirect calls reach read_part too.
+        self.assertEqual(result["paths"]["kui_retail_resident_dispatch"]["bytes"], 372)
+        self.assertNotIn("kui_retail_async_irq", result["paths"])
+        with self.assertRaisesRegex(ValueError, "Missing callback frame: kui_retail_async_read_part"):
+            self.check(ce=True)
+
+    def test_deepest_path_per_entry_with_callbacks(self):
+        result = self.check()
+        # dispatch 48 + gd 172 + guest 0 + deepest GD callback (map 8, check 4).
+        self.assertEqual(result["paths"]["kui_retail_resident_dispatch"]["bytes"], 228)
+        # entry 44 + irq 16 + deliver 64 + fetch 40 + byte 0 + transfer 24.
+        self.assertEqual(result["paths"]["kui_retail_async_irq"]["bytes"], 188)
+        self.assertEqual(result["paths"]["kui_retail_menu_return"]["bytes"], 60)
+        self.assertEqual(result["worst_bytes"], 228)
+        with self.assertRaisesRegex(ValueError, "exceeds"):
+            self.check(available=228 + 63)
+
+    def test_unknown_indirect_recursion_dynamic_and_missing_reject(self):
+        with self.assertRaisesRegex(ValueError, "Unexpected indirect"):
+            self.check(calls=self.calls + [("deliver", "__indirect_call", "other.c:1:1")])
+        with self.assertRaisesRegex(ValueError, "Recursion"):
+            self.check(calls=self.calls + [("transfer", "deliver", "")])
+        with self.assertRaisesRegex(ValueError, "Dynamic"):
+            self.check(kind="dynamic")
+        frames = dict(self.frames); del frames["write_out"]
+        with self.assertRaisesRegex(ValueError, "Missing callback"):
+            self.check(frames=frames)
+        with self.assertRaisesRegex(ValueError, "without a frame"):
+            self.check(calls=self.calls + [("deliver", "unknown_function", "")])
+        with self.assertRaisesRegex(ValueError, "Missing compiler call-graph"):
+            with tempfile.TemporaryDirectory() as tmp:
+                check_retail_stack.check(tmp, 464)
+
+
 class RetailLinkedLayout(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -219,19 +460,27 @@ class RetailLinkedLayout(unittest.TestCase):
         self.symbols = {"stage": {}, "entry": {}}
         self.memory = {"stage": 1024}
         ss, es = self.symbols["stage"], self.symbols["entry"]
-        for transport in TRANSPORTS:
+        for transport in RESIDENTS:
             name = "resident-" + transport
             self.bases[name] = layout.RESIDENT_ADDRESS
             self.payload[name] = bytearray(128)
             # Distinct bytes expose accidentally swapped transport blobs.
-            self.payload[name][0] = TRANSPORTS.index(transport)
-            self.memory[name] = 512
+            self.payload[name][0] = RESIDENTS.index(transport)
+            self.memory[name] = 0x900 if transport == "scia" else 512
             rs = self.symbols[name] = {}
             required = ["kui_retail_resident_init", "kui_retail_resident_hook",
-                        "kui_retail_resident_dispatch", "kui_retail_gd_dispatch",
-                        "kui_retail_image_read"]
-            if transport == "ide":
-                required += ["kui_ata_read"]
+                        "kui_retail_resident_dispatch", "kui_retail_gd_dispatch"]
+            if transport == "scia":
+                required += ["kui_retail_async_irq", "kui_retail_irq_entry",
+                             "kui_retail_vector_forward", "kui_retail_vector_interrupt",
+                             "kui_retail_release_100", "kui_retail_release_400",
+                             "kui_retail_release_600", "kui_retail_rehook"]
+            else:
+                required += ["kui_retail_image_read"]
+            if transport == "scia":
+                pass
+            elif transport == "ide":
+                required += ["kui_ata_read_run", "kui_ata_read_stop"]
             else:
                 required += ["kui_loader_sd_stream_next"]
                 prefix = "kui_retail_sd_" if transport == "scif" else "kui_sci_sd_"
@@ -239,14 +488,22 @@ class RetailLinkedLayout(unittest.TestCase):
             for index, symbol in enumerate(required):
                 rs["_" + symbol] = layout.RESIDENT_ADDRESS + 4 + index * 4
             rs.update({"__retail_hook_stack": layout.HOOK_STACK,
-                       "__retail_hook_stack_bottom": layout.HOOK_STACK_BOTTOM,
+                       "__retail_hook_stack_bottom": layout.ASYNC_HOOK_STACK_BOTTOM
+                       if transport == "scia" else layout.HOOK_STACK_BOTTOM,
                        "_kui_retail_hook_active": layout.RESIDENT_ADDRESS + 128,
                        "_kui_retail_hook_fault": layout.RESIDENT_ADDRESS + 132})
             frames = list(ResidentStackReports.required)
             if transport == "ide":
-                frames[-1] = "kui_ata_read"
+                frames[-1] = "kui_ata_read_run"
+                frames.append("kui_ata_read_stop")
             report = "\n".join(f"test.c:1:1:{frame}\t32\tstatic" for frame in frames)
             (self.directory / transport).mkdir()
+            if transport == "scia":
+                rs["_kui_retail_async_region"] = layout.RESIDENT_ADDRESS + 0x100
+                (self.directory / transport / "lto").mkdir()
+                (self.directory / transport / "lto/resident-scia.elf.ltrans0.ltrans.ci").write_text(
+                    CallGraphStack.graph(CallGraphStack.frames, CallGraphStack.calls))
+                continue
             if transport == "sci":
                 (self.directory / transport / "lto").mkdir()
                 report_path = self.directory / transport / "lto/resident-sci.elf.ltrans0.ltrans.su"
@@ -260,7 +517,7 @@ class RetailLinkedLayout(unittest.TestCase):
         ss["__retail_trampoline_end"] = layout.STAGE_ADDRESS + 256
         struct.pack_into("<I", self.payload["stage"], 240,
                          ss["_kui_retail_game_resume"] | 0x20000000)
-        for transport in TRANSPORTS:
+        for transport in RESIDENTS:
             label = "__retail_resident_" + transport + "_blob_"
             ss[label + "start"] = layout.STAGE_ADDRESS + len(self.payload["stage"])
             self.payload["stage"] += self.payload["resident-" + transport]
@@ -293,7 +550,74 @@ class RetailLinkedLayout(unittest.TestCase):
         result = check_directory(self.directory)
         for transport in TRANSPORTS:
             self.assertEqual(result["resident-" + transport]["payload_bytes"], 128)
-            self.assertEqual(result["resident_stacks"][transport]["conservative_bytes"], 384)
+            self.assertEqual(result["resident_stacks"][transport]["conservative_bytes"],
+                             416 if transport == "ide" else 384)
+        self.assertEqual(result["resident-scia"]["payload_bytes"], 128)
+        self.assertEqual(result["resident_stacks"]["scia"]["worst_bytes"], 48 + 172 + 8)
+
+    def test_ce_probe_stage_is_checked_at_its_own_address(self):
+        shift = layout.CE_STAGE_ADDRESS - layout.STAGE_ADDRESS
+        self.bases["stage"] += shift
+        ss = self.symbols["stage"]
+        for name in ss:
+            ss[name] += shift
+        struct.pack_into("<I", self.payload["stage"], 240, ss["_kui_retail_game_resume"] | 0x20000000)
+        self.payload["entry"][layout.STAGE_BLOB_OFFSET:] = self.payload["stage"]
+        self.payload["entry"][0x100:0x140] = layout.relocation_header(len(self.payload["stage"]), ce=True)
+        self.write()
+        # Its SCI reader has its own limit and larger stack.
+        with self.assertRaisesRegex(ValueError, "resident-sci hook stack"):
+            check_directory(self.directory, ce=True)
+        self.symbols["resident-sci"].update({"__retail_hook_stack": layout.CE_HOOK_STACK,
+                                             "__retail_hook_stack_bottom": layout.CE_RESIDENT_LIMIT})
+        self.write()
+        # So has its background reader, reached through CE's handler table.
+        with self.assertRaisesRegex(ValueError, "Missing retail executable symbol: _kui_retail_ce_isr"):
+            check_directory(self.directory, ce=True)
+        rs = self.symbols["resident-scia"]
+        for index, symbol in enumerate(("kui_retail_ce_isr", "kui_retail_ce_irq",
+                                        "kui_retail_async_read_part")):
+            rs["_" + symbol] = layout.RESIDENT_ADDRESS + 64 + index * 4
+        self.write()
+        with self.assertRaisesRegex(ValueError, "resident-scia hook stack"):
+            check_directory(self.directory, ce=True)
+        rs.update({"__retail_hook_stack": layout.CE_ASYNC_HOOK_STACK,
+                   "__retail_hook_stack_bottom": layout.CE_ASYNC_RESIDENT_LIMIT})
+        self.write()
+        with self.assertRaisesRegex(ValueError, "Missing callback frame: kui_retail_async_read_part"):
+            check_directory(self.directory, ce=True)
+        report = self.directory / "scia/lto/resident-scia.elf.ltrans0.ltrans.ci"
+        report.write_text(CallGraphStack.graph(*CallGraphStack.ce_graph()))
+        self.payload["entry"][0x100:0x140] = layout.relocation_header(len(self.payload["stage"]))
+        self.write()
+        with self.assertRaisesRegex(ValueError, "relocation header mismatch"):
+            check_directory(self.directory, ce=True)
+        self.payload["entry"][0x100:0x140] = layout.relocation_header(len(self.payload["stage"]), ce=True)
+        self.write()
+        result = check_directory(self.directory, ce=True)
+        self.assertEqual(result["stage"]["payload_bytes"], len(self.payload["stage"]))
+        with self.assertRaises(ValueError):
+            check_directory(self.directory)
+
+    def test_background_reader_stack_region_and_symbols(self):
+        rs = self.symbols["resident-scia"]
+        rs["__retail_hook_stack_bottom"] = layout.HOOK_STACK_BOTTOM; self.write()
+        with self.assertRaisesRegex(ValueError, "hook stack"):
+            check_directory(self.directory)
+        rs["__retail_hook_stack_bottom"] = layout.ASYNC_HOOK_STACK_BOTTOM
+        rs["_kui_retail_async_region"] += 4; self.write()
+        with self.assertRaisesRegex(ValueError, "vector region"):
+            check_directory(self.directory)
+        rs["_kui_retail_async_region"] -= 4
+        del rs["_kui_retail_irq_entry"]; self.write()
+        with self.assertRaisesRegex(ValueError, "Missing retail executable symbol"):
+            check_directory(self.directory)
+        rs["_kui_retail_irq_entry"] = layout.RESIDENT_ADDRESS + 8
+        report = self.directory / "scia/lto/resident-scia.elf.ltrans0.ltrans.ci"
+        frames = dict(CallGraphStack.frames, deliver=400)
+        report.write_text(CallGraphStack.graph(frames, CallGraphStack.calls)); self.write()
+        with self.assertRaisesRegex(ValueError, "worst-case stack"):
+            check_directory(self.directory)
 
     def test_embedded_identity_timer_import_and_guard(self):
         self.payload["resident-scif"][0] = 1; self.write()

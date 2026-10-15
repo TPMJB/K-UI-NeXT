@@ -52,7 +52,9 @@ static bool root_filename(const char *name) {
 static void boot_profile(const uint8_t *ip, struct kui_game_metadata *out) {
     /* IP.BIN peripheral field: seven hexadecimal digits at 0x38; bit zero
      * selects Windows CE. Raw GD executable bytes need no MIL-CD transform. */
-    if(memcmp(ip + 37, "GD-ROM", 6) || ip[63] != ' ') return;
+    bool gd = !memcmp(ip + 37, "GD-ROM", 6);
+    bool cd = !memcmp(ip + 37, "CD-ROM", 6);
+    if((!gd && !cd) || ip[63] != ' ') return;
     uint32_t flags = 0;
     for(unsigned i = 56; i < 63; ++i) {
         unsigned digit = ip[i];
@@ -63,7 +65,8 @@ static void boot_profile(const uint8_t *ip, struct kui_game_metadata *out) {
         flags = (flags << 4) | digit;
     }
     out->windows_ce = (flags & 1u) != 0;
-    out->native_gd = !out->windows_ce;
+    out->native_gd = gd && !out->windows_ce;
+    out->native_cd = cd && !out->windows_ce;
 }
 static unsigned fold(unsigned c) {
     return c >= 'a' && c <= 'z' ? c - ('a' - 'A') : c;

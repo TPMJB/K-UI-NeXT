@@ -3,6 +3,21 @@
 #ifndef KUI_RETAIL_STAGE_BIN
 #define KUI_RETAIL_STAGE_BIN "build/retail/stage.bin"
 #endif
+#ifdef KUI_RETAIL_CE
+#define STAGE_ADDRESS KUI_RETAIL_CE_STAGE_ADDRESS
+#define PACKAGE_MAGIC KUI_RETAIL_CE_PACKAGE_MAGIC
+#else
+#define STAGE_ADDRESS KUI_RETAIL_STAGE_ADDRESS
+#if KUI_RETAIL_ZSO
+#if KUI_ZSO_CODECS == 2
+#define PACKAGE_MAGIC "KUIRLB01"
+#else
+#define PACKAGE_MAGIC "KUIRZB01"
+#endif
+#else
+#define PACKAGE_MAGIC KUI_RETAIL_PACKAGE_MAGIC
+#endif
+#endif
     .section .entry,"ax"
     .align 2
     .global _start
@@ -27,25 +42,25 @@ _start:
     .align 2
 .Lsr: .long 0x500000f0
 .Lsource: .long __retail_stage_blob_start
-.Ltarget: .long KUI_RETAIL_STAGE_ADDRESS
+.Ltarget: .long STAGE_ADDRESS
 .Llength: .long __retail_stage_blob_end-__retail_stage_blob_start
 .Lstack: .long KUI_RETAIL_STAGE_STACK
 .Lmap: .long __retail_map
     .section .package_header,"a"
-    .ascii KUI_RETAIL_PACKAGE_MAGIC
+    .ascii PACKAGE_MAGIC
     .long KUI_RETAIL_PACKAGE_VERSION
     .long KUI_RETAIL_HEADER_BYTES
     .long KUI_RETAIL_MAP_OFFSET
     .long KUI_RETAIL_MAP_BYTES
-    .long KUI_RETAIL_STAGE_ADDRESS
+    .long STAGE_ADDRESS
     .long __retail_stage_blob_end-__retail_stage_blob_start
-    .long KUI_RETAIL_STAGE_ADDRESS
+    .long STAGE_ADDRESS
     .long KUI_RETAIL_EXEC_ADDRESS
     .long KUI_RETAIL_EXEC_MAX_BYTES
     .long KUI_RETAIL_STAGE_STACK
     .long KUI_RETAIL_STAGE_BLOB_OFFSET
     .long KUI_RETAIL_RESIDENT_ADDRESS
-    .long KUI_RETAIL_RESIDENT_LIMIT
+    .long KUI_RETAIL_STANDARD_LIMIT
     .long 0
     .section .retail_map,"a"
     .global __retail_map

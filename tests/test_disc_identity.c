@@ -60,6 +60,38 @@ static void identify(struct kui_disc_identity *id,const struct kui_disc_identity
 int main(void) {
     const struct kui_disc_identity_ops *ops=kui_disc_identity_console_ops();assert(ops);
     struct kui_disc_identity id;
+    /* Startup STOP policy: all status-only startup observations, including
+     * transient/stale types and errors, must leave the same disc uninitialized.
+     * Physical removal is the only automatic rearm after parking. */
+    static const int startup_status[]={CD_STATUS_PAUSED,CD_STATUS_STANDBY,CD_STATUS_RETRY,
+        CD_STATUS_BUSY,CD_STATUS_FATAL,CD_STATUS_READ_FAIL};
+    for(unsigned s=0;s<sizeof(startup_status)/sizeof(startup_status[0]);++s) {
+        reset("BOOT DISC");kui_disc_identity_init(&id);kui_disc_identity_park(&id);
+        for(unsigned at=0;at<10000;at+=500) {
+            fake.status=startup_status[s];
+            fake.type=(at%1500)==0?CD_GDROM:(at%1500)==500?CD_CDROM:CD_FAIL;
+            fake.status_error=at==3500?-1:0;
+            assert(!kui_disc_identity_poll(&id,ops,at,true));
+        }
+        assert(fake.polls==20 && !fake.prepares && !fake.initializes && !fake.reads);
+        fake.status_error=0;fake.status=CD_STATUS_OPEN;
+        assert(!kui_disc_identity_poll(&id,ops,10000,true));
+        fake.status=CD_STATUS_RETRY;fake.type=CD_CDROM;
+        identify(&id,ops,10500);
+        assert(!strcmp(id.title,"BOOT DISC") && fake.prepares==1 && fake.reads==1 && id.parked);
+        for(unsigned at=11000;at<20000;at+=500) {
+            fake.status=at%1000?CD_STATUS_RETRY:CD_STATUS_STANDBY;
+            fake.type=at%1500?CD_CDROM:CD_GDROM;
+            assert(!kui_disc_identity_poll(&id,ops,at,true));
+            assert(id.state==KUI_DISC_IDENTITY_READY && !strcmp(id.title,"BOOT DISC"));
+        }
+        assert(fake.prepares==1 && fake.reads==1);
+        kui_disc_identity_invalidate(&id);
+        fake.status=CD_STATUS_PAUSED;fake.type=CD_GDROM;
+        assert(!kui_disc_identity_poll(&id,ops,20000,true) && id.state==KUI_DISC_IDENTITY_STOPPED);
+        assert(fake.prepares==1 && fake.reads==1);
+    }
+    assert(kui_disc_identity_text(KUI_DISC_IDENTITY_STOPPED)[0]);
     reset("  OMIKRON THE NOMAD SOUL  ");kui_disc_identity_init(&id);
     for(unsigned i=0;i<30;i++) assert(!kui_disc_identity_poll(&id,ops,i*1000,false));
     assert(fake.polls==0 && fake.prepares==0 && fake.reads==0);
@@ -83,17 +115,19 @@ int main(void) {
     assert(kui_disc_identity_poll(&id,ops,62000,true));
     fake.prepare_fail=true;kui_disc_identity_read(&id,ops);fake.prepare_fail=false;
     assert(id.state==KUI_DISC_IDENTITY_NON_GD && fake.reads==1);
-    fake.type=CD_GDROM;identify(&id,ops,62500);assert(fake.reads==2);
-    fake.status_error=-1;assert(!kui_disc_identity_poll(&id,ops,63000,true));
+    fake.type=CD_GDROM;assert(!kui_disc_identity_poll(&id,ops,62500,true) && fake.reads==1);
+    fake.status=CD_STATUS_OPEN;assert(!kui_disc_identity_poll(&id,ops,63000,true));
+    fake.status=CD_STATUS_STANDBY;identify(&id,ops,63500);assert(fake.reads==2);
+    fake.status_error=-1;assert(!kui_disc_identity_poll(&id,ops,64000,true));
     assert(id.state==KUI_DISC_IDENTITY_ERROR && !id.title[0]);
-    fake.status_error=0;assert(!kui_disc_identity_poll(&id,ops,63500,true));
+    fake.status_error=0;assert(!kui_disc_identity_poll(&id,ops,64500,true));
     assert(fake.reads==2); /* status failure cannot cause an optical retry loop */
 
     reset("MDK2");kui_disc_identity_init(&id);fake.poisoned=true;
     identify(&id,ops,0);assert(id.state==KUI_DISC_IDENTITY_ERROR && fake.prepares==1 && !fake.reads);
     for(unsigned i=500;i<5000;i+=500) assert(!kui_disc_identity_poll(&id,ops,i,true));
     assert(fake.prepares==1 && fake.poisoned);
-    kui_disc_identity_invalidate(&id);identify(&id,ops,5000);
+    kui_disc_identity_invalidate(&id);assert(!kui_disc_identity_poll(&id,ops,5000,true));
     assert(fake.poisoned && !fake.reads); /* even explicit refresh cannot reset the adapter */
 
     /* Startup has no INIT_CDROM: one guarded preparation must precede
@@ -190,9 +224,10 @@ int main(void) {
     kui_disc_identity_invalidate(&id);
     assert(!kui_disc_identity_poll(&id,ops,500,true) && fake.prepares==1);
     fake.status_error=0;fake.status=CD_STATUS_RETRY;fake.type=-1;
-    assert(kui_disc_identity_poll(&id,ops,1000,true));
-    kui_disc_identity_read(&id,ops);
-    for(unsigned i=1500;i<5000;i+=500) assert(!kui_disc_identity_poll(&id,ops,i,true));
+    assert(!kui_disc_identity_poll(&id,ops,1000,true));
+    fake.status=CD_STATUS_OPEN;assert(!kui_disc_identity_poll(&id,ops,1500,true));
+    fake.status=CD_STATUS_RETRY;identify(&id,ops,2000);
+    for(unsigned i=2500;i<5000;i+=500) assert(!kui_disc_identity_poll(&id,ops,i,true));
     assert(fake.prepares==2 && !fake.reads);
 
     reset("MDK2");kui_disc_identity_init(&id);fake.status=CD_STATUS_RETRY;

@@ -13,9 +13,20 @@ from runtime_package import envelope, flatten_elf, rejection_cases, verify
 from loader_package import inspect_probe
 from image_probe_package import inspect_image_probe
 from retail_package import inspect_retail
+from zso_package import inspect_zso
 from boot_badge import BADGE, inspect_badge, verify_cdi_badge
 
 ROOT = Path(__file__).resolve().parents[1]
+WINCE_CDDA_PROFILES = {"armada": "armada-us", "bam4": "bam4-us", "worms": "worms-us", "wwp": "wwp-us"}
+WINCE_CDDA_FILES = tuple("ce-cdda-" + name + ".kui" for name in WINCE_CDDA_PROFILES)
+NATIVE_CDDA_PROFILES = {
+    "toy-raw": ("cdda-native-toy-raw.kui", "retail-toy-pilot.kui"),
+    "toy-cooked": ("cdda-native-toy-cooked.kui", "retail-toy-pilot.kui"),
+    "mdk2": ("cdda-native-mdk2.kui", "retail-mdk2-cdda.kui"),
+}
+NATIVE_CDDA_FILES = tuple(names[0] for names in NATIVE_CDDA_PROFILES.values())
+GAME_FILES = ("probe.kui", "image-probe.kui", "retail-boot.kui", "zso-boot.kui", "lzo-boot.kui", "ce-probe.kui", "probe.dat",
+              *WINCE_CDDA_FILES, *NATIVE_CDDA_FILES)
 
 
 def run(*args):
@@ -47,18 +58,132 @@ def release_metadata(path=ROOT / "include/kui/version.h"):
     return release
 
 
+def candidate_requested(environment=None):
+    """Keep the development candidate opt-in separate from experimental DMA."""
+    value = (os.environ if environment is None else environment).get("KUI_RELEASE_CANDIDATE", "")
+    if value not in ("", "0", "1"):
+        raise ValueError("KUI_RELEASE_CANDIDATE must be empty, 0 or 1")
+    return value == "1"
+
+
+def development_test(release=None):
+    """Explicitly versioned hardware experiments are never public releases."""
+    return (release or release_metadata())["version"].endswith(("-2048-test", "-formats-test"))
+
+
+def release_is_rc(release=None):
+    return re.search(r"-rc[1-9][0-9]*$", (release or release_metadata())["version"]) is not None
+
+
+def guide_version(release=None):
+    return re.sub(r"-rc[1-9][0-9]*$", "", (release or release_metadata())["version"])
+
+
+def development_experiment(release=None):
+    version = (release or release_metadata())["version"]
+    return "Games image formats hardware test" if version.endswith("-formats-test") else "2048-byte sector hardware test"
+
+
+def package_kind(release, candidate=False):
+    if development_test(release):
+        return "development-test"
+    return "release-candidate" if candidate or release_is_rc(release) else "release"
+
+
+def development_notice(release=None):
+    release = release or release_metadata()
+    formats = release["version"].endswith("-formats-test")
+    return (f"Experimental {development_experiment(release)}; not a public release.\n"
+            + ("Direct launch: GDI, ISO, BIN/CUE, CDI and standalone BIN/IMG.\n" if formats else "") +
+            "Dreamcast hardware is untested. No measured loading-speed or compatibility\n"
+            "improvement is claimed. Preserve the original dump and back up KUI; install\n"
+            "this build's matching runtime and Games payloads together.\n\n")
+
+
+def package_metadata(candidate=None):
+    """Name candidate downloads apart without changing the console's version."""
+    if candidate is None:
+        candidate = candidate_requested()
+    release = release_metadata()
+    if candidate and not development_test(release) and not release_is_rc(release):
+        release = {**release,
+                   "name": release["name"] + " — ATA readiness candidate",
+                   "artifact_prefix": release["artifact_prefix"] + "-ata-readiness-candidate"}
+    return release
+
+
+def candidate_evidence():
+    return {"name": "ATA readiness", "ata_hardware": "untested",
+            "sci512_hardware": "rejected; restored 256-byte allowance", "ata_io": "synchronous PIO",
+            "ata_dma": "not implemented", "windows_ce_ide": "unsupported"}
+
+
+def candidate_notice():
+    return ("ATA readiness release candidate; not a hardware-validated release.\n"
+            "ATA hardware is untested; the SCI512 test was rejected after degraded audio.\n"
+            "The prior 256-byte SCI token allowance is restored.\n"
+            "The ATA changes use synchronous PIO only. ATA DMA is not implemented;\n"
+            "an asynchronous DMA hardware diagnostic is a future milestone.\n"
+            "Windows CE remains SCI-only; no CE IDE support or measured speed gain is claimed.\n\n")
+
+
 def guide(source):
     text = (ROOT / "docs" / source).read_text()
-    for name in ("storage-testing", "storage-transports", "ext4-bootstrap", "bootloader-refresh", "boot-recovery"):
+    for name in ("storage-testing", "storage-transports", "ext4-bootstrap", "bootloader-refresh", "boot-recovery",
+                 "games-formats-test", "games-formats", "games-zso", "gdi-2048-test", "capture-format",
+                 "network-rip", "repair-copy", "cd-capture",
+                 "wifi", "wifi-performance-test", "wifi-flash-arch", "sci-connector", "ftp"):
         # Preserve section anchors while matching the packaged uppercase names.
         text = re.sub(r"\(" + re.escape(name) + r"\.md(?=[)#])",
                       "(" + name.upper() + ".md", text)
     for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan", "m15-shell-test", "prior-work-reuse", "ripper-controls", "salvage-plan", "apps-test", "app-architecture", "resume-and-retries", "independent-app-parity", "apps-round-two", "apps-round-three", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan"):
         text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
-    text = text.replace("(release-v1.5.1.md)", "(START-HERE.md)")
+    version = guide_version()
+    text = text.replace(f"(release-v{version}.md)", "(START-HERE.md)")
     text = text.replace("(../resources/music/README.md)", "(MUSIC.md)")
-    text = text.replace("(release-v1.5.1-notes.md)", "(RELEASE-NOTES.md)")
+    text = text.replace(f"(release-v{version}-notes.md)", "(RELEASE-NOTES.md)")
     return text
+
+
+def write_release_guides(dist, candidate=False):
+    version = guide_version()
+    experimental = development_test()
+    guides = (("START-HERE.md", f"release-v{version}.md"),
+              ("RELEASE-NOTES.md", f"release-v{version}-notes.md"))
+    for target, source in guides:
+        if candidate and not experimental and not release_is_rc():
+            source = "ata-readiness-candidate.md"
+        (dist / target).write_text(guide(source), encoding="utf-8")
+    if (not candidate or experimental) and not release_is_rc():
+        (dist / "ANNOUNCEMENTS.md").write_text(
+            guide(f"release-v{version}-announcements.md"), encoding="utf-8")
+    if version.endswith("-formats-test"):
+        (dist / "GAMES-FORMATS-TEST.md").write_text(guide("games-formats-test.md"), encoding="utf-8")
+
+
+def resolve_bundle_links(bundle, commit):
+    """Point supporting documentation omitted from the install ZIP at exact source."""
+    def replace_link(match, document):
+        target = match.group(1)
+        if re.match(r"^[a-z][a-z0-9+.-]*:|^#", target, re.IGNORECASE):
+            return match.group(0)
+        path, separator, anchor = target.partition("#")
+        installed = (document.parent / path).resolve()
+        if installed.is_relative_to(bundle.resolve()) and installed.is_file():
+            return match.group(0)
+        source = (ROOT / "docs" / path).resolve()
+        if not source.is_file():
+            source = (ROOT / "docs" / path.lower()).resolve()
+        if source.is_relative_to(ROOT) and source.is_file():
+            url = f"https://github.com/TPMJB/K-UI-NeXT/blob/{commit}/{source.relative_to(ROOT)}"
+            return "(" + url + (separator + anchor if separator else "") + ")"
+        return match.group(0)
+
+    for document in bundle.glob("*.md"):
+        content = document.read_text(encoding="utf-8")
+        content = re.sub(r"(?<=\])\(([^)\s]+)\)",
+                         lambda match: replace_link(match, document), content)
+        document.write_text(content, encoding="utf-8")
 
 
 def storage_image(elf_data, build, label):
@@ -73,7 +198,248 @@ def storage_image(elf_data, build, label):
     return package, verify(package)
 
 
+def write_capture_codec_notices(directory):
+    """Retain the vendored codec licenses in every distributable install/source tree."""
+    directory.mkdir(parents=True, exist_ok=True)
+    for source, target in (("third_party/capture-codecs.md", "capture-codecs.md"),
+                           ("third_party/minilzo/COPYING", "minilzo-COPYING"),
+                           ("third_party/minilzo/README.LZO", "minilzo-README.LZO")):
+        shutil.copyfile(ROOT / source, directory / target)
+    # The amalgamation retains several original notices, including Martin
+    # Raiber's copyright and the Unlicense. Copy each distinct notice verbatim.
+    text = (ROOT / "third_party/miniz/miniz.c").read_text(encoding="utf-8")
+    notices = dict.fromkeys(block for block in re.findall(r"/\*[\s\S]*?\*/", text)
+                            if "Copyright" in block or "free and unencumbered software" in block)
+    if not notices or not any("Martin Raiber" in block for block in notices):
+        raise ValueError("Vendored miniz copyright notices are incomplete")
+    (directory / "miniz-NOTICES.txt").write_text("\n\n".join(notices) + "\n", encoding="utf-8")
+
+
+def write_game_tools(bundle):
+    """Ship PC helpers and their local guides in every installation tree."""
+    tools = bundle / "tools"
+    tools.mkdir(exist_ok=True)
+    for name in ("gdi_optimize.py", "game_image_import.py", "network_rip_server.py"):
+        shutil.copyfile(ROOT / "tools" / name, tools / name)
+    for source in ("games-formats", "gdi-2048-test", "ripper-controls", "capture-format",
+                   "network-rip", "repair-copy", "cd-capture"):
+        (bundle / (source.upper() + ".md")).write_text(guide(source + ".md"), encoding="utf-8")
+
+
+def audit_wince_cdda(directory, data, profile):
+    """Use the same linked layout/stack/owner audits as the tested delivery."""
+    if profile not in WINCE_CDDA_PROFILES:
+        raise ValueError("Unknown WinCE music profile: " + profile)
+    if profile == "worms":
+        from package_wince_ce_stream import audit_stream
+        return audit_stream(directory, data)
+    if profile == "bam4":
+        from package_bam4_ce_stream import audit_stream
+        return audit_stream(directory, data)
+    from package_armada_ce_stream import inspect_stream_seed
+    from check_armada_ce_excerpt import check
+    return inspect_stream_seed(data), check(directory, stream=True, wwp=profile == "wwp")
+
+
+def write_wince_cdda_modules(games, dist, commit):
+    """Package fresh modules; historical ZIPs are not build inputs."""
+    from package_armada_excerpt import verify_build
+    result = {}
+    for profile, title in WINCE_CDDA_PROFILES.items():
+        directory = ROOT / "build" / (profile + "-ce-stream")
+        elf = directory / "entry.elf"
+        compiled, compile_bytes = verify_build(elf, commit)
+        payload, memory = flatten_elf(elf.read_bytes())
+        if commit[:12].encode() + b"\0" not in payload:
+            raise ValueError("WinCE music display build does not match source: " + profile)
+        data = envelope(payload, memory, commit[:12])
+        info = inspect_retail(data, ce=True)
+        seed, audit = audit_wince_cdda(directory, data, profile)
+        if (audit["title_profile"] != title or audit["stream_profile"] is not True or
+                audit["distributed_pcm_bytes"] != 0 or audit["distributed_audio_map_bytes"] != 4096 or
+                audit["stream_boot_arm"]["attach_only_after_relay"] is not True or
+                audit["stream_boot_arm"]["preserves_controller_zero_check"] is not True or
+                not seed["wire_all_zero"]):
+            raise ValueError("WinCE music profile or blank-source audit differs: " + profile)
+        if profile == "wwp" and (audit["native_owner_reader"]["kernel_profile"] != title or
+                int(audit["seed_address"], 16) - 0x8ce10000 != seed["stage_offset"] or
+                not audit["linked_direct_calls"]):
+            raise ValueError("World Party ownership, seed or linked-call audit differs")
+        name = "ce-cdda-" + profile + ".kui"
+        (games / name).write_bytes(data)
+        evidence = dist / (profile + "-ce-stream-build")
+        shutil.copytree(directory, evidence, ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+        (evidence / "linked-audit.json").write_text(json.dumps(audit, indent=2) + "\n")
+        (evidence / "entry.compile.json").write_bytes(compile_bytes)
+        result[profile] = {"package": "KUI/apps/games/" + name, "envelope": info,
+                           "sha256": hashlib.sha256(data).hexdigest(), "compile": compiled,
+                           "seed": seed, "linked_audit": audit, "new_binary_hardware_tested": False}
+    return result
+
+
+def write_native_cdda_modules(games, dist, commit):
+    """Admit only fresh, linked-audited experimental native adapters."""
+    from package_armada_excerpt import verify_build
+    from package_wince_cdda_diagnostic import matched_package
+    from check_native_cdda_compat import check_directory
+    result = {}
+    for profile, (name, package_name) in NATIVE_CDDA_PROFILES.items():
+        directory = ROOT / "build" / ("native-compat-" + profile)
+        reference = ROOT / "build" / ("native-reference-" + profile)
+        compiled_reference, _ = verify_build(reference / "entry.elf", commit)
+        data, _, compiled, compile_bytes = matched_package(
+            directory / "entry.elf", directory / package_name, commit)
+        info = inspect_retail(data)
+        audit = check_directory(directory, profile, reference)
+        if (audit["profile"] != profile or audit["experimental"] is not True or
+                audit["console_tested"] is not False or audit["package"]["build"] != commit[:12]):
+            raise ValueError("Native experimental linked audit differs: " + profile)
+        (games / name).write_bytes(data)
+        evidence = dist / ("native-cdda-" + profile + "-build")
+        shutil.copytree(directory, evidence, ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+        shutil.copytree(reference, evidence / "reference",
+                        ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+        (evidence / "linked-audit.json").write_text(json.dumps(audit, indent=2) + "\n")
+        (evidence / "entry.compile.json").write_bytes(compile_bytes)
+        result[profile] = {"package": "KUI/apps/games/" + name, "envelope": info,
+                           "sha256": hashlib.sha256(data).hexdigest(), "compile": compiled,
+                           "reference_compile": compiled_reference, "linked_audit": audit,
+                           "experimental": True, "new_binary_hardware_tested": False}
+    return result
+
+
+def validate_ordinary_ce(directory, data):
+    config = (directory / "layout-config").read_text().split()
+    if not {"LOW=0", "TRACE=0", "SONIC=0", "CE_SCI_RESUME_FIX=1"}.issubset(config):
+        raise ValueError("Ordinary CE loader must retain the tested placement and DMA resume fix")
+    if any(marker in data[64:] for marker in (b"ARMADA AUDIO TEST PROFILE MISMATCH",
+            b"CE CD MUSIC PROFILE MISMATCH", b"CEX2", b"ARMADA AUDIO TEST")):
+        raise ValueError("A specialized audio payload occupied the ordinary CE fallback slot")
+
+
+def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, candidate=False):
+    """Assemble the install tree without benchmarks, fixtures or user preferences."""
+    release = record["release"]
+    commit = record["commit"]
+    experimental = development_test(release)
+    rc = release_is_rc(release)
+    # Ship only the normal application payloads. This fresh directory cannot
+    # retain scan fixtures, demo music, or preferences from an earlier package.
+    bundle = dist / "release"
+    if bundle.exists():
+        shutil.rmtree(bundle)
+    bundle_sd = bundle / "KUI"
+    (bundle_sd / "apps").mkdir(parents=True)
+    shutil.copyfile(sd / "runtime.kui", bundle_sd / "runtime.kui")
+    bundle_apps = {
+        "music": [track["ogg"]["file"] for track in music_manifest["tracks"]],
+        "games": GAME_FILES,
+    }
+    for app, files in bundle_apps.items():
+        (bundle_sd / "apps" / app).mkdir()
+        for name in files:
+            shutil.copyfile(sd / "apps" / app / name, bundle_sd / "apps" / app / name)
+    for name in ("redump.db", "tosec.db"):
+        shutil.copyfile(sd / name, bundle_sd / name)
+    (bundle / "boot-cd").mkdir()
+    cdi_name = release["artifact_prefix"] + ".cdi" if candidate or experimental or rc else f"kui-v{release['version']}.cdi"
+    shutil.copyfile(cdi, bundle / "boot-cd" / cdi_name)
+    splash = ROOT / "resources/branding/startup.png"
+    shutil.copyfile(splash, bundle / "splash-preview.png")
+    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "GAMES-ZSO.md", "WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md", "LICENSE", "THIRD_PARTY.md"):
+        shutil.copyfile(dist / name, bundle / name)
+    if release["version"].endswith("-formats-test"):
+        shutil.copyfile(dist / "GAMES-FORMATS-TEST.md", bundle / "GAMES-FORMATS-TEST.md")
+    if (not candidate or experimental) and not rc:
+        shutil.copyfile(dist / "ANNOUNCEMENTS.md", bundle / "ANNOUNCEMENTS.md")
+    if not candidate and not experimental and not rc:
+        shutil.copyfile(ROOT / f"resources/branding/release-v{release['version']}-banner.jpg",
+                        bundle / "release-banner.jpg")
+    if guide_version(release) in ("1.8.5", "2.0"):
+        write_game_tools(bundle)
+    resolve_bundle_links(bundle, commit)
+    write_capture_codec_notices(dist / "LICENSES")
+    shutil.copytree(dist / "LICENSES", bundle / "LICENSES")
+    bundle_record = {**record, "kind": package_kind(release, candidate),
+                        "bootstrap": boot_record["bootstrap"],
+                        "splash": {"sha256": hashlib.sha256(splash.read_bytes()).hexdigest(),
+                                   "preview": "splash-preview.png"}}
+    (bundle / "build.json").write_text(
+        json.dumps(bundle_record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    status = "experimental hardware test" if experimental else "release candidate" if candidate or rc else "final release"
+    bootstrap_note = ("Keep an existing compatible SCIF/SCI bootstrap. An older SCIF-only CD\n"
+                      "needs the new CDI in boot-cd/ only when changing to SCI or IDE/CF.\n")
+    (bundle / "SOURCE.txt").write_text(
+        f"{release['name']} ({release['version']}) — {status}\n"
+        + (development_notice(release) if experimental else candidate_notice() if candidate else "") +
+        f"K-UI NeXT source commit: {commit}\n"
+        f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
+        f"The accompanying {release['artifact_prefix']}-source.zip contains exact K-UI, KOS,\n"
+        "FatFs, lwext4 and compiler runtime source records under source/. Dependency pins and\n"
+        "original notices are also included in build.json and LICENSES/.\n"
+        "Original badge and splash provenance are in resources/branding/ in that source.\n\n"
+        "Start with START-HERE.md; RELEASE-NOTES.md lists compatibility and evidence limits.\n"
+        "Merge the supplied KUI files into the SD root, preserving existing preferences and dumps.\n"
+        + bootstrap_note +
+        ("PC helpers are included under tools/. NETWORK-RIP.md describes direct PC\n"
+         "capture. See GAMES-FORMATS.md for imported\n"
+         "compressed images, and GDI-2048-TEST.md for batch 2048-byte copies.\n"
+         "RIPPER-CONTROLS.md and CAPTURE-FORMAT.md explain capture exports.\n"
+         if guide_version(release) in ("1.8.5", "2.0") else "") +
+        "Read STORAGE-TRANSPORTS.md for development hardware status and installation.\n"
+        "The CD's read-only ext4 backend is ready for future runtime work; this runtime\n"
+        "still requires FAT32/exFAT. See EXT4-BOOTSTRAP.md before changing formats.\n"
+        "Preserve any working recovery.kui; BOOT-RECOVERY.md describes boot fallback\n"
+        "and the future split-card layout. No ext4 repair program is bundled yet.\n"
+        "The graphical CD menu offers manual source selection and idle SD retry; B\n"
+        "returns/stops without disabling later attempts. The separate bootstrap-cd\n"
+        "artifact supplies optional tools.kui for read-only load measurement.\n"
+        "Native standard/background and Windows CE launch payloads are installed.\n"
+        "Separate LZ4/LZO1X ZSO modules are included; see GAMES-ZSO.md for their limits.\n"
+        "Optional WinCE CD music uses four checked kernel/sound adapters established\n"
+        "from Armada, Bust-A-Move 4, Worms Armageddon and Worms World Party. Other\n"
+        "images require a matching checked runtime contract; unknown kernels are refused.\n"
+        "Separate experimental native modules retain Toy Commander raw/cooked DATA\n"
+        "and MDK2 executable/driver bindings. These are not general native CDDA support.\n"
+        "CD music defaults Off. Broader images and World Party remain Experimental;\n"
+        "see RELEASE-NOTES.md for admission, evidence and console acceptance limits.\n"
+        "CE and CD music remain SCI options with their existing runtime checks.\n"
+        "No SD benchmark payload is included. ATA/IDE/CF is untested synchronous PIO;\n"
+        "ATA DMA and Windows CE on IDE are not implemented.\n",
+        encoding="utf-8")
+    bundle_hashes = []
+    for path in sorted(bundle.rglob("*")):
+        if path.is_file() and path.name != "SHA256SUMS":
+            bundle_hashes.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(bundle)}")
+    (bundle / "SHA256SUMS").write_text("\n".join(bundle_hashes) + "\n")
+    return bundle
+
+
+def write_release_assets(dist, bundle, source, release):
+    """Archive the install tree and corresponding source with exact checksums."""
+    # Permanent release assets: normal installation files plus corresponding source.
+    # Include notices and build identity alongside the complete pinned source inputs.
+    assets = dist / "release-assets"
+    if assets.exists():
+        shutil.rmtree(assets)
+    assets.mkdir()
+    shutil.make_archive(str(assets / (release["artifact_prefix"] + "-release")), "zip", bundle)
+    with zipfile.ZipFile(assets / (release["artifact_prefix"] + "-source.zip"), "w", zipfile.ZIP_DEFLATED) as archive:
+        for tree in (source, dist / "LICENSES"):
+            for path in sorted(tree.rglob("*")):
+                if path.is_file():
+                    archive.write(path, path.relative_to(dist))
+        for name in ("build.json", "LICENSE", "THIRD_PARTY.md"):
+            archive.write(dist / name, name)
+    asset_hashes = []
+    for path in sorted(assets.glob("*.zip")):
+        with path.open("rb") as stream:
+            asset_hashes.append(f"{hashlib.file_digest(stream, 'sha256').hexdigest()}  {path.name}")
+    (assets / "SHA256SUMS.txt").write_text("\n".join(asset_hashes) + "\n")
+
+
 def main():
+    candidate = candidate_requested()
     dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT)
     if dirty:
         raise SystemExit("Commit source changes before packaging; source and binary must agree")
@@ -83,19 +449,27 @@ def main():
     if not elf.is_file():
         raise SystemExit("Build the Dreamcast diagnostic first")
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    release = release_metadata()
+    release = package_metadata(candidate)
+    candidate = candidate and not development_test(release) and not release_is_rc(release)
     runtime = ROOT / "build/kui-runtime.elf"
     probe = ROOT / "build/loader/entry.elf"
     image_probe = ROOT / "build/loader/image_entry.elf"
     retail = ROOT / "build/retail/entry.elf"
     retail_bench = ROOT / "build/retail-bench/entry.elf"
+    retail_ce = ROOT / "build/retail-ce/entry.elf"
+    retail_zso = ROOT / "build/retail-zso/entry.elf"
+    retail_lzo = ROOT / "build/retail-lzo/entry.elf"
     run("python3", "tools/check_loader_layout.py")
     run("python3", "tools/check_image_loader_layout.py")
     run("python3", "tools/check_retail_loader_layout.py")
     run("python3", "tools/check_retail_instructions.py")
     run("python3", "tools/check_retail_loader_layout.py", "build/retail-bench")
     run("python3", "tools/check_retail_instructions.py", "build/retail-bench")
-    for image in (elf, runtime, probe, image_probe, retail, retail_bench):
+    run("python3", "tools/check_retail_loader_layout.py", "--ce", "build/retail-ce")
+    run("python3", "tools/check_retail_instructions.py", "build/retail-ce")
+    run("python3", "tools/check_zso_loader.py", "build/retail-zso")
+    run("python3", "tools/check_zso_loader.py", "--codec", "lzo", "build/retail-lzo")
+    for image in (elf, runtime, probe, image_probe, retail, retail_bench, retail_ce, retail_zso, retail_lzo):
         compiled = json.loads(image.with_suffix(".compile.json").read_text())
         if (compiled["source_dirty"] or compiled["commit"] != commit or
                 compiled["elf_sha256"] != hashlib.sha256(image.read_bytes()).hexdigest()):
@@ -141,11 +515,27 @@ def main():
     (games / "image-probe.kui").write_bytes(image_package)
     retail_payload, retail_memory = flatten_elf(retail.read_bytes())
     retail_package = envelope(retail_payload, retail_memory, commit[:12])
-    retail_info = inspect_retail(retail_package)
+    retail_info = inspect_retail(retail_package, formats=release["version"].endswith("-formats-test"))
     (games / "retail-boot.kui").write_bytes(retail_package)
+    zso_payload, zso_memory = flatten_elf(retail_zso.read_bytes())
+    zso_package = envelope(zso_payload, zso_memory, commit[:12])
+    zso_info = inspect_zso(zso_package)
+    (games / "zso-boot.kui").write_bytes(zso_package)
+    lzo_payload, lzo_memory = flatten_elf(retail_lzo.read_bytes())
+    lzo_package = envelope(lzo_payload, lzo_memory, commit[:12])
+    lzo_info = inspect_zso(lzo_package, "lzo")
+    (games / "lzo-boot.kui").write_bytes(lzo_package)
     bench_payload, bench_memory = flatten_elf(retail_bench.read_bytes())
     bench_package = envelope(bench_payload, bench_memory, commit[:12])
     bench_info = inspect_retail(bench_package)
+    # The Windows CE boot test: loads and starts a CE kernel, tracing its disc calls.
+    ce_payload, ce_memory = flatten_elf(retail_ce.read_bytes())
+    ce_package = envelope(ce_payload, ce_memory, commit[:12])
+    ce_info = inspect_retail(ce_package, ce=True)
+    validate_ordinary_ce(retail_ce.parent, ce_package)
+    (games / "ce-probe.kui").write_bytes(ce_package)
+    wince_profiles = write_wince_cdda_modules(games, dist, commit)
+    native_profiles = write_native_cdda_modules(games, dist, commit)
     run("python3", "tools/make_loader_probe.py", str(games / "probe.dat"))
     # Keep link maps and exact standalone ELFs in the full diagnostic download.
     shutil.copytree(ROOT / "build/loader", dist / "loader-build",
@@ -154,6 +544,18 @@ def main():
                     ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
     shutil.copytree(ROOT / "build/retail-bench", dist / "retail-bench-build",
                     ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+    shutil.copytree(ROOT / "build/retail-ce", dist / "retail-ce-build",
+                    ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+    shutil.copytree(ROOT / "build/retail-zso", dist / "retail-zso-build",
+                    ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+    (dist / "retail-zso-build/linked-audit.json").write_text(
+        subprocess.check_output(["python3", "tools/check_zso_loader.py", "build/retail-zso"],
+                                cwd=ROOT, text=True), encoding="utf-8")
+    shutil.copytree(ROOT / "build/retail-lzo", dist / "retail-lzo-build",
+                    ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+    (dist / "retail-lzo-build/linked-audit.json").write_text(
+        subprocess.check_output(["python3", "tools/check_zso_loader.py", "--codec", "lzo", "build/retail-lzo"],
+                                cwd=ROOT, text=True), encoding="utf-8")
     # Menu music ships as the committed Ogg encodings recorded in the manifest.
     # A fresh folder cannot carry WAVs from an earlier local package.
     music_manifest = json.loads((ROOT / "resources/music/manifest.json").read_text())
@@ -187,9 +589,8 @@ def main():
     (dist / "HARDWARE-EVIDENCE.md").write_text(guide("hardware-evidence.md"))
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
-    (dist / "START-HERE.md").write_text(guide("release-v1.5.1.md"), encoding="utf-8")
-    (dist / "RELEASE-NOTES.md").write_text(guide("release-v1.5.1-notes.md"), encoding="utf-8")
-    for name in ("games-sd-benchmark", "games-covers", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
+    write_release_guides(dist, candidate)
+    for name in ("games-zso", "wifi", "wifi-performance-test", "wifi-flash-arch", "sci-connector", "ftp", "windows-ce-placement-test", "games-sd-benchmark", "games-background-reader", "games-covers", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
         (dist / (name.upper()+".md")).write_text(guide(name+".md"))
     run("make", "build/render-shell")
     run("python3", "tools/render_app_previews.py", "--output", str(dist / "ui-previews"))
@@ -202,8 +603,12 @@ def main():
     shutil.copyfile(ROOT / "tools/verify_salvage.py", dist / "verify_salvage.py")
     for src, name in (("capture-test.md", "CAPTURE-TEST.md"), ("capture-format.md", "CAPTURE-FORMAT.md"), ("memory-stats.md", "MEMORY-STATS.md"), ("optical-test.md", "OPTICAL-TEST.md"), ("performance-test-plan.md", "PERFORMANCE-TEST-PLAN.md")):
         (dist / name).write_text(guide(src))
+    if guide_version(release) in ("1.8.5", "2.0"):
+        write_game_tools(dist)
+    resolve_bundle_links(dist, commit)
     shutil.copyfile(ROOT / "tools/runtime_package.py", dist / "runtime_package.py")
     shutil.copytree(ROOT / "LICENSES", dist / "LICENSES", dirs_exist_ok=True)
+    write_capture_codec_notices(dist / "LICENSES")
     shutil.copyfile(ROOT / "data/known-dumps/README.txt", dist / "LICENSES/known-dumps-README.txt")
     kos = ROOT / ".deps/kos"
     shutil.copytree(kos / "doc/license", dist / "LICENSES/KOS", dirs_exist_ok=True)
@@ -234,11 +639,18 @@ def main():
             shutil.copyfile(path, source / path.name)
     compiler = subprocess.check_output(["sh-elf-gcc", "--version"], text=True).splitlines()[0]
     record = {"commit": commit, "release": release, "compiler": compiler, "dependencies": lock,
+              "kind": package_kind(release, candidate),
               "runtime": runtime_info, "loader_probe": probe_info,
               "image_probe": image_probe_info,
-              "retail_boot": retail_info,
+              "retail_boot": retail_info, "zso_boot": zso_info, "lzo_boot": lzo_info, "ce_probe": ce_info,
+              "wince_cdda_profiles": wince_profiles,
+              "native_cdda_profiles": native_profiles,
               "hardware_tested": False,
               "host_os": Path("/etc/os-release").read_text() if Path("/etc/os-release").exists() else os.name}
+    if candidate:
+        record.update(kind="release-candidate", candidate=candidate_evidence())
+    if development_test(release):
+        record.update(kind="development-test", experiment=development_experiment(release))
     (dist / "build.json").write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     # Existing boot discs need only the small runtime update. Full source and
     # dependency archives remain available in this run's diagnostic artifact.
@@ -254,22 +666,36 @@ def main():
     shutil.copyfile(dist / "MUSIC-DEMO.md", update / "MUSIC-DEMO.md")
     shutil.copyfile(dist / "GAMES-LOADER-PROBE.md", update / "GAMES-LOADER-PROBE.md")
     shutil.copyfile(dist / "GAMES-RETAIL-TEST.md", update / "GAMES-RETAIL-TEST.md")
+    shutil.copyfile(dist / "WINDOWS-CE-PLACEMENT-TEST.md", update / "WINDOWS-CE-PLACEMENT-TEST.md")
     shutil.copyfile(dist / "GAMES-COVERS.md", update / "GAMES-COVERS.md")
+    shutil.copyfile(dist / "GAMES-ZSO.md", update / "GAMES-ZSO.md")
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(sd / name, update / "KUI" / name)
-    for name in ("GAMES-IMAGE-PROBE.md", "GD-BIOS-CONTRACT.md", "GAMES-TEST.md", "GAMES-MILESTONE-PLAN.md", "APPS-ROUND-FIVE.md", "MUSIC-ROUND-FIVE.md", "NETWORK-CONNECTION-TEST.md", "SYSTEM-BACKUPS.md", "SALVAGE-WORKER.md", "verify_salvage.py", "APPS-ROUND-FOUR.md", "CLOCK-AND-FILE-DATES.md", "VMU-RESTORE.md", "ADVANCED-CRC-SCAN.md", "APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md", "GAMES-IMAGE-PROBE.md", "GD-BIOS-CONTRACT.md", "GAMES-TEST.md", "GAMES-MILESTONE-PLAN.md", "APPS-ROUND-FIVE.md", "MUSIC-ROUND-FIVE.md", "NETWORK-CONNECTION-TEST.md", "SYSTEM-BACKUPS.md", "SALVAGE-WORKER.md", "verify_salvage.py", "APPS-ROUND-FOUR.md", "CLOCK-AND-FILE-DATES.md", "VMU-RESTORE.md", "ADVANCED-CRC-SCAN.md", "APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, update / name)
     shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
     for name in ("START-HERE.md", "RELEASE-NOTES.md"):
         shutil.copyfile(dist / name, update / name)
+    if guide_version(release) in ("1.8.5", "2.0"):
+        write_game_tools(update)
+    if release["version"].endswith("-formats-test"):
+        shutil.copyfile(dist / "GAMES-FORMATS-TEST.md", update / "GAMES-FORMATS-TEST.md")
+    bootstrap_note = ("Keep an existing compatible SCIF/SCI bootstrap. An older SCIF-only CD\n"
+                      "needs this run's new bootstrap CD only when changing to SCI or IDE/CF.\n")
     (update / "SOURCE.txt").write_text(
+        (development_notice(release) if development_test(release) else candidate_notice() if candidate else "") +
         f"K-UI NeXT source commit: {commit}\n"
         f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
         "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
         "FatFs, lwext4 and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n\n"
-        "Install KUI/runtime.kui and the matching Games payload on your storage card.\n"
-        "SCIF can keep its existing boot CD; SCI/IDE boot requires this run's new bootstrap CD.\n"
+        "Install KUI/runtime.kui and the complete matching KUI/apps/games folder.\n"
+        + bootstrap_note +
+        ("PC helpers are included under tools/. NETWORK-RIP.md describes direct PC\n"
+         "capture. See GAMES-FORMATS.md for imported\n"
+         "compressed images, and GDI-2048-TEST.md for batch 2048-byte copies.\n"
+         "RIPPER-CONTROLS.md and CAPTURE-FORMAT.md explain capture exports.\n"
+         if guide_version(release) in ("1.8.5", "2.0") else "") +
         "Read STORAGE-TRANSPORTS.md before testing standalone SCI microSD or IDE/CF.\n"
         "The CD can read compatible ext4, but this runtime still needs FAT32/exFAT.\n"
         "Keep your card's filesystem; EXT4-BOOTSTRAP.md explains future runtime updates.\n"
@@ -285,8 +711,12 @@ def main():
         "See MUSIC-DEMO.md for its format, playback check and composition provenance.\n"
         "Copy KUI/apps/games along with runtime.kui for the Games app.\n"
         "START-HERE.md and RELEASE-NOTES.md describe installation and compatibility limits.\n"
+        "WIFI.md describes the SCI Wi-Fi board; WIFI-FLASH-ARCH.md covers initial C5 flashing.\n"
+        "SCI-CONNECTOR.md has the wiring and FTP.md covers transfers over either adapter.\n"
         "Games: A inspects a GDI; A on its detail opens confirmation; A confirms launch.\n"
-        "Update both KUI/runtime.kui and KUI/apps/games/retail-boot.kui from this package.\n"
+        "Update runtime.kui and the complete Games folder from this same package.\n"
+        "That folder includes separate LZ4/LZO1X ZSO modules; see GAMES-ZSO.md.\n"
+        "KUI/apps/games/ce-probe.kui is the Windows CE boot test; see WINDOWS-CE-PLACEMENT-TEST.md.\n"
         "DOA2 has confirmed gameplay; Evolution 2 boots with severe slowdown.\n"
         "Other titles and VMU save/load compatibility remain under community testing.\n"
         "Games reads the selected storage device; games may write VMU saves. Power cycle to return.\n"
@@ -296,6 +726,9 @@ def main():
         "compared with the known-good Redump/TOSEC track CRCs; without them the capture\n"
         "works as before and reports that nothing was compared. Attribution and licence\n"
         "for both catalogues: LICENSES/known-dumps-README.txt.\n")
+    # Supporting firmware documentation stays online at this exact source
+    # commit; local Wi-Fi/flash/wiring/FTP guides travel with the update.
+    resolve_bundle_links(update, commit)
     update_hashes=[]
     for path in sorted(update.rglob("*")):
         if path.is_file() and path.name != "SHA256SUMS":
@@ -407,82 +840,8 @@ def main():
         if path.is_file() and path.name != "SHA256SUMS":
             boot_hashes.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(boot)}")
     (boot / "SHA256SUMS").write_text("\n".join(boot_hashes) + "\n")
-    # Ship only the normal application payloads. This fresh directory cannot
-    # retain scan fixtures, demo music, or preferences from an earlier package.
-    bundle = dist / "release"
-    if bundle.exists():
-        shutil.rmtree(bundle)
-    bundle_sd = bundle / "KUI"
-    (bundle_sd / "apps").mkdir(parents=True)
-    shutil.copyfile(sd / "runtime.kui", bundle_sd / "runtime.kui")
-    bundle_apps = {
-        "music": [track["ogg"]["file"] for track in music_manifest["tracks"]],
-        "games": ("probe.kui", "image-probe.kui", "retail-boot.kui", "probe.dat"),
-    }
-    for app, files in bundle_apps.items():
-        (bundle_sd / "apps" / app).mkdir()
-        for name in files:
-            shutil.copyfile(sd / "apps" / app / name, bundle_sd / "apps" / app / name)
-    for name in ("redump.db", "tosec.db"):
-        shutil.copyfile(sd / name, bundle_sd / name)
-    (bundle / "boot-cd").mkdir()
-    shutil.copyfile(cdi, bundle / "boot-cd/kui-v1.5.1.cdi")
-    splash = ROOT / "resources/branding/startup.png"
-    shutil.copyfile(splash, bundle / "splash-preview.png")
-    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "LICENSE", "THIRD_PARTY.md"):
-        shutil.copyfile(dist / name, bundle / name)
-    shutil.copytree(dist / "LICENSES", bundle / "LICENSES")
-    bundle_record = {**record, "kind": "release",
-                        "bootstrap": boot_record["bootstrap"],
-                        "splash": {"sha256": hashlib.sha256(splash.read_bytes()).hexdigest(),
-                                   "preview": "splash-preview.png"}}
-    (bundle / "build.json").write_text(
-        json.dumps(bundle_record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    (bundle / "SOURCE.txt").write_text(
-        f"{release['name']} ({release['version']}) — final release\n"
-        f"K-UI NeXT source commit: {commit}\n"
-        f"https://github.com/TPMJB/K-UI-NeXT/tree/{commit}\n\n"
-        f"The accompanying {release['artifact_prefix']}-source.zip contains exact K-UI, KOS,\n"
-        "FatFs, lwext4 and compiler runtime source records under source/. Dependency pins and\n"
-        "original notices are also included in build.json and LICENSES/.\n"
-        "Original badge and splash provenance are in resources/branding/ in that source.\n\n"
-        "Start with START-HERE.md; RELEASE-NOTES.md lists compatibility and evidence limits.\n"
-        "Merge the supplied KUI files into the SD root, preserving existing preferences and dumps.\n"
-        "Existing boot CDs work with SCIF; SCI/IDE boot needs the new CDI in boot-cd/.\n"
-        "Read STORAGE-TRANSPORTS.md for development hardware status and installation.\n"
-        "The CD's read-only ext4 backend is ready for future runtime work; this runtime\n"
-        "still requires FAT32/exFAT. See EXT4-BOOTSTRAP.md before changing formats.\n"
-        "Preserve any working recovery.kui; BOOT-RECOVERY.md describes boot fallback\n"
-        "and the future split-card layout. No ext4 repair program is bundled yet.\n"
-        "The graphical CD menu offers manual source selection and idle SD retry; B\n"
-        "returns/stops without disabling later attempts. The separate bootstrap-cd\n"
-        "artifact supplies optional tools.kui for read-only load measurement.\n"
-        "The normal retail game reader is installed; no SD benchmark payload is included.\n",
-        encoding="utf-8")
-    bundle_hashes = []
-    for path in sorted(bundle.rglob("*")):
-        if path.is_file() and path.name != "SHA256SUMS":
-            bundle_hashes.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(bundle)}")
-    (bundle / "SHA256SUMS").write_text("\n".join(bundle_hashes) + "\n")
-    # Permanent release assets: normal installation files plus corresponding source.
-    # Include notices and build identity alongside the complete pinned source inputs.
-    assets = dist / "release-assets"
-    if assets.exists():
-        shutil.rmtree(assets)
-    assets.mkdir()
-    shutil.make_archive(str(assets / (release["artifact_prefix"] + "-release")), "zip", bundle)
-    with zipfile.ZipFile(assets / (release["artifact_prefix"] + "-source.zip"), "w", zipfile.ZIP_DEFLATED) as archive:
-        for tree in (source, dist / "LICENSES"):
-            for path in sorted(tree.rglob("*")):
-                if path.is_file():
-                    archive.write(path, path.relative_to(dist))
-        for name in ("build.json", "LICENSE", "THIRD_PARTY.md"):
-            archive.write(dist / name, name)
-    asset_hashes = []
-    for path in sorted(assets.glob("*.zip")):
-        with path.open("rb") as stream:
-            asset_hashes.append(f"{hashlib.file_digest(stream, 'sha256').hexdigest()}  {path.name}")
-    (assets / "SHA256SUMS.txt").write_text("\n".join(asset_hashes) + "\n")
+    bundle = write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, candidate)
+    write_release_assets(dist, bundle, source, release)
     hashes = []
     for path in sorted(dist.rglob("*")):
         if path.is_file() and path != dist / "SHA256SUMS":

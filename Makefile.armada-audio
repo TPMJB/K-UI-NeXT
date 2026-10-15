@@ -1,0 +1,81 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# An isolated CE request observer. Default CE/native build objects and payloads
+# are not destinations of any rule here. Source the ordinary KOS environment.
+KUI_RETAIL_LOW_RESIDENT := 0
+include Makefile.dc
+
+ARMADA_AUDIO_DIR ?= build/armada-ce-audio
+ARMADA_AUDIO_COMMON_SRC := src/loader/sd_reader.c src/loader/retail_sd.c \
+    src/loader/retail_storage.c src/loader/sci_sd_bus.c src/core/ata.c \
+    src/dreamcast/ata_bus.c src/loader/minic.c src/core/retail_image.c
+ARMADA_AUDIO_COMMON := $(patsubst %.c,$(ARMADA_AUDIO_DIR)/common/%.o,$(ARMADA_AUDIO_COMMON_SRC))
+ARMADA_AUDIO_STAGE := $(ARMADA_AUDIO_DIR)/retail_stage_asm.o \
+    $(ARMADA_AUDIO_DIR)/retail_stage.o $(ARMADA_AUDIO_DIR)/retail_display.o \
+    $(ARMADA_AUDIO_DIR)/ce_load_plan.o $(ARMADA_AUDIO_DIR)/hash.o $(ARMADA_AUDIO_COMMON)
+ARMADA_AUDIO_SCIF := $(patsubst %.c,$(ARMADA_AUDIO_DIR)/scif/%.o,$(RETAIL_SCIF_SRC)) $(ARMADA_AUDIO_DIR)/scif/src/loader/retail_resident_asm.o
+ARMADA_AUDIO_IDE := $(patsubst %.c,$(ARMADA_AUDIO_DIR)/ide/%.o,$(RETAIL_IDE_SRC)) $(ARMADA_AUDIO_DIR)/ide/src/loader/retail_resident_asm.o
+ARMADA_AUDIO_SCI := $(patsubst %.c,$(ARMADA_AUDIO_DIR)/sci/%.o,$(RETAIL_SCI_SRC)) $(ARMADA_AUDIO_DIR)/sci/src/loader/retail_resident_asm.o
+ARMADA_AUDIO_SCIA := $(patsubst %.c,$(ARMADA_AUDIO_DIR)/scia/%.o,$(RETAIL_SCIA_SRC)) $(ARMADA_AUDIO_DIR)/scia/src/loader/retail_resident_asm.o
+ARMADA_AUDIO_FLAGS := $(RETAIL_SCIA_DEFS) -DKUI_RETAIL_CE=1 -DKUI_CE_SCI_RESUME_FIX=1 -DKUI_ARMADA_CE_AUDIO_OBSERVE=1 $(ARMADA_AUDIO_EXTRA_FLAGS)
+ARMADA_AUDIO_BINS := $(addprefix $(ARMADA_AUDIO_DIR)/resident-,scif.bin sci.bin ide.bin scia.bin)
+ARMADA_AUDIO_BIN_FLAGS := -DKUI_RETAIL_CE_SCIF_BIN='"$(ARMADA_AUDIO_DIR)/resident-scif.bin"' \
+    -DKUI_RETAIL_CE_SCI_BIN='"$(ARMADA_AUDIO_DIR)/resident-sci.bin"' \
+    -DKUI_RETAIL_CE_IDE_BIN='"$(ARMADA_AUDIO_DIR)/resident-ide.bin"' \
+    -DKUI_RETAIL_CE_SCIA_BIN='"$(ARMADA_AUDIO_DIR)/resident-scia.bin"'
+
+define armada_audio_resident_rules
+$(ARMADA_AUDIO_DIR)/$(1)/%.o: %.c
+	@mkdir -p $$(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(2) -MMD -MP -c $$< -o $$@
+$(ARMADA_AUDIO_DIR)/$(1)/%_asm.o: %.S
+	@mkdir -p $$(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(2) -MMD -MP -c $$< -o $$@
+$(ARMADA_AUDIO_DIR)/$(1)/src/loader/retail_display.o: force-build-id
+endef
+$(eval $(call armada_audio_resident_rules,scif,-DKUI_RETAIL_TRANSPORT=0))
+$(eval $(call armada_audio_resident_rules,ide,-DKUI_RETAIL_TRANSPORT=2))
+$(eval $(call armada_audio_resident_rules,sci,$(RETAIL_SCI_FLAGS) -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_CE=1))
+$(eval $(call armada_audio_resident_rules,scia,$(RETAIL_SCI_FLAGS) $(ARMADA_AUDIO_FLAGS)))
+
+$(ARMADA_AUDIO_DIR)/resident-scif.elf: $(ARMADA_AUDIO_SCIF) src/loader/retail_resident.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,$(@:.elf=.map) -o $@ $(ARMADA_AUDIO_SCIF) -lgcc
+$(ARMADA_AUDIO_DIR)/resident-ide.elf: $(ARMADA_AUDIO_IDE) src/loader/retail_resident.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_resident.ld -Wl,-Map,$(@:.elf=.map) -o $@ $(ARMADA_AUDIO_IDE) -lgcc
+$(ARMADA_AUDIO_DIR)/resident-sci.elf: $(ARMADA_AUDIO_SCI) src/loader/retail_resident_ce.ld
+	@mkdir -p $(ARMADA_AUDIO_DIR)/sci/lto
+	sh-elf-gcc $(RETAIL_LINK) $(RETAIL_SCI_LINK) -Tsrc/loader/retail_resident_ce.ld -Wl,-Map,$(@:.elf=.map) -o $@ $(ARMADA_AUDIO_SCI) -lgcc
+	cp $@.ltrans*.su $(ARMADA_AUDIO_DIR)/sci/lto/
+$(ARMADA_AUDIO_DIR)/resident-scia.elf: $(ARMADA_AUDIO_SCIA) src/loader/retail_resident_ce_async.ld
+	@mkdir -p $(ARMADA_AUDIO_DIR)/scia/lto
+	sh-elf-gcc $(RETAIL_LINK) $(RETAIL_SCIA_LINK) $(ARMADA_AUDIO_EXTRA_LINK_FLAGS) -Wl,-u,_kui_retail_ce_irq -Tsrc/loader/retail_resident_ce_async.ld -Wl,-Map,$(@:.elf=.map) -o $@ $(ARMADA_AUDIO_SCIA) -lgcc
+	cp $@.ltrans*.su $@.ltrans*.ci $(ARMADA_AUDIO_DIR)/scia/lto/
+$(ARMADA_AUDIO_DIR)/resident-%.bin: $(ARMADA_AUDIO_DIR)/resident-%.elf
+	sh-elf-objcopy -O binary $< $@
+
+$(ARMADA_AUDIO_DIR)/common/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/retail_stage.o: src/loader/retail_stage.c
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -DKUI_ARMADA_CE_AUDIO_STAGE=1 $(ARMADA_AUDIO_EXTRA_STAGE_FLAGS) -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/retail_stage_asm.o: src/loader/retail_stage.S $(ARMADA_AUDIO_BINS) $(ARMADA_AUDIO_EXTRA_STAGE_DEPS)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 $(ARMADA_AUDIO_BIN_FLAGS) $(ARMADA_AUDIO_EXTRA_ASM_FLAGS) -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/retail_display.o: src/loader/retail_display.c force-build-id
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/ce_load_plan.o: src/core/ce_load_plan.c
+	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/hash.o: src/core/hash.c
+	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/stage.elf: $(ARMADA_AUDIO_STAGE) src/loader/retail_stage_ce.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_stage_ce.ld -Wl,-Map,$(@:.elf=.map) -o $@ $(ARMADA_AUDIO_STAGE) -lgcc
+$(ARMADA_AUDIO_DIR)/stage.bin: $(ARMADA_AUDIO_DIR)/stage.elf
+	sh-elf-objcopy -O binary $< $@
+$(ARMADA_AUDIO_DIR)/retail_entry_asm.o: src/loader/retail_entry.S $(ARMADA_AUDIO_DIR)/stage.bin
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -DKUI_RETAIL_STAGE_BIN='"$(ARMADA_AUDIO_DIR)/stage.bin"' -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/entry.elf: $(ARMADA_AUDIO_DIR)/retail_entry_asm.o src/loader/retail_entry.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,$(@:.elf=.map) -o $@ $<
+	python3 tools/check_retail_instructions.py $(ARMADA_AUDIO_DIR)
+	python3 tools/check_retail_loader_layout.py --ce $(ARMADA_AUDIO_DIR)
+	$(ARMADA_AUDIO_EXTRA_CHECK)
+	python3 tools/record_build.py $@
+
+-include $(ARMADA_AUDIO_STAGE:.o=.d) $(ARMADA_AUDIO_SCIF:.o=.d) $(ARMADA_AUDIO_IDE:.o=.d) $(ARMADA_AUDIO_SCI:.o=.d) $(ARMADA_AUDIO_SCIA:.o=.d)

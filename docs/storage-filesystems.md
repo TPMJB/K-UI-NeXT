@@ -4,7 +4,7 @@
 apps and Games preparation still use FatFs for FAT32/exFAT. Keep the working
 card's filesystem until a later runtime implements ext4 application access.
 The [ext4 bootstrap guide](ext4-bootstrap.md) defines the pinned format, partition
-layouts and read-only limits. SCI and IDE/CF still need console validation;
+layouts and read-only limits. SCI has passed storage and game tests; IDE/CF still needs console validation;
 see [installation and test scope](storage-transports.md).
 
 The agreed future same-card layout is **128 MiB FAT32 boot/recovery plus ext4
@@ -76,9 +76,9 @@ An ext backend must convert filesystem blocks to device sectors and initially
 reject sparse or unwritten image mappings that the manifest cannot represent.
 Files and their allocation must remain stable through handoff. The filesystem
 libraries stay outside the game resident; it reads the prepared physical runs
-through the selected device transport. The standalone storage build supplies
-independent SCIF, SCI and IDE/CF resident readers; the latter two still need
-hardware validation.
+through the selected device transport. The standalone storage build supplies independent SCIF, SCI and IDE/CF
+resident readers. SCIF and SCI have scoped hardware results; IDE/CF remains
+untested. See [the current release notes](release-v1.8.5-notes.md).
 
 Adding lwext4 does not inherently slow existing FAT32/exFAT SD reads: those
 volumes would continue using FatFs. Detection adds mount-time work, while code,

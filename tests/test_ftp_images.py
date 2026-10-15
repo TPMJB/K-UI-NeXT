@@ -2,12 +2,15 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """The FTP server end to end: build/ftp-image runs K-UI's server on the
 W5500 model (tests/w5500_model.c) with real FatFs on FAT32 and exFAT images,
-and Python's ftplib is the client. fsck checks every image afterwards; on
-FAT32, mtools reads the uploads back without K-UI's code."""
+and Python's ftplib is the client. Both filesystems run again on the Wi-Fi board
+model (tests/wifi_model.c: the firmware's own bridge core). fsck checks
+every image afterwards; on FAT32, mtools reads the uploads back without
+K-UI's code."""
 import ftplib
 import hashlib
 import os
 import random
+import re
 import shutil
 import socket
 import struct
@@ -60,8 +63,10 @@ class Server:
                 self.seen.set()
 
     def send(self, key):
-        """A key on the harness's stdin: n makes the next upload's rename to
-        its name fail, N also the rename that puts the old file back."""
+        """A key on the harness's stdin: r restarts the Wi-Fi board, d drops
+        its Wi-Fi, u brings it back on 127.0.0.2; n makes the next upload's
+        rename to its name fail, N also the rename that puts the old file
+        back."""
         self.proc.stdin.write(key)
         self.proc.stdin.flush()
 
@@ -480,6 +485,39 @@ def full_card(f):
     print("PASS FTP full card: 452, nothing kept, room again afterwards", flush=True)
 
 
+def wifi_events(server, port, password):
+    """The Wi-Fi board's news while serving: its Wi-Fi drops and comes back
+    on another address, then the board restarts, closing every connection;
+    the server listens again by itself."""
+    f = client(port, password)
+    server.send("d")
+    server.wait_for("FTP: Wi-Fi connection lost; the board is reconnecting")
+    server.send("u")
+    server.wait_for("FTP: Wi-Fi connection back")
+    server.wait_for("FTP: New address: 127.0.0.2")
+    assert f.sendcmd("NOOP").startswith("200")
+    server.send("r")
+    server.wait_for("FTP: The Wi-Fi board restarted; its connections were closed")
+    try:
+        f.sendcmd("NOOP")
+        f.sendcmd("NOOP")
+        raise AssertionError("the connection survived the board's restart")
+    except (EOFError,) + ftplib.all_errors:
+        pass
+    f.close()
+    deadline = time.monotonic() + 20
+    while True:
+        try:
+            again = client(port, password)
+            break
+        except ftplib.all_errors:
+            assert time.monotonic() < deadline, "no listening again after the board's restart"
+            time.sleep(0.2)
+    assert again.pwd() == "/" and again.sendcmd("PASV").startswith("227 Entering Passive Mode (127,0,0,2,")
+    again.quit()
+    print("PASS FTP over Wi-Fi: connection lost and back, new address, board restart", flush=True)
+
+
 def streams(f, server):
     """Uploads and downloads move by the model's async frames while the
     card works (the adapter line says "overlapped"), and each leaves the
@@ -558,8 +596,8 @@ def card_fails(f, server):
     print("PASS FTP card write failure: 451, nothing kept, the next upload works", flush=True)
 
 
-def serve_image(binary, image, kind, port, passive, case_insensitive=True, env=None):
-    server = Server(binary, image, port, passive, env=env)
+def serve_image(binary, image, kind, port, passive, case_insensitive=True, env=None, adapter=()):
+    server = Server(binary, image, port, passive, env=env, extra=adapter)
     password = server.password
     assert len(password) == 8 and password.isdigit(), password
     basics(port, password)
@@ -573,8 +611,14 @@ def serve_image(binary, image, kind, port, passive, case_insensitive=True, env=N
     aborts(f, port, password, files)
     limits(port, password, 1)
     full_card(f)
+    if adapter == ("wifi",):
+        wifi_events(server, port, password)
+        # The board's restart closed every connection, this one too.
+        f.close()
+        f = client(port, password)
     card_fails(f, server)
-    streams(f, server)
+    if not adapter:
+        streams(f, server)
     # Stopping with a client connected: it is told.
     f.sock.settimeout(30)
     code, output = server.stop()
@@ -587,6 +631,14 @@ def serve_image(binary, image, kind, port, passive, case_insensitive=True, env=N
     assert code == 0 and "STOPPED state=2" in output, output[-3000:]
     # Every event is logged; the screen shows only the latest.
     assert "LOG FTP: Received /Games/big.bin (20.0 MB)" in output, output[-3000:]
+    if adapter == ("wifi",):
+        batches = [tuple(map(int, match)) for match in re.findall(
+            r"LOG FTP Wi-Fi: (\d+) SPI frames in (\d+) bounded bursts; largest (\d+) frames", output)]
+        large = [(frames, bursts, maximum) for frames, bursts, maximum in batches if frames >= 1024]
+        assert large, "No substantial Wi-Fi transfer emitted burst counters"
+        assert all(0 < maximum <= 8 and frames <= bursts * 8 for frames, bursts, maximum in large), large
+        assert any(frames > bursts and maximum > 1 for frames, bursts, maximum in large), large
+        print("PASS Wi-Fi FTP: real bridge moves several SPI frames per pass; transfer hashes remain exact", flush=True)
     return password, files
 
 
@@ -596,12 +648,12 @@ def main():
             raise SystemExit(f"Missing test prerequisite: {binary}")
     # Below Linux's ephemeral ports (32768 and up), so no binding collides
     # with an outgoing connection.
-    base_port = 22000 + os.getpid() % 500 * 8
+    base_port = 22000 + os.getpid() % 400 * 10
     with tempfile.TemporaryDirectory(prefix="kui-ftp-") as temp:
         base = Path(temp)
         for number, kind in enumerate(("fat32", "exfat")):
-            port = base_port + number * 4
-            passive = 26000 + (os.getpid() % 60) * 100 + number * 50
+            port = base_port + number * 5
+            passive = 26000 + (os.getpid() % 40) * 150 + number * 50
             image = base / f"{kind}.img"
             with image.open("wb") as stream:
                 stream.truncate(96 * 1024 * 1024)
@@ -614,6 +666,17 @@ def main():
             assert quiet.proc.wait(60) == 1
             time.sleep(0.1)
             assert "STOPPED state=3" in quiet.output() and "No W5500 answered" in quiet.output(), quiet.output()
+            # Neither a W5500 nor the Wi-Fi board.
+            quiet = Server(BINARY, image, port + 1, passive, extra=("none",), ready=False)
+            assert quiet.proc.wait(60) == 1
+            time.sleep(0.1)
+            assert "No W5500 or Wi-Fi board answered on the SCI port" in quiet.output(), quiet.output()
+            assert "Opening the SD card" not in quiet.output(), quiet.output()
+            # The Wi-Fi board with no network set up.
+            quiet = Server(BINARY, image, port + 1, passive, extra=("offline",), ready=False)
+            assert quiet.proc.wait(60) == 1
+            time.sleep(0.1)
+            assert "STOPPED state=3" in quiet.output() and "No Wi-Fi network is set up" in quiet.output(), quiet.output()
 
             password, files = serve_image(BINARY, image, kind, port, passive)
             run(*fsck, "-n", str(image))
@@ -641,6 +704,35 @@ def main():
             assert code == 0, output
             run(*fsck, "-n", str(image))
             print(f"PASS {kind} FTP server", flush=True)
+            # Everything again over the Wi-Fi board, on a fresh card of
+            # the same filesystem. The owner's hardware uses exFAT.
+            wifi = base / f"wifi-{kind}.img"
+            with wifi.open("wb") as stream:
+                stream.truncate(96 * 1024 * 1024)
+            run("mkfs.fat", "-F", "32", str(wifi)) if kind == "fat32" else run("mkfs.exfat", str(wifi))
+            run(BINARY, str(wifi), "seed")
+            if kind == "fat32":
+                # A queued LISTEN is not readiness: a rejected actual bind
+                # must fail startup before publishing READY.
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as occupied:
+                    occupied.bind((HOST, port + 4))
+                    occupied.listen(1)
+                    blocked = Server(BINARY, wifi, port + 4, passive + 100,
+                                     extra=("wifi",), ready=False)
+                    assert blocked.proc.wait(60) == 1
+                    blocked.wait_for("STOPPED state=3")
+                    assert "could not listen for connections" in blocked.output(), blocked.output()
+                    assert "READY " not in blocked.output(), blocked.output()
+                print("PASS Wi-Fi FTP waits for actual listener setup and reports bind failure", flush=True)
+            _, wifi_files = serve_image(BINARY, wifi, kind, port + 4, passive + 100, adapter=("wifi",))
+            run(*fsck, "-n", str(wifi))
+            if kind == "fat32":
+                out = base / "out"
+                out.mkdir(exist_ok=True)
+                run("mcopy", "-n", "-i", str(wifi), "::/Games/big.bin", str(out / "wifi-big.bin"))
+                assert digest((out / "wifi-big.bin").read_bytes()) == digest(wifi_files["big"])
+            wifi.unlink()
+            print(f"PASS {kind} FTP server over the Wi-Fi board", flush=True)
 
             # An unusable password file stops the server with the reason.
             broken = base / f"{kind}-broken.img"

@@ -10,16 +10,25 @@
 #include "kui/clock.h"
 #include "kui/cd_audio.h"
 #include "kui/games.h"
+#include "kui/game_launch_settings.h"
+#include "kui/games_selection.h"
 #include "kui/games_covers.h"
 #include "kui/files.h"
 #include "kui/ftp.h"
 #include "kui/storage_test.h"
+#include "kui/network_wifi.h"
 #include <stdbool.h>
 #include <stdint.h>
 
 #define KUI_SHELL_WIDTH 640u
 #define KUI_SHELL_HEIGHT 480u
 #define KUI_SHELL_LOG_ROWS 10u
+/* A cover belongs to one published listing and selection. The worker must
+ * echo this key; main publishes pixels only after the same key is accepted. */
+struct kui_shell_games_art_key {
+    unsigned generation,page,view,row;
+    char root[KUI_DEST_ROOT_CAP],path[KUI_GAMES_FILE_CAP];
+};
 enum kui_shell_button {
     KUI_SHELL_UP = 1u << 0, KUI_SHELL_DOWN = 1u << 1,
     KUI_SHELL_LEFT = 1u << 2, KUI_SHELL_RIGHT = 1u << 3,
@@ -40,7 +49,27 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_FILES, KUI_SHELL_FILES_ACTIONS, KUI_SHELL_FILES_PICK,
     KUI_SHELL_FILES_CONFIRM, KUI_SHELL_FILES_INFO, KUI_SHELL_FILES_VIEW,
     KUI_SHELL_FTP, KUI_SHELL_STORAGE_TESTS, KUI_SHELL_STORAGE_TEST_HISTORY,
-    KUI_SHELL_SCI_ASYNC_PROBE };
+    KUI_SHELL_SCI_ASYNC_PROBE, KUI_SHELL_GAMES_VARIANTS, KUI_SHELL_WIFI,
+    KUI_SHELL_GAMES_LAUNCH_OPTIONS, KUI_SHELL_GAMES_EXTRA_OPTIONS,
+    KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK };
+enum kui_shell_game_option {
+    KUI_SHELL_GAME_OPTION_READER, KUI_SHELL_GAME_OPTION_CDDA,
+    KUI_SHELL_GAME_OPTION_ADVANCED, KUI_SHELL_GAME_OPTION_CODEC, KUI_SHELL_GAME_OPTION_COUNT
+};
+enum kui_shell_game_tool {
+    KUI_SHELL_GAME_TOOL_ENCODING, KUI_SHELL_GAME_TOOL_SPEED,
+    KUI_SHELL_GAME_TOOL_INFO, KUI_SHELL_GAME_TOOL_TESTS,
+    KUI_SHELL_GAME_TOOL_PATCHES, KUI_SHELL_GAME_TOOL_DEFAULTS, KUI_SHELL_GAME_TOOL_CHECK, KUI_SHELL_GAME_TOOL_BASELINE, KUI_SHELL_GAME_TOOL_COUNT
+};
+enum kui_shell_ripper_tool {
+    KUI_SHELL_RIPPER_TOOL_VERIFY, KUI_SHELL_RIPPER_TOOL_RESUME,
+    KUI_SHELL_RIPPER_TOOL_SETTINGS, KUI_SHELL_RIPPER_TOOL_QUICK,
+    KUI_SHELL_RIPPER_TOOL_DESTINATION, KUI_SHELL_RIPPER_TOOL_SCAN,
+    KUI_SHELL_RIPPER_TOOL_SALVAGE, KUI_SHELL_RIPPER_TOOL_JOB,
+    KUI_SHELL_RIPPER_TOOL_LABEL, KUI_SHELL_RIPPER_TOOL_REPAIR,
+    KUI_SHELL_RIPPER_TOOL_FORENSIC, KUI_SHELL_RIPPER_TOOL_NETWORK,
+    KUI_SHELL_RIPPER_TOOL_CD_SOURCE, KUI_SHELL_RIPPER_TOOL_COUNT
+};
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
     KUI_SHELL_DISC_PROBE, KUI_SHELL_STORAGE_PROBE, KUI_SHELL_SAVE_LOG,
@@ -66,7 +95,12 @@ enum kui_shell_action {
     KUI_SHELL_GAMES_IMAGE_PROBE, KUI_SHELL_GAMES_RETAIL, KUI_SHELL_GAMES_SCAN,
     KUI_SHELL_FILES_LIST, KUI_SHELL_FILES_CHECK, KUI_SHELL_FILES_RUN, KUI_SHELL_FILES_PICTURE,
     KUI_SHELL_FTP_START, KUI_SHELL_TEST_RUN, KUI_SHELL_TEST_HISTORY,
-    KUI_SHELL_TEST_BASELINE, KUI_SHELL_SCI_ASYNC_RUN, KUI_SHELL_SCI_ASYNC_STRESS
+    KUI_SHELL_TEST_BASELINE, KUI_SHELL_SCI_ASYNC_RUN, KUI_SHELL_SCI_ASYNC_STRESS,
+    KUI_SHELL_SCI_ASYNC_SCREEN, KUI_SHELL_SCI_ASYNC_SPEED,
+    KUI_SHELL_WIFI_REFRESH, KUI_SHELL_WIFI_JOIN, KUI_SHELL_WIFI_FORGET,
+    KUI_SHELL_WIFI_BAND, KUI_SHELL_SAVE_GAME_LAUNCH,
+    KUI_SHELL_WIFI_UPDATE_CHECK, KUI_SHELL_WIFI_UPDATE,
+    KUI_SHELL_REPAIR_COPY, KUI_SHELL_FORENSIC, KUI_SHELL_GAMES_CHECK_EXECUTABLE
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -99,10 +133,41 @@ struct kui_shell {
     struct kui_cd_audio_status cd_audio;
     unsigned cd_selected;
     char games_path[KUI_DEST_ROOT_CAP], games_selected_path[KUI_GAMES_FILE_CAP];
+    struct kui_games_selection games_last;
+    char games_seek_name[KUI_DEST_NAME_CAP];
+    bool games_seek;
+    /* A paired game keeps both exact files while details/confirmation are
+     * open; the selected path is set only after the version is chosen. */
+    char games_original_path[KUI_GAMES_FILE_CAP], games_2048_path[KUI_GAMES_FILE_CAP];
+    unsigned games_variant_selected;
     unsigned games_page, games_selected, games_advanced_selected;
     /* KUI_GAMES_VIEW_SAVED until a listing reports the card's saved view. */
     unsigned games_view;
+    unsigned games_generation;
+    bool games_loading,games_art_loading;
     bool games_scanning; /* The box art scan runs; a listing ends it. */
+    /* Explicit refresh rebuilds worker-owned directory discovery; entering,
+     * page and view changes reuse its read-only snapshot. */
+    bool games_refresh;
+    /* Reader enum plus explicit launch options from games_retail.h.
+     * Each accepted launch replaces the preceding choice. */
+    unsigned games_retail_reader;
+    /* Saved choices belong to the exact inspected image. The dispatched
+     * flags above are built afresh when the owner explicitly launches. */
+    unsigned games_launch_reader, games_launch_selected;
+    unsigned games_launch_encoding, game_tools_selected, game_tests_selected;
+    bool games_tests_from_options;
+    unsigned games_launch_codec,games_codec_selected;
+    bool games_codec_override;
+    bool games_baseline;
+    struct kui_game_launch_settings games_baseline_previous;
+    char games_launch_notice[128];
+    bool games_launch_cdda, games_retail_scrambled;
+    struct kui_game_ram_patches games_launch_patches;
+    unsigned games_patch_selected, games_patch_digit;
+    bool games_patch_editing;
+    uint32_t games_patch_draft;
+    bool games_probe_from_options; /* Independent probe's return destination. */
     struct kui_games_page games_listing;
     struct kui_games_detail games_detail;
     /* Destination is committed only by a successful worker load/save. Browsing
@@ -114,7 +179,15 @@ struct kui_shell {
     unsigned browser_selected, browser_page, keyboard_selected;
     unsigned advanced_selected;
     enum kui_shell_page settings_return;
-    bool keyboard_upper, browse_for_scan;
+    unsigned keyboard_layer; /* KUI_SHELL_KEYS_* */
+    bool browse_for_scan;
+    /* RAM-only choices: an empty job means automatic latest for Resume/Verify;
+     * an empty folder label means the disc title for NEW captures only. */
+    char capture_job[KUI_DEST_JOB_CAP], capture_folder_label[KUI_DEST_TITLE_CAP];
+    bool browse_for_capture_job, capture_label_keyboard;
+    unsigned recovery_operation; /* 0 scan, 1 explicit repair copy, 2 reread evidence. */
+    bool capture_network;
+    bool capture_cd_toc; /* Explicitly declared single-session CD source. */
     /* File Manager. files_request is the next listing main hands to the
      * worker: the browser's folder, or the picker's (folders_only). A job
      * is checked (FILES_CHECK) before it is confirmed and run (FILES_RUN);
@@ -142,6 +215,16 @@ struct kui_shell {
     uint32_t storage_test_baseline_id;
     bool storage_test_last_valid, storage_test_show_result, storage_test_details;
     bool storage_test_from_history, storage_test_keyboard, confirm_storage_test;
+    /* The Wi-Fi page: the board's latest view; rows are the band setting,
+     * the networks in range, then "Other network". wifi_request is the job
+     * main hands to the worker (JOIN, BAND); main wipes its password once
+     * taken. The keyboard types the password, or first the name of a
+     * network typed by hand (wifi_typing_name). */
+    struct kui_wifi_view wifi;
+    unsigned wifi_selected;
+    struct kui_wifi_request wifi_request;
+    uint8_t wifi_security; /* of the network being joined; 0xff: not known */
+    bool wifi_keyboard, wifi_typing_name, confirm_wifi_forget, confirm_wifi_update;
 };
 /* Home's apps, top to bottom: A on row home_selected opens
  * kui_shell_home_pages[home_selected]. Drawing looks each app up by page. */
@@ -185,12 +268,46 @@ void kui_shell_set_music_listing(struct kui_shell *shell,
  * LIST uses games_path + games_page * ROWS and games_view; INSPECT uses
  * games_selected_path. SCAN covers /Games, then lists its first page. */
 void kui_shell_set_games_listing(struct kui_shell *shell, const struct kui_games_page *page);
+void kui_shell_set_games_selection(struct kui_shell *,const struct kui_games_selection *);
+bool kui_shell_games_selection(const struct kui_shell *,struct kui_games_selection *);
+bool kui_shell_set_games_found_rows(struct kui_shell *,const struct kui_games_page *,
+    unsigned generation,unsigned offset,unsigned view,unsigned selected);
+/* Worker publications must match the request that is still on screen. */
+bool kui_shell_set_games_rows(struct kui_shell *,const struct kui_games_page *,
+    unsigned generation,unsigned offset,unsigned requested_view);
 void kui_shell_set_games_detail(struct kui_shell *shell, const struct kui_games_detail *detail);
+bool kui_shell_games_zso_selected(const struct kui_shell *);
 bool kui_shell_games_image_ready(const struct kui_shell *shell);
 /* The view to draw: the saved view once known, else the list. */
 unsigned kui_shell_games_view(const struct kui_shell *shell);
-/* Exact initial test profile only; preparation revalidates files and metadata. */
+bool kui_shell_games_art_key(const struct kui_shell *,struct kui_shell_games_art_key *);
+bool kui_shell_games_art_same(const struct kui_shell_games_art_key *,const struct kui_shell_games_art_key *);
+bool kui_shell_set_games_art(struct kui_shell *,const struct kui_shell_games_art_key *,
+    const struct kui_games_cover_result *);
+/* Selected paired version, or NULL for an ordinary single image. */
+const char *kui_shell_games_variant_label(const struct kui_shell *shell);
+/* Media and boot eligibility; preparation revalidates files and metadata. */
 bool kui_shell_games_retail_ready(const struct kui_shell *shell);
+bool kui_shell_games_background_ready(const struct kui_shell *shell);
+bool kui_shell_games_encoding_ready(const struct kui_shell *shell);
+/* Represented playable audio allows an experimental opt-in. This does not
+ * establish runtime compatibility or successful playback. */
+bool kui_shell_games_cdda_ready(const struct kui_shell *shell);
+/* Inspection publishes a tested status only after checking exact content
+ * identity. Unknown, stale and out-of-range statuses never imply a test. */
+const char *kui_shell_games_cdda_status(const struct kui_shell *shell);
+bool kui_shell_games_launch_ready(const struct kui_shell *shell);
+bool kui_shell_games_patches_ready(const struct kui_shell *shell);
+bool kui_shell_game_launch_settings(const struct kui_shell *shell,
+                                    struct kui_game_launch_settings *out);
+void kui_shell_set_game_launch_settings(struct kui_shell *shell,const char *path,
+                                       const struct kui_game_launch_settings *settings,bool loaded);
+void kui_shell_game_launch_saved(struct kui_shell *shell,const char *path,bool ok);
+bool kui_shell_games_option_ready(const struct kui_shell *shell, unsigned row);
+const char *kui_shell_games_reader_label(const struct kui_shell *shell);
+/* A Windows CE image the CE boot test can take: it loads the CE kernel,
+ * starts it, and stops at the first disc request K-UI cannot serve. */
+bool kui_shell_games_ce_probe_ready(const struct kui_shell *shell);
 /* File Manager results. A listing is kept only for the folder it was asked
  * for; a check only for the job and page that asked; a picture only while
  * its view is open. A run's status becomes the browser's notice. */
@@ -215,9 +332,16 @@ void kui_shell_set_listing(struct kui_shell *shell,
     const struct kui_destination_page *page);
 void kui_shell_destination_error(struct kui_shell *shell, const char *message);
 /* Keyboard has four QWERTY/digit rows of ten keys, then SPACE/BACK/DONE.
- * Only directions may be repeated; A and the other action buttons are edges. */
+ * Only directions may be repeated; A and the other action buttons are edges.
+ * Y cycles its layers: lowercase, uppercase, then symbols. */
 #define KUI_SHELL_KEY_COUNT 43u
-const char *kui_shell_key_label(unsigned key, bool uppercase);
+enum { KUI_SHELL_KEYS_LOWER, KUI_SHELL_KEYS_UPPER, KUI_SHELL_KEYS_SYMBOLS, KUI_SHELL_KEY_LAYERS };
+const char *kui_shell_key_label(unsigned key, unsigned layer);
+/* The Wi-Fi page's view from the worker. A view without a scan keeps the
+ * networks already listed. */
+void kui_shell_set_wifi(struct kui_shell *shell, const struct kui_wifi_view *view);
+/* Rows on the Wi-Fi page: the band setting, each network, "Other network". */
+unsigned kui_shell_wifi_rows(const struct kui_shell *shell);
 
 /* Main copies shared worker state while locked, then draws outside the lock.
  * Pointer fields remain valid for this draw. log_lines contains up to LOG_ROWS
@@ -251,6 +375,8 @@ struct kui_shell_view {
      * and image details' large cover. Valid only where the listing or
      * detail says cover; NULL draws placeholders. */
     const uint16_t (*game_covers)[KUI_COVER_PIXELS];
+    /* Runtime keeps one selected cover; host previews may still supply rows. */
+    const uint16_t *game_selected_cover;
     const uint16_t *game_detail_cover;
     /* The File Manager's picture, KUI_FILES_PICTURE_EDGE square; drawn only
      * while shell->files_picture says it loaded. */

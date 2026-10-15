@@ -1,0 +1,663 @@
+/* SPDX-License-Identifier: GPL-3.0-only
+ * Original K-UI implementation of the receive-only SCI stream that the SCI
+ * async probe proved on the console (513-byte DMA, RDR tail byte, MSTP0 reset
+ * between blocks; docs/evidence/sci-async-cmd18-stream-2026-10-02.md). */
+#include "sci_stream.h"
+#include "sci_sd_bus.h"
+#include "kui/general_sci_options.h"
+#if KUI_TOY_PIPELINE_HIGH_STREAM
+#include "kui/toy_loader_data_pipeline.h"
+#endif
+#ifndef KUI_TOY_PILOT_WORD_REVERSE_PROFILE
+#define KUI_TOY_PILOT_WORD_REVERSE_PROFILE 0
+#endif
+#if KUI_TOY_PILOT_WORD_REVERSE_PROFILE < 0 || KUI_TOY_PILOT_WORD_REVERSE_PROFILE > 1
+#error Toy word reversal profile must be 0 or 1
+#endif
+#if KUI_TOY_PILOT_WORD_REVERSE_PROFILE && \
+    (!KUI_TOY_PIPELINE_HIGH_STREAM || KUI_TOY_PILOT_DATA_PIPELINE_PROFILE != 2)
+#error Toy word reversal requires the exact high-only AP pipeline
+#endif
+
+#define SMR UINT32_C(0xffe00000)
+#define BRR UINT32_C(0xffe00004)
+#define SCR UINT32_C(0xffe00008)
+#define SSR UINT32_C(0xffe00010)
+#define RDR UINT32_C(0xffe00014)
+#define SCMR UINT32_C(0xffe00018)
+#define SPTR UINT32_C(0xffe0001c)
+#define STBCR UINT32_C(0xffc00004)
+#define PDTR UINT32_C(0xff800030)
+#define SAR UINT32_C(0xffa00010)
+#define DAR UINT32_C(0xffa00014)
+#define TCR UINT32_C(0xffa00018)
+#define CHCR UINT32_C(0xffa0001c)
+#define DMAOR UINT32_C(0xffa00040)
+/* Channel 1: SCI receive request, byte units, destination incrementing; no
+ * completion interrupt (the game's DMAC level stays as it is). RIE+RE then
+ * clock the card without a transmitter; with SPTR.EIO only the receiver's
+ * error (ERI) reaches the CPU, at the overrun that ends every reception. */
+#define RX_DMA UINT32_C(0x4911)
+#define RDRF 0x40u
+#define ORER 0x20u
+#define FLAGS 0x38u
+#define TEND 0x04u
+#define DMA_BYTES 513u
+#define AREA_BYTES KUI_SCI_STREAM_AREA_BYTES
+
+#ifdef KUI_SCI_STREAM_TEST
+extern uint32_t kui_sci_stream_test_read(uint32_t address, unsigned width);
+extern void kui_sci_stream_test_write(uint32_t address, uint32_t value, unsigned width);
+extern void kui_sci_stream_test_settle(unsigned count);
+extern uint32_t kui_sci_stream_test_physical(const void *area);
+extern void kui_sci_stream_test_purge(const void *area, unsigned bytes);
+extern void kui_sci_stream_test_fence(void);
+#define rd8(a) ((uint8_t)kui_sci_stream_test_read(a, 1))
+#define rd16(a) ((uint16_t)kui_sci_stream_test_read(a, 2))
+#define rd32(a) kui_sci_stream_test_read(a, 4)
+#define wr8(a,v) kui_sci_stream_test_write(a, (uint8_t)(v), 1)
+#define wr32(a,v) kui_sci_stream_test_write(a, v, 4)
+#define settle kui_sci_stream_test_settle
+#define physical kui_sci_stream_test_physical
+#define purge kui_sci_stream_test_purge
+#define fence(area) kui_sci_stream_test_fence()
+#else
+#define rd8(a) (*(volatile uint8_t *)(uintptr_t)(a))
+#define rd16(a) (*(volatile uint16_t *)(uintptr_t)(a))
+#define rd32(a) (*(volatile uint32_t *)(uintptr_t)(a))
+#define wr8(a,v) (rd8(a) = (uint8_t)(v))
+#define wr32(a,v) (rd32(a) = (uint32_t)(v))
+static void settle(unsigned n) {
+    __asm__ __volatile__("1: dt %0\n\tbf 1b" : "+r"(n) : : "t", "memory");
+}
+static uint32_t physical(const void *area) { return (uint32_t)(uintptr_t)area & UINT32_C(0x1fffffff); }
+static void purge(const void *area, unsigned bytes) {
+    for(uintptr_t p = (uintptr_t)area; p < (uintptr_t)area + bytes; p += 32u)
+        __asm__ __volatile__("ocbp @%0" : : "r"(p) : "memory");
+}
+/* An uncached read of main memory waits for the external bus, and the DMAC
+ * goes before the CPU there: a transfer the channel had begun (RDR read, the
+ * write held off by the game's own DMA) has landed when it returns. Stopping
+ * the channel does not cancel such a transfer, so finish fences both before
+ * the stop (requests it still takes) and after it (before counting). */
+static void fence(const void *area) {
+    (void)*(volatile uint32_t *)(((uintptr_t)area & UINT32_C(0x1fffffff)) | UINT32_C(0xa0000000));
+}
+#endif
+
+typedef uint32_t alias_word __attribute__((__may_alias__));
+/* RESUME: stopped mid-block by an overrun in an interrupt, to be resumed. */
+enum { CLOSED, PAUSED, DMA, LOST, RESUME
+#if KUI_SCI_STREAM_TOKEN_SLICED
+    , TOKEN_WAIT
+#endif
+};
+#ifdef KUI_RETAIL_ASYNC
+/* The game reader keeps this state between its interrupt vectors. */
+#include "retail_async.h"
+#define s (kui_retail_async_region.shared.stream)
+#else
+static struct kui_sci_stream_state s;
+#endif
+
+static uint8_t byte(uint8_t value) { return s.card->bus.transfer(s.card->bus.ctx, value, false); }
+static void select(bool selected) { s.card->bus.select(s.card->bus.ctx, selected); }
+static uint32_t reverse(uint32_t x) {
+    /* Each byte's bits in reverse order, bytes in place: SCI is LSB first. */
+    uint32_t t = (x ^ (x >> 1)) & UINT32_C(0x55555555);
+    x ^= t ^ (t << 1);
+    t = (x ^ (x >> 2)) & UINT32_C(0x33333333);
+    x ^= t ^ (t << 2);
+    t = (x ^ (x >> 4)) & UINT32_C(0x0f0f0f0f);
+    return x ^ t ^ (t << 4);
+}
+#if KUI_TOY_PILOT_WORD_REVERSE_PROFILE
+/* Only the main 128 data words avoid call/stack traffic. Keep the existing
+ * out-of-line reversal for the two CRC tail bytes and every other reader. */
+static inline __attribute__((__always_inline__)) uint32_t reverse_data_word(uint32_t x) {
+    uint32_t t = (x ^ (x >> 1)) & UINT32_C(0x55555555);
+    x ^= t ^ (t << 1);
+    t = (x ^ (x >> 2)) & UINT32_C(0x33333333);
+    x ^= t ^ (t << 2);
+    t = (x ^ (x >> 4)) & UINT32_C(0x0f0f0f0f);
+    return x ^ t ^ (t << 4);
+}
+#endif
+#ifdef KUI_RETAIL_CE
+/* Original MSB-first CRC16 table for x^16+x^12+x^5+1 (0x1021).
+ * Entry i is generated from i << 8 by eight repetitions of:
+ *     crc = (crc << 1) ^ ((crc & 0x8000) ? 0x1021 : 0);
+ * retaining the low 16 bits after each step. CE spends 512 bytes of
+ * read-only resident space to shorten checks in both DMA and polled paths.
+ * Native readers retain the table-free update below. */
+static const uint16_t ce_crc16_table[256] __attribute__((aligned(32))) = {
+    0x0000u, 0x1021u, 0x2042u, 0x3063u, 0x4084u, 0x50a5u, 0x60c6u, 0x70e7u,
+    0x8108u, 0x9129u, 0xa14au, 0xb16bu, 0xc18cu, 0xd1adu, 0xe1ceu, 0xf1efu,
+    0x1231u, 0x0210u, 0x3273u, 0x2252u, 0x52b5u, 0x4294u, 0x72f7u, 0x62d6u,
+    0x9339u, 0x8318u, 0xb37bu, 0xa35au, 0xd3bdu, 0xc39cu, 0xf3ffu, 0xe3deu,
+    0x2462u, 0x3443u, 0x0420u, 0x1401u, 0x64e6u, 0x74c7u, 0x44a4u, 0x5485u,
+    0xa56au, 0xb54bu, 0x8528u, 0x9509u, 0xe5eeu, 0xf5cfu, 0xc5acu, 0xd58du,
+    0x3653u, 0x2672u, 0x1611u, 0x0630u, 0x76d7u, 0x66f6u, 0x5695u, 0x46b4u,
+    0xb75bu, 0xa77au, 0x9719u, 0x8738u, 0xf7dfu, 0xe7feu, 0xd79du, 0xc7bcu,
+    0x48c4u, 0x58e5u, 0x6886u, 0x78a7u, 0x0840u, 0x1861u, 0x2802u, 0x3823u,
+    0xc9ccu, 0xd9edu, 0xe98eu, 0xf9afu, 0x8948u, 0x9969u, 0xa90au, 0xb92bu,
+    0x5af5u, 0x4ad4u, 0x7ab7u, 0x6a96u, 0x1a71u, 0x0a50u, 0x3a33u, 0x2a12u,
+    0xdbfdu, 0xcbdcu, 0xfbbfu, 0xeb9eu, 0x9b79u, 0x8b58u, 0xbb3bu, 0xab1au,
+    0x6ca6u, 0x7c87u, 0x4ce4u, 0x5cc5u, 0x2c22u, 0x3c03u, 0x0c60u, 0x1c41u,
+    0xedaeu, 0xfd8fu, 0xcdecu, 0xddcdu, 0xad2au, 0xbd0bu, 0x8d68u, 0x9d49u,
+    0x7e97u, 0x6eb6u, 0x5ed5u, 0x4ef4u, 0x3e13u, 0x2e32u, 0x1e51u, 0x0e70u,
+    0xff9fu, 0xefbeu, 0xdfddu, 0xcffcu, 0xbf1bu, 0xaf3au, 0x9f59u, 0x8f78u,
+    0x9188u, 0x81a9u, 0xb1cau, 0xa1ebu, 0xd10cu, 0xc12du, 0xf14eu, 0xe16fu,
+    0x1080u, 0x00a1u, 0x30c2u, 0x20e3u, 0x5004u, 0x4025u, 0x7046u, 0x6067u,
+    0x83b9u, 0x9398u, 0xa3fbu, 0xb3dau, 0xc33du, 0xd31cu, 0xe37fu, 0xf35eu,
+    0x02b1u, 0x1290u, 0x22f3u, 0x32d2u, 0x4235u, 0x5214u, 0x6277u, 0x7256u,
+    0xb5eau, 0xa5cbu, 0x95a8u, 0x8589u, 0xf56eu, 0xe54fu, 0xd52cu, 0xc50du,
+    0x34e2u, 0x24c3u, 0x14a0u, 0x0481u, 0x7466u, 0x6447u, 0x5424u, 0x4405u,
+    0xa7dbu, 0xb7fau, 0x8799u, 0x97b8u, 0xe75fu, 0xf77eu, 0xc71du, 0xd73cu,
+    0x26d3u, 0x36f2u, 0x0691u, 0x16b0u, 0x6657u, 0x7676u, 0x4615u, 0x5634u,
+    0xd94cu, 0xc96du, 0xf90eu, 0xe92fu, 0x99c8u, 0x89e9u, 0xb98au, 0xa9abu,
+    0x5844u, 0x4865u, 0x7806u, 0x6827u, 0x18c0u, 0x08e1u, 0x3882u, 0x28a3u,
+    0xcb7du, 0xdb5cu, 0xeb3fu, 0xfb1eu, 0x8bf9u, 0x9bd8u, 0xabbbu, 0xbb9au,
+    0x4a75u, 0x5a54u, 0x6a37u, 0x7a16u, 0x0af1u, 0x1ad0u, 0x2ab3u, 0x3a92u,
+    0xfd2eu, 0xed0fu, 0xdd6cu, 0xcd4du, 0xbdaau, 0xad8bu, 0x9de8u, 0x8dc9u,
+    0x7c26u, 0x6c07u, 0x5c64u, 0x4c45u, 0x3ca2u, 0x2c83u, 0x1ce0u, 0x0cc1u,
+    0xef1fu, 0xff3eu, 0xcf5du, 0xdf7cu, 0xaf9bu, 0xbfbau, 0x8fd9u, 0x9ff8u,
+    0x6e17u, 0x7e36u, 0x4e55u, 0x5e74u, 0x2e93u, 0x3eb2u, 0x0ed1u, 0x1ef0u,
+};
+#endif
+#ifdef KUI_RETAIL_CE
+/* Keep the accumulator in a full SH register; a uint16_t accumulator made
+ * the compiler spill/reload it each byte. Every update still yields a
+ * 16-bit state, so the next table index remains within 0..255. */
+static inline uint32_t crc16(uint32_t crc, uint8_t data) {
+    return ((crc << 8) & 0xffffu) ^ ce_crc16_table[(crc >> 8) ^ data];
+}
+#else
+static inline uint16_t crc16(uint16_t crc, uint8_t data) {
+    uint32_t x = (crc >> 8) ^ data;
+    x ^= x >> 4;
+    return (uint16_t)((crc << 8) ^ (x << 12) ^ (x << 5) ^ x);
+}
+#endif
+static uint8_t crc7(const uint8_t *p) {
+    unsigned c = 0;
+    for(unsigned i = 0; i < 5; ++i) for(unsigned j = 0; j < 8; ++j) {
+        c <<= 1;
+        if(((p[i] >> (7u - j)) ^ (c >> 7)) & 1u) c ^= 9u;
+    }
+    return (uint8_t)((c << 1) | 1u);
+}
+/* Bus faults latch: the card is then unusable until reinitialized. */
+static bool healthy(void) { return kui_sci_sd_healthy(); }
+static bool channel_idle(void) { return !(rd32(CHCR) & 7u) && (rd32(DMAOR) & 7u) == 1u; }
+
+enum kui_sci_stream_result kui_sci_stream_open(const struct kui_loader_sd *card,
+    uint8_t *area0, uint8_t *area1, bool unknown) {
+    s.card = card;
+    s.area[0] = area0; s.area[1] = area1;
+    s.state = unknown ? LOST : CLOSED;
+    s.ready[0] = s.ready[1] = 0; s.kept = 0; s.unrepaired = 0; s.arrived = 0;
+    s.sptr = rd8(SPTR);
+    /* A deselected idle byte at the fast rate: the bus leaves its slow
+     * acquisition rate and the card sees whole bytes. */
+    select(false);
+    (void)byte(0xff);
+    if(!healthy() || (s.sptr & 0x0au) || rd8(SCR) != 0x30u || rd8(BRR) != 0)
+        return KUI_SCI_STREAM_RESET;
+    return KUI_SCI_STREAM_OK;
+}
+bool kui_sci_stream_busy(void) { return s.state == DMA; }
+bool kui_sci_stream_ready(uint32_t lba) { return s.arrived == lba + 1u; }
+#if KUI_SCI_STREAM_TOKEN_SLICED
+void kui_sci_stream_token_budget(bool bounded) {
+    s.token_bounded = bounded;
+    s.token_budget = KUI_SCI_STREAM_TOKEN_SLICE;
+}
+bool kui_sci_stream_token_pending(void) { return s.state == TOKEN_WAIT; }
+#endif
+const struct kui_sci_stream_stats *kui_sci_stream_stats(void) { return &s.stats; }
+void kui_sci_stream_discard(void) { s.ready[0] = s.ready[1] = 0; s.kept = 0; s.arrived = 0; }
+
+/* Data token after the card's wait (0xff); TEND before the DMA starts. */
+#if KUI_SCI_STREAM_TOKEN_SLICED
+static void token_count(uint32_t bytes) {
+    s.stats.token_bytes += bytes;
+    if(bytes > s.stats.token_max) s.stats.token_max = bytes;
+}
+#endif
+static enum kui_sci_stream_result token(uint32_t limit) {
+#if KUI_SCI_STREAM_TOKEN_SLICED
+    if(s.state != TOKEN_WAIT) {
+        s.token_limit = limit;
+        s.token_used = 0;
+        s.state = TOKEN_WAIT;
+    }
+    uint32_t remaining = s.token_limit - s.token_used, run = remaining;
+    if(s.token_bounded && run > s.token_budget) run = s.token_budget;
+    uint32_t n = 0;
+    uint8_t value = 0xff;
+    while(n < run) {
+        value = byte(0xff);
+        ++n;
+        if(value != 0xff) break;
+    }
+    s.token_used += n;
+    if(s.token_bounded) s.token_budget -= n;
+    if(value == 0xfe) {
+        for(unsigned k = 0; k < 64u && !(rd8(SSR) & TEND); ++k) {}
+        token_count(s.token_used);
+        return KUI_SCI_STREAM_OK;
+    }
+    if(value == 0xff && n < remaining && healthy()) {
+        select(false); /* no more clocks until the same search resumes */
+        if(!healthy()) {s.state = LOST; return KUI_SCI_STREAM_RESET;}
+        if(n) ++s.stats.token_yields; /* count work paused, not zero-budget probes */
+        return KUI_SCI_STREAM_PENDING;
+    }
+    token_count(s.token_used);
+    s.state = LOST;
+#else
+    for(uint32_t n = 0; n < limit; ++n) {
+        uint8_t value = byte(0xff);
+        if(value == 0xfe) {
+            for(unsigned k = 0; k < 64u && !(rd8(SSR) & TEND); ++k) {}
+            return KUI_SCI_STREAM_OK;
+        }
+        if(value != 0xff) break;
+    }
+#endif
+    ++s.stats.token_errors;
+    return healthy() ? KUI_SCI_STREAM_TOKEN : KUI_SCI_STREAM_RESET;
+}
+/* R1, or 0xff if none came within the response window. */
+static uint8_t command(const uint8_t packet[6], bool stop) {
+    for(unsigned i = 0; i < 6; ++i) (void)byte(packet[i]);
+    if(stop) (void)byte(0xff); /* CMD12's stuff byte */
+    uint8_t value = 0xff;
+    for(unsigned i = 0; i < 20u && (value & 0x80u); ++i) value = byte(0xff);
+    return value;
+}
+#if KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+/* Shared-worker visits must not clock an entire legacy busy timeout while
+ * the game's decoder is paused. Keep the first hardware trial's idle and
+ * CMD12 R1b windows bounded; a timeout is a transport fault, never a grant
+ * to raw audio. Ordinary and CE readers retain their admitted windows. */
+#define START_IDLE_LIMIT 4096u
+#define STOP_BUSY_LAST 4095u
+#else
+#define START_IDLE_LIMIT 50000u
+#define STOP_BUSY_LAST 200000u
+#endif
+/* CMD12 into the stream, its R1b busy, deselection and an idle byte. An
+ * idle card answers "illegal command" (0x04): it is stopped all the same. */
+static enum kui_sci_stream_result stop_card(void) {
+    static const uint8_t stop[6] = {0x4c, 0, 0, 0, 0, 0x61};
+#if KUI_SCI_STREAM_TOKEN_SLICED
+    if(s.state == TOKEN_WAIT) token_count(s.token_used);
+    ++s.stats.stops;
+#endif
+    select(true);
+    enum kui_sci_stream_result result = command(stop, true) & ~0x04u ?
+        KUI_SCI_STREAM_COMMAND : KUI_SCI_STREAM_OK;
+    for(uint32_t n = 0; byte(0xff) != 0xffu; ++n)
+        if(n >= STOP_BUSY_LAST || !healthy()) {result = KUI_SCI_STREAM_COMMAND; break;}
+    select(false);
+    (void)byte(0xff);
+    s.state = result == KUI_SCI_STREAM_OK ? CLOSED : LOST;
+    return healthy() ? result : KUI_SCI_STREAM_RESET;
+}
+static enum kui_sci_stream_result start(uint32_t lba, uint32_t limit) {
+    uint32_t address = s.card->high_capacity ? lba : lba << 9;
+    uint8_t packet[6] = {0x52, (uint8_t)(address >> 24), (uint8_t)(address >> 16),
+        (uint8_t)(address >> 8), (uint8_t)address, 0};
+    packet[5] = crc7(packet);
+    select(true);
+    for(uint32_t n = 0; byte(0xff) != 0xffu;)
+        if(++n >= START_IDLE_LIMIT || !healthy()) return KUI_SCI_STREAM_COMMAND;
+    s.state = LOST; /* from here on, CMD18 may be running */
+    ++s.stats.starts;
+    uint8_t r1 = command(packet, false);
+    if(!healthy()) return KUI_SCI_STREAM_RESET;
+#if KUI_SCI_STREAM_TOKEN_SLICED
+    s.position = lba;
+#endif
+    return r1 ? KUI_SCI_STREAM_COMMAND : token(limit);
+}
+static enum kui_sci_stream_result module_reset(void) {
+    uint8_t before = rd8(STBCR);
+    if((before & 1u) || rd8(SCR) || (rd8(SSR) & (RDRF | FLAGS)) ||
+       (rd8(SPTR) & 0x8au) != 0x82u || !(rd16(PDTR) & 0x80u)) return KUI_SCI_STREAM_RESET;
+    wr8(STBCR, before | 1u);
+    bool stopped = false, resumed = false;
+    for(unsigned n = 0; n < 8u && !stopped; ++n) stopped = rd8(STBCR) & 1u;
+    settle(64);
+    wr8(STBCR, rd8(STBCR) & ~1u);
+    for(unsigned n = 0; n < 8u && !resumed; ++n) resumed = !(rd8(STBCR) & 1u);
+    if(!resumed || !stopped) return KUI_SCI_STREAM_RESET;
+    settle(64);
+    if(rd8(SCR) || rd8(SMR) || rd8(BRR) != 0xffu || rd8(SCMR) ||
+       (rd8(SSR) & 0xfcu) != 0x84u || (rd8(SPTR) & 0x8au) != 0x82u) {
+        wr8(SCR, 0);
+        return KUI_SCI_STREAM_RESET;
+    }
+    return KUI_SCI_STREAM_OK;
+}
+/* After reception: deselect, reset the module after an overrun, and restore
+ * the synchronous fast settings the bus uses for command bytes. */
+static enum kui_sci_stream_result handoff(bool overrun) {
+    select(false);
+    if(!healthy() || !(rd16(PDTR) & 0x80u)) return KUI_SCI_STREAM_RESET;
+    if(overrun) {
+        enum kui_sci_stream_result result = module_reset();
+        if(result != KUI_SCI_STREAM_OK) return result;
+    }
+    wr8(SCR, 0); wr8(SCMR, 0); wr8(SMR, 0x80u); wr8(BRR, 0);
+    settle(64); /* more than one bit time at 12.5 MHz */
+    wr8(SPTR, s.sptr); wr8(SCR, 0x30u);
+    uint8_t status = rd8(SSR);
+    if(rd8(SCR) != 0x30u || rd8(SMR) != 0x80u || rd8(BRR) != 0 ||
+       (status & (RDRF | FLAGS)) || (status & 0x84u) != 0x84u) return KUI_SCI_STREAM_RESET;
+    return KUI_SCI_STREAM_OK;
+}
+/* Receive the area's bytes from offset on by DMA: RIE+RE clock the card
+ * without a transmitter, the channel takes each byte, and the receiver keeps
+ * the one after the last in RDR and stops on the next one's overrun. */
+static enum kui_sci_stream_result start_dma(uint32_t area, uint32_t offset) {
+    /* TxD latched high as GPIO before the transmitter is turned off. */
+    wr8(SPTR, 0x83u);
+    if((rd8(SPTR) & 0x8au) != 0x82u) return KUI_SCI_STREAM_RESET;
+#if KUI_GENERAL_SCI_RESUME_FIX || KUI_CE_SCI_RESUME_FIX
+    /* Snapshot at every actual acquisition, including a resumed block.
+     * receive/fetch admit an idle channel; finish restores it before
+     * continuing a repaired block with interrupts still masked. */
+    for(unsigned j = 0; j < 4; ++j) s.saved[j] = rd32(SAR + 4u * j);
+#endif
+    wr8(SCR, 0);
+    wr32(CHCR, 0);
+    wr32(SAR, RDR & UINT32_C(0x1fffffff));
+    wr32(DAR, physical(s.area[area]) + offset);
+    wr32(TCR, DMA_BYTES - offset);
+    wr32(CHCR, RX_DMA);
+    wr8(SCR, 0x50u);
+    s.state = DMA;
+    return KUI_SCI_STREAM_OK;
+}
+/* The block whose token was just read, into the area not holding the last
+ * block taken (an untaken block there is dropped), unless the last block
+ * received still awaits taking: then into the other area, the kept block
+ * giving way. By DMA when channel 1 is idle and polled is false, otherwise
+ * by programmed transfers (514 bytes, so the card's gap byte is left for
+ * the next token search), which cannot overrun. */
+static enum kui_sci_stream_result receive(bool polled) {
+    uint32_t area = s.fill ^ 1u;
+    if(s.kept == area + 1u) {
+        if(s.arrived) s.kept = 0;
+        else area ^= 1u;
+    }
+    uint8_t *p = s.area[area];
+    s.fill = area;
+    s.arrived = 0;
+    s.ready[area] = 0;
+    s.lost[area] = 0;
+    settle(64); /* the token byte's last edge */
+    if(polled || !channel_idle()) {
+        for(unsigned i = 0; i < DMA_BYTES; ++i) p[i] = byte(0xff);
+        s.rdr[area] = byte(0xff);
+        select(false);
+        if(!healthy()) return KUI_SCI_STREAM_RESET;
+        s.wire[area] = 0;
+        s.ready[area] = 1;
+        s.ready_lba[area] = s.position++;
+        s.arrived = s.position;
+        s.state = PAUSED;
+        ++s.stats.polled;
+        return KUI_SCI_STREAM_OK;
+    }
+    purge(p, AREA_BYTES);
+#if !KUI_GENERAL_SCI_RESUME_FIX && !KUI_CE_SCI_RESUME_FIX
+    for(unsigned i = 0; i < 4; ++i) s.saved[i] = rd32(SAR + 4u * i);
+#endif
+    s.wire[area] = 1;
+    return start_dma(area, 0);
+}
+enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_limit, bool polled) {
+    if(s.state == DMA) return KUI_SCI_STREAM_BUSY;
+    enum kui_sci_stream_result result;
+    if(s.state == RESUME && s.position == lba) {
+        /* Resumed where an overrun in an interrupt stopped it. */
+#if KUI_GENERAL_SCI_RESUME_FIX || KUI_CE_SCI_RESUME_FIX
+        /* A busy guest channel falls through to the normal stop/restart
+         * path below, which rereads this block by PIO. */
+        if(channel_idle()) {
+#elif KUI_TOY_PIPELINE_HIGH_STREAM && KUI_TOY_PIPELINE_RESUME_FIX
+        /* finish already restored DMA1 before leaving RESUME. The guest
+         * may have changed its idle tuple or started a transfer meanwhile.
+         * Never resume over that transfer, or restore the old saved tuple. */
+        if(!channel_idle()) {
+            if((result = stop_card()) != KUI_SCI_STREAM_OK) return result;
+            /* CLOSED falls through to CMD18 at this unchanged block. The
+             * normal receive path uses PIO while the guest owns DMA1. */
+        } else {
+            for(unsigned i = 0; i < 4; ++i) s.saved[i] = rd32(SAR + 4u * i);
+#endif
+        select(true);
+        if((result = start_dma(s.fill, s.lost[s.fill])) != KUI_SCI_STREAM_OK) s.state = LOST;
+        return result;
+#if (KUI_TOY_PIPELINE_HIGH_STREAM && KUI_TOY_PIPELINE_RESUME_FIX) || KUI_GENERAL_SCI_RESUME_FIX || KUI_CE_SCI_RESUME_FIX
+        }
+#endif
+    }
+#if KUI_SCI_STREAM_TOKEN_SLICED
+    bool pending = s.state == TOKEN_WAIT && s.position == lba;
+    if(!pending) s.token_polled = polled;
+    else polled = s.token_polled;
+    if(pending || (s.state == PAUSED && s.position == lba)) {
+#else
+    if(s.state == PAUSED && s.position == lba) {
+#endif
+        select(true);
+        result = token(token_limit);
+        if(result != KUI_SCI_STREAM_OK) {
+#if KUI_SCI_STREAM_TOKEN_SLICED
+            if(result != KUI_SCI_STREAM_PENDING)
+#endif
+                s.state = LOST;
+            return result;
+        }
+    } else {
+        if(s.state != CLOSED && (result = stop_card()) != KUI_SCI_STREAM_OK) return result;
+        result = start(lba, token_limit);
+        if(result != KUI_SCI_STREAM_OK) return result;
+    }
+    s.position = lba;
+    result = receive(polled);
+    if(result != KUI_SCI_STREAM_OK) s.state = LOST;
+    return result;
+}
+/* End a reception: let the receiver take the second CRC byte and stop on the
+ * next byte's overrun, stop the SCI and channel, restore the channel, keep
+ * the RDR byte, then hand the SCI back to command bytes. A channel someone
+ * else reprogrammed is left alone; the SCI is handed back in every case.
+ * later: a mid-block overrun is resumed by the next fetch, not now. */
+static enum kui_sci_stream_result finish(bool later) {
+    uint32_t area = s.fill, start = physical(s.area[area]), control = 0, count = 1;
+    s.state = LOST;
+    if(rd32(CHCR) & 2u)
+        for(unsigned n = 0; n < 512u && !(rd8(SSR) & ORER); ++n) {}
+    wr8(SCR, 0);
+    fence(s.area[area]);
+    uint32_t address = rd32(DAR);
+    bool ours = rd32(SAR) == (RDR & UINT32_C(0x1fffffff)) && address >= start &&
+        address <= start + DMA_BYTES;
+    if(ours) {
+        wr32(CHCR, rd32(CHCR) & ~UINT32_C(5));
+        (void)rd32(CHCR);
+        fence(s.area[area]);
+        control = rd32(CHCR); count = rd32(TCR);
+        ours = rd32(DAR) == start + DMA_BYTES - count;
+        if(ours) {
+            wr32(CHCR, 0);
+            for(unsigned i = 0; i < 4; ++i) wr32(SAR + 4u * i, s.saved[i]);
+        }
+    }
+    uint8_t status = rd8(SSR), tail = 0;
+    if(status & RDRF) tail = rd8(RDR);
+    wr8(SSR, status & ~(RDRF | FLAGS));
+    enum kui_sci_stream_result result = handoff(status & ORER);
+    if(result != KUI_SCI_STREAM_OK) return result;
+    if(!ours) {
+        ++s.stats.foreign;
+        return KUI_SCI_STREAM_BUSY;
+    }
+    if(count || !(control & 2u) || !(status & RDRF)) {
+#ifdef KUI_RETAIL_CE
+        unsigned bucket = !count ? 0u : count <= 128u ? 1u : count <= 384u ? 2u : 3u;
+        ++s.stats.incomplete[bucket];
+        /* The SCI and our channel have already stopped and handed back.
+         * These late snapshots cannot identify the exact fault-time owner. */
+        s.stats.incomplete_ch2_active += (rd32(CHCR + 0x10u) & 3u) == 1u;
+        s.stats.incomplete_dmaor_bad += (rd32(DMAOR) & 7u) != 1u;
+#endif
+        /* The channel was held off the bus (the game's own DMA) and the
+         * receiver overran mid-block: the byte that overran is lost and the
+         * card stopped after it. The channel has `at` bytes; usually it
+         * also took the byte RDR held when it got the bus back, so byte
+         * `at` is the lost one. If it had not yet (RDRF), RDR still holds
+         * byte `at` and `at + 1` is lost. Once per block, if the lost byte
+         * was data, carry on from the byte after it (the card simply
+         * waited, deselected) and rebuild the lost one from the CRC when
+         * the block is taken. */
+        uint32_t at = DMA_BYTES - count, held = status & RDRF ? 1u : 0u, lost = at + held;
+        if((status & ORER) && lost < 512u && !s.lost[area] && s.unrepaired < 2u) {
+            s.lost[area] = (uint16_t)(lost + 1u);
+            s.hold[area] = (uint8_t)held;
+            s.held[area] = tail;
+            ++s.stats.repaired;
+            if(later) {
+                ++s.stats.deferred;
+                s.state = RESUME;
+                return KUI_SCI_STREAM_PENDING;
+            }
+            select(true);
+            result = start_dma(area, lost + 1u);
+            return result == KUI_SCI_STREAM_OK ? KUI_SCI_STREAM_PENDING : result;
+        }
+        ++s.stats.overruns;
+        return KUI_SCI_STREAM_OVERRUN;
+    }
+    s.ready[area] = 1;
+    s.ready_lba[area] = s.position++;
+    s.arrived = s.position;
+    s.rdr[area] = tail;
+    s.state = PAUSED;
+    ++s.stats.blocks;
+    return KUI_SCI_STREAM_OK;
+}
+enum kui_sci_stream_result kui_sci_stream_poll(bool interrupt) {
+    if(s.state != DMA) return KUI_SCI_STREAM_OK;
+    uint32_t control = rd32(CHCR);
+    /* Still receiving, unless the channel stopped or the receiver overran. */
+    if(!(control & 2u) && (control & 1u) && !(rd8(SSR) & ORER) &&
+       (rd32(DMAOR) & 7u) == 1u) return KUI_SCI_STREAM_PENDING;
+    return finish(interrupt);
+}
+enum kui_sci_stream_result kui_sci_stream_wait(void) {
+    for(uint32_t n = 0; n < 200000u; ++n) {
+        enum kui_sci_stream_result result = kui_sci_stream_poll(false);
+        if(result != KUI_SCI_STREAM_PENDING) return result;
+    }
+    return finish(false); /* a stalled receiver ends as an overrun */
+}
+/* The byte whose loss leaves this CRC16 syndrome when it stands as zero
+ * with `after` bytes behind it, or -1 if no single byte explains it. The
+ * CRC (zero start) is linear: undo the `after` zero-byte shifts, bit by bit
+ * (x^16+x^12+x^5+1 has its constant term, so each step is invertible). What
+ * remains is one byte's own step, t ^ t << 5 ^ t << 12 with t = x ^ x >> 4:
+ * its low byte gives t, t gives x, and the whole step must match. */
+static int rebuild(uint32_t syndrome, uint32_t after) {
+    for(uint32_t n = after * 8u; n; --n)
+        syndrome = syndrome & 1u ? ((syndrome ^ 0x1021u) >> 1) | 0x8000u : syndrome >> 1;
+    uint32_t t = (syndrome ^ syndrome << 5) & 0xffu, x = t ^ t >> 4;
+    return crc16(0, (uint8_t)x) == syndrome ? (int)x : -1;
+}
+const uint8_t *kui_sci_stream_take(uint32_t lba, enum kui_sci_stream_result *result) {
+    for(unsigned i = 0; i < 2; ++i) {
+        if(!s.ready[i] || s.ready_lba[i] != lba) continue;
+        s.ready[i] = 0;
+        uint8_t *area = s.area[i];
+        uint32_t lost = s.lost[i];
+        if(lost) {
+            if(s.hold[i]) area[lost - 2u] = s.held[i];
+            area[lost - 1u] = 0;
+        }
+        uint8_t high = area[512], low = s.rdr[i];
+        bool wire = s.wire[i];
+#ifdef KUI_RETAIL_CE
+        uint32_t crc = 0;
+#else
+        uint16_t crc = 0;
+#endif
+        for(unsigned w = 0; w < 128u; ++w) {
+            uint32_t word = ((alias_word *)area)[w];
+#if KUI_TOY_PILOT_WORD_REVERSE_PROFILE
+            if(wire) ((alias_word *)area)[w] = word = reverse_data_word(word);
+#else
+            if(wire) ((alias_word *)area)[w] = word = reverse(word);
+#endif
+            for(unsigned b = 0; b < 4u; ++b) {
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+                crc = crc16(crc, (uint8_t)word); word >>= 8;
+#else
+                crc = crc16(crc, (uint8_t)(word >> 24)); word <<= 8;
+#endif
+            }
+        }
+        if(wire) {high = (uint8_t)reverse(high); low = (uint8_t)reverse(low);}
+        uint16_t sent = (uint16_t)(high << 8 | low);
+        if(crc != sent && lost) {
+            /* The gap byte (0xff) or the next token (0xfe) where the second
+             * CRC byte belongs: the resumed reception ran a byte ahead. */
+            if((low | 1u) == 0xffu) ++s.stats.ahead;
+            else {
+                int x = rebuild((uint32_t)(crc ^ sent), 512u - lost);
+                if(x >= 0) {area[lost - 1u] = (uint8_t)x; crc = sent;}
+                else ++s.unrepaired;
+            }
+        }
+        if(crc != sent) {
+            ++s.stats.crc_errors;
+            *result = KUI_SCI_STREAM_CRC;
+            return NULL;
+        }
+        s.kept = (uint8_t)(i + 1u);
+        s.kept_lba = lba;
+        *result = KUI_SCI_STREAM_OK;
+        return area;
+    }
+    if(s.kept && s.kept_lba == lba) {
+        ++s.stats.kept;
+        *result = KUI_SCI_STREAM_OK;
+        return s.area[s.kept - 1u];
+    }
+    *result = KUI_SCI_STREAM_PENDING;
+    return NULL;
+}
+enum kui_sci_stream_result kui_sci_stream_stop(void) {
+    enum kui_sci_stream_result result = KUI_SCI_STREAM_OK;
+#if (KUI_TOY_PIPELINE_HIGH_STREAM && KUI_TOY_PIPELINE_RESUME_FIX) || KUI_GENERAL_SCI_RESUME_FIX || KUI_CE_SCI_RESUME_FIX
+    /* Cancellation must fence the receiver, not launch another repair and
+     * then clock CMD12 while DMA remains active. Deferred finish restores
+     * the channel and leaves a partial block stopped in RESUME. */
+    for(uint32_t n = 0; s.state == DMA && n < 200000u; ++n) {
+        result = kui_sci_stream_poll(true);
+        if(result != KUI_SCI_STREAM_PENDING) break;
+    }
+    if(s.state == DMA) result = finish(true);
+#else
+    if(s.state == DMA) result = kui_sci_stream_wait();
+#endif
+    if(result == KUI_SCI_STREAM_BUSY || result == KUI_SCI_STREAM_RESET) return result;
+    s.ready[0] = s.ready[1] = 0;
+    s.kept = 0; s.arrived = 0;
+    return s.state == CLOSED ? KUI_SCI_STREAM_OK : stop_card();
+}

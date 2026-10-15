@@ -3,6 +3,7 @@
 """Fetch independent sources at locked revisions; never import DreamShell."""
 import argparse
 import hashlib
+import io
 import json
 from pathlib import Path
 import shutil
@@ -65,29 +66,44 @@ def fetch_git(name):
 
 def fetch_fatfs():
     cache = DEPS / "downloads"
-    cache.mkdir(parents=True, exist_ok=True)
+    bundle = ROOT / "third_party" / "fatfs-downloads"
     files = []
     for spec in LOCK["fatfs"]:
         target = cache / spec["url"].rsplit("/", 1)[-1]
-        if not target.exists():
+        cached = target.exists()
+        bundled = bundle / target.name
+        if cached:
+            data = target.read_bytes()
+            origin = "Cached"
+        elif bundled.exists():
+            data = bundled.read_bytes()
+            origin = "Bundled"
+        else:
             print(f"Downloading {spec['url']}", flush=True)
             data = download(spec["url"])
-            if hashlib.sha256(data).hexdigest() != spec["sha256"]:
-                raise SystemExit(f"Download checksum mismatch: {target.name}")
+            origin = "Download"
+        if hashlib.sha256(data).hexdigest() != spec["sha256"]:
+            raise SystemExit(f"{origin} checksum mismatch: {target.name}")
+        files.append((target, data, cached))
+    # Verify the entire pinned input set before populating a clean cache or
+    # touching generated sources. A corrupt cache is refused, never replaced
+    # silently with a bundled/downloaded copy. Extraction uses the verified
+    # archive snapshot, not a second read of an externally mutable cache file.
+    cache.mkdir(parents=True, exist_ok=True)
+    for target, data, cached in files:
+        if not cached:
             target.write_bytes(data)
-        if hashlib.sha256(target.read_bytes()).hexdigest() != spec["sha256"]:
-            raise SystemExit(f"Cached checksum mismatch: {target}")
-        files.append(target)
     dest = DEPS / "fatfs"
     # Reconstruct only generated FatFs files, keeping source and notices intact.
-    with zipfile.ZipFile(files[0]) as archive:
+    with zipfile.ZipFile(io.BytesIO(files[0][1])) as archive:
         for name in ("source/ff.c", "source/ff.h", "source/diskio.h",
                      "source/ffunicode.c", "LICENSE.txt"):
             target = dest / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(archive.read(name).replace(b"\r\n", b"\n"))
-    for patch in files[1:]:
-        run("patch", "--batch", "--fuzz=0", str(dest / "source/ff.c"), str(patch))
+    for _, data, _ in files[1:]:
+        subprocess.run(["patch", "--batch", "--fuzz=0", str(dest / "source/ff.c")],
+                       input=data, check=True)
     shutil.copyfile(ROOT / "config/ffconf.h", dest / "source/ffconf.h")
 
 

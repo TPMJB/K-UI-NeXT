@@ -6,9 +6,11 @@
  * home-music, home-gd, music, gd-play, gd-confirm, quick-resume, dma-fallback,
  * music-queued, advanced-destination, clock, clock-confirm, defaults,
  * vmu-restore, vmu-restore-confirm, crc-scan, scan-folder, home-games,
- * games, games-detail, games-error, games-advanced, games-probe,
+ * games, games-variants, games-variants-2048, games-detail-2048, games-retail-2048,
+ * games-detail, games-error, games-advanced, games-probe,
  * games-probe-loading, games-image-probe, games-image-probe-loading,
- * games-retail, games-retail-loading, games-retail-invalid, games-list-art,
+ * games-retail, games-retail-loading, games-retail-invalid, games-ce-probe, games-list-art,
+ * games-retail-cd-plain, games-retail-cd-scrambled,
  * games-compact, games-gallery, games-scan, games-detail-art, home-files, home-ripper,
  * files, files-root, files-actions, files-actions-locked, files-pick,
  * files-copy, files-delete, files-refused, files-info, files-info-file,
@@ -18,9 +20,11 @@
  * storage-test-mismatch, storage-test-history, sci-async-probe, sci-async-result,
  * sci-async-failure, sci-async-dma-failure, sci-async-handoff-failure, sci-async-bus-failure,
  * sci-async-reset-failure, sci-async-stress-result, sci-async-stress-busy, sci-async-stress-failure,
- * sci-async-quiet-fault. */
+ * sci-async-quiet-fault, ftp-wifi, wifi, wifi-online, wifi-joining,
+ * wifi-password, wifi-name, wifi-forget, wifi-absent. */
 #include "kui/shell.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static uint16_t frame[640*480];
@@ -63,7 +67,16 @@ static void library(struct kui_shell *shell,unsigned view) {
         if(e->cover) make_cover(covers[i],edge,i);
     }
     shell->games_selected=1;
-    strcpy(l->message,"Select a GDI to inspect and launch.");
+    strcpy(l->message,"Choose a game to inspect and launch.");
+}
+static void game_pair(struct kui_shell *shell,unsigned choice) {
+    strcpy(shell->games_original_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
+    strcpy(shell->games_2048_path,"/Games/Dead or Alive 2-2048/Dead or Alive 2.gdi");
+    shell->games_variant_selected=choice;
+    if(shell->page!=KUI_SHELL_GAMES_VARIANTS) {
+        strcpy(shell->games_selected_path,choice?shell->games_2048_path:shell->games_original_path);
+        strcpy(shell->games_detail.path,shell->games_selected_path);
+    }
 }
 /* A game folder as the File Manager lists it: folders first, then files. */
 static void files_folder(struct kui_shell *shell,bool root) {
@@ -146,6 +159,56 @@ static void ftp_state(struct kui_shell *shell,struct kui_shell_view *view,const 
         }
     }
 }
+/* The Wi-Fi page in each state it draws. */
+static void wifi_state(struct kui_shell *shell,struct kui_shell_view *view,const char *mode) {
+    static const struct {const char *ssid;uint8_t channel,security;int8_t rssi;} nets[]={
+        {"Home 5G",36,3,-48},{"Home",6,3,-57},{"Upstairs",44,4,-63},{"Neighbours",11,3,-71},{"Cafe",1,0,-80},
+        {"Printer Direct",6,3,-84}};
+    struct kui_wifi_view w;
+    memset(&w,0,sizeof(w));
+    shell->page=KUI_SHELL_WIFI;
+    if(!strcmp(mode,"wifi-absent")) {
+        w.failed=true;snprintf(w.message,sizeof(w.message),"No Wi-Fi board answered on the SCI port");
+        kui_shell_set_wifi(shell,&w);
+        return;
+    }
+    w.found=w.scanned=true;w.count=sizeof(nets)/sizeof(nets[0]);
+    snprintf(w.board,sizeof(w.board),"XIAO ESP32-C5, firmware 0.1.0-3f2a9c1e (SPI 12.5 MHz, select GPIO6)");
+    for(unsigned i=0;i<w.count;i++) {
+        snprintf(w.networks[i].ssid,sizeof(w.networks[i].ssid),"%s",nets[i].ssid);
+        w.networks[i].channel=nets[i].channel;w.networks[i].security=nets[i].security;w.networks[i].rssi=nets[i].rssi;
+        w.networks[i].five=nets[i].channel>14;
+    }
+    w.wifi.band_mode=KWM_BAND_BOTH;
+    snprintf(w.message,sizeof(w.message),"6 networks in range");
+    if(strcmp(mode,"wifi")) {
+        w.wifi.state=KWM_WIFI_ONLINE;w.wifi.saved=1;w.wifi.band=5;w.wifi.channel=36;w.wifi.rssi=-48;
+        snprintf(w.wifi.ssid,sizeof(w.wifi.ssid),"Home 5G");
+        w.wifi.ip[0]=192;w.wifi.ip[1]=168;w.wifi.ip[2]=1;w.wifi.ip[3]=23;
+        snprintf(w.message,sizeof(w.message),"Online on Home 5G as 192.168.1.23; saved on the board");
+    }
+    if(!strcmp(mode,"wifi-joining")) {
+        view->busy=true;w.working=true;
+        w.wifi.state=KWM_WIFI_ASSOCIATED;snprintf(w.wifi.ssid,sizeof(w.wifi.ssid),"Upstairs");
+        memset(w.wifi.ip,0,4);
+        snprintf(w.message,sizeof(w.message),"Wi-Fi: joined Upstairs; waiting for an address");
+    }
+    kui_shell_set_wifi(shell,&w);
+    shell->wifi_selected=strcmp(mode,"wifi-joining")?1:3;
+    if(!strcmp(mode,"wifi-password")) {
+        shell->wifi_selected=3;
+        (void)kui_shell_input(shell,KUI_SHELL_A,false);
+        snprintf(shell->keyboard,sizeof(shell->keyboard),"blue-Heron!42");
+        shell->keyboard_layer=KUI_SHELL_KEYS_SYMBOLS;shell->keyboard_selected=12;
+    }
+    if(!strcmp(mode,"wifi-name")) {
+        shell->wifi_selected=kui_shell_wifi_rows(shell)-1;
+        (void)kui_shell_input(shell,KUI_SHELL_A,false);
+        snprintf(shell->keyboard,sizeof(shell->keyboard),"Garage");
+        shell->keyboard_selected=16;
+    }
+    if(!strcmp(mode,"wifi-forget")) (void)kui_shell_input(shell,KUI_SHELL_Y,false);
+}
 static unsigned home_row(enum kui_shell_page page) {
     for(unsigned i=0;i<KUI_SHELL_HOME_APPS;i++) if(kui_shell_home_pages[i]==page) return i;
     return 0;
@@ -203,7 +266,7 @@ static void storage_tests(struct kui_shell *s,struct kui_shell_view *v,const cha
 }
 int main(int argc,char **argv) {
     if(argc!=3) return 2;
-    struct kui_settings preferences={true,false,true};
+    struct kui_settings preferences={true,false,true,KUI_CAPTURE_FORMAT_GDI,0,false};
     struct kui_shell shell; kui_shell_init(&shell,&preferences);
     const char *logs[]={"SD exFAT, 249997312 sectors, cluster=131072 bytes",
         "Volume start=2048 (MBR)","Disc: MDK2", "Track 04: audio",
@@ -224,8 +287,15 @@ int main(int argc,char **argv) {
     else if(!strcmp(argv[1],"home-files")) shell.home_selected=home_row(KUI_SHELL_FILES);
     else if(!strcmp(argv[1],"home-ripper")) shell.home_selected=home_row(KUI_SHELL_RIPPER);
     else if(!strcmp(argv[1],"home-network")) shell.home_selected=home_row(KUI_SHELL_NETWORK);
+    else if(!strcmp(argv[1],"home-settings")) shell.home_selected=home_row(KUI_SHELL_SETTINGS);
+    else if(!strcmp(argv[1],"home-diagnostics")) shell.home_selected=home_row(KUI_SHELL_DIAGNOSTICS);
     else if(!strcmp(argv[1],"network")) shell.page=KUI_SHELL_NETWORK;
-    else if(!strncmp(argv[1],"ftp-",4)) ftp_state(&shell,&view,argv[1]);
+    else if(!strcmp(argv[1],"ftp-wifi")) {
+        ftp_state(&shell,&view,"ftp-ready");
+        ftp.wifi=true;ftp.ip[3]=23;
+        snprintf(ftp.adapter,sizeof(ftp.adapter),"Wi-Fi: Home 5G, 5 GHz channel 36, -48 dBm");
+    } else if(!strncmp(argv[1],"ftp-",4)) ftp_state(&shell,&view,argv[1]);
+    else if(!strncmp(argv[1],"wifi",4)) wifi_state(&shell,&view,argv[1]);
     else if(!strncmp(argv[1],"storage-test",12)) storage_tests(&shell,&view,argv[1]);
     else if(!strcmp(argv[1],"files") || !strcmp(argv[1],"files-root")) {
         files_folder(&shell,!strcmp(argv[1],"files-root"));
@@ -281,8 +351,19 @@ int main(int argc,char **argv) {
             "Armada","Grandia II","Sword of the Berserk","A very long game name that clips safely at the right margin"};
         for(unsigned i=0;i<8;i++) snprintf(shell.games_listing.entries[i].name,sizeof(shell.games_listing.entries[i].name),"%s",names[i]);
         shell.games_listing.entries[0].directory=true;shell.games_selected=1;
-        strcpy(shell.games_listing.message,"Choose a GDI image to inspect.");
+        strcpy(shell.games_listing.message,"Choose a game image to inspect.");
     } else if(!strcmp(argv[1],"games-list-art")) library(&shell,KUI_GAMES_VIEW_LIST);
+    else if(!strcmp(argv[1],"games-art-loading")) {
+        library(&shell,KUI_GAMES_VIEW_LIST);shell.games_listing.entries[shell.games_selected].cover=false;
+        shell.games_art_loading=true;
+    } else if(!strcmp(argv[1],"games-rows-loading")) {
+        library(&shell,KUI_GAMES_VIEW_LIST);shell.games_loading=true;view.busy=true;
+        strcpy(shell.games_listing.message,"Reading SD directory...");
+    }
+    else if(!strcmp(argv[1],"games-variants") || !strcmp(argv[1],"games-variants-2048")) {
+        library(&shell,KUI_GAMES_VIEW_LIST);shell.page=KUI_SHELL_GAMES_VARIANTS;
+        game_pair(&shell,!strcmp(argv[1],"games-variants-2048"));
+    }
     else if(!strcmp(argv[1],"games-compact")) library(&shell,KUI_GAMES_VIEW_COMPACT);
     else if(!strcmp(argv[1],"games-gallery")) {library(&shell,KUI_GAMES_VIEW_GALLERY);shell.games_selected=5;}
     else if(!strcmp(argv[1],"games-scan")) {
@@ -292,16 +373,51 @@ int main(int argc,char **argv) {
         strcpy(status.lines[0],"Games found: 43");strcpy(status.lines[1],"New covers from discs: 9");
         strcpy(status.lines[2],"New covers from your images: 1");strcpy(status.lines[3],"No artwork found: 1");
         strcpy(status.lines[4],"Unchanged since last scan: 0");
-    } else if(!strcmp(argv[1],"games-detail") || !strcmp(argv[1],"games-error") || !strcmp(argv[1],"games-detail-art")) {
+    } else if(!strcmp(argv[1],"games-detail") || !strcmp(argv[1],"games-error") ||
+            !strcmp(argv[1],"games-detail-art") || !strcmp(argv[1],"games-detail-2048")) {
         shell.page=KUI_SHELL_GAMES_DETAIL;
         strcpy(shell.games_selected_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
         struct kui_games_detail *d=&shell.games_detail;
         strcpy(d->path,shell.games_selected_path);
         d->valid=strcmp(argv[1],"games-error")!=0;d->bytes=1185765648;d->tracks=3;d->data_tracks=2;d->audio_tracks=1;
         d->boot_bytes=123456;d->boot_lba=45166;d->native_gd=true;
+        if(!strcmp(argv[1],"games-options-advanced") || !strcmp(argv[1],"games-patches") || !strcmp(argv[1],"games-patches-edit")) {
+            strcpy(shell.games_selected_path,"/Games/Generated sample/disc.gdi");strcpy(d->path,shell.games_selected_path);
+            strcpy(d->title,"GENERATED UI SAMPLE");shell.games_launch_reader=KUI_GAME_READER_BACKGROUND;
+            shell.page=!strcmp(argv[1],"games-options-advanced")?KUI_SHELL_GAMES_EXTRA_OPTIONS:KUI_SHELL_GAMES_PATCHES;
+            shell.game_tools_selected=KUI_SHELL_GAME_TOOL_PATCHES;
+            shell.games_launch_patches.entries[0]=(struct kui_game_ram_patch){0x8c010000u,0u,true};
+            shell.games_launch_patches.entries[1]=(struct kui_game_ram_patch){0x8c010004u,0x12345678u,false};
+            shell.games_patch_selected=1;shell.games_patch_editing=!strcmp(argv[1],"games-patches-edit");
+            shell.games_patch_draft=0x8c010000u;shell.games_patch_digit=4;
+            strcpy(shell.games_launch_notice,"Saved for this image.");
+        }
         strcpy(d->title,"DEAD OR ALIVE 2");strcpy(d->product,"T-3601N");strcpy(d->region,"JUE");
         strcpy(d->boot_file,"1ST_READ.BIN");strcpy(d->message,"Track file missing: track03.bin");
         if(!strcmp(argv[1],"games-detail-art")) {d->cover=true;make_cover(detail_cover,KUI_COVER_LARGE,1);}
+        if(!strcmp(argv[1],"games-detail-2048")) game_pair(&shell,1);
+    } else if(!strcmp(argv[1],"games-zso") || !strcmp(argv[1],"games-zso-inspect") ||
+            !strcmp(argv[1],"games-zso-ce") || !strcmp(argv[1],"games-zso-options") ||
+            !strcmp(argv[1],"games-zso-advanced") || !strcmp(argv[1],"games-zso-information")) {
+        shell.page=KUI_SHELL_GAMES_DETAIL;
+        struct kui_games_detail *d=&shell.games_detail;
+        strcpy(shell.games_selected_path,"/Games/Generated ZSO/disc.zso");strcpy(d->path,shell.games_selected_path);
+        strcpy(d->title,"GENERATED ZSO SAMPLE");strcpy(d->boot_file,"1ST_READ.BIN");
+        d->valid=true;d->native_cd=d->cd_image=true;d->format=KUI_GAME_IMAGE_ZSO;
+        d->tracks=d->data_tracks=1;d->boot_bytes=123456;d->bytes=16777216;
+        d->audio.classification=KUI_GAME_AUDIO_UNKNOWN;
+        d->zso_launch=strcmp(argv[1],"games-zso-inspect") && strcmp(argv[1],"games-zso-ce");
+        if(!strcmp(argv[1],"games-zso-inspect"))
+            strcpy(d->message,"ZSO launching requires native SCI storage.");
+        if(!strcmp(argv[1],"games-zso-ce")) {
+            d->native_cd=false;d->windows_ce=true;d->boot_bytes=1253376;
+            strcpy(d->boot_file,"0WINCEOS.BIN");strcpy(d->message,"Windows CE ZSO images can be inspected but not launched.");
+        }
+        if(!strcmp(argv[1],"games-zso-options")) shell.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;
+        if(!strcmp(argv[1],"games-zso-advanced")) {
+            shell.page=KUI_SHELL_GAMES_EXTRA_OPTIONS;shell.game_tools_selected=KUI_SHELL_GAME_TOOL_PATCHES;
+        }
+        if(!strcmp(argv[1],"games-zso-information")) shell.page=KUI_SHELL_GAMES_INFO;
     } else if(!strcmp(argv[1],"games-advanced")) {
         shell.page=KUI_SHELL_GAMES_ADVANCED;shell.games_advanced_selected=2;
     } else if(!strcmp(argv[1],"games-probe") || !strcmp(argv[1],"games-probe-loading")) {
@@ -320,18 +436,44 @@ int main(int argc,char **argv) {
         }
     }
     else if(!strcmp(argv[1],"games-retail") || !strcmp(argv[1],"games-retail-loading") ||
-            !strcmp(argv[1],"games-retail-invalid")) {
+            !strcmp(argv[1],"games-retail-invalid") || !strcmp(argv[1],"games-ce-probe") ||
+            !strcmp(argv[1],"games-retail-2048") || !strcmp(argv[1],"games-retail-cd-plain") ||
+            !strcmp(argv[1],"games-retail-cd-scrambled") || !strcmp(argv[1],"games-options-advanced") ||
+            !strcmp(argv[1],"games-patches") || !strcmp(argv[1],"games-patches-edit")) {
         shell.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;
         strcpy(shell.games_selected_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
         struct kui_games_detail *d=&shell.games_detail;
         strcpy(d->path,shell.games_selected_path);d->valid=true;d->tracks=3;
         strcpy(d->title,"DEAD OR ALIVE 2");strcpy(d->boot_file,"1ST_READ.BIN");
         d->boot_bytes=123456;d->boot_lba=45166;d->native_gd=true;
+        if(!strcmp(argv[1],"games-options-advanced") || !strcmp(argv[1],"games-patches") || !strcmp(argv[1],"games-patches-edit")) {
+            strcpy(shell.games_selected_path,"/Games/Generated sample/disc.gdi");strcpy(d->path,shell.games_selected_path);
+            strcpy(d->title,"GENERATED UI SAMPLE");shell.games_launch_reader=KUI_GAME_READER_BACKGROUND;
+            shell.page=!strcmp(argv[1],"games-options-advanced")?KUI_SHELL_GAMES_EXTRA_OPTIONS:KUI_SHELL_GAMES_PATCHES;
+            shell.game_tools_selected=KUI_SHELL_GAME_TOOL_PATCHES;
+            shell.games_launch_patches.entries[0]=(struct kui_game_ram_patch){0x8c010000u,0u,true};
+            shell.games_launch_patches.entries[1]=(struct kui_game_ram_patch){0x8c010004u,0x12345678u,false};
+            shell.games_patch_selected=1;shell.games_patch_editing=!strcmp(argv[1],"games-patches-edit");
+            shell.games_patch_draft=0x8c010000u;shell.games_patch_digit=4;
+            strcpy(shell.games_launch_notice,"Saved for this image.");
+        }
+        if(!strcmp(argv[1],"games-retail-cd-plain") || !strcmp(argv[1],"games-retail-cd-scrambled")) {
+            strcpy(shell.games_selected_path,"/Games/CD sample/disc.cue");strcpy(d->path,shell.games_selected_path);
+            strcpy(d->title,"CD SAMPLE");d->native_gd=false;d->native_cd=d->cd_image=true;
+            d->format=KUI_GAME_IMAGE_CUE;d->boot_lba=11716;
+            shell.games_retail_scrambled=!strcmp(argv[1],"games-retail-cd-scrambled");
+        }
+        if(!strcmp(argv[1],"games-retail-2048")) game_pair(&shell,1);
         if(!strcmp(argv[1],"games-retail-loading")) {
             view.busy=true;view.app_status=&status;status.complete=false;
             strcpy(status.message,"Preparing selected game launch...");
         }
-        if(!strcmp(argv[1],"games-retail-invalid")) { d->native_gd=false; d->windows_ce=true; }
+        if(!strcmp(argv[1],"games-retail-invalid")) d->native_gd=false;
+        if(!strcmp(argv[1],"games-ce-probe")) {
+            strcpy(shell.games_selected_path,"/Games/ARMADA/ARMADA.gdi");strcpy(d->path,shell.games_selected_path);
+            strcpy(d->title,"ARMADA");strcpy(d->boot_file,"0WINCEOS.BIN");
+            d->boot_bytes=1253376;d->boot_lba=548388;d->native_gd=false;d->windows_ce=true;d->tracks=5;
+        }
     }
     else if(!strcmp(argv[1],"audio-cd")) {
         shell.page=KUI_SHELL_CD_AUDIO;shell.cd_audio.loaded=true;shell.cd_audio.count=12;
@@ -411,6 +553,12 @@ int main(int argc,char **argv) {
         strcpy(shell.music_listing.message,"Choose a WAV or Ogg file to play.");
     } else if(!strcmp(argv[1],"settings")) {shell.page=KUI_SHELL_SETTINGS;shell.system_selected=2;}
     else if(!strcmp(argv[1],"ripper-settings")) shell.page=KUI_SHELL_RIPPER_SETTINGS;
+    else if(!strncmp(argv[1],"ripper-format-",14)) {
+        shell.page=KUI_SHELL_RIPPER_SETTINGS;shell.setting_selected=2;
+        unsigned format=(unsigned)strtoul(argv[1]+14,NULL,10);
+        if(format>=KUI_CAPTURE_FORMAT_COUNT) return 2;
+        shell.draft.capture_format=(enum kui_capture_format)format;
+    }
     else if(!strcmp(argv[1],"video")) {
         shell.page=KUI_SHELL_SETTINGS;view.video_trial=true;view.video_seconds=7;
         shell.system_draft.video_mode=KUI_VIDEO_PAL50;
@@ -519,26 +667,58 @@ int main(int argc,char **argv) {
         }
     }
     else if(!strcmp(argv[1],"diagnostics")) shell.page=KUI_SHELL_DIAGNOSTICS;
-    else if(!strcmp(argv[1],"advanced") || !strcmp(argv[1],"advanced-destination")) {
+    else if(!strcmp(argv[1],"advanced") || !strcmp(argv[1],"advanced-destination") ||
+            !strcmp(argv[1],"advanced-saved-job") || !strcmp(argv[1],"advanced-label") ||
+            !strcmp(argv[1],"advanced-repair") || !strcmp(argv[1],"advanced-network") || !strcmp(argv[1],"advanced-cd")) {
         shell.page=KUI_SHELL_ADVANCED;
         if(!strcmp(argv[1],"advanced-destination")) shell.advanced_selected=4;
+        if(!strcmp(argv[1],"advanced-repair")) shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_REPAIR;
+        if(!strcmp(argv[1],"advanced-network")) {shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_NETWORK;shell.capture_network=true;}
+        if(!strcmp(argv[1],"advanced-cd")) {shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_CD_SOURCE;shell.capture_cd_toc=true;}
+        if(!strcmp(argv[1],"advanced-saved-job")) {
+            shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_JOB;
+            strcpy(shell.capture_job,"/Games/Generated sample (2)");
+        }
+        if(!strcmp(argv[1],"advanced-label")) {
+            shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_LABEL;strcpy(shell.capture_folder_label,"Evening capture");
+        }
     }
-    else if(!strcmp(argv[1],"destination")) {
+    else if(!strcmp(argv[1],"destination") || !strcmp(argv[1],"ripper-job-browser") || !strcmp(argv[1],"ripper-job-long")) {
         shell.page=KUI_SHELL_DESTINATION;
         const char *folders[]={"Action","Adventure","Driving","Fighting","Imports",
             "Puzzle","Role-playing","Sports"};
         shell.listing.count=8; shell.listing.has_more=true; shell.browser_selected=3;
-        for(unsigned i=0;i<8;i++) snprintf(shell.listing.entries[i].name,
-            sizeof(shell.listing.entries[i].name),"%s",folders[i]);
-    } else if(!strcmp(argv[1],"keyboard")) {
+        for(unsigned i=0;i<8;i++) {
+            snprintf(shell.listing.entries[i].name,sizeof(shell.listing.entries[i].name),"%s",folders[i]);
+            shell.listing.entries[i].job_selectable=true;
+        }
+        shell.browse_for_capture_job=strcmp(argv[1],"destination")!=0;
+        if(!strcmp(argv[1],"ripper-job-long")) {
+            strcpy(shell.browse_path,"/Games/Generated library folder with a descriptive name/Long directory for output captures");
+            strcpy(shell.listing.entries[3].name,"Generated saved capture with a long descriptive label (2)");
+            shell.listing.entries[3].disabled=true;
+        }
+    } else if(!strcmp(argv[1],"keyboard") || !strcmp(argv[1],"ripper-label-keyboard")) {
         shell.page=KUI_SHELL_KEYBOARD; shell.keyboard_selected=42;
         snprintf(shell.keyboard,sizeof(shell.keyboard),"/Games/Fighting");
+        if(!strcmp(argv[1],"ripper-label-keyboard")) {
+            shell.capture_label_keyboard=true;strcpy(shell.keyboard,"Evening capture");
+        }
     }
     else if(strcmp(argv[1],"home")) {
         shell.page=KUI_SHELL_RIPPER;
         if(!strcmp(argv[1],"confirm")) shell.confirm_new=true;
+        else if(!strcmp(argv[1],"ripper-job") || !strcmp(argv[1],"ripper-label-confirm") || !strcmp(argv[1],"quick-resume-selected")) {
+            strcpy(shell.capture_job,"/Games/Generated sample (2)");strcpy(shell.capture_folder_label,"Evening capture");
+            view.busy=false;view.phase=0;view.outcome=KUI_SHELL_OUTCOME_NONE;view.message=NULL;
+            shell.confirm_new=!strcmp(argv[1],"ripper-label-confirm");
+            shell.confirm_quick_resume=!strcmp(argv[1],"quick-resume-selected");
+        }
+        else if(!strcmp(argv[1],"ripper-export")) {
+            view.busy=true;view.phase=4;view.gdi_name="MDK2.chd";
+        }
         else if(!strcmp(argv[1],"complete") || !strcmp(argv[1],"partial")) {
-            view.phase=4; view.outcome=KUI_SHELL_OUTCOME_COMPLETE;
+            view.phase=5; view.outcome=KUI_SHELL_OUTCOME_COMPLETE;
             view.done=view.total; view.committed=view.total;
             view.track=view.tracks; view.rate_kib=0;
             view.inserted_title="Sword of the Berserk";
@@ -557,6 +737,20 @@ int main(int argc,char **argv) {
             view.message="Capture timed out; drive abort failed. Restart required.";
         } else if(!strcmp(argv[1],"stopped")) view.outcome=KUI_SHELL_OUTCOME_STOPPED;
         else view.busy=true;
+    }
+    if(!strcmp(argv[1],"games-codec") || !strcmp(argv[1],"games-check") || !strcmp(argv[1],"games-baseline")) {
+        strcpy(shell.games_selected_path,"/Games/Generated ZSO/disc.zso");
+        strcpy(shell.games_detail.path,shell.games_selected_path);
+        shell.games_detail.valid=true;shell.games_detail.native_gd=true;shell.games_detail.zso_launch=true;
+        shell.games_detail.format=KUI_GAME_IMAGE_ZSO;shell.games_detail.zso_codec=KUI_ZSO_LZO1X;
+        shell.games_detail.tracks=1;shell.games_detail.boot_bytes=3001;
+        strcpy(shell.games_detail.boot_file,"1ST_READ.BIN");strcpy(shell.games_detail.title,"INDEPENDENT GAMES FIXTURE");
+        view.busy=false;shell.games_launch_codec=KUI_ZSO_LZO1X;
+        if(!strcmp(argv[1],"games-codec")) {shell.page=KUI_SHELL_GAMES_CODEC;shell.games_codec_selected=KUI_ZSO_LZO1X;}
+        else if(!strcmp(argv[1],"games-check")) {
+            shell.page=KUI_SHELL_GAMES_CHECK;view.app_status=&status;
+            strcpy(status.message,"Executable preparation passed. The game was not started.");
+        } else {shell.page=KUI_SHELL_GAMES_EXTRA_OPTIONS;shell.games_baseline=true;shell.game_tools_selected=KUI_SHELL_GAME_TOOL_BASELINE;}
     }
     view.game_covers=(const uint16_t (*)[KUI_COVER_PIXELS])covers;view.game_detail_cover=detail_cover;
     view.files_picture=picture;

@@ -1,4 +1,955 @@
-# K-UI NeXT handoff (2026-09-28)
+# K-UI NeXT handoff (updated 2026-10-04)
+
+## Release 1.7: accepted SCI baseline
+
+Release 1.7 carries the prior owner-selected SCI configuration, new crimson
+Dáinsleif artwork, the Windows CE SCI test payload and isolated ATA PIO
+preparation. CE FMV audio/video remain imperfect and ATA hardware is untested.
+See [release notes](release-v1.7-notes.md) and the
+[SCI baseline record](evidence/v1.7-sci-baseline-2026-10-04.md).
+
+
+## ATA readiness release candidate (2026-10-04)
+
+Owner requests ATA preparation and a release build, but cannot test IDE/CF
+until soldering is complete. The SCI512 test `6dc75f1ea0b2` was subsequently rejected for unclear audio.
+Release 1.7 restores the accepted 256-byte setting from `6f14bc529472`,
+while retaining the isolated ATA preparation from `d584316ac1c2`.
+The owner explicitly requested final release 1.7 after the SCI result.
+
+The candidate adds bounded eight-sector ATA PIO command streaming, optional
+bulk PIO sector copies, and device-selection/IDENTIFY validity fixes. It
+does not enable ATA DMA or Windows CE on IDE. Candidate packages explicitly
+retain those evidence limits. See
+[implementation scope and DMA follow-up](evidence/ata-readiness-2026-10-04.md).
+SCI/SCIF tuning stays at the selected
+baseline; shared resident memory and stack bounds must still pass.
+
+## Windows CE: compare 512-byte token allowance (2026-10-04)
+
+Owner confirms photo `01-image-1791148467591.jpg` is ARMADA on build
+`6f14bc529472`. ARMADA seemed a little better. Worms Armageddon improved
+in some respects but its intro audio preceded video by about half a second;
+the owner considers it mostly fine and is not supplying a separate photo.
+
+The ARMADA counters show 24,657 DMA and 7,058 polled receptions (22.25%
+polled), 7,174 token yields, guard 0, CRC errors 2, and token/foreign errors
+0. Incomplete bins total 7,226, matching 7,058 overruns plus 168 repair
+attempts. These unequal-duration sessions do not establish a transfer-rate
+change or the cause of the audio offset.
+
+The 512-byte test `6dc75f1ea0b2` was rejected: the owner reports unclear
+audio and uncertain video synchronization, and prefers the preceding test.
+Release 1.7 restores only `KUI_SCI_STREAM_TOKEN_SLICE` to 256 bytes.
+Payload reception, CRC, recovery and wakeup rules are unchanged. See the
+[comparison record](evidence/ce-token-512-2026-10-04.md).
+
+## Windows CE: resumable token search experiment (2026-10-04)
+
+ARMADA photo `61835.jpg` confirms diagnostic build `b6f55e1e0876`. It
+records 66,595 DMA and 18,643 polled receptions (21.87% polled). All
+successful polled receptions occurred in interrupt delivery visits, maximum
+one per visit; no PIO `read_part` calls occurred. The 18,809 incomplete
+receptions equal 18,643 overruns plus 166 repair attempts; 83.7% stopped
+with 129–384 DMA bytes left. Late controller snapshots were clean, which
+does not exclude earlier contention. Token searches clocked 6,524,422
+bytes, with a maximum of 3,222 in one successful search. Starts/stops were
+18,893/18,892; guard 0, CRC errors 4, token/foreign errors 0.
+
+The owner separately reports Worms Armageddon is slightly laggy but its
+audio/video appear synchronized. No controlled duration or Worms counters
+were supplied, and the diagnostic build does not establish a sync fix.
+
+The approved next experiment shares a 256-token-byte allowance across each
+CE service entry, preserves pending searches across returns and explicitly
+wakes CE to continue. It retains the accepted payload byte loop and CRC.
+Boot/noninstalled and synchronous PIO-transfer entries remain unbudgeted.
+`TOKYIELD` replaces the unused fifth column of the last counter row. See
+[design, evidence and validation](evidence/ce-token-slicing-2026-10-04.md).
+
+## Windows CE: count incomplete DMA and blocking work (2026-10-04)
+
+The next experiment adds CE-only counters to the restored `e9ff2353c3cd`
+reader. It does not reintroduce the rejected batched receiver or change
+transfer ordering, retries, CRC, IRQ priorities, queue size or live overlay.
+The goal is to choose a smaller blocking-work change from console evidence,
+not claim a speed gain from this diagnostic build. See
+[counter definitions and test procedure](evidence/ce-blocking-diagnostics-2026-10-04.md).
+
+The return screen replaces last-command and queue rows with incomplete-DMA
+bins, late controller snapshots, token work and maximum polled blocks per
+delivery visit. All values remain hexadecimal; one photo captures the whole
+screen. The existing CE-owned timer cannot safely measure arbitrarily long
+masked intervals, so these counts must not be reported as microseconds.
+
+The older DreamShell-based menu was also compared read-only. Its cached
+PCM callback only copied samples, and its UI status mutex was released
+before sound-driver work. Current K-UI decodes Ogg while holding the mutex
+that the main loop acquires before processing input. Separate input/render
+scheduling and PVR rendering are further differences. No menu implementation
+or code from that repository is included in this CE experiment.
+
+## Windows CE: batched recovery rejected, restore CRC baseline (2026-10-04)
+
+Owner reports `bd2b7fb7424b` made ARMADA worse and Worms Armageddon no
+longer boots. Reject this experiment. Restore all source, test and Makefile
+changes from that commit to `e9ff2353c3cd`, the last owner-confirmed build
+that improved both titles. Retain the original verified e9 SD ZIP as the
+immediate recovery artifact; a freshly compiled rollback is not needed
+for the owner's next run.
+
+Photo `image(7).png` confirms the rejected build and records a menu return:
+guard 0, DMA blocks `0x143C2` (82,882), polled/overruns `0x5FF8` (24,568),
+starts `0x6144` (24,900), kept `0x273` (627), CRC errors 4, token/foreign 0,
+and repair attempts/deferred `0xA2` (162). The polled fraction is 22.86%,
+essentially unchanged from 22.84% previously. This does not measure stall
+duration or identify the boot-failure cause. The image does not show the
+Worms boot failure itself, and no exact failed stage is yet established.
+
+The host register model covered the intended byte sequence; it did not
+establish real SCI timing or CE compatibility. Passing checks and zero
+guard faults did not predict the console result. No root cause is claimed,
+and no new optimization or audio/video timing workaround accompanies this
+rollback. Previous experiment details below remain as the rejected record.
+
+## Windows CE: batched polled recovery experiment (2026-10-04)
+
+Owner reports `e9ff2353c3cd` is quite a bit better. ARMADA still needs
+improvement; Worms Armageddon's roughly ten-second intro is almost perfect,
+but audio precedes the corresponding video. Whether that offset grows or
+stays constant is unknown. No artificial audio delay or timing adjustment
+is part of this experiment; the owner requested one problem at a time.
+
+Photo `image(6).png` identifies `e9ff2353c3cd`; its title and exact run
+duration are unconfirmed. Whole-session counters are:
+
+| Counter | Hex | Decimal |
+| --- | --- | ---: |
+| Guard | 00000000 | 0 |
+| IRQ blocks | 0001614E | 90446 |
+| Call blocks | 00006B81 | 27521 |
+| DMA blocks | 00016175 | 90485 |
+| Polled blocks | 0000689D | 26781 |
+| Stream starts | 000069E8 | 27112 |
+| Kept blocks | 000002BF | 703 |
+| Overruns | 0000689D | 26781 |
+| CRC errors | 00000002 | 2 |
+| Token errors / foreign channel | 00000000 | 0 |
+| Repair attempts / deferred repairs | 00000098 | 152 |
+| Ahead | 00000000 | 0 |
+| Queue peak bytes | 000007E0 | 2016 |
+| Queued bytes | 00004290 | 17040 |
+| Queue-full visits | 00000015 | 21 |
+| Queue bytes left | 00000000 | 0 |
+
+Of 117,266 completed card receptions, 22.84% were polled, close to 22.23%
+in the prior run. The unchanged one-overrun-per-polled-block relationship
+and reported smoother playback are consistent with less CRC CPU work,
+but do not establish measured throughput or the cause of Worms' offset.
+
+The next isolated change targets those CPU-driven recoveries. The CE
+background reader receives each 512-byte payload and its two CRC bytes
+with one bounded batch, preparing SCI once and keeping only one byte in
+flight. Raw bytes then pass through the existing word reversal and CRC
+validation. It must not start DMA, clock an extra byte, publish unchecked
+data, or change retry/repair policy, interrupt ownership, queue capacity,
+boot behavior or live-overlay suppression. Native and synchronous CE
+readers retain their existing paths. Console benefit remains unmeasured.
+
+Local SH proxy native/CE instruction, layout and stack audits pass. CE
+async payload is 15,780 bytes (+160), with unchanged 5,084-byte BSS; its
+end is `0x8c00d49c`, leaving 868 bytes below the unchanged limit. Worst
+stack is 432 plus 64 bytes within 2,000 usable; the interrupt path is
+232 bytes. At a fixed build ID, native resident/stage binaries and the
+synchronous CE resident remain byte-identical to `e9ff2353c3cd`.
+
+The generated batch prepares once and seeds TDR once. Each byte uses one
+bounded flag wait, with no per-byte bus callback, repeated preparation or
+bit reversal; storing the preceding byte overlaps the next transfer.
+Generated code still spills registers around the wait call, so no cycle
+or throughput improvement is claimed without the console comparison.
+
+The actual helper passes the register model with varied byte timing:
+exactly 514 bytes, one byte in flight, raw bit order, no byte 515, unchanged
+CS/DMA/IRQ ownership, and latched bounded failures at the first, middle
+and final byte. The existing bus suite also passes. The stream-model
+adapter supplies the helper's raw-wire contract; the separate register
+test exercises the production implementation itself.
+
+ASan/UBSan native and CE stream tests pass, including the independent CRC
+vectors, corruption rejection and repair cases. CE async passes 103,800
+checks, including raw-helper selection on first-overrun recovery and a
+partial helper fault ending the request with zero published bytes. Normal
+`make test` includes the new register-model variant. Full pinned CI is
+required for these committed test and Makefile changes. Compare the same
+ARMADA intro with X after a cold boot, then capture menu-return counters;
+judge audio/video pacing without changing reader settings or adding an
+audio synchronization workaround.
+
+## Windows CE: CRC lookup experiment and first-overrun result (2026-10-04)
+
+Owner reports smoother ARMADA intro video and audio on `ba7caf575391`,
+with room for improvement. Photo `61832.jpg` records the following
+whole-session counters. No live overlay or audio audition is used to
+claim a measured throughput gain.
+
+| Counter | Hex | Decimal |
+| --- | --- | ---: |
+| Guard | 00000000 | 0 |
+| IRQ blocks | 00010D29 | 68905 |
+| Call blocks | 00004F21 | 20257 |
+| DMA blocks | 00010D50 | 68944 |
+| Polled blocks | 00004CF7 | 19703 |
+| Stream starts | 00004DF0 | 19952 |
+| Overruns | 00004CF7 | 19703 |
+| CRC errors | 00000003 | 3 |
+| Token errors / foreign channel | 00000000 | 0 |
+| Repair attempts / deferred repairs | 0000009D | 157 |
+| Ahead | 00000000 | 0 |
+| Queue peak bytes | 000007E0 | 2016 |
+| Queued bytes | 00004290 | 17040 |
+| Queue-full visits | 00000015 | 21 |
+| Queue bytes left | 00000000 | 0 |
+
+There is now exactly one overrun per polled block, versus about 2.01 in
+the preceding run. This confirms the immediate-fallback behavior; it does
+not show a lower normalized overrun rate. The newer session completed
+88,647 card receptions (DMA plus polled), 3.19 times the preceding 27,773,
+and roughly 22.2% were polled versus 10.5% previously. Different workloads
+and run lengths prevent treating these totals as a controlled speed test.
+Guard faults remain zero. The three CRC errors and 157 repair attempts
+do not establish which failures triggered the existing repair cutoff.
+
+The next isolated experiment replaces only the CE stream reader's
+algebraic CRC16 byte update with an original, polynomial-generated
+256-entry constant table (512 bytes). It retains CRC checks on every
+block and the same repair validation. Native readers keep their existing
+algebraic calculation. DMA, fallback thresholds, interrupt priority,
+queue size, boot paths and the live-overlay guard are unchanged.
+
+The aim is to shorten CPU work while checking each received sector,
+including work done with interrupts masked. This does not eliminate the
+CPU-driven fallback transfer or guarantee fewer DMA overruns. Console
+comparison should use the same ARMADA intro interval after a cold boot,
+launching with X, and compare broken/repeated speech, video pacing and
+menu-return counters. Host correctness and resident fit must pass before
+publishing; any speed or smoothness gain still requires console evidence.
+
+Local SH proxy compilation and instruction/layout/stack audits pass. CE
+async payload is 15,620 bytes, with unchanged 5,084-byte BSS; the resident
+ends at `0x8c00d3fc`, leaving 1,028 bytes below its `0x8c00d800` limit. The
+512-byte table is read-only and 32-byte aligned. Worst conservative stack
+is 408 plus 64 bytes within 2,000 usable, with a 208-byte interrupt path.
+At a fixed build ID, native resident/stage binaries and the CE synchronous
+resident remain byte-identical to `ba7caf575391`. These proxy checks do not
+replace pinned CI or console playback comparison.
+
+The CE accumulator uses a full register while explicitly retaining a
+16-bit CRC state at each step. This avoids the compiler's initial
+per-byte spill/reload. The final proxy byte loop has 14 instructions
+versus 23 previously, with two table-related memory reads and no per-byte
+stack traffic or function calls. Instruction counts alone are not a
+timing measurement; cache behavior and the card/game workload still matter.
+
+Focused ASan/UBSan validation passes both native and CE stream suites and
+the CE async suite (97,636 checks). New stream vectors exercise six sector
+patterns through DMA and polled reads against the model's independent
+bitwise CRC reference, anchored by `123456789` yielding `0x31c3`. They
+reject payload and CRC-trailer corruption, accept clean rereads, and check
+single-byte reconstruction with nonuniform data. Normal `make test` now
+also runs the stream suite with `KUI_RETAIL_CE`, so CI covers the table
+and algebraic implementations through the same public receive APIs.
+
+## Windows CE: first-overrun fallback experiment (2026-10-04)
+
+Owner confirmed `68cbe37aa95e` boots. The FMV advanced steadily, but audio
+had a consistent echo/repetition effect and no clear playback improvement
+was reported. Photo `61827.jpg` identifies that build and records the
+whole-session counters below; clip `61826.mp4` accompanies it. Audio could
+not be auditioned by this agent, so the description is the owner's.
+
+| Counter | Hex | Decimal |
+| --- | --- | ---: |
+| Guard | 00000000 | 0 |
+| IRQ blocks | 000060E8 | 24808 |
+| Call blocks | 00000C22 | 3106 |
+| DMA blocks | 00006110 | 24848 |
+| Polled blocks | 00000B6D | 2925 |
+| Stream starts | 0000182C | 6188 |
+| Overruns | 00001703 | 5891 |
+| CRC errors | 00000002 | 2 |
+| Token errors / foreign channel | 00000000 | 0 |
+| Repair attempts / deferred repairs | 000000C7 | 199 |
+| Ahead | 00000000 | 0 |
+| Queue peak bytes | 000007E0 | 2016 |
+| Queued bytes | 00004290 | 17040 |
+| Queue-full visits | 00000015 | 21 |
+| Queue bytes left | 00000000 | 0 |
+
+`OVERRUNS` counts failed/incomplete receptions, not the intentional stop at
+successful block ends. `REPAIRED` is incremented when an in-place repair is
+attempted, before its CRC is known. These totals do not prove that the two
+CRC errors disabled repairs, nor isolate the FMV interval. Roughly two
+overruns per polled block is consistent with the existing two-failure
+fallback threshold; it motivates the following controlled test.
+
+Only the CE background reader changes: an unrecovered `OVERRUN` marks the
+current block for a polled reread immediately. Other failures retain the
+two-failure fallback rule, and the eight-retry failure budget is unchanged.
+The flag clears after successful block delivery, on new requests and abort.
+Following blocks resume normal DMA. CRC checks, the existing two-failed-
+repair cutoff, the two-iteration interrupt limit, queue size and live-overlay
+guard remain intact. This is an attempt to reduce wasted retries/restarts;
+no improvement is claimed before the console comparison.
+
+Validation: the CE model passes 97,636 checks under ASan/UBSan, including
+first-overrun reread at the same LBA before delivery, return to DMA for the
+next block, repairable-overrun continuation, other error thresholds and
+terminal CRC failure. The first-overrun case fails against `68cbe37aa95e`
+as expected. Native async (119,928 checks) and GD (847) pass. Local SH
+instruction/layout/stack audits pass; CE async has 1,540 bytes free and its
+stack remains 404 + 64 bytes within 2,000 usable. At a fixed build ID,
+native images and CE standard are byte-identical; CE stage instructions
+are unchanged, with relocated pointers adjusted. Full pinned CI is required
+because the committed CE test file is outside the existing console-only
+scope. Console performance remains unmeasured.
+
+Console comparison: cold boot, launch the same CE title with X, play the
+same intro segment for the same duration, then photograph the menu-return
+counters. Compare audio/video smoothness and overruns/starts relative to
+completed DMA plus polled blocks; absolute counts alone depend on run length.
+
+## Windows CE: restore boot paths, suppress only the live redraw (2026-10-04)
+
+Owner reports that no-overlay build `b3d9ee49f9b7` stops at the bootstrap 2
+screen. The precise last line/fault is not yet available; no root cause is
+confirmed. That build passed compile/layout/stack audits, which did not
+establish console boot compatibility. Recovery build `68cbe37aa95e` subsequently booted on the owner's console;
+its FMV results are recorded above.
+
+The recovery comparison restores the timer/accounting and display code
+from `90b0456391fe`. Its only production-code difference from that build is
+an early return from `retail_display_status` when MMUCR.AT is set, the same
+CE-active distinction used by the background reader. Boot diagnostics keep
+their previous path; normal MMU-on CE calls do not redraw the live overlay.
+Fault and menu-return diagnostics do not use this gated function. There is
+no change to the prefetch queue, CRC, DMA handoff or interrupt priority.
+
+This isolates live drawing from the earlier wholesale removal. Timer
+sampling and accounting remain deliberately, and compiled resident addresses
+can still move. Build `68cbe37aa95e` passed its console boot test. No clear playback gain
+was reported; the root cause of the earlier regression remains unconfirmed.
+
+## Windows CE: earlier full overlay-removal experiment (regressed, 2026-10-04)
+
+Owner result on `90b0456391fe`: ARMADA's intro initially appeared improved,
+with displayed delivery around 620 KiB/s, later around 420 and sometimes
+300. These scene-dependent delivery rates alone do not establish a card
+throughput limit. The owner requested removing the live speed/call display.
+
+That experiment omitted the live framebuffer drawing and the associated
+timer sampling, rate calculation and formatting. The overlay cleared
+53,504 framebuffer bytes per refresh plus glyph writes while the GD call
+masked interrupts; its cost was excluded from BUSY PCT. Stage, failure and
+return-to-menu screens remain, including queue and stream-error counters.
+The 2 KiB prefetch queue, CRC, IRQ priority and transfer logic are unchanged.
+
+Local GCC 15 SH preflight: full native/CE instruction, layout and stack
+audits pass. CE async ends at `0x8c00cfbc` (2,116 bytes free), stack 400 plus
+64-byte margin within 2,000 usable; CE standard ends at `0x8c00c164`
+(1,692 bytes free). Native resident/stage binaries remain byte-identical
+to `90b0456` at a fixed build identifier. Existing console-only CI scope
+applies to this loader/docs-only change; the preceding build passed the
+full host/filesystem suite. Console comparison: same ARMADA intro with X,
+judged by playback pacing, audio sync and skips, without a live rate line.
+
+## Windows CE: bounded prefetch between driver buffers (2026-10-04)
+
+First optimization after the owner's background-reader result of roughly
+420 to 470 KiB/s. CE's background reader now stages up to 2 KiB of checked
+output in a ring, replacing the 512-byte spill. It continues production
+between physical DMA pieces and while virtual PIO buffers cannot be touched
+from an interrupt. CE calls drain virtual buffers; physical buffers keep
+their direct path when no older queued data remains. Completion follows
+bytes delivered to the destination, including a final queued tail after
+the cursor finishes. Abort/reset clears the queue. CE interrupt visits are
+limited to two delivery-loop iterations, including retries.
+
+Review also caught terminal PIO-stream prefetch errors not notifying CE;
+they now fail the request and raise the drive event without synthesizing
+a callback for an unsubmitted transfer. Focused CE host tests pass 85,428
+checks under ASan/UBSan (LSan disabled for this container's /proc restriction),
+covering queued final tails, FIFO wrap, small physical pieces, virtual-buffer
+isolation, abort/init/reset, CRC failure and bounded polled-fallback wakeup.
+Supporting GD, cursor, SCI stream and native async suites also pass.
+
+The menu-return report now shows `ISR Q PEAK Q BYTES Q FULL Q LEFT` in the
+old hook-count row. No extra screen rows or changes to the live overlay.
+The standard CE reader, native readers, SCI framing/CRC and memory/stack
+boundaries are unchanged. See
+[the prefetch experiment](windows-ce-placement-test.md#ce-prefetch-experiment-2026-10-04)
+for counter meanings and the ARMADA/X then Worms comparison. No console
+speed or compatibility gain is claimed before those tests.
+
+Local GCC 15 SH preflight: full native and CE instruction/layout/stack
+audits pass; CE background resident ends at `0x8c00d1bc` (1,604 bytes free),
+worst stack 404 bytes plus the audit's 64-byte margin within 2,000 usable.
+All native residents/stage and the standard CE resident are byte-identical
+to the baseline when built with the same identifier. Pinned CI and console
+results are recorded separately after completion.
+
+## Windows CE: background reader through CE's interrupt table (2026-10-04 UTC)
+
+For the slow FMVs: **X** on the Windows CE boot test's confirmation launches
+with a CE build of the background SCI reader (A keeps the standard one). The
+stage finds CE's interrupt handler table (KData + 0x404, matched in ARMADA,
+Bust-a-Move 4 and Worms). The reader puts its entry in the SCI's two slots
+at CE's first GD call with the MMU on. Blocks then arrive by DMA and are
+placed by the interrupt into physical destinations: DMAREAD, and each
+DMA_TRANSFER of a command-38 stream. The interrupt returns SYSINTR 21 or 20
+as CE's driver expects. CE's virtual buffers (PIO reads, command-39
+streams) are filled in CE's calls, with the drive's interrupt bringing those
+calls. Without a table the stage falls back to the standard reader.
+
+Code: `retail_async.c` (`KUI_RETAIL_CE`: pieces, a 512-byte spill, install,
+wake), `retail_gd.c` (`kui_retail_gd_stream_progress`),
+`retail_resident.c`/`.S` (`kui_retail_ce_irq`, `kui_retail_ce_isr`) and
+`build/retail-ce/resident-scia` (below `0x8c00d800`, 2 KiB stack to
+`0x8c00e000`). Tests: `test-retail-async-ce` (new); package, shell and
+launcher cases. Details:
+[windows-ce-placement-test.md](windows-ce-placement-test.md#background-reader-for-windows-ce-x-on-the-boot-tests-confirmation).
+The first build (`951bbe0`) failed the layout check: a helper named
+`irq_fills` matched the forbidden KOS `_irq_` prefix. It is now
+`interrupt_fills`. Build `a30deb97b46e`: host and Dreamcast passed ([run
+37206850694](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37206850694)).
+To test: ARMADA's intro with A, then with X. Compare KIB/S and BUSY PCT on
+the status line.
+
+## Games: the launch map holds 99 tracks (2026-10-04 UTC)
+
+Bust-a-Move 4 (25 tracks) and MDK2 (31, native) were refused: the map held
+16. Tracks and extents now share one table of 12-byte slots (`union
+kui_retail_slot`, `retail_image.h`): 160 slots in the standard readers and 64
+in the background reader, the same memory as before. A track's number is its
+position, and the GD service reads track slots directly (one layout, not
+two). Audio tracks keep their extents when everything fits; otherwise they
+are listed without them, and reads of them are refused. Wire format
+`KUIRTI02`. No resident grew: free bytes SCIF 596, SCI 48 (unchanged), IDE
+1,412 (was 1,380), background 100 (was 36). Details:
+[games-launch-map.md](games-launch-map.md).
+The first build (`24018ef`) failed in the linked-instruction audit: it took a
+literal-pool pointer for a PC-relative load that "loaded" the stage's FPSCR
+setup and so skipped it ("Missing unique bootstrap FPSCR setup"). The audit
+now walks in address order so pool data never marks literals
+(`tests/test_retail_instructions.py`), and CI annotates every failing line
+(make's `***` lines, Python exceptions). Build `e965e09d10b0`: host and
+Dreamcast passed ([run
+37179324326](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37179324326)).
+To test: Bust-a-Move 4 (Windows CE boot test), MDK2 (normal launch), and a
+title that already works.
+
+## Windows CE: Worms Armageddon and ARMADA run; FMVs slow (2026-10-04 UTC)
+
+Build `e349bdc5457a`: Worms Armageddon and ARMADA both run from SCI microSD.
+FMVs are still somewhat slow; 442 KiB/s seen during ARMADA's intro. The
+synchronous reader costs about 1 ms of CPU per KiB (roughly 40 to 45% of
+CE's time at that rate). Levers, largest first: the background reader for
+CE (DMA receive, interrupt per block, about a third of the CPU per KiB,
+overlapped; CE's ISR table at KData + 0x404 could take its handler); a
+CMD18 stream kept open between calls (about 10 to 15%). Details:
+[windows-ce-placement-test.md](windows-ce-placement-test.md).
+
+## Windows CE: PIO stream reads with the driver's callback (2026-10-04 UTC)
+
+Worms Armageddon stopped on command 39 (PIOREAD_STREAM_EX). CE build: GD
+service `pio_check`/`pio_transfer` and PIO_CALLBACK storage
+(`pio_callback`, `pio_argument`, `callback_due`); the CE reader queues a due
+callback on EXEC (`kui_retail_ce_deferred`) and `retail_resident.S`
+`.Ldeferred_call` makes it after unlocking, in the caller's restored
+context (16-byte home area, GBR kept). Host: `pio_stream_reads`. Bust-a-Move
+4 was refused by the launcher: it has 25 tracks (mostly CD audio) and the
+launch map holds 16. Options given to the owner: a 32-track map for the CE
+reader only (it has about 1 KiB free; native SCI has 48 bytes), or TOC-only
+audio tracks for all readers.
+Builds: `ab76385707ad` ([run
+37170930329](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37170930329)) and
+`e349bdc5457a` ([run
+37171394153](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37171394153), speed
+and PIO stream together): host and Dreamcast passed; native resident sizes
+unchanged.
+
+## Windows CE: no 25 ms sleeps between reads; rate readout (2026-10-04 UTC)
+
+CE's tick is 25 ms (all three kernels), so the driver's Sleep(5) between
+DMAREAD steps costs a tick each. CE reader: CHECK word 3 = 1 while a read is
+pending and SYSINTR 20 per read step (driver waits on the interrupt instead);
+status line `CALLS COMMAND KIB/S BUSY PCT SECTORS` (decimal except the
+command) from CE's millisecond count (`kui_retail_ce_kernel[2] + 4`) and
+TMU0 counts, redrawn per half-second window. Native readers byte-identical.
+
+## Windows CE: ARMADA reaches gameplay (2026-10-04 UTC)
+
+Build `fc08d071ed7d`: ARMADA boots through Windows CE to gameplay from SCI
+microSD. Its intro FMV runs at roughly 5 fps: reads run synchronously with
+CE frozen, and ordinary reads step 4 KiB per EXEC/CHECK around the driver's
+5 ms sleeps. Bust-a-Move 4 and Worms Armageddon (CE titles the owner knows)
+are the next calibration runs. Speed options are listed in
+[windows-ce-placement-test.md](windows-ce-placement-test.md).
+
+## Windows CE: 711 calls in; 0x0c pointers are virtual under CE (2026-10-04 UTC)
+
+Build `9ab26bd0e9ad`: stream reads ran (status line climbing; 711 GD calls,
+4,646 card blocks), then `GD REQUEST REJECTED` for a DMAREAD whose
+parameters were at `0C3BF4EC`, a slot-6 stack address. K-UI treated
+`0x0c......` as physical RAM. Next build (CE only): CPU pointers outside
+P1/P2 are virtual including `0x0c`; DMA destinations stay physical
+(`dma_guest` in `retail_gd.c`; the CE reader's map takes only P1/P2 as
+RAM). Native readers byte-identical (proxy).
+Build `fc08d071ed7d` ([Diagnostic run
+37169338751](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37169338751)):
+host and Dreamcast passed; native resident sizes unchanged.
+
+## Windows CE: large stream transfers, stepped (2026-10-04 UTC)
+
+Build `96705505d1d6` (polled SD) stopped at the same call with SD 0 and
+IMAGE 9 (RANGE): the driver merges adjacent physical pages, so one
+DMA_TRANSFER exceeded `kui_retail_image_read_part`'s 64 sectors. Not DMA
+starvation; the CE reader's SCI DMA is restored. The GD service now steps a
+stream transfer 4 KiB per DMA_TRANSFER/DMA_CHECK/EXEC call
+(`stream_step`, `xfer_destination`, `xfer_left`), raising SYSINTR 21 after
+each step and SYSINTR 20 while bytes remain and at completion; DMA_CHECK
+returns 1 with the bytes left until done. CE reader limit `0x8c00c800`,
+stack to `0x8c00d000`. Host: `test-retail-gd-ce` covers stepping, abort,
+init and a mid-transfer refusal.
+Build `9ab26bd0e9ad` ([Diagnostic run
+37168123361](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37168123361)):
+host and Dreamcast passed; native resident sizes unchanged.
+
+## Windows CE: stream reads run; card read fails under CE's display (2026-10-04 UTC)
+
+Build `50c37b5c2464`: the first DMA stream piece moved and CE delivered the
+injected SYSINTR 21 to the driver's DMA thread; its next DMA_TRANSFER failed
+with `IMAGE READ FAILED`. Likely SCI receive overruns: the reader's DMA
+channel 1 is starved by CE's display DMA on channel 2. Next build: the CE
+reader's SCI bus never uses DMA (`KUI_RETAIL_CE` in `sci_sd_bus.c`), and its
+stop screen shows SD/image results, blocks read, DMAOR and CHCR2. Native
+readers byte-identical (proxy). Polling roughly halves card reads (SCI
+soaks: about 530 KiB/s polled, 930-1,050 KiB/s with DMA): a test of the
+starvation theory; if confirmed, DMA returns with a starved-block retry or
+a raised channel 1 priority while it reads.
+Build `96705505d1d6` ([Diagnostic run
+37166820490](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37166820490)):
+host and Dreamcast passed; native resident sizes unchanged.
+
+## Windows CE: resident check fix (2026-10-04 UTC)
+
+Build `bddec88525e8` stopped at `BOOTSTRAP ALTERED RESIDENT` (detail 0):
+the stage's own post-bootstrap comparison of the reader with its blob saw
+the kernel-address slot it had filled in (`KUI_RETAIL_CE_KERNEL`). The
+relay now compares around the slot, checks the slot holds the addresses,
+and reports the first changed offset as the detail.
+Build `50c37b5c2464` ([Diagnostic run
+37165807642](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37165807642)):
+host and Dreamcast passed.
+
+## Windows CE: stream reads with CE's own interrupts (2026-10-04 UTC)
+
+Build `ec6d39cc5372` on ARMADA stopped with `GD REQUEST REJECTED`: command
+38 (DMAREAD_STREAM_EX), used by `wsegacd.dll` when a buffer's pages are not
+physically contiguous. Its pieces move by DMA_TRANSFER/DMA_CHECK, driven by
+SYSINTR 21 (G1 DMA end) and completed by SYSINTR 20 (drive). Next build
+(`KUI_RETAIL_CE` only): the GD service streams (`transfer`, `dma_check`,
+`kui_retail_image_read_part` for split sectors) and flags the interrupts;
+the CE reader raises them in CE's kernel as its interrupt dispatch does
+(pending mask, ring, reschedule flag), at addresses the stage finds by
+matching that code in the loaded kernel and writes to
+`KUI_RETAIL_CE_KERNEL` (`0x8c008324`). The CE reader's limit is now
+`0x8c00c000` with a 2 KiB stack to `0x8c00c800`
+(`retail_resident_ce.ld`); package headers keep the standard limit. Host
+tests: `test-retail-gd-ce` (new), `test-retail-image` byte ranges. Native
+SCI reader bytes unchanged (proxy build compared). Details:
+[windows-ce-placement-test.md](windows-ce-placement-test.md).
+Build `bddec88525e8` ([Diagnostic run
+37164952134](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37164952134)):
+host and Dreamcast passed, including the CE package's layout and stack
+checks; native resident sizes unchanged (SCIF 596, SCI 48, IDE 1380,
+background 36 bytes free).
+
+## Windows CE: black screen, then a hang; status line next (2026-10-03 UTC)
+
+Build `6eb4736083b8` on ARMADA: past `ENTERING WINDOWS CE`, the screen went
+black (CE's display driver) and stayed so, with no stop screen or reset.
+`wsegacd.dll` runs requests synchronously while CHECK's word 3 is not 1
+(K-UI writes 4), so the disc interrupt is not needed for reads;
+`ResetToFirmware` calls the BIOS menu vector, which the reader catches.
+Next build (CE reader only): a live status line on CE's own frame
+(`retail_display_status`, FB_R_SOF1/FB_R_SIZE, 16-bit pixels) on every
+REQUEST and every 16th call, and the CE trace plus the last command on the
+A+B+X+Y+Start screen. Native residents unchanged (proxy sizes identical).
+Details: [windows-ce-placement-test.md](windows-ce-placement-test.md).
+Build `ec6d39cc5372` ([Diagnostic run
+37162823553](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37162823553)):
+host and Dreamcast passed; native resident sizes unchanged (SCI 48 bytes free).
+
+## Windows CE: first stop inside CE; virtual addresses next (2026-10-03 UTC)
+
+Build `21c31ca296bf` on ARMADA stopped with `CE PASSED A VIRTUAL ADDRESS`:
+`wsegacd.dll` INIT, REQUEST 0x18, EXEC, then CHECK with its status buffer on
+its stack (`080DFCF0`, MMU on). Refusing it made CHECK fail, which sent the
+driver into its disc check: the earlier resets. Next build: the CE reader
+leaves SR.BL clear (interrupts still masked) and uses U0/P3 addresses
+directly, CE's TLB-miss handler mapping pages (`KUI_RETAIL_CE` in
+`retail_gd.c` guest() and the resident's map). Missing for ARMADA after that:
+commands 26, 38, 39 and functions 6, 7, 12, 13.
+Build `6eb4736083b8` ([Diagnostic run
+37161291909](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37161291909)):
+host and Dreamcast passed; native resident sizes unchanged.
+
+## Windows CE: the reset is CE's disc check reaching the real BIOS (2026-10-03 UTC)
+
+Second boot test (`15b912ccfff5`): reset again, now clearly after the relay
+screen, inside Windows CE. ARMADA's IP.BIN (owner-supplied, analysis only)
+has SEGA's standard bootstrap 2, which works. ARMADA's `wsegacd.dll` init
+loops on BIOS system function 2 (`0x8c0000e0`, R4=2), the check of the disc
+in the physical drive, which K-UI forwarded to the BIOS. Next build: the CE
+reader answers it (0, disc present) via the common entry as source 4,
+records it (`E0`), and stops at CE's first non-RAM GD pointer with the
+trace. Details: [windows-ce-placement-test.md](windows-ce-placement-test.md).
+Build `21c31ca296bf` ([Diagnostic run
+37158249080](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37158249080)):
+host and Dreamcast passed; native resident sizes unchanged.
+
+## Windows CE: boot test reset in bootstrap 2; fixes (2026-10-03 UTC)
+
+First boot test (`64f30e3f8ce4`) on ARMADA: `ENTERING OWNER BOOTSTRAP 2`,
+then a console reset. Next build: IP `0xFC` bit `0x20` cleared as for native
+games; only the trampoline's first 64 bytes placed (CE keeps `ECEC` and its
+ROM header pointer at body `0x40`); bootstrap 2 entered with SR.BL clear and
+a stage exception table (`__retail_ce_vbr`: exceptions reported, an
+interrupt left pending as SR.BL would) instead of a reset; relay restores VBR
+and BL; handoff screens held two seconds. Asked the owner for ARMADA's
+IP.BIN (analysis only, never committed) to read what its bootstrap 2 does.
+Build `15b912ccfff5` ([Diagnostic run
+37156416922](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37156416922)):
+host and Dreamcast passed; native resident sizes unchanged.
+
+## Windows CE: boot test, second step (2026-10-03 UTC)
+
+The CE test now **starts Windows CE** after placement and stops at the first
+disc request K-UI cannot serve, with a trace (caller, stack, SR, MMUCR, VBR,
+last four GD calls). SCI microSD only. Guide:
+[windows-ce-placement-test.md](windows-ce-placement-test.md) (now titled
+"Windows CE boot test"), including what each outcome means.
+
+- Stage (`KUI_RETAIL_CE`): after placement, trampoline at the body start,
+  CE-safe SCI resident, bootstrap 2 entered with the IP unchanged; the relay
+  checks the body's CRC32 and enters `0x8c010000`.
+- Resident (`KUI_RETAIL_CE`, `build/retail-ce/resident-sci.*`, embedded only
+  in `ce-probe.kui`): saves/restores the caller's registers without SR.BL
+  set, no pacing (fixed step; a step on each CHECK while reading), trace on
+  failure using value rows only (the conservative stack sum stays within
+  1232). Native residents are unchanged (proxy sizes identical).
+- ARMADA's `wsegacd.dll` calls `0x8c0010f0` directly; the resident's existing
+  redirection of that entry covers it.
+- Build `64f30e3f8ce4` ([Diagnostic run
+  37154394933](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37154394933)):
+  host and Dreamcast passed, including the CE package's layout, stack and
+  instruction checks; native resident sizes unchanged (SCI 48 bytes free).
+  Test: `sd-update` artifact's `KUI/runtime.kui` and `KUI/apps/games/`.
+
+## Windows CE: placement test, first step (2026-10-03 UTC)
+
+New: a **Windows CE placement test** for CE images (first target ARMADA). On
+a CE game's detail screen, A opens the test; it loads the CE kernel
+(`0WINCEOS.BIN`) where the BIOS would put it, checks it, shows checksums and
+layout, and stops. It does not start the game. See
+[windows-ce-placement-test.md](windows-ce-placement-test.md) for the screen
+and the expected values for ARMADA, Bust-A-Move 4 and Worms Armageddon.
+
+- Separate package `KUI/apps/games/ce-probe.kui` (magic `KUIRCE01`): the same
+  stage built with `KUI_RETAIL_CE` and linked at `0x8ce10000`
+  (`src/loader/retail_stage_ce.ld`), so CE's prefix slot `0x8ce01000` is free.
+  The native package, stage and residents are unchanged.
+- The launcher passes `KUI_GAMES_RETAIL_CE_PROBE` as the reader; preparation
+  then requires a CE image and the CE package. The stage checks the IP's CE
+  flag again, plans with `kui_ce_load_plan_build`, loads the body to
+  `0x8c010000` with header checks and the prefix to `0x8ce01000`.
+- Build `79f065b4ea88` ([Diagnostic run
+  37152435648](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37152435648),
+  host and Dreamcast passed, including the CE stage's layout and instruction
+  checks). Test: copy the `sd-update` artifact's `KUI/runtime.kui` and
+  `KUI/apps/games/` (now with `ce-probe.kui`), run the test on ARMADA and
+  photograph the result screen.
+- **Console result: passed on ARMADA** (every checksum and address matched;
+  details in the guide). Placement is settled.
+- Next: enter CE (keep the stage alive through the relay), then trace CE's
+  first GD calls and IRQ waits before implementing anything.
+
+## Games: background reader, pinned known-good builds (2026-10-03 UTC)
+
+**90f22512c808, launch Y (25 blocks per call)** is now the best background
+reader for DOA2 on SCI microSD: "the most fluid" of all runs. Its repair
+stayed on for the whole session (142 repairs; the only 2 CRC errors were
+byte-ahead blocks, fetched again) and only 4 overruns restarted the card.
+Source: commit `90f22512c808`; build: [Diagnostic run
+37149233706](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37149233706).
+Background-reader work is parked here while Windows CE is investigated.
+
+The earlier pin, **effc7b43fe5d, launch X (20 blocks per call)**: "very
+doable as far as gameplay goes". Source: commit
+`effc7b43fe5d` on `claude/modest-galileo-hpjv79`; build: [Diagnostic run
+37143988592](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37143988592)
+(artifacts kept until 2026-11-02; the owner keeps the SD update). The session
+could not push a tag (`pin/background-reader-x20`, refused with HTTP 403);
+create one on that commit from GitHub to rebuild it by name later.
+
+## Games: background reader, ninth build (2026-10-03 UTC)
+
+Built on the pinned build. An overrun the reader's interrupt finds is no
+longer resumed there: the block waits (card deselected, nothing in flight)
+until the next GD call's fetch resumes it in place (`DEFERRED`), since every
+repair a GD call started succeeded in the eighth run. X stays 20 blocks per
+call; Y tries 25. To make room, `CONTINUE` and `MAXTOKEN` are gone (stream
+rows: `DMA BLKS POLLED STARTS KEPT OVERRUNS`, `CRC ERRS TOKENERR FOREIGN
+REPAIRED AHEAD`, `DEFERRED`) and the reader's private stack is 352 bytes
+(call graph 224 plus the 64-byte allowance against 304). See
+[games-background-reader.md](games-background-reader.md). Build
+**90f22512c808** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37149233706)
+(36 bytes free, call-graph stack 224 of 304). Console: Y (25) was "the most
+fluid" and is pinned above. X (20): its 6 repairs were all overruns found by
+the interrupt and resumed later by a GD call (`DEFERRED` 6), and 2 still
+failed, so the fault lies in what is captured when the interrupt finds the
+overrun, not in when the block is resumed. Y's repairs all started inside
+GD calls (142, none deferred).
+
+## Games: background reader, eighth build (2026-10-03 UTC)
+
+The seventh build on the console: Y (20 blocks per call) had "a lot less
+lag. Reasonable even."; X (10) was largely as before, with about 3 s of lag
+as a fight's textures appeared. A larger target also meant fewer overruns
+(0.56% against 1.26%). Repair still failed 4 times in 49, never a byte ahead,
+so its cause is still open; with fewer overruns it costs about half a second
+a session. This build: 20 blocks per call is the new X, Y tries 30; within a
+run the next block starts as soon as one has arrived, before that one is
+checked and copied (the CRC check and bit reversal used to idle the card);
+the block kept for a following request gives way to the one being checked.
+`STALLED` is gone (it made room; the interrupt's hold-offs are established).
+See [games-background-reader.md](games-background-reader.md). Build
+**effc7b43fe5d** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37143988592)
+(4 bytes free, call-graph stack 224 of 336: GCC 15 came out within 8 bytes of
+the local GCC 14 this time, so any further growth needs room made first).
+Console: X (20) was better than Y (30) and is pinned above. Y read faster
+(about 20 KB per EXEC against 13) but its longer waits sit in DOA2's
+vertical-blank handler (99% of EXECs). Y also delivered almost nothing by
+interrupt (20 blocks) and repaired all 43 overruns with no failure, while X
+(7.5% by interrupt) failed 2 of 24: repairs may fail only when started
+from the reader's interrupt.
+
+## Games: background reader, seventh build (2026-10-03 UTC)
+
+`5136651bba37` with Y (eager) on the console: about 10 s from selecting
+Kasumi to the textures, then at most 5 s to the first fight (no lag in it),
+short lags around the next fights' FMVs (skipping one choked 2 to 3 s):
+"pretty damned close to parity". But repair stopped early, after 2 of 55
+failed, so its other 1,869 overruns (1.9%) each restarted the card. This
+build: `finish` also waits for the bus after stopping the channel, before
+counting (a transfer the channel had begun still lands then; the host model
+shows the old order resuming a byte early and the new one repairing it); a
+repaired block that ran a byte ahead (the card's gap or token as its last
+byte) is fetched again without a rebuild and counted as `AHEAD`, not against
+repair; the rebuild computes the lost byte directly. Launches: X is the
+sixth build's Y (EXEC and CHECK top up to 10 blocks), Y tops up to 20.
+`STOPS` gave its place to `AHEAD`, and `IRQS` and `FAILURES` (repeats of
+`IRQ BLKS` and the stream's errors) are gone: the rows read `IRQ BLKS
+CALLBLKS WAITS EXECS EXEC INT`, `STALLED HOOKS RELEASES`, the release row,
+`DMA BLKS POLLED STARTS CONTINUE KEPT`, `OVERRUNS CRC ERRS TOKENERR FOREIGN
+MAXTOKEN`, `REPAIRED AHEAD`. The first CI run (`c6cf6571b25c`) failed to
+link: the resident was over its limit with CI's GCC 15 although a local GCC
+13 build was 20 bytes smaller (GCC 14, now installed locally as a closer
+proxy, showed +4). So the SCI bus's 20-byte state moved into the reader
+region's spare gap and the two counters went: GCC 14 now ends 36 bytes
+under the limit. See [games-background-reader.md](games-background-reader.md).
+Build **cbfa8f74f05b** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37133001235)
+(36 bytes free, call-graph stack 224 of 336). Console, Y: "A lot less lag.
+Reasonable even." Overruns fell to 0.56% of blocks (1.9% before), but repair
+still stopped after 2 of 13 failed, neither a byte ahead (`AHEAD` 0). X (10
+blocks per call): "largely the same", about 3 s of lag as the fight's
+textures appeared; overruns 1.26%, repair off after 2 of 36.
+
+## Games: background reader, sixth build (2026-10-03 UTC)
+
+`40e7e2b71c61` Y (one block per call) was far slower: boot past 20 to 30 s,
+30 s of intro lag (6 to 7 with the fourth build), so the lag is DOA2 waiting
+for data. During boot almost nothing came by interrupt (`IRQS` 120;
+`EXEC INT` 2,172 of 6,548 EXECs from handlers, `STALLED` 1,987). It then
+stopped with `IMAGE READ FAILED` after nine failures in a row at one block
+(4% overruns; repair off after two of 63 failed). This build: from the
+second failure in a row a block is read by programmed transfers (cannot
+overrun); `finish` does an uncached read of main memory before stopping the
+channel so a held-off last write lands before the count is read; Y is now
+`ASYNC_EAGER` (CHECK tops up like EXEC). See
+[games-background-reader.md](games-background-reader.md). Build
+**5136651bba37** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37128672324)
+(16 bytes free, call-graph stack 220 of 336); console: see the seventh build.
+
+## Games: background reader, fifth build (2026-10-03 UTC)
+
+`c86877c0dbb9` on the console with Y: character select to fight in under
+ten seconds (about 25 before), textures in faster; still 6 to 7 s of lag
+after the first line of the intro, a slight FMV stutter and lag in the
+second fight's first section. 41% of blocks by interrupt (`REHOOKS` 6,025
+of `REL 600` 6,034, no exceptions); the lag is EXEC's masked top-up
+(`EXECWAIT` 4,611 of about 10 blocks). 36 repairs worked before one failed
+CRC switched repair off. This build: both launches release and re-hook;
+**X** keeps the top-up, **Y** (`ASYNC_SMOOTH`, manifest reader 2) lets an
+EXEC or CHECK wait for at most the block in flight, only when nothing
+arrived since the previous GD call. Repair now stops after two failed
+blocks. New counters: `EXECS`, `EXEC INT` (EXEC from a handler), `STALLED`
+(a call found a block ended with its interrupt held off). `MAXRETRY` is gone,
+`VBR CHGS` moved to the release row. See
+[games-background-reader.md](games-background-reader.md). Build
+**40e7e2b71c61** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37126914530)
+(48 bytes free, call-graph stack 220 of 336); console: see the sixth build.
+
+## Games: background reader, fourth build (2026-10-03 UTC)
+
+`7462d64cec22` on the console: X ran DOA2, Y crashed, so DOA2's handlers must
+not start under the reader's VBR. X still lagged before character select and
+at the fight's start: only 3% of blocks came by interrupt (`RELEASES` 6,243,
+DOA2's own interrupts hand the vectors back almost at once), and all 1,676
+mid-block overruns restarted the card (`REPAIRED` 0: the channel takes the
+byte RDR held once it gets the bus back, so RDR is empty). This build:
+**Y** now releases like X but points each released interrupt's SPC at a
+trampoline (`kui_retail_rehook`) that installs the reader's VBR and SCI level
+again when the game's handler returns, then RTEs to the interrupted code
+(`REHOOKS`; up to three pending, newest first); exceptions are only
+released. Overrun repair handles an empty RDR (lost byte = channel count) and
+switches itself off if a repaired block ever fails its CRC. The release
+frame sits at the engine's start (`region + 0x240`); the releasing entries
+and trampoline keep registers on the interrupted stack. The resident's
+private stack is 384 bytes (call-graph worst 220 + 64 against 336) to make
+room. Counters: `REL 100/400/600` and `REHOOKS` replace `FORWARDS` and
+`BOOT VBR`. See [games-background-reader.md](games-background-reader.md).
+Build **c86877c0dbb9** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37102296675)
+(112 bytes free, call-graph stack 220 of 336); console: see the fifth build.
+
+## Games: background reader, third build (2026-10-03 UTC)
+
+`da60895201d3` crashed and rebooted the console right after the bootstrap
+with the background reader (X). Its first hook had raised the DMAC's
+interrupt level (IPRC) from 0 to 1 and armed channel 1's completion
+interrupt, and passed the game's events on under the reader's VBR. This
+build never touches IPRC or the DMA interrupt (every block ends on the SCI's
+receive error interrupt, ERI, at the lowest level) and makes the VBR
+question the launch choice: **X** hands the game its VBR and SCI level back
+at the first event that is not the reader's (re-installed at the next GD
+call; `RELEASES`), **Y** keeps its vectors while it streams. An EXEC now
+tops up to 10 blocks since the previous EXEC instead of waiting whenever no
+interrupt came. See [games-background-reader.md](games-background-reader.md).
+Build **7462d64cec22** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37099593981)
+(176 bytes free, call-graph stack 220 of 464); console: X ran, Y crashed
+(fourth build above).
+
+## Games: background reader, second build (2026-10-03 UTC)
+
+`80687b46fde8` on the console with DOA2: no faster and no smoother (25 s
+load, 7 s of lag into the fight). Its counters show why: DOA2 keeps the
+bootstrap's VBR (0x8C00F400) for good and that build never hooked it
+(`HOOKS 0`, `IRQS 0`), so every block was read in the game's own calls, ten
+per EXEC; and 4% of blocks overran mid-block, each restarting the card for
+up to 3 ms. The next build hooks the boot VBR, and resumes an overrun block
+in place, rebuilding its one lost byte from the CRC16 instead of restarting.
+See [games-background-reader.md](games-background-reader.md). Build
+**da60895201d3** passed [Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37097485011)
+(144 bytes free, call-graph stack 220 of 464); console results are pending.
+
+## Games: background SCI reader, first test build (2026-10-03 UTC)
+
+The owner asked for the asynchronous game loader. On the Launch game
+confirmation, **X** now launches with a background SCI reader (A keeps the
+standard one): a CMD18 stream received by DMA, each block finished by the
+reader's own interrupt (DMTE1/SCI ERI through a vector table it places in
+front of the game's only while a block is in flight), with EXEC waiting for
+blocks itself whenever no interrupt is delivering. It is a fourth low
+resident (`resident-scia`, 32 extents, 512-byte stack proven from GCC's call
+graph). Design, risks, the counters screen and the DOA2 test steps:
+[games-background-reader.md](games-background-reader.md). Host tests:
+`test-sci-stream`, `test-retail-cursor`, `test-retail-async`,
+`test-retail-gd-async`. Build **80687b46fde8** passed
+[Diagnostic run](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37095699048)
+(host and Dreamcast): the background resident has 496 bytes free and a
+call-graph worst-case stack of 220 of 464 bytes; the standard SCI resident
+now has 48 bytes free. Console results are pending.
+
+## SCI async: reader final; game loader next (2026-10-03 UTC)
+
+`9e6ccca3dd9e` on the console: no pauses, longest call 371 us, longest
+interrupt-masked window 61 us (the reader's one-time table build at open,
+now moved before masking), stream 1,191 KiB/s with all data matching. See
+[the change record](evidence/sci-async-pause-hunt-2026-10-02.md). The owner
+asked for the asynchronous game loader next. CI now annotates each run with
+the low residents' sizes (`tools/report_retail_sizes.py`).
+
+## SCI async: the 2.5 ms pause is KOS's clock (2026-10-02 UTC)
+
+`ad0340e18528` on the console: the logged pauses fall exactly at whole seconds
+of uptime, and nothing timed with raw counters stalled (73,273 back-to-back
+module resets, longest 9 us; idle CPU gaps 1.4 us masked). KOS's
+`timer_us_gettime64()` counts TMU2's 80.2 ns ticks as 80 ns, so each second
+reads 997,498 us and then jumps 2.5 ms; every "pause" was an interval across
+that jump. The reader needs no change. The next build times the probe with
+TMU2 ticks at their real length, drops the one-off reset loop and idle tests,
+and shows the longest interrupt-masked window on R's screen. See
+[the change record](evidence/sci-async-pause-hunt-2026-10-02.md). Build
+**9e6ccca3dd9e** passed [Diagnostic run 208](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37074912372);
+install its two files from the `sd-update` artifact, run R and return the JSON.
+
+## SCI async: streaming with overlapped checks (2026-10-02 UTC)
+
+`3aa4554c44d9` on the console: the streaming reader read all 2,048 blocks
+with matching data and no restart at 1,059 KiB/s (ordinary reader 1,095); the
+resume measurement passed 64/64 with every token found at once. Per block:
+receive 343 us, check 69 us, next-block framing 62 us. The next build checks
+each block while the next one is received (two receive areas, whole-run
+`begin_stream(lba, count, dst)` driven by `poll`), restarts the run at a block
+that fails its check, and records where the longest masked window (2.5 ms in
+that run) happened. See the end of
+[the change record](evidence/sci-async-cmd18-stream-2026-10-02.md). Build
+**bac1b152b4ac** passed [Diagnostic run 206](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37048656141);
+install its two files from the `sd-update` artifact, run R and return the JSON.
+
+## SCI async: CMD18 streaming reader (2026-10-02 UTC)
+
+Console results for `97b590137b9b`: async CMD17 634 KiB/s (card access about
+280 us per block), ordinary reader 1,095 KiB/s; the card streams CMD18 blocks
+with exactly one 0xff byte between them; the per-block resume lost the next
+token because stopping the SCI after 514 bytes drops two bytes. The new build
+receives 513 bytes per block and takes the second CRC byte from RDR, so only
+the gap byte is lost. `kui_sci_async_begin_stream` reads CMD18 streams through
+`poll`/`finish` (reset and reselection between blocks, CMD12 after the last,
+CMD12 + CMD18 again after a lost token or overrun), and **R** reads the same
+1 MiB a fourth time through it. See
+[the change record](evidence/sci-async-cmd18-stream-2026-10-02.md). Build
+**3aa4554c44d9** passed [Diagnostic run 205](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37044237806)
+(host and Dreamcast jobs); install `KUI/runtime.kui` and
+`KUI/apps/games/retail-boot.kui` from its `sd-update` artifact, run R and
+return the JSON. Console results are pending.
+
+## SCI async: leaner reader and CMD18 measurements (2026-10-02 UTC)
+
+Speed build on `claude/modest-galileo-hpjv79`. The single-block reader no
+longer reads the wall clock on every framing byte, checks blocks by table
+lookup, waits one bit time (not 1,024 loops) after each re-initialization,
+times masked windows from after the mask and reports the card wait in
+microseconds. **R** now also runs two read-only CMD18 measurements: a 16 KiB
+continuous capture that records the card's gap between blocks, and 64 blocks
+read one DMA at a time with an SCI reset and reselection between them (the
+cycle a receive-only streaming reader needs). See
+[the change record](evidence/sci-async-speed-cmd18-2026-10-02.md). Build
+**97b590137b9b** passed [Diagnostic run 204](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37025928884)
+(host and Dreamcast jobs). Install `KUI/runtime.kui` and
+`KUI/apps/games/retail-boot.kui` from its `sd-update` artifact, run R (Y
+optional) and return the JSON. Console results are pending.
 
 ## SCI stress: 559 verified reads, then incomplete receive (2026-10-02 UTC)
 
@@ -15,17 +966,30 @@ its last frame and explicitly drains store queues. It retains full-speed
 SCI, timer IRQs, scheduling, controller cancellation and all data/ownership
 checks. It also captures the first failed DMA state before cleanup writes.
 Periodic rendering contention is a hypothesis, not a confirmed cause; even
-a quiet-screen pass would not establish game-rendering coexistence.
+a quiet-screen pass would not establish game-rendering coexistence. Build,
+review and console confirmation are pending. Native game and CE integration
+are not enabled by this experiment.
 
-Candidate **9e8fd8372705** passed independent source review and full host/Dreamcast
-CI run 201. Delivered as `K-UI-SCI-Async-Quiet-9e8fd8372705.zip` (789,218 bytes).
-All 96 source-manifest hashes, runtime CRCs and both build labels are verified;
-native game payload is unchanged except its four build labels. The
-[completed CI audit](evidence/sci-async-quiet-ci-9e8fd8372705.json) confirms unchanged
-resident layout/stack bounds. Replace both included files, keep the current CD,
-reboot, run A Quick then X 60s. The display intentionally stays still during X;
-return JSON and a result photo. Hardware confirmation is pending. Native game
-and CE integration are not enabled by this experiment.
+## SCI async: overrun retry, screen-on stress and speed comparison (2026-10-02 UTC)
+
+The owner's quiet 60-second stress on `9e8fd8372705` passed: 71,641 reads, no
+errors, 2,278 timer ticks during DMA. Work continues on
+`claude/modest-galileo-hpjv79` (merged from `codex/storage-transports`).
+A mid-payload receive overrun is now retried when the stopped channel is
+provably idle (MSTP0 reset, rest of the block clocked out, same CMD17 again,
+at most three times); any other incomplete stop still quarantines. The probe
+page adds **Y** (60-second stress with the screen updating) and **R** (1 MiB
+speed comparison, ordinary CMD18 reader versus one async CMD17 per block).
+See [the change record](evidence/sci-async-overrun-retry-2026-10-02.md).
+Build **8daab44490f5** passed [Diagnostic run 202](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37017797243)
+(host and Dreamcast jobs). Install `KUI/runtime.kui` and
+`KUI/apps/games/retail-boot.kui` from its `sd-update` artifact, keep the current
+boot CD, then run Y and R and return both JSON reports and result photos.
+**Console: both passed.** Y: 65,422 reads verified with the screen updating,
+51 overruns all retried, no restart. R: same data; ordinary reader 1,089 KiB/s,
+async single-block reader 587 KiB/s (setup 312 us, receive 345 us, finish 148 us
+per block; card wait 58 polled bytes, time not measured). Native game reads and
+the CE gate are unchanged.
 
 ## Reusable SCI runtime reader and 60-second stress candidate (2026-10-02 UTC)
 
@@ -494,6 +1458,24 @@ The Wi-Fi branch is meant to go into the W5500 branch once the board works
 on a console, and that branch into `main` for the next release. The
 `milestone/*` and `baseline/*` branches are pinned history; leave them.
 
+## Artwork follow-up — 2026-09-28
+
+`codex/home-icons` completes the seven missing/distinct Home icons on top of
+`claude/modest-galileo-hpjv79`. Each has original editable SVG sources, a native
+128×128 PNG and a separately simplified 24×24 PNG. The original three icons,
+header and splash remain unchanged. All ten Home selections were rendered with
+the production code. [Provenance and rebuild steps](../resources/icons/README.md).
+
+The first console photo showed crowded Games and VMU Manager list icons. Their
+24×24 artwork has been revised with broader silhouettes, dark controls and dimmer
+frames. Host previews are updated; confirm their legibility on the TV with the
+next SD runtime. This correction changes no launcher logic or memory footprint.
+
+The contact sheet below now shows the completed set. This is an SD runtime
+update; the current working CD is reusable. Merge the art branch into the W5500
+branch before carrying it to Wi-Fi; keep Wi-Fi's own Network description and
+preview modes when resolving the adjacent edits.
+
 ## Next on the hardware
 
 ### The W5500 (works on the console)
@@ -617,16 +1599,14 @@ emptying ring with stops for the network; a burst of retries as a large
 upload tells whether frames were lost on the way.
 
 - **Build:** the Diagnostic build run
-  [36750709659](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36750709659)
-  (`claude/modest-galileo-hpjv79`, commit `6306263`: the music polls its
-  stream every 32 ms instead of 8, on top of the timer-paused build
-  `a05977c`, run 36730241374). The Wi-Fi branch's build of the same is
-  run
-  [36750784925](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36750784925)
-  (merge `0a2c808`). On the FTP screen the adapter line should end
-  ", overlapped"; after an upload and a download the screen keeps "Last
-  up" and "Last down" lines (speed, card, net, overlap, share retried).
-  Compare an upload with the music on and off.
+  [36754858957](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36754858957)
+  (`claude/modest-galileo-hpjv79`, commit `1da58d6`: the per-second trace
+  of each streamed transfer's first ten seconds, on top of the 32 ms music
+  polling build `6306263`, run 36750709659). The Wi-Fi branch's build of
+  the same is run
+  [36755409001](https://github.com/TPMJB/K-UI-NeXT/actions/runs/36755409001)
+  (merge `fe5fc7c`). After an upload that starts slowly, the trace's
+  lines ("FTP 1.0s net ...") are on the Diagnostics page (UP to scroll).
   Download `sd-update`, merge its `KUI` folder onto the card and keep the
   boot CD.
 - **Wiring:** [the FTP server's hardware section](ftp.md#the-hardware) and
@@ -750,8 +1730,8 @@ piece of artwork goes, the technical limits, and what would help most.
 | --- | --- | --- | --- |
 | Startup splash | `resources/branding/startup.png` | 640×480 RGB. Same approved image as `boot-red.png`: 576×432, centred on `#090102`, with TV-safe margins. The large source is retained separately | `tools/build_splash.py` converts it at build time. It checks the PNG's pinned Git blob, so a new splash updates `PNG_BLOB` and `startup-README.md` |
 | Header brand | `resources/branding/launcher-brand.png` | 256×128 source, shown at 128×64, opaque on navy | `tools/generate_shell_art.py` writes `src/dreamcast/shell_art.inc`; it checks pinned SHA-256s |
-| Home icons (3 drawn so far) | `resources/icons/<name>.svg` and `.png` | 64×64 PNG with transparency; shown at 128×128 and 24×24 | `tools/generate_shell_art.py` (the `SOURCES` and `ICONS` lists), and `home_apps[].art` in `src/dreamcast/shell_draw.c` |
-| Home icons (7 placeholders) | none yet | see below | The same, once art exists |
+| Home icons (3 original) | `resources/icons/<name>.svg` and `.png` | 64×64 PNG with transparency; shown at 128×128 and 24×24 | `tools/generate_shell_art.py` (the `SOURCES` and `ICONS` lists), and `home_apps[].art` in `src/dreamcast/shell_draw.c` |
+| Home icons (7 new) | `resources/icons/<name>[-small].svg` and `.png` | 128×128 and dedicated 24×24 RGBA | `home-icons.json` pins sources; `generate_shell_art.py` embeds both sizes |
 | Boot-disc badge (under the SEGA licence screen) | `resources/branding/boot-disc-badge.*` | 320×90, at most 32 colours, MR format, at most 8,192 bytes | Packaging passes it to mkdcdisc. A new badge needs an MR encoder step, which the repo does not have yet |
 | Startup sound | `resources/branding/startup-chime.ogg` | ≤ 2.65 s, 44.1 kHz mono Ogg Vorbis | `tools/build_splash.py --encode-chime` |
 | Menu music | `resources/music/*.ogg` | Original synthesized songs, Ogg Vorbis | See `resources/music/README.md` |
@@ -762,22 +1742,21 @@ it, and the splash about 600 KiB, so a full icon set is affordable.
 
 ### What would help most
 
-1. **Icons for the seven apps that have placeholders.** The contact sheet
-   above shows them as flat blocks. What each app does:
+1. **Home icon completion is implemented on `codex/home-icons`.** The contact
+   sheet above shows the completed set. The seven new icons represent:
    - **Games:** launches games stored on the SD card, with box art.
    - **VMU Manager:** the Dreamcast memory card (the VMU, which has a small
      screen). Browses, backs up and restores game saves.
    - **File Manager:** every file and folder on the SD card.
    - **Music Player:** WAV and Ogg music from the card, and audio CDs.
    - **GD Play:** boots the disc in the drive through the console's own
-     BIOS. It borrows the Disc Ripper's icon today, so it needs its own.
+     BIOS. Its new icon combines a disc and play symbol.
    - **Memory Test:** checks the console's RAM.
    - **Network:** the network adapter, Wi-Fi setup, and sharing the SD card
      over FTP.
 
-   Match the three existing icons (a neon line drawing inside a rounded
-   square with a violet edge), or propose one new set for all ten. The
-   owner decides.
+   The new icons match the existing rounded neon frames and preserve the
+   original three sources. Their list-size versions are separately drawn.
 2. **A splash for the next release,** once the owner names it. Keep the
    character and composition, and restyle the colours and lettering as
    Dáinsleif did.
@@ -787,8 +1766,8 @@ it, and the splash about 600 KiB, so a full icon set is affordable.
 
 - **Size:** deliver icons as 128×128 PNGs with transparency, plus a
   separately simplified 24×24 version. At 24×24, a scaled-down detailed
-  icon turns to mush. Today's pipeline takes 64×64 sources; accepting
-  128×128 and 24×24 is a small change to `tools/generate_shell_art.py`.
+  icon turns to mush. The pipeline now accepts native 128×128 and 24×24
+  sources for the new icons; the original three retain their 64×64 inputs.
 - **Generated images:** image generators rarely produce exact sizes or
   clean transparency. Generate large (for example 1024×1024) on a flat
   background that can be keyed out, and scale down afterwards.
@@ -813,11 +1792,10 @@ it, and the splash about 600 KiB, so a full icon set is affordable.
 
 ### Getting new art into the build (for whoever writes the code)
 
-- Icons: add the sources to `resources/icons/`, extend `SOURCES` and
-  `ICONS` in `tools/generate_shell_art.py`, run it to regenerate
-  `src/dreamcast/shell_art.inc`, and point the apps' `art` fields in
-  `src/dreamcast/shell_draw.c` at the new icons. Then record the hashes in
-  `resources/branding/README.md`.
+- Icons: edit the large/small SVG sources, run `tools/render_home_icons.py`
+  to regenerate PNGs and `resources/icons/home-icons.json`, then run
+  `tools/generate_shell_art.py` to regenerate `src/dreamcast/shell_art.inc`.
+  All ten apps already use named icon indexes in `shell_draw.c`.
 - Splash: replace `resources/branding/startup.png`, update `PNG_BLOB` in
   `tools/build_splash.py`, and record it in `startup-README.md`.
 - Preview on a computer, without a console: `make build/render-shell`, then

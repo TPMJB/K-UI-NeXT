@@ -1,7 +1,11 @@
 # Capture format and invariants
 
-Profile: `gdi-raw2352-typegap150-v1`. This is a declared logical GDI capture
-profile, not a subchannel or forensic image of every physical region.
+The default retail GD profile is `gdi-raw2352-typegap150-v1`. This is a
+declared logical GDI capture profile, not a subchannel or forensic image of every
+physical region. User-declared single-session CD/CD-R/audio uses the separate
+[BIN/CUE CD profile](cd-capture.md); firmware preparation does not prove the
+session count. Its actual TOC intervals never use the GD type-change tail
+convention below.
 
 ## Track plan
 
@@ -44,8 +48,13 @@ high-density boot metadata, whose Dreamcast signature is required. Full hashes
 are still necessary to establish whole-disc identity against a reference.
 
 A failing batch shrinks to single-sector reads for the affected window. The
-budget is ten additional attempts after the initial failed request; shrinking
-does not replenish it. Capture attempts use one guarded raw PIO read, check the
+default budget is ten additional attempts after the initial failed request;
+shrinking does not replenish it. The optional per-run retry limit admits
+1/5/10/20/50 additional attempts. Optional strict acquisition adds Mode 1
+sync/address/reserved/P/Q checks; it explicitly refuses Mode 2 while ordinary
+Mode 2 Form 1 capture remains supported. See
+[CD capture and acquisition checks](cd-capture.md). Capture attempts use one
+guarded raw PIO read, check the
 firmware's transferred-byte count and retain data-sector EDC validation. The
 small identification samples and diagnostic probes still use paired reads.
 Capture services PIO continuously with a runnable scheduler yield every 2 ms,
@@ -58,11 +67,14 @@ No data is written from a failed/invalid request and no sectors are zero-filled.
 
 ## Files and checkpoints
 
-New jobs are exclusively created at `/KUI/dumps/d<first-16-identity-hex>-NNNN/`.
-The complete 32-byte identity is checked in checkpoints; the short directory
-prefix is only an index. New capture never replaces an existing job. Resume
-selects the greatest existing NNNN for that fingerprint and refuses corrupt
-state instead of guessing an older job.
+New jobs are exclusively created under the selected parent (default `/Games`)
+as sanitized title folders: `Title`, `Title (2)`, and increasing suffixes. The
+complete 32-byte identity and track plan are checked in checkpoints; folder
+names are only an index. New never replaces an existing job. Resume selects
+the greatest matching named suffix in that parent, with legacy
+`/KUI/dumps/d<first-16-identity-hex>-NNNN/` fallback when no named match exists.
+It refuses corrupt state rather than guessing. See
+[ripper controls](ripper-controls.md).
 
 Track writes must return the exact requested length. Hash/accounting advances
 only then. Every 4,096 sectors (about 9.2 MiB), at track end, and on controlled
@@ -82,7 +94,9 @@ Checkpoint schema 1 uses little-endian integers:
 | 24 | Full disc fingerprint (32 bytes) |
 | 56 / 60 | Track count / cumulative retries (u32) |
 | 64 | Original capture build ID (12 hexadecimal ASCII bytes) |
-| 76–95 | Reserved, zero |
+| 76 | Flags: bit 0 CRC-only; bits 1–3 output format (0 GDI, 1 BIN/CUE, 2 CSO, 3 ZSO, 4 CHD, 5 GDI 2048) |
+| 80–92 | Non-GDI jobs: one Mode 2 bit per saved data track; Mode 1 is zero. GDI jobs retain zero bytes. |
+| 93–95 | Reserved, zero |
 | 96 | Up to 99 entries: sectors (u32), CRC32 (u32), SHA-256 (32 bytes) |
 | After final entry through 4091 | Reserved, zero |
 | 4092 | CRC32 of bytes 0–4091 |
@@ -99,10 +113,12 @@ file invariants still hold; arbitrary FAT/exFAT power-loss recovery is not promi
 
 ## Completion and verification
 
-After all tracks are synchronized and checkpointed, unmount/remount FatFs and
-reread every saved byte. Compare exact sizes, CRC32 and SHA-256 to the capture
-stream. Only then publish `disc.gdi` and `manifest.json` through flushed temporary
-files and checked renames. A final-file readback checks metadata too. If stopped
+After all tracks are synchronized and checkpointed, jobs requiring saved-byte
+readback unmount/remount FatFs and reread every saved byte, comparing the
+recorded hashes with the capture stream. SHA-256 jobs and compressed exports
+require this readback; CRC-only GDI/BIN-CUE jobs may explicitly omit it.
+Publication uses the selected descriptor/container and `manifest.json` through
+flushed temporary files and checked renames. A final-file readback checks metadata too. If stopped
 between publishing those files, Resume revalidates and completes finalization;
 the PC verifier requires both. Existing final metadata must match and is never
 silently overwritten. Verify performs no writes.
@@ -122,7 +138,7 @@ started with, because SHA-256 state cannot be resumed from a digest. `verify_dum
 accepts both schemas, always recomputes CRC32 (and SHA-256, for reference) from the
 files, and rejects a schema 2 manifest that carries a claim or a SHA field.
 
-Related options, all defaulting to the old behaviour: `end_readback=off` skips the
+Current defaults are CRC32 with automatic end readback Off. Related options: `end_readback=off` skips the
 re-read after capture (CRC-only jobs only; the report then says `CAPTURED`, never
 `SAVED DATA VERIFIED`, and Verify still works afterwards); `resume_check=size` checks
 file sizes on resume instead of re-reading the committed bytes and continues the
@@ -161,7 +177,9 @@ and distinguish complete, partial and mismatching supplied references.
 CRC32 and SHA-256 are new project implementations of published algorithms;
 SHA-256 follows [FIPS 180-4](https://doi.org/10.6028/NIST.FIPS.180-4). The CD EDC
 uses reflected polynomial `0xd8018001`, zero initial state and no complement.
-No new linked library or copied DreamShell code is introduced.
+These hash and EDC routines introduce no linked library or copied DreamShell code.
+Compressed output uses the separately documented codecs in
+[capture-codecs.md](../third_party/capture-codecs.md).
 
 
 ## Named output metadata extension
@@ -176,3 +194,69 @@ Resume/Verify discover the highest numbered folder in the selected parent whose
 checkpoint matches the complete disc identity and track plan, falling back to
 legacy `/KUI/dumps` jobs if no named match exists. See
 [ripper-controls.md](ripper-controls.md).
+
+## Output formats over the same raw capture
+
+GDI remains the default, with the same track files, descriptor and manifest as
+older builds. A new job can instead select BIN/CUE, CSO, ZSO, CHD or GDI 2048. The choice
+is stored in its checkpoint. Resume and Verify use that stored choice even when
+the current preferences select another format; they never transform an older job
+into a different output format.
+
+Non-GDI jobs keep the authoritative `trackNN.bin` data and `trackNN.raw` audio
+files and a fixed hidden `.capture.gdi`. Their visible descriptor or container
+is `disc.cue`/`.cso`/`.zso`/`.chd`/`.gdi`, or the sanitized game title with that extension.
+The hidden GDI prevents two launcher entries while retaining the original layout
+and raw hashes for verification. Keep the entire folder for Resume, Verify and
+reference checks. No raw track is deleted after export.
+
+GDI 2048 is a post-capture derivative for the normal two-density GD profile.
+It retains every authoritative raw track, checkpoint and hidden `.capture.gdi`.
+Data tracks are checked as Mode 1 or Mode 2 Form 1 with valid EDC and extracted
+to `trackNN.iso`; audio stays in the existing raw2352 files. The visible GDI
+references those cooked data/raw audio files and is published only after
+conversion and saved-file readback. Invalid sectors, an existing mismatching
+cooked file, Stop or I/O failure preserve the raw job; Resume retries the
+derivative and Verify checks it without rewriting it. This option does not
+change capture geometry or admit the separate declared single-session CD
+profile. See [CD capture limits](cd-capture.md).
+
+BIN/CUE references those existing raw files as `BINARY`, declares both GD density
+areas, and represents the profile's excluded 150-sector tails with virtual
+`PREGAP 00:02:00` entries. It neither claims that INDEX 00 was measured nor adds
+pregap bytes to the files. Each data track records its actual Mode 1 or Mode 2
+Form 1 type. A mixed-mode data track cannot be represented by the selected track
+tag and stops safely with its partial raw job preserved, without treating the
+layout as a read fault or inventing sectors.
+
+CSO and ZSO export cooked 2048-byte sectors from one high-density data track
+starting at FAD 45150. Layouts with multiple high-density data tracks are refused
+before a new job writes anything; GDI, BIN/CUE and CHD preserve those layouts.
+The source raw framing, low-density tracks and CD audio remain beside the
+container. ZSO uses DreamShell's LZO1X dialect, rather than LZ4. Producing a
+container does not establish compatibility with every game reader.
+
+CHDv4 preserves the captured mainchannel and audio in a standard hunk container.
+It declares absent subchannels and the capture profile's omitted regions, with
+virtual padding for the density gap and track alignment. It does not reconstruct
+unread physical pregaps or subchannels. Audio is stored in CHD's canonical byte
+order; the unmodified bytes returned by the drive remain in the raw source files.
+
+Compressed exports require a full raw-file readback even if CRC-only options
+otherwise skip it. Space checks reserve the bounded worst-case output in addition
+to the raw files before capture. After raw verification, `.capture.gdi` is
+published first. The container is written to a separate temporary file, decoded
+and compared with the source, hashed, synchronized and renamed without replacing
+an existing differing output. `manifest.json` is published last. A stopped export
+leaves the completed raw job safe; Resume restarts export without recapturing its
+optical tracks. An already published identical container is verified and reused.
+Verify reads existing metadata and containers without writing or creating missing
+files.
+
+Non-GDI manifests add `output_format` and per-track `sector_mode`. BIN/CUE also
+records `cue_file`; compressed formats record `output_file`, `output_bytes`,
+`output_crc32`, `output_sha256`, `output_logical_bytes` and `output_data_track`.
+The PC verifier checks both the original raw hashes/layout and the primary output
+descriptor or container hash. Container decoding and source comparison happen in
+the console export verification; a file-hash check alone is not an independent
+container-decoding test.

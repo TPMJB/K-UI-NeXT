@@ -116,6 +116,7 @@ static void pause_worker(void *ctx) {
     if(probe_stats) {probe_stats->pause_us+=timer_us_gettime64()-start;++probe_stats->pauses;}
 }
 static bool cancelled(void *ctx) { (void)ctx; return kui_cancelled(); }
+static bool never_cancelled(void *ctx) { (void)ctx; return false; }
 static int submit(void *ctx, int command, void *params) {
     (void)ctx;
     uint64_t start=(active_command||probe_stats)?timer_us_gettime64():0;
@@ -148,15 +149,16 @@ static void abort_command(void *ctx, int handle) {
     syscall_gdrom_abort_command(handle);
     if(active_command) {active_command->abort_us+=timer_us_gettime64()-start;++active_command->aborts;}
 }
-static bool command(int code, void *params, uint32_t timeout) {
-    if(poisoned || kui_cancelled()) {
+static bool command_run(int code, void *params, uint32_t timeout,bool can_cancel) {
+    if(poisoned || (can_cancel && kui_cancelled())) {
         if(active_command) ++active_command->result[poisoned?KUI_CMD_RECOVERY_FAILED:KUI_CMD_CANCELLED];
         return false;
     }
     memset(&detail, 0, sizeof(detail));
     fast_pio=code==CD_CMD_PIOREAD;
     last_pass_us=timer_us_gettime64();
-    struct kui_command_ops ops = {NULL, now, pause_worker, cancelled, submit, poll, abort_command};
+    struct kui_command_ops ops = {NULL, now, pause_worker,
+        can_cancel?cancelled:never_cancelled, submit, poll, abort_command};
     enum kui_command_result result = kui_command(&ops, code, params, timeout, 1000);
     fast_pio=false;
     if(active_command) ++active_command->result[result];
@@ -167,6 +169,9 @@ static bool command(int code, void *params, uint32_t timeout) {
     if(result == KUI_CMD_RECOVERY_FAILED) poisoned = true;
     if(detail.err1 == 6 || detail.err1 == 2) media_changed = true;
     return false;
+}
+static bool command(int code,void *params,uint32_t timeout) {
+    return command_run(code,params,timeout,true);
 }
 
 static bool set_mode(int size, int track_type) {
@@ -233,7 +238,8 @@ static bool sample(const struct kui_track *track, uint32_t fad) {
     return true;
 }
 
-bool kui_disc_prepare(struct kui_toc sessions[2]) {
+static bool disc_prepare(struct kui_toc sessions[2],bool allow_cd,bool *is_cd) {
+    if(is_cd)*is_cd=false;
     if(poisoned) { kui_log("Drive unavailable after failed recovery; reset console"); return false; }
     if(!initialized) { kui_drive_init_bus(); initialized = true; }
     bool ready = false;
@@ -244,7 +250,22 @@ bool kui_disc_prepare(struct kui_toc sessions[2]) {
     }
     if(!ready) { kui_log("Disc initialization did not complete"); return false; }
     media_changed = false;
-    for(unsigned area = 0; area < 2; ++area) {
+    unsigned areas=2;
+    if(allow_cd) {
+        cd_check_drive_status_t drive;
+        memset(&drive,0,sizeof(drive));
+        if(syscall_gdrom_check_drive(&drive)!=0)return false;
+        if(drive.disc_type==CD_CDDA || drive.disc_type==CD_CDROM || drive.disc_type==CD_CDROM_XA) {
+            if(drive.status!=CD_STATUS_PAUSED && drive.status!=CD_STATUS_STANDBY) {
+                kui_log("CD is not ready; wait and retry capture");return false;
+            }
+            areas=1;if(is_cd)*is_cd=true;
+            memset(sessions,0,2u*sizeof(*sessions));
+        } else if(drive.disc_type!=CD_GDROM) {
+            kui_log("Unsupported optical media type; no capture started");return false;
+        }
+    }
+    for(unsigned area = 0; area < areas; ++area) {
         memset(&toc, 0xa5, sizeof(toc));
         toc_params = (cd_cmd_toc_params_t){(cd_area_t)area, &toc.data};
         if(!command(CD_CMD_GETTOC2, &toc_params, 5000)) return false;
@@ -264,6 +285,12 @@ bool kui_disc_prepare(struct kui_toc sessions[2]) {
         }
     }
     return true;
+}
+bool kui_disc_prepare(struct kui_toc sessions[2]) {
+    return disc_prepare(sessions,false,NULL);
+}
+bool kui_disc_prepare_capture(struct kui_toc sessions[2],bool *is_cd) {
+    return disc_prepare(sessions,true,is_cd);
 }
 
 enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
@@ -455,6 +482,20 @@ static unsigned dma_failures;   /* consecutive DMA reads that failed on an uncha
 static uint8_t *dma_target;
 static size_t dma_target_bytes;
 static bool dma_in_flight;
+
+bool kui_disc_stop(void) {
+    /* In particular do not reset/init after failed recovery: static firmware
+     * objects may still be owned. An unfinished DMA must be ended by its owner
+     * before STOP can safely share the command detail/parameter workspace. */
+    if(poisoned || dma_in_flight) return false;
+    if(!initialized) {kui_drive_init_bus();initialized=true;}
+    /* This only initializes the BIOS dispatcher workspace. Disc INIT (24),
+     * which discovers/spins media, remains exclusive to explicit preparation. */
+    bool ok=command_run(CD_CMD_STOP,NULL,3000,false);
+    kui_log(ok?"Disc stopped; idle checks do not initialize or read it.":
+        "Disc stop did not complete; no automatic retry.");
+    return ok;
+}
 
 bool kui_disc_read_begin(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
     (void)ctx;

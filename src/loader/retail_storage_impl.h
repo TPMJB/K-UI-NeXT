@@ -66,7 +66,9 @@ KUI_RETAIL_STORAGE_API enum kui_loader_sd_result kui_retail_storage_adopt(struct
     const struct kui_retail_storage *prepared) {
     if(!s || !prepared || s == prepared || !supported(prepared->transport))
         return KUI_LOADER_SD_ARGUMENT;
-    if(prepared->stream.active) return KUI_LOADER_SD_NOT_READY;
+    if(prepared->stream.active ||
+       (selected(prepared) == KUI_STORAGE_IDE && prepared->device.ata.read_active))
+        return KUI_LOADER_SD_NOT_READY;
     memset(s, 0, sizeof(*s)); s->transport = prepared->transport;
     if(selected(s) == KUI_STORAGE_IDE) {
         if(!prepared->device.ata.ready || !prepared->device.ata.sectors)
@@ -99,12 +101,13 @@ KUI_RETAIL_STORAGE_API enum kui_loader_sd_result kui_retail_storage_read_run(str
     if(!s || !out || !available || !supported(s->transport))
         return KUI_LOADER_SD_ARGUMENT;
     if(selected(s) == KUI_STORAGE_IDE)
-        return kui_ata_read(&s->device.ata, lba, 1, out) ? KUI_LOADER_SD_OK : KUI_LOADER_SD_COMMAND;
+        return kui_ata_read_run(&s->device.ata, lba, available, out) ? KUI_LOADER_SD_OK : KUI_LOADER_SD_COMMAND;
     return kui_retail_sd_read_run(&s->device.sd, &s->stream, lba, available, out);
 }
 KUI_RETAIL_STORAGE_API enum kui_loader_sd_result kui_retail_storage_stop(struct kui_retail_storage *s) {
     if(!s || !supported(s->transport)) return KUI_LOADER_SD_ARGUMENT;
-    if(selected(s) == KUI_STORAGE_IDE) return KUI_LOADER_SD_OK;
+    if(selected(s) == KUI_STORAGE_IDE)
+        return kui_ata_read_stop(&s->device.ata) ? KUI_LOADER_SD_OK : KUI_LOADER_SD_COMMAND;
     enum kui_loader_sd_result r = kui_loader_sd_stream_stop(&s->device.sd, &s->stream);
     if(selected(s) == KUI_STORAGE_SCI && !kui_sci_sd_healthy()) {
         s->device.sd.ready = false;

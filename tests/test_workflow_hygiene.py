@@ -10,18 +10,25 @@ import os
 import pathlib
 import subprocess
 import tempfile
+import re
+from types import SimpleNamespace
 import textwrap
 import unittest
+
+try:
+    import yaml
+except ImportError:
+    yaml = None
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 WORKFLOW = ROOT / ".github/workflows/diagnostic.yml"
 STEP = "name: Compile CD bootstrap and SD runtime"
 
 
-def step_script():
+def step_script(step=STEP):
     """The `run: |` block of the compile step, taken from the workflow text (no YAML library needed)."""
     lines = WORKFLOW.read_text().splitlines()
-    start = next(n for n, line in enumerate(lines) if STEP in line)
+    start = next(n for n, line in enumerate(lines) if step in line)
     run = next(n for n in range(start, len(lines)) if lines[n].strip() == "run: |")
     indent = len(lines[run]) - len(lines[run].lstrip())
     body = []
@@ -80,6 +87,66 @@ class CompileStepLeavesTheTreeClean(unittest.TestCase):
         self.assertIn("*** [Makefile.dc:35", digest)
 
 
+class GamesVariantValidationScope(unittest.TestCase):
+    def run_scope(self, changed_path, scope="games-variants"):
+        with tempfile.TemporaryDirectory() as d:
+            base = pathlib.Path(d)
+            repo = base / "repo"
+            repo.mkdir()
+            (repo / "README").write_text("base\n")
+            git(repo, "init", "-q")
+            git(repo, "add", "-A")
+            git(repo, "commit", "-q", "-m", "base")
+            changed = repo / changed_path
+            changed.parent.mkdir(parents=True, exist_ok=True)
+            changed.write_text("changed\n")
+            git(repo, "add", "-A")
+            git(repo, "commit", "-q", "-m", "Test Games change\n\nValidation: " + scope)
+            output = base / "scope-output"
+            env = dict(os.environ, KUI_VALIDATION_HEAD=git(repo, "rev-parse", "HEAD").strip(),
+                       GITHUB_OUTPUT=str(output))
+            result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c",
+                                     step_script("name: Select requested validation scope")],
+                                    cwd=repo, env=env, capture_output=True, text=True)
+            return result, output.read_text() if output.exists() else ""
+
+    def test_selector_changes_use_recorded_focused_checks(self):
+        result, output = self.run_scope("include/kui/games.h")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("console_only=true", output)
+
+    def test_reader_changes_cannot_skip_the_broad_host_suite(self):
+        result, output = self.run_scope("src/loader/retail_sd.c")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("outside listing, selector UI", result.stderr)
+        self.assertEqual(output, "")
+
+    def test_navigation_correction_uses_recorded_focused_checks(self):
+        result, output = self.run_scope("src/dreamcast/main.c")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("console_only=true", output)
+
+
+class GamesFormatsValidationScope(unittest.TestCase):
+    def test_formats_run_portable_and_relevant_filesystem_checks(self):
+        for path in ("src/core/game_image.c", "src/loader/retail_resident.c", "tools/game_image_import.py"):
+            with self.subTest(path=path):
+                result, output = GamesVariantValidationScope().run_scope(path, "games-formats")
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("console_only=false", output)
+                self.assertIn("games_formats=true", output)
+        script = step_script("name: Run Games format checks")
+        self.assertIn("make test ", script)
+        for check in ("test_games_retail.py", "test_games_images.py", "test_games_covers_images.py", "test_games_image_probe.py"):
+            self.assertIn(check, script)
+
+    def test_unrelated_transport_changes_require_the_broad_suite(self):
+        result, output = GamesVariantValidationScope().run_scope("src/loader/sci_stream.c", "games-formats")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("outside image formats", result.stderr)
+        self.assertEqual(output, "")
+
+
 class ExperimentalBuildIsOptIn(unittest.TestCase):
     """The DMA probe must never be in an ordinary build, and must be reachable without the
     "Run workflow" button: that button only exists when the workflow file is on the repository's
@@ -107,6 +174,145 @@ class ExperimentalBuildIsOptIn(unittest.TestCase):
             self.assertIn("name: ${{ steps.package.outputs.artifact_prefix }}-" + name +
                           "${{ env.KUI_EXPERIMENTAL != '' && '-experimental' || '' }}", self.text)
 
+
+class NativeLowResidentWorkflow(unittest.TestCase):
+    def test_low_diagnostic_is_separately_named(self):
+        text = WORKFLOW.read_text()
+        self.assertIn("low_resident:", text)
+        flag = next(line for line in text.splitlines() if "KUI_RETAIL_LOW_RESIDENT_DIAGNOSTIC:" in line)
+        self.assertIn("inputs.low_resident", flag)
+        self.assertIn("Diagnostic: Native low resident", flag)
+        self.assertRegex(flag, r"&& '1' \|\| '0'")
+        self.assertEqual(text.count("&& '-low-resident' || ''"), 5)
+        self.assertIn("env.KUI_RETAIL_LOW_RESIDENT_DIAGNOSTIC == '0'", text)
+        for line in text.splitlines():
+            if "KUI_RETAIL_STARTUP_TRACE:" in line or "KUI_RETAIL_SONIC_STACK_TEST:" in line:
+                self.assertIn("inputs.low_resident", line)
+        self.assertIn('KUI_RETAIL_LOW_RESIDENT="$KUI_RETAIL_LOW_RESIDENT"', step_script())
+
+
+    def test_normal_builds_keep_confirmed_layout_and_historical_diagnostics_keep_legacy(self):
+        text = WORKFLOW.read_text()
+        def evaluate(name, chosen=(), message=""):
+            line = next(line for line in text.splitlines() if line.strip().startswith(name + ":"))
+            expression = line.split("${{", 1)[1].split("}}", 1)[0]
+            expression = expression.replace("&&", " and ").replace("||", " or ")
+            expression = re.sub(r"!(?!=)", " not ", expression).strip()
+            inputs = SimpleNamespace(**{key: key in chosen for key in
+                ("low_resident", "sonic_stack", "mount_trace", "gd_trace", "startup_trace")})
+            github = SimpleNamespace(event=SimpleNamespace(head_commit=SimpleNamespace(message=message)))
+            return eval(expression, {"__builtins__": {}},
+                        {"inputs": inputs, "github": github, "contains": lambda text, part: part in text})
+        ordinary = ("KUI_RETAIL_LOW_RESIDENT", "KUI_RETAIL_LOW_RESIDENT_DIAGNOSTIC",
+                    "KUI_RETAIL_STARTUP_TRACE", "KUI_RETAIL_SONIC_STACK_TEST")
+        self.assertEqual(tuple(evaluate(name) for name in ordinary), ("1", "0", "0", "0"))
+        for flag, marker, trace, scope in (
+            ("startup_trace", "Sonic startup trace", "1", "0"),
+            ("gd_trace", "Sonic GD trace", "2", "0"),
+            ("mount_trace", "Sonic mount trace", "3", "0"),
+            ("sonic_stack", "Sonic scoped stack", "0", "1")):
+            for chosen, message in (((flag,), ""), ((), "Diagnostic: " + marker)):
+                with self.subTest(flag=flag, chosen=chosen):
+                    self.assertEqual(tuple(evaluate(name, chosen, message) for name in ordinary),
+                                     ("0", "0", trace, scope))
+                    self.assertEqual(tuple(evaluate(name, (*chosen, "low_resident"), message) for name in ordinary),
+                                     ("1", "1", "0", "0"))
+        self.assertEqual(tuple(evaluate(name, (), "Diagnostic: Native low resident") for name in ordinary),
+                         ("1", "1", "0", "0"))
+
+    def test_focused_scope_admits_required_checks_and_runs_them(self):
+        for path in ("tests/test_retail_low_resident.py", "tools/report_retail_sizes.py",
+                     "src/loader/retail_resident_low.ld", "tests/test_workflow_hygiene.py"):
+            with self.subTest(path=path):
+                result, output = GamesVariantValidationScope().run_scope(path, "console-only")
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("console_only=true", output)
+        script = step_script("name: Check native low resident admission and envelopes")
+        for check in ("test_retail_low_resident.py", "test_retail_package.py", "test_workflow_hygiene.py"):
+            self.assertIn(check, script)
+
+
+class ReleasePublicationWorkflow(unittest.TestCase):
+    def test_release_185_reuses_verified_build_without_second_native_compile(self):
+        diagnostic = WORKFLOW.read_text()
+        release = (ROOT / ".github/workflows/release.yml").read_text()
+        self.assertIn("'Release: v1.8.5'", diagnostic)
+        self.assertIn("'Release post: v1.8.5'", diagnostic)
+        self.assertIn("'Release: v1.8.5'", release)
+        self.assertIn("'Release post: v1.8.5'", release)
+        self.assertIn("python3 tools/publish_release.py", release)
+        self.assertNotIn("make ", release)
+
+    def test_release_scope_admits_versioned_artwork_and_runs_publication_checks(self):
+        for path in ("include/kui/version.h", "resources/branding/startup.png",
+                     "resources/branding/startup.json", "resources/branding/boot-red.png",
+                     "resources/branding/release-v1.8.5-banner.jpg",
+                     "tools/publish_release.py", "tests/test_publish_release.py", "tests/test_package_candidate.py"):
+            with self.subTest(path=path):
+                result, output = GamesVariantValidationScope().run_scope(path, "release-only")
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("console_only=true", output)
+                self.assertIn("release_only=true", output)
+        script = step_script("name: Check release publication, installation and splash")
+        for check in ("test_publish_release.py", "test_package_candidate.py", "test_splash_assets.py"):
+            self.assertIn(check, script)
+
+    def test_splash_checker_fatfs_headers_are_prepared_before_any_release_scope_consumes_them(self):
+        text = WORKFLOW.read_text()
+        restore = text.index("      - name: Restore pinned FatFs downloads\n")
+        fetch = text.index("      - name: Fetch verified FatFs sources\n")
+        release = text.index("      - name: Check release publication, installation and splash\n")
+        self.assertLess(restore, fetch)
+        self.assertLess(fetch, release)
+        for name in ("Restore pinned FatFs downloads", "Fetch verified FatFs sources"):
+            lines = text[text.index("      - name: " + name + "\n"):].splitlines()
+            self.assertEqual(lines[1].strip(),
+                             "if: steps.scope.outputs.console_only != 'true' || steps.scope.outputs.release_only == 'true'")
+        self.assertIn("python3 tools/fetch_deps.py --fatfs-only", text[fetch:release])
+        self.assertIn("make build/music-asset-check", step_script("name: Check release publication, installation and splash"))
+
+    def test_release_scope_does_not_admit_driver_changes(self):
+        result, output = GamesVariantValidationScope().run_scope("src/loader/retail_sd.c", "release-only")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(output, "")
+
+
+class WorkflowYamlSyntax(unittest.TestCase):
+    def setUp(self):
+        if yaml is None:
+            if os.environ.get("KUI_REQUIRE_WORKFLOW_YAML") == "1":
+                self.fail("The full CI workflow requires its installed PyYAML parser")
+            self.skipTest("PyYAML is unavailable locally; full CI installs and requires it")
+
+    def test_all_workflows_parse_as_yaml_before_github_creates_jobs(self):
+        for path in sorted((ROOT / ".github/workflows").glob("*.yml")):
+            with self.subTest(workflow=path.name):
+                document = yaml.safe_load(path.read_text())
+                self.assertIsInstance(document, dict)
+                self.assertIsInstance(document.get("jobs"), dict)
+                self.assertTrue(document["jobs"])
+
+    def test_missing_environment_quote_cannot_pass_syntax_validation(self):
+        text = WORKFLOW.read_text()
+        line = next(line for line in text.splitlines() if line.strip().startswith("KUI_RETAIL_LOW_RESIDENT_DIAGNOSTIC:"))
+        self.assertTrue(line.endswith('"'))
+        with self.assertRaises(yaml.YAMLError):
+            yaml.safe_load(text.replace(line, line[:-1], 1))
+
+    def test_release_colon_in_plain_condition_cannot_pass_syntax_validation(self):
+        text = WORKFLOW.read_text()
+        folded = ("        if: >-\n"
+                  "          steps.scope.outputs.release_only == 'true' || contains(github.event.head_commit.message, 'Release: v1.8.5')")
+        plain = "        if: steps.scope.outputs.release_only == 'true' || contains(github.event.head_commit.message, 'Release: v1.8.5')"
+        self.assertIn(folded, text)
+        with self.assertRaises(yaml.YAMLError):
+            yaml.safe_load(text.replace(folded, plain, 1))
+
+    def test_full_ci_installs_and_requires_the_parser(self):
+        text = WORKFLOW.read_text()
+        self.assertIn("liblzo2-2 python3-yaml", text)
+        self.assertIn("KUI_REQUIRE_WORKFLOW_YAML: '1'", text)
+        self.assertIn("run: /usr/bin/python3 tests/test_workflow_hygiene.py", text)
 
 if __name__ == "__main__":
     unittest.main()

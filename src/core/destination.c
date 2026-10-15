@@ -145,6 +145,25 @@ bool kui_destination_job_path(char out[KUI_DEST_JOB_CAP],const char *root,const 
     if(count<0 || count>=(int)sizeof(path)) {out[0]=0;return false;}
     strcpy(out,path);return true;
 }
+bool kui_destination_job_normalize(char out[KUI_DEST_JOB_CAP],const char *path) {
+    size_t length=bounded_length(path,KUI_DEST_PATH_CAP);
+    if(!out || !path || !length || length==KUI_DEST_PATH_CAP)return false;
+    size_t at=length>=2u && path[0]=='0' && path[1]==':'?2u:0u;
+    if(at>=length || path[at]!='/')return false;
+    char result[KUI_DEST_JOB_CAP];size_t used=1;result[0]='/';++at;
+    while(at<length) {
+        while(at<length && path[at]=='/')++at;
+        size_t begin=at;while(at<length && path[at]!='/')++at;
+        size_t count=at-begin;
+        if(!count || (count==1u && path[begin]=='.'))continue;
+        if(count>=KUI_DEST_NAME_CAP || !component(path+begin,count) ||
+           used+(used>1u?1u:0u)+count>=KUI_DEST_JOB_CAP-2u)return false;
+        if(used>1u)result[used++]='/';
+        memcpy(result+used,path+begin,count);used+=count;
+    }
+    if(used==1u)return false;
+    result[used]=0;memcpy(out,result,used+1u);return true;
+}
 static void put32(uint8_t *p,uint32_t value) {for(unsigned i=0;i<4;i++) p[i]=(uint8_t)(value>>(8*i));}
 static uint32_t get32(const uint8_t *p) {uint32_t v=0;for(unsigned i=0;i<4;i++) v|=(uint32_t)p[i]<<(8*i);return v;}
 static void put64(uint8_t *p,uint64_t value) {for(unsigned i=0;i<8;i++) p[i]=(uint8_t)(value>>(8*i));}

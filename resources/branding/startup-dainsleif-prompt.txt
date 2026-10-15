@@ -1,11 +1,10 @@
-Use case: style-transfer.
-Asset type: finished 4:3 Dreamcast startup splash, an edit of the attached existing K-UI startup image, intended to remain crisp when displayed at 640×480 on a television.
-Primary request: Update the existing K-UI splash for version 1.5 named "Dáinsleif". Preserve its distinctive illustrated woman wearing a large futuristic visor on the left, flowing hair in neon outlines, prominent chrome K-UI typography on the right, and subtle perspective grid. Make the same cyberpunk / 1980s retrofuturistic brand feel predominantly crimson and red neon, with restrained cyan highlights.
-Composition: Exactly 4:3 aspect ratio. Preserve the broad left-portrait/right-wordmark composition. Use strong, clean, confident shapes, polished chrome lettering, dark charcoal/navy background, rich scarlet/crimson edge light, subtle red horizon glow. All essential art and lettering must stay within television-safe margins of at least 7% on all sides. Keep the lower 15% mostly dark, like the original.
-Text, rendered accurately and legibly on the right:
-Line 1: K-UI V1.5
-Line 2: "Dáinsleif"
-Line 3, smaller: (Katana User Interface)
-Line 4, smaller: by TPMJB
-The spelling of Dáinsleif is D-á-i-n-s-l-e-i-f, with an acute accent over the first a, and no extra letters. Keep K-UI large and V1.5 readable, subordinate on the same line. The quoted release name is a prominent, beautiful second line, fitting cleanly under the title. Typography should feel crafted, futuristic and chrome with red accents; excellent contrast at low display resolution.
-Constraints: This is the established K-UI brand character, not a new character design. Keep the woman's face silhouette and visor recognizable. No swords, additional people, unrelated objects, logos, slogans, loading bars or UI controls. No Sega logo. Do not add RC or any extra version words. Opaque background.
+K-UI V1.8.5 splash edited with the built-in image-generation tool on 2026-10-06 for TPMJB. Input: existing K-UI V1.7 startup.png from the repository.
+
+Use case: text-localization.
+Asset type: Dreamcast K-UI release startup splash, opaque 4:3 image.
+Input image 1 is the edit target, the existing K-UI V1.7 crimson Dáinsleif splash. Change only the existing version lettering from "V1.7" to "V1.8.5". Preserve the same visor portrait, pose, dark flowing hair, red illumination, neon laser, synthwave grid, chrome lettering, composition, dark lower portion, and TV-safe margins. Match the existing bold italic metallic typography and center the wider version under K-UI and above Dáinsleif; keep it readable and contained within the existing safe artwork area. All text must read exactly: "K-UI", "V1.8.5", "Dáinsleif", "by TPMJB". Preserve Dáinsleif's accent. Do not add any other text, logos, objects, border changes, or redesign. Keep all non-version artwork as close to the input as possible.
+
+Deployment conversion: generated 1448x1086 RGB image resized directly to 640x480 RGB with Lanczos; existing generated TV-safe margins retained. Matching startup.png and boot-red.png use identical bytes. No lettering edits after generation. release-v1.8.5-banner.jpg uses the same generated image, resized to 960x720 and centered on a black 1280x720 frame, JPEG quality 92.
+
+Deployment Git blob: a136e6f426140424febf38aebe69169c430ea6aa.
+Deployment SHA-256: bad69f585b46e56872d855b4ec9602c99f7eb671e6a47478e7a9f8a40c5ff232.

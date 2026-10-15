@@ -82,6 +82,8 @@ bool kui_destination_list(const char *root,unsigned offset,struct kui_destinatio
         } else {
             strcpy(entry->name,names.name[i]);
             char joined[KUI_DEST_ROOT_CAP];entry->disabled=!kui_destination_join(joined,root,entry->name);
+            char job_path[KUI_DEST_JOB_CAP];
+            entry->job_selectable=kui_destination_job_path(job_path,root,entry->name);
         }
     }
     return true;

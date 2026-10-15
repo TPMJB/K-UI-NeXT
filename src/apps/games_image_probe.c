@@ -143,6 +143,10 @@ bool kui_games_image_probe_prepare(const char *path,struct kui_runtime_image *pa
     struct kui_game_file_ops file_ops={&files,stat_file,read_file};
     enum kui_game_result r=kui_game_image_open(gdi,(size_t)size,&file_ops,image);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
+    for(unsigned i=0;i<image->count;i++)
+        if(image->tracks[i].file_offset || image->tracks[i].sector_bytes!=KUI_GAME_RAW_BYTES) {
+            problem="legacy image probe requires separate 2352-byte tracks with zero offsets";goto done;
+        }
     map->track_count=image->count;map->gdi_crc32=kui_crc32(0,gdi,(size_t)size);
     for(unsigned i=0;i<image->count;i++) if(image->tracks[i].control==4 && image->tracks[i].start_lba>=45000) {
         map->session_lba=image->tracks[i].start_lba;break;

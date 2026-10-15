@@ -1,22 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #ifndef KUI_PLATFORM_H
 #define KUI_PLATFORM_H
+#include "kui/target.h"
 #include "kui/probe.h"
 #include "kui/capture.h"
 #include "kui/bench.h"
 #include "kui/storage.h"
 #include "kui/boot_image.h"
 
-/* True when compiling for the Dreamcast's SH-4. GCC defines a DIFFERENT macro for each SH-4 mode:
- * __SH4__ only for plain -m4, __SH4_SINGLE__ for -m4-single (which is how KOS builds), plus
- * __SH4_SINGLE_ONLY__ and __SH4_NOFPU__. Testing __SH4__ alone is false on the real build, and the
- * code silently took the host-test branch there (twice in CI: it pulled KOS's cache header in again
- * and failed to compile). KOS's own -D_arch_dreamcast=1 is the most direct signal. This is the ONLY
- * place the raw macros may appear (tests/test_asm_audit.py enforces it). */
-#if defined(_arch_dreamcast) || defined(__DREAMCAST__) || defined(__SH4__) || defined(__SH4_SINGLE__) || \
-    defined(__SH4_SINGLE_ONLY__) || defined(__SH4_NOFPU__)
-#define KUI_ON_CONSOLE 1
-#endif
 void kui_log(const char *format, ...);
 bool kui_cancelled(void);
 /* AUTO reopens the boot-selected device; the first call discovers a usable
@@ -41,6 +32,10 @@ struct kui_media_ops;
 bool kui_sd_raw_read_ops(struct kui_media_ops *out);
 void kui_disc_probe(void);
 void kui_drive_init_bus(void);
+/* Exclusive optical owner only, with no read in flight. STOP has a 3-second
+ * deadline and 1-second abort recovery; it never resets a poisoned adapter or
+ * submits disc INIT/TOC/read. Cleanup completes even while B is held. */
+bool kui_disc_stop(void);
 void kui_bootstrap_load(kui_cancel_fn cancelled,bool recovery_only);
 /* Caller owns storage exclusively; no diagnostic job may be running. */
 enum kui_runtime_result kui_bootstrap_start(unsigned transport_filter,
@@ -51,11 +46,18 @@ enum kui_runtime_result kui_bootstrap_start(unsigned transport_filter,
 enum kui_runtime_result kui_bootstrap_measure(unsigned transport_filter,
     kui_cancel_fn cancelled);
 bool kui_disc_prepare(struct kui_toc sessions[2]);
+bool kui_disc_prepare_capture(struct kui_toc sessions[2],bool *is_cd);
 enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out);
 /* Normal capture uses a normalized card-root destination (for example /Games)
  * and game-named output. Invalid paths fail before preference or drive I/O. */
 enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build,
     const char *destination);
+/* Session choices copied by the sole worker. Exact job applies only to
+ * Resume/Verify; folder label applies only to New. NULL/empty uses defaults. */
+enum kui_capture_result kui_capture_start_selected(enum kui_capture_mode mode,const char *build,
+    const char *destination,const char *job_directory,const char *folder_label,bool quick_resume);
+enum kui_capture_result kui_capture_start_target(enum kui_capture_mode mode,const char *build,
+    const char *destination,const char *job_directory,const char *folder_label,bool quick_resume,bool network,bool cd_toc);
 /* Explicit one-operation size-only resume. CRC32 jobs continue the checkpoint's
  * CRC without rereading committed bytes, so same-size corruption is not checked.
  * SHA-256 jobs still require the engine's full prefix reread. This does not

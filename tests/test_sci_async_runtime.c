@@ -23,6 +23,16 @@ static bool stop,probe_started=true,probe_restored=true;
 static int scif_result;
 static bool healthy=true,disc_busy;
 static bool stress_mode,stress_cancel,heartbeat_available=true,heartbeat_lost;
+static bool speed_mode,speed_file;
+static unsigned quantum_calls,multi_blocks;
+/* CMD18 measurement mocks: calls, injected outcome and one corrupt block. */
+static unsigned capture_calls,resume_calls;
+static uint32_t capture_lba,resume_lba;
+static enum kui_sci_async_status capture_result;
+static bool capture_corrupt;
+/* Streaming pass mock: the current run, its next block and destination. */
+static uint32_t stream_left,stream_index,stream_runs,stream_corrupt_lba;
+static uint8_t *stream_dst;
 static unsigned async_opens,async_begins,async_polls,async_finishes,async_cancels,async_closes;
 static unsigned yield_calls,work_calls,cancel_at_poll,cancel_at_baseline;
 static uint64_t mock_now,card_blocks=10000;
@@ -37,7 +47,17 @@ semaphore_t _g1_ata_sem;
 
 void kui_log(const char *format,...) {(void)format;}
 bool kui_disc_read_pending(void *ctx) {(void)ctx;return disc_busy;}
-bool kui_mount(FATFS *fs,kui_log_fn log) {(void)fs;(void)log;return true;}
+bool kui_mount(FATFS *fs,kui_log_fn log) {
+    (void)log;
+    if(speed_file) {fs->database=100;fs->csize=8;}
+    return true;
+}
+FRESULT f_open(FIL *fp,const TCHAR *path,BYTE mode) {
+    assert(speed_mode && path && strstr(path,"runtime.kui") && mode==FA_READ);
+    if(!speed_file) return FR_NO_FILE;
+    fp->obj.sclust=10;return FR_OK;
+}
+FRESULT f_close(FIL *fp) {(void)fp;return FR_OK;}
 FRESULT f_mount(FATFS *fs,const TCHAR *path,BYTE immediate) {
     (void)path;(void)immediate;if(!fs) ++unmounts;return FR_OK;
 }
@@ -73,7 +93,11 @@ void kui_loader_sd_shutdown(struct kui_loader_sd *card) {card->ready=false;}
 const char *kui_loader_sd_result_name(enum kui_loader_sd_result result) {return result==KUI_LOADER_SD_TIMEOUT?"card timeout":"test";}
 enum kui_loader_sd_result kui_loader_sd_read_multi(struct kui_loader_sd *card,
     uint32_t block,uint32_t count,void *out) {
-    (void)block;(void)count;(void)out;
+    if(speed_mode) {
+        assert(!async_opens && count && count<=128u);
+        for(uint32_t i=0;i<count;++i) memset((uint8_t *)out+(size_t)i*512u,sector_byte(block+i),512);
+        multi_blocks+=count;
+    }
     ++read_calls;card->last_command=18;card->last_response=0;
     return !fail_read_call || read_calls==fail_read_call?read_result:KUI_LOADER_SD_OK;
 }
@@ -122,7 +146,7 @@ enum kui_sci_async_status kui_sci_async_probe_run(const struct kui_loader_sd *ca
 }
 enum kui_sci_async_status kui_sci_async_open(struct kui_sci_async_reader *reader,
         const struct kui_loader_sd *card,struct kui_sci_async_probe_result *out) {
-    assert(stress_mode && card->ready && single_calls==2u*baseline_seen);
+    assert((stress_mode || speed_mode) && card->ready && (speed_mode || single_calls==2u*baseline_seen));
     ++async_opens;engine_result=out;
     *out=(struct kui_sci_async_probe_result){.status=probe_status,.started=probe_started,
         .operation_status=operation_status,.dma_quarantined=quarantined,.safe_restored=probe_restored};
@@ -132,21 +156,42 @@ enum kui_sci_async_status kui_sci_async_open(struct kui_sci_async_reader *reader
 enum kui_sci_async_status kui_sci_async_begin(struct kui_sci_async_reader *reader,
         uint32_t lba,bool slow) {
     assert(reader->generation && !slow && !stress_cancel);
-    bool found=false;
+    bool found=speed_mode;
     for(unsigned i=0;i<baseline_seen;++i) if(baseline_lba_seen[i]==lba) found=true;
     assert(found);current_lba=lba;polled=0;++async_begins;
     ++engine_result->fast.attempted;++engine_result->fast.dma_started;
     return KUI_SCI_ASYNC_OK;
 }
+enum kui_sci_async_status kui_sci_async_begin_stream(struct kui_sci_async_reader *reader,
+        uint32_t lba,uint32_t count,uint8_t *dst) {
+    assert(reader->generation && speed_mode && !stream_left && resume_calls==1 && dst);
+    assert(count && count<=KUI_LOADER_SD_MAX_READ_BLOCKS && (uint64_t)lba+count<=card_blocks);
+    current_lba=lba;stream_left=count;stream_index=0;stream_dst=dst;polled=0;++stream_runs;
+    return KUI_SCI_ASYNC_OK;
+}
 enum kui_sci_async_status kui_sci_async_poll(struct kui_sci_async_reader *reader) {
     assert(reader->generation);++async_polls;
     if(probe_status!=KUI_SCI_ASYNC_OK) return probe_status;
+    if(stream_left) {
+        /* One checked block per poll; the poll with the last ends the run. */
+        uint32_t lba=current_lba+stream_index;
+        memset(stream_dst+(size_t)stream_index*512u,sector_byte(lba)^(lba==stream_corrupt_lba?1u:0u),512);
+        ++stream_index;++engine_result->streaming.passed;++engine_result->streaming.dma_irqs;
+        mock_now+=400;
+        return --stream_left?KUI_SCI_ASYNC_PENDING:KUI_SCI_ASYNC_OK;
+    }
     if(++polled<3u) return KUI_SCI_ASYNC_PENDING;
-    ++engine_result->fast.dma_irqs;return KUI_SCI_ASYNC_OK;
+    ++engine_result->fast.dma_irqs;
+    return KUI_SCI_ASYNC_OK;
 }
 enum kui_sci_async_status kui_sci_async_finish(struct kui_sci_async_reader *reader,
         uint8_t dst[512],const uint8_t expected[512]) {
-    assert(reader->generation && polled==3 && expected && dst);++async_finishes;
+    assert(reader->generation && polled==3 && dst && (expected || speed_mode));
+    ++async_finishes;
+    if(speed_mode) {
+        assert(!expected);memset(dst,sector_byte(current_lba),512);
+        ++engine_result->fast.passed;mock_now+=500;return KUI_SCI_ASYNC_OK;
+    }
     for(unsigned i=0;i<512;++i) assert(expected[i]==sector_byte(current_lba));
     engine_result->guards_ok=engine_result->crc_ok=engine_result->baseline_ok=true;
     engine_result->baseline_checked=true;
@@ -164,6 +209,34 @@ enum kui_sci_async_status kui_sci_async_close(struct kui_sci_async_reader *reade
     engine_result->safe_restored=probe_restored;
     engine_result->handlers_restored=engine_result->registers_restored=probe_restored;
     return probe_restored?KUI_SCI_ASYNC_OK:KUI_SCI_ASYNC_RESTORE;
+}
+enum kui_sci_async_status kui_sci_async_stream_capture(struct kui_sci_async_reader *reader,
+        uint32_t lba,void *buffer,uint32_t bytes,struct kui_sci_async_stream *out) {
+    assert(reader->generation && speed_mode && buffer && !((uintptr_t)buffer&31u));
+    assert(bytes==KUI_SD_ASYNC_CAPTURE_BYTES && async_finishes>=KUI_SD_ASYNC_COMPARE_BLOCKS);
+    ++capture_calls;capture_lba=lba;
+    *out=(struct kui_sci_async_stream){.status=capture_result,.lba=lba,.bytes=bytes,
+        .received=bytes,.complete=1,.blocks=30,.gaps=30,.gap_min=3,.gap_max=9,.gap_total=150};
+    for(uint32_t i=0;i<out->blocks;++i)
+        memset((uint8_t *)buffer+(size_t)i*512u,sector_byte(lba+i),512);
+    if(capture_corrupt) ((uint8_t *)buffer)[512*7+100]^=1u;
+    if(capture_result!=KUI_SCI_ASYNC_OK) {
+        engine_result->status=engine_result->operation_status=capture_result;
+        probe_status=capture_result;
+    }
+    return capture_result;
+}
+enum kui_sci_async_status kui_sci_async_stream_resume(struct kui_sci_async_reader *reader,
+        uint32_t lba,uint32_t count,uint8_t *dst,struct kui_sci_async_resume *out) {
+    assert(reader->generation && speed_mode && capture_calls && dst);
+    assert(count==KUI_SD_ASYNC_RESUME_BLOCKS);
+    ++resume_calls;resume_lba=lba;
+    *out=(struct kui_sci_async_resume){.status=KUI_SCI_ASYNC_OK,.lba=lba,.requested=count,.blocks=count};
+    for(uint32_t i=0;i<count;++i) memset(dst+(size_t)i*512u,sector_byte(lba+i),512);
+    return KUI_SCI_ASYNC_OK;
+}
+void kui_sci_async_set_framing_quantum(struct kui_sci_async_reader *reader,unsigned bytes) {
+    assert(reader->generation && speed_mode && bytes==4096u);++quantum_calls;
 }
 uint32_t kui_sci_async_work_sample(struct kui_sci_async_reader *reader) {
     assert(reader->generation);return polled && polled<3u?256u:0;
@@ -202,6 +275,66 @@ static void prepare(void) {
     stress_mode=stress_cancel=heartbeat_lost=heartbeat_started=false;
     heartbeat_available=true;async_opens=async_begins=async_polls=async_finishes=async_cancels=async_closes=0;
     yield_calls=work_calls=cancel_at_poll=cancel_at_baseline=baseline_seen=0;mock_now=0;
+    speed_mode=speed_file=false;quantum_calls=multi_blocks=read_calls=0;
+    capture_calls=resume_calls=capture_lba=resume_lba=0;
+    capture_result=KUI_SCI_ASYNC_OK;capture_corrupt=false;
+    stream_left=stream_index=stream_runs=stream_corrupt_lba=0;stream_dst=NULL;
+}
+/* The same blocks through both readers: the file's first cluster when found,
+ * otherwise the data area. Matching CRCs are required for a pass. */
+static void test_speed(void) {
+    struct kui_sd_async_result out;
+    prepare();speed_mode=speed_file=true;kui_sd_async_speed(&out,cancelled,NULL);
+    assert(out.speed && !out.sustained && out.speed_file_found);
+    assert(out.speed_lba==164 && out.speed_blocks==KUI_SD_ASYNC_SPEED_BLOCKS);
+    assert(out.speed_match && out.speed_async_blocks==KUI_SD_ASYNC_SPEED_BLOCKS);
+    assert(out.speed_normal_crc==out.speed_async_crc && multi_blocks==KUI_SD_ASYNC_SPEED_BLOCKS);
+    assert(read_calls==KUI_SD_ASYNC_SPEED_BLOCKS/128u && quantum_calls==1);
+    assert(async_opens==1 && async_begins==KUI_SD_ASYNC_SPEED_BLOCKS && async_closes==1);
+    assert(out.speed_async_us==UINT64_C(500)*KUI_SD_ASYNC_SPEED_BLOCKS);
+    assert(out.probe.status==KUI_SCI_ASYNC_OK && out.recovery_verified && !out.restart_required);
+    assert(single_calls==3 && !probe_calls && !out.recovery_reinitialized);
+    /* CMD18 measurements on the same, already verified blocks. */
+    assert(out.stream_ran && out.resume_ran && out.stream_match && out.resume_match);
+    assert(capture_calls==1 && resume_calls==1 && capture_lba==164);
+    assert(resume_lba==164+KUI_SD_ASYNC_RESUME_OFFSET && out.stream.blocks==30);
+    assert(out.resume.blocks==KUI_SD_ASYNC_RESUME_BLOCKS);
+    /* Then the same 2048 blocks as CMD18 streams of 128, matching the
+     * ordinary pass's CRC32. */
+    assert(out.speed_stream_match && out.speed_stream_blocks==KUI_SD_ASYNC_SPEED_BLOCKS);
+    assert(out.speed_stream_crc==out.speed_normal_crc && stream_runs==KUI_SD_ASYNC_SPEED_BLOCKS/128u);
+    assert(out.speed_stream_us==UINT64_C(400)*KUI_SD_ASYNC_SPEED_BLOCKS && !stream_left);
+
+    /* A streamed block that differs from the ordinary pass is reported. */
+    prepare();speed_mode=speed_file=true;stream_corrupt_lba=164+700;
+    kui_sd_async_speed(&out,cancelled,NULL);
+    assert(out.speed_match && !out.speed_stream_match && out.speed_stream_blocks==KUI_SD_ASYNC_SPEED_BLOCKS);
+    assert(out.probe.status==KUI_SCI_ASYNC_OK && out.recovery_verified);
+
+    /* A captured block that differs from the async copy is reported. */
+    prepare();speed_mode=speed_file=true;capture_corrupt=true;
+    kui_sd_async_speed(&out,cancelled,NULL);
+    assert(out.speed_match && out.stream_ran && !out.stream_match && out.resume_match);
+    assert(out.probe.status==KUI_SCI_ASYNC_OK && out.recovery_verified);
+
+    /* A failed measurement fails the run and goes through reinitialization;
+     * the resume pass is not attempted after it. */
+    prepare();speed_mode=speed_file=true;capture_result=KUI_SCI_ASYNC_COMMAND;
+    kui_sd_async_speed(&out,cancelled,NULL);
+    assert(out.speed_match && out.stream_ran && !out.resume_ran && !resume_calls && !stream_runs);
+    assert(out.probe.status==KUI_SCI_ASYNC_COMMAND && out.recovery_reinitialized && out.recovery_verified);
+    kui_sd_disconnect();prepare();assert(kui_sd_connect());
+
+    prepare();speed_mode=true;kui_sd_async_speed(&out,cancelled,NULL);
+    assert(!out.speed_file_found && out.speed_lba==0 && out.speed_match && out.recovery_verified);
+
+    prepare();speed_mode=true;card_blocks=1000;
+    kui_sd_disconnect();assert(kui_sd_connect());
+    speed_file=true;kui_sd_async_speed(&out,cancelled,NULL);
+    /* A range past the card's end is never read; fall back to block 0. */
+    assert(!out.speed_file_found && out.speed_lba==0 && out.speed_blocks==1000 && out.recovery_verified);
+    assert(out.speed_async_blocks==1000 && out.speed_match);
+    kui_sd_disconnect();card_blocks=10000;prepare();assert(kui_sd_connect());
 }
 static void stress_prepare(void) {prepare();stress_mode=true;}
 static void test_stress(void) {
@@ -288,6 +421,7 @@ int main(int argc,char **argv) {
     assert(out.probe.status==KUI_SCI_ASYNC_CANCELLED && !out.restart_required);
     assert(!single_calls && !probe_calls);
     test_stress();
+    test_speed();
     prepare();
     const char *mode=argc>1?argv[1]:"restore";
     if(!strcmp(mode,"restore")) {probe_status=KUI_SCI_ASYNC_RESTORE;probe_restored=false;probe_started=false;}

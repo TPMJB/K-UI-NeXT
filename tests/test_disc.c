@@ -9,15 +9,22 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 static struct {
     uint64_t us,last_handoff,max_service_us;
-    unsigned sends,reads,polls,total_polls,sleeps,passes,aborts,modes;
+    unsigned sends,reads,polls,total_polls,sleeps,passes,aborts,modes,bus_inits;
     unsigned target_polls,poll_us,guard;
     int reported_delta,command;
     bool stop,abort_started,submit_busy,submit_always_busy,underfill,fail;
     bool timeout,cancel,abort_fail,mode_fail,changed,cancel_on_pass,cancel_on_sleep;
     cd_read_params_t params;
+    cd_cmd_toc_params_t toc_params;
+    cd_check_drive_status_t drive;
+    int drive_result;
+    unsigned drive_queries,toc_reads[2],toc_order[2],toc_count;
+    bool cd_toc,toc_bad,toc_guard;
     char log[32768];size_t used;
 } fake;
 char test_cache_log[64];unsigned test_cache_n;uintptr_t test_cache_start[16];size_t test_cache_bytes[16];
@@ -34,7 +41,7 @@ void thd_pass(void) {
     if(fake.cancel_on_pass) fake.stop=true;
 }
 bool kui_cancelled(void) {return fake.stop;}
-void kui_drive_init_bus(void) {}
+void kui_drive_init_bus(void) {++fake.bus_inits;}
 void kui_log(const char *format,...) {
     va_list args;va_start(args,format);
     int n=vsnprintf(fake.log+fake.used,sizeof(fake.log)-fake.used,format,args);va_end(args);
@@ -44,12 +51,26 @@ void kui_log(const char *format,...) {
 int syscall_gdrom_sector_mode(cd_sec_mode_params_t *p) {
     assert(p->size==2352 && p->track_type==0);fake.us+=7;++fake.modes;return fake.mode_fail?-1:0;
 }
+int syscall_gdrom_check_drive(cd_check_drive_status_t *out) {
+    assert(out);++fake.drive_queries;
+    /* A failed syscall may leave its zero-filled destination untouched. A
+     * positive failure must not turn that into apparent CDDA admission. */
+    if(!fake.drive_result)*out=fake.drive;
+    return fake.drive_result;
+}
 int syscall_gdrom_send_command(cd_cmd_code_t code,void *params) {
-    assert(code==CD_CMD_PIOREAD || code==CD_CMD_DMAREAD || code==CD_CMD_INIT);
+    assert(code==CD_CMD_PIOREAD || code==CD_CMD_DMAREAD || code==CD_CMD_INIT ||
+           code==CD_CMD_STOP || code==CD_CMD_GETTOC2);
     fake.command=code;fake.us+=13;++fake.sends;
     if(fake.submit_busy || fake.submit_always_busy) {fake.submit_busy=false;return 0;}
     fake.polls=0;fake.abort_started=false;
     if(code==CD_CMD_PIOREAD || code==CD_CMD_DMAREAD) {fake.params=*(cd_read_params_t *)params;++fake.reads;}
+    if(code==CD_CMD_GETTOC2) {
+        assert(params);fake.toc_params=*(cd_cmd_toc_params_t *)params;
+        assert(fake.toc_params.toc && fake.toc_params.area>=0 && fake.toc_params.area<2);
+        assert(fake.toc_count<2u);fake.toc_order[fake.toc_count++]=(unsigned)fake.toc_params.area;
+        ++fake.toc_reads[fake.toc_params.area];
+    }
     if(code==CD_CMD_DMAREAD) test_cache_note('D',0,0);   /* the transfer starts here */
     return 1;
 }
@@ -59,6 +80,25 @@ static void damage_guard(void) {
     size_t bytes=(size_t)fake.params.num_sec*KUI_RAW_BYTES;
     if(fake.guard==1) data[bytes]=0; /* tail or trailing guard */
     if(fake.guard==2) data[-1]=0;
+}
+static void return_toc(void) {
+    cd_toc_t *toc=fake.toc_params.toc;memset(toc,0xff,sizeof(*toc));
+    if(fake.cd_toc) {
+        assert(fake.toc_params.area==0);
+        unsigned control=fake.drive.disc_type==CD_CDDA?0u:4u;
+        toc->first=toc->last=0x01010000u;
+        toc->entry[0]=(control<<28u)|0x01000000u|225u;
+        toc->leadout_sector=0x01000000u|865u;
+    } else if(!fake.toc_params.area) {
+        toc->first=0x41010000u;toc->last=0x01020000u;
+        toc->entry[0]=0x41000000u|150u;toc->entry[1]=0x01000000u|650u;
+        toc->leadout_sector=0x01000000u|950u;
+    } else {
+        toc->first=toc->last=0x41030000u;
+        toc->entry[2]=0x41000000u|45150u;toc->leadout_sector=0x41000000u|51813u;
+    }
+    if(fake.toc_bad)toc->entry[(toc->first>>16u&255u)-1u]=UINT32_MAX;
+    if(fake.toc_guard)((uint8_t *)toc)[sizeof(*toc)]=0;
 }
 int syscall_gdrom_check_command(int handle,cd_cmd_chk_status_t *detail) {
     assert(handle==1);fake.us+=fake.poll_us;++fake.polls;++fake.total_polls;
@@ -71,6 +111,8 @@ int syscall_gdrom_check_command(int handle,cd_cmd_chk_status_t *detail) {
     if(fake.timeout || fake.cancel) return 1;
     unsigned needed=fake.target_polls?fake.target_polls:((fake.reads&1)?2u:4u);
     if(fake.polls<needed) return 1;
+    if(fake.command==CD_CMD_STOP || fake.command==CD_CMD_INIT) {detail->size=0;return 2;}
+    if(fake.command==CD_CMD_GETTOC2) {return_toc();detail->size=sizeof(cd_toc_t);return 2;}
     assert(fake.command==CD_CMD_PIOREAD || fake.command==CD_CMD_DMAREAD);
     if(fake.command==CD_CMD_DMAREAD) test_cache_note('C',0,0);   /* the transfer is done */
     size_t bytes=(size_t)fake.params.num_sec*KUI_RAW_BYTES;
@@ -81,6 +123,7 @@ int syscall_gdrom_check_command(int handle,cd_cmd_chk_status_t *detail) {
 void syscall_gdrom_abort_command(int handle) {assert(handle==1);fake.us+=11;++fake.aborts;fake.abort_started=true;}
 static void reset(void) {
     memset(&fake,0,sizeof(fake));fake.poll_us=23;kui_disc_timing_reset();
+    fake.drive=(cd_check_drive_status_t){CD_STATUS_PAUSED,CD_GDROM};
 }
 static void expect(const char *line) {
     if(!strstr(fake.log,line)) {fprintf(stderr,"Missing %s\n%s",line,fake.log);assert(false);}
@@ -103,6 +146,8 @@ static int run_dma_async(const char *mode) {
     reset();
     if(!strcmp(mode,"dma-async-stop")) {
         assert(kui_disc_read_begin(NULL,45150,32,buf));
+        unsigned sends=fake.sends;
+        assert(!kui_disc_stop() && fake.sends==sends && !fake.bus_inits);
         fake.stop=true;                                   /* B pressed with a read in flight */
         assert(kui_disc_read_end(NULL)==KUI_READ_FATAL);
         fake.stop=false;
@@ -228,13 +273,115 @@ static int run_dma(const char *mode) {
     printf("PASS dma probe: %s leaves DMA off and refuses further attempts without touching the drive\n",mode);
     return 0;
 }
+static void preparation_counts(unsigned queries,unsigned low,unsigned high) {
+    assert(fake.drive_queries==queries && fake.toc_reads[0]==low && fake.toc_reads[1]==high);
+    assert(fake.sends==1u+low+high && fake.reads==0u && fake.modes==0u && fake.aborts==0u);
+    if(low)assert(fake.toc_order[0]==0u);
+    if(high)assert(fake.toc_order[1]==1u);
+}
+static void gd_geometry(const struct kui_toc sessions[2]) {
+    assert(sessions[0].count==2u && sessions[1].count==1u);
+    assert(sessions[0].tracks[0].number==1u && sessions[0].tracks[0].start==150u &&
+           sessions[0].tracks[0].end==650u && sessions[0].tracks[0].control==4u);
+    assert(sessions[0].tracks[1].number==2u && sessions[0].tracks[1].start==650u &&
+           sessions[0].tracks[1].end==950u && sessions[0].tracks[1].control==0u);
+    assert(sessions[1].tracks[0].number==3u && sessions[1].tracks[0].start==45150u &&
+           sessions[1].tracks[0].end==51813u && sessions[1].tracks[0].control==4u);
+}
+static int run_prepare(void) {
+    struct kui_toc sessions[2];bool is_cd=true;
+    /* Default retail preparation never acquires the opt-in status/query path:
+     * even a failing or apparently absent check-drive double is irrelevant. */
+    reset();fake.drive_result=1;fake.drive=(cd_check_drive_status_t){CD_STATUS_NO_DISC,CD_CDDA};
+    memset(sessions,0xc7,sizeof(sessions));
+    assert(kui_disc_prepare(sessions));preparation_counts(0u,1u,1u);gd_geometry(sessions);
+
+    const cd_disc_types_t cds[]={CD_CDDA,CD_CDROM,CD_CDROM_XA};
+    const cd_stat_t ready[]={CD_STATUS_PAUSED,CD_STATUS_STANDBY};
+    for(unsigned i=0;i<sizeof(cds)/sizeof(cds[0]);i++) for(unsigned j=0;j<sizeof(ready)/sizeof(ready[0]);j++) {
+        reset();fake.cd_toc=true;fake.drive=(cd_check_drive_status_t){ready[j],cds[i]};
+        memset(sessions,0xc7,sizeof(sessions));is_cd=false;
+        assert(kui_disc_prepare_capture(sessions,&is_cd) && is_cd);
+        preparation_counts(1u,1u,0u);
+        assert(sessions[0].count==1u && sessions[0].tracks[0].number==1u &&
+               sessions[0].tracks[0].start==225u && sessions[0].tracks[0].end==865u &&
+               sessions[0].tracks[0].control==(cds[i]==CD_CDDA?0u:4u));
+        const struct kui_toc blank={0};assert(!memcmp(&sessions[1],&blank,sizeof(blank)));
+    }
+    /* The optional result pointer does not change the media or TOC contract. */
+    reset();fake.cd_toc=true;fake.drive.disc_type=CD_CDROM;
+    assert(kui_disc_prepare_capture(sessions,NULL));preparation_counts(1u,1u,0u);
+
+    const cd_stat_t unavailable[]={CD_STATUS_READ_FAIL,CD_STATUS_BUSY,CD_STATUS_PLAYING,
+        CD_STATUS_SEEKING,CD_STATUS_SCANNING,CD_STATUS_OPEN,CD_STATUS_NO_DISC,
+        CD_STATUS_RETRY,CD_STATUS_ERROR,CD_STATUS_FATAL,(cd_stat_t)42};
+    for(unsigned i=0;i<sizeof(cds)/sizeof(cds[0]);i++) for(unsigned j=0;j<sizeof(unavailable)/sizeof(unavailable[0]);j++) {
+        reset();fake.drive=(cd_check_drive_status_t){unavailable[j],cds[i]};is_cd=true;
+        assert(!kui_disc_prepare_capture(sessions,&is_cd) && !is_cd);
+        preparation_counts(1u,0u,0u);expect("CD is not ready");
+    }
+    const cd_disc_types_t unsupported[]={CD_CDI,CD_FAIL,(cd_disc_types_t)0x40};
+    for(unsigned i=0;i<sizeof(unsupported)/sizeof(unsupported[0]);i++) {
+        reset();fake.drive.disc_type=unsupported[i];is_cd=true;
+        assert(!kui_disc_prepare_capture(sessions,&is_cd) && !is_cd);
+        preparation_counts(1u,0u,0u);expect("Unsupported optical media type");
+    }
+    const int errors[]={-1,1};
+    for(unsigned i=0;i<sizeof(errors)/sizeof(errors[0]);i++) {
+        reset();fake.drive_result=errors[i];is_cd=true;
+        assert(!kui_disc_prepare_capture(sessions,&is_cd) && !is_cd);
+        preparation_counts(1u,0u,0u);
+    }
+    reset();fake.drive.disc_type=CD_GDROM;is_cd=true;
+    assert(kui_disc_prepare_capture(sessions,&is_cd) && !is_cd);
+    preparation_counts(1u,1u,1u);gd_geometry(sessions);
+
+    reset();fake.fail=true;is_cd=true;
+    assert(!kui_disc_prepare_capture(sessions,&is_cd) && !is_cd);
+    preparation_counts(0u,0u,0u);expect("Disc initialization did not complete");
+    reset();fake.cd_toc=true;fake.drive.disc_type=CD_CDROM;fake.toc_bad=true;
+    assert(!kui_disc_prepare_capture(sessions,&is_cd));preparation_counts(1u,1u,0u);
+    expect("TOC invalid or unsupported");
+
+    /* Guard failure poisons preparation permanently, so this final case stays
+     * in its own process and cannot alter the existing transfer-policy tests. */
+    reset();fake.cd_toc=true;fake.drive.disc_type=CD_CDROM;fake.toc_guard=true;
+    assert(!kui_disc_prepare_capture(sessions,&is_cd));preparation_counts(1u,1u,0u);
+    expect("TOC GUARD CORRUPTION: RESET REQUIRED");
+    unsigned sends=fake.sends,queries=fake.drive_queries;
+    fake.toc_guard=false;is_cd=true;
+    assert(!kui_disc_prepare_capture(sessions,&is_cd) && !is_cd);
+    assert(!kui_disc_prepare(sessions) && fake.sends==sends && fake.drive_queries==queries);
+    puts("PASS optical preparation: unchanged default GD path, explicit ready CD TOC, status/errors/types, zero second area, GD opt-in and guarded refusal");
+    return 0;
+}
+static void prepare_subprocess(void) {
+    /* Run by the ordinary no-argument test gate, while preserving disc.c's
+     * static INIT/poison latches for all pre-existing transfer assertions. */
+    pid_t child=fork();assert(child>=0);
+    if(!child) {int result=run_prepare();assert(fflush(stdout)==0);_exit(result);}
+    int status;assert(waitpid(child,&status,0)==child && WIFEXITED(status) && WEXITSTATUS(status)==0);
+}
 int main(int argc,char **argv) {
     uint8_t out[KUI_CAPTURE_CHUNK*KUI_RAW_BYTES],expected[sizeof(out)];
+    if(argc==2 && !strcmp(argv[1],"prepare"))return run_prepare();
     if(argc==2 && !strncmp(argv[1],"dma",3)) return run_dma(argv[1]);
+    if(argc==1)prepare_subprocess();
     memset(out,0xd3,sizeof(out));reset();
     if(argc==2) {
         capture_phase();
-        if(!strcmp(argv[1],"abort-fail")) {
+        if(!strcmp(argv[1],"stop-abort-fail")) {
+            fake.timeout=fake.abort_fail=fake.stop=true;
+            assert(!kui_disc_stop());
+            assert(fake.command==CD_CMD_STOP && fake.reads==0 && fake.modes==0 && fake.bus_inits==1);
+            assert(fake.aborts==1 && fake.us>=4000000 && fake.us<4024000);
+            unsigned sends=fake.sends,bus=fake.bus_inits;
+            fake.stop=fake.timeout=fake.abort_fail=false;
+            assert(!kui_disc_stop() && fake.sends==sends && fake.bus_inits==bus);
+            struct kui_toc sessions[2];
+            assert(!kui_disc_prepare(sessions) && fake.sends==sends && fake.bus_inits==bus);
+            puts("PASS STOP: bounded failed abort remains poisoned; no reset, INIT, read or retry");return 0;
+        } else if(!strcmp(argv[1],"abort-fail")) {
             fake.timeout=fake.abort_fail=true;
             assert(kui_disc_read_raw(NULL,45150,2,out)==KUI_READ_FATAL);
             assert(fake.aborts==1 && fake.us>=6000000 && fake.us<6024000);
@@ -254,6 +401,19 @@ int main(int argc,char **argv) {
         unchanged(out,sizeof(out));check_refused(out);
         puts("PASS optical: failed abort/media change/guard stays refused after profile reset");return 0;
     }
+
+    /* Startup STOP does not discover/read the boot disc. Holding B cannot
+     * cancel required cleanup; both command and abort have finite deadlines. */
+    fake.stop=true;
+    assert(kui_disc_stop());
+    assert(fake.sends==1 && fake.command==CD_CMD_STOP && fake.bus_inits==1);
+    assert(fake.reads==0 && fake.modes==0 && fake.aborts==0 && fake.sleeps>0);
+    fake.timeout=true;fake.cancel_on_sleep=true;
+    uint64_t stop_start=fake.us;
+    assert(!kui_disc_stop());
+    assert(fake.sends==2 && fake.bus_inits==1 && fake.reads==0 && fake.modes==0);
+    assert(fake.aborts==1 && fake.us-stop_start>=3000000 && fake.us-stop_start<3012000);
+    reset();
 
     /* Identification stays paired and byte-identical; short service commands
      * finish without a scheduler tick. Counters remain exclusive and exact. */
@@ -356,6 +516,8 @@ int main(int argc,char **argv) {
     assert(kui_disc_read_raw(NULL,45150,KUI_CAPTURE_CHUNK,out)==KUI_READ_FATAL);
     assert(kui_disc_read_raw(NULL,45150,2,out)==KUI_READ_FATAL && fake.reads==1);
     unchanged(out,sizeof(out));kui_disc_timing_report();expect("opt mismatch=0 guards=1 refused=1");
+    unsigned sends=fake.sends;
+    assert(!kui_disc_stop() && fake.sends==sends && !fake.bus_inits);
     puts("PASS optical: paired identity, single capture, transfer size, bounded fast service, periodic scheduling, busy submit, deadlines, cancel and guards");
     return 0;
 }

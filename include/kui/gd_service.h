@@ -29,7 +29,7 @@ enum kui_gd_status {
  * error/sense fidelity. Unsupported commands are rejected at submission. */
 enum kui_gd_error {
     KUI_GD_ERROR_NONE, KUI_GD_ERROR_IO, KUI_GD_ERROR_CANCELLED,
-    KUI_GD_ERROR_MEMORY
+    KUI_GD_ERROR_MEMORY, KUI_GD_ERROR_UNAVAILABLE
 };
 struct kui_gd_track {
     uint32_t number, control, start_lba, end_lba; /* exclusive */

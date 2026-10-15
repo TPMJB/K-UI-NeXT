@@ -202,6 +202,47 @@ void kui_w5500_session_end(struct kui_w5500_session *s) {
     s->port->close();
     s->open = false;
 }
+static struct kui_w5500 *chip_of(void *ctx) { return &((struct kui_w5500_session *)ctx)->chip; }
+static bool socket_listen(void *ctx, unsigned s, uint16_t port) {
+    return kui_w5500_open(chip_of(ctx), s, KUI_W5500_TCP | KUI_W5500_MR_NODELAY, port) && kui_w5500_listen(chip_of(ctx), s);
+}
+static bool socket_connect(void *ctx, unsigned s, uint16_t local, const uint8_t ip[4], uint16_t port) {
+    return kui_w5500_open(chip_of(ctx), s, KUI_W5500_TCP | KUI_W5500_MR_NODELAY, local) &&
+        kui_w5500_connect(chip_of(ctx), s, ip, port);
+}
+static bool socket_disconnect(void *ctx, unsigned s) { return kui_w5500_disconnect(chip_of(ctx), s); }
+static bool socket_close(void *ctx, unsigned s) { return kui_w5500_close(chip_of(ctx), s); }
+static bool socket_state(void *ctx, unsigned s, uint8_t *state) { return kui_w5500_status(chip_of(ctx), s, state); }
+static bool socket_peer(void *ctx, unsigned s, uint8_t ip[4], uint16_t *port) { return kui_w5500_peer(chip_of(ctx), s, ip, port); }
+static bool socket_keepalive(void *ctx, unsigned s, unsigned seconds) { return kui_w5500_keepalive(chip_of(ctx), s, seconds); }
+static bool socket_received(void *ctx, unsigned s, size_t *bytes) {
+    uint16_t n = 0;
+    bool ok = kui_w5500_received(chip_of(ctx), s, &n);
+    *bytes = n;
+    return ok;
+}
+static bool socket_receive(void *ctx, unsigned s, void *data, size_t bytes) {
+    return bytes <= UINT16_MAX && kui_w5500_receive(chip_of(ctx), s, data, (uint16_t)bytes);
+}
+static bool socket_room(void *ctx, unsigned s, size_t *bytes) {
+    uint16_t n = 0;
+    bool ok = kui_w5500_room(chip_of(ctx), s, &n);
+    *bytes = n;
+    return ok;
+}
+static bool socket_send(void *ctx, unsigned s, const void *data, size_t bytes) {
+    return bytes <= UINT16_MAX && kui_w5500_send(chip_of(ctx), s, data, (uint16_t)bytes);
+}
+static bool socket_sent(void *ctx, unsigned s, bool *all) {
+    uint16_t room = 0;
+    if(s >= KUI_W5500_SOCKETS || !kui_w5500_room(chip_of(ctx), s, &room)) return false;
+    *all = room == chip_of(ctx)->tx_kb[s] * 1024u;
+    return true;
+}
+void kui_w5500_session_sockets(struct kui_w5500_session *s, struct kui_net_sockets *out) {
+    *out = (struct kui_net_sockets){s, KUI_W5500_SOCKETS, socket_listen, socket_connect, socket_disconnect, socket_close,
+        socket_state, socket_peer, socket_keepalive, socket_received, socket_receive, socket_room, socket_send, socket_sent};
+}
 static uint32_t elapsed(const struct kui_w5500_session *s, uint64_t now_ms) {
     uint64_t ms = now_ms > s->leased_ms ? now_ms - s->leased_ms : 0;
     return ms / 1000u > UINT32_MAX ? UINT32_MAX : (uint32_t)(ms / 1000u);

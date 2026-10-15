@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "retail_display.h"
+#include "kui/version.h"
 #include <stddef.h>
 #ifndef KUI_BUILD_ID
 #define KUI_BUILD_ID "LOCAL"
@@ -37,15 +38,23 @@ static const uint8_t glyphs[36][7] = {
  {14,17,17,14,17,17,14},{14,17,17,15,1,1,14}
 };
 static unsigned row;
+#ifdef KUI_RETAIL_CE
+/* The live status line draws on the frame Windows CE shows; every other
+ * line uses K-UI's captured 640-pixel frame at the start of video RAM. */
+static uint32_t base = 0xa5000000u, stride = 640u;
+#else
+#define base 0xa5000000u
+#define stride 640u
+#endif
 void retail_display_capture(struct retail_display_state *s) {
     for(unsigned i=0;i<14;i++) s->regs[i]=*reg(i);
 }
 void retail_display_line(const char *text) {
-    volatile uint16_t *frame=(volatile uint16_t *)(uintptr_t)0xa5000000u;
+    volatile uint16_t *frame=(volatile uint16_t *)(uintptr_t)base;
     unsigned x=20;
     if(row>444) row=124;
     for(unsigned y=row;y<row+22;y++)
-        for(unsigned a=16;a<624;a++) frame[y*640+a]=0x0864;
+        for(unsigned a=16;a<624;a++) frame[y*stride+a]=0x0864;
     while(*text && x<612) {
         unsigned char c=(unsigned char)*text++;
         if(c>='a' && c<='z') c-=32;
@@ -57,7 +66,7 @@ void retail_display_line(const char *text) {
             for(unsigned a=0;a<5;a++) if(bits&(16u>>a))
                 for(unsigned dy=0;dy<2;dy++)
                     for(unsigned dx=0;dx<2;dx++)
-                        frame[(row+y*2+dy)*640+x+a*2+dx]=0xffff;
+                        frame[(row+y*2+dy)*stride+x+a*2+dx]=0xffff;
         }
         x+=12;
     }
@@ -70,9 +79,13 @@ void retail_display_restore(const struct retail_display_state *s) {
     volatile uint16_t *frame=(volatile uint16_t *)(uintptr_t)0xa5000000u;
     for(unsigned i=0;i<640u*480u;i++) frame[i]=0x0864;
     row=20;
-    retail_display_line("K-UI V1.5 GAME LAUNCH");
+    retail_display_line("K-UI V" KUI_VERSION " LAUNCH");
     retail_display_line("BUILD " KUI_BUILD_ID);
+#ifdef KUI_RETAIL_CE
+    retail_display_line("WINDOWS CE BOOT TEST");
+#else
     retail_display_line("NATIVE GD IMAGE");
+#endif
     row=108;
 }
 void retail_display_hex(const char *label,uint32_t value) {
@@ -82,6 +95,55 @@ void retail_display_hex(const char *label,uint32_t value) {
     for(unsigned i=0;i<8;i++) out[n++]="0123456789ABCDEF"[(value>>(28-4*i))&15];
     out[n]=0; retail_display_line(out);
 }
+/* A legend line, then up to five values in nine-character columns under it. */
+void retail_display_values(const char *legend,const uint32_t *values,unsigned count) {
+#if defined(KUI_RETAIL_TRANSPORT) && !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
+    /* All input rows are word-aligned. Terminal snapshots may occupy the
+     * byte-sector cache: alias-qualified reads remain valid under GCC LTO,
+     * as do the ordinary uint32_t arrays used for other diagnostic rows. */
+    typedef uint32_t display_word __attribute__((__may_alias__));
+    const display_word *words = (const display_word *)(const void *)values;
+    char out[50], *next = out;
+    retail_display_line(legend);
+    for(unsigned v=0;v<count && v<5;v++) {
+        uint32_t value = words[v];
+        char *digit = next + 8;
+        while(digit != next) {
+            *--digit = "0123456789ABCDEF"[value & 15u];
+            value >>= 4;
+        }
+        next += 8; *next++ = ' ';
+    }
+    *next = 0; retail_display_line(out);
+#else
+    char out[50]; unsigned n=0;
+    retail_display_line(legend);
+    for(unsigned v=0;v<count && v<5;v++) {
+        for(unsigned i=0;i<8;i++) out[n++]="0123456789ABCDEF"[(values[v]>>(28-4*i))&15];
+        out[n++]=' ';
+    }
+    out[n]=0; retail_display_line(out);
+#endif
+}
+#ifdef KUI_RETAIL_CE
+/* Two lines near the top of the frame CE is showing, without changing any
+ * video register: FB_R_SOF1 is its start and FB_R_SIZE its line pitch
+ * (32-bit units per line plus modulo, minus one). 16-bit pixels assumed. */
+void retail_display_status(const char *legend,const uint32_t *values,unsigned count) {
+    /* Suppress the live overlay after CE enables its MMU. Keep the pre-CE
+     * display path and the caller's timing/accounting intact for this
+     * comparison: removing them together regressed a console boot. This
+     * guard belongs only to the live status line, never fault diagnostics. */
+    if(*(volatile const uint32_t *)(uintptr_t)0xff000010u & 1u) return;
+    volatile const uint32_t *pvr=(volatile const uint32_t *)(uintptr_t)0xa05f8000u;
+    uint32_t size=pvr[0x5c/4], saved=row;
+    base=0xa5000000u|(pvr[0x50/4]&0x007ffffcu);
+    stride=((size&0x3ffu)+((size>>20)&0x3ffu))*2u;
+    row=40;
+    retail_display_values(legend,values,count);
+    base=0xa5000000u; stride=640u; row=saved;
+}
+#endif
 void retail_display_progress(uint32_t done,uint32_t total) {
     /* Fixed bottom bar, independent of scrolling diagnostic rows. */
     if(!total || done>total) return;

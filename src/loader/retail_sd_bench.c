@@ -10,24 +10,27 @@ static const uint32_t batches[3] = {2, 8, 10};
 static bool bench_window(const struct kui_retail_manifest *m,
                          uint64_t card_blocks, uint32_t *lba) {
     if(!m || !m->track_count || m->track_count > KUI_RETAIL_IMAGE_TRACKS ||
-       m->extent_count > KUI_RETAIL_IMAGE_EXTENTS ||
+       m->extent_count > KUI_RETAIL_IMAGE_SLOTS - m->track_count ||
        m->partition_start >= m->partition_end ||
        m->partition_end > m->card_sectors || m->card_sectors > card_blocks)
         return false;
     for(uint32_t i = 0; i < m->track_count; ++i) {
-        const struct kui_retail_track *t = &m->tracks[i];
-        if(t->gd.control != 4 || t->gd.start_lba < 45000 || t->gd.end_lba <= t->gd.start_lba ||
-           t->first_extent >= m->extent_count ||
-           t->extent_count > m->extent_count - t->first_extent) continue;
-        uint64_t full_blocks = (uint64_t)(t->gd.end_lba - t->gd.start_lba) * 2352 / 512;
+        const struct kui_retail_track *t = &m->slots[i].track;
+        const uint32_t used = m->track_count + m->extent_count;
+        uint32_t first=kui_retail_track_first_extent(t),offset=kui_retail_track_file_offset(t);
+        if(kui_retail_track_control(t) != 4 || (!(m->flags & KUI_RETAIL_IMAGE_CD) && t->start_lba < 45000) || t->end_lba <= t->start_lba ||
+           first < m->track_count || first >= used || t->extent_count > used - first) continue;
+        uint64_t full_blocks = (offset+(uint64_t)(t->end_lba - t->start_lba) *
+            kui_retail_track_sector_bytes(t)) / 512;
         for(uint32_t j = 0; j < t->extent_count; ++j) {
-            const struct kui_retail_extent *e = &m->extents[t->first_extent + j];
-            uint64_t end = (uint64_t)e->card_lba + KUI_SD_BENCH_BLOCKS;
-            if(e->blocks < KUI_SD_BENCH_BLOCKS ||
-               (uint64_t)e->file_block + KUI_SD_BENCH_BLOCKS > full_blocks ||
+            const struct kui_retail_extent *e = &m->slots[first + j].extent;
+            uint32_t skip=offset && !e->file_block?1u:0u;
+            uint64_t end = (uint64_t)e->card_lba + skip + KUI_SD_BENCH_BLOCKS;
+            if(e->blocks < skip+KUI_SD_BENCH_BLOCKS ||
+               (uint64_t)e->file_block + skip + KUI_SD_BENCH_BLOCKS > full_blocks ||
                e->card_lba < m->partition_start || end > m->partition_end ||
                end > (UINT64_C(1) << 32)) continue;
-            *lba = e->card_lba;
+            *lba = e->card_lba+skip;
             return true;
         }
     }
