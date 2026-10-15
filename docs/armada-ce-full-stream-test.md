@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Armada CE full CD music stream test
 
-## K-UI 2.0 RC5 bounded token allowance
+## K-UI 2.0 RC6 wrapped refill publication
 
 This console candidate integrates the net changes from
 `fix/armada-cdda-supply` at `be793d667cf0` into our current `eb06827d85da`
@@ -105,6 +105,28 @@ these budget yields since the previous sample, saturated at 15. This counts
 forced yields, not milliseconds or underruns. It makes remaining budget
 pressure visible without another page. Existing timestamps and SOURCE/READY
 remain necessary to judge supply; this allowance is not a console-success claim.
+
+Recording `62661.mp4` still contains audible cuts according to the console
+report. Its retained six sample rows all have zero budget yields, with native
+visits around 20/s and a maximum approximate job interval of 750 ms. Those
+samples follow the last retained underrun, so they do not measure budget
+pressure at that earlier instant. This evidence does not justify another
+pump-limit increase; RC6 keeps the 92-pump bound and its counter.
+
+The source review identified a separate ring-wrap publication gap. A native
+refill ticket stops at the end of the circular buffer. A completed replacement
+job can therefore publish only a short tail and leave its wrapped remainder
+staged until the next visit. That visit observes consumption before draining
+staging, and the native protected frontier can then block the waiting remainder.
+RC6 drains at most two eligible refill segments before yielding. Each segment
+retains its own native lock, current frontier, mapping witnesses, command epoch
+and Unlock publication check. If no bytes publish, the drain stops immediately.
+One staged job is smaller than the ring, so at most one wrap is involved.
+The real-player regression reproduces RC5 leaving 36,608 bytes staged, then
+underrunning and calling Stop after two 50 ms native visits. With this bounded
+drain, all eligible checked bytes publish before that yield and those visits
+remain playing. No source-prefix API, source-job size, DATA-reader or scheduling
+change is made.
 
 Focused player checks cover clock drift, real underruns, finite/infinite
 playback, staging carry and bounded PIO draining/cancellation. Transport checks

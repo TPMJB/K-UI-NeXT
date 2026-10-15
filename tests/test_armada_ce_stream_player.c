@@ -568,6 +568,56 @@ int main(void) {
         CHECK(!player.disabled && player.model.native_running && !player.model.recoveries);
     }
     ++cases;
+    /* The final replacement, not the first source/refill pair, crosses the
+     * native ring boundary. A one-sector end-of-repeat fragment first ends
+     * at R-1024; its full16-sector replacement must publish both the short
+     * tail and the wrapped remainder before the worker yields. Otherwise
+     * the first50ms visit moves the native copied frontier past ring0 and
+     * blocks that remainder; the second50ms visit reports UNDERRUN. */
+    reset(true,128u);bus.pio_ready=true;prime();
+    CHECK(!player.read_active && !player.model.read.id && !player.model.refill.id &&
+        player.model.staged<64u);
+    {
+        const uint32_t ring_bytes=KUI_ARMADA_CE_STREAM_RING_BYTES;
+        const uint32_t first_bytes=2304u,initial_ready=12000u;
+        const uint64_t produced=ring_bytes-1024u-first_bytes;
+        const uint64_t span=128u*2352u;
+        const uint64_t fetch=2u*span-first_bytes;
+        player.model.origin=fetch-produced;
+        player.model.produced=produced;player.model.consumed=produced-initial_ready;
+        player.model.fetch=fetch;player.model.staged=0u;player.stage_head=0u;
+        player.model.audible=player.model.origin+player.model.consumed;
+        player.model.last_play=(uint32_t)(player.model.consumed%ring_bytes);
+        player.model.last_ms=bus.now;
+        bus.cursor=player.model.last_play;
+        bus.frontier=(bus.cursor+11008u)%ring_bytes;
+        player.model.write_cursor=bus.frontier;
+        uint8_t *host_bytes=(uint8_t *)(uintptr_t)HOST;
+        memset(host_bytes,0xa5,ring_bytes);
+        for(uint64_t i=player.model.consumed;i<produced;i++)
+            host_bytes[i%ring_bytes]=expected_byte(player.model.origin+i);
+        uint32_t before_source=player.source_total;
+        unsigned before_submits=bus.submits,before_stops=bus.stops;
+        visit();
+        uint64_t published_before_yield=player.model.produced;
+        uint32_t staged_before_yield=player.model.staged;
+        CHECK(!player.disabled && player.source_total-before_source==first_bytes+RAW_BYTES &&
+            bus.submits-before_submits==2u && !player.read_active && !bus.pending);
+        for(unsigned i=0;i<2u;i++) {
+            bus.now+=50u;bus.cursor=(bus.cursor+8820u)%ring_bytes;
+            bus.frontier=(bus.cursor+11008u)%ring_bytes;visit();
+        }
+        if(published_before_yield!=produced+first_bytes+RAW_BYTES ||
+           staged_before_yield>=64u || player.model.recoveries)
+            fprintf(stderr,"replacement wrap: published=%" PRIu64 " expected=%" PRIu64
+                " staged=%" PRIu32 " recoveries=%" PRIu32 " stops=%u\n",
+                published_before_yield,produced+first_bytes+RAW_BYTES,staged_before_yield,
+                player.model.recoveries,bus.stops-before_stops);
+        CHECK(published_before_yield==produced+first_bytes+RAW_BYTES && staged_before_yield<64u &&
+            !player.disabled && player.model.native_running && !player.model.recoveries &&
+            bus.stops==before_stops);
+    }
+    ++cases;
     /* A command arriving between one-block masks prevents any old source
      * ticket from reaching staging, even if furtherPIO bytes are ready. */
     reset(true,128u);bus.pio_ready=true;bus.stale_source=true;CHECK(source());

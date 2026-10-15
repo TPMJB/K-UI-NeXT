@@ -428,7 +428,7 @@ def build(args):
                 "packaging_corruption_checks": checks,
                 "output_member_sizes_sha256_crc32_verified": True}}
     files["build.json"] = (json.dumps(info, indent=2) + "\n").encode()
-    files["README.md"] = f"""# K-UI 2.0 RC5 — Armada CD music
+    files["README.md"] = f"""# K-UI 2.0 RC6 — Armada CD music
 
 Menu and optional audio loader build **{stamp}**. Merge this ZIP's `KUI` folder
 onto the SCI microSD card with the console off, replacing **both**
@@ -436,18 +436,18 @@ onto the SCI microSD card with the console off, replacing **both**
 
 Select **Original Armada → Y Options → CD music On → START**. This test streams
 the requested audio tracks from your image; it is not the earlier two-second
-excerpt loop. RC5 adds16bounded pump iterations for token-search work:
-92total, enough for a whole16-sector read plus4KiB of extra token-clock work.
-RC4's76iterations barely covered a full job, so token slices could push its
-final blocks into another native timer visit. Each pump still restores
-interrupts and stops on incomplete DMA, DATA handoff, cancellation or completion.
+excerpt loop. RC6 drains both eligible pieces of a completed audio refill
+when it crosses the circular-buffer boundary. RC5 could publish the short tail,
+leave the wrapped remainder staged, then check for underrun before publishing
+that remainder on its next worker visit.
 
-RC4 recorded3underruns and a550ms maximum source job, versus13and1,152ms in
-the prior run. RC5 preserves16-sector reads,75-block urgent grants, priority2,
-one-second restart and immediate completed-read publication. It also records
-budget yields in sample AUX bits4–7 (count since prior sample, saturating at15).
-This exposes whether the bound is still reached; console playback remains the
-required confirmation.
+The drain is bounded to two segments, stops when publication makes no progress,
+and retains native locking, current protected-frontier checks, mapping witnesses,
+command-epoch checks and Unlock publication for each segment. The92-pump bound,
+16-sector reads,75-block urgent grants, priority2 and one-second restart remain.
+Sample AUX bits4–7 still count forced budget yields; the six retained RC5 rows
+showed zero, so this candidate does not raise that limit again. Sustained console
+playback remains the required confirmation.
 
 Use the same in-game scene where the earlier loop was audible. No main-menu
 wait or gameplay video is requested. Return with **A+B+X+Y+Start** after music
@@ -529,7 +529,7 @@ def main():
     parser.add_argument("--elf", type=Path, default=ROOT / "build/kui-runtime.elf")
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     parser.add_argument("--evidence", action="append", default=[], metavar="NAME=PATH")
-    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-2.0-RC5-Armada-Audio.zip")
+    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-2.0-RC6-Armada-Audio.zip")
     args = parser.parse_args()
     try:
         build(args)

@@ -569,6 +569,17 @@ static bool refill(void) {
     if(!ok) refuse(KUI_ARMADA_CE_EXCERPT_COPY);
     return ok && released;
 }
+static bool drain_refill(void) {
+    /* One staged job is smaller than the ring. A native ticket ends at the
+     * ring boundary, so its wrapped remainder may need one more ticket.
+     * Do not yield while that checked remainder can still be published. */
+    for(unsigned segment=0;segment<2u;segment++) {
+        uint64_t before=player.model.produced;
+        if(!refill()) return false;
+        if(player.model.produced==before || player.model.staged<64u) break;
+    }
+    return true;
+}
 static bool source(void) {
     struct kui_armada_ce_stream_transport_snapshot progress;
     if(!mail_current()) return true;
@@ -698,7 +709,7 @@ static void step(uint32_t sr,uint32_t fpscr) {
     if(player.model.state==KUI_ARMADA_CE_STREAM_PREFILL || player.model.state==KUI_ARMADA_CE_STREAM_PLAYING) {
         if(!player.stats.buffer && !create_buffer()) goto failed;
         uint32_t before=player.source_total;
-        if(!refill() || !source() || !refill() || !start()) goto failed;
+        if(!drain_refill() || !source() || !drain_refill() || !start()) goto failed;
         /* Once a job has been admitted and drained, lend its replacement to
          * SCI immediately. Waiting for the next fully guarded native visit
          * leaves the transport idle through the yield and position call.
@@ -708,7 +719,7 @@ static void step(uint32_t sr,uint32_t fpscr) {
             /* Ready PIO may finish this replacement too. Publish its PCM
              * before yielding: the next visit observes consumption first
              * and cannot count bytes left only in staging as fresh audio. */
-            if(!source() || !refill()) goto failed;
+            if(!source() || !drain_refill()) goto failed;
         }
     }
     switch(player.model.state) {
