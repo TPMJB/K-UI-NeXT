@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Package matched WinCE CDDA bounded-worker modules and the audio-off loader."""
+"""Package matched WinCE CDDA RAM-copy modules and the audio-off loader."""
 import argparse
 import gzip
 import json
@@ -94,13 +94,13 @@ def build(args):
     files["evidence/ordinary-ce-compile.json"] = ordinary_compile_bytes
     files["evidence/ordinary-ce-layout.json"] = json_bytes(check_directory(ordinary_directory, ce=True))
     files["evidence/ordinary-ce-config.txt"] = ordinary_config.encode()
-    archive = "source/K-UI-WinCE-CDDA-Worker-Budget-" + stamp + ".tar.gz"
+    archive = "source/K-UI-WinCE-CDDA-RAM-Copy-" + stamp + ".tar.gz"
     files[archive] = gzip.compress(git("archive", "--format=tar",
         "--prefix=K-UI-WinCE-CDDA-Diagnostics/", args.commit), mtime=0)
     for name in ("wince-cdda-diagnostic-test.md", "wince-cdda-worms-test.md",
                  "wince-cdda-next-titles.md", "wince-cdda-refill-fix.md",
                  "wince-cdda-diagnostic-result-62687.md", "wince-cdda-worker-budget-test.md",
-                 "wince-cdda-refill-console-result.md"):
+                 "wince-cdda-refill-console-result.md", "wince-cdda-copy-test.md"):
         files["docs/" + name] = (ROOT / "docs" / name).read_bytes()
     for specification in args.evidence:
         add_evidence(files, specification)
@@ -115,6 +115,8 @@ def build(args):
         "ordinary_ce": {"package": ordinary_member, "envelope": ordinary_info,
                         "compile": ordinary_compile, "sha256": digest(ordinary)},
         "playing_worker_pumps_per_step": 32,
+        "aligned_ram_copy_bytes": 4, "worms_copy_guard_bytes": 64,
+        "worker_scheduling_retuned": False,
         "urgent_worker_polled_reception": True, "irq_data_dma_path_retained": True,
         "cooked_model_track_control_decoded": True,
         "terminal_pages": 4, "last_underrun_context_frozen": True,
@@ -124,23 +126,24 @@ def build(args):
         "dependency_source_provenance": provenance,
         "source_archive_sha256": {name: digest(data) for name, data in files.items()
                                   if name.endswith(".tar.gz")}})
-    files["README.md"] = (f"# K-UI WinCE CDDA bounded-worker candidate\n\n"
+    files["README.md"] = (f"# K-UI WinCE CDDA RAM-copy candidate\n\n"
         f"Build **{stamp}**. This new binary has not been tested on console.\n\n"
         "Merge the `KUI` folder onto the SCI card with the console off, then cold boot. "
         "This updates the matching menu, Armada/BAM4/Worms CD-music modules and ordinary "
         "audio-off CE loader. The latter prevents an old Armada test payload from blocking "
         "the audio-off comparison. Previous working binaries remain in their earlier ZIPs.\n\n"
-        "The playing music worker now shares a 32-pump budget across its entire turn, "
-        "roughly 16 KiB of polled reception, and publishes checked audio before sleeping. "
-        "Full 16-sector requests, urgent reception, priorities, buffers and copy guards remain. "
-        "Actual throughput and game pacing still require console validation.\n\n"
+        "Aligned RAM audio copies now use four-byte integer accesses. Worms keeps "
+        "its same 64-byte copy guards and byte-based final padding. The successful "
+        "32-pump turn budget, full 16-sector requests, urgent reception, priorities, "
+        "sleeps and buffers remain. This may modestly reduce CPU work; game pacing "
+        "still requires console validation.\n\n"
         "Use Worms with Background loading and CD music On in the same match where Off "
         "was smooth. Check game responsiveness and music continuity for about two minutes. "
         "Settings save separately per image. No title-screen wait is required. "
         "If a cut occurs, A+B+X+Y+Start and a 20-second recording retain all four pages; "
         "the fourth page freezes the last underrun. Existing recordings have already been read. "
         "Cooked audio and reconstruction of discarded raw DATA sectors are unsupported.\n\n"
-        "See `docs/wince-cdda-worker-budget-test.md` for changes, evidence and limitations. "
+        "See `docs/wince-cdda-copy-test.md` for changes, evidence and limitations. "
         "Complete committed source, verified dependency sources/licenses, linked audits and "
         "member SHA256/CRC manifests are included. No game executable, CE kernel, "
         "sound firmware or PCM sample is distributed.\n").encode()
@@ -157,7 +160,7 @@ def main():
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     parser.add_argument("--evidence", action="append", default=[], metavar="NAME=PATH")
     parser.add_argument("--output", type=Path,
-        default=DELIVERABLES / "K-UI-2.0-WinCE-CDDA-Worker-Budget-Test.zip")
+        default=DELIVERABLES / "K-UI-2.0-WinCE-CDDA-RAM-Copy-Test.zip")
     build(parser.parse_args())
 
 

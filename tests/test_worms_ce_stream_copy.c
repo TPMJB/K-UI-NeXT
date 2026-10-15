@@ -67,6 +67,16 @@ int main(int argc,char **argv) {
     uint64_t produced=player.model.produced;
     CHECK(refill() && chunk_calls==3u && player.model.produced==produced+192u && !player.model.staged);
     CHECK(!bus.consumer && !bus.lock_held && bus.unlocks==1u);++cases;
+    /* One aligned full chunk followed by a padded partial chunk and the
+     * remaining EOF silence. Unlock checks every PCM and padding byte. */
+    copy_fixture(16384u,68u,4096u,5312u);
+    player.model.infinite=false;
+    player.model.fetch=player.model.finite_end=player.model.origin+player.model.produced+68u;
+    uint32_t padded=KUI_ARMADA_CE_STREAM_STAGE_BYTES&~63u;
+    memset((void *)(uintptr_t)(HOST+16384u),0xa5,padded);
+    produced=player.model.produced;
+    CHECK(refill() && chunk_calls==padded/64u && player.model.produced==produced+padded && !player.model.staged);
+    CHECK(!bus.consumer && !bus.lock_held && bus.unlocks==1u);++cases;
     copy_fixture(16320u,192u,4096u,5312u);produced=player.model.produced;
     CHECK(refill() && !chunk_calls && player.model.produced==produced && player.model.staged==192u &&
         !player.model.refill.id && !player.disabled);++cases;

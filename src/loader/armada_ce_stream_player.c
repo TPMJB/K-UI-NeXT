@@ -141,7 +141,17 @@ static void update_priority(bool active) {
 }
 static void copy_bytes(void *to,const void *from,uint32_t bytes) {
     volatile uint8_t *dst=to;const volatile uint8_t *src=from;
-    for(uint32_t i=0;i<bytes;i++) dst[i]=src[i];
+    /* These are RAM aliases, not registers. SH4 requires aligned word
+     * accesses; keep exact byte bounds and the forward carry-copy order.
+     * may_alias also permits the same helper on authored byte buffers. */
+    typedef uint32_t copy_word __attribute__((may_alias));
+    if(!(((uintptr_t)dst|(uintptr_t)src)&3u)) {
+        while(bytes>=4u) {
+            *(volatile copy_word *)dst=*(const volatile copy_word *)src;
+            dst+=4u;src+=4u;bytes-=4u;
+        }
+    }
+    while(bytes--) *dst++=*src++;
 }
 static bool same_words(const void *a,const void *b,uint32_t bytes) {
     const uint32_t *x=a,*y=b;
@@ -654,7 +664,9 @@ static enum worms_copy_result worms_copy_ticket(
         if(result==WORMS_COPY_OK) {
             volatile uint8_t *to=(volatile uint8_t *)(uintptr_t)(target+at);
             const volatile uint8_t *from=(const volatile uint8_t *)(uintptr_t)(STAGE_BEGIN+player.stage_head+at);
-            for(uint32_t i=0;i<64u;i++) to[i]=at+i<ticket->audio_bytes?from[i]:0u;
+            if(at+64u<=ticket->audio_bytes)
+                copy_bytes((void *)to,(const void *)from,64u);
+            else for(uint32_t i=0;i<64u;i++) to[i]=at+i<ticket->audio_bytes?from[i]:0u;
         }
         mask_end(saved);
         if(result!=WORMS_COPY_OK) return result;
@@ -725,7 +737,7 @@ static bool refill(void) {
 #else
             volatile uint8_t *target=(volatile uint8_t *)(uintptr_t)regions[0];
             const volatile uint8_t *stage=(const volatile uint8_t *)(uintptr_t)(STAGE_BEGIN+player.stage_head);
-            for(uint32_t i=0;i<ticket.audio_bytes;i++) target[i]=stage[i];
+            copy_bytes((void *)target,(const void *)stage,ticket.audio_bytes);
             for(uint32_t i=ticket.audio_bytes;i<ticket.bytes;i++) target[i]=0;
 #endif
             for(uint32_t i=0;i<pages;i++) {

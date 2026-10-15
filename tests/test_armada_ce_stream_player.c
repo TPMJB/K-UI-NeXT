@@ -700,6 +700,27 @@ static void initialized_track_controls(void) {
     }
     CHECK(!initialize_fixture(&cooked));++cases;
 }
+static void ram_copy_boundaries(void) {
+    _Alignas(4) uint8_t src[160],dst[160],expected[160];
+    for(unsigned i=0;i<sizeof(src);i++) src[i]=(uint8_t)(i*29u+7u);
+    /* Every alignment and tail; compare untouched destination canaries too.
+     * UBSan rejects a word access if the SH4 alignment gate is bypassed. */
+    for(unsigned s=0;s<4u;s++) for(unsigned d=0;d<4u;d++)
+        for(unsigned bytes=0;bytes<=129u;bytes++) {
+            memset(dst,0xa5,sizeof(dst));memcpy(expected,dst,sizeof(dst));
+            memcpy(expected+8u+d,src+8u+s,bytes);
+            copy_bytes(dst+8u+d,src+8u+s,bytes);
+            CHECK(!memcmp(dst,expected,sizeof(dst)));
+        }
+    /* The staging carry compacts toward lower addresses and may overlap. */
+    for(unsigned gap=1;gap<=64u;gap++) for(unsigned bytes=0;bytes<=64u;bytes++) {
+        memcpy(dst,src,sizeof(dst));memcpy(expected,src,sizeof(expected));
+        memmove(expected+8u,expected+8u+gap,bytes);
+        copy_bytes(dst+8u,dst+8u+gap,bytes);
+        CHECK(!memcmp(dst,expected,sizeof(dst)));
+    }
+    ++cases;
+}
 int main(int argc,char **argv) {
     void *source_mapping=mmap((void *)(uintptr_t)KUI_ARMADA_CE_EXCERPT_POOL_BEGIN,512u*1024u,
         PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0);
@@ -712,7 +733,7 @@ int main(int argc,char **argv) {
         CHECK(munmap(source_mapping,512u*1024u)==0 && munmap(host,0x60000u)==0);
         printf("armada checked-head cache: %u cases, %u checks\n",cases,checks);return 0;
     }
-    initialized_track_controls();
+    ram_copy_boundaries();initialized_track_controls();
     if(argc==2 && !strcmp(argv[1],"--initialize-only")) {
         CHECK(munmap(source_mapping,512u*1024u)==0 && munmap(host,0x60000u)==0);
         printf("CE player track initialization: %u cases, %u checks\n",cases,checks);return 0;
