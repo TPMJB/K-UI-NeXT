@@ -1,24 +1,30 @@
 # Games feature-parity roadmap
 
 Source review: 2026-10-15, `release/2.0-tyrfing` integration source. The first
-Games-options increment and the initial native LZ4 ZSO slice are implemented
+Games-options increment and the native LZ4/LZO1X ZSO slices are implemented
 in source, with console acceptance pending. Later increments remain a plan. The historical comparison is in
 [the legacy Games audit](audit-legacy-games.md). All future runtime work must
 be independently implemented; no DreamShell loader implementation is proposed
 for reuse.
 
+The user has deferred gameplay screenshots/hotkeys, new RAM-patch features,
+alternate executable selection, additional boot methods and per-game region
+overrides for this Tyrfing preparation. VMU emulation is also deferred. The
+existing two one-time native boot-patch slots remain unchanged; this is not
+a request for recurring patches, a patch database or new resident hooks.
+
 ## Sequence
 
 | Increment | Deliverable | Current boundary |
 | --- | --- | --- |
-| 1 — implemented; console acceptance pending | Two bounded RAM patches, detected defaults, persistent launch report | Validate/apply patches after the original executable CRC, before handoff; keep unsafe targets out. Defaults must come from the inspected image. Save launch evidence before KOS/filesystem teardown. Native non-CDDA only; CE/CDDA admission is refused. See [launch options](games-launch-options.md) and the updated audit. |
-| 2 — first slice implemented; console acceptance pending | Independent standard LZ4 ZSO block reader, inspection and dedicated native launch path | Development capability only: native SCI Standard, one cooked track, 2048-byte blocks, 32 map slots/31 physical fragments. Separate package/audit gates must pass before a test package is supplied. The development Play route requests an unvalidated-on-console capability; it does not establish compatibility or final-release acceptance. See [ZSO scope](games-zso.md). |
-| 3a — planned | CSO v1 DEFLATE, then CSO v2 mixed methods; explicit LZO dialect later | Each decoder needs its own bounded workspace and malformed-input tests. Keep offline import working for all unsupported sizes/codecs. |
+| 1 — implemented; console acceptance pending | Two bounded RAM patches, detected defaults, temporary unsaved baseline, Check executable, persistent preparation report | Validate/apply patches after the original executable CRC, before handoff; keep unsafe targets out. Defaults must come from the inspected image. Save launch evidence before KOS/filesystem teardown. RAM patches remain native non-CDDA only; Check and baseline preserve the existing CE/CDDA admission. See [launch options](games-launch-options.md) and the updated audit. |
+| 2 — first slice implemented; console acceptance pending | Independent standard LZ4 / explicit historical LZO1X ZSO readers, inspection and dedicated native launch paths | Development capability only: native SCI Standard, one cooked track, 2048-byte blocks, 32 map slots/31 physical fragments. Separate package/audit gates must pass before a test package is supplied. The development Play route requests an unvalidated-on-console capability; it does not establish compatibility or final-release acceptance. See [ZSO scope](games-zso.md). |
+| 3a — planned | CSO v1 DEFLATE, then CSO v2 mixed methods | Each decoder needs its own bounded workspace and malformed-input tests. Keep offline import working for all unsupported sizes/codecs. |
 | 3b — planned | Direct CHD: portable hunk/track reader, then a protected native runtime | Common CHDv5 CD/GD needs `cdlz`/`cdzl`/`cdfl`, hunk/map decoding and metadata normalization. Default 19584-byte hunks plus codec state exceed the whole low reservation. K-UI's own CHDv4 exports are a distinct first prototype. Prove hunk decoding with MAME oracles before choosing runtime memory; no enabled Play claim or unchecked game-RAM reservation. See [CHD design](games-chd.md). |
 | 4 — deferred by user | Emulated VMU prototype | Not part of the current Tyrfing preparation. Future work needs Maple command interception and a safe writable backing store; the existing VMU Manager is not gameplay emulation. No use of unreserved game RAM or KOS after handoff. |
-| 5 — planned separately; not implemented | Runtime screenshots and configurable hotkeys | Needs input observation, framebuffer interpretation and safe output ownership before a working screenshot option can be offered. No full-frame allocation in the current low resident. Scope each proven video/reader profile independently. |
-| 6 | Last-game selection, category/library improvements, shortcuts, optional game previews | These can be separate shell changes; they need not wait for runtime milestones. Keep a shortcut bound to an inspected image and saved settings. Audio previews must yield to foreground I/O. |
-| As needed | Region override, alternate executable/boot modes, placement controls | Start from a concrete failing game and independently established requirements. Old DreamShell numeric options are not equivalent parameters for this loader. |
+| 5 — deferred by user; not implemented | Runtime screenshots and configurable hotkeys | Needs input observation, framebuffer interpretation and safe output ownership before a working screenshot option can be offered. No full-frame allocation in the current low resident. Scope each proven video/reader profile independently. |
+| 6 — alphabetical listing and last selection implemented | Category/library improvements, shortcuts, optional game previews remain | Games now sorts every page and restores its last folder/highlight by name, including after insertions. See [library behaviour](games-library.md). Flat recursive categories, shortcuts and previews remain independent follow-ups. Audio previews must yield to foreground I/O. |
+| Deferred by user | Region override, alternate executable/boot modes, placement controls | Start from a concrete failing game and independently established requirements. Old DreamShell numeric options are not equivalent parameters for this loader. |
 
 G1 SD adapter hardware experiments remain excluded. Wireless networking does
 not make network shares supported game-launch media. Existing WinCE/CDDA
@@ -27,7 +33,7 @@ the native ZSO slice does not enable it for compressed images.
 
 ## Direct compressed images: implemented first slice
 
-The new source reads standard LZ4 ZSO directly through independent bounded C
+The new source reads standard LZ4 or explicitly selected historical LZO1X ZSO directly through independent bounded C
 callbacks. Shell inspection and the detached native reader share the container
 and logical-read implementation. The complete matching package still needs
 console acceptance; the development launch route is available only inside the
@@ -35,14 +41,14 @@ stated first-slice boundary. It is not a published 2.0 capability guarantee.
 
 **Standard LZ4 and historical LZO ZSO can share `ZISO` magic/version.** K-UI's
 existing ripper exports the historical LZO dialect. Neither extension nor magic
-proves the codec. This live implementation admits standard LZ4 only and does
-not guess/fall back to LZO. Keep
+proves the codec. The per-image codec chooser selects exactly one decoder before inspection and does
+not guess or fall back to another codec. Keep
 `game_image_import.py --zso-codec lzo` as the offline conversion route.
 
 The actual contract is one cooked ISO DATA track, native executable, Standard
 reader, SCI storage and exactly 2048 decoded bytes per independent block.
 Header/index geometry, overflow, strictly increasing offsets outside the
-index, terminal bounds, raw-block lengths, LZ4 matches/end conditions and
+index, terminal bounds, raw-block lengths, codec matches/end conditions and
 padding are checked. Preparation scans the whole index in bounded pages;
 the detached reader rechecks its chosen pair and decodes through a fixed
 512-byte physical cache into the requester's sector output. No full index,
@@ -51,30 +57,31 @@ WinCE, CDDA, background loading and executable RAM patches are outside this
 path. A single ISO does not retain its original audio inventory; represent
 that as unknown, not proof that the disc had no audio.
 
-The separate `KUIRZS01` manifest covers the entire physical compressed file,
+The separate `KUIRZS01` (LZ4) / `KUIRLS01` (LZO1X) manifests cover the entire physical compressed file,
 including header/index, and carries its distinct decoded geometry. It has
 32 slots: one logical cooked track and at most 31 physical fragments. The
 ordinary retail map/reader contract is unchanged. The dedicated outer launch
-header is `KUIRZB01`; its shipped manifest is blank and it contains no RAM-patch
+headers are `KUIRZB01` / `KUIRLB01`; each shipped manifest is blank and contains no RAM-patch
 capability.
 
 Implemented seams:
 
 - `include/kui/zso.h`, `src/core/zso.c`: independent header/index validation
-  and bounded standard LZ4 block decoding.
+  and bounded standard LZ4 / historical LZO1X block decoding.
 - `include/kui/retail_zso.h`, `src/core/retail_zso.c`: physical-container
   extent mapping and the shared read-only logical sector adapter.
 - `src/core/game_image.c`, Games inspection/artwork and
   `src/apps/games_retail.c`: admitted container discovery, metadata/boot
   inspection, physical mapping, preparation checks and package selection.
-- Separately compiled native ZSO stage/resident in `build/retail-zso`: SCI
+- Separately compiled native stage/resident pairs in `build/retail-zso` and
+  `build/retail-lzo`: SCI
   Standard only, within the existing low reservation and guarded stack.
 - `tools/zso_package.py`, `tools/check_zso_loader.py`: distinct outer contract,
   linked embed/placement checks, final compiler stack reports and mandatory
   integer-instruction audit. Ordinary native/CE gates remain in force.
 
 See [the full ZSO limits and acceptance checklist](games-zso.md). CSO, CHD,
-larger blocks and a live historical-LZO reader remain later work. Host
+and larger blocks remain later work. Host
 format/inspection tests alone must never be described as successful gameplay.
 The requested direct CHD follow-up has a separate [implementation design](games-chd.md);
 its current supported route remains PC import with MAME `chdman`.
@@ -108,7 +115,7 @@ stored bytes can still lose to decode cost, index seeks or short card streams.
 
 **VMU emulation is deferred at the user's request.** Its design below is a
 future reference, not active implementation scope for Tyrfing. Runtime
-screenshots and their hotkeys remain a separate planned feature; the current
+screenshots and their hotkeys are also deferred; the current
 Games options do not implement them. The two manual executable RAM-patch slots
 are independent of either feature and are not a patch database or hotkey system.
 
@@ -139,7 +146,7 @@ Deferred VMU sequence:
    Start without CDDA/background/CE, which require separate bus and interrupt
    ownership proofs.
 
-Planned screenshot sequence:
+Deferred screenshot sequence:
 
 1. In an owned runtime, validate framebuffer base/size/stride/pixel format and
    implement bounded BMP output. Check VRAM ranges, double buffers and the

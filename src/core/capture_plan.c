@@ -7,6 +7,40 @@ static uint32_t get32(const uint8_t *p) {
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
 }
 static void put32(uint8_t *p,uint32_t n) { for(unsigned i=0;i<4;i++) p[i]=(uint8_t)(n>>(8*i)); }
+bool kui_capture_retry_limit_valid(unsigned limit) {
+    return !limit || limit==1u || limit==5u || limit==10u || limit==20u || limit==50u;
+}
+static bool cd_plan_valid(const struct kui_capture_plan *plan) {
+    if(!plan || plan->profile!=KUI_CAPTURE_PROFILE_CD_TOC || !plan->count || plan->count>99u) return false;
+    uint64_t bytes=0;
+    for(unsigned i=0;i<plan->count;i++) {
+        const struct kui_capture_track *t=&plan->tracks[i];
+        if(t->number!=i+1u || t->session || (t->control!=0u && t->control!=4u) ||
+           t->start<150u || t->start>=t->end || t->end!=t->toc_end || t->end>720000u ||
+           (i && t->start!=plan->tracks[i-1u].end)) return false;
+        uint64_t n=(uint64_t)(t->end-t->start)*KUI_RAW_BYTES;
+        if(n>UINT32_MAX) return false;
+        bytes+=n;
+    }
+    return bytes==plan->bytes;
+}
+const char *kui_capture_profile_name(const struct kui_capture_plan *plan) {
+    if(!plan) return NULL;
+    if(plan->profile==KUI_CAPTURE_PROFILE_GD) return KUI_CAPTURE_PROFILE;
+    return cd_plan_valid(plan)?KUI_CAPTURE_CD_PROFILE:NULL;
+}
+bool kui_plan_cd_tracks(const struct kui_toc *toc,struct kui_capture_plan *out) {
+    if(!toc || !out || !toc->count || toc->count>99u) return false;
+    struct kui_capture_plan plan={.profile=KUI_CAPTURE_PROFILE_CD_TOC,.count=toc->count};
+    for(unsigned i=0;i<toc->count;i++) {
+        const struct kui_track *t=&toc->tracks[i];
+        if(t->end<=t->start) return false;
+        plan.tracks[i]=(struct kui_capture_track){t->number,t->control,0u,t->start,t->end,t->end};
+        plan.bytes+=(uint64_t)(t->end-t->start)*KUI_RAW_BYTES;
+    }
+    if(!cd_plan_valid(&plan)) return false;
+    *out=plan;return true;
+}
 const char *kui_bench_fad_note(const struct kui_toc sessions[2], uint32_t fad, bool audio) {
     if(!sessions) return NULL;
     for(unsigned area=0;area<2;area++) {
@@ -113,6 +147,27 @@ static bool cue_append(char *out,size_t capacity,size_t *used,const char *format
 bool kui_capture_cue_encode(const struct kui_capture_plan *plan,const uint8_t modes[99],
     char *out,size_t capacity,size_t *bytes) {
     if(!plan || !modes || !out || !bytes || !plan->count || plan->count>99u) return false;
+    const char *profile=kui_capture_profile_name(plan);if(!profile) return false;
+    if(plan->profile==KUI_CAPTURE_PROFILE_CD_TOC) {
+        size_t used=0;
+        if(!cue_append(out,capacity,&used,"REM CAPTURE_PROFILE %s\nREM TOC INDEX01 ONLY; INDEX00 AND SUBCHANNELS NOT CAPTURED\n",profile)) return false;
+        for(unsigned i=0;i<plan->count;i++) {
+            const struct kui_capture_track *t=&plan->tracks[i];
+            if(t->control==4u && modes[i]!=1u && modes[i]!=2u) return false;
+            if(!cue_append(out,capacity,&used,"FILE \"track%02u.%s\" BINARY\n  TRACK %02u ",
+                i+1u,t->control==4u?"bin":"raw",i+1u)) return false;
+            if(t->control==4u) {
+                if(!cue_append(out,capacity,&used,"MODE%u/2352\n",modes[i])) return false;
+            } else if(!cue_append(out,capacity,&used,"AUDIO\n")) return false;
+            if(!i && t->start>150u) {
+                uint32_t gap=t->start-150u;
+                if(!cue_append(out,capacity,&used,"    PREGAP %02u:%02u:%02u\n",
+                    gap/4500u,(gap/75u)%60u,gap%75u)) return false;
+            }
+            if(!cue_append(out,capacity,&used,"    INDEX 01 00:00:00\n")) return false;
+        }
+        *bytes=used;return true;
+    }
     size_t used=0;bool high=false;
     if(!cue_append(out,capacity,&used,"REM CAPTURE_PROFILE %s\n",KUI_CAPTURE_PROFILE)) return false;
     for(unsigned i=0;i<plan->count;i++) {

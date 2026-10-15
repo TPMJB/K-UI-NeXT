@@ -2,6 +2,7 @@
 #include "kui/games_covers.h"
 #include "kui/cover_image.h"
 #include "kui/game_image.h"
+#include "kui/game_launch_settings.h"
 #include "kui/game_metadata.h"
 #include "kui/pvr_texture.h"
 #include "kui/retail_image.h"
@@ -259,8 +260,12 @@ static void detail_cover(void *ctx, kui_log_fn log, kui_cancel_fn cancel) {
 }
 bool kui_games_inspect_cover(const char *path, struct kui_games_detail *out,
     uint16_t pixels[KUI_COVER_PIXELS], kui_log_fn log, kui_cancel_fn cancel) {
-    struct detail_job job = {path, out, pixels};
-    return kui_games_inspect_with(path, out, detail_cover, &job, log, cancel);
+    return kui_games_inspect_cover_codec(path,KUI_ZSO_LZ4,out,pixels,log,cancel);
+}
+bool kui_games_inspect_cover_codec(const char *path,enum kui_zso_codec codec,struct kui_games_detail *out,
+    uint16_t pixels[KUI_COVER_PIXELS],kui_log_fn log,kui_cancel_fn cancel) {
+    struct detail_job job = {path,out,pixels};
+    return kui_games_inspect_with_codec(path,codec,out,detail_cover,&job,log,cancel);
 }
 
 /* ---- The scan ---- */
@@ -541,6 +546,13 @@ static enum outcome build(struct scan *s, const char *key, const char *gdi_path)
         if(s->log) s->log("Box art: %s: compressed image requires offline import",key);
         return OUT_FAILED;
     }
+    size_t leaf_bytes=strlen(slash+1);
+    bool zso=leaf_bytes>=4u && same_name(slash+1+leaf_bytes-4u,".zso");
+    struct kui_game_launch_settings choice;
+    kui_game_launch_settings_default(&choice);
+    /* The scan already owns the mounted volume. An unread preference file
+     * is not permission to guess the codec or overwrite its cover record. */
+    if(zso && !kui_game_launch_settings_load(gdi_path,&choice,s->log))return OUT_FAILED;
     struct kui_cover_record record;
     memset(&record, 0, sizeof(record));
     char path[PATH_CAP], user[PATH_CAP] = "";
@@ -561,9 +573,11 @@ static enum outcome build(struct scan *s, const char *key, const char *gdi_path)
         struct kui_cover_record old;
         if(record_open(key, gdi_path, &file, &old)) {
             f_close(&file);
-            /* Records produced before a layout could be parsed have no disc
-             * title. Retry those so newly supported images can acquire art. */
-            if(old.title[0] && same_stamp(&old.gdi, &record.gdi) && same_stamp(&old.user, &record.user)) return OUT_UNCHANGED;
+            /* Old records do not carry a codec. Recheck ZSO during explicit
+             * scans so a changed preference never reuses another decoder's
+             * result; selected-art RAM/disk caches remain unchanged. Records
+             * without a parsed title also need a retry. */
+            if(!zso && old.title[0] && same_stamp(&old.gdi, &record.gdi) && same_stamp(&old.user, &record.user)) return OUT_UNCHANGED;
         }
     }
     /* Bounded image metadata, then IP and the root directory for title/art. */
@@ -578,7 +592,7 @@ static enum outcome build(struct scan *s, const char *key, const char *gdi_path)
     if(!image) io = true;
     else {
         struct kui_game_file_ops ops = {&files, image_stat, image_read};
-        enum kui_game_result r = kui_game_image_open_named(slash+1, &ops, image);
+        enum kui_game_result r = kui_game_image_open_named_codec(slash+1,&ops,(enum kui_zso_codec)choice.codec,image);
         io = r == KUI_GAME_IO || r == KUI_GAME_CANCELLED || r == KUI_GAME_NOT_FOUND;
         have_image = r == KUI_GAME_OK;
         if(!have_image && !io && s->log) s->log("Box art: %s: %s", key, kui_game_result_name(r));

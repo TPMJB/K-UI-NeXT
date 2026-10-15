@@ -21,10 +21,14 @@ ZSO_CASES = (
     "zso-header-reserved", "zso-header-shift", "zso-windows-ce",
     "zso-cdda", "zso-background", "zso-patches", "zso-scif",
     "zso-source-header-change", "zso-source-index-change",
+    "zso-lzo-gd-shift0", "zso-lzo-cd11700-shift9", "zso-lzo-cd0-shift0",
+    "zso-lzo-fragments31", "zso-lzo-fragments32", "zso-lzo-wrong-codec",
+    "zso-lz4-as-lzo", "zso-lzo-wrong-package", "zso-lzo-payload-invalid",
 )
 ZSO_PREPARED = (
     "zso-gd-shift0", "zso-cd11700-shift9", "zso-cd0-shift0", "zso-fragments31",
     "zso-source-header-change", "zso-source-index-change",
+    "zso-lzo-gd-shift0", "zso-lzo-cd11700-shift9", "zso-lzo-cd0-shift0", "zso-lzo-fragments31",
 )
 
 
@@ -100,14 +104,33 @@ def decode_emitted(data):
     return bytes(out)
 
 
-def ziso(logical, shift):
+def lzo_block(source):
+    """Independent LZO1X emitter: either a distance-one M3 or one literal run.
+
+    Exact original bytes remain the oracle. The public miniLZO test suite
+    separately cross-checks these token forms and general compressor output.
+    """
+    def extended(value):
+        result = bytearray()
+        while value > 255:
+            result.append(0)
+            value -= 255
+        result.append(value)
+        return result
+    if len(set(source)) == 1:
+        return bytes((18, source[0], 32)) + extended(2048 - 1 - 33) + bytes((0, 0, 17, 0, 0))
+    return bytes((0,)) + extended(2048 - 18) + source + bytes((17, 0, 0))
+
+
+def ziso(logical, shift, codec="lz4"):
     count, align = len(logical) // 2048, 1 << shift
     first = (24 + (count + 1) * 4 + align - 1) // align * align
     body, index, raw_count = bytearray(first), [], 0
     for block in range(count):
         source = logical[block * 2048:(block + 1) * 2048]
-        compressed = lz4_block(source)
-        assert decode_emitted(compressed) == source
+        compressed = lzo_block(source) if codec == "lzo" else lz4_block(source)
+        if codec == "lz4":
+            assert decode_emitted(compressed) == source
         raw = block % 3 == 1 or len(compressed) >= 2048
         raw_count += raw
         index.append((len(body) >> shift) | (0x80000000 if raw else 0))
@@ -136,17 +159,19 @@ def make_zso_fixture(folder, case):
         sectors[0][62] = ord("1")
     logical = b"".join(sectors)
     shift = 9 if "shift9" in case or "fragments" in case else 0
-    data, index = ziso(logical, shift)
+    data, index = ziso(logical, shift, "lzo" if "-lzo-" in case else "lz4")
     if case == "zso-index-underflow":
         struct.pack_into("<I", data, 24, 0)
     if case == "zso-index-descending":
         struct.pack_into("<I", data, 24 + 32 * 4, index[31])
     if case == "zso-index-past-end":
         struct.pack_into("<I", data, 24 + len(sectors) * 4, (len(data) >> shift) + 1)
-    if case == "zso-payload-invalid":
+    if case in ("zso-payload-invalid", "zso-lzo-payload-invalid"):
         offset = (index[0] & 0x7fffffff) << shift
-        assert not index[0] & 0x80000000
-        data[offset:offset + 3] = bytes(3)  # Zero-distance match before any output.
+        data[offset:offset + 3] = bytes(3)
+        if "-lzo-" in case:
+            # The first metadata block may be raw; corrupt its IP signature.
+            data[offset:offset + 16] = b"INVALID-IP-BLOCK!"
     if case == "zso-header-version":
         data[20] = 2
     if case == "zso-header-blocksize":
@@ -157,7 +182,7 @@ def make_zso_fixture(folder, case):
         data[21] = 10
     (folder / "selected.zso").write_bytes(data)
     (folder / "zso-expected.iso").write_bytes(logical)
-    expected_extents = 31 if case == "zso-fragments31" else 0
+    expected_extents = 31 if case.endswith("fragments31") else 0
     (folder / "zso.expect").write_text(
         f"{int(case in ZSO_PREPARED)} {session} 3001 {len(sectors)} {len(data)} {shift} {expected_extents}\n"
         f"{zlib.crc32(logical[:32768]):08x} {zlib.crc32(logical[21 * 2048:21 * 2048 + 3001]):08x}\n",

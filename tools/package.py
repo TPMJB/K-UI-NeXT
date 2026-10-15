@@ -25,7 +25,7 @@ NATIVE_CDDA_PROFILES = {
     "mdk2": ("cdda-native-mdk2.kui", "retail-mdk2-cdda.kui"),
 }
 NATIVE_CDDA_FILES = tuple(names[0] for names in NATIVE_CDDA_PROFILES.values())
-GAME_FILES = ("probe.kui", "image-probe.kui", "retail-boot.kui", "zso-boot.kui", "ce-probe.kui", "probe.dat",
+GAME_FILES = ("probe.kui", "image-probe.kui", "retail-boot.kui", "zso-boot.kui", "lzo-boot.kui", "ce-probe.kui", "probe.dat",
               *WINCE_CDDA_FILES, *NATIVE_CDDA_FILES)
 
 
@@ -131,6 +131,7 @@ def guide(source):
     text = (ROOT / "docs" / source).read_text()
     for name in ("storage-testing", "storage-transports", "ext4-bootstrap", "bootloader-refresh", "boot-recovery",
                  "games-formats-test", "games-formats", "games-zso", "gdi-2048-test", "capture-format",
+                 "network-rip", "repair-copy", "cd-capture",
                  "wifi", "wifi-performance-test", "wifi-flash-arch", "sci-connector", "ftp"):
         # Preserve section anchors while matching the packaged uppercase names.
         text = re.sub(r"\(" + re.escape(name) + r"\.md(?=[)#])",
@@ -215,11 +216,14 @@ def write_capture_codec_notices(directory):
 
 
 def write_game_tools(bundle):
-    """Ship the independently authored PC converters beside their usage guides."""
+    """Ship PC helpers and their local guides in every installation tree."""
     tools = bundle / "tools"
     tools.mkdir(exist_ok=True)
-    for name in ("gdi_optimize.py", "game_image_import.py"):
+    for name in ("gdi_optimize.py", "game_image_import.py", "network_rip_server.py"):
         shutil.copyfile(ROOT / "tools" / name, tools / name)
+    for source in ("games-formats", "gdi-2048-test", "ripper-controls", "capture-format",
+                   "network-rip", "repair-copy", "cd-capture"):
+        (bundle / (source.upper() + ".md")).write_text(guide(source + ".md"), encoding="utf-8")
 
 
 def audit_wince_cdda(directory, data, profile):
@@ -352,8 +356,6 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
         shutil.copyfile(ROOT / f"resources/branding/release-v{release['version']}-banner.jpg",
                         bundle / "release-banner.jpg")
     if guide_version(release) in ("1.8.5", "2.0"):
-        for name in ("games-formats", "gdi-2048-test", "ripper-controls", "capture-format"):
-            (bundle / (name.upper() + ".md")).write_text(guide(name + ".md"), encoding="utf-8")
         write_game_tools(bundle)
     resolve_bundle_links(bundle, commit)
     write_capture_codec_notices(dist / "LICENSES")
@@ -379,7 +381,8 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
         "Start with START-HERE.md; RELEASE-NOTES.md lists compatibility and evidence limits.\n"
         "Merge the supplied KUI files into the SD root, preserving existing preferences and dumps.\n"
         + bootstrap_note +
-        ("PC converters are included under tools/. See GAMES-FORMATS.md for imported\n"
+        ("PC helpers are included under tools/. NETWORK-RIP.md describes direct PC\n"
+         "capture. See GAMES-FORMATS.md for imported\n"
          "compressed images, and GDI-2048-TEST.md for batch 2048-byte copies.\n"
          "RIPPER-CONTROLS.md and CAPTURE-FORMAT.md explain capture exports.\n"
          if guide_version(release) in ("1.8.5", "2.0") else "") +
@@ -392,9 +395,15 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
         "returns/stops without disabling later attempts. The separate bootstrap-cd\n"
         "artifact supplies optional tools.kui for read-only load measurement.\n"
         "Native standard/background and Windows CE launch payloads are installed.\n"
-        "Optional WinCE CD music modules cover the admitted US Armada, Bust-A-Move 4\n"
-        "and Worms Armageddon profiles. CD music defaults Off.\n"
-        "CE and background launch remain title-dependent SCI options; consult their guides.\n"
+        "Separate LZ4/LZO1X ZSO modules are included; see GAMES-ZSO.md for their limits.\n"
+        "Optional WinCE CD music uses four checked kernel/sound adapters established\n"
+        "from Armada, Bust-A-Move 4, Worms Armageddon and Worms World Party. Other\n"
+        "images require a matching checked runtime contract; unknown kernels are refused.\n"
+        "Separate experimental native modules retain Toy Commander raw/cooked DATA\n"
+        "and MDK2 executable/driver bindings. These are not general native CDDA support.\n"
+        "CD music defaults Off. Broader images and World Party remain Experimental;\n"
+        "see RELEASE-NOTES.md for admission, evidence and console acceptance limits.\n"
+        "CE and CD music remain SCI options with their existing runtime checks.\n"
         "No SD benchmark payload is included. ATA/IDE/CF is untested synchronous PIO;\n"
         "ATA DMA and Windows CE on IDE are not implemented.\n",
         encoding="utf-8")
@@ -449,6 +458,7 @@ def main():
     retail_bench = ROOT / "build/retail-bench/entry.elf"
     retail_ce = ROOT / "build/retail-ce/entry.elf"
     retail_zso = ROOT / "build/retail-zso/entry.elf"
+    retail_lzo = ROOT / "build/retail-lzo/entry.elf"
     run("python3", "tools/check_loader_layout.py")
     run("python3", "tools/check_image_loader_layout.py")
     run("python3", "tools/check_retail_loader_layout.py")
@@ -458,7 +468,8 @@ def main():
     run("python3", "tools/check_retail_loader_layout.py", "--ce", "build/retail-ce")
     run("python3", "tools/check_retail_instructions.py", "build/retail-ce")
     run("python3", "tools/check_zso_loader.py", "build/retail-zso")
-    for image in (elf, runtime, probe, image_probe, retail, retail_bench, retail_ce, retail_zso):
+    run("python3", "tools/check_zso_loader.py", "--codec", "lzo", "build/retail-lzo")
+    for image in (elf, runtime, probe, image_probe, retail, retail_bench, retail_ce, retail_zso, retail_lzo):
         compiled = json.loads(image.with_suffix(".compile.json").read_text())
         if (compiled["source_dirty"] or compiled["commit"] != commit or
                 compiled["elf_sha256"] != hashlib.sha256(image.read_bytes()).hexdigest()):
@@ -510,6 +521,10 @@ def main():
     zso_package = envelope(zso_payload, zso_memory, commit[:12])
     zso_info = inspect_zso(zso_package)
     (games / "zso-boot.kui").write_bytes(zso_package)
+    lzo_payload, lzo_memory = flatten_elf(retail_lzo.read_bytes())
+    lzo_package = envelope(lzo_payload, lzo_memory, commit[:12])
+    lzo_info = inspect_zso(lzo_package, "lzo")
+    (games / "lzo-boot.kui").write_bytes(lzo_package)
     bench_payload, bench_memory = flatten_elf(retail_bench.read_bytes())
     bench_package = envelope(bench_payload, bench_memory, commit[:12])
     bench_info = inspect_retail(bench_package)
@@ -535,6 +550,11 @@ def main():
                     ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
     (dist / "retail-zso-build/linked-audit.json").write_text(
         subprocess.check_output(["python3", "tools/check_zso_loader.py", "build/retail-zso"],
+                                cwd=ROOT, text=True), encoding="utf-8")
+    shutil.copytree(ROOT / "build/retail-lzo", dist / "retail-lzo-build",
+                    ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+    (dist / "retail-lzo-build/linked-audit.json").write_text(
+        subprocess.check_output(["python3", "tools/check_zso_loader.py", "--codec", "lzo", "build/retail-lzo"],
                                 cwd=ROOT, text=True), encoding="utf-8")
     # Menu music ships as the committed Ogg encodings recorded in the manifest.
     # A fresh folder cannot carry WAVs from an earlier local package.
@@ -583,6 +603,9 @@ def main():
     shutil.copyfile(ROOT / "tools/verify_salvage.py", dist / "verify_salvage.py")
     for src, name in (("capture-test.md", "CAPTURE-TEST.md"), ("capture-format.md", "CAPTURE-FORMAT.md"), ("memory-stats.md", "MEMORY-STATS.md"), ("optical-test.md", "OPTICAL-TEST.md"), ("performance-test-plan.md", "PERFORMANCE-TEST-PLAN.md")):
         (dist / name).write_text(guide(src))
+    if guide_version(release) in ("1.8.5", "2.0"):
+        write_game_tools(dist)
+    resolve_bundle_links(dist, commit)
     shutil.copyfile(ROOT / "tools/runtime_package.py", dist / "runtime_package.py")
     shutil.copytree(ROOT / "LICENSES", dist / "LICENSES", dirs_exist_ok=True)
     write_capture_codec_notices(dist / "LICENSES")
@@ -619,7 +642,7 @@ def main():
               "kind": package_kind(release, candidate),
               "runtime": runtime_info, "loader_probe": probe_info,
               "image_probe": image_probe_info,
-              "retail_boot": retail_info, "zso_boot": zso_info, "ce_probe": ce_info,
+              "retail_boot": retail_info, "zso_boot": zso_info, "lzo_boot": lzo_info, "ce_probe": ce_info,
               "wince_cdda_profiles": wince_profiles,
               "native_cdda_profiles": native_profiles,
               "hardware_tested": False,
@@ -653,6 +676,8 @@ def main():
     shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
     for name in ("START-HERE.md", "RELEASE-NOTES.md"):
         shutil.copyfile(dist / name, update / name)
+    if guide_version(release) in ("1.8.5", "2.0"):
+        write_game_tools(update)
     if release["version"].endswith("-formats-test"):
         shutil.copyfile(dist / "GAMES-FORMATS-TEST.md", update / "GAMES-FORMATS-TEST.md")
     bootstrap_note = ("Keep an existing compatible SCIF/SCI bootstrap. An older SCIF-only CD\n"
@@ -664,12 +689,13 @@ def main():
         "The diagnostic artifact from this same workflow run contains exact K-UI, KOS,\n"
         "FatFs, lwext4 and compiler runtime source records under source/. Dependency pins and\n"
         "original notices are also included in build.json and LICENSES/.\n\n"
-        "Install KUI/runtime.kui and the matching Games payload on your storage card.\n"
+        "Install KUI/runtime.kui and the complete matching KUI/apps/games folder.\n"
         + bootstrap_note +
-        ("PC converters are included under tools/. See GAMES-FORMATS.md for imported\n"
+        ("PC helpers are included under tools/. NETWORK-RIP.md describes direct PC\n"
+         "capture. See GAMES-FORMATS.md for imported\n"
          "compressed images, and GDI-2048-TEST.md for batch 2048-byte copies.\n"
          "RIPPER-CONTROLS.md and CAPTURE-FORMAT.md explain capture exports.\n"
-         if release["version"] == "1.8.5" else "") +
+         if guide_version(release) in ("1.8.5", "2.0") else "") +
         "Read STORAGE-TRANSPORTS.md before testing standalone SCI microSD or IDE/CF.\n"
         "The CD can read compatible ext4, but this runtime still needs FAT32/exFAT.\n"
         "Keep your card's filesystem; EXT4-BOOTSTRAP.md explains future runtime updates.\n"
@@ -688,7 +714,8 @@ def main():
         "WIFI.md describes the SCI Wi-Fi board; WIFI-FLASH-ARCH.md covers initial C5 flashing.\n"
         "SCI-CONNECTOR.md has the wiring and FTP.md covers transfers over either adapter.\n"
         "Games: A inspects a GDI; A on its detail opens confirmation; A confirms launch.\n"
-        "Update both KUI/runtime.kui and KUI/apps/games/retail-boot.kui from this package.\n"
+        "Update runtime.kui and the complete Games folder from this same package.\n"
+        "That folder includes separate LZ4/LZO1X ZSO modules; see GAMES-ZSO.md.\n"
         "KUI/apps/games/ce-probe.kui is the Windows CE boot test; see WINDOWS-CE-PLACEMENT-TEST.md.\n"
         "DOA2 has confirmed gameplay; Evolution 2 boots with severe slowdown.\n"
         "Other titles and VMU save/load compatibility remain under community testing.\n"

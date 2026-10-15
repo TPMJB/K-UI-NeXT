@@ -73,11 +73,12 @@ CHECKSUM_CASES = (
 )
 FORMAT_CASES += CHECKSUM_CASES
 LAUNCH_CASES = (
+    "launch-check", "launch-check-cancel", "launch-check-range",
     "launch-report", "launch-patches", "launch-patch-old-package",
     "launch-patch-duplicate", "launch-patch-range", "launch-patch-ce", "launch-patch-cdda",
     "launch-report-readonly", "launch-report-full", "launch-report-source-directory",
 )
-LAUNCH_SUCCESS = ("launch-report", "launch-patches", "launch-report-readonly", "launch-report-full",
+LAUNCH_SUCCESS = ("launch-check", "launch-report", "launch-patches", "launch-report-readonly", "launch-report-full",
                   "launch-report-source-directory")
 
 
@@ -142,12 +143,12 @@ def make_checksum_fixture(folder, case):
     (folder / "checksum.expect").write_text(f"{zlib.crc32(ip):08x} {expected_boot:08x}\n", encoding="ascii")
 
 
-def synthetic_package(ce=False, ram_seed=False, zso=False):
+def synthetic_package(ce=False, ram_seed=False, zso=False, lzo=False):
     # Structural preparation fixture. The stage is original data, never code
     # executed on the host; every retail-looking IP field is generated here.
     # ce: the Windows CE boot test's package, with its higher stage.
     payload = bytearray(0x2010 + (64 if ram_seed else 0))
-    payload[0x100:0x108] = b"KUIRZB01" if zso else b"KUIRCE01" if ce else b"KUIRBT01"
+    payload[0x100:0x108] = b"KUIRLB01" if lzo else b"KUIRZB01" if zso else b"KUIRCE01" if ce else b"KUIRBT01"
     stage = 0x8CE10000 if ce else 0x8CE00000
     struct.pack_into("<14I", payload, 0x108,
                      1, 64, 0x1000, 4096, stage, 16 + (64 if ram_seed else 0),
@@ -164,7 +165,8 @@ def make_retail_fixture(folder, case):
         make_zso_fixture(folder, case)
         for name, package_bytes in (("retail-boot.kui", synthetic_package()),
                                     ("ce-probe.kui", synthetic_package(ce=True)),
-                                    ("zso-boot.kui", synthetic_package(zso=True))):
+                                    ("zso-boot.kui", synthetic_package(zso=True)),
+                                    ("lzo-boot.kui", synthetic_package(zso=True, lzo=case != "zso-lzo-wrong-package"))):
             (folder / name).write_bytes(package_bytes)
         return
     if case in LAUNCH_CASES and folder.exists():
@@ -260,7 +262,7 @@ def check_launch_outputs(folder, case):
             assert int(footer, 16) == zlib.crc32(body), "report checksum is independent"
             fields = dict(line.split(": ", 1) for line in body.decode("ascii").splitlines()[1:])
             reports.append(fields)
-    expected_reports = 2 if case == "launch-report" else 1 if case == "launch-patches" else 0
+    expected_reports = 2 if case == "launch-report" else 1 if case in ("launch-patches", "launch-check") else 0
     assert len(reports) == expected_reports
     if case not in LAUNCH_SUCCESS:
         assert not (folder / "launch-payload.bin").exists()
@@ -286,6 +288,9 @@ def check_launch_outputs(folder, case):
             expected = f"on address=0x{address:08X} value=0x{value:08X}" if case == "launch-patches" else \
                 "off address=0x00000000 value=0x00000000"
             assert fields[f"patch {index}"] == expected
+    if case == "launch-check":
+        assert not (folder / "launch-payload.bin").exists(), "Check must never return an executable handoff payload"
+        return
     payload = (folder / "launch-payload.bin").read_bytes()
     original = (folder / "retail-boot.kui").read_bytes()[64:]
     assert len(payload) == len(original) == 0x2050
@@ -298,7 +303,8 @@ def check_launch_outputs(folder, case):
 
 
 def check_zso_outputs(folder, case):
-    for name in ("zso-boot.kui", "selected.zso"):
+    lzo = "-lzo-" in case or case == "zso-lz4-as-lzo"
+    for name in ("zso-boot.kui", "lzo-boot.kui", "selected.zso"):
         assert (folder / f"after-{name}").read_bytes() == (folder / name).read_bytes(), name
     report_path = folder / "after-last-launch-a.txt"
     if case not in ZSO_PREPARED:
@@ -311,7 +317,8 @@ def check_zso_outputs(folder, case):
     assert fields["sequence"] == f"{1:020d}"
     assert fields["state"] == "prepared before handoff; game start unconfirmed"
     assert fields["image"] == "/games/reader test/selected.zso"
-    assert fields["package"] == "/kui/apps/games/zso-boot.kui"
+    package_name = "lzo-boot.kui" if lzo else "zso-boot.kui"
+    assert fields["package"] == "/kui/apps/games/" + package_name
     assert fields["reader"] == "Standard" and fields["storage"] == "SCI microSD"
     assert fields["cd music"] == "off" and fields["profile"] == "Off"
     logical = (folder / "zso-expected.iso").read_bytes()
@@ -320,10 +327,10 @@ def check_zso_outputs(folder, case):
     assert int(fields["source executable bytes"]) == 3001
     assert int(fields["source executable crc32"], 16) == zlib.crc32(executable)
     payload = (folder / "zso-launch-payload.bin").read_bytes()
-    original = (folder / "zso-boot.kui").read_bytes()[64:]
+    original = (folder / package_name).read_bytes()[64:]
     assert payload[:0x1000] == original[:0x1000] and payload[0x2000:] == original[0x2000:]
     wire = bytearray(payload[0x1000:0x2000])
-    assert wire[:8] == b"KUIRZS01"
+    assert wire[:8] == (b"KUIRLS01" if lzo else b"KUIRZS01")
     saved_crc, = struct.unpack_from("<I", wire, 16)
     struct.pack_into("<I", wire, 16, 0)
     assert zlib.crc32(wire) == saved_crc
@@ -392,7 +399,7 @@ def main():
                             assert "Detached ZSO source change refused before any IP/executable load" in output
                         else:
                             assert "Detached ZSO exact decode PASS" in output
-                        if case == "zso-fragments32":
+                        if case.endswith("fragments32"):
                             assert "31 physical extents" in output
                         if case in ("zso-cdda", "zso-background", "zso-patches"):
                             assert "needs native Standard reader, CD music Off and RAM patches Off" in output

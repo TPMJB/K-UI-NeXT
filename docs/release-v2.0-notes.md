@@ -83,6 +83,11 @@ and [wireless performance evidence](wifi-performance-test.md). Firmware 0.1.3 is
 built separately. The final timing changes still need console throughput and
 round-trip file-integrity acceptance; host transfer results are not radio speeds.
 
+The [direct PC capture destination](network-rip.md) uses the bundled Python
+helper and an authenticated FAT32/exFAT volume image, without a temporary
+local-card dump. Local capture stays the default. Host loopback checks do not
+establish console adapter compatibility or throughput.
+
 Seven original icon pairs complete the ten-app Home menu, including the
 television-legibility follow-up. The established Wi-Fi wording, Games options
 and current branding remain in the merged renderer.
@@ -105,10 +110,10 @@ the selected branches and exclusions.
   deferred: its GINSU transfer and different allocator need a separate adapter.
 - **Storage:** SCI is required for CE. IDE/CF is untested synchronous PIO;
   ATA DMA and CE on IDE/SCIF remain future work. ext4 is bootstrap-only.
-- **Formats:** standard LZ4 ZSO has an experimental native SCI Standard
-  reader; console acceptance is pending. CSO, CHD and historical LZO ZSO
-  require PC import. Ripper exports do not supply general resident compressed
-  decoding. See [ZSO scope](games-zso.md) and [CHD work](games-chd.md).
+- **Formats:** standard LZ4 and explicitly selected historical LZO1X ZSO have
+  separate experimental native SCI Standard readers; console acceptance is
+  pending. CSO and CHD require PC import. These bounded ZSO readers do not
+  supply general resident compressed decoding. See [ZSO scope](games-zso.md) and [CHD work](games-chd.md).
 - **Release acceptance:** build the complete matching package, pass its host
   and console build/layout checks, and confirm the assembled candidate on
   hardware before calling it final 2.0. Earlier per-feature test packages and

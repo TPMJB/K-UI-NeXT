@@ -2,6 +2,7 @@
 #ifndef KUI_GAME_LAUNCH_SETTINGS_H
 #define KUI_GAME_LAUNCH_SETTINGS_H
 #include "kui/probe.h"
+#include "kui/zso.h"
 #include "kui/game_ram_patches.h"
 
 enum kui_game_reader {
@@ -14,6 +15,7 @@ enum kui_game_encoding {
 };
 struct kui_game_launch_settings {
     unsigned reader;bool cdda;unsigned encoding;
+    unsigned codec; /* Explicit ZSO dialect; default standard LZ4, never inferred. */
     struct kui_game_ram_patches patches;
 };
 #define KUI_GAME_LAUNCH_SETTINGS_ENTRIES 128u
@@ -47,10 +49,12 @@ bool kui_game_launch_table_upsert(struct kui_game_launch_table *table,const char
                                   const struct kui_game_launch_settings *settings);
 /* Little-endian records: 32-byte header, variable-length entries and CRC32.
  * Read v1 entries {u16 path bytes,u8 reader,u8 CDDA,u8 encoding,3 reserved zero}
- * with patches disabled. Write v2 entries {u16 path bytes,u8 reader,u8 CDDA,
+ * with patches disabled. Read v2 entries {u16 path bytes,u8 reader,u8 CDDA,
  * u8 encoding,u8 patch-enable mask,u16 reserved zero,u32 address0,u32 value0,
  * u32 address1,u32 value1}; mask bits0/1 select the two patches, other bits fail.
- * Both entries end in canonical non-NUL path bytes. Disabled patch tuples are
+ * Write v3 using the same 24-byte entry with u8 codec at byte6 (0 LZ4,
+ * 1 LZO1X) and byte7 reserved zero. Old v1/v2 default to LZ4.
+ * All entries end in canonical non-NUL path bytes. Disabled patch tuples are
  * retained, so an edited patch can be disabled and reenabled without reentry.
  * Header has version at8, sequence at16, count at24 and reserved zero at28.
  * Sequence0/unknown fields/duplicate keys/truncation/trailing bytes fail.

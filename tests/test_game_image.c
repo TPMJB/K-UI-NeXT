@@ -631,7 +631,7 @@ static void zso_images(void) {
         CHECK(image.tracks[0].file_bytes == 64u * 2048u && !image.tracks[0].file_offset);
         CHECK(image.files.ctx == &fixture && image.files.read == read_file);
         CHECK(kui_game_image_name_supported("Mixed.ZSO"));
-        CHECK(!strcmp(kui_game_image_format_name(image.format), "ZSO (standard LZ4)"));
+        CHECK(!strcmp(kui_game_image_format_name(image.format), "ZSO"));
         struct kui_game_audio_info audio;
         CHECK(kui_game_image_audio_info(&image, &audio) == KUI_GAME_OK);
         CHECK(audio.classification == KUI_GAME_AUDIO_UNKNOWN && !audio.audio_tracks);

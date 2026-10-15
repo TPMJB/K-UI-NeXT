@@ -321,7 +321,7 @@ class LowPlacement(unittest.TestCase):
             "MAP_GUEST": ("src/loader/retail_resident.c", "static uint8_t *map_guest("),
             "GD_GUEST": ("src/core/retail_gd.c", "static uint8_t *guest("),
             "FRONTEND_LE32": ("src/apps/games_retail.c", "static uint32_t le32("),
-            "FRONTEND_LAYOUT": ("src/apps/games_retail.c", "static bool layout_kind("),
+            "FRONTEND_LAYOUT": ("src/apps/games_retail.c", "static bool layout_codec("),
             "FIRMWARE_CODE": ("src/loader/retail_stage.c", "static int low_firmware_code("),
             "FIRMWARE_PREFLIGHT": ("src/loader/retail_stage.c", "static void low_firmware_preflight("),
             "INSTALL_RESIDENT": ("src/loader/retail_stage.c", "static void install_resident("),

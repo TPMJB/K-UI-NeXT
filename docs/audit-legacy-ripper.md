@@ -1,59 +1,78 @@
 # Legacy GD Ripper comparison for 2.0 Tyrfing
 
-Source audit, 2026-10-15. Legacy: `TPMJB/DreamShell_NeXT`, `master`
+Source audit updated 2026-10-15. Legacy: `TPMJB/DreamShell_NeXT`, `master`
 at `2a530929` (GD Ripper app 2.2.5). Independent implementation:
-`TPMJB/K-UI-NeXT`, `release/2.0-tyrfing`, starting at `3599188`.
-Line references below refer to those inspected sources; the release integration
-may move them. This is a functionality comparison, not a code port or a new
-hardware acceptance result. G1 SD adapter hardware experiments are excluded.
+`TPMJB/K-UI-NeXT`, Tyrfing integration sources, including the new CD/acquisition,
+network-destination, cooked-export and repair/evidence workers. Legacy line
+references identify the inspected old implementation; current K-UI files are
+named directly because integration moves their lines.
 
-The independent ripper already has the central workflows from the adapted
-project. The useful differences are mostly destination and job selection,
-optional diagnostics, and the scope of recovery and supported disc profiles.
-There is no missing catalogue verification or missing resume engine to import.
+All seven remaining workflow differences identified after exact job selection
+and custom folder labels now have independent source implementations. Their
+bounds differ deliberately from the legacy app, as documented below. This is
+source parity for the listed workflows, not full compatibility with every disc,
+network mount or repair case. The integrated console runtime still needs
+acceptance. No final 2.0 release is announced, and G1 SD board experiments
+remain excluded. These new workflow implementations do not copy SWAT or
+DreamShell runtime/drive code. The pre-existing sector validator separately
+credits checksum helpers adapted from TPMJB's original legacy ripper.
 
 ## Existing functionality, independently implemented
 
-| User workflow | Legacy evidence | Independent K-UI evidence and result |
+| User workflow | Legacy evidence | Current K-UI behavior |
 | --- | --- | --- |
-| Read disc title and make a named game folder/GDI | `applications/gd_ripper/modules/module.c:522` reads IP.BIN; `:1410` builds the name | `src/core/capture.c:206` identifies the disc; `:301` selects a named job; `src/core/destination.c:86` sanitizes titles. Present, with numbered collision avoidance. |
-| Choose destination folders | Legacy `module.c:2555–2637`, `modules/folders.h` | `src/core/shell.c:1621–1663`, `src/core/destination.c`, `src/core/destination_file.c`. Present, including saved destination and path entry. Device differences are below. |
-| Stop and resume a partial capture | Legacy `module.c:983–1016`, `:2003`, `:2147` | `src/core/capture.c:372–430`, `:844–879`; `src/core/shell.c:1604–1620`. Present, with alternating checkpoints and identity checks. Also offers explicit Quick Resume; SHA jobs retain full prefix reads. |
-| Retry bad reads, stop on fatal drive or storage errors | Legacy `module.c:2339–2408` | `src/core/capture.c:181–200` falls back to one sector with bounded retries; `:142–152` checks write/sync errors. Present. Normal retry-count configurability differs below. |
-| Stream CRC and Redump/TOSEC matching, with partial/full distinctions | Legacy `module.c:1557–1574`, `modules/verify.c:708–749` | `src/core/capture.c:786–820`, `src/core/known_dumps.c`. Present. Capture-reference matching is separate from saved-file reread verification. |
-| Reread saved bytes; scan raw sectors with EDC/P/Q/address checks | Legacy `module.c:1905–1937`, `modules/verify.c:196–300` | `src/core/capture.c:876–879,892–915`; `src/core/recovery_scan.c:239–304`. Present. Advanced CRC can browse a completed job or supported imported raw GDI without an inserted disc. |
-| Recover unreadable sectors with tracked placeholders and later optical rereads | Legacy `modules/recovery.c`, `module.c:1535–1543` | `src/core/salvage.c`, `include/kui/salvage.h:20–36`; reachable through `src/core/shell.c:1613` and the Salvage page. Present as a separate job format, with explicit zero-fill consent and 1/5/10/20/50 recovery sweeps. Console acceptance remains pending per `docs/salvage-worker.md`. |
-| Progress, speed/time information, retry/FAD state and saved diagnostics | Legacy `module.c:1656–1744`, `:229–281` | `src/core/capture_display.c`, `src/dreamcast/disc.c:55–99`, `src/dreamcast/main.c` automatic capture/scan report paths. Present. Binary diagnostic sampling differs below. |
-| Output formats | Legacy `module.c:1019–1031` offers raw BIN or cooked ISO data tracks in GDI, plus raw audio | `include/kui/capture_format.h:4–25` offers GDI, BIN/CUE, CSO, ZSO and CHD; `src/core/capture_export.c` verifies exports while retaining raw capture. New formats are broader, but direct cooked GDI output differs below. |
+| Read the title and create a named game folder | `module.c:522,1410` | `src/core/capture.c` identifies the disc; `src/core/destination.c` sanitizes titles and reserves numbered collision suffixes. Present |
+| Choose local destination folders | `module.c:2555–2637`, `modules/folders.h` | Saved parent, browser and path entry in `src/core/shell.c` and `destination_file.c`. Local SCIF/SCI SD and IDE/CF transports already exist; IDE ripping was not missing |
+| Stop and resume a partial capture | `module.c:983–1016,2003,2147` | Alternating checkpoints, full optical identity, committed-prefix checks and explicit Quick Resume. SHA jobs retain full prefix reads |
+| Retry reads and stop on fatal drive/storage failures | `module.c:2339–2408` | Bounded single-sector fallback, exact writes, sync/error checks and no normal zero-fill. Default remains ten additional retries |
+| Stream CRC and Redump/TOSEC matching | `module.c:1557–1574`, `modules/verify.c:708–749` | `known_dumps.c` distinguishes full/data/listed-data/partial/inconclusive results. Catalogue matching is separate from saved-file reread verification |
+| Verify saved bytes and scan raw sectors | `module.c:1905–1937`, `modules/verify.c:196–300` | Normal Verify rereads recorded hashes. Advanced CRC scans completed jobs or supported imported raw GDI, including Mode 1 sync/address/EDC/reserved/P/Q, without an inserted disc |
+| Recover tracked holes in a separate damaged-disc job | `modules/recovery.c`, `module.c:1535–1543` | `src/core/salvage.c` has separate journals, explicit zero-fill consent and 1/5/10/20/50 recovery sweeps. It does not turn ordinary capture into a repair operation |
+| Progress, speed/time, retry/FAD and diagnostics | `module.c:1656–1744,229–281` | `capture_display.c`, native optical timing and automatic operation reports. Present |
+| Output formats | `module.c:1019–1031` | Raw GDI, BIN/CUE, CSO, historical LZO ZSO, CHDv4 and new GDI 2048. Raw source files remain authoritative |
 
-## Differences and new convenience controls
+## Exact-job and naming controls
 
-| Capability in the adapted app | Current independent behavior | Release recommendation |
+| Legacy capability | Independent implementation | Limits |
 | --- | --- | --- |
-| **Choose an exact existing dump for Resume/Verify.** Legacy `module.c:2555–2557,2589–2592,2623–2634` recognizes `rip.state`, sets that dump's parent and exact name. | **Implemented independently in source.** Advanced > Saved job for Resume/Verify browses to an exact candidate folder. `kui_capture_options.job_directory` selects only that job; path, full optical identity, checkpoint, recorded hash/format and prefix checks still apply. A bad/missing/wrong-disc selection fails without falling back to a newer job. Clearing the selection retains automatic latest matching-job behavior. Advanced CRC remains the separate exact-folder route for supported imported/completed raw dumps. | Tyrfing preparation convenience; console acceptance pending. See [ripper controls](ripper-controls.md#choose-an-exact-saved-job). |
-| **Edit the output game/folder name.** Legacy editable `gname-text` (`applications/gd_ripper/app.xml:168`) calls `module.c:512–520`. | **New folder label implemented independently in source.** Advanced > New dump folder label opens the keyboard. `kui_capture_output.folder_label` changes only a New job's directory; existing sanitization and collision numbering apply. The optical title, descriptor/container base name, manifest identity and raw track bytes retain the disc-derived values. Empty input uses the detected title. Resume/Verify ignore the current label. | Tyrfing preparation convenience; no checkpoint-format change or file renaming. Console acceptance pending. See [output names](ripper-controls.md#new-output-names-and-existing-dumps). |
-| **Choose PC share as a direct rip destination.** Legacy browser offers SD, IDE and PC (`app.xml:199–206`; `modules/folders.h:13`), using DreamShell's mounted `/pc` service. | Current capture uses one selected local storage backend through FatFs (`src/dreamcast/capture.c:46–66`, `src/dreamcast/sd.c:282`). SCIF, SCI and IDE/CF exist; IDE already serializes GD-ROM/ATA access (`src/dreamcast/capture.c:6–19`). There is no `/pc` mount capture destination. FTP transfer is a separate workflow. | Later independent network-filesystem/streaming project. Do not describe IDE ripping as missing, and do not merge G1 SD board experiments to close this gap. A within-ripper device picker is UI convenience, since storage is already selected globally. |
-| **Cooked 2048-byte data tracks directly in the console's GDI output.** Legacy `module.c:1019–1026,2483–2507`; UI explicitly says cooked output has no catalogue CRC match. | Normal raw GDI is 2352-byte tracks; CSO/ZSO export cooked data but are not cooked GDI (`include/kui/capture_format.h`). `tools/gdi_optimize.py:223` already produces a separate 2048-byte GDI copy on a PC, checking framing/address structure without establishing EDC/ECC or catalogue correctness. | Later optional on-console post-capture export using the existing raw job as the source. Keep raw capture/hash/resume conventions intact. Existing PC conversion covers the practical workflow for Tyrfing. |
-| **Rip single-session CD/CD-R/audio media as tracks.** Legacy chooses one TOC area for non-GD discs (`module.c:1429`), with CD-specific track-tail treatment (`:1060–1065`); this path is reachable, not merely an unused declaration. | `src/core/capture_plan.c:29–36` requires both GD sessions and the 150/45150 starts. The current ripper supports its declared retail-GD profile, despite the broader Disc Ripper name. Audio-CD playback is a different app. | Later separate CD capture profile with correct CUE/session/index semantics and media tests. Source support in the legacy app is not proof of archival accuracy for every CD layout. |
-| **Optional P/Q checks during an ordinary rip.** Legacy Advanced CRC changes `checked_sector_read` from EDC to `gd_check_sector` (`module.c:2085–2094`). | Normal capture checks data layout/EDC (`src/core/capture.c:159–179`). The saved-file Advanced CRC scanner and separate salvage perform full Mode 1 parity/address checks. | Keep the accepted normal DMA acquisition path for Tyrfing. An optional strict acquisition mode can be evaluated later if needed; saved-file Advanced CRC already covers the validation goal. |
-| **Repair suspect sectors in an existing ordinary saved dump.** A saved-file scan creates `.suspect`; enabling Advanced CRC then Start/Resume invokes optical replacement with original-byte backups (`module.c:2177–2180,2950–3015`). | Advanced CRC is explicitly read-only (`include/kui/recovery_scan.h:7–11`). Salvage repairs only its own journaled zero-hole targets, not an arbitrary normal/imported capture (`include/kui/salvage.h:24–36`). | Later explicit repair-to-copy workflow with durable evidence, identity and interrupted-write handling. This is a real workflow gap; do not solve it by making Scan or ordinary Resume silently patch data. Neither implementation performs generic ECC reconstruction. |
-| **Storage-instability forensic samples.** Legacy reopens/rereads up to a bounded number of suspect sectors twice, records byte differences and `readback.bin`, detects buffer changes and blocks optical repair after disagreement (`modules/readback.c:109–174`, `:14–31`; `module.c:1422–1426`). | Current Advanced CRC reads each track once, reports suspect FADs and hash mismatches (`src/core/recovery_scan.c:255–303`), and preserves originals. Normal capture has guarded read buffers, optional sample readback and hash checks, but no equivalent saved-sector reopen/diff bundle. | Useful later diagnostic enhancement if unexplained readback corruption returns. The missing artifact is forensic discrimination, not a missing corruption check or a demonstrated reliability regression. |
-| **Configurable normal-capture retry limit.** Legacy UI cycles 1/5/10/20/50 (`module.c:503–509`), applying it to ordinary reads and recovery. | Normal capture uses the accepted fixed ten additional retries (`include/kui/capture.h:12`, `src/core/capture.c:181–200`). Salvage already exposes the same five sweep limits. | Low priority. Keep normal retry behavior for Tyrfing and expose tuning only if real media needs it. Counting recovery sweeps as normal retries would misrepresent the two policies. |
+| Select an existing dump, using its `rip.state` and exact name (`module.c:2555–2557,2589–2592,2623–2634`) | Advanced > Saved job for Resume/Verify sets `kui_capture_options.job_directory`. Only that candidate is checked; invalid state never falls back to another job | Browser lists local storage. Full path, optical identity, checkpoint, format/hash mode and prefix checks remain. Automatic selection is restored with Left on idle Disc Ripper |
+| Edit the new output folder name (`app.xml:168`, `module.c:512–520`) | Advanced > New dump folder label changes New directory presentation using existing sanitization and collision rules | Session-only label; optical title, descriptor base, identity and existing jobs remain unchanged. Resume/Verify ignore the current label |
 
-## Tyrfing scope
+## Seven additional workflows now implemented
 
-The two small app gaps now have independent source implementations: an exact
-saved-job selector and an editable New-job folder label. Their controls are
-in [the ripper guide](ripper-controls.md). They preserve the accepted optical
-reader, identity/checkpoint checks, canonical descriptor names and collision
-rules. The complete integrated runtime still needs console acceptance; this
-is preparation for Tyrfing, not publication of a final 2.0 release.
+| Legacy capability and evidence | Current independent source implementation | Material scope and limits |
+| --- | --- | --- |
+| **Direct PC rip destination.** Legacy `/pc` mount offered alongside SD/IDE (`app.xml:199–206`, `modules/folders.h:13`) | Advanced > Rip destination: local / PC selects `capture_network` for normal New/Resume/Verify. The authenticated `network_rip` client and `tools/network_rip_server.py` expose a dedicated PC FAT32/exFAT volume image to the existing FatFs capture engine | W5500/Wi-Fi socket adapters; no SMB/NFS or arbitrary PC-directory mount. Local card supplies `/KUI/network-rip.cfg`. Session toggle defaults local and clears exact-job selection. Browsers remain local; remote Resume/Verify use automatic matching in the same remote volume. Disconnect stops without automatic reconnect. Console/network throughput acceptance pending. See [PC destination](network-rip.md) |
+| **Cooked 2048-byte GDI data tracks.** Legacy cooked ISO plus raw audio (`module.c:1019–1026,2483–2507`) | Capture settings > Output format > GDI 2048. `src/core/capture_cooked.c` exports `trackNN.iso` after full raw readback, retains original raw tracks/checkpoints/hidden GDI, and publishes the primary GDI after cooked readback | Original LBAs/audio remain; Mode 1/Mode 2 Form 1 payloads require valid framing/EDC. It is a derivative, not a replacement capture. Stream reference CRCs remain the raw tracks' CRCs. Stop/failure preserves the raw job for explicit Resume |
+| **CD/CD-R/audio track capture.** Legacy reachable non-GD TOC path (`module.c:1429,1060–1065`) | Advanced > Single-session CD source admits the separate `cd-toc-index01-raw2352-v1` plan in `capture_plan.c`; native adapter forces BIN/CUE and uses generic CD titles when no actual Sega title exists | Explicit user-declared single-session opt-in, default off. Native checks ready CD type and TOC but does not query/prove session count. No guessed BIOS GETSES ABI. Captures INDEX01 windows only; no measured INDEX00/subchannels, no multisession claim, no fabricated GD start. Unlocated type-changing pregaps can fail closed. See [CD profile](cd-capture.md) |
+| **Optional acquisition P/Q checks.** Legacy Advanced CRC changes ordinary read validation (`module.c:2085–2094`) | Capture settings > Strict sector checks enables existing independent `recovery_sector.c` validation on newly acquired data sectors through both synchronous and DMA paths | Default off preserves normal EDC acquisition. Strict supports Mode 1 sync/address/EDC/reserved/P/Q; Mode 2 is explicitly refused. Audio has no equivalent parity. No repair, retrospective saved-prefix parity promise or independent-reference claim |
+| **Repair an ordinary/imported saved dump.** Legacy `.suspect` scan plus Start/Resume optical replacement (`module.c:2177–2180,2950–3015`) | Advanced > Repair to a separate copy invokes `src/core/repair_copy.c` on supported completed raw-track jobs or imported raw-2352 GDI folders, with matching GD-ROM, stable saved rereads, durable original/candidate evidence and full copied-byte readback | Localized Mode 1 structural damage only; no Mode 2 repair, automatic localization of audio/whole-track hash damage, generic ECC reconstruction or in-place changes. Imported identity uses two healthy high-density data anchors; imported audio may remain unverified. No GDI until completion. Failed/stopped/unresolved partial copies are retained; another attempt creates a new copy, without automatic repair resume. See [repair copies](repair-copy.md) |
+| **Storage-instability forensic samples.** Legacy two reopen passes, byte differences and raw evidence (`modules/readback.c:14–31,109–174`, `module.c:1422–1426`) | Advanced > Suspect-sector reread evidence scans local raw files and saves three samples per selected suspect: initial bytes plus two independent reopen/read/close passes, difference counts/offsets and CRCs | Storage-only, no optical reads or original-track writes. At most 64 suspects sampled; remaining suspects still counted. Stable reads do not prove correct data or localize audio/hash damage. Separate evidence `.part` stays incomplete; see [saved-sector rereads](repair-copy.md#saved-sector-rereads) |
+| **Configurable ordinary-read retries.** Legacy cycles 1/5/10/20/50 (`module.c:503–509`) | Capture settings > Read retries persists the same five choices; `capture.c` bounds additional attempts, including identity reads, without replenishing the budget on batch shrink | Default remains ten additional attempts. Fatal/Stop exits remain immediate. A DMA failure can first enter the existing synchronous fallback. These are additional read attempts, distinct from salvage sweeps and repair candidate-pair limits |
 
-Keep documenting exact-folder Advanced CRC scanning, PC 2048 conversion,
-the retail-GD capture scope and the distinction between normal capture and
-Salvage. Network destinations, a CD profile, on-console cooked exports,
-normal-dump repair copies and extra forensic reads remain separate projects.
-They are not prerequisites for merging the accepted 2.0 work.
+The 13 Advanced tools and five capture settings are listed in
+[ripper-controls.md](ripper-controls.md). PC target, CD opt-in, exact job and
+folder label are session choices; capture hash/readback/format/retry/strict
+preferences are saved. Explicit `bench.cfg` values retain precedence.
 
-No legacy implementation code was copied. The comparison does not imply that
-DreamShell's storage, repair or CD paths should replace K-UI's independent ones.
+## Verification and acceptance
+
+The changes retain separate meanings for acquisition validity, storage
+consistency and independent reference equality. EDC/P/Q can reject invalid
+Mode 1 sectors; full saved-file readback compares storage with the captured
+stream; only a full matching independent catalogue/reference covers that
+reference's track sizes and hashes. None of these alone supplies missing CD
+subchannels, audio offset correction or generic ECC reconstruction.
+
+Real FatFs host coverage includes existing GD capture/stop/resume/verification,
+the new CD plans and strict/retry paths, cooked exports, repair/evidence faults,
+and FAT32/exFAT preservation. PC destination tests use actual loopback TCP and
+the capture engine. These source and host results do not establish console
+adapter compatibility, new UI acceptance or whole-disc archival equivalence.
+
+The default local retail-GD path retains its two-area preparation and normal
+DMA reader. CD opt-in alone selects the new media-aware preparation; it still
+accepts GD media while enabled. Strict checks default off, normal retries remain
+ten and GDI stays the retail default. Broader CD session/index/subchannel work,
+other remote filesystems and unsupported repair cases remain outside the
+implemented scope rather than being implied by an accepted extension or menu.

@@ -93,7 +93,7 @@ static uint32_t le32(const uint8_t *p) {
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
 }
 /* ce: the Windows CE probe package, with its own magic and higher stage. */
-static bool layout_kind(const struct kui_runtime_image *image,bool ce,bool zso) {
+static bool layout_codec(const struct kui_runtime_image *image,bool ce,bool zso,enum kui_zso_codec codec) {
     const uint32_t stage=ce?KUI_RETAIL_CE_STAGE_ADDRESS:KUI_RETAIL_STAGE_ADDRESS;
     const uint32_t begin=KUI_RETAIL_STAGE_BLOB_OFFSET,max=KUI_RETAIL_STAGE_MAX_BYTES;
     if(!image->data || image->info.payload_bytes<begin+4 || image->info.payload_bytes>begin+max ||
@@ -107,7 +107,7 @@ static bool layout_kind(const struct kui_runtime_image *image,bool ce,bool zso) 
                          (limit==KUI_RETAIL_LOW_STANDARD_LIMIT ||
                           limit==KUI_MDK2_CDDA_LOW_LIMIT));
     if(zso && (resident!=KUI_RETAIL_LOW_RESIDENT_ADDRESS || limit!=KUI_RETAIL_LOW_STANDARD_LIMIT)) return false;
-    if(memcmp(h,zso?KUI_RETAIL_ZSO_PACKAGE_MAGIC:ce?KUI_RETAIL_CE_PACKAGE_MAGIC:KUI_RETAIL_PACKAGE_MAGIC,8) ||
+    if(memcmp(h,zso?(codec==KUI_ZSO_LZO1X?KUI_RETAIL_LZO_PACKAGE_MAGIC:KUI_RETAIL_ZSO_PACKAGE_MAGIC):ce?KUI_RETAIL_CE_PACKAGE_MAGIC:KUI_RETAIL_PACKAGE_MAGIC,8) ||
         le32(h+8)!=KUI_RETAIL_PACKAGE_VERSION ||
         le32(h+12)!=KUI_RETAIL_HEADER_BYTES || le32(h+16)!=KUI_RETAIL_MAP_OFFSET ||
         le32(h+20)!=KUI_RETAIL_IMAGE_WIRE_BYTES || le32(h+24)!=stage ||
@@ -119,7 +119,7 @@ static bool layout_kind(const struct kui_runtime_image *image,bool ce,bool zso) 
         if(((const uint8_t *)image->data)[KUI_RETAIL_MAP_OFFSET+i]) return false;
     return true;
 }
-static bool layout(const struct kui_runtime_image *image,bool ce) {return layout_kind(image,ce,false);}
+static bool layout(const struct kui_runtime_image *image,bool ce) {return layout_codec(image,ce,false,KUI_ZSO_LZ4);}
 static bool zso_path(const char *path) {
     if(!path) return false;
     size_t n=strlen(path);
@@ -468,6 +468,8 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     const bool patched=kui_game_ram_patches_enabled(patches);
     struct kui_game_ram_patches applied_patches={0};
     const bool zso=zso_path(path);
+    const enum kui_zso_codec codec=(reader&KUI_GAMES_RETAIL_LZO)?KUI_ZSO_LZO1X:KUI_ZSO_LZ4;
+    if(codec!=KUI_ZSO_LZ4 && !zso) {log("LZO codec selection requires a ZSO image");return false;}
     const bool ce=(reader&KUI_GAMES_RETAIL_CE_PROBE)!=0;
     const bool descramble=(reader&KUI_GAMES_RETAIL_DESCRAMBLE)!=0;
     const bool plain=(reader&KUI_GAMES_RETAIL_BOOT_PLAIN)!=0;
@@ -477,9 +479,9 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         log("RAM patches require a native game with CD music Off");return false;
     }
     reader&=~(KUI_GAMES_RETAIL_CE_PROBE | KUI_GAMES_RETAIL_DESCRAMBLE |
-        KUI_GAMES_RETAIL_BOOT_PLAIN | KUI_GAMES_RETAIL_CDDA | KUI_GAMES_RETAIL_CE_EXCERPT);
+        KUI_GAMES_RETAIL_BOOT_PLAIN | KUI_GAMES_RETAIL_CDDA | KUI_GAMES_RETAIL_CE_EXCERPT | KUI_GAMES_RETAIL_LZO);
     if(zso && (ce || cdda || ce_excerpt || patched || reader!=KUI_RETAIL_READER_STANDARD)) {
-        log("Standard LZ4 ZSO needs native Standard reader, CD music Off and RAM patches Off");return false;
+        log("ZSO needs native Standard reader, CD music Off and RAM patches Off");return false;
     }
     if(ce_excerpt && (!ce || cdda || descramble || plain || reader!=KUI_RETAIL_READER_ASYNC)) {
         log("CE CD music requires its separate background profile");return false;
@@ -499,12 +501,12 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     struct kui_retail_zso_manifest *zso_map=NULL;
     if(!kui_mount(&fs,log)) goto done;
     enum kui_wince_cdda_profile music_profile=KUI_WINCE_CDDA_NONE;
-    const char *launch_package=zso?KUI_GAMES_RETAIL_ZSO_PACKAGE:ce?KUI_GAMES_RETAIL_CE_PACKAGE:KUI_GAMES_RETAIL_PACKAGE;
+    const char *launch_package=zso?(codec==KUI_ZSO_LZO1X?KUI_GAMES_RETAIL_LZO_PACKAGE:KUI_GAMES_RETAIL_ZSO_PACKAGE):ce?KUI_GAMES_RETAIL_CE_PACKAGE:KUI_GAMES_RETAIL_PACKAGE;
     enum kui_runtime_result rr=KUI_RUNTIME_OK;
     if(!cdda && !ce_excerpt) {
         rr=kui_runtime_read(launch_package,package,log,cancel);
         if(rr!=KUI_RUNTIME_OK) {problem=kui_runtime_result_name(rr);goto done;}
-        if(!layout_kind(package,ce,zso)) {problem="unsupported game-launch package layout";goto done;}
+        if(!layout_codec(package,ce,zso,codec)) {problem="unsupported game-launch package layout";goto done;}
     }
     uint64_t size=0;
     if(stat_file(&files,name,&size)!=KUI_GAME_OK || !size) {
@@ -515,7 +517,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     if(!map || !image || !gdi) {problem="insufficient memory to prepare selected image";goto done;}
     if(read_file(&files,name,0,gdi,fingerprint_bytes)!=KUI_GAME_OK) {problem="cannot read image header";goto done;}
     struct kui_game_file_ops file_ops={&files,stat_file,read_file};
-    enum kui_game_result r=kui_game_image_open_named(name,&file_ops,image);
+    enum kui_game_result r=kui_game_image_open_named_codec(name,&file_ops,codec,image);
     if(r!=KUI_GAME_OK) {
         problem=r==KUI_GAME_UNSUPPORTED?
             "unsupported image layout; compressed images need the import tool":kui_game_result_name(r);
@@ -524,7 +526,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     if(image->compressed!=zso) {problem="compressed image/backend mismatch";goto done;}
     map->storage_transport=kui_storage_active();
     if(zso && map->storage_transport!=KUI_STORAGE_SCI) {
-        problem="Standard LZ4 ZSO direct launch needs SCI microSD";goto done;
+        problem="ZSO direct launch needs SCI microSD";goto done;
     }
     if(map->storage_transport>KUI_STORAGE_IDE) {problem="storage transport not selected";goto done;}
     log("Retail boot storage: %s",map->storage_transport==KUI_STORAGE_SCIF?"SCIF microSD":
@@ -830,4 +832,14 @@ bool kui_games_retail_prepare_launch(const char *path,uint32_t reader,
     const struct kui_game_ram_patches *patches,struct kui_runtime_image *image,
     kui_log_fn log,kui_cancel_fn cancelled) {
     return prepare_launch(path,reader,patches,true,image,log,cancelled);
+}
+
+bool kui_games_retail_check_launch(const char *path,uint32_t reader,
+    const struct kui_game_ram_patches *patches,kui_log_fn log,kui_cancel_fn cancelled) {
+    struct kui_runtime_image staged={0};
+    bool ok=kui_games_retail_prepare_launch(path,reader,patches,&staged,log,cancelled);
+    kui_runtime_free(&staged);
+    if(ok && cancelled && cancelled())ok=false;
+    if(ok && log)log("Executable check passed; staged package released without handoff");
+    return ok;
 }

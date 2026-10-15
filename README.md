@@ -36,8 +36,10 @@ K-UI 1.0 requires an independent K-UI bootstrap CD.
 
 Native Sonic Adventure, Grandia II and Skies of Arcadia have scoped console
 confirmation from 1.8.5; Time Stalkers and some FMV stalls remain unresolved.
-Toy Commander FMV stalls are not fixed by the WinCE work. Compressed games
-require PC import before launch. IDE/CF remains untested synchronous PIO;
+Toy Commander FMV stalls are not fixed by the WinCE work. Native SCI Standard
+has experimental direct LZ4/LZO1X ZSO readers with explicit codec selection;
+console acceptance is pending. CSO and CHD require PC import.
+IDE/CF remains untested synchronous PIO;
 ATA DMA and CE on IDE/SCIF remain future work. ext4 is available only to the
 read-only bootstrap, not runtime apps or Games.
 
@@ -98,7 +100,7 @@ These new app paths still need physical-console acceptance.
   The startup chime is embedded as Ogg too ([details](docs/music-round-five.md#bundled-menu-songs-as-ogg)).
 - Ripper: A confirms a new dump, X resumes the newest matching job, Y verifies.
   Start opens Advanced, **Destination folder** and **Capture settings**.
-  Output choices are GDI, BIN/CUE, CSO, DreamShell-LZO ZSO and CHDv4; compressed
+  Output choices are GDI, GDI 2048, BIN/CUE, CSO, historical LZO1X ZSO and CHDv4; compressed
   exports retain the verified raw capture for resume and verification.
   Advanced also offers explicitly confirmed Quick resume (sizes only), preserving
   full Resume and its saved-byte checks. During work, B requests Stop. Reports still save automatically. Idle insertion
@@ -205,12 +207,17 @@ See [the research scope](docs/milestone-1-research.md),
 [the implementation decisions](docs/diagnostic-design.md), and
 [dependency provenance](THIRD_PARTY.md).
 
+Direct PC capture writes to an authenticated FAT32/exFAT volume image through
+the bundled `tools/network_rip_server.py`, with no temporary local-card dump.
+Local storage remains the default. Console adapter acceptance is pending; see
+[PC destination setup and limits](docs/network-rip.md).
+
 ## Games
 
 Games directly launches supported GDI, ISO, BIN/CUE, CDI v2/v3/v3.5 and
-standalone BIN/IMG layouts. Standard LZ4 ZSO now has a separate native SCI
-Standard-reader launch path; console acceptance is pending. CSO, historical
-LZO ZSO and CHD use the supplied PC importer. See [ZSO limits](docs/games-zso.md) and
+standalone BIN/IMG layouts. Standard LZ4 and explicitly selected historical
+LZO1X ZSO have separate experimental native SCI Standard readers; console
+acceptance is pending. CSO and CHD use the supplied PC importer. See [ZSO limits](docs/games-zso.md) and
 [format and import limits](docs/games-formats.md).
 
 Matching `Game` and `Game-2048` folders collapse into one Games entry. Choose

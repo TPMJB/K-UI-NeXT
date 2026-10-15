@@ -91,6 +91,8 @@ enum kui_capture_export_result kui_capture_export_file(const struct kui_capture_
         if(ops->log) ops->log("Export refused: %s",reason);
         return KUI_EXPORT_FAILED;
     }
+    if(state->format==KUI_CAPTURE_FORMAT_GDI_2048)
+        return kui_capture_cooked_file(plan,state,ops,dir,primary,create,report);
     char final[KUI_DEST_PATH_CAP],temporary[KUI_DEST_PATH_CAP];
     int n=snprintf(final,sizeof(final),"%s/%s",dir,primary);
     int m=snprintf(temporary,sizeof(temporary),"%s/%s.kui-export.tmp",dir,primary);

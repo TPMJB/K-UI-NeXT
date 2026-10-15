@@ -100,7 +100,7 @@ class CandidateInstallation(unittest.TestCase):
         self.assertEqual(record["candidate"]["ata_hardware"], "untested")
         self.assertEqual(record["candidate"]["sci512_hardware"], "rejected; restored 256-byte allowance")
         self.assertEqual(record["commit"], self.commit)
-        for name in ("runtime.kui", "apps/games/retail-boot.kui", "apps/games/zso-boot.kui", "apps/games/ce-probe.kui"):
+        for name in ("runtime.kui", "apps/games/retail-boot.kui", "apps/games/zso-boot.kui", "apps/games/lzo-boot.kui", "apps/games/ce-probe.kui"):
             self.assertEqual((bundle / "KUI" / name).read_bytes(), (self.sd / name).read_bytes())
         self.assertTrue((bundle / "WINDOWS-CE-PLACEMENT-TEST.md").is_file())
         for name in ("WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md"):

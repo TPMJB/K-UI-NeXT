@@ -3,6 +3,9 @@
 #include "kui/retail_image.h"
 #if KUI_RETAIL_ZSO
 #include "kui/retail_zso.h"
+#if KUI_ZSO_CODECS != 1 && KUI_ZSO_CODECS != 2
+#error Detached compressed stage must admit exactly one explicit codec
+#endif
 #if defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_SD_BENCH) || KUI_RETAIL_TOY_PILOT || KUI_RETAIL_MDK2_CDDA || KUI_GAME_RAM_PATCHES_STAGE
 #error ZSO belongs only to its separate native high stage
 #endif

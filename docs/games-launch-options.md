@@ -30,9 +30,14 @@ together. With patches Off, the executable and resident behavior stay as before.
 The source game and loader files on the card are not patched.
 
 Patch settings belong to the exact selected image path. Original and converted
-2048-byte images keep separate choices. New saves use settings format v2;
-existing v1 settings load with both patches Off. Preserve the two settings
-files when backing up an installation; older runtimes cannot read v2 records.
+2048-byte images keep separate choices. New saves use settings format v3,
+including the explicit ZSO codec. Existing v1 settings load with both patches
+Off; v1/v2 default to standard LZ4. Preserve the two settings files when backing
+up an installation; older runtimes cannot read v3 records.
+
+See [Games library behaviour](games-library.md) for Check executable and the
+temporary unsaved baseline. Both use the current image choices; a check never
+starts the game.
 
 ## Restore detected defaults
 

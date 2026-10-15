@@ -5,6 +5,7 @@
 #include "kui/game_ram_patches.h"
 #define KUI_GAMES_RETAIL_PACKAGE "0:/KUI/apps/games/retail-boot.kui"
 #define KUI_GAMES_RETAIL_ZSO_PACKAGE "0:/KUI/apps/games/zso-boot.kui"
+#define KUI_GAMES_RETAIL_LZO_PACKAGE "0:/KUI/apps/games/lzo-boot.kui"
 #define KUI_GAMES_RETAIL_CE_PACKAGE "0:/KUI/apps/games/ce-probe.kui"
 #define KUI_GAMES_RETAIL_CE_EXCERPT_PACKAGE "0:/KUI/apps/games/ce-cdda-armada.kui"
 #define KUI_GAMES_RETAIL_CE_BAM4_PACKAGE "0:/KUI/apps/games/ce-cdda-bam4.kui"
@@ -30,6 +31,8 @@
 /* Exact admitted original GDI: separately built CE music backend per title.
  * This routes to its separate package; it is never a manifest flag. */
 #define KUI_GAMES_RETAIL_CE_EXCERPT 0x1000u
+/* Explicit historical LZO1X selection for .zso only; not a reader/wire bit. */
+#define KUI_GAMES_RETAIL_LZO 0x2000u
 /* Single storage worker only. Prepare one native GD-ROM launch;
  * complete IP/boot CRCs and bounded physical extent map are read-only. Success
  * owns a patched stage package with all files closed and SD disconnected.
@@ -49,4 +52,9 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
 bool kui_games_retail_prepare_launch(const char *path,uint32_t reader,
     const struct kui_game_ram_patches *patches,struct kui_runtime_image *image,
     kui_log_fn log,kui_cancel_fn cancelled);
+/* Performs the same executable/package/map checks and preparation report as
+ * a launch, then frees the staged package. Never exposes a handoff image or
+ * executes a game. Success is preparation evidence, not console compatibility. */
+bool kui_games_retail_check_launch(const char *path,uint32_t reader,
+    const struct kui_game_ram_patches *patches,kui_log_fn log,kui_cancel_fn cancelled);
 #endif

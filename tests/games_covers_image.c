@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #define _DEFAULT_SOURCE
 #include "kui/games_covers.h"
+#include "kui/game_launch_settings.h"
 #include "kui/media.h"
 #include "kui/storage.h"
 #include <assert.h>
@@ -400,7 +401,7 @@ static void check(const char *host) {
         if(!strcmp(test.fault,"format-compressed")) {
             assert(c.games==1 && c.failed==1 && !c.disc && !c.none && !c.user && records()==0 && test.imports==1);return;
         }
-        bool ambiguous=!strcmp(test.fault,"format-payloads");unsigned count=ambiguous?2u:1u;
+        bool ambiguous=!strcmp(test.fault,"format-payloads"),lzo=!strcmp(test.fault,"format-zso-lzo");unsigned count=ambiguous?2u:1u;
         assert(c.games==count && c.disc==count && !c.none && !c.user && !c.failed && !c.duplicates && records()==count);
         struct kui_games_page page;
         assert(kui_games_list_covers(ambiguous?"/Games/Ambiguous":"/Games",0,KUI_GAMES_VIEW_LIST,&page,pixels,log_line,cancel));
@@ -410,11 +411,22 @@ static void check(const char *host) {
             assert(!page.entries[i].directory && page.entries[i].cover && !strcmp(page.entries[i].title,"GENERIC BOX ART"));
             check_split(pixels[i],KUI_COVER_LARGE);
             struct kui_games_detail detail;static uint16_t large[KUI_COVER_PIXELS];
-            assert(kui_games_inspect_cover(page.entries[i].path,&detail,large,log_line,cancel));
+            assert(kui_games_inspect_cover_codec(page.entries[i].path,lzo?KUI_ZSO_LZO1X:KUI_ZSO_LZ4,&detail,large,log_line,cancel));
             assert(detail.valid && detail.cover && detail.native_cd && detail.cd_image);
             check_split(large,KUI_COVER_LARGE);
         }
-        test.writes=0;scan(&c,true);assert(c.unchanged==count && !c.disc && !c.failed && !test.writes);
+        test.writes=0;scan(&c,true);
+        if(lzo) {
+            assert(c.disc==1 && !c.unchanged && !c.failed && test.writes);
+            /* Same image/stamp: a changed explicit preference must be reread,
+             * and a wrong codec must not trigger fallback to the working one. */
+            struct kui_game_launch_settings choice={0};mounted(true);
+            assert(kui_game_launch_settings_save("/Games/Format Game/selected.zso",&choice,log_line));mounted(false);
+            scan(&c,true);assert(c.none==1 && !c.disc && !c.failed);
+            choice.codec=KUI_ZSO_LZO1X;mounted(true);
+            assert(kui_game_launch_settings_save("/Games/Format Game/selected.zso",&choice,log_line));mounted(false);
+            scan(&c,true);assert(c.disc==1 && !c.none && !c.failed);
+        } else assert(c.unchanged==count && !c.disc && !c.failed && !test.writes);
         return;
     }
     if(!strcmp(test.fault, "scan")) { check_scan(host); return; }

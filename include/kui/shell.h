@@ -11,6 +11,7 @@
 #include "kui/cd_audio.h"
 #include "kui/games.h"
 #include "kui/game_launch_settings.h"
+#include "kui/games_selection.h"
 #include "kui/games_covers.h"
 #include "kui/files.h"
 #include "kui/ftp.h"
@@ -50,22 +51,24 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_FTP, KUI_SHELL_STORAGE_TESTS, KUI_SHELL_STORAGE_TEST_HISTORY,
     KUI_SHELL_SCI_ASYNC_PROBE, KUI_SHELL_GAMES_VARIANTS, KUI_SHELL_WIFI,
     KUI_SHELL_GAMES_LAUNCH_OPTIONS, KUI_SHELL_GAMES_EXTRA_OPTIONS,
-    KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES };
+    KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK };
 enum kui_shell_game_option {
     KUI_SHELL_GAME_OPTION_READER, KUI_SHELL_GAME_OPTION_CDDA,
-    KUI_SHELL_GAME_OPTION_ADVANCED, KUI_SHELL_GAME_OPTION_COUNT
+    KUI_SHELL_GAME_OPTION_ADVANCED, KUI_SHELL_GAME_OPTION_CODEC, KUI_SHELL_GAME_OPTION_COUNT
 };
 enum kui_shell_game_tool {
     KUI_SHELL_GAME_TOOL_ENCODING, KUI_SHELL_GAME_TOOL_SPEED,
     KUI_SHELL_GAME_TOOL_INFO, KUI_SHELL_GAME_TOOL_TESTS,
-    KUI_SHELL_GAME_TOOL_PATCHES, KUI_SHELL_GAME_TOOL_DEFAULTS, KUI_SHELL_GAME_TOOL_COUNT
+    KUI_SHELL_GAME_TOOL_PATCHES, KUI_SHELL_GAME_TOOL_DEFAULTS, KUI_SHELL_GAME_TOOL_CHECK, KUI_SHELL_GAME_TOOL_BASELINE, KUI_SHELL_GAME_TOOL_COUNT
 };
 enum kui_shell_ripper_tool {
     KUI_SHELL_RIPPER_TOOL_VERIFY, KUI_SHELL_RIPPER_TOOL_RESUME,
     KUI_SHELL_RIPPER_TOOL_SETTINGS, KUI_SHELL_RIPPER_TOOL_QUICK,
     KUI_SHELL_RIPPER_TOOL_DESTINATION, KUI_SHELL_RIPPER_TOOL_SCAN,
     KUI_SHELL_RIPPER_TOOL_SALVAGE, KUI_SHELL_RIPPER_TOOL_JOB,
-    KUI_SHELL_RIPPER_TOOL_LABEL, KUI_SHELL_RIPPER_TOOL_COUNT
+    KUI_SHELL_RIPPER_TOOL_LABEL, KUI_SHELL_RIPPER_TOOL_REPAIR,
+    KUI_SHELL_RIPPER_TOOL_FORENSIC, KUI_SHELL_RIPPER_TOOL_NETWORK,
+    KUI_SHELL_RIPPER_TOOL_CD_SOURCE, KUI_SHELL_RIPPER_TOOL_COUNT
 };
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
@@ -96,7 +99,8 @@ enum kui_shell_action {
     KUI_SHELL_SCI_ASYNC_SCREEN, KUI_SHELL_SCI_ASYNC_SPEED,
     KUI_SHELL_WIFI_REFRESH, KUI_SHELL_WIFI_JOIN, KUI_SHELL_WIFI_FORGET,
     KUI_SHELL_WIFI_BAND, KUI_SHELL_SAVE_GAME_LAUNCH,
-    KUI_SHELL_WIFI_UPDATE_CHECK, KUI_SHELL_WIFI_UPDATE
+    KUI_SHELL_WIFI_UPDATE_CHECK, KUI_SHELL_WIFI_UPDATE,
+    KUI_SHELL_REPAIR_COPY, KUI_SHELL_FORENSIC, KUI_SHELL_GAMES_CHECK_EXECUTABLE
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -129,6 +133,9 @@ struct kui_shell {
     struct kui_cd_audio_status cd_audio;
     unsigned cd_selected;
     char games_path[KUI_DEST_ROOT_CAP], games_selected_path[KUI_GAMES_FILE_CAP];
+    struct kui_games_selection games_last;
+    char games_seek_name[KUI_DEST_NAME_CAP];
+    bool games_seek;
     /* A paired game keeps both exact files while details/confirmation are
      * open; the selected path is set only after the version is chosen. */
     char games_original_path[KUI_GAMES_FILE_CAP], games_2048_path[KUI_GAMES_FILE_CAP];
@@ -150,6 +157,10 @@ struct kui_shell {
     unsigned games_launch_reader, games_launch_selected;
     unsigned games_launch_encoding, game_tools_selected, game_tests_selected;
     bool games_tests_from_options;
+    unsigned games_launch_codec,games_codec_selected;
+    bool games_codec_override;
+    bool games_baseline;
+    struct kui_game_launch_settings games_baseline_previous;
     char games_launch_notice[128];
     bool games_launch_cdda, games_retail_scrambled;
     struct kui_game_ram_patches games_launch_patches;
@@ -174,6 +185,9 @@ struct kui_shell {
      * an empty folder label means the disc title for NEW captures only. */
     char capture_job[KUI_DEST_JOB_CAP], capture_folder_label[KUI_DEST_TITLE_CAP];
     bool browse_for_capture_job, capture_label_keyboard;
+    unsigned recovery_operation; /* 0 scan, 1 explicit repair copy, 2 reread evidence. */
+    bool capture_network;
+    bool capture_cd_toc; /* Explicitly declared single-session CD source. */
     /* File Manager. files_request is the next listing main hands to the
      * worker: the browser's folder, or the picker's (folders_only). A job
      * is checked (FILES_CHECK) before it is confirmed and run (FILES_RUN);
@@ -254,10 +268,15 @@ void kui_shell_set_music_listing(struct kui_shell *shell,
  * LIST uses games_path + games_page * ROWS and games_view; INSPECT uses
  * games_selected_path. SCAN covers /Games, then lists its first page. */
 void kui_shell_set_games_listing(struct kui_shell *shell, const struct kui_games_page *page);
+void kui_shell_set_games_selection(struct kui_shell *,const struct kui_games_selection *);
+bool kui_shell_games_selection(const struct kui_shell *,struct kui_games_selection *);
+bool kui_shell_set_games_found_rows(struct kui_shell *,const struct kui_games_page *,
+    unsigned generation,unsigned offset,unsigned view,unsigned selected);
 /* Worker publications must match the request that is still on screen. */
 bool kui_shell_set_games_rows(struct kui_shell *,const struct kui_games_page *,
     unsigned generation,unsigned offset,unsigned requested_view);
 void kui_shell_set_games_detail(struct kui_shell *shell, const struct kui_games_detail *detail);
+bool kui_shell_games_zso_selected(const struct kui_shell *);
 bool kui_shell_games_image_ready(const struct kui_shell *shell);
 /* The view to draw: the saved view once known, else the list. */
 unsigned kui_shell_games_view(const struct kui_shell *shell);

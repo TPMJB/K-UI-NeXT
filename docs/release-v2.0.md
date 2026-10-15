@@ -40,9 +40,10 @@ boot CD. See [boot and recovery](boot-recovery.md).
 
 Place each image and all its referenced tracks in a folder under `/Games`.
 Supported GDI, ISO, BIN/CUE, CDI and standalone BIN/IMG layouts remain available.
-Standard LZ4 ZSO has a separate experimental native SCI Standard reader,
-with console acceptance pending; see [ZSO scope](games-zso.md). CSO, CHD
-and historical LZO ZSO require PC import; see [format boundaries](games-formats.md).
+Standard LZ4 and explicitly selected historical LZO1X ZSO have separate
+experimental native SCI Standard readers, with console acceptance pending; see
+[ZSO scope](games-zso.md). CSO and CHD require PC import; see
+[format boundaries](games-formats.md).
 
 1. Open **Games** and select the title. Where paired copies exist, choose
    **Original** or **2048-byte copy**.
@@ -50,6 +51,9 @@ and historical LZO ZSO require PC import; see [format boundaries](games-formats.
    **CD music**. **Advanced** contains boot encoding, background speed, image
    information and developer tests. Choices save automatically for this image;
    Original and converted copies have separate image paths and settings.
+   For ZSO, select its known codec under **Options > ZSO codec** before
+   inspection. If initial inspection fails, **Y Select ZSO codec** opens that
+   choice; LZ4 is the default and no decoder fallback is attempted.
 3. Use **START** from Options, or **A Launch** from details/confirmation, to
    launch with those saved choices. Keep the card inserted while playing.
 
@@ -90,12 +94,17 @@ settings retain their existing roles. The
 [1.8.5 guide](release-v1.8.5.md#rip-a-disc-in-another-format) describes retained
 ripper exports. [Wi-Fi setup](wifi.md) and [FTP setup](ftp.md) remain applicable.
 SCI networking uses SCIF storage because SCI storage reserves that port.
+For the separate [PC capture destination](network-rip.md), the worker first
+loads its local configuration, disconnects local storage, then writes directly
+to an authenticated PC FAT32/exFAT volume image. Its helper is included under
+`tools/`; local capture remains the default and console adapter acceptance
+is pending.
 
 IDE/CF remains experimental synchronous PIO without console validation.
 ATA DMA and Windows CE on IDE/SCIF are not implemented. This candidate makes
 no new Wi-Fi, Ethernet or storage-throughput claim. Time Stalkers, some native
-FMVs and universal CDDA remain unresolved. The first native LZ4 ZSO path
-still needs console acceptance; other compressed resident formats remain
+FMVs and universal CDDA remain unresolved. Both native ZSO codec paths
+still need console acceptance; CSO and CHD resident decoding remain
 unimplemented. Direct CHD loading has its own [implementation plan](games-chd.md).
 
 ## Rollback and source

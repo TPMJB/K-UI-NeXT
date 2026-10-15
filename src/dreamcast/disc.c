@@ -238,7 +238,8 @@ static bool sample(const struct kui_track *track, uint32_t fad) {
     return true;
 }
 
-bool kui_disc_prepare(struct kui_toc sessions[2]) {
+static bool disc_prepare(struct kui_toc sessions[2],bool allow_cd,bool *is_cd) {
+    if(is_cd)*is_cd=false;
     if(poisoned) { kui_log("Drive unavailable after failed recovery; reset console"); return false; }
     if(!initialized) { kui_drive_init_bus(); initialized = true; }
     bool ready = false;
@@ -249,7 +250,22 @@ bool kui_disc_prepare(struct kui_toc sessions[2]) {
     }
     if(!ready) { kui_log("Disc initialization did not complete"); return false; }
     media_changed = false;
-    for(unsigned area = 0; area < 2; ++area) {
+    unsigned areas=2;
+    if(allow_cd) {
+        cd_check_drive_status_t drive;
+        memset(&drive,0,sizeof(drive));
+        if(syscall_gdrom_check_drive(&drive)!=0)return false;
+        if(drive.disc_type==CD_CDDA || drive.disc_type==CD_CDROM || drive.disc_type==CD_CDROM_XA) {
+            if(drive.status!=CD_STATUS_PAUSED && drive.status!=CD_STATUS_STANDBY) {
+                kui_log("CD is not ready; wait and retry capture");return false;
+            }
+            areas=1;if(is_cd)*is_cd=true;
+            memset(sessions,0,2u*sizeof(*sessions));
+        } else if(drive.disc_type!=CD_GDROM) {
+            kui_log("Unsupported optical media type; no capture started");return false;
+        }
+    }
+    for(unsigned area = 0; area < areas; ++area) {
         memset(&toc, 0xa5, sizeof(toc));
         toc_params = (cd_cmd_toc_params_t){(cd_area_t)area, &toc.data};
         if(!command(CD_CMD_GETTOC2, &toc_params, 5000)) return false;
@@ -269,6 +285,12 @@ bool kui_disc_prepare(struct kui_toc sessions[2]) {
         }
     }
     return true;
+}
+bool kui_disc_prepare(struct kui_toc sessions[2]) {
+    return disc_prepare(sessions,false,NULL);
+}
+bool kui_disc_prepare_capture(struct kui_toc sessions[2],bool *is_cd) {
+    return disc_prepare(sessions,true,is_cd);
 }
 
 enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {

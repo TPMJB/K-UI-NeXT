@@ -15,7 +15,7 @@ void kui_game_launch_settings_default(struct kui_game_launch_settings *out) {
     if(out) *out=(struct kui_game_launch_settings){.reader=KUI_GAME_READER_STANDARD,.encoding=KUI_GAME_ENCODING_AUTO};
 }
 bool kui_game_launch_settings_valid(const struct kui_game_launch_settings *s) {
-    return s && s->reader<KUI_GAME_READER_COUNT && s->encoding<KUI_GAME_ENCODING_COUNT &&
+    return s && s->reader<KUI_GAME_READER_COUNT && s->encoding<KUI_GAME_ENCODING_COUNT && s->codec<=KUI_ZSO_LZO1X &&
         kui_game_ram_patches_valid(&s->patches);
 }
 bool kui_game_launch_settings_normalize(char out[KUI_GAME_LAUNCH_SETTINGS_PATH_CAP],const char *path) {
@@ -82,11 +82,12 @@ bool kui_game_launch_settings_encode(void *record,size_t capacity,size_t *size,c
     for(unsigned i=0;i<table->count;i++) bytes+=24u+strlen(table->entries[i].path);
     if(bytes>capacity || bytes>KUI_GAME_LAUNCH_SETTINGS_RECORD_MAX) return false;
     uint8_t *p=record;memset(p,0,bytes);memcpy(p,magic,8);
-    put32(p+8,2);put32(p+12,(uint32_t)bytes);put64(p+16,sequence);put32(p+24,table->count);
+    put32(p+8,3);put32(p+12,(uint32_t)bytes);put64(p+16,sequence);put32(p+24,table->count);
     size_t at=32;
     for(unsigned i=0;i<table->count;i++) {
         const struct kui_game_launch_entry *e=&table->entries[i];size_t n=strlen(e->path);
         p[at]=(uint8_t)n;p[at+1]=(uint8_t)(n>>8);p[at+2]=(uint8_t)e->settings.reader;
+        p[at+6]=(uint8_t)e->settings.codec;
         p[at+3]=(uint8_t)(e->settings.cdda?1:0);p[at+4]=(uint8_t)e->settings.encoding;
         for(unsigned j=0;j<2;j++) {
             const struct kui_game_ram_patch *patch=&e->settings.patches.entries[j];
@@ -101,7 +102,7 @@ bool kui_game_launch_settings_decode(struct kui_game_launch_table *table,uint64_
     if(!table || !sequence || !record || size<36 || size>KUI_GAME_LAUNCH_SETTINGS_RECORD_MAX) return false;
     const uint8_t *p=record;
     uint32_t version=get32(p+8);size_t entry_size=version==1?8u:24u;
-    if(memcmp(p,magic,8) || (version!=1 && version!=2) || get32(p+12)!=size || !get64(p+16) ||
+    if(memcmp(p,magic,8) || (version!=1 && version!=2 && version!=3) || get32(p+12)!=size || !get64(p+16) ||
        get32(p+24)>KUI_GAME_LAUNCH_SETTINGS_ENTRIES || get32(p+28) ||
        get32(p+size-4)!=kui_crc32(0,p,size-4)) return false;
     unsigned count=get32(p+24);size_t at=32;
@@ -111,9 +112,9 @@ bool kui_game_launch_settings_decode(struct kui_game_launch_table *table,uint64_
         unsigned n=(unsigned)p[at]|(unsigned)p[at+1]<<8;
         if(!n || n>=KUI_GAME_LAUNCH_SETTINGS_PATH_CAP || n>size-4-at-entry_size ||
            p[at+2]>=KUI_GAME_READER_COUNT || p[at+3]>1 || p[at+4]>=KUI_GAME_ENCODING_COUNT ||
-           (version==1?p[at+5]!=0:(p[at+5]&~3u)!=0) || p[at+6] || p[at+7] ||
+           (version==1?p[at+5]!=0:(p[at+5]&~3u)!=0) || (version==3?p[at+6]>KUI_ZSO_LZO1X:p[at+6]!=0) || p[at+7] ||
            memchr(p+at+entry_size,0,n)) return false;
-        if(version==2) {
+        if(version>=2) {
             struct kui_game_ram_patches patches={0};
             for(unsigned j=0;j<2;j++) patches.entries[j]=(struct kui_game_ram_patch){
                 .address=get32(p+at+8u+j*8u),.value=get32(p+at+12u+j*8u),.enabled=(p[at+5]&(1u<<j))!=0};
@@ -130,8 +131,8 @@ bool kui_game_launch_settings_decode(struct kui_game_launch_table *table,uint64_
     for(unsigned i=0;i<count;i++) {
         unsigned n=lengths[i];struct kui_game_launch_entry *e=&table->entries[i];
         memcpy(e->path,paths[i],n);e->path[n]=0;
-        e->settings=(struct kui_game_launch_settings){.reader=p[at+2],.cdda=p[at+3]!=0,.encoding=p[at+4]};
-        if(version==2) for(unsigned j=0;j<2;j++) e->settings.patches.entries[j]=(struct kui_game_ram_patch){
+        e->settings=(struct kui_game_launch_settings){.reader=p[at+2],.cdda=p[at+3]!=0,.encoding=p[at+4],.codec=version==3?p[at+6]:KUI_ZSO_LZ4};
+        if(version>=2) for(unsigned j=0;j<2;j++) e->settings.patches.entries[j]=(struct kui_game_ram_patch){
             .address=get32(p+at+8u+j*8u),.value=get32(p+at+12u+j*8u),.enabled=(p[at+5]&(1u<<j))!=0};
         at+=entry_size+n;
     }

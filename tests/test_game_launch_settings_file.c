@@ -81,7 +81,7 @@ FRESULT f_stat(const TCHAR *path,FILINFO *info) {
 }
 FRESULT f_mkdir(const TCHAR *path) {parents[parent_of(path)]=true;return FR_OK;}
 static void same(struct kui_game_launch_settings a,struct kui_game_launch_settings b) {
-    assert(a.reader==b.reader && a.cdda==b.cdda && a.encoding==b.encoding);
+    assert(a.reader==b.reader && a.cdda==b.cdda && a.encoding==b.encoding && a.codec==b.codec);
     for(unsigned i=0;i<2;i++) {
         assert(a.patches.entries[i].address==b.patches.entries[i].address);
         assert(a.patches.entries[i].value==b.patches.entries[i].value);
@@ -167,21 +167,21 @@ static void faults_preserve_authority(void) {
     clear_faults();assert(!kui_game_launch_settings_save("/games/a.gdi",&invalid,NULL));
     assert(!kui_game_launch_settings_save("/games/../a.gdi",&new_choice,NULL));
     assert(!read_opens && !write_opens);
-    puts("PASS launch files: v1-to-v2 read/write/flush/close/verify fault refusal, untouched authoritative slot, read races and sequence exhaustion");
+    puts("PASS launch files: v1-to-v3 read/write/flush/close/verify fault refusal, untouched authoritative slot, read races and sequence exhaustion");
 }
 static void mixed_version_migration(void) {
     for(unsigned legacy=0;legacy<2;legacy++) {
         reset();seed_legacy(legacy,7);seed(1-legacy,6,"/games/a.gdi",&new_choice);
         expect_load("/games/a.gdi",&old_choice);snapshot[legacy]=disk[legacy];
         assert(kui_game_launch_settings_save("/games/b.gdi",&new_choice,NULL));
-        assert(last_written==1-legacy && disk[last_written].data[8]==2);
+        assert(last_written==1-legacy && disk[last_written].data[8]==3);
         assert(!memcmp(&snapshot[legacy],&disk[legacy],sizeof(snapshot[legacy])));
         clear_faults();expect_load("/games/a.gdi",&old_choice);expect_load("/games/b.gdi",&new_choice);
         struct kui_game_launch_settings changed=old_choice;changed.patches=new_choice.patches;
         assert(kui_game_launch_settings_save("/games/a.gdi",&changed,NULL));
-        assert(last_written==legacy && disk[legacy].data[8]==2);
+        assert(last_written==legacy && disk[legacy].data[8]==3);
         clear_faults();expect_load("/games/a.gdi",&changed);expect_load("/games/b.gdi",&new_choice);
-        /* A newer v1 remains authoritative over v2; version is never used
+        /* A newer v1 remains authoritative over v3; version is never used
          * as generation priority, and a torn v2 falls back to that v1. */
         reset();seed_legacy(legacy,9);seed(1-legacy,10,"/games/a.gdi",&new_choice);
         expect_load("/games/a.gdi",&new_choice);disk[1-legacy].size/=2;
@@ -189,7 +189,7 @@ static void mixed_version_migration(void) {
         reset();seed_legacy(legacy,10);seed(1-legacy,9,"/games/a.gdi",&new_choice);
         expect_load("/games/a.gdi",&old_choice);
     }
-    puts("PASS launch files: highest-sequence v1/v2 selection, non-destructive migration, preserved entries and torn migration recovery");
+    puts("PASS launch files: highest-sequence v1/v2/v3 selection, non-destructive migration, preserved entries and torn migration recovery");
 }
 static void patch_tuple_updates(void) {
     reset();struct kui_game_launch_settings choice=old_choice;
@@ -237,4 +237,14 @@ static void full_collection(void) {
     assert(!write_opens && !memcmp(snapshot,disk,sizeof(disk)));
     puts("PASS launch files: full collection updates, bounded chunked readback and overflow without eviction");
 }
-int main(void) {recovery_and_merging();faults_preserve_authority();mixed_version_migration();patch_tuple_updates();full_collection();return 0;}
+static void codec_updates(void) {
+    reset();struct kui_game_launch_settings a={0},b={.codec=KUI_ZSO_LZO1X};
+    assert(kui_game_launch_settings_save("/games/first.zso",&a,NULL));
+    unsigned writes=write_opens;
+    assert(kui_game_launch_settings_save("/games/first.zso",&b,NULL));
+    assert(write_opens>writes);expect_load("/games/first.zso",&b);
+    assert(kui_game_launch_settings_save("/games/second.zso",&a,NULL));
+    expect_load("/games/first.zso",&b);expect_load("/games/second.zso",&a);
+    puts("PASS saved codecs: changing only codec writes; exact images retain separate choices");
+}
+int main(void) {codec_updates();recovery_and_merging();faults_preserve_authority();mixed_version_migration();patch_tuple_updates();full_collection();return 0;}
