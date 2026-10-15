@@ -1,9 +1,9 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# K-UI V2.0 RC11 "Tyrfing"
+# K-UI V2.0 RC12 "Tyrfing"
 
 Tyrfing continues K-UI's cursed-sword release names. This guide covers the
-**2.0 RC11 source integration candidate**, not a published final 2.0 release.
-Its package prefix is `kui-2.0-rc11-tyrfing`. For the existing stable download,
+**2.0 RC12 source integration candidate**, not a published final 2.0 release.
+Its package prefix is `kui-2.0-rc12-tyrfing`. For the existing stable download,
 use [1.8.5](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.8.5) and its
 [installation guide](release-v1.8.5.md).
 
@@ -22,17 +22,17 @@ for retained features, remaining gaps and deferred work.
    saved launch settings. Install `runtime.kui` and the complete
    `KUI/apps/games` payload folder together. Earlier partial test ZIPs are not
    a substitute for the matching release package.
-3. Safely eject the card and cold boot. Check **V2.0 RC11** and the displayed
+3. Safely eject the card and cold boot. Check **V2.0 RC12** and the displayed
    build ID against the package's `build.json`. The illustration says V2.0;
    the live version label distinguishes this RC from a final release.
 
-RC11 includes orange Tyrfing runtime/header artwork and a matching optional
+RC12 retains the orange Tyrfing runtime/header artwork introduced in RC11 and a matching optional
 CDI with the new boot splash, orange controls and sword badge. Burn that CDI
 to replace artwork on the boot disc; the normal runtime update can continue
 using your existing compatible independent K-UI CD. To preview the new boot
 menu without burning, copy only the separate bootstrap package's
 `KUI/tools.kui` to the card, pause the existing CD startup and choose
-**Card tools**. Check **Card boot / recovery**, RC11 and the build ID, then
+**Card tools**. Check **Card boot / recovery**, RC12 and the build ID, then
 choose **Start K-UI**. The under-SEGA badge is stored on the disc and changes
 only when that disc is replaced. See [the card preview guide](bootloader-refresh.md#check-the-final-artwork-without-reburning).
 
@@ -101,6 +101,27 @@ with music after the worker-budget and RAM-copy improvements. This is a scoped
 owner report, not a zero-overhead or universal compatibility result. Earlier
 Armada/BAM4/Worms tests retain documented audio/FMV limitations. The WinCE path
 does not resolve Toy Commander's native FMV stalls.
+
+## RC12 VMU and system tools
+
+- In **VMU Manager**, open **L Actions → Backup card image** to save the
+  selected formatted VMU as a verified 131072-byte raw VMD. An empty formatted
+  card is supported. The backup never writes to the VMU.
+- Open **R Backups**, select a `.vmd`, then use **X Extract selected** or
+  **Y Extract all**. Extraction needs no attached VMU and creates new verified
+  save bundles. To inspect an external raw image, place it under a folder such
+  as `/KUI/backups/vmu/A1-0001/imported.vmd`. See [accepted paths and image
+  limits](vmu-restore.md#full-card-vmd-backup-and-read-only-image-tools).
+- In **Settings → System Tools**, choose **Compare settings flash** or
+  **Compare visible BIOS** and select an image with A. Directories are browsed,
+  not selected. The required sizes are 131072 and 2097152 bytes respectively.
+  The result reports an exact match or differing-byte count and first offset.
+  See [comparison scope](system-backups.md#compare-an-existing-image).
+
+These additions are host-tested and await console acceptance. VMD extraction
+uses the existing separately confirmed single-save restore workflow if you later
+choose to restore a bundle. Whole-card restore/format/overwrite and flash
+programming are not provided. No DreamShell implementation code is reused.
 
 ## Existing tools and hardware boundaries
 

@@ -813,9 +813,9 @@ build/test-network-w5500: tests/test_network_w5500.c src/core/w5500.c src/apps/n
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests src/core/w5500.c src/apps/network_probe.c src/apps/network_w5500.c tests/w5500_model.c tests/test_network_w5500.c -o $@
 
-build/maintenance-image: tests/maintenance_image.c $(CORE) $(FATFS) src/core/storage_probe.c src/apps/maintenance.c include/kui/maintenance.h
+build/maintenance-image: tests/maintenance_image.c $(CORE) $(FATFS) src/core/storage_probe.c src/core/destination.c src/core/files_path.c src/core/hash.c src/apps/maintenance.c include/kui/maintenance.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/storage_probe.c src/apps/maintenance.c tests/maintenance_image.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/storage_probe.c src/core/destination.c src/core/files_path.c src/core/hash.c src/apps/maintenance.c tests/maintenance_image.c -o $@
 
 build/salvage-image: tests/salvage_image.c $(CORE) $(FATFS) src/core/salvage.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c include/kui/salvage.h
 	@mkdir -p $(@D)

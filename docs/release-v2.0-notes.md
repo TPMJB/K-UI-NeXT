@@ -1,8 +1,9 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# K-UI V2.0 RC11 "Tyrfing" — preparation notes
+# K-UI V2.0 RC12 "Tyrfing" — preparation notes
 
-**2.0 RC11 prepares the tested SCI WinCE CD music work for integration with the
-existing Games launcher.** Tyrfing continues the cursed-sword naming theme.
+**2.0 RC12 adds small independent maintenance tools to the assembled Tyrfing
+candidate, retaining the tested SCI WinCE CD music and orange artwork.**
+Tyrfing continues the cursed-sword naming theme.
 This is a source integration candidate; it is not an announcement that final
 2.0 has shipped. The existing stable download remains
 [1.8.5](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.8.5).
@@ -11,6 +12,26 @@ Use the [installation guide](release-v2.0.md) and install the complete matching
 runtime and Games payload folder. Existing exFAT cards, dumps and compatible
 independent K-UI boot CDs remain usable.
 
+## RC12 maintenance additions
+
+- **VMU card backup:** Actions → Backup card image captures a verified raw
+  128 KiB VMD, including an empty formatted card, into a new backup directory.
+- **VMD browsing/extraction:** Backups opens standard raw 128 KiB images,
+  including external images without a K-UI sidecar. Extract one/all saves into
+  new verified `.vms`/`.dir`/`.crc` bundles, retaining names and metadata. These
+  image operations need no connected VMU and never write to a physical card.
+- **BIOS/settings-flash comparison:** System Tools selects an exact-size SD
+  image and compares two complete stable reads with the current console source.
+  Results show exact match or byte-difference count and first offset. Comparison
+  writes neither the source nor the image and creates no output files.
+
+These tools use independently authored K-UI code and upstream KallistiOS
+interfaces. No DreamShell implementation code was copied. Full-card restore,
+format/overwrite, broader VMS/VMI/DCI import and bulk VMU copy remain outside
+this candidate. See [VMU controls and limits](vmu-restore.md) and
+[system comparison](system-backups.md). Fault-injection and real FAT32/exFAT
+host-image checks pass; the new integrated console workflows await acceptance.
+
 ## Orange Tyrfing artwork and preparation tools
 
 RC11 replaces the previous release's splash with orange retro futuristic
@@ -18,7 +39,7 @@ artwork featuring the cursed blade Tyrfing. The runtime and CD share matching
 television-safe artwork, with a new sword header, under-SEGA disc badge and
 orange bootstrap accents. Runtime/boot image dimensions, splash timing and
 memory bounds are retained. The V2.0 illustration is release artwork; the
-live **RC11** label and build ID identify this candidate. Updating the card
+live **RC12** label and build ID identify this candidate. Updating the card
 changes runtime artwork; the optional matching CDI changes the burned disc.
 
 Games keeps its alphabetical order when titles are added and restores the
@@ -63,7 +84,7 @@ owner's selected image; retail bytes are not release assets.
 
 | Area | Recorded result | Limit |
 | --- | --- | --- |
-| Native 1.8.5 reader | Owner confirmed Sonic Adventure, Grandia II and Skies of Arcadia on `5973741a6077`; Power Stone 1/2 worked after earlier command fixes | Scoped runs, not full playthroughs or an RC11 retest |
+| Native 1.8.5 reader | Owner confirmed Sonic Adventure, Grandia II and Skies of Arcadia on `5973741a6077`; Power Stone 1/2 worked after earlier command fixes | Scoped runs, not full playthroughs or an RC12 retest |
 | Armada WinCE music | Established exact US profile and working full-stream baseline | Audio/FMV limitations remain; no new Armada test is inferred from Worms work |
 | Bust-A-Move 4 | Owner reported successful music on `ed0a2c809bda`; diagnostics recorded ten starts, no refusal/HRESULT and one recovered underrun | Other revisions, every track and a long soak remain unverified |
 | Worms audio supply | `8a22ec45229a` had no observed underruns in two submitted runs, with gameplay lag reported | Those runs do not establish zero-dropout playback everywhere |
@@ -75,7 +96,7 @@ The latest tested performance source is published as
 `d9f861ba87a2957234d0af276a4cfeb573367258`. The preceding bounded-worker
 candidate had already reduced lag without affecting music. These results
 support retaining that baseline while preparing the release; they do not
-certify every profile in the newly assembled RC11 package.
+certify every profile in the newly assembled RC12 package.
 
 See [native placement evidence](evidence/native-low-resident-2026-10-06.md),
 [BAM4 results](bam4-ce-cdda-test.md),

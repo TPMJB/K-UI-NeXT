@@ -41,6 +41,77 @@ directory changes through upstream KOS's filesystem APIs. The final allocation,
 directory, root and every payload byte are reread before success is reported.
 Stop is deferred during the short metadata commit and its final check.
 
+## Full-card VMD backup and read-only image tools
+
+The VMU Actions page also offers **Backup card image**, including on an empty
+formatted card. This writes `/KUI/backups/vmu/A1-NNNN/card.vmd` (or the selected
+slot's prefix) in a new, never-overwritten folder. The `.vmd` contains exactly
+131072 bytes: raw blocks 0 through 255 in ascending order, including free data
+and system blocks. The existing filesystem checks must succeed first; this
+operation is not a forensic reader for an unformatted or damaged card.
+
+The reader checks the selected device at block boundaries, reads each block
+twice, and requires two complete image scans to agree. The SD output is synced,
+closed, reopened and compared byte-for-byte, with CRC32 checked. A separate
+`card.vmd.crc` is a 32-byte K-UI record: `KUIVMD1` plus a NUL, little-endian image
+length at byte 8, payload CRC32 at byte 12, zero bytes 16 through 27, and record
+CRC32 at byte 28. `complete.txt` is published after image and checksum success.
+An interrupted attempt can leave a new `.part` file or an image without its
+completion marker; existing files are retained. Capturing an image never writes
+to the VMU. Whole-card image restoration is not implemented.
+
+The saved-backups browser lists `.vmd` images as well as verified save bundles.
+Select an image to browse its saves, extract one selected save, or extract all
+saves. External raw images are accepted without a K-UI checksum sidecar. Copy
+one to a directory such as `/KUI/backups/vmu/A1-0001/imported.vmd` first; create
+that directory if needed. Paths must use an `A1` through `D2` prefix, four decimal
+digits, and a filename made from letters, digits, `_` or `-`. The `.vmd`
+extension is case-insensitive. This prefix is an organizational folder name for
+an imported file and does not identify or require a connected source VMU.
+Headered containers, compressed images, and sizes other than exactly 131072
+bytes are refused. If an image has a matching `.vmd.crc` sidecar, it must pass
+its recorded length, payload checksum and record checksum as well.
+
+Browsing and extraction open the source image read-only, perform no physical
+VMU enumeration, reads, locks or writes, and validate root geometry, directory
+bounds, file type/header offset/copy flag, allocation-chain lengths, cycles and
+shared blocks. Two complete source reads must agree. The browsed image's full
+CRC32 is pinned; a changed image requires refreshing the image view. The source
+is reread before each extracted bundle and again before final completion.
+
+Extraction creates a new unused backup directory with the same organizational
+prefix as the source directory. Every save uses the existing verified `.vms`,
+`.dir`, and `.crc` bundle format and existing restore workflow. The `.dir`
+preserves the original 12-byte filename, save or mini-game type, copy flag,
+header offset and timestamp; no metadata is reconstructed from the display
+name. Output files are never written over. A completed individual bundle has a
+verified `.crc` even if a later save fails or the user stops. Only a completely
+successful extraction publishes `complete.txt`. No source image is altered or
+removed. The implementation holds one 128 KiB image, one bounded save payload,
+and bounded filesystem metadata in memory.
+
+Console acceptance for the new read-only tools:
+
+1. List a VMU and choose Actions → Backup card image. Check the generated
+   `card.vmd` is 131072 bytes and the operation reports verified.
+2. Open saved backups, select `card.vmd`, and compare save names and block
+   counts with the physical VMU listing. An empty formatted VMU should also
+   produce a browsable empty image.
+3. Extract a selected save, then extract all saves. Confirm each job uses a new
+   directory and keeps the source `.vmd` and existing backups intact.
+4. Preview an extracted bundle in the existing restore workflow. If testing
+   restoration, use free space on a spare VMU and the existing acceptance checks
+   below; no image-level write or restore action exists.
+
+Host tests run real FAT32 and exFAT filesystems with simulated VMU transport.
+They cover exact image bytes, empty cards, unchanged originals, changed device
+or contents, malformed geometry/chains, shared blocks, truncation/oversize,
+metadata preservation, optional checksum records, source changes, cancellation,
+SD write/sync/readback failures and partial multi-save extraction. Selected and
+all-save extraction also pass through the existing restore preview and
+transport-simulated restore, including mini-game metadata. These checks do not
+replace console acceptance.
+
 ## Hardware limits
 
 **Keep the VMU connected and leave power on during a restore.** VMU flash

@@ -51,7 +51,7 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_FTP, KUI_SHELL_STORAGE_TESTS, KUI_SHELL_STORAGE_TEST_HISTORY,
     KUI_SHELL_SCI_ASYNC_PROBE, KUI_SHELL_GAMES_VARIANTS, KUI_SHELL_WIFI,
     KUI_SHELL_GAMES_LAUNCH_OPTIONS, KUI_SHELL_GAMES_EXTRA_OPTIONS,
-    KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK };
+    KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK, KUI_SHELL_VMU_IMAGE };
 enum kui_shell_game_option {
     KUI_SHELL_GAME_OPTION_READER, KUI_SHELL_GAME_OPTION_CDDA,
     KUI_SHELL_GAME_OPTION_ADVANCED, KUI_SHELL_GAME_OPTION_CODEC, KUI_SHELL_GAME_OPTION_COUNT
@@ -100,7 +100,10 @@ enum kui_shell_action {
     KUI_SHELL_WIFI_REFRESH, KUI_SHELL_WIFI_JOIN, KUI_SHELL_WIFI_FORGET,
     KUI_SHELL_WIFI_BAND, KUI_SHELL_SAVE_GAME_LAUNCH,
     KUI_SHELL_WIFI_UPDATE_CHECK, KUI_SHELL_WIFI_UPDATE,
-    KUI_SHELL_REPAIR_COPY, KUI_SHELL_FORENSIC, KUI_SHELL_GAMES_CHECK_EXECUTABLE
+    KUI_SHELL_REPAIR_COPY, KUI_SHELL_FORENSIC, KUI_SHELL_GAMES_CHECK_EXECUTABLE,
+    KUI_SHELL_VMU_BACKUP_CARD, KUI_SHELL_VMU_IMAGE_LIST,
+    KUI_SHELL_VMU_IMAGE_EXTRACT, KUI_SHELL_VMU_IMAGE_EXTRACT_ALL,
+    KUI_SHELL_FLASH_COMPARE, KUI_SHELL_BIOS_COMPARE
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -125,6 +128,10 @@ struct kui_shell {
     struct kui_vmu_view vmu;
     struct kui_vmu_backup_view backups;
     unsigned backup_page, backup_selected;
+    /* Image browsing never borrows a physical VMU selection or restore target. */
+    char vmu_image_path[KUI_VMU_BACKUP_PATH_CAP];
+    unsigned vmu_image_page, vmu_image_selected;
+    struct kui_vmu_view vmu_image;
     char restore_path[KUI_VMU_BACKUP_PATH_CAP], restore_name[16];
     uint32_t restore_bytes;
     char music_path[KUI_DEST_ROOT_CAP], music_selected_path[KUI_DEST_ROOT_CAP];
@@ -206,6 +213,10 @@ struct kui_shell {
     /* A copy, move, delete, rename or new folder runs until its status is
      * installed; the browser shows its progress meanwhile. */
     bool files_running;
+    /* System tools uses the same safe listing as File Manager, with files
+     * visible. A regular copy/move picker still chooses folders only. */
+    bool files_pick_compare, system_compare_bios;
+    char system_compare_path[KUI_FILES_PATH_CAP];
     /* Diagnostics' storage tests use worker-published copies only. The last
      * request stays independent of whichever historical result is displayed. */
     struct kui_storage_test_request storage_test_request, storage_test_last_request;
@@ -251,6 +262,9 @@ bool kui_shell_system_dirty(const struct kui_shell *shell);
  * active. The reducer returns CONFIRM/CANCEL; it never commits a video mode. */
 void kui_shell_set_vmu(struct kui_shell *shell, const struct kui_vmu_view *view);
 /* Worker publications are ignored unless their page/slot still matches. */
+/* A VMD result echoes its exact path and requested page; the returned page
+ * can fall back to zero if the image has fewer saves after refresh. */
+void kui_shell_set_vmu_image(struct kui_shell *,const char *path,unsigned requested_page,const struct kui_vmu_view *);
 void kui_shell_set_vmu_backups(struct kui_shell *shell, const struct kui_vmu_backup_view *view);
 void kui_shell_set_vmu_restore_preview(struct kui_shell *shell, const struct kui_vmu_view *view);
 /* A successful clock read or write replaces the editable snapshot. Failure

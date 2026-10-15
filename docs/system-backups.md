@@ -1,4 +1,4 @@
-# Console inventory and verified system backups
+# Console inventory, verified system backups and image comparisons
 
 System Tools can inspect the console's reported region, BIOS language/audio/
 autostart settings and all five settings-flash partition bounds. A failed region
@@ -24,6 +24,39 @@ Settings-flash files can contain private network/ISP information. Keep the image
 on your own card/computer; a diagnostic result and checksum are sufficient for
 our test record. BIOS backup does not demonstrate that a chip is writable or
 that an image is compatible with another console.
+
+## Compare an existing image
+
+System Tools can compare an existing SD file with **settings flash** or the
+**visible BIOS bank**. Choose the file from the card; any safe local filename is
+accepted, including images previously saved by K-UI. Settings-flash files must
+be exactly 131072 bytes and BIOS files exactly 2097152 bytes. Smaller, larger,
+missing and unreadable files are refused. Nothing is restored or programmed.
+
+The result says **Exact match** or reports the exact number of differing bytes
+and the first differing byte offset, starting at zero. Console and image CRC32
+values are also shown. A difference is a completed comparison, separate from an
+I/O failure or cancellation. It does not establish image authenticity, chip type,
+bank identity, programming support or compatibility with another console.
+
+Comparison opens the selected file read-only, creates no report or directory,
+and never changes either the file or console memory. It uses two 4 KiB buffers
+for two complete streaming passes, reads each console chunk twice, checks
+SHA-256 digests between passes, and rechecks the reported console settings and
+partition layout at completion. A detected source or file change refuses the
+result. B stops between chunks without publishing a comparison result. External
+bank switches remain untouched; only the currently visible BIOS window is read.
+
+The maintenance host-image suite includes 108 comparison cases across FAT32 and
+exFAT: flash/BIOS exact matches and four-byte differences (including a 4 KiB
+boundary), qualified and full-length local paths, unknown console settings,
+incorrect lengths,
+missing files/directories, unsafe paths, partition/identity failures and changes,
+console/SD read failures, unstable console reads, changed source/file content
+between passes, and cancellation before/during/rechecking. Every case uses a
+read-only storage backend and verifies the whole SD-image hash is unchanged;
+the fake source memory is also checked unchanged. These extend the 32 backup
+cases below. Console acceptance remains pending.
 
 The [32 FAT32/exFAT host image cases](evidence/m15-network-maintenance-host-2026-09-23.json)
 cover inventory without SD writes, verified

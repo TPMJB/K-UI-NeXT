@@ -5,7 +5,8 @@
  * memory, network, idle, reset, home-vmu, home-memory, home-network,
  * home-music, home-gd, music, gd-play, gd-confirm, quick-resume, dma-fallback,
  * music-queued, advanced-destination, clock, clock-confirm, defaults,
- * vmu-restore, vmu-restore-confirm, crc-scan, scan-folder, home-games,
+ * vmu-restore, vmu-restore-confirm, vmu-card-backup, vmu-image, vmu-image-working,
+ * system-compare, bios-image-pick, flash-image-pick, crc-scan, scan-folder, home-games,
  * games, games-variants, games-variants-2048, games-detail-2048, games-retail-2048,
  * games-detail, games-error, games-advanced, games-probe,
  * games-probe-loading, games-image-probe, games-image-probe-loading,
@@ -486,6 +487,40 @@ int main(int argc,char **argv) {
         strcpy(shell.vmu.entries[0].name,"MDK2_SAVE");shell.vmu.entries[0].bytes=4096;
         shell.vmu_copy_slot=1;shell.confirm_vmu_delete=!strcmp(argv[1],"vmu-delete");
         shell.confirm_vmu_copy=!strcmp(argv[1],"vmu-copy");
+    } else if(!strcmp(argv[1],"vmu-card-backup")) {
+        shell.page=KUI_SHELL_VMU_ACTIONS;shell.vmu.present=true;shell.vmu_action_selected=2;shell.vmu_copy_slot=1;
+        view.app_status=&status;strcpy(status.message,"Card image saved and read back successfully.");
+    } else if(!strcmp(argv[1],"vmu-image") || !strcmp(argv[1],"vmu-image-working")) {
+        shell.page=KUI_SHELL_VMU_IMAGE;shell.vmu_image.present=true;
+        shell.vmu_image.count=8;shell.vmu_image.total=14;shell.vmu_image_selected=7;
+        strcpy(shell.vmu_image_path,"/KUI/backups/vmu/A1-0001/card.vmd");
+        for(unsigned i=0;i<8;i++) {
+            snprintf(shell.vmu_image.entries[i].name,16,"GAME_SAVE_%02u",i);
+            shell.vmu_image.entries[i].bytes=512u*(i+1u);
+        }
+        view.app_status=&status;
+        if(!strcmp(argv[1],"vmu-image-working")) {
+            view.busy=true;status.complete=false;status.passed=false;
+            strcpy(status.message,"Extracting save 8 of 14 to verified SD backups...");
+        } else strcpy(status.message,"Valid card image. Choose a save to extract.");
+    } else if(!strcmp(argv[1],"system-compare")) {
+        shell.page=KUI_SHELL_SYSTEM_TOOLS;shell.tools_selected=5;
+        strcpy(shell.system_compare_path,"/KUI/backups/system/bios-0001.bin");
+        status.complete=true;status.passed=false;status.line_count=12;status.done=status.total=2097152;
+        strcpy(status.message,"Different: 42 bytes; first at 0x000020.");
+        strcpy(status.lines[10],"Visible BIOS differs at 0x000020");
+        strcpy(status.lines[11],"Console memory and SD image were not changed.");view.app_status=&status;
+    } else if(!strcmp(argv[1],"bios-image-pick") || !strcmp(argv[1],"flash-image-pick")) {
+        shell.page=KUI_SHELL_FILES_PICK;shell.files_pick_compare=true;
+        shell.system_compare_bios=!strcmp(argv[1],"bios-image-pick");
+        strcpy(shell.files_pick_path,"/KUI/backups/system");
+        struct kui_files_page *l=&shell.files_pick;l->count=l->total=8;
+        for(unsigned i=0;i<8;i++) {
+            snprintf(l->entries[i].name,sizeof(l->entries[i].name),"%s-%04u.bin",
+                shell.system_compare_bios?"bios":"flash",i+1);
+            l->entries[i].bytes=shell.system_compare_bios?2097152:131072;
+        }
+        l->entries[2].bytes=512;shell.files_pick_selected=7;
     } else if(!strcmp(argv[1],"safe-area")) {
         shell.page=KUI_SHELL_SETTINGS;shell.system_selected=8;shell.system_draft.screen_inset=1;
     } else if(!strcmp(argv[1],"system-tools") || !strcmp(argv[1],"restart")) {

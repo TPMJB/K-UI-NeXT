@@ -19,4 +19,17 @@ void kui_maintenance_execute(unsigned action,const struct kui_maintenance_source
 /* Single-I/O-worker adapter; owns SD connect/mount only for backup actions. */
 void kui_maintenance_run(unsigned action,struct kui_app_status *out,
     kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+/* Read-only comparison against an existing local SD file. Accepts a safe,
+ * canonical card-root or 0:/ path up to the Files picker's full path limit,
+ * and requires exactly 2 MiB (BIOS) or 128 KiB (flash).
+ * Two streaming passes check every byte and recheck source/file stability.
+ * A completed mismatch has complete=true, passed=false and errors=0; count
+ * and first differing byte offset are shown in the message and detail lines.
+ * Neither engine nor adapter creates reports, directories or any SD files. */
+void kui_maintenance_compare_execute(const char *path,bool bios,
+    const struct kui_maintenance_source *source,struct kui_app_status *out,
+    kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+void kui_maintenance_compare_run(const char *path,bool bios,
+    struct kui_app_status *out,kui_log_fn log,kui_cancel_fn cancel,
+    kui_app_progress_fn progress);
 #endif

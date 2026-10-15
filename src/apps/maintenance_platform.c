@@ -41,3 +41,16 @@ done:
     if(connected)kui_sd_disconnect();
     if(progress)progress(out);
 }
+void kui_maintenance_compare_run(const char *path,bool bios,struct kui_app_status *out,
+    kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress){
+    if(!out)return;
+    memset(out,0,sizeof(*out));bool connected=false,mounted=false;FATFS fs;
+    if(cancel&&cancel()){out->stopped=true;snprintf(out->message,sizeof(out->message),"System comparison stopped");goto done;}
+    if(!kui_sd_connect()){snprintf(out->message,sizeof(out->message),"Cannot connect SD for system comparison");++out->errors;goto done;}connected=true;
+    if(!kui_mount(&fs,log?log:quiet)){snprintf(out->message,sizeof(out->message),"Cannot mount SD for system comparison");++out->errors;goto done;}mounted=true;
+    kui_maintenance_compare_execute(path,bios,&source,out,log,cancel,progress);
+done:
+    if(mounted&&f_mount(NULL,"0:",0)!=FR_OK){++out->errors;out->passed=false;out->complete=false;snprintf(out->message,sizeof(out->message),"System comparison unmount failed");}
+    if(connected)kui_sd_disconnect();
+    if(progress)progress(out);
+}

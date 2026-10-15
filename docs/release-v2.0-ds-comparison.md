@@ -2,7 +2,8 @@
 # Tyrfing compared with DS-based K-UI 1.0.1
 
 Audit: 2026-10-15. Independent runtime source inspected at
-`9e1efbf` (`2.0-rc10` before the subsequent artwork/documentation update).
+`9e1efbf` (`2.0-rc10`), updated for the independent RC12 maintenance additions
+and retained RC11 artwork. RC12 source/build records identify its final commit.
 Legacy baseline: [K-UI_DS release `k-ui-1.0.1`](https://github.com/TPMJB/K-UI_DS/releases/tag/k-ui-1.0.1),
 commit `2a5309298dde8fb100da1e2e4e10517695c9780f`, including GD Ripper 2.2.5
 and Bootloader 3.3. That repository was previously named DreamShell_NeXT;
@@ -19,7 +20,7 @@ and incomplete individual VMU/flash test coverage.
 
 **Tyrfing has enough implemented scope for a 2.0 release after acceptance of
 the complete candidate. Full DreamShell feature parity is not a prerequisite.**
-The largest remaining everyday gaps are full-card VMU images/imports,
+The largest remaining everyday gaps are full-card VMU restoration/broader save imports,
 BIOS/region programming, direct CSO loading and broader storage/loader
 compatibility. They require independent implementation rather than another
 merge of existing work. Several smaller library and peripheral features also
@@ -40,7 +41,8 @@ CDDA/ZSO/IDE combinations as working because their UI or source exists.
 | WinCE/native CD music | Broader checked runtime selection; four CE kernel/sound adapters established from Armada, BAM4, Worms Armageddon and World Party; native Toy/MDK2 executable/driver bindings | `53dc10f`; `src/apps/games_retail.c`, `include/kui/wince_cdda_profiles.h`, `src/core/games_cdda_profile.h`, [admission/evidence](experimental-cdda.md). World Party and unfamiliar matching images remain Experimental. This is a substantial serial-storage capability beyond the old release's recorded BAM4 failure, not proof of universal superiority. |
 | Compressed ZSO first slice | Independent standard LZ4 and explicitly selected historical LZO1X readers, separate packages and validation | `d406863`, `4d79d63`; `src/core/zso.c`, `src/core/retail_zso.c`, [ZSO limits](games-zso.md). Native SCI Standard, one cooked track, 2048-byte blocks and at most 31 physical fragments; no CE/CDDA/background/patch combination. Console acceptance remains pending. |
 | GD Ripper | Existing resumable/verified capture, reference catalogues and salvage; exact saved-job selection, custom folder label, retries, strict Mode 1 acquisition checks, cooked GDI export, opt-in single-session CD capture, direct PC destination, repair-to-copy and suspect reread evidence | `f502d29`, `4d79d63`; [ripper audit](audit-legacy-ripper.md), [controls](ripper-controls.md). All identified ripper workflow additions are implemented. The newly integrated operations need console acceptance, not another feature implementation. |
-| VMU management | Selected/all-save SD backups, selected-save VMU copy, managed delete and verified restore to a new filename; startup LCD branding | `9508dde`, `8b82f04`, `1b6f809`; `src/apps/vmu.c`, [restore](vmu-restore.md), [startup](vmu-startup.md). The recorded THPS2 backup/delete/restore round trip passed in the game; two-VMU copy and the new LCD presentation need their own acceptance. |
+| VMU management | Selected/all-save SD backups, selected-save VMU copy, managed delete and verified restore to a new filename; startup LCD branding; RC12 verified raw 128 KiB VMD backup, read-only browsing and selected/all-save extraction | `9508dde`, `8b82f04`, `1b6f809`; `src/apps/vmu.c`, [restore](vmu-restore.md), [startup](vmu-startup.md). The recorded THPS2 backup/delete/restore round trip passed in the game; two-VMU copy, the new LCD presentation and RC12 image tools need their own acceptance. RC12 FAT32/exFAT tests also round-trip extracted bundles through existing restore. |
+| System comparison | RC12 read-only comparison of exact-size SD images with all 128 KiB settings flash or the currently visible 2 MiB BIOS bank; exact byte-difference count/first offset and two-pass stability checks | `src/apps/maintenance.c`, [system tools](system-backups.md). Real FAT32/exFAT tests prove card images remain unchanged; console acceptance remains pending. No chip identification, bank switch or programming is inferred. |
 | Files, music and diagnostics | Checked local copy/move/rename/delete/mkdir and file viewing; menu/custom WAV/Ogg playback and audio CD; allocated-buffer RAM test; storage Quick/Compare/Soak, history/baselines and reports | `2fc9453`, `8b82f04`, `eddc0d4`; [files](files.md), [app acceptance](apps-round-five.md), [storage tests](storage-testing.md). File Manager's new native-console workflow remains unaccepted. Storage speed testing is present. |
 | Networking | W5500 and XIAO ESP32-C5/C6 FTP; Wi-Fi scan/join/band selection and saved adapter credentials; compatible card-supplied adapter firmware checks/install | `75e6776`, `cbdc383`, `3e3f86c`; [FTP](ftp.md), [Wi-Fi](wifi.md), [console updates](wifi-console-update.md). Final wireless timing, firmware update and direct-PC-rip adapter paths still need console acceptance; firmware 0.1.3 is built separately. |
 
@@ -51,8 +53,8 @@ stay deferred even where the old application offered them.
 
 | Area | Remaining difference from the old release | Priority and concrete next work |
 | --- | --- | --- |
-| VMU full-card and imported saves | Old VMU Manager offers full `.vmd` image creation/browsing/restoration, format/overwrite and broader external save inputs. Current restore uses its verified `.vms` + `.dir` + `.crc` bundles under `/KUI/backups/vmu`, with no overwrite or full-card format. **Backup all to SD is already present**; bulk direct VMU-to-VMU Copy all is absent. | Useful post-2.0 parity work: start with read-only VMD/VMS/DCI inspection and explicit import, then independently validate full-card restoration. Old `applications/vmu_manager/`, `utils/README.vmu-manager.md`; new `src/apps/vmu.c`, [restore contract](vmu-restore.md). |
-| BIOS and permanent region maintenance | Old BIOS Flasher offers chip/bank identification, complete-image compare and erase/program on supported programmable chips; Region Changer offers persistent factory/settings changes. Current System Tools exposes inventory and verified settings-flash/visible-BIOS backups only. Original Sega mask ROM is not programmable. | Separate hardware project, not an RC defect. Identify the actual flash part/bank wiring and implement from its datasheet with a recoverable test setup. Old `applications/bios_flasher/`, `applications/region_changer/`, `modules/bflash/`; new `include/kui/maintenance.h`, `src/apps/maintenance*.c`, [boundaries](independent-app-parity.md), [backups](system-backups.md). |
+| VMU full-card and imported saves | Old VMU Manager offers full `.vmd` image creation/browsing/restoration, format/overwrite and broader external save inputs. RC12 now creates verified raw 128 KiB VMD images and browses/extracts saves from structurally valid standard images without a connected VMU. Current restore uses its verified `.vms` + `.dir` + `.crc` bundles under `/KUI/backups/vmu`, with no overwrite or full-card format. Broader standalone VMS/VMI/DCI import and bulk direct VMU-to-VMU Copy all are absent. | Useful post-2.0 parity work: independently add broader save-format inspection/import, then validate full-card restoration with a recoverable hardware setup. Old `applications/vmu_manager/`, `utils/README.vmu-manager.md`; new `src/apps/vmu.c`, [restore contract](vmu-restore.md). |
+| BIOS and permanent region maintenance | Old BIOS Flasher offers chip/bank identification, complete-image compare and erase/program on supported programmable chips; Region Changer offers persistent factory/settings changes. Current System Tools exposes inventory, verified settings-flash/visible-BIOS backups and RC12 read-only complete-image comparison. Chip/bank identification and permanent changes remain absent. Original Sega mask ROM is not programmable. | Separate hardware project, not an RC defect. Identify the actual flash part/bank wiring and implement from its datasheet with a recoverable test setup. Old `applications/bios_flasher/`, `applications/region_changer/`, `modules/bflash/`; new `include/kui/maintenance.h`, `src/apps/maintenance*.c`, [boundaries](independent-app-parity.md), [backups](system-backups.md). |
 | Compressed game containers | The old ISO-loader/ISOFS path has direct CSO and historical ZSO support. Tyrfing has the narrower experimental ZSO slice above; **CSO still needs PC import**. Broader block sizes, other transports and CE/CDDA/background combinations are not implemented for direct ZSO. | High-value later loader work: bounded CSO DEFLATE decoder and a separately proven resident layout, followed by measured console comparison. `src/core/zso.c`, [roadmap](games-parity-roadmap.md). **Direct CHD is a requested enhancement, not a demonstrated loss from 1.0.1**; see [CHD design](games-chd.md). |
 | Retail compatibility and runtime controls | Time Stalkers still returns to K-UI; Toy Commander and some other FMVs stall/skip. Unknown native sound drivers and CE kernel/sound contracts need new adapters. Old automatic/manual OS, alternate executable, boot-method/placement, IRQ/async, region and CDDA controls are not interchangeable parameters for this independent loader. | Preserve the tested SCI/native baseline. Work from one reproducible failing title/trace at a time; do not add old numeric knobs without an implemented meaning. [Current evidence](release-v2.0-notes.md), `src/apps/games_retail.c`, `src/loader/retail_*`, [legacy Games audit](audit-legacy-games.md). These failures are known limits, not evidence that every corresponding title worked in 1.0.1. |
 | Gameplay VMU/screenshots/new patch features | Old Games exposes SD-backed VMU emulation and screenshot hotkeys; more flexible old RAM-patch controls are outside the two existing one-time executable patch slots. | **Explicitly deferred by the owner**, together with alternate executable selection, additional boot methods and per-game region override. None is a Tyrfing blocker. See [independent design/sequence](games-parity-roadmap.md). |
@@ -86,8 +88,9 @@ stay deferred even where the old application offered them.
   imported. Old `rip.state` is not an independent K-UI resume checkpoint;
   current `checkpoint-a.bin`/`checkpoint-b.bin` records are a different contract.
   An imported GDI's scan/repair support does not convert old partial jobs into
-  resumable captures. The same distinction applies to old VMU files versus
-  the current verified restore bundle.
+  resumable captures. The same distinction applies to standalone old save files versus
+  the current verified restore bundle. RC12 can browse/extract structurally valid
+  raw VMD images into that bundle format; it does not restore the whole image.
 - **Different CD distribution.** Legacy 1.0.1 includes a self-contained full
   shell/apps CDI alongside its bootloader. The independent distribution is a
   bootstrap/recovery diagnostic CD plus storage runtime; there is no matching
@@ -109,7 +112,9 @@ stay deferred even where the old application offered them.
    and saved selection, then test an established native game and the accepted
    WinCE/music baseline. Preserve raw/2048 choices and a usable recovery path.
    Check that an unsupported music profile is refused clearly.
-3. Smoke-test normal local rip/Stop/Resume/Verify and the new UI controls. Record
+3. Smoke-test normal local rip/Stop/Resume/Verify and the new UI controls.
+   For RC12, back up a formatted VMU as VMD, browse/extract a save, and compare
+   the console with its own verified settings-flash/visible-BIOS backup. Record
    actual console acceptance separately for PC destination, CD capture,
    repair/evidence, ZSO and adapter firmware paths if exercised. Features left
    untested retain their explicit experimental/acceptance labels; do not turn

@@ -18,6 +18,7 @@
 #include <string.h>
 
 #define BLOCK_BYTES 512u
+#define IMAGE_BYTES (256u*BLOCK_BYTES)
 #define DIR_BLOCKS_MAX 16u
 #define FILES_MAX (DIR_BLOCKS_MAX*16u)
 #define BACKUP_ROOT "/KUI/backups/vmu"
@@ -37,6 +38,7 @@ struct session {
     kui_app_progress_fn progress;
     maple_device_t *device;
     unsigned port,unit;
+    bool sd_source; /* Image extraction never probes or writes a physical VMU. */
 };
 /* Only the existing I/O worker calls this module. Remember the view the user
  * selected, so a changed VMU cannot silently turn a selected row into another
@@ -104,9 +106,7 @@ static bool read_block(struct session *s,unsigned block,uint8_t out[BLOCK_BYTES]
     if(memcmp(first,second,BLOCK_BYTES)) return fail(s,"VMU block was short or changed while reading");
     memcpy(out,first,BLOCK_BYTES);return true;
 }
-static bool read_snapshot(struct session *s,struct snapshot *snap) {
-    memset(snap,0,sizeof(*snap));
-    if(!read_block(s,255,snap->root)) return false;
+static bool snapshot_layout(struct session *s,struct snapshot *snap) {
     for(unsigned i=0;i<16;i++) if(snap->root[i]!=0x55) return fail(s,"VMU is unformatted or its root is damaged");
     unsigned fat=le16(snap->root+70),fat_blocks=le16(snap->root+72);
     snap->directory_start=le16(snap->root+74);snap->directory_blocks=le16(snap->root+76);
@@ -117,9 +117,9 @@ static bool read_snapshot(struct session *s,struct snapshot *snap) {
        snap->directory_start+1-snap->directory_blocks<snap->user_blocks ||
        (fat<=snap->directory_start && fat>=snap->directory_start+1-snap->directory_blocks))
         return fail(s,"Unsupported or damaged VMU filesystem layout");
-    if(!read_block(s,fat,snap->fat)) return false;
-    for(unsigned i=0;i<snap->directory_blocks;i++)
-        if(!read_block(s,snap->directory_start-i,snap->directory+i*BLOCK_BYTES)) return false;
+    return true;
+}
+static bool validate_snapshot(struct session *s,struct snapshot *snap) {
     bool used[256]={false};
     for(unsigned i=0;i<snap->user_blocks;i++) if(le16(snap->fat+i*2)==0xfffc) ++snap->free_blocks;
     for(unsigned i=0;i<snap->directory_blocks*16;i++) {
@@ -142,6 +142,14 @@ static bool read_snapshot(struct session *s,struct snapshot *snap) {
     snap->fingerprint=kui_crc32(snap->fingerprint,snap->fat,sizeof(snap->fat));
     snap->fingerprint=kui_crc32(snap->fingerprint,snap->directory,snap->directory_blocks*BLOCK_BYTES);
     return true;
+}
+static bool read_snapshot(struct session *s,struct snapshot *snap) {
+    memset(snap,0,sizeof(*snap));
+    if(!read_block(s,255,snap->root) || !snapshot_layout(s,snap)) return false;
+    if(!read_block(s,le16(snap->root+70),snap->fat)) return false;
+    for(unsigned i=0;i<snap->directory_blocks;i++)
+        if(!read_block(s,snap->directory_start-i,snap->directory+i*BLOCK_BYTES)) return false;
+    return validate_snapshot(s,snap);
 }
 static bool locked_snapshot(struct session *s,struct snapshot *snap) {
     if(vmufs_mutex_lock()!=0) return fail(s,"Cannot lock VMU reader");
@@ -199,12 +207,12 @@ static bool read_save(struct session *s,const struct snapshot *snap,const uint8_
 static bool save_file(struct session *s,const char *path,const uint8_t *bytes,size_t length) {
     char part[KUI_DEST_PATH_CAP];int n=snprintf(part,sizeof(part),"%s.part",path);
     if(n<0 || n>=(int)sizeof(part)) return fail(s,"VMU backup path is too long");
-    if(cancelled(s) || !same_device(s)) return false;
+    if(cancelled(s) || (!s->sd_source && !same_device(s))) return false;
     FIL file;FRESULT r=f_open(&file,part,FA_WRITE|FA_CREATE_NEW);
     if(r!=FR_OK) return fail(s,"Cannot create new SD backup file");
     bool ok=true;size_t at=0;
     while(at<length) {
-        if(cancelled(s) || !same_device(s)) {ok=false;break;}
+        if(cancelled(s) || (!s->sd_source && !same_device(s))) {ok=false;break;}
         UINT count=(UINT)(length-at>4096?4096:length-at),written=0;
         r=f_write(&file,bytes+at,count,&written);
         if(r!=FR_OK || written!=count) {ok=fail(s,"SD backup write failed or card is full");break;}
@@ -218,7 +226,7 @@ static bool save_file(struct session *s,const char *path,const uint8_t *bytes,si
     if(f_size(&file)!=length) ok=fail(s,"SD backup verification length mismatch");
     uint8_t buffer[4096];uint32_t crc=0;at=0;
     while(ok && at<length) {
-        if(cancelled(s) || !same_device(s)) {ok=false;break;}
+        if(cancelled(s) || (!s->sd_source && !same_device(s))) {ok=false;break;}
         UINT count=(UINT)(length-at>sizeof(buffer)?sizeof(buffer):length-at),got=0;
         r=f_read(&file,buffer,count,&got);
         if(r!=FR_OK || got!=count || memcmp(buffer,bytes+at,count)) {
@@ -228,7 +236,7 @@ static bool save_file(struct session *s,const char *path,const uint8_t *bytes,si
     }
     if(f_close(&file)!=FR_OK) ok=fail(s,"SD verification close failed");
     if(ok && crc!=kui_crc32(0,bytes,length)) ok=fail(s,"SD backup CRC32 mismatch");
-    if(!ok || cancelled(s) || !same_device(s)) return false;
+    if(!ok || cancelled(s) || (!s->sd_source && !same_device(s))) return false;
     if(f_rename(part,path)!=FR_OK) return fail(s,"Cannot publish verified backup file");
     if(s->log) s->log("VMU backup verified %s bytes=%u CRC32=%08" PRIx32,path+2,(unsigned)length,crc);
     return true;
@@ -244,15 +252,29 @@ static bool new_folder(struct session *s,char folder[KUI_DEST_JOB_CAP]) {
     }
     return fail(s,"VMU backup folder numbers are exhausted");
 }
+/* A complete raw image includes unallocated and system blocks. Two full scans
+ * must agree, in addition to the transport's immediate per-block rereads. */
+static bool capture_image(struct session *s,uint8_t *data,bool compare) {
+    if(vmufs_mutex_lock()!=0) return fail(s,"Cannot lock VMU image reader");
+    bool ok=true;uint8_t block[BLOCK_BYTES];
+    for(unsigned i=0;i<256;i++) {
+        if(!read_block(s,i,compare?block:data+i*BLOCK_BYTES)) {ok=false;break;}
+        if(compare && memcmp(block,data+i*BLOCK_BYTES,BLOCK_BYTES)) {
+            ok=fail(s,"VMU image changed during capture; refresh and retry");break;
+        }
+    }
+    if(vmufs_mutex_unlock()!=0) return fail(s,"Cannot unlock VMU image reader");
+    return ok;
+}
 void kui_vmu_app_run(unsigned action,unsigned slot,unsigned page,unsigned selected,
     struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
     if(!out) return;
     if(!log) log=quiet_log;
     memset(out,0,sizeof(*out));out->slot=slot;
-    struct session s={out,log,cancel,progress,NULL,slot/2,slot%2+1};
+    struct session s={out,log,cancel,progress,NULL,slot/2,slot%2+1,false};
     struct snapshot *snap=NULL,*check=NULL;uint8_t *data=NULL;
     bool connected=false,mounted=false,ok=false;FATFS fs;
-    if(slot>=8 || action>2) {fail(&s,"Invalid VMU slot or action");goto done;}
+    if(slot>=8 || action>3) {fail(&s,"Invalid VMU slot or action");goto done;}
     if(cancelled(&s)) goto done;
     s.device=maple_enum_dev((int)s.port,(int)s.unit);
     if(!s.device || !s.device->valid || !(s.device->info.functions&MAPLE_FUNC_MEMCARD)) {
@@ -275,12 +297,13 @@ void kui_vmu_app_run(unsigned action,unsigned slot,unsigned page,unsigned select
     if(listed[slot].device!=s.device || listed[slot].fingerprint!=snap->fingerprint) {
         listed[slot].valid=false;fail(&s,"VMU changed since listing; refresh before backup");goto done;
     }
-    if(!snap->count) {fail(&s,"The selected VMU has no saves to back up");goto done;}
+    if(!snap->count && action!=3) {fail(&s,"The selected VMU has no saves to back up");goto done;}
     if(action==1 && (page!=out->page || selected>=out->count)) {
         fail(&s,"Selected VMU save is no longer available");goto done;
     }
+    if(action==3) out->status.total=IMAGE_BYTES;
     unsigned first=action==1?page*KUI_VMU_ROWS+selected:0,end=action==1?first+1:snap->count;
-    for(unsigned i=first;i<end;i++) out->status.total+=(uint64_t)le16(snap->directory+snap->entries[i]*32+24)*BLOCK_BYTES;
+    for(unsigned i=first;action!=3 && i<end;i++) out->status.total+=(uint64_t)le16(snap->directory+snap->entries[i]*32+24)*BLOCK_BYTES;
     check=malloc(sizeof(*check));
     if(!check) {fail(&s,"Not enough RAM for VMU verification");goto done;}
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
@@ -290,6 +313,27 @@ void kui_vmu_app_run(unsigned action,unsigned slot,unsigned page,unsigned select
     mounted=true;
     char folder[KUI_DEST_JOB_CAP];
     if(!new_folder(&s,folder)) goto done;
+    if(action==3) {
+        data=malloc(IMAGE_BYTES);
+        if(!data) {fail(&s,"Not enough RAM for complete VMU image");goto done;}
+        status(&s,"Reading all 256 VMU blocks...");
+        if(!capture_image(&s,data,false) || !capture_image(&s,data,true) || !check_snapshot(&s,snap,check)) goto done;
+        char path[KUI_DEST_PATH_CAP];snprintf(path,sizeof(path),"%s/card.vmd",folder);
+        status(&s,"Saving and verifying complete VMU image...");
+        if(!save_file(&s,path,data,IMAGE_BYTES)) goto done;
+        strcpy(out->backup_path,path);
+        uint8_t proof[32]={0};memcpy(proof,"KUIVMD1",7);
+        put32(proof+8,IMAGE_BYTES);put32(proof+12,kui_crc32(0,data,IMAGE_BYTES));
+        put32(proof+28,kui_crc32(0,proof,28));
+        snprintf(path,sizeof(path),"%s/card.vmd.crc",folder);
+        if(!save_file(&s,path,proof,sizeof(proof)) || !check_snapshot(&s,snap,check)) goto done;
+        static const uint8_t note[]="K-UI complete 131072-byte raw VMU image, blocks 0..255.\n"
+            "Source read only; two full captures agreed; SD reread and CRC verified.\n"
+            "No whole-card image restore is implemented. Keep card.vmd.crc with card.vmd.\n";
+        snprintf(path,sizeof(path),"%s/complete.txt",folder);
+        if(!save_file(&s,path,note,sizeof(note)-1)) goto done;
+        out->status.done=IMAGE_BYTES;status(&s,"Verified full-card VMD: %s",out->backup_path+2);ok=true;goto done;
+    }
     if(log) log("VMU backup: %s (.vms raw payload; .dir original metadata; no VMU writes)",folder+2);
     for(unsigned i=first;i<end;i++) {
         const uint8_t *entry=snap->directory+snap->entries[i]*32;
@@ -332,11 +376,20 @@ done:
     if(progress) progress(&out->status);
 }
 
-static bool source_path(const char *path,char peer[KUI_VMU_BACKUP_PATH_CAP],const char *ext) {
+static bool extension_is(const char *extension,const char *expected) {
+    if(extension[0]!='.') return false;
+    for(unsigned i=0;i<3;i++) {
+        unsigned char c=(unsigned char)extension[i+1];
+        if(c>='A' && c<='Z') c=(unsigned char)(c-'A'+'a');
+        if(c!=(unsigned char)expected[i]) return false;
+    }
+    return extension[4]==0;
+}
+static bool backup_path(const char *path,char peer[KUI_VMU_BACKUP_PATH_CAP],const char *source_ext,const char *ext) {
     static const char prefix[]="0:" BACKUP_ROOT "/";
     if(!path || strncmp(path,prefix,sizeof(prefix)-1)) return false;
     size_t length=strlen(path);
-    if(length>=KUI_VMU_BACKUP_PATH_CAP || length<sizeof(prefix)+5 || strcmp(path+length-4,".vms")) return false;
+    if(length>=KUI_VMU_BACKUP_PATH_CAP || length<sizeof(prefix)+5 || !extension_is(path+length-4,source_ext)) return false;
     const char *folder=path+sizeof(prefix)-1,*slash=strchr(folder,'/');
     if(!slash || slash-folder!=7 || path+length-4==slash+1 || folder[0]<'A' || folder[0]>'D' ||
        folder[1]<'1' || folder[1]>'2' || folder[2]!='-') return false;
@@ -344,6 +397,12 @@ static bool source_path(const char *path,char peer[KUI_VMU_BACKUP_PATH_CAP],cons
     for(const char *p=slash+1;p<path+length-4;p++)
         if(!((*p>='a'&&*p<='z') || (*p>='A'&&*p<='Z') || (*p>='0'&&*p<='9') || *p=='_' || *p=='-')) return false;
     memcpy(peer,path,length-3);memcpy(peer+length-3,ext,4);return true;
+}
+static bool source_path(const char *path,char peer[KUI_VMU_BACKUP_PATH_CAP],const char *ext) {
+    return backup_path(path,peer,"vms",ext);
+}
+static bool image_path(const char *path) {
+    char peer[KUI_VMU_BACKUP_PATH_CAP];return backup_path(path,peer,"vmd","vmd");
 }
 static bool load_exact(struct session *s,const char *path,void *data,size_t size) {
     FIL file;FRESULT r=f_open(&file,path,FA_READ);
@@ -381,7 +440,7 @@ void kui_vmu_backups_run(unsigned page,struct kui_vmu_backup_view *out,
     kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
     if(!out) return;
     memset(out,0,sizeof(*out));out->page=page;
-    struct kui_vmu_view scratch={0};struct session s={&scratch,log?log:quiet_log,cancel,progress,NULL,0,0};
+    struct kui_vmu_view scratch={0};struct session s={&scratch,log?log:quiet_log,cancel,progress,NULL,0,0,false};
     FATFS fs;bool connected=false,mounted=false,ok=false,root_open=false,sub_open=false;
     DIR root,sub;FILINFO folder,file;
     if(page>UINT32_MAX/KUI_VMU_ROWS) {fail(&s,"Invalid backup page");goto done;}
@@ -411,11 +470,15 @@ void kui_vmu_backups_run(unsigned page,struct kui_vmu_backup_view *out,
             if(r!=FR_OK) {fail(&s,"Cannot read VMU backup files");goto done;}
             if(!file.fname[0]) break;
             size_t length=strlen(file.fname);
-            if((file.fattrib&AM_DIR) || length<5 || strcmp(file.fname+length-4,".vms")) continue;
+            if((file.fattrib&AM_DIR) || length<5) continue;
+            bool is_image=extension_is(file.fname+length-4,"vmd");
+            if(!is_image && strcmp(file.fname+length-4,".vms")) continue;
             char path[KUI_VMU_BACKUP_PATH_CAP],peer[KUI_VMU_BACKUP_PATH_CAP];
             n=snprintf(path,sizeof(path),"%s/%s",directory,file.fname);
-            if(n<0 || n>=(int)sizeof(path) || !source_path(path,peer,"crc")) continue;
-            FILINFO proof_info;FRESULT proof_result=f_stat(peer,&proof_info);
+            if(n<0 || n>=(int)sizeof(path)) continue;
+            if(is_image) {if(!image_path(path)) continue;}
+            else if(!source_path(path,peer,"crc")) continue;
+            FILINFO proof_info;FRESULT proof_result=is_image?FR_OK:f_stat(peer,&proof_info);
             if(proof_result==FR_NO_FILE || proof_result==FR_NO_PATH) continue; /* Legacy backup: no restore proof. */
             if(proof_result!=FR_OK) {fail(&s,"Cannot inspect backup CRC record");goto done;}
             if(out->total>=page*KUI_VMU_ROWS && out->count<KUI_VMU_ROWS) {
@@ -431,7 +494,7 @@ void kui_vmu_backups_run(unsigned page,struct kui_vmu_backup_view *out,
         if(f_closedir(&sub)!=FR_OK) {sub_open=false;fail(&s,"Cannot close backup directory");goto done;}
         sub_open=false;
     }
-    status(&s,out->total?"%u restore candidates; select one to verify":"No restorable backups; make a new backup with CRC proof",out->total);ok=true;
+    status(&s,out->total?"%u backups; select a save or browse a VMD":"No backups; back up a save or a full VMU image",out->total);ok=true;
 done:
     if(sub_open && f_closedir(&sub)!=FR_OK) {fail(&s,"Cannot close backup directory");ok=false;}
     if(root_open && f_closedir(&root)!=FR_OK) {fail(&s,"Cannot close backup directory");ok=false;}
@@ -541,7 +604,7 @@ void kui_vmu_restore_run(const char *path,unsigned slot,bool commit,
     struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
     if(!out) return;
     memset(out,0,sizeof(*out));out->slot=slot;
-    struct session s={out,log?log:quiet_log,cancel,progress,NULL,slot/2,slot%2+1};
+    struct session s={out,log?log:quiet_log,cancel,progress,NULL,slot/2,slot%2+1,false};
     struct snapshot *snap=NULL,*check=NULL;uint8_t *data=NULL,entry[32],proof[32];
     bool connected=false,mounted=false,ok=false;FATFS fs;
     if(!commit) restore_preview.valid=false;
@@ -633,6 +696,119 @@ static bool publish_save(struct session *s,const char *folder,const uint8_t entr
  * then cannot cause a live entry to point at blocks marked free. A failed
  * directory write may affect neighboring entries: never retry it or report
  * success. Both exact metadata and restorable payload are already saved on SD. */
+
+/* Raw VMD tools operate on our own documented byte layout, never on a VMU.
+ * A full-image CRC pins the viewed file until the user explicitly refreshes. */
+static struct {char path[KUI_VMU_BACKUP_PATH_CAP];uint32_t crc;bool valid;} image_listed;
+static bool image_read(struct session *s,const char *path,uint8_t *data,bool compare) {
+    FIL file;FRESULT r=f_open(&file,path,FA_READ);
+    if(r!=FR_OK) return fail(s,"Cannot open the read-only VMD image");
+    bool ok=f_size(&file)==IMAGE_BYTES;
+    if(!ok) fail(s,"VMD must be exactly 131072 bytes (256 raw 512-byte blocks)");
+    uint8_t buffer[4096];
+    for(unsigned at=0;ok && at<IMAGE_BYTES;at+=sizeof(buffer)) {
+        if(cancelled(s)) {ok=false;break;}
+        UINT got=0;r=f_read(&file,compare?buffer:data+at,sizeof(buffer),&got);
+        if(r!=FR_OK || got!=sizeof(buffer)) {ok=fail(s,"VMD read failed or image was truncated");break;}
+        if(compare && memcmp(buffer,data+at,sizeof(buffer))) {ok=fail(s,"VMD image changed; refresh before extraction");break;}
+    }
+    if(f_close(&file)!=FR_OK) ok=fail(s,"Cannot close VMD image");
+    return ok;
+}
+static bool image_proof(struct session *s,const char *path,const uint8_t *data) {
+    char proof_path[KUI_VMU_BACKUP_PATH_CAP+4];
+    int n=snprintf(proof_path,sizeof(proof_path),"%s.crc",path);
+    if(n<0 || n>=(int)sizeof(proof_path)) return fail(s,"VMD checksum path is too long");
+    FILINFO info;FRESULT r=f_stat(proof_path,&info);
+    if(r==FR_NO_FILE || r==FR_NO_PATH) return true; /* External raw images need no K-UI sidecar. */
+    if(r!=FR_OK) return fail(s,"Cannot inspect VMD checksum record");
+    uint8_t proof[32];
+    if(!load_exact(s,proof_path,proof,sizeof(proof))) return false;
+    if(memcmp(proof,"KUIVMD1\0",8) || le32(proof+8)!=IMAGE_BYTES ||
+       le32(proof+12)!=kui_crc32(0,data,IMAGE_BYTES) || le32(proof+16) || le32(proof+20) || le32(proof+24) ||
+       le32(proof+28)!=kui_crc32(0,proof,28))
+        return fail(s,"VMD image or checksum record is damaged");
+    return true;
+}
+static bool image_snapshot(struct session *s,const uint8_t *data,struct snapshot *snap) {
+    memset(snap,0,sizeof(*snap));memcpy(snap->root,data+255*BLOCK_BYTES,BLOCK_BYTES);
+    if(!snapshot_layout(s,snap)) return false;
+    memcpy(snap->fat,data+le16(snap->root+70)*BLOCK_BYTES,BLOCK_BYTES);
+    for(unsigned i=0;i<snap->directory_blocks;i++)
+        memcpy(snap->directory+i*BLOCK_BYTES,data+(snap->directory_start-i)*BLOCK_BYTES,BLOCK_BYTES);
+    if(!validate_snapshot(s,snap)) return false;
+    for(unsigned i=0;i<snap->count;i++) {
+        const uint8_t *entry=snap->directory+snap->entries[i]*32;
+        if((entry[1]!=0 && entry[1]!=0xff) || !entry[4])
+            return fail(s,"VMD save has invalid copy flag or an empty filename");
+    }
+    return true;
+}
+void kui_vmu_image_run(const char *path,unsigned page,unsigned selected,unsigned action,
+    struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
+    if(!out) return;
+    memset(out,0,sizeof(*out));out->page=page;
+    struct session s={out,log?log:quiet_log,cancel,progress,NULL,0,1,true};
+    struct snapshot *snap=NULL;uint8_t *data=NULL,*payload=NULL;
+    FATFS fs;bool connected=false,mounted=false,ok=false;
+    if(!action) image_listed.valid=false;
+    if(action>2 || !image_path(path)) {fail(&s,"Select a .vmd from the VMU backup browser");goto done;}
+    if(action && (!image_listed.valid || strcmp(path,image_listed.path))) {
+        fail(&s,"Browse this VMD image before extracting saves");goto done;
+    }
+    const char *origin=path+sizeof("0:" BACKUP_ROOT "/")-1;
+    s.port=(unsigned)(origin[0]-'A');s.unit=(unsigned)(origin[1]-'0');
+    if(cancelled(&s)) goto done;
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    if(!kui_sd_connect()) {fail(&s,"Cannot connect SD card for VMD image");goto done;}
+    connected=true;
+    if(!kui_mount(&fs,s.log)) {fail(&s,"Cannot mount SD card for VMD image");goto done;}
+    mounted=true;data=malloc(IMAGE_BYTES);snap=malloc(sizeof(*snap));
+    if(!data || !snap) {fail(&s,"Not enough RAM for VMD image");goto done;}
+    status(&s,"Reading and checking read-only VMD image...");
+    if(!image_read(&s,path,data,false) || !image_read(&s,path,data,true) || !image_proof(&s,path,data) || !image_snapshot(&s,data,snap)) goto done;
+    uint32_t crc=kui_crc32(0,data,IMAGE_BYTES);
+    if(action && crc!=image_listed.crc) {
+        image_listed.valid=false;fail(&s,"VMD changed since browsing; refresh before extraction");goto done;
+    }
+    fill_view(&s,snap,page);out->present=true;
+    if(!action) {
+        strcpy(image_listed.path,path);image_listed.crc=crc;image_listed.valid=true;
+        status(&s,"VMD image: %u saves, %u free blocks (read only)",snap->count,snap->free_blocks);ok=true;goto done;
+    }
+    if(!snap->count) {fail(&s,"The VMD image has no saves to extract");goto done;}
+    if(action==1 && (page!=out->page || selected>=out->count)) {
+        fail(&s,"Selected VMD save is no longer available");goto done;
+    }
+    unsigned first=action==1?page*KUI_VMU_ROWS+selected:0,end=action==1?first+1:snap->count;
+    for(unsigned i=first;i<end;i++) out->status.total+=(uint64_t)le16(snap->directory+snap->entries[i]*32+24)*BLOCK_BYTES;
+    char folder[KUI_DEST_JOB_CAP];if(!new_folder(&s,folder)) goto done;
+    for(unsigned i=first;i<end;i++) {
+        const uint8_t *entry=snap->directory+snap->entries[i]*32;
+        unsigned blocks=le16(entry+24),at=le16(entry+2);size_t bytes=blocks*BLOCK_BYTES;
+        status(&s,"Extracting %u/%u to verified SD save bundles...",i-first+1,end-first);
+        payload=malloc(bytes);
+        if(!payload) {fail(&s,"Not enough RAM for extracted VMU save");goto done;}
+        for(unsigned n=0;n<blocks;n++) {memcpy(payload+n*BLOCK_BYTES,data+at*BLOCK_BYTES,BLOCK_BYTES);at=le16(snap->fat+at*2);}
+        if(!image_read(&s,path,data,true) || !publish_save(&s,folder,entry,payload,i)) goto done;
+        free(payload);payload=NULL;out->status.done+=bytes;
+    }
+    if(!image_read(&s,path,data,true)) goto done;
+    static const uint8_t note[]="K-UI VMD save extraction completed. Original .vmd was read only.\n"
+        "Each .vms + .dir + .crc bundle preserves complete payload and original metadata.\n"
+        "All output files were synchronized and reread byte-for-byte with CRC checks.\n"
+        "A .crc published before an interruption marks a complete individual save bundle.\n";
+    char marker[KUI_DEST_PATH_CAP];snprintf(marker,sizeof(marker),"%s/complete.txt",folder);
+    if(!save_file(&s,marker,note,sizeof(note)-1)) goto done;
+    status(&s,"Extracted %u verified saves: %s",end-first,folder+2);ok=true;
+done:
+    free(payload);free(data);free(snap);
+    if(mounted && f_mount(NULL,"0:",0)!=FR_OK) {fail(&s,"Cannot unmount VMD filesystem");ok=false;}
+    if(connected) kui_sd_disconnect();
+    out->status.complete=ok;out->status.passed=ok;
+    if(progress) progress(&out->status);
+}
+
 static bool delete_write(struct session *s,const struct snapshot *original,
                          struct snapshot *check,unsigned entry_index) {
     vmu_root_t root;uint16_t fat[256];uint8_t bytes[BLOCK_BYTES];
@@ -681,8 +857,8 @@ static void managed_run(bool copy,unsigned source_slot,unsigned page,unsigned se
                         bool commit,struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
     if(!out) return;
     memset(out,0,sizeof(*out));out->slot=copy?destination_slot:source_slot;
-    struct session source={out,log?log:quiet_log,cancel,progress,NULL,source_slot/2,source_slot%2+1};
-    struct session target={out,log?log:quiet_log,cancel,progress,NULL,destination_slot/2,destination_slot%2+1};
+    struct session source={out,log?log:quiet_log,cancel,progress,NULL,source_slot/2,source_slot%2+1,false};
+    struct session target={out,log?log:quiet_log,cancel,progress,NULL,destination_slot/2,destination_slot%2+1,false};
     struct snapshot *snap=NULL,*check=NULL,*destination=NULL;uint8_t *data=NULL;
     bool connected=false,mounted=false,ok=false;FATFS fs;
     if(!commit) managed_preview.valid=false;
