@@ -524,14 +524,12 @@ int main(void) {
     CHECK(player.model.produced==produced && player.model.staged==staged && bus.unlocks==1u &&
         player.mail.epoch!=player.applied_epoch);++cases;
     /* A source completion revoked before staging cannot publish old data. */
-    /* Completed PIO blocks need no scheduler wake or second IRQ. The real
-     * worker drains a bounded32-pump visit, then resumes the same ticket. */
+    /* A complete16-sector PIO job fits one worker visit, rather than
+     * requiring three CE timer wakes at the observed20visits/second. */
     reset(true,128u);bus.pio_ready=true;
     unsigned pio_before=bus.pumps;CHECK(source());
-    CHECK(player.read_active && bus.pending && bus.bytes==SOURCE_READY_PUMPS*512u &&
-        bus.pumps-pio_before==SOURCE_READY_PUMPS+1u && !player.source_total);
-    CHECK(source() && player.read_active && bus.bytes==2u*SOURCE_READY_PUMPS*512u);
-    CHECK(source() && !player.read_active && !bus.pending &&
+    CHECK(!player.read_active && !bus.pending && bus.bytes==RAW_BYTES &&
+        bus.pumps-pio_before<=SOURCE_READY_PUMPS+1u &&
         player.model.staged==RAW_BYTES && player.source_total==RAW_BYTES);++cases;
     /* A command arriving between one-block masks prevents any old source
      * ticket from reaching staging, even if furtherPIO bytes are ready. */

@@ -428,7 +428,7 @@ def build(args):
                 "packaging_corruption_checks": checks,
                 "output_member_sizes_sha256_crc32_verified": True}}
     files["build.json"] = (json.dumps(info, indent=2) + "\n").encode()
-    files["README.md"] = f"""# K-UI 2.0 RC1 — Armada CD music
+    files["README.md"] = f"""# K-UI 2.0 RC2 — Armada CD music
 
 Menu and optional audio loader build **{stamp}**. Merge this ZIP's `KUI` folder
 onto the SCI microSD card with the console off, replacing **both**
@@ -436,13 +436,15 @@ onto the SCI microSD card with the console off, replacing **both**
 
 Select **Original Armada → Y Options → CD music On → START**. This test streams
 the requested audio tracks from your image; it is not the earlier two-second
-excerpt loop. This2.0 release candidate integrates Claude'sbe793d667cf0 changes
-into our current source: cursor-authoritative pacing, a one-second restart
-threshold, offset-based staging with only tiny unmasked carry copies, and
-worker-visit counts. It also drains up to32 already-ready card-block pumps per
-source visit, with interrupts restored between pumps. The loop stops on an incomplete reception; DMA, quota handoff or a new
-command ends the drain. The working
-startup, priority2,16-sector reads, urgent grants and shared DATA reader remain.
+excerpt loop. RC2 retains Claude's cursor-authoritative pacing, one-second
+restart threshold, offset staging and worker diagnostics. RC1's console trace
+supplied137,984B/s against176,811B/s consumed during continuous playback,
+with20worker visits/second. RC2 allows one whole16-sector job per urgent grant:
+75card blocks, with up to76worker pumps including initial reception setup.
+Interrupts restore between pumps; incomplete DMA, a new command or DATA handoff
+ends the drain. Priority2,16-sector reads, DATA's16-block quantum and immediate
+foreground preemption remain. This is a measured supply correction, not a
+hardware success claim.
 
 Use the same in-game scene where the earlier loop was audible. No main-menu
 wait or gameplay video is requested. Return with **A+B+X+Y+Start** after music
@@ -524,7 +526,7 @@ def main():
     parser.add_argument("--elf", type=Path, default=ROOT / "build/kui-runtime.elf")
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     parser.add_argument("--evidence", action="append", default=[], metavar="NAME=PATH")
-    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-2.0-RC1-Armada-Audio.zip")
+    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-2.0-RC2-Armada-Audio.zip")
     args = parser.parse_args()
     try:
         build(args)

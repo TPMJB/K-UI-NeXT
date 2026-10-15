@@ -31,7 +31,9 @@
 #define WORKER_TOKEN UINT32_C(0x5354524d)
 #define STEP_MS 20u
 #define SOURCE_STEP_MS 1u
-#define SOURCE_READY_PUMPS 32u
+/* One whole unaligned batch, plus the pump that arms its first reception.
+ * Stop earlier on pending DMA, a transport handoff or changed commands. */
+#define SOURCE_READY_PUMPS ((RAW_BYTES+1022u)/512u+1u)
 #define COPY_PAGES ((KUI_ARMADA_CE_STREAM_STAGE_BYTES+4095u)/4096u+1u)
 _Static_assert(RAW_BYTES+KUI_ARMADA_CE_STREAM_STAGE_BYTES<=KUI_ARMADA_CE_STREAM_SOURCE_BYTES,
     "raw batch and carry staging must fit the already reserved source bank");

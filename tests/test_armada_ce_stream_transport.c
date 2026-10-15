@@ -26,9 +26,10 @@ static struct {
     uint8_t before[32], bytes[AUDIO_BYTES], after[32];
 } output;
 static uint8_t expected[AUDIO_BYTES];
+static uint32_t audio_stride=2448u;
 
 static uint8_t source(unsigned track, uint32_t file_byte) {
-    uint32_t stride = track == 3u ? 2448u : 2352u;
+    uint32_t stride = track == 3u ? audio_stride : 2352u;
     uint32_t sector = file_byte / stride, inside = file_byte % stride;
     /* Audio deliberately contains no valid Mode1 sync/header, so a mistaken
      * cooked-data path cannot accidentally pass this fixture. */
@@ -39,7 +40,8 @@ static int reference_block(void *context, uint32_t lba, uint8_t out[512]) {
     memcpy(out, card_bytes + lba * 512u, 512u);
     return 0;
 }
-static void fixture(void) {
+static void fixture_stride(uint32_t stride) {
+    audio_stride=stride;
     memset(&manifest, 0, sizeof(manifest));
     memset(card_bytes, 0xf3, sizeof(card_bytes));
     memset(&output, 0xa5, sizeof(output));
@@ -59,7 +61,7 @@ static void fixture(void) {
     static const uint32_t offset[4] = {0u, 509u, 0u, 257u};
     for(unsigned i = 0; i < 4u; ++i) {
         struct kui_retail_track *t = &manifest.slots[i].track;
-        uint32_t stride = i == 3u ? 2448u : 2352u;
+        uint32_t stride = i == 3u ? audio_stride : 2352u;
         uint32_t bytes = (end[i] - start[i]) * stride;
         uint32_t blocks = (offset[i] + bytes + 511u) / 512u;
         *t = (struct kui_retail_track){
@@ -68,7 +70,7 @@ static void fixture(void) {
                                        ((offset[i] & 255u) << 8)),
             .control = (uint8_t)((i == 0u || i == 2u ? 4u : 0u) |
                                 (offset[i] > 255u ? KUI_RETAIL_TRACK_OFFSET_HIGH : 0u) |
-                                (i == 3u ? KUI_RETAIL_TRACK_2448 : 0u))
+                                (i == 3u && audio_stride==2448u ? KUI_RETAIL_TRACK_2448 : 0u))
         };
         for(uint32_t n = 0; n < blocks;) {
             uint32_t take = blocks - n > 3u ? 3u : blocks - n;
@@ -90,6 +92,7 @@ static void fixture(void) {
     CHECK(kui_retail_image_init(&reference, &manifest, reference_block,
                                 card_bytes) == KUI_GAME_OK);
 }
+static void fixture(void) { fixture_stride(2448u); }
 static void guard_bytes(void) {
     for(unsigned i = 0; i < sizeof(output.before); ++i) {
         CHECK(output.before[i] == 0xa5u);
@@ -234,7 +237,7 @@ static void finish_audio(uint32_t epoch) {
 static void exact_audio(uint32_t lba,uint32_t count) {
     reference_read(lba,count);CHECK(!memcmp(output.bytes,expected,sizeof(expected)));
     unsigned tr=lba<45000u ? 1u : 3u;
-    uint32_t first=manifest.slots[tr].track.start_lba,stride=tr==3u ? 2448u : 2352u;
+    uint32_t first=manifest.slots[tr].track.start_lba,stride=tr==3u ? audio_stride : 2352u;
     /* Independent per-sample oracle also establishes that 2448 subchannel
      * tails and packed offset padding are not delivered as CDDA samples. */
     for(uint32_t n=0;n<count*2352u;n++)
@@ -356,7 +359,7 @@ static void test_continuous_data(bool urgent) {
     setup();data_active(100u);region.engine.in_irq=1u;
     kui_armada_ce_stream_transport_priority(0u,urgent);
     CHECK(kui_armada_ce_stream_transport_urgent()==urgent);
-    uint32_t count=urgent?16u:8u,quantum=urgent?64u:8u;
+    uint32_t count=urgent?16u:8u,quantum=urgent?75u:8u;
     submit(1u,45002u,count);wire.latency=2u;
     unsigned jobs=0u,delivered=0u;
     for(unsigned cycle=0;cycle<20u && snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING;cycle++) {
@@ -402,7 +405,7 @@ static void test_priority(void) {
     kui_armada_ce_stream_transport_priority(264600u,true);
     CHECK(!kui_armada_ce_stream_transport_urgent());
     /* Change priority inside a live grant. Only its replacement may use
-     * the new allowance: first8, then64, then normal8 on the next job. */
+     * the new allowance: first8, then75, then normal8 on the next job. */
     data_active(101u);region.engine.in_irq=1u;submit(1u,45002u,16u);
     credits(16u);CHECK(snap(1u).owner==2u);
     kui_armada_ce_stream_transport_priority(0u,true);
@@ -412,11 +415,8 @@ static void test_priority(void) {
     credits(1u);CHECK(snap(1u).owner==2u);
     kui_armada_ce_stream_transport_priority(264600u,true);
     for(unsigned n=0;n<80u && snap(1u).owner==2u;n++) pump_one(1u,true);
-    CHECK(snap(1u).audio_blocks==72u && snap(1u).owner==0u &&
-        snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING);
-    credits(16u);
-    for(unsigned n=0;n<16u && snap(1u).owner==2u;n++) pump_one(1u,true);
-    CHECK(snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_DONE);exact_audio(45002u,16u);
+    CHECK(snap(1u).audio_blocks==77u && snap(1u).owner==0u &&
+        snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_DONE);exact_audio(45002u,16u);
     uint32_t before=snap(1u).audio_blocks;
     memset(&output,0xa5,sizeof(output));submit(2u,45002u,16u);credits(16u);
     for(unsigned n=0;n<16u && snap(2u).owner==2u;n++) pump_one(2u,true);
@@ -428,6 +428,21 @@ static void test_priority(void) {
     CHECK(!kui_armada_ce_stream_transport_urgent());
     CHECK(kui_armada_ce_stream_transport_cancel(2u)==KUI_ARMADA_CE_STREAM_TRANSPORT_CANCELLED);
     CHECK(!wire.waits && !wire.busy);intact();
+}
+static void test_urgent_whole_raw_job(void) {
+    /*2352 backing with a257-byte packed prefix touches75 card blocks.
+     * One urgent grant must finish it even while DATA remains active. */
+    fixture_stride(2352u);attach();wire.immediate_pio=true;data_active(100u);
+    kui_armada_ce_stream_transport_priority(0u,true);submit(1u,45002u,16u);
+    credits(16u);pump_one(1u,false);
+    for(unsigned n=0;n<76u && kui_armada_ce_stream_transport_ready_to_pump();n++) {
+        CHECK(snap(1u).owner==2u && snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING);
+        pump_one(1u,false);
+    }
+    CHECK(snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_DONE &&
+        snap(1u).audio_blocks==75u && snap(1u).data_blocks==16u && !snap(1u).preemptions &&
+        wire.wakes==1u && !wire.busy && !wire.waits);
+    exact_audio(45002u,16u);intact();
 }
 static void test_fences(void) {
     setup();kui_armada_ce_stream_transport_priority(0u,true);
@@ -556,7 +571,7 @@ static void test_ready_to_pump(void) {
 }
 int main(void) {
     test_raw_mapping();test_admission();test_parked_data();test_continuous_data(false);
-    test_continuous_data(true);test_priority();test_fences();
+    test_continuous_data(true);test_priority();test_urgent_whole_raw_job();test_fences();
     test_token_holds_and_errors();test_audio_errors();test_cancel();test_ready_to_pump();
     printf("Armada CE production SCI transport: %u checks passed\n",checks);
     return 0;

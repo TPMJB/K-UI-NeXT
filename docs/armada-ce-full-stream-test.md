@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Armada CE full CD music stream test
 
-## K-UI 2.0 RC1 integration
+## K-UI 2.0 RC2 supply budget
 
 This console candidate integrates the net changes from
 `fix/armada-cdda-supply` at `be793d667cf0` into our current `eb06827d85da`
@@ -21,14 +21,24 @@ the 11,388-byte rate allowance. Its first two playing sample intervals supplied
 94,464 B/s against nominal 176,400 B/s. Thus the rate-stop removal addresses a
 latent clock-drift fault, while this test also needs faster source delivery.
 
+Recording `62656.mp4` confirms RC1 plays substantially better but still
+underruns. Across three uninterrupted one-second intervals (MS `23348` to
+`23f00`), source grows by 413,952 bytes: 137,984 B/s. Source minus READY
+change implies 176,811 B/s consumed. Each row records 20 worker visits. The
+last underrun advances 9,088 bytes with only 4,416 fresh bytes. Thus the
+remaining stops have a measured supply deficit; the removed rate guard is
+not involved. Maximum recorded job interval fell from 1,050 to 646 ms.
+
 SCI's polling fallback completes a card block immediately without another
-interrupt. Previously audio returned after this ready result and left the
-block for a later worker visit. The worker now drains at most 32 already-ready
-one-block pumps per source visit, restoring interrupts between each pump.
-Pending DMA, quota handoff, a new command, error or completion ends the drain.
-The loop stops on an incomplete reception; each pump retains its existing bounded card-read contract. At the observed maximum 56 ms worker
-interval, 32 blocks provide headroom above CDDA's required source rate.
-The shared DATA reader, its allocation and immediate preemption are unchanged.
+interrupt. RC1 drains at most 32 ready blocks per source visit, while a
+37,632-byte, 16-sector job spans up to 75 card blocks when unaligned. Its
+urgent grant of 64 blocks also forces a DATA handoff before that job finishes.
+RC2 matches the urgent grant to 75 blocks and the worker to 76 pumps (including
+the initial fetch-only pump). A ready polling job can complete within one visit.
+Interrupts are restored between pumps; incomplete DMA, DATA handoff, a new
+command, error or completion still ends the drain. This removes two avoidable
+sources of scheduler delay; it does not guarantee card or CE timing.
+DATA's 16-block quantum and immediate foreground preemption are unchanged.
 
 Focused player checks cover clock drift, real underruns, finite/infinite
 playback, staging carry and bounded PIO draining/cancellation. Transport checks
@@ -42,7 +52,7 @@ not yet certified. This is a 2.0 release candidate, not a final release claim.
 Replace both files from the ZIP's `KUI` folder with the console off and cold
 boot. Select **Original Armada → Y Options → CD music On → START**.
 Use the same in-game scene where the earlier loop was audible. Return after
-music fails, or after about 30 seconds if it continues, with
+music fails, or after about 60 seconds if it continues, with
 **A+B+X+Y+Start**. Record one **15-second cycle** of the three diagnostic
 pages, which repeat every five seconds until power-off. Then power-cycle.
 No main-menu wait, gameplay video, new extraction or private upload is needed.

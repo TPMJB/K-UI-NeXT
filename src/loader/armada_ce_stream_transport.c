@@ -1,13 +1,16 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/armada_ce_stream_transport.h"
 #include "kui/armada_ce_stream_seed.h"
+#include "kui/armada_ce_stream_model.h"
 #include "kui/retail_cursor.h"
 #include "retail_async.h"
 #include <string.h>
 
 #define DATA_QUANTUM 16u
 #define AUDIO_QUANTUM 8u
-#define AUDIO_URGENT_QUANTUM 64u
+/* A16-sector2352-byte source job can touch one unaligned partial block at
+ * each end. Let its urgent grant finish before returning SCI to DATA. */
+#define AUDIO_URGENT_QUANTUM ((KUI_ARMADA_CE_STREAM_BATCH_BYTES+1022u)/512u)
 #define AUDIO_URGENT_ENTER_BYTES 176400u
 #define AUDIO_URGENT_EXIT_BYTES 264600u
 #define TOKEN_LIMIT 65536u
