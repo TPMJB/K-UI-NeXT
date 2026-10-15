@@ -17,8 +17,9 @@ Those reports concern CDI conversion fixes, not compatibility with K-UI's
 SCI emulation. No patch bytes from those posts are used here.
 
 Bust-A-Move 4 was ported first because its supplied runtime closely matched
-Armada. Worms Armageddon supplies a different older sound-runtime family and
-is the next console candidate.
+Armada. Worms Armageddon supplies a different older sound-runtime family;
+its second console candidate now has audible playback with recovered
+underruns documented in its test guide.
 
 ## Reusable engine and required profiles
 
@@ -91,6 +92,8 @@ that does not take Armada's refill critical section. Its separate adapter
 protects each short host copy against the callback's current in-flight source
 slice and handles asynchronous Stop cleanup before re-priming. It reserves
 a lower source/controller pool below that kernel's OEM region. See
-[the Worms console test](wince-cdda-worms-test.md); it remains hardware-unverified
-until the owner tests the delivered candidate. Armada and BAM4 modules are
-retained unchanged by that delivery.
+[the Worms console test](wince-cdda-worms-test.md). The owner heard music with
+build `5be6d79357b3` and noticed a minor cut; recording `62685.mp4` contains
+three recovered underruns, five successful starts and no refusals/HRESULT.
+This is the working Worms baseline, with the residual buffer-supply limitation
+still open. Armada and BAM4 modules are retained unchanged by that delivery.

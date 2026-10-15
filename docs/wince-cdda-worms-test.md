@@ -5,8 +5,9 @@ This experimental candidate targets the original US **Worms Armageddon**,
 product **T40601N**, version **V1.001**, with its original **eight-track GDI**.
 Its native sound/runtime profile is separate from Armada and Bust-A-Move 4.
 Test 1 booted on Dreamcast hardware but produced no CD music. Test 2 corrects
-the runtime layout admission described below; sustained playback remains
-unverified on hardware.
+the runtime layout admission described below and has audible console playback,
+with three recovered buffer underruns in the supplied recording. Keep Test 2
+as the working Worms baseline; zero-dropout playback remains unverified.
 
 ## Test 1 result and Test 2 correction
 
@@ -22,7 +23,37 @@ the console. Test 2 corrects those three Worms-only constants and the synthetic
 fixture, including a regression against the observed console addresses. It
 retains the existing playback engine, refill timing, source reader and modules
 for Armada and Bust-A-Move 4. No new playback success is inferred from this
-admission fix.
+admission fix alone.
+
+## Test 2 hardware result — 2026-10-15
+
+Build `5be6d79357b3`, recording `62685.mp4`. The owner reported a minor audible
+cut. This listening report establishes audible playback; the diagnostic
+recording is used to read counters, not to independently assess sound.
+
+Runtime admission and worker startup succeeded. The terminal snapshot shows
+five successful native Play calls, zero refusals, zero HRESULT and three
+recoveries. The retained event rows contain three UND events at native clocks
+62,550, 73,900 and 87,900 ms, each followed by a successful Play. Fresh data
+before those observations was 2,112, 4,416 and 1,344 bytes, respectively.
+Each UND row records a 50 ms interval since the preceding cursor observation.
+For the final event, the cursor consumed 5,632 bytes against 1,344 fresh bytes:
+a 4,288-byte deficit, equivalent to about 24.3 ms of stereo PCM. This deficit
+does not measure the audible interruption.
+
+The interval from each UND event to its next recorded Play was 2,653, 764 and
+1,502 ms. Those intervals do not establish uninterrupted silence: native
+buffering and subsequent game commands also affect what the listener hears.
+The whole run's maximum worker interval was 1,100 ms and longest source job
+600 ms; neither maximum is temporally tied to a particular UND row by these
+retained snapshots. Zero fresh bytes in the final samples coincide with a
+stopped stream and a final stop command, not a failure to read any audio.
+
+BAM4 and Armada also have recorded recovered underruns. The common symptom
+is the native consumer overtaking fresh PCM; the shared refill/supply path is
+a plausible common cause. These snapshots do not prove an identical underlying
+stall in all three games, or explain which recovery the owner noticed. Keep
+the working adapters unchanged while investigating that shared limitation.
 
 ## Install and launch
 
