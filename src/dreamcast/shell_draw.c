@@ -1342,7 +1342,9 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
         snprintf(line,sizeof(line),"Background loading: %s",game_background(s));
         words(p,48,256,right,MUTED,line,false);
         words(p,48,282,right,MUTED,s->games_launch_cdda?"CD music: On":"CD music: Off",false);
-        words(p,48,322,right,CYAN,"A Launch game   Y Options",false);
+        if(kui_shell_games_cdda_ready(s))
+            words(p,48,304,right,AMBER,kui_shell_games_cdda_status(s),false);
+        words(p,48,328,right,CYAN,"A Launch game   Y Options",false);
         words(p,48,350,right,MUTED,"Options are saved for this image.",false);
         words(p,48,378,right,MUTED,"Keep the SD card inserted while playing.",false);
     } else {
@@ -1442,8 +1444,10 @@ static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
     char line[128];
     snprintf(line,sizeof(line),"Background loading: %s",game_background(s));
     label(p,48,220,WHITE,line);
-    label(p,48,246,WHITE,s->games_launch_cdda?"CD music: On (experimental)":"CD music: Off");
-    label(p,48,278,kui_game_ram_patches_enabled(&s->games_launch_patches)?AMBER:MUTED,
+    label(p,48,246,WHITE,s->games_launch_cdda?"CD music: On":"CD music: Off");
+    if(kui_shell_games_cdda_ready(s))
+        label(p,48,268,AMBER,kui_shell_games_cdda_status(s));
+    label(p,48,292,kui_game_ram_patches_enabled(&s->games_launch_patches)?AMBER:MUTED,
         kui_game_ram_patches_enabled(&s->games_launch_patches)?"RAM patches: On (one-time boot writes)":"RAM patches: Off");
     label(p,48,316,WHITE,"Keep the SD card inserted while playing.");
     label(p,48,342,AMBER,"Power cycle to return to the launcher.");
@@ -1469,6 +1473,8 @@ static void games_launch_options(struct paint *p,const struct kui_shell *s) {
         label(p,48,y+12,ready?WHITE:MUTED,names[i]);
         words(p,350,y+12,592,ready?CYAN:MUTED,values[i],false);
     }
+    if(kui_shell_games_cdda_ready(s))
+        label(p,40,350,AMBER,kui_shell_games_cdda_status(s));
     const char *hint="Extra settings, image information and developer tests.";
     if(s->games_launch_selected==KUI_SHELL_GAME_OPTION_READER)
         hint=s->games_detail.format==KUI_GAME_IMAGE_ZSO?"ZSO uses the Standard reader; background loading is unavailable.":
@@ -1477,9 +1483,9 @@ static void games_launch_options(struct paint *p,const struct kui_shell *s) {
             "Load from SD while the game continues working.";
     else if(s->games_launch_selected==KUI_SHELL_GAME_OPTION_CDDA)
         hint=kui_shell_games_cdda_ready(s)?(s->games_detail.windows_ce?
-            "Experimental. Play music from this game's audio tracks. Compatible WinCE runtime required.":
-            "Experimental. Turning On sets background loading Off."):
-            "CD music is not yet supported for this image.";
+            "Play music from this game's audio tracks; runtime checks apply.":
+            "Runtime checks apply. Turning On sets background loading Off."):
+            "No playable audio tracks are represented by this image.";
     words(p,40,374,608,MUTED,hint,false);
     game_options_notice(p,s);
 }

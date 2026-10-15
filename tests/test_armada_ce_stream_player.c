@@ -699,6 +699,25 @@ static void initialized_track_controls(void) {
         cooked.slots[i].track.control|=KUI_RETAIL_TRACK_COOKED;break;
     }
     CHECK(!initialize_fixture(&cooked));++cases;
+    /* Actual player construction must follow an unfamiliar disc's inventory,
+     * including tracks beyond the old compiled title count. The map decoder
+     * seam leaves admission/model construction in production initialize(). */
+    struct kui_retail_manifest unfamiliar=raw;
+    unsigned count=unfamiliar.track_count;
+    memmove(unfamiliar.slots+count+1u,unfamiliar.slots+count,
+        count*sizeof(*unfamiliar.slots));
+    unfamiliar.track_count++;unfamiliar.extent_count++;
+    for(unsigned i=0;i<count;i++) unfamiliar.slots[i].track.first_extent++;
+    uint32_t last=unfamiliar.slots[count-1u].track.end_lba;
+    unfamiliar.slots[count].track=(struct kui_retail_track){last,last+150u,
+        (uint16_t)(unfamiliar.track_count+count),1u,0u};
+    unfamiliar.slots[unfamiliar.track_count+count].extent=(struct kui_retail_extent){
+        0u,card_lba,(150u*2352u+511u)/512u};
+    strcpy(unfamiliar.product,"UNTESTED-IMAGE");strcpy(unfamiliar.bootfile,"OTHERCE.BIN");
+    CHECK(initialize_fixture(&unfamiliar));
+    CHECK(player.model.track_count==count+1u && player.model.tracks[count].number==count+1u &&
+        player.model.tracks[count].first_lba==last && player.model.tracks[count].end_lba==last+150u);
+    ++cases;
 }
 static void ram_copy_boundaries(void) {
     _Alignas(4) uint8_t src[160],dst[160],expected[160];

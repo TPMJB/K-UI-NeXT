@@ -10,6 +10,10 @@ else ifeq ($(KUI_WINCE_CDDA_PROFILE),bam4)
 override ARMADA_AUDIO_DIR := build/bam4-ce-stream
 WINCE_CDDA_PROFILE_FLAGS := -DKUI_WINCE_CDDA_BAM4=1
 WINCE_CDDA_PROFILE_CHECK := --bam4
+else ifeq ($(KUI_WINCE_CDDA_PROFILE),wwp)
+override ARMADA_AUDIO_DIR := build/wwp-ce-stream
+WINCE_CDDA_PROFILE_FLAGS := -DKUI_WINCE_CDDA_WWP=1 -DKUI_ARMADA_CE_GENERIC_APPLICATION=1
+WINCE_CDDA_PROFILE_CHECK := --wwp
 else
 override ARMADA_AUDIO_DIR := build/armada-ce-stream
 endif
@@ -20,7 +24,20 @@ override ARMADA_AUDIO_EXTRA_STAGE_DEPS := $(ARMADA_AUDIO_DIR)/bind-probe.bin
 override ARMADA_AUDIO_EXTRA_ASM_FLAGS := -DKUI_ARMADA_CE_RAM_BIND_STAGE=1 -DKUI_ARMADA_CE_RAM_BIND_BIN='"$(ARMADA_AUDIO_DIR)/bind-probe.bin"'
 override ARMADA_AUDIO_EXTRA_LINK_FLAGS := -Wl,--defsym,_kui_armada_ce_bind_probe=$(WINCE_CDDA_CONTROLLER_BEGIN)
 override ARMADA_AUDIO_EXTRA_CHECK := python3 tools/check_armada_ce_excerpt.py --stream $(WINCE_CDDA_PROFILE_CHECK) $(ARMADA_AUDIO_DIR)
+ifeq ($(KUI_WINCE_CDDA_PROFILE),wwp)
+# The controller is linked first. Export only its checked scalar object;
+# importing the whole controller symbol table would collide with low helpers.
+override ARMADA_AUDIO_EXTRA_LINK_FLAGS += -Wl,-T,$(ARMADA_AUDIO_DIR)/wwp-drive-status.ld
+# Keep named callee relocations in LTRANS assembly: SH section+addend
+# optimization otherwise leaves stale branch targets after linker relaxation.
+override ARMADA_AUDIO_EXTRA_LINK_FLAGS += -Wa,--renesas
+endif
 include Makefile.armada-audio
+ifeq ($(KUI_WINCE_CDDA_PROFILE),wwp)
+# The embedded synchronous fallback also uses LTRANS and SH relaxation.
+$(ARMADA_AUDIO_DIR)/resident-sci.elf: override RETAIL_SCI_LINK += -Wa,--renesas
+$(ARMADA_AUDIO_DIR)/entry.elf: tools/check_retail_calls.py
+endif
 
 ARMADA_STREAM_FLAGS := $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -DKUI_ARMADA_CE_EXCERPT=1 -DKUI_ARMADA_CE_STREAM=1 -DKUI_RETAIL_EXTENDED_MAP=1 -fcallgraph-info=su $(WINCE_CDDA_PROFILE_FLAGS)
 # Override to empty only for the initial high-placement excerpt preflight.
@@ -55,6 +72,12 @@ $(ARMADA_AUDIO_DIR)/bind-probe.elf: $(ARMADA_STREAM_OBJS) src/loader/armada_ce_s
 $(ARMADA_AUDIO_DIR)/bind-probe.bin: $(ARMADA_AUDIO_DIR)/bind-probe.elf
 	sh-elf-objcopy -O binary $< $@
 $(ARMADA_AUDIO_DIR)/resident-scia.elf: $(ARMADA_AUDIO_DIR)/bind-probe.elf
+ifeq ($(KUI_WINCE_CDDA_PROFILE),wwp)
+$(ARMADA_AUDIO_DIR)/wwp-drive-status.ld: $(ARMADA_AUDIO_DIR)/bind-probe.elf tools/check_armada_ce_excerpt.py
+	python3 tools/check_armada_ce_excerpt.py --wwp-drive-link $< > $@.new
+	mv $@.new $@
+$(ARMADA_AUDIO_DIR)/resident-scia.elf: $(ARMADA_AUDIO_DIR)/wwp-drive-status.ld
+endif
 
 -include $(ARMADA_STREAM_OBJS:.o=.d)
 

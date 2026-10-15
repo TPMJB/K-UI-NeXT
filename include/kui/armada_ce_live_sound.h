@@ -2,8 +2,25 @@
 #ifndef KUI_ARMADA_CE_LIVE_SOUND_H
 #define KUI_ARMADA_CE_LIVE_SOUND_H
 #include "kui/armada_ce_ram_bind.h"
+#if defined(KUI_WINCE_CDDA_WWP) && KUI_WINCE_CDDA_WWP == 1
+#include "kui/wince_cdda_wwp_kernel.h"
+#endif
 #include <stddef.h>
 #include <string.h>
+
+/* Generic application admission still requires one of the exact kernel and
+ * sound-runtime profiles below. Only application code/holder assumptions are
+ * replaced by stable module-instance singleton ownership. Legacy observers
+ * keep their exact application witnesses unless explicitly opted in. */
+#ifndef KUI_ARMADA_CE_GENERIC_APPLICATION
+#define KUI_ARMADA_CE_GENERIC_APPLICATION 0
+#endif
+#if KUI_ARMADA_CE_GENERIC_APPLICATION != 0 && KUI_ARMADA_CE_GENERIC_APPLICATION != 1
+#error "KUI_ARMADA_CE_GENERIC_APPLICATION must be 0 or 1"
+#endif
+#if defined(KUI_WINCE_CDDA_WWP) && KUI_WINCE_CDDA_WWP == 1 && !KUI_ARMADA_CE_GENERIC_APPLICATION
+#error "World Party requires the verified module-singleton owner binding"
+#endif
 
 /* Exact private Armada US CE profile. The caller verifies the kernel identity
  * and keeps its captured TTB/context unchanged throughout this read-only call.
@@ -11,7 +28,24 @@
 #define KUI_ARMADA_CE_LIVE_READ_LIMIT 4096u
 #define KUI_ARMADA_CE_LIVE_MODULE_LIMIT 64u
 #define KUI_ARMADA_CE_LIVE_PAGE_LIMIT 64u
-#if defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
+#if defined(KUI_WINCE_CDDA_WWP) && KUI_WINCE_CDDA_WWP == 1
+/* Exact supplied Worms World Party US CE3 runtime. NK globals match BAM4;
+ * the sound DLL identities and callable methods are separately reviewed in
+ * docs/evidence/world-party-sound-contracts-2026-10-15.md. */
+#define KUI_ARMADA_CE_LIVE_MODULE_HEAD KUI_WWP_CE_MODULE_HEAD
+#define KUI_ARMADA_CE_LIVE_PROCESS_BASE KUI_WWP_CE_PROCESS_BASE
+#define KUI_ARMADA_CE_LIVE_CURRENT_PROCESS KUI_WWP_CE_CURRENT_PROCESS
+#define KUI_ARMADA_CE_LIVE_HEAP_LOW KUI_WWP_CE_HEAP_LOW
+#define KUI_ARMADA_CE_LIVE_HEAP_HIGH KUI_WWP_CE_HEAP_HIGH
+#define KUI_ARMADA_CE_LIVE_APISETS KUI_WWP_CE_APISETS
+#define KUI_ARMADA_CE_LIVE_DSOUND_TOC KUI_WWP_CE_DSOUND_TOC
+#define KUI_ARMADA_CE_LIVE_SNDCORE_TOC KUI_WWP_CE_SNDCORE_TOC
+#define KUI_ARMADA_CE_LIVE_COREDLL_TOC KUI_WWP_CE_COREDLL_TOC
+#define KUI_ARMADA_CE_LIVE_DEVICE_VTABLE_RVA 0x112cu
+#define KUI_ARMADA_CE_LIVE_DSOUND_TEXT_BYTES 0x6bd6u
+#define KUI_ARMADA_CE_LIVE_BUFFER_PLAY_RVA 0x30c0u
+#define KUI_ARMADA_CE_LIVE_BUFFER_POSITION_RVA 0x338cu
+#elif defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
 /* Exact supplied Worms Armageddon US CE2 kernel, game and sound DLLs. */
 #define KUI_ARMADA_CE_LIVE_MODULE_HEAD UINT32_C(0x8c121b24)
 #define KUI_ARMADA_CE_LIVE_PROCESS_BASE UINT32_C(0x8c1276c0)
@@ -65,7 +99,28 @@
 #define KUI_ARMADA_CE_LIVE_BUFFER_POSITION_RVA 0x3154u
 #endif
 #define KUI_ARMADA_CE_LIVE_PROCESS_STRIDE UINT32_C(0x9c)
-#if defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
+#if defined(KUI_WINCE_CDDA_WWP) && KUI_WINCE_CDDA_WWP == 1
+#define KUI_ARMADA_CE_LIVE_WIN32_RECORD KUI_WWP_CE_WIN32_RECORD
+#define KUI_ARMADA_CE_LIVE_WIN32_METHODS KUI_WWP_CE_WIN32_METHODS
+#define KUI_ARMADA_CE_LIVE_CALLBACK_SENTINEL KUI_WWP_CE_CALLBACK_SENTINEL
+#define KUI_ARMADA_CE_LIVE_DSOUND_SPAN 0xb000u
+#define KUI_ARMADA_CE_LIVE_COREDLL_SPAN 0x34000u
+#define KUI_ARMADA_CE_LIVE_TABLE_RVAS {0x846cu,0x6198u,0x2e170u}
+#define KUI_ARMADA_CE_LIVE_SINGLETON_RVA 0x8110u
+#define KUI_ARMADA_CE_LIVE_CREATE_RVA 0x16e8u
+#define KUI_ARMADA_CE_LIVE_ADDREF_RVA 0x1a90u
+#define KUI_ARMADA_CE_LIVE_RELEASE_RVA 0x1a98u
+#define KUI_ARMADA_CE_LIVE_CREATE_BUFFER_RVA 0x1ad4u
+#define KUI_ARMADA_CE_LIVE_COOPERATIVE_RVA 0x1cc4u
+#define KUI_ARMADA_CE_LIVE_BUFFER_VTABLE_RVA 0x1240u
+#define KUI_ARMADA_CE_LIVE_ENTER_IAT_RVA 0x801cu
+#define KUI_ARMADA_CE_LIVE_LEAVE_IAT_RVA 0x8020u
+#define KUI_ARMADA_CE_LIVE_ENTER_RVA 0x8ea0u
+#define KUI_ARMADA_CE_LIVE_LEAVE_RVA 0x8efcu
+#define KUI_ARMADA_CE_LIVE_ENTER_CRC 0xeea467ebu
+#define KUI_ARMADA_CE_LIVE_LEAVE_CRC 0x01916477u
+#define KUI_ARMADA_CE_LIVE_POSITION_CRC 0x4f8e5e6bu
+#elif defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
 #define KUI_ARMADA_CE_LIVE_WIN32_RECORD UINT32_C(0x8c011b7c)
 #define KUI_ARMADA_CE_LIVE_WIN32_METHODS UINT32_C(0x8c01193c)
 #define KUI_ARMADA_CE_LIVE_CALLBACK_SENTINEL UINT32_C(0x8c011b00)
@@ -330,7 +385,19 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_module_fields(
 }
 static inline enum kui_armada_ce_live_status kui_armada_ce_live_sections(
     struct kui_armada_ce_live_workspace *w,struct kui_armada_ce_live_module *m,unsigned profile,bool verify) {
-#if defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
+#if defined(KUI_WINCE_CDDA_WWP) && KUI_WINCE_CDDA_WWP == 1
+    static const uint32_t ds_rva[3]={0x1000u,0x8000u,0x9000u},sn_rva[3]={0x1000u,0x5000u,0x7000u};
+    static const uint32_t ds_size[3]={0x6bd6u,0x4c0u,0x5a8u},sn_size[3]={0x3db0u,0x11ecu,0x3e0u};
+    static const uint32_t flags[3]={0x60000020u,0xc0002040u,0x40002040u};
+    static const uint32_t co_rva[4]={0x1000u,0x2e000u,0x2f000u,0x31000u};
+    static const uint32_t co_size[4]={0x2ccc4u,0x1e0u,0x1848u,0x218u};
+    static const uint32_t co_flags[4]={0x60000020u,0xc0300040u,0x40002040u,0x40000040u};
+    static const uint32_t disk_ds_rva[4]={0x1000u,0x8000u,0x9000u,0xa000u};
+    static const uint32_t disk_sn_rva[4]={0x1000u,0x5000u,0x7000u,0x8000u};
+    static const uint32_t disk_ds_size[4]={0x6bd6u,0x4dcu,0x5a8u,0x806u};
+    static const uint32_t disk_sn_size[4]={0x3db0u,0x1208u,0x3e0u,0x4beu};
+    static const uint32_t disk_flags[4]={0x60000020u,0xc0000040u,0x40000040u,0x42000040u};
+#elif defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
     static const uint32_t ds_rva[3]={0x1000u,0x9000u,0xa000u},sn_rva[3]={0x1000u,0x5000u,0x7000u};
     static const uint32_t ds_size[3]={0x73a6u,0x460u,0x610u},sn_size[3]={0x3885u,0x11e4u,0x378u};
     static const uint32_t flags[3]={0x60000020u,0xc0002040u,0x40002040u};
@@ -396,7 +463,10 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sections(
 }
 static inline enum kui_armada_ce_live_status kui_armada_ce_live_disk_identity(
     struct kui_armada_ce_live_workspace *w,const struct kui_armada_ce_live_module *m,unsigned profile) {
-#if defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
+#if defined(KUI_WINCE_CDDA_WWP) && KUI_WINCE_CDDA_WWP == 1
+    static const uint32_t offsets[2][3]={{0x16e8u,0x1ad4u,0x30c0u},{0x10d8u,0x11c8u,0x12c4u}};
+    static const uint32_t crc[2][3]={{0xa2f5e2c9u,0x34718dd9u,0xeee481b4u},{0x5ba8b52bu,0x8303faf9u,0x53f228afu}};
+#elif defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
     static const uint32_t offsets[2][3]={{0x1598u,0x1924u,0x2bacu},{0x1110u,0x1200u,0x12f4u}};
     static const uint32_t crc[2][3]={{0x3486e9e0u,0x06c05de7u,0x17ca5406u},{0x5e7cdea8u,0xa437a283u,0x05db23f8u}};
 #else
@@ -416,11 +486,57 @@ static inline bool kui_armada_ce_live_method(uint32_t pointer,uint32_t slot,uint
     if(!kui_armada_ce_live_owner_pointer(pointer,slot,out)) return false;
     return *out==(slot|((base&0x01ffffffu)+rva)) || *out==base+rva;
 }
+#if KUI_ARMADA_CE_GENERIC_APPLICATION
+/* This is an ownership witness, not an object scan or a callable lease. The
+ * complete binder has already admitted the exact modules, sections and sound
+ * contracts. Resolve that DSOUND instance's singleton only in its attached
+ * process, then repeat the owner generation and object words before returning.
+ * A future application with the same admitted runtime needs no game global,
+ * import-table address or application instruction witness. */
+static inline enum kui_armada_ce_live_status kui_armada_ce_live_runtime_owner_guard(
+    struct kui_armada_ce_live_workspace *w,const struct kui_armada_ce_live_sound *sound,
+    uint32_t handle) {
+    if(!w || !sound || !handle || handle==UINT32_MAX || sound->owner_index>=32u ||
+       sound->owner_process!=KUI_ARMADA_CE_LIVE_PROCESS_BASE+
+           KUI_ARMADA_CE_LIVE_PROCESS_STRIDE*sound->owner_index ||
+       sound->owner_slot!=((sound->owner_index+1u)<<25) ||
+       (sound->device&0xfe000000u)!=sound->owner_slot ||
+       (sound->device&0x01ffffffu)>0x02000000u-12u || sound->dsound_module!=w->dsound.node ||
+       sound->dsound_base!=w->dsound.base ||
+       !(w->dsound.attach&w->sndcore.attach&w->coredll.attach&
+         (UINT32_C(1)<<sound->owner_index))) return KUI_ARMADA_CE_LIVE_OWNER;
+    uint32_t singleton=sound->owner_slot|((w->dsound.base&0x01ffffffu)+KUI_ARMADA_CE_LIVE_SINGLETON_RVA);
+    uint32_t observed[6],again,pointer,vtable;
+    const uint32_t address[6]={sound->owner_process,sound->owner_process+12u,
+        sound->owner_process+8u,singleton,sound->device,sound->device+8u};
+    for(unsigned i=0;i<6u;i++) {
+        enum kui_armada_ce_live_status status=kui_armada_ce_live_word(w,address[i],&observed[i]);
+        if(status!=KUI_ARMADA_CE_LIVE_OK) return status;
+    }
+    if((observed[0]&255u)!=sound->owner_index || observed[1]!=sound->owner_slot ||
+       observed[2]!=handle) return KUI_ARMADA_CE_LIVE_CHANGED;
+    if(!kui_armada_ce_live_owner_pointer(observed[3],sound->owner_slot,&pointer) ||
+       !observed[5] || observed[5]>0x7fffffffu ||
+       !kui_armada_ce_live_method(observed[4],sound->owner_slot,w->dsound.base,
+           KUI_ARMADA_CE_LIVE_DEVICE_VTABLE_RVA,&vtable))
+        return KUI_ARMADA_CE_LIVE_OBJECT;
+    if(pointer!=sound->device || vtable!=sound->vtable) return KUI_ARMADA_CE_LIVE_CHANGED;
+    for(unsigned i=0;i<6u;i++) {
+        enum kui_armada_ce_live_status status=kui_armada_ce_live_word(w,address[i],&again);
+        if(status!=KUI_ARMADA_CE_LIVE_OK) return status;
+        if(again!=observed[i]) return KUI_ARMADA_CE_LIVE_CHANGED;
+    }
+    return KUI_ARMADA_CE_LIVE_OK;
+}
+#endif
 static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_value_reader(
     uint32_t ttb,uint32_t ccr,kui_armada_ce_ram_read32 read32,void *context,
     kui_armada_ce_ram_read_mapped mapped32,bool native_values,
     struct kui_armada_ce_live_workspace *w,struct kui_armada_ce_live_sound *out) {
     uint32_t head,low,high,node,current,candidate=0,slot=0,id=0,value,again,p1,owner_ref[3]={0};
+#if KUI_ARMADA_CE_GENERIC_APPLICATION
+    uint32_t owner_handle=0;
+#endif
     enum kui_armada_ce_live_status status=KUI_ARMADA_CE_LIVE_ARGUMENT;
     if(!out) return status;
     memset(out,0,sizeof(*out));
@@ -522,11 +638,20 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_
            !((coref>>(16u*(i&1u)))&0xffffu)) {
             status=KUI_ARMADA_CE_LIVE_OWNER;goto done;
         }
+#if KUI_ARMADA_CE_GENERIC_APPLICATION
+        uint32_t handle;
+        if(!kui_armada_ce_live_physical(w,process+8u,&handle)) {status=w->failure;goto done;}
+        if(!handle || handle==UINT32_MAX) {status=KUI_ARMADA_CE_LIVE_OWNER;goto done;}
+#else
         status=kui_armada_ce_live_game_guard(w,base);
         if(status==KUI_ARMADA_CE_LIVE_MAPPING || status==KUI_ARMADA_CE_LIVE_IDENTITY) continue;
         if(status!=KUI_ARMADA_CE_LIVE_OK) goto done;
+#endif
         if(candidate) {status=KUI_ARMADA_CE_LIVE_OWNER;goto done;}
         candidate=process;slot=base;id=i;
+#if KUI_ARMADA_CE_GENERIC_APPLICATION
+        owner_handle=handle;
+#endif
         owner_ref[0]=(dsref>>(16u*(i&1u)))&0xffffu;
         owner_ref[1]=(snref>>(16u*(i&1u)))&0xffffu;
         owner_ref[2]=(coref>>(16u*(i&1u)))&0xffffu;
@@ -537,8 +662,19 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_
     result.dsound_module=w->dsound.node;result.sndcore_module=w->sndcore.node;
     result.coredll_module=w->coredll.node;
     result.dsound_base=w->dsound.base;result.sndcore_base=w->sndcore.base;result.coredll_base=w->coredll.base;
-    uint32_t object_raw,singleton_raw,vtable_raw,refs,iat,methods[4],cs[2],buffer_methods[8];
+    uint32_t singleton_raw,vtable_raw,refs,methods[4],cs[2],buffer_methods[8];
     uint32_t singleton=slot|((w->dsound.base&0x01ffffffu)+KUI_ARMADA_CE_LIVE_SINGLETON_RVA);
+#if KUI_ARMADA_CE_GENERIC_APPLICATION
+    if((status=kui_armada_ce_live_word(w,singleton,&singleton_raw))!=KUI_ARMADA_CE_LIVE_OK) goto done;
+    if(!kui_armada_ce_live_owner_pointer(singleton_raw,slot,&result.device) ||
+       (result.device&0xfe000000u)!=slot || (result.device&0x01ffffffu)>0x02000000u-12u) {
+        status=KUI_ARMADA_CE_LIVE_OBJECT;goto done;
+    }
+    /* Diagnostic metadata for the exact admitted DLL entry. Playback acquires
+     * its reference with the checked existing device's AddRef, not this entry. */
+    result.direct_sound_create=slot|((w->dsound.base&0x01ffffffu)+KUI_ARMADA_CE_LIVE_CREATE_RVA);
+#else
+    uint32_t object_raw,iat;
     uint32_t game_holder=slot|KUI_ARMADA_CE_LIVE_GAME_DEVICE;
 #if defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
     uint32_t game_class_raw;
@@ -556,6 +692,7 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_
        !kui_armada_ce_live_method(iat,slot,w->dsound.base,KUI_ARMADA_CE_LIVE_CREATE_RVA,&result.direct_sound_create)) {
         status=KUI_ARMADA_CE_LIVE_OBJECT;goto done;
     }
+#endif
     if((status=kui_armada_ce_live_word(w,result.device,&vtable_raw))!=KUI_ARMADA_CE_LIVE_OK ||
        (status=kui_armada_ce_live_word(w,result.device+8u,&refs))!=KUI_ARMADA_CE_LIVE_OK) goto done;
     if(!refs || refs>0x7fffffffu || !kui_armada_ce_live_method(vtable_raw,slot,w->dsound.base,KUI_ARMADA_CE_LIVE_DEVICE_VTABLE_RVA,&result.vtable)) {
@@ -585,7 +722,9 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_
     if(status!=KUI_ARMADA_CE_LIVE_OK) goto done;
     result.buffer_vtable=result.vtable-KUI_ARMADA_CE_LIVE_DEVICE_VTABLE_RVA+KUI_ARMADA_CE_LIVE_BUFFER_VTABLE_RVA;
     static const unsigned buffer_offset[8]={8u,12u,44u,76u,48u,72u,36u,16u};
-#if defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
+#if defined(KUI_WINCE_CDDA_WWP) && KUI_WINCE_CDDA_WWP == 1
+    static const uint32_t buffer_rva[8]={0x2b7cu,0x2c68u,0x2f28u,0x3afcu,0x30c0u,0x39e8u,0x2e98u,0x2cb0u};
+#elif defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
     static const uint32_t buffer_rva[8]={0x2744u,0x283cu,0x2a10u,0x3744u,0x2bacu,0x364cu,0x2980u,0x2884u};
 #elif defined(KUI_WINCE_CDDA_BAM4) && KUI_WINCE_CDDA_BAM4 == 1
     static const uint32_t buffer_rva[8]={0x2918u,0x2a04u,0x2cc4u,0x39b4u,0x2e5cu,0x38a0u,0x2c34u,0x2a4cu};
@@ -603,7 +742,11 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_
     }
     /* A success is a stable observation, never an acquired COM reference.
      * Repeat guards and every published mapping/metadata before publishing. */
+#if KUI_ARMADA_CE_GENERIC_APPLICATION
+    status=kui_armada_ce_live_runtime_owner_guard(w,&result,owner_handle);
+#else
     status=kui_armada_ce_live_game_guard(w,slot);
+#endif
     if(status==KUI_ARMADA_CE_LIVE_IDENTITY) status=KUI_ARMADA_CE_LIVE_CHANGED;
     if(status!=KUI_ARMADA_CE_LIVE_OK) goto done;
     status=kui_armada_ce_live_sections(w,&w->dsound,0,true);
@@ -656,6 +799,10 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_
     if((again&255u)!=id) {status=KUI_ARMADA_CE_LIVE_CHANGED;goto done;}
     if(!kui_armada_ce_live_physical(w,candidate+12u,&again)) {status=w->failure;goto done;}
     if(again!=slot) {status=KUI_ARMADA_CE_LIVE_CHANGED;goto done;}
+#if KUI_ARMADA_CE_GENERIC_APPLICATION
+    if(!kui_armada_ce_live_physical(w,candidate+8u,&again)) {status=w->failure;goto done;}
+    if(again!=owner_handle) {status=KUI_ARMADA_CE_LIVE_CHANGED;goto done;}
+#endif
     if(!kui_armada_ce_live_physical(w,KUI_ARMADA_CE_LIVE_MODULE_HEAD,&again)) {status=w->failure;goto done;}
     if(again!=head) {status=KUI_ARMADA_CE_LIVE_CHANGED;goto done;}
     if(!kui_armada_ce_live_physical(w,KUI_ARMADA_CE_LIVE_HEAP_LOW,&again)) {status=w->failure;goto done;}
@@ -664,11 +811,22 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_
     if(again!=high) {status=KUI_ARMADA_CE_LIVE_CHANGED;goto done;}
     if(!kui_armada_ce_live_physical(w,KUI_ARMADA_CE_LIVE_CURRENT_PROCESS,&again)) {status=w->failure;goto done;}
     if(again!=current) {status=KUI_ARMADA_CE_LIVE_CHANGED;goto done;}
-#if defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
+#if !KUI_ARMADA_CE_GENERIC_APPLICATION && defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
     status=kui_armada_ce_live_word(w,slot|KUI_ARMADA_CE_LIVE_GAME_DEVICE,&again);
     if(status!=KUI_ARMADA_CE_LIVE_OK) goto done;
     if(again!=game_class_raw) {status=KUI_ARMADA_CE_LIVE_CHANGED;goto done;}
 #endif
+#if KUI_ARMADA_CE_GENERIC_APPLICATION
+    static const unsigned verify_offset[7]={0u,8u,4u,8u,12u,24u,0u};
+    for(unsigned i=0;i<7u;i++) {
+        uint32_t address=i<2u?result.device+verify_offset[i]:
+            i<6u?result.vtable+verify_offset[i]:singleton;
+        uint32_t expected=i==0u?vtable_raw:i==1u?refs:i<6u?methods[i-2u]:singleton_raw;
+        status=kui_armada_ce_live_word(w,address,&again);
+        if(status!=KUI_ARMADA_CE_LIVE_OK) goto done;
+        if(again!=expected) {status=KUI_ARMADA_CE_LIVE_CHANGED;goto done;}
+    }
+#else
     static const unsigned verify_offset[9]={KUI_ARMADA_CE_LIVE_GAME_DEVICE,KUI_ARMADA_CE_LIVE_GAME_IAT,0u,8u,4u,8u,12u,24u,0u};
     for(unsigned i=0;i<9u;i++) {
         uint32_t address=i==0u?game_holder:i==1u?(slot|verify_offset[i]):i<4u?result.device+verify_offset[i]:
@@ -678,6 +836,7 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_
         if(status!=KUI_ARMADA_CE_LIVE_OK) goto done;
         if(again!=expected) {status=KUI_ARMADA_CE_LIVE_CHANGED;goto done;}
     }
+#endif
     for(unsigned i=0;i<2u;i++) {
         status=kui_armada_ce_live_word(w,ds_owner+KUI_ARMADA_CE_LIVE_ENTER_IAT_RVA+4u*i,&again);
         if(status!=KUI_ARMADA_CE_LIVE_OK) goto done;
@@ -761,7 +920,11 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_stream_api_bind(
         return KUI_ARMADA_CE_LIVE_OBJECT;
     status=kui_armada_ce_live_crc_range(w,result.buffer_set_position,32u,KUI_ARMADA_CE_LIVE_POSITION_CRC);
     if(status!=KUI_ARMADA_CE_LIVE_OK) return status;
+#if KUI_ARMADA_CE_GENERIC_APPLICATION
+    status=kui_armada_ce_live_runtime_owner_guard(w,sound,handle);
+#else
     status=kui_armada_ce_live_game_guard(w,sound->owner_slot);
+#endif
     if(status!=KUI_ARMADA_CE_LIVE_OK) return status==KUI_ARMADA_CE_LIVE_IDENTITY?KUI_ARMADA_CE_LIVE_CHANGED:status;
     const struct kui_armada_ce_live_module *mods[3]={&w->dsound,&w->sndcore,&w->coredll};
     for(unsigned i=0;i<3u;i++) {

@@ -6,6 +6,8 @@
 #if defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_SD_BENCH) || KUI_RETAIL_TOY_PILOT || KUI_RETAIL_MDK2_CDDA || KUI_GAME_RAM_PATCHES_STAGE
 #error ZSO belongs only to its separate native high stage
 #endif
+#else
+#include "kui/retail_map_diagnostic.h"
 #endif
 #include "kui/retail_resident.h"
 #include "retail_storage.h"
@@ -49,6 +51,9 @@ static struct kui_game_ram_patch_seed ram_patch_seed
 #endif
 #include "kui/armada_ce_audio_admission.h"
 #include "kui/hash.h"
+#if KUI_WINCE_CDDA_WWP
+#include "kui/wince_cdda_wwp_kernel.h"
+#endif
 #endif
 #if KUI_ARMADA_CE_RAM_BIND_STAGE
 #if KUI_ARMADA_CE_RAM_BIND_STAGE != 1 || !KUI_ARMADA_CE_AUDIO_STAGE
@@ -723,7 +728,7 @@ static uint32_t ce_load(const uint8_t *ip) {
     kui_sha256_digest(&sha,digest);
     if(!kui_armada_ce_audio_admit(&manifest,kui_retail_crc32(0,ip,KUI_RETAIL_IP_BYTES),
             prefix_crc,body_crc,digest))
-#if KUI_WINCE_CDDA_BAM4 || KUI_WINCE_CDDA_WORMS
+#if KUI_WINCE_CDDA_BAM4 || KUI_WINCE_CDDA_WORMS || KUI_WINCE_CDDA_WWP
         stopped("CE CD MUSIC PROFILE MISMATCH",body_crc);
 #else
         stopped("ARMADA AUDIO TEST PROFILE MISMATCH",body_crc);
@@ -746,7 +751,7 @@ static uint32_t ce_load(const uint8_t *ip) {
     retail_display_line(manifest.title);
 #if KUI_ARMADA_CE_AUDIO_STAGE
 #if KUI_ARMADA_CE_EXCERPT_STAGE
-#if KUI_WINCE_CDDA_BAM4 || KUI_WINCE_CDDA_WORMS
+#if KUI_WINCE_CDDA_BAM4 || KUI_WINCE_CDDA_WORMS || KUI_WINCE_CDDA_WWP
     retail_display_line("CE CD MUSIC STREAM");
 #else
     retail_display_line("ARMADA CE CD MUSIC EXCERPT TEST");
@@ -772,6 +777,9 @@ static uint32_t ce_load(const uint8_t *ip) {
     static const uint32_t armada_kernel[4]={
 #if KUI_WINCE_CDDA_WORMS
         0x8c121b40u,0x8c121aa8u,0x8c121884u,0x8c121c04u};
+#elif KUI_WINCE_CDDA_WWP
+        KUI_WWP_CE_IRQ_PENDING,KUI_WWP_CE_IRQ_RING,
+        KUI_WWP_CE_IRQ_RESCHEDULE,KUI_WWP_CE_IRQ_TABLE};
 #elif KUI_WINCE_CDDA_BAM4
         0x8c1d1b40u,0x8c1d1aa8u,0x8c1d1884u,0x8c1d1c04u};
 #else
@@ -885,6 +893,42 @@ static void install_resident(void) {
     int initialized=init(&manifest,&card,firmware,&display);
     if(initialized) stopped("RETAIL RESIDENT INIT FAILED",(uint32_t)initialized);
 }
+#if !KUI_RETAIL_ZSO
+/* Failure-only report for the KUIRTI03 wire form. The separate ZSO map
+ * retains its own decoder and rejection path. No rejected map is launched. */
+static void report_invalid_map(const uint8_t *wire,enum kui_game_result result)
+    __attribute__((noreturn));
+static void report_invalid_map(const uint8_t *wire,enum kui_game_result result) {
+    struct kui_retail_map_diagnostic diagnostic;
+    kui_retail_map_diagnose(wire_copy,&diagnostic);
+    uintptr_t pointer=(uintptr_t)wire;
+    uint32_t source_crc=0u,mode=0u;
+    /* The entry passes its fixed low package map in P1. Restrict the
+     * extra failure-only source observation to a complete aligned RAM
+     * span; malformed pointers never trigger a diagnostic MMIO read. */
+    if(pointer>=0x8c010000u && pointer<=0x8d000000u-KUI_RETAIL_MAP_BYTES && !(pointer&3u)) {
+        source_crc=kui_retail_map_diagnostic_crc(wire);
+        if(source_crc!=diagnostic.actual_crc) diagnostic.reasons|=KUI_RETAIL_MAP_DIAG_SOURCE;
+    } else diagnostic.reasons|=KUI_RETAIL_MAP_DIAG_SOURCE;
+#ifdef KUI_RETAIL_CE
+    mode=1u; /* Ordinary CE;2/3/4 select known native sound ABI modules. */
+#if KUI_ARMADA_CE_STREAM
+    mode=1u+(uint32_t)KUI_WINCE_CDDA_COMPILED_PROFILE;
+#endif
+#endif
+    const uint32_t identity[2]={(uint32_t)pointer,mode};
+    const uint32_t fields[4]={diagnostic.flags,diagnostic.reader,
+        diagnostic.track_count,diagnostic.extent_count};
+    retail_display_values("MAP POINTER MODE",identity,2u);
+    retail_display_hex("MAP REASONS",diagnostic.reasons);
+    retail_display_hex("STORED CRC",diagnostic.stored_crc);
+    retail_display_hex("COPY CRC",diagnostic.actual_crc);
+    retail_display_hex("SOURCE CRC",source_crc);
+    retail_display_values("FLAGS READER TRACKS EXTENTS",fields,4u);
+    stopped("INVALID RETAIL MAP",(uint32_t)result);
+}
+#endif
+
 void kui_retail_stage_main(const uint8_t *wire) {
     retail_display_capture(&display);
     retail_display_restore(&display);
@@ -896,7 +940,13 @@ void kui_retail_stage_main(const uint8_t *wire) {
 #else
         kui_retail_manifest_decode(wire_copy,&manifest);
 #endif
-    if(result!=KUI_GAME_OK) stopped("INVALID RETAIL MAP",(uint32_t)result);
+    if(result!=KUI_GAME_OK) {
+#if KUI_RETAIL_ZSO
+        stopped("INVALID RETAIL MAP",(uint32_t)result);
+#else
+        report_invalid_map(wire,result);
+#endif
+    }
 #if KUI_GAME_RAM_PATCHES_STAGE
     struct kui_game_ram_patches patches;
     if(!kui_game_ram_patch_seed_decode(&patches,&ram_patch_seed,sizeof(ram_patch_seed),manifest.boot_bytes))

@@ -7,7 +7,7 @@
 #include <string.h>
 #include "kui/armada_ce_stream_native.h"
 
-#define PROCESS_BASE UINT32_C(0x8c14e6e0)
+#define PROCESS_BASE KUI_ARMADA_CE_LIVE_PROCESS_BASE
 #define OWNER (PROCESS_BASE + 5u * UINT32_C(0x9c))
 #define OWNER_SLOT UINT32_C(0x0c000000)
 #define TTB UINT32_C(0x8c1458a0)

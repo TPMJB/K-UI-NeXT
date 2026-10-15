@@ -1,5 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/target.h"
+#if KUI_ARMADA_CE_STREAM && !defined(KUI_ARMADA_CE_GENERIC_APPLICATION)
+/* Full-stream adapters discover the owning native sound singleton. The
+ * legacy one-excerpt observer keeps its exact application witnesses. */
+#define KUI_ARMADA_CE_GENERIC_APPLICATION 1
+#endif
 #include "kui/armada_ce_excerpt_entry.h"
 #include "kui/armada_ce_excerpt.h"
 #include "kui/armada_ce_live_sound.h"

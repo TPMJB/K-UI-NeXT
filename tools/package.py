@@ -17,9 +17,16 @@ from zso_package import inspect_zso
 from boot_badge import BADGE, inspect_badge, verify_cdi_badge
 
 ROOT = Path(__file__).resolve().parents[1]
-WINCE_CDDA_PROFILES = {"armada": "armada-us", "bam4": "bam4-us", "worms": "worms-us"}
+WINCE_CDDA_PROFILES = {"armada": "armada-us", "bam4": "bam4-us", "worms": "worms-us", "wwp": "wwp-us"}
 WINCE_CDDA_FILES = tuple("ce-cdda-" + name + ".kui" for name in WINCE_CDDA_PROFILES)
-GAME_FILES = ("probe.kui", "image-probe.kui", "retail-boot.kui", "zso-boot.kui", "ce-probe.kui", "probe.dat", *WINCE_CDDA_FILES)
+NATIVE_CDDA_PROFILES = {
+    "toy-raw": ("cdda-native-toy-raw.kui", "retail-toy-pilot.kui"),
+    "toy-cooked": ("cdda-native-toy-cooked.kui", "retail-toy-pilot.kui"),
+    "mdk2": ("cdda-native-mdk2.kui", "retail-mdk2-cdda.kui"),
+}
+NATIVE_CDDA_FILES = tuple(names[0] for names in NATIVE_CDDA_PROFILES.values())
+GAME_FILES = ("probe.kui", "image-probe.kui", "retail-boot.kui", "zso-boot.kui", "ce-probe.kui", "probe.dat",
+              *WINCE_CDDA_FILES, *NATIVE_CDDA_FILES)
 
 
 def run(*args):
@@ -217,6 +224,8 @@ def write_game_tools(bundle):
 
 def audit_wince_cdda(directory, data, profile):
     """Use the same linked layout/stack/owner audits as the tested delivery."""
+    if profile not in WINCE_CDDA_PROFILES:
+        raise ValueError("Unknown WinCE music profile: " + profile)
     if profile == "worms":
         from package_wince_ce_stream import audit_stream
         return audit_stream(directory, data)
@@ -225,7 +234,7 @@ def audit_wince_cdda(directory, data, profile):
         return audit_stream(directory, data)
     from package_armada_ce_stream import inspect_stream_seed
     from check_armada_ce_excerpt import check
-    return inspect_stream_seed(data), check(directory, stream=True)
+    return inspect_stream_seed(data), check(directory, stream=True, wwp=profile == "wwp")
 
 
 def write_wince_cdda_modules(games, dist, commit):
@@ -248,6 +257,10 @@ def write_wince_cdda_modules(games, dist, commit):
                 audit["stream_boot_arm"]["preserves_controller_zero_check"] is not True or
                 not seed["wire_all_zero"]):
             raise ValueError("WinCE music profile or blank-source audit differs: " + profile)
+        if profile == "wwp" and (audit["native_owner_reader"]["kernel_profile"] != title or
+                int(audit["seed_address"], 16) - 0x8ce10000 != seed["stage_offset"] or
+                not audit["linked_direct_calls"]):
+            raise ValueError("World Party ownership, seed or linked-call audit differs")
         name = "ce-cdda-" + profile + ".kui"
         (games / name).write_bytes(data)
         evidence = dist / (profile + "-ce-stream-build")
@@ -257,6 +270,37 @@ def write_wince_cdda_modules(games, dist, commit):
         result[profile] = {"package": "KUI/apps/games/" + name, "envelope": info,
                            "sha256": hashlib.sha256(data).hexdigest(), "compile": compiled,
                            "seed": seed, "linked_audit": audit, "new_binary_hardware_tested": False}
+    return result
+
+
+def write_native_cdda_modules(games, dist, commit):
+    """Admit only fresh, linked-audited experimental native adapters."""
+    from package_armada_excerpt import verify_build
+    from package_wince_cdda_diagnostic import matched_package
+    from check_native_cdda_compat import check_directory
+    result = {}
+    for profile, (name, package_name) in NATIVE_CDDA_PROFILES.items():
+        directory = ROOT / "build" / ("native-compat-" + profile)
+        reference = ROOT / "build" / ("native-reference-" + profile)
+        compiled_reference, _ = verify_build(reference / "entry.elf", commit)
+        data, _, compiled, compile_bytes = matched_package(
+            directory / "entry.elf", directory / package_name, commit)
+        info = inspect_retail(data)
+        audit = check_directory(directory, profile, reference)
+        if (audit["profile"] != profile or audit["experimental"] is not True or
+                audit["console_tested"] is not False or audit["package"]["build"] != commit[:12]):
+            raise ValueError("Native experimental linked audit differs: " + profile)
+        (games / name).write_bytes(data)
+        evidence = dist / ("native-cdda-" + profile + "-build")
+        shutil.copytree(directory, evidence, ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+        shutil.copytree(reference, evidence / "reference",
+                        ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+        (evidence / "linked-audit.json").write_text(json.dumps(audit, indent=2) + "\n")
+        (evidence / "entry.compile.json").write_bytes(compile_bytes)
+        result[profile] = {"package": "KUI/apps/games/" + name, "envelope": info,
+                           "sha256": hashlib.sha256(data).hexdigest(), "compile": compiled,
+                           "reference_compile": compiled_reference, "linked_audit": audit,
+                           "experimental": True, "new_binary_hardware_tested": False}
     return result
 
 
@@ -476,6 +520,7 @@ def main():
     validate_ordinary_ce(retail_ce.parent, ce_package)
     (games / "ce-probe.kui").write_bytes(ce_package)
     wince_profiles = write_wince_cdda_modules(games, dist, commit)
+    native_profiles = write_native_cdda_modules(games, dist, commit)
     run("python3", "tools/make_loader_probe.py", str(games / "probe.dat"))
     # Keep link maps and exact standalone ELFs in the full diagnostic download.
     shutil.copytree(ROOT / "build/loader", dist / "loader-build",
@@ -576,6 +621,7 @@ def main():
               "image_probe": image_probe_info,
               "retail_boot": retail_info, "zso_boot": zso_info, "ce_probe": ce_info,
               "wince_cdda_profiles": wince_profiles,
+              "native_cdda_profiles": native_profiles,
               "hardware_tested": False,
               "host_os": Path("/etc/os-release").read_text() if Path("/etc/os-release").exists() else os.name}
     if candidate:

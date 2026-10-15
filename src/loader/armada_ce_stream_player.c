@@ -80,19 +80,16 @@ struct stream_player {
     uint32_t stage_head; /* Offset of the model's first staged byte. */
     uint32_t cache_first,cache_end,cache_bytes;
     uint32_t start_ms,start_cached;
-#if KUI_WINCE_CDDA_WORMS
+#if KUI_WINCE_CDDA_WORMS || KUI_WINCE_CDDA_WWP
     uint32_t stop_requested_epoch,stop_voice_mask;
 #endif
     uint32_t source_pumps_left,source_budget_yielded;
 };
 static struct stream_player player;
-#if KUI_WINCE_CDDA_BAM4 || KUI_WINCE_CDDA_WORMS
-/* Keep the audited offsets within player identical to Armada RC9. */
-static struct kui_armada_ce_stream_track profile_tracks[KUI_WINCE_CDDA_TRACK_COUNT];
+/* Keep the audited offsets within player identical to the proven controller.
+ * Disc track inventory is independent of the selected native sound ABI. */
+static struct kui_armada_ce_stream_track profile_tracks[KUI_RETAIL_IMAGE_TRACKS];
 #define PLAYER_TRACKS profile_tracks
-#else
-#define PLAYER_TRACKS player.tracks
-#endif
 
 static void publish(void) { __asm__ __volatile__("" : : : "memory"); }
 static uint32_t ready_bytes(void) {
@@ -133,6 +130,38 @@ static void mask_end(uint32_t sr) {
     (void)sr;
 #endif
 }
+#if KUI_WINCE_CDDA_WWP
+/* A single aligned, zero-initialized publication. The low DRIVE adapter
+ * reads it without entering this controller or changing CPU state. No
+ * override exists until the native owner has actually started playback. */
+volatile uint32_t kui_wwp_cdda_drive_status;
+static void status_model(void) {
+    const struct kui_armada_ce_stream_model *m=&player.model;
+    enum kui_armada_ce_stream_state state=m->state==KUI_ARMADA_CE_STREAM_QUIESCING?
+        m->after_stop:m->state;
+    uint32_t saved=mask_begin();
+    if(player.mail.epoch==player.applied_epoch) {
+        if(!player.mail.play_epoch) kui_wwp_cdda_drive_status=0u;
+        else if(kui_wwp_cdda_drive_status || m->native_running) {
+            uint32_t drive=0u;
+            if(player.disabled || state==KUI_ARMADA_CE_STREAM_FAULT) drive=9u;
+            else if(state==KUI_ARMADA_CE_STREAM_PLAYING ||
+                    state==KUI_ARMADA_CE_STREAM_PREFILL) drive=3u;
+            else if(state==KUI_ARMADA_CE_STREAM_PAUSED) drive=1u;
+            else if(state==KUI_ARMADA_CE_STREAM_ENDED) drive=2u;
+            kui_wwp_cdda_drive_status=drive;
+        }
+    }
+    mask_end(saved);
+}
+static void status_command(uint32_t command) {
+    /* The resident serializes accepted controls with IRQs already masked.
+     * Preserve that existing path: publish one word without another SR call. */
+    if(command==33u) kui_wwp_cdda_drive_status=0u;
+    else if(kui_wwp_cdda_drive_status)
+        kui_wwp_cdda_drive_status=command==22u?1u:3u;
+}
+#endif
 static void update_priority(bool active) {
     /* Only authored arbitration state changes here. Publish it through the
      * same short integer mask as the worker's transport bridge. */
@@ -321,6 +350,9 @@ int kui_armada_ce_excerpt_queue(const struct kui_armada_ce_excerpt_binding *unus
     player.stats.command=command;player.stats.first=first;player.stats.last=last;player.stats.repeat=repeat;
     player.stats.status=KUI_ARMADA_CE_EXCERPT_QUEUED;
     publish();player.mail.epoch=epoch;
+#if KUI_WINCE_CDDA_WWP
+    status_command(command);
+#endif
     return kui_armada_ce_stream_needs_deferred();
 }
 void kui_armada_ce_excerpt_snapshot(struct kui_armada_ce_excerpt_snapshot *out) {
@@ -368,11 +400,11 @@ static bool initialize(void) {
        seed[KUI_ARMADA_CE_STREAM_MAP_CRC_WORD]!=kui_armada_ce_excerpt_le32(wire+16u) ||
        kui_retail_manifest_decode(wire,&player.map)!=KUI_GAME_OK ||
        !kui_armada_ce_stream_map_valid(&player.map)) return false;
-    for(unsigned i=0;i<KUI_WINCE_CDDA_TRACK_COUNT;i++) {
+    for(unsigned i=0;i<player.map.track_count;i++) {
         const struct kui_retail_track *t=&player.map.slots[i].track;
         PLAYER_TRACKS[i]=(struct kui_armada_ce_stream_track){i+1u,kui_retail_track_control(t),t->start_lba,t->end_lba};
     }
-    if(kui_armada_ce_stream_init(&player.model,PLAYER_TRACKS,KUI_WINCE_CDDA_TRACK_COUNT)!=KUI_ARMADA_CE_STREAM_OK ||
+    if(kui_armada_ce_stream_init(&player.model,PLAYER_TRACKS,player.map.track_count)!=KUI_ARMADA_CE_STREAM_OK ||
        !kui_armada_ce_stream_transport_init(&player.map,RAW_BEGIN,
            KUI_ARMADA_CE_STREAM_SOURCE_BEGIN+KUI_ARMADA_CE_STREAM_SOURCE_BYTES)) return false;
     player.stats.pcm_crc32=seed[KUI_ARMADA_CE_STREAM_MAP_CRC_WORD];player.initialized=1u;return true;
@@ -465,7 +497,7 @@ static void trace_observation(uint32_t now,uint32_t ready,uint32_t delta,uint32_
 }
 static bool observe(void) {
     if(!player.model.native_running) return true;
-#if KUI_WINCE_CDDA_WORMS
+#if KUI_WINCE_CDDA_WORMS || KUI_WINCE_CDDA_WWP
     if(player.stop_requested_epoch && player.model.stop_needed) return true;
 #endif
     uint32_t positions[2]={0,0};
@@ -552,15 +584,25 @@ static bool control(void) {
     }
     publish();player.applied_epoch=mail.epoch;return true;
 }
-#if KUI_WINCE_CDDA_WORMS
+#if KUI_WINCE_CDDA_WORMS || KUI_WINCE_CDDA_WWP
 /* Device+112 is the callback's active-port mask (decimal byte offset), not
  * the allocation mask at+108. CS+88 stabilizes app-side allocation; the IRQ
- * mask makes this RAM-only snapshot indivisible with the native callback. */
+ * mask makes this RAM-only snapshot indivisible with the older callback.
+ * World Party instead has its active software mask at+132 and a real
+ * consumer CS at+108. Its native lock order is allocation+88 then consumer
+ * +108; both are released before Stop/GetStatus or any worker yield. */
 static bool worms_stop_voices(uint32_t *owned,uint32_t *pending) {
     (void)call(player.binding.enter_cs,player.binding.device+DEVICE_CS_OFFSET,0,0,0);
+#if KUI_WINCE_CDDA_WWP
+    (void)call(player.binding.enter_cs,player.binding.device+108u,0,0,0);
+#endif
     uint32_t own=0u,possible=0u;bool valid=true;uint32_t saved=mask_begin();
     struct kui_armada_ce_ram_binding active;
+#if KUI_WINCE_CDDA_WWP
+    if(!mapped_word(player.binding.device+132u,&active)) valid=false;
+#else
     if(!mapped_word(player.binding.device+112u,&active)) valid=false;
+#endif
     for(unsigned i=0;valid && i<DEVICE_VOICES;i++) {
         struct kui_armada_ce_ram_binding owner;
         if(!mapped_word(player.binding.device+DEVICE_OWNER_OFFSET+i*4u,&owner)) {valid=false;break;}
@@ -575,6 +617,9 @@ static bool worms_stop_voices(uint32_t *owned,uint32_t *pending) {
     *owned=own;
     *pending=valid?active.value&(own|(player.stop_voice_mask&possible)):0u;
     mask_end(saved);
+#if KUI_WINCE_CDDA_WWP
+    (void)call(player.binding.leave_cs,player.binding.device+108u,0,0,0);
+#endif
     (void)call(player.binding.leave_cs,player.binding.device+DEVICE_CS_OFFSET,0,0,0);
     return valid;
 }
@@ -582,7 +627,7 @@ static bool worms_stop_voices(uint32_t *owned,uint32_t *pending) {
 static bool stopped(void) {
     if(!player.model.stop_needed) return true;
     cancel_read();
-#if KUI_WINCE_CDDA_WORMS
+#if KUI_WINCE_CDDA_WORMS || KUI_WINCE_CDDA_WWP
     uint32_t owned=0u,pending=0u;
     if(!worms_stop_voices(&owned,&pending)) {refuse(KUI_ARMADA_CE_EXCERPT_COPY);return false;}
     player.stop_voice_mask|=owned;
@@ -594,7 +639,11 @@ static bool stopped(void) {
     /* Stop requests cleanup. Callback1c58 clears active+112 only after its
      * final host read; it deliberately retains the owner-table entries.
      * GetStatus2980 then sweeps those finished owners through1d44/42b0.
-     * Both native calls stay outside the IRQ mask and logical copy lease. */
+     * World Party's callback49c4 clears active+132 after its final host read;
+     * GetStatus2e98 sweeps through1ff0/47a0/48a4/20a4. A stereo sweep may need
+     * another worker visit. Its Stop return/status bits alone prove neither
+     * the active-mask acknowledgment nor release of its owner entries.
+     * Both native calls stay outside the IRQ mask and copy/consumer lease. */
     if(pending) return true;
     uint32_t native_status=0u;
     player.stats.last_hresult=call(player.binding.get_status,player.stats.buffer,
@@ -1031,7 +1080,7 @@ static void step(uint32_t sr,uint32_t fpscr) {
     }
     native_allowed=true;
     if(!observe() || !control() || !stopped()) goto failed;
-#if KUI_WINCE_CDDA_WORMS
+#if KUI_WINCE_CDDA_WORMS || KUI_WINCE_CDDA_WWP
     if(player.model.stop_needed) {player.stats.status=KUI_ARMADA_CE_EXCERPT_QUEUED;return;}
 #endif
     update_priority(player.model.state==KUI_ARMADA_CE_STREAM_PREFILL ||
@@ -1083,7 +1132,13 @@ failed:
     if(player.stats.status<KUI_ARMADA_CE_EXCERPT_ARGUMENT) refuse(KUI_ARMADA_CE_EXCERPT_COPY);
 }
 void kui_armada_ce_excerpt_attempt(uint32_t sr,uint32_t fpscr) {
-    if(player.worker_step) {step(sr,fpscr);return;}
+    if(player.worker_step) {
+        step(sr,fpscr);
+#if KUI_WINCE_CDDA_WWP
+        status_model();
+#endif
+        return;
+    }
     if(!player.dispatching || player.worker_started || player.disabled) return;
     player.booting=1u;player.stats.caller_sr=sr;player.stats.caller_fpscr=fpscr;
     player.stats.current_process=word(CURRENT_PROCESS);

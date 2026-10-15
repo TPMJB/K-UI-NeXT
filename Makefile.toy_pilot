@@ -1,0 +1,370 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Experimental exact-Toy pilot. Ordinary reader targets/output are untouched.
+CC = sh-elf-gcc
+OBJCOPY = sh-elf-objcopy
+BUILD ?= build/toy-pilot
+BUILD_ID ?= $(shell git rev-parse --short=12 HEAD)
+NATIVE_COMPAT ?= 0
+SCI_REUSE_TDRE ?= 0
+# Match the delivered 7b55156 clean-audio profile in this isolated Toy target.
+GD_FIXED_STEP ?= 2
+SHARED_SCI ?= 0
+ASYNC_CDDA ?= 0
+PRIVATE_P2 ?= 0
+NATIVE_CACHE ?= 0
+# Causal source-cost control only: preserve playback while generating zero PCM.
+SYNTHETIC_SOURCE ?= 0
+# High-only passive adapter telemetry; preserves the retained audio algorithm.
+LOADER_TRACE ?= 0
+DATA_PROBE ?= 0
+DATA_PAYLOAD_MODE ?= 0
+DATA_SCHEDULE_MODE ?= 0
+DATA_BUDGET_PROFILE ?= 0
+AD_FOLLOWUP_PROFILE ?= 0
+DATA_TUNING_PROFILE ?= 0
+STARTUP_IRQ_PROFILE ?= 0
+DATA_PIPELINE_PROFILE ?= 0
+COOKED_DATA_PROFILE ?= 0
+WORD_REVERSE_PROFILE ?= 0
+ifneq ($(words $(COOKED_DATA_PROFILE)),1)
+$(error COOKED_DATA_PROFILE requires one value)
+endif
+ifneq ($(words $(WORD_REVERSE_PROFILE)),1)
+$(error WORD_REVERSE_PROFILE requires one value)
+endif
+ifneq ($(filter $(COOKED_DATA_PROFILE),0 1),$(COOKED_DATA_PROFILE))
+$(error COOKED_DATA_PROFILE must be 0 or 1)
+endif
+ifneq ($(filter $(WORD_REVERSE_PROFILE),0 1),$(WORD_REVERSE_PROFILE))
+$(error WORD_REVERSE_PROFILE must be 0 or 1)
+endif
+ifneq ($(COOKED_DATA_PROFILE):$(WORD_REVERSE_PROFILE),0:0)
+ifneq ($(DATA_PIPELINE_PROFILE),2)
+$(error Cooked DATA and word reversal require the exact AP pipeline)
+endif
+endif
+ifeq ($(COOKED_DATA_PROFILE),1)
+COOKED_CONFIG = COOKED_DATA_PROFILE=1
+COOKED_STAGE_FLAGS = -DKUI_TOY_PILOT_COOKED_DATA_PROFILE=1
+endif
+ifeq ($(WORD_REVERSE_PROFILE),1)
+REVERSE_CONFIG = WORD_REVERSE_PROFILE=1
+REVERSE_STREAM_FLAGS = -DKUI_TOY_PILOT_WORD_REVERSE_PROFILE=1
+endif
+ifneq ($(words $(DATA_PIPELINE_PROFILE)),1)
+$(error DATA_PIPELINE_PROFILE must be one value from 0, 1, 2 or 3)
+endif
+ifneq ($(filter $(DATA_PIPELINE_PROFILE),0 1 2 3),$(DATA_PIPELINE_PROFILE))
+$(error DATA_PIPELINE_PROFILE must be 0, 1, 2 or 3)
+endif
+ifneq ($(DATA_PIPELINE_PROFILE),0)
+ifneq ($(DATA_TUNING_PROFILE):$(AD_FOLLOWUP_PROFILE):$(DATA_BUDGET_PROFILE):$(DATA_SCHEDULE_MODE):$(PRIVATE_P2):$(NATIVE_CACHE):$(SHARED_SCI):$(ASYNC_CDDA):$(SYNTHETIC_SOURCE):$(LOADER_TRACE):$(DATA_PROBE):$(DATA_PAYLOAD_MODE):$(GD_FIXED_STEP):$(SCI_REUSE_TDRE),1:2:4:2:1:0:0:0:0:1:1:0:2:0)
+$(error DATA pipeline requires the exact admitted startup DATA configuration)
+endif
+ifeq ($(DATA_PIPELINE_PROFILE),1)
+ifneq ($(STARTUP_IRQ_PROFILE),2)
+$(error AO DATA pipeline requires its admitted AN parent)
+endif
+else
+ifneq ($(STARTUP_IRQ_PROFILE),1)
+$(error AP and AQ DATA pipeline require their admitted AM parent)
+endif
+endif
+PIPELINE_CONFIG = DATA_PIPELINE_PROFILE=$(DATA_PIPELINE_PROFILE)
+endif
+ifneq ($(words $(STARTUP_IRQ_PROFILE)),1)
+$(error STARTUP_IRQ_PROFILE must be one value from 0, 1 or 2)
+endif
+ifneq ($(filter $(STARTUP_IRQ_PROFILE),0 1 2),$(STARTUP_IRQ_PROFILE))
+$(error STARTUP_IRQ_PROFILE must be 0, 1 or 2)
+endif
+ifneq ($(STARTUP_IRQ_PROFILE),0)
+ifneq ($(DATA_TUNING_PROFILE):$(AD_FOLLOWUP_PROFILE):$(DATA_BUDGET_PROFILE):$(DATA_SCHEDULE_MODE),1:2:4:2)
+$(error Startup IRQ experiments require the admitted AI configuration)
+endif
+IRQ_CONFIG = STARTUP_IRQ_PROFILE=$(STARTUP_IRQ_PROFILE)
+endif
+ifneq ($(words $(DATA_TUNING_PROFILE)),1)
+$(error DATA_TUNING_PROFILE must be one value from 0, 1, 2, 3 or 4)
+endif
+ifneq ($(filter $(DATA_TUNING_PROFILE),0 1 2 3 4),$(DATA_TUNING_PROFILE))
+$(error DATA_TUNING_PROFILE must be 0, 1, 2, 3 or 4)
+endif
+ifneq ($(DATA_TUNING_PROFILE),0)
+ifneq ($(AD_FOLLOWUP_PROFILE):$(DATA_BUDGET_PROFILE):$(DATA_SCHEDULE_MODE),2:4:2)
+$(error DATA tuning requires the admitted AF startup DATA profile)
+endif
+TUNING_CONFIG = DATA_TUNING_PROFILE=$(DATA_TUNING_PROFILE)
+endif
+ifneq ($(words $(AD_FOLLOWUP_PROFILE)),1)
+$(error AD_FOLLOWUP_PROFILE must be one value from 0, 1, 2, 3 or 4)
+endif
+ifneq ($(filter $(AD_FOLLOWUP_PROFILE),0 1 2 3 4),$(AD_FOLLOWUP_PROFILE))
+$(error AD_FOLLOWUP_PROFILE must be 0, 1, 2, 3 or 4)
+endif
+ifneq ($(AD_FOLLOWUP_PROFILE),0)
+ifneq ($(DATA_BUDGET_PROFILE):$(DATA_SCHEDULE_MODE),4:2)
+$(error AD follow-ups require the admitted AD startup DATA profile)
+endif
+FOLLOWUP_CONFIG = AD_FOLLOWUP_PROFILE=$(AD_FOLLOWUP_PROFILE)
+endif
+ifneq ($(filter $(DATA_BUDGET_PROFILE),0 1 2 3 4),$(DATA_BUDGET_PROFILE))
+$(error DATA_BUDGET_PROFILE must be 0, 1, 2, 3 or 4)
+endif
+ifneq ($(DATA_BUDGET_PROFILE),0)
+ifneq ($(DATA_SCHEDULE_MODE),2)
+$(error DATA budget profiles require startup DATA_SCHEDULE_MODE=2)
+endif
+BUDGET_CONFIG = DATA_BUDGET_PROFILE=$(DATA_BUDGET_PROFILE)
+endif
+ifneq ($(filter $(DATA_SCHEDULE_MODE),0 1 2 3),$(DATA_SCHEDULE_MODE))
+$(error DATA_SCHEDULE_MODE must be 0, 1, 2 or 3)
+endif
+ifneq ($(DATA_SCHEDULE_MODE),0)
+ifneq ($(DATA_PROBE):$(DATA_PAYLOAD_MODE),1:0)
+$(error DATA scheduling requires DATA_PROBE=1 and original DATA_PAYLOAD_MODE=0)
+endif
+SCHEDULE_CONFIG = DATA_SCHEDULE_MODE=$(DATA_SCHEDULE_MODE)
+endif
+ifneq ($(filter $(DATA_PAYLOAD_MODE),0 1 2),$(DATA_PAYLOAD_MODE))
+$(error DATA_PAYLOAD_MODE must be 0, 1 or 2)
+endif
+ifneq ($(DATA_PAYLOAD_MODE),0)
+ifneq ($(DATA_PROBE),1)
+$(error DATA payload experiments require DATA_PROBE=1)
+endif
+endif
+ifneq ($(filter $(DATA_PROBE),0 1),$(DATA_PROBE))
+$(error DATA_PROBE must be 0 or 1)
+endif
+ifeq ($(DATA_PROBE),1)
+ifneq ($(LOADER_TRACE),1)
+$(error DATA probe requires LOADER_TRACE=1)
+endif
+PROBE_CONFIG = DATA_PROBE=1 DATA_PAYLOAD_MODE=$(DATA_PAYLOAD_MODE)
+endif
+ifneq ($(filter $(LOADER_TRACE),0 1),$(LOADER_TRACE))
+$(error LOADER_TRACE must be 0 or 1)
+endif
+ifeq ($(LOADER_TRACE),1)
+ifneq ($(PRIVATE_P2):$(NATIVE_CACHE):$(SHARED_SCI):$(ASYNC_CDDA):$(SYNTHETIC_SOURCE):$(GD_FIXED_STEP):$(SCI_REUSE_TDRE),1:0:0:0:0:2:0)
+$(error Loader trace requires the exact retained R profile)
+endif
+TRACE_CONFIG = LOADER_TRACE=1
+endif
+ifneq ($(filter $(SYNTHETIC_SOURCE),0 1),$(SYNTHETIC_SOURCE))
+$(error SYNTHETIC_SOURCE must be 0 or 1)
+endif
+ifeq ($(SYNTHETIC_SOURCE),1)
+ifneq ($(SHARED_SCI),0)
+$(error Synthetic source requires the retained synchronous SCI profile)
+endif
+endif
+ifneq ($(filter $(PRIVATE_P2),0 1),$(PRIVATE_P2))
+$(error PRIVATE_P2 must be 0 or 1)
+endif
+ifneq ($(filter $(NATIVE_CACHE),0 1),$(NATIVE_CACHE))
+$(error NATIVE_CACHE must be 0 or 1)
+endif
+ifeq ($(NATIVE_CACHE),1)
+ifneq ($(PRIVATE_P2),1)
+$(error NATIVE_CACHE requires PRIVATE_P2=1)
+endif
+endif
+ifeq ($(PRIVATE_P2),1)
+ifneq ($(SHARED_SCI),0)
+$(error The first private-cache comparison requires baseline SHARED_SCI=0)
+endif
+RESIDENT_SCRIPT = src/loader/toy_pilot_resident_p2.ld
+RESIDENT_SYMBOL_FLAGS = --private-p2
+else
+RESIDENT_SCRIPT = src/loader/retail_resident_low.ld
+endif
+ifneq ($(ASYNC_CDDA),0)
+ifneq ($(ASYNC_CDDA),1)
+$(error ASYNC_CDDA must be 0 or 1)
+endif
+endif
+ifeq ($(ASYNC_CDDA),1)
+ifneq ($(SHARED_SCI),1)
+$(error Asynchronous CDDA requires the isolated shared SCI worker)
+endif
+endif
+ifeq ($(SHARED_SCI),1)
+ifneq ($(GD_FIXED_STEP),3)
+$(error Shared SCI requires GD_FIXED_STEP=3 for its synchronous bootstrap)
+endif
+endif
+ifneq ($(GD_FIXED_STEP),0)
+ifeq ($(filter $(GD_FIXED_STEP),2 3),)
+$(error GD_FIXED_STEP must be 0, 2 or 3)
+endif
+ifneq ($(SCI_REUSE_TDRE),0)
+$(error The fixed GD test requires baseline SCI_REUSE_TDRE=0)
+endif
+endif
+ifneq ($(SCI_REUSE_TDRE),0)
+ifneq ($(SCI_REUSE_TDRE),1)
+$(error SCI_REUSE_TDRE must be 0 or 1)
+endif
+endif
+ifeq ($(DATA_PROBE),1)
+RESIDENT_SYMBOL_FLAGS += --data-probe
+endif
+CPU = -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,fpul-fpul
+RESIDENT_OPT = -Os -fno-tree-scev-cprop
+FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
+ -DKUI_RETAIL_FAST_IO=1 -DKUI_RETAIL_OBSERVE=0 -DKUI_RETAIL_TOY_PILOT=1 \
+ -DKUI_RETAIL_LOW_RESIDENT=1 -DKUI_RETAIL_STARTUP_TRACE=0 \
+ -DKUI_RETAIL_SONIC_STACK_TEST=0 -DKUI_ON_CONSOLE=1 \
+ -DKUI_RETAIL_SCI_DIAGNOSTIC=1 -DKUI_SCI_DMA_PACED=1 \
+ -DKUI_SCI_DMA_REUSE_TDRE=$(SCI_REUSE_TDRE) \
+ -DKUI_TOY_PILOT_GD_FIXED_STEP=$(GD_FIXED_STEP) -DKUI_TOY_PILOT_SHARED_SCI=$(SHARED_SCI) \
+ -DKUI_TOY_PILOT_ASYNC_CDDA=$(ASYNC_CDDA) \
+ -DKUI_TOY_PILOT_PRIVATE_P2=$(PRIVATE_P2) -DKUI_TOY_PILOT_NATIVE_CACHE=$(NATIVE_CACHE) \
+ -DKUI_TOY_PILOT_SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE) \
+ -DKUI_TOY_PILOT_LOADER_TRACE=$(LOADER_TRACE) -DKUI_TOY_PILOT_DATA_PROBE=$(DATA_PROBE) \
+ -DKUI_TOY_PILOT_DATA_PAYLOAD_MODE=$(DATA_PAYLOAD_MODE) \
+ -DKUI_TOY_PILOT_DATA_SCHEDULE_MODE=$(DATA_SCHEDULE_MODE) \
+ $(if $(BUDGET_CONFIG),-DKUI_TOY_PILOT_DATA_BUDGET_PROFILE=$(DATA_BUDGET_PROFILE)) \
+ $(if $(FOLLOWUP_CONFIG),-DKUI_TOY_PILOT_AD_FOLLOWUP_PROFILE=$(AD_FOLLOWUP_PROFILE)) \
+ $(if $(TUNING_CONFIG),-DKUI_TOY_PILOT_DATA_TUNING_PROFILE=$(DATA_TUNING_PROFILE)) \
+ $(if $(IRQ_CONFIG),-DKUI_TOY_PILOT_STARTUP_IRQ_PROFILE=$(STARTUP_IRQ_PROFILE)) \
+ $(if $(PIPELINE_CONFIG),-DKUI_TOY_PILOT_DATA_PIPELINE_PROFILE=$(DATA_PIPELINE_PROFILE)) \
+ -ffreestanding -fno-builtin -fno-stack-protector -fno-pic \
+ -ffunction-sections -fdata-sections -fno-jump-tables -fstack-usage \
+ -Iinclude -Isrc/loader -I$(BUILD) -DKUI_BUILD_ID='"$(BUILD_ID)"'
+BUS_ADMISSION = -include src/loader/toy_pilot_bus_admission.h
+LINK = $(CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
+RESIDENT_FLAGS = $(filter-out -Os,$(FLAGS)) $(RESIDENT_OPT) -flto -mrelax \
+ -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_MANIFEST_SLOTS=64
+RESIDENT_SRC = src/loader/toy_pilot_resident.c src/core/retail_gd.c src/core/retail_pace.c \
+ src/loader/minic.c src/core/retail_image.c src/loader/retail_display.c \
+ src/loader/sd_reader.c src/loader/retail_sd.c src/loader/sci_sd_bus.c
+RESIDENT_OBJ = $(patsubst %.c,$(BUILD)/sci/%.o,$(RESIDENT_SRC)) \
+ $(BUILD)/sci/retail_resident_asm.o $(BUILD)/sci/toy_pilot_boot_asm.o
+STAGE_SRC = src/loader/toy_pilot_stage.c src/loader/sd_reader.c src/loader/retail_sd.c \
+ src/loader/retail_storage.c src/loader/sci_sd_bus.c src/core/ata.c src/dreamcast/ata_bus.c \
+ src/loader/minic.c src/core/retail_image.c src/loader/retail_display.c \
+ src/core/retail_observe.c src/core/hash.c
+STAGE_OBJ = $(patsubst %.c,$(BUILD)/stage/%.o,$(STAGE_SRC)) $(BUILD)/stage_asm.o
+WORKER_SRC = src/loader/toy_pilot_worker.c src/loader/toy_pilot_bus.c src/loader/toy_pilot_lease.c \
+ src/loader/toy_pilot_gd.c src/loader/toy_pilot_pause.c src/core/toy_pilot.c src/core/hash.c src/loader/minic.c
+ifeq ($(LOADER_TRACE),1)
+WORKER_SRC += src/loader/toy_loader_trace.c src/loader/toy_loader_trace_report.c src/loader/retail_display.c
+endif
+ifeq ($(DATA_PROBE),1)
+WORKER_SRC += src/loader/toy_loader_data_probe.c src/loader/toy_loader_payload_control.c
+endif
+ifneq ($(DATA_SCHEDULE_MODE),0)
+WORKER_SRC += src/loader/toy_loader_schedule_report.c
+SCHEDULE_RESIDENT_EXPORTS = -Wl,-u,_kui_retail_toy_data_schedule_play
+endif
+ifeq ($(DATA_SCHEDULE_MODE),2)
+WORKER_SRC += src/loader/toy_pilot_sci.c src/loader/sci_stream.c src/core/retail_cursor.c
+SCHEDULE_RESIDENT_EXPORTS += -Wl,-u,_kui_toy_pilot_card_pointer -Wl,-u,_kui_toy_pilot_startup_sci_healthy
+FLAGS += -DKUI_RETAIL_GD_REJECTION_DETAILS=1
+endif
+WORKER_OBJ = $(patsubst %.c,$(BUILD)/worker/%.o,$(WORKER_SRC)) $(BUILD)/worker_asm.o $(BUILD)/pause_asm.o
+ifeq ($(DATA_SCHEDULE_MODE),2)
+WORKER_OBJ += $(BUILD)/worker/async_gd.o $(BUILD)/sci_irq_asm.o
+endif
+ifeq ($(SHARED_SCI),1)
+FLAGS += -DKUI_RETAIL_GD_REJECTION_DETAILS=1
+WORKER_SRC += src/loader/toy_pilot_sci.c src/loader/sci_stream.c src/core/retail_cursor.c
+ifeq ($(ASYNC_CDDA),1)
+WORKER_SRC += src/core/retail_image.c
+endif
+WORKER_OBJ += $(BUILD)/worker/async_gd.o $(BUILD)/sci_irq_asm.o
+WORKER_EXTRA_FLAGS = -DKUI_RETAIL_GD_ASYNC=1
+SHARED_RESIDENT_EXPORTS = -Wl,-u,_kui_toy_pilot_card_pointer -Wl,-u,_kui_sci_sd_healthy
+endif
+.PHONY: all resident force-config
+.DELETE_ON_ERROR:
+all: $(BUILD)/retail-toy-pilot.kui
+resident: $(BUILD)/resident-sci.bin
+force-config:
+$(BUILD)/build-config: force-config
+	@mkdir -p $(@D)
+	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=15' 'PILOT=1' 'LOW=1' 'SLOTS=64' 'SCI=1' 'SCI_PACED=1' 'SCI_FAULT=1' 'SCI_REUSE_TDRE=$(SCI_REUSE_TDRE)' 'GD_FIXED_STEP=$(GD_FIXED_STEP)' 'SHARED_SCI=$(SHARED_SCI)' 'ASYNC_CDDA=$(ASYNC_CDDA)' 'PRIVATE_P2=$(PRIVATE_P2)' 'NATIVE_CACHE=$(NATIVE_CACHE)' 'SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE)' 'OPT=$(RESIDENT_OPT)' $(if $(TRACE_CONFIG),'$(TRACE_CONFIG)') $(if $(filter $(DATA_PROBE),1),'DATA_PROBE=1' 'DATA_PAYLOAD_MODE=$(DATA_PAYLOAD_MODE)') $(if $(SCHEDULE_CONFIG),'$(SCHEDULE_CONFIG)') $(if $(BUDGET_CONFIG),'$(BUDGET_CONFIG)') $(if $(FOLLOWUP_CONFIG),'$(FOLLOWUP_CONFIG)') $(if $(TUNING_CONFIG),'$(TUNING_CONFIG)') $(if $(IRQ_CONFIG),'$(IRQ_CONFIG)') $(if $(PIPELINE_CONFIG),'$(PIPELINE_CONFIG)') $(if $(COOKED_CONFIG),'$(COOKED_CONFIG)') $(if $(REVERSE_CONFIG),'$(REVERSE_CONFIG)') $(if $(filter 1,$(NATIVE_COMPAT)),'NATIVE_COMPAT=1') > $@.new
+	@if ! cmp -s $@.new $@; then mv $@.new $@; else rm $@.new; fi
+$(RESIDENT_OBJ) $(STAGE_OBJ) $(WORKER_OBJ) $(BUILD)/entry_asm.o: $(BUILD)/build-config
+$(BUILD)/sci/%.o: %.c
+	@mkdir -p $(@D)
+	$(CC) $(RESIDENT_FLAGS) $(BUS_ADMISSION) -MMD -MP -c $< -o $@
+$(BUILD)/sci/retail_resident_asm.o: src/loader/retail_resident.S
+	@mkdir -p $(@D)
+	$(CC) $(RESIDENT_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/sci/toy_pilot_boot_asm.o: src/loader/toy_pilot_boot.S
+	@mkdir -p $(@D)
+	$(CC) $(RESIDENT_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/resident-sci.elf: $(RESIDENT_OBJ) $(RESIDENT_SCRIPT)
+	@mkdir -p $(BUILD)/sci/lto
+	$(CC) $(LINK) -flto -mrelax $(RESIDENT_OPT) -fstack-usage -save-temps=obj -Wl,--relax \
+	 -Wl,-u,_memcpy -Wl,-u,_memset -Wl,-u,_kui_retail_resident_init \
+	 -Wl,-u,_kui_retail_resident_dispatch -Wl,-u,_kui_retail_gd_dispatch \
+	 -Wl,-u,_kui_retail_image_read -Wl,-u,_kui_loader_sd_stream_next \
+	 -Wl,-u,_kui_sci_sd_acquire -Wl,-u,_kui_sci_sd_release \
+	 -Wl,-u,_kui_toy_pilot_read_raw -Wl,-u,_kui_toy_pilot_heap_hook \
+	 -Wl,-u,_kui_toy_pilot_return_hook -Wl,-u,_kui_toy_pilot_manifest_pointer \
+	 -Wl,-u,_kui_toy_pilot_pending_pointer -Wl,-u,_kui_toy_pilot_active_pointer \
+	 $(SHARED_RESIDENT_EXPORTS) $(SCHEDULE_RESIDENT_EXPORTS) -T$(RESIDENT_SCRIPT) -Wl,-Map,$(BUILD)/resident-sci.map -o $@ $(RESIDENT_OBJ) -lgcc
+	cp $(BUILD)/resident-sci.elf.ltrans*.su $(BUILD)/sci/lto/
+$(BUILD)/resident-sci.bin: $(BUILD)/resident-sci.elf
+	$(OBJCOPY) -O binary $< $@
+$(BUILD)/toy_pilot_resident_symbols.h: $(BUILD)/resident-sci.elf tools/toy_pilot_symbols.py tools/check_loader_layout.py
+	python3 tools/toy_pilot_symbols.py $< $@ $(RESIDENT_SYMBOL_FLAGS)
+ifeq ($(DATA_PROBE),1)
+$(BUILD)/worker/src/loader/toy_loader_data_probe.o $(BUILD)/worker/src/loader/toy_loader_payload_control.o: $(BUILD)/toy_pilot_resident_symbols.h
+endif
+ifneq ($(DATA_SCHEDULE_MODE),0)
+$(BUILD)/worker/src/loader/toy_pilot_gd.o: $(BUILD)/toy_pilot_resident_symbols.h
+endif
+ifeq ($(DATA_SCHEDULE_MODE),2)
+$(BUILD)/worker/src/loader/toy_pilot_worker.o: $(BUILD)/toy_pilot_resident_symbols.h
+endif
+$(BUILD)/worker/%.o: %.c
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) $(WORKER_EXTRA_FLAGS) $(BUS_ADMISSION) -MMD -MP -c $< -o $@
+ifeq ($(DATA_SCHEDULE_MODE),2)
+$(BUILD)/worker/src/loader/toy_pilot_sci.o: src/loader/toy_pilot_sci.c
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -DKUI_RETAIL_GD_ASYNC=1 $(BUS_ADMISSION) -MMD -MP -c $< -o $@
+endif
+ifneq ($(DATA_PIPELINE_PROFILE),0)
+$(BUILD)/worker/src/loader/sci_stream.o: src/loader/sci_stream.c
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) $(REVERSE_STREAM_FLAGS) -DKUI_TOY_PIPELINE_HIGH_STREAM=1 $(BUS_ADMISSION) -MMD -MP -c $< -o $@
+endif
+$(BUILD)/worker_asm.o: src/loader/toy_pilot_worker.S
+	$(CC) $(FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/worker/async_gd.o: src/core/retail_gd.c
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -DKUI_RETAIL_GD_ASYNC=1 -MMD -MP -c $< -o $@
+$(BUILD)/sci_irq_asm.o: src/loader/toy_pilot_sci_irq.S
+	$(CC) $(FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/pause_asm.o: src/loader/toy_pilot_pause.S
+	$(CC) $(FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/worker.elf: $(WORKER_OBJ) src/loader/toy_pilot_worker.ld
+	$(CC) $(LINK) -Wl,--defsym,KUI_TOY_PRIVATE_P2=$(PRIVATE_P2) -Wl,--defsym,KUI_TOY_TRACE=$(LOADER_TRACE) -Tsrc/loader/toy_pilot_worker.ld -Wl,-Map,$(BUILD)/worker.map -o $@ $(WORKER_OBJ) -lgcc
+$(BUILD)/worker.bin: $(BUILD)/worker.elf
+	$(OBJCOPY) -O binary $< $@
+$(BUILD)/stage/%.o: %.c $(BUILD)/toy_pilot_resident_symbols.h $(BUILD)/worker.bin
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) $(COOKED_STAGE_FLAGS) -DKUI_NATIVE_CDDA_COMPAT=$(NATIVE_COMPAT) $(BUS_ADMISSION) -DKUI_TOY_PILOT_WORKER_BIN='"$(BUILD)/worker.bin"' -MMD -MP -c $< -o $@
+$(BUILD)/stage_asm.o: src/loader/retail_stage.S $(BUILD)/resident-sci.bin
+	$(CC) $(FLAGS) -E -P -x assembler-with-cpp $< -o $(BUILD)/stage_asm.s.original
+	sed 's@build/retail/resident-[^"]*\.bin@$(BUILD)/resident-sci.bin@g' $(BUILD)/stage_asm.s.original > $(BUILD)/stage_asm.s
+	$(CC) $(FLAGS) -c $(BUILD)/stage_asm.s -o $@
+$(BUILD)/stage.elf: $(STAGE_OBJ) src/loader/retail_stage.ld
+	$(CC) $(LINK) -Tsrc/loader/retail_stage.ld -Wl,-Map,$(BUILD)/stage.map -o $@ $(STAGE_OBJ) -lgcc
+$(BUILD)/stage.bin: $(BUILD)/stage.elf
+	$(OBJCOPY) -O binary $< $@
+$(BUILD)/entry_asm.o: src/loader/retail_entry.S $(BUILD)/stage.bin
+	$(CC) $(FLAGS) -DKUI_RETAIL_STAGE_BIN='"$(BUILD)/stage.bin"' -c $< -o $@
+$(BUILD)/entry.elf: $(BUILD)/entry_asm.o src/loader/retail_entry.ld
+	$(CC) $(LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,$(BUILD)/entry.map -o $@ $<
+	python3 tools/record_build.py $@
+$(BUILD)/retail-toy-pilot.kui: $(BUILD)/entry.elf
+	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
+-include $(RESIDENT_OBJ:.o=.d) $(STAGE_OBJ:.o=.d) $(WORKER_OBJ:.o=.d)

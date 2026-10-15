@@ -346,7 +346,7 @@ bool kui_shell_games_background_ready(const struct kui_shell *s) {
 bool kui_shell_games_cdda_ready(const struct kui_shell *s) {
     if(kui_shell_games_ce_probe_ready(s)) {
         /* Offer an opt-in to every WinCE GDI with gameplay audio
-         * tracks. Preparation still requires a compatible native runtime. */
+         * candidates. Preparation checks the actual native runtime. */
         return s->games_detail.format==KUI_GAME_IMAGE_GDI && !s->games_detail.cd_image &&
             !s->games_detail.scrambled &&
             memchr(s->games_detail.product,0,sizeof(s->games_detail.product)) &&
@@ -360,6 +360,14 @@ bool kui_shell_games_cdda_ready(const struct kui_shell *s) {
         s->games_detail.audio.candidate_tracks &&
         s->games_detail.audio.candidate_tracks<=s->games_detail.audio.audio_tracks &&
         s->games_detail.audio.audio_tracks<=s->games_detail.tracks;
+}
+const char *kui_shell_games_cdda_status(const struct kui_shell *s) {
+    if(!kui_shell_games_cdda_ready(s)) return "CD audio: Unavailable";
+    switch(s->games_detail.cdda_compatibility) {
+    case KUI_GAME_CDDA_TESTED: return "CD audio: Tested (known version)";
+    case KUI_GAME_CDDA_TESTED_LIMITED: return "CD audio: Tested; FMV issues remain";
+    default: return "CD audio: Experimental / untested";
+    }
 }
 bool kui_shell_games_launch_ready(const struct kui_shell *s) {
     return kui_shell_games_retail_ready(s) || kui_shell_games_ce_probe_ready(s);

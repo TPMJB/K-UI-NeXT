@@ -52,9 +52,10 @@ APP_SOURCES := $(filter-out src/apps/boot_splash.c,$(wildcard src/apps/*.c))
 RUNTIME_OBJECTS += $(patsubst %.c,build/dc/%.o,$(APP_SOURCES))
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 
-.PHONY: all force-build-id wince-cdda
+.PHONY: all force-build-id wince-cdda native-cdda
 all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf build/retail/entry.elf build/retail-bench/entry.elf build/retail-ce/entry.elf wince-cdda
 all: native-zso
+all: native-cdda
 # These separately linked, opt-in music modules retain their tested CE layout
 # even when the ordinary native loader uses its lower firmware reservation.
 # Explicit arguments also isolate them from a requested native diagnostic.
@@ -63,6 +64,12 @@ wince-cdda:
 	$(MAKE) -f Makefile.armada-stream build/armada-ce-stream/entry.elf $(WINCE_CDDA_BUILD_FLAGS)
 	$(MAKE) -f Makefile.bam4-stream build/bam4-ce-stream/entry.elf $(WINCE_CDDA_BUILD_FLAGS)
 	$(MAKE) -f Makefile.worms-stream build/worms-ce-stream/entry.elf $(WINCE_CDDA_BUILD_FLAGS)
+	$(MAKE) -f Makefile.wwp-stream build/wwp-ce-stream/entry.elf $(WINCE_CDDA_BUILD_FLAGS)
+
+# Reference builds prove that broader admission leaves native playback intact.
+# Only the three experimental compatibility adapters are installation payloads.
+native-cdda:
+	python3 tools/build_native_cdda_compat.py
 include $(KOS_BASE)/Makefile.rules
 
 CPPFLAGS += -Iinclude -Isrc/dreamcast -Isrc/loader -I.deps/fatfs/source -Ifirmware/kui-wifi/components/kwlink/include -DKUI_BUILD_ID='"$(BUILD_ID)"'

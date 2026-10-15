@@ -124,6 +124,9 @@ volatile uint32_t kui_retail_hook_active, kui_retail_hook_fault;
 #if KUI_ARMADA_CE_AUDIO_OBSERVE
 #include "armada_ce_audio_observe.inc"
 #endif
+#if KUI_WINCE_CDDA_WWP && KUI_ARMADA_CE_STREAM && KUI_ARMADA_CE_AUDIO_OBSERVE
+#include "wwp_ce_stream_status.inc"
+#endif
 #if KUI_RETAIL_OBSERVE
 #if defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_ASYNC) || KUI_RETAIL_TRANSPORT != 1 || !KUI_RETAIL_LOW_RESIDENT
 #error "Observation is native standard SCI in the original low reservation only"
@@ -477,8 +480,13 @@ static void report_fault(const char *reason, uint32_t function) {
     retail_display_line("STOPPED: PHOTO SCREEN");
     retail_display_line("POWER CYCLE");
 #else
+#if KUI_WINCE_CDDA_WWP && KUI_ARMADA_CE_STREAM && KUI_ARMADA_CE_AUDIO_OBSERVE
+    retail_display_line("PHOTO SCREEN");
+    retail_display_line("POWER CYCLE");
+#else
     retail_display_line("STOPPED: PHOTO THIS SCREEN");
     retail_display_line("POWER CYCLE FOR K-UI");
+#endif
 #endif
     for(;;) __asm__ volatile("nop");
 }
@@ -941,7 +949,17 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
     if(source>3) return -1;
     if(source!=1 && r6==UINT32_MAX) return 0;
     kui_retail_async_call(r7);
+#if KUI_WINCE_CDDA_WWP && KUI_ARMADA_CE_STREAM && KUI_ARMADA_CE_AUDIO_OBSERVE
+    uint32_t drive_status=service.drive_status;
+    if(r7==KUI_GD_DRIVE) {
+        uint32_t status=wwp_ce_stream_drive_status();
+        if(status) service.drive_status=status;
+    }
+#endif
     int32_t result = kui_retail_gd_dispatch(&service, r4, r5, 0, r7);
+#if KUI_WINCE_CDDA_WWP && KUI_ARMADA_CE_STREAM && KUI_ARMADA_CE_AUDIO_OBSERVE
+    if(r7==KUI_GD_DRIVE) service.drive_status=drive_status;
+#endif
 #if KUI_ARMADA_CE_AUDIO_OBSERVE
     armada_ce_audio_record(r7, r4, result);
 #endif

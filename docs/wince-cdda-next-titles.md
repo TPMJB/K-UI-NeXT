@@ -1,6 +1,12 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Extending the WinCE CDDA loader
 
+This is the historical three-profile port plan. The later
+[experimental CDDA integration](experimental-cdda.md) supersedes its
+title-specific admission/discovery description, adds the fourth World Party
+kernel/sound adapter and records current launch boundaries. World Party's
+scoped owner acceptance is in the [console evidence](evidence/world-party-status-restart-2026-10-15.md).
+
 The current shared SCI audio candidate is console build **1aa16821209b**,
 published as `d9f861ba87a2957234d0af276a4cfeb573367258`. On 2026-10-15 the
 owner reported almost imperceptible Worms gameplay lag after its RAM-copy

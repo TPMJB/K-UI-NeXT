@@ -267,13 +267,16 @@ bool kui_shell_set_games_art(struct kui_shell *,const struct kui_shell_games_art
     const struct kui_games_cover_result *);
 /* Selected paired version, or NULL for an ordinary single image. */
 const char *kui_shell_games_variant_label(const struct kui_shell *shell);
-/* Exact initial test profile only; preparation revalidates files and metadata. */
+/* Media and boot eligibility; preparation revalidates files and metadata. */
 bool kui_shell_games_retail_ready(const struct kui_shell *shell);
 bool kui_shell_games_background_ready(const struct kui_shell *shell);
 bool kui_shell_games_encoding_ready(const struct kui_shell *shell);
-/* Represented playable audio allows an opt-in; the backend still admits only
- * its exact supported title and GDI profiles. */
+/* Represented playable audio allows an experimental opt-in. This does not
+ * establish runtime compatibility or successful playback. */
 bool kui_shell_games_cdda_ready(const struct kui_shell *shell);
+/* Inspection publishes a tested status only after checking exact content
+ * identity. Unknown, stale and out-of-range statuses never imply a test. */
+const char *kui_shell_games_cdda_status(const struct kui_shell *shell);
 bool kui_shell_games_launch_ready(const struct kui_shell *shell);
 bool kui_shell_games_patches_ready(const struct kui_shell *shell);
 bool kui_shell_game_launch_settings(const struct kui_shell *shell,

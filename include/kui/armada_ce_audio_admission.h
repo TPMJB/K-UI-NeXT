@@ -6,7 +6,9 @@
 /* Admission binds the selected exact US kernel/IP and track layout. DATA may
  * be Mode 1 payload-only with an executable CRC; AUDIO remains raw2352.
  * It does not embed or patch proprietary sound code. */
-#if defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
+#if defined(KUI_WINCE_CDDA_WWP) && KUI_WINCE_CDDA_WWP == 1
+#define KUI_ARMADA_CE_KERNEL_BYTES UINT32_C(1828864)
+#elif defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
 #define KUI_ARMADA_CE_KERNEL_BYTES UINT32_C(1110016)
 #elif defined(KUI_WINCE_CDDA_BAM4) && KUI_WINCE_CDDA_BAM4 == 1
 #define KUI_ARMADA_CE_KERNEL_BYTES UINT32_C(1830912)
@@ -15,7 +17,24 @@
 #endif
 static inline bool kui_armada_ce_audio_admit(const struct kui_retail_manifest *m,
         uint32_t ip_crc,uint32_t prefix_crc,uint32_t body_crc,const uint8_t sha[32]) {
-#if defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
+#if KUI_ARMADA_CE_STREAM
+    /* The full-stream adapter binds an unchanged kernel/native sound ABI,
+     * independently of the application identity or disc track geometry.
+     * IP is still bound to the launcher map, and detached physical loading
+     * rechecks the complete kernel SHA before any pool patch or native call. */
+    static const uint32_t prefix[4]={0x6200729cu,0x70513a3cu,0xeffd7677u,0x7e29bc00u};
+    static const uint32_t body[4]={0xb9f755bcu,0xf6902800u,0xcd686951u,0x12f68791u};
+    const enum kui_wince_cdda_profile profile=KUI_WINCE_CDDA_COMPILED_PROFILE;
+    return kui_wince_cdda_runtime_data_manifest_valid(m,profile) &&
+        ip_crc==m->ip_crc32 && prefix_crc==prefix[profile-KUI_WINCE_CDDA_ARMADA] &&
+        body_crc==body[profile-KUI_WINCE_CDDA_ARMADA] &&
+        kui_wince_cdda_kernel_profile(m->boot_bytes,sha)==profile;
+#else
+#if defined(KUI_WINCE_CDDA_WWP) && KUI_WINCE_CDDA_WWP == 1
+    /* World Party is a full-stream implementation only. */
+    (void)m;(void)ip_crc;(void)prefix_crc;(void)body_crc;(void)sha;
+    return false;
+#elif defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
     static const uint8_t kernel_sha[32]={
         0x39,0xb8,0x0e,0x30,0x59,0x47,0x05,0x65,0x51,0x31,0x8b,0xb6,0x55,0x29,0xcc,0xcc,
         0x88,0x60,0x21,0xbe,0x60,0x40,0x6c,0x06,0xf3,0x11,0x0f,0x7f,0xe0,0x3b,0xf5,0x71};
@@ -68,5 +87,6 @@ static inline bool kui_armada_ce_audio_admit(const struct kui_retail_manifest *m
            kui_retail_track_file_offset(&m->slots[i].track)) return false;
 #endif
     return true;
+#endif
 }
 #endif

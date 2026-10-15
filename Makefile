@@ -123,7 +123,7 @@ build/test-armada-ce-live-sound: tests/test_armada_ce_live_sound.c include/kui/a
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
 ARMADA_PREPARE_TEST_SOURCES := src/core/retail_zso.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/game_image.c src/core/zso.c src/core/hash.c src/core/data.c src/core/destination.c src/core/retail_image.c
-build/test-armada-ce-excerpt-prepare: tests/test_armada_ce_excerpt_prepare.c src/apps/games_retail.c $(ARMADA_PREPARE_TEST_SOURCES) include/kui/armada_ce_excerpt_pool.h include/kui/game_ram_patches.h include/kui/retail_zso.h include/kui/zso.h
+build/test-armada-ce-excerpt-prepare: tests/test_armada_ce_excerpt_prepare.c src/apps/games_retail.c $(ARMADA_PREPARE_TEST_SOURCES) include/kui/armada_ce_excerpt_pool.h include/kui/game_ram_patches.h include/kui/retail_zso.h include/kui/zso.h include/kui/wince_cdda_profiles.h include/kui/armada_ce_stream_seed.h include/kui/games_retail.h include/kui/wince_cdda_wwp_kernel.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -ffunction-sections -fdata-sections tests/test_armada_ce_excerpt_prepare.c $(ARMADA_PREPARE_TEST_SOURCES) -Wl,--gc-sections -o $@
 build/test-armada-ce-excerpt-entry: tests/test_armada_ce_excerpt_entry.c src/loader/armada_ce_excerpt_entry.c include/kui/armada_ce_excerpt_entry.h src/loader/armada_ce_audio_observe.inc
@@ -832,7 +832,7 @@ build/test-cover-image: tests/test_cover_image.c src/apps/cover_image.c include/
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests src/apps/cover_image.c tests/test_cover_image.c -o $@
 
-GAMES = src/apps/games.c src/core/game_image.c src/core/zso.c src/core/game_metadata.c src/core/destination.c src/core/storage_probe.c
+GAMES = src/apps/games.c src/core/game_image.c src/core/zso.c src/core/game_metadata.c src/core/destination.c src/core/storage_probe.c src/core/hash.c
 GAMES_COVERS = $(GAMES) src/apps/games_covers.c src/apps/cover_image.c src/core/game_cover.c src/core/pvr_texture.c src/core/retail_image.c
 GAMES_COVERS_WRAP = -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_opendir,--wrap=f_closedir,--wrap=f_write
 GAMES_WRAP = -Wl,--wrap=f_open,--wrap=f_read,--wrap=f_lseek,--wrap=f_close,--wrap=f_write,--wrap=f_mkdir,--wrap=f_unlink,--wrap=f_rename,--wrap=f_opendir,--wrap=f_readdir,--wrap=f_closedir,--wrap=f_stat
@@ -945,3 +945,93 @@ build/test-zso: tests/test_zso.c src/core/zso.c include/kui/zso.h
 build/test-retail-zso: tests/test_retail_zso.c src/core/retail_zso.c src/core/zso.c src/core/retail_image.c include/kui/retail_zso.h include/kui/zso.h include/kui/retail_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_RETAIL_MANIFEST_SLOTS=32 src/core/retail_image.c src/core/retail_zso.c src/core/zso.c tests/test_retail_zso.c -o $@
+
+
+# Runtime identity is independent of application identity and track inventory.
+.PHONY: test-native-cdda-compat test-games-cdda-identity-io
+test-games-cdda-identity-io: build/test-games-cdda-identity-io
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-cdda-identity-io
+build/test-games-cdda-identity-io: tests/test_games_cdda_identity_io.c tests/test_games_cdda_status.c src/apps/games.c include/kui/games_cdda_status.h src/core/game_image.c src/core/zso.c src/core/hash.c src/core/data.c src/core/destination.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -ffunction-sections -fdata-sections tests/test_games_cdda_identity_io.c src/core/game_image.c src/core/zso.c src/core/hash.c src/core/data.c src/core/destination.c -Wl,--gc-sections -o $@
+
+test-native-cdda-compat: build/test-native-cdda-compat
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-native-cdda-compat
+build/test-native-cdda-compat: tests/test_native_cdda_compat.c include/kui/native_cdda_compat.h src/core/games_cdda_profile.h src/core/retail_image.c src/core/hash.c src/core/data.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_RETAIL_EXTENDED_MAP=1 tests/test_native_cdda_compat.c src/core/retail_image.c src/core/hash.c src/core/data.c -o $@
+
+.PHONY: test-wince-runtime-families
+test-wince-runtime-families: build/test-wince-runtime-armada build/test-wince-runtime-bam4 build/test-wince-runtime-worms build/test-wince-runtime-wwp build/test-armada-ce-generic-sound build/test-bam4-ce-generic-sound build/test-worms-ce-generic-sound
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-wince-runtime-armada
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-wince-runtime-bam4
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-wince-runtime-worms
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-wince-runtime-wwp
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-armada-ce-generic-sound
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-bam4-ce-generic-sound
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-worms-ce-generic-sound
+build/test-wince-runtime-bam4: WINCE_RUNTIME_FLAGS := -DKUI_WINCE_CDDA_BAM4=1
+build/test-wince-runtime-worms: WINCE_RUNTIME_FLAGS := -DKUI_WINCE_CDDA_WORMS=1
+build/test-wince-runtime-wwp: WINCE_RUNTIME_FLAGS := -DKUI_WINCE_CDDA_WWP=1
+build/test-wince-runtime-armada build/test-wince-runtime-bam4 build/test-wince-runtime-worms build/test-wince-runtime-wwp: tests/test_wince_runtime_profiles.c src/core/retail_image.c include/kui/wince_cdda_profiles.h include/kui/armada_ce_audio_admission.h include/kui/armada_ce_stream_seed.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_RETAIL_EXTENDED_MAP=1 $(WINCE_RUNTIME_FLAGS) tests/test_wince_runtime_profiles.c src/core/retail_image.c -o $@
+
+.PHONY: test-wwp-ce-stream
+build/test-wwp-ce-stream-status-publish: tests/test_wwp_ce_stream_status_publish.c src/loader/armada_ce_stream_player.c include/kui/armada_ce_excerpt_entry.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) -fsanitize=undefined -ffunction-sections -fdata-sections -fno-pie -no-pie $(INCLUDES) -Isrc/loader $< -Wl,--gc-sections -o $@
+test-wwp-ce-stream: build/test-wwp-ce-generic-sound build/test-wwp-ce-stream-native build/test-wwp-ce-stream-stop build/test-wwp-ce-stream-status build/test-wwp-ce-stream-status-publish
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-wwp-ce-generic-sound
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-wwp-ce-stream-native
+	./build/test-wwp-ce-stream-stop
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-wwp-ce-stream-status
+	./build/test-wwp-ce-stream-status-publish
+build/test-wwp-ce-generic-sound: tests/test_armada_ce_generic_sound.c tests/test_armada_ce_live_sound.c include/kui/armada_ce_live_sound.h include/kui/wince_cdda_wwp_kernel.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_WINCE_CDDA_WWP=1 $< -o $@
+build/test-wwp-ce-stream-native: tests/test_wwp_ce_stream_native.c tests/test_armada_ce_stream_native.c src/loader/armada_ce_stream_native.c include/kui/armada_ce_live_sound.h include/kui/wince_cdda_wwp_kernel.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_WINCE_CDDA_WWP=1 -DKUI_ARMADA_CE_GENERIC_APPLICATION=1 -DKUI_RETAIL_CE=1 -DKUI_ARMADA_CE_STREAM=1 $< src/loader/armada_ce_stream_native.c -o $@
+build/test-wwp-ce-stream-stop: tests/test_wwp_ce_stream_stop.c src/loader/armada_ce_stream_player.c src/loader/armada_ce_stream_model.c include/kui/armada_ce_live_sound.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) -fsanitize=undefined -ffunction-sections -fdata-sections -fno-pie -no-pie $(INCLUDES) -Isrc/loader $< src/loader/armada_ce_stream_model.c -Wl,--gc-sections -o $@
+build/test-wwp-ce-stream-status: tests/test_wwp_ce_stream_status.c tests/test_retail_gd.c src/loader/wwp_ce_stream_status.inc src/core/retail_gd.c include/kui/retail_gd.h include/kui/armada_ce_excerpt_entry.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_RETAIL_CE=1 $< src/core/retail_gd.c -o $@
+build/test-bam4-ce-generic-sound: WINCE_GENERIC_FLAGS := -DKUI_WINCE_CDDA_BAM4=1
+build/test-worms-ce-generic-sound: WINCE_GENERIC_FLAGS := -DKUI_WINCE_CDDA_WORMS=1
+build/test-armada-ce-generic-sound build/test-bam4-ce-generic-sound build/test-worms-ce-generic-sound: tests/test_armada_ce_generic_sound.c tests/test_armada_ce_live_sound.c include/kui/armada_ce_live_sound.h include/kui/armada_ce_stream_initial_word.h include/kui/armada_ce_stream_rebind_word.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(WINCE_GENERIC_FLAGS) $< -o $@
+
+.PHONY: test-games-cdda-status
+test-games-cdda-status: build/test-games-cdda-status
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-cdda-status
+build/test-games-cdda-status: tests/test_games_cdda_status.c include/kui/games_cdda_status.h include/kui/games.h include/kui/game_metadata.h include/kui/wince_cdda_profiles.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
+
+.PHONY: test-retail-map-diagnostic
+build/test-wince-packaged-prepare: tests/test_wince_packaged_prepare.c tests/test_armada_ce_excerpt_prepare.c src/apps/games_retail.c $(ARMADA_PREPARE_TEST_SOURCES) include/kui/wince_cdda_profiles.h include/kui/armada_ce_stream_seed.h include/kui/games_retail.h include/kui/wince_cdda_wwp_kernel.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -ffunction-sections -fdata-sections tests/test_wince_packaged_prepare.c $(ARMADA_PREPARE_TEST_SOURCES) -Wl,--gc-sections -o $@
+
+test-retail-map-diagnostic: build/test-retail-map-diagnostic build/test-retail-map-diagnostic-extended build/test-retail-map-stage-native build/test-retail-map-stage-ce build/test-retail-map-stage-worms
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-retail-map-diagnostic
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-retail-map-diagnostic-extended
+	./build/test-retail-map-stage-native
+	./build/test-retail-map-stage-ce
+	./build/test-retail-map-stage-worms
+build/test-retail-map-diagnostic-extended: MAP_DIAG_FLAGS := -DKUI_RETAIL_EXTENDED_MAP=1
+build/test-retail-map-diagnostic build/test-retail-map-diagnostic-extended: tests/test_retail_map_diagnostic.c include/kui/retail_map_diagnostic.h src/core/retail_image.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(MAP_DIAG_FLAGS) tests/test_retail_map_diagnostic.c src/core/retail_image.c -o $@
+build/test-retail-map-stage-ce: MAP_STAGE_FLAGS := -DKUI_RETAIL_CE=1
+build/test-retail-map-stage-worms: MAP_STAGE_FLAGS := -DKUI_RETAIL_CE=1 -DKUI_ARMADA_CE_AUDIO_STAGE=1 -DKUI_ARMADA_CE_RAM_BIND_STAGE=1 -DKUI_ARMADA_CE_EXCERPT_STAGE=1 -DKUI_ARMADA_CE_STREAM=1 -DKUI_RETAIL_EXTENDED_MAP=1 -DKUI_WINCE_CDDA_WORMS=1
+build/test-retail-map-stage-native build/test-retail-map-stage-ce build/test-retail-map-stage-worms: tests/test_retail_map_stage_diagnostic.c src/loader/retail_stage.c include/kui/retail_map_diagnostic.h src/core/retail_image.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) -fsanitize=undefined -fno-omit-frame-pointer $(INCLUDES) -Isrc/loader -ffunction-sections -fdata-sections -fno-pie -no-pie $(MAP_STAGE_FLAGS) tests/test_retail_map_stage_diagnostic.c src/core/retail_image.c -Wl,--gc-sections -o $@
+
+# Broader CD music admission and linked-reader regression coverage.
+test: test-games-cdda-status test-games-cdda-identity-io test-native-cdda-compat test-wince-runtime-families test-wwp-ce-stream test-retail-map-diagnostic

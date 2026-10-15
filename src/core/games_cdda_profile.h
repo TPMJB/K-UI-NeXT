@@ -6,11 +6,14 @@
 #include "kui/hash.h"
 #include "kui/retail_image.h"
 #include "kui/mdk2_cdda_layout.h"
+#include "kui/native_cdda_compat.h"
 #include <string.h>
 
 enum kui_games_cdda_profile {
     KUI_GAMES_CDDA_UNSUPPORTED, KUI_GAMES_CDDA_TOY_RAW, KUI_GAMES_CDDA_TOY_COOKED,
-    KUI_GAMES_CDDA_MDK2_RAW
+    KUI_GAMES_CDDA_MDK2_RAW,
+    KUI_GAMES_CDDA_TOY_RAW_COMPAT, KUI_GAMES_CDDA_TOY_COOKED_COMPAT,
+    KUI_GAMES_CDDA_MDK2_RAW_COMPAT
 };
 /* Routing is deliberately narrower than the binaries' final loaded-byte
  * checks. Every track, including the low-density separator, must be mapped;
@@ -58,7 +61,10 @@ static inline bool kui_games_cdda_mdk2_identity(
 }
 static inline unsigned kui_games_cdda_mapping_capacity(
     const struct kui_game_image *image,const struct kui_retail_manifest *m) {
-    return kui_games_cdda_mdk2_identity(image,m)?KUI_MDK2_CDDA_MANIFEST_SLOTS:64u;
+    return image && m && image->format==KUI_GAME_IMAGE_GDI && !image->cd_image &&
+        !image->scrambled && m->flags==KUI_RETAIL_IMAGE_BOOT_CRC &&
+        kui_native_cdda_boot_binding(m->boot_bytes,m->boot_crc32)==KUI_NATIVE_CDDA_MDK2?
+        KUI_MDK2_CDDA_MANIFEST_SLOTS:64u;
 }
 /* First MDK2 integration: the owner's exact 31-track raw GDI, all tracks
  * mapped, native SCI and the standard reader. Cooked/2048, CE, other media
@@ -92,10 +98,67 @@ static inline enum kui_games_cdda_profile kui_games_cdda_profile(
     enum kui_games_cdda_profile profile=kui_games_cdda_mdk2_profile(image,m);
     return profile!=KUI_GAMES_CDDA_UNSUPPORTED?profile:kui_games_cdda_toy_profile(image,m);
 }
+/* Select a family before building the complete map. Source CRC/size select
+ * only a candidate; the later map check and loaded SHA remain mandatory. */
+static inline enum kui_games_cdda_profile kui_games_cdda_boot_profile(
+    const struct kui_game_image *image,const struct kui_retail_manifest *m) {
+    if(!image || !m || image->format!=KUI_GAME_IMAGE_GDI || image->cd_image ||
+       image->scrambled || !image->count || image->count>KUI_RETAIL_IMAGE_TRACKS ||
+       image->count!=m->track_count || m->storage_transport!=KUI_STORAGE_SCI ||
+       m->reader!=KUI_RETAIL_READER_STANDARD || m->flags!=KUI_RETAIL_IMAGE_BOOT_CRC)
+        return KUI_GAMES_CDDA_UNSUPPORTED;
+    enum kui_native_cdda_binding binding=kui_native_cdda_boot_binding(m->boot_bytes,m->boot_crc32);
+    if(binding==KUI_NATIVE_CDDA_NONE) return KUI_GAMES_CDDA_UNSUPPORTED;
+    bool raw=false,cooked=false,audio=false;
+    for(unsigned i=0;i<image->count;i++) {
+        const struct kui_game_image_track *t=&image->tracks[i];
+        if(t->file_offset || (t->control!=0u && t->control!=4u))
+            return KUI_GAMES_CDDA_UNSUPPORTED;
+        if(t->control==4u) {
+            if(t->sector_bytes==2048u) cooked=true;
+            else if(t->sector_bytes==2352u) raw=true;
+            else return KUI_GAMES_CDDA_UNSUPPORTED;
+        } else {
+            if(t->sector_bytes!=2352u) return KUI_GAMES_CDDA_UNSUPPORTED;
+            if(t->start_lba>=45000u) audio=true;
+        }
+    }
+    if(!audio || raw==cooked || (cooked && binding==KUI_NATIVE_CDDA_MDK2))
+        return KUI_GAMES_CDDA_UNSUPPORTED;
+    return binding==KUI_NATIVE_CDDA_MDK2?KUI_GAMES_CDDA_MDK2_RAW_COMPAT:
+        cooked?KUI_GAMES_CDDA_TOY_COOKED_COMPAT:KUI_GAMES_CDDA_TOY_RAW_COMPAT;
+}
+static inline bool kui_games_cdda_is_experimental(enum kui_games_cdda_profile profile) {
+    return profile==KUI_GAMES_CDDA_TOY_RAW_COMPAT ||
+        profile==KUI_GAMES_CDDA_TOY_COOKED_COMPAT || profile==KUI_GAMES_CDDA_MDK2_RAW_COMPAT;
+}
+/* Only an absent separately delivered exact module permits this fallback.
+ * A present exact module retains its strict byte identity and admission. */
+static inline enum kui_games_cdda_profile kui_games_cdda_package_fallback(
+    enum kui_games_cdda_profile profile,bool absent) {
+    if(!absent) return profile;
+    return profile==KUI_GAMES_CDDA_TOY_RAW?KUI_GAMES_CDDA_TOY_RAW_COMPAT:
+        profile==KUI_GAMES_CDDA_TOY_COOKED?KUI_GAMES_CDDA_TOY_COOKED_COMPAT:
+        profile==KUI_GAMES_CDDA_MDK2_RAW?KUI_GAMES_CDDA_MDK2_RAW_COMPAT:profile;
+}
+static inline enum kui_games_cdda_profile kui_games_cdda_compatible_profile(
+    const struct kui_game_image *image,const struct kui_retail_manifest *m) {
+    enum kui_games_cdda_profile exact=kui_games_cdda_profile(image,m);
+    if(exact!=KUI_GAMES_CDDA_UNSUPPORTED) return exact;
+    enum kui_games_cdda_profile candidate=kui_games_cdda_boot_profile(image,m);
+    const bool cooked=candidate==KUI_GAMES_CDDA_TOY_COOKED_COMPAT;
+    enum kui_native_cdda_binding binding=candidate==KUI_GAMES_CDDA_MDK2_RAW_COMPAT?
+        KUI_NATIVE_CDDA_MDK2:candidate==KUI_GAMES_CDDA_UNSUPPORTED?
+        KUI_NATIVE_CDDA_NONE:KUI_NATIVE_CDDA_TOY;
+    return kui_native_cdda_manifest_compatible(m,binding,cooked)?candidate:KUI_GAMES_CDDA_UNSUPPORTED;
+}
 static inline const char *kui_games_cdda_package(enum kui_games_cdda_profile profile) {
     return profile==KUI_GAMES_CDDA_TOY_RAW?KUI_GAMES_RETAIL_CDDA_RAW_PACKAGE:
         profile==KUI_GAMES_CDDA_TOY_COOKED?KUI_GAMES_RETAIL_CDDA_COOKED_PACKAGE:
-        profile==KUI_GAMES_CDDA_MDK2_RAW?KUI_GAMES_RETAIL_CDDA_MDK2_PACKAGE:NULL;
+        profile==KUI_GAMES_CDDA_MDK2_RAW?KUI_GAMES_RETAIL_CDDA_MDK2_PACKAGE:
+        profile==KUI_GAMES_CDDA_TOY_RAW_COMPAT?"0:/KUI/apps/games/cdda-native-toy-raw.kui":
+        profile==KUI_GAMES_CDDA_TOY_COOKED_COMPAT?"0:/KUI/apps/games/cdda-native-toy-cooked.kui":
+        profile==KUI_GAMES_CDDA_MDK2_RAW_COMPAT?"0:/KUI/apps/games/cdda-native-mdk2.kui":NULL;
 }
 /* Bind the runtime route to the checked MDK2 adapter allocation. The
  * unmodified executable and external driver still undergo their own loaded
@@ -117,6 +180,26 @@ static inline bool kui_games_cdda_mdk2_package_admit(const struct kui_runtime_im
  * insufficient. The map is still empty when this SHA is checked. */
 static inline bool kui_games_cdda_package_admit(enum kui_games_cdda_profile profile,
     const struct kui_runtime_image *image) {
+    if(kui_games_cdda_is_experimental(profile)) {
+        static const struct kui_native_cdda_descriptor descriptors[3]={
+            KUI_NATIVE_CDDA_TOY_DESCRIPTOR(0u),KUI_NATIVE_CDDA_TOY_DESCRIPTOR(1u),
+            KUI_NATIVE_CDDA_MDK2_DESCRIPTOR};
+        unsigned index=profile==KUI_GAMES_CDDA_TOY_RAW_COMPAT?0u:
+            profile==KUI_GAMES_CDDA_TOY_COOKED_COMPAT?1u:2u;
+        const uint8_t *identity=(const uint8_t *)&descriptors[index];
+        if(!image || !image->data || image->info.payload_bytes<sizeof(descriptors[0]) ||
+           image->info.payload_bytes>1024u*1024u ||
+           image->info.memory_bytes!=image->info.payload_bytes ||
+           kui_retail_crc32(0u,image->data,image->info.payload_bytes)!=image->info.crc32)
+            return false;
+        const uint8_t *payload=image->data;
+        unsigned found=0u;
+        for(uint32_t i=0;i<=image->info.payload_bytes-sizeof(descriptors[0]);i++) {
+            if(memcmp(payload+i,identity,8u)) continue;
+            if(memcmp(payload+i,identity,sizeof(descriptors[0])) || ++found>1u) return false;
+        }
+        return found==1u;
+    }
     if(profile==KUI_GAMES_CDDA_MDK2_RAW) return kui_games_cdda_mdk2_package_admit(image);
     static const uint8_t raw_sha[32]={
         0x78,0xc1,0x5a,0x85,0x80,0x32,0x0d,0xc2,0xb5,0x30,0x1d,0x85,0x76,0xcd,0x48,0x77,

@@ -4,6 +4,7 @@
 #include "kui/armada_ce_excerpt_pool.h"
 #include "kui/retail_image.h"
 #include "kui/wince_cdda_profiles.h"
+#include "kui/wince_cdda_wwp_kernel.h"
 
 /* Authored pre-boot metadata only. Audio remains in the user's image; the
  * package contains a blank fixed wire map, never proprietary PCM. */
@@ -49,7 +50,8 @@ static inline bool kui_armada_ce_stream_seed_header_valid(const uint32_t *words)
  * own compilation profile. Never fill one runtime's wire seed in another. */
 static inline bool kui_wince_cdda_seed_header_valid(const uint32_t *words,
         enum kui_wince_cdda_profile profile) {
-    uint32_t pool=profile==KUI_WINCE_CDDA_WORMS_ARMAGEDDON?0x8ce70000u:0x8cf50000u;
+    uint32_t pool=profile==KUI_WINCE_CDDA_WORMS_WORLD_PARTY?KUI_WWP_CE_POOL_BEGIN:
+        profile==KUI_WINCE_CDDA_WORMS_ARMAGEDDON?0x8ce70000u:0x8cf50000u;
     if(!words || !kui_wince_cdda_disc(profile) ||
        words[0]!=KUI_ARMADA_CE_STREAM_MAGIC || words[1]!=KUI_ARMADA_CE_STREAM_VERSION ||
        words[2]!=pool+64u || words[3]!=KUI_ARMADA_CE_STREAM_SOURCE_BYTES ||
@@ -61,26 +63,7 @@ static inline bool kui_wince_cdda_seed_header_valid(const uint32_t *words,
 /* Call after the canonical full wire decoder. Do not use an async-sized
  * truncated manifest: both raw audio files must have every mapped block. */
 static inline bool kui_armada_ce_stream_map_valid(const struct kui_retail_manifest *map) {
-#if KUI_WINCE_CDDA_BAM4 || KUI_WINCE_CDDA_WORMS
-    return kui_wince_cdda_manifest_valid(map,KUI_WINCE_CDDA_COMPILED_PROFILE);
-#else
-    /* Retain RC9's compiled Armada admission and controller layout. */
-    static const uint32_t starts[5]={0u,756u,45000u,149842u,434062u};
-    static const char product[]="T40301N 00",bootfile[]="0WINCEOS.BIN";
-    if(!map || map->track_count!=5u || map->storage_transport!=KUI_STORAGE_SCI ||
-       map->reader!=KUI_RETAIL_READER_STANDARD || map->boot_bytes!=1253376u ||
-       map->flags&(KUI_RETAIL_IMAGE_CD|KUI_RETAIL_IMAGE_SCRAMBLED) ||
-       map->track_count+map->extent_count>KUI_RETAIL_MANIFEST_SLOTS) return false;
-    for(unsigned i=0;i<sizeof(product);i++) if(map->product[i]!=product[i]) return false;
-    for(unsigned i=0;i<sizeof(bootfile);i++) if(map->bootfile[i]!=bootfile[i]) return false;
-    for(unsigned i=0;i<5u;i++) {
-        const struct kui_retail_track *track=&map->slots[i].track;
-        if(track->start_lba!=starts[i] || track->end_lba<=track->start_lba ||
-           !kui_wince_cdda_track_storage_valid(track,i==1u || i==3u?0u:4u,map->flags) ||
-           kui_retail_track_file_offset(track) || !track->extent_count) return false;
-    }
-    return true;
-#endif
+    return kui_wince_cdda_runtime_manifest_valid(map,KUI_WINCE_CDDA_COMPILED_PROFILE);
 }
 static inline bool kui_armada_ce_stream_maps_match(const struct kui_retail_manifest *full,
         const struct kui_retail_manifest *data) {

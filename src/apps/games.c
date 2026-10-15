@@ -2,6 +2,8 @@
 #include "kui/games.h"
 #include "kui/game_image.h"
 #include "kui/game_metadata.h"
+#include "kui/games_cdda_status.h"
+#include "kui/hash.h"
 #include "kui/retail_image.h"
 #include "kui/storage.h"
 #include "kui/retail_loader_layout.h"
@@ -509,6 +511,12 @@ struct image_files {
     kui_log_fn log;
     enum kui_game_result last;
     uint64_t read_bytes;
+    /* Enabled only for a bounded known-version fingerprint. Ordinary
+     * browsing retains its short-lived handles. Sequential hashing avoids
+     * reopening a large track and rewalking its cluster chain per sector. */
+    FIL *identity_reader;
+    bool identity_open;
+    char identity_name[KUI_GAME_NAME_CAP];
 };
 static enum kui_game_result fs_problem(struct image_files *files,FRESULT result,const char *name) {
     enum kui_game_result value=(result==FR_NO_FILE || result==FR_NO_PATH)?KUI_GAME_NOT_FOUND:KUI_GAME_IO;
@@ -536,22 +544,34 @@ static enum kui_game_result image_read(void *ctx,const char *name,uint64_t offse
     char path[KUI_GAMES_FILE_CAP+3];
     if(!fs_path(files,name,path) || size>UINT_MAX || (uint64_t)(FSIZE_t)offset!=offset)
         return files->last=KUI_GAME_INVALID;
-    FIL file;FRESULT r=f_open(&file,path,FA_READ);
+    FIL local,*file=files->identity_reader?files->identity_reader:&local;
+    FRESULT r=FR_OK;
+    if(files->identity_reader && files->identity_open && strcmp(files->identity_name,name)) {
+        r=f_close(file);files->identity_open=false;
+        if(r!=FR_OK) return fs_problem(files,r,name);
+    }
+    if(!files->identity_reader || !files->identity_open) {
+        r=f_open(file,path,FA_READ);
+        if(r==FR_OK && files->identity_reader) {
+            files->identity_open=true;
+            snprintf(files->identity_name,sizeof(files->identity_name),"%s",name);
+        }
+    }
     if(r!=FR_OK) return fs_problem(files,r,name);
     enum kui_game_result result=KUI_GAME_OK;
-    if(offset>(uint64_t)f_size(&file) || (uint64_t)size>(uint64_t)f_size(&file)-offset) result=KUI_GAME_FILE_SIZE;
+    if(offset>(uint64_t)f_size(file) || (uint64_t)size>(uint64_t)f_size(file)-offset) result=KUI_GAME_FILE_SIZE;
     if(result==KUI_GAME_OK) {
-        r=f_lseek(&file,(FSIZE_t)offset);
+        r=files->identity_reader && f_tell(file)==offset?FR_OK:f_lseek(file,(FSIZE_t)offset);
         if(r!=FR_OK) result=fs_problem(files,r,name);
-        else if((uint64_t)f_tell(&file)!=offset) result=KUI_GAME_IO;
+        else if((uint64_t)f_tell(file)!=offset) result=KUI_GAME_IO;
     }
     if(result==KUI_GAME_OK) {
-        UINT got=0;r=f_read(&file,out,(UINT)size,&got);
+        UINT got=0;r=f_read(file,out,(UINT)size,&got);
         files->read_bytes+=got;
         if(r!=FR_OK) result=fs_problem(files,r,name);
         else if(got!=size) result=KUI_GAME_IO;
     }
-    r=f_close(&file);
+    r=files->identity_reader?FR_OK:f_close(file);
     if(r!=FR_OK) result=fs_problem(files,r,name);
     if(stopped(files->cancel)) result=KUI_GAME_CANCELLED;
     return files->last=result;
@@ -757,6 +777,39 @@ static bool metadata_range(void *ctx,uint32_t lba,uint32_t count) {
     struct metadata_reader *reader=ctx;
     return kui_game_image_check(reader->image,lba,count,KUI_GAME_SECTOR_MODE1)==KUI_GAME_OK;
 }
+/* Only candidate tested releases pay the extra boot-file read. An unknown
+ * title's inspection remains bounded metadata work. The launch path always
+ * repeats its own detached executable/runtime checks. */
+static enum kui_game_result tested_audio_status(const struct kui_game_image *image,
+        struct image_files *files,const struct kui_game_metadata *metadata,
+        enum kui_game_cdda_compatibility *out) {
+    *out=KUI_GAME_CDDA_UNTESTED;
+    unsigned candidate=kui_games_cdda_test_candidate(image,metadata);
+    if(!candidate) return KUI_GAME_OK;
+    FIL cached;files->identity_reader=&cached;files->identity_open=false;
+    struct kui_sha256 hash;kui_sha256_init(&hash);
+    uint8_t sector[2048],digest[32];uint32_t ip_crc=0;
+    enum kui_game_result result=KUI_GAME_OK;
+    for(uint32_t i=0;i<16u && result==KUI_GAME_OK;i++) {
+        result=kui_game_image_read(image,image->data_lba+i,1u,KUI_GAME_SECTOR_MODE1,sector,sizeof(sector));
+        if(result==KUI_GAME_OK) ip_crc=kui_crc32(ip_crc,sector,sizeof(sector));
+    }
+    for(uint32_t done=0;done<metadata->boot_bytes && result==KUI_GAME_OK;) {
+        result=kui_game_image_read(image,metadata->boot_lba+done/2048u,1u,
+            KUI_GAME_SECTOR_MODE1,sector,sizeof(sector));
+        if(result==KUI_GAME_OK) {
+            uint32_t take=metadata->boot_bytes-done;if(take>sizeof(sector)) take=sizeof(sector);
+            kui_sha256_update(&hash,sector,take);done+=take;
+        }
+    }
+    if(files->identity_open && f_close(&cached)!=FR_OK) result=KUI_GAME_IO;
+    files->identity_open=false;files->identity_reader=NULL;
+    if(result==KUI_GAME_OK) {
+        kui_sha256_digest(&hash,digest);
+        *out=kui_games_cdda_test_status(candidate,ip_crc,digest);
+    }
+    return result;
+}
 bool kui_games_inspect(const char *path,struct kui_games_detail *out,kui_log_fn log,kui_cancel_fn cancel) {
     return kui_games_inspect_with(path,out,NULL,NULL,log,cancel);
 }
@@ -830,6 +883,8 @@ bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
         problem="Boot executable and full IP must be in boot-session data tracks";goto done;
     }
     out->valid=true;
+    result=tested_audio_status(image,&files,&metadata,&out->cdda_compatibility);
+    if(result!=KUI_GAME_OK) {out->valid=false;problem=kui_game_result_name(result);goto done;}
     out->zso_launch=image->compressed && !out->windows_ce && (out->native_gd || out->native_cd) &&
         kui_storage_active()==KUI_STORAGE_SCI && out->boot_bytes>=KUI_RETAIL_TRAMPOLINE_BYTES &&
         out->boot_bytes<=KUI_RETAIL_EXEC_MAX_BYTES;
@@ -843,7 +898,7 @@ bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
         out->tracks>KUI_RETAIL_IMAGE_TRACKS?"Image inspected; launch map supports at most 99 tracks":
         out->boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES || out->boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES?
             "Image inspected; boot executable must be 128 bytes to 12 MiB":
-        out->audio.candidate_tracks?"Image inspected; CD audio playback unavailable; music may be missing":
+        out->audio.candidate_tracks?"Image inspected; optional CD music uses checked experimental adapters":
         out->audio.classification==KUI_GAME_AUDIO_UNKNOWN?
             "Image inspected; audio track inventory unavailable in this format":
         "Image inspected; native game launch available, compatibility varies";
@@ -867,8 +922,8 @@ done:
             log("Games boot: %s LBA=%lu bytes=%lu",out->boot_file,
                 (unsigned long)out->boot_lba,(unsigned long)out->boot_bytes);
         }
-        log("Games metadata bytes read=%llu; no complete-file verification or launch",
-            (unsigned long long)files.read_bytes);
+        log("Games inspection bytes read=%llu; tested audio status=%u; no complete-disc verification or launch",
+            (unsigned long long)files.read_bytes,(unsigned)out->cdda_compatibility);
     }
     return out->valid;
 }

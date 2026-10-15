@@ -31,6 +31,11 @@ struct kui_games_page {
     bool has_more, artwork;
     char root[KUI_DEST_ROOT_CAP], message[128];
 };
+enum kui_game_cdda_compatibility {
+    KUI_GAME_CDDA_UNTESTED = 0,
+    KUI_GAME_CDDA_TESTED,
+    KUI_GAME_CDDA_TESTED_LIMITED
+};
 struct kui_games_detail {
     char path[KUI_GAMES_FILE_CAP];
     char title[129], product[17], region[9], boot_file[17];
@@ -39,9 +44,13 @@ struct kui_games_detail {
     uint32_t boot_bytes, boot_lba;
     unsigned tracks, audio_tracks, data_tracks;
     struct kui_game_audio_info audio;
+    /* Known tested disc release, never inferred from a title string. Final
+     * executable and native-runtime guards still run before handoff. */
+    enum kui_game_cdda_compatibility cdda_compatibility;
     bool valid, stopped;
     /* Inspection is useful even when this loader cannot boot the image.
-     * CDDA is advisory: audio-play commands are acknowledged silently.
+     * CD music is optional and uses checked runtime adapters; unfamiliar
+     * images remain experimental. With music Off, CD audio is silent.
      * Bare ISO/raw files do not reveal the original audio-track inventory. */
     bool native_gd, native_cd, windows_ce, scrambled, cd_image;
     /* Explicit inspection capability: native ZSO on a supported SCI path.
@@ -76,8 +85,9 @@ bool kui_games_single_image(const char *root, char selected[KUI_GAMES_FILE_CAP],
  * descriptor-payload filter. Returning false stops and closes the directory. */
 typedef bool (*kui_games_image_visit_fn)(void *ctx,const char *name,bool directory);
 bool kui_games_visit_images(const char *root,kui_games_image_visit_fn visit,void *ctx,kui_cancel_fn cancel);
-/* Validate every track's existence/length and bounded boot metadata. This is
- * image inspection, not content verification or proof of game compatibility. */
+/* Validate track existence/length and bounded boot metadata. Candidates for
+ * a known tested audio version also fingerprint IP and the complete boot
+ * runtime. This is not disc verification or proof of game compatibility. */
 bool kui_games_inspect(const char *path, struct kui_games_detail *out,
                        kui_log_fn log, kui_cancel_fn cancel);
 bool kui_games_inspect_with(const char *path, struct kui_games_detail *out,

@@ -9,17 +9,29 @@ This prepares the next release without publishing a final 2.0 tag.
 | Source | Disposition |
 | --- | --- |
 | `sci-armada-cdda` through `359918874090423e89764af15b0a8cbf0120a819` | Integrate 35 commits beyond `main` (`e4c521d`), including the tested `d9f861b` word-copy improvement, bounded worker, saved per-image launch choices and the three exact US WinCE CD music profiles. Historical diagnostic tools are source records, not enabled release modes. |
+| `experiment/broader-cdda-2026-10-15` through `b08802f8945f9891eb8b3efe49dead842f7a8cbf` | Integrate broader checked native/WinCE contract selection, exact evidence labels, BIN/CUE startup analysis and the fourth World Party CE adapter. Preserve the tested Armageddon module; World Party remains Experimental after scoped owner acceptance. |
 | `milestone/wifi-performance-test`: `a66186c`, `3f44de8`, `fbbc3df`, `f430f26` | Integrate the four missing wireless software commits, preserving current reader and Games behavior. The final wireless timing still needs console acceptance. |
 | `codex/home-icons`: `c91820c`, `10cd1bb` | Integrate the seven icon pairs and television refinement. Preserve current Wi-Fi text, version text and preview cases. |
 | FTP close-storm, 2048 converter, original C5 support, PRs #2/#7/#8 | Already in `main` or the selected source ancestry; no duplicate code merge. |
 | New G1 SD adapter board branches and older mixed hardware/software branches | Excluded at the owner's request. Existing PIO code does not certify new G1 hardware. |
-| Toy scheduling experiments and older validation-link-only commits | Excluded from promotion. No native CDDA module or Toy FMV fix is claimed. |
+| Toy scheduling experiments and older validation-link-only commits | Excluded from promotion. Only the isolated dependencies required by the existing Toy/MDK2 native compatibility adapters are retained; no Toy FMV fix is claimed. |
 
-The ordinary build now compiles and packages the separate Armada, Bust-A-Move 4
-and Worms modules alongside the ordinary CE fallback. Each module must pass its
+The release source includes separate Armada, Bust-A-Move 4, Worms Armageddon
+and World Party modules alongside the ordinary CE fallback. Each module must pass its
 linked profile, memory, stack, bootstrap, blank-map and source-identity audits.
 The CE fallback retains its tested DMA-resume correction and original placement;
 native loader placement remains independently selected. CD music remains opt-in.
+Broader selection reuses admitted kernel/sound or native executable/driver
+contracts; it does not admit arbitrary runtimes. Quake III CD music is deferred.
+
+The owner accepted World Party build `b08802f8945f` after the status-restart and
+linked-call corrections, with successful boot/playback reported and diagnostic
+video showing no recorded guard, bind, audio fault, gaps or recoveries. Its
+two native starts are 33 seconds apart. This is scoped evidence for that
+feature binary; World Party remains generally Experimental. The original
+Armageddon module remains byte-identical, including its three reported
+converted2048 cold boots. See the [CDDA handoff](cdda-2.0-handoff.md) and
+[World Party acceptance](evidence/world-party-status-restart-2026-10-15.md).
 
 The wireless merge originally reused worker action 76, already occupied by
 saving launch settings. The integration preserves 76 for that action and uses

@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 from package import (candidate_evidence, candidate_requested, development_experiment, development_notice,
                      development_test, package_kind, package_metadata,
                      release_metadata, write_release_assets, write_release_bundle,
-                     write_release_guides)
+                     write_release_guides, GAME_FILES)
 from publish_release import verify_assets
 from runtime_package import envelope
 from retail_package import relocation_header, HEADER_OFFSET, STAGE_BLOB_OFFSET
@@ -42,10 +42,7 @@ class CandidateInstallation(unittest.TestCase):
         self.commit = "0123456789abcdef" * 2 + "01234567"
         self.music = {"tracks": [{"ogg": {"file": "menu.ogg"}}]}
         files = ("runtime.kui", "redump.db", "tosec.db", "apps/music/menu.ogg",
-                 "apps/games/probe.kui", "apps/games/image-probe.kui",
-                 "apps/games/retail-boot.kui", "apps/games/zso-boot.kui", "apps/games/probe.dat",
-                 "apps/games/ce-probe.kui", "apps/games/ce-cdda-armada.kui",
-                 "apps/games/ce-cdda-bam4.kui", "apps/games/ce-cdda-worms.kui",
+                 *("apps/games/" + name for name in GAME_FILES),
                  "tests/scan/fixture.bin", "preferences.ini")
         for name in files:
             path = self.sd / name

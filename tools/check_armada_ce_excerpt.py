@@ -9,6 +9,7 @@ relocated C-attempt pointer varies, and that must target the linked attempt.
 All other controller instructions pass the ordinary FPU-free audit.
 """
 import argparse
+from collections import Counter
 import hashlib
 import json
 from pathlib import Path
@@ -20,6 +21,7 @@ from check_loader_layout import EH, SH, SYM, inspect_elf, region
 from check_retail_loader_layout import (FORBIDDEN_PREFIXES, FORBIDDEN_SYMBOLS,
                                        check_bss, check_directory)
 from check_retail_instructions import IMAGES, audit
+from check_retail_calls import check_directory as check_direct_calls
 from check_retail_stack import (CE_INDIRECT, EXCERPT_NATIVE_PATH, STREAM_NATIVE_PATH,
                                 STREAM_BUS_CALLBACKS,
                                 base, load, worst)
@@ -175,18 +177,20 @@ STREAM_OWNER_RELOCS = {
 }
 
 
-def stream_owner_bodies(*, bam4=False, worms=False):
+def stream_owner_bodies(*, bam4=False, worms=False, wwp=False):
     """Select reviewed kernel globals without relaxing any linked-body pin.
 
-    Both supplied kernels retain the admitted owner structures and page
+    The title kernels retain the admitted owner structures and page
     walk, with their independently verified global addresses. GCC emits
     PROCESS_BASE negated for the range/index calculation. Only these four
     literal words change; instructions, lengths and targets remain exact.
     """
-    if bam4 and worms:
+    if sum((bam4, worms, wwp)) > 1:
         raise ValueError('Select only one WinCE title profile')
     bodies = dict(STREAM_OWNER_BODIES)
-    if bam4 or worms:
+    if bam4 or worms or wwp:
+        # WWP's NK globals and process/page contracts were reviewed against
+        # its complete supplied kernel; matching BAM4 values are intentional.
         changes = {
             '_read_native': ((72, 0x8c145890, 0x8c1d1890),),
             '_kui_armada_ce_stream_owner_word': (
@@ -394,6 +398,21 @@ for _key, _targets in STREAM_BOOT_RELOCS.items():
     for _offset, _, _ in _targets:
         _body[_offset:_offset + 4] = bytes(4)
     STREAM_BOOT_BODIES[_key] = bytes(_body)
+
+# Adding WWP's scalar leaf moves the original first-text purge helper by
+# twelve bytes. Its complete body is unchanged from the booting b579 build;
+# admit only that exact named helper, never an arbitrary low-image address.
+WWP_INIT_PURGE_BYTES = bytes.fromhex('e0e14c3519245234018b0b000900a304f9af2074')
+
+
+def stream_boot_relocs(*, wwp=False):
+    relocations = dict(STREAM_BOOT_RELOCS)
+    if wwp:
+        key = ('resident', '_kui_retail_resident_init')
+        relocations[key] += ((0x26e, '_purge.lto_priv.0', 0),)
+    return relocations
+
+
 STREAM_BOOT_REQUIRED = frozenset({
     ("controller", "_kui_armada_ce_bind_probe"),
     ("controller", "_kui_armada_ce_stream_transport_attached"),
@@ -423,13 +442,15 @@ STREAM_UNDERRUN_LABELS = (
 # The title admission code changes the stage's link positions, while the
 # 912-byte relay's instructions remain identical. Pin every moved literal
 # to its original named function or its complete original terminal message;
-# never admit an arbitrary in-image address. Armada's existing pins remain
-# untouched. These offsets were reviewed against all three linked relays.
+# never admit an arbitrary in-image address. Armada retains its historical
+# complete-body pins after each linked target has passed the same exact
+# symbol/message proof. These offsets were reviewed against all four relays.
 BAM4_STAGE_LINKED_TARGETS = (
     (0x1a0, 0x8ce12168, '_retail_display_restore', None),
     (0x1a8, 0x8ce11fd0, '_retail_display_line', None),
     (0x1ac, 0x8ce163d8, None, 'BOOTSTRAP 2 REACHED GAME ENTRY'),
     (0x1bc, 0x8ce163f8, None, 'UNSUPPORTED BOOT STACK'),
+    (0x1c0, 0x8ce10878, '_stopped', None),
     (0x1d4, 0x8ce16410, None, 'UNSUPPORTED BOOT CPU STATE'),
     (0x1d8, 0x8ce121f0, '_retail_display_hex', None),
     (0x1dc, 0x8ce16404, None, 'BOOT STACK'),
@@ -439,6 +460,7 @@ BAM4_STAGE_LINKED_TARGETS = (
     (0x1f4, 0x8ce15054, '_kui_retail_crc32', None),
     (0x200, 0x8ce16440, None, 'BOOTSTRAP ALTERED EXECUTABLE'),
     (0x204, 0x8ce14bd2, '_memcmp', None),
+    (0x220, 0x8ce10a80, '_armada_stream_controller_valid', None),
     (0x238, 0x8ce164e8, None, 'BOOTSTRAP ALTERED CE RAM RESERVATION'),
     (0x23c, 0x8ce16460, None, 'BOOTSTRAP ALTERED RESIDENT'),
     (0x244, 0x8ce1647c, None, 'BOOTSTRAP ALTERED STREAM CONTRACT'),
@@ -459,17 +481,26 @@ BAM4_STAGE_LINKED_TARGETS = (
 )
 
 
-def stream_boot_bodies(*, bam4=False, worms=False):
+def stream_boot_bodies(*, bam4=False, worms=False, wwp=False):
     """Keep the complete startup proof, selecting the admitted ROM header."""
-    if bam4 and worms:
+    if sum((bam4, worms, wwp)) > 1:
         raise ValueError('Select only one WinCE title profile')
     bodies = dict(STREAM_BOOT_BODIES)
-    if bam4 or worms:
+    if wwp:
+        key = ('resident', '_kui_retail_resident_init')
+        body = bytearray(bodies[key])
+        if body[0x26e:0x272] != struct.pack('<I', 0x8c008338):
+            raise ValueError('WWP initializer purge pin differs from the booting reference')
+        body[0x26e:0x272] = bytes(4)
+        bodies[key] = bytes(body)
+        bodies[('resident', '_purge.lto_priv.0')] = WWP_INIT_PURGE_BYTES
+    if bam4 or worms or wwp:
         key = ('stage', '_kui_retail_stage_relay')
         body = bytearray(bodies[key])
         if body[0x234:0x238] != struct.pack('<I', 0xac141420):
             raise ValueError('Title startup pin no longer matches reviewed Armada ROMHDR literal')
-        body[0x234:0x238] = struct.pack('<I', 0xac11de70 if worms else 0xac1ce19c)
+        body[0x234:0x238] = struct.pack('<I', 0xac11de70 if worms else
+                                     0xac1cd614 if wwp else 0xac1ce19c)
         if worms:
             for offset, original, replacement in (
                     (0x230, 0x8cf50000, 0x8ce70000),
@@ -491,9 +522,15 @@ def stream_boot_bodies(*, bam4=False, worms=False):
     return bodies
 
 
-def audit_bam4_stage_literals(code, image):
-    """Normalize the same exact function/message targets for both ports."""
-    for offset, _, symbol, message in BAM4_STAGE_LINKED_TARGETS:
+def audit_bam4_stage_literals(code, image, *, original_literals=False):
+    """Prove exact linked targets before normalizing address-only movement.
+
+    The title port bodies use zero placeholders. Armada's original whole-body
+    fixture retains the historical addresses, so normalize back to those only
+    after the same linked symbol or complete terminal-message proof succeeds.
+    No instruction, pool constant or arbitrary in-image target is exempted.
+    """
+    for offset, original, symbol, message in BAM4_STAGE_LINKED_TARGETS:
         target = struct.unpack_from('<I', code, offset)[0]
         if not STAGE <= target < STAGE + len(image['payload']):
             raise ValueError('Title startup literal leaves linked stage')
@@ -504,7 +541,7 @@ def audit_bam4_stage_literals(code, image):
             expected = message.encode('ascii') + b'\0'
             if region(image['payload'], target - STAGE, len(expected), message) != expected:
                 raise ValueError('Title startup literal targets unexpected terminal message')
-        code[offset:offset + 4] = bytes(4)
+        code[offset:offset + 4] = struct.pack('<I', original) if original_literals else bytes(4)
 
 # Pinned compiler's direct-RAM destination admission. Its physical alias
 # range test rejects pool overlap (physical cf50000..cfd0000) before any
@@ -573,6 +610,82 @@ def local_spans(data):
                     raise ValueError("Duplicate source-qualified local symbol: " + repr(key))
                 result[key] = address, count
     return result
+
+
+WWP_DRIVE_SYMBOL = '_kui_wwp_cdda_drive_status'
+WWP_DRIVE_READER = '_wwp_ce_stream_drive_status'
+# Complete zero-stack leaf: load one named aligned scalar, then return.
+# The final literal alone relocates to the checked controller BSS object.
+WWP_DRIVE_READER_BYTES = bytes.fromhex('01d112600b00090000000000')
+
+
+def wwp_drive_status_symbol(data):
+    """Resolve one public scalar object from the linked zero-initialized bank."""
+    image = inspect_elf(data, STREAM_BASE, STREAM_LIMIT,
+                        entry_symbol='_kui_armada_ce_bind_probe')
+    check_bss(image, STREAM_BASE, '__armada_bind')
+    audit_stream_contract(image)
+    header = EH.unpack_from(data)
+    sections = [SH.unpack_from(data, header[6] + i * header[11]) for i in range(header[12])]
+    definitions = []
+    for section in sections:
+        _, kind, _, _, offset, size, link, _, _, stride = section
+        if kind != 2:
+            continue
+        strings = region(data, sections[link][4], sections[link][5], 'symbol strings')
+        for at in range(offset, offset + size, stride):
+            name, address, count, info, other, index = SYM.unpack_from(data, at)
+            end = strings.find(b'\0', name)
+            if strings[name:end].decode('ascii') == WWP_DRIVE_SYMBOL:
+                definitions.append((address, count, info, other, index))
+    if len(definitions) != 1:
+        raise ValueError('Missing unique public WWP drive-status object')
+    address, count, info, other, index = definitions[0]
+    begin = image['symbols']['__armada_bind_bss_begin']
+    end = image['symbols']['__armada_bind_bss_end']
+    if (info != 0x11 or other or count != 4 or address % 4 or
+            index >= len(sections) or sections[index][1] != 8 or sections[index][2] & 7 != 3 or
+            not begin <= address <= end - 4 or
+            not sections[index][3] <= address <= sections[index][3] + sections[index][5] - 4):
+        raise ValueError('WWP drive status must be one aligned public four-byte BSS object')
+    return address
+
+
+def audit_wwp_drive_projection(controller_elf, resident, sizes, calls):
+    """Pin one atomic scalar load and preserve the booting bridge call graph."""
+    address = wwp_drive_status_symbol(controller_elf)
+    if resident['symbols'].get(WWP_DRIVE_SYMBOL) != address:
+        raise ValueError('Low WWP status symbol differs from the linked controller object')
+    start, count = sizes.get(WWP_DRIVE_READER) or (0, 0)
+    if (start % 4 or count != len(WWP_DRIVE_READER_BYTES) or
+            not 0x8c008300 <= start <= 0x8c008300 + len(resident['payload']) - count):
+        raise ValueError('Missing exact WWP scalar-only low reader')
+    code = bytearray(region(resident['payload'], start - 0x8c008300, count, WWP_DRIVE_READER))
+    if code[8:12] != struct.pack('<I', address):
+        raise ValueError('WWP low reader does not target the exact controller scalar')
+    code[8:12] = bytes(4)
+    if code != WWP_DRIVE_READER_BYTES:
+        raise ValueError('WWP low scalar reader instructions/literals changed')
+    readers = [(base(source), label.split(':', 1)[0])
+               for source, edges in calls.items() for target, label in edges
+               if base(target) == WWP_DRIVE_READER[1:]]
+    if readers != [('kui_retail_resident_dispatch', 'retail_resident.c')]:
+        raise ValueError('WWP scalar reader has an unexpected low caller')
+    bridge_calls = Counter((base(source), label.split(':', 1)[0])
+                           for source, edges in calls.items() for target, label in edges
+                           if base(target) == 'kui_armada_ce_bind_probe')
+    expected = Counter({('stream_event', 'retail_async.c'): 1,
+                        ('kui_retail_menu_return', 'armada_ce_audio_observe.inc'): 2,
+                        ('kui_retail_resident_dispatch', 'armada_ce_audio_observe.inc'): 2})
+    if bridge_calls != expected:
+        raise ValueError('WWP adds or changes a cross-controller bootstrap/audio call')
+    return {'word_address': hex(address), 'word_bytes': 4, 'word_alignment': 4,
+            'public_zero_initialized_controller_bss_object': True,
+            'exact_linked_object_not_fixed_offset': True,
+            'reader_complete_body_pinned': True, 'reader_bytes': count,
+            'reader_stack_bytes': 0, 'scalar_loads': 1,
+            'reader_calls_and_sr_changes': 0, 'existing_controller_call_sites': 5,
+            'additional_cross_controller_query_calls': 0}
 
 
 def audit_bridges(image, sizes, *, base_address=BASE, limit=LIMIT):
@@ -706,7 +819,7 @@ def audit_cache_reader(image, sizes, *, base_address=BASE, limit=LIMIT,
             "cache_reader_entry_binder_only": stream}
 
 
-def audit_stream_owner_code(image, locals, sizes, *, bam4=False, worms=False):
+def audit_stream_owner_code(image, locals, sizes, *, bam4=False, worms=False, wwp=False):
     """Pin the bounded worker reader in its native owner's virtual domain."""
     STREAM_BASE, STREAM_LIMIT, _, _ = stream_layout(worms=worms)
     unit = "armada_ce_stream_player.c"
@@ -716,7 +829,7 @@ def audit_stream_owner_code(image, locals, sizes, *, bam4=False, worms=False):
             not symbols.get("__armada_bind_bss_begin", 0) <= player < player + player_bytes <=
                 symbols.get("__armada_bind_bss_end", 0) <= STREAM_LIMIT):
         raise ValueError("Missing bounded native-owner player state")
-    bodies = stream_owner_bodies(bam4=bam4, worms=worms)
+    bodies = stream_owner_bodies(bam4=bam4, worms=worms, wwp=wwp)
     for name, expected in bodies.items():
         span = (sizes.get(name) if name.startswith("___") else locals.get((unit, name)))
         start, count = span or (0, 0)
@@ -745,7 +858,12 @@ def audit_stream_owner_code(image, locals, sizes, *, bam4=False, worms=False):
     if any((unit, name) in locals for name in ("_read_cache", "_read_mapped")):
         raise ValueError("Native worker retains the entry binder's cache-array observer")
     return {"complete_owner_reader_bodies_pinned": len(bodies),
-            "kernel_profile": "worms-us" if worms else "bam4-us" if bam4 else "armada-us",
+            "kernel_profile": "worms-us" if worms else "wwp-us" if wwp else
+                              "bam4-us" if bam4 else "armada-us",
+            "current_process_p1": hex(0x8c121890 if worms else
+                                      0x8c1d1890 if bam4 or wwp else 0x8c145890),
+            "process_base_p1": hex(0x8c1276c0 if worms else
+                                   0x8c1da6e0 if bam4 or wwp else 0x8c14e6e0),
             "irq_mask_covers_both_walks_and_native_sample": True,
             "entire_saved_sr_restored": True, "ttb_and_sr_rechecked": True,
             "sr_stability_mask": "0x700000f0", "arithmetic_status_flags_do_not_refuse": True,
@@ -910,7 +1028,7 @@ def audit_stream_terminal_snapshot(image, locals_, *, worms=False):
 
 
 def audit_stream_boot_arm(controller, controller_spans, resident, resident_spans, stage, stage_spans,
-                          *, bam4=False, worms=False):
+                          *, bam4=False, worms=False, wwp=False):
     """Pin startup quiescence and the exact post-verification arming path.
 
     This intentionally checks complete compiled bodies, not a source-text
@@ -929,8 +1047,10 @@ def audit_stream_boot_arm(controller, controller_spans, resident, resident_spans
             not 0x8c008300 + 56 <= descriptor <= 0x8c008300 + len(low) - descriptor_bytes or
             region(low, slot, 4, "stream bus entry") != struct.pack("<I", descriptor)):
         raise ValueError("Missing exact immutable stream descriptor entry at slot 52")
-    bodies = stream_boot_bodies(bam4=bam4, worms=worms)
-    if set(bodies) != STREAM_BOOT_REQUIRED:
+    bodies = stream_boot_bodies(bam4=bam4, worms=worms, wwp=wwp)
+    relocations = stream_boot_relocs(wwp=wwp)
+    required = STREAM_BOOT_REQUIRED | ({('resident', '_purge.lto_priv.0')} if wwp else set())
+    if set(bodies) != required:
         raise ValueError("Missing stream bootstrap complete-body proof")
     pinned = []
     for (image_name, name), expected in bodies.items():
@@ -943,7 +1063,7 @@ def audit_stream_boot_arm(controller, controller_spans, resident, resident_spans
                 not image_base <= address <= image_base + len(image["payload"]) - count):
             raise ValueError("Missing exact stream bootstrap body: " + name)
         code = bytearray(region(image["payload"], address - image_base, count, name))
-        for offset, target_name, addend in STREAM_BOOT_RELOCS.get((image_name, name), ()):
+        for offset, target_name, addend in relocations.get((image_name, name), ()):
             target = image["symbols"].get(target_name, 0) + addend
             # The initializer's exclusive BSS boundary is a checked bound,
             # not a dereferenced object or call target. Keep its literal tied
@@ -957,27 +1077,30 @@ def audit_stream_boot_arm(controller, controller_spans, resident, resident_spans
             if code[offset:offset + 4] != struct.pack("<I", target):
                 raise ValueError("Stream bootstrap body targets an unexpected address: " + name)
             code[offset:offset + 4] = bytes(4)
-        if (bam4 or worms) and image_name == 'stage':
-            audit_bam4_stage_literals(code, image)
+        if image_name == 'stage':
+            audit_bam4_stage_literals(code, image, original_literals=not (bam4 or worms or wwp))
         if code != expected:
             raise ValueError("Stream bootstrap instructions/order/literals changed: " + name)
         pinned.append(image_name + ":" + name)
     if not pinned:
         raise ValueError("Missing stream bootstrap reviewed body pins")
     return {"entry_slot": slot, "descriptor_address": hex(descriptor),
+            "romhdr_p2": hex(0xac11de70 if worms else 0xac1cd614 if wwp else
+                              0xac1ce19c if bam4 else 0xac141420),
             "preserves_controller_zero_check": True, "attach_only_after_relay": True,
             "bootstrap_audio_and_bus_gated": True, "complete_linked_body_pins": pinned}
 
 
-def check(directory, *, stream=False, bam4=False, worms=False):
-    if bam4 and worms:
+def check(directory, *, stream=False, bam4=False, worms=False, wwp=False):
+    if sum((bam4, worms, wwp)) > 1:
         raise ValueError('Select only one WinCE title profile')
-    if (bam4 or worms) and not stream:
+    if (bam4 or worms or wwp) and not stream:
         raise ValueError('Title profiles require the explicit stream audit')
     STREAM_BASE, STREAM_LIMIT, POOL_BEGIN, POOL_END = stream_layout(worms=worms)
     directory = Path(directory)
     controller_base, controller_limit = (STREAM_BASE, STREAM_LIMIT) if stream else (BASE, LIMIT)
     ordinary = check_directory(directory, ce=True)
+    direct_calls = check_direct_calls(directory) if wwp else None
     ordinary_instructions = 0
     for name in IMAGES:
         decoded = subprocess.check_output(
@@ -1006,7 +1129,7 @@ def check(directory, *, stream=False, bam4=False, worms=False):
                                      locals=controller_locals, stream=stream)
     native_code = audit_stream_native_code(controller, controller_locals, worms=worms) if stream else None
     owner_reader = audit_stream_owner_code(controller, controller_locals, controller_sizes,
-                                           bam4=bam4, worms=worms) if stream else None
+                                           bam4=bam4, worms=worms, wwp=wwp) if stream else None
     disassembly = subprocess.check_output(
         ["sh-elf-objdump", "-d", str(directory / "bind-probe.elf")], text=True)
     (directory / "bind-probe.dis").write_text(disassembly)
@@ -1041,11 +1164,12 @@ def check(directory, *, stream=False, bam4=False, worms=False):
                                    function_sizes(resident_elf, kinds=(1, 2)), worms=worms) if stream else None
     stream_boot_arm = audit_stream_boot_arm(controller, controller_sizes, resident,
                           function_sizes(resident_elf, kinds=(1, 2)), stage,
-                          function_sizes(stage_elf, kinds=(1, 2)), bam4=bam4, worms=worms) if stream else None
+                          function_sizes(stage_elf, kinds=(1, 2)), bam4=bam4, worms=worms,
+                          wwp=wwp) if stream else None
     if resident["symbols"].get("_kui_armada_ce_bind_probe") != controller_base:
         raise ValueError("Resident controller call target moved")
     audit_map_guard(resident, function_sizes(resident_elf), worms=worms)
-    _, calls = load(sorted((directory / "scia/lto").glob("*.ci")))
+    _, calls = load(sorted((directory / "scia/lto").glob("*.ci")), qualified=wwp)
     sources = {base(source) for source, edges in calls.items()
                if any(base(target) == "kui_armada_ce_bind_probe" for target, _ in edges)}
     expected_sources = {"kui_retail_resident_dispatch", "kui_retail_menu_return"}
@@ -1053,6 +1177,8 @@ def check(directory, *, stream=False, bam4=False, worms=False):
         expected_sources.add("stream_event")
     if sources != expected_sources:
         raise ValueError("Controller entry has an unexpected resident caller")
+    drive_projection = audit_wwp_drive_projection(elf, resident,
+                        function_sizes(resident_elf), calls) if wwp else None
     controller_reports = [directory / "bind-probe.ci", directory / "excerpt.ci"]
     if stream:
         controller_reports += sorted(directory.glob("stream-*.ci"))
@@ -1079,7 +1205,8 @@ def check(directory, *, stream=False, bam4=False, worms=False):
     if not stack["call_graph"] or stack["worst_bytes"] + stack["margin"] > stack["available_bytes"]:
         raise ValueError("Excerpt entry is not covered by bounded masked-stack audit")
     return {"controller_entry": hex(controller_base), "controller_memory_end": hex(controller["memory_end"]),
-            "title_profile": "worms-us" if worms else "bam4-us" if bam4 else "armada-us",
+            "title_profile": "worms-us" if worms else "wwp-us" if wwp else
+                             "bam4-us" if bam4 else "armada-us",
             "stream_profile": stream, "stream_controller_contract": stream_contract,
             "controller_payload_bytes": len(controller["payload"]), "controller_unresolved_symbols": 0,
             "controller_integer_instructions": instructions, "exact_authored_deferred_bridge": True,
@@ -1109,17 +1236,21 @@ def check(directory, *, stream=False, bam4=False, worms=False):
             "cache_reader": cache_reader, "native_worker_code": native_code,
             "native_owner_reader": owner_reader,
             "stream_bus": stream_bus, "stream_boot_arm": stream_boot_arm,
-            "terminal_snapshot": terminal_snapshot}
+            "terminal_snapshot": terminal_snapshot, "drive_status_projection": drive_projection,
+            "linked_direct_calls": direct_calls}
 
 
-def stream_boot_self_test():
+def stream_boot_self_test(*, bam4=False, worms=False, wwp=False):
     """Reject entry-slot, gate, every compiled guard and ordering bit."""
+    STREAM_BASE, _, _, _ = stream_layout(worms=worms)
+    bodies = stream_boot_bodies(bam4=bam4, worms=worms, wwp=wwp)
+    relocations = stream_boot_relocs(wwp=wwp)
     fixtures = {}
     for image_name, image_base in (("controller", STREAM_BASE),
                                    ("resident", 0x8c008300), ("stage", STAGE)):
         payload = bytearray(64)
         symbols, spans = {}, {}
-        for (owner, name), code in STREAM_BOOT_BODIES.items():
+        for (owner, name), code in bodies.items():
             if owner != image_name:
                 continue
             payload.extend(bytes(-len(payload) % 4))
@@ -1143,7 +1274,7 @@ def stream_boot_self_test():
         # appended terminal snapshot. Give each declared target a distinct
         # synthetic span; only the complete bodies above are code fixtures.
         external_targets = {}
-        for (owner, _), targets in STREAM_BOOT_RELOCS.items():
+        for (owner, _), targets in relocations.items():
             if owner == image_name:
                 for _, target, addend in targets:
                     external_targets[target] = max(external_targets.get(target, 4), addend + 4)
@@ -1151,13 +1282,27 @@ def stream_boot_self_test():
             if target not in symbols:
                 symbols[target] = image_base + len(payload)
                 payload.extend(bytes(target_bytes))
-        for (owner, name), targets in STREAM_BOOT_RELOCS.items():
+        for (owner, name), targets in relocations.items():
             if owner != image_name:
                 continue
             body_start = symbols[name] - image_base
             for offset, target_name, addend in targets:
                 payload[body_start + offset:body_start + offset + 4] = struct.pack(
                     "<I", symbols[target_name] + addend)
+        if image_name == 'stage':
+            # Exercise the real address-aware proof with distinct synthetic
+            # functions/messages. Historical absolute addresses must not be
+            # accepted merely because they appear in the expected body.
+            relay_start = symbols['_kui_retail_stage_relay'] - image_base
+            for offset, _, symbol, message in BAM4_STAGE_LINKED_TARGETS:
+                payload.extend(bytes(-len(payload) % 4))
+                target = image_base + len(payload)
+                if symbol:
+                    symbols[symbol] = target
+                    payload.extend(bytes.fromhex('0b000900'))
+                else:
+                    payload.extend(message.encode('ascii') + b'\0')
+                struct.pack_into('<I', payload, relay_start + offset, target)
         fixtures[image_name] = ({"payload": payload, "symbols": symbols,
                                   "memory_end": image_base + len(payload)}, spans)
     def check_boot(changed_name=None, changed_image=None, changed_spans=None):
@@ -1166,13 +1311,13 @@ def stream_boot_self_test():
             fixture, spans = fixtures[owner]
             args.extend((changed_image if changed_name == owner and changed_image is not None else fixture,
                          changed_spans if changed_name == owner and changed_spans is not None else spans))
-        return audit_stream_boot_arm(*args)
+        return audit_stream_boot_arm(*args, bam4=bam4, worms=worms, wwp=wwp)
     proof = check_boot()
     assert proof["entry_slot"] == 52 and proof["preserves_controller_zero_check"]
     assert proof["attach_only_after_relay"] and proof["bootstrap_audio_and_bus_gated"]
     checks = 1
     for owner, (fixture, spans) in fixtures.items():
-        positions = [n for (im, name), code in STREAM_BOOT_BODIES.items() if im == owner
+        positions = [n for (im, name), code in bodies.items() if im == owner
                      for n in range(spans[name][0] - (STREAM_BASE if owner == "controller" else
                                                       0x8c008300 if owner == "resident" else STAGE),
                                     spans[name][0] - (STREAM_BASE if owner == "controller" else
@@ -1319,11 +1464,16 @@ def stream_code_self_test():
     return checks
 
 
-def stream_owner_self_test():
+def stream_owner_self_test(*, bam4=False, worms=False, wwp=False):
     """Reject every owner-reader byte, local target, state span and route."""
+    STREAM_BASE, STREAM_LIMIT, _, _ = stream_layout(worms=worms)
+    bodies = stream_owner_bodies(bam4=bam4, worms=worms, wwp=wwp)
+    def check_owner(image, locals, sizes):
+        return audit_stream_owner_code(image, locals, sizes, bam4=bam4,
+                                       worms=worms, wwp=wwp)
     unit = "armada_ce_stream_player.c"
     payload, locals, sizes, checked = bytearray(), {}, {}, []
-    for name, expected in STREAM_OWNER_BODIES.items():
+    for name, expected in bodies.items():
         payload.extend(bytes(-len(payload) % 4))
         start = STREAM_BASE + len(payload)
         payload.extend(expected)
@@ -1333,7 +1483,7 @@ def stream_owner_self_test():
         else:
             locals[(unit, name)] = span
         checked.extend(range(start - STREAM_BASE, start - STREAM_BASE + len(expected)))
-    player, player_bytes = 0x8cfbd000, 4100
+    player, player_bytes = STREAM_LIMIT - 0x2000, 4100
     locals[(unit, "_player")] = player, player_bytes
     symbols = {name: address for name, (address, _) in sizes.items()}
     symbols.update({"__armada_bind_bss_begin": player,
@@ -1345,13 +1495,15 @@ def stream_owner_self_test():
                            locals[(unit, target_name)])
             struct.pack_into("<I", payload, start - STREAM_BASE + offset, target_span[0] + addend)
     image = {"payload": payload, "symbols": symbols}
-    audit_stream_owner_code(image, locals, sizes)
+    proof = check_owner(image, locals, sizes)
+    assert proof['kernel_profile'] == ('worms-us' if worms else 'wwp-us' if wwp else
+                                       'bam4-us' if bam4 else 'armada-us')
     checks = 1
     for at in checked:
         for bit in range(8):
             broken = bytearray(payload); broken[at] ^= 1 << bit
             try:
-                audit_stream_owner_code(dict(image, payload=broken), locals, sizes)
+                check_owner(dict(image, payload=broken), locals, sizes)
             except ValueError:
                 checks += 1
             else:
@@ -1360,7 +1512,7 @@ def stream_owner_self_test():
         for span in ((start + 2, count), (start, count - 2), (STREAM_LIMIT, count)):
             broken = dict(locals); broken[key] = span
             try:
-                audit_stream_owner_code(image, broken, sizes)
+                check_owner(image, broken, sizes)
             except ValueError:
                 checks += 1
             else:
@@ -1369,13 +1521,13 @@ def stream_owner_self_test():
                    {"__armada_bind_bss_end": player + player_bytes - 4},
                    {"__armada_bind_bss_end": STREAM_LIMIT + 4}):
         try:
-            audit_stream_owner_code(dict(image, symbols=dict(symbols, **bounds)), locals, sizes)
+            check_owner(dict(image, symbols=dict(symbols, **bounds)), locals, sizes)
         except ValueError:
             checks += 1
         else:
             raise AssertionError("Native-owner state outside admitted BSS allowed")
     try:
-        audit_stream_owner_code(image, {("unreviewed.c", n): span for (_, n), span in locals.items()}, sizes)
+        check_owner(image, {("unreviewed.c", n): span for (_, n), span in locals.items()}, sizes)
     except ValueError:
         checks += 1
     else:
@@ -1699,8 +1851,31 @@ def self_test():
         else:
             raise AssertionError("Native path admitted on masked stack")
     checks += stream_code_self_test()
-    checks += stream_owner_self_test()
-    checks += stream_boot_self_test()
+    for profile in ({}, {"bam4": True}, {"worms": True}, {"wwp": True}):
+        checks += stream_owner_self_test(**profile)
+        checks += stream_boot_self_test(**profile)
+    for profile in ({"bam4": True}, {"worms": True}, {"wwp": True}):
+        try:
+            check(Path('/nonexistent-cdda-profile-audit'), **profile)
+        except ValueError as error:
+            if 'explicit stream audit' not in str(error):
+                raise
+            checks += 1
+        else:
+            raise AssertionError('Title profile admitted through excerpt audit')
+    for profile in ({"bam4": True, "worms": True}, {"bam4": True, "wwp": True},
+                    {"worms": True, "wwp": True}, {"bam4": True, "worms": True, "wwp": True}):
+        for selector in (stream_owner_bodies, stream_boot_bodies,
+                         lambda **kwargs: check(Path('/nonexistent-cdda-profile-audit'),
+                                                stream=True, **kwargs)):
+            try:
+                selector(**profile)
+            except ValueError as error:
+                if 'Select only one' not in str(error):
+                    raise
+                checks += 1
+            else:
+                raise AssertionError('Multiple title profiles admitted')
     frames.update({callback: 0 for callback in STREAM_BUS_CALLBACKS})
     frames["excerpt:transport.c:write_audio"] = 0
     # The generic and urgent-worker bridges share one integer-only helper.
@@ -1785,16 +1960,24 @@ def main():
     parser.add_argument("--stream", action="store_true", help="Admit only the reserved high-P1 stream controller")
     parser.add_argument("--bam4", action="store_true", help="Use the exact Bust-A-Move 4 US kernel profile")
     parser.add_argument("--worms", action="store_true", help="Use the exact Worms Armageddon US kernel profile")
+    parser.add_argument("--wwp", action="store_true", help="Use the exact Worms World Party US kernel profile")
+    parser.add_argument('--wwp-drive-link', type=Path, metavar='ELF',
+                        help='Emit one checked WWP scalar linker assignment from the controller ELF')
     args = parser.parse_args()
-    if args.bam4 and args.worms:
+    if args.wwp_drive_link:
+        if args.directory or args.self_test or args.stream or args.bam4 or args.worms or args.wwp:
+            parser.error('--wwp-drive-link is a separate controller-symbol operation')
+        print(WWP_DRIVE_SYMBOL + ' = ' + hex(wwp_drive_status_symbol(args.wwp_drive_link.read_bytes())) + ';')
+        return
+    if sum((args.bam4, args.worms, args.wwp)) > 1:
         parser.error('Select only one WinCE title profile')
-    if (args.bam4 or args.worms) and not args.stream:
+    if (args.bam4 or args.worms or args.wwp) and not args.stream:
         parser.error('Title profiles require --stream')
     if args.self_test:
         print(f"PASS Armada excerpt linked-auditor self-test: {self_test()} checks")
     if args.directory:
         print(json.dumps(check(args.directory, stream=args.stream, bam4=args.bam4,
-                               worms=args.worms), indent=2))
+                               worms=args.worms, wwp=args.wwp), indent=2))
     elif not args.self_test:
         parser.error("Provide a build directory or --self-test")
 

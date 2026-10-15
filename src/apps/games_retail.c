@@ -323,6 +323,23 @@ static enum kui_game_result extent_crc(const struct kui_game_image *image,
     }
     *crc=value;return KUI_GAME_OK;
 }
+/* Hash the complete IP-selected kernel before choosing an ABI. File size,
+ * product strings and a similar-looking header never select native addresses. */
+static enum kui_game_result extent_sha(const struct kui_game_image *image,
+    uint32_t lba,uint32_t bytes,uint8_t digest[32]) {
+    if(!bytes || !digest) return KUI_GAME_INVALID;
+    enum kui_game_result result=kui_game_image_check(image,lba,(bytes+2047u)/2048u,
+        KUI_GAME_SECTOR_MODE1);
+    if(result!=KUI_GAME_OK) return result;
+    struct kui_sha256 hash;kui_sha256_init(&hash);uint8_t sector[2048];
+    for(uint32_t done=0;done<bytes;) {
+        result=kui_game_image_read(image,lba++,1,KUI_GAME_SECTOR_MODE1,sector,sizeof(sector));
+        if(result!=KUI_GAME_OK) return result;
+        uint32_t take=bytes-done;if(take>sizeof(sector)) take=sizeof(sector);
+        kui_sha256_update(&hash,sector,take);done+=take;
+    }
+    kui_sha256_digest(&hash,digest);return KUI_GAME_OK;
+}
 bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *package,
     kui_log_fn log,kui_cancel_fn cancel) {
     return kui_games_retail_prepare_reader(path,KUI_RETAIL_READER_STANDARD,package,log,cancel);
@@ -332,7 +349,7 @@ static enum kui_wince_cdda_profile ce_music_profile(const struct kui_game_image 
     if(image->format!=KUI_GAME_IMAGE_GDI || image->cd_image || image->scrambled ||
        !metadata->windows_ce || strcmp(metadata->bootfile,"0WINCEOS.BIN")) return KUI_WINCE_CDDA_NONE;
     for(enum kui_wince_cdda_profile profile=KUI_WINCE_CDDA_ARMADA;
-            profile<=KUI_WINCE_CDDA_WORMS_ARMAGEDDON;profile++) {
+            profile<=KUI_WINCE_CDDA_WORMS_WORLD_PARTY;profile++) {
         const struct kui_wince_cdda_disc *disc=kui_wince_cdda_disc(profile);
         if(image->count!=disc->track_count || metadata->boot_bytes!=disc->kernel_bytes ||
            (profile!=KUI_WINCE_CDDA_ARMADA && metadata->boot_lba!=disc->boot_lba) ||
@@ -349,6 +366,23 @@ static enum kui_wince_cdda_profile ce_music_profile(const struct kui_game_image 
             return profile;
     }
     return KUI_WINCE_CDDA_NONE;
+}
+static enum kui_wince_cdda_profile ce_music_runtime_profile(const struct kui_game_image *image,
+        const struct kui_game_metadata *metadata,const uint8_t sha[32]) {
+    if(!image || !metadata || image->format!=KUI_GAME_IMAGE_GDI || image->cd_image ||
+       image->scrambled || !metadata->windows_ce || !metadata->boot_valid ||
+       !image->count || image->count>KUI_GAME_TRACK_MAX) return KUI_WINCE_CDDA_NONE;
+    struct kui_game_audio_info audio;
+    if(kui_game_image_audio_info(image,&audio)!=KUI_GAME_OK ||
+       audio.classification!=KUI_GAME_AUDIO_GD_HIGH_DENSITY || !audio.candidate_tracks)
+        return KUI_WINCE_CDDA_NONE;
+    for(unsigned i=0;i<image->count;i++) {
+        const struct kui_game_image_track *track=&image->tracks[i];
+        if(track->file_offset || track->end_lba<=track->start_lba ||
+           (track->sector_bytes!=2352u && !(track->control==4u &&
+             track->sector_bytes==2048u && !track->data_offset))) return KUI_WINCE_CDDA_NONE;
+    }
+    return kui_wince_cdda_kernel_profile(metadata->boot_bytes,sha);
 }
 static bool armada_excerpt_seed(struct kui_runtime_image *package,
         const struct kui_game_image *image,kui_log_fn log) {
@@ -395,7 +429,7 @@ static bool armada_stream_seed_fill(struct kui_runtime_image *package,size_t at,
         const struct kui_retail_manifest *map,enum kui_wince_cdda_profile profile,kui_log_fn log) {
     if(at==SIZE_MAX || at>package->info.payload_bytes ||
        sizeof(struct kui_armada_ce_stream_seed)>package->info.payload_bytes-at ||
-       !kui_wince_cdda_manifest_valid(map,profile)) return false;
+       !kui_wince_cdda_runtime_manifest_valid(map,profile)) return false;
     struct kui_armada_ce_stream_seed *seed=(void *)((uint8_t *)package->data+at);
     if(!kui_wince_cdda_seed_header_valid(seed->words,profile) ||
        seed->words[KUI_ARMADA_CE_STREAM_MAP_CRC_WORD]) return false;
@@ -509,11 +543,25 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         problem="unsupported CDDA profile; supported SCI/native GDI required";goto done;
     }
     if(ce_excerpt) {
-        music_profile=ce_music_profile(image,&metadata);
-        if(music_profile==KUI_WINCE_CDDA_NONE || map->storage_transport!=KUI_STORAGE_SCI) {
-            problem="CD music has no compatible WinCE runtime adapter for this image; turn CD music Off to launch";goto done;
+        if(map->storage_transport!=KUI_STORAGE_SCI || !metadata.windows_ce ||
+           image->format!=KUI_GAME_IMAGE_GDI || image->cd_image || image->scrambled ||
+           metadata.boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES) {
+            problem="Experimental WinCE CD music requires a WinCE GDI on SCI microSD";goto done;
         }
-        launch_package=music_profile==KUI_WINCE_CDDA_WORMS_ARMAGEDDON?
+        uint8_t kernel_sha[32];
+        log("Experimental CE CD music: checking the complete native kernel identity");
+        r=extent_sha(image,metadata.boot_lba,metadata.boot_bytes,kernel_sha);
+        if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
+        music_profile=ce_music_runtime_profile(image,&metadata,kernel_sha);
+        if(music_profile==KUI_WINCE_CDDA_NONE) {
+            char hex[65];kui_hex(kernel_sha,32u,hex);
+            log("CE music unsupported runtime: boot bytes=%u SHA256=%s",metadata.boot_bytes,hex);
+            problem="Experimental CD music: unrecognized WinCE runtime; turn CD music Off to launch";goto done;
+        }
+        log("CE CD music: %s native runtime; %s",kui_wince_cdda_disc(music_profile)->name,
+            ce_music_profile(image,&metadata)==music_profile?"known disc layout":"experimental image / untested");
+        launch_package=music_profile==KUI_WINCE_CDDA_WORMS_WORLD_PARTY?
+            KUI_GAMES_RETAIL_CE_WWP_PACKAGE:music_profile==KUI_WINCE_CDDA_WORMS_ARMAGEDDON?
             KUI_GAMES_RETAIL_CE_WORMS_PACKAGE:music_profile==KUI_WINCE_CDDA_BUST_A_MOVE_4?
             KUI_GAMES_RETAIL_CE_BAM4_PACKAGE:KUI_GAMES_RETAIL_CE_EXCERPT_PACKAGE;
         log("CE CD music: %s profile",kui_wince_cdda_disc(music_profile)->name);
@@ -672,11 +720,28 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             reader==KUI_RETAIL_READER_ASYNC_EAGER?"25 blocks per call":"20 blocks per call");
     }
     if(cdda) {
-        enum kui_games_cdda_profile profile=kui_games_cdda_profile(image,map);
+        enum kui_games_cdda_profile profile=kui_games_cdda_compatible_profile(image,map);
         const char *package_path=kui_games_cdda_package(profile);
-        if(!package_path) {problem="unsupported CDDA profile; supported image identity required";goto done;}
+        if(!package_path) {
+            log("Native CD music: boot bytes=%u CRC32=%08x; no compatible executable binding",map->boot_bytes,map->boot_crc32);
+            problem="Experimental CD music: unrecognized native runtime; turn CD music Off to launch";goto done;
+        }
         struct kui_runtime_image candidate={0};
         rr=kui_runtime_read(package_path,&candidate,log,cancel);
+        /* Old exact native modules were delivered separately. An absent old
+         * file may use the newly built checked compatibility adapter. Never
+         * hide corruption, cancellation or a read error with a fallback. */
+        if(rr==KUI_RUNTIME_IO && !kui_games_cdda_is_experimental(profile)) {
+            FILINFO old_info;FRESULT exists=f_stat(package_path,&old_info);
+            enum kui_games_cdda_profile fallback=kui_games_cdda_package_fallback(profile,
+                exists==FR_NO_FILE || exists==FR_NO_PATH);
+            if(fallback!=profile) {
+                profile=fallback;
+                package_path=kui_games_cdda_package(profile);
+                log("CD music: exact module absent; selecting Experimental checked native adapter");
+                rr=kui_runtime_read(package_path,&candidate,log,cancel);
+            }
+        }
         if(rr!=KUI_RUNTIME_OK) {problem=kui_runtime_result_name(rr);goto done;}
         if(!layout(&candidate,false) || !kui_games_cdda_package_admit(profile,&candidate)) {
             kui_runtime_free(&candidate);
@@ -685,9 +750,10 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         /* Publish only the verified allocation; failures never expose a
          * partial replacement or silently use the ordinary loader. */
         kui_runtime_free(package);*package=candidate;launch_package=package_path;
-        log("CDDA launch: exact %s %s profile; loaded executable SHA, driver and hook guards remain mandatory",
-            profile==KUI_GAMES_CDDA_MDK2_RAW?"MDK2":"Toy Commander",
-            profile==KUI_GAMES_CDDA_TOY_COOKED?"cooked DATA":"raw GDI");
+        log("CDDA launch: %s %s %s binding; executable SHA, driver and hook guards remain mandatory",
+            kui_games_cdda_is_experimental(profile)?"experimental":"known-disc",
+            profile==KUI_GAMES_CDDA_MDK2_RAW || profile==KUI_GAMES_CDDA_MDK2_RAW_COMPAT?"MDK2":"Toy Commander",
+            profile==KUI_GAMES_CDDA_TOY_COOKED || profile==KUI_GAMES_CDDA_TOY_COOKED_COMPAT?"cooked DATA":"raw GDI");
     }
     if(ce_excerpt) {
         size_t stream_seed=armada_stream_seed_find(package,music_profile);

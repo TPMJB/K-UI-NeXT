@@ -4,8 +4,11 @@
 
 Only the supported kernel hash is accepted. Reports bounded ROM metadata,
 exports/imports, address domains and hashes of manually reviewed contracts.
-Compressed sections are never guessed or decoded. Optional external DLLs are
-parsed by armada_pe_audio_audit.py to compare their layout and API metadata.
+ROMInventory exposes the same bounded tables for metadata-only inventories of
+other kernels. ROM retains exact Armada identity admission for every reviewed
+contract in this audit. Compressed sections are never guessed or decoded.
+Optional external DLLs are parsed by armada_pe_audio_audit.py to compare
+their layout and API metadata.
 Nominal CE addresses and ROM storage addresses are not live-call addresses.
 """
 import argparse
@@ -19,6 +22,13 @@ KERNEL_SHA256 = "a7628c78090fce2c93012d5e4db6142096e138dceb7ebbf555142e902ca03c1
 KERNEL_BYTES = 1253376
 MAX_MODULES, MAX_SECTIONS, MAX_EXPORTS, MAX_IMPORTS = 64, 16, 4096, 128
 MAX_STRING = 256
+MAX_ROM_BYTES = 16 * 1024 * 1024
+# The supplied CE2 image has no ECEC marker. Its independently recorded ROMHDR
+# is usable for inventory only after complete file identity matches. This is
+# never a guessed header search or a runtime admission rule.
+LEGACY_INVENTORY_HEADERS = {
+    '39b80e305947056551318bb65529cccc886021be60406c06f3110f7fe03bf571': 0x8c11de70,
+}
 
 
 def sha(data):
@@ -29,23 +39,32 @@ class ROMError(ValueError):
     pass
 
 
-class ROM:
+class ROMInventory:
+    """Bounded metadata only; parsing success establishes no runtime contract."""
+
     def __init__(self, path):
         p = Path(path)
-        if p.stat().st_size != KERNEL_BYTES:
-            raise ROMError("This audit accepts only the exact Armada kernel size")
-        self.data = p.read_bytes()
-        if sha(self.data) != KERNEL_SHA256:
-            raise ROMError("This audit accepts only the exact Armada kernel hash")
+        with p.open('rb') as source:
+            self.data = source.read(MAX_ROM_BYTES + 1)
+        if len(self.data) > MAX_ROM_BYTES:
+            raise ROMError("CE ROM exceeds the 16 MiB inventory limit")
+        self.validate_identity()
         count, address, offset, size, entry = struct.unpack("<5I", self.read(16, 20))
         if count != 1 or offset != 2048 or size != len(self.data) - offset or entry != address:
             raise ROMError("Unexpected CE load prefix")
         self.base, self.body_offset, self.body_bytes = address | 0x80000000, offset, size
+        if not 0x8c000000 <= self.base < self.base + size <= 0x8d000000:
+            raise ROMError("CE load body leaves Dreamcast main RAM")
         self.load_header = dict(count=count, address=address, file_offset=offset,
                                 bytes=size, entry=entry)
-        if self.read(offset + 64, 4) != b"ECEC":
-            raise ROMError("Missing CE ROM marker")
-        self.header_address = self.u32(offset + 68)
+        if self.read(offset + 64, 4) == b"ECEC":
+            self.header_address = self.u32(offset + 68)
+            self.header_provenance = 'ECEC marker at body +0x40'
+        else:
+            self.header_address = LEGACY_INVENTORY_HEADERS.get(sha(self.data))
+            if self.header_address is None:
+                raise ROMError("Missing CE ROM marker and no exact legacy inventory identity")
+            self.header_provenance = 'Exact file SHA legacy ROMHDR metadata'
         h = struct.unpack("<21I", self.address_read(self.header_address, 84))
         keys = ("dllfirst", "dlllast", "physfirst", "physlast", "nummods", "ram_start",
                 "ram_free", "ram_end", "copy_count", "copy_address", "profile_bytes",
@@ -106,6 +125,9 @@ class ROM:
                 raise ROMError("Invalid copy record")
             self.copies.append(dict(source=src, destination=dst, copied_bytes=n, total_bytes=total,
                                     initialized_sha256=sha(self.address_read(src, n))))
+
+    def validate_identity(self):
+        """Inventory accepts bounded unknown images, without admission."""
 
     def read(self, offset, size):
         if offset < 0 or size < 0 or offset + size > len(self.data):
@@ -221,6 +243,16 @@ class ROM:
                     nominal_va=m["nominal_virtual_base"] + start,
                     rom_storage_address=self.rva_address(m, start, len(contents)),
                     sha256=sha(contents), crc32=f"{zlib.crc32(contents):08x}", description=description)
+
+
+class ROM(ROMInventory):
+    """Exact Armada identity required before parsing reviewed contracts."""
+
+    def validate_identity(self):
+        if len(self.data) != KERNEL_BYTES:
+            raise ROMError("This audit accepts only the exact Armada kernel size")
+        if sha(self.data) != KERNEL_SHA256:
+            raise ROMError("This audit accepts only the exact Armada kernel hash")
 
 
 CONTRACTS = [

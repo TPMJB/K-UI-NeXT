@@ -19,12 +19,15 @@ information and developer tests. Original and converted2048 image paths can
 retain different choices. CD music defaults to Off, and Off uses the ordinary
 CE loader. Windows CE remains dependent on the background SCI reader.
 
-The optional WinCE music engine currently has adapters for the exact admitted
-US **Armada, Bust-A-Move 4 and Worms Armageddon** runtimes. It checks runtime
-identity and layout before handoff. The menu can offer the toggle for other
-inspected WinCE GDIs with high-density audio, but those images still need a
-compatible runtime adapter. This is not broad automatic WinCE CDDA support.
-See [admission boundaries](wince-cdda-next-titles.md).
+The optional WinCE music engine has four exact admitted kernel/sound adapters,
+established from US **Armada, Bust-A-Move 4, Worms Armageddon and Worms World
+Party**. Other applications and track layouts can use a matching checked
+kernel/sound contract; title strings alone cannot establish compatibility.
+Native CDDA similarly broadens the existing Toy/MDK2 bindings to matching
+executable/driver identities with their memory and lifecycle checks retained.
+The menu offers CD music for inspected high-density AUDIO candidates; an
+unrecognized runtime is refused when music is On. Unknown versions remain
+Experimental, and music defaults to Off. See [admission boundaries](experimental-cdda.md).
 
 For admitted profiles, raw2352 AUDIO is retained with either original raw or
 supported converted2048 DATA. Conversion is optional and does not provide
@@ -40,6 +43,8 @@ owner's selected image; retail bytes are not release assets.
 | Bust-A-Move 4 | Owner reported successful music on `ed0a2c809bda`; diagnostics recorded ten starts, no refusal/HRESULT and one recovered underrun | Other revisions, every track and a long soak remain unverified |
 | Worms audio supply | `8a22ec45229a` had no observed underruns in two submitted runs, with gameplay lag reported | Those runs do not establish zero-dropout playback everywhere |
 | Worms responsiveness | Latest RAM-copy build `1aa16821209b` was reported to have almost completely eliminated lag; remaining delay was almost imperceptible | Subjective owner result; no measured frame-rate or zero-overhead claim |
+| Worms converted2048 | Owner reported three successful cold boots of the tested converted2048 version | Does not certify other revisions or conversions |
+| Worms World Party | Owner reported successful operation on `b08802f8945f`; diagnostic clip shows two native starts 33 seconds apart, no recorded gaps/recoveries and no guard/bind/audio fault | Clip contains diagnostic pages, not live gameplay or audible continuous music; image geometry is not established and general status remains Experimental |
 
 The latest tested performance source is published as
 `d9f861ba87a2957234d0af276a4cfeb573367258`. The preceding bounded-worker
@@ -90,12 +95,14 @@ the selected branches and exclusions.
 
 ## Remaining limits before final 2.0
 
-- **WinCE music:** three exact admitted US runtime profiles. Other titles,
-  regions and revisions need adapter discovery and validation. The option
-  remains experimental and defaults to Off.
+- **WinCE music:** four exact kernel/sound adapters can admit other applications
+  sharing their checked contracts. Other kernels, sound ABIs and memory layouts
+  still need adapter discovery and validation. Unknown combinations and World
+  Party's broader profile remain experimental; the option defaults to Off.
 - **Native games:** Time Stalkers still returns to K-UI. Some FMVs stall or
   skip; Toy Commander FMV stutter is not fixed by this work. Universal CDDA,
-  Mode 2 Form 2 and subchannel emulation are not provided.
+  Mode 2 Form 2 and subchannel emulation are not provided. Quake III CD music is
+  deferred: its GINSU transfer and different allocator need a separate adapter.
 - **Storage:** SCI is required for CE. IDE/CF is untested synchronous PIO;
   ATA DMA and CE on IDE/SCIF remain future work. ext4 is bootstrap-only.
 - **Formats:** standard LZ4 ZSO has an experimental native SCI Standard

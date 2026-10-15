@@ -1583,6 +1583,61 @@ static void games_bam4_ce_music_controls(void) {
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==music);
     puts("PASS WinCE CD music: BAM4/Worms and other CDDA candidates, saved opt-in On route and Off ordinary route");
 }
+static void games_cdda_compatibility_status(void) {
+    struct kui_shell_view view={0};
+    const char *experimental="CD audio: Experimental / untested";
+    const char *tested="CD audio: Tested (known version)";
+    const char *limited="CD audio: Tested; FMV issues remain";
+    assert(!strcmp(kui_shell_games_cdda_status(NULL),"CD audio: Unavailable"));
+    for(unsigned ce=0;ce<2u;ce++) {
+        struct kui_games_detail detail=launch_detail(ce!=0,false);
+        /* Neither a familiar title/product nor an enabled saved option is
+         * evidence that this particular image has been tested. */
+        strcpy(detail.title,ce?"WORMS ARMAGEDDON":"MDK2");
+        strcpy(detail.product,ce?"T40601N":"T-12501N");
+        install_launch_detail(&detail);
+        assert(kui_shell_games_cdda_ready(&s) && !s.games_launch_cdda);
+        assert(!strcmp(kui_shell_games_cdda_status(&s),experimental));
+        render(&view);assert(strstr(drawn,experimental));
+        const struct kui_game_launch_settings saved={.reader=KUI_GAME_READER_STANDARD,.cdda=true,.encoding=KUI_GAME_ENCODING_AUTO};
+        kui_shell_set_game_launch_settings(&s,detail.path,&saved,true);
+        assert(s.games_launch_cdda && !strcmp(kui_shell_games_cdda_status(&s),experimental));
+        s.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;s.games_launch_selected=KUI_SHELL_GAME_OPTION_CDDA;
+        render(&view);assert(strstr(drawn,experimental) && strstr(drawn,"START Launch"));
+        assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL);
+        s.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;render(&view);
+        assert(strstr(drawn,experimental) && strstr(drawn,"CD music: On"));
+        /* The worker owns content matching. Only its explicit status may
+         * display a tested claim; the claim concerns audio, not the game. */
+        s.games_detail.cdda_compatibility=KUI_GAME_CDDA_TESTED;
+        s.games_launch_cdda=false;render(&view);
+        assert(strstr(drawn,tested) && strstr(drawn,"CD music: Off") && !strstr(drawn,experimental));
+        assert(strstr(drawn,"RAM patches: Off"));
+        if(!ce) {
+            s.games_launch_patches.entries[0]=(struct kui_game_ram_patch){UINT32_C(0x8c010000),0u,true};
+            render(&view);
+            assert(strstr(drawn,tested) && strstr(drawn,"RAM patches: On (one-time boot writes)"));
+            memset(&s.games_launch_patches,0,sizeof(s.games_launch_patches));
+        }
+        s.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;render(&view);
+        assert(strstr(drawn,tested));
+        s.games_detail.cdda_compatibility=KUI_GAME_CDDA_TESTED_LIMITED;
+        render(&view);assert(strstr(drawn,limited) && !strstr(drawn,tested));
+        s.page=KUI_SHELL_GAMES_DETAIL;render(&view);assert(strstr(drawn,limited));
+        s.games_detail.cdda_compatibility=(enum kui_game_cdda_compatibility)99;
+        assert(!strcmp(kui_shell_games_cdda_status(&s),experimental));
+        s.games_detail.cdda_compatibility=KUI_GAME_CDDA_TESTED;
+        strcpy(s.games_detail.path,"/Games/Stale/disc.gdi");
+        assert(!strcmp(kui_shell_games_cdda_status(&s),"CD audio: Unavailable"));
+        s.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;render(&view);
+        assert(!strstr(drawn,tested) && !strstr(drawn,experimental) && !strstr(drawn,"START Launch"));
+        install_launch_detail(&detail);
+        s.games_detail.audio=(struct kui_game_audio_info){KUI_GAME_AUDIO_GD_LOW_DENSITY_ONLY,1u,0u,1u};
+        s.games_detail.cdda_compatibility=KUI_GAME_CDDA_TESTED;
+        assert(!strcmp(kui_shell_games_cdda_status(&s),"CD audio: Unavailable"));
+    }
+    puts("PASS CD audio status: unknown versions remain experimental, tested audio comes from inspection, stale evidence is hidden");
+}
 static void games_launch_options_controls(void) {
     struct kui_games_detail detail=launch_detail(false,false);
     install_launch_detail(&detail);
@@ -3239,7 +3294,7 @@ int main(int argc,char **argv) {
         destination_transaction();keyboard_transaction();advanced_navigation();restore_and_scan_controls();
         ripper_saved_job_rendering();reference_and_destination_rendering();music_and_boot_rendering();return 0;
     }
-    games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_zso_controls(); games_variant_controls();
+    games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_cdda_compatibility_status(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_zso_controls(); games_variant_controls();
     if(argc==2 && !strcmp(argv[1],"--games-controls")) { puts("PASS Games navigation and launch controls"); return 0; }
     games_rendering(); games_patch_rendering(); games_zso_rendering(); games_selected_art_rendering(); games_variant_rendering();
     if(argc==2 && !strcmp(argv[1],"--games")) { puts("PASS Games navigation, launch eligibility and rendering"); return 0; }
