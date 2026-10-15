@@ -1300,7 +1300,8 @@ static void round_four_rendering(void) {
 }
 static void round_five_controls(void) {
     reset(KUI_SHELL_VMU);
-    assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU);
+    assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_ACTIONS);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_VMU_LIST && s.page==KUI_SHELL_VMU);
     s.vmu.present=true;s.vmu.count=1;s.vmu.total=1;
     strcpy(s.vmu.entries[0].name,"TEST_SAVE");s.vmu.entries[0].bytes=4096;
     assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_ACTIONS);
@@ -3558,6 +3559,202 @@ static void small_tools_rendering(void) {
     puts("PASS small tools rendering: card image actions, eight image rows, progress, compare file sizes and outcome details fit safe margins");
 }
 
+
+/* The bulk operation confirms a fresh snapshot of both cards. A stopped or
+ * uncertain previous attempt may only be retried through another preview. */
+static void vmu_copy_all_controls(void) {
+    reset(KUI_SHELL_VMU);s.vmu_slot=7;
+    assert(press(KUI_SHELL_L,true)==KUI_SHELL_MSTATS && s.page==KUI_SHELL_VMU);
+    assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_ACTIONS);
+    assert(s.vmu_copy_slot==0);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.vmu_action_selected==3);
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.vmu_action_selected==0);
+    press(KUI_SHELL_UP,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE); /* No readable source. */
+    s.vmu.present=true;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE); /* Empty source. */
+    s.vmu.total=12;s.vmu.count=0;
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.vmu_copy_slot==6);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.vmu_copy_slot==0);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && !s.confirm_vmu_copy_all);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_COPY_ALL_PREVIEW);
+    assert(!s.confirm_vmu_copy_all && !s.vmu.count && s.vmu.total==12);
+    struct kui_vmu_view ready={.slot=7,.copy_ready=true,.bulk_total=12,.bulk_remaining=12};
+    ready.status.complete=ready.status.passed=true;
+    kui_shell_set_vmu_copy_all(&s,6,0,false,&ready);assert(!s.confirm_vmu_copy_all);
+    kui_shell_set_vmu_copy_all(&s,7,1,false,&ready);assert(!s.confirm_vmu_copy_all);
+    s.vmu_action_selected=2;kui_shell_set_vmu_copy_all(&s,7,0,false,&ready);
+    assert(!s.confirm_vmu_copy_all);s.vmu_action_selected=3;
+    /* A result with partial or unverified work is never a new write permit. */
+    struct kui_vmu_view refused=ready;refused.bulk_remaining=11;refused.bulk_completed=1;
+    kui_shell_set_vmu_copy_all(&s,7,0,false,&refused);assert(!s.confirm_vmu_copy_all);
+    refused=ready;refused.bulk_unverified=1;
+    kui_shell_set_vmu_copy_all(&s,7,0,false,&refused);assert(!s.confirm_vmu_copy_all);
+    refused=ready;refused.bulk_total=refused.bulk_remaining=0;
+    kui_shell_set_vmu_copy_all(&s,7,0,false,&refused);assert(!s.confirm_vmu_copy_all);
+    refused=ready;refused.status.passed=false;
+    kui_shell_set_vmu_copy_all(&s,7,0,false,&refused);assert(!s.confirm_vmu_copy_all);
+    refused=ready;refused.status.stopped=true;
+    kui_shell_set_vmu_copy_all(&s,7,0,false,&refused);assert(!s.confirm_vmu_copy_all);
+    refused=ready;refused.status.errors=1;
+    kui_shell_set_vmu_copy_all(&s,7,0,false,&refused);assert(!s.confirm_vmu_copy_all);
+    refused=ready;refused.status.complete=false;
+    kui_shell_set_vmu_copy_all(&s,7,0,false,&refused);assert(!s.confirm_vmu_copy_all);
+    refused=ready;refused.slot=0;
+    kui_shell_set_vmu_copy_all(&s,7,0,false,&refused);assert(!s.confirm_vmu_copy_all);
+    kui_shell_set_vmu_copy_all(&s,7,0,false,&ready);assert(s.confirm_vmu_copy_all);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.confirm_vmu_copy_all);
+    assert(press(KUI_SHELL_LEFT|KUI_SHELL_START,false)==KUI_SHELL_NONE && s.vmu_copy_slot==0);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_vmu_copy_all);
+    assert(s.page==KUI_SHELL_VMU_ACTIONS);
+    kui_shell_set_vmu_copy_all(&s,7,0,false,&ready);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_COPY_ALL_COMMIT && !s.confirm_vmu_copy_all);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP);
+    struct kui_vmu_view partial=ready;partial.copy_ready=false;
+    partial.status.passed=false;partial.status.stopped=true;
+    partial.bulk_completed=4;partial.bulk_unverified=1;partial.bulk_remaining=7;
+    kui_shell_set_vmu_copy_all(&s,7,0,true,&partial);
+    assert(!s.confirm_vmu_copy_all && s.vmu_copy_all.bulk_completed==4 && s.vmu_copy_all.bulk_unverified==1);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_COPY_ALL_PREVIEW && !s.confirm_vmu_copy_all);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_COPY_ALL_PREVIEW); /* Never recommit stale state. */
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_VMU_LIST && s.page==KUI_SHELL_VMU);
+    kui_shell_set_vmu_copy_all(&s,7,0,false,&ready);assert(!s.confirm_vmu_copy_all);
+    puts("PASS VMU bulk controls: empty cards, no selected row, both-slot stale guards, explicit confirmation and partial retry require fresh preview");
+}
+/* External saves are staged on SD, then appear in the existing restore list.
+ * Neither picking a file nor returning from the import screen restores a VMU. */
+static void vmu_import_controls(void) {
+    static const char *const names[]={"Saves","MDK2.VMS","Grandia.vMi","Sonic.DcI","readme.txt","bad/name.vms","save.vms.txt"};
+    static const bool dirs[]={true,false,false,false,false,false,false};
+    reset(KUI_SHELL_VMU_RESTORE);strcpy(s.files_path,"/Music");
+    assert(!s.vmu.present);
+    assert(press(KUI_SHELL_Y,true)==KUI_SHELL_NONE && !s.files_pick_import);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_FILES_LIST && s.page==KUI_SHELL_FILES_PICK);
+    assert(s.files_pick_import && !s.files_pick_compare && !s.files_request.folders_only);
+    assert(!strcmp(s.files_pick_path,"/") && !strcmp(s.files_request.path,"/") && !strcmp(s.files_path,"/Music"));
+    struct kui_files_page page=files_result("/",false,7,0,7,names,dirs);
+    struct kui_files_page stale=page;stale.folders_only=true;
+    kui_shell_set_files_listing(&s,&stale);assert(!s.files_pick.count);
+    stale=page;strcpy(stale.path,"/Other");
+    kui_shell_set_files_listing(&s,&stale);assert(!s.files_pick.count);
+    kui_shell_set_files_listing(&s,&page);
+    assert(s.files_pick.count==7 && !s.files_pick.entries[0].disabled);
+    for(unsigned i=1;i<=3;i++) assert(!s.files_pick.entries[i].disabled);
+    for(unsigned i=4;i<=6;i++) assert(s.files_pick.entries[i].disabled);
+    assert(!s.files_listing.count);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_FILES_PICK);
+    s.files_pick_selected=4;assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    s.files_pick_selected=0;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_FILES_LIST && !strcmp(s.files_pick_path,"/Saves"));
+    assert(!s.files_request.folders_only && s.files_pick_import);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_FILES_LIST && !strcmp(s.files_pick_path,"/"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_RESTORE && !s.files_pick_import);
+    press(KUI_SHELL_Y,false);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_RESTORE && !s.files_pick_import);
+    for(unsigned choice=1;choice<=3;choice++) {
+        assert(press(KUI_SHELL_Y,false)==KUI_SHELL_FILES_LIST);
+        kui_shell_set_files_listing(&s,&page);s.files_pick_selected=choice;
+        unsigned generation=s.vmu_import_generation;
+        assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.files_pick_import);
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_IMPORT_PREVIEW && s.page==KUI_SHELL_VMU_IMPORT);
+        assert(s.vmu_import_generation==generation+1 && !s.files_pick_import);
+        char expected[KUI_FILES_PATH_CAP];snprintf(expected,sizeof(expected),"/%s",names[choice]);
+        assert(!strcmp(s.vmu_import_path,expected) && !s.confirm_vmu_import && !s.vmu_import_staged);
+        assert(!s.confirm_vmu_restore && !s.restore_path[0]);
+        generation=s.vmu_import_generation;
+        struct kui_vmu_view ready={.import_ready=true,.count=1,.total=1};
+        ready.status.complete=ready.status.passed=true;
+        strcpy(ready.entries[0].name,"IMPORTED_SAVE");ready.entries[0].bytes=4096;
+        kui_shell_set_vmu_import(&s,"/Other.VMS",generation,false,&ready);
+        assert(!s.confirm_vmu_import && !s.vmu_import.count);
+        kui_shell_set_vmu_import(&s,expected,generation-1,false,&ready);
+        assert(!s.confirm_vmu_import && !s.vmu_import.count);
+        struct kui_vmu_view refused=ready;refused.count=0;
+        kui_shell_set_vmu_import(&s,expected,generation,false,&refused);assert(!s.confirm_vmu_import);
+        refused=ready;refused.entries[0].bytes=0;
+        kui_shell_set_vmu_import(&s,expected,generation,false,&refused);assert(!s.confirm_vmu_import);
+        refused=ready;refused.entries[0].name[0]=0;
+        kui_shell_set_vmu_import(&s,expected,generation,false,&refused);assert(!s.confirm_vmu_import);
+        refused=ready;refused.status.passed=false;
+        kui_shell_set_vmu_import(&s,expected,generation,false,&refused);assert(!s.confirm_vmu_import);
+        refused=ready;refused.status.complete=false;
+        kui_shell_set_vmu_import(&s,expected,generation,false,&refused);assert(!s.confirm_vmu_import);
+        refused=ready;refused.status.stopped=true;
+        kui_shell_set_vmu_import(&s,expected,generation,false,&refused);assert(!s.confirm_vmu_import);
+        refused=ready;refused.status.errors=1;
+        kui_shell_set_vmu_import(&s,expected,generation,false,&refused);assert(!s.confirm_vmu_import);
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_IMPORT_PREVIEW && s.vmu_import_generation==generation+1);
+        kui_shell_set_vmu_import(&s,expected,generation,false,&ready);assert(!s.confirm_vmu_import);
+        generation=s.vmu_import_generation;
+        kui_shell_set_vmu_import(&s,expected,generation,false,&ready);assert(s.confirm_vmu_import);
+        assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.confirm_vmu_import);
+        assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_VMU_IMPORT);
+        assert(!s.confirm_vmu_import);
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_IMPORT_PREVIEW && s.vmu_import_generation==generation+1);
+        generation=s.vmu_import_generation;
+        kui_shell_set_vmu_import(&s,expected,generation,false,&ready);assert(s.confirm_vmu_import);
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_IMPORT_COMMIT && !s.confirm_vmu_import);
+        ready.import_ready=false;
+        strcpy(ready.backup_path,"/KUI/backups/vmu/import-0001/IMPORTED_SAVE.vms");
+        kui_shell_set_vmu_import(&s,expected,generation,true,&ready);
+        assert(s.vmu_import_staged && !s.confirm_vmu_import);
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.vmu_import_generation==generation);
+        assert(press(KUI_SHELL_B,false)==KUI_SHELL_VMU_BACKUPS_LIST && s.page==KUI_SHELL_VMU_RESTORE);
+        assert(!s.confirm_vmu_restore && !s.restore_path[0] && !s.vmu.present);
+        kui_shell_set_vmu_import(&s,expected,generation,false,&ready);assert(!s.confirm_vmu_import);
+    }
+    /* Cancelling an uncommitted preview needs no list refresh or VMU write. */
+    press(KUI_SHELL_Y,false);kui_shell_set_files_listing(&s,&page);s.files_pick_selected=1;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_IMPORT_PREVIEW);
+    assert(press(KUI_SHELL_B|KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_RESTORE);
+    assert(!s.confirm_vmu_import && !s.confirm_vmu_restore && !strcmp(s.files_path,"/Music"));
+    puts("PASS VMU import controls: mixed-case VMS/VMI/DCI selection, folders, unsupported names, busy lock, exact path/generation guards, staged-only completion and cancellation");
+}
+
+
+static void vmu_bulk_import_rendering(void) {
+    struct kui_shell_view view={0};
+    reset(KUI_SHELL_VMU_ACTIONS);s.vmu_slot=7;s.vmu_copy_slot=0;s.vmu_action_selected=3;
+    s.vmu.present=true;s.vmu.total=12;
+    s.vmu_copy_all.bulk_total=s.vmu_copy_all.bulk_remaining=12;render(&view);
+    assert(strstr(drawn,"Source VMU D2: No selected save") && strstr(drawn,"Copy all saves to VMU A1"));
+    assert(strstr(drawn,"Total 12   Verified 0   Remaining 12"));
+    s.confirm_vmu_copy_all=true;render(&view);
+    assert(strstr(drawn,"COPY ALL SAVES TO ANOTHER VMU?") && strstr(drawn,"12 saves from VMU D2 to VMU A1"));
+    assert(strstr(drawn,"Existing destination names are refused.") && strstr(drawn,"A Copy all saves"));
+    s.confirm_vmu_copy_all=false;s.vmu_copy_all.bulk_completed=4;s.vmu_copy_all.bulk_remaining=8;
+    s.vmu_copy_all.bulk_unverified=true;render(&view);
+    assert(strstr(drawn,"Total 12   Verified 4   Remaining 8") && strstr(drawn,"Destination save unverified"));
+    assert(!strstr(drawn,"COPY ALL SAVES TO ANOTHER VMU?"));
+    reset(KUI_SHELL_VMU_RESTORE);render(&view);assert(strstr(drawn,"Y Import save"));
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_FILES_LIST);
+    static const char *const names[]={"Saves","GRANDIA2.VMS","SONICADV.vmi","TOYCOMMANDER.DCI","readme.txt"};
+    static const bool dirs[]={true,false,false,false,false};
+    struct kui_files_page files=files_result("/",false,5,0,5,names,dirs);
+    kui_shell_set_files_listing(&s,&files);render(&view);
+    assert(strstr(drawn,"Choose an external save") && strstr(drawn,"GRANDIA2.VMS") && strstr(drawn,"TOYCOMMANDER.DCI"));
+    assert(strstr(drawn,"VMS, VMI or DCI") && strstr(drawn,"A Open folder / check save"));
+    assert(!strstr(drawn,"Y Move here") && !strstr(drawn,"Y Copy here") && !strstr(drawn,"Comparison is read-only"));
+    s.files_pick_selected=2;press(KUI_SHELL_A,false);
+    struct kui_vmu_view imported={.count=1,.total=1,.import_ready=true};
+    strcpy(imported.entries[0].name,"SONICADV_SYS");imported.entries[0].bytes=32768;
+    imported.status.complete=imported.status.passed=true;imported.status.line_count=8;
+    for(unsigned i=0;i<8;i++) snprintf(imported.status.lines[i],KUI_APP_LINE_CAP,"Import detail %u",i+1);
+    kui_shell_set_vmu_import(&s,s.vmu_import_path,s.vmu_import_generation,false,&imported);render(&view);
+    assert(strstr(drawn,"Import save to SD") && strstr(drawn,"/SONICADV.vmi"));
+    assert(strstr(drawn,"SONICADV_SYS   32768 bytes / 64 blocks") && strstr(drawn,"Import detail 1") && strstr(drawn,"Import detail 8"));
+    assert(strstr(drawn,"A Stage SD backup") && strstr(drawn,"Creates an SD backup only; restore separately from backups."));
+    assert(!strstr(drawn,"WRITE THIS SAVE TO THE VMU?"));
+    imported.import_ready=false;strcpy(imported.backup_path,"/KUI/backups/vmu/import-0001/SONICADV_SYS.vms");
+    kui_shell_set_vmu_import(&s,s.vmu_import_path,s.vmu_import_generation,true,&imported);render(&view);
+    assert(strstr(drawn,"Verified SD backup:") && strstr(drawn,imported.backup_path) && strstr(drawn,"No VMU was written."));
+    assert(strstr(drawn,"Restore separately from the SD backups list.") && !strstr(drawn,"A Stage SD backup"));
+    s.vmu_import_staged=false;s.vmu_import.count=0;s.vmu_import.status.line_count=0;view.busy=true;render(&view);
+    assert(strstr(drawn,"Reading external save...") && !strstr(drawn,"A Stage SD backup"));
+    puts("PASS VMU bulk/import rendering: both slots, total/verified/remaining counts, uncertain destination, external picker, eight metadata lines and staged SD-only result");
+}
+
 int main(int argc,char **argv) {
     if(argc==2 && !strcmp(argv[1],"--wifi")) {
         wifi_controls();wifi_rendering();wifi_update_controls();wifi_update_rendering();return 0;
@@ -3571,6 +3768,7 @@ int main(int argc,char **argv) {
         ripper_saved_job_rendering();reference_and_destination_rendering();music_and_boot_rendering();return 0;
     }
     small_tools_controls();small_tools_rendering();
+    vmu_copy_all_controls();vmu_import_controls();vmu_bulk_import_rendering();
     games_remembered_selection(); games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_cdda_compatibility_status(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_zso_controls(); games_codec_controls(); games_check_baseline_controls(); games_variant_controls();
     if(argc==2 && !strcmp(argv[1],"--games-controls")) { puts("PASS Games navigation and launch controls"); return 0; }
     games_rendering(); games_patch_rendering(); games_zso_rendering(); games_selected_art_rendering(); games_variant_rendering();

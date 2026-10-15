@@ -38,7 +38,7 @@ RUNTIME_OBJECTS += build/dc/src/core/games_selection.o build/dc/src/core/game_la
 RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadata.o
 RUNTIME_OBJECTS += build/dc/src/core/zso.o build/dc/src/core/lzo1x.o build/dc/src/core/retail_zso.o
 RUNTIME_OBJECTS += build/dc/src/core/game_cover.o build/dc/src/core/pvr_texture.o
-RUNTIME_OBJECTS += build/dc/src/core/files_path.o
+RUNTIME_OBJECTS += build/dc/src/core/files_path.o build/dc/src/core/vmu_save_format.o
 RUNTIME_OBJECTS += build/dc/src/core/w5500.o build/dc/src/dreamcast/w5500_sci.o build/dc/src/core/ftp_protocol.o
 # The SCI port's network adapters: its chip selects, and the Wi-Fi board's
 # link, whose library is shared with the board's firmware (MIT).

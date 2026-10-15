@@ -51,7 +51,7 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_FTP, KUI_SHELL_STORAGE_TESTS, KUI_SHELL_STORAGE_TEST_HISTORY,
     KUI_SHELL_SCI_ASYNC_PROBE, KUI_SHELL_GAMES_VARIANTS, KUI_SHELL_WIFI,
     KUI_SHELL_GAMES_LAUNCH_OPTIONS, KUI_SHELL_GAMES_EXTRA_OPTIONS,
-    KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK, KUI_SHELL_VMU_IMAGE };
+    KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK, KUI_SHELL_VMU_IMAGE, KUI_SHELL_VMU_IMPORT };
 enum kui_shell_game_option {
     KUI_SHELL_GAME_OPTION_READER, KUI_SHELL_GAME_OPTION_CDDA,
     KUI_SHELL_GAME_OPTION_ADVANCED, KUI_SHELL_GAME_OPTION_CODEC, KUI_SHELL_GAME_OPTION_COUNT
@@ -103,7 +103,9 @@ enum kui_shell_action {
     KUI_SHELL_REPAIR_COPY, KUI_SHELL_FORENSIC, KUI_SHELL_GAMES_CHECK_EXECUTABLE,
     KUI_SHELL_VMU_BACKUP_CARD, KUI_SHELL_VMU_IMAGE_LIST,
     KUI_SHELL_VMU_IMAGE_EXTRACT, KUI_SHELL_VMU_IMAGE_EXTRACT_ALL,
-    KUI_SHELL_FLASH_COMPARE, KUI_SHELL_BIOS_COMPARE
+    KUI_SHELL_FLASH_COMPARE, KUI_SHELL_BIOS_COMPARE,
+    KUI_SHELL_VMU_COPY_ALL_PREVIEW, KUI_SHELL_VMU_COPY_ALL_COMMIT,
+    KUI_SHELL_VMU_IMPORT_PREVIEW, KUI_SHELL_VMU_IMPORT_COMMIT
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -116,6 +118,10 @@ struct kui_shell {
     unsigned system_selected;
     bool video_trial, confirm_defaults, confirm_clock, confirm_vmu_restore;
     bool confirm_vmu_delete, confirm_vmu_copy, confirm_music_clear, confirm_restart;
+    bool confirm_vmu_copy_all, confirm_vmu_import, vmu_import_staged;
+    struct kui_vmu_view vmu_copy_all, vmu_import;
+    char vmu_import_path[KUI_FILES_PATH_CAP];
+    unsigned vmu_import_generation;
     unsigned tools_selected;
     bool confirm_salvage, salvage_zero_fill;
     unsigned salvage_selected, salvage_passes;
@@ -215,7 +221,7 @@ struct kui_shell {
     bool files_running;
     /* System tools uses the same safe listing as File Manager, with files
      * visible. A regular copy/move picker still chooses folders only. */
-    bool files_pick_compare, system_compare_bios;
+    bool files_pick_compare, files_pick_import, system_compare_bios;
     char system_compare_path[KUI_FILES_PATH_CAP];
     /* Diagnostics' storage tests use worker-published copies only. The last
      * request stays independent of whichever historical result is displayed. */
@@ -271,6 +277,13 @@ void kui_shell_set_vmu_restore_preview(struct kui_shell *shell, const struct kui
  * preserves a valid draft or seeds an editable 1980-01-01 with an error notice. */
 void kui_shell_set_vmu_delete_preview(struct kui_shell *shell, const struct kui_vmu_view *view);
 void kui_shell_set_vmu_copy_preview(struct kui_shell *shell, const struct kui_vmu_view *view);
+/* Bulk previews belong to both exact slots; completed/partial results never
+ * grant another commit. Import publications echo the full source and request
+ * generation, and importing only stages a checked SD backup. */
+void kui_shell_set_vmu_copy_all(struct kui_shell *,unsigned source,unsigned destination,
+    bool committed,const struct kui_vmu_view *);
+void kui_shell_set_vmu_import(struct kui_shell *,const char *path,unsigned generation,
+    bool committed,const struct kui_vmu_view *);
 void kui_shell_set_clock(struct kui_shell *shell, const struct kui_datetime *value, const char *notice);
 /* MUSIC_LIST uses music_path and music_page * ROWS. MUSIC_PLAY uses the
  * validated music_selected_path. Worker completion never changes directory. */

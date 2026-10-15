@@ -3,6 +3,7 @@
 #define KUI_APPS_H
 #include "kui/probe.h"
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #define KUI_APP_LINES 12u
 #define KUI_APP_LINE_CAP 80u
@@ -23,7 +24,8 @@ struct kui_vmu_view {
     struct kui_vmu_entry entries[KUI_VMU_ROWS];
     char backup_path[KUI_VMU_BACKUP_PATH_CAP];
     unsigned slot,page,count,total,free_blocks;
-    bool present,restore_ready,delete_ready,copy_ready;
+    unsigned bulk_total,bulk_completed,bulk_remaining;
+    bool present,restore_ready,delete_ready,copy_ready,import_ready,bulk_unverified;
 };
 struct kui_vmu_backup_entry {
     char name[16],folder[16],path[KUI_VMU_BACKUP_PATH_CAP];
@@ -66,4 +68,17 @@ void kui_vmu_delete_run(unsigned slot,unsigned page,unsigned selected,bool commi
 void kui_vmu_copy_run(unsigned source_slot,unsigned page,unsigned selected,
     unsigned destination_slot,bool commit,struct kui_vmu_view *out,
     kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+/* Full-batch preview pins both cards and all source payloads. Confirmation
+ * stages verified SD bundles before any destination write; existing names
+ * refuse the entire batch. remaining includes any unverified current item.
+ * A failed metadata commit stops the batch without retry or rollback. */
+void kui_vmu_copy_all_run(unsigned source_slot,unsigned destination_slot,bool commit,
+    struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+/* Caller owns an already connected/mounted SD filesystem. Creates one new
+ * organizational A1-NNNN verified backup bundle, never accesses a physical VMU,
+ * and never mounts/unmounts storage. Inputs remain caller-owned. out is reset;
+ * backup_path becomes usable after .dir/.vms/.crc publication succeeds. */
+bool kui_vmu_import_publish(const uint8_t entry[32],const uint8_t *data,size_t length,
+    struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+
 #endif

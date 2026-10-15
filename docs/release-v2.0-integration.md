@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Tyrfing integration record
 
-Preparation date: 2026-10-15. Original integration version **2.0-rc10** (artwork candidate: **2.0-rc11**, small-tools candidate: **2.0-rc12**), release name **Tyrfing**.
+Preparation date: 2026-10-15. Original integration version **2.0-rc10** (artwork candidate: **2.0-rc11**, small-tools candidate: **2.0-rc12**, VMU candidate: **2.0-rc13**), release name **Tyrfing**.
 This prepares the next release without publishing a final 2.0 tag.
 
 ## Selected source
@@ -89,3 +89,19 @@ A scoped maintenance CI path runs the ordinary host checks plus the complete
 VMU/maintenance FAT32/exFAT suites. It retains the existing Dreamcast build,
 layout/stack/instruction, source/licence and full-package checks. Console
 acceptance of this assembled RC12 remains the gate before a final 2.0 release.
+
+
+## RC13 medium VMU follow-up
+
+RC13 retains RC12 and adds external save import and Copy all between VMUs.
+VMS/VMI/DCI inputs are independently parsed from documented formats, previewed
+and staged as new verified SD bundles; physical restore remains separate.
+Bulk copy preflights the entire batch, backs up all source saves before writing,
+and retains verified completed copies with explicit counts after a partial job.
+Menu jobs 89–92 follow the existing worker jobs without changing game readers.
+
+The implementation uses only K-UI code and pinned upstream interfaces; no
+DreamShell implementation is read or reused for this work. Existing source art,
+SCI/SCIF readers, CE/native CD music, capture and recovery contracts remain.
+RC12 is retained as the preceding candidate. Host and console build/package
+validation do not replace physical-console acceptance before final 2.0.

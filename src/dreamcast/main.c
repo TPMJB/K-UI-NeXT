@@ -15,6 +15,7 @@
 #include "kui/disc_identity.h"
 #include "kui/music.h"
 #include "kui/apps.h"
+#include "kui/vmu_import.h"
 #include "kui/music_player.h"
 #include "kui/games.h"
 #include "kui/game_launch_settings.h"
@@ -109,6 +110,11 @@ static struct kui_vmu_view vmu_image_snapshot;
 static unsigned vmu_image_generation,vmu_image_page_pending,vmu_image_selected_pending;
 static char vmu_image_path_pending[KUI_VMU_BACKUP_PATH_CAP];
 static char maintenance_compare_path_pending[KUI_FILES_PATH_CAP];
+static struct kui_vmu_view vmu_bulk_snapshot,vmu_import_snapshot;
+static unsigned vmu_bulk_generation,vmu_bulk_source_result,vmu_bulk_destination_result;
+static bool vmu_bulk_commit_result,vmu_import_commit_result;
+static unsigned vmu_import_generation,vmu_import_request_pending,vmu_import_request_result;
+static char vmu_import_path_pending[KUI_FILES_PATH_CAP],vmu_import_path_result[KUI_FILES_PATH_CAP];
 static struct kui_datetime clock_pending,clock_snapshot;
 static bool clock_valid;
 static unsigned clock_generation;
@@ -552,6 +558,8 @@ static void app_progress(const struct kui_app_status *status) {
     else if(active_app==20 || active_app==45) network_test_status=*status;
     else if((active_app>=41 && active_app<=43) || active_app==87 || active_app==88) maintenance_status=*status;
     else if(active_app>=84 && active_app<=86) vmu_image_snapshot.status=*status;
+    else if(active_app==89 || active_app==90) vmu_bulk_snapshot.status=*status;
+    else if(active_app==91 || active_app==92) vmu_import_snapshot.status=*status;
     else if(active_app==24) player_status=*status;
     else if(active_app==31) vmu_backups.status=*status;
     else vmu_snapshot.status=*status;
@@ -1611,7 +1619,7 @@ static bool games_action_invalidates(unsigned action) {
         action==25 || action==30 || action==33 || action==38 || action==40 ||
         (action>=42 && action<=48) || (action>=56 && action<=59) || action==62 ||
         action==64 || action==65 || action==67 || action==79 || action==81 || action==82 ||
-        action==83 || action==85 || action==86 || (action>=68 && action<=71);
+        action==83 || action==85 || action==86 || action==90 || action==92 || (action>=68 && action<=71);
 }
 static bool games_idle_cancelled(void) {
     mutex_lock(&lock);
@@ -1935,6 +1943,21 @@ static void *worker(void *unused) {
                 vmu_image_snapshot.status=(struct kui_app_status){.complete=true,.stopped=true};
                 snprintf(vmu_image_snapshot.status.message,sizeof(vmu_image_snapshot.status.message),"Image operation stopped before starting.");
                 ++vmu_image_generation;
+            }
+            if(action==89 || action==90) {
+                vmu_bulk_snapshot.status=(struct kui_app_status){.complete=true,.stopped=true};
+                snprintf(vmu_bulk_snapshot.status.message,sizeof(vmu_bulk_snapshot.status.message),"Copy-all stopped before starting; no VMU writes.");
+                vmu_bulk_snapshot.copy_ready=false;
+                vmu_bulk_source_result=vmu_slot_pending;vmu_bulk_destination_result=vmu_copy_slot_pending;
+                vmu_bulk_commit_result=action==90;++vmu_bulk_generation;
+            }
+            if(action==91 || action==92) {
+                vmu_import_snapshot.status=(struct kui_app_status){.complete=true,.stopped=true};
+                snprintf(vmu_import_snapshot.status.message,sizeof(vmu_import_snapshot.status.message),"Save import stopped before starting.");
+                vmu_import_snapshot.import_ready=false;
+                memcpy(vmu_import_path_result,vmu_import_path_pending,sizeof(vmu_import_path_result));
+                vmu_import_request_result=vmu_import_request_pending;vmu_import_commit_result=action==92;
+                ++vmu_import_generation;
             }
             if(action==45) {
                 network_test_status=(struct kui_app_status){.stopped=true};
@@ -2364,6 +2387,24 @@ static void *worker(void *unused) {
                     action-84,&result,kui_log,kui_cancelled,app_progress);
                 mutex_lock(&lock);vmu_image_snapshot=result;++vmu_image_generation;mutex_unlock(&lock);
             }
+            if(action==89 || action==90) {
+                struct kui_vmu_view result;
+                active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
+                kui_vmu_copy_all_run(vmu_slot_pending,vmu_copy_slot_pending,action==90,
+                    &result,kui_log,kui_cancelled,app_progress);
+                mutex_lock(&lock);vmu_bulk_snapshot=result;
+                vmu_bulk_source_result=vmu_slot_pending;vmu_bulk_destination_result=vmu_copy_slot_pending;
+                vmu_bulk_commit_result=action==90;++vmu_bulk_generation;mutex_unlock(&lock);
+            }
+            if(action==91 || action==92) {
+                struct kui_vmu_view result;
+                active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
+                kui_vmu_import_run(vmu_import_path_pending,action==92,&result,kui_log,kui_cancelled,app_progress);
+                mutex_lock(&lock);vmu_import_snapshot=result;
+                memcpy(vmu_import_path_result,vmu_import_path_pending,sizeof(vmu_import_path_result));
+                vmu_import_request_result=vmu_import_request_pending;vmu_import_commit_result=action==92;
+                ++vmu_import_generation;mutex_unlock(&lock);
+            }
             if(action>=46 && action<=48) salvage_operation(action);
             if(action==45) {
                 struct kui_app_status result;
@@ -2599,6 +2640,8 @@ static void draw_shell(void) {
         shell.page==KUI_SHELL_SALVAGE?salvage_status:
         shell.page==KUI_SHELL_SYSTEM_TOOLS?maintenance_status:
         shell.page==KUI_SHELL_VMU_IMAGE?vmu_image_snapshot.status:
+        shell.page==KUI_SHELL_VMU_IMPORT?vmu_import_snapshot.status:
+        shell.page==KUI_SHELL_VMU_ACTIONS && shell.vmu_action_selected==3?vmu_bulk_snapshot.status:
         shell.page==KUI_SHELL_VMU_RESTORE && active_app!=32 && active_app!=33?vmu_backups.status:vmu_snapshot.status;
     view.phase = capture_status.phase; view.track = capture_status.track; view.tracks = capture_status.tracks;
     view.rate_kib = rate_kib; view.retries = capture_display.retries;
@@ -2718,6 +2761,10 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_VMU_IMAGE_EXTRACT_ALL:return 86;
         case KUI_SHELL_FLASH_COMPARE:return 87;
         case KUI_SHELL_BIOS_COMPARE:return 88;
+        case KUI_SHELL_VMU_COPY_ALL_PREVIEW:return 89;
+        case KUI_SHELL_VMU_COPY_ALL_COMMIT:return 90;
+        case KUI_SHELL_VMU_IMPORT_PREVIEW:return 91;
+        case KUI_SHELL_VMU_IMPORT_COMMIT:return 92;
         default: return 0;
     }
 }
@@ -2892,7 +2939,7 @@ int main(void) {
     unsigned seen_games_listing=0,seen_games_detail=0,seen_games_launch_result=0;
     unsigned seen_games_selection=0;
     unsigned seen_files_listing=0,seen_files_preview=0,seen_files_result=0,seen_files_picture=0;
-    unsigned seen_wifi_generation=0;
+    unsigned seen_wifi_generation=0,seen_vmu_bulk=0,seen_vmu_import=0;
     bool startup_routed=false;
     unsigned held_navigation = 0;
     uint64_t repeat_at = 0;
@@ -2940,6 +2987,14 @@ int main(void) {
         if(seen_vmu_image!=vmu_image_generation) {
             kui_shell_set_vmu_image(&shell,vmu_image_path_pending,vmu_image_page_pending,&vmu_image_snapshot);
             seen_vmu_image=vmu_image_generation;
+        }
+        if(seen_vmu_bulk!=vmu_bulk_generation) {
+            kui_shell_set_vmu_copy_all(&shell,vmu_bulk_source_result,vmu_bulk_destination_result,
+                vmu_bulk_commit_result,&vmu_bulk_snapshot);seen_vmu_bulk=vmu_bulk_generation;
+        }
+        if(seen_vmu_import!=vmu_import_generation) {
+            kui_shell_set_vmu_import(&shell,vmu_import_path_result,vmu_import_request_result,
+                vmu_import_commit_result,&vmu_import_snapshot);seen_vmu_import=vmu_import_generation;
         }
         if(seen_music_listing!=music_listing_generation) {
             kui_shell_set_music_listing(&shell,&music_listing);
@@ -3189,6 +3244,17 @@ int main(void) {
             if((action>=41 && action<=43) || action==87 || action==88) maintenance_status=(struct kui_app_status){0};
             if(action==87 || action==88)
                 memcpy(maintenance_compare_path_pending,shell.system_compare_path,sizeof(maintenance_compare_path_pending));
+            if(action==89 || action==90) {
+                vmu_slot_pending=shell.vmu_slot;vmu_copy_slot_pending=shell.vmu_copy_slot;
+                vmu_bulk_snapshot=shell.vmu_copy_all;vmu_bulk_snapshot.slot=vmu_slot_pending;vmu_bulk_snapshot.copy_ready=false;
+                vmu_bulk_snapshot.status=(struct kui_app_status){0};
+            }
+            if(action==91 || action==92) {
+                memcpy(vmu_import_path_pending,shell.vmu_import_path,sizeof(vmu_import_path_pending));
+                vmu_import_request_pending=shell.vmu_import_generation;
+                vmu_import_snapshot=shell.vmu_import;vmu_import_snapshot.import_ready=false;
+                vmu_import_snapshot.status=(struct kui_app_status){0};
+            }
             if(action>=84 && action<=86) {
                 memcpy(vmu_image_path_pending,shell.vmu_image_path,sizeof(vmu_image_path_pending));
                 vmu_image_page_pending=shell.vmu_image_page;vmu_image_selected_pending=shell.vmu_image_selected;

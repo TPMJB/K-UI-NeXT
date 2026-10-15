@@ -44,6 +44,28 @@ IMAGES = ("card-image", "card-image-empty", "card-image-read-fail", "card-image-
           "image-readback-corrupt", "image-cancel-start", "image-cancel-write")
 
 
+BULK = ("bulk-ok", "bulk-preview-only", "bulk-unpreviewed", "bulk-same-slot", "bulk-invalid-source", "bulk-invalid-destination",
+        "bulk-conflict-last", "bulk-capacity", "bulk-directory-full", "bulk-source-cycle", "bulk-source-shared", "bulk-source-orphan",
+        "bulk-destination-orphan", "bulk-source-duplicate", "bulk-destination-duplicate", "bulk-source-nameless", "bulk-source-protection",
+        "bulk-source-removed", "bulk-destination-removed", "bulk-vmu-read-fail", "bulk-changed-source", "bulk-changed-payload-last",
+        "bulk-changed-destination", "bulk-source-device-change", "bulk-destination-device-change", "bulk-source-removed-before-commit",
+        "bulk-destination-removed-before-commit", "bulk-cancel-start", "bulk-cancel-after-one", "bulk-source-removed-after-one",
+        "bulk-destination-removed-after-one", "bulk-write-fail-after-one", "bulk-fat-fail-after-one", "bulk-dir-fail-after-one",
+        "bulk-sd-write-fail", "bulk-sd-sync-fail", "bulk-readback-fail", "bulk-readback-corrupt", "bulk-write-fail", "bulk-data-corrupt",
+        "bulk-fat-fail", "bulk-fat-corrupt", "bulk-dir-fail", "bulk-dir-corrupt", "bulk-final-corrupt", "bulk-final-read-fail", "bulk-game", "bulk-empty-source", "bulk-cancel-data",
+        "bulk-source-payload-change-during-stage", "bulk-destination-change-during-stage",
+        "bulk-source-removed-during-stage", "bulk-destination-removed-during-stage")
+BULK_READ_ONLY = BULK[1:20] + ("bulk-changed-source", "bulk-changed-payload-last", "bulk-changed-destination", "bulk-source-device-change",
+                            "bulk-destination-device-change", "bulk-source-removed-before-commit", "bulk-destination-removed-before-commit", "bulk-cancel-start", "bulk-empty-source")
+
+
+PUBLISH = ("publish-ok", "publish-type", "publish-protection", "publish-first-block", "publish-nameless", "publish-header",
+           "publish-dirty", "publish-reserved", "publish-count", "publish-zero", "publish-short", "publish-large",
+           "publish-null-entry", "publish-null-data", "publish-write-fail", "publish-sync-fail", "publish-readback-fail",
+           "publish-readback-corrupt", "publish-cancel-start", "publish-cancel-write")
+PUBLISH_READ_ONLY = tuple(case for case in PUBLISH[1:14] if case != "publish-first-block") + ("publish-cancel-start",)
+
+
 def digest(path):
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").digest()
@@ -60,13 +82,13 @@ def main():
             run(BINARY, str(seed), "seed")
             original = digest(seed)
             checker = "fsck.fat" if kind == "fat32" else "fsck.exfat"
-            for case in READ_ONLY + BACKUPS + RESTORES + MANAGED + IMAGES:
+            for case in READ_ONLY + BACKUPS + RESTORES + MANAGED + IMAGES + BULK + PUBLISH:
                 image = base / f"{kind}-{case}.img"
                 shutil.copyfile(seed, image)
                 assert f"PASS VMU {case}" in run(BINARY, str(image), case)
-                if case in READ_ONLY:
+                if case in READ_ONLY + BULK_READ_ONLY + PUBLISH_READ_ONLY:
                     assert digest(image) == original, f"{case} unexpectedly wrote to the SD card"
-                if case not in ("write-fail", "sync-fail", "card-image-write-fail", "card-image-sync-fail", "image-write-fail", "image-sync-fail") and not case.endswith(("sd-write-fail", "sd-sync-fail")):
+                if case not in ("write-fail", "sync-fail", "card-image-write-fail", "card-image-sync-fail", "image-write-fail", "image-sync-fail", "publish-write-fail", "publish-sync-fail") and not case.endswith(("sd-write-fail", "sd-sync-fail")):
                     run(checker, "-n", str(image))
                 image.unlink()
                 print(f"PASS {kind} VMU: {case}", flush=True)

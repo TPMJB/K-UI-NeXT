@@ -130,6 +130,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->confirm_vmu_restore ? "A Restore save   B Cancel" :
         s->confirm_vmu_delete ? "A Delete after backup   B Cancel" :
         s->confirm_vmu_copy ? "A Copy save   B Cancel" :
+        s->confirm_vmu_copy_all ? "A Copy all saves   B Cancel" :
         s->confirm_music_clear ? "A Clear music cache   B Cancel" :
         s->confirm_restart ? "A Restart console   B Cancel" :
         s->confirm_salvage ? "A Start salvage   B Cancel" :
@@ -143,6 +144,8 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_CRC_SCAN ? "A Scan again   B Advanced" :
         s->page==KUI_SHELL_VMU_ACTIONS ? "A Open   B VMU   LEFT/RIGHT Copy target" :
         s->page==KUI_SHELL_VMU_IMAGE ? "B SD backups   START Page" :
+        s->page==KUI_SHELL_VMU_IMPORT ? (s->confirm_vmu_import?"A Stage SD backup   B SD backups":
+            s->vmu_import_staged?"B SD backups":"A Check again   B SD backups") :
         s->page==KUI_SHELL_SALVAGE ? "A Start / Open   B Advanced" :
         s->page==KUI_SHELL_SYSTEM_TOOLS ? "D-pad Select   A Open   B Settings" :
         s->page==KUI_SHELL_VMU_RESTORE ? "B VMU   LEFT/RIGHT Target   START Page" :
@@ -199,7 +202,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_GAMES_CODEC ? "D-pad Select   A Save and inspect   B Details" :
         s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
-    words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_IMAGE||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU||s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM||s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS||s->page==KUI_SHELL_GAMES_EXTRA_OPTIONS||s->page==KUI_SHELL_GAMES_PATCHES||s->page==KUI_SHELL_GAMES_TESTS||s->page==KUI_SHELL_GAMES_INFO?608:500,MUTED,controls,false);
+    words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_IMAGE||s->page==KUI_SHELL_VMU_IMPORT||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU||s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM||s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS||s->page==KUI_SHELL_GAMES_EXTRA_OPTIONS||s->page==KUI_SHELL_GAMES_PATCHES||s->page==KUI_SHELL_GAMES_TESTS||s->page==KUI_SHELL_GAMES_INFO?608:500,MUTED,controls,false);
 }
 /* Each Home app by page, so its row can move without touching this table.
  * All icons are embedded RGB565 assets with separate list-sized artwork. */
@@ -684,15 +687,27 @@ static void vmu_actions(struct paint *p,const struct kui_shell *s,const struct k
     char line[120];snprintf(line,sizeof(line),"Source VMU %c%u: %s",'A'+s->vmu_slot/2,
         s->vmu_slot%2+1,entry?entry->name:"No selected save");
     label(p,40,138,CYAN,line);
-    for(unsigned i=0;i<3;i++) {
-        unsigned y=176+i*42;panel(p,32,y,576,36,i==s->vmu_action_selected?SELECTED:PANEL);
-        if(i==1) snprintf(line,sizeof(line),"Copy to VMU %c%u",'A'+s->vmu_copy_slot/2,s->vmu_copy_slot%2+1);
+    for(unsigned i=0;i<4;i++) {
+        unsigned y=172+i*34;panel(p,32,y,576,30,i==s->vmu_action_selected?SELECTED:PANEL);
+        if(i==1 || i==3) snprintf(line,sizeof(line),i==3?"Copy all saves to VMU %c%u":"Copy to VMU %c%u",
+            'A'+s->vmu_copy_slot/2,s->vmu_copy_slot%2+1);
         else snprintf(line,sizeof(line),"%s",i==2?"Backup card image":"Delete selected save");
-        label(p,48,y+8,i==s->vmu_action_selected?WHITE:MUTED,line);
+        label(p,48,y+6,i==s->vmu_action_selected?WHITE:MUTED,line);
     }
-    label(p,40,314,MUTED,"Card image saves all 128 KiB as a verified VMD on SD.");
-    label(p,40,338,MUTED,"Delete / copy checks the save and asks before writing.");
-    label(p,40,362,MUTED,"Copy refuses existing names on the destination VMU.");
+    if(s->vmu_action_selected==3) {
+        const struct kui_vmu_view *bulk=&s->vmu_copy_all;
+        snprintf(line,sizeof(line),"Total %u   Verified %u   Remaining %u",bulk->bulk_total,
+            bulk->bulk_completed,bulk->bulk_remaining);
+        label(p,40,320,CYAN,line);
+        label(p,40,344,bulk->bulk_unverified?AMBER:MUTED,bulk->bulk_unverified?
+            "Destination save unverified; inspect it before retry.":
+            "Completed copies stay. A starts a fresh check before retry.");
+        label(p,40,366,MUTED,"All names and space are checked; existing saves are refused.");
+    } else {
+        label(p,40,320,MUTED,"Card image saves all 128 KiB as a verified VMD on SD.");
+        label(p,40,344,MUTED,"Delete / copy checks the save and asks before writing.");
+        label(p,40,366,MUTED,"Copy refuses existing names on the destination VMU.");
+    }
     const struct kui_app_status *status=v->app_status?v->app_status:&s->vmu.status;
     label(p,40,386,status->complete&&!status->passed?AMBER:CYAN,status->message);
 }
@@ -746,7 +761,7 @@ static void vmu_restore(struct paint *p,const struct kui_shell *s,const struct k
     char line[112];snprintf(line,sizeof(line),"Target VMU %c%u   PAGE %u   %u backups",
         'A'+s->vmu_slot/2,s->vmu_slot%2+1,s->backup_page+1,s->backups.total);
     label(p,40,138,CYAN,line);
-    label(p,40,160,v->busy?MUTED:WHITE,"A Open image / check save   X Refresh");
+    label(p,40,160,v->busy?MUTED:WHITE,"A Open / check   X Refresh   Y Import save");
     panel(p,32,190,576,178,PANEL);
     unsigned count=s->backups.count<KUI_VMU_ROWS?s->backups.count:KUI_VMU_ROWS;
     if(!count) label(p,48,206,MUTED,v->busy?"Reading backups...":"No compatible backups on this page.");
@@ -782,6 +797,31 @@ static void vmu_image(struct paint *p,const struct kui_shell *s,const struct kui
     char line[96];snprintf(line,sizeof(line),"Page %u   %u saves; extracts verified SD backups only.",
         s->vmu_image_page+1,image->total);
     label(p,40,396,MUTED,line);
+}
+static void vmu_import(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    title(p,40,108,"Import save to SD");
+    words(p,40,138,608,CYAN,s->vmu_import_path,false);
+    const struct kui_vmu_view *imported=&s->vmu_import;
+    char line[120];
+    if(imported->count) snprintf(line,sizeof(line),"%s   %lu bytes / %lu blocks",imported->entries[0].name,
+        (unsigned long)imported->entries[0].bytes,(unsigned long)((imported->entries[0].bytes+511u)/512u));
+    else snprintf(line,sizeof(line),"Checking the external save and original metadata...");
+    label(p,40,160,MUTED,line);
+    panel(p,32,184,576,184,PANEL);
+    if(s->vmu_import_staged) {
+        label(p,48,198,CYAN,"Verified SD backup:");
+        words(p,48,224,592,WHITE,imported->backup_path,false);
+        label(p,48,256,MUTED,"No VMU was written.");
+        label(p,48,282,MUTED,"Restore separately from the SD backups list.");
+        label(p,48,316,MUTED,"B opens the refreshed backup list.");
+    } else {
+        unsigned count=imported->status.line_count<KUI_APP_LINES?imported->status.line_count:KUI_APP_LINES;
+        for(unsigned i=0;i<count && i<8;i++) label(p,48,194+i*21,MUTED,imported->status.lines[i]);
+        if(!count) label(p,48,202,MUTED,v->busy?"Reading external save...":"Check the save before importing.");
+    }
+    const struct kui_app_status *status=v->app_status?v->app_status:&imported->status;
+    label(p,40,378,status->errors || (status->complete&&!status->passed)?AMBER:CYAN,status->message);
+    label(p,40,396,MUTED,"Creates an SD backup only; restore separately from backups.");
 }
 static void crc_scan(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     title(p,40,108,s->recovery_operation==1u?"Repair to a separate copy":s->recovery_operation==2u?
@@ -856,6 +896,15 @@ static void app_confirmation(struct paint *p,const struct kui_shell *s) {
         label(p,72,302,MUTED,copy?"Keep both VMUs connected until the result appears.":
             "Keep the VMU connected until the result appears.");
         label(p,72,334,CYAN,copy?"A Copy save":"A Delete save");
+    } else if(s->confirm_vmu_copy_all) {
+        label(p,72,188,WHITE,"COPY ALL SAVES TO ANOTHER VMU?");
+        char line[112];snprintf(line,sizeof(line),"%u saves from VMU %c%u to VMU %c%u",s->vmu_copy_all.bulk_total,
+            'A'+s->vmu_slot/2,s->vmu_slot%2+1,'A'+s->vmu_copy_slot/2,s->vmu_copy_slot%2+1);
+        label(p,72,222,CYAN,line);
+        label(p,72,248,MUTED,"Existing destination names are refused.");
+        label(p,72,276,MUTED,"Each save needs a verified SD backup before writing.");
+        label(p,72,302,MUTED,"Keep both VMUs connected until the result appears.");
+        label(p,72,334,CYAN,"A Copy all saves");
     } else if(s->confirm_defaults) {
         label(p,72,188,WHITE,"USE DEFAULT SYSTEM PREFERENCES?");
         label(p,72,222,MUTED,"This replaces your draft with the default values.");
@@ -1783,28 +1832,31 @@ static void files_pick(struct paint *p,const struct kui_shell *s,const struct ku
     const struct kui_files_page *l=&s->files_pick;
     bool copy=s->files_job.op==KUI_FILES_OP_COPY;
     unsigned count=l->count<KUI_FILES_ROWS?l->count:KUI_FILES_ROWS;
-    title(p,40,108,s->files_pick_compare?(s->system_compare_bios?"Choose a BIOS image":"Choose a settings-flash image"):
+    title(p,40,108,s->files_pick_import?"Choose an external save":
+        s->files_pick_compare?(s->system_compare_bios?"Choose a BIOS image":"Choose a settings-flash image"):
         copy?"Copy to a folder":"Move to a folder");
     path_words(p,40,138,608,CYAN,s->files_pick_path);
     panel(p,32,166,576,204,PANEL);
-    if(!count) label(p,48,188,MUTED,v->busy?"Reading folder...":l->message[0]?l->message:s->files_pick_compare?"No files here.":"No folders here.");
+    if(!count) label(p,48,188,MUTED,v->busy?"Reading folder...":l->message[0]?l->message:(s->files_pick_compare || s->files_pick_import)?"No files here.":"No folders here.");
     for(unsigned i=0;i<count;i++) {
         const struct kui_files_entry *e=&l->entries[i];
         unsigned y=174+i*23;
         if(i==s->files_pick_selected) {panel(p,40,y,560,23,SELECTED);box(p,40,y+4,3,15,PINK);}
         bool wrong_size=s->files_pick_compare && !e->directory &&
             e->bytes!=(s->system_compare_bios?2097152u:131072u);
-        words(p,52,y+2,s->files_pick_compare?492:608,e->disabled || wrong_size?AMBER:
+        words(p,52,y+2,(s->files_pick_compare || s->files_pick_import)?492:608,e->disabled || wrong_size?AMBER:
             i==s->files_pick_selected?WHITE:MUTED,e->name,false);
-        if(s->files_pick_compare) {
+        if(s->files_pick_compare || s->files_pick_import) {
             char size[16];kui_files_size_text(size,e->bytes);
             label(p,504,y+2,MUTED,e->directory?"Folder":size);
         }
     }
-    label(p,40,376,v->busy?MUTED:WHITE,s->files_pick_compare?"A Open folder / compare file":
+    label(p,40,376,v->busy?MUTED:WHITE,s->files_pick_import?"A Open folder / check save":
+        s->files_pick_compare?"A Open folder / compare file":
         copy?"A Open folder   Y Copy here":"A Open folder   Y Move here");
     char line[180];
     if(count && l->message[0]) snprintf(line,sizeof(line),"%s",l->message);
+    else if(s->files_pick_import) snprintf(line,sizeof(line),"Choose VMS, VMI or DCI. Import creates an SD backup only.");
     else if(s->files_pick_compare) snprintf(line,sizeof(line),"%s",s->system_compare_bios?
         "Exact 2 MiB image required. Comparison is read-only.":
         "Exact 128 KiB image required. Comparison is read-only.");
@@ -2130,6 +2182,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_SYSTEM_TOOLS: system_tools(&p,s,v); break;
     case KUI_SHELL_VMU_RESTORE: vmu_restore(&p,s,v); break;
     case KUI_SHELL_VMU_IMAGE: vmu_image(&p,s,v); break;
+    case KUI_SHELL_VMU_IMPORT: vmu_import(&p,s,v); break;
     case KUI_SHELL_CLOCK: clock_page(&p,s); break;
     case KUI_SHELL_CRC_SCAN: crc_scan(&p,s,v); break;
     case KUI_SHELL_GD_PLAY: gd_play(&p,v); break;
@@ -2164,7 +2217,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     if(s->confirm_gd_boot) gd_boot_confirmation(&p);
     if(s->confirm_storage_test) storage_test_confirmation(&p,s,v);
     if(s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore || s->confirm_vmu_delete ||
-       s->confirm_vmu_copy || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage ||
+       s->confirm_vmu_copy || s->confirm_vmu_copy_all || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage ||
        s->confirm_wifi_forget || s->confirm_wifi_update) app_confirmation(&p,s);
     if(v->video_trial) video_trial(&p,v);
 }

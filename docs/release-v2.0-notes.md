@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# K-UI V2.0 RC12 "Tyrfing" — preparation notes
+# K-UI V2.0 RC13 "Tyrfing" — preparation notes
 
-**2.0 RC12 adds small independent maintenance tools to the assembled Tyrfing
+**2.0 RC13 adds independent save import and bulk VMU copy to the assembled Tyrfing
 candidate, retaining the tested SCI WinCE CD music and orange artwork.**
 Tyrfing continues the cursed-sword naming theme.
 This is a source integration candidate; it is not an announcement that final
@@ -11,6 +11,26 @@ This is a source integration candidate; it is not an announcement that final
 Use the [installation guide](release-v2.0.md) and install the complete matching
 runtime and Games payload folder. Existing exFAT cards, dumps and compatible
 independent K-UI boot CDs remain usable.
+
+## RC13 VMU additions
+
+- **Import save file:** from SD backups, choose an external VMS, VMI or DCI
+  file. Preview the internal filename, metadata origin, type and size, then
+  confirm creation of a new verified `.vms`/`.dir`/`.crc` bundle. Import reads
+  its inputs only and does not access a physical VMU. Restore remains a separate
+  previewed and confirmed operation. Bare VMS data files require the correct
+  short SD basename because a VMS payload contains no original VMU filename.
+- **Copy all saves:** Actions previews both VMU slots, the whole batch's
+  capacity and filename conflicts. Confirmation first backs up all source
+  saves to SD, then uses the existing verified per-save transaction. A failed
+  or stopped batch retains completed copies and reports its partial result;
+  uncertain metadata writes stop the job without automatic retry or rollback.
+
+See [import formats and metadata](vmu-import.md) and
+[bulk copy and acceptance](vmu-copy-all.md). These are independent K-UI code;
+no DreamShell implementation is reused. Their integrated console workflows
+still need acceptance. Whole-card restore/format/overwrite and permanent
+flash/region changes remain outside this candidate.
 
 ## RC12 maintenance additions
 
@@ -26,9 +46,8 @@ independent K-UI boot CDs remain usable.
   writes neither the source nor the image and creates no output files.
 
 These tools use independently authored K-UI code and upstream KallistiOS
-interfaces. No DreamShell implementation code was copied. Full-card restore,
-format/overwrite, broader VMS/VMI/DCI import and bulk VMU copy remain outside
-this candidate. See [VMU controls and limits](vmu-restore.md) and
+interfaces. No DreamShell implementation code was copied. Full-card restore and format/overwrite remain outside this candidate.
+RC13 adds the import and bulk-copy workflows described above. See [VMU controls and limits](vmu-restore.md) and
 [system comparison](system-backups.md). Fault-injection and real FAT32/exFAT
 host-image checks pass; the new integrated console workflows await acceptance.
 
@@ -39,7 +58,7 @@ artwork featuring the cursed blade Tyrfing. The runtime and CD share matching
 television-safe artwork, with a new sword header, under-SEGA disc badge and
 orange bootstrap accents. Runtime/boot image dimensions, splash timing and
 memory bounds are retained. The V2.0 illustration is release artwork; the
-live **RC12** label and build ID identify this candidate. Updating the card
+live **RC13** label and build ID identify this candidate. Updating the card
 changes runtime artwork; the optional matching CDI changes the burned disc.
 
 Games keeps its alphabetical order when titles are added and restores the
@@ -84,7 +103,7 @@ owner's selected image; retail bytes are not release assets.
 
 | Area | Recorded result | Limit |
 | --- | --- | --- |
-| Native 1.8.5 reader | Owner confirmed Sonic Adventure, Grandia II and Skies of Arcadia on `5973741a6077`; Power Stone 1/2 worked after earlier command fixes | Scoped runs, not full playthroughs or an RC12 retest |
+| Native 1.8.5 reader | Owner confirmed Sonic Adventure, Grandia II and Skies of Arcadia on `5973741a6077`; Power Stone 1/2 worked after earlier command fixes | Scoped runs, not full playthroughs or an RC13 retest |
 | Armada WinCE music | Established exact US profile and working full-stream baseline | Audio/FMV limitations remain; no new Armada test is inferred from Worms work |
 | Bust-A-Move 4 | Owner reported successful music on `ed0a2c809bda`; diagnostics recorded ten starts, no refusal/HRESULT and one recovered underrun | Other revisions, every track and a long soak remain unverified |
 | Worms audio supply | `8a22ec45229a` had no observed underruns in two submitted runs, with gameplay lag reported | Those runs do not establish zero-dropout playback everywhere |
@@ -96,7 +115,7 @@ The latest tested performance source is published as
 `d9f861ba87a2957234d0af276a4cfeb573367258`. The preceding bounded-worker
 candidate had already reduced lag without affecting music. These results
 support retaining that baseline while preparing the release; they do not
-certify every profile in the newly assembled RC12 package.
+certify every profile in the newly assembled RC13 package.
 
 See [native placement evidence](evidence/native-low-resident-2026-10-06.md),
 [BAM4 results](bam4-ce-cdda-test.md),
