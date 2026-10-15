@@ -121,10 +121,11 @@ static int band_cmd(int argc, char **argv) {
         return 1;
     }
     if(!wifi_set_band(band)) {
-        printf("This board has no 5 GHz radio.\n");
+        printf("Could not change bands: unsupported by this board or refused by the Wi-Fi driver.\n");
         return 1;
     }
-    printf("Bands: %s (kept across restarts).\n", bands[band]);
+    printf("Bands: %s (kept across restarts). The saved network will reconnect if one is configured.\n", bands[wifi_band()]);
+    printf("A different network name needs join \"SSID\" \"password\".\n");
     return 0;
 }
 #ifdef PIN_RF_ANTENNA

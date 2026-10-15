@@ -49,6 +49,7 @@ HARNESS = r'''
 #include <sys/mman.h>
 #include "kui/retail_gd.h"
 #include "kui/retail_loader_layout.h"
+#include "kui/mdk2_cdda_layout.h"
 /* RUNTIME_DECLARATIONS */
 
 static unsigned checks, purges, copies, stops, markers;

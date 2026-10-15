@@ -152,6 +152,7 @@ struct bus {
     struct kwb *bridge;
     uint8_t armed[KWL_FRAME_MAX], bridge_in[KWL_FRAME_MAX];
     unsigned flip_permille;
+    bool arm_first;
 };
 static void flip(uint8_t *b, size_t len, unsigned permille) {
     if(permille && rnd() % 1000u < permille) b[rnd() % len] ^= (uint8_t)(1u << (rnd() % 8u));
@@ -167,8 +168,24 @@ static bool bus_transfer(void *ctx, const uint8_t *out, uint8_t *in, size_t len)
     memcpy(b->bridge_in, out, len);
     flip(in, len, b->flip_permille);
     flip(b->bridge_in, len, b->flip_permille);
-    kwb_transfer(b->bridge, b->bridge_in, len);
-    arm(b);
+    if(b->arm_first) {
+        kwb_receive(b->bridge, b->bridge_in, len);
+        /* A LISTEN state must not be advertised before its bind/listen
+         * succeeded, even though normal socket polling follows arming. */
+        for(unsigned i = 0; i < KWM_SLOTS; ++i) {
+            struct kwb_slot *s = &b->bridge->slot[i];
+            if(s->state != KWM_LISTEN) continue;
+            bool bound = false;
+            for(unsigned k = 0; k < KWM_SLOTS; ++k)
+                if(b->bridge->listener[k].fd >= 0 && b->bridge->listener[k].port == s->local_port) bound = true;
+            CHECK(bound);
+        }
+        arm(b);
+        kwb_service(b->bridge);
+    } else {
+        kwb_transfer(b->bridge, b->bridge_in, len);
+        arm(b);
+    }
     return true;
 }
 
@@ -293,6 +310,44 @@ static void wifi_controls(void) {
     UNTIL(host->counts.time, 20);
     CHECK(host->time_status == 0 && host->time_ms == 1790000000123ull);
     printf("wifi: status, scan, join, leave, band, echo, dns and time answered\n");
+}
+
+/* Returning RX credit is work even before kwh_step has queued its message.
+ * Use a real TCP peer and let all old frames settle before each check. */
+static void idle_credit(void) {
+    CHECK(kwh_listen(host, 7, (uint16_t)(base_port + 12u), KWM_NODELAY));
+    UNTIL(kwh_idle(host), 20);
+    int fd = tcp_client((uint16_t)(base_port + 12u));
+    UNTIL(kwh_state(host, 7) == KWM_ESTABLISHED, 200);
+    CHECK(send(fd, "abc", 3, MSG_NOSIGNAL) == 3);
+    UNTIL(kwh_available(host, 7) == 3u, 200);
+    UNTIL(kwh_idle(host), 20);
+    CHECK(bridge->slot[7].host_credit == KWH_RX - 3u);
+    char data[3];
+    CHECK(kwh_recv(host, 7, data, 2) == 2 && !memcmp(data, "ab", 2));
+    /* A small partial read still waits for the normal batching rule. */
+    CHECK(kwh_idle(host) && host->slot[7].credit_back == 2u);
+    CHECK(kwh_recv(host, 7, data, 1) == 1 && data[0] == 'c');
+    CHECK(!kwh_idle(host) && !host->queue_len && !kwl_busy(&host->link));
+    step();
+    CHECK(!kwh_idle(host)); /* the credit itself still awaits its ACK */
+    UNTIL(kwh_idle(host), 20);
+    CHECK(!host->slot[7].credit_back && bridge->slot[7].host_credit == KWH_RX);
+
+    /* Bytes received before a peer reset remain readable. Consuming them
+     * after CLOSED must not invent work that cannot be sent to that slot. */
+    CHECK(send(fd, "rst", 3, MSG_NOSIGNAL) == 3);
+    UNTIL(kwh_available(host, 7) == 3u, 200);
+    struct linger reset = {1, 0};
+    CHECK(setsockopt(fd, SOL_SOCKET, SO_LINGER, &reset, sizeof reset) == 0);
+    close(fd);
+    UNTIL(kwh_state(host, 7) == KWM_CLOSED, 200);
+    UNTIL(kwh_idle(host), 20);
+    CHECK(kwh_recv(host, 7, data, sizeof data) == 3 && !memcmp(data, "rst", 3));
+    CHECK(host->slot[7].credit_back == 3u && kwh_idle(host));
+    step();
+    CHECK(!host->slot[7].credit_back && kwh_idle(host));
+    printf("idle: consumed RX returns credit before idle; closed sockets do not block it\n");
 }
 
 static void tcp_listen(void) {
@@ -623,7 +678,9 @@ static void ota_and_reboot(void) {
     printf("ota: 10000 bytes written; reboot after the answer\n");
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    CHECK(argc == 1 || (argc == 2 && strcmp(argv[1], "--arm-first") == 0));
+    bus.arm_first = argc == 2;
     base_port = (uint16_t)(30000u + (unsigned)getpid() % 20000u);
     bridge = calloc(1, sizeof *bridge);
     host = calloc(1, sizeof *host);
@@ -637,6 +694,7 @@ int main(void) {
     kwh_init(host, &host_bus);
     start();
     wifi_controls();
+    idle_credit();
     tcp_listen();
     tcp_connect();
     udp();
@@ -645,7 +703,8 @@ int main(void) {
     dns_across_reset();
     reuse();
     ota_and_reboot();
-    printf("test_bridge: all passed (%u transfers)\n", (unsigned)host->transfers);
+    printf("test_bridge: %s, all passed (%u transfers)\n", bus.arm_first ? "arm before sockets" : "poll before arm",
+           (unsigned)host->transfers);
     free(fake.ota);
     kwb_release(bridge);
     free(bridge);

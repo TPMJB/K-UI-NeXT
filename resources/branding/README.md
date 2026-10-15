@@ -49,13 +49,21 @@ python3 tools/generate_shell_art.py --check
 ```
 
 Run from the repository root with Pillow installed. The generator validates the
-seven hashes above and writes `src/dreamcast/shell_art.inc`. Ordinary Dreamcast
+seven original hashes above, plus `resources/icons/home-icons.json`, and writes `src/dreamcast/shell_art.inc`. Ordinary Dreamcast
 builds use that committed include and do not need image conversion libraries.
 
 The opaque brand is 128x64 RGB565 pixels against the original navy background.
 Icons are emitted at 128x128 for the detail pane and 24x24 for the app list, in
-disc-ripper/settings/diagnostics order. Bilinear scaling follows the original
-launcher's texture scaling. Fully transparent icon pixels use `0xf81f`, which the
+disc-ripper/settings/diagnostics order, followed by the seven new Home icons.
+The original three retain their bilinear texture scaling; the new icons use
+native 128x128 and separately simplified 24x24 sources. Fully transparent icon pixels use `0xf81f`, which the
 renderer skips; antialiased edges are precomposed against `#121A31`. The arrays
-contain 118,144 bytes of pixel data. They are fixed assets, with no runtime
+contain 355,584 bytes of pixel data. They are fixed assets, with no runtime
 decoding, file access or allocation.
+
+
+## Home icon completion — 2026-09-28
+
+The seven additional apps now have original neon SVG artwork and dedicated
+small versions. See [the icon provenance and rebuild guide](../icons/README.md)
+and its SHA-256 manifest. The original assets listed above remain unchanged.

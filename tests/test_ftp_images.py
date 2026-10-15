@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """The FTP server end to end: build/ftp-image runs K-UI's server on the
 W5500 model (tests/w5500_model.c) with real FatFs on FAT32 and exFAT images,
-and Python's ftplib is the client. On FAT32 it runs again on the Wi-Fi board
+and Python's ftplib is the client. Both filesystems run again on the Wi-Fi board
 model (tests/wifi_model.c: the firmware's own bridge core). fsck checks
 every image afterwards; on FAT32, mtools reads the uploads back without
 K-UI's code."""
@@ -10,6 +10,7 @@ import ftplib
 import hashlib
 import os
 import random
+import re
 import shutil
 import socket
 import struct
@@ -630,6 +631,14 @@ def serve_image(binary, image, kind, port, passive, case_insensitive=True, env=N
     assert code == 0 and "STOPPED state=2" in output, output[-3000:]
     # Every event is logged; the screen shows only the latest.
     assert "LOG FTP: Received /Games/big.bin (20.0 MB)" in output, output[-3000:]
+    if adapter == ("wifi",):
+        batches = [tuple(map(int, match)) for match in re.findall(
+            r"LOG FTP Wi-Fi: (\d+) SPI frames in (\d+) bounded bursts; largest (\d+) frames", output)]
+        large = [(frames, bursts, maximum) for frames, bursts, maximum in batches if frames >= 1024]
+        assert large, "No substantial Wi-Fi transfer emitted burst counters"
+        assert all(0 < maximum <= 8 and frames <= bursts * 8 for frames, bursts, maximum in large), large
+        assert any(frames > bursts and maximum > 1 for frames, bursts, maximum in large), large
+        print("PASS Wi-Fi FTP: real bridge moves several SPI frames per pass; transfer hashes remain exact", flush=True)
     return password, files
 
 
@@ -695,21 +704,35 @@ def main():
             assert code == 0, output
             run(*fsck, "-n", str(image))
             print(f"PASS {kind} FTP server", flush=True)
+            # Everything again over the Wi-Fi board, on a fresh card of
+            # the same filesystem. The owner's hardware uses exFAT.
+            wifi = base / f"wifi-{kind}.img"
+            with wifi.open("wb") as stream:
+                stream.truncate(96 * 1024 * 1024)
+            run("mkfs.fat", "-F", "32", str(wifi)) if kind == "fat32" else run("mkfs.exfat", str(wifi))
+            run(BINARY, str(wifi), "seed")
             if kind == "fat32":
-                # Everything again over the Wi-Fi board, on a fresh card.
-                wifi = base / "wifi.img"
-                with wifi.open("wb") as stream:
-                    stream.truncate(96 * 1024 * 1024)
-                run("mkfs.fat", "-F", "32", str(wifi))
-                run(BINARY, str(wifi), "seed")
-                _, wifi_files = serve_image(BINARY, wifi, kind, port + 4, passive + 100, adapter=("wifi",))
-                run("fsck.fat", "-n", str(wifi))
+                # A queued LISTEN is not readiness: a rejected actual bind
+                # must fail startup before publishing READY.
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as occupied:
+                    occupied.bind((HOST, port + 4))
+                    occupied.listen(1)
+                    blocked = Server(BINARY, wifi, port + 4, passive + 100,
+                                     extra=("wifi",), ready=False)
+                    assert blocked.proc.wait(60) == 1
+                    blocked.wait_for("STOPPED state=3")
+                    assert "could not listen for connections" in blocked.output(), blocked.output()
+                    assert "READY " not in blocked.output(), blocked.output()
+                print("PASS Wi-Fi FTP waits for actual listener setup and reports bind failure", flush=True)
+            _, wifi_files = serve_image(BINARY, wifi, kind, port + 4, passive + 100, adapter=("wifi",))
+            run(*fsck, "-n", str(wifi))
+            if kind == "fat32":
                 out = base / "out"
                 out.mkdir(exist_ok=True)
                 run("mcopy", "-n", "-i", str(wifi), "::/Games/big.bin", str(out / "wifi-big.bin"))
                 assert digest((out / "wifi-big.bin").read_bytes()) == digest(wifi_files["big"])
-                wifi.unlink()
-                print("PASS fat32 FTP server over the Wi-Fi board", flush=True)
+            wifi.unlink()
+            print(f"PASS {kind} FTP server over the Wi-Fi board", flush=True)
 
             # An unusable password file stops the server with the reason.
             broken = base / f"{kind}-broken.img"

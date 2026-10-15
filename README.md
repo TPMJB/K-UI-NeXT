@@ -1,28 +1,45 @@
-# K-UI V1.8.5 "Dáinsleif"
+# K-UI V2.0 RC10 "Tyrfing"
 
 An independent Dreamcast shell built directly on upstream KallistiOS, retaining
 the original GD-ROM and using exFAT/FAT32 storage.
 
-**Version 1.8.5 fixes the native reader placement that blocked Sonic Adventure
-and Grandia II; the owner also reports Skies of Arcadia works.** Games adds
-GDI/ISO/BIN-CUE/CDI/raw-image support, an Original/2048 picker, RAM-cached lists
-and selected-title artwork. Disc Ripper adds BIN/CUE and verified CSO/ZSO/CHD
-exports. SCI Wi-Fi integration and separate ESP32-C5/C6 firmware are included.
-The splash identifies 1.8.5 and retains the Dáinsleif artwork.
+**The current source prepares 2.0 RC10, named Tyrfing, continuing the cursed-sword
+release theme.** It integrates the tested SCI Windows CE CD music work with
+saved per-image launch options while retaining the established 1.8.5 native
+reader. This is release preparation; a final 2.0 release has not been published.
+Read the [2.0 installation guide](docs/release-v2.0.md) and
+[2.0 preparation notes](docs/release-v2.0-notes.md) for its scope.
 
-Download the [1.8.5 release](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.8.5),
-then read the [installation guide](docs/release-v1.8.5.md) and
-[release notes](docs/release-v1.8.5-notes.md). Install the runtime and complete
-Games payload folder together. Existing exFAT cards, game dumps and compatible
-independent K-UI boot CDs stay usable. DreamShell-based K-UI 1.0 requires the
-supplied new CDI. No reformat, reripping or 2048 conversion is required.
+The integration also carries the wireless performance branch: checked adaptive
+SCI pacing, band-change reconnects, bounded FTP service and Wi-Fi adapter updates
+from the card. Firmware 0.1.3 remains a separate ESP32 build. All ten Home apps
+now have dedicated icons. See the [integration record](docs/release-v2.0-integration.md).
+The G1 SD adapter hardware design remains on its development branch.
 
-Windows CE defaults to its background SCI reader and remains experimental;
-audio/FMVs and title compatibility are limited. Time Stalkers and some native
-FMV stalls remain unresolved. Compressed games require PC import before launch.
-IDE/CF remains untested synchronous PIO; ATA DMA and CE on IDE/SCIF are future
-work. ext4 is available only to the read-only bootstrap, not runtime apps or
-Games.
+Optional WinCE CD music currently supports the exact admitted US **Armada,
+Bust-A-Move 4 and Worms Armageddon** runtimes. It defaults to Off, requires SCI
+microSD and raw AUDIO tracks, and accepts original raw or converted 2048-byte
+DATA for those profiles. The latest Worms console report describes almost
+imperceptible gameplay lag after the worker-budget and RAM-copy improvements.
+An available CD music toggle does not establish compatibility with another
+title, region or revision. Broader automatic runtime detection remains work
+for a later candidate.
+
+For the existing stable download, use the
+[1.8.5 release](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.8.5), its
+[installation guide](docs/release-v1.8.5.md) and
+[release notes](docs/release-v1.8.5-notes.md). For either version, install the
+complete matching package: the runtime and Games payload folder belong together.
+Keep your existing exFAT card, game dumps and compatible independent K-UI boot
+CD. No reformat, reripping or 2048 conversion is required. DreamShell-based
+K-UI 1.0 requires an independent K-UI bootstrap CD.
+
+Native Sonic Adventure, Grandia II and Skies of Arcadia have scoped console
+confirmation from 1.8.5; Time Stalkers and some FMV stalls remain unresolved.
+Toy Commander FMV stalls are not fixed by the WinCE work. Compressed games
+require PC import before launch. IDE/CF remains untested synchronous PIO;
+ATA DMA and CE on IDE/SCIF remain future work. ext4 is available only to the
+read-only bootstrap, not runtime apps or Games.
 
 The historical [1.7 notes](docs/release-v1.7-notes.md) and
 [1.5.1 notes](docs/release-v1.5.1-notes.md) remain available.
@@ -57,10 +74,11 @@ parent folder, defaulting to `/Games`, with title-based folders and GDI filename
 The established raw acquisition engine remains in place; new format exports
 have separate host validation and still need console acceptance.
 
-Coming from DreamShell-based K-UI 1.0? Burn the supplied 1.8.5 CDI; that older
-CD cannot boot this independent runtime. For an existing independent K-UI
-installation, use its compatible bootstrap CD and merge the release package's `KUI` folder
-onto the SD card as described in the [installation guide](docs/release-v1.8.5.md).
+Coming from DreamShell-based K-UI 1.0? Use the independent K-UI bootstrap CDI;
+that older CD cannot boot this runtime. For an existing independent K-UI
+installation, use its compatible bootstrap CD and merge the complete package's
+`KUI` folder onto the SD card as described in the
+[installation guide](docs/release-v2.0.md).
 Update the runtime and Games payload together; optional original menu music
 is included.
 See [the current app acceptance round](docs/apps-round-five.md) and
@@ -206,19 +224,26 @@ game's cover loads. The owner reports the first Games entry takes about
 **X Refresh** rebuilds the cache after library/card changes. See
 [covers and views](docs/games-covers.md).
 
-Native confirmation uses **A** standard, **X** background SCI/20 and **Y**
-background SCI/25. Windows CE uses **A** for its background SCI reader; its
-broken regular reader is no longer offered. The native reader now stays below
-the IP image, clearing startup-stack collisions without changing game code.
-The owner confirms Sonic Adventure, Grandia II and Skies of Arcadia working
-on the tested layout. Power Stone 1/2 worked after earlier GD command fixes.
-These are scoped console results, not full playthroughs or an all-games claim.
+Launch uses saved options for the selected image. Press **Y Options** to change
+**Background loading** and optional **CD music**; **Advanced** contains boot
+encoding, background speed, image information and developer tests. Options save
+per image, so Original and 2048 copies can keep separate choices. Windows CE
+requires the background SCI reader. New CD music choices default to Off; turn
+it Off to use the ordinary CE loader when an image has no admitted music profile.
+See the [2.0 launch guide](docs/release-v2.0.md#launch-games).
+
+The native reader stays below the IP image, clearing startup-stack collisions
+without changing game code. The owner confirms Sonic Adventure, Grandia II and
+Skies of Arcadia working on the tested layout. Power Stone 1/2 worked after
+earlier GD command fixes. These are scoped console results, not full
+playthroughs or an all-games claim.
 
 Time Stalkers still returns to K-UI, and some titles stall/skip FMVs in both
-Original and 2048 mode. CDDA, Mode 2 Form 2 and subchannel emulation remain
-unsupported. See the [current release notes](docs/release-v1.8.5-notes.md),
+Original and 2048 mode. Optional WinCE CD music is limited to the admitted
+profiles above; universal CDDA, Mode 2 Form 2 and subchannel emulation are not
+provided. See the [2.0 preparation notes](docs/release-v2.0-notes.md),
 [native placement evidence](docs/evidence/native-low-resident-2026-10-06.md),
-and [historical gameplay development](docs/games-retail-test.md).
+and [WinCE profile scope](docs/wince-cdda-next-titles.md).
 
 ## License and contribution policy
 

@@ -3,11 +3,11 @@
 K-UI can use a small Wi-Fi board inside the console instead of a network
 cable: a Seeed XIAO ESP32-C5 (dual-band, 2.4 and 5 GHz) running K-UI's own
 firmware, wired to the SH-4's SCI port. The FTP server and the Network app
-work over it as they do over a W5500. The integration is implemented and
-host-tested. The owner has reported Wi-Fi connection and FTP use in earlier
-builds; hardware characterization of this merged 1.8.5 source remains
-incomplete. No new wireless speed result is claimed. Flash and test the board
-by USB before installing it.
+work over it as they do over a W5500. The first C5 console test succeeded on
+5 GHz with SCI DMA and no READY wire, receiving a 16 MB file at 66 KiB/s.
+The faster timing and firmware changes in this branch remain a performance
+test candidate; use [the test guide](wifi-performance-test.md) and verify
+uploaded files by downloading and comparing hashes.
 
 - Wiring: [the SCI connector plan](sci-connector.md).
 - The board's firmware, and how to load it from a computer:
@@ -42,6 +42,10 @@ Also on the page:
 - **Bands** (the first row): **LEFT/RIGHT** chooses 2.4 and 5 GHz, 5 GHz
   only or 2.4 GHz only; the board keeps the choice. The XIAO ESP32-C6 has no
   5 GHz radio and stays on 2.4 GHz.
+  Stop FTP before changing bands. If the router uses separate names for
+  its bands, select and join the corresponding network after changing the
+  band. Restricting a saved 5 GHz-only network to 2.4 GHz does not select a
+  different network name automatically.
 - **X** scans again.
 - **Y** forgets the saved network (after a confirmation): the board
   disconnects, drops the password and stays off until you join again.
@@ -77,11 +81,14 @@ board at 12.5 MHz (no answer, no READY change) it moves on to the other chip
 select at once, so a missing board costs about half a second.
 
 Each transfer waits for the board's READY line (GPIO5) to change, which it
-does each time it is ready for another transfer; without it (a missing wire)
-the driver falls back to a 20 ms wait for each transfer, very slowly, and the
-inspection says "READY never changed (GPIO5)". On the XIAO, READY is **D1**;
-the exact Dreamcast GPIO5 solder point still needs confirmation. The fallback
-is implemented and host-tested, but its physical timing has not been validated.
+does each time it is ready for another transfer. The original 0.1.1/current
+1.7 combination waits 20 ms when the wire is absent. This performance test
+uses a shorter adaptive gap only after the HELLO and large echo checks
+succeed; errors or stalled acknowledgements increase the gap again.
+Automated timing/recovery checks do not replace the console speed and
+read-back verification described in [the test guide](wifi-performance-test.md).
+On the XIAO, READY is **D1**. The electrical mapping on VA1 is **RA101 pin 2**
+(GPIO5/A21); verify the board's pin orientation before soldering.
 The optional **D4** reset request is not driven by current K-UI; leave it
 unconnected for the first test.
 
@@ -100,7 +107,7 @@ for three seconds, whatever is using it stops and says so.
 | --- | --- |
 | No Wi-Fi board answered on the SCI port | Not powered (5 V), no firmware, the chip select on neither GPIO6 nor GPIO7, or MISO/MOSI swapped |
 | The Wi-Fi board answered, but not reliably at any speed | A bad clock, MOSI or MISO connection, or long wires; check the solder points |
-| The Wi-Fi board's firmware speaks protocol N | Update the board's firmware (from a computer, for now) |
+| The Wi-Fi board's firmware speaks protocol N | Install matching firmware; an incompatible link may need USB recovery |
 | ... refused the password | Wrong password: choose the network again |
 | ... not found; the board keeps looking for it | Out of range, a 5 GHz network with "2.4 GHz only" set, or a typo in a typed name |
 | Not online on ... after 30 seconds | The router did not answer: check it, then X to scan again |

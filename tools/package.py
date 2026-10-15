@@ -16,6 +16,9 @@ from retail_package import inspect_retail
 from boot_badge import BADGE, inspect_badge, verify_cdi_badge
 
 ROOT = Path(__file__).resolve().parents[1]
+WINCE_CDDA_PROFILES = {"armada": "armada-us", "bam4": "bam4-us", "worms": "worms-us"}
+WINCE_CDDA_FILES = tuple("ce-cdda-" + name + ".kui" for name in WINCE_CDDA_PROFILES)
+GAME_FILES = ("probe.kui", "image-probe.kui", "retail-boot.kui", "ce-probe.kui", "probe.dat", *WINCE_CDDA_FILES)
 
 
 def run(*args):
@@ -60,6 +63,14 @@ def development_test(release=None):
     return (release or release_metadata())["version"].endswith(("-2048-test", "-formats-test"))
 
 
+def release_is_rc(release=None):
+    return re.search(r"-rc[1-9][0-9]*$", (release or release_metadata())["version"]) is not None
+
+
+def guide_version(release=None):
+    return re.sub(r"-rc[1-9][0-9]*$", "", (release or release_metadata())["version"])
+
+
 def development_experiment(release=None):
     version = (release or release_metadata())["version"]
     return "Games image formats hardware test" if version.endswith("-formats-test") else "2048-byte sector hardware test"
@@ -68,7 +79,7 @@ def development_experiment(release=None):
 def package_kind(release, candidate=False):
     if development_test(release):
         return "development-test"
-    return "release-candidate" if candidate else "release"
+    return "release-candidate" if candidate or release_is_rc(release) else "release"
 
 
 def development_notice(release=None):
@@ -86,7 +97,7 @@ def package_metadata(candidate=None):
     if candidate is None:
         candidate = candidate_requested()
     release = release_metadata()
-    if candidate and not development_test(release):
+    if candidate and not development_test(release) and not release_is_rc(release):
         release = {**release,
                    "name": release["name"] + " — ATA readiness candidate",
                    "artifact_prefix": release["artifact_prefix"] + "-ata-readiness-candidate"}
@@ -112,13 +123,13 @@ def guide(source):
     text = (ROOT / "docs" / source).read_text()
     for name in ("storage-testing", "storage-transports", "ext4-bootstrap", "bootloader-refresh", "boot-recovery",
                  "games-formats-test", "games-formats", "gdi-2048-test", "capture-format",
-                 "wifi", "wifi-flash-arch", "sci-connector", "ftp"):
+                 "wifi", "wifi-performance-test", "wifi-flash-arch", "sci-connector", "ftp"):
         # Preserve section anchors while matching the packaged uppercase names.
         text = re.sub(r"\(" + re.escape(name) + r"\.md(?=[)#])",
                       "(" + name.upper() + ".md", text)
     for name in ("sd-bootstrap", "hardware-test", "hardware-evidence", "capture-test", "capture-format", "memory-stats", "optical-test", "performance-test-plan", "m15-shell-test", "prior-work-reuse", "ripper-controls", "salvage-plan", "apps-test", "app-architecture", "resume-and-retries", "independent-app-parity", "apps-round-two", "apps-round-three", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan"):
         text = text.replace(f"({name}.md)", f"({name.upper()}.md)")
-    version = release_metadata()["version"]
+    version = guide_version()
     text = text.replace(f"(release-v{version}.md)", "(START-HERE.md)")
     text = text.replace("(../resources/music/README.md)", "(MUSIC.md)")
     text = text.replace(f"(release-v{version}-notes.md)", "(RELEASE-NOTES.md)")
@@ -126,15 +137,15 @@ def guide(source):
 
 
 def write_release_guides(dist, candidate=False):
-    version = release_metadata()["version"]
+    version = guide_version()
     experimental = development_test()
     guides = (("START-HERE.md", f"release-v{version}.md"),
               ("RELEASE-NOTES.md", f"release-v{version}-notes.md"))
     for target, source in guides:
-        if candidate and not experimental:
+        if candidate and not experimental and not release_is_rc():
             source = "ata-readiness-candidate.md"
         (dist / target).write_text(guide(source), encoding="utf-8")
-    if not candidate or experimental:
+    if (not candidate or experimental) and not release_is_rc():
         (dist / "ANNOUNCEMENTS.md").write_text(
             guide(f"release-v{version}-announcements.md"), encoding="utf-8")
     if version.endswith("-formats-test"):
@@ -203,11 +214,66 @@ def write_game_tools(bundle):
         shutil.copyfile(ROOT / "tools" / name, tools / name)
 
 
+def audit_wince_cdda(directory, data, profile):
+    """Use the same linked layout/stack/owner audits as the tested delivery."""
+    if profile == "worms":
+        from package_wince_ce_stream import audit_stream
+        return audit_stream(directory, data)
+    if profile == "bam4":
+        from package_bam4_ce_stream import audit_stream
+        return audit_stream(directory, data)
+    from package_armada_ce_stream import inspect_stream_seed
+    from check_armada_ce_excerpt import check
+    return inspect_stream_seed(data), check(directory, stream=True)
+
+
+def write_wince_cdda_modules(games, dist, commit):
+    """Package fresh modules; historical ZIPs are not build inputs."""
+    from package_armada_excerpt import verify_build
+    result = {}
+    for profile, title in WINCE_CDDA_PROFILES.items():
+        directory = ROOT / "build" / (profile + "-ce-stream")
+        elf = directory / "entry.elf"
+        compiled, compile_bytes = verify_build(elf, commit)
+        payload, memory = flatten_elf(elf.read_bytes())
+        if commit[:12].encode() + b"\0" not in payload:
+            raise ValueError("WinCE music display build does not match source: " + profile)
+        data = envelope(payload, memory, commit[:12])
+        info = inspect_retail(data, ce=True)
+        seed, audit = audit_wince_cdda(directory, data, profile)
+        if (audit["title_profile"] != title or audit["stream_profile"] is not True or
+                audit["distributed_pcm_bytes"] != 0 or audit["distributed_audio_map_bytes"] != 4096 or
+                audit["stream_boot_arm"]["attach_only_after_relay"] is not True or
+                audit["stream_boot_arm"]["preserves_controller_zero_check"] is not True or
+                not seed["wire_all_zero"]):
+            raise ValueError("WinCE music profile or blank-source audit differs: " + profile)
+        name = "ce-cdda-" + profile + ".kui"
+        (games / name).write_bytes(data)
+        evidence = dist / (profile + "-ce-stream-build")
+        shutil.copytree(directory, evidence, ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+        (evidence / "linked-audit.json").write_text(json.dumps(audit, indent=2) + "\n")
+        (evidence / "entry.compile.json").write_bytes(compile_bytes)
+        result[profile] = {"package": "KUI/apps/games/" + name, "envelope": info,
+                           "sha256": hashlib.sha256(data).hexdigest(), "compile": compiled,
+                           "seed": seed, "linked_audit": audit, "new_binary_hardware_tested": False}
+    return result
+
+
+def validate_ordinary_ce(directory, data):
+    config = (directory / "layout-config").read_text().split()
+    if not {"LOW=0", "TRACE=0", "SONIC=0", "CE_SCI_RESUME_FIX=1"}.issubset(config):
+        raise ValueError("Ordinary CE loader must retain the tested placement and DMA resume fix")
+    if any(marker in data[64:] for marker in (b"ARMADA AUDIO TEST PROFILE MISMATCH",
+            b"CE CD MUSIC PROFILE MISMATCH", b"CEX2", b"ARMADA AUDIO TEST")):
+        raise ValueError("A specialized audio payload occupied the ordinary CE fallback slot")
+
+
 def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, candidate=False):
     """Assemble the install tree without benchmarks, fixtures or user preferences."""
     release = record["release"]
     commit = record["commit"]
     experimental = development_test(release)
+    rc = release_is_rc(release)
     # Ship only the normal application payloads. This fresh directory cannot
     # retain scan fixtures, demo music, or preferences from an earlier package.
     bundle = dist / "release"
@@ -218,7 +284,7 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
     shutil.copyfile(sd / "runtime.kui", bundle_sd / "runtime.kui")
     bundle_apps = {
         "music": [track["ogg"]["file"] for track in music_manifest["tracks"]],
-        "games": ("probe.kui", "image-probe.kui", "retail-boot.kui", "ce-probe.kui", "probe.dat"),
+        "games": GAME_FILES,
     }
     for app, files in bundle_apps.items():
         (bundle_sd / "apps" / app).mkdir()
@@ -227,20 +293,20 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(sd / name, bundle_sd / name)
     (bundle / "boot-cd").mkdir()
-    cdi_name = release["artifact_prefix"] + ".cdi" if candidate or experimental else f"kui-v{release['version']}.cdi"
+    cdi_name = release["artifact_prefix"] + ".cdi" if candidate or experimental or rc else f"kui-v{release['version']}.cdi"
     shutil.copyfile(cdi, bundle / "boot-cd" / cdi_name)
     splash = ROOT / "resources/branding/startup.png"
     shutil.copyfile(splash, bundle / "splash-preview.png")
-    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "WIFI.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, bundle / name)
     if release["version"].endswith("-formats-test"):
         shutil.copyfile(dist / "GAMES-FORMATS-TEST.md", bundle / "GAMES-FORMATS-TEST.md")
-    if not candidate or experimental:
+    if (not candidate or experimental) and not rc:
         shutil.copyfile(dist / "ANNOUNCEMENTS.md", bundle / "ANNOUNCEMENTS.md")
-    if not candidate and not experimental:
+    if not candidate and not experimental and not rc:
         shutil.copyfile(ROOT / f"resources/branding/release-v{release['version']}-banner.jpg",
                         bundle / "release-banner.jpg")
-    if release["version"] == "1.8.5":
+    if guide_version(release) in ("1.8.5", "2.0"):
         for name in ("games-formats", "gdi-2048-test", "ripper-controls", "capture-format"):
             (bundle / (name.upper() + ".md")).write_text(guide(name + ".md"), encoding="utf-8")
         write_game_tools(bundle)
@@ -253,7 +319,7 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
                                    "preview": "splash-preview.png"}}
     (bundle / "build.json").write_text(
         json.dumps(bundle_record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    status = "experimental hardware test" if experimental else "release candidate" if candidate else "final release"
+    status = "experimental hardware test" if experimental else "release candidate" if candidate or rc else "final release"
     bootstrap_note = ("Keep an existing compatible SCIF/SCI bootstrap. An older SCIF-only CD\n"
                       "needs the new CDI in boot-cd/ only when changing to SCI or IDE/CF.\n")
     (bundle / "SOURCE.txt").write_text(
@@ -271,7 +337,7 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
         ("PC converters are included under tools/. See GAMES-FORMATS.md for imported\n"
          "compressed images, and GDI-2048-TEST.md for batch 2048-byte copies.\n"
          "RIPPER-CONTROLS.md and CAPTURE-FORMAT.md explain capture exports.\n"
-         if release["version"] == "1.8.5" else "") +
+         if guide_version(release) in ("1.8.5", "2.0") else "") +
         "Read STORAGE-TRANSPORTS.md for development hardware status and installation.\n"
         "The CD's read-only ext4 backend is ready for future runtime work; this runtime\n"
         "still requires FAT32/exFAT. See EXT4-BOOTSTRAP.md before changing formats.\n"
@@ -281,6 +347,8 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
         "returns/stops without disabling later attempts. The separate bootstrap-cd\n"
         "artifact supplies optional tools.kui for read-only load measurement.\n"
         "Native standard/background and Windows CE launch payloads are installed.\n"
+        "Optional WinCE CD music modules cover the admitted US Armada, Bust-A-Move 4\n"
+        "and Worms Armageddon profiles. CD music defaults Off.\n"
         "CE and background launch remain title-dependent SCI options; consult their guides.\n"
         "No SD benchmark payload is included. ATA/IDE/CF is untested synchronous PIO;\n"
         "ATA DMA and Windows CE on IDE are not implemented.\n",
@@ -328,7 +396,7 @@ def main():
         raise SystemExit("Build the Dreamcast diagnostic first")
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     release = package_metadata(candidate)
-    candidate = candidate and not development_test(release)
+    candidate = candidate and not development_test(release) and not release_is_rc(release)
     runtime = ROOT / "build/kui-runtime.elf"
     probe = ROOT / "build/loader/entry.elf"
     image_probe = ROOT / "build/loader/image_entry.elf"
@@ -398,7 +466,9 @@ def main():
     ce_payload, ce_memory = flatten_elf(retail_ce.read_bytes())
     ce_package = envelope(ce_payload, ce_memory, commit[:12])
     ce_info = inspect_retail(ce_package, ce=True)
+    validate_ordinary_ce(retail_ce.parent, ce_package)
     (games / "ce-probe.kui").write_bytes(ce_package)
+    wince_profiles = write_wince_cdda_modules(games, dist, commit)
     run("python3", "tools/make_loader_probe.py", str(games / "probe.dat"))
     # Keep link maps and exact standalone ELFs in the full diagnostic download.
     shutil.copytree(ROOT / "build/loader", dist / "loader-build",
@@ -443,7 +513,7 @@ def main():
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
     write_release_guides(dist, candidate)
-    for name in ("wifi", "wifi-flash-arch", "sci-connector", "ftp", "windows-ce-placement-test", "games-sd-benchmark", "games-background-reader", "games-covers", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
+    for name in ("wifi", "wifi-performance-test", "wifi-flash-arch", "sci-connector", "ftp", "windows-ce-placement-test", "games-sd-benchmark", "games-background-reader", "games-covers", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
         (dist / (name.upper()+".md")).write_text(guide(name+".md"))
     run("make", "build/render-shell")
     run("python3", "tools/render_app_previews.py", "--output", str(dist / "ui-previews"))
@@ -489,9 +559,11 @@ def main():
             shutil.copyfile(path, source / path.name)
     compiler = subprocess.check_output(["sh-elf-gcc", "--version"], text=True).splitlines()[0]
     record = {"commit": commit, "release": release, "compiler": compiler, "dependencies": lock,
+              "kind": package_kind(release, candidate),
               "runtime": runtime_info, "loader_probe": probe_info,
               "image_probe": image_probe_info,
               "retail_boot": retail_info, "ce_probe": ce_info,
+              "wince_cdda_profiles": wince_profiles,
               "hardware_tested": False,
               "host_os": Path("/etc/os-release").read_text() if Path("/etc/os-release").exists() else os.name}
     if candidate:
@@ -517,7 +589,7 @@ def main():
     shutil.copyfile(dist / "GAMES-COVERS.md", update / "GAMES-COVERS.md")
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(sd / name, update / "KUI" / name)
-    for name in ("WIFI.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md", "GAMES-IMAGE-PROBE.md", "GD-BIOS-CONTRACT.md", "GAMES-TEST.md", "GAMES-MILESTONE-PLAN.md", "APPS-ROUND-FIVE.md", "MUSIC-ROUND-FIVE.md", "NETWORK-CONNECTION-TEST.md", "SYSTEM-BACKUPS.md", "SALVAGE-WORKER.md", "verify_salvage.py", "APPS-ROUND-FOUR.md", "CLOCK-AND-FILE-DATES.md", "VMU-RESTORE.md", "ADVANCED-CRC-SCAN.md", "APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md", "GAMES-IMAGE-PROBE.md", "GD-BIOS-CONTRACT.md", "GAMES-TEST.md", "GAMES-MILESTONE-PLAN.md", "APPS-ROUND-FIVE.md", "MUSIC-ROUND-FIVE.md", "NETWORK-CONNECTION-TEST.md", "SYSTEM-BACKUPS.md", "SALVAGE-WORKER.md", "verify_salvage.py", "APPS-ROUND-FOUR.md", "CLOCK-AND-FILE-DATES.md", "VMU-RESTORE.md", "ADVANCED-CRC-SCAN.md", "APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, update / name)
     shutil.copytree(dist / "LICENSES", update / "LICENSES", dirs_exist_ok=True)
     for name in ("START-HERE.md", "RELEASE-NOTES.md"):
