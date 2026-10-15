@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Armada CE full CD music stream test
 
-## K-UI 2.0 RC8 transient supply reserve
+## K-UI 2.0 RC9 checked audio-head reuse
 
 This console candidate integrates the net changes from
 `fix/armada-cdda-supply` at `be793d667cf0` into our current `eb06827d85da`
@@ -179,6 +179,48 @@ supply; it does not reproduce the console's unknown exact per-visit timing.
 The focused sanitizer replay passes 2,949 checks, retaining at least 67,800
 fresh bytes. The same replay built with the former half-ring threshold
 underruns at 10,900 ms. The 45 player cases also pass with the new reserve.
+
+Recording `62664.mp4` reports zero recoveries, refusals or errors. Its seven
+events are three successful startup stages and four native playback starts,
+with four processed control batches. A sample at MS `1d5a1` is in PREFILL;
+the next START is at `1d85f`, 702 ms later. Since no recovery occurred, this
+re-prime was control-driven. These logs do not record every command argument
+or the audible timing, so they cannot attribute every heard cut or distinguish
+an intended music transition from a redundant PLAY request.
+
+RC9 retains the current selection's first 263,424 checked PCM bytes in the
+unused tail of the existing source bank. The fixed cache ends at `8cfa2b80`,
+14,048 bytes before that bank ends; neither the CE heap limit nor the source
+seed/layout changes. Only successfully committed, contiguous real PCM from
+logical offset zero becomes valid, with the selected first/end LBA as its key.
+A different range invalidates the key before new payload writes. Padding is
+never cached. Finite repeat/EOF limits remain enforced by the normal model.
+
+A new PLAY still stops the old native lease and restarts at the requested
+beginning. Whole read tickets covered by the matching cache can now fill
+staging without an SD submit. A bounded seven-ticket prime retains each
+native lock, protected frontier, mapping witness and command-epoch publication
+check, with interrupts enabled during copies. It starts before admitting the
+next physical read. Cache misses retain the ordinary checked source path.
+The larger reserve, transport grants, worker priority and DATA reader are
+unchanged. First use of a range still buffers from the image.
+
+The review also found a late RELEASE during native Unlock could abandon a
+refill ticket that the idempotent command would never revoke, blocking later
+refills. After successfully releasing the native lock, that uncommitted ticket
+is now discarded while its staging and producer position remain unchanged.
+The next current visit replans against the fresh native frontier.
+
+START event AUX now records the applied control/recovery-to-Play delay in its
+low 16 bits (milliseconds, saturated at 65,535) and cached 64-byte block count
+in its high 16 bits. A complete cached prime is 4,116 blocks. This measures
+worker-side restart delay, not an acoustical silence duration. Regressions
+exercise exact cached restart bytes, position-zero semantics, no SD submits
+before a warm native Play, changed-range misses and late control commands.
+All 52 player cases pass with UBSan, including RELEASE during cached and
+ordinary native Unlock, retained staging, restart timing and cache-byte counts.
+Physical playback and the cause of every remaining audible cut still need
+console confirmation; this does not certify FMV audio timing.
 
 Focused player checks cover clock drift, real underruns, finite/infinite
 playback, staging carry and bounded PIO draining/cancellation. Transport checks

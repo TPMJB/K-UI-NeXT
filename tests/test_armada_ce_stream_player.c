@@ -29,6 +29,8 @@ static unsigned checks,cases;
 struct authored_bus {
     unsigned consumer,control,locks,unlocks,plays,stops,releases;
     unsigned submits,pumps,cancels,waits,starts,owner_admissions,priority_updates;
+    unsigned set_positions,play_submits[32];
+    uint32_t play_cached[32];
     uint32_t priority_fresh;
     uint32_t cursor,frontier,now,epoch,lba,sectors,bytes,raw;
     uint32_t position_delay_ms,play_delay_ms;
@@ -37,7 +39,9 @@ struct authored_bus {
     unsigned token_slices;
     uint32_t checked_slice_bytes;
     bool release_after_source_copy;
+    bool stop_after_source_copy;
     bool release_at_snapshot;
+    bool release_at_unlock;
     uint32_t last_sleep_ms;
     bool pending,cancelled,revoked,stale_unlock,stale_source,bad_unlock,fail_end;
     bool bad_current,fail_ticks,driver_context,fail_owner_admission,urgent,priority_active,pio_ready;
@@ -47,6 +51,10 @@ struct authored_bus {
 } bus;
 static struct kui_armada_ce_excerpt_binding admitted_binding;
 void kui_armada_ce_stream_player_test_source_copied(void) {
+    if(bus.stop_after_source_copy) {
+        bus.stop_after_source_copy=false;
+        (void)kui_armada_ce_excerpt_queue(NULL,33u,0,0,0);
+    }
     if(bus.release_after_source_copy) {
         bus.release_after_source_copy=false;
         (void)kui_armada_ce_excerpt_queue(NULL,23u,0,0,0);
@@ -160,6 +168,7 @@ uint32_t kui_armada_ce_excerpt_ce_call(uint32_t target,const uint32_t args[8]) {
         for(unsigned i=0;i<args[2];i++) CHECK(host[i]==expected_byte(player.model.origin+player.model.produced+i));
         bus.lock_held=false;++bus.unlocks;
         if(bus.stale_unlock) {bus.stale_unlock=false;(void)kui_armada_ce_excerpt_queue(NULL,33u,0,0,0);}
+        if(bus.release_at_unlock) {bus.release_at_unlock=false;(void)kui_armada_ce_excerpt_queue(NULL,23u,0,0,0);}
         return bus.bad_unlock?0x80004005u:0u;
     }
     if(target==player.binding.enter_cs) {
@@ -170,7 +179,7 @@ uint32_t kui_armada_ce_excerpt_ce_call(uint32_t target,const uint32_t args[8]) {
     }
     if(target==player.native.api.buffer_set_position) {
         CHECK(!bus.consumer && !bus.control && args[0]==BUFFER && !args[1]);
-        bus.cursor=bus.frontier=0;return 0;
+        ++bus.set_positions;bus.cursor=bus.frontier=0;return 0;
     }
     if(target==player.binding.play) {
         CHECK(!bus.consumer && bus.control==1u && args[0]==BUFFER && args[3]==1u);
@@ -179,6 +188,8 @@ uint32_t kui_armada_ce_excerpt_ce_call(uint32_t target,const uint32_t args[8]) {
             !player.model.read.id && !player.model.refill.id);
         const uint8_t *host=(const uint8_t *)(uintptr_t)HOST;
         for(unsigned i=0;i<player.model.produced;i++) CHECK(host[i]==expected_byte(player.model.origin+i));
+        CHECK(bus.plays<32u);
+        bus.play_submits[bus.plays]=bus.submits;bus.play_cached[bus.plays]=player.start_cached;
         bus.now+=bus.play_delay_ms;
         bus.cursor=(bus.cursor+((bus.play_delay_ms*176400u/1000u)&~3u))%
             KUI_ARMADA_CE_STREAM_RING_BYTES;
@@ -415,13 +426,107 @@ static void sustained_async(void) {
     CHECK(physical>4u*KUI_ARMADA_CE_STREAM_RING_BYTES && bus.plays==1u && !bus.stops);
     ++cases;
 }
-int main(void) {
+static void cached_start_aux(uint32_t cached,uint32_t latency) {
+    struct kui_armada_ce_stream_trace_snapshot history;
+    kui_armada_ce_stream_trace_snapshot(&history);
+    uint32_t rows=history.counts[0]<KUI_ARMADA_CE_STREAM_TRACE_ROWS?
+        history.counts[0]:KUI_ARMADA_CE_STREAM_TRACE_ROWS;
+    CHECK(rows && history.events[rows-1u][0]==KUI_ARMADA_CE_STREAM_TRACE_START);
+    CHECK(history.events[rows-1u][4]==((cached/64u)<<16|latency));
+}
+static void cached_restarts(void) {
+    reset(true,128u);prime();
+    CHECK(player.cache_first==100u && player.cache_end==228u && player.cache_bytes==CACHE_BYTES &&
+        CACHE_BYTES==KUI_ARMADA_CE_STREAM_START_BYTES && bus.play_submits[0]==7u &&
+        !bus.play_cached[0] && bus.set_positions==1u);
+    cached_start_aux(0u,0u);
+    unsigned submits=bus.submits,plays=bus.plays;
+    (void)kui_armada_ce_excerpt_queue(NULL,20u,1u,1u,15u);visit();
+    CHECK(!player.disabled && bus.plays==plays+1u && bus.set_positions==2u &&
+        bus.play_submits[plays]==submits && bus.play_cached[plays]==CACHE_BYTES &&
+        player.model.native_running && player.model.origin==0u && player.model.last_play==0u);
+    cached_start_aux(CACHE_BYTES,0u);
+    ++cases;
+    /* STOP retains the checked head; another PLAY still restarts at zero. */
+    (void)kui_armada_ce_excerpt_queue(NULL,33u,0,0,0);visit();
+    CHECK(player.model.state==KUI_ARMADA_CE_STREAM_STOPPED && player.cache_bytes==CACHE_BYTES);
+    submits=bus.submits;plays=bus.plays;
+    (void)kui_armada_ce_excerpt_queue(NULL,20u,1u,1u,15u);visit();
+    CHECK(!player.disabled && bus.plays==plays+1u && bus.set_positions==3u &&
+        bus.play_submits[plays]==submits && bus.play_cached[plays]==CACHE_BYTES &&
+        player.model.native_running && player.model.origin==0u && player.model.last_play==0u);
+    cached_start_aux(CACHE_BYTES,0u);
+    ++cases;
+    /* A different FAD interval must obtain its own checked bytes. */
+    submits=bus.submits;plays=bus.plays;bus.read_latency_pumps=4u;
+    (void)kui_armada_ce_excerpt_queue(NULL,21u,251u,378u,15u);visit();
+    CHECK(!player.disabled && bus.plays==plays && bus.submits>submits &&
+        player.model.state==KUI_ARMADA_CE_STREAM_PREFILL && player.model.first_lba==101u &&
+        player.cache_first==101u && player.cache_end==228u && !player.cache_bytes);
+    ++cases;
+    /* A late mailbox change revokes the copied cached ticket before model
+     * publication. RELEASE can retain that useful epoch on the next visit. */
+    reset(true,128u);prime();
+    (void)kui_armada_ce_excerpt_queue(NULL,20u,1u,1u,15u);CHECK(control() && stopped());
+    submits=bus.submits;plays=bus.plays;uint32_t epoch=player.model.epoch;
+    bus.release_after_source_copy=true;CHECK(source_run(true));
+    CHECK(!player.model.fetch && !player.model.staged && !player.model.produced &&
+        !player.start_cached && player.mail.epoch!=player.applied_epoch &&
+        player.model.epoch==epoch && bus.submits==submits && !player.read_active);
+    bus.now+=17u;visit();
+    CHECK(!player.disabled && bus.plays==plays+1u && player.model.epoch==epoch &&
+        bus.play_submits[plays]==submits && bus.play_cached[plays]==CACHE_BYTES);
+    cached_start_aux(CACHE_BYTES,17u);
+    ++cases;
+    (void)kui_armada_ce_excerpt_queue(NULL,20u,1u,1u,15u);CHECK(control() && stopped());
+    submits=bus.submits;plays=bus.plays;bus.stop_after_source_copy=true;CHECK(source_run(true));
+    CHECK(!player.model.fetch && !player.model.staged && !player.model.produced &&
+        !player.start_cached && player.mail.epoch!=player.applied_epoch &&
+        bus.submits==submits && !player.read_active);
+    visit();
+    CHECK(!player.disabled && bus.plays==plays && bus.submits==submits &&
+        player.model.state==KUI_ARMADA_CE_STREAM_STOPPED && !player.model.read.id &&
+        !player.model.staged && !player.model.produced);
+    ++cases;
+    /* RELEASE at the first cached Unlock retains staged PCM but abandons
+     * its uncommitted refill ticket. The next visit can prime all seven jobs. */
+    reset(true,128u);prime();
+    (void)kui_armada_ce_excerpt_queue(NULL,20u,1u,1u,15u);CHECK(control() && stopped());
+    submits=bus.submits;plays=bus.plays;epoch=player.model.epoch;
+    CHECK(source_run(true) && player.model.fetch==RAW_BYTES && player.model.staged==RAW_BYTES);
+    uint32_t head=player.stage_head;bus.release_at_unlock=true;CHECK(drain_refill());
+    CHECK(!player.model.produced && player.model.staged==RAW_BYTES && player.stage_head==head &&
+        !player.model.refill.id && player.model.epoch==epoch &&
+        player.mail.epoch!=player.applied_epoch && bus.submits==submits && bus.plays==plays);
+    bus.now+=11u;visit();
+    CHECK(!player.disabled && player.model.epoch==epoch && !player.model.refill.id &&
+        bus.plays==plays+1u && bus.play_submits[plays]==submits && bus.play_cached[plays]==CACHE_BYTES);
+    cached_start_aux(CACHE_BYTES,11u);++cases;
+    /* The same Unlock race during normal playback must not Stop/Play or
+     * strand checked bytes behind a permanently BUSY refill ticket. */
+    reset(true,128u);prime();CHECK(source() && player.model.staged==RAW_BYTES);
+    uint64_t produced=player.model.produced;head=player.stage_head;
+    epoch=player.model.epoch;plays=bus.plays;unsigned stops=bus.stops;
+    bus.release_at_unlock=true;CHECK(refill());
+    CHECK(player.model.produced==produced && player.model.staged==RAW_BYTES &&
+        player.stage_head==head && !player.model.refill.id && player.model.native_running);
+    CHECK(control() && player.model.epoch==epoch && drain_refill());
+    CHECK(player.model.produced==produced+RAW_BYTES && !player.model.staged &&
+        !player.model.refill.id && player.model.native_running &&
+        bus.plays==plays && bus.stops==stops && !player.disabled);++cases;
+}
+int main(int argc,char **argv) {
     void *source_mapping=mmap((void *)(uintptr_t)KUI_ARMADA_CE_EXCERPT_POOL_BEGIN,512u*1024u,
         PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0);
     CHECK(source_mapping==(void *)(uintptr_t)KUI_ARMADA_CE_EXCERPT_POOL_BEGIN);
     void *host=mmap((void *)(uintptr_t)HOST,0x60000u,PROT_READ|PROT_WRITE,
         MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0);
     CHECK(host==(void *)(uintptr_t)HOST);
+    if(argc==2 && !strcmp(argv[1],"--cache-only")) {
+        cached_restarts();
+        CHECK(munmap(source_mapping,512u*1024u)==0 && munmap(host,0x60000u)==0);
+        printf("armada checked-head cache: %u cases, %u checks\n",cases,checks);return 0;
+    }
     reset(true,1u);prime();++cases;
     struct kui_armada_ce_stream_trace_snapshot history;
     kui_armada_ce_stream_trace_snapshot(&history);
@@ -786,6 +891,7 @@ int main(void) {
     CHECK(kui_armada_ce_stream_worker((uint32_t)(uintptr_t)&player)==UINT32_MAX);
     CHECK(bus.consumer==1u && player.native.consumer_cs==DEVICE+108u &&
         bus.stops==stops && bus.pumps==pumps && bus.waits==sleeps && bus.cancels==cancels+1u);++cases;
+    cached_restarts();
     /* Retained event rows remain chronological after wrapping the six-row
      * ring; total event count continues independently of retention. */
     kui_armada_ce_stream_trace_snapshot(&history);uint32_t previous_events=history.counts[0];

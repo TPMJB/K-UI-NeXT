@@ -21,6 +21,8 @@ struct kui_armada_ce_stream_trace_snapshot {
      * previous sample (use the MS difference for visits per second). */
     /* Startup codes5/6/7 have MS0 until a native clock exists; AUX is the
      * discovery/binding/native-start status (zero means successful admission). */
+    /* START AUX: low16 bits are applied control/recovery-to-Play delay in ms
+     * (saturated65535); high16 bits count cached64-byte blocks in this prime. */
     uint32_t events[KUI_ARMADA_CE_STREAM_TRACE_ROWS][5];
     uint32_t samples[KUI_ARMADA_CE_STREAM_TRACE_ROWS][5];
     /* Totals, longest worker interval, longest source job, completed jobs. */

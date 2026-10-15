@@ -428,7 +428,7 @@ def build(args):
                 "packaging_corruption_checks": checks,
                 "output_member_sizes_sha256_crc32_verified": True}}
     files["build.json"] = (json.dumps(info, indent=2) + "\n").encode()
-    files["README.md"] = f"""# K-UI 2.0 RC8 — Armada CD music
+    files["README.md"] = f"""# K-UI 2.0 RC9 — Armada CD music
 
 Menu and optional audio loader build **{stamp}**. Merge this ZIP's `KUI` folder
 onto the SCI microSD card with the console off, replacing **both**
@@ -450,12 +450,19 @@ forced budget yields. SOURCE now advances as checked portions publish; the job
 count and maximum job duration still describe whole reads. Sustained console
 playback remains the required confirmation.
 
-RC7 recorded one underrun after an 11.3-second interval supplying about 160 KB/s
-against 176.4 KB/s consumption. Supply then recovered. RC8 increases the starting
-reserve from the observed 188,160 bytes to seven batches, 263,424 bytes (about 1.49 s).
-This adds about 427 ms of audio reserve and some startup/recovery buffering.
-It targets that temporary deficit; it cannot cure a permanent supply shortage.
-No transport, DATA-reader or native-driver changes are included in RC8.
+RC8 recorded no underruns, but a control-driven restart waited for fresh audio.
+RC9 keeps the selected range's first 263,424 checked PCM bytes in unused space
+inside the existing audio bank. A matching restart can prime from memory, with
+no SD reads before native Play. PLAY still restarts at the requested beginning;
+a different range invalidates the cache. First use still buffers from the image.
+The reserve, transport, thread priority, DATA reader and native-driver code are
+unchanged. This targets restart latency; it does not certify all audible cuts.
+
+START event AUX now gives cached 64-byte blocks in its upper 16 bits and the
+applied control/recovery-to-Play delay in its lower 16 bits (ms, max 65,535).
+A fully cached prime uses 4,116 blocks. The native publication checks remain
+in place. A late RELEASE during Unlock no longer leaves an abandoned refill
+ticket permanently blocking the worker; retained bytes are replanned safely.
 
 Use the same in-game scene where the earlier loop was audible. No main-menu
 wait or gameplay video is requested. Return with **A+B+X+Y+Start** after music
@@ -537,7 +544,7 @@ def main():
     parser.add_argument("--elf", type=Path, default=ROOT / "build/kui-runtime.elf")
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     parser.add_argument("--evidence", action="append", default=[], metavar="NAME=PATH")
-    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-2.0-RC8-Armada-Audio.zip")
+    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-2.0-RC9-Armada-Audio.zip")
     args = parser.parse_args()
     try:
         build(args)

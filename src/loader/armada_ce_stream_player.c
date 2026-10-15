@@ -24,6 +24,8 @@
 #define RAW_BYTES KUI_ARMADA_CE_STREAM_BATCH_BYTES
 #define RAW_BEGIN KUI_ARMADA_CE_STREAM_SOURCE_BEGIN
 #define STAGE_BEGIN (RAW_BEGIN+RAW_BYTES)
+#define CACHE_BEGIN (STAGE_BEGIN+KUI_ARMADA_CE_STREAM_STAGE_BYTES)
+#define CACHE_BYTES KUI_ARMADA_CE_STREAM_START_BYTES
 #define BUFFER_SOFTWARE 8u
 #define DEVICE_VOICES 16u
 #define DEVICE_OWNER_OFFSET 24u
@@ -37,8 +39,8 @@
 #define SOURCE_TOKEN_SLACK 16u
 #define SOURCE_READY_PUMPS ((RAW_BYTES+1022u)/512u+1u+SOURCE_TOKEN_SLACK)
 #define COPY_PAGES ((KUI_ARMADA_CE_STREAM_STAGE_BYTES+4095u)/4096u+1u)
-_Static_assert(RAW_BYTES+KUI_ARMADA_CE_STREAM_STAGE_BYTES<=KUI_ARMADA_CE_STREAM_SOURCE_BYTES,
-    "raw batch and carry staging must fit the already reserved source bank");
+_Static_assert(RAW_BYTES+KUI_ARMADA_CE_STREAM_STAGE_BYTES+CACHE_BYTES<=KUI_ARMADA_CE_STREAM_SOURCE_BYTES,
+    "raw, carry staging and checked head cache must fit the existing source bank");
 _Static_assert(COPY_PAGES*4096u>=KUI_ARMADA_CE_STREAM_STAGE_BYTES+4095u,
     "copy witnesses must cover every page of an unaligned refill");
 #ifndef KUI_ARMADA_CE_STREAM_PLAYER_TEST
@@ -70,6 +72,8 @@ struct stream_player {
     uint32_t recovery[5];
     /* Last, so the audited owner-reader offsets into player stay fixed. */
     uint32_t stage_head; /* Offset of the model's first staged byte. */
+    uint32_t cache_first,cache_end,cache_bytes;
+    uint32_t start_ms,start_cached;
 };
 static struct stream_player player;
 
@@ -477,7 +481,9 @@ static bool control(void) {
             refuse(KUI_ARMADA_CE_EXCERPT_ARGUMENT);player.applied_epoch=mail.epoch;return true;
         }
     }
-    if(player.model.epoch!=previous_model_epoch) cancel_read();
+    if(player.model.epoch!=previous_model_epoch) {
+        cancel_read();player.start_ms=player.now_ms;player.start_cached=0u;
+    }
     publish();player.applied_epoch=mail.epoch;return true;
 }
 static bool stopped(void) {
@@ -487,6 +493,10 @@ static bool stopped(void) {
     bool ok=player.stats.last_hresult==0;
     player.last_model_result=kui_armada_ce_stream_stop_complete(&player.model,player.model.epoch,ok);
     if(!ok) {refuse(KUI_ARMADA_CE_EXCERPT_NATIVE_STOP);return false;}
+    if(player.last_model_result==KUI_ARMADA_CE_STREAM_OK &&
+       player.model.state==KUI_ARMADA_CE_STREAM_PREFILL) {
+        player.start_ms=player.now_ms;player.start_cached=0u;
+    }
     ++player.stats.stop_ok;return player.last_model_result==KUI_ARMADA_CE_STREAM_OK;
 }
 static bool refill(void) {
@@ -565,7 +575,13 @@ static bool refill(void) {
     }
     mask_end(sr);
     bool released=kui_armada_ce_stream_native_write_end(&player.native,NULL);
-    if(!current) return released;
+    if(!current) {
+        /* Unlock may race an idempotent RELEASE. No model bytes committed;
+         * discard only this abandoned ticket so the retained staging can be
+         * replanned against the next current consumer frontier. */
+        if(released) player.model.refill=(struct kui_armada_ce_stream_refill){0};
+        return released;
+    }
     if(!ok) refuse(KUI_ARMADA_CE_EXCERPT_COPY);
     return ok && released;
 }
@@ -580,9 +596,67 @@ static bool drain_refill(void) {
     }
     return true;
 }
-static bool source(void) {
+/* A selection's first checked PCM stays in the unused source-bank tail.
+ * Only this owner worker reads/writes its metadata. It contains no padding,
+ * and changes of range revoke the old prefix before any new bytes replace it. */
+static void cache_key(void) {
+    if(player.cache_first==player.model.first_lba && player.cache_end==player.model.end_lba) return;
+    player.cache_bytes=0u;publish();
+    player.cache_first=player.model.first_lba;player.cache_end=player.model.end_lba;
+}
+static bool cache_contains(void) {
+    return player.cache_bytes<=CACHE_BYTES && player.model.fetch<=player.cache_bytes &&
+        player.read.bytes<=player.cache_bytes-player.model.fetch;
+}
+static bool source_append(const void *from,uint32_t available,bool done,bool physical) {
+    if(!mail_current()) return true;
+    if(kui_armada_ce_stream_read_validate(&player.model,&player.read)!=KUI_ARMADA_CE_STREAM_OK) return false;
+    /* Compact only the sub-block carry, outside the interrupt mask. */
+    if(player.stage_head && player.model.staged<64u) {
+        if(player.model.staged)
+            copy_bytes((void *)(uintptr_t)STAGE_BEGIN,
+                (const void *)(uintptr_t)(STAGE_BEGIN+player.stage_head),player.model.staged);
+        player.stage_head=0;
+    }
+    if(player.stage_head>KUI_ARMADA_CE_STREAM_STAGE_BYTES ||
+       player.model.staged>KUI_ARMADA_CE_STREAM_STAGE_BYTES-player.stage_head ||
+       available>KUI_ARMADA_CE_STREAM_STAGE_BYTES-player.stage_head-player.model.staged) return false;
+    copy_bytes((void *)(uintptr_t)(STAGE_BEGIN+player.stage_head+player.model.staged),from,available);
+    uint32_t cache_add=0;
+    if(physical && player.model.fetch==player.cache_bytes && player.cache_bytes<CACHE_BYTES) {
+        cache_add=available;
+        if(cache_add>CACHE_BYTES-player.cache_bytes) cache_add=CACHE_BYTES-player.cache_bytes;
+        /* Payload first, validity only after the same epoch's source commit.
+         * A late command may leave unadvertised bytes, never a false hit. */
+        copy_bytes((void *)(uintptr_t)(CACHE_BEGIN+player.cache_bytes),from,cache_add);
+    }
+#if KUI_ARMADA_CE_STREAM_PLAYER_TEST
+    extern void kui_armada_ce_stream_player_test_source_copied(void);
+    kui_armada_ce_stream_player_test_source_copied();
+#endif
+    uint32_t sr=mask_begin();
+    bool current=mail_current();
+    if(current) player.last_model_result=done?
+        kui_armada_ce_stream_read_complete(&player.model,&player.read,true,available):
+        kui_armada_ce_stream_read_progress(&player.model,&player.read,available);
+    if(current && player.last_model_result==KUI_ARMADA_CE_STREAM_OK) {
+        player.source_total+=available;player.cache_bytes+=cache_add;
+        if(!physical && player.model.state==KUI_ARMADA_CE_STREAM_PREFILL)
+            player.start_cached+=available;
+        if(physical && done) {
+            kui_armada_ce_stream_trace_source_end(player.now_ms);
+            player.read_active=0u;
+        }
+    }
+    /* A late idempotent RELEASE retains the current ticket. Physical reads
+     * keep their completed lease; cache tickets keep read_active zero. */
+    mask_end(sr);
+    return !current || player.last_model_result==KUI_ARMADA_CE_STREAM_OK;
+}
+static bool source_run(bool cache_only) {
     struct kui_armada_ce_stream_transport_snapshot progress;
     if(!mail_current()) return true;
+    cache_key();
     if(!player.read_active) {
         enum kui_armada_ce_stream_result planned=player.model.read.id?
             kui_armada_ce_stream_read_validate(&player.model,&player.read):
@@ -590,6 +664,10 @@ static bool source(void) {
         if(planned==KUI_ARMADA_CE_STREAM_NOTHING || planned==KUI_ARMADA_CE_STREAM_STATE ||
            planned==KUI_ARMADA_CE_STREAM_BUSY) return true;
         if(planned!=KUI_ARMADA_CE_STREAM_OK) return false;
+        if(cache_contains())
+            return source_append((const void *)(uintptr_t)(CACHE_BEGIN+(uint32_t)player.model.fetch),
+                player.read.bytes,true,false);
+        if(cache_only) return true;
         player.read_bus_epoch=player.read.id;
         uint32_t sr=mask_begin();
         /* A cancelled reception is fenced asynchronously before its singleton
@@ -604,6 +682,7 @@ static bool source(void) {
         player.read_active=1u;
         kui_armada_ce_stream_trace_source_begin(player.now_ms);
     }
+    if(cache_only) return true;
     uint32_t sr;
     enum kui_armada_ce_stream_transport_status status=KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING;
     /* Ready PIO and a yielded token search need no IRQ. Continue their
@@ -641,41 +720,21 @@ static bool source(void) {
         if(available>=player.read.bytes) available=(player.read.bytes-1u)&~63u;
         if(!available) return true;
     } else if(available!=player.read.bytes) return false;
-    if(!mail_current()) return true;
-    if(kui_armada_ce_stream_read_validate(&player.model,&player.read)!=KUI_ARMADA_CE_STREAM_OK) return false;
-    /* IRQ reception only appends beyond the checked RAW prefix. This worker
-     * alone writes staging; compact only a tiny carry between publications. */
-    if(player.stage_head && player.model.staged<64u) {
-        if(player.model.staged)
-            copy_bytes((void *)(uintptr_t)STAGE_BEGIN,
-                (const void *)(uintptr_t)(STAGE_BEGIN+player.stage_head),player.model.staged);
-        player.stage_head=0;
+    /* IRQ reception only appends beyond this CRC-checked RAW prefix. */
+    return source_append((const void *)(uintptr_t)(RAW_BEGIN+player.read.skip),available,done,true);
+}
+static bool source(void) {return source_run(false);}
+static bool prime_cache(void) {
+    /* At most seven cached jobs form the existing start reserve. Each keeps
+     * its normal native lock, mapping witnesses and epoch publication checks;
+     * IRQs stay enabled during copies. A miss performs no transport work. */
+    for(unsigned batch=0;batch<7u && player.model.state==KUI_ARMADA_CE_STREAM_PREFILL;batch++) {
+        uint64_t before=player.model.fetch,produced=player.model.produced;
+        if(!source_run(true) || !drain_refill()) return false;
+        if((player.model.fetch==before && player.model.produced==produced) ||
+           kui_armada_ce_stream_can_start(&player.model)) break;
     }
-    if(player.stage_head>KUI_ARMADA_CE_STREAM_STAGE_BYTES ||
-       player.model.staged>KUI_ARMADA_CE_STREAM_STAGE_BYTES-player.stage_head ||
-       available>KUI_ARMADA_CE_STREAM_STAGE_BYTES-player.stage_head-player.model.staged) return false;
-    copy_bytes((void *)(uintptr_t)(STAGE_BEGIN+player.stage_head+player.model.staged),
-        (const void *)(uintptr_t)(RAW_BEGIN+player.read.skip),available);
-#if KUI_ARMADA_CE_STREAM_PLAYER_TEST
-    extern void kui_armada_ce_stream_player_test_source_copied(void);
-    kui_armada_ce_stream_player_test_source_copied();
-#endif
-    sr=mask_begin();
-    bool current=mail_current();
-    if(current) player.last_model_result=done?
-        kui_armada_ce_stream_read_complete(&player.model,&player.read,true,available):
-        kui_armada_ce_stream_read_progress(&player.model,&player.read,available);
-    if(current && player.last_model_result==KUI_ARMADA_CE_STREAM_OK) {
-        player.source_total+=available;
-        if(done) {
-            kui_armada_ce_stream_trace_source_end(player.now_ms);
-            player.read_active=0u;
-        }
-    }
-    /* A late idempotent RELEASE may leave this ticket current. Retain its
-     * completed transport job until commit, rather than resubmitting its id. */
-    mask_end(sr);
-    return !current || player.last_model_result==KUI_ARMADA_CE_STREAM_OK;
+    return true;
 }
 static bool start(void) {
     if(!kui_armada_ce_stream_can_start(&player.model) || !mail_current()) return true;
@@ -709,8 +768,11 @@ static bool start(void) {
         refuse(KUI_ARMADA_CE_EXCERPT_PLAY);return false;
     }
     ++player.stats.play_ok;
+    uint32_t latency=started_ms-player.start_ms;
+    if(latency>65535u) latency=65535u;
     kui_armada_ce_stream_trace_event(KUI_ARMADA_CE_STREAM_TRACE_START,
-        started_ms,player.source_total,ready_bytes(),0u);
+        started_ms,player.source_total,ready_bytes(),
+        ((player.start_cached/64u)<<16)|latency);
     return true;
 }
 static void step(uint32_t sr,uint32_t fpscr) {
@@ -735,6 +797,9 @@ static void step(uint32_t sr,uint32_t fpscr) {
     if(!mail_current()) return;
     if(player.model.state==KUI_ARMADA_CE_STREAM_PREFILL || player.model.state==KUI_ARMADA_CE_STREAM_PLAYING) {
         if(!player.stats.buffer && !create_buffer()) goto failed;
+        /* Start a cached reserve before admitting the next physical read:
+         * an outstanding source ticket deliberately blocks Play admission. */
+        if(!prime_cache() || !start()) goto failed;
         uint32_t before=player.source_total;
         if(!drain_refill() || !source() || !drain_refill() || !start()) goto failed;
         /* Once a job has been admitted and drained, lend its replacement to
