@@ -105,6 +105,10 @@ static struct kui_vmu_backup_view vmu_backups;
 static unsigned vmu_backups_generation,vmu_backup_page_pending,vmu_restore_generation;
 static unsigned vmu_delete_generation,vmu_copy_generation,vmu_copy_slot_pending;
 static char vmu_restore_path_pending[KUI_VMU_BACKUP_PATH_CAP];
+static struct kui_vmu_view vmu_image_snapshot;
+static unsigned vmu_image_generation,vmu_image_page_pending,vmu_image_selected_pending;
+static char vmu_image_path_pending[KUI_VMU_BACKUP_PATH_CAP];
+static char maintenance_compare_path_pending[KUI_FILES_PATH_CAP];
 static struct kui_datetime clock_pending,clock_snapshot;
 static bool clock_valid;
 static unsigned clock_generation;
@@ -546,7 +550,8 @@ static void app_progress(const struct kui_app_status *status) {
     mutex_lock(&lock);
     if(active_app==19) memory_test_status=*status;
     else if(active_app==20 || active_app==45) network_test_status=*status;
-    else if(active_app>=41 && active_app<=43) maintenance_status=*status;
+    else if((active_app>=41 && active_app<=43) || active_app==87 || active_app==88) maintenance_status=*status;
+    else if(active_app>=84 && active_app<=86) vmu_image_snapshot.status=*status;
     else if(active_app==24) player_status=*status;
     else if(active_app==31) vmu_backups.status=*status;
     else vmu_snapshot.status=*status;
@@ -1605,7 +1610,8 @@ static bool games_action_invalidates(unsigned action) {
         action==14 || action==17 || action==18 || action==19 || action==21 || action==22 ||
         action==25 || action==30 || action==33 || action==38 || action==40 ||
         (action>=42 && action<=48) || (action>=56 && action<=59) || action==62 ||
-        action==64 || action==65 || action==67 || action==79 || action==81 || action==82 || (action>=68 && action<=71);
+        action==64 || action==65 || action==67 || action==79 || action==81 || action==82 ||
+        action==83 || action==85 || action==86 || (action>=68 && action<=71);
 }
 static bool games_idle_cancelled(void) {
     mutex_lock(&lock);
@@ -1916,9 +1922,19 @@ static void *worker(void *unused) {
                 snprintf(probe_status.message,sizeof(probe_status.message),"Games handoff stopped before starting.");
                 probe_launch_failed=true;
             }
-            if(action>=41 && action<=43) {
-                maintenance_status=(struct kui_app_status){.stopped=true};
+            if((action>=41 && action<=43) || action==87 || action==88) {
+                maintenance_status=(struct kui_app_status){.complete=true,.stopped=true};
                 snprintf(maintenance_status.message,sizeof(maintenance_status.message),"System operation stopped before starting.");
+            }
+            if(action==83) {
+                vmu_snapshot.status=(struct kui_app_status){.complete=true,.stopped=true};
+                snprintf(vmu_snapshot.status.message,sizeof(vmu_snapshot.status.message),"Card-image backup stopped before starting.");
+                ++vmu_generation;
+            }
+            if(action>=84 && action<=86) {
+                vmu_image_snapshot.status=(struct kui_app_status){.complete=true,.stopped=true};
+                snprintf(vmu_image_snapshot.status.message,sizeof(vmu_image_snapshot.status.message),"Image operation stopped before starting.");
+                ++vmu_image_generation;
             }
             if(action==45) {
                 network_test_status=(struct kui_app_status){.stopped=true};
@@ -2327,6 +2343,27 @@ static void *worker(void *unused) {
                         result.passed?"backup verified":result.stopped?"stopped":"not verified",true);
                 }
             }
+            if(action==87 || action==88) {
+                struct kui_app_status result;
+                active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
+                kui_maintenance_compare_run(maintenance_compare_path_pending,action==88,&result,
+                    kui_log,kui_cancelled,app_progress);
+                mutex_lock(&lock);maintenance_status=result;mutex_unlock(&lock);
+            }
+            if(action==83) {
+                struct kui_vmu_view result;
+                active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
+                kui_vmu_app_run(3,vmu_slot_pending,vmu_page_pending,vmu_selected_pending,
+                    &result,kui_log,kui_cancelled,app_progress);
+                mutex_lock(&lock);vmu_snapshot=result;++vmu_generation;mutex_unlock(&lock);
+            }
+            if(action>=84 && action<=86) {
+                struct kui_vmu_view result;
+                active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
+                kui_vmu_image_run(vmu_image_path_pending,vmu_image_page_pending,vmu_image_selected_pending,
+                    action-84,&result,kui_log,kui_cancelled,app_progress);
+                mutex_lock(&lock);vmu_image_snapshot=result;++vmu_image_generation;mutex_unlock(&lock);
+            }
             if(action>=46 && action<=48) salvage_operation(action);
             if(action==45) {
                 struct kui_app_status result;
@@ -2561,7 +2598,8 @@ static void draw_shell(void) {
         shell.page==KUI_SHELL_CRC_SCAN?scan_status:
         shell.page==KUI_SHELL_SALVAGE?salvage_status:
         shell.page==KUI_SHELL_SYSTEM_TOOLS?maintenance_status:
-        shell.page==KUI_SHELL_VMU_RESTORE && active_app==31?vmu_backups.status:vmu_snapshot.status;
+        shell.page==KUI_SHELL_VMU_IMAGE?vmu_image_snapshot.status:
+        shell.page==KUI_SHELL_VMU_RESTORE && active_app!=32 && active_app!=33?vmu_backups.status:vmu_snapshot.status;
     view.phase = capture_status.phase; view.track = capture_status.track; view.tracks = capture_status.tracks;
     view.rate_kib = rate_kib; view.retries = capture_display.retries;
     view.retry_attempt=capture_display.retry_attempt;view.retry_limit=capture_display.retry_limit;
@@ -2674,6 +2712,12 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_WIFI_UPDATE: return 78;
         case KUI_SHELL_REPAIR_COPY:return 81;
         case KUI_SHELL_FORENSIC:return 82;
+        case KUI_SHELL_VMU_BACKUP_CARD:return 83;
+        case KUI_SHELL_VMU_IMAGE_LIST:return 84;
+        case KUI_SHELL_VMU_IMAGE_EXTRACT:return 85;
+        case KUI_SHELL_VMU_IMAGE_EXTRACT_ALL:return 86;
+        case KUI_SHELL_FLASH_COMPARE:return 87;
+        case KUI_SHELL_BIOS_COMPARE:return 88;
         default: return 0;
     }
 }
@@ -2844,7 +2888,7 @@ int main(void) {
     unsigned seen_system_generation=0,seen_vmu_generation=0,seen_music_listing=0;
     unsigned seen_clock_generation=0,seen_vmu_backups=0,seen_vmu_restore=0;
     unsigned seen_storage_test=0,seen_storage_history=0;
-    unsigned seen_vmu_delete=0,seen_vmu_copy=0,seen_cd_audio=0;
+    unsigned seen_vmu_delete=0,seen_vmu_copy=0,seen_cd_audio=0,seen_vmu_image=0;
     unsigned seen_games_listing=0,seen_games_detail=0,seen_games_launch_result=0;
     unsigned seen_games_selection=0;
     unsigned seen_files_listing=0,seen_files_preview=0,seen_files_result=0,seen_files_picture=0;
@@ -2892,6 +2936,10 @@ int main(void) {
         }
         if(seen_vmu_generation!=vmu_generation) {
             kui_shell_set_vmu(&shell,&vmu_snapshot);seen_vmu_generation=vmu_generation;
+        }
+        if(seen_vmu_image!=vmu_image_generation) {
+            kui_shell_set_vmu_image(&shell,vmu_image_path_pending,vmu_image_page_pending,&vmu_image_snapshot);
+            seen_vmu_image=vmu_image_generation;
         }
         if(seen_music_listing!=music_listing_generation) {
             kui_shell_set_music_listing(&shell,&music_listing);
@@ -3106,7 +3154,7 @@ int main(void) {
             if(action==14) system_pending=shell.system_draft;
             if(action==13 || action==14) snprintf(system_note,sizeof(system_note),"%s",
                 action==14?"Saving system settings...":"Loading system settings...");
-            if(action>=16 && action<=18) {
+            if((action>=16 && action<=18) || action==83) {
                 vmu_slot_pending=shell.vmu_slot;vmu_page_pending=shell.vmu_page;
                 vmu_selected_pending=shell.vmu_selected;
                 vmu_snapshot.status=(struct kui_app_status){0};
@@ -3138,7 +3186,15 @@ int main(void) {
             }
             if(action>=49 && action<=53) cd_track_pending=shell.cd_selected<shell.cd_audio.count?
                 shell.cd_audio.tracks[shell.cd_selected].number:0;
-            if(action>=41 && action<=43) maintenance_status=(struct kui_app_status){0};
+            if((action>=41 && action<=43) || action==87 || action==88) maintenance_status=(struct kui_app_status){0};
+            if(action==87 || action==88)
+                memcpy(maintenance_compare_path_pending,shell.system_compare_path,sizeof(maintenance_compare_path_pending));
+            if(action>=84 && action<=86) {
+                memcpy(vmu_image_path_pending,shell.vmu_image_path,sizeof(vmu_image_path_pending));
+                vmu_image_page_pending=shell.vmu_image_page;vmu_image_selected_pending=shell.vmu_image_selected;
+                vmu_image_snapshot=shell.vmu_image;vmu_image_snapshot.page=vmu_image_page_pending;
+                vmu_image_snapshot.status=(struct kui_app_status){0};
+            }
             if(action==35) clock_pending=shell.clock_draft;
             if(action==23 || action==24) {
                 snprintf(music_path_pending,sizeof(music_path_pending),"%s",

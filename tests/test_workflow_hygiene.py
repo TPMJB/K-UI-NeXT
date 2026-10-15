@@ -147,6 +147,58 @@ class GamesFormatsValidationScope(unittest.TestCase):
         self.assertEqual(output, "")
 
 
+class MaintenanceValidationScope(unittest.TestCase):
+    def test_scoped_tools_and_their_checks_use_maintenance_validation(self):
+        paths = ("Makefile", "Makefile.dc", ".github/workflows/diagnostic.yml", "README.md",
+                 "include/kui/apps.h", "include/kui/maintenance.h", "include/kui/shell.h", "include/kui/version.h",
+                 "src/apps/vmu.c", "src/apps/maintenance.c", "src/apps/maintenance_platform.c",
+                 "src/core/shell.c", "src/dreamcast/main.c", "src/dreamcast/shell_draw.c",
+                 "tests/test_vmu_app.c", "tests/test_vmu_images.py", "tests/maintenance_image.c",
+                 "tests/test_maintenance_images.py", "tests/test_shell.c", "tests/render_shell.c",
+                 "tests/test_retail_package.py", "tests/test_workflow_hygiene.py", "docs/maintenance-tools.md")
+        for path in paths:
+            with self.subTest(path=path):
+                result, output = GamesVariantValidationScope().run_scope(path, "maintenance-only")
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("console_only=true", output)
+                self.assertIn("maintenance_only=true", output)
+                self.assertIn("release_only=false", output)
+                self.assertIn("games_formats=false", output)
+
+    def test_driver_and_unreviewed_source_changes_cannot_skip_real_filesystem_coverage(self):
+        for path in ("src/loader/retail_sd.c", "src/loader/retail_resident.c", "src/dreamcast/sci_port.c",
+                     "src/dreamcast/w5500_sci.c", "src/apps/vmu_unreviewed.c", "include/kui/vmu_unreviewed.h",
+                     "src/apps/games.c", "tests/test_games_images.py"):
+            with self.subTest(path=path):
+                result, output = GamesVariantValidationScope().run_scope(path, "maintenance-only")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("outside VMU, console maintenance, shell and their checks", result.stderr)
+                self.assertEqual(output, "")
+
+    def test_scope_runs_portable_and_all_existing_vmu_maintenance_cases(self):
+        script = step_script("name: Run maintenance tool checks")
+        self.assertEqual(script.strip().splitlines(), [
+            "make test build/test-vmu-app build/maintenance-image",
+            "python3 tests/test_vmu_images.py", "python3 tests/test_maintenance_images.py"])
+        result, output = GamesVariantValidationScope().run_scope("include/kui/games.h")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("maintenance_only=false", output)
+
+    def test_focused_scope_prepares_its_filesystem_dependencies_and_yaml_parser(self):
+        text = WORKFLOW.read_text()
+        focused = text.index("      - name: Run maintenance tool checks\n")
+        for name in ("Install filesystem test utilities", "Validate workflow YAML with the installed parser",
+                     "Restore pinned FatFs downloads", "Fetch verified FatFs sources"):
+            with self.subTest(step=name):
+                start = text.index("      - name: " + name + "\n")
+                self.assertLess(start, focused)
+                condition = text[start:].splitlines()[1].strip()
+                self.assertIn("steps.scope.outputs.maintenance_only == 'true'", condition)
+        start = text.index("      - name: Validate workflow YAML with the installed parser\n")
+        self.assertIn("KUI_REQUIRE_WORKFLOW_YAML: '1'", text[start:focused])
+        self.assertIn("python3 tools/fetch_deps.py --fatfs-only", text[start:focused])
+
+
 class ExperimentalBuildIsOptIn(unittest.TestCase):
     """The DMA probe must never be in an ordinary build, and must be reachable without the
     "Run workflow" button: that button only exists when the workflow file is on the repository's
@@ -284,7 +336,7 @@ class ReleasePublicationWorkflow(unittest.TestCase):
         for name in ("Restore pinned FatFs downloads", "Fetch verified FatFs sources"):
             lines = text[text.index("      - name: " + name + "\n"):].splitlines()
             self.assertEqual(lines[1].strip(),
-                             "if: steps.scope.outputs.console_only != 'true' || steps.scope.outputs.release_only == 'true'")
+                             "if: steps.scope.outputs.console_only != 'true' || steps.scope.outputs.release_only == 'true' || steps.scope.outputs.maintenance_only == 'true'")
         self.assertIn("python3 tools/fetch_deps.py --fatfs-only", text[fetch:release])
         self.assertIn("make build/music-asset-check", step_script("name: Check release publication, installation and splash"))
 

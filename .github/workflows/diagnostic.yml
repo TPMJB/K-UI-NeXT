@@ -131,6 +131,20 @@ jobs:
                   raise SystemExit('Games-variants request includes changes outside listing, selector UI and documentation')
               requested = True
               print('Games selector: focused shell and FAT32/exFAT Games checks recorded locally; native build and package checks run here.')
+          maintenance = 'Validation: maintenance-only' in message.splitlines()
+          if maintenance:
+              paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
+              exact = {'Makefile', 'Makefile.dc', '.github/workflows/diagnostic.yml', 'README.md',
+                       'include/kui/apps.h', 'include/kui/maintenance.h', 'include/kui/shell.h', 'include/kui/version.h',
+                       'src/apps/vmu.c', 'src/apps/maintenance.c', 'src/apps/maintenance_platform.c',
+                       'src/core/shell.c', 'src/dreamcast/main.c', 'src/dreamcast/shell_draw.c',
+                       'tests/test_vmu_app.c', 'tests/test_vmu_images.py', 'tests/maintenance_image.c',
+                       'tests/test_maintenance_images.py', 'tests/test_shell.c', 'tests/render_shell.c',
+                       'tests/test_retail_package.py', 'tests/test_workflow_hygiene.py'}
+              if not paths or any(p not in exact and not p.startswith('docs/') for p in paths):
+                  raise SystemExit('Maintenance-only request includes changes outside VMU, console maintenance, shell and their checks')
+              requested = True
+              print('Maintenance tools: portable suite and all VMU/maintenance FAT32/exFAT checks; native build and package gates remain enabled.')
           formats = 'Validation: games-formats' in message.splitlines()
           if formats:
               paths = subprocess.check_output(['git', 'diff', '--name-only', head + '^', head], text=True).splitlines()
@@ -224,6 +238,7 @@ jobs:
               out.write('console_only=' + str(requested).lower() + '\n')
               out.write('games_formats=' + str(formats).lower() + '\n')
               out.write('release_only=' + str(candidate).lower() + '\n')
+              out.write('maintenance_only=' + str(maintenance).lower() + '\n')
           PY
       - name: Check Sonic caller-stack capture
         if: env.KUI_RETAIL_SONIC_STACK_TEST == '1' || env.KUI_RETAIL_LOW_RESIDENT == '1'
@@ -240,21 +255,21 @@ jobs:
           python3 tests/test_retail_package.py
           python3 tests/test_workflow_hygiene.py
       - name: Install filesystem test utilities
-        if: steps.scope.outputs.console_only != 'true'
+        if: steps.scope.outputs.console_only != 'true' || steps.scope.outputs.maintenance_only == 'true'
         run: sudo apt-get update && sudo apt-get install -y dosfstools exfatprogs mtools e2fsprogs mame-tools liblzo2-2 python3-yaml
       - name: Validate workflow YAML with the installed parser
-        if: steps.scope.outputs.console_only != 'true'
+        if: steps.scope.outputs.console_only != 'true' || steps.scope.outputs.maintenance_only == 'true'
         env:
           KUI_REQUIRE_WORKFLOW_YAML: '1'
         run: /usr/bin/python3 tests/test_workflow_hygiene.py
       - name: Restore pinned FatFs downloads
-        if: steps.scope.outputs.console_only != 'true' || steps.scope.outputs.release_only == 'true'
+        if: steps.scope.outputs.console_only != 'true' || steps.scope.outputs.release_only == 'true' || steps.scope.outputs.maintenance_only == 'true'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .deps/downloads
           key: fatfs-downloads-v1-${{ hashFiles('dependencies.json') }}
       - name: Fetch verified FatFs sources
-        if: steps.scope.outputs.console_only != 'true' || steps.scope.outputs.release_only == 'true'
+        if: steps.scope.outputs.console_only != 'true' || steps.scope.outputs.release_only == 'true' || steps.scope.outputs.maintenance_only == 'true'
         run: python3 tools/fetch_deps.py --fatfs-only
       - name: Check release publication, installation and splash
         if: >-
@@ -266,6 +281,12 @@ jobs:
           make build/music-asset-check build/test-splash
           ./build/test-splash
           python3 tests/test_splash_assets.py
+      - name: Run maintenance tool checks
+        if: steps.scope.outputs.maintenance_only == 'true'
+        run: |
+          make test build/test-vmu-app build/maintenance-image
+          python3 tests/test_vmu_images.py
+          python3 tests/test_maintenance_images.py
       - name: Run portable and real filesystem checks
         if: steps.scope.outputs.console_only != 'true' && steps.scope.outputs.games_formats != 'true'
         run: make test test-images

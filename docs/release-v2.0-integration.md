@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Tyrfing integration record
 
-Preparation date: 2026-10-15. Original integration version **2.0-rc10** (artwork candidate: **2.0-rc11**), release name **Tyrfing**.
+Preparation date: 2026-10-15. Original integration version **2.0-rc10** (artwork candidate: **2.0-rc11**, small-tools candidate: **2.0-rc12**), release name **Tyrfing**.
 This prepares the next release without publishing a final 2.0 tag.
 
 ## Selected source
@@ -70,3 +70,22 @@ larger runtime gaps remain recommendations, not new release features.
 Final acceptance requires the complete assembled candidate's build/package
 checks and console confirmation. Per-feature hardware reports remain scoped to
 their original binaries; a fresh integration is not automatically hardware-tested.
+
+
+## RC12 small-tools follow-up
+
+RC12 retains the RC11 orange runtime/bootstrap artwork and adds three bounded
+maintenance workflows: verified full-card 128 KiB VMD backup, read-only VMD
+browsing/save extraction into existing verified restore bundles, and read-only
+settings-flash/visible-BIOS comparison with an exact-size SD image. Its menu
+jobs use 83–88 without changing the earlier launch/network dispatch.
+
+All implementation is K-UI code built on the pinned upstream KallistiOS APIs;
+no DreamShell source was used. Full-card restore/format/overwrite, broader save
+imports, bulk VMU copy, loader changes and permanent flash/region changes remain
+excluded. RC11 stays available as the preceding acceptance baseline.
+
+A scoped maintenance CI path runs the ordinary host checks plus the complete
+VMU/maintenance FAT32/exFAT suites. It retains the existing Dreamcast build,
+layout/stack/instruction, source/licence and full-package checks. Console
+acceptance of this assembled RC12 remains the gate before a final 2.0 release.

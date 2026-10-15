@@ -36,12 +36,18 @@ struct kui_vmu_backup_view {
 };
 void kui_memory_app_run(struct kui_app_status *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
 void kui_network_app_run(struct kui_app_status *out,kui_log_fn log,kui_cancel_fn cancel);
-/* action 0=list, 1=backup selected row, 2=backup all saves. These are read-only
+/* action 0=list, 1=backup selected row, 2=backup all saves, 3=full-card VMD.
+ * These actions are read-only
  * on the VMU. New backups include .crc records required for restore. */
 void kui_vmu_app_run(unsigned action,unsigned slot,unsigned page,unsigned selected,
     struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
 void kui_vmu_backups_run(unsigned page,struct kui_vmu_backup_view *out,
     kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+/* Exact 128 KiB raw VMD only. action 0=browse, 1=extract selected row,
+ * 2=extract all into new .vms/.dir/.crc bundles. Source is always read-only;
+ * these tools do not access any physical VMU or implement image restoration. */
+void kui_vmu_image_run(const char *path,unsigned page,unsigned selected,unsigned action,
+    struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
 /* Preview (commit=false) reads/checks the entire backup and destination. Commit
  * requires that exact preview, rechecks both, and adds a new file only. Existing
  * names are refused. Never formats, deletes, or overwrites. Once VMU metadata

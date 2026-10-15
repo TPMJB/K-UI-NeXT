@@ -1,12 +1,14 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/maintenance.h"
+#include "kui/files.h"
+#include "kui/hash.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 #define ROOT "0:/KUI/backups/system"
 struct session {struct kui_app_status *out;kui_log_fn log;kui_cancel_fn cancel;kui_app_progress_fn progress;};
 static void message(struct session *s,const char *text){snprintf(s->out->message,sizeof(s->out->message),"%s",text);if(s->progress)s->progress(s->out);}
-static bool error(struct session *s,const char *text){++s->out->errors;message(s,text);if(s->log)s->log("System backup: %s",text);return false;}
+static bool error(struct session *s,const char *text){++s->out->errors;message(s,text);if(s->log)s->log("System maintenance: %s",text);return false;}
 static bool stopped(struct session *s){if(s->cancel&&s->cancel()){s->out->stopped=true;message(s,"Stopped; incomplete backup is not published");return true;}return false;}
 bool kui_maintenance_layout_valid(const struct kui_maintenance_identity *id){
     if(!id)return false;
@@ -86,5 +88,101 @@ done:
     if(opened&&f_close(&file)!=FR_OK)error(&s,"Backup cleanup close failed");
     out->complete=ok;out->passed=ok&&!out->errors&&!out->stopped;
     if(log){log("System maintenance: %s",out->message);if(action==KUI_MAINTENANCE_INSPECT)for(unsigned i=0;i<out->line_count;i++)log("%s",out->lines[i]);}
+    if(progress)progress(out);
+}
+static bool compare_stopped(struct session *s){
+    if(s->cancel&&s->cancel()){
+        s->out->stopped=true;message(s,"Comparison stopped; no result and no files changed");return true;
+    }
+    return false;
+}
+void kui_maintenance_compare_execute(const char *path,bool bios,
+    const struct kui_maintenance_source *source,struct kui_app_status *out,
+    kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress){
+    if(!out)return;
+    memset(out,0,sizeof(*out));struct session s={out,log,cancel,progress};
+    struct kui_maintenance_identity before,after;FIL file;bool opened=false,ok=false;
+    uint8_t data[4096],check[4096],first_source[32],first_image[32];
+    char local[KUI_FILES_PATH_CAP+2u];
+    const char *card=path&&path[0]=='0'&&path[1]==':'?path+2:path;
+    const uint32_t bytes=bios?KUI_MAINTENANCE_BIOS_BYTES:KUI_MAINTENANCE_FLASH_BYTES;
+    uint32_t differing=0,first=UINT32_MAX,source_crc=0,image_crc=0;
+    if(!source||!source->identity||!source->read||
+       !kui_files_path_valid(card)||!card[1]){
+        error(&s,"Invalid comparison source or local SD image path");goto done;
+    }
+    int length=snprintf(local,sizeof(local),"0:%s",card);
+    if(length<0||(size_t)length>=sizeof(local)){error(&s,"Comparison path is too long");goto done;}
+    if(compare_stopped(&s))goto done;
+    memset(&before,0,sizeof(before));
+    if(!source->identity(source->ctx,&before)){error(&s,"Cannot read console identity/flash partition layout");goto done;}
+    describe(out,&before);
+    if(!kui_maintenance_layout_valid(&before)){error(&s,"Unsupported or overlapping flash partition layout");goto done;}
+    out->total=(uint64_t)bytes*2;
+    for(unsigned pass=0;pass<2;pass++){
+        struct kui_sha256 source_hash,image_hash;uint8_t source_digest[32],image_digest[32];
+        kui_sha256_init(&source_hash);kui_sha256_init(&image_hash);
+        uint32_t pass_differing=0,pass_first=UINT32_MAX;source_crc=0;image_crc=0;
+        if(compare_stopped(&s))goto done;
+        message(&s,pass?"Rechecking comparison and source stability":
+            bios?"Comparing image with the visible BIOS bank":"Comparing image with all settings-flash partitions");
+        if(f_open(&file,local,FA_READ)!=FR_OK){error(&s,"Cannot open selected image for read-only comparison");goto done;}
+        opened=true;
+        if(f_size(&file)!=bytes){
+            error(&s,bios?"BIOS comparison requires an exact 2097152-byte image":
+                "Settings-flash comparison requires an exact 131072-byte image");goto done;
+        }
+        for(uint32_t off=0;off<bytes;off+=sizeof(data)){
+            UINT amount=(UINT)(bytes-off>sizeof(data)?sizeof(data):bytes-off),got=0;
+            if(compare_stopped(&s))goto done;
+            if(source->read(source->ctx,bios,off,data,amount)||
+               source->read(source->ctx,bios,off,check,amount)){
+                error(&s,"Console memory read failed during comparison");goto done;
+            }
+            if(memcmp(data,check,amount)){
+                error(&s,"Console memory changed between reads; comparison refused");goto done;
+            }
+            if(f_read(&file,check,amount,&got)!=FR_OK||got!=amount){
+                error(&s,"Selected image read failed during comparison");goto done;
+            }
+            for(UINT i=0;i<amount;i++)if(data[i]!=check[i]){
+                if(pass_first==UINT32_MAX)pass_first=off+i;
+                ++pass_differing;
+            }
+            kui_sha256_update(&source_hash,data,amount);kui_sha256_update(&image_hash,check,amount);
+            source_crc=kui_crc32(source_crc,data,amount);image_crc=kui_crc32(image_crc,check,amount);
+            out->done+=amount;if(progress)progress(out);
+        }
+        FRESULT closed=f_close(&file);opened=false;
+        if(closed!=FR_OK){error(&s,"Selected image close failed during comparison");goto done;}
+        kui_sha256_digest(&source_hash,source_digest);kui_sha256_digest(&image_hash,image_digest);
+        if(!pass){
+            differing=pass_differing;first=pass_first;
+            memcpy(first_source,source_digest,sizeof(first_source));memcpy(first_image,image_digest,sizeof(first_image));
+        }else if(memcmp(first_source,source_digest,sizeof(first_source))||
+                 memcmp(first_image,image_digest,sizeof(first_image))||
+                 differing!=pass_differing||first!=pass_first){
+            error(&s,"Console memory or selected image changed; comparison refused");goto done;
+        }
+    }
+    memset(&after,0,sizeof(after));
+    if(!source->identity(source->ctx,&after)||memcmp(&before,&after,sizeof(before))){
+        error(&s,"Console identity changed during comparison");goto done;
+    }
+    if(compare_stopped(&s))goto done;
+    out->line_count=12;
+    if(differing){
+        snprintf(out->message,sizeof(out->message),"Different: %" PRIu32 " bytes; first at 0x%08" PRIx32,differing,first);
+        snprintf(out->lines[10],KUI_APP_LINE_CAP,"Different bytes=%" PRIu32 "; first offset=0x%08" PRIx32,differing,first);
+    }else{
+        snprintf(out->message,sizeof(out->message),"Exact match: %s (%" PRIu32 " bytes)",bios?"visible BIOS bank":"settings flash",bytes);
+        snprintf(out->lines[10],KUI_APP_LINE_CAP,"All %" PRIu32 " bytes match; differing bytes=0",bytes);
+    }
+    snprintf(out->lines[11],KUI_APP_LINE_CAP,"CRC32: console=%08" PRIx32 "; image=%08" PRIx32,source_crc,image_crc);
+    ok=true;
+done:
+    if(opened&&f_close(&file)!=FR_OK)error(&s,"Comparison cleanup close failed");
+    out->complete=ok;out->passed=ok&&!differing&&!out->errors&&!out->stopped;
+    if(log){log("System comparison: %s",out->message);if(ok)for(unsigned i=0;i<out->line_count;i++)log("%s",out->lines[i]);}
     if(progress)progress(out);
 }

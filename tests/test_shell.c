@@ -1212,7 +1212,7 @@ static void new_pages_rendering(void) {
     }
     s.vmu_slot=7;s.vmu_selected=7;render(&v);
     assert(strstr(drawn,"VMU D2") && strstr(drawn,"SAVE_07") && strstr(drawn,"32768 bytes"));
-    assert(strstr(drawn,"LEFT/RIGHT VMU") && strstr(drawn,"L Copy / delete selected"));
+    assert(strstr(drawn,"LEFT/RIGHT VMU") && strstr(drawn,"L Save / card actions"));
     reset(KUI_SHELL_HOME);v.app_status=NULL;
     render(&v);
     assert(strstr(drawn,"SD game library") && !strstr(drawn,"Inserted:"));
@@ -1342,7 +1342,8 @@ static void round_five_controls(void) {
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_SYSTEM_INSPECT && s.page==KUI_SHELL_SYSTEM_TOOLS);
     assert(press(KUI_SHELL_X,false)==KUI_SHELL_FLASH_BACKUP);
     assert(press(KUI_SHELL_Y,false)==KUI_SHELL_BIOS_BACKUP);
-    press(KUI_SHELL_UP,false);assert(s.tools_selected==3);
+    press(KUI_SHELL_UP,false);assert(s.tools_selected==5);
+    press(KUI_SHELL_UP,false);press(KUI_SHELL_UP,false);assert(s.tools_selected==3);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_restart);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_restart);
     press(KUI_SHELL_A,false);assert(press(KUI_SHELL_A,false)==KUI_SHELL_RESTART);
@@ -3428,6 +3429,135 @@ static void games_remembered_selection(void) {
     puts("PASS Games selection: cold folder/name restoration after sorting, exact page row, stale guards, parent anchor, refresh and missing-folder fallback");
 }
 
+static void small_tools_controls(void) {
+    /* Full image backup includes an empty readable card; existing selected
+     * and all-save actions retain their independent dispatch. */
+    reset(KUI_SHELL_VMU);s.vmu.present=true;
+    assert(press(KUI_SHELL_L,true)==KUI_SHELL_MSTATS && s.page==KUI_SHELL_VMU);
+    assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_ACTIONS);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    press(KUI_SHELL_DOWN,false);assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    press(KUI_SHELL_DOWN,false);assert(s.vmu_action_selected==2);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_VMU_ACTIONS);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_BACKUP_CARD);
+    s.vmu.present=false;assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_VMU);
+    s.vmu.present=true;s.vmu.count=s.vmu.total=1;
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_VMU_BACKUP);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_VMU_BACKUP_ALL);
+    assert(press(KUI_SHELL_R,false)==KUI_SHELL_VMU_BACKUPS_LIST);
+    struct kui_vmu_backup_view backups={.page=0,.count=2,.total=2};
+    strcpy(backups.entries[0].path,"/KUI/backups/vmu/A1-0001/card.VMD");
+    strcpy(backups.entries[0].name,"card.VMD");
+    strcpy(backups.entries[1].path,"/KUI/backups/vmu/A1-0002/TESTSAVE.vms");
+    strcpy(backups.entries[1].name,"TESTSAVE");
+    kui_shell_set_vmu_backups(&s,&backups);s.vmu_slot=5;
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_RESTORE);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_IMAGE_LIST && s.page==KUI_SHELL_VMU_IMAGE);
+    assert(!strcmp(s.vmu_image_path,backups.entries[0].path) && !s.restore_path[0] && !s.confirm_vmu_restore);
+    assert(s.vmu_slot==5 && s.vmu.count==1 && !s.vmu_image.count);
+    struct kui_vmu_view image={.page=0,.count=2,.total=10,.present=true};
+    strcpy(image.entries[0].name,"FIRST_SAVE");strcpy(image.entries[1].name,"SECOND_SAVE");
+    kui_shell_set_vmu_image(&s,"/other.vmd",0,&image);assert(!s.vmu_image.count);
+    image.page=1;kui_shell_set_vmu_image(&s,s.vmu_image_path,image.page,&image);assert(!s.vmu_image.count);
+    image.page=0;kui_shell_set_vmu_image(&s,s.vmu_image_path,image.page,&image);assert(s.vmu_image.count==2);
+    press(KUI_SHELL_DOWN,false);assert(s.vmu_image_selected==1);
+    assert(press(KUI_SHELL_X,true)==KUI_SHELL_NONE && s.vmu_image_selected==1);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_VMU_IMAGE_EXTRACT && s.vmu_image_selected==1);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_VMU_IMAGE_EXTRACT_ALL);
+    assert(s.vmu_slot==5 && s.vmu_selected==0 && !s.confirm_vmu_restore);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_VMU_IMAGE_LIST && s.vmu_image_page==1);
+    assert(!s.vmu_image.count && s.vmu_image_selected==0);
+    kui_shell_set_vmu_image(&s,s.vmu_image_path,image.page,&image);assert(!s.vmu_image.count);
+    image.page=1;image.status.stopped=true;
+    kui_shell_set_vmu_image(&s,s.vmu_image_path,image.page,&image);assert(s.vmu_image.present);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_VMU_IMAGE_EXTRACT); /* Retry after stop. */
+    image.page=0;kui_shell_set_vmu_image(&s,s.vmu_image_path,1,&image);
+    assert(s.vmu_image_page==0 && s.vmu_image.count==2); /* Refresh can return a shorter image. */
+    assert(press(KUI_SHELL_B|KUI_SHELL_X,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_RESTORE);
+    assert(s.backups.count==2 && s.backup_selected==0 && s.vmu_slot==5);
+    kui_shell_set_vmu_image(&s,s.vmu_image_path,image.page,&image);assert(s.page==KUI_SHELL_VMU_RESTORE);
+    s.backup_selected=1;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_RESTORE_PREVIEW);
+    assert(!strcmp(s.restore_path,backups.entries[1].path)); /* Original physical restore. */
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU);
+    for(unsigned bios=0;bios<2;bios++) {
+        reset(KUI_SHELL_SYSTEM_TOOLS);s.tools_selected=4+bios;
+        strcpy(s.files_path,"/Music");
+        assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && !s.files_pick_compare);
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_FILES_LIST && s.page==KUI_SHELL_FILES_PICK);
+        assert(s.files_pick_compare && s.system_compare_bios==(bool)bios && !s.files_request.folders_only);
+        assert(!strcmp(s.files_path,"/Music") && !strcmp(s.files_request.path,"/KUI/backups"));
+        const char *names[]={"system","image.bin","bad.bin","bad/name"};
+        const bool dirs[]={true,false,false,false};
+        struct kui_files_page page=files_result("/KUI/backups",false,4,0,12,names,dirs);
+        page.entries[1].bytes=bios?2097152u:131072u;
+        page.entries[2].bytes=512;
+        struct kui_files_page stale=page;stale.folders_only=true;
+        kui_shell_set_files_listing(&s,&stale);assert(!s.files_pick.count);
+        strcpy(stale.path,"/other");stale.folders_only=false;
+        kui_shell_set_files_listing(&s,&stale);assert(!s.files_pick.count);
+        kui_shell_set_files_listing(&s,&page);assert(s.files_pick.count==4 && s.files_pick.entries[3].disabled);
+        assert(!s.files_listing.count); /* File choice stays outside the ordinary browser. */
+        assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_FILES_PICK);
+        s.files_pick_selected=2;
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && strstr(s.files_pick.message,"exact"));
+        assert(!s.system_compare_path[0]);
+        s.files_pick_selected=3;assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+        s.files_pick_selected=0;
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_FILES_LIST && !strcmp(s.files_pick_path,"/KUI/backups/system"));
+        assert(!s.files_request.folders_only);
+        assert(press(KUI_SHELL_B,false)==KUI_SHELL_FILES_LIST && !strcmp(s.files_pick_path,"/KUI/backups"));
+        kui_shell_set_files_listing(&s,&page);s.files_pick_selected=1;
+        assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.files_pick_compare);
+        assert(press(KUI_SHELL_A,false)==(bios?KUI_SHELL_BIOS_COMPARE:KUI_SHELL_FLASH_COMPARE));
+        assert(s.page==KUI_SHELL_SYSTEM_TOOLS && !s.files_pick_compare);
+        assert(!strcmp(s.system_compare_path,"/KUI/backups/image.bin") && !strcmp(s.files_path,"/Music"));
+        assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_SYSTEM_TOOLS);
+        assert(!strcmp(s.system_compare_path,"/KUI/backups/image.bin"));
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_FILES_LIST);
+        assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SYSTEM_TOOLS && !s.files_pick_compare);
+        press(KUI_SHELL_A,false);
+        while(strcmp(s.files_pick_path,"/")) assert(press(KUI_SHELL_B,false)==KUI_SHELL_FILES_LIST);
+        assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SYSTEM_TOOLS && !s.files_pick_compare);
+    }
+    puts("PASS small tools: empty VMU card backup, VMD browse/extract separate from restore, safe file selection, exact size checks, stale guards and Stop ownership");
+}
+static void small_tools_rendering(void) {
+    struct kui_shell_view view={0};
+    reset(KUI_SHELL_VMU_ACTIONS);s.vmu_action_selected=2;render(&view);
+    assert(strstr(drawn,"Backup card image") && strstr(drawn,"all 128 KiB") && strstr(drawn,"No selected save"));
+    reset(KUI_SHELL_VMU_IMAGE);strcpy(s.vmu_image_path,"/KUI/backups/vmu/A1-0001/card.vmd");
+    s.vmu_image.present=true;s.vmu_image.count=8;s.vmu_image.total=13;
+    for(unsigned i=0;i<8;i++) {
+        snprintf(s.vmu_image.entries[i].name,16,"SAVE_%02u",i);s.vmu_image.entries[i].bytes=32768;
+    }
+    s.vmu_image_selected=7;render(&view);
+    assert(strstr(drawn,"VMU card image on SD") && strstr(drawn,"SAVE_07") && strstr(drawn,"X Extract selected"));
+    assert(strstr(drawn,"verified SD backups only") && !strstr(drawn,"WRITE THIS SAVE"));
+    s.vmu_image.count=0;render(&view);assert(strstr(drawn,"No saves on this page"));
+    view.busy=true;render(&view);assert(strstr(drawn,"Reading card image"));
+    view.busy=false;reset(KUI_SHELL_SYSTEM_TOOLS);s.tools_selected=5;
+    struct kui_app_status status={.complete=true,.line_count=12};
+    strcpy(status.message,"Different: 42 bytes; first at 0x000020.");
+    strcpy(status.lines[10],"Visible BIOS differs at 0x000020");
+    strcpy(status.lines[11],"Console memory and SD image were not changed.");
+    view.app_status=&status;render(&view);
+    assert(strstr(drawn,"Compare settings flash with SD image") && strstr(drawn,"Compare visible BIOS with SD image"));
+    assert(strstr(drawn,"Different: 42 bytes") && strstr(drawn,"not changed"));
+    view.app_status=NULL;
+    press(KUI_SHELL_A,false);
+    static const char *names[]={"system","bios-0001.bin","short.bin"};
+    static const bool dirs[]={true,false,false};
+    struct kui_files_page files=files_result("/KUI/backups",false,3,0,3,names,dirs);
+    files.entries[1].bytes=2097152u;kui_shell_set_files_listing(&s,&files);render(&view);
+    assert(strstr(drawn,"Choose a BIOS image") && strstr(drawn,"bios-0001.bin") && strstr(drawn,"2.0 MB"));
+    assert(strstr(drawn,"Comparison is read-only") && !strstr(drawn,"Y Move here") && !strstr(drawn,"Y Copy here"));
+    s.system_compare_bios=false;render(&view);assert(strstr(drawn,"128 KiB") && strstr(drawn,"settings-flash image"));
+    puts("PASS small tools rendering: card image actions, eight image rows, progress, compare file sizes and outcome details fit safe margins");
+}
+
 int main(int argc,char **argv) {
     if(argc==2 && !strcmp(argv[1],"--wifi")) {
         wifi_controls();wifi_rendering();wifi_update_controls();wifi_update_rendering();return 0;
@@ -3440,6 +3570,7 @@ int main(int argc,char **argv) {
         destination_transaction();keyboard_transaction();advanced_navigation();restore_and_scan_controls();
         ripper_saved_job_rendering();reference_and_destination_rendering();music_and_boot_rendering();return 0;
     }
+    small_tools_controls();small_tools_rendering();
     games_remembered_selection(); games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_cdda_compatibility_status(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_zso_controls(); games_codec_controls(); games_check_baseline_controls(); games_variant_controls();
     if(argc==2 && !strcmp(argv[1],"--games-controls")) { puts("PASS Games navigation and launch controls"); return 0; }
     games_rendering(); games_patch_rendering(); games_zso_rendering(); games_selected_art_rendering(); games_variant_rendering();

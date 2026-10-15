@@ -1,14 +1,15 @@
-# K-UI V2.0 RC11 "Tyrfing"
+# K-UI V2.0 RC12 "Tyrfing"
 
 An independent Dreamcast shell built directly on upstream KallistiOS, retaining
 the original GD-ROM and using exFAT/FAT32 storage.
 
-**The current source prepares 2.0 RC11, named Tyrfing, continuing the cursed-sword
+**The current source prepares 2.0 RC12, named Tyrfing, continuing the cursed-sword
 release theme.** It integrates the tested SCI Windows CE CD music work with
 saved per-image launch options while retaining the established 1.8.5 native
 reader. This is release preparation; a final 2.0 release has not been published.
-RC11 adds matching orange Tyrfing splash, bootloader, header and disc-badge
-artwork. The runtime update works with an existing compatible bootstrap;
+RC12 adds verified 128 KiB VMU card-image backups, read-only VMD browsing
+and save extraction, and read-only BIOS/settings-flash comparisons. It retains
+the matching orange Tyrfing splash, bootloader, header and disc-badge artwork. The runtime update works with an existing compatible bootstrap;
 burn the matching optional CDI to update artwork stored on the boot disc.
 Read the [2.0 installation guide](docs/release-v2.0.md) and
 [2.0 preparation notes](docs/release-v2.0-notes.md) for its scope.
@@ -115,11 +116,15 @@ These new app paths still need physical-console acceptance.
   Current retry attempts and the cumulative job total are labelled separately.
 - System Settings: 640x480 TV timing with reversible preview, memory display,
   music enabled and volume, startup chime/app, local clock, TV safe area, menu sounds
-  and restore-defaults. System Tools adds inventory, verified flash/visible BIOS backups and Restart.
+  and restore-defaults. System Tools adds inventory, verified flash/visible BIOS
+  backups, read-only comparisons with card files and Restart.
   Capture hashes/readback remain inside the ripper. New file dates follow the RTC.
 - VMU Manager: read saves, make verified SD backups, and preview/confirm restore
   into a free filename with readback. Managed copy/delete require confirmation and
-  a verified restorable SD backup. No overwrite or format. Memory Test checks only its allocated RAM.
+  a verified restorable SD backup. Actions also backs up a whole formatted
+  card as VMD; Backups browses VMD images and extracts selected/all saves into
+  verified bundles without a connected VMU. No overwrite or format. Memory Test
+  checks only its allocated RAM.
 - Ripper Advanced CRC scans completed saved jobs and reports hash/Mode 1 sector
   errors separately. Already-read track sizes and CRCs are compared with the
   Redump/TOSEC catalogues, including GDI-only folders without a manifest. Only a

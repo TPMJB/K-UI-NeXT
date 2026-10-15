@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Read-only console backups and publication failures on real FAT32/exFAT."""
+"""Read-only console comparisons and backup publication on real FAT32/exFAT."""
 from pathlib import Path
 import hashlib
 import shutil
@@ -33,5 +33,22 @@ def main():
                 if case not in ("write-fail", "sync-fail"):
                     run("fsck.fat" if kind == "fat32" else "fsck.exfat", "-n", str(image))
                 print(f"PASS {kind} maintenance: {case}", flush=True)
+            comparison_cases = ("exact", "qualified", "deep", "deep-qualified", "too-long", "unknown-identity", "different", "truncated", "oversize",
+                                "missing", "directory", "unsafe-parent", "other-drive", "root",
+                                "bad-layout", "identity-fail", "identity-after-fail", "identity-change", "source-fail", "source-second-fail",
+                                "source-change", "source-late-change", "media-fail", "file-change",
+                                "cancel-before", "cancel-during", "cancel-recheck")
+            for target in ("flash", "bios"):
+                for case in comparison_cases:
+                    name = f"compare-{target}-{case}"
+                    image = base / f"{kind}-{name}.img"
+                    shutil.copyfile(seed, image)
+                    run(BINARY, str(image), name, "prepare")
+                    before = digest(image)
+                    output = run(BINARY, str(image), name)
+                    assert f"PASS maintenance {name}" in output
+                    assert digest(image) == before, "read-only comparison changed the card"
+                    run("fsck.fat" if kind == "fat32" else "fsck.exfat", "-n", str(image))
+                    print(f"PASS {kind} maintenance: {name}, storage hash unchanged", flush=True)
 if __name__ == "__main__":
     main()
