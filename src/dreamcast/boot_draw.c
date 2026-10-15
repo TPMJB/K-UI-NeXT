@@ -7,9 +7,9 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Ivory and warm accents stay legible over dark crimson on RF/composite. */
-enum { WHITE=0xff9b, MUTED=0xcdd7, SALMON=0xf594, CRIMSON=0xe12a,
-    PANEL=0x1042, SELECTED=0x58a4, EDGE=0x7946, AMBER=0xfd6f };
+/* Ivory and orange accents stay legible over dark Tyrfing panels on RF/composite. */
+enum { WHITE=0xff9b, MUTED=0xcdd4, HIGHLIGHT=0xfe2d, ORANGE=0xfc44,
+    PANEL=0x1061, SELECTED=0x5182, EDGE=0xa2a4, AMBER=0xfd6f };
 static void box(uint16_t *frame,unsigned x,unsigned y,unsigned w,unsigned h,uint16_t c) {
     for(unsigned row=y;row<y+h && row<480;row++)
         for(unsigned col=x;col<x+w && col<640;col++) frame[row*640+col]=c;
@@ -51,7 +51,7 @@ static void menu(uint16_t *f,const struct kui_boot_ui *ui,const struct kui_boot_
     box(f,320,112,288,224,PANEL);
     for(unsigned i=0;i<5;i++) {
         unsigned y=120+i*42;
-        if(i==ui->selected) {box(f,38,y,268,38,SELECTED);box(f,38,y,4,38,CRIMSON);}
+        if(i==ui->selected) {box(f,38,y,268,38,SELECTED);box(f,38,y,4,38,ORANGE);}
         text(f,50,y+7,298,i==ui->selected?WHITE:MUTED,
             home_page?home[i]:diagnostics[i],true);
     }
@@ -93,7 +93,7 @@ static void menu(uint16_t *f,const struct kui_boot_ui *ui,const struct kui_boot_
             details[4]="No writes. Y shows logs.";break;
         }
     }
-    text(f,336,126,596,SALMON,heading,false);
+    text(f,336,126,596,HIGHLIGHT,heading,false);
     for(unsigned i=0;i<6;i++) line(f,336,159+i*26,596,details[i]);
     if(!v->worker_available && !home_page)
         text(f,336,307,596,AMBER,"Diagnostics unavailable",false);
@@ -120,7 +120,7 @@ void kui_boot_ui_draw(uint16_t *frame,const struct kui_boot_ui *ui,
     if(view->countdown && !view->busy && ui->page==KUI_BOOT_HOME) {
         kui_boot_splash_draw(frame);
         box(frame,32,360,576,96,PANEL);
-        box(frame,32,360,5,96,CRIMSON);
+        box(frame,32,360,5,96,ORANGE);
         char countdown[64];snprintf(countdown,sizeof(countdown),"Starting K-UI in %u...",view->countdown);
         text(frame,48,373,592,WHITE,countdown,true);
         line(frame,48,407,592,"A Start now   B Boot menu   X Recovery");
@@ -131,17 +131,17 @@ void kui_boot_ui_draw(uint16_t *frame,const struct kui_boot_ui *ui,
      * readable over RF/composite; no scaling, fine-line icons or animations. */
     kui_boot_splash_draw_dimmed(frame);
     box(frame,32,24,576,76,PANEL);
-    box(frame,32,24,5,76,CRIMSON);
+    box(frame,32,24,5,76,ORANGE);
     text(frame,48,34,366,WHITE,"K-UI Boot",true);
     line(frame,48,65,366,view->from_card?"Card boot / recovery":"CD boot / recovery");
-    text(frame,392,36,594,SALMON,KUI_RELEASE_SHORT,false);
+    text(frame,392,36,594,HIGHLIGHT,KUI_RELEASE_SHORT,false);
     char build[40];snprintf(build,sizeof(build),"Build %.12s",view->build?view->build:"local");
     line(frame,392,65,594,build);
     if(ui->page==KUI_BOOT_HOME || ui->page==KUI_BOOT_DIAGNOSTICS) {
         menu(frame,ui,view);
         box(frame,32,346,576,34,PANEL);
         char label[80];snprintf(label,sizeof(label),"Source: %s",source(ui->transport));
-        text(frame,46,354,420,SALMON,label,false);
+        text(frame,46,354,420,HIGHLIGHT,label,false);
         if(ui->page==KUI_BOOT_HOME) line(frame,442,354,596,"Left/Right");
     } else if(ui->page==KUI_BOOT_HELP) help(frame);
     else if(ui->page==KUI_BOOT_CONFIRM) {
@@ -165,14 +165,14 @@ void kui_boot_ui_draw(uint16_t *frame,const struct kui_boot_ui *ui,
         }
         char label[96];snprintf(label,sizeof(label),"Log: %u lines   Scroll %u   Columns %u+",
             view->total_lines,ui->scroll,ui->log_column+1);
-        text(frame,42,386,598,SALMON,label,false);
+        text(frame,42,386,598,HIGHLIGHT,label,false);
     }
     char status[100];
     if(view->busy) snprintf(status,sizeof(status),"%s",view->cancelled?"Stopping safely...":
         view->status?view->status:"Reading selected boot image...");
     else if(view->countdown) snprintf(status,sizeof(status),"Starting in %u... any button opens the menu.",view->countdown);
     else snprintf(status,sizeof(status),"%s",view->status?view->status:"Idle. Choose Start K-UI to try the selected source.");
-    if(ui->page!=KUI_BOOT_LOG) text(frame,40,392,600,view->busy?SALMON:WHITE,status,false);
+    if(ui->page!=KUI_BOOT_LOG) text(frame,40,392,600,view->busy?HIGHLIGHT:WHITE,status,false);
     box(frame,32,420,576,2,EDGE);
     const char *controls=view->busy?"B Stop safely   Y Log":
         ui->page==KUI_BOOT_LOG?"Up/Down Scroll   Left/Right Pan   Start Latest   B Back":

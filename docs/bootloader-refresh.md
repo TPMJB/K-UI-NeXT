@@ -34,7 +34,7 @@ it is not an ext4 repair program.
 
 1. Boot the existing compatible graphical CD (the `82984` build has Card tools),
    pause its automatic startup and choose **Card tools**.
-2. Confirm the red artwork, then press **B** to open the menu. Its header should
+2. Confirm the orange Tyrfing artwork, then press **B** to open the menu. Its header should
    say **Card boot / recovery** and show the new package's build ID.
 3. Choose **Start K-UI** and confirm the normal runtime opens. The prior loading
    correction is already confirmed; no repeat timing measurement is requested.
@@ -59,8 +59,8 @@ particular shortcut.
 ## Install and use
 
 Burn `kui-bootstrap.cdi` as a disc image onto a new boot CD-R. Normal startup
-shows the original K-UI badge, including `github.com/TPMJB`, under the Sega
-logo, then the red Dáinsleif artwork and startup countdown. Any input opens the
+shows the orange Tyrfing sword badge, including `github.com/TPMJB`, under the Sega
+logo, then the orange Tyrfing artwork and startup countdown. Any input opens the
 graphical menu. After three seconds without input,
 unattended CD startup searches SCIF, SCI and IDE/CF. On each device it tries
 optional `/KUI/boot.kui`, then `/KUI/runtime.kui` and `/KUI/recovery.kui` when an
@@ -129,7 +129,7 @@ when none is installed, or open the new menu when this utility is copied.
 Measure load time must return after validation without starting an image.
 Confirm that write/read, save-log and benchmark actions
 show confirmation first. Normal SCIF boot from `18dd87d457fc` and its redraw
-correction are confirmed. The newer optional override and red artwork still
+correction are confirmed. The newer optional override and orange Tyrfing artwork still
 await console validation. SCI and IDE/CF paths retain
 the hardware status and short
 integrity/game check described in the storage guide.

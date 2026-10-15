@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Encode the Dáinsleif splash and embed the original startup notes as Ogg."""
+"""Encode the Tyrfing splash and embed the original startup notes as Ogg."""
 # SPDX-License-Identifier: GPL-3.0-only
 import argparse
 import hashlib
@@ -12,8 +12,8 @@ import wave
 import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
-PNG_BLOB = "a136e6f426140424febf38aebe69169c430ea6aa"
-BOOT_PNG_BLOB = "a136e6f426140424febf38aebe69169c430ea6aa"
+PNG_BLOB = "943c815fcff5884857c2f772a6329649e6725e6f"
+BOOT_PNG_BLOB = "943c815fcff5884857c2f772a6329649e6725e6f"
 STARTUP_RATE = 44100
 STARTUP_FRAMES = STARTUP_RATE * 265 // 100
 # The runtime embeds this Ogg Vorbis encoding of startup_samples() instead of
@@ -142,11 +142,11 @@ def main():
         return
     data=(ROOT/"resources/branding/startup.png").read_bytes()
     if hashlib.sha1(b"blob "+str(len(data)).encode()+b"\0"+data).hexdigest()!=PNG_BLOB:
-        raise SystemExit("Startup artwork differs from the pinned Dainsleif asset")
+        raise SystemExit("Startup artwork differs from the pinned Tyrfing asset")
     array_file(args.directory/"splash_pixels.inc","kui_splash_pixels","uint16_t",decode_png(data))
     boot=(ROOT/"resources/branding/boot-red.png").read_bytes()
     if hashlib.sha1(b"blob "+str(len(boot)).encode()+b"\0"+boot).hexdigest()!=BOOT_PNG_BLOB:
-        raise SystemExit("Boot artwork differs from the pinned crimson asset")
+        raise SystemExit("Boot artwork differs from the pinned Tyrfing asset")
     array_file(args.directory/"boot_splash_pixels.inc","kui_boot_splash_pixels","uint16_t",decode_png(boot))
     chime=CHIME.read_bytes()
     if hashlib.sha256(chime).hexdigest()!=CHIME_SHA256:

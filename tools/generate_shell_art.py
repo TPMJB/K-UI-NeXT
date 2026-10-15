@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "src/dreamcast/shell_art.inc"
 TRANSPARENT = 0xF81F
 SOURCES = {
-    "resources/branding/launcher-brand.png": "a5d98f17ae66cc549760e98a7907a2c680d4af0d57ea209bab07df7cb7e50355",
+    "resources/branding/launcher-brand.png": "e5ebcba15d3990aef7180e66c1850e24947acbf28e1cd1087954c50d16c88039",
     "resources/icons/disc-ripper.svg": "8263c8ef8efe9b779863303f90d921f90b9374c734255cb8f119463990eaa683",
     "resources/icons/disc-ripper.png": "1c3bb0ed7ffc95949a06339b16b87f8392de6ed443cd92e4913a4b8d70c1283b",
     "resources/icons/settings.svg": "772f5912638c1e0996edd51be50ec2c2d5c9bd6c4761f76b892da5a60cf13ccd",
@@ -65,7 +65,7 @@ def rows(values):
 def generate():
     for path, expected in SOURCES.items():
         if hashlib.sha256((ROOT / path).read_bytes()).hexdigest() != expected:
-            raise ValueError(f"Original source hash differs: {path}")
+            raise ValueError(f"Pinned source hash differs: {path}")
     manifest = json.loads(MANIFEST.read_text())
     expected_paths = {f"resources/icons/{name}{suffix}.{extension}"
                       for name in NEW_ICONS for suffix in ("", "-small")

@@ -782,7 +782,8 @@ def main():
     for name in ("LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, boot / name)
     shutil.copytree(dist / "LICENSES", boot / "LICENSES")
-    for name in ("boot-red.png", "boot-red-README.md", "boot-red-prompt.txt"):
+    for name in ("boot-red.png", "boot-red-README.md", "boot-red-prompt.txt",
+                 "startup-README.md", "startup-tyrfing-prompt.txt"):
         shutil.copyfile(ROOT / "resources/branding" / name, boot / name)
     boot_record = {"kind": "bootstrap-cd", "commit": commit, "release": release,
                    "compiler": compiler, "dependencies": lock,
@@ -806,7 +807,7 @@ def main():
         "original notices are also included in build.json and LICENSES/.\n\n"
         "CARD PREVIEW: no CD reburn. Copy only KUI/tools.kui onto the card; leave\n"
         "KUI/runtime.kui and KUI/recovery.kui unchanged. On the existing compatible\n"
-        "CD choose Card tools. Check the red artwork, press B, and confirm the\n"
+        "CD choose Card tools. Check the orange Tyrfing artwork, press B, and confirm the\n"
         "Card boot / recovery header and this package's build ID. Choose Start K-UI\n"
         "to confirm normal launch. No repeat timing measurement is requested.\n"
         "This preview does not exercise CD-origin boot.kui selection. The old CD loads\n"
@@ -817,7 +818,7 @@ def main():
         "This CD also loads runtime.kui from clean, compatible ext4 volumes read-only.\n"
         "The supplied runtime still uses FAT32/exFAT; keep your card as-is for now.\n"
         "Read EXT4-BOOTSTRAP.md for the fixed format and future card-only development.\n"
-        "Crimson Dainsleif artwork shows a three-second countdown; any input pauses it.\n"
+        "Orange Tyrfing artwork shows a three-second countdown; any input pauses it.\n"
         "CD autoboot first tries optional KUI/boot.kui, then runtime/recovery on the same\n"
         "source. This optional update file is not installed by the package. Manual Start\n"
         "and Recovery bypass it; card-loaded bootstrap menus skip it to avoid loops.\n"
@@ -834,7 +835,7 @@ def main():
         "SCIF measurement and faster full launch were confirmed on 18dd87d. This final\n"
         "artwork/update-hook revision still needs a card test before burning.\n"
         "STORAGE-TRANSPORTS.md records SCI/IDE hardware boundaries.\n"
-        "Follow BOOTLOADER-REFRESH.md. BADGE-PROVENANCE.md identifies the original logo.\n")
+        "Follow BOOTLOADER-REFRESH.md. BADGE-PROVENANCE.md identifies the new sword badge.\n")
     boot_hashes = []
     for path in sorted(boot.rglob("*")):
         if path.is_file() and path.name != "SHA256SUMS":

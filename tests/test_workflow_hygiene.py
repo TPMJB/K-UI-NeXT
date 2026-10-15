@@ -254,8 +254,25 @@ class ReleasePublicationWorkflow(unittest.TestCase):
                 self.assertIn("console_only=true", output)
                 self.assertIn("release_only=true", output)
         script = step_script("name: Check release publication, installation and splash")
-        for check in ("test_publish_release.py", "test_package_candidate.py", "test_splash_assets.py"):
+        for check in ("test_publish_release.py", "test_package_candidate.py", "test_boot_badge.py",
+                      "test_splash_assets.py"):
             self.assertIn(check, script)
+        self.assertIn("make build/music-asset-check build/test-splash", script)
+        self.assertIn("./build/test-splash", script)
+
+    def test_candidate_scope_admits_tyrfing_artwork_and_its_generators(self):
+        paths = ("resources/branding/release-v2.0-banner.jpg", "resources/branding/launcher-brand.png",
+                 "resources/branding/boot-disc-badge.md", "resources/branding/boot-disc-badge.mr",
+                 "resources/branding/boot-disc-badge.png", "resources/branding/boot-disc-badge.svg",
+                 "resources/branding/README.md", "tools/generate_shell_art.py", "tools/boot_badge.py",
+                 "src/dreamcast/shell_art.inc", "src/dreamcast/boot_draw.c", "tests/test_boot_badge.py")
+        for scope in ("rc-only", "release-only"):
+            for path in paths:
+                with self.subTest(scope=scope, path=path):
+                    result, output = GamesVariantValidationScope().run_scope(path, scope)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertIn("console_only=true", output)
+                    self.assertIn("release_only=true", output)
 
     def test_splash_checker_fatfs_headers_are_prepared_before_any_release_scope_consumes_them(self):
         text = WORKFLOW.read_text()
@@ -272,9 +289,15 @@ class ReleasePublicationWorkflow(unittest.TestCase):
         self.assertIn("make build/music-asset-check", step_script("name: Check release publication, installation and splash"))
 
     def test_release_scope_does_not_admit_driver_changes(self):
-        result, output = GamesVariantValidationScope().run_scope("src/loader/retail_sd.c", "release-only")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(output, "")
+        for scope in ("rc-only", "release-only"):
+            for path in ("src/loader/retail_sd.c", "src/dreamcast/sci_port.c",
+                         "src/dreamcast/unreviewed_art.c", "tools/unreviewed_art.py",
+                         "resources/branding/boot-disc-badge.unreviewed"):
+                with self.subTest(scope=scope, path=path):
+                    result, output = GamesVariantValidationScope().run_scope(path, scope)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("outside Games eligibility, branding and packaging", result.stderr)
+                    self.assertEqual(output, "")
 
 
 class WorkflowYamlSyntax(unittest.TestCase):

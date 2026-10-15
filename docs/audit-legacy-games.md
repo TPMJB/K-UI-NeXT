@@ -35,10 +35,11 @@ Abbreviations in the evidence column:
 
 Implementation update: the first independent Games follow-up adds the scoped
 native boot patches, defaults action and pre-handoff reports described in
-[Games launch options](games-launch-options.md). The next source increment
-adds the initial [native standard-LZ4 ZSO path](games-zso.md), with console
-acceptance pending. Other rows retain the audit's original evidence and
-runtime limits.
+[Games launch options](games-launch-options.md). Subsequent increments add the [native LZ4/LZO1X ZSO paths](games-zso.md),
+[alphabetical listing and remembered selection](games-library.md), and
+[broader checked CD music contracts](experimental-cdda.md). Console acceptance
+remains scoped to the recorded binaries. The [current release comparison](release-v2.0-ds-comparison.md)
+separates remaining gaps from completed work and final-release acceptance.
 
 | Functionality | Independent K-UI status | Evidence and practical difference | Release priority |
 | --- | --- | --- | --- |
@@ -48,7 +49,7 @@ runtime limits.
 | Persistent pre-handoff launch report | **Implemented in normal shell launch preparation** | `kui_games_retail_prepare_launch` hashes the complete source executable before handoff and saves actual metadata/options via `src/apps/game_launch_report.c`. Two bounded CRC/sequence text slots preserve the previous complete report under partial writes. Report failure is logged while read-only-card launching remains available. | Keep for Tyrfing preparation; reports prove preparation, not successful game startup. |
 | GDI, ISO and CDI images | **Existing with layout limits** | Old discovery accepts these at `GM/menu.c:3307`. New `src/core/game_image.c:340` lists GDI/CUE/ISO/BIN/IMG/CDI; `:864` (`kui_game_image_open_named`) routes descriptor, CDI and single-file parsing. New support additionally includes CUE/BIN and original/2048 pairing (`src/apps/games.c:219`, `src/core/shell.c:1450`). Parsing an image does not prove runtime compatibility. | Keep; no format-parity work needed for these extensions. |
 | Direct compressed-image loading | **Partial: native LZ4 and explicit historical LZO1X ZSO implemented; console acceptance pending** | Old Games discovers `.cso` at `GM/menu.c:3307`; old `modules/isoldr/module.c:366` prepares CSO/ZSO data. Independent `src/core/zso.c` and `src/core/retail_zso.c` provide bounded standard-LZ4 decoding and a distinct 32-slot physical-file map. The dedicated `KUIRZB01` package admits native SCI Standard with 2048-byte blocks and at most 31 file fragments; WinCE, CDDA, background loading and RAM patches are excluded. A separate typed LZO1X package and saved per-image chooser cover the historical dialect. CSO/CHD still use offline import. The existing ripper's ZSO export is LZO, despite sharing `ZISO` magic. | Development test capability; require linked package/stack/instruction gates and console acceptance before promoting compatibility or final-release status. See [ZSO scope](games-zso.md). |
-| CD music detection and emulation | **Partial; support is still profile limited** | Old Games auto-enables CDDA using track-4/track-6 heuristics (`GM/menu.c:1331`), and exposes source/destination/timer/channel modes (`GM/preset.c:818`–`:980`). New `src/core/game_image.c:166` classifies represented audio tracks; `src/core/shell.c:336` offers an opt-in for candidate GDI audio. Runtime admission remains guarded: native profiles at `src/apps/games_retail.c:606`, WinCE adapters at `:315` and `:462`. The latter are Armada, Bust-A-Move 4 and Worms Armageddon; the broad option is **not** generic WinCE CDDA compatibility. Unsupported WinCE adapters return a clear “turn CD music Off” message at `:465`. | Keep opt-in and exact guards. Broader metadata detection is useful, but generic CDDA needs independent runtime work and hardware tests. Do not transplant the old track-number heuristic or claim general support. |
+| CD music detection and emulation | **Partial; support is still profile limited** | Old Games auto-enables CDDA using track-4/track-6 heuristics (`GM/menu.c:1331`), and exposes source/destination/timer/channel modes (`GM/preset.c:818`–`:980`). New `src/core/game_image.c` classifies represented audio tracks; `src/core/shell.c` offers an opt-in for candidate GDI audio. `ce_music_runtime_profile` in `src/apps/games_retail.c` selects among four checked kernel/sound adapters established from Armada, Bust-A-Move 4, Worms Armageddon and Worms World Party. Compatible unfamiliar images remain Experimental; unknown kernels are refused with music On. Native selection retains executable/driver and lifecycle guards in `src/core/games_cdda_profile.h`. See [current admission](experimental-cdda.md); this is **not** generic WinCE/native CDDA compatibility. | Keep opt-in and checked runtime guards. Broader contract selection is implemented; unmatched runtimes still need independent adapter work and hardware tests. Do not transplant the old track-number heuristic or claim general support. |
 | Emulated VMU backed by SD files | **Missing in game runtime** | Reachable old choices include shared root dump, private 128 KB and private 1024 KB (`GM/preset.c:1310`); `GM/menu.c:1136` creates files and `:1606` passes emulation to the loader. New game's persisted settings contain no VMU field (`include/kui/game_launch_settings.h:14`), and the launch preparation has no equivalent. The independent VMU Manager is a separate backup/restore app, not an emulated VMU during gameplay. | Later; substantial Maple/storage/runtime work. |
 | In-game screenshots with chosen hotkey | **Missing** | Old `GM/preset.c:1126` enables screenshots and configures buttons; `GM/menu.c:1602` passes the hotkey into the loader. New `include/kui/game_launch_settings.h:14` and `src/core/shell.c:1541` have no screenshot option or persisted hotkey. | Later; resident capture and writable storage coordination need design and testing. |
 | User-entered RAM patches | **Scoped native boot implementation** | Two saved address/value slots with a controller hex editor. `src/core/game_ram_patches.c` validates both aligned destinations inside the actual executable before any write; the ordinary native high stage applies them after original CRC/resident guards. No file patching or resident growth. | Ordinary native with CD music Off; CE/CDDA, ZSO and arbitrary RAM/runtime cheats remain outside this implementation. Console acceptance pending. |
@@ -69,11 +70,10 @@ described as missing from the old custom Games Menu itself:
 - Unsaved diagnostic **Baseline**, described above:
   `ISO/app.xml:679`, `ISO/modules/next_ui.h:144`.
 - **Check** executable without launching:
-  `ISO/modules/module.c:1710`. Independent image inspection validates bounded
-  metadata/track structure (`src/apps/games.c:695`); launch preparation hashes
-  executable bytes (`src/apps/games_retail.c:537`) and the detached loader
-  checks them. There is no matching shell action for “prepare/check all boot
-  executable bytes and stay here”; the resident/image tests are different.
+  `ISO/modules/module.c:1710`. The independent **Check executable** action now
+  calls `kui_games_retail_check_launch` in `src/apps/games_retail.c`, using the
+  same bounded preparation and exact executable checks as Play before freeing
+  staging and remaining in the shell. See [the implemented action](games-library.md).
 - **Manual region override**: `ISO/app.xml:582`,
   `ISO/modules/module.c:1699`, and old
   `firmware/isoldr/loader/utils.c:170` pass/apply a region choice to the
@@ -95,8 +95,8 @@ described as missing from the old custom Games Menu itself:
 2. Validate the newly implemented pre-handoff reports, per-image defaults
    and bounded native boot patches on console. They were implemented
    independently; the first patch scope deliberately excludes CE/CDDA.
-3. Validate the independent native LZ4 ZSO first slice on SCI, retaining its
-   separate map/package and strict host/native audit gates. An exposed
+3. Validate both independent native LZ4/LZO1X ZSO paths on SCI, retaining
+   their separate maps/packages and strict host/native audit gates. An exposed
    development launch path is not a compatibility result or a final 2.0 release.
 4. Track VMU emulation, remaining compressed formats/dialects, broader RAM
    patches, alternate boot modes, screenshots and general CDDA runtime support

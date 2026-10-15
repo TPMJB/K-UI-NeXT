@@ -1,6 +1,6 @@
 # Boot and recovery on one card
 
-The refreshed CD has a graphical Dáinsleif boot menu and can load a normal
+The refreshed CD has a graphical Tyrfing boot menu and can load a normal
 image or a separate known-working image from the same card. For the future
 ext4 application runtime, the recommended
 layout is **128 MiB FAT32 for boot/recovery, with the remaining space as ext4
@@ -29,7 +29,7 @@ boot images must be an explicit operation, separate from ordinary app writes.
 
 ## Startup controls and file selection
 
-The red Dáinsleif artwork appears during the three-second countdown.
+The orange Tyrfing artwork appears during the three-second countdown.
 The menu uses the launcher font, high-contrast panels and TV-safe margins.
 
 | Menu/control | Behavior |
@@ -169,7 +169,7 @@ The separate FAT boot path does not need ext4 recovery to start an image.
 The Card tools entry has a fixed `/KUI/tools.kui` path and never substitutes a
 normal or recovery image. The **bootstrap-cd** download now supplies the exact
 bootstrap executable as a version-1 card utility. Copy only that file, choose
-Card tools on the existing compatible CD, check the red artwork and Card boot
+Card tools on the existing compatible CD, check the orange Tyrfing artwork and Card boot
 header, then select Start K-UI. No repeat timing measurement is requested. This
 allows checking the final menu without reburning or replacing
 `runtime.kui`/`recovery.kui`. The old CD

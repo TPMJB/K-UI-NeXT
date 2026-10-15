@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Validate the original K-UI boot badge and its placement in a packaged CDI.
+"""Validate the Tyrfing K-UI boot badge and its placement in a packaged CDI.
 
-No artwork conversion or bootstrap patching is performed here. mkdcdisc's -i
-option embeds the already encoded MR asset in its own bootstrap. Source and
-format references are recorded in resources/branding/boot-disc-badge.md.
+mkdcdisc's -i option embeds the already encoded MR asset in its own bootstrap.
+Optional --rebuild-branding renders the editable vector badge and header with
+Inkscape/Pillow. Ordinary validation needs only the Python standard library.
+Source and format references are in resources/branding/boot-disc-badge.md.
 """
 import argparse
 import hashlib
@@ -14,7 +15,7 @@ import struct
 
 ROOT = Path(__file__).resolve().parents[1]
 BADGE = ROOT / "resources/branding/boot-disc-badge.mr"
-BADGE_SHA256 = "4f95ef3caac9d449914baa6266b154582363edb7e5b821d5bf18121951fc5fec"
+BADGE_SHA256 = "42de4efd6e9401fbd1df17a42e1240a3e0a5b200ed5b7bc573ba29d0d1c77bac"
 MR_OFFSET = 0x3820
 MR_LIMIT = 8192
 BOOT_BYTES = 32768
@@ -23,17 +24,17 @@ BOOT_SIGNATURE = b"SEGA SEGAKATANA SEGA ENTERPRISES"
 
 
 def inspect_badge(data):
-    """Require the unchanged original asset and its bounded MR geometry."""
+    """Require the approved asset and its bounded MR geometry."""
     digest = hashlib.sha256(data).hexdigest()
     if digest != BADGE_SHA256:
-        raise ValueError("Boot badge differs from the approved original asset")
+        raise ValueError("Boot badge differs from the approved Tyrfing asset")
     if len(data) < 30 or data[:2] != b"MR":
         raise ValueError("Missing MR badge header")
     size, reserved, offset, width, height, reserved2, colors = struct.unpack_from("<7I", data, 2)
     if not 30 < size == len(data) <= MR_LIMIT or reserved or reserved2:
         raise ValueError("Invalid MR badge size or reserved fields")
     if (width, height, colors) != (320, 90, 32) or offset != 30 + 4 * colors:
-        raise ValueError("Original MR badge geometry changed")
+        raise ValueError("Approved MR badge geometry changed")
     # MR uses indexed literals and runs. Decoding counts here catches malformed
     # or truncated data before any disc is produced; no pixel buffer is needed.
     cursor, pixels = offset, 0
@@ -92,15 +93,97 @@ def verify_cdi_badge(data, badge):
         raise ValueError(f"CDI must contain one recognizable ISO9660 bootstrap; found {len(candidates)}")
     start, stride, bootstrap = candidates[0]
     if bootstrap[MR_OFFSET:MR_OFFSET + len(badge)] != badge:
-        raise ValueError("CDI does not contain the original K-UI boot badge")
+        raise ValueError("CDI does not contain the approved K-UI boot badge")
     return {**info, "cdi_bootstrap_offset": start, "cdi_sector_bytes": stride}
+
+
+def rebuild_branding():
+    """Render the shared vector mark, then encode its 32-color MR preview.
+
+    The independent encoder uses only literal indices and runs of 2..127;
+    this small image does not need the extended-run forms the validator accepts.
+    The SVG is the editable source for both deployed images.
+    """
+    import subprocess
+    import tempfile
+    import xml.etree.ElementTree as ET
+    from PIL import Image
+
+    branding = ROOT / "resources/branding"
+    source = branding / "boot-disc-badge.svg"
+    with tempfile.TemporaryDirectory(prefix="kui-branding-") as directory:
+        temp = Path(directory)
+        rendered = temp / "badge.png"
+        subprocess.run(["inkscape", str(source), "--export-type=png",
+                        "--export-filename=" + str(rendered)], check=True)
+        image = Image.open(rendered).convert("RGB").quantize(
+            colors=32, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+        if image.size != (320, 90) or len(image.getcolors()) != 32:
+            raise ValueError("Expected a 320x90 badge with 32 colors")
+        image.save(branding / "boot-disc-badge.png", optimize=False)
+
+        # Preserve the original K-UI wordmark paths at a readable header size.
+        # Share the sword with the badge rather than maintaining a second icon.
+        namespace = "{http://www.w3.org/2000/svg}"
+        ET.register_namespace("", namespace[1:-1])
+        header = ET.Element(namespace + "svg", {
+            "width": "256", "height": "128", "viewBox": "0 0 256 128"})
+        ET.SubElement(header, namespace + "title").text = "K-UI Tyrfing by TPMJB"
+        ET.SubElement(header, namespace + "rect", {
+            "width": "256", "height": "128", "fill": "#080f23"})
+        for item in ET.parse(source).getroot():
+            transform = {"tyrfing-mark": "translate(7 21) scale(.95)",
+                         "kui-wordmark": "translate(12 29) scale(.79)"}.get(item.get("id"))
+            if transform:
+                group = ET.SubElement(header, namespace + "g", {"transform": transform})
+                group.append(item)
+        ET.SubElement(header, namespace + "text", {
+            "x": "91", "y": "91", "font-family": "DejaVu Sans Mono, monospace",
+            "font-size": "12", "font-weight": "bold", "letter-spacing": "2",
+            "fill": "#ffc56a"}).text = "by TPMJB"
+        header_source = temp / "launcher.svg"
+        ET.ElementTree(header).write(header_source, encoding="unicode")
+        header_png = temp / "launcher.png"
+        subprocess.run(["inkscape", str(header_source), "--export-type=png",
+                        "--export-filename=" + str(header_png)], check=True)
+        Image.open(header_png).convert("RGB").save(branding / "launcher-brand.png")
+
+    indices = list(image.tobytes())
+    compressed = bytearray()
+    at = 0
+    while at < len(indices):
+        length = 1
+        while length < 127 and at + length < len(indices) and indices[at + length] == indices[at]:
+            length += 1
+        if length > 1:
+            compressed.append(0x80 | length)
+        compressed.append(indices[at])
+        at += length
+    palette = image.getpalette()
+    palette_bytes = b"".join(bytes((palette[i + 2], palette[i + 1], palette[i], 0))
+                             for i in range(0, 32 * 3, 3))
+    offset = 30 + len(palette_bytes)
+    badge = b"MR" + struct.pack("<7I", offset + len(compressed), 0, offset, 320, 90, 0, 32)
+    badge += palette_bytes + compressed
+    if len(badge) > MR_LIMIT:
+        raise ValueError("Rebuilt badge exceeds the boot logo reservation")
+    BADGE.write_bytes(badge)
+    print("Rebuilt branding; update source pins after reviewing the PNG previews.")
+    print("BADGE_SHA256 = " + repr(hashlib.sha256(badge).hexdigest()))
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cdi", type=Path, help="also verify the badge in this generated CDI")
+    parser.add_argument("--rebuild-branding", action="store_true",
+                        help="rebuild badge and launcher PNG/MR from SVG (requires Inkscape/Pillow)")
     args = parser.parse_args()
     try:
+        if args.rebuild_branding:
+            if args.cdi:
+                parser.error("--rebuild-branding cannot be combined with --cdi")
+            rebuild_branding()
+            return
         badge = BADGE.read_bytes()
         info = verify_cdi_badge(args.cdi.read_bytes(), badge) if args.cdi else inspect_badge(badge)
         print(json.dumps(info, sort_keys=True))
