@@ -581,6 +581,99 @@ static void singles(void) {
     CHECK(!strcmp(kui_game_image_format_name(KUI_GAME_IMAGE_CDI), "CDI"));
     CHECK(named(&fixture, "game.chd", &image) == KUI_GAME_UNSUPPORTED);
 }
+
+/* Original hand-coded LZ4: one literal, a distance1 overlapping run, then five
+ * final literals. This fixture is independent of the portable decoder. */
+static size_t zso_iso_fixture(unsigned char *container, const unsigned char *iso,
+    unsigned sectors) {
+    const unsigned shift = 4u, align = 1u << shift;
+    size_t at = (24u + (sectors + 1u) * 4u + align - 1u) & ~(size_t)(align - 1u);
+    memset(container, 0, at);
+    memcpy(container, "ZISO", 4u); put32(container + 4u, 24u);
+    put32(container + 8u, sectors * 2048u); put32(container + 16u, 2048u);
+    container[20] = 1u; container[21] = shift;
+    for(unsigned sector = 0; sector < sectors; ++sector) {
+        const unsigned char *source = iso + (size_t)sector * 2048u;
+        bool uniform = all_is(source, 2048u, source[0]);
+        put32(container + 24u + sector * 4u, (uint32_t)(at >> shift) |
+            (uniform ? 0u : UINT32_C(0x80000000)));
+        if(uniform) {
+            container[at++] = 0x1f; container[at++] = source[0];
+            container[at++] = 1u; container[at++] = 0u;
+            for(unsigned i = 0; i < 7u; ++i) container[at++] = 255u;
+            container[at++] = 238u; container[at++] = 0x50;
+            memset(container + at, source[0], 5u); at += 5u;
+        } else { memcpy(container + at, source, 2048u); at += 2048u; }
+        while(at & (align - 1u)) container[at++] = 0xad; /* Legal nonzero pad. */
+    }
+    put32(container + 24u + sectors * 4u, (uint32_t)(at >> shift));
+    return at;
+}
+static void zso_images(void) {
+    const uint32_t bases[] = {0u, 11700u, 45000u};
+    unsigned char *iso = calloc(64u, 2048u), *container = malloc(64u * 2064u + 512u);
+    CHECK(iso != NULL && container != NULL);
+    for(unsigned variant = 0; variant < sizeof(bases) / sizeof(bases[0]); ++variant) {
+        memset(iso, 0, 64u * 2048u);
+        unsigned char *pvd = iso + 16u * 2048u, *root = pvd + 156u;
+        pvd[0] = 1u; memcpy(pvd + 1u, "CD001", 5u); pvd[6] = 1u;
+        root[0] = 34u; root[25] = 2u; root[32] = 1u;
+        both32_test(root + 2u, bases[variant] + 20u);
+        memcpy(iso + 20u * 2048u, root, 34u);
+        memset(iso + 63u * 2048u, 0x5a, 2048u);
+        size_t physical = zso_iso_fixture(container, iso, 64u);
+        struct fixture fixture = {0}; struct kui_game_image image;
+        add_content(&fixture, "Mixed.ZSO", container, physical);
+        CHECK(named(&fixture, "Mixed.ZSO", &image) == KUI_GAME_OK);
+        CHECK(image.compressed && image.format == KUI_GAME_IMAGE_ZSO && image.count == 1u);
+        CHECK(image.data_lba == bases[variant] && image.cd_image == (bases[variant] < 45000u));
+        CHECK(image.zso.file_bytes == physical && image.zso.total_bytes == 64u * 2048u);
+        CHECK(image.tracks[0].file_bytes == 64u * 2048u && !image.tracks[0].file_offset);
+        CHECK(image.files.ctx == &fixture && image.files.read == read_file);
+        CHECK(kui_game_image_name_supported("Mixed.ZSO"));
+        CHECK(!strcmp(kui_game_image_format_name(image.format), "ZSO (standard LZ4)"));
+        struct kui_game_audio_info audio;
+        CHECK(kui_game_image_audio_info(&image, &audio) == KUI_GAME_OK);
+        CHECK(audio.classification == KUI_GAME_AUDIO_UNKNOWN && !audio.audio_tracks);
+        unsigned char out[3u * 2048u];
+        CHECK(kui_game_image_read(&image, bases[variant] + 15u, 3u,
+            KUI_GAME_SECTOR_MODE1, out, sizeof(out)) == KUI_GAME_OK);
+        CHECK(!memcmp(out, iso + 15u * 2048u, sizeof(out)));
+        CHECK(kui_game_image_read(&image, bases[variant] + 63u, 1u,
+            KUI_GAME_SECTOR_MODE1, out, sizeof(out)) == KUI_GAME_OK);
+        CHECK(!memcmp(out, iso + 63u * 2048u, 2048u));
+        /* A copied image still owns no callback into its opener's stack. */
+        struct kui_game_image copied = image;
+        memset(&image, 0, sizeof(image));
+        CHECK(kui_game_image_read(&copied, bases[variant], 1u,
+            KUI_GAME_SECTOR_MODE1, out, sizeof(out)) == KUI_GAME_OK);
+        CHECK(!memcmp(out, iso, 2048u));
+        memset(out, 0xa5, sizeof(out)); unsigned reads = fixture.reads;
+        CHECK(kui_game_image_read(&copied, bases[variant], 1u,
+            KUI_GAME_SECTOR_RAW, out, sizeof(out)) == KUI_GAME_UNSUPPORTED);
+        CHECK(fixture.reads == reads && all_is(out, sizeof(out), 0xa5));
+        CHECK(kui_game_image_read(&copied, bases[variant] + 64u, 1u,
+            KUI_GAME_SECTOR_MODE1, out, sizeof(out)) == KUI_GAME_RANGE);
+        fixture.failure = KUI_GAME_CANCELLED; fixture.fail_read = fixture.reads + 1u;
+        CHECK(kui_game_image_read(&copied, bases[variant], 1u,
+            KUI_GAME_SECTOR_MODE1, out, sizeof(out)) == KUI_GAME_CANCELLED);
+        fixture.fail_read = 0u;
+        copied.zso.block_count++;
+        reads = fixture.reads;
+        CHECK(kui_game_image_read(&copied, bases[variant], 1u,
+            KUI_GAME_SECTOR_MODE1, out, sizeof(out)) == KUI_GAME_INVALID);
+        CHECK(fixture.reads == reads);
+        /* Reject a bad full index without publishing a partly opened image. */
+        put32(container + 24u + 40u * 4u, 1u);
+        memset(&image, 0xa5, sizeof(image));
+        CHECK(named(&fixture, "Mixed.ZSO", &image) == KUI_GAME_RANGE);
+        CHECK(all_is(&image, sizeof(image), 0xa5));
+        container[20] = 2u;
+        CHECK(named(&fixture, "Mixed.ZSO", &image) == KUI_GAME_UNSUPPORTED);
+        CHECK(all_is(&image, sizeof(image), 0xa5));
+    }
+    free(container); free(iso);
+}
 static size_t cdi_track(unsigned char *out, unsigned version, uint32_t lba,
                          unsigned mode, unsigned code) {
     static const unsigned char marker[20] = {
@@ -721,6 +814,7 @@ int main(void) {
     cue_and_modes();
     cue_sessions();
     singles();
+    zso_images();
     cdi_containers();
     cdi_sector_codes_and_pregap();
     printf("game image: %u checks passed\n", checks);

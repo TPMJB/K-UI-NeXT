@@ -10,6 +10,7 @@ import tempfile
 import zlib
 from games_fixture import make_fixture, dual32
 from game_format_fixture import make_format_fixture
+from zso_fixture import make_zso_fixture, ZSO_CASES, ZSO_PREPARED
 from test_images import run
 from test_loader_probe_images import digest, partition_image, check_fs, envelope
 
@@ -141,17 +142,17 @@ def make_checksum_fixture(folder, case):
     (folder / "checksum.expect").write_text(f"{zlib.crc32(ip):08x} {expected_boot:08x}\n", encoding="ascii")
 
 
-def synthetic_package(ce=False, ram_seed=False):
+def synthetic_package(ce=False, ram_seed=False, zso=False):
     # Structural preparation fixture. The stage is original data, never code
     # executed on the host; every retail-looking IP field is generated here.
     # ce: the Windows CE boot test's package, with its higher stage.
     payload = bytearray(0x2010 + (64 if ram_seed else 0))
-    payload[0x100:0x108] = b"KUIRCE01" if ce else b"KUIRBT01"
+    payload[0x100:0x108] = b"KUIRZB01" if zso else b"KUIRCE01" if ce else b"KUIRBT01"
     stage = 0x8CE10000 if ce else 0x8CE00000
     struct.pack_into("<14I", payload, 0x108,
                      1, 64, 0x1000, 4096, stage, 16 + (64 if ram_seed else 0),
                      stage, 0x8C010000, 0xC00000, 0x8CFF0000,
-                     0x2000, 0x8C008300, 0x8C00BB00, 0)
+                     0x2000, 0x8C004000 if zso else 0x8C008300, 0x8C007800 if zso else 0x8C00BB00, 0)
     payload[0x2000:0x2010] = b"ORIGINALSTAGE123"
     if ram_seed:
         struct.pack_into("<16I", payload, 0x2010, 0x5249554B, 0x31504D41, 1, 64, *([0] * 12))
@@ -159,6 +160,13 @@ def synthetic_package(ce=False, ram_seed=False):
 
 
 def make_retail_fixture(folder, case):
+    if case in ZSO_CASES:
+        make_zso_fixture(folder, case)
+        for name, package_bytes in (("retail-boot.kui", synthetic_package()),
+                                    ("ce-probe.kui", synthetic_package(ce=True)),
+                                    ("zso-boot.kui", synthetic_package(zso=True))):
+            (folder / name).write_bytes(package_bytes)
+        return
     if case in LAUNCH_CASES and folder.exists():
         shutil.rmtree(folder)
     if case in FORMAT_CASES:
@@ -289,6 +297,54 @@ def check_launch_outputs(folder, case):
     assert payload[0x2010:] == expected_seed, "exact canonical in-RAM seed; no executable disk patch"
 
 
+def check_zso_outputs(folder, case):
+    for name in ("zso-boot.kui", "selected.zso"):
+        assert (folder / f"after-{name}").read_bytes() == (folder / name).read_bytes(), name
+    report_path = folder / "after-last-launch-a.txt"
+    if case not in ZSO_PREPARED:
+        assert not report_path.exists() and not (folder / "zso-launch-payload.bin").exists()
+        return
+    data = report_path.read_bytes()
+    body, footer = data.rsplit(b"crc32: ", 1)
+    assert int(footer, 16) == zlib.crc32(body)
+    fields = dict(line.split(": ", 1) for line in body.decode("ascii").splitlines()[1:])
+    assert fields["sequence"] == f"{1:020d}"
+    assert fields["state"] == "prepared before handoff; game start unconfirmed"
+    assert fields["image"] == "/games/reader test/selected.zso"
+    assert fields["package"] == "/kui/apps/games/zso-boot.kui"
+    assert fields["reader"] == "Standard" and fields["storage"] == "SCI microSD"
+    assert fields["cd music"] == "off" and fields["profile"] == "Off"
+    logical = (folder / "zso-expected.iso").read_bytes()
+    executable = logical[21 * 2048:21 * 2048 + 3001]
+    assert int(fields["ip crc32"], 16) == zlib.crc32(logical[:32768])
+    assert int(fields["source executable bytes"]) == 3001
+    assert int(fields["source executable crc32"], 16) == zlib.crc32(executable)
+    payload = (folder / "zso-launch-payload.bin").read_bytes()
+    original = (folder / "zso-boot.kui").read_bytes()[64:]
+    assert payload[:0x1000] == original[:0x1000] and payload[0x2000:] == original[0x2000:]
+    wire = bytearray(payload[0x1000:0x2000])
+    assert wire[:8] == b"KUIRZS01"
+    saved_crc, = struct.unpack_from("<I", wire, 16)
+    struct.pack_into("<I", wire, 16, 0)
+    assert zlib.crc32(wire) == saved_crc
+    valid, session, boot_bytes, sectors, physical_bytes, shift, expected_extents = map(
+        int, (folder / "zso.expect").read_text().splitlines()[0].split())
+    assert valid and struct.unpack_from("<3I", wire, 56) == (session, session + 21, boot_bytes)
+    source = (folder / "selected.zso").read_bytes()
+    assert struct.unpack_from("<I", wire, 68)[0] == zlib.crc32(source[:32768])
+    assert struct.unpack_from("<2I", wire, 256) == (zlib.crc32(executable), zlib.crc32(logical[:32768]))
+    assert struct.unpack_from("<5I", wire, 272) == (physical_bytes, len(logical), sectors, (sectors + 1) * 4, shift)
+    assert struct.unpack_from("<2I", wire, 320) == (session, session + sectors)
+    extent_count, = struct.unpack_from("<I", wire, 24)
+    assert 1 <= extent_count <= 31 and (not expected_extents or extent_count == expected_extents)
+    next_file_block = 0
+    for index in range(extent_count):
+        file_block, card_block, blocks = struct.unpack_from("<3I", wire, 332 + index * 12)
+        assert file_block == next_file_block and card_block >= 2048 and blocks
+        next_file_block += blocks
+    assert next_file_block == (physical_bytes + 511) // 512
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rc-only", action="store_true",
@@ -299,6 +355,8 @@ def main():
                         help="Only exact CRC, physical-bound and fault cases, on MBR FAT32/exFAT")
     parser.add_argument("--launch-only", action="store_true",
                         help="Only pre-handoff reports and native RAM patches, on MBR FAT32/exFAT")
+    parser.add_argument("--zso-only", action="store_true",
+                        help="Only direct standard-LZ4 ZSO launch/physical-map cases, on MBR FAT32/exFAT")
     args = parser.parse_args()
     for binary in ("mkfs.fat", "mkfs.exfat", "fsck.fat", "fsck.exfat"):
         if not shutil.which(binary):
@@ -313,8 +371,8 @@ def main():
             run("mkfs.fat", "-F", "32", str(volume)) if kind == "fat32" else run("mkfs.exfat", str(volume))
             partitioned_clean = base / f"{kind}-mbr.img"
             partition_image(volume, partitioned_clean, kind)
-            layouts = ((True, LAUNCH_CASES),) if args.launch_only else ((True, CHECKSUM_CASES),) if args.checksums_only else ((True, FORMAT_CASES),) if args.formats_only else ((True, RC_CASES),) if args.rc_only else (
-                (True, CASES + FORMAT_CASES + LAUNCH_CASES), (False, ("valid", "boot-tail", "fragmented", "cooked-2048")))
+            layouts = ((True, ZSO_CASES),) if args.zso_only else ((True, LAUNCH_CASES),) if args.launch_only else ((True, CHECKSUM_CASES),) if args.checksums_only else ((True, FORMAT_CASES),) if args.formats_only else ((True, RC_CASES),) if args.rc_only else (
+                (True, CASES + FORMAT_CASES + LAUNCH_CASES + ZSO_CASES), (False, ("valid", "boot-tail", "fragmented", "cooked-2048")))
             for partitioned, cases in layouts:
                 clean = partitioned_clean if partitioned else volume
                 layout = "MBR" if partitioned else "superfloppy"
@@ -325,6 +383,25 @@ def main():
                     run(BINARY, str(image), str(fixture), "seed", case)
                     before = digest(image)
                     output = run(BINARY, str(image), str(fixture), "check", case)
+                    if case in ZSO_CASES:
+                        assert f"PASS retail preparation check {case}; only bounded launch-report writes allowed" in output
+                        check_zso_outputs(fixture, case)
+                        if case not in ZSO_PREPARED:
+                            assert digest(image) == before, f"Refused ZSO launch changed {kind} card"
+                        elif "source-" in case:
+                            assert "Detached ZSO source change refused before any IP/executable load" in output
+                        else:
+                            assert "Detached ZSO exact decode PASS" in output
+                        if case == "zso-fragments32":
+                            assert "31 physical extents" in output
+                        if case in ("zso-cdda", "zso-background", "zso-patches"):
+                            assert "needs native Standard reader, CD music Off and RAM patches Off" in output
+                        if case == "zso-scif":
+                            assert "needs SCI microSD" in output
+                        check_fs(image, base / "check-volume.img", kind, partitioned)
+                        image.unlink()
+                        print(f"PASS {kind} {layout} {case}; source/package unchanged; independent ZSO/report/wire checks", flush=True)
+                        continue
                     if case in LAUNCH_CASES:
                         assert f"PASS retail preparation check {case}; only bounded launch-report writes allowed" in output
                         check_launch_outputs(fixture, case)

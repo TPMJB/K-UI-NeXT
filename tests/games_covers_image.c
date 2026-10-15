@@ -2,6 +2,7 @@
 #define _DEFAULT_SOURCE
 #include "kui/games_covers.h"
 #include "kui/media.h"
+#include "kui/storage.h"
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -39,6 +40,7 @@ static int write_image(void *ctx, uint32_t block, size_t count, const uint8_t *d
 }
 static int sync_image(void *ctx) { (void)ctx; return fflush(test.image) || fsync(fileno(test.image)) ? -1 : 0; }
 static const struct kui_media_ops media = {NULL, blocks, read_image, write_image, sync_image};
+unsigned kui_storage_active(void) { return KUI_STORAGE_SCIF; }
 bool kui_sd_connect(void) {
     assert(!test.connected); ++test.connects;
     test.connected = true; kui_media_set(&media); return true;

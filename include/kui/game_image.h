@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include "kui/zso.h"
 
 #define KUI_GAME_TRACK_MAX 99u
 #define KUI_GAME_NAME_CAP 128u
@@ -39,17 +40,17 @@ struct kui_game_file_ops {
 struct kui_game_image_track {
     uint32_t start_lba, end_lba; /* End exclusive; pregaps remain unmapped. */
     unsigned number, control; /* 0 = audio, 4 = data. */
-    unsigned sector_bytes; /* Physical stride: 2048, 2336, 2352 or 2448. */
+    unsigned sector_bytes; /* Track stride: 2048, 2336, 2352 or 2448. */
     unsigned sector_mode; /* 0 = audio, 1 = Mode 1, 2 = Mode 2 Form 1. */
     unsigned data_offset; /* User bytes inside the physical sector. */
-    uint64_t file_bytes; /* Whole backing file, including other tracks/header. */
+    uint64_t file_bytes; /* Whole backing file; decoded ISO length for ZSO. */
     uint64_t file_offset; /* First accessible sector within that file. */
     char name[KUI_GAME_NAME_CAP];
 };
 
 enum kui_game_image_format {
     KUI_GAME_IMAGE_GDI, KUI_GAME_IMAGE_ISO, KUI_GAME_IMAGE_CUE,
-    KUI_GAME_IMAGE_CDI, KUI_GAME_IMAGE_RAW
+    KUI_GAME_IMAGE_CDI, KUI_GAME_IMAGE_RAW, KUI_GAME_IMAGE_ZSO
 };
 
 struct kui_game_image {
@@ -59,6 +60,11 @@ struct kui_game_image {
     uint32_t data_lba; /* First data track of the boot session. */
     bool scrambled; /* Explicit boot transform override; containers default false. */
     bool cd_image; /* CD media; GD CUE density markers preserve GD media. */
+    /* Standard LZ4 ZSO only. files still addresses the physical container;
+     * zso.file_bytes is physical, track.file_bytes is decoded ISO length.
+     * No callback/context borrowed from the opener is installed here. */
+    bool compressed;
+    struct kui_zso_info zso;
     struct kui_game_image_track tracks[KUI_GAME_TRACK_MAX];
 };
 
@@ -90,7 +96,8 @@ enum kui_game_result kui_game_image_open(const void *gdi, size_t size,
  * Output is unchanged on error. */
 enum kui_game_result kui_game_gdi_layout(const void *gdi,size_t size,struct kui_game_image *out);
 
-/* Open a named GDI/CUE descriptor, ISO, raw BIN/IMG, or DiscJuggler CDI.
+/* Open a named GDI/CUE descriptor, ISO, raw BIN/IMG, DiscJuggler CDI or standard
+ * LZ4 ZSO v1 containing independent 2048-byte ISO blocks.
  * Descriptor reads are bounded by KUI_GAME_GDI_LIMIT; CDI uses bounded random
  * reads of its footer and never loads the container. All callbacks use the same
  * relative single-component names. On failure out is unchanged. Unsupported

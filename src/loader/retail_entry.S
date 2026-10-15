@@ -8,7 +8,11 @@
 #define PACKAGE_MAGIC KUI_RETAIL_CE_PACKAGE_MAGIC
 #else
 #define STAGE_ADDRESS KUI_RETAIL_STAGE_ADDRESS
+#if KUI_RETAIL_ZSO
+#define PACKAGE_MAGIC "KUIRZB01"
+#else
 #define PACKAGE_MAGIC KUI_RETAIL_PACKAGE_MAGIC
+#endif
 #endif
     .section .entry,"ax"
     .align 2

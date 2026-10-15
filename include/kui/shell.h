@@ -258,6 +258,7 @@ bool kui_shell_set_games_art(struct kui_shell *,const struct kui_shell_games_art
 const char *kui_shell_games_variant_label(const struct kui_shell *shell);
 /* Exact initial test profile only; preparation revalidates files and metadata. */
 bool kui_shell_games_retail_ready(const struct kui_shell *shell);
+bool kui_shell_games_background_ready(const struct kui_shell *shell);
 bool kui_shell_games_encoding_ready(const struct kui_shell *shell);
 /* Represented playable audio allows an opt-in; the backend still admits only
  * its exact supported title and GDI profiles. */

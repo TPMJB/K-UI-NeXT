@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "kui/games.h"
 #include "kui/media.h"
+#include "kui/storage.h"
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -49,6 +50,10 @@ static int sync_image(void *ctx) {
     (void)ctx; return fflush(test.image) || fsync(fileno(test.image)) ? -1 : 0;
 }
 static const struct kui_media_ops media = {NULL, blocks, read_image, write_image, sync_image};
+unsigned kui_storage_active(void) {
+    return !strcmp(test.fault,"inspect-zso-sci") || !strcmp(test.fault,"inspect-zso-ce")?
+        KUI_STORAGE_SCI:KUI_STORAGE_SCIF;
+}
 bool kui_sd_connect(void) {
     assert(!test.connected); ++test.connects;
     if(fault("connect-fail")) { test.injected = true; return false; }
@@ -395,6 +400,13 @@ static void seed_formats(const char *host) {
     }
 }
 static void seed(const char *host) {
+    if(!strncmp(test.fault,"inspect-zso-",12)) {
+        assert(f_mkdir("0:/Games")==FR_OK && f_mkdir(folder)==FR_OK);
+        char path[1024];assert(snprintf(path,sizeof(path),"%s/selected.zso",host)<(int)sizeof(path));
+        FILE *file=fopen(path,"rb");assert(file);uint8_t data[200000];
+        size_t bytes=fread(data,1,sizeof(data),file);assert(bytes<sizeof(data) && !ferror(file) && !fclose(file));
+        write_file("0:/Games/Reader Test/selected.zso",data,bytes);return;
+    }
     if(!strncmp(test.fault,"format-",7)) {seed_formats(host);return;}
     if(!strncmp(test.fault,"variant-",8)) {seed_variants(host);return;}
     if(!strcmp(test.fault, "missing-root")) return;
@@ -754,7 +766,8 @@ static void check_formats(void) {
         for(unsigned i=0;i<3;i++) {
             char path[96];snprintf(path,sizeof(path),"/Games/%s",names[i]);struct kui_games_detail detail;
             assert(!kui_games_inspect(path,&detail,log_line,cancel) && !detail.valid && !detail.stopped);
-            assert(strstr(detail.message,"offline import") && strstr(detail.message,"direct launch unavailable"));
+            if(i==1) assert(strstr(detail.message,"standard LZ4 ZSO") && strstr(detail.message,"LZO ZSO needs offline import"));
+            else assert(strstr(detail.message,"offline import") && strstr(detail.message,"direct launch unavailable"));
         }
         assert(!test.read_calls);return;
     }
@@ -799,6 +812,23 @@ static void check_formats(void) {
 }
 
 static void check(void) {
+    if(!strncmp(test.fault,"inspect-zso-",12)) {
+        struct kui_games_page page;
+        assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.count==1 && !page.entries[0].directory);
+        assert(!strcmp(page.entries[0].path,"/Games/Reader Test/selected.zso"));
+        struct kui_games_detail detail;assert(kui_games_inspect(page.entries[0].path,&detail,log_line,cancel));
+        bool ce=!strcmp(test.fault,"inspect-zso-ce"),sci=!strcmp(test.fault,"inspect-zso-sci");
+        assert(detail.valid && !detail.stopped && detail.format==KUI_GAME_IMAGE_ZSO && detail.zso_launch==sci);
+        assert(detail.windows_ce==ce && !detail.cd_image && detail.tracks==1 && detail.data_tracks==1 && !detail.audio_tracks);
+        assert(detail.boot_lba==45021u && detail.boot_bytes==3001u && detail.bytes && detail.bytes<64u*2048u);
+        assert(!strcmp(detail.title,"Independent Games Fixture") && !strcmp(detail.boot_file,"1ST_READ.BIN"));
+        if(ce)assert(strstr(detail.message,"Windows CE compressed launch unavailable"));
+        else if(!sci)assert(strstr(detail.message,"direct launch needs SCI microSD"));
+        else assert(strstr(detail.message,"native Standard reader"));
+        printf("ZSO inspection PASS: physical bytes=%llu, native SCI admission=%u, Windows CE=%u; no writes\n",
+            (unsigned long long)detail.bytes,(unsigned)detail.zso_launch,(unsigned)detail.windows_ce);
+        return;
+    }
     if(!strncmp(test.fault,"format-",7)) {check_formats();return;}
     if(!strncmp(test.fault,"variant-",8)) {check_variants();return;}
     if(!strcmp(test.fault, "listing")) { check_listing(); return; }

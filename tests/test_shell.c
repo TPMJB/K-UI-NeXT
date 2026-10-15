@@ -1761,6 +1761,86 @@ static void games_image_defaults_controls(void) {
     }
     puts("PASS Games defaults: current-image save only, detected native/CE/scrambled defaults, cleared patches and preserved unrelated presets");
 }
+static struct kui_games_detail zso_detail(void) {
+    struct kui_games_detail detail=launch_detail(false,true);
+    strcpy(detail.path,"/Games/Generated ZSO/disc.zso");strcpy(detail.title,"GENERATED ZSO SAMPLE");
+    detail.format=KUI_GAME_IMAGE_ZSO;detail.tracks=detail.data_tracks=1;detail.audio_tracks=0;
+    detail.audio=(struct kui_game_audio_info){KUI_GAME_AUDIO_UNKNOWN,0,0,0};
+    return detail;
+}
+static void games_zso_controls(void) {
+    struct kui_games_detail detail=zso_detail();
+    struct kui_game_launch_settings saved={.reader=KUI_GAME_READER_EAGER,.cdda=true,.encoding=KUI_GAME_ENCODING_PLAIN};
+    saved.patches.entries[0]=(struct kui_game_ram_patch){.address=UINT32_C(0x8c010004),.value=UINT32_C(0x12345678),.enabled=true};
+    install_launch_detail(&detail);
+    /* Metadata from SCIF/another source has no explicit native SCI capability.
+     * It is inspectable without accidentally inheriting the ordinary ISO path. */
+    assert(kui_shell_games_image_ready(&s) && !kui_shell_games_launch_ready(&s));
+    assert(!kui_shell_games_retail_ready(&s) && !kui_shell_games_ce_probe_ready(&s));
+    assert(!kui_shell_games_background_ready(&s) && !kui_shell_games_background_ready(NULL));
+    assert(!strcmp(kui_shell_games_reader_label(&s),"Standard"));
+    kui_shell_set_game_launch_settings(&s,detail.path,&saved,true);
+    assert(!s.games_launch_reader && !s.games_launch_cdda && !kui_game_ram_patches_enabled(&s.games_launch_patches));
+    assert(strstr(s.games_launch_notice,"Saved RAM patches are unavailable"));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    open_extra_options();s.game_tools_selected=KUI_SHELL_GAME_TOOL_INFO;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_INFO);
+    /* CE remains inspection-only even if a stale or malformed publication
+     * supplies zso_launch; it cannot fall through to the CE probe route. */
+    detail=launch_detail(true,false);detail.format=KUI_GAME_IMAGE_ZSO;detail.zso_launch=true;
+    strcpy(detail.path,"/Games/Generated CE/disc.zso");install_launch_detail(&detail);
+    assert(kui_shell_games_image_ready(&s) && !kui_shell_games_launch_ready(&s) && !kui_shell_games_ce_probe_ready(&s));
+    assert(s.games_launch_reader==KUI_GAME_READER_STANDARD && !kui_shell_games_cdda_ready(&s));
+    kui_shell_set_game_launch_settings(&s,detail.path,&saved,true);
+    assert(!s.games_launch_reader && !s.games_launch_cdda && !kui_game_ram_patches_enabled(&s.games_launch_patches));
+    press(KUI_SHELL_Y,false);assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    open_extra_options();s.game_tools_selected=KUI_SHELL_GAME_TOOL_DEFAULTS;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==KUI_GAME_READER_STANDARD);
+    detail=zso_detail();detail.zso_launch=true;install_launch_detail(&detail);
+    assert(kui_shell_games_retail_ready(&s) && kui_shell_games_launch_ready(&s) && kui_shell_games_encoding_ready(&s));
+    assert(!kui_shell_games_background_ready(&s) && !kui_shell_games_patches_ready(&s) && !kui_shell_games_cdda_ready(&s));
+    kui_shell_set_game_launch_settings(&s,detail.path,&saved,true);
+    assert(s.games_launch_reader==KUI_GAME_READER_STANDARD && !s.games_launch_cdda && !s.games_retail_scrambled);
+    assert(s.games_launch_encoding==KUI_GAME_ENCODING_PLAIN && strstr(s.games_launch_notice,"Saved RAM patches are unavailable"));
+    assert_patch(0,UINT32_C(0x8c010004),UINT32_C(0x12345678),false);
+    struct kui_game_launch_settings sanitized;
+    assert(kui_shell_game_launch_settings(&s,&sanitized) && sanitized.reader==KUI_GAME_READER_STANDARD && !sanitized.cdda);
+    assert(!sanitized.patches.entries[0].enabled);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_GAMES_RETAIL_BOOT_PLAIN);
+    press(KUI_SHELL_Y,false);
+    const unsigned unavailable[]={KUI_SHELL_GAME_OPTION_READER,KUI_SHELL_GAME_OPTION_CDDA};
+    for(unsigned i=0;i<sizeof(unavailable)/sizeof(*unavailable);i++) {
+        s.games_launch_selected=unavailable[i];assert(!kui_shell_games_option_ready(&s,unavailable[i]));
+        const unsigned controls[]={KUI_SHELL_A,KUI_SHELL_LEFT,KUI_SHELL_RIGHT};
+        for(unsigned j=0;j<sizeof(controls)/sizeof(*controls);j++)
+            assert(press(controls[j],false)==KUI_SHELL_NONE && !s.games_launch_reader && !s.games_launch_cdda);
+    }
+    open_extra_options();s.game_tools_selected=KUI_SHELL_GAME_TOOL_SPEED;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.games_launch_reader);
+    s.game_tools_selected=KUI_SHELL_GAME_TOOL_PATCHES;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_EXTRA_OPTIONS);
+    s.game_tools_selected=KUI_SHELL_GAME_TOOL_ENCODING;
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_retail_scrambled);
+    assert(s.games_launch_encoding==KUI_GAME_ENCODING_SCRAMBLED);
+    press(KUI_SHELL_B,false);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_GAMES_RETAIL_DESCRAMBLE);
+    /* Dispatch still forces Standard if a stale state somehow retained a
+     * background reader; it never selects an unsupported ZSO runtime. */
+    s.games_launch_reader=KUI_GAME_READER_EAGER;
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_GAMES_RETAIL_DESCRAMBLE);
+    s.games_detail.scrambled=true;open_extra_options();s.game_tools_selected=KUI_SHELL_GAME_TOOL_DEFAULTS;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && !s.games_launch_reader);
+    assert(!s.games_launch_cdda && s.games_launch_encoding==KUI_GAME_ENCODING_AUTO && s.games_retail_scrambled);
+    assert_patch(0,0,0,false);assert_patch(1,0,0,false);
+    s.games_detail.native_cd=false;
+    assert(!kui_shell_games_retail_ready(&s) && !kui_shell_games_launch_ready(&s));
+    s.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    puts("PASS Games ZSO: explicit native SCI capability, inspection-only CE/other sources, Standard-only dispatch and saved-option sanitization");
+}
 static void games_page(unsigned count,bool more,unsigned view) {
     struct kui_games_page page={.count=count,.has_more=more,.view=view,.total=count};
     strcpy(page.root,s.games_path);
@@ -2093,6 +2173,26 @@ static void games_patch_rendering(void) {
     s.game_tools_selected=KUI_SHELL_GAME_TOOL_PATCHES;render(&view);
     assert(strstr(drawn,"RAM patches") && strstr(drawn,"Unavailable") && strstr(drawn,"Native games with CD music Off only"));
     puts("PASS Games patch rendering: six advanced rows, both patch slots, exact range, controller hints and moving nibble underline");
+}
+static void games_zso_rendering(void) {
+    struct kui_shell_view view={0};struct kui_games_detail detail=zso_detail();
+    strcpy(detail.message,"ZSO launching requires native SCI storage.");
+    install_launch_detail(&detail);render(&view);
+    assert(strstr(drawn,"Games / Selected image") && strstr(drawn,detail.message) && !strstr(drawn,"A Launch"));
+    detail.zso_launch=true;install_launch_detail(&detail);render(&view);
+    assert(strstr(drawn,"Ready to play") && strstr(drawn,"Background loading: Off") && strstr(drawn,"CD music: Off"));
+    assert(strstr(drawn,"ZSO launch test; compatibility untested"));
+    press(KUI_SHELL_Y,false);render(&view);
+    assert(option_row_colors[KUI_SHELL_GAME_OPTION_READER]==0xadd9 && option_row_colors[KUI_SHELL_GAME_OPTION_CDDA]==0xadd9);
+    assert(option_row_colors[KUI_SHELL_GAME_OPTION_ADVANCED]==0xf7bf && strstr(drawn,"ZSO uses the Standard reader"));
+    open_extra_options();s.game_tools_selected=KUI_SHELL_GAME_TOOL_SPEED;render(&view);
+    assert(strstr(drawn,"Unavailable") && strstr(drawn,"ZSO uses the Standard reader"));
+    s.game_tools_selected=KUI_SHELL_GAME_TOOL_PATCHES;render(&view);
+    assert(strstr(drawn,"RAM patches are unavailable for ZSO images"));
+    s.game_tools_selected=KUI_SHELL_GAME_TOOL_INFO;press(KUI_SHELL_A,false);render(&view);
+    assert(strstr(drawn,"Format: ZSO (standard LZ4)") && strstr(drawn,"Audio: unknown"));
+    assert(!strstr(drawn,"CSO") && !strstr(drawn,"LZO") && !strstr(drawn,"CHD"));
+    puts("PASS Games ZSO rendering: inspect-only explanation, Standard reader constraints and accurate format/unknown-audio information");
 }
 static void games_selected_art_rendering(void) {
     static uint16_t selected[KUI_COVER_PIXELS],legacy[KUI_GAMES_ROWS][KUI_COVER_PIXELS];
@@ -2897,9 +2997,9 @@ int main(int argc,char **argv) {
     if(argc==2 && !strcmp(argv[1],"--storage-tests")) {
         storage_test_controls();storage_test_rendering();return 0;
     }
-    games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_variant_controls();
+    games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_zso_controls(); games_variant_controls();
     if(argc==2 && !strcmp(argv[1],"--games-controls")) { puts("PASS Games navigation and launch controls"); return 0; }
-    games_rendering(); games_patch_rendering(); games_selected_art_rendering(); games_variant_rendering();
+    games_rendering(); games_patch_rendering(); games_zso_rendering(); games_selected_art_rendering(); games_variant_rendering();
     if(argc==2 && !strcmp(argv[1],"--games")) { puts("PASS Games navigation, launch eligibility and rendering"); return 0; }
     storage_test_controls();storage_test_rendering();
     launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction(); ripper_export_rendering();

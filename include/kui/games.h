@@ -44,6 +44,9 @@ struct kui_games_detail {
      * CDDA is advisory: audio-play commands are acknowledged silently.
      * Bare ISO/raw files do not reveal the original audio-track inventory. */
     bool native_gd, native_cd, windows_ce, scrambled, cd_image;
+    /* Explicit inspection capability: native ZSO on a supported SCI path.
+     * Valid metadata alone never grants compressed-image launch support. */
+    bool zso_launch;
     enum kui_game_image_format format;
     bool cover; /* Large box art was loaded for this image. */
 };

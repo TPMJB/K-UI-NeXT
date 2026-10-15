@@ -13,12 +13,13 @@ from runtime_package import envelope, flatten_elf, rejection_cases, verify
 from loader_package import inspect_probe
 from image_probe_package import inspect_image_probe
 from retail_package import inspect_retail
+from zso_package import inspect_zso
 from boot_badge import BADGE, inspect_badge, verify_cdi_badge
 
 ROOT = Path(__file__).resolve().parents[1]
 WINCE_CDDA_PROFILES = {"armada": "armada-us", "bam4": "bam4-us", "worms": "worms-us"}
 WINCE_CDDA_FILES = tuple("ce-cdda-" + name + ".kui" for name in WINCE_CDDA_PROFILES)
-GAME_FILES = ("probe.kui", "image-probe.kui", "retail-boot.kui", "ce-probe.kui", "probe.dat", *WINCE_CDDA_FILES)
+GAME_FILES = ("probe.kui", "image-probe.kui", "retail-boot.kui", "zso-boot.kui", "ce-probe.kui", "probe.dat", *WINCE_CDDA_FILES)
 
 
 def run(*args):
@@ -122,7 +123,7 @@ def candidate_notice():
 def guide(source):
     text = (ROOT / "docs" / source).read_text()
     for name in ("storage-testing", "storage-transports", "ext4-bootstrap", "bootloader-refresh", "boot-recovery",
-                 "games-formats-test", "games-formats", "gdi-2048-test", "capture-format",
+                 "games-formats-test", "games-formats", "games-zso", "gdi-2048-test", "capture-format",
                  "wifi", "wifi-performance-test", "wifi-flash-arch", "sci-connector", "ftp"):
         # Preserve section anchors while matching the packaged uppercase names.
         text = re.sub(r"\(" + re.escape(name) + r"\.md(?=[)#])",
@@ -297,7 +298,7 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
     shutil.copyfile(cdi, bundle / "boot-cd" / cdi_name)
     splash = ROOT / "resources/branding/startup.png"
     shutil.copyfile(splash, bundle / "splash-preview.png")
-    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "GAMES-ZSO.md", "WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, bundle / name)
     if release["version"].endswith("-formats-test"):
         shutil.copyfile(dist / "GAMES-FORMATS-TEST.md", bundle / "GAMES-FORMATS-TEST.md")
@@ -403,6 +404,7 @@ def main():
     retail = ROOT / "build/retail/entry.elf"
     retail_bench = ROOT / "build/retail-bench/entry.elf"
     retail_ce = ROOT / "build/retail-ce/entry.elf"
+    retail_zso = ROOT / "build/retail-zso/entry.elf"
     run("python3", "tools/check_loader_layout.py")
     run("python3", "tools/check_image_loader_layout.py")
     run("python3", "tools/check_retail_loader_layout.py")
@@ -411,7 +413,8 @@ def main():
     run("python3", "tools/check_retail_instructions.py", "build/retail-bench")
     run("python3", "tools/check_retail_loader_layout.py", "--ce", "build/retail-ce")
     run("python3", "tools/check_retail_instructions.py", "build/retail-ce")
-    for image in (elf, runtime, probe, image_probe, retail, retail_bench, retail_ce):
+    run("python3", "tools/check_zso_loader.py", "build/retail-zso")
+    for image in (elf, runtime, probe, image_probe, retail, retail_bench, retail_ce, retail_zso):
         compiled = json.loads(image.with_suffix(".compile.json").read_text())
         if (compiled["source_dirty"] or compiled["commit"] != commit or
                 compiled["elf_sha256"] != hashlib.sha256(image.read_bytes()).hexdigest()):
@@ -459,6 +462,10 @@ def main():
     retail_package = envelope(retail_payload, retail_memory, commit[:12])
     retail_info = inspect_retail(retail_package, formats=release["version"].endswith("-formats-test"))
     (games / "retail-boot.kui").write_bytes(retail_package)
+    zso_payload, zso_memory = flatten_elf(retail_zso.read_bytes())
+    zso_package = envelope(zso_payload, zso_memory, commit[:12])
+    zso_info = inspect_zso(zso_package)
+    (games / "zso-boot.kui").write_bytes(zso_package)
     bench_payload, bench_memory = flatten_elf(retail_bench.read_bytes())
     bench_package = envelope(bench_payload, bench_memory, commit[:12])
     bench_info = inspect_retail(bench_package)
@@ -479,6 +486,11 @@ def main():
                     ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
     shutil.copytree(ROOT / "build/retail-ce", dist / "retail-ce-build",
                     ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+    shutil.copytree(ROOT / "build/retail-zso", dist / "retail-zso-build",
+                    ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+    (dist / "retail-zso-build/linked-audit.json").write_text(
+        subprocess.check_output(["python3", "tools/check_zso_loader.py", "build/retail-zso"],
+                                cwd=ROOT, text=True), encoding="utf-8")
     # Menu music ships as the committed Ogg encodings recorded in the manifest.
     # A fresh folder cannot carry WAVs from an earlier local package.
     music_manifest = json.loads((ROOT / "resources/music/manifest.json").read_text())
@@ -513,7 +525,7 @@ def main():
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
     write_release_guides(dist, candidate)
-    for name in ("wifi", "wifi-performance-test", "wifi-flash-arch", "sci-connector", "ftp", "windows-ce-placement-test", "games-sd-benchmark", "games-background-reader", "games-covers", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
+    for name in ("games-zso", "wifi", "wifi-performance-test", "wifi-flash-arch", "sci-connector", "ftp", "windows-ce-placement-test", "games-sd-benchmark", "games-background-reader", "games-covers", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
         (dist / (name.upper()+".md")).write_text(guide(name+".md"))
     run("make", "build/render-shell")
     run("python3", "tools/render_app_previews.py", "--output", str(dist / "ui-previews"))
@@ -562,7 +574,7 @@ def main():
               "kind": package_kind(release, candidate),
               "runtime": runtime_info, "loader_probe": probe_info,
               "image_probe": image_probe_info,
-              "retail_boot": retail_info, "ce_probe": ce_info,
+              "retail_boot": retail_info, "zso_boot": zso_info, "ce_probe": ce_info,
               "wince_cdda_profiles": wince_profiles,
               "hardware_tested": False,
               "host_os": Path("/etc/os-release").read_text() if Path("/etc/os-release").exists() else os.name}
@@ -587,6 +599,7 @@ def main():
     shutil.copyfile(dist / "GAMES-RETAIL-TEST.md", update / "GAMES-RETAIL-TEST.md")
     shutil.copyfile(dist / "WINDOWS-CE-PLACEMENT-TEST.md", update / "WINDOWS-CE-PLACEMENT-TEST.md")
     shutil.copyfile(dist / "GAMES-COVERS.md", update / "GAMES-COVERS.md")
+    shutil.copyfile(dist / "GAMES-ZSO.md", update / "GAMES-ZSO.md")
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(sd / name, update / "KUI" / name)
     for name in ("WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md", "GAMES-IMAGE-PROBE.md", "GD-BIOS-CONTRACT.md", "GAMES-TEST.md", "GAMES-MILESTONE-PLAN.md", "APPS-ROUND-FIVE.md", "MUSIC-ROUND-FIVE.md", "NETWORK-CONNECTION-TEST.md", "SYSTEM-BACKUPS.md", "SALVAGE-WORKER.md", "verify_salvage.py", "APPS-ROUND-FOUR.md", "CLOCK-AND-FILE-DATES.md", "VMU-RESTORE.md", "ADVANCED-CRC-SCAN.md", "APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
