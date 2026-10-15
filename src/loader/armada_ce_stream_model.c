@@ -136,12 +136,27 @@ enum kui_armada_ce_stream_result kui_armada_ce_stream_read_validate(
        r->skip!=a->skip || r->bytes!=a->bytes) return KUI_ARMADA_CE_STREAM_STALE;
     return KUI_ARMADA_CE_STREAM_OK;
 }
+enum kui_armada_ce_stream_result kui_armada_ce_stream_read_progress(
+    struct kui_armada_ce_stream_model *m,struct kui_armada_ce_stream_read *r,uint32_t bytes) {
+    enum kui_armada_ce_stream_result s=kui_armada_ce_stream_read_validate(m,r);
+    if(s!=KUI_ARMADA_CE_STREAM_OK) return s;
+    if(!bytes || (bytes&63u) || bytes>=r->bytes) return KUI_ARMADA_CE_STREAM_ARGUMENT;
+    if(m->refill.id) return KUI_ARMADA_CE_STREAM_BUSY;
+    if(m->staged>KUI_ARMADA_CE_STREAM_STAGE_BYTES ||
+       bytes>KUI_ARMADA_CE_STREAM_STAGE_BYTES-m->staged) return KUI_ARMADA_CE_STREAM_ARGUMENT;
+    if(m->fetch>UINT64_MAX-bytes || r->skip>UINT32_MAX-bytes) return KUI_ARMADA_CE_STREAM_OVERFLOW;
+    m->fetch+=bytes;m->staged+=bytes;m->read.skip+=bytes;m->read.bytes-=bytes;
+    *r=m->read;return KUI_ARMADA_CE_STREAM_OK;
+}
 enum kui_armada_ce_stream_result kui_armada_ce_stream_read_complete(
     struct kui_armada_ce_stream_model *m,const struct kui_armada_ce_stream_read *r,bool success,uint32_t bytes) {
     enum kui_armada_ce_stream_result s=kui_armada_ce_stream_read_validate(m,r);
     if(s!=KUI_ARMADA_CE_STREAM_OK) return s;
     if(!success) return fault(m);
     if(bytes!=r->bytes) return KUI_ARMADA_CE_STREAM_ARGUMENT;
+    if(m->refill.id) return KUI_ARMADA_CE_STREAM_BUSY;
+    if(m->staged>KUI_ARMADA_CE_STREAM_STAGE_BYTES ||
+       bytes>KUI_ARMADA_CE_STREAM_STAGE_BYTES-m->staged) return KUI_ARMADA_CE_STREAM_ARGUMENT;
     if(m->fetch>UINT64_MAX-bytes) return KUI_ARMADA_CE_STREAM_OVERFLOW;
     m->fetch+=bytes;m->staged+=bytes;m->read=(struct kui_armada_ce_stream_read){0};
     return KUI_ARMADA_CE_STREAM_OK;
@@ -160,7 +175,7 @@ enum kui_armada_ce_stream_result kui_armada_ce_stream_refill_plan(
     struct kui_armada_ce_stream_model *m,uint32_t max,struct kui_armada_ce_stream_refill *out) {
     if(!valid(m) || !out || max<64u) return KUI_ARMADA_CE_STREAM_ARGUMENT;
     if(!filling(m)) return KUI_ARMADA_CE_STREAM_STATE;
-    if(m->read.id || m->refill.id) return KUI_ARMADA_CE_STREAM_BUSY;
+    if((m->read.id && m->staged<64u) || m->refill.id) return KUI_ARMADA_CE_STREAM_BUSY;
     uint32_t offset=(uint32_t)(m->produced%R),bytes=room(m),audio;
     if(bytes>R-offset) bytes=R-offset;
     if(bytes>max) bytes=max;

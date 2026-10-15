@@ -35,6 +35,9 @@ struct authored_bus {
     uint32_t submit_epoch[4096],last_lock_offset,last_lock_bytes;
     unsigned pending_pumps,read_latency_pumps,cancel_pumps,busy_submits,sleep_visits;
     unsigned token_slices;
+    uint32_t checked_slice_bytes;
+    bool release_after_source_copy;
+    bool release_at_snapshot;
     uint32_t last_sleep_ms;
     bool pending,cancelled,revoked,stale_unlock,stale_source,bad_unlock,fail_end;
     bool bad_current,fail_ticks,driver_context,fail_owner_admission,urgent,priority_active,pio_ready;
@@ -43,6 +46,12 @@ struct authored_bus {
     unsigned copy_page_hits,copy_page_flip;
 } bus;
 static struct kui_armada_ce_excerpt_binding admitted_binding;
+void kui_armada_ce_stream_player_test_source_copied(void) {
+    if(bus.release_after_source_copy) {
+        bus.release_after_source_copy=false;
+        (void)kui_armada_ce_excerpt_queue(NULL,23u,0,0,0);
+    }
+}
 
 static int __attribute__((aligned(4))) revalidate(
     const struct kui_armada_ce_excerpt_binding *binding) {
@@ -259,9 +268,10 @@ enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_submit
     bus.submit_epoch[bus.submits++]=epoch;
     if(bus.busy_submits) {--bus.busy_submits;return KUI_ARMADA_CE_STREAM_TRANSPORT_BUSY;}
     if(bus.cancelled || bus.pending) return KUI_ARMADA_CE_STREAM_TRANSPORT_BUSY;
+    if(epoch<=bus.epoch) return KUI_ARMADA_CE_STREAM_TRANSPORT_STALE;
     bus.epoch=epoch;bus.lba=lba;bus.sectors=sectors;bus.raw=(uint32_t)destination;bus.bytes=0;bus.pending=true;bus.revoked=false;
     if(bus.read_latency_pumps) bus.pending_pumps=bus.read_latency_pumps;
-    if(!bus.pending_pumps && !bus.pio_ready && !bus.token_slices) complete_bus();
+    if(!bus.pending_pumps && !bus.pio_ready && !bus.token_slices && !bus.checked_slice_bytes) complete_bus();
     return bus.pending?KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING:KUI_ARMADA_CE_STREAM_TRANSPORT_DONE;
 }
 enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_pump(void) {
@@ -273,9 +283,10 @@ enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_pump(v
     if(bus.pending) {
         if(bus.token_slices) {--bus.token_slices;return KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING;}
         if(bus.pending_pumps) {--bus.pending_pumps;return KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING;}
-        if(bus.pio_ready) {
+        if(bus.pio_ready || bus.checked_slice_bytes) {
             uint32_t total=bus.sectors*2352u,count=total-bus.bytes;
-            if(count>512u) count=512u;
+            uint32_t limit=bus.checked_slice_bytes?bus.checked_slice_bytes:512u;
+            if(count>limit) count=limit;
             uint8_t *dst=(uint8_t *)(uintptr_t)bus.raw;
             for(uint32_t i=0;i<count;i++) {
                 uint32_t at=bus.bytes+i;
@@ -293,6 +304,7 @@ enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_snapsh
     *out=(struct kui_armada_ce_stream_transport_snapshot){.epoch=epoch,.bytes=bus.bytes,
         .owner=bus.pending?2u:0u};
     if(bus.stale_source) {bus.stale_source=false;(void)kui_armada_ce_excerpt_queue(NULL,33u,0,0,0);}
+    if(bus.release_at_snapshot) {bus.release_at_snapshot=false;(void)kui_armada_ce_excerpt_queue(NULL,23u,0,0,0);}
     if(bus.revoked) return KUI_ARMADA_CE_STREAM_TRANSPORT_CANCELLED;
     return bus.pending?KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING:KUI_ARMADA_CE_STREAM_TRANSPORT_DONE;
 }
@@ -547,6 +559,55 @@ int main(void) {
         bus.token_slices==SOURCE_READY_PUMPS && bus.pumps-pio_before==SOURCE_READY_PUMPS+1u);
     CHECK(source() && player.read_active && bus.pending && bus.bytes==0u && !bus.token_slices);
     CHECK(source() && !player.read_active && player.source_total==RAW_BYTES);++cases;
+    /* Certified prefixes reach the native ring while the same physical
+     * source job is still in flight. No extra submit or early job completion. */
+    reset(true,128u);bus.checked_slice_bytes=4096u;CHECK(create_buffer());
+    CHECK(source() && player.read_active && player.model.read.id &&
+        player.model.fetch==4096u && player.model.staged==4096u &&
+        player.read.skip==4096u && player.read.bytes==RAW_BYTES-4096u);
+    uint32_t partial_id=player.read.id;
+    CHECK(drain_refill() && player.model.produced==4096u && !player.model.staged &&
+        player.read_active && player.read.id==partial_id && bus.submits==1u);
+    for(unsigned i=0;i<32u && player.read_active;i++) CHECK(source() && drain_refill());
+    CHECK(!player.read_active && !player.model.read.id && !player.model.staged &&
+        player.model.produced==RAW_BYTES && player.source_total==RAW_BYTES && bus.submits==1u);
+    for(uint32_t i=0;i<RAW_BYTES;i++) CHECK(((uint8_t *)(uintptr_t)HOST)[i]==expected_byte(i));
+    ++cases;
+    /* A resumed job's first card blocks can precede its audio skip. They
+     * produce no PCM yet; later prefixes retain exact bytes and tiny carry. */
+    reset(true,128u);bus.checked_slice_bytes=512u;CHECK(create_buffer());
+    player.model.origin=player.model.audible=player.model.fetch=2000u;
+    for(unsigned i=0;i<4u;i++) CHECK(source() && !player.source_total && !player.model.staged);
+    for(unsigned i=0;i<128u && player.read_active;i++) CHECK(source() && drain_refill());
+    CHECK(!player.read_active && bus.submits==1u && player.source_total==RAW_BYTES-2000u &&
+        player.model.fetch==RAW_BYTES && player.model.staged==48u &&
+        player.model.produced==RAW_BYTES-2048u);
+    for(uint32_t i=0;i<player.model.produced;i++)
+        CHECK(((uint8_t *)(uintptr_t)HOST)[i]==expected_byte(2000u+i));
+    ++cases;
+    /* Cancellation revokes the next prefix without committing old bytes. */
+    reset(true,128u);bus.checked_slice_bytes=4096u;CHECK(create_buffer());
+    CHECK(source() && drain_refill());bus.stale_source=true;CHECK(source());
+    CHECK(player.source_total==4096u && player.model.produced==4096u && !player.model.staged &&
+        player.read_active && !bus.cancels);
+    CHECK(control() && !player.read_active && bus.cancels==1u && player.source_total==4096u);++cases;
+    /* RELEASE during a completed job's staging copy is idempotent. Keep
+     * that DONE lease for commit; resubmitting its epoch would be stale. */
+    reset(true,128u);bus.release_after_source_copy=true;
+    CHECK(source() && player.read_active && player.model.read.id &&
+        !player.source_total && !player.model.staged && bus.submits==1u);
+    visit();CHECK(!player.disabled && player.source_total==2u*RAW_BYTES &&
+        bus.submits==2u && !player.read_active);++cases;
+    /* The same RELEASE race can occur before copying, on a pending or
+     * completed transport snapshot. Neither case revokes the unchanged job. */
+    for(unsigned pio=0;pio<2u;pio++) {
+        reset(true,128u);bus.pio_ready=pio!=0u;bus.release_at_snapshot=true;
+        CHECK(source() && player.read_active && player.model.read.id &&
+            !player.source_total && !bus.cancels && bus.submits==1u);
+        visit();CHECK(!player.disabled && player.source_total==2u*RAW_BYTES &&
+            bus.submits==2u && !player.read_active && !bus.cancels);
+    }
+    ++cases;
     /* A second completed PIO job must reach the native ring before Sleep.
      * Otherwise the next observation underruns despite fresh staged PCM. */
     reset(true,128u);bus.pio_ready=true;prime();CHECK(refill());
@@ -621,9 +682,11 @@ int main(void) {
     /* A command arriving between one-block masks prevents any old source
      * ticket from reaching staging, even if furtherPIO bytes are ready. */
     reset(true,128u);bus.pio_ready=true;bus.stale_source=true;CHECK(source());
+    CHECK(control());
     CHECK(!player.source_total && !player.model.staged && bus.cancels==1u &&
         !bus.pending && !player.read_active);++cases;
     reset(true,1u);bus.stale_source=true;CHECK(source());
+    CHECK(control());
     CHECK(!player.model.fetch && !player.model.staged && !player.read_active);++cases;
     /* A one-sector finite track pads its native prime and stops exactly atEOF. */
     reset(false,1u);prime();advance(2304u);CHECK(player.model.native_running);

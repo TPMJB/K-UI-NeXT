@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Armada CE full CD music stream test
 
-## K-UI 2.0 RC6 wrapped refill publication
+## K-UI 2.0 RC7 progressive source publication
 
 This console candidate integrates the net changes from
 `fix/armada-cdda-supply` at `be793d667cf0` into our current `eb06827d85da`
@@ -127,6 +127,32 @@ underrunning and calling Stop after two 50 ms native visits. With this bounded
 drain, all eligible checked bytes publish before that yield and those visits
 remain playing. No source-prefix API, source-job size, DATA-reader or scheduling
 change is made.
+
+Recording `62662.mp4` retains two real UNDERRUN events in RC6. The last
+has 8,000 fresh bytes and a 50 ms observation interval. SOURCE is unchanged
+from the sample 250 ms before that event; maximum recorded source-job duration
+is 700 ms, while the retained sample rows show zero pump-budget yields. This
+short recording does not include the summary page or the total underrun count,
+and cannot identify every interruption heard by the console tester.
+
+RC7 removes the all-or-nothing source publication barrier. A pending physical
+read already exposes an ordered, CRC-checked RAW prefix. The worker can now
+commit its aligned prefix into staging and refill the native ring while the
+same job continues. The ticket retains its identity and advances its RAW byte
+offset; DONE commits the remaining suffix. Partial data never certifies EOF,
+and final finite-track padding still waits for DONE. All command epochs,
+native locks/frontiers, mapping witnesses and exact byte counts remain checked.
+A late idempotent RELEASE retains the physical job until its publication can
+commit; a genuine STOP or new PLAY cancels it through the existing control path.
+
+Focused checks cover prefix-to-native publication before DONE, exact byte
+continuity, resumed reads whose initial skip has not yet arrived, carry, ring
+wrap, cancellation and RELEASE during pending/final publication. The model
+suite passes 37,685 sanitizer checks and the player suite passes 45 cases.
+This changes neither the shared DATA reader nor physical read size, priority,
+transport grants, pump bound, start threshold or audited player/model layout.
+It addresses a source-proven publication delay, not a measured hardware-success
+claim; the next console run must establish its effect on the remaining cuts.
 
 Focused player checks cover clock drift, real underruns, finite/infinite
 playback, staging carry and bounded PIO draining/cancellation. Transport checks

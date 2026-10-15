@@ -491,10 +491,10 @@ static bool stopped(void) {
 }
 static bool refill(void) {
     if(!mail_current()) return true;
-    /* A pending source read or sub-block carry cannot produce a refill.
-     * Avoid acquiring the shared sound-service lock for these idle visits. */
-    if(player.model.read.id || (player.model.staged<64u &&
-       (player.model.infinite || player.model.fetch!=player.model.finite_end))) return true;
+    /* Checked prefixes can refill while the rest of the source job runs.
+     * A sub-block carry cannot refill until source EOF permits padding. */
+    if(player.model.staged<64u && (player.model.read.id ||
+       player.model.infinite || player.model.fetch!=player.model.finite_end)) return true;
     if(!kui_armada_ce_stream_native_write_begin(&player.native,NULL,player.binding.device)) return false;
     struct kui_armada_ce_stream_refill ticket;
     struct kui_armada_ce_ram_binding frontier;
@@ -613,7 +613,9 @@ static bool source(void) {
     unsigned visit=0;bool immediate=false;
     for(;visit<SOURCE_READY_PUMPS;visit++) {
         sr=mask_begin();
-        if(!mail_current()) {mask_end(sr);cancel_read();return true;}
+        /* control() decides whether the new command actually changes the
+         * epoch. An idempotent RELEASE must keep this physical job alive. */
+        if(!mail_current()) {mask_end(sr);return true;}
         (void)kui_armada_ce_stream_transport_pump();
         status=kui_armada_ce_stream_transport_snapshot(player.read_bus_epoch,&progress);
         immediate=status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING &&
@@ -623,31 +625,56 @@ static bool source(void) {
     }
     if(visit==SOURCE_READY_PUMPS && immediate)
         kui_armada_ce_stream_trace_budget_yield();
-    if(status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING || status==KUI_ARMADA_CE_STREAM_TRANSPORT_BUSY) return true;
-    if(status!=KUI_ARMADA_CE_STREAM_TRANSPORT_DONE ||
-       progress.bytes!=player.read.sectors*KUI_ARMADA_CE_STREAM_SECTOR_BYTES) return false;
-    if(!mail_current()) {cancel_read();return true;}
+    if(status==KUI_ARMADA_CE_STREAM_TRANSPORT_BUSY) return true;
+    bool done=status==KUI_ARMADA_CE_STREAM_TRANSPORT_DONE;
+    uint32_t raw_total=player.read.sectors*KUI_ARMADA_CE_STREAM_SECTOR_BYTES;
+    if((!done && status!=KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING) ||
+       progress.bytes>raw_total || player.read.skip>raw_total ||
+       (done && progress.bytes!=raw_total)) return false;
+    uint32_t available=progress.bytes>player.read.skip?progress.bytes-player.read.skip:0u;
+    if(available>player.read.bytes) available=player.read.bytes;
+    if(!done) {
+        /* Only the ordered CRC-checked RAW prefix is available. Retain a
+         * final suffix under the same ticket until transport DONE certifies
+         * the complete job, including short finite tracks and carry. */
+        available&=~63u;
+        if(available>=player.read.bytes) available=(player.read.bytes-1u)&~63u;
+        if(!available) return true;
+    } else if(available!=player.read.bytes) return false;
+    if(!mail_current()) return true;
     if(kui_armada_ce_stream_read_validate(&player.model,&player.read)!=KUI_ARMADA_CE_STREAM_OK) return false;
-    /* Only this worker writes staging. read_plan admits a job only while
-     * fewer than 64 bytes remain, so the carry moved here is tiny. A reset
-     * model (staged 0) simply restarts at the beginning. */
-    if(player.stage_head) {
+    /* IRQ reception only appends beyond the checked RAW prefix. This worker
+     * alone writes staging; compact only a tiny carry between publications. */
+    if(player.stage_head && player.model.staged<64u) {
         if(player.model.staged)
             copy_bytes((void *)(uintptr_t)STAGE_BEGIN,
                 (const void *)(uintptr_t)(STAGE_BEGIN+player.stage_head),player.model.staged);
         player.stage_head=0;
     }
-    copy_bytes((void *)(uintptr_t)(STAGE_BEGIN+player.model.staged),
-        (const void *)(uintptr_t)(RAW_BEGIN+player.read.skip),player.read.bytes);
+    if(player.stage_head>KUI_ARMADA_CE_STREAM_STAGE_BYTES ||
+       player.model.staged>KUI_ARMADA_CE_STREAM_STAGE_BYTES-player.stage_head ||
+       available>KUI_ARMADA_CE_STREAM_STAGE_BYTES-player.stage_head-player.model.staged) return false;
+    copy_bytes((void *)(uintptr_t)(STAGE_BEGIN+player.stage_head+player.model.staged),
+        (const void *)(uintptr_t)(RAW_BEGIN+player.read.skip),available);
+#if KUI_ARMADA_CE_STREAM_PLAYER_TEST
+    extern void kui_armada_ce_stream_player_test_source_copied(void);
+    kui_armada_ce_stream_player_test_source_copied();
+#endif
     sr=mask_begin();
     bool current=mail_current();
-    if(current) player.last_model_result=kui_armada_ce_stream_read_complete(
-        &player.model,&player.read,true,player.read.bytes);
+    if(current) player.last_model_result=done?
+        kui_armada_ce_stream_read_complete(&player.model,&player.read,true,available):
+        kui_armada_ce_stream_read_progress(&player.model,&player.read,available);
     if(current && player.last_model_result==KUI_ARMADA_CE_STREAM_OK) {
-        player.source_total+=player.read.bytes;
-        kui_armada_ce_stream_trace_source_end(player.now_ms);
+        player.source_total+=available;
+        if(done) {
+            kui_armada_ce_stream_trace_source_end(player.now_ms);
+            player.read_active=0u;
+        }
     }
-    mask_end(sr);player.read_active=0;
+    /* A late idempotent RELEASE may leave this ticket current. Retain its
+     * completed transport job until commit, rather than resubmitting its id. */
+    mask_end(sr);
     return !current || player.last_model_result==KUI_ARMADA_CE_STREAM_OK;
 }
 static bool start(void) {

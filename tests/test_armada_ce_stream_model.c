@@ -85,7 +85,79 @@ static void play_frames(unsigned sectors,unsigned repeat,bool infinite) {
         unsigned work=0;while(pump()) CHECK(++work<1000u);
     }
 }
-int main(void) {
+static void progressive_reads(void) {
+    struct kui_armada_ce_stream_track t={1u,0u,1000u,1200u};
+    struct kui_armada_ce_stream_read rd,old;
+    struct kui_armada_ce_stream_refill rf;
+    reset(&t,1u);CHECK(kui_armada_ce_stream_request(&model,20u,1u,1u,15u)==KUI_ARMADA_CE_STREAM_OK);
+    CHECK(kui_armada_ce_stream_read_plan(&model,16u,&rd)==KUI_ARMADA_CE_STREAM_OK);
+    CHECK(kui_armada_ce_stream_refill_plan(&model,4096u,&rf)==KUI_ARMADA_CE_STREAM_BUSY);
+    CHECK(kui_armada_ce_stream_read_progress(&model,&rd,0u)==KUI_ARMADA_CE_STREAM_ARGUMENT);
+    CHECK(kui_armada_ce_stream_read_progress(&model,&rd,63u)==KUI_ARMADA_CE_STREAM_ARGUMENT);
+    CHECK(kui_armada_ce_stream_read_progress(&model,&rd,rd.bytes)==KUI_ARMADA_CE_STREAM_ARGUMENT);
+    model.fetch=UINT64_MAX-31u;
+    CHECK(kui_armada_ce_stream_read_progress(&model,&rd,64u)==KUI_ARMADA_CE_STREAM_OVERFLOW && !model.staged);
+    model.fetch=0;model.staged=KUI_ARMADA_CE_STREAM_STAGE_BYTES-32u;
+    CHECK(kui_armada_ce_stream_read_progress(&model,&rd,64u)==KUI_ARMADA_CE_STREAM_ARGUMENT && !model.fetch);
+    CHECK(kui_armada_ce_stream_read_complete(&model,&rd,true,rd.bytes)==KUI_ARMADA_CE_STREAM_ARGUMENT);
+    model.staged=0;
+    for(unsigned prefix=0;prefix<2u;prefix++) {
+        old=rd;
+        CHECK(kui_armada_ce_stream_read_validate(&model,&rd)==KUI_ARMADA_CE_STREAM_OK);
+        for(unsigned i=0;i<4096u;i++) {
+            uint32_t raw=rd.skip+i;stage[staged+i]=source_byte(rd.lba+raw/S,raw%S);
+        }
+        CHECK(kui_armada_ce_stream_read_progress(&model,&rd,4096u)==KUI_ARMADA_CE_STREAM_OK);
+        staged+=4096u;
+        CHECK(rd.id==old.id && rd.epoch==old.epoch && rd.selection==old.selection &&
+            rd.lba==old.lba && rd.sectors==old.sectors && rd.skip==old.skip+4096u &&
+            rd.bytes==old.bytes-4096u && model.fetch==(prefix+1u)*4096u && model.staged==staged);
+        CHECK(kui_armada_ce_stream_read_validate(&model,&old)==KUI_ARMADA_CE_STREAM_STALE);
+        CHECK(kui_armada_ce_stream_refill_plan(&model,4096u,&rf)==KUI_ARMADA_CE_STREAM_OK);
+        CHECK(kui_armada_ce_stream_read_progress(&model,&rd,64u)==KUI_ARMADA_CE_STREAM_BUSY);
+        CHECK(kui_armada_ce_stream_read_complete(&model,&rd,true,rd.bytes)==KUI_ARMADA_CE_STREAM_BUSY);
+        CHECK(kui_armada_ce_stream_refill_validate(&model,&rf)==KUI_ARMADA_CE_STREAM_OK);
+        memcpy(ring+rf.ring_offset,stage,rf.audio_bytes);
+        CHECK(kui_armada_ce_stream_refill_complete(&model,&rf,true)==KUI_ARMADA_CE_STREAM_OK);
+        staged-=rf.audio_bytes;CHECK(!staged && model.staged==staged && model.read.id==rd.id);
+    }
+    CHECK(rd.skip==8192u && rd.skip>S);
+    for(unsigned i=0;i<rd.bytes;i++) {
+        uint32_t raw=rd.skip+i;stage[i]=source_byte(rd.lba+raw/S,raw%S);
+    }
+    staged=rd.bytes;
+    CHECK(kui_armada_ce_stream_read_complete(&model,&rd,true,rd.bytes)==KUI_ARMADA_CE_STREAM_OK);
+    CHECK(!model.read.id && model.fetch==16u*S && model.staged==staged);
+    CHECK(kui_armada_ce_stream_refill_plan(&model,KUI_ARMADA_CE_STREAM_STAGE_BYTES,&rf)==KUI_ARMADA_CE_STREAM_OK);
+    memcpy(ring+rf.ring_offset,stage,rf.audio_bytes);
+    CHECK(kui_armada_ce_stream_refill_complete(&model,&rf,true)==KUI_ARMADA_CE_STREAM_OK);
+    staged-=rf.audio_bytes;CHECK(!staged && model.produced==16u*S);
+    for(unsigned i=0;i<16u*S;i++) CHECK(ring[i]==source_byte(t.first_lba+i/S,i%S));
+    /* A completed short job retains its48-byte carry while a checked
+     * prefix of the same next in-flight job can already enter the ring. */
+    t.end_lba=t.first_lba+1u;reset(&t,1u);
+    CHECK(kui_armada_ce_stream_request(&model,20u,1u,1u,15u)==KUI_ARMADA_CE_STREAM_OK);
+    CHECK(kui_armada_ce_stream_read_plan(&model,16u,&rd)==KUI_ARMADA_CE_STREAM_OK);
+    CHECK(kui_armada_ce_stream_read_complete(&model,&rd,true,rd.bytes)==KUI_ARMADA_CE_STREAM_OK);
+    CHECK(kui_armada_ce_stream_refill_plan(&model,4096u,&rf)==KUI_ARMADA_CE_STREAM_OK);
+    CHECK(kui_armada_ce_stream_refill_complete(&model,&rf,true)==KUI_ARMADA_CE_STREAM_OK && model.staged==48u);
+    CHECK(kui_armada_ce_stream_read_plan(&model,16u,&rd)==KUI_ARMADA_CE_STREAM_OK);
+    CHECK(kui_armada_ce_stream_read_progress(&model,&rd,512u)==KUI_ARMADA_CE_STREAM_OK && model.staged==560u);
+    CHECK(kui_armada_ce_stream_refill_plan(&model,4096u,&rf)==KUI_ARMADA_CE_STREAM_OK && rf.bytes==512u);
+    CHECK(kui_armada_ce_stream_refill_complete(&model,&rf,true)==KUI_ARMADA_CE_STREAM_OK && model.staged==48u);
+    CHECK(kui_armada_ce_stream_read_progress(&model,&rd,64u)==KUI_ARMADA_CE_STREAM_OK);
+    CHECK(kui_armada_ce_stream_refill_plan(&model,4096u,&rf)==KUI_ARMADA_CE_STREAM_OK);
+    CHECK(kui_armada_ce_stream_request(&model,33u,0u,0u,0u)==KUI_ARMADA_CE_STREAM_OK);
+    CHECK(kui_armada_ce_stream_read_progress(&model,&rd,64u)==KUI_ARMADA_CE_STREAM_STALE);
+    CHECK(kui_armada_ce_stream_read_complete(&model,&rd,true,rd.bytes)==KUI_ARMADA_CE_STREAM_STALE);
+    CHECK(kui_armada_ce_stream_refill_complete(&model,&rf,true)==KUI_ARMADA_CE_STREAM_STALE);
+    CHECK(!model.read.id && !model.refill.id && !model.staged && !model.fetch);
+}
+int main(int argc,char **argv) {
+    progressive_reads();
+    if(argc==2 && !strcmp(argv[1],"--progress-only")) {
+        printf("Armada CE progressive stream model: %u checks passed\n",checks);return 0;
+    }
     const struct kui_armada_ce_stream_track tracks[]={
         {1u,4u,0u,10u},{2u,0u,10u,17u},{3u,0u,17u,23u},{4u,4u,30u,40u},{5u,0u,45u,50u}};
     CHECK(kui_armada_ce_stream_init(NULL,tracks,5u)==KUI_ARMADA_CE_STREAM_ARGUMENT);

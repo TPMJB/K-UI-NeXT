@@ -69,6 +69,13 @@ enum kui_armada_ce_stream_result kui_armada_ce_stream_read_plan(
     struct kui_armada_ce_stream_model *,uint32_t max_sectors,struct kui_armada_ce_stream_read *);
 enum kui_armada_ce_stream_result kui_armada_ce_stream_read_validate(
     const struct kui_armada_ce_stream_model *,const struct kui_armada_ce_stream_read *);
+/* Commit a positive64-byte-aligned checked prefix smaller than the remaining
+ * ticket.bytes, after appending it to staging. Retain the transport lease,
+ * advance ticket.skip within its original raw span, and reduce ticket.bytes.
+ * skip may now exceed one sector. Old ticket copies become stale. Refills
+ * may drain committed prefixes while the same source read remains pending. */
+enum kui_armada_ce_stream_result kui_armada_ce_stream_read_progress(
+    struct kui_armada_ce_stream_model *,struct kui_armada_ce_stream_read *,uint32_t bytes);
 enum kui_armada_ce_stream_result kui_armada_ce_stream_read_complete(
     struct kui_armada_ce_stream_model *,const struct kui_armada_ce_stream_read *,bool,uint32_t bytes);
 /* A refill never wraps the native ring and is always64-byte aligned. Its

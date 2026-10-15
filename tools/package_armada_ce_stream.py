@@ -428,7 +428,7 @@ def build(args):
                 "packaging_corruption_checks": checks,
                 "output_member_sizes_sha256_crc32_verified": True}}
     files["build.json"] = (json.dumps(info, indent=2) + "\n").encode()
-    files["README.md"] = f"""# K-UI 2.0 RC6 — Armada CD music
+    files["README.md"] = f"""# K-UI 2.0 RC7 — Armada CD music
 
 Menu and optional audio loader build **{stamp}**. Merge this ZIP's `KUI` folder
 onto the SCI microSD card with the console off, replacing **both**
@@ -436,17 +436,18 @@ onto the SCI microSD card with the console off, replacing **both**
 
 Select **Original Armada → Y Options → CD music On → START**. This test streams
 the requested audio tracks from your image; it is not the earlier two-second
-excerpt loop. RC6 drains both eligible pieces of a completed audio refill
-when it crosses the circular-buffer boundary. RC5 could publish the short tail,
-leave the wrapped remainder staged, then check for underrun before publishing
-that remainder on its next worker visit.
+excerpt loop. RC7 lets an ordered, CRC-checked portion of a pending audio read
+reach playback before the entire read finishes. The same physical job stays
+active; its ticket advances through checked bytes, and DONE commits the suffix.
+RC6 still withheld those bytes until DONE, even when a job lasted700ms.
 
-The drain is bounded to two segments, stops when publication makes no progress,
-and retains native locking, current protected-frontier checks, mapping witnesses,
-command-epoch checks and Unlock publication for each segment. The92-pump bound,
-16-sector reads,75-block urgent grants, priority2 and one-second restart remain.
-Sample AUX bits4–7 still count forced budget yields; the six retained RC5 rows
-showed zero, so this candidate does not raise that limit again. Sustained console
+Command epochs, native locking, protected-frontier checks, mapping witnesses
+and exact byte counts remain checked. Finite-track EOF/padding still waits for
+DONE. Late idempotent RELEASE keeps the physical job; STOP/new PLAY cancels it.
+The bounded two-segment ring drain,92-pump bound,16-sector reads,75-block urgent
+grants, priority2 and one-second restart remain. Sample AUX bits4–7 still count
+forced budget yields. SOURCE now advances as checked portions publish; the job
+count and maximum job duration still describe whole reads. Sustained console
 playback remains the required confirmation.
 
 Use the same in-game scene where the earlier loop was audible. No main-menu
@@ -529,7 +530,7 @@ def main():
     parser.add_argument("--elf", type=Path, default=ROOT / "build/kui-runtime.elf")
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     parser.add_argument("--evidence", action="append", default=[], metavar="NAME=PATH")
-    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-2.0-RC6-Armada-Audio.zip")
+    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-2.0-RC7-Armada-Audio.zip")
     args = parser.parse_args()
     try:
         build(args)

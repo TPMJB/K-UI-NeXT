@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #ifndef KUI_VERSION_H
 #define KUI_VERSION_H
-#define KUI_VERSION "2.0-rc6"
-#define KUI_RELEASE_NAME "K-UI V2.0 RC6 \"Dáinsleif\""
+#define KUI_VERSION "2.0-rc7"
+#define KUI_RELEASE_NAME "K-UI V2.0 RC7 \"Dáinsleif\""
 /* Console text fonts are ASCII; the splash and package preserve the accent. */
-#define KUI_RELEASE_SHORT "K-UI V2.0 RC6"
-#define KUI_ARTIFACT_PREFIX "kui-2.0-rc6-dainsleif"
+#define KUI_RELEASE_SHORT "K-UI V2.0 RC7"
+#define KUI_ARTIFACT_PREFIX "kui-2.0-rc7-dainsleif"
 #endif
