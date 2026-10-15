@@ -24,9 +24,9 @@ static FATFS fs;
 static const char *slots[] = {"0:/KUI/settings-a.bin", "0:/KUI/settings-b.bin"};
 static const char *kept[] = {"0:/KUI/dumps/keep/track03.bin", "0:/KUI/dumps/keep/checkpoint-a.bin"};
 static const char sentinel[] = "Existing capture/checkpoint must remain unchanged.\n";
-static const struct kui_settings previous = {false, true, false,KUI_CAPTURE_FORMAT_GDI};
-static const struct kui_settings changed = {true, false, true,KUI_CAPTURE_FORMAT_GDI};
-static const struct kui_settings third = {true, true, false,KUI_CAPTURE_FORMAT_BIN_CUE};
+static const struct kui_settings previous = {false, true, false,KUI_CAPTURE_FORMAT_GDI,0,false};
+static const struct kui_settings changed = {true, false, true,KUI_CAPTURE_FORMAT_GDI,0,false};
+static const struct kui_settings third = {true, true, false,KUI_CAPTURE_FORMAT_BIN_CUE,0,false};
 
 static bool fault(const char *name) { return test.fault && !strcmp(test.fault, name); }
 static void log_line(const char *format, ...) {

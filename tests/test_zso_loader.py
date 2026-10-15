@@ -14,6 +14,7 @@ from test_image_loader_layout import executable
 
 
 class ZsoLinkedLoader(unittest.TestCase):
+    codec = "lz4"
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -112,7 +113,7 @@ class ZsoLinkedLoader(unittest.TestCase):
         # cross-objdump process is modeled; its returned instructions go through
         # the production integer audit, including the named FPSCR exception.
         with patch("check_zso_loader.subprocess.check_output", side_effect=self.disassembly):
-            return audit.check_directory(self.directory)
+            return audit.check_directory(self.directory, self.codec)
 
     def test_valid_dedicated_three_image_contract(self):
         result = self.check()
@@ -222,7 +223,7 @@ class ZsoLinkedLoader(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Missing final"):
             self.check()
         self.report.write_text(clean + "x.c:1:1:local\t100\tstatic\nx.c:2:1:local\t120\tstatic\n")
-        self.assertEqual(self.check()["resident_stack"]["conservative_bytes"], 636)
+        self.assertEqual(self.check()["resident_stack"]["conservative_bytes"], 636 + (32 if self.codec == "lzo" else 0))
         for extra, error in (("x.c:1:1:hidden\t8\tdynamic,bounded\n", "dynamic"),
                               ("x.c:1:1:hidden\t-1\tstatic\n", "Invalid"),
                               ("x.c:1:1:hidden\t2000\tstatic\n", "exceeds")):
@@ -287,12 +288,12 @@ class ZsoLinkedLoader(unittest.TestCase):
                 return value.replace(before, after, 1) if Path(args[2]).stem == "stage" else value
             with self.subTest(after=after), patch("check_zso_loader.subprocess.check_output", side_effect=changed):
                 with self.assertRaisesRegex(ValueError, "initialize its resident on the high stack"):
-                    audit.check_directory(self.directory)
+                    audit.check_directory(self.directory, self.codec)
 
     def test_integer_instruction_audit_is_mandatory_for_all_three_images(self):
         with patch("check_zso_loader.subprocess.check_output", side_effect=FileNotFoundError("objdump")):
             with self.assertRaisesRegex(ValueError, "integer-instruction"):
-                audit.check_directory(self.directory)
+                audit.check_directory(self.directory, self.codec)
         for name in audit.IMAGES:
             def mutated(args, **kwargs):
                 value = self.disassembly(args, **kwargs)
@@ -301,7 +302,55 @@ class ZsoLinkedLoader(unittest.TestCase):
                 return value
             with self.subTest(name=name), patch("check_zso_loader.subprocess.check_output", side_effect=mutated):
                 with self.assertRaisesRegex(ValueError, "FPU use"):
-                    audit.check_directory(self.directory)
+                    audit.check_directory(self.directory, self.codec)
+
+
+class LzoLinkedLoader(ZsoLinkedLoader):
+    codec = "lzo"
+    def setUp(self):
+        super().setUp()
+        self.symbols["resident-sci"]["_kui_lzo1x_decode"] = layout.RESIDENT_ADDRESS + 200
+        with self.report.open("a") as report:
+            report.write("source.c:1:1:kui_lzo1x_decode\t32\tstatic\n")
+        (self.directory / "layout-config").write_text(
+            "ZSO=1 CODEC=1 LOW=1 TRANSPORT=1 READER=0 SLOTS=32 PATCHES=0 BUILD=012345abcdef\n")
+        self.payloads["entry"][layout.HEADER_OFFSET:layout.HEADER_OFFSET + layout.HEADER_BYTES] = layout.relocation_header(512, "lzo")
+        self.write()
+
+    def check(self):
+        with patch("check_zso_loader.subprocess.check_output", side_effect=self.disassembly):
+            return audit.check_directory(self.directory, "lzo")
+
+    def test_valid_dedicated_three_image_contract(self):
+        result = self.check()
+        self.assertEqual(result["contract"]["manifest_magic"], "KUIRLS01")
+        self.assertEqual(result["resident_stack"]["conservative_bytes"], 448)
+
+    def test_required_lzo_decoder_symbol_and_frame(self):
+        saved = self.report.read_text()
+        self.report.write_text("\n".join(line for line in saved.splitlines() if "kui_lzo1x_decode" not in line) + "\n")
+        with self.assertRaisesRegex(ValueError, "Missing ZSO runtime stack"):
+            self.check()
+        self.report.write_text(saved)
+        del self.symbols["resident-sci"]["_kui_lzo1x_decode"]
+        self.write()
+        with self.assertRaises(ValueError):
+            self.check()
+
+    def test_lzo_profile_does_not_pass_lz4_gate(self):
+        with self.assertRaisesRegex(ValueError, "build profile"):
+            audit.check_directory(self.directory, "lz4")
+
+    def test_linked_instruction_gate_has_no_bypass(self):
+        for name in audit.IMAGES:
+            def mutated(args, **kwargs):
+                value = self.disassembly(args, **kwargs)
+                if Path(args[2]).stem == name:
+                    value += f" {self.bases[name] + 4:08x}: 00 f0 fadd fr0,fr0\n"
+                return value
+            with self.subTest(name=name), patch("check_zso_loader.subprocess.check_output", side_effect=mutated):
+                with self.assertRaisesRegex(ValueError, "FPU use"):
+                    audit.check_directory(self.directory, "lzo")
 
 
 if __name__ == "__main__":

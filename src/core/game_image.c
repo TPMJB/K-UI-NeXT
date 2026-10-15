@@ -209,7 +209,7 @@ static bool valid_image(const struct kui_game_image *image) {
        image->zso.total_bytes % KUI_ZSO_BLOCK_BYTES ||
        image->zso.block_count != image->zso.total_bytes / KUI_ZSO_BLOCK_BYTES ||
        image->zso.index_bytes != (image->zso.block_count + 1u) * 4u ||
-       image->zso.shift > KUI_ZSO_MAX_SHIFT ||
+       image->zso.shift > KUI_ZSO_MAX_SHIFT || image->zso.codec > KUI_ZSO_LZO1X ||
        image->zso.file_bytes < KUI_ZSO_HEADER_BYTES + image->zso.index_bytes ||
        image->tracks[0].file_offset || image->tracks[0].file_bytes != image->zso.total_bytes ||
        image->tracks[0].sector_bytes != KUI_GAME_DATA_BYTES)) return false;
@@ -407,7 +407,7 @@ const char *kui_game_image_format_name(enum kui_game_image_format format) {
     case KUI_GAME_IMAGE_CUE: return "BIN/CUE";
     case KUI_GAME_IMAGE_CDI: return "CDI";
     case KUI_GAME_IMAGE_RAW: return "Raw BIN/IMG";
-    case KUI_GAME_IMAGE_ZSO: return "ZSO (standard LZ4)";
+    case KUI_GAME_IMAGE_ZSO: return "ZSO";
     default: return "Unknown";
     }
 }
@@ -921,9 +921,16 @@ static enum kui_game_result single_parse(const char *name, uint64_t bytes,
 
 enum kui_game_result kui_game_image_open_named(const char *name,
     const struct kui_game_file_ops *files, struct kui_game_image *out) {
+    return kui_game_image_open_named_codec(name, files, KUI_ZSO_LZ4, out);
+}
+enum kui_game_result kui_game_image_open_named_codec(const char *name,
+    const struct kui_game_file_ops *files, enum kui_zso_codec codec,
+    struct kui_game_image *out) {
     if(!safe_name(name) || !files || !files->stat || !files->read || !out)
         return KUI_GAME_INVALID;
     if(!kui_game_image_name_supported(name)) return KUI_GAME_UNSUPPORTED;
+    if((unsigned)codec > KUI_ZSO_LZO1X || (codec != KUI_ZSO_LZ4 && !extension(name, ".zso")))
+        return KUI_GAME_UNSUPPORTED;
     uint64_t bytes = 0;
     enum kui_game_result result = files->stat(files->ctx, name, &bytes);
     if(result != KUI_GAME_OK) return result;
@@ -951,7 +958,7 @@ enum kui_game_result kui_game_image_open_named(const char *name,
         result = files->read(files->ctx, name, 0, header, sizeof(header));
         if(result != KUI_GAME_OK) return result;
         struct zso_context context = {&image, name, KUI_GAME_OK};
-        result = zso_result(kui_zso_header_parse(header, bytes, &image.zso), &context);
+        result = zso_result(kui_zso_header_parse_codec(header, bytes, codec, &image.zso), &context);
         if(result != KUI_GAME_OK) return result;
         if(image.zso.block_count > KUI_GAME_LBA_LIMIT) return KUI_GAME_RANGE;
         result = zso_result(kui_zso_validate_index(&image.zso, zso_read, &context), &context);

@@ -8,13 +8,29 @@
 #include "kui/timing.h"
 #include "kui/capture_format.h"
 #define KUI_CAPTURE_PROFILE "gdi-raw2352-typegap150-v1"
+#define KUI_CAPTURE_CD_PROFILE "cd-toc-index01-raw2352-v1"
 #define KUI_CAPTURE_CHUNK 32u
 #define KUI_CAPTURE_RETRIES 10u
 #define KUI_CHECKPOINT_SECTORS 4096u
 #define KUI_CHECKPOINT_BYTES 4096u
 struct kui_capture_track { uint32_t number, control, session, start, end, toc_end; };
-struct kui_capture_plan { struct kui_capture_track tracks[99]; unsigned count; uint64_t bytes; };
+enum kui_capture_profile { KUI_CAPTURE_PROFILE_GD, KUI_CAPTURE_PROFILE_CD_TOC };
+struct kui_capture_plan {
+    struct kui_capture_track tracks[99]; unsigned count; uint64_t bytes;
+    enum kui_capture_profile profile; /* Zero retains the accepted GD profile. */
+};
 bool kui_plan_tracks(const struct kui_toc sessions[2], struct kui_capture_plan *out);
+/* Single-session CD TOC, not a GD density-area substitute. Capture the whole
+ * [INDEX01,next INDEX01/leadout) interval of every track. A TOC does not locate
+ * INDEX00 or pre-emphasis/subchannel flags; none are invented. First INDEX01
+ * may be later than FAD150; the CUE declares that uncaptured initial offset.
+ * Data is Mode1 or Mode2 Form1; audio remains raw drive bytes. Failure leaves
+ * out unchanged. The caller must establish that the disc has one session. */
+bool kui_plan_cd_tracks(const struct kui_toc *toc,struct kui_capture_plan *out);
+const char *kui_capture_profile_name(const struct kui_capture_plan *plan);
+/* 0 selects the historical ten additional attempts. Other admitted values
+ * are 1/5/10/20/50 additional attempts after an initial unsuccessful request. */
+bool kui_capture_retry_limit_valid(unsigned retry_limit);
 /* Bench sanity: is `fad` inside a track of the type the bench is configured to capture?
  * Returns NULL when the configuration is consistent, else a sentence to log. A bench can
  * otherwise measure something other than what was asked for and say nothing: capture_fad
@@ -82,6 +98,11 @@ struct kui_capture_options {
      * The folder is validated before I/O and never falls back to another job.
      * Existing optical identity, checkpoint and prefix checks still apply. */
     const char *job_directory;
+    unsigned retry_limit; /* 0 preserves KUI_CAPTURE_RETRIES. */
+    /* New optical reads only: require Mode1 sync/FAD/EDC/reserved/P/Q.
+     * Unsupported Mode2 fails closed; audio has no sector parity. Saved
+     * prefix verification remains the job's recorded hash check. */
+    bool strict_sectors;
 };
 /* What a run did, for the benchmark and application. Optional; filled at end. */
 struct kui_capture_stats {

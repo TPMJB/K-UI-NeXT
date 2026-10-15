@@ -96,6 +96,11 @@ static void headers(void) {
     memcpy(damaged,original,24);put32(damaged+8,KUI_ZSO_MAX_BYTES);
     assert(kui_zso_header_parse(damaged,UINT32_MAX,&info)==KUI_ZSO_OK);
     assert(info.block_count==1048576u && info.index_bytes==4194308u);
+    memcpy(damaged,original,24);damaged[20]=0;damaged[4]=0;damaged[22]=0xa5;
+    assert(kui_zso_header_parse_codec(damaged,source.size,KUI_ZSO_LZO1X,&info)==KUI_ZSO_OK);
+    assert(info.codec==KUI_ZSO_LZO1X);
+    header_reject(damaged,source.size);
+    assert(kui_zso_header_parse_codec(original,source.size,(enum kui_zso_codec)2,&info)==KUI_ZSO_UNSUPPORTED);
     puts("PASS ZSO headers: strict standard-LZ4 geometry, endian/size bounds and unchanged failure output");
 }
 static void mixed_reads_and_faults(void) {

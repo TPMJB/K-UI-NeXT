@@ -1,25 +1,30 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Native ZSO: experimental SCI Standard reader
 
-This first slice adds a separate resident reader for **standard LZ4 ZSO**
-images. It is an opt-in development candidate for console testing, not a
+Separate native residents decode **standard LZ4 ZSO** and explicitly selected
+**historical LZO1X ZSO** images. It is an opt-in development candidate for console testing, not a
 published K-UI 2.0 release or a claim that compressed games are now generally
 compatible. Ordinary uncompressed images keep their existing reader path.
 
 ## Which ZSO format
 
-The supported container is **ZISO version 1 with independent 2048-byte LZ4
-blocks**. Each logical block is either stored raw or decoded as one bounded
-LZ4 block. No LZ4 frame, dependent dictionary or codec guessing is used.
+Standard mode admits **ZISO version 1 with independent 2048-byte LZ4 blocks**.
+Historical mode admits **ZISO version 0 or 1 with independent 2048-byte LZO1X
+blocks**, including K-UI Disc Ripper exports. Each logical block is stored raw
+or decoded using the one explicitly selected codec. No frame, dependent
+dictionary, codec guessing or failure-triggered fallback is used.
 
 K-UI's existing Disc Ripper **ZSO export uses the historical DreamShell-LZO
 dialect**. Both dialects can use `.zso` and the `ZISO` magic, so the extension
-and header do not reliably identify their compression algorithm. The new
-resident reader does not provide LZO fallback. Do not assume an existing
-ripper export is suitable or rename a different format to `.zso`.
+and header do not reliably identify their compression algorithm. The launcher must select historical LZO1X before inspecting or preparing an
+LZO file; the default remains standard LZ4. In Games, use Options > ZSO codec,
+or Y after a failed inspection, then A to save and reinspect. The exact image
+choice is loaded before metadata reads. Selecting the wrong codec refuses
+malformed decoded blocks rather than switching decoders. Raw-only blocks
+cannot identify a codec. Do not rename another container to `.zso`.
 
-Use an image produced explicitly as standard LZ4 ZSO from a complete Dreamcast
-data-session ISO, and retain its original image. The existing
+Use a known codec and a complete Dreamcast data-session ISO, and retain the
+original image. The existing
 [PC import workflow](games-formats.md#compressed-image-import) remains available
 for other supported compressed containers. This reader does not add CSO or CHD
 resident decoding.
@@ -37,7 +42,7 @@ resident decoding.
 | Optional executable RAM patches | Off; the ZSO package has no patch capability |
 | File allocation | At most 31 physical file fragments in the separate 32-slot map |
 
-Selecting a ZSO image explicitly requests this experimental path. Unsupported
+Selecting a ZSO image requests the selected codec's experimental path. Unsupported
 storage, reader or feature combinations must be refused before handoff. A
 recognized container and successful preparation do not prove a particular
 game will run. No broad compatibility or performance figure is available.
@@ -64,9 +69,16 @@ bounds are admission limits, not recommended image sizes or speed promises.
 
 ## Separate package and audits
 
-The dedicated build directory is `build/retail-zso`, containing one Standard
-SCI resident, its high stage and its entry wrapper. Its outer relocation
-header is **`KUIRZB01`**, while the private prepared map is **`KUIRZS01`**.
+Each dedicated directory contains one Standard SCI resident, its high stage
+and entry wrapper:
+
+| Codec | Build directory | Installed package | Outer header | Prepared map |
+| --- | --- | --- | --- | --- |
+| LZ4 | `build/retail-zso` | `zso-boot.kui` | `KUIRZB01` | `KUIRZS01` |
+| LZO1X | `build/retail-lzo` | `lzo-boot.kui` | `KUIRLB01` | `KUIRLS01` |
+
+The LZ4 version1 wire ABI is unchanged. Each detached binary admits only its
+own codec and rejects a map or package typed for the other.
 Ordinary native and CE packages retain their own contracts; a ZSO payload
 cannot be substituted for either by changing its filename.
 
@@ -76,7 +88,7 @@ is linked at `0x8ce00000`. Shipped packages contain a completely blank map and
 no executable RAM-patch seed. Only the launcher fills the owner's checked
 map before handoff.
 
-`tools/zso_package.py` checks the runtime envelope, exact relocation tuple,
+`tools/zso_package.py` (explicit `--codec lzo` for the LZO package) checks the runtime envelope, exact relocation tuple,
 blank manifest and absence of patch capabilities. The dedicated
 `tools/check_zso_loader.py` gate additionally checks all three linked ELFs,
 resident and stage bounds, BSS and stack reservations, embedded byte identity,
@@ -88,6 +100,20 @@ linked wrapper/bootstrap bytes, its unique entry reference, the final call
 graph and initialization-before-owner-boot call sites establish that domain.
 Every shared helper remains charged to the resident service stack; neither
 stack limit is enlarged. There is no audit-skip mode for this profile.
+
+Both decoders stream through the existing 512-byte physical-sector cache
+directly into the caller's 2048-byte output; there is no compressed-input
+buffer, heap or borrowed game RAM. LZO validates every literal/match length,
+lookbehind and the canonical `11 00 00` hexadecimal end marker. The bundled
+public miniLZO compressor/safe decoder is a host test oracle, never linked
+into the detached resident.
+
+At the pinned SH-4 toolchain, the first LZO reader ends at `0x8c007688`, leaving
+376 bytes in the existing reservation. Its conservative runtime stack sum is
+1216 of 1232 bytes; LZ4 remains 1208. These are build measurements, not console
+speed results. Compression reduces card bytes but adds decoding and index
+reads; compare the same image/card against uncompressed ISO to measure the
+net loading or gameplay-stall cost. No SH-4 throughput promise is made.
 
 Generated host fixtures and mutation tests exercise these package and audit
 gates. They do not supply retail images or establish console acceptance.

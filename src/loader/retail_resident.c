@@ -4,6 +4,9 @@
 #include "kui/retail_image.h"
 #if KUI_RETAIL_ZSO
 #include "kui/retail_zso.h"
+#if KUI_ZSO_CODECS != 1 && KUI_ZSO_CODECS != 2
+#error Detached compressed resident must admit exactly one explicit codec
+#endif
 #if defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_ASYNC) || KUI_RETAIL_TRANSPORT != 1 || !KUI_RETAIL_LOW_RESIDENT || KUI_RETAIL_TOY_PILOT || KUI_RETAIL_MDK2_CDDA
 #error ZSO belongs only to its separate low native SCI Standard resident
 #endif

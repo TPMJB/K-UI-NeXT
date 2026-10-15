@@ -63,8 +63,42 @@ static bool split_file(const char *path,char root[KUI_DEST_ROOT_CAP],char name[K
 struct cached_entry {
     char name[KUI_DEST_NAME_CAP],gdi[KUI_DEST_NAME_CAP];
     char cooked[KUI_DEST_NAME_CAP],cooked_gdi[KUI_DEST_NAME_CAP];
+    char *long_name;
     bool folder,resolved,disabled;
 };
+/* Sort physical folders and loose images together by name. Resolving a game folder lazily
+ * must not move its row between pages. Keep the complete FAT name as the key,
+ * including names too long to open, and only fold ASCII for comparison. */
+static int entry_order(const void *left,const void *right) {
+    const struct cached_entry *a=left,*b=right;
+    const char *an=a->long_name?a->long_name:a->name,*bn=b->long_name?b->long_name:b->name;
+    const unsigned char *x=(const unsigned char *)an,*y=(const unsigned char *)bn;
+    while(*x && *y) {
+        unsigned p=*x++,q=*y++;
+        if(p>='A' && p<='Z') p+='a'-'A';
+        if(q>='A' && q<='Z') q+='a'-'A';
+        if(p!=q) return p<q?-1:1;
+    }
+    if(*x!=*y) return *x?1:-1;
+    int order=strcmp(an,bn);
+    return order?order:a->folder==b->folder?0:a->folder?-1:1;
+}
+static void entries_free(struct cached_entry *entries,unsigned count) {
+    for(unsigned i=0;i<count;i++) free(entries[i].long_name);
+    free(entries);
+}
+static void entry_heap_down(struct cached_entry *entries,unsigned count,unsigned at) {
+    for(;;) {
+        unsigned child=at*2u+1u;
+        if(child>=count) return;
+        if(child+1u<count && entry_order(&entries[child],&entries[child+1u])<0) ++child;
+        if(entry_order(&entries[at],&entries[child])>=0) return;
+        struct cached_entry swap=entries[at];entries[at]=entries[child];entries[child]=swap;at=child;
+    }
+}
+static void entry_heap(struct cached_entry *entries,unsigned count) {
+    for(unsigned at=count/2u;at;--at) entry_heap_down(entries,count,at-1u);
+}
 struct catalogue {
     struct cached_entry *entries;
     unsigned count,capacity,used;
@@ -75,7 +109,7 @@ static struct catalogue catalogues[CATALOG_ROOTS];
 static unsigned catalogue_active,catalogue_clock;
 #define listing_cache catalogues[catalogue_active]
 void kui_games_cache_clear(void) {
-    for(unsigned i=0;i<CATALOG_ROOTS;i++) free(catalogues[i].entries);
+    for(unsigned i=0;i<CATALOG_ROOTS;i++) entries_free(catalogues[i].entries,catalogues[i].count);
     memset(catalogues,0,sizeof(catalogues));catalogue_active=catalogue_clock=0;
 }
 static void catalogue_select(const char *root) {
@@ -86,7 +120,7 @@ static void catalogue_select(const char *root) {
         if(chosen==CATALOG_ROOTS) {
             chosen=0;for(unsigned i=1;i<CATALOG_ROOTS;i++) if(catalogues[i].used<catalogues[chosen].used) chosen=i;
         }
-        free(catalogues[chosen].entries);memset(&catalogues[chosen],0,sizeof(catalogues[chosen]));
+        entries_free(catalogues[chosen].entries,catalogues[chosen].count);memset(&catalogues[chosen],0,sizeof(catalogues[chosen]));
         strcpy(catalogues[chosen].root,root);
     }
     catalogue_active=chosen;listing_cache.used=++catalogue_clock;
@@ -99,7 +133,7 @@ static void catalogue_room(unsigned capacity) {
             if(catalogues[i].capacity && (oldest==CATALOG_ROOTS || catalogues[i].used<catalogues[oldest].used)) oldest=i;
         }
         if(total<=CATALOG_ENTRIES || oldest==CATALOG_ROOTS) return;
-        free(catalogues[oldest].entries);memset(&catalogues[oldest],0,sizeof(catalogues[oldest]));
+        entries_free(catalogues[oldest].entries,catalogues[oldest].count);memset(&catalogues[oldest],0,sizeof(catalogues[oldest]));
     }
 }
 static bool same_component(const char *a,const char *b) {
@@ -312,13 +346,14 @@ static bool cached_page_needs_io(unsigned offset) {
     }
     return false;
 }
-static bool cached_page(unsigned offset,struct kui_games_page *out,kui_cancel_fn cancel) {
-    out->total=listing_cache.count;
-    for(unsigned i=offset;i<listing_cache.count && i-offset<KUI_GAMES_ROWS;i++) {
+static bool entry_page(struct cached_entry *entries,unsigned count,unsigned offset,
+    struct kui_games_page *out,kui_cancel_fn cancel) {
+    for(unsigned i=offset;i<count && i-offset<KUI_GAMES_ROWS;i++) {
         if(stopped(cancel)) return false;
-        struct cached_entry *saved=&listing_cache.entries[i];
+        struct cached_entry *saved=&entries[i];
         struct kui_games_entry *entry=&out->entries[out->count++];
-        strcpy(entry->name,saved->name);entry->disabled=saved->disabled;
+        strcpy(entry->name,saved->name);
+        entry->disabled=saved->disabled;
         entry->directory=saved->folder;
         if(entry->disabled) continue;
         char child[KUI_DEST_ROOT_CAP];
@@ -343,15 +378,26 @@ static bool cached_page(unsigned offset,struct kui_games_page *out,kui_cancel_fn
                 !file_join(entry->variant_2048_path,child,saved->cooked_gdi);
         } else entry->disabled=!file_join(entry->path,out->root,saved->name);
     }
-    out->has_more=offset<listing_cache.count && listing_cache.count-offset>out->count;
     return !stopped(cancel);
+}
+static bool cached_page(unsigned offset,struct kui_games_page *out,kui_cancel_fn cancel) {
+    out->total=listing_cache.count;
+    bool ok=entry_page(listing_cache.entries,listing_cache.count,offset,out,cancel);
+    out->has_more=offset<listing_cache.count && listing_cache.count-offset>out->count;
+    return ok;
 }
 bool kui_games_list(const char *root,unsigned offset,struct kui_games_page *out,
     kui_log_fn log,kui_cancel_fn cancel) {
     return kui_games_list_with(root,offset,out,NULL,NULL,log,cancel);
 }
-bool kui_games_list_with(const char *root,unsigned offset,struct kui_games_page *out,
-    kui_games_mounted_fn mounted,void *ctx,kui_log_fn log,kui_cancel_fn cancel) {
+static bool find_entry(const struct cached_entry *entries,unsigned count,const char *name,unsigned *position) {
+    for(unsigned i=0;i<count;i++)
+        if(same_component(entries[i].long_name?entries[i].long_name:entries[i].name,name)) {*position=i;return true;}
+    return false;
+}
+static bool list_with(const char *root,unsigned offset,struct kui_games_page *out,
+    kui_games_mounted_fn mounted,void *ctx,kui_log_fn log,kui_cancel_fn cancel,
+    const char *find,unsigned *position) {
     if(!out) return false;
     memset(out,0,sizeof(*out));
     if(!kui_destination_normalize(out->root,root) || offset>8192u) {
@@ -360,6 +406,7 @@ bool kui_games_list_with(const char *root,unsigned offset,struct kui_games_page 
     if(stopped(cancel)) {snprintf(out->message,sizeof(out->message),"Games browse stopped");return false;}
     catalogue_select(out->root);
     bool cached=listing_cache.valid;
+    if(cached && find) return find_entry(listing_cache.entries,listing_cache.count,find,position);
     if(cached && !mounted && !cached_page_needs_io(offset)) {
         bool ok=cached_page(offset,out,cancel);
         snprintf(out->message,sizeof(out->message),"%s",ok?"Select an image to inspect.":"Games browse stopped");
@@ -370,8 +417,10 @@ bool kui_games_list_with(const char *root,unsigned offset,struct kui_games_page 
     FATFS fs;DIR dir;bool opened=false,ok=false;
     struct variant *pairs=NULL;unsigned pair_count=0;
     struct selector_index *selectors=NULL;
-    struct cached_entry *draft=NULL;unsigned draft_capacity=0;bool draft_enabled=true,retry=false;
-    bool counting=false,counted=true;unsigned listed=0;
+    struct cached_entry *draft=NULL;unsigned draft_capacity=0,draft_count=0;bool bounded=false,retry=false;
+    unsigned listed=0,requested=offset;
+    unsigned rank=0;bool found=false;
+    struct cached_entry wanted={0};if(find) strcpy(wanted.name,find);
     const char *problem="Cannot mount SD card";
     char path[KUI_DEST_ROOT_CAP+3];snprintf(path,sizeof(path),"0:%s",out->root);
     if(!kui_mount(&fs,log)) goto done;
@@ -398,17 +447,19 @@ bool kui_games_list_with(const char *root,unsigned offset,struct kui_games_page 
         problem=stopped(cancel)?"Games browse stopped":"Cannot read Games folder";goto done;
     }
     strcpy(listing_cache.diagnostic_root,out->root);
-    /* After the page is full the rest is only counted; a count that cannot
-     * finish leaves the total unknown rather than failing the page. */
+    char boundary_name[FF_LFN_BUF+1u];
+    struct cached_entry boundary={.long_name=boundary_name};bool after_boundary=false;
+next_window:
+    for(unsigned i=0;i<draft_count;i++) free(draft[i].long_name);
+    draft_count=0;
+    /* An incomplete scan cannot establish the first alphabetical page. */
     for(unsigned scanned=0;;scanned++) {
         if(stopped(cancel)) {problem="Games browse stopped";goto done;}
         if(scanned==32768u) {
-            if(counting) {counted=false;break;}
             problem="Directory too large to browse";goto done;
         }
         FILINFO info;r=f_readdir(&dir,&info);
         if(r!=FR_OK) {
-            if(counting) {counted=false;break;}
             problem="Cannot read Games folder";goto done;
         }
         if(!info.fname[0]) break;
@@ -423,65 +474,59 @@ bool kui_games_list_with(const char *root,unsigned offset,struct kui_games_page 
         /* Check before counting or skipping a page: a converted folder may
          * precede its original in the physical directory enumeration. */
         if(pair && alternate) continue;
-        ++listed;
-        struct cached_entry *saved=NULL;
-        if(draft_enabled) {
-            if(listed>LIST_CACHE_LIMIT) {free(draft);draft=NULL;draft_enabled=false;}
-            else {
-                if(listed>draft_capacity) {
-                    unsigned capacity=draft_capacity?draft_capacity*2u:32u;
-                    struct cached_entry *grown=realloc(draft,capacity*sizeof(*draft));
-                    if(!grown) {free(draft);draft=NULL;draft_enabled=false;}
-                    else {
-                        memset(grown+draft_capacity,0,(capacity-draft_capacity)*sizeof(*draft));
-                        draft=grown;draft_capacity=capacity;
-                    }
-                }
-                if(draft) {
-                    saved=&draft[listed-1u];saved->folder=directory;
-                    saved->disabled=strlen(info.fname)>=sizeof(saved->name);
-                    strcpy(saved->name,saved->disabled?"[Name too long]":info.fname);
-                    if(pair) {
-                        saved->resolved=true;strcpy(saved->gdi,pair->original_gdi);
-                        strcpy(saved->cooked,pair->cooked);strcpy(saved->cooked_gdi,pair->cooked_gdi);
-                    }
-                }
-            }
+        if(!after_boundary) ++listed;
+        struct cached_entry candidate={.folder=directory};
+        candidate.disabled=strlen(info.fname)>=KUI_DEST_NAME_CAP;
+        /* Only unopenable names need an auxiliary full UTF-8 sort key. */
+        if(candidate.disabled) {
+            candidate.long_name=malloc(strlen(info.fname)+1u);
+            if(!candidate.long_name) {problem="Insufficient memory to sort Games folder";goto done;}
+            strcpy(candidate.long_name,info.fname);strcpy(candidate.name,"[Name too long]");
+        } else strcpy(candidate.name,info.fname);
+        if(find) {
+            bool match=same_component(info.fname,find);
+            if(match)found=true;
+            wanted.folder=directory;
+            if(!match && entry_order(&candidate,&wanted)<0)++rank;
         }
-        if(offset) {--offset;continue;}
-        if(counting) continue;
-        if(out->count==KUI_GAMES_ROWS) {out->has_more=true;counting=true;continue;}
-        struct kui_games_entry *entry=&out->entries[out->count++];
-        bool resolved=pair!=NULL || !directory;
-        entry->directory=directory;
-        if(strlen(info.fname)>=sizeof(entry->name)) {
-            snprintf(entry->name,sizeof(entry->name),"[Name too long]");entry->disabled=true;continue;
-        }
-        strcpy(entry->name,info.fname);
+        if(after_boundary && entry_order(&candidate,&boundary)<=0) {free(candidate.long_name);continue;}
         if(pair) {
-            char child[KUI_DEST_ROOT_CAP];
-            entry->directory=false;
-            entry->disabled=!kui_destination_join(child,out->root,entry->name) ||
-                !file_join(entry->path,child,pair->original_gdi) ||
-                !kui_destination_join(child,out->root,pair->cooked) ||
-                !file_join(entry->variant_2048_path,child,pair->cooked_gdi);
-        } else if(directory) {
-            char child[KUI_DEST_ROOT_CAP];
-            entry->disabled=!kui_destination_join(child,out->root,entry->name);
-            if(!entry->disabled) {
-                enum single_result result=single_image(child,entry->path,cancel);
-                if(stopped(cancel)) {problem="Games browse stopped";goto done;}
-                if(result==SINGLE_FOUND) entry->directory=false;
-                else strcpy(entry->path,child);
-                resolved=result!=SINGLE_FAILED;
+            candidate.resolved=true;strcpy(candidate.gdi,pair->original_gdi);
+            strcpy(candidate.cooked,pair->cooked);strcpy(candidate.cooked_gdi,pair->cooked_gdi);
+        }
+        if(draft_count==draft_capacity && !bounded) {
+            unsigned capacity=draft_capacity?draft_capacity*2u:32u;
+            struct cached_entry *grown=capacity<=LIST_CACHE_LIMIT?realloc(draft,capacity*sizeof(*draft)):NULL;
+            if(grown) {draft=grown;draft_capacity=capacity;}
+            else {
+                if(!draft_capacity) {free(candidate.long_name);problem="Insufficient memory to sort Games folder";goto done;}
+                bounded=true;entry_heap(draft,draft_count);
             }
-        } else entry->disabled=!file_join(entry->path,out->root,entry->name);
-        if(saved) {
-            saved->disabled=entry->disabled;saved->resolved=resolved || entry->disabled;
-            if(directory && !entry->directory && !entry->disabled) strcpy(saved->gdi,strrchr(entry->path,'/')+1);
+        }
+        if(draft_count<draft_capacity) {
+            draft[draft_count++]=candidate;
+            if(bounded && draft_count==draft_capacity) entry_heap(draft,draft_count);
+        } else if(entry_order(&candidate,&draft[0])<0) {
+            free(draft[0].long_name);draft[0]=candidate;entry_heap_down(draft,draft_count,0);
+        } else free(candidate.long_name);
+    }
+    if(draft_count>1u) qsort(draft,draft_count,sizeof(*draft),entry_order);
+    /* Oversized catalogues keep only the earliest bounded window. Advance by
+     * almost a whole window, retaining enough overlap for a full page. This
+     * also preserves ordering if a cache allocation could not grow. */
+    if(!find && bounded && offset+KUI_GAMES_ROWS>draft_count && draft_count==draft_capacity) {
+        unsigned advance=draft_count-KUI_GAMES_ROWS+1u;
+        if(offset>=advance) {
+            const struct cached_entry *last=&draft[advance-1u];
+            strcpy(boundary_name,last->long_name?last->long_name:last->name);
+            boundary.folder=last->folder;after_boundary=true;offset-=advance;
+            if(f_readdir(&dir,NULL)!=FR_OK) {problem="Cannot read Games folder";goto done;}
+            goto next_window;
         }
     }
-    out->total=counted?listed:0;
+    if(!find && !entry_page(draft,draft_count,offset,out,cancel)) {problem="Games browse stopped";goto done;}
+    out->total=listed;
+    out->has_more=requested<listed && listed-requested>out->count;
     ok=true;
 done:
     free(selectors);
@@ -492,17 +537,35 @@ done:
     if(stopped(cancel)) {ok=false;problem="Games browse stopped";}
     if(f_mount(NULL,"0:",0)!=FR_OK) {ok=false;problem="Cannot release SD filesystem";}
     kui_sd_disconnect();
-    if(ok && !cached && counted && draft_enabled && !retry) {
+    if(ok && !cached && !bounded && !retry) {
         catalogue_room(draft_capacity);
         listing_cache.entries=draft;draft=NULL;listing_cache.count=listed;
         listing_cache.capacity=draft_capacity;listing_cache.valid=true;
     }
-    free(draft);
+    entries_free(draft,draft?draft_count:0);
     if(!ok && !stopped(cancel)) kui_games_cache_clear();
     snprintf(out->message,sizeof(out->message),"%s",ok?
         "Select an image to inspect.":problem);
     if(!ok) {out->count=0;out->has_more=false;if(log) log("Games browse: %s",problem);}
+    if(ok && find) {
+        if(!found) return false;
+        *position=rank;
+    }
     return ok;
+}
+bool kui_games_list_with(const char *root,unsigned offset,struct kui_games_page *out,
+    kui_games_mounted_fn mounted,void *ctx,kui_log_fn log,kui_cancel_fn cancel) {
+    return list_with(root,offset,out,mounted,ctx,log,cancel,NULL,NULL);
+}
+bool kui_games_find(const char *root,const char *name,unsigned *offset,kui_log_fn log,kui_cancel_fn cancel) {
+    if(!offset || !name || !kui_destination_name_valid(name)) return false;
+    char normalized[KUI_DEST_ROOT_CAP];
+    if(!kui_destination_normalize(normalized,root) || stopped(cancel)) return false;
+    catalogue_select(normalized);
+    if(listing_cache.valid) return find_entry(listing_cache.entries,listing_cache.count,name,offset);
+    struct kui_games_page *page=malloc(sizeof(*page));if(!page) return false;
+    bool ok=list_with(normalized,0,page,NULL,NULL,log,cancel,name,offset);
+    free(page);return ok;
 }
 
 struct image_files {
@@ -815,8 +878,16 @@ bool kui_games_inspect(const char *path,struct kui_games_detail *out,kui_log_fn 
 }
 bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
     kui_games_mounted_fn mounted,void *ctx,kui_log_fn log,kui_cancel_fn cancel) {
+    return kui_games_inspect_with_codec(path,KUI_ZSO_LZ4,out,mounted,ctx,log,cancel);
+}
+bool kui_games_inspect_codec(const char *path,enum kui_zso_codec codec,struct kui_games_detail *out,
+    kui_log_fn log,kui_cancel_fn cancel) {
+    return kui_games_inspect_with_codec(path,codec,out,NULL,NULL,log,cancel);
+}
+bool kui_games_inspect_with_codec(const char *path,enum kui_zso_codec codec,struct kui_games_detail *out,
+    kui_games_mounted_fn mounted,void *ctx,kui_log_fn log,kui_cancel_fn cancel) {
     if(!out) return false;
-    memset(out,0,sizeof(*out));
+    memset(out,0,sizeof(*out));out->zso_codec=(unsigned)codec;
     out->audio.classification=KUI_GAME_AUDIO_UNKNOWN;
     struct image_files files={.cancel=cancel,.log=log};
     char descriptor[KUI_DEST_NAME_CAP];
@@ -824,6 +895,9 @@ bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
         snprintf(out->message,sizeof(out->message),"Invalid image path");return false;
     }
     strcpy(out->path,path);
+    if((unsigned)codec>KUI_ZSO_LZO1X || (codec!=KUI_ZSO_LZ4 && !extension(descriptor,".zso"))) {
+        snprintf(out->message,sizeof(out->message),"ZSO codec choice does not match this image");return false;
+    }
     if(stopped(cancel)) {out->stopped=true;snprintf(out->message,sizeof(out->message),"Games inspection stopped");return false;}
     if(!kui_sd_connect()) {snprintf(out->message,sizeof(out->message),"SD card unavailable");return false;}
     FATFS fs;struct kui_game_image *image=NULL;bool mounted_card=false;
@@ -836,10 +910,10 @@ bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
     image=malloc(sizeof(*image));
     if(!image) {problem="Insufficient memory for Games inspection";goto done;}
     struct kui_game_file_ops ops={&files,image_stat,image_read};
-    enum kui_game_result result=kui_game_image_open_named(descriptor,&ops,image);
+    enum kui_game_result result=kui_game_image_open_named_codec(descriptor,&ops,codec,image);
     if(result!=KUI_GAME_OK) {
         problem=extension(descriptor,".zso") && result!=KUI_GAME_IO && result!=KUI_GAME_CANCELLED?
-            "Invalid/unsupported standard LZ4 ZSO; LZO ZSO needs offline import":result==KUI_GAME_UNSUPPORTED?
+            "Invalid ZSO for selected codec; use Y to choose LZ4 or LZO1X":result==KUI_GAME_UNSUPPORTED?
             "Unsupported image layout; offline import may be required":kui_game_result_name(result);
         goto done;
     }
@@ -888,11 +962,11 @@ bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
     out->zso_launch=image->compressed && !out->windows_ce && (out->native_gd || out->native_cd) &&
         kui_storage_active()==KUI_STORAGE_SCI && out->boot_bytes>=KUI_RETAIL_TRAMPOLINE_BYTES &&
         out->boot_bytes<=KUI_RETAIL_EXEC_MAX_BYTES;
-    problem=image->compressed?(out->windows_ce?"Standard LZ4 ZSO inspected; Windows CE compressed launch unavailable":
-        !(out->native_gd || out->native_cd)?"Standard LZ4 ZSO inspected; native IP flags required":
-        kui_storage_active()!=KUI_STORAGE_SCI?"Standard LZ4 ZSO inspected; direct launch needs SCI microSD":
-        !out->zso_launch?"Standard LZ4 ZSO inspected; boot size unsupported":
-        "Standard LZ4 ZSO; native Standard reader, console compatibility untested"):
+    problem=image->compressed?(out->windows_ce?"ZSO inspected; Windows CE compressed launch unavailable":
+        !(out->native_gd || out->native_cd)?"ZSO inspected; native IP flags required":
+        kui_storage_active()!=KUI_STORAGE_SCI?"ZSO inspected; direct launch needs SCI microSD":
+        !out->zso_launch?"ZSO inspected; boot size unsupported":
+        "ZSO; native Standard reader, console compatibility untested"):
         out->windows_ce?"Image inspected; Windows CE SCI launch test, compatibility varies":
         !(out->native_gd || out->native_cd)?"Image inspected; valid GD-ROM/CD-ROM IP flags required":
         out->tracks>KUI_RETAIL_IMAGE_TRACKS?"Image inspected; launch map supports at most 99 tracks":

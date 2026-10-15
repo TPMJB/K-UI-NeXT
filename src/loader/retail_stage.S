@@ -813,7 +813,10 @@ __retail_resident_sci_blob_start:
 __retail_resident_ide_blob_start:
 __retail_resident_scia_blob_start:
 #if KUI_RETAIL_ZSO
-    .incbin "build/retail-zso/resident-sci.bin"
+#ifndef KUI_RETAIL_ZSO_RESIDENT_BIN
+#define KUI_RETAIL_ZSO_RESIDENT_BIN "build/retail-zso/resident-sci.bin"
+#endif
+    .incbin KUI_RETAIL_ZSO_RESIDENT_BIN
 #else
     .incbin "build/retail/resident-sci.bin"
 #endif

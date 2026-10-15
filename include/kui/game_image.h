@@ -60,7 +60,7 @@ struct kui_game_image {
     uint32_t data_lba; /* First data track of the boot session. */
     bool scrambled; /* Explicit boot transform override; containers default false. */
     bool cd_image; /* CD media; GD CUE density markers preserve GD media. */
-    /* Standard LZ4 ZSO only. files still addresses the physical container;
+    /* Explicitly selected LZ4 or LZO1X ZSO. files addresses the physical container;
      * zso.file_bytes is physical, track.file_bytes is decoded ISO length.
      * No callback/context borrowed from the opener is installed here. */
     bool compressed;
@@ -104,6 +104,11 @@ enum kui_game_result kui_game_gdi_layout(const void *gdi,size_t size,struct kui_
  * containers are rejected before publication, never guessed from their bytes. */
 enum kui_game_result kui_game_image_open_named(const char *name,
     const struct kui_game_file_ops *files, struct kui_game_image *out);
+/* Explicit ambiguous-ZISO dialect. Non-ZSO images require the default LZ4
+ * value. Never retries inspection with another codec after a decode error. */
+enum kui_game_result kui_game_image_open_named_codec(const char *name,
+    const struct kui_game_file_ops *files, enum kui_zso_codec codec,
+    struct kui_game_image *out);
 
 /* Recognized direct formats only; case insensitive extension, safe filename. */
 bool kui_game_image_name_supported(const char *name);

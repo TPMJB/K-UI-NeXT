@@ -102,5 +102,32 @@ class ZsoPackage(unittest.TestCase):
                 layout.inspect_zso(package[:size])
 
 
+class LzoPackage(unittest.TestCase):
+    def package(self, codec="lzo"):
+        payload = bytearray(layout.STAGE_BLOB_OFFSET + 128)
+        payload[layout.HEADER_OFFSET:layout.HEADER_OFFSET + layout.HEADER_BYTES] = layout.relocation_header(128, codec)
+        return envelope(payload, len(payload), "012345abcdef")
+
+    def test_exact_typed_contract_and_no_codec_substitution(self):
+        result = layout.inspect_zso(self.package(), "lzo")
+        self.assertEqual(result["manifest_magic"], "KUIRLS01")
+        self.assertIn("LZO1X", result["codec"])
+        expected = bytearray(layout.relocation_header(128))
+        expected[:8] = b"KUIRLB01"
+        self.assertEqual(layout.relocation_header(128, "lzo"), expected)
+        for selected, packaged in (("lz4", "lzo"), ("lzo", "lz4")):
+            with self.subTest(selected=selected), self.assertRaisesRegex(ValueError, "relocation header"):
+                layout.inspect_zso(self.package(packaged), selected)
+
+    def test_every_header_and_map_byte_remains_checked(self):
+        clean = self.package()[64:]
+        for offset in (*range(layout.HEADER_OFFSET, layout.HEADER_OFFSET + layout.HEADER_BYTES),
+                       layout.MAP_OFFSET, layout.MAP_OFFSET + layout.MAP_BYTES - 1):
+            payload = bytearray(clean)
+            payload[offset] ^= 1
+            with self.subTest(offset=offset), self.assertRaises(ValueError):
+                layout.inspect_zso(envelope(payload, len(payload), "012345abcdef"), "lzo")
+
+
 if __name__ == "__main__":
     unittest.main()

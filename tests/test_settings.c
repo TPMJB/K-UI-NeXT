@@ -6,14 +6,14 @@
 
 static void same(struct kui_settings a,struct kui_settings b) {
     assert(a.crc_only==b.crc_only && a.end_readback==b.end_readback && a.show_memory==b.show_memory &&
-        a.capture_format==b.capture_format);
+        a.capture_format==b.capture_format && a.retry_limit==b.retry_limit && a.strict_sectors==b.strict_sectors);
 }
 static void crc(uint8_t *record) {
     uint32_t sum=kui_crc32(0,record,28);
     for(unsigned i=0;i<4;i++) record[28+i]=(uint8_t)(sum>>(8*i));
 }
 static void rejects(const void *record,size_t size) {
-    struct kui_settings before={false,true,false,KUI_CAPTURE_FORMAT_BIN_CUE},out=before;uint64_t sequence=123;
+    struct kui_settings before={false,true,false,KUI_CAPTURE_FORMAT_BIN_CUE,0,false},out=before;uint64_t sequence=123;
     assert(!kui_settings_decode(&out,&sequence,record,size));same(out,before);assert(sequence==123);
 }
 int main(void) {
@@ -29,7 +29,7 @@ int main(void) {
     assert(kui_settings_decode(&out,&sequence,fixture,sizeof(fixture)));same(out,defaults);assert(sequence==1);
     const uint64_t sequences[]={1,0x0807060504030201ull,UINT64_MAX};
     for(unsigned flags=0;flags<8;flags++) for(unsigned i=0;i<3;i++) {
-        struct kui_settings wanted={(flags&1)!=0,(flags&2)!=0,(flags&4)!=0,KUI_CAPTURE_FORMAT_GDI};
+        struct kui_settings wanted={(flags&1)!=0,(flags&2)!=0,(flags&4)!=0,KUI_CAPTURE_FORMAT_GDI,0,false};
         assert(kui_settings_encode(record,&wanted,sequences[i]));
         assert(kui_settings_decode(&out,&sequence,record,KUI_SETTINGS_RECORD_SIZE));
         same(out,wanted);assert(sequence==sequences[i]);
@@ -40,6 +40,12 @@ int main(void) {
             assert(kui_settings_decode(&out,&sequence,record,KUI_SETTINGS_RECORD_SIZE));
             same(out,wanted);assert(sequence==sequences[i]);
         }
+    }
+    const unsigned limits[]={0,1,5,10,20,50};
+    for(unsigned i=0;i<6u;i++)for(unsigned strict=0;strict<2u;strict++) {
+        struct kui_settings wanted=defaults;wanted.retry_limit=limits[i];wanted.strict_sectors=strict!=0;
+        assert(kui_settings_encode(record,&wanted,3));
+        assert(kui_settings_decode(&out,&sequence,record,KUI_SETTINGS_RECORD_SIZE));same(out,wanted);
     }
     for(unsigned bit=0;bit<KUI_SETTINGS_RECORD_SIZE*8;bit++) {
         memcpy(record,fixture,sizeof(fixture));record[bit/8]^=(uint8_t)(1u<<(bit%8));rejects(record,sizeof(fixture));

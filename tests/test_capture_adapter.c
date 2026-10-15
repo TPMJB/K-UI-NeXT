@@ -3,6 +3,7 @@
  * A rejected destination/preference load must never reach the drive or engine;
  * outcome details must come from this operation, not an earlier successful one. */
 #include "platform.h"
+#include "kui/capture_network.h"
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -19,6 +20,7 @@ static struct {
     unsigned storage, dma_ends;
     bool exercise_dma, dma_pending;
     bool load_format;
+    bool cd, mount_ok,config_ok,remote_ok,remote_close_ok;
     enum kui_capture_format loaded_format;
     char order[32], log[512], destination[KUI_DEST_ROOT_CAP];
     char selected_job[KUI_DEST_JOB_CAP],folder_label[KUI_DEST_TITLE_CAP];
@@ -35,6 +37,7 @@ static void reset(void) {
     memset(&fake,0,sizeof(fake));
     memset(&kui_options,0,sizeof(kui_options));
     fake.refresh_ok=fake.prepare_ok=fake.plan_ok=fake.connect_ok=true;
+    fake.mount_ok=fake.config_ok=fake.remote_ok=fake.remote_close_ok=true;
     fake.mode=KUI_CAPTURE_NEW;fake.result=KUI_CAPTURE_COMPLETE;
     /* Deliberately nonzero options so a missing/incorrect mapping is visible. */
     kui_options.capture_crc_only[0]=true;
@@ -42,6 +45,7 @@ static void reset(void) {
     kui_options.resume_size[0]=true;
     kui_options.sample_readback[0]=17;
     kui_options.capture_dma[0]=true;
+    kui_options.capture_retry_limit=20u;kui_options.capture_strict_sectors=true;
     fake.stats.bytes=12345678;fake.stats.sampled=9;
     fake.stats.verified=true;fake.stats.crc_only=true;
     strcpy(fake.destination,"/Games");
@@ -79,8 +83,34 @@ bool kui_disc_prepare(struct kui_toc sessions[2]) {
     note('D');memset(sessions,0,2*sizeof(*sessions));
     sessions[0].count=2;sessions[1].count=1;
     if(fake.cancel_in_prepare) fake.stop=true;
-    return fake.prepare_ok;
+    return fake.prepare_ok && !fake.cd;
 }
+bool kui_disc_prepare_capture(struct kui_toc sessions[2],bool *cd) {
+    *cd=fake.cd;bool prepared=kui_disc_prepare(sessions);return fake.cd?fake.prepare_ok:prepared;
+}
+bool kui_plan_cd_tracks(const struct kui_toc *toc,struct kui_capture_plan *out) {
+    (void)toc;note('P');memset(out,0,sizeof(*out));out->profile=KUI_CAPTURE_PROFILE_CD_TOC;
+    out->count=3;out->bytes=987654321;return fake.plan_ok;
+}
+bool kui_mount(FATFS *fs,kui_log_fn log) {(void)fs;(void)log;note('M');return fake.mount_ok;}
+FRESULT f_mount(FATFS *fs,const TCHAR *drive,BYTE now) {
+    assert(!fs && !strcmp(drive,"0:") && !now);note('u');return FR_OK;
+}
+const struct kui_w5500_port *kui_w5500_console_port(void) {return NULL;}
+const struct kui_wifi_port *kui_wifi_console_port(void) {return NULL;}
+bool kui_capture_network_config_load(struct kui_network_rip_config *out,char problem[128]) {
+    memset(out,0,sizeof(*out));if(!fake.config_ok)snprintf(problem,128,"invalid local configuration");
+    return fake.config_ok;
+}
+struct kui_capture_network *kui_capture_network_start(const struct kui_net_ports *ports,
+    const struct kui_network_rip_config *config,kui_log_fn log,kui_cancel_fn cancel,
+    void (*stage)(const char *),char problem[128]) {
+    (void)ports;(void)config;(void)log;(void)cancel;(void)stage;note('N');
+    if(!fake.remote_ok)snprintf(problem,128,"receiver unavailable");
+    return fake.remote_ok?(struct kui_capture_network *)&fake:NULL;
+}
+bool kui_capture_network_end(struct kui_capture_network *p) {assert(p==(struct kui_capture_network *)&fake);note('E');return fake.remote_close_ok;}
+const char *kui_capture_network_problem(const struct kui_capture_network *p) {(void)p;return "";}
 bool kui_plan_tracks(const struct kui_toc sessions[2],struct kui_capture_plan *out) {
     note('P');assert(sessions[0].count==2 && sessions[1].count==1);
     memset(out,0,sizeof(*out));out->count=3;out->bytes=987654321;
@@ -126,7 +156,9 @@ enum kui_capture_result kui_capture(const struct kui_capture_plan *plan,
     assert(ops->options->sample_every==kui_options.sample_readback[0]);
     assert(ops->options->read_dma==kui_options.capture_dma[0]);
     assert(ops->options->output && ops->options->output->game_names);
-    assert(ops->options->output->format==kui_options.capture_format);
+    assert(ops->options->output->format==(fake.cd?KUI_CAPTURE_FORMAT_BIN_CUE:kui_options.capture_format));
+    assert(ops->options->retry_limit==kui_options.capture_retry_limit);
+    assert(ops->options->strict_sectors==kui_options.capture_strict_sectors);
     assert(!strcmp(ops->options->output->parent,fake.destination));
     assert(ops->options->output->parent!=fake.mutate_destination);
     assert(fake.selected_job[0]?(ops->options->job_directory && !strcmp(ops->options->job_directory,fake.selected_job)):
@@ -246,6 +278,24 @@ static void selected_requests(void) {
 }
 int main(void) {
     expect_empty_stats();
+    reset();fake.cd=true;
+    assert(kui_capture_start(KUI_CAPTURE_NEW,"123456abcdef","/Games")==KUI_CAPTURE_FAILED);
+    assert(!fake.engine_calls);
+    reset();fake.cd=true;
+    assert(kui_capture_start_target(KUI_CAPTURE_NEW,"123456abcdef","/Games",NULL,NULL,false,false,true)==KUI_CAPTURE_COMPLETE);
+    assert(fake.engine_calls==1);
+    reset();
+    assert(kui_capture_start_target(KUI_CAPTURE_NEW,"123456abcdef","/Games",NULL,NULL,false,true,false)==KUI_CAPTURE_COMPLETE);
+    assert(!strcmp(fake.order,"OTDPSMuUNCECLuER"));
+    reset();fake.remote_close_ok=false;
+    assert(kui_capture_start_target(KUI_CAPTURE_NEW,"123456abcdef","/Games",NULL,NULL,false,true,false)==KUI_CAPTURE_FAILED);
+    assert(!strcmp(fake.order,"OTDPSMuUNCECLuER"));
+    reset();fake.config_ok=false;
+    assert(kui_capture_start_target(KUI_CAPTURE_NEW,"123456abcdef","/Games",NULL,NULL,false,true,false)==KUI_CAPTURE_FAILED);
+    assert(!strcmp(fake.order,"OTDPSMuU") && !fake.engine_calls);
+    reset();fake.remote_ok=false;
+    assert(kui_capture_start_target(KUI_CAPTURE_NEW,"123456abcdef","/Games",NULL,NULL,false,true,false)==KUI_CAPTURE_FAILED);
+    assert(!strcmp(fake.order,"OTDPSMuUN") && !fake.engine_calls);
     for(unsigned storage=KUI_STORAGE_SCIF;storage<=KUI_STORAGE_IDE;storage++) {
         reset();fake.storage=storage;fake.exercise_dma=true;run_success();
     }

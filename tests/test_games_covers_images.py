@@ -9,11 +9,12 @@ import tempfile
 import zlib
 from test_images import run
 from games_fixture import make_fixture, raw_sector, dual32
+from zso_fixture import lzo_block
 
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = str(ROOT / "build/games-covers-image")
 CASES = ("scan", "selected-cache", "cancel", "write-fail", "missing-root", "format-iso", "format-cue",
-         "format-cdi", "format-compressed", "format-legacy-empty", "format-payloads")
+         "format-cdi", "format-zso-lzo", "format-compressed", "format-legacy-empty", "format-payloads")
 
 
 def twiddled(x, y):
@@ -117,6 +118,25 @@ def make_format_tree(base, case):
     (base / "KUI" / "covers").mkdir(parents=True)
     if case == "format-compressed":
         (folder / "selected.cso").write_bytes(b"CISO")
+    elif case == "format-zso-lzo":
+        # Independent container: deliberately retain expanded LZO literal
+        # blocks so default LZ4 must reject, even for metadata/art sectors.
+        blocks = [lzo_block(bytes(sector)) for sector in sectors]
+        cursor = 24 + 4 * (len(blocks) + 1)
+        offsets = []
+        for block in blocks:
+            offsets.append(cursor)
+            cursor += len(block)
+        offsets.append(cursor)
+        (folder / "selected.zso").write_bytes(
+            struct.pack("<4sIQIBB2s", b"ZISO", 24, len(sectors) * 2048, 2048, 1, 0, b"\0\0") +
+            struct.pack(f"<{len(offsets)}I", *offsets) + b"".join(blocks))
+        key = b"/games/format game/selected.zso"
+        entry = struct.pack("<H6B4I", len(key), 0, 0, 0, 0, 1, 0, 0, 0, 0, 0) + key
+        body = struct.pack("<8sIIQII", b"KUILCH01", 3, 36 + len(entry), 1, 1, 0) + entry
+        preferences = base / "KUI/apps/games"
+        preferences.mkdir(parents=True)
+        (preferences / "launch-settings-a.bin").write_bytes(body + struct.pack("<I", zlib.crc32(body)))
     elif case in ("format-iso", "format-legacy-empty"):
         (folder / "selected.iso").write_bytes(b"".join(sectors))
     else:

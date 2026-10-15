@@ -39,4 +39,7 @@ enum kui_capture_export_result kui_capture_export_write(const struct kui_capture
 enum kui_capture_export_result kui_capture_export_file(const struct kui_capture_plan *,
     const struct kui_checkpoint *,const struct kui_capture_ops *,const char *dir,
     const char *primary,bool create,struct kui_capture_export_report *);
+enum kui_capture_export_result kui_capture_cooked_file(const struct kui_capture_plan *,
+    const struct kui_checkpoint *,const struct kui_capture_ops *,const char *dir,
+    const char *primary,bool create,struct kui_capture_export_report *);
 #endif

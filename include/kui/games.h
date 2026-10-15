@@ -56,6 +56,7 @@ struct kui_games_detail {
     /* Explicit inspection capability: native ZSO on a supported SCI path.
      * Valid metadata alone never grants compressed-image launch support. */
     bool zso_launch;
+    unsigned zso_codec; /* Explicit decoder used by inspection, including errors. */
     enum kui_game_image_format format;
     bool cover; /* Large box art was loaded for this image. */
 };
@@ -63,6 +64,11 @@ struct kui_games_detail {
  * Listing never creates /Games and never scans/hashes complete track files. */
 bool kui_games_list(const char *root, unsigned offset, struct kui_games_page *out,
                     kui_log_fn log, kui_cancel_fn cancel);
+/* Find a visible row by its FAT ASCII-casefolded name in the same sorted order
+ * as list. Cached lookup performs no I/O; cold lookup does not resolve child
+ * folders or read image payloads. Missing/error preserves offset. */
+bool kui_games_find(const char *root,const char *name,unsigned *offset,
+    kui_log_fn log,kui_cancel_fn cancel);
 /* Storage worker only. Four roots share a bounded RAM catalogue across
  * pages/views and leave/return navigation. Explicit card/storage/content
  * refresh must clear both this cache and kui_games_covers_cache_clear().
@@ -90,6 +96,10 @@ bool kui_games_visit_images(const char *root,kui_games_image_visit_fn visit,void
  * runtime. This is not disc verification or proof of game compatibility. */
 bool kui_games_inspect(const char *path, struct kui_games_detail *out,
                        kui_log_fn log, kui_cancel_fn cancel);
+bool kui_games_inspect_codec(const char *path,enum kui_zso_codec codec,struct kui_games_detail *out,
+    kui_log_fn log,kui_cancel_fn cancel);
+bool kui_games_inspect_with_codec(const char *path,enum kui_zso_codec codec,struct kui_games_detail *out,
+    kui_games_mounted_fn mounted,void *ctx,kui_log_fn log,kui_cancel_fn cancel);
 bool kui_games_inspect_with(const char *path, struct kui_games_detail *out,
                             kui_games_mounted_fn mounted, void *ctx, kui_log_fn log, kui_cancel_fn cancel);
 #endif

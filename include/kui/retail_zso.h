@@ -9,6 +9,8 @@
 _Static_assert(KUI_RETAIL_MANIFEST_SLOTS>=KUI_RETAIL_ZSO_SLOTS,"ZSO manifest must fit its32slots");
 #define KUI_RETAIL_ZSO_WIRE_MAGIC "KUIRZS01"
 #define KUI_RETAIL_ZSO_PACKAGE_MAGIC "KUIRZB01"
+#define KUI_RETAIL_LZO_WIRE_MAGIC "KUIRLS01"
+#define KUI_RETAIL_LZO_PACKAGE_MAGIC "KUIRLB01"
 #define KUI_RETAIL_ZSO_VERSION 1u
 /* The ordinary manifest ABI is unchanged. Only separately compiled ZSO
  * stages/residents use this wrapper and a 32-slot manifest allocation. The
@@ -19,7 +21,10 @@ struct kui_retail_zso_manifest {
     struct kui_retail_manifest manifest;
     struct kui_zso_info zso;
 };
-/* Distinct canonical4096-byte LE wire. Common header fields retain ordinary
+/* Distinct canonical4096-byte LE wires: KUIRZS01 means LZ4 and KUIRLS01 means
+ * LZO1X, both version1. A single-codec detached build rejects the other magic.
+ * No codec byte reuses the old reserved-zero wire fields, so the existing
+ * LZ4 ABI remains exact. Common header fields retain ordinary
  * offsets0..271; words272/276/280/284/288 are file_bytes/total_bytes/
  * block_count/index_bytes/shift. Bytes292..319 and unused slots must be zero.
  * CRC at16 covers all4096 bytes with its own word zeroed. One track starts

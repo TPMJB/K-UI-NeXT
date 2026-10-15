@@ -44,7 +44,7 @@ bool kui_capture_export_preflight(const struct kui_capture_plan *plan,const stru
     if(why && capacity) why[0]=0;
     if(!plan || !state || !plan->count || plan->count>99u || state->count!=plan->count)
         return refuse(why,capacity,"Invalid capture plan/checkpoint");
-    if(format!=KUI_CAPTURE_FORMAT_CSO && format!=KUI_CAPTURE_FORMAT_ZSO && format!=KUI_CAPTURE_FORMAT_CHD)
+    if(format!=KUI_CAPTURE_FORMAT_CSO && format!=KUI_CAPTURE_FORMAT_ZSO && format!=KUI_CAPTURE_FORMAT_CHD && format!=KUI_CAPTURE_FORMAT_GDI_2048)
         return refuse(why,capacity,"Unsupported derivative format");
     unsigned high_data=0;
     for(unsigned i=0;i<plan->count;i++) {
@@ -55,11 +55,11 @@ bool kui_capture_export_preflight(const struct kui_capture_plan *plan,const stru
             return refuse(why,capacity,"The raw capture track layout is invalid");
         if(t->session==1u && t->control==4u) {
             ++high_data;
-            if(format!=KUI_CAPTURE_FORMAT_CHD && t->start!=45150u)
+            if((format==KUI_CAPTURE_FORMAT_CSO || format==KUI_CAPTURE_FORMAT_ZSO) && t->start!=45150u)
                 return refuse(why,capacity,"CSO/ZSO require the high-density data track at FAD 45150; raw capture retained");
         }
     }
-    if(format!=KUI_CAPTURE_FORMAT_CHD && high_data!=1u)
+    if((format==KUI_CAPTURE_FORMAT_CSO || format==KUI_CAPTURE_FORMAT_ZSO) && high_data!=1u)
         return refuse(why,capacity,"CSO/ZSO support one high-density data track; use GDI/CUE/CHD for this layout");
     if(format==KUI_CAPTURE_FORMAT_CHD) {
         bool high=false;
@@ -88,6 +88,15 @@ bool kui_capture_export_preflight(const struct kui_capture_plan *plan,const stru
 }
 bool kui_capture_export_bound(const struct kui_capture_plan *plan,enum kui_capture_format format,uint64_t *bytes) {
     if(!plan || !bytes || !plan->count || plan->count>99u) return false;
+    if(format==KUI_CAPTURE_FORMAT_GDI_2048) {
+        *bytes=8192u;
+        for(unsigned i=0;i<plan->count;i++) {
+            if(plan->tracks[i].end<=plan->tracks[i].start)return false;
+            if(plan->tracks[i].control==4u)
+                *bytes+=(uint64_t)(plan->tracks[i].end-plan->tracks[i].start)*KUI_DATA_BYTES;
+        }
+        return true;
+    }
     if(format==KUI_CAPTURE_FORMAT_CSO || format==KUI_CAPTURE_FORMAT_ZSO) {
         unsigned found=0;uint64_t blocks=0;
         for(unsigned i=0;i<plan->count;i++) if(plan->tracks[i].session==1u && plan->tracks[i].control==4u) {

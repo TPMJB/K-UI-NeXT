@@ -51,6 +51,9 @@ bool kui_games_list_covers(const char *root, unsigned offset, unsigned view,
 bool kui_games_inspect_cover(const char *path, struct kui_games_detail *out,
     uint16_t pixels[KUI_COVER_PIXELS], kui_log_fn log, kui_cancel_fn cancel);
 
+bool kui_games_inspect_cover_codec(const char *path,enum kui_zso_codec codec,struct kui_games_detail *out,
+    uint16_t pixels[KUI_COVER_PIXELS],kui_log_fn log,kui_cancel_fn cancel);
+
 struct kui_games_scan_counts {
     unsigned games, disc, user, none, unchanged, failed, duplicates;
 };

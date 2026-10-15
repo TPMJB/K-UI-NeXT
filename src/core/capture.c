@@ -3,6 +3,7 @@
 #include "kui/capture_export.h"
 #include "kui/known_dumps.h"
 #include "kui/timing.h"
+#include "kui/recovery_checks.h"
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -25,7 +26,7 @@ static struct {
     char path[KUI_DEST_PATH_CAP], title[129], identity[65], text[32768];
     char gdi_name[KUI_DEST_TITLE_CAP+5u];
     char output_name[KUI_DEST_TITLE_CAP+5u];
-    bool cue_layout_bad;
+    bool cue_layout_bad,strict_unsupported;
     struct kui_capture_export_report exported;
     bool named_output,reference_checked;
     struct kui_known_summary reference;
@@ -34,7 +35,7 @@ static struct {
      * chosen for a new job, adopted from the checkpoint on resume. */
     const struct kui_capture_options *opt;
     bool crc_only, size_resume, verified, bench;
-    unsigned sample_every, chunks, sampled;
+    unsigned sample_every, chunks, sampled,retry_limit;
     struct kui_capture_progress progress;
     struct kui_timing timing;
     struct {
@@ -154,7 +155,7 @@ static bool sync_file(FIL *file) {
 }
 
 /* An unsuccessful batch is retried as a single sector at the same FAD.
- * The ten additional attempts are not reset by reducing the request size. */
+ * Reducing the request size never resets the selected additional-attempt budget. */
 /* Every data sector's EDC. Shared by the ordinary read and the overlapped one, so both check
  * exactly the same thing. */
 static bool edc_ok(unsigned i,const uint8_t *data,unsigned count,uint32_t fad) {
@@ -169,6 +170,16 @@ static bool edc_ok(unsigned i,const uint8_t *data,unsigned count,uint32_t fad) {
             job.ops->log("Invalid data-sector layout/EDC at FAD=%" PRIu32,fad+s);
             ok=false;break;
         }
+        if(job.opt->strict_sectors) {
+            unsigned flags=kui_recovery_sector_check(data+s*KUI_RAW_BYTES,KUI_RAW_BYTES,fad+s);
+            if(flags) {
+                job.strict_unsupported=(flags&KUI_RECOVERY_SECTOR_UNSUPPORTED)!=0;
+                job.ops->log(job.strict_unsupported?
+                    "Strict acquisition supports Mode1 data only; Mode2 refused at FAD=%" PRIu32:
+                    "Strict sync/address/EDC/P/Q acquisition check failed at FAD=%" PRIu32,fad+s);
+                ok=false;break;
+            }
+        }
         if(job.state.format!=KUI_CAPTURE_FORMAT_GDI && data[s*KUI_RAW_BYTES+15u]!=mode) {
             job.ops->log("Unsupported %s layout: mixed data sector modes in track %02u; raw job preserved",
                 kui_capture_format_name(job.state.format),i+1u);
@@ -180,22 +191,22 @@ static bool edc_ok(unsigned i,const uint8_t *data,unsigned count,uint32_t fad) {
     return ok;
 }
 static bool read_raw(unsigned i,uint32_t fad,unsigned *count,uint8_t *out) {
-    for(unsigned attempt=0;attempt<=KUI_CAPTURE_RETRIES;attempt++) {
+    for(unsigned attempt=0;attempt<=job.retry_limit;attempt++) {
         if(cancelled()) return false;
         uint64_t start=kui_timing_begin(&job.timing);
         enum kui_read_result r=job.ops->read(job.ops->ctx,fad,*count,out);
         kui_timing_end(&job.timing,KUI_TIME_DISC,start,r==KUI_READ_OK?*count*KUI_RAW_BYTES:0);
         if(r==KUI_READ_FATAL) return false;
         if(r==KUI_READ_OK && !edc_ok(i,out,*count,fad)) {
-            if(job.cue_layout_bad) return false;
+            if(job.cue_layout_bad || job.strict_unsupported) return false;
             r=KUI_READ_RETRY;
         }
         if(r==KUI_READ_OK) return true;
-        if(attempt==KUI_CAPTURE_RETRIES) break;
+        if(attempt==job.retry_limit) break;
         if(job.state.retries!=UINT32_MAX) ++job.state.retries;
         *count=1;
         job.ops->log("Read retry %u/%u: track %02u FAD=%" PRIu32,
-            attempt+1,KUI_CAPTURE_RETRIES,i+1,fad);
+            attempt+1,job.retry_limit,i+1,fad);
     }
     job.ops->log("Read retries exhausted: track %02u FAD=%" PRIu32,i+1,fad);
     return false;
@@ -206,7 +217,13 @@ static void hash_u32(struct kui_sha256 *hash,uint32_t n) {
 }
 static bool identify(void) {
     struct kui_sha256 hash;kui_sha256_init(&hash);
-    kui_sha256_update(&hash,KUI_CAPTURE_PROFILE,strlen(KUI_CAPTURE_PROFILE));
+    const char *profile=kui_capture_profile_name(job.plan);
+    kui_sha256_update(&hash,profile,strlen(profile));
+    if(job.plan->profile==KUI_CAPTURE_PROFILE_CD_TOC) {
+        unsigned data=0;
+        for(unsigned i=0;i<job.plan->count;i++) if(job.plan->tracks[i].control==4u) ++data;
+        snprintf(job.title,sizeof(job.title),"%s",!data?"Audio CD":data==job.plan->count?"Data CD":"Mixed Mode CD");
+    }
     hash_u32(&hash,job.plan->count);
     for(unsigned i=0;i<job.plan->count;i++) {
         const struct kui_capture_track *t=&job.plan->tracks[i];
@@ -219,11 +236,14 @@ static bool identify(void) {
             unsigned one=1;
             if(!read_raw(i,points[k],&one,job.data)) return false;
             hash_u32(&hash,points[k]);kui_sha256_update(&hash,job.data,KUI_RAW_BYTES);
-            if(t->start==45150 && k==0) {
+            if((job.plan->profile==KUI_CAPTURE_PROFILE_GD && t->start==45150 && k==0) ||
+               (job.plan->profile==KUI_CAPTURE_PROFILE_CD_TOC && t->control==4u && k==0)) {
                 int offset=kui_data_offset(job.data);
-                if(offset<0 || memcmp(job.data+offset,"SEGA SEGAKATANA",14)) {
+                bool sega=offset>=0 && !memcmp(job.data+offset,"SEGA SEGAKATANA",14);
+                if(!sega && job.plan->profile==KUI_CAPTURE_PROFILE_GD) {
                     job.ops->log("Missing retail Dreamcast IP.BIN signature; capture refused");return false;
                 }
+                if(!sega) continue;
                 for(unsigned c=0;c<128;c++) {
                     unsigned ch=job.data[offset+128+c];
                     job.title[c]=(ch>=32 && ch<=126 && ch!='"' && ch!='\\')?(char)ch:'_';
@@ -236,7 +256,7 @@ static bool identify(void) {
     kui_sha256_digest(&hash,job.state.identity);kui_hex(job.state.identity,32,job.identity);
     job.ops->log("Disc: %s",job.title);
     job.ops->log("Identity: %s",job.identity);
-    job.ops->log("Profile: %s",KUI_CAPTURE_PROFILE);
+    job.ops->log("Profile: %s",profile);
     for(unsigned i=0;i<job.plan->count;i++) {
         const struct kui_capture_track *t=&job.plan->tracks[i];
         job.ops->log("T%02u FAD [%" PRIu32 ",%" PRIu32 ") %s; gap excluded=%" PRIu32,
@@ -502,6 +522,9 @@ static bool load_checkpoint(void) {
         } else job.ops->log("Ignoring invalid checkpoint %c",i?'B':'A');
     }
     if(!best.sequence) {job.ops->log("No valid checkpoint for this disc/profile; preserving job");return false;}
+    if(job.plan->profile==KUI_CAPTURE_PROFILE_CD_TOC && best.format!=KUI_CAPTURE_FORMAT_BIN_CUE) {
+        job.ops->log("Unsupported saved CD format; preserving job");return false;
+    }
     uint32_t identification_retries=job.state.retries;
     job.state=best;
     job.state.retries=UINT32_MAX-job.state.retries<identification_retries?UINT32_MAX:job.state.retries+identification_retries;
@@ -647,7 +670,7 @@ static bool capture_tracks(void) {
                  * RETRY and a failed EDC do fall back, which is the ordinary retry path. */
                 if(r==KUI_READ_FATAL) {ok=false;break;}
                 have=wanted&&r==KUI_READ_OK&&edc_ok(i,data,n,t->start+position);
-                if(job.cue_layout_bad) {ok=false;break;}
+                if(job.cue_layout_bad || job.strict_unsupported) {ok=false;break;}
             }
             if(!have&&!read_raw(i,t->start+position,&n,data)) {ok=false;break;}
             if(have) ++job.dma_chunks; else ++job.pio_chunks;
@@ -753,7 +776,7 @@ static bool final_metadata(bool create) {
            !publish(job.output_name,used,create)) return false;
     } else if(job.state.format>=KUI_CAPTURE_FORMAT_CSO) {
         char reason[160];
-        if(!job.verified) {job.ops->log("Compressed output requires full raw-track readback");return false;}
+        if(!job.verified) {job.ops->log("Exported output requires full raw-track readback");return false;}
         if(!kui_capture_export_preflight(job.plan,&job.state,job.state.format,reason,sizeof(reason))) {
             job.ops->log("%s export refused: %s",kui_capture_format_name(job.state.format),reason);return false;
         }
@@ -771,7 +794,8 @@ static bool final_metadata(bool create) {
             "  \"output_format\":\"%s\",\"output_file\":\"%s\",\"gdi_file\":\"%s\",\n"
             "  \"output_bytes\":%" PRIu64 ",\"output_crc32\":\"%08" PRIx32 "\",\"output_sha256\":\"%s\",\n"
             "  \"output_logical_bytes\":%" PRIu64 ",\"output_data_track\":%u,\n",
-            job.state.format==KUI_CAPTURE_FORMAT_CSO?"cso":job.state.format==KUI_CAPTURE_FORMAT_ZSO?"zso":"chd",
+            job.state.format==KUI_CAPTURE_FORMAT_CSO?"cso":job.state.format==KUI_CAPTURE_FORMAT_ZSO?"zso":
+                job.state.format==KUI_CAPTURE_FORMAT_GDI_2048?"gdi_2048":"chd",
             job.output_name,job.gdi_name,job.exported.bytes,job.exported.crc32,sha,
             job.exported.logical_bytes,job.exported.data_track);
     }
@@ -787,7 +811,7 @@ static bool final_metadata(bool create) {
             "  \"profile\":\"%s\",\"identity\":\"%s\",\n  \"capture_build\":\"%s\",\n"
             "  \"title\":\"%s\",\"sector_bytes\":2352,\n%s"
             "  \"audio\":\"raw drive bytes; no offset/subchannel correction\",\n  \"tracks\":[\n",
-            KUI_CAPTURE_PROFILE,job.identity,job.state.build,job.title,descriptor)) return false;
+            kui_capture_profile_name(job.plan),job.identity,job.state.build,job.title,descriptor)) return false;
         for(unsigned i=0;i<job.plan->count;i++) {
             const struct kui_capture_track *t=&job.plan->tracks[i];
             char mode[32]={0};
@@ -808,7 +832,7 @@ static bool final_metadata(bool create) {
         "  \"profile\":\"%s\",\"identity\":\"%s\",\n  \"capture_build\":\"%s\",\n"
         "  \"title\":\"%s\",\"sector_bytes\":2352,\"reference\":\"not compared\",\n%s"
         "  \"audio\":\"raw drive bytes; no offset/subchannel correction\",\n  \"tracks\":[\n",
-        KUI_CAPTURE_PROFILE,job.identity,job.state.build,job.title,descriptor)) return false;
+        kui_capture_profile_name(job.plan),job.identity,job.state.build,job.title,descriptor)) return false;
     for(unsigned i=0;i<job.plan->count;i++) {
         const struct kui_capture_track *t=&job.plan->tracks[i];char sha[65];
         char mode[32]={0};
@@ -840,9 +864,11 @@ static bool enough_space(FATFS *fs) {
     else if(job.state.format>=KUI_CAPTURE_FORMAT_CSO) {
         uint64_t bound;
         if(!kui_capture_export_bound(job.plan,job.state.format,&bound)) {
-            job.ops->log("Cannot bound compressed output storage; capture refused");return false;
+            job.ops->log("Cannot bound exported output storage; capture refused");return false;
         }
         needed+=((bound+cluster-1u)/cluster)*cluster;
+        if(job.state.format==KUI_CAPTURE_FORMAT_GDI_2048)
+            needed+=(job.plan->count+1u)*cluster; /* one derivative per DATA track */
     }
     for(unsigned i=0;i<job.plan->count;i++) {
         uint64_t expected=(uint64_t)(job.plan->tracks[i].end-job.plan->tracks[i].start)*KUI_RAW_BYTES;
@@ -916,6 +942,14 @@ enum kui_capture_result kui_capture(const struct kui_capture_plan *plan,
     static const struct kui_capture_options defaults={0};
     job.opt=ops->options?ops->options:&defaults;
     job.bench=job.opt->bench;job.sample_every=job.opt->sample_every;
+    if(!kui_capture_profile_name(plan) || !kui_capture_retry_limit_valid(job.opt->retry_limit)) {
+        ops->log("Unsupported capture profile or retry limit; no I/O performed");return KUI_CAPTURE_FAILED;
+    }
+    job.retry_limit=job.opt->retry_limit?job.opt->retry_limit:KUI_CAPTURE_RETRIES;
+    if(plan->profile==KUI_CAPTURE_PROFILE_CD_TOC && (job.bench || (mode==KUI_CAPTURE_NEW &&
+       (!job.opt->output || job.opt->output->format!=KUI_CAPTURE_FORMAT_BIN_CUE)))) {
+        ops->log("Single-session CD capture requires BIN/CUE output; no I/O performed");return KUI_CAPTURE_FAILED;
+    }
     if(job.opt->job_directory && job.opt->job_directory[0]) {
         if(job.bench || mode==KUI_CAPTURE_NEW) {
             ops->log("An exact job folder is valid only for normal Resume or Verify; no I/O performed");return KUI_CAPTURE_FAILED;
@@ -982,7 +1016,7 @@ enum kui_capture_result kui_capture(const struct kui_capture_plan *plan,
     if(job.state.format>=KUI_CAPTURE_FORMAT_CSO) skip_end=false;
     if(job.opt->skip_end_readback && !skip_end && mode!=KUI_CAPTURE_VERIFY)
         ops->log(job.state.format>=KUI_CAPTURE_FORMAT_CSO?
-            "End read-back stays on: compressed output requires every raw byte verified":
+            "End read-back stays on: exported output requires every raw byte verified":
             "End read-back stays on: this job records SHA-256");
     if(mode!=KUI_CAPTURE_VERIFY && !already_complete) {
         if(!enough_space(&fs) || !capture_tracks() || cancelled()) goto out;
@@ -995,7 +1029,7 @@ enum kui_capture_result kui_capture(const struct kui_capture_plan *plan,
     }
     if(cancelled() || !all_captured()) goto out;
     if(job.state.format>=KUI_CAPTURE_FORMAT_CSO && !job.verified) {
-        ops->log("Compressed output: rereading every saved raw byte before export");
+        ops->log("Exported output: rereading every saved raw byte before export");
         if(!check_files(true,KUI_VERIFYING)) goto out;
     }
     kui_timing_phase(&job.timing,KUI_TIME_FINISH);

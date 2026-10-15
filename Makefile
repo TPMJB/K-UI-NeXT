@@ -14,8 +14,8 @@ GD_SERVICE = src/core/gd_service.c
 DESTINATION = src/core/destination.c src/core/destination_file.c
 EXPORT_CODEC_FLAGS = -Ithird_party/miniz -Ithird_party/minilzo -DMINIZ_NO_ARCHIVE_APIS -DMINIZ_NO_STDIO -DMINIZ_NO_TIME -DMINIZ_NO_ZLIB_APIS -DMINIZ_NO_MALLOC -DLZO_CFG_NO_UNALIGNED=1
 EXPORT_CODECS = third_party/miniz/miniz.c third_party/minilzo/minilzo.c
-CAPTURE_EXPORT = src/core/capture_export.c src/core/capture_export_file.c src/core/capture_chd.c $(EXPORT_CODECS)
-CAPTURE = $(DESTINATION) src/core/hash.c src/core/capture_plan.c src/core/capture.c src/core/known_dumps.c src/core/timing.c $(CAPTURE_EXPORT)
+CAPTURE_EXPORT = src/core/capture_export.c src/core/capture_export_file.c src/core/capture_cooked.c src/core/capture_chd.c $(EXPORT_CODECS)
+CAPTURE = $(DESTINATION) src/core/hash.c src/core/capture_plan.c src/core/capture.c src/core/recovery_sector.c src/core/known_dumps.c src/core/timing.c $(CAPTURE_EXPORT)
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
 include config/lwext4.mk
@@ -122,8 +122,9 @@ build/test-armada-ce-excerpt-pool: tests/test_armada_ce_excerpt_pool.c include/k
 build/test-armada-ce-live-sound: tests/test_armada_ce_live_sound.c include/kui/armada_ce_live_sound.h include/kui/armada_ce_ram_bind.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
-ARMADA_PREPARE_TEST_SOURCES := src/core/retail_zso.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/game_image.c src/core/zso.c src/core/hash.c src/core/data.c src/core/destination.c src/core/retail_image.c
+ARMADA_PREPARE_TEST_SOURCES := src/core/retail_zso.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/hash.c src/core/data.c src/core/destination.c src/core/retail_image.c
 build/test-armada-ce-excerpt-prepare: tests/test_armada_ce_excerpt_prepare.c src/apps/games_retail.c $(ARMADA_PREPARE_TEST_SOURCES) include/kui/armada_ce_excerpt_pool.h include/kui/game_ram_patches.h include/kui/retail_zso.h include/kui/zso.h include/kui/wince_cdda_profiles.h include/kui/armada_ce_stream_seed.h include/kui/games_retail.h include/kui/wince_cdda_wwp_kernel.h
+
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -ffunction-sections -fdata-sections tests/test_armada_ce_excerpt_prepare.c $(ARMADA_PREPARE_TEST_SOURCES) -Wl,--gc-sections -o $@
 build/test-armada-ce-excerpt-entry: tests/test_armada_ce_excerpt_entry.c src/loader/armada_ce_excerpt_entry.c include/kui/armada_ce_excerpt_entry.h src/loader/armada_ce_audio_observe.inc
@@ -132,8 +133,9 @@ build/test-armada-ce-excerpt-entry: tests/test_armada_ce_excerpt_entry.c src/loa
 build/test-armada-ce-excerpt: tests/test_armada_ce_excerpt.c src/loader/armada_ce_excerpt.c include/kui/armada_ce_excerpt.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -fno-pie -no-pie $< -o $@
+test: build/test-vmu-lcd
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek build/music-asset-check
-test: build/test-zso build/test-retail-zso build/test-game-launch-settings build/test-game-launch-settings-file build/test-game-ram-patches build/test-game-launch-report build/test-retail-relay-patches
+test: build/test-games-selection build/test-zso build/test-lzo1x build/test-retail-zso build/test-retail-lzo build/test-game-launch-settings build/test-game-launch-settings-file build/test-game-ram-patches build/test-game-launch-report build/test-retail-relay-patches
 test: test-armada-ce-stream test-worms-ce-stream test-wince-cooked-admission test-armada-ce-excerpt
 test: build/test-capture-export
 test: build/test-game-image build/test-game-metadata build/test-loader-probe build/test-loader-sd build/loader-probe.dat
@@ -146,6 +148,7 @@ test: build/test-retail-cursor build/test-sci-stream build/test-sci-stream-ce bu
 test: build/test-boot-volume build/ext4-boot build/boot-recovery build/test-boot-ui
 test: build/test-ata build/test-storage-policy build/test-sci-sd-bus build/test-retail-storage build/test-sci-sd-storage build/test-sci-async-probe build/test-sci-async-heartbeat build/test-sci-async-runtime build/test-sci-video-quiet
 test: build/test-storage-errors build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
+	./build/test-vmu-lcd
 	./build/test-storage-errors
 	./build/test-cd-audio
 	./build/test-game-image
@@ -241,10 +244,13 @@ test: build/test-storage-errors build/test-cd-audio build/test-network-probe bui
 	./build/test-destination
 	./build/test-settings
 	./build/test-zso
+	./build/test-lzo1x
 	./build/test-retail-zso
+	./build/test-retail-lzo
 	./build/test-game-ram-patches
 	./build/test-game-launch-report
 	./build/test-retail-relay-patches
+	./build/test-games-selection
 	./build/test-game-launch-settings
 	./build/test-game-launch-settings-file
 	./build/test-shell
@@ -509,13 +515,13 @@ build/test-image-client: tests/test_image_client.c src/loader/image_client.c $(G
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/loader/image_client.c $(GD_SERVICE) tests/test_image_client.c -o $@
 
-GAMES_IMAGE_PROBE = src/apps/games_image_probe.c $(RESIDENT_IMAGE) src/core/game_image.c src/core/zso.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c
+GAMES_IMAGE_PROBE = src/apps/games_image_probe.c $(RESIDENT_IMAGE) src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c
 GAMES_IMAGE_PROBE_WRAP = -Wl,--wrap=f_open,--wrap=f_read,--wrap=f_lseek,--wrap=f_close,--wrap=f_mount,--wrap=f_write,--wrap=f_mkdir,--wrap=f_unlink,--wrap=f_rename
 build/games-image-probe: tests/games_image_probe.c $(GAMES_IMAGE_PROBE) $(CORE) $(FATFS) include/kui/games_image_probe.h include/kui/resident_image.h include/kui/game_image.h include/kui/game_metadata.h include/kui/image_loader_layout.h include/kui/runtime.h include/kui/destination.h include/kui/media.h src/dreamcast/platform.h config/ffconf.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast tests/games_image_probe.c $(GAMES_IMAGE_PROBE) $(CORE) $(FATFS) $(GAMES_IMAGE_PROBE_WRAP) -o $@
 
-GAMES_RETAIL = src/core/retail_zso.c src/apps/game_launch_report.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/apps/games_retail.c src/core/hash.c src/core/retail_image.c src/core/retail_cursor.c src/core/game_image.c src/core/zso.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c
+GAMES_RETAIL = src/core/retail_zso.c src/apps/game_launch_report.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/apps/games_retail.c src/core/hash.c src/core/retail_image.c src/core/retail_cursor.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c
 build/games-retail: tests/games_retail.c $(GAMES_RETAIL) $(CORE) $(FATFS) include/kui/games_retail.h include/kui/ce_load_plan.h include/kui/retail_image.h include/kui/retail_loader_layout.h include/kui/game_image.h include/kui/game_metadata.h include/kui/runtime.h include/kui/destination.h include/kui/media.h src/dreamcast/platform.h config/ffconf.h .deps/fatfs/source/ff.h include/kui/game_ram_patches.h include/kui/game_launch_settings.h include/kui/game_launch_report.h include/kui/retail_zso.h include/kui/zso.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast tests/games_retail.c $(GAMES_RETAIL) $(CORE) $(FATFS) $(GAMES_IMAGE_PROBE_WRAP) -o $@
@@ -536,13 +542,18 @@ build/scan-fixtures/.stamp: tools/make_scan_fixtures.py tests/make_recovery_vect
 	python3 tools/make_scan_fixtures.py build/scan-fixtures
 	touch $@
 
-build/test-recovery-manifest: tests/test_recovery_manifest.c src/core/recovery_manifest.c include/kui/recovery_scan.h include/kui/recovery_checks.h
+build/test-recovery-manifest: tests/test_recovery_manifest.c src/core/recovery_manifest.c src/core/capture_plan.c src/core/data.c include/kui/recovery_scan.h include/kui/recovery_checks.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/recovery_manifest.c tests/test_recovery_manifest.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/recovery_manifest.c src/core/capture_plan.c src/core/data.c tests/test_recovery_manifest.c -o $@
 
-build/test-capture-core: tests/test_capture_core.c src/core/hash.c src/core/capture_plan.c src/core/data.c src/core/game_image.c src/core/zso.c include/kui/game_image.h include/kui/hash.h include/kui/capture.h include/kui/zso.h
+build/test-capture-core: tests/test_capture_core.c src/core/hash.c src/core/capture_plan.c src/core/data.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c include/kui/game_image.h include/kui/hash.h include/kui/capture.h include/kui/zso.h
 	@mkdir -p build
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/data.c src/core/hash.c src/core/capture_plan.c src/core/game_image.c src/core/zso.c tests/test_capture_core.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/data.c src/core/hash.c src/core/capture_plan.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c tests/test_capture_core.c -o $@
+
+.PHONY: test-capture-cd
+test-capture-cd: build/test-capture-core build/test-recovery-manifest build/capture-image
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-capture-core
+	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_capture_cd_images.py
 
 build/test-capture-export: tests/test_capture_export.c src/core/capture_export.c src/core/capture_chd.c src/core/hash.c src/core/data.c $(EXPORT_CODECS) include/kui/capture_export.h src/core/capture_export_internal.h
 	@mkdir -p $(@D)
@@ -560,17 +571,17 @@ build/test-settings: tests/test_settings.c src/core/settings.c src/core/data.c i
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/settings.c src/core/data.c tests/test_settings.c -o $@
 
-build/test-shell: include/kui/game_launch_settings.h src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h include/kui/game_ram_patches.h
+build/test-shell: include/kui/games_selection.h include/kui/zso.h include/kui/game_launch_settings.h src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/games_selection.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h include/kui/game_ram_patches.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/games_selection.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
 
 build/test-shell-font: tests/test_shell_font.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc include/kui/shell_font.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/dreamcast/shell_font.c tests/test_shell_font.c -o $@
 
-build/render-shell: include/kui/game_launch_settings.h src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h include/kui/game_ram_patches.h
+build/render-shell: include/kui/games_selection.h include/kui/zso.h include/kui/game_launch_settings.h src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/games_selection.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h include/kui/game_ram_patches.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/data.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c tests/render_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/data.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/games_selection.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c tests/render_shell.c -o $@
 
 build/test-capture-adapter: src/core/destination.c src/core/data.c include/kui/destination.h tests/test_capture_adapter.c src/dreamcast/capture.c src/dreamcast/platform.h include/kui/capture.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
@@ -626,7 +637,7 @@ build/storage-test-store-image: tests/storage_test_store_image.c $(CORE) $(STORA
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(STORAGE_TEST_MODEL) src/core/storage_test_store.c $(FATFS) tests/storage_test_store_image.c -o $@
 
-test-images: build/test-wifi-update build/storage-test-image build/storage-test-store-image build/ftp-image build/files-image build/games-retail build/games-image-probe build/loader-probe-image build/games-image build/games-covers-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/report-image build/bench-image build/settings-image
+test-images: build/test-wifi-update build/storage-test-image build/storage-test-store-image build/ftp-image build/files-image build/games-retail build/games-image-probe build/loader-probe-image build/games-image build/games-covers-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/test-recovery-manifest build/report-image build/bench-image build/settings-image
 	python3 tests/test_wifi_update_images.py
 	python3 tests/test_storage_test_images.py
 	python3 tests/test_storage_test_store_images.py
@@ -646,8 +657,11 @@ test-images: build/test-wifi-update build/storage-test-image build/storage-test-
 	python3 tests/test_images.py
 	python3 tests/test_runtime_images.py
 	python3 tests/test_capture_images.py
+	python3 tests/test_capture_cd_images.py
 	python3 tests/test_capture_cue_images.py
 	python3 tests/test_capture_compressed_images.py
+	python3 tests/test_capture_cooked_images.py
+	python3 tests/test_repair_copy_images.py
 	python3 tests/test_report_images.py
 	python3 tests/test_bench_images.py
 	python3 tests/test_known_images.py
@@ -812,9 +826,9 @@ build/test-cd-audio: tests/test_cd_audio.c src/apps/cd_audio.c src/core/command.
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/cdda_stubs -Itests/stubs -Isrc/dreamcast src/apps/cd_audio.c src/core/command.c src/core/data.c tests/test_cd_audio.c -o $@
 
 # Games uses a read-only image backend separate from the accepted optical reader.
-build/test-game-image: tests/test_game_image.c src/core/game_image.c src/core/zso.c include/kui/game_image.h include/kui/zso.h
+build/test-game-image: tests/test_game_image.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c include/kui/game_image.h include/kui/zso.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/game_image.c src/core/zso.c tests/test_game_image.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/game_image.c src/core/zso.c src/core/lzo1x.c tests/test_game_image.c -o $@
 
 build/test-game-metadata: tests/test_game_metadata.c src/core/game_metadata.c include/kui/game_metadata.h
 	@mkdir -p $(@D)
@@ -832,8 +846,9 @@ build/test-cover-image: tests/test_cover_image.c src/apps/cover_image.c include/
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests src/apps/cover_image.c tests/test_cover_image.c -o $@
 
-GAMES = src/apps/games.c src/core/game_image.c src/core/zso.c src/core/game_metadata.c src/core/destination.c src/core/storage_probe.c src/core/hash.c
-GAMES_COVERS = $(GAMES) src/apps/games_covers.c src/apps/cover_image.c src/core/game_cover.c src/core/pvr_texture.c src/core/retail_image.c
+GAMES = src/apps/games.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/game_metadata.c src/core/destination.c src/core/storage_probe.c src/core/hash.c
+GAMES_COVERS = $(GAMES) src/core/game_launch_settings.c src/core/game_ram_patches.c src/apps/game_launch_settings_file.c src/apps/games_covers.c src/apps/cover_image.c src/core/game_cover.c src/core/pvr_texture.c src/core/retail_image.c
+
 GAMES_COVERS_WRAP = -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_opendir,--wrap=f_closedir,--wrap=f_write
 GAMES_WRAP = -Wl,--wrap=f_open,--wrap=f_read,--wrap=f_lseek,--wrap=f_close,--wrap=f_write,--wrap=f_mkdir,--wrap=f_unlink,--wrap=f_rename,--wrap=f_opendir,--wrap=f_readdir,--wrap=f_closedir,--wrap=f_stat
 build/games-image: tests/games_image.c $(GAMES) $(CORE) $(FATFS) include/kui/games.h include/kui/game_image.h include/kui/game_metadata.h
@@ -937,23 +952,41 @@ build/test-retail-relay-patches: $(RETAIL_RELAY_DEPS)
 	$(CC) $(HOST_FLAGS) $(RETAIL_RELAY_FLAGS) -DKUI_GAME_RAM_PATCHES_STAGE=1 -Iinclude -Isrc/loader tests/test_retail_relay.c src/core/retail_image.c src/core/game_ram_patches.c -Wl,--gc-sections -o $@
 
 # Standard LZ4 ZSO container and bounded streaming decoder.
-build/test-zso: tests/test_zso.c src/core/zso.c include/kui/zso.h
+build/test-zso: tests/test_zso.c src/core/zso.c src/core/lzo1x.c include/kui/zso.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/zso.c tests/test_zso.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/zso.c src/core/lzo1x.c tests/test_zso.c -o $@
 
 # Detached SCI physical extents, ZSO wire validation and logical-sector reads.
-build/test-retail-zso: tests/test_retail_zso.c src/core/retail_zso.c src/core/zso.c src/core/retail_image.c include/kui/retail_zso.h include/kui/zso.h include/kui/retail_image.h
+build/test-retail-zso: tests/test_retail_zso.c src/core/retail_zso.c src/core/zso.c src/core/lzo1x.c src/core/retail_image.c include/kui/retail_zso.h include/kui/zso.h include/kui/retail_image.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_RETAIL_MANIFEST_SLOTS=32 src/core/retail_image.c src/core/retail_zso.c src/core/zso.c tests/test_retail_zso.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_RETAIL_MANIFEST_SLOTS=32 src/core/retail_image.c src/core/retail_zso.c src/core/zso.c src/core/lzo1x.c tests/test_retail_zso.c -o $@
+build/test-retail-lzo: tests/test_retail_zso.c src/core/retail_zso.c src/core/zso.c src/core/lzo1x.c src/core/retail_image.c include/kui/retail_zso.h include/kui/zso.h include/kui/lzo1x.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_RETAIL_MANIFEST_SLOTS=32 -DKUI_ZSO_CODECS=2 -DKUI_TEST_LZO=1 src/core/retail_image.c src/core/retail_zso.c src/core/zso.c src/core/lzo1x.c tests/test_retail_zso.c -o $@
+build/test-lzo1x: tests/test_lzo1x.c src/core/lzo1x.c include/kui/lzo1x.h include/kui/zso.h third_party/minilzo/minilzo.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Ithird_party/minilzo -DLZO_CFG_NO_UNALIGNED=1 src/core/lzo1x.c third_party/minilzo/minilzo.c tests/test_lzo1x.c -o $@
 
+build/test-games-selection: tests/test_games_selection.c src/core/games_selection.c src/apps/games_selection.c include/kui/games_selection.h src/core/destination.c src/core/data.c .deps/fatfs/source/ff.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_games_selection.c src/core/games_selection.c src/apps/games_selection.c src/core/destination.c src/core/data.c -o $@
+
+REPAIR_COPY = src/core/repair_copy.c src/core/recovery_manifest.c src/core/capture_plan.c src/core/recovery_sector.c src/core/hash.c src/core/destination.c src/core/storage_probe.c
+.PHONY: test-repair-copy
+test-images: build/repair-copy-image
+test-repair-copy: build/repair-copy-image
+	python3 tests/test_repair_copy_images.py
+build/repair-copy-image: tests/repair_copy_image.c $(CORE) $(FATFS) $(REPAIR_COPY) include/kui/repair_copy.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) $(REPAIR_COPY) tests/repair_copy_image.c -Wl,--wrap=f_read,--wrap=f_write,--wrap=f_sync,--wrap=f_close,--wrap=f_rename -o $@
 
 # Runtime identity is independent of application identity and track inventory.
 .PHONY: test-native-cdda-compat test-games-cdda-identity-io
 test-games-cdda-identity-io: build/test-games-cdda-identity-io
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-cdda-identity-io
-build/test-games-cdda-identity-io: tests/test_games_cdda_identity_io.c tests/test_games_cdda_status.c src/apps/games.c include/kui/games_cdda_status.h src/core/game_image.c src/core/zso.c src/core/hash.c src/core/data.c src/core/destination.c
+build/test-games-cdda-identity-io: tests/test_games_cdda_identity_io.c tests/test_games_cdda_status.c src/apps/games.c include/kui/games_cdda_status.h src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/hash.c src/core/data.c src/core/destination.c
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -ffunction-sections -fdata-sections tests/test_games_cdda_identity_io.c src/core/game_image.c src/core/zso.c src/core/hash.c src/core/data.c src/core/destination.c -Wl,--gc-sections -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -ffunction-sections -fdata-sections tests/test_games_cdda_identity_io.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/hash.c src/core/data.c src/core/destination.c -Wl,--gc-sections -o $@
 
 test-native-cdda-compat: build/test-native-cdda-compat
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-native-cdda-compat
@@ -1035,3 +1068,10 @@ build/test-retail-map-stage-native build/test-retail-map-stage-ce build/test-ret
 
 # Broader CD music admission and linked-reader regression coverage.
 test: test-games-cdda-status test-games-cdda-identity-io test-native-cdda-compat test-wince-runtime-families test-wwp-ce-stream test-retail-map-diagnostic
+
+.PHONY: test-vmu-lcd
+test-vmu-lcd: build/test-vmu-lcd
+	./build/test-vmu-lcd
+build/test-vmu-lcd: tests/test_vmu_lcd.c src/core/vmu_lcd.c src/dreamcast/vmu_lcd.c include/kui/vmu_lcd.h include/kui/version.h tests/vmu_stubs/dc/maple.h tests/vmu_stubs/dc/maple/vmu.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/vmu_stubs src/core/vmu_lcd.c src/dreamcast/vmu_lcd.c tests/test_vmu_lcd.c -o $@

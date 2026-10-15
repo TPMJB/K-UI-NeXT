@@ -1,7 +1,11 @@
 # Capture format and invariants
 
-Profile: `gdi-raw2352-typegap150-v1`. This is a declared logical GDI capture
-profile, not a subchannel or forensic image of every physical region.
+The default retail GD profile is `gdi-raw2352-typegap150-v1`. This is a
+declared logical GDI capture profile, not a subchannel or forensic image of every
+physical region. User-declared single-session CD/CD-R/audio uses the separate
+[BIN/CUE CD profile](cd-capture.md); firmware preparation does not prove the
+session count. Its actual TOC intervals never use the GD type-change tail
+convention below.
 
 ## Track plan
 
@@ -44,8 +48,13 @@ high-density boot metadata, whose Dreamcast signature is required. Full hashes
 are still necessary to establish whole-disc identity against a reference.
 
 A failing batch shrinks to single-sector reads for the affected window. The
-budget is ten additional attempts after the initial failed request; shrinking
-does not replenish it. Capture attempts use one guarded raw PIO read, check the
+default budget is ten additional attempts after the initial failed request;
+shrinking does not replenish it. The optional per-run retry limit admits
+1/5/10/20/50 additional attempts. Optional strict acquisition adds Mode 1
+sync/address/reserved/P/Q checks; it explicitly refuses Mode 2 while ordinary
+Mode 2 Form 1 capture remains supported. See
+[CD capture and acquisition checks](cd-capture.md). Capture attempts use one
+guarded raw PIO read, check the
 firmware's transferred-byte count and retain data-sector EDC validation. The
 small identification samples and diagnostic probes still use paired reads.
 Capture services PIO continuously with a runnable scheduler yield every 2 ms,
@@ -85,7 +94,7 @@ Checkpoint schema 1 uses little-endian integers:
 | 24 | Full disc fingerprint (32 bytes) |
 | 56 / 60 | Track count / cumulative retries (u32) |
 | 64 | Original capture build ID (12 hexadecimal ASCII bytes) |
-| 76 | Flags: bit 0 CRC-only; bits 1–3 output format (0 GDI, 1 BIN/CUE, 2 CSO, 3 ZSO, 4 CHD) |
+| 76 | Flags: bit 0 CRC-only; bits 1–3 output format (0 GDI, 1 BIN/CUE, 2 CSO, 3 ZSO, 4 CHD, 5 GDI 2048) |
 | 80–92 | Non-GDI jobs: one Mode 2 bit per saved data track; Mode 1 is zero. GDI jobs retain zero bytes. |
 | 93–95 | Reserved, zero |
 | 96 | Up to 99 entries: sectors (u32), CRC32 (u32), SHA-256 (32 bytes) |
@@ -189,17 +198,28 @@ legacy `/KUI/dumps` jobs if no named match exists. See
 ## Output formats over the same raw capture
 
 GDI remains the default, with the same track files, descriptor and manifest as
-older builds. A new job can instead select BIN/CUE, CSO, ZSO or CHD. The choice
+older builds. A new job can instead select BIN/CUE, CSO, ZSO, CHD or GDI 2048. The choice
 is stored in its checkpoint. Resume and Verify use that stored choice even when
 the current preferences select another format; they never transform an older job
 into a different output format.
 
 Non-GDI jobs keep the authoritative `trackNN.bin` data and `trackNN.raw` audio
 files and a fixed hidden `.capture.gdi`. Their visible descriptor or container
-is `disc.cue`/`.cso`/`.zso`/`.chd`, or the sanitized game title with that extension.
+is `disc.cue`/`.cso`/`.zso`/`.chd`/`.gdi`, or the sanitized game title with that extension.
 The hidden GDI prevents two launcher entries while retaining the original layout
 and raw hashes for verification. Keep the entire folder for Resume, Verify and
 reference checks. No raw track is deleted after export.
+
+GDI 2048 is a post-capture derivative for the normal two-density GD profile.
+It retains every authoritative raw track, checkpoint and hidden `.capture.gdi`.
+Data tracks are checked as Mode 1 or Mode 2 Form 1 with valid EDC and extracted
+to `trackNN.iso`; audio stays in the existing raw2352 files. The visible GDI
+references those cooked data/raw audio files and is published only after
+conversion and saved-file readback. Invalid sectors, an existing mismatching
+cooked file, Stop or I/O failure preserve the raw job; Resume retries the
+derivative and Verify checks it without rewriting it. This option does not
+change capture geometry or admit the separate declared single-session CD
+profile. See [CD capture limits](cd-capture.md).
 
 BIN/CUE references those existing raw files as `BINARY`, declares both GD density
 areas, and represents the profile's excluded 150-sector tails with virtual

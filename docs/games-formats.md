@@ -1,9 +1,10 @@
 # Games image and ripper formats — K-UI 1.8.5
 
-**2.0 preparation update:** current source adds an experimental direct
-[standard LZ4 ZSO reader](games-zso.md) for native SCI Standard launches.
+**2.0 preparation update:** current source adds experimental direct
+[LZ4/LZO1X ZSO readers with explicit codec selection](games-zso.md) for native SCI Standard launches.
 Console acceptance is pending. The 1.8.5 boundaries recorded below remain
-historical; CSO, CHD and the ripper's LZO ZSO still require PC import.
+historical; CSO and CHD still require PC import. Historical LZO ZSO requires an explicit
+codec selection before inspection and its separate native SCI/Standard package.
 
 Games supports the direct-launch layouts below, the Original/2048 picker,
 RAM-cached lists and selected-game artwork. Disc Ripper also offers multiple
@@ -50,7 +51,7 @@ or storage invalidate both caches. RAM caches are rebuilt after reboot.
 | BIN/CUE | Direct launch; shared or separate BINARY files, audio/data tracks, indices and gaps |
 | CDI | Direct launch; DiscJuggler v2, v3 and v3.5 layouts |
 | CSO | Import to ISO; CISO versions 1 and 2 |
-| ZSO | Import to ISO; standard LZ4 or explicitly selected DreamShell LZO |
+| ZSO | Experimental native SCI Standard direct reader for explicit LZ4/LZO1X; offline ISO import also available |
 | CHD | Import CD/GD tracks through an installed MAME chdman |
 
 ISO session addresses are recovered from its PVD and root directory rather
@@ -67,7 +68,8 @@ The data path handles 2048, 2336, 2352 and 2448-byte sectors, extracting 2048-by
 Mode 1/Mode 2 Form 1 payloads. Full raw reads are available from 2352/2448-byte sources;
 2448-byte subchannels are omitted. Mode 2 Form 2, captured subchannel emulation,
 CDDA playback, NRG, MDS/MDF, CCD and arbitrary archives are not implemented.
-Compressed images do not decode inside the resident game reader.
+The bounded native SCI Standard ZSO readers are the compressed-image exception;
+CSO and CHD still require import. See [current ZSO scope](games-zso.md).
 
 ## Disc-ripper output formats
 
@@ -78,6 +80,7 @@ current preference. GDI remains the default.
 | Output | What it contains |
 | --- | --- |
 | GDI | Existing raw 2352 tracks and GDI descriptor |
+| GDI 2048 | Tyrfing source: verified cooked data tracks and raw audio, with every original raw track retained |
 | BIN/CUE | The same raw tracks, with a CUE that describes density areas and declared gaps |
 | CSO | Raw-DEFLATE compressed cooked 2048 high-density data-track export |
 | ZSO | DreamShell's LZO dialect of ZSO, containing the same cooked data stream |
@@ -102,10 +105,10 @@ Export cancellation keeps the raw capture. Resume recreates an interrupted
 export. Verify checks the raw hashes and the published export without writing
 either. A mismatching existing final export is preserved and reported.
 
-These ripper exports do not add compressed boot support to Games. Use the
-computer import tool below for K-UI. ZSO exports require `--zso-codec lzo`.
-The resident reader still needs a separate compression/index and protected
-memory design before it can read compressed sectors while a game runs.
+K-UI ZSO exports use historical LZO1X. The experimental native SCI Standard
+reader can inspect and prepare them when that codec is explicitly selected;
+see [ZSO scope](games-zso.md). The computer import tool remains an alternative
+with `--zso-codec lzo`. CSO and CHD exports require that offline workflow.
 
 Native controls retain A standard, X background 20, Y background 25. Native CD
 confirmation uses L/R triggers to choose **Plain** or **Scrambled** executable
@@ -210,5 +213,7 @@ Format references, independently implemented:
 - [MAME chdman](https://docs.mamedev.org/tools/chdman.html)
 - [Historical DreamShell LZO reader](https://github.com/DC-SWAT/DreamShell/blob/4a2b898cbc244b2fb9bd1698b45e5325056232fb/modules/isofs/ciso.c)
 
-No current DreamShell loader code is imported. LZO tests use a temporary
-historical miniLZO oracle outside the repository; that oracle is not shipped.
+No current DreamShell loader code is imported. The detached LZO1X decoder is
+independently implemented. Host tests use the
+already bundled public miniLZO compressor and safe decoder as an oracle;
+miniLZO is not linked into the resident reader.
