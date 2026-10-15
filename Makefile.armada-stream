@@ -1,16 +1,22 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Isolated Armada full-stream profile. The controller occupies the existing
 # pre-boot reserved pool; ordinary/excerpt loader objects are not destinations.
+ifeq ($(KUI_WINCE_CDDA_PROFILE),bam4)
+override ARMADA_AUDIO_DIR := build/bam4-ce-stream
+WINCE_CDDA_PROFILE_FLAGS := -DKUI_WINCE_CDDA_BAM4=1
+WINCE_CDDA_PROFILE_CHECK := --bam4
+else
 override ARMADA_AUDIO_DIR := build/armada-ce-stream
-override ARMADA_AUDIO_EXTRA_FLAGS := -DKUI_ARMADA_CE_EXCERPT=1 -DKUI_ARMADA_CE_STREAM=1
-override ARMADA_AUDIO_EXTRA_STAGE_FLAGS := -DKUI_ARMADA_CE_RAM_BIND_STAGE=1 -DKUI_ARMADA_CE_EXCERPT_STAGE=1 -DKUI_ARMADA_CE_STREAM=1 -DKUI_RETAIL_EXTENDED_MAP=1
+endif
+override ARMADA_AUDIO_EXTRA_FLAGS := -DKUI_ARMADA_CE_EXCERPT=1 -DKUI_ARMADA_CE_STREAM=1 $(WINCE_CDDA_PROFILE_FLAGS)
+override ARMADA_AUDIO_EXTRA_STAGE_FLAGS := -DKUI_ARMADA_CE_RAM_BIND_STAGE=1 -DKUI_ARMADA_CE_EXCERPT_STAGE=1 -DKUI_ARMADA_CE_STREAM=1 -DKUI_RETAIL_EXTENDED_MAP=1 $(WINCE_CDDA_PROFILE_FLAGS)
 override ARMADA_AUDIO_EXTRA_STAGE_DEPS := $(ARMADA_AUDIO_DIR)/bind-probe.bin
 override ARMADA_AUDIO_EXTRA_ASM_FLAGS := -DKUI_ARMADA_CE_RAM_BIND_STAGE=1 -DKUI_ARMADA_CE_RAM_BIND_BIN='"$(ARMADA_AUDIO_DIR)/bind-probe.bin"'
 override ARMADA_AUDIO_EXTRA_LINK_FLAGS := -Wl,--defsym,_kui_armada_ce_bind_probe=0x8cfa7000
-override ARMADA_AUDIO_EXTRA_CHECK := python3 tools/check_armada_ce_excerpt.py --stream $(ARMADA_AUDIO_DIR)
+override ARMADA_AUDIO_EXTRA_CHECK := python3 tools/check_armada_ce_excerpt.py --stream $(WINCE_CDDA_PROFILE_CHECK) $(ARMADA_AUDIO_DIR)
 include Makefile.armada-audio
 
-ARMADA_STREAM_FLAGS := $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -DKUI_ARMADA_CE_EXCERPT=1 -DKUI_ARMADA_CE_STREAM=1 -DKUI_RETAIL_EXTENDED_MAP=1 -fcallgraph-info=su
+ARMADA_STREAM_FLAGS := $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -DKUI_ARMADA_CE_EXCERPT=1 -DKUI_ARMADA_CE_STREAM=1 -DKUI_RETAIL_EXTENDED_MAP=1 -fcallgraph-info=su $(WINCE_CDDA_PROFILE_FLAGS)
 # Override to empty only for the initial high-placement excerpt preflight.
 # Full stream builds require all three independently implemented source units.
 ARMADA_STREAM_EXTRA_SRC ?= src/loader/armada_ce_stream_model.c src/loader/armada_ce_stream_native.c src/loader/armada_ce_stream_transport.c src/loader/armada_ce_stream_player.c src/loader/armada_ce_stream_trace.c

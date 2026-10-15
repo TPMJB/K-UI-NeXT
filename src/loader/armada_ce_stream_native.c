@@ -152,7 +152,7 @@ bool kui_armada_ce_stream_native_start(struct kui_armada_ce_stream_native *s,
         o->read32,o->context,&mapping);
     if((ccr&0xa1u)!=1u || (mapped!=KUI_ARMADA_CE_RAM_BIND_OK && mapped!=KUI_ARMADA_CE_RAM_BIND_CACHE) ||
        (mapping.page_word&0xfffu)!=RWX_COMMITTED || (mapping.physical_address&0xfffu) ||
-       mapping.physical_address<UINT32_C(0x8c150000) ||
+       mapping.physical_address<KUI_ARMADA_CE_EXCERPT_RAM_FREE ||
        mapping.physical_address>KUI_ARMADA_CE_EXCERPT_POOL_BEGIN-4096u ||
        !kui_armada_ce_excerpt_pool_destination_safe(mapping.physical_address,4096u)) {
         s->status=KUI_ARMADA_CE_STREAM_NATIVE_MAPPING;

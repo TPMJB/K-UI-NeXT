@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #ifndef KUI_ARMADA_CE_STREAM_OWNER_WORD_H
 #define KUI_ARMADA_CE_STREAM_OWNER_WORD_H
-#include "kui/armada_ce_ram_bind.h"
+#include "kui/armada_ce_live_sound.h"
 
 enum kui_armada_ce_stream_owner_status {
     KUI_ARMADA_CE_STREAM_OWNER_OK,
@@ -41,7 +41,7 @@ kui_armada_ce_stream_owner_word(uint32_t ttb,uint32_t sr,uint32_t process,
     uint32_t slot,uint32_t handle,uint32_t va,kui_armada_ce_ram_read32 read_table,
     kui_armada_ce_ram_read32 read_native,void *context,
     struct kui_armada_ce_ram_binding *out) {
-    const uint32_t process_base=UINT32_C(0x8c14e6e0),process_stride=UINT32_C(0x9c);
+    const uint32_t process_base=KUI_ARMADA_CE_LIVE_PROCESS_BASE,process_stride=KUI_ARMADA_CE_LIVE_PROCESS_STRIDE;
     uint32_t current,actual_slot,actual_handle,value;
     struct kui_armada_ce_ram_binding before,after;
     if(!out) return KUI_ARMADA_CE_STREAM_OWNER_ARGUMENT;
@@ -55,7 +55,7 @@ kui_armada_ce_stream_owner_word(uint32_t ttb,uint32_t sr,uint32_t process,
     /* MD1, BL/RB0, IRQs masked. FD and other thread state are retained. */
     if((sr&UINT32_C(0x700000f0))!=UINT32_C(0x400000f0))
         return KUI_ARMADA_CE_STREAM_OWNER_CONTEXT;
-    if(!read_table(context,UINT32_C(0x8c145890),&current) ||
+    if(!read_table(context,KUI_ARMADA_CE_LIVE_CURRENT_PROCESS,&current) ||
        !read_table(context,process+12u,&actual_slot) ||
        !read_table(context,process+8u,&actual_handle)) return KUI_ARMADA_CE_STREAM_OWNER_READ;
     if(current!=process || actual_slot!=slot || actual_handle!=handle)
@@ -81,7 +81,7 @@ kui_armada_ce_stream_owner_word(uint32_t ttb,uint32_t sr,uint32_t process,
     if(mapped!=KUI_ARMADA_CE_RAM_BIND_CACHE || before.page_word!=after.page_word ||
        before.physical_address!=after.physical_address)
         return KUI_ARMADA_CE_STREAM_OWNER_CHANGED;
-    if(!read_table(context,UINT32_C(0x8c145890),&current) ||
+    if(!read_table(context,KUI_ARMADA_CE_LIVE_CURRENT_PROCESS,&current) ||
        !read_table(context,process+12u,&actual_slot) ||
        !read_table(context,process+8u,&actual_handle)) return KUI_ARMADA_CE_STREAM_OWNER_READ;
     if(current!=process || actual_slot!=slot || actual_handle!=handle)

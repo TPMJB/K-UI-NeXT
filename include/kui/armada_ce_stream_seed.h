@@ -3,6 +3,7 @@
 #define KUI_ARMADA_CE_STREAM_SEED_H
 #include "kui/armada_ce_excerpt_pool.h"
 #include "kui/retail_image.h"
+#include "kui/wince_cdda_profiles.h"
 
 /* Authored pre-boot metadata only. Audio remains in the user's image; the
  * package contains a blank fixed wire map, never proprietary PCM. */
@@ -47,6 +48,10 @@ static inline bool kui_armada_ce_stream_seed_header_valid(const uint32_t *words)
 /* Call after the canonical full wire decoder. Do not use an async-sized
  * truncated manifest: both raw audio files must have every mapped block. */
 static inline bool kui_armada_ce_stream_map_valid(const struct kui_retail_manifest *map) {
+#if KUI_WINCE_CDDA_BAM4
+    return kui_wince_cdda_manifest_valid(map,KUI_WINCE_CDDA_COMPILED_PROFILE);
+#else
+    /* Retain RC9's compiled Armada admission and controller layout. */
     static const uint32_t starts[5]={0u,756u,45000u,149842u,434062u};
     static const char product[]="T40301N 00",bootfile[]="0WINCEOS.BIN";
     if(!map || map->track_count!=5u || map->storage_transport!=KUI_STORAGE_SCI ||
@@ -62,6 +67,7 @@ static inline bool kui_armada_ce_stream_map_valid(const struct kui_retail_manife
            kui_retail_track_file_offset(track) || !track->extent_count) return false;
     }
     return true;
+#endif
 }
 static inline bool kui_armada_ce_stream_maps_match(const struct kui_retail_manifest *full,
         const struct kui_retail_manifest *data) {

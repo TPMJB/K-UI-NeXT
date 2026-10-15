@@ -166,6 +166,33 @@ STREAM_OWNER_RELOCS = {
     '_mapped_word': ((156, '_player', 4028), (160, '_pointer', 0), (164, '_player', 0), (168, '_mask_begin', 0), (176, '_read_native', 0), (180, '_read_ram', 0), (184, '_player', 188), (188, '_kui_armada_ce_stream_owner_word', 0)),
 }
 
+
+def stream_owner_bodies(*, bam4=False):
+    """Select reviewed kernel globals without relaxing any linked-body pin.
+
+    The supplied BAM4 kernel uses the same owner structures and page walk,
+    with its kernel RAM globals rebased by 0x8c000. GCC emits PROCESS_BASE
+    negated for the range/index calculation. Only these four literal words
+    change; all instructions, lengths and relocation targets remain exact.
+    """
+    bodies = dict(STREAM_OWNER_BODIES)
+    if bam4:
+        changes = {
+            '_read_native': ((72, 0x8c145890, 0x8c1d1890),),
+            '_kui_armada_ce_stream_owner_word': (
+                (348, 0x73eb1920, 0x73e25920),
+                (376, 0x8c145890, 0x8c1d1890),
+                (496, 0x8c145890, 0x8c1d1890)),
+        }
+        for name, words in changes.items():
+            body = bytearray(bodies[name])
+            for offset, original, replacement in words:
+                if body[offset:offset + 4] != struct.pack('<I', original):
+                    raise ValueError('BAM4 owner pin no longer matches reviewed Armada literal')
+                body[offset:offset + 4] = struct.pack('<I', replacement)
+            bodies[name] = bytes(body)
+    return bodies
+
 # Authored P0 thread entry: twelve saved bytes, sixteen-byte native home,
 # SetKMode then an actual SR.MD test before the high P1 worker call. Both
 # branches return through P0, restoring the old native mode.
@@ -351,6 +378,77 @@ STREAM_BOOT_REQUIRED = frozenset({
     ("resident", "_kui_retail_resident_init"),
     ("stage", "_kui_retail_stage_relay"),
 })
+
+# The BAM4 admission code changes the stage's link positions, while the
+# 912-byte relay's instructions remain identical. Pin every moved literal
+# to its original named function or its complete original terminal message;
+# never admit an arbitrary in-image address. Armada's existing pins remain
+# untouched. These offsets were reviewed against both linked relay bodies.
+BAM4_STAGE_LINKED_TARGETS = (
+    (0x1a0, 0x8ce121c8, '_retail_display_restore', None),
+    (0x1a8, 0x8ce12030, '_retail_display_line', None),
+    (0x1ac, 0x8ce16438, None, 'BOOTSTRAP 2 REACHED GAME ENTRY'),
+    (0x1bc, 0x8ce16458, None, 'UNSUPPORTED BOOT STACK'),
+    (0x1d4, 0x8ce16470, None, 'UNSUPPORTED BOOT CPU STATE'),
+    (0x1d8, 0x8ce12250, '_retail_display_hex', None),
+    (0x1dc, 0x8ce16464, None, 'BOOT STACK'),
+    (0x1e0, 0x8ce1648c, None, 'BOOT SR'),
+    (0x1e4, 0x8ce16494, None, 'BOOT CACHE'),
+    (0x1e8, 0x8ce14bea, '_memcpy', None),
+    (0x1f4, 0x8ce150b4, '_kui_retail_crc32', None),
+    (0x200, 0x8ce164a0, None, 'BOOTSTRAP ALTERED EXECUTABLE'),
+    (0x204, 0x8ce14c32, '_memcmp', None),
+    (0x238, 0x8ce16548, None, 'BOOTSTRAP ALTERED CE RAM RESERVATION'),
+    (0x23c, 0x8ce164c0, None, 'BOOTSTRAP ALTERED RESIDENT'),
+    (0x244, 0x8ce164dc, None, 'BOOTSTRAP ALTERED STREAM CONTRACT'),
+    (0x24c, 0x8ce16500, None, 'BOOTSTRAP ALTERED ARMADA BIND CODE'),
+    (0x250, 0x8ce16524, None, 'BOOTSTRAP ALTERED ARMADA BIND RAM'),
+    (0x338, 0x8ce16570, None, 'BOOTSTRAP ALTERED STREAM SOURCE MAP'),
+    (0x34c, 0x8ce16594, None, 'BOOTSTRAP ALTERED AUDIO SOURCE BANK'),
+    (0x350, 0x8ce165b8, None, 'STREAM BUS ENTRY MISSING'),
+    (0x364, 0x8ce165d4, None, 'STREAM BUS ENTRY INVALID'),
+    (0x36c, 0x8ce165f0, None, 'STREAM BUS ATTACH FAILED'),
+    (0x370, 0x8ce1660c, None, 'READER INTACT - ORIGINAL ENTRY RESTORED'),
+    (0x374, 0x8ce15f44, None, 'BODY CRC32'),
+    (0x378, 0x8ce16634, None, 'ENTERING WINDOWS CE'),
+    (0x380, 0x8ce16648, None, 'IF IT STOPS PHOTOGRAPH THE LAST SCREEN'),
+    (0x384, 0x8ce15d28, None, 'POWER OFF AND ON TO RETURN'),
+    (0x388, 0x8ce16670, None, 'A RESET NOW MEANS WINDOWS CE ITSELF FAILED'),
+    (0x38c, 0x8ce12390, '_retail_display_pause', None),
+)
+
+
+def stream_boot_bodies(*, bam4=False):
+    """Keep the complete startup proof, selecting the admitted ROM header."""
+    bodies = dict(STREAM_BOOT_BODIES)
+    if bam4:
+        key = ('stage', '_kui_retail_stage_relay')
+        body = bytearray(bodies[key])
+        if body[0x234:0x238] != struct.pack('<I', 0xac141420):
+            raise ValueError('BAM4 startup pin no longer matches reviewed Armada ROMHDR literal')
+        body[0x234:0x238] = struct.pack('<I', 0xac1ce19c)
+        for offset, original, _, _ in BAM4_STAGE_LINKED_TARGETS:
+            if body[offset:offset + 4] != struct.pack('<I', original):
+                raise ValueError('BAM4 startup pin no longer matches reviewed linked literal')
+            body[offset:offset + 4] = bytes(4)
+        bodies[key] = bytes(body)
+    return bodies
+
+
+def audit_bam4_stage_literals(code, image):
+    """Normalize only exact function targets and complete terminal messages."""
+    for offset, _, symbol, message in BAM4_STAGE_LINKED_TARGETS:
+        target = struct.unpack_from('<I', code, offset)[0]
+        if not STAGE <= target < STAGE + len(image['payload']):
+            raise ValueError('BAM4 startup literal leaves linked stage')
+        if symbol:
+            if target != image['symbols'].get(symbol):
+                raise ValueError('BAM4 startup literal targets unexpected function: ' + symbol)
+        else:
+            expected = message.encode('ascii') + b'\0'
+            if region(image['payload'], target - STAGE, len(expected), message) != expected:
+                raise ValueError('BAM4 startup literal targets unexpected terminal message')
+        code[offset:offset + 4] = bytes(4)
 
 # Pinned compiler's direct-RAM destination admission. Its physical alias
 # range test rejects pool overlap (physical cf50000..cfd0000) before any
@@ -542,7 +640,7 @@ def audit_cache_reader(image, sizes, *, base_address=BASE, limit=LIMIT,
             "cache_reader_entry_binder_only": stream}
 
 
-def audit_stream_owner_code(image, locals, sizes):
+def audit_stream_owner_code(image, locals, sizes, *, bam4=False):
     """Pin the bounded worker reader in its native owner's virtual domain."""
     unit = "armada_ce_stream_player.c"
     symbols, payload = image["symbols"], image["payload"]
@@ -551,7 +649,8 @@ def audit_stream_owner_code(image, locals, sizes):
             not symbols.get("__armada_bind_bss_begin", 0) <= player < player + player_bytes <=
                 symbols.get("__armada_bind_bss_end", 0) <= STREAM_LIMIT):
         raise ValueError("Missing bounded native-owner player state")
-    for name, expected in STREAM_OWNER_BODIES.items():
+    bodies = stream_owner_bodies(bam4=bam4)
+    for name, expected in bodies.items():
         span = (sizes.get(name) if name.startswith("___") else locals.get((unit, name)))
         start, count = span or (0, 0)
         if (start % 2 or count != len(expected) or
@@ -578,7 +677,8 @@ def audit_stream_owner_code(image, locals, sizes):
             raise ValueError("Native-owner reader instruction/literal bytes changed: " + name)
     if any((unit, name) in locals for name in ("_read_cache", "_read_mapped")):
         raise ValueError("Native worker retains the entry binder's cache-array observer")
-    return {"complete_owner_reader_bodies_pinned": len(STREAM_OWNER_BODIES),
+    return {"complete_owner_reader_bodies_pinned": len(bodies),
+            "kernel_profile": "bam4-us" if bam4 else "armada-us",
             "irq_mask_covers_both_walks_and_native_sample": True,
             "entire_saved_sr_restored": True, "ttb_and_sr_rechecked": True,
             "sr_stability_mask": "0x700000f0", "arithmetic_status_flags_do_not_refuse": True,
@@ -709,7 +809,8 @@ def audit_seed(stage, *, stream=False):
     return start
 
 
-def audit_stream_boot_arm(controller, controller_spans, resident, resident_spans, stage, stage_spans):
+def audit_stream_boot_arm(controller, controller_spans, resident, resident_spans, stage, stage_spans,
+                          *, bam4=False):
     """Pin startup quiescence and the exact post-verification arming path.
 
     This intentionally checks complete compiled bodies, not a source-text
@@ -727,10 +828,11 @@ def audit_stream_boot_arm(controller, controller_spans, resident, resident_spans
             not 0x8c008300 + 56 <= descriptor <= 0x8c008300 + len(low) - descriptor_bytes or
             region(low, slot, 4, "stream bus entry") != struct.pack("<I", descriptor)):
         raise ValueError("Missing exact immutable stream descriptor entry at slot 52")
-    if set(STREAM_BOOT_BODIES) != STREAM_BOOT_REQUIRED:
+    bodies = stream_boot_bodies(bam4=bam4)
+    if set(bodies) != STREAM_BOOT_REQUIRED:
         raise ValueError("Missing stream bootstrap complete-body proof")
     pinned = []
-    for (image_name, name), expected in STREAM_BOOT_BODIES.items():
+    for (image_name, name), expected in bodies.items():
         image, spans, image_base = {"resident": (resident, resident_spans, 0x8c008300),
                                     "stage": (stage, stage_spans, STAGE),
                                     "controller": (controller, controller_spans, STREAM_BASE)}[image_name]
@@ -754,6 +856,8 @@ def audit_stream_boot_arm(controller, controller_spans, resident, resident_spans
             if code[offset:offset + 4] != struct.pack("<I", target):
                 raise ValueError("Stream bootstrap body targets an unexpected address: " + name)
             code[offset:offset + 4] = bytes(4)
+        if bam4 and image_name == 'stage':
+            audit_bam4_stage_literals(code, image)
         if code != expected:
             raise ValueError("Stream bootstrap instructions/order/literals changed: " + name)
         pinned.append(image_name + ":" + name)
@@ -764,7 +868,9 @@ def audit_stream_boot_arm(controller, controller_spans, resident, resident_spans
             "bootstrap_audio_and_bus_gated": True, "complete_linked_body_pins": pinned}
 
 
-def check(directory, *, stream=False):
+def check(directory, *, stream=False, bam4=False):
+    if bam4 and not stream:
+        raise ValueError('BAM4 requires the explicit stream audit')
     directory = Path(directory)
     controller_base, controller_limit = (STREAM_BASE, STREAM_LIMIT) if stream else (BASE, LIMIT)
     ordinary = check_directory(directory, ce=True)
@@ -793,7 +899,8 @@ def check(directory, *, stream=False):
                                      base_address=controller_base, limit=controller_limit,
                                      locals=controller_locals, stream=stream)
     native_code = audit_stream_native_code(controller, controller_locals) if stream else None
-    owner_reader = audit_stream_owner_code(controller, controller_locals, controller_sizes) if stream else None
+    owner_reader = audit_stream_owner_code(controller, controller_locals, controller_sizes,
+                                           bam4=bam4) if stream else None
     disassembly = subprocess.check_output(
         ["sh-elf-objdump", "-d", str(directory / "bind-probe.elf")], text=True)
     (directory / "bind-probe.dis").write_text(disassembly)
@@ -828,7 +935,7 @@ def check(directory, *, stream=False):
                                    function_sizes(resident_elf, kinds=(1, 2))) if stream else None
     stream_boot_arm = audit_stream_boot_arm(controller, controller_sizes, resident,
                           function_sizes(resident_elf, kinds=(1, 2)), stage,
-                          function_sizes(stage_elf, kinds=(1, 2))) if stream else None
+                          function_sizes(stage_elf, kinds=(1, 2)), bam4=bam4) if stream else None
     if resident["symbols"].get("_kui_armada_ce_bind_probe") != controller_base:
         raise ValueError("Resident controller call target moved")
     audit_map_guard(resident, function_sizes(resident_elf))
@@ -866,6 +973,7 @@ def check(directory, *, stream=False):
     if not stack["call_graph"] or stack["worst_bytes"] + stack["margin"] > stack["available_bytes"]:
         raise ValueError("Excerpt entry is not covered by bounded masked-stack audit")
     return {"controller_entry": hex(controller_base), "controller_memory_end": hex(controller["memory_end"]),
+            "title_profile": "bam4-us" if bam4 else "armada-us",
             "stream_profile": stream, "stream_controller_contract": stream_contract,
             "controller_payload_bytes": len(controller["payload"]), "controller_unresolved_symbols": 0,
             "controller_integer_instructions": instructions, "exact_authored_deferred_bridge": True,
@@ -1496,11 +1604,14 @@ def main():
     parser.add_argument("directory", nargs="?", type=Path)
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--stream", action="store_true", help="Admit only the reserved high-P1 stream controller")
+    parser.add_argument("--bam4", action="store_true", help="Use the exact Bust-A-Move 4 US kernel profile")
     args = parser.parse_args()
+    if args.bam4 and not args.stream:
+        parser.error('--bam4 requires --stream')
     if args.self_test:
         print(f"PASS Armada excerpt linked-auditor self-test: {self_test()} checks")
     if args.directory:
-        print(json.dumps(check(args.directory, stream=args.stream), indent=2))
+        print(json.dumps(check(args.directory, stream=args.stream, bam4=args.bam4), indent=2))
     elif not args.self_test:
         parser.error("Provide a build directory or --self-test")
 

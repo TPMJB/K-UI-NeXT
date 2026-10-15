@@ -5,6 +5,7 @@
 #define KUI_GAMES_RETAIL_PACKAGE "0:/KUI/apps/games/retail-boot.kui"
 #define KUI_GAMES_RETAIL_CE_PACKAGE "0:/KUI/apps/games/ce-probe.kui"
 #define KUI_GAMES_RETAIL_CE_EXCERPT_PACKAGE "0:/KUI/apps/games/ce-cdda-armada.kui"
+#define KUI_GAMES_RETAIL_CE_BAM4_PACKAGE "0:/KUI/apps/games/ce-cdda-bam4.kui"
 #define KUI_GAMES_RETAIL_CDDA_RAW_PACKAGE "0:/KUI/apps/games/cdda-toy-raw.kui"
 #define KUI_GAMES_RETAIL_CDDA_COOKED_PACKAGE "0:/KUI/apps/games/cdda-toy-cooked.kui"
 #define KUI_GAMES_RETAIL_CDDA_MDK2_PACKAGE "0:/KUI/apps/games/retail-cdda-mdk2.kui"
@@ -22,7 +23,7 @@
  * application option, never a manifest reader bit. Unsupported profiles fail
  * before handoff; ordinary launches retain KUI_GAMES_RETAIL_PACKAGE. */
 #define KUI_GAMES_RETAIL_CDDA 0x800u
-/* Exact Armada original GDI only: separately admitted CE music backend.
+/* Exact admitted original GDI: separately built CE music backend per title.
  * This routes to its separate package; it is never a manifest flag. */
 #define KUI_GAMES_RETAIL_CE_EXCERPT 0x1000u
 /* Single storage worker only. Prepare one native GD-ROM launch;

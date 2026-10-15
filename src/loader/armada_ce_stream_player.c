@@ -14,7 +14,7 @@
 #if !defined(KUI_ARMADA_CE_STREAM) || KUI_ARMADA_CE_STREAM != 1 || !defined(KUI_RETAIL_CE)
 #error "The full-track player belongs only to the isolated Armada CE stream"
 #endif
-#define CURRENT_PROCESS UINT32_C(0x8c145890)
+#define CURRENT_PROCESS KUI_ARMADA_CE_LIVE_CURRENT_PROCESS
 #define SR_REQUIRED UINT32_C(0x40000000)
 #define SR_CHECK UINT32_C(0x700000f0)
 #define OWNER_CALLBACK UINT32_C(0xfffffd1f)
@@ -76,6 +76,13 @@ struct stream_player {
     uint32_t start_ms,start_cached;
 };
 static struct stream_player player;
+#if KUI_WINCE_CDDA_BAM4
+/* Keep the audited offsets within player identical to Armada RC9. */
+static struct kui_armada_ce_stream_track profile_tracks[KUI_WINCE_CDDA_TRACK_COUNT];
+#define PLAYER_TRACKS profile_tracks
+#else
+#define PLAYER_TRACKS player.tracks
+#endif
 
 static void publish(void) { __asm__ __volatile__("" : : : "memory"); }
 static uint32_t ready_bytes(void) {
@@ -152,8 +159,8 @@ static uint32_t call(uint32_t target,uint32_t a0,uint32_t a1,uint32_t a2,uint32_
     return kui_armada_ce_excerpt_ce_call(target,args);
 }
 static bool binding_valid(const struct kui_armada_ce_excerpt_binding *b) {
-    if(!b || b->owner_process<0x8c14e6e0u || b->owner_process>=0x8c14fa60u ||
-       (b->owner_process-0x8c14e6e0u)%0x9cu ||
+    if(!b || b->owner_process<KUI_ARMADA_CE_LIVE_PROCESS_BASE || b->owner_process>=(KUI_ARMADA_CE_LIVE_PROCESS_BASE+32u*KUI_ARMADA_CE_LIVE_PROCESS_STRIDE) ||
+       (b->owner_process-KUI_ARMADA_CE_LIVE_PROCESS_BASE)%KUI_ARMADA_CE_LIVE_PROCESS_STRIDE ||
        b->owner_slot<0x02000000u || b->owner_slot>0x40000000u || (b->owner_slot&0x01ffffffu)) return false;
     const uint32_t *words=(const uint32_t *)b;
     for(unsigned i=2;i<sizeof(*b)/4u;i++) if(!words[i] || (words[i]&1u)) return false;
@@ -312,10 +319,10 @@ void kui_armada_ce_excerpt_dispatch(uint32_t sr,uint32_t stack) {
     /* Discovery publishes only the stable process/slot. The pinned kernel
      * callback enters that owner before DLL values or sound APIs are read. */
     if(!kui_armada_ce_stream_bind_deferred(&player.binding) ||
-       player.binding.owner_process<0x8c14e6e0u || player.binding.owner_process>=0x8c14fa60u ||
-       (player.binding.owner_process-0x8c14e6e0u)%0x9cu ||
-       player.binding.owner_slot!=((1u+(player.binding.owner_process-0x8c14e6e0u)/0x9cu)<<25) ||
-       word(0x8c14fa80u)!=0x8c011b20u || word(0x8c011b20u)!=0x32336e57u ||
+       player.binding.owner_process<KUI_ARMADA_CE_LIVE_PROCESS_BASE || player.binding.owner_process>=(KUI_ARMADA_CE_LIVE_PROCESS_BASE+32u*KUI_ARMADA_CE_LIVE_PROCESS_STRIDE) ||
+       (player.binding.owner_process-KUI_ARMADA_CE_LIVE_PROCESS_BASE)%KUI_ARMADA_CE_LIVE_PROCESS_STRIDE ||
+       player.binding.owner_slot!=((1u+(player.binding.owner_process-KUI_ARMADA_CE_LIVE_PROCESS_BASE)/KUI_ARMADA_CE_LIVE_PROCESS_STRIDE)<<25) ||
+       word(KUI_ARMADA_CE_LIVE_APISETS)!=0x8c011b20u || word(0x8c011b20u)!=0x32336e57u ||
        word(0x8c011b24u)!=0x00900003u || word(0x8c011b28u)!=0x8c0118e0u ||
        word(0x8c011aa4u)!=UINT32_MAX) goto failed;
     uint32_t handle=word(player.binding.owner_process+8u);
@@ -339,11 +346,11 @@ static bool initialize(void) {
        seed[KUI_ARMADA_CE_STREAM_MAP_CRC_WORD]!=kui_armada_ce_excerpt_le32(wire+16u) ||
        kui_retail_manifest_decode(wire,&player.map)!=KUI_GAME_OK ||
        !kui_armada_ce_stream_map_valid(&player.map)) return false;
-    for(unsigned i=0;i<5u;i++) {
+    for(unsigned i=0;i<KUI_WINCE_CDDA_TRACK_COUNT;i++) {
         const struct kui_retail_track *t=&player.map.slots[i].track;
-        player.tracks[i]=(struct kui_armada_ce_stream_track){i+1u,t->control,t->start_lba,t->end_lba};
+        PLAYER_TRACKS[i]=(struct kui_armada_ce_stream_track){i+1u,t->control,t->start_lba,t->end_lba};
     }
-    if(kui_armada_ce_stream_init(&player.model,player.tracks,5u)!=KUI_ARMADA_CE_STREAM_OK ||
+    if(kui_armada_ce_stream_init(&player.model,PLAYER_TRACKS,KUI_WINCE_CDDA_TRACK_COUNT)!=KUI_ARMADA_CE_STREAM_OK ||
        !kui_armada_ce_stream_transport_init(&player.map,RAW_BEGIN,
            KUI_ARMADA_CE_STREAM_SOURCE_BEGIN+KUI_ARMADA_CE_STREAM_SOURCE_BYTES)) return false;
     player.stats.pcm_crc32=seed[KUI_ARMADA_CE_STREAM_MAP_CRC_WORD];player.initialized=1u;return true;

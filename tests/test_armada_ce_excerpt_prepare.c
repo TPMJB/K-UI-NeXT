@@ -59,7 +59,7 @@ static void exact_profile(void) {
     reads=logs=0u;read_result=KUI_GAME_OK;
 }
 static void profile_admission(void) {
-    exact_profile();CHECK(armada_excerpt_profile(&image,&metadata));
+    exact_profile();CHECK(ce_music_profile(&image,&metadata));
     const struct kui_game_image original=image;
     const struct kui_game_metadata original_metadata=metadata;
     for(unsigned fault=0;fault<9u;fault++) {
@@ -73,7 +73,7 @@ static void profile_admission(void) {
         if(fault==6u) strcpy(metadata.product,"T00000N 00");
         if(fault==7u) strcpy(metadata.bootfile,"OTHER.BIN");
         if(fault==8u) image.tracks[3].end_lba=KUI_ARMADA_CE_EXCERPT_START_LBA+149u;
-        CHECK(!armada_excerpt_profile(&image,&metadata) && !reads);
+        CHECK(!ce_music_profile(&image,&metadata) && !reads);
     }
     for(unsigned track=0;track<5u;track++) for(unsigned fault=0;fault<4u;fault++) {
         image=original;metadata=original_metadata;
@@ -81,14 +81,56 @@ static void profile_admission(void) {
         if(fault==1u) image.tracks[track].file_offset=512u;
         if(fault==2u) image.tracks[track].sector_bytes=2048u;
         if(fault==3u) image.tracks[track].control=image.tracks[track].control?0u:4u;
-        CHECK(!armada_excerpt_profile(&image,&metadata) && !reads);
+        CHECK(!ce_music_profile(&image,&metadata) && !reads);
     }
     image=original;metadata=original_metadata;
     /* A user-selected cooked version can share metadata but must fail before
      * any PCM read, regardless of where it is stored or how it is named. */
     image.tracks[2].sector_bytes=2048u;image.tracks[2].data_offset=0u;
-    CHECK(!armada_excerpt_profile(&image,&metadata));
+    CHECK(!ce_music_profile(&image,&metadata));
     CHECK(!reads);
+}
+static void bam4_profile(void) {
+    exact_profile();
+    const struct kui_wince_cdda_disc *disc=kui_wince_cdda_disc(KUI_WINCE_CDDA_BUST_A_MOVE_4);
+    CHECK(disc && disc->track_count==26u && disc->kernel_bytes==1830912u && disc->boot_lba==548106u);
+    image.count=disc->track_count;
+    for(unsigned i=0;i<image.count;i++) {
+        struct kui_game_image_track *track=&image.tracks[i];
+        memset(track,0,sizeof(*track));track->number=i+1u;track->start_lba=disc->starts[i];
+        track->end_lba=i+1u<image.count?disc->starts[i+1u]:disc->starts[i]+1024u;
+        track->sector_bytes=2352u;track->control=kui_wince_cdda_track_control(KUI_WINCE_CDDA_BUST_A_MOVE_4,i);
+        track->sector_mode=track->control?1u:0u;track->data_offset=track->control?16u:0u;
+        track->file_bytes=(uint64_t)(track->end_lba-track->start_lba)*2352u;
+        snprintf(track->name,sizeof(track->name),"track%02u.raw",i+1u);
+    }
+    metadata.boot_bytes=disc->kernel_bytes;metadata.boot_lba=disc->boot_lba;
+    strcpy(metadata.product,disc->product);
+}
+static void bam4_profile_admission(void) {
+    bam4_profile();CHECK(ce_music_profile(&image,&metadata)==KUI_WINCE_CDDA_BUST_A_MOVE_4);
+    CHECK(image.tracks[25].start_lba==548106u && image.tracks[24].control==0u);
+    const struct kui_game_image original=image;
+    const struct kui_game_metadata original_metadata=metadata;
+    for(unsigned fault=0;fault<7u;fault++) {
+        image=original;metadata=original_metadata;
+        if(fault==0u) strcpy(metadata.product,"T40301N 00");
+        if(fault==1u) metadata.boot_bytes--;
+        if(fault==2u) metadata.boot_lba++;
+        if(fault==3u) image.count=25u;
+        if(fault==4u) metadata.windows_ce=false;
+        if(fault==5u) strcpy(metadata.bootfile,"OTHER.BIN");
+        if(fault==6u) image.format=KUI_GAME_IMAGE_ISO;
+        CHECK(ce_music_profile(&image,&metadata)==KUI_WINCE_CDDA_NONE && !reads);
+    }
+    for(unsigned track=0;track<26u;track++) for(unsigned fault=0;fault<4u;fault++) {
+        image=original;metadata=original_metadata;
+        if(fault==0u) image.tracks[track].start_lba++;
+        if(fault==1u) image.tracks[track].sector_bytes=2048u;
+        if(fault==2u) image.tracks[track].file_offset=512u;
+        if(fault==3u) image.tracks[track].control^=4u;
+        CHECK(ce_music_profile(&image,&metadata)==KUI_WINCE_CDDA_NONE && !reads);
+    }
 }
 static void new_package(size_t payload_bytes,bool include_seed) {
     free(allocation);
@@ -167,6 +209,60 @@ static void seed_rejections(void) {
     image.tracks[3].end_lba=KUI_ARMADA_CE_EXCERPT_START_LBA+149u;
     CHECK(!armada_excerpt_seed(&package,&image,record_log));
     CHECK(!reads && logs==1u && !seed()[KUI_ARMADA_CE_EXCERPT_SEED_PCM_CRC32]);guard_check();
+}
+static void bam4_manifest_seed(void) {
+    bam4_profile();
+    struct kui_retail_manifest map={.card_sectors=4000000u,.partition_start=2048u,
+        .partition_end=4000000u,.track_count=26u,.extent_count=26u,.session_lba=45000u,
+        .boot_lba=548106u,.boot_bytes=1830912u,.storage_transport=KUI_STORAGE_SCI,
+        .reader=KUI_RETAIL_READER_STANDARD};
+    strcpy(map.title,"Synthetic BAM4");strcpy(map.product,"T-8117N");strcpy(map.bootfile,"0WINCEOS.BIN");
+    uint32_t card_lba=4096u;
+    for(unsigned i=0;i<26u;i++) {
+        const struct kui_game_image_track *source=&image.tracks[i];
+        map.slots[i].track=(struct kui_retail_track){source->start_lba,source->end_lba,
+            (uint16_t)(26u+i),1u,(uint8_t)source->control};
+        uint32_t blocks=(uint32_t)((source->file_bytes+511u)/512u);
+        map.slots[26u+i].extent=(struct kui_retail_extent){0u,card_lba,blocks};
+        card_lba+=blocks;
+    }
+    CHECK(kui_retail_manifest_validate(&map)==KUI_GAME_OK);
+    CHECK(kui_wince_cdda_manifest_valid(&map,KUI_WINCE_CDDA_BUST_A_MOVE_4));
+    CHECK(!kui_wince_cdda_manifest_valid(&map,KUI_WINCE_CDDA_ARMADA));
+    const struct kui_retail_manifest original=map;
+    for(unsigned fault=0;fault<9u;fault++) {
+        map=original;
+        if(fault==0u) map.slots[25].track.start_lba++;
+        if(fault==1u) map.slots[25].track.end_lba=map.slots[25].track.start_lba;
+        if(fault==2u) map.slots[25].track.control=0u;
+        if(fault==3u) map.slots[24].track.extent_count=0u;
+        if(fault==4u) map.slots[25].track.control|=KUI_RETAIL_TRACK_COOKED;
+        if(fault==5u) map.slots[25].track.first_extent|=0x100u;
+        if(fault==6u) map.boot_lba++;
+        if(fault==7u) map.boot_bytes--;
+        if(fault==8u) map.product[0]^=1;
+        CHECK(!kui_wince_cdda_manifest_valid(&map,KUI_WINCE_CDDA_BUST_A_MOVE_4));
+    }
+    /* Profile admission follows canonical decoding; a short audio extent
+     * also fails the full validator/seed encoder before any source I/O. */
+    map=original;map.slots[50].extent.blocks--;
+    CHECK(kui_retail_manifest_validate(&map)!=KUI_GAME_OK);
+    new_package(SEED_AT+sizeof(struct kui_armada_ce_stream_seed)+64u,false);
+    const uint32_t blank[16]=KUI_ARMADA_CE_STREAM_BLANK_WORDS;
+    memcpy(seed(),blank,sizeof(blank));
+    CHECK(!armada_stream_seed_fill(&package,SEED_AT,&map,KUI_WINCE_CDDA_BUST_A_MOVE_4,record_log));
+    CHECK(!reads && !logs && !seed()[KUI_ARMADA_CE_STREAM_MAP_CRC_WORD]);guard_check();
+    map=original;
+    CHECK(armada_stream_seed_find(&package)==SEED_AT);
+    CHECK(!armada_stream_seed_fill(&package,SEED_AT,&map,KUI_WINCE_CDDA_ARMADA,record_log));
+    CHECK(armada_stream_seed_fill(&package,SEED_AT,&map,KUI_WINCE_CDDA_BUST_A_MOVE_4,record_log));
+    struct kui_retail_manifest decoded;
+    struct kui_armada_ce_stream_seed *source=(void *)seed();
+    CHECK(kui_retail_manifest_decode(source->wire,&decoded)==KUI_GAME_OK);
+    CHECK(decoded.track_count==26u && decoded.extent_count==26u);
+    CHECK(decoded.slots[25].track.start_lba==548106u && decoded.slots[24].track.extent_count==1u);
+    CHECK(kui_wince_cdda_manifest_valid(&decoded,KUI_WINCE_CDDA_BUST_A_MOVE_4));
+    CHECK(!reads && logs==1u);guard_check();
 }
 /* A read-only filesystem model drives the entire public prepare function.
  * Its sectors and runtime package are generated; the original parser,
@@ -375,7 +471,8 @@ static void launcher_paths(void) {
         if(fault==5u) launch.cancel_read=true;
         CHECK(!kui_games_retail_prepare_reader("/Games/ARMADA/ARMADA.gdi",excerpt,&prepared,record_log,launch_cancel));
         CHECK(!prepared.data && !prepared.info.payload_bytes && !prepared.info.memory_bytes);
-        CHECK(launch.package_reads==1u && !strcmp(launch.package_path,KUI_GAMES_RETAIL_CE_EXCERPT_PACKAGE));
+        CHECK(launch.package_reads==(fault<3u?0u:1u));
+        CHECK(fault<3u?!launch.package_path[0]:!strcmp(launch.package_path,KUI_GAMES_RETAIL_CE_EXCERPT_PACKAGE));
         CHECK(launch.preloads==(fault>=4u?1u:0u));
         CHECK(launch.connects==1u && launch.disconnects==1u && launch.opens==launch.closes);
         CHECK(!launch.connected && !launch.mounted && !launch.active);
@@ -433,9 +530,10 @@ static void stream_launcher_paths(void) {
     }
 }
 int main(void) {
-    profile_admission();seed_success();seed_rejections();free(allocation);allocation=NULL;
+    profile_admission();bam4_profile_admission();seed_success();seed_rejections();
+    bam4_manifest_seed();free(allocation);allocation=NULL;
     launcher_paths();
     stream_launcher_paths();
-    printf("Armada CE excerpt preparation: %u checks; exact raw profile, generated 150-sector preload, fixed CRC, unique empty seed, bounds, package isolation and failed/cancelled reads passed\n",checks);
+    printf("WinCE music preparation: %u checks; exact Armada/BAM4 raw profiles, 26-track map, generated 150-sector preload, fixed CRC, unique empty seed, bounds, package isolation and failed/cancelled reads passed\n",checks);
     return 0;
 }

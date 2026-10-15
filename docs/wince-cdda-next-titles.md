@@ -72,3 +72,17 @@ one console candidate for the first game, and test track changes, pause/resume,
 repeated PLAY and sustained delivery. Reuse the RC9 transport and buffering
 parameters unless that game's measurements justify a change. No console
 compatibility is claimed before that test.
+
+## Supplied runtime comparison and first port
+
+The supplied US Bust-A-Move 4 runtime (T-8117N, 26 tracks) shares Armada's
+SNDCORE, audio firmware and kernel instructions. A separate BAM4 profile
+selects its rebased kernel globals, DirectSound method addresses and verified
+game device holder. Its first console candidate reuses the RC9 streaming
+engine; see [the BAM4 test guide](bam4-ce-cdda-test.md). It has not yet passed
+a physical playback test.
+
+The supplied Worms Armageddon runtime uses a different DirectSound callback
+that does not take Armada's refill critical section. Reusing that lock would
+be unsafe. Its source/refill model is reusable, but its consumer synchronization
+needs a separate adapter before a console audio candidate is enabled.

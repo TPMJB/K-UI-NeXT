@@ -6,14 +6,23 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* Independently authored metadata contract for the exact admitted Armada
+/* Independently authored metadata contract for the exact admitted CE
  * kernel. No owner executable, ARM driver or PCM bytes are compiled here.
  * Original whole-kernel SHA admission must precede this helper. The caller
  * applies the returned single-word plan before NK executes its first code;
  * this header never writes physical memory or changes CE/MMU state. */
-#define KUI_ARMADA_CE_EXCERPT_ROMHDR UINT32_C(0x8c141420)
 #define KUI_ARMADA_CE_EXCERPT_ROMHDR_BYTES 84u
+#if defined(KUI_WINCE_CDDA_BAM4) && KUI_WINCE_CDDA_BAM4 == 1
+#define KUI_ARMADA_CE_EXCERPT_ROMHDR UINT32_C(0x8c1ce19c)
+#define KUI_ARMADA_CE_EXCERPT_ROMHDR_CRC UINT32_C(0xe3b81ab3)
+#define KUI_ARMADA_CE_EXCERPT_RAM_START UINT32_C(0x8c1cf000)
+#define KUI_ARMADA_CE_EXCERPT_RAM_FREE UINT32_C(0x8c1dc000)
+#else
+#define KUI_ARMADA_CE_EXCERPT_ROMHDR UINT32_C(0x8c141420)
 #define KUI_ARMADA_CE_EXCERPT_ROMHDR_CRC UINT32_C(0x7ddd77a1)
+#define KUI_ARMADA_CE_EXCERPT_RAM_START UINT32_C(0x8c142000)
+#define KUI_ARMADA_CE_EXCERPT_RAM_FREE UINT32_C(0x8c150000)
+#endif
 #define KUI_ARMADA_CE_EXCERPT_RAM_END_WORD (KUI_ARMADA_CE_EXCERPT_ROMHDR+28u)
 #define KUI_ARMADA_CE_EXCERPT_STAGE_BEGIN UINT32_C(0x8ce10000)
 #define KUI_ARMADA_CE_EXCERPT_POOL_BEGIN UINT32_C(0x8cf50000)
@@ -156,8 +165,8 @@ static inline enum kui_armada_ce_excerpt_pool_status kui_armada_ce_excerpt_pool_
 static inline bool kui_armada_ce_excerpt_pool_header_valid(const uint8_t *header,size_t bytes) {
     return header && bytes==KUI_ARMADA_CE_EXCERPT_ROMHDR_BYTES &&
         kui_armada_ce_excerpt_crc32(header,bytes)==KUI_ARMADA_CE_EXCERPT_ROMHDR_CRC &&
-        kui_armada_ce_excerpt_le32(header+20u)==UINT32_C(0x8c142000) &&
-        kui_armada_ce_excerpt_le32(header+24u)==UINT32_C(0x8c150000) &&
+        kui_armada_ce_excerpt_le32(header+20u)==KUI_ARMADA_CE_EXCERPT_RAM_START &&
+        kui_armada_ce_excerpt_le32(header+24u)==KUI_ARMADA_CE_EXCERPT_RAM_FREE &&
         kui_armada_ce_excerpt_le32(header+28u)==KUI_ARMADA_CE_EXCERPT_POOL_END &&
         kui_armada_ce_excerpt_le32(header+60u)==KUI_ARMADA_CE_EXCERPT_POOL_END &&
         kui_armada_ce_excerpt_le32(header+64u)==UINT32_C(0x00030000);

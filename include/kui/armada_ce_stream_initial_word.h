@@ -35,8 +35,8 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_stream_discover_owner
     w->failure=KUI_ARMADA_CE_LIVE_READ;
     if((ccr&0xa1u)!=1u) return KUI_ARMADA_CE_LIVE_CACHE;
     if(!kui_armada_ce_live_physical(w,KUI_ARMADA_CE_LIVE_CURRENT_PROCESS,&current) ||
-       !kui_armada_ce_live_physical(w,0x8c14d430u,&low) ||
-       !kui_armada_ce_live_physical(w,0x8c14d434u,&high) ||
+       !kui_armada_ce_live_physical(w,KUI_ARMADA_CE_LIVE_HEAP_LOW,&low) ||
+       !kui_armada_ce_live_physical(w,KUI_ARMADA_CE_LIVE_HEAP_HIGH,&high) ||
        !kui_armada_ce_live_physical(w,KUI_ARMADA_CE_LIVE_MODULE_HEAD,&head)) return w->failure;
     if(!kui_armada_ce_ram_table_p1(low,&p1) || high<=low || high>0x8d000000u)
         return kui_armada_ce_live_module_fail(w,KUI_ARMADA_CE_LIVE_FAULT_HEAP,head,low,high,0u);
@@ -177,8 +177,8 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_stream_discover_owner
         if(again!=process_expected[i]) return kui_armada_ce_stream_discovery_changed(w,
             candidate.process+process_offset[i],again,process_expected[i],process_offset[i]);
     }
-    static const uint32_t root_address[4]={KUI_ARMADA_CE_LIVE_MODULE_HEAD,0x8c14d430u,
-        0x8c14d434u,KUI_ARMADA_CE_LIVE_CURRENT_PROCESS};
+    static const uint32_t root_address[4]={KUI_ARMADA_CE_LIVE_MODULE_HEAD,KUI_ARMADA_CE_LIVE_HEAP_LOW,
+        KUI_ARMADA_CE_LIVE_HEAP_HIGH,KUI_ARMADA_CE_LIVE_CURRENT_PROCESS};
     const uint32_t root_expected[4]={head,low,high,current};
     for(unsigned i=0;i<4u;i++) {
         if(!kui_armada_ce_live_physical(w,root_address[i],&again)) return w->failure;

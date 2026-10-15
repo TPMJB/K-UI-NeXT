@@ -683,7 +683,11 @@ static uint32_t ce_load(const uint8_t *ip) {
     kui_sha256_digest(&sha,digest);
     if(!kui_armada_ce_audio_admit(&manifest,kui_retail_crc32(0,ip,KUI_RETAIL_IP_BYTES),
             prefix_crc,body_crc,digest))
+#if KUI_WINCE_CDDA_BAM4
+        stopped("CE CD MUSIC PROFILE MISMATCH",body_crc);
+#else
         stopped("ARMADA AUDIO TEST PROFILE MISMATCH",body_crc);
+#endif
 #endif
     if(prefix_crc!=kui_retail_crc32(0,ce_prefix,sizeof(ce_prefix)))
         stopped("CE PREFIX CHANGED IN PLACE",prefix_crc);
@@ -702,7 +706,11 @@ static uint32_t ce_load(const uint8_t *ip) {
     retail_display_line(manifest.title);
 #if KUI_ARMADA_CE_AUDIO_STAGE
 #if KUI_ARMADA_CE_EXCERPT_STAGE
+#if KUI_WINCE_CDDA_BAM4
+    retail_display_line("CE CD MUSIC STREAM");
+#else
     retail_display_line("ARMADA CE CD MUSIC EXCERPT TEST");
+#endif
 #else
 #if KUI_ARMADA_CE_RAM_BIND_STAGE
     retail_display_line("ARMADA SOUND RAM BINDING OBSERVER");
@@ -722,7 +730,11 @@ static uint32_t ce_load(const uint8_t *ip) {
     ce_find_kernel(plan.body.address,plan.body.bytes);
 #if KUI_ARMADA_CE_AUDIO_STAGE
     static const uint32_t armada_kernel[4]={
+#if KUI_WINCE_CDDA_BAM4
+        0x8c1d1b40u,0x8c1d1aa8u,0x8c1d1884u,0x8c1d1c04u};
+#else
         0x8c145b40u,0x8c145aa8u,0x8c145884u,0x8c145c04u};
+#endif
     if(memcmp(ce_kernel,armada_kernel,sizeof(armada_kernel)))
         stopped("ARMADA AUDIO CE IRQ BINDING MISMATCH",ce_kernel[3]);
 #endif

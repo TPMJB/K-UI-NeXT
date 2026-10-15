@@ -334,13 +334,16 @@ bool kui_shell_games_encoding_ready(const struct kui_shell *s) {
     return kui_shell_games_retail_ready(s) && s->games_detail.cd_image;
 }
 bool kui_shell_games_cdda_ready(const struct kui_shell *s) {
-    if(kui_shell_games_ce_probe_ready(s))
-        return s->games_detail.format==KUI_GAME_IMAGE_GDI && s->games_detail.tracks==5u &&
-            !s->games_detail.cd_image && !s->games_detail.scrambled &&
-            memchr(s->games_detail.product,0,sizeof(s->games_detail.product)) &&
-            !strcmp(s->games_detail.product,"T40301N 00") &&
-            !strcmp(s->games_detail.boot_file,"0WINCEOS.BIN") &&
-            s->games_detail.boot_bytes==1253376u;
+    if(kui_shell_games_ce_probe_ready(s)) {
+        if(s->games_detail.format!=KUI_GAME_IMAGE_GDI || s->games_detail.cd_image ||
+           s->games_detail.scrambled ||
+           !memchr(s->games_detail.product,0,sizeof(s->games_detail.product)) ||
+           strcmp(s->games_detail.boot_file,"0WINCEOS.BIN")) return false;
+        return (s->games_detail.tracks==5u && !strcmp(s->games_detail.product,"T40301N 00") &&
+                s->games_detail.boot_bytes==1253376u) ||
+               (s->games_detail.tracks==26u && !strcmp(s->games_detail.product,"T-8117N") &&
+                s->games_detail.boot_bytes==1830912u);
+    }
     return kui_shell_games_retail_ready(s) && s->games_detail.format==KUI_GAME_IMAGE_GDI &&
         !s->games_detail.cd_image && s->games_detail.audio.classification==KUI_GAME_AUDIO_GD_HIGH_DENSITY &&
         s->games_detail.audio.candidate_tracks &&

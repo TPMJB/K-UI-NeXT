@@ -1314,6 +1314,39 @@ static void games_armada_ce_music_controls(void) {
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
     puts("PASS Armada CE music: saved On selects separate excerpt route, Off preserves CE route, unsupported metadata and stale paths refuse");
 }
+static void games_bam4_ce_music_controls(void) {
+    struct kui_games_detail detail=launch_detail(true,false);
+    detail.tracks=26u;detail.audio=(struct kui_game_audio_info){KUI_GAME_AUDIO_GD_HIGH_DENSITY,23u,22u,1u};
+    detail.boot_bytes=1830912u;detail.boot_lba=548106u;
+    strcpy(detail.product,"T-8117N");strcpy(detail.boot_file,"0WINCEOS.BIN");
+    strcpy(detail.path,"/Games/BAM4/BAM4.gdi");
+    install_launch_detail(&detail);
+    assert(kui_shell_games_cdda_ready(&s) && !s.games_launch_cdda);
+    const unsigned ordinary=KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC;
+    const unsigned music=ordinary|KUI_GAMES_RETAIL_CE_EXCERPT;
+    press(KUI_SHELL_Y,false);s.games_launch_selected=KUI_SHELL_GAME_OPTION_CDDA;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_cdda);
+    assert(s.games_launch_reader==KUI_RETAIL_READER_ASYNC && !s.games_retail_reader);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==music);
+    const struct kui_game_launch_settings saved={KUI_GAME_READER_EAGER,true,KUI_GAME_ENCODING_SCRAMBLED};
+    install_launch_detail(&detail);kui_shell_set_game_launch_settings(&s,detail.path,&saved,true);
+    assert(s.games_launch_cdda && s.games_launch_reader==KUI_RETAIL_READER_ASYNC &&
+        s.games_launch_encoding==KUI_GAME_ENCODING_AUTO);
+    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==music);
+    s.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;s.games_launch_selected=KUI_SHELL_GAME_OPTION_CDDA;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && !s.games_launch_cdda);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==ordinary);
+    for(unsigned fault=0;fault<3u;fault++) {
+        struct kui_games_detail other=detail;
+        if(fault==0u) other.tracks=25u;
+        if(fault==1u) other.boot_bytes--;
+        if(fault==2u) strcpy(other.product,"T40301N 00");
+        install_launch_detail(&other);assert(!kui_shell_games_cdda_ready(&s));
+        kui_shell_set_game_launch_settings(&s,other.path,&saved,true);assert(!s.games_launch_cdda);
+    }
+    puts("PASS BAM4 CE music: 26-track candidate, saved On launch route, Off route and unsupported metadata rejection");
+}
 static void games_launch_options_controls(void) {
     struct kui_games_detail detail=launch_detail(false,false);
     install_launch_detail(&detail);
@@ -2567,7 +2600,7 @@ int main(int argc,char **argv) {
     if(argc==2 && !strcmp(argv[1],"--storage-tests")) {
         storage_test_controls();storage_test_rendering();return 0;
     }
-    games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_variant_controls();
+    games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_variant_controls();
     if(argc==2 && !strcmp(argv[1],"--games-controls")) { puts("PASS Games navigation and launch controls"); return 0; }
     games_rendering(); games_selected_art_rendering(); games_variant_rendering();
     if(argc==2 && !strcmp(argv[1],"--games")) { puts("PASS Games navigation, launch eligibility and rendering"); return 0; }

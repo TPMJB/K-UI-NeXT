@@ -312,16 +312,26 @@ bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *package
     kui_log_fn log,kui_cancel_fn cancel) {
     return kui_games_retail_prepare_reader(path,KUI_RETAIL_READER_STANDARD,package,log,cancel);
 }
-static bool armada_excerpt_profile(const struct kui_game_image *image,
-                                    const struct kui_game_metadata *metadata) {
-    static const uint32_t starts[5]={0u,756u,45000u,149842u,434062u};
-    if(image->format!=KUI_GAME_IMAGE_GDI || image->count!=5u || image->cd_image ||
-       image->scrambled || !metadata->windows_ce || metadata->boot_bytes!=1253376u ||
-       strcmp(metadata->product,"T40301N 00") || strcmp(metadata->bootfile,"0WINCEOS.BIN")) return false;
-    for(unsigned i=0;i<5u;i++)
-        if(image->tracks[i].start_lba!=starts[i] || image->tracks[i].file_offset ||
-           image->tracks[i].sector_bytes!=2352u || image->tracks[i].control!=(i==1u || i==3u?0u:4u)) return false;
-    return image->tracks[3].end_lba>=KUI_ARMADA_CE_EXCERPT_START_LBA+KUI_ARMADA_CE_EXCERPT_SECTORS;
+static enum kui_wince_cdda_profile ce_music_profile(const struct kui_game_image *image,
+        const struct kui_game_metadata *metadata) {
+    if(image->format!=KUI_GAME_IMAGE_GDI || image->cd_image || image->scrambled ||
+       !metadata->windows_ce || strcmp(metadata->bootfile,"0WINCEOS.BIN")) return KUI_WINCE_CDDA_NONE;
+    for(enum kui_wince_cdda_profile profile=KUI_WINCE_CDDA_ARMADA;
+            profile<=KUI_WINCE_CDDA_BUST_A_MOVE_4;profile++) {
+        const struct kui_wince_cdda_disc *disc=kui_wince_cdda_disc(profile);
+        if(image->count!=disc->track_count || metadata->boot_bytes!=disc->kernel_bytes ||
+           (profile==KUI_WINCE_CDDA_BUST_A_MOVE_4 && metadata->boot_lba!=disc->boot_lba) ||
+           strcmp(metadata->product,disc->product)) continue;
+        unsigned i=0;
+        for(;i<disc->track_count;i++)
+            if(image->tracks[i].start_lba!=disc->starts[i] || image->tracks[i].file_offset ||
+               image->tracks[i].sector_bytes!=2352u ||
+               image->tracks[i].control!=kui_wince_cdda_track_control(profile,i)) break;
+        if(i==disc->track_count && (profile!=KUI_WINCE_CDDA_ARMADA ||
+           image->tracks[3].end_lba>=KUI_ARMADA_CE_EXCERPT_START_LBA+KUI_ARMADA_CE_EXCERPT_SECTORS))
+            return profile;
+    }
+    return KUI_WINCE_CDDA_NONE;
 }
 static bool armada_excerpt_seed(struct kui_runtime_image *package,
         const struct kui_game_image *image,kui_log_fn log) {
@@ -364,10 +374,10 @@ static size_t armada_stream_seed_find(const struct kui_runtime_image *package) {
     return found;
 }
 static bool armada_stream_seed_fill(struct kui_runtime_image *package,size_t at,
-        const struct kui_retail_manifest *map,kui_log_fn log) {
+        const struct kui_retail_manifest *map,enum kui_wince_cdda_profile profile,kui_log_fn log) {
     if(at==SIZE_MAX || at>package->info.payload_bytes ||
        sizeof(struct kui_armada_ce_stream_seed)>package->info.payload_bytes-at ||
-       !kui_armada_ce_stream_map_valid(map)) return false;
+       !kui_wince_cdda_manifest_valid(map,profile)) return false;
     struct kui_armada_ce_stream_seed *seed=(void *)((uint8_t *)package->data+at);
     if(!kui_armada_ce_stream_seed_header_valid(seed->words) ||
        seed->words[KUI_ARMADA_CE_STREAM_MAP_CRC_WORD]) return false;
@@ -391,7 +401,7 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     reader&=~(KUI_GAMES_RETAIL_CE_PROBE | KUI_GAMES_RETAIL_DESCRAMBLE |
         KUI_GAMES_RETAIL_BOOT_PLAIN | KUI_GAMES_RETAIL_CDDA | KUI_GAMES_RETAIL_CE_EXCERPT);
     if(ce_excerpt && (!ce || cdda || descramble || plain || reader!=KUI_RETAIL_READER_ASYNC)) {
-        log("CE music excerpt requires the separate Armada background profile");return false;
+        log("CE CD music requires its separate background profile");return false;
     }
     if(cdda && (ce || descramble || plain || reader!=KUI_RETAIL_READER_STANDARD)) {
         log("CDDA launch: unsupported profile; use native GDI, standard reader and original boot encoding");
@@ -406,18 +416,13 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     FATFS fs;bool ok=false;const char *problem="cannot mount storage";
     struct kui_retail_manifest *map=NULL;struct kui_game_image *image=NULL;uint8_t *gdi=NULL;
     if(!kui_mount(&fs,log)) goto done;
+    enum kui_wince_cdda_profile music_profile=KUI_WINCE_CDDA_NONE;
+    const char *launch_package=ce?KUI_GAMES_RETAIL_CE_PACKAGE:KUI_GAMES_RETAIL_PACKAGE;
     enum kui_runtime_result rr=KUI_RUNTIME_OK;
-    if(!cdda) rr=kui_runtime_read(ce_excerpt?KUI_GAMES_RETAIL_CE_EXCERPT_PACKAGE:
-        ce?KUI_GAMES_RETAIL_CE_PACKAGE:KUI_GAMES_RETAIL_PACKAGE,
-        package,log,cancel);
-    if(rr!=KUI_RUNTIME_OK) {problem=kui_runtime_result_name(rr);goto done;}
-    if(!cdda && !layout(package,ce)) {
-        problem=ce_excerpt?"unsupported CE music excerpt package layout":
-            ce?"unsupported Windows CE probe package layout":"unsupported retail-boot package layout";
-        log("Replace %s with the selected game-launch package",
-            (ce_excerpt?KUI_GAMES_RETAIL_CE_EXCERPT_PACKAGE:
-             ce?KUI_GAMES_RETAIL_CE_PACKAGE:KUI_GAMES_RETAIL_PACKAGE)+2);
-        goto done;
+    if(!cdda && !ce_excerpt) {
+        rr=kui_runtime_read(launch_package,package,log,cancel);
+        if(rr!=KUI_RUNTIME_OK) {problem=kui_runtime_result_name(rr);goto done;}
+        if(!layout(package,ce)) {problem="unsupported game-launch package layout";goto done;}
     }
     uint64_t size=0;
     if(stat_file(&files,name,&size)!=KUI_GAME_OK || !size) {
@@ -451,8 +456,21 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
         map->storage_transport!=KUI_STORAGE_SCI)) {
         problem="unsupported CDDA profile; supported SCI/native GDI required";goto done;
     }
-    if(ce_excerpt && (!armada_excerpt_profile(image,&metadata) || map->storage_transport!=KUI_STORAGE_SCI)) {
-        problem="CE music excerpt test needs the original raw US Armada GDI on SCI";goto done;
+    if(ce_excerpt) {
+        music_profile=ce_music_profile(image,&metadata);
+        if(music_profile==KUI_WINCE_CDDA_NONE || map->storage_transport!=KUI_STORAGE_SCI) {
+            problem="CE CD music needs an admitted original raw GDI on SCI";goto done;
+        }
+        launch_package=music_profile==KUI_WINCE_CDDA_BUST_A_MOVE_4?
+            KUI_GAMES_RETAIL_CE_BAM4_PACKAGE:KUI_GAMES_RETAIL_CE_EXCERPT_PACKAGE;
+        log("CE CD music: %s profile",kui_wince_cdda_disc(music_profile)->name);
+        if(!close_reader(&files)) {problem="cannot close metadata reader";goto done;}
+        rr=kui_runtime_read(launch_package,package,log,cancel);
+        if(rr!=KUI_RUNTIME_OK) {problem=kui_runtime_result_name(rr);goto done;}
+        if(!layout(package,ce)) {
+            problem="unsupported CE CD music package layout";
+            log("Replace %s with the selected game-launch package",launch_package+2);goto done;
+        }
     }
     /* The owner's IP/ISO metadata selects the executable. Titles and boot
      * filenames are not compatibility gates; native GD bytes stay verbatim. */
@@ -608,19 +626,19 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
             enum map_result complete=map_cdda_tracks(&files,&fs,&volume,image,full,
                 KUI_RETAIL_MANIFEST_SLOTS,&stats);
             bool admitted=complete==MAP_OK && stats.complete &&
-                armada_stream_seed_fill(package,stream_seed,full,log);
+                armada_stream_seed_fill(package,stream_seed,full,music_profile,log);
             if(!admitted) log("CE audio map: %u slots required; %s",stats.required_slots,
                 complete==MAP_FULL?"mapping capacity exceeded":map_reason_name(stats.reason));
             free(full);
             if(!admitted) {problem="complete CE audio source map is unavailable";goto done;}
-        } else if(!armada_excerpt_seed(package,image,log)) {
+        } else if(music_profile!=KUI_WINCE_CDDA_ARMADA || !armada_excerpt_seed(package,image,log)) {
             problem="CE music seed is missing, invalid, stopped or unreadable";goto done;
         }
     }
     r=kui_retail_manifest_encode(map,(uint8_t *)package->data+KUI_RETAIL_MAP_OFFSET);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
     log("%s prepared: %u tracks, %u extents; IP CRC32=%08x, %s=%u bytes checked at load",
-        ce_excerpt?"Windows CE music excerpt test":ce?"Windows CE boot test":"Retail boot",
+        ce_excerpt?"Windows CE CD music":ce?"Windows CE boot test":"Retail boot",
         map->track_count,map->extent_count,map->ip_crc32,map->bootfile,map->boot_bytes);
     ok=true;
 done:

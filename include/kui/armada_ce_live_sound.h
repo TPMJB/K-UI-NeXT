@@ -11,13 +11,42 @@
 #define KUI_ARMADA_CE_LIVE_READ_LIMIT 4096u
 #define KUI_ARMADA_CE_LIVE_MODULE_LIMIT 64u
 #define KUI_ARMADA_CE_LIVE_PAGE_LIMIT 64u
+#if defined(KUI_WINCE_CDDA_BAM4) && KUI_WINCE_CDDA_BAM4 == 1
+/* Exact supplied Bust-A-Move4 US kernel/game/DSOUND profile. SNDCORE and
+ * the admitted COREDLL wrapper prefixes match the Armada contracts. */
+#define KUI_ARMADA_CE_LIVE_MODULE_HEAD UINT32_C(0x8c1d1b24)
+#define KUI_ARMADA_CE_LIVE_PROCESS_BASE UINT32_C(0x8c1da6e0)
+#define KUI_ARMADA_CE_LIVE_CURRENT_PROCESS UINT32_C(0x8c1d1890)
+#define KUI_ARMADA_CE_LIVE_HEAP_LOW UINT32_C(0x8c1d9430)
+#define KUI_ARMADA_CE_LIVE_HEAP_HIGH UINT32_C(0x8c1d9434)
+#define KUI_ARMADA_CE_LIVE_APISETS UINT32_C(0x8c1dba80)
+#define KUI_ARMADA_CE_LIVE_DSOUND_TOC UINT32_C(0x8c1ce430)
+#define KUI_ARMADA_CE_LIVE_SNDCORE_TOC UINT32_C(0x8c1ce410)
+#define KUI_ARMADA_CE_LIVE_COREDLL_TOC UINT32_C(0x8c1ce210)
+#define KUI_ARMADA_CE_LIVE_DEVICE_VTABLE_RVA 0x111cu
+#define KUI_ARMADA_CE_LIVE_DSOUND_TEXT_BYTES 0x61b6u
+#define KUI_ARMADA_CE_LIVE_GAME_DEVICE 0x13f14cu
+#define KUI_ARMADA_CE_LIVE_GAME_IAT 0x5f0c4u
+#define KUI_ARMADA_CE_LIVE_BUFFER_PLAY_RVA 0x2e5cu
+#define KUI_ARMADA_CE_LIVE_BUFFER_POSITION_RVA 0x315cu
+#else
 #define KUI_ARMADA_CE_LIVE_MODULE_HEAD UINT32_C(0x8c145b24)
 #define KUI_ARMADA_CE_LIVE_PROCESS_BASE UINT32_C(0x8c14e6e0)
-#define KUI_ARMADA_CE_LIVE_PROCESS_STRIDE UINT32_C(0x9c)
 #define KUI_ARMADA_CE_LIVE_CURRENT_PROCESS UINT32_C(0x8c145890)
+#define KUI_ARMADA_CE_LIVE_HEAP_LOW UINT32_C(0x8c14d430)
+#define KUI_ARMADA_CE_LIVE_HEAP_HIGH UINT32_C(0x8c14d434)
+#define KUI_ARMADA_CE_LIVE_APISETS UINT32_C(0x8c14fa80)
 #define KUI_ARMADA_CE_LIVE_DSOUND_TOC UINT32_C(0x8c1416b4)
 #define KUI_ARMADA_CE_LIVE_SNDCORE_TOC UINT32_C(0x8c141694)
 #define KUI_ARMADA_CE_LIVE_COREDLL_TOC UINT32_C(0x8c141494)
+#define KUI_ARMADA_CE_LIVE_DEVICE_VTABLE_RVA 0x116cu
+#define KUI_ARMADA_CE_LIVE_DSOUND_TEXT_BYTES 0x61a6u
+#define KUI_ARMADA_CE_LIVE_GAME_DEVICE 0xf7180u
+#define KUI_ARMADA_CE_LIVE_GAME_IAT 0xf21a8u
+#define KUI_ARMADA_CE_LIVE_BUFFER_PLAY_RVA 0x2e54u
+#define KUI_ARMADA_CE_LIVE_BUFFER_POSITION_RVA 0x3154u
+#endif
+#define KUI_ARMADA_CE_LIVE_PROCESS_STRIDE UINT32_C(0x9c)
 
 enum kui_armada_ce_live_status {
     KUI_ARMADA_CE_LIVE_OK, KUI_ARMADA_CE_LIVE_ARGUMENT,
@@ -198,9 +227,15 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_crc_range(
 }
 static inline enum kui_armada_ce_live_status kui_armada_ce_live_game_guard(
     struct kui_armada_ce_live_workspace *w,uint32_t slot) {
+#if defined(KUI_WINCE_CDDA_BAM4) && KUI_WINCE_CDDA_BAM4 == 1
+    static const uint32_t offset[3]={0x1b9b0u,0x5bf98u,0x1bb00u};
+    static const uint32_t expected[3]={0x1d70fb98u,0x413d9757u,0x8a2de20eu};
+    static const uint32_t bytes[3]={32u,12u,40u};
+#else
     static const uint32_t offset[3]={0x995d4u,0xce900u,0x996a0u};
-    static const uint32_t bytes[3]={32u,12u,28u};
     static const uint32_t expected[3]={0x9baf8d11u,0x46696861u,0xb374b05au};
+    static const uint32_t bytes[3]={32u,12u,28u};
+#endif
     for(unsigned range=0;range<3u;range++) {
         enum kui_armada_ce_live_status status=kui_armada_ce_live_crc_range(w,slot|offset[range],bytes[range],expected[range]);
         if(status!=KUI_ARMADA_CE_LIVE_OK) return status;
@@ -233,7 +268,7 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sections(
      * section records in writable .data page slack. The stable live size
      * includes those records; raw PE/ROM sizes describe an earlier state.
      * Name-only and raw layouts are not callable-module admission. */
-    static const uint32_t ds_size[3]={0x61a6u,0x4c0u,0x550u},sn_size[3]={0x3c25u,0x11ecu,0x3d0u};
+    static const uint32_t ds_size[3]={KUI_ARMADA_CE_LIVE_DSOUND_TEXT_BYTES,0x4c0u,0x550u},sn_size[3]={0x3c25u,0x11ecu,0x3d0u};
     static const uint32_t flags[3]={0x60000020u,0xc0002040u,0x40002040u};
     static const uint32_t co_rva[4]={0x1000u,0x2e000u,0x2f000u,0x31000u};
     static const uint32_t co_size[4]={0x2ccc4u,0x1e0u,0x1848u,0x218u};
@@ -244,7 +279,7 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sections(
      * the discardable relocation section, clearing its adjusted address. */
     static const uint32_t disk_ds_rva[4]={0x1000u,0x8000u,0x9000u,0xa000u};
     static const uint32_t disk_sn_rva[4]={0x1000u,0x5000u,0x7000u,0x8000u};
-    static const uint32_t disk_ds_size[4]={0x61a6u,0x4dcu,0x550u,0x764u};
+    static const uint32_t disk_ds_size[4]={KUI_ARMADA_CE_LIVE_DSOUND_TEXT_BYTES,0x4dcu,0x550u,0x764u};
     static const uint32_t disk_sn_size[4]={0x3c25u,0x1208u,0x3d0u,0x4b4u};
     static const uint32_t disk_flags[4]={0x60000020u,0xc0000040u,0x40000040u,0x42000040u};
     if(profile>2u) return KUI_ARMADA_CE_LIVE_MODULE;
@@ -280,7 +315,7 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sections(
 }
 static inline enum kui_armada_ce_live_status kui_armada_ce_live_disk_identity(
     struct kui_armada_ce_live_workspace *w,const struct kui_armada_ce_live_module *m,unsigned profile) {
-    static const uint32_t offsets[2][3]={{0x15ecu,0x19dcu,0x2e54u},{0x10d8u,0x11c8u,0x12b8u}};
+    static const uint32_t offsets[2][3]={{0x15ecu,0x19dcu,KUI_ARMADA_CE_LIVE_BUFFER_PLAY_RVA},{0x10d8u,0x11c8u,0x12b8u}};
     static const uint32_t crc[2][3]={{0xeb34aa87u,0x34718dd9u,0x3453b46fu},{0x5ba8b52bu,0x2718008fu,0x834f5156u}};
     if(profile>1u || m->kind!=2u) return KUI_ARMADA_CE_LIVE_ARGUMENT;
     /* Each 32-byte range is proved free of HIGHLOW relocations in the exact
@@ -316,8 +351,8 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_
     w->failure=KUI_ARMADA_CE_LIVE_READ;
     if((ccr&0xa1u)!=1u) {status=KUI_ARMADA_CE_LIVE_CACHE;goto done;}
     if(!kui_armada_ce_live_physical(w,KUI_ARMADA_CE_LIVE_CURRENT_PROCESS,&current) ||
-       !kui_armada_ce_live_physical(w,0x8c14d430u,&low) ||
-       !kui_armada_ce_live_physical(w,0x8c14d434u,&high) ||
+       !kui_armada_ce_live_physical(w,KUI_ARMADA_CE_LIVE_HEAP_LOW,&low) ||
+       !kui_armada_ce_live_physical(w,KUI_ARMADA_CE_LIVE_HEAP_HIGH,&high) ||
        !kui_armada_ce_live_physical(w,KUI_ARMADA_CE_LIVE_MODULE_HEAD,&head)) {status=w->failure;goto done;}
     if(!kui_armada_ce_ram_table_p1(low,&p1) || high<=low || high>0x8d000000u) {
         status=kui_armada_ce_live_module_fail(w,KUI_ARMADA_CE_LIVE_FAULT_HEAP,head,low,high,0);goto done;
@@ -418,9 +453,9 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_
     result.dsound_base=w->dsound.base;result.sndcore_base=w->sndcore.base;result.coredll_base=w->coredll.base;
     uint32_t object_raw,singleton_raw,vtable_raw,refs,iat,methods[4],cs[2],buffer_methods[8];
     uint32_t singleton=slot|((w->dsound.base&0x01ffffffu)+0x8110u);
-    if((status=kui_armada_ce_live_word(w,slot|0xf7180u,&object_raw))!=KUI_ARMADA_CE_LIVE_OK ||
+    if((status=kui_armada_ce_live_word(w,slot|KUI_ARMADA_CE_LIVE_GAME_DEVICE,&object_raw))!=KUI_ARMADA_CE_LIVE_OK ||
        (status=kui_armada_ce_live_word(w,singleton,&singleton_raw))!=KUI_ARMADA_CE_LIVE_OK ||
-       (status=kui_armada_ce_live_word(w,slot|0xf21a8u,&iat))!=KUI_ARMADA_CE_LIVE_OK) goto done;
+       (status=kui_armada_ce_live_word(w,slot|KUI_ARMADA_CE_LIVE_GAME_IAT,&iat))!=KUI_ARMADA_CE_LIVE_OK) goto done;
     uint32_t singleton_pointer;
     if(!kui_armada_ce_live_owner_pointer(object_raw,slot,&result.device) ||
        !kui_armada_ce_live_owner_pointer(singleton_raw,slot,&singleton_pointer) || singleton_pointer!=result.device ||
@@ -430,7 +465,7 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_
     }
     if((status=kui_armada_ce_live_word(w,result.device,&vtable_raw))!=KUI_ARMADA_CE_LIVE_OK ||
        (status=kui_armada_ce_live_word(w,result.device+8u,&refs))!=KUI_ARMADA_CE_LIVE_OK) goto done;
-    if(!refs || refs>0x7fffffffu || !kui_armada_ce_live_method(vtable_raw,slot,w->dsound.base,0x116cu,&result.vtable)) {
+    if(!refs || refs>0x7fffffffu || !kui_armada_ce_live_method(vtable_raw,slot,w->dsound.base,KUI_ARMADA_CE_LIVE_DEVICE_VTABLE_RVA,&result.vtable)) {
         status=KUI_ARMADA_CE_LIVE_OBJECT;goto done;
     }
     result.refcount=refs;
@@ -455,9 +490,13 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_
     if(status!=KUI_ARMADA_CE_LIVE_OK) goto done;
     status=kui_armada_ce_live_crc_range(w,result.leave_cs,32u,0x01916477u);
     if(status!=KUI_ARMADA_CE_LIVE_OK) goto done;
-    result.buffer_vtable=result.vtable-0x116cu+0x11ccu;
+    result.buffer_vtable=result.vtable-KUI_ARMADA_CE_LIVE_DEVICE_VTABLE_RVA+0x11ccu;
     static const unsigned buffer_offset[8]={8u,12u,44u,76u,48u,72u,36u,16u};
+#if defined(KUI_WINCE_CDDA_BAM4) && KUI_WINCE_CDDA_BAM4 == 1
+    static const uint32_t buffer_rva[8]={0x2918u,0x2a04u,0x2cc4u,0x39b4u,0x2e5cu,0x38a0u,0x2c34u,0x2a4cu};
+#else
     static const uint32_t buffer_rva[8]={0x2910u,0x29fcu,0x2cbcu,0x39acu,0x2e54u,0x3898u,0x2c2cu,0x2a44u};
+#endif
     uint32_t *buffer_target[8]={&result.buffer_release,&result.buffer_get_caps,&result.buffer_lock,&result.buffer_unlock,
         &result.buffer_play,&result.buffer_stop,&result.buffer_get_status,&result.buffer_get_position};
     for(unsigned i=0;i<8u;i++) {
@@ -524,13 +563,13 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sound_bind_with_
     if(again!=slot) {status=KUI_ARMADA_CE_LIVE_CHANGED;goto done;}
     if(!kui_armada_ce_live_physical(w,KUI_ARMADA_CE_LIVE_MODULE_HEAD,&again)) {status=w->failure;goto done;}
     if(again!=head) {status=KUI_ARMADA_CE_LIVE_CHANGED;goto done;}
-    if(!kui_armada_ce_live_physical(w,0x8c14d430u,&again)) {status=w->failure;goto done;}
+    if(!kui_armada_ce_live_physical(w,KUI_ARMADA_CE_LIVE_HEAP_LOW,&again)) {status=w->failure;goto done;}
     if(again!=low) {status=KUI_ARMADA_CE_LIVE_CHANGED;goto done;}
-    if(!kui_armada_ce_live_physical(w,0x8c14d434u,&again)) {status=w->failure;goto done;}
+    if(!kui_armada_ce_live_physical(w,KUI_ARMADA_CE_LIVE_HEAP_HIGH,&again)) {status=w->failure;goto done;}
     if(again!=high) {status=KUI_ARMADA_CE_LIVE_CHANGED;goto done;}
     if(!kui_armada_ce_live_physical(w,KUI_ARMADA_CE_LIVE_CURRENT_PROCESS,&again)) {status=w->failure;goto done;}
     if(again!=current) {status=KUI_ARMADA_CE_LIVE_CHANGED;goto done;}
-    static const unsigned verify_offset[9]={0xf7180u,0xf21a8u,0u,8u,4u,8u,12u,24u,0u};
+    static const unsigned verify_offset[9]={KUI_ARMADA_CE_LIVE_GAME_DEVICE,KUI_ARMADA_CE_LIVE_GAME_IAT,0u,8u,4u,8u,12u,24u,0u};
     for(unsigned i=0;i<9u;i++) {
         uint32_t address=i<2u?(slot|verify_offset[i]):i<4u?result.device+verify_offset[i]:
             i<8u?result.vtable+verify_offset[i]:singleton;
@@ -613,7 +652,7 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_stream_api_bind(
     }
     enum kui_armada_ce_live_status status=kui_armada_ce_live_word(w,sound->buffer_vtable+52u,&position);
     if(status!=KUI_ARMADA_CE_LIVE_OK) return status;
-    if(!kui_armada_ce_live_method(position,sound->owner_slot,w->dsound.base,0x3154u,&result.buffer_set_position))
+    if(!kui_armada_ce_live_method(position,sound->owner_slot,w->dsound.base,KUI_ARMADA_CE_LIVE_BUFFER_POSITION_RVA,&result.buffer_set_position))
         return KUI_ARMADA_CE_LIVE_OBJECT;
     status=kui_armada_ce_live_crc_range(w,result.buffer_set_position,32u,0x0d46861au);
     if(status!=KUI_ARMADA_CE_LIVE_OK) return status;
