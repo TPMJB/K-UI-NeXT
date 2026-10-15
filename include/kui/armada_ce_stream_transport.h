@@ -68,9 +68,10 @@ bool kui_armada_ce_stream_transport_attached(void);
  * synchronous one-reception preemption remain unchanged. */
 void kui_armada_ce_stream_transport_priority(uint32_t fresh_bytes,bool active);
 bool kui_armada_ce_stream_transport_urgent(void);
-/* Masked state query only: a live AUDIO lease already has its next block
- * ready and no reception in flight. Does not poll, fetch, copy or wait. */
-bool kui_armada_ce_stream_transport_ready_to_pump(void);
+/* Masked state query for bounded worker visits: a pending AUDIO lease has
+ * no reception in flight. The next pump can consume a ready block or
+ * continue a sliced token search. Does not poll, fetch, copy or wait. */
+bool kui_armada_ce_stream_transport_worker_can_pump(void);
 enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_submit(
     uint32_t epoch,uint32_t raw_lba,uint32_t sectors,uintptr_t destination,uint32_t capacity);
 /* At most one received block is copied and one reception started per pump.

@@ -119,7 +119,7 @@ static struct {
     struct checked_bank bank[2];
     uint32_t busy,lba,delay,latency,fetches,polls,waits,takes,discards;
     uint32_t hooks,unhooks,wakes,budgets,opens,polled,completions;
-    uint32_t fetch_faults,crc_faults,poll_faults,open_fails;
+    uint32_t fetch_faults,crc_faults,poll_faults,open_fails,token_slices;
     uint32_t inflight_dma,guest_dma,guest_tuple,guest_irq;
     bool immediate_pio;
     enum kui_sci_stream_result fetch_error,poll_error;
@@ -172,6 +172,7 @@ static enum kui_sci_stream_result mock_fetch(uint32_t lba,uint32_t limit,bool po
     CHECK(!wire.busy && !wire.inflight_dma && lba<CARD_BLOCKS && limit==65536u);
     ++wire.fetches;wire.polled+=polled;
     if(wire.fetch_faults) {--wire.fetch_faults;return wire.fetch_error;}
+    if(wire.token_slices) {--wire.token_slices;return KUI_SCI_STREAM_PENDING;}
     if(wire.immediate_pio) {
         checked(lba,KUI_SCI_STREAM_OK);++wire.completions;
         if(!polled) ++wire.polled;
@@ -435,7 +436,7 @@ static void test_urgent_whole_raw_job(void) {
     fixture_stride(2352u);attach();wire.immediate_pio=true;data_active(100u);
     kui_armada_ce_stream_transport_priority(0u,true);submit(1u,45002u,16u);
     credits(16u);pump_one(1u,false);
-    for(unsigned n=0;n<76u && kui_armada_ce_stream_transport_ready_to_pump();n++) {
+    for(unsigned n=0;n<76u && kui_armada_ce_stream_transport_worker_can_pump();n++) {
         CHECK(snap(1u).owner==2u && snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING);
         pump_one(1u,false);
     }
@@ -532,47 +533,79 @@ static void test_cancel(void) {
     pump_one(1u,false);CHECK(!memcmp(output.bytes,untouched,sizeof(untouched)) && snap(1u).bytes==bytes);
     CHECK(!wire.busy && !wire.waits);intact();
 }
-static void test_ready_to_pump(void) {
+static void test_worker_can_pump(void) {
     kui_armada_ce_stream_transport_test_reset();
-    CHECK(!kui_armada_ce_stream_transport_ready_to_pump());
+    CHECK(!kui_armada_ce_stream_transport_worker_can_pump());
     setup();wire.immediate_pio=true;submit(1u,45002u,1u);
-    CHECK(!kui_armada_ce_stream_transport_ready_to_pump());
+    CHECK(!kui_armada_ce_stream_transport_worker_can_pump());
     pump_one(1u,false);
     CHECK(!wire.busy && snap(1u).owner==2u && !snap(1u).bytes &&
-        kui_armada_ce_stream_transport_ready_to_pump());
+        kui_armada_ce_stream_transport_worker_can_pump());
     uint32_t polls=wire.polls,waits=wire.waits,fetches=wire.fetches,takes=wire.takes;
-    for(unsigned n=0;n<4u;n++) CHECK(kui_armada_ce_stream_transport_ready_to_pump());
+    for(unsigned n=0;n<4u;n++) CHECK(kui_armada_ce_stream_transport_worker_can_pump());
     CHECK(wire.polls==polls && wire.waits==waits && wire.fetches==fetches && wire.takes==takes);
     uint32_t blocks=snap(1u).audio_blocks;
     pump_one(1u,false);
     CHECK(snap(1u).audio_blocks==blocks+1u && snap(1u).bytes &&
-        kui_armada_ce_stream_transport_ready_to_pump());
-    for(unsigned n=0;n<16u && kui_armada_ce_stream_transport_ready_to_pump();n++) pump_one(1u,false);
+        kui_armada_ce_stream_transport_worker_can_pump());
+    for(unsigned n=0;n<16u && kui_armada_ce_stream_transport_worker_can_pump();n++) pump_one(1u,false);
     CHECK(snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_DONE &&
-        !kui_armada_ce_stream_transport_ready_to_pump());
+        !kui_armada_ce_stream_transport_worker_can_pump());
     exact_audio(45002u,1u);CHECK(!wire.waits && wire.polled==wire.fetches);
     /* A pending DMA must yield; a complete checked PIO block must also
      * yield when the AUDIO quota lends the singleton back to DATA. */
     setup();wire.latency=4u;submit(1u,45002u,1u);pump_one(1u,false);
-    CHECK(wire.busy && !kui_armada_ce_stream_transport_ready_to_pump());
+    CHECK(wire.busy && !kui_armada_ce_stream_transport_worker_can_pump());
     setup();wire.immediate_pio=true;data_active(100u);submit(1u,45002u,8u);
     credits(16u);pump_one(1u,false);
-    CHECK(kui_armada_ce_stream_transport_ready_to_pump());
-    for(unsigned n=0;n<16u && kui_armada_ce_stream_transport_ready_to_pump();n++) pump_one(1u,false);
+    CHECK(kui_armada_ce_stream_transport_worker_can_pump());
+    for(unsigned n=0;n<16u && kui_armada_ce_stream_transport_worker_can_pump();n++) pump_one(1u,false);
     CHECK(snap(1u).audio_blocks==8u && snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING &&
-        snap(1u).owner==0u && !kui_armada_ce_stream_transport_ready_to_pump());
+        snap(1u).owner==0u && !kui_armada_ce_stream_transport_worker_can_pump());
     /* Revocation never turns an already checked bank into another copy. */
     setup();wire.immediate_pio=true;submit(1u,45002u,1u);pump_one(1u,false);
-    CHECK(kui_armada_ce_stream_transport_ready_to_pump());
+    CHECK(kui_armada_ce_stream_transport_worker_can_pump());
     CHECK(kui_armada_ce_stream_transport_cancel(1u)==KUI_ARMADA_CE_STREAM_TRANSPORT_CANCELLED);
-    CHECK(!kui_armada_ce_stream_transport_ready_to_pump());
+    CHECK(!kui_armada_ce_stream_transport_worker_can_pump());
     pump_one(1u,false);
     CHECK(!snap(1u).bytes && snap(1u).owner==0u && !wire.waits);intact();
+}
+static void test_worker_token_slices(void) {
+    /* Token searches can yield without a ready block or a future IRQ.
+     * Permit bounded worker retries, then stop as soon as DMA is armed. */
+    setup();wire.token_slices=5u;wire.latency=4u;submit(1u,45002u,1u);
+    pump_one(1u,false);
+    CHECK(snap(1u).owner==2u && !wire.busy && !wire.bank[0].used && !wire.bank[1].used &&
+        kui_armada_ce_stream_transport_worker_can_pump());
+    uint32_t fetches=wire.fetches,polls=wire.polls,waits=wire.waits;
+    unsigned visits=0u;
+    for(;visits<3u && kui_armada_ce_stream_transport_worker_can_pump();visits++) pump_one(1u,false);
+    CHECK(visits==3u && wire.fetches==fetches+3u && wire.token_slices==1u &&
+        !snap(1u).audio_blocks && !snap(1u).bytes && !snap(1u).retries &&
+        wire.polls==polls && wire.waits==waits && kui_armada_ce_stream_transport_worker_can_pump());
+    visits=0u;
+    for(;visits<3u && kui_armada_ce_stream_transport_worker_can_pump();visits++) pump_one(1u,false);
+    CHECK(visits==2u && !wire.token_slices && wire.busy && wire.inflight_dma==1u &&
+        !kui_armada_ce_stream_transport_worker_can_pump() && wire.polls==polls && wire.waits==waits);
+    finish_audio(1u);exact_audio(45002u,1u);
+    /* The same no-DMA token state remains immediately preemptible and
+     * cancellable; neither path may consume or wait for another block. */
+    setup();wire.token_slices=2u;submit(1u,45002u,1u);pump_one(1u,false);
+    CHECK(kui_armada_ce_stream_transport_worker_can_pump());fetches=wire.fetches;
+    CHECK(kui_armada_ce_stream_transport_event(KUI_ARMADA_CE_STREAM_BUS_DATA_ENTER,1u));
+    CHECK(!kui_armada_ce_stream_transport_worker_can_pump() && snap(1u).owner==1u &&
+        !snap(1u).bytes && wire.fetches==fetches && !wire.polls && !wire.waits);
+    setup();wire.token_slices=2u;submit(1u,45002u,1u);pump_one(1u,false);
+    CHECK(kui_armada_ce_stream_transport_worker_can_pump());fetches=wire.fetches;
+    CHECK(kui_armada_ce_stream_transport_cancel(1u)==KUI_ARMADA_CE_STREAM_TRANSPORT_CANCELLED);
+    CHECK(!kui_armada_ce_stream_transport_worker_can_pump());pump_one(1u,false);
+    CHECK(snap(1u).owner==0u && !snap(1u).bytes && wire.fetches==fetches && !wire.polls && !wire.waits);
+    intact();
 }
 int main(void) {
     test_raw_mapping();test_admission();test_parked_data();test_continuous_data(false);
     test_continuous_data(true);test_priority();test_urgent_whole_raw_job();test_fences();
-    test_token_holds_and_errors();test_audio_errors();test_cancel();test_ready_to_pump();
+    test_token_holds_and_errors();test_audio_errors();test_cancel();test_worker_can_pump();test_worker_token_slices();
     printf("Armada CE production SCI transport: %u checks passed\n",checks);
     return 0;
 }

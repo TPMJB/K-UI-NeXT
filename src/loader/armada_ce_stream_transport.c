@@ -37,10 +37,9 @@ void kui_armada_ce_stream_transport_priority(uint32_t fresh_bytes,bool active) {
     else if(fresh_bytes<=AUDIO_URGENT_ENTER_BYTES) t.urgent=1u;
 }
 bool kui_armada_ce_stream_transport_urgent(void) { return t.urgent!=0u; }
-bool kui_armada_ce_stream_transport_ready_to_pump(void) {
+bool kui_armada_ce_stream_transport_worker_can_pump(void) {
     return t.stats.attached && t.stats.status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING &&
-        t.stats.owner==OWNER_AUDIO && !t.cancelled && !t.bus.busy() &&
-        t.bus.ready(t.cursor.block);
+        t.stats.owner==OWNER_AUDIO && !t.cancelled && !t.bus.busy();
 }
 
 static bool span(uintptr_t address,uintptr_t first,uintptr_t end,size_t bytes) {

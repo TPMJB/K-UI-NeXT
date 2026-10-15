@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Armada CE full CD music stream test
 
-## K-UI 2.0 RC3 completed-read handoff
+## K-UI 2.0 RC4 token-search progress
 
 This console candidate integrates the net changes from
 `fix/armada-cdda-supply` at `be793d667cf0` into our current `eb06827d85da`
@@ -59,6 +59,29 @@ A focused player regression fails on RC2 and passes with this handoff: two
 completed jobs reach the native ring before a 350 ms delayed visit, rather
 than leaving the second job unavailable to observation. This proves the code
 path, not that every console underrun has this cause.
+
+Recording `62659.mp4` retains real underruns in RC3: the summary reports 13
+gaps and a maximum approximate source-job interval of 1,152 ms, while worker
+visits remain around 20/s (maximum 54 ms). Across two uninterrupted one-second intervals (MS `22137` to `22907`),
+SOURCE grows from `e56af0` to `ea02f0`: 150,528 B/s, below nominal 176,400 B/s;
+READY falls by 49,536 bytes. The final displayed underrun has
+1,088 fresh bytes and a 50 ms observation interval. That recording does not
+independently count token waits, so it cannot prove how much of its source
+latency comes from the following source-level stall.
+
+SCI's bounded token search can return PENDING after 256 clocked bytes without
+a ready block or DMA in flight. No reception interrupt can wake that token
+search. RC3's ready-only predicate ended the worker visit in this state, adding
+a native sleep/visit delay between token slices. RC4's state query permits the
+worker to continue a pending, AUDIO-owned transfer with no DMA in flight.
+Token slices share the existing 76-pump bound and each retains its own interrupt
+mask. Starting DMA, DATA handoff, cancellation or completion stops the drain.
+The query performs no I/O, poll or wait. No descriptor, reader, allocation,
+priority, batch-size, grant or buffer-start changes are made.
+Focused tests exercise token-only pending states with no IRQ, enforce the pump
+bound, stop immediately at DMA/preemption/cancellation and verify exact audio.
+The next console result must establish whether this removes the remaining
+interruptions; host checks cannot establish CE or SD timing.
 
 Focused player checks cover clock drift, real underruns, finite/infinite
 playback, staging carry and bounded PIO draining/cancellation. Transport checks

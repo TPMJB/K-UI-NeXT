@@ -32,7 +32,8 @@
 #define STEP_MS 20u
 #define SOURCE_STEP_MS 1u
 /* One whole unaligned batch, plus the pump that arms its first reception.
- * Stop earlier on pending DMA, a transport handoff or changed commands. */
+ * Token retries share this cap. Stop earlier on pending DMA, a transport
+ * handoff or changed commands. */
 #define SOURCE_READY_PUMPS ((RAW_BYTES+1022u)/512u+1u)
 #define COPY_PAGES ((KUI_ARMADA_CE_STREAM_STAGE_BYTES+4095u)/4096u+1u)
 _Static_assert(RAW_BYTES+KUI_ARMADA_CE_STREAM_STAGE_BYTES<=KUI_ARMADA_CE_STREAM_SOURCE_BYTES,
@@ -593,16 +594,17 @@ static bool source(void) {
     }
     uint32_t sr;
     enum kui_armada_ce_stream_transport_status status=KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING;
-    /* A polled card reception can finish immediately without another IRQ.
-     * Drain only already-ready audio, with a separate short mask per pump.
-     * Pending DMA, quota handoff or a new command ends this bounded visit. */
+    /* Ready PIO and a yielded token search need no IRQ. Continue their
+     * bounded work with a separate mask per pump; neither may sit idle
+     * waiting for a DMA wake that cannot occur. Pending DMA, quota handoff
+     * or a new command ends this bounded visit. */
     for(unsigned visit=0;visit<SOURCE_READY_PUMPS;visit++) {
         sr=mask_begin();
         if(!mail_current()) {mask_end(sr);cancel_read();return true;}
         (void)kui_armada_ce_stream_transport_pump();
         status=kui_armada_ce_stream_transport_snapshot(player.read_bus_epoch,&progress);
         bool immediate=status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING &&
-            kui_armada_ce_stream_transport_ready_to_pump();
+            kui_armada_ce_stream_transport_worker_can_pump();
         mask_end(sr);
         if(!immediate) break;
     }

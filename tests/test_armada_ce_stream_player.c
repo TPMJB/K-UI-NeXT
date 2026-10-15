@@ -34,6 +34,7 @@ struct authored_bus {
     uint32_t position_delay_ms,play_delay_ms;
     uint32_t submit_epoch[4096],last_lock_offset,last_lock_bytes;
     unsigned pending_pumps,read_latency_pumps,cancel_pumps,busy_submits,sleep_visits;
+    unsigned token_slices;
     uint32_t last_sleep_ms;
     bool pending,cancelled,revoked,stale_unlock,stale_source,bad_unlock,fail_end;
     bool bad_current,fail_ticks,driver_context,fail_owner_admission,urgent,priority_active,pio_ready;
@@ -260,7 +261,7 @@ enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_submit
     if(bus.cancelled || bus.pending) return KUI_ARMADA_CE_STREAM_TRANSPORT_BUSY;
     bus.epoch=epoch;bus.lba=lba;bus.sectors=sectors;bus.raw=(uint32_t)destination;bus.bytes=0;bus.pending=true;bus.revoked=false;
     if(bus.read_latency_pumps) bus.pending_pumps=bus.read_latency_pumps;
-    if(!bus.pending_pumps && !bus.pio_ready) complete_bus();
+    if(!bus.pending_pumps && !bus.pio_ready && !bus.token_slices) complete_bus();
     return bus.pending?KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING:KUI_ARMADA_CE_STREAM_TRANSPORT_DONE;
 }
 enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_pump(void) {
@@ -270,6 +271,7 @@ enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_pump(v
         bus.cancelled=bus.pending=false;bus.bytes=0;return KUI_ARMADA_CE_STREAM_TRANSPORT_CANCELLED;
     }
     if(bus.pending) {
+        if(bus.token_slices) {--bus.token_slices;return KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING;}
         if(bus.pending_pumps) {--bus.pending_pumps;return KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING;}
         if(bus.pio_ready) {
             uint32_t total=bus.sectors*2352u,count=total-bus.bytes;
@@ -307,7 +309,7 @@ void kui_armada_ce_stream_transport_priority(uint32_t fresh,bool active) {
     bus.urgent=active && fresh<=176400u;
 }
 bool kui_armada_ce_stream_transport_urgent(void) {return bus.urgent;}
-bool kui_armada_ce_stream_transport_ready_to_pump(void) {
+bool kui_armada_ce_stream_transport_worker_can_pump(void) {
     CHECK(!bus.consumer && !bus.control);
     return bus.pio_ready && bus.pending && !bus.cancelled && !bus.revoked && !bus.pending_pumps;
 }
@@ -532,6 +534,19 @@ int main(void) {
     CHECK(!player.read_active && !bus.pending && bus.bytes==RAW_BYTES &&
         bus.pumps-pio_before<=SOURCE_READY_PUMPS+1u &&
         player.model.staged==RAW_BYTES && player.source_total==RAW_BYTES);++cases;
+    /* A token search can yield with neither DMA nor a ready block. Its
+     * next bounded slice must not wait for another native timer visit. */
+    reset(true,128u);bus.pio_ready=true;bus.token_slices=2u;
+    pio_before=bus.pumps;CHECK(source());
+    CHECK(!player.read_active && !bus.pending && !bus.token_slices &&
+        player.source_total==RAW_BYTES && bus.pumps-pio_before<=SOURCE_READY_PUMPS+1u);++cases;
+    /* A card that keeps returning token wait cannot spin indefinitely. */
+    reset(true,128u);bus.pio_ready=true;bus.token_slices=2u*SOURCE_READY_PUMPS;
+    pio_before=bus.pumps;CHECK(source());
+    CHECK(player.read_active && bus.pending && bus.bytes==0u &&
+        bus.token_slices==SOURCE_READY_PUMPS && bus.pumps-pio_before==SOURCE_READY_PUMPS+1u);
+    CHECK(source() && player.read_active && bus.pending && bus.bytes==0u && !bus.token_slices);
+    CHECK(source() && !player.read_active && player.source_total==RAW_BYTES);++cases;
     /* A second completed PIO job must reach the native ring before Sleep.
      * Otherwise the next observation underruns despite fresh staged PCM. */
     reset(true,128u);bus.pio_ready=true;prime();CHECK(refill());
