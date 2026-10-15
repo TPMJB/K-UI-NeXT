@@ -3,7 +3,7 @@
 #include <stddef.h>
 static struct {
     struct kui_armada_ce_stream_trace_snapshot rows;
-    uint32_t last_sample,last_visit,source_begin;
+    uint32_t last_sample,last_visit,source_begin,visits;
     uint32_t have_sample,have_visit,source_active;
 } trace;
 static void record(uint32_t rows[KUI_ARMADA_CE_STREAM_TRACE_ROWS][5],
@@ -21,10 +21,14 @@ void kui_armada_ce_stream_trace_sample(uint32_t now,uint32_t source,
     uint32_t ready,uint32_t pending) {
     if(trace.have_visit && now-trace.last_visit>trace.rows.counts[2])
         trace.rows.counts[2]=now-trace.last_visit;
-    trace.last_visit=now;trace.have_visit=1u;
+    trace.last_visit=now;trace.have_visit=1u;++trace.visits;
     if(trace.have_sample && now-trace.last_sample<1000u) return;
+    /* Bits 16-31 of AUX count worker visits since the previous sample: the
+     * worker cadence alongside source-job duration and byte supply. */
+    uint32_t visits=trace.visits>0xffffu?0xffffu:trace.visits;
     record(trace.rows.samples,trace.rows.counts[1],KUI_ARMADA_CE_STREAM_TRACE_SAMPLE,
-        now,source,ready,pending);
+        now,source,ready,(pending&0xffffu)|(visits<<16));
+    trace.visits=0;
     ++trace.rows.counts[1];trace.last_sample=now;trace.have_sample=1u;
 }
 void kui_armada_ce_stream_trace_source_begin(uint32_t now) {

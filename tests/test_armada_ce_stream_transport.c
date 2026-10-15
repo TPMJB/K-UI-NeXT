@@ -118,6 +118,7 @@ static struct {
     uint32_t hooks,unhooks,wakes,budgets,opens,polled,completions;
     uint32_t fetch_faults,crc_faults,poll_faults,open_fails;
     uint32_t inflight_dma,guest_dma,guest_tuple,guest_irq;
+    bool immediate_pio;
     enum kui_sci_stream_result fetch_error,poll_error;
 } wire;
 static struct kui_armada_ce_stream_bus bus;
@@ -168,6 +169,11 @@ static enum kui_sci_stream_result mock_fetch(uint32_t lba,uint32_t limit,bool po
     CHECK(!wire.busy && !wire.inflight_dma && lba<CARD_BLOCKS && limit==65536u);
     ++wire.fetches;wire.polled+=polled;
     if(wire.fetch_faults) {--wire.fetch_faults;return wire.fetch_error;}
+    if(wire.immediate_pio) {
+        checked(lba,KUI_SCI_STREAM_OK);++wire.completions;
+        if(!polled) ++wire.polled;
+        return KUI_SCI_STREAM_OK;
+    }
     wire.busy=wire.inflight_dma=1u;wire.lba=lba;wire.delay=wire.latency;
     return KUI_SCI_STREAM_OK;
 }
@@ -511,10 +517,47 @@ static void test_cancel(void) {
     pump_one(1u,false);CHECK(!memcmp(output.bytes,untouched,sizeof(untouched)) && snap(1u).bytes==bytes);
     CHECK(!wire.busy && !wire.waits);intact();
 }
+static void test_ready_to_pump(void) {
+    kui_armada_ce_stream_transport_test_reset();
+    CHECK(!kui_armada_ce_stream_transport_ready_to_pump());
+    setup();wire.immediate_pio=true;submit(1u,45002u,1u);
+    CHECK(!kui_armada_ce_stream_transport_ready_to_pump());
+    pump_one(1u,false);
+    CHECK(!wire.busy && snap(1u).owner==2u && !snap(1u).bytes &&
+        kui_armada_ce_stream_transport_ready_to_pump());
+    uint32_t polls=wire.polls,waits=wire.waits,fetches=wire.fetches,takes=wire.takes;
+    for(unsigned n=0;n<4u;n++) CHECK(kui_armada_ce_stream_transport_ready_to_pump());
+    CHECK(wire.polls==polls && wire.waits==waits && wire.fetches==fetches && wire.takes==takes);
+    uint32_t blocks=snap(1u).audio_blocks;
+    pump_one(1u,false);
+    CHECK(snap(1u).audio_blocks==blocks+1u && snap(1u).bytes &&
+        kui_armada_ce_stream_transport_ready_to_pump());
+    for(unsigned n=0;n<16u && kui_armada_ce_stream_transport_ready_to_pump();n++) pump_one(1u,false);
+    CHECK(snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_DONE &&
+        !kui_armada_ce_stream_transport_ready_to_pump());
+    exact_audio(45002u,1u);CHECK(!wire.waits && wire.polled==wire.fetches);
+    /* A pending DMA must yield; a complete checked PIO block must also
+     * yield when the AUDIO quota lends the singleton back to DATA. */
+    setup();wire.latency=4u;submit(1u,45002u,1u);pump_one(1u,false);
+    CHECK(wire.busy && !kui_armada_ce_stream_transport_ready_to_pump());
+    setup();wire.immediate_pio=true;data_active(100u);submit(1u,45002u,8u);
+    credits(16u);pump_one(1u,false);
+    CHECK(kui_armada_ce_stream_transport_ready_to_pump());
+    for(unsigned n=0;n<16u && kui_armada_ce_stream_transport_ready_to_pump();n++) pump_one(1u,false);
+    CHECK(snap(1u).audio_blocks==8u && snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING &&
+        snap(1u).owner==0u && !kui_armada_ce_stream_transport_ready_to_pump());
+    /* Revocation never turns an already checked bank into another copy. */
+    setup();wire.immediate_pio=true;submit(1u,45002u,1u);pump_one(1u,false);
+    CHECK(kui_armada_ce_stream_transport_ready_to_pump());
+    CHECK(kui_armada_ce_stream_transport_cancel(1u)==KUI_ARMADA_CE_STREAM_TRANSPORT_CANCELLED);
+    CHECK(!kui_armada_ce_stream_transport_ready_to_pump());
+    pump_one(1u,false);
+    CHECK(!snap(1u).bytes && snap(1u).owner==0u && !wire.waits);intact();
+}
 int main(void) {
     test_raw_mapping();test_admission();test_parked_data();test_continuous_data(false);
     test_continuous_data(true);test_priority();test_fences();
-    test_token_holds_and_errors();test_audio_errors();test_cancel();
+    test_token_holds_and_errors();test_audio_errors();test_cancel();test_ready_to_pump();
     printf("Armada CE production SCI transport: %u checks passed\n",checks);
     return 0;
 }

@@ -1,35 +1,41 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Armada CE full CD music stream test
 
-## What this revision changes
+## K-UI 2.0 RC1 integration
 
-Recording `62654.mp4` confirms audible gameplay music in `1ae245a365d8`.
-The return summary records WORKER 1, PLAY `B` (11), REFUSED 0 and HRESULT 0,
-with nine recoveries. The retained error is a real UNDERRUN; recorded playback
-events also show buffer depletion. Startup binding now succeeds.
+This console candidate integrates the net changes from
+`fix/armada-cdda-supply` at `be793d667cf0` into our current `eb06827d85da`
+source. It preserves the working owner callback, full native identity checks,
+priority 2, 16-sector reads and adaptive low-buffer grants.
 
-While playing, samples at 109,400 and 111,400 ms show SOURCE increasing from
-`00669780` to `0068E3B0`: 150,576 bytes in two seconds, or 75,288 B/s.
-Stereo CD audio consumes 176,400 B/s. READY falls from 254,208 to 50,944 bytes.
-The longest source job is 1,050 ms, although a 16-sector job carries only
-213 ms of audio. The longest worker visit is 56 ms. These measurements identify
-insufficient source supply in this run, rather than a startup or native Play
-refusal. They do not by themselves prove where every job's delay occurred.
+Claude's cursor-authoritative pacing removes the cumulative 20 ms rate stop.
+Native position still cannot jump beyond fresh PCM, advance ambiguously by
+more than half a ring, or use an observation older than 999 ms. Refill follows
+the driver's actual consumption. Restart now requires one second of fresh
+PCM instead of two. Staging keeps an offset after partial refills; only the
+sub-64-byte carry moves before the next read, outside the interrupt mask.
+Worker visits are recorded in the upper half of sample AUX.
 
-Audio arbitration now enters urgency at one second of fresh PCM or less and
-leaves at 1.5 seconds; pause, stop and failure clear it. An urgent audio grant
-allows 64 card blocks instead of eight. DATA retains 16 blocks, permitting an
-80% audio share in contended asynchronous turns instead of one third. Each
-pump still handles at most one received block. Synchronous foreground DATA
-retains immediate preemption after the in-flight block, and the shared DATA
-reader is unchanged. This is a source-scheduling change, not a larger native
-ring or an alteration to cursor/underrun recovery.
+Recording `62655.mp4` retained a real UNDERRUN: delta 9,088 bytes was below
+the 11,388-byte rate allowance. Its first two playing sample intervals supplied
+94,464 B/s against nominal 176,400 B/s. Thus the rate-stop removal addresses a
+latent clock-drift fault, while this test also needs faster source delivery.
 
-The working driver-to-game callback, full native identity admission, worker
-priority 2, 16-sector reads and source reservations are retained. Startup
-still uses metadata-only discovery followed by full binding inside Armada's
-owner process before any sound/thread API. Hardware sustained supply remains
-to be confirmed; host tests cannot establish CE scheduling or audibility.
+SCI's polling fallback completes a card block immediately without another
+interrupt. Previously audio returned after this ready result and left the
+block for a later worker visit. The worker now drains at most 32 already-ready
+one-block pumps per source visit, restoring interrupts between each pump.
+Pending DMA, quota handoff, a new command, error or completion ends the drain.
+The loop stops on an incomplete reception; each pump retains its existing bounded card-read contract. At the observed maximum 56 ms worker
+interval, 32 blocks provide headroom above CDDA's required source rate.
+The shared DATA reader, its allocation and immediate preemption are unchanged.
+
+Focused player checks cover clock drift, real underruns, finite/infinite
+playback, staging carry and bounded PIO draining/cancellation. Transport checks
+cover immediate PIO readiness, DMA yield, quota handoff and cancellation.
+Console memory/stack/bootstrap/owner-reader checks still apply. These establish
+code behavior and build validity; continuous hardware music and FMV echo are
+not yet certified. This is a 2.0 release candidate, not a final release claim.
 
 ## Console test
 
@@ -57,7 +63,9 @@ Thus initial refusals no longer leave the event page empty; periodic samples
 correctly stay zero until the worker starts. Rows contain
 code, native milliseconds, cumulative source bytes, fresh ring bytes and AUX.
 Sample AUX bit 0 means pending read, bit 1 means native playback running,
-bit 2 means urgent audio grants; bits 8 onward contain model state. Counts include maximum worker visit and
+bit 2 means urgent audio grants, bits 8–15 contain model state, and the upper
+16 bits count worker visits since the previous sample. Divide by the MS
+interval to get visits per second; intervals need not be exactly one second. Counts include maximum worker visit and
 source-job intervals, and completed jobs. Source-job duration is approximate.
 
 While playback runs uninterrupted, required source growth is

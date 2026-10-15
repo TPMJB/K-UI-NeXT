@@ -36,7 +36,7 @@ struct authored_bus {
     unsigned pending_pumps,read_latency_pumps,cancel_pumps,busy_submits,sleep_visits;
     uint32_t last_sleep_ms;
     bool pending,cancelled,revoked,stale_unlock,stale_source,bad_unlock,fail_end;
-    bool bad_current,fail_ticks,driver_context,fail_owner_admission,urgent,priority_active;
+    bool bad_current,fail_ticks,driver_context,fail_owner_admission,urgent,priority_active,pio_ready;
     bool bad_object_page,bad_copy_page,lock_held;
     uint32_t copy_page_address;
     unsigned copy_page_hits,copy_page_flip;
@@ -164,10 +164,11 @@ uint32_t kui_armada_ce_excerpt_ce_call(uint32_t target,const uint32_t args[8]) {
     }
     if(target==player.binding.play) {
         CHECK(!bus.consumer && bus.control==1u && args[0]==BUFFER && args[3]==1u);
-        CHECK(player.model.produced==KUI_ARMADA_CE_STREAM_RING_BYTES &&
+        CHECK(player.model.produced>=KUI_ARMADA_CE_STREAM_START_BYTES &&
+            player.model.produced<=KUI_ARMADA_CE_STREAM_RING_BYTES &&
             !player.model.read.id && !player.model.refill.id);
         const uint8_t *host=(const uint8_t *)(uintptr_t)HOST;
-        for(unsigned i=0;i<KUI_ARMADA_CE_STREAM_RING_BYTES;i++) CHECK(host[i]==expected_byte(player.model.origin+i));
+        for(unsigned i=0;i<player.model.produced;i++) CHECK(host[i]==expected_byte(player.model.origin+i));
         bus.now+=bus.play_delay_ms;
         bus.cursor=(bus.cursor+((bus.play_delay_ms*176400u/1000u)&~3u))%
             KUI_ARMADA_CE_STREAM_RING_BYTES;
@@ -259,7 +260,7 @@ enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_submit
     if(bus.cancelled || bus.pending) return KUI_ARMADA_CE_STREAM_TRANSPORT_BUSY;
     bus.epoch=epoch;bus.lba=lba;bus.sectors=sectors;bus.raw=(uint32_t)destination;bus.bytes=0;bus.pending=true;bus.revoked=false;
     if(bus.read_latency_pumps) bus.pending_pumps=bus.read_latency_pumps;
-    if(!bus.pending_pumps) complete_bus();
+    if(!bus.pending_pumps && !bus.pio_ready) complete_bus();
     return bus.pending?KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING:KUI_ARMADA_CE_STREAM_TRANSPORT_DONE;
 }
 enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_pump(void) {
@@ -270,7 +271,16 @@ enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_pump(v
     }
     if(bus.pending) {
         if(bus.pending_pumps) {--bus.pending_pumps;return KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING;}
-        complete_bus();
+        if(bus.pio_ready) {
+            uint32_t total=bus.sectors*2352u,count=total-bus.bytes;
+            if(count>512u) count=512u;
+            uint8_t *dst=(uint8_t *)(uintptr_t)bus.raw;
+            for(uint32_t i=0;i<count;i++) {
+                uint32_t at=bus.bytes+i;
+                dst[at]=sample_byte(bus.lba+at/2352u,at%2352u);
+            }
+            bus.bytes+=count;if(bus.bytes==total) bus.pending=false;
+        } else complete_bus();
     }
     if(bus.revoked) return KUI_ARMADA_CE_STREAM_TRANSPORT_CANCELLED;
     return bus.epoch?KUI_ARMADA_CE_STREAM_TRANSPORT_DONE:KUI_ARMADA_CE_STREAM_TRANSPORT_IDLE;
@@ -297,6 +307,10 @@ void kui_armada_ce_stream_transport_priority(uint32_t fresh,bool active) {
     bus.urgent=active && fresh<=176400u;
 }
 bool kui_armada_ce_stream_transport_urgent(void) {return bus.urgent;}
+bool kui_armada_ce_stream_transport_ready_to_pump(void) {
+    CHECK(!bus.consumer && !bus.control);
+    return bus.pio_ready && bus.pending && !bus.cancelled && !bus.revoked && !bus.pending_pumps;
+}
 enum kui_game_result kui_retail_manifest_decode(const uint8_t wire[KUI_RETAIL_IMAGE_WIRE_BYTES],struct kui_retail_manifest *out) {
     (void)wire;(void)out;return KUI_GAME_INVALID; /* Seed decoder has its separate actual tests. */
 }
@@ -336,6 +350,27 @@ static void prime(void) {
 static void advance(uint32_t bytes) {
     bus.now+=20u;bus.cursor=(bus.cursor+bytes)%KUI_ARMADA_CE_STREAM_RING_BYTES;
     bus.frontier=(bus.cursor+11008u)%KUI_ARMADA_CE_STREAM_RING_BYTES;visit();
+}
+static unsigned drifting_clock(uint32_t ppm,unsigned seconds) {
+    /* The audio cursor follows the AICA's 44.1kHz clock; GetTickCount
+     * follows CE's timer. A rate mismatch of `ppm` parts per million makes the
+     * cursor run ahead of the tick clock by ppm*elapsed. Any cumulative cursor
+     * allowance with fixed slack eventually stops healthy playback (each
+     * stop is an audible dropout and a re-prime); the cursor is authoritative. */
+    reset(true,20000u);bus.read_latency_pumps=1u;
+    for(unsigned i=0;i<1000u && !bus.plays && !player.disabled;i++) {bus.now+=20u;visit();}
+    CHECK(bus.plays==1u && !player.disabled);
+    uint64_t audio_us=0,played=0;
+    for(uint32_t tick=0;tick<seconds*1000u;tick+=20u) {
+        bus.now+=20u;audio_us+=20000u+20u*ppm/1000u;
+        uint64_t target=(audio_us*176400u/1000000u)&~UINT64_C(3);
+        uint32_t bytes=(uint32_t)(target-played);played=target;
+        if(player.model.native_running)
+            bus.cursor=(bus.cursor+bytes)%KUI_ARMADA_CE_STREAM_RING_BYTES;
+        bus.frontier=(bus.cursor+11008u)%KUI_ARMADA_CE_STREAM_RING_BYTES;
+        visit();CHECK(!player.disabled);
+    }
+    return player.model.recoveries;
 }
 static void sustained_async(void) {
     /* Real native visits observed82ms apart. Completion needs multiple
@@ -377,7 +412,8 @@ int main(void) {
     struct kui_armada_ce_stream_trace_snapshot history;
     kui_armada_ce_stream_trace_snapshot(&history);
     CHECK(history.counts[0]==1u && history.events[0][0]==KUI_ARMADA_CE_STREAM_TRACE_START &&
-        history.events[0][3]==KUI_ARMADA_CE_STREAM_RING_BYTES);
+        history.events[0][3]>=KUI_ARMADA_CE_STREAM_START_BYTES &&
+        history.events[0][3]<=KUI_ARMADA_CE_STREAM_RING_BYTES);
     /* An underrun retains the fresh-byte balance before recovery re-primes
      * the model, and the returned cursor's certified elapsed time. */
     player.model.produced=player.model.consumed+64u;
@@ -390,7 +426,7 @@ int main(void) {
     /* The real worker publishes post-observation readiness while a source
      * job is delayed, then withdraws urgency when gameplay is paused. */
     reset(true,128u);prime();bus.pending_pumps=1000u;
-    for(unsigned i=0;i<5u;i++) {bus.now+=230u;advance(44100u);}
+    for(unsigned i=0;i<3u;i++) {bus.now+=230u;advance(44100u);}
     CHECK(!player.disabled && player.model.native_running && bus.urgent &&
         bus.priority_active && bus.priority_fresh==ready_bytes() &&
         bus.priority_fresh<=176400u);
@@ -406,10 +442,13 @@ int main(void) {
     bus.now+=20u;bus.cursor+=3528u;bus.position_delay_ms=80u;visit();
     CHECK(!player.disabled && player.model.recoveries==0u &&
         player.model.last_ms==180u && player.model.consumed==31752u);++cases;
+    /* A coarse native cursor may report a large catch-up. While the jump stays
+     * inside fresh data it is consumption, not a fault: no Stop/re-prime. */
+    uint32_t consumed_before=player.model.consumed;
     bus.now+=20u;bus.cursor+=35280u;visit();
     uint32_t recovery[5];kui_armada_ce_stream_fault(recovery);
-    CHECK(player.model.recoveries==1u && recovery[0]==11u+KUI_ARMADA_CE_STREAM_CURSOR &&
-        recovery[2]==35280u && recovery[3]==7056u && recovery[4]==20u);
+    CHECK(!player.disabled && player.model.recoveries==0u && !recovery[0] &&
+        player.model.consumed==consumed_before+35280u && player.model.native_running);
     bus.bad_object_page=true;visit();kui_armada_ce_stream_fault(recovery);
     CHECK(recovery[0]==STREAM_FAULT_DEVICE);++cases;
     reset(true,128u);prime();
@@ -485,6 +524,20 @@ int main(void) {
     CHECK(player.model.produced==produced && player.model.staged==staged && bus.unlocks==1u &&
         player.mail.epoch!=player.applied_epoch);++cases;
     /* A source completion revoked before staging cannot publish old data. */
+    /* Completed PIO blocks need no scheduler wake or second IRQ. The real
+     * worker drains a bounded32-pump visit, then resumes the same ticket. */
+    reset(true,128u);bus.pio_ready=true;
+    unsigned pio_before=bus.pumps;CHECK(source());
+    CHECK(player.read_active && bus.pending && bus.bytes==SOURCE_READY_PUMPS*512u &&
+        bus.pumps-pio_before==SOURCE_READY_PUMPS+1u && !player.source_total);
+    CHECK(source() && player.read_active && bus.bytes==2u*SOURCE_READY_PUMPS*512u);
+    CHECK(source() && !player.read_active && !bus.pending &&
+        player.model.staged==RAW_BYTES && player.source_total==RAW_BYTES);++cases;
+    /* A command arriving between one-block masks prevents any old source
+     * ticket from reaching staging, even if furtherPIO bytes are ready. */
+    reset(true,128u);bus.pio_ready=true;bus.stale_source=true;CHECK(source());
+    CHECK(!player.source_total && !player.model.staged && bus.cancels==1u &&
+        !bus.pending && !player.read_active);++cases;
     reset(true,1u);bus.stale_source=true;CHECK(source());
     CHECK(!player.model.fetch && !player.model.staged && !player.read_active);++cases;
     /* A one-sector finite track pads its native prime and stops exactly atEOF. */
@@ -596,6 +649,8 @@ int main(void) {
         CHECK(history.events[i][1]==10002u+i && history.events[i][2]==i+2u &&
             history.events[i][4]==i+2u);
     ++cases;
+    /* Half a percent of clock mismatch for two minutes: no false stops. */
+    CHECK(drifting_clock(5000u,120u)==0u);++cases;
     CHECK(munmap(source_mapping,512u*1024u)==0 && munmap(host,0x60000u)==0);
     printf("armada stream player: %u cases, %u checks\n",cases,checks);return 0;
 }

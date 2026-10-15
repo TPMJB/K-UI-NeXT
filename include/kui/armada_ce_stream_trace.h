@@ -16,7 +16,8 @@ struct kui_armada_ce_stream_trace_snapshot {
     /* Chronological retained rows: code, native elapsed ms, fetched bytes,
      * fresh ring bytes, auxiliary (elapsed/reason/sample flags).
      * Sample flags: bit0 pending read, bit1 native running, bit2 urgent
-     * audio arbitration, bits8+ state. */
+     * audio arbitration, bits8-15 state, bits16-31 worker visits since the
+     * previous sample (use the MS difference for visits per second). */
     /* Startup codes5/6/7 have MS0 until a native clock exists; AUX is the
      * discovery/binding/native-start status (zero means successful admission). */
     uint32_t events[KUI_ARMADA_CE_STREAM_TRACE_ROWS][5];

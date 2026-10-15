@@ -31,6 +31,7 @@
 #define WORKER_TOKEN UINT32_C(0x5354524d)
 #define STEP_MS 20u
 #define SOURCE_STEP_MS 1u
+#define SOURCE_READY_PUMPS 32u
 #define COPY_PAGES ((KUI_ARMADA_CE_STREAM_STAGE_BYTES+4095u)/4096u+1u)
 _Static_assert(RAW_BYTES+KUI_ARMADA_CE_STREAM_STAGE_BYTES<=KUI_ARMADA_CE_STREAM_SOURCE_BYTES,
     "raw batch and carry staging must fit the already reserved source bank");
@@ -63,6 +64,8 @@ struct stream_player {
     uint32_t fault[5],mapping_status,mapping_address;
     struct kui_armada_ce_stream_read read;
     uint32_t recovery[5];
+    /* Last, so the audited owner-reader offsets into player stay fixed. */
+    uint32_t stage_head; /* Offset of the model's first staged byte. */
 };
 static struct stream_player player;
 
@@ -529,7 +532,7 @@ static bool refill(void) {
         }
         if(ok && mail_current()) {
             volatile uint8_t *target=(volatile uint8_t *)(uintptr_t)regions[0];
-            const volatile uint8_t *stage=(const volatile uint8_t *)(uintptr_t)STAGE_BEGIN;
+            const volatile uint8_t *stage=(const volatile uint8_t *)(uintptr_t)(STAGE_BEGIN+player.stage_head);
             for(uint32_t i=0;i<ticket.audio_bytes;i++) target[i]=stage[i];
             for(uint32_t i=ticket.audio_bytes;i<ticket.bytes;i++) target[i]=0;
             for(uint32_t i=0;i<pages;i++) {
@@ -548,11 +551,13 @@ static bool refill(void) {
      * advances. A newer mailbox epoch revokes this ticket before commit. */
     uint32_t sr=mask_begin();bool current=mail_current();
     if(ok && current) {
-        uint32_t remaining=player.model.staged-ticket.audio_bytes;
-        uint8_t *stage=(uint8_t *)(uintptr_t)STAGE_BEGIN;
-        copy_bytes(stage,stage+ticket.audio_bytes,remaining);
         player.last_model_result=kui_armada_ce_stream_refill_complete(&player.model,&ticket,true);
         ok=player.last_model_result==KUI_ARMADA_CE_STREAM_OK;
+        /* Advance past the drained bytes. Shifting the remainder (up to a
+         * whole 16-sector job, byte by byte) here kept IRQs masked for most
+         * of a millisecond after every partial refill. source() moves only
+         * the sub-64-byte carry, unmasked, before appending the next job. */
+        if(ok) player.stage_head=player.model.staged?player.stage_head+ticket.audio_bytes:0u;
     }
     mask_end(sr);
     bool released=kui_armada_ce_stream_native_write_end(&player.native,NULL);
@@ -584,16 +589,35 @@ static bool source(void) {
         player.read_active=1u;
         kui_armada_ce_stream_trace_source_begin(player.now_ms);
     }
-    uint32_t sr=mask_begin();
-    (void)kui_armada_ce_stream_transport_pump();
-    enum kui_armada_ce_stream_transport_status status=
-        kui_armada_ce_stream_transport_snapshot(player.read_bus_epoch,&progress);
-    mask_end(sr);
+    uint32_t sr;
+    enum kui_armada_ce_stream_transport_status status=KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING;
+    /* A polled card reception can finish immediately without another IRQ.
+     * Drain only already-ready audio, with a separate short mask per pump.
+     * Pending DMA, quota handoff or a new command ends this bounded visit. */
+    for(unsigned visit=0;visit<SOURCE_READY_PUMPS;visit++) {
+        sr=mask_begin();
+        if(!mail_current()) {mask_end(sr);cancel_read();return true;}
+        (void)kui_armada_ce_stream_transport_pump();
+        status=kui_armada_ce_stream_transport_snapshot(player.read_bus_epoch,&progress);
+        bool immediate=status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING &&
+            kui_armada_ce_stream_transport_ready_to_pump();
+        mask_end(sr);
+        if(!immediate) break;
+    }
     if(status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING || status==KUI_ARMADA_CE_STREAM_TRANSPORT_BUSY) return true;
     if(status!=KUI_ARMADA_CE_STREAM_TRANSPORT_DONE ||
        progress.bytes!=player.read.sectors*KUI_ARMADA_CE_STREAM_SECTOR_BYTES) return false;
     if(!mail_current()) {cancel_read();return true;}
     if(kui_armada_ce_stream_read_validate(&player.model,&player.read)!=KUI_ARMADA_CE_STREAM_OK) return false;
+    /* Only this worker writes staging. read_plan admits a job only while
+     * fewer than 64 bytes remain, so the carry moved here is tiny. A reset
+     * model (staged 0) simply restarts at the beginning. */
+    if(player.stage_head) {
+        if(player.model.staged)
+            copy_bytes((void *)(uintptr_t)STAGE_BEGIN,
+                (const void *)(uintptr_t)(STAGE_BEGIN+player.stage_head),player.model.staged);
+        player.stage_head=0;
+    }
     copy_bytes((void *)(uintptr_t)(STAGE_BEGIN+player.model.staged),
         (const void *)(uintptr_t)(RAW_BEGIN+player.read.skip),player.read.bytes);
     sr=mask_begin();
