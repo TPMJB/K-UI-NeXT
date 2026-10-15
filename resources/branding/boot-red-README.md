@@ -1,24 +1,21 @@
-# K-UI V1.8.5 crimson Dáinsleif artwork
+# K-UI V2.0 orange Tyrfing boot artwork
 
-`boot-red.png` and `startup.png` are identical 640×480 RGB deployment assets
-for the graphical bootstrap and SD runtime. TPMJB requested the V1.8.5 splash
-on October 6, 2026. The built-in image-generation tool edited the existing
-release splash, retaining its visor portrait and crimson/black/chrome style,
-with K-UI, V1.8.5, Dáinsleif and by TPMJB lettering. The complete production prompt and
-conversion record are in `boot-red-prompt.txt`. These project assets are
-provided under the repository's GPL-3.0-only terms.
+`boot-red.png` now contains the orange Tyrfing artwork, identical to
+`startup.png`. The historical filename is retained to keep the existing
+bootstrap asset contract. See [startup-README.md](startup-README.md) for the
+master image, exact conversion, Git/SHA-256 pins and shared startup sound.
 
-The generated 1448×1086 image includes TV-safe margins and a dark lower area.
-It was resized directly to 640×480 RGB with Lanczos. No lettering was edited
-after generation. Git blob: `a136e6f426140424febf38aebe69169c430ea6aa`.
-SHA-256: `bad69f585b46e56872d855b4ec9602c99f7eb671e6a47478e7a9f8a40c5ff232`.
+The built-in image generation tool created the master for TPMJB's October 15,
+2026 request: orange retro futuristic artwork with the cursed blade Tyrfing.
+The exact production prompt is [startup-tyrfing-prompt.txt](startup-tyrfing-prompt.txt).
+`boot-red-prompt.txt` and `startup-dainsleif-prompt.txt` document the previous
+Dáinsleif release and are historical records.
 
-`tools/build_splash.py` validates those exact bytes before encoding RGB565.
-Each executable embeds only its own existing 640×480 pixel array; no runtime
-image decoding or additional full-screen buffer is introduced. The separate
-badge beneath the Sega logo and the startup chime retain their existing assets.
-`release-v1.8.5-banner.jpg` is a 1280×720 JPEG presentation of the same generated
-splash, resized to 960×720 and centered with black side margins so its entire
-portrait and lettering remain visible. `release-v1.7-banner.jpg` is retained
-for historical release references.
-Previous artwork and records remain in Git history.
+The 32-pixel side and 24-pixel vertical margins retain all generated lettering.
+The countdown controls at y=360..456 sit over the dark lower part of the art.
+Menu, recovery, diagnostics and help retain their existing dimmed background
+and opaque controls. No boot delay, buffer size, runtime decoder or input
+behavior changes accompany the artwork.
+
+The source artwork and generated project assets are provided under the
+repository's GPL-3.0-only terms. Historical release banners are retained.

@@ -1,14 +1,19 @@
-# K-UI V2.0 RC10 "Tyrfing"
+# K-UI V2.0 RC11 "Tyrfing"
 
 An independent Dreamcast shell built directly on upstream KallistiOS, retaining
 the original GD-ROM and using exFAT/FAT32 storage.
 
-**The current source prepares 2.0 RC10, named Tyrfing, continuing the cursed-sword
+**The current source prepares 2.0 RC11, named Tyrfing, continuing the cursed-sword
 release theme.** It integrates the tested SCI Windows CE CD music work with
 saved per-image launch options while retaining the established 1.8.5 native
 reader. This is release preparation; a final 2.0 release has not been published.
+RC11 adds matching orange Tyrfing splash, bootloader, header and disc-badge
+artwork. The runtime update works with an existing compatible bootstrap;
+burn the matching optional CDI to update artwork stored on the boot disc.
 Read the [2.0 installation guide](docs/release-v2.0.md) and
 [2.0 preparation notes](docs/release-v2.0-notes.md) for its scope.
+The [comparison with DS-based K-UI 1.0.1](docs/release-v2.0-ds-comparison.md)
+separates remaining feature gaps from release acceptance and deferred work.
 
 The integration also carries the wireless performance branch: checked adaptive
 SCI pacing, band-change reconnects, bounded FTP service and Wi-Fi adapter updates
@@ -16,14 +21,16 @@ from the card. Firmware 0.1.3 remains a separate ESP32 build. All ten Home apps
 now have dedicated icons. See the [integration record](docs/release-v2.0-integration.md).
 The G1 SD adapter hardware design remains on its development branch.
 
-Optional WinCE CD music currently supports the exact admitted US **Armada,
-Bust-A-Move 4 and Worms Armageddon** runtimes. It defaults to Off, requires SCI
-microSD and raw AUDIO tracks, and accepts original raw or converted 2048-byte
-DATA for those profiles. The latest Worms console report describes almost
-imperceptible gameplay lag after the worker-budget and RAM-copy improvements.
-An available CD music toggle does not establish compatibility with another
-title, region or revision. Broader automatic runtime detection remains work
-for a later candidate.
+Optional WinCE CD music uses four checked kernel/sound adapters established
+from US **Armada, Bust-A-Move 4, Worms Armageddon and Worms World Party**.
+Other images can attempt a matching checked runtime contract; unknown kernels
+are refused. Music defaults to Off, requires SCI microSD and raw AUDIO tracks,
+and accepts supported original raw or converted 2048-byte DATA. The latest
+Worms Armageddon console report describes almost imperceptible gameplay lag
+after the worker-budget and RAM-copy improvements. World Party has a scoped
+successful owner report and remains Experimental, as do unfamiliar matching
+images. A CD music toggle does not establish another title's compatibility.
+See [admission and evidence limits](docs/experimental-cdda.md).
 
 For the existing stable download, use the
 [1.8.5 release](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.8.5), its
@@ -135,8 +142,9 @@ These new app paths still need physical-console acceptance.
   these are historical results, not new 1.8.5 measurements.
   A XIAO ESP32-C5/C6 with the separate K-UI firmware provides SCI Wi-Fi;
   Network Start opens scan/join and band selection. Storage remains on SCIF
-  while networking owns SCI. Flash firmware by USB from a computer; console
-  firmware updating is not exposed ([setup](docs/wifi.md)).
+  while networking owns SCI. Firmware can be flashed by USB from a computer;
+  the Wi-Fi page also checks and installs a compatible card-supplied update
+  after confirmation ([setup](docs/wifi.md), [console updates](docs/wifi-console-update.md)).
   Diagnostics retains disc/SD probes, log export,
   mstats and benchmarks. RAM remains visible in the ripper.
 - Music keeps playing from RAM during menu actions and capture; uncached song
@@ -251,11 +259,11 @@ earlier GD command fixes. These are scoped console results, not full
 playthroughs or an all-games claim.
 
 Time Stalkers still returns to K-UI, and some titles stall/skip FMVs in both
-Original and 2048 mode. Optional WinCE CD music is limited to the admitted
-profiles above; universal CDDA, Mode 2 Form 2 and subchannel emulation are not
-provided. See the [2.0 preparation notes](docs/release-v2.0-notes.md),
+Original and 2048 mode. Optional WinCE CD music requires one of the admitted
+kernel/sound contracts above; universal CDDA, Mode 2 Form 2 and subchannel
+emulation are not provided. See the [2.0 preparation notes](docs/release-v2.0-notes.md),
 [native placement evidence](docs/evidence/native-low-resident-2026-10-06.md),
-and [WinCE profile scope](docs/wince-cdda-next-titles.md).
+and [CD music admission](docs/experimental-cdda.md).
 
 ## License and contribution policy
 

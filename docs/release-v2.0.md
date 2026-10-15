@@ -1,16 +1,17 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# K-UI V2.0 RC10 "Tyrfing"
+# K-UI V2.0 RC11 "Tyrfing"
 
 Tyrfing continues K-UI's cursed-sword release names. This guide covers the
-**2.0 RC10 source integration candidate**, not a published final 2.0 release.
-Its package prefix is `kui-2.0-rc10-tyrfing`. For the existing stable download,
+**2.0 RC11 source integration candidate**, not a published final 2.0 release.
+Its package prefix is `kui-2.0-rc11-tyrfing`. For the existing stable download,
 use [1.8.5](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.8.5) and its
 [installation guide](release-v1.8.5.md).
 
 The candidate combines the established native reader with saved per-image
-launch options and optional SCI WinCE CD music for three admitted US runtime
-profiles. Read the [preparation notes](release-v2.0-notes.md) for the console
-evidence and remaining release checks.
+launch options and optional SCI WinCE CD music using four checked kernel/sound
+adapters. Read the [preparation notes](release-v2.0-notes.md) for the console
+evidence and remaining release checks, and the [DS-based release comparison](release-v2.0-ds-comparison.md)
+for retained features, remaining gaps and deferred work.
 
 ## Update an existing independent K-UI installation
 
@@ -21,8 +22,14 @@ evidence and remaining release checks.
    saved launch settings. Install `runtime.kui` and the complete
    `KUI/apps/games` payload folder together. Earlier partial test ZIPs are not
    a substitute for the matching release package.
-3. Safely eject the card and cold boot. Check **V2.0 RC10** and the displayed
-   build ID against the package's `build.json`.
+3. Safely eject the card and cold boot. Check **V2.0 RC11** and the displayed
+   build ID against the package's `build.json`. The illustration says V2.0;
+   the live version label distinguishes this RC from a final release.
+
+RC11 includes orange Tyrfing runtime/header artwork and a matching optional
+CDI with the new boot splash, orange controls and sword badge. Burn that CDI
+to replace artwork on the boot disc; the normal runtime update can continue
+using your existing compatible independent K-UI CD.
 
 Keep your existing **exFAT card**. FAT32 remains supported. No reformat,
 reripping or 2048-byte conversion is required. ext4 remains a read-only
@@ -68,18 +75,21 @@ For a matching profile on **SCI microSD**, set **Background loading On** and
 inspected WinCE GDIs containing high-density audio tracks; the loader still
 checks the selected runtime before handoff.
 
-| Current admitted runtime | Profile scope |
+| Adapter established from | Recorded scope |
 | --- | --- |
-| Armada | Exact admitted US runtime, T40301N 00 |
-| Bust-A-Move 4 | Exact admitted US runtime, T-8117N |
-| Worms Armageddon | Exact admitted US runtime, T40601N |
+| Armada | Exact US runtime, T40301N 00; console audio evidence |
+| Bust-A-Move 4 | Exact US runtime, T-8117N; console audio evidence |
+| Worms Armageddon | Exact US runtime, T40601N; console audio and converted2048 cold-boot evidence |
+| Worms World Party | Fourth kernel/sound adapter; scoped successful owner report, still Experimental |
 
 These profiles require original **raw2352 AUDIO** tracks. Their DATA tracks
-may be original raw or supported converted2048 copies. A matching title name
-or audio-track list alone does not establish admission. Other regions,
-revisions and titles need compatible runtime adapters; an unsupported music
-profile is refused before handoff. Turn **CD music Off** to attempt launch
-with the ordinary CE reader. See [profile scope](wince-cdda-next-titles.md).
+may be original raw or supported converted2048 copies. Adapter selection checks
+the complete kernel identity and the runtime's sound/memory contracts. Other
+images sharing an admitted implementation can be attempted as Experimental;
+a matching title name or audio-track list alone does not establish admission
+or successful gameplay. Unknown kernels are refused before handoff. Turn
+**CD music Off** to attempt launch with the ordinary CE reader.
+See [admission and evidence limits](experimental-cdda.md).
 
 The latest Worms hardware report describes almost imperceptible gameplay lag
 with music after the worker-budget and RAM-copy improvements. This is a scoped

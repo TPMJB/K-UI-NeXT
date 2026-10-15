@@ -18,7 +18,7 @@ class StartupAssets(unittest.TestCase):
         self.assertEqual(len(module.decode_png(data)),640*480)
         self.assertEqual(data,(ROOT/"resources/branding/startup.png").read_bytes())
         self.assertEqual(module.BOOT_PNG_BLOB,module.PNG_BLOB)
-    def test_dainsleif_asset_and_bounds(self):
+    def test_tyrfing_asset_and_bounds(self):
         data=(ROOT/"resources/branding/startup.png").read_bytes()
         self.assertEqual(hashlib.sha1(b"blob "+str(len(data)).encode()+b"\0"+data).hexdigest(),module.PNG_BLOB)
         pixels=module.decode_png(data)

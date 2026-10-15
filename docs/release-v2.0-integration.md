@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Tyrfing integration record
 
-Preparation date: 2026-10-15. Version **2.0-rc10**, release name **Tyrfing**.
+Preparation date: 2026-10-15. Original integration version **2.0-rc10** (artwork candidate: **2.0-rc11**), release name **Tyrfing**.
 This prepares the next release without publishing a final 2.0 tag.
 
 ## Selected source
