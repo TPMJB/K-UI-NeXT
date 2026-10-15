@@ -6,6 +6,8 @@ on:
   push:
     branches: [main, 'milestone/**', claude/wifi-esp32c5-firmware]
     paths: ['firmware/kui-wifi/**', '.github/workflows/wifi-firmware.yml']
+  pull_request:
+    paths: ['firmware/kui-wifi/**', '.github/workflows/wifi-firmware.yml']
   workflow_dispatch:
 
 permissions:

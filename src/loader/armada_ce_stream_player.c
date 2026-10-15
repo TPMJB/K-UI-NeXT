@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
+#include "kui/target.h"
 #include "kui/armada_ce_excerpt.h"
 #include "kui/armada_ce_stream_seed.h"
 #include "kui/armada_ce_stream_model.h"
@@ -117,7 +118,7 @@ static uint32_t word(uint32_t address) {
 #endif
 }
 static uint32_t mask_begin(void) {
-#if defined(__sh__)
+#if defined(KUI_ON_CONSOLE)
     uint32_t sr,next;
     __asm__ __volatile__("stc sr,%0" : "=r"(sr));next=sr|0xf0u;
     __asm__ __volatile__("ldc %0,sr" : : "r"(next) : "memory");return sr;
@@ -126,7 +127,7 @@ static uint32_t mask_begin(void) {
 #endif
 }
 static void mask_end(uint32_t sr) {
-#if defined(__sh__)
+#if defined(KUI_ON_CONSOLE)
     __asm__ __volatile__("ldc %0,sr" : : "r"(sr) : "memory");
 #else
     (void)sr;

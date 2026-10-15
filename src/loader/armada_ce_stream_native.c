@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
+#include "kui/target.h"
 #include "kui/armada_ce_stream_native.h"
 #include "kui/armada_ce_excerpt.h"
 #include <stddef.h>
@@ -12,7 +13,7 @@
 #define WAIT_OBJECT_0 0u
 #define RWX_COMMITTED UINT32_C(0x37d)
 
-#if defined(__sh__)
+#if defined(KUI_ON_CONSOLE)
 static uint32_t native_call(void *context,uint32_t target,const uint32_t args[8]) {
     (void)context;return kui_armada_ce_excerpt_ce_call(target,args);
 }
@@ -53,7 +54,7 @@ static const struct kui_armada_ce_stream_native_ops production={NULL,native_call
 #endif
 static const struct kui_armada_ce_stream_native_ops *operations(
     const struct kui_armada_ce_stream_native_ops *ops) {
-#if defined(__sh__)
+#if defined(KUI_ON_CONSOLE)
     if(!ops) ops=&production;
 #endif
     return ops && ops->call && ops->read32 && ops->write32 && ops->publish_code &&

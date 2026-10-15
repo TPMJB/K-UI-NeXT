@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
+#include "kui/target.h"
 #include "kui/armada_ce_excerpt_entry.h"
 #include "kui/armada_ce_excerpt.h"
 #include "kui/armada_ce_live_sound.h"
@@ -126,7 +127,7 @@ struct worker_observer {
 static struct worker_observer initial_observer;
 static struct kui_armada_ce_stream_initial_owner discovered_owner;
 static uint32_t worker_mask_begin(void) {
-#if defined(__sh__)
+#if defined(KUI_ON_CONSOLE)
     uint32_t saved,next;
     __asm__ __volatile__("stc sr,%0" : "=r"(saved));next=saved|0xf0u;
     __asm__ __volatile__("ldc %0,sr" : : "r"(next) : "memory");return saved;
@@ -135,14 +136,14 @@ static uint32_t worker_mask_begin(void) {
 #endif
 }
 static void worker_mask_end(uint32_t saved) {
-#if defined(__sh__)
+#if defined(KUI_ON_CONSOLE)
     __asm__ __volatile__("ldc %0,sr" : : "r"(saved) : "memory");
 #else
     (void)saved;
 #endif
 }
 static uint32_t worker_sr(void) {
-#if defined(__sh__)
+#if defined(KUI_ON_CONSOLE)
     uint32_t sr;__asm__ __volatile__("stc sr,%0" : "=r"(sr));return sr;
 #else
     return 0u;
