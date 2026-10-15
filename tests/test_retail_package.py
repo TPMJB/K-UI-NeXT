@@ -29,6 +29,34 @@ class RetailPackage(unittest.TestCase):
     def packaged(data):
         return envelope(data, len(data), "012345abcdef")
 
+    def test_ram_patch_capability_is_blank_unique_and_native_only(self):
+        blank = b"KUIRAMP1" + struct.pack("<14I", 1, 64, *([0] * 12))
+        data = self.payload(256)
+        at = layout.STAGE_BLOB_OFFSET + 64
+        data[at:at + 64] = blank
+        self.assertTrue(layout.inspect_ram_patch_seed(data, required=True))
+        data[at + 128:at + 136] = b"KUIRAMP1"  # unrelated comparison literals
+        layout.inspect_retail(self.packaged(data))
+        for byte in range(64):
+            changed = bytearray(data)
+            changed[at + byte] ^= 1
+            with self.subTest(byte=byte), self.assertRaises(ValueError):
+                layout.inspect_ram_patch_seed(changed, required=True)
+        duplicate = bytearray(data)
+        duplicate[at + 64:at + 128] = blank
+        with self.assertRaises(ValueError):
+            layout.inspect_retail(self.packaged(duplicate))
+        truncated = data[:at + 63]
+        with self.assertRaises(ValueError):
+            layout.inspect_ram_patch_seed(truncated, required=True)
+        old = self.payload()
+        self.assertFalse(layout.inspect_ram_patch_seed(old))
+        with self.assertRaises(ValueError):
+            layout.inspect_ram_patch_seed(old, required=True)
+        data[layout.HEADER_OFFSET:layout.HEADER_OFFSET + layout.HEADER_BYTES] = layout.relocation_header(256, ce=True)
+        with self.assertRaises(ValueError):
+            layout.inspect_retail(self.packaged(data), ce=True)
+
     def test_constants_match_native_contract(self):
         source = (ROOT / "include/kui/retail_loader_layout.h").read_text()
         names = {

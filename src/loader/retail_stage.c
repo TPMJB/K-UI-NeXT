@@ -19,6 +19,24 @@
 #include <stdint.h>
 #include <string.h>
 #include "kui/skies_read_diagnostic.h"
+#ifndef KUI_GAME_RAM_PATCHES_STAGE
+#define KUI_GAME_RAM_PATCHES_STAGE 0
+#endif
+#if KUI_GAME_RAM_PATCHES_STAGE
+#if defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_SD_BENCH) || KUI_RETAIL_TOY_PILOT || \
+    KUI_RETAIL_MDK2_CDDA || KUI_RETAIL_OBSERVE || KUI_RETAIL_STARTUP_TRACE || \
+    KUI_RETAIL_SONIC_STACK_TEST || KUI_RETAIL_SKIES_READ_DIAGNOSTIC
+#error User RAM patches belong only to the ordinary native high stage
+#endif
+#include "kui/game_ram_patches.h"
+_Static_assert(KUI_GAME_RAM_PATCH_EXEC_ADDRESS==KUI_RETAIL_EXEC_ADDRESS,"patch executable base");
+_Static_assert(KUI_GAME_RAM_PATCH_EXEC_MAX_BYTES==KUI_RETAIL_EXEC_MAX_BYTES,"patch executable limit");
+/* The launcher fills exactly one blank capability after the package passes
+ * its ordinary layout checks. This is high-stage data, never resident RAM or
+ * a manifest extension. Default/off packages contain no patch addresses. */
+static struct kui_game_ram_patch_seed ram_patch_seed
+    __attribute__((used,section(".data.ram_patch_seed"),aligned(4)))={KUI_GAME_RAM_PATCH_SEED_BLANK_WORDS};
+#endif
 #if KUI_ARMADA_CE_AUDIO_STAGE
 #if KUI_ARMADA_CE_AUDIO_STAGE != 1 || !defined(KUI_RETAIL_CE) || KUI_RETAIL_TOY_PILOT || KUI_RETAIL_LOW_RESIDENT
 #error Armada audio admission belongs only to its isolated Windows CE stage
@@ -853,6 +871,11 @@ void kui_retail_stage_main(const uint8_t *wire) {
     memcpy(wire_copy,wire,sizeof(wire_copy));
     enum kui_game_result result=kui_retail_manifest_decode(wire_copy,&manifest);
     if(result!=KUI_GAME_OK) stopped("INVALID RETAIL MAP",(uint32_t)result);
+#if KUI_GAME_RAM_PATCHES_STAGE
+    struct kui_game_ram_patches patches;
+    if(!kui_game_ram_patch_seed_decode(&patches,&ram_patch_seed,sizeof(ram_patch_seed),manifest.boot_bytes))
+        stopped("INVALID USER RAM PATCH PLAN",0);
+#endif
 #if KUI_RETAIL_TOY_PILOT
     /* The separate Toy translation unit supplies this check. Unsupported
      * launcher options must stop before resident selection or storage I/O. */
@@ -1826,6 +1849,17 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
         (uintptr_t)ARMADA_BIND_INSTALL_ADDRESS;
     if(attach(KUI_ARMADA_CE_STREAM_BUS_EVENT,KUI_ARMADA_CE_STREAM_BUS_ATTACH,0,bus)!=1u)
         relay_stopped("STREAM BUS ATTACH FAILED",bus);
+#endif
+#if KUI_GAME_RAM_PATCHES_STAGE
+    /* Bootstrap2 has finished. Original executable CRC, resident bytes and
+     * every retained controller guard above have all passed. Revalidate the
+     * complete seed and both destinations before the first user write.
+     * Existing assembly owns cache invalidation and restores the game CPU
+     * state on return; no new interrupt or resident behavior is installed. */
+    struct kui_game_ram_patches patches;
+    if(!kui_game_ram_patch_seed_decode(&patches,&ram_patch_seed,sizeof(ram_patch_seed),exec_bytes) ||
+       !kui_game_ram_patches_apply(boot,exec_bytes,&patches))
+        relay_stopped("USER RAM PATCH PLAN REFUSED",0);
 #endif
 #if KUI_RETAIL_SKIES_READ_DIAGNOSTIC
     skies_read_arm();

@@ -180,6 +180,8 @@ static void clear_game_detail(struct kui_shell *s) {
     s->games_launch_encoding=KUI_GAME_ENCODING_AUTO;
     s->game_tools_selected=s->game_tests_selected=0;s->games_tests_from_options=false;
     s->games_launch_notice[0]=0;
+    memset(&s->games_launch_patches,0,sizeof(s->games_launch_patches));
+    s->games_patch_selected=s->games_patch_digit=0;s->games_patch_editing=false;
     memset(&s->games_detail,0,sizeof(s->games_detail));
 }
 static void clear_game_choice(struct kui_shell *s) {
@@ -293,6 +295,8 @@ void kui_shell_set_games_detail(struct kui_shell *s,const struct kui_games_detai
     s->games_launch_selected=0;s->games_launch_cdda=false;s->games_probe_from_options=false;
     s->games_retail_scrambled=detail->cd_image && !detail->windows_ce && detail->scrambled;
     s->games_launch_encoding=KUI_GAME_ENCODING_AUTO;
+    memset(&s->games_launch_patches,0,sizeof(s->games_launch_patches));
+    s->games_patch_selected=s->games_patch_digit=0;s->games_patch_editing=false;
     s->game_tools_selected=s->game_tests_selected=0;s->games_tests_from_options=true;
     snprintf(s->games_launch_notice,sizeof(s->games_launch_notice),"Options save automatically for this image.");
     s->games_detail.title[sizeof(s->games_detail.title)-1]=0;
@@ -354,6 +358,9 @@ bool kui_shell_games_cdda_ready(const struct kui_shell *s) {
 bool kui_shell_games_launch_ready(const struct kui_shell *s) {
     return kui_shell_games_retail_ready(s) || kui_shell_games_ce_probe_ready(s);
 }
+bool kui_shell_games_patches_ready(const struct kui_shell *s) {
+    return kui_shell_games_retail_ready(s) && !s->games_launch_cdda;
+}
 bool kui_shell_games_option_ready(const struct kui_shell *s,unsigned row) {
     switch(row) {
     case KUI_SHELL_GAME_OPTION_READER: return kui_shell_games_retail_ready(s);
@@ -365,8 +372,8 @@ bool kui_shell_games_option_ready(const struct kui_shell *s,unsigned row) {
 bool kui_shell_game_launch_settings(const struct kui_shell *s,
                                     struct kui_game_launch_settings *out) {
     if(!out || !kui_shell_games_image_ready(s)) return false;
-    struct kui_game_launch_settings value={s->games_launch_reader,s->games_launch_cdda,
-                                          s->games_launch_encoding};
+    struct kui_game_launch_settings value={.reader=s->games_launch_reader,.cdda=s->games_launch_cdda,
+        .encoding=s->games_launch_encoding,.patches=s->games_launch_patches};
     if(!kui_game_launch_settings_valid(&value)) return false;
     *out=value;return true;
 }
@@ -377,12 +384,17 @@ void kui_shell_set_game_launch_settings(struct kui_shell *s,const char *path,
         s->games_launch_reader=kui_shell_games_ce_probe_ready(s)?KUI_RETAIL_READER_ASYNC:value->reader;
         s->games_launch_cdda=value->cdda && kui_shell_games_cdda_ready(s);
         s->games_launch_encoding=kui_shell_games_encoding_ready(s)?value->encoding:KUI_GAME_ENCODING_AUTO;
+        s->games_launch_patches=value->patches;
+        bool patches_unavailable=!kui_shell_games_patches_ready(s) && kui_game_ram_patches_enabled(&value->patches);
+        if(patches_unavailable)
+            for(unsigned i=0;i<KUI_GAME_RAM_PATCHES_COUNT;i++) s->games_launch_patches.entries[i].enabled=false;
         if(s->games_launch_cdda && !kui_shell_games_ce_probe_ready(s))
             s->games_launch_reader=KUI_RETAIL_READER_STANDARD;
         s->games_retail_scrambled=kui_shell_games_encoding_ready(s) &&
             (s->games_launch_encoding==KUI_GAME_ENCODING_SCRAMBLED ||
              (s->games_launch_encoding==KUI_GAME_ENCODING_AUTO && s->games_detail.scrambled));
-        snprintf(s->games_launch_notice,sizeof(s->games_launch_notice),"Options save automatically for this image.");
+        snprintf(s->games_launch_notice,sizeof(s->games_launch_notice),"%s",patches_unavailable?
+            "Saved RAM patches are unavailable for this launch; they are Off.":"Options save automatically for this image.");
     } else snprintf(s->games_launch_notice,sizeof(s->games_launch_notice),
         "Saved options could not be read; using defaults.");
 }
@@ -395,6 +407,14 @@ static enum kui_shell_action save_game_launch(struct kui_shell *s) {
     snprintf(s->games_launch_notice,sizeof(s->games_launch_notice),"Saving options...");
     return KUI_SHELL_SAVE_GAME_LAUNCH;
 }
+static enum kui_shell_action game_launch_defaults(struct kui_shell *s) {
+    s->games_launch_reader=s->games_detail.windows_ce?KUI_RETAIL_READER_ASYNC:KUI_RETAIL_READER_STANDARD;
+    s->games_launch_cdda=false;s->games_launch_encoding=KUI_GAME_ENCODING_AUTO;
+    s->games_retail_scrambled=kui_shell_games_encoding_ready(s) && s->games_detail.scrambled;
+    memset(&s->games_launch_patches,0,sizeof(s->games_launch_patches));
+    s->games_patch_editing=false;
+    return save_game_launch(s);
+}
 const char *kui_shell_games_reader_label(const struct kui_shell *s) {
     if(kui_shell_games_ce_probe_ready(s)) return "Background";
     if(!kui_shell_games_retail_ready(s)) return "Unavailable";
@@ -406,6 +426,15 @@ const char *kui_shell_games_reader_label(const struct kui_shell *s) {
     }
 }
 static enum kui_shell_action games_launch_choice(struct kui_shell *s) {
+    if(kui_game_ram_patches_enabled(&s->games_launch_patches)) {
+        uint32_t offsets[KUI_GAME_RAM_PATCHES_COUNT];
+        if(!kui_shell_games_patches_ready(s) ||
+           !kui_game_ram_patches_plan(&s->games_launch_patches,s->games_detail.boot_bytes,offsets)) {
+            snprintf(s->games_launch_notice,sizeof(s->games_launch_notice),
+                "RAM patches do not fit this native executable. Edit or disable them in Advanced.");
+            s->page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;return KUI_SHELL_NONE;
+        }
+    }
     if(kui_shell_games_ce_probe_ready(s)) {
         /* CE uses its own interrupts and only its working background reader. */
         s->games_retail_reader=KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC;
@@ -437,6 +466,56 @@ static enum kui_shell_action list_games(struct kui_shell *s,bool first) {
     return KUI_SHELL_GAMES_LIST;
 }
 static unsigned move_count(unsigned selected, unsigned buttons,unsigned count);
+static enum kui_shell_action game_patch_input(struct kui_shell *s,unsigned buttons) {
+    if(!kui_shell_games_patches_ready(s)) return KUI_SHELL_NONE;
+    if(s->games_patch_selected>=KUI_GAME_RAM_PATCHES_COUNT*3u) s->games_patch_selected=0;
+    unsigned row=s->games_patch_selected,slot=row/3u,field=row%3u;
+    if(s->games_patch_editing) {
+        if(s->games_patch_digit>=8u) s->games_patch_digit=0;
+        if(buttons==KUI_SHELL_LEFT || buttons==KUI_SHELL_RIGHT) {
+            s->games_patch_digit=(s->games_patch_digit+(buttons==KUI_SHELL_LEFT?7u:1u))%8u;
+        } else if(buttons==KUI_SHELL_UP || buttons==KUI_SHELL_DOWN) {
+            unsigned shift=(7u-s->games_patch_digit)*4u;
+            uint32_t digit=((s->games_patch_draft>>shift)+(buttons==KUI_SHELL_UP?1u:15u))&15u;
+            s->games_patch_draft=(s->games_patch_draft&~(UINT32_C(15)<<shift))|(digit<<shift);
+        } else if(buttons==KUI_SHELL_A) {
+            struct kui_game_ram_patches next=s->games_launch_patches;
+            if(field==1u) next.entries[slot].address=s->games_patch_draft;
+            else next.entries[slot].value=s->games_patch_draft;
+            /* Validate even a disabled address before accepting its editor.
+             * An enabled second patch must also remain non-overlapping. */
+            struct kui_game_ram_patches check=next;
+            check.entries[slot].enabled=true;uint32_t offsets[KUI_GAME_RAM_PATCHES_COUNT];
+            if((field==1u || next.entries[slot].enabled) &&
+               !kui_game_ram_patches_plan(&check,s->games_detail.boot_bytes,offsets)) {
+                snprintf(s->games_launch_notice,sizeof(s->games_launch_notice),
+                    "Use an aligned address inside this boot file, separate from the other enabled patch.");
+                return KUI_SHELL_NONE;
+            }
+            s->games_launch_patches=next;s->games_patch_editing=false;
+            return save_game_launch(s);
+        }
+        return KUI_SHELL_NONE;
+    }
+    if(buttons==KUI_SHELL_UP || buttons==KUI_SHELL_DOWN) {
+        s->games_patch_selected=move_count(row,buttons,KUI_GAME_RAM_PATCHES_COUNT*3u);
+    } else if(!field && (buttons==KUI_SHELL_A || buttons==KUI_SHELL_LEFT || buttons==KUI_SHELL_RIGHT)) {
+        struct kui_game_ram_patches next=s->games_launch_patches;
+        next.entries[slot].enabled=!next.entries[slot].enabled;
+        uint32_t offsets[KUI_GAME_RAM_PATCHES_COUNT];
+        if(next.entries[slot].enabled && !kui_game_ram_patches_plan(&next,s->games_detail.boot_bytes,offsets)) {
+            snprintf(s->games_launch_notice,sizeof(s->games_launch_notice),"Set a valid boot-file address before enabling this patch.");
+            return KUI_SHELL_NONE;
+        }
+        s->games_launch_patches=next;return save_game_launch(s);
+    } else if(field && buttons==KUI_SHELL_A) {
+        const struct kui_game_ram_patch *p=&s->games_launch_patches.entries[slot];
+        s->games_patch_draft=field==1u?(p->address?p->address:KUI_GAME_RAM_PATCH_EXEC_ADDRESS):p->value;
+        s->games_patch_digit=0;s->games_patch_editing=true;
+        snprintf(s->games_launch_notice,sizeof(s->games_launch_notice),"Edit eight hex digits. A saves; B discards this edit.");
+    }
+    return KUI_SHELL_NONE;
+}
 /* Turning a page from a grid edge lands on the matching cell; the listing
  * clamps it if the new page is shorter. */
 static enum kui_shell_action turn_games_page(struct kui_shell *s,bool forward,unsigned select) {
@@ -1154,6 +1233,13 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(s->page==KUI_SHELL_GAMES_EXTRA_OPTIONS) {
             s->page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;return KUI_SHELL_NONE;
         }
+        if(s->page==KUI_SHELL_GAMES_PATCHES) {
+            if(s->games_patch_editing) {
+                s->games_patch_editing=false;
+                snprintf(s->games_launch_notice,sizeof(s->games_launch_notice),"Edit discarded; saved patch unchanged.");
+            } else s->page=KUI_SHELL_GAMES_EXTRA_OPTIONS;
+            return KUI_SHELL_NONE;
+        }
         if(s->page==KUI_SHELL_GAMES_INFO) {
             s->page=KUI_SHELL_GAMES_EXTRA_OPTIONS;return KUI_SHELL_NONE;
         }
@@ -1521,6 +1607,10 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             s->games_launch_cdda=false;
             return save_game_launch(s);
         case KUI_SHELL_GAME_OPTION_CDDA:
+            if(!s->games_launch_cdda && kui_game_ram_patches_enabled(&s->games_launch_patches)) {
+                snprintf(s->games_launch_notice,sizeof(s->games_launch_notice),"Disable RAM patches before enabling CD music.");
+                break;
+            }
             s->games_launch_cdda=!s->games_launch_cdda;
             if(s->games_launch_cdda) {
                 s->games_launch_reader=kui_shell_games_ce_probe_ready(s)?
@@ -1565,8 +1655,18 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                 s->games_tests_from_options=true;s->game_tests_selected=0;s->page=KUI_SHELL_GAMES_TESTS;
             }
             break;
+        case KUI_SHELL_GAME_TOOL_PATCHES:
+            if(buttons==KUI_SHELL_A && kui_shell_games_patches_ready(s)) {
+                s->games_patch_selected=0;s->games_patch_editing=false;s->page=KUI_SHELL_GAMES_PATCHES;
+            }
+            break;
+        case KUI_SHELL_GAME_TOOL_DEFAULTS:
+            if(buttons==KUI_SHELL_A) return game_launch_defaults(s);
+            break;
         }
         break;
+    case KUI_SHELL_GAMES_PATCHES:
+        return game_patch_input(s,buttons);
     case KUI_SHELL_GAMES_TESTS:
         if(buttons==KUI_SHELL_UP || buttons==KUI_SHELL_DOWN) {
             s->game_tests_selected=move_count(s->game_tests_selected,buttons,2u);break;

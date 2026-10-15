@@ -5,6 +5,7 @@
 #include "kui/media.h"
 #include "kui/retail_image.h"
 #include "kui/retail_cursor.h"
+#include "kui/game_launch_report.h"
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -19,7 +20,7 @@ static struct {
     FILE *image;
     uint64_t blocks;
     const char *fault;
-    FIL *track;
+    FIL *track, *report_write;
     unsigned writes, connects, disconnects, files, read_calls, physical_reads;
     unsigned hash_phase,hash_reads[2],hash_max[2],between_read_cancel_checks;
     uint64_t hash_begin[2],hash_end[2];
@@ -27,7 +28,7 @@ static struct {
     uint32_t first_sector;
     bool boot_read;
     char track_name[96];
-    bool active, connected, injected, cancelled;
+    bool active, connected, injected, cancelled, report_warning, report_skipped;
 } test;
 static FATFS fs;
 static const char *const selected = "/Games/Reader Test/disc.gdi";
@@ -36,6 +37,8 @@ static const char *const ce_package = "0:/KUI/apps/games/ce-probe.kui";
 static const char *const names[] = {"track01.bin", "music track02.raw", "track03.bin", "music track04.raw"};
 static const uint32_t starts[] = {0, 4, 45000, 45064};
 static const uint32_t counts[] = {4, 4, 64, 4};
+static bool source_directory_case(void) {return !strcmp(test.fault,"launch-report-source-directory");}
+static const char *game_root(void) {return source_directory_case()?"0:/KUI/apps/games":"0:/Games/Reader Test";}
 /* Tracks 5 on are copies of track 2's audio, four sectors each, end to end. */
 static unsigned track_count(void) {
     return !strcmp(test.fault, "tracks-99") ? 99u :
@@ -45,6 +48,7 @@ static unsigned track_count(void) {
 }
 static const char *track_name(unsigned i, char generated[32]) {
     snprintf(generated, 32, "track%02u.raw", i + 1);
+    if(i==2 && source_directory_case()) return "last-launch-a.txt";
     return i < 4 ? names[i] : generated;
 }
 static uint32_t track_start(unsigned i) { return i < 4 ? starts[i] : 45064u + (i - 3u) * 4u; }
@@ -63,6 +67,14 @@ static bool audio_unmapped(void) {
     return !strcmp(test.fault, "tracks-99") || !strcmp(test.fault, "async-tracks-40");
 }
 static bool fault(const char *name) { return test.active && !strcmp(test.fault, name); }
+static bool launch_case(void) {return !strncmp(test.fault,"launch-",7);}
+static bool launch_success(void) {
+    return !strcmp(test.fault,"launch-report") || !strcmp(test.fault,"launch-patches") ||
+        !strcmp(test.fault,"launch-report-readonly") || !strcmp(test.fault,"launch-report-full") || source_directory_case();
+}
+static bool report_path(const char *path) {
+    return !strcmp(path,KUI_GAME_LAUNCH_REPORT_PATH_A) || !strcmp(path,KUI_GAME_LAUNCH_REPORT_PATH_B);
+}
 static bool format_case(void) { return !strncmp(test.fault, "format-", 7); }
 static bool checksum_case(void) {return !strncmp(test.fault,"format-checksum-",16);}
 struct format_track {
@@ -98,6 +110,8 @@ static void log_line(const char *format, ...) {
     if(!strcmp(format,"Retail boot: %.100s; product=%s version=%s region=%s")) test.hash_phase=1;
     if(strstr(format,"checking exact executable")) test.hash_phase=2;
     if(strstr(format,"mapping %u tracks")) test.hash_phase=0;
+    if(strstr(format,"Launch report unavailable; continuing")) test.report_warning=true;
+    if(strstr(format,"Launch report skipped: selected image shares")) test.report_skipped=true;
     va_list args; va_start(args, format); vprintf(format, args); va_end(args); puts("");
 }
 static uint64_t blocks(void *ctx) { (void)ctx; return test.blocks; }
@@ -108,7 +122,7 @@ static int read_image(void *ctx, uint32_t block, size_t count, uint8_t *data) {
         fread(data, 512, count, test.image) != count ? -1 : 0;
 }
 static int write_image(void *ctx, uint32_t block, size_t count, const uint8_t *data) {
-    (void)ctx; ++test.writes; assert(!test.active);
+    (void)ctx; ++test.writes; assert(!test.active || launch_case());
     return fseeko(test.image, (off_t)block * 512, SEEK_SET) ||
         fwrite(data, 512, count, test.image) != count ? -1 : 0;
 }
@@ -143,11 +157,17 @@ static bool cancel(void) {
 }
 FRESULT __real_f_open(FIL *, const TCHAR *, BYTE);
 FRESULT __wrap_f_open(FIL *file, const TCHAR *path, BYTE flags) {
-    if(test.active) assert(!(flags & (FA_WRITE | FA_CREATE_NEW | FA_CREATE_ALWAYS | FA_OPEN_ALWAYS | FA_OPEN_APPEND)));
+    bool writes=(flags & (FA_WRITE | FA_CREATE_NEW | FA_CREATE_ALWAYS | FA_OPEN_ALWAYS | FA_OPEN_APPEND))!=0;
+    if(test.active && writes) {
+        assert(launch_case() && report_path(path));
+        if(fault("launch-report-readonly")) {test.injected=true;return FR_WRITE_PROTECTED;}
+    }
     FRESULT result = __real_f_open(file, path, flags);
     if(test.active && result == FR_OK) {
         ++test.files;
-        if(strstr(path, "track") || (format_case() && !strncmp(path,"0:/Games/Reader Test/",21))) {
+        if(writes) {assert(!test.report_write);test.report_write=file;}
+        if(strstr(path, "track") || (source_directory_case() && report_path(path)) ||
+            (format_case() && !strncmp(path,"0:/Games/Reader Test/",21))) {
             test.track = file;
             snprintf(test.track_name, sizeof(test.track_name), "%s", path);
             if(fault("size-change")) { ++file->obj.objsize; test.injected = true; }
@@ -177,10 +197,10 @@ FRESULT __wrap_f_read(FIL *file, void *buffer, UINT bytes, UINT *got) {
                 }
             }
             if(fault("read-fail")) { test.injected = true; return FR_DISK_ERR; }
-            /* Raw boot files are read only by the detached stage; cooked
-             * preparation reads their exact logical bytes for expected CRC. */
+            /* Legacy raw preparation defers boot reads to the detached stage.
+             * Cooked preparation and reporting launches hash exact bytes here. */
             FSIZE_t end = f_tell(file), start = end - *got;
-            if(strstr(test.track_name, "track03") && start < 23u * track_stride(2) &&
+            if((strstr(test.track_name, "track03") || (source_directory_case() && report_path(test.track_name))) && start < 23u * track_stride(2) &&
                end > 21u * track_stride(2))
                 test.boot_read = true;
             /* The last IP sector: the launcher's final read of track data. */
@@ -215,6 +235,7 @@ FRESULT __wrap_f_close(FIL *file) {
     FRESULT result = __real_f_close(file);
     if(test.active) {
         assert(test.files); --test.files;
+        if(file==test.report_write) test.report_write=NULL;
         if(track) test.track = NULL;
         if(track && fault("close-fail")) { test.injected = true; return FR_DISK_ERR; }
     }
@@ -228,7 +249,11 @@ FRESULT __wrap_f_mount(FATFS *volume, const TCHAR *path, BYTE option) {
 }
 FRESULT __real_f_write(FIL *, const void *, UINT, UINT *);
 FRESULT __wrap_f_write(FIL *file, const void *data, UINT bytes, UINT *written) {
-    assert(!test.active); return __real_f_write(file, data, bytes, written);
+    if(test.active) {
+        assert(launch_case() && file==test.report_write);
+        if(fault("launch-report-full")) {test.injected=true;*written=0;return FR_OK;}
+    }
+    return __real_f_write(file, data, bytes, written);
 }
 FRESULT __real_f_mkdir(const TCHAR *);
 FRESULT __wrap_f_mkdir(const TCHAR *path) { assert(!test.active); return __real_f_mkdir(path); }
@@ -324,12 +349,13 @@ static void seed(const char *directory) {
         return;
     }
     data = host_file(directory, "disc.gdi", &size);
-    write_file("0:/Games/Reader Test/disc.gdi", data, size); free(data);
+    char gdi_path[256];assert(snprintf(gdi_path,sizeof(gdi_path),"%s/disc.gdi",game_root())<(int)sizeof(gdi_path));
+    write_file(gdi_path, data, size); free(data);
     for(unsigned i = 0; i < track_count(); ++i) {
         if(i == 1 && !strcmp(test.fault, "missing-track")) continue;
         char path[256], generated[32];
         const char *name = track_name(i, generated);
-        snprintf(path, sizeof(path), "0:/Games/Reader Test/%s", name);
+        snprintf(path, sizeof(path), "%s/%s", game_root(), name);
         data = host_file(directory, name, &size);
         if(i == 2 && !strcmp(test.fault, "bad-ip")) data[16] ^= 1;
         if(i == 2 && !strcmp(test.fault, "bad-bootfile")) data[16 + 96] = 'X';
@@ -517,7 +543,7 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
     assert(map->track_count == track_count() &&
            map->extent_count >= (audio_unmapped() ? 2u : track_count()));
     assert(map->session_lba == 45000 && map->boot_lba == 45021 &&
-           map->boot_bytes == (!strcmp(test.fault, "boot-tail") || !strcmp(test.fault, "cooked-boot-tail") ? 3001u : 4096u));
+           map->boot_bytes == (launch_case() || !strcmp(test.fault, "boot-tail") || !strcmp(test.fault, "cooked-boot-tail") ? 3001u : 4096u));
     assert(!strcmp(map->title, !strcmp(test.fault, "other-title") ? "Independent Native Game" :
         !strcmp(test.fault, "blank-title") ? "Untitled game" : "DEAD OR ALIVE 2"));
     assert(!strcmp(map->bootfile, !strcmp(test.fault, "alternate-bootfile") ? "ALT_BOOT.BIN" : "1ST_READ.BIN"));
@@ -571,8 +597,8 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
                 assert(!memcmp(actual + n * 2048u, expected[i] + n * stride + kui_retail_track_header_bytes(t), 2048));
         }
     }
-    /* Raw preparation skips the executable and preserves zero boot CRC.
-     * Cooked preparation provides its exact expected logical-byte CRC. */
+    /* The old raw API preserves zero boot CRC; reporting launches and cooked
+     * preparation provide the exact expected logical-byte CRC. */
     const struct kui_retail_track *boot_track = &map->slots[2].track;
     uint32_t boot_stride = kui_retail_track_sector_bytes(boot_track);
     uint32_t boot_header = kui_retail_track_header_bytes(boot_track), boot_crc = 0;
@@ -592,7 +618,8 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
         }
         done += bytes;
     }
-    assert(map->boot_crc32 == (cooked_track(2) ? boot_crc : 0));
+    assert(map->boot_crc32 == (cooked_track(2) || launch_case() ? boot_crc : 0));
+    if(launch_case()) assert(map->flags & KUI_RETAIL_IMAGE_BOOT_CRC);
     if(cooked_track(2))
         assert(boot_crc == (!strcmp(test.fault, "cooked-boot-tail") ? 0x4a3efbf8u : 0xbaf6ad9cu));
     assert(kui_retail_image_read(&reader, map->session_lba, 16,
@@ -622,8 +649,99 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
     printf("Detached selected-image read PASS: all raw tracks, cooked data, full IP CRC, exact boot bytes and headers; %u SD blocks\n", reads);
     if(cooked_track(2)) printf("Cooked data RAW requests refused before IO; exact boot CRC %08x\n", boot_crc);
 }
+static void host_write(const char *directory,const char *name,const void *data,size_t bytes) {
+    char path[1024];assert(snprintf(path,sizeof(path),"%s/%s",directory,name)<(int)sizeof(path));
+    FILE *file=fopen(path,"wb");assert(file);
+    assert(fwrite(data,1,bytes,file)==bytes && !fclose(file));
+}
+/* Export logical bytes after launch preparation so Python independently checks
+ * every game/package file and the report CRC/fields, rather than blessing a
+ * changed card just because it contains a valid production-coded record. */
+static void export_file(const char *directory,const char *path,const char *name,bool report) {
+    FIL file;FRESULT r=f_open(&file,path,FA_READ);
+    if(report && r==FR_NO_FILE) return;
+    assert(r==FR_OK && f_size(&file)<1000000u);
+    size_t bytes=(size_t)f_size(&file);uint8_t *data=malloc(bytes+1u);assert(data);
+    UINT got=0;assert(f_read(&file,data,(UINT)bytes,&got)==FR_OK && got==bytes);
+    assert(f_close(&file)==FR_OK);
+    host_write(directory,name,data,bytes);
+    if(report && bytes) {
+        uint64_t sequence=0;assert(kui_game_launch_report_inspect(data,bytes,&sequence));
+        assert(sequence==(!strcmp(name,"after-last-launch-b.txt")?2u:1u));
+    }
+    free(data);
+}
+static void export_launch_files(const char *directory) {
+    unsigned writes=test.writes;test.active=false;
+    kui_media_set(&media);assert(kui_mount(&fs,log_line));
+    export_file(directory,package,"after-retail-boot.kui",false);
+    export_file(directory,ce_package,"after-ce-probe.kui",false);
+    char gdi_path[256];assert(snprintf(gdi_path,sizeof(gdi_path),"%s/disc.gdi",game_root())<(int)sizeof(gdi_path));
+    export_file(directory,gdi_path,"after-disc.gdi",false);
+    for(unsigned i=0;i<3;i++) {
+        char generated[32],path[256],output[128];const char *name=track_name(i,generated);
+        assert(snprintf(path,sizeof(path),"%s/%s",game_root(),name)<(int)sizeof(path));
+        assert(snprintf(output,sizeof(output),"after-%s",name)<(int)sizeof(output));
+        export_file(directory,path,output,false);
+    }
+    if(!source_directory_case()) export_file(directory,KUI_GAME_LAUNCH_REPORT_PATH_A,"after-last-launch-a.txt",true);
+    export_file(directory,KUI_GAME_LAUNCH_REPORT_PATH_B,"after-last-launch-b.txt",true);
+    assert(f_mount(NULL,"0:",0)==FR_OK);kui_media_set(NULL);test.active=true;
+    assert(test.writes==writes);
+}
+static void check_launch(const char *directory) {
+    struct kui_game_ram_patches patches={0};
+    test.hash_begin[0]=0;test.hash_end[0]=16u*2352u;
+    test.hash_begin[1]=21u*2352u;test.hash_end[1]=23u*2352u;test.hash_bounded=true;
+    bool patched=strcmp(test.fault,"launch-report") && strcmp(test.fault,"launch-report-readonly") &&
+        strcmp(test.fault,"launch-report-full") && !source_directory_case();
+    if(patched) {
+        patches.entries[0]=(struct kui_game_ram_patch){0x0c010004u,0x12345678u,true};
+        /* Last aligned word entirely inside 3001 exact bytes; sector padding
+         * is not part of the owner's executable and must not admit a target. */
+        patches.entries[1]=(struct kui_game_ram_patch){0xac010bb4u,0xa1b2c3d4u,true};
+    }
+    if(fault("launch-patch-duplicate")) patches.entries[1].address=0x8c010004u;
+    if(fault("launch-patch-range")) patches.entries[1].address=0x8c010bb8u;
+    uint32_t reader=KUI_RETAIL_READER_STANDARD;
+    if(fault("launch-patch-ce")) reader|=KUI_GAMES_RETAIL_CE_PROBE;
+    if(fault("launch-patch-cdda")) reader|=KUI_GAMES_RETAIL_CDDA;
+    unsigned runs=!strcmp(test.fault,"launch-report")?2u:1u;
+    for(unsigned run=0;run<runs;run++) {
+        struct kui_runtime_image image={0};
+        const char *path=source_directory_case()?"/KUI/apps/games/disc.gdi":selected;
+        bool result=kui_games_retail_prepare_launch(path,reader,&patches,&image,log_line,cancel);
+        assert(result==launch_success());
+        if(result) {
+            assert(test.hash_reads[0]==16u*(run+1u) && test.hash_reads[1]==2u*(run+1u));
+            assert(test.hash_max[0]==2352u && test.hash_max[1]==2352u);
+            assert(test.boot_read);check_mapping(directory,&image);
+            host_write(directory,"launch-payload.bin",image.data,image.info.payload_bytes);
+            const uint8_t *seed=(const uint8_t *)image.data+0x2010u;
+            assert(image.info.payload_bytes>=0x2010u+KUI_GAME_RAM_PATCH_SEED_BYTES);
+            struct kui_game_ram_patches decoded={0};
+            assert(kui_game_ram_patch_seed_decode(&decoded,seed,KUI_GAME_RAM_PATCH_SEED_BYTES,3001u));
+            assert(kui_game_ram_patches_enabled(&decoded)==patched);
+            if(patched) {
+                assert(decoded.entries[0].address==0x8c010004u && decoded.entries[0].value==0x12345678u);
+                assert(decoded.entries[1].address==0x8c010bb4u && decoded.entries[1].value==0xa1b2c3d4u);
+            } else assert(kui_game_ram_patch_seed_blank(seed,KUI_GAME_RAM_PATCH_SEED_BYTES));
+        } else assert(!image.data && !image.info.payload_bytes && !image.info.memory_bytes);
+        kui_runtime_free(&image);
+    }
+    bool report_failed=fault("launch-report-readonly") || fault("launch-report-full");
+    assert(test.report_warning==report_failed);
+    assert(test.report_skipped==source_directory_case());
+    if(report_failed) assert(test.injected);
+    if(!launch_success() || fault("launch-report-readonly") || source_directory_case()) assert(!test.writes);
+    if(fault("launch-patch-duplicate") || fault("launch-patch-ce") || fault("launch-patch-cdda"))
+        assert(!test.connects && !test.read_calls);
+    export_launch_files(directory);
+    puts("Launch preparation PASS: only report writes admitted; original game/package bytes exported for independent comparison");
+}
 static void check(const char *directory) {
     struct kui_runtime_image image = {0};
+    if(launch_case()) {check_launch(directory);return;}
     if(format_case()) {
         struct format_expect expected = format_expect(directory);
         if(checksum_case()) {
@@ -701,11 +819,12 @@ int main(int argc, char **argv) {
         assert(f_mount(NULL, "0:", 0) == FR_OK); kui_media_set(NULL);
     } else {
         assert(!strcmp(argv[3], "check")); test.active = true; check(argv[2]);
-        assert(!test.writes && !test.files && !test.connected && test.connects == test.disconnects);
+        assert((launch_case() || !test.writes) && !test.files && !test.report_write && !test.connected && test.connects == test.disconnects);
         if(strstr(test.fault, "-fail") || !strncmp(test.fault, "sector-", 7) ||
             !strcmp(test.fault, "cancel-map") || !strcmp(test.fault, "cancel-ip") || !strcmp(test.fault, "size-change")) assert(test.injected);
     }
     assert(!fclose(test.image));
-    printf("PASS retail preparation %s %s; no active-operation writes\n", argv[3], test.fault);
+    printf("PASS retail preparation %s %s; %s\n", argv[3], test.fault,
+        launch_case()?"only bounded launch-report writes allowed":"no active-operation writes");
     return 0;
 }

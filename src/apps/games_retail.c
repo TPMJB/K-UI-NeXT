@@ -1,5 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/games_retail.h"
+#include "kui/game_launch_report.h"
+#include "kui/game_launch_settings.h"
+#include "kui/version.h"
+#ifndef KUI_BUILD_ID
+#define KUI_BUILD_ID "unknown"
+#endif
 #include "kui/ce_load_plan.h"
 #include "kui/armada_ce_excerpt_pool.h"
 #include "kui/armada_ce_stream_seed.h"
@@ -391,16 +397,41 @@ static bool armada_stream_seed_fill(struct kui_runtime_image *package,size_t at,
         map->track_count,map->extent_count,seed->words[KUI_ARMADA_CE_STREAM_MAP_CRC_WORD]);
     return true;
 }
-bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
-    struct kui_runtime_image *package,kui_log_fn log,kui_cancel_fn cancel) {
+static bool fill_ram_patches(struct kui_runtime_image *package,
+        const struct kui_game_ram_patches *patches,uint32_t exec_bytes) {
+    if(!kui_game_ram_patches_enabled(patches)) return true;
+    size_t found=SIZE_MAX;
+    for(size_t at=KUI_RETAIL_STAGE_BLOB_OFFSET;
+        at<=package->info.payload_bytes && KUI_GAME_RAM_PATCH_SEED_BYTES<=package->info.payload_bytes-at;at+=4u) {
+        uint8_t *seed=(uint8_t *)package->data+at;
+        /* SH literal pools can contain adjacent magic comparison words.
+         * Select the complete typed header, not an eight-byte coincidence. */
+        if(le32(seed)!=KUI_GAME_RAM_PATCH_SEED_MAGIC0 || le32(seed+4)!=KUI_GAME_RAM_PATCH_SEED_MAGIC1 ||
+           le32(seed+8)!=KUI_GAME_RAM_PATCH_SEED_VERSION || le32(seed+12)!=KUI_GAME_RAM_PATCH_SEED_BYTES) continue;
+        if(found!=SIZE_MAX || !kui_game_ram_patch_seed_blank(seed,KUI_GAME_RAM_PATCH_SEED_BYTES)) return false;
+        found=at;
+    }
+    return found!=SIZE_MAX && kui_game_ram_patch_seed_encode((uint8_t *)package->data+found,
+        KUI_GAME_RAM_PATCH_SEED_BYTES,patches,exec_bytes);
+}
+static bool prepare_launch(const char *path,uint32_t reader,const struct kui_game_ram_patches *patches,
+    bool reporting,struct kui_runtime_image *package,kui_log_fn log,kui_cancel_fn cancel) {
     if(!package) return false;
     *package=(struct kui_runtime_image){0};
     if(!log || !cancel) return false;
+    const struct kui_game_ram_patches off={0};
+    if(!patches) patches=&off;
+    if(!kui_game_ram_patches_valid(patches)) {log("RAM patches: invalid address or duplicate target");return false;}
+    const bool patched=kui_game_ram_patches_enabled(patches);
+    struct kui_game_ram_patches applied_patches={0};
     const bool ce=(reader&KUI_GAMES_RETAIL_CE_PROBE)!=0;
     const bool descramble=(reader&KUI_GAMES_RETAIL_DESCRAMBLE)!=0;
     const bool plain=(reader&KUI_GAMES_RETAIL_BOOT_PLAIN)!=0;
     const bool cdda=(reader&KUI_GAMES_RETAIL_CDDA)!=0;
     const bool ce_excerpt=(reader&KUI_GAMES_RETAIL_CE_EXCERPT)!=0;
+    if(patched && (ce || cdda || ce_excerpt)) {
+        log("RAM patches require a native game with CD music Off");return false;
+    }
     reader&=~(KUI_GAMES_RETAIL_CE_PROBE | KUI_GAMES_RETAIL_DESCRAMBLE |
         KUI_GAMES_RETAIL_BOOT_PLAIN | KUI_GAMES_RETAIL_CDDA | KUI_GAMES_RETAIL_CE_EXCERPT);
     if(ce_excerpt && (!ce || cdda || descramble || plain || reader!=KUI_RETAIL_READER_ASYNC)) {
@@ -505,6 +536,13 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
         problem="boot executable and full IP must be in the selected data session";goto done;
     }
     map->boot_lba=metadata.boot_lba;map->boot_bytes=metadata.boot_bytes;
+    uint32_t patch_offsets[KUI_GAME_RAM_PATCHES_COUNT];
+    if(!kui_game_ram_patches_plan(patches,map->boot_bytes,patch_offsets)) {
+        problem="RAM patch target lies outside the selected boot executable";goto done;
+    }
+    for(unsigned i=0;i<KUI_GAME_RAM_PATCHES_COUNT;i++) if(patches->entries[i].enabled)
+        applied_patches.entries[i]=(struct kui_game_ram_patch){
+            KUI_GAME_RAM_PATCH_EXEC_ADDRESS+patch_offsets[i],patches->entries[i].value,true};
     snprintf(map->title,sizeof(map->title),"%.127s",metadata.title[0]?metadata.title:"Untitled game");
     snprintf(map->product,sizeof(map->product),"%s",metadata.product);
     snprintf(map->region,sizeof(map->region),"%s",metadata.region);
@@ -533,7 +571,7 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
         if(image->tracks[i].sector_bytes==KUI_GAME_DATA_BYTES &&
             image->tracks[i].start_lba<boot_end && image->tracks[i].end_lba>map->boot_lba)
             cooked_boot=true;
-    if(cdda || cooked_boot || image->format!=KUI_GAME_IMAGE_GDI) {
+    if(reporting || patched || cdda || cooked_boot || image->format!=KUI_GAME_IMAGE_GDI) {
         map->flags|=KUI_RETAIL_IMAGE_BOOT_CRC;
         log("Retail boot: checking exact executable CRC before detached launch");
         r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32);
@@ -615,7 +653,7 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
         }
         /* Publish only the verified allocation; failures never expose a
          * partial replacement or silently use the ordinary loader. */
-        kui_runtime_free(package);*package=candidate;
+        kui_runtime_free(package);*package=candidate;launch_package=package_path;
         log("CDDA launch: exact %s %s profile; loaded executable SHA, driver and hook guards remain mandatory",
             profile==KUI_GAMES_CDDA_MDK2_RAW?"MDK2":"Toy Commander",
             profile==KUI_GAMES_CDDA_TOY_COOKED?"cooked DATA":"raw GDI");
@@ -641,6 +679,34 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     }
     r=kui_retail_manifest_encode(map,(uint8_t *)package->data+KUI_RETAIL_MAP_OFFSET);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
+    if(!fill_ram_patches(package,&applied_patches,map->boot_bytes)) {
+        problem="RAM patches need a matching ordinary native loader; reinstall the game-launch package";goto done;
+    }
+    if(patched) log("RAM patches: validated one-time writes inside %u executable bytes",map->boot_bytes);
+    char report_root[KUI_GAME_LAUNCH_SETTINGS_PATH_CAP];
+    /* Track names are sibling components. Keeping all source files outside
+     * the report directory also excludes FAT short-name aliases of either
+     * report filename, without guessing which spelling refers to a file. */
+    bool report_safe=!strcmp(files.root,"/") ||
+        (kui_game_launch_settings_normalize(report_root,files.root) && strcmp(report_root,"/kui/apps/games"));
+    if(reporting && !report_safe)
+        log("Launch report skipped: selected image shares the reserved report directory");
+    if(reporting && report_safe && !stopped(&files)) {
+        struct kui_game_launch_report report={
+            .version=KUI_VERSION,.build_id=KUI_BUILD_ID,.image_path=path,
+            .reader=map->reader==KUI_RETAIL_READER_ASYNC?"Background":
+                map->reader==KUI_RETAIL_READER_ASYNC_EAGER?"Background (more work)":"Standard",
+            .storage=map->storage_transport==KUI_STORAGE_SCIF?"SCIF microSD":
+                map->storage_transport==KUI_STORAGE_SCI?"SCI microSD":"IDE / CF",
+            .encoding=ce?"Windows CE prefix + body":(map->flags&KUI_RETAIL_IMAGE_SCRAMBLED)?"Scrambled (decode)":"Plain",
+            .cdda=cdda || ce_excerpt,.cdda_profile=ce_excerpt?kui_wince_cdda_disc(music_profile)->name:
+                cdda?"Native admitted profile":"Off",.package_path=launch_package,
+            .product=map->product,.title=map->title,.bootfile=map->bootfile,
+            .ip_crc32=map->ip_crc32,.ip_bytes=KUI_RETAIL_IP_BYTES,
+            .executable_crc32=map->boot_crc32,.executable_bytes=map->boot_bytes,.patches=&applied_patches};
+        if(!kui_game_launch_report_save(&report,log,cancel))
+            log("Launch report unavailable; continuing without a new saved report");
+    }
     log("%s prepared: %u tracks, %u extents; IP CRC32=%08x, %s=%u bytes checked at load",
         ce_excerpt?"Windows CE CD music":ce?"Windows CE boot test":"Retail boot",
         map->track_count,map->extent_count,map->ip_crc32,map->bootfile,map->boot_bytes);
@@ -652,4 +718,14 @@ done:
     if(stopped(&files)) {ok=false;problem="cancelled before retail handoff";}
     if(!ok) {kui_runtime_free(package);log("Retail boot: %s",problem);}
     return ok;
+}
+
+bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
+    struct kui_runtime_image *image,kui_log_fn log,kui_cancel_fn cancelled) {
+    return prepare_launch(path,reader,NULL,false,image,log,cancelled);
+}
+bool kui_games_retail_prepare_launch(const char *path,uint32_t reader,
+    const struct kui_game_ram_patches *patches,struct kui_runtime_image *image,
+    kui_log_fn log,kui_cancel_fn cancelled) {
+    return prepare_launch(path,reader,patches,true,image,log,cancelled);
 }

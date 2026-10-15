@@ -122,8 +122,8 @@ build/test-armada-ce-excerpt-pool: tests/test_armada_ce_excerpt_pool.c include/k
 build/test-armada-ce-live-sound: tests/test_armada_ce_live_sound.c include/kui/armada_ce_live_sound.h include/kui/armada_ce_ram_bind.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
-ARMADA_PREPARE_TEST_SOURCES := src/core/game_image.c src/core/hash.c src/core/data.c src/core/destination.c src/core/retail_image.c
-build/test-armada-ce-excerpt-prepare: tests/test_armada_ce_excerpt_prepare.c src/apps/games_retail.c $(ARMADA_PREPARE_TEST_SOURCES) include/kui/armada_ce_excerpt_pool.h
+ARMADA_PREPARE_TEST_SOURCES := src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/game_image.c src/core/hash.c src/core/data.c src/core/destination.c src/core/retail_image.c
+build/test-armada-ce-excerpt-prepare: tests/test_armada_ce_excerpt_prepare.c src/apps/games_retail.c $(ARMADA_PREPARE_TEST_SOURCES) include/kui/armada_ce_excerpt_pool.h include/kui/game_ram_patches.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -ffunction-sections -fdata-sections tests/test_armada_ce_excerpt_prepare.c $(ARMADA_PREPARE_TEST_SOURCES) -Wl,--gc-sections -o $@
 build/test-armada-ce-excerpt-entry: tests/test_armada_ce_excerpt_entry.c src/loader/armada_ce_excerpt_entry.c include/kui/armada_ce_excerpt_entry.h src/loader/armada_ce_audio_observe.inc
@@ -133,7 +133,7 @@ build/test-armada-ce-excerpt: tests/test_armada_ce_excerpt.c src/loader/armada_c
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -fno-pie -no-pie $< -o $@
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek build/music-asset-check
-test: build/test-game-launch-settings build/test-game-launch-settings-file
+test: build/test-game-launch-settings build/test-game-launch-settings-file build/test-game-ram-patches build/test-game-launch-report build/test-retail-relay-patches
 test: test-armada-ce-stream test-worms-ce-stream test-wince-cooked-admission test-armada-ce-excerpt
 test: build/test-capture-export
 test: build/test-game-image build/test-game-metadata build/test-loader-probe build/test-loader-sd build/loader-probe.dat
@@ -240,6 +240,9 @@ test: build/test-storage-errors build/test-cd-audio build/test-network-probe bui
 	./build/test-crc16
 	./build/test-destination
 	./build/test-settings
+	./build/test-game-ram-patches
+	./build/test-game-launch-report
+	./build/test-retail-relay-patches
 	./build/test-game-launch-settings
 	./build/test-game-launch-settings-file
 	./build/test-shell
@@ -410,14 +413,14 @@ build/test-retail-boot: tests/test_retail_boot.c src/loader/retail_boot.h src/co
 # The real relay uses fixed P1 RAM addresses within ASan's shadow mapping.
 # Keep UBSan and execute the production source rather than relocating its RAM.
 RETAIL_RELAY_FLAGS = -fsanitize=undefined -fno-omit-frame-pointer -ffunction-sections -fdata-sections
-RETAIL_RELAY_DEPS = tests/test_retail_relay.c src/loader/retail_stage.c src/loader/retail_boot.h src/loader/retail_display.h src/loader/retail_storage.h include/kui/retail_loader_layout.h include/kui/retail_image.h src/core/retail_image.c
+RETAIL_RELAY_DEPS = src/core/game_ram_patches.c include/kui/game_ram_patches.h tests/test_retail_relay.c src/loader/retail_stage.c src/loader/retail_boot.h src/loader/retail_display.h src/loader/retail_storage.h include/kui/retail_loader_layout.h include/kui/retail_image.h src/core/retail_image.c
 build/test-retail-relay: $(RETAIL_RELAY_DEPS)
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(RETAIL_RELAY_FLAGS) -Iinclude -Isrc/loader tests/test_retail_relay.c src/core/retail_image.c -Wl,--gc-sections -o $@
+	$(CC) $(HOST_FLAGS) $(RETAIL_RELAY_FLAGS) -Iinclude -Isrc/loader tests/test_retail_relay.c src/core/retail_image.c src/core/game_ram_patches.c -Wl,--gc-sections -o $@
 
 build/test-retail-relay-ce: $(RETAIL_RELAY_DEPS) include/kui/ce_load_plan.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(RETAIL_RELAY_FLAGS) -DKUI_RETAIL_CE=1 -Iinclude -Isrc/loader tests/test_retail_relay.c src/core/retail_image.c -Wl,--gc-sections -o $@
+	$(CC) $(HOST_FLAGS) $(RETAIL_RELAY_FLAGS) -DKUI_RETAIL_CE=1 -Iinclude -Isrc/loader tests/test_retail_relay.c src/core/retail_image.c src/core/game_ram_patches.c -Wl,--gc-sections -o $@
 
 build/test-retail-startup-trace: tests/test_retail_startup_trace.c $(RETAIL_RELAY_DEPS)
 	@mkdir -p $(@D)
@@ -510,8 +513,8 @@ build/games-image-probe: tests/games_image_probe.c $(GAMES_IMAGE_PROBE) $(CORE) 
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast tests/games_image_probe.c $(GAMES_IMAGE_PROBE) $(CORE) $(FATFS) $(GAMES_IMAGE_PROBE_WRAP) -o $@
 
-GAMES_RETAIL = src/apps/games_retail.c src/core/hash.c src/core/retail_image.c src/core/retail_cursor.c src/core/game_image.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c
-build/games-retail: tests/games_retail.c $(GAMES_RETAIL) $(CORE) $(FATFS) include/kui/games_retail.h include/kui/ce_load_plan.h include/kui/retail_image.h include/kui/retail_loader_layout.h include/kui/game_image.h include/kui/game_metadata.h include/kui/runtime.h include/kui/destination.h include/kui/media.h src/dreamcast/platform.h config/ffconf.h .deps/fatfs/source/ff.h
+GAMES_RETAIL = src/apps/game_launch_report.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/apps/games_retail.c src/core/hash.c src/core/retail_image.c src/core/retail_cursor.c src/core/game_image.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c
+build/games-retail: tests/games_retail.c $(GAMES_RETAIL) $(CORE) $(FATFS) include/kui/games_retail.h include/kui/ce_load_plan.h include/kui/retail_image.h include/kui/retail_loader_layout.h include/kui/game_image.h include/kui/game_metadata.h include/kui/runtime.h include/kui/destination.h include/kui/media.h src/dreamcast/platform.h config/ffconf.h .deps/fatfs/source/ff.h include/kui/game_ram_patches.h include/kui/game_launch_settings.h include/kui/game_launch_report.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast tests/games_retail.c $(GAMES_RETAIL) $(CORE) $(FATFS) $(GAMES_IMAGE_PROBE_WRAP) -o $@
 
@@ -555,17 +558,17 @@ build/test-settings: tests/test_settings.c src/core/settings.c src/core/data.c i
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/settings.c src/core/data.c tests/test_settings.c -o $@
 
-build/test-shell: include/kui/game_launch_settings.h src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/game_launch_settings.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h
+build/test-shell: include/kui/game_launch_settings.h src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h include/kui/game_ram_patches.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/game_launch_settings.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c tests/test_shell.c -o $@
 
 build/test-shell-font: tests/test_shell_font.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc include/kui/shell_font.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/dreamcast/shell_font.c tests/test_shell_font.c -o $@
 
-build/render-shell: include/kui/game_launch_settings.h src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/game_launch_settings.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h
+build/render-shell: include/kui/game_launch_settings.h src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h include/kui/game_ram_patches.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/data.c src/core/game_launch_settings.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c tests/render_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/data.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c tests/render_shell.c -o $@
 
 build/test-capture-adapter: src/core/destination.c src/core/data.c include/kui/destination.h tests/test_capture_adapter.c src/dreamcast/capture.c src/dreamcast/platform.h include/kui/capture.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
@@ -910,10 +913,23 @@ build/test-storage-errors: tests/test_storage_errors.c src/dreamcast/sd.c src/co
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Itests/storage_stubs -Itests/stubs -Itests/apps_stubs $(INCLUDES) src/dreamcast/sd.c src/core/storage_error.c src/core/storage_policy.c tests/test_storage_errors.c -o $@
 
 # Saved per-image launch choices and dual-slot write-failure recovery.
-build/test-game-launch-settings: tests/test_game_launch_settings.c src/core/game_launch_settings.c include/kui/game_launch_settings.h src/core/data.c
+build/test-game-launch-settings: tests/test_game_launch_settings.c src/core/game_launch_settings.c src/core/game_ram_patches.c include/kui/game_launch_settings.h src/core/data.c include/kui/game_ram_patches.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/data.c src/core/game_launch_settings.c tests/test_game_launch_settings.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/data.c src/core/game_launch_settings.c src/core/game_ram_patches.c tests/test_game_launch_settings.c -o $@
 
-build/test-game-launch-settings-file: tests/test_game_launch_settings_file.c src/apps/game_launch_settings_file.c src/core/game_launch_settings.c src/core/data.c include/kui/game_launch_settings.h .deps/fatfs/source/ff.h
+build/test-game-launch-settings-file: tests/test_game_launch_settings_file.c src/apps/game_launch_settings_file.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/data.c include/kui/game_launch_settings.h .deps/fatfs/source/ff.h include/kui/game_ram_patches.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/data.c src/core/game_launch_settings.c src/apps/game_launch_settings_file.c tests/test_game_launch_settings_file.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/data.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/apps/game_launch_settings_file.c tests/test_game_launch_settings_file.c -o $@
+
+# One-time high-stage patch bounds and durable pre-handoff diagnostics.
+build/test-game-ram-patches: tests/test_game_ram_patches.c src/core/game_ram_patches.c include/kui/game_ram_patches.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/game_ram_patches.c tests/test_game_ram_patches.c -o $@
+
+build/test-game-launch-report: tests/test_game_launch_report.c src/apps/game_launch_report.c include/kui/game_launch_report.h src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/data.c include/kui/game_launch_settings.h include/kui/game_ram_patches.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/data.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/apps/game_launch_report.c tests/test_game_launch_report.c -o $@
+
+build/test-retail-relay-patches: $(RETAIL_RELAY_DEPS)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(RETAIL_RELAY_FLAGS) -DKUI_GAME_RAM_PATCHES_STAGE=1 -Iinclude -Isrc/loader tests/test_retail_relay.c src/core/retail_image.c src/core/game_ram_patches.c -Wl,--gc-sections -o $@

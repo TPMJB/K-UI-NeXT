@@ -218,6 +218,10 @@ Matching `Game` and `Game-2048` folders collapse into one Games entry. Choose
 originals and reports each conversion, skip or failure. Conversion does not
 guarantee compatibility or replace an archival raw dump.
 
+Games preparation now includes two saved one-time native boot patches, a
+per-image **Restore defaults** action, and verified pre-handoff launch reports.
+See [Games launch options](docs/games-launch-options.md) for controls and scope.
+
 Recent lists remain in RAM. Rows appear before artwork, and only the selected
 game's cover loads. The owner reports the first Games entry takes about
 5–7 seconds on the tested collection and navigation afterward is fluid.

@@ -33,7 +33,7 @@ RUNTIME_OBJECTS += build/dc/src/core/storage_test_model.o build/dc/src/core/stor
 RUNTIME_OBJECTS += build/dc/src/dreamcast/capture.o
 RUNTIME_OBJECTS += build/dc/src/dreamcast/memory.o
 RUNTIME_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recovery_scan.o build/dc/src/core/recovery_sector.o
-RUNTIME_OBJECTS += build/dc/src/core/game_launch_settings.o
+RUNTIME_OBJECTS += build/dc/src/core/game_launch_settings.o build/dc/src/core/game_ram_patches.o
 RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadata.o
 RUNTIME_OBJECTS += build/dc/src/core/game_cover.o build/dc/src/core/pvr_texture.o
 RUNTIME_OBJECTS += build/dc/src/core/files_path.o
@@ -287,7 +287,7 @@ RETAIL_SCIA := $(patsubst %.c,build/retail/scia/%.o,$(RETAIL_SCIA_SRC)) build/re
 RETAIL_RESIDENT_BINS := build/retail/resident-scif.bin build/retail/resident-sci.bin build/retail/resident-ide.bin \
     build/retail/resident-scia.bin
 RETAIL_STAGE := build/retail/src/loader/retail_stage_asm.o \
-    build/retail/src/loader/retail_stage.o $(RETAIL_COMMON)
+    build/retail/src/loader/retail_stage.o build/retail/src/core/game_ram_patches.o $(RETAIL_COMMON)
 RETAIL_BENCH_STAGE := build/retail/src/loader/retail_stage_asm.o \
     build/retail-bench/retail_stage.o build/retail/src/loader/retail_sd_bench.o $(RETAIL_COMMON)
 # The Windows CE placement probe: the same stage built with KUI_RETAIL_CE and
@@ -301,7 +301,7 @@ build/retail/%.o: %.c
 	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@
 build/retail/src/loader/retail_stage.o: src/loader/retail_stage.c
 	@mkdir -p $(@D)
-	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SKIES_DEFS) -MMD -MP -c $< -o $@
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SKIES_DEFS) -DKUI_GAME_RAM_PATCHES_STAGE=$(if $(filter-out 0,$(KUI_RETAIL_STARTUP_TRACE) $(KUI_RETAIL_SONIC_STACK_TEST) $(KUI_RETAIL_RETURN_TRACE) $(KUI_RETAIL_NATIVE_DISC_CHECK) $(KUI_RETAIL_NATIVE_DRIVE_STATE)),0,1) -MMD -MP -c $< -o $@
 build/retail/%_asm.o: %.S
 	@mkdir -p $(@D)
 	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@

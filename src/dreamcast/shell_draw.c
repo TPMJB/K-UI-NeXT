@@ -188,11 +188,12 @@ static void footer(struct paint *p, const struct kui_shell *s,
             "D-pad Select/change   A Toggle/open   START Launch   B Back":
             "D-pad Select/change   A Toggle/open   B Back") :
         s->page==KUI_SHELL_GAMES_EXTRA_OPTIONS ? "D-pad Select/change   A Open   B Options" :
+        s->page==KUI_SHELL_GAMES_PATCHES ? (s->games_patch_editing?"LEFT/RIGHT Digit   UP/DOWN Change   A Save   B Cancel":"D-pad Select   A Toggle/edit   B Advanced") :
         s->page==KUI_SHELL_GAMES_TESTS ? "D-pad Select   A Open test   B Back" :
         s->page==KUI_SHELL_GAMES_INFO ? "B Advanced" :
         s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
-    words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU||s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM||s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS||s->page==KUI_SHELL_GAMES_EXTRA_OPTIONS||s->page==KUI_SHELL_GAMES_TESTS||s->page==KUI_SHELL_GAMES_INFO?608:500,MUTED,controls,false);
+    words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU||s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM||s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS||s->page==KUI_SHELL_GAMES_EXTRA_OPTIONS||s->page==KUI_SHELL_GAMES_PATCHES||s->page==KUI_SHELL_GAMES_TESTS||s->page==KUI_SHELL_GAMES_INFO?608:500,MUTED,controls,false);
 }
 /* Each Home app by page, so its row can move without touching this table.
  * All icons are embedded RGB565 assets with separate list-sized artwork. */
@@ -1400,7 +1401,8 @@ static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
     snprintf(line,sizeof(line),"Background loading: %s",game_background(s));
     label(p,48,220,WHITE,line);
     label(p,48,246,WHITE,s->games_launch_cdda?"CD music: On (experimental)":"CD music: Off");
-    label(p,48,278,MUTED,"Uses the saved options for this image.");
+    label(p,48,278,kui_game_ram_patches_enabled(&s->games_launch_patches)?AMBER:MUTED,
+        kui_game_ram_patches_enabled(&s->games_launch_patches)?"RAM patches: On (one-time boot writes)":"RAM patches: Off");
     label(p,48,316,WHITE,"Keep the SD card inserted while playing.");
     label(p,48,342,AMBER,"Power cycle to return to the launcher.");
     if(v->busy && v->app_status && v->app_status->message[0])
@@ -1442,23 +1444,59 @@ static void games_extra_options(struct paint *p,const struct kui_shell *s) {
     title(p,40,108,"Games / Advanced");
     words(p,40,140,608,CYAN,s->games_detail.title[0]?s->games_detail.title:s->games_selected_path,false);
     games_variant_line(p,s,158);
-    const char *names[]={"Boot encoding","Background speed","Image information","Developer tests"};
+    const char *names[]={"Boot encoding","Background speed","Image information","Developer tests","RAM patches","Restore defaults"};
     const char *encodings[]={"Automatic","Plain","Scrambled"};
     bool encoding=kui_shell_games_encoding_ready(s);
     bool speed=kui_shell_games_retail_ready(s) && !s->games_launch_cdda &&
         s->games_launch_reader!=KUI_GAME_READER_STANDARD;
     const char *values[]={encoding?encodings[s->games_launch_encoding<KUI_GAME_ENCODING_COUNT?s->games_launch_encoding:0]:"Automatic",
-        speed?(s->games_launch_reader==KUI_GAME_READER_EAGER?"Aggressive":"Normal"):"Unavailable","Open","Open"};
+        speed?(s->games_launch_reader==KUI_GAME_READER_EAGER?"Aggressive":"Normal"):"Unavailable","Open","Open",
+        kui_shell_games_patches_ready(s)?(kui_game_ram_patches_enabled(&s->games_launch_patches)?"On":"Off"):"Unavailable","Apply"};
     for(unsigned i=0;i<KUI_SHELL_GAME_TOOL_COUNT;i++) {
-        unsigned y=180+i*42;bool ready=i==KUI_SHELL_GAME_TOOL_ENCODING?encoding:i==KUI_SHELL_GAME_TOOL_SPEED?speed:true;
-        panel(p,32,y,576,36,s->game_tools_selected==i?SELECTED:PANEL);
-        label(p,48,y+9,ready?WHITE:MUTED,names[i]);
-        words(p,350,y+9,592,ready?CYAN:MUTED,values[i],false);
+        unsigned y=178+i*31;bool ready=i==KUI_SHELL_GAME_TOOL_ENCODING?encoding:i==KUI_SHELL_GAME_TOOL_SPEED?speed:
+            i==KUI_SHELL_GAME_TOOL_PATCHES?kui_shell_games_patches_ready(s):true;
+        panel(p,32,y,576,27,s->game_tools_selected==i?SELECTED:PANEL);
+        label(p,48,y+5,ready?WHITE:MUTED,names[i]);
+        words(p,350,y+5,592,ready?CYAN:MUTED,values[i],false);
     }
     const char *hints[]={"Automatic uses the inspected CD boot encoding.",
         "Aggressive gives the background reader more work per step.",
-        "Disc tracks, image format and boot file details.","Read tests run separately from normal game launches."};
+        "Disc tracks, image format and boot file details.","Read tests run separately from normal game launches.",
+        "Two one-time boot patches. Native games with CD music Off only.",
+        "Save detected defaults for this image, including turning RAM patches Off."};
     words(p,40,374,608,MUTED,hints[s->game_tools_selected<KUI_SHELL_GAME_TOOL_COUNT?s->game_tools_selected:0],false);
+    game_options_notice(p,s);
+}
+static void games_patches(struct paint *p,const struct kui_shell *s) {
+    title(p,40,108,"Games / RAM patches");
+    words(p,40,140,608,CYAN,s->games_detail.title[0]?s->games_detail.title:s->games_selected_path,false);
+    label(p,40,160,MUTED,"One-time 32-bit writes after the original boot file is checked.");
+    for(unsigned row=0;row<KUI_GAME_RAM_PATCHES_COUNT*3u;row++) {
+        unsigned slot=row/3u,field=row%3u,y=186+row*29u;
+        const struct kui_game_ram_patch *patch=&s->games_launch_patches.entries[slot];
+        bool selected=row==s->games_patch_selected;
+        panel(p,32,y,576,25,selected?SELECTED:PANEL);
+        char name[32],value[16];
+        snprintf(name,sizeof(name),"Patch %u / %s",slot+1u,field==0?"Enabled":field==1?"Address":"Value");
+        label(p,48,y+4,WHITE,name);
+        if(!field) label(p,400,y+4,patch->enabled?AMBER:CYAN,patch->enabled?"On":"Off");
+        else {
+            uint32_t word=selected && s->games_patch_editing?s->games_patch_draft:field==1?patch->address:patch->value;
+            snprintf(value,sizeof(value),"%08lX",(unsigned long)word);
+            label(p,400,y+4,CYAN,value);
+            if(selected && s->games_patch_editing) {
+                unsigned digit=s->games_patch_digit<8?s->games_patch_digit:0;
+                char prefix[9];memcpy(prefix,value,digit);prefix[digit]=0;
+                char glyph[2]={value[digit],0};
+                box(p,400+word_width(p,prefix,false),y+21,word_width(p,glyph,false),2,AMBER);
+            }
+        }
+    }
+    char range[100];
+    uint32_t last=s->games_detail.boot_bytes>=4?KUI_GAME_RAM_PATCH_EXEC_ADDRESS+s->games_detail.boot_bytes-4u:KUI_GAME_RAM_PATCH_EXEC_ADDRESS;
+    snprintf(range,sizeof(range),"Boot range: %08lX - %08lX (4-byte aligned)",
+        (unsigned long)KUI_GAME_RAM_PATCH_EXEC_ADDRESS,(unsigned long)(last&~UINT32_C(3)));
+    label(p,40,370,MUTED,range);
     game_options_notice(p,s);
 }
 static void games_tests(struct paint *p,const struct kui_shell *s) {
@@ -1945,6 +1983,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_GAMES_RETAIL_CONFIRM: games_retail_confirmation(&p,s,v); break;
     case KUI_SHELL_GAMES_LAUNCH_OPTIONS: games_launch_options(&p,s); break;
     case KUI_SHELL_GAMES_EXTRA_OPTIONS: games_extra_options(&p,s); break;
+    case KUI_SHELL_GAMES_PATCHES: games_patches(&p,s); break;
     case KUI_SHELL_GAMES_TESTS: games_tests(&p,s); break;
     case KUI_SHELL_GAMES_INFO: games_information(&p,s); break;
     case KUI_SHELL_MEMORY: case KUI_SHELL_NETWORK: utility_page(&p,s,v); break;

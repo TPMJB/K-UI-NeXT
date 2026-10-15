@@ -15,8 +15,10 @@ enum fault {NONE,READ_OPEN,READ_ERROR,READ_SHORT,READ_CLOSE,WRITE_OPEN,WRITE_ERR
     WRITE_SHORT,SYNC_ERROR,WRITE_CLOSE,VERIFY_OPEN,VERIFY_CORRUPT,VERIFY_SHORT,
     VERIFY_CLOSE,CHANGED_DURING_READ,PARENT_ERROR};
 static enum fault failure;
-static const struct kui_game_launch_settings old_choice={KUI_GAME_READER_BACKGROUND,false,KUI_GAME_ENCODING_PLAIN};
-static const struct kui_game_launch_settings new_choice={KUI_GAME_READER_EAGER,true,KUI_GAME_ENCODING_SCRAMBLED};
+static const struct kui_game_launch_settings old_choice={.reader=KUI_GAME_READER_BACKGROUND,.encoding=KUI_GAME_ENCODING_PLAIN};
+static const struct kui_game_launch_settings new_choice={.reader=KUI_GAME_READER_EAGER,.cdda=true,.encoding=KUI_GAME_ENCODING_SCRAMBLED,
+    .patches={.entries={{.address=UINT32_C(0x8c200000),.value=UINT32_C(0xdeadbeef),.enabled=true},
+        {.address=UINT32_MAX,.value=UINT32_C(0x12345678)}}}};
 static unsigned index_of(const char *path) {
     if(!strcmp(path,KUI_GAME_LAUNCH_SETTINGS_PATH_A)) return 0;
     assert(!strcmp(path,KUI_GAME_LAUNCH_SETTINGS_PATH_B));return 1;
@@ -80,6 +82,11 @@ FRESULT f_stat(const TCHAR *path,FILINFO *info) {
 FRESULT f_mkdir(const TCHAR *path) {parents[parent_of(path)]=true;return FR_OK;}
 static void same(struct kui_game_launch_settings a,struct kui_game_launch_settings b) {
     assert(a.reader==b.reader && a.cdda==b.cdda && a.encoding==b.encoding);
+    for(unsigned i=0;i<2;i++) {
+        assert(a.patches.entries[i].address==b.patches.entries[i].address);
+        assert(a.patches.entries[i].value==b.patches.entries[i].value);
+        assert(a.patches.entries[i].enabled==b.patches.entries[i].enabled);
+    }
 }
 static void reset(void) {
     memset(disk,0,sizeof(disk));memset(parents,0,sizeof(parents));file_in_parent=false;
@@ -91,6 +98,18 @@ static void seed(unsigned slot,uint64_t sequence,const char *path,const struct k
     kui_game_launch_table_clear(&table);assert(kui_game_launch_table_upsert(&table,path,choice));
     assert(kui_game_launch_settings_encode(disk[slot].data,sizeof(disk[slot].data),&disk[slot].size,&table,sequence));
     disk[slot].exists=true;
+}
+static void seed_legacy(unsigned slot,uint64_t sequence) {
+    /* Independent v1 layout, deliberately not produced by the current codec. */
+    static const uint8_t fixture[]={
+        'K','U','I','L','C','H','0','1',1,0,0,0,56,0,0,0,
+        0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,
+        12,0,1,0,1,0,0,0,'/','g','a','m','e','s','/','a','.','g','d','i',0,0,0,0};
+    memcpy(disk[slot].data,fixture,sizeof(fixture));
+    for(unsigned i=0;i<8;i++) disk[slot].data[16+i]=(uint8_t)(sequence>>(i*8));
+    uint32_t crc=kui_crc32(0,disk[slot].data,sizeof(fixture)-4u);
+    for(unsigned i=0;i<4;i++) disk[slot].data[sizeof(fixture)-4u+i]=(uint8_t)(crc>>(i*8));
+    disk[slot].size=sizeof(fixture);disk[slot].exists=true;
 }
 static void expect_load(const char *path,const struct kui_game_launch_settings *choice) {
     struct kui_game_launch_settings got=new_choice;
@@ -122,7 +141,7 @@ static void faults_preserve_authority(void) {
     const enum fault cases[]={READ_OPEN,READ_ERROR,READ_SHORT,READ_CLOSE,WRITE_OPEN,WRITE_ERROR,
         WRITE_SHORT,SYNC_ERROR,WRITE_CLOSE,VERIFY_OPEN,VERIFY_CORRUPT,VERIFY_SHORT,VERIFY_CLOSE,PARENT_ERROR};
     for(unsigned current=0;current<2;current++) for(unsigned i=0;i<sizeof(cases)/sizeof(cases[0]);i++) {
-        reset();seed(current,7,"/games/a.gdi",&old_choice);seed(1-current,6,"/games/a.gdi",&new_choice);
+        reset();seed_legacy(current,7);seed(1-current,6,"/games/a.gdi",&new_choice);
         snapshot[current]=disk[current];failure=cases[i];
         assert(!kui_game_launch_settings_save("/games/a.gdi",&new_choice,NULL));
         assert(!memcmp(&snapshot[current],&disk[current],sizeof(snapshot[current])));
@@ -148,7 +167,55 @@ static void faults_preserve_authority(void) {
     clear_faults();assert(!kui_game_launch_settings_save("/games/a.gdi",&invalid,NULL));
     assert(!kui_game_launch_settings_save("/games/../a.gdi",&new_choice,NULL));
     assert(!read_opens && !write_opens);
-    puts("PASS launch files: read/write/flush/close/verify fault refusal, untouched authoritative slot, read races and sequence exhaustion");
+    puts("PASS launch files: v1-to-v2 read/write/flush/close/verify fault refusal, untouched authoritative slot, read races and sequence exhaustion");
+}
+static void mixed_version_migration(void) {
+    for(unsigned legacy=0;legacy<2;legacy++) {
+        reset();seed_legacy(legacy,7);seed(1-legacy,6,"/games/a.gdi",&new_choice);
+        expect_load("/games/a.gdi",&old_choice);snapshot[legacy]=disk[legacy];
+        assert(kui_game_launch_settings_save("/games/b.gdi",&new_choice,NULL));
+        assert(last_written==1-legacy && disk[last_written].data[8]==2);
+        assert(!memcmp(&snapshot[legacy],&disk[legacy],sizeof(snapshot[legacy])));
+        clear_faults();expect_load("/games/a.gdi",&old_choice);expect_load("/games/b.gdi",&new_choice);
+        struct kui_game_launch_settings changed=old_choice;changed.patches=new_choice.patches;
+        assert(kui_game_launch_settings_save("/games/a.gdi",&changed,NULL));
+        assert(last_written==legacy && disk[legacy].data[8]==2);
+        clear_faults();expect_load("/games/a.gdi",&changed);expect_load("/games/b.gdi",&new_choice);
+        /* A newer v1 remains authoritative over v2; version is never used
+         * as generation priority, and a torn v2 falls back to that v1. */
+        reset();seed_legacy(legacy,9);seed(1-legacy,10,"/games/a.gdi",&new_choice);
+        expect_load("/games/a.gdi",&new_choice);disk[1-legacy].size/=2;
+        clear_faults();expect_load("/games/a.gdi",&old_choice);
+        reset();seed_legacy(legacy,10);seed(1-legacy,9,"/games/a.gdi",&new_choice);
+        expect_load("/games/a.gdi",&old_choice);
+    }
+    puts("PASS launch files: highest-sequence v1/v2 selection, non-destructive migration, preserved entries and torn migration recovery");
+}
+static void patch_tuple_updates(void) {
+    reset();struct kui_game_launch_settings choice=old_choice;
+    assert(kui_game_launch_settings_save("/games/a.gdi",&choice,NULL));
+    for(unsigned change=0;change<12;change++) {
+        clear_faults();assert(kui_game_launch_settings_save("/games/a.gdi",&choice,NULL));assert(!write_opens);
+        switch(change) {
+        case 0: choice.patches.entries[0].address=1;break;
+        case 1: choice.patches.entries[0].value=UINT32_C(0xdeadbeef);break;
+        case 2: choice.patches.entries[0].address=UINT32_C(0x8c200000);break;
+        case 3: choice.patches.entries[0].enabled=true;break;
+        case 4: choice.patches.entries[0].address=UINT32_C(0x8c200004);break;
+        case 5: choice.patches.entries[0].value=UINT32_C(0x89abcdef);break;
+        case 6: choice.patches.entries[1].address=UINT32_C(0xac200008);break;
+        case 7: choice.patches.entries[1].value=UINT32_MAX;break;
+        case 8: choice.patches.entries[1].enabled=true;break;
+        case 9: choice.patches.entries[1].address=UINT32_C(0xac20000c);break;
+        case 10: choice.patches.entries[1].value=UINT32_C(0x87654321);break;
+        case 11: choice.patches.entries[0].enabled=false;break;
+        }
+        assert(kui_game_launch_settings_save("/games/a.gdi",&choice,NULL));assert(write_opens==1);
+        clear_faults();expect_load("/games/a.gdi",&choice);
+    }
+    clear_faults();choice.patches.entries[0]=choice.patches.entries[1];
+    assert(!kui_game_launch_settings_save("/games/a.gdi",&choice,NULL));assert(!read_opens && !write_opens);
+    puts("PASS launch files: patch-only address, value and enable changes save; disabled tuples survive and enabled duplicate targets fail before I/O");
 }
 static void full_collection(void) {
     static struct kui_game_launch_table table;
@@ -170,4 +237,4 @@ static void full_collection(void) {
     assert(!write_opens && !memcmp(snapshot,disk,sizeof(disk)));
     puts("PASS launch files: full collection updates, bounded chunked readback and overflow without eviction");
 }
-int main(void) {recovery_and_merging();faults_preserve_authority();full_collection();return 0;}
+int main(void) {recovery_and_merging();faults_preserve_authority();mixed_version_migration();patch_tuple_updates();full_collection();return 0;}

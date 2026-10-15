@@ -2,6 +2,7 @@
 #ifndef KUI_GAMES_RETAIL_H
 #define KUI_GAMES_RETAIL_H
 #include "kui/runtime.h"
+#include "kui/game_ram_patches.h"
 #define KUI_GAMES_RETAIL_PACKAGE "0:/KUI/apps/games/retail-boot.kui"
 #define KUI_GAMES_RETAIL_CE_PACKAGE "0:/KUI/apps/games/ce-probe.kui"
 #define KUI_GAMES_RETAIL_CE_EXCERPT_PACKAGE "0:/KUI/apps/games/ce-cdda-armada.kui"
@@ -38,4 +39,12 @@ bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *image,
  * otherwise the launch uses the standard reader and says why in the log. */
 bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     struct kui_runtime_image *image,kui_log_fn log,kui_cancel_fn cancelled);
+/* Shell launch: additionally validates the two optional one-time native boot
+ * patches and saves a bounded pre-handoff report. Reports contain metadata,
+ * not game bytes. An unavailable report is logged and does not turn a valid
+ * read-only-card launch into a failure. Patches require an ordinary native
+ * package with its exact high-stage capability; CE/CDDA are refused. */
+bool kui_games_retail_prepare_launch(const char *path,uint32_t reader,
+    const struct kui_game_ram_patches *patches,struct kui_runtime_image *image,
+    kui_log_fn log,kui_cancel_fn cancelled);
 #endif

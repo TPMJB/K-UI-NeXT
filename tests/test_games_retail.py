@@ -71,6 +71,13 @@ CHECKSUM_CASES = (
     "format-checksum-cue-shared-bad-ip-header",
 )
 FORMAT_CASES += CHECKSUM_CASES
+LAUNCH_CASES = (
+    "launch-report", "launch-patches", "launch-patch-old-package",
+    "launch-patch-duplicate", "launch-patch-range", "launch-patch-ce", "launch-patch-cdda",
+    "launch-report-readonly", "launch-report-full", "launch-report-source-directory",
+)
+LAUNCH_SUCCESS = ("launch-report", "launch-patches", "launch-report-readonly", "launch-report-full",
+                  "launch-report-source-directory")
 
 
 def make_checksum_fixture(folder, case):
@@ -134,22 +141,26 @@ def make_checksum_fixture(folder, case):
     (folder / "checksum.expect").write_text(f"{zlib.crc32(ip):08x} {expected_boot:08x}\n", encoding="ascii")
 
 
-def synthetic_package(ce=False):
+def synthetic_package(ce=False, ram_seed=False):
     # Structural preparation fixture. The stage is original data, never code
     # executed on the host; every retail-looking IP field is generated here.
     # ce: the Windows CE boot test's package, with its higher stage.
-    payload = bytearray(0x2010)
+    payload = bytearray(0x2010 + (64 if ram_seed else 0))
     payload[0x100:0x108] = b"KUIRCE01" if ce else b"KUIRBT01"
     stage = 0x8CE10000 if ce else 0x8CE00000
     struct.pack_into("<14I", payload, 0x108,
-                     1, 64, 0x1000, 4096, stage, 16,
+                     1, 64, 0x1000, 4096, stage, 16 + (64 if ram_seed else 0),
                      stage, 0x8C010000, 0xC00000, 0x8CFF0000,
                      0x2000, 0x8C008300, 0x8C00BB00, 0)
-    payload[0x2000:] = b"ORIGINALSTAGE123"
+    payload[0x2000:0x2010] = b"ORIGINALSTAGE123"
+    if ram_seed:
+        struct.pack_into("<16I", payload, 0x2010, 0x5249554B, 0x31504D41, 1, 64, *([0] * 12))
     return envelope(payload, len(payload), "0123456789ab")
 
 
 def make_retail_fixture(folder, case):
+    if case in LAUNCH_CASES and folder.exists():
+        shutil.rmtree(folder)
     if case in FORMAT_CASES:
         if case in CHECKSUM_CASES:
             make_checksum_fixture(folder, case)
@@ -173,7 +184,7 @@ def make_retail_fixture(folder, case):
     if case == "alternate-bootfile":
         data[16 + 96:16 + 112] = b"ALT_BOOT.BIN".ljust(16)
         data[20 * 2352 + 16 + 68 + 33:20 * 2352 + 16 + 68 + 47] = b"ALT_BOOT.BIN;1"
-    boot_bytes = {"boot-tail": 3001, "cooked-boot-tail": 3001,
+    boot_bytes = 3001 if case in LAUNCH_CASES else {"boot-tail": 3001, "cooked-boot-tail": 3001,
                   "boot-small": 127, "ce-probe-small": 2048,
                   "boot-large": 0xC00001}.get(case, 4096)
     # The third root record describes our generated random test bytes.
@@ -210,8 +221,72 @@ def make_retail_fixture(folder, case):
             shutil.copyfile(folder / "music track02.raw", folder / name)
             text += f'{number} {45064 + (number - 4) * 4} 0 2352 "{name}" 0\n'
         gdi.write_text(text, encoding="ascii")
-    (folder / "retail-boot.kui").write_bytes(synthetic_package())
+    if case == "launch-report-source-directory":
+        # This is an actual source/report path collision, not just a nearby
+        # image. Selecting the source from the reserved directory must never
+        # replace this track with diagnostic text.
+        track.rename(folder / "last-launch-a.txt")
+        gdi.write_text(gdi.read_text().replace("track03.bin", "last-launch-a.txt"), encoding="ascii")
+    (folder / "retail-boot.kui").write_bytes(synthetic_package(
+        ram_seed=case in LAUNCH_CASES and case != "launch-patch-old-package"))
     (folder / "ce-probe.kui").write_bytes(synthetic_package(ce=True))
+
+
+def check_launch_outputs(folder, case):
+    # A report may change filesystem metadata, so whole-card equality is not
+    # the oracle here. Every original logical file must remain byte-identical.
+    source_directory = case == "launch-report-source-directory"
+    data_track = "last-launch-a.txt" if source_directory else "track03.bin"
+    for name in ("retail-boot.kui", "ce-probe.kui", "disc.gdi", "track01.bin",
+                 "music track02.raw", data_track):
+        assert (folder / f"after-{name}").read_bytes() == (folder / name).read_bytes(), name
+    reports = []
+    for name in ("last-launch-a.txt", "last-launch-b.txt"):
+        if source_directory and name == "last-launch-a.txt":
+            continue  # Already compared byte-for-byte as an original track.
+        path = folder / f"after-{name}"
+        if path.exists() and path.stat().st_size:
+            data = path.read_bytes()
+            body, footer = data.rsplit(b"crc32: ", 1)
+            assert re.fullmatch(rb"[0-9A-F]{8}\n", footer)
+            assert int(footer, 16) == zlib.crc32(body), "report checksum is independent"
+            fields = dict(line.split(": ", 1) for line in body.decode("ascii").splitlines()[1:])
+            reports.append(fields)
+    expected_reports = 2 if case == "launch-report" else 1 if case == "launch-patches" else 0
+    assert len(reports) == expected_reports
+    if case not in LAUNCH_SUCCESS:
+        assert not (folder / "launch-payload.bin").exists()
+        return
+    source = (folder / data_track).read_bytes()
+    logical = b"".join(source[n:n + 2048] for n in range(16, len(source), 2352))
+    ip, executable = logical[:32768], logical[21 * 2048:21 * 2048 + 3001]
+    assert len(executable) == 3001
+    assert zlib.crc32(executable) != zlib.crc32(logical[21 * 2048:23 * 2048])
+    for sequence, fields in enumerate(reports, 1):
+        assert fields["sequence"] == f"{sequence:020d}"
+        assert fields["state"] == "prepared before handoff; game start unconfirmed"
+        assert fields["image"] == "/games/reader test/disc.gdi"
+        assert fields["package"] == "/kui/apps/games/retail-boot.kui"
+        assert fields["reader"] == "Standard" and fields["storage"] == "SCIF microSD"
+        assert fields["encoding"] == "Plain" and fields["cd music"] == "off"
+        assert fields["profile"] == "Off" and fields["bootfile"] == "1ST_READ.BIN"
+        assert fields["product"] == "KUI-TEST" and fields["title"] == "DEAD OR ALIVE 2"
+        assert int(fields["ip bytes"]) == 32768 and int(fields["ip crc32"], 16) == zlib.crc32(ip)
+        assert int(fields["source executable bytes"]) == 3001
+        assert int(fields["source executable crc32"], 16) == zlib.crc32(executable)
+        for index, (address, value) in enumerate(((0x8C010004, 0x12345678), (0x8C010BB4, 0xA1B2C3D4)), 1):
+            expected = f"on address=0x{address:08X} value=0x{value:08X}" if case == "launch-patches" else \
+                "off address=0x00000000 value=0x00000000"
+            assert fields[f"patch {index}"] == expected
+    payload = (folder / "launch-payload.bin").read_bytes()
+    original = (folder / "retail-boot.kui").read_bytes()[64:]
+    assert len(payload) == len(original) == 0x2050
+    assert payload[:0x1000] == original[:0x1000] and payload[0x2000:0x2010] == original[0x2000:0x2010]
+    expected_seed = bytearray(struct.pack("<16I", 0x5249554B, 0x31504D41, 1, 64, *([0] * 12)))
+    if case == "launch-patches":
+        struct.pack_into("<6I", expected_seed, 16, 3, 3001, 0x8C010004, 0x12345678, 0x8C010BB4, 0xA1B2C3D4)
+        struct.pack_into("<I", expected_seed, 40, zlib.crc32(expected_seed))
+    assert payload[0x2010:] == expected_seed, "exact canonical in-RAM seed; no executable disk patch"
 
 
 def main():
@@ -222,6 +297,8 @@ def main():
                         help="Only generic image-format preparation, on MBR FAT32/exFAT")
     parser.add_argument("--checksums-only", action="store_true",
                         help="Only exact CRC, physical-bound and fault cases, on MBR FAT32/exFAT")
+    parser.add_argument("--launch-only", action="store_true",
+                        help="Only pre-handoff reports and native RAM patches, on MBR FAT32/exFAT")
     args = parser.parse_args()
     for binary in ("mkfs.fat", "mkfs.exfat", "fsck.fat", "fsck.exfat"):
         if not shutil.which(binary):
@@ -236,8 +313,8 @@ def main():
             run("mkfs.fat", "-F", "32", str(volume)) if kind == "fat32" else run("mkfs.exfat", str(volume))
             partitioned_clean = base / f"{kind}-mbr.img"
             partition_image(volume, partitioned_clean, kind)
-            layouts = ((True, CHECKSUM_CASES),) if args.checksums_only else ((True, FORMAT_CASES),) if args.formats_only else ((True, RC_CASES),) if args.rc_only else (
-                (True, CASES + FORMAT_CASES), (False, ("valid", "boot-tail", "fragmented", "cooked-2048")))
+            layouts = ((True, LAUNCH_CASES),) if args.launch_only else ((True, CHECKSUM_CASES),) if args.checksums_only else ((True, FORMAT_CASES),) if args.formats_only else ((True, RC_CASES),) if args.rc_only else (
+                (True, CASES + FORMAT_CASES + LAUNCH_CASES), (False, ("valid", "boot-tail", "fragmented", "cooked-2048")))
             for partitioned, cases in layouts:
                 clean = partitioned_clean if partitioned else volume
                 layout = "MBR" if partitioned else "superfloppy"
@@ -248,6 +325,26 @@ def main():
                     run(BINARY, str(image), str(fixture), "seed", case)
                     before = digest(image)
                     output = run(BINARY, str(image), str(fixture), "check", case)
+                    if case in LAUNCH_CASES:
+                        assert f"PASS retail preparation check {case}; only bounded launch-report writes allowed" in output
+                        check_launch_outputs(fixture, case)
+                        if case not in LAUNCH_SUCCESS or case in ("launch-report-readonly", "launch-report-source-directory"):
+                            assert digest(image) == before, f"Refused/report-readonly launch changed {kind} card"
+                        if case in ("launch-report-readonly", "launch-report-full"):
+                            assert "Launch report unavailable; continuing without a new saved report" in output
+                        if case == "launch-report-source-directory":
+                            assert "Launch report skipped: selected image shares the reserved report directory" in output
+                            assert "Prepared launch report" not in output
+                        if case == "launch-report":
+                            assert "sequence=1" in output and "sequence=2" in output
+                        if case == "launch-patch-range":
+                            assert "outside the selected boot executable" in output
+                        if case in ("launch-patch-ce", "launch-patch-cdda"):
+                            assert "RAM patches require a native game with CD music Off" in output
+                        check_fs(image, base / "check-volume.img", kind, partitioned)
+                        image.unlink()
+                        print(f"PASS {kind} {layout} {case}; original files unchanged; independent report/seed checks", flush=True)
+                        continue
                     assert f"PASS retail preparation check {case}; no active-operation writes" in output
                     assert digest(image) == before, f"Retail preparation changed {kind} {layout} in {case}"
                     if case in CHECKSUM_CASES and not any(word in case for word in (

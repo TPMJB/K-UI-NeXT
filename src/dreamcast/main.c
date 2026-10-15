@@ -135,6 +135,7 @@ static struct kui_games_page games_listing;
 static struct kui_games_detail games_detail;
 static unsigned games_listing_generation,games_detail_generation;
 static struct kui_game_launch_settings games_detail_launch_settings,games_launch_settings_pending;
+static struct kui_game_ram_patches games_patches_pending;
 static bool games_detail_launch_loaded,games_launch_saved;
 static char games_launch_path_pending[KUI_GAMES_FILE_CAP],games_launch_result_path[KUI_GAMES_FILE_CAP];
 static unsigned games_launch_result_generation;
@@ -2024,7 +2025,7 @@ static void *worker(void *unused) {
             if(action==56 || action==57 || action==58) {
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 bool prepared=action==58?
-                    kui_games_retail_prepare_reader(games_path_pending,games_reader_pending,&probe_image,
+                    kui_games_retail_prepare_launch(games_path_pending,games_reader_pending,&games_patches_pending,&probe_image,
                         kui_log,kui_cancelled):action==57?
                     kui_games_image_probe_prepare(games_path_pending,&probe_image,kui_log,kui_cancelled):
                     kui_games_probe_prepare(&probe_image,kui_log,kui_cancelled);
@@ -2958,6 +2959,7 @@ int main(void) {
                     action==54?shell.games_path:shell.games_selected_path);
                 games_offset_pending=shell.games_page*KUI_GAMES_ROWS;
                 games_reader_pending=shell.games_retail_reader;
+                games_patches_pending=shell.games_launch_patches;
             }
             if(action==54 || action==59) {games_view_pending=shell.games_view;games_epoch_pending=shell.games_generation;}
             if(action==54) games_refresh_pending=shell.games_refresh;
