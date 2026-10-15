@@ -3,8 +3,26 @@
 
 This experimental candidate targets the original US **Worms Armageddon**,
 product **T40601N**, version **V1.001**, with its original **eight-track GDI**.
-It has not yet been tested on Dreamcast hardware. Its native sound/runtime
-profile is separate from Armada and Bust-A-Move 4.
+Its native sound/runtime profile is separate from Armada and Bust-A-Move 4.
+Test 1 booted on Dreamcast hardware but produced no CD music. Test 2 corrects
+the runtime layout admission described below; sustained playback remains
+unverified on hardware.
+
+## Test 1 result and Test 2 correction
+
+The console recording `62684.mp4` identifies build `d12e010170a4`. Its final
+diagnostic page reports a COREDLL section-table rejection: reason 9, detail 2,
+observed `03e8c0f8`, expected `03e8b0f8`. There were zero worker launches,
+play attempts and audio source bytes. The rejection occurred before playback.
+
+Test 1 used the wrong COREDLL data and exception-table RVAs for Worms' ROM
+module. The supplied kernel places those sections at `1c000` and `1d000`,
+respectively. Its loaded section table belongs at `base + 1c0f8`, which matches
+the console. Test 2 corrects those three Worms-only constants and the synthetic
+fixture, including a regression against the observed console addresses. It
+retains the existing playback engine, refill timing, source reader and modules
+for Armada and Bust-A-Move 4. No new playback success is inferred from this
+admission fix.
 
 ## Install and launch
 

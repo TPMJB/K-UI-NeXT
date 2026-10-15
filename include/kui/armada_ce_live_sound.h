@@ -71,7 +71,9 @@
 #define KUI_ARMADA_CE_LIVE_CALLBACK_SENTINEL UINT32_C(0x8c011b00)
 #define KUI_ARMADA_CE_LIVE_DSOUND_SPAN 0xc000u
 #define KUI_ARMADA_CE_LIVE_COREDLL_SPAN 0x21000u
-#define KUI_ARMADA_CE_LIVE_TABLE_RVAS {0x940cu,0x6190u,0x1b0f8u}
+/* COREDLL's ROM .data starts at 0x1c000, with its basename/table after
+ * the original 0xec bytes. The preceding .text ends in the 0x1b000 page. */
+#define KUI_ARMADA_CE_LIVE_TABLE_RVAS {0x940cu,0x6190u,0x1c0f8u}
 #define KUI_ARMADA_CE_LIVE_SINGLETON_RVA 0x90a8u
 #define KUI_ARMADA_CE_LIVE_CREATE_RVA 0x1598u
 #define KUI_ARMADA_CE_LIVE_ADDREF_RVA 0x18dcu
@@ -332,7 +334,7 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_live_sections(
     static const uint32_t ds_rva[3]={0x1000u,0x9000u,0xa000u},sn_rva[3]={0x1000u,0x5000u,0x7000u};
     static const uint32_t ds_size[3]={0x73a6u,0x460u,0x610u},sn_size[3]={0x3885u,0x11e4u,0x378u};
     static const uint32_t flags[3]={0x60000020u,0xc0002040u,0x40002040u};
-    static const uint32_t co_rva[4]={0x1000u,0x1b000u,0x1c000u,0x1e000u};
+    static const uint32_t co_rva[4]={0x1000u,0x1c000u,0x1d000u,0x1e000u};
     static const uint32_t co_size[4]={0x1a0efu,0x168u,0xfe0u,0x218u};
     static const uint32_t co_flags[4]={0x60000020u,0xc0300040u,0x40002040u,0x40000040u};
     static const uint32_t disk_ds_rva[4]={0x1000u,0x9000u,0xa000u,0xb000u};
