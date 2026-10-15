@@ -424,6 +424,28 @@ static bool clock_now(uint32_t *now) {
     (void)fault(STREAM_FAULT_TICKS,0u,player.native.status,0u,player.native.last_result);
     refuse(KUI_ARMADA_CE_EXCERPT_CONTEXT);return false;
 }
+static void trace_observation(uint32_t now,uint32_t ready,uint32_t delta,uint32_t staged,
+                              uint32_t state,bool running,bool underrun) {
+    struct kui_armada_ce_stream_transport_snapshot progress={0};
+    struct kui_armada_ce_stream_trace_supply supply={0};
+    uint32_t saved=mask_begin();
+    enum kui_armada_ce_stream_transport_status status=KUI_ARMADA_CE_STREAM_TRANSPORT_STALE;
+    if(player.read_active) status=
+        kui_armada_ce_stream_transport_snapshot(player.read_bus_epoch,&progress);
+    bool active=status!=KUI_ARMADA_CE_STREAM_TRANSPORT_STALE;
+    if(active) {
+        supply=(struct kui_armada_ce_stream_trace_supply){(uint32_t)status,progress.owner,
+            progress.bytes,progress.total,progress.retries,progress.data_blocks,
+            progress.audio_blocks,progress.preemptions};
+    }
+    uint32_t flags=(active?1u:0u)|(running?2u:0u)|
+        (kui_armada_ce_stream_transport_urgent()?4u:0u)|(state<<8);
+    /* This is an authored-state snapshot, not a transport pump, bus query,
+     * guest read or native call. Keep it outside the native consumer lease. */
+    kui_armada_ce_stream_trace_observe(now,player.source_total,ready,delta,staged,
+        flags,active?&supply:NULL,underrun);
+    mask_end(saved);
+}
 static bool observe(void) {
     if(!player.model.native_running) return true;
 #if KUI_WINCE_CDDA_WORMS
@@ -440,6 +462,9 @@ static bool observe(void) {
     player.now_ms=now;
     if(!kui_armada_ce_stream_native_write_begin(&player.native,NULL,player.binding.device)) return false;
     struct kui_armada_ce_ram_binding frontier;
+    uint32_t observed_ready=0u,observed_delta=0u,observed_staged=0u;
+    uint32_t observed_state=(uint32_t)player.model.state;
+    bool observed=false,observed_running=player.model.native_running;
     bool valid=mapped_word(player.stats.buffer+116u,&frontier) &&
         (!player.frontier_page || frontier.page_word==player.frontier_page);
     if(valid) {
@@ -456,6 +481,7 @@ static bool observe(void) {
             KUI_ARMADA_CE_STREAM_RING_BYTES-player.model.last_play+positions[0];
         uint32_t allowance=kui_armada_ce_stream_cursor_allowance(&player.model,now);
         uint32_t ready=ready_bytes();
+        observed_ready=ready;observed_delta=delta;observed_staged=player.model.staged;observed=true;
         player.last_model_result=kui_armada_ce_stream_observe(&player.model,player.model.ring_epoch,
             positions[0],frontier.value,now);
         if(player.last_model_result==KUI_ARMADA_CE_STREAM_UNDERRUN)
@@ -471,6 +497,8 @@ static bool observe(void) {
         player.stats.play_cursor=positions[0];player.stats.write_cursor=positions[1];++player.stats.position_ok;
     }
     bool released=kui_armada_ce_stream_native_write_end(&player.native,NULL);
+    if(observed && released) trace_observation(now,observed_ready,observed_delta,observed_staged,
+        observed_state,observed_running,player.last_model_result==KUI_ARMADA_CE_STREAM_UNDERRUN);
     return valid && released;
 }
 static bool control(void) {
@@ -733,6 +761,7 @@ static bool refill(void) {
          * of a millisecond after every partial refill. source() moves only
          * the sub-64-byte carry, unmasked, before appending the next job. */
         if(ok) player.stage_head=player.model.staged?player.stage_head+ticket.audio_bytes:0u;
+        if(ok) kui_armada_ce_stream_trace_ring_progress(player.now_ms);
     }
     mask_end(sr);
     bool released=kui_armada_ce_stream_native_write_end(&player.native,NULL);
@@ -747,6 +776,7 @@ static bool refill(void) {
     if(abandoned && released) {
         /* A partial host copy is never published to the model. Retain its
          * staging and retry from the same producer offset next visit. */
+        kui_armada_ce_stream_trace_copy_retry();
         player.model.refill=(struct kui_armada_ce_stream_refill){0};return true;
     }
 #endif
@@ -809,6 +839,7 @@ static bool source_append(const void *from,uint32_t available,bool done,bool phy
         kui_armada_ce_stream_read_progress(&player.model,&player.read,available);
     if(current && player.last_model_result==KUI_ARMADA_CE_STREAM_OK) {
         player.source_total+=available;player.cache_bytes+=cache_add;
+        if(available) kui_armada_ce_stream_trace_source_progress(player.now_ms);
         if(!physical && player.model.state==KUI_ARMADA_CE_STREAM_PREFILL)
             player.start_cached+=available;
         if(physical && done) {
@@ -1050,6 +1081,7 @@ uint32_t kui_armada_ce_stream_worker(uint32_t argument) {
                     player.now_ms,player.source_total,ready_bytes(),STREAM_FAULT_TICKS);
                 cancel_read();
             } else {
+                kui_armada_ce_stream_trace_worker_begin(player.now_ms);
                 player.worker_step=1u;publish();
                 kui_armada_ce_excerpt_owner_deferred(0);
                 publish();player.worker_step=0;
@@ -1061,7 +1093,9 @@ uint32_t kui_armada_ce_stream_worker(uint32_t argument) {
         }
         if(player.disabled) continue;
         /* No SD or COM lock is held while this native CE thread yields. */
-        if(!kui_armada_ce_stream_native_sleep(&player.native,NULL,step_delay()))
+        uint32_t delay=step_delay();
+        kui_armada_ce_stream_trace_sleep(delay);
+        if(!kui_armada_ce_stream_native_sleep(&player.native,NULL,delay))
             return UINT32_MAX;
     }
 }

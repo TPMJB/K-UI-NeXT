@@ -701,7 +701,7 @@ armada_return_pages:
 #if KUI_ARMADA_CE_STREAM && KUI_ARMADA_CE_AUDIO_OBSERVE
     /* Additional terminal pages retain the timing missing from a single
      * cumulative photograph. No game, card, clock or native audio resumes. */
-    for(unsigned page=0;page<2u;page++) {
+    for(unsigned page=0;page<3u;page++) {
         retail_display_restore(&display);
         armada_ce_audio_history(page);
         retail_display_pause(300u);

@@ -43,6 +43,15 @@ static inline bool kui_wince_cdda_text_is(const char *value,size_t bytes,const c
     }
     return false;
 }
+/* Conversion removes only Mode 1 DATA framing. Audio stays raw2352 and
+ * cooked executable data is admitted only with the detached byte CRC. Do not
+ * mask unknown storage flags into a seemingly valid DATA/audio control. */
+static inline bool kui_wince_cdda_track_storage_valid(const struct kui_retail_track *track,
+        uint32_t control,uint32_t flags) {
+    return track && (track->control==control ||
+        (control==4u && track->control==(4u|KUI_RETAIL_TRACK_COOKED) &&
+         (flags&KUI_RETAIL_IMAGE_BOOT_CRC)));
+}
 static inline bool kui_wince_cdda_manifest_valid(const struct kui_retail_manifest *map,
         enum kui_wince_cdda_profile profile) {
     const struct kui_wince_cdda_disc *disc=kui_wince_cdda_disc(profile);
@@ -57,9 +66,7 @@ static inline bool kui_wince_cdda_manifest_valid(const struct kui_retail_manifes
     for(unsigned i=0;i<disc->track_count;i++) {
         const struct kui_retail_track *track=&map->slots[i].track;
         if(track->start_lba!=disc->starts[i] || track->end_lba<=track->start_lba ||
-           track->control!=kui_wince_cdda_track_control(profile,i) ||
-           (profile!=KUI_WINCE_CDDA_ARMADA &&
-                kui_retail_track_sector_bytes(track)!=KUI_GAME_RAW_BYTES) ||
+           !kui_wince_cdda_track_storage_valid(track,kui_wince_cdda_track_control(profile,i),map->flags) ||
            kui_retail_track_file_offset(track) || !track->extent_count) return false;
     }
     return true;

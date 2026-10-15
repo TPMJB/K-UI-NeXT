@@ -335,7 +335,7 @@ bool kui_shell_games_encoding_ready(const struct kui_shell *s) {
 }
 bool kui_shell_games_cdda_ready(const struct kui_shell *s) {
     if(kui_shell_games_ce_probe_ready(s)) {
-        /* Offer an opt-in to every original WinCE GDI with gameplay audio
+        /* Offer an opt-in to every WinCE GDI with gameplay audio
          * tracks. Preparation still requires a compatible native runtime. */
         return s->games_detail.format==KUI_GAME_IMAGE_GDI && !s->games_detail.cd_image &&
             !s->games_detail.scrambled &&

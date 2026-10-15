@@ -80,11 +80,12 @@ def audit_stream(directory, candidate):
     return seed, audit
 
 
-def write_zip(output, files):
+def write_zip(output, files, installed_files=None):
+    installed = [RUNTIME, INSTALL_AUDIO] if installed_files is None else installed_files
     check(sorted(name for name in files if name.startswith("KUI/")) ==
-          sorted([RUNTIME, INSTALL_AUDIO]),
-          "Install set must contain only the menu runtime and Worms audio module")
-    check(not any(name.endswith(".kui") and name not in (RUNTIME, INSTALL_AUDIO)
+          sorted(installed),
+          "Install set differs from the explicitly selected runtime/modules")
+    check(not any(name.endswith(".kui") and name not in installed
                   for name in files), "Unexpected loader or rollback binary in package")
     check(not any(name.endswith(".bundle") for name in files),
           "This delivery must not include a Git history bundle")

@@ -36,6 +36,44 @@ def owner_fixture():
 
 
 class WormsAudit(unittest.TestCase):
+    def test_terminal_snapshot_appends_frozen_evidence_to_original_abi(self):
+        base = audit.stream_layout(worms=True)[0]
+        payload, symbols, locals_ = bytearray(), {}, {}
+        unit = 'armada_ce_excerpt_entry.c'
+        for name, labels in (('_labels.1', audit.STREAM_REPORT_LABELS),
+                             ('_underrun_labels.0', audit.STREAM_UNDERRUN_LABELS)):
+            expected = b''.join(label.encode('ascii').ljust(40, b'\0') for label in labels)
+            symbols[name] = base + len(payload)
+            locals_[unit, name] = symbols[name], len(expected)
+            payload.extend(expected)
+        snapshot = base + len(payload)
+        symbols.update({'_snapshot': snapshot, '__armada_bind_bss_begin': snapshot,
+                        '__armada_bind_bss_end': snapshot + 600})
+        locals_[unit, '_snapshot'] = snapshot, 600
+        image = {'payload': payload, 'symbols': symbols, 'memory_end': snapshot + 600}
+        report = audit.audit_stream_terminal_snapshot(image, locals_, worms=True)
+        self.assertEqual((report['preserved_prefix_bytes'], report['frozen_underrun_offset'],
+                          report['frozen_underrun_bytes'], report['frozen_labels_offset']),
+                         (428, 428, 140, 568))
+        for count in (428, 596, 604):
+            changed = dict(locals_); changed[unit, '_snapshot'] = snapshot, count
+            with self.subTest(count=count), self.assertRaises(ValueError):
+                audit.audit_stream_terminal_snapshot(image, changed, worms=True)
+        for name in ('_labels.1', '_underrun_labels.0'):
+            changed = bytearray(payload); changed[symbols[name] - base] ^= 1
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                audit.audit_stream_terminal_snapshot(dict(image, payload=changed), locals_, worms=True)
+        wrong_unit = {('unreviewed.c', name): span for (_, name), span in locals_.items()}
+        with self.assertRaises(ValueError):
+            audit.audit_stream_terminal_snapshot(image, wrong_unit, worms=True)
+
+    def test_terminal_capture_relocations_keep_old_and_appended_offsets(self):
+        relocations = audit.STREAM_BOOT_RELOCS['controller', '_kui_armada_ce_bind_probe']
+        self.assertEqual(tuple(addend for _, name, addend in relocations if name == '_snapshot'),
+                         (0, 124, 384, 428, 568))
+        self.assertIn((0x1e4, '_kui_armada_ce_stream_underrun_snapshot', 0), relocations)
+        self.assertIn((0x1ec, '_underrun_labels.0', 0), relocations)
+
     def test_layout_is_explicit_and_does_not_mutate_other_profiles(self):
         original = audit.stream_layout()
         self.assertEqual(audit.stream_layout(worms=True),

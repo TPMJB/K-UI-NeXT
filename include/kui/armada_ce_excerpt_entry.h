@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #ifndef KUI_ARMADA_CE_EXCERPT_ENTRY_H
 #define KUI_ARMADA_CE_EXCERPT_ENTRY_H
+#include <stddef.h>
 #include <stdint.h>
 #if KUI_ARMADA_CE_STREAM
 #include "kui/armada_ce_stream_trace.h"
@@ -26,11 +27,17 @@ struct kui_armada_ce_excerpt_entry_snapshot {
 #if KUI_ARMADA_CE_STREAM
     struct kui_armada_ce_stream_trace_snapshot trace;
     uint32_t report_labels[11]; /* Immutable high-controller text addresses. */
+    struct kui_armada_ce_stream_underrun_snapshot underrun;
+    uint32_t underrun_labels[8];
 #endif
 };
 #if KUI_ARMADA_CE_STREAM
-_Static_assert(sizeof(struct kui_armada_ce_excerpt_entry_snapshot)==428u,
-               "Stream snapshot appends a bounded temporal history");
+_Static_assert(offsetof(struct kui_armada_ce_excerpt_entry_snapshot,trace)==124u &&
+               offsetof(struct kui_armada_ce_excerpt_entry_snapshot,report_labels)==384u &&
+               offsetof(struct kui_armada_ce_excerpt_entry_snapshot,underrun)==428u,
+               "Frozen underrun evidence preserves the existing report ABI prefix");
+_Static_assert(sizeof(struct kui_armada_ce_excerpt_entry_snapshot)==600u,
+               "Stream snapshot appends bounded frozen underrun evidence");
 #else
 _Static_assert(sizeof(struct kui_armada_ce_excerpt_entry_snapshot)==124u,
                "Excerpt entry has six five-word rows and one callback");

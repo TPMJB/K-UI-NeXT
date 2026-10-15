@@ -84,10 +84,9 @@ static void profile_admission(void) {
         CHECK(!ce_music_profile(&image,&metadata) && !reads);
     }
     image=original;metadata=original_metadata;
-    /* A user-selected cooked version can share metadata but must fail before
-     * any PCM read, regardless of where it is stored or how it is named. */
+    /* A converted DATA payload preserves the profile; audio is never cooked. */
     image.tracks[2].sector_bytes=2048u;image.tracks[2].data_offset=0u;
-    CHECK(!ce_music_profile(&image,&metadata));
+    CHECK(ce_music_profile(&image,&metadata)==KUI_WINCE_CDDA_ARMADA);
     CHECK(!reads);
 }
 static void bam4_profile(void) {
@@ -322,10 +321,12 @@ static struct {
     FIL *active;
     FATFS *fs;
     char name[KUI_GAME_NAME_CAP],package_path[96];
+    char descriptor[8192];
+    bool variant;
 } launch;
 static const struct kui_volume launch_volume={.start=2048u,.count=4000000u};
 static uint64_t fixture_size(const char *name) {
-    if(!strcmp(name,"ARMADA.gdi")) return sizeof(descriptor)-1u;
+    if(!strcmp(name,"ARMADA.gdi")) return launch.descriptor[0]?strlen(launch.descriptor):sizeof(descriptor)-1u;
     for(unsigned i=0;i<image.count;i++)
         if(!strcmp(name,image.tracks[i].name)) return image.tracks[i].file_bytes;
     return 0u;
@@ -382,7 +383,13 @@ FRESULT f_lseek(FIL *file,FSIZE_t offset) {
         for(uint32_t i=0;i<runs;i++) {
             uint32_t count=blocks/runs+(i<blocks%runs?1u:0u);
             file->cltbl[1u+2u*i]=count;
-            file->cltbl[2u+2u*i]=1000u+track*100000u+done+i;
+            uint32_t first=1000u+track*100000u;
+            if(launch.variant) {
+                first=1000u;
+                for(unsigned before=0;before+1u<track;before++)
+                    first+=(uint32_t)((image.tracks[before].file_bytes+511u)/512u)+2u;
+            }
+            file->cltbl[2u+2u*i]=first+done+i;
             done+=count;
         }
         file->cltbl[1u+2u*runs]=0u;
@@ -395,16 +402,23 @@ FRESULT f_read(FIL *file,void *out,UINT bytes,UINT *got) {
     CHECK(file==launch.active && bytes<=file->obj.objsize-file->fptr);
     uint8_t *data=out;uint64_t offset=file->fptr;
     if(!strcmp(launch.name,"ARMADA.gdi")) {
-        memcpy(out,descriptor+offset,bytes);
+        memcpy(out,(launch.descriptor[0]?launch.descriptor:descriptor)+offset,bytes);
     } else {
         unsigned track=0;CHECK(sscanf(launch.name,"track%u.raw",&track)==1);
-        if(track==4u) {
+        if(track==4u && !launch.variant) {
             CHECK(offset==150u*2352u && bytes==150u*2352u);++launch.preloads;
             if(launch.read_fail) {*got=0u;return FR_DISK_ERR;}
             if(launch.cancel_read) launch.cancelled=true;
         }
         for(size_t i=0;i<bytes;i++) data[i]=generated_byte(offset+i);
-        if(track==1u || track==3u || track==5u) {
+        if(launch.variant && image.tracks[track-1u].control==4u) {
+            const struct kui_game_image_track *t=&image.tracks[track-1u];
+            CHECK(bytes==t->sector_bytes && !(offset%t->sector_bytes));
+            uint64_t payload=offset/t->sector_bytes*2048u;
+            for(unsigned i=0;i<2048u;i++) data[t->data_offset+i]=generated_byte(payload+i);
+        }
+        if((launch.variant?image.tracks[track-1u].control==4u &&
+                image.tracks[track-1u].sector_bytes==2352u:track==1u || track==3u || track==5u)) {
             CHECK(bytes==2352u && !(offset%2352u));
             data[0]=data[11]=0u;memset(data+1u,255,10u);data[15]=1u;
         }
@@ -418,8 +432,9 @@ enum kui_runtime_result kui_runtime_read(const char *path,struct kui_runtime_ima
         kui_log_fn log,kui_cancel_fn cancel) {
     CHECK(launch.connected && launch.mounted && !out->data && log && cancel);
     ++launch.package_reads;snprintf(launch.package_path,sizeof(launch.package_path),"%s",path);
-    bool ce=!strcmp(path,KUI_GAMES_RETAIL_CE_PACKAGE) || !strcmp(path,KUI_GAMES_RETAIL_CE_EXCERPT_PACKAGE);
-    bool excerpt=!strcmp(path,KUI_GAMES_RETAIL_CE_EXCERPT_PACKAGE);
+    bool excerpt=!strcmp(path,KUI_GAMES_RETAIL_CE_EXCERPT_PACKAGE) ||
+        !strcmp(path,KUI_GAMES_RETAIL_CE_BAM4_PACKAGE) || !strcmp(path,KUI_GAMES_RETAIL_CE_WORMS_PACKAGE);
+    bool ce=!strcmp(path,KUI_GAMES_RETAIL_CE_PACKAGE) || excerpt;
     CHECK(ce || !strcmp(path,KUI_GAMES_RETAIL_PACKAGE));
     uint32_t bytes=excerpt?SEED_AT+(launch.stream?sizeof(struct kui_armada_ce_stream_seed):SEED_TOTAL)+64u:KUI_RETAIL_STAGE_BLOB_OFFSET+16u;
     uint8_t *data=calloc(1,bytes);CHECK(data!=NULL);
@@ -436,6 +451,10 @@ enum kui_runtime_result kui_runtime_read(const char *path,struct kui_runtime_ima
         if(launch.stream) {
             const uint32_t words[16]=KUI_ARMADA_CE_STREAM_BLANK_WORDS;
             memcpy(data+SEED_AT,words,sizeof(words));
+            if(!strcmp(path,KUI_GAMES_RETAIL_CE_WORMS_PACKAGE)) {
+                uint32_t *seed=(uint32_t *)(void *)(data+SEED_AT);
+                seed[2]=0x8ce70040u;seed[4]=0x8cedf000u;
+            }
         } else CHECK(kui_armada_ce_excerpt_seed_make((uint32_t *)(void *)(data+SEED_AT),0u));
     }
     return KUI_RUNTIME_OK;
@@ -571,12 +590,75 @@ static void stream_launcher_paths(void) {
         CHECK(kui_armada_ce_stream_seed_header_valid(words)==(word==KUI_ARMADA_CE_STREAM_MAP_CRC_WORD));
     }
 }
+static void converted_ce_launcher_paths(void) {
+    const uint32_t ordinary=KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC;
+    for(enum kui_wince_cdda_profile profile=KUI_WINCE_CDDA_ARMADA;
+            profile<=KUI_WINCE_CDDA_WORMS_ARMAGEDDON;profile++) {
+        uint32_t cooked_boot_crc=0;
+        for(unsigned version=0;version<3u;version++) {
+            launch_setup();launch.stream=launch.variant=true;
+            const struct kui_wince_cdda_disc *disc=kui_wince_cdda_disc(profile);
+            image.count=disc->track_count;
+            metadata.boot_lba=disc->boot_lba;metadata.boot_bytes=disc->kernel_bytes;
+            strcpy(metadata.product,disc->product);
+            size_t at=(size_t)snprintf(launch.descriptor,sizeof(launch.descriptor),"%u\n",disc->track_count);
+            for(unsigned i=0;i<disc->track_count;i++) {
+                uint32_t control=kui_wince_cdda_track_control(profile,i);
+                uint32_t stride=version && control?2048u:2352u;
+                uint32_t end=i+1u<disc->track_count?disc->starts[i+1u]:549150u;
+                image.tracks[i]=(struct kui_game_image_track){.number=i+1u,.start_lba=disc->starts[i],
+                    .end_lba=end,.sector_bytes=stride,.control=control,.sector_mode=control?1u:0u,
+                    .data_offset=control && stride==2352u?16u:0u,
+                    .file_bytes=(uint64_t)(end-disc->starts[i])*stride};
+                snprintf(image.tracks[i].name,sizeof(image.tracks[i].name),"track%02u.raw",i+1u);
+                at+=(size_t)snprintf(launch.descriptor+at,sizeof(launch.descriptor)-at,
+                    "%u %u %u %u track%02u.raw 0\n",i+1u,disc->starts[i],control,stride,i+1u);
+                CHECK(at<sizeof(launch.descriptor));
+            }
+            struct kui_runtime_image prepared;
+            uint32_t request=ordinary|(version==2u?0u:KUI_GAMES_RETAIL_CE_EXCERPT);
+            CHECK(kui_games_retail_prepare_reader("/Games/ARMADA/ARMADA.gdi",request,&prepared,record_log,launch_cancel));
+            struct kui_retail_manifest data,full;
+            CHECK(kui_retail_manifest_decode((uint8_t *)prepared.data+KUI_RETAIL_MAP_OFFSET,&data)==KUI_GAME_OK);
+            CHECK(data.reader==KUI_RETAIL_READER_ASYNC && data.track_count==disc->track_count);
+            CHECK(!launch.preloads && launch.opens==launch.closes && !launch.connected && !launch.mounted);
+            if(version) CHECK(data.flags&KUI_RETAIL_IMAGE_BOOT_CRC);
+            if(version==1u) cooked_boot_crc=data.boot_crc32;
+            if(version==2u) {
+                CHECK(data.boot_crc32==cooked_boot_crc && !strcmp(launch.package_path,KUI_GAMES_RETAIL_CE_PACKAGE));
+            } else {
+                struct kui_armada_ce_stream_seed *seed=(void *)((uint8_t *)prepared.data+SEED_AT);
+                CHECK(kui_retail_manifest_decode(seed->wire,&full)==KUI_GAME_OK);
+                CHECK(kui_wince_cdda_manifest_valid(&full,profile));
+                CHECK(kui_armada_ce_stream_maps_match(&full,&data));
+                if(profile==KUI_WINCE_CDDA_ARMADA) CHECK(kui_armada_ce_stream_map_valid(&full));
+                for(unsigned i=0;i<disc->track_count;i++) {
+                    struct kui_retail_manifest changed=full;
+                    if(kui_wince_cdda_track_control(profile,i)==0u) {
+                        CHECK(full.slots[i].track.control==0u && kui_retail_track_sector_bytes(&full.slots[i].track)==2352u);
+                        changed.slots[i].track.control|=KUI_RETAIL_TRACK_COOKED;
+                        CHECK(!kui_wince_cdda_manifest_valid(&changed,profile));
+                    } else if(version) {
+                        CHECK(full.slots[i].track.control==(4u|KUI_RETAIL_TRACK_COOKED));
+                        changed.flags&=~KUI_RETAIL_IMAGE_BOOT_CRC;
+                        CHECK(!kui_wince_cdda_manifest_valid(&changed,profile));
+                    }
+                    changed=full;changed.slots[i].track.control|=KUI_RETAIL_TRACK_MODE2;
+                    CHECK(!kui_wince_cdda_manifest_valid(&changed,profile));
+                }
+            }
+            kui_runtime_free(&prepared);
+        }
+    }
+    puts("PASS WinCE converted DATA: all three exact profiles prepare with raw2352 AUDIO; ordinary CE/background and CD music, CRC, seed and map checks passed");
+}
 int main(void) {
     profile_admission();bam4_profile_admission();seed_success();seed_rejections();
     bam4_manifest_seed();
     worms_profile_and_seed();free(allocation);allocation=NULL;
     launcher_paths();
     stream_launcher_paths();
-    printf("WinCE music preparation: %u checks; exact Armada/BAM4/Worms raw profiles, 26/8-track maps, generated 150-sector preload, fixed CRC, unique empty seed, bounds, package isolation and failed/cancelled reads passed\n",checks);
+    converted_ce_launcher_paths();
+    printf("WinCE music preparation: %u checks; exact Armada/BAM4/Worms raw/cooked DATA profiles, raw AUDIO, 26/8-track maps, generated 150-sector preload, fixed CRC, unique empty seed, bounds, package isolation and failed/cancelled reads passed\n",checks);
     return 0;
 }

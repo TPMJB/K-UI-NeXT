@@ -8,6 +8,9 @@ Test 1 booted on Dreamcast hardware but produced no CD music. Test 2 corrects
 the runtime layout admission described below and has audible console playback,
 with three recovered buffer underruns in the supplied recording. Keep Test 2
 as the working Worms baseline; zero-dropout playback remains unverified.
+The subsequent [diagnostic candidate](wince-cdda-diagnostic-test.md) adds a
+fourth frozen-underrun page and cooked-DATA admission. The three-page test
+instructions below describe the retained Test 2 baseline.
 
 ## Test 1 result and Test 2 correction
 

@@ -365,6 +365,18 @@ static void capture_audio(void) {
         "LAST SIX ONE-SECOND SAMPLES", "CODE MS SOURCE READY AUX",
         "5S PER PAGE - POWER OFF TO EXIT"};
     for(unsigned i=0;i<11u;i++) snapshot.report_labels[i]=(uint32_t)(uintptr_t)labels[i];
+    kui_armada_ce_stream_underrun_snapshot(&snapshot.underrun);
+    static const char underrun_labels[8][40]={
+        "LAST UNDERRUN - FROZEN CONTEXT",
+        "MS READY DELTA STAGED READ-MS",
+        "ENTRY-GAP SLEEP OBS-MS SRCAGE RINGAGE",
+        "STATUS OWNER READ-BYTES TOTAL RETRIES",
+        "DATA-D AUDIO-D PRE-D YIELD-D COPY-D",
+        "MS SOURCE READY STAGED FLAGS",
+        "MS SOURCE READY STAGED FLAGS",
+        "MS SOURCE READY STAGED FLAGS"};
+    for(unsigned i=0;i<8u;i++)
+        snapshot.underrun_labels[i]=(uint32_t)(uintptr_t)underrun_labels[i];
 #endif
 }
 const struct kui_armada_ce_excerpt_entry_snapshot *kui_armada_ce_bind_probe(

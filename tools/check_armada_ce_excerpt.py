@@ -249,16 +249,17 @@ STREAM_BUS_RELAY_BYTES = bytes.fromhex("02d0536700e643652b40fee400000000")
 # Relocations are admitted against linked symbols before normalization.
 STREAM_BOOT_BODIES = {
     ('controller', '_kui_armada_ce_bind_probe'): bytes.fromhex(
-        '862f4360962ffe88a62f736ab62f536b224f0a8fd47f61d07365b3642c7f264ff66bf66af6692b40f6685dd0421f0b40611f'
-        '0820f2545d8df1565ad800e14360ff88836940795d8f1e1957d157da0b41a364a5511518a6511618a25118210589a7522718'
-        'a8522818a95229181b18f364a351a2621c18a4512a181d18af511e18aa511f18ab511229ac511119ae51121947d110522319'
-        '175224191852251919522619145215512719181942d10b410c74f351f3641218f4511318f55114183ed10b411874f6511821'
-        '08891919f7511a19f8511b19f9511c19fa511d1937d138d40b41090037d20be137d3222310410473fb8f28722bd02c7f264f'
-        'f66bf66af6690b00f66801e24361ff712631098da82a078b2ed00b4009000820eb892cd1e9af1e1948242900e58f01ca6330'
-        'e28903e2b361ec712631028fb3602188da8b8260ff88018d01700228a36003c8068f01e120d22191ac321632028f01e1caaf'
-        '1118a350018804898450ff88018d01700418a25100e418d0b365122fa1570b40a2660820b7898350ff88018d01700318a350'
-        '0188af8bc2af0900f054090050bbfa8c40bbfa8ca0f4fa8c1cd0fa8c4cf6fa8c8cf6fa8c04cffa8c2ccffa8c4cdcfa8c1cf5'
-        'fa8c68eefa8c20f6fa8cdccefa8ce497fa8c007dff736ccffa8c'
+        '862f4360962ffe88a62f736ab62f536b224f0a8fd47f67d07365b3642c7f264ff66bf66af6692b40f66863d0421f0b40'
+        '611f0820f254698df15660d800e14360ff8883694079698f1e195dd15dda0b41a364a5511518a6511618a25118210589'
+        'a7522718a8522818a95229181b18f364a351a2621c18a4512a181d18af511e18aa511f18ab511229ac511119ae511219'
+        '4dd110522319175224191852251919522619145215512719181948d10b410c74f351f3641218f4511318f551141844d1'
+        '0b411874f651182108891919f7511a19f8511b19f9511c19fa511d193dd13ed40b4109003dd20be13dd3222310410473'
+        'fb8f28723bd13cd40b4109003bd208e13bd3222310410473fb8f28722bd02c7f264ff66bf66af6690b00f66801e24361'
+        'ff712631098da82a078b32d00b4009000820eb8930d1e9af1e1948242900e58f01ca6330e28903e2b361ec712631028f'
+        'b3602188da8b8260ff88018d01700228a36003c8068f01e124d22191ac321632028f01e1caaf1118a350018804898450'
+        'ff88018d01700418a25100e41cd0b365122fa1570b40a2660820b7898350ff88018d01700318a3500188af8bc2af0900'
+        'f05409003ccafa8c2ccafa8c2c0efb8c2ce4fa8c8410fb8cc410fb8c14e3fa8c3ce3fa8c20f4fa8ca80efb8c8807fb8c'
+        'ac0ffb8cb0f2fa8cd80ffb8c4806fb8c6410fb8cece2fa8c84a5fa8c007dff737ce3fa8c'
     ),
     ('controller', '_kui_armada_ce_stream_transport_attached'): bytes.fromhex(
         '02d11b5001880b0029000900eceefa8c'
@@ -297,46 +298,50 @@ STREAM_BOOT_BODIES = {
         '03c8'
     ),
     ('stage', '_kui_retail_stage_relay'): bytes.fromhex(
-        '862f962fa62f436ab62f03ebc62f536cd62fa92be62f62d1224f62d40b41f87f61d862d40b480900a36003c8088b60d160d2'
-        '61d3a9212b21b1921c332633048b5ed4a3655ed10b4109005ed2a35520355dd20b8b5dd3231aa4523b22241aa4525bd33822'
-        '078b58d502a009002035f68958d4e7af090058d9136558d40b49547557d40b49a45557d40b49c36556d057d557d40b4040e6'
-        '57d000e457d154d50b40126656d112610031038d036c54d4c9af036554dd10e654d154d555d40b4d126a08203b8fa36253de'
-        '00e5e2670fe601721042378f536150d150d551d01835122f511f0b4053640820f261398df155536300e201731043368b4ad2'
-        '4bd126355831008b01e110413d8f03e348d700e554e25361e47136313f8d5360084144d61c311b611d466c6143d65c366066'
-        '6c661036018b8fa0104240d484af090024e53fd480af0900dc716631088f53603cd17c035c3110613c631c613031f08bb8af'
-        '017538d46faf090038d710662c3770676c667c677036048d0171ff7134d462af2365b8af017230d25c3220622822028930d4'
-        '58af0900b6af01757c01c4af1c61ac1fc821e18c1858e38c3020e18c3864e18cffffff1f000000800020ff735864e18c7808'
-        'e18c0002e18c00f4008c00000010000000407064e18c5022e18c6464e18c8c64e18c9464e18cea4be18cbc67e38c0000018c'
-        'b450e18c04c5e28c10c5e28ca064e18c324ce18cfcc4e28ce8bce28c2483008c00c5e28c5434e28c1cace28c800ae18c0080'
-        '01000180010094bce28c0000f58c201414ac4865e18cc064e18c0083008cdc64e18c0070faac0065e18c2465e18c028d0175'
-        '5baf536134d535d40b4d40e60820028933d4ebae00e55e9632d533d40b4d09000820f58b31d132d2bc32084222622822038d'
-        'b3652fd4d9ae09001041f38f017b37e1163a038da3652bd4cfae09002bdde2640b4d347403c80d8f036b28d11630098b28d7'
-        '7c3a023a058b27d40b4d0900b030038d036a25d4b8aeb365036724d000e600e50b40fee40188038da36521d4acae090020d4'
-        '0b48090020d40b49c3651fd40b4809001fd40b4809001ed40b4809001ed40b4809001dd40b4809001dd178e4087f264ff66e'
-        'f66df66cf66bf66af6692b41f668001020ace28c0000f5ac7065e18c60ace28c00f0fbac8858010010403deb9465e18cb865'
-        'e18c4008e18cff82008cc482008c3483008cd465e18c0070fa8cf065e18c0c66e18c445fe18c3466e18c045be38c4866e18c'
-        '285de18c7066e18c9023e18c'
+        '862f962fa62f436ab62f03ebc62f536cd62fa92be62f62d1224f62d40b41f87f61d862d40b480900a36003c8088b60d1'
+        '60d261d3a9212b21b1921c332633048b5ed4a3655ed10b4109005ed2a35520355dd20b8b5dd3231aa4523b22241aa452'
+        '5bd33822078b58d502a009002035f68958d4e7af090058d9136558d40b49547557d40b49a45557d40b49c36556d057d5'
+        '57d40b4040e657d000e457d154d50b40126656d112610031038d036c54d4c9af036554dd10e654d154d555d40b4d126a'
+        '08203b8fa36253de00e5e2670fe601721042378f536150d150d551d01835122f511f0b4053640820f261398df1555363'
+        '00e201731043368b4ad24bd126355831008b01e110413d8f03e348d700e554e25361e47136313f8d5360084144d61c31'
+        '1b611d466c6143d65c3660666c661036018b8fa0104240d484af090024e53fd480af0900dc716631088f53603cd17c03'
+        '5c3110613c631c613031f08bb8af017538d46faf090038d710662c3770676c667c677036048d0171ff7134d462af2365'
+        'b8af017230d25c3220622822028930d458af0900b6af01757c01c4af1c61ac1f6821e18cb87de38cd01fe18cd863e18c'
+        'ffffff1f000000800020ff73f863e18c7808e18c0002e18c00f4008c00000010000000401064e18cf021e18c0464e18c'
+        '2c64e18c3464e18c8a4be18c5c8de38c0000018c5450e18ca4eae28cb0eae28c4064e18cd24be18c9ceae28c88e2e28c'
+        '2483008ca0eae28cec33e28cc8d1e28c800ae18c008001000180010034e2e28c0000f58c201414ace864e18c6064e18c'
+        '0083008c7c64e18c0070faaca064e18cc464e18c028d01755baf536134d535d40b4d40e60820028933d4ebae00e55e96'
+        '32d533d40b4d09000820f58b31d132d2bc32084222622822038db3652fd4d9ae09001041f38f017b37e1163a038da365'
+        '2bd4cfae09002bdde2640b4d347403c80d8f036b28d11630098b28d77c3a023a058b27d40b4d0900b030038d036a25d4'
+        'b8aeb365036724d000e600e50b40fee40188038da36521d4acae090020d40b48090020d40b49c3651fd40b4809001fd4'
+        '0b4809001ed40b4809001ed40b4809001dd40b4809001dd178e4087f264ff66ef66df66cf66bf66af6692b41f6680010'
+        'ccd1e28c0000f5ac1065e18c0cd2e28c00f0fbac8858010010403deb3465e18c5865e18c4008e18cff82008cc482008c'
+        '3483008c7465e18c0070fa8c9065e18cac65e18ce45ee18cd465e18ca480e38ce865e18cc85ce18c1066e18c3023e18c'
     ),
 }
 STREAM_BOOT_RELOCS = {
     # Reviewed terminal-only history copy/text publication follows the unchanged
     # attachment guard. Pre-attachment paths still write no controller state.
     ("controller", "_kui_armada_ce_bind_probe"): (
-        (0x19c, "_kui_armada_ce_stream_transport_event", 0),
-        (0x1a0, "_kui_armada_ce_stream_transport_attached", 0),
-        (0x1a4, "_snapshot", 0),
-        (0x1a8, "_kui_armada_ce_excerpt_snapshot", 0),
-        (0x1ac, "_audio", 0),
-        (0x1b0, "_audio", 64),
-        (0x1b4, "_kui_armada_ce_stream_progress", 0),
-        (0x1b8, "_kui_armada_ce_stream_fault", 0),
-        (0x1bc, "_kui_armada_ce_stream_trace_snapshot", 0),
-        (0x1c0, "_snapshot", 124),
-        (0x1c4, "_labels.0", 0),
-        (0x1c8, "_snapshot", 384),
-        (0x1cc, "_kui_armada_ce_stream_needs_deferred", 0),
-        (0x1d0, "_kui_armada_ce_excerpt_deferred", 0),
-        (0x1d8, "_kui_armada_ce_excerpt_queue", 0),
+        (0x1b4, "_kui_armada_ce_stream_transport_event", 0),
+        (0x1b8, "_kui_armada_ce_stream_transport_attached", 0),
+        (0x1bc, "_snapshot", 0),
+        (0x1c0, "_kui_armada_ce_excerpt_snapshot", 0),
+        (0x1c4, "_audio", 0),
+        (0x1c8, "_audio", 64),
+        (0x1cc, "_kui_armada_ce_stream_progress", 0),
+        (0x1d0, "_kui_armada_ce_stream_fault", 0),
+        (0x1d4, "_kui_armada_ce_stream_trace_snapshot", 0),
+        (0x1d8, "_snapshot", 124),
+        (0x1dc, "_labels.1", 0),
+        (0x1e0, "_snapshot", 384),
+        (0x1e4, "_kui_armada_ce_stream_underrun_snapshot", 0),
+        (0x1e8, "_snapshot", 428),
+        (0x1ec, "_underrun_labels.0", 0),
+        (0x1f0, "_snapshot", 568),
+        (0x1f4, "_kui_armada_ce_stream_needs_deferred", 0),
+        (0x1f8, "_kui_armada_ce_excerpt_deferred", 0),
+        (0x200, "_kui_armada_ce_excerpt_queue", 0),
     ),
     ("controller", "_kui_armada_ce_stream_transport_attached"): ((0xc, "_t", 124),),
     ("controller", "_kui_armada_ce_stream_transport_event"): (
@@ -397,42 +402,60 @@ STREAM_BOOT_REQUIRED = frozenset({
     ("stage", "_kui_retail_stage_relay"),
 })
 
+# The terminal report keeps the old 428-byte ABI prefix, then appends a 140-byte
+# frozen underrun and eight 32-bit label pointers. These labels are emitted only
+# after the worker is stopped; no guest or device memory is read for the page.
+STREAM_REPORT_LABELS = (
+    'GD BIND SOURCE GAPS WORKER', 'AUDIO WHY NODE VALUE EXPECT DETAIL',
+    'SR FPSCR CURRENT OWNER DEVICE', 'STREAM ATTEMPT PLAY REFUSED HR',
+    'BUFFER CAPS BYTES VOICES CRC', 'CMD FIRST LAST PLAYCUR WRITECUR',
+    'EVENTS SAMPLES VISIT-MS JOB-MS JOBS', 'LAST SIX AUDIO EVENTS',
+    'LAST SIX ONE-SECOND SAMPLES', 'CODE MS SOURCE READY AUX',
+    '5S PER PAGE - POWER OFF TO EXIT')
+STREAM_UNDERRUN_LABELS = (
+    'LAST UNDERRUN - FROZEN CONTEXT', 'MS READY DELTA STAGED READ-MS',
+    'ENTRY-GAP SLEEP OBS-MS SRCAGE RINGAGE',
+    'STATUS OWNER READ-BYTES TOTAL RETRIES',
+    'DATA-D AUDIO-D PRE-D YIELD-D COPY-D',
+    'MS SOURCE READY STAGED FLAGS', 'MS SOURCE READY STAGED FLAGS',
+    'MS SOURCE READY STAGED FLAGS')
+
 # The title admission code changes the stage's link positions, while the
 # 912-byte relay's instructions remain identical. Pin every moved literal
 # to its original named function or its complete original terminal message;
 # never admit an arbitrary in-image address. Armada's existing pins remain
 # untouched. These offsets were reviewed against all three linked relays.
 BAM4_STAGE_LINKED_TARGETS = (
-    (0x1a0, 0x8ce121c8, '_retail_display_restore', None),
-    (0x1a8, 0x8ce12030, '_retail_display_line', None),
-    (0x1ac, 0x8ce16438, None, 'BOOTSTRAP 2 REACHED GAME ENTRY'),
-    (0x1bc, 0x8ce16458, None, 'UNSUPPORTED BOOT STACK'),
-    (0x1d4, 0x8ce16470, None, 'UNSUPPORTED BOOT CPU STATE'),
-    (0x1d8, 0x8ce12250, '_retail_display_hex', None),
-    (0x1dc, 0x8ce16464, None, 'BOOT STACK'),
-    (0x1e0, 0x8ce1648c, None, 'BOOT SR'),
-    (0x1e4, 0x8ce16494, None, 'BOOT CACHE'),
-    (0x1e8, 0x8ce14bea, '_memcpy', None),
-    (0x1f4, 0x8ce150b4, '_kui_retail_crc32', None),
-    (0x200, 0x8ce164a0, None, 'BOOTSTRAP ALTERED EXECUTABLE'),
-    (0x204, 0x8ce14c32, '_memcmp', None),
-    (0x238, 0x8ce16548, None, 'BOOTSTRAP ALTERED CE RAM RESERVATION'),
-    (0x23c, 0x8ce164c0, None, 'BOOTSTRAP ALTERED RESIDENT'),
-    (0x244, 0x8ce164dc, None, 'BOOTSTRAP ALTERED STREAM CONTRACT'),
-    (0x24c, 0x8ce16500, None, 'BOOTSTRAP ALTERED ARMADA BIND CODE'),
-    (0x250, 0x8ce16524, None, 'BOOTSTRAP ALTERED ARMADA BIND RAM'),
-    (0x338, 0x8ce16570, None, 'BOOTSTRAP ALTERED STREAM SOURCE MAP'),
-    (0x34c, 0x8ce16594, None, 'BOOTSTRAP ALTERED AUDIO SOURCE BANK'),
-    (0x350, 0x8ce165b8, None, 'STREAM BUS ENTRY MISSING'),
-    (0x364, 0x8ce165d4, None, 'STREAM BUS ENTRY INVALID'),
-    (0x36c, 0x8ce165f0, None, 'STREAM BUS ATTACH FAILED'),
-    (0x370, 0x8ce1660c, None, 'READER INTACT - ORIGINAL ENTRY RESTORED'),
-    (0x374, 0x8ce15f44, None, 'BODY CRC32'),
-    (0x378, 0x8ce16634, None, 'ENTERING WINDOWS CE'),
-    (0x380, 0x8ce16648, None, 'IF IT STOPS PHOTOGRAPH THE LAST SCREEN'),
-    (0x384, 0x8ce15d28, None, 'POWER OFF AND ON TO RETURN'),
-    (0x388, 0x8ce16670, None, 'A RESET NOW MEANS WINDOWS CE ITSELF FAILED'),
-    (0x38c, 0x8ce12390, '_retail_display_pause', None),
+    (0x1a0, 0x8ce12168, '_retail_display_restore', None),
+    (0x1a8, 0x8ce11fd0, '_retail_display_line', None),
+    (0x1ac, 0x8ce163d8, None, 'BOOTSTRAP 2 REACHED GAME ENTRY'),
+    (0x1bc, 0x8ce163f8, None, 'UNSUPPORTED BOOT STACK'),
+    (0x1d4, 0x8ce16410, None, 'UNSUPPORTED BOOT CPU STATE'),
+    (0x1d8, 0x8ce121f0, '_retail_display_hex', None),
+    (0x1dc, 0x8ce16404, None, 'BOOT STACK'),
+    (0x1e0, 0x8ce1642c, None, 'BOOT SR'),
+    (0x1e4, 0x8ce16434, None, 'BOOT CACHE'),
+    (0x1e8, 0x8ce14b8a, '_memcpy', None),
+    (0x1f4, 0x8ce15054, '_kui_retail_crc32', None),
+    (0x200, 0x8ce16440, None, 'BOOTSTRAP ALTERED EXECUTABLE'),
+    (0x204, 0x8ce14bd2, '_memcmp', None),
+    (0x238, 0x8ce164e8, None, 'BOOTSTRAP ALTERED CE RAM RESERVATION'),
+    (0x23c, 0x8ce16460, None, 'BOOTSTRAP ALTERED RESIDENT'),
+    (0x244, 0x8ce1647c, None, 'BOOTSTRAP ALTERED STREAM CONTRACT'),
+    (0x24c, 0x8ce164a0, None, 'BOOTSTRAP ALTERED ARMADA BIND CODE'),
+    (0x250, 0x8ce164c4, None, 'BOOTSTRAP ALTERED ARMADA BIND RAM'),
+    (0x338, 0x8ce16510, None, 'BOOTSTRAP ALTERED STREAM SOURCE MAP'),
+    (0x34c, 0x8ce16534, None, 'BOOTSTRAP ALTERED AUDIO SOURCE BANK'),
+    (0x350, 0x8ce16558, None, 'STREAM BUS ENTRY MISSING'),
+    (0x364, 0x8ce16574, None, 'STREAM BUS ENTRY INVALID'),
+    (0x36c, 0x8ce16590, None, 'STREAM BUS ATTACH FAILED'),
+    (0x370, 0x8ce165ac, None, 'READER INTACT - ORIGINAL ENTRY RESTORED'),
+    (0x374, 0x8ce15ee4, None, 'BODY CRC32'),
+    (0x378, 0x8ce165d4, None, 'ENTERING WINDOWS CE'),
+    (0x380, 0x8ce165e8, None, 'IF IT STOPS PHOTOGRAPH THE LAST SCREEN'),
+    (0x384, 0x8ce15cc8, None, 'POWER OFF AND ON TO RETURN'),
+    (0x388, 0x8ce16610, None, 'A RESET NOW MEANS WINDOWS CE ITSELF FAILED'),
+    (0x38c, 0x8ce12330, '_retail_display_pause', None),
 )
 
 
@@ -860,6 +883,32 @@ def audit_seed(stage, *, stream=False, worms=False):
     return start
 
 
+def audit_stream_terminal_snapshot(image, locals_, *, worms=False):
+    """Keep the terminal ABI and its immutable labels tied to the entry unit."""
+    base_address, _, _, _ = stream_layout(worms=worms)
+    unit = 'armada_ce_excerpt_entry.c'
+    address, count = locals_.get((unit, '_snapshot')) or (0, 0)
+    begin = image['symbols'].get('__armada_bind_bss_begin', 0)
+    end = image['symbols'].get('__armada_bind_bss_end', 0)
+    if (count != 600 or address % 4 or
+            image['symbols'].get('_snapshot') != address or
+            not base_address <= begin <= address <= end - count or
+            end != image['memory_end']):
+        raise ValueError('Missing exact 600-byte terminal snapshot ABI')
+    for name, labels in (('_labels.1', STREAM_REPORT_LABELS),
+                         ('_underrun_labels.0', STREAM_UNDERRUN_LABELS)):
+        expected = b''.join(label.encode('ascii').ljust(40, b'\0') for label in labels)
+        start, length = locals_.get((unit, name)) or (0, 0)
+        if (start % 4 or length != len(expected) or
+                image['symbols'].get(name) != start or
+                not base_address <= start <= base_address + len(image['payload']) - length or
+                region(image['payload'], start - base_address, length, name) != expected):
+            raise ValueError('Missing exact terminal label table: ' + name)
+    return {'snapshot_bytes': 600, 'preserved_prefix_bytes': 428,
+            'frozen_underrun_offset': 428, 'frozen_underrun_bytes': 140,
+            'frozen_labels_offset': 568, 'frozen_label_pointers': 8}
+
+
 def audit_stream_boot_arm(controller, controller_spans, resident, resident_spans, stage, stage_spans,
                           *, bam4=False, worms=False):
     """Pin startup quiescence and the exact post-verification arming path.
@@ -948,6 +997,8 @@ def check(directory, *, stream=False, bam4=False, worms=False):
         raise ValueError("Controller binary differs from linked ELF")
     controller_sizes = function_sizes(elf)
     controller_locals = local_spans(elf)
+    terminal_snapshot = audit_stream_terminal_snapshot(controller, controller_locals,
+                         worms=worms) if stream else None
     bridge_start, bridge_end = audit_bridges(controller, controller_sizes,
                                              base_address=controller_base, limit=controller_limit)
     cache_reader = audit_cache_reader(controller, controller_sizes,
@@ -1057,7 +1108,8 @@ def check(directory, *, stream=False, bam4=False, worms=False):
             "resident_stacks": ordinary["resident_stacks"],
             "cache_reader": cache_reader, "native_worker_code": native_code,
             "native_owner_reader": owner_reader,
-            "stream_bus": stream_bus, "stream_boot_arm": stream_boot_arm}
+            "stream_bus": stream_bus, "stream_boot_arm": stream_boot_arm,
+            "terminal_snapshot": terminal_snapshot}
 
 
 def stream_boot_self_test():

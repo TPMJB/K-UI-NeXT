@@ -81,6 +81,19 @@ build/test-armada-ce-stream-entry: tests/test_armada_ce_stream_entry.c src/loade
 build/test-armada-ce-stream-player: tests/test_armada_ce_stream_player.c src/loader/armada_ce_stream_player.c src/loader/armada_ce_stream_model.c src/loader/armada_ce_stream_trace.c include/kui/armada_ce_stream_trace.h include/kui/armada_ce_stream_model.h include/kui/armada_ce_stream_native.h include/kui/armada_ce_stream_transport.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) -fsanitize=undefined -fno-omit-frame-pointer -fno-pie -no-pie $(INCLUDES) -Isrc/loader tests/test_armada_ce_stream_player.c src/loader/armada_ce_stream_model.c src/loader/armada_ce_stream_trace.c -o $@
+build/test-armada-ce-stream-trace: tests/test_armada_ce_stream_trace.c src/loader/armada_ce_stream_trace.c include/kui/armada_ce_stream_trace.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
+.PHONY: test-wince-cooked-admission
+test-wince-cooked-admission: build/test-wince-ce-cooked-armada build/test-wince-ce-cooked-bam4 build/test-wince-ce-cooked-worms
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-wince-ce-cooked-armada
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-wince-ce-cooked-bam4
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-wince-ce-cooked-worms
+build/test-wince-ce-cooked-bam4: WINCE_COOKED_FLAGS := -DKUI_WINCE_CDDA_BAM4=1
+build/test-wince-ce-cooked-worms: WINCE_COOKED_FLAGS := -DKUI_WINCE_CDDA_WORMS=1
+build/test-wince-ce-cooked-armada build/test-wince-ce-cooked-bam4 build/test-wince-ce-cooked-worms: tests/test_wince_ce_cooked_admission.c include/kui/armada_ce_audio_admission.h include/kui/wince_cdda_profiles.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_RETAIL_EXTENDED_MAP=1 $(WINCE_COOKED_FLAGS) $< -o $@
 
 .PHONY: test-worms-ce-stream
 test-worms-ce-stream: build/test-worms-ce-live-sound build/test-worms-ce-stream-native build/test-worms-ce-stream-copy

@@ -325,7 +325,9 @@ static enum kui_wince_cdda_profile ce_music_profile(const struct kui_game_image 
         unsigned i=0;
         for(;i<disc->track_count;i++)
             if(image->tracks[i].start_lba!=disc->starts[i] || image->tracks[i].file_offset ||
-               image->tracks[i].sector_bytes!=2352u ||
+               (image->tracks[i].sector_bytes!=2352u &&
+                !(image->tracks[i].control==4u && image->tracks[i].sector_bytes==2048u &&
+                  !image->tracks[i].data_offset)) ||
                image->tracks[i].control!=kui_wince_cdda_track_control(profile,i)) break;
         if(i==disc->track_count && (profile!=KUI_WINCE_CDDA_ARMADA ||
            image->tracks[3].end_lba>=KUI_ARMADA_CE_EXCERPT_START_LBA+KUI_ARMADA_CE_EXCERPT_SECTORS))

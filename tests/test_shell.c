@@ -768,11 +768,18 @@ static void games_variant_controls(void) {
     /* Both CE versions default to the working background reader. */
     for(unsigned choice=0;choice<2;choice++) {
         open_paired_games();inspect_paired_choice(choice,true);
+        s.games_detail.audio=(struct kui_game_audio_info){KUI_GAME_AUDIO_GD_HIGH_DENSITY,2,1,1};
+        assert(kui_shell_games_ce_probe_ready(&s) && kui_shell_games_cdda_ready(&s));
         press(KUI_SHELL_A,false);assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
         s.games_retail_reader=0;
         assert(press(KUI_SHELL_X|KUI_SHELL_Y,false)==KUI_SHELL_NONE && !s.games_retail_reader);
         assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL &&
             s.games_retail_reader==(KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC));
+        assert(!strcmp(s.games_selected_path,paths[choice]));
+        press(KUI_SHELL_Y,false);s.games_launch_selected=KUI_SHELL_GAME_OPTION_CDDA;
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_cdda);
+        assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL &&
+            s.games_retail_reader==(KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC|KUI_GAMES_RETAIL_CE_EXCERPT));
         assert(!strcmp(s.games_selected_path,paths[choice]));
     }
 

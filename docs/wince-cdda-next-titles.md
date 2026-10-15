@@ -68,12 +68,21 @@ The published helper and its synthetic tests contain no retail game bytes.
 
 ## Opt-in availability
 
-The saved CD music toggle is offered to every inspected original WinCE GDI
-with high-density audio tracks. New images default to Off. The menu does not
+The saved CD music toggle is offered to inspected WinCE GDIs with high-density
+audio tracks, including converted 2048-byte DATA with original raw AUDIO.
+New images default to Off. The menu does not
 use a title whitelist to hide the option. Actual launch still requires a
 matching native runtime adapter; an unrecognized profile is refused before
 handoff with a clear option to turn CD music Off. An available toggle does
 not claim universal WinCE playback compatibility.
+
+The diagnostic candidate removes the all-raw DATA admission restriction for
+the three exact profiles while retaining raw AUDIO and executable CRC checks.
+It also freezes a fourth terminal page at the last underrun, using existing
+clock samples and source/ring/transport progress. See
+[the diagnostic test guide](wince-cdda-diagnostic-test.md). This records
+event-correlated evidence without retuning playback or reconstructing discarded
+raw DATA sectors.
 
 ## Supplied runtime comparison and first port
 

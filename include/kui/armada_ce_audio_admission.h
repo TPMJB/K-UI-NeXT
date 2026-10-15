@@ -1,9 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #ifndef KUI_ARMADA_CE_AUDIO_ADMISSION_H
 #define KUI_ARMADA_CE_AUDIO_ADMISSION_H
-#include "kui/retail_image.h"
+#include "kui/wince_cdda_profiles.h"
 #include <string.h>
-/* Admission binds the selected exact US kernel/IP and raw track layout.
+/* Admission binds the selected exact US kernel/IP and track layout. DATA may
+ * be Mode 1 payload-only with an executable CRC; AUDIO remains raw2352.
  * It does not embed or patch proprietary sound code. */
 #if defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
 #define KUI_ARMADA_CE_KERNEL_BYTES UINT32_C(1110016)
@@ -28,8 +29,7 @@ static inline bool kui_armada_ce_audio_admit(const struct kui_retail_manifest *m
        body_crc!=UINT32_C(0xcd686951) || memcmp(sha,kernel_sha,32u)) return false;
     for(unsigned i=0;i<8u;i++)
         if(m->slots[i].track.start_lba!=starts[i] ||
-           kui_retail_track_control(&m->slots[i].track)!=(i==0u || i==2u || i==7u?4u:0u) ||
-           kui_retail_track_sector_bytes(&m->slots[i].track)!=KUI_GAME_RAW_BYTES ||
+           !kui_wince_cdda_track_storage_valid(&m->slots[i].track,i==0u || i==2u || i==7u?4u:0u,m->flags) ||
            kui_retail_track_file_offset(&m->slots[i].track)) return false;
 #elif defined(KUI_WINCE_CDDA_BAM4) && KUI_WINCE_CDDA_BAM4 == 1
     static const uint8_t kernel_sha[32]={
@@ -48,8 +48,7 @@ static inline bool kui_armada_ce_audio_admit(const struct kui_retail_manifest *m
        body_crc!=UINT32_C(0xf6902800) || memcmp(sha,kernel_sha,32u)) return false;
     for(unsigned i=0;i<26u;i++)
         if(m->slots[i].track.start_lba!=starts[i] ||
-           kui_retail_track_control(&m->slots[i].track)!=(i==0u || i==2u || i==25u?4u:0u) ||
-           kui_retail_track_sector_bytes(&m->slots[i].track)!=KUI_GAME_RAW_BYTES ||
+           !kui_wince_cdda_track_storage_valid(&m->slots[i].track,i==0u || i==2u || i==25u?4u:0u,m->flags) ||
            kui_retail_track_file_offset(&m->slots[i].track)) return false;
 #else
     static const uint8_t kernel_sha[32]={
@@ -65,8 +64,7 @@ static inline bool kui_armada_ce_audio_admit(const struct kui_retail_manifest *m
        body_crc!=UINT32_C(0xb9f755bc) || memcmp(sha,kernel_sha,32u)) return false;
     for(unsigned i=0;i<5;i++)
         if(m->slots[i].track.start_lba!=starts[i] ||
-           kui_retail_track_control(&m->slots[i].track)!=(i==1u || i==3u?0u:4u) ||
-           kui_retail_track_sector_bytes(&m->slots[i].track)!=KUI_GAME_RAW_BYTES ||
+           !kui_wince_cdda_track_storage_valid(&m->slots[i].track,i==1u || i==3u?0u:4u,m->flags) ||
            kui_retail_track_file_offset(&m->slots[i].track)) return false;
 #endif
     return true;

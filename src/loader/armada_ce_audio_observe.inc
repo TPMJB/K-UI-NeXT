@@ -64,16 +64,25 @@ static void armada_ce_audio_report(void) {
 #endif
 }
 #if KUI_ARMADA_CE_STREAM
-static void armada_ce_audio_history(unsigned samples) {
+static void armada_ce_audio_history(unsigned page) {
     /* Terminal execution has stopped: copy authored history only, without
      * sampling guest memory, clocks or native sound methods. */
     const struct kui_armada_ce_excerpt_entry_snapshot *s=kui_armada_ce_bind_probe(UINT32_MAX,0,0,0);
+    if(page==2u) {
+        if(!s->underrun_labels[0]) return;
+        retail_display_line((const char *)(uintptr_t)s->underrun_labels[0]);
+        for(unsigned i=0;i<7u;i++)
+            retail_display_values((const char *)(uintptr_t)s->underrun_labels[i+1u],
+                s->underrun.rows[i],5);
+        retail_display_line((const char *)(uintptr_t)s->report_labels[10]);
+        return;
+    }
     if(!s->report_labels[7]) return;
-    retail_display_line((const char *)(uintptr_t)s->report_labels[samples?8u:7u]);
+    retail_display_line((const char *)(uintptr_t)s->report_labels[page?8u:7u]);
     retail_display_values((const char *)(uintptr_t)s->report_labels[6],s->trace.counts,5);
     for(unsigned i=0;i<KUI_ARMADA_CE_STREAM_TRACE_ROWS;i++)
         retail_display_values((const char *)(uintptr_t)s->report_labels[9],
-            samples?s->trace.samples[i]:s->trace.events[i],5);
+            page?s->trace.samples[i]:s->trace.events[i],5);
     retail_display_line((const char *)(uintptr_t)s->report_labels[10]);
 }
 #endif

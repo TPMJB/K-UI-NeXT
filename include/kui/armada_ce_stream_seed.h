@@ -76,7 +76,7 @@ static inline bool kui_armada_ce_stream_map_valid(const struct kui_retail_manife
     for(unsigned i=0;i<5u;i++) {
         const struct kui_retail_track *track=&map->slots[i].track;
         if(track->start_lba!=starts[i] || track->end_lba<=track->start_lba ||
-           track->control!=(i==1u || i==3u?0u:4u) ||
+           !kui_wince_cdda_track_storage_valid(track,i==1u || i==3u?0u:4u,map->flags) ||
            kui_retail_track_file_offset(track) || !track->extent_count) return false;
     }
     return true;
