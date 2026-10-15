@@ -428,7 +428,7 @@ def build(args):
                 "packaging_corruption_checks": checks,
                 "output_member_sizes_sha256_crc32_verified": True}}
     files["build.json"] = (json.dumps(info, indent=2) + "\n").encode()
-    files["README.md"] = f"""# K-UI 2.0 RC2 — Armada CD music
+    files["README.md"] = f"""# K-UI 2.0 RC3 — Armada CD music
 
 Menu and optional audio loader build **{stamp}**. Merge this ZIP's `KUI` folder
 onto the SCI microSD card with the console off, replacing **both**
@@ -436,15 +436,19 @@ onto the SCI microSD card with the console off, replacing **both**
 
 Select **Original Armada → Y Options → CD music On → START**. This test streams
 the requested audio tracks from your image; it is not the earlier two-second
-excerpt loop. RC2 retains Claude's cursor-authoritative pacing, one-second
-restart threshold, offset staging and worker diagnostics. RC1's console trace
-supplied137,984B/s against176,811B/s consumed during continuous playback,
-with20worker visits/second. RC2 allows one whole16-sector job per urgent grant:
-75card blocks, with up to76worker pumps including initial reception setup.
-Interrupts restore between pumps; incomplete DMA, a new command or DATA handoff
-ends the drain. Priority2,16-sector reads, DATA's16-block quantum and immediate
-foreground preemption remain. This is a measured supply correction, not a
-hardware success claim.
+excerpt loop. RC3 publishes the completed replacement PIO job before yielding.
+RC2 could leave up to37,632bytes staged until after the next cursor observation,
+so playback could stop while completed source audio was still waiting.
+The final refill retains existing native locks, cursor/frontier guards and
+command-epoch checks; pending source reads skip it without taking the sound lock.
+
+RC2's console sample supplied180,633.6B/s against176,947.2B/s consumed, but held
+onlyabout0.3–0.5seconds of reserve. This handoff makes already-completed audio
+available immediately. Cursor-authoritative pacing, one-second restart,
+priority2,16-sector reads,75-block urgent grants and76-pump ready drains remain.
+The shared DATA reader and foreground preemption are unchanged. A regression
+fails with the old handoff and passes after this correction; console success
+still requires the physical test.
 
 Use the same in-game scene where the earlier loop was audible. No main-menu
 wait or gameplay video is requested. Return with **A+B+X+Y+Start** after music
@@ -526,7 +530,7 @@ def main():
     parser.add_argument("--elf", type=Path, default=ROOT / "build/kui-runtime.elf")
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     parser.add_argument("--evidence", action="append", default=[], metavar="NAME=PATH")
-    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-2.0-RC2-Armada-Audio.zip")
+    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-2.0-RC3-Armada-Audio.zip")
     args = parser.parse_args()
     try:
         build(args)

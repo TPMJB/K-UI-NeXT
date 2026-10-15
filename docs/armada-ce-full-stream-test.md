@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Armada CE full CD music stream test
 
-## K-UI 2.0 RC2 supply budget
+## K-UI 2.0 RC3 completed-read handoff
 
 This console candidate integrates the net changes from
 `fix/armada-cdda-supply` at `be793d667cf0` into our current `eb06827d85da`
@@ -39,6 +39,26 @@ Interrupts are restored between pumps; incomplete DMA, DATA handoff, a new
 command, error or completion still ends the drain. This removes two avoidable
 sources of scheduler delay; it does not guarantee card or CE timing.
 DATA's 16-block quantum and immediate foreground preemption are unchanged.
+
+Recording `62658.mp4` confirms further improvement in RC2. During the final
+five uninterrupted one-second sample intervals (MS `1f95f` to `20ce7`), source
+grows 903,168 bytes (180,633.6 B/s) against implied consumption of 176,947.2 B/s.
+READY remains only 52,992–88,192 bytes while the maximum job interval is 650 ms.
+The last underrun sees 8,448 bytes consumed with only 2,432 fresh bytes. Supply
+can now match playback in this sample, but has little reserve for delayed work.
+
+RC3 fixes a completed-read publication delay. The final replacement source
+visit can now complete a whole PIO job, but RC2 returned with that PCM still
+in staging. The next visit observed the native cursor before refilling, so it
+could stop despite up to 37,632 bytes already read. A refill immediately after
+that replacement source visit publishes eligible PCM before Sleep. It retains
+all native locks, cursor/frontier checks and command-epoch publication checks;
+a still-pending read makes refill return without acquiring the native lock.
+No additional source jobs, transport grants or scheduling changes are added.
+A focused player regression fails on RC2 and passes with this handoff: two
+completed jobs reach the native ring before a 350 ms delayed visit, rather
+than leaving the second job unavailable to observation. This proves the code
+path, not that every console underrun has this cause.
 
 Focused player checks cover clock drift, real underruns, finite/infinite
 playback, staging carry and bounded PIO draining/cancellation. Transport checks

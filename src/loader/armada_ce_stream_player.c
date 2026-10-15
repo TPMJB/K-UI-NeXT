@@ -698,7 +698,12 @@ static void step(uint32_t sr,uint32_t fpscr) {
          * leaves the transport idle through the yield and position call.
          * Start comes first because a new read ticket prevents ring prime
          * admission. This second source visit never waits for reception. */
-        if(player.source_total!=before && !source()) goto failed;
+        if(player.source_total!=before) {
+            /* Ready PIO may finish this replacement too. Publish its PCM
+             * before yielding: the next visit observes consumption first
+             * and cannot count bytes left only in staging as fresh audio. */
+            if(!source() || !refill()) goto failed;
+        }
     }
     switch(player.model.state) {
     case KUI_ARMADA_CE_STREAM_PLAYING: player.stats.status=KUI_ARMADA_CE_EXCERPT_PLAYING;break;

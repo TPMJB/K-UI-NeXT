@@ -477,6 +477,7 @@ int main(void) {
     /* Waiting for native ring space retains the20ms idle cadence; a
      * pending source ticket uses the shorter native yield. */
     reset(true,128u);prime();
+    for(unsigned i=0;i<16u && player.model.staged<64u && !player.disabled;i++) visit();
     CHECK(player.model.staged>=64u && !player.read_active && step_delay()==STEP_MS);
     bus.sleep_visits=0u;
     CHECK(kui_armada_ce_stream_worker((uint32_t)(uintptr_t)&player)==UINT32_MAX);
@@ -531,6 +532,27 @@ int main(void) {
     CHECK(!player.read_active && !bus.pending && bus.bytes==RAW_BYTES &&
         bus.pumps-pio_before<=SOURCE_READY_PUMPS+1u &&
         player.model.staged==RAW_BYTES && player.source_total==RAW_BYTES);++cases;
+    /* A second completed PIO job must reach the native ring before Sleep.
+     * Otherwise the next observation underruns despite fresh staged PCM. */
+    reset(true,128u);bus.pio_ready=true;prime();CHECK(refill());
+    CHECK(player.model.staged<64u && !player.read_active);
+    player.model.consumed=player.model.produced-16384u;
+    player.model.audible=player.model.origin+player.model.consumed;
+    player.model.last_play=(uint32_t)(player.model.consumed%KUI_ARMADA_CE_STREAM_RING_BYTES);
+    bus.cursor=player.model.last_play;
+    bus.frontier=(bus.cursor+11008u)%KUI_ARMADA_CE_STREAM_RING_BYTES;
+    {
+        uint64_t before_produced=player.model.produced;
+        uint32_t before_source=player.source_total;
+        visit();
+        CHECK(!player.disabled && player.source_total-before_source==2u*RAW_BYTES &&
+            player.model.produced-before_produced==2u*RAW_BYTES && player.model.staged<64u);
+        /* 350ms at44.1kHz exceeds one job plus the old16KiB reserve,
+         * but fits the two completed jobs just published. */
+        bus.now+=330u;advance(61740u);
+        CHECK(!player.disabled && player.model.native_running && !player.model.recoveries);
+    }
+    ++cases;
     /* A command arriving between one-block masks prevents any old source
      * ticket from reaching staging, even if furtherPIO bytes are ready. */
     reset(true,128u);bus.pio_ready=true;bus.stale_source=true;CHECK(source());
