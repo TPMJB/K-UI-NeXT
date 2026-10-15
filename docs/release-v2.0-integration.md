@@ -42,6 +42,12 @@ Audio regressions now run under the ordinary host test gate. A stale Worms
 test recipe was corrected to link the actual native implementation with its
 matching profile definition.
 
+The CI run exposed repeated timeouts at FatFs's upstream download server.
+The exact existing pinned archive and patches are now bundled with their
+original licence and provenance under `third_party/fatfs-downloads`.
+Clean builds verify the complete pinned set before caching or extraction;
+dependency versions and compiled FatFs bytes remain unchanged.
+
 ## Feature comparison
 
 See the [Games audit](audit-legacy-games.md) and [GD Ripper audit](audit-legacy-ripper.md).
