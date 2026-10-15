@@ -98,8 +98,10 @@ the selected branches and exclusions.
   Mode 2 Form 2 and subchannel emulation are not provided.
 - **Storage:** SCI is required for CE. IDE/CF is untested synchronous PIO;
   ATA DMA and CE on IDE/SCIF remain future work. ext4 is bootstrap-only.
-- **Formats:** compressed games require PC import. Ripper exports do not
-  supply resident compressed game decoding.
+- **Formats:** standard LZ4 ZSO has an experimental native SCI Standard
+  reader; console acceptance is pending. CSO, CHD and historical LZO ZSO
+  require PC import. Ripper exports do not supply general resident compressed
+  decoding. See [ZSO scope](games-zso.md) and [CHD work](games-chd.md).
 - **Release acceptance:** build the complete matching package, pass its host
   and console build/layout checks, and confirm the assembled candidate on
   hardware before calling it final 2.0. Earlier per-feature test packages and

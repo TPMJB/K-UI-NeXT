@@ -40,7 +40,9 @@ boot CD. See [boot and recovery](boot-recovery.md).
 
 Place each image and all its referenced tracks in a folder under `/Games`.
 Supported GDI, ISO, BIN/CUE, CDI and standalone BIN/IMG layouts remain available.
-CSO/ZSO/CHD require PC import; see [format boundaries](games-formats.md).
+Standard LZ4 ZSO has a separate experimental native SCI Standard reader,
+with console acceptance pending; see [ZSO scope](games-zso.md). CSO, CHD
+and historical LZO ZSO require PC import; see [format boundaries](games-formats.md).
 
 1. Open **Games** and select the title. Where paired copies exist, choose
    **Original** or **2048-byte copy**.
@@ -92,7 +94,9 @@ SCI networking uses SCIF storage because SCI storage reserves that port.
 IDE/CF remains experimental synchronous PIO without console validation.
 ATA DMA and Windows CE on IDE/SCIF are not implemented. This candidate makes
 no new Wi-Fi, Ethernet or storage-throughput claim. Time Stalkers, some native
-FMVs, universal CDDA and compressed resident game booting remain unresolved.
+FMVs and universal CDDA remain unresolved. The first native LZ4 ZSO path
+still needs console acceptance; other compressed resident formats remain
+unimplemented. Direct CHD loading has its own [implementation plan](games-chd.md).
 
 ## Rollback and source
 

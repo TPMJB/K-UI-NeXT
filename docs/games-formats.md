@@ -1,5 +1,10 @@
 # Games image and ripper formats — K-UI 1.8.5
 
+**2.0 preparation update:** current source adds an experimental direct
+[standard LZ4 ZSO reader](games-zso.md) for native SCI Standard launches.
+Console acceptance is pending. The 1.8.5 boundaries recorded below remain
+historical; CSO, CHD and the ripper's LZO ZSO still require PC import.
+
 Games supports the direct-launch layouts below, the Original/2048 picker,
 RAM-cached lists and selected-game artwork. Disc Ripper also offers multiple
 output formats. Container support does not guarantee that every title boots;

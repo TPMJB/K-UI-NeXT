@@ -208,8 +208,9 @@ See [the research scope](docs/milestone-1-research.md),
 ## Games
 
 Games directly launches supported GDI, ISO, BIN/CUE, CDI v2/v3/v3.5 and
-standalone BIN/IMG layouts. The supplied PC importer expands CSO/ZSO and
-extracts CHD; resident compressed boot decoding is not implemented. See
+standalone BIN/IMG layouts. Standard LZ4 ZSO now has a separate native SCI
+Standard-reader launch path; console acceptance is pending. CSO, historical
+LZO ZSO and CHD use the supplied PC importer. See [ZSO limits](docs/games-zso.md) and
 [format and import limits](docs/games-formats.md).
 
 Matching `Game` and `Game-2048` folders collapse into one Games entry. Choose

@@ -122,8 +122,8 @@ build/test-armada-ce-excerpt-pool: tests/test_armada_ce_excerpt_pool.c include/k
 build/test-armada-ce-live-sound: tests/test_armada_ce_live_sound.c include/kui/armada_ce_live_sound.h include/kui/armada_ce_ram_bind.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
-ARMADA_PREPARE_TEST_SOURCES := src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/game_image.c src/core/hash.c src/core/data.c src/core/destination.c src/core/retail_image.c
-build/test-armada-ce-excerpt-prepare: tests/test_armada_ce_excerpt_prepare.c src/apps/games_retail.c $(ARMADA_PREPARE_TEST_SOURCES) include/kui/armada_ce_excerpt_pool.h include/kui/game_ram_patches.h
+ARMADA_PREPARE_TEST_SOURCES := src/core/retail_zso.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/game_image.c src/core/zso.c src/core/hash.c src/core/data.c src/core/destination.c src/core/retail_image.c
+build/test-armada-ce-excerpt-prepare: tests/test_armada_ce_excerpt_prepare.c src/apps/games_retail.c $(ARMADA_PREPARE_TEST_SOURCES) include/kui/armada_ce_excerpt_pool.h include/kui/game_ram_patches.h include/kui/retail_zso.h include/kui/zso.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -ffunction-sections -fdata-sections tests/test_armada_ce_excerpt_prepare.c $(ARMADA_PREPARE_TEST_SOURCES) -Wl,--gc-sections -o $@
 build/test-armada-ce-excerpt-entry: tests/test_armada_ce_excerpt_entry.c src/loader/armada_ce_excerpt_entry.c include/kui/armada_ce_excerpt_entry.h src/loader/armada_ce_audio_observe.inc
@@ -133,7 +133,7 @@ build/test-armada-ce-excerpt: tests/test_armada_ce_excerpt.c src/loader/armada_c
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -fno-pie -no-pie $< -o $@
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek build/music-asset-check
-test: build/test-game-launch-settings build/test-game-launch-settings-file build/test-game-ram-patches build/test-game-launch-report build/test-retail-relay-patches
+test: build/test-zso build/test-retail-zso build/test-game-launch-settings build/test-game-launch-settings-file build/test-game-ram-patches build/test-game-launch-report build/test-retail-relay-patches
 test: test-armada-ce-stream test-worms-ce-stream test-wince-cooked-admission test-armada-ce-excerpt
 test: build/test-capture-export
 test: build/test-game-image build/test-game-metadata build/test-loader-probe build/test-loader-sd build/loader-probe.dat
@@ -240,6 +240,8 @@ test: build/test-storage-errors build/test-cd-audio build/test-network-probe bui
 	./build/test-crc16
 	./build/test-destination
 	./build/test-settings
+	./build/test-zso
+	./build/test-retail-zso
 	./build/test-game-ram-patches
 	./build/test-game-launch-report
 	./build/test-retail-relay-patches
@@ -507,14 +509,14 @@ build/test-image-client: tests/test_image_client.c src/loader/image_client.c $(G
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/loader/image_client.c $(GD_SERVICE) tests/test_image_client.c -o $@
 
-GAMES_IMAGE_PROBE = src/apps/games_image_probe.c $(RESIDENT_IMAGE) src/core/game_image.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c
+GAMES_IMAGE_PROBE = src/apps/games_image_probe.c $(RESIDENT_IMAGE) src/core/game_image.c src/core/zso.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c
 GAMES_IMAGE_PROBE_WRAP = -Wl,--wrap=f_open,--wrap=f_read,--wrap=f_lseek,--wrap=f_close,--wrap=f_mount,--wrap=f_write,--wrap=f_mkdir,--wrap=f_unlink,--wrap=f_rename
 build/games-image-probe: tests/games_image_probe.c $(GAMES_IMAGE_PROBE) $(CORE) $(FATFS) include/kui/games_image_probe.h include/kui/resident_image.h include/kui/game_image.h include/kui/game_metadata.h include/kui/image_loader_layout.h include/kui/runtime.h include/kui/destination.h include/kui/media.h src/dreamcast/platform.h config/ffconf.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast tests/games_image_probe.c $(GAMES_IMAGE_PROBE) $(CORE) $(FATFS) $(GAMES_IMAGE_PROBE_WRAP) -o $@
 
-GAMES_RETAIL = src/apps/game_launch_report.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/apps/games_retail.c src/core/hash.c src/core/retail_image.c src/core/retail_cursor.c src/core/game_image.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c
-build/games-retail: tests/games_retail.c $(GAMES_RETAIL) $(CORE) $(FATFS) include/kui/games_retail.h include/kui/ce_load_plan.h include/kui/retail_image.h include/kui/retail_loader_layout.h include/kui/game_image.h include/kui/game_metadata.h include/kui/runtime.h include/kui/destination.h include/kui/media.h src/dreamcast/platform.h config/ffconf.h .deps/fatfs/source/ff.h include/kui/game_ram_patches.h include/kui/game_launch_settings.h include/kui/game_launch_report.h
+GAMES_RETAIL = src/core/retail_zso.c src/apps/game_launch_report.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/apps/games_retail.c src/core/hash.c src/core/retail_image.c src/core/retail_cursor.c src/core/game_image.c src/core/zso.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c
+build/games-retail: tests/games_retail.c $(GAMES_RETAIL) $(CORE) $(FATFS) include/kui/games_retail.h include/kui/ce_load_plan.h include/kui/retail_image.h include/kui/retail_loader_layout.h include/kui/game_image.h include/kui/game_metadata.h include/kui/runtime.h include/kui/destination.h include/kui/media.h src/dreamcast/platform.h config/ffconf.h .deps/fatfs/source/ff.h include/kui/game_ram_patches.h include/kui/game_launch_settings.h include/kui/game_launch_report.h include/kui/retail_zso.h include/kui/zso.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast tests/games_retail.c $(GAMES_RETAIL) $(CORE) $(FATFS) $(GAMES_IMAGE_PROBE_WRAP) -o $@
 
@@ -538,9 +540,9 @@ build/test-recovery-manifest: tests/test_recovery_manifest.c src/core/recovery_m
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/recovery_manifest.c tests/test_recovery_manifest.c -o $@
 
-build/test-capture-core: tests/test_capture_core.c src/core/hash.c src/core/capture_plan.c src/core/data.c src/core/game_image.c include/kui/game_image.h include/kui/hash.h include/kui/capture.h
+build/test-capture-core: tests/test_capture_core.c src/core/hash.c src/core/capture_plan.c src/core/data.c src/core/game_image.c src/core/zso.c include/kui/game_image.h include/kui/hash.h include/kui/capture.h include/kui/zso.h
 	@mkdir -p build
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/data.c src/core/hash.c src/core/capture_plan.c src/core/game_image.c tests/test_capture_core.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/data.c src/core/hash.c src/core/capture_plan.c src/core/game_image.c src/core/zso.c tests/test_capture_core.c -o $@
 
 build/test-capture-export: tests/test_capture_export.c src/core/capture_export.c src/core/capture_chd.c src/core/hash.c src/core/data.c $(EXPORT_CODECS) include/kui/capture_export.h src/core/capture_export_internal.h
 	@mkdir -p $(@D)
@@ -810,9 +812,9 @@ build/test-cd-audio: tests/test_cd_audio.c src/apps/cd_audio.c src/core/command.
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/cdda_stubs -Itests/stubs -Isrc/dreamcast src/apps/cd_audio.c src/core/command.c src/core/data.c tests/test_cd_audio.c -o $@
 
 # Games uses a read-only image backend separate from the accepted optical reader.
-build/test-game-image: tests/test_game_image.c src/core/game_image.c include/kui/game_image.h
+build/test-game-image: tests/test_game_image.c src/core/game_image.c src/core/zso.c include/kui/game_image.h include/kui/zso.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/game_image.c tests/test_game_image.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/game_image.c src/core/zso.c tests/test_game_image.c -o $@
 
 build/test-game-metadata: tests/test_game_metadata.c src/core/game_metadata.c include/kui/game_metadata.h
 	@mkdir -p $(@D)
@@ -830,7 +832,7 @@ build/test-cover-image: tests/test_cover_image.c src/apps/cover_image.c include/
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests src/apps/cover_image.c tests/test_cover_image.c -o $@
 
-GAMES = src/apps/games.c src/core/game_image.c src/core/game_metadata.c src/core/destination.c src/core/storage_probe.c
+GAMES = src/apps/games.c src/core/game_image.c src/core/zso.c src/core/game_metadata.c src/core/destination.c src/core/storage_probe.c
 GAMES_COVERS = $(GAMES) src/apps/games_covers.c src/apps/cover_image.c src/core/game_cover.c src/core/pvr_texture.c src/core/retail_image.c
 GAMES_COVERS_WRAP = -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_opendir,--wrap=f_closedir,--wrap=f_write
 GAMES_WRAP = -Wl,--wrap=f_open,--wrap=f_read,--wrap=f_lseek,--wrap=f_close,--wrap=f_write,--wrap=f_mkdir,--wrap=f_unlink,--wrap=f_rename,--wrap=f_opendir,--wrap=f_readdir,--wrap=f_closedir,--wrap=f_stat
@@ -933,3 +935,13 @@ build/test-game-launch-report: tests/test_game_launch_report.c src/apps/game_lau
 build/test-retail-relay-patches: $(RETAIL_RELAY_DEPS)
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(RETAIL_RELAY_FLAGS) -DKUI_GAME_RAM_PATCHES_STAGE=1 -Iinclude -Isrc/loader tests/test_retail_relay.c src/core/retail_image.c src/core/game_ram_patches.c -Wl,--gc-sections -o $@
+
+# Standard LZ4 ZSO container and bounded streaming decoder.
+build/test-zso: tests/test_zso.c src/core/zso.c include/kui/zso.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/zso.c tests/test_zso.c -o $@
+
+# Detached SCI physical extents, ZSO wire validation and logical-sector reads.
+build/test-retail-zso: tests/test_retail_zso.c src/core/retail_zso.c src/core/zso.c src/core/retail_image.c include/kui/retail_zso.h include/kui/zso.h include/kui/retail_image.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_RETAIL_MANIFEST_SLOTS=32 src/core/retail_image.c src/core/retail_zso.c src/core/zso.c tests/test_retail_zso.c -o $@

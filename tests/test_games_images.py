@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Real FAT32/exFAT Games reads, injected faults and whole-card preservation."""
 from pathlib import Path
+import argparse
 import hashlib
 import shutil
 import sys
 import tempfile
 from test_images import run
 from games_fixture import make_fixture
+from zso_fixture import make_zso_fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = str(ROOT / "build/games-image")
@@ -41,6 +43,8 @@ CASES += ("format-root-extensions", "format-gdi-payload", "format-capture-payloa
           "format-cue-shared", "format-compressed", "format-inspect-cdi", "format-inspect-cdi-invalid", "format-bad-boot")
 CASES += ("format-capture-zso", "format-capture-chd", "format-capture-gdi",
           "format-capture-gdi-malformed", "format-capture-unrelated-bin")
+ZSO_INSPECT_CASES = ("inspect-zso-sci", "inspect-zso-scif", "inspect-zso-ce")
+CASES += ZSO_INSPECT_CASES
 
 
 def digest(path):
@@ -49,6 +53,9 @@ def digest(path):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--zso-only", action="store_true", help="Only direct-ZSO inspection and compressed-format refusals")
+    args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="kui-games-") as temp:
         base = Path(temp)
         fixture = base / "original-gdi"
@@ -63,14 +70,21 @@ def main():
                 run("mkfs.fat", "-F", "32", str(clean))
             else:
                 run("mkfs.exfat", str(clean))
-            for case in CASES:
+            for case in (ZSO_INSPECT_CASES + ("format-compressed",) if args.zso_only else CASES):
+                selected_fixture = fixture
+                if case in ZSO_INSPECT_CASES:
+                    selected_fixture = base / "zso-inspect"
+                    make_zso_fixture(selected_fixture, "zso-windows-ce" if case == "inspect-zso-ce" else "zso-gd-shift0")
                 image = base / f"{kind}-{case}.img"
                 shutil.copyfile(clean, image)
-                run(BINARY, str(image), str(fixture), "seed", case)
+                run(BINARY, str(image), str(selected_fixture), "seed", case)
                 before = digest(image)
-                output = run(BINARY, str(image), str(fixture), "check", case)
+                output = run(BINARY, str(image), str(selected_fixture), "check", case)
                 assert f"PASS Games check {case}; no active-operation writes" in output
                 assert digest(image) == before, f"Games changed {kind} card image in {case}"
+                if case in ZSO_INSPECT_CASES:
+                    physical_bytes = (selected_fixture / "selected.zso").stat().st_size
+                    assert f"physical bytes={physical_bytes}, native SCI admission={int(case == 'inspect-zso-sci')}, Windows CE={int(case == 'inspect-zso-ce')}" in output
                 run("fsck.fat" if kind == "fat32" else "fsck.exfat", "-n", str(image))
                 image.unlink()
                 print(f"PASS {kind} Games: {case}; whole-card SHA256 unchanged", flush=True)

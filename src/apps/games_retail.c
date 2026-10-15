@@ -12,6 +12,7 @@
 #include "kui/games.h"
 #include "kui/game_metadata.h"
 #include "kui/retail_image.h"
+#include "kui/retail_zso.h"
 #include "kui/retail_loader_layout.h"
 #include "kui/media.h"
 #include "../core/games_cdda_profile.h"
@@ -92,7 +93,7 @@ static uint32_t le32(const uint8_t *p) {
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
 }
 /* ce: the Windows CE probe package, with its own magic and higher stage. */
-static bool layout(const struct kui_runtime_image *image,bool ce) {
+static bool layout_kind(const struct kui_runtime_image *image,bool ce,bool zso) {
     const uint32_t stage=ce?KUI_RETAIL_CE_STAGE_ADDRESS:KUI_RETAIL_STAGE_ADDRESS;
     const uint32_t begin=KUI_RETAIL_STAGE_BLOB_OFFSET,max=KUI_RETAIL_STAGE_MAX_BYTES;
     if(!image->data || image->info.payload_bytes<begin+4 || image->info.payload_bytes>begin+max ||
@@ -105,7 +106,8 @@ static bool layout(const struct kui_runtime_image *image,bool ce) {
                         (!ce && resident==KUI_RETAIL_LOW_RESIDENT_ADDRESS &&
                          (limit==KUI_RETAIL_LOW_STANDARD_LIMIT ||
                           limit==KUI_MDK2_CDDA_LOW_LIMIT));
-    if(memcmp(h,ce?KUI_RETAIL_CE_PACKAGE_MAGIC:KUI_RETAIL_PACKAGE_MAGIC,8) ||
+    if(zso && (resident!=KUI_RETAIL_LOW_RESIDENT_ADDRESS || limit!=KUI_RETAIL_LOW_STANDARD_LIMIT)) return false;
+    if(memcmp(h,zso?KUI_RETAIL_ZSO_PACKAGE_MAGIC:ce?KUI_RETAIL_CE_PACKAGE_MAGIC:KUI_RETAIL_PACKAGE_MAGIC,8) ||
         le32(h+8)!=KUI_RETAIL_PACKAGE_VERSION ||
         le32(h+12)!=KUI_RETAIL_HEADER_BYTES || le32(h+16)!=KUI_RETAIL_MAP_OFFSET ||
         le32(h+20)!=KUI_RETAIL_IMAGE_WIRE_BYTES || le32(h+24)!=stage ||
@@ -116,6 +118,13 @@ static bool layout(const struct kui_runtime_image *image,bool ce) {
     for(unsigned i=0;i<KUI_RETAIL_IMAGE_WIRE_BYTES;i++)
         if(((const uint8_t *)image->data)[KUI_RETAIL_MAP_OFFSET+i]) return false;
     return true;
+}
+static bool layout(const struct kui_runtime_image *image,bool ce) {return layout_kind(image,ce,false);}
+static bool zso_path(const char *path) {
+    if(!path) return false;
+    size_t n=strlen(path);
+    return n>4 && path[n-4]=='.' && (path[n-3]=='z' || path[n-3]=='Z') &&
+        (path[n-2]=='s' || path[n-2]=='S') && (path[n-1]=='o' || path[n-1]=='O');
 }
 /* FatFs fast-seek link map: the table size, then (cluster count, first
  * cluster) pairs ending in zero. Room for more runs than a map can hold, so
@@ -424,6 +433,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     if(!kui_game_ram_patches_valid(patches)) {log("RAM patches: invalid address or duplicate target");return false;}
     const bool patched=kui_game_ram_patches_enabled(patches);
     struct kui_game_ram_patches applied_patches={0};
+    const bool zso=zso_path(path);
     const bool ce=(reader&KUI_GAMES_RETAIL_CE_PROBE)!=0;
     const bool descramble=(reader&KUI_GAMES_RETAIL_DESCRAMBLE)!=0;
     const bool plain=(reader&KUI_GAMES_RETAIL_BOOT_PLAIN)!=0;
@@ -434,6 +444,9 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     }
     reader&=~(KUI_GAMES_RETAIL_CE_PROBE | KUI_GAMES_RETAIL_DESCRAMBLE |
         KUI_GAMES_RETAIL_BOOT_PLAIN | KUI_GAMES_RETAIL_CDDA | KUI_GAMES_RETAIL_CE_EXCERPT);
+    if(zso && (ce || cdda || ce_excerpt || patched || reader!=KUI_RETAIL_READER_STANDARD)) {
+        log("Standard LZ4 ZSO needs native Standard reader, CD music Off and RAM patches Off");return false;
+    }
     if(ce_excerpt && (!ce || cdda || descramble || plain || reader!=KUI_RETAIL_READER_ASYNC)) {
         log("CE CD music requires its separate background profile");return false;
     }
@@ -449,14 +462,15 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     if(!kui_sd_connect()) {log("Retail boot: storage unavailable");return false;}
     FATFS fs;bool ok=false;const char *problem="cannot mount storage";
     struct kui_retail_manifest *map=NULL;struct kui_game_image *image=NULL;uint8_t *gdi=NULL;
+    struct kui_retail_zso_manifest *zso_map=NULL;
     if(!kui_mount(&fs,log)) goto done;
     enum kui_wince_cdda_profile music_profile=KUI_WINCE_CDDA_NONE;
-    const char *launch_package=ce?KUI_GAMES_RETAIL_CE_PACKAGE:KUI_GAMES_RETAIL_PACKAGE;
+    const char *launch_package=zso?KUI_GAMES_RETAIL_ZSO_PACKAGE:ce?KUI_GAMES_RETAIL_CE_PACKAGE:KUI_GAMES_RETAIL_PACKAGE;
     enum kui_runtime_result rr=KUI_RUNTIME_OK;
     if(!cdda && !ce_excerpt) {
         rr=kui_runtime_read(launch_package,package,log,cancel);
         if(rr!=KUI_RUNTIME_OK) {problem=kui_runtime_result_name(rr);goto done;}
-        if(!layout(package,ce)) {problem="unsupported game-launch package layout";goto done;}
+        if(!layout_kind(package,ce,zso)) {problem="unsupported game-launch package layout";goto done;}
     }
     uint64_t size=0;
     if(stat_file(&files,name,&size)!=KUI_GAME_OK || !size) {
@@ -473,7 +487,11 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             "unsupported image layout; compressed images need the import tool":kui_game_result_name(r);
         goto done;
     }
+    if(image->compressed!=zso) {problem="compressed image/backend mismatch";goto done;}
     map->storage_transport=kui_storage_active();
+    if(zso && map->storage_transport!=KUI_STORAGE_SCI) {
+        problem="Standard LZ4 ZSO direct launch needs SCI microSD";goto done;
+    }
     if(map->storage_transport>KUI_STORAGE_IDE) {problem="storage transport not selected";goto done;}
     log("Retail boot storage: %s",map->storage_transport==KUI_STORAGE_SCIF?"SCIF microSD":
         map->storage_transport==KUI_STORAGE_SCI?"SCI microSD":"IDE / CF");
@@ -592,7 +610,17 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     enum map_result mapped=MAP_FULL;
     const unsigned cdda_capacity=kui_games_cdda_mapping_capacity(image,map);
     struct map_stats cdda_stats={0};
-    if(cdda) {
+    if(zso) {
+        /* map_track operates on physical file blocks here, never on decoded
+         * sector geometry. Restore the one logical ISO track afterwards. */
+        struct kui_game_image_track source=image->tracks[0];
+        source.start_lba=0;source.end_lba=(uint32_t)(((uint64_t)image->zso.file_bytes+511u)/512u);
+        source.sector_bytes=512u;source.file_offset=0;source.file_bytes=image->zso.file_bytes;
+        mapped=map_track(&files,&fs,&volume,&source,map,0,KUI_RETAIL_ZSO_SLOTS,true,NULL);
+        struct kui_retail_track *track=&map->slots[0].track;
+        track->start_lba=image->tracks[0].start_lba;track->end_lba=image->tracks[0].end_lba;
+        track->control=4u|KUI_RETAIL_TRACK_COOKED;track->first_extent=1;
+    } else if(cdda) {
         /* CDDA requires every audio file. Capacity belongs to the selected
          * executable adapter; the Toy payload still has its original limit. */
         log("CDDA map capacity: %u slots (%u available for file extents)",
@@ -615,7 +643,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             background=false;
         }
     }
-    if(!cdda && !background && mapped!=MAP_FAILED)
+    if(!zso && !cdda && !background && mapped!=MAP_FAILED)
         mapped=map_tracks(&files,&fs,&volume,image,map,LEGACY_MAP_SLOTS,&audio);
     if(mapped!=MAP_OK) {
         if(cdda && mapped==MAP_FULL) {
@@ -624,7 +652,10 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             problem="CDDA track map exceeds this adapter's capacity";
         } else if(cdda) {
             problem=map_reason_name(cdda_stats.reason);
-        } else problem=mapped==MAP_FULL?"track files too fragmented for the launch map (160 slots)":
+        } else if(zso) problem=mapped==MAP_FULL?
+            "ZSO compressed file exceeds 31 physical extents; defragment or use offline import":
+            "ZSO physical file map failed: changed file, I/O or bounds";
+        else problem=mapped==MAP_FULL?"track files too fragmented for the launch map (160 slots)":
             "track map failed: changed file, I/O or bounds";
         goto done;
     }
@@ -677,7 +708,12 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             problem="CE music seed is missing, invalid, stopped or unreadable";goto done;
         }
     }
-    r=kui_retail_manifest_encode(map,(uint8_t *)package->data+KUI_RETAIL_MAP_OFFSET);
+    if(zso) {
+        zso_map=malloc(sizeof(*zso_map));
+        if(!zso_map) {problem="not enough memory for ZSO launch map";goto done;}
+        zso_map->manifest=*map;zso_map->zso=image->zso;
+        r=kui_retail_zso_manifest_encode(zso_map,(uint8_t *)package->data+KUI_RETAIL_MAP_OFFSET);
+    } else r=kui_retail_manifest_encode(map,(uint8_t *)package->data+KUI_RETAIL_MAP_OFFSET);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
     if(!fill_ram_patches(package,&applied_patches,map->boot_bytes)) {
         problem="RAM patches need a matching ordinary native loader; reinstall the game-launch package";goto done;
@@ -714,7 +750,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
 done:
     if(!close_reader(&files)) {ok=false;problem="cannot close image reader";}
     if(f_mount(NULL,"0:",0)!=FR_OK) {ok=false;problem="cannot release filesystem";}
-    kui_sd_disconnect();free(gdi);free(image);free(map);
+    kui_sd_disconnect();free(zso_map);free(gdi);free(image);free(map);
     if(stopped(&files)) {ok=false;problem="cancelled before retail handoff";}
     if(!ok) {kui_runtime_free(package);log("Retail boot: %s",problem);}
     return ok;

@@ -1,6 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/retail_loader_layout.h"
 #include "kui/retail_image.h"
+#if KUI_RETAIL_ZSO
+#include "kui/retail_zso.h"
+#if defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_SD_BENCH) || KUI_RETAIL_TOY_PILOT || KUI_RETAIL_MDK2_CDDA || KUI_GAME_RAM_PATCHES_STAGE
+#error ZSO belongs only to its separate native high stage
+#endif
+#endif
 #include "kui/retail_resident.h"
 #include "retail_storage.h"
 #include "retail_display.h"
@@ -145,8 +151,14 @@ extern void kui_retail_stage_sync(void);
  * installed in its reserved RAM. No proprietary bootstrap is bundled. */
 static uint8_t wire_copy[KUI_RETAIL_MAP_BYTES];
 static uint8_t original_entry[KUI_RETAIL_TRAMPOLINE_BYTES];
+#if KUI_RETAIL_ZSO
+static struct kui_retail_zso_manifest zso_manifest;
+#define manifest (zso_manifest.manifest)
+static struct kui_retail_zso_image image;
+#else
 static struct kui_retail_manifest manifest;
 static struct kui_retail_image image;
+#endif
 static struct kui_retail_storage card;
 static struct retail_display_state display;
 static enum kui_loader_sd_result last_card_result;
@@ -344,8 +356,12 @@ static void startup_gd_install(void);
 #endif
 
 static void select_resident(void) {
-    const uint8_t *end;
     resident_limit=KUI_RETAIL_STANDARD_LIMIT;
+#if KUI_RETAIL_ZSO
+    resident_blob=__retail_resident_sci_blob_start;
+    resident_bytes=(size_t)(__retail_resident_sci_blob_end-resident_blob);
+#else
+    const uint8_t *end;
     /* Decoding accepted the background reader only for SCI with tracks and
      * extents in at most KUI_RETAIL_ASYNC_SLOTS slots, the most its resident
      * holds. */
@@ -377,6 +393,7 @@ static void select_resident(void) {
             break;
     }
     resident_bytes=(size_t)(end-resident_blob);
+#endif
 }
 
 static void retire_launcher_serial(void) {
@@ -413,8 +430,12 @@ static void read_sectors(uint32_t lba,uint32_t count,enum kui_game_sector_format
     if(last_card_result!=KUI_LOADER_SD_OK)
         stopped("STORAGE BUS NOT AVAILABLE",(uint32_t)last_card_result);
     size_t bytes=format==KUI_GAME_SECTOR_RAW?KUI_GAME_RAW_BYTES:KUI_GAME_DATA_BYTES;
-    enum kui_game_result result=kui_retail_image_read(&image,lba,count,
-        format,out,(size_t)count*bytes);
+    enum kui_game_result result=
+#if KUI_RETAIL_ZSO
+        kui_retail_zso_image_read(&image,lba,count,format,out,(size_t)count*bytes);
+#else
+        kui_retail_image_read(&image,lba,count,format,out,(size_t)count*bytes);
+#endif
     enum kui_loader_sd_result stop_result=kui_retail_storage_stop(&card);
     if(last_card_result==KUI_LOADER_SD_OK) last_card_result=stop_result;
     if(stop_result!=KUI_LOADER_SD_OK) image.cache_valid=0;
@@ -869,7 +890,12 @@ void kui_retail_stage_main(const uint8_t *wire) {
     retail_display_restore(&display);
     retail_display_line("LAUNCHER HAS SHUT DOWN");
     memcpy(wire_copy,wire,sizeof(wire_copy));
-    enum kui_game_result result=kui_retail_manifest_decode(wire_copy,&manifest);
+    enum kui_game_result result=
+#if KUI_RETAIL_ZSO
+        kui_retail_zso_manifest_decode(wire_copy,&zso_manifest);
+#else
+        kui_retail_manifest_decode(wire_copy,&manifest);
+#endif
     if(result!=KUI_GAME_OK) stopped("INVALID RETAIL MAP",(uint32_t)result);
 #if KUI_GAME_RAM_PATCHES_STAGE
     struct kui_game_ram_patches patches;
@@ -917,14 +943,39 @@ void kui_retail_stage_main(const uint8_t *wire) {
         stopped("THIS COMPARISON BENCHMARK REQUIRES SCIF",manifest.storage_transport);
     kui_retail_sd_benchmark(&card.device.sd,&manifest,&display);
 #endif
+#if KUI_RETAIL_ZSO
+    result=kui_retail_zso_image_init(&image,&zso_manifest,physical_read,&card);
+#else
     result=kui_retail_image_init(&image,&manifest,physical_read,&card);
+#endif
     if(result!=KUI_GAME_OK) stopped("IMAGE READER INIT FAILED",(uint32_t)result);
     image.read_run=physical_run;
+#if KUI_RETAIL_ZSO
+    last_card_result=kui_retail_storage_acquire(&card);
+    if(last_card_result!=KUI_LOADER_SD_OK)stopped("ZSO STORAGE BUS NOT AVAILABLE",(uint32_t)last_card_result);
+    result=kui_retail_zso_verify_source(&image);
+    enum kui_loader_sd_result zso_stop=kui_retail_storage_stop(&card);
+    kui_retail_storage_release(&card);
+    if(result!=KUI_GAME_OK || zso_stop!=KUI_LOADER_SD_OK)stopped("ZSO HEADER OR INDEX CHANGED",(uint32_t)result);
+#endif
     retail_display_line("LOADING OWNER IP AND EXECUTABLE");
     uint8_t *ip=(uint8_t *)(uintptr_t)KUI_RETAIL_IP_ADDRESS;
     read_sectors(manifest.session_lba,16,KUI_GAME_SECTOR_MODE1,ip);
     uint32_t crc=kui_retail_crc32(0,ip,KUI_RETAIL_IP_BYTES);
     if(crc!=manifest.ip_crc32) stopped("IP CHECKSUM CHANGED",crc);
+#if KUI_RETAIL_ZSO
+    uint32_t peripheral=0;
+    for(unsigned i=56;i<63;i++) {
+        unsigned digit=ip[i];
+        if(digit>='0' && digit<='9')digit-='0';
+        else if(digit>='A' && digit<='F')digit=digit-'A'+10;
+        else if(digit>='a' && digit<='f')digit=digit-'a'+10;
+        else stopped("ZSO NATIVE IP PROFILE INVALID",i);
+        peripheral=(peripheral<<4)|digit;
+    }
+    if((peripheral&1u) || ip[63]!=' ' || (memcmp(ip+37,"GD-ROM",6) && memcmp(ip+37,"CD-ROM",6)))
+        stopped("ZSO REQUIRES NATIVE OWNER IP",peripheral);
+#endif
 #if KUI_RETAIL_OBSERVE
     if(!kui_retail_observe_native_ip(ip)) stopped("14 NATIVE GD IP REFUSED",crc);
 #endif

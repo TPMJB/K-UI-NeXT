@@ -3,6 +3,7 @@
 #include "kui/game_image.h"
 #include "kui/game_metadata.h"
 #include "kui/retail_image.h"
+#include "kui/storage.h"
 #include "kui/retail_loader_layout.h"
 #include "platform.h"
 #include <limits.h>
@@ -709,7 +710,7 @@ bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
     const char *problem="Cannot mount SD card";
     if(!kui_mount(&fs,log)) goto done;
     mounted_card=true;
-    if(extension(descriptor,".cso") || extension(descriptor,".zso") || extension(descriptor,".chd")) {
+    if(extension(descriptor,".cso") || extension(descriptor,".chd")) {
         problem="Compressed image requires offline import; direct launch unavailable";goto done;
     }
     image=malloc(sizeof(*image));
@@ -717,7 +718,8 @@ bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
     struct kui_game_file_ops ops={&files,image_stat,image_read};
     enum kui_game_result result=kui_game_image_open_named(descriptor,&ops,image);
     if(result!=KUI_GAME_OK) {
-        problem=result==KUI_GAME_UNSUPPORTED?
+        problem=extension(descriptor,".zso") && result!=KUI_GAME_IO && result!=KUI_GAME_CANCELLED?
+            "Invalid/unsupported standard LZ4 ZSO; LZO ZSO needs offline import":result==KUI_GAME_UNSUPPORTED?
             "Unsupported image layout; offline import may be required":kui_game_result_name(result);
         goto done;
     }
@@ -732,7 +734,7 @@ bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
         const struct kui_game_image_track *t=&image->tracks[i];
         bool shared=false;
         for(unsigned previous=0;previous<i;previous++) if(same_component(t->name,image->tracks[previous].name)) {shared=true;break;}
-        if(!shared) out->bytes+=t->file_bytes;
+        if(!shared) out->bytes+=image->compressed?image->zso.file_bytes:t->file_bytes;
         if(t->control==4) {
             ++out->data_tracks;
         }
@@ -761,7 +763,15 @@ bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
         problem="Boot executable and full IP must be in boot-session data tracks";goto done;
     }
     out->valid=true;
-    problem=out->windows_ce?"Image inspected; Windows CE SCI launch test, compatibility varies":
+    out->zso_launch=image->compressed && !out->windows_ce && (out->native_gd || out->native_cd) &&
+        kui_storage_active()==KUI_STORAGE_SCI && out->boot_bytes>=KUI_RETAIL_TRAMPOLINE_BYTES &&
+        out->boot_bytes<=KUI_RETAIL_EXEC_MAX_BYTES;
+    problem=image->compressed?(out->windows_ce?"Standard LZ4 ZSO inspected; Windows CE compressed launch unavailable":
+        !(out->native_gd || out->native_cd)?"Standard LZ4 ZSO inspected; native IP flags required":
+        kui_storage_active()!=KUI_STORAGE_SCI?"Standard LZ4 ZSO inspected; direct launch needs SCI microSD":
+        !out->zso_launch?"Standard LZ4 ZSO inspected; boot size unsupported":
+        "Standard LZ4 ZSO; native Standard reader, console compatibility untested"):
+        out->windows_ce?"Image inspected; Windows CE SCI launch test, compatibility varies":
         !(out->native_gd || out->native_cd)?"Image inspected; valid GD-ROM/CD-ROM IP flags required":
         out->tracks>KUI_RETAIL_IMAGE_TRACKS?"Image inspected; launch map supports at most 99 tracks":
         out->boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES || out->boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES?

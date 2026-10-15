@@ -2,6 +2,12 @@
 #include "kui/retail_resident.h"
 #include "kui/retail_gd.h"
 #include "kui/retail_image.h"
+#if KUI_RETAIL_ZSO
+#include "kui/retail_zso.h"
+#if defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_ASYNC) || KUI_RETAIL_TRANSPORT != 1 || !KUI_RETAIL_LOW_RESIDENT || KUI_RETAIL_TOY_PILOT || KUI_RETAIL_MDK2_CDDA
+#error ZSO belongs only to its separate low native SCI Standard resident
+#endif
+#endif
 #include "kui/retail_pace.h"
 #include "retail_storage.h"
 #include "retail_display.h"
@@ -40,6 +46,10 @@ static int toy_gd_clock_valid(void) {
 #include "kui/mdk2_cdda_map.h"
 static const struct kui_retail_manifest *mdk2_manifest;
 #define RETAIL_MANIFEST mdk2_manifest
+#elif KUI_RETAIL_ZSO
+static struct kui_retail_zso_manifest zso_manifest;
+#define manifest (zso_manifest.manifest)
+#define RETAIL_MANIFEST (&manifest)
 #else
 static struct kui_retail_manifest manifest;
 #define RETAIL_MANIFEST (&manifest)
@@ -52,7 +62,11 @@ static struct kui_retail_manifest manifest;
 #define display (kui_retail_async_region.shared.display)
 #define reader (kui_retail_async_region.engine)
 #else
+#if KUI_RETAIL_ZSO
+static struct kui_retail_zso_image image;
+#else
 static struct kui_retail_image image;
+#endif
 static struct kui_retail_gd service;
 static struct kui_retail_storage card;
 static struct retail_display_state display;
@@ -200,7 +214,11 @@ static enum kui_game_sector_format sector_format(uint32_t bytes) {
 static int check_sectors(void *unused, uint32_t lba, uint32_t count, uint32_t bytes) {
     (void)unused;
     if(bytes != 2048 && bytes != 2352) return -1;
+#if KUI_RETAIL_ZSO
+    return kui_retail_zso_image_check(RETAIL_MANIFEST,lba,count,sector_format(bytes))==KUI_GAME_OK?0:-1;
+#else
     return kui_retail_image_check_validated(RETAIL_MANIFEST, lba, count, sector_format(bytes)) == KUI_GAME_OK ? 0 : -1;
+#endif
 }
 #ifndef KUI_RETAIL_ASYNC
 static int read_sectors(void *unused, uint32_t lba, uint32_t count,
@@ -217,8 +235,12 @@ static int read_sectors(void *unused, uint32_t lba, uint32_t count,
     observe_read_card_result=card_result;
 #endif
     if(card_result != KUI_LOADER_SD_OK) return -1;
-    enum kui_game_result result = kui_retail_image_read(&image, lba, count,
-        sector_format(bytes), out, (size_t)count * bytes);
+    enum kui_game_result result =
+#if KUI_RETAIL_ZSO
+        kui_retail_zso_image_read(&image,lba,count,sector_format(bytes),out,(size_t)count*bytes);
+#else
+        kui_retail_image_read(&image, lba, count,sector_format(bytes), out, (size_t)count * bytes);
+#endif
 #if defined(KUI_RETAIL_CE) || KUI_RETAIL_OBSERVE
     image_result = result;
 #endif
@@ -738,6 +760,12 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     if(!kui_mdk2_cdda_stage_map_address((uint32_t)(uintptr_t)prepared))
         return KUI_RETAIL_RESIDENT_ARGUMENT;
     mdk2_manifest=prepared;
+#elif KUI_RETAIL_ZSO
+    /* Both separately linked images use the same32-slot prefix/wrapper.
+     * Validate before copying; retain no pointer into temporary stage RAM. */
+    const struct kui_retail_zso_manifest *compressed=(const struct kui_retail_zso_manifest *)(const void *)prepared;
+    if(kui_retail_zso_manifest_validate(compressed)!=KUI_GAME_OK)return KUI_RETAIL_RESIDENT_MAP;
+    zso_manifest=*compressed;
 #else
     manifest = *prepared;
 #endif
@@ -750,10 +778,18 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     kui_retail_async_init(RETAIL_MANIFEST);
     const struct kui_gd_ops ops = {NULL, map_guest, check_sectors, NULL};
 #else
+#if KUI_RETAIL_ZSO
+    image.map=&zso_manifest;
+#else
     image.manifest = RETAIL_MANIFEST;
+#endif
     image.read_block = read_block;
     image.read_run = read_run;
+#if KUI_RETAIL_ZSO
+    static const struct kui_gd_ops ops = {NULL,map_guest,check_sectors,read_sectors};
+#else
     const struct kui_gd_ops ops = {NULL, map_guest, check_sectors, read_sectors};
+#endif
 #endif
     kui_retail_gd_init_prepared(&service, RETAIL_MANIFEST, &ops,
         KUI_RETAIL_IP_ADDRESS, KUI_RETAIL_RAM_END);

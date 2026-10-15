@@ -42,6 +42,7 @@ HARNESS = r'''
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include "kui/retail_zso.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -64,6 +65,7 @@ static void purge(uint32_t address,uint32_t bytes) {
 /* GD_GUEST */
 /* FRONTEND_LE32 */
 /* FRONTEND_LAYOUT */
+/* FRONTEND_WRAPPER */
 /* FIRMWARE_CODE */
 
 static jmp_buf stopped_jump;
@@ -319,7 +321,7 @@ class LowPlacement(unittest.TestCase):
             "MAP_GUEST": ("src/loader/retail_resident.c", "static uint8_t *map_guest("),
             "GD_GUEST": ("src/core/retail_gd.c", "static uint8_t *guest("),
             "FRONTEND_LE32": ("src/apps/games_retail.c", "static uint32_t le32("),
-            "FRONTEND_LAYOUT": ("src/apps/games_retail.c", "static bool layout("),
+            "FRONTEND_LAYOUT": ("src/apps/games_retail.c", "static bool layout_kind("),
             "FIRMWARE_CODE": ("src/loader/retail_stage.c", "static int low_firmware_code("),
             "FIRMWARE_PREFLIGHT": ("src/loader/retail_stage.c", "static void low_firmware_preflight("),
             "INSTALL_RESIDENT": ("src/loader/retail_stage.c", "static void install_resident("),
@@ -327,6 +329,8 @@ class LowPlacement(unittest.TestCase):
         source = HARNESS
         for name, (path, signature) in substitutions.items():
             source = source.replace("/* " + name + " */", function(path, signature))
+        source = source.replace("/* FRONTEND_WRAPPER */",
+                                function("src/apps/games_retail.c", "static bool layout("))
         # runtime.h's public interface also includes FatFs via probe.h.
         # This bounds-only fixture uses the actual two production struct
         # declarations, keeping console-only CI independent of FatFs fetches.

@@ -291,7 +291,8 @@ void kui_shell_set_games_detail(struct kui_shell *s,const struct kui_games_detai
     if(!s || !detail || s->page!=KUI_SHELL_GAMES_DETAIL ||
        !memchr(detail->path,0,sizeof(detail->path)) || strcmp(detail->path,s->games_selected_path)) return;
     s->games_detail=*detail;
-    s->games_launch_reader=detail->windows_ce?KUI_RETAIL_READER_ASYNC:KUI_RETAIL_READER_STANDARD;
+    s->games_launch_reader=detail->windows_ce && detail->format!=KUI_GAME_IMAGE_ZSO?
+        KUI_RETAIL_READER_ASYNC:KUI_RETAIL_READER_STANDARD;
     s->games_launch_selected=0;s->games_launch_cdda=false;s->games_probe_from_options=false;
     s->games_retail_scrambled=detail->cd_image && !detail->windows_ce && detail->scrambled;
     s->games_launch_encoding=KUI_GAME_ENCODING_AUTO;
@@ -318,6 +319,7 @@ bool kui_shell_games_retail_ready(const struct kui_shell *s) {
         memchr(s->games_detail.title,0,sizeof(s->games_detail.title)) &&
         memchr(s->games_detail.boot_file,0,sizeof(s->games_detail.boot_file)) &&
         (s->games_detail.native_gd || s->games_detail.native_cd) && !s->games_detail.windows_ce &&
+        (s->games_detail.format!=KUI_GAME_IMAGE_ZSO || s->games_detail.zso_launch) &&
         s->games_detail.boot_file[0] &&
         s->games_detail.tracks && s->games_detail.tracks<=KUI_RETAIL_IMAGE_TRACKS &&
         (s->games_detail.format!=KUI_GAME_IMAGE_GDI || s->games_detail.boot_lba>=45000) && s->games_detail.boot_bytes>=128 &&
@@ -326,6 +328,7 @@ bool kui_shell_games_retail_ready(const struct kui_shell *s) {
 bool kui_shell_games_ce_probe_ready(const struct kui_shell *s) {
     /* The boot file holds a 2048-byte load prefix, then the kernel body. */
     return kui_shell_games_image_ready(s) &&
+        s->games_detail.format!=KUI_GAME_IMAGE_ZSO &&
         memchr(s->games_detail.title,0,sizeof(s->games_detail.title)) &&
         memchr(s->games_detail.boot_file,0,sizeof(s->games_detail.boot_file)) &&
         s->games_detail.windows_ce && !s->games_detail.native_gd && !s->games_detail.native_cd &&
@@ -336,6 +339,9 @@ bool kui_shell_games_ce_probe_ready(const struct kui_shell *s) {
 }
 bool kui_shell_games_encoding_ready(const struct kui_shell *s) {
     return kui_shell_games_retail_ready(s) && s->games_detail.cd_image;
+}
+bool kui_shell_games_background_ready(const struct kui_shell *s) {
+    return kui_shell_games_retail_ready(s) && s->games_detail.format!=KUI_GAME_IMAGE_ZSO;
 }
 bool kui_shell_games_cdda_ready(const struct kui_shell *s) {
     if(kui_shell_games_ce_probe_ready(s)) {
@@ -359,11 +365,11 @@ bool kui_shell_games_launch_ready(const struct kui_shell *s) {
     return kui_shell_games_retail_ready(s) || kui_shell_games_ce_probe_ready(s);
 }
 bool kui_shell_games_patches_ready(const struct kui_shell *s) {
-    return kui_shell_games_retail_ready(s) && !s->games_launch_cdda;
+    return kui_shell_games_retail_ready(s) && s->games_detail.format!=KUI_GAME_IMAGE_ZSO && !s->games_launch_cdda;
 }
 bool kui_shell_games_option_ready(const struct kui_shell *s,unsigned row) {
     switch(row) {
-    case KUI_SHELL_GAME_OPTION_READER: return kui_shell_games_retail_ready(s);
+    case KUI_SHELL_GAME_OPTION_READER: return kui_shell_games_background_ready(s);
     case KUI_SHELL_GAME_OPTION_CDDA: return kui_shell_games_cdda_ready(s);
     case KUI_SHELL_GAME_OPTION_ADVANCED: return kui_shell_games_image_ready(s);
     default: return false;
@@ -381,7 +387,8 @@ void kui_shell_set_game_launch_settings(struct kui_shell *s,const char *path,
                                        const struct kui_game_launch_settings *value,bool loaded) {
     if(!path || !kui_shell_games_image_ready(s) || strcmp(path,s->games_selected_path)) return;
     if(loaded && kui_game_launch_settings_valid(value)) {
-        s->games_launch_reader=kui_shell_games_ce_probe_ready(s)?KUI_RETAIL_READER_ASYNC:value->reader;
+        s->games_launch_reader=s->games_detail.format==KUI_GAME_IMAGE_ZSO?KUI_RETAIL_READER_STANDARD:
+            kui_shell_games_ce_probe_ready(s)?KUI_RETAIL_READER_ASYNC:value->reader;
         s->games_launch_cdda=value->cdda && kui_shell_games_cdda_ready(s);
         s->games_launch_encoding=kui_shell_games_encoding_ready(s)?value->encoding:KUI_GAME_ENCODING_AUTO;
         s->games_launch_patches=value->patches;
@@ -408,7 +415,8 @@ static enum kui_shell_action save_game_launch(struct kui_shell *s) {
     return KUI_SHELL_SAVE_GAME_LAUNCH;
 }
 static enum kui_shell_action game_launch_defaults(struct kui_shell *s) {
-    s->games_launch_reader=s->games_detail.windows_ce?KUI_RETAIL_READER_ASYNC:KUI_RETAIL_READER_STANDARD;
+    s->games_launch_reader=s->games_detail.windows_ce && s->games_detail.format!=KUI_GAME_IMAGE_ZSO?
+        KUI_RETAIL_READER_ASYNC:KUI_RETAIL_READER_STANDARD;
     s->games_launch_cdda=false;s->games_launch_encoding=KUI_GAME_ENCODING_AUTO;
     s->games_retail_scrambled=kui_shell_games_encoding_ready(s) && s->games_detail.scrambled;
     memset(&s->games_launch_patches,0,sizeof(s->games_launch_patches));
@@ -416,6 +424,7 @@ static enum kui_shell_action game_launch_defaults(struct kui_shell *s) {
     return save_game_launch(s);
 }
 const char *kui_shell_games_reader_label(const struct kui_shell *s) {
+    if(kui_shell_games_image_ready(s) && s->games_detail.format==KUI_GAME_IMAGE_ZSO) return "Standard";
     if(kui_shell_games_ce_probe_ready(s)) return "Background";
     if(!kui_shell_games_retail_ready(s)) return "Unavailable";
     switch(s->games_launch_reader) {
@@ -450,7 +459,8 @@ static enum kui_shell_action games_launch_choice(struct kui_shell *s) {
         s->games_retail_reader=KUI_RETAIL_READER_STANDARD|KUI_GAMES_RETAIL_CDDA;
         return KUI_SHELL_GAMES_RETAIL;
     }
-    s->games_retail_reader=s->games_launch_reader<=KUI_RETAIL_READER_ASYNC_EAGER?
+    s->games_retail_reader=s->games_detail.format==KUI_GAME_IMAGE_ZSO?KUI_RETAIL_READER_STANDARD:
+        s->games_launch_reader<=KUI_RETAIL_READER_ASYNC_EAGER?
         s->games_launch_reader:KUI_RETAIL_READER_STANDARD;
     if(kui_shell_games_encoding_ready(s))
         s->games_retail_reader|=s->games_retail_scrambled?KUI_GAMES_RETAIL_DESCRAMBLE:KUI_GAMES_RETAIL_BOOT_PLAIN;
@@ -1640,7 +1650,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             }
             break;
         case KUI_SHELL_GAME_TOOL_SPEED:
-            if(kui_shell_games_retail_ready(s) && !s->games_launch_cdda &&
+            if(kui_shell_games_background_ready(s) && !s->games_launch_cdda &&
                s->games_launch_reader!=KUI_RETAIL_READER_STANDARD) {
                 s->games_launch_reader=s->games_launch_reader==KUI_RETAIL_READER_ASYNC?
                     KUI_RETAIL_READER_ASYNC_EAGER:KUI_RETAIL_READER_ASYNC;

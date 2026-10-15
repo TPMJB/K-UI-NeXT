@@ -396,6 +396,28 @@ int main(int argc,char **argv) {
         strcpy(d->boot_file,"1ST_READ.BIN");strcpy(d->message,"Track file missing: track03.bin");
         if(!strcmp(argv[1],"games-detail-art")) {d->cover=true;make_cover(detail_cover,KUI_COVER_LARGE,1);}
         if(!strcmp(argv[1],"games-detail-2048")) game_pair(&shell,1);
+    } else if(!strcmp(argv[1],"games-zso") || !strcmp(argv[1],"games-zso-inspect") ||
+            !strcmp(argv[1],"games-zso-ce") || !strcmp(argv[1],"games-zso-options") ||
+            !strcmp(argv[1],"games-zso-advanced") || !strcmp(argv[1],"games-zso-information")) {
+        shell.page=KUI_SHELL_GAMES_DETAIL;
+        struct kui_games_detail *d=&shell.games_detail;
+        strcpy(shell.games_selected_path,"/Games/Generated ZSO/disc.zso");strcpy(d->path,shell.games_selected_path);
+        strcpy(d->title,"GENERATED ZSO SAMPLE");strcpy(d->boot_file,"1ST_READ.BIN");
+        d->valid=true;d->native_cd=d->cd_image=true;d->format=KUI_GAME_IMAGE_ZSO;
+        d->tracks=d->data_tracks=1;d->boot_bytes=123456;d->bytes=16777216;
+        d->audio.classification=KUI_GAME_AUDIO_UNKNOWN;
+        d->zso_launch=strcmp(argv[1],"games-zso-inspect") && strcmp(argv[1],"games-zso-ce");
+        if(!strcmp(argv[1],"games-zso-inspect"))
+            strcpy(d->message,"ZSO launching requires native SCI storage.");
+        if(!strcmp(argv[1],"games-zso-ce")) {
+            d->native_cd=false;d->windows_ce=true;d->boot_bytes=1253376;
+            strcpy(d->boot_file,"0WINCEOS.BIN");strcpy(d->message,"Windows CE ZSO images can be inspected but not launched.");
+        }
+        if(!strcmp(argv[1],"games-zso-options")) shell.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;
+        if(!strcmp(argv[1],"games-zso-advanced")) {
+            shell.page=KUI_SHELL_GAMES_EXTRA_OPTIONS;shell.game_tools_selected=KUI_SHELL_GAME_TOOL_PATCHES;
+        }
+        if(!strcmp(argv[1],"games-zso-information")) shell.page=KUI_SHELL_GAMES_INFO;
     } else if(!strcmp(argv[1],"games-advanced")) {
         shell.page=KUI_SHELL_GAMES_ADVANCED;shell.games_advanced_selected=2;
     } else if(!strcmp(argv[1],"games-probe") || !strcmp(argv[1],"games-probe-loading")) {

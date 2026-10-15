@@ -1,18 +1,20 @@
 # Games feature-parity roadmap
 
-Source review: 2026-10-15, main at `e003836`. The first increment is implemented in source; subsequent increments remain
-a plan, not an announcement of supported runtime features. The historical comparison is in
+Source review: 2026-10-15, `release/2.0-tyrfing` integration source. The first
+Games-options increment and the initial native LZ4 ZSO slice are implemented
+in source, with console acceptance pending. Later increments remain a plan. The historical comparison is in
 [the legacy Games audit](audit-legacy-games.md). All future runtime work must
 be independently implemented; no DreamShell loader implementation is proposed
 for reuse.
 
 ## Sequence
 
-| Increment | Deliverable | Boundary before enabling it |
+| Increment | Deliverable | Current boundary |
 | --- | --- | --- |
 | 1 — implemented; console acceptance pending | Two bounded RAM patches, detected defaults, persistent launch report | Validate/apply patches after the original executable CRC, before handoff; keep unsafe targets out. Defaults must come from the inspected image. Save launch evidence before KOS/filesystem teardown. Native non-CDDA only; CE/CDDA admission is refused. See [launch options](games-launch-options.md) and the updated audit. |
-| 2 | Independently tested compressed-block reader, then direct native ZSO launch | First support standard LZ4 ZSO with 2048-byte independent blocks and a separate Standard-reader package. Inspection alone is not direct-launch support. Pass memory/stack checks and console acceptance before exposing Play. |
-| 3 | CSO v1 DEFLATE, then CSO v2 mixed methods; explicit LZO dialect later | Each decoder needs its own bounded workspace and malformed-input tests. Keep offline import working for all unsupported sizes/codecs. CHD remains a separate project. |
+| 2 — first slice implemented; console acceptance pending | Independent standard LZ4 ZSO block reader, inspection and dedicated native launch path | Development capability only: native SCI Standard, one cooked track, 2048-byte blocks, 32 map slots/31 physical fragments. Separate package/audit gates must pass before a test package is supplied. The development Play route requests an unvalidated-on-console capability; it does not establish compatibility or final-release acceptance. See [ZSO scope](games-zso.md). |
+| 3a — planned | CSO v1 DEFLATE, then CSO v2 mixed methods; explicit LZO dialect later | Each decoder needs its own bounded workspace and malformed-input tests. Keep offline import working for all unsupported sizes/codecs. |
+| 3b — planned | Direct CHD: portable hunk/track reader, then a protected native runtime | Common CHDv5 CD/GD needs `cdlz`/`cdzl`/`cdfl`, hunk/map decoding and metadata normalization. Default 19584-byte hunks plus codec state exceed the whole low reservation. K-UI's own CHDv4 exports are a distinct first prototype. Prove hunk decoding with MAME oracles before choosing runtime memory; no enabled Play claim or unchecked game-RAM reservation. See [CHD design](games-chd.md). |
 | 4 | Emulated VMU prototype | Prove Maple command interception and a safe writable backing store; the existing VMU Manager is not gameplay emulation. First prototype must not depend on unreserved game RAM or KOS after handoff. |
 | 5 | Runtime screenshots | Prove input trigger, framebuffer interpretation and safe output ownership. No full-frame allocation in the current low resident. Enable only the demonstrated video/reader profiles. |
 | 6 | Last-game selection, category/library improvements, shortcuts, optional game previews | These can be separate shell changes; they need not wait for runtime milestones. Keep a shortcut bound to an inspected image and saved settings. Audio previews must yield to foreground I/O. |
@@ -20,76 +22,62 @@ for reuse.
 
 G1 SD adapter hardware experiments remain excluded. Wireless networking does
 not make network shares supported game-launch media. Existing WinCE/CDDA
-finishing work stays on its own branch until independently accepted.
+work retains its own exact-profile admission and recorded console evidence;
+the native ZSO slice does not enable it for compressed images.
 
-## Direct compressed images: bounded first slice
+## Direct compressed images: implemented first slice
 
-The offline importer already defines and tests CSO v1/v2, standard LZ4 ZSO and
-an explicitly selected LZO ZSO dialect (`tools/game_image_import.py`,
-`tests/test_game_image_import.py`). Reuse the independent format knowledge and
-original test-data generators, not the Python conversion workflow inside the
-detached reader. The runtime must read compressed bytes directly.
+The new source reads standard LZ4 ZSO directly through independent bounded C
+callbacks. Shell inspection and the detached native reader share the container
+and logical-read implementation. The complete matching package still needs
+console acceptance; the development launch route is available only inside the
+stated first-slice boundary. It is not a published 2.0 capability guarantee.
 
-**Standard LZ4 and historical LZO ZSO can share `ZISO` magic/version.** Extension
-or magic does not identify the codec. The first live implementation should
-explicitly admit standard LZ4 only, fail clearly on invalid/other dialects and
-retain `game_image_import.py --zso-codec lzo` as the conversion route. Do not
-retry another codec after arbitrary decoder failure or advertise all `.zso`
-files as compatible.
+**Standard LZ4 and historical LZO ZSO can share `ZISO` magic/version.** K-UI's
+existing ripper exports the historical LZO dialect. Neither extension nor magic
+proves the codec. This live implementation admits standard LZ4 only and does
+not guess/fall back to LZO. Keep
+`game_image_import.py --zso-codec lzo` as the offline conversion route.
 
-First contract: one cooked ISO data track; native executable; Standard reader;
-SCI transport initially; exactly 2048 decoded bytes per block; a documented,
-bounded alignment shift and stored span. Use existing ISO session-base
-recovery and plain/scrambled boot choices. Refuse WinCE, CDDA/background modes,
-larger compression blocks and unsupported codecs before launch. A single ISO
-does not retain its original audio inventory: display **unknown**, not “no
-audio” (`src/core/game_image.c`, `kui_game_image_audio_info`).
+The actual contract is one cooked ISO DATA track, native executable, Standard
+reader, SCI storage and exactly 2048 decoded bytes per independent block.
+Header/index geometry, overflow, strictly increasing offsets outside the
+index, terminal bounds, raw-block lengths, LZ4 matches/end conditions and
+padding are checked. Preparation scans the whole index in bounded pages;
+the detached reader rechecks its chosen pair and decodes through a fixed
+512-byte physical cache into the requester's sector output. No full index,
+compressed input buffer, heap or launcher-owned callback survives handoff.
+WinCE, CDDA, background loading and executable RAM patches are outside this
+path. A single ISO does not retain its original audio inventory; represent
+that as unknown, not proof that the disc had no audio.
 
-Add a pure C container/decoder module with caller-owned workspace and read-only
-range callbacks. Validate the 24-byte header, overflow-safe decoded size,
-block count, full index geometry, strictly increasing offsets outside the
-index, terminal bound, raw-block length, decoded length and padding. Scan the
-index in bounded pages during preparation; never retain a multi-megabyte index
-in low RAM. Cache a small fixed number of index entries for sequential reads.
-LZ4 input can stream through a 512-byte physical cache; whole blocks can decode
-directly into the requester's 2048-byte destination, including overlapping
-matches. Shell metadata's partial reads can use its own temporary decoded
-sector, which must not become a detached pointer.
+The separate `KUIRZS01` manifest covers the entire physical compressed file,
+including header/index, and carries its distinct decoded geometry. It has
+32 slots: one logical cooked track and at most 31 physical fragments. The
+ordinary retail map/reader contract is unchanged. The dedicated outer launch
+header is `KUIRZB01`; its shipped manifest is blank and it contains no RAM-patch
+capability.
 
-Compressed bytes require a distinct physical-container map. The existing
-retail v3 validator equates logical track bytes with extent coverage and
-requires wire bytes 272–319 to be zero (`src/core/retail_image.c`,
-`kui_retail_manifest_validate` / `kui_retail_manifest_decode`). Do not place
-compressed offsets into an ordinary track map. Define explicit compressed
-wire/package admission with container bytes, codec/block geometry and bounded
-physical extents; validate it before copying the resident prefix. Preserve
-ordinary v3 decoding and readers. The high stage and detached resident must
-share the same logical-to-compressed read implementation and retain IP/boot
-CRC verification.
+Implemented seams:
 
-Integration seams:
+- `include/kui/zso.h`, `src/core/zso.c`: independent header/index validation
+  and bounded standard LZ4 block decoding.
+- `include/kui/retail_zso.h`, `src/core/retail_zso.c`: physical-container
+  extent mapping and the shared read-only logical sector adapter.
+- `src/core/game_image.c`, Games inspection/artwork and
+  `src/apps/games_retail.c`: admitted container discovery, metadata/boot
+  inspection, physical mapping, preparation checks and package selection.
+- Separately compiled native ZSO stage/resident in `build/retail-zso`: SCI
+  Standard only, within the existing low reservation and guarded stack.
+- `tools/zso_package.py`, `tools/check_zso_loader.py`: distinct outer contract,
+  linked embed/placement checks, final compiler stack reports and mandatory
+  integer-instruction audit. Ordinary native/CE gates remain in force.
 
-- `include/kui/game_image.h`, `src/core/game_image.c`: explicit compressed
-  format/storage metadata, read adapter, ISO normalization; no retained pointer
-  to an opener's stack. Keep physical and decoded sizes distinct.
-- `src/apps/games.c`, `src/apps/games_covers.c`: bounded inspection/art extraction
-  through that adapter. Remove the offline-only message only for admitted
-  formats; preserve it for everything else.
-- `src/apps/games_retail.c`: validate the physical compressed file and index,
-  build its extent map, fingerprint preparation metadata and select the new
-  package. Its current `map_track` assumes uncompressed file geometry.
-- New compressed map/read module alongside `src/core/retail_image.c`, plus
-  explicit stage/resident selection in `src/loader/retail_stage.c` and
-  `src/loader/retail_resident.c`. The existing background
-  `src/core/retail_cursor.c` is not compression aware; leave it out of this slice.
-- `Makefile`, `Makefile.dc`, `tools/retail_package.py`,
-  `tools/check_retail_loader_layout.py`, `tools/package.py`: separate native
-  package, audited embedded resident, dependencies and installed files.
-
-This is a moderate-to-large feature spanning format parsing, detached mapping
-and package validation. Split it into reviewable decoder, shell inspection,
-native runtime and acceptance commits. Decoder/inspection commits alone must
-not be labeled direct launch.
+See [the full ZSO limits and acceptance checklist](games-zso.md). CSO, CHD,
+larger blocks and a live historical-LZO reader remain later work. Host
+format/inspection tests alone must never be described as successful gameplay.
+The requested direct CHD follow-up has a separate [implementation design](games-chd.md);
+its current supported route remains PC import with MAME `chdman`.
 
 ## Memory proof before adding a resident feature
 
@@ -101,11 +89,11 @@ for future changes. Native async and CE have distinct reservations/stacks;
 their extra space is not permission to relocate native state or borrow game
 RAM.
 
-For the first one-track compressed resident, a proposed 32-slot map permits at
-most 31 physical fragments and saves 1536 bytes versus the ordinary 160-slot
-allocation. `kui_retail_resident_init` already copies a stage-validated map
-prefix. A specialized cooked-only reader can also omit unused raw-sector
-paths. These are feasibility options, not proof that the decoder fits.
+The separate one-track ZSO resident now uses the 32-slot map, permitting at
+most 31 physical fragments and saving 1536 bytes versus the ordinary 160-slot
+allocation. Its cooked-only reader omits unused raw-sector paths. The current
+linked build must still pass its dedicated placement and stack audits; the
+smaller map alone is not proof that a particular binary fits.
 
 Cross-build every proposed package; inspect linked text/data/BSS and compiler
 stack call paths, including decoder error paths and callbacks. Pass
@@ -170,10 +158,13 @@ capture, continued gameplay/input without corrupted state.
 
 ## Required verification
 
-For compression, extend `tests/test_game_image.c`, `tests/test_retail_image.c`,
+For later compression expansion, extend `tests/test_game_image.c`, `tests/test_retail_image.c`,
 `tests/games_retail.c`, `tests/test_games_retail.py`,
 `tests/test_games_images.py` and `tests/test_games_covers_images.py`; add a
-focused pure codec/map test. Use the offline importer's original synthetic
+focused pure codec/map test. The initial ZSO slice adds independent codec/map
+coverage and `tests/test_zso_package.py` / `tests/test_zso_loader.py` mutation
+gates; keep their bounds and failure coverage when expanding scope. Use the
+offline importer's original synthetic
 fixtures and independent encoders as byte-for-byte oracles. Cover:
 
 - Raw/compressed mixtures, overlapping LZ4 matches, final literals, index-page
