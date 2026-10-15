@@ -451,6 +451,115 @@ static void sustained_async(void) {
     CHECK(physical>4u*KUI_ARMADA_CE_STREAM_RING_BYTES && bus.plays==1u && !bus.stops);
     ++cases;
 }
+static void playing_reserve(uint32_t bytes) {
+    CHECK(player.model.native_running && player.model.produced>=bytes);
+    player.model.consumed=player.model.produced-bytes;
+    player.model.audible=player.model.origin+player.model.consumed;
+    player.model.last_play=(uint32_t)(player.model.consumed%KUI_ARMADA_CE_STREAM_RING_BYTES);
+    bus.cursor=player.model.last_play;
+    bus.frontier=(bus.cursor+11008u)%KUI_ARMADA_CE_STREAM_RING_BYTES;
+}
+static void bounded_playing_source(void) {
+    /* A playing visit retains one16-sector ticket but publishes its checked
+     * prefix before the real worker's unchanged Sleep(1). Framing consumes
+     * one of the same32 calls rather than adding uncounted physical work. */
+    reset(true,20000u);prime();bus.pio_ready=true;playing_reserve(65536u);
+    unsigned pumps=bus.pumps,sleeps=bus.waits;
+    uint32_t source_before=player.source_total;
+    uint64_t produced=player.model.produced;
+    CHECK(kui_armada_ce_stream_worker((uint32_t)(uintptr_t)&player)==UINT32_MAX);
+    CHECK(bus.pumps-pumps==SOURCE_PLAYING_PUMPS && bus.waits==sleeps+1u &&
+        bus.last_sleep_ms==SOURCE_STEP_MS && !player.source_pumps_left &&
+        player.source_budget_yielded==1u && player.read_active && bus.pending &&
+        player.read.sectors==KUI_ARMADA_CE_STREAM_BATCH_SECTORS &&
+        player.source_total-source_before==31u*512u &&
+        player.model.produced-produced==31u*512u && player.model.staged<64u);
+    /* Re-entering source within this same step neither pumps nor admits
+     * another physical job. Snapshotting and draining remain safe. */
+    pumps=bus.pumps;unsigned submits=bus.submits;
+    CHECK(source() && drain_refill() && bus.pumps==pumps && bus.submits==submits);
+    bool replacement=false;
+    for(unsigned i=0;i<3u && !replacement;i++) {
+        pumps=bus.pumps;submits=bus.submits;source_before=player.source_total;
+        produced=player.model.produced;visit();
+        CHECK(!player.disabled && bus.pumps-pumps<=SOURCE_PLAYING_PUMPS &&
+            player.source_total-source_before<=SOURCE_PLAYING_PUMPS*512u &&
+            player.model.produced-produced==player.source_total-source_before &&
+            player.model.staged<64u);
+        replacement=bus.submits>submits;
+        if(replacement) CHECK(bus.pumps-pumps==SOURCE_PLAYING_PUMPS &&
+            bus.bytes>0u && bus.bytes<RAW_BYTES && player.read_active && bus.pending);
+    }
+    CHECK(replacement);++cases;
+    /* Even token-only work exhausts the allowance; it cannot turn the
+     * ready loop into an unbounded high-priority token search. */
+    reset(true,20000u);prime();bus.pio_ready=true;bus.token_slices=64u;
+    playing_reserve(65536u);pumps=bus.pumps;source_before=player.source_total;
+    visit();
+    CHECK(bus.pumps-pumps==SOURCE_PLAYING_PUMPS && bus.token_slices==33u &&
+        player.source_total==source_before && player.read_active && bus.pending &&
+        player.source_budget_yielded==1u);
+    visit();CHECK(bus.token_slices==1u && player.source_total==source_before);
+    visit();CHECK(!bus.token_slices && player.source_total>source_before &&
+        player.model.staged<64u && !player.disabled);
+    /* A command observed with no allowance left still revokes the pending
+     * ticket before staging. Only cancellation may fence its old lease. */
+    pumps=bus.pumps;source_before=player.source_total;bus.stale_source=true;
+    CHECK(source() && bus.pumps==pumps && player.source_total==source_before);
+    CHECK(control() && bus.cancels==1u && !player.read_active && !bus.pending);
+    ++cases;
+    reset(true,20000u);prime();bus.pio_ready=true;player.source_pumps_left=0u;
+    pumps=bus.pumps;submits=bus.submits;source_before=player.source_total;
+    CHECK(source() && !player.read_active && player.model.read.id &&
+        bus.pumps==pumps && bus.submits==submits && player.source_total==source_before);
+    ++cases;
+}
+static void bounded_pio_schedule(uint32_t block_us) {
+    /* Explicit timing model, not measured console throughput: every playing
+     * visit is charged the full32-pump maximum at0.5 or1ms per call, plus
+     * 4ms for native checks/copy, and a50ms wake delay. Charge audio for that
+     * complete interval before each visit, including calls that only frame
+     * or wait for tokens. This is stricter than the actual call count when
+     * the ring fills. Production player/model paths publish and validate
+     * every consumed PCM byte across multiple ring wraps. */
+    const uint32_t native_us=4000u,wake_us=50000u;
+    const uint32_t burst_us=SOURCE_PLAYING_PUMPS*block_us+native_us;
+    const uint32_t interval_us=wake_us+burst_us;
+    reset(true,20000u);prime();bus.pio_ready=true;
+    uint32_t first_source=player.source_total;
+    uint64_t elapsed_us=0u,played=0u;
+    unsigned max_pumps=0u;
+    for(unsigned i=0;i<300u;i++) {
+        elapsed_us+=interval_us;
+        uint64_t target=(elapsed_us*176400u/1000000u)&~UINT64_C(3);
+        uint32_t bytes=(uint32_t)(target-played);
+        const uint8_t *host=(const uint8_t *)(uintptr_t)HOST;
+        CHECK(bytes<=ready_bytes());
+        for(uint32_t n=0;n<bytes;n++)
+            CHECK(host[(bus.cursor+n)%KUI_ARMADA_CE_STREAM_RING_BYTES]==
+                expected_byte(player.model.origin+played+n));
+        bus.now=(uint32_t)(elapsed_us/1000u);
+        bus.cursor=(bus.cursor+bytes)%KUI_ARMADA_CE_STREAM_RING_BYTES;
+        bus.frontier=(bus.cursor+11008u)%KUI_ARMADA_CE_STREAM_RING_BYTES;
+        unsigned pumps=bus.pumps;visit();pumps=bus.pumps-pumps;
+        if(pumps>max_pumps) max_pumps=pumps;
+        if(player.disabled || player.model.recoveries || player.model.consumed!=target)
+            fprintf(stderr,"bounded model: call=%u visit=%u pumps=%u disabled=%u recoveries=%u consumed=%" PRIu64
+                " target=%" PRIu64 " staged=%u delay=%u ready=%u\n",block_us,i,pumps,
+                player.disabled,player.model.recoveries,player.model.consumed,target,
+                player.model.staged,step_delay(),ready_bytes());
+        CHECK(pumps<=SOURCE_PLAYING_PUMPS && pumps*block_us+native_us<=burst_us &&
+            !player.disabled && player.model.native_running && !player.model.recoveries &&
+            player.model.consumed==target);
+        played=target;
+    }
+    uint64_t supplied=(uint64_t)(player.source_total-first_source)*1000000u;
+    CHECK(max_pumps==SOURCE_PLAYING_PUMPS && played>8u*KUI_ARMADA_CE_STREAM_RING_BYTES &&
+        supplied>elapsed_us*176400u && bus.plays==1u && !bus.stops);
+    printf("bounded PIO model: call=%uus native=%uus wake=%uus max-pumps=%u burst<=%uus supply=%" PRIu64 "B/s\n",
+        block_us,native_us,wake_us,max_pumps,burst_us,supplied/elapsed_us);
+    ++cases;
+}
 static void cached_start_aux(uint32_t cached,uint32_t latency) {
     struct kui_armada_ce_stream_trace_snapshot history;
     kui_armada_ce_stream_trace_snapshot(&history);
@@ -685,7 +794,8 @@ int main(int argc,char **argv) {
     reset(true,128u);bus.read_latency_pumps=8u;bus.sleep_visits=0u;
     CHECK(kui_armada_ce_stream_worker((uint32_t)(uintptr_t)&player)==UINT32_MAX);
     CHECK(player.read_active && bus.last_sleep_ms==SOURCE_STEP_MS);++cases;
-    sustained_async();
+    sustained_async();bounded_playing_source();
+    bounded_pio_schedule(500u);bounded_pio_schedule(1000u);
     /* Mailbox STOP dominates an immediately following RELEASE. */
     uint32_t progress[3],source_total=player.source_total;
     (void)kui_armada_ce_excerpt_queue(NULL,33u,0,0,0);
@@ -794,34 +904,13 @@ int main(int argc,char **argv) {
             bus.submits==2u && !player.read_active && !bus.cancels);
     }
     ++cases;
-    /* A second completed PIO job must reach the native ring before Sleep.
-     * Otherwise the next observation underruns despite fresh staged PCM. */
-    reset(true,128u);bus.pio_ready=true;prime();CHECK(refill());
-    CHECK(player.model.staged<64u && !player.read_active);
-    player.model.consumed=player.model.produced-16384u;
-    player.model.audible=player.model.origin+player.model.consumed;
-    player.model.last_play=(uint32_t)(player.model.consumed%KUI_ARMADA_CE_STREAM_RING_BYTES);
-    bus.cursor=player.model.last_play;
-    bus.frontier=(bus.cursor+11008u)%KUI_ARMADA_CE_STREAM_RING_BYTES;
-    {
-        uint64_t before_produced=player.model.produced;
-        uint32_t before_source=player.source_total;
-        visit();
-        CHECK(!player.disabled && player.source_total-before_source==2u*RAW_BYTES &&
-            player.model.produced-before_produced==2u*RAW_BYTES && player.model.staged<64u);
-        /* 350ms at44.1kHz exceeds one job plus the old16KiB reserve,
-         * but fits the two completed jobs just published. */
-        bus.now+=330u;advance(61740u);
-        CHECK(!player.disabled && player.model.native_running && !player.model.recoveries);
-    }
-    ++cases;
     /* The final replacement, not the first source/refill pair, crosses the
      * native ring boundary. A one-sector end-of-repeat fragment first ends
-     * at R-1024; its full16-sector replacement must publish both the short
-     * tail and the wrapped remainder before the worker yields. Otherwise
+     * at R-1024; the checked prefix of its16-sector replacement must publish
+     * both the short tail and wrapped remainder before the worker yields. Otherwise
      * the first50ms visit moves the native copied frontier past ring0 and
      * blocks that remainder; the second50ms visit reports UNDERRUN. */
-    reset(true,128u);bus.pio_ready=true;prime();
+    reset(true,128u);prime();bus.pio_ready=true;
     CHECK(!player.read_active && !player.model.read.id && !player.model.refill.id &&
         player.model.staged<64u);
     {
@@ -844,23 +933,25 @@ int main(int argc,char **argv) {
         for(uint64_t i=player.model.consumed;i<produced;i++)
             host_bytes[i%ring_bytes]=expected_byte(player.model.origin+i);
         uint32_t before_source=player.source_total;
-        unsigned before_submits=bus.submits,before_stops=bus.stops;
+        unsigned before_submits=bus.submits,before_stops=bus.stops,before_pumps=bus.pumps;
         visit();
+        uint32_t fetched=player.source_total-before_source;
+        CHECK(bus.pumps-before_pumps==SOURCE_PLAYING_PUMPS);
         uint64_t published_before_yield=player.model.produced;
         uint32_t staged_before_yield=player.model.staged;
-        CHECK(!player.disabled && player.source_total-before_source==first_bytes+RAW_BYTES &&
-            bus.submits-before_submits==2u && !player.read_active && !bus.pending);
+        CHECK(!player.disabled && fetched>first_bytes+1024u && fetched<first_bytes+RAW_BYTES &&
+            bus.submits-before_submits==2u && player.read_active && bus.pending);
         for(unsigned i=0;i<2u;i++) {
             bus.now+=50u;bus.cursor=(bus.cursor+8820u)%ring_bytes;
             bus.frontier=(bus.cursor+11008u)%ring_bytes;visit();
         }
-        if(published_before_yield!=produced+first_bytes+RAW_BYTES ||
+        if(published_before_yield!=produced+fetched ||
            staged_before_yield>=64u || player.model.recoveries)
             fprintf(stderr,"replacement wrap: published=%" PRIu64 " expected=%" PRIu64
                 " staged=%" PRIu32 " recoveries=%" PRIu32 " stops=%u\n",
-                published_before_yield,produced+first_bytes+RAW_BYTES,staged_before_yield,
+                published_before_yield,produced+fetched,staged_before_yield,
                 player.model.recoveries,bus.stops-before_stops);
-        CHECK(published_before_yield==produced+first_bytes+RAW_BYTES && staged_before_yield<64u &&
+        CHECK(published_before_yield==produced+fetched && staged_before_yield<64u &&
             !player.disabled && player.model.native_running && !player.model.recoveries &&
             bus.stops==before_stops);
     }

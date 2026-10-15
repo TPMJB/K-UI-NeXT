@@ -38,6 +38,11 @@
  * must not force a nearly completed job to wait for a native timer visit. */
 #define SOURCE_TOKEN_SLACK 16u
 #define SOURCE_READY_PUMPS ((RAW_BYTES+1022u)/512u+1u+SOURCE_TOKEN_SLACK)
+/* Share this allowance across both source visits in one playing step.
+ * At most16KiB of512-byte receptions can run before the existing native
+ * sleep; setup and token-only work consume the same allowance. Prefill
+ * keeps its eager whole-job behavior before native playback starts. */
+#define SOURCE_PLAYING_PUMPS 32u
 #define COPY_PAGES ((KUI_ARMADA_CE_STREAM_STAGE_BYTES+4095u)/4096u+1u)
 _Static_assert(RAW_BYTES+KUI_ARMADA_CE_STREAM_STAGE_BYTES+CACHE_BYTES<=KUI_ARMADA_CE_STREAM_SOURCE_BYTES,
     "raw, carry staging and checked head cache must fit the existing source bank");
@@ -77,6 +82,7 @@ struct stream_player {
 #if KUI_WINCE_CDDA_WORMS
     uint32_t stop_requested_epoch,stop_voice_mask;
 #endif
+    uint32_t source_pumps_left,source_budget_yielded;
 };
 static struct stream_player player;
 #if KUI_WINCE_CDDA_BAM4 || KUI_WINCE_CDDA_WORMS
@@ -867,11 +873,21 @@ static bool source_run(bool cache_only) {
             return source_append((const void *)(uintptr_t)(CACHE_BEGIN+(uint32_t)player.model.fetch),
                 player.read.bytes,true,false);
         if(cache_only) return true;
+        /* Even the preparatory cancellation fence can touch the bus. Do
+         * not admit it or a replacement physical job after this step's
+         * allowance has run out. The same model ticket retries next step. */
+        if(player.model.native_running && !player.source_pumps_left) {
+            if(!player.source_budget_yielded) {
+                player.source_budget_yielded=1u;kui_armada_ce_stream_trace_budget_yield();
+            }
+            return true;
+        }
         player.read_bus_epoch=player.read.id;
         uint32_t sr=mask_begin();
         /* A cancelled reception is fenced asynchronously before its singleton
          * becomes available. Retry this same model ticket without consuming a
          * second job epoch or falsely treating temporary ownership as I/O. */
+        if(player.model.native_running) --player.source_pumps_left;
         (void)kui_armada_ce_stream_transport_pump();
         enum kui_armada_ce_stream_transport_status s=kui_armada_ce_stream_transport_submit(
             player.read_bus_epoch,player.read.lba,player.read.sectors,RAW_BEGIN,RAW_BYTES);
@@ -894,11 +910,21 @@ static bool source_run(bool cache_only) {
         /* control() decides whether the new command actually changes the
          * epoch. An idempotent RELEASE must keep this physical job alive. */
         if(!mail_current()) {mask_end(sr);return true;}
-        (void)kui_armada_ce_stream_transport_pump_worker();
+        bool allowed=!player.model.native_running || player.source_pumps_left;
+        if(allowed) {
+            if(player.model.native_running) --player.source_pumps_left;
+            (void)kui_armada_ce_stream_transport_pump_worker();
+        }
         status=kui_armada_ce_stream_transport_snapshot(player.read_bus_epoch,&progress);
         immediate=status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING &&
             kui_armada_ce_stream_transport_worker_can_pump();
         mask_end(sr);
+        if(!allowed) {
+            if(immediate && !player.source_budget_yielded) {
+                player.source_budget_yielded=1u;kui_armada_ce_stream_trace_budget_yield();
+            }
+            break;
+        }
         if(!immediate) break;
     }
     if(visit==SOURCE_READY_PUMPS && immediate)
@@ -976,6 +1002,7 @@ static bool start(void) {
 }
 static void step(uint32_t sr,uint32_t fpscr) {
     bool native_allowed=false;
+    player.source_pumps_left=SOURCE_PLAYING_PUMPS;player.source_budget_yielded=0u;
     player.stats.caller_sr=sr;player.stats.caller_fpscr=fpscr;
     player.stats.current_process=word(CURRENT_PROCESS);
     if((sr&SR_CHECK)!=SR_REQUIRED) {
