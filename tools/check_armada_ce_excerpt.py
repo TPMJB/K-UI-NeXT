@@ -1139,6 +1139,18 @@ def stream_boot_self_test():
             payload.extend(bytes.fromhex("0b000900"))
             symbols["_t"] = image_base + len(payload)
             payload.extend(bytes(1248))
+        # Relocation pins also name unpinned helpers and data, including the
+        # appended terminal snapshot. Give each declared target a distinct
+        # synthetic span; only the complete bodies above are code fixtures.
+        external_targets = {}
+        for (owner, _), targets in STREAM_BOOT_RELOCS.items():
+            if owner == image_name:
+                for _, target, addend in targets:
+                    external_targets[target] = max(external_targets.get(target, 4), addend + 4)
+        for target, target_bytes in sorted(external_targets.items()):
+            if target not in symbols:
+                symbols[target] = image_base + len(payload)
+                payload.extend(bytes(target_bytes))
         for (owner, name), targets in STREAM_BOOT_RELOCS.items():
             if owner != image_name:
                 continue
@@ -1691,6 +1703,66 @@ def self_test():
     checks += stream_boot_self_test()
     frames.update({callback: 0 for callback in STREAM_BUS_CALLBACKS})
     frames["excerpt:transport.c:write_audio"] = 0
+    # The generic and urgent-worker bridges share one integer-only helper.
+    # Count both real wrappers and the helper before crossing to the finite
+    # resident SCI callback set; an unrelated callback site must still fail.
+    pump = "excerpt:armada_ce_stream_transport.c:pump"
+    ordinary_pump = "excerpt:kui_armada_ce_stream_transport_pump"
+    worker_pump = "excerpt:kui_armada_ce_stream_transport_pump_worker"
+    transport_frames = dict(frames, **{pump: 20, ordinary_pump: 4, worker_pump: 8,
+                                      "kui_sci_stream_fetch": 36,
+                                      "kui_sci_stream_wait": 9000})
+    transport_calls = dict(calls, **{
+        ordinary_pump: [(pump, "armada_ce_stream_transport.c:224:12")],
+        worker_pump: [(pump, "armada_ce_stream_transport.c:233:12")],
+        pump: [("__indirect_call", "armada_ce_stream_transport.c:187:5")]})
+    pump_roots = {"kui_armada_ce_stream_transport_pump": 0,
+                  "kui_armada_ce_stream_transport_pump_worker": 0}
+    result = worst(transport_frames, transport_calls, ce=True, armada_bind=True,
+                   armada_excerpt=True, armada_stream=True, roots_override=pump_roots)
+    if (result["kui_armada_ce_stream_transport_pump"]["bytes"] != 60 or
+            result["kui_armada_ce_stream_transport_pump_worker"]["bytes"] != 64):
+        raise AssertionError("Transport pump wrapper/helper/SCI frames omitted or widened")
+    checks += 1
+    for label in ("unreviewed.c:1", "armada_ce_stream_transport.c:1"):
+        broken = dict(transport_calls)
+        if label.startswith("armada_ce_stream_transport.c"):
+            # A callback moved into a wrapper is not an authorized helper
+            # site, even though its source file and target set are familiar.
+            broken[worker_pump] = [("__indirect_call", label)]
+        else:
+            broken[pump] = [("__indirect_call", label)]
+        try:
+            worst(transport_frames, broken, ce=True, armada_bind=True,
+                  armada_excerpt=True, armada_stream=True, roots_override=pump_roots)
+        except ValueError as error:
+            if "Unexpected" not in str(error):
+                raise
+            checks += 1
+        else:
+            raise AssertionError("Unexpected transport pump callback site admitted")
+    try:
+        worst({f: size for f, size in transport_frames.items() if f != pump},
+              transport_calls, ce=True, armada_bind=True, armada_excerpt=True,
+              armada_stream=True, roots_override=pump_roots)
+    except ValueError as error:
+        if "without a frame" not in str(error):
+            raise
+        checks += 1
+    else:
+        raise AssertionError("Transport pump helper frame omitted")
+    broken = dict(transport_calls)
+    broken[pump] = transport_calls[pump] + [
+        ("excerpt:kui_armada_ce_stream_native_sleep", "armada_ce_stream_transport.c:1")]
+    try:
+        worst(transport_frames, broken, ce=True, armada_bind=True,
+              armada_excerpt=True, armada_stream=True, roots_override=pump_roots)
+    except ValueError as error:
+        if "Native excerpt path reached private GD stack" not in str(error):
+            raise
+        checks += 1
+    else:
+        raise AssertionError("Native call admitted through masked worker pump")
     for forbidden in STREAM_NATIVE_PATH:
         broken = dict(calls)
         broken["excerpt:kui_armada_ce_bind_probe"] = calls["excerpt:kui_armada_ce_bind_probe"] + [

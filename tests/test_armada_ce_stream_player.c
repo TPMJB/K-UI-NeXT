@@ -50,6 +50,7 @@ struct authored_bus {
     unsigned copy_page_hits,copy_page_flip;
 } bus;
 static struct kui_armada_ce_excerpt_binding admitted_binding;
+static const struct kui_retail_manifest *decoded_manifest;
 void kui_armada_ce_stream_player_test_source_copied(void) {
     if(bus.stop_after_source_copy) {
         bus.stop_after_source_copy=false;
@@ -326,6 +327,9 @@ enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_pump(v
     if(bus.revoked) return KUI_ARMADA_CE_STREAM_TRANSPORT_CANCELLED;
     return bus.epoch?KUI_ARMADA_CE_STREAM_TRANSPORT_DONE:KUI_ARMADA_CE_STREAM_TRANSPORT_IDLE;
 }
+enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_pump_worker(void) {
+    return kui_armada_ce_stream_transport_pump();
+}
 enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_snapshot(
     uint32_t epoch,struct kui_armada_ce_stream_transport_snapshot *out) {
     CHECK(!bus.consumer && !bus.control && out && epoch==bus.epoch);
@@ -354,7 +358,11 @@ bool kui_armada_ce_stream_transport_worker_can_pump(void) {
     return bus.pio_ready && bus.pending && !bus.cancelled && !bus.revoked && !bus.pending_pumps;
 }
 enum kui_game_result kui_retail_manifest_decode(const uint8_t wire[KUI_RETAIL_IMAGE_WIRE_BYTES],struct kui_retail_manifest *out) {
-    (void)wire;(void)out;return KUI_GAME_INVALID; /* Seed decoder has its separate actual tests. */
+    /* The wire decoder has separate tests. Opt in only to exercise the
+     * actual player's seed/map admission and model-track construction. */
+    (void)wire;
+    if(!decoded_manifest) return KUI_GAME_INVALID;
+    *out=*decoded_manifest;return KUI_GAME_OK;
 }
 
 static void reset(bool infinite,uint32_t sectors) {
@@ -374,8 +382,8 @@ static void reset(bool infinite,uint32_t sectors) {
         .virtual_free=CORE+0x88b4u,.set_kmode=CORE+0x8c44u,.flush_instruction_cache=CORE+0x8cd8u,
         .get_tick_count=CORE+0x890cu,.buffer_set_position=DS+0x3154u,
         .enter_cs=CORE+0x8ea0u,.leave_cs=CORE+0x8efcu};
-    player.tracks[0]=(struct kui_armada_ce_stream_track){1u,0,100u,100u+sectors};
-    CHECK(kui_armada_ce_stream_init(&player.model,player.tracks,1u)==KUI_ARMADA_CE_STREAM_OK);
+    PLAYER_TRACKS[0]=(struct kui_armada_ce_stream_track){1u,0,100u,100u+sectors};
+    CHECK(kui_armada_ce_stream_init(&player.model,PLAYER_TRACKS,1u)==KUI_ARMADA_CE_STREAM_OK);
     player.initialized=1u;player.worker_started=1u;
     (void)kui_armada_ce_excerpt_queue(NULL,20u,1u,1u,infinite?15u:0u);
     CHECK(control());CHECK(guard());
@@ -532,6 +540,57 @@ static void cached_restarts(void) {
         !player.model.refill.id && player.model.native_running &&
         bus.plays==plays && bus.stops==stops && !player.disabled);++cases;
 }
+static bool initialize_fixture(const struct kui_retail_manifest *map) {
+    static const uint32_t seed[KUI_ARMADA_CE_STREAM_SEED_WORDS]=KUI_ARMADA_CE_STREAM_BLANK_WORDS;
+    memset(&player,0,sizeof(player));memset(&bus,0,sizeof(bus));
+    memset((void *)(uintptr_t)KUI_ARMADA_CE_EXCERPT_POOL_BEGIN,0,512u*1024u);
+    memcpy((void *)(uintptr_t)KUI_ARMADA_CE_EXCERPT_POOL_BEGIN,seed,sizeof(seed));
+    decoded_manifest=map;bool result=initialize();decoded_manifest=NULL;
+    return result;
+}
+static void initialized_track_controls(void) {
+    enum kui_wince_cdda_profile profile=KUI_WINCE_CDDA_COMPILED_PROFILE;
+    const struct kui_wince_cdda_disc *disc=kui_wince_cdda_disc(profile);
+    struct kui_retail_manifest raw={.card_sectors=8000000u,.partition_start=2048u,
+        .partition_end=8000000u,.track_count=disc->track_count,.extent_count=disc->track_count,
+        .session_lba=45000u,.boot_lba=disc->boot_lba,.boot_bytes=disc->kernel_bytes,
+        .storage_transport=KUI_STORAGE_SCI,.reader=KUI_RETAIL_READER_STANDARD};
+    strcpy(raw.product,disc->product);strcpy(raw.bootfile,"0WINCEOS.BIN");
+    uint32_t card_lba=4096u;
+    for(unsigned i=0;i<disc->track_count;i++) {
+        uint32_t end=i+1u<disc->track_count?disc->starts[i+1u]:549000u;
+        raw.slots[i].track=(struct kui_retail_track){.start_lba=disc->starts[i],.end_lba=end,
+            .first_extent=(uint16_t)(disc->track_count+i),.extent_count=1u,
+            .control=(uint8_t)kui_wince_cdda_track_control(profile,i)};
+        uint32_t blocks=((end-disc->starts[i])*2352u+511u)/512u;
+        raw.slots[disc->track_count+i].extent=(struct kui_retail_extent){0u,card_lba,blocks};
+        card_lba+=blocks;
+    }
+    CHECK(initialize_fixture(&raw));
+    CHECK(player.initialized && player.model.initialized && player.model.track_count==disc->track_count);
+    ++cases;
+    struct kui_retail_manifest cooked=raw;cooked.flags=KUI_RETAIL_IMAGE_BOOT_CRC;
+    for(unsigned i=0;i<disc->track_count;i++) if(cooked.slots[i].track.control==4u) {
+        struct kui_retail_track *track=&cooked.slots[i].track;
+        track->control|=KUI_RETAIL_TRACK_COOKED;
+        cooked.slots[disc->track_count+i].extent.blocks=
+            ((track->end_lba-track->start_lba)*2048u+511u)/512u;
+    }
+    /* Storage-only flags must survive in the map, while the pure CD model
+     * receives only TOC controls. This calls actual initialize(), not init. */
+    CHECK(initialize_fixture(&cooked));
+    for(unsigned i=0;i<disc->track_count;i++) {
+        CHECK(player.map.slots[i].track.control==cooked.slots[i].track.control);
+        CHECK(player.model.tracks[i].control==kui_wince_cdda_track_control(profile,i));
+    }
+    ++cases;
+    cooked.flags=0u;CHECK(!initialize_fixture(&cooked));++cases;
+    cooked=raw;cooked.flags=KUI_RETAIL_IMAGE_BOOT_CRC;
+    for(unsigned i=0;i<disc->track_count;i++) if(!cooked.slots[i].track.control) {
+        cooked.slots[i].track.control|=KUI_RETAIL_TRACK_COOKED;break;
+    }
+    CHECK(!initialize_fixture(&cooked));++cases;
+}
 int main(int argc,char **argv) {
     void *source_mapping=mmap((void *)(uintptr_t)KUI_ARMADA_CE_EXCERPT_POOL_BEGIN,512u*1024u,
         PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0);
@@ -543,6 +602,11 @@ int main(int argc,char **argv) {
         cached_restarts();
         CHECK(munmap(source_mapping,512u*1024u)==0 && munmap(host,0x60000u)==0);
         printf("armada checked-head cache: %u cases, %u checks\n",cases,checks);return 0;
+    }
+    initialized_track_controls();
+    if(argc==2 && !strcmp(argv[1],"--initialize-only")) {
+        CHECK(munmap(source_mapping,512u*1024u)==0 && munmap(host,0x60000u)==0);
+        printf("CE player track initialization: %u cases, %u checks\n",cases,checks);return 0;
     }
     reset(true,1u);prime();++cases;
     struct kui_armada_ce_stream_trace_snapshot history;

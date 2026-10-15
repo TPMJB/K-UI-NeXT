@@ -121,7 +121,9 @@ STREAM_BUS_INDIRECT = {
         ("kui_sci_stream_busy", "kui_sci_stream_poll", "kui_sci_stream_wait"),
     ("release_audio", "armada_ce_stream_transport.c"):
         ("kui_sci_stream_discard", "stream_wake"),
-    ("kui_armada_ce_stream_transport_pump", "armada_ce_stream_transport.c"):
+    # Both public pump bridges call this one source-qualified helper. The
+    # wrappers have no indirect calls; retain the same finite bus targets.
+    ("pump", "armada_ce_stream_transport.c"):
         tuple(n for n in STREAM_BUS_CALLBACKS if n not in ("kui_sci_stream_wait", "kui_sci_stream_ready")),
     ("kui_armada_ce_stream_transport_event", "armada_ce_stream_transport.c"):
         ("kui_sci_stream_busy", "kui_sci_stream_take", "kui_sci_stream_token_budget", "unhook"),
@@ -296,6 +298,7 @@ def check(directory, available, ce=False):
         # frames and apply the same native-call prohibition and 2KiB budget.
         worker = worst(frames, calls, ce, armada_bind, armada_excerpt, True,
                        roots_override={"kui_armada_ce_stream_transport_pump": 0,
+                                       "kui_armada_ce_stream_transport_pump_worker": 0,
                                        "kui_armada_ce_stream_transport_submit": 0,
                                        "kui_armada_ce_stream_transport_snapshot": 0,
                                        "kui_armada_ce_stream_transport_cancel": 0})

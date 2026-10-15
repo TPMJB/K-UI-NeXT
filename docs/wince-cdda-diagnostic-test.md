@@ -1,6 +1,10 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # WinCE CD music: underrun diagnostics and 2048 DATA candidate
 
+Follow-up: the [urgent-refill candidate](wince-cdda-refill-fix.md) fixes a
+cooked-track control error after admission and changes urgent worker reception.
+The description below records the preceding diagnostic-only build.
+
 This candidate adds a frozen report around the last real buffer underrun and
 admits cooked 2048-byte DATA alongside original raw 2352-byte AUDIO in the
 three exact WinCE CD-music profiles. It does not retune playback, thread

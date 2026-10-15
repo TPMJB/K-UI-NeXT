@@ -182,7 +182,7 @@ static void release_audio(void) {
     if(!t.bus.busy()) t.bus.unhook();
     if(data_active()) t.bus.wake();
 }
-enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_pump(void) {
+static enum kui_armada_ce_stream_transport_status pump(bool worker) {
     if(!t.stats.attached) return KUI_ARMADA_CE_STREAM_TRANSPORT_ARGUMENT;
     t.bus.token_budget(true);
     if(t.stats.owner==OWNER_AUDIO && (t.cancelled || t.stats.status!=KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING)) {
@@ -214,11 +214,23 @@ enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_pump(v
         lba=t.cursor.block;
     } else if(result==KUI_SCI_STREAM_CRC) audio_failure(result);
     if(t.stats.status!=KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING) {release_audio();return KUI_ARMADA_CE_STREAM_TRANSPORT_IO;}
-    result=t.bus.fetch(lba,TOKEN_LIMIT,t.early_polled || t.stats.retries>=2u);
+    result=t.bus.fetch(lba,TOKEN_LIMIT,(worker && t.urgent) || t.early_polled || t.stats.retries>=2u);
     if(result>KUI_SCI_STREAM_BUSY) audio_failure(result);
     if(t.bus.busy()) t.bus.hook();
     else t.bus.unhook();
     return (enum kui_armada_ce_stream_transport_status)t.stats.status;
+}
+enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_pump(void) {
+    return pump(false);
+}
+enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_pump_worker(void) {
+    /* An IRQ can finish DMA then leave the next block ready by PIO, without
+     * a future completion IRQ. Sleep(1) may then cost a scheduler quantum.
+     * At low reserve the source worker keeps its current job moving by PIO;
+     * it restores IRQs after each 512-byte reception and bounds its visits.
+     * IRQ/DATA pumps retain DMA. Actual PIO timing and game pacing still
+     * require console measurement. */
+    return pump(true);
 }
 enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_snapshot(
     uint32_t epoch,struct kui_armada_ce_stream_transport_snapshot *out) {

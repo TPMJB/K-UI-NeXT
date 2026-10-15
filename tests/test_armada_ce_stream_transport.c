@@ -173,8 +173,10 @@ static enum kui_sci_stream_result mock_fetch(uint32_t lba,uint32_t limit,bool po
     ++wire.fetches;wire.polled+=polled;
     if(wire.fetch_faults) {--wire.fetch_faults;return wire.fetch_error;}
     if(wire.token_slices) {--wire.token_slices;return KUI_SCI_STREAM_PENDING;}
-    if(wire.immediate_pio) {
-        checked(lba,KUI_SCI_STREAM_OK);++wire.completions;
+    if(polled || wire.immediate_pio) {
+        enum kui_sci_stream_result result=KUI_SCI_STREAM_OK;
+        if(wire.crc_faults) {--wire.crc_faults;result=KUI_SCI_STREAM_CRC;}
+        checked(lba,result);++wire.completions;
         if(!polled) ++wire.polled;
         return KUI_SCI_STREAM_OK;
     }
@@ -227,6 +229,13 @@ static void pump_one(uint32_t epoch,bool irq) {
     else (void)kui_armada_ce_stream_transport_pump();
     struct kui_armada_ce_stream_transport_snapshot after=snap(epoch);
     CHECK(after.audio_blocks-before.audio_blocks<=1u);
+    CHECK(wire.fetches-fetches<=1u && wire.waits==waits);intact();
+}
+static void pump_worker_one(uint32_t epoch) {
+    struct kui_armada_ce_stream_transport_snapshot before=snap(epoch);
+    uint32_t fetches=wire.fetches,waits=wire.waits;
+    (void)kui_armada_ce_stream_transport_pump_worker();
+    CHECK(snap(epoch).audio_blocks-before.audio_blocks<=1u);
     CHECK(wire.fetches-fetches<=1u && wire.waits==waits);intact();
 }
 static void finish_audio(uint32_t epoch) {
@@ -602,10 +611,57 @@ static void test_worker_token_slices(void) {
     CHECK(snap(1u).owner==0u && !snap(1u).bytes && wire.fetches==fetches && !wire.polls && !wire.waits);
     intact();
 }
+static void test_urgent_worker_pio(void) {
+    /* A50ms worker scheduling gap must not become a gap between every
+     * reception. Finish the current DMA normally, then let this bounded
+     * worker visit complete a2352-backed job without another DMA IRQ. */
+    fixture_stride(2352u);attach();data_active(100u);
+    kui_armada_ce_stream_transport_priority(0u,true);submit(1u,45002u,16u);
+    credits(16u);wire.latency=1u;pump_one(1u,false);
+    CHECK(wire.busy && wire.fetches==1u && !wire.polled);
+    uint32_t fetches=wire.fetches,polls=wire.polls;
+    pump_worker_one(1u);
+    CHECK(wire.busy && wire.fetches==fetches && wire.polls==polls+1u &&
+        !wire.waits && !wire.polled && !snap(1u).audio_blocks &&
+        !kui_armada_ce_stream_transport_worker_can_pump());
+    pump_worker_one(1u);
+    CHECK(!wire.busy && snap(1u).audio_blocks==1u && wire.polled==1u &&
+        kui_armada_ce_stream_transport_worker_can_pump());
+    unsigned visits=1u;
+    for(;visits<76u && kui_armada_ce_stream_transport_worker_can_pump();visits++)
+        pump_worker_one(1u);
+    CHECK(visits==75u && snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_DONE &&
+        snap(1u).audio_blocks==75u && wire.fetches==75u && wire.polled==74u &&
+        !snap(1u).preemptions && wire.wakes==1u && !wire.busy && !wire.waits);
+    exact_audio(45002u,16u);
+    /* Urgency alone never changes the generic/IRQ pump's DMA path. */
+    setup();kui_armada_ce_stream_transport_priority(0u,true);
+    submit(1u,45002u,1u);pump_one(1u,false);pump_one(1u,true);
+    CHECK(wire.busy && wire.fetches==2u && !wire.polled && snap(1u).audio_blocks==1u);
+    /* A nonurgent worker also retains DMA. Clearing urgency applies at the
+     * next fetch, without stopping or restarting a reception already armed. */
+    setup();submit(1u,45002u,1u);pump_worker_one(1u);
+    CHECK(wire.busy && !wire.polled && !snap(1u).audio_blocks);
+    setup();kui_armada_ce_stream_transport_priority(0u,true);
+    submit(1u,45002u,1u);pump_worker_one(1u);
+    CHECK(!wire.busy && wire.polled==1u && kui_armada_ce_stream_transport_worker_can_pump());
+    kui_armada_ce_stream_transport_priority(264600u,true);pump_worker_one(1u);
+    CHECK(wire.busy && wire.polled==1u && snap(1u).audio_blocks==1u);
+    /* A cancelled ready PIO block is discarded, never copied or replaced. */
+    setup();kui_armada_ce_stream_transport_priority(0u,true);
+    submit(1u,45002u,1u);pump_worker_one(1u);fetches=wire.fetches;
+    CHECK(kui_armada_ce_stream_transport_cancel(1u)==KUI_ARMADA_CE_STREAM_TRANSPORT_CANCELLED);
+    pump_worker_one(1u);
+    CHECK(snap(1u).status==KUI_ARMADA_CE_STREAM_TRANSPORT_CANCELLED && !snap(1u).owner &&
+        !snap(1u).bytes && !snap(1u).audio_blocks && wire.fetches==fetches && !wire.waits);
+    for(unsigned n=0;n<sizeof(output.bytes);n++) CHECK(output.bytes[n]==0xa5u);
+    intact();
+}
 int main(void) {
     test_raw_mapping();test_admission();test_parked_data();test_continuous_data(false);
     test_continuous_data(true);test_priority();test_urgent_whole_raw_job();test_fences();
     test_token_holds_and_errors();test_audio_errors();test_cancel();test_worker_can_pump();test_worker_token_slices();
+    test_urgent_worker_pio();
     printf("Armada CE production SCI transport: %u checks passed\n",checks);
     return 0;
 }

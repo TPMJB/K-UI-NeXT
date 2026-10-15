@@ -77,6 +77,10 @@ enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_submit
 /* At most one received block is copied and one reception started per pump.
  * The caller supplies its short IRQ-masked integer-only bridge. */
 enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_pump(void);
+/* Source-worker bridge only: urgent reception uses PIO, still at most one
+ * block per call. The worker restores IRQs between calls and bounds the
+ * visit to its current source job. An in-flight DMA is only polled. */
+enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_pump_worker(void);
 enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_snapshot(
     uint32_t epoch,struct kui_armada_ce_stream_transport_snapshot *);
 enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_cancel(uint32_t epoch);

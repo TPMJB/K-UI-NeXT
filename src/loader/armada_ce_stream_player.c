@@ -353,7 +353,7 @@ static bool initialize(void) {
        !kui_armada_ce_stream_map_valid(&player.map)) return false;
     for(unsigned i=0;i<KUI_WINCE_CDDA_TRACK_COUNT;i++) {
         const struct kui_retail_track *t=&player.map.slots[i].track;
-        PLAYER_TRACKS[i]=(struct kui_armada_ce_stream_track){i+1u,t->control,t->start_lba,t->end_lba};
+        PLAYER_TRACKS[i]=(struct kui_armada_ce_stream_track){i+1u,kui_retail_track_control(t),t->start_lba,t->end_lba};
     }
     if(kui_armada_ce_stream_init(&player.model,PLAYER_TRACKS,KUI_WINCE_CDDA_TRACK_COUNT)!=KUI_ARMADA_CE_STREAM_OK ||
        !kui_armada_ce_stream_transport_init(&player.map,RAW_BEGIN,
@@ -894,7 +894,7 @@ static bool source_run(bool cache_only) {
         /* control() decides whether the new command actually changes the
          * epoch. An idempotent RELEASE must keep this physical job alive. */
         if(!mail_current()) {mask_end(sr);return true;}
-        (void)kui_armada_ce_stream_transport_pump();
+        (void)kui_armada_ce_stream_transport_pump_worker();
         status=kui_armada_ce_stream_transport_snapshot(player.read_bus_epoch,&progress);
         immediate=status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING &&
             kui_armada_ce_stream_transport_worker_can_pump();

@@ -52,7 +52,9 @@ static void copy_fixture(uint32_t offset,uint32_t bytes,uint32_t play,uint32_t f
      * Unlock fixture checks exact PCM even when publication was revoked. */
     memcpy(host,stage,bytes);bus.locks=bus.unlocks=0u;
 }
-int main(void) {
+int main(int argc,char **argv) {
+    if(argc==2 && !strcmp(argv[1],"--initialize-only"))
+        return worms_unused_armada_fixture_main(argc,argv);
     void *source=mmap((void *)(uintptr_t)KUI_ARMADA_CE_EXCERPT_POOL_BEGIN,512u*1024u,
         PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0);
     void *host=mmap((void *)(uintptr_t)HOST,0x60000u,PROT_READ|PROT_WRITE,
