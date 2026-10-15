@@ -62,9 +62,12 @@ def make_tree(base):
     make_fixture(games / "Fighting" / "Plain Game", b"SAME NAME GAME")
     # A loose GDI beside its tracks, with a wide stride texture.
     make_fixture(games, b"LOOSE GAME", pvr(1, 9, 64, 32, struct.pack("<2048H", *[0xF81F] * 2048)), "Loose.gdi")
-    # Two GDIs sharing one folder are two games named after themselves.
+    # Distinct backing maps in one folder are two games named after themselves;
+    # descriptor aliases that share all tracks intentionally collapse instead.
     make_fixture(games / "Pair", b"PAIR GAME", None, "a.gdi")
-    shutil.copyfile(games / "Pair" / "a.gdi", games / "Pair" / "b.gdi")
+    shutil.copyfile(games / "Pair" / "track03.bin", games / "Pair" / "track03-b.bin")
+    (games / "Pair" / "b.gdi").write_text(
+        (games / "Pair" / "a.gdi").read_text().replace("track03.bin", "track03-b.bin"), encoding="ascii")
     covers = base / "KUI" / "covers"
     covers.mkdir(parents=True)
     (covers / "User Art.png").write_bytes(png(40, 60, (30, 60, 200)))
