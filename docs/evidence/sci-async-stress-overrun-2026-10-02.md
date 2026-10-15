@@ -101,3 +101,36 @@ and CE work still require their separately documented contracts.
 
 Implementation review, full build/package verification and the next console
 result will be recorded with delivery. No corrected hardware result is claimed.
+
+
+## Historical candidate delivery (2026-10-02)
+
+This section preserves the delivery evidence from the final
+`codex/storage-transports` documentation commit `e7727d6f406d`. Its code was
+already integrated into Main. The records below describe the historical
+candidate, not a new Tyrfing package or a request to repeat its console test.
+
+Source **9e8fd837270588b8559c6d2b66d19ef14b1aed3f** passed independent source
+review and both jobs of [Diagnostic build 201](https://github.com/TPMJB/K-UI-NeXT/actions/runs/37012523280).
+The [completed-log CI audit](sci-async-quiet-ci-9e8fd8372705.json) records all
+12 wrapper cases, lifecycle/heartbeat, quiet-handshake and first-fault checks.
+Native instruction counts, resident layouts, stack bounds and stage sizes
+remained identical to c0c285482dac, with no unresolved symbols or resident FPU use.
+
+SD source artifact **11229130918**, SHA-256
+`c39758ac183957e83e32c169ac84233c7aca3760e6813c84f71fda4632a889bc`,
+passed ZIP integrity and all 96 manifest hashes. Both delivered packages
+identified build `9e8fd8372705` and passed their runtime header/payload CRC checks.
+The native game payload was byte-identical to 0e9a2f814231 after normalizing
+exactly four build labels.
+
+The minimal delivery was `K-UI-SCI-Async-Quiet-9e8fd8372705.zip`, **789,218 bytes**,
+SHA-256 `40c5378d980ea6812f929c804b90a86692f439b3fadf4e8b5a640a9c107bddb2`.
+It contained `KUI/runtime.kui`, `KUI/apps/games/retail-boot.kui`, instructions,
+checksums and the build record.
+
+Console acceptance was pending at delivery. The owner's later quiet
+60-second stress **passed: 71,641 reads, no errors, and 2,278 timer ticks
+during DMA**, as recorded in the [subsequent overrun-retry evidence](sci-async-overrun-retry-2026-10-02.md#what-the-passing-run-did-and-did-not-show).
+That result established the quiet-screen diagnostic condition; it did not
+establish game/CE compatibility or filesystem throughput.
