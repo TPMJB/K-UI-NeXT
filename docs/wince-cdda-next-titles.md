@@ -1,11 +1,21 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Extending the WinCE CDDA loader
 
-The SCI audio baseline is RC9, console source `8be0305943c9`, published as
-`68736e84fb5f20f1a25307d0354c0da75a1c9f7c`. Its final Armada recording
-`62665.mp4` reports one underrun and four complete cached primes with
-47–50 ms worker-side restart delay. Occasional audio gaps remain a known
-limitation. This extension does not retune that baseline.
+The current shared SCI audio candidate is console build **1aa16821209b**,
+published as `d9f861ba87a2957234d0af276a4cfeb573367258`. On 2026-10-15 the
+owner reported almost imperceptible Worms gameplay lag after its RAM-copy
+optimization. Its preceding bounded-worker build had substantially reduced
+lag without affecting music. Keep this as the tested performance baseline;
+the historical port results below describe earlier builds, not its current
+audio quality. See [the RAM-copy result](wince-cdda-copy-test.md).
+
+WinCE CD music is an optional, per-image saved launch setting and defaults
+to Off. It is offered to inspected WinCE GDIs with high-density audio.
+The engine is shared, while actual playback currently requires one of the
+three admitted US runtime profiles: Armada, Bust-A-Move 4 or Worms Armageddon.
+Raw2352 AUDIO is required; either original raw or converted2048 DATA is
+supported for those profiles. Another region or revision is not automatically
+equivalent to the tested runtime.
 
 ## Next candidates
 
@@ -37,6 +47,14 @@ the product check. Compare the selected boot image, ROM module layout, external
 DLLs, API exports, process-owner discovery and native object/callback interface
 before adding a matching profile. Identical verified runtime components may
 share one profile; differing builds need separate checked adapters.
+
+There is also title-specific discovery to replace: the current adapters use
+the game's sound-device holder and import-table addresses in addition to
+kernel and DLL identities. A generic loader must locate these interfaces,
+reserve its source/controller memory for the discovered kernel, and select
+the sound library's correct consumer-copy contract. Matching a sound DLL
+alone or accepting an arbitrary track map does not supply those guarantees.
+Do not route an unknown title through Armada or Worms by default.
 
 Keep the same saved CD music option in the launcher. Select an admitted profile
 from the image/runtime identity. Preserve the ordinary CE loader and existing

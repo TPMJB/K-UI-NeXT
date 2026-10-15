@@ -5,6 +5,20 @@ The owner reports that build 3e5fce65537a mostly removed the Worms gameplay
 lag without affecting music, with a little perceptible lag remaining.
 That is the console baseline for this small follow-up.
 
+## Console result, 2026-10-15
+
+After testing the RAM-copy build **1aa16821209b**, the owner reported that
+gameplay lag was almost completely eliminated and any remaining delay was
+almost imperceptible. The preceding 32-pump build had already reduced lag
+without affecting music. This is a subjective hardware result, not a
+measured zero-overhead claim or a new compatibility test of every profile.
+
+Keep 1aa16821209b as the tested Worms performance baseline. No further
+timing or physical-reader change is part of this result. The current
+optional WinCE CD music path supports the three exact admitted Armada,
+Bust-A-Move 4 and Worms Armageddon profiles; it does not yet discover an
+unknown game's kernel or native sound interface.
+
 The player copied each checked audio byte into staging and then into the
 native ring using volatile byte accesses. Aligned RAM copies now use
 four-byte integer accesses, with exact byte tails and an unaligned fallback.
