@@ -29,7 +29,12 @@ for retained features, remaining gaps and deferred work.
 RC11 includes orange Tyrfing runtime/header artwork and a matching optional
 CDI with the new boot splash, orange controls and sword badge. Burn that CDI
 to replace artwork on the boot disc; the normal runtime update can continue
-using your existing compatible independent K-UI CD.
+using your existing compatible independent K-UI CD. To preview the new boot
+menu without burning, copy only the separate bootstrap package's
+`KUI/tools.kui` to the card, pause the existing CD startup and choose
+**Card tools**. Check **Card boot / recovery**, RC11 and the build ID, then
+choose **Start K-UI**. The under-SEGA badge is stored on the disc and changes
+only when that disc is replaced. See [the card preview guide](bootloader-refresh.md#check-the-final-artwork-without-reburning).
 
 Keep your existing **exFAT card**. FAT32 remains supported. No reformat,
 reripping or 2048-byte conversion is required. ext4 remains a read-only
