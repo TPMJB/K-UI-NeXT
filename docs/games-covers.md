@@ -27,6 +27,19 @@ Scan again after adding games or changing art. Only new or changed games are
 read again; a scan of an unchanged library reads the folders and records and
 writes nothing.
 
+## Equivalent image entries
+
+The current Tyrfing preparation source groups equivalent CUE/GDI descriptors
+into one Games entry, preferring the GDI. Duplicate GDIs can also share one
+entry. Grouping requires the same complete track layout, referenced files,
+file offsets, sector strides and media/boot-encoding flags; a matching title
+or shared filename alone is insufficient. Different layouts remain available.
+Malformed descriptors and transient read errors do not establish an alias.
+
+Only BIN/IMG files actually referenced by a descriptor are hidden as its
+payload; unrelated images remain selectable. After adding or changing library
+files, press **X Refresh** in Games to rebuild the cached listing.
+
 ## Where the art comes from
 
 Many retail discs carry their own cover picture, `0GDTEX.PVR`, in the root
@@ -108,6 +121,10 @@ No DreamShell code, cover scanner or decoder is used.
   cases.
 - `test-shell`: views, grid movement and page turns, the scan action and
   drawing.
+- Games listing tests on real FAT32/exFAT images cover equivalent CUE/GDI
+  and duplicate-GDI entries, independent layouts/payloads, malformed
+  descriptors, transient read failures and cancellation. These are host
+  checks; the grouping change does not establish new game compatibility.
 - `test_games_covers_images.py` on real FAT32 and exFAT images: a scan of
   eight synthetic games (twiddled, VQ, mipmapped with GBIX, stride, none,
   your PNG, a category folder, two GDIs in one folder, one duplicate name);

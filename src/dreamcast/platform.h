@@ -51,6 +51,10 @@ enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,u
  * and game-named output. Invalid paths fail before preference or drive I/O. */
 enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build,
     const char *destination);
+/* Session choices copied by the sole worker. Exact job applies only to
+ * Resume/Verify; folder label applies only to New. NULL/empty uses defaults. */
+enum kui_capture_result kui_capture_start_selected(enum kui_capture_mode mode,const char *build,
+    const char *destination,const char *job_directory,const char *folder_label,bool quick_resume);
 /* Explicit one-operation size-only resume. CRC32 jobs continue the checkpoint's
  * CRC without rereading committed bytes, so same-size corruption is not checked.
  * SHA-256 jobs still require the engine's full prefix reread. This does not

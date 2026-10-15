@@ -21,6 +21,8 @@ static struct {
     bool load_format;
     enum kui_capture_format loaded_format;
     char order[32], log[512], destination[KUI_DEST_ROOT_CAP];
+    char selected_job[KUI_DEST_JOB_CAP],folder_label[KUI_DEST_TITLE_CAP];
+    char *mutate_destination,*mutate_job,*mutate_label;
     size_t order_size, log_size;
 } fake;
 
@@ -54,6 +56,9 @@ static void reset(void) {
 
 bool kui_options_refresh(void) {
     note('O');
+    if(fake.mutate_destination)strcpy(fake.mutate_destination,"/Changed during refresh");
+    if(fake.mutate_job)strcpy(fake.mutate_job,"/Changed during refresh/Job");
+    if(fake.mutate_label)strcpy(fake.mutate_label,"Changed during refresh");
     if(fake.refresh_ok && fake.load_format) kui_options.capture_format=fake.loaded_format;
     return fake.refresh_ok;
 }
@@ -123,6 +128,13 @@ enum kui_capture_result kui_capture(const struct kui_capture_plan *plan,
     assert(ops->options->output && ops->options->output->game_names);
     assert(ops->options->output->format==kui_options.capture_format);
     assert(!strcmp(ops->options->output->parent,fake.destination));
+    assert(ops->options->output->parent!=fake.mutate_destination);
+    assert(fake.selected_job[0]?(ops->options->job_directory && !strcmp(ops->options->job_directory,fake.selected_job)):
+        !ops->options->job_directory);
+    assert(fake.folder_label[0]?(ops->options->output->folder_label && !strcmp(ops->options->output->folder_label,fake.folder_label)):
+        !ops->options->output->folder_label);
+    if(fake.mutate_job)assert(ops->options->job_directory!=fake.mutate_job);
+    if(fake.mutate_label)assert(ops->options->output->folder_label!=fake.mutate_label);
     assert(!ops->options->bench);
     if(fake.exercise_dma) {
         uint8_t buffer[32];
@@ -170,6 +182,68 @@ static void run_destination(const char *destination) {
     expect_stats();
 }
 static void run_success(void) {run_destination("/Games");}
+static void selected_requests(void) {
+    /* Copy all request strings before a refresh callback can change UI-owned
+     * buffers. Sanitizing the folder label must not change optical metadata. */
+    reset();char parent[128]="//Games/./My Discs//",label[96]="  New/Folder:* Label. ";
+    strcpy(fake.destination,"/Games/My Discs");strcpy(fake.folder_label,"New_Folder__ Label");
+    fake.mutate_destination=parent;fake.mutate_label=label;
+    assert(kui_capture_start_selected(KUI_CAPTURE_NEW,"123456abcdef",parent,NULL,label,false)==KUI_CAPTURE_COMPLETE);
+    assert(!strcmp(fake.order,"OTDPSCECLUR") && fake.engine_calls==1 && fake.simulated_writes==1);
+    assert(!strcmp(parent,"/Changed during refresh") && !strcmp(label,"Changed during refresh"));expect_stats();
+    for(unsigned mode=KUI_CAPTURE_RESUME;mode<=KUI_CAPTURE_VERIFY;mode++) {
+        reset();fake.mode=(enum kui_capture_mode)mode;
+        char exact[256]="0://Games/./Older Job (2)//",ignored[96];memset(ignored,'Q',sizeof(ignored));
+        strcpy(fake.selected_job,"/Games/Older Job (2)");fake.mutate_job=exact;
+        assert(kui_capture_start_selected(fake.mode,"123456abcdef","/Games",exact,ignored,false)==KUI_CAPTURE_COMPLETE);
+        assert(!strcmp(fake.order,"OTDPSCECLUR") && fake.engine_calls==1);
+        assert(fake.simulated_writes==(mode==KUI_CAPTURE_RESUME?1u:0u));
+        assert(!strcmp(exact,"/Changed during refresh/Job"));expect_stats();
+    }
+    /* The exact selector has a larger bound than the destination parent. */
+    reset();fake.mode=KUI_CAPTURE_RESUME;
+    char exact[256];exact[0]='/';memset(exact+1,'A',127);exact[128]='/';memset(exact+129,'B',124);exact[253]=0;
+    strcpy(fake.selected_job,exact);
+    assert(kui_capture_start_selected(fake.mode,"123456abcdef","/Games",exact,NULL,false)==KUI_CAPTURE_COMPLETE);
+    assert(fake.engine_calls==1);expect_stats();
+    for(unsigned mode=KUI_CAPTURE_NEW;mode<=KUI_CAPTURE_VERIFY;mode++) {
+        reset();fake.mode=(enum kui_capture_mode)mode;
+        assert(kui_capture_start_selected(fake.mode,"123456abcdef","/Games","","",false)==KUI_CAPTURE_COMPLETE);
+        assert(fake.engine_calls==1);expect_stats();
+    }
+    reset();fake.mode=KUI_CAPTURE_RESUME;fake.quick_resume=true;
+    kui_options.resume_size[0]=false;strcpy(fake.selected_job,"/Games/Older");
+    assert(kui_capture_start_selected(fake.mode,"123456abcdef","/Games","/Games/Older",NULL,true)==KUI_CAPTURE_COMPLETE);
+    assert(!kui_options.resume_size[0]);expect_stats();
+
+    const char *bad[]={"/","0:/","/Games/../Older","1:/Games/Older","/Games/NUL","/Games/trailing."};
+    for(unsigned i=0;i<sizeof(bad)/sizeof(bad[0]);i++)for(unsigned stopped=0;stopped<2;stopped++) {
+        reset();run_success();reset();fake.stop=stopped!=0;
+        assert(kui_capture_start_selected(KUI_CAPTURE_RESUME,"123456abcdef","/Games",bad[i],NULL,false)==
+            (stopped?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED));
+        assert(!fake.order[0] && !fake.engine_calls && !fake.simulated_writes);expect_empty_stats();
+    }
+    for(unsigned stopped=0;stopped<2;stopped++) {
+        reset();run_success();reset();fake.stop=stopped!=0;
+        assert(kui_capture_start_selected(KUI_CAPTURE_NEW,"123456abcdef","/Games","/Games/Older",NULL,false)==
+            (stopped?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED));
+        assert(!fake.order[0] && !fake.engine_calls && !fake.simulated_writes);expect_empty_stats();
+        reset();run_success();reset();fake.stop=stopped!=0;
+        char too_long_label[96];memset(too_long_label,'X',sizeof(too_long_label));
+        assert(kui_capture_start_selected(KUI_CAPTURE_NEW,"123456abcdef","/Games",NULL,too_long_label,false)==
+            (stopped?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED));
+        assert(!fake.order[0] && !fake.engine_calls && !fake.simulated_writes);expect_empty_stats();
+        for(unsigned mode=KUI_CAPTURE_NEW;mode<=KUI_CAPTURE_VERIFY;mode+=2u) {
+            reset();run_success();reset();fake.stop=stopped!=0;
+            assert(kui_capture_start_selected((enum kui_capture_mode)mode,"123456abcdef","/Games",NULL,NULL,true)==
+                (stopped?KUI_CAPTURE_STOPPED:KUI_CAPTURE_FAILED));
+            assert(!fake.order[0] && !fake.engine_calls && !fake.simulated_writes);expect_empty_stats();
+        }
+    }
+    reset();run_success();reset();fake.refresh_ok=false;
+    assert(kui_capture_start_selected(KUI_CAPTURE_VERIFY,"123456abcdef","/Games","/Games/Older",NULL,false)==KUI_CAPTURE_FAILED);
+    assert(!strcmp(fake.order,"O") && !fake.engine_calls);expect_empty_stats();
+}
 int main(void) {
     expect_empty_stats();
     for(unsigned storage=KUI_STORAGE_SCIF;storage<=KUI_STORAGE_IDE;storage++) {
@@ -277,6 +351,7 @@ int main(void) {
         reset();fake.result=(enum kui_capture_result)result;fake.stats.verified=false;
         fake.stats.bytes=321;strcpy(fake.stats.job_dir,"/KUI/dumps/partial");run_success();
     }
+    selected_requests();
     puts("PASS capture adapter: fail-closed inputs, per-action quick resume without persistent changes, named output/reference outcomes, fresh stats");
     return 0;
 }

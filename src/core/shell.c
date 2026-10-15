@@ -617,7 +617,7 @@ void kui_shell_set_listing(struct kui_shell *s, const struct kui_destination_pag
         struct kui_destination_entry *entry=&s->listing.entries[i];
         if(!memchr(entry->name,0,sizeof(entry->name))) {
             snprintf(entry->name,sizeof(entry->name),"[Name too long]");
-            entry->disabled=true;
+            entry->disabled=true;entry->job_selectable=false;
         }
     }
     s->browser_selected=0;
@@ -639,6 +639,29 @@ static enum kui_shell_action save_destination(struct kui_shell *s, const char *p
     snprintf(s->browse_path,sizeof(s->browse_path),"%s",normalized);
     s->destination_notice[0]=0;
     return KUI_SHELL_DEST_SAVE;
+}
+static enum kui_shell_action select_capture_job(struct kui_shell *s,bool highlighted) {
+    char qualified[KUI_DEST_JOB_CAP],selected[KUI_DEST_JOB_CAP];
+    const char *path=s->browse_path;
+    if(highlighted) {
+        if(s->browser_selected>=s->listing.count || !s->listing.entries[s->browser_selected].job_selectable ||
+           !kui_destination_job_path(qualified,s->browse_path,s->listing.entries[s->browser_selected].name)) {
+            kui_shell_destination_error(s,"Choose a valid saved-job folder.");return KUI_SHELL_NONE;
+        }
+        path=qualified;
+    }
+    if(!kui_destination_job_normalize(selected,path)) {
+        kui_shell_destination_error(s,"Choose a saved-job folder below the card root.");return KUI_SHELL_NONE;
+    }
+    strcpy(s->capture_job,selected);s->browse_for_capture_job=false;s->page=KUI_SHELL_ADVANCED;
+    snprintf(s->destination_notice,sizeof(s->destination_notice),"Resume and Verify will use the selected job. New dumps use a new folder.");
+    return KUI_SHELL_NONE;
+}
+static void capture_label_keyboard(struct kui_shell *s) {
+    snprintf(s->keyboard,sizeof(s->keyboard),"%s",s->capture_folder_label);
+    s->keyboard_original[0]=0;s->keyboard_selected=0;s->keyboard_layer=KUI_SHELL_KEYS_LOWER;
+    s->files_keyboard=s->wifi_keyboard=s->wifi_typing_name=s->storage_test_keyboard=false;
+    s->capture_label_keyboard=true;s->destination_notice[0]=0;s->page=KUI_SHELL_KEYBOARD;
 }
 /* ---- File Manager ---- */
 #define FILES_ACTION_COUNT 7u
@@ -720,7 +743,7 @@ static enum kui_shell_action files_keyboard(struct kui_shell *s,enum kui_files_o
     }
     memcpy(s->keyboard_original,s->keyboard,sizeof(s->keyboard_original));
     s->keyboard_selected=0;s->keyboard_layer=KUI_SHELL_KEYS_LOWER;s->destination_notice[0]=0;
-    s->files_keyboard=true;s->page=KUI_SHELL_KEYBOARD;
+    s->capture_label_keyboard=false;s->files_keyboard=true;s->page=KUI_SHELL_KEYBOARD;
     return KUI_SHELL_NONE;
 }
 static enum kui_shell_action files_name_done(struct kui_shell *s) {
@@ -1028,7 +1051,7 @@ void kui_shell_set_wifi(struct kui_shell *s,const struct kui_wifi_view *view) {
 static void wifi_keyboard(struct kui_shell *s,bool name) {
     s->keyboard[0]=s->keyboard_original[0]=0;
     s->keyboard_selected=0;s->keyboard_layer=KUI_SHELL_KEYS_LOWER;s->destination_notice[0]=0;
-    s->wifi_keyboard=true;s->wifi_typing_name=name;s->page=KUI_SHELL_KEYBOARD;
+    s->capture_label_keyboard=false;s->wifi_keyboard=true;s->wifi_typing_name=name;s->page=KUI_SHELL_KEYBOARD;
 }
 static void wifi_keyboard_close(struct kui_shell *s) {
     memset(s->keyboard,0,sizeof(s->keyboard));
@@ -1097,6 +1120,16 @@ static enum kui_shell_action wifi_input(struct kui_shell *s,unsigned buttons) {
     return KUI_SHELL_NONE;
 }
 static enum kui_shell_action keyboard_done(struct kui_shell *s) {
+    if(s->capture_label_keyboard) {
+        bool blank=true;
+        for(size_t i=0;s->keyboard[i];i++) if(s->keyboard[i]!=' ' &&
+                (s->keyboard[i]<'\t' || s->keyboard[i]>'\r')) {blank=false;break;}
+        if(blank) s->capture_folder_label[0]=0;
+        else kui_destination_title(s->capture_folder_label,s->keyboard);
+        s->capture_label_keyboard=false;s->page=KUI_SHELL_ADVANCED;
+        snprintf(s->destination_notice,sizeof(s->destination_notice),"Folder label applies to new dumps only; saved jobs keep their names.");
+        return KUI_SHELL_NONE;
+    }
     if(s->wifi_keyboard) return wifi_name_done(s);
     if(s->storage_test_keyboard) {
         snprintf(s->storage_test_request.card_label,sizeof(s->storage_test_request.card_label),
@@ -1108,6 +1141,9 @@ static enum kui_shell_action keyboard_done(struct kui_shell *s) {
     return s->files_keyboard?files_name_done(s):save_destination(s,s->keyboard);
 }
 static enum kui_shell_action keyboard_input(struct kui_shell *s,unsigned buttons) {
+    if(s->capture_label_keyboard && buttons!=KUI_SHELL_UP && buttons!=KUI_SHELL_DOWN &&
+       buttons!=KUI_SHELL_LEFT && buttons!=KUI_SHELL_RIGHT && buttons!=KUI_SHELL_X &&
+       buttons!=KUI_SHELL_Y && buttons!=KUI_SHELL_START && buttons!=KUI_SHELL_A) return KUI_SHELL_NONE;
     s->keyboard_selected=keyboard_move(s->keyboard_selected,buttons);
     if(buttons&KUI_SHELL_X) keyboard_backspace(s);
     else if(buttons&KUI_SHELL_Y) s->keyboard_layer=(s->keyboard_layer+1u)%KUI_SHELL_KEY_LAYERS;
@@ -1117,12 +1153,12 @@ static enum kui_shell_action keyboard_input(struct kui_shell *s,unsigned buttons
         if(s->keyboard_selected==41) keyboard_backspace(s);
         else {
             size_t n=strlen(s->keyboard);
-            size_t cap=s->storage_test_keyboard?sizeof(s->storage_test_request.card_label)-1:!s->wifi_keyboard?sizeof(s->keyboard)-1:s->wifi_typing_name?KWM_SSID_MAX:KWM_PASSWORD_MAX;
+            size_t cap=s->capture_label_keyboard?sizeof(s->capture_folder_label)-1:s->storage_test_keyboard?sizeof(s->storage_test_request.card_label)-1:!s->wifi_keyboard?sizeof(s->keyboard)-1:s->wifi_typing_name?KWM_SSID_MAX:KWM_PASSWORD_MAX;
             if(n<cap) {
                 s->keyboard[n]=s->keyboard_selected==40?' ':
                     *kui_shell_key_label(s->keyboard_selected,s->keyboard_layer);
                 s->keyboard[n+1]=0; s->destination_notice[0]=0;
-            } else kui_shell_destination_error(s,s->storage_test_keyboard?"Card labels allow 23 characters.":s->wifi_keyboard?(s->wifi_typing_name?
+            } else kui_shell_destination_error(s,s->capture_label_keyboard?"Folder labels allow 95 bytes.":s->storage_test_keyboard?"Card labels allow 23 characters.":s->wifi_keyboard?(s->wifi_typing_name?
                 "A network name has at most 32 characters.":"A Wi-Fi password has at most 64 characters."):
                 s->files_keyboard?"This name is too long.":"This folder path is too long.");
         }
@@ -1193,6 +1229,10 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             s->confirm_wifi_forget=false;
             s->confirm_wifi_update=false;
             return KUI_SHELL_STOP;
+        }
+        if(s->page==KUI_SHELL_KEYBOARD && s->capture_label_keyboard) {
+            s->capture_label_keyboard=false;s->page=KUI_SHELL_ADVANCED;
+            s->destination_notice[0]=0;return KUI_SHELL_NONE;
         }
         if(s->confirm_storage_test) {s->confirm_storage_test=false;return KUI_SHELL_NONE;}
         if(s->storage_test_keyboard && s->page==KUI_SHELL_KEYBOARD) {
@@ -1340,6 +1380,10 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                strcmp(parent,s->browse_path)) {
                 snprintf(s->browse_path,sizeof(s->browse_path),"%s",parent);
                 return list_destination(s,true);
+            }
+            if(s->browse_for_capture_job) {
+                s->browse_for_capture_job=false;s->page=KUI_SHELL_ADVANCED;
+                s->destination_notice[0]=0;
             }
             return KUI_SHELL_NONE;
         }
@@ -1712,14 +1756,27 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     case KUI_SHELL_FILES_INFO: case KUI_SHELL_FILES_VIEW:
         break;
     case KUI_SHELL_RIPPER:
-        if(buttons & KUI_SHELL_A) s->confirm_new = true;
+        if(buttons==KUI_SHELL_LEFT) {
+            s->capture_job[0]=0;
+            snprintf(s->destination_notice,sizeof(s->destination_notice),"Resume and Verify use the automatic latest matching job.");
+        } else if(buttons & KUI_SHELL_A) s->confirm_new = true;
         else if(buttons & KUI_SHELL_X) return KUI_SHELL_RESUME;
         else if(buttons & KUI_SHELL_Y) return KUI_SHELL_VERIFY;
         else if(buttons & KUI_SHELL_START) s->page=KUI_SHELL_ADVANCED;
         break;
     case KUI_SHELL_ADVANCED:
-        s->advanced_selected=move_count(s->advanced_selected,buttons,7);
+        s->advanced_selected=move_count(s->advanced_selected,buttons,KUI_SHELL_RIPPER_TOOL_COUNT);
         if(buttons & KUI_SHELL_A) {
+            if(s->advanced_selected==KUI_SHELL_RIPPER_TOOL_JOB) {
+                if(buttons!=KUI_SHELL_A) break;
+                s->browse_for_capture_job=true;s->browse_for_scan=false;s->page=KUI_SHELL_DESTINATION;
+                snprintf(s->browse_path,sizeof(s->browse_path),"%s",s->destination);
+                return list_destination(s,true);
+            }
+            if(s->advanced_selected==KUI_SHELL_RIPPER_TOOL_LABEL) {
+                if(buttons==KUI_SHELL_A) capture_label_keyboard(s);
+                break;
+            }
             if(s->advanced_selected==6) {s->page=KUI_SHELL_SALVAGE;return KUI_SHELL_NONE;}
             if(s->advanced_selected<2) {
                 s->page=KUI_SHELL_RIPPER;
@@ -1730,6 +1787,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             }
             if(s->advanced_selected==4 || s->advanced_selected==5) {
                 s->browse_for_scan=s->advanced_selected==5;
+                s->browse_for_capture_job=false;
                 s->page=KUI_SHELL_DESTINATION;
                 snprintf(s->browse_path,sizeof(s->browse_path),"%s",s->destination);
                 return list_destination(s,true);
@@ -1740,16 +1798,22 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         }
         break;
     case KUI_SHELL_DESTINATION:
+        if(s->browse_for_capture_job && buttons!=KUI_SHELL_START && buttons!=KUI_SHELL_X &&
+           buttons!=KUI_SHELL_Y && buttons!=KUI_SHELL_A && buttons!=KUI_SHELL_UP &&
+           buttons!=KUI_SHELL_DOWN && buttons!=KUI_SHELL_LEFT && buttons!=KUI_SHELL_RIGHT) break;
         if(buttons & KUI_SHELL_START) {
-            s->page=s->browse_for_scan?KUI_SHELL_ADVANCED:KUI_SHELL_RIPPER;
+            s->page=s->browse_for_scan || s->browse_for_capture_job?KUI_SHELL_ADVANCED:KUI_SHELL_RIPPER;
+            s->browse_for_capture_job=false;
             snprintf(s->browse_path,sizeof(s->browse_path),"%s",s->destination);
             s->destination_notice[0]=0;
         } else if((buttons & KUI_SHELL_X) && !s->browse_for_scan) {
+            if(s->browse_for_capture_job) return select_capture_job(s,false);
             snprintf(s->keyboard,sizeof(s->keyboard),"%s",s->browse_path);
             snprintf(s->keyboard_original,sizeof(s->keyboard_original),"%s",s->browse_path);
             s->keyboard_selected=0; s->keyboard_layer=KUI_SHELL_KEYS_LOWER;
-            s->destination_notice[0]=0; s->page=KUI_SHELL_KEYBOARD;
+            s->capture_label_keyboard=false;s->destination_notice[0]=0; s->page=KUI_SHELL_KEYBOARD;
         } else if(buttons & KUI_SHELL_Y) {
+            if(s->browse_for_capture_job) return select_capture_job(s,true);
             if(s->browse_for_scan) {s->page=KUI_SHELL_CRC_SCAN;return KUI_SHELL_ADVANCED_CRC;}
             return save_destination(s,s->browse_path);
         }
@@ -1761,7 +1825,9 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                     snprintf(s->browse_path,sizeof(s->browse_path),"%s",child);
                     return list_destination(s,true);
                 }
-                kui_shell_destination_error(s,"This folder cannot be selected. Choose another folder.");
+                kui_shell_destination_error(s,s->browse_for_capture_job?
+                    "Cannot open this path here. Y can select a highlighted saved-job folder.":
+                    "This folder cannot be selected. Choose another folder.");
             }
         } else if((buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT))==KUI_SHELL_LEFT && s->browser_page) {
             --s->browser_page; return list_destination(s,false);
@@ -2038,7 +2104,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         }
         if(buttons&KUI_SHELL_A) switch(s->storage_test_selected) {
         case 3:
-            s->storage_test_keyboard=true;s->files_keyboard=false;
+            s->capture_label_keyboard=false;s->storage_test_keyboard=true;s->files_keyboard=false;
             s->keyboard_selected=0;s->keyboard_layer=KUI_SHELL_KEYS_LOWER;
             snprintf(s->keyboard,sizeof(s->keyboard),"%s",s->storage_test_request.card_label);
             s->destination_notice[0]=0;s->page=KUI_SHELL_KEYBOARD;break;

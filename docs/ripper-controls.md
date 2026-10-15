@@ -1,7 +1,9 @@
 # Disc Ripper: destinations, controls and results
 
-The ripper now saves new captures under a chosen SD folder, using the game's
-title for its folder and GDI descriptor. The default parent is **`/Games`**.
+The ripper saves new captures under a chosen SD folder, using the game's
+title by default. The default parent is **`/Games`**. Tyrfing preparation adds
+an exact saved-job selector and a custom New-job folder label; their console
+acceptance remains pending.
 Use the existing bootstrap disc and update the SD runtime as described in
 [sd-bootstrap.md](sd-bootstrap.md).
 
@@ -10,10 +12,12 @@ Use the existing bootstrap disc and update the SD runtime as described in
 | Screen | Controls |
 | --- | --- |
 | Launcher | D-pad or stick selects; A opens Disc Ripper, Settings or Diagnostics |
-| Disc Ripper | A opens New confirmation; release and press A again to begin. X resumes; Y verifies saved files. L/R select bundled songs; Start opens Advanced (including Destination folder). B returns home while idle |
+| Disc Ripper | A opens New confirmation; release and press A again to begin. X resumes; Y verifies saved files. Left clears the exact saved-job selection and restores Automatic. L/R select bundled songs; Start opens Advanced. B returns home while idle |
 | Destination browser | Up/Down selects; A opens a subfolder; B goes to its parent. Left/Right changes the listing page. Y saves the current folder as the destination. X opens path entry. Start cancels browsing and returns to the ripper |
 | Path entry | Directions select a key; A enters it. X deletes one character; Y changes letter case. Start or the DONE key saves the path. B cancels typing and returns to the browser |
-| Advanced | Up/Down selects Verify, Full Resume, Capture settings, Quick Resume, Destination folder, Advanced CRC or Salvage; A opens it; B returns to the ripper |
+| Advanced | Up/Down selects Verify, Full Resume, Capture settings, Quick Resume, Destination folder, Advanced CRC, Salvage, Saved job for Resume/Verify or New dump folder label. A opens it; B returns to the ripper |
+| Saved-job browser | A opens a folder; Y selects the highlighted child folder; X selects the current folder. B goes to the parent, or leaves the browser at its root. Start cancels and retains the earlier selection |
+| New folder-label keyboard | Directions select a key; A enters it; X deletes; Y changes letter case. Start or DONE applies the label. B cancels and retains the previous label |
 | Settings | Up/Down selects; Left/Right changes; A saves. B discards unsaved edits and returns to the screen that opened Settings |
 | Diagnostics | A runs disc samples; X runs the SD test; Y saves the log. Up/Down scrolls; Start shows the latest lines. R retains the configured benchmark entry |
 | Active operation | B requests Stop. Wait for the operation and automatic report save to finish before starting another action |
@@ -46,13 +50,29 @@ descriptor. CSO, DreamShell-LZO ZSO and CHDv4 are verified post-capture
 exports; they retain the raw capture and its internal `.capture.gdi` for
 resume and verification. CSO/ZSO contain one cooked high-density data track;
 audio stays in the raw files. CHD includes the captured data and audio tracks.
-Compression needs additional space and time. Games still requires importing
-compressed files on a computer. See [Games formats](games-formats.md).
+Compression needs additional space and time. These CSO, historical LZO ZSO
+and CHD exports still require PC import before Games can launch them. The
+separate experimental [native ZSO reader](games-zso.md) accepts standard LZ4
+ZSO, which is a different dialect from this ripper's ZSO output. See
+[Games formats](games-formats.md).
 
 Resume and Verify use the job's saved format. Changing the setting affects
 only New. Existing GDI jobs and their reference hashes remain compatible.
 
 ## New output names and existing dumps
+
+Open **Start > New dump folder label** to enter an optional label for the
+next New job. Start or DONE applies its sanitized FAT-safe form; empty or
+whitespace-only input restores **Auto (disc title)**. B cancels the edit.
+The label is held for the current launcher session and resets on restart.
+It changes only the new folder, while the descriptor/container base and saved
+optical title remain disc-derived. It does not rename an existing job.
+
+For example, label `Archive Copy` with an MDK2 disc creates
+`/Games/Archive Copy/MDK2.gdi`; another New uses `Archive Copy (2)` and keeps
+`MDK2.gdi`. Resume and Verify ignore the current label and keep the selected
+job's existing names. Choose a custom-labelled job explicitly when resuming
+or verifying it; automatic selection follows the detected title's folders.
 
 For an IP.BIN title of `MDK2`, the first capture produces:
 
@@ -73,9 +93,40 @@ For default GDI jobs, track names, track bytes and checkpoint encoding are uncha
 `disc.gdi` and their existing metadata. The PC verifier reads either form; use the
 updated verifier when checking a newly named job.
 
-## Resume and Verify select by disc identity
+## Choose an exact saved job
 
-Resume and Verify search the **selected parent**, considering the current title
+Open **Start > Saved job for Resume/Verify**. The browser starts at the
+current destination. Use A to enter a folder, **Y to select its highlighted
+child folder**, or **X to select the current folder**. Start cancels without
+changing the earlier selection. B moves up, then returns to Advanced at the
+browser root. A folder too long to enter can still be selected directly with
+Y when its complete job path fits the capture engine's limit.
+
+The selection is a candidate, not proof that the folder is resumable. Normal
+**X Resume**, **Y Verify**, Advanced Full Resume and explicitly confirmed
+**Quick Resume** use that exact folder. The engine checks the path, matching
+inserted disc, full identity, checkpoint and recorded job format/hash mode;
+normal Resume retains its prefix verification. Verify rereads without writing
+saved game data. Missing/corrupt checkpoints, wrong-disc jobs or I/O errors
+stop the operation; they never redirect it to another job.
+
+The exact selection is held only for this launcher session and resets on
+restart. It can also identify a legacy `/KUI/dumps` job, which keeps its
+existing `disc.gdi` name. Merely selecting a candidate folder performs no
+disc/checkpoint reads and does not start an operation.
+
+On the idle ripper, press **Left** to clear the exact selection and restore
+**Automatic** latest matching-job selection. **New** ignores the selected
+existing job and creates a separate capture without clearing that selection.
+The saved destination choice remains
+independent. Advanced CRC is still the separate read-only route for scanning
+an exact supported raw GDI or completed dump without using normal capture
+Resume/Verify.
+
+## Automatic Resume and Verify select by disc identity
+
+With no exact job selected, Resume and Verify search the **selected parent**,
+considering the current title
 and its numbered folders. They choose the greatest matching suffix whose valid
 checkpoint matches the inserted disc's full identity and track plan. A newer
 folder with the same title but different disc contents is skipped. Missing or
@@ -112,6 +163,11 @@ continue to override saved preferences.
 
 ## Evidence and optional checks
 
+The new exact-job and folder-label controls are source changes prepared for
+Tyrfing. They still need console acceptance with the integrated runtime.
+Keep the existing compatible bootstrap CD and install the complete matching
+package; this guide does not announce a final 2.0 release.
+
 The destination, collision, resume-selection, metadata and reference-result paths
 pass host tests on FAT32 and exFAT. **The new named output flow still needs console
 acceptance.** The separately supplied completed MDK2 log for restored-menu
@@ -139,7 +195,7 @@ During the next normal rip:
 
 No repeat optical benchmark is required for this release. Advanced includes
 Verify, Full Resume, Capture settings, Quick Resume, Destination folder,
-Advanced CRC and Salvage. Salvage is a separate explicit recovery job; it does
+Advanced CRC, Salvage, Saved job for Resume/Verify and New dump folder label. Salvage is a separate explicit recovery job; it does
 not overwrite normal captures. See [salvage controls and limits](salvage-worker.md).
 Current bounded capture retries, stop behavior and preservation of partial jobs
 remain in force.
@@ -148,8 +204,9 @@ remain in force.
 
 Both baseline host suites passed on clean `54711b931554` before protected-file
 edits, with the three recorded source hashes unchanged throughout those checks.
-The additions to `src/core/capture.c` concern destination selection, descriptor
-publication and result observation. The accepted acquisition loop, raw/DMA
+The additions to `src/core/capture.c` concern destination selection, exact-job
+selection, New-job folder labels, descriptor publication and result observation.
+The accepted acquisition loop, raw/DMA
 reader, command deadlines, retry policy, hashes and checkpoint encoding are
 unchanged. Named capture tests independently compare track hashes with the legacy
 output, exercise stop/resume and publication failure, and check reference grades.

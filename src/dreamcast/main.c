@@ -70,6 +70,7 @@ static unsigned settings_generation;
 static char settings_note[96];
 static char destination_current[KUI_DEST_ROOT_CAP], destination_pending[KUI_DEST_ROOT_CAP];
 static char capture_destination[KUI_DEST_ROOT_CAP], destination_note[128];
+static char capture_job_pending[KUI_DEST_JOB_CAP],capture_label_pending[KUI_DEST_TITLE_CAP];
 static bool destination_ready;
 static unsigned destination_generation, destination_result, destination_offset;
 static struct kui_destination_page destination_listing;
@@ -2193,9 +2194,10 @@ static void *worker(void *unused) {
             if(action == 10 || action == 11) destination_operation(action == 11);
             if(is_capture_action(action)) {
                 kui_memory_log("capture/verify start");
-                enum kui_capture_result result=action==22?
-                    kui_capture_resume_quick(KUI_BUILD_ID,capture_destination):
-                    kui_capture_start((enum kui_capture_mode)(action-4),KUI_BUILD_ID,capture_destination);
+                enum kui_capture_result result=kui_capture_start_selected(
+                    action==22?KUI_CAPTURE_RESUME:(enum kui_capture_mode)(action-4),KUI_BUILD_ID,
+                    capture_destination,action==4?NULL:capture_job_pending,
+                    action==4?capture_label_pending:NULL,action==22);
                 mutex_lock(&lock);
                 capture_summary = *kui_capture_last_stats();
                 observing_capture=false;
@@ -2876,7 +2878,8 @@ int main(void) {
             }
             action=0;
         }
-        if(is_capture_action(action) && !destination_ready) {
+        if(is_capture_action(action) && !destination_ready &&
+           !(action!=4 && shell.capture_job[0])) {
             capture_summary = (struct kui_capture_stats){0};
             capture_status = (struct kui_capture_progress){0};
             capture_outcome = KUI_SHELL_OUTCOME_FAILED;
@@ -2911,7 +2914,11 @@ int main(void) {
                 strcpy(destination_pending, shell.browse_path);
                 destination_offset = shell.browser_page * KUI_DEST_PAGE_SIZE;
             }
-            if(is_capture_action(action)) strcpy(capture_destination, shell.destination);
+            if(is_capture_action(action)) {
+                strcpy(capture_destination,shell.destination);
+                strcpy(capture_job_pending,shell.capture_job);
+                strcpy(capture_label_pending,shell.capture_folder_label);
+            }
             if(action == 9) settings_pending = shell.draft;
             if(action==14) system_pending=shell.system_draft;
             if(action==13 || action==14) snprintf(system_note,sizeof(system_note),"%s",

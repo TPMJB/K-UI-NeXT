@@ -490,10 +490,176 @@ static void advanced_navigation(void) {
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_DISCARD_SETTINGS && s.page==KUI_SHELL_ADVANCED);
     press(KUI_SHELL_B,false); assert(s.page==KUI_SHELL_RIPPER);
     press(KUI_SHELL_START,false);s.advanced_selected=0;
+    press(KUI_SHELL_UP,false);assert(s.advanced_selected==8);
+    press(KUI_SHELL_UP,false);assert(s.advanced_selected==7);
     press(KUI_SHELL_UP,false);assert(s.advanced_selected==6);
     press(KUI_SHELL_UP,false);assert(s.advanced_selected==5);
     press(KUI_SHELL_UP,false);assert(s.advanced_selected==4);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_DEST_LIST && s.page==KUI_SHELL_DESTINATION);
+}
+static void open_capture_job(void) {
+    s.page=KUI_SHELL_ADVANCED;s.advanced_selected=7;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DEST_LIST);
+    assert(s.page==KUI_SHELL_DESTINATION && s.browse_for_capture_job && !s.browse_for_scan);
+}
+static void open_capture_label(void) {
+    s.page=KUI_SHELL_ADVANCED;s.advanced_selected=8;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    assert(s.page==KUI_SHELL_KEYBOARD && s.capture_label_keyboard);
+    assert(!s.files_keyboard && !s.wifi_keyboard && !s.storage_test_keyboard);
+}
+static void ripper_saved_job_controls(void) {
+    reset(KUI_SHELL_RIPPER);
+    assert(KUI_SHELL_RIPPER_TOOL_JOB==7 && KUI_SHELL_RIPPER_TOOL_LABEL==8 && KUI_SHELL_RIPPER_TOOL_COUNT==9);
+    assert(!s.capture_job[0] && !s.capture_folder_label[0] && !s.browse_for_capture_job && !s.capture_label_keyboard);
+    open_capture_job();
+    assert(!strcmp(s.browse_path,"/Games") && !s.capture_job[0]);
+    struct kui_destination_page page={.count=3,.has_more=true};
+    strcpy(page.entries[0].name,"Older dump");
+    page.entries[0].job_selectable=true;
+    strcpy(page.entries[1].name,"../bad");
+    strcpy(page.entries[2].name,"Unavailable");page.entries[2].disabled=true;
+    kui_shell_set_listing(&s,&page);
+    assert(press(KUI_SHELL_A|KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DESTINATION && !s.capture_job[0]);
+    assert(press(KUI_SHELL_X|KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DESTINATION && !s.capture_job[0]);
+    assert(press(KUI_SHELL_Y,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_DESTINATION && !s.capture_job[0]);
+    s.listing.entries[0].job_selectable=false;
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DESTINATION && !s.capture_job[0]);
+    s.listing.entries[0].job_selectable=true;
+    s.browser_selected=1;
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.destination_notice[0] && !s.capture_job[0]);
+    assert(s.page==KUI_SHELL_DESTINATION && !strcmp(s.browse_path,"/Games"));
+    s.browser_selected=2;
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.destination_notice[0] && !s.capture_job[0]);
+    s.browser_selected=0;
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE);
+    assert(!strcmp(s.capture_job,"/Games/Older dump") && !strcmp(s.destination,"/Games"));
+    assert(s.page==KUI_SHELL_ADVANCED && !s.browse_for_capture_job);
+    /* Selection chooses a job without dispatching a read or changing New's
+     * destination. All three existing resume/verify controls keep the path. */
+    s.page=KUI_SHELL_RIPPER;
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_RESUME && !strcmp(s.capture_job,"/Games/Older dump"));
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_VERIFY && !strcmp(s.capture_job,"/Games/Older dump"));
+    s.page=KUI_SHELL_ADVANCED;s.advanced_selected=3;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_quick_resume);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_RESUME_QUICK && s.page==KUI_SHELL_RIPPER);
+    assert(!strcmp(s.capture_job,"/Games/Older dump"));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_new);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NEW_DUMP && !strcmp(s.capture_job,"/Games/Older dump"));
+    /* Busy input cannot replace or clear the job. B retains Stop priority. */
+    assert(press(KUI_SHELL_LEFT,true)==KUI_SHELL_NONE && s.capture_job[0]);
+    assert(press(KUI_SHELL_START,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_RIPPER);
+    assert(press(KUI_SHELL_B|KUI_SHELL_LEFT,true)==KUI_SHELL_STOP && s.capture_job[0]);
+    assert(press(KUI_SHELL_LEFT|KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.capture_job[0]);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && !s.capture_job[0]);
+    assert(!strcmp(s.destination,"/Games"));
+    strcpy(s.capture_job,"/Games/Prior");
+    open_capture_job();kui_shell_set_listing(&s,&page);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_DEST_LIST && s.browser_page==1 && !s.listing.count);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.browser_page==1);
+    kui_shell_set_listing(&s,&page);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_DEST_LIST && !s.browser_page);
+    kui_shell_set_listing(&s,&page);
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.browser_selected==1);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && !s.browser_selected);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DEST_LIST && !strcmp(s.browse_path,"/Games/Older dump"));
+    assert(press(KUI_SHELL_B|KUI_SHELL_Y,false)==KUI_SHELL_DEST_LIST);
+    assert(!strcmp(s.browse_path,"/Games") && !strcmp(s.capture_job,"/Games/Prior"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_DEST_LIST && !strcmp(s.browse_path,"/"));
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && s.destination_notice[0]);
+    assert(!strcmp(s.capture_job,"/Games/Prior") && s.page==KUI_SHELL_DESTINATION);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_ADVANCED && !s.browse_for_capture_job);
+    open_capture_job();strcpy(s.browse_path,"/Games/Current");
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_ADVANCED);
+    assert(!strcmp(s.capture_job,"/Games/Current") && !s.browse_for_capture_job);
+    open_capture_job();strcpy(s.browse_path,"/Games/Discarded");
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_ADVANCED);
+    assert(!strcmp(s.capture_job,"/Games/Current") && !s.browse_for_capture_job);
+    /* A parent must fit the existing 128-byte browser. Y can select a child
+     * whose full 256-byte job path cannot be opened in that browser. */
+    open_capture_job();
+    s.browse_path[0]='/';memset(s.browse_path+1,'a',110);s.browse_path[111]=0;
+    memset(&page,0,sizeof(page));page.count=1;
+    memset(page.entries[0].name,'b',100);page.entries[0].name[100]=0;
+    page.entries[0].disabled=true;page.entries[0].job_selectable=true;
+    kui_shell_set_listing(&s,&page);
+    char expected[KUI_DEST_JOB_CAP];
+    assert(strlen(s.browse_path)+1+strlen(page.entries[0].name)<sizeof(expected));
+    strcpy(expected,s.browse_path);strcat(expected,"/");strcat(expected,page.entries[0].name);
+    assert(strlen(expected)>=KUI_DEST_ROOT_CAP);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DESTINATION && s.destination_notice[0]);
+    assert(!strcmp(s.capture_job,"/Games/Current") && strlen(s.browse_path)==111);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_ADVANCED);
+    assert(!strcmp(s.capture_job,expected) && !strcmp(s.destination,"/Games"));
+    /* Current-folder selection rejects invalid paths as well as the card
+     * root; highlighted names never accept reserved DOS components. */
+    open_capture_job();strcpy(s.browse_path,"/Games/../Bad");
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DESTINATION && s.destination_notice[0]);
+    assert(!strcmp(s.capture_job,expected));
+    strcpy(s.browse_path,"/Games");strcpy(page.entries[0].name,"CON");
+    page.entries[0].disabled=false;
+    kui_shell_set_listing(&s,&page);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DESTINATION && s.destination_notice[0]);
+    memset(page.entries[0].name,'x',sizeof(page.entries[0].name));page.entries[0].job_selectable=true;
+    kui_shell_set_listing(&s,&page);
+    assert(s.listing.entries[0].disabled && !s.listing.entries[0].job_selectable);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DESTINATION && !strcmp(s.capture_job,expected));
+    memset(&page,0,sizeof(page));kui_shell_set_listing(&s,&page);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DESTINATION && !strcmp(s.capture_job,expected));
+    press(KUI_SHELL_START,false);
+    /* Changing browser purposes resets job mode. Existing output-folder
+     * saves and Advanced CRC's current-folder action retain their semantics. */
+    s.advanced_selected=4;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DEST_LIST && !s.browse_for_capture_job && !s.browse_for_scan);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_DEST_SAVE && !strcmp(s.capture_job,expected));
+    press(KUI_SHELL_START,false);s.page=KUI_SHELL_ADVANCED;s.advanced_selected=5;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DEST_LIST && s.browse_for_scan && !s.browse_for_capture_job);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DESTINATION);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_ADVANCED_CRC && s.page==KUI_SHELL_CRC_SCAN);
+    assert(!strcmp(s.capture_job,expected) && !strcmp(s.destination,"/Games"));
+    puts("PASS shell saved dump picker: exact paths, long children, paging, cancel, guards, separate browser purposes");
+}
+static void ripper_folder_label_controls(void) {
+    reset(KUI_SHELL_RIPPER);strcpy(s.capture_job,"/Games/Existing");
+    s.files_keyboard=s.wifi_keyboard=s.storage_test_keyboard=true;
+    open_capture_label();assert(!s.keyboard[0]);
+    strcpy(s.keyboard,"  ..My:\tGame*/ Name...  ");
+    assert(press(KUI_SHELL_A|KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_KEYBOARD && !s.capture_folder_label[0]);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_ADVANCED && !s.capture_label_keyboard);
+    assert(!strcmp(s.capture_folder_label,"My_ Game__ Name") && !strcmp(s.capture_job,"/Games/Existing"));
+    assert(!strcmp(s.destination,"/Games"));
+    open_capture_label();assert(!strcmp(s.keyboard,"My_ Game__ Name"));
+    strcpy(s.keyboard,"Cancelled");
+    assert(press(KUI_SHELL_B|KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_ADVANCED && !s.capture_label_keyboard);
+    assert(!strcmp(s.capture_folder_label,"My_ Game__ Name"));
+    open_capture_label();strcpy(s.keyboard,"CON");s.keyboard_selected=42;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_ADVANCED);
+    assert(!strcmp(s.capture_folder_label,"DreamcastDisc") && !s.capture_label_keyboard);
+    open_capture_label();strcpy(s.keyboard,"Caf\xc3\xa9");
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && !strcmp(s.capture_folder_label,"Caf\xc3\xa9"));
+    open_capture_label();memset(s.keyboard,'n',KUI_DEST_TITLE_CAP-2);s.keyboard[KUI_DEST_TITLE_CAP-2]=0;
+    s.keyboard_selected=0;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && strlen(s.keyboard)==KUI_DEST_TITLE_CAP-1);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && strlen(s.keyboard)==KUI_DEST_TITLE_CAP-1 && s.destination_notice[0]);
+    assert(press(KUI_SHELL_START,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_KEYBOARD && s.capture_label_keyboard);
+    assert(!strcmp(s.capture_folder_label,"Caf\xc3\xa9"));
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && strlen(s.capture_folder_label)==KUI_DEST_TITLE_CAP-1);
+    open_capture_label();s.keyboard[0]=0;s.keyboard_selected=42;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_ADVANCED && !s.capture_folder_label[0]);
+    assert(!s.capture_label_keyboard && !strcmp(s.capture_job,"/Games/Existing"));
+    open_capture_label();strcpy(s.keyboard," \t  ");
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_ADVANCED && !s.capture_folder_label[0]);
+    /* Accepting the next normal destination keyboard still returns a save
+     * request rather than accidentally rewriting the capture-only label. */
+    s.page=KUI_SHELL_RIPPER;open_destination();
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_KEYBOARD && !s.capture_label_keyboard);
+    strcpy(s.keyboard,"/Other");
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_DEST_SAVE && !s.capture_folder_label[0]);
+    assert(!strcmp(s.capture_job,"/Games/Existing"));
+    /* This is a session-only choice: fresh shell state restores Auto and
+     * Automatic latest without touching the separate stored destination. */
+    reset(KUI_SHELL_RIPPER);assert(!s.capture_job[0] && !s.capture_folder_label[0]);
+    puts("PASS shell new dump folder label: sanitized names, UTF-8, Auto, cancel, cap, keyboard purpose, session reset");
 }
 static void music_and_boot_controls(void) {
     const enum kui_shell_page song_pages[]={KUI_SHELL_HOME,KUI_SHELL_RIPPER};
@@ -813,6 +979,10 @@ static bool header_link_seen;
 static uint16_t header_link_color;
 static uint16_t image_test_row_color;
 static uint16_t option_row_colors[KUI_SHELL_GAME_OPTION_COUNT];
+static const char *const ripper_tool_names[]={"Verify saved files","Resume interrupted dump","Capture settings",
+    "Quick resume (sizes only)","Destination folder","Advanced CRC scan","Damaged disc salvage",
+    "Saved job for Resume/Verify","New dump folder label"};
+static uint16_t ripper_tool_colors[KUI_SHELL_RIPPER_TOOL_COUNT];
 static void observe(void *ctx,unsigned x,unsigned y,uint16_t color,const char *value,bool large) {
     (void)ctx;
     if(!strncmp(value,"STREAM CRC:",11)) badge_color=color;
@@ -822,6 +992,9 @@ static void observe(void *ctx,unsigned x,unsigned y,uint16_t color,const char *v
         for(unsigned i=0;i<KUI_SHELL_GAME_OPTION_COUNT;i++)
             if(!strcmp(value,names[i])) option_row_colors[i]=color;
     }
+    if(s.page==KUI_SHELL_ADVANCED && x==48)
+        for(unsigned i=0;i<KUI_SHELL_RIPPER_TOOL_COUNT;i++)
+            if(!strcmp(value,ripper_tool_names[i])) ripper_tool_colors[i]=color;
     if(x==32 && y==78) {
         assert(!large && !strcmp(value,"github.com/TPMJB/K-UI-NeXT"));
         assert(kui_shell_font_width(value,false)<=396u-x);
@@ -839,6 +1012,7 @@ static void render(struct kui_shell_view *v) {
     pixels[0]=0x1234; pixels[640*480+1]=0xabcd;
     drawn_size=0; drawn[0]=0; badge_color=0;header_link_seen=false;image_test_row_color=0;
     memset(option_row_colors,0,sizeof(option_row_colors));
+    memset(ripper_tool_colors,0,sizeof(ripper_tool_colors));
     kui_shell_draw(pixels+1,&s,v,observe,NULL);
     assert(header_link_seen);
     unsigned link_ink=0;
@@ -918,6 +1092,45 @@ static void reference_and_destination_rendering(void) {
     s.keyboard_selected=42; render(&v);
     assert(strstr(drawn,"SPACE") && strstr(drawn,"BACK") && strstr(drawn,"DONE"));
     assert(strstr(drawn,"X Backspace") && strstr(drawn,"Y Shift"));
+}
+static void ripper_saved_job_rendering(void) {
+    reset(KUI_SHELL_RIPPER);struct kui_shell_view v={0};render(&v);
+    assert(strstr(drawn,"Resume/Verify: Automatic latest matching job."));
+    assert(strstr(drawn,"New folder label: Auto (disc title)"));
+    strcpy(s.capture_job,"/Games/Older dump");strcpy(s.capture_folder_label,"Selected label");
+    render(&v);
+    assert(strstr(drawn,"Resume/Verify job:") && strstr(drawn,"/Games/Older dump"));
+    assert(strstr(drawn,"X Resume selected") && strstr(drawn,"Y Verify selected"));
+    assert(strstr(drawn,"LEFT restores Automatic latest") && strstr(drawn,"LEFT Automatic job"));
+    assert(strstr(drawn,"New folder label: Selected label"));
+    s.confirm_new=true;render(&v);
+    assert(strstr(drawn,"START A NEW DUMP?") && strstr(drawn,"New folder label: Selected label"));
+    s.confirm_new=false;s.confirm_quick_resume=true;s.page=KUI_SHELL_ADVANCED;render(&v);
+    assert(strstr(drawn,"QUICK RESUME WITHOUT REREADING?") && strstr(drawn,"/Games/Older dump"));
+    s.confirm_quick_resume=false;
+    for(unsigned row=0;row<KUI_SHELL_RIPPER_TOOL_COUNT;row++) {
+        s.advanced_selected=row;render(&v);const char *at=drawn;
+        for(unsigned i=0;i<KUI_SHELL_RIPPER_TOOL_COUNT;i++) {
+            at=strstr(at,ripper_tool_names[i]);assert(at);at+=strlen(ripper_tool_names[i]);
+            assert(ripper_tool_colors[i]==(i==row?0xf7bf:0xadd9));
+        }
+        if(row==KUI_SHELL_RIPPER_TOOL_JOB) assert(strstr(drawn,"/Games/Older dump"));
+        if(row==KUI_SHELL_RIPPER_TOOL_LABEL) assert(strstr(drawn,"Selected label"));
+    }
+    s.advanced_selected=KUI_SHELL_RIPPER_TOOL_JOB;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DEST_LIST);render(&v);
+    assert(strstr(drawn,"Choose saved job") && strstr(drawn,"Y Select highlighted") && strstr(drawn,"X Select this folder"));
+    assert(strstr(drawn,"Resume/Verify only") && !strstr(drawn,"selected destination is saved"));
+    v.busy=true;render(&v);assert(strstr(drawn,"Loading folders"));v.busy=false;
+    s.listing.count=1;s.listing.entries[0].job_selectable=true;s.listing.entries[0].disabled=true;
+    memset(s.listing.entries[0].name,'a',100);strcpy(s.listing.entries[0].name+100," (9)");render(&v);
+    assert(strstr(drawn,"...") && strstr(drawn,"(9)")); /* Collision ordinal stays visible on long selected names. */
+    press(KUI_SHELL_START,false);open_capture_label();render(&v);
+    assert(strstr(drawn,"New dump folder label") && strstr(drawn,"Empty uses Auto (disc title)"));
+    assert(strstr(drawn,"New folders only") && !strstr(drawn,"Type destination") && !strstr(drawn,"saves your choice"));
+    memset(s.keyboard,'m',KUI_DEST_TITLE_CAP-1);s.keyboard[KUI_DEST_TITLE_CAP-1]=0;s.keyboard_selected=42;
+    render(&v);assert(strstr(drawn,"...") && strstr(drawn,"SPACE") && strstr(drawn,"BACK") && strstr(drawn,"DONE"));
+    puts("PASS shell saved dump rendering: nine Advanced rows, selected job, Auto, label, confirmations, picker and keyboard bounds");
 }
 static void new_pages_rendering(void) {
     struct kui_shell_view v={.inserted_title="Sword of the Berserk",.disc_title="MDK2",
@@ -2990,12 +3203,41 @@ static void wifi_update_rendering(void) {
     assert(!strstr(drawn,"B Stop safely"));
     puts("PASS shell Wi-Fi update rendering: version, image, size, confirmation, transfer progress, finishing state");
 }
+static void ripper_label_keyboard_purpose_controls(void) {
+    /* Each existing keyboard entry owns its purpose even if an old capture
+     * label mode remained set. Its completion must keep the capture label. */
+    reset(KUI_SHELL_FILES);files_root();
+    strcpy(s.capture_folder_label,"Keep label");s.capture_label_keyboard=true;
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_KEYBOARD && s.files_keyboard && !s.capture_label_keyboard);
+    strcpy(s.keyboard,"Created folder");
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_FILES_RUN && s.page==KUI_SHELL_FILES && !s.files_keyboard);
+    assert(!strcmp(s.files_job.name,"Created folder") && !strcmp(s.capture_folder_label,"Keep label"));
+    reset(KUI_SHELL_STORAGE_TESTS);s.storage_test_selected=3;
+    strcpy(s.capture_folder_label,"Keep label");s.capture_label_keyboard=true;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_KEYBOARD && s.storage_test_keyboard && !s.capture_label_keyboard);
+    strcpy(s.keyboard,"Card nickname");
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_STORAGE_TESTS && !s.storage_test_keyboard);
+    assert(!strcmp(s.storage_test_request.card_label,"Card nickname") && !strcmp(s.capture_folder_label,"Keep label"));
+    reset(KUI_SHELL_WIFI);struct kui_wifi_view view=three_networks();kui_shell_set_wifi(&s,&view);
+    strcpy(s.capture_folder_label,"Keep label");s.capture_label_keyboard=true;s.wifi_selected=4;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_KEYBOARD && s.wifi_keyboard && !s.capture_label_keyboard);
+    strcpy(s.keyboard,"Other network");
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_KEYBOARD && !s.wifi_typing_name);
+    assert(!strcmp(s.wifi_request.ssid,"Other network") && !strcmp(s.capture_folder_label,"Keep label"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_WIFI && !s.wifi_keyboard && !s.capture_label_keyboard);
+    puts("PASS shell capture label keyboard isolation: File Manager, card nickname and Wi-Fi retain their own actions");
+}
 int main(int argc,char **argv) {
     if(argc==2 && !strcmp(argv[1],"--wifi")) {
         wifi_controls();wifi_rendering();wifi_update_controls();wifi_update_rendering();return 0;
     }
     if(argc==2 && !strcmp(argv[1],"--storage-tests")) {
         storage_test_controls();storage_test_rendering();return 0;
+    }
+    if(argc==2 && !strcmp(argv[1],"--ripper")) {
+        ripper_saved_job_controls();ripper_folder_label_controls();ripper_label_keyboard_purpose_controls();
+        destination_transaction();keyboard_transaction();advanced_navigation();restore_and_scan_controls();
+        ripper_saved_job_rendering();reference_and_destination_rendering();music_and_boot_rendering();return 0;
     }
     games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_zso_controls(); games_variant_controls();
     if(argc==2 && !strcmp(argv[1],"--games-controls")) { puts("PASS Games navigation and launch controls"); return 0; }
@@ -3005,6 +3247,8 @@ int main(int argc,char **argv) {
     launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction(); ripper_export_rendering();
     system_transaction_and_video(); app_navigation_and_vmu(); clock_and_defaults(); restore_and_scan_controls(); phase_eta();
     diagnostics(); destination_transaction(); keyboard_transaction(); advanced_navigation();
+    ripper_saved_job_controls();ripper_folder_label_controls();ripper_label_keyboard_purpose_controls();
+    ripper_saved_job_rendering();
     rendering_semantics(); reference_and_destination_rendering(); new_pages_rendering();
     music_and_boot_controls(); music_and_boot_rendering(); round_four_rendering(); round_five_controls(); round_five_rendering();
     files_controls(); files_rendering();

@@ -60,6 +60,13 @@ enum kui_shell_game_tool {
     KUI_SHELL_GAME_TOOL_INFO, KUI_SHELL_GAME_TOOL_TESTS,
     KUI_SHELL_GAME_TOOL_PATCHES, KUI_SHELL_GAME_TOOL_DEFAULTS, KUI_SHELL_GAME_TOOL_COUNT
 };
+enum kui_shell_ripper_tool {
+    KUI_SHELL_RIPPER_TOOL_VERIFY, KUI_SHELL_RIPPER_TOOL_RESUME,
+    KUI_SHELL_RIPPER_TOOL_SETTINGS, KUI_SHELL_RIPPER_TOOL_QUICK,
+    KUI_SHELL_RIPPER_TOOL_DESTINATION, KUI_SHELL_RIPPER_TOOL_SCAN,
+    KUI_SHELL_RIPPER_TOOL_SALVAGE, KUI_SHELL_RIPPER_TOOL_JOB,
+    KUI_SHELL_RIPPER_TOOL_LABEL, KUI_SHELL_RIPPER_TOOL_COUNT
+};
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
     KUI_SHELL_DISC_PROBE, KUI_SHELL_STORAGE_PROBE, KUI_SHELL_SAVE_LOG,
@@ -163,6 +170,10 @@ struct kui_shell {
     enum kui_shell_page settings_return;
     unsigned keyboard_layer; /* KUI_SHELL_KEYS_* */
     bool browse_for_scan;
+    /* RAM-only choices: an empty job means automatic latest for Resume/Verify;
+     * an empty folder label means the disc title for NEW captures only. */
+    char capture_job[KUI_DEST_JOB_CAP], capture_folder_label[KUI_DEST_TITLE_CAP];
+    bool browse_for_capture_job, capture_label_keyboard;
     /* File Manager. files_request is the next listing main hands to the
      * worker: the browser's folder, or the picker's (folders_only). A job
      * is checked (FILES_CHECK) before it is confirmed and run (FILES_RUN);

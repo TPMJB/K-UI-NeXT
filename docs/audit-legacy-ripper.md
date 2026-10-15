@@ -26,12 +26,12 @@ There is no missing catalogue verification or missing resume engine to import.
 | Progress, speed/time information, retry/FAD state and saved diagnostics | Legacy `module.c:1656–1744`, `:229–281` | `src/core/capture_display.c`, `src/dreamcast/disc.c:55–99`, `src/dreamcast/main.c` automatic capture/scan report paths. Present. Binary diagnostic sampling differs below. |
 | Output formats | Legacy `module.c:1019–1031` offers raw BIN or cooked ISO data tracks in GDI, plus raw audio | `include/kui/capture_format.h:4–25` offers GDI, BIN/CUE, CSO, ZSO and CHD; `src/core/capture_export.c` verifies exports while retaining raw capture. New formats are broader, but direct cooked GDI output differs below. |
 
-## Actual gaps and differences
+## Differences and new convenience controls
 
 | Capability in the adapted app | Current independent behavior | Release recommendation |
 | --- | --- | --- |
-| **Choose an exact existing dump for Resume/Verify.** Legacy `module.c:2555–2557,2589–2592,2623–2634` recognizes `rip.state`, sets that dump's parent and exact name. | Normal Resume/Verify selects the highest matching numbered folder under the configured parent (`src/core/capture.c:301–337`), with legacy-job fallback. Advanced CRC already lets the user scan an exact older completed raw dump (`src/core/shell.c:1621–1644`). There is no corresponding exact selection for an older unfinished normal job. | Best convenience candidate after integration: add an explicit job picker without weakening identity/checkpoint checks. For Tyrfing, document the existing Advanced CRC route for older completed dumps. This is not absence of manual file verification. |
-| **Edit the output game/folder name.** Legacy editable `gname-text` (`applications/gd_ripper/app.xml:168`) calls `module.c:512–520`. | New job names always derive from the identified title (`src/core/capture.c:307,354`). The keyboard edits only the destination parent (`src/core/shell.c:1637–1641`), not the new title. | Optional later convenience. Add an output-label override with existing sanitization and collision rules; keep optical identity separate from the label. Avoid changing capture/checkpoint formats just for naming. |
+| **Choose an exact existing dump for Resume/Verify.** Legacy `module.c:2555–2557,2589–2592,2623–2634` recognizes `rip.state`, sets that dump's parent and exact name. | **Implemented independently in source.** Advanced > Saved job for Resume/Verify browses to an exact candidate folder. `kui_capture_options.job_directory` selects only that job; path, full optical identity, checkpoint, recorded hash/format and prefix checks still apply. A bad/missing/wrong-disc selection fails without falling back to a newer job. Clearing the selection retains automatic latest matching-job behavior. Advanced CRC remains the separate exact-folder route for supported imported/completed raw dumps. | Tyrfing preparation convenience; console acceptance pending. See [ripper controls](ripper-controls.md#choose-an-exact-saved-job). |
+| **Edit the output game/folder name.** Legacy editable `gname-text` (`applications/gd_ripper/app.xml:168`) calls `module.c:512–520`. | **New folder label implemented independently in source.** Advanced > New dump folder label opens the keyboard. `kui_capture_output.folder_label` changes only a New job's directory; existing sanitization and collision numbering apply. The optical title, descriptor/container base name, manifest identity and raw track bytes retain the disc-derived values. Empty input uses the detected title. Resume/Verify ignore the current label. | Tyrfing preparation convenience; no checkpoint-format change or file renaming. Console acceptance pending. See [output names](ripper-controls.md#new-output-names-and-existing-dumps). |
 | **Choose PC share as a direct rip destination.** Legacy browser offers SD, IDE and PC (`app.xml:199–206`; `modules/folders.h:13`), using DreamShell's mounted `/pc` service. | Current capture uses one selected local storage backend through FatFs (`src/dreamcast/capture.c:46–66`, `src/dreamcast/sd.c:282`). SCIF, SCI and IDE/CF exist; IDE already serializes GD-ROM/ATA access (`src/dreamcast/capture.c:6–19`). There is no `/pc` mount capture destination. FTP transfer is a separate workflow. | Later independent network-filesystem/streaming project. Do not describe IDE ripping as missing, and do not merge G1 SD board experiments to close this gap. A within-ripper device picker is UI convenience, since storage is already selected globally. |
 | **Cooked 2048-byte data tracks directly in the console's GDI output.** Legacy `module.c:1019–1026,2483–2507`; UI explicitly says cooked output has no catalogue CRC match. | Normal raw GDI is 2352-byte tracks; CSO/ZSO export cooked data but are not cooked GDI (`include/kui/capture_format.h`). `tools/gdi_optimize.py:223` already produces a separate 2048-byte GDI copy on a PC, checking framing/address structure without establishing EDC/ECC or catalogue correctness. | Later optional on-console post-capture export using the existing raw job as the source. Keep raw capture/hash/resume conventions intact. Existing PC conversion covers the practical workflow for Tyrfing. |
 | **Rip single-session CD/CD-R/audio media as tracks.** Legacy chooses one TOC area for non-GD discs (`module.c:1429`), with CD-specific track-tail treatment (`:1060–1065`); this path is reachable, not merely an unused declaration. | `src/core/capture_plan.c:29–36` requires both GD sessions and the 150/45150 starts. The current ripper supports its declared retail-GD profile, despite the broader Disc Ripper name. Audio-CD playback is a different app. | Later separate CD capture profile with correct CUE/session/index semantics and media tests. Source support in the legacy app is not proof of archival accuracy for every CD layout. |
@@ -42,16 +42,18 @@ There is no missing catalogue verification or missing resume engine to import.
 
 ## Tyrfing scope
 
-The immediate safe work is documentation and discoverability: describe exact-folder
-Advanced CRC scanning, the PC 2048 conversion tool, the retail-GD capture scope,
-and the distinction between normal capture and Salvage. These do not need a
-new disc burn or a change to the accepted reader.
+The two small app gaps now have independent source implementations: an exact
+saved-job selector and an editable New-job folder label. Their controls are
+in [the ripper guide](ripper-controls.md). They preserve the accepted optical
+reader, identity/checkpoint checks, canonical descriptor names and collision
+rules. The complete integrated runtime still needs console acceptance; this
+is preparation for Tyrfing, not publication of a final 2.0 release.
 
-An exact-job selector is the most useful next app enhancement, followed by an
-editable output label. Both need normal UI/filesystem validation and should be
-reviewed independently of release integration. Network destinations, a CD profile,
-on-console cooked exports, in-place normal-dump repairs and extra forensic reads
-are separate projects, not prerequisites for merging the accepted 2.0 features.
+Keep documenting exact-folder Advanced CRC scanning, PC 2048 conversion,
+the retail-GD capture scope and the distinction between normal capture and
+Salvage. Network destinations, a CD profile, on-console cooked exports,
+normal-dump repair copies and extra forensic reads remain separate projects.
+They are not prerequisites for merging the accepted 2.0 work.
 
 No legacy implementation code was copied. The comparison does not imply that
 DreamShell's storage, repair or CD paths should replace K-UI's independent ones.

@@ -18,7 +18,31 @@ static void rejects_record(const void *record,size_t size) {
     char out[KUI_DEST_ROOT_CAP]="unchanged";uint64_t sequence=17;
     assert(!kui_destination_decode(out,&sequence,record,size));assert(!strcmp(out,"unchanged") && sequence==17);
 }
+static void exact_jobs(void) {
+    char out[KUI_DEST_JOB_CAP]="unchanged";
+    assert(kui_destination_job_normalize(out,"0://Games///Old (2)/./") && !strcmp(out,"/Games/Old (2)"));
+    assert(kui_destination_job_normalize(out,"/Jeux/日本語 é") && !strcmp(out,"/Jeux/日本語 é"));
+    assert(kui_destination_job_normalize(out,out) && !strcmp(out,"/Jeux/日本語 é"));
+    const char *bad[]={NULL,"","/","0:/","////./","1:/Games/Old","0:Games/Old","/Games/../Old",
+        "/Games/..","/CON/Old","/Games/bad.","/Games/bad ","/Games/bad\\name","/Games/bad\nname","/Games/bad\xe2\x82"};
+    for(size_t i=0;i<sizeof(bad)/sizeof(bad[0]);i++) {
+        strcpy(out,"unchanged");assert(!kui_destination_job_normalize(out,bad[i]) && !strcmp(out,"unchanged"));
+    }
+    char full[KUI_DEST_PATH_CAP],qualified[KUI_DEST_JOB_CAP];
+    full[0]='/';memset(full+1,'A',127);full[128]='/';memset(full+129,'B',124);full[253]=0;
+    assert(kui_destination_job_normalize(out,full) && !strcmp(out,full));
+    memcpy(qualified,"0:",2);memcpy(qualified+2,full,254);
+    assert(kui_destination_job_normalize(out,qualified) && !strcmp(out,full));
+    full[253]='B';full[254]=0;strcpy(out,"unchanged");
+    assert(!kui_destination_job_normalize(out,full) && !strcmp(out,"unchanged"));
+    full[0]='/';memset(full+1,'A',128);full[129]=0;
+    assert(!kui_destination_job_normalize(out,full) && !strcmp(out,"unchanged"));
+    memset(full,'A',sizeof(full));
+    assert(!kui_destination_job_normalize(out,full) && !strcmp(out,"unchanged"));
+    assert(!kui_destination_job_normalize(NULL,"/Games/Old"));
+}
 int main(void) {
+    exact_jobs();
     char max_name[KUI_DEST_NAME_CAP+1];memset(max_name,'A',sizeof(max_name));
     max_name[KUI_DEST_NAME_CAP-1]=0;assert(kui_destination_name_valid(max_name));
     max_name[KUI_DEST_NAME_CAP-1]='A';max_name[KUI_DEST_NAME_CAP]=0;

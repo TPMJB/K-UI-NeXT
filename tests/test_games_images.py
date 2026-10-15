@@ -41,8 +41,11 @@ CASES += ("format-root-extensions", "format-gdi-payload", "format-capture-payloa
           "format-folder-cue", "format-folder-iso", "format-folder-ambiguous",
           "format-inspect-iso", "format-inspect-bin", "format-inspect-mode2",
           "format-cue-shared", "format-compressed", "format-inspect-cdi", "format-inspect-cdi-invalid", "format-bad-boot")
-CASES += ("format-capture-zso", "format-capture-chd", "format-capture-gdi",
+CASES += ("format-capture-zso", "format-capture-chd", "format-capture-gdi", "format-capture-cue",
           "format-capture-gdi-malformed", "format-capture-unrelated-bin")
+CASES += ("format-alias-cue", "format-alias-reverse", "format-alias-gdi", "format-alias-independent",
+          "format-alias-scrambled", "format-alias-media", "format-alias-layout",
+          "format-alias-malformed", "format-alias-read-once", "format-alias-cancel")
 ZSO_INSPECT_CASES = ("inspect-zso-sci", "inspect-zso-scif", "inspect-zso-ce")
 CASES += ZSO_INSPECT_CASES
 

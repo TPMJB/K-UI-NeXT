@@ -39,7 +39,14 @@ struct kui_capture_progress {
  * parent is a bounded card-root path such as /Games; the caller retains it for
  * the run. Existing matching named jobs are resumed in place, with legacy
  * jobs still discoverable when this parent has no matching checkpoint. */
-struct kui_capture_output { const char *parent; bool game_names; enum kui_capture_format format; };
+struct kui_capture_output {
+    const char *parent;
+    bool game_names;
+    enum kui_capture_format format;
+    /* New named jobs only: optional folder label. The descriptor/manifest
+     * title and optical identity retain the inserted disc's title. */
+    const char *folder_label;
+};
 /* Runtime choices for the capture engine. All-zero, or no options at all, is the
  * engine exactly as it has always been: SHA-256 and CRC32 per track, every saved
  * byte re-read after capture, a full prefix check on resume, no sampling. They
@@ -70,6 +77,11 @@ struct kui_capture_options {
     /* Benchmark run: publish no metadata and skip the reference check. */
     bool bench;
     const struct kui_capture_output *output;
+    /* Normal Resume/Verify only: exact existing job folder, card-root or
+     * 0:/ qualified. NULL/empty keeps automatic latest-job selection.
+     * The folder is validated before I/O and never falls back to another job.
+     * Existing optical identity, checkpoint and prefix checks still apply. */
+    const char *job_directory;
 };
 /* What a run did, for the benchmark and application. Optional; filled at end. */
 struct kui_capture_stats {

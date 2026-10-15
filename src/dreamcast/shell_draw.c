@@ -15,6 +15,7 @@ enum { NAVY=0x0864, PANEL=0x10c6, SELECTED=0x494b, EDGE=0x318a,
     WHITE=0xf7bf, MUTED=0xadd9, CYAN=0x675e, PINK=0xf3fb,
     GREEN=0x8ef6, AMBER=0xfda9 };
 struct paint { uint16_t *fb; kui_shell_text_fn text; void *ctx; bool crisp; };
+static void path_words(struct paint *,unsigned,unsigned,unsigned,uint16_t,const char *);
 static unsigned word_width(const struct paint *p,const char *text,bool large) {
     return p->crisp?kui_shell_font_width_crisp(text,large):kui_shell_font_width(text,large);
 }
@@ -147,7 +148,8 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_DESTINATION ? "B Parent   START Cancel   LEFT/RIGHT Page" :
         s->page==KUI_SHELL_KEYBOARD ? "A Key   X Backspace   Y Shift   B Cancel" :
         s->page==KUI_SHELL_ADVANCED ? "D-pad Select   A Open   B Ripper" :
-        s->page==KUI_SHELL_RIPPER ? "B Home   START Advanced   L/R Songs" :
+        s->page==KUI_SHELL_RIPPER ? (s->capture_job[0]?"LEFT Automatic job   START Advanced   L/R Songs   B Home":
+            "B Home   START Advanced   L/R Songs") :
         s->page==KUI_SHELL_VMU ? "B Home   LEFT/RIGHT VMU   L Actions" :
         s->page==KUI_SHELL_GAMES ? (kui_shell_games_view(s)==KUI_GAMES_VIEW_LIST?
             "A Open   Y View   LEFT/RIGHT Page   START More":"A Open   Y View   D-pad Move   START More") :
@@ -280,8 +282,12 @@ static void ripper(struct paint *p, const struct kui_shell *s,
         (v->inserted_title&&v->inserted_title[0]?v->inserted_title:"No disc detected"));
     label(p,40,136,CYAN,title_line);
     char destination[160];
-    snprintf(destination,sizeof(destination),"Destination: %s",s->destination);
-    label(p,40,158,MUTED,destination);
+    if(s->capture_job[0]) {
+        label(p,40,158,MUTED,"Resume/Verify job:");path_words(p,200,158,608,CYAN,s->capture_job);
+    } else {
+        snprintf(destination,sizeof(destination),"Destination: %s",s->destination);
+        label(p,40,158,MUTED,destination);
+    }
     panel(p,32,182,576,122,PANEL);
     const char *phase=v->saving ? "Saving diagnostic report" :
         v->cancel_requested && v->busy ? "Stopping safely..." :
@@ -337,6 +343,7 @@ static void ripper(struct paint *p, const struct kui_shell *s,
     } else label(p,40,312,v->drive_reset_required||v->dma_degraded?AMBER:v->busy?MUTED:WHITE,
         v->drive_reset_required?"Restart the console before another disc operation.":
         v->dma_degraded?"Drive errors: PIO active. Reboot to restore DMA.":
+        s->capture_job[0]?"A New dump   X Resume selected   Y Verify selected":
         "A New dump   X Resume latest   Y Verify latest");
     if(!v->busy && v->outcome==KUI_SHELL_OUTCOME_COMPLETE) {
         uint16_t color=MUTED;
@@ -357,6 +364,12 @@ static void ripper(struct paint *p, const struct kui_shell *s,
         label(p,44,342,color,badge);
         label(p,40,368,v->saved_verified?CYAN:MUTED,v->saved_verified?
             "Saved bytes reread and verified.":"Saved bytes not fully reread. Verify later if needed.");
+    } else if(!v->busy && v->outcome==KUI_SHELL_OUTCOME_NONE) {
+        label(p,40,342,MUTED,v->message && v->message[0]?v->message:s->capture_job[0]?
+            "Resume/Verify: selected job. LEFT restores Automatic latest.":"Resume/Verify: Automatic latest matching job.");
+        char folder[160];snprintf(folder,sizeof(folder),"New folder label: %s",
+            s->capture_folder_label[0]?s->capture_folder_label:"Auto (disc title)");
+        label(p,40,368,MUTED,folder);
     } else {
         label(p,40,342,MUTED,v->message && v->message[0]?v->message:
             "A new dump always uses a separate folder.");
@@ -367,7 +380,7 @@ static void ripper(struct paint *p, const struct kui_shell *s,
 }
 static void destination(struct paint *p,const struct kui_shell *s,
         const struct kui_shell_view *v) {
-    title(p,40,108,s->browse_for_scan?"Choose dump to scan":"Choose destination");
+    title(p,40,108,s->browse_for_capture_job?"Choose saved job":s->browse_for_scan?"Choose dump to scan":"Choose destination");
     words(p,40,138,478,CYAN,s->browse_path,false);
     char page[32]; snprintf(page,sizeof(page),"PAGE %u%s",s->browser_page+1,
         s->listing.has_more?" +":"");
@@ -375,6 +388,7 @@ static void destination(struct paint *p,const struct kui_shell *s,
     panel(p,32,166,576,204,PANEL);
     unsigned count=s->listing.count<KUI_DEST_PAGE_SIZE?s->listing.count:KUI_DEST_PAGE_SIZE;
     if(!count) label(p,48,188,MUTED,v->busy?"Loading folders...":
+        s->browse_for_capture_job?"No subfolders. X selects this saved-job folder.":
         s->browse_for_scan?"No subfolders. Y scans this dump folder.":
         "No subfolders. Y selects the current folder.");
     for(unsigned i=0;i<count;i++) {
@@ -384,13 +398,16 @@ static void destination(struct paint *p,const struct kui_shell *s,
             panel(p,40,y,560,23,SELECTED);
             box(p,40,y+4,3,15,PINK);
         }
-        label(p,52,y+2,entry->disabled?AMBER:i==s->browser_selected?WHITE:MUTED,
-            entry->name);
+        uint16_t color=(s->browse_for_capture_job?!entry->job_selectable:entry->disabled)?AMBER:i==s->browser_selected?WHITE:MUTED;
+        if(s->browse_for_capture_job) path_words(p,52,y+2,608,color,entry->name);
+        else label(p,52,y+2,color,entry->name);
     }
-    label(p,40,376,v->busy?MUTED:WHITE,s->browse_for_scan?
+    label(p,40,376,v->busy?MUTED:WHITE,s->browse_for_capture_job?
+        "A Open   Y Select highlighted job   X Select this folder":s->browse_for_scan?
         "A Open folder   Y Scan this folder":"A Open folder   Y Use folder   X Type path");
     label(p,40,396,s->destination_notice[0]?AMBER:MUTED,
         s->destination_notice[0]?s->destination_notice:
+        s->browse_for_capture_job?"Resume/Verify only; disc and checkpoint checks still apply.":
         s->browse_for_scan?"Choose the game folder containing its .gdi file.":
         "The selected destination is saved to SD.");
 }
@@ -399,8 +416,8 @@ static void keyboard(struct paint *p,const struct kui_shell *s) {
     char heading[80];
     if(wifi && s->wifi_typing_name) snprintf(heading,sizeof(heading),"Wi-Fi network name");
     else if(wifi) snprintf(heading,sizeof(heading),"Password for %.32s",s->wifi_request.ssid);
-    title(p,40,108,s->storage_test_keyboard?"Card nickname":wifi?heading:!naming?"Type destination":s->files_job.op==KUI_FILES_OP_RENAME?"Rename":"New folder");
-    label(p,40,136,MUTED,s->storage_test_keyboard?"Label for test reports; START or DONE applies it.":wifi?(s->wifi_typing_name?"As the router shows it; START or DONE goes on to its password.":
+    title(p,40,108,s->capture_label_keyboard?"New dump folder label":s->storage_test_keyboard?"Card nickname":wifi?heading:!naming?"Type destination":s->files_job.op==KUI_FILES_OP_RENAME?"Rename":"New folder");
+    label(p,40,136,MUTED,s->capture_label_keyboard?"START or DONE applies it. Empty uses Auto (disc title).":s->storage_test_keyboard?"Label for test reports; START or DONE applies it.":wifi?(s->wifi_typing_name?"As the router shows it; START or DONE goes on to its password.":
         "START or DONE joins; the board keeps the network for next time."):naming?
         "Name on the SD card; START or DONE applies it.":
         "Folder path on SD; START or DONE saves your choice.");
@@ -429,7 +446,7 @@ static void keyboard(struct paint *p,const struct kui_shell *s) {
     label(p,40,378,CYAN,s->keyboard_layer==KUI_SHELL_KEYS_UPPER?"Y Shift: UPPERCASE":
         s->keyboard_layer==KUI_SHELL_KEYS_SYMBOLS?"Y Shift: symbols":"Y Shift: lowercase");
     label(p,40,398,s->destination_notice[0]?AMBER:MUTED,
-        s->destination_notice[0]?s->destination_notice:s->storage_test_keyboard?"Up to 23 characters, e.g. Samsung 128GB. Optional.":wifi?(s->wifi_typing_name?
+        s->destination_notice[0]?s->destination_notice:s->capture_label_keyboard?"New folders only; disc identity and saved job names stay unchanged.":s->storage_test_keyboard?"Up to 23 characters, e.g. Samsung 128GB. Optional.":wifi?(s->wifi_typing_name?
         "Leave the password empty on the next screen for an open network.":
         "Letters, digits and symbols (Y); 8 to 63 characters."):naming?
         "A name cannot contain / or end with a space or dot.":
@@ -437,8 +454,9 @@ static void keyboard(struct paint *p,const struct kui_shell *s) {
 }
 static void advanced(struct paint *p,const struct kui_shell *s) {
     static const char *names[]={"Verify saved files","Resume interrupted dump","Capture settings",
-        "Quick resume (sizes only)","Destination folder","Advanced CRC scan","Damaged disc salvage"};
-    static const char *details[7][3]={
+        "Quick resume (sizes only)","Destination folder","Advanced CRC scan","Damaged disc salvage",
+        "Saved job for Resume/Verify","New dump folder label"};
+    static const char *details[KUI_SHELL_RIPPER_TOOL_COUNT][3]={
         {"Reread saved tracks and check their recorded hashes.",
          "This checks the card; the stream CRC badge compares",
          "captured tracks with an independent reference."},
@@ -459,17 +477,30 @@ static void advanced(struct paint *p,const struct kui_shell *s) {
          "Audio needs recorded hashes to be verified."},
         {"Read damaged media into a separate salvage job.",
          "Unreadable sectors can be recorded as unresolved holes.",
-         "Explicit retry passes revisit only the missing sectors."}};
-    unsigned selected=s->advanced_selected<7?s->advanced_selected:0;
+         "Explicit retry passes revisit only the missing sectors."},
+        {"Choose an exact saved job instead of the latest match.",
+         "Resume and Verify check it against the inserted disc.",
+         "LEFT on Disc Ripper restores Automatic latest."},
+        {"Choose the folder label for new dumps only.",
+         "Auto uses the disc title; existing jobs keep their names.",
+         "The label stays in memory until this launcher restarts."}};
+    unsigned selected=s->advanced_selected<KUI_SHELL_RIPPER_TOOL_COUNT?s->advanced_selected:0;
     title(p,40,108,"Advanced disc tools");
     label(p,40,138,MUTED,"Choose an operation for your disc or saved dump.");
-    for(unsigned i=0;i<7;i++) {
-        unsigned y=156+i*25;
-        panel(p,32,y,576,23,selected==i?SELECTED:PANEL);
-        if(selected==i) box(p,32,y+4,3,17,PINK);
-        label(p,48,y+4,selected==i?WHITE:MUTED,names[i]);
+    for(unsigned i=0;i<KUI_SHELL_RIPPER_TOOL_COUNT;i++) {
+        unsigned y=156+i*22;
+        panel(p,32,y,576,20,selected==i?SELECTED:PANEL);
+        if(selected==i) box(p,32,y+3,3,14,PINK);
+        label(p,48,y+2,selected==i?WHITE:MUTED,names[i]);
     }
-    for(unsigned i=0;i<3;i++) label(p,40,340+i*23,MUTED,details[selected][i]);
+    for(unsigned i=0;i<3;i++) label(p,40,365+i*18,MUTED,details[selected][i]);
+    if(selected==KUI_SHELL_RIPPER_TOOL_JOB) {
+        panel(p,32,397,576,22,PANEL);
+        path_words(p,40,401,608,CYAN,s->capture_job[0]?s->capture_job:"Automatic latest matching job");
+    } else if(selected==KUI_SHELL_RIPPER_TOOL_LABEL) {
+        panel(p,32,397,576,22,PANEL);
+        label(p,40,401,CYAN,s->capture_folder_label[0]?s->capture_folder_label:"Auto (disc title)");
+    }
 }
 static void ripper_settings(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
@@ -1074,7 +1105,7 @@ static void storage_test_history(struct paint *p,const struct kui_shell *s,const
     }
     label(p,40,400,MUTED,h->message[0]?h->message:"A opens rates, comparison, metadata and error details.");
 }
-static void confirmation(struct paint *p,bool quick) {
+static void confirmation(struct paint *p,const struct kui_shell *s,bool quick) {
     box(p,32,154,576,262,NAVY);
     box(p,48,160,544,180,EDGE); box(p,52,164,536,172,PANEL);
     box(p,52,164,536,4,PINK);
@@ -1084,6 +1115,12 @@ static void confirmation(struct paint *p,bool quick) {
     label(p,72,244,MUTED,quick?"Same-size damage is not detected by this check.":
         "A new folder keeps existing dumps intact.");
     if(quick) label(p,72,266,AMBER,"Use Verify later to check the saved data.");
+    else {
+        char label[128];snprintf(label,sizeof(label),"New folder label: %s",
+            s->capture_folder_label[0]?s->capture_folder_label:"Auto (disc title)");
+        words(p,72,266,568,MUTED,label,false);
+    }
+    if(quick) path_words(p,72,282,568,MUTED,s->capture_job[0]?s->capture_job:"Automatic latest matching job");
     label(p,72,304,CYAN,quick?"A Quick resume":"A Start capture"); label(p,368,304,WHITE,"B Cancel");
 }
 static void gd_play(struct paint *p,const struct kui_shell_view *v) {
@@ -2010,7 +2047,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_WIFI: wifi_page(&p,s,v); break;
     }
     footer(&p,s,v);
-    if(s->confirm_new || s->confirm_quick_resume) confirmation(&p,s->confirm_quick_resume);
+    if(s->confirm_new || s->confirm_quick_resume) confirmation(&p,s,s->confirm_quick_resume);
     if(s->confirm_gd_boot) gd_boot_confirmation(&p);
     if(s->confirm_storage_test) storage_test_confirmation(&p,s,v);
     if(s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore || s->confirm_vmu_delete ||

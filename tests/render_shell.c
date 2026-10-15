@@ -667,24 +667,49 @@ int main(int argc,char **argv) {
         }
     }
     else if(!strcmp(argv[1],"diagnostics")) shell.page=KUI_SHELL_DIAGNOSTICS;
-    else if(!strcmp(argv[1],"advanced") || !strcmp(argv[1],"advanced-destination")) {
+    else if(!strcmp(argv[1],"advanced") || !strcmp(argv[1],"advanced-destination") ||
+            !strcmp(argv[1],"advanced-saved-job") || !strcmp(argv[1],"advanced-label")) {
         shell.page=KUI_SHELL_ADVANCED;
         if(!strcmp(argv[1],"advanced-destination")) shell.advanced_selected=4;
+        if(!strcmp(argv[1],"advanced-saved-job")) {
+            shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_JOB;
+            strcpy(shell.capture_job,"/Games/Generated sample (2)");
+        }
+        if(!strcmp(argv[1],"advanced-label")) {
+            shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_LABEL;strcpy(shell.capture_folder_label,"Evening capture");
+        }
     }
-    else if(!strcmp(argv[1],"destination")) {
+    else if(!strcmp(argv[1],"destination") || !strcmp(argv[1],"ripper-job-browser") || !strcmp(argv[1],"ripper-job-long")) {
         shell.page=KUI_SHELL_DESTINATION;
         const char *folders[]={"Action","Adventure","Driving","Fighting","Imports",
             "Puzzle","Role-playing","Sports"};
         shell.listing.count=8; shell.listing.has_more=true; shell.browser_selected=3;
-        for(unsigned i=0;i<8;i++) snprintf(shell.listing.entries[i].name,
-            sizeof(shell.listing.entries[i].name),"%s",folders[i]);
-    } else if(!strcmp(argv[1],"keyboard")) {
+        for(unsigned i=0;i<8;i++) {
+            snprintf(shell.listing.entries[i].name,sizeof(shell.listing.entries[i].name),"%s",folders[i]);
+            shell.listing.entries[i].job_selectable=true;
+        }
+        shell.browse_for_capture_job=strcmp(argv[1],"destination")!=0;
+        if(!strcmp(argv[1],"ripper-job-long")) {
+            strcpy(shell.browse_path,"/Games/Generated library folder with a descriptive name/Long directory for output captures");
+            strcpy(shell.listing.entries[3].name,"Generated saved capture with a long descriptive label (2)");
+            shell.listing.entries[3].disabled=true;
+        }
+    } else if(!strcmp(argv[1],"keyboard") || !strcmp(argv[1],"ripper-label-keyboard")) {
         shell.page=KUI_SHELL_KEYBOARD; shell.keyboard_selected=42;
         snprintf(shell.keyboard,sizeof(shell.keyboard),"/Games/Fighting");
+        if(!strcmp(argv[1],"ripper-label-keyboard")) {
+            shell.capture_label_keyboard=true;strcpy(shell.keyboard,"Evening capture");
+        }
     }
     else if(strcmp(argv[1],"home")) {
         shell.page=KUI_SHELL_RIPPER;
         if(!strcmp(argv[1],"confirm")) shell.confirm_new=true;
+        else if(!strcmp(argv[1],"ripper-job") || !strcmp(argv[1],"ripper-label-confirm") || !strcmp(argv[1],"quick-resume-selected")) {
+            strcpy(shell.capture_job,"/Games/Generated sample (2)");strcpy(shell.capture_folder_label,"Evening capture");
+            view.busy=false;view.phase=0;view.outcome=KUI_SHELL_OUTCOME_NONE;view.message=NULL;
+            shell.confirm_new=!strcmp(argv[1],"ripper-label-confirm");
+            shell.confirm_quick_resume=!strcmp(argv[1],"quick-resume-selected");
+        }
         else if(!strcmp(argv[1],"ripper-export")) {
             view.busy=true;view.phase=4;view.gdi_name="MDK2.chd";
         }

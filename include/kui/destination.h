@@ -33,8 +33,17 @@ void kui_destination_title(char out[KUI_DEST_TITLE_CAP],const char *ip_title);
 bool kui_destination_folder_name(char out[KUI_DEST_NAME_CAP],const char *title,unsigned index);
 bool kui_destination_folder_index(const char *name,const char *title,unsigned *index);
 bool kui_destination_job_path(char out[KUI_DEST_JOB_CAP],const char *root,const char *folder);
+/* Exact existing job selector. Accept card-root or 0:/ paths; normalize to
+ * card-root form, preserving UTF-8/case. Root, traversal, unsafe components,
+ * another drive and paths longer than 253 normalized bytes are rejected.
+ * The bound leaves room for a 0: prefix in JOB_CAP. Failure preserves out. */
+bool kui_destination_job_normalize(char out[KUI_DEST_JOB_CAP],const char *path);
 
-struct kui_destination_entry {char name[KUI_DEST_NAME_CAP];bool disabled;};
+struct kui_destination_entry {
+    char name[KUI_DEST_NAME_CAP];
+    bool disabled; /* Cannot enter as a bounded destination parent. */
+    bool job_selectable; /* Fits the longer exact capture-job path. */
+};
 struct kui_destination_page {
     struct kui_destination_entry entries[KUI_DEST_PAGE_SIZE];
     unsigned count;
