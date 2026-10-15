@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
-/* RGB565 of the #090102 frame around the 576x432 Tyrfing artwork. */
+/* RGB565 of the #090102 frame around the 576x324 Tyrfing artwork. */
 #define BACKGROUND 0x0800u
 static uint16_t guarded[640u*480u+2u];
 static uint16_t expected_dimmed[640u*480u];

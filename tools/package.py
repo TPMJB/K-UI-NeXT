@@ -154,6 +154,9 @@ def write_release_guides(dist, candidate=False):
         if candidate and not experimental and not release_is_rc():
             source = "ata-readiness-candidate.md"
         (dist / target).write_text(guide(source), encoding="utf-8")
+    if version == "2.0":
+        (dist / "RC-TEST-PLAN.md").write_text(
+            guide("release-v2.0-rc14-test-plan.md"), encoding="utf-8")
     if (not candidate or experimental) and not release_is_rc():
         (dist / "ANNOUNCEMENTS.md").write_text(
             guide(f"release-v{version}-announcements.md"), encoding="utf-8")
@@ -354,6 +357,10 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
         shutil.copyfile(dist / "ANNOUNCEMENTS.md", bundle / "ANNOUNCEMENTS.md")
     if not candidate and not experimental and not rc:
         shutil.copyfile(ROOT / f"resources/branding/release-v{release['version']}-banner.jpg",
+                        bundle / "release-banner.jpg")
+    if guide_version(release) == "2.0":
+        shutil.copyfile(dist / "RC-TEST-PLAN.md", bundle / "RC-TEST-PLAN.md")
+        shutil.copyfile(ROOT / "resources/branding/release-v2.0-banner.jpg",
                         bundle / "release-banner.jpg")
     if guide_version(release) in ("1.8.5", "2.0"):
         write_game_tools(bundle)
@@ -783,7 +790,8 @@ def main():
         shutil.copyfile(dist / name, boot / name)
     shutil.copytree(dist / "LICENSES", boot / "LICENSES")
     for name in ("boot-red.png", "boot-red-README.md", "boot-red-prompt.txt",
-                 "startup-README.md", "startup-tyrfing-prompt.txt"):
+                 "startup-README.md", "startup-tyrfing-prompt.txt",
+                 "startup-tyrfing-pixel-prompt.txt"):
         shutil.copyfile(ROOT / "resources/branding" / name, boot / name)
     boot_record = {"kind": "bootstrap-cd", "commit": commit, "release": release,
                    "compiler": compiler, "dependencies": lock,

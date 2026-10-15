@@ -217,7 +217,7 @@ jobs:
                        'resources/branding/boot-disc-badge.png', 'resources/branding/boot-disc-badge.svg',
                        'resources/branding/README.md',
                        'tests/test_retail_package.py', 'tests/test_workflow_hygiene.py',
-                       'tests/test_publish_release.py', 'tests/test_package_candidate.py',
+                       'tests/test_publish_release.py', 'tests/test_package_candidate.py', 'tests/test_zso_release_package.py',
                        'tools/build_splash.py', 'tools/render_app_previews.py',
                        'tools/generate_shell_art.py', 'tools/boot_badge.py', 'tests/test_boot_badge.py',
                        'tools/package.py', 'tools/retail_package.py'}

@@ -1,9 +1,9 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# K-UI V2.0 RC13 "Tyrfing"
+# K-UI V2.0 RC14 "Tyrfing"
 
 Tyrfing continues K-UI's cursed-sword release names. This guide covers the
-**2.0 RC13 source integration candidate**, not a published final 2.0 release.
-Its package prefix is `kui-2.0-rc13-tyrfing`. For the existing stable download,
+**2.0 RC14 source integration candidate**, not a published final 2.0 release.
+Its package prefix is `kui-2.0-rc14-tyrfing`. For the existing stable download,
 use [1.8.5](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.8.5) and its
 [installation guide](release-v1.8.5.md).
 
@@ -12,6 +12,9 @@ launch options and optional SCI WinCE CD music using four checked kernel/sound
 adapters. Read the [preparation notes](release-v2.0-notes.md) for the console
 evidence and remaining release checks, and the [DS-based release comparison](release-v2.0-ds-comparison.md)
 for retained features, remaining gaps and deferred work.
+
+Use the [complete RC14 console test plan](release-v2.0-rc14-test-plan.md) for
+prioritized acceptance checks since stable 1.8.5.
 
 ## Update an existing independent K-UI installation
 
@@ -22,17 +25,18 @@ for retained features, remaining gaps and deferred work.
    saved launch settings. Install `runtime.kui` and the complete
    `KUI/apps/games` payload folder together. Earlier partial test ZIPs are not
    a substitute for the matching release package.
-3. Safely eject the card and cold boot. Check **V2.0 RC13** and the displayed
+3. Safely eject the card and cold boot. Check **V2.0 RC14** and the displayed
    build ID against the package's `build.json`. The illustration says V2.0;
    the live version label distinguishes this RC from a final release.
 
-RC13 retains the orange Tyrfing runtime/header artwork introduced in RC11 and a matching optional
-CDI with the new boot splash, orange controls and sword badge. Burn that CDI
+RC14 uses the selected character-free orange pixel-art Tyrfing splash and banner.
+The orange header, controls and sword badge introduced in RC11 are retained.
+The matching optional CDI carries the pixel-art boot background. Burn that CDI
 to replace artwork on the boot disc; the normal runtime update can continue
 using your existing compatible independent K-UI CD. To preview the new boot
 menu without burning, copy only the separate bootstrap package's
 `KUI/tools.kui` to the card, pause the existing CD startup and choose
-**Card tools**. Check **Card boot / recovery**, RC13 and the build ID, then
+**Card tools**. Check **Card boot / recovery**, RC14 and the build ID, then
 choose **Start K-UI**. The under-SEGA badge is stored on the disc and changes
 only when that disc is replaced. See [the card preview guide](bootloader-refresh.md#check-the-final-artwork-without-reburning).
 

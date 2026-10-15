@@ -1,42 +1,33 @@
-# K-UI V2.0 Tyrfing startup
+# K-UI V2.0 Tyrfing pixel-art startup — RC14
 
-`startup.png` and `boot-red.png` are matching 640×480 RGB deployment assets
-for the SD runtime and graphical CD bootstrap. The historical `boot-red`
-filename remains the bootstrap's asset name; its current artwork is orange.
-The source is `startup-tyrfing-master.png`, created with the built-in image
-generation tool for TPMJB's October 15, 2026 Tyrfing request. The exact prompt
-is retained in [startup-tyrfing-prompt.txt](startup-tyrfing-prompt.txt).
+The maintainer selected variation 2, the character-free pixel-art Tyrfing
+scene, on October 15, 2026. `startup-tyrfing-pixel-master.png` is the unmodified
+1672×941 RGB image returned by the built-in image generation tool. Its exact
+production prompt and reference are recorded in
+[startup-tyrfing-pixel-prompt.txt](startup-tyrfing-pixel-prompt.txt).
+The previous portrait master and prompt remain as historical sources.
 
-The visor portrait and chrome K-UI/V2.0 lettering retain the established
-retro futuristic composition. An orange, rune-lit Tyrfing blade replaces the
-crimson release motif. The artwork carries the target V2.0 identity; the live
-console version and build label identify release candidates separately.
+Deployment conversion only: Pillow nearest-neighbor resize of the complete
+master to 576×324, pasted at (32,24) on a 640×480 RGB `#090102` canvas. This
+preserves all lettering, 32-pixel side margins and a clear lower region for
+the existing bootstrap countdown at y=360..456. No cropping, repainted pixels
+or lettering edits are applied. `startup.png` and `boot-red.png` are identical.
+The historical boot-red filename remains the bootstrap asset contract.
 
-The 1448×1086 RGB master is resized with Pillow Lanczos to 576×432 and centered
-at (32,24) on a 640×480 `#090102` canvas. This supplies television-safe margins
-without cropping the generated lettering. No lettering or painted detail is
-edited after generation. The lower area stays dark for live boot controls.
-The deployment files have identical bytes:
+- Deployment Git blob: `a851c7eee7f32cc8340f72de93e9c0030fce1b97`.
+- Deployment SHA-256: `45f70493ee914e05f65cd804f17e3f8db7cc7ad927e2b003ca64001f9a9b4d09`.
+- Master SHA-256: `9dd274432cf82cb35087823c2819ed9d8932c6c940a4ce0443e81cbef1d6c74b`.
 
-- Git blob: `943c815fcff5884857c2f772a6329649e6725e6f`.
-- SHA-256: `2c5bce50bcd53dd119a9284360b4be45645a96ea3e79f1a9d55329e273fed386`.
+`tools/build_splash.py` pins those deployment bytes before encoding the same
+640×480 RGB565 arrays. Runtime buffers, timing, sound, input and loaders do not
+change. The orange vector header and disc sword badge remain from RC11.
 
-`tools/build_splash.py` validates those exact bytes before encoding each
-executable's existing 640×480 RGB565 array. Dimensions, memory allocation,
-startup timing and rendering behavior are unchanged. Previous Dáinsleif
-artwork remains in Git history and historical release banners.
+`release-v2.0-banner.jpg` uses the complete selected master resized with
+nearest-neighbor to 1280×720, JPEG quality 95 without chroma subsampling.
+The runtime update supplies the new splash; the optional matching CDI supplies
+the boot-disc background. The existing compatible boot CD remains usable.
+To preview the bootstrap from that CD, use its Card tools entry with the
+matching `KUI/tools.kui` from this candidate's optional bootstrap package.
 
-`release-v2.0-banner.jpg` presents the same generated master at 960×720,
-centered on a black 1280×720 canvas, JPEG quality 92 with no chroma subsampling.
-It is a release presentation asset; it adds no runtime image or decoder.
-
-Updating `KUI/runtime.kui` supplies the runtime splash and header. The
-matching-artwork CDI updates images stored on the boot disc; an existing
-compatible working bootstrap still loads this runtime. The separate small
-header and disc badge have their own vector provenance records.
-
-The original three-note startup composition and shortened 2.65-second mono
-encoding remain unchanged. `startup-chime.ogg` is still pinned by SHA-256 in
-`tools/build_splash.py`; no third-party sound or DreamShell audio code is added.
-The existing decoder arena is released before menu music loads. The splash
-is skippable and adds no drawing work during capture.
+The existing three-note 2.65-second mono startup chime is unchanged. Original
+project artwork and derived assets are offered under GPL-3.0-only.
