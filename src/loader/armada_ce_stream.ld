@@ -6,7 +6,9 @@ OUTPUT_ARCH(sh)
 ENTRY(_kui_armada_ce_bind_probe)
 PHDRS { probe PT_LOAD FLAGS(7); }
 SECTIONS {
-    . = 0x8cfa7000;
+    __stream_code_begin = DEFINED(_kui_stream_code_base) ? _kui_stream_code_base : 0x8cfa7000;
+    __stream_code_end = __stream_code_begin + 0x18000;
+    . = __stream_code_begin;
     .entry : { KEEP(*(.entry)) } :probe
     .text : { *(.text .text.*) } :probe
     .rodata : { *(.rodata .rodata.*) } :probe
@@ -16,11 +18,11 @@ SECTIONS {
         __armada_stream_contract = .;
         LONG(0x31444341); /* ACD1: authored controller layout, version1 */
         LONG(1);
-        LONG(0x8cfa7000);
+        LONG(__stream_code_begin);
         LONG(__armada_bind_binary_end);
         LONG(__armada_bind_bss_begin);
         LONG(__armada_bind_bss_end);
-        LONG(0x8cfbf000);
+        LONG(__stream_code_end);
         LONG(_kui_armada_ce_bind_probe);
     } :probe
     __armada_bind_binary_end = .;
@@ -30,12 +32,12 @@ SECTIONS {
         . = ALIGN(4);
         __armada_bind_bss_end = .;
     } :probe
-    ASSERT(_kui_armada_ce_bind_probe == 0x8cfa7000, "stream controller entry moved")
+    ASSERT(_kui_armada_ce_bind_probe == __stream_code_begin, "stream controller entry moved")
     ASSERT(SIZEOF(.armada_stream_contract) == 32, "stream controller footer changed")
     ASSERT(__armada_stream_contract + 32 == __armada_bind_binary_end,
            "stream controller footer must finish initialized bytes")
     ASSERT(__armada_bind_bss_begin == __armada_bind_binary_end,
            "stream controller BSS must follow initialized bytes")
-    ASSERT(__armada_bind_bss_end <= 0x8cfbf000, "stream controller exceeds reserved code/state budget")
+    ASSERT(__armada_bind_bss_end <= __stream_code_end, "stream controller exceeds reserved code/state budget")
     /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) }
 }

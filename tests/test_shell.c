@@ -1230,7 +1230,7 @@ static void games_retail_controls(void) {
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
     assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
     assert(!kui_shell_games_option_ready(&s,KUI_SHELL_GAME_OPTION_READER));
-    assert(!kui_shell_games_option_ready(&s,KUI_SHELL_GAME_OPTION_CDDA));
+    assert(kui_shell_games_option_ready(&s,KUI_SHELL_GAME_OPTION_CDDA));
     assert(!kui_shell_games_encoding_ready(&s));
     assert(!strcmp(kui_shell_games_reader_label(&s),"Background"));
     assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.games_launch_reader==KUI_RETAIL_READER_ASYNC);
@@ -1240,7 +1240,8 @@ static void games_retail_controls(void) {
         s.games_retail_reader==(KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC));
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
     s.games_launch_cdda=true;s.games_launch_reader=KUI_RETAIL_READER_ASYNC_EAGER;
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL &&
+        s.games_retail_reader==(KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC|KUI_GAMES_RETAIL_CE_EXCERPT));
     s.games_launch_cdda=false;
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL &&
         s.games_retail_reader==(KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC));
@@ -1299,12 +1300,19 @@ static void games_armada_ce_music_controls(void) {
         if(fault==5u) other.cd_image=true;
         if(fault==6u) other.scrambled=true;
         install_launch_detail(&other);
-        assert(!kui_shell_games_cdda_ready(&s));
+        /* The UI offers the opt-in by media capability; exact runtime
+         * admission happens in the loader, before native code executes. */
+        const bool candidate=fault<4u;
+        assert(kui_shell_games_cdda_ready(&s)==candidate);
         kui_shell_set_game_launch_settings(&s,other.path,&saved,true);
-        assert(!s.games_launch_cdda);
+        assert(s.games_launch_cdda==candidate);
         press(KUI_SHELL_Y,false);s.games_launch_selected=KUI_SHELL_GAME_OPTION_CDDA;
-        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.games_launch_cdda);
-        assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==ordinary);
+        if(!candidate) {
+            assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.games_launch_cdda);
+            assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==ordinary);
+        } else {
+            assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==excerpt);
+        }
     }
     install_launch_detail(&detail);memset(s.games_detail.product,'X',sizeof(s.games_detail.product));
     assert(!kui_shell_games_cdda_ready(&s));
@@ -1342,10 +1350,18 @@ static void games_bam4_ce_music_controls(void) {
         if(fault==0u) other.tracks=25u;
         if(fault==1u) other.boot_bytes--;
         if(fault==2u) strcpy(other.product,"T40301N 00");
-        install_launch_detail(&other);assert(!kui_shell_games_cdda_ready(&s));
-        kui_shell_set_game_launch_settings(&s,other.path,&saved,true);assert(!s.games_launch_cdda);
+        install_launch_detail(&other);assert(kui_shell_games_cdda_ready(&s));
+        kui_shell_set_game_launch_settings(&s,other.path,&saved,true);assert(s.games_launch_cdda);
     }
-    puts("PASS BAM4 CE music: 26-track candidate, saved On launch route, Off route and unsupported metadata rejection");
+    detail.tracks=8u;detail.boot_bytes=1110016u;detail.boot_lba=548458u;
+    detail.audio=(struct kui_game_audio_info){KUI_GAME_AUDIO_GD_HIGH_DENSITY,5u,4u,1u};
+    strcpy(detail.product,"T40601N");strcpy(detail.path,"/Games/WORMS/WORMS.gdi");
+    install_launch_detail(&detail);assert(kui_shell_games_cdda_ready(&s) && !s.games_launch_cdda);
+    kui_shell_set_game_launch_settings(&s,detail.path,&saved,true);
+    assert(s.games_launch_cdda && s.games_launch_reader==KUI_RETAIL_READER_ASYNC);
+    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==music);
+    puts("PASS WinCE CD music: BAM4/Worms and other CDDA candidates, saved opt-in On route and Off ordinary route");
 }
 static void games_launch_options_controls(void) {
     struct kui_games_detail detail=launch_detail(false,false);
@@ -1551,7 +1567,7 @@ static void games_saved_launch_controls(void) {
     detail=launch_detail(true,false);install_launch_detail(&detail);
     value=(struct kui_game_launch_settings){KUI_GAME_READER_EAGER,true,KUI_GAME_ENCODING_SCRAMBLED};
     kui_shell_set_game_launch_settings(&s,detail.path,&value,true);
-    assert(s.games_launch_reader==KUI_RETAIL_READER_ASYNC && !s.games_launch_cdda &&
+    assert(s.games_launch_reader==KUI_RETAIL_READER_ASYNC && s.games_launch_cdda &&
         s.games_launch_encoding==KUI_GAME_ENCODING_AUTO && !s.games_retail_scrambled);
     detail=launch_detail(false,false);detail.audio=(struct kui_game_audio_info){KUI_GAME_AUDIO_NONE,0,0,0};
     install_launch_detail(&detail);kui_shell_set_game_launch_settings(&s,detail.path,&value,true);
@@ -1858,9 +1874,9 @@ static void games_rendering(void) {
     assert(strstr(drawn,"Aggressive") && strstr(drawn,"Boot encoding") && strstr(drawn,"Image information") && strstr(drawn,"Developer tests"));
     s.games_detail.native_gd=false;s.games_detail.windows_ce=true;s.games_detail.boot_bytes=1253376;
     s.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;s.games_launch_selected=KUI_SHELL_GAME_OPTION_READER;render(&view);
-    assert(strstr(drawn,"On") && strstr(drawn,"required") && strstr(drawn,"Unavailable"));
+    assert(strstr(drawn,"On") && strstr(drawn,"required") && strstr(drawn,"CD music") && strstr(drawn,"Off"));
     assert(option_row_colors[KUI_SHELL_GAME_OPTION_READER]==0xadd9 &&
-        option_row_colors[KUI_SHELL_GAME_OPTION_CDDA]==0xadd9 &&
+        option_row_colors[KUI_SHELL_GAME_OPTION_CDDA]==0xf7bf &&
         option_row_colors[KUI_SHELL_GAME_OPTION_ADVANCED]==0xf7bf);
     assert(!strstr(drawn,"0WINCEOS.BIN") && !strstr(drawn,"CE test") && !strstr(drawn,"Windows CE SCI launch test"));
     strcpy(s.games_detail.path,"/Games/Other.gdi");render(&view);

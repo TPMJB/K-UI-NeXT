@@ -81,6 +81,21 @@ build/test-armada-ce-stream-entry: tests/test_armada_ce_stream_entry.c src/loade
 build/test-armada-ce-stream-player: tests/test_armada_ce_stream_player.c src/loader/armada_ce_stream_player.c src/loader/armada_ce_stream_model.c src/loader/armada_ce_stream_trace.c include/kui/armada_ce_stream_trace.h include/kui/armada_ce_stream_model.h include/kui/armada_ce_stream_native.h include/kui/armada_ce_stream_transport.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) -fsanitize=undefined -fno-omit-frame-pointer -fno-pie -no-pie $(INCLUDES) -Isrc/loader tests/test_armada_ce_stream_player.c src/loader/armada_ce_stream_model.c src/loader/armada_ce_stream_trace.c -o $@
+
+.PHONY: test-worms-ce-stream
+test-worms-ce-stream: build/test-worms-ce-live-sound build/test-worms-ce-stream-native build/test-worms-ce-stream-copy
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-worms-ce-live-sound
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-worms-ce-stream-native
+	./build/test-worms-ce-stream-copy
+build/test-worms-ce-live-sound: tests/test_worms_ce_live_sound.c tests/test_armada_ce_live_sound.c include/kui/armada_ce_live_sound.h include/kui/armada_ce_stream_initial_word.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
+build/test-worms-ce-stream-native: tests/test_worms_ce_stream_native.c tests/test_armada_ce_stream_native.c src/loader/armada_ce_stream_native.c include/kui/armada_ce_stream_native.h include/kui/armada_ce_live_sound.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_RETAIL_CE=1 -DKUI_ARMADA_CE_STREAM=1 $< -o $@
+build/test-worms-ce-stream-copy: tests/test_worms_ce_stream_copy.c tests/test_armada_ce_stream_player.c src/loader/armada_ce_stream_player.c src/loader/armada_ce_stream_model.c src/loader/armada_ce_stream_trace.c include/kui/armada_ce_stream_native.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) -fsanitize=undefined -fno-omit-frame-pointer -fno-pie -no-pie $(INCLUDES) -Isrc/loader $< src/loader/armada_ce_stream_model.c src/loader/armada_ce_stream_trace.c -o $@
 test-armada-ce-excerpt: build/test-armada-ce-excerpt-pool build/test-armada-ce-live-sound build/test-armada-ce-excerpt-prepare build/test-armada-ce-excerpt-entry build/test-armada-ce-excerpt
 	./build/test-armada-ce-excerpt-pool
 	./build/test-armada-ce-live-sound

@@ -75,8 +75,8 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_stream_discover_owner
             _Static_assert(KUI_ARMADA_CE_LIVE_PAGE_LIMIT>=KUI_ARMADA_CE_LIVE_MODULE_LIMIT,
                            "Discovery needs one metadata pair per module link");
             w->page[w->links-1u]=(struct kui_armada_ce_live_page){span,count};
-            if((count&0xffffu)==4u && (span==0xb000u || span==0x9000u))
-                profile=span==0xb000u?0u:1u;
+            if((count&0xffffu)==4u && (span==KUI_ARMADA_CE_LIVE_DSOUND_SPAN || span==0x9000u))
+                profile=span==KUI_ARMADA_CE_LIVE_DSOUND_SPAN?0u:1u;
         }
         if(profile<3u) {
             struct kui_armada_ce_live_module observed;
@@ -85,7 +85,7 @@ static inline enum kui_armada_ce_live_status kui_armada_ce_stream_discover_owner
                 memset(w->fault,0,sizeof(w->fault));node=link->next;continue;
             }
             if(status!=KUI_ARMADA_CE_LIVE_OK) return status;
-            static const uint32_t table[3]={0x846cu,0x6198u,0x2e170u};
+            static const uint32_t table[3]=KUI_ARMADA_CE_LIVE_TABLE_RVAS;
             if(observed.sections!=observed.base+table[profile]) {
                 if(kind==2u) {node=link->next;continue;}
                 return kui_armada_ce_live_module_fail(w,KUI_ARMADA_CE_LIVE_FAULT_TABLE,
@@ -223,8 +223,8 @@ static inline bool kui_armada_ce_stream_initial_owner(
  * target, COM reference or successful module identity. */
 static inline bool kui_armada_ce_stream_initial_module(
     const struct kui_armada_ce_live_module *m,unsigned profile,uint32_t index,uint32_t va) {
-    static const uint32_t span[3]={0xb000u,0x9000u,0x34000u};
-    static const uint32_t table[3]={0x846cu,0x6198u,0x2e170u};
+    static const uint32_t span[3]={KUI_ARMADA_CE_LIVE_DSOUND_SPAN,0x9000u,KUI_ARMADA_CE_LIVE_COREDLL_SPAN};
+    static const uint32_t table[3]=KUI_ARMADA_CE_LIVE_TABLE_RVAS;
     if(!m || profile>2u || index>=32u || !m->node || !(m->attach&(UINT32_C(1)<<index)) ||
        (m->kind!=3u && (m->kind!=2u || profile==2u)) ||
        m->count!=(profile==2u || m->kind==2u?4u:3u) || m->span!=span[profile] ||

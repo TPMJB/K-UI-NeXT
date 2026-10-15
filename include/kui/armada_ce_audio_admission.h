@@ -5,14 +5,33 @@
 #include <string.h>
 /* Admission binds the selected exact US kernel/IP and raw track layout.
  * It does not embed or patch proprietary sound code. */
-#if defined(KUI_WINCE_CDDA_BAM4) && KUI_WINCE_CDDA_BAM4 == 1
+#if defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
+#define KUI_ARMADA_CE_KERNEL_BYTES UINT32_C(1110016)
+#elif defined(KUI_WINCE_CDDA_BAM4) && KUI_WINCE_CDDA_BAM4 == 1
 #define KUI_ARMADA_CE_KERNEL_BYTES UINT32_C(1830912)
 #else
 #define KUI_ARMADA_CE_KERNEL_BYTES UINT32_C(1253376)
 #endif
 static inline bool kui_armada_ce_audio_admit(const struct kui_retail_manifest *m,
         uint32_t ip_crc,uint32_t prefix_crc,uint32_t body_crc,const uint8_t sha[32]) {
-#if defined(KUI_WINCE_CDDA_BAM4) && KUI_WINCE_CDDA_BAM4 == 1
+#if defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
+    static const uint8_t kernel_sha[32]={
+        0x39,0xb8,0x0e,0x30,0x59,0x47,0x05,0x65,0x51,0x31,0x8b,0xb6,0x55,0x29,0xcc,0xcc,
+        0x88,0x60,0x21,0xbe,0x60,0x40,0x6c,0x06,0xf3,0x11,0x0f,0x7f,0xe0,0x3b,0xf5,0x71};
+    static const uint32_t starts[8]={0u,450u,45000u,91528u,117095u,232929u,329558u,379575u};
+    if(!m || !sha || m->track_count!=8u || m->session_lba!=45000u ||
+       m->boot_lba!=548458u || m->boot_bytes!=KUI_ARMADA_CE_KERNEL_BYTES ||
+       m->storage_transport!=KUI_STORAGE_SCI || m->reader!=KUI_RETAIL_READER_ASYNC ||
+       (m->flags & ~KUI_RETAIL_IMAGE_BOOT_CRC) ||
+       memcmp(m->product,"T40601N",8u) || memcmp(m->bootfile,"0WINCEOS.BIN",13u) ||
+       ip_crc!=UINT32_C(0x86bbb334) || prefix_crc!=UINT32_C(0xeffd7677) ||
+       body_crc!=UINT32_C(0xcd686951) || memcmp(sha,kernel_sha,32u)) return false;
+    for(unsigned i=0;i<8u;i++)
+        if(m->slots[i].track.start_lba!=starts[i] ||
+           kui_retail_track_control(&m->slots[i].track)!=(i==0u || i==2u || i==7u?4u:0u) ||
+           kui_retail_track_sector_bytes(&m->slots[i].track)!=KUI_GAME_RAW_BYTES ||
+           kui_retail_track_file_offset(&m->slots[i].track)) return false;
+#elif defined(KUI_WINCE_CDDA_BAM4) && KUI_WINCE_CDDA_BAM4 == 1
     static const uint8_t kernel_sha[32]={
         0x2a,0x8d,0x24,0x73,0x8b,0xb5,0xba,0x06,0x87,0xfa,0x56,0xad,0x33,0xe8,0x14,0xfe,
         0x79,0x81,0x58,0xf9,0xcb,0x8c,0xac,0xfd,0x4a,0x8a,0x20,0xde,0xa6,0xbb,0xb3,0x5d};

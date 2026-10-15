@@ -317,10 +317,10 @@ static enum kui_wince_cdda_profile ce_music_profile(const struct kui_game_image 
     if(image->format!=KUI_GAME_IMAGE_GDI || image->cd_image || image->scrambled ||
        !metadata->windows_ce || strcmp(metadata->bootfile,"0WINCEOS.BIN")) return KUI_WINCE_CDDA_NONE;
     for(enum kui_wince_cdda_profile profile=KUI_WINCE_CDDA_ARMADA;
-            profile<=KUI_WINCE_CDDA_BUST_A_MOVE_4;profile++) {
+            profile<=KUI_WINCE_CDDA_WORMS_ARMAGEDDON;profile++) {
         const struct kui_wince_cdda_disc *disc=kui_wince_cdda_disc(profile);
         if(image->count!=disc->track_count || metadata->boot_bytes!=disc->kernel_bytes ||
-           (profile==KUI_WINCE_CDDA_BUST_A_MOVE_4 && metadata->boot_lba!=disc->boot_lba) ||
+           (profile!=KUI_WINCE_CDDA_ARMADA && metadata->boot_lba!=disc->boot_lba) ||
            strcmp(metadata->product,disc->product)) continue;
         unsigned i=0;
         for(;i<disc->track_count;i++)
@@ -360,14 +360,15 @@ static bool armada_excerpt_seed(struct kui_runtime_image *package,
 }
 /* A unique typed blank CEX2 seed identifies the full-stream package. A
  * populated or malformed template cannot silently use the excerpt route. */
-static size_t armada_stream_seed_find(const struct kui_runtime_image *package) {
+static size_t armada_stream_seed_find(const struct kui_runtime_image *package,
+        enum kui_wince_cdda_profile profile) {
     size_t found=SIZE_MAX;
     if(!package || !package->data) return SIZE_MAX;
     const uint8_t *data=package->data;
     for(size_t at=KUI_RETAIL_STAGE_BLOB_OFFSET;at<=package->info.payload_bytes &&
             sizeof(struct kui_armada_ce_stream_seed)<=package->info.payload_bytes-at;at+=4u) {
         const uint32_t *words=(const uint32_t *)(const void *)(data+at);
-        if(!kui_armada_ce_stream_seed_header_valid(words)) continue;
+        if(!kui_wince_cdda_seed_header_valid(words,profile)) continue;
         if(found!=SIZE_MAX) return SIZE_MAX;
         found=at;
     }
@@ -379,7 +380,7 @@ static bool armada_stream_seed_fill(struct kui_runtime_image *package,size_t at,
        sizeof(struct kui_armada_ce_stream_seed)>package->info.payload_bytes-at ||
        !kui_wince_cdda_manifest_valid(map,profile)) return false;
     struct kui_armada_ce_stream_seed *seed=(void *)((uint8_t *)package->data+at);
-    if(!kui_armada_ce_stream_seed_header_valid(seed->words) ||
+    if(!kui_wince_cdda_seed_header_valid(seed->words,profile) ||
        seed->words[KUI_ARMADA_CE_STREAM_MAP_CRC_WORD]) return false;
     for(unsigned i=0;i<sizeof(seed->wire);i++) if(seed->wire[i]) return false;
     if(kui_retail_manifest_encode(map,seed->wire)!=KUI_GAME_OK) return false;
@@ -459,9 +460,10 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     if(ce_excerpt) {
         music_profile=ce_music_profile(image,&metadata);
         if(music_profile==KUI_WINCE_CDDA_NONE || map->storage_transport!=KUI_STORAGE_SCI) {
-            problem="CE CD music needs an admitted original raw GDI on SCI";goto done;
+            problem="CD music has no compatible WinCE runtime adapter for this image; turn CD music Off to launch";goto done;
         }
-        launch_package=music_profile==KUI_WINCE_CDDA_BUST_A_MOVE_4?
+        launch_package=music_profile==KUI_WINCE_CDDA_WORMS_ARMAGEDDON?
+            KUI_GAMES_RETAIL_CE_WORMS_PACKAGE:music_profile==KUI_WINCE_CDDA_BUST_A_MOVE_4?
             KUI_GAMES_RETAIL_CE_BAM4_PACKAGE:KUI_GAMES_RETAIL_CE_EXCERPT_PACKAGE;
         log("CE CD music: %s profile",kui_wince_cdda_disc(music_profile)->name);
         if(!close_reader(&files)) {problem="cannot close metadata reader";goto done;}
@@ -617,7 +619,7 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
             profile==KUI_GAMES_CDDA_TOY_COOKED?"cooked DATA":"raw GDI");
     }
     if(ce_excerpt) {
-        size_t stream_seed=armada_stream_seed_find(package);
+        size_t stream_seed=armada_stream_seed_find(package,music_profile);
         if(stream_seed!=SIZE_MAX) {
             struct kui_retail_manifest *full=malloc(sizeof(*full));
             if(!full) {problem="not enough memory for the complete CE audio map";goto done;}

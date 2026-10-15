@@ -1481,7 +1481,7 @@ static void games_launch_options(struct paint *p,const struct kui_shell *s) {
             "Load from SD while the game continues working.";
     else if(s->games_launch_selected==KUI_SHELL_GAME_OPTION_CDDA)
         hint=kui_shell_games_cdda_ready(s)?(s->games_detail.windows_ce?
-            "Experimental. Play music from this game's audio tracks.":
+            "Experimental. Play music from this game's audio tracks. Compatible WinCE runtime required.":
             "Experimental. Turning On sets background loading Off."):
             "CD music is not yet supported for this image.";
     words(p,40,374,608,MUTED,hint,false);

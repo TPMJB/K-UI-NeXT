@@ -12,7 +12,12 @@
  * applies the returned single-word plan before NK executes its first code;
  * this header never writes physical memory or changes CE/MMU state. */
 #define KUI_ARMADA_CE_EXCERPT_ROMHDR_BYTES 84u
-#if defined(KUI_WINCE_CDDA_BAM4) && KUI_WINCE_CDDA_BAM4 == 1
+#if defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
+#define KUI_ARMADA_CE_EXCERPT_ROMHDR UINT32_C(0x8c11de70)
+#define KUI_ARMADA_CE_EXCERPT_ROMHDR_CRC UINT32_C(0xf7c57d43)
+#define KUI_ARMADA_CE_EXCERPT_RAM_START UINT32_C(0x8c11f000)
+#define KUI_ARMADA_CE_EXCERPT_RAM_FREE UINT32_C(0x8c129000)
+#elif defined(KUI_WINCE_CDDA_BAM4) && KUI_WINCE_CDDA_BAM4 == 1
 #define KUI_ARMADA_CE_EXCERPT_ROMHDR UINT32_C(0x8c1ce19c)
 #define KUI_ARMADA_CE_EXCERPT_ROMHDR_CRC UINT32_C(0xe3b81ab3)
 #define KUI_ARMADA_CE_EXCERPT_RAM_START UINT32_C(0x8c1cf000)
@@ -25,8 +30,15 @@
 #endif
 #define KUI_ARMADA_CE_EXCERPT_RAM_END_WORD (KUI_ARMADA_CE_EXCERPT_ROMHDR+28u)
 #define KUI_ARMADA_CE_EXCERPT_STAGE_BEGIN UINT32_C(0x8ce10000)
+#if defined(KUI_WINCE_CDDA_WORMS) && KUI_WINCE_CDDA_WORMS == 1
+#define KUI_ARMADA_CE_EXCERPT_POOL_BEGIN UINT32_C(0x8ce70000)
+#define KUI_ARMADA_CE_EXCERPT_POOL_END UINT32_C(0x8cef0000)
+#define KUI_ARMADA_CE_EXCERPT_OEM_BYTES UINT32_C(0x00110000)
+#else
 #define KUI_ARMADA_CE_EXCERPT_POOL_BEGIN UINT32_C(0x8cf50000)
 #define KUI_ARMADA_CE_EXCERPT_POOL_END UINT32_C(0x8cfd0000)
+#define KUI_ARMADA_CE_EXCERPT_OEM_BYTES UINT32_C(0x00030000)
+#endif
 #define KUI_ARMADA_CE_EXCERPT_SEED_WORDS 16u
 #define KUI_ARMADA_CE_EXCERPT_SEED_BYTES 64u
 #define KUI_ARMADA_CE_EXCERPT_MAGIC UINT32_C(0x31584543) /* CEX1 */
@@ -169,7 +181,7 @@ static inline bool kui_armada_ce_excerpt_pool_header_valid(const uint8_t *header
         kui_armada_ce_excerpt_le32(header+24u)==KUI_ARMADA_CE_EXCERPT_RAM_FREE &&
         kui_armada_ce_excerpt_le32(header+28u)==KUI_ARMADA_CE_EXCERPT_POOL_END &&
         kui_armada_ce_excerpt_le32(header+60u)==KUI_ARMADA_CE_EXCERPT_POOL_END &&
-        kui_armada_ce_excerpt_le32(header+64u)==UINT32_C(0x00030000);
+        kui_armada_ce_excerpt_le32(header+64u)==KUI_ARMADA_CE_EXCERPT_OEM_BYTES;
 }
 /* Every rejection leaves out unchanged. No caller memory, PCM, original
  * header or hardware state is changed. Cancellation precedes optional reads. */

@@ -39,8 +39,9 @@ const uint32_t kui_armada_ce_bind_stage_contract
 #if KUI_ARMADA_CE_STREAM != 1 || !KUI_ARMADA_CE_EXCERPT_STAGE
 #error Armada stream placement requires the reserved-pool excerpt stage
 #endif
-#define ARMADA_BIND_INSTALL_ADDRESS UINT32_C(0x8cfa7000)
-#define ARMADA_BIND_INSTALL_LIMIT UINT32_C(0x8cfbf000)
+#include "kui/armada_ce_stream_seed.h"
+#define ARMADA_BIND_INSTALL_ADDRESS KUI_ARMADA_CE_STREAM_CODE_BEGIN
+#define ARMADA_BIND_INSTALL_LIMIT KUI_ARMADA_CE_STREAM_CODE_END
 #define ARMADA_STREAM_CONTRACT_MAGIC UINT32_C(0x31444341)
 #define ARMADA_STREAM_CONTRACT_BYTES 32u
 #else
@@ -683,7 +684,7 @@ static uint32_t ce_load(const uint8_t *ip) {
     kui_sha256_digest(&sha,digest);
     if(!kui_armada_ce_audio_admit(&manifest,kui_retail_crc32(0,ip,KUI_RETAIL_IP_BYTES),
             prefix_crc,body_crc,digest))
-#if KUI_WINCE_CDDA_BAM4
+#if KUI_WINCE_CDDA_BAM4 || KUI_WINCE_CDDA_WORMS
         stopped("CE CD MUSIC PROFILE MISMATCH",body_crc);
 #else
         stopped("ARMADA AUDIO TEST PROFILE MISMATCH",body_crc);
@@ -706,7 +707,7 @@ static uint32_t ce_load(const uint8_t *ip) {
     retail_display_line(manifest.title);
 #if KUI_ARMADA_CE_AUDIO_STAGE
 #if KUI_ARMADA_CE_EXCERPT_STAGE
-#if KUI_WINCE_CDDA_BAM4
+#if KUI_WINCE_CDDA_BAM4 || KUI_WINCE_CDDA_WORMS
     retail_display_line("CE CD MUSIC STREAM");
 #else
     retail_display_line("ARMADA CE CD MUSIC EXCERPT TEST");
@@ -730,7 +731,9 @@ static uint32_t ce_load(const uint8_t *ip) {
     ce_find_kernel(plan.body.address,plan.body.bytes);
 #if KUI_ARMADA_CE_AUDIO_STAGE
     static const uint32_t armada_kernel[4]={
-#if KUI_WINCE_CDDA_BAM4
+#if KUI_WINCE_CDDA_WORMS
+        0x8c121b40u,0x8c121aa8u,0x8c121884u,0x8c121c04u};
+#elif KUI_WINCE_CDDA_BAM4
         0x8c1d1b40u,0x8c1d1aa8u,0x8c1d1884u,0x8c1d1c04u};
 #else
         0x8c145b40u,0x8c145aa8u,0x8c145884u,0x8c145c04u};

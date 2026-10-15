@@ -11,15 +11,15 @@
 #define KUI_ARMADA_CE_STREAM_VERSION 2u
 #define KUI_ARMADA_CE_STREAM_SEED_WORDS 16u
 #define KUI_ARMADA_CE_STREAM_SEED_BYTES 64u
-#define KUI_ARMADA_CE_STREAM_SOURCE_BEGIN UINT32_C(0x8cf50040)
+#define KUI_ARMADA_CE_STREAM_SOURCE_BEGIN (KUI_ARMADA_CE_EXCERPT_POOL_BEGIN+64u)
 #define KUI_ARMADA_CE_STREAM_SOURCE_BYTES 352800u
 #define KUI_ARMADA_CE_STREAM_RING_BYTES 352768u
-#define KUI_ARMADA_CE_STREAM_CODE_BEGIN UINT32_C(0x8cfa7000)
-#define KUI_ARMADA_CE_STREAM_CODE_END UINT32_C(0x8cfbf000)
-#define KUI_ARMADA_CE_STREAM_MAP_BEGIN UINT32_C(0x8cfbf000)
-#define KUI_ARMADA_CE_STREAM_WORK_BEGIN UINT32_C(0x8cfc0000)
-#define KUI_ARMADA_CE_STREAM_WORK_END UINT32_C(0x8cfcf000)
-#define KUI_ARMADA_CE_STREAM_GUARD_END UINT32_C(0x8cfd0000)
+#define KUI_ARMADA_CE_STREAM_CODE_BEGIN (KUI_ARMADA_CE_EXCERPT_POOL_BEGIN+0x57000u)
+#define KUI_ARMADA_CE_STREAM_CODE_END (KUI_ARMADA_CE_EXCERPT_POOL_BEGIN+0x6f000u)
+#define KUI_ARMADA_CE_STREAM_MAP_BEGIN KUI_ARMADA_CE_STREAM_CODE_END
+#define KUI_ARMADA_CE_STREAM_WORK_BEGIN (KUI_ARMADA_CE_EXCERPT_POOL_BEGIN+0x70000u)
+#define KUI_ARMADA_CE_STREAM_WORK_END (KUI_ARMADA_CE_EXCERPT_POOL_BEGIN+0x7f000u)
+#define KUI_ARMADA_CE_STREAM_GUARD_END KUI_ARMADA_CE_EXCERPT_POOL_END
 #define KUI_ARMADA_CE_STREAM_MAP_CRC_WORD 6u
 struct kui_armada_ce_stream_seed {
     uint32_t words[KUI_ARMADA_CE_STREAM_SEED_WORDS];
@@ -45,10 +45,23 @@ static inline bool kui_armada_ce_stream_seed_header_valid(const uint32_t *words)
     for(unsigned i=8u;i<KUI_ARMADA_CE_STREAM_SEED_WORDS;i++) if(words[i]) return false;
     return true;
 }
+/* The shared menu validates the selected module's placement rather than its
+ * own compilation profile. Never fill one runtime's wire seed in another. */
+static inline bool kui_wince_cdda_seed_header_valid(const uint32_t *words,
+        enum kui_wince_cdda_profile profile) {
+    uint32_t pool=profile==KUI_WINCE_CDDA_WORMS_ARMAGEDDON?0x8ce70000u:0x8cf50000u;
+    if(!words || !kui_wince_cdda_disc(profile) ||
+       words[0]!=KUI_ARMADA_CE_STREAM_MAGIC || words[1]!=KUI_ARMADA_CE_STREAM_VERSION ||
+       words[2]!=pool+64u || words[3]!=KUI_ARMADA_CE_STREAM_SOURCE_BYTES ||
+       words[4]!=pool+0x6f000u || words[5]!=KUI_RETAIL_IMAGE_WIRE_BYTES ||
+       words[7]!=KUI_ARMADA_CE_STREAM_RING_BYTES) return false;
+    for(unsigned i=8u;i<KUI_ARMADA_CE_STREAM_SEED_WORDS;i++) if(words[i]) return false;
+    return true;
+}
 /* Call after the canonical full wire decoder. Do not use an async-sized
  * truncated manifest: both raw audio files must have every mapped block. */
 static inline bool kui_armada_ce_stream_map_valid(const struct kui_retail_manifest *map) {
-#if KUI_WINCE_CDDA_BAM4
+#if KUI_WINCE_CDDA_BAM4 || KUI_WINCE_CDDA_WORMS
     return kui_wince_cdda_manifest_valid(map,KUI_WINCE_CDDA_COMPILED_PROFILE);
 #else
     /* Retain RC9's compiled Armada admission and controller layout. */

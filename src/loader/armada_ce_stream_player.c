@@ -74,9 +74,12 @@ struct stream_player {
     uint32_t stage_head; /* Offset of the model's first staged byte. */
     uint32_t cache_first,cache_end,cache_bytes;
     uint32_t start_ms,start_cached;
+#if KUI_WINCE_CDDA_WORMS
+    uint32_t stop_requested_epoch,stop_voice_mask;
+#endif
 };
 static struct stream_player player;
-#if KUI_WINCE_CDDA_BAM4
+#if KUI_WINCE_CDDA_BAM4 || KUI_WINCE_CDDA_WORMS
 /* Keep the audited offsets within player identical to Armada RC9. */
 static struct kui_armada_ce_stream_track profile_tracks[KUI_WINCE_CDDA_TRACK_COUNT];
 #define PLAYER_TRACKS profile_tracks
@@ -322,9 +325,11 @@ void kui_armada_ce_excerpt_dispatch(uint32_t sr,uint32_t stack) {
        player.binding.owner_process<KUI_ARMADA_CE_LIVE_PROCESS_BASE || player.binding.owner_process>=(KUI_ARMADA_CE_LIVE_PROCESS_BASE+32u*KUI_ARMADA_CE_LIVE_PROCESS_STRIDE) ||
        (player.binding.owner_process-KUI_ARMADA_CE_LIVE_PROCESS_BASE)%KUI_ARMADA_CE_LIVE_PROCESS_STRIDE ||
        player.binding.owner_slot!=((1u+(player.binding.owner_process-KUI_ARMADA_CE_LIVE_PROCESS_BASE)/KUI_ARMADA_CE_LIVE_PROCESS_STRIDE)<<25) ||
-       word(KUI_ARMADA_CE_LIVE_APISETS)!=0x8c011b20u || word(0x8c011b20u)!=0x32336e57u ||
-       word(0x8c011b24u)!=0x00900003u || word(0x8c011b28u)!=0x8c0118e0u ||
-       word(0x8c011aa4u)!=UINT32_MAX) goto failed;
+       word(KUI_ARMADA_CE_LIVE_APISETS)!=KUI_ARMADA_CE_LIVE_WIN32_RECORD ||
+       word(KUI_ARMADA_CE_LIVE_WIN32_RECORD)!=0x32336e57u ||
+       word(KUI_ARMADA_CE_LIVE_WIN32_RECORD+4u)!=0x00900003u ||
+       word(KUI_ARMADA_CE_LIVE_WIN32_RECORD+8u)!=KUI_ARMADA_CE_LIVE_WIN32_METHODS ||
+       word(KUI_ARMADA_CE_LIVE_CALLBACK_SENTINEL)!=UINT32_MAX) goto failed;
     uint32_t handle=word(player.binding.owner_process+8u);
     if(!handle || handle!=word(player.binding.owner_process+8u)) goto failed;
     player.callback_info[0]=handle;
@@ -421,6 +426,9 @@ static bool clock_now(uint32_t *now) {
 }
 static bool observe(void) {
     if(!player.model.native_running) return true;
+#if KUI_WINCE_CDDA_WORMS
+    if(player.stop_requested_epoch && player.model.stop_needed) return true;
+#endif
     uint32_t positions[2]={0,0};
     player.stats.last_hresult=call(player.binding.get_position,player.stats.buffer,
         (uint32_t)(uintptr_t)&positions[0],(uint32_t)(uintptr_t)&positions[1],0);
@@ -435,6 +443,12 @@ static bool observe(void) {
     bool valid=mapped_word(player.stats.buffer+116u,&frontier) &&
         (!player.frontier_page || frontier.page_word==player.frontier_page);
     if(valid) {
+#if KUI_WINCE_CDDA_WORMS
+        /* The wrapped native transfer briefly retains exactlyR between its
+         * tail and head pieces. Other out-of-range values remain invalid. */
+        if(frontier.value==KUI_ARMADA_CE_STREAM_RING_BYTES) frontier.value=0u;
+        if(positions[0]==KUI_ARMADA_CE_STREAM_RING_BYTES) positions[0]=0u;
+#endif
         player.frontier_page=frontier.page_word;
         player.copied_frontier=frontier.value;
         uint32_t elapsed=now-player.model.last_ms;
@@ -493,11 +507,61 @@ static bool control(void) {
     }
     publish();player.applied_epoch=mail.epoch;return true;
 }
+#if KUI_WINCE_CDDA_WORMS
+/* Device+112 is the callback's active-port mask (decimal byte offset), not
+ * the allocation mask at+108. CS+88 stabilizes app-side allocation; the IRQ
+ * mask makes this RAM-only snapshot indivisible with the native callback. */
+static bool worms_stop_voices(uint32_t *owned,uint32_t *pending) {
+    (void)call(player.binding.enter_cs,player.binding.device+DEVICE_CS_OFFSET,0,0,0);
+    uint32_t own=0u,possible=0u;bool valid=true;uint32_t saved=mask_begin();
+    struct kui_armada_ce_ram_binding active;
+    if(!mapped_word(player.binding.device+112u,&active)) valid=false;
+    for(unsigned i=0;valid && i<DEVICE_VOICES;i++) {
+        struct kui_armada_ce_ram_binding owner;
+        if(!mapped_word(player.binding.device+DEVICE_OWNER_OFFSET+i*4u,&owner)) {valid=false;break;}
+        uint32_t bit=1u<<i;
+        bool ours=owner.value==player.stats.buffer ||
+            owner.value==(player.stats.buffer&0x01ffffffu);
+        if(ours) own|=bit;
+        /* A different nonzero owner proves a saved voice bit was reused.
+         * Zero without a callback acknowledgment remains conservative. */
+        if(ours || !owner.value) possible|=bit;
+    }
+    *owned=own;
+    *pending=valid?active.value&(own|(player.stop_voice_mask&possible)):0u;
+    mask_end(saved);
+    (void)call(player.binding.leave_cs,player.binding.device+DEVICE_CS_OFFSET,0,0,0);
+    return valid;
+}
+#endif
 static bool stopped(void) {
     if(!player.model.stop_needed) return true;
     cancel_read();
+#if KUI_WINCE_CDDA_WORMS
+    uint32_t owned=0u,pending=0u;
+    if(!worms_stop_voices(&owned,&pending)) {refuse(KUI_ARMADA_CE_EXCERPT_COPY);return false;}
+    player.stop_voice_mask|=owned;
+    if(player.stop_requested_epoch!=player.model.epoch) {
+        player.stats.last_hresult=call(player.binding.stop,player.stats.buffer,0,0,0);
+        if(player.stats.last_hresult) {refuse(KUI_ARMADA_CE_EXCERPT_NATIVE_STOP);return false;}
+        player.stop_requested_epoch=player.model.epoch;
+    }
+    /* Stop requests cleanup. Callback1c58 clears active+112 only after its
+     * final host read; it deliberately retains the owner-table entries.
+     * GetStatus2980 then sweeps those finished owners through1d44/42b0.
+     * Both native calls stay outside the IRQ mask and logical copy lease. */
+    if(pending) return true;
+    uint32_t native_status=0u;
+    player.stats.last_hresult=call(player.binding.get_status,player.stats.buffer,
+        (uint32_t)(uintptr_t)&native_status,0,0);
+    if(player.stats.last_hresult) {refuse(KUI_ARMADA_CE_EXCERPT_NATIVE_STOP);return false;}
+    if(!worms_stop_voices(&owned,&pending)) {refuse(KUI_ARMADA_CE_EXCERPT_COPY);return false;}
+    if(owned || pending) return true;
+    player.stop_requested_epoch=player.stop_voice_mask=0u;bool ok=true;
+#else
     player.stats.last_hresult=call(player.binding.stop,player.stats.buffer,0,0,0);
     bool ok=player.stats.last_hresult==0;
+#endif
     player.last_model_result=kui_armada_ce_stream_stop_complete(&player.model,player.model.epoch,ok);
     if(!ok) {refuse(KUI_ARMADA_CE_EXCERPT_NATIVE_STOP);return false;}
     if(player.last_model_result==KUI_ARMADA_CE_STREAM_OK &&
@@ -506,6 +570,68 @@ static bool stopped(void) {
     }
     ++player.stats.stop_ok;return player.last_model_result==KUI_ARMADA_CE_STREAM_OK;
 }
+#if KUI_WINCE_CDDA_WORMS
+/* Exact software PCM16 stereo path: constructor flags8 gives a separate
+ * host ring; native deinterleave copies into scratch before queuing DMA.
+ * A single invocation can still hold the source slice beginning at+116.
+ * ceil64(ceil32(176400/16)) bounds that slice, including its wrapped head. */
+#define WORMS_HOST_SLICE_BYTES 11072u
+enum worms_copy_result { WORMS_COPY_OK,WORMS_COPY_RETRY,WORMS_COPY_FAULT };
+static bool worms_arc_overlap(uint32_t offset,uint32_t bytes,uint32_t first,uint32_t end) {
+    if(first==end) return false;
+    return first<end?(offset<end && first<offset+bytes):
+        (offset<end || first<offset+bytes);
+}
+/* Caller masks IRQs. Only mapped RAM/model/mail observations occur here. */
+static enum worms_copy_result worms_copy_frontier(
+        const struct kui_armada_ce_stream_refill *ticket,uint32_t offset,uint32_t bytes) {
+    struct kui_armada_ce_ram_binding frontier;
+    if(!mail_current()) return WORMS_COPY_RETRY;
+    if(!mapped_word(player.stats.buffer+116u,&frontier) ||
+       (player.frontier_page && frontier.page_word!=player.frontier_page)) return WORMS_COPY_FAULT;
+    if(frontier.value==KUI_ARMADA_CE_STREAM_RING_BYTES) frontier.value=0u;
+    if(frontier.value>=KUI_ARMADA_CE_STREAM_RING_BYTES || (frontier.value&3u))
+        return WORMS_COPY_FAULT;
+    player.frontier_page=frontier.page_word;
+    if(player.model.native_running) {
+        player.model.write_cursor=player.copied_frontier=frontier.value;
+        uint32_t end=frontier.value+WORMS_HOST_SLICE_BYTES;
+        if(end>=KUI_ARMADA_CE_STREAM_RING_BYTES) end-=KUI_ARMADA_CE_STREAM_RING_BYTES;
+        if(bytes && worms_arc_overlap(offset,bytes,frontier.value,end)) return WORMS_COPY_RETRY;
+    }
+    /* Revalidate the whole ticket against the refreshed play->frontier arc.
+     * A consumer that reaches an earlier copied prefix revokes its commit. */
+    return kui_armada_ce_stream_refill_validate(&player.model,ticket)==KUI_ARMADA_CE_STREAM_OK?
+        WORMS_COPY_OK:WORMS_COPY_RETRY;
+}
+static enum worms_copy_result worms_copy_ticket(
+        const struct kui_armada_ce_stream_refill *ticket,uint32_t target,
+        const struct kui_armada_ce_ram_binding *witness,const uint32_t *addresses,uint32_t pages) {
+    if(target&63u) return WORMS_COPY_FAULT;
+    for(uint32_t at=0;at<ticket->bytes;at+=64u) {
+        uint32_t saved=mask_begin();
+        enum worms_copy_result result=worms_copy_frontier(ticket,ticket->ring_offset+at,64u);
+        uint32_t page=(target+at)&~0xfffu,index=0u;
+        while(index<pages && addresses[index]!=page) ++index;
+        struct kui_armada_ce_ram_binding current;
+        if(result==WORMS_COPY_OK && (index==pages || !mapped_word(page,&current) ||
+           current.page_word!=witness[index].page_word ||
+           current.physical_address!=witness[index].physical_address)) result=WORMS_COPY_FAULT;
+        if(result==WORMS_COPY_OK) {
+            volatile uint8_t *to=(volatile uint8_t *)(uintptr_t)(target+at);
+            const volatile uint8_t *from=(const volatile uint8_t *)(uintptr_t)(STAGE_BEGIN+player.stage_head+at);
+            for(uint32_t i=0;i<64u;i++) to[i]=at+i<ticket->audio_bytes?from[i]:0u;
+        }
+        mask_end(saved);
+        if(result!=WORMS_COPY_OK) return result;
+#if KUI_ARMADA_CE_STREAM_PLAYER_TEST
+        extern void kui_armada_ce_stream_player_test_copy_chunk(uint32_t);
+        kui_armada_ce_stream_player_test_copy_chunk(at+64u);
+#endif
+    }
+    return WORMS_COPY_OK;
+}
+#endif
 static bool refill(void) {
     if(!mail_current()) return true;
     /* Checked prefixes can refill while the rest of the source job runs.
@@ -518,9 +644,13 @@ static bool refill(void) {
     bool ok=mapped_word(player.stats.buffer+116u,&frontier) &&
         (!player.frontier_page || frontier.page_word==player.frontier_page);
     if(ok) player.frontier_page=frontier.page_word;
+#if KUI_WINCE_CDDA_WORMS
+    if(ok && frontier.value==KUI_ARMADA_CE_STREAM_RING_BYTES) frontier.value=0u;
+#endif
     if(ok && player.model.native_running) {
-        /* The consumer's copied source frontier is read while its own108
-         * lock is held. Never trust DirectSound's unused write cursor0. */
+        /* Armada/BAM4 hold the consumer's108 lock. Worms repeats this
+         * frontier under its per-chunk mask before writing any host bytes.
+         * DirectSound's public write cursor is not an exclusion boundary. */
         ok=frontier.value<KUI_ARMADA_CE_STREAM_RING_BYTES && !(frontier.value&3u);
         if(ok) player.model.write_cursor=player.copied_frontier=frontier.value;
     }
@@ -533,6 +663,9 @@ static bool refill(void) {
     }
     if(planned!=KUI_ARMADA_CE_STREAM_OK || !mail_current()) ok=false;
     uint32_t regions[4]={0,0,0,0};bool locked=false;
+#if KUI_WINCE_CDDA_WORMS
+    bool abandoned=false;
+#endif
     if(ok) {
         uint32_t args[8]={player.stats.buffer,ticket.ring_offset,ticket.bytes,
             (uint32_t)(uintptr_t)&regions[0],(uint32_t)(uintptr_t)&regions[1],
@@ -552,25 +685,46 @@ static bool refill(void) {
             }
         }
         if(ok && mail_current()) {
+#if KUI_WINCE_CDDA_WORMS
+            enum worms_copy_result copied=worms_copy_ticket(&ticket,explicit_address,witness,addresses,pages);
+            abandoned=copied==WORMS_COPY_RETRY;ok=copied==WORMS_COPY_OK;
+#else
             volatile uint8_t *target=(volatile uint8_t *)(uintptr_t)regions[0];
             const volatile uint8_t *stage=(const volatile uint8_t *)(uintptr_t)(STAGE_BEGIN+player.stage_head);
             for(uint32_t i=0;i<ticket.audio_bytes;i++) target[i]=stage[i];
             for(uint32_t i=ticket.audio_bytes;i<ticket.bytes;i++) target[i]=0;
+#endif
             for(uint32_t i=0;i<pages;i++) {
                 struct kui_armada_ce_ram_binding again;
                 if(!mapped_word(addresses[i],&again) || again.page_word!=witness[i].page_word ||
-                   again.physical_address!=witness[i].physical_address) ok=false;
+                   again.physical_address!=witness[i].physical_address) {
+                    ok=false;
+#if KUI_WINCE_CDDA_WORMS
+                    abandoned=false;
+#endif
+                }
             }
         } else ok=false;
     }
     if(locked) {
         uint32_t args[8]={player.stats.buffer,regions[0],regions[1],regions[2],regions[3],0,0,0};
         player.stats.last_hresult=kui_armada_ce_excerpt_ce_call(player.binding.unlock,args);
-        if(player.stats.last_hresult) ok=false;
+        if(player.stats.last_hresult) {
+            ok=false;
+#if KUI_WINCE_CDDA_WORMS
+            abandoned=false;
+#endif
+        }
     }
     /* Native Unlock publishes the host bytes before our producer frontier
      * advances. A newer mailbox epoch revokes this ticket before commit. */
     uint32_t sr=mask_begin();bool current=mail_current();
+#if KUI_WINCE_CDDA_WORMS
+    if(ok && current) {
+        enum worms_copy_result fresh=worms_copy_frontier(&ticket,0u,0u);
+        abandoned=fresh==WORMS_COPY_RETRY;ok=fresh==WORMS_COPY_OK;
+    }
+#endif
     if(ok && current) {
         player.last_model_result=kui_armada_ce_stream_refill_complete(&player.model,&ticket,true);
         ok=player.last_model_result==KUI_ARMADA_CE_STREAM_OK;
@@ -589,6 +743,13 @@ static bool refill(void) {
         if(released) player.model.refill=(struct kui_armada_ce_stream_refill){0};
         return released;
     }
+#if KUI_WINCE_CDDA_WORMS
+    if(abandoned && released) {
+        /* A partial host copy is never published to the model. Retain its
+         * staging and retry from the same producer offset next visit. */
+        player.model.refill=(struct kui_armada_ce_stream_refill){0};return true;
+    }
+#endif
     if(!ok) refuse(KUI_ARMADA_CE_EXCERPT_COPY);
     return ok && released;
 }
@@ -799,6 +960,9 @@ static void step(uint32_t sr,uint32_t fpscr) {
     }
     native_allowed=true;
     if(!observe() || !control() || !stopped()) goto failed;
+#if KUI_WINCE_CDDA_WORMS
+    if(player.model.stop_needed) {player.stats.status=KUI_ARMADA_CE_EXCERPT_QUEUED;return;}
+#endif
     update_priority(player.model.state==KUI_ARMADA_CE_STREAM_PREFILL ||
         player.model.state==KUI_ARMADA_CE_STREAM_PLAYING);
     if(!mail_current()) return;

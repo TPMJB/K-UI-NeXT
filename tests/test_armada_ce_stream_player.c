@@ -110,6 +110,15 @@ bool kui_armada_ce_stream_player_test_mapped(uint32_t address,
         CHECK(bus.consumer==1u);out->value=bus.frontier;
     } else if(address>=DEVICE+24u && address<DEVICE+24u+16u*4u) {
         CHECK(bus.control==1u);out->value=0;
+#if KUI_WINCE_CDDA_WORMS
+        extern uint32_t kui_armada_ce_stream_player_test_stop_owner(unsigned,uint32_t);
+        out->value=kui_armada_ce_stream_player_test_stop_owner((address-DEVICE-24u)/4u,out->value);
+#endif
+#if KUI_WINCE_CDDA_WORMS
+    } else if(address==DEVICE+112u) {
+        extern uint32_t kui_armada_ce_stream_player_test_stop_active(void);
+        CHECK(bus.control==1u);out->value=kui_armada_ce_stream_player_test_stop_active();
+#endif
     } else if(address>=HOST && address<HOST+KUI_ARMADA_CE_STREAM_RING_BYTES) {
         CHECK(bus.consumer==1u);
         if(address==bus.copy_page_address && ++bus.copy_page_hits>=bus.copy_page_flip &&
@@ -197,6 +206,14 @@ uint32_t kui_armada_ce_excerpt_ce_call(uint32_t target,const uint32_t args[8]) {
         ++bus.plays;bus.frontier=(bus.cursor+11008u)%KUI_ARMADA_CE_STREAM_RING_BYTES;return 0;
     }
     if(target==player.binding.stop) {CHECK(!bus.consumer && !bus.control);++bus.stops;return 0;}
+#if KUI_WINCE_CDDA_WORMS
+    if(target==player.binding.get_status) {
+        extern uint32_t kui_armada_ce_stream_player_test_stop_status(void);
+        CHECK(!bus.consumer && !bus.control && args[0]==BUFFER && !args[2] && !args[3]);
+        *(uint32_t *)stack_pointer(args[1])=0u;
+        return kui_armada_ce_stream_player_test_stop_status();
+    }
+#endif
     if(target==player.binding.get_position) {
         CHECK(!bus.consumer && args[0]==BUFFER);
         bus.now+=bus.position_delay_ms;

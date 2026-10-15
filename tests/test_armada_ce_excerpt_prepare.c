@@ -253,7 +253,7 @@ static void bam4_manifest_seed(void) {
     CHECK(!armada_stream_seed_fill(&package,SEED_AT,&map,KUI_WINCE_CDDA_BUST_A_MOVE_4,record_log));
     CHECK(!reads && !logs && !seed()[KUI_ARMADA_CE_STREAM_MAP_CRC_WORD]);guard_check();
     map=original;
-    CHECK(armada_stream_seed_find(&package)==SEED_AT);
+    CHECK(armada_stream_seed_find(&package,KUI_WINCE_CDDA_ARMADA)==SEED_AT);
     CHECK(!armada_stream_seed_fill(&package,SEED_AT,&map,KUI_WINCE_CDDA_ARMADA,record_log));
     CHECK(armada_stream_seed_fill(&package,SEED_AT,&map,KUI_WINCE_CDDA_BUST_A_MOVE_4,record_log));
     struct kui_retail_manifest decoded;
@@ -262,6 +262,48 @@ static void bam4_manifest_seed(void) {
     CHECK(decoded.track_count==26u && decoded.extent_count==26u);
     CHECK(decoded.slots[25].track.start_lba==548106u && decoded.slots[24].track.extent_count==1u);
     CHECK(kui_wince_cdda_manifest_valid(&decoded,KUI_WINCE_CDDA_BUST_A_MOVE_4));
+    CHECK(!reads && logs==1u);guard_check();
+}
+/* Independent original Worms disc geometry and relocated CEX2 placement. */
+static void worms_profile_and_seed(void) {
+    static const uint32_t starts[8]={0,450,45000,91528,117095,232929,329558,379575};
+    static const uint32_t ends[8]={300,946,91378,117095,232929,329558,379425,549150};
+    exact_profile();image.count=8u;
+    struct kui_retail_manifest map={.card_sectors=4000000u,.partition_start=2048u,
+        .partition_end=4000000u,.track_count=8u,.extent_count=8u,.session_lba=45000u,
+        .boot_lba=548458u,.boot_bytes=1110016u,.storage_transport=KUI_STORAGE_SCI,
+        .reader=KUI_RETAIL_READER_STANDARD};
+    strcpy(map.title,"Synthetic Worms");strcpy(map.product,"T40601N");strcpy(map.bootfile,"0WINCEOS.BIN");
+    metadata.boot_bytes=1110016u;metadata.boot_lba=548458u;strcpy(metadata.product,"T40601N");
+    uint32_t card_lba=4096u;
+    for(unsigned i=0;i<8u;i++) {
+        uint8_t control=i==0u || i==2u || i==7u?4u:0u;
+        image.tracks[i]=(struct kui_game_image_track){.number=i+1u,.start_lba=starts[i],
+            .end_lba=ends[i],.sector_bytes=2352u,.control=control};
+        map.slots[i].track=(struct kui_retail_track){starts[i],ends[i],(uint16_t)(8u+i),1u,control};
+        uint32_t blocks=(uint32_t)(((uint64_t)(ends[i]-starts[i])*2352u+511u)/512u);
+        map.slots[8u+i].extent=(struct kui_retail_extent){0u,card_lba,blocks};card_lba+=blocks;
+    }
+    CHECK(ce_music_profile(&image,&metadata)==KUI_WINCE_CDDA_WORMS_ARMAGEDDON);
+    for(unsigned i=0;i<8u;i++) {
+        image.tracks[i].start_lba++;
+        CHECK(ce_music_profile(&image,&metadata)==KUI_WINCE_CDDA_NONE);
+        image.tracks[i].start_lba--;
+    }
+    CHECK(kui_retail_manifest_validate(&map)==KUI_GAME_OK);
+    CHECK(kui_wince_cdda_manifest_valid(&map,KUI_WINCE_CDDA_WORMS_ARMAGEDDON));
+    CHECK(!kui_wince_cdda_manifest_valid(&map,KUI_WINCE_CDDA_BUST_A_MOVE_4));
+    new_package(SEED_AT+sizeof(struct kui_armada_ce_stream_seed),false);
+    const uint32_t blank[16]={0x32584543u,2u,0x8ce70040u,352800u,0x8cedf000u,4096u,0u,352768u};
+    memcpy(seed(),blank,sizeof(blank));
+    CHECK(armada_stream_seed_find(&package,KUI_WINCE_CDDA_ARMADA)==SIZE_MAX);
+    CHECK(armada_stream_seed_find(&package,KUI_WINCE_CDDA_WORMS_ARMAGEDDON)==SEED_AT);
+    CHECK(!armada_stream_seed_fill(&package,SEED_AT,&map,KUI_WINCE_CDDA_ARMADA,record_log));
+    CHECK(armada_stream_seed_fill(&package,SEED_AT,&map,KUI_WINCE_CDDA_WORMS_ARMAGEDDON,record_log));
+    struct kui_retail_manifest decoded;
+    CHECK(kui_retail_manifest_decode(((struct kui_armada_ce_stream_seed *)(void *)seed())->wire,&decoded)==KUI_GAME_OK);
+    CHECK(decoded.track_count==8u && decoded.slots[7].track.start_lba==379575u);
+    CHECK(kui_wince_cdda_manifest_valid(&decoded,KUI_WINCE_CDDA_WORMS_ARMAGEDDON));
     CHECK(!reads && logs==1u);guard_check();
 }
 /* A read-only filesystem model drives the entire public prepare function.
@@ -485,7 +527,7 @@ static void stream_launcher_paths(void) {
         launch_setup();launch.stream=true;launch.fragments=fragmented?70u:0u;
         CHECK(kui_games_retail_prepare_reader("/Games/ARMADA/ARMADA.gdi",request,&prepared,record_log,launch_cancel));
         CHECK(!launch.preloads && !launch.connected && !launch.mounted && launch.opens==launch.closes);
-        CHECK(armada_stream_seed_find(&prepared)==SEED_AT);
+        CHECK(armada_stream_seed_find(&prepared,KUI_WINCE_CDDA_ARMADA)==SEED_AT);
         struct kui_armada_ce_stream_seed *seed=(void *)((uint8_t *)prepared.data+SEED_AT);
         struct kui_retail_manifest full,data;
         CHECK(kui_armada_ce_stream_seed_header_valid(seed->words));
@@ -531,9 +573,10 @@ static void stream_launcher_paths(void) {
 }
 int main(void) {
     profile_admission();bam4_profile_admission();seed_success();seed_rejections();
-    bam4_manifest_seed();free(allocation);allocation=NULL;
+    bam4_manifest_seed();
+    worms_profile_and_seed();free(allocation);allocation=NULL;
     launcher_paths();
     stream_launcher_paths();
-    printf("WinCE music preparation: %u checks; exact Armada/BAM4 raw profiles, 26-track map, generated 150-sector preload, fixed CRC, unique empty seed, bounds, package isolation and failed/cancelled reads passed\n",checks);
+    printf("WinCE music preparation: %u checks; exact Armada/BAM4/Worms raw profiles, 26/8-track maps, generated 150-sector preload, fixed CRC, unique empty seed, bounds, package isolation and failed/cancelled reads passed\n",checks);
     return 0;
 }

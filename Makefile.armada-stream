@@ -1,18 +1,24 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Isolated Armada full-stream profile. The controller occupies the existing
 # pre-boot reserved pool; ordinary/excerpt loader objects are not destinations.
-ifeq ($(KUI_WINCE_CDDA_PROFILE),bam4)
+ifeq ($(KUI_WINCE_CDDA_PROFILE),worms)
+override ARMADA_AUDIO_DIR := build/worms-ce-stream
+WINCE_CDDA_PROFILE_FLAGS := -DKUI_WINCE_CDDA_WORMS=1
+WINCE_CDDA_PROFILE_CHECK := --worms
+WINCE_CDDA_CONTROLLER_BEGIN := 0x8cec7000
+else ifeq ($(KUI_WINCE_CDDA_PROFILE),bam4)
 override ARMADA_AUDIO_DIR := build/bam4-ce-stream
 WINCE_CDDA_PROFILE_FLAGS := -DKUI_WINCE_CDDA_BAM4=1
 WINCE_CDDA_PROFILE_CHECK := --bam4
 else
 override ARMADA_AUDIO_DIR := build/armada-ce-stream
 endif
+WINCE_CDDA_CONTROLLER_BEGIN ?= 0x8cfa7000
 override ARMADA_AUDIO_EXTRA_FLAGS := -DKUI_ARMADA_CE_EXCERPT=1 -DKUI_ARMADA_CE_STREAM=1 $(WINCE_CDDA_PROFILE_FLAGS)
 override ARMADA_AUDIO_EXTRA_STAGE_FLAGS := -DKUI_ARMADA_CE_RAM_BIND_STAGE=1 -DKUI_ARMADA_CE_EXCERPT_STAGE=1 -DKUI_ARMADA_CE_STREAM=1 -DKUI_RETAIL_EXTENDED_MAP=1 $(WINCE_CDDA_PROFILE_FLAGS)
 override ARMADA_AUDIO_EXTRA_STAGE_DEPS := $(ARMADA_AUDIO_DIR)/bind-probe.bin
 override ARMADA_AUDIO_EXTRA_ASM_FLAGS := -DKUI_ARMADA_CE_RAM_BIND_STAGE=1 -DKUI_ARMADA_CE_RAM_BIND_BIN='"$(ARMADA_AUDIO_DIR)/bind-probe.bin"'
-override ARMADA_AUDIO_EXTRA_LINK_FLAGS := -Wl,--defsym,_kui_armada_ce_bind_probe=0x8cfa7000
+override ARMADA_AUDIO_EXTRA_LINK_FLAGS := -Wl,--defsym,_kui_armada_ce_bind_probe=$(WINCE_CDDA_CONTROLLER_BEGIN)
 override ARMADA_AUDIO_EXTRA_CHECK := python3 tools/check_armada_ce_excerpt.py --stream $(WINCE_CDDA_PROFILE_CHECK) $(ARMADA_AUDIO_DIR)
 include Makefile.armada-audio
 
@@ -45,7 +51,7 @@ $(ARMADA_AUDIO_DIR)/stream-cursor.o: src/core/retail_cursor.c
 	@mkdir -p $(@D)
 	sh-elf-gcc $(ARMADA_STREAM_FLAGS) -MMD -MP -c $< -o $@
 $(ARMADA_AUDIO_DIR)/bind-probe.elf: $(ARMADA_STREAM_OBJS) src/loader/armada_ce_stream.ld
-	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/armada_ce_stream.ld -Wl,-Map,$(@:.elf=.map) -o $@ $(ARMADA_STREAM_OBJS) -lgcc
+	sh-elf-gcc $(RETAIL_LINK) -Wl,--defsym,_kui_stream_code_base=$(WINCE_CDDA_CONTROLLER_BEGIN) -Tsrc/loader/armada_ce_stream.ld -Wl,-Map,$(@:.elf=.map) -o $@ $(ARMADA_STREAM_OBJS) -lgcc
 $(ARMADA_AUDIO_DIR)/bind-probe.bin: $(ARMADA_AUDIO_DIR)/bind-probe.elf
 	sh-elf-objcopy -O binary $< $@
 $(ARMADA_AUDIO_DIR)/resident-scia.elf: $(ARMADA_AUDIO_DIR)/bind-probe.elf

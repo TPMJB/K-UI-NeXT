@@ -61,9 +61,10 @@ bool kui_armada_ce_stream_native_ticks(struct kui_armada_ce_stream_native *,
     const struct kui_armada_ce_stream_native_ops *,uint32_t *);
 bool kui_armada_ce_stream_native_sleep(struct kui_armada_ce_stream_native *,
     const struct kui_armada_ce_stream_native_ops *,uint32_t milliseconds);
-/* Only108: excludes native stereo host consumption while the sole worker
- * checks its own buffer+116 and calls Lock(flags0), copies RAM, and Unlock.
- * Play/Stop/SetPosition/Release, SD reads, and waits MUST be outside this CS.
+/* Armada/BAM4 acquire the native consumer CS+108. Worms has no such CS:
+ * its logical lease forbids waits/Stop while the player checks/copies one
+ * bounded host chunk with IRQs masked. This lease alone excludes no consumer.
+ * Play/Stop/SetPosition/Release, SD reads, and waits MUST be outside the lease.
  * This does not assert a native88->108 order or serialize other controllers.
  * device must be the worker's retained, revalidated native device reference. */
 bool kui_armada_ce_stream_native_write_begin(struct kui_armada_ce_stream_native *,

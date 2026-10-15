@@ -235,15 +235,26 @@ bool kui_armada_ce_stream_native_write_begin(struct kui_armada_ce_stream_native 
         return reject(s,KUI_ARMADA_CE_STREAM_NATIVE_ARGUMENT);
     if(s->consumer_cs) return reject(s,KUI_ARMADA_CE_STREAM_NATIVE_LOCK);
     if(!context_valid(s,o)) return false;
+#if KUI_WINCE_CDDA_WORMS
+    /* The older runtime has voice masks at+108, not a consumer CS. This
+     * logical lease only forbids waits/Stop; the player serializes each
+     * bounded host write with its own IRQ-masked frontier transaction. */
+    s->consumer_cs=UINT32_MAX;return true;
+#else
     uint32_t cs=device+108u;
     (void)invoke(s,o,s->api.enter_cs,cs,0,0,0,0,0);
     s->consumer_cs=cs;return true;
+#endif
 }
 bool kui_armada_ce_stream_native_write_end(struct kui_armada_ce_stream_native *s,
     const struct kui_armada_ce_stream_native_ops *ops) {
     const struct kui_armada_ce_stream_native_ops *o=operations(ops);
     if(!s || !o || !s->consumer_cs) return reject(s,KUI_ARMADA_CE_STREAM_NATIVE_LOCK);
     if(!context_valid(s,o)) return false;
+#if KUI_WINCE_CDDA_WORMS
+    if(s->consumer_cs!=UINT32_MAX) return reject(s,KUI_ARMADA_CE_STREAM_NATIVE_LOCK);
+#else
     (void)invoke(s,o,s->api.leave_cs,s->consumer_cs,0,0,0,0,0);
+#endif
     s->consumer_cs=0;return true;
 }
