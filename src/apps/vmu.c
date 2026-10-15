@@ -526,7 +526,8 @@ static bool fits_destination(struct session *s,const struct snapshot *snap,const
  * before publishing FAT/directory. No rollback is attempted after metadata
  * failure: a torn flash write cannot safely be undone by assuming its result. */
 static bool restore_write(struct session *s,const struct snapshot *original,struct snapshot *check,
-                          const uint8_t entry[32],uint8_t *data) {
+                          const uint8_t entry[32],uint8_t *data,bool *unverified) {
+    if(unverified) *unverified=false;
     vmu_root_t root;vmu_dir_t added;uint16_t fat[256];
     vmu_dir_t *dir=malloc(original->directory_blocks*BLOCK_BYTES);
     if(!dir) return fail(s,"Not enough RAM for VMU restore directory");
@@ -598,6 +599,7 @@ committed_done:
 done:
     if(locked && vmufs_mutex_unlock()!=0) {fail(s,"Cannot unlock VMU restore");ok=false;}
     if(metadata_started && !ok && s->log) s->log("VMU RESTORE UNVERIFIED: metadata commit began; inspect the card, do not automatically retry");
+    if(unverified) *unverified=metadata_started && !ok;
     free(dir);return ok;
 }
 void kui_vmu_restore_run(const char *path,unsigned slot,bool commit,
@@ -648,7 +650,7 @@ void kui_vmu_restore_run(const char *path,unsigned slot,bool commit,
     if(!save_file(&s,metadata,(const uint8_t *)snap,2*BLOCK_BYTES+snap->directory_blocks*BLOCK_BYTES)) goto done;
     s.log("VMU restore source=%s destination=%c%u metadata backup=%s",path+2,'A'+s.port,s.unit,metadata+2);
     listed[slot].valid=false;
-    if(!restore_write(&s,snap,check,entry,data)) goto done;
+    if(!restore_write(&s,snap,check,entry,data,NULL)) goto done;
     out->free_blocks=check->free_blocks;
     status(&s,"Restored %s to %c%u; every byte verified",out->entries[0].name,'A'+s.port,s.unit);
     s.log("VMU restore verified name=%s bytes=%u CRC32=%08" PRIx32,out->entries[0].name,(unsigned)length,le32(proof+16));ok=true;
@@ -692,6 +694,36 @@ static bool publish_save(struct session *s,const char *folder,const uint8_t entr
     if(!save_file(s,path,proof,sizeof(proof))) return false;
     strcpy(s->out->backup_path,backup);return true;
 }
+bool kui_vmu_import_publish(const uint8_t entry[32],const uint8_t *data,size_t length,
+    struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
+    if(!out) return false;
+    memset(out,0,sizeof(*out));
+    struct session s={out,log?log:quiet_log,cancel,progress,NULL,0,1,true};
+    bool ok=false;
+    /* Imported first-block values are historical locations, not addresses to
+     * dereference. Preserve them in .dir; restore allocates a new chain. */
+    if(!entry || !data || !length || length>255u*BLOCK_BYTES || length%BLOCK_BYTES ||
+       (entry[0]!=0x33 && entry[0]!=0xcc) || (entry[1]!=0 && entry[1]!=0xff) ||
+       !entry[4] || le16(entry+24)!=length/BLOCK_BYTES ||
+       le16(entry+26)>=length/BLOCK_BYTES || entry[28] || entry[29] || entry[30] || entry[31]) {
+        fail(&s,"Invalid imported VMU save metadata or payload length");goto done;
+    }
+    out->status.total=length;out->count=out->total=1;
+    display_name(out->entries[0].name,entry);out->entries[0].bytes=(uint32_t)length;
+    if(cancelled(&s)) goto done;
+    char folder[KUI_DEST_JOB_CAP];
+    if(!new_folder(&s,folder) || !publish_save(&s,folder,entry,data,0)) goto done;
+    static const uint8_t note[]="K-UI imported VMU save staged as verified .vms + .dir + .crc.\n"
+        "No physical VMU was read or written. Restore is a separate preview/confirmation.\n";
+    char marker[KUI_DEST_PATH_CAP];snprintf(marker,sizeof(marker),"%s/complete.txt",folder);
+    if(!save_file(&s,marker,note,sizeof(note)-1)) goto done;
+    out->status.done=length;status(&s,"Imported save verified on SD; restore separately");ok=true;
+done:
+    out->status.complete=out->status.passed=ok;
+    if(progress) progress(&out->status);
+    return ok;
+}
+
 /* Remove the directory entry before freeing the chain. A failed/torn FAT write
  * then cannot cause a live entry to point at blocks marked free. A failed
  * directory write may affect neighboring entries: never retry it or report
@@ -950,7 +982,7 @@ static void managed_run(bool copy,unsigned source_slot,unsigned page,unsigned se
         snprintf(metadata,sizeof(metadata),"%s/before-copy-destination.bin",folder);
         if(!save_file(&target,metadata,(const uint8_t *)destination,2*BLOCK_BYTES+destination->directory_blocks*BLOCK_BYTES)) goto done;
         listed[destination_slot].valid=false;
-        if(!restore_write(&target,destination,check,entry,data)) goto done;
+        if(!restore_write(&target,destination,check,entry,data,NULL)) goto done;
         out->free_blocks=check->free_blocks;
         status(&source,"Copied %s to %c%u; every byte verified",out->entries[0].name,'A'+target.port,target.unit);
         source.log("VMU copy verified destination=%c%u; source and SD backup retained",'A'+target.port,target.unit);
@@ -980,4 +1012,201 @@ void kui_vmu_delete_run(unsigned slot,unsigned page,unsigned selected,bool commi
 void kui_vmu_copy_run(unsigned source_slot,unsigned page,unsigned selected,unsigned destination_slot,bool commit,
     struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
     managed_run(true,source_slot,page,selected,destination_slot,commit,out,log,cancel,progress);
+}
+
+/* Bulk copy is independently authored around the same guarded transaction as
+ * selected-save copy. The whole source fits within one normal VMU's data area;
+ * all verified SD bundles exist before any destination metadata is changed. */
+static struct {
+    maple_device_t *source_device,*destination_device;
+    struct snapshot source,destination;
+    uint32_t payload_crc[FILES_MAX];
+    uint64_t bytes;
+    unsigned source_slot,destination_slot;
+    bool valid;
+} copy_all_preview;
+static bool snapshots_equal(const struct snapshot *a,const struct snapshot *b) {
+    return a->directory_blocks==b->directory_blocks && !memcmp(a->root,b->root,BLOCK_BYTES) &&
+        !memcmp(a->fat,b->fat,BLOCK_BYTES) &&
+        !memcmp(a->directory,b->directory,a->directory_blocks*BLOCK_BYTES);
+}
+static bool bulk_metadata(struct session *s,const struct snapshot *snap) {
+    if(!healthy_metadata(s,snap)) return false;
+    for(unsigned i=0;i<snap->count;i++) {
+        const uint8_t *entry=snap->directory+snap->entries[i]*32;
+        if(!entry[4] || (entry[1]!=0 && entry[1]!=0xff))
+            return fail(s,"VMU save metadata cannot be copied safely; batch refused");
+    }
+    return true;
+}
+static bool bulk_preflight(struct session *source,struct session *target,
+                           const struct snapshot *snap,const struct snapshot *destination) {
+    if(!bulk_metadata(source,snap) || !bulk_metadata(target,destination)) return false;
+    unsigned blocks=0,conflicts=0;
+    for(unsigned i=0;i<snap->count;i++) {
+        const uint8_t *entry=snap->directory+snap->entries[i]*32;blocks+=le16(entry+24);
+        for(unsigned j=0;j<destination->count;j++)
+            if(!strncmp((const char *)entry+4,(const char *)destination->directory+destination->entries[j]*32+4,12)) ++conflicts;
+    }
+    if(conflicts) {
+        char message[112];snprintf(message,sizeof(message),"Copy all refused: %u filename conflicts; destination unchanged",conflicts);
+        return fail(target,message);
+    }
+    if(blocks>destination->free_blocks) return fail(target,"Not enough free destination blocks for the entire batch");
+    if(snap->count>destination->directory_blocks*16-destination->count)
+        return fail(target,"Not enough free destination directory entries for the entire batch");
+    return true;
+}
+static bool bulk_payloads(struct session *s,const struct snapshot *snap,struct snapshot *check,
+                          uint8_t *data,uint8_t *scratch,bool compare,uint32_t crc[FILES_MAX]) {
+    size_t at=0;
+    for(unsigned i=0;i<snap->count;i++) {
+        const uint8_t *entry=snap->directory+snap->entries[i]*32;
+        size_t bytes=(size_t)le16(entry+24)*BLOCK_BYTES;
+        if(!read_save(s,snap,entry,compare?scratch:data+at)) return false;
+        if(compare && memcmp(scratch,data+at,bytes)) return fail(s,"Source save bytes changed; copy all stopped");
+        if(!compare) crc[i]=kui_crc32(0,data+at,bytes);
+        at+=bytes;
+    }
+    return check_snapshot(s,snap,check);
+}
+static bool bulk_bundle_path(struct session *s,const char *folder,const uint8_t entry[32],
+                             unsigned index,char path[KUI_VMU_BACKUP_PATH_CAP]) {
+    char base[32];filename(base,entry,index);
+    int n=snprintf(path,KUI_VMU_BACKUP_PATH_CAP,"%s/%s.vms",folder,base);
+    return (n>=0 && n<(int)KUI_VMU_BACKUP_PATH_CAP) || fail(s,"Bulk backup path is too long");
+}
+void kui_vmu_copy_all_run(unsigned source_slot,unsigned destination_slot,bool commit,
+    struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
+    if(!out) return;
+    memset(out,0,sizeof(*out));out->slot=source_slot;
+    struct session source={out,log?log:quiet_log,cancel,progress,NULL,source_slot/2,source_slot%2+1,false};
+    struct session target={out,log?log:quiet_log,cancel,progress,NULL,destination_slot/2,destination_slot%2+1,false};
+    struct snapshot *snap=NULL,*destination=NULL,*check=NULL;
+    uint8_t *data=NULL,*scratch=NULL;uint32_t crc[FILES_MAX]={0};
+    FATFS fs;bool connected=false,mounted=false,ok=false,preview_matches=false;
+    uint64_t verified_bytes=0;char folder[KUI_DEST_JOB_CAP]={0};
+    if(!commit) copy_all_preview.valid=false;
+    if(source_slot>=8 || destination_slot>=8 || source_slot==destination_slot) {
+        fail(&source,"Choose valid, different source and destination VMUs");goto done;
+    }
+    if(commit) {
+        preview_matches=copy_all_preview.valid && copy_all_preview.source_slot==source_slot &&
+            copy_all_preview.destination_slot==destination_slot;
+        if(!preview_matches) {fail(&source,"Preview the entire batch and both VMUs before confirming");goto done;}
+        out->bulk_total=out->bulk_remaining=copy_all_preview.source.count;out->status.total=copy_all_preview.bytes;
+        copy_all_preview.valid=false; /* Every confirmation is consumed, including a failed attempt. */
+    }
+    if(cancelled(&source)) goto done;
+    source.device=maple_enum_dev((int)source.port,(int)source.unit);
+    target.device=maple_enum_dev((int)target.port,(int)target.unit);
+    if(!source.device || !source.device->valid || !(source.device->info.functions&MAPLE_FUNC_MEMCARD)) {
+        fail(&source,"No VMU in the selected source slot");goto done;
+    }
+    if(!target.device || target.device==source.device || !target.device->valid || !(target.device->info.functions&MAPLE_FUNC_MEMCARD)) {
+        fail(&target,"No different VMU in the selected destination slot");goto done;
+    }
+    snap=malloc(sizeof(*snap));destination=malloc(sizeof(*destination));check=malloc(sizeof(*check));
+    if(!snap || !destination || !check) {fail(&source,"Not enough RAM for bulk VMU metadata");goto done;}
+    if(!locked_snapshot(&source,snap)) goto done;
+    fill_view(&source,snap,0);out->present=true;
+    if(!commit) out->bulk_total=out->bulk_remaining=snap->count;
+    if(!snap->count) {fail(&source,"Source VMU has no saves to copy");goto done;}
+    size_t length=0,largest=0;
+    for(unsigned i=0;i<snap->count;i++) {
+        size_t bytes=(size_t)le16(snap->directory+snap->entries[i]*32+24)*BLOCK_BYTES;
+        length+=bytes;if(bytes>largest) largest=bytes;
+    }
+    if(!commit) out->status.total=length;
+    if(!locked_snapshot(&target,destination) || !bulk_preflight(&source,&target,snap,destination)) goto done;
+    out->free_blocks=destination->free_blocks;
+    data=malloc(length);scratch=malloc(largest);
+    if(!data || !scratch) {fail(&source,"Not enough RAM for complete VMU batch payloads");goto done;}
+    status(&source,"Reading all %u source saves before copying...",snap->count);
+    if(!bulk_payloads(&source,snap,check,data,scratch,false,crc) || !check_snapshot(&target,destination,check)) goto done;
+    if(!commit) {
+        copy_all_preview.source_device=source.device;copy_all_preview.destination_device=target.device;
+        copy_all_preview.source=*snap;copy_all_preview.destination=*destination;
+        memcpy(copy_all_preview.payload_crc,crc,sizeof(crc));copy_all_preview.bytes=length;
+        copy_all_preview.source_slot=source_slot;copy_all_preview.destination_slot=destination_slot;copy_all_preview.valid=true;
+        out->copy_ready=true;
+        status(&source,"Copy all %u saves (%u blocks), %c%u to %c%u? Source stays.",snap->count,(unsigned)(length/BLOCK_BYTES),
+            'A'+source.port,source.unit,'A'+target.port,target.unit);ok=true;goto done;
+    }
+    if(copy_all_preview.source_device!=source.device || copy_all_preview.destination_device!=target.device ||
+       !snapshots_equal(snap,&copy_all_preview.source) || !snapshots_equal(destination,&copy_all_preview.destination) ||
+       memcmp(crc,copy_all_preview.payload_crc,sizeof(crc))) {
+        fail(&source,"Source, destination or save bytes changed since preview; preview again");goto done;
+    }
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    if(!kui_sd_connect()) {fail(&source,"Cannot connect SD for verified whole-batch backups");goto done;}
+    connected=true;
+    if(!kui_mount(&fs,source.log)) {fail(&source,"Cannot mount SD for verified whole-batch backups");goto done;}
+    mounted=true;
+    if(!new_folder(&source,folder)) goto done;
+    size_t at=0;
+    for(unsigned i=0;i<snap->count;i++) {
+        const uint8_t *entry=snap->directory+snap->entries[i]*32;
+        status(&source,"Staging verified SD backup %u/%u; VMUs unchanged...",i+1,snap->count);
+        if(!check_snapshot(&source,snap,check) || !same_device(&target) ||
+           !publish_save(&source,folder,entry,data+at,i)) goto done;
+        uint8_t saved_entry[32],proof[32];
+        if(!load_metadata(&source,out->backup_path,saved_entry,proof) || memcmp(saved_entry,entry,32) || le32(proof+16)!=crc[i]) {
+            if(!out->status.errors && !out->status.stopped) fail(&source,"Staged save backup failed normal restore validation");
+            goto done;
+        }
+        at+=(size_t)le16(entry+24)*BLOCK_BYTES;
+    }
+    char metadata[KUI_DEST_PATH_CAP];
+    snprintf(metadata,sizeof(metadata),"%s/before-copy-all-source.bin",folder);
+    if(!save_file(&source,metadata,(const uint8_t *)snap,2*BLOCK_BYTES+snap->directory_blocks*BLOCK_BYTES) ||
+       !bulk_payloads(&source,snap,check,data,scratch,true,crc) || !check_snapshot(&target,destination,check)) goto done;
+    source.log("VMU COPY ALL staged %u verified backups at %s; source=%c%u destination=%c%u",snap->count,folder+2,
+        'A'+source.port,source.unit,'A'+target.port,target.unit);
+    at=0;listed[destination_slot].valid=false;
+    for(unsigned i=0;i<snap->count;i++) {
+        const uint8_t *entry=snap->directory+snap->entries[i]*32;
+        size_t bytes=(size_t)le16(entry+24)*BLOCK_BYTES;
+        status(&source,"Copy all: %u/%u verified; preparing save %u...",out->bulk_completed,out->bulk_total,i+1);
+        if(cancelled(&source) || !check_snapshot(&source,snap,check) || !check_snapshot(&target,destination,check) ||
+           !read_save(&source,snap,entry,scratch)) goto done;
+        if(memcmp(scratch,data+at,bytes)) {fail(&source,"Source save changed before copying; batch stopped");goto done;}
+        if(!fits_destination(&target,destination,entry)) goto done;
+        snprintf(metadata,sizeof(metadata),"%s/before-copy-%03u-destination.bin",folder,i+1);
+        if(!save_file(&target,metadata,(const uint8_t *)destination,2*BLOCK_BYTES+destination->directory_blocks*BLOCK_BYTES) ||
+           !check_snapshot(&source,snap,check)) goto done;
+        char bundle[KUI_VMU_BACKUP_PATH_CAP];
+        if(!bulk_bundle_path(&source,folder,entry,i,bundle)) goto done;
+        strcpy(out->backup_path,bundle);
+        if(!restore_write(&target,destination,check,entry,data+at,&out->bulk_unverified)) goto done;
+        *destination=*check;verified_bytes+=bytes;out->status.done=verified_bytes;
+        ++out->bulk_completed;out->bulk_remaining=out->bulk_total-out->bulk_completed;out->free_blocks=destination->free_blocks;
+        char name[16];display_name(name,entry);
+        source.log("VMU COPY ALL verified %u/%u name=%s backup=%s",out->bulk_completed,out->bulk_total,name,bundle+2);
+        at+=bytes;
+    }
+    if(!bulk_payloads(&source,snap,check,data,scratch,true,crc) || !check_snapshot(&target,destination,check)) goto done;
+    static const uint8_t note[]="K-UI copy-all completed. Every destination save was reread and verified.\n"
+        "The source VMU and preexisting destination saves were retained; verified SD backups remain.\n";
+    char marker[KUI_DEST_PATH_CAP];snprintf(marker,sizeof(marker),"%s/complete.txt",folder);
+    if(!save_file(&target,marker,note,sizeof(note)-1)) goto done;
+    status(&source,"Copied all %u saves to %c%u; every byte verified",out->bulk_total,'A'+target.port,target.unit);ok=true;
+done:
+    if(mounted && f_mount(NULL,"0:",0)!=FR_OK) {fail(&source,"Cannot unmount bulk-copy backup filesystem");ok=false;}
+    if(connected) kui_sd_disconnect();
+    free(data);free(scratch);free(snap);free(destination);free(check);
+    out->status.done=verified_bytes;
+    out->bulk_remaining=out->bulk_total-out->bulk_completed;
+    if(!ok) {
+        out->copy_ready=false;
+        if(commit && preview_matches) {
+            char reason[sizeof(out->status.message)];strcpy(reason,out->status.message);
+            status(&source,"Copy all: %u verified, %u remaining, %u unverified. %.56s",out->bulk_completed,
+                out->bulk_remaining,out->bulk_unverified?1u:0u,reason);
+            source.log("VMU COPY ALL stopped: verified=%u remaining=%u unverified=%u; %s",out->bulk_completed,
+                out->bulk_remaining,out->bulk_unverified?1u:0u,reason);
+        }
+    }
+    out->status.complete=out->status.passed=ok;
+    if(progress) progress(&out->status);
 }

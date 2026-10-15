@@ -237,10 +237,10 @@ class ReleaseMetadata(unittest.TestCase):
     def test_current_tyrfing_candidate_names_match_artifact_version(self):
         release = release_metadata()
         self.assertEqual(release, {
-            "version": "2.0-rc12",
-            "name": 'K-UI V2.0 RC12 "Tyrfing"',
-            "short_name": "K-UI V2.0 RC12",
-            "artifact_prefix": "kui-2.0-rc12-tyrfing",
+            "version": "2.0-rc13",
+            "name": 'K-UI V2.0 RC13 "Tyrfing"',
+            "short_name": "K-UI V2.0 RC13",
+            "artifact_prefix": "kui-2.0-rc13-tyrfing",
         })
 
     def test_canonical_fixture_preserves_accent_and_ascii_console_name(self):

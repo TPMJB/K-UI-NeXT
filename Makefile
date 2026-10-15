@@ -133,7 +133,7 @@ build/test-armada-ce-excerpt-entry: tests/test_armada_ce_excerpt_entry.c src/loa
 build/test-armada-ce-excerpt: tests/test_armada_ce_excerpt.c src/loader/armada_ce_excerpt.c include/kui/armada_ce_excerpt.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -fno-pie -no-pie $< -o $@
-test: build/test-vmu-lcd
+test: build/test-vmu-lcd build/test-vmu-save-format
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek build/music-asset-check
 test: build/test-games-selection build/test-zso build/test-lzo1x build/test-retail-zso build/test-retail-lzo build/test-game-launch-settings build/test-game-launch-settings-file build/test-game-ram-patches build/test-game-launch-report build/test-retail-relay-patches
 test: test-armada-ce-stream test-worms-ce-stream test-wince-cooked-admission test-armada-ce-excerpt
@@ -149,6 +149,7 @@ test: build/test-boot-volume build/ext4-boot build/boot-recovery build/test-boot
 test: build/test-ata build/test-storage-policy build/test-sci-sd-bus build/test-retail-storage build/test-sci-sd-storage build/test-sci-async-probe build/test-sci-async-heartbeat build/test-sci-async-runtime build/test-sci-video-quiet
 test: build/test-storage-errors build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
 	./build/test-vmu-lcd
+	./build/test-vmu-save-format
 	./build/test-storage-errors
 	./build/test-cd-audio
 	./build/test-game-image
@@ -637,7 +638,7 @@ build/storage-test-store-image: tests/storage_test_store_image.c $(CORE) $(STORA
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(STORAGE_TEST_MODEL) src/core/storage_test_store.c $(FATFS) tests/storage_test_store_image.c -o $@
 
-test-images: build/test-wifi-update build/storage-test-image build/storage-test-store-image build/ftp-image build/files-image build/games-retail build/games-image-probe build/loader-probe-image build/games-image build/games-covers-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/test-recovery-manifest build/report-image build/bench-image build/settings-image
+test-images: build/vmu-import-image build/test-wifi-update build/storage-test-image build/storage-test-store-image build/ftp-image build/files-image build/games-retail build/games-image-probe build/loader-probe-image build/games-image build/games-covers-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/test-recovery-manifest build/report-image build/bench-image build/settings-image
 	python3 tests/test_wifi_update_images.py
 	python3 tests/test_storage_test_images.py
 	python3 tests/test_storage_test_store_images.py
@@ -653,6 +654,7 @@ test-images: build/test-wifi-update build/storage-test-image build/storage-test-
 	python3 tests/test_recovery_scan_images.py
 	python3 tests/test_clock_images.py
 	python3 tests/test_vmu_images.py
+	python3 tests/test_vmu_import_images.py
 	python3 tests/test_system_settings_images.py
 	python3 tests/test_images.py
 	python3 tests/test_runtime_images.py
@@ -730,6 +732,14 @@ build/test-network-app: tests/test_network_app.c src/apps/network_test.c src/app
 build/test-vmu-app: tests/test_vmu_app.c $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) src/apps/vmu.c include/kui/apps.h $(wildcard tests/vmu_stubs/dc/*.h tests/vmu_stubs/dc/maple/*.h)
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) src/apps/vmu.c tests/test_vmu_app.c -o $@
+
+build/test-vmu-save-format: tests/test_vmu_save_format.c src/core/vmu_save_format.c src/core/crc16.c include/kui/vmu_import.h include/kui/crc16.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_vmu_save_format.c src/core/vmu_save_format.c src/core/crc16.c -o $@
+
+build/vmu-import-image: tests/vmu_import_image.c $(CORE) $(DESTINATION) src/core/storage_probe.c src/core/files_path.c src/core/hash.c src/core/crc16.c $(FATFS) src/core/vmu_save_format.c src/apps/vmu_import.c src/apps/vmu.c include/kui/vmu_import.h include/kui/apps.h $(wildcard tests/vmu_stubs/dc/*.h tests/vmu_stubs/dc/maple/*.h)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c src/core/files_path.c src/core/hash.c src/core/crc16.c $(FATFS) src/core/vmu_save_format.c src/apps/vmu_import.c src/apps/vmu.c tests/vmu_import_image.c -o $@
 
 # Original startup assets are encoded on the host, never decoded during ripping.
 build/splash_pixels.inc build/boot_splash_pixels.inc build/startup_ogg.inc &: tools/build_splash.py resources/branding/startup.png resources/branding/boot-red.png resources/branding/startup-chime.ogg

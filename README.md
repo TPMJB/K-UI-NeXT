@@ -1,13 +1,15 @@
-# K-UI V2.0 RC12 "Tyrfing"
+# K-UI V2.0 RC13 "Tyrfing"
 
 An independent Dreamcast shell built directly on upstream KallistiOS, retaining
 the original GD-ROM and using exFAT/FAT32 storage.
 
-**The current source prepares 2.0 RC12, named Tyrfing, continuing the cursed-sword
+**The current source prepares 2.0 RC13, named Tyrfing, continuing the cursed-sword
 release theme.** It integrates the tested SCI Windows CE CD music work with
 saved per-image launch options while retaining the established 1.8.5 native
 reader. This is release preparation; a final 2.0 release has not been published.
-RC12 adds verified 128 KiB VMU card-image backups, read-only VMD browsing
+RC13 adds external VMS/VMI/DCI save import into verified SD bundles and
+previewed Copy all between VMUs. It retains RC12 verified 128 KiB VMU
+card-image backups, read-only VMD browsing
 and save extraction, and read-only BIOS/settings-flash comparisons. It retains
 the matching orange Tyrfing splash, bootloader, header and disc-badge artwork. The runtime update works with an existing compatible bootstrap;
 burn the matching optional CDI to update artwork stored on the boot disc.
@@ -121,7 +123,9 @@ These new app paths still need physical-console acceptance.
   Capture hashes/readback remain inside the ripper. New file dates follow the RTC.
 - VMU Manager: read saves, make verified SD backups, and preview/confirm restore
   into a free filename with readback. Managed copy/delete require confirmation and
-  a verified restorable SD backup. Actions also backs up a whole formatted
+  a verified restorable SD backup. Copy all preflights the complete batch;
+  The SD backups page imports external VMS/VMI/DCI files into new verified bundles.
+  Actions also backs up a whole formatted
   card as VMD; Backups browses VMD images and extracts selected/all saves into
   verified bundles without a connected VMU. No overwrite or format. Memory Test
   checks only its allocated RAM.

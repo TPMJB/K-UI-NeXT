@@ -123,6 +123,53 @@ void kui_shell_set_vmu_copy_preview(struct kui_shell *s,const struct kui_vmu_vie
     if(s->confirm_vmu_copy) s->vmu.entries[s->vmu_selected]=view->entries[0];
     else if(view->status.complete) s->vmu.count=0;
 }
+void kui_shell_set_vmu_copy_all(struct kui_shell *s,unsigned source,unsigned destination,
+        bool committed,const struct kui_vmu_view *view) {
+    if(!s || !view || s->page!=KUI_SHELL_VMU_ACTIONS || s->vmu_action_selected!=3 ||
+       source!=s->vmu_slot || destination!=s->vmu_copy_slot || source==destination ||
+       source>=8 || destination>=8 || view->slot!=source) return;
+    s->vmu_copy_all=*view;
+    s->vmu_copy_all.status.message[sizeof(s->vmu_copy_all.status.message)-1]=0;
+    s->confirm_vmu_copy_all=!committed && view->copy_ready && view->status.complete && view->status.passed &&
+        !view->status.stopped && !view->status.errors &&
+        view->bulk_total && !view->bulk_completed && view->bulk_remaining==view->bulk_total &&
+        !view->bulk_unverified;
+}
+static enum kui_shell_action preview_vmu_import(struct kui_shell *s) {
+    ++s->vmu_import_generation;
+    if(!s->vmu_import_generation) ++s->vmu_import_generation;
+    s->confirm_vmu_import=false;s->vmu_import_staged=false;
+    memset(&s->vmu_import,0,sizeof(s->vmu_import));
+    s->page=KUI_SHELL_VMU_IMPORT;
+    return KUI_SHELL_VMU_IMPORT_PREVIEW;
+}
+void kui_shell_set_vmu_import(struct kui_shell *s,const char *path,unsigned generation,
+        bool committed,const struct kui_vmu_view *view) {
+    if(!s || !path || !view || s->page!=KUI_SHELL_VMU_IMPORT ||
+       strcmp(path,s->vmu_import_path) || generation!=s->vmu_import_generation) return;
+    s->vmu_import=*view;
+    s->vmu_import.status.message[sizeof(s->vmu_import.status.message)-1]=0;
+    if(!memchr(view->backup_path,0,sizeof(view->backup_path))) s->vmu_import.backup_path[0]=0;
+    bool entry=view->count==1 && memchr(view->entries[0].name,0,sizeof(view->entries[0].name)) &&
+        view->entries[0].name[0] && view->entries[0].bytes;
+    s->vmu_import.count=entry?1:0;
+    if(s->vmu_import.status.line_count>KUI_APP_LINES) s->vmu_import.status.line_count=KUI_APP_LINES;
+    for(unsigned i=0;i<s->vmu_import.status.line_count;i++)
+        s->vmu_import.status.lines[i][KUI_APP_LINE_CAP-1]=0;
+    bool passed=view->status.complete && view->status.passed && !view->status.stopped && !view->status.errors;
+    s->confirm_vmu_import=!committed && entry && view->import_ready && passed &&
+        kui_files_path_valid(s->vmu_import_path);
+    s->vmu_import_staged=committed && passed && s->vmu_import.backup_path[0];
+}
+static bool vmu_import_name(const char *name) {
+    size_t n=strlen(name);
+    if(n<4 || name[n-4]!='.') return false;
+    char a=name[n-3],b=name[n-2],c=name[n-1];
+    if(a>='A' && a<='Z') a=(char)(a-'A'+'a');
+    if(b>='A' && b<='Z') b=(char)(b-'A'+'a');
+    if(c>='A' && c<='Z') c=(char)(c-'A'+'a');
+    return (a=='v' && b=='m' && (c=='s' || c=='i')) || (a=='d' && b=='c' && c=='i');
+}
 void kui_shell_set_clock(struct kui_shell *s,const struct kui_datetime *value,const char *notice) {
     if(!s) return;
     bool read_valid=value && kui_datetime_valid(value);
@@ -772,7 +819,7 @@ static enum kui_shell_action list_files(struct kui_shell *s,bool picker,enum kui
     memset(r,0,sizeof(*r));
     memcpy(r->path,picker?s->files_pick_path:s->files_path,sizeof(r->path));
     r->path[sizeof(r->path)-1]=0;
-    r->folders_only=picker && !s->files_pick_compare;
+    r->folders_only=picker && !s->files_pick_compare && !s->files_pick_import;
     r->seek=KUI_FILES_SEEK_FIRST;
     if(seek!=KUI_FILES_SEEK_FIRST && anchor && memchr(anchor,0,KUI_FILES_KEY_CAP) && anchor[0]) {
         memcpy(r->anchor,anchor,strlen(anchor)+1);
@@ -907,7 +954,7 @@ static enum kui_shell_action files_action(struct kui_shell *s) {
     case 0: return files_open(s);
     case 1: case 2:
         files_begin(s,item==1?KUI_FILES_OP_COPY:KUI_FILES_OP_MOVE,path);
-        s->files_pick_compare=false;
+        s->files_pick_compare=s->files_pick_import=false;
         memcpy(s->files_pick_path,s->files_path,sizeof(s->files_pick_path));
         s->page=KUI_SHELL_FILES_PICK;
         return list_files(s,true,KUI_FILES_SEEK_FIRST,NULL,false);
@@ -938,10 +985,11 @@ static enum kui_shell_action files_pick_input(struct kui_shell *s,unsigned butto
     const struct kui_files_page *l=&s->files_pick;
     unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
     if(buttons&KUI_SHELL_START) {
-        s->page=s->files_pick_compare?KUI_SHELL_SYSTEM_TOOLS:KUI_SHELL_FILES;
-        s->files_pick_compare=false;return KUI_SHELL_NONE;
+        s->page=s->files_pick_compare?KUI_SHELL_SYSTEM_TOOLS:
+            s->files_pick_import?KUI_SHELL_VMU_RESTORE:KUI_SHELL_FILES;
+        s->files_pick_compare=s->files_pick_import=false;return KUI_SHELL_NONE;
     }
-    if((buttons&KUI_SHELL_Y) && !s->files_pick_compare) {
+    if((buttons&KUI_SHELL_Y) && !s->files_pick_compare && !s->files_pick_import) {
         memcpy(s->files_job.target,s->files_pick_path,sizeof(s->files_job.target));
         return files_check(s);
     }
@@ -952,10 +1000,24 @@ static enum kui_shell_action files_pick_input(struct kui_shell *s,unsigned butto
         const struct kui_files_entry *e=&l->entries[s->files_pick_selected];
         char child[KUI_FILES_PATH_CAP];
         if(e->disabled || !kui_files_join(child,s->files_pick_path,e->name)) {
+            if(s->files_pick_import) {
+                snprintf(s->files_pick.message,sizeof(s->files_pick.message),"%s",vmu_import_name(e->name)?
+                    "This save name or path cannot be used.":"Choose a VMS, VMI or DCI save file.");
+                return KUI_SHELL_NONE;
+            }
             snprintf(s->files_pick.message,sizeof(s->files_pick.message),"%s",
                 kui_files_join(child,s->files_pick_path,e->name) && !strcmp(child,s->files_job.source)?
                 "This is the folder being copied or moved.":"This folder cannot be opened.");
             return KUI_SHELL_NONE;
+        }
+        if(s->files_pick_import && !e->directory) {
+            if(!vmu_import_name(e->name)) {
+                snprintf(s->files_pick.message,sizeof(s->files_pick.message),"Choose a VMS, VMI or DCI save file.");
+                return KUI_SHELL_NONE;
+            }
+            memcpy(s->vmu_import_path,child,sizeof(s->vmu_import_path));
+            s->files_pick_import=false;
+            return preview_vmu_import(s);
         }
         if(s->files_pick_compare && !e->directory) {
             uint64_t expected=s->system_compare_bios?2097152u:131072u;
@@ -988,9 +1050,9 @@ bool kui_shell_files_ready(const struct kui_shell *s) {
 }
 void kui_shell_set_files_listing(struct kui_shell *s,const struct kui_files_page *page) {
     if(!s || !page || !memchr(page->path,0,sizeof(page->path))) return;
-    bool compare_picker=s->page==KUI_SHELL_FILES_PICK && s->files_pick_compare;
-    bool picker=page->folders_only || compare_picker;
-    if(picker && page->folders_only != !compare_picker) return;
+    bool file_picker=s->page==KUI_SHELL_FILES_PICK && (s->files_pick_compare || s->files_pick_import);
+    bool picker=page->folders_only || file_picker;
+    if(picker && page->folders_only != !file_picker) return;
     if(picker?(s->page!=KUI_SHELL_FILES_PICK || strcmp(page->path,s->files_pick_path)):
               strcmp(page->path,s->files_path)) return;
     struct kui_files_page *l=picker?&s->files_pick:&s->files_listing;
@@ -1010,8 +1072,9 @@ void kui_shell_set_files_listing(struct kui_shell *s,const struct kui_files_page
             snprintf(e->name,sizeof(e->name),"[Name too long]");e->disabled=true;
         }
         if(!e->disabled && !kui_files_join(path,l->path,e->name)) e->disabled=true;
+        if(picker && s->files_pick_import && !e->directory && !vmu_import_name(e->name)) e->disabled=true;
         /* A copied or moved folder cannot be chosen as its own destination. */
-        if(picker && !compare_picker && moving && !e->disabled && !strcmp(path,s->files_job.source)) e->disabled=true;
+        if(picker && !file_picker && moving && !e->disabled && !strcmp(path,s->files_job.source)) e->disabled=true;
     }
     unsigned *selected=picker?&s->files_pick_selected:&s->files_selected;
     if(*selected>=l->count) *selected=0;
@@ -1331,7 +1394,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             s->confirm_storage_test=false;
             s->confirm_new=false; s->confirm_quick_resume=false; s->confirm_gd_boot=false;
             s->confirm_clock=false;s->confirm_defaults=false;s->confirm_vmu_restore=false;
-            s->confirm_vmu_delete=false;s->confirm_vmu_copy=false;s->confirm_music_clear=false;s->confirm_restart=false;s->confirm_salvage=false;
+            s->confirm_vmu_delete=false;s->confirm_vmu_copy=false;s->confirm_vmu_copy_all=false;
+            s->confirm_vmu_import=false;s->confirm_music_clear=false;s->confirm_restart=false;s->confirm_salvage=false;
             s->confirm_wifi_forget=false;
             s->confirm_wifi_update=false;
             return KUI_SHELL_STOP;
@@ -1370,6 +1434,11 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(s->page==KUI_SHELL_KEYBOARD && s->wifi_keyboard) {wifi_keyboard_close(s);return KUI_SHELL_NONE;}
         if(s->confirm_vmu_delete) {s->confirm_vmu_delete=false;return KUI_SHELL_NONE;}
         if(s->confirm_vmu_copy) {s->confirm_vmu_copy=false;return KUI_SHELL_NONE;}
+        if(s->confirm_vmu_copy_all) {s->confirm_vmu_copy_all=false;return KUI_SHELL_NONE;}
+        if(s->page==KUI_SHELL_VMU_IMPORT) {
+            s->confirm_vmu_import=false;s->page=KUI_SHELL_VMU_RESTORE;
+            return s->vmu_import_staged?list_backups(s,true):KUI_SHELL_NONE;
+        }
         if(s->confirm_music_clear) {s->confirm_music_clear=false;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_VMU_ACTIONS) {s->page=KUI_SHELL_VMU;return KUI_SHELL_VMU_LIST;}
         if(s->confirm_clock) {s->confirm_clock=false;return KUI_SHELL_NONE;}
@@ -1444,8 +1513,9 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                 memcpy(s->files_pick_path,parent,sizeof(s->files_pick_path));
                 return list_files(s,true,KUI_FILES_SEEK_FIRST,NULL,false);
             }
-            s->page=s->files_pick_compare?KUI_SHELL_SYSTEM_TOOLS:KUI_SHELL_FILES_ACTIONS;
-            s->files_pick_compare=false;return KUI_SHELL_NONE;
+            s->page=s->files_pick_compare?KUI_SHELL_SYSTEM_TOOLS:
+                s->files_pick_import?KUI_SHELL_VMU_RESTORE:KUI_SHELL_FILES_ACTIONS;
+            s->files_pick_compare=s->files_pick_import=false;return KUI_SHELL_NONE;
         }
         if(s->page==KUI_SHELL_FILES) {
             char parent[KUI_FILES_PATH_CAP],left[KUI_FILES_NAME_CAP];
@@ -1522,7 +1592,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     bool song_page=s->page==KUI_SHELL_HOME || s->page==KUI_SHELL_RIPPER;
     bool confirming=s->confirm_new || s->confirm_quick_resume || s->confirm_gd_boot ||
         s->confirm_storage_test || s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore ||
-        s->confirm_vmu_delete || s->confirm_vmu_copy || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage ||
+        s->confirm_vmu_delete || s->confirm_vmu_copy || s->confirm_vmu_copy_all || s->confirm_vmu_import || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage ||
         s->confirm_wifi_forget || s->confirm_wifi_update || s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
         s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM || s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS ||
         s->page==KUI_SHELL_GAMES_VARIANTS || s->page==KUI_SHELL_FILES_CONFIRM;
@@ -1577,6 +1647,10 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     }
     if(s->confirm_vmu_copy) {
         if(buttons&KUI_SHELL_A) {s->confirm_vmu_copy=false;return KUI_SHELL_VMU_COPY_COMMIT;}
+        return KUI_SHELL_NONE;
+    }
+    if(s->confirm_vmu_copy_all) {
+        if(buttons&KUI_SHELL_A) {s->confirm_vmu_copy_all=false;return KUI_SHELL_VMU_COPY_ALL_COMMIT;}
         return KUI_SHELL_NONE;
     }
     if(s->confirm_music_clear) {
@@ -2089,7 +2163,20 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons&KUI_SHELL_A)return s->recovery_operation==1u?KUI_SHELL_REPAIR_COPY:
             s->recovery_operation==2u?KUI_SHELL_FORENSIC:KUI_SHELL_ADVANCED_CRC;
         break;
+    case KUI_SHELL_VMU_IMPORT:
+        if(buttons&KUI_SHELL_A) {
+            if(s->vmu_import_staged) return KUI_SHELL_NONE;
+            if(s->confirm_vmu_import) {s->confirm_vmu_import=false;return KUI_SHELL_VMU_IMPORT_COMMIT;}
+            return preview_vmu_import(s);
+        }
+        break;
     case KUI_SHELL_VMU_RESTORE: {
+        if(buttons&KUI_SHELL_Y) {
+            s->files_pick_compare=false;s->files_pick_import=true;
+            snprintf(s->files_pick_path,sizeof(s->files_pick_path),"/");
+            s->page=KUI_SHELL_FILES_PICK;
+            return list_files(s,true,KUI_FILES_SEEK_FIRST,NULL,false);
+        }
         unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
         if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT) {
             s->vmu_slot=(s->vmu_slot+(horizontal==KUI_SHELL_LEFT?7:1))%8;
@@ -2223,30 +2310,37 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             if(s->tools_selected==1) return KUI_SHELL_FLASH_BACKUP;
             if(s->tools_selected==2) return KUI_SHELL_BIOS_BACKUP;
             if(s->tools_selected==3) {s->confirm_restart=true;break;}
-            s->system_compare_bios=s->tools_selected==5;s->files_pick_compare=true;
+            s->system_compare_bios=s->tools_selected==5;s->files_pick_compare=true;s->files_pick_import=false;
             snprintf(s->files_pick_path,sizeof(s->files_pick_path),"/KUI/backups");
             s->page=KUI_SHELL_FILES_PICK;
             return list_files(s,true,KUI_FILES_SEEK_FIRST,NULL,false);
         }
         break;
     case KUI_SHELL_VMU_ACTIONS: {
-        s->vmu_action_selected=move_count(s->vmu_action_selected,buttons,3);
+        s->vmu_action_selected=move_count(s->vmu_action_selected,buttons,4);
         unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
-        if(s->vmu_action_selected==1 && (horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT)) {
+        if((s->vmu_action_selected==1 || s->vmu_action_selected==3) &&
+           (horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT)) {
             do {s->vmu_copy_slot=(s->vmu_copy_slot+(horizontal==KUI_SHELL_LEFT?7:1))%8;}
             while(s->vmu_copy_slot==s->vmu_slot);
         }
         if((buttons&KUI_SHELL_A) && s->vmu.present) {
             if(s->vmu_action_selected==2) return KUI_SHELL_VMU_BACKUP_CARD;
+            if(s->vmu_action_selected==3) {
+                if(!s->vmu.total) return KUI_SHELL_NONE;
+                memset(&s->vmu_copy_all,0,sizeof(s->vmu_copy_all));
+                return KUI_SHELL_VMU_COPY_ALL_PREVIEW;
+            }
             if(s->vmu_selected<s->vmu.count)
                 return s->vmu_action_selected?KUI_SHELL_VMU_COPY_PREVIEW:KUI_SHELL_VMU_DELETE_PREVIEW;
         }
         break;
     }
     case KUI_SHELL_VMU: {
-        if((buttons&KUI_SHELL_L) && s->vmu.present) {
+        if(buttons&KUI_SHELL_L) {
             s->vmu_action_selected=0;s->vmu_copy_slot=(s->vmu_slot+1)%8;
-            s->confirm_vmu_delete=false;s->confirm_vmu_copy=false;s->page=KUI_SHELL_VMU_ACTIONS;
+            s->confirm_vmu_delete=false;s->confirm_vmu_copy=false;s->confirm_vmu_copy_all=false;
+            memset(&s->vmu_copy_all,0,sizeof(s->vmu_copy_all));s->page=KUI_SHELL_VMU_ACTIONS;
             return KUI_SHELL_NONE;
         }
         if(buttons&KUI_SHELL_R) {s->page=KUI_SHELL_VMU_RESTORE;return list_backups(s,true);}

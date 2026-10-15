@@ -1,5 +1,9 @@
 # VMU backup and restore
 
+RC13 also provides [external save import](vmu-import.md) into this verified
+bundle format and [Copy all between VMUs](vmu-copy-all.md) using the existing
+per-save write transaction. Both have their own preview and confirmation.
+
 VMU Manager now browses its SD backups and restores a selected save into free
 space on a selected VMU. Restore always previews the source name, block count,
 and destination slot before a separate confirmation. An existing filename is

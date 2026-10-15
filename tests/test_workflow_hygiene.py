@@ -151,10 +151,12 @@ class MaintenanceValidationScope(unittest.TestCase):
     def test_scoped_tools_and_their_checks_use_maintenance_validation(self):
         paths = ("Makefile", "Makefile.dc", ".github/workflows/diagnostic.yml", "README.md",
                  "include/kui/apps.h", "include/kui/maintenance.h", "include/kui/shell.h", "include/kui/version.h",
+                 "include/kui/vmu_import.h", "src/core/vmu_save_format.c", "src/apps/vmu_import.c",
                  "src/apps/vmu.c", "src/apps/maintenance.c", "src/apps/maintenance_platform.c",
                  "src/core/shell.c", "src/dreamcast/main.c", "src/dreamcast/shell_draw.c",
                  "tests/test_vmu_app.c", "tests/test_vmu_images.py", "tests/maintenance_image.c",
                  "tests/test_maintenance_images.py", "tests/test_shell.c", "tests/render_shell.c",
+                 "tests/test_vmu_save_format.c", "tests/vmu_import_image.c", "tests/test_vmu_import_images.py",
                  "tests/test_retail_package.py", "tests/test_workflow_hygiene.py", "docs/maintenance-tools.md")
         for path in paths:
             with self.subTest(path=path):
@@ -168,6 +170,7 @@ class MaintenanceValidationScope(unittest.TestCase):
     def test_driver_and_unreviewed_source_changes_cannot_skip_real_filesystem_coverage(self):
         for path in ("src/loader/retail_sd.c", "src/loader/retail_resident.c", "src/dreamcast/sci_port.c",
                      "src/dreamcast/w5500_sci.c", "src/apps/vmu_unreviewed.c", "include/kui/vmu_unreviewed.h",
+                     "src/apps/vmu_import_unreviewed.c", "src/core/vmu_save_unreviewed.c",
                      "src/apps/games.c", "tests/test_games_images.py"):
             with self.subTest(path=path):
                 result, output = GamesVariantValidationScope().run_scope(path, "maintenance-only")
@@ -175,14 +178,18 @@ class MaintenanceValidationScope(unittest.TestCase):
                 self.assertIn("outside VMU, console maintenance, shell and their checks", result.stderr)
                 self.assertEqual(output, "")
 
-    def test_scope_runs_portable_and_all_existing_vmu_maintenance_cases(self):
+    def test_scope_runs_portable_parser_and_all_vmu_maintenance_import_cases(self):
         script = step_script("name: Run maintenance tool checks")
         self.assertEqual(script.strip().splitlines(), [
-            "make test build/test-vmu-app build/maintenance-image",
-            "python3 tests/test_vmu_images.py", "python3 tests/test_maintenance_images.py"])
+            "make test build/test-vmu-app build/maintenance-image build/test-vmu-save-format build/vmu-import-image",
+            "python3 tests/test_vmu_images.py",
+            "python3 tests/test_maintenance_images.py", "python3 tests/test_vmu_import_images.py"])
         result, output = GamesVariantValidationScope().run_scope("include/kui/games.h")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("maintenance_only=false", output)
+
+    def test_parser_is_executed_by_the_ordinary_portable_suite(self):
+        self.assertIn("\t./build/test-vmu-save-format\n", (ROOT / "Makefile").read_text())
 
     def test_focused_scope_prepares_its_filesystem_dependencies_and_yaml_parser(self):
         text = WORKFLOW.read_text()

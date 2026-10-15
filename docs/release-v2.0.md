@@ -1,9 +1,9 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# K-UI V2.0 RC12 "Tyrfing"
+# K-UI V2.0 RC13 "Tyrfing"
 
 Tyrfing continues K-UI's cursed-sword release names. This guide covers the
-**2.0 RC12 source integration candidate**, not a published final 2.0 release.
-Its package prefix is `kui-2.0-rc12-tyrfing`. For the existing stable download,
+**2.0 RC13 source integration candidate**, not a published final 2.0 release.
+Its package prefix is `kui-2.0-rc13-tyrfing`. For the existing stable download,
 use [1.8.5](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.8.5) and its
 [installation guide](release-v1.8.5.md).
 
@@ -22,17 +22,17 @@ for retained features, remaining gaps and deferred work.
    saved launch settings. Install `runtime.kui` and the complete
    `KUI/apps/games` payload folder together. Earlier partial test ZIPs are not
    a substitute for the matching release package.
-3. Safely eject the card and cold boot. Check **V2.0 RC12** and the displayed
+3. Safely eject the card and cold boot. Check **V2.0 RC13** and the displayed
    build ID against the package's `build.json`. The illustration says V2.0;
    the live version label distinguishes this RC from a final release.
 
-RC12 retains the orange Tyrfing runtime/header artwork introduced in RC11 and a matching optional
+RC13 retains the orange Tyrfing runtime/header artwork introduced in RC11 and a matching optional
 CDI with the new boot splash, orange controls and sword badge. Burn that CDI
 to replace artwork on the boot disc; the normal runtime update can continue
 using your existing compatible independent K-UI CD. To preview the new boot
 menu without burning, copy only the separate bootstrap package's
 `KUI/tools.kui` to the card, pause the existing CD startup and choose
-**Card tools**. Check **Card boot / recovery**, RC12 and the build ID, then
+**Card tools**. Check **Card boot / recovery**, RC13 and the build ID, then
 choose **Start K-UI**. The under-SEGA badge is stored on the disc and changes
 only when that disc is replaced. See [the card preview guide](bootloader-refresh.md#check-the-final-artwork-without-reburning).
 
@@ -102,8 +102,18 @@ owner report, not a zero-overhead or universal compatibility result. Earlier
 Armada/BAM4/Worms tests retain documented audio/FMV limitations. The WinCE path
 does not resolve Toy Commander's native FMV stalls.
 
-## RC12 VMU and system tools
+## VMU and system tools
 
+- In **VMU Manager → R Backups**, press **Y Import save file**, choose an
+  external `.vms`, `.vmi` or `.dci`, review its name and metadata, then confirm
+  staging a verified SD bundle. This step needs no attached VMU. See
+  [format limits and filename rules](vmu-import.md). Use the existing separate
+  restore preview/confirmation if you want to put the imported save on a VMU.
+- In **L Actions**, choose **Copy all saves to VMU**, select the destination
+  with Left/Right and review the whole batch before confirmation. Both cards
+  must remain connected and SD backups must succeed. Conflicting names or
+  inadequate capacity refuse the batch before writing. See
+  [bulk-copy behavior and partial results](vmu-copy-all.md).
 - In **VMU Manager**, open **L Actions → Backup card image** to save the
   selected formatted VMU as a verified 131072-byte raw VMD. An empty formatted
   card is supported. The backup never writes to the VMU.
@@ -118,9 +128,8 @@ does not resolve Toy Commander's native FMV stalls.
   The result reports an exact match or differing-byte count and first offset.
   See [comparison scope](system-backups.md#compare-an-existing-image).
 
-These additions are host-tested and await console acceptance. VMD extraction
-uses the existing separately confirmed single-save restore workflow if you later
-choose to restore a bundle. Whole-card restore/format/overwrite and flash
+These additions are host-tested and await console acceptance. VMD extraction and external import
+create bundles for the existing separately confirmed single-save restore workflow. Whole-card restore/format/overwrite and flash
 programming are not provided. No DreamShell implementation code is reused.
 
 ## Existing tools and hardware boundaries

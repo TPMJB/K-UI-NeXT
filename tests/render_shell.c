@@ -6,6 +6,8 @@
  * home-music, home-gd, music, gd-play, gd-confirm, quick-resume, dma-fallback,
  * music-queued, advanced-destination, clock, clock-confirm, defaults,
  * vmu-restore, vmu-restore-confirm, vmu-card-backup, vmu-image, vmu-image-working,
+ * vmu-copy-all, vmu-copy-all-confirm, vmu-copy-all-partial, vmu-import-pick,
+ * vmu-import-preview, vmu-import-complete,
  * system-compare, bios-image-pick, flash-image-pick, crc-scan, scan-folder, home-games,
  * games, games-variants, games-variants-2048, games-detail-2048, games-retail-2048,
  * games-detail, games-error, games-advanced, games-probe,
@@ -487,6 +489,64 @@ int main(int argc,char **argv) {
         strcpy(shell.vmu.entries[0].name,"MDK2_SAVE");shell.vmu.entries[0].bytes=4096;
         shell.vmu_copy_slot=1;shell.confirm_vmu_delete=!strcmp(argv[1],"vmu-delete");
         shell.confirm_vmu_copy=!strcmp(argv[1],"vmu-copy");
+    } else if(!strcmp(argv[1],"vmu-copy-all") || !strcmp(argv[1],"vmu-copy-all-confirm") ||
+              !strcmp(argv[1],"vmu-copy-all-partial")) {
+        shell.page=KUI_SHELL_VMU_ACTIONS;shell.vmu.present=true;shell.vmu.total=12;
+        shell.vmu_slot=7;shell.vmu_copy_slot=0;shell.vmu_action_selected=3;
+        struct kui_vmu_view *bulk=&shell.vmu_copy_all;
+        bulk->slot=7;bulk->copy_ready=true;bulk->bulk_total=bulk->bulk_remaining=12;
+        view.app_status=&bulk->status;
+        bulk->status.complete=bulk->status.passed=true;
+        strcpy(bulk->status.message,"12 saves checked. Destination has enough free blocks.");
+        shell.confirm_vmu_copy_all=!strcmp(argv[1],"vmu-copy-all-confirm");
+        if(!strcmp(argv[1],"vmu-copy-all-partial")) {
+            bulk->copy_ready=false;bulk->bulk_completed=4;bulk->bulk_remaining=8;bulk->bulk_unverified=true;
+            bulk->status.passed=false;bulk->status.stopped=true;
+            strcpy(bulk->status.message,"Stopped after four verified copies; inspect the destination.");
+        }
+    } else if(!strcmp(argv[1],"vmu-import-pick")) {
+        shell.page=KUI_SHELL_FILES_PICK;shell.files_pick_import=true;
+        strcpy(shell.files_pick_path,"/Saves");
+        struct kui_files_page *files=&shell.files_pick;
+        strcpy(files->path,shell.files_pick_path);files->count=files->total=8;
+        static const char *const names[]={"Card images","GRANDIA2.VMS","MDK2.vmi","SONICADV.DCI", "notes.txt",
+            "SKIES_OF_ARCADIA.VMS","TOYCOMMANDER.VMI","WORMS_WORLD_PARTY.DCI"};
+        for(unsigned i=0;i<8;i++) {
+            snprintf(files->entries[i].name,sizeof(files->entries[i].name),"%s",names[i]);
+            files->entries[i].directory=i==0;files->entries[i].disabled=i==4;
+            files->entries[i].bytes=i?4096u+512u*i:0;
+        }
+        shell.files_pick_selected=3;
+        strcpy(files->message,"Choose an external save to stage as a verified SD backup.");
+    } else if(!strcmp(argv[1],"vmu-import-preview") || !strcmp(argv[1],"vmu-import-complete")) {
+        shell.page=KUI_SHELL_VMU_IMPORT;
+        strcpy(shell.vmu_import_path,"/Saves/Grandia II/GRANDIA2_SYS.vms");shell.vmu_import_generation=1;
+        struct kui_vmu_view *import=&shell.vmu_import;
+        import->count=import->total=1;import->entries[0].bytes=32768;
+        strcpy(import->entries[0].name,"GRANDIA2_SYS");
+        import->status.complete=import->status.passed=true;
+        /* Exact backend describe() text, including bare VMS's longest name
+         * origin and unknown timestamp. The renderer shows the first eight
+         * metadata lines; its footer explains the separate restore step. */
+        import->status.line_count=9;
+        static const char *const lines[]={
+            "Source: VMS; read-only input",
+            "VMU name bytes: 4752414e444941325f535953",
+            "Name from SD filename (not a name in the VMS header)",
+            "Type: data save; copy flag: unprotected",
+            "64 blocks (32768 bytes); header block: 0",
+            "Original date: unknown (zero timestamp)",
+            "VMS package CRC16 checked; complete inputs read twice",
+            "Confirm creates a new .vms/.dir/.crc bundle on SD",
+            "No physical VMU is accessed; restore is a separate action"
+        };
+        for(unsigned i=0;i<9;i++) snprintf(import->status.lines[i],KUI_APP_LINE_CAP,"%s",lines[i]);
+        shell.vmu_import_staged=!strcmp(argv[1],"vmu-import-complete");
+        shell.confirm_vmu_import=import->import_ready=!shell.vmu_import_staged;
+        if(shell.vmu_import_staged) {
+            strcpy(import->backup_path,"/KUI/backups/vmu/A1-0001/001_GRANDIA2_SYS.vms");
+            strcpy(import->status.message,"Imported save staged and read back successfully.");
+        } else strcpy(import->status.message,"External save is valid. Ready to create a verified SD backup.");
     } else if(!strcmp(argv[1],"vmu-card-backup")) {
         shell.page=KUI_SHELL_VMU_ACTIONS;shell.vmu.present=true;shell.vmu_action_selected=2;shell.vmu_copy_slot=1;
         view.app_status=&status;strcpy(status.message,"Card image saved and read back successfully.");

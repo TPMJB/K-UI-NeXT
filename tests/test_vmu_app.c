@@ -18,7 +18,11 @@
  * Restore/delete stubs model upstream allocation/commit stages. No format API. */
 static uint8_t card[256][512],destination_card[256][512],original_destination[256][512];
 static bool two_cards;
-static maple_device_t devices[3]={{1,0,1,{MAPLE_FUNC_MEMCARD}},{1,0,1,{MAPLE_FUNC_MEMCARD}},{1,0,2,{MAPLE_FUNC_MEMCARD}}};
+static maple_device_t devices[4]={{1,0,1,{MAPLE_FUNC_MEMCARD}},{1,0,1,{MAPLE_FUNC_MEMCARD}},{1,0,2,{MAPLE_FUNC_MEMCARD}},{1,0,2,{MAPLE_FUNC_MEMCARD}}};
+static unsigned destination_active=2,source_vmu_writes,bulk_dir_commits;
+static uint64_t reported_done;
+static bool bulk_staging_checked;
+static void verify_save(unsigned index);
 static unsigned active,reads,locks,connects,disconnects,writes,source_slot,enumerations,raw_zero_reads,media_reads;
 static bool missing,payload_seen,injected;
 static unsigned vmu_writes;
@@ -50,19 +54,19 @@ static void setup(unsigned count) {
     }
 }
 static uint8_t (*device_card(maple_device_t *device))[512] {
-    assert(device==&devices[active] || (two_cards && device==&devices[2]));
-    return device==&devices[2]?destination_card:card;
+    assert(device==&devices[active] || (two_cards && device==&devices[destination_active]));
+    return device==&devices[destination_active]?destination_card:card;
 }
 maple_device_t *maple_enum_dev(int port,int unit) {
     ++enumerations;
-    if(two_cards && port==0 && unit==2) return &devices[2];
+    if(two_cards && port==0 && unit==2) return &devices[destination_active];
     return !missing && port==(int)(source_slot/2) && unit==(int)(source_slot%2+1)?&devices[active]:NULL;
 }
 int vmufs_mutex_lock(void) {assert(!locks);++locks;return 0;}
 int vmufs_mutex_unlock(void) {assert(locks==1);--locks;return 0;}
 int vmu_block_read(maple_device_t *device,uint16_t block,uint8_t *out) {
     assert(locks==1 && block<256);++reads;uint8_t (*storage)[512]=device_card(device);
-    if(is("vmu-read-fail")) {injected=true;return -1;}
+    if(is("bulk-vmu-read-fail") || (is("bulk-final-read-fail") && bulk_dir_commits && block==199 && device==&devices[destination_active]) || is("vmu-read-fail")) {injected=true;return -1;}
     if(is("short-block")) {memcpy(out,storage[block],508);injected=true;return 0;}
     if(block==0 && is("card-image-changed") && ++raw_zero_reads==3) {storage[0][11]^=1;injected=true;}
     if(block==10 && is("card-image-removed")) {missing=true;injected=true;}
@@ -74,18 +78,25 @@ int vmu_block_read(maple_device_t *device,uint16_t block,uint8_t *out) {
 }
 /* Transport fault model plus upstream FAT/directory publish boundaries. */
 int vmu_block_write(maple_device_t *device,uint16_t block,const uint8_t *data) {
-    assert(locks==1 && block<200);++vmu_writes;uint8_t (*storage)[512]=device_card(device);
-    if((is("restore-write-fail") || is("copy-write-fail"))) {injected=true;return -1;}
+    assert(locks==1 && block<200);
+    if(fault && !strncmp(fault,"bulk-",5) && !vmu_writes) {
+        for(unsigned i=0;i<3;i++) verify_save(i);
+        bulk_staging_checked=true;
+    }
+    ++vmu_writes;uint8_t (*storage)[512]=device_card(device);
+    if(device!=&devices[destination_active]) ++source_vmu_writes;
+    if((is("restore-write-fail") || is("copy-write-fail") || is("bulk-write-fail") || (is("bulk-write-fail-after-one") && reported_done>=1024))) {injected=true;return -1;}
     memcpy(storage[block],data,512);
-    if((is("restore-data-corrupt") || is("copy-data-corrupt"))) {storage[block][0]^=1;injected=true;}
+    if((is("restore-data-corrupt") || is("copy-data-corrupt") || is("bulk-data-corrupt"))) {storage[block][0]^=1;injected=true;}
     if(is("restore-remove")) {missing=true;injected=true;}
     return 0;
 }
 int vmufs_fat_write(maple_device_t *device,vmu_root_t *root,uint16_t *fat) {
     assert(locks==1);++vmu_writes;uint8_t (*storage)[512]=device_card(device);
-    if((is("restore-fat-fail") || is("delete-fat-fail") || is("copy-fat-fail"))) {injected=true;memcpy(storage[root->fat_loc]+384,(uint8_t *)fat+384,64);return -1;}
+    if(device!=&devices[destination_active]) ++source_vmu_writes;
+    if((is("restore-fat-fail") || is("delete-fat-fail") || is("copy-fat-fail") || is("bulk-fat-fail") || (is("bulk-fat-fail-after-one") && reported_done>=1024))) {injected=true;memcpy(storage[root->fat_loc]+384,(uint8_t *)fat+384,64);return -1;}
     memcpy(storage[root->fat_loc],fat,512);
-    if((is("restore-fat-corrupt") || is("delete-fat-corrupt") || is("copy-fat-corrupt"))) {injected=true;storage[root->fat_loc][20]^=1;}
+    if((is("restore-fat-corrupt") || is("delete-fat-corrupt") || is("copy-fat-corrupt") || is("bulk-fat-corrupt"))) {injected=true;storage[root->fat_loc][20]^=1;}
     return 0;
 }
 int vmufs_dir_write(maple_device_t *device,vmu_root_t *root,vmu_dir_t *dir) {
@@ -95,16 +106,19 @@ int vmufs_dir_write(maple_device_t *device,vmu_root_t *root,vmu_dir_t *dir) {
         for(unsigned i=0;i<16;i++) {if(dir[block*16+i].dirty) dirty=true;dir[block*16+i].dirty=0;}
         if(!dirty) continue;
         ++vmu_writes;
-        if((is("restore-dir-fail") || is("delete-dir-fail") || is("copy-dir-fail"))) {injected=true;return -1;}
-        memcpy(storage[root->dir_loc-block],dir+block*16,512);
-        if((is("restore-dir-corrupt") || is("delete-dir-corrupt") || is("copy-dir-corrupt"))) {injected=true;storage[root->dir_loc-block][63]^=1;}
+        if(device!=&devices[destination_active]) ++source_vmu_writes;
+        if((is("restore-dir-fail") || is("delete-dir-fail") || is("copy-dir-fail") || is("bulk-dir-fail") || (is("bulk-dir-fail-after-one") && reported_done>=1024))) {injected=true;return -1;}
+        memcpy(storage[root->dir_loc-block],dir+block*16,512);++bulk_dir_commits;
+        if((is("restore-dir-corrupt") || is("delete-dir-corrupt") || is("copy-dir-corrupt") || is("bulk-dir-corrupt"))) {injected=true;storage[root->dir_loc-block][63]^=1;}
         if(is("restore-dir-existing-corrupt")) {injected=true;storage[root->dir_loc-block][31]^=1;}
         if(is("restore-final-corrupt") || is("copy-final-corrupt")) {injected=true;storage[199][1]^=1;}
+        if(is("bulk-final-corrupt")) {injected=true;storage[198][1]^=1;}
         if(is("delete-remove")) {injected=true;missing=true;}
     }
     return 0;
 }
 static bool cancelled(void) {
+    if(is("bulk-cancel-start") || (is("bulk-cancel-data") && vmu_writes) || (is("bulk-cancel-after-one") && reported_done>=1024)) {injected=true;return true;}
     if(is("image-cancel-read") && media_reads>=8) {injected=true;return true;}
     if(((is("restore-cancel") && vmu_writes) || (is("restore-stop-commit") && vmu_writes>=3)) || (is("delete-stop-commit") && vmu_writes) || (is("delete-cancel-backup") && payload_seen) ||
        (is("copy-cancel") && vmu_writes) || is("cancel-start") || (is("cancel-read") && reads>=4) || (is("cancel-write") && payload_seen)) {
@@ -125,23 +139,27 @@ static int read_image(void *ctx,uint32_t block,size_t count,uint8_t *data) {
         if(is("image-read-corrupt") && !injected) {injected=true;data[10]^=1;}
     }
     if(payload_seen && contains_payload(data,count)) {
-        if(is("readback-fail") || is("delete-readback-fail") || is("copy-readback-fail")) {injected=true;return -1;}
-        if(is("readback-corrupt") || is("delete-readback-corrupt") || is("copy-readback-corrupt")) {injected=true;data[0]^=1;}
+        if(is("readback-fail") || is("delete-readback-fail") || is("copy-readback-fail") || is("bulk-readback-fail")) {injected=true;return -1;}
+        if(is("readback-corrupt") || is("delete-readback-corrupt") || is("copy-readback-corrupt") || is("bulk-readback-corrupt")) {injected=true;data[0]^=1;}
     }
     return 0;
 }
 static int write_image(void *ctx,uint32_t block,size_t count,const uint8_t *data) {
     (void)ctx;++writes;
-    if((is("restore-sd-write-fail") || is("delete-sd-write-fail") || is("copy-sd-write-fail"))) {injected=true;return -1;}
+    if((is("restore-sd-write-fail") || is("delete-sd-write-fail") || is("copy-sd-write-fail") || is("bulk-sd-write-fail"))) {injected=true;return -1;}
     if(contains_payload(data,count)) {
         payload_seen=true;
+        if(!injected && is("bulk-source-payload-change-during-stage")) {card[4][19]^=1;original_card[4][19]^=1;injected=true;}
+        if(!injected && is("bulk-destination-change-during-stage")) {destination_card[255][48]^=1;original_destination[255][48]^=1;injected=true;}
+        if(!injected && is("bulk-source-removed-during-stage")) {missing=true;injected=true;}
+        if(!injected && is("bulk-destination-removed-during-stage")) {two_cards=false;injected=true;}
         if(is("write-fail")) {injected=true;return -1;}
     }
     return fseeko(image,(off_t)block*512,SEEK_SET) || fwrite(data,512,count,image)!=count?-1:0;
 }
 static int sync_image(void *ctx) {
     (void)ctx;
-    if((is("sync-fail") && payload_seen) || (is("restore-sd-sync-fail") || is("delete-sd-sync-fail") || is("copy-sd-sync-fail"))) {injected=true;return -1;}
+    if((is("sync-fail") && payload_seen) || (is("restore-sd-sync-fail") || is("delete-sd-sync-fail") || is("copy-sd-sync-fail") || is("bulk-sd-sync-fail"))) {injected=true;return -1;}
     return fflush(image) || fsync(fileno(image))?-1:0;
 }
 static const struct kui_media_ops media={NULL,blocks,read_image,write_image,sync_image};
@@ -152,7 +170,13 @@ bool kui_sd_connect(void) {
     kui_media_set(&media);return true;
 }
 void kui_sd_disconnect(void) {++disconnects;kui_media_set(NULL);}
-static void progress(const struct kui_app_status *value) {assert(value->done<=value->total);}
+static void progress(const struct kui_app_status *value) {
+    assert(value->done<=value->total);reported_done=value->done;
+    if(value->done>=1024 && !injected) {
+        if(is("bulk-source-removed-after-one")) {missing=true;injected=true;}
+        if(is("bulk-destination-removed-after-one")) {two_cards=false;injected=true;}
+    }
+}
 static void mount_image(FATFS *fs) {kui_media_set(&media);assert(kui_mount(fs,log_line));}
 static void write_file(const char *path,const void *data,size_t size) {
     FIL file;UINT count;
@@ -354,6 +378,174 @@ static void test_managed(const char *mode) {
         assert(!memcmp(card[199],source_data,512) && !memcmp(card[198],source_data+512,512));
     }
 }
+/* Bulk fixtures and fault injection exercise the independent batch API, not
+ * a loop around the single-save preview. Every preview must be SD/read-only. */
+static unsigned get16(const uint8_t *bytes) {return bytes[0]|((unsigned)bytes[1]<<8);}
+static void verify_bulk_copy(unsigned index) {
+    const uint8_t *source=card[253-index/16]+index%16*32;
+    const uint8_t *destination=destination_card[253-(index+1)/16]+(index+1)%16*32;
+    assert(!memcmp(source,destination,2) && !memcmp(source+4,destination+4,28));
+    unsigned block=get16(destination+2);
+    for(unsigned part=0;part<2;part++) {
+        assert(block<200 && !memcmp(destination_card[block],card[index*2+part],512));
+        block=get16(destination_card[254]+block*2);
+    }
+    assert(block==0xfffa);
+}
+static void test_bulk_copy(const char *mode) {
+    FATFS fs;struct kui_vmu_view out;
+    setup(!strcmp(mode,"bulk-empty-source")?0:3);
+    if(!strcmp(mode,"bulk-game")) {card[253][0]=0xcc;put16(card[253]+26,1);}
+    memcpy(original_card,card,sizeof(card));
+    unsigned destination_count=!strcmp(mode,"bulk-capacity")?98:!strcmp(mode,"bulk-directory-full")?16:1;
+    setup(destination_count);
+    for(unsigned i=0;i<destination_count;i++) {
+        uint8_t *entry=card[253-i/16]+i%16*32;char name[16];
+        memset(entry+4,0,12);snprintf(name,sizeof(name),"KEEP%02u",i);memcpy(entry+4,name,strlen(name));
+    }
+    card[0][10]^=0xa7;
+    if(!strcmp(mode,"bulk-directory-full")) put16(card[255]+76,1);
+    memcpy(destination_card,card,sizeof(card));memcpy(card,original_card,sizeof(card));two_cards=true;
+    if(!strcmp(mode,"bulk-conflict-last")) memcpy(destination_card[253]+4,card[253]+68,12);
+    if(!strcmp(mode,"bulk-source-cycle")) put16(card[254],0);
+    if(!strcmp(mode,"bulk-source-shared")) put16(card[253]+34,0);
+    if(!strcmp(mode,"bulk-source-orphan")) put16(card[254]+40,0xfffa);
+    if(!strcmp(mode,"bulk-destination-orphan")) put16(destination_card[254]+40,0xfffa);
+    if(!strcmp(mode,"bulk-source-duplicate")) memcpy(card[253]+36,card[253]+4,12);
+    if(!strcmp(mode,"bulk-destination-duplicate")) {
+        memcpy(destination_card[253]+32,destination_card[253],32);
+        put16(destination_card[253]+34,2);put16(destination_card[254]+4,3);put16(destination_card[254]+6,0xfffa);
+    }
+    if(!strcmp(mode,"bulk-source-nameless")) memset(card[253]+68,0,12);
+    if(!strcmp(mode,"bulk-source-protection")) card[253][65]=0x13;
+    if(!strcmp(mode,"bulk-source-removed")) missing=true;
+    if(!strcmp(mode,"bulk-destination-removed")) two_cards=false;
+    memcpy(original_card,card,sizeof(card));memcpy(original_destination,destination_card,sizeof(destination_card));
+    unsigned source=!strcmp(mode,"bulk-invalid-source")?8:0;
+    unsigned destination=!strcmp(mode,"bulk-invalid-destination")?8:!strcmp(mode,"bulk-same-slot")?0:1;
+    bool unpreviewed=!strcmp(mode,"bulk-unpreviewed");
+    if(!strcmp(mode,"bulk-vmu-read-fail")) fault=mode;
+    unsigned writes_before=writes,connects_before=connects;
+    kui_vmu_copy_all_run(source,destination,unpreviewed,&out,log_line,cancelled,progress);
+    bool preview_fail=unpreviewed || !strcmp(mode,"bulk-same-slot") || !strcmp(mode,"bulk-invalid-source") ||
+        !strcmp(mode,"bulk-invalid-destination") || !strcmp(mode,"bulk-conflict-last") || !strcmp(mode,"bulk-capacity") ||
+        !strcmp(mode,"bulk-directory-full") || !strcmp(mode,"bulk-source-cycle") || !strcmp(mode,"bulk-source-shared") ||
+        !strcmp(mode,"bulk-source-orphan") || !strcmp(mode,"bulk-destination-orphan") || !strcmp(mode,"bulk-source-duplicate") ||
+        !strcmp(mode,"bulk-destination-duplicate") || !strcmp(mode,"bulk-source-nameless") || !strcmp(mode,"bulk-source-protection") ||
+        !strcmp(mode,"bulk-source-removed") || !strcmp(mode,"bulk-destination-removed") || !strcmp(mode,"bulk-vmu-read-fail") || !strcmp(mode,"bulk-empty-source");
+    assert(!vmu_writes && writes==writes_before && connects==connects_before && !source_vmu_writes);
+    assert(!memcmp(card,original_card,sizeof(card)) && !memcmp(destination_card,original_destination,sizeof(destination_card)));
+    if(preview_fail) {
+        assert(!out.status.passed && !out.copy_ready && out.status.errors && !out.bulk_completed && !out.bulk_unverified);return;
+    }
+    assert(out.status.passed && out.copy_ready && out.bulk_total==3 && !out.bulk_completed && out.bulk_remaining==3);
+    assert(!out.bulk_unverified && out.status.total==3072 && !out.status.done);
+    if(!strcmp(mode,"bulk-preview-only")) return;
+    if(!strcmp(mode,"bulk-changed-source")) card[255][48]^=1;
+    if(!strcmp(mode,"bulk-changed-payload-last")) card[4][19]^=1;
+    if(!strcmp(mode,"bulk-changed-destination")) destination_card[255][48]^=1;
+    if(!strcmp(mode,"bulk-source-device-change")) active=1;
+    if(!strcmp(mode,"bulk-destination-device-change")) destination_active=3;
+    if(!strcmp(mode,"bulk-source-removed-before-commit")) missing=true;
+    if(!strcmp(mode,"bulk-destination-removed-before-commit")) two_cards=false;
+    memcpy(original_card,card,sizeof(card));memcpy(original_destination,destination_card,sizeof(destination_card));
+    fault=mode;reported_done=0;
+    kui_vmu_copy_all_run(0,1,true,&out,log_line,cancelled,progress);
+    bool success=!strcmp(mode,"bulk-ok") || !strcmp(mode,"bulk-game");
+    unsigned expected_completed=success?3:strstr(mode,"after-one")?1:0;
+    bool metadata_unverified=!strcmp(mode,"bulk-fat-fail") || !strcmp(mode,"bulk-fat-corrupt") ||
+        !strcmp(mode,"bulk-dir-fail") || !strcmp(mode,"bulk-dir-corrupt") || !strcmp(mode,"bulk-final-corrupt") ||
+        !strcmp(mode,"bulk-final-read-fail") || !strcmp(mode,"bulk-fat-fail-after-one") || !strcmp(mode,"bulk-dir-fail-after-one");
+    assert(out.status.passed==success && !out.copy_ready && !out.restore_ready);
+    assert(out.bulk_total==3 && out.bulk_completed==expected_completed && out.bulk_remaining==3-expected_completed);
+    assert(out.bulk_unverified==metadata_unverified && out.status.done==(uint64_t)expected_completed*1024 && out.status.total==3072);
+    assert(out.status.complete==success);
+    if(!success) assert(out.status.errors || out.status.stopped);
+    if(!strcmp(mode,"bulk-cancel-start") || !strcmp(mode,"bulk-cancel-data") || !strcmp(mode,"bulk-cancel-after-one")) assert(out.status.stopped);
+    assert(!source_vmu_writes && !memcmp(card,original_card,sizeof(card)));
+    assert(!memcmp(destination_card[0],original_destination[0],1024) && !memcmp(destination_card[253],original_destination[253],32));
+    for(unsigned i=0;i<expected_completed;i++) verify_bulk_copy(i);
+    if(success) assert(out.free_blocks==192);
+    if(strstr(mode,"changed-") || strstr(mode,"device-change") || strstr(mode,"removed-before-commit") ||
+       strstr(mode,"during-stage") || !strcmp(mode,"bulk-cancel-start") || strstr(mode,"sd-write") || strstr(mode,"sd-sync") || strstr(mode,"readback-")) {
+        assert(!vmu_writes && !memcmp(destination_card,original_destination,sizeof(destination_card)));
+    }
+    if(metadata_unverified) {
+        unsigned metadata_writes=strstr(mode,"fat-")?3:4;
+        assert(injected && vmu_writes==expected_completed*4+metadata_writes);
+    }
+    /* A stopped or failed batch consumes its preview, preventing blind retry. */
+    if(!success) {
+        fault=NULL;missing=false;two_cards=true;
+        unsigned before=vmu_writes;kui_vmu_copy_all_run(0,1,true,&out,log_line,cancelled,progress);
+        assert(!out.status.passed && !out.copy_ready && out.status.errors && vmu_writes==before);
+    }
+    fault=NULL;missing=false;two_cards=true;mount_image(&fs);verify_preserved();
+    /* Entire source batch is durably staged before any destination write. */
+    if(vmu_writes) {assert(bulk_staging_checked);for(unsigned i=0;i<3;i++) verify_save(i);}
+    assert(f_mount(NULL,"0:",0)==FR_OK);
+}
+static void test_import_publish(const char *mode) {
+    FATFS fs;struct kui_vmu_view out;uint8_t entry[32],data[1024];
+    memcpy(entry,card[253],32);memcpy(data,card[0],sizeof(data));
+    size_t length=sizeof(data);
+    if(!strcmp(mode,"publish-type")) entry[0]=0x17;
+    if(!strcmp(mode,"publish-protection")) entry[1]=0x13;
+    if(!strcmp(mode,"publish-first-block")) put16(entry+2,0xffff);
+    if(!strcmp(mode,"publish-nameless")) memset(entry+4,0,12);
+    if(!strcmp(mode,"publish-header")) put16(entry+26,2);
+    if(!strcmp(mode,"publish-dirty")) entry[28]=1;
+    if(!strcmp(mode,"publish-reserved")) entry[31]=1;
+    if(!strcmp(mode,"publish-count")) put16(entry+24,1);
+    if(!strcmp(mode,"publish-zero")) length=0;
+    if(!strcmp(mode,"publish-short")) length=513;
+    if(!strcmp(mode,"publish-large")) length=131072;
+    bool invalid=!strcmp(mode,"publish-type") || !strcmp(mode,"publish-protection") ||
+        !strcmp(mode,"publish-nameless") || !strcmp(mode,"publish-header") || !strcmp(mode,"publish-dirty") ||
+        !strcmp(mode,"publish-reserved") || !strcmp(mode,"publish-count") || !strcmp(mode,"publish-zero") ||
+        !strcmp(mode,"publish-short") || !strcmp(mode,"publish-large") || !strcmp(mode,"publish-null-entry") || !strcmp(mode,"publish-null-data");
+    uint8_t original_entry[32];memcpy(original_entry,entry,sizeof(original_entry));
+    mount_image(&fs);unsigned before=writes;
+    fault=mode;
+    if(!strcmp(mode,"publish-write-fail")) fault="write-fail";
+    if(!strcmp(mode,"publish-sync-fail")) fault="sync-fail";
+    if(!strcmp(mode,"publish-readback-fail")) fault="readback-fail";
+    if(!strcmp(mode,"publish-readback-corrupt")) fault="readback-corrupt";
+    if(!strcmp(mode,"publish-cancel-start")) fault="cancel-start";
+    if(!strcmp(mode,"publish-cancel-write")) fault="cancel-write";
+    bool result=kui_vmu_import_publish(!strcmp(mode,"publish-null-entry")?NULL:entry,
+        !strcmp(mode,"publish-null-data")?NULL:data,length,&out,log_line,cancelled,progress);
+    bool success=!strcmp(mode,"publish-ok") || !strcmp(mode,"publish-first-block");
+    assert(result==success && out.status.passed==success && out.status.complete==success);
+    assert(!reads && !enumerations && !vmu_writes && !connects && !disconnects && !locks);
+    assert(!memcmp(entry,original_entry,sizeof(entry)));assert(!memcmp(data,card[0],sizeof(data)));
+    if(invalid || !strcmp(mode,"publish-cancel-start")) assert(writes==before);
+    if(!success) assert(out.status.errors || out.status.stopped);
+    fault=NULL;
+    if(!success) {assert(f_mount(NULL,"0:",0)==FR_OK);mount_image(&fs);}
+    verify_preserved();
+    FILINFO info;
+    if(success) {
+        assert(!strcmp(out.backup_path,"0:/KUI/backups/vmu/A1-0002/001_SAVE00.vms"));
+        assert(out.status.done==1024 && out.status.total==1024);
+        if(!strcmp(mode,"publish-first-block")) {
+            equal_file("0:/KUI/backups/vmu/A1-0002/001_SAVE00.dir",entry,sizeof(entry));
+            equal_file("0:/KUI/backups/vmu/A1-0002/001_SAVE00.vms",data,sizeof(data));
+        } else verify_save(0);
+        assert(f_stat("0:/KUI/backups/vmu/A1-0002/complete.txt",&info)==FR_OK);
+    } else assert(f_stat("0:/KUI/backups/vmu/A1-0002/complete.txt",&info)!=FR_OK);
+    assert(f_mount(NULL,"0:",0)==FR_OK);
+    if(success) {
+        setup(0);
+        kui_vmu_restore_run("0:/KUI/backups/vmu/A1-0002/001_SAVE00.vms",0,false,&out,log_line,cancelled,progress);
+        assert(out.status.passed && out.restore_ready && !vmu_writes);
+        kui_vmu_restore_run("0:/KUI/backups/vmu/A1-0002/001_SAVE00.vms",0,true,&out,log_line,cancelled,progress);
+        assert(out.status.passed && out.status.complete && out.status.done==1024);
+        assert(!memcmp(card[199],data,512) && !memcmp(card[198],data+512,512));
+        assert(!memcmp(card[253],entry,2) && !memcmp(card[253]+4,entry+4,28));
+        assert(card[253][2]==199 && card[253][3]==0); /* Imported location is ignored; new allocation is used. */
+    }
+}
 static const char *fixture="0:/KUI/backups/vmu/A1-0001/fixture.vmd";
 static void test_card_image(const char *mode) {
     FATFS fs;struct kui_vmu_view out;
@@ -520,6 +712,12 @@ int main(int argc,char **argv) {
     if(!strncmp(mode,"card-image",10) || !strncmp(mode,"image-",6)) {
         if(!strncmp(mode,"card-image",10)) test_card_image(mode);else test_image_tools(mode);
         assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;
+    }
+    if(!strncmp(mode,"publish-",8)) {
+        test_import_publish(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;
+    }
+    if(!strncmp(mode,"bulk-",5)) {
+        test_bulk_copy(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;
     }
     if(!strncmp(mode,"delete-",7) || !strncmp(mode,"copy-",5)) {
         test_managed(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;
