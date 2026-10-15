@@ -62,7 +62,7 @@ static void play_frames(unsigned sectors,unsigned repeat,bool infinite) {
     reset(t,tracks);CHECK(kui_armada_ce_stream_request(&model,20u,1u,tracks,repeat)==KUI_ARMADA_CE_STREAM_OK);
     prime();uint32_t ms=0;uint64_t physical=0;
     uint64_t end=infinite?3u*(uint64_t)R:(uint64_t)sectors*S*(repeat+1u);
-    /* Play may start with half the ring fresh. Everything produced past a
+    /* Play starts once its configured reserve is fresh. Anything past a
      * finite end is silence; the rest is filled ahead of the cursor. */
     CHECK(model.produced>=KUI_ARMADA_CE_STREAM_START_BYTES && model.produced<=R);
     if(!infinite && end<model.produced) for(unsigned i=(unsigned)end;i<model.produced;i++) CHECK(!ring[i]);
@@ -153,11 +153,71 @@ static void progressive_reads(void) {
     CHECK(kui_armada_ce_stream_refill_complete(&model,&rf,true)==KUI_ARMADA_CE_STREAM_STALE);
     CHECK(!model.read.id && !model.refill.id && !model.staged && !model.fetch);
 }
+static void reserve_feed(uint32_t bytes) {
+    unsigned chunks=0;
+    while(bytes) {
+        CHECK(++chunks<=4u);
+        struct kui_armada_ce_stream_read rd=model.read;
+        if(!rd.id) CHECK(kui_armada_ce_stream_read_plan(&model,16u,&rd)==KUI_ARMADA_CE_STREAM_OK);
+        uint32_t n=bytes<rd.bytes?bytes:rd.bytes;
+        CHECK(n && !(n&63u));
+        CHECK((n==rd.bytes?kui_armada_ce_stream_read_complete(&model,&rd,true,n):
+            kui_armada_ce_stream_read_progress(&model,&rd,n))==KUI_ARMADA_CE_STREAM_OK);
+        bytes-=n;
+        for(unsigned segment=0;segment<2u && model.staged>=64u;segment++) {
+            struct kui_armada_ce_stream_refill rf;
+            CHECK(kui_armada_ce_stream_refill_plan(&model,KUI_ARMADA_CE_STREAM_STAGE_BYTES,&rf)==KUI_ARMADA_CE_STREAM_OK);
+            CHECK(kui_armada_ce_stream_refill_complete(&model,&rf,true)==KUI_ARMADA_CE_STREAM_OK);
+        }
+        CHECK(model.staged<64u);
+    }
+}
+static bool reserve_headroom(void) {
+    /* Replay the recorded11.299s supply average, with20Hz native visits.
+     * Observe before supplying each visit, as the actual worker does; align
+     * the cursor to4 bytes and checked prefixes to64 bytes. This bounds a
+     * transient deficit, not the timing of the physical card or game. */
+    const uint32_t deficit_ms=11299u,deficit_bytes=1806336u,recovery_ms=5000u;
+    struct kui_armada_ce_stream_track t={1u,0u,1000u,11000u};
+    reset(&t,1u);CHECK(kui_armada_ce_stream_request(&model,20u,1u,1u,15u)==KUI_ARMADA_CE_STREAM_OK);
+    prime();uint32_t initial=(uint32_t)model.produced,minimum=initial,delivered=0u;
+    for(unsigned phase=0;phase<2u;phase++) {
+        uint32_t span=phase?recovery_ms:deficit_ms,elapsed=0u;
+        while(elapsed<span) {
+            elapsed+=span-elapsed<50u?span-elapsed:50u;
+            uint32_t now=phase?deficit_ms+elapsed:elapsed;
+            uint32_t play=(uint32_t)(((uint64_t)now*176400u/1000u)&~UINT64_C(3));
+            uint32_t p=play%R;
+            enum kui_armada_ce_stream_result result=kui_armada_ce_stream_observe(
+                &model,model.ring_epoch,p,p,now);
+            if(result==KUI_ARMADA_CE_STREAM_UNDERRUN) {
+                printf("reserve replay: threshold%u initial%u UNDERRUN at%ums, supplied%u, fresh%llu\n",
+                    KUI_ARMADA_CE_STREAM_START_BYTES,initial,now,delivered,
+                    (unsigned long long)(model.produced-model.consumed));
+                return false;
+            }
+            CHECK(result==KUI_ARMADA_CE_STREAM_OK && model.consumed==play);
+            uint32_t fresh=(uint32_t)(model.produced-model.consumed);
+            if(fresh<minimum) minimum=fresh;
+            uint32_t target=phase?deficit_bytes+((uint32_t)((uint64_t)elapsed*220500u/1000u)&~63u):
+                ((uint32_t)((uint64_t)elapsed*deficit_bytes/deficit_ms)&~63u);
+            reserve_feed(target-delivered);delivered=target;
+        }
+    }
+    CHECK(!model.recoveries && model.native_running && !model.stop_needed);
+    CHECK(model.produced-model.consumed>initial);
+    printf("reserve replay: threshold%u initial%u;11,299ms deficit159866.9B/s, then5,000ms recovery220500B/s; minfresh%u finalfresh%llu; no underrun (%u checks)\n",
+        KUI_ARMADA_CE_STREAM_START_BYTES,initial,minimum,
+        (unsigned long long)(model.produced-model.consumed),checks);
+    return true;
+}
 int main(int argc,char **argv) {
+    if(argc==2 && !strcmp(argv[1],"--reserve-only")) return reserve_headroom()?0:1;
     progressive_reads();
     if(argc==2 && !strcmp(argv[1],"--progress-only")) {
         printf("Armada CE progressive stream model: %u checks passed\n",checks);return 0;
     }
+    CHECK(reserve_headroom());
     const struct kui_armada_ce_stream_track tracks[]={
         {1u,4u,0u,10u},{2u,0u,10u,17u},{3u,0u,17u,23u},{4u,4u,30u,40u},{5u,0u,45u,50u}};
     CHECK(kui_armada_ce_stream_init(NULL,tracks,5u)==KUI_ARMADA_CE_STREAM_ARGUMENT);

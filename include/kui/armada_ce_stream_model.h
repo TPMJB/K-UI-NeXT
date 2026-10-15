@@ -10,10 +10,10 @@
 #define KUI_ARMADA_CE_STREAM_BATCH_BYTES \
     (KUI_ARMADA_CE_STREAM_BATCH_SECTORS*KUI_ARMADA_CE_STREAM_SECTOR_BYTES)
 #define KUI_ARMADA_CE_STREAM_STAGE_BYTES (KUI_ARMADA_CE_STREAM_BATCH_BYTES+64u)
-/* Native Play may begin once half the ring (one second) is fresh. Requiring
- * the whole ring made every start and every recovery at least two seconds of
- * silence while the ring re-primed. */
-#define KUI_ARMADA_CE_STREAM_START_BYTES (KUI_ARMADA_CE_STREAM_RING_BYTES/2u)
+/* Start with seven complete batches, about1.5 seconds of fresh PCM. This
+ * adds75,264 bytes beyond RC7's actual five-batch188,160-byte start, giving
+ * transient source deficits more reserve without requiring the whole ring. */
+#define KUI_ARMADA_CE_STREAM_START_BYTES (7u*KUI_ARMADA_CE_STREAM_BATCH_BYTES)
 #define KUI_ARMADA_CE_STREAM_GUARD_BYTES 4096u
 #define KUI_ARMADA_CE_STREAM_MAX_OBSERVE_MS 999u
 enum kui_armada_ce_stream_state {

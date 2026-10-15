@@ -428,7 +428,7 @@ def build(args):
                 "packaging_corruption_checks": checks,
                 "output_member_sizes_sha256_crc32_verified": True}}
     files["build.json"] = (json.dumps(info, indent=2) + "\n").encode()
-    files["README.md"] = f"""# K-UI 2.0 RC7 — Armada CD music
+    files["README.md"] = f"""# K-UI 2.0 RC8 — Armada CD music
 
 Menu and optional audio loader build **{stamp}**. Merge this ZIP's `KUI` folder
 onto the SCI microSD card with the console off, replacing **both**
@@ -436,19 +436,26 @@ onto the SCI microSD card with the console off, replacing **both**
 
 Select **Original Armada → Y Options → CD music On → START**. This test streams
 the requested audio tracks from your image; it is not the earlier two-second
-excerpt loop. RC7 lets an ordered, CRC-checked portion of a pending audio read
+excerpt loop. It lets an ordered, CRC-checked portion of a pending audio read
 reach playback before the entire read finishes. The same physical job stays
 active; its ticket advances through checked bytes, and DONE commits the suffix.
-RC6 still withheld those bytes until DONE, even when a job lasted700ms.
+RC6 still withheld those bytes until DONE, even when a job lasted 700 ms.
 
 Command epochs, native locking, protected-frontier checks, mapping witnesses
 and exact byte counts remain checked. Finite-track EOF/padding still waits for
 DONE. Late idempotent RELEASE keeps the physical job; STOP/new PLAY cancels it.
-The bounded two-segment ring drain,92-pump bound,16-sector reads,75-block urgent
-grants, priority2 and one-second restart remain. Sample AUX bits4–7 still count
+The bounded two-segment ring drain, 92-pump bound, 16-sector reads, 75-block urgent
+grants and priority 2 remain. Sample AUX bits 4–7 still count
 forced budget yields. SOURCE now advances as checked portions publish; the job
 count and maximum job duration still describe whole reads. Sustained console
 playback remains the required confirmation.
+
+RC7 recorded one underrun after an 11.3-second interval supplying about 160 KB/s
+against 176.4 KB/s consumption. Supply then recovered. RC8 increases the starting
+reserve from the observed 188,160 bytes to seven batches, 263,424 bytes (about 1.49 s).
+This adds about 427 ms of audio reserve and some startup/recovery buffering.
+It targets that temporary deficit; it cannot cure a permanent supply shortage.
+No transport, DATA-reader or native-driver changes are included in RC8.
 
 Use the same in-game scene where the earlier loop was audible. No main-menu
 wait or gameplay video is requested. Return with **A+B+X+Y+Start** after music
@@ -530,7 +537,7 @@ def main():
     parser.add_argument("--elf", type=Path, default=ROOT / "build/kui-runtime.elf")
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     parser.add_argument("--evidence", action="append", default=[], metavar="NAME=PATH")
-    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-2.0-RC7-Armada-Audio.zip")
+    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-2.0-RC8-Armada-Audio.zip")
     args = parser.parse_args()
     try:
         build(args)

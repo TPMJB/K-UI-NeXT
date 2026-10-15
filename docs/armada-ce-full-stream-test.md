@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Armada CE full CD music stream test
 
-## K-UI 2.0 RC7 progressive source publication
+## K-UI 2.0 RC8 transient supply reserve
 
 This console candidate integrates the net changes from
 `fix/armada-cdda-supply` at `be793d667cf0` into our current `eb06827d85da`
@@ -11,7 +11,7 @@ priority 2, 16-sector reads and adaptive low-buffer grants.
 Claude's cursor-authoritative pacing removes the cumulative 20 ms rate stop.
 Native position still cannot jump beyond fresh PCM, advance ambiguously by
 more than half a ring, or use an observation older than 999 ms. Refill follows
-the driver's actual consumption. Restart now requires one second of fresh
+the driver's actual consumption. RC1 reduced restart to one second of fresh
 PCM instead of two. Staging keeps an offset after partial refills; only the
 sub-64-byte carry moves before the next read, outside the interrupt mask.
 Worker visits are recorded in the upper half of sample AUX.
@@ -153,6 +153,32 @@ This changes neither the shared DATA reader nor physical read size, priority,
 transport grants, pump bound, start threshold or audited player/model layout.
 It addresses a source-proven publication delay, not a measured hardware-success
 claim; the next console run must establish its effect on the remaining cuts.
+
+Recording `62663.mp4` confirms RC7 has one recorded underrun and no refusal or
+fault. Maximum approximate source-job duration is 500 ms and maximum visit
+interval is 56 ms. From START at MS `e7f0` to UNDERRUN at `11413` (11,299 ms),
+SOURCE grows from `3a9500` to `562500`: 1,806,336 bytes, about 159,867 B/s.
+Fresh bytes fall from 188,160 to 5,504. This is an early supply deficit,
+not merely a single 500 ms job using up an otherwise-full two-second ring.
+Recovery starts 902 ms later, after sourcing 187,120 bytes (about 207,450 B/s),
+and no further underrun occurs for 36,448 ms before the next START. Final
+sample READY values range from 278,608 to 348,672 bytes, with zero budget
+yields and normal transport priority. Workload/selection changes prevent
+treating the later samples as a controlled continuation of the earlier deficit.
+
+RC8 starts with seven complete batches (263,424 bytes, about 1.49 seconds).
+That adds 75,264 bytes, or about 427 ms of audio, beyond RC7's actual
+188,160-byte start. The threshold is batch-aligned because admission waits
+for the pending read to finish. A simple three-quarter-ring threshold would
+round up to eight whole batches. This is a bounded reserve adjustment for
+the measured transient deficit, with additional startup/recovery buffering;
+it cannot fix a permanent supply shortage. Progressive publication, transport
+grants, thread priority, DATA reader and native checks are unchanged. A focused
+model regression exercises a quantized early deficit followed by recovering
+supply; it does not reproduce the console's unknown exact per-visit timing.
+The focused sanitizer replay passes 2,949 checks, retaining at least 67,800
+fresh bytes. The same replay built with the former half-ring threshold
+underruns at 10,900 ms. The 45 player cases also pass with the new reserve.
 
 Focused player checks cover clock drift, real underruns, finite/infinite
 playback, staging carry and bounded PIO draining/cancellation. Transport checks
