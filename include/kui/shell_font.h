@@ -17,4 +17,9 @@ unsigned kui_shell_font_width(const char *text,bool large);
  * writes and full coverage writes the exact requested color. */
 void kui_shell_font_draw(uint16_t *frame,int x,int y,uint16_t rgb565,
                          const char *text,bool large);
+/* Compact, opaque glyphs for the console header: no letter gap, coverage
+ * below half skips writes and the remaining pixels use the exact color. */
+unsigned kui_shell_font_width_crisp(const char *text,bool large);
+void kui_shell_font_draw_crisp(uint16_t *frame,int x,int y,uint16_t rgb565,
+                               const char *text,bool large);
 #endif

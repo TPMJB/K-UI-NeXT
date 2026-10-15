@@ -4,6 +4,7 @@
 #include "kui/apps.h"
 #include "kui/net.h"
 #include "kwhost.h"
+#include "kui/wifi_pace.h"
 
 /* K-UI's Wi-Fi board on the SCI port: a Seeed XIAO ESP32-C5 (or C6)
  * running firmware/kui-wifi, found only when asked for. The board runs
@@ -12,16 +13,23 @@
  * side in firmware/kui-wifi/components/kwlink.
  *
  * The console's link to the board: one transfer at a time, paced by the
- * board's READY line. */
+ * board's READY line, or a checked adaptive gap when READY is absent. */
 struct kui_wifi_bus {
     void *ctx;
-    /* Waits up to KUI_WIFI_READY_MS for READY to change, then clocks `bytes`
-     * out of `out` while filling `in`, with the board's chip select held.
+    /* With a working READY line, waits up to KUI_WIFI_READY_MS for it to
+     * change; an unwired platform may use a trained timed gap. Then clocks
+     * `bytes` out of `out` while filling `in`, with chip select held.
      * *ready: READY changed (false: the wait ran out and the transfer went
      * anyway, as the protocol allows). False when the SCI port failed. */
     bool (*transfer)(void *ctx, const uint8_t *out, uint8_t *in, size_t bytes, bool *ready);
     uint64_t (*now_ms)(void *ctx);
     void (*pause)(void *ctx, unsigned ms);
+    /* Optional platform pacing: VALID/PROGRESS come from the link's checked
+     * result; TRAIN follows HELLO and all four large echo checks. */
+    void (*feedback)(void *ctx, unsigned flags);
+    /* Current timed fallback gap in microseconds, or 0 for a working READY
+     * handshake. Optional; used by inspection and diagnostics. */
+    unsigned (*gap_us)(void *ctx);
 };
 /* levels: every chip select the board may be on, each at `speeds` clock
  * rates from the fastest down (level = select * speeds + rate). */
@@ -119,11 +127,19 @@ struct kui_wifi_network {
     int8_t rssi;
     bool five; /* 5 GHz */
 };
-enum kui_wifi_action { KUI_WIFI_REFRESH, KUI_WIFI_JOIN, KUI_WIFI_FORGET, KUI_WIFI_BAND };
+/* The preview pins the image and adapter before a separate confirmation. */
+struct kui_wifi_firmware {
+    uint32_t bytes;
+    uint8_t sha256[32], chip, mac[6];
+    char version[33], path[80];
+};
+enum kui_wifi_action { KUI_WIFI_REFRESH, KUI_WIFI_JOIN, KUI_WIFI_FORGET, KUI_WIFI_BAND,
+    KUI_WIFI_UPDATE_CHECK, KUI_WIFI_UPDATE };
 struct kui_wifi_request {
     enum kui_wifi_action action;
     char ssid[KWM_SSID_MAX + 1], password[KWM_PASSWORD_MAX + 1];
     uint8_t band;
+    struct kui_wifi_firmware firmware;
 };
 struct kui_wifi_view {
     bool found, working, failed;
@@ -133,6 +149,9 @@ struct kui_wifi_view {
     bool scanned;
     struct kui_wifi_network networks[KUI_WIFI_NETWORKS];
     unsigned count;
+    struct kui_wifi_firmware firmware;
+    bool firmware_ready, firmware_updating, firmware_committing;
+    uint32_t firmware_done, firmware_total;
 };
 typedef void (*kui_wifi_publish_fn)(const struct kui_wifi_view *view);
 /* Finds the board, does what was asked (REFRESH: status and a scan), and

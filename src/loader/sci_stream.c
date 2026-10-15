@@ -4,6 +4,20 @@
  * between blocks; docs/evidence/sci-async-cmd18-stream-2026-10-02.md). */
 #include "sci_stream.h"
 #include "sci_sd_bus.h"
+#include "kui/general_sci_options.h"
+#if KUI_TOY_PIPELINE_HIGH_STREAM
+#include "kui/toy_loader_data_pipeline.h"
+#endif
+#ifndef KUI_TOY_PILOT_WORD_REVERSE_PROFILE
+#define KUI_TOY_PILOT_WORD_REVERSE_PROFILE 0
+#endif
+#if KUI_TOY_PILOT_WORD_REVERSE_PROFILE < 0 || KUI_TOY_PILOT_WORD_REVERSE_PROFILE > 1
+#error Toy word reversal profile must be 0 or 1
+#endif
+#if KUI_TOY_PILOT_WORD_REVERSE_PROFILE && \
+    (!KUI_TOY_PIPELINE_HIGH_STREAM || KUI_TOY_PILOT_DATA_PIPELINE_PROFILE != 2)
+#error Toy word reversal requires the exact high-only AP pipeline
+#endif
 
 #define SMR UINT32_C(0xffe00000)
 #define BRR UINT32_C(0xffe00004)
@@ -74,7 +88,7 @@ static void fence(const void *area) {
 typedef uint32_t alias_word __attribute__((__may_alias__));
 /* RESUME: stopped mid-block by an overrun in an interrupt, to be resumed. */
 enum { CLOSED, PAUSED, DMA, LOST, RESUME
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
     , TOKEN_WAIT
 #endif
 };
@@ -97,6 +111,18 @@ static uint32_t reverse(uint32_t x) {
     t = (x ^ (x >> 4)) & UINT32_C(0x0f0f0f0f);
     return x ^ t ^ (t << 4);
 }
+#if KUI_TOY_PILOT_WORD_REVERSE_PROFILE
+/* Only the main 128 data words avoid call/stack traffic. Keep the existing
+ * out-of-line reversal for the two CRC tail bytes and every other reader. */
+static inline __attribute__((__always_inline__)) uint32_t reverse_data_word(uint32_t x) {
+    uint32_t t = (x ^ (x >> 1)) & UINT32_C(0x55555555);
+    x ^= t ^ (t << 1);
+    t = (x ^ (x >> 2)) & UINT32_C(0x33333333);
+    x ^= t ^ (t << 2);
+    t = (x ^ (x >> 4)) & UINT32_C(0x0f0f0f0f);
+    return x ^ t ^ (t << 4);
+}
+#endif
 #ifdef KUI_RETAIL_CE
 /* Original MSB-first CRC16 table for x^16+x^12+x^5+1 (0x1021).
  * Entry i is generated from i << 8 by eight repetitions of:
@@ -182,7 +208,7 @@ enum kui_sci_stream_result kui_sci_stream_open(const struct kui_loader_sd *card,
 }
 bool kui_sci_stream_busy(void) { return s.state == DMA; }
 bool kui_sci_stream_ready(uint32_t lba) { return s.arrived == lba + 1u; }
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
 void kui_sci_stream_token_budget(bool bounded) {
     s.token_bounded = bounded;
     s.token_budget = KUI_SCI_STREAM_TOKEN_SLICE;
@@ -193,14 +219,14 @@ const struct kui_sci_stream_stats *kui_sci_stream_stats(void) { return &s.stats;
 void kui_sci_stream_discard(void) { s.ready[0] = s.ready[1] = 0; s.kept = 0; s.arrived = 0; }
 
 /* Data token after the card's wait (0xff); TEND before the DMA starts. */
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
 static void token_count(uint32_t bytes) {
     s.stats.token_bytes += bytes;
     if(bytes > s.stats.token_max) s.stats.token_max = bytes;
 }
 #endif
 static enum kui_sci_stream_result token(uint32_t limit) {
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
     if(s.state != TOKEN_WAIT) {
         s.token_limit = limit;
         s.token_used = 0;
@@ -251,11 +277,22 @@ static uint8_t command(const uint8_t packet[6], bool stop) {
     for(unsigned i = 0; i < 20u && (value & 0x80u); ++i) value = byte(0xff);
     return value;
 }
+#if KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+/* Shared-worker visits must not clock an entire legacy busy timeout while
+ * the game's decoder is paused. Keep the first hardware trial's idle and
+ * CMD12 R1b windows bounded; a timeout is a transport fault, never a grant
+ * to raw audio. Ordinary and CE readers retain their admitted windows. */
+#define START_IDLE_LIMIT 4096u
+#define STOP_BUSY_LAST 4095u
+#else
+#define START_IDLE_LIMIT 50000u
+#define STOP_BUSY_LAST 200000u
+#endif
 /* CMD12 into the stream, its R1b busy, deselection and an idle byte. An
  * idle card answers "illegal command" (0x04): it is stopped all the same. */
 static enum kui_sci_stream_result stop_card(void) {
     static const uint8_t stop[6] = {0x4c, 0, 0, 0, 0, 0x61};
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
     if(s.state == TOKEN_WAIT) token_count(s.token_used);
     ++s.stats.stops;
 #endif
@@ -263,7 +300,7 @@ static enum kui_sci_stream_result stop_card(void) {
     enum kui_sci_stream_result result = command(stop, true) & ~0x04u ?
         KUI_SCI_STREAM_COMMAND : KUI_SCI_STREAM_OK;
     for(uint32_t n = 0; byte(0xff) != 0xffu; ++n)
-        if(n >= 200000u || !healthy()) {result = KUI_SCI_STREAM_COMMAND; break;}
+        if(n >= STOP_BUSY_LAST || !healthy()) {result = KUI_SCI_STREAM_COMMAND; break;}
     select(false);
     (void)byte(0xff);
     s.state = result == KUI_SCI_STREAM_OK ? CLOSED : LOST;
@@ -276,12 +313,12 @@ static enum kui_sci_stream_result start(uint32_t lba, uint32_t limit) {
     packet[5] = crc7(packet);
     select(true);
     for(uint32_t n = 0; byte(0xff) != 0xffu;)
-        if(++n >= 50000u || !healthy()) return KUI_SCI_STREAM_COMMAND;
+        if(++n >= START_IDLE_LIMIT || !healthy()) return KUI_SCI_STREAM_COMMAND;
     s.state = LOST; /* from here on, CMD18 may be running */
     ++s.stats.starts;
     uint8_t r1 = command(packet, false);
     if(!healthy()) return KUI_SCI_STREAM_RESET;
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
     s.position = lba;
 #endif
     return r1 ? KUI_SCI_STREAM_COMMAND : token(limit);
@@ -329,6 +366,12 @@ static enum kui_sci_stream_result start_dma(uint32_t area, uint32_t offset) {
     /* TxD latched high as GPIO before the transmitter is turned off. */
     wr8(SPTR, 0x83u);
     if((rd8(SPTR) & 0x8au) != 0x82u) return KUI_SCI_STREAM_RESET;
+#if KUI_GENERAL_SCI_RESUME_FIX || KUI_CE_SCI_RESUME_FIX
+    /* Snapshot at every actual acquisition, including a resumed block.
+     * receive/fetch admit an idle channel; finish restores it before
+     * continuing a repaired block with interrupts still masked. */
+    for(unsigned j = 0; j < 4; ++j) s.saved[j] = rd32(SAR + 4u * j);
+#endif
     wr8(SCR, 0);
     wr32(CHCR, 0);
     wr32(SAR, RDR & UINT32_C(0x1fffffff));
@@ -371,7 +414,9 @@ static enum kui_sci_stream_result receive(bool polled) {
         return KUI_SCI_STREAM_OK;
     }
     purge(p, AREA_BYTES);
+#if !KUI_GENERAL_SCI_RESUME_FIX && !KUI_CE_SCI_RESUME_FIX
     for(unsigned i = 0; i < 4; ++i) s.saved[i] = rd32(SAR + 4u * i);
+#endif
     s.wire[area] = 1;
     return start_dma(area, 0);
 }
@@ -380,11 +425,29 @@ enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_lim
     enum kui_sci_stream_result result;
     if(s.state == RESUME && s.position == lba) {
         /* Resumed where an overrun in an interrupt stopped it. */
+#if KUI_GENERAL_SCI_RESUME_FIX || KUI_CE_SCI_RESUME_FIX
+        /* A busy guest channel falls through to the normal stop/restart
+         * path below, which rereads this block by PIO. */
+        if(channel_idle()) {
+#elif KUI_TOY_PIPELINE_HIGH_STREAM && KUI_TOY_PIPELINE_RESUME_FIX
+        /* finish already restored DMA1 before leaving RESUME. The guest
+         * may have changed its idle tuple or started a transfer meanwhile.
+         * Never resume over that transfer, or restore the old saved tuple. */
+        if(!channel_idle()) {
+            if((result = stop_card()) != KUI_SCI_STREAM_OK) return result;
+            /* CLOSED falls through to CMD18 at this unchanged block. The
+             * normal receive path uses PIO while the guest owns DMA1. */
+        } else {
+            for(unsigned i = 0; i < 4; ++i) s.saved[i] = rd32(SAR + 4u * i);
+#endif
         select(true);
         if((result = start_dma(s.fill, s.lost[s.fill])) != KUI_SCI_STREAM_OK) s.state = LOST;
         return result;
+#if (KUI_TOY_PIPELINE_HIGH_STREAM && KUI_TOY_PIPELINE_RESUME_FIX) || KUI_GENERAL_SCI_RESUME_FIX || KUI_CE_SCI_RESUME_FIX
+        }
+#endif
     }
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
     bool pending = s.state == TOKEN_WAIT && s.position == lba;
     if(!pending) s.token_polled = polled;
     else polled = s.token_polled;
@@ -395,7 +458,7 @@ enum kui_sci_stream_result kui_sci_stream_fetch(uint32_t lba, uint32_t token_lim
         select(true);
         result = token(token_limit);
         if(result != KUI_SCI_STREAM_OK) {
-#ifdef KUI_RETAIL_CE
+#if KUI_SCI_STREAM_TOKEN_SLICED
             if(result != KUI_SCI_STREAM_PENDING)
 #endif
                 s.state = LOST;
@@ -536,7 +599,11 @@ const uint8_t *kui_sci_stream_take(uint32_t lba, enum kui_sci_stream_result *res
 #endif
         for(unsigned w = 0; w < 128u; ++w) {
             uint32_t word = ((alias_word *)area)[w];
+#if KUI_TOY_PILOT_WORD_REVERSE_PROFILE
+            if(wire) ((alias_word *)area)[w] = word = reverse_data_word(word);
+#else
             if(wire) ((alias_word *)area)[w] = word = reverse(word);
+#endif
             for(unsigned b = 0; b < 4u; ++b) {
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
                 crc = crc16(crc, (uint8_t)word); word >>= 8;
@@ -577,7 +644,18 @@ const uint8_t *kui_sci_stream_take(uint32_t lba, enum kui_sci_stream_result *res
 }
 enum kui_sci_stream_result kui_sci_stream_stop(void) {
     enum kui_sci_stream_result result = KUI_SCI_STREAM_OK;
+#if (KUI_TOY_PIPELINE_HIGH_STREAM && KUI_TOY_PIPELINE_RESUME_FIX) || KUI_GENERAL_SCI_RESUME_FIX || KUI_CE_SCI_RESUME_FIX
+    /* Cancellation must fence the receiver, not launch another repair and
+     * then clock CMD12 while DMA remains active. Deferred finish restores
+     * the channel and leaves a partial block stopped in RESUME. */
+    for(uint32_t n = 0; s.state == DMA && n < 200000u; ++n) {
+        result = kui_sci_stream_poll(true);
+        if(result != KUI_SCI_STREAM_PENDING) break;
+    }
+    if(s.state == DMA) result = finish(true);
+#else
     if(s.state == DMA) result = kui_sci_stream_wait();
+#endif
     if(result == KUI_SCI_STREAM_BUSY || result == KUI_SCI_STREAM_RESET) return result;
     s.ready[0] = s.ready[1] = 0;
     s.kept = 0; s.arrived = 0;

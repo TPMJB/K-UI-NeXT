@@ -64,7 +64,12 @@ struct kwb {
 void kwb_init(struct kwb *b, const struct kwb_platform *pf, size_t buffer);
 /* Our frame for the next transfer. */
 size_t kwb_frame(struct kwb *b, uint8_t frame[KWL_FRAME_MAX]);
-/* The host's bytes from the transfer just finished. */
+/* Process the host's frame without polling established sockets. A device
+ * can build and arm the next DMA frame, then service sockets while that
+ * frame is waiting for the host. Requested listeners are bound before
+ * their state can be sent back. Everything still runs on one task. */
+void kwb_receive(struct kwb *b, const uint8_t *in, size_t clocked);
+/* Process a transfer and service sockets, for transports without DMA. */
 void kwb_transfer(struct kwb *b, const uint8_t *in, size_t clocked);
 /* Sockets, timers and notes; call often, including between transfers. */
 void kwb_service(struct kwb *b);

@@ -1,11 +1,14 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/games_retail.h"
 #include "kui/ce_load_plan.h"
+#include "kui/armada_ce_excerpt_pool.h"
+#include "kui/armada_ce_stream_seed.h"
 #include "kui/games.h"
 #include "kui/game_metadata.h"
 #include "kui/retail_image.h"
 #include "kui/retail_loader_layout.h"
 #include "kui/media.h"
+#include "../core/games_cdda_profile.h"
 #include "platform.h"
 #include <limits.h>
 #include <stdio.h>
@@ -94,7 +97,8 @@ static bool layout(const struct kui_runtime_image *image,bool ce) {
     bool known_resident=(resident==KUI_RETAIL_LEGACY_RESIDENT_ADDRESS &&
                          limit==KUI_RETAIL_LEGACY_STANDARD_LIMIT) ||
                         (!ce && resident==KUI_RETAIL_LOW_RESIDENT_ADDRESS &&
-                         limit==KUI_RETAIL_LOW_STANDARD_LIMIT);
+                         (limit==KUI_RETAIL_LOW_STANDARD_LIMIT ||
+                          limit==KUI_MDK2_CDDA_LOW_LIMIT));
     if(memcmp(h,ce?KUI_RETAIL_CE_PACKAGE_MAGIC:KUI_RETAIL_PACKAGE_MAGIC,8) ||
         le32(h+8)!=KUI_RETAIL_PACKAGE_VERSION ||
         le32(h+12)!=KUI_RETAIL_HEADER_BYTES || le32(h+16)!=KUI_RETAIL_MAP_OFFSET ||
@@ -110,18 +114,47 @@ static bool layout(const struct kui_runtime_image *image,bool ce) {
 /* FatFs fast-seek link map: the table size, then (cluster count, first
  * cluster) pairs ending in zero. Room for more runs than a map can hold, so
  * an over-fragmented track fails on the slot limit, not on this table. */
-#define LINK_MAP_WORDS (2u+2u*(KUI_RETAIL_IMAGE_SLOTS+1u))
+#define LEGACY_MAP_SLOTS 160u
+#define LINK_MAP_WORDS (2u+2u*(LEGACY_MAP_SLOTS+1u))
+#define CDDA_LINK_MAP_MAX_WORDS (2u+2u*8192u)
 static DWORD link_map[LINK_MAP_WORDS]; /* One I/O worker prepares at a time. */
 enum map_result {MAP_OK,MAP_FULL,MAP_FAILED};
-/* Lists track index in map's slots and, when mapped, appends its file's
- * extents, using at most capacity slots in all. An audio track not mapped
- * keeps no extents (the readers refuse its sectors). */
+enum map_reason {MAP_REASON_NONE,MAP_REASON_FILE,MAP_REASON_CANCEL,
+    MAP_REASON_LINK_LIMIT,MAP_REASON_MEMORY,MAP_REASON_CHAIN,
+    MAP_REASON_BOUNDS,MAP_REASON_CLOSE};
+struct map_stats {
+    uint32_t required_extents,required_slots,max_track_extents,largest_track,bad_track;
+    uint32_t link_map_words,max_link_map_words;
+    enum map_reason reason;
+    bool complete;
+};
+static void map_failure(struct map_stats *stats,unsigned index,enum map_reason reason) {
+    if(!stats) return;
+    stats->complete=false;
+    if(!stats->bad_track) {stats->bad_track=index+1u;stats->reason=reason;}
+}
+static const char *map_reason_name(enum map_reason reason) {
+    switch(reason) {
+    case MAP_REASON_FILE:return "missing or changed file";
+    case MAP_REASON_CANCEL:return "cancelled";
+    case MAP_REASON_LINK_LIMIT:return "allocation chain exceeds the bounded link table";
+    case MAP_REASON_MEMORY:return "insufficient memory for allocation chain";
+    case MAP_REASON_CHAIN:return "allocation-chain lookup failed";
+    case MAP_REASON_BOUNDS:return "allocation chain outside file or card bounds";
+    case MAP_REASON_CLOSE:return "cannot close mapped file";
+    default:return "mapping capacity";
+    }
+}
+/* Lists track index in map's slots and appends normalized physical runs.
+ * A CDDA caller supplies stats to finish counting after its table fills;
+ * ordinary callers retain the prior early refusal and audio fallback. */
 static enum map_result map_track(struct files *files,FATFS *fs,const struct kui_volume *volume,
     const struct kui_game_image_track *track,struct kui_retail_manifest *map,unsigned index,
-    uint32_t capacity,bool mapped) {
+    uint32_t capacity,bool mapped,struct map_stats *stats) {
+    uint32_t used=map->track_count+map->extent_count;
     struct kui_retail_track *t=&map->slots[index].track;
     *t=(struct kui_retail_track){.start_lba=track->start_lba,.end_lba=track->end_lba,
-        .first_extent=(uint16_t)((map->track_count+map->extent_count) |
+        .first_extent=(uint16_t)((used<256u?used:0u) |
             ((track->file_offset & 255u) << 8)),
         .control=(uint8_t)(track->control |
             (track->sector_bytes==KUI_GAME_DATA_BYTES?KUI_RETAIL_TRACK_COOKED:0u) |
@@ -131,39 +164,114 @@ static enum map_result map_track(struct files *files,FATFS *fs,const struct kui_
             (track->file_offset & 256u?KUI_RETAIL_TRACK_OFFSET_HIGH:0u))};
     if(!mapped) return stopped(files)?MAP_FAILED:MAP_OK;
     char path[KUI_GAMES_FILE_CAP+3];FIL file;
-    if(stopped(files) || !join(files,track->name,path) || f_open(&file,path,FA_READ)!=FR_OK) return MAP_FAILED;
+    if(stopped(files)) {map_failure(stats,index,MAP_REASON_CANCEL);return MAP_FAILED;}
+    if(!join(files,track->name,path) || f_open(&file,path,FA_READ)!=FR_OK) {
+        map_failure(stats,index,MAP_REASON_FILE);return MAP_FAILED;
+    }
     enum map_result result=f_size(&file)==track->file_bytes && fs->csize?MAP_OK:MAP_FAILED;
+    if(result==MAP_FAILED) map_failure(stats,index,MAP_REASON_FILE);
     uint64_t track_bytes=(uint64_t)(track->end_lba-track->start_lba)*track->sector_bytes;
     uint64_t skip=track->file_offset/512u;
-    uint32_t total=(uint32_t)(((track->file_offset & 511u)+track_bytes+511u)/512u);
-    /* The allocation table alone lists the file's contiguous cluster runs:
-     * no track data is read (one data read per cluster took seconds). */
-    link_map[0]=LINK_MAP_WORDS;file.cltbl=link_map;
+    uint64_t total64=((track->file_offset & 511u)+track_bytes+511u)/512u;
+    if(total64>UINT32_MAX) {result=MAP_FAILED;map_failure(stats,index,MAP_REASON_BOUNDS);}
+    uint32_t total=(uint32_t)total64;
+    DWORD *table=link_map,*allocated=NULL;
+    uint32_t table_words=LINK_MAP_WORDS;
+    table[0]=table_words;file.cltbl=table;
     if(result==MAP_OK) {
         FRESULT seek=f_lseek(&file,CREATE_LINKMAP);
-        result=seek==FR_NOT_ENOUGH_CORE?MAP_FULL:seek!=FR_OK || stopped(files)?MAP_FAILED:MAP_OK;
+        uint32_t required=(seek==FR_OK || seek==FR_NOT_ENOUGH_CORE)?table[0]:0u;
+        if(stats) {
+            stats->link_map_words=required;
+            if(required>stats->max_link_map_words) stats->max_link_map_words=required;
+        }
+        /* FatFs reports the exact required word count even when its first
+         * table is too small. Only CDDA expands, to a finite read-only heap
+         * allocation; no track payload or FAT allocation is modified. */
+        if(seek==FR_NOT_ENOUGH_CORE && stats && !stopped(files)) {
+            if(required<4u || (required&1u) || required>CDDA_LINK_MAP_MAX_WORDS) {
+                map_failure(stats,index,MAP_REASON_LINK_LIMIT);
+            } else if(!(allocated=malloc((size_t)required*sizeof(*allocated)))) {
+                map_failure(stats,index,MAP_REASON_MEMORY);
+            } else {
+                table=allocated;table_words=required;table[0]=required;file.cltbl=table;
+                seek=f_lseek(&file,CREATE_LINKMAP);
+                if(seek==FR_OK || seek==FR_NOT_ENOUGH_CORE) {
+                    if(table[0]>stats->max_link_map_words) stats->max_link_map_words=table[0];
+                    stats->link_map_words=table[0];
+                }
+            }
+        }
+        if(stopped(files)) {result=MAP_FAILED;map_failure(stats,index,MAP_REASON_CANCEL);}
+        else if(seek==FR_NOT_ENOUGH_CORE) {
+            result=stats?MAP_FAILED:MAP_FULL;
+            map_failure(stats,index,allocated?MAP_REASON_CHAIN:MAP_REASON_LINK_LIMIT);
+        } else if(seek!=FR_OK) {result=MAP_FAILED;map_failure(stats,index,MAP_REASON_CHAIN);}
+        else if(table[0]<2u || (table[0]&1u) || table[0]>table_words) {
+            result=MAP_FAILED;map_failure(stats,index,MAP_REASON_CHAIN);
+        }
     }
-    uint32_t block=0;
-    for(const DWORD *run=link_map+1;result==MAP_OK && block<total;run+=2) {
-        if(!run[0] || run[1]<2u || run[1]>=fs->n_fatent) {result=MAP_FAILED;break;}
+    uint32_t block=0,normal_runs=0,last_stored=UINT32_MAX;
+    uint64_t last_end=0;
+    bool store=true;
+    const DWORD *run=table+1,*table_end=table+table_words;
+    while((result==MAP_OK || (stats && result==MAP_FULL)) && block<total) {
+        if(run+1>=table_end || !run[0] || run[1]<2u || run[1]>=fs->n_fatent) {
+            result=MAP_FAILED;map_failure(stats,index,MAP_REASON_CHAIN);break;
+        }
         uint64_t sect=(uint64_t)fs->database+(uint64_t)(run[1]-2u)*fs->csize;
         uint64_t count=(uint64_t)run[0]*fs->csize;
+        run+=2;
         if(skip>=count) {skip-=count;continue;}
         sect+=skip;count-=skip;skip=0;
         if(count>total-block) count=total-block;
-        if(sect<fs->database || sect>=volume->count || sect+count>volume->count) {result=MAP_FAILED;break;}
-        uint32_t card=volume->start+(uint32_t)sect,used=map->track_count+map->extent_count;
-        struct kui_retail_extent *last=t->extent_count?&map->slots[used-1].extent:NULL;
-        if(last && (uint64_t)last->card_lba+last->blocks==card) last->blocks+=(uint32_t)count;
-        else {
-            if(used>=capacity || t->extent_count==UINT8_MAX) {result=MAP_FULL;break;}
-            map->slots[used].extent=(struct kui_retail_extent){block,card,(uint32_t)count};
-            ++map->extent_count;++t->extent_count;
+        if(sect<fs->database || sect>=volume->count || sect+count>volume->count ||
+           (uint64_t)volume->start+sect>UINT32_MAX ||
+           (uint64_t)volume->start+sect+count>UINT64_C(0x100000000)) {
+            result=MAP_FAILED;map_failure(stats,index,MAP_REASON_BOUNDS);break;
         }
+        uint32_t card=volume->start+(uint32_t)sect;
+        bool adjacent=normal_runs && last_end==card;
+        if(!adjacent) ++normal_runs;
+        if(store) {
+            used=map->track_count+map->extent_count;
+            if(adjacent && last_stored!=UINT32_MAX) map->slots[last_stored].extent.blocks+=(uint32_t)count;
+            else if(used>=capacity || used>=KUI_RETAIL_MANIFEST_SLOTS || used>=256u ||
+                    t->extent_count==UINT8_MAX) {
+                result=MAP_FULL;store=false;
+                if(!stats) break;
+            } else {
+                map->slots[used].extent=(struct kui_retail_extent){block,card,(uint32_t)count};
+                last_stored=used;++map->extent_count;++t->extent_count;
+            }
+        }
+        last_end=(uint64_t)card+count;
         block+=(uint32_t)count;
+        if(stopped(files)) {result=MAP_FAILED;map_failure(stats,index,MAP_REASON_CANCEL);break;}
+    }
+    if(stats) {
+        stats->required_extents+=normal_runs;
+        stats->required_slots=map->track_count+stats->required_extents;
+        if(normal_runs>stats->max_track_extents) {
+            stats->max_track_extents=normal_runs;stats->largest_track=index+1u;
+        }
     }
     file.cltbl=NULL;
-    if(f_close(&file)!=FR_OK) result=MAP_FAILED;
+    if(f_close(&file)!=FR_OK) {result=MAP_FAILED;map_failure(stats,index,MAP_REASON_CLOSE);}
+    free(allocated);
+    return result;
+}
+static enum map_result map_cdda_tracks(struct files *files,FATFS *fs,const struct kui_volume *volume,
+    const struct kui_game_image *image,struct kui_retail_manifest *map,uint32_t capacity,
+    struct map_stats *stats) {
+    *stats=(struct map_stats){.required_slots=image->count,.complete=true};
+    memset(map->slots,0,sizeof(map->slots));map->extent_count=0;
+    enum map_result result=image->count>capacity?MAP_FULL:MAP_OK;
+    for(unsigned i=0;i<image->count;i++) {
+        enum map_result one=map_track(files,fs,volume,&image->tracks[i],map,i,capacity,true,stats);
+        if(one==MAP_FAILED) return MAP_FAILED;
+        if(one==MAP_FULL) result=MAP_FULL;
+    }
     return result;
 }
 /* Maps every track's file within capacity slots when they fit; otherwise
@@ -177,7 +285,7 @@ static enum map_result map_tracks(struct files *files,FATFS *fs,const struct kui
         memset(map->slots,0,sizeof(map->slots));map->extent_count=0;result=MAP_OK;
         for(unsigned i=0;i<image->count && result==MAP_OK;i++)
             result=map_track(files,fs,volume,&image->tracks[i],map,i,capacity,
-                with_audio || image->tracks[i].control);
+                with_audio || image->tracks[i].control,NULL);
         *audio=with_audio;
     }
     return result;
@@ -204,6 +312,85 @@ bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *package
     kui_log_fn log,kui_cancel_fn cancel) {
     return kui_games_retail_prepare_reader(path,KUI_RETAIL_READER_STANDARD,package,log,cancel);
 }
+static enum kui_wince_cdda_profile ce_music_profile(const struct kui_game_image *image,
+        const struct kui_game_metadata *metadata) {
+    if(image->format!=KUI_GAME_IMAGE_GDI || image->cd_image || image->scrambled ||
+       !metadata->windows_ce || strcmp(metadata->bootfile,"0WINCEOS.BIN")) return KUI_WINCE_CDDA_NONE;
+    for(enum kui_wince_cdda_profile profile=KUI_WINCE_CDDA_ARMADA;
+            profile<=KUI_WINCE_CDDA_WORMS_ARMAGEDDON;profile++) {
+        const struct kui_wince_cdda_disc *disc=kui_wince_cdda_disc(profile);
+        if(image->count!=disc->track_count || metadata->boot_bytes!=disc->kernel_bytes ||
+           (profile!=KUI_WINCE_CDDA_ARMADA && metadata->boot_lba!=disc->boot_lba) ||
+           strcmp(metadata->product,disc->product)) continue;
+        unsigned i=0;
+        for(;i<disc->track_count;i++)
+            if(image->tracks[i].start_lba!=disc->starts[i] || image->tracks[i].file_offset ||
+               (image->tracks[i].sector_bytes!=2352u &&
+                !(image->tracks[i].control==4u && image->tracks[i].sector_bytes==2048u &&
+                  !image->tracks[i].data_offset)) ||
+               image->tracks[i].control!=kui_wince_cdda_track_control(profile,i)) break;
+        if(i==disc->track_count && (profile!=KUI_WINCE_CDDA_ARMADA ||
+           image->tracks[3].end_lba>=KUI_ARMADA_CE_EXCERPT_START_LBA+KUI_ARMADA_CE_EXCERPT_SECTORS))
+            return profile;
+    }
+    return KUI_WINCE_CDDA_NONE;
+}
+static bool armada_excerpt_seed(struct kui_runtime_image *package,
+        const struct kui_game_image *image,kui_log_fn log) {
+    uint8_t *data=package->data;size_t found=SIZE_MAX;
+    const size_t bytes=KUI_ARMADA_CE_EXCERPT_SEED_BYTES+KUI_ARMADA_CE_EXCERPT_PCM_BYTES;
+    /* Locate the one typed, initially empty seed in this trusted package.
+     * Do not confuse an instruction literal with a writable PCM seed. */
+    for(size_t at=KUI_RETAIL_STAGE_BLOB_OFFSET;at<=package->info.payload_bytes &&
+            bytes<=package->info.payload_bytes-at;at+=4u) {
+        const uint32_t *words=(const uint32_t *)(const void *)(data+at);
+        if(!kui_armada_ce_excerpt_seed_valid(words) || words[KUI_ARMADA_CE_EXCERPT_SEED_PCM_CRC32]) continue;
+        if(found!=SIZE_MAX) return false;
+        found=at;
+    }
+    if(found==SIZE_MAX) return false;
+    uint8_t *pcm=data+found+KUI_ARMADA_CE_EXCERPT_SEED_BYTES;
+    for(size_t i=0;i<KUI_ARMADA_CE_EXCERPT_PCM_BYTES;i++) if(pcm[i]) return false;
+    enum kui_game_result result=kui_game_image_read(image,KUI_ARMADA_CE_EXCERPT_START_LBA,
+        KUI_ARMADA_CE_EXCERPT_SECTORS,KUI_GAME_SECTOR_RAW,pcm,KUI_ARMADA_CE_EXCERPT_PCM_BYTES);
+    if(result!=KUI_GAME_OK) {log("CE music excerpt read failed: %s",kui_game_result_name(result));return false;}
+    uint32_t *seed=(uint32_t *)(void *)(data+found);
+    seed[KUI_ARMADA_CE_EXCERPT_SEED_PCM_CRC32]=kui_armada_ce_excerpt_crc32(pcm,KUI_ARMADA_CE_EXCERPT_PCM_BYTES);
+    log("CE music test: preloaded seconds 2..4 of track 4 (%u bytes), CRC32=%08x",
+        KUI_ARMADA_CE_EXCERPT_PCM_BYTES,seed[KUI_ARMADA_CE_EXCERPT_SEED_PCM_CRC32]);
+    return true;
+}
+/* A unique typed blank CEX2 seed identifies the full-stream package. A
+ * populated or malformed template cannot silently use the excerpt route. */
+static size_t armada_stream_seed_find(const struct kui_runtime_image *package,
+        enum kui_wince_cdda_profile profile) {
+    size_t found=SIZE_MAX;
+    if(!package || !package->data) return SIZE_MAX;
+    const uint8_t *data=package->data;
+    for(size_t at=KUI_RETAIL_STAGE_BLOB_OFFSET;at<=package->info.payload_bytes &&
+            sizeof(struct kui_armada_ce_stream_seed)<=package->info.payload_bytes-at;at+=4u) {
+        const uint32_t *words=(const uint32_t *)(const void *)(data+at);
+        if(!kui_wince_cdda_seed_header_valid(words,profile)) continue;
+        if(found!=SIZE_MAX) return SIZE_MAX;
+        found=at;
+    }
+    return found;
+}
+static bool armada_stream_seed_fill(struct kui_runtime_image *package,size_t at,
+        const struct kui_retail_manifest *map,enum kui_wince_cdda_profile profile,kui_log_fn log) {
+    if(at==SIZE_MAX || at>package->info.payload_bytes ||
+       sizeof(struct kui_armada_ce_stream_seed)>package->info.payload_bytes-at ||
+       !kui_wince_cdda_manifest_valid(map,profile)) return false;
+    struct kui_armada_ce_stream_seed *seed=(void *)((uint8_t *)package->data+at);
+    if(!kui_wince_cdda_seed_header_valid(seed->words,profile) ||
+       seed->words[KUI_ARMADA_CE_STREAM_MAP_CRC_WORD]) return false;
+    for(unsigned i=0;i<sizeof(seed->wire);i++) if(seed->wire[i]) return false;
+    if(kui_retail_manifest_encode(map,seed->wire)!=KUI_GAME_OK) return false;
+    seed->words[KUI_ARMADA_CE_STREAM_MAP_CRC_WORD]=le32(seed->wire+16u);
+    log("CE music: complete source map, %u tracks, %u extents, CRC32=%08x",
+        map->track_count,map->extent_count,seed->words[KUI_ARMADA_CE_STREAM_MAP_CRC_WORD]);
+    return true;
+}
 bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     struct kui_runtime_image *package,kui_log_fn log,kui_cancel_fn cancel) {
     if(!package) return false;
@@ -212,7 +399,17 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     const bool ce=(reader&KUI_GAMES_RETAIL_CE_PROBE)!=0;
     const bool descramble=(reader&KUI_GAMES_RETAIL_DESCRAMBLE)!=0;
     const bool plain=(reader&KUI_GAMES_RETAIL_BOOT_PLAIN)!=0;
-    reader&=~(KUI_GAMES_RETAIL_CE_PROBE | KUI_GAMES_RETAIL_DESCRAMBLE | KUI_GAMES_RETAIL_BOOT_PLAIN);
+    const bool cdda=(reader&KUI_GAMES_RETAIL_CDDA)!=0;
+    const bool ce_excerpt=(reader&KUI_GAMES_RETAIL_CE_EXCERPT)!=0;
+    reader&=~(KUI_GAMES_RETAIL_CE_PROBE | KUI_GAMES_RETAIL_DESCRAMBLE |
+        KUI_GAMES_RETAIL_BOOT_PLAIN | KUI_GAMES_RETAIL_CDDA | KUI_GAMES_RETAIL_CE_EXCERPT);
+    if(ce_excerpt && (!ce || cdda || descramble || plain || reader!=KUI_RETAIL_READER_ASYNC)) {
+        log("CE CD music requires its separate background profile");return false;
+    }
+    if(cdda && (ce || descramble || plain || reader!=KUI_RETAIL_READER_STANDARD)) {
+        log("CDDA launch: unsupported profile; use native GDI, standard reader and original boot encoding");
+        return false;
+    }
     if((ce && (descramble || plain)) || (descramble && plain)) {
         log("Retail boot: invalid boot encoding choice");return false;
     }
@@ -222,12 +419,13 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     FATFS fs;bool ok=false;const char *problem="cannot mount storage";
     struct kui_retail_manifest *map=NULL;struct kui_game_image *image=NULL;uint8_t *gdi=NULL;
     if(!kui_mount(&fs,log)) goto done;
-    enum kui_runtime_result rr=kui_runtime_read(ce?KUI_GAMES_RETAIL_CE_PACKAGE:KUI_GAMES_RETAIL_PACKAGE,
-        package,log,cancel);
-    if(rr!=KUI_RUNTIME_OK) {problem=kui_runtime_result_name(rr);goto done;}
-    if(!layout(package,ce)) {
-        problem=ce?"unsupported Windows CE probe package layout":"unsupported retail-boot package layout";
-        goto done;
+    enum kui_wince_cdda_profile music_profile=KUI_WINCE_CDDA_NONE;
+    const char *launch_package=ce?KUI_GAMES_RETAIL_CE_PACKAGE:KUI_GAMES_RETAIL_PACKAGE;
+    enum kui_runtime_result rr=KUI_RUNTIME_OK;
+    if(!cdda && !ce_excerpt) {
+        rr=kui_runtime_read(launch_package,package,log,cancel);
+        if(rr!=KUI_RUNTIME_OK) {problem=kui_runtime_result_name(rr);goto done;}
+        if(!layout(package,ce)) {problem="unsupported game-launch package layout";goto done;}
     }
     uint64_t size=0;
     if(stat_file(&files,name,&size)!=KUI_GAME_OK || !size) {
@@ -256,6 +454,28 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     struct kui_game_metadata metadata;struct kui_game_metadata_ops metadata_ops={image,metadata_read,metadata_range};
     enum kui_game_metadata_status ms=kui_game_metadata_read(&metadata_ops,map->session_lba,&metadata);
     if(ms!=KUI_GAME_METADATA_OK) {problem=kui_game_metadata_status_text(ms);goto done;}
+    if(cdda && (metadata.windows_ce || !metadata.native_gd ||
+        image->format!=KUI_GAME_IMAGE_GDI || image->cd_image || image->scrambled ||
+        map->storage_transport!=KUI_STORAGE_SCI)) {
+        problem="unsupported CDDA profile; supported SCI/native GDI required";goto done;
+    }
+    if(ce_excerpt) {
+        music_profile=ce_music_profile(image,&metadata);
+        if(music_profile==KUI_WINCE_CDDA_NONE || map->storage_transport!=KUI_STORAGE_SCI) {
+            problem="CD music has no compatible WinCE runtime adapter for this image; turn CD music Off to launch";goto done;
+        }
+        launch_package=music_profile==KUI_WINCE_CDDA_WORMS_ARMAGEDDON?
+            KUI_GAMES_RETAIL_CE_WORMS_PACKAGE:music_profile==KUI_WINCE_CDDA_BUST_A_MOVE_4?
+            KUI_GAMES_RETAIL_CE_BAM4_PACKAGE:KUI_GAMES_RETAIL_CE_EXCERPT_PACKAGE;
+        log("CE CD music: %s profile",kui_wince_cdda_disc(music_profile)->name);
+        if(!close_reader(&files)) {problem="cannot close metadata reader";goto done;}
+        rr=kui_runtime_read(launch_package,package,log,cancel);
+        if(rr!=KUI_RUNTIME_OK) {problem=kui_runtime_result_name(rr);goto done;}
+        if(!layout(package,ce)) {
+            problem="unsupported CE CD music package layout";
+            log("Replace %s with the selected game-launch package",launch_package+2);goto done;
+        }
+    }
     /* The owner's IP/ISO metadata selects the executable. Titles and boot
      * filenames are not compatibility gates; native GD bytes stay verbatim. */
     if(ce) {
@@ -291,11 +511,18 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     snprintf(map->bootfile,sizeof(map->bootfile),"%s",metadata.bootfile);
     log("Retail boot: %.100s; product=%s version=%s region=%s",map->title,metadata.product,
         metadata.version,metadata.region);
-    for(unsigned i=0;i<image->count;i++)
-        if(image->tracks[i].control==0 && image->tracks[i].start_lba>=45000) {
-            log("Retail warning: CD audio playback is unsupported; the reader accepts audio commands silently, so that music is absent");
-            break;
-        }
+    struct kui_game_audio_info audio_info;
+    r=kui_game_image_audio_info(image,&audio_info);
+    if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
+    if(cdda && (audio_info.classification!=KUI_GAME_AUDIO_GD_HIGH_DENSITY ||
+        !audio_info.candidate_tracks || audio_info.candidate_tracks>KUI_GAME_TRACK_MAX)) {
+        problem="unsupported CDDA profile; no known playable high-density audio tracks";goto done;
+    }
+    if(!cdda && !ce_excerpt && audio_info.candidate_tracks)
+        log("Retail warning: CD audio playback is unsupported (%u candidate tracks); commands are acknowledged silently, so music using them is absent",
+            audio_info.candidate_tracks);
+    else if(!cdda && !ce_excerpt && audio_info.classification==KUI_GAME_AUDIO_UNKNOWN)
+        log("Retail audio: bare ISO/raw image has no original audio-track inventory; CD audio playback remains unsupported");
     r=extent_crc(image,map->session_lba,KUI_RETAIL_IP_BYTES,&map->ip_crc32);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
     r=kui_game_image_check(image,map->boot_lba,(map->boot_bytes+2047u)/2048u,KUI_GAME_SECTOR_MODE1);
@@ -306,7 +533,7 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
         if(image->tracks[i].sector_bytes==KUI_GAME_DATA_BYTES &&
             image->tracks[i].start_lba<boot_end && image->tracks[i].end_lba>map->boot_lba)
             cooked_boot=true;
-    if(cooked_boot || image->format!=KUI_GAME_IMAGE_GDI) {
+    if(cdda || cooked_boot || image->format!=KUI_GAME_IMAGE_GDI) {
         map->flags|=KUI_RETAIL_IMAGE_BOOT_CRC;
         log("Retail boot: checking exact executable CRC before detached launch");
         r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32);
@@ -325,7 +552,23 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
         background=false;
     }
     enum map_result mapped=MAP_FULL;
-    if(background) {
+    const unsigned cdda_capacity=kui_games_cdda_mapping_capacity(image,map);
+    struct map_stats cdda_stats={0};
+    if(cdda) {
+        /* CDDA requires every audio file. Capacity belongs to the selected
+         * executable adapter; the Toy payload still has its original limit. */
+        log("CDDA map capacity: %u slots (%u available for file extents)",
+            cdda_capacity,cdda_capacity>image->count?cdda_capacity-image->count:0u);
+        mapped=map_cdda_tracks(&files,&fs,&volume,image,map,cdda_capacity,&cdda_stats);
+        if(cdda_stats.complete)
+            log("CDDA complete map: %u tracks need %u file extents, %u slots; largest T%02u has %u extents",
+                image->count,cdda_stats.required_extents,cdda_stats.required_slots,
+                cdda_stats.largest_track,cdda_stats.max_track_extents);
+        else
+            log("CDDA mapping incomplete at T%02u: %s; CLMT reported %u words (limit %u), %u extents counted",
+                cdda_stats.bad_track,map_reason_name(cdda_stats.reason),
+                cdda_stats.link_map_words,CDDA_LINK_MAP_MAX_WORDS,cdda_stats.required_extents);
+    } else if(background) {
         mapped=map_tracks(&files,&fs,&volume,image,map,KUI_RETAIL_ASYNC_SLOTS,&audio);
         if(mapped==MAP_FULL) {
             if(ce) {problem="Windows CE background map exceeds 64 slots; defragment or use cooked tracks";goto done;}
@@ -334,9 +577,16 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
             background=false;
         }
     }
-    if(!background && mapped!=MAP_FAILED) mapped=map_tracks(&files,&fs,&volume,image,map,KUI_RETAIL_IMAGE_SLOTS,&audio);
+    if(!cdda && !background && mapped!=MAP_FAILED)
+        mapped=map_tracks(&files,&fs,&volume,image,map,LEGACY_MAP_SLOTS,&audio);
     if(mapped!=MAP_OK) {
-        problem=mapped==MAP_FULL?"track files too fragmented for the launch map (160 slots)":
+        if(cdda && mapped==MAP_FULL) {
+            log("CDDA map requires %u slots (%u file extents); this adapter holds %u",
+                cdda_stats.required_slots,cdda_stats.required_extents,cdda_capacity);
+            problem="CDDA track map exceeds this adapter's capacity";
+        } else if(cdda) {
+            problem=map_reason_name(cdda_stats.reason);
+        } else problem=mapped==MAP_FULL?"track files too fragmented for the launch map (160 slots)":
             "track map failed: changed file, I/O or bounds";
         goto done;
     }
@@ -352,10 +602,47 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
         else log("Retail boot reader: background SCI stream (test, %s)",
             reader==KUI_RETAIL_READER_ASYNC_EAGER?"25 blocks per call":"20 blocks per call");
     }
+    if(cdda) {
+        enum kui_games_cdda_profile profile=kui_games_cdda_profile(image,map);
+        const char *package_path=kui_games_cdda_package(profile);
+        if(!package_path) {problem="unsupported CDDA profile; supported image identity required";goto done;}
+        struct kui_runtime_image candidate={0};
+        rr=kui_runtime_read(package_path,&candidate,log,cancel);
+        if(rr!=KUI_RUNTIME_OK) {problem=kui_runtime_result_name(rr);goto done;}
+        if(!layout(&candidate,false) || !kui_games_cdda_package_admit(profile,&candidate)) {
+            kui_runtime_free(&candidate);
+            problem="CDDA package identity or layout mismatch; reinstall the selected package";goto done;
+        }
+        /* Publish only the verified allocation; failures never expose a
+         * partial replacement or silently use the ordinary loader. */
+        kui_runtime_free(package);*package=candidate;
+        log("CDDA launch: exact %s %s profile; loaded executable SHA, driver and hook guards remain mandatory",
+            profile==KUI_GAMES_CDDA_MDK2_RAW?"MDK2":"Toy Commander",
+            profile==KUI_GAMES_CDDA_TOY_COOKED?"cooked DATA":"raw GDI");
+    }
+    if(ce_excerpt) {
+        size_t stream_seed=armada_stream_seed_find(package,music_profile);
+        if(stream_seed!=SIZE_MAX) {
+            struct kui_retail_manifest *full=malloc(sizeof(*full));
+            if(!full) {problem="not enough memory for the complete CE audio map";goto done;}
+            *full=*map;full->reader=KUI_RETAIL_READER_STANDARD;
+            struct map_stats stats;
+            enum map_result complete=map_cdda_tracks(&files,&fs,&volume,image,full,
+                KUI_RETAIL_MANIFEST_SLOTS,&stats);
+            bool admitted=complete==MAP_OK && stats.complete &&
+                armada_stream_seed_fill(package,stream_seed,full,music_profile,log);
+            if(!admitted) log("CE audio map: %u slots required; %s",stats.required_slots,
+                complete==MAP_FULL?"mapping capacity exceeded":map_reason_name(stats.reason));
+            free(full);
+            if(!admitted) {problem="complete CE audio source map is unavailable";goto done;}
+        } else if(music_profile!=KUI_WINCE_CDDA_ARMADA || !armada_excerpt_seed(package,image,log)) {
+            problem="CE music seed is missing, invalid, stopped or unreadable";goto done;
+        }
+    }
     r=kui_retail_manifest_encode(map,(uint8_t *)package->data+KUI_RETAIL_MAP_OFFSET);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
     log("%s prepared: %u tracks, %u extents; IP CRC32=%08x, %s=%u bytes checked at load",
-        ce?"Windows CE boot test":"Retail boot",
+        ce_excerpt?"Windows CE CD music":ce?"Windows CE boot test":"Retail boot",
         map->track_count,map->extent_count,map->ip_crc32,map->bootfile,map->boot_bytes);
     ok=true;
 done:

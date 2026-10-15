@@ -14,7 +14,10 @@
 enum { NAVY=0x0864, PANEL=0x10c6, SELECTED=0x494b, EDGE=0x318a,
     WHITE=0xf7bf, MUTED=0xadd9, CYAN=0x675e, PINK=0xf3fb,
     GREEN=0x8ef6, AMBER=0xfda9 };
-struct paint { uint16_t *fb; kui_shell_text_fn text; void *ctx; };
+struct paint { uint16_t *fb; kui_shell_text_fn text; void *ctx; bool crisp; };
+static unsigned word_width(const struct paint *p,const char *text,bool large) {
+    return p->crisp?kui_shell_font_width_crisp(text,large):kui_shell_font_width(text,large);
+}
 static void box(struct paint *p, unsigned x, unsigned y,
         unsigned w, unsigned h, uint16_t color) {
     if(x >= 640 || y >= 480) return;
@@ -44,17 +47,18 @@ static void words(struct paint *p, unsigned x, unsigned y,
     }
     clipped[n]='\0';
     bool truncated=value[read] && value[read]!='\n' && value[read]!='\r';
-    while(n && kui_shell_font_width(clipped,large)>right-x) {
+    while(n && word_width(p,clipped,large)>right-x) {
         clipped[--n]='\0'; truncated=true;
     }
     if(truncated) {
         while(n && (n+4>sizeof(clipped) ||
-                kui_shell_font_width(clipped,large)+kui_shell_font_width("...",large)>right-x))
+                word_width(p,clipped,large)+word_width(p,"...",large)>right-x))
             clipped[--n]='\0';
-        if(n+4<=sizeof(clipped) && kui_shell_font_width("...",large)<=right-x)
+        if(n+4<=sizeof(clipped) && word_width(p,"...",large)<=right-x)
             memcpy(clipped+n,"...",4);
     }
-    kui_shell_font_draw(p->fb,(int)x,(int)y,color,clipped,large);
+    if(p->crisp) kui_shell_font_draw_crisp(p->fb,(int)x,(int)y,color,clipped,large);
+    else kui_shell_font_draw(p->fb,(int)x,(int)y,color,clipped,large);
     if(p->text) p->text(p->ctx,x,y,color,clipped,large);
 }
 static void label(struct paint *p, unsigned x, unsigned y,
@@ -92,8 +96,11 @@ static const char *state(const struct kui_shell_view *v) {
 static void heading(struct paint *p, const struct kui_shell *s,const struct kui_shell_view *v) {
     art(p,32,20,128,64,kui_art_brand);
     words(p,176,26,396,WHITE,KUI_RELEASE_SHORT,true);
-    words(p,176,52,396,MUTED,"by TPMJB / SD runtime",false);
-    words(p,176,74,396,CYAN,state(v),false);
+    const char *credit=v->busy || v->saving?state(v):"by TPMJB / READY";
+    words(p,176,52,396,MUTED,credit,false);
+    /* Keep the project link beneath the brand, with normal letter spacing.
+     * It has the whole left header width rather than a cramped middle column. */
+    words(p,32,78,396,CYAN,"github.com/TPMJB/K-UI-NeXT",false);
     char music[48];
     const char *prefix=s->page==KUI_SHELL_HOME&&!v->busy?"Y Music":"Music";
     if(v->music_change_pending) snprintf(music,sizeof(music),"Music change queued");
@@ -104,14 +111,16 @@ static void heading(struct paint *p, const struct kui_shell *s,const struct kui_
     words(p,412,48,608,v->music_enabled?WHITE:MUTED,
         v->music_title&&v->music_title[0]?v->music_title:"No song selected",false);
     char build[40]; snprintf(build,sizeof(build),"Build %.12s",v->build?v->build:"local");
-    label(p,416,74,MUTED,build); rule(p,98);
+    label(p,416,74,MUTED,build);
+    rule(p,98);
 }
 static void footer(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
     rule(p,416);
     bool song_page=s->page==KUI_SHELL_HOME || s->page==KUI_SHELL_RIPPER;
     const char *controls=v->video_trial ? "A Keep mode   B Revert" :
-        v->busy ? (song_page?"B Stop safely   L/R Songs":s->page==KUI_SHELL_FTP?"B Stop the server":"B Stop safely") :
+        v->busy ? (s->page==KUI_SHELL_WIFI && s->wifi.firmware_committing?"Finishing update; keep the console powered on":
+            song_page?"B Stop safely   L/R Songs":s->page==KUI_SHELL_FTP?"B Stop the server":"B Stop safely") :
         s->confirm_gd_boot ? "A Exit to BIOS   B Cancel" :
         s->confirm_quick_resume ? "A Quick resume   B Cancel" :
         s->confirm_new ? "A Start capture   B Cancel" :
@@ -125,6 +134,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->confirm_salvage ? "A Start salvage   B Cancel" :
         s->confirm_storage_test ? "A Start test   B Cancel" :
         s->confirm_wifi_forget ? "A Forget the network   B Cancel" :
+        s->confirm_wifi_update ? "A Update firmware   B Cancel" :
         s->page==KUI_SHELL_HOME ? "D-pad Select   A Open   Y Volume   L/R Songs" :
         s->page==KUI_SHELL_SETTINGS ? "A Save / Open   B Back / discard" :
         s->page==KUI_SHELL_RIPPER_SETTINGS ? "A Save   B Back / discard" :
@@ -143,14 +153,14 @@ static void footer(struct paint *p, const struct kui_shell *s,
             "A Open   Y View   LEFT/RIGHT Page   START More":"A Open   Y View   D-pad Move   START More") :
         s->page==KUI_SHELL_GAMES_VARIANTS ? "D-pad Select   A Inspect   B Games" :
         s->page==KUI_SHELL_GAMES_DETAIL ? (kui_shell_games_retail_ready(s)?
-            (s->games_from_files?"A Launch   X Inspect   B Files":kui_shell_games_variant_label(s)?
-                "A Launch   X Inspect   B Versions":"A Launch   X Inspect   B Games"):
+            (s->games_from_files?"A Launch   Y Options   B Files":kui_shell_games_variant_label(s)?
+                "A Launch   Y Options   B Versions":"A Launch   Y Options   B Games"):
             kui_shell_games_ce_probe_ready(s)?
-            (s->games_from_files?"A CE test   X Inspect   B Files":kui_shell_games_variant_label(s)?
-                "A CE test   X Inspect   B Versions":"A CE test   X Inspect   B Games"):
+            (s->games_from_files?"A Launch   Y Options   B Files":kui_shell_games_variant_label(s)?
+                "A Launch   Y Options   B Versions":"A Launch   Y Options   B Games"):
             kui_shell_games_image_ready(s)?
-            (s->games_from_files?"Y Read test   X Inspect   B Files":kui_shell_games_variant_label(s)?
-                "Y Read test   X Inspect   B Versions":"Y Read test   X Inspect   B Games"):
+            (s->games_from_files?"Y Options   X Inspect   B Files":kui_shell_games_variant_label(s)?
+                "Y Options   X Inspect   B Versions":"Y Options   X Inspect   B Games"):
             s->games_from_files?"X Inspect again   B Files":kui_shell_games_variant_label(s)?
                 "X Inspect again   B Versions":"X Inspect again   B Games") :
         s->page==KUI_SHELL_FILES ? "B Up   START Home   LEFT/RIGHT Page" :
@@ -167,105 +177,47 @@ static void footer(struct paint *p, const struct kui_shell *s,
             "D-pad Select/change   A Open   B Diagnostics") :
         s->page==KUI_SHELL_SCI_ASYNC_PROBE ? "A Quick   X 60s stress   Y With screen   R Speed   B Back" :
         s->page==KUI_SHELL_STORAGE_TEST_HISTORY ? "A View   Y Baseline   X Refresh   B Back" :
-        s->page==KUI_SHELL_WIFI ? (s->wifi.found?"A Join   X Scan again   Y Forget   B Network":"X Look again   B Network") :
+        s->page==KUI_SHELL_WIFI ? (s->wifi.found?"A Join   X Scan   Y Forget   START Update   B Network":"X Look again   B Network") :
         s->page==KUI_SHELL_GAMES_ADVANCED ? "D-pad Select   A Open   B Games" :
-        s->page==KUI_SHELL_GAMES_PROBE_CONFIRM ? "A Start probe   B Advanced" :
+        s->page==KUI_SHELL_GAMES_PROBE_CONFIRM ? "A Start test   B Tests" :
         s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ? (kui_shell_games_image_ready(s)?
-            "A Start test   B Image details":"B Image details") :
-        s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM ? (kui_shell_games_retail_ready(s)?
-            "A Launch   X/Y Background reader   B Details":kui_shell_games_ce_probe_ready(s)?
-            "A Start test   B Details":"B Image details") :
+            "A Start test   B Tests":"B Tests") :
+        s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM ? (kui_shell_games_launch_ready(s)?
+            "A Launch   Y Options   B Details":"B Image details") :
+        s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS ? (kui_shell_games_launch_ready(s)?
+            "D-pad Select/change   A Toggle/open   START Launch   B Back":
+            "D-pad Select/change   A Toggle/open   B Back") :
+        s->page==KUI_SHELL_GAMES_EXTRA_OPTIONS ? "D-pad Select/change   A Open   B Options" :
+        s->page==KUI_SHELL_GAMES_TESTS ? "D-pad Select   A Open test   B Back" :
+        s->page==KUI_SHELL_GAMES_INFO ? "B Advanced" :
         s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
-    words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU?608:500,MUTED,controls,false);
-    if(!v->video_trial && !s->confirm_storage_test && !song_page && s->page!=KUI_SHELL_MUSIC && s->page!=KUI_SHELL_VMU_RESTORE && s->page!=KUI_SHELL_VMU_ACTIONS && s->page!=KUI_SHELL_VMU && s->page!=KUI_SHELL_GAMES_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM && s->page!=KUI_SHELL_GAMES_RETAIL_CONFIRM && s->page!=KUI_SHELL_GAMES_VARIANTS && s->page!=KUI_SHELL_FILES_CONFIRM)
-        label(p,512,430,MUTED,"L Memory");
-}
-static void utility_icon(struct paint *p,enum kui_shell_page app,unsigned x,unsigned y) {
-    if(app==KUI_SHELL_VMU) {
-        panel(p,x+30,y+10,68,108,CYAN); box(p,x+38,y+22,52,38,NAVY);
-        box(p,x+48,y+76,24,7,NAVY); box(p,x+56,y+68,8,24,NAVY);
-        box(p,x+78,y+76,8,8,PINK); box(p,x+80,y+92,8,8,NAVY);
-    } else if(app==KUI_SHELL_MEMORY) {
-        for(unsigned i=0;i<5;i++) {
-            box(p,x+20+i*20,y+12,6,104,CYAN);
-            box(p,x+12,y+20+i*20,104,6,CYAN);
-        }
-        box(p,x+24,y+24,80,80,EDGE); box(p,x+30,y+30,68,68,PANEL);
-        words(p,x+40,y+54,x+98,WHITE,"RAM",true);
-    } else if(app==KUI_SHELL_GAMES) {
-        panel(p,x+12,y+38,104,60,CYAN);panel(p,x+20,y+46,88,44,PANEL);
-        box(p,x+30,y+61,30,8,CYAN);box(p,x+41,y+50,8,30,CYAN);
-        box(p,x+80,y+53,10,10,PINK);box(p,x+94,y+68,10,10,PINK);
-        box(p,x+61,y+65,8,4,WHITE);
-    } else if(app==KUI_SHELL_FILES) {
-        box(p,x+12,y+22,40,12,EDGE);panel(p,x+12,y+30,104,78,EDGE);
-        panel(p,x+26,y+14,64,62,WHITE);
-        box(p,x+36,y+26,44,4,EDGE);box(p,x+36,y+36,36,4,EDGE);box(p,x+36,y+46,40,4,EDGE);
-        panel(p,x+8,y+52,112,62,CYAN);box(p,x+22,y+96,26,6,PINK);
-    } else if(app==KUI_SHELL_MUSIC) {
-        box(p,x+36,y+32,8,62,CYAN);box(p,x+88,y+20,8,62,PINK);
-        box(p,x+40,y+28,52,8,CYAN);box(p,x+40,y+20,52,8,PINK);
-        panel(p,x+16,y+84,28,18,CYAN);panel(p,x+68,y+72,28,18,PINK);
-    } else {
-        box(p,x+28,y+38,72,4,CYAN); box(p,x+62,y+40,4,44,CYAN);
-        box(p,x+26,y+40,4,44,CYAN); box(p,x+98,y+40,4,44,CYAN);
-        panel(p,x+44,y+10,40,30,CYAN);
-        panel(p,x+10,y+82,36,28,CYAN); panel(p,x+46,y+82,36,28,PINK);
-        panel(p,x+82,y+82,36,28,CYAN);
-    }
-}
-static void small_utility_icon(struct paint *p,enum kui_shell_page app,unsigned x,unsigned y) {
-    if(app==KUI_SHELL_VMU) {
-        panel(p,x+5,y+1,14,22,CYAN);box(p,x+7,y+4,10,8,NAVY);
-        box(p,x+8,y+16,5,2,NAVY);box(p,x+10,y+14,2,6,NAVY);
-        box(p,x+15,y+16,2,2,PINK);
-    } else if(app==KUI_SHELL_MEMORY) {
-        for(unsigned i=0;i<3;i++) {
-            box(p,x+5+i*6,y,2,24,CYAN);box(p,x,y+5+i*6,24,2,CYAN);
-        }
-        box(p,x+4,y+4,16,16,EDGE);box(p,x+7,y+7,10,10,PANEL);
-    } else if(app==KUI_SHELL_FILES) {
-        box(p,x+1,y+4,10,4,CYAN);panel(p,x,y+7,24,16,CYAN);
-        box(p,x+4,y+12,16,2,NAVY);box(p,x+4,y+16,10,2,NAVY);box(p,x+17,y+16,3,3,PINK);
-    } else if(app==KUI_SHELL_GAMES) {
-        panel(p,x,y+6,24,16,CYAN);box(p,x+3,y+12,9,3,NAVY);
-        box(p,x+6,y+9,3,9,NAVY);box(p,x+16,y+9,3,3,PINK);box(p,x+19,y+14,3,3,PINK);
-    } else if(app==KUI_SHELL_MUSIC) {
-        box(p,x+7,y+5,3,15,CYAN);box(p,x+18,y+2,3,15,PINK);
-        box(p,x+8,y+2,13,3,CYAN);
-        box(p,x+2,y+18,8,5,CYAN);box(p,x+13,y+15,8,5,PINK);
-    } else {
-        box(p,x+11,y+4,2,14,CYAN);box(p,x+3,y+12,18,2,CYAN);
-        box(p,x+3,y+12,2,8,CYAN);box(p,x+19,y+12,2,8,CYAN);
-        box(p,x+8,y+1,8,7,CYAN);box(p,x,y+17,8,7,CYAN);
-        box(p,x+8,y+17,8,7,PINK);box(p,x+16,y+17,8,7,CYAN);
-    }
+    words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU||s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM||s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS||s->page==KUI_SHELL_GAMES_EXTRA_OPTIONS||s->page==KUI_SHELL_GAMES_TESTS||s->page==KUI_SHELL_GAMES_INFO?608:500,MUTED,controls,false);
 }
 /* Each Home app by page, so its row can move without touching this table.
- * art: the embedded icon, or -1 for one drawn by utility_icon. */
-struct home_app {enum kui_shell_page page;const char *name,*category,*details[3];int art;};
+ * All icons are embedded RGB565 assets with separate list-sized artwork. */
+struct home_app {enum kui_shell_page page;const char *name,*category,*details[3];unsigned art;};
 static const struct home_app home_apps[KUI_SHELL_HOME_APPS]={
     {KUI_SHELL_RIPPER,"Disc Ripper","Disc tools",
-        {"Capture discs, check CRCs and","resume interrupted dumps.","Verify saved files when needed."},0},
+        {"Capture discs, check CRCs and","resume interrupted dumps.","Verify saved files when needed."},KUI_ART_ICON_DISC_RIPPER},
     {KUI_SHELL_VMU,"VMU Manager","Save files",
-        {"Browse, copy or delete saves.","Back up to SD, then restore","checked backups to a free name."},-1},
+        {"Browse, copy or delete saves.","Back up to SD, then restore","checked backups to a free name."},KUI_ART_ICON_VMU_MANAGER},
     {KUI_SHELL_MEMORY,"Memory Test","System tools",
-        {"Check available application RAM","with data patterns and report","any mismatches found."},-1},
+        {"Check available application RAM","with data patterns and report","any mismatches found."},KUI_ART_ICON_MEMORY_TEST},
     {KUI_SHELL_NETWORK,"Network","Connectivity",
-        {"Inspect your network adapter,","set up Wi-Fi and test it. Share","the SD card by FTP."},-1},
+        {"Inspect your network adapter,","set up Wi-Fi and test it. Share","the SD card by FTP."},KUI_ART_ICON_NETWORK},
     {KUI_SHELL_SETTINGS,"Settings","System preferences",
-        {"Choose video, memory display","and background music.","Save preferences to SD."},1},
+        {"Choose video, memory display","and background music.","Save preferences to SD."},KUI_ART_ICON_SETTINGS},
     {KUI_SHELL_DIAGNOSTICS,"Diagnostics","Diagnostics",
-        {"Inspect the disc and SD card.","Run probes, review messages","and save a diagnostic report."},2},
+        {"Inspect the disc and SD card.","Run probes, review messages","and save a diagnostic report."},KUI_ART_ICON_DIAGNOSTICS},
     {KUI_SHELL_GD_PLAY,"GD Play","Disc boot",
-        {"Exit K-UI and boot the disc","through the console BIOS.","Console region rules still apply."},0},
+        {"Exit K-UI and boot the disc","through the console BIOS.","Console region rules still apply."},KUI_ART_ICON_GD_PLAY},
     {KUI_SHELL_MUSIC,"Music Player","Music",
-        {"Play WAV or Ogg music from SD.","Listen to audio CD tracks","or keep music in the background."},-1},
+        {"Play WAV or Ogg music from SD.","Listen to audio CD tracks","or keep music in the background."},KUI_ART_ICON_MUSIC_PLAYER},
     {KUI_SHELL_GAMES,"Games","SD game library",
-        {"Launch native GD images from SD.","Browse your game library.","V" KUI_VERSION ": compatibility varies."},-1},
+        {"Launch native GD images from SD.","Browse your game library.","V" KUI_VERSION ": compatibility varies."},KUI_ART_ICON_GAMES},
     {KUI_SHELL_FILES,"File Manager","SD card files",
-        {"Browse every folder and file on SD.","Open games, music and pictures.","Copy, move, rename or delete."},-1}};
+        {"Browse every folder and file on SD.","Open games, music and pictures.","Copy, move, rename or delete."},KUI_ART_ICON_FILE_MANAGER}};
 static const struct home_app *home_app(unsigned row) {
     enum kui_shell_page page=kui_shell_home_pages[row<KUI_SHELL_HOME_APPS?row:0];
     for(unsigned i=0;i<KUI_SHELL_HOME_APPS;i++) if(home_apps[i].page==page) return &home_apps[i];
@@ -281,8 +233,7 @@ static void home(struct paint *p, const struct kui_shell *s,const struct kui_she
             panel(p,32,y,208,26,SELECTED);
             box(p,32,y+4,3,18,PINK);
         }
-        if(app->art<0) small_utility_icon(p,app->page,44,y+1);
-        else art(p,44,y+1,24,24,kui_art_small_icons[app->art]);
+        art(p,44,y+1,24,24,kui_art_small_icons[app->art]);
         words(p,80,y+4,230,selected==i?WHITE:MUTED,app->name,false);
     }
     if(s->system_saved.show_memory && v->memory_valid) {
@@ -302,8 +253,7 @@ static void home(struct paint *p, const struct kui_shell *s,const struct kui_she
         label(p,264,144,CYAN,inserted);
     } else label(p,264,144,CYAN,chosen->category);
     panel(p,264,172,344,140,PANEL);
-    if(chosen->art<0) utility_icon(p,chosen->page,372,178);
-    else art(p,372,178,128,128,kui_art_icons[chosen->art]);
+    art(p,372,178,128,128,kui_art_icons[chosen->art]);
     for(unsigned i=0;i<3;i++) label(p,264,326+i*19,MUTED,chosen->details[i]);
     panel(p,264,382,344,28,CYAN);
     label(p,382,388,NAVY,"A  Open app");
@@ -768,6 +718,18 @@ static void app_confirmation(struct paint *p,const struct kui_shell *s) {
         label(p,72,276,MUTED,"Placeholders are not repaired or verified sectors.");
         label(p,72,302,MUTED,"Normal dumps and their checkpoints stay intact.");
         label(p,72,334,CYAN,"A Start salvage");
+    } else if(s->confirm_wifi_update) {
+        char line[96],bytes[16];
+        const struct kui_wifi_firmware *f=&s->wifi.firmware;
+        kui_files_size_text(bytes,f->bytes);
+        label(p,72,188,WHITE,"UPDATE WI-FI FIRMWARE?");
+        snprintf(line,sizeof(line),"%s firmware %.32s (%s)",kui_wifi_chip_text(f->chip),f->version,bytes);
+        label(p,72,218,CYAN,line);
+        words(p,72,244,568,MUTED,f->path,false);
+        label(p,72,270,MUTED,"The checked image will be installed on the Wi-Fi board.");
+        label(p,72,294,MUTED,"Keep the console powered on while it finishes.");
+        label(p,72,318,MUTED,"Saved Wi-Fi settings are kept. The board will restart.");
+        label(p,72,350,CYAN,"A Update firmware");
     } else if(s->confirm_wifi_forget) {
         char line[96];
         label(p,72,188,WHITE,"FORGET THIS WI-FI NETWORK?");
@@ -1319,65 +1281,67 @@ static void games_variant_line(struct paint *p,const struct kui_shell *s,unsigne
         label(p,40,y,CYAN,line);
     }
 }
+static const char *game_background(const struct kui_shell *s) {
+    if(kui_shell_games_ce_probe_ready(s)) return "On (required)";
+    return s->games_launch_reader==KUI_GAME_READER_STANDARD?"Off":"On";
+}
 static void game_detail(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     const struct kui_games_detail *d=&s->games_detail;
-    title(p,40,108,"Games / Image details");
-    label(p,40,140,d->valid?CYAN:AMBER,d->valid?(d->title[0]?d->title:"Untitled image"):
-        v->busy?"Inspecting image...":d->stopped?"Inspection stopped":"Could not inspect image");
-    words(p,40,kui_shell_games_variant_label(s)?158:164,608,MUTED,s->games_selected_path,false);
-    games_variant_line(p,s,174);
-    panel(p,32,190,576,214,PANEL);
-    bool art=d->cover && v->game_detail_cover;
-    unsigned right=art?428:608;
-    if(art) cover_image(p,440,204,KUI_COVER_LARGE,v->game_detail_cover);
-    if(d->valid) {
-        char line[160];snprintf(line,sizeof(line),"Product: %s   Region: %s",d->product,d->region);
-        words(p,44,202,right,WHITE,line,false);
-        snprintf(line,sizeof(line),"Boot file: %s   %lu bytes",d->boot_file,(unsigned long)d->boot_bytes);
-        words(p,44,228,right,WHITE,line,false);
-        snprintf(line,sizeof(line),"Tracks: %u   Data: %u   Audio: %u",d->tracks,d->data_tracks,d->audio_tracks);
-        words(p,44,254,right,WHITE,line,false);
-        static const char *const formats[]={"GDI","ISO","CUE/BIN","CDI","BIN/IMG"};
-        const char *format=(unsigned)d->format<sizeof(formats)/sizeof(formats[0])?formats[d->format]:"Unknown";
-        snprintf(line,sizeof(line),"Format: %s   %llu bytes",format,(unsigned long long)d->bytes);
-        words(p,44,280,right,WHITE,line,false);
-        snprintf(line,sizeof(line),"Boot file starts at LBA %lu",(unsigned long)d->boot_lba);
-        words(p,44,306,right,MUTED,line,false);
-        if(kui_shell_games_retail_ready(s)) {
-            words(p,44,337,right,CYAN,d->format==KUI_GAME_IMAGE_GDI?
-                "A Launch game   Y Advanced read test":"A Launch game   X Inspect again",false);
-            words(p,44,365,right,d->high_density_audio?AMBER:MUTED,d->high_density_audio?
-                "CD audio is unavailable; music may be missing.":
-                "V" KUI_VERSION ": game compatibility varies.",false);
-        } else if(kui_shell_games_ce_probe_ready(s)) {
-            words(p,44,337,right,CYAN,d->format==KUI_GAME_IMAGE_GDI?
-                "A Windows CE boot test   Y Advanced read test":"A Windows CE boot test   X Inspect again",false);
-            words(p,44,365,right,AMBER,"Windows CE SCI launch test; compatibility varies.",false);
-        } else {
-            words(p,44,337,right,AMBER,d->windows_ce?"Windows CE SCI launch test; compatibility varies.":
-                !(d->native_gd || d->native_cd)?"This image has no supported native boot header.":
-                d->tracks>KUI_RETAIL_IMAGE_TRACKS?"Launch supports at most 99 tracks.":
-                "This image exceeds the current launch limits.",false);
-            words(p,44,365,right,MUTED,d->format==KUI_GAME_IMAGE_GDI?
-                "Y Advanced read test   X Inspect again":"X Inspect again",false);
-        }
-        words(p,44,386,right,MUTED,art?"Checks do not verify every saved sector.":
-            "Metadata checks do not verify every saved sector.",false);
+    title(p,40,108,kui_shell_games_launch_ready(s)?"Games / Ready to play":"Games / Selected image");
+    words(p,40,140,608,d->valid?CYAN:AMBER,d->valid?(d->title[0]?d->title:"Untitled image"):
+        v->busy?"Inspecting image...":d->stopped?"Inspection stopped":"Could not inspect image",false);
+    words(p,40,158,608,MUTED,s->games_selected_path,false);
+    games_variant_line(p,s,176);
+    panel(p,32,200,576,204,PANEL);
+    bool cover=d->cover && v->game_detail_cover;
+    unsigned right=cover?428:592;
+    if(cover) cover_image(p,440,214,KUI_COVER_LARGE,v->game_detail_cover);
+    if(kui_shell_games_launch_ready(s)) {
+        char line[128];
+        words(p,48,218,right,WHITE,"Ready to launch",false);
+        snprintf(line,sizeof(line),"Background loading: %s",game_background(s));
+        words(p,48,256,right,MUTED,line,false);
+        words(p,48,282,right,MUTED,s->games_launch_cdda?"CD music: On":"CD music: Off",false);
+        words(p,48,322,right,CYAN,"A Launch game   Y Options",false);
+        words(p,48,350,right,MUTED,"Options are saved for this image.",false);
+        words(p,48,378,right,MUTED,"Keep the SD card inserted while playing.",false);
     } else {
-        words(p,44,210,right,v->busy?CYAN:AMBER,d->message,false);
-        words(p,44,252,right,MUTED,v->busy?"Reading bounded image metadata from SD.":
-            "Check the image files, then press X to inspect again.",false);
-        words(p,44,284,right,MUTED,s->games_from_files?"B returns to the File Manager.":
-            kui_shell_games_variant_label(s)?"B returns to the version choices.":
-            "B returns to your Games list.",false);
+        words(p,48,218,right,AMBER,d->message[0]?d->message:
+            "This image cannot be launched yet.",false);
+        words(p,48,256,right,MUTED,v->busy?"Reading image information from SD.":
+            "Check the image files and inspect again.",false);
+        words(p,48,294,right,MUTED,kui_shell_games_image_ready(s)?
+            "Y Options   X Inspect again":"X Inspect again",false);
     }
+}
+static void games_information(struct paint *p,const struct kui_shell *s) {
+    const struct kui_games_detail *d=&s->games_detail;
+    title(p,40,108,"Games / Image information");
+    words(p,40,140,608,CYAN,s->games_selected_path,false);
+    games_variant_line(p,s,160);
+    panel(p,32,188,576,214,PANEL);
+    if(!d->valid) {label(p,48,208,AMBER,"Inspect the image to see its information.");return;}
+    char line[160];snprintf(line,sizeof(line),"Product: %s   Region: %s",d->product,d->region);
+    label(p,48,202,WHITE,line);
+    snprintf(line,sizeof(line),"Boot file: %s   %lu bytes",d->boot_file,(unsigned long)d->boot_bytes);
+    label(p,48,230,WHITE,line);
+    snprintf(line,sizeof(line),"Tracks: %u   Data: %u   Audio: %u",d->tracks,d->data_tracks,d->audio_tracks);
+    label(p,48,258,WHITE,line);
+    static const char *const formats[]={"GDI","ISO","CUE/BIN","CDI","BIN/IMG"};
+    const char *format=(unsigned)d->format<sizeof(formats)/sizeof(formats[0])?formats[d->format]:"Unknown";
+    snprintf(line,sizeof(line),"Format: %s   %llu bytes",format,(unsigned long long)d->bytes);
+    label(p,48,286,MUTED,line);
+    snprintf(line,sizeof(line),"Boot file starts at LBA %lu",(unsigned long)d->boot_lba);
+    label(p,48,314,MUTED,line);
+    label(p,48,342,MUTED,d->windows_ce?"Windows CE image":d->native_cd?"Native CD image":"Native GD image");
+    label(p,48,376,MUTED,"Metadata checks do not verify every saved sector.");
 }
 static void games_advanced(struct paint *p,const struct kui_shell *s) {
     title(p,40,108,"Games / Advanced");
     label(p,40,142,CYAN,"Source: SD card");
-    const char *names[]={"Game library","Browse SD folders","Scan box art","Resident loader probe"};
+    const char *names[]={"Game library","Browse SD folders","Scan box art","Developer tests"};
     const char *details[]={"Open /Games","Find a disc image elsewhere on the card",
-        "Covers and titles for every game in /Games","Test SD reads after leaving the launcher"};
+        "Covers and titles for every game in /Games","Image and loader read tests"};
     for(unsigned i=0;i<4;i++) {
         unsigned y=166+i*56;
         panel(p,32,y,576,50,s->games_advanced_selected==i?SELECTED:PANEL);
@@ -1386,7 +1350,7 @@ static void games_advanced(struct paint *p,const struct kui_shell *s) {
     label(p,40,396,MUTED,"IDE / CF sources are not available yet.");
 }
 static void games_probe_confirmation(struct paint *p,const struct kui_shell_view *v) {
-    title(p,40,108,"Games / Resident loader probe");
+    title(p,40,108,"Games / Loader read test");
     panel(p,32,152,576,250,PANEL);
     label(p,48,168,CYAN,v->busy?"Preparing the handoff...":"Run our test program?");
     label(p,48,204,WHITE,"Exits this menu and starts our test program.");
@@ -1406,7 +1370,7 @@ static void games_image_probe_confirmation(struct paint *p,const struct kui_shel
     panel(p,32,168,576,234,PANEL);
     if(!kui_shell_games_image_ready(s)) {
         label(p,48,186,AMBER,"Image details changed; inspect the image again.");
-        label(p,48,220,WHITE,"Press B, then X to inspect before testing.");
+        label(p,48,220,WHITE,"Return to game details and inspect again.");
         return;
     }
     label(p,48,186,CYAN,v->busy?"Preparing the handoff...":"Run the selected-image test?");
@@ -1421,46 +1385,96 @@ static void games_image_probe_confirmation(struct paint *p,const struct kui_shel
 }
 static void games_retail_confirmation(struct paint *p,const struct kui_shell *s,
         const struct kui_shell_view *v) {
+    title(p,40,108,"Games / Launch game");
     words(p,40,140,608,CYAN,s->games_selected_path,false);
     games_variant_line(p,s,154);
-    if(kui_shell_games_ce_probe_ready(s)) {
-        title(p,40,108,"Games / Windows CE boot test");
-        panel(p,32,168,576,234,PANEL);
-        label(p,48,186,CYAN,v->busy?"Preparing the test...":
-            s->games_detail.title[0]?s->games_detail.title:"Test the selected image?");
-        label(p,48,218,AMBER,"Experimental SCI launch; compatibility varies.");
-        label(p,48,244,WHITE,"Loads Windows CE and the selected game.");
-        label(p,48,270,WHITE,"Video and audio may still slow or lose sync.");
-        label(p,48,302,WHITE,"Needs SCI microSD. SD stays read-only.");
-        label(p,48,328,WHITE,"Reader: background (SCI microSD).");
-        label(p,48,354,AMBER,"Power cycle to return to the launcher.");
-        if(v->busy && v->app_status && v->app_status->message[0])
-            label(p,48,380,CYAN,v->app_status->message);
-        else label(p,48,380,MUTED,"Photograph any error or the last screen shown.");
-        return;
-    }
-    title(p,40,108,"Games / Launch game");
     panel(p,32,168,576,234,PANEL);
-    if(!kui_shell_games_retail_ready(s)) {
-        label(p,48,186,AMBER,"This image is not ready for native GD launch.");
+    if(!kui_shell_games_launch_ready(s)) {
+        label(p,48,186,AMBER,"Image details changed; launch is unavailable.");
         label(p,48,220,WHITE,"Press B, then X to inspect the image again.");
         return;
     }
     label(p,48,186,CYAN,v->busy?"Preparing the launch...":
         s->games_detail.title[0]?s->games_detail.title:"Launch selected game?");
-    label(p,48,218,AMBER,s->games_detail.high_density_audio?
-        "CD audio is unavailable; this game may not run.":
-        "V" KUI_VERSION ": game compatibility varies.");
-    label(p,48,244,WHITE,"SD access remains read-only.");
-    label(p,48,270,WHITE,"The launcher closes before the game starts.");
-    label(p,48,302,WHITE,"Keep the SD card inserted while playing.");
-    if(kui_shell_games_encoding_ready(s)) label(p,48,328,WHITE,s->games_retail_scrambled?
-        "Boot encoding: Scrambled   L/R Change":"Boot encoding: Plain   L/R Change");
-    else label(p,48,328,WHITE,"Photograph any error or the last screen shown.");
-    label(p,48,354,AMBER,"Power cycle to return to the launcher.");
+    char line[128];
+    snprintf(line,sizeof(line),"Background loading: %s",game_background(s));
+    label(p,48,220,WHITE,line);
+    label(p,48,246,WHITE,s->games_launch_cdda?"CD music: On (experimental)":"CD music: Off");
+    label(p,48,278,MUTED,"Uses the saved options for this image.");
+    label(p,48,316,WHITE,"Keep the SD card inserted while playing.");
+    label(p,48,342,AMBER,"Power cycle to return to the launcher.");
     if(v->busy && v->app_status && v->app_status->message[0])
         label(p,48,380,CYAN,v->app_status->message);
-    else label(p,48,380,MUTED,"X/Y: background reader tests (SCI microSD).");
+    else label(p,48,380,MUTED,"Y opens saved game options.");
+}
+static void game_options_notice(struct paint *p,const struct kui_shell *s) {
+    const char *notice=s->games_launch_notice;
+    bool failed=strncmp(notice,"Not saved",9)==0 || strstr(notice,"could not")!=NULL;
+    words(p,40,398,608,failed?AMBER:CYAN,notice,false);
+}
+static void games_launch_options(struct paint *p,const struct kui_shell *s) {
+    title(p,40,108,"Games / Options");
+    words(p,40,140,608,CYAN,s->games_detail.title[0]?s->games_detail.title:s->games_selected_path,false);
+    games_variant_line(p,s,160);
+    const char *names[]={"Background loading","CD music","Advanced"};
+    const char *values[]={game_background(s),
+        kui_shell_games_cdda_ready(s)?(s->games_launch_cdda?"On":"Off"):"Unavailable","Open"};
+    for(unsigned i=0;i<KUI_SHELL_GAME_OPTION_COUNT;i++) {
+        unsigned y=192+i*48;bool ready=kui_shell_games_option_ready(s,i);
+        panel(p,32,y,576,42,s->games_launch_selected==i?SELECTED:PANEL);
+        label(p,48,y+12,ready?WHITE:MUTED,names[i]);
+        words(p,350,y+12,592,ready?CYAN:MUTED,values[i],false);
+    }
+    const char *hint="Extra settings, image information and developer tests.";
+    if(s->games_launch_selected==KUI_SHELL_GAME_OPTION_READER)
+        hint=kui_shell_games_ce_probe_ready(s)?"This Windows CE game requires background loading.":
+            s->games_launch_cdda?"Changing background loading turns CD music off.":
+            "Load from SD while the game continues working.";
+    else if(s->games_launch_selected==KUI_SHELL_GAME_OPTION_CDDA)
+        hint=kui_shell_games_cdda_ready(s)?(s->games_detail.windows_ce?
+            "Experimental. Play music from this game's audio tracks. Compatible WinCE runtime required.":
+            "Experimental. Turning On sets background loading Off."):
+            "CD music is not yet supported for this image.";
+    words(p,40,374,608,MUTED,hint,false);
+    game_options_notice(p,s);
+}
+static void games_extra_options(struct paint *p,const struct kui_shell *s) {
+    title(p,40,108,"Games / Advanced");
+    words(p,40,140,608,CYAN,s->games_detail.title[0]?s->games_detail.title:s->games_selected_path,false);
+    games_variant_line(p,s,158);
+    const char *names[]={"Boot encoding","Background speed","Image information","Developer tests"};
+    const char *encodings[]={"Automatic","Plain","Scrambled"};
+    bool encoding=kui_shell_games_encoding_ready(s);
+    bool speed=kui_shell_games_retail_ready(s) && !s->games_launch_cdda &&
+        s->games_launch_reader!=KUI_GAME_READER_STANDARD;
+    const char *values[]={encoding?encodings[s->games_launch_encoding<KUI_GAME_ENCODING_COUNT?s->games_launch_encoding:0]:"Automatic",
+        speed?(s->games_launch_reader==KUI_GAME_READER_EAGER?"Aggressive":"Normal"):"Unavailable","Open","Open"};
+    for(unsigned i=0;i<KUI_SHELL_GAME_TOOL_COUNT;i++) {
+        unsigned y=180+i*42;bool ready=i==KUI_SHELL_GAME_TOOL_ENCODING?encoding:i==KUI_SHELL_GAME_TOOL_SPEED?speed:true;
+        panel(p,32,y,576,36,s->game_tools_selected==i?SELECTED:PANEL);
+        label(p,48,y+9,ready?WHITE:MUTED,names[i]);
+        words(p,350,y+9,592,ready?CYAN:MUTED,values[i],false);
+    }
+    const char *hints[]={"Automatic uses the inspected CD boot encoding.",
+        "Aggressive gives the background reader more work per step.",
+        "Disc tracks, image format and boot file details.","Read tests run separately from normal game launches."};
+    words(p,40,374,608,MUTED,hints[s->game_tools_selected<KUI_SHELL_GAME_TOOL_COUNT?s->game_tools_selected:0],false);
+    game_options_notice(p,s);
+}
+static void games_tests(struct paint *p,const struct kui_shell *s) {
+    title(p,40,108,"Games / Developer tests");
+    words(p,40,140,608,CYAN,s->games_tests_from_options?s->games_selected_path:"SD loader diagnostics",false);
+    const char *names[]={"Image read test","Loader read test"};
+    const char *hints[]={"Read samples from the selected GDI.","Run the standalone SD loader test program."};
+    for(unsigned i=0;i<2;i++) {
+        unsigned y=186+i*72;bool ready=i || (kui_shell_games_image_ready(s) &&
+            s->games_detail.format==KUI_GAME_IMAGE_GDI);
+        panel(p,32,y,576,62,s->game_tests_selected==i?SELECTED:PANEL);
+        label(p,48,y+8,ready?WHITE:MUTED,names[i]);
+        label(p,48,y+34,MUTED,ready?hints[i]:"Requires an inspected GDI image.");
+    }
+    label(p,40,360,MUTED,"These tests do not start a game.");
+    label(p,40,392,MUTED,"Each test has a separate confirmation before it runs.");
 }
 /* ---- File Manager ---- */
 /* Long paths keep their end, the folder you are in, behind "...". */
@@ -1840,6 +1854,23 @@ static void wifi_page(struct paint *p,const struct kui_shell *s,const struct kui
         return;
     }
     label(p,40,136,MUTED,w->board);
+    if(w->firmware_updating) {
+        panel(p,32,174,576,190,PANEL);
+        label(p,48,190,CYAN,"Updating the Wi-Fi board");
+        label(p,48,222,w->failed?AMBER:WHITE,w->message);
+        char done[16],total[16];
+        kui_files_size_text(done,w->firmware_done);
+        kui_files_size_text(total,w->firmware_total);
+        snprintf(line,sizeof(line),"%s / %s",done,total);
+        label(p,48,258,MUTED,line);
+        unsigned filled=w->firmware_total?(unsigned)((uint64_t)w->firmware_done*536u/w->firmware_total):0;
+        if(filled>536u) filled=536u;
+        box(p,48,284,536,12,EDGE);
+        if(filled) box(p,48,284,filled,12,CYAN);
+        label(p,48,320,MUTED,w->firmware_committing?"Finishing and checking the restarted board...":
+            "B stops before the new firmware is activated.");
+        return;
+    }
     uint16_t color=st->state==KWM_WIFI_ONLINE?CYAN:st->state==KWM_WIFI_BAD_PASSWORD||st->state==KWM_WIFI_NOT_FOUND?AMBER:WHITE;
     if(st->state==KWM_WIFI_ONLINE) snprintf(line,sizeof(line),"Online on %.32s as %u.%u.%u.%u (%s GHz, %d dBm)",st->ssid,
         st->ip[0],st->ip[1],st->ip[2],st->ip[3],st->band==5?"5":"2.4",st->rssi);
@@ -1881,7 +1912,7 @@ static void wifi_page(struct paint *p,const struct kui_shell *s,const struct kui
 void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
         const struct kui_shell_view *v, kui_shell_text_fn text, void *ctx) {
     if(!frame || !s || !v) return;
-    struct paint p={frame,text,ctx};
+    struct paint p={.fb=frame,.text=text,.ctx=ctx,.crisp=false};
     heading(&p,s,v);
     switch(s->page) {
     case KUI_SHELL_HOME: home(&p,s,v); break;
@@ -1912,6 +1943,10 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_GAMES_PROBE_CONFIRM: games_probe_confirmation(&p,v); break;
     case KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM: games_image_probe_confirmation(&p,s,v); break;
     case KUI_SHELL_GAMES_RETAIL_CONFIRM: games_retail_confirmation(&p,s,v); break;
+    case KUI_SHELL_GAMES_LAUNCH_OPTIONS: games_launch_options(&p,s); break;
+    case KUI_SHELL_GAMES_EXTRA_OPTIONS: games_extra_options(&p,s); break;
+    case KUI_SHELL_GAMES_TESTS: games_tests(&p,s); break;
+    case KUI_SHELL_GAMES_INFO: games_information(&p,s); break;
     case KUI_SHELL_MEMORY: case KUI_SHELL_NETWORK: utility_page(&p,s,v); break;
     case KUI_SHELL_FILES: files(&p,s,v); break;
     case KUI_SHELL_FILES_ACTIONS: files_actions(&p,s); break;
@@ -1928,14 +1963,14 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     if(s->confirm_storage_test) storage_test_confirmation(&p,s,v);
     if(s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore || s->confirm_vmu_delete ||
        s->confirm_vmu_copy || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage ||
-       s->confirm_wifi_forget) app_confirmation(&p,s);
+       s->confirm_wifi_forget || s->confirm_wifi_update) app_confirmation(&p,s);
     if(v->video_trial) video_trial(&p,v);
 }
 
 void kui_shell_draw(uint16_t *frame, const struct kui_shell *s,
         const struct kui_shell_view *v, kui_shell_text_fn text, void *ctx) {
     if(!frame || !s || !v) return;
-    struct paint p={frame,text,ctx};
+    struct paint p={.fb=frame,.text=text,.ctx=ctx,.crisp=false};
     box(&p,0,0,640,480,NAVY);
     kui_shell_draw_content(frame,s,v,text,ctx);
 }

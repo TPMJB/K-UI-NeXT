@@ -5,6 +5,18 @@
 #include "sci_sd_bus.h"
 #include "kui/retail_loader_layout.h"
 #include <string.h>
+#if KUI_ARMADA_CE_STREAM
+static void wake(void);
+#if !defined(KUI_RETAIL_CE) || !defined(KUI_RETAIL_ASYNC)
+#error "Armada streaming SCI hooks require the CE background reader"
+#endif
+#include "kui/armada_ce_stream_transport.h"
+#include "kui/armada_ce_excerpt_entry.h"
+static uintptr_t stream_event(uint32_t event,uintptr_t argument) {
+    return (uintptr_t)kui_armada_ce_bind_probe(KUI_ARMADA_CE_STREAM_BUS_EVENT,
+        event,0,(uint32_t)argument);
+}
+#endif
 
 #define IPRB UINT32_C(0xffd00008)
 /* IPRB bits 7..4: the SCI's level. The reader's is the lowest. */
@@ -177,6 +189,18 @@ static bool open_bus(void) {
         kui_sci_stream_open(&R.shared.card.device.sd, R.area0, R.area1, false) == KUI_SCI_STREAM_OK;
     return e.opened;
 }
+#if KUI_ARMADA_CE_STREAM
+extern void kui_retail_ce_stream_wake(void);
+static void stream_wake(void) { wake();kui_retail_ce_stream_wake(); }
+/* Published only through the immutable STREAM entry word. The stage sends
+ * ATTACH after proving the high controller and its zero state survived boot. */
+const struct kui_armada_ce_stream_bus kui_retail_ce_stream_bus={
+    KUI_ARMADA_CE_STREAM_BUS_VERSION,sizeof(struct kui_armada_ce_stream_bus),&R,
+    open_bus,hook,unhook,stream_wake,kui_sci_stream_busy,kui_sci_stream_ready,
+    kui_sci_stream_poll,kui_sci_stream_wait,kui_sci_stream_fetch,kui_sci_stream_take,kui_sci_stream_discard,
+    kui_sci_stream_token_budget
+};
+#endif
 /* CRC errors, overruns, token waits and a busy channel are retried at the
  * same block. A latched bus fault or an SCI that did not come back (RESET)
  * ends the read, as it does for the ordinary reader. */
@@ -316,6 +340,9 @@ static void deliver_work(uint32_t wait) {
     uint32_t irq_steps = 0;
 #endif
     for(;;) {
+#if KUI_ARMADA_CE_STREAM
+        if(!stream_event(KUI_ARMADA_CE_STREAM_BUS_DATA_ENTER,delivered<wait)) return;
+#endif
 #ifdef KUI_RETAIL_CE
         if(kui_sci_stream_token_pending() && R.shared.stream.token_bounded &&
            !R.shared.stream.token_budget) return;
@@ -355,9 +382,21 @@ static void deliver_work(uint32_t wait) {
         /* The run's next block starts before this one is checked and
          * copied: the card streams while the CPU works. If it cannot start,
          * its own fetch later retries it and counts the failure. */
-        if(e.cursor.run > 1u && kui_sci_stream_ready(lba))
+        if(e.cursor.run > 1u && kui_sci_stream_ready(lba)
+#if KUI_ARMADA_CE_STREAM
+           && stream_event(KUI_ARMADA_CE_STREAM_BUS_DATA_PREFETCH,0)
+#endif
+          )
             (void)kui_sci_stream_fetch(lba + 1u, TOKEN_LIMIT, false);
+#if KUI_ARMADA_CE_STREAM
+        struct kui_armada_ce_stream_data_take held={lba,KUI_SCI_STREAM_PENDING,0,NULL};
+        (void)stream_event(KUI_ARMADA_CE_STREAM_BUS_DATA_TAKE,(uintptr_t)&held);
+        const uint8_t *block;
+        if(held.copied) {block=held.block;r=(enum kui_sci_stream_result)held.result;}
+        else block=kui_sci_stream_take(lba,&r);
+#else
         const uint8_t *block = kui_sci_stream_take(lba, &r);
+#endif
         if(block) {
             e.retries = 0;
 #ifdef KUI_RETAIL_CE
@@ -369,6 +408,9 @@ static void deliver_work(uint32_t wait) {
             if(e.in_irq) ++e.stats.irq_blocks;
             else ++e.stats.call_blocks;
             if(e.cursor.done == e.cursor.count) e.active = 0;
+#if KUI_ARMADA_CE_STREAM
+            if(stream_event(KUI_ARMADA_CE_STREAM_BUS_DATA_BLOCK,0)) return;
+#endif
             continue;
         }
         if(r == KUI_SCI_STREAM_CRC) {
@@ -515,9 +557,15 @@ void kui_retail_async_after(uint32_t function, int32_t result) {
     /* What the interrupt does not fill, CE's driver calls for again at once. */
     if(kui_sci_stream_token_pending() ||
        (!interrupt_fills() && (topping(function) || function == KUI_GD_DMA_TRANSFER))) wake();
+#if KUI_ARMADA_CE_STREAM
+    (void)stream_event(KUI_ARMADA_CE_STREAM_BUS_IDLE,0);
+#endif
 #endif
 }
 uint32_t kui_retail_async_irq(void) {
+#if KUI_ARMADA_CE_STREAM
+    if(stream_event(KUI_ARMADA_CE_STREAM_BUS_IRQ,0)) return 0;
+#endif
     /* An SCI event without a reception: not ours, passed on as any other
      * (under CE: its level is dropped). */
     if(!kui_sci_stream_busy()) {

@@ -1,8 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/retail_loader_layout.h"
+#include "kui/retail_native_disc.h"
 #define JOIN_INNER(a,b) a##b
 #define JOIN(a,b) JOIN_INNER(a,b)
 #define C_SYMBOL(name) JOIN(__USER_LABEL_PREFIX__,name)
+#include "toy_pilot_frame.inc"
 
 /* Called by the high stage before entering the owner's upper IP bootstrap.
  * Do not switch stacks here: state adoption/init use the temporary high stack.
@@ -36,6 +38,17 @@ _start:
  * kernel; zero if they were not found. */
     .global C_SYMBOL(kui_retail_ce_kernel)
 C_SYMBOL(kui_retail_ce_kernel): .long 0,0,0,0
+#if KUI_ARMADA_CE_STREAM
+/* Stage verifies the complete immutable resident before following this word.
+ * High stream state remains dormant throughout owner bootstrap 2. */
+    .global C_SYMBOL(kui_retail_ce_stream_bus_entry)
+C_SYMBOL(kui_retail_ce_stream_bus_entry): .long C_SYMBOL(kui_retail_ce_stream_bus)
+#endif
+#elif KUI_RETAIL_RETURN_TRACE == 3
+/* Native-only word at entry offset 36. The high stage verifies this pointer
+ * against the selected immutable resident before its exact-owner RAM patch. */
+    .global C_SYMBOL(kui_retail_skies_read_entry)
+C_SYMBOL(kui_retail_skies_read_entry): .long C_SYMBOL(kui_retail_skies_read_failure)
 #endif
 
 /* Save original SR on the caller's stack, then mask BEFORE examining the
@@ -70,8 +83,13 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
     mov #3,r0
 .Lgd_common:
     stc sr,r1
+#if KUI_TOY_PILOT_PRIVATE_P2
+    mov.l .Lirq_mask,r2
+    or r1,r2
+    ldc r2,sr
+#endif
     mov.l r1,@-r15
-#ifndef KUI_RETAIL_CE
+#if !defined(KUI_RETAIL_CE) && !KUI_TOY_PILOT_PRIVATE_P2
     mov.l .Lirq_mask,r2
     or r2,r1
     ldc r1,sr
@@ -84,6 +102,11 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
     mov.l r12,@-r15
     mov.l r13,@-r15
     mov.l r14,@-r15
+#if KUI_TOY_PILOT_PRIVATE_P2
+    /* This SHARED0 dispatch has no native SDK/invalidator callback. BL and
+     * IMASK15 remain held until every inherited save is read and popped;
+     * only then is its exact SR restored. No live frame crosses unmask. */
+#endif
 #ifdef KUI_RETAIL_CE
     mov.l .Lirq_mask,r2
     or r2,r1
@@ -236,8 +259,13 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
 #endif
 .Lactive: .long C_SYMBOL(kui_retail_hook_active)
 .Lfault: .long C_SYMBOL(kui_retail_hook_fault)
+#if KUI_TOY_PILOT_PRIVATE_P2
+.Lprivate_stack: .long KUI_RETAIL_HOOK_STACK-16+0x20000000
+.Lguard: .long KUI_RETAIL_HOOK_STACK_BOTTOM+0x20000000
+#else
 .Lprivate_stack: .long KUI_RETAIL_HOOK_STACK-16
 .Lguard: .long KUI_RETAIL_HOOK_STACK_BOTTOM
+#endif
 .Lguard_value: .long 0x4b554947
 .Ldispatch: .long C_SYMBOL(kui_retail_resident_dispatch)
 .Lsource: .long C_SYMBOL(kui_retail_hook_source)
@@ -249,10 +277,41 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
 .Lnative_caller: .long C_SYMBOL(kui_retail_native_caller)
 #endif
 
+#if KUI_TOY_PILOT_PRIVATE_P2
+    TOY_FRAME_HELPER C_SYMBOL(kui_toy_pilot_frame_publish_retail)
+#endif
+
+#if KUI_RETAIL_RETURN_TRACE == 3
+/* Only the two fingerprinted fatal-read branches call here. R0 is the failed
+ * submit/poll result: capture it before any scratch use, preserve the failure
+ * caller PR and owner's original SP, then stop on the existing private stack.
+ * This path never returns to the game or resumes storage. */
+    .align 2
+    .global C_SYMBOL(kui_retail_skies_read_failure)
+C_SYMBOL(kui_retail_skies_read_failure):
+    mov r0,r4
+    sts pr,r5
+    mov r15,r6
+    stc sr,r0
+    mov.l .Lmenu_mask,r1
+    or r1,r0
+    ldc r0,sr
+    /* Keep R0 as the masked-SR operand until LDC completes. Loading the
+     * stack through that register prevents SH relaxation from scheduling a
+     * direct R15 load ahead of interrupt masking. */
+    mov.l .Lmenu_stack,r0
+    mov r0,r15
+    mov.l .Lmenu_report,r0
+    jmp @r0
+    nop
+#endif
+
 /* Menu command 1 (return to the BIOS menu; A+B+X+Y+Start in most games)
  * shows the reader's counters, then restarts the console so the boot disc
  * starts K-UI again. Other menu functions still forward to firmware. Use our
- * private stack even if the caller was in a dying game. */
+ * private stack even if the caller was in a dying game. Native function 2 can
+ * optionally answer for the unchanged mounted image without entering the
+ * physical firmware, the GD service, or the resident stack. */
     .align 2
     .global C_SYMBOL(kui_retail_menu_hook)
 C_SYMBOL(kui_retail_menu_hook):
@@ -268,14 +327,22 @@ C_SYMBOL(kui_retail_menu_hook):
     bf .Lmenu_forward
     bra .Lgd_common
     mov #4,r0
-.Lmenu_forward:
+#elif KUI_RETAIL_NATIVE_DISC_CHECK
+    cmp/eq #2,r0
+    bf .Lmenu_forward
+    rts
+    mov #0,r0
 #endif
+.Lmenu_forward:
     mov.l .Lmenu_original,r0
     mov.l @r0,r0
     jmp @r0
     nop
 .Lmenu_stop:
     stc sr,r0
+#if KUI_RETAIL_RETURN_TRACE == 2
+    mov r0,r7 /* Preserve original entry SR before masking for the terminal. */
+#endif
     mov.l .Lmenu_mask,r1
     or r1,r0
     ldc r0,sr
@@ -288,7 +355,11 @@ C_SYMBOL(kui_retail_menu_hook):
     .align 2
 .Lmenu_original: .long C_SYMBOL(kui_retail_original_menu)
 .Lmenu_mask: .long 0x100000f0
+#if KUI_TOY_PILOT_PRIVATE_P2
+.Lmenu_stack: .long KUI_RETAIL_HOOK_STACK-16+0x20000000
+#else
 .Lmenu_stack: .long KUI_RETAIL_HOOK_STACK-16
+#endif
 .Lmenu_report: .long C_SYMBOL(kui_retail_menu_return)
 
 #if defined(KUI_RETAIL_ASYNC) && defined(KUI_RETAIL_CE)

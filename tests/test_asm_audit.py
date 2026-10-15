@@ -11,9 +11,9 @@
    plain -m4; __SH4_SINGLE__ for -m4-single, which is how KOS builds). A test for __SH4__ alone is
    false on the real build, so the "console" branch was silently skipped, the host-test branch ran,
    and KOS's cache header came back in (the second CI failure, which my first fix and my first guard
-   test both got backwards). The raw macros may now appear only in platform.h, which turns them into
-   KUI_ON_CONSOLE, and the preprocessor is run over src/dreamcast/disc.c under EACH SH-4 macro set the
-   toolchain can produce: the console branch must be taken for every one of them.
+   test both got backwards). Raw macros appear only in include/kui/target.h, shared by platform.h
+   and freestanding loaders. The preprocessor runs over disc.c and the CE music loaders under
+   EACH SH-4 macro set: every mode must select the same console branch.
 This does not prove anything compiles on the console toolchain; it stops these two known ways of
 failing there from coming back."""
 import pathlib
@@ -25,6 +25,8 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MAX_OPERANDS = 3   # the tree's asm has 0 to 1; KOS's failing helper had 9
+TARGET_DETECTORS = {"include/kui/target.h"}
+RAW_TARGET_MACROS = re.compile(r"__SH4|__sh__|_arch_dreamcast|__DREAMCAST__")
 
 
 def strip_comments(text):
@@ -82,6 +84,18 @@ def audit(root):
     return bad
 
 
+def raw_target_macros(root):
+    bad = []
+    for path in sorted(list(root.glob("src/**/*.[ch]")) + list(root.glob("include/**/*.h"))):
+        relative = str(path.relative_to(root))
+        if relative in TARGET_DETECTORS:
+            continue
+        for number, line in enumerate(strip_comments(path.read_text()).splitlines(), 1):
+            if RAW_TARGET_MACROS.search(line):
+                bad.append((relative, number))
+    return bad
+
+
 # The statement that failed on the CI compiler, verbatim from KOS's arch/cache.h.
 KOS_PURGE_LINE = '''__asm__ __volatile__("ocbp @%8\\n\\t"
              : "+m"(ptr[0]), "+m"(ptr[1]), "+m"(ptr[2]), "+m"(ptr[3]),
@@ -91,14 +105,17 @@ KOS_PURGE_LINE = '''__asm__ __volatile__("ocbp @%8\\n\\t"
 
 # Every way the toolchain says "this is an SH-4 / the Dreamcast": one macro per mode, plus KOS's own.
 CONSOLE_MACRO_SETS = {
+    "generic SH cross compiler": ["-D__sh__"],
     "-m4 (plain)":               ["-D__SH4__"],
     "-m4-single (how KOS builds)": ["-D__SH4_SINGLE__"],
     "-m4-single-only":           ["-D__SH4_SINGLE_ONLY__"],
     "-m4-nofpu":                 ["-D__SH4_NOFPU__"],
     "KOS's -D_arch_dreamcast":   ["-D_arch_dreamcast=1"],
     "-D__DREAMCAST__":           ["-D__DREAMCAST__"],
+    "explicit console build":   ["-DKUI_ON_CONSOLE=1"],
     "all of them":               ["-D__SH4__", "-D__SH4_SINGLE__", "-D_arch_dreamcast=1", "-D__DREAMCAST__"],
 }
+CE_LOADERS = ("armada_ce_excerpt_entry", "armada_ce_stream_native", "armada_ce_stream_player")
 
 
 def preprocess_disc(*macros):
@@ -107,6 +124,16 @@ def preprocess_disc(*macros):
         raise unittest.SkipTest("needs a C compiler and FatFs (make test fetches it)")
     cmd = [cc, "-E", "-P", "-std=c11", "-Iinclude", "-Isrc/dreamcast", "-Itests/stubs", "-I.deps/fatfs/source",
            "-DKUI_EXPERIMENTAL_DMA=1", *macros, "src/dreamcast/disc.c"]
+    return subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, check=True).stdout
+
+
+def preprocess_loader(name, *macros):
+    cc = shutil.which("cc") or shutil.which("gcc")
+    if not cc:
+        raise unittest.SkipTest("needs a C preprocessor")
+    cmd = [cc, "-E", "-P", "-std=c11", "-Iinclude", "-Isrc/loader",
+           "-DKUI_RETAIL_CE=1", "-DKUI_ARMADA_CE_EXCERPT=1", "-DKUI_ARMADA_CE_STREAM=1",
+           *macros, "src/loader/" + name + ".c"]
     return subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, check=True).stdout
 
 
@@ -132,12 +159,19 @@ class AsmAudit(unittest.TestCase):
 
 
 class ConsoleMacro(unittest.TestCase):
-    def test_raw_sh4_macros_appear_only_in_platform_h(self):
-        for path in sorted(list((ROOT / "src").glob("**/*.[ch]")) + list((ROOT / "include").glob("**/*.h"))):
-            if path.name == "platform.h": continue
-            for n, line in enumerate(strip_comments(path.read_text()).splitlines(), 1):
-                self.assertNotRegex(line, r"__SH4|__sh__|_arch_dreamcast|__DREAMCAST__",
-                                    f"{path.name}:{n}: use KUI_ON_CONSOLE, not a raw toolchain macro (see docstring)")
+    def test_raw_sh4_macros_appear_only_in_the_shared_target_detector(self):
+        self.assertEqual(raw_target_macros(ROOT), [],
+                         "use KUI_ON_CONSOLE outside include/kui/target.h (see docstring)")
+
+    def test_another_platform_or_target_header_cannot_bypass_the_audit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            for name in ("include/kui/target.h", "src/other/platform.h", "include/other/target.h"):
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("#if defined(__sh__)\n#endif\n")
+            self.assertEqual(raw_target_macros(root),
+                             [("include/other/target.h", 1), ("src/other/platform.h", 1)])
 
     def test_every_sh4_mode_takes_the_console_branch(self):
         for name, macros in CONSOLE_MACRO_SETS.items():
@@ -154,6 +188,36 @@ class ConsoleMacro(unittest.TestCase):
         self.assertIn("arch_dcache_purge_range", out)     # the recording double the disc tests rely on
         self.assertNotIn("ocbp", out)
         self.assertNotIn("0x1fffffffu", out)
+
+    def test_every_console_mode_preserves_the_ce_loader_console_code(self):
+        for loader in CE_LOADERS:
+            reference = preprocess_loader(loader, "-D__sh__")
+            for name, macros in CONSOLE_MACRO_SETS.items():
+                with self.subTest(loader=loader, mode=name):
+                    out = preprocess_loader(loader, *macros)
+                    self.assertEqual(out, reference)
+                    self.assertIn('"stc sr,%0"', out)
+                    if loader == "armada_ce_stream_native":
+                        self.assertIn('"ocbp @%0"', out)
+                        self.assertIn("ops=&production", out)
+                    else:
+                        self.assertIn('"ldc %0,sr"', out)
+
+    def test_host_ce_loaders_keep_console_asm_and_production_operations_absent(self):
+        for loader in CE_LOADERS:
+            with self.subTest(loader=loader):
+                out = preprocess_loader(loader)
+                if loader == "armada_ce_stream_native":
+                    self.assertNotIn('"stc sr,%0"', out)
+                    self.assertNotIn('"ocbp @%0"', out)
+                else:
+                    prefix = "worker_" if loader == "armada_ce_excerpt_entry" else ""
+                    for name in (prefix + "mask_begin", prefix + "mask_end"):
+                        body = re.search(r"\b" + name + r"\([^)]*\)\s*\{([^}]+)\}", out)
+                        self.assertIsNotNone(body)
+                        self.assertNotIn('"stc sr,%0"', body.group(1))
+                        self.assertNotIn('"ldc %0,sr"', body.group(1))
+                self.assertNotIn("ops=&production", out)
 
 
 if __name__ == "__main__":

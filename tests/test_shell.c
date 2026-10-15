@@ -17,6 +17,42 @@ static void reset(enum kui_shell_page page) {
 static enum kui_shell_action press(unsigned buttons, bool busy) {
     return kui_shell_input(&s,buttons,busy);
 }
+static void open_extra_options(void) {
+    assert(s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+    s.games_launch_selected=KUI_SHELL_GAME_OPTION_ADVANCED;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_EXTRA_OPTIONS);
+}
+static void open_developer_tests(void) {
+    open_extra_options();s.game_tools_selected=3;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_TESTS);
+}
+/* Background loading is a saved toggle; its aggressive setting is deeper
+ * in Advanced. Neither gesture itself dispatches a game launch. */
+static enum kui_shell_action launch_reader(unsigned button) {
+    assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+    s.games_launch_selected=KUI_SHELL_GAME_OPTION_READER;
+    unsigned reader=button==KUI_SHELL_A?KUI_RETAIL_READER_STANDARD:
+        button==KUI_SHELL_X?KUI_RETAIL_READER_ASYNC:KUI_RETAIL_READER_ASYNC_EAGER;
+    if((s.games_launch_reader!=KUI_RETAIL_READER_STANDARD)!=(reader!=KUI_RETAIL_READER_STANDARD))
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH);
+    if(reader!=KUI_RETAIL_READER_STANDARD) {
+        open_extra_options();s.game_tools_selected=1;
+        if(s.games_launch_reader!=reader)
+            assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH);
+        assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+    }
+    assert(s.games_launch_reader==reader && !s.games_launch_cdda);
+    enum kui_shell_action action=press(KUI_SHELL_START,false);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
+    return action;
+}
+static void open_image_test(void) {
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+    open_developer_tests();s.game_tests_selected=0;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
+    assert(press(KUI_SHELL_A|KUI_SHELL_START,false)==KUI_SHELL_NONE);
+}
 static unsigned home_index(enum kui_shell_page page) {
     for(unsigned i=0;i<KUI_SHELL_HOME_APPS;i++) if(kui_shell_home_pages[i]==page) return i;
     assert(!"app missing from Home");
@@ -62,13 +98,14 @@ static void launcher_and_confirmation(void) {
 }
 static void operation_lock_and_stop(void) {
     const unsigned launch=KUI_SHELL_A|KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_R;
-    for(unsigned page=0;page<=KUI_SHELL_WIFI;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_GAMES_INFO;page++) {
         reset((enum kui_shell_page)page);
         assert(press(launch,true)==KUI_SHELL_NONE && s.page==page);
         assert(press(launch|KUI_SHELL_L|KUI_SHELL_B,true)==KUI_SHELL_STOP);
         assert(press(KUI_SHELL_L,true)==(page==KUI_SHELL_HOME||page==KUI_SHELL_RIPPER?
             KUI_SHELL_MUSIC_PREVIOUS:(page==KUI_SHELL_GAMES_PROBE_CONFIRM ||
             page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM || page==KUI_SHELL_GAMES_RETAIL_CONFIRM ||
+            page==KUI_SHELL_GAMES_LAUNCH_OPTIONS ||
             page==KUI_SHELL_GAMES_VARIANTS || page==KUI_SHELL_FILES_CONFIRM)?KUI_SHELL_NONE:KUI_SHELL_MSTATS));
         assert(s.page==page);
     }
@@ -556,11 +593,12 @@ static void games_controls(void) {
     assert(kui_shell_games_image_ready(&s));
     assert(press(KUI_SHELL_Y,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
-    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
+    open_image_test();
     assert(press(KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_L|KUI_SHELL_R|KUI_SHELL_START,false)==KUI_SHELL_NONE);
-    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_TESTS);
     assert(kui_shell_games_image_ready(&s));
-    press(KUI_SHELL_Y,false);
+    s.game_tests_selected=0;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_IMAGE_PROBE);
@@ -575,6 +613,9 @@ static void games_controls(void) {
     strcpy(s.games_detail.path,s.games_selected_path);
     assert(!kui_shell_games_image_ready(&s) && press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
     strcpy(s.games_selected_path,detail.path);strcpy(s.games_detail.path,detail.path);
+    press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_TESTS);
+    press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_EXTRA_OPTIONS);
+    press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
     press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_DETAIL);
     assert(press(KUI_SHELL_A|KUI_SHELL_X,false)==KUI_SHELL_GAMES_INSPECT && !s.games_detail.valid);
     kui_shell_set_games_detail(&s,&detail);
@@ -607,17 +648,20 @@ static void games_controls(void) {
     reset(KUI_SHELL_GAMES_ADVANCED);
     press(KUI_SHELL_UP,false);assert(s.games_advanced_selected==3);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_ADVANCED);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_TESTS);
+    assert(s.game_tests_selected==1 && !s.games_tests_from_options);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_PROBE_CONFIRM);
     assert(press(KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_L|KUI_SHELL_R|KUI_SHELL_START,false)==KUI_SHELL_NONE);
-    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_ADVANCED);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_TESTS);
     assert(s.games_advanced_selected==3);
     press(KUI_SHELL_A,false);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_PROBE_CONFIRM);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_PROBE);
     assert(s.page==KUI_SHELL_GAMES_PROBE_CONFIRM);
-    press(KUI_SHELL_B,false);press(KUI_SHELL_DOWN,false);
-    assert(s.games_advanced_selected==0);
+    press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_TESTS);
+    press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_ADVANCED);
+    press(KUI_SHELL_DOWN,false);assert(s.games_advanced_selected==0);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && !strcmp(s.games_path,"/Games"));
 
     /* A long complete file path is not truncated to the folder path capacity. */
@@ -692,13 +736,17 @@ static void games_variant_controls(void) {
         assert(!strcmp(kui_shell_games_variant_label(&s),labels[choice]));
         assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
         for(unsigned reader=0;reader<3;reader++) {
-            assert(press(buttons[reader],false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==readers[reader]);
+            assert(launch_reader(buttons[reader])==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==readers[reader]);
             assert(!strcmp(s.games_selected_path,paths[choice]));
         }
         assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
         assert(kui_shell_games_image_ready(&s) && !strcmp(kui_shell_games_variant_label(&s),labels[choice]));
-        assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
+        open_image_test();
         assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_IMAGE_PROBE && !strcmp(s.games_selected_path,paths[choice]));
+        press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_TESTS);
+        press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_EXTRA_OPTIONS);
+        press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+        press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
         press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_DETAIL);
         struct kui_games_detail old=s.games_detail;
         assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_VARIANTS);
@@ -720,11 +768,18 @@ static void games_variant_controls(void) {
     /* Both CE versions default to the working background reader. */
     for(unsigned choice=0;choice<2;choice++) {
         open_paired_games();inspect_paired_choice(choice,true);
+        s.games_detail.audio=(struct kui_game_audio_info){KUI_GAME_AUDIO_GD_HIGH_DENSITY,2,1,1};
+        assert(kui_shell_games_ce_probe_ready(&s) && kui_shell_games_cdda_ready(&s));
         press(KUI_SHELL_A,false);assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
         s.games_retail_reader=0;
         assert(press(KUI_SHELL_X|KUI_SHELL_Y,false)==KUI_SHELL_NONE && !s.games_retail_reader);
         assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL &&
             s.games_retail_reader==(KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC));
+        assert(!strcmp(s.games_selected_path,paths[choice]));
+        press(KUI_SHELL_Y,false);s.games_launch_selected=KUI_SHELL_GAME_OPTION_CDDA;
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_cdda);
+        assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL &&
+            s.games_retail_reader==(KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC|KUI_GAMES_RETAIL_CE_EXCERPT));
         assert(!strcmp(s.games_selected_path,paths[choice]));
     }
 
@@ -754,9 +809,24 @@ static uint16_t pixels[640*480+2], prepared[640*480+2];
 static char drawn[8192];
 static size_t drawn_size;
 static uint16_t badge_color;
+static bool header_link_seen;
+static uint16_t header_link_color;
+static uint16_t image_test_row_color;
+static uint16_t option_row_colors[KUI_SHELL_GAME_OPTION_COUNT];
 static void observe(void *ctx,unsigned x,unsigned y,uint16_t color,const char *value,bool large) {
     (void)ctx;
     if(!strncmp(value,"STREAM CRC:",11)) badge_color=color;
+    if(x==48 && y==194 && !strcmp(value,"Image read test")) image_test_row_color=color;
+    if(s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS && x==48) {
+        static const char *const names[]={"Background loading","CD music","Advanced"};
+        for(unsigned i=0;i<KUI_SHELL_GAME_OPTION_COUNT;i++)
+            if(!strcmp(value,names[i])) option_row_colors[i]=color;
+    }
+    if(x==32 && y==78) {
+        assert(!large && !strcmp(value,"github.com/TPMJB/K-UI-NeXT"));
+        assert(kui_shell_font_width(value,false)<=396u-x);
+        header_link_seen=true;header_link_color=color;
+    }
     assert(x>=32 && x+kui_shell_font_width(value,large)<=608 && y>=24 &&
         y+(large?KUI_SHELL_FONT_LARGE_HEIGHT:KUI_SHELL_FONT_SMALL_HEIGHT)<=448);
     for(size_t i=0;value[i];i++) assert(value[i]>=32 && value[i]<=126);
@@ -767,8 +837,15 @@ static void observe(void *ctx,unsigned x,unsigned y,uint16_t color,const char *v
 }
 static void render(struct kui_shell_view *v) {
     pixels[0]=0x1234; pixels[640*480+1]=0xabcd;
-    drawn_size=0; drawn[0]=0; badge_color=0;
+    drawn_size=0; drawn[0]=0; badge_color=0;header_link_seen=false;image_test_row_color=0;
+    memset(option_row_colors,0,sizeof(option_row_colors));
     kui_shell_draw(pixels+1,&s,v,observe,NULL);
+    assert(header_link_seen);
+    unsigned link_ink=0;
+    for(unsigned y=78;y<78+KUI_SHELL_FONT_SMALL_HEIGHT;y++)
+        for(unsigned x=32;x<32+kui_shell_font_width("github.com/TPMJB/K-UI-NeXT",false);x++)
+            link_ink+=pixels[1+y*640+x]==header_link_color;
+    assert(link_ink>0); /* The unclipped link stays below the brand on every page. */
     assert(pixels[0]==0x1234 && pixels[640*480+1]==0xabcd);
     prepared[0]=0x1234; prepared[640*480+1]=0xabcd;
     for(unsigned i=1;i<=640*480;i++) prepared[i]=0x0864;
@@ -780,7 +857,7 @@ static void rendering_semantics(void) {
     const char *logs[]={"A very long diagnostic line deliberately exceeding safe frame margins 0123456789012345678901234567890"};
     struct kui_shell_view v={.build="0123456789abcdef",.log_lines=logs,.log_count=1,
         .total_log_lines=1,.done=UINT64_MAX-1,.total=UINT64_MAX};
-    for(unsigned page=0;page<=KUI_SHELL_WIFI;page++) {
+    for(unsigned page=0;page<=KUI_SHELL_GAMES_INFO;page++) {
         reset((enum kui_shell_page)page); render(&v);
     }
     reset(KUI_SHELL_DIAGNOSTICS); render(&v);
@@ -1100,183 +1177,425 @@ static void round_five_rendering(void) {
     v.app_status=&state;render(&v);
     assert(strstr(drawn,"remaining 7") && strstr(drawn,"pass 2/5") && !strstr(drawn,"New salvage job"));
 }
-static void games_retail_controls(void) {
+static struct kui_games_detail launch_detail(bool ce, bool cd) {
+    struct kui_games_detail detail={.valid=true,.format=cd?KUI_GAME_IMAGE_CUE:KUI_GAME_IMAGE_GDI,
+        .native_gd=!ce&&!cd,.native_cd=!ce&&cd,.cd_image=cd,.windows_ce=ce,
+        .tracks=15,.boot_bytes=ce?1253376:123456,.boot_lba=45166,
+        .audio={KUI_GAME_AUDIO_GD_HIGH_DENSITY,12,12,0}};
+    strcpy(detail.path,cd?"/Games/CD sample/disc.cue":"/Games/Toy Commander/disc.gdi");
+    strcpy(detail.title,ce?"ARMADA":"TOY COMMANDER");
+    strcpy(detail.boot_file,ce?"0WINCEOS.BIN":"1ST_READ.BIN");
+    return detail;
+}
+static void install_launch_detail(const struct kui_games_detail *detail) {
     reset(KUI_SHELL_GAMES_DETAIL);
-    strcpy(s.games_selected_path,"/Games/DOA2/DOA2.gdi");
-    struct kui_games_detail detail={.valid=true,.native_gd=true,.tracks=3,.boot_bytes=123456,.boot_lba=45166};
-    strcpy(detail.path,s.games_selected_path);
-    strcpy(detail.title,"DEAD OR ALIVE 2");strcpy(detail.boot_file,"1ST_READ.BIN");
-    kui_shell_set_games_detail(&s,&detail);
-    assert(kui_shell_games_retail_ready(&s));
+    strcpy(s.games_selected_path,detail->path);
+    kui_shell_set_games_detail(&s,detail);
+}
+static void games_retail_controls(void) {
+    struct kui_games_detail detail=launch_detail(false,false);
+    install_launch_detail(&detail);
+    assert(kui_shell_games_retail_ready(&s) && kui_shell_games_launch_ready(&s));
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && !s.games_retail_reader);
+    assert(press(KUI_SHELL_A|KUI_SHELL_X,false)==KUI_SHELL_NONE && !s.games_retail_reader);
+    assert(press(KUI_SHELL_A|KUI_SHELL_Y,false)==KUI_SHELL_NONE && !s.games_retail_reader);
     assert(press(KUI_SHELL_START|KUI_SHELL_L,false)==KUI_SHELL_NONE);
-    assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
-    /* X and Y launch with the background SCI reader (releasing or keeping
-     * its vectors), A with the standard one. */
-    assert(press(KUI_SHELL_X,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_ASYNC);
-    assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
-    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_ASYNC_EAGER);
-    assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
-    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
-    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_STANDARD);
+    assert(launch_reader(KUI_SHELL_X)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_ASYNC);
+    assert(launch_reader(KUI_SHELL_Y)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_ASYNC_EAGER);
+    /* Leaving and returning retains this image's choices; a fresh inspection resets them. */
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP);
-    assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_STANDARD);
-    /* The confirmation rechecks eligibility, including the selected identity. */
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_ASYNC_EAGER);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_GAMES_INSPECT && !s.games_detail.valid);
+    assert(s.games_launch_reader==KUI_RETAIL_READER_STANDARD && !s.games_launch_cdda);
+    kui_shell_set_games_detail(&s,&detail);press(KUI_SHELL_A,false);
+    /* Launch admission is rechecked at handoff. */
     strcpy(s.games_detail.path,"/Games/Other.gdi");
     assert(!kui_shell_games_retail_ready(&s) && press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
-    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE);
-    strcpy(s.games_detail.path,detail.path);s.games_detail.valid=false;
-    assert(!kui_shell_games_retail_ready(&s) && press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
-    s.games_detail=detail;
-    memset(s.games_detail.title,'X',sizeof(s.games_detail.title));
+    s.games_detail=detail;memset(s.games_detail.title,'X',sizeof(s.games_detail.title));
     assert(!kui_shell_games_retail_ready(&s));
     s.games_detail=detail;memset(s.games_detail.boot_file,'X',sizeof(s.games_detail.boot_file));
     assert(!kui_shell_games_retail_ready(&s));
-    s.games_detail=detail;strcpy(s.games_detail.title,"Dead or Alive 2");
-    assert(kui_shell_games_retail_ready(&s));
-    s.games_detail=detail;strcpy(s.games_detail.title,"ARMADA");
-    assert(kui_shell_games_retail_ready(&s));
-    s.games_detail=detail;strcpy(s.games_detail.boot_file,"OTHER.BIN");
-    assert(kui_shell_games_retail_ready(&s));
     s.games_detail=detail;s.games_detail.windows_ce=true;assert(!kui_shell_games_retail_ready(&s));
     s.games_detail=detail;s.games_detail.native_gd=false;assert(!kui_shell_games_retail_ready(&s));
-    s.games_detail=detail;s.games_detail.high_density_audio=true;assert(kui_shell_games_retail_ready(&s));
     s.games_detail=detail;s.games_detail.boot_bytes=0;assert(!kui_shell_games_retail_ready(&s));
-    s.games_detail=detail;s.games_detail.boot_bytes=12u*1024u*1024u+1;assert(!kui_shell_games_retail_ready(&s));
+    s.games_detail=detail;s.games_detail.boot_bytes=KUI_RETAIL_IMAGE_BOOT_MAX+1;assert(!kui_shell_games_retail_ready(&s));
     s.games_detail=detail;s.games_detail.boot_lba=44999;assert(!kui_shell_games_retail_ready(&s));
     s.games_detail=detail;s.games_detail.tracks=99;assert(kui_shell_games_retail_ready(&s));
     s.games_detail=detail;s.games_detail.tracks=100;assert(!kui_shell_games_retail_ready(&s));
     s.games_detail=detail;s.games_detail.tracks=0;assert(!kui_shell_games_retail_ready(&s));
-    s.games_detail=detail;press(KUI_SHELL_B,false);
-    strcpy(s.games_detail.title,"ARMADA");
+    assert(!kui_shell_games_retail_ready(NULL) && !kui_shell_games_launch_ready(NULL));
+    detail=launch_detail(true,false);install_launch_detail(&detail);
+    assert(kui_shell_games_ce_probe_ready(&s) && !kui_shell_games_retail_ready(&s));
+    assert(s.games_launch_reader==KUI_RETAIL_READER_ASYNC);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL);
-    press(KUI_SHELL_B,false);
-    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_IMAGE_PROBE);
-    press(KUI_SHELL_B,false);s.games_detail=detail;
-    /* A Windows CE image starts its background boot test with A. The regular
-     * reader is not offered; X and Y do nothing on this confirmation. */
-    s.games_detail.windows_ce=true;s.games_detail.native_gd=false;
-    strcpy(s.games_detail.boot_file,"0WINCEOS.BIN");s.games_detail.boot_bytes=1253376;
-    assert(!kui_shell_games_retail_ready(&s) && kui_shell_games_ce_probe_ready(&s));
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
-    s.games_retail_reader=0;
-    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && !s.games_retail_reader);
-    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && !s.games_retail_reader);
-    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && !s.games_retail_reader);
-    assert(press(KUI_SHELL_A|KUI_SHELL_X,false)==KUI_SHELL_GAMES_RETAIL &&
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+    assert(!kui_shell_games_option_ready(&s,KUI_SHELL_GAME_OPTION_READER));
+    assert(kui_shell_games_option_ready(&s,KUI_SHELL_GAME_OPTION_CDDA));
+    assert(!kui_shell_games_encoding_ready(&s));
+    assert(!strcmp(kui_shell_games_reader_label(&s),"Background"));
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.games_launch_reader==KUI_RETAIL_READER_ASYNC);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.games_retail_reader);
+    assert(press(KUI_SHELL_START|KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.games_retail_reader);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL &&
+        s.games_retail_reader==(KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
+    s.games_launch_cdda=true;s.games_launch_reader=KUI_RETAIL_READER_ASYNC_EAGER;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL &&
+        s.games_retail_reader==(KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC|KUI_GAMES_RETAIL_CE_EXCERPT));
+    s.games_launch_cdda=false;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL &&
         s.games_retail_reader==(KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC));
     s.games_detail.boot_bytes=2048;assert(!kui_shell_games_ce_probe_ready(&s));
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
-    s.games_detail.boot_bytes=12u*1024u*1024u+1;assert(!kui_shell_games_ce_probe_ready(&s));
-    s.games_detail.boot_bytes=1253376;s.games_detail.native_gd=true;assert(!kui_shell_games_ce_probe_ready(&s));
-    s.games_detail.native_gd=false;s.games_detail.tracks=25;assert(kui_shell_games_ce_probe_ready(&s));
-    s.games_detail.tracks=100;assert(!kui_shell_games_ce_probe_ready(&s));
-    s.games_detail.tracks=3;s.games_detail.boot_lba=44999;assert(!kui_shell_games_ce_probe_ready(&s));
-    s.games_detail.boot_lba=45166;strcpy(s.games_detail.path,"/Games/Other.gdi");
+    s.games_detail=detail;s.games_detail.boot_bytes=KUI_RETAIL_IMAGE_BOOT_MAX+1;
     assert(!kui_shell_games_ce_probe_ready(&s));
-    s.games_detail=detail;press(KUI_SHELL_B,false);
-    /* A is the primary launch action; inspection still takes priority. */
-    assert(press(KUI_SHELL_A|KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
-    press(KUI_SHELL_B,false);
-    assert(press(KUI_SHELL_X|KUI_SHELL_A,false)==KUI_SHELL_GAMES_INSPECT && !s.games_detail.valid);
-    assert(!kui_shell_games_retail_ready(&s));
-    assert(!kui_shell_games_retail_ready(NULL));
+    s.games_detail=detail;s.games_detail.native_gd=true;assert(!kui_shell_games_ce_probe_ready(&s));
+    s.games_detail=detail;s.games_detail.tracks=100;assert(!kui_shell_games_ce_probe_ready(&s));
+    s.games_detail=detail;s.games_detail.boot_lba=44999;assert(!kui_shell_games_ce_probe_ready(&s));
+    s.games_detail=detail;strcpy(s.games_detail.path,"/Games/Stale.gdi");assert(!kui_shell_games_ce_probe_ready(&s));
+}
+static void games_armada_ce_music_controls(void) {
+    struct kui_shell_view view={0};
+    struct kui_games_detail detail=launch_detail(true,false);
+    detail.tracks=5;detail.audio=(struct kui_game_audio_info){KUI_GAME_AUDIO_GD_HIGH_DENSITY,2,1,1};
+    strcpy(detail.product,"T40301N 00");strcpy(detail.path,"/Games/ARMADA/ARMADA.gdi");
+    install_launch_detail(&detail);
+    const unsigned ordinary=KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC;
+    const unsigned excerpt=ordinary|KUI_GAMES_RETAIL_CE_EXCERPT;
+    assert(kui_shell_games_cdda_ready(&s) && !s.games_launch_cdda);
+    assert(s.games_launch_reader==KUI_RETAIL_READER_ASYNC);
+    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==ordinary);
+    press(KUI_SHELL_Y,false);s.games_launch_selected=KUI_SHELL_GAME_OPTION_CDDA;
+    assert(kui_shell_games_option_ready(&s,KUI_SHELL_GAME_OPTION_CDDA));
+    render(&view);
+    assert(strstr(drawn,"Play music from this game's audio tracks") &&
+        !strstr(drawn,"CD music requires background loading off"));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_cdda);
+    assert(s.games_launch_reader==KUI_RETAIL_READER_ASYNC && s.games_retail_reader==ordinary);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==excerpt);
+    s.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;render(&view);
+    assert(strstr(drawn,"CD music: On") && strstr(drawn,"Background loading: On"));
+    s.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;
+    /* Returning to Off retains the old CE background package route. */
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_SAVE_GAME_LAUNCH && !s.games_launch_cdda);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==ordinary);
+    /* The saved boolean hydrates to the CE reader, never native CDDA or an
+     * eager reader. Persisting the setting remains a separate launch gesture. */
+    const struct kui_game_launch_settings saved={KUI_GAME_READER_EAGER,true,KUI_GAME_ENCODING_SCRAMBLED};
+    install_launch_detail(&detail);kui_shell_set_game_launch_settings(&s,detail.path,&saved,true);
+    assert(s.games_launch_cdda && s.games_launch_reader==KUI_RETAIL_READER_ASYNC &&
+        s.games_launch_encoding==KUI_GAME_ENCODING_AUTO && !s.games_retail_scrambled);
+    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==excerpt);
+    /* Inspection only advertises an exact metadata candidate. Physical raw
+     * geometry is checked again by preparation before an excerpt is read. */
+    for(unsigned fault=0;fault<7u;fault++) {
+        struct kui_games_detail other=detail;
+        if(fault==0u) strcpy(other.product,"T00000N 00");
+        if(fault==1u) other.tracks=6;
+        if(fault==2u) strcpy(other.boot_file,"OTHER.BIN");
+        if(fault==3u) other.boot_bytes--;
+        if(fault==4u) other.format=KUI_GAME_IMAGE_ISO;
+        if(fault==5u) other.cd_image=true;
+        if(fault==6u) other.scrambled=true;
+        install_launch_detail(&other);
+        /* The UI offers the opt-in by media capability; exact runtime
+         * admission happens in the loader, before native code executes. */
+        const bool candidate=fault<4u;
+        assert(kui_shell_games_cdda_ready(&s)==candidate);
+        kui_shell_set_game_launch_settings(&s,other.path,&saved,true);
+        assert(s.games_launch_cdda==candidate);
+        press(KUI_SHELL_Y,false);s.games_launch_selected=KUI_SHELL_GAME_OPTION_CDDA;
+        if(!candidate) {
+            assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.games_launch_cdda);
+            assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==ordinary);
+        } else {
+            assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==excerpt);
+        }
+    }
+    install_launch_detail(&detail);memset(s.games_detail.product,'X',sizeof(s.games_detail.product));
+    assert(!kui_shell_games_cdda_ready(&s));
+    install_launch_detail(&detail);s.games_launch_cdda=true;
+    strcpy(s.games_detail.path,"/Games/Stale/ARMADA.gdi");
+    assert(!kui_shell_games_cdda_ready(&s));s.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    puts("PASS Armada CE music: saved On selects separate excerpt route, Off preserves CE route, unsupported metadata and stale paths refuse");
+}
+static void games_bam4_ce_music_controls(void) {
+    struct kui_games_detail detail=launch_detail(true,false);
+    detail.tracks=26u;detail.audio=(struct kui_game_audio_info){KUI_GAME_AUDIO_GD_HIGH_DENSITY,23u,22u,1u};
+    detail.boot_bytes=1830912u;detail.boot_lba=548106u;
+    strcpy(detail.product,"T-8117N");strcpy(detail.boot_file,"0WINCEOS.BIN");
+    strcpy(detail.path,"/Games/BAM4/BAM4.gdi");
+    install_launch_detail(&detail);
+    assert(kui_shell_games_cdda_ready(&s) && !s.games_launch_cdda);
+    const unsigned ordinary=KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC;
+    const unsigned music=ordinary|KUI_GAMES_RETAIL_CE_EXCERPT;
+    press(KUI_SHELL_Y,false);s.games_launch_selected=KUI_SHELL_GAME_OPTION_CDDA;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_cdda);
+    assert(s.games_launch_reader==KUI_RETAIL_READER_ASYNC && !s.games_retail_reader);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==music);
+    const struct kui_game_launch_settings saved={KUI_GAME_READER_EAGER,true,KUI_GAME_ENCODING_SCRAMBLED};
+    install_launch_detail(&detail);kui_shell_set_game_launch_settings(&s,detail.path,&saved,true);
+    assert(s.games_launch_cdda && s.games_launch_reader==KUI_RETAIL_READER_ASYNC &&
+        s.games_launch_encoding==KUI_GAME_ENCODING_AUTO);
+    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==music);
+    s.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;s.games_launch_selected=KUI_SHELL_GAME_OPTION_CDDA;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && !s.games_launch_cdda);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==ordinary);
+    for(unsigned fault=0;fault<3u;fault++) {
+        struct kui_games_detail other=detail;
+        if(fault==0u) other.tracks=25u;
+        if(fault==1u) other.boot_bytes--;
+        if(fault==2u) strcpy(other.product,"T40301N 00");
+        install_launch_detail(&other);assert(kui_shell_games_cdda_ready(&s));
+        kui_shell_set_game_launch_settings(&s,other.path,&saved,true);assert(s.games_launch_cdda);
+    }
+    detail.tracks=8u;detail.boot_bytes=1110016u;detail.boot_lba=548458u;
+    detail.audio=(struct kui_game_audio_info){KUI_GAME_AUDIO_GD_HIGH_DENSITY,5u,4u,1u};
+    strcpy(detail.product,"T40601N");strcpy(detail.path,"/Games/WORMS/WORMS.gdi");
+    install_launch_detail(&detail);assert(kui_shell_games_cdda_ready(&s) && !s.games_launch_cdda);
+    kui_shell_set_game_launch_settings(&s,detail.path,&saved,true);
+    assert(s.games_launch_cdda && s.games_launch_reader==KUI_RETAIL_READER_ASYNC);
+    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==music);
+    puts("PASS WinCE CD music: BAM4/Worms and other CDDA candidates, saved opt-in On route and Off ordinary route");
+}
+static void games_launch_options_controls(void) {
+    struct kui_games_detail detail=launch_detail(false,false);
+    install_launch_detail(&detail);
+    assert(kui_shell_games_cdda_ready(&s) && !kui_shell_games_cdda_ready(NULL));
+    assert(!kui_shell_games_option_ready(NULL,KUI_SHELL_GAME_OPTION_READER));
+    assert(!kui_shell_games_option_ready(&s,KUI_SHELL_GAME_OPTION_COUNT));
+    assert(KUI_SHELL_GAME_OPTION_COUNT==3);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+    assert(!s.games_launch_selected && !s.games_launch_cdda && !s.games_retail_reader);
+    assert(press(KUI_SHELL_RIGHT,true)==KUI_SHELL_NONE && !s.games_launch_reader);
+    assert(press(KUI_SHELL_A|KUI_SHELL_START,false)==KUI_SHELL_NONE && !s.games_launch_reader && !s.games_retail_reader);
+    assert(press(KUI_SHELL_RIGHT|KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && !s.games_launch_selected);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==KUI_RETAIL_READER_ASYNC);
+    assert(!s.games_retail_reader); /* Saving a toggle never starts a game. */
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_SAVE_GAME_LAUNCH && !s.games_launch_reader);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==KUI_RETAIL_READER_ASYNC);
+    /* The basic toggle has only two states. Aggressive belongs to Advanced. */
+    open_extra_options();s.game_tools_selected=1;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==KUI_RETAIL_READER_ASYNC_EAGER);
+    assert(!s.games_retail_reader);
+    assert(press(KUI_SHELL_START|KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+    s.games_launch_selected=KUI_SHELL_GAME_OPTION_CDDA;
+    s.games_retail_scrambled=true;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_cdda && !s.games_launch_reader && !s.games_retail_scrambled);
+    assert(!s.games_retail_reader);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL &&
+        s.games_retail_reader==(KUI_RETAIL_READER_STANDARD|KUI_GAMES_RETAIL_CDDA));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
+    assert(s.games_launch_cdda && press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL &&
+        s.games_retail_reader==(KUI_RETAIL_READER_STANDARD|KUI_GAMES_RETAIL_CDDA));
+    press(KUI_SHELL_Y,false);s.games_launch_selected=KUI_SHELL_GAME_OPTION_READER;
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_SAVE_GAME_LAUNCH && !s.games_launch_cdda && s.games_launch_reader==KUI_RETAIL_READER_ASYNC);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_ASYNC);
+    /* Diagnostic actions are nested and cancel to Tests, then Advanced. */
+    open_developer_tests();s.game_tests_selected=0;
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_TESTS);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_IMAGE_PROBE);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_TESTS);
+    assert(s.games_launch_reader==KUI_RETAIL_READER_ASYNC);
+    press(KUI_SHELL_DOWN,false);assert(s.game_tests_selected==1);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_PROBE_CONFIRM && s.games_tests_from_options);
+    assert(press(KUI_SHELL_A|KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_PROBE);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_TESTS);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_EXTRA_OPTIONS);
+    s.game_tools_selected=2;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_INFO);
+    assert(press(KUI_SHELL_A|KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_EXTRA_OPTIONS);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+    /* Metadata eligibility remains separate from exact worker profile admission. */
+    strcpy(s.games_detail.title,"ANOTHER NATIVE GAME");
+    s.games_launch_selected=KUI_SHELL_GAME_OPTION_CDDA;
+    assert(kui_shell_games_cdda_ready(&s));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_cdda);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL);
+    const struct kui_game_audio_info unavailable[]={
+        {KUI_GAME_AUDIO_NONE,0,0,0},{KUI_GAME_AUDIO_GD_LOW_DENSITY_ONLY,1,0,1},
+        {KUI_GAME_AUDIO_UNKNOWN,12,12,0},{KUI_GAME_AUDIO_GD_HIGH_DENSITY,12,0,0},
+        {KUI_GAME_AUDIO_GD_HIGH_DENSITY,0,1,0},{KUI_GAME_AUDIO_GD_HIGH_DENSITY,12,13,0},
+        {KUI_GAME_AUDIO_GD_HIGH_DENSITY,16,12,0},{KUI_GAME_AUDIO_GD_HIGH_DENSITY,UINT_MAX,UINT_MAX,0}
+    };
+    for(unsigned i=0;i<sizeof(unavailable)/sizeof(*unavailable);i++) {
+        s.games_detail=detail;s.games_detail.audio=unavailable[i];s.games_launch_cdda=false;
+        assert(!kui_shell_games_cdda_ready(&s));
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.games_launch_cdda);
+        s.games_launch_cdda=true;s.games_retail_reader=0;
+        assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && !s.games_retail_reader);
+        s.games_launch_cdda=false;
+        assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_STANDARD);
+    }
+    s.games_detail=detail;strcpy(s.games_detail.path,"/Games/Stale/disc.gdi");
+    for(unsigned row=0;row<KUI_SHELL_GAME_OPTION_COUNT;row++) {
+        s.games_launch_selected=row;assert(!kui_shell_games_option_ready(&s,row));
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+    }
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    kui_shell_set_games_detail(&s,&detail);assert(!kui_shell_games_image_ready(&s));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
+    /* An unknown inspected GDI still has read tests, without a launch route. */
+    s.games_detail=detail;s.games_detail.native_gd=false;
+    assert(!kui_shell_games_launch_ready(&s));
+    open_image_test();assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_IMAGE_PROBE);
+    press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_TESTS);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    press(KUI_SHELL_B,false);press(KUI_SHELL_B,false);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
+    /* Inspection clears the previous in-memory snapshot; matching worker
+     * publication restores persisted settings separately. */
+    s.games_launch_cdda=true;s.games_retail_scrambled=true;
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_GAMES_INSPECT && !s.games_launch_cdda && !s.games_retail_scrambled);
+    kui_shell_set_games_detail(&s,&detail);
+    assert(!s.games_launch_cdda && !s.games_launch_reader);
+    puts("PASS Games settings: save is not launch, reader/CDDA isolation, nested diagnostic returns, stale identity");
 }
 static void games_cd_controls(void) {
-    const struct {const char *path,*format;enum kui_game_image_format kind;uint32_t boot_lba;bool scrambled;} cases[]={
-        {"/Games/CD sample/disc.iso","ISO",KUI_GAME_IMAGE_ISO,0,false},
-        {"/Games/CD sample/disc.cue","CUE",KUI_GAME_IMAGE_CUE,11700,false},
-        {"/Games/CD sample/marked.cue","CUE",KUI_GAME_IMAGE_CUE,11700,true},
-        {"/Games/CD sample/disc.cdi","CDI",KUI_GAME_IMAGE_CDI,11700,false}
+    const struct {const char *path;enum kui_game_image_format kind;uint32_t boot_lba;bool scrambled;} cases[]={
+        {"/Games/CD sample/disc.iso",KUI_GAME_IMAGE_ISO,0,false},
+        {"/Games/CD sample/disc.cue",KUI_GAME_IMAGE_CUE,11700,false},
+        {"/Games/CD sample/marked.cue",KUI_GAME_IMAGE_CUE,11700,true},
+        {"/Games/CD sample/disc.cdi",KUI_GAME_IMAGE_CDI,11700,false}
     };
     const unsigned buttons[]={KUI_SHELL_A,KUI_SHELL_X,KUI_SHELL_Y};
     const unsigned readers[]={KUI_RETAIL_READER_STANDARD,KUI_RETAIL_READER_ASYNC,KUI_RETAIL_READER_ASYNC_EAGER};
-    struct kui_shell_view view={0};
     for(unsigned i=0;i<sizeof(cases)/sizeof(*cases);i++) {
-        reset(KUI_SHELL_GAMES);
-        struct kui_games_page page={.count=1,.total=1,.view=KUI_GAMES_VIEW_LIST};
-        strcpy(page.root,"/Games");strcpy(page.entries[0].name,"CD sample");
-        strcpy(page.entries[0].path,cases[i].path);kui_shell_set_games_listing(&s,&page);
-        assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_INSPECT && !strcmp(s.games_selected_path,cases[i].path));
-        struct kui_games_detail detail={.valid=true,.native_cd=true,.cd_image=true,.scrambled=cases[i].scrambled,
-            .format=cases[i].kind,.tracks=3,.boot_bytes=123456,.boot_lba=cases[i].boot_lba};
-        /* A CD container may retain a GD-ROM media field in its IP header. */
-        if(cases[i].kind==KUI_GAME_IMAGE_CDI) {detail.native_gd=true;detail.native_cd=false;}
-        strcpy(detail.path,cases[i].path);strcpy(detail.title,"CD SAMPLE");strcpy(detail.boot_file,"1ST_READ.BIN");
-        kui_shell_set_games_detail(&s,&detail);
-        assert(kui_shell_games_retail_ready(&s) && !kui_shell_games_ce_probe_ready(&s));
-        assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
-        render(&view);
-        assert(strstr(drawn,cases[i].format) && strstr(drawn,"A Launch game"));
-        assert(!strstr(drawn,"Advanced read test") && !strstr(drawn,"Y Read test"));
-        /* A stale confirmation cannot invoke the GDI-only read probe. */
-        s.page=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM;
-        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+        struct kui_games_detail detail=launch_detail(false,true);
+        strcpy(detail.path,cases[i].path);detail.format=cases[i].kind;
+        detail.boot_lba=cases[i].boot_lba;detail.scrambled=cases[i].scrambled;
+        if(detail.format==KUI_GAME_IMAGE_CDI) {detail.native_gd=true;detail.native_cd=false;}
+        install_launch_detail(&detail);
+        assert(kui_shell_games_encoding_ready(&s) && s.games_retail_scrambled==cases[i].scrambled);
+        assert(s.games_launch_encoding==KUI_GAME_ENCODING_AUTO);
+        assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+        s.games_launch_selected=KUI_SHELL_GAME_OPTION_CDDA;
+        assert(!kui_shell_games_cdda_ready(&s) && press(KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.games_launch_cdda);
+        open_developer_tests();s.game_tests_selected=0;
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_TESTS);
+        press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_EXTRA_OPTIONS);
+        s.game_tools_selected=KUI_SHELL_GAME_TOOL_ENCODING;
+        assert(press(KUI_SHELL_RIGHT,true)==KUI_SHELL_NONE && s.games_retail_scrambled==cases[i].scrambled);
+        assert(press(KUI_SHELL_LEFT|KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.games_launch_encoding==KUI_GAME_ENCODING_AUTO);
+        unsigned override=cases[i].scrambled?KUI_GAME_ENCODING_PLAIN:KUI_GAME_ENCODING_SCRAMBLED;
+        for(unsigned n=0;s.games_launch_encoding!=override && n<2;n++)
+            assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH);
+        assert(s.games_launch_encoding==override && s.games_retail_scrambled!=cases[i].scrambled);
+        assert(!s.games_retail_reader);
+        press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
         press(KUI_SHELL_B,false);
-        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
-        assert(s.games_retail_scrambled==cases[i].scrambled && kui_shell_games_encoding_ready(&s));
-        render(&view);assert(strstr(drawn,cases[i].scrambled?"Boot encoding: Scrambled":"Boot encoding: Plain"));
-        assert(strstr(drawn,"L/R Change"));
-        for(unsigned reader=0;reader<3;reader++) {
-            unsigned encoding=cases[i].scrambled?KUI_GAMES_RETAIL_DESCRAMBLE:KUI_GAMES_RETAIL_BOOT_PLAIN;
-            assert(press(buttons[reader],false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==(readers[reader]|encoding));
-            assert(!strcmp(s.games_selected_path,cases[i].path));
-        }
-        assert(press(KUI_SHELL_L|KUI_SHELL_R,false)==KUI_SHELL_NONE && s.games_retail_scrambled==cases[i].scrambled);
-        assert(press(KUI_SHELL_R,true)==KUI_SHELL_NONE && s.games_retail_scrambled==cases[i].scrambled);
+        assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM && s.games_retail_scrambled!=cases[i].scrambled);
         assert(press(KUI_SHELL_R,false)==KUI_SHELL_NONE && s.games_retail_scrambled!=cases[i].scrambled);
         for(unsigned reader=0;reader<3;reader++) {
             unsigned encoding=cases[i].scrambled?KUI_GAMES_RETAIL_BOOT_PLAIN:KUI_GAMES_RETAIL_DESCRAMBLE;
-            assert(press(buttons[reader],false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==(readers[reader]|encoding));
+            assert(launch_reader(buttons[reader])==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==(readers[reader]|encoding));
+            assert(!strcmp(s.games_selected_path,cases[i].path));
         }
-        assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE && s.games_retail_scrambled==cases[i].scrambled);
-        assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
-        assert(press(KUI_SHELL_X,false)==KUI_SHELL_GAMES_INSPECT && !s.games_retail_scrambled);
+        press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_DETAIL);
+        press(KUI_SHELL_A,false);assert(s.games_retail_scrambled!=cases[i].scrambled);
+        press(KUI_SHELL_B,false);press(KUI_SHELL_X,false);
+        assert(!s.games_retail_scrambled && !s.games_launch_cdda && !s.games_launch_reader);
         kui_shell_set_games_detail(&s,&detail);
-        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.games_retail_scrambled==cases[i].scrambled);
-        press(KUI_SHELL_R,false);press(KUI_SHELL_B,false);
-        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.games_retail_scrambled==cases[i].scrambled); /* Reenter uses source default. */
-        if(!s.games_retail_scrambled) press(KUI_SHELL_R,false);
-        strcpy(s.games_detail.path,"/Games/Stale/disc.iso");
-        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.games_retail_scrambled);
-        press(KUI_SHELL_B,false);
+        assert(s.games_launch_encoding==KUI_GAME_ENCODING_AUTO && s.games_retail_scrambled==cases[i].scrambled);
+        s.page=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM;
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+        s.page=KUI_SHELL_GAMES_DETAIL;
+        detail.windows_ce=true;detail.native_gd=detail.native_cd=false;
+        strcpy(detail.boot_file,"0WINCEOS.BIN");detail.boot_bytes=1253376;
         kui_shell_set_games_detail(&s,&detail);
-        s.games_detail.format=KUI_GAME_IMAGE_GDI;
-        assert(!kui_shell_games_retail_ready(&s)); /* GD still needs high-density boot sectors. */
-        s.games_detail=detail;s.games_detail.native_gd=s.games_detail.native_cd=false;s.games_detail.windows_ce=true;
-        strcpy(s.games_detail.boot_file,"0WINCEOS.BIN");s.games_detail.boot_bytes=1253376;
-        assert(kui_shell_games_ce_probe_ready(&s) && !kui_shell_games_retail_ready(&s));
-        assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
-        render(&view);assert(strstr(drawn,"A Windows CE boot test") && !strstr(drawn,"Advanced read test"));
+        assert(kui_shell_games_ce_probe_ready(&s) && !kui_shell_games_encoding_ready(&s) && !s.games_retail_scrambled);
         assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
-        render(&view);assert(strstr(drawn,"Reader: background") && !strstr(drawn,"standard reader"));
-        assert(!s.games_retail_scrambled && !kui_shell_games_encoding_ready(&s) && !strstr(drawn,"Boot encoding"));
-        assert(press(KUI_SHELL_L|KUI_SHELL_R,false)==KUI_SHELL_NONE && !s.games_retail_scrambled);
-        s.games_retail_reader=0;
-        assert(press(KUI_SHELL_X|KUI_SHELL_Y,false)==KUI_SHELL_NONE && !s.games_retail_reader);
         assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL &&
             s.games_retail_reader==(KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC));
-        assert(!strcmp(s.games_selected_path,cases[i].path));
-        strcpy(s.games_detail.path,"/Games/Other/disc.iso");
-        assert(!kui_shell_games_ce_probe_ready(&s) && press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+        strcpy(s.games_detail.path,"/Games/Stale.iso");
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
     }
-    reset(KUI_SHELL_GAMES_DETAIL);
-    strcpy(s.games_selected_path,"/Games/NativeGD/disc.gdi");
-    struct kui_games_detail gd={.valid=true,.native_gd=true,.format=KUI_GAME_IMAGE_GDI,
-        .scrambled=true,.tracks=3,.boot_lba=45016,.boot_bytes=128};
-    strcpy(gd.path,s.games_selected_path);strcpy(gd.title,"Native GD");strcpy(gd.boot_file,"1ST_READ.BIN");
-    kui_shell_set_games_detail(&s,&gd);press(KUI_SHELL_A,false);
-    assert(!kui_shell_games_encoding_ready(&s) && !s.games_retail_scrambled);
-    press(KUI_SHELL_L,false);press(KUI_SHELL_R,false);
-    assert(!s.games_retail_scrambled);
-    render(&view);assert(!strstr(drawn,"Boot encoding"));
-    for(unsigned reader=0;reader<3;reader++)
-        assert(press(buttons[reader],false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==readers[reader]);
+}
+static void games_saved_launch_controls(void) {
+    static struct kui_game_launch_table table,decoded;
+    static uint8_t record[KUI_GAME_LAUNCH_SETTINGS_RECORD_MAX];
+    struct kui_games_detail detail=launch_detail(false,false);
+    struct kui_game_launch_settings value={99,true,99},saved;
+    install_launch_detail(&detail);
+    assert(!kui_shell_game_launch_settings(NULL,&value));
+    assert(!kui_shell_game_launch_settings(&s,NULL));
+    assert(kui_shell_game_launch_settings(&s,&value));
+    assert(value.reader==KUI_GAME_READER_STANDARD && !value.cdda && value.encoding==KUI_GAME_ENCODING_AUTO);
+    press(KUI_SHELL_Y,false);s.games_launch_selected=KUI_SHELL_GAME_OPTION_READER;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && !s.games_retail_reader);
+    assert(kui_shell_game_launch_settings(&s,&saved) && saved.reader==KUI_GAME_READER_BACKGROUND);
+    kui_shell_game_launch_saved(&s,detail.path,false);
+    assert(strstr(s.games_launch_notice,"Not saved") && s.games_launch_reader==KUI_RETAIL_READER_ASYNC);
+    kui_shell_game_launch_saved(&s,"/Games/Stale/disc.gdi",true);
+    assert(strstr(s.games_launch_notice,"Not saved"));
+    kui_shell_game_launch_saved(&s,detail.path,true);assert(strstr(s.games_launch_notice,"Saved for this image"));
+    /* Persist two exact variants, then recreate the shell as on a cold boot. */
+    kui_game_launch_table_clear(&table);
+    assert(kui_game_launch_table_upsert(&table,detail.path,&saved));
+    struct kui_game_launch_settings copy={KUI_GAME_READER_STANDARD,true,KUI_GAME_ENCODING_AUTO};
+    const char *copy_path="/Games/Toy Commander/disc-2048.gdi";
+    assert(kui_game_launch_table_upsert(&table,copy_path,&copy));
+    size_t bytes=0;uint64_t sequence=0;
+    assert(kui_game_launch_settings_encode(record,sizeof(record),&bytes,&table,7));
+    assert(kui_game_launch_settings_decode(&decoded,&sequence,record,bytes) && sequence==7);
+    install_launch_detail(&detail);
+    assert(kui_game_launch_table_find(&decoded,detail.path,&value));
+    kui_shell_set_game_launch_settings(&s,detail.path,&value,true);
+    assert(s.games_launch_reader==KUI_RETAIL_READER_ASYNC && !s.games_launch_cdda);
+    press(KUI_SHELL_A,false);assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_ASYNC);
+    /* A stale publication cannot hydrate either settings or save feedback. */
+    unsigned reader=s.games_launch_reader;char notice[sizeof(s.games_launch_notice)];
+    strcpy(notice,s.games_launch_notice);
+    kui_shell_set_game_launch_settings(&s,copy_path,&copy,true);
+    kui_shell_game_launch_saved(&s,copy_path,false);
+    assert(s.games_launch_reader==reader && !s.games_launch_cdda && !strcmp(notice,s.games_launch_notice));
+    s.page=KUI_SHELL_GAMES_DETAIL;strcpy(detail.path,copy_path);strcpy(s.games_selected_path,copy_path);
+    kui_shell_set_games_detail(&s,&detail);
+    assert(kui_game_launch_table_find(&decoded,copy_path,&value));
+    kui_shell_set_game_launch_settings(&s,copy_path,&value,true);
+    assert(s.games_launch_cdda && s.games_launch_reader==KUI_RETAIL_READER_STANDARD);
+    /* CE and unavailable profiles constrain a stored choice before launch. */
+    detail=launch_detail(true,false);install_launch_detail(&detail);
+    value=(struct kui_game_launch_settings){KUI_GAME_READER_EAGER,true,KUI_GAME_ENCODING_SCRAMBLED};
+    kui_shell_set_game_launch_settings(&s,detail.path,&value,true);
+    assert(s.games_launch_reader==KUI_RETAIL_READER_ASYNC && s.games_launch_cdda &&
+        s.games_launch_encoding==KUI_GAME_ENCODING_AUTO && !s.games_retail_scrambled);
+    detail=launch_detail(false,false);detail.audio=(struct kui_game_audio_info){KUI_GAME_AUDIO_NONE,0,0,0};
+    install_launch_detail(&detail);kui_shell_set_game_launch_settings(&s,detail.path,&value,true);
+    assert(s.games_launch_reader==KUI_RETAIL_READER_ASYNC_EAGER && !s.games_launch_cdda && s.games_launch_encoding==KUI_GAME_ENCODING_AUTO);
+    value.reader=KUI_GAME_READER_COUNT;
+    kui_shell_set_game_launch_settings(&s,detail.path,&value,true);
+    assert(strstr(s.games_launch_notice,"could not be read"));
+    strcpy(s.games_detail.path,"/Games/Stale/disc.gdi");
+    saved=(struct kui_game_launch_settings){99,true,99};
+    assert(!kui_shell_game_launch_settings(&s,&saved) && saved.reader==99 && saved.encoding==99);
+    kui_shell_set_game_launch_settings(&s,detail.path,&copy,true);
+    assert(!s.games_launch_cdda && s.games_launch_reader==KUI_RETAIL_READER_ASYNC_EAGER);
+    /* Automatic follows current inspected encoding; explicit override survives restart. */
+    detail=launch_detail(false,true);detail.scrambled=true;install_launch_detail(&detail);
+    value=(struct kui_game_launch_settings){KUI_GAME_READER_BACKGROUND,false,KUI_GAME_ENCODING_AUTO};
+    kui_shell_set_game_launch_settings(&s,detail.path,&value,true);assert(s.games_retail_scrambled);
+    value.encoding=KUI_GAME_ENCODING_PLAIN;
+    kui_shell_set_game_launch_settings(&s,detail.path,&value,true);assert(!s.games_retail_scrambled);
+    press(KUI_SHELL_A,false);assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL &&
+        s.games_retail_reader==(KUI_RETAIL_READER_ASYNC|KUI_GAMES_RETAIL_BOOT_PLAIN));
+    puts("PASS Games saved settings: codec cold-boot hydration, separate variants, capabilities, stale publication and save feedback");
 }
 static void games_page(unsigned count,bool more,unsigned view) {
     struct kui_games_page page={.count=count,.has_more=more,.view=view,.total=count};
@@ -1461,50 +1780,68 @@ static void games_rendering(void) {
     s.games_detail.bytes=1185765648;s.games_detail.boot_bytes=123456;s.games_detail.boot_lba=45166;
     strcpy(s.games_detail.title,"Dead or Alive 2");strcpy(s.games_detail.product,"T-3601N");
     strcpy(s.games_detail.region,"JUE");strcpy(s.games_detail.boot_file,"1ST_READ.BIN");render(&view);
-    assert(strstr(drawn,"Dead or Alive 2") && strstr(drawn,"T-3601N") && strstr(drawn,"1ST_READ.BIN"));
-    assert(strstr(drawn,"Tracks: 3") && strstr(drawn,"1185765648 bytes"));
-    assert(strstr(drawn,"A Launch") && strstr(drawn,"X Inspect") && strstr(drawn,"Y Advanced read test"));
+    assert(strstr(drawn,"Dead or Alive 2") && strstr(drawn,"A Launch"));
+    assert(!strstr(drawn,"T-3601N") && !strstr(drawn,"1ST_READ.BIN") && !strstr(drawn,"Tracks: 3"));
+    assert(!strstr(drawn,"1185765648 bytes") && !strstr(drawn,"LBA"));
+    s.page=KUI_SHELL_GAMES_INFO;render(&view);
+    assert(strstr(drawn,"T-3601N") && strstr(drawn,"1ST_READ.BIN"));
+    assert(strstr(drawn,"Tracks: 3") && strstr(drawn,"1185765648 bytes") && strstr(drawn,"LBA"));
+    s.page=KUI_SHELL_GAMES_DETAIL;
     strcpy(s.games_detail.title,"DEAD OR ALIVE 2");render(&view);
-    assert(strstr(drawn,"A Launch") && strstr(drawn,"compatibility varies"));
-    strcpy(s.games_detail.title,"ARMADA");render(&view);
     assert(strstr(drawn,"A Launch"));
-    s.games_detail.high_density_audio=true;render(&view);assert(strstr(drawn,"CD audio is unavailable"));
-    s.games_detail.high_density_audio=false;s.games_detail.windows_ce=true;render(&view);
-    assert(strstr(drawn,"Windows CE SCI launch test") && !strstr(drawn,"A Launch"));
-    assert(!strstr(drawn,"boot test"));
+    strcpy(s.games_detail.title,"ARMADA");render(&view);assert(strstr(drawn,"A Launch"));
+    const struct kui_game_audio_info notices[]={
+        {KUI_GAME_AUDIO_GD_LOW_DENSITY_ONLY,1,0,1},
+        {KUI_GAME_AUDIO_GD_HIGH_DENSITY,2,1,1},{KUI_GAME_AUDIO_CD,1,1,0},
+        {KUI_GAME_AUDIO_UNKNOWN,0,0,0}
+    };
+    for(unsigned i=0;i<sizeof(notices)/sizeof(*notices);i++) {
+        s.games_detail.audio=notices[i];render(&view);assert(strstr(drawn,"A Launch"));
+        assert(!strstr(drawn,"Boot file") && !strstr(drawn,"LBA") && !strstr(drawn,"launch test"));
+    }
+    s.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;render(&view);
+    assert(strstr(drawn,"CD music: Off") && strstr(drawn,"A Launch"));
+    assert(strstr(drawn,"Background loading: Off") && !strstr(drawn,"Boot encoding"));
+    s.page=KUI_SHELL_GAMES_DETAIL;
+    s.games_detail.audio=(struct kui_game_audio_info){KUI_GAME_AUDIO_NONE,0,0,0};
+    s.games_detail.windows_ce=true;render(&view);
+    assert(!strstr(drawn,"A Launch") && !strstr(drawn,"CE test") && !strstr(drawn,"Windows CE SCI launch test"));
     s.games_detail.native_gd=false;strcpy(s.games_detail.boot_file,"0WINCEOS.BIN");
     s.games_detail.boot_bytes=1253376;render(&view);
-    assert(strstr(drawn,"A Windows CE boot test") && strstr(drawn,"SCI launch test"));
-    assert(strstr(drawn,"A CE test") && strstr(drawn,"X Inspect"));
-    assert(!strstr(drawn,"A Launch"));
+    assert(strstr(drawn,"A Launch game") && !strstr(drawn,"0WINCEOS.BIN") && !strstr(drawn,"boot test"));
     s.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;render(&view);
-    assert(strstr(drawn,"Games / Windows CE boot test") && strstr(drawn,"Experimental SCI launch"));
-    assert(strstr(drawn,"A Start test") && strstr(drawn,"Reader: background (SCI microSD)"));
-    assert(!strstr(drawn,"standard reader") && !strstr(drawn,"X Background reader") && !strstr(drawn,"X/Y"));
+    assert(strstr(drawn,"Games / Launch game") && strstr(drawn,"ARMADA") && strstr(drawn,"A Launch"));
+    assert(strstr(drawn,"Background loading: On") && !strstr(drawn,"standard reader") && !strstr(drawn,"X/Y"));
     s.page=KUI_SHELL_GAMES_DETAIL;s.games_detail.native_gd=true;
-    strcpy(s.games_detail.boot_file,"1ST_READ.BIN");s.games_detail.boot_bytes=123456;
-    s.games_detail.windows_ce=false;
+    strcpy(s.games_detail.boot_file,"1ST_READ.BIN");s.games_detail.boot_bytes=123456;s.games_detail.windows_ce=false;
     s.games_detail.valid=false;strcpy(s.games_detail.message,"Track file missing");render(&view);
-    assert(strstr(drawn,"Could not inspect image") && strstr(drawn,"Track file missing"));
-    assert(!strstr(drawn,"A Launch"));
+    assert(strstr(drawn,"Could not inspect image") && strstr(drawn,"Track file missing") && !strstr(drawn,"A Launch"));
     s.games_detail.stopped=true;render(&view);assert(strstr(drawn,"Inspection stopped"));
     reset(KUI_SHELL_GAMES_ADVANCED);render(&view);
-    assert(strstr(drawn,"Game library") && strstr(drawn,"Browse SD folders") && strstr(drawn,"Resident loader probe"));
-    assert(strstr(drawn,"Scan box art") && strstr(drawn,"IDE / CF sources are not available"));
+    assert(strstr(drawn,"Game library") && strstr(drawn,"Browse SD folders") && strstr(drawn,"Developer tests"));
+    assert(strstr(drawn,"Scan box art") && !strstr(drawn,"Loader test") && !strstr(drawn,"Resident loader probe"));
+    reset(KUI_SHELL_GAMES_TESTS);render(&view);
+    assert(strstr(drawn,"Image read test") && strstr(drawn,"Loader read test") && !strstr(drawn,"A Launch"));
+    assert(image_test_row_color==0xadd9);
+    struct kui_games_detail test_detail=launch_detail(false,true);
+    install_launch_detail(&test_detail);s.page=KUI_SHELL_GAMES_TESTS;render(&view);
+    assert(image_test_row_color==0xadd9 && strstr(drawn,"Requires an inspected GDI"));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_TESTS);
+    test_detail=launch_detail(false,false);install_launch_detail(&test_detail);
+    s.page=KUI_SHELL_GAMES_TESTS;render(&view);assert(image_test_row_color==0xf7bf);
     reset(KUI_SHELL_GAMES_PROBE_CONFIRM);render(&view);
-    assert(strstr(drawn,"A Start probe") && strstr(drawn,"B Advanced"));
+    assert(strstr(drawn,"A Start test") && strstr(drawn,"B Tests"));
     assert(strstr(drawn,"Exits this menu") && strstr(drawn,"test data after shutdown"));
     assert(strstr(drawn,"does not launch a retail game") && strstr(drawn,"Photograph the final result"));
     assert(strstr(drawn,"Power cycle to return") && !strstr(drawn,"L Memory"));
     struct kui_app_status status={0};view.app_status=&status;view.busy=true;
     strcpy(status.message,"Validating the probe package");render(&view);
     assert(strstr(drawn,"Preparing the handoff") && strstr(drawn,status.message) && strstr(drawn,"B Stop safely"));
-    assert(!strstr(drawn,"A Start probe"));
+    assert(!strstr(drawn,"A Start test"));
     view.busy=false;reset(KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM);
     strcpy(s.games_selected_path,"/Games/Dead or Alive 2/Dead or Alive 2.gdi");
-    strcpy(s.games_detail.path,s.games_selected_path);s.games_detail.valid=true;
-    render(&view);
-    assert(strstr(drawn,s.games_selected_path) && strstr(drawn,"A Start test") && strstr(drawn,"B Image details"));
+    strcpy(s.games_detail.path,s.games_selected_path);s.games_detail.valid=true;render(&view);
+    assert(strstr(drawn,s.games_selected_path) && strstr(drawn,"A Start test") && strstr(drawn,"B Tests"));
     assert(strstr(drawn,"reads samples from this GDI") && strstr(drawn,"GD requests used by retail games"));
     assert(strstr(drawn,"game itself will not start") && strstr(drawn,"not a full image verification"));
     assert(strstr(drawn,"Photograph the final result, then power cycle") && !strstr(drawn,"L Memory"));
@@ -1513,23 +1850,49 @@ static void games_rendering(void) {
     assert(!strstr(drawn,"A Start test"));view.busy=false;
     strcpy(s.games_detail.path,"/Games/Other.gdi");render(&view);
     assert(strstr(drawn,"Image details changed") && !strstr(drawn,"A Start test"));
-    reset(KUI_SHELL_GAMES_RETAIL_CONFIRM);
-    strcpy(s.games_selected_path,"/Games/DOA2/DOA2.gdi");
-    strcpy(s.games_detail.path,s.games_selected_path);s.games_detail.valid=true;s.games_detail.native_gd=true;
-    strcpy(s.games_detail.title,"DEAD OR ALIVE 2");strcpy(s.games_detail.boot_file,"1ST_READ.BIN");
-    s.games_detail.tracks=3;s.games_detail.boot_lba=45166;s.games_detail.boot_bytes=123456;
-    render(&view);
+    struct kui_games_detail detail=launch_detail(false,false);
+    install_launch_detail(&detail);s.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;render(&view);
     assert(strstr(drawn,"Launch game") && strstr(drawn,"A Launch") && strstr(drawn,"B Details"));
-    assert(strstr(drawn,"X/Y Background reader") && strstr(drawn,"background reader tests (SCI microSD)"));
-    assert(strstr(drawn,"compatibility varies") && strstr(drawn,"SD access remains read-only"));
+    assert(!strstr(drawn,"X Background") && !strstr(drawn,"Boot encoding") && !strstr(drawn,"Loader test"));
+    assert(strstr(drawn,"Background loading: Off") && strstr(drawn,"CD music: Off"));
     assert(strstr(drawn,"Power cycle to return") && !strstr(drawn,"L Memory"));
     view.busy=true;strcpy(status.message,"Preparing selected game launch...");render(&view);
     assert(strstr(drawn,"Preparing the launch") && strstr(drawn,"B Stop safely") && !strstr(drawn,"A Launch"));
-    view.busy=false;strcpy(s.games_detail.title,"ARMADA");render(&view);
-    assert(strstr(drawn,"ARMADA") && strstr(drawn,"A Launch"));
-    s.games_detail.native_gd=false;render(&view);
-    assert(strstr(drawn,"not ready for native GD launch") && !strstr(drawn,"A Launch"));
+    view.busy=false;s.games_detail.native_gd=false;render(&view);
+    assert(strstr(drawn,"Image details changed") && !strstr(drawn,"A Launch"));
+    s.games_detail.native_gd=true;s.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;
+    s.games_launch_selected=KUI_SHELL_GAME_OPTION_CDDA;render(&view);
+    assert(strstr(drawn,"Background loading") && strstr(drawn,"CD music") && strstr(drawn,"Advanced"));
+    assert(!strstr(drawn,"Image read test") && !strstr(drawn,"Loader read test") && !strstr(drawn,"Boot encoding"));
+    assert(strstr(drawn,"START Launch") && !strstr(drawn,"X/Y Background"));
+    for(unsigned i=0;i<KUI_SHELL_GAME_OPTION_COUNT;i++) assert(option_row_colors[i]==0xf7bf);
+    strcpy(s.games_launch_notice,"Saved for this image.");render(&view);assert(strstr(drawn,s.games_launch_notice));
+    strcpy(s.games_launch_notice,"Not saved. These choices apply until you leave this image.");
+    render(&view);assert(strstr(drawn,"Not saved"));
+    view.busy=true;strcpy(status.message,"Stale result from the previous loader probe");
+    strcpy(s.games_launch_notice,"Saving options...");render(&view);
+    assert(strstr(drawn,"Saving options...") && !strstr(drawn,status.message));
+    assert(strstr(drawn,"B Stop safely") && !strstr(drawn,"START Launch"));
+    view.busy=false;
+    s.games_launch_cdda=true;s.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;render(&view);
+    assert(strstr(drawn,"CD music: On") && strstr(drawn,"Background loading: Off"));
+    s.page=KUI_SHELL_GAMES_EXTRA_OPTIONS;s.games_launch_cdda=false;
+    s.games_launch_reader=KUI_RETAIL_READER_ASYNC_EAGER;s.game_tools_selected=KUI_SHELL_GAME_TOOL_SPEED;render(&view);
+    assert(strstr(drawn,"Aggressive") && strstr(drawn,"Boot encoding") && strstr(drawn,"Image information") && strstr(drawn,"Developer tests"));
+    s.games_detail.native_gd=false;s.games_detail.windows_ce=true;s.games_detail.boot_bytes=1253376;
+    s.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;s.games_launch_selected=KUI_SHELL_GAME_OPTION_READER;render(&view);
+    assert(strstr(drawn,"On") && strstr(drawn,"required") && strstr(drawn,"CD music") && strstr(drawn,"Off"));
+    assert(option_row_colors[KUI_SHELL_GAME_OPTION_READER]==0xadd9 &&
+        option_row_colors[KUI_SHELL_GAME_OPTION_CDDA]==0xf7bf &&
+        option_row_colors[KUI_SHELL_GAME_OPTION_ADVANCED]==0xf7bf);
+    assert(!strstr(drawn,"0WINCEOS.BIN") && !strstr(drawn,"CE test") && !strstr(drawn,"Windows CE SCI launch test"));
+    strcpy(s.games_detail.path,"/Games/Other.gdi");render(&view);
+    assert(strstr(drawn,"Unavailable"));
+    assert(!strstr(drawn,"START Launch"));
+    for(unsigned i=0;i<KUI_SHELL_GAME_OPTION_COUNT;i++) assert(option_row_colors[i]==0xadd9);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE);
 }
+
 static void games_selected_art_rendering(void) {
     static uint16_t selected[KUI_COVER_PIXELS],legacy[KUI_GAMES_ROWS][KUI_COVER_PIXELS];
     for(unsigned i=0;i<KUI_COVER_PIXELS;i++) selected[i]=0x1234;
@@ -1582,19 +1945,25 @@ static void games_variant_rendering(void) {
         assert(strstr(drawn,"A Inspect") && strstr(drawn,"B Games") && !strstr(drawn,"L Memory"));
         inspect_paired_choice(choice,false);render(&view);
         const char *label=choice?"Version: 2048-byte copy":"Version: Original";
-        assert(strstr(drawn,label) && strstr(drawn,s.games_selected_path) && strstr(drawn,"B Versions"));
+        assert(strstr(drawn,label) && strstr(drawn,"B Versions"));
+        assert(!strstr(drawn,"1ST_READ.BIN") && !strstr(drawn,"LBA"));
         press(KUI_SHELL_A,false);render(&view);
-        assert(strstr(drawn,label) && strstr(drawn,"A Launch") && strstr(drawn,"X/Y Background reader"));
+        assert(strstr(drawn,label) && strstr(drawn,"A Launch") && strstr(drawn,"Y Options"));
         press(KUI_SHELL_B,false);press(KUI_SHELL_Y,false);render(&view);
-        assert(strstr(drawn,label) && strstr(drawn,"A Start test") && strstr(drawn,"B Image details"));
-        press(KUI_SHELL_B,false);press(KUI_SHELL_B,false);press(KUI_SHELL_B,false);
+        assert(strstr(drawn,label) && strstr(drawn,"Background loading") && strstr(drawn,"CD music"));
+        assert(!strstr(drawn,"Image read test") && !strstr(drawn,"Loader read test"));
+        open_developer_tests();s.game_tests_selected=0;
+        press(KUI_SHELL_A,false);render(&view);
+        assert(strstr(drawn,label) && strstr(drawn,"A Start test") && strstr(drawn,"B Tests"));
+        for(unsigned back=0;s.page!=KUI_SHELL_GAMES && back<8;back++) press(KUI_SHELL_B,false);
+        assert(s.page==KUI_SHELL_GAMES);
         render(&view);assert(!strstr(drawn,"Version:") && strstr(drawn,"A chooses Original or 2048-byte copy"));
         s.games_view=KUI_GAMES_VIEW_COMPACT;render(&view);
         assert(strstr(drawn,"Original / 2048-byte copy"));
     }
     open_paired_games();inspect_paired_choice(1,true);press(KUI_SHELL_A,false);render(&view);
-    assert(strstr(drawn,"Version: 2048-byte copy") && strstr(drawn,"Windows CE boot test"));
-    assert(strstr(drawn,"A Start test") && strstr(drawn,"Reader: background (SCI microSD)"));
+    assert(strstr(drawn,"Version: 2048-byte copy") && strstr(drawn,"Launch game"));
+    assert(strstr(drawn,"A Launch") && strstr(drawn,"Background loading: On"));
     assert(!strstr(drawn,"standard reader") && !strstr(drawn,"X Background reader") && !strstr(drawn,"X/Y"));
 }
 /* ---- File Manager ---- */
@@ -1876,7 +2245,8 @@ static void files_rendering(void) {
     s.files_keyboard=false;render(&v);assert(strstr(drawn,"Type destination"));
     /* Games details opened here return here. */
     reset(KUI_SHELL_GAMES_DETAIL);s.games_from_files=true;render(&v);
-    assert(strstr(drawn,"B Files") && strstr(drawn,"B returns to the File Manager."));
+    assert(strstr(drawn,"B Files"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_FILES);
     puts("PASS File Manager rendering: Home entry, rows, notices, progress, actions, confirmations, details, picture, keyboard");
 }
 /* FTP server: Y on the Network page opens its page and starts it; B stops
@@ -2209,7 +2579,7 @@ static void wifi_rendering(void) {
     assert(strstr(drawn,"Bands: 2.4 and 5 GHz") && strstr(drawn,"LEFT/RIGHT"));
     assert(strstr(drawn,"Home 5G") && strstr(drawn,"5 GHz ch 36") && strstr(drawn,"WPA2") && strstr(drawn,"WPA3"));
     assert(strstr(drawn,"2.4 GHz ch 1") && strstr(drawn,"Open") && strstr(drawn,"Other network (type its name)"));
-    assert(strstr(drawn,"3 networks in range") && strstr(drawn,"A Join   X Scan again   Y Forget   B Network"));
+    assert(strstr(drawn,"3 networks in range") && strstr(drawn,"A Join   X Scan   Y Forget   START Update   B Network"));
     view.wifi.state=KWM_WIFI_ONLINE;strcpy(view.wifi.ssid,"Home 5G");view.wifi.band=5;view.wifi.rssi=-48;
     view.wifi.ip[0]=192;view.wifi.ip[1]=168;view.wifi.ip[2]=1;view.wifi.ip[3]=23;
     kui_shell_set_wifi(&s,&view);render(&v);
@@ -2249,11 +2619,86 @@ static void wifi_rendering(void) {
     assert(strstr(drawn,"Wi-Fi connection lost; the board is reconnecting") && !strstr(drawn,"No cable link"));
     puts("PASS shell Wi-Fi rendering: looking, no board, networks, online, scrolling, password keyboard, forget, FTP over Wi-Fi");
 }
+static struct kui_wifi_view firmware_preview(void) {
+    struct kui_wifi_view view=three_networks();
+    view.firmware_ready=true;
+    view.firmware.bytes=128u*1024u;
+    view.firmware.chip=5;
+    strcpy(view.firmware.version,"0.1.2-21d3b1c5");
+    strcpy(view.firmware.path,"/KUI/firmware/kui-wifi-esp32c5-update.bin");
+    for(unsigned i=0;i<sizeof(view.firmware.sha256);i++) view.firmware.sha256[i]=(uint8_t)(i*7u);
+    for(unsigned i=0;i<sizeof(view.firmware.mac);i++) view.firmware.mac[i]=(uint8_t)(i+1u);
+    strcpy(view.message,"Firmware image checked; review before updating");
+    return view;
+}
+static void wifi_update_controls(void) {
+    reset(KUI_SHELL_WIFI);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    struct kui_wifi_view view=three_networks();
+    kui_shell_set_wifi(&s,&view);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_WIFI_UPDATE_CHECK);
+    assert(s.wifi_request.action==KUI_WIFI_UPDATE_CHECK && !s.confirm_wifi_update);
+    /* Looking at an image is a separate action from writing it. Busy A,
+     * START and join controls cannot commit before the preview arrives. */
+    assert(press(KUI_SHELL_A|KUI_SHELL_START|KUI_SHELL_Y,true)==KUI_SHELL_NONE);
+    view=firmware_preview();view.working=true;
+    kui_shell_set_wifi(&s,&view);
+    assert(!s.confirm_wifi_update);
+    view.working=false;kui_shell_set_wifi(&s,&view);
+    assert(s.confirm_wifi_update && kui_shell_wifi_rows(&s)==5);
+    assert(press(KUI_SHELL_X|KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    /* Cancel and even A+B must not write or leave the Wi-Fi page. */
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE);
+    assert(!s.confirm_wifi_update && s.page==KUI_SHELL_WIFI);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_WIFI_UPDATE_CHECK);
+    kui_shell_set_wifi(&s,&view);
+    assert(s.confirm_wifi_update);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_WIFI_UPDATE);
+    assert(!s.confirm_wifi_update && s.wifi_request.action==KUI_WIFI_UPDATE);
+    assert(!memcmp(&s.wifi_request.firmware,&view.firmware,sizeof(view.firmware)));
+    view.firmware_ready=false;view.firmware_updating=true;view.working=true;
+    kui_shell_set_wifi(&s,&view);
+    assert(press(KUI_SHELL_B,true)==KUI_SHELL_STOP);
+    view.firmware_committing=true;kui_shell_set_wifi(&s,&view);
+    assert(press(KUI_SHELL_B|KUI_SHELL_A,true)==KUI_SHELL_NONE);
+    assert(s.page==KUI_SHELL_WIFI && !s.confirm_wifi_update);
+    /* Failed or stale image publications cannot offer a commit. */
+    view=firmware_preview();view.failed=true;
+    kui_shell_set_wifi(&s,&view);
+    assert(!s.confirm_wifi_update);
+    reset(KUI_SHELL_NETWORK);view.failed=false;kui_shell_set_wifi(&s,&view);
+    assert(!s.confirm_wifi_update);
+    puts("PASS shell Wi-Fi update: check first, explicit pinned confirmation, cancel priority, commit lock, failed and stale guards");
+}
+static void wifi_update_rendering(void) {
+    struct kui_shell_view v={.build="a1b2c3d4e5f6"};
+    reset(KUI_SHELL_WIFI);
+    struct kui_wifi_view view=firmware_preview();
+    kui_shell_set_wifi(&s,&view);render(&v);
+    assert(strstr(drawn,"UPDATE WI-FI FIRMWARE?") && strstr(drawn,"ESP32-C5 firmware 0.1.2-21d3b1c5"));
+    assert(strstr(drawn,view.firmware.path) && strstr(drawn,"128 KB"));
+    assert(strstr(drawn,"Saved Wi-Fi settings are kept") && strstr(drawn,"A Update firmware   B Cancel"));
+    view.firmware_ready=false;view.firmware_updating=true;view.working=true;
+    view.firmware_total=view.firmware.bytes;view.firmware_done=view.firmware.bytes/2u;
+    strcpy(view.message,"Sending firmware to the Wi-Fi board");
+    kui_shell_set_wifi(&s,&view);v.busy=true;render(&v);
+    assert(strstr(drawn,"Updating the Wi-Fi board") && strstr(drawn,"Sending firmware"));
+    assert(strstr(drawn,"64.0 KB / 128 KB") && strstr(drawn,"B Stop safely"));
+    view.firmware_committing=true;kui_shell_set_wifi(&s,&view);render(&v);
+    assert(strstr(drawn,"Finishing and checking the restarted board") && strstr(drawn,"keep the console powered on"));
+    assert(!strstr(drawn,"B Stop safely"));
+    puts("PASS shell Wi-Fi update rendering: version, image, size, confirmation, transfer progress, finishing state");
+}
 int main(int argc,char **argv) {
+    if(argc==2 && !strcmp(argv[1],"--wifi")) {
+        wifi_controls();wifi_rendering();wifi_update_controls();wifi_update_rendering();return 0;
+    }
     if(argc==2 && !strcmp(argv[1],"--storage-tests")) {
         storage_test_controls();storage_test_rendering();return 0;
     }
-    games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_cd_controls(); games_variant_controls(); games_rendering(); games_selected_art_rendering(); games_variant_rendering();
+    games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_variant_controls();
+    if(argc==2 && !strcmp(argv[1],"--games-controls")) { puts("PASS Games navigation and launch controls"); return 0; }
+    games_rendering(); games_selected_art_rendering(); games_variant_rendering();
     if(argc==2 && !strcmp(argv[1],"--games")) { puts("PASS Games navigation, launch eligibility and rendering"); return 0; }
     storage_test_controls();storage_test_rendering();
     launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction(); ripper_export_rendering();
@@ -2263,7 +2708,7 @@ int main(int argc,char **argv) {
     music_and_boot_controls(); music_and_boot_rendering(); round_four_rendering(); round_five_controls(); round_five_rendering();
     files_controls(); files_rendering();
     ftp_controls(); ftp_rendering();
-    wifi_controls(); wifi_rendering();
+    wifi_controls(); wifi_rendering(); wifi_update_controls(); wifi_update_rendering();
     puts("PASS shell: Games browsing/inspection, stale result guards, Stop lock, system/ripper preferences, reversible video actions, VMU paging, phase ETA, destination keyboard, reference grades, safe rendering");
     return 0;
 }

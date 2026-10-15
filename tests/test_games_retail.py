@@ -280,7 +280,7 @@ def main():
                     if case == "ce-probe-native":
                         assert "the Windows CE boot test needs a Windows CE image" in output
                     if case == "ce-probe-package":
-                        assert "unsupported Windows CE probe package layout" in output
+                        assert "unsupported game-launch package layout" in output
                     if case == "ce-probe-small":
                         assert "larger than its 2048-byte prefix" in output
                     if case == "ce-probe-scif":

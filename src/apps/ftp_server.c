@@ -57,6 +57,12 @@
 #define TRACE_SECONDS 10u
 #define PART_LIMIT 99u
 #define WIFI_ONLINE_MS 30000u
+#define WIFI_LISTEN_MS 3000u /* for queued listener commands to reach the board */
+/* Several link frames share one FTP/control pass. Card operations stay on
+ * the outer loop; these bounds return to input and other clients promptly. */
+#define WIFI_BURST_FRAMES 8u
+#define WIFI_BURST_MS 20u
+#define WIFI_BURST_STALL 2u
 /* A file an upload replaces, until the upload has taken its name. */
 #define OLD_SUFFIX ".kui-old"
 enum {FREE = -1, REJECTING = -2, RENEWING = -3};
@@ -114,6 +120,7 @@ struct session {
     uint64_t trace_us, trace_slowest_us;
     uint32_t trace_net, trace_card, trace_retries, trace_starved, trace_stalled, trace_passes;
     unsigned trace_lines;
+    uint32_t wifi_first_burst, wifi_first_frame;
 };
 struct server {
     /* The adapter in use: the W5500 session, or the Wi-Fi board's (large,
@@ -149,6 +156,8 @@ struct server {
     struct session *streaming;
     uint8_t *ring;
     uint64_t poll_ms;
+    uint32_t wifi_bursts, wifi_frames;
+    unsigned wifi_max_burst;
 };
 
 /* The clock and pauses come from whichever adapter port was given. */
@@ -579,6 +588,15 @@ static void timing(struct server *sv, const struct session *s) {
     sv->changed = true;
     if(!sv->log) return;
     sv->log("FTP: %s", line);
+    if(sv->wifi) {
+        sv->log("FTP Wi-Fi: %lu SPI frames in %lu bounded bursts; largest %u frames",
+            (unsigned long)(sv->wifi_frames - s->wifi_first_frame),
+            (unsigned long)(sv->wifi_bursts - s->wifi_first_burst), sv->wifi_max_burst);
+        if(sv->wifi->port->bus->gap_us)
+            sv->log("FTP Wi-Fi: gap %u us; link totals %lu bad frames, %lu retransmits",
+                sv->wifi->port->bus->gap_us(sv->wifi->port->bus->ctx),
+                (unsigned long)sv->wifi->host.link.stats.bad, (unsigned long)sv->wifi->host.link.stats.resent);
+    }
     if(s->pieces)
         sv->log("FTP: socket %u, %llu B pieces; waited for the card %lu times, network %lu; %lu retries",
             s->stream_socket, (unsigned long long)(s->stream_bytes / s->pieces), (unsigned long)s->starved,
@@ -755,7 +773,7 @@ static bool stream_card(struct server *sv) {
     return true;
 }
 static bool stream_begin(struct server *sv, struct session *s) {
-    s->no_stream = sv->wifi ? "no DMA (Wi-Fi)" : !sv->w5500.chip.async ? "DMA off" : sv->streaming ? "DMA in use" :
+    s->no_stream = sv->wifi ? "no overlap (Wi-Fi)" : !sv->w5500.chip.async ? "DMA off" : sv->streaming ? "DMA in use" :
         "no DMA";
     if(sv->wifi || sv->streaming || !sv->w5500.chip.async || (s->kind != T_RETR && s->kind != T_STOR)) return false;
     if(!sv->ring && !(sv->ring = malloc(RING_BYTES))) return false;
@@ -773,6 +791,36 @@ static bool stream_begin(struct server *sv, struct session *s) {
     s->trace_lines = 0;
     return true;
 }
+/* Move only data already in memory. The Wi-Fi burst reuses these same
+ * accounting/credit paths without calling FatFs between link frames. */
+static bool receive_buffer(struct server *sv, struct session *s, unsigned j, uint64_t now,
+                           size_t *waiting, bool *work) {
+    if(!net_received(sv, j, waiting)) return false;
+    if(!*waiting || s->buffered >= BUFFER_BYTES) return true;
+    size_t take = BUFFER_BYTES - s->buffered < *waiting ? BUFFER_BYTES - s->buffered : *waiting;
+    if(!net_receive(sv, j, s->buffer + s->buffered, take)) return false;
+    s->buffered += take;
+    s->done += take;
+    sv->status->bytes_in += take;
+    s->progress_ms = now;
+    *waiting -= take;
+    *work = true;
+    return true;
+}
+static bool send_buffer(struct server *sv, struct session *s, unsigned j, uint64_t now, bool *work) {
+    if(s->sent >= s->buffered) return true;
+    size_t room = 0;
+    if(!net_room(sv, j, &room)) return false;
+    if(!room) return true;
+    size_t n = s->buffered - s->sent < room ? s->buffered - s->sent : room;
+    if(!net_send(sv, j, s->buffer + s->sent, n)) return false;
+    s->sent += n;
+    s->done += n;
+    if(s->kind == T_RETR) sv->status->bytes_out += n;
+    s->progress_ms = now;
+    *work = true;
+    return true;
+}
 static bool transfer_step(struct server *sv, struct session *s, uint64_t now) {
     if(s->phase == P_CONNECT) {
         bool failed;
@@ -783,6 +831,8 @@ static bool transfer_step(struct server *sv, struct session *s, uint64_t now) {
             s->card_us = s->net_us = s->plain_us = s->plain_card_us = s->stream_bytes = s->overlap = 0;
             s->pieces = s->starved = s->stalled = s->retries = 0;
             s->used_stream = s->fell_back = false;
+            s->wifi_first_burst = sv->wifi_bursts;
+            s->wifi_first_frame = sv->wifi_frames;
             (void)stream_begin(sv, s);
             return true;
         }
@@ -796,19 +846,8 @@ static bool transfer_step(struct server *sv, struct session *s, uint64_t now) {
     bool work = false;
     if(s->kind == T_STOR) {
         size_t waiting = 0;
-        if(!net_received(sv, j, &waiting)) { fail_transfer(sv, s, now, "426 The network adapter stopped"); return true; }
-        if(waiting && s->buffered < BUFFER_BYTES) {
-            size_t take = BUFFER_BYTES - s->buffered < waiting ? BUFFER_BYTES - s->buffered : waiting;
-            if(!net_receive(sv, j, s->buffer + s->buffered, take)) {
-                fail_transfer(sv, s, now, "426 The network adapter stopped");
-                return true;
-            }
-            s->buffered += take;
-            s->done += take;
-            sv->status->bytes_in += take;
-            s->progress_ms = now;
-            work = true;
-            waiting -= take;
+        if(!receive_buffer(sv, s, j, now, &waiting, &work)) {
+            fail_transfer(sv, s, now, "426 The network adapter stopped"); return true;
         }
         bool ended = state == KUI_NET_PEER_CLOSED && !waiting;
         /* Whole buffers suit the card; the rest is written at the end. */
@@ -843,21 +882,8 @@ static bool transfer_step(struct server *sv, struct session *s, uint64_t now) {
             }
             work = true;
         }
-        if(s->sent < s->buffered) {
-            size_t room = 0;
-            if(!net_room(sv, j, &room)) { fail_transfer(sv, s, now, "426 The connection was lost"); return true; }
-            if(room) {
-                size_t n = s->buffered - s->sent < room ? s->buffered - s->sent : room;
-                if(!net_send(sv, j, s->buffer + s->sent, n)) {
-                    fail_transfer(sv, s, now, "426 The connection was lost");
-                    return true;
-                }
-                s->sent += n;
-                s->done += n;
-                if(s->kind == T_RETR) sv->status->bytes_out += n;
-                s->progress_ms = now;
-                work = true;
-            }
+        if(!send_buffer(sv, s, j, now, &work)) {
+            fail_transfer(sv, s, now, "426 The connection was lost"); return true;
         }
         if(s->source_done && s->sent == s->buffered) { s->phase = P_DRAIN; s->phase_ms = now; }
     } else {
@@ -1602,6 +1628,33 @@ static void w5500_adapter(struct server *sv) {
         l->fast ? "100" : "10", l->full ? "full" : "half");
     sv->changed = true;
 }
+static bool wifi_listeners_ready(struct server *sv) {
+    /* kwh_listen queues a command and sets LISTEN optimistically. Drain its
+     * checked acknowledgements and state replies before publishing READY,
+     * so a client can connect as soon as the UI says the server is ready. */
+    stage(sv, "Opening FTP listeners on the Wi-Fi board");
+    uint64_t start = now_ms(sv);
+    while(kui_wifi_session_busy(sv->wifi)) {
+        if(sv->cancel && sv->cancel()) { fail(sv, "Stopped"); return false; }
+        if(now_ms(sv) - start >= WIFI_LISTEN_MS) {
+            fail(sv, "The Wi-Fi board did not acknowledge the FTP listeners");
+            return false;
+        }
+        if(!kui_wifi_session_step(sv->wifi)) { fail(sv, sv->wifi->problem); return false; }
+        if(kui_wifi_session_busy(sv->wifi)) pause_ms(sv, 0);
+    }
+    for(unsigned c = 0; c < CONTROL_SOCKETS; ++c) {
+        unsigned socket = CONTROL_FIRST + c;
+        uint8_t state = KUI_NET_CLOSED;
+        /* A client may already have connected before READY is published. */
+        if(!net_state(sv, socket, &state) || kwh_error(&sv->wifi->host, socket) ||
+           (state != KUI_NET_LISTEN && state != KUI_NET_ESTABLISHED && state != KUI_NET_PEER_CLOSED)) {
+            fail(sv, "The Wi-Fi board could not listen for connections");
+            return false;
+        }
+    }
+    return true;
+}
 static bool start_network(struct server *sv) {
     if(sv->wifi) {
         stage(sv, "Waiting for the Wi-Fi network");
@@ -1629,7 +1682,7 @@ static bool start_network(struct server *sv) {
             fail(sv, sv->wifi ? "The Wi-Fi board could not listen for connections" : "The W5500 could not listen for connections");
             return false;
         }
-    return true;
+    return !sv->wifi || wifi_listeners_ready(sv);
 }
 static void ready_message(struct server *sv) {
     char where[8] = "";
@@ -1637,15 +1690,55 @@ static void ready_message(struct server *sv) {
     snprintf(sv->status->message, sizeof(sv->status->message), "Ready: ftp://%u.%u.%u.%u%s", sv->ip[0], sv->ip[1],
         sv->ip[2], sv->ip[3], where);
 }
-/* Each round: the Wi-Fi board's link moves one transfer. True while it has
- * more to do. */
+/* Drain/refill every active data buffer fairly, without card work. A full
+ * upload or exhausted download returns to transfer_step on the next pass. */
+static bool wifi_buffers(struct server *sv, uint64_t now, bool *work) {
+    for(unsigned i = 0; i < KUI_FTP_SESSIONS; ++i) {
+        struct session *s = &sv->sessions[i];
+        if(!s->active || s->phase != P_RUN || s->data < 0 || (s->kind != T_STOR && s->kind != T_RETR)) continue;
+        unsigned j = (unsigned)s->data;
+        uint8_t state;
+        if(!net_state(sv, j, &state)) return false;
+        /* The outer loop owns connection transitions, failures and FIN. */
+        if(state != KUI_NET_ESTABLISHED && state != KUI_NET_PEER_CLOSED) continue;
+        if(s->kind == T_STOR) {
+            size_t waiting;
+            if(!receive_buffer(sv, s, j, now, &waiting, work)) return false;
+        } else if(!send_buffer(sv, s, j, now, work)) return false;
+        rate(s, now);
+    }
+    return true;
+}
+/* Each FTP pass clocks a short burst. CRC errors, reset, silence and idle
+ * end it; two unproductive frames still permit the normal reply pipeline. */
 static bool adapter_poll(struct server *sv) {
     if(!sv->wifi) return false;
-    if(!kui_wifi_session_step(sv->wifi)) {
-        sv->stop_reason = sv->wifi->problem;
-        return false;
-    }
-    return kui_wifi_session_busy(sv->wifi);
+    struct kwh *h = &sv->wifi->host;
+    uint64_t start = now_ms(sv);
+    unsigned frames = 0, stalled = 0;
+    bool work = false;
+    ++sv->wifi_bursts;
+    do {
+        if(sv->cancel && sv->cancel()) break;
+        uint32_t lost = h->counts.lost, received = h->link.stats.received;
+        uint32_t bad = h->link.stats.bad, failures = h->failures, transfers = h->transfers;
+        unsigned head = h->link.out_head, count = h->link.out_count;
+        bool answered = kui_wifi_session_step(sv->wifi);
+        sv->wifi_frames += h->transfers - transfers;
+        if(!answered) { sv->stop_reason = sv->wifi->problem; break; }
+        ++frames;
+        if(h->counts.lost != lost || h->link.stats.bad != bad || h->failures != failures) break;
+        bool moved = false;
+        if(!wifi_buffers(sv, now_ms(sv), &moved)) {
+            sv->stop_reason = "The Wi-Fi data socket stopped answering"; break;
+        }
+        work |= moved;
+        bool progress = moved || h->link.stats.received != received || h->link.out_head != head || h->link.out_count < count;
+        stalled = progress ? 0 : stalled + 1u;
+        if(!kui_wifi_session_busy(sv->wifi) || stalled >= WIFI_BURST_STALL) break;
+    } while(frames < WIFI_BURST_FRAMES && now_ms(sv) - start < WIFI_BURST_MS);
+    if(frames > sv->wifi_max_burst) sv->wifi_max_burst = frames;
+    return work || kui_wifi_session_busy(sv->wifi);
 }
 /* Each second: the W5500's cable link and lease; the Wi-Fi board's status
  * (its answer is read by wifi_news). */

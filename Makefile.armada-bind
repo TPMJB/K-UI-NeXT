@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Isolated RAM-only sound binding test. No CE APIs or AICA access.
+override ARMADA_AUDIO_DIR := build/armada-ce-bind
+override ARMADA_AUDIO_EXTRA_FLAGS := -DKUI_ARMADA_CE_RAM_BIND=1
+override ARMADA_AUDIO_EXTRA_STAGE_FLAGS := -DKUI_ARMADA_CE_RAM_BIND_STAGE=1
+override ARMADA_AUDIO_EXTRA_STAGE_DEPS := $(ARMADA_AUDIO_DIR)/bind-probe.bin
+override ARMADA_AUDIO_EXTRA_ASM_FLAGS := -DKUI_ARMADA_CE_RAM_BIND_STAGE=1 -DKUI_ARMADA_CE_RAM_BIND_BIN='"$(ARMADA_AUDIO_DIR)/bind-probe.bin"'
+override ARMADA_AUDIO_EXTRA_LINK_FLAGS := -Wl,--defsym,_kui_armada_ce_bind_probe=0x8c004000
+override ARMADA_AUDIO_EXTRA_CHECK := python3 tools/check_armada_ce_bind.py $(ARMADA_AUDIO_DIR)
+include Makefile.armada-audio
+
+$(ARMADA_AUDIO_DIR)/bind-probe.o: src/loader/armada_ce_bind_probe.c include/kui/armada_ce_bind_probe.h include/kui/armada_ce_ram_bind.h include/kui/armada_ce_table_trace.h
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -fcallgraph-info=su -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/bind-probe.elf: $(ARMADA_AUDIO_DIR)/bind-probe.o src/loader/armada_ce_bind_probe.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/armada_ce_bind_probe.ld -Wl,-Map,$(@:.elf=.map) -o $@ $< -lgcc
+$(ARMADA_AUDIO_DIR)/bind-probe.bin: $(ARMADA_AUDIO_DIR)/bind-probe.elf
+	sh-elf-objcopy -O binary $< $@
+
+-include $(ARMADA_AUDIO_DIR)/bind-probe.d

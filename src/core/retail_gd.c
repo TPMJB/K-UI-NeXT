@@ -672,7 +672,11 @@ int32_t kui_retail_gd_dispatch(struct kui_retail_gd *s, uint32_t r4,
     case KUI_GD_DATATYPE: result = datatype(s, r4); break;
     case KUI_GD_DRIVE: {
         uint8_t *out = guest(s, r4, 8, 4, 1);
+#if KUI_RETAIL_NATIVE_DRIVE_STATE
+        if(out) { put32(out, s->drive_status); put32(out + 4, s->disc_type); result = 0; }
+#else
         if(out) { put32(out, s->pending ? 0 : s->drive_status); put32(out + 4, s->disc_type); result = 0; }
+#endif
         break;
     }
     case KUI_GD_ABORT:

@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Isolated Armada full-stream profile. The controller occupies the existing
+# pre-boot reserved pool; ordinary/excerpt loader objects are not destinations.
+ifeq ($(KUI_WINCE_CDDA_PROFILE),worms)
+override ARMADA_AUDIO_DIR := build/worms-ce-stream
+WINCE_CDDA_PROFILE_FLAGS := -DKUI_WINCE_CDDA_WORMS=1
+WINCE_CDDA_PROFILE_CHECK := --worms
+WINCE_CDDA_CONTROLLER_BEGIN := 0x8cec7000
+else ifeq ($(KUI_WINCE_CDDA_PROFILE),bam4)
+override ARMADA_AUDIO_DIR := build/bam4-ce-stream
+WINCE_CDDA_PROFILE_FLAGS := -DKUI_WINCE_CDDA_BAM4=1
+WINCE_CDDA_PROFILE_CHECK := --bam4
+else
+override ARMADA_AUDIO_DIR := build/armada-ce-stream
+endif
+WINCE_CDDA_CONTROLLER_BEGIN ?= 0x8cfa7000
+override ARMADA_AUDIO_EXTRA_FLAGS := -DKUI_ARMADA_CE_EXCERPT=1 -DKUI_ARMADA_CE_STREAM=1 $(WINCE_CDDA_PROFILE_FLAGS)
+override ARMADA_AUDIO_EXTRA_STAGE_FLAGS := -DKUI_ARMADA_CE_RAM_BIND_STAGE=1 -DKUI_ARMADA_CE_EXCERPT_STAGE=1 -DKUI_ARMADA_CE_STREAM=1 -DKUI_RETAIL_EXTENDED_MAP=1 $(WINCE_CDDA_PROFILE_FLAGS)
+override ARMADA_AUDIO_EXTRA_STAGE_DEPS := $(ARMADA_AUDIO_DIR)/bind-probe.bin
+override ARMADA_AUDIO_EXTRA_ASM_FLAGS := -DKUI_ARMADA_CE_RAM_BIND_STAGE=1 -DKUI_ARMADA_CE_RAM_BIND_BIN='"$(ARMADA_AUDIO_DIR)/bind-probe.bin"'
+override ARMADA_AUDIO_EXTRA_LINK_FLAGS := -Wl,--defsym,_kui_armada_ce_bind_probe=$(WINCE_CDDA_CONTROLLER_BEGIN)
+override ARMADA_AUDIO_EXTRA_CHECK := python3 tools/check_armada_ce_excerpt.py --stream $(WINCE_CDDA_PROFILE_CHECK) $(ARMADA_AUDIO_DIR)
+include Makefile.armada-audio
+
+ARMADA_STREAM_FLAGS := $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -DKUI_ARMADA_CE_EXCERPT=1 -DKUI_ARMADA_CE_STREAM=1 -DKUI_RETAIL_EXTENDED_MAP=1 -fcallgraph-info=su $(WINCE_CDDA_PROFILE_FLAGS)
+# Override to empty only for the initial high-placement excerpt preflight.
+# Full stream builds require all three independently implemented source units.
+ARMADA_STREAM_EXTRA_SRC ?= src/loader/armada_ce_stream_model.c src/loader/armada_ce_stream_native.c src/loader/armada_ce_stream_transport.c src/loader/armada_ce_stream_player.c src/loader/armada_ce_stream_trace.c
+ARMADA_STREAM_EXTRA_OBJS := $(patsubst src/loader/armada_ce_stream_%.c,$(ARMADA_AUDIO_DIR)/stream-%.o,$(ARMADA_STREAM_EXTRA_SRC))
+ARMADA_STREAM_OBJS := $(ARMADA_AUDIO_DIR)/bind-probe.o $(ARMADA_AUDIO_DIR)/excerpt.o $(ARMADA_AUDIO_DIR)/excerpt-asm.o $(ARMADA_AUDIO_DIR)/excerpt-minic.o $(ARMADA_STREAM_EXTRA_OBJS) $(ARMADA_AUDIO_DIR)/stream-image.o $(ARMADA_AUDIO_DIR)/stream-cursor.o
+
+$(ARMADA_AUDIO_DIR)/bind-probe.o: src/loader/armada_ce_excerpt_entry.c include/kui/armada_ce_excerpt_entry.h include/kui/armada_ce_live_sound.h include/kui/armada_ce_excerpt.h
+	@mkdir -p $(@D)
+	sh-elf-gcc $(ARMADA_STREAM_FLAGS) -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/excerpt.o: src/loader/armada_ce_excerpt.c include/kui/armada_ce_excerpt.h
+	@mkdir -p $(@D)
+	sh-elf-gcc $(ARMADA_STREAM_FLAGS) -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/excerpt-asm.o: src/loader/armada_ce_excerpt.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(ARMADA_STREAM_FLAGS) -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/excerpt-minic.o: src/loader/minic.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(ARMADA_STREAM_FLAGS) -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/stream-%.o: src/loader/armada_ce_stream_%.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(ARMADA_STREAM_FLAGS) -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/stream-image.o: src/core/retail_image.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(ARMADA_STREAM_FLAGS) -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/stream-cursor.o: src/core/retail_cursor.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(ARMADA_STREAM_FLAGS) -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/bind-probe.elf: $(ARMADA_STREAM_OBJS) src/loader/armada_ce_stream.ld
+	sh-elf-gcc $(RETAIL_LINK) -Wl,--defsym,_kui_stream_code_base=$(WINCE_CDDA_CONTROLLER_BEGIN) -Tsrc/loader/armada_ce_stream.ld -Wl,-Map,$(@:.elf=.map) -o $@ $(ARMADA_STREAM_OBJS) -lgcc
+$(ARMADA_AUDIO_DIR)/bind-probe.bin: $(ARMADA_AUDIO_DIR)/bind-probe.elf
+	sh-elf-objcopy -O binary $< $@
+$(ARMADA_AUDIO_DIR)/resident-scia.elf: $(ARMADA_AUDIO_DIR)/bind-probe.elf
+
+-include $(ARMADA_STREAM_OBJS:.o=.d)
+
+# The stage decodes a separate complete256-slot source map; the low DATA
+# resident retains its original64-slot allocation and linked budget.
+$(ARMADA_AUDIO_DIR)/common/src/core/retail_image.o: src/core/retail_image.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_EXTENDED_MAP=1 -MMD -MP -c $< -o $@

@@ -44,7 +44,9 @@ class CandidateInstallation(unittest.TestCase):
         files = ("runtime.kui", "redump.db", "tosec.db", "apps/music/menu.ogg",
                  "apps/games/probe.kui", "apps/games/image-probe.kui",
                  "apps/games/retail-boot.kui", "apps/games/probe.dat",
-                 "apps/games/ce-probe.kui", "tests/scan/fixture.bin", "preferences.ini")
+                 "apps/games/ce-probe.kui", "apps/games/ce-cdda-armada.kui",
+                 "apps/games/ce-cdda-bam4.kui", "apps/games/ce-cdda-worms.kui",
+                 "tests/scan/fixture.bin", "preferences.ini")
         for name in files:
             path = self.sd / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -53,7 +55,7 @@ class CandidateInstallation(unittest.TestCase):
             if name.endswith(".kui"):
                 (self.sd / name).write_bytes(envelope(b"\x09\0\x09\0", 4, self.commit[:12]))
         for name in ("STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md",
-                     "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "WIFI.md", "WIFI-FLASH-ARCH.md",
+                     "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md",
                      "SCI-CONNECTOR.md", "FTP.md", "LICENSE", "THIRD_PARTY.md"):
             (self.dist / name).write_text(name + "\n")
         (self.dist / "LICENSES").mkdir()
@@ -104,7 +106,7 @@ class CandidateInstallation(unittest.TestCase):
         for name in ("runtime.kui", "apps/games/retail-boot.kui", "apps/games/ce-probe.kui"):
             self.assertEqual((bundle / "KUI" / name).read_bytes(), (self.sd / name).read_bytes())
         self.assertTrue((bundle / "WINDOWS-CE-PLACEMENT-TEST.md").is_file())
-        for name in ("WIFI.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md"):
+        for name in ("WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md"):
             self.assertEqual((bundle / name).read_bytes(), (self.dist / name).read_bytes())
         self.assertTrue((bundle / "boot-cd" / (release["artifact_prefix"] + ".cdi")).is_file())
         self.assertFalse((bundle / "KUI/preferences.ini").exists())
@@ -172,6 +174,27 @@ class CandidateInstallation(unittest.TestCase):
             stream.write(b"unexpected bytes")
         with self.assertRaisesRegex(SystemExit, "checksum mismatch"):
             verify_assets(self.dist / "release-assets", release, self.commit)
+
+    def test_tyrfing_rc_installs_all_music_modules_without_final_release_labeling(self):
+        rc = {"version": "2.0-rc10", "name": 'K-UI V2.0 RC10 "Tyrfing"',
+              "short_name": "K-UI V2.0 RC10", "artifact_prefix": "kui-2.0-rc10-tyrfing"}
+        with patch("package.release_metadata", return_value=rc):
+            bundle, release = self.assemble(False)
+        self.assertEqual(release, rc)
+        self.assertEqual(json.loads((bundle / "build.json").read_text())["kind"], "release-candidate")
+        self.assertIn("release candidate", (bundle / "SOURCE.txt").read_text())
+        self.assertNotIn("final release", (bundle / "SOURCE.txt").read_text())
+        self.assertNotIn("ATA readiness", (bundle / "SOURCE.txt").read_text())
+        self.assertFalse((bundle / "release-banner.jpg").exists())
+        self.assertFalse((bundle / "ANNOUNCEMENTS.md").exists())
+        self.assertEqual({path.name for path in (bundle / "boot-cd").iterdir()},
+                         {rc["artifact_prefix"] + ".cdi"})
+        for name in ("ce-probe.kui", "ce-cdda-armada.kui", "ce-cdda-bam4.kui", "ce-cdda-worms.kui"):
+            self.assertEqual((bundle / "KUI/apps/games" / name).read_bytes(),
+                             (self.sd / "apps/games" / name).read_bytes())
+        self.assert_checksums(bundle, "SHA256SUMS")
+        with self.assertRaisesRegex(SystemExit, "Refusing a diagnostic or candidate package"):
+            verify_assets(self.dist / "release-assets", rc, self.commit)
 
     def test_experimental_bundle_omits_banner_and_cannot_be_published(self):
         for release in (TEST_RELEASE, FORMATS_RELEASE):

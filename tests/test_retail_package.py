@@ -198,15 +198,36 @@ class RetailPackage(unittest.TestCase):
 
 
 class ReleaseMetadata(unittest.TestCase):
-    def test_canonical_names_preserve_accent_and_match_artifact_version(self):
+    # Parser rejection fixtures must stay independent of the current release;
+    # otherwise a version bump can silently turn a corruption into a no-op.
+    fixture = r'''#define KUI_VERSION "1.8.5"
+#define KUI_RELEASE_NAME "K-UI V1.8.5 \"Dáinsleif\""
+#define KUI_RELEASE_SHORT "K-UI V1.8.5"
+#define KUI_ARTIFACT_PREFIX "kui-1.8.5-dainsleif"
+'''
+
+    def test_current_tyrfing_candidate_names_match_artifact_version(self):
         release = release_metadata()
+        self.assertEqual(release, {
+            "version": "2.0-rc10",
+            "name": 'K-UI V2.0 RC10 "Tyrfing"',
+            "short_name": "K-UI V2.0 RC10",
+            "artifact_prefix": "kui-2.0-rc10-tyrfing",
+        })
+
+    def test_canonical_fixture_preserves_accent_and_ascii_console_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            header = Path(tmp) / "version.h"
+            header.write_text(self.fixture, encoding="utf-8")
+            release = release_metadata(header)
         self.assertEqual(release["version"], "1.8.5")
-        self.assertIn("Dáinsleif", release["name"])
+        self.assertEqual(release["name"], 'K-UI V1.8.5 "Dáinsleif"')
+        self.assertEqual(release["short_name"], "K-UI V1.8.5")
         self.assertTrue(release["short_name"].isascii())
         self.assertEqual(release["artifact_prefix"], "kui-1.8.5-dainsleif")
 
     def test_missing_duplicate_control_character_and_unsafe_artifact_names_reject(self):
-        source = (ROOT / "include/kui/version.h").read_text(encoding="utf-8")
+        source = self.fixture
         invalid = (
             (source.replace('#define KUI_VERSION "1.8.5"', ''), "Missing"),
             (source + '\n#define KUI_VERSION "1.7"\n', "repeated"),
@@ -218,6 +239,7 @@ class ReleaseMetadata(unittest.TestCase):
             header = Path(tmp) / "version.h"
             for text, error in invalid:
                 with self.subTest(error=error):
+                    self.assertNotEqual(text, source, "rejection fixture must alter the valid header")
                     header.write_text(text, encoding="utf-8")
                     with self.assertRaisesRegex(ValueError, error):
                         release_metadata(header)

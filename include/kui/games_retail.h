@@ -4,6 +4,12 @@
 #include "kui/runtime.h"
 #define KUI_GAMES_RETAIL_PACKAGE "0:/KUI/apps/games/retail-boot.kui"
 #define KUI_GAMES_RETAIL_CE_PACKAGE "0:/KUI/apps/games/ce-probe.kui"
+#define KUI_GAMES_RETAIL_CE_EXCERPT_PACKAGE "0:/KUI/apps/games/ce-cdda-armada.kui"
+#define KUI_GAMES_RETAIL_CE_BAM4_PACKAGE "0:/KUI/apps/games/ce-cdda-bam4.kui"
+#define KUI_GAMES_RETAIL_CE_WORMS_PACKAGE "0:/KUI/apps/games/ce-cdda-worms.kui"
+#define KUI_GAMES_RETAIL_CDDA_RAW_PACKAGE "0:/KUI/apps/games/cdda-toy-raw.kui"
+#define KUI_GAMES_RETAIL_CDDA_COOKED_PACKAGE "0:/KUI/apps/games/cdda-toy-cooked.kui"
+#define KUI_GAMES_RETAIL_CDDA_MDK2_PACKAGE "0:/KUI/apps/games/retail-cdda-mdk2.kui"
 /* Not a manifest reader: prepare_reader given this prepares the Windows CE
  * boot test instead of a launch. It needs a Windows CE image and the CE probe
  * package, whose stage loads, checks and starts the CE kernel with a tracing
@@ -14,6 +20,13 @@
 #define KUI_GAMES_RETAIL_CE_PROBE 0x100u
 #define KUI_GAMES_RETAIL_DESCRAMBLE 0x200u
 #define KUI_GAMES_RETAIL_BOOT_PLAIN 0x400u
+/* Opt-in routing to an exact admitted title/format package. This is an
+ * application option, never a manifest reader bit. Unsupported profiles fail
+ * before handoff; ordinary launches retain KUI_GAMES_RETAIL_PACKAGE. */
+#define KUI_GAMES_RETAIL_CDDA 0x800u
+/* Exact admitted original GDI: separately built CE music backend per title.
+ * This routes to its separate package; it is never a manifest flag. */
+#define KUI_GAMES_RETAIL_CE_EXCERPT 0x1000u
 /* Single storage worker only. Prepare one native GD-ROM launch;
  * complete IP/boot CRCs and bounded physical extent map are read-only. Success
  * owns a patched stage package with all files closed and SD disconnected.

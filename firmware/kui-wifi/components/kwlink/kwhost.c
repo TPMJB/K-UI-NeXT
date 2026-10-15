@@ -235,10 +235,13 @@ static void deliver(void *ctx, const uint8_t *payload, size_t len) {
 }
 
 /* Credit for data read goes back in batches, or as soon as all is read. */
+static bool credit_due(const struct kwh_slot *s) {
+    return s->credit_back && (s->credit_back >= KWH_RX / 4u || !s->rx_len);
+}
 static void credit_back(struct kwh *h) {
     for(unsigned i = 0; i < KWM_SLOTS; ++i) {
         struct kwh_slot *s = &h->slot[i];
-        if(!s->credit_back || (s->credit_back < KWH_RX / 4u && s->rx_len)) continue;
+        if(!credit_due(s)) continue;
         uint8_t body[4];
         kwl_put32(body, s->credit_back);
         if(s->state != KWM_CLOSED && !queue(h, KWM_SOCK_CREDIT, slot_byte(s, i), body, 4)) continue;
@@ -268,7 +271,13 @@ bool kwh_step(struct kwh *h) {
     return true;
 }
 bool kwh_idle(const struct kwh *h) {
-    return h->link.live && !h->queue_len && !kwl_busy(&h->link) && !h->link.peer_window;
+    if(!h->link.live || h->queue_len || kwl_busy(&h->link) || h->link.peer_window) return false;
+    /* Reading the final RX bytes can make a credit message ready before
+     * kwh_step has queued it. The host must keep polling to return that
+     * space; otherwise a drained receive window can stall the bridge. */
+    for(unsigned i = 0; i < KWM_SLOTS; ++i)
+        if(h->slot[i].state != KWM_CLOSED && credit_due(&h->slot[i])) return false;
+    return true;
 }
 
 /* Requests. */

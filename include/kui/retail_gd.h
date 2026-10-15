@@ -4,6 +4,7 @@
 
 #include "kui/gd_service.h"
 #include "kui/retail_image.h"
+#include "kui/retail_native_drive.h"
 
 /* This opt-in service is independent of the accepted own-client probe. The
  * native entry must serialize dispatch BEFORE switching to its private stack,
@@ -51,10 +52,12 @@ enum kui_retail_gd_interrupt {
 #endif
 /* The extra low-memory fields are confined to the standard native reader.
  * CE and background reader layouts retain their existing ABI and footprint. */
-#if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_GD_ASYNC)
+#ifndef KUI_RETAIL_GD_REJECTION_DETAILS
+#if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_GD_ASYNC) && !KUI_RETAIL_OBSERVE
 #define KUI_RETAIL_GD_REJECTION_DETAILS 1
 #else
 #define KUI_RETAIL_GD_REJECTION_DETAILS 0
+#endif
 #endif
 /* Submission diagnostics only: these do not change command/status/error or
  * the firmware return contract. A nonzero reason describes why REQUEST

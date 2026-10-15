@@ -5,12 +5,23 @@ Dreamcast's SCI port. It gives K-UI a network connection the way the W5500
 does, over Wi-Fi instead of a cable. It also builds for the XIAO ESP32-C6
 (2.4 GHz only).
 
-**Status: implemented and host-tested; hardware characterization remains
-incomplete.** Earlier owner reports include Wi-Fi connection and FTP use,
-without establishing performance for the merged 1.8.5 source. K-UI provides
-a driver, FTP integration and a Wi-Fi page for choosing a network (see
-[Wi-Fi](../../docs/wifi.md)). Set up and test the board from a computer
-before installation.
+**Status: an ESP32-C5 has joined 5 GHz Wi-Fi and transferred files over
+SCI on a Dreamcast.** The first console upload measured about 65 KiB/s with
+READY omitted. The first performance update reached 226 KiB/s on a console
+upload, with 291 KiB/s measured in the network path. Firmware 0.1.3 keeps
+the 8 KiB socket rings and disabled modem sleep, and arms the next SPI
+frame before polling established sockets. Socket work can then run while
+DMA waits for the next transfer, shortening the gap during which a host
+without READY would find the adapter unarmed. The new timing still needs a
+console measurement. K-UI includes the driver, FTP server and a Wi-Fi page
+to choose a network (see [Wi-Fi](../../docs/wifi.md)). The board can be set
+up and tested on its own from a computer before installation.
+
+Changing bands now disconnects and rejoins the configured network, clears
+the previous connection's displayed address/channel while reconnecting,
+and saves the preference only if the Wi-Fi driver accepts it. This keeps
+the same network name and password: if your router gives 5 GHz a different
+name, select that name with `join "SSID" "password"` after `band 5`.
 
 ## What it does
 
@@ -20,8 +31,9 @@ before installation.
   sockets on it, much as it does on the W5500, so the FTP server can run
   over either.
 - Also offers the Dreamcast a network list, joining, name lookups, and the
-  time of day (set from the internet). Firmware-update messages exist in
-  the link protocol; K-UI does not yet expose a firmware-update workflow.
+  time of day (set from the internet). K-UI's
+  [console updater](../../docs/wifi-console-update.md) installs checked
+  firmware from the card through the existing SCI link.
 - A USB console for setting it up and checking it from a computer.
 
 The link to the Dreamcast is described in [PROTOCOL.md](PROTOCOL.md); the
@@ -51,8 +63,8 @@ before attaching powered USB: the XIAO's 5V pin is also USB VBUS.
    plugging it in, release it, then try again.
 
 `kui-wifi-esp32c5-update.bin` in the same download is the app on its own,
-for the firmware-update protocol, not initial USB flashing. K-UI's update
-workflow remains to be implemented. `SHA256SUMS` lists checksums. The
+for the console updater, not initial USB flashing. Its `.bin.sha256` sidecar
+supplies the expected digest. `SHA256SUMS` lists checksums. The
 protocol's rollback mechanism keeps an update only once the new firmware
 has started and the Dreamcast has reached it over the link; otherwise the
 board goes back to the firmware it had (see [PROTOCOL.md](PROTOCOL.md)).
@@ -102,6 +114,17 @@ driving real TCP and UDP sockets on localhost, with listening, connecting,
 closes both ways, bands, echoes, a board reset and a firmware update. K-UI's
 own tests also run this bridge core, behind K-UI's real driver and FTP
 server (`tests/wifi_model.c` at the top of the repository).
+
+The throughput regression moves 256 KiB through real localhost TCP sockets
+and the production link protocol. It compares transfer counts with 4 KiB
+and 8 KiB bridge rings, verifies every byte and the stream's CRC32, then
+repeats with damaged frames and retransmission. This checks payload per
+transfer, not radio, storage or physical SPI speed. The rings are allocated
+when a socket slot is used; 8 KiB in each direction costs 16 KiB per used
+slot, at most 128 KiB for all eight slots (64 KiB more than before).
+The band-control transaction also has driver-failure tests: unsuccessful
+disconnect/apply operations cannot publish or save the requested mode,
+and retries resume after the operation; C6 rejects 5 GHz before disconnecting.
 
 ## Licence
 
