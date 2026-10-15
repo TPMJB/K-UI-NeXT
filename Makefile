@@ -133,6 +133,7 @@ build/test-armada-ce-excerpt-entry: tests/test_armada_ce_excerpt_entry.c src/loa
 build/test-armada-ce-excerpt: tests/test_armada_ce_excerpt.c src/loader/armada_ce_excerpt.c include/kui/armada_ce_excerpt.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -fno-pie -no-pie $< -o $@
+test: build/test-vmu-lcd
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek build/music-asset-check
 test: build/test-games-selection build/test-zso build/test-lzo1x build/test-retail-zso build/test-retail-lzo build/test-game-launch-settings build/test-game-launch-settings-file build/test-game-ram-patches build/test-game-launch-report build/test-retail-relay-patches
 test: test-armada-ce-stream test-worms-ce-stream test-wince-cooked-admission test-armada-ce-excerpt
@@ -147,6 +148,7 @@ test: build/test-retail-cursor build/test-sci-stream build/test-sci-stream-ce bu
 test: build/test-boot-volume build/ext4-boot build/boot-recovery build/test-boot-ui
 test: build/test-ata build/test-storage-policy build/test-sci-sd-bus build/test-retail-storage build/test-sci-sd-storage build/test-sci-async-probe build/test-sci-async-heartbeat build/test-sci-async-runtime build/test-sci-video-quiet
 test: build/test-storage-errors build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
+	./build/test-vmu-lcd
 	./build/test-storage-errors
 	./build/test-cd-audio
 	./build/test-game-image
@@ -969,7 +971,7 @@ build/test-games-selection: tests/test_games_selection.c src/core/games_selectio
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_games_selection.c src/core/games_selection.c src/apps/games_selection.c src/core/destination.c src/core/data.c -o $@
 
-REPAIR_COPY = src/core/repair_copy.c src/core/recovery_manifest.c src/core/recovery_sector.c src/core/hash.c src/core/destination.c src/core/storage_probe.c
+REPAIR_COPY = src/core/repair_copy.c src/core/recovery_manifest.c src/core/capture_plan.c src/core/recovery_sector.c src/core/hash.c src/core/destination.c src/core/storage_probe.c
 .PHONY: test-repair-copy
 test-images: build/repair-copy-image
 test-repair-copy: build/repair-copy-image
@@ -1066,3 +1068,10 @@ build/test-retail-map-stage-native build/test-retail-map-stage-ce build/test-ret
 
 # Broader CD music admission and linked-reader regression coverage.
 test: test-games-cdda-status test-games-cdda-identity-io test-native-cdda-compat test-wince-runtime-families test-wwp-ce-stream test-retail-map-diagnostic
+
+.PHONY: test-vmu-lcd
+test-vmu-lcd: build/test-vmu-lcd
+	./build/test-vmu-lcd
+build/test-vmu-lcd: tests/test_vmu_lcd.c src/core/vmu_lcd.c src/dreamcast/vmu_lcd.c include/kui/vmu_lcd.h include/kui/version.h tests/vmu_stubs/dc/maple.h tests/vmu_stubs/dc/maple/vmu.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/vmu_stubs src/core/vmu_lcd.c src/dreamcast/vmu_lcd.c tests/test_vmu_lcd.c -o $@

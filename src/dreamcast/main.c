@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "platform.h"
 #include "kui/version.h"
+#include "kui/vmu_lcd.h"
 #include "kui/ui_rate.h"
 #include "kui/report.h"
 #include "kui/clock_platform.h"
@@ -2808,6 +2809,7 @@ int main(void) {
     draw_boot();
 #endif
     (void)kui_disc_stop();
+    kui_vmu_lcd_startup();
     /* A slow STOP must not consume the interval in which input can cancel
      * automatic startup, nor expire the chime before its worker starts. */
 #ifdef KUI_SD_RUNTIME
