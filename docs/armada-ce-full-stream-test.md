@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Armada CE full CD music stream test
 
-## K-UI 2.0 RC4 token-search progress
+## K-UI 2.0 RC5 bounded token allowance
 
 This console candidate integrates the net changes from
 `fix/armada-cdda-supply` at `be793d667cf0` into our current `eb06827d85da`
@@ -83,6 +83,29 @@ bound, stop immediately at DMA/preemption/cancellation and verify exact audio.
 The next console result must establish whether this removes the remaining
 interruptions; host checks cannot establish CE or SD timing.
 
+Recording `62660.mp4` confirms RC4 substantially improves playback: 3 recorded
+underruns versus 13 in the prior run, and maximum source-job duration falls
+from 1,152 to 550 ms. Worker visits remain around 20/s. This is not zero
+underruns, and different run lengths/scenes prevent treating those counts as
+a controlled benchmark. The final displayed underrun retains 7,168 fresh
+bytes before an 8,448-byte cursor advance over 50 ms.
+
+The 76-pump bound leaves almost no room beyond the 75 card blocks and initial
+reception setup of a worst-case job. Token slices use that same budget without
+advancing a card block. RC5 adds 16 pumps of explicit token allowance (at most
+4,096 extra token-clock bytes), for a bound of 92. Reads still contain 16
+sectors, urgent grants still contain 75 blocks, and an incomplete DMA or DATA
+handoff still ends work immediately. No extra jobs or native scheduling changes
+are introduced. A player fixture completes 16 token slices and a full job
+inside one visit; a prolonged token wait still stops at the exact bound.
+
+A new diagnostic counter records a read visit that hits this bound while
+AUDIO could continue without DMA. Bits 4–7 of sample AUX give the number of
+these budget yields since the previous sample, saturated at 15. This counts
+forced yields, not milliseconds or underruns. It makes remaining budget
+pressure visible without another page. Existing timestamps and SOURCE/READY
+remain necessary to judge supply; this allowance is not a console-success claim.
+
 Focused player checks cover clock drift, real underruns, finite/infinite
 playback, staging carry and bounded PIO draining/cancellation. Transport checks
 cover immediate PIO readiness, DMA yield, quota handoff and cancellation.
@@ -116,7 +139,8 @@ Thus initial refusals no longer leave the event page empty; periodic samples
 correctly stay zero until the worker starts. Rows contain
 code, native milliseconds, cumulative source bytes, fresh ring bytes and AUX.
 Sample AUX bit 0 means pending read, bit 1 means native playback running,
-bit 2 means urgent audio grants, bits 8–15 contain model state, and the upper
+bit 2 means urgent audio grants, bits 4–7 count budget yields (saturating at15),
+bits 8–15 contain model state, and the upper
 16 bits count worker visits since the previous sample. Divide by the MS
 interval to get visits per second; intervals need not be exactly one second. Counts include maximum worker visit and
 source-job intervals, and completed jobs. Source-job duration is approximate.

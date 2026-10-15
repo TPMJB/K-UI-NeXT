@@ -536,7 +536,7 @@ int main(void) {
         player.model.staged==RAW_BYTES && player.source_total==RAW_BYTES);++cases;
     /* A token search can yield with neither DMA nor a ready block. Its
      * next bounded slice must not wait for another native timer visit. */
-    reset(true,128u);bus.pio_ready=true;bus.token_slices=2u;
+    reset(true,128u);bus.pio_ready=true;bus.token_slices=SOURCE_TOKEN_SLACK;
     pio_before=bus.pumps;CHECK(source());
     CHECK(!player.read_active && !bus.pending && !bus.token_slices &&
         player.source_total==RAW_BYTES && bus.pumps-pio_before<=SOURCE_READY_PUMPS+1u);++cases;

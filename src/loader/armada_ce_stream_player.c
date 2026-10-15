@@ -31,10 +31,11 @@
 #define WORKER_TOKEN UINT32_C(0x5354524d)
 #define STEP_MS 20u
 #define SOURCE_STEP_MS 1u
-/* One whole unaligned batch, plus the pump that arms its first reception.
- * Token retries share this cap. Stop earlier on pending DMA, a transport
- * handoff or changed commands. */
-#define SOURCE_READY_PUMPS ((RAW_BYTES+1022u)/512u+1u)
+/* One whole unaligned batch, initial reception setup, and bounded token
+ * slack (at most4096 additional token-clock bytes). Token-only iterations
+ * must not force a nearly completed job to wait for a native timer visit. */
+#define SOURCE_TOKEN_SLACK 16u
+#define SOURCE_READY_PUMPS ((RAW_BYTES+1022u)/512u+1u+SOURCE_TOKEN_SLACK)
 #define COPY_PAGES ((KUI_ARMADA_CE_STREAM_STAGE_BYTES+4095u)/4096u+1u)
 _Static_assert(RAW_BYTES+KUI_ARMADA_CE_STREAM_STAGE_BYTES<=KUI_ARMADA_CE_STREAM_SOURCE_BYTES,
     "raw batch and carry staging must fit the already reserved source bank");
@@ -598,16 +599,19 @@ static bool source(void) {
      * bounded work with a separate mask per pump; neither may sit idle
      * waiting for a DMA wake that cannot occur. Pending DMA, quota handoff
      * or a new command ends this bounded visit. */
-    for(unsigned visit=0;visit<SOURCE_READY_PUMPS;visit++) {
+    unsigned visit=0;bool immediate=false;
+    for(;visit<SOURCE_READY_PUMPS;visit++) {
         sr=mask_begin();
         if(!mail_current()) {mask_end(sr);cancel_read();return true;}
         (void)kui_armada_ce_stream_transport_pump();
         status=kui_armada_ce_stream_transport_snapshot(player.read_bus_epoch,&progress);
-        bool immediate=status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING &&
+        immediate=status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING &&
             kui_armada_ce_stream_transport_worker_can_pump();
         mask_end(sr);
         if(!immediate) break;
     }
+    if(visit==SOURCE_READY_PUMPS && immediate)
+        kui_armada_ce_stream_trace_budget_yield();
     if(status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING || status==KUI_ARMADA_CE_STREAM_TRANSPORT_BUSY) return true;
     if(status!=KUI_ARMADA_CE_STREAM_TRANSPORT_DONE ||
        progress.bytes!=player.read.sectors*KUI_ARMADA_CE_STREAM_SECTOR_BYTES) return false;

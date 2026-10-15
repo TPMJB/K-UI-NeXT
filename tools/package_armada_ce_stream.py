@@ -428,7 +428,7 @@ def build(args):
                 "packaging_corruption_checks": checks,
                 "output_member_sizes_sha256_crc32_verified": True}}
     files["build.json"] = (json.dumps(info, indent=2) + "\n").encode()
-    files["README.md"] = f"""# K-UI 2.0 RC4 — Armada CD music
+    files["README.md"] = f"""# K-UI 2.0 RC5 — Armada CD music
 
 Menu and optional audio loader build **{stamp}**. Merge this ZIP's `KUI` folder
 onto the SCI microSD card with the console off, replacing **both**
@@ -436,19 +436,18 @@ onto the SCI microSD card with the console off, replacing **both**
 
 Select **Original Armada → Y Options → CD music On → START**. This test streams
 the requested audio tracks from your image; it is not the earlier two-second
-excerpt loop. RC4 removes another wait between bounded source operations.
-SCI can yield its256-byte token search without starting DMA or making a card
-block ready. RC3 then slept until the next native visit even though no IRQ
-could advance that token search. The worker now continues these slices within
-its existing76-pump budget, restoring interrupts between pumps and stopping
-on DMA, DATA handoff, cancellation or completion.
+excerpt loop. RC5 adds16bounded pump iterations for token-search work:
+92total, enough for a whole16-sector read plus4KiB of extra token-clock work.
+RC4's76iterations barely covered a full job, so token slices could push its
+final blocks into another native timer visit. Each pump still restores
+interrupts and stops on incomplete DMA, DATA handoff, cancellation or completion.
 
-The RC3 recording still reports13underruns and a maximum source-job interval
-of1,152ms; it does not separately count token waits. Focused tests prove bounded
-progress through that no-IRQ state, not physical-console success. Priority2,
-16-sector reads,75-block urgent grants, one-second restart and RC3's immediate
-publication of completed replacement audio remain. No shared DATA reader,
-source allocation, batch size or native scheduling changes are included.
+RC4 recorded3underruns and a550ms maximum source job, versus13and1,152ms in
+the prior run. RC5 preserves16-sector reads,75-block urgent grants, priority2,
+one-second restart and immediate completed-read publication. It also records
+budget yields in sample AUX bits4–7 (count since prior sample, saturating at15).
+This exposes whether the bound is still reached; console playback remains the
+required confirmation.
 
 Use the same in-game scene where the earlier loop was audible. No main-menu
 wait or gameplay video is requested. Return with **A+B+X+Y+Start** after music
@@ -530,7 +529,7 @@ def main():
     parser.add_argument("--elf", type=Path, default=ROOT / "build/kui-runtime.elf")
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     parser.add_argument("--evidence", action="append", default=[], metavar="NAME=PATH")
-    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-2.0-RC4-Armada-Audio.zip")
+    parser.add_argument("--output", type=Path, default=DELIVERABLES / "K-UI-2.0-RC5-Armada-Audio.zip")
     args = parser.parse_args()
     try:
         build(args)
