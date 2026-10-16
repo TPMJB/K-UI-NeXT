@@ -156,7 +156,10 @@ def write_release_guides(dist, candidate=False):
         (dist / target).write_text(guide(source), encoding="utf-8")
     if version == "2.0":
         (dist / "RC-TEST-PLAN.md").write_text(
-            guide("release-v2.0-rc14-test-plan.md"), encoding="utf-8")
+            guide("release-v2.0-rc15-test-plan.md"), encoding="utf-8")
+        for source, target in (("release-v2.0-accepted-fix-audit.md", "ACCEPTED-FIX-AUDIT.md"),
+                               ("release-v2.0-cdda-acceptance-audit.md", "CDDA-ACCEPTANCE-AUDIT.md")):
+            (dist / target).write_text(guide(source), encoding="utf-8")
     if (not candidate or experimental) and not release_is_rc():
         (dist / "ANNOUNCEMENTS.md").write_text(
             guide(f"release-v{version}-announcements.md"), encoding="utf-8")
@@ -320,6 +323,22 @@ def validate_ordinary_ce(directory, data):
         raise ValueError("A specialized audio payload occupied the ordinary CE fallback slot")
 
 
+def validate_native_release_baseline(directory):
+    """Refuse a release that silently disables the accepted native fixes."""
+    fields = dict(token.split("=", 1) for token in
+                  (directory / "layout-config").read_text().split())
+    required = {"LOW": "1", "TRACE": "0", "SONIC": "0",
+                "SCI_RESUME_FIX": "1", "NATIVE_DISC_CHECK": "1",
+                "NATIVE_DRIVE_STATE": "1"}
+    for name, value in required.items():
+        if fields.get(name) != value:
+            raise ValueError("Native release lost accepted baseline: " + name + "=" + value)
+    if any(fields.get(name, "0") != "0" for name in
+           ("RETURN_TRACE", "SKIES_READ_DIAGNOSTIC")):
+        raise ValueError("Native release contains an owner-only return diagnostic")
+    return {"accepted_reference_build": "72e3bf049b26", "flags": required}
+
+
 def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, candidate=False):
     """Assemble the install tree without benchmarks, fixtures or user preferences."""
     release = record["release"]
@@ -359,7 +378,8 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
         shutil.copyfile(ROOT / f"resources/branding/release-v{release['version']}-banner.jpg",
                         bundle / "release-banner.jpg")
     if guide_version(release) == "2.0":
-        shutil.copyfile(dist / "RC-TEST-PLAN.md", bundle / "RC-TEST-PLAN.md")
+        for name in ("RC-TEST-PLAN.md", "ACCEPTED-FIX-AUDIT.md", "CDDA-ACCEPTANCE-AUDIT.md"):
+            shutil.copyfile(dist / name, bundle / name)
         shutil.copyfile(ROOT / "resources/branding/release-v2.0-banner.jpg",
                         bundle / "release-banner.jpg")
     if guide_version(release) in ("1.8.5", "2.0"):
@@ -523,6 +543,8 @@ def main():
     retail_payload, retail_memory = flatten_elf(retail.read_bytes())
     retail_package = envelope(retail_payload, retail_memory, commit[:12])
     retail_info = inspect_retail(retail_package, formats=release["version"].endswith("-formats-test"))
+    native_baseline = (validate_native_release_baseline(retail.parent)
+                       if guide_version(release) == "2.0" else None)
     (games / "retail-boot.kui").write_bytes(retail_package)
     zso_payload, zso_memory = flatten_elf(retail_zso.read_bytes())
     zso_package = envelope(zso_payload, zso_memory, commit[:12])
@@ -650,6 +672,7 @@ def main():
               "runtime": runtime_info, "loader_probe": probe_info,
               "image_probe": image_probe_info,
               "retail_boot": retail_info, "zso_boot": zso_info, "lzo_boot": lzo_info, "ce_probe": ce_info,
+              "native_release_baseline": native_baseline,
               "wince_cdda_profiles": wince_profiles,
               "native_cdda_profiles": native_profiles,
               "hardware_tested": False,
@@ -724,7 +747,8 @@ def main():
         "Update runtime.kui and the complete Games folder from this same package.\n"
         "That folder includes separate LZ4/LZO1X ZSO modules; see GAMES-ZSO.md.\n"
         "KUI/apps/games/ce-probe.kui is the Windows CE boot test; see WINDOWS-CE-PLACEMENT-TEST.md.\n"
-        "DOA2 has confirmed gameplay; Evolution 2 boots with severe slowdown.\n"
+        "RC15 restores the accepted Skies/Time Stalkers/Evolution native settings;\n"
+        "retest those titles and Evolution 1/2 opening FMVs using RC-TEST-PLAN.md.\n"
         "Other titles and VMU save/load compatibility remain under community testing.\n"
         "Games reads the selected storage device; games may write VMU saves. Power cycle to return.\n"
         "Keep existing preferences and dumps. No repeated read probe or benchmark is requested.\n"

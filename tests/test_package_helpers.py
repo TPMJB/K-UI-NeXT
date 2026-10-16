@@ -24,6 +24,28 @@ class PackagedPcHelpers(unittest.TestCase):
         metadata.start()
         self.addCleanup(metadata.stop)
 
+    def test_native_release_requires_the_hardware_accepted_configuration(self):
+        directory = self.dist / "retail"
+        directory.mkdir()
+        accepted = ("LOW=1 TRACE=0 SONIC=0 BUILD=0123456789ab SCI_RESUME_FIX=1 "
+                    "NATIVE_DISC_CHECK=1 NATIVE_DRIVE_STATE=1")
+        config = directory / "layout-config"
+        config.write_text(accepted)
+        result = package.validate_native_release_baseline(directory)
+        self.assertEqual(result["accepted_reference_build"], "72e3bf049b26")
+        for flag in ("SCI_RESUME_FIX", "NATIVE_DISC_CHECK", "NATIVE_DRIVE_STATE"):
+            with self.subTest(disabled=flag):
+                config.write_text(accepted.replace(flag + "=1", flag + "=0"))
+                with self.assertRaisesRegex(ValueError, "lost accepted baseline"):
+                    package.validate_native_release_baseline(directory)
+            with self.subTest(missing=flag):
+                config.write_text(accepted.replace(flag + "=1", ""))
+                with self.assertRaisesRegex(ValueError, "lost accepted baseline"):
+                    package.validate_native_release_baseline(directory)
+        config.write_text(accepted + " RETURN_TRACE=3 SKIES_READ_DIAGNOSTIC=1")
+        with self.assertRaisesRegex(ValueError, "owner-only return diagnostic"):
+            package.validate_native_release_baseline(directory)
+
     def test_diagnostic_install_and_update_keep_exact_helpers_and_local_guides(self):
         for tree in (self.dist, self.dist / "release", self.dist / "sd-update"):
             tree.mkdir(exist_ok=True)

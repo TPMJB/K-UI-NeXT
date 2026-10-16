@@ -138,3 +138,174 @@ bool kui_game_launch_settings_decode(struct kui_game_launch_table *table,uint64_
     }
     *sequence=get64(p+16);return true;
 }
+
+/* The fixed-schema JSON primitives below are retained from K-UI's own
+ * saved-launch implementation, not an external loader. No recursive parser. */
+struct legacy_parser {const unsigned char *at,*end;};
+static void whitespace(struct legacy_parser *p) {
+    while(p->at<p->end && (*p->at==' ' || *p->at=='\t' || *p->at=='\r' || *p->at=='\n')) ++p->at;
+}
+static bool take(struct legacy_parser *p,unsigned char token) {
+    whitespace(p);
+    if(p->at==p->end || *p->at!=token) return false;
+    ++p->at;return true;
+}
+static bool literal(struct legacy_parser *p,const char *word) {
+    whitespace(p);size_t size=strlen(word);
+    if((size_t)(p->end-p->at)<size || memcmp(p->at,word,size)) return false;
+    p->at+=size;return true;
+}
+static int hex(unsigned char c) {
+    if(c>='0' && c<='9') return c-'0';
+    if(c>='a' && c<='f') return c-'a'+10;
+    if(c>='A' && c<='F') return c-'A'+10;
+    return -1;
+}
+static bool unicode_quad(struct legacy_parser *p,uint32_t *value) {
+    if((size_t)(p->end-p->at)<4) return false;
+    uint32_t code=0;
+    for(unsigned i=0;i<4;i++) {
+        int digit=hex(*p->at++);if(digit<0) return false;
+        code=code*16u+(unsigned)digit;
+    }
+    *value=code;return true;
+}
+static bool append_code(char *out,size_t cap,size_t *used,uint32_t code) {
+    unsigned char bytes[4];size_t n;
+    if(!code || code>0x10ffff || (code>=0xd800 && code<=0xdfff)) return false;
+    if(code<0x80) {bytes[0]=(unsigned char)code;n=1;}
+    else if(code<0x800) {bytes[0]=(unsigned char)(0xc0|(code>>6));bytes[1]=(unsigned char)(0x80|(code&63));n=2;}
+    else if(code<0x10000) {
+        bytes[0]=(unsigned char)(0xe0|(code>>12));bytes[1]=(unsigned char)(0x80|((code>>6)&63));
+        bytes[2]=(unsigned char)(0x80|(code&63));n=3;
+    } else {
+        bytes[0]=(unsigned char)(0xf0|(code>>18));bytes[1]=(unsigned char)(0x80|((code>>12)&63));
+        bytes[2]=(unsigned char)(0x80|((code>>6)&63));bytes[3]=(unsigned char)(0x80|(code&63));n=4;
+    }
+    if(*used+n>=cap) return false;
+    memcpy(out+*used,bytes,n);*used+=n;return true;
+}
+static bool string(struct legacy_parser *p,char *out,size_t cap) {
+    if(!take(p,'"')) return false;
+    size_t used=0;
+    while(p->at<p->end) {
+        unsigned char c=*p->at++;
+        if(c=='"') {out[used]=0;return true;}
+        if(c<0x20) return false;
+        if(c=='\\') {
+            if(p->at==p->end) return false;
+            c=*p->at++;
+            if(c=='u') {
+                uint32_t code,low;
+                if(!unicode_quad(p,&code)) return false;
+                if(code>=0xd800 && code<=0xdbff) {
+                    if((size_t)(p->end-p->at)<2 || p->at[0]!='\\' || p->at[1]!='u') return false;
+                    p->at+=2;
+                    if(!unicode_quad(p,&low) || low<0xdc00 || low>0xdfff) return false;
+                    code=0x10000u+((code-0xd800u)<<10)+(low-0xdc00u);
+                }
+                if(!append_code(out,cap,&used,code)) return false;
+                continue;
+            }
+            switch(c) {
+            case '"': case '\\': case '/': break;
+            case 'b': c='\b';break;
+            case 'f': c='\f';break;
+            case 'n': c='\n';break;
+            case 'r': c='\r';break;
+            case 't': c='\t';break;
+            default: return false;
+            }
+        } else if(c>=0x80) {
+            uint32_t code,min;unsigned extra;
+            if(c>=0xc2 && c<=0xdf) {code=c&31u;min=0x80;extra=1;}
+            else if(c>=0xe0 && c<=0xef) {code=c&15u;min=0x800;extra=2;}
+            else if(c>=0xf0 && c<=0xf4) {code=c&7u;min=0x10000;extra=3;}
+            else return false;
+            if((size_t)(p->end-p->at)<extra) return false;
+            while(extra--) {
+                unsigned char continuation=*p->at++;
+                if((continuation&0xc0u)!=0x80u) return false;
+                code=(code<<6)|(continuation&63u);
+            }
+            if(code<min || !append_code(out,cap,&used,code)) return false;
+            continue;
+        }
+        if(used+1>=cap) return false;
+        out[used++]=(char)c;
+    }
+    return false;
+}
+
+static bool legacy_choice(struct legacy_parser *p,struct kui_game_launch_settings *out,bool *unsupported) {
+    if(!take(p,'{')) return false;
+    unsigned fields=0;bool release=false;
+    struct kui_game_launch_settings choice;kui_game_launch_settings_default(&choice);
+    do {
+        char key[16];if(!string(p,key,sizeof(key)) || !take(p,':')) return false;
+        if(!strcmp(key,"reader")) {
+            char reader[16];if((fields&1u) || !string(p,reader,sizeof(reader))) return false;
+            if(!strcmp(reader,"standard")) choice.reader=KUI_GAME_READER_STANDARD;
+            else if(!strcmp(reader,"x")) choice.reader=KUI_GAME_READER_BACKGROUND;
+            else if(!strcmp(reader,"y")) choice.reader=KUI_GAME_READER_EAGER;
+            else return false;
+            fields|=1u;
+        } else if(!strcmp(key,"cdda") || !strcmp(key,"release_loader")) {
+            unsigned flag=!strcmp(key,"cdda")?2u:4u;bool value;
+            if(fields&flag) return false;
+            if(literal(p,"true")) value=true;
+            else if(literal(p,"false")) value=false;
+            else return false;
+            if(flag==2u) choice.cdda=value;else release=value;
+            fields|=flag;
+        } else return false;
+        if(take(p,'}')) {
+            if((fields&3u)!=3u) return false;
+            *out=choice;*unsupported=release;return true;
+        }
+    } while(take(p,','));
+    return false;
+}
+static bool legacy_profiles(struct legacy_parser *p,struct kui_game_launch_table *table,bool excluded[KUI_GAME_LAUNCH_SETTINGS_ENTRIES]) {
+    if(!take(p,'{')) return false;
+    if(take(p,'}')) return true;
+    do {
+        if(table->count==KUI_GAME_LAUNCH_SETTINGS_ENTRIES) return false;
+        char path[KUI_GAME_LAUNCH_SETTINGS_PATH_CAP],key[KUI_GAME_LAUNCH_SETTINGS_PATH_CAP];
+        if(!string(p,path,sizeof(path)) || !kui_game_launch_settings_normalize(key,path) || !take(p,':')) return false;
+        for(unsigned i=0;i<table->count;i++) if(!strcmp(table->entries[i].path,key)) return false;
+        struct kui_game_launch_entry *entry=&table->entries[table->count];
+        if(!legacy_choice(p,&entry->settings,&excluded[table->count])) return false;
+        memcpy(entry->path,key,strlen(key)+1u);++table->count;
+        if(take(p,'}')) return true;
+    } while(take(p,','));
+    return false;
+}
+bool kui_game_launch_settings_legacy_decode(struct kui_game_launch_table *table,unsigned *skipped,const void *json,size_t size) {
+    if(!table || !skipped || !json || !size || size>KUI_GAME_LAUNCH_LEGACY_JSON_MAX) return false;
+    struct legacy_parser p={(const unsigned char *)json,(const unsigned char *)json+size};
+    bool excluded[KUI_GAME_LAUNCH_SETTINGS_ENTRIES]={false};unsigned fields=0;
+    kui_game_launch_table_clear(table);
+    if(!take(&p,'{')) return false;
+    do {
+        char key[16];if(!string(&p,key,sizeof(key)) || !take(&p,':')) return false;
+        if(!strcmp(key,"version")) {
+            if((fields&1u) || !literal(&p,"1")) return false;
+            fields|=1u;
+        } else if(!strcmp(key,"profiles")) {
+            if((fields&2u) || !legacy_profiles(&p,table,excluded)) return false;
+            fields|=2u;
+        } else return false;
+        if(take(&p,'}')) {
+            whitespace(&p);if(fields!=3u || p.at!=p.end) return false;
+            unsigned kept=0,ignored=0;
+            for(unsigned i=0;i<table->count;i++) {
+                if(excluded[i]) {++ignored;continue;}
+                if(kept!=i) table->entries[kept]=table->entries[i];
+                ++kept;
+            }
+            table->count=kept;*skipped=ignored;return true;
+        }
+    } while(take(&p,','));
+    return false;
+}

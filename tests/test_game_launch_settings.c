@@ -184,9 +184,58 @@ static void maximum_record(void) {
     assert(size==123 && !memcmp(record,damaged,sizeof(record)));
     puts("PASS launch record: 128 maximum-length image paths with two patches fit the bounded v3 record");
 }
+static void legacy_json(void) {
+    const char *json="{\"profiles\":{\"/Games/A.gdi\":{\"reader\":\"standard\",\"cdda\":false},"
+        "\"/Games/B.gdi\":{\"reader\":\"x\",\"cdda\":true,\"release_loader\":false},"
+        "\"/G\\u0061mes/C.gdi\":{\"reader\":\"y\",\"cdda\":false},"
+        "\"/Games/Old.gdi\":{\"reader\":\"y\",\"cdda\":true,\"release_loader\":true}},\"version\":1}";
+    unsigned skipped=99;
+    assert(kui_game_launch_settings_legacy_decode(&decoded,&skipped,json,strlen(json)));
+    assert(decoded.count==3 && skipped==1);
+    for(unsigned i=0;i<3;i++) {
+        struct kui_game_launch_settings choice={.reader=i,.cdda=i==1};same(decoded.entries[i].settings,choice);
+    }
+    assert(!strcmp(decoded.entries[2].path,"/games/c.gdi"));
+    assert(!kui_game_launch_settings_legacy_decode(&decoded,&skipped,json,KUI_GAME_LAUNCH_LEGACY_JSON_MAX+1u));
+    for(size_t n=0;n<strlen(json);n++) {
+        skipped=99;assert(!kui_game_launch_settings_legacy_decode(&decoded,&skipped,json,n));assert(skipped==99);
+    }
+    const char *bad[]={
+        "{}", "{\"version\":2,\"profiles\":{}}", "{\"version\":1,\"version\":1,\"profiles\":{}}",
+        "{\"version\":1,\"profiles\":{}}x", "{\"version\":1,\"profiles\":{},\"extra\":0}",
+        "{\"version\":1,\"profiles\":{\"/a\":{\"reader\":\"y\"}}}",
+        "{\"version\":1,\"profiles\":{\"/a\":{\"reader\":\"z\",\"cdda\":false}}}",
+        "{\"version\":1,\"profiles\":{\"/a\":{\"reader\":\"x\",\"cdda\":0}}}",
+        "{\"version\":1,\"profiles\":{\"/a\":{\"reader\":\"x\",\"cdda\":true,\"cdda\":false}}}",
+        "{\"version\":1,\"profiles\":{\"/a\":{\"reader\":\"x\",\"cdda\":false,\"release_loader\":1}}}",
+        "{\"version\":1,\"profiles\":{\"/a\":{\"reader\":\"x\",\"cdda\":false,\"extra\":true}}}",
+        "{\"version\":1,\"profiles\":{\"/../a\":{\"reader\":\"x\",\"cdda\":false}}}",
+        "{\"version\":1,\"profiles\":{\"/A\":{\"reader\":\"x\",\"cdda\":false},\"/a\":{\"reader\":\"y\",\"cdda\":false}}}",
+        "{\"version\":1,\"profiles\":{\"/a\\u0000\":{\"reader\":\"x\",\"cdda\":false}}}",
+        "{\"version\":1,\"profiles\":{\"/a\\ud800\":{\"reader\":\"x\",\"cdda\":false}}}",
+        "{\"version\":1,\"profiles\":{\"/a\xc0\x80\":{\"reader\":\"x\",\"cdda\":false}}}"
+    };
+    for(unsigned i=0;i<sizeof(bad)/sizeof(bad[0]);i++) {
+        skipped=99;assert(!kui_game_launch_settings_legacy_decode(&decoded,&skipped,bad[i],strlen(bad[i])));assert(skipped==99);
+    }
+    const char *unicode="{\"version\":1,\"profiles\":{\"/G\\u00d6\\ud83d\\ude00.gdi\":{\"reader\":\"y\",\"cdda\":true}}}";
+    assert(kui_game_launch_settings_legacy_decode(&decoded,&skipped,unicode,strlen(unicode)));
+    assert(!strcmp(decoded.entries[0].path,"/g\xc3\x96\xf0\x9f\x98\x80.gdi"));
+    static char large[16384];size_t at=(size_t)snprintf(large,sizeof(large),"{\"version\":1,\"profiles\":{");
+    for(unsigned i=0;i<=KUI_GAME_LAUNCH_SETTINGS_ENTRIES;i++) {
+        at+=(size_t)snprintf(large+at,sizeof(large)-at,"%s\"/g/%u.gdi\":{\"reader\":\"standard\",\"cdda\":false}",i?",":"",i);
+        if(i==KUI_GAME_LAUNCH_SETTINGS_ENTRIES-1u) {
+            memcpy(large+at,"}}",3);
+            assert(kui_game_launch_settings_legacy_decode(&decoded,&skipped,large,at+2u));
+        }
+    }
+    memcpy(large+at,"}}",3);
+    assert(!kui_game_launch_settings_legacy_decode(&decoded,&skipped,large,at+2u));
+    puts("PASS legacy JSON: independent reader/CDDA mappings, release comparison skip, UTF-8/escapes, strict schema, truncation, aliases and capacity");
+}
 int main(void) {
     struct kui_game_launch_settings defaults;memset(&defaults,0xa5,sizeof(defaults));kui_game_launch_settings_default(&defaults);
     assert(defaults.reader==KUI_GAME_READER_STANDARD && !defaults.cdda && defaults.encoding==KUI_GAME_ENCODING_AUTO);
     for(unsigned i=0;i<2;i++) assert(!defaults.patches.entries[i].enabled && !defaults.patches.entries[i].address && !defaults.patches.entries[i].value);
-    paths_and_capacity();wire_contract();maximum_record();return 0;
+    paths_and_capacity();wire_contract();maximum_record();legacy_json();return 0;
 }

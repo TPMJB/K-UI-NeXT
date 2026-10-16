@@ -24,6 +24,9 @@ struct kui_game_launch_settings {
 #define KUI_GAME_LAUNCH_SETTINGS_RECORD_MAX (36u + KUI_GAME_LAUNCH_SETTINGS_ENTRIES * (24u + KUI_GAME_LAUNCH_SETTINGS_PATH_CAP - 1u))
 #define KUI_GAME_LAUNCH_SETTINGS_PATH_A "0:/KUI/apps/games/launch-settings-a.bin"
 #define KUI_GAME_LAUNCH_SETTINGS_PATH_B "0:/KUI/apps/games/launch-settings-b.bin"
+#define KUI_GAME_LAUNCH_LEGACY_PATH "0:/KUI/game-launch.json"
+#define KUI_GAME_LAUNCH_LEGACY_BACKUP_PATH "0:/KUI/game-launch.json.bak"
+#define KUI_GAME_LAUNCH_LEGACY_JSON_MAX (KUI_GAME_LAUNCH_SETTINGS_ENTRIES * (6u * KUI_GAME_LAUNCH_SETTINGS_PATH_CAP + 96u) + 64u)
 struct kui_game_launch_entry {
     char path[KUI_GAME_LAUNCH_SETTINGS_PATH_CAP];
     struct kui_game_launch_settings settings;
@@ -63,9 +66,19 @@ bool kui_game_launch_settings_encode(void *record,size_t capacity,size_t *size,
                                      const struct kui_game_launch_table *table,uint64_t sequence);
 bool kui_game_launch_settings_decode(struct kui_game_launch_table *table,uint64_t *sequence,
                                      const void *record,size_t size);
+/* Strict independent K-UI JSON v1 import. Scratch table is unspecified on
+ * failure and must never be used. Normalized duplicate keys/capacity overflow
+ * fail; release_loader=true entries are counted and skipped, since the old
+ * comparison binary has no supported equivalent. Sources remain read-only. */
+bool kui_game_launch_settings_legacy_decode(struct kui_game_launch_table *table,unsigned *skipped,
+                                            const void *json,size_t size);
 /* Caller owns the mounted volume and excludes file workers. These functions
  * do not mount, lock, launch, or decide whether CE/CDDA/reader options are
- * supported. Missing/invalid slots use defaults; real I/O errors return false.
+ * supported. Only when both binary paths are absent, load/save may import
+ * strict legacy JSON (or its .bak recovery) into a new verified slot. JSON is
+ * never altered; unsupported Release-loader entries are skipped with a log.
+ * Invalid existing binary slots never resurrect stale JSON. Missing/invalid
+ * slots otherwise use defaults; real I/O or failed migration returns false.
  * Save rereads both slots, updates only this key, writes the older/invalid slot,
  * syncs/closes and verifies every byte by reread. Current valid slot is never
  * opened for writing. Transient bounded heap workspace avoids worker-stack

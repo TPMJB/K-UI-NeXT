@@ -45,7 +45,9 @@ CD. No reformat, reripping or 2048 conversion is required. DreamShell-based
 K-UI 1.0 requires an independent K-UI bootstrap CD.
 
 Native Sonic Adventure, Grandia II and Skies of Arcadia have scoped console
-confirmation from 1.8.5; Time Stalkers and some FMV stalls remain unresolved.
+confirmation from 1.8.5. Later accepted native fixes for Skies, Time Stalkers
+and Evolution 1/2 were omitted from RC14 and are restored in RC15; see the
+[accepted-fix audit](docs/release-v2.0-accepted-fix-audit.md).
 Toy Commander FMV stalls are not fixed by the WinCE work. Native SCI Standard
 has experimental direct LZ4/LZO1X ZSO readers with explicit codec selection;
 console acceptance is pending. CSO and CHD require PC import.
@@ -267,8 +269,9 @@ Skies of Arcadia working on the tested layout. Power Stone 1/2 worked after
 earlier GD command fixes. These are scoped console results, not full
 playthroughs or an all-games claim.
 
-Time Stalkers still returns to K-UI, and some titles stall/skip FMVs in both
-Original and 2048 mode. Optional WinCE CD music requires one of the admitted
+RC15 restores the native configuration accepted on Skies, Time Stalkers and
+Evolution 1/2; these title paths need verification in the complete new package.
+Toy Commander and other documented FMV limitations remain. Optional WinCE CD music requires one of the admitted
 kernel/sound contracts above; universal CDDA, Mode 2 Form 2 and subchannel
 emulation are not provided. See the [2.0 preparation notes](docs/release-v2.0-notes.md),
 [native placement evidence](docs/evidence/native-low-resident-2026-10-06.md),
