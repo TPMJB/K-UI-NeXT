@@ -2,7 +2,7 @@ name: Diagnostic build
 
 on:
   push:
-    branches: [main, 'milestone/**']
+    branches: [main, 'milestone/**', '!milestone/vmu-*']
   pull_request:
   workflow_dispatch:
     inputs:

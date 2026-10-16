@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Standalone owned KOS program. Never changes ordinary runtime/game loaders.
+ifneq ($(filter host-test,$(MAKECMDGOALS)),host-test)
+ifndef KOS_BASE
+$(error Source .deps/kos/environ.sh before building)
+endif
+endif
+BUILD ?= build/vmu-harness
+BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
+TARGET := $(BUILD)/vmu-harness.elf
+SOURCES := src/experimental/vmu_harness/main.c \
+    src/core/vmu_emulation.c src/loader/vmu_maple_dma.c src/core/vmu_store.c \
+    src/core/retail_image.c src/core/data.c src/core/diskio.c src/core/clock.c src/core/storage_probe.c \
+    src/core/storage_policy.c src/core/ata.c src/dreamcast/ata_bus.c \
+    src/dreamcast/sd.c src/dreamcast/sci_sd_storage.c src/loader/sd_reader.c \
+    src/loader/sci_sd_bus.c src/dreamcast/shell_font.c
+OBJECTS := $(patsubst %.c,$(BUILD)/%.o,$(SOURCES)) $(BUILD)/ff.o $(BUILD)/ffunicode.o
+.DEFAULT_GOAL := all
+.PHONY: all package
+all: $(TARGET)
+package: $(BUILD)/KUI/tools.kui
+ifneq ($(filter host-test,$(MAKECMDGOALS)),host-test)
+include $(KOS_BASE)/Makefile.rules
+endif
+CPPFLAGS += -Iinclude -Isrc/dreamcast -Isrc/loader -I.deps/fatfs/source \
+    -DKUI_ON_CONSOLE=1 -DKUI_RETAIL_FAST_IO=1 -DKUI_BUILD_ID='"$(BUILD_ID)"'
+CFLAGS += -std=c11 -Os -Wall -Wextra -Werror -ffunction-sections -fdata-sections -fstack-usage
+$(BUILD)/%.o: %.c
+	@mkdir -p $(@D)
+	kos-cc $(CFLAGS) $(CPPFLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/ff.o: .deps/fatfs/source/ff.c .deps/fatfs/source/ffconf.h
+	@mkdir -p $(@D)
+	kos-cc $(filter-out -Werror,$(CFLAGS)) $(CPPFLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/ffunicode.o: .deps/fatfs/source/ffunicode.c .deps/fatfs/source/ffconf.h
+	@mkdir -p $(@D)
+	kos-cc $(filter-out -Werror,$(CFLAGS)) $(CPPFLAGS) -MMD -MP -c $< -o $@
+$(TARGET): $(OBJECTS)
+	kos-cc -o $@ $(OBJECTS) -Wl,--gc-sections -Wl,-Map,$(BUILD)/vmu-harness.map
+	python3 tools/record_build.py $@
+-include $(OBJECTS:.o=.d)
+
+$(BUILD)/KUI/tools.kui: $(TARGET) tools/runtime_package.py
+	@mkdir -p $(@D)
+	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
+	python3 tools/runtime_package.py verify $@
+
+# Host sequence uses the exact console main.c through real FatFs, replacing
+# display/controller/physical media only. Supply existing disposable FAT/exFAT
+# image with VMU_HARNESS_IMAGE; no test ever formats a user's card.
+HOST_CC ?= cc
+HOST_SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie
+HOST_SOURCES := src/experimental/vmu_harness/host.c src/core/vmu_emulation.c \
+    src/loader/vmu_maple_dma.c src/core/vmu_store.c src/core/retail_image.c src/core/data.c \
+    src/core/diskio.c src/core/clock.c src/core/storage_probe.c \
+    .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
+.PHONY: host-test
+host-test: $(BUILD)/host-sequence
+	$(if $(VMU_HARNESS_IMAGE),$(BUILD)/host-sequence $(VMU_HARNESS_IMAGE) $(or $(VMU_HARNESS_MODE),create),@echo "Built host sequence; supply VMU_HARNESS_IMAGE to run")
+$(BUILD)/host-sequence: $(HOST_SOURCES) src/experimental/vmu_harness/main.c \
+    src/experimental/vmu_harness/host-stubs/kos.h \
+    src/experimental/vmu_harness/host-stubs/dc/maple/controller.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
+        -Isrc/experimental/vmu_harness/host-stubs -Iinclude -Isrc/dreamcast \
+        -I.deps/fatfs/source $(HOST_SOURCES) -o $@

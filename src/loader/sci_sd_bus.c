@@ -7,6 +7,10 @@
  */
 #include "sci_sd_bus.h"
 
+#if KUI_VMU_EXPERIMENTAL && (KUI_RETAIL_ASYNC || KUI_RETAIL_CE || KUI_RETAIL_TOY_PILOT)
+#error "Experimental VMU SCI writes support only the synchronous native reader"
+#endif
+
 #if KUI_SCI_DMA_REUSE_TDRE && (!KUI_SCI_DMA_PACED || !KUI_RETAIL_SCI_DIAGNOSTIC || \
     (!KUI_RETAIL_TOY_PILOT && !defined(KUI_SCI_SD_TEST)))
 #error "TDRE sample reuse is restricted to the separate paced Toy pilot"
@@ -540,7 +544,7 @@ static int dma_block(const uint8_t *tx, uint8_t *rx, uint16_t *crc_out) {
 static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
                            size_t count, bool slow, uint16_t *crc_out) {
     (void)ctx;
-#ifdef KUI_RETAIL_TRANSPORT
+#if defined(KUI_RETAIL_TRANSPORT) && !KUI_VMU_EXPERIMENTAL
     /* Resident block users are read-only. Keep runtime write support out of
      * the fixed low-memory image, including the programmed fallback. */
     if(tx) return false;
