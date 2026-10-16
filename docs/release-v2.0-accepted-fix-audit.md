@@ -99,3 +99,19 @@ Background; Time Stalkers into gameplay; Evolution and Evolution II opening
 FMVs. Then repeat the already-passing Sonic/Grandia/Power Stone baseline and
 Worms music/input checks. The [complete plan](release-v2.0-rc15-test-plan.md)
 covers the remaining features. Final 2.0 remains blocked on console acceptance.
+
+## Boundaries and final publication gates
+
+The restored layout/configuration guard covers ordinary raw/2048 retail
+readers. Separate detached ZSO/LZO readers retain their existing settings and
+remain without a console-accepted compressed-loader baseline. They require
+their separate tests; the native restoration is not a compressed-game pass.
+
+Final 2.0 publication also remains unfinished: publisher/workflow version gates
+still admit only 1.7/1.8.5, the final announcements file is absent, and final
+asset validation must expand beyond the legacy payload set to cover the full
+2.0 codec/CDDA inventory and accepted native flags. RC rejection, exact-source
+CI identity and checksum checks remain. These are final-promotion tasks, not
+lost console fixes or requirements to install this candidate. Complete and
+test them before final packaging/publication; do not enable 2.0 by an allowlist
+change alone.
