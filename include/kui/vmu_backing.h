@@ -71,7 +71,7 @@ struct kui_vmu_backing {
     struct kui_vmu_store_extent allowed[KUI_VMU_STORE_MAX_EXTENTS*2u];
     size_t allowed_count;
     int last_result,last_sd_result;
-    bool initialized,allow_writes,poisoned,inflight;
+    bool initialized,allow_writes,poisoned,inflight,reserved,callback_active;
 };
 /* No I/O. Validates exact 128 KiB image + two-sector journal, card/partition
  * bounds, all pairwise overlaps, and protected ranges before copying maps.
@@ -83,6 +83,21 @@ struct kui_vmu_store_io kui_vmu_backing_io(struct kui_vmu_backing *);
 int kui_vmu_backing_read(void *,uint64_t absolute_lba,void *sector);
 int kui_vmu_backing_write(void *,uint64_t absolute_lba,const void *sector);
 int kui_vmu_backing_sync(void *);
+/* Optional synchronous transaction ownership. Reserve BEFORE entering the
+ * journal store, so initial BUSY can become a Maple retry without touching the
+ * store. Successful reserve keeps the shared lock, IRQ mask and SCI lease
+ * until unreserve; all sector callbacks reuse that ownership. Each callback
+ * still validates CID/card state/bounds. No unrelated reader may run during
+ * this interval. Do not hot-swap media or call from another execution context.
+ *
+ * Always unreserve after success OR failure. It releases exactly once, never
+ * clears poison, and checks final health. A game bridge may acknowledge a
+ * save only after BOTH store_write and unreserve succeed. A nested reserve,
+ * callback, or unreserve during an active callback returns BUSY without I/O.
+ * Holding IRQs across SD programming can stall the game for the bounded card
+ * timeout; this API is an experimental building block, not a latency claim. */
+int kui_vmu_backing_reserve(struct kui_vmu_backing *);
+int kui_vmu_backing_unreserve(struct kui_vmu_backing *);
 /* Writes require BOTH KUI_VMU_EXPERIMENTAL=1 at compile time and allow_writes
  * at init. Default builds cannot issue CMD24/CMD25 through this backend.
  * sync uses the existing CMD13/busy completion implementation. A successful

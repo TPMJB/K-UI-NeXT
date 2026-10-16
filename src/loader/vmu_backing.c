@@ -137,6 +137,19 @@ static bool authorized(const struct kui_vmu_backing *b,uint64_t lba) {
     }
     return false;
 }
+static int check_identity(struct kui_vmu_backing *b) {
+    struct kui_loader_sd *card=b->bus.card;
+    if(!card->ready || card->slow || card->blocks!=b->identity.sectors ||
+       card->high_capacity!=b->identity.high_capacity)
+        return poison(b,KUI_VMU_BACKING_IDENTITY);
+    if(b->bus.healthy && !b->bus.healthy(b->bus.context)) return poison(b,KUI_VMU_BACKING_IO);
+    struct kui_vmu_sd_identity actual;
+    int result=kui_vmu_sd_identity_read(card,&actual);
+    if(result!=KUI_VMU_BACKING_OK) return poison(b,result);
+    for(unsigned i=0;i<16;i++) if(actual.cid[i]!=b->identity.cid[i])
+        return poison(b,KUI_VMU_BACKING_IDENTITY);
+    return KUI_VMU_BACKING_OK;
+}
 /* All exits after enter unwind through finish; failed acquisition never
  * releases somebody else's lease. No operation retries an uncertain command. */
 static int begin(struct kui_vmu_backing *b,bool *entered,bool *acquired) {
@@ -165,13 +178,7 @@ static int begin(struct kui_vmu_backing *b,bool *entered,bool *acquired) {
     b->last_sd_result=b->bus.acquire(b->bus.context);
     if(b->last_sd_result!=KUI_LOADER_SD_OK) return b->last_result=KUI_VMU_BACKING_BUSY;
     *acquired=true;
-    if(b->bus.healthy && !b->bus.healthy(b->bus.context)) return poison(b,KUI_VMU_BACKING_IO);
-    struct kui_vmu_sd_identity actual;
-    int result=kui_vmu_sd_identity_read(card,&actual);
-    if(result!=KUI_VMU_BACKING_OK) return poison(b,result);
-    for(unsigned i=0;i<16;i++) if(actual.cid[i]!=b->identity.cid[i])
-        return poison(b,KUI_VMU_BACKING_IDENTITY);
-    return KUI_VMU_BACKING_OK;
+    return check_identity(b);
 }
 static int finish(struct kui_vmu_backing *b,bool entered,bool acquired,int result) {
     if(!entered) return result;
@@ -195,17 +202,47 @@ static int admission(struct kui_vmu_backing *b,bool writing) {
     }
     return KUI_VMU_BACKING_OK;
 }
+struct call_scope {bool entered,acquired,reserved_call;};
+static int call_begin(struct kui_vmu_backing *b,struct call_scope *scope) {
+    *scope=(struct call_scope){0};
+    if(!b->reserved) return begin(b,&scope->entered,&scope->acquired);
+    if(b->callback_active) return b->last_result=KUI_VMU_BACKING_BUSY;
+    b->callback_active=true;scope->reserved_call=true;
+    return check_identity(b);
+}
+static int call_finish(struct kui_vmu_backing *b,const struct call_scope *scope,int result) {
+    if(!scope->reserved_call) return finish(b,scope->entered,scope->acquired,result);
+    if(b->bus.healthy && !b->bus.healthy(b->bus.context) && !result)
+        result=poison(b,KUI_VMU_BACKING_IO);
+    b->callback_active=false;
+    return b->last_result=result;
+}
+int kui_vmu_backing_reserve(struct kui_vmu_backing *b) {
+    int result=admission(b,true);
+    if(result) return result;
+    bool entered=false,acquired=false;result=begin(b,&entered,&acquired);
+    if(result) return finish(b,entered,acquired,result);
+    b->reserved=true;
+    return b->last_result=KUI_VMU_BACKING_OK;
+}
+int kui_vmu_backing_unreserve(struct kui_vmu_backing *b) {
+    if(!b || !b->initialized || !b->reserved) return KUI_VMU_BACKING_ARGUMENT;
+    if(b->callback_active) return b->last_result=KUI_VMU_BACKING_BUSY;
+    int result=b->poisoned?KUI_VMU_BACKING_POISONED:KUI_VMU_BACKING_OK;
+    b->reserved=false;
+    return finish(b,true,true,result);
+}
 int kui_vmu_backing_read(void *context,uint64_t lba,void *out) {
     struct kui_vmu_backing *b=context;int result=admission(b,false);
     if(result) return result;
     if(!out) return b->last_result=KUI_VMU_BACKING_ARGUMENT;
     if(!authorized(b,lba)) return b->last_result=KUI_VMU_BACKING_MAPPING;
-    bool entered=false,acquired=false;result=begin(b,&entered,&acquired);
+    struct call_scope scope;result=call_begin(b,&scope);
     if(!result) {
         b->last_sd_result=kui_loader_sd_read(b->bus.card,(uint32_t)lba,1,out);
         if(b->last_sd_result!=KUI_LOADER_SD_OK) result=poison(b,KUI_VMU_BACKING_IO);
     }
-    return finish(b,entered,acquired,result);
+    return call_finish(b,&scope,result);
 }
 int kui_vmu_backing_write(void *context,uint64_t lba,const void *in) {
     struct kui_vmu_backing *b=context;int result=admission(b,true);
@@ -213,12 +250,12 @@ int kui_vmu_backing_write(void *context,uint64_t lba,const void *in) {
     if(!in) return b->last_result=KUI_VMU_BACKING_ARGUMENT;
     if(!authorized(b,lba)) return b->last_result=KUI_VMU_BACKING_MAPPING;
 #if KUI_VMU_EXPERIMENTAL
-    bool entered=false,acquired=false;result=begin(b,&entered,&acquired);
+    struct call_scope scope;result=call_begin(b,&scope);
     if(!result) {
         b->last_sd_result=kui_sci_sd_write(b->bus.card,(uint32_t)lba,1,in);
         if(b->last_sd_result!=KUI_LOADER_SD_OK) result=poison(b,KUI_VMU_BACKING_IO);
     }
-    return finish(b,entered,acquired,result);
+    return call_finish(b,&scope,result);
 #else
     return KUI_VMU_BACKING_READ_ONLY;
 #endif
@@ -227,12 +264,12 @@ int kui_vmu_backing_sync(void *context) {
     struct kui_vmu_backing *b=context;int result=admission(b,true);
     if(result) return result;
 #if KUI_VMU_EXPERIMENTAL
-    bool entered=false,acquired=false;result=begin(b,&entered,&acquired);
+    struct call_scope scope;result=call_begin(b,&scope);
     if(!result) {
         b->last_sd_result=kui_sci_sd_sync(b->bus.card);
         if(b->last_sd_result!=KUI_LOADER_SD_OK) result=poison(b,KUI_VMU_BACKING_IO);
     }
-    return finish(b,entered,acquired,result);
+    return call_finish(b,&scope,result);
 #else
     return KUI_VMU_BACKING_READ_ONLY;
 #endif

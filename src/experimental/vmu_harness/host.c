@@ -75,6 +75,14 @@ int main(int argc,char **argv) {
         FIL file;assert(f_open(&file,name,FA_READ|FA_WRITE)==FR_OK);
         assert(f_lseek(&file,512)==FR_OK && f_truncate(&file)==FR_OK);
         assert(f_close(&file)==FR_OK);assert(disconnect_volume());ok=true;
+    } else if(!strcmp(argv[2],"bad-vmu-geometry") || !strcmp(argv[2],"orphan-vmu-chain")) {
+        assert(connect_volume());char name[96];assert(path(name,2,"card.vmd"));
+        FIL file;assert(f_open(&file,name,FA_READ|FA_WRITE)==FR_OK);
+        bool geometry=!strcmp(argv[2],"bad-vmu-geometry");
+        assert(f_lseek(&file,geometry?255u*512u+70u:254u*512u+43u*2u)==FR_OK);
+        uint8_t changed[2]={0xff,0xff};if(!geometry) changed[0]=0xfa;
+        UINT done=0;assert(f_write(&file,changed,2,&done)==FR_OK && done==2);
+        assert(f_close(&file)==FR_OK);assert(disconnect_volume());ok=true;
     } else if(!strcmp(argv[2],"repeat")) {
         uint32_t before=image_crc(1);ok=run_test(true);
         assert(image_crc(1)==before);assert(image_crc(2)!=before);

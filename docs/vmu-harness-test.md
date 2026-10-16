@@ -62,7 +62,10 @@ the console is powered on.
 
 ## Exact scope of this proof
 
-The fresh image uses standard empty 200-user-block VMU filesystem geometry. The
+The shared image formatter admits only an exact all-zero newly created image,
+then writes and verifies standard empty 200-user-block VMU filesystem geometry.
+The shared read-only validator checks all blocks and filesystem allocation both
+before protocol requests and after persisted readback. The
 probe writes raw VMU block 42, which remains marked free in the empty VMU FAT.
 The deterministic marker is deliberately not presented as a valid game save.
 The command sequence uses the documented four 128-byte writes followed by the
@@ -95,6 +98,7 @@ python3 tests/test_vmu_harness_images.py
 The host binary includes the actual console sequence and file callbacks. Only
 the display/controller and physical SD transport are substituted. ASan/UBSan
 cover creation, verify in a new process, repeat without overwriting the first
-card, exact identity/sidecar-length refusal, and filesystem checks on disposable
+card, exact identity/sidecar-length refusal, damaged VMU geometry/orphan-chain refusal,
+and filesystem checks on disposable
 FAT32/exFAT images. Unsupported FAT16 must be refused without changing a byte.
 These checks need `dosfstools` and `exfatprogs` installed.

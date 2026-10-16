@@ -35,7 +35,7 @@ def main():
                 assert 'PASS native harness host sequence' in run(BINARY, image, mode)
             checker = 'fsck.fat' if kind == 'fat32' else 'fsck.exfat'
             run(checker, '-n', image)
-            for corruption in ('bad-identity', 'short-journal'):
+            for corruption in ('bad-identity', 'short-journal', 'bad-vmu-geometry', 'orphan-vmu-chain'):
                 bad = base / f'{kind}-{corruption}.img'
                 shutil.copyfile(image, bad)
                 run(BINARY, bad, corruption)
@@ -43,7 +43,7 @@ def main():
                 run(BINARY, bad, 'refuse-verify')
                 assert digest(bad) == before, 'refused pair changed storage'
                 run(checker, '-n', bad)
-            print(f'PASS {kind}: create, separate-process verify, repeat, identity/length refusal, fsck', flush=True)
+            print(f'PASS {kind}: create, separate-process verify, repeat, identity/length/geometry/chain refusal, fsck', flush=True)
         image = base / 'fat16-refusal.img'
         with image.open('wb') as stream:
             stream.truncate(32 * 1024 * 1024)

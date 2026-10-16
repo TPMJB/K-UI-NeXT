@@ -4,6 +4,7 @@
 #include "platform.h"
 #include "kui/shell_font.h"
 #include "kui/vmu_emulation.h"
+#include "kui/vmu_image.h"
 #include "kui/vmu_maple_dma.h"
 #include "kui/vmu_store.h"
 #include <kos.h>
@@ -28,6 +29,7 @@ static unsigned transport=KUI_STORAGE_SCI;
 static const char *result="Idle. A creates a new isolated probe; X checks the latest.";
 static struct kui_vmu_store store;
 static kui_vmu_emulation_t device;
+static struct kui_vmu_image_workspace image_workspace;
 static FATFS volume;
 struct file_pair { FIL image,journal; bool image_open,journal_open; };
 static struct file_pair pair;
@@ -63,7 +65,6 @@ void kui_log(const char *format,...) {
     render();
 }
 static bool fail(const char *message) {kui_log("FAIL: %s",message);return false;}
-static void put16(uint8_t *p,unsigned value) {p[0]=(uint8_t)value;p[1]=(uint8_t)(value>>8);}
 static void put32(uint8_t *p,uint32_t value) {for(unsigned i=0;i<4;i++) p[i]=(uint8_t)(value>>(i*8));}
 static void identity(unsigned number,uint8_t out[16]) {
     memcpy(out,"KUI-VMU-PB01",12);put32(out+12,number);
@@ -107,6 +108,21 @@ static int file_sync(void *context) {
     if(!files->image_open || !files->journal_open) return -1;
     FRESULT a=f_sync(&files->journal),b=f_sync(&files->image);
     return a==FR_OK && b==FR_OK?0:-1;
+}
+static int image_read(void *context,uint16_t block,void *data) {
+    return block<256u?file_read(context,block,data):-1;
+}
+static int image_write(void *context,uint16_t block,const void *data) {
+    return block<256u?file_write(context,block,data):-1;
+}
+static bool validate_image(void) {
+    const struct kui_vmu_image_io io={&pair,image_read,NULL,NULL};
+    struct kui_vmu_image_summary summary;
+    int status=kui_vmu_image_validate(&io,131072,&image_workspace,&summary);
+    if(status!=KUI_VMU_IMAGE_OK || summary.files || summary.used_blocks || summary.free_blocks!=200) {
+        kui_log("FAIL image filesystem validation: status=%d",status);return false;
+    }
+    kui_log("PASS image filesystem: 200 free blocks, no orphan chains");return true;
 }
 static int block_read(void *context,uint16_t block,uint8_t data[512]) {
     return kui_vmu_store_read(context,block,data)==KUI_VMU_STORE_OK?0:-1;
@@ -158,7 +174,7 @@ static bool protocol_setup(void) {
     if(!exchange(12,0x08,32)) return false;
     kui_log("PASS virtual memory geometry");return true;
 }
-static bool prepare_store(unsigned number) {
+static bool prepare_store(unsigned number,bool fresh) {
     char name[96];uint8_t id[16],check[17];FIL file;UINT done=0;
     if(!path(name,number,"identity.bin") || f_open(&file,name,FA_READ)!=FR_OK)
         return fail("probe identity is missing");
@@ -183,29 +199,21 @@ static bool prepare_store(unsigned number) {
     if(status!=KUI_VMU_STORE_OK) {
         kui_log("Store refused pair: %d; keep both files for recovery",status);return false;
     }
-    return protocol_setup();
-}
-static void format_sector(unsigned block,uint8_t out[512]) {
-    memset(out,0,512);
-    if(block==254) {
-        for(unsigned i=0;i<256;i++) put16(out+2*i,i<200?0xfffc:0xfffa);
-        for(unsigned i=242;i<=253;i++) put16(out+2*i,i-1);
-    } else if(block==255) {
-        memset(out,0x55,16);
-        /* Standard empty 200-user-block VMU geometry. Block 42 remains free:
-         * the proof changes raw bytes, not a valid game save or directory. */
-        put16(out+64,255);put16(out+66,0);put16(out+68,255);
-        put16(out+70,254);put16(out+72,1);put16(out+74,253);
-        put16(out+76,13);put16(out+78,0);put16(out+80,200);put16(out+82,31);
+    if(fresh) {
+        const struct kui_vmu_image_io image_io={&pair,image_read,image_write,file_sync};
+        if(kui_vmu_image_format_blank(&image_io,131072,NULL,&image_workspace)!=KUI_VMU_IMAGE_OK)
+            return fail("format only the newly created zero image");
+        kui_log("PASS shared formatter created and verified empty VMU");
     }
+    return validate_image() && protocol_setup();
 }
-static bool make_file(unsigned number,const char *leaf,unsigned sectors,bool formatted) {
+static bool make_file(unsigned number,const char *leaf,unsigned sectors) {
     char name[96];FIL file;
     if(!path(name,number,leaf) || f_open(&file,name,FA_WRITE|FA_CREATE_NEW)!=FR_OK)
         return fail("create-new isolated test file");
-    bool ok=true;uint8_t bytes[512];
+    bool ok=true;uint8_t bytes[512]={0};
     for(unsigned block=0;block<sectors;block++) {
-        UINT done=0;format_sector(formatted?block:0,bytes);
+        UINT done=0;
         if(f_write(&file,bytes,512,&done)!=FR_OK || done!=512) {ok=false;break;}
     }
     FRESULT synced=f_sync(&file),closed=f_close(&file);
@@ -231,7 +239,7 @@ static bool new_probe(unsigned *number) {
     FRESULT written=f_write(&file,id,sizeof(id),&done),synced=f_sync(&file),closed=f_close(&file);
     if(written!=FR_OK || synced!=FR_OK || closed!=FR_OK || done!=sizeof(id))
         return fail("persist pair identity");
-    return make_file(*number,"card.vmd",256,true) && make_file(*number,"card.journal",2,false);
+    return make_file(*number,"card.vmd",256) && make_file(*number,"card.journal",2);
 }
 static bool latest_probe(unsigned *number) {
     DIR directory;FILINFO info;
@@ -268,7 +276,7 @@ static bool run_test(bool create) {
     if(!connect_volume()) return false;
     if(create?!new_probe(&number):!latest_probe(&number)) return false;
     kui_log("Probe /KUI/vmu-test/p%04u",number);
-    if(!prepare_store(number)) return false;
+    if(!prepare_store(number,create)) return false;
     pattern(number,expected);
     if(create) {
         memset(actual,0xa5,sizeof(actual));
@@ -288,13 +296,15 @@ static bool run_test(bool create) {
         kui_log("PASS journaled commit and virtual readback");
         if(!disconnect_volume()) return fail("close / unmount after commit");
         memset(&store,0,sizeof(store));memset(&device,0,sizeof(device));
-        if(!connect_volume() || !prepare_store(number)) return false;
+        if(!connect_volume() || !prepare_store(number,false)) return false;
     }
     if(!virtual_read(actual) || memcmp(actual,expected,512)) return fail("persisted block differs");
     kui_log(create?"PASS fresh reopen after remount / reconnect":"PASS latest persisted block matches expected bytes");
+    if(!validate_image()) return false;
     if(kui_vmu_store_checkpoint(&store)!=KUI_VMU_STORE_OK) return fail("clean image / journal checkpoint");
     kui_log("PASS clean checkpoint; base image is synced");
     if(!disconnect_volume()) return fail("final close / unmount");
+    if(create) kui_log("PASS protocol: discovery, geometry, write phases and sync");
     kui_log("READY: power may now be switched off.");
     if(create) kui_log("After a power cycle, relaunch this tool and press X.");
     else kui_log("If you power-cycled first, this proves restart persistence.");

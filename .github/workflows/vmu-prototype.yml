@@ -67,19 +67,36 @@ jobs:
           mkdir -p build/vmu-harness/transport
           for unit in src/loader/vmu_backing.c src/loader/sci_sd_bus.c src/loader/sd_reader.c src/dreamcast/sci_sd_storage.c; do
             kos-cc -std=c11 -Os -Wall -Wextra -Werror -ffreestanding -fno-builtin -fstack-usage \
-              -Iinclude -Isrc/loader -Isrc/dreamcast -DKUI_RETAIL_TRANSPORT=1 -DKUI_VMU_EXPERIMENTAL=1 \
+              -Iinclude -Isrc/loader -Isrc/dreamcast -DKUI_ON_CONSOLE=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_VMU_EXPERIMENTAL=1 \
               -c "$unit" -o "build/vmu-harness/transport/$(basename "$unit" .c).o"
           done
           sh-elf-size build/vmu-harness/vmu-harness.elf build/vmu-harness/transport/*.o
           sh-elf-objdump -d build/vmu-harness/vmu-harness.elf > build/vmu-harness/vmu-harness.dis
+      - name: Prove default native SCI transport is unchanged
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          mkdir -p "$RUNNER_TEMP/vmu-baseline" build/vmu-harness/default-proof
+          git fetch --no-tags --depth=1 origin 194a94483132c8dd30b0a21d7c20887c0e1eaed3
+          git show 194a94483132c8dd30b0a21d7c20887c0e1eaed3:src/loader/sci_sd_bus.c > "$RUNNER_TEMP/vmu-baseline/sci_sd_bus.c"
+          for mode in baseline current; do
+            unit=src/loader/sci_sd_bus.c
+            if [ "$mode" = baseline ]; then unit="$RUNNER_TEMP/vmu-baseline/sci_sd_bus.c"; fi
+            kos-cc -std=c11 -Os -Wall -Wextra -Werror -ffreestanding -fno-builtin -g0 \
+              -Iinclude -Isrc/loader -DKUI_ON_CONSOLE=1 -DKUI_RETAIL_TRANSPORT=1 \
+              -c "$unit" -o "build/vmu-harness/default-proof/$mode.o"
+          done
+          cmp build/vmu-harness/default-proof/baseline.o build/vmu-harness/default-proof/current.o
+          sha256sum build/vmu-harness/default-proof/*.o > build/vmu-harness/default-proof/SHA256SUMS
       - name: Assemble console test files
         run: |
           mkdir -p build/vmu-harness/package/KUI
           cp build/vmu-harness/KUI/tools.kui build/vmu-harness/package/KUI/
           cp docs/vmu-harness-test.md build/vmu-harness/package/README.md
-          cp docs/vmu-protocol.md docs/vmu-store.md docs/vmu-maple-interception.md docs/vmu-runtime-design.md build/vmu-harness/package/
+          cp docs/vmu-protocol.md docs/vmu-store.md docs/vmu-maple-interception.md docs/vmu-runtime-design.md \
+            docs/vmu-image.md docs/vmu-backing.md docs/vmu-emulation-status.md build/vmu-harness/package/
           git rev-parse HEAD > build/vmu-harness/package/SOURCE-COMMIT.txt
-          sha256sum build/vmu-harness/package/KUI/tools.kui > build/vmu-harness/package/SHA256SUMS
+          (cd build/vmu-harness/package && sha256sum KUI/tools.kui > SHA256SUMS)
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: K-UI-experimental-VMU-console-test
@@ -98,5 +115,6 @@ jobs:
             build/vmu-harness/*.dis
             build/vmu-harness/**/*.su
             build/vmu-harness/transport/
+            build/vmu-harness/default-proof/
           if-no-files-found: ignore
           retention-days: 30

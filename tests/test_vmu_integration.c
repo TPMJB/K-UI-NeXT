@@ -29,6 +29,7 @@ static struct kui_vmu_store_extent protected[]={{32,68},{600,200}};
 static struct kui_vmu_store_config store_config;
 static struct kui_vmu_backing_config backing_config;
 static uint8_t response[524];static size_t response_bytes;
+static bool reserve_transactions;
 
 static uint16_t crc16(const uint8_t *p,size_t n) {
     uint16_t crc=0;
@@ -144,7 +145,16 @@ static int read_block(void *ctx,uint16_t block,uint8_t data[512]) {
 }
 static int commit_block(void *ctx,uint16_t block,const uint8_t data[512]) {
     assert(ctx==&store);
+    if(reserve_transactions) {
+        int reserved=kui_vmu_backing_reserve(&backing);
+        if(reserved==KUI_VMU_BACKING_BUSY) return KUI_VMU_EMU_IO_BUSY;
+        if(reserved) return KUI_VMU_EMU_IO_ERROR;
+    }
     int result=kui_vmu_store_write(&store,block,data);
+    if(reserve_transactions) {
+        int released=kui_vmu_backing_unreserve(&backing);
+        if(released) result=released;
+    }
     if(!result) {
         assert(!sd.pending_valid && !sd.busy && card.ready && !backing.poisoned);
         assert(!memcmp(sd.media[image_lba(block)],data,512));
@@ -174,6 +184,7 @@ static int reopen(void) {
 }
 static void setup(void) {
     memset(&sd,0,sizeof(sd));
+    reserve_transactions=false;
     for(unsigned lba=0;lba<1024;lba++) memset(sd.media[lba],0x59,512);
     memset(sd.media[950],0,512); /* Empty preallocated sidecar marker. */
     for(unsigned i=0;i<16;i++) sd.cid[i]=(uint8_t)(0x20+i);
@@ -261,11 +272,34 @@ static void failure_cases(void) {
     uint8_t frame[12]={11,1,0,2,0,0,0,2,0,0,0,42};request(frame,sizeof(frame));
     assert(response[0]==0xfb && backing.poisoned && !store.ready);guards();
 }
+static void reservation_cases(void) {
+    uint8_t data[512];memset(data,0x36,sizeof(data));
+    setup();reserve_transactions=true;stage(42,data);
+    sd.deny_acquire=true;
+    uint8_t frame[12]={13,1,0,2,0,0,0,2,0,4,0,42};
+    request(frame,sizeof(frame));assert(response[0]==0xfc && response_bytes==4);
+    assert(store.ready && !backing.poisoned && !sd.writes); /* Retry before store entry. */
+    sd.deny_acquire=false;unsigned acquisitions=sd.acquires;
+    finalize(42,true);
+    assert(sd.acquires==acquisitions+1 && sd.writes==4 && sd.statuses==8);
+    assert(!backing.reserved);read(42,data);guards();
+    assert(reopen()==0);read(42,data);
+    for(unsigned kind=0;kind<3;kind++) {
+        setup();reserve_transactions=true;stage(42,data);
+        if(kind==0) sd.fail_write=sd.writes+4;
+        if(kind==1) sd.fail_status=sd.statuses+6;
+        if(kind==2) sd.fail_busy=sd.writes+4;
+        acquisitions=sd.acquires;finalize(42,false);
+        assert(sd.acquires==acquisitions+1 && backing.poisoned && !backing.reserved);
+        assert(!store.ready && !card.ready);idle();guards();
+        assert(reopen()==0);read(42,data);guards();
+    }
+}
 int main(void) {
 #if !KUI_VMU_EXPERIMENTAL
 #error "Cross-layer save integration requires explicit KUI_VMU_EXPERIMENTAL=1"
 #endif
-    success_cases();failure_cases();
+    success_cases();failure_cases();reservation_cases();
     puts("PASS VMU protocol/store/SD integration: all blocks, durable ACKs, replay, identity, arbitration, bounded faults");
     return 0;
 }

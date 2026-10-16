@@ -16,7 +16,7 @@ struct mock {
     size_t frame_n,reply_at,reply_n;
     uint32_t ticks,bytes,reads,writes,syncs,stops,acquires,releases;
     bool selected,locked,acquired,reader_lease,deny_enter,deny_acquire;
-    bool health,bad_crc,no_reply,reject,stall,frozen_ticks,reenter;
+    bool health,bad_crc,no_reply,reject,stall,frozen_ticks,reenter,reenter_callback;
     int read_result,write_result,sync_result,stop_result;
     char events[128];size_t event_n;
     uint8_t media[1024][512];
@@ -94,6 +94,14 @@ enum kui_loader_sd_result kui_loader_sd_read(struct kui_loader_sd *card,
     uint32_t lba,uint32_t count,void *out) {
     assert(card==&m.card && m.locked && m.acquired && count==1 && lba<1024 && !m.selected);
     ++m.reads;event('r');
+    if(m.reenter_callback) {
+        uint8_t nested[512];m.reenter_callback=false;
+        assert(m.backing.reserved && m.backing.callback_active);
+        assert(kui_vmu_backing_read(&m.backing,lba,nested)==KUI_VMU_BACKING_BUSY);
+        assert(kui_vmu_backing_unreserve(&m.backing)==KUI_VMU_BACKING_BUSY);
+        assert(kui_vmu_backing_reserve(&m.backing)==KUI_VMU_BACKING_BUSY);
+        assert(m.locked && m.acquired && m.backing.reserved && m.backing.callback_active);
+    }
     if(!m.read_result) memcpy(out,m.media[lba],512);
     return m.read_result;
 }
@@ -250,7 +258,60 @@ static void write_cases(void) {
     assert(!m.bytes && !m.writes && !m.syncs && !m.acquires);idle();
 #endif
 }
+static void reservation_cases(void) {
+    uint8_t data[512];memset(data,0x49,512);setup();
+    assert(kui_vmu_backing_unreserve(&m.backing)==KUI_VMU_BACKING_ARGUMENT && !m.bytes);
+#if KUI_VMU_EXPERIMENTAL
+    assert(kui_vmu_backing_reserve(&m.backing)==0);
+    assert(m.locked && m.acquired && m.backing.reserved && m.backing.inflight);
+    assert(m.acquires==1 && !m.releases && !strcmp(m.events,"EAC"));
+    uint32_t bytes=m.bytes;
+    assert(kui_vmu_backing_reserve(&m.backing)==KUI_VMU_BACKING_BUSY && m.bytes==bytes);
+    assert(kui_vmu_backing_write(&m.backing,100,data)==0);
+    m.deny_acquire=true; /* A reserved transaction never reacquires per sector. */
+    assert(kui_vmu_backing_sync(&m.backing)==0);
+    m.reenter_callback=true;
+    assert(kui_vmu_backing_read(&m.backing,100,data)==0);
+    assert(m.acquires==1 && !m.releases && m.locked && m.acquired);
+    bytes=m.bytes;
+    assert(kui_vmu_backing_write(&m.backing,1,data)==KUI_VMU_BACKING_MAPPING && m.bytes==bytes);
+    assert(kui_vmu_backing_unreserve(&m.backing)==0);
+    assert(m.releases==1 && !m.backing.reserved);idle();
+    assert(kui_vmu_backing_unreserve(&m.backing)==KUI_VMU_BACKING_ARGUMENT && m.releases==1);
+    setup();m.deny_acquire=true;
+    assert(kui_vmu_backing_reserve(&m.backing)==KUI_VMU_BACKING_BUSY && !m.backing.poisoned);
+    assert(!m.releases && !m.bytes);idle();
+    m.deny_acquire=false;assert(kui_vmu_backing_reserve(&m.backing)==0);
+    assert(kui_vmu_backing_unreserve(&m.backing)==0);idle();
+    setup();m.cid[2]^=1;
+    assert(kui_vmu_backing_reserve(&m.backing)==KUI_VMU_BACKING_IDENTITY && m.backing.poisoned);
+    assert(m.acquires==1 && m.releases==1 && !m.backing.reserved);idle();
+    for(unsigned kind=0;kind<4;kind++) {
+        setup();assert(kui_vmu_backing_reserve(&m.backing)==0);
+        if(kind==0) m.write_result=KUI_LOADER_SD_TIMEOUT;
+        if(kind==1) m.sync_result=KUI_LOADER_SD_TIMEOUT;
+        if(kind==2) m.cid[2]^=1;
+        int result=kind==1?kui_vmu_backing_sync(&m.backing):
+            kind==3?KUI_VMU_BACKING_OK:kui_vmu_backing_write(&m.backing,100,data);
+        if(kind==3) {
+            /* Final health failure is observable even when every store I/O
+             * returned success; the bridge must withhold its final ACK. */
+            m.health=false;
+            assert(kui_vmu_backing_unreserve(&m.backing)==KUI_VMU_BACKING_IO);
+        } else {
+            assert(result && m.backing.poisoned && m.backing.reserved && !m.releases);
+            assert(m.locked && m.acquired);
+            bytes=m.bytes;
+            assert(kui_vmu_backing_write(&m.backing,100,data)==KUI_VMU_BACKING_POISONED && m.bytes==bytes);
+            assert(kui_vmu_backing_unreserve(&m.backing)==KUI_VMU_BACKING_POISONED);
+        }
+        assert(m.backing.poisoned && !m.card.ready && !m.backing.reserved && m.releases==1);idle();
+    }
+#else
+    assert(kui_vmu_backing_reserve(&m.backing)==KUI_VMU_BACKING_READ_ONLY && !m.bytes);idle();
+#endif
+}
 int main(void) {
-    mapping_cases();read_cases();identity_cases();write_cases();
+    mapping_cases();read_cases();identity_cases();write_cases();reservation_cases();
     puts("VMU bounded backing tests passed");return 0;
 }
