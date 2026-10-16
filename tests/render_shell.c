@@ -269,6 +269,10 @@ static void storage_tests(struct kui_shell *s,struct kui_shell_view *v,const cha
 }
 int main(int argc,char **argv) {
     if(argc!=3) return 2;
+    /* Press previews use the production renderer with clearly labelled sample
+     * state. This affects only this host-side fixture, never runtime code. */
+    bool press_mode=!strncmp(argv[1],"press-",6);
+    if(press_mode) argv[1]+=6;
     struct kui_settings preferences={true,false,true,KUI_CAPTURE_FORMAT_GDI,0,false};
     struct kui_shell shell; kui_shell_init(&shell,&preferences);
     const char *logs[]={"SD exFAT, 249997312 sectors, cluster=131072 bytes",
@@ -846,6 +850,44 @@ int main(int argc,char **argv) {
             shell.page=KUI_SHELL_GAMES_CHECK;view.app_status=&status;
             strcpy(status.message,"Executable preparation passed. The game was not started.");
         } else {shell.page=KUI_SHELL_GAMES_EXTRA_OPTIONS;shell.games_baseline=true;shell.game_tools_selected=KUI_SHELL_GAME_TOOL_BASELINE;}
+    }
+    if(press_mode) {
+        view.build="UI SAMPLE";
+        if(!strcmp(argv[1],"games-gallery") || !strcmp(argv[1],"games-list-art")) {
+            static const char *names[]={"Fighting","Armada","Crazy Taxi","Dead or Alive 2",
+                "Grandia II","MDK2","Resident Evil - Code Veronica","Sword of the Berserk"};
+            struct kui_games_page *l=&shell.games_listing;
+            l->count=l->total=8;l->has_more=false;
+            for(unsigned i=0;i<8;i++) {
+                snprintf(l->entries[i].name,sizeof(l->entries[i].name),"%s",names[i]);
+                snprintf(l->entries[i].title,sizeof(l->entries[i].title),"%s",names[i]);
+                l->entries[i].directory=i==0;l->entries[i].cover=i!=0;
+                if(i) make_cover(covers[i],shell.games_view==KUI_GAMES_VIEW_GALLERY?
+                    KUI_COVER_MEDIUM:KUI_COVER_LARGE,i);
+            }
+            shell.games_selected=4;
+        }
+        if(!strcmp(argv[1],"games-options") || !strcmp(argv[1],"games-ce-options")) {
+            bool ce=!strcmp(argv[1],"games-ce-options");
+            struct kui_games_detail *d=&shell.games_detail;
+            memset(d,0,sizeof(*d));
+            shell.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;view.busy=false;
+            strcpy(shell.games_selected_path,ce?"/Games/Generated WinCE sample/disc.gdi":
+                "/Games/Grandia II/disc.gdi");
+            strcpy(d->path,shell.games_selected_path);
+            strcpy(d->title,ce?"GENERATED WINCE SAMPLE":"GRANDIA II");
+            strcpy(d->boot_file,ce?"0WINCEOS.BIN":"1ST_READ.BIN");
+            d->valid=true;d->native_gd=!ce;d->windows_ce=ce;d->tracks=ce?16:3;
+            d->format=KUI_GAME_IMAGE_GDI;d->boot_lba=45166;d->boot_bytes=ce?1253376:123456;
+            shell.games_launch_reader=KUI_GAME_READER_BACKGROUND;
+            shell.games_launch_cdda=ce;
+            shell.games_launch_selected=ce?KUI_SHELL_GAME_OPTION_CDDA:KUI_SHELL_GAME_OPTION_READER;
+            if(ce) {
+                d->audio.classification=KUI_GAME_AUDIO_GD_HIGH_DENSITY;
+                d->audio.audio_tracks=14;d->audio.candidate_tracks=13;
+            }
+            strcpy(shell.games_launch_notice,"Options save automatically for this image.");
+        }
     }
     view.game_covers=(const uint16_t (*)[KUI_COVER_PIXELS])covers;view.game_detail_cover=detail_cover;
     view.files_picture=picture;

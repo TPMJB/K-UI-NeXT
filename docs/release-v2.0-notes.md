@@ -1,207 +1,248 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# K-UI V2.0 RC15 "Tyrfing" — preparation notes
+# K-UI 2.0.0 “Tyrfing” — release notes since 1.7.5
 
-**2.0 RC15 restores the accepted native drive-status, disc-check and SCI resume
-configuration omitted from RC14.** The working reference is `72e3bf049b26`: the
-owner confirmed Skies raw/2048, Time Stalkers and retained Evolution FMV gains.
-The return-trace diagnostics remain disabled. Older saved reader/CDDA JSON
-presets migrate only when both new settings slots are absent, preserving
-the original JSON and current presets. Collections above 128 profiles refuse
-migration; retired release-loader comparison profiles are skipped with a log.
-The selected pixel artwork and
-RC13 VMU tools remain. See the [accepted-fix audit](release-v2.0-accepted-fix-audit.md).
+![K-UI 2.0 Tyrfing](../resources/branding/release-v2.0-banner.jpg)
 
-Tyrfing continues the cursed-sword naming theme.
-This is a source integration candidate; it is not an announcement that final
-2.0 has shipped. The existing stable download remains
-[1.8.5](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.8.5).
+**Tyrfing brings the work since 1.7.5 into one public update:** a more usable
+Games library, native compatibility and FMV improvements, optional SCI CD
+music, expanded disc formats and ripping tools, more VMU workflows, and new
+orange pixel artwork. This cumulative changelog includes the intervening
+1.8.5 work, which did not receive a separate public announcement.
 
-Use the [installation guide](release-v2.0.md) and install the complete matching
-runtime and Games payload folder. Existing exFAT cards, dumps and compatible
-independent K-UI boot CDs remain usable.
+K-UI is an independent Dreamcast environment built on upstream KallistiOS,
+with its own shell, disc capture engine and game loader. The original GD-ROM
+stays installed. exFAT remains the primary working-card setup; FAT32 is also
+supported. Existing compatible independent K-UI boot CDs and game dumps remain
+usable. Follow the [installation guide](release-v2.0.md), and update the
+complete matching `KUI` folder together.
 
-## RC13 VMU additions
+[Release downloads](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v2.0.0) ·
+[Screenshots and posting images](release-v2.0-image-index.md) ·
+[Reddit/forum drafts](release-v2.0-announcements.md) ·
+[Optional development support](https://ko-fi.com/tpmjb)
 
-- **Import save file:** from SD backups, choose an external VMS, VMI or DCI
-  file. Preview the internal filename, metadata origin, type and size, then
-  confirm creation of a new verified `.vms`/`.dir`/`.crc` bundle. Import reads
-  its inputs only and does not access a physical VMU. Restore remains a separate
-  previewed and confirmed operation. Bare VMS data files require the correct
-  short SD basename because a VMS payload contains no original VMU filename.
-- **Copy all saves:** Actions previews both VMU slots, the whole batch's
-  capacity and filename conflicts. Confirmation first backs up all source
-  saves to SD, then uses the existing verified per-save transaction. A failed
-  or stopped batch retains completed copies and reports its partial result;
-  uncertain metadata writes stop the job without automatic retry or rollback.
+## Release previews
 
-See [import formats and metadata](vmu-import.md) and
-[bulk copy and acceptance](vmu-copy-all.md). These are independent K-UI code;
-no DreamShell implementation is reused. Their integrated console workflows
-still need acceptance. Whole-card restore/format/overwrite and permanent
-flash/region changes remain outside this candidate.
+These are release feature cards using host-rendered interface examples, not
+console photographs or gameplay captures. The
+[image index](release-v2.0-image-index.md) includes the full gallery, raw UI
+renders, image origins and posting captions.
 
-## RC12 maintenance additions
+| Games library | Optional SCI CD music |
+| --- | --- |
+| ![Games feature card with host-rendered UI](../resources/release-v2.0/04-games.png) | ![Optional runtime-checked SCI CD music feature card](../resources/release-v2.0/05-wince-cd-music.png) |
 
-- **VMU card backup:** Actions → Backup card image captures a verified raw
-  128 KiB VMD, including an empty formatted card, into a new backup directory.
-- **VMD browsing/extraction:** Backups opens standard raw 128 KiB images,
-  including external images without a K-UI sidecar. Extract one/all saves into
-  new verified `.vms`/`.dir`/`.crc` bundles, retaining names and metadata. These
-  image operations need no connected VMU and never write to a physical card.
-- **BIOS/settings-flash comparison:** System Tools selects an exact-size SD
-  image and compares two complete stable reads with the current console source.
-  Results show exact match or byte-difference count and first offset. Comparison
-  writes neither the source nor the image and creates no output files.
+| Disc preservation | VMU tools |
+| --- | --- |
+| ![Disc Ripper feature card; new paths retain console-test limits](../resources/release-v2.0/06-disc-preservation.png) | ![VMU tools feature card; new workflows retain console-test limits](../resources/release-v2.0/07-vmu-saves.png) |
 
-These tools use independently authored K-UI code and upstream KallistiOS
-interfaces. No DreamShell implementation code was copied. Full-card restore and format/overwrite remain outside this candidate.
-RC13 adds the import and bulk-copy workflows described above. See [VMU controls and limits](vmu-restore.md) and
-[system comparison](system-backups.md). Fault-injection and real FAT32/exFAT
-host-image checks pass; the new integrated console workflows await acceptance.
+## Games: compatibility and a better library
 
-## Orange Tyrfing artwork and preparation tools
+- **Native reader placement:** moving the reader and its private stack below
+  the IP image avoids startup-stack collisions. Sonic Adventure, Grandia II
+  and Skies of Arcadia have working owner hardware reports. Earlier GD-command
+  corrections also brought Power Stone 1 and 2 to fluid gameplay.
+- **Skies and Time Stalkers:** retain the accepted drive-status and mounted-image
+  disc-check behavior, rather than reporting the physical boot CD's state to
+  the game. RC15 restored the accepted configuration omitted from RC14.
+- **Evolution and Evolution II:** retain the accepted SCI resume/cancellation
+  correction associated with the owner's improved opening FMV results.
+- **Always alphabetical:** ordering remains consistent across pages, cached
+  visits and later additions to the card. The last folder and highlighted
+  title are remembered by name.
+- **More responsive browsing:** recent folders stay in a bounded RAM catalogue.
+  Rows appear before artwork; only the selected game's cover loads. The first
+  scan of a large collection can still take several seconds.
+- **Original/2048 picker:** safely matched original and converted sibling
+  folders appear as one title with a version choice. Equivalent GDI/CUE
+  descriptors are grouped only after checking complete track maps.
+- **Saved launch choices:** reader, CD music, encoding and related advanced
+  options belong to the selected image. Original and 2048 copies can keep
+  separate settings. Compatible legacy JSON presets migrate when both new
+  settings slots are absent; originals are preserved and unsupported or
+  oversized legacy collections are explicitly refused.
+- **Preparation tools:** Check executable, detected defaults, a temporary
+  unsaved baseline and durable pre-handoff launch reports aid troubleshooting.
+  A preparation check does not execute a game or certify every sector.
 
-RC11 replaces the previous release's splash with orange retro futuristic
-artwork featuring the cursed blade Tyrfing. The runtime and CD share matching
-television-safe artwork, with a new sword header, under-SEGA disc badge and
-orange bootstrap accents. Runtime/boot image dimensions, splash timing and
-memory bounds are retained. The V2.0 illustration is release artwork; the
-live **RC15** label and build ID identify this candidate. Updating the card
-changes runtime artwork; the optional matching CDI changes the burned disc.
+The batch [2048-byte GDI converter](gdi-2048-test.md) creates separate copies,
+keeps raw audio, preserves originals and reports conversions, skips and errors.
+Conversion is optional; it does not create compatibility by itself or replace
+an archival raw dump. See [library behavior](games-library.md) and
+[launch options](games-launch-options.md).
 
-Games keeps its alphabetical order when titles are added and restores the
-last folder/highlight by name. Explicit LZ4/LZO1X selection, Check executable
-and a temporary unsaved Baseline complement the saved launch choices. The
-startup VMU LCD shows K-UI and the current version. New gameplay screenshot,
-RAM-patch, alternate-executable, boot-method, region-override and VMU-emulation
-features remain deferred.
+## More image formats, with explicit boundaries
 
-Disc Ripper adds bounded retry preferences, optional strict Mode 1 acquisition,
-verified cooked GDI export, repair-to-copy and saved-sector reread evidence.
-It can also capture explicitly declared single-session CDs as BIN/CUE, or
-write directly to the authenticated PC-volume destination. These additions
-are implemented and host-tested; their integrated console paths still need
-acceptance. See [ripper controls](ripper-controls.md), [PC capture](network-rip.md)
-and the [remaining differences from DS-based 1.0.1](release-v2.0-ds-comparison.md).
+| Image | Games support in 2.0.0 |
+| --- | --- |
+| GDI | Supported original raw and cooked 2048-byte DATA; raw audio retained |
+| ISO | Supported complete Dreamcast data sessions with valid boot metadata |
+| BIN/CUE | Supported shared/separate BINARY track and session layouts |
+| CDI | Supported DiscJuggler v2, v3 and v3.5 layouts |
+| Standalone BIN/IMG | Supported raw Mode 1 / Mode 2 Form 1 data layouts |
+| ZSO | Experimental separate LZ4/LZO1X native SCI Standard readers; explicit codec choice |
+| CSO / CHD | Supplied PC importer required; no resident decoder |
 
-## Integrated Games behavior
+Native CD images expose Plain/Scrambled encoding. Descriptors, sector geometry,
+offsets and launch-map bounds are checked rather than inferred from extensions.
+ZSO's bounded first implementation has no background, CE or CD music combination
+and still needs console acceptance. See [formats](games-formats.md) and
+[ZSO scope](games-zso.md).
 
-Launch options are saved per image. **Y Options** exposes Background loading
-and optional CD music; Advanced holds encoding, background speed, image
-information and developer tests. Original and converted2048 image paths can
-retain different choices. CD music defaults to Off, and Off uses the ordinary
-CE loader. Windows CE remains dependent on the background SCI reader.
+## Optional CD music from SCI storage
 
-The optional WinCE music engine has four exact admitted kernel/sound adapters,
-established from US **Armada, Bust-A-Move 4, Worms Armageddon and Worms World
-Party**. Other applications and track layouts can use a matching checked
-kernel/sound contract; title strings alone cannot establish compatibility.
-Native CDDA similarly broadens the existing Toy/MDK2 bindings to matching
-executable/driver identities with their memory and lifecycle checks retained.
-The menu offers CD music for inspected high-density AUDIO candidates; an
-unrecognized runtime is refused when music is On. Unknown versions remain
-Experimental, and music defaults to Off. See [admission boundaries](experimental-cdda.md).
+**CD music is opt-in and defaults to Off.** Windows CE runs through the
+background SCI reader. The optional music path adds checked adapters
+established from these US runtimes:
 
-For admitted profiles, raw2352 AUDIO is retained with either original raw or
-supported converted2048 DATA. Conversion is optional and does not provide
-new compatibility by itself. Game code, CE modules and audio are read from the
-owner's selected image; retail bytes are not release assets.
+| Adapter established from | Hardware evidence and scope |
+| --- | --- |
+| Armada | Boot/gameplay and music reports; documented audio/FMV limits remain |
+| Bust-A-Move 4 | Successful music report and recorded native starts |
+| Worms Armageddon | Music, converted2048 cold boots and improved input responsiveness |
+| Worms World Party | Scoped successful owner report; broader support remains Experimental |
 
-## Console evidence carried into this candidate
+Runtime identity, sound interfaces and memory contracts determine admission.
+Other images sharing an admitted implementation can be attempted as
+Experimental; an audio-track list or familiar title name is insufficient.
+Unknown combinations are refused when music is On. With music Off, Games uses
+the ordinary CE loading path.
 
-| Area | Recorded result | Limit |
-| --- | --- | --- |
-| Native 1.8.5 reader | Owner confirmed Sonic Adventure, Grandia II and Skies of Arcadia on `5973741a6077`; Power Stone 1/2 worked after earlier command fixes | Scoped runs, not full playthroughs or an RC15 retest |
-| Armada WinCE music | Established exact US profile and working full-stream baseline | Audio/FMV limitations remain; no new Armada test is inferred from Worms work |
-| Bust-A-Move 4 | Owner reported successful music on `ed0a2c809bda`; diagnostics recorded ten starts, no refusal/HRESULT and one recovered underrun | Other revisions, every track and a long soak remain unverified |
-| Worms audio supply | `8a22ec45229a` had no observed underruns in two submitted runs, with gameplay lag reported | Those runs do not establish zero-dropout playback everywhere |
-| Worms responsiveness | Latest RAM-copy build `1aa16821209b` was reported to have almost completely eliminated lag; remaining delay was almost imperceptible | Subjective owner result; no measured frame-rate or zero-overhead claim |
-| Worms converted2048 | Owner reported three successful cold boots of the tested converted2048 version | Does not certify other revisions or conversions |
-| Worms World Party | Owner reported successful operation on `b08802f8945f`; diagnostic clip shows two native starts 33 seconds apart, no recorded gaps/recoveries and no guard/bind/audio fault | Clip contains diagnostic pages, not live gameplay or audible continuous music; image geometry is not established and general status remains Experimental |
+The music worker yields within a bounded work budget and uses checked aligned
+RAM copies. In the latest Worms performance test, the owner described the
+remaining input delay as almost imperceptible. This is a subjective result
+for that tested path, without a zero-overhead or new link-speed claim.
 
-The latest tested performance source is published as
-`d9f861ba87a2957234d0af276a4cfeb573367258`. The preceding bounded-worker
-candidate had already reduced lag without affecting music. These results
-support retaining that baseline while preparing the release; they do not
-certify every profile in the newly assembled RC15 package.
+Native CD music retains the Toy Commander/MDK2 runtime bindings and checked
+selection for matching implementations. **Toy Commander's intro FMV stutter
+remains unresolved**, even where CD music plays. Raw2352 AUDIO is required;
+supported DATA can be original raw or converted2048. See
+[music admission and evidence](experimental-cdda.md).
 
-See [native placement evidence](evidence/native-low-resident-2026-10-06.md),
-[BAM4 results](bam4-ce-cdda-test.md),
-[Worms refill results](wince-cdda-refill-console-result.md),
-[worker-budget changes](wince-cdda-worker-budget-test.md) and
-[the latest RAM-copy result](wince-cdda-copy-test.md).
+## Disc Ripper: more capture and recovery controls
 
-## Performance changes and preserved behavior
+Established raw capture, Stop/Resume, CRC32/SHA-256 verification, Redump/TOSEC
+comparisons and separate damaged-disc salvage remain. The cumulative update adds:
 
-The optional music worker has a bounded physical-work budget while native
-playback is active. It publishes checked partial PCM before yielding instead
-of monopolizing long source turns. Aligned checked RAM copies use integer
-word accesses with exact tails and an unaligned fallback; Worms retains its
-short-copy exclusion and source-boundary checks.
+- **Output choices:** GDI, BIN/CUE, CSO, historical LZO ZSO, CHDv4 and cooked
+  **GDI 2048**. Post-capture exports retain raw source files and are verified
+  against them. Allow space for both forms.
+- **Jobs and names:** exact saved-job selection for Resume/Verify, destination
+  browsing and optional New folder labels. New uses a free name instead of
+  replacing a previous capture.
+- **Retries and strict checks:** bounded additional retries and optional Mode 1
+  framing/EDC/P/Q acquisition checks.
+- **Repair to a separate copy:** a matching GD-ROM and validated repeat reads
+  precede replacement of supported damaged Mode 1 sectors in new output.
+  Originals/evidence remain; unresolved copies stay partial.
+- **Saved-sector reread evidence:** bounded repeat-read samples from saved
+  tracks, without changing those tracks.
+- **Declared single-session CD capture:** explicit opt-in BIN/CUE capture for
+  known single-session CD/CD-R/audio CD media. Arbitrary multisession self-boot
+  discs are outside this scope.
+- **Experimental direct PC destination:** an authenticated Python receiver
+  exposes a dedicated FAT32/exFAT volume image through W5500/Wi-Fi. Capture
+  writes there directly, without a temporary local-card dump. It is a volume
+  image, not an SMB/NFS folder; console adapter acceptance is pending.
 
-These changes reduce optional music-path scheduling and copy cost. They do
-not increase the physical SCI link rate. The established 1.8.5 native reader,
-ordinary CE loading, physical capture engine and sound driver retain their
-separate roles. Host regression and linked-layout checks complement console
-reports; modeled timings are not console measurements.
+A full independent reference match, saved-file consistency and structural
+sector checks remain separate results. A partial catalogue match is never
+reported as a full-disc match. Compressed export does not imply compressed
+Games launch support. New export, recovery, CD and PC paths have host/fault/
+filesystem coverage and retain their documented console-test limits. See
+[ripper controls](ripper-controls.md), [repair](repair-copy.md) and [PC setup](network-rip.md).
 
-## Wireless and Home integration
+## VMU and system tools
 
-The wireless software adds checked adaptive SCI pacing, reconnects after an
-accepted band change, listener-ready FTP startup and bounded FTP frame bursts.
-Network's Wi-Fi page can check and install a compatible adapter firmware image
-from the card after confirmation. It verifies the chip, image digest, inactive
-slot write and restarted firmware. See [console updates](wifi-console-update.md)
-and [wireless performance evidence](wifi-performance-test.md). Firmware 0.1.3 is
-built separately. The final timing changes still need console throughput and
-round-trip file-integrity acceptance; host transfer results are not radio speeds.
+- **Whole-card backup:** verified raw 128 KiB VMD, including an empty formatted VMU.
+- **VMD browsing/extraction:** inspect standard raw images and extract one/all
+  saves into verified bundles without a connected VMU.
+- **External save import:** preview supported VMS/VMI/DCI files and stage new
+  verified SD bundles. Physical restore is a separate confirmed action. Bare
+  VMS data needs a correct short filename; its payload lacks the original VMU name.
+- **Copy all between VMUs:** preview the batch, check capacity/conflicts, back
+  up source saves first, then verify each copy. A stopped/failed batch reports
+  partial completion rather than an all-or-nothing result.
+- **System comparison:** compare exact-size card images with two stable reads
+  of settings flash or the visible BIOS bank, reporting differences without
+  programming either chip.
+- **Startup VMU display:** K-UI and the current version appear on the LCD.
 
-The [direct PC capture destination](network-rip.md) uses the bundled Python
-helper and an authenticated FAT32/exFAT volume image, without a temporary
-local-card dump. Local capture stays the default. Host loopback checks do not
-establish console adapter compatibility or throughput.
+Selected-save backup/restore retains its earlier hardware evidence. New VMD,
+import, batch-copy and comparison workflows have host/fault/filesystem checks;
+broad RC15 game acceptance does not establish every maintenance path.
+Full-card restore, format/overwrite, BIOS programming and permanent region
+changes are not provided. See [VMU tools](vmu-restore.md), [imports](vmu-import.md),
+[bulk copy](vmu-copy-all.md) and [system comparison](system-backups.md).
 
-Seven original icon pairs complete the ten-app Home menu, including the
-television-legibility follow-up. The established Wi-Fi wording, Games options
-and current branding remain in the merged renderer.
+## Networking, Home and presentation
 
-The [legacy Games audit](audit-legacy-games.md) and
-[legacy GD Ripper audit](audit-legacy-ripper.md) compare reachable features in
-the DreamShell-adapted project. They identify follow-up work; no legacy loader
-code was imported. [The integration record](release-v2.0-integration.md) lists
-the selected branches and exclusions.
+- XIAO ESP32-C5/C6 Wi-Fi scan/join and saved adapter settings; C5 offers
+  2.4/5 GHz band selection, while C6 is 2.4 GHz.
+- Adaptive SCI pacing, reconnect after an accepted band change, listener-ready
+  FTP startup and bounded wireless frame bursts.
+- Compatible card-supplied adapter firmware check/install after confirmation.
+  Initial programming/recovery still use USB; firmware is built separately.
+- Retained W5500 Ethernet/FTP transfer and connection-close handling.
+- Seven new original icon pairs complete the ten-app Home menu, with TV
+  legibility refinements. Orange pixel Tyrfing artwork refreshes the runtime,
+  header, bootstrap and disc badge.
+- Optical STOP at the runtime screen, with idle disc discovery parked until
+  an observed media change. Optical apps can spin the drive when needed.
 
-## Remaining limits before final 2.0
+SCI networking needs storage on SCIF because SCI storage owns the same port.
+No new radio, Ethernet or storage throughput figure is claimed for 2.0.0.
+New wireless timing/update paths retain their own console-acceptance limits.
+See [Wi-Fi](wifi.md), [updates](wifi-console-update.md) and [FTP](ftp.md).
 
-- **WinCE music:** four exact kernel/sound adapters can admit other applications
-  sharing their checked contracts. Other kernels, sound ABIs and memory layouts
-  still need adapter discovery and validation. Unknown combinations and World
-  Party's broader profile remain experimental; the option defaults to Off.
-- **Native games:** RC14 regressed Skies and Time Stalkers by omitting an
-  accepted configuration; RC15 restores it with console confirmation pending.
-  Evolution 1/2 opening FMVs also need to retain their accepted improvement.
-  Other documented FMVs can stall or
-  skip; Toy Commander FMV stutter is not fixed by this work. Universal CDDA,
-  Mode 2 Form 2 and subchannel emulation are not provided. Quake III CD music is
-  deferred: its GINSU transfer and different allocator need a separate adapter.
-- **Storage:** SCI is required for CE. IDE/CF is untested synchronous PIO;
-  ATA DMA and CE on IDE/SCIF remain future work. ext4 is bootstrap-only.
-- **Formats:** standard LZ4 and explicitly selected historical LZO1X ZSO have
-  separate experimental native SCI Standard readers; console acceptance is
-  pending. CSO and CHD require PC import. These bounded ZSO readers do not
-  supply general resident compressed decoding. See [ZSO scope](games-zso.md) and [CHD work](games-chd.md).
-- **Release acceptance:** build the complete matching package, pass its host
-  and console build/layout checks, and confirm the assembled candidate on
-  hardware before calling it final 2.0. Earlier per-feature test packages and
-  subjective reports do not replace that integration check.
+The ten apps remain Games, Disc Ripper, VMU Manager, File Manager, Music Player,
+GD Play, Memory Test, Network, Diagnostics and Settings. Checked file tools,
+music, storage tests, boot/recovery and diagnostics retain their documented
+scopes and individual evidence.
 
-The ten-app shell, original/2048 catalogue, verified/resumable ripping, VMU
-backups, checked file operations, Wi-Fi/W5500 setup and independent boot and
-recovery remain established features. No new networking or IDE throughput
-figure is claimed. The [1.8.5 notes](release-v1.8.5-notes.md) retain the detailed
-history of those features.
+## Validation and remaining limits
 
-New K-UI shell code is GPL-3.0-only except where stated. Separate Wi-Fi
-firmware and kwlink are MIT; dependencies retain their original licenses.
-Corresponding source, dependency pins and notices must accompany a packaged
-release. See [source and licensing records](../THIRD_PARTY.md).
+On **October 15, 2026 (America/Chicago)**, after the priority RC15 console retest,
+the owner reported “everything seems to work now” and authorized final 2.0.0
+preparation. This accepts the restored native baseline; it does not invent a
+complete title/region/peripheral matrix. The
+[accepted-fix audit](release-v2.0-accepted-fix-audit.md) explains the RC14
+configuration omission and release guards. The
+[CDDA artifact audit](release-v2.0-cdda-acceptance-audit.md) records the scope of
+earlier feature-binary results.
+
+Release validation covers host tests, disposable FAT32/exFAT images, linked
+reader layout/stack/instruction checks, payload inventories, source identity
+and checksums. Check the final release's CI status and `build.json` for its
+exact build. These checks complement hardware reports, without establishing
+universal compatibility.
+
+- Some native FMVs still stall or skip; Toy Commander is a known example.
+- CD music remains runtime/title-dependent. Universal CDDA, Mode 2 Form 2 and
+  subchannel emulation are not provided. Quake III music is deferred.
+- CE requires SCI. IDE/CF is experimental synchronous PIO without physical
+  validation; ATA DMA and CE on IDE/SCIF remain future work.
+- ext4 is read-only bootstrap support, not runtime app/game-library access.
+- Direct ZSO, new ripper recovery/PC/CD paths, newer wireless behavior and new
+  maintenance workflows retain individual experimental/acceptance labels.
+- Gameplay screenshots, VMU emulation, alternate executable selection,
+  additional boot methods and per-game region override remain future work.
+
+## Looking toward version 3
+
+![G1 microSD / Wi-Fi carrier CAD preview](../resources/release-v2.0/board/g1-board-hardware-preview.png)
+
+The custom internal G1 microSD / Wi-Fi carrier is designed to retain the
+original GD-ROM and has provision for optional BIOS circuitry. Its current
+59 × 115 mm design is being developed separately. It is a
+**hardware preview**, not a 2.0.0 requirement or a validated shipping accessory.
+Getting that board working is the intended milestone for version 3. Its press
+render depicts a design in development, without establishing manufacture,
+electrical operation, fit or achieved performance. The 2.0.0 software release
+continues to use the existing supported setups. The [CAD render notes](../resources/release-v2.0/board/README.md)
+identify the exact hardware revision and components without resolved 3D bodies.
+
+New K-UI shell code is GPL-3.0-only except where stated. Separate Wi-Fi firmware
+and kwlink are MIT; dependencies retain their original licenses. Corresponding
+source, dependency pins and notices accompany packaged releases. See
+[source and licensing records](../THIRD_PARTY.md).

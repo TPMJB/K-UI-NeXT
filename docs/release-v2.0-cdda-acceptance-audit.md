@@ -68,3 +68,17 @@ the new binder before claiming equivalent behavior. Preserve the requested
 broader-family feature and its Experimental status; do not describe its
 rebuilt module as the unchanged accepted binary. Host and linked audits
 remain useful evidence but cannot replace this console comparison.
+
+## Final-promotion addendum — October 16, 2026 UTC
+
+After the priority RC15 console retest, the owner reported “everything seems
+to work now” on October 15, 2026 (America/Chicago) and authorized final 2.0.0
+preparation. That report accepts the restored native baseline without listing
+exact per-module CDDA hashes or a new four-adapter test matrix.
+
+The final source retains the broader checked selection and the documented
+worker-budget/RAM-copy corrections. It does not relabel rebuilt modules as
+byte-identical to earlier accepted binaries. Prior per-feature observations
+remain scoped to the binaries recorded above; unfamiliar matching runtimes
+and World Party's broader support remain Experimental. Final package/source,
+layout, inventory and checksum checks still apply to the assembled release.

@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -83,15 +84,16 @@ class ExactBuildPublication(unittest.TestCase):
 
 class ExplicitReleaseSelection(unittest.TestCase):
     def test_known_versions_and_post_paths_are_explicitly_scoped(self):
-        for version in ("1.7", "1.8.5"):
+        for version in ("1.7", "1.8.5", "2.0.0"):
             with self.subTest(version=version):
                 self.assertEqual(publish_release.release_tag({"version": version}), "v" + version)
                 allowed = publish_release.post_allowed_paths(version)
-                self.assertIn(f"docs/release-v{version}-notes.md", allowed)
+                family = "2.0" if version == "2.0.0" else version
+                self.assertIn(f"docs/release-v{family}-notes.md", allowed)
                 other = "1.7" if version == "1.8.5" else "1.8.5"
                 self.assertNotIn(f"docs/release-v{other}-notes.md", allowed)
                 self.assertNotIn("src/loader/retail_stage.c", allowed)
-        for version in ("1.8.6", "1.8.5-formats-test", "../1.8.5"):
+        for version in ("1.8.6", "1.8.5-formats-test", "2.0", "2.0-rc15", "../1.8.5"):
             with self.subTest(version=version), self.assertRaises(SystemExit):
                 publish_release.release_tag({"version": version})
 
@@ -118,6 +120,56 @@ class ExplicitReleaseSelection(unittest.TestCase):
                     publish_release.main()
                 api.assert_not_called()
                 gh.assert_not_called()
+
+    def test_explicit_draft_request_stages_assets_without_latest_or_publication(self):
+        final = {"version": "2.0.0", "name": 'K-UI V2.0.0 "Tyrfing"',
+                 "short_name": "K-UI V2.0.0", "artifact_prefix": "kui-2.0.0-tyrfing"}
+        env = {"GITHUB_REPOSITORY": REPOSITORY, "GITHUB_REF": "refs/heads/main", "GITHUB_SHA": COMMIT}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "docs").mkdir()
+            (root / "resources").mkdir()
+            (root / "resources/press.png").write_bytes(b"draft image fixture")
+            (root / "docs/release-v2.0.md").write_text("Install guide.\n")
+            (root / "docs/release-v2.0-notes.md").write_text(
+                "Tyrfing final notes.\n\n![Image](../resources/press.png)\n"
+                "[Install](release-v2.0.md)\n")
+            run = {"id": 42, "html_url": "https://github.com/TPMJB/K-UI-NeXT/actions/runs/42"}
+            uploaded_notes = []
+            def fake_gh(*args):
+                if args[:2] == ("release", "create"):
+                    uploaded_notes.append(Path(args[args.index("--notes-file") + 1]).read_text())
+                return "draft URL"
+            with patch.dict(os.environ, env), patch.object(sys, "argv", ["publish_release.py", "--draft"]), \
+                    patch.object(publish_release, "ROOT", root), \
+                    patch.object(publish_release, "release_metadata", return_value=final), \
+                    patch.object(publish_release.subprocess, "check_output", return_value="Release draft: v2.0.0\n"), \
+                    patch.object(publish_release, "successful_build", return_value=(run, "final-assets")), \
+                    patch.object(publish_release, "verify_assets", return_value=[root / "release.zip"]), \
+                    patch.object(publish_release, "api", side_effect=[{"object": {"sha": COMMIT}},
+                                                                     {"object": {"sha": COMMIT}}, []]), \
+                    patch.object(publish_release, "gh", side_effect=fake_gh) as gh:
+                publish_release.main()
+                create = gh.call_args.args
+                self.assertEqual(create[:3], ("release", "create", "v2.0.0"))
+                self.assertIn("--draft", create)
+                self.assertNotIn("--latest", create)
+                self.assertEqual(create[create.index("--target") + 1], COMMIT)
+                self.assertIn(f"https://raw.githubusercontent.com/{REPOSITORY}/{COMMIT}/resources/press.png",
+                              uploaded_notes[0])
+                self.assertIn(f"https://github.com/{REPOSITORY}/blob/{COMMIT}/docs/release-v2.0.md",
+                              uploaded_notes[0])
+                self.assertNotIn("/v2.0.0/", uploaded_notes[0])
+
+    def test_draft_marker_does_not_authorize_public_publication(self):
+        env = {"GITHUB_REPOSITORY": REPOSITORY, "GITHUB_REF": "refs/heads/main", "GITHUB_SHA": COMMIT}
+        with patch.dict(os.environ, env), patch.object(sys, "argv", ["publish_release.py"]), \
+                patch.object(publish_release, "release_metadata", return_value={"version": "2.0.0"}), \
+                patch.object(publish_release.subprocess, "check_output", return_value="Release draft: v2.0.0\n"), \
+                patch.object(publish_release, "api") as api:
+            with self.assertRaisesRegex(SystemExit, "explicit release request"):
+                publish_release.main()
+            api.assert_not_called()
 
 
 if __name__ == "__main__":

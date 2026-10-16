@@ -27,6 +27,9 @@ NATIVE_CDDA_PROFILES = {
 NATIVE_CDDA_FILES = tuple(names[0] for names in NATIVE_CDDA_PROFILES.values())
 GAME_FILES = ("probe.kui", "image-probe.kui", "retail-boot.kui", "zso-boot.kui", "lzo-boot.kui", "ce-probe.kui", "probe.dat",
               *WINCE_CDDA_FILES, *NATIVE_CDDA_FILES)
+NATIVE_RELEASE_FLAGS = {"LOW": "1", "TRACE": "0", "SONIC": "0",
+                        "SCI_RESUME_FIX": "1", "NATIVE_DISC_CHECK": "1",
+                        "NATIVE_DRIVE_STATE": "1"}
 
 
 def run(*args):
@@ -76,7 +79,9 @@ def release_is_rc(release=None):
 
 
 def guide_version(release=None):
-    return re.sub(r"-rc[1-9][0-9]*$", "", (release or release_metadata())["version"])
+    version = re.sub(r"-rc[1-9][0-9]*$", "", (release or release_metadata())["version"])
+    # Tyrfing's RC and final documentation/artwork share their 2.0 family paths.
+    return "2.0" if version == "2.0.0" else version
 
 
 def development_experiment(release=None):
@@ -155,8 +160,9 @@ def write_release_guides(dist, candidate=False):
             source = "ata-readiness-candidate.md"
         (dist / target).write_text(guide(source), encoding="utf-8")
     if version == "2.0":
-        (dist / "RC-TEST-PLAN.md").write_text(
-            guide("release-v2.0-rc15-test-plan.md"), encoding="utf-8")
+        if release_is_rc():
+            (dist / "RC-TEST-PLAN.md").write_text(
+                guide("release-v2.0-rc15-test-plan.md"), encoding="utf-8")
         for source, target in (("release-v2.0-accepted-fix-audit.md", "ACCEPTED-FIX-AUDIT.md"),
                                ("release-v2.0-cdda-acceptance-audit.md", "CDDA-ACCEPTANCE-AUDIT.md")):
             (dist / target).write_text(guide(source), encoding="utf-8")
@@ -225,7 +231,7 @@ def write_game_tools(bundle):
     """Ship PC helpers and their local guides in every installation tree."""
     tools = bundle / "tools"
     tools.mkdir(exist_ok=True)
-    for name in ("gdi_optimize.py", "game_image_import.py", "network_rip_server.py"):
+    for name in ("gdi_optimize.py", "game_image_import.py", "network_rip_server.py", "verify_dump.py"):
         shutil.copyfile(ROOT / "tools" / name, tools / name)
     for source in ("games-formats", "gdi-2048-test", "ripper-controls", "capture-format",
                    "network-rip", "repair-copy", "cd-capture"):
@@ -327,9 +333,7 @@ def validate_native_release_baseline(directory):
     """Refuse a release that silently disables the accepted native fixes."""
     fields = dict(token.split("=", 1) for token in
                   (directory / "layout-config").read_text().split())
-    required = {"LOW": "1", "TRACE": "0", "SONIC": "0",
-                "SCI_RESUME_FIX": "1", "NATIVE_DISC_CHECK": "1",
-                "NATIVE_DRIVE_STATE": "1"}
+    required = NATIVE_RELEASE_FLAGS
     for name, value in required.items():
         if fields.get(name) != value:
             raise ValueError("Native release lost accepted baseline: " + name + "=" + value)
@@ -375,11 +379,13 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
     if (not candidate or experimental) and not rc:
         shutil.copyfile(dist / "ANNOUNCEMENTS.md", bundle / "ANNOUNCEMENTS.md")
     if not candidate and not experimental and not rc:
-        shutil.copyfile(ROOT / f"resources/branding/release-v{release['version']}-banner.jpg",
+        shutil.copyfile(ROOT / f"resources/branding/release-v{guide_version(release)}-banner.jpg",
                         bundle / "release-banner.jpg")
     if guide_version(release) == "2.0":
-        for name in ("RC-TEST-PLAN.md", "ACCEPTED-FIX-AUDIT.md", "CDDA-ACCEPTANCE-AUDIT.md"):
+        for name in ("ACCEPTED-FIX-AUDIT.md", "CDDA-ACCEPTANCE-AUDIT.md"):
             shutil.copyfile(dist / name, bundle / name)
+        if rc:
+            shutil.copyfile(dist / "RC-TEST-PLAN.md", bundle / "RC-TEST-PLAN.md")
         shutil.copyfile(ROOT / "resources/branding/release-v2.0-banner.jpg",
                         bundle / "release-banner.jpg")
     if guide_version(release) in ("1.8.5", "2.0"):
@@ -458,6 +464,27 @@ def write_release_assets(dist, bundle, source, release):
                     archive.write(path, path.relative_to(dist))
         for name in ("build.json", "LICENSE", "THIRD_PARTY.md"):
             archive.write(dist / name, name)
+    if release["version"] == "2.0.0":
+        # Preserve repository paths so image-index and announcement links work
+        # after extraction. Original-resolution assets include the board render.
+        family = guide_version(release)
+        directory = ROOT / f"resources/release-v{family}"
+        files = {str(path.relative_to(ROOT)): path for path in sorted(directory.rglob("*"))
+                 if path.is_file()}
+        if not any(Path(name).suffix.lower() == ".png" for name in files):
+            raise ValueError("Final press archive requires release images")
+        for name in (f"docs/release-v{family}-image-index.md",
+                     f"docs/release-v{family}-notes.md", f"docs/release-v{family}-announcements.md"):
+            files[name] = ROOT / name
+        for name in ("build.json", "LICENSE", "THIRD_PARTY.md"):
+            files[name] = dist / name
+        with zipfile.ZipFile(assets / (release["artifact_prefix"] + "-press.zip"), "w", zipfile.ZIP_DEFLATED) as archive:
+            checksums = []
+            for name, path in sorted(files.items()):
+                data = path.read_bytes()
+                archive.writestr(name, data)
+                checksums.append(f"{hashlib.sha256(data).hexdigest()}  {name}")
+            archive.writestr("SHA256SUMS", "\n".join(checksums) + "\n")
     asset_hashes = []
     for path in sorted(assets.glob("*.zip")):
         with path.open("rb") as stream:
@@ -747,8 +774,8 @@ def main():
         "Update runtime.kui and the complete Games folder from this same package.\n"
         "That folder includes separate LZ4/LZO1X ZSO modules; see GAMES-ZSO.md.\n"
         "KUI/apps/games/ce-probe.kui is the Windows CE boot test; see WINDOWS-CE-PLACEMENT-TEST.md.\n"
-        "RC15 restores the accepted Skies/Time Stalkers/Evolution native settings;\n"
-        "retest those titles and Evolution 1/2 opening FMVs using RC-TEST-PLAN.md.\n"
+        "The native reader retains the accepted Skies/Time Stalkers/Evolution settings.\n"
+        "RELEASE-NOTES.md records the tested baseline and remaining compatibility limits.\n"
         "Other titles and VMU save/load compatibility remain under community testing.\n"
         "Games reads the selected storage device; games may write VMU saves. Power cycle to return.\n"
         "Keep existing preferences and dumps. No repeated read probe or benchmark is requested.\n"

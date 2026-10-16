@@ -234,13 +234,13 @@ class ReleaseMetadata(unittest.TestCase):
 #define KUI_ARTIFACT_PREFIX "kui-1.8.5-dainsleif"
 '''
 
-    def test_current_tyrfing_candidate_names_match_artifact_version(self):
+    def test_current_tyrfing_final_names_match_artifact_version(self):
         release = release_metadata()
         self.assertEqual(release, {
-            "version": "2.0-rc15",
-            "name": 'K-UI V2.0 RC15 "Tyrfing"',
-            "short_name": "K-UI V2.0 RC15",
-            "artifact_prefix": "kui-2.0-rc15-tyrfing",
+            "version": "2.0.0",
+            "name": 'K-UI V2.0.0 "Tyrfing"',
+            "short_name": "K-UI V2.0.0",
+            "artifact_prefix": "kui-2.0.0-tyrfing",
         })
 
     def test_canonical_fixture_preserves_accent_and_ascii_console_name(self):

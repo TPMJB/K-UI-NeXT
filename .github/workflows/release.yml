@@ -19,7 +19,10 @@ jobs:
       contains(github.event.head_commit.message, 'Release: v1.7') ||
       contains(github.event.head_commit.message, 'Release post: v1.7') ||
       contains(github.event.head_commit.message, 'Release: v1.8.5') ||
-      contains(github.event.head_commit.message, 'Release post: v1.8.5')
+      contains(github.event.head_commit.message, 'Release post: v1.8.5') ||
+      contains(github.event.head_commit.message, 'Release: v2.0.0') ||
+      contains(github.event.head_commit.message, 'Release draft: v2.0.0') ||
+      contains(github.event.head_commit.message, 'Release post: v2.0.0')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -31,13 +34,19 @@ jobs:
           fetch-depth: 0
       - name: Publish verified binaries and corresponding source
         if: >-
-          ${{ !(contains(github.event.head_commit.message, 'Release post: v1.7') || contains(github.event.head_commit.message, 'Release post: v1.8.5')) }}
+          ${{ !(contains(github.event.head_commit.message, 'Release post: v1.7') || contains(github.event.head_commit.message, 'Release post: v1.8.5') || contains(github.event.head_commit.message, 'Release post: v2.0.0') || contains(github.event.head_commit.message, 'Release draft: v2.0.0')) }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 tools/publish_release.py
+      - name: Stage verified 2.0.0 release as a draft
+        if: >-
+          ${{ contains(github.event.head_commit.message, 'Release draft: v2.0.0') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/publish_release.py --draft
       - name: Update published release screenshots and support link
         if: >-
-          ${{ contains(github.event.head_commit.message, 'Release post: v1.7') || contains(github.event.head_commit.message, 'Release post: v1.8.5') }}
+          ${{ contains(github.event.head_commit.message, 'Release post: v1.7') || contains(github.event.head_commit.message, 'Release post: v1.8.5') || contains(github.event.head_commit.message, 'Release post: v2.0.0') }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 tools/publish_release.py --update-post

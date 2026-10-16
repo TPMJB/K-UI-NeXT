@@ -302,11 +302,21 @@ class ReleasePublicationWorkflow(unittest.TestCase):
         self.assertIn("python3 tools/publish_release.py", release)
         self.assertNotIn("make ", release)
 
+    def test_tyrfing_draft_uses_verified_exact_build_without_public_publication(self):
+        diagnostic = WORKFLOW.read_text()
+        release = (ROOT / ".github/workflows/release.yml").read_text()
+        for marker in ("Release: v2.0.0", "Release draft: v2.0.0", "Release post: v2.0.0"):
+            self.assertIn("'" + marker + "'", diagnostic)
+            self.assertIn("'" + marker + "'", release)
+        self.assertIn("run: python3 tools/publish_release.py --draft", release)
+        self.assertNotIn("make ", release)
+
     def test_release_scope_admits_versioned_artwork_and_runs_publication_checks(self):
         for path in ("include/kui/version.h", "resources/branding/startup.png",
                      "resources/branding/startup.json", "resources/branding/boot-red.png",
                      "resources/branding/release-v1.8.5-banner.jpg",
-                     "tools/publish_release.py", "tests/test_publish_release.py", "tests/test_package_candidate.py"):
+                     "tools/publish_release.py", "tests/test_publish_release.py", "tests/test_package_candidate.py",
+                     "tools/build_release_press.py", "resources/release-v2.0/01-hero.png"):
             with self.subTest(path=path):
                 result, output = GamesVariantValidationScope().run_scope(path, "release-only")
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

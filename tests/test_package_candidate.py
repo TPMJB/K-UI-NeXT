@@ -15,10 +15,11 @@ sys.path.insert(0, str(ROOT / "tools"))
 from package import (candidate_evidence, candidate_requested, development_experiment, development_notice,
                      development_test, package_kind, package_metadata,
                      release_metadata, write_release_assets, write_release_bundle,
-                     write_release_guides, GAME_FILES)
+                     write_release_guides, GAME_FILES, NATIVE_RELEASE_FLAGS)
 from publish_release import verify_assets
 from runtime_package import envelope
 from retail_package import relocation_header, HEADER_OFFSET, STAGE_BLOB_OFFSET
+from zso_package import relocation_header as zso_relocation_header
 
 STABLE_RELEASE = {"version": "1.7", "name": 'K-UI V1.7 "Dáinsleif"',
                   "short_name": "K-UI V1.7", "artifact_prefix": "kui-1.7-dainsleif"}
@@ -26,6 +27,8 @@ TEST_RELEASE = {"version": "1.7-2048-test", "name": 'K-UI V1.7 2048-byte test "D
                 "short_name": "K-UI V1.7 2048 test", "artifact_prefix": "kui-1.7-2048-test-dainsleif"}
 FORMATS_RELEASE = {"version": "1.7-formats-test", "name": 'K-UI V1.7 Games formats test "Dáinsleif"',
                    "short_name": "K-UI V1.7 formats test", "artifact_prefix": "kui-1.7-formats-test-dainsleif"}
+FINAL_RELEASE = {"version": "2.0.0", "name": 'K-UI V2.0.0 "Tyrfing"',
+                 "short_name": "K-UI V2.0.0", "artifact_prefix": "kui-2.0.0-tyrfing"}
 
 
 class CandidateInstallation(unittest.TestCase):
@@ -69,6 +72,9 @@ class CandidateInstallation(unittest.TestCase):
         candidate = candidate and not development_test(release)
         record = {"commit": self.commit, "release": release, "hardware_tested": False,
                   "kind": package_kind(release, candidate)}
+        if release["version"] == "2.0.0":
+            record["native_release_baseline"] = {"accepted_reference_build": "72e3bf049b26",
+                                                 "flags": dict(NATIVE_RELEASE_FLAGS)}
         if candidate:
             record.update(candidate=candidate_evidence())
         if development_test(release):
@@ -284,6 +290,120 @@ class CandidateInstallation(unittest.TestCase):
                 with self.assertRaisesRegex(SystemExit, message):
                     verify_assets(self.dist / "release-assets", release, self.commit)
 
+
+
+class TyrfingFinalInstallation(unittest.TestCase):
+    def setUp(self):
+        self.fixture = CandidateInstallation(methodName="runTest")
+        self.addCleanup(self.fixture.doCleanups)
+        self.fixture.setUp()
+        metadata = patch("package.release_metadata", return_value=FINAL_RELEASE)
+        metadata.start()
+        self.addCleanup(metadata.stop)
+        self.payload_names = ("runtime.kui", *("apps/games/" + name for name in GAME_FILES
+                                             if name.endswith(".kui")))
+        for name in GAME_FILES:
+            if (name == "retail-boot.kui" or name == "ce-probe.kui" or
+                    name.startswith(("ce-cdda-", "cdda-native-")) or
+                    name in ("zso-boot.kui", "lzo-boot.kui")):
+                ce = name == "ce-probe.kui" or name.startswith("ce-cdda-")
+                payload = bytearray(STAGE_BLOB_OFFSET + 4)
+                header = (zso_relocation_header(4, "lzo" if name == "lzo-boot.kui" else "lz4")
+                          if name in ("zso-boot.kui", "lzo-boot.kui") else
+                          relocation_header(4, ce=ce, low=not ce))
+                payload[HEADER_OFFSET:HEADER_OFFSET + 64] = header
+                payload[-4:] = b"\x09\0\x09\0"
+                (self.fixture.sd / "apps/games" / name).write_bytes(
+                    envelope(payload, len(payload), self.fixture.commit[:12]))
+
+    def test_final_installs_all_matching_payloads_and_family_guides_without_rc_instructions(self):
+        bundle, release = self.fixture.assemble(False)
+        self.assertEqual(release, FINAL_RELEASE)
+        self.assertEqual(len(self.payload_names), 14)
+        for name in self.payload_names:
+            self.assertEqual((bundle / "KUI" / name).read_bytes(), (self.fixture.sd / name).read_bytes())
+        self.assertEqual(json.loads((bundle / "build.json").read_text())["kind"], "release")
+        self.assertIn("— final release", (bundle / "SOURCE.txt").read_text())
+        self.assertTrue((bundle / "ANNOUNCEMENTS.md").is_file())
+        self.assertTrue((bundle / "ACCEPTED-FIX-AUDIT.md").is_file())
+        self.assertTrue((bundle / "CDDA-ACCEPTANCE-AUDIT.md").is_file())
+        self.assertFalse((bundle / "RC-TEST-PLAN.md").exists())
+        self.assertEqual((bundle / "release-banner.jpg").read_bytes(),
+                         (ROOT / "resources/branding/release-v2.0-banner.jpg").read_bytes())
+        self.assertTrue((bundle / "boot-cd/kui-v2.0.0.cdi").is_file())
+        self.assertEqual((bundle / "tools/verify_dump.py").read_bytes(),
+                         (ROOT / "tools/verify_dump.py").read_bytes())
+        self.fixture.assert_checksums(bundle, "SHA256SUMS")
+        self.assertEqual(len(verify_assets(self.fixture.dist / "release-assets", release,
+                                           self.fixture.commit)), 4)
+        with zipfile.ZipFile(self.fixture.dist / "release-assets" /
+                             (release["artifact_prefix"] + "-press.zip")) as archive:
+            self.assertIn("docs/release-v2.0-image-index.md", archive.namelist())
+            self.assertIn("docs/release-v2.0-announcements.md", archive.namelist())
+            for source in (ROOT / "resources/release-v2.0").rglob("*"):
+                if source.is_file():
+                    self.assertEqual(archive.read(str(source.relative_to(ROOT))), source.read_bytes())
+
+    def test_final_promotion_requires_every_module_and_data_inventory_entry(self):
+        for name in (*self.payload_names, "apps/games/probe.dat", "redump.db", "tosec.db"):
+            with self.subTest(missing=name):
+                bundle, release = self.fixture.assemble(False)
+                (bundle / "KUI" / name).unlink()
+                write_release_assets(self.fixture.dist, bundle, self.fixture.source, release)
+                with self.assertRaisesRegex(SystemExit, "Incomplete release"):
+                    verify_assets(self.fixture.dist / "release-assets", release, self.fixture.commit)
+
+    def test_final_promotion_checks_source_identity_of_every_payload(self):
+        for name in self.payload_names:
+            with self.subTest(mixed=name):
+                bundle, release = self.fixture.assemble(False)
+                (bundle / "KUI" / name).write_bytes(envelope(b"\x09\0\x09\0", 4, "f" * 12))
+                write_release_assets(self.fixture.dist, bundle, self.fixture.source, release)
+                with self.assertRaisesRegex(SystemExit, "payload source identity"):
+                    verify_assets(self.fixture.dist / "release-assets", release, self.fixture.commit)
+
+    def test_final_promotion_rejects_wrong_typed_compressed_and_music_modules(self):
+        for name in ("zso-boot.kui", "lzo-boot.kui", "ce-cdda-wwp.kui", "cdda-native-mdk2.kui"):
+            with self.subTest(module=name):
+                bundle, release = self.fixture.assemble(False)
+                (bundle / "KUI/apps/games" / name).write_bytes(
+                    envelope(b"\x09\0\x09\0", 4, self.fixture.commit[:12]))
+                write_release_assets(self.fixture.dist, bundle, self.fixture.source, release)
+                with self.assertRaisesRegex(SystemExit, "Invalid release reader"):
+                    verify_assets(self.fixture.dist / "release-assets", release, self.fixture.commit)
+
+    def test_final_promotion_rejects_missing_or_disabled_accepted_native_flags(self):
+        for flag in (None, *NATIVE_RELEASE_FLAGS):
+            with self.subTest(flag=flag):
+                bundle, release = self.fixture.assemble(False)
+                path = bundle / "build.json"
+                record = json.loads(path.read_text())
+                if flag is None:
+                    record.pop("native_release_baseline")
+                else:
+                    record["native_release_baseline"]["flags"][flag] = (
+                        "0" if NATIVE_RELEASE_FLAGS[flag] == "1" else "1")
+                path.write_text(json.dumps(record))
+                write_release_assets(self.fixture.dist, bundle, self.fixture.source, release)
+                with self.assertRaisesRegex(SystemExit, "accepted native configuration"):
+                    verify_assets(self.fixture.dist / "release-assets", release, self.fixture.commit)
+
+    def test_final_press_inventory_cannot_omit_an_image_with_fresh_outer_checksums(self):
+        _, release = self.fixture.assemble(False)
+        assets = self.fixture.dist / "release-assets"
+        press = assets / (release["artifact_prefix"] + "-press.zip")
+        with zipfile.ZipFile(press) as archive:
+            files = {entry: archive.read(entry) for entry in archive.namelist()}
+        image = next(entry for entry in files if entry.startswith("resources/") and entry.endswith(".png"))
+        files.pop(image)
+        with zipfile.ZipFile(press, "w", zipfile.ZIP_DEFLATED) as archive:
+            for name, data in files.items():
+                archive.writestr(name, data)
+        (assets / "SHA256SUMS.txt").write_text("\n".join(
+            f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}"
+            for path in sorted(assets.glob("*.zip"))) + "\n")
+        with self.assertRaisesRegex(SystemExit, "press archive inventory"):
+            verify_assets(assets, release, self.fixture.commit)
 
 
 class CandidateSelection(unittest.TestCase):

@@ -107,9 +107,9 @@ class ZsoReleaseInstallation(unittest.TestCase):
         self.assertEqual(Path(failure.exception.filename), guide)
         self.assertFalse((self.fixture.dist / "release-assets").exists())
 
-    def test_zso_integration_does_not_enable_tyrfing_publication(self):
+    def test_rc_and_unversioned_tyrfing_remain_ineligible_for_publication(self):
         _, release = self.assemble()
-        self.assertEqual(publish_release.SUPPORTED_RELEASES, {"1.7", "1.8.5"})
+        self.assertEqual(publish_release.SUPPORTED_RELEASES, {"1.7", "1.8.5", "2.0.0"})
         for version in (release["version"], "2.0"):
             with self.subTest(version=version), self.assertRaisesRegex(SystemExit, "explicitly scoped"):
                 publish_release.release_tag({**release, "version": version})

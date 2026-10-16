@@ -7,6 +7,10 @@ earlier delivered source/binary records and recovered owner acceptance reports.
 This inventory distinguishes accepted feature builds from the newly assembled
 candidate. It does not certify another console run or every game revision.
 
+**Current status:** the [final-promotion addendum](#final-promotion-addendum--october-16-2026-utc)
+records the subsequent owner acceptance of RC15 and 2.0.0 preparation. Pending
+statements below describe the original audit-time state.
+
 ## Confirmed omissions
 
 The October 13 working native reference is
@@ -115,3 +119,28 @@ CI identity and checksum checks remain. These are final-promotion tasks, not
 lost console fixes or requirements to install this candidate. Complete and
 test them before final packaging/publication; do not enable 2.0 by an allowlist
 change alone.
+
+## Final-promotion addendum — October 16, 2026 UTC
+
+On October 15, 2026 (America/Chicago), after receiving RC15 and the prioritized
+Skies/Time Stalkers/Evolution test instructions, the owner reported “everything
+seems to work now” and requested final 2.0.0. This accepts the restored native
+baseline. The report does not enumerate every image, reader, revision, optional
+maintenance action or music module; no complete matrix is inferred.
+
+RC15 was merged to main at `9ded185e7219cb2db55791198ecba7d6ea8870b5`. Final
+promotion retains its loader behavior and accepted defaults, with the final
+version, documentation and release tooling updated together. The earlier
+“blocked on console acceptance” statement is superseded for that baseline.
+
+The final pipeline now handles version 2.0.0, supplies final announcements,
+and validates the complete codec/CDDA payload inventory and accepted native
+configuration. Final build/CI, exact-source, checksum and publication checks
+still apply to the final assembled commit; this addendum does not claim those
+future artifacts already passed or were published.
+
+Separate ZSO readers, unfamiliar CD music combinations, IDE/CF hardware,
+new maintenance/recovery/PC/CD paths and newer wireless behavior keep their
+individual experimental/acceptance labels. The final
+[release notes](release-v2.0-notes.md) replace stale public compatibility wording
+without converting the broad owner report into unrecorded feature passes.

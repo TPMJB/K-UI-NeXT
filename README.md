@@ -1,28 +1,41 @@
-# K-UI V2.0 RC13 "Tyrfing"
+# K-UI 2.0.0 “Tyrfing”
 
 An independent Dreamcast shell built directly on upstream KallistiOS, retaining
 the original GD-ROM and using exFAT/FAT32 storage.
 
-**The current source prepares 2.0 RC13, named Tyrfing, continuing the cursed-sword
-release theme.** It integrates the tested SCI Windows CE CD music work with
-saved per-image launch options while retaining the established 1.8.5 native
-reader. This is release preparation; a final 2.0 release has not been published.
-RC13 adds external VMS/VMI/DCI save import into verified SD bundles and
-previewed Copy all between VMUs. It retains RC12 verified 128 KiB VMU
-card-image backups, read-only VMD browsing
-and save extraction, and read-only BIOS/settings-flash comparisons. It retains
-the matching orange Tyrfing splash, bootloader, header and disc-badge artwork. The runtime update works with an existing compatible bootstrap;
-burn the matching optional CDI to update artwork stored on the boot disc.
-Read the [2.0 installation guide](docs/release-v2.0.md) and
-[2.0 preparation notes](docs/release-v2.0-notes.md) for its scope.
-The [comparison with DS-based K-UI 1.0.1](docs/release-v2.0-ds-comparison.md)
-separates remaining feature gaps from release acceptance and deferred work.
+**Tyrfing is the cumulative update since 1.7.5**, including the intervening
+1.8.5 work: native compatibility/FMV improvements, alphabetical cached Games
+browsing, Original/2048 selection, saved per-image options, optional checked
+SCI CD music, more ripper formats/recovery tools and expanded VMU workflows.
+New orange pixel artwork refreshes the runtime and optional matching boot CD;
+all ten Home apps now have original icons, and the startup VMU shows K-UI's
+version.
 
-The integration also carries the wireless performance branch: checked adaptive
-SCI pacing, band-change reconnects, bounded FTP service and Wi-Fi adapter updates
-from the card. Firmware 0.1.3 remains a separate ESP32 build. All ten Home apps
-now have dedicated icons. See the [integration record](docs/release-v2.0-integration.md).
-The G1 SD adapter hardware design remains on its development branch.
+The owner accepted the priority RC15 console retest on October 15, 2026
+(America/Chicago) and authorized final **2.0.0** preparation. Final packages are
+staged through the release build/publishing workflow; source preparation alone
+does not imply a public download is already published. Individual optional
+features retain their documented hardware-test limits.
+
+[2.0.0 downloads](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v2.0.0) ·
+[Installation](docs/release-v2.0.md) ·
+[Changelog since 1.7.5](docs/release-v2.0-notes.md) ·
+[Screenshots/press images](docs/release-v2.0-image-index.md) ·
+[Reddit/forum drafts](docs/release-v2.0-announcements.md)
+
+VMU additions include verified 128 KiB VMD backups, read-only image browsing
+and save extraction, supported external VMS/VMI/DCI import into verified SD
+bundles, and previewed Copy all between VMUs. System Tools compares existing
+BIOS/settings-flash images without programming. The new maintenance paths have
+host/fault/filesystem checks, without a blanket console-acceptance claim.
+
+Wireless changes add adaptive SCI pacing, band-change reconnects, bounded FTP
+service and compatible card-supplied adapter updates. Firmware is a separate
+ESP32 build; newer timing/update paths retain their own acceptance limits.
+See the [integration record](docs/release-v2.0-integration.md) and
+[comparison with DS-based K-UI 1.0.1](docs/release-v2.0-ds-comparison.md).
+The separate custom G1 board is a development preview; getting that hardware
+working is the intended version 3 milestone, not a 2.0.0 requirement.
 
 Optional WinCE CD music uses four checked kernel/sound adapters established
 from US **Armada, Bust-A-Move 4, Worms Armageddon and Worms World Party**.
@@ -35,18 +48,15 @@ successful owner report and remains Experimental, as do unfamiliar matching
 images. A CD music toggle does not establish another title's compatibility.
 See [admission and evidence limits](docs/experimental-cdda.md).
 
-For the existing stable download, use the
-[1.8.5 release](https://github.com/TPMJB/K-UI-NeXT/releases/tag/v1.8.5), its
-[installation guide](docs/release-v1.8.5.md) and
-[release notes](docs/release-v1.8.5-notes.md). For either version, install the
-complete matching package: the runtime and Games payload folder belong together.
+Install the complete matching package: runtime and Games payloads belong together.
 Keep your existing exFAT card, game dumps and compatible independent K-UI boot
 CD. No reformat, reripping or 2048 conversion is required. DreamShell-based
 K-UI 1.0 requires an independent K-UI bootstrap CD.
 
 Native Sonic Adventure, Grandia II and Skies of Arcadia have scoped console
 confirmation from 1.8.5. Later accepted native fixes for Skies, Time Stalkers
-and Evolution 1/2 were omitted from RC14 and are restored in RC15; see the
+and Evolution 1/2 were omitted from RC14 and restored in the accepted RC15
+baseline retained for 2.0.0; see the
 [accepted-fix audit](docs/release-v2.0-accepted-fix-audit.md).
 Toy Commander FMV stalls are not fixed by the WinCE work. Native SCI Standard
 has experimental direct LZ4/LZO1X ZSO readers with explicit codec selection;
@@ -55,13 +65,17 @@ IDE/CF remains untested synchronous PIO;
 ATA DMA and CE on IDE/SCIF remain future work. ext4 is available only to the
 read-only bootstrap, not runtime apps or Games.
 
-The historical [1.7 notes](docs/release-v1.7-notes.md) and
+The historical [1.8.5 notes](docs/release-v1.8.5-notes.md),
+[1.7 notes](docs/release-v1.7-notes.md) and
 [1.5.1 notes](docs/release-v1.5.1-notes.md) remain available.
 
-The current SD runtime adds **raw-track GDI capture, saved-file verification and
-controlled resume** to the independently booting hardware diagnostic. It stays
-in RAM after you swap discs and uses FAT32/exFAT through the standard external
-serial SD adapter. Keep the reusable CD and update `/KUI/runtime.kui`.
+## Foundation and capture evidence
+
+The independent SD runtime established **raw-track GDI capture, saved-file
+verification and controlled resume** on top of the independently booting
+hardware diagnostic. It stays in RAM after disc swaps and uses FAT32/exFAT.
+Later SCI and Games work builds on that foundation; update the complete
+matching package as described above.
 
 **Disc reading is done and verified. For the full state, read
 [docs/HANDOFF-disc-reader.md](docs/HANDOFF-disc-reader.md) first.** A whole GD-ROM now rips in
@@ -150,7 +164,7 @@ These new app paths still need physical-console acceptance.
   complete, and K-UI's start-up files are protected
   ([details](docs/ftp.md)). Earlier overlapping-transfer builds reached about
   0.8 MiB/s uploads and 0.5 MiB/s downloads in the tested W5500/SCIF setup;
-  these are historical results, not new 1.8.5 measurements.
+  these are historical results, not new 2.0.0 measurements.
   A XIAO ESP32-C5/C6 with the separate K-UI firmware provides SCI Wi-Fi;
   Network Start opens scan/join and band selection. Storage remains on SCIF
   while networking owns SCI. Firmware can be flashed by USB from a computer;
@@ -269,11 +283,11 @@ Skies of Arcadia working on the tested layout. Power Stone 1/2 worked after
 earlier GD command fixes. These are scoped console results, not full
 playthroughs or an all-games claim.
 
-RC15 restores the native configuration accepted on Skies, Time Stalkers and
-Evolution 1/2; these title paths need verification in the complete new package.
+The accepted RC15 baseline restores the native configuration for Skies,
+Time Stalkers and Evolution 1/2 and is retained for final 2.0.0.
 Toy Commander and other documented FMV limitations remain. Optional WinCE CD music requires one of the admitted
 kernel/sound contracts above; universal CDDA, Mode 2 Form 2 and subchannel
-emulation are not provided. See the [2.0 preparation notes](docs/release-v2.0-notes.md),
+emulation are not provided. See the [2.0 release notes](docs/release-v2.0-notes.md),
 [native placement evidence](docs/evidence/native-low-resident-2026-10-06.md),
 and [CD music admission](docs/experimental-cdda.md).
 

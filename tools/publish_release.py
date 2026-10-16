@@ -11,23 +11,26 @@ import subprocess
 import tempfile
 import zipfile
 
-from package import ROOT, release_metadata
+from package import ROOT, GAME_FILES, NATIVE_RELEASE_FLAGS, guide_version, release_metadata
 from runtime_package import verify
 from retail_package import inspect_retail
+from zso_package import inspect_zso
 
-SUPPORTED_RELEASES = {"1.7", "1.8.5"}
+SUPPORTED_RELEASES = {"1.7", "1.8.5", "2.0.0"}
 
 
 def release_tag(release):
     require(release["version"] in SUPPORTED_RELEASES,
-            "This promotion is explicitly scoped to 1.7 and 1.8.5")
+            "This promotion is explicitly scoped to 1.7, 1.8.5 and 2.0.0")
     return "v" + release["version"]
 
 
 def post_allowed_paths(version):
     require(version in SUPPORTED_RELEASES, "Unsupported release-post version")
-    return {"README.md", f"docs/release-v{version}.md",
-            f"docs/release-v{version}-notes.md", f"docs/release-v{version}-announcements.md",
+    family = guide_version({"version": version})
+    return {"README.md", f"docs/release-v{family}.md",
+            f"docs/release-v{family}-notes.md", f"docs/release-v{family}-announcements.md",
+            f"docs/release-v{family}-image-index.md",
             "tools/publish_release.py", ".github/workflows/release.yml",
             ".github/workflows/diagnostic.yml"}
 
@@ -78,7 +81,7 @@ def public_notes(notes, repository, tag, asset_ref=None):
         path, separator, anchor = target.partition("#")
         source = (ROOT / "docs" / path).resolve()
         if source.is_relative_to(ROOT) and source.is_file():
-            if source.suffix.lower() in (".png", ".jpg", ".jpeg"):
+            if source.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp"):
                 url = f"https://raw.githubusercontent.com/{repository}/{asset_ref or tag}/{source.relative_to(ROOT)}"
             else:
                 url = f"https://github.com/{repository}/blob/{asset_ref or tag}/{source.relative_to(ROOT)}"
@@ -90,6 +93,8 @@ def public_notes(notes, repository, tag, asset_ref=None):
 def verify_assets(directory, release, commit):
     prefix = release["artifact_prefix"]
     names = {prefix + "-release.zip", prefix + "-source.zip"}
+    if release["version"] == "2.0.0":
+        names.add(prefix + "-press.zip")
     checksums = {}
     for line in (directory / "SHA256SUMS.txt").read_text().splitlines():
         digest, name = line.split("  ", 1)
@@ -104,11 +109,23 @@ def verify_assets(directory, release, commit):
             record = json.loads(archive.read("build.json"))
             require(record["commit"] == commit and record["release"] == release,
                     "Build source identity does not match the promoted commit")
+            if release["version"] == "2.0.0":
+                baseline = record.get("native_release_baseline")
+                require(isinstance(baseline, dict) and baseline.get("flags") == NATIVE_RELEASE_FLAGS,
+                        "Release lost the accepted native configuration flags")
             if name.endswith("-release.zip"):
                 require(record["kind"] == "release", "Refusing a diagnostic or candidate package")
                 payloads = ("KUI/runtime.kui", "KUI/apps/games/probe.kui",
                             "KUI/apps/games/image-probe.kui", "KUI/apps/games/retail-boot.kui",
                             "KUI/apps/games/ce-probe.kui")
+                if release["version"] == "2.0.0":
+                    payloads = ("KUI/runtime.kui", *("KUI/apps/games/" + name
+                                for name in GAME_FILES if name.endswith(".kui")))
+                    for entry in ("KUI/apps/games/probe.dat", "KUI/redump.db", "KUI/tosec.db",
+                                  "ACCEPTED-FIX-AUDIT.md", "CDDA-ACCEPTANCE-AUDIT.md",
+                                  "GAMES-ZSO.md", "NETWORK-RIP.md", "REPAIR-COPY.md", "CD-CAPTURE.md",
+                                  "tools/network_rip_server.py", "tools/verify_dump.py"):
+                        require(entry in archive.namelist(), "Incomplete release: " + entry)
                 for entry in (*payloads, f"boot-cd/kui-v{release['version']}.cdi",
                               "START-HERE.md", "RELEASE-NOTES.md", "SHA256SUMS"):
                     require(entry in archive.namelist(), "Incomplete release: " + entry)
@@ -118,14 +135,14 @@ def verify_assets(directory, release, commit):
                     except ValueError as error:
                         require(False, "Invalid release payload " + entry + ": " + str(error))
                     require(info["build"] == commit[:12], "Release payload source identity mismatch: " + entry)
-                if release["version"] == "1.8.5":
+                if release["version"] in ("1.8.5", "2.0.0"):
                     try:
                         native = inspect_retail(archive.read("KUI/apps/games/retail-boot.kui"))
                         ce = inspect_retail(archive.read("KUI/apps/games/ce-probe.kui"), ce=True)
                     except ValueError as error:
                         require(False, "Invalid release reader: " + str(error))
                     require((native["resident_address"], native["resident_limit"]) ==
-                            ("0x8c004000", "0x8c007800"), "1.8.5 requires the hardware-confirmed native placement")
+                            ("0x8c004000", "0x8c007800"), "Release requires the hardware-confirmed native placement")
                     require((ce["resident_address"], ce["resident_limit"]) ==
                             ("0x8c008300", "0x8c00bb00"), "Windows CE release placement changed")
                     for entry in ("tools/gdi_optimize.py", "tools/game_image_import.py",
@@ -134,6 +151,18 @@ def verify_assets(directory, release, commit):
                                   "LICENSES/miniz-NOTICES.txt", "LICENSES/minilzo-COPYING",
                                   "LICENSES/minilzo-README.LZO"):
                         require(entry in archive.namelist(), "Incomplete release: " + entry)
+                if release["version"] == "2.0.0":
+                    for entry in payloads:
+                        module_name = Path(entry).name
+                        try:
+                            if module_name in ("zso-boot.kui", "lzo-boot.kui"):
+                                inspect_zso(archive.read(entry), "lzo" if module_name == "lzo-boot.kui" else "lz4")
+                            elif module_name.startswith("ce-cdda-"):
+                                inspect_retail(archive.read(entry), ce=True)
+                            elif module_name.startswith("cdda-native-"):
+                                inspect_retail(archive.read(entry))
+                        except ValueError as error:
+                            require(False, "Invalid release reader " + entry + ": " + str(error))
                 entries = [entry for entry in archive.namelist() if not entry.endswith("/")]
                 require(len(entries) == len(set(entries)), "Duplicate release archive entry")
                 sums = {}
@@ -145,6 +174,32 @@ def verify_assets(directory, release, commit):
                             "Installed release checksum mismatch: " + entry)
                     sums[entry] = digest
                 require(set(sums) == set(entries) - {"SHA256SUMS"}, "Incomplete installed checksums")
+            elif name.endswith("-press.zip"):
+                family = guide_version(release)
+                resources = ROOT / f"resources/release-v{family}"
+                image_files = {str(path.relative_to(ROOT)): path for path in resources.rglob("*")
+                               if path.is_file()}
+                require(any(Path(entry).suffix.lower() == ".png" for entry in image_files),
+                        "Final press archive requires release images")
+                documents = {f"docs/release-v{family}-{suffix}.md":
+                             ROOT / f"docs/release-v{family}-{suffix}.md"
+                             for suffix in ("image-index", "notes", "announcements")}
+                expected = {**image_files, **documents}
+                entries = archive.namelist()
+                require(len(entries) == len(set(entries)), "Duplicate press archive entry")
+                require(set(entries) == set(expected) | {"build.json", "LICENSE", "THIRD_PARTY.md", "SHA256SUMS"},
+                        "Incomplete or unexpected press archive inventory")
+                for entry, source in expected.items():
+                    require(archive.read(entry) == source.read_bytes(), "Press asset differs from source: " + entry)
+                sums = {}
+                for line in archive.read("SHA256SUMS").decode("utf-8").splitlines():
+                    digest, entry = line.split("  ", 1)
+                    require(entry in entries and entry not in sums and entry != "SHA256SUMS",
+                            "Unexpected press checksum entry")
+                    require(hashlib.sha256(archive.read(entry)).hexdigest() == digest,
+                            "Press asset checksum mismatch: " + entry)
+                    sums[entry] = digest
+                require(set(sums) == set(entries) - {"SHA256SUMS"}, "Incomplete press checksums")
             else:
                 for entry in ("source/kui-source.tar.gz", "source/kos-source.tar.gz", "LICENSE"):
                     require(entry in archive.namelist(), "Incomplete corresponding source: " + entry)
@@ -162,15 +217,17 @@ def update_post(repository, commit, release, tag, message):
     tag_before = api(endpoint + "/git/ref/tags/" + tag)["object"]
     require(tag_before["type"] == "commit", "Expected the original lightweight release tag")
     allowed = post_allowed_paths(release["version"])
+    family = guide_version(release)
     paths = subprocess.check_output(["git", "diff", "--name-only", tag_before["sha"], commit],
                                     cwd=ROOT, text=True).splitlines()
     require(paths and all(path in allowed or
-            (path.startswith(f"resources/release-v{release['version']}/") and path.endswith(".png")) for path in paths),
+            (path.startswith(f"resources/release-v{family}/") and
+             Path(path).suffix.lower() in (".png", ".jpg", ".jpeg", ".webp")) for path in paths),
             "Release-post update includes changes outside documentation and screenshots")
     old_body = published["body"]
     require("\nSource commit: " in old_body, "Missing original build attribution")
     footer = "\nSource commit: " + old_body.rsplit("\nSource commit: ", 1)[1]
-    notes = (ROOT / f"docs/release-v{release['version']}-notes.md").read_text(encoding="utf-8")
+    notes = (ROOT / f"docs/release-v{family}-notes.md").read_text(encoding="utf-8")
     notes = public_notes(notes, repository, tag, asset_ref=commit) + footer
     assets_before = [(asset["id"], asset["name"], asset.get("digest")) for asset in published["assets"]]
     with tempfile.TemporaryDirectory(prefix="kui-release-post-") as temporary:
@@ -188,7 +245,9 @@ def update_post(repository, commit, release, tag, message):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--update-post", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--update-post", action="store_true")
+    mode.add_argument("--draft", action="store_true", help="Stage verified assets without public publication")
     args = parser.parse_args()
     repository = os.environ["GITHUB_REPOSITORY"]
     commit = os.environ["GITHUB_SHA"]
@@ -201,7 +260,8 @@ def main():
     if args.update_post:
         update_post(repository, commit, release, tag, message)
         return
-    require("Release: " + tag in message.splitlines(), "Missing explicit release request")
+    request = "Release draft: " if args.draft else "Release: "
+    require(request + tag in message.splitlines(), "Missing explicit release request")
     endpoint = "repos/" + repository
     require(api(endpoint + "/git/ref/heads/main")["object"]["sha"] == commit,
             "Main advanced after this promotion; refusing to publish stale artifacts")
@@ -211,12 +271,12 @@ def main():
         directory = Path(temporary)
         gh("run", "download", run_id, "--repo", repository, "--name", artifact_name, "--dir", temporary)
         assets = verify_assets(directory, release, commit)
-        notes = (ROOT / f"docs/release-v{release['version']}-notes.md").read_text(encoding="utf-8")
-        notes = public_notes(notes, repository, tag)
+        notes = (ROOT / f"docs/release-v{guide_version(release)}-notes.md").read_text(encoding="utf-8")
+        notes = public_notes(notes, repository, tag, asset_ref=commit if args.draft else None)
         notes += f"\nSource commit: `{commit}`. [Native build]({run['html_url']}).\n"
         notes_file = directory / "release-notes.md"
         notes_file.write_text(notes, encoding="utf-8")
-        # gh creates the release as a draft while uploading assets, then publishes it.
+        # Explicit draft requests keep the completed upload unpublished.
         # An existing tag/release is never moved or overwritten by this script.
         require(api(endpoint + "/git/ref/heads/main")["object"]["sha"] == commit,
                 "Main advanced while release assets were being verified")
@@ -224,7 +284,8 @@ def main():
         require(not any(item["ref"] == "refs/tags/" + tag for item in tags),
                 "Release tag already exists; refusing to overwrite it")
         print(gh("release", "create", tag, *(str(path) for path in assets), "--repo", repository,
-                 "--target", commit, "--title", release["name"], "--notes-file", str(notes_file), "--latest"))
+                 "--target", commit, "--title", release["name"], "--notes-file", str(notes_file),
+                 "--draft" if args.draft else "--latest"))
 
 
 if __name__ == "__main__":
