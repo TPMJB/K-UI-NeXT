@@ -243,11 +243,69 @@ def update_post(repository, commit, release, tag, message):
     print("Updated release post; original build attribution and assets verified")
 
 
+def publish_draft(repository, commit, release, tag, message):
+    """Publish an existing verified draft without rebuilding or replacing assets."""
+    require("Publish draft: " + tag in message.splitlines(), "Missing explicit draft-publication request")
+    endpoint = "repos/" + repository
+    require(api(endpoint + "/git/ref/heads/main")["object"]["sha"] == commit,
+            "Main advanced after the draft-publication request")
+    matches = [item for item in api(endpoint + "/releases?per_page=100") if item["tag_name"] == tag]
+    require(len(matches) == 1, "Expected exactly one existing release draft")
+    draft = matches[0]
+    require(draft["draft"] and not draft["prerelease"], "Expected an unpublished full-release draft")
+    source = draft["target_commitish"]
+    require(re.fullmatch(r"[0-9a-f]{40}", source) is not None and
+            f"\nSource commit: `{source}`." in draft["body"], "Draft source attribution differs from its target")
+    allowed = {"tools/publish_release.py", ".github/workflows/release.yml",
+               ".github/workflows/diagnostic.yml", "tests/test_publish_release.py",
+               "tests/test_workflow_hygiene.py"}
+    paths = subprocess.check_output(["git", "diff", "--name-only", source, commit],
+                                    cwd=ROOT, text=True).splitlines()
+    require(paths and all(path in allowed for path in paths),
+            "Draft publication includes changes outside the publication workflow")
+    successful_build(repository, source, release)
+    def identity(item):
+        return (item["id"], item["tag_name"], item["target_commitish"], item["name"], item["body"],
+                sorted((asset["id"], asset["name"], asset["size"], asset.get("digest"))
+                       for asset in item["assets"]))
+    def check_tag(required):
+        refs = [item for item in api(endpoint + "/git/matching-refs/tags/" + tag)
+                if item["ref"] == "refs/tags/" + tag]
+        require(len(refs) <= 1 and (not required or len(refs) == 1), "Release tag is missing or ambiguous")
+        if refs:
+            obj = refs[0]["object"]
+            if obj["type"] == "tag":
+                obj = api(endpoint + "/git/tags/" + obj["sha"])["object"]
+            require(obj["type"] == "commit" and obj["sha"] == source,
+                    "Release tag does not identify the verified draft source")
+    check_tag(False)
+    release_path = endpoint + "/releases/" + str(draft["id"])
+    with tempfile.TemporaryDirectory(prefix="kui-publish-draft-") as temporary:
+        gh("release", "download", tag, "--repo", repository, "--dir", temporary,
+           "--pattern", release["artifact_prefix"] + "-*.zip", "--pattern", "SHA256SUMS.txt")
+        verify_assets(Path(temporary), release, source)
+        require(api(endpoint + "/git/ref/heads/main")["object"]["sha"] == commit,
+                "Main advanced while the draft was being verified")
+        current = api(release_path)
+        require(current["draft"] and not current["prerelease"] and identity(current) == identity(draft),
+                "Release draft changed while its assets were being verified")
+        check_tag(False)
+        print(gh("release", "edit", tag, "--repo", repository, "--draft=false", "--latest"))
+    published = api(release_path)
+    require(not published["draft"] and not published["prerelease"] and published.get("published_at"),
+            "Release did not become a public full release")
+    require(identity(published) == identity(draft), "Release identity, notes or assets changed during publication")
+    check_tag(True)
+    require(api(endpoint + "/releases/latest")["id"] == draft["id"], "Published release is not marked latest")
+    print("Published existing verified draft; source, notes, assets and latest tag verified")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--update-post", action="store_true")
     mode.add_argument("--draft", action="store_true", help="Stage verified assets without public publication")
+    mode.add_argument("--publish-draft", action="store_true", help="Publish the existing verified draft unchanged")
     args = parser.parse_args()
     repository = os.environ["GITHUB_REPOSITORY"]
     commit = os.environ["GITHUB_SHA"]
@@ -259,6 +317,9 @@ def main():
                                       cwd=ROOT, text=True)
     if args.update_post:
         update_post(repository, commit, release, tag, message)
+        return
+    if args.publish_draft:
+        publish_draft(repository, commit, release, tag, message)
         return
     request = "Release draft: " if args.draft else "Release: "
     require(request + tag in message.splitlines(), "Missing explicit release request")

@@ -172,5 +172,67 @@ class ExplicitReleaseSelection(unittest.TestCase):
             api.assert_not_called()
 
 
+class ExistingDraftPublication(unittest.TestCase):
+    def exercise(self, fault=None):
+        import copy
+        source = "5" * 40
+        final = {"version": "2.0.0", "artifact_prefix": "kui-2.0.0-tyrfing"}
+        draft = {"id": 17, "tag_name": "v2.0.0", "target_commitish": source,
+                 "name": "Tyrfing", "body": f"Notes\nSource commit: `{source}`. [Native build](url).\n",
+                 "draft": True, "prerelease": False,
+                 "assets": [{"id": 18, "name": "release.zip", "size": 10, "digest": "sha256:abc"}]}
+        published = False
+        operations = []
+        def fake_api(path):
+            if path.endswith("/git/ref/heads/main"):
+                return {"object": {"sha": "f" * 40 if fault == "stale" else COMMIT}}
+            if path.endswith("/releases?per_page=100"):
+                item = copy.deepcopy(draft)
+                if fault == "source": item["target_commitish"] = "6" * 40
+                return [item]
+            if "/git/matching-refs/tags/" in path:
+                return ([{"ref": "refs/tags/v2.0.0", "object": {"type": "commit",
+                         "sha": "f" * 40 if fault == "tag" else source}}]
+                        if published or fault == "tag" else [])
+            if path.endswith("/releases/latest"): return {"id": 17}
+            if path.endswith("/releases/17"):
+                item = copy.deepcopy(draft)
+                if fault == "assets": item["assets"][0]["id"] = 99
+                if published: item.update(draft=False, published_at="2026-10-16T12:00:00Z")
+                return item
+            raise AssertionError(path)
+        def fake_gh(*args):
+            nonlocal published
+            operations.append(args)
+            if args[:2] == ("release", "edit"): published = True
+            return "release URL"
+        message = "Publish draft: v2.0.0\n" if fault != "marker" else "Publish draft: v1.8.5\n"
+        paths = "tools/publish_release.py\n" if fault != "paths" else "src/loader/retail_stage.c\n"
+        with patch.object(publish_release, "api", side_effect=fake_api), \
+                patch.object(publish_release, "gh", side_effect=fake_gh), \
+                patch.object(publish_release.subprocess, "check_output", return_value=paths), \
+                patch.object(publish_release, "successful_build") as build_check, \
+                patch.object(publish_release, "verify_assets") as asset_check:
+            if fault:
+                with self.assertRaises(SystemExit):
+                    publish_release.publish_draft(REPOSITORY, COMMIT, final, "v2.0.0", message)
+                self.assertFalse(published)
+            else:
+                publish_release.publish_draft(REPOSITORY, COMMIT, final, "v2.0.0", message)
+                build_check.assert_called_once_with(REPOSITORY, source, final)
+                self.assertEqual(asset_check.call_args.args[1:], (final, source))
+                self.assertEqual([args[:2] for args in operations],
+                                 [("release", "download"), ("release", "edit")])
+                self.assertEqual(operations[-1], ("release", "edit", "v2.0.0", "--repo", REPOSITORY,
+                                                  "--draft=false", "--latest"))
+
+    def test_publishes_existing_verified_assets_without_replacing_them(self):
+        self.exercise()
+
+    def test_rejects_unapproved_stale_changed_or_wrong_source_drafts(self):
+        for fault in ("marker", "source", "paths", "stale", "tag", "assets"):
+            with self.subTest(fault=fault): self.exercise(fault)
+
+
 if __name__ == "__main__":
     unittest.main()
