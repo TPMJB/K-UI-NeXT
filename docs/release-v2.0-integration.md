@@ -28,9 +28,10 @@ The owner accepted World Party build `b08802f8945f` after the status-restart and
 linked-call corrections, with successful boot/playback reported and diagnostic
 video showing no recorded guard, bind, audio fault, gaps or recoveries. Its
 two native starts are 33 seconds apart. This is scoped evidence for that
-feature binary; World Party remains generally Experimental. The original
-Armageddon module remains byte-identical, including its three reported
-converted2048 cold boots. See the [CDDA handoff](cdda-2.0-handoff.md) and
+feature binary; World Party remains generally Experimental. The incremental delivery preserved the original Armageddon module and its
+three reported converted2048 cold boots. The later full RC14 packaging rebuilt
+that module with broader application discovery, so exact-binary acceptance
+does not carry over; see the [artifact audit](release-v2.0-cdda-acceptance-audit.md). See the [CDDA handoff](cdda-2.0-handoff.md) and
 [World Party acceptance](evidence/world-party-status-restart-2026-10-15.md).
 
 The wireless merge originally reused worker action 76, already occupied by
@@ -105,3 +106,13 @@ DreamShell implementation is read or reused for this work. Existing source art,
 SCI/SCIF readers, CE/native CD music, capture and recovery contracts remain.
 RC12 is retained as the preceding candidate. Host and console build/package
 validation do not replace physical-console acceptance before final 2.0.
+
+## RC15 accepted-native-baseline correction
+
+RC14 retained the Skies drive-status and native SCI resume code but disabled
+the accepted configuration in ordinary release builds. RC15 restores native
+DRIVE state, mounted-image disc checking and SCI resume defaults from working
+`72e3bf049b26`, without its owner-only return trace. The packager refuses a
+missing/disabled accepted flag and records the configuration in `build.json`.
+The [accepted-fix audit](release-v2.0-accepted-fix-audit.md) records the
+source/configuration omission, other retained fixes and remaining acceptance.

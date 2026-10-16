@@ -1,10 +1,12 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# K-UI V2.0 RC14 "Tyrfing" — preparation notes
+# K-UI V2.0 RC15 "Tyrfing" — preparation notes
 
-**2.0 RC14 uses the selected character-free pixel-art Tyrfing splash and banner,
-and adds a consolidated console test plan.** Runtime algorithms, loaders and
-tools are unchanged from RC13, including its independent save import and bulk
-VMU copy and the established SCI WinCE CD music.
+**2.0 RC15 restores the accepted native drive-status, disc-check and SCI resume
+configuration omitted from RC14.** The working reference is `72e3bf049b26`: the
+owner confirmed Skies raw/2048, Time Stalkers and retained Evolution FMV gains.
+The return-trace diagnostics remain disabled. The selected pixel artwork and
+RC13 VMU tools remain. See the [accepted-fix audit](release-v2.0-accepted-fix-audit.md).
+
 Tyrfing continues the cursed-sword naming theme.
 This is a source integration candidate; it is not an announcement that final
 2.0 has shipped. The existing stable download remains
@@ -14,7 +16,7 @@ Use the [installation guide](release-v2.0.md) and install the complete matching
 runtime and Games payload folder. Existing exFAT cards, dumps and compatible
 independent K-UI boot CDs remain usable.
 
-## RC14 VMU additions
+## RC15 VMU additions
 
 - **Import save file:** from SD backups, choose an external VMS, VMI or DCI
   file. Preview the internal filename, metadata origin, type and size, then
@@ -49,7 +51,7 @@ flash/region changes remain outside this candidate.
 
 These tools use independently authored K-UI code and upstream KallistiOS
 interfaces. No DreamShell implementation code was copied. Full-card restore and format/overwrite remain outside this candidate.
-RC14 adds the import and bulk-copy workflows described above. See [VMU controls and limits](vmu-restore.md) and
+RC15 adds the import and bulk-copy workflows described above. See [VMU controls and limits](vmu-restore.md) and
 [system comparison](system-backups.md). Fault-injection and real FAT32/exFAT
 host-image checks pass; the new integrated console workflows await acceptance.
 
@@ -60,7 +62,7 @@ artwork featuring the cursed blade Tyrfing. The runtime and CD share matching
 television-safe artwork, with a new sword header, under-SEGA disc badge and
 orange bootstrap accents. Runtime/boot image dimensions, splash timing and
 memory bounds are retained. The V2.0 illustration is release artwork; the
-live **RC14** label and build ID identify this candidate. Updating the card
+live **RC15** label and build ID identify this candidate. Updating the card
 changes runtime artwork; the optional matching CDI changes the burned disc.
 
 Games keeps its alphabetical order when titles are added and restores the
@@ -105,7 +107,7 @@ owner's selected image; retail bytes are not release assets.
 
 | Area | Recorded result | Limit |
 | --- | --- | --- |
-| Native 1.8.5 reader | Owner confirmed Sonic Adventure, Grandia II and Skies of Arcadia on `5973741a6077`; Power Stone 1/2 worked after earlier command fixes | Scoped runs, not full playthroughs or an RC14 retest |
+| Native 1.8.5 reader | Owner confirmed Sonic Adventure, Grandia II and Skies of Arcadia on `5973741a6077`; Power Stone 1/2 worked after earlier command fixes | Scoped runs, not full playthroughs or an RC15 retest |
 | Armada WinCE music | Established exact US profile and working full-stream baseline | Audio/FMV limitations remain; no new Armada test is inferred from Worms work |
 | Bust-A-Move 4 | Owner reported successful music on `ed0a2c809bda`; diagnostics recorded ten starts, no refusal/HRESULT and one recovered underrun | Other revisions, every track and a long soak remain unverified |
 | Worms audio supply | `8a22ec45229a` had no observed underruns in two submitted runs, with gameplay lag reported | Those runs do not establish zero-dropout playback everywhere |
@@ -117,7 +119,7 @@ The latest tested performance source is published as
 `d9f861ba87a2957234d0af276a4cfeb573367258`. The preceding bounded-worker
 candidate had already reduced lag without affecting music. These results
 support retaining that baseline while preparing the release; they do not
-certify every profile in the newly assembled RC14 package.
+certify every profile in the newly assembled RC15 package.
 
 See [native placement evidence](evidence/native-low-resident-2026-10-06.md),
 [BAM4 results](bam4-ce-cdda-test.md),
@@ -171,7 +173,10 @@ the selected branches and exclusions.
   sharing their checked contracts. Other kernels, sound ABIs and memory layouts
   still need adapter discovery and validation. Unknown combinations and World
   Party's broader profile remain experimental; the option defaults to Off.
-- **Native games:** Time Stalkers still returns to K-UI. Some FMVs stall or
+- **Native games:** RC14 regressed Skies and Time Stalkers by omitting an
+  accepted configuration; RC15 restores it with console confirmation pending.
+  Evolution 1/2 opening FMVs also need to retain their accepted improvement.
+  Other documented FMVs can stall or
   skip; Toy Commander FMV stutter is not fixed by this work. Universal CDDA,
   Mode 2 Form 2 and subchannel emulation are not provided. Quake III CD music is
   deferred: its GINSU transfer and different allocator need a separate adapter.

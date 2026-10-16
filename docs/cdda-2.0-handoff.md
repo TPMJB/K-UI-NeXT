@@ -22,12 +22,13 @@ Existing supported Toy/MDK2 native families remain available. Quake III has
 an active GINSU chain that overwrites the current native worker and uses a
 different allocator; its CD music requires further implementation.
 
-The proven Armageddon module is preserved byte for byte, SHA256
-`3c39d5b4e149b4ed911f7d4cf1fd19ea750f94a0a783b149cf4c5357cd36651a`.
-The candidate packager verifies it and does not include an installer copy.
-Its corresponding diagnostic source/provenance remains in the earlier
-Armageddon diagnostic delivery. Keep that module for the final release set;
-rebuilding it would need another console validation.
+The incremental World Party delivery preserved the accepted Armageddon module,
+SHA256 `3c39d5b4e149b4ed911f7d4cf1fd19ea750f94a0a783b149cf4c5357cd36651a`.
+The later full RC14 packager rebuilt all four modules instead. Its rebuilt
+Worms module enables broader application discovery; it is not the exact accepted
+binary. The worker-budget/RAM-copy corrections remain enabled, while rebuilt
+module acceptance still needs a console run. See the
+[artifact audit](release-v2.0-cdda-acceptance-audit.md) for exact hashes and scope.
 
 World Party build `b08802f8945f` has an owner-reported successful console run.
 The supplied diagnostic video records two successful native starts 33 seconds
