@@ -10,7 +10,8 @@ hardware test result. This document is a test plan, not
 evidence that these checks have passed or that final 2.0 has shipped.
 
 Use **Pass / Fail / Not run / No hardware / Expected limitation** for each ID.
-Start with section A; complete B–F over later sessions. Section G needs the
+First run the native regression checks in B10, then section A; complete the
+remaining B–F checks over later sessions. Section G needs the
 specified hardware/media and remains explicitly unaccepted when not exercised.
 An untested optional feature need not become a new release blocker, but its
 release notes must retain that qualification. A failure affecting existing
@@ -79,6 +80,7 @@ the old 1.8.5 A/X/Y reader shortcuts; select the reader in Options now.
 | B09 | Rescan box art with **START → Scan box art** after adding a title; stop once with B if convenient. | Existing/custom art and titles remain usable; completed covers survive Stop; equivalent descriptors do not create false duplicate titles. |
 | B10 | First retest **Skies of Arcadia** raw and 2048 with Standard/Background, **Time Stalkers**, and opening FMVs in **Evolution 1/2**. Then Sonic Adventure, Grandia II, DOA2/Power Stone 1/2 as available. | Restore accepted native behavior from `72e3bf049b26`, then preserve the other working titles through an actual stage/area load; compare the same image/card and choices when a change is suspected. No full playthrough is implied. |
 | B11 | Compare one established native title with Background Off and On; compare Normal/Aggressive only if useful. | Supported choices load and play without a new regression; unsupported storage/maps give an explanation. Record options rather than assuming the faster-sounding choice is better. |
+| B12 | If the card already has old `/KUI/game-launch.json` presets and neither newer binary settings slot, inspect the known reader/CDDA choices after boot, then reboot once. Otherwise mark not applicable; keep existing settings. | Supported profiles migrate and persist; original JSON remains. Existing binary settings take precedence. More than 128 legacy entries refuses migration; retired release-loader comparison entries are skipped with a diagnostic log. |
 
 Existing two-slot **one-time native boot patches** are a separate optional check
 under Advanced → RAM patches: A edits eight hex digits, Left/Right chooses a

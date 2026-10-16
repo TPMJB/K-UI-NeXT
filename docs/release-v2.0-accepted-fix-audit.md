@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Accepted-fix audit: RC14 omissions and RC15 restoration
 
-Audit date: October 15, 2026. Examined RC14 source/build
+Audit date: October 16, 2026. Examined RC14 source/build
 `8c9190a9b6920b439523aed95e6bfa1ddfd8d57c`, its actual release artifact,
 earlier delivered source/binary records and recovered owner acceptance reports.
 This inventory distinguishes accepted feature builds from the newly assembled
@@ -32,6 +32,21 @@ default 0. PR #14/#16 did not delete the corrected code. The earlier merge
 audit checked source integration without reconciling this accepted build
 configuration, and the release notes repeated stale compatibility claims.
 
+## Saved preset migration omission
+
+The accepted saved-options runtime `5686c3b825b0` used
+`/KUI/game-launch.json` and its `.bak`. RC14 reads only the newer
+`/KUI/apps/games/launch-settings-{a,b}.bin` records. Its binary v1/v2 handling
+does not migrate the older JSON, so those reader/CDDA choices were ignored.
+RC15 imports valid legacy presets only when both new binary slots are absent,
+preserving the original JSON and existing new-format profiles. The retired
+release-loader comparison has no current equivalent and is reported/skipped
+rather than silently mapped to another loader. Decode and filesystem checks
+cover fallback, refusal, readback and preservation of the source data. The
+new table holds 128 profiles; larger legacy collections are explicitly refused
+rather than truncated. A failed initial binary write can require manual recovery;
+the original JSON remains available and is never deleted.
+
 ## Other accepted behavior checked
 
 | Accepted behavior/reference | Evidence in RC14 | Assessment |
@@ -43,7 +58,13 @@ configuration, and the release notes repeated stale compatibility claims.
 | Stable 2048 converter | `tools/gdi_optimize.py` is byte-identical to stable 1.8.5 and still packaged. | Retained. |
 | W5500 transfer/close handling | FTP retains the 250 ms closing cleanup. | Retained. |
 | C5 transfer pacing/listener readiness | Adaptive pacing and bounded bursts remain; firmware changes require the separate firmware build/install. | Retained source; newer radio/band/update acceptance remains pending. |
-| Games caching/grouping and saved settings | Catalogue/art caches, Original/2048 paths and per-image options remain; sorting, reports and restored selection are present. | Retained implementation; new options still need their scoped console checks. |
+| Games caching/grouping and current saved settings | Catalogue/art caches, Original/2048 paths and binary per-image options remain; sorting, reports and restored selection are present. | Retained implementation; older JSON migration was omitted and is corrected above. |
+| Scanline geometry/wrap batching `ce7006087f20` | `src/core/retail_pace.c:5–57` uses the SPG_LOAD counter period independently of vblank position, invalidates changed geometry and counts wraps. The resident calls its budget/measurement path at `src/loader/retail_resident.c:1052,1072`. | Retained and reachable; fresh UBSan pacing test passed all 246 checks, including interlaced geometry and wrap cases. No new console timing claim. |
+| ATA bounded PIO/busy-selection/older CF support `d584316ac1c2` | `src/core/ata.c:50–73,101–115,212–231` retains idle-before-select, CF signature/capability handling and up to eight sectors per streamed command. `src/loader/retail_storage_impl.h:104,110` uses the streamed read/stop APIs. | Retained in the IDE build and runtime; fresh UBSan ATA tests passed batching, CF/LBA48, DMA exclusion and failure handling. Physical IDE/CF acceptance remains pending. |
+| Newer direct ZSO readers | Separate Standard LZ4 and Historical LZO1X reader targets remain in `Makefile.dc`; actual RC14 ZIP contains `zso-boot.kui` and `lzo-boot.kui`, with their codec identities recorded in `build.json`. | Retained and packaged; fresh UBSan container and both detached-reader tests passed bounds, fragmented reads, poisoned-cache recovery and explicit codec handling. Hardware compatibility remains a separate gate. |
+| Durable launch reports | `src/apps/games_retail.c:790–812` saves the prepared reader/storage/music/package identity through `game_launch_report.c`; the runtime build includes that implementation. | Retained; fresh UBSan report tests passed independent CRC fixtures, torn/conflicting slots, malformed records, write/readback faults and cancellation. A report failure remains nonfatal to launch. |
+| GDI/CUE duplicate collapse, preferring GDI (PR #13) | `src/apps/games.c:692–750` compares complete track maps before hiding aliases and explicitly prefers GDI. `tests/games_image.c:817–835` checks selector choice, different layouts, transient failure/cancellation and bounded reads. | Retained; existing FAT32/exFAT cases are registered in `tests/test_games_images.py:46–48`. Equal titles alone do not hide an image. |
+| Ripper exact Saved job and New dump label (PR #13) | `shell.c` retains picker/label controls; `src/dreamcast/main.c:2436–2441` sends the exact job only to Resume/Verify and the folder label only to New. `tests/test_shell.c:535–686,1121–1158` covers selection, sanitization, cancellation and rendered controls. | Retained and wired into the packaged runtime; new console-path acceptance is still pending. Existing jobs are not renamed by a new-dump label. |
 | MDK2 early sound-buffer reservation | Actual shipped worker contains the heap constructor hook and early reservation, not just dormant source. | Retained and enabled. |
 | Toy raw/cooked CD music | Actual embedded workers match their reference hashes and selected AP/AT pipeline settings. | Retained rebuilt adapters; no new FMV fix claimed. |
 | WinCE shared worker budget and aligned RAM copies | Shared 32-pump allowance and aligned/guarded Worms copies remain enabled; CE resume remains separately enabled. | Performance changes retained; rebuilt-module acceptance remains scoped. |
@@ -68,6 +89,10 @@ The exact native configuration is included in `build.json`. Host checks exercise
 both behavior and disabled/missing-flag refusals; Dreamcast linked size, stack
 and instruction audits still apply. Future accepted experiments must update this
 inventory and release defaults/guards together, with source and payload identity.
+
+The native GD source is byte-identical to the accepted reference; native
+disc-check assembly preprocesses identically. SCI resume differences add
+the separate CE condition while retaining the accepted native path.
 
 First RC15 tests: Skies raw and 2048 through the intro using Standard and
 Background; Time Stalkers into gameplay; Evolution and Evolution II opening

@@ -8,7 +8,7 @@
  * keeps both slots independently, so every attempted write can be checked
  * against the previously authoritative on-card bytes. */
 struct image {bool exists;size_t size;uint8_t data[KUI_GAME_LAUNCH_SETTINGS_RECORD_MAX];};
-static struct image disk[2], snapshot[2];
+static struct image disk[4], snapshot[4];
 static unsigned read_opens,write_opens,last_written,opened,closed;
 static bool parents[3],file_in_parent;
 enum fault {NONE,READ_OPEN,READ_ERROR,READ_SHORT,READ_CLOSE,WRITE_OPEN,WRITE_ERROR,
@@ -21,7 +21,9 @@ static const struct kui_game_launch_settings new_choice={.reader=KUI_GAME_READER
         {.address=UINT32_MAX,.value=UINT32_C(0x12345678)}}}};
 static unsigned index_of(const char *path) {
     if(!strcmp(path,KUI_GAME_LAUNCH_SETTINGS_PATH_A)) return 0;
-    assert(!strcmp(path,KUI_GAME_LAUNCH_SETTINGS_PATH_B));return 1;
+    if(!strcmp(path,KUI_GAME_LAUNCH_SETTINGS_PATH_B)) return 1;
+    if(!strcmp(path,KUI_GAME_LAUNCH_LEGACY_PATH)) return 2;
+    assert(!strcmp(path,KUI_GAME_LAUNCH_LEGACY_BACKUP_PATH));return 3;
 }
 static int parent_of(const char *path) {
     static const char *const names[]={"0:/KUI","0:/KUI/apps","0:/KUI/apps/games"};
@@ -31,8 +33,10 @@ static int parent_of(const char *path) {
 FRESULT f_open(FIL *file,const TCHAR *path,BYTE mode) {
     unsigned index=index_of(path);bool writing=(mode&FA_WRITE)!=0;
     if(writing) {
+        assert(index<2); /* Legacy inputs must never be opened for writes. */
         ++write_opens;
         if(failure==WRITE_OPEN) return FR_DISK_ERR;
+        if((mode&FA_CREATE_NEW) && disk[index].exists) return FR_EXIST;
         last_written=index;disk[index].exists=true;disk[index].size=0;
     } else {
         ++read_opens;
@@ -48,7 +52,7 @@ FRESULT f_open(FIL *file,const TCHAR *path,BYTE mode) {
     file->flag=mode;++opened;return FR_OK;
 }
 FRESULT f_read(FIL *file,void *buffer,UINT wanted,UINT *got) {
-    unsigned index=(unsigned)file->obj.id-1;assert(index<2 && !(file->flag&FA_WRITE));
+    unsigned index=(unsigned)file->obj.id-1;assert(index<4 && !(file->flag&FA_WRITE));
     size_t at=(size_t)file->fptr,available=disk[index].size-at;
     UINT count=available<wanted?(UINT)available:wanted;
     if((failure==READ_SHORT || (failure==VERIFY_SHORT && write_opens)) && count) --count;
@@ -67,7 +71,7 @@ FRESULT f_sync(FIL *file) {
     assert(file->flag&FA_WRITE);return failure==SYNC_ERROR?FR_DISK_ERR:FR_OK;
 }
 FRESULT f_close(FIL *file) {
-    unsigned index=(unsigned)file->obj.id-1;assert(index<2);++closed;
+    unsigned index=(unsigned)file->obj.id-1;assert(index<4);++closed;
     if((file->flag&FA_WRITE) && failure==VERIFY_CORRUPT) disk[index].data[0]^=1;
     if((file->flag&FA_WRITE) && failure==WRITE_CLOSE) return FR_DISK_ERR;
     if(!(file->flag&FA_WRITE) && (failure==READ_CLOSE || (failure==VERIFY_CLOSE && write_opens))) return FR_DISK_ERR;
@@ -89,7 +93,7 @@ static void same(struct kui_game_launch_settings a,struct kui_game_launch_settin
     }
 }
 static void reset(void) {
-    memset(disk,0,sizeof(disk));memset(parents,0,sizeof(parents));file_in_parent=false;
+    memset(disk,0,sizeof(disk));memset(snapshot,0,sizeof(snapshot));memset(parents,0,sizeof(parents));file_in_parent=false;
     failure=NONE;read_opens=write_opens=opened=closed=0;last_written=99;
 }
 static void clear_faults(void) {failure=NONE;read_opens=write_opens=opened=closed=0;last_written=99;}
@@ -247,4 +251,51 @@ static void codec_updates(void) {
     expect_load("/games/first.zso",&b);expect_load("/games/second.zso",&a);
     puts("PASS saved codecs: changing only codec writes; exact images retain separate choices");
 }
-int main(void) {codec_updates();recovery_and_merging();faults_preserve_authority();mixed_version_migration();patch_tuple_updates();full_collection();return 0;}
+static const char legacy_json[]="{\"version\":1,\"profiles\":{\"/Games/A.gdi\":{\"reader\":\"y\",\"cdda\":true},"
+    "\"/Games/B.gdi\":{\"reader\":\"x\",\"cdda\":false,\"release_loader\":false},"
+    "\"/Games/Old.gdi\":{\"reader\":\"y\",\"cdda\":true,\"release_loader\":true}}}";
+static void seed_json(unsigned slot,const char *json) {
+    assert(slot==2 || slot==3);disk[slot].exists=true;disk[slot].size=strlen(json);
+    memcpy(disk[slot].data,json,disk[slot].size);snapshot[slot]=disk[slot];
+}
+static void json_unchanged(void) {
+    assert(!memcmp(&snapshot[2],&disk[2],sizeof(disk[2])));
+    assert(!memcmp(&snapshot[3],&disk[3],sizeof(disk[3])));
+}
+static void json_migration(void) {
+    const struct kui_game_launch_settings a={.reader=KUI_GAME_READER_EAGER,.cdda=true};
+    const struct kui_game_launch_settings b={.reader=KUI_GAME_READER_BACKGROUND};
+    struct kui_game_launch_settings defaults;kui_game_launch_settings_default(&defaults);
+    for(unsigned primary=0;primary<3;primary++) {
+        reset();if(primary==0) seed_json(2,legacy_json);
+        else {if(primary==2) seed_json(2,"{bad");seed_json(3,legacy_json);}
+        expect_load("/games/a.gdi",&a);assert(last_written==0 && write_opens==1);json_unchanged();
+        clear_faults();expect_load("/games/b.gdi",&b);expect_load("/games/old.gdi",&defaults);
+        assert(!write_opens);json_unchanged();
+        /* Existing binary state always wins, even when legacy input later changes. */
+        assert(kui_game_launch_settings_save("/games/a.gdi",&old_choice,NULL));
+        clear_faults();expect_load("/games/a.gdi",&old_choice);json_unchanged();
+    }
+    reset();seed_json(2,legacy_json);seed(0,9,"/games/a.gdi",&old_choice);
+    clear_faults();expect_load("/games/a.gdi",&old_choice);assert(!write_opens);json_unchanged();
+    disk[0].data[0]^=1;clear_faults();expect_load("/games/a.gdi",&defaults);
+    assert(!write_opens);json_unchanged(); /* Corrupt binary must not resurrect JSON. */
+    clear_faults();failure=READ_OPEN;struct kui_game_launch_settings out;
+    assert(!kui_game_launch_settings_load("/games/a.gdi",&out,NULL));assert(!write_opens);json_unchanged();
+    reset();seed_json(2,"{bad");seed_json(3,"{bad");
+    assert(!kui_game_launch_settings_load("/games/a.gdi",&out,NULL));assert(!write_opens);json_unchanged();
+    reset();seed_json(2,legacy_json);seed_json(3,"{bad");
+    expect_load("/games/a.gdi",&a);assert(read_opens==5);json_unchanged(); /* Valid primary never opens .bak. */
+    reset();seed_json(2,legacy_json);disk[2].size=KUI_GAME_LAUNCH_LEGACY_JSON_MAX+1u;snapshot[2]=disk[2];
+    assert(!kui_game_launch_settings_load("/games/a.gdi",&out,NULL));assert(!write_opens);json_unchanged();
+    const enum fault faults[]={READ_ERROR,READ_SHORT,READ_CLOSE,WRITE_OPEN,WRITE_ERROR,WRITE_SHORT,
+        SYNC_ERROR,WRITE_CLOSE,VERIFY_OPEN,VERIFY_CORRUPT,VERIFY_SHORT,VERIFY_CLOSE,PARENT_ERROR};
+    for(unsigned i=0;i<sizeof(faults)/sizeof(faults[0]);i++) {
+        reset();seed_json(2,legacy_json);failure=faults[i];
+        assert(!kui_game_launch_settings_load("/games/a.gdi",&out,NULL));same(out,defaults);
+        assert(opened==closed);json_unchanged();
+        if(faults[i]==READ_ERROR || faults[i]==READ_SHORT || faults[i]==READ_CLOSE) assert(read_opens==3);
+    }
+    puts("PASS legacy JSON files: primary/backup import, skipped unsupported loader, immutable originals, binary authority and migration read/write/sync/verify fault refusal");
+}
+int main(void) {codec_updates();recovery_and_merging();faults_preserve_authority();mixed_version_migration();patch_tuple_updates();full_collection();json_migration();return 0;}

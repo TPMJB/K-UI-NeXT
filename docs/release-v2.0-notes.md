@@ -4,7 +4,11 @@
 **2.0 RC15 restores the accepted native drive-status, disc-check and SCI resume
 configuration omitted from RC14.** The working reference is `72e3bf049b26`: the
 owner confirmed Skies raw/2048, Time Stalkers and retained Evolution FMV gains.
-The return-trace diagnostics remain disabled. The selected pixel artwork and
+The return-trace diagnostics remain disabled. Older saved reader/CDDA JSON
+presets migrate only when both new settings slots are absent, preserving
+the original JSON and current presets. Collections above 128 profiles refuse
+migration; retired release-loader comparison profiles are skipped with a log.
+The selected pixel artwork and
 RC13 VMU tools remain. See the [accepted-fix audit](release-v2.0-accepted-fix-audit.md).
 
 Tyrfing continues the cursed-sword naming theme.
@@ -16,7 +20,7 @@ Use the [installation guide](release-v2.0.md) and install the complete matching
 runtime and Games payload folder. Existing exFAT cards, dumps and compatible
 independent K-UI boot CDs remain usable.
 
-## RC15 VMU additions
+## RC13 VMU additions
 
 - **Import save file:** from SD backups, choose an external VMS, VMI or DCI
   file. Preview the internal filename, metadata origin, type and size, then
@@ -51,7 +55,7 @@ flash/region changes remain outside this candidate.
 
 These tools use independently authored K-UI code and upstream KallistiOS
 interfaces. No DreamShell implementation code was copied. Full-card restore and format/overwrite remain outside this candidate.
-RC15 adds the import and bulk-copy workflows described above. See [VMU controls and limits](vmu-restore.md) and
+RC13 adds the import and bulk-copy workflows described above. See [VMU controls and limits](vmu-restore.md) and
 [system comparison](system-backups.md). Fault-injection and real FAT32/exFAT
 host-image checks pass; the new integrated console workflows await acceptance.
 
