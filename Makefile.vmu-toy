@@ -101,8 +101,10 @@ $(BUILD)/retail-maple-observe.kui: $(BUILD)/entry.elf
 $(BUILD)/vmu-maple-observer-test.zip: $(BUILD)/retail-maple-observe.kui \
  $(BUILD)/worker.elf $(BUILD)/worker.bin tools/package_vmu_maple_observe.py \
  tools/check_vmu_maple_observe_hook.py \
- docs/vmu-maple-observer-test.md
+ docs/vmu-maple-observer-test.md include/kui/games_retail.h \
+ tests/test_vmu_observer_install_route.py
 	python3 tools/package_vmu_maple_observe.py $(BUILD)
+	python3 tests/test_vmu_observer_install_route.py
 
 host-tests:
 	@mkdir -p $(BUILD)
@@ -114,7 +116,11 @@ host-tests:
 	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
 	 -g -Iinclude tests/test_vmu_toy_observe_admission.c -o $(BUILD)/test-observer-admission
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-observer-admission
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -g -Iinclude tests/test_vmu_maple_observe_io.c -o $(BUILD)/test-observer-io
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-observer-io
 	python3 tests/test_vmu_maple_observe_package.py
 	python3 tests/test_vmu_maple_observe_hook.py
+	python3 tests/test_vmu_observer_install_route.py
 
 -include $(RESIDENT_OBJ:.o=.d) $(STAGE_OBJ:.o=.d) $(WORKER_OBJ:.o=.d)

@@ -3,11 +3,65 @@
 #if !KUI_VMU_MAPLE_OBSERVE || !KUI_RETAIL_LOW_RESIDENT || defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_ASYNC)
 #error VMU observation resident requires its isolated synchronous native build
 #endif
+/* Admit declarations before the call-only observation macros. The physical
+ * storage/image functions and their acquire/read/stop/release order remain
+ * the ordinary implementation below. */
+#include "kui/retail_gd.h"
+#include "kui/retail_image.h"
+#include "retail_storage.h"
+#include "retail_display.h"
+#include "kui/vmu_maple_observe_io.h"
+static void observe_display_restore(const struct retail_display_state *);
+#define kui_retail_storage_acquire(...) \
+    KUI_VMU_OBSERVE_IO_ACQUIRE(service.diag.read_flags, \
+        kui_retail_storage_acquire(__VA_ARGS__))
+#define kui_retail_image_read(...) \
+    KUI_VMU_OBSERVE_IO_IMAGE(service.diag.read_flags, \
+        kui_retail_image_read(__VA_ARGS__))
+#define retail_display_restore observe_display_restore
 #define kui_retail_resident_init kui_vmu_observe_base_init
 #include "retail_resident.c"
 #undef kui_retail_resident_init
+#undef retail_display_restore
+#undef kui_retail_image_read
+#undef kui_retail_storage_acquire
 #include "kui/vmu_maple_observe_boot.h"
 #include "kui/vmu_toy_observe_admission.h"
+
+#if !KUI_RETAIL_GD_REJECTION_DETAILS
+#error Observer I/O telemetry requires the standard native diagnostic fields
+#endif
+
+static void observe_display_restore(const struct retail_display_state *state) {
+    retail_display_restore(state);
+    if(service.error != KUI_GD_ERROR_IO) return;
+    /* Accepted reads have flags=0. In this separate observer only, the
+     * diagnostic field retains the returned image enum until the terminal
+     * screen. No post-read execution branch consumes it; REQUEST resets it.
+     * Acquisition failure retains UINT32_MAX instead of a stale image result.
+     * The native terminal header owns cache words0..8. Reuse its tail only
+     * after I/O has stopped/released and will never resume. */
+    typedef uint32_t observe_word __attribute__((__may_alias__));
+    observe_word *row=(observe_word *)(void *)image.block+9;
+    const volatile struct kui_vmu_observe_boot_control *c=
+        (const volatile struct kui_vmu_observe_boot_control *)
+        ((uintptr_t)&kui_vmu_observe_boot_control+UINT32_C(0x20000000));
+    row[0]=service.diag.read_flags==UINT32_MAX?(uint32_t)card_result:0u;
+    row[1]=(uint32_t)card_result;row[2]=service.diag.read_flags;
+    row[3]=service.lba;row[4]=service.count;
+    retail_display_values("ACQ SD IMAGE REQLBA REQCOUNT",row,5u);
+    row[0]=service.destination;row[1]=service.completed_bytes;
+    row[2]=(c->status<<16)|(c->error&UINT32_C(0xffff));
+    row[3]=c->lease;row[4]=*(volatile const uint32_t *)(uintptr_t)0xff00001cu;
+    retail_display_values("DEST DONE BOOTERR LEASE CCR",row,5u);
+    row[0]=*(volatile const uint8_t *)(uintptr_t)0xffe00010u;
+    row[1]=*(volatile const uint8_t *)(uintptr_t)0xffe00008u;
+    row[2]=(uint32_t)*(volatile const uint8_t *)(uintptr_t)0xffe00000u<<16|
+        *(volatile const uint8_t *)(uintptr_t)0xffe00004u;
+    row[3]=*(volatile const uint32_t *)(uintptr_t)0xffa0001cu;
+    row[4]=*(volatile const uint32_t *)(uintptr_t)0xffa00040u;
+    retail_display_values("SSR SCR MODE-RATE DMA1 DMAOR",row,5u);
+}
 
 static uint8_t *observe_map(void *context,uint32_t address,uint32_t bytes,int writing) {
     if(!kui_vmu_toy_observe_destination(address,bytes)) return NULL;

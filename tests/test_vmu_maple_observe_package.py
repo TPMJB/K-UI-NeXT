@@ -51,9 +51,9 @@ def low_reader():
     data = bytearray(4096)
     EH.pack_into(data, 0, b"\x7fELF\x01\x01\x01" + bytes(9), 2, 42, 1,
                  base, 52, 0x300, 0, 52, 32, 1, 40, 5, 0)
-    PH.pack_into(data, 52, 1, 0x100, base, base, 128, 180, 7, 4)
+    PH.pack_into(data, 52, 1, 0x100, base, base, 128, 192, 7, 4)
     SH.pack_into(data, 0x328, 0, 1, 6, base, 0x100, 128, 0, 0, 4, 0)
-    SH.pack_into(data, 0x350, 0, 8, 3, base + 128, 0x180, 52, 0, 0, 4, 0)
+    SH.pack_into(data, 0x350, 0, 8, 3, base + 128, 0x180, 64, 0, 0, 32, 0)
     SH.pack_into(data, 0x378, 0, 2, 0, 0, 0x500, 5 * 16, 4, 1, 4, 16)
     names = bytearray(b"\0")
     symbols = (("_start", base, 4, 0x12, 1),
@@ -127,13 +127,26 @@ class ObserverPackageTests(unittest.TestCase):
             path.write_bytes(data)
             self.assertIn("#define KUI_VMU_OBSERVE_LOW_CONTROL 0x8c004080u", generate(path))
             for index, offset, value in ((2, 8, 0), (3, 12, 0x11),
-                                         (4, 8, 48), (4, 12, 0x12)):
+                                         (4, 8, 48), (4, 12, 0x12),
+                                         (4, 4, 0x8C004084)):
                 bad = low_reader()
                 struct.pack_into("<B" if offset == 12 else "<I", bad,
                                  0x500 + index * 16 + offset, value)
                 path.write_bytes(bad)
                 with self.subTest(index=index), self.assertRaises(ValueError):
                     generate(path)
+
+    def test_low_control_must_reserve_both_cache_lines(self):
+        with tempfile.TemporaryDirectory() as name:
+            path = Path(name) / "resident.elf"
+            data = low_reader()
+            # Original faulty layout: the object fits, but its last line
+            # has no exclusive reservation and may contain P1 state.
+            struct.pack_into("<I", data, 0x350 + 20, 52)
+            struct.pack_into("<I", data, 52 + 20, 180)
+            path.write_bytes(data)
+            with self.assertRaisesRegex(ValueError, "cache lines"):
+                generate(path)
 
 
 if __name__ == "__main__":

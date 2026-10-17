@@ -63,6 +63,30 @@ Successful SD busy/status completion relies on the card honoring its device
 protocol; arbitrary defective or dishonest flash behavior is not covered.
 The journal protects a block, not an entire game's multi-block save.
 
+### Console evidence, 17 October 2026
+
+The standalone harness from source `87140926efd1` passed on SCI/exFAT:
+allocated `KUIPROOF` bytes and package CRC16, two used/198 free blocks,
+virtual-device reset, fresh reopen after remount/reconnect, and a synced clean
+checkpoint. A photograph of the post-power-cycle **X** verification is still
+needed; the successful checkpoint screen alone does not prove that step.
+
+The same source's Toy observer stopped during an accepted GD DMAREAD with
+CD music off, before completing its four report pages. The terminal screen
+reported function `2`, command `0x11`, rejection `0`, and caller PR
+`0x8c08d55a`. This is an image-I/O failure, not a rejected request; its zero
+parameter/stack-offset fields are expected for that terminal path. The screen
+does not distinguish storage acquisition, physical reads, raw-sector parsing,
+or stream-stop failure, and does not prove the Maple hook had run.
+
+Review also found that the experimental low P2 bootstrap control shared a
+cache line with mutable P1 pacing state. The observer now reserves complete
+cache lines for that control, with linked-ELF checks to reject shared layouts.
+This fixes a definite coherency hazard; its connection to the photographed
+I/O failure remains unproven. The next observer build adds per-layer failure
+details. Hardware validation is pending, and the released 2.0.0 loader is
+unchanged.
+
 ## Work required before in-game saves
 
 1. Prove exact game-side Maple ownership before submission and before the

@@ -22,9 +22,16 @@ def generate(path):
         if not size or section is None or not section[3] <= address < address + size <= section[3] + section[5]:
             raise ValueError("Missing or unbounded typed observer symbol: " + name)
         if macro.endswith("CONTROL"):
-            if (size != 52 or kind != 1 or address & 3 or section[1] != 8 or
-                    section[2] & 7 != 3 or not 0x8C004000 <= address < address + size <= 0x8C007800):
-                raise ValueError("Observer control must be its 52-byte low BSS object")
+            if (size != 52 or kind != 1 or address & 31 or section[1] != 8 or
+                    section[2] & 7 != 3 or
+                    not 0x8C004000 <= address < address + 64 <= 0x8C007800 or
+                    address + 64 > section[3] + section[5]):
+                raise ValueError("Observer control must own two complete low BSS cache lines")
+            # No other runtime symbol may occupy the control's padding.
+            # The typed object's ABI is52bytes; its allocation reserves64.
+            if any(address + size <= value < address + 64
+                   for value in image["symbols"].values()):
+                raise ValueError("Observer control cache-line padding is shared")
         elif (kind != 2 or address & 1 or section[2] & 7 != 6 or
               not 0x8C004000 <= address < address + size <= 0x8C004000 + len(image["payload"])):
             raise ValueError("Observer hook must be a bounded low cached-code function")

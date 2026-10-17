@@ -152,9 +152,13 @@ C(kui_vmu_observe_return_hook):
     .size C(kui_vmu_observe_return_hook),.-C(kui_vmu_observe_return_hook)
 
     .section .bss.vmu_observe_control,"aw",@nobits
-    .align 2
+    /* This object is accessed through P2 while surrounding resident state
+     * uses P1. Give both ends full data-cache lines: a dirty neighbouring
+     * P1 pacing line must never write stale control bytes over P2 updates. */
+    .balign 32
     .global C(kui_vmu_observe_boot_control)
     .type C(kui_vmu_observe_boot_control),@object
 C(kui_vmu_observe_boot_control):
     .space KUI_VMU_OBS_BOOT_BYTES
     .size C(kui_vmu_observe_boot_control),.-C(kui_vmu_observe_boot_control)
+    .balign 32

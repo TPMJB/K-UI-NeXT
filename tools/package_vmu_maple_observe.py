@@ -18,6 +18,24 @@ from check_vmu_maple_observe_hook import check_hook
 import retail_package as layout
 
 
+def write_test_archive(directory, module, report_bytes):
+    """Install through the ordinary native-game route in the released shell."""
+    files = {"KUI/apps/games/retail-boot.kui": module,
+             "README-FIRST.md": Path("docs/vmu-maple-observer-test.md").read_bytes(),
+             "observer-artifact-audit.json": report_bytes}
+    files["SHA256SUMS.txt"] = "".join(
+        hashlib.sha256(data).hexdigest() + "  " + name + "\n"
+        for name, data in sorted(files.items())).encode()
+    target = directory / "vmu-maple-observer-test.zip"
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, data in sorted(files.items()):
+            entry = zipfile.ZipInfo(name, (2026, 10, 16, 0, 0, 0))
+            entry.compress_type = zipfile.ZIP_DEFLATED
+            entry.external_attr = 0o100644 << 16
+            archive.writestr(entry, data)
+    return target
+
+
 def inspect_worker(directory):
     elf = (directory / "worker.elf").read_bytes()
     image = inspect_elf(elf,
@@ -152,20 +170,7 @@ def main():
                    "virtual_vmu_enabled": False})
     report_bytes = (json.dumps(report, indent=2, sort_keys=True) + "\n").encode()
     (directory / "observer-artifact-audit.json").write_bytes(report_bytes)
-    files = {"KUI/retail.kui": module,
-             "README-FIRST.md": Path("docs/vmu-maple-observer-test.md").read_bytes(),
-             "observer-artifact-audit.json": report_bytes}
-    files["SHA256SUMS.txt"] = "".join(
-        hashlib.sha256(data).hexdigest() + "  " + name + "\n"
-        for name, data in sorted(files.items())).encode()
-    target = directory / "vmu-maple-observer-test.zip"
-    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
-        for name, data in sorted(files.items()):
-            entry = zipfile.ZipInfo(name, (2026, 10, 16, 0, 0, 0))
-            entry.compress_type = zipfile.ZIP_DEFLATED
-            entry.external_attr = 0o100644 << 16
-            archive.writestr(entry, data)
-    print(target)
+    print(write_test_archive(directory, module, report_bytes))
 
 
 if __name__ == "__main__":
