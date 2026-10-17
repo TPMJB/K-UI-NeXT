@@ -62,7 +62,7 @@ separately in the standalone harness.
 
 ## If an image read fails
 
-Photograph the entire `IMAGE READ FAILED` screen. Its three extra rows retain
+Photograph the entire `IMAGE READ FAILED` screen. Its two extra rows retain
 the read failure and observer state, even if the four Maple pages never appear.
 All values are hexadecimal.
 
@@ -71,7 +71,10 @@ All values are hexadecimal.
 | `ACQ`, `SD`, `IMAGE` | Storage-acquisition result, final SD result after stream cleanup, and image-reader result. Zero means success. `IMAGE = FFFFFFFF` means acquisition failed and the image read never ran. The SD result preserves the first read error if cleanup also fails. |
 | `REQLBA`, `REQCOUNT`, `DEST`, `DONE` | Start sector, total sector count and starting destination of the whole game request, followed by bytes completed before the failure. These identify the request rather than the failed step's exact sector. |
 | `BOOTERR`, `LEASE`, `CCR` | `BOOTERR` packs bootstrap state in its upper 16 bits and error in its lower 16 bits. State 1 is armed; 2 is initializing; 3 is leased; 4 is installed; 5 is failed. The installed lease begins at `8CFD0000`. `CCR` is the CPU cache-control register. |
-| `SSR`, `SCR`, `MODE-RATE`, `DMA1`, `DMAOR` | SCI status/control, SCI mode and baud (`SMR` in the upper 16 bits, `BRR` below), DMA channel-1 control, and DMA operation register. These are **post-cleanup snapshots**: release restores the previous serial configuration, so these are not latched fault-time register values. |
+
+The storage results are captured through the normal acquire/read/stop/release
+sequence. This compact page does not include latched serial or DMA fault-time
+registers; the read-only register shown is the current CPU cache control.
 
 ## Build checks and their limits
 

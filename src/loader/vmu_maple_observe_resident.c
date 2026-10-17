@@ -49,18 +49,13 @@ static void observe_display_restore(const struct retail_display_state *state) {
     row[0]=service.diag.read_flags==UINT32_MAX?(uint32_t)card_result:0u;
     row[1]=(uint32_t)card_result;row[2]=service.diag.read_flags;
     row[3]=service.lba;row[4]=service.count;
+    /* Capture both rows before rendering so no service/control pointers
+     * need to survive a display call on the tightly bounded low stack. */
+    row[5]=service.destination;row[6]=service.completed_bytes;
+    row[7]=(c->status<<16)|(c->error&UINT32_C(0xffff));
+    row[8]=c->lease;row[9]=*(volatile const uint32_t *)(uintptr_t)0xff00001cu;
     retail_display_values("ACQ SD IMAGE REQLBA REQCOUNT",row,5u);
-    row[0]=service.destination;row[1]=service.completed_bytes;
-    row[2]=(c->status<<16)|(c->error&UINT32_C(0xffff));
-    row[3]=c->lease;row[4]=*(volatile const uint32_t *)(uintptr_t)0xff00001cu;
-    retail_display_values("DEST DONE BOOTERR LEASE CCR",row,5u);
-    row[0]=*(volatile const uint8_t *)(uintptr_t)0xffe00010u;
-    row[1]=*(volatile const uint8_t *)(uintptr_t)0xffe00008u;
-    row[2]=(uint32_t)*(volatile const uint8_t *)(uintptr_t)0xffe00000u<<16|
-        *(volatile const uint8_t *)(uintptr_t)0xffe00004u;
-    row[3]=*(volatile const uint32_t *)(uintptr_t)0xffa0001cu;
-    row[4]=*(volatile const uint32_t *)(uintptr_t)0xffa00040u;
-    retail_display_values("SSR SCR MODE-RATE DMA1 DMAOR",row,5u);
+    retail_display_values("DEST DONE BOOTERR LEASE CCR",row+5,5u);
 }
 
 static uint8_t *observe_map(void *context,uint32_t address,uint32_t bytes,int writing) {
