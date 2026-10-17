@@ -1,6 +1,6 @@
-Actual circuit checks, KiCad 10.0.6, 10 October 2026
+Actual circuit checks, KiCad 10.0.7, 17 October 2026 (FPGA JTAG wired to the RP2350)
 
-Native integrated schematic ERC: 0 violations, no ignored checks.
+Native integrated schematic ERC: 0 violations; no project-specific exclusions (KiCad's four default-ignored check types are listed in checks/erc.json).
 Physical package-pin / loaded footprint-pad audit: PASS.
 Native exported XML netlist: checks/netlist.xml.
 ERC report: checks/erc.json.

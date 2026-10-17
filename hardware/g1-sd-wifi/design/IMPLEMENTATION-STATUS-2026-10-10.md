@@ -23,7 +23,7 @@ The design branch now contains the actual KiCad circuit, physical footprints, ca
 | BIOS bank behavior | Factory bank 0; reset/power-warning do not silently switch a running CPU's mapped ROM | Runtime bank switching intentionally unavailable without whole-console reset control |
 | Modchip-style CN503 attachment | Two independent 20-conductor passive flex arms, retained connector housing, 0.5 mm Hirose sockets | Physical continuity/orientation and assembled bend/landing fit |
 | Measured heat-shield space | Provisional BIOS opening/CN503 notch and 6/8 mm height assumptions in a 59 × 115 mm native carrier (grown 10 mm north on 10 October to make routing possible) | Full existing-part obstacle map, registration of the larger outline, support and installed clearance |
-| Parts and assembly | BASE: 54 exact JLC SMT catalog types, 264 fitted SMT parts, actual native candidate CPL; separate manual C5 | Stock allocation, factory fixture agreement and manufacturer rotation preview |
+| Parts and assembly | BASE: 55 SMT catalog types (54 exact JLC entries; the 220 Ω FPGA configuration resistor's LCSC code C112291 comes from a search index and its JLC entry is pending), 269 fitted SMT parts, actual native candidate CPL; separate manual C5 | Stock allocation, factory fixture agreement and manufacturer rotation preview |
 | Factory assembly conditions | Harwin contacts and Abracon clock oscillator explicitly identified as requiring assembly fixtures | Assembler confirmation; these are separate from the installed C5 clamp |
 | Filesystem ownership | K-UI sole filesystem owner; C5 transport does not mount media; exFAT baseline | Storage/filesystem software and power-cut testing |
 

@@ -110,13 +110,13 @@
         },
         "21": {
           "name": "GPIO21",
-          "net": null,
-          "type": "no_connect"
+          "net": "FPGA_TMS_MCU",
+          "type": "bidirectional"
         },
         "22": {
           "name": "GPIO22",
-          "net": null,
-          "type": "no_connect"
+          "net": "FPGA_TCK_MCU",
+          "type": "bidirectional"
         },
         "23": {
           "name": "GPIO23",
@@ -185,18 +185,18 @@
         },
         "36": {
           "name": "GPIO28",
-          "net": null,
-          "type": "no_connect"
+          "net": "FPGA_PROGRAMn_MCU",
+          "type": "bidirectional"
         },
         "37": {
           "name": "GPIO29",
-          "net": null,
-          "type": "no_connect"
+          "net": "FPGA_TDI_MCU",
+          "type": "bidirectional"
         },
         "38": {
           "name": "GPIO30",
-          "net": null,
-          "type": "no_connect"
+          "net": "FPGA_TDO_MCU",
+          "type": "bidirectional"
         },
         "39": {
           "name": "GPIO31",
@@ -418,7 +418,7 @@
         "https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf",
         "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
       ],
-      "description": "Main MCU. GPIO0\u201315 asynchronous 8-bit FPGA link; native 4-bit SD; C5 SPI1/UART0; GPIO47 QMI CS1. All 81 physical package terminals included.",
+      "description": "Main MCU. GPIO0\u201315 asynchronous 8-bit FPGA link; GPIO21/22/28/29/30 FPGA JTAG/PROGRAMn through 220 ohm; native 4-bit SD; C5 SPI1/UART0; GPIO47 QMI CS1. All 81 physical package terminals included.",
       "populate": true
     },
     {
@@ -3837,6 +3837,121 @@
       "positive_stop_height_mm": 0.55,
       "body_height_at_working_mm": 0.9,
       "in_bom": true
+    },
+    {
+      "ref": "R2044",
+      "value": "220",
+      "mpn": "RC0402FR-07220RL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "FPGA_TCK_MCU",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "FPGA_TCK",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.latticesemi.com/view_document?document_id=39085"
+      ],
+      "description": "JTAG TCK from GPIO22 to U10.91. Limits contention with an external J10 programmer or a misconfigured pin to 15 mA.",
+      "populate": true
+    },
+    {
+      "ref": "R2045",
+      "value": "220",
+      "mpn": "RC0402FR-07220RL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "FPGA_TMS_MCU",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "FPGA_TMS",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.latticesemi.com/view_document?document_id=39085"
+      ],
+      "description": "JTAG TMS from GPIO21 to U10.90. Limits contention with an external J10 programmer or a misconfigured pin to 15 mA.",
+      "populate": true
+    },
+    {
+      "ref": "R2046",
+      "value": "220",
+      "mpn": "RC0402FR-07220RL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "FPGA_TDI_MCU",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "FPGA_TDI",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.latticesemi.com/view_document?document_id=39085"
+      ],
+      "description": "JTAG TDI from GPIO29 to U10.94. Limits contention with an external J10 programmer or a misconfigured pin to 15 mA.",
+      "populate": true
+    },
+    {
+      "ref": "R2047",
+      "value": "220",
+      "mpn": "RC0402FR-07220RL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "FPGA_TDO_MCU",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "FPGA_TDO",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.latticesemi.com/view_document?document_id=39085"
+      ],
+      "description": "JTAG TDO from U10.95 to GPIO30. Limits contention with an external J10 programmer or a misconfigured pin to 15 mA.",
+      "populate": true
+    },
+    {
+      "ref": "R2048",
+      "value": "220",
+      "mpn": "RC0402FR-07220RL",
+      "footprint": "Resistor_SMD:R_0402_1005Metric",
+      "pins": {
+        "1": {
+          "name": "1",
+          "net": "FPGA_PROGRAMn_MCU",
+          "type": "passive"
+        },
+        "2": {
+          "name": "2",
+          "net": "FPGA_PROGRAMn",
+          "type": "passive"
+        }
+      },
+      "sources": [
+        "https://www.latticesemi.com/view_document?document_id=39085"
+      ],
+      "description": "PROGRAMn from GPIO28 (open-drain use only) to U10.81. Limits contention with an external J10 programmer or a misconfigured pin to 15 mA.",
+      "populate": true
     }
   ],
   "gpio_assignments": {
@@ -3861,10 +3976,15 @@
     "18": "C5_EN_ASSERT",
     "19": "C5_BOOT_ASSERT",
     "20": "C5_IO_OEn",
+    "21": "FPGA_TMS_MCU",
+    "22": "FPGA_TCK_MCU",
     "23": "USB_VBUS_SENSE",
     "24": "SD_DAT_DIR",
     "25": "SD_CMD_DIR",
     "26": "SD_IO_EN",
+    "28": "FPGA_PROGRAMn_MCU",
+    "29": "FPGA_TDI_MCU",
+    "30": "FPGA_TDO_MCU",
     "31": "PWR_FAILn",
     "32": "SD_CLK_MCU",
     "33": "SD_CMD_MCU",
@@ -3890,7 +4010,8 @@
       "PWR_FAILn",
       "STORAGE_PGOOD",
       "LINK_IRQ",
-      "LINK_READY"
+      "LINK_READY",
+      "FPGA_TDO_MCU"
     ],
     "outputs": [
       "C5_PWR_EN",
@@ -3899,7 +4020,11 @@
       "LINK_WRn",
       "LINK_RDn",
       "LINK_A0",
-      "LINK_A1"
+      "LINK_A1",
+      "FPGA_TCK_MCU",
+      "FPGA_TMS_MCU",
+      "FPGA_TDI_MCU",
+      "FPGA_PROGRAMn_MCU"
     ],
     "bidirectional": [
       "LINK_D0",
@@ -3933,6 +4058,12 @@
     "Hardware SD isolation uses STORAGE_PGOOD; keep storage rail alive for flush; coordinate PIO direction and OE at CMD/DAT turnaround",
     "PSRAM QMI CS1 select=GPIO47; initialize>=150us after supply stable,split transfers to meet AP tCEM(max)8us and deselect>=tCPH",
     "FPGA/front-end owns safe default reset, arm and link-strobe pull resistors",
-    "FPGA transfer engine exact24-bit remaining-word count registers0x16/17/18 must be set before DRQ; transfer-done IRQ distinguishes command completion from temporary FIFO empty"
+    "FPGA transfer engine exact24-bit remaining-word count registers0x16/17/18 must be set before DRQ; transfer-done IRQ distinguishes command completion from temporary FIFO empty",
+    "FPGA JTAG: GPIO21 TMS, GPIO22 TCK, GPIO29 TDI outputs and GPIO30 TDO input only during a configuration session; otherwise all inputs with pulls off. TCK at most 10 MHz: the 220 ohm series resistors make the edges RC-limited. A configuration session is any erase, flash program (offline or transparent), SRAM load, REFRESH or PROGRAMn pulse: drive BRIDGE_ARM and FPGA_RESETn low (12 mA) and keep LINK_* released for the whole session",
+    "FPGA_PROGRAMn on GPIO28 is open-drain only: output value 0, toggle output enable; never drive it high; pulse it only inside a configuration session",
+    "Before ISC_ENABLE (0xC6) or ISC_ENABLE_X (0x74), shift SAMPLE/PRELOAD (0x1C) with all ones so every U10 output is tri-stated while it follows the boundary-scan register, or replay a Lattice-generated SVF unchanged; never issue EXTEST or CLAMP. Until the preload, U10 can drive BRIDGE_ARM, FPGA_RESETn, FPGA_READY and BUS_SAFE",
+    "Reconfigure U10 (SRAM load, REFRESH, PROGRAMn pulse, offline programming) only with no G1 session active: device1 disappears until the new image raises FPGA_READY. With BIOS_OPTION fitted, use only bank-0 images or hold the whole console in verified reset (design/BIOS-variant.md, fpga/README.md). Transparent flash programming is a configuration session too (BRIDGE_ARM low, so device1 also disappears) and likewise runs with no G1 session active; it keeps the running image in configuration SRAM, so a failed program leaves U10 usable, and the new image takes effect only at the next REFRESH or power cycle. An image delivered over G1 (for example from a boot CD) is buffered by U201 and programmed after that session ends",
+    "Read U10 configuration state (DONE, errors, USERCODE) through the JTAG status registers; FPGA_DONE is not wired to the controller",
+    "Release all five FPGA configuration GPIOs (inputs) or hold RUN low before an external programmer is attached to J10"
   ]
 }

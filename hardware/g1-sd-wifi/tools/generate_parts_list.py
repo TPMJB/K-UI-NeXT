@@ -116,6 +116,9 @@ def make_rows(cs, evidence):
                 raise ValueError('Circuit manufacturer differs from reviewed identity: ' + c['ref'])
             if 'height_max_mm' in e and c.get('height_max_mm') != e['height_max_mm']:
                 raise ValueError('Circuit height budget differs from reviewed evidence: ' + c['ref'])
+        # An identity read only from a search engine's index of the catalog page
+        # (identity_source 'search_index') is recorded but not counted as verified.
+        indexed = bool(code) and supplier.get('identity_source') == 'search_index'
         jlc = e.get('jlc_assembly', {})
         if jlc:
             if (urlparse(jlc.get('url', '')).hostname not in {'jlcpcb.com', 'www.jlcpcb.com'}
@@ -136,7 +139,8 @@ def make_rows(cs, evidence):
             'height_max_mm': max((c.get('height_max_mm', 0) for c in parts), default=0),
             'assembly_method': method,
             'lcsc_code': code,
-            'sourcing_status': 'catalog_identity_verified_assembly_pending' if code else 'sourcing_pending',
+            'sourcing_status': ('catalog_identity_search_index_only_assembly_pending' if indexed else
+                                'catalog_identity_verified_assembly_pending' if code else 'sourcing_pending'),
             'supplier_identity_url': supplier.get('url', ''),
             'jlc_assembly_status': assembly_status,
             'jlc_assembly_url': jlc.get('url', ''),
@@ -196,6 +200,7 @@ def main():
     audit = {
         'status': 'SOURCING_WORKSHEET; NOT_A_PRODUCTION_RELEASE',
         'evidence_review_date': evidence['review_date'],
+        'evidence_review_updates': evidence.get('review_updates', []),
         'quantity_basis': 'Full component quantities for one complete assembly per variant; no scrap allowance, reel/MOQ rounding or inventory promise.',
         'source_sha256': {str(p.relative_to(ROOT)): sha(p) for p in source_paths},
         'source_component_refs': len(cs), 'purchased_component_refs': len(purchased),
@@ -204,9 +209,10 @@ def main():
             name: sorted((c['ref'] for c in purchased if not populated(c, *settings)), key=natural)
             for name, settings in VARIANTS.items()
         },
-        'supplier_identity_verified_rows': sum(bool(r['lcsc_code']) for r in rows),
+        'supplier_identity_verified_rows': sum(r['sourcing_status'].startswith('catalog_identity_verified') for r in rows),
+        'supplier_identity_search_index_only_rows': [r['mpn'] for r in rows if 'search_index_only' in r['sourcing_status']],
         'sourcing_pending_rows': sum(not r['lcsc_code'] for r in rows),
-        'catalog_identity_verified_base_rows': sum(bool(r['lcsc_code']) and r['qty_base'] > 0 for r in rows),
+        'catalog_identity_verified_base_rows': sum(r['sourcing_status'].startswith('catalog_identity_verified') and r['qty_base'] > 0 for r in rows),
         'sourcing_pending_base_rows': [r['mpn'] for r in rows if not r['lcsc_code'] and r['qty_base'] > 0],
         'manual_base_purchase_rows': [r['mpn'] for r in rows if r['qty_base'] > 0 and r['assembly_method'].startswith('Manual')],
         'jlc_smt_catalog_verified_base_rows': sum(bool(r['jlc_assembly_url']) and r['qty_base'] > 0 for r in rows),

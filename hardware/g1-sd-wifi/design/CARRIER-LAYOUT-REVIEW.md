@@ -1,19 +1,31 @@
-# Carrier layout review — 11 October 2026
+# Carrier layout review — 17 October 2026
 
-Status: **fully routed and native DRC/ERC/parity clean; normal-current screening passes, fault screening and mechanical qualification remain open.** The current PCB SHA-256 is **`8c891b8b5a62dc336a8c3707fa846e28394412a2acb061c2c4e02a207ac74ed8`**. This follow-up preserves Claude commit `4b8c7d6` routing, corrects the three protection land patterns and widens existing supply traces without moving routes or vias. The owner reviews in `manufacturing/review-evidence.json` still gate release.
+Status: **fully routed and native DRC/ERC/parity clean; normal-current screening passes, fault screening and mechanical qualification remain open.** The current PCB SHA-256 is **`3b52bedb1832483bfb08103dd08cba4ced4b851021ff90b177d7cd918f897843`**. The 17 October follow-up wires U10's JTAG port and PROGRAMn to the RP2350 (next section) and keeps everything else of the 11 October board (`8c891b8b…`, commit fedc570), which preserved Claude commit `4b8c7d6` routing, corrected the three protection land patterns and widened existing supply traces without moving routes or vias. The owner reviews in `manufacturing/review-evidence.json` still gate release.
 
 | Current native snapshot | Result |
 |---|---:|
 | Outline | 59 × 115 mm, BIOS opening 29 × 19 mm, CN503 notch 15.2 × 47 mm |
 | Copper layers | 6: F signal / In1 GND / In2 signal / In3 signal / In4 +3V3_LOGIC / B signal |
 | Board thickness, copper | 0.8 mm; 1 oz outer, 0.5 oz inner |
-| Physical footprints | 351 |
-| Copper segments / vias | 11318 / 1004 |
+| Physical footprints | 356 |
+| Copper segments / vias | 12084 / 1043 |
 | Native DRC, all severities, zones refilled | **0 violations** |
 | Unconnected items | **0** |
 | Schematic parity issues | **0** |
 | Supply copper screen (IPC-2221) | Normal: pass; selected 2.5 A fault screen: 138 failed track/via entries |
 | Schematic ERC (carrier, flex A, flex B) | 0 / 0 / 0 |
+
+## RP2350-driven FPGA configuration (17 October 2026)
+
+U201 can now program U10 itself: TMS GPIO21, TCK GPIO22, TDI GPIO29, TDO GPIO30 and PROGRAMn GPIO28 reach U10 through R2044–R2048 (220 Ω, Yageo RC0402FR-07220RL), placed in one row in the open field south of U201. No FPGA cable is needed once the RP2350 configuration firmware exists; it has not been written, so first bring-up still uses a target-powered 3.3 V MachXO2 cable on J10 with RUN (J203.5) held low. `tools/rp_fpga_jtag_2026_10_17.sh` replays the change from fedc570 and ends with the DRC gates and the preservation check. Two replays gave the same placement and copper item for item; KiCad gives new items random IDs, so a replay changes the board hash and every hash-bound report must be regenerated (`ROUTING-CHECKPOINT.md`). The board's `git diff` (about 11,100 lines added, 3,000 removed) is the 821 new tracks and vias, the five new footprints and the refill of two zones, whose old fill polygons account for most of the removed lines; `preservation-check.json` is the item-by-item track/via, footprint, zone and drawing comparison.
+
+- **Pad escapes.** U201 pads 21/22 share an F.Cu pocket with one via site, and pads 36–38 have two escapes under the package. Six segments on five nets were lifted to open the missing exits and rerouted by the gap closer: USB_VBUS_SENSE and LINK_A1 in the pocket, C5_PWR_EN, USB_SERVICE_VBUS and PWR_UPSTREAM_OK south-east of pad 38. LINK_A1 is an address line of the deliberately slow asynchronous byte link (set up before the WRn/RDn strobe), and its route got shorter. Pads 21 and 22 have explicit locked escapes (`tools/fanout_pins.py` now takes bend points), because pad 22's dog-leg under pad 21 clears by less than the gap closer's one-cell margin; native DRC checks it exactly. U10 pin 95 (TDO) has a locked fan-out to a via under the FPGA body, so the TDO leg joins at the pin; the other pins' fan-out sites collide with PWR_GOOD/JTAGEN copper and a GND via.
+- **Crystal circuit.** The configuration nets and the rerouted nets were routed with no F.Cu track or via inside three boxes around X201, C2020, C2021, R2002 and the XIN/XOUT traces south of the U201 pad row (`KUI_KEEPOUT_BOX` in `close_gaps.py`). Closest new F.Cu copper: the FPGA_TDO_MCU via 0.75 mm from X201.3 (XTAL_OUT), the USB_SERVICE_VBUS via 0.99 mm from C2021.1 (XTAL_OUT), the FPGA_TCK_MCU via 1.22 mm from C2020.1 (XIN). New copper under the crystal is on In2 and B.Cu, separated from F.Cu parts by the In1 ground plane. Rip-up was restricted to named slow nets (`KUI_RIP_NETS`) and none was needed.
+- **Junctions.** Two places where the gap closer met old copper at a shallow angle are tidied by explicit edits (`design/rp-fpga-jtag-2026-10-17/tidy.json`, `tools/edit_tracks.py`): C5_PWR_EN joins its old corner directly instead of through a 10° hairpin, and FPGA_TMS meets its old 45° segment at right angles instead of 22°. No new track runs between the pads of a two-pad part or within 0.25 mm alongside same-net copper.
+- **DONE and INITn stay on J10 only.** The nearest free pad, GPIO27 (pad 28), could leave the package only between C2009's pads and past the XIN trace; GPIO39 (pad 48, east edge) is boxed in by SD and C5 routing with no via site. The JTAG status register reports DONE, configuration errors and USERCODE, so neither pad is used; both remain spare.
+- **Routes** (copper path length between the pad centres, vias; measured from the pad edges the lengths are up to 0.7 mm shorter): TCK 11.0 mm/2 to R2044 and 45.2 mm/5 to U10.91; TMS 11.2/2 and 36.1/5; TDI 14.3/2 and 40.6/3; TDO 10.1/2 and 44.9/5; PROGRAMn 21.1/4 and 53.3/7. The longest, PROGRAMn, is a static line. With 220 Ω at the source the JTAG edges are RC-limited (about 13 ns on TCK); the lines are electrically short at the 10 MHz TCK limit. Rerouted slow nets, before → after: LINK_A1 39.9 → 35.4 mm, C5_PWR_EN (U201 → U34) 18.1 → 29.1 mm, USB_SERVICE_VBUS (static sense) 27.2 → 41.3 mm; USB_VBUS_SENSE (U201 → R2041) 4.45 → 4.66 mm and PWR_UPSTREAM_OK 25.00 → 25.03 mm, essentially unchanged.
+- **Preservation** (`design/rp-fpga-jtag-2026-10-17/preservation-check.json`, run by the replay with its arguments recorded): all 351 earlier footprints, 15 zones and 29 drawings unchanged; 12,300 of 12,322 earlier tracks/vias unchanged; 4 split where new copper joins them, with the pieces covering the originals (FPGA_TCK, FPGA_TMS, C5_PWR_EN, USB_VBUS_SENSE); 2 shortened on lifted nets (LINK_A1 to a 13 µm stub, USB_SERVICE_VBUS from 5.95 to 4.23 mm); 16 removed, all on the five lifted nets. No new copper on In1 or In4. The power-copper report is unchanged apart from the board hash.
+- **Release state.** DRC 0, unconnected 0, parity 0, ERC 0. The new part is a new BOM line (55 BASE rows, 269 SMT parts); its LCSC identity C112291 comes from a search index and its JLC SMT entry is pending (parts list status `catalog_identity_search_index_only_assembly_pending`). The owner reviews in `manufacturing/review-evidence.json` were made on fedc570 and must be repeated.
 
 ## What changed since the 600-open checkpoint
 

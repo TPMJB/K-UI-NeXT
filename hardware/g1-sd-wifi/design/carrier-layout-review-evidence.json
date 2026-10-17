@@ -1,18 +1,18 @@
 {
   "status": "current_native_followup_checked; fabrication_fault_and_mechanical_qualification_open",
-  "review_time_utc": "2026-10-11",
-  "board_sha256": "8c891b8b5a62dc336a8c3707fa846e28394412a2acb061c2c4e02a207ac74ed8",
+  "review_time_utc": "2026-10-17",
+  "board_sha256": "3b52bedb1832483bfb08103dd08cba4ced4b851021ff90b177d7cd918f897843",
   "claude_routed_baseline_commit": "4b8c7d6876aaa2a1808bc46c1ccce587e028ebf5",
   "historical_review": "The previous fa3e8848 placement review, withdrawn candidates and source comparisons remain in Git history; they do not describe the routed current snapshot.",
-  "board_footprints": 351,
-  "nonvia_track_segments": 11318,
-  "through_vias": 1004,
-  "tracks_and_vias": 12322,
+  "board_footprints": 356,
+  "nonvia_track_segments": 12084,
+  "through_vias": 1043,
+  "tracks_and_vias": 13127,
   "tracks_by_layer": {
-    "B.Cu": 1721,
-    "F.Cu": 5772,
-    "In2.Cu": 1614,
-    "In3.Cu": 2029,
+    "B.Cu": 1852,
+    "F.Cu": 5940,
+    "In2.Cu": 2004,
+    "In3.Cu": 2106,
     "In4.Cu": 182
   },
   "copper_layers": 6,
@@ -241,8 +241,8 @@
   },
   "all_16_nominal_contacts_match": true,
   "current_assembly_counts": {
-    "BASE_SMT_parts": 264,
-    "BASE_BOM_rows": 54,
+    "BASE_SMT_parts": 269,
+    "BASE_BOM_rows": 55,
     "exact_catalog_rows": 54
   },
   "normal_current_screen_pass": true,
@@ -256,13 +256,119 @@
   "reference_plane_limit": "In1 has no signal tracks; In4 includes9 signal-net plane hops. DC connectivity does not qualify return-path integrity or timing.",
   "file_sha256": {
     "controller/KUI-G1-Bridge-RevA.kicad_pro": "92373b92ed3e500ced97fd4eee1b0e234efeb1d24f4b35825dd824df5d732743",
-    "design/integrated-components.json": "decfdc150f128684002009b1d7cad4258c322ae34b83eeae503c9565b4332c41",
+    "design/integrated-components.json": "0d888380d2805acaee3d4ce4b64da31379cb5d697e56d986fbfc628303219220",
     "design/sources/xiao-c5-spring-contact-placement.json": "285f926f3cc9023020b50a657f657363a763744bc2a762e0f123777631f4ea6c",
     "design/sources/input-protection-footprints.json": "0b841fa295075a4d3e4e68c64615e4587bdce7668ace139e02cf07cebc12557a",
-    "design/carrier-final-drc.json": "9f80c6e4351885c1aafe54bf8a37b34ba9e1ef40830ff7e1299b02376af2500e",
-    "design/power-copper-check.json": "66070cc4e3216cfcd7db7e609663c89ae7441b870f789acdcea931c3475bcf46",
+    "design/carrier-final-drc.json": "72bff505732456fbfde7f3b11f4a0add85cc90dc9c6026a1067d73e5f83ff7ce",
+    "design/power-copper-check.json": "23f29d36bc1427d39668837a88f54015ccfd578170bb2599053f051931ee4c03",
     "design/power-native-preservation-check.json": "ded5379103e4ee329a7e25d057c8db4e617f1df5b511624d72b7204b7bae76ed",
-    "manufacturing/assembly-draft-report.json": "01409eb6bcf5fd2f1c67e97c4a6caae139e2459232a2e1bca265ae1216f3fd26",
-    "flex/checks/summary.json": "c985f39b21682d3e2e65da3bc7c9c136ce7cb3853f14e07afc52f155ab1feabf"
+    "manufacturing/assembly-draft-report.json": "91f19a0667e7fa7453030222261a9e12a183029b3ec211e4c87e974cd5e0b1d7",
+    "flex/checks/summary.json": "c985f39b21682d3e2e65da3bc7c9c136ce7cb3853f14e07afc52f155ab1feabf",
+    "design/rp-fpga-jtag-2026-10-17/preservation-check.json": "37a19ac80bf1ce0e71545e1150b4990ba62dad6ec6b5cabe5d935163a4f3d8aa",
+    "design/rp-fpga-jtag-2026-10-17/tidy.json": "5af70275815a0086a49c59ad65a1d815440879b6f09ec816cf4d70816a6c2306"
+  },
+  "rp_fpga_jtag_followup": {
+    "date": "2026-10-17",
+    "change": "U201 GPIO21/22/28/29/30 drive U10 TMS/TCK/PROGRAMn/TDI and read TDO through R2044-R2048 (220 ohm); replayed by tools/rp_fpga_jtag_2026_10_17.sh from fedc570. No RP2350 configuration firmware exists yet; until it does, U10 is programmed through J10 with RUN held low.",
+    "preservation": "design/rp-fpga-jtag-2026-10-17/preservation-check.json (run by the replay; arguments and board hash recorded): all 351 earlier footprints, 15 zones and 29 drawings unchanged; 12300 of 12322 earlier tracks/vias unchanged; 4 split where new copper joins them, with the pieces covering the originals (FPGA_TCK, FPGA_TMS, C5_PWR_EN, USB_VBUS_SENSE); 2 shortened on lifted nets (LINK_A1 31ed8dad 4.276 -> 0.013 mm, USB_SERVICE_VBUS 0604e1bd 5.950 -> 4.234 mm); 16 removed, all on the five lifted nets LINK_A1, USB_VBUS_SENSE, USB_SERVICE_VBUS, C5_PWR_EN and PWR_UPSTREAM_OK, which were rerouted.",
+    "crystal_keepout": "No new F.Cu track or via within the three keepout boxes around X201, C2020, C2021, R2002 and the XIN/XOUT traces south of the U201 pad row. Closest new F.Cu copper: FPGA_TDO_MCU via 0.75 mm to X201.3 (XTAL_OUT), USB_SERVICE_VBUS via 0.99 mm to C2021.1 (XTAL_OUT), FPGA_TCK_MCU via 1.22 mm to C2020.1 (XIN), FPGA_PROGRAMn_MCU 1.84 mm to U201.31 (XOUT). New copper under the crystal is on In2 and B.Cu, separated from F.Cu parts by the In1.Cu ground plane.",
+    "route_lengths_mm_vias": {
+      "FPGA_TCK_MCU U201.22-R2044.1": [
+        11.01,
+        2
+      ],
+      "FPGA_TCK R2044.2-U10.91": [
+        45.24,
+        5
+      ],
+      "FPGA_TMS_MCU U201.21-R2045.1": [
+        11.18,
+        2
+      ],
+      "FPGA_TMS R2045.2-U10.90": [
+        36.07,
+        5
+      ],
+      "FPGA_TDI_MCU U201.37-R2046.1": [
+        14.26,
+        2
+      ],
+      "FPGA_TDI R2046.2-U10.94": [
+        40.56,
+        3
+      ],
+      "FPGA_TDO_MCU U201.38-R2047.1": [
+        10.09,
+        2
+      ],
+      "FPGA_TDO R2047.2-U10.95": [
+        44.9,
+        5
+      ],
+      "FPGA_PROGRAMn_MCU U201.36-R2048.1": [
+        21.05,
+        4
+      ],
+      "FPGA_PROGRAMn R2048.2-U10.81": [
+        53.32,
+        7
+      ]
+    },
+    "rerouted_nets_mm_vias_before_after": {
+      "LINK_A1 U201.9-U10.62": [
+        [
+          39.94,
+          3
+        ],
+        [
+          35.43,
+          4
+        ]
+      ],
+      "C5_PWR_EN U201.57-U34.2": [
+        [
+          18.13,
+          2
+        ],
+        [
+          29.08,
+          3
+        ]
+      ],
+      "USB_SERVICE_VBUS R2040.1-J202.4": [
+        [
+          27.19,
+          2
+        ],
+        [
+          41.29,
+          5
+        ]
+      ],
+      "PWR_UPSTREAM_OK U27.3-U28.2": [
+        [
+          25.0,
+          3
+        ],
+        [
+          25.03,
+          3
+        ]
+      ],
+      "USB_VBUS_SENSE U201.23-R2041.1": [
+        [
+          4.45,
+          0
+        ],
+        [
+          4.66,
+          0
+        ]
+      ]
+    },
+    "junction_tidy": "design/rp-fpga-jtag-2026-10-17/tidy.json (tools/edit_tracks.py): C5_PWR_EN joins its old corner directly instead of a 10-degree hairpin; FPGA_TMS meets its old 45-degree segment at 90 degrees instead of 22. No new track runs between the pads of a two-pad part, and no new track runs within 0.25 mm alongside same-net copper.",
+    "not_in_plane": "No new copper on In1.Cu or In4.Cu.",
+    "power_copper_screen": "Unchanged apart from the board hash: normal screen pass, 138 failed entries in the selected 2.5 A fault screen.",
+    "review_status": "Technical snapshot only; owner reviews in manufacturing/review-evidence.json were made on fedc570 and must be repeated (input hashes are stale)."
   }
 }

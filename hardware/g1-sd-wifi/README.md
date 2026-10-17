@@ -1,13 +1,13 @@
 # K-UI G1 microSD and Wi-Fi bridge — Rev A
 
-The design now has a complete native KiCad circuit, two routed CN503 flex arms, selected components and original FPGA logic. All 53 BASE SMT part types have exact catalog matches, and candidate BOM/CPL files exist. **Prototype fabrication is not released yet:** carrier routing and electrical layout review, mechanical support/fit and assembler placement/fixture review remain open. Device timing and firmware qualification are also outstanding. This directory supersedes the historical MCU-only starter.
+The design now has a complete native KiCad circuit, two routed CN503 flex arms, selected components and original FPGA logic. All 55 BASE SMT part types have catalog matches (the 220 Ω FPGA configuration resistor added on 17 October has an LCSC code, C112291, taken from a search index: confirm it on lcsc.com and its JLC SMT entry), and candidate BOM/CPL files exist. **Prototype fabrication is not released yet:** carrier routing and electrical layout review, mechanical support/fit and assembler placement/fixture review remain open. Device timing and firmware qualification are also outstanding. This directory supersedes the historical MCU-only starter.
 
 The Dreamcast VA1 keeps its original 3.3 V GD-ROM as device0. The bridge supplies ATA device1, raw microSD sectors and Wi-Fi transport. K-UI is the sole filesystem owner; the C5 never independently mounts the card. exFAT is the baseline user choice; ext4 remains a software option. No FAT32 setup is prescribed.
 
 | Implemented hardware | Selected component or circuit |
 | --- | --- |
-| ATA front end | U10 LCMXO2-2000HC-4TG100C; 50 MHz clock, JTAG, TX/RX FIFOs and hardware isolation |
-| Controller | U201 RP2350B with boot NOR, native four-bit SD, USB/SWD recovery |
+| ATA front end | U10 LCMXO2-2000HC-4TG100C; 50 MHz clock, JTAG configured by the RP2350 (J10 pads as an alternative), TX/RX FIFOs and hardware isolation |
+| Controller | U201 RP2350B with boot NOR, native four-bit SD, USB/SWD recovery, and FPGA JTAG/PROGRAMn control |
 | Bridge cache | U203 APS6404L-3SQR-ZR, 8 MiB PSRAM on QMI CS1/GPIO47; does not add SH-4 system RAM |
 | microSD | Molex1040310811 socket, card detect, pullups and rail-qualified bidirectional isolation |
 | Wi-Fi | Manual USB-free XIAO ESP32-C5, sixteen Harwin spring contacts, switched5 V, isolated SPI/UART and EN/BOOT recovery |

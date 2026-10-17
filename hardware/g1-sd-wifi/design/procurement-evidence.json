@@ -1,6 +1,9 @@
 {
   "review_date": "2026-10-11",
-  "scope": "Exact purchasing identities and variant quantities derived from physical circuit contracts. All 54 BASE SMT purchase rows have exact official JLC SMT catalog identity evidence, including D21 High Diode SMF5.0CA C22458622 and F21 Littelfuse 0467.500NR C206990. One BASE C5 module is a separate maker-SKU manual purchase. Optional BIOS/reserve sourcing may remain pending. Catalog identity is not inventory, allocation, quotation, assembler acceptance or production release.",
+  "review_updates": [
+    "2026-10-17: RC0402FR-07220RL (R2044-R2048) added; LCSC identity C112291 from a search-engine index, lcsc.com and jlcpcb.com unreachable from the design environment."
+  ],
+  "scope": "Exact purchasing identities and variant quantities derived from physical circuit contracts. All 54 BASE SMT purchase rows of the 2026-10-11 review, including D21 High Diode SMF5.0CA C22458622 and F21 Littelfuse 0467.500NR C206990, have exact official JLC SMT catalog identity evidence. The 2026-10-17 FPGA configuration resistor RC0402FR-07220RL (C112291) has LCSC catalog identity from a search index only, and its JLC SMT entry is pending. One BASE C5 module is a separate maker-SKU manual purchase. Optional BIOS/reserve sourcing may remain pending. Catalog identity is not inventory, allocation, quotation, assembler acceptance or production release.",
   "parts": {
     "046701.5NR": {
       "manufacturer": "Littelfuse",
@@ -822,6 +825,26 @@
         "pcba_type": "Economic and Standard",
         "fixture_required_by_catalog": false,
         "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+      }
+    },
+    "RC0402FR-07220RL": {
+      "manufacturer": "Yageo",
+      "description": "220",
+      "physical_package": "0402 imperial / 1005 metric SMT chip",
+      "electrical_spec": "220 ohm; 1% thick-film; nominal power 0.063 W at 70 C",
+      "manufacturer_sources": [
+        "https://yageogroup.com/component-documentation/download/specsheet/RC0402FR-07220RL"
+      ],
+      "spec_review_status": "Exact circuit MPN selected; procurement and operating qualification pending",
+      "notes": "Use exact Yageo value/package. FPGA configuration series resistors R2044-R2048; no approved substitution.",
+      "supplier_identity": {
+        "lcsc_code": "C112291",
+        "url": "https://www.lcsc.com/product-detail/Chip-Resistor-Surface-Mount_220R-220R-1_C112291.html",
+        "verified_mpn": "RC0402FR-07220RL",
+        "verified_manufacturer": "Yageo",
+        "verified_on": "2026-10-17",
+        "verification_scope": "LCSC catalog page title (exact MPN) and attributes (YAGEO, 220 ohm 1%, 62.5 mW, 0402) read through a search-engine index; lcsc.com and jlcpcb.com were not reachable from the design environment. Confirm the page and the JLC SMT part entry before ordering; no availability, allocation, basic/extended status or assembly acceptance guarantee.",
+        "identity_source": "search_index"
       }
     },
     "RC0402FR-0727RL": {
@@ -1850,6 +1873,7 @@
     "Complete assembly orientation/footprint and shield-clearance review; C5 module is modified and installed manually. Harwin spring contacts are SMT parts requiring an assembler-approved support fixture.",
     "Optional BIOS requires separate mechanical/timing installation qualification, isolated stock CE, R410 removal and externally verified bank-0 preprogramming; no onboard flasher is provided.",
     "CN503 flex, optional BIOS FPC/selector harness, power leads, mounting/insulation fixture and microSD media are separate fabrication/installation items, not guessed catalog stock parts.",
-    "JLC explicitly lists assembly support fixture requirements for Harwin S7221-45R C22445132 and Abracon ASE-50.000MHZ-LC-T C596955; confirm fixture process before assembly order release."
+    "JLC explicitly lists assembly support fixture requirements for Harwin S7221-45R C22445132 and Abracon ASE-50.000MHZ-LC-T C596955; confirm fixture process before assembly order release.",
+    "Confirm on lcsc.com that C112291 is Yageo RC0402FR-07220RL, and find its JLC SMT parts-library entry and Basic/Extended status, before ordering (R2044-R2048); the current identity is search-index derived."
   ]
 }

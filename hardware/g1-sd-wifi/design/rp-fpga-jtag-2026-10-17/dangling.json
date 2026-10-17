@@ -1,0 +1,67 @@
+{
+  "removed_items": 12,
+  "removed_vias": 1,
+  "locked_dangling_left": [],
+  "items": [
+    {
+      "net": "LINK_A1",
+      "layer": "In2.Cu",
+      "via": false
+    },
+    {
+      "net": "C5_PWR_EN",
+      "layer": "In2.Cu",
+      "via": false
+    },
+    {
+      "net": "USB_SERVICE_VBUS",
+      "layer": "In3.Cu",
+      "via": false
+    },
+    {
+      "net": "USB_SERVICE_VBUS",
+      "layer": "In3.Cu",
+      "via": false
+    },
+    {
+      "net": "LINK_A1",
+      "layer": "In2.Cu",
+      "via": false
+    },
+    {
+      "net": "USB_SERVICE_VBUS",
+      "layer": "In3.Cu",
+      "via": false
+    },
+    {
+      "net": "LINK_A1",
+      "layer": "F.Cu",
+      "via": true
+    },
+    {
+      "net": "LINK_A1",
+      "layer": "In3.Cu",
+      "via": false
+    },
+    {
+      "net": "LINK_A1",
+      "layer": "In3.Cu",
+      "via": false
+    },
+    {
+      "net": "LINK_A1",
+      "layer": "In3.Cu",
+      "via": false
+    },
+    {
+      "net": "LINK_A1",
+      "layer": "In3.Cu",
+      "via": false
+    },
+    {
+      "net": "LINK_A1",
+      "layer": "In3.Cu",
+      "via": false
+    }
+  ]
+}

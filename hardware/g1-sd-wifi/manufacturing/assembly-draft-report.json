@@ -1,10 +1,10 @@
 {
   "status": "draft_not_released",
   "variant": "BASE",
-  "SMT_parts": 264,
+  "SMT_parts": 269,
   "omitted_base_refs": [],
   "psram_policy": "U203 populated; exact-part driver and bandwidth remain unqualified.",
-  "BOM_rows": 54,
+  "BOM_rows": 55,
   "manual_offboard_refs": [
     "U206"
   ],
@@ -45,13 +45,27 @@
     }
   ],
   "unverified_catalog_rows": [],
-  "pcb_sha256": "8c891b8b5a62dc336a8c3707fa846e28394412a2acb061c2c4e02a207ac74ed8",
-  "parts_list_sha256": "b4b434f3f5415751d74c3dfd937292528f24a9ae9815b30fd50fc7ab0162b756",
+  "jlc_assembly_pending_rows": [
+    {
+      "mpn": "RC0402FR-07220RL",
+      "refs": [
+        "R2044",
+        "R2045",
+        "R2046",
+        "R2047",
+        "R2048"
+      ],
+      "lcsc_code": "C112291",
+      "sourcing_status": "catalog_identity_search_index_only_assembly_pending"
+    }
+  ],
+  "pcb_sha256": "3b52bedb1832483bfb08103dd08cba4ced4b851021ff90b177d7cd918f897843",
+  "parts_list_sha256": "e0202ea148740e8175615538ce1669d20b7ac6f08a98b0b1a5ec1e154d3eaa99",
   "origin_mm": [
     70.0,
     160.0
   ],
   "coordinates": "Actual footprint body origin; X right, Y up, mm, relative to native aux origin",
   "rotation_status": "Native orientation only; manufacturer model zero-angle/placement preview review pending",
-  "note": "Catalog identities are checked except the rows listed as unverified; placement rotations, factory fixtures and the owner layout review remain open. Do not submit as approved PCBA data."
+  "note": "Catalog identities are recorded in parts-to-buy.csv; rows listed as unverified or JLC-assembly pending still need confirmation in the JLC parts library. Placement rotations, factory fixtures and the owner layout review remain open. Do not submit as approved PCBA data."
 }

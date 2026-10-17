@@ -1,5 +1,5 @@
 {
-  "board_sha256": "8c891b8b5a62dc336a8c3707fa846e28394412a2acb061c2c4e02a207ac74ed8",
+  "board_sha256": "3b52bedb1832483bfb08103dd08cba4ced4b851021ff90b177d7cd918f897843",
   "status": "routing_present_qualification_pending",
   "routing_qualified": false,
   "signal_integrity_qualified": false,
@@ -15,7 +15,7 @@
     "sum": 0,
     "matches_full_board_total": true,
     "counts_are_uncapped": true,
-    "board_sha256": "8c891b8b5a62dc336a8c3707fa846e28394412a2acb061c2c4e02a207ac74ed8",
+    "board_sha256": "3b52bedb1832483bfb08103dd08cba4ced4b851021ff90b177d7cd918f897843",
     "method": "Independent fresh LoadBoard for each category; assign netcode0 to all pads/tracks/vias/zones outside that category; BuildConnectivity/RecalculateRatsnest/GetUnconnectedCount(False)",
     "power_net_classification": [
       "+1V1_MCU",
@@ -168,15 +168,20 @@
         "FPGA_INITn",
         "FPGA_JTAGEN",
         "FPGA_PROGRAMn",
+        "FPGA_PROGRAMn_MCU",
         "FPGA_READY",
         "FPGA_RESETn",
         "FPGA_SCL",
         "FPGA_SDA",
         "FPGA_SN",
         "FPGA_TCK",
+        "FPGA_TCK_MCU",
         "FPGA_TDI",
+        "FPGA_TDI_MCU",
         "FPGA_TDO",
+        "FPGA_TDO_MCU",
         "FPGA_TMS",
+        "FPGA_TMS_MCU",
         "HOST_OKn",
         "INTRQ_OEn",
         "IORDY_PULL_LOW",
@@ -288,12 +293,7 @@
         "unconnected-(U10-PT22A-Pad78)",
         "unconnected-(U10-PT9A-Pad99)",
         "unconnected-(U10-PT9B-Pad98)",
-        "unconnected-(U201-GPIO21-Pad21)",
-        "unconnected-(U201-GPIO22-Pad22)",
         "unconnected-(U201-GPIO27-Pad28)",
-        "unconnected-(U201-GPIO28-Pad36)",
-        "unconnected-(U201-GPIO29-Pad37)",
-        "unconnected-(U201-GPIO30-Pad38)",
         "unconnected-(U201-GPIO39-Pad48)",
         "unconnected-(U208-1B2-Pad12)",
         "unconnected-(U23-CT-Pad4)",
@@ -318,9 +318,9 @@
   "kicad_drc_unconnected_report_limit": 499,
   "kicad_drc_unconnected_report_at_limit_status": "not_at_limit",
   "drc_count_interpretation": "A DRC report showing 499 means capped_at_499; use uncapped native connectivity for progress.",
-  "physical_footprints": 351,
-  "tracks_and_vias": 12322,
-  "through_vias": 1004,
+  "physical_footprints": 356,
+  "tracks_and_vias": 13127,
+  "through_vias": 1043,
   "C5_rigid_contact_group": {
     "checked_contacts": 16,
     "all_origins_orientations_and_tips_match": true,
@@ -539,9 +539,9 @@
   "all_physical_components_on_top": false,
   "physical_footprint_layer_counts": {
     "B.Cu": 39,
-    "F.Cu": 312
+    "F.Cu": 317
   },
-  "fitted_smt_components": 264,
+  "fitted_smt_components": 269,
   "all_fitted_smt_components_on_top": true,
   "fitted_smt_bottom_refs": [],
   "fitted_smt_refs": [
@@ -722,6 +722,11 @@
     "R2041",
     "R2042",
     "R2043",
+    "R2044",
+    "R2045",
+    "R2046",
+    "R2047",
+    "R2048",
     "R205",
     "R206",
     "R207",
@@ -811,7 +816,7 @@
     "X201"
   ],
   "fitment_scope": "BASE population declared by integrated component contract; fabricated copper and DNP/offboard parts excluded",
-  "fitment_contract_sha256": "decfdc150f128684002009b1d7cad4258c322ae34b83eeae503c9565b4332c41",
+  "fitment_contract_sha256": "0d888380d2805acaee3d4ce4b64da31379cb5d697e56d986fbfc628303219220",
   "physical_refs_missing_component_contract": [],
   "fabricated_copper_footprints": 52,
   "fabricated_copper_bottom_refs": [
@@ -1392,7 +1397,7 @@
       "vias": 2
     },
     "LINK_A1": {
-      "total_trace_length_mm": 40.4802,
+      "total_trace_length_mm": 35.9649,
       "trace_widths_mm": [
         0.127
       ],
@@ -1401,8 +1406,8 @@
         "In2.Cu",
         "In3.Cu"
       ],
-      "segments": 23,
-      "vias": 3
+      "segments": 25,
+      "vias": 4
     },
     "+1V1_MCU": {
       "total_trace_length_mm": 49.0201,
@@ -1505,15 +1510,39 @@
       "segments": 20,
       "vias": 2
     },
+    "FPGA_TMS_MCU": {
+      "total_trace_length_mm": 11.1927,
+      "trace_widths_mm": [
+        0.127
+      ],
+      "copper_layers": [
+        "F.Cu",
+        "In2.Cu"
+      ],
+      "segments": 19,
+      "vias": 2
+    },
+    "FPGA_TCK_MCU": {
+      "total_trace_length_mm": 11.3841,
+      "trace_widths_mm": [
+        0.127
+      ],
+      "copper_layers": [
+        "F.Cu",
+        "In3.Cu"
+      ],
+      "segments": 55,
+      "vias": 2
+    },
     "USB_VBUS_SENSE": {
-      "total_trace_length_mm": 5.2842,
+      "total_trace_length_mm": 5.4378,
       "trace_widths_mm": [
         0.127
       ],
       "copper_layers": [
         "F.Cu"
       ],
-      "segments": 6,
+      "segments": 25,
       "vias": 0
     },
     "SD_DAT_DIR": {
@@ -1614,6 +1643,43 @@
       ],
       "segments": 34,
       "vias": 4
+    },
+    "FPGA_PROGRAMn_MCU": {
+      "total_trace_length_mm": 21.077,
+      "trace_widths_mm": [
+        0.127
+      ],
+      "copper_layers": [
+        "B.Cu",
+        "F.Cu",
+        "In2.Cu"
+      ],
+      "segments": 72,
+      "vias": 4
+    },
+    "FPGA_TDI_MCU": {
+      "total_trace_length_mm": 14.2789,
+      "trace_widths_mm": [
+        0.127
+      ],
+      "copper_layers": [
+        "F.Cu",
+        "In2.Cu"
+      ],
+      "segments": 183,
+      "vias": 2
+    },
+    "FPGA_TDO_MCU": {
+      "total_trace_length_mm": 10.1125,
+      "trace_widths_mm": [
+        0.127
+      ],
+      "copper_layers": [
+        "F.Cu",
+        "In2.Cu"
+      ],
+      "segments": 36,
+      "vias": 2
     },
     "PWR_FAILn": {
       "total_trace_length_mm": 104.7847,
@@ -1792,16 +1858,17 @@
       "vias": 0
     },
     "C5_PWR_EN": {
-      "total_trace_length_mm": 35.7537,
+      "total_trace_length_mm": 44.7738,
       "trace_widths_mm": [
         0.127
       ],
       "copper_layers": [
+        "B.Cu",
         "F.Cu",
         "In2.Cu"
       ],
-      "segments": 40,
-      "vias": 3
+      "segments": 87,
+      "vias": 4
     },
     "PSRAM_CSn_MCU": {
       "total_trace_length_mm": 10.5696,
@@ -2103,6 +2170,20 @@
       "segments": 30,
       "vias": 4
     },
+    "FPGA_TCK": {
+      "total_trace_length_mm": 58.5117,
+      "trace_widths_mm": [
+        0.127
+      ],
+      "copper_layers": [
+        "B.Cu",
+        "F.Cu",
+        "In2.Cu",
+        "In3.Cu"
+      ],
+      "segments": 45,
+      "vias": 6
+    },
     "REQ_INTRQ_OEn": {
       "total_trace_length_mm": 51.3868,
       "trace_widths_mm": [
@@ -2142,16 +2223,18 @@
       "vias": 4
     },
     "FPGA_TDO": {
-      "total_trace_length_mm": 17.0418,
+      "total_trace_length_mm": 61.948,
       "trace_widths_mm": [
         0.127
       ],
       "copper_layers": [
+        "B.Cu",
         "F.Cu",
-        "In2.Cu"
+        "In2.Cu",
+        "In3.Cu"
       ],
-      "segments": 9,
-      "vias": 1
+      "segments": 45,
+      "vias": 6
     },
     "SD_DAT2": {
       "total_trace_length_mm": 6.2578,
@@ -2974,18 +3057,6 @@
       "segments": 9,
       "vias": 2
     },
-    "FPGA_TCK": {
-      "total_trace_length_mm": 21.0885,
-      "trace_widths_mm": [
-        0.127
-      ],
-      "copper_layers": [
-        "B.Cu",
-        "F.Cu"
-      ],
-      "segments": 11,
-      "vias": 2
-    },
     "REQ_DATA_OEn": {
       "total_trace_length_mm": 34.8617,
       "trace_widths_mm": [
@@ -3133,16 +3204,18 @@
       "vias": 2
     },
     "USB_SERVICE_VBUS": {
-      "total_trace_length_mm": 27.192,
+      "total_trace_length_mm": 41.2884,
       "trace_widths_mm": [
         0.127
       ],
       "copper_layers": [
+        "B.Cu",
         "F.Cu",
+        "In2.Cu",
         "In3.Cu"
       ],
-      "segments": 9,
-      "vias": 2
+      "segments": 74,
+      "vias": 5
     },
     "C5_ENn": {
       "total_trace_length_mm": 24.4725,
@@ -3170,41 +3243,46 @@
       "vias": 7
     },
     "FPGA_TMS": {
-      "total_trace_length_mm": 24.54,
-      "trace_widths_mm": [
-        0.127
-      ],
-      "copper_layers": [
-        "F.Cu",
-        "In3.Cu"
-      ],
-      "segments": 9,
-      "vias": 2
-    },
-    "FPGA_TDI": {
-      "total_trace_length_mm": 22.3043,
+      "total_trace_length_mm": 55.0192,
       "trace_widths_mm": [
         0.127
       ],
       "copper_layers": [
         "B.Cu",
         "F.Cu",
+        "In2.Cu",
         "In3.Cu"
       ],
-      "segments": 10,
-      "vias": 2
+      "segments": 62,
+      "vias": 6
     },
-    "FPGA_PROGRAMn": {
-      "total_trace_length_mm": 21.4931,
+    "FPGA_TDI": {
+      "total_trace_length_mm": 62.8786,
       "trace_widths_mm": [
         0.127
       ],
       "copper_layers": [
+        "B.Cu",
         "F.Cu",
+        "In2.Cu",
         "In3.Cu"
       ],
-      "segments": 10,
-      "vias": 1
+      "segments": 95,
+      "vias": 5
+    },
+    "FPGA_PROGRAMn": {
+      "total_trace_length_mm": 73.6213,
+      "trace_widths_mm": [
+        0.127
+      ],
+      "copper_layers": [
+        "B.Cu",
+        "F.Cu",
+        "In2.Cu",
+        "In3.Cu"
+      ],
+      "segments": 63,
+      "vias": 7
     },
     "FPGA_INITn": {
       "total_trace_length_mm": 26.2866,
@@ -3969,7 +4047,7 @@
       "vias": 0
     },
     "PWR_UPSTREAM_OK": {
-      "total_trace_length_mm": 25.5788,
+      "total_trace_length_mm": 25.61,
       "trace_widths_mm": [
         0.127
       ],
@@ -3978,7 +4056,7 @@
         "F.Cu",
         "In3.Cu"
       ],
-      "segments": 15,
+      "segments": 22,
       "vias": 3
     },
     "PWR_LOCAL_OK": {

@@ -30,7 +30,7 @@ def main():
         raise ValueError('Native carrier PCB cannot be loaded')
     footprints = {fp.GetReference(): fp for fp in board.GetFootprints()}
     origin = board.GetDesignSettings().GetAuxOrigin()
-    bom, cpl, manual, pending, fixtures = [], [], [], [], []
+    bom, cpl, manual, pending, fixtures, jlc_pending = [], [], [], [], [], []
     jlc_verified = 0
     requested = set()
     base_smt_refs = set()
@@ -79,6 +79,9 @@ def main():
                              'status': 'assembler_fixture_agreement_pending'})
         if not row['lcsc_code']:
             pending.append({'mpn': row['mpn'], 'refs': refs})
+        elif not row.get('jlc_assembly_status', '').startswith(('jlc_smt_catalog_verified', 'manual')):
+            jlc_pending.append({'mpn': row['mpn'], 'refs': refs, 'lcsc_code': row['lcsc_code'],
+                                'sourcing_status': row.get('sourcing_status', '')})
     if not omitted.issubset(base_smt_refs) or requested != base_smt_refs-omitted:
         raise ValueError('Variant must omit only the selected PSRAM reference')
     for name, items, fields in [
@@ -97,12 +100,13 @@ def main():
         'exact_jlc_smt_catalog_rows': jlc_verified,
         'assembly_fixture_requirements': fixtures,
         'unverified_catalog_rows': pending,
+        'jlc_assembly_pending_rows': jlc_pending,
         'pcb_sha256': hashlib.sha256(PCB.read_bytes()).hexdigest(),
         'parts_list_sha256': hashlib.sha256(PARTS.read_bytes()).hexdigest(),
         'origin_mm': [pcbnew.ToMM(origin.x), pcbnew.ToMM(origin.y)],
         'coordinates': 'Actual footprint body origin; X right, Y up, mm, relative to native aux origin',
         'rotation_status': 'Native orientation only; manufacturer model zero-angle/placement preview review pending',
-        'note': 'Catalog identities are checked except the rows listed as unverified; placement rotations, factory fixtures and the owner layout review remain open. Do not submit as approved PCBA data.'}
+        'note': 'Catalog identities are recorded in parts-to-buy.csv; rows listed as unverified or JLC-assembly pending still need confirmation in the JLC parts library. Placement rotations, factory fixtures and the owner layout review remain open. Do not submit as approved PCBA data.'}
     (MFG / report_name).write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps({'variant':args.variant,'SMT_parts':len(cpl),'BOM_rows':len(bom),'pending_catalog_rows':len(pending),'status':report['status']}))
 

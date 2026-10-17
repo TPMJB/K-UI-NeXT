@@ -2907,13 +2907,13 @@
       },
       "21": {
         "name": "GPIO21",
-        "net": null,
-        "type": "no_connect"
+        "net": "FPGA_TMS_MCU",
+        "type": "bidirectional"
       },
       "22": {
         "name": "GPIO22",
-        "net": null,
-        "type": "no_connect"
+        "net": "FPGA_TCK_MCU",
+        "type": "bidirectional"
       },
       "23": {
         "name": "GPIO23",
@@ -2982,18 +2982,18 @@
       },
       "36": {
         "name": "GPIO28",
-        "net": null,
-        "type": "no_connect"
+        "net": "FPGA_PROGRAMn_MCU",
+        "type": "bidirectional"
       },
       "37": {
         "name": "GPIO29",
-        "net": null,
-        "type": "no_connect"
+        "net": "FPGA_TDI_MCU",
+        "type": "bidirectional"
       },
       "38": {
         "name": "GPIO30",
-        "net": null,
-        "type": "no_connect"
+        "net": "FPGA_TDO_MCU",
+        "type": "bidirectional"
       },
       "39": {
         "name": "GPIO31",
@@ -3215,7 +3215,7 @@
       "https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf",
       "https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008280-DS-1-hardware-design-with-rp2350.pdf"
     ],
-    "description": "Main MCU. GPIO0\u201315 asynchronous 8-bit FPGA link; native 4-bit SD; C5 SPI1/UART0; GPIO47 QMI CS1. All 81 physical package terminals included.",
+    "description": "Main MCU. GPIO0\u201315 asynchronous 8-bit FPGA link; GPIO21/22/28/29/30 FPGA JTAG/PROGRAMn through 220 ohm; native 4-bit SD; C5 SPI1/UART0; GPIO47 QMI CS1. All 81 physical package terminals included.",
     "populate": true,
     "block": "controller",
     "variant": "BASE",
@@ -7079,6 +7079,141 @@
     "block": "controller",
     "variant": "BASE",
     "source_footprint": "KUI_Footprints:Harwin_S7221-45R_BodyOrigin",
+    "on_board": true
+  },
+  {
+    "ref": "R2044",
+    "value": "220",
+    "mpn": "RC0402FR-07220RL",
+    "footprint": "KUI_Footprints:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "FPGA_TCK_MCU",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FPGA_TCK",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=39085"
+    ],
+    "description": "JTAG TCK from GPIO22 to U10.91. Limits contention with an external J10 programmer or a misconfigured pin to 15 mA.",
+    "populate": true,
+    "block": "controller",
+    "variant": "BASE",
+    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
+    "on_board": true
+  },
+  {
+    "ref": "R2045",
+    "value": "220",
+    "mpn": "RC0402FR-07220RL",
+    "footprint": "KUI_Footprints:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "FPGA_TMS_MCU",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FPGA_TMS",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=39085"
+    ],
+    "description": "JTAG TMS from GPIO21 to U10.90. Limits contention with an external J10 programmer or a misconfigured pin to 15 mA.",
+    "populate": true,
+    "block": "controller",
+    "variant": "BASE",
+    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
+    "on_board": true
+  },
+  {
+    "ref": "R2046",
+    "value": "220",
+    "mpn": "RC0402FR-07220RL",
+    "footprint": "KUI_Footprints:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "FPGA_TDI_MCU",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FPGA_TDI",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=39085"
+    ],
+    "description": "JTAG TDI from GPIO29 to U10.94. Limits contention with an external J10 programmer or a misconfigured pin to 15 mA.",
+    "populate": true,
+    "block": "controller",
+    "variant": "BASE",
+    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
+    "on_board": true
+  },
+  {
+    "ref": "R2047",
+    "value": "220",
+    "mpn": "RC0402FR-07220RL",
+    "footprint": "KUI_Footprints:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "FPGA_TDO_MCU",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FPGA_TDO",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=39085"
+    ],
+    "description": "JTAG TDO from U10.95 to GPIO30. Limits contention with an external J10 programmer or a misconfigured pin to 15 mA.",
+    "populate": true,
+    "block": "controller",
+    "variant": "BASE",
+    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
+    "on_board": true
+  },
+  {
+    "ref": "R2048",
+    "value": "220",
+    "mpn": "RC0402FR-07220RL",
+    "footprint": "KUI_Footprints:R_0402_1005Metric",
+    "pins": {
+      "1": {
+        "name": "1",
+        "net": "FPGA_PROGRAMn_MCU",
+        "type": "passive"
+      },
+      "2": {
+        "name": "2",
+        "net": "FPGA_PROGRAMn",
+        "type": "passive"
+      }
+    },
+    "sources": [
+      "https://www.latticesemi.com/view_document?document_id=39085"
+    ],
+    "description": "PROGRAMn from GPIO28 (open-drain use only) to U10.81. Limits contention with an external J10 programmer or a misconfigured pin to 15 mA.",
+    "populate": true,
+    "block": "controller",
+    "variant": "BASE",
+    "source_footprint": "Resistor_SMD:R_0402_1005Metric",
     "on_board": true
   },
   {

@@ -29,6 +29,11 @@ PULL_DOWN = re.compile(r'BUS_DD\[')
 HEADER = ('# LCMXO2-2000HC-4TG100C, physical allocation only.\n'
           '# External ATA/link setup, hold, latency and recovery constraints remain required.\n'
           '# No global asynchronous false-path exemption is supplied.\n'
+          '# sysCONFIG (MachXO2 defaults: JTAG_PORT=ENABLE, SDM_PORT=DISABLE). Every image keeps\n'
+          '# JTAG and PROGRAMN/DONE/INITN as configuration pins, so U201 can reload U10 through\n'
+          '# PROGRAMn (GPIO28) and the controller always meets the same ports. Confirm in\n'
+          '# Diamond Global Preferences on the first build.\n'
+          'SYSCONFIG JTAG_PORT=ENABLE SDM_PORT=PROGRAMN_DONE_INITN ;\n'
           'FREQUENCY PORT "FPGA_CLK50" 50.000 MHZ;\n')
 
 

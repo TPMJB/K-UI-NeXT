@@ -156,6 +156,29 @@ review, refill, native DRC, and schematic parity before fabrication. Import
 with `generate_board.py import-session`; do not rerun `place` over routed
 copper. A stale pad-net mapping is deliberately rejected.
 
+## Session notes, 17 October 2026 (RP2350 FPGA configuration)
+
+- **KiCad 10.0.7.** The committed ERC/DRC reports name 10.0.7, so this session
+  built 10.0.7 the same way as the 10.0.6 notes below (GitLab tag archive,
+  `kicad-cli pcbnew_kiface eeschema_kiface cvpcb_kiface pcbnew/_pcbnew.so`,
+  Python 3.13). A baseline DRC of the fedc570 board reproduced 0/0/0. The
+  10.0.6 footprint and symbol library tags were used for
+  `KICAD10_FOOTPRINT_DIR`; `generate_design.py --reuse-localized-footprints`
+  does not read them.
+- **lcsc.com and jlcpcb.com are blocked** by this container's proxy (HTTP 403
+  on CONNECT) and unresolvable from the web-fetch tool, so the new part's
+  LCSC identity was taken from a search engine's index of the LCSC page.
+- **Gap-closer options.** `close_gaps.py` gained `KUI_KEEPOUT_BOX` (keep a
+  run's F.Cu tracks and vias out of boxes, such as a crystal loop) and
+  `KUI_RIP_NETS` (limit `--rip` to nets matching a pattern, so only nets you
+  name can be moved). `fanout_pins.py` takes bend points for a dog-leg
+  escape; use it where a passage clears a pad by less than the gap closer's
+  one-cell margin, and let native DRC judge it. `edit_tracks.py` applies
+  explicit, geometry-matched track deletions and additions from a JSON file
+  (junction tidy-ups the gap closer leaves at shallow angles), and
+  `check_preservation.py` compares a changed board with a base revision
+  (tracks/vias by UUID, footprints, zones, drawings).
+
 ## Generated hierarchical schematics
 
 `kiutils` 1.4.8 can generate a hierarchy accepted by KiCad 10 using schema

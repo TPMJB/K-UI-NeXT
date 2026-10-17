@@ -504,6 +504,26 @@
     "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
   },
   {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
+    "source": "/usr/share/kicad/footprints/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    "local": "controller/KUI_Footprints.pretty/R_0402_1005Metric.kicad_mod"
+  },
+  {
     "source": "manufacturer recommended land; design/sources/input-protection-footprints.json",
     "local": "controller/KUI_Footprints.pretty/Littelfuse_467_0603_Recommended.kicad_mod",
     "manufacturer_source": "Littelfuse_467",

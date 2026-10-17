@@ -133,7 +133,27 @@
     "hardware/g1-sd-wifi/tools/enlarge_power_vias.py",
     "hardware/g1-sd-wifi/tools/make_review_package.py",
     "hardware/g1-sd-wifi/manufacturing/SUPPLIER-CHECKLIST.md",
-    "hardware/g1-sd-wifi/mechanical/template-verification.json"
+    "hardware/g1-sd-wifi/mechanical/template-verification.json",
+    "hardware/g1-sd-wifi/controller/K-UI-G1-GPIO-RevA.csv",
+    "hardware/g1-sd-wifi/fpga/README.md",
+    "hardware/g1-sd-wifi/tools/rp_fpga_jtag_2026_10_17.sh",
+    "hardware/g1-sd-wifi/tools/check_preservation.py",
+    "hardware/g1-sd-wifi/tools/edit_tracks.py",
+    "hardware/g1-sd-wifi/tools/close_gaps.py",
+    "hardware/g1-sd-wifi/tools/fanout_pins.py",
+    "hardware/g1-sd-wifi/tools/sync_fpga_pins.py",
+    "hardware/g1-sd-wifi/design/rp-fpga-jtag-2026-10-17/preservation-check.json",
+    "hardware/g1-sd-wifi/design/rp-fpga-jtag-2026-10-17/tidy.json",
+    "hardware/g1-sd-wifi/tools/update_board_from_netlist.py",
+    "hardware/g1-sd-wifi/tools/remove_dangling_copper.py",
+    "hardware/g1-sd-wifi/design/rp-fpga-jtag-2026-10-17/pad-net-changes.json",
+    "hardware/g1-sd-wifi/design/rp-fpga-jtag-2026-10-17/lift-west.json",
+    "hardware/g1-sd-wifi/design/rp-fpga-jtag-2026-10-17/lift-east.json",
+    "hardware/g1-sd-wifi/design/rp-fpga-jtag-2026-10-17/escapes-west.json",
+    "hardware/g1-sd-wifi/design/rp-fpga-jtag-2026-10-17/fanout-u10.json",
+    "hardware/g1-sd-wifi/design/rp-fpga-jtag-2026-10-17/close-gaps.json",
+    "hardware/g1-sd-wifi/design/rp-fpga-jtag-2026-10-17/tidy-applied.json",
+    "hardware/g1-sd-wifi/design/rp-fpga-jtag-2026-10-17/dangling.json"
   ],
   "review_evidence": "hardware/g1-sd-wifi/manufacturing/review-evidence.json",
   "requested_provisions": [
@@ -164,7 +184,7 @@
     "rigid_schematic": "Complete native hierarchy; ERC 0 and physical pad-number audit pass",
     "rigid_layout": "Six-layer0.8mm59x115mm fully routed native carrier; current native checks recorded, power-fault and prototype mechanics qualification open",
     "fpga": "Original tested synthesizable logic; MachXO2 resource mapping passes, device P&R/timing open",
-    "assembly": "54 exact catalog-matched BASE SMT part types,264 physical SMT parts; manufacturer rotation and fixture review pending"
+    "assembly": "55 catalog-matched BASE SMT part types (RC0402FR-07220RL JLC entry pending),269 physical SMT parts; manufacturer rotation and fixture review pending"
   },
   "claude_routed_baseline_commit": "4b8c7d6876aaa2a1808bc46c1ccce587e028ebf5"
 }

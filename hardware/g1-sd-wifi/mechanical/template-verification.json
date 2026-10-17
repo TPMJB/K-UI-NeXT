@@ -1,5 +1,5 @@
 {
-  "pcb_sha256": "8c891b8b5a62dc336a8c3707fa846e28394412a2acb061c2c4e02a207ac74ed8",
+  "pcb_sha256": "3b52bedb1832483bfb08103dd08cba4ced4b851021ff90b177d7cd918f897843",
   "status": "pass_actual_size_pdf_geometry_and_render; physical_fit_unqualified",
   "files": [
     {
@@ -8,10 +8,10 @@
         612,
         792
       ],
-      "horizontal_bar_mm": 49.99999172222221,
-      "vertical_bar_mm": 50.00000583333333,
-      "sha256": "5e1f7edaf4d3b2f81f4ed18d1d9168ad2fcd72baaf6ab198406dbe940cc0015c",
-      "rendered_visual_inspection": "passed; no overlaps or clipping"
+      "horizontal_bar_mm": 49.99999230702718,
+      "vertical_bar_mm": 50.00001653035482,
+      "sha256": "ae01ac966f70f8130d3d3ca11cb7b87e806733d1e8ca24dfb8892697e6a6bc49",
+      "rendered_visual_inspection": "passed; no overlaps or clipping (re-rendered 2026-10-17)"
     },
     {
       "file": "carrier-fit-A4.pdf",
@@ -19,10 +19,10 @@
         595.2756,
         841.8898
       ],
-      "horizontal_bar_mm": 49.99999172222221,
-      "vertical_bar_mm": 50.00000583333332,
-      "sha256": "2ad971fd9129a82d83f529006084782a5da8b903f68a1e33f0546342d157abe2",
-      "rendered_visual_inspection": "passed; no overlaps or clipping"
+      "horizontal_bar_mm": 49.99999230702718,
+      "vertical_bar_mm": 50.00000576443142,
+      "sha256": "b8ae32f28592125b2b92caf366d589f7fb685389b15658f2f881d46ec26a647f",
+      "rendered_visual_inspection": "passed; no overlaps or clipping (re-rendered 2026-10-17)"
     }
   ]
 }

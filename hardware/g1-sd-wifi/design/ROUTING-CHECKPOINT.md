@@ -2,6 +2,12 @@
 
 Where the carrier stands, and how to continue in a new session or container without redoing work. Keep this file current with every routing commit.
 
+## FPGA configuration wiring (17 October 2026)
+
+`tools/rp_fpga_jtag_2026_10_17.sh` rebuilds the current board from the finished fedc570 carrier: it adds R2044–R2048 south of U201, lifts six slow-net segments that closed U201's pad exits, lays explicit escapes for U201 pads 21/22 and a fan-out for U10 pin 95, routes the five configuration nets and the lifted nets with `close_gaps.py` (crystal keepout; rip-up limited to named slow nets), applies the junction edits in `design/rp-fpga-jtag-2026-10-17/tidy.json`, checks DRC/opens/parity and runs `tools/check_preservation.py` against fedc570. Its reports, including `preservation-check.json` with the arguments used and the board hash, are in `design/rp-fpga-jtag-2026-10-17/`.
+
+A rerun reproduces the same copper, but KiCad gives the new items fresh random IDs, so the board hash changes and the script overwrites `design/carrier-final-drc.json`. After a rerun, regenerate the hash-bound outputs: `check_power_copper.py --report design/power-copper-check.json`, `audit_carrier_routing.py`, `generate_parts_list.py`, both `generate_assembly_draft.py` variants, `generate_carrier_template.py` (then re-measure `mechanical/template-verification.json`), `design/carrier-layout-review-evidence.json` (its `file_sha256` table), the board hash quoted in `design/CARRIER-LAYOUT-REVIEW.md`, the review package (`make_review_package.py`) and, last, `manufacturing/preflight-report.json`.
+
 ## Routing finished (11 October 2026)
 
 `controller/KUI-G1-Bridge-RevA.kicad_pcb` is now the fully routed carrier. Native DRC with zones refilled (all severities): 0 violations, 0 unconnected items, schematic parity 0. The supply copper current check (`design/power-copper-check.json`) passes. `design/CARRIER-LAYOUT-REVIEW.md` is the review report for this board; `design/carrier-final-drc.json` is its DRC report.
@@ -32,7 +38,7 @@ The routing checkpoint below (`design/routing-checkpoint/`) belongs to the place
 ## Resume
 
 Toolchain: `design/EDA-ENVIRONMENT.md`. You need:
-- KiCad 10.0.6 built from source, with `PY`, `KICAD10_CLI` and the pcbnew `PYTHONPATH` set.
+- KiCad 10.0.7 built from source (the committed DRC/ERC reports name 10.0.7), with `PY`, `KICAD10_CLI` and the pcbnew `PYTHONPATH` set.
 - A Python with numpy and Pillow beside pcbnew, as `PYNP`.
 - The Freerouting 1.9.0 JAR as `FREEROUTING19`, and Java 21.
 

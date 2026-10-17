@@ -1,0 +1,170 @@
+{
+  "base_rev": "fedc570",
+  "board_sha256": "3b52bedb1832483bfb08103dd08cba4ced4b851021ff90b177d7cd918f897843",
+  "allow_net": [
+    "C5_PWR_EN",
+    "LINK_A1",
+    "PWR_UPSTREAM_OK",
+    "USB_SERVICE_VBUS",
+    "USB_VBUS_SENSE"
+  ],
+  "pad_net_change": [
+    "U201:21",
+    "U201:22",
+    "U201:36",
+    "U201:37",
+    "U201:38"
+  ],
+  "base_footprints": 351,
+  "footprints": 356,
+  "added_footprints": [
+    "R2044",
+    "R2045",
+    "R2046",
+    "R2047",
+    "R2048"
+  ],
+  "zones_compared": 15,
+  "drawings_compared": 29,
+  "base_tracks_and_vias": 12322,
+  "tracks_and_vias": 13127,
+  "base_items_kept_unchanged": 12300,
+  "base_items_split_and_covered": {
+    "23a589c8-7007-4c2a-a1e6-733bc43eaa23": "C5_PWR_EN",
+    "4de6d1ed-e707-468d-b870-e94e7ed8f31a": "FPGA_TMS",
+    "e9f8ed95-9f11-436d-a2b4-25f49767e859": "FPGA_TCK",
+    "fd557373-57eb-416c-bf96-a59701acd85b": "USB_VBUS_SENSE"
+  },
+  "base_items_shortened": {
+    "0604e1bd-cffe-48dd-af06-b6ef276db275": {
+      "net": "USB_SERVICE_VBUS",
+      "base_mm": 5.9496,
+      "kept_mm": 4.2336
+    },
+    "31ed8dad-db25-4f90-aa30-bc1547a68fc6": {
+      "net": "LINK_A1",
+      "base_mm": 4.2756,
+      "kept_mm": 0.0125
+    }
+  },
+  "base_items_removed": 16,
+  "base_items_removed_by_net": {
+    "C5_PWR_EN": 2,
+    "LINK_A1": 8,
+    "PWR_UPSTREAM_OK": 1,
+    "USB_SERVICE_VBUS": 4,
+    "USB_VBUS_SENSE": 1
+  },
+  "base_removed_and_shortened_mm_by_net": {
+    "C5_PWR_EN": 10.224,
+    "LINK_A1": 14.867,
+    "PWR_UPSTREAM_OK": 5.009,
+    "USB_SERVICE_VBUS": 14.854,
+    "USB_VBUS_SENSE": 1.487
+  },
+  "items_added": 821,
+  "added_by_net": {
+    "C5_PWR_EN": {
+      "via": 1,
+      "B.Cu": 4,
+      "In2.Cu": 45
+    },
+    "FPGA_PROGRAMn": {
+      "F.Cu": 3,
+      "via": 6,
+      "B.Cu": 10,
+      "In2.Cu": 39,
+      "In3.Cu": 1
+    },
+    "FPGA_PROGRAMn_MCU": {
+      "F.Cu": 37,
+      "via": 4,
+      "B.Cu": 10,
+      "In2.Cu": 25
+    },
+    "FPGA_TCK": {
+      "F.Cu": 2,
+      "via": 4,
+      "B.Cu": 19,
+      "In2.Cu": 3,
+      "In3.Cu": 10
+    },
+    "FPGA_TCK_MCU": {
+      "F.Cu": 37,
+      "via": 2,
+      "In3.Cu": 18
+    },
+    "FPGA_TDI": {
+      "F.Cu": 35,
+      "via": 3,
+      "B.Cu": 9,
+      "In2.Cu": 41
+    },
+    "FPGA_TDI_MCU": {
+      "F.Cu": 10,
+      "via": 2,
+      "In2.Cu": 173
+    },
+    "FPGA_TDO": {
+      "F.Cu": 3,
+      "via": 5,
+      "B.Cu": 22,
+      "In2.Cu": 2,
+      "In3.Cu": 9
+    },
+    "FPGA_TDO_MCU": {
+      "F.Cu": 16,
+      "via": 2,
+      "In2.Cu": 20
+    },
+    "FPGA_TMS": {
+      "F.Cu": 2,
+      "via": 4,
+      "B.Cu": 19,
+      "In2.Cu": 1,
+      "In3.Cu": 31
+    },
+    "FPGA_TMS_MCU": {
+      "F.Cu": 3,
+      "via": 2,
+      "In2.Cu": 16
+    },
+    "LINK_A1": {
+      "F.Cu": 1,
+      "via": 2,
+      "In2.Cu": 6,
+      "In3.Cu": 2
+    },
+    "PWR_UPSTREAM_OK": {
+      "B.Cu": 8
+    },
+    "USB_SERVICE_VBUS": {
+      "via": 3,
+      "B.Cu": 31,
+      "In2.Cu": 24,
+      "In3.Cu": 14
+    },
+    "USB_VBUS_SENSE": {
+      "F.Cu": 20
+    }
+  },
+  "added_track_length_mm": {
+    "C5_PWR_EN": 21.1,
+    "FPGA_PROGRAMn": 52.13,
+    "FPGA_PROGRAMn_MCU": 21.08,
+    "FPGA_TCK": 43.4,
+    "FPGA_TCK_MCU": 11.38,
+    "FPGA_TDI": 40.57,
+    "FPGA_TDI_MCU": 14.28,
+    "FPGA_TDO": 44.91,
+    "FPGA_TDO_MCU": 10.11,
+    "FPGA_TMS": 34.16,
+    "FPGA_TMS_MCU": 11.19,
+    "LINK_A1": 10.35,
+    "PWR_UPSTREAM_OK": 5.04,
+    "USB_SERVICE_VBUS": 28.95,
+    "USB_VBUS_SENSE": 1.69
+  },
+  "problems": [],
+  "pass": true
+}

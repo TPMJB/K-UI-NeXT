@@ -1,0 +1,1 @@
+{"ripped_items": 0, "ripped_nets": [], "fanouts": [{"pin": "21", "net": "FPGA_TMS_MCU", "via": [34.5, 38.85], "bends": []}, {"pin": "22", "net": "FPGA_TCK_MCU", "via": [34.95, 39.55], "bends": [[35.7, 39.3], [35.7, 39.45], [35.6, 39.55]]}]}

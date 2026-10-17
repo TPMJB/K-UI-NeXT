@@ -1,13 +1,15 @@
 # G1 bridge order readiness — 11 October 2026
 
+**17 October 2026 update:** U10's JTAG port and PROGRAMn are now wired to the RP2350 (GPIO21/22/28/29/30 through R2044–R2048, 220 Ω), so assembled boards need no FPGA cable once the RP2350 configuration firmware exists; until then, first bring-up uses a MachXO2 cable on J10 with RUN held low. See `design/CARRIER-LAYOUT-REVIEW.md`. The board now has 356 footprints, 12,084 segments and 1,043 vias; DRC, opens, parity and ERC remain zero, and the owner reviews must be repeated for the new board. One new lookup is open: confirm on lcsc.com that C112291 is Yageo RC0402FR-07220RL, and its JLC SMT entry and Basic/Extended status (`OWNER-NEXT-STEPS.md` item 7a).
+
 Claude's `4b8c7d6` is the routed-board baseline. Online lookups are now
-resolved, but **the manufacturing release remains unapproved**. Printing
+resolved (except the 17 October C112291 check above), but **the manufacturing release remains unapproved**. Printing
 and checking the refreshed template is useful now; fit alone does not
 resolve the corrected power review or unfinished mounting fixture.
 
 | Item | Evidence / remaining work |
 |---|---|
-| Routed carrier | Baseline: 59 × 115 mm, 351 footprints, 11,318 segments, 1,004 vias. Final counts preserved; native KiCad10.0.7 DRC/opens/parity/ERC all zero. |
+| Routed carrier | 59 × 115 mm. 11 October baseline: 351 footprints, 11,318 segments, 1,004 vias. Since 17 October: 356 footprints, 12,084 segments, 1,043 vias (the FPGA configuration wiring); native KiCad10.0.7 DRC/opens/parity/ERC all zero. |
 | Fabrication research | JLCPCB lists six-layer 0.8 mm, 0.09 mm track/space and suitable vias. Confirm the actual quote preserves the specified 0.8 mm, 1 oz outer / 0.5 oz inner stack. |
 | Protection procurement | Exact D21: High Diode SMF5.0CA, C22458622, maximum height 1.4 mm. Exact F21: Littelfuse 0467.500NR, C206990. Manufacturer-recommended lands applied and checked against native CAD. |
 | Power | TI's 2.45 A maximum high-side threshold replaces the assumed 1.5 A. Local-branch screening at 2.5 A exposed failures; bounded widening reduced the screen from240 to138 failed track/via entries; normal-current screening passes, fault qualification remains open. This peak-based screen does not establish continuous fault current or fuse coordination. |

@@ -77,6 +77,15 @@ PLANE_PRICE = float(os.environ.get('KUI_PLANE_PRICE', '4.0'))
 # hops to those boxes: a corridor where a slot in the plane runs alongside the
 # signals it carries rather than across them.
 PLANE_BOXES = [tuple(map(float, b.split(','))) for b in os.environ.get('KUI_PLANE_BOX', '').split(';') if b]
+# KUI_KEEPOUT_BOX='x0,y0,x1,y1;...' (board mm from the top-left corner) keeps
+# the new F.Cu tracks and the vias of this run out of those boxes: a crystal
+# loop that switching nets must not run beside. Inner and bottom layers stay
+# open under a box: the In1.Cu ground plane separates them from F.Cu parts.
+KEEPOUT_BOXES = [tuple(map(float, b.split(','))) for b in os.environ.get('KUI_KEEPOUT_BOX', '').split(';') if b]
+# KUI_RIP_NETS (a regular expression on the whole net name) limits --rip to
+# those nets' copper, so nets it leaves out (a finished board's buses and
+# clocks, for example) are never moved.
+RIP_NETS = re.compile(os.environ['KUI_RIP_NETS']) if os.environ.get('KUI_RIP_NETS') else None
 ROUTE_LAYERS = [pcbnew.F_Cu, pcbnew.In2_Cu, pcbnew.In3_Cu, pcbnew.B_Cu] + ([pcbnew.In4_Cu] if PLANE_HOPS else [])
 OUTER_INDICES = {0, 3}
 SIGNAL_INDICES = {0, 1, 2, 3}
@@ -502,6 +511,10 @@ def build(board, rippable=None, width=TRACK, via_size=(VIA_D, VIA_DRILL)):
         for x0, y0, x1, y1 in PLANE_BOXES:
             inside |= (xx >= x0 / G) & (xx <= x1 / G) & (yy >= y0 / G) & (yy <= y1 / G)
         track[pcbnew.In4_Cu][~inside] = -1
+    for x0, y0, x1, y1 in KEEPOUT_BOXES:
+        tm, vk = (width / 2 + SLACK) / G, (via_size[0] / 2 + SLACK) / G
+        track[pcbnew.F_Cu][(xx > x0 / G - tm) & (xx < x1 / G + tm) & (yy > y0 / G - tm) & (yy < y1 / G + tm)] = -1
+        via[(xx > x0 / G - vk) & (xx < x1 / G + vk) & (yy > y0 / G - vk) & (yy < y1 / G + vk)] = -1
     if rippable:
         return track, via, soft_track, soft_via, soft_items
     return track, via
@@ -939,7 +952,8 @@ def rip_transaction(board, pair, nets, margin, protected, banned, work, scratch)
     if name in protected:
         return None, set()
     rippable = lambda it: (it.Type() in (pcbnew.PCB_TRACE_T, pcbnew.PCB_VIA_T) and not it.IsLocked()
-                           and it.GetNetname() not in protected and it.GetNetname() not in banned)
+                           and it.GetNetname() not in protected and it.GetNetname() not in banned
+                           and (RIP_NETS is None or RIP_NETS.fullmatch(it.GetNetname())))
     track, via, soft_track, soft_via, soft_items = build(board, rippable)
     sa, sb = item_cells(board, pa, net), item_cells(board, pb, net)
     if not sa or not sb:

@@ -6,11 +6,11 @@
   "snapshot": [
     {
       "path": "design/blocks/bios.json",
-      "sha256": "6c78b14bf1bffda7ebc4ca913427aa4b466e4fa0b61a81a36b96ff39dee9ebe7"
+      "sha256": "8f2ee3b022fce27a136b1522ebc95721a08cda85550d225bda824ccc12e15e00"
     },
     {
       "path": "design/blocks/controller.json",
-      "sha256": "d5fa2fa23fa4b1c01efa0ac48c27fdb21b2bb02ef6e40d25a76b317961147bd2"
+      "sha256": "bc15974af6db31325d6ff9c7faaba3eaa42253cf16b9468eaa83545c90d19e68"
     },
     {
       "path": "design/blocks/frontend.json",
@@ -30,31 +30,31 @@
     },
     {
       "path": "fpga/bridge.lpf",
-      "sha256": "f45bfd5cc020f154281a995d0a461e391b8cee62ee876b8a88d631341e5bf9fc"
+      "sha256": "3a542419c94cf3c698d49ff544573f0563990f16f5c20575662020a80c10bbdc"
     },
     {
       "path": "design/integrated-components.json",
-      "sha256": "decfdc150f128684002009b1d7cad4258c322ae34b83eeae503c9565b4332c41"
+      "sha256": "0d888380d2805acaee3d4ce4b64da31379cb5d697e56d986fbfc628303219220"
     },
     {
       "path": "controller/checks/netlist.xml",
-      "sha256": "5f7682c0132157ca532bb681e613cfde72322fb4ed3d9c092a8d6f13a1533cc3"
+      "sha256": "0265650e7e71cc8f90e993149a5739d64b2af420b8cbff6107fe9dc115d9194f"
     },
     {
       "path": "tools/check_integration.py",
-      "sha256": "d46746606242b97cf0baf5815170c95ffc2513d3f58698ff7c55e3c5a8926d04"
+      "sha256": "5bf93095671e65a027236000bb6dc384587b138920f0959c2deea995ad038de9"
     }
   ],
   "components": {
-    "total": 351,
+    "total": 356,
     "by_block": {
       "bios": 33,
-      "controller": 112,
+      "controller": 117,
       "frontend": 75,
       "power-bus": 131
     },
     "duplicate_refs": [],
-    "native_total_including_cn503_and_erc_flags": 362,
+    "native_total_including_cn503_and_erc_flags": 367,
     "native_extra_cn503_connectors": 2,
     "native_extra_erc_flags": 9
   },
@@ -90,7 +90,7 @@
     {
       "id": "INT-C01",
       "result": "pass",
-      "description": "351 unique reference designators across controller, frontend, power-bus and BIOS source blocks; native generator additionally adds two CN503 FPC connectors and nine ERC declarations. Manufactured probe pads are retained in the native circuit but excluded from purchased parts. Optional BIOS has complete 48-pin NOR mapping."
+      "description": "356 unique reference designators across controller, frontend, power-bus and BIOS source blocks; native generator additionally adds two CN503 FPC connectors and nine ERC declarations. Manufactured probe pads are retained in the native circuit but excluded from purchased parts. Optional BIOS has complete 48-pin NOR mapping."
     },
     {
       "id": "INT-C02",
@@ -153,7 +153,7 @@
     {
       "id": "INT-C13",
       "result": "pass_exported_native_connectivity",
-      "description": "All 351 source components and two native CN503 sockets agree with integrated native pin contracts and exported XML component fields/terminals/nets/types/DNP. Nine ERC flags are omitted from XML; all 53 intended unused endpoints are isolated. Physical bare probe pads remain in XML despite being excluded from purchased BOM. Safety equations are evaluated from exported XML connectivity."
+      "description": "All 356 source components and two native CN503 sockets agree with integrated native pin contracts and exported XML component fields/terminals/nets/types/DNP. Nine ERC flags are omitted from XML; all 48 intended unused endpoints are isolated. Physical bare probe pads remain in XML despite being excluded from purchased BOM. Safety equations are evaluated from exported XML connectivity."
     },
     {
       "id": "INT-C14",
@@ -3599,6 +3599,40 @@
         "populate": true
       }
     ],
+    "FPGA_PROGRAMn": [
+      {
+        "block": "controller",
+        "ref": "R2048",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "81",
+        "name": "PT20D / PROGRAMN",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "R100",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "J10",
+        "pin": "8",
+        "name": "FPGA_PROGRAMn",
+        "type": "passive",
+        "populate": false
+      }
+    ],
     "FPGA_READY": [
       {
         "block": "frontend",
@@ -3657,6 +3691,142 @@
         "name": "1",
         "type": "passive",
         "populate": true
+      }
+    ],
+    "FPGA_TCK": [
+      {
+        "block": "controller",
+        "ref": "R2044",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "91",
+        "name": "PT16C / TCK",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "R109",
+        "pin": "1",
+        "name": "1",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "J10",
+        "pin": "3",
+        "name": "FPGA_TCK",
+        "type": "passive",
+        "populate": false
+      }
+    ],
+    "FPGA_TDI": [
+      {
+        "block": "controller",
+        "ref": "R2046",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "94",
+        "name": "PT12D / TDI",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "R107",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "J10",
+        "pin": "6",
+        "name": "FPGA_TDI",
+        "type": "passive",
+        "populate": false
+      }
+    ],
+    "FPGA_TDO": [
+      {
+        "block": "controller",
+        "ref": "R2047",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "95",
+        "name": "PT12C / TDO",
+        "type": "output",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "R108",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "J10",
+        "pin": "7",
+        "name": "FPGA_TDO",
+        "type": "passive",
+        "populate": false
+      }
+    ],
+    "FPGA_TMS": [
+      {
+        "block": "controller",
+        "ref": "R2045",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "U10",
+        "pin": "90",
+        "name": "PT16D / TMS",
+        "type": "input",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "R106",
+        "pin": "2",
+        "name": "2",
+        "type": "passive",
+        "populate": true
+      },
+      {
+        "block": "frontend",
+        "ref": "J10",
+        "pin": "5",
+        "name": "FPGA_TMS",
+        "type": "passive",
+        "populate": false
       }
     ],
     "INTRQ_OEn": [
@@ -4323,7 +4493,7 @@
     "CONSOLE_5V controller power comes from dedicated J20 wire pads; flex5V baseline links remain DNP.",
     "ROM_A10..ROM_A19, ROM_CEn and STOCK_CEn are optional J40 motherboard tap nodes. Stock CE pad and isolated leg must remain distinct.",
     "SW40 is an offboard physical switch with no carrier footprint. J41 is its carrier FPC harness interface.",
-    "FPGA_CCLK, SPISI, SPISO, SDA and SCL are unused configuration capabilities; factory FPGA programming uses explicit JTAG service pads.",
+    "FPGA_CCLK, SPISI, SPISO, SDA, SCL and INITn are unused by the controller; U201 configures U10 over JTAG (GPIO21 TMS, GPIO22 TCK, GPIO29 TDI, GPIO30 TDO and GPIO28 PROGRAMn through R2044-R2048, 220 ohm; DONE is read through the JTAG status register). The unpopulated J10 pads remain an external-programmer alternative with the controller pins released.",
     "LINK data and strobes may be high-impedance while MCU/FPGA held reset. Firmware must establish idle strobes and directions before releasing FPGA_RESETn and asserting BRIDGE_ARM."
   ],
   "release_gates_open": [
@@ -4343,11 +4513,11 @@
     "https://www.macronix.com/Lists/Datasheet/Attachments/8514/MX29LV640E%20T-B%2C%203V%2C%2064Mb%2C%20v1.7.pdf",
     "https://consolemods.org/wiki/images/2/27/Dreamcast_VA1_FULL.pdf"
   ],
-  "revision_note": "Refreshed after the corrected J51 mapping and 39 manufactured debug pads. Reusable checker verifies 362 integrated references, 353 XML references, 351 onboard footprints, all native endpoints, 100 FPGA package functions and 56 LPF pin/net constraints; all 8240 functional Boolean combinations use exported native connectivity. All 39 debug probe mappings are verified from XML. No mechanical, probe loading, timing or assembler fixture release is claimed.",
+  "revision_note": "Refreshed after the corrected J51 mapping and 39 manufactured debug pads. Reusable checker verifies 367 integrated references, 358 XML references, 356 onboard footprints, all native endpoints, 100 FPGA package functions and 56 LPF pin/net constraints; all 8240 functional Boolean combinations use exported native connectivity. All 39 debug probe mappings are verified from XML. No mechanical, probe loading, timing or assembler fixture release is claimed.",
   "native_netlist": {
-    "native_components": 362,
-    "xml_components": 353,
-    "onboard_footprinted_components": 351,
+    "native_components": 367,
+    "xml_components": 358,
+    "onboard_footprinted_components": 356,
     "omitted_erc_flags": [
       "#FLG1",
       "#FLG2",
@@ -4360,8 +4530,8 @@
       "#FLG9"
     ],
     "xml_named_nets": 278,
-    "assigned_pin_endpoints_checked": 1175,
-    "isolated_no_connect_endpoints_checked": 53
+    "assigned_pin_endpoints_checked": 1190,
+    "isolated_no_connect_endpoints_checked": 48
   },
   "automated_proof": {
     "bus_ownership_cases": 8192,

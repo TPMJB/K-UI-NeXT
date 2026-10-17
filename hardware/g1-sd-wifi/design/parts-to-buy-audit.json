@@ -1,32 +1,35 @@
 {
   "status": "SOURCING_WORKSHEET; NOT_A_PRODUCTION_RELEASE",
   "evidence_review_date": "2026-10-11",
+  "evidence_review_updates": [
+    "2026-10-17: RC0402FR-07220RL (R2044-R2048) added; LCSC identity C112291 from a search-engine index, lcsc.com and jlcpcb.com unreachable from the design environment."
+  ],
   "quantity_basis": "Full component quantities for one complete assembly per variant; no scrap allowance, reel/MOQ rounding or inventory promise.",
   "source_sha256": {
-    "design/blocks/bios.json": "6c78b14bf1bffda7ebc4ca913427aa4b466e4fa0b61a81a36b96ff39dee9ebe7",
-    "design/blocks/controller.json": "d5fa2fa23fa4b1c01efa0ac48c27fdb21b2bb02ef6e40d25a76b317961147bd2",
+    "design/blocks/bios.json": "8f2ee3b022fce27a136b1522ebc95721a08cda85550d225bda824ccc12e15e00",
+    "design/blocks/controller.json": "bc15974af6db31325d6ff9c7faaba3eaa42253cf16b9468eaa83545c90d19e68",
     "design/blocks/frontend.json": "8756a42cfff6185fc4f77298d7800dd9c5f92a740fce2f05e43822d25e68b386",
     "design/blocks/power-bus.json": "7db62a4633f06aaae56ad7c7adaa0ab73f66799f8115d1b656d7958e2bbcf9fd",
     "design/flex-interface.json": "2fcee6e0acc78c7d8c799e0687c211fa49bbbc1af7ba152ec395a2c623cfa964",
     "tools/generate_design.py": "bc56500116a58107408abca4843882647c212cabc5aaea59db4b2951f3e61842",
-    "tools/generate_parts_list.py": "87fab246286bb221e4f89bb769f3e9446921bb245d378ce396f0f0dc92df0c89",
-    "design/procurement-evidence.json": "83e04188782b4b68f2bfadd96e5f4b59dbc80c53ea9c8ed2f1e1f356c5d13cfd",
+    "tools/generate_parts_list.py": "3dc0d8125ae24501893d035b872d7a562d581d7a5e63265f3a91033df0137fb2",
+    "design/procurement-evidence.json": "8f55b55af0e4ed968ca38990f35212eb16752ddaf7a697322711582f4a190b70",
     "design/sources/input-protection-footprints.json": "0b841fa295075a4d3e4e68c64615e4587bdce7668ace139e02cf07cebc12557a",
     "controller/KUI_Footprints.pretty/HighDiode_SMF_SOD123FL.kicad_mod": "9021a815ab48310c281d3f9cfa8b39abb3529cc934b21c230f0af43ae0a02289",
     "controller/KUI_Footprints.pretty/Littelfuse_467_0603_Recommended.kicad_mod": "112ea9cfbe1606d1f283a5e5ba72a96c6d91da92ecbd2a5fea0be818b36de11e"
   },
-  "source_component_refs": 362,
-  "purchased_component_refs": 300,
-  "unique_purchase_rows": 69,
+  "source_component_refs": 367,
+  "purchased_component_refs": 305,
+  "unique_purchase_rows": 70,
   "variant_total_parts": {
-    "BASE": 265,
-    "BIOS": 293,
-    "RESERVE": 271,
-    "BIOS_AND_RESERVE": 299,
-    "BASE_PSRAM_DNP": 264,
-    "BIOS_PSRAM_DNP": 292,
-    "RESERVE_PSRAM_DNP": 270,
-    "BIOS_AND_RESERVE_PSRAM_DNP": 298
+    "BASE": 270,
+    "BIOS": 298,
+    "RESERVE": 276,
+    "BIOS_AND_RESERVE": 304,
+    "BASE_PSRAM_DNP": 269,
+    "BIOS_PSRAM_DNP": 297,
+    "RESERVE_PSRAM_DNP": 275,
+    "BIOS_AND_RESERVE_PSRAM_DNP": 303
   },
   "variant_dnp_purchased_refs": {
     "BASE": [
@@ -195,6 +198,9 @@
     ]
   },
   "supplier_identity_verified_rows": 54,
+  "supplier_identity_search_index_only_rows": [
+    "RC0402FR-07220RL"
+  ],
   "sourcing_pending_rows": 15,
   "catalog_identity_verified_base_rows": 54,
   "sourcing_pending_base_rows": [
@@ -204,7 +210,9 @@
     "100010048"
   ],
   "jlc_smt_catalog_verified_base_rows": 54,
-  "jlc_assembly_pending_base_rows": [],
+  "jlc_assembly_pending_base_rows": [
+    "RC0402FR-07220RL"
+  ],
   "jlc_fixture_required_base_rows": [
     "ASE-50.000MHZ-LC-T",
     "S7221-45R"
@@ -542,6 +550,7 @@
     "Complete assembly orientation/footprint and shield-clearance review; C5 module is modified and installed manually. Harwin spring contacts are SMT parts requiring an assembler-approved support fixture.",
     "Optional BIOS requires separate mechanical/timing installation qualification, isolated stock CE, R410 removal and externally verified bank-0 preprogramming; no onboard flasher is provided.",
     "CN503 flex, optional BIOS FPC/selector harness, power leads, mounting/insulation fixture and microSD media are separate fabrication/installation items, not guessed catalog stock parts.",
-    "JLC explicitly lists assembly support fixture requirements for Harwin S7221-45R C22445132 and Abracon ASE-50.000MHZ-LC-T C596955; confirm fixture process before assembly order release."
+    "JLC explicitly lists assembly support fixture requirements for Harwin S7221-45R C22445132 and Abracon ASE-50.000MHZ-LC-T C596955; confirm fixture process before assembly order release.",
+    "Confirm on lcsc.com that C112291 is Yageo RC0402FR-07220RL, and find its JLC SMT parts-library entry and Basic/Extended status, before ordering (R2044-R2048); the current identity is search-index derived."
   ]
 }

@@ -2,7 +2,7 @@
 
 Native DRC and the normal-current copper screen pass. The selected fault-current screen remains open: **138 failed track/via entries**, rather than 138 independent fault cases. These results do not prove physical fault overheating; they apply the unchanged steady-current IPC fit to a selected 2.5-A peak-current envelope.
 
-The frozen board SHA-256 is `8c891b8b5a62dc336a8c3707fa846e28394412a2acb061c2c4e02a207ac74ed8`. `power-copper-check.json` identifies that exact board. KiCad 10.0.7 native DRC with all severities, schematic parity and refilled zones reports **0 violations, 0 unconnected items and 0 parity issues** in `carrier-final-drc.json`.
+The frozen board SHA-256 is `8c891b8b5a62dc336a8c3707fa846e28394412a2acb061c2c4e02a207ac74ed8`. `power-copper-check.json` identified that exact board; since 17 October it identifies the RP-JTAG board, with results unchanged apart from the board hash (no supply copper was touched). KiCad 10.0.7 native DRC with all severities, schematic parity and refilled zones reports **0 violations, 0 unconnected items and 0 parity issues** in `carrier-final-drc.json`.
 
 ## What changed
 

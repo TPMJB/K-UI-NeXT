@@ -1,6 +1,6 @@
 {
   "status": "pass",
-  "components": 351,
+  "components": 356,
   "errors": [],
   "rows": [
     {
@@ -2684,6 +2684,66 @@
       ],
       "schematic_pin_numbers": [
         "1"
+      ],
+      "match": true
+    },
+    {
+      "ref": "R2044",
+      "physical_pad_numbers": [
+        "1",
+        "2"
+      ],
+      "schematic_pin_numbers": [
+        "1",
+        "2"
+      ],
+      "match": true
+    },
+    {
+      "ref": "R2045",
+      "physical_pad_numbers": [
+        "1",
+        "2"
+      ],
+      "schematic_pin_numbers": [
+        "1",
+        "2"
+      ],
+      "match": true
+    },
+    {
+      "ref": "R2046",
+      "physical_pad_numbers": [
+        "1",
+        "2"
+      ],
+      "schematic_pin_numbers": [
+        "1",
+        "2"
+      ],
+      "match": true
+    },
+    {
+      "ref": "R2047",
+      "physical_pad_numbers": [
+        "1",
+        "2"
+      ],
+      "schematic_pin_numbers": [
+        "1",
+        "2"
+      ],
+      "match": true
+    },
+    {
+      "ref": "R2048",
+      "physical_pad_numbers": [
+        "1",
+        "2"
+      ],
+      "schematic_pin_numbers": [
+        "1",
+        "2"
       ],
       "match": true
     },

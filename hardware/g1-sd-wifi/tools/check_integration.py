@@ -53,7 +53,7 @@ def load_sources():
             part.setdefault('populate', True)
             part.setdefault('variant', 'BASE')
     parts = [p for group in blocks.values() for p in group]
-    require(len(parts) == 351, 'Source component count changed; review audit scope.')
+    require(len(parts) == 356, 'Source component count changed; review audit scope.')
     require(len({p['ref'] for p in parts}) == len(parts), 'Duplicate source reference.')
     return blocks, parts
 
@@ -61,7 +61,7 @@ def load_sources():
 def check_native(source, flex):
     native = json.loads(NATIVE.read_text())
     byref = {c['ref']: c for c in native}
-    require(len(byref) == len(native) == 362, 'Native component count or uniqueness failed.')
+    require(len(byref) == len(native) == 367, 'Native component count or uniqueness failed.')
     for part in source:
         require(part['ref'] in byref, 'Missing native component: ' + part['ref'])
         target = byref[part['ref']]
@@ -106,7 +106,7 @@ def check_native(source, flex):
     xml = ET.parse(NETLIST).getroot()
     xml_components = xml.findall('components/comp')
     xml_byref = {c.attrib['ref']: c for c in xml_components}
-    require(len(xml_byref) == len(xml_components) == 353, 'XML component count or uniqueness failed.')
+    require(len(xml_byref) == len(xml_components) == 358, 'XML component count or uniqueness failed.')
     require(set(xml_byref) == set(byref) - flag_refs,
             'XML references differ; only the nine ERC flags may be omitted.')
     endpoint = {}

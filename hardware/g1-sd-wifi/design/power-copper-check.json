@@ -1,6 +1,6 @@
 {
   "method": "IPC-2221 chart fit; outer 35 um, inner 17 um, via plating 18 um; branch currents from a layer-aware resistive copper graph with finite via barrels and ideal filled plane islands",
-  "board_sha256": "8c891b8b5a62dc336a8c3707fa846e28394412a2acb061c2c4e02a207ac74ed8",
+  "board_sha256": "3b52bedb1832483bfb08103dd08cba4ced4b851021ff90b177d7cd918f897843",
   "converter_screen_current_a": 2.5,
   "converter_screen_basis": "TI TPS62160 family Rev E electrical characteristics: static ILIM max 2.45 A at VIN=12 V, TJ=25 C, rounded to 2.5 A; dynamic comparator delay is typical 30 ns, so this is a screening envelope, not a guaranteed peak bound.",
   "converter_primary_source": "https://www.ti.com/lit/ds/symlink/tps62160.pdf",

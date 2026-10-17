@@ -1,0 +1,10 @@
+[
+  {"op": "delete", "net": "C5_PWR_EN", "layer": "In2.Cu", "start": [114.95, 81.825], "end": [114.0, 76.55]},
+  {"op": "delete", "net": "C5_PWR_EN", "layer": "In2.Cu", "start": [114.009, 76.554], "end": [114.0, 76.55]},
+  {"op": "add", "net": "C5_PWR_EN", "layer": "In2.Cu", "points": [[114.009, 80.922], [114.95, 81.825]]},
+  {"op": "delete", "net": "FPGA_TMS", "layer": "In3.Cu", "start": [87.325, 71.7], "end": [86.725, 70.3]},
+  {"op": "delete", "net": "FPGA_TMS", "layer": "In3.Cu", "start": [86.7336, 70.2887], "end": [86.725, 70.3]},
+  {"op": "delete", "net": "FPGA_TMS", "layer": "In3.Cu", "start": [86.7336, 70.2887], "end": [89.3341, 72.8892]},
+  {"op": "add", "net": "FPGA_TMS", "layer": "In3.Cu", "points": [[86.7336, 70.2887], [87.735, 71.29], [89.3341, 72.8892]]},
+  {"op": "add", "net": "FPGA_TMS", "layer": "In3.Cu", "points": [[87.325, 71.7], [87.735, 71.29]]}
+]

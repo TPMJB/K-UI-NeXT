@@ -16,8 +16,11 @@ This circuit is implemented locally for schematic integration. It is not a fabri
 | 16, 17 | C5_UART_TX_MCU, C5_UART_RX_MCU | UART0 TX/RX for recovery proxy |
 | 18, 19 | C5_EN_ASSERT, C5_BOOT_ASSERT | Active-high transistor sink controls |
 | 20 | C5_IO_OEn | High disables both C5 isolation ICs |
+| 21, 22 | FPGA_TMS_MCU, FPGA_TCK_MCU | JTAG outputs to U10 through R2045/R2044 (220 Ω), only during a configuration session; inputs otherwise |
 | 23 | USB_VBUS_SENSE | Input, 100k/100k divider from external USB VBUS |
 | 24, 25, 26 | SD_DAT_DIR, SD_CMD_DIR, SD_IO_EN | PIO direction controls and active-high enable request |
+| 28 | FPGA_PROGRAMn_MCU | Open-drain only to U10 PROGRAMn through R2048 (220 Ω): output value 0, toggle output enable |
+| 29, 30 | FPGA_TDI_MCU, FPGA_TDO_MCU | JTAG TDI output / TDO input through R2046/R2047 (220 Ω) |
 | 31 | PWR_FAILn | Input from retained power block |
 | 32, 33 | SD_CLK_MCU, SD_CMD_MCU | Native SD clock and bidirectional command |
 | 34–37 | SD_DAT0_MCU–SD_DAT3_MCU | Native SD data, PIO |
@@ -25,6 +28,8 @@ This circuit is implemented locally for schematic integration. It is not a fabri
 | 40–43 | C5_MISO_MCU, C5_CSn_MCU, C5_SCLK_MCU, C5_MOSI_MCU | SPI1 RX, CSn, SCLK, TX |
 | 44, 45, 46 | C5_IRQ_MCU, C5_READY_MCU, C5_PWR_EN | Inputs, input, switched-5V enable output |
 | 47 | PSRAM_CSn_MCU | QMI/XIP CS1 |
+
+GPIO21, 22 and 28–30 make U201 the FPGA's configuration programmer (17 October 2026). JTAGENB is held high by R103 and every image keeps `JTAG_PORT=ENABLE SDM_PORT=PROGRAMN_DONE_INITN` (`fpga/bridge.lpf`), so U10's JTAG port and PROGRAMN stay configuration pins whatever the bitstream does: the RP2350 can identify a blank or misconfigured U10, program and verify its internal flash, issue REFRESH or pulse PROGRAMn. Once that firmware exists the FPGA needs no factory or bench cable; it has not been written, so first bring-up uses a MachXO2 cable on J10 with RUN held low (loading a trial image directly into configuration SRAM is also expected over JTAG; confirm against Lattice FPGA-TN-02155 before firmware relies on it). Each line has a 220 Ω series resistor (R2044–R2048) in a row south of U201; the board pulls (R100, R106–R108 up, R109 down) still set every idle level, so a reset or unprogrammed RP2350 leaves TMS high, TCK low and PROGRAMn released. A configuration session is any erase, flash program (offline or transparent), SRAM load, REFRESH or PROGRAMn pulse. Firmware drives BRIDGE_ARM and FPGA_RESETn low and keeps LINK_* released for the whole session, and shifts SAMPLE/PRELOAD with all ones before ISC_ENABLE/ISC_ENABLE_X (or replays a Lattice SVF unchanged): in offline ISC mode U10's pins follow the boundary-scan register, and until the preload U10 could drive BRIDGE_ARM, FPGA_RESETn, FPGA_READY or BUS_SAFE. It never issues EXTEST or CLAMP. Reconfiguration happens only with no G1 session active, because device1 disappears until the new image raises FPGA_READY; transparent flash programming also lowers BRIDGE_ARM, so it waits for the session to end too, and an image delivered over G1 (for example from a boot CD) is buffered by U201 and programmed afterwards; with BIOS_OPTION fitted, only bank-0 images or a verified whole-console held reset (`BIOS-variant.md`). After the session it releases all five pins (inputs), and it does so whenever an external programmer uses J10; a fight with such a cable is limited to 15 mA per pin. DONE is not wired to the controller: the nearest free pad, GPIO27 (pad 28), can leave the package only between C2009's pads and past the crystal's XIN trace, and GPIO39 (pad 48, east edge) is boxed in by SD and C5 routing with no via site; the JTAG status register reports DONE, configuration errors and USERCODE. GPIO27 and GPIO39 remain spare.
 
 GPIO24–26 are additions required by the SD hardware isolation. A PIO SD driver must manage the two direction signals at CMD/DAT turnaround and set the MCU pin directions consistently. DIR=1 transfers MCU to card; DIR=0 transfers card to MCU. Keep enable low during reset and initialization. Native four-bit SD has not yet been benchmarked; this design does not promise a transfer rate.
 
@@ -88,7 +93,7 @@ Place this assembly only within the measured8mm region. The installed envelope e
 
 ## RP programming contacts
 
-J202 is four copper USB service contacts. D+/D− have27Ω series resistors close to RP pins67/66. External USB VBUS only feeds a100k/100k sense divider; it does not power the board or join console5V. The board must receive console or bench power during USB recovery, and firmware attaches only when VBUS is present. J203 provides SWD, GND, VTREF, RUN and a1k-isolated BOOTSEL request. Ground BOOTSEL, pulse RUN and use the RP ROM USB loader, or recover through SWD independently of the application image. These contacts have no fitted connectors and are excluded from the fitted-component BOM.
+J202 is four copper USB service contacts. D+/D− have27Ω series resistors close to RP pins67/66. External USB VBUS only feeds a100k/100k sense divider; it does not power the board or join console5V. The board must receive console or bench power during USB recovery, and firmware attaches only when VBUS is present. J203 provides SWD, GND, VTREF, RUN and a1k-isolated BOOTSEL request. Ground BOOTSEL, pulse RUN and use the RP ROM USB loader, or recover through SWD independently of the application image. These contacts have no fitted connectors and are excluded from the fitted-component BOM. U10 is configured by U201 over JTAG (see the GPIO contract above); the unpopulated J10 pads remain an alternative for an external MachXO2 programmer with the controller's configuration pins released or RUN held low.
 
 ## Primary sources and licensing
 

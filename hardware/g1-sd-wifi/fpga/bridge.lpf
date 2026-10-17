@@ -1,6 +1,11 @@
 # LCMXO2-2000HC-4TG100C, physical allocation only.
 # External ATA/link setup, hold, latency and recovery constraints remain required.
 # No global asynchronous false-path exemption is supplied.
+# sysCONFIG (MachXO2 defaults: JTAG_PORT=ENABLE, SDM_PORT=DISABLE). Every image keeps
+# JTAG and PROGRAMN/DONE/INITN as configuration pins, so U201 can reload U10 through
+# PROGRAMn (GPIO28) and the controller always meets the same ports. Confirm in
+# Diamond Global Preferences on the first build.
+SYSCONFIG JTAG_PORT=ENABLE SDM_PORT=PROGRAMN_DONE_INITN ;
 FREQUENCY PORT "FPGA_CLK50" 50.000 MHZ;
 LOCATE COMP "FPGA_CLK50" SITE "3";
 IOBUF PORT "FPGA_CLK50" IO_TYPE=LVCMOS33 PULLMODE=NONE;

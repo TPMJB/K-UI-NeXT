@@ -6,6 +6,10 @@ and power screening, and refreshes the printable fit sheets. Final native
 checks are still required; **the release remains unapproved**. See
 [current order readiness](ORDER-READINESS-2026-10-11.md).
 
+17 October 2026: U10's JTAG port and PROGRAMn are now wired to the RP2350
+(see `design/CARRIER-LAYOUT-REVIEW.md`). This adds one lookup, item 7a, and
+the owner reviews must be repeated for the new board.
+
 Original item numbers are retained to match earlier messages. Items 8 and
 9 no longer need research from you. Fit alone will not resolve the power
 qualification or unfinished mounting fixture.
@@ -109,6 +113,13 @@ selected service can assemble them and explain any fixture charge or
 handling requirement. Inspect its placement/orientation preview. Factory
 assembly fixtures are separate from in-console C5 retention.
 
+**7a. Confirm the FPGA configuration resistor.** R2044-R2048 use Yageo
+RC0402FR-07220RL (220 ohm, 0402). Its LCSC code C112291 was taken from a
+search engine's index because lcsc.com and jlcpcb.com could not be reached
+on 17 October. Check on lcsc.com that C112291 is that exact part, find its
+JLC SMT parts-library entry and note whether it is a Basic or Extended part
+(Extended parts add a fee to the quote).
+
 **8. Protection-part lookup completed.**
 
 | Ref | Exact selected part | JLCPCB code |
@@ -147,6 +158,12 @@ release conditions.
 vendor placement/routing, a bitstream and timing verification still need
 Lattice Diamond and an account/licence. This is a bring-up dependency,
 separate from consciously ordering an accepted first hardware prototype.
+Since 17 October 2026 the RP2350 drives U10's JTAG port and PROGRAMn
+(GPIO21/22/28-30 through R2044-R2048), so assembled boards need no Lattice
+cable once the RP2350 configuration firmware (a JTAG player) exists. That
+firmware is new work and not written yet: for first bring-up, have a
+target-powered 3.3 V MachXO2 JTAG cable for the J10 pads and hold RUN
+(J203.5) low while it is attached.
 
 ## After fabrication
 

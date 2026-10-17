@@ -1,0 +1,105 @@
+{
+  "added": [
+    "R2044",
+    "R2045",
+    "R2046",
+    "R2047",
+    "R2048"
+  ],
+  "swapped": [],
+  "pad_net_changes": [
+    {
+      "ref": "R2048",
+      "pin": "1",
+      "old_net": "",
+      "new_net": "FPGA_PROGRAMn_MCU"
+    },
+    {
+      "ref": "R2048",
+      "pin": "2",
+      "old_net": "",
+      "new_net": "FPGA_PROGRAMn"
+    },
+    {
+      "ref": "R2047",
+      "pin": "1",
+      "old_net": "",
+      "new_net": "FPGA_TDO_MCU"
+    },
+    {
+      "ref": "R2047",
+      "pin": "2",
+      "old_net": "",
+      "new_net": "FPGA_TDO"
+    },
+    {
+      "ref": "R2046",
+      "pin": "1",
+      "old_net": "",
+      "new_net": "FPGA_TDI_MCU"
+    },
+    {
+      "ref": "R2046",
+      "pin": "2",
+      "old_net": "",
+      "new_net": "FPGA_TDI"
+    },
+    {
+      "ref": "R2045",
+      "pin": "1",
+      "old_net": "",
+      "new_net": "FPGA_TMS_MCU"
+    },
+    {
+      "ref": "R2045",
+      "pin": "2",
+      "old_net": "",
+      "new_net": "FPGA_TMS"
+    },
+    {
+      "ref": "R2044",
+      "pin": "1",
+      "old_net": "",
+      "new_net": "FPGA_TCK_MCU"
+    },
+    {
+      "ref": "R2044",
+      "pin": "2",
+      "old_net": "",
+      "new_net": "FPGA_TCK"
+    },
+    {
+      "ref": "U201",
+      "pin": "21",
+      "old_net": "unconnected-(U201-GPIO21-Pad21)",
+      "new_net": "FPGA_TMS_MCU"
+    },
+    {
+      "ref": "U201",
+      "pin": "22",
+      "old_net": "unconnected-(U201-GPIO22-Pad22)",
+      "new_net": "FPGA_TCK_MCU"
+    },
+    {
+      "ref": "U201",
+      "pin": "36",
+      "old_net": "unconnected-(U201-GPIO28-Pad36)",
+      "new_net": "FPGA_PROGRAMn_MCU"
+    },
+    {
+      "ref": "U201",
+      "pin": "37",
+      "old_net": "unconnected-(U201-GPIO29-Pad37)",
+      "new_net": "FPGA_TDI_MCU"
+    },
+    {
+      "ref": "U201",
+      "pin": "38",
+      "old_net": "unconnected-(U201-GPIO30-Pad38)",
+      "new_net": "FPGA_TDO_MCU"
+    }
+  ],
+  "removed_copper": [],
+  "removed": [],
+  "metadata_synced": 356
+}

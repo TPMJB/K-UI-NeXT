@@ -1209,7 +1209,7 @@
     "All optional NOR/control devices use CONSOLE_3V3, never the held-up +3V3_LOGIC rail. Ioff control inputs prevent logic-domain backpowering.",
     "All four custom NOR banks are writable when physically armed and explicitly authorized. No stock image occupies this NOR; whole-chip erase may destroy all custom banks but cannot erase original mask ROM.",
     "Physical selector is only changed with power disconnected. Stock recovery CE path is passive and remains operative without MCU or FPGA configuration.",
-    "FPGA bank latch remains stable across MCU reset and ATA SRST/G1 reset; write authorization resets blocked. Reconfiguration requires a cold console restart or physical stock recovery.",
+    "FPGA bank latch remains stable across MCU reset and ATA SRST/G1 reset; write authorization resets blocked. Reconfiguration (now possible in-system from U201 over JTAG) needs no active G1 session. With the console running only bank-0 images may be loaded (the bank pull-downs hold bank 0 while U10 is unconfigured); a nonzero-bank image needs the console off or in a verified whole-console held reset (fpga/README.md). Physical stock recovery remains available.",
     "Counterfeit/substitute NOR, actual FPC contact orientation, full SI/timing/power ramp and optional populated PCB height require qualification."
   ]
 }
