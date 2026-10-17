@@ -79,13 +79,29 @@ parameter/stack-offset fields are expected for that terminal path. The screen
 does not distinguish storage acquisition, physical reads, raw-sector parsing,
 or stream-stop failure, and does not prove the Maple hook had run.
 
+Later photographs bearing the same `87140926efd1` build reached the observer's
+planned stop: 1,200 pre-submit schedules and 4,800 descriptors, with a maximum
+of four descriptors per schedule. Each port A–D had 1,200 main-unit requests;
+no subunit requests were recorded. The shown malformed/unsupported, missing-end,
+receive-range and stack-guard error counters were zero. Captures cover pages
+0, 2 and 3; page 2 was photographed twice and page 1 is missing, so the complete
+command histogram has not been captured.
+
+These counts include the final schedule, which the observer deliberately does
+not start. They demonstrate a live pre-submit hook reaching its planned stop,
+not DMA-completion interception or virtual VMU discovery, saving or loading.
+The user also reported further progress with CD music On, but the exact loader
+route for that attempt was not established. It is not evidence for the
+observer's CDDA compatibility.
+
 Review also found that the experimental low P2 bootstrap control shared a
 cache line with mutable P1 pacing state. The observer now reserves complete
 cache lines for that control, with linked-ELF checks to reject shared layouts.
 This fixes a definite coherency hazard; its connection to the photographed
-I/O failure remains unproven. The next observer build adds per-layer failure
-details. Hardware validation is pending, and the released 2.0.0 loader is
-unchanged.
+I/O failure remains unproven. Build `e17a57de4252` contains this isolation and
+compact per-layer failure details, but the photographs above still show the
+older `87140926efd1` build. Console validation of the newer build is pending;
+the released 2.0.0 loader is unchanged.
 
 ## Work required before in-game saves
 
