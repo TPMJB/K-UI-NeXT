@@ -9,6 +9,10 @@
 #include "kui/crc16.h"
 #include "kui/vmu_maple_dma.h"
 #include "kui/vmu_store.h"
+#include "kui/vmu_sd_profile.h"
+#include "kui/vmu_backing.h"
+#include "kui/media.h"
+#include "kui/hash.h"
 #include <kos.h>
 #include <dc/maple/controller.h>
 #include <stdarg.h>
@@ -31,7 +35,7 @@ KOS_INIT_FLAGS(INIT_IRQ | INIT_CONTROLLER | INIT_NO_DCLOAD | INIT_QUIET);
 static char lines[LOG_ROWS][LOG_COLS];
 static unsigned line_count;
 static unsigned transport=KUI_STORAGE_SCI;
-static const char *result="Idle. A creates a new isolated probe; X checks the latest.";
+static const char *result="A new probe; X verify; Y export SCI read-only profile.";
 static struct kui_vmu_store store;
 static kui_vmu_emulation_t device;
 static struct kui_vmu_image_workspace image_workspace;
@@ -41,6 +45,9 @@ static struct file_pair pair;
 static uint8_t request[140],expected[PROBE_SAVE_BYTES],actual[PROBE_SAVE_BYTES];
 static uint8_t original[512],metadata[512];
 static _Alignas(32) uint8_t reply[1024];
+static struct kui_vmu_sd_profile readonly_profile;
+static uint8_t profile_bytes[KUI_VMU_SD_PROFILE_WIRE_BYTES],profile_check[KUI_VMU_SD_PROFILE_WIRE_BYTES];
+static char exported_profile_path[96];
 
 /* Existing SD adapter's optical arbitration seam. This standalone program
  * never starts an optical request. No drive initialization is performed. */
@@ -59,7 +66,7 @@ static void render(void) {
     for(unsigned row=0;row<line_count;row++)
         kui_shell_font_draw(vram_s,28,139+(int)row*18,0xffff,lines[row],false);
     kui_shell_font_draw(vram_s,28,418,0xfe2d,result,false);
-    kui_shell_font_draw(vram_s,28,444,0xc618,"A New write test   X Verify latest   Left/Right SCI/SCIF",false);
+    kui_shell_font_draw(vram_s,28,444,0xc618,"A New   X Verify   Y SCI profile   Left/Right SCI/SCIF",false);
     vid_waitvbl();vid_flip(-1);
 }
 void kui_log(const char *format,...) {
@@ -374,6 +381,146 @@ static bool run_test(bool create) {
     else kui_log("If you power-cycled first, this proves restart persistence.");
     return true;
 }
+static int profile_file_read(void *context,uint16_t block,uint8_t bytes[512]) {
+    FIL *file=context;UINT done=0;
+    return block<256u && f_lseek(file,(FSIZE_t)block*512u)==FR_OK &&
+        f_read(file,bytes,512,&done)==FR_OK && done==512?0:-1;
+}
+struct profile_raw_reader {
+    const struct kui_vmu_sd_profile *profile;
+    struct kui_media_ops operations;
+};
+static int profile_raw_read(void *context,uint16_t block,uint8_t bytes[512]) {
+    struct profile_raw_reader *reader=context;uint32_t lba;
+    if(kui_vmu_sd_profile_map_lba(reader->profile,block,&lba)) return -1;
+    return reader->operations.read(reader->operations.ctx,lba,1,bytes);
+}
+static bool profile_card_matches(const struct kui_vmu_sd_profile *profile) {
+    struct kui_vmu_sd_identity current;
+    return kui_sd_vmu_profile_identity(&current) && current.sectors==profile->card_sectors &&
+        (unsigned)current.high_capacity==profile->high_capacity && !memcmp(current.cid,profile->cid,16);
+}
+static bool export_readonly_profile(void) {
+    exported_profile_path[0]=0;
+    if(transport!=KUI_STORAGE_SCI) return fail("profile export requires SCI; no profile was written");
+    /* Verification/recovery and its final checkpoint finish before exporting.
+     * The following image handle is independently opened FA_READ only. */
+    if(!run_test(false)) {
+        close_pair();(void)f_mount(NULL,"0:",0);kui_sd_disconnect();return false;
+    }
+    kui_log("Preparing physical read-only profile; keep power on until READY.");
+    bool ok=false,file_open=false;unsigned number=0;FIL file;
+    memset(&readonly_profile,0,sizeof(readonly_profile));
+    if(!connect_volume() || !latest_probe(&number)) goto finished;
+    char name[96];uint8_t id[17],wanted[16];UINT done=0;
+    if(!path(name,number,"identity.bin") || f_open(&file,name,FA_READ)!=FR_OK) {
+        fail("profile source identity missing");goto finished;
+    }
+    file_open=true;
+    FRESULT read=f_read(&file,id,sizeof(id),&done),closed=f_close(&file);file_open=false;
+    identity(number,wanted);
+    if(read!=FR_OK || closed!=FR_OK || done!=16u || memcmp(id,wanted,16u)) {
+        fail("profile source identity differs");goto finished;
+    }
+    struct kui_vmu_sd_identity card;
+    const struct kui_volume *view=kui_media_volume();
+    if(!view || !view->count || !kui_sd_vmu_profile_identity(&card)) {
+        fail("profile card identity / partition unavailable");goto finished;
+    }
+    readonly_profile.card_sectors=card.sectors;
+    readonly_profile.partition_first=view->start;
+    readonly_profile.partition_end=(uint64_t)view->start+view->count;
+    readonly_profile.transport=KUI_VMU_SD_PROFILE_TRANSPORT;
+    readonly_profile.image_bytes=KUI_VMU_SD_PROFILE_IMAGE_BYTES;
+    readonly_profile.high_capacity=card.high_capacity?1u:0u;
+    memcpy(readonly_profile.cid,card.cid,16);memcpy(readonly_profile.image_id,id,16);
+    if(!path(name,number,"card.vmd") || f_open(&file,name,FA_READ)!=FR_OK) {
+        fail("profile source image open");goto finished;
+    }
+    file_open=true;
+    if(f_size(&file)!=131072u) {fail("profile source image length");goto finished;}
+    for(unsigned block=0;block<256u;block++) {
+        uint8_t byte;
+        if(f_lseek(&file,(FSIZE_t)block*512u)!=FR_OK || f_read(&file,&byte,1,&done)!=FR_OK || done!=1u) {
+            fail("profile sector mapping read");goto finished;
+        }
+        /* FIL.sect is authoritative only after an actual one-byte data read.
+         * FatFs addresses this volume relatively; raw SD reads are absolute. */
+        uint64_t absolute=readonly_profile.partition_first+(uint64_t)file.sect;
+        if(!file.sect || absolute>UINT32_MAX || absolute>=readonly_profile.partition_end) {
+            fail("profile sector outside partition");goto finished;
+        }
+        unsigned count=readonly_profile.extent_count;
+        if(count && (uint64_t)readonly_profile.extents[count-1u].lba+
+                        readonly_profile.extents[count-1u].blocks==absolute) {
+            ++readonly_profile.extents[count-1u].blocks;
+        } else {
+            if(count==KUI_VMU_SD_PROFILE_MAX_EXTENTS) {fail("profile image needs more than 16 physical extents");goto finished;}
+            readonly_profile.extents[count].logical_block=block;
+            readonly_profile.extents[count].lba=(uint32_t)absolute;
+            readonly_profile.extents[count].blocks=1u;
+            ++readonly_profile.extent_count;
+        }
+    }
+    if(kui_vmu_sd_profile_collect_hashes(&readonly_profile,profile_file_read,&file)) {
+        fail("profile image CRC / SHA collection");goto finished;
+    }
+    closed=f_close(&file);file_open=false;
+    if(closed!=FR_OK || !disconnect_volume()) {fail("profile image close / disconnect");goto finished;}
+    /* Fresh hardware connection, no mounted filesystem, and no write/sync
+     * callback: verify every pinned sector against the image-level hashes. */
+    if(!kui_sd_connect()) {fail("profile fresh raw connection");goto finished;}
+    struct profile_raw_reader raw={.profile=&readonly_profile};
+    if(!profile_card_matches(&readonly_profile) || !kui_sd_raw_read_ops(&raw.operations) ||
+       !raw.operations.blocks || !raw.operations.read || raw.operations.write || raw.operations.sync ||
+       raw.operations.blocks(raw.operations.ctx)!=readonly_profile.card_sectors ||
+       kui_vmu_sd_profile_verify_image(&readonly_profile,profile_raw_read,&raw)) {
+        fail("profile fresh raw identity / sector CRC / SHA verification");goto finished;
+    }
+    kui_sd_disconnect();
+    if(kui_vmu_sd_profile_encode(&readonly_profile,profile_bytes)) {
+        fail("profile encoding refused");goto finished;
+    }
+    if(!connect_volume() || !profile_card_matches(&readonly_profile)) {
+        fail("profile output reconnect identity");goto finished;
+    }
+    view=kui_media_volume();
+    if(!view || view->start!=readonly_profile.partition_first ||
+       (uint64_t)view->start+view->count!=readonly_profile.partition_end) {
+        fail("profile output partition changed");goto finished;
+    }
+    for(unsigned attempt=1;attempt<=9999u;attempt++) {
+        char leaf[48];snprintf(leaf,sizeof(leaf),"retail-readonly-profile-%04u.bin",attempt);
+        if(!path(exported_profile_path,number,leaf)) {fail("profile output path");goto finished;}
+        FRESULT opened=f_open(&file,exported_profile_path,FA_WRITE|FA_CREATE_NEW);
+        if(opened==FR_EXIST) continue;
+        if(opened!=FR_OK) {fail("create-new profile output");goto finished;}
+        file_open=true;break;
+    }
+    if(!file_open) {fail("all profile output names already exist");goto finished;}
+    FRESULT written=f_write(&file,profile_bytes,sizeof(profile_bytes),&done);
+    FRESULT synced=f_sync(&file);closed=f_close(&file);file_open=false;
+    if(written!=FR_OK || synced!=FR_OK || closed!=FR_OK || done!=sizeof(profile_bytes)) {
+        fail("profile output write / sync / close");goto finished;
+    }
+    if(f_open(&file,exported_profile_path,FA_READ)!=FR_OK) {fail("profile output reopen");goto finished;}
+    file_open=true;read=f_read(&file,profile_check,sizeof(profile_check),&done);
+    bool exact=f_size(&file)==sizeof(profile_check) && read==FR_OK && done==sizeof(profile_check) &&
+        !memcmp(profile_bytes,profile_check,sizeof(profile_bytes));
+    closed=f_close(&file);file_open=false;
+    if(!exact || closed!=FR_OK || !disconnect_volume()) {fail("profile output exact readback / disconnect");goto finished;}
+    char prefix[17];kui_hex(readonly_profile.sha256,8,prefix);
+    kui_log("PROFILE %s",exported_profile_path+2);
+    kui_log("Source p%04u; %u physical extents; SHA %.16s",number,
+            (unsigned)readonly_profile.extent_count,prefix);
+    kui_log("READY: attach the .bin profile for the next build; retail is unchanged.");
+    ok=true;
+finished:
+    if(file_open) (void)f_close(&file);
+    close_pair();(void)f_mount(NULL,"0:",0);kui_sd_disconnect();
+    if(!ok) exported_profile_path[0]=0;
+    return ok;
+}
 static uint32_t buttons(void) {
     maple_device_t *controller=maple_enum_type(0,MAPLE_FUNC_CONTROLLER);
     cont_state_t *state=controller?maple_dev_status(controller):NULL;
@@ -393,16 +540,19 @@ int main(void) {
         uint32_t now=buttons(),pressed=now&~previous;previous=now;
         if(pressed&(CONT_DPAD_LEFT|CONT_DPAD_RIGHT)) {
             transport=transport==KUI_STORAGE_SCI?KUI_STORAGE_SCIF:KUI_STORAGE_SCI;
-            result="Idle. A creates a new isolated probe; X checks the latest.";
+            result="A new probe; X verify; Y export SCI read-only profile.";
         }
-        if(pressed&(CONT_A|CONT_X)) {
+        if(pressed&(CONT_A|CONT_X|CONT_Y)) {
             bool create=(pressed&CONT_A)!=0;line_count=0;
-            result=create?"Running isolated persistence write test...":"Checking latest probe (may replay its journal)...";
-            render();bool ok=run_test(create);
+            bool exporting=(pressed&CONT_Y)!=0 && !create;
+            result=exporting?"Exporting SCI read-only profile; keep power on...":
+                create?"Running isolated persistence write test...":"Checking latest probe (may replay its journal)...";
+            render();bool ok=exporting?export_readonly_profile():run_test(create);
             /* A failed callback blocks this session; never acknowledge a save
              * or silently retry. Retain files, close, and show the failure. */
             close_pair();(void)f_mount(NULL,"0:",0);kui_sd_disconnect();
-            result=ok?"PASS / READY. Photograph this screen, then power off.":
+            result=ok?(exporting?"PROFILE / READY. Attach .bin; retail loader is unchanged.":
+                      "PASS / READY. Photograph this screen, then power off."):
                       "FAILED. Keep the probe files and photograph this screen.";
             previous=buttons();
         }

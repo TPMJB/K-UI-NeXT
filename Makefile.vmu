@@ -10,6 +10,7 @@ BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 TARGET := $(BUILD)/vmu-harness.elf
 SOURCES := src/experimental/vmu_harness/main.c \
     src/core/vmu_emulation.c src/core/vmu_image.c src/core/vmu_save_format.c src/core/crc16.c src/loader/vmu_maple_dma.c src/core/vmu_store.c \
+    src/core/vmu_sd_profile.c src/core/hash.c src/loader/vmu_backing.c \
     src/core/retail_image.c src/core/data.c src/core/diskio.c src/core/clock.c src/core/storage_probe.c \
     src/core/storage_policy.c src/core/ata.c src/dreamcast/ata_bus.c \
     src/dreamcast/sd.c src/dreamcast/sci_sd_storage.c src/loader/sd_reader.c \
@@ -23,7 +24,8 @@ ifneq ($(filter host-test,$(MAKECMDGOALS)),host-test)
 include $(KOS_BASE)/Makefile.rules
 endif
 CPPFLAGS += -Iinclude -Isrc/dreamcast -Isrc/loader -I.deps/fatfs/source \
-    -DKUI_ON_CONSOLE=1 -DKUI_RETAIL_FAST_IO=1 -DKUI_BUILD_ID='"$(BUILD_ID)"'
+    -DKUI_ON_CONSOLE=1 -DKUI_RETAIL_FAST_IO=1 -DKUI_VMU_PROFILE_PREP=1 -DKUI_VMU_EXPERIMENTAL=0 \
+    -DKUI_BUILD_ID='"$(BUILD_ID)"'
 CFLAGS += -std=c11 -Os -Wall -Wextra -Werror -ffunction-sections -fdata-sections -fstack-usage
 $(BUILD)/%.o: %.c
 	@mkdir -p $(@D)
@@ -50,16 +52,25 @@ $(BUILD)/KUI/tools.kui: $(TARGET) tools/runtime_package.py
 HOST_CC ?= cc
 HOST_SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie
 HOST_SOURCES := src/experimental/vmu_harness/host.c src/core/vmu_emulation.c src/core/vmu_image.c src/core/vmu_save_format.c src/core/crc16.c \
+    src/core/vmu_sd_profile.c src/core/hash.c \
     src/loader/vmu_maple_dma.c src/core/vmu_store.c src/core/retail_image.c src/core/data.c \
     src/core/diskio.c src/core/clock.c src/core/storage_probe.c \
     .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 .PHONY: host-test
-host-test: $(BUILD)/host-sequence
+host-test: $(BUILD)/host-sequence $(BUILD)/test-sd-profile
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-sd-profile
 	$(if $(VMU_HARNESS_IMAGE),$(BUILD)/host-sequence $(VMU_HARNESS_IMAGE) $(or $(VMU_HARNESS_MODE),create),@echo "Built host sequence; supply VMU_HARNESS_IMAGE to run")
 $(BUILD)/host-sequence: $(HOST_SOURCES) src/experimental/vmu_harness/main.c \
     src/experimental/vmu_harness/host-stubs/kos.h \
-    src/experimental/vmu_harness/host-stubs/dc/maple/controller.h
+    src/experimental/vmu_harness/host-stubs/dc/maple/controller.h include/kui/vmu_sd_profile.h
 	@mkdir -p $(@D)
 	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
         -Isrc/experimental/vmu_harness/host-stubs -Iinclude -Isrc/dreamcast \
-        -I.deps/fatfs/source $(HOST_SOURCES) -o $@
+        -I.deps/fatfs/source -DKUI_VMU_PROFILE_PREP=1 $(HOST_SOURCES) -o $@
+$(BUILD)/test-sd-profile: tests/test_vmu_sd_profile.c src/core/vmu_sd_profile.c \
+    src/core/hash.c src/core/retail_image.c include/kui/vmu_sd_profile.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
+        -ffunction-sections -fdata-sections -Wl,--gc-sections \
+        -Iinclude tests/test_vmu_sd_profile.c src/core/vmu_sd_profile.c src/core/hash.c \
+        src/core/retail_image.c -o $@

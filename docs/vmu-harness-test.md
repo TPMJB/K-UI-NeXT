@@ -34,7 +34,7 @@ method.
    filesystem is supported; no filesystem conversion or formatting is needed.
 2. Press **A** once. It creates a new `p0001`, `p0002`, etc. folder under
    `/KUI/vmu-test`. Existing folders and files are never overwritten by a new
-   test. The only new contents are a 128 KiB `card.vmd`, a 1 KiB `card.journal`
+   test. A creates a 128 KiB `card.vmd`, a 1 KiB `card.journal`
    sidecar and a 16-byte `identity.bin` identifying that exact pair.
 3. Check that device discovery, memory geometry, four write phases, journaled
    commit, virtual readback and fresh reopen all pass. The program disconnects,
@@ -48,6 +48,55 @@ method.
    directory/FAT allocation with the expected data.
 5. Photograph the second PASS screen. That second result, when preceded by an
    actual power cycle, proves restart persistence on that card and connection.
+
+## Export the card's read-only physical profile
+
+The next preparation step uses **Y** in this standalone tool. The separate
+synthetic A1 test has established discovery/read behavior; Y now describes
+the allocated `card.vmd` on your particular microSD card. This preparation ZIP
+updates **`KUI/tools.kui`** and includes its instructions and reference docs. It supplies
+no new `retail-boot.kui` and does not install an SD-backed retail VMU reader.
+
+1. Finish the A persistence test, wait for READY, then power the console off
+   and on. Open **Card tools** again through the existing boot CD.
+2. Select **SCI**. Press **Y** to export the latest numbered isolated probe.
+   Physical VMUs may remain removed; no physical VMU operation is called.
+   Y first runs the same latest-probe verification/recovery as X, including
+   validation of the allocated VMS, filesystem and clean journal checkpoint.
+   Keep power on through the subsequent export until **PROFILE / READY**.
+3. Photograph the final screen. It gives the full output path, source probe
+   number, physical extent count and image SHA-256 prefix. The output is exactly
+   **1,536 bytes**, for example
+   `/KUI/vmu-test/p0002/retail-readonly-profile-0001.bin`.
+4. Attach that indicated `.bin` file for the next build. Keep its source probe
+   folder and microSD card in place. Each additional Y export creates a new
+   numbered profile; existing profiles and the source image are never overwritten
+   by the export. A different card or relocated source file needs a fresh profile.
+
+After verification/checkpoint finishes, Y reopens `card.vmd` **read only**.
+It maps all 256 file sectors using FatFs's authoritative current-sector field
+after an actual one-byte data read, adds the selected partition's start sector,
+and coalesces contiguous physical allocations into at most 16 extents. The
+profile records the card CID/capacity/addressing mode, partition bounds, probe
+pair identity, each 512-byte block's CRC32 and the complete image SHA-256.
+
+The tool closes the file, unmounts and disconnects before verification. A fresh
+SCI connection, with no mounted filesystem and no write callbacks, checks the
+same card identity and reads every recorded physical sector, comparing all
+block CRCs and the complete SHA. Only then does it reconnect and create the
+unique profile output with `FA_CREATE_NEW`, sync/close it, and reopen it to
+verify every exported byte. An identity/map/hash/read failure prevents this
+output stage. Y is SCI-only; SCIF selection is refused before export begins.
+
+Y's initial verification can recover/checkpoint its own probe pair just like X;
+Y is not a promise that the entire operation performs no storage writes. The
+image-mapping and fresh raw-verification stages are read only, and the export
+adds only its new profile file after they pass.
+
+This is the **VMU image's own physical map**, independent of any game's track
+map or the standalone store's synthetic sectors 0–257. The profile is input to
+the next per-card build. It does not establish retail SDK compatibility,
+game-to-card arbitration, or durable in-game saving.
 
 **X** can replay an already committed journal block into that probe's own image;
 it is a verify/recovery action, not a strictly read-only file viewer. No
@@ -92,11 +141,12 @@ continue it.
 The store is the same portable journal engine intended for a future resident
 service. This harness connects its logical sectors 0–255 to `card.vmd` and
 256–257 to `card.journal` through ordinary FatFs seeks, reads, writes and syncs.
-These are **synthetic logical sector numbers**, not a pinned physical card
-extent map. A retail-game implementation will need allocation validation,
+These are **synthetic logical sector numbers**. Y independently exports and
+raw-verifies the image's physical allocation; the A/X store continues to use
+the synthetic logical numbers. A retail-game implementation will still need allocation validation,
 physical extent pinning, filesystem unmount, storage arbitration, verified
 runtime memory reservations and a real Maple interception/completion path.
-The current test does not satisfy those later requirements.
+The profile export does not install that runtime service.
 
 The journal preserves one committed 512-byte block against interrupted base
 image writes, assuming the storage driver and card honor successful sync
@@ -119,7 +169,12 @@ the display/controller and physical SD transport are substituted. ASan/UBSan
 cover creation of the allocated CRC-valid VMS, incomplete and committed device
 reset, verify in a new process, repeat without overwriting the first card,
 identity/sidecar-length refusal, and damaged VMU geometry, orphan chains or save
-payload refusal. Refused probes must leave storage byte-for-byte unchanged.
+payload refusal. The profile codec suite runs in `host-test`. The real-filesystem
+suite exports twice into unique names, independently decodes the 1,536-byte
+wire record, checks its actual raw 512-byte allocations/CRC32/SHA-256, and
+checks the source card is unchanged. It covers superfloppies and nonzero
+partition offsets on both FAT32 and exFAT, plus SCI-only, changed-CID and fresh
+raw-read failure refusal. Refused probes must leave storage byte-for-byte unchanged.
 Filesystem checks run on disposable FAT32/exFAT images. Unsupported FAT16 must
 be refused without changing a byte. These checks need `dosfstools` and
 `exfatprogs` installed.

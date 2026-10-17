@@ -106,6 +106,51 @@ static void discovery_and_all_blank_reads(void) {
     assert(overlay.stats.replies==259u && overlay.stats.completed==260u);
 }
 
+static void virtual_read_batch(void) {
+    frame(0,9u,32u,1u,0x01000000u,0);
+    frame(1,11u,1u,2u,0x02000000u,0xff000000u);
+    physical(9u,0);capture();assert(!prepare(2u));
+    assert(!kui_vmu_readonly_overlay_complete(&overlay));
+    assert(overlay.stats.last_request==header(11u,1u,2u));
+    assert(overlay.stats.last_reply==0x82010008u);
+    assert(overlay.stats.last_rx==frames[1].rx_physical);
+}
+
+static void request_reply_rx_telemetry_stays_correlated(void) {
+    fresh();virtual_read_batch();
+    physical(9u,0);capture();assert(!prepare(1u));
+    assert(overlay.stats.last_request==header(9u,32u,1u));
+    assert(!overlay.stats.last_reply && overlay.stats.last_rx==frames[0].rx_physical);
+    assert(!kui_vmu_readonly_overlay_complete(&overlay));
+    assert(overlay.stats.last_request==header(9u,32u,1u));
+    assert(overlay.stats.last_reply==0x03210008u); /* Published controller DATA/3. */
+    assert(overlay.stats.last_rx==frames[0].rx_physical);
+    assert(rx[0][0]==(before[0][0]|0x00010000u));
+    assert(!memcmp((uint8_t *)rx[0]+4u,(uint8_t *)before[0]+4u,1020u));
+    assert(!memcmp(rx[1],before[1],sizeof(rx)-sizeof(rx[0])));
+
+    fresh();virtual_read_batch();
+    frame(1,12u,1u,0,0,0);physical(9u,0);capture();
+    assert(prepare(2u)==KUI_VMU_OVERLAY_REQUEST);unchanged();
+    assert(overlay.stats.last_request==header(12u,1u,0));
+    assert(!overlay.stats.last_reply && overlay.stats.last_rx==frames[1].rx_physical);
+
+    fresh();virtual_read_batch();
+    physical(9u,0);rx[0][0]=UINT32_MAX;completion_refused(1u);
+    assert(overlay.stats.last_request==header(9u,32u,1u));
+    assert(overlay.stats.last_reply==UINT32_MAX && overlay.stats.last_rx==frames[0].rx_physical);
+
+    fresh();virtual_read_batch();
+    physical(9u,0);rx[1][0]=0x000100fbu;completion_refused(2u);
+    assert(overlay.stats.last_request==header(11u,1u,2u));
+    assert(overlay.stats.last_reply==0x000100fbu && overlay.stats.last_rx==frames[1].rx_physical);
+
+    fresh();virtual_read_batch();
+    physical(9u,0);fail_call=calls+1u;completion_refused(2u);
+    assert(overlay.stats.last_request==header(11u,1u,2u));
+    assert(!overlay.stats.last_reply && overlay.stats.last_rx==frames[1].rx_physical);
+}
+
 static void strict_request_and_capacity_guards(void) {
     for(unsigned cmd=0;cmd<256u;cmd++) {
         if(cmd==1u || cmd==2u || cmd==10u || cmd==11u) continue;
@@ -209,7 +254,8 @@ static void bounded_batch_and_terminal_state(void) {
 }
 
 int main(void) {
-    discovery_and_all_blank_reads();strict_request_and_capacity_guards();
+    discovery_and_all_blank_reads();request_reply_rx_telemetry_stays_correlated();
+    strict_request_and_capacity_guards();
     span_alias_and_full_source_guards();physical_conflicts_and_parent_reply_guards();
     staging_failures_are_atomic();bounded_batch_and_terminal_state();
     puts("VMU read-only overlay: atomic batches, blank-card reads and conflict guards passed");
