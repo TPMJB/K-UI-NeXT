@@ -1,0 +1,114 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Isolated exact-Toy Maple observer. Does not build virtual saving or CDDA.
+CC = sh-elf-gcc
+OBJCOPY = sh-elf-objcopy
+HOST_CC ?= cc
+BUILD ?= build/vmu-toy
+BUILD_ID ?= $(shell git rev-parse --short=12 HEAD)
+CPU = -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,fpul-fpul
+FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
+ -DKUI_RETAIL_FAST_IO=1 -DKUI_RETAIL_OBSERVE=0 -DKUI_RETAIL_LOW_RESIDENT=1 \
+ -DKUI_RETAIL_STARTUP_TRACE=0 -DKUI_RETAIL_SONIC_STACK_TEST=0 \
+ -DKUI_GAME_RAM_PATCHES_STAGE=0 -DKUI_ON_CONSOLE=1 \
+ -DKUI_RETAIL_SCI_DIAGNOSTIC=0 -DKUI_SCI_DMA_PACED=1 -DKUI_SCI_DMA_REUSE_TDRE=0 \
+ -DKUI_GENERAL_SCI_RESUME_FIX=1 -DKUI_RETAIL_NATIVE_DISC_CHECK=1 \
+ -DKUI_RETAIL_NATIVE_DRIVE_STATE=1 \
+ -DKUI_VMU_MAPLE_OBSERVE=1 -ffreestanding -fno-builtin \
+ -fno-stack-protector -fno-pic -ffunction-sections -fdata-sections \
+ -fno-jump-tables -fstack-usage -Iinclude -Isrc/loader -I$(BUILD) \
+ -DKUI_BUILD_ID='"$(BUILD_ID)"'
+RESIDENT_FLAGS = $(FLAGS) -fno-tree-scev-cprop -flto -mrelax \
+ -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_MANIFEST_SLOTS=64
+LINK = $(CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
+RESIDENT_SRC = src/loader/vmu_maple_observe_resident.c src/core/retail_gd.c \
+ src/core/retail_pace.c src/loader/minic.c src/core/retail_image.c \
+ src/loader/retail_display.c src/loader/sd_reader.c src/loader/retail_sd.c \
+ src/loader/sci_sd_bus.c
+RESIDENT_OBJ = $(patsubst %.c,$(BUILD)/resident/%.o,$(RESIDENT_SRC)) \
+ $(BUILD)/resident_asm.o $(BUILD)/observe_boot_asm.o
+STAGE_SRC = src/loader/vmu_maple_observe_stage.c src/loader/sd_reader.c \
+ src/loader/retail_sd.c src/loader/retail_storage.c src/loader/sci_sd_bus.c \
+ src/core/ata.c src/dreamcast/ata_bus.c src/loader/minic.c \
+ src/core/retail_image.c src/loader/retail_display.c src/core/hash.c \
+ src/core/retail_observe.c
+STAGE_OBJ = $(patsubst %.c,$(BUILD)/stage/%.o,$(STAGE_SRC)) $(BUILD)/stage_asm.o
+WORKER_SRC = src/loader/vmu_maple_observe_worker.c src/loader/retail_display.c
+WORKER_OBJ = $(patsubst %.c,$(BUILD)/worker/%.o,$(WORKER_SRC)) $(BUILD)/worker_asm.o
+
+.PHONY: all package host-tests
+.DELETE_ON_ERROR:
+all: $(BUILD)/retail-maple-observe.kui
+package: $(BUILD)/vmu-maple-observer-test.zip
+
+$(BUILD)/resident/%.o: %.c
+	@mkdir -p $(@D)
+	$(CC) $(RESIDENT_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/resident_asm.o: src/loader/retail_resident.S
+	@mkdir -p $(@D)
+	$(CC) $(RESIDENT_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/observe_boot_asm.o: src/loader/vmu_maple_observe_boot.S
+	@mkdir -p $(@D)
+	$(CC) $(RESIDENT_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/resident-sci.elf: $(RESIDENT_OBJ) src/loader/retail_resident_low.ld
+	@mkdir -p $(BUILD)/resident/lto
+	$(CC) $(LINK) -flto -mrelax -Os -fno-tree-scev-cprop -fstack-usage -save-temps=obj -Wl,--relax \
+	 -Wl,-u,_memcpy -Wl,-u,_memset -Wl,-u,_kui_retail_resident_init \
+	 -Wl,-u,_kui_retail_resident_dispatch -Wl,-u,_kui_retail_gd_dispatch \
+	 -Wl,-u,_kui_retail_image_read -Wl,-u,_kui_loader_sd_stream_next \
+	 -Wl,-u,_kui_sci_sd_acquire -Wl,-u,_kui_sci_sd_release \
+	 -Wl,-u,_kui_vmu_observe_heap_hook -Wl,-u,_kui_vmu_observe_return_hook \
+	 -Wl,-u,_kui_vmu_observe_boot_control \
+	 -Tsrc/loader/retail_resident_low.ld -Wl,-Map,$(BUILD)/resident-sci.map \
+	 -o $@ $(RESIDENT_OBJ) -lgcc
+	cp $(BUILD)/resident-sci.elf.ltrans*.su $(BUILD)/resident/lto/
+$(BUILD)/resident-sci.bin: $(BUILD)/resident-sci.elf
+	$(OBJCOPY) -O binary $< $@
+$(BUILD)/vmu_maple_observe_symbols.h: $(BUILD)/resident-sci.elf tools/vmu_maple_observe_symbols.py
+	python3 tools/vmu_maple_observe_symbols.py $< $@
+$(BUILD)/worker/%.o: %.c
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/worker_asm.o: src/loader/vmu_maple_hook.S
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/worker.elf: $(WORKER_OBJ) src/loader/vmu_maple_observe_worker.ld
+	$(CC) $(LINK) -Tsrc/loader/vmu_maple_observe_worker.ld \
+	 -Wl,-Map,$(BUILD)/worker.map -o $@ $(WORKER_OBJ) -lgcc
+$(BUILD)/worker.bin: $(BUILD)/worker.elf
+	$(OBJCOPY) -O binary $< $@
+$(BUILD)/stage/%.o: %.c $(BUILD)/vmu_maple_observe_symbols.h $(BUILD)/worker.bin
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -DKUI_VMU_OBSERVE_WORKER_BIN='"$(BUILD)/worker.bin"' \
+	 -MMD -MP -c $< -o $@
+$(BUILD)/stage_asm.o: src/loader/retail_stage.S $(BUILD)/resident-sci.bin
+	$(CC) $(FLAGS) -E -P -x assembler-with-cpp $< -o $(BUILD)/stage_asm.s.original
+	sed 's@build/retail/resident-[^"]*\.bin@$(BUILD)/resident-sci.bin@g' \
+	 $(BUILD)/stage_asm.s.original > $(BUILD)/stage_asm.s
+	$(CC) $(FLAGS) -c $(BUILD)/stage_asm.s -o $@
+$(BUILD)/stage.elf: $(STAGE_OBJ) src/loader/retail_stage.ld
+	$(CC) $(LINK) -Tsrc/loader/retail_stage.ld -Wl,-Map,$(BUILD)/stage.map \
+	 -o $@ $(STAGE_OBJ) -lgcc
+$(BUILD)/stage.bin: $(BUILD)/stage.elf
+	$(OBJCOPY) -O binary $< $@
+$(BUILD)/entry_asm.o: src/loader/retail_entry.S $(BUILD)/stage.bin
+	$(CC) $(FLAGS) -DKUI_RETAIL_STAGE_BIN='"$(BUILD)/stage.bin"' -c $< -o $@
+$(BUILD)/entry.elf: $(BUILD)/entry_asm.o src/loader/retail_entry.ld
+	$(CC) $(LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,$(BUILD)/entry.map -o $@ $<
+	python3 tools/record_build.py $@
+$(BUILD)/retail-maple-observe.kui: $(BUILD)/entry.elf
+	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
+	python3 tools/runtime_package.py verify $@
+$(BUILD)/vmu-maple-observer-test.zip: $(BUILD)/retail-maple-observe.kui \
+ $(BUILD)/worker.elf $(BUILD)/worker.bin tools/package_vmu_maple_observe.py \
+ docs/vmu-maple-observer-test.md
+	python3 tools/package_vmu_maple_observe.py $(BUILD)
+
+host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -g -Iinclude -Isrc/loader -DKUI_VMU_MAPLE_OBSERVE_HOST_TEST=1 \
+	 src/loader/vmu_maple_observe_worker.c tests/test_vmu_maple_observe_worker.c \
+	 -o $(BUILD)/test-observer-worker
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-observer-worker
+
+-include $(RESIDENT_OBJ:.o=.d) $(STAGE_OBJ:.o=.d) $(WORKER_OBJ:.o=.d)

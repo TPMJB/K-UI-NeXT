@@ -1113,6 +1113,10 @@ build/test-vmu-store: tests/test_vmu_store.c src/core/vmu_store.c src/core/retai
 build/test-vmu-image: tests/test_vmu_image.c src/core/vmu_image.c include/kui/vmu_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_vmu_image.c src/core/vmu_image.c -o $@
+VMU_IMAGE_COMPAT_SOURCES = $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) src/apps/vmu.c src/core/vmu_image.c src/core/vmu_save_format.c src/core/crc16.c
+build/test-vmu-image-compat: tests/test_vmu_image_compat.c tests/test_vmu_app.c $(VMU_IMAGE_COMPAT_SOURCES) include/kui/vmu_image.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(VMU_IMAGE_COMPAT_SOURCES) tests/test_vmu_image_compat.c -o $@
 build/test-vmu-maple-dma: tests/test_vmu_maple_dma.c src/loader/vmu_maple_dma.c include/kui/vmu_maple_dma.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_vmu_maple_dma.c src/loader/vmu_maple_dma.c -o $@

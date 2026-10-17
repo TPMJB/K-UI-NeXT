@@ -107,7 +107,7 @@ does not import an emulator's packet-dispatch algorithm.
 
 ## Validation
 
-`tests/test_vmu_emulation.c` uses literal DMA byte fixtures. It checks all256
+`tests/test_vmu_emulation.c` uses literal DMA byte fixtures. It checks all 256
 physical blocks, identity/media responses, every valid subunit on four ports,
 incorrect endpoints/function endian order, short/excess packets, every short
 output capacity for major commands, out-of-order/conflicting phases, immutable

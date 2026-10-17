@@ -33,8 +33,12 @@ jobs:
         run: |
           make -f Makefile.vmu host-test
           python3 tests/test_vmu_harness_images.py
+          make build/test-vmu-image-compat
+          python3 tests/test_vmu_image_compat.py
       - name: Verify workflow hygiene
         run: python3 tests/test_workflow_hygiene.py
+      - name: Verify exact-title observer admission and bounded telemetry
+        run: make -f Makefile.vmu-toy host-tests
   dreamcast:
     needs: host
     runs-on: ubuntu-24.04
@@ -97,6 +101,18 @@ jobs:
             docs/vmu-image.md docs/vmu-backing.md docs/vmu-emulation-status.md build/vmu-harness/package/
           git rev-parse HEAD > build/vmu-harness/package/SOURCE-COMMIT.txt
           (cd build/vmu-harness/package && sha256sum KUI/tools.kui > SHA256SUMS)
+      - name: Build isolated Toy Commander observer
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          make -f Makefile.vmu-toy -j2 package
+      - name: Upload exact-title observer test
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-Toy-Maple-observer
+          path: build/vmu-toy/vmu-maple-observer-test.zip
+          if-no-files-found: error
+          retention-days: 30
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: K-UI-experimental-VMU-console-test
@@ -116,5 +132,10 @@ jobs:
             build/vmu-harness/**/*.su
             build/vmu-harness/transport/
             build/vmu-harness/default-proof/
+            build/vmu-toy/*.elf
+            build/vmu-toy/*.map
+            build/vmu-toy/*.json
+            build/vmu-toy/*.dis
+            build/vmu-toy/**/*.su
           if-no-files-found: ignore
           retention-days: 30

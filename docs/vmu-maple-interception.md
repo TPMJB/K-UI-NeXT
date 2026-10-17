@@ -1,7 +1,9 @@
 # Experimental virtual VMU: Maple schedule boundary
 
 The packet backend and schedule adapter are implemented. They do not yet install
-a retail-game hook. A software-chain test passing demonstrates packet routing;
+a retail virtual-card service. A separate exact-Toy observation module installs
+a read-only pre-start counter hook; it does not emulate a card. A software-chain
+test passing demonstrates packet routing;
 it does not demonstrate that a commercial game can discover, save to, and reload
 a virtual card. The native harness must label that distinction.
 
@@ -71,6 +73,10 @@ as missing; the adapter does not invent controller input.
 The configured virtual slot must be selected deliberately. Routing commands for
 A2 to a virtual card hides a physical device in A2. The initial harness should
 use an empty slot, retain the physical controller, and avoid physical VMU writes.
+The adapter filters all commands for that slot, including LCD and clock commands;
+it does not combine virtual memory with a physical screen in the same slot.
+Physical traffic runs before virtual completion, so admission must also establish
+that cross-device interleaving in the original list is not required.
 
 Relevant primary implementation references:
 
@@ -133,6 +139,15 @@ the game cannot reclaim. Neither follows merely from passing host packet tests.
 The exact Toy Commander allocation already used for the separate CDDA experiment
 is a candidate for a VMU-only experiment with CDDA disabled, subject to its own
 admission and memory-size audit.
+
+The optional `Makefile.vmu-toy` package advances the retail evidence step with a
+read-only hook before Toy's exact software-start store. It replays the six
+overwritten instructions, counts bounded descriptor headers, and reports live
+Maple trigger/enable/busy state plus inherited CPU interrupt masks. It stops for
+four photo pages after 1200 attempted starts. It injects no VMU command; the
+game's real physical-card operations continue. See
+[the observer test instructions](vmu-maple-observer-test.md). Console results are
+still required before treating this candidate as a validated retail hook.
 
 ## Host validation
 

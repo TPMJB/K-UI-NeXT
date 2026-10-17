@@ -1,0 +1,52 @@
+# Toy Commander Maple observer — experimental, read only
+
+This is a transport research test, **not virtual VMU saving**. It counts and
+describes the actual Maple DMA schedules created by one exact Toy Commander
+executable. The authored observer injects no VMU commands and changes no VMU
+responses. **The game's own physical VMU operations continue normally.**
+
+The existing K-UI 2.0.0 release stays your normal installation. This ZIP replaces
+only `KUI/retail.kui` temporarily; it does not contain a replacement boot CD,
+shell, save files, game image, or ordinary release loader.
+
+## Install and run
+
+1. Back up the installed 2.0.0 `KUI/retail.kui` somewhere outside the `KUI`
+   folder. Keep that original file so it can be restored after the test.
+2. Copy this ZIP's `KUI/retail.kui` over the card's copy.
+3. Launch your original, uncompressed Toy Commander image over **SCI**, using
+   the **standard native reader** with **background loading Off** and **CDDA
+   emulation Off**. Use the original raw-sector image for this initial test.
+   Other titles and unsupported options are refused by the exact-title stage.
+4. Let the game start normally. Keep any physical card whose saves you want to
+   use in its ordinary slot; it remains a real card. To avoid game-authored card
+   writes during this observation, use an empty physical slot and do not save.
+5. The observer intentionally stops after **1200 attempted SDK DMA starts**.
+   This is roughly 20 seconds if one schedule is submitted each video frame;
+   actual timing depends on the game. The final pending DMA is deliberately not
+   started because the game has stopped for the diagnostic.
+6. Photograph **all four report pages**. Each remains visible for about ten
+   seconds before the next appears. Page numbers are zero through three and
+   all numeric values are hexadecimal. Power the console off afterward.
+7. Restore the backed-up 2.0.0 `KUI/retail.kui` before playing other games.
+
+If it refuses the image, photograph the refusal screen. If it crashes or never
+shows a report, note whether that happened before the title/menu appeared.
+No virtual card is mounted by this test and no new virtual save is expected.
+
+## What the pages prove
+
+- Page 0 records the descriptor source-address range, maximum chain size,
+  per-port traffic, response-address range, and parse/stack errors.
+- Page 1 counts commands 0 through F, including DEVINFO, controller condition,
+  memory information, block read/write, and final synchronization.
+- Page 2 records main/subunit addressing, initial schedule pointers, the last
+  descriptor words, and a rolling FNV fingerprint of descriptor headers.
+- Page 3 records live trigger/enable/busy register values, the inherited CPU
+  interrupt mask, and the game's live Maple register-base field. Nonzero
+  "NONSW", "NONONE", "NONZERO", or "NONMAPLE" counters need investigation.
+
+These counts provide evidence for a future pre-submit hook. They do not prove
+complete SDK call coverage, memory-card response timing, or durable virtual
+save/load in the game. The virtual-card packet/storage implementation is tested
+separately in the standalone harness.
