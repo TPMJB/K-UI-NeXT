@@ -54,12 +54,86 @@ those values. Reading an uncached alias of a dirty P1 selector can observe an
 old transfer bank.
 
 Manager `+0xfe8` holds two banks of 24 receive pointers, each bank occupying
-96 bytes. Manager `+0x10b4` selects the current construction bank, so the
-consumer selects completed bank `1 - selector`. Initialization at
-`0x8c0beeaa..0x8c0beeba` makes the receive-buffer bases P2 addresses; the table
-construction at `0x8c0bf6fc..0x8c0bf724` produces the corresponding banks.
-Read each receive buffer through its actual P2 table value. The consumer needs
-no cache invalidation for those uncached response bytes.
+96 bytes. Manager `+0x10b4` selects the construction bank. The consumer selects
+completed bank `1 - selector`. These are indices into a pointer table, not the
+distance between response buffers.
+
+The game's call at `0x8c04e936` enters wrapper `0x8c0b3288` with raw RX storage
+`0x8c0e007c` in R5 and TX storage `0x8c0ec09c` in R6. The wrapper calls
+`0x8c0b4fac` at `0x8c0b32d4`; that routine calls the uniform SDK initializer
+`0x8c0bed28` with RX in R6 and TX in R4. The initializer rounds each base up to
+32-byte alignment and converts it to P2 at `0x8c0bed7e..0x8c0bed92`. Its call
+to `0x8c0bf6d0` constructs all 48 receive pointers:
+
+```
+RX[bank][port * 6 + unit] = 0xac0e0080 + bank * 0x6000
+                          + (port * 6 + unit) * 0x400
+bank = 0..1, port = 0..3, unit = 0..5
+```
+
+Here `unit` is the slot ordinal. The owner address table at `0x8c0c63a8`
+maps ordinals 0 through 5 to port-local address bits
+`0x20, 0x01, 0x02, 0x04, 0x08, 0x10` respectively. A raw one-hot subunit
+address is not itself the ordinal; reject combinations outside that mapping.
+
+The constructor writes bank zero at `0x8c0bf70a`, bank one at
+`0x8c0bf71e`, and advances each device allocation by literal `0x400` from
+`0x8c0bf7b4`. Literal `0x6000` at `0x8c0bf7b2` separates the two banks.
+Each device owns **1024 bytes per bank**, including A1. A1 uses `0xac0e0480`
+and `0xac0e6480`. Both the 116-byte DEVINFO response and the 524-byte block
+read response fit. The complete RX arena is `[0xac0e0080, 0xac0ec080)`;
+TX begins at `0xac0ec0a0`, leaving a 32-byte gap. This conclusion comes from
+the initialized allocation layout, not from a general physical RAM bound.
+
+The owner also contains a custom initializer at `0x8c0bee44` that clears the
+tables and installs supplied per-unit pointers. The full original file has no
+aligned pointer or encoded direct branch naming its public wrapper
+`0x8c0b3360`. That scan cannot exclude arbitrary dynamic calls. All static
+`0xfe8`-based table accesses were inspected: only the two initialization paths
+write the tables. Normal and alternate builders read them at
+`0x8c0bfa68` and `0x8c0bfcae`; response consumers only read them. No dynamic
+per-function RX resizing was found. A live admission must reject a custom or
+changed table instead of assuming the uniform layout.
+
+| Live P1 address | Field and fixed-layout requirement |
+| --- | --- |
+| `0x8c1223a4` | Manager pointer equals `0x8c1212a8` before any manager dereference |
+| `0x8c122268` | Manager `+0xfc0`, ready state: 1 at normal pre-submit; 0 at completion |
+| `0x8c12226c` | Manager `+0xfc4`, TX base equals `0xac0ec0a0` |
+| `0x8c122270` | Manager `+0xfc8`, RX base equals `0xac0e0080` |
+| `0x8c122290` / `0x8c1222f0` | RX pointer tables: all 24 entries in each bank match the formula |
+| `0x8c122350` / `0x8c122354` | Manager `+0x10a8/+0x10ac`, TX banks equal `0xac0ec0a0/0xac0ef0a0` |
+| `0x8c122358` | Manager `+0x10b0`, pending TX pointer matches the pre-submit bank |
+| `0x8c12235c` | Manager `+0x10b4`, RX construction selector |
+| `0x8c122360` | Manager `+0x10b8`, TX construction selector |
+| `0x8c12236c` | Manager `+0x10c4`, endian mode must be 0 for the observed header encoding |
+
+At normal pre-submit site `0x8c0bf264`, both selectors must equal the admitted
+bank, 0 or 1. The pending MDSTAR must name that bank's TX base, and each normal
+descriptor RX must equal its decoded `port * 6 + unit` slot in the same bank.
+After MDST starts at `0x8c0bf26a`, the TX selector toggles at
+`0x8c0bf27a..0x8c0bf27c`; the RX construction selector toggles at
+`0x8c0bf29e..0x8c0bf2a0`. Therefore, at the common completion boundary **both
+selectors must equal the admitted bank XOR 1**. Neither remains at the old
+bank until consumption. Validate the full fixed table at both boundaries,
+along with source-bank bounds, nonoverlapping response slots, exact pending
+MDSTAR, and the existing hardware/SDK context checks.
+
+The successful normal start holds the TAS lock from `0x8c0bf1a4` through
+`0x8c0bf314`; pre-submit therefore has lock byte `0x80` and ready state 1.
+After submission, ready becomes 0 at `0x8c0bf30e`. The completion gate reacquires
+the lock at `0x8c0bf34a`, so completion has lock byte `0x80` and ready state 0.
+The lock pointer is read through P1 cell `0x8c0c0964`; the admitted pointer
+value is `0xac0c0968`, and its byte is read through P2. Require the separate
+gun flag at `0x8c118398` to be zero at both normal boundaries.
+
+The P2 consumer route is direct. The main consumer loads its table pointer at
+`0x8c0bfefa` and reads the header through that pointer at `0x8c0bfefc`.
+The unit consumer loads its table pointer into R11 at `0x8c0bffe4`, passes it
+to decoder `0x8c0c00ca`, and that decoder reads it at `0x8c0c00d0`. The payload
+consumer `0x8c0c02fe` advances the same pointer by four bytes. No route here
+converts the buffer to P1. Read or write through the actual admitted P2 slot;
+the SDK consumes uncached response bytes without a cache invalidation.
 
 `0x8c0bfebe` reads a main controller's response header and updates its subunit
 mask. `0x8c0bff84` processes a unit response, calling `0x8c0c00ca` to decode its
@@ -114,8 +188,37 @@ pre-submit chain and bound every receive pointer before reading a header.
 Record completions, unexpected entry PR/SR, selector values, response counts,
 and the special-DMA flag without changing a response or starting extra DMA.
 
-With a stop before normal start 1200, a clean run should normally observe 1199
-completed normal schedules. Treat mismatches as evidence to investigate rather
-than silently accepting an alternate path. Static identity, zero malformed
-counts, and these expected totals still do not prove save/load timing,
-recovery behavior, or general compatibility with another game.
+The later padding-capable D878 run reached its planned stop with `0x4cc`
+normal starts and `0x4cb` matched completions. It observed 28 subunit requests,
+including one DEVINFO, one LCD update, one MEMCARD geometry request, and 25
+MEMCARD reads. Its block read response header `0x82010008` describes 130
+payload words, or 524 total bytes. Its recorded RX range
+`0x0c0e0080..0x0c0ea880` agrees with the uniform table's main-device slots
+across both banks. An earlier reported 256-byte RX spacing remains an
+unreconciled photograph interpretation and is not admitted as another layout.
+
+The smallest subsequent virtual-discovery proof can keep hardware chains
+unchanged and replace only a validated absent A1 response at this completion
+boundary. Before any write, establish the full 48-slot layout above and all
+existing completion gates. Match the pending request's exact port, unit,
+command and source address; require its A1 RX header to be the hardware
+timeout marker `0xffffffff`. Require the unmodified real controller response
+to report A1 absent, and refuse a real A1 reply or later physical presence.
+The SDK also recognizes `0x0000ff00` as a missing response; this is not enough
+evidence to admit replacing that alternate marker.
+
+The main consumer updates the subunit mask from every valid parent response,
+not only DEVINFO. An eventual overlay must maintain the added A1 presence bit
+in valid, matched parent replies while preserving the controller's other
+bits, before `0x8c0bfebe` runs. The unit discovery consumer at
+`0x8c0c01cc` detects that new bit and schedules a real A1 DEVINFO request;
+its successful DEVINFO path at `0x8c0c0240..0x8c0c024e` publishes the device.
+With endian mode 0, it consumes the replacement payload directly through P2.
+
+A MEMCARD-only formatted empty image can prove discovery, geometry, and block
+reads without SD writes or a full 128 KiB RAM mirror. Writes and write-phase
+synchronization must stop before submission for this proof. It still needs
+implementation review, exact-owner admission, and a console test with the
+physical A1 VMU absent. Static identity, a capacity contract, and clean
+passive totals do not prove save/load timing, recovery, or another game's
+compatibility.

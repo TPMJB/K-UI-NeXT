@@ -6,13 +6,23 @@ from pathlib import Path
 import struct
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from vmu_toy_completion_probe import (analyze, branch_locations, pc_relative_loads,
-                                      pointer_locations, read_at, verify_identity)
+                                      pointer_locations, read_at, verify_identity,
+                                      BASE, OWNER_BYTES, RX_WITNESSES, WITNESSES)
 
 
 class CompletionProbeTests(unittest.TestCase):
+    @staticmethod
+    def scalar_fixture():
+        """Independent zero-filled input containing sparse public metadata only."""
+        data = bytearray(OWNER_BYTES)
+        for address, size, value, _ in WITNESSES + RX_WITNESSES:
+            data[address - BASE:address - BASE + size] = value.to_bytes(size, "little")
+        return data
+
     def test_pc_longword_alignment_and_register(self):
         data = struct.pack("<4H", 0xD301, 0xD701, 0x0009, 0x0009) + bytes(8)
         self.assertEqual(pc_relative_loads(data, 0x1008, 0x1000), [0x1000, 0x1002])
@@ -45,6 +55,42 @@ class CompletionProbeTests(unittest.TestCase):
     def test_unrecognized_input_cannot_emit_owner_claims(self):
         with self.assertRaises(ValueError):
             analyze(bytes(748444))
+
+    def test_initializer_route_decodes_from_sparse_fixture(self):
+        # Only synthetic fixture tests bypass identity. The production analyzer
+        # still refuses any input not matching the exact entire owner executable.
+        with patch("vmu_toy_completion_probe.verify_identity"):
+            result = analyze(self.scalar_fixture())
+        route = result["receive_ownership"]["uniform_initializer"]
+        self.assertEqual(route["game_target_pointer_locations"], ["0x8c04e9c8"])
+        self.assertEqual(route["game_target_load_references"], ["0x8c04e930"])
+        self.assertEqual(route["custom_wrapper_pointer_locations"], [])
+        self.assertEqual(route["custom_wrapper_direct_branches"], [])
+        self.assertFalse(result["retail_admitted"])
+        self.assertFalse(result["patches_generated"])
+
+    def test_rx_scalar_mismatch_refuses_even_when_completion_scalars_match(self):
+        data = self.scalar_fixture()
+        # A wrong allocation stride must not silently retain a capacity claim.
+        data[0x8C0BF7B4 - BASE] ^= 1
+        with patch("vmu_toy_completion_probe.verify_identity"), self.assertRaises(ValueError):
+            analyze(data)
+
+    def test_uniform_capacity_is_disjoint_and_fits_longest_card_reply(self):
+        with patch("vmu_toy_completion_probe.verify_identity"):
+            contract = analyze(self.scalar_fixture())["receive_ownership"]["uniform_initializer"]
+        slots = [int(slot, 16) for bank in contract["rx_slots"] for slot in bank]
+        self.assertEqual(len(slots), 48)
+        self.assertEqual(len(set(slots)), 48)
+        self.assertEqual(contract["a1_slots"], ["0xac0e0480", "0xac0e6480"])
+        self.assertEqual(contract["rx_slot_bytes"], 1024)
+        self.assertEqual(contract["rx_to_tx_gap_bytes"], 32)
+        self.assertEqual(contract["rx_arena_end_exclusive"], "0xac0ec080")
+        for left, right in zip(slots, slots[1:]):
+            self.assertEqual(right - left, 1024)
+        for reply_bytes in (116, 524):
+            self.assertLessEqual(reply_bytes, contract["rx_slot_bytes"])
+        self.assertLessEqual(slots[-1] + 1024, int(contract["tx_banks"][0], 16))
 
 
 if __name__ == "__main__":

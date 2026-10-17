@@ -1,6 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Read-only observation of the admitted game's pre-MDST schedule. */
 #include "kui/vmu_maple_observe.h"
+#if KUI_VMU_READONLY_PROOF
+#include "kui/vmu_readonly.h"
+#include "kui/vmu_readonly_overlay.h"
+#endif
 #include "retail_display.h"
 
 #define PHYSICAL_BASE UINT32_C(0x0c000000)
@@ -14,6 +18,12 @@ static struct retail_display_state saved_display;
 struct pending_descriptor {uint32_t rx,header,ordinal;};
 static struct pending_descriptor pending[32];
 static uint32_t pending_source;
+void kui_vmu_maple_observer_report(void);
+#if KUI_VMU_READONLY_PROOF
+static struct kui_vmu_readonly blank_card;
+static struct kui_vmu_readonly_overlay overlay;
+static struct kui_vmu_readonly_overlay_frame proof_frames[32];
+#endif
 
 #ifdef KUI_VMU_MAPLE_OBSERVE_HOST_TEST
 static uint32_t host_stack[KUI_VMU_MAPLE_OBSERVE_STACK_BYTES / 4u];
@@ -68,6 +78,69 @@ static unsigned unit_index(uint8_t address) {
     return index;
 }
 
+#if KUI_VMU_READONLY_PROOF
+static int blank_packet(void *context,const uint8_t *request,size_t bytes,
+    uint8_t *response,size_t capacity,size_t *response_bytes) {
+    return kui_vmu_readonly_handle(context,request,bytes,response,capacity,response_bytes);
+}
+static uint8_t *proof_response(uint32_t physical) {
+#ifdef KUI_VMU_MAPLE_OBSERVE_HOST_TEST
+    return kui_vmu_maple_observer_test_response(physical);
+#else
+    return (uint8_t *)(uintptr_t)(physical|UINT32_C(0xa0000000));
+#endif
+}
+/* These fixed arenas are established by the exact owner's initializer and
+ * checked against ALL live cached SDK pointers, not inferred from RAM range.
+ * RX tables and SDK bookkeeping use P1; the actual RX bytes use P2. */
+static int proof_layout(uint32_t source,unsigned completed) {
+    const uint32_t m=UINT32_C(0x8c1212a8);
+    unsigned bank;
+    if(source==UINT32_C(0x0c0ec0a0)) bank=0u;
+    else if(source==UINT32_C(0x0c0ef0a0)) bank=1u;
+    else return 0;
+    if(read_word(UINT32_C(0x8c1223a4))!=m ||
+       read_word(m+0xfc4u)!=UINT32_C(0xac0ec0a0) ||
+       read_word(m+0xfc8u)!=UINT32_C(0xac0e0080) ||
+       read_word(m+0x10a8u)!=UINT32_C(0xac0ec0a0) ||
+       read_word(m+0x10acu)!=UINT32_C(0xac0ef0a0) ||
+       read_word(m+0x10b0u)!=(source|UINT32_C(0xa0000000)) ||
+       read_word(m+0x10b4u)!=(bank^completed) ||
+       read_word(m+0x10b8u)!=(bank^completed) ||
+       read_word(m+0x10c4u)!=0u ||
+       read_word(m+0xfc0u)!=(completed?0u:1u) ||
+       read_word(m+0x10f4u)!=UINT32_C(0xa05f6c00) ||
+       read_word(UINT32_C(0x8c0c0964))!=UINT32_C(0xac0c0968) ||
+       read_byte(UINT32_C(0xac0c0968))!=0x80u ||
+       read_word(UINT32_C(0x8c118398))!=0u ||
+       read_word(UINT32_C(0xa05f6c10))!=0u ||
+       read_word(UINT32_C(0xa05f6c14))!=1u ||
+       read_word(UINT32_C(0xa05f6c18))!=0u) return 0;
+    for(unsigned i=0;i<48u;i++)
+        if(read_word(m+0xfe8u+i*4u)!=UINT32_C(0xac0e0080)+i*1024u) return 0;
+    return 1;
+}
+static void proof_stats(void) {
+    struct kui_vmu_maple_observe_snapshot *s=&kui_vmu_maple_observer_snapshot;
+    const struct kui_vmu_readonly_overlay_stats *p=&overlay.stats;
+    s->proof_prepared=p->prepared;s->proof_completed=p->completed;
+    s->proof_parents=p->advertisements;s->proof_replies=p->replies;
+    s->proof_info=p->devinfo+p->allinfo;s->proof_media=p->media;s->proof_reads=p->reads;
+    s->proof_conflicts=!!(p->flags&KUI_VMU_OVERLAY_PHYSICAL_CONFLICT);
+    s->proof_refused=p->failures;s->proof_flags|=p->flags;
+    s->proof_last_request=p->last_request;s->proof_last_response=p->last_reply;
+    s->proof_last_rx=p->last_rx;s->proof_last_block=blank_card.protocol.read_block;
+    s->proof_bytes=p->devinfo*116u+p->allinfo*196u+p->media*32u+p->reads*524u;
+    s->proof_commit_attempts=blank_card.commit_attempts;
+}
+static void proof_stop(uint32_t flags) {
+    struct kui_vmu_maple_observe_snapshot *s=&kui_vmu_maple_observer_snapshot;
+    s->proof_flags|=flags;proof_stats();
+    s->stop_reason=KUI_VMU_OBSERVE_PROOF_REFUSED;
+    kui_vmu_maple_observer_report();
+}
+#endif
+
 int kui_vmu_maple_observer_init(const struct kui_vmu_maple_observe_config *config) {
     uint32_t *words = (uint32_t *)(void *)&kui_vmu_maple_observer_snapshot;
     uint32_t *stack;
@@ -94,6 +167,11 @@ int kui_vmu_maple_observer_init(const struct kui_vmu_maple_observe_config *confi
     kui_vmu_maple_observer_snapshot.source_fingerprint = UINT32_C(2166136261);
     kui_vmu_maple_observer_snapshot.initialized = 1u;
     pending_source=0;
+#if KUI_VMU_READONLY_PROOF
+    kui_vmu_maple_observer_snapshot.proof_mode=1u;
+    if(kui_vmu_readonly_init(&blank_card) ||
+       kui_vmu_readonly_overlay_init(&overlay,blank_packet,&blank_card)) return -1;
+#endif
     return 0;
 }
 
@@ -126,7 +204,8 @@ void kui_vmu_maple_observer_report(void) {
     uint32_t page;
     for(page = 0;;page = (page + 1u) % 4u) {
         retail_display_restore(&saved_display);
-        retail_display_line("TOY MAPLE OBSERVER - READ ONLY");
+        retail_display_line(KUI_VMU_READONLY_PROOF?
+            "VIRTUAL VMU - READ ONLY BLANK CARD":"TOY MAPLE OBSERVER - READ ONLY");
         retail_display_values("PAGE SCHEDULES DESCRIPTORS BAD",
             (uint32_t[4]){page, s->starts, s->descriptors, s->malformed}, 4u);
         if(page == 0u) {
@@ -149,6 +228,18 @@ void kui_vmu_maple_observer_report(void) {
             unsigned oldest=total<KUI_VMU_MAPLE_OBSERVE_RECORDS?0u:
                 total%KUI_VMU_MAPLE_OBSERVE_RECORDS;
             retail_display_values("SUBSTART CARDSTART POST SUBREQ WHY", &s->first_subunit_start, 5u);
+#if KUI_VMU_READONLY_PROOF
+            retail_display_values("VIRTUAL REPLIES INFO MEDIA READ",&s->proof_replies,4u);
+            retail_display_values("PATCHES CONFLICTS REFUSED BANKBAD",
+                (uint32_t[4]){s->proof_parents,s->proof_conflicts,s->proof_refused,s->proof_bank_fail},4u);
+            retail_display_values("FLAGS LAST REQUEST RESPONSE RX",
+                (uint32_t[4]){s->proof_flags,s->proof_last_request,s->proof_last_response,s->proof_last_rx},4u);
+            retail_display_values("BLOCK BYTES COMMITS",&s->proof_last_block,3u);
+            retail_display_values("MODE PREPARED COMPLETED",&s->proof_mode,3u);
+            retail_display_line("SYNTHETIC EMPTY CARD / NO PERSISTENCE");
+            retail_display_pause(600u);
+            continue;
+#endif
             if(s->stop_reason==KUI_VMU_OBSERVE_UNSAFE) {
                 retail_display_values("FAULT CURSOR CONTROL RX HEADER",
                     (uint32_t[4]){s->fault_cursor,s->last_control,s->last_rx,s->last_header},4u);
@@ -174,7 +265,8 @@ void kui_vmu_maple_observer_report(void) {
             retail_display_values("CMP SR MASKS MAIN-A INFO HDR RX", &s->completion_sr_last, 4u);
             retail_display_values("SUB REQUEST RESPONSE RX ORDINAL", &s->subunit_request, 4u);
             retail_display_values("CTXBAD FLAGS MDSTAR CALLER PR", &s->completion_bad_context, 4u);
-            retail_display_line("FINAL PENDING DMA IS NOT STARTED");
+            retail_display_line(KUI_VMU_READONLY_PROOF?
+                "READ-ONLY PROOF STOPPED / PHOTO SCREEN":"FINAL PENDING DMA IS NOT STARTED");
         }
         if(page!=2u && page!=3u) retail_display_line("PHOTO ALL FOUR PAGES THEN POWER OFF");
         retail_display_pause(600u);
@@ -247,11 +339,20 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
         unsafe_schedule = 1u;
         goto done;
     }
+#if KUI_VMU_READONLY_PROOF
+    if(s->completion_pending || !proof_layout(source,0u)) {
+        increment(&s->proof_bank_fail);proof_stop(UINT32_C(0x10000));return;
+    }
+#endif
     for(entries=0;entries<256u && count<32u;entries++) {
         uint32_t control, rx, header, bytes;
         unsigned command, destination, sender, words, unit, port;
         s->fault_cursor=cursor;s->last_control=0;s->last_rx=0;s->last_header=0;
-        if(!source_span(cursor, 4u)) {
+        if(!source_span(cursor, 4u)
+#if KUI_VMU_READONLY_PROOF
+            || cursor-source>UINT32_C(0x3000)-4u
+#endif
+           ) {
             increment(&s->malformed);
             unsafe_schedule = 1u;
             break;
@@ -262,6 +363,11 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
          * padding between repeated-port packets. It has no RX or header.
          * Other pattern/control encodings remain refused. */
         if(control==UINT32_C(0x00000700)) {
+#if KUI_VMU_READONLY_PROOF
+            if(cursor-source>UINT32_C(0x3000)-4u) {
+                increment(&s->malformed);unsafe_schedule=1u;break;
+            }
+#endif
             increment(&s->nop_words);cursor+=4u;continue;
         }
         if(control & ~UINT32_C(0x800300ff)) {
@@ -270,7 +376,11 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
             break;
         }
         bytes = 12u + 4u * (control & 255u);
-        if(!source_span(cursor, bytes)) {
+        if(!source_span(cursor, bytes)
+#if KUI_VMU_READONLY_PROOF
+            || cursor-source>UINT32_C(0x3000)-bytes
+#endif
+           ) {
             increment(&s->malformed);
             unsafe_schedule = 1u;
             break;
@@ -303,6 +413,26 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
             increment(&s->rx_bad);
             unsafe_schedule = 1u;
         }
+#if KUI_VMU_READONLY_PROOF
+        {
+            unsigned bank=source==UINT32_C(0x0c0ec0a0)?0u:1u;
+            uint32_t expected=UINT32_C(0x0c0e0080)+bank*UINT32_C(0x6000)+(port*6u+unit)*1024u;
+            if(rx!=expected) {
+                increment(&s->proof_bank_fail);s->proof_flags|=UINT32_C(0x20000);
+                unsafe_schedule=1u;
+            }
+            proof_frames[count].header=header;
+            proof_frames[count].payload0=proof_frames[count].payload1=0u;
+            /* Snapshot only A1 function/location or A-controller function;
+             * never copy save data or later reread the live source chain. */
+            if(destination==1u || destination==0x20u) {
+                if(words) proof_frames[count].payload0=read_word((cursor+12u)|UINT32_C(0xa0000000));
+                if(words>1u) proof_frames[count].payload1=read_word((cursor+16u)|UINT32_C(0xa0000000));
+            }
+            proof_frames[count].rx_physical=rx;proof_frames[count].rx_capacity=1024u;
+            proof_frames[count].rx_bytes=proof_response(rx);
+        }
+#endif
         s->source_fingerprint = (s->source_fingerprint ^ control) * UINT32_C(16777619);
         s->source_fingerprint = (s->source_fingerprint ^ rx) * UINT32_C(16777619);
         s->source_fingerprint = (s->source_fingerprint ^ header) * UINT32_C(16777619);
@@ -341,6 +471,13 @@ done:
     if(s->stop_reason)
         kui_vmu_maple_observer_report();
     else {
+#if KUI_VMU_READONLY_PROOF
+        if(kui_vmu_readonly_overlay_prepare(&overlay,proof_frames,count,source,cursor-source,
+            PROTECTED_BEGIN,UINT32_C(0x10020))) {
+            proof_stop(0u);return;
+        }
+        proof_stats();
+#endif
         /* Publish only a complete schedule that will really reach MDST.
          * The final diagnostic schedule is counted but never published. */
         if(s->completion_pending) increment(&s->completion_overwritten);
@@ -378,8 +515,26 @@ void kui_vmu_maple_observer_complete(uint32_t inherited_sr,uint32_t inherited_pr
        s->completion_pending>32u) flags|=64u;
     s->completion_guard_flags|=flags;
     if(flags&UINT32_C(0x73)) increment(&s->completion_bad_context);
-    if(!s->completion_pending) {increment(&s->completion_orphan);return;}
-    if(flags) return;
+    if(!s->completion_pending) {
+        increment(&s->completion_orphan);
+#if KUI_VMU_READONLY_PROOF
+        proof_stop(UINT32_C(0x100000));
+#endif
+        return;
+    }
+    if(flags) {
+#if KUI_VMU_READONLY_PROOF
+        proof_stop(UINT32_C(0x80000));
+#endif
+        return;
+    }
+#if KUI_VMU_READONLY_PROOF
+    if(!proof_layout(pending_source,1u)) {
+        increment(&s->proof_bank_fail);proof_stop(UINT32_C(0x10000));return;
+    }
+    if(kui_vmu_readonly_overlay_complete(&overlay)) {proof_stop(0u);return;}
+    proof_stats();
+#endif
     for(unsigned i=0;i<s->completion_pending;i++) {
         uint32_t header=read_word(pending[i].rx|UINT32_C(0xa0000000));
         unsigned address=(pending[i].header>>8)&255u;

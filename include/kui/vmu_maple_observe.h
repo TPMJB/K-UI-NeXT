@@ -3,16 +3,22 @@
 #define KUI_VMU_MAPLE_OBSERVE_H
 
 #define KUI_VMU_MAPLE_OBSERVE_MAGIC 0x564d4f31
-#define KUI_VMU_MAPLE_OBSERVE_VERSION 3
+#define KUI_VMU_MAPLE_OBSERVE_VERSION 4
+#ifndef KUI_VMU_READONLY_PROOF
+#define KUI_VMU_READONLY_PROOF 0
+#endif
+#if KUI_VMU_READONLY_PROOF != 0 && KUI_VMU_READONLY_PROOF != 1
+#error VMU proof mode must be explicitly zero or one
+#endif
 #define KUI_VMU_MAPLE_OBSERVE_SITE 0x8c0bf264
 #define KUI_VMU_MAPLE_OBSERVE_RESUME 0x8c0bf270
 #define KUI_VMU_MAPLE_OBSERVE_LEASE 0x8cfd0000
 #define KUI_VMU_MAPLE_OBSERVE_LIMIT 0x8cfe0000
 #define KUI_VMU_MAPLE_OBSERVE_LEASE_BYTES 0x30000
 #define KUI_VMU_MAPLE_OBSERVE_STACK_BYTES 4096
-#define KUI_VMU_MAPLE_OBSERVE_EXPORT_BYTES 56
+#define KUI_VMU_MAPLE_OBSERVE_EXPORT_BYTES 60
 #define KUI_VMU_MAPLE_OBSERVE_CONFIG_BYTES 76
-#define KUI_VMU_MAPLE_OBSERVE_SNAPSHOT_BYTES 540
+#define KUI_VMU_MAPLE_OBSERVE_SNAPSHOT_BYTES 612
 #define KUI_VMU_MAPLE_OBSERVE_CONSUMER 0x8c0bf37a
 #define KUI_VMU_MAPLE_OBSERVE_COMPLETION_SLOT 0x8c0b540c
 #define KUI_VMU_MAPLE_OBSERVE_COMPLETION_PR 0x8c0b5362
@@ -29,6 +35,7 @@ struct kui_vmu_maple_observe_exports {
     uint32_t magic, version, bytes;
     uint32_t initialize, hook, bss_begin, bss_end;
     uint32_t stack_bottom, stack_top, worker_end, lease_bytes, snapshot, terminal, complete_hook;
+    uint32_t readonly_mode;
 };
 
 struct kui_vmu_maple_observe_config {
@@ -39,7 +46,8 @@ struct kui_vmu_maple_observe_config {
 enum kui_vmu_maple_observe_stop {
     KUI_VMU_OBSERVE_RUNNING, KUI_VMU_OBSERVE_UNSAFE,
     KUI_VMU_OBSERVE_HARD_LIMIT, KUI_VMU_OBSERVE_CARD_WINDOW,
-    KUI_VMU_OBSERVE_STACK_FAULT, KUI_VMU_OBSERVE_OWNER_TERMINAL
+    KUI_VMU_OBSERVE_STACK_FAULT, KUI_VMU_OBSERVE_OWNER_TERMINAL,
+    KUI_VMU_OBSERVE_PROOF_REFUSED
 };
 
 struct kui_vmu_maple_observe_record {
@@ -69,6 +77,11 @@ struct kui_vmu_maple_observe_snapshot {
     uint32_t subunit_request, subunit_response, subunit_rx, subunit_ordinal;
     uint32_t completion_bad_context, completion_guard_flags, completion_source, completion_pr_last;
     uint32_t fault_cursor, nop_words;
+    uint32_t proof_mode, proof_prepared, proof_completed, proof_parents;
+    uint32_t proof_replies, proof_info, proof_media, proof_reads;
+    uint32_t proof_conflicts, proof_refused, proof_bank_fail, proof_flags;
+    uint32_t proof_last_request, proof_last_response, proof_last_rx, proof_last_block;
+    uint32_t proof_bytes, proof_commit_attempts;
 };
 
 _Static_assert(sizeof(struct kui_vmu_maple_observe_exports) ==
@@ -91,6 +104,9 @@ extern struct kui_vmu_maple_observe_snapshot kui_vmu_maple_observer_snapshot;
 #ifdef KUI_VMU_MAPLE_OBSERVE_HOST_TEST
 uint32_t kui_vmu_maple_observer_test_read(uint32_t address);
 void kui_vmu_maple_observer_test_stop(void);
+#if KUI_VMU_READONLY_PROOF
+uint8_t *kui_vmu_maple_observer_test_response(uint32_t physical);
+#endif
 #endif
 #endif
 #endif

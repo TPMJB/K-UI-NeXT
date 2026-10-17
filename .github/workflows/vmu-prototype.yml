@@ -113,11 +113,23 @@ jobs:
         run: |
           source .deps/kos/environ.sh
           make -k -f Makefile.vmu-toy -j2 package
+      - name: Build isolated read-only Toy Commander A1 proof
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          make -f Makefile.vmu-toy -j2 BUILD=build/vmu-toy-readonly READONLY_PROOF=1 package
       - name: Upload exact-title observer test
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: K-UI-experimental-Toy-Maple-observer
           path: build/vmu-toy/vmu-maple-observer-test.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload read-only blank-card proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-Toy-Read-Only-VMU
+          path: build/vmu-toy-readonly/vmu-readonly-card-test.zip
           if-no-files-found: error
           retention-days: 30
       - name: Retain native proof
@@ -138,5 +150,10 @@ jobs:
             build/vmu-toy/*.json
             build/vmu-toy/*.dis
             build/vmu-toy/**/*.su
+            build/vmu-toy-readonly/*.elf
+            build/vmu-toy-readonly/*.map
+            build/vmu-toy-readonly/*.json
+            build/vmu-toy-readonly/*.dis
+            build/vmu-toy-readonly/**/*.su
           if-no-files-found: ignore
           retention-days: 30

@@ -47,6 +47,11 @@ struct kui_vmu_image_summary {
     unsigned free_blocks;
 };
 
+/* Pure synthesis of one canonical blank-card block, using the same default
+ * timestamp and bytes as format_blank(NULL timestamp). No image, I/O or
+ * workspace is needed. Invalid block/output returns ARGUMENT without writing. */
+int kui_vmu_image_blank_block(uint16_t block, uint8_t out[512]);
+
 /* Creates a standard formatted image only if EVERY block is entirely zero.
  * A nonzero byte causes NOT_BLANK before any write or sync. Never formats an
  * imported/existing card automatically. Timestamp is 8-byte KOS BCD order

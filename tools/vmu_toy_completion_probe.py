@@ -20,6 +20,11 @@ OWNER_SHA256 = "ee68a326da964fec5892b7226311f2293fd3a0bbf5bac496ec82991964d49bbd
 CONSUMER = 0x8C0BF37A
 CONSUMER_LITERAL = 0x8C0B540C
 CONSUMER_LOAD = 0x8C0B535C
+MANAGER = 0x8C1212A8
+RX_BASE = 0xAC0E0080
+RX_SLOT_BYTES = 0x400
+RX_BANK_BYTES = 24 * RX_SLOT_BYTES
+TX_BASE = 0xAC0EC0A0
 
 # Sparse scalar witnesses, not an instruction payload or relocated SDK body.
 WITNESSES = (
@@ -51,6 +56,38 @@ WITNESSES = (
     (0x8C0B4E44, 4, 0x80000200, "separate gun DMA descriptor base control"),
     (0x8C0B4D2A, 2, 0x8B19, "gun-completion flag bypasses normal consumer"),
     (0x8C0B4F68, 4, 0x8C0B4D10, "normal interrupt callback registration"),
+)
+
+# Additional sparse evidence for the exact game's uniform receive initializer.
+# The full hash remains mandatory; these checks are not a disassembler or a
+# substitute for validating all live P1 table entries before any RX mutation.
+RX_WITNESSES = (
+    (0x8C04E930, 2, 0xD225, "game loads normal Maple initialization wrapper"),
+    (0x8C04E932, 2, 0xD524, "game loads RX storage argument into R5"),
+    (0x8C04E934, 2, 0xD622, "game loads TX storage argument into R6"),
+    (0x8C04E936, 2, 0x420B, "game calls normal initialization wrapper"),
+    (0x8C04E9C0, 4, 0x8C0EC09C, "game TX storage before alignment"),
+    (0x8C04E9C4, 4, 0x8C0E007C, "game RX storage before alignment"),
+    (0x8C04E9C8, 4, 0x8C0B3288, "game normal initialization target"),
+    (0x8C0B32D4, 2, 0x430B, "normal wrapper calls interrupt-masked initializer"),
+    (0x8C0B3344, 4, 0x8C0B4FAC, "interrupt-masked initialization target"),
+    (0x8C0B508C, 4, 0x8C0BED28, "uniform SDK initialization target"),
+    (0x8C0BED3E, 2, 0x0246, "uniform initializer stores TX base"),
+    (0x8C0BED44, 2, 0x0366, "uniform initializer stores RX base"),
+    (0x8C0BED88, 2, 0x0326, "uniform initializer stores P2 TX base"),
+    (0x8C0BED92, 2, 0x0326, "uniform initializer stores P2 RX base"),
+    (0x8C0BEE30, 4, 0x8C0BF6D0, "uniform receive table construction target"),
+    (0x8C0BF70A, 2, 0x2212, "table constructor stores bank-zero RX pointer"),
+    (0x8C0BF71E, 2, 0x2212, "table constructor stores bank-one RX pointer"),
+    (0x8C0BF7B2, 2, 0x6000, "uniform RX bank displacement"),
+    (0x8C0BF7B4, 2, 0x0400, "uniform RX allocation per unit"),
+    (0x8C0BF27A, 2, 0x22CA, "normal start toggles TX bank after MDST"),
+    (0x8C0BF27C, 2, 0x0326, "normal start stores next TX bank"),
+    (0x8C0BF29E, 2, 0x22CA, "normal start toggles RX construction bank"),
+    (0x8C0BF2A0, 2, 0x0326, "normal start stores next RX construction bank"),
+    (0x8C0BFEFC, 2, 0x6342, "main consumer loads header through actual RX pointer"),
+    (0x8C0BFFE4, 2, 0x0BBE, "unit consumer loads actual completed-bank RX pointer"),
+    (0x8C0C00D0, 2, 0x6356, "unit header decoder reads through actual RX pointer"),
 )
 
 
@@ -107,7 +144,7 @@ def analyze(data: bytes) -> dict:
     verify_identity(data)
     checks = [{"address": h(address), "bytes": size, "description": description,
                "matches": read_at(data, address, size) == value}
-              for address, size, value, description in WITNESSES]
+              for address, size, value, description in WITNESSES + RX_WITNESSES]
     if not all(check["matches"] for check in checks):
         raise ValueError("Exact-owner completion witness mismatch")
     loads = pc_relative_loads(data, CONSUMER_LITERAL)
@@ -115,7 +152,7 @@ def analyze(data: bytes) -> dict:
     branches = branch_locations(data, CONSUMER)
     unique = loads == [CONSUMER_LOAD] and pointers == [CONSUMER_LITERAL] and not branches
     return {
-        "schema": "kui-vmu-toy-completion-probe-v1",
+        "schema": "kui-vmu-toy-completion-probe-v2",
         "retail_admitted": False,
         "patches_generated": False,
         "input": {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),
@@ -149,6 +186,34 @@ def analyze(data: bytes) -> dict:
             "rx_alias": "Table values are P2 pointers; dereference the actual table value",
             "main_consumer": "0x8c0bfebe", "unit_consumer": "0x8c0bff84",
             "consumer_coverage": "Four ports; each enabled port's main device and up to six units",
+            "uniform_initializer": {
+                "game_call": "0x8c04e936", "game_target": "0x8c0b3288",
+                "game_target_pointer_locations": list(map(h, pointer_locations(data, 0x8C0B3288))),
+                "game_target_load_references": list(map(h, pc_relative_loads(data, 0x8C04E9C8))),
+                "custom_wrapper_pointer_locations": list(map(h, pointer_locations(data, 0x8C0B3360))),
+                "custom_wrapper_direct_branches": list(map(h, branch_locations(data, 0x8C0B3360))),
+                "route": ["0x8c0b3288", "0x8c0b4fac", "0x8c0bed28", "0x8c0bf6d0"],
+                "rx_base": h(RX_BASE), "rx_slot_bytes": RX_SLOT_BYTES,
+                "rx_bank_bytes": RX_BANK_BYTES, "rx_arena_end_exclusive": h(RX_BASE + 2 * RX_BANK_BYTES),
+                "rx_table_formula": "rx_base + bank * 0x6000 + (port * 6 + unit) * 0x400",
+                "rx_slots": [[h(RX_BASE + bank * RX_BANK_BYTES + unit * RX_SLOT_BYTES)
+                              for unit in range(24)] for bank in range(2)],
+                "a1_slots": [h(RX_BASE + bank * RX_BANK_BYTES + RX_SLOT_BYTES) for bank in range(2)],
+                "tx_banks": [h(TX_BASE), h(TX_BASE + 0x3000)],
+                "rx_to_tx_gap_bytes": TX_BASE - (RX_BASE + 2 * RX_BANK_BYTES),
+                "capacity_claim": "1024 bytes only after all 48 live P1 RX pointers and fixed bases match this schema",
+            },
+            "live_fields_p1": {
+                "ready": h(MANAGER + 0xFC0), "tx_base": h(MANAGER + 0xFC4),
+                "rx_base": h(MANAGER + 0xFC8), "rx_tables": [h(MANAGER + 0xFE8), h(MANAGER + 0xFE8 + 96)],
+                "tx_banks": [h(MANAGER + 0x10A8), h(MANAGER + 0x10AC)],
+                "pending_tx": h(MANAGER + 0x10B0), "rx_selector": h(MANAGER + 0x10B4),
+                "tx_selector": h(MANAGER + 0x10B8), "endian_mode": h(MANAGER + 0x10C4),
+            },
+            "pre_context": "At bf264, ready=1 and lock byte=0x80; both selectors equal admitted bank 0 or 1",
+            "completion_context": "At original consumer, ready=0 and lock byte=0x80; both selectors equal admitted bank XOR 1",
+            "descriptor_rx_requirement": "Each normal descriptor RX equals the admitted bank table at port*6+unit",
+            "p2_consumer_evidence": "bfefc directly reads main RX; bffe4 fetches unit RX and c00d0 directly reads it; no P1 conversion",
         },
         "special_dma": {
             "descriptor_control_base": "0x80000200", "start_store": "0x8c0b4db6",
@@ -162,6 +227,7 @@ def analyze(data: bytes) -> dict:
             "The normal pre-submit hook does not cover the separate gun DMA start.",
             "No IRQ registration, callback ownership, live cache state, or response lifetime is admitted by a file hash.",
             "A passive experiment must verify MDST idle, SDK lock/ready state, normal schedule identity, and RX pointer bounds before every observation.",
+            "The uniform capacity contract rejects any changed/custom table; file identity alone does not admit a response write.",
             "This tool neither mutates responses nor supplies virtual VMU saves.",
         ],
     }

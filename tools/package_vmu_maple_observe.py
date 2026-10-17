@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Inspect the isolated Maple observer and package its temporary retail module."""
+"""Inspect isolated passive/blank-card proof workers and package their retail module."""
 import hashlib
 import json
 from pathlib import Path
@@ -18,15 +18,18 @@ from check_vmu_maple_observe_hook import check_hook, check_completion_hook
 import retail_package as layout
 
 
-def write_test_archive(directory, module, report_bytes):
+def write_test_archive(directory, module, report_bytes, *, readonly_proof=False):
     """Install through the ordinary native-game route in the released shell."""
+    if type(readonly_proof) is not bool:
+        raise ValueError("Read-only proof selection must be boolean")
+    guide = "vmu-readonly-card-test.md" if readonly_proof else "vmu-maple-observer-test.md"
     files = {"KUI/apps/games/retail-boot.kui": module,
-             "README-FIRST.md": Path("docs/vmu-maple-observer-test.md").read_bytes(),
+             "README-FIRST.md": (Path("docs") / guide).read_bytes(),
              "observer-artifact-audit.json": report_bytes}
     files["SHA256SUMS.txt"] = "".join(
         hashlib.sha256(data).hexdigest() + "  " + name + "\n"
         for name, data in sorted(files.items())).encode()
-    target = directory / "vmu-maple-observer-test.zip"
+    target = directory / ("vmu-readonly-card-test.zip" if readonly_proof else "vmu-maple-observer-test.zip")
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
         for name, data in sorted(files.items()):
             entry = zipfile.ZipInfo(name, (2026, 10, 16, 0, 0, 0))
@@ -51,15 +54,17 @@ def inspect_worker(directory):
     payload = image["payload"]
     if (directory / "worker.bin").read_bytes() != payload:
         raise ValueError("Worker objcopy bytes differ from admitted ELF")
-    words = struct.unpack_from("<14I", payload)
+    words = struct.unpack_from("<15I", payload)
     names = ("magic", "version", "bytes", "initialize", "hook", "bss_begin", "bss_end",
-             "stack_bottom", "stack_top", "worker_end", "lease_bytes", "snapshot", "terminal", "complete_hook")
+             "stack_bottom", "stack_top", "worker_end", "lease_bytes", "snapshot", "terminal", "complete_hook",
+             "readonly_mode")
     exports = dict(zip(names, words))
     symbols = image["symbols"]
     typed = _linked_symbols(elf, {"_kui_vmu_maple_observer_init",
         "_kui_vmu_maple_observer_hook", "_kui_vmu_maple_observer_terminal",
         "_kui_vmu_maple_observer_snapshot", "_kui_vmu_maple_observer_complete_hook"})
-    if words[:3] != (0x564D4F31, 3, 56) or exports["lease_bytes"] != 0x30000:
+    if (words[:3] != (0x564D4F31, 4, 60) or exports["lease_bytes"] != 0x30000 or
+            exports["readonly_mode"] not in (0, 1)):
         raise ValueError("Observer exports identity differs from profile")
     for key, symbol in (("initialize", "_kui_vmu_maple_observer_init"),
                         ("hook", "_kui_vmu_maple_observer_hook"),
@@ -73,8 +78,8 @@ def inspect_worker(directory):
                 not section[3] <= address < address + size <= section[3] + section[5]):
             raise ValueError("Worker export has no bounded typed symbol: " + key)
         if key == "snapshot":
-            if size != 540 or kind != 1 or section[1] != 8 or section[2] & 7 != 3:
-                raise ValueError("Worker snapshot must be its 540-byte private BSS object")
+            if size != 612 or kind != 1 or section[1] != 8 or section[2] & 7 != 3:
+                raise ValueError("Worker snapshot must be its 612-byte private BSS object")
         elif kind != 2 or size & 1 or section[2] & 7 != 6:
             raise ValueError("Worker entry must be a bounded cached-code function: " + key)
     if (not 0xACFD0000 <= exports["bss_begin"] <= exports["snapshot"] < exports["bss_end"]
@@ -84,13 +89,16 @@ def inspect_worker(directory):
             or exports["worker_end"] != image["memory_end"]
             or any(exports[key] & 31 for key in ("bss_begin", "bss_end", "stack_bottom", "stack_top"))
             or exports["snapshot"] & 3
-            or exports["snapshot"] + 540 > exports["bss_end"]
+            or exports["snapshot"] + 612 > exports["bss_end"]
             or exports["bss_begin"] - 0x20000000 < 0x8CFD0000 + len(payload)):
         raise ValueError("Observer private BSS/stack is outside owned lease")
     for key in ("initialize", "hook", "terminal", "complete_hook"):
-        if not 0x8CFD0038 <= exports[key] < 0x8CFD0000 + len(payload) or exports[key] & 1:
+        if not 0x8CFD003C <= exports[key] < 0x8CFD0000 + len(payload) or exports[key] & 1:
             raise ValueError("Worker entry is outside cached executable image: " + key)
+    readonly = exports["readonly_mode"] == 1
     return {"exports": exports, "binary_bytes": len(payload),
+            "mode": "READ-ONLY virtual blank A1 proof" if readonly else "read-only Toy Maple observation",
+            "virtual_vmu_enabled": readonly, "storage_writes_enabled": False,
             "worker_sha256": hashlib.sha256(payload).hexdigest(),
             "hook_integer_state": check_hook(image, exports),
             "completion_integer_state": check_completion_hook(image, exports)}
@@ -168,11 +176,11 @@ def main():
     report["runtime"] = check_embedded_images(directory,
         (directory / "worker.bin").read_bytes(), resident, stage, entry, module)
     report.update({"module_sha256": hashlib.sha256(module).hexdigest(),
-                   "module_bytes": len(module), "mode": "read-only Toy Maple observation",
-                   "virtual_vmu_enabled": False})
+                   "module_bytes": len(module)})
     report_bytes = (json.dumps(report, indent=2, sort_keys=True) + "\n").encode()
     (directory / "observer-artifact-audit.json").write_bytes(report_bytes)
-    print(write_test_archive(directory, module, report_bytes))
+    print(write_test_archive(directory, module, report_bytes,
+                             readonly_proof=report["exports"]["readonly_mode"] == 1))
 
 
 if __name__ == "__main__":

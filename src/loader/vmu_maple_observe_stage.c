@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* An isolated exact-Toy passive Maple observer. No virtual device or storage
- * writes are installed by this target. The normal retail stage is unchanged. */
+/* An isolated exact-Toy Maple diagnostic. Its separate readonly mode supplies
+ * synthetic blank-card replies without storage I/O. The normal stage is unchanged. */
 #if !KUI_VMU_MAPLE_OBSERVE || !KUI_RETAIL_LOW_RESIDENT || defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_ASYNC) || KUI_RETAIL_TOY_PILOT
 #error VMU observation stage requires its separate synchronous native build
 #endif
@@ -118,7 +118,8 @@ static void observe_fail(uint32_t reason,uint32_t detail) {
     retail_display_restore(&display);
     retail_display_hex("TOY MAPLE OBSERVER REFUSED",reason);
     retail_display_hex("DETAIL",detail);
-    stopped("PASSIVE OBSERVER: PHOTO SCREEN",reason);
+    stopped(KUI_VMU_READONLY_PROOF?"VIRTUAL CARD PROOF: PHOTO SCREEN":
+        "PASSIVE OBSERVER: PHOTO SCREEN",reason);
 }
 static void observe_witnesses(bool installed) {
     for(unsigned i=0;i<sizeof(witnesses)/sizeof(witnesses[0]);i++) {
@@ -143,7 +144,8 @@ static void observe_exports(struct kui_vmu_maple_observe_exports *e,uint32_t byt
     uint32_t bss_begin=observe_p1(e->bss_begin),bss_end=observe_p1(e->bss_end);
     uint32_t stack_bottom=observe_p1(e->stack_bottom),stack_top=observe_p1(e->stack_top);
     if(e->magic!=KUI_VMU_MAPLE_OBSERVE_MAGIC || e->version!=KUI_VMU_MAPLE_OBSERVE_VERSION ||
-       e->bytes!=sizeof(*e) || e->lease_bytes!=KUI_VMU_TOY_LEASE_BYTES ||
+       e->bytes!=sizeof(*e) || e->readonly_mode!=KUI_VMU_READONLY_PROOF ||
+       e->lease_bytes!=KUI_VMU_TOY_LEASE_BYTES ||
        !observe_code(e->initialize,bytes) || !observe_code(e->hook,bytes) ||
        !observe_code(e->terminal,bytes) || !observe_code(e->complete_hook,bytes) ||
        bss_begin<KUI_VMU_TOY_LEASE_BEGIN+bytes || bss_begin>bss_end ||
@@ -261,7 +263,9 @@ void kui_retail_stage_main(const uint8_t *wire) {
     if(kui_retail_manifest_decode(wire,&manifest)!=KUI_GAME_OK ||
        !kui_vmu_toy_observe_manifest(&manifest))
         stopped("OBSERVER NEEDS ORIGINAL TOY / SCI / STANDARD",0);
-    retail_display_line("PASSIVE MAPLE OBSERVER / NO VIRTUAL VMU YET");
+    retail_display_line(KUI_VMU_READONLY_PROOF?
+        "VIRTUAL A1: READ-ONLY EMPTY CARD / NO STORAGE":
+        "PASSIVE MAPLE OBSERVER / NO VIRTUAL VMU YET");
     kui_vmu_observe_base_main(wire);
 }
 

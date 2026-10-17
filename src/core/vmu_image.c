@@ -6,6 +6,7 @@
 
 enum { ROOT = 255, FAT = 254, DIR_FIRST = 253, DIR_LAST = 241,
        FREE = 0xfffc, END = 0xfffa };
+static const uint8_t default_time[] = {0x20,0x00,0x01,0x01,0,0,0,5};
 
 static unsigned le16(const uint8_t *p) {
     return (unsigned)p[0] | ((unsigned)p[1] << 8);
@@ -67,10 +68,16 @@ static void make_block(unsigned block, const uint8_t stamp[8], uint8_t *out) {
     }
 }
 
+int kui_vmu_image_blank_block(uint16_t block, uint8_t out[512]) {
+    if(block >= KUI_VMU_IMAGE_BLOCKS || !out)
+        return KUI_VMU_IMAGE_ARGUMENT;
+    make_block(block, default_time, out);
+    return KUI_VMU_IMAGE_OK;
+}
+
 int kui_vmu_image_format_blank(const struct kui_vmu_image_io *io,
     size_t image_bytes, const uint8_t timestamp[8],
     struct kui_vmu_image_workspace *work) {
-    static const uint8_t default_time[] = {0x20,0x00,0x01,0x01,0,0,0,5};
     uint8_t stamp[8];
     if(!io || !io->read_block || !io->write_block || !io->sync || !work ||
        image_bytes != KUI_VMU_IMAGE_BYTES)

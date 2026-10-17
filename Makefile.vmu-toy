@@ -1,9 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-only
-# Isolated exact-Toy Maple observer. Does not build virtual saving or CDDA.
+# Isolated exact-Toy Maple observer and optional read-only blank-card proof.
 CC = sh-elf-gcc
 OBJCOPY = sh-elf-objcopy
 HOST_CC ?= cc
 BUILD ?= build/vmu-toy
+READONLY_PROOF ?= 0
+ifneq ($(READONLY_PROOF),0)
+ifneq ($(READONLY_PROOF),1)
+$(error READONLY_PROOF must be 0 or 1)
+endif
+endif
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD)
 CPU = -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,fpul-fpul
 FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
@@ -13,7 +19,8 @@ FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
  -DKUI_RETAIL_SCI_DIAGNOSTIC=0 -DKUI_SCI_DMA_PACED=0 -DKUI_SCI_DMA_REUSE_TDRE=0 \
  -DKUI_GENERAL_SCI_RESUME_FIX=1 -DKUI_RETAIL_NATIVE_DISC_CHECK=1 \
  -DKUI_RETAIL_NATIVE_DRIVE_STATE=1 \
- -DKUI_VMU_MAPLE_OBSERVE=1 -ffreestanding -fno-builtin \
+ -DKUI_VMU_MAPLE_OBSERVE=1 -DKUI_VMU_READONLY_PROOF=$(READONLY_PROOF) \
+ -ffreestanding -fno-builtin \
  -fno-stack-protector -fno-pic -ffunction-sections -fdata-sections \
  -fno-jump-tables -fstack-usage -Iinclude -Isrc/loader -I$(BUILD) \
  -DKUI_BUILD_ID='"$(BUILD_ID)"'
@@ -33,12 +40,33 @@ STAGE_SRC = src/loader/vmu_maple_observe_stage.c src/loader/sd_reader.c \
  src/core/retail_observe.c
 STAGE_OBJ = $(patsubst %.c,$(BUILD)/stage/%.o,$(STAGE_SRC)) $(BUILD)/stage_asm.o
 WORKER_SRC = src/loader/vmu_maple_observe_worker.c src/loader/retail_display.c src/loader/minic.c
+READONLY_SRC = src/core/vmu_readonly.c src/core/vmu_emulation.c src/core/vmu_image.c \
+ src/loader/vmu_readonly_overlay.c
+ifeq ($(READONLY_PROOF),1)
+WORKER_SRC += $(READONLY_SRC)
+TEST_ZIP = vmu-readonly-card-test.zip
+TEST_GUIDE = docs/vmu-readonly-card-test.md
+else
+TEST_ZIP = vmu-maple-observer-test.zip
+TEST_GUIDE = docs/vmu-maple-observer-test.md
+endif
 WORKER_OBJ = $(patsubst %.c,$(BUILD)/worker/%.o,$(WORKER_SRC)) $(BUILD)/worker_asm.o
 
-.PHONY: all package host-tests
+.PHONY: all package host-tests force-mode-config
 .DELETE_ON_ERROR:
 all: $(BUILD)/retail-maple-observe.kui
-package: $(BUILD)/vmu-maple-observer-test.zip
+package: $(BUILD)/$(TEST_ZIP)
+
+# Changing a mode in one BUILD directory must invalidate all native objects.
+force-mode-config:
+$(BUILD)/readonly-config: force-mode-config
+	@mkdir -p $(BUILD)
+	@printf '%s\n' 'READONLY_PROOF=$(READONLY_PROOF)' > $(BUILD)/readonly-config.tmp
+	@cmp -s $(BUILD)/readonly-config.tmp $(BUILD)/readonly-config || \
+	 cp $(BUILD)/readonly-config.tmp $(BUILD)/readonly-config
+	@rm -f $(BUILD)/readonly-config.tmp
+
+$(RESIDENT_OBJ) $(STAGE_OBJ) $(WORKER_OBJ): $(BUILD)/readonly-config
 
 $(BUILD)/resident/%.o: %.c
 	@mkdir -p $(@D)
@@ -98,10 +126,10 @@ $(BUILD)/entry.elf: $(BUILD)/entry_asm.o src/loader/retail_entry.ld
 $(BUILD)/retail-maple-observe.kui: $(BUILD)/entry.elf
 	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
 	python3 tools/runtime_package.py verify $@
-$(BUILD)/vmu-maple-observer-test.zip: $(BUILD)/retail-maple-observe.kui \
+$(BUILD)/$(TEST_ZIP): $(BUILD)/retail-maple-observe.kui \
  $(BUILD)/worker.elf $(BUILD)/worker.bin tools/package_vmu_maple_observe.py \
  tools/check_vmu_maple_observe_hook.py \
- docs/vmu-maple-observer-test.md include/kui/games_retail.h \
+ $(TEST_GUIDE) include/kui/games_retail.h \
  tests/test_vmu_observer_install_route.py
 	python3 tools/package_vmu_maple_observe.py $(BUILD)
 	python3 tests/test_vmu_observer_install_route.py
@@ -110,6 +138,7 @@ host-tests:
 	@mkdir -p $(BUILD)
 	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
 	 -g -Iinclude -Isrc/loader -DKUI_VMU_MAPLE_OBSERVE_HOST_TEST=1 \
+	 -DKUI_VMU_READONLY_PROOF=0 \
 	 src/loader/vmu_maple_observe_worker.c tests/test_vmu_maple_observe_worker.c \
 	 -o $(BUILD)/test-observer-worker
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-observer-worker
@@ -119,6 +148,19 @@ host-tests:
 	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
 	 -g -Iinclude tests/test_vmu_maple_observe_io.c -o $(BUILD)/test-observer-io
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-observer-io
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -g -Iinclude src/core/vmu_readonly.c src/core/vmu_emulation.c src/core/vmu_image.c \
+	 tests/test_vmu_readonly.c -o $(BUILD)/test-readonly-backend
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-readonly-backend
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -g -Iinclude -Isrc/loader $(READONLY_SRC) tests/test_vmu_readonly_overlay.c \
+	 -o $(BUILD)/test-readonly-overlay
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-readonly-overlay
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -g -Iinclude -Isrc/loader -DKUI_VMU_MAPLE_OBSERVE_HOST_TEST=1 -DKUI_VMU_READONLY_PROOF=1 \
+	 src/loader/vmu_maple_observe_worker.c $(READONLY_SRC) tests/test_vmu_maple_readonly_worker.c \
+	 -o $(BUILD)/test-readonly-worker
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-readonly-worker
 	python3 tests/test_vmu_maple_observe_package.py
 	python3 tests/test_vmu_maple_observe_hook.py
 	python3 tests/test_vmu_toy_completion_probe.py

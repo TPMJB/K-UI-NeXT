@@ -227,6 +227,134 @@
         "The second counted schedule was deliberately not submitted. No virtual replies or saving were exercised.",
         "Settings and physical-card placement were requested in the preceding test instructions but not separately confirmed by the user."
       ]
+    },
+    {
+      "build": "d8788a9c8e86",
+      "date": "2026-10-17",
+      "outcome": "planned_memory_card_window_stop",
+      "pages_present": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "source_images": [
+        "62762.jpg",
+        "62763.jpg",
+        "62764.jpg",
+        "62765.jpg"
+      ],
+      "starts": 1228,
+      "descriptors": 4940,
+      "descriptors_max": 5,
+      "stop_after": 18000,
+      "ports": [
+        1256,
+        1228,
+        1228,
+        1228
+      ],
+      "units": [
+        4912,
+        28,
+        0,
+        0,
+        0,
+        0
+      ],
+      "commands": [
+        0,
+        3686,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1227,
+        1,
+        25,
+        1,
+        0,
+        0,
+        0
+      ],
+      "malformed": 0,
+      "unsupported": 0,
+      "stack_fault": 0,
+      "incomplete": 0,
+      "rx_bad": 0,
+      "source_min": "0x0c0ec0a0",
+      "source_max": "0x0c0ef0a0",
+      "source_last": "0x0c0ef0a0",
+      "source_changes": 1227,
+      "rx_min": "0x0c0e0080",
+      "rx_max": "0x0c0ea880",
+      "main_devinfo_requests": 3685,
+      "completion_calls": 1227,
+      "completion_matched": 1227,
+      "completion_orphan": 0,
+      "completion_overwritten": 0,
+      "completion_pending": 0,
+      "completion_busy": 0,
+      "completion_bad_mask": 0,
+      "completion_rx_headers": 4936,
+      "completion_sr_last": "0x600001f1",
+      "completion_masks": "0x8000",
+      "main_a_response": "0x1c210005",
+      "main_a_rx": "0x0c0e0080",
+      "completion_bad_context": 0,
+      "completion_guard_flags": 0,
+      "completion_source": "0x0c0ec0a0",
+      "completion_pr_last": "0x8c0b5362",
+      "subunit_request": "0x0200010b",
+      "subunit_response": "0x82010008",
+      "subunit_ordinal": 4420,
+      "first_subunit_start": 2,
+      "first_card_start": 28,
+      "post_after": 1200,
+      "subunit_requests": 28,
+      "stop_reason": 3,
+      "first_subunit_records": [
+        {
+          "ordinal": 6,
+          "header": "0x00000101",
+          "payload0": "0x0",
+          "payload1": "0x0"
+        },
+        {
+          "ordinal": 106,
+          "header": "0x3200010c",
+          "payload0": "0x04000000",
+          "payload1": "0x0"
+        },
+        {
+          "ordinal": 111,
+          "header": "0x0200010a",
+          "payload0": "0x02000000",
+          "payload1": "0x0"
+        },
+        {
+          "ordinal": 116,
+          "header": "0x0200010b",
+          "payload0": "0x02000000",
+          "payload1": "0xff000000"
+        }
+      ],
+      "last_read_blocks": [
+        135,
+        134,
+        133,
+        68
+      ],
+      "limits": [
+        "One CMD12 packet targets LCD function 04000000; it is not a storage write. No storage write or synchronization was recorded.",
+        "Only response headers were sampled; block contents and package/filesystem checksums were not observed.",
+        "The final four main-unit packets were counted but not submitted.",
+        "Some fine-grained RX addresses and inherited pre-submit SR digits are omitted from this transcription rather than inferred from photograph pixels.",
+        "This is physical-card traffic and passive completion evidence, not virtual-card enumeration or persistence."
+      ]
     }
   ]
 }

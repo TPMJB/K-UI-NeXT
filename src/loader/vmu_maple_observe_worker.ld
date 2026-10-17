@@ -6,7 +6,7 @@ PHDRS { worker PT_LOAD FLAGS(5); private PT_LOAD FLAGS(6); }
 SECTIONS {
     . = 0x8cfd0000;
     .vmu_observe_exports : { KEEP(*(.vmu_observe_exports)) } :worker
-    ASSERT(SIZEOF(.vmu_observe_exports)==56,"Maple observer exports size")
+    ASSERT(SIZEOF(.vmu_observe_exports)==60,"Maple observer exports size")
     .text : { *(.text .text.*) } :worker
     .rodata : { *(.rodata .rodata.*) } :worker
     . = ALIGN(32);

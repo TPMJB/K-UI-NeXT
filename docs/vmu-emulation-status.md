@@ -136,6 +136,35 @@ revision admits only that exact padding value, counts it separately, preserves
 the packet/source/RX bounds, and displays failing cursor/control details on an
 unsafe stop. Its padding-aware parser still requires console validation.
 
+The four photographs of `d8788a9c8e86` supply that validation for this run.
+It reached the planned memory-card window: first card request at schedule 28,
+then 1,200 more attempted starts, ending at 1,228. All 1,227 submitted normal
+schedules matched their completions, sampling 4,936 RX headers. The final four
+main-unit packets were deliberately unsent. No parse, unsupported-control,
+RX-range, stack, orphan, overwrite, busy, mask or completion-context error was
+recorded. Of 4,940 packet requests, 4,912 targeted main units and 28 targeted A1:
+one DEVINFO, one LCD update (`CMD12`, function `04000000`), one memory-info
+request and 25 block reads. The first read targets root block 255. Last response
+header `82010008` has the expected 130-word DATA shape for a 512-byte block plus
+function/location fields. The payload was not sampled, so its contents and
+checksums remain unverified. No memory-card write or synchronization was seen.
+These are physical-card observations; no virtual reply was supplied.
+
+The next separate `READONLY_PROOF=1` target supplies a synthetic blank A1,
+without SD access or persistence. It leaves the real DMA chain and SDK
+bookkeeping intact. Before submission it snapshots supported A1 requests,
+refuses writes/synchronization, and proves the exact fixed receive-bank layout,
+capacity, source bounds, selectors and lock state. After unchanged hardware
+completion it requires a valid physical controller with A1 absent and exact
+no-response markers for A1. All virtual replies are staged privately and
+validated before any external store; the controller advertisement is published
+last, before the proved P2 SDK consumers. Whole-batch conflicts terminate the
+proof without changing any RX byte. Strict host tests exercise all 256 blank
+blocks and the integrated alternating-bank path, including every live RX-table
+entry corrupted before and after DMA. Native layout/stack/integer audits and
+console discovery/read validation are still required; durable saving remains
+outside this proof. See `vmu-readonly-card-test.md` for the empty-slot test.
+
 ## Work required before in-game saves
 
 1. Prove exact game-side Maple ownership before submission and before the

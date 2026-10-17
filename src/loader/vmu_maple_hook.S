@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* Optional exact-owner Toy Commander observation only. No VMU responses or I/O.
+/* Optional exact-owner Toy Commander diagnostic. The separate readonly proof
+ * can supply synthetic blank-card replies; no storage I/O is installed.
  * Installed at 0x8c0bf264 only after complete executable/window admission.
  * The patch's r0 is dead: the first replaced instruction overwrote it. */
 #include "kui/vmu_maple_observe.h"
@@ -16,6 +17,7 @@
     .long __vmu_observe_worker_end,KUI_VMU_MAPLE_OBSERVE_LEASE_BYTES
     .long C(kui_vmu_maple_observer_snapshot),C(kui_vmu_maple_observer_terminal)
     .long C(kui_vmu_maple_observer_complete_hook)
+    .long KUI_VMU_READONLY_PROOF
 
     .text
     .align 2
