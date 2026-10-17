@@ -98,7 +98,8 @@ class ObserverPackageTests(unittest.TestCase):
     def test_typed_export_is_required(self):
         for index, offset, value in ((1, 12, 0x11), (2, 8, 0), (4, 8, 268)):
             data = worker()
-            struct.pack_into("<I", data, 0x500 + index * 16 + offset, value)
+            struct.pack_into("<B" if offset == 12 else "<I", data,
+                             0x500 + index * 16 + offset, value)
             with self.subTest(index=index), self.assertRaises(ValueError):
                 self.inspect(data)
 
@@ -128,7 +129,8 @@ class ObserverPackageTests(unittest.TestCase):
             for index, offset, value in ((2, 8, 0), (3, 12, 0x11),
                                          (4, 8, 48), (4, 12, 0x12)):
                 bad = low_reader()
-                struct.pack_into("<I", bad, 0x500 + index * 16 + offset, value)
+                struct.pack_into("<B" if offset == 12 else "<I", bad,
+                                 0x500 + index * 16 + offset, value)
                 path.write_bytes(bad)
                 with self.subTest(index=index), self.assertRaises(ValueError):
                     generate(path)
