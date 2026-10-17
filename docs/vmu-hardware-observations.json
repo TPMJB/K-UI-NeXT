@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "Passive exact-Toy pre-submit observations; no virtual replies or writes",
+  "scope": "Passive exact-Toy normal Maple pre-submit and completion observations; no virtual replies or writes",
   "captures": [
     {
       "build": "87140926efd1",
@@ -124,6 +124,108 @@
         "No subunit requests were observed.",
         "This run does not establish the cause of earlier image I/O failures.",
         "Settings were requested as SCI/Standard/background off/CD music off/RAM patches off; the user supplied photographs without a separate settings confirmation."
+      ]
+    },
+    {
+      "build": "83bf9649d565",
+      "date": "2026-10-17",
+      "outcome": "unsafe_schedule_stop_before_second_submit",
+      "pages_present": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "source_images": [
+        "image-1792277431419.jpg",
+        "image-1792277438708.jpg",
+        "image-1792277446930.jpg",
+        "image-1792277456549.jpg"
+      ],
+      "starts": 2,
+      "descriptors": 5,
+      "descriptors_max": 4,
+      "stop_after": 18000,
+      "ports": [
+        2,
+        1,
+        1,
+        1
+      ],
+      "units": [
+        5,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "commands": [
+        0,
+        4,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "malformed": 0,
+      "unsupported": 1,
+      "stack_fault": 0,
+      "incomplete": 1,
+      "rx_bad": 0,
+      "source_min": "0x0c0ec0a0",
+      "source_max": "0x0c0ef0a0",
+      "source_last": "0x0c0ef0a0",
+      "source_changes": 1,
+      "rx_min": "0x0c0e0080",
+      "rx_max": "0x0c0e6080",
+      "main_devinfo_requests": 4,
+      "completion_calls": 1,
+      "completion_matched": 1,
+      "completion_orphan": 0,
+      "completion_overwritten": 0,
+      "completion_pending": 0,
+      "completion_busy": 0,
+      "completion_bad_mask": 0,
+      "completion_rx_headers": 4,
+      "completion_sr_last": "0x600001f1",
+      "completion_masks": "0x8000",
+      "main_a_response": "0x1c210005",
+      "main_a_rx": "0x0c0e0080",
+      "completion_bad_context": 0,
+      "completion_guard_flags": 0,
+      "completion_source": "0x0c0ec0a0",
+      "completion_pr_last": "0x8c0b5362",
+      "first_subunit_start": 0,
+      "first_card_start": 0,
+      "post_after": 1200,
+      "subunit_requests": 0,
+      "stop_reason": 1,
+      "entry_sr_last": "0x60000161",
+      "entry_masks": "0x40",
+      "trigger_last": 0,
+      "trigger_other": 0,
+      "enable_last": 1,
+      "enable_other": 0,
+      "busy_last": 0,
+      "busy_active": 0,
+      "manager_last": "0xa05f6c00",
+      "manager_other": 0,
+      "limits": [
+        "The rejected control and its cursor were not retained; exact 00000700 padding is supported by independent owner SDK analysis, not recovered from these photographs.",
+        "The first normal completion matched four headers and the controller advertised a subunit; no subunit request or card read was recorded.",
+        "The second counted schedule was deliberately not submitted. No virtual replies or saving were exercised.",
+        "Settings and physical-card placement were requested in the preceding test instructions but not separately confirmed by the user."
       ]
     }
   ]

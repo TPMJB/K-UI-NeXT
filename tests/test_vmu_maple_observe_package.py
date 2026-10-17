@@ -31,7 +31,7 @@ def worker():
     symbols = (("_kui_vmu_maple_observer_init", base + 64, 2, 0x12, 1),
                ("_kui_vmu_maple_observer_hook", base + 68, 2, 0x12, 1),
                ("_kui_vmu_maple_observer_terminal", base + 72, 2, 0x12, 1),
-               ("_kui_vmu_maple_observer_snapshot", private + 0x100, 532, 0x11, 2),
+               ("_kui_vmu_maple_observer_snapshot", private + 0x100, 540, 0x11, 2),
                ("_kui_vmu_maple_observer_complete_hook", base + 76, 2, 0x12, 1))
     for index, (name, address, size, kind, section) in enumerate(symbols, 1):
         SYM.pack_into(data, 0x500 + index * 16, len(names), address,
@@ -39,7 +39,7 @@ def worker():
         names.extend(name.encode() + b"\0")
     SH.pack_into(data, 0x3C8, 0, 3, 0, 0, 0x600, len(names), 0, 0, 1, 0)
     data[0x600:0x600 + len(names)] = names
-    exports = (0x564D4F31, 2, 56, base + 64, base + 68,
+    exports = (0x564D4F31, 3, 56, base + 64, base + 68,
                private + 0x100, private + 0x340, private + 0x340,
                private + 0x1340, base + 0x1340, 0x30000,
                private + 0x100, base + 72, base + 76)
@@ -88,7 +88,7 @@ class ObserverPackageTests(unittest.TestCase):
         self.assertEqual(report["exports"]["snapshot"], 0xACFD0100)
 
     def test_malformed_exports(self):
-        for field, value in ((0, 0), (1, 1), (2, 52), (3, 0x8CFD0042),
+        for field, value in ((0, 0), (1, 1), (1, 2), (2, 52), (3, 0x8CFD0042),
                              (5, 0xACFD0104), (6, 0xACFD0120),
                              (8, 0xACFE0000), (9, 0x8CFE0020),
                              (10, 0x10000), (11, 0xACFD023C), (13, 0x8CFE0000)):
@@ -98,7 +98,7 @@ class ObserverPackageTests(unittest.TestCase):
                 self.inspect(data)
 
     def test_typed_export_is_required(self):
-        for index, offset, value in ((1, 12, 0x11), (2, 8, 0), (4, 8, 272)):
+        for index, offset, value in ((1, 12, 0x11), (2, 8, 0), (4, 8, 532)):
             data = worker()
             struct.pack_into("<B" if offset == 12 else "<I", data,
                              0x500 + index * 16 + offset, value)

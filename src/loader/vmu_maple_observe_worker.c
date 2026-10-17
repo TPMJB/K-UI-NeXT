@@ -149,6 +149,15 @@ void kui_vmu_maple_observer_report(void) {
             unsigned oldest=total<KUI_VMU_MAPLE_OBSERVE_RECORDS?0u:
                 total%KUI_VMU_MAPLE_OBSERVE_RECORDS;
             retail_display_values("SUBSTART CARDSTART POST SUBREQ WHY", &s->first_subunit_start, 5u);
+            if(s->stop_reason==KUI_VMU_OBSERVE_UNSAFE) {
+                retail_display_values("FAULT CURSOR CONTROL RX HEADER",
+                    (uint32_t[4]){s->fault_cursor,s->last_control,s->last_rx,s->last_header},4u);
+                retail_display_values("SDK NOP WORDS",&s->nop_words,1u);
+                retail_display_line("RX HEADER ZERO IF NOT A PACKET");
+                retail_display_line("FINAL PENDING DMA IS NOT STARTED");
+                retail_display_pause(600u);
+                continue;
+            }
             retail_display_line("ORDINAL HEADER PAY0 PAY1 RX");
             retail_display_line("FIRST FOUR SUBUNIT REQUESTS");
             for(unsigned i=0;i<KUI_VMU_MAPLE_OBSERVE_RECORDS;i++) report_record(&s->first[i]);
@@ -196,7 +205,7 @@ static void record_subunit(uint32_t cursor,uint32_t header,uint32_t rx,unsigned 
 void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
     struct kui_vmu_maple_observe_snapshot *s = &kui_vmu_maple_observer_snapshot;
     uint32_t source, cursor;
-    unsigned count = 0, last = 0, unsafe_schedule = 0;
+    unsigned count = 0, last = 0, unsafe_schedule = 0, entries;
     if(s->initialized != 1u)
         return;
     if(STACK_BOTTOM[0] != STACK_PATTERN || STACK_BOTTOM[1] != STACK_PATTERN) {
@@ -224,6 +233,8 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
         if(s->manager_last != UINT32_C(0xa05f6c00)) increment(&s->manager_other);
     }
     source = read_word(UINT32_C(0xa05f6c04));
+    cursor=source;s->fault_cursor=source;
+    s->last_control=0;s->last_rx=0;s->last_header=0;
     if(s->starts <= 8u)
         s->source_samples[s->starts - 1u] = source;
     if(s->source_last != source && s->starts > 1u)
@@ -236,16 +247,23 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
         unsafe_schedule = 1u;
         goto done;
     }
-    cursor = source;
-    for(count = 0; count < 32u; ++count) {
+    for(entries=0;entries<256u && count<32u;entries++) {
         uint32_t control, rx, header, bytes;
         unsigned command, destination, sender, words, unit, port;
-        if(!source_span(cursor, 12u)) {
+        s->fault_cursor=cursor;s->last_control=0;s->last_rx=0;s->last_header=0;
+        if(!source_span(cursor, 4u)) {
             increment(&s->malformed);
             unsafe_schedule = 1u;
             break;
         }
         control = read_word(cursor | UINT32_C(0xa0000000));
+        s->last_control=control;
+        /* The exact SDK helper at 8c0bf93c emits one-word 00000700
+         * padding between repeated-port packets. It has no RX or header.
+         * Other pattern/control encodings remain refused. */
+        if(control==UINT32_C(0x00000700)) {
+            increment(&s->nop_words);cursor+=4u;continue;
+        }
         if(control & ~UINT32_C(0x800300ff)) {
             increment(&s->unsupported);
             unsafe_schedule = 1u;
@@ -259,6 +277,7 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
         }
         rx = read_word((cursor + 4u) | UINT32_C(0xa0000000));
         header = read_word((cursor + 8u) | UINT32_C(0xa0000000));
+        s->last_rx=rx;s->last_header=header;
         command = header & 255u;
         destination = (header >> 8) & 255u;
         sender = (header >> 16) & 255u;
@@ -294,6 +313,7 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
             pending[count].rx=rx;pending[count].header=header;pending[count].ordinal=s->descriptors;
         }
         if(unit && !unsafe_schedule) record_subunit(cursor,header,rx,words);
+        ++count;
         cursor += bytes;
         /* Until live ownership is established, never start a DMA chain
          * which might read our allocator header/worker as descriptors or
@@ -301,12 +321,10 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
          * addresses unproved. Report before replaying the original MDST. */
         if(unsafe_schedule) {
             last = !!(control & UINT32_C(0x80000000));
-            ++count;
             break;
         }
         if(control & UINT32_C(0x80000000)) {
             last = 1u;
-            ++count;
             break;
         }
     }

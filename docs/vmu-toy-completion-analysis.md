@@ -95,6 +95,18 @@ or reset handling; they are not the normal response-consumer boundary.
 
 ## Next safe console experiment
 
+The packet builder at `0x8c0bf980` can insert spacing between consecutive
+same-port packets. Its call at `0x8c0bfa16` reaches helper `0x8c0bf93c`, which
+loads literal `0x0700` at `0x8c0bf952`, writes one word at `0x8c0bf962`, and
+advances four bytes at `0x8c0bf968`. Initialization stores spacing count five
+in manager `+0x10cc` at `0x8c0bf85a`. These are padding entries with no RX or
+packet header. A bounded observer can recognize exact `0x00000700` separately
+from normal packets; this does not justify accepting other control patterns
+or a LAST-marked padding entry. Build `83bf9649d565` stopped after the second
+schedule's A-controller GETCOND, before recording a subunit request. The
+padding form explains a missing parser capability, but the rejected word was
+not retained in that build and is not directly established by its photographs.
+
 Keep the next step passive. Before each common-consumer observation, require
 MDST idle, software trigger mode, expected Maple base, SDK pending state, and
 the acquired SDK lock. Correlate the normal MDSTAR with the last admitted

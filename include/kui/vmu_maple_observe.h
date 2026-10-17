@@ -3,7 +3,7 @@
 #define KUI_VMU_MAPLE_OBSERVE_H
 
 #define KUI_VMU_MAPLE_OBSERVE_MAGIC 0x564d4f31
-#define KUI_VMU_MAPLE_OBSERVE_VERSION 2
+#define KUI_VMU_MAPLE_OBSERVE_VERSION 3
 #define KUI_VMU_MAPLE_OBSERVE_SITE 0x8c0bf264
 #define KUI_VMU_MAPLE_OBSERVE_RESUME 0x8c0bf270
 #define KUI_VMU_MAPLE_OBSERVE_LEASE 0x8cfd0000
@@ -12,7 +12,7 @@
 #define KUI_VMU_MAPLE_OBSERVE_STACK_BYTES 4096
 #define KUI_VMU_MAPLE_OBSERVE_EXPORT_BYTES 56
 #define KUI_VMU_MAPLE_OBSERVE_CONFIG_BYTES 76
-#define KUI_VMU_MAPLE_OBSERVE_SNAPSHOT_BYTES 532
+#define KUI_VMU_MAPLE_OBSERVE_SNAPSHOT_BYTES 540
 #define KUI_VMU_MAPLE_OBSERVE_CONSUMER 0x8c0bf37a
 #define KUI_VMU_MAPLE_OBSERVE_COMPLETION_SLOT 0x8c0b540c
 #define KUI_VMU_MAPLE_OBSERVE_COMPLETION_PR 0x8c0b5362
@@ -68,6 +68,7 @@ struct kui_vmu_maple_observe_snapshot {
     uint32_t completion_sr_last, completion_masks, main_a_response, main_a_rx;
     uint32_t subunit_request, subunit_response, subunit_rx, subunit_ordinal;
     uint32_t completion_bad_context, completion_guard_flags, completion_source, completion_pr_last;
+    uint32_t fault_cursor, nop_words;
 };
 
 _Static_assert(sizeof(struct kui_vmu_maple_observe_exports) ==

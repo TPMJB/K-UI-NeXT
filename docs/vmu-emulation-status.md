@@ -116,9 +116,25 @@ virtual saving. The next capture waits longer and retains bounded subunit
 metadata so a physical VMU's actual memory-card requests can be examined. The
 next experimental observer also samples response headers before the exact
 normal SDK consumer, with caller, DMA, SDK-ready/lock and private-memory guards.
-This additional completion path has host and instruction-model checks; it has
-not yet been demonstrated by console photographs. It changes no responses and
-does not mount a virtual card.
+It changes no responses and does not mount a virtual card.
+
+All four photographs of build `83bf9649d565` show its first successful passive
+completion match: one submitted schedule, four RX headers sampled, no orphan,
+overwrite, busy, mask or context rejection, and caller PR `8C0B5362`. The
+retained main-A DEVINFO header `1C210005` advertises a subunit. The observer then
+stopped before submitting schedule 2: five packet requests had been counted
+(four main DEVINFO and one main GETCOND), with one unsupported control and one
+missing-end count, but no malformed or RX-range error. No subunit packet had
+yet been recorded. This demonstrates the normal completion hook and controller
+subunit advertisement, not a physical-card read or virtual save.
+
+The stopped build did not retain the rejected cursor/control, so that value
+cannot be recovered from these photographs. Independent inspection of the exact
+owner shows its SDK inserting one-word `00000700` padding between same-port
+packets; the old observer rejected that legitimate form. The next passive
+revision admits only that exact padding value, counts it separately, preserves
+the packet/source/RX bounds, and displays failing cursor/control details on an
+unsafe stop. Its padding-aware parser still requires console validation.
 
 ## Work required before in-game saves
 

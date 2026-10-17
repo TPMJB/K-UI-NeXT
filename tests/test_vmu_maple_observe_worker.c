@@ -8,7 +8,7 @@
 static uint32_t ram[1024], source;
 static unsigned reads, stops;
 static unsigned metadata_reads;
-static int metadata_only;
+static int metadata_only,protected_nops;
 static uint32_t responses[32u*256u], dma_busy;
 static unsigned response_reads;
 static uint32_t sdk_ready,sdk_lock,sdk_manager,sdk_lock_pointer,sdk_maple;
@@ -34,6 +34,8 @@ uint32_t kui_vmu_maple_observer_test_read(uint32_t address) {
         assert(!(address&3u) && !(index%256u)); /* Headers only, no response payload. */
         ++response_reads;return responses[index];
     }
+    if(protected_nops && address>=0xacfcffc0u && address<0xacfcffe0u)
+        return 0x00000700u;
     if(address == UINT32_C(0xacfcffc0))
         return UINT32_C(0x80000008); /* Payload would cross the allocator header. */
     assert(address >= UINT32_C(0xac100000));
@@ -58,7 +60,7 @@ static void initialize_window(unsigned stop_after,unsigned post_after) {
     };
     source = UINT32_C(0x0c100000);
     reads = stops = 0;
-    metadata_reads=0;metadata_only=0;
+    metadata_reads=0;metadata_only=0;protected_nops=0;
     response_reads=0;dma_busy=0;sdk_ready=0;sdk_lock=0x80u;
     dma_trigger=0;dma_enable=1;sdk_manager=0x8c1212a8u;
     sdk_lock_pointer=0xac0c0968u;sdk_maple=0xa05f6c00u;
@@ -363,6 +365,67 @@ static void completion_pending_lifetime_and_bounded_batch(void) {
     assert(s->main_a_rx==0x0c207c00u && s->main_a_response==0x1c002024u);
 }
 
+static void exact_sdk_padding_preserves_packet_boundaries(void) {
+    const struct kui_vmu_maple_observe_snapshot *s=&kui_vmu_maple_observer_snapshot;
+    unsigned cursor=0;
+    initialize_window(100u,20u);
+    /* Repeated-port builder: GETCOND, five one-word NOPs, then VMU DEVINFO. */
+    ram[cursor++]=1u;ram[cursor++]=0x0c200000u;
+    ram[cursor++]=0x01002009u;ram[cursor++]=0x01000000u;
+    for(unsigned i=0;i<5u;i++) ram[cursor++]=0x00000700u;
+    ram[cursor++]=0u;ram[cursor++]=0x0c200400u;ram[cursor++]=0x00000101u;
+    for(unsigned port=1u;port<4u;port++) {
+        ram[cursor++]=(port==3u?0x80000000u:0u)|(port<<16);
+        ram[cursor++]=0x0c200400u+port*1024u;
+        ram[cursor++]=(port<<22)|((0x20u|(port<<6))<<8)|1u;
+    }
+    kui_vmu_maple_observer_visit(0x60000161u);
+    assert(!stops && s->descriptors==5u && s->nop_words==5u && !s->unsupported);
+    assert(s->commands[9]==1u && s->commands[1]==4u && s->units[0]==4u && s->units[1]==1u);
+    assert(s->completion_pending==5u && s->first[0].ordinal==2u && s->first[0].header==0x00000101u);
+    responses[0]=0x03002008u;responses[256]=0x1c000105u;complete();
+    assert(response_reads==5u && s->completion_rx_headers==5u && s->completion_matched==1u);
+    assert(s->subunit_request==0x00000101u && s->subunit_response==0x1c000105u);
+    /* Padding entries consume neither the32-packet allowance nor pending RX slots. */
+    for(unsigned frames=31u;frames<=32u;frames++) {
+        initialize(100u);cursor=0;
+        for(unsigned frame=0;frame<frames;frame++) {
+            if(frame) for(unsigned i=0;i<5u;i++) ram[cursor++]=0x00000700u;
+            ram[cursor++]=frame==frames-1u?0x80000000u:0u;
+            ram[cursor++]=0x0c200000u+frame*1024u;ram[cursor++]=0x00002001u;
+        }
+        kui_vmu_maple_observer_visit(0u);complete();
+        assert(!stops && s->descriptors==frames && s->descriptors_max==frames && s->nop_words==(frames-1u)*5u);
+        assert(s->completion_matched==1u && response_reads==frames && !s->incomplete);
+    }
+}
+
+static void padding_bounds_and_exact_pattern_rejection(void) {
+    const struct kui_vmu_maple_observe_snapshot *s=&kui_vmu_maple_observer_snapshot;
+    const uint32_t unsupported[]={0x80000700u,0x00010700u,0x00000701u,0x00000800u,0x80000200u};
+    for(unsigned i=0;i<sizeof(unsupported)/sizeof(unsupported[0]);i++) {
+        initialize(100u);
+        ram[0]=0u;ram[1]=0x0c200000u;ram[2]=0x00002001u;
+        ram[3]=unsupported[i];ram[4]=0xdeadc0deu;ram[5]=0xdeadbeefu;
+        kui_vmu_maple_observer_visit(0u);
+        assert(stops==1u && s->unsupported==1u && !s->malformed && s->descriptors==1u);
+        assert(s->fault_cursor==source+12u && s->last_control==unsupported[i]);
+        assert(s->last_rx==0u && s->last_header==0u && !response_reads && !s->completion_pending);
+    }
+    initialize(100u);for(unsigned i=0;i<256u;i++) ram[i]=0x00000700u;
+    kui_vmu_maple_observer_visit(0u);
+    assert(stops==1u && s->nop_words==256u && !s->descriptors && s->incomplete==1u);
+    assert(reads==262u && !s->completion_pending && s->stop_reason==KUI_VMU_OBSERVE_UNSAFE);
+    initialize(100u);source=0x0cfcffc0u;protected_nops=1;
+    kui_vmu_maple_observer_visit(0u);
+    assert(stops==1u && s->nop_words==8u && s->malformed==1u && s->fault_cursor==0x0cfcffe0u);
+    assert(reads==14u && !s->completion_pending && !response_reads);
+    initialize(100u);packet(1u,1u,0u,0,0);ram[1]=0x0cfd0000u;
+    kui_vmu_maple_observer_visit(0u);
+    assert(stops==1u && s->fault_cursor==source && s->last_rx==0x0cfd0000u);
+    assert(s->last_header==0x00000101u && s->rx_bad==1u);
+}
+
 int main(void) {
     mixed_owned_observation();
     invalid_sources_and_patterns();
@@ -376,6 +439,8 @@ int main(void) {
     completed_headers_and_devinfo_retention();
     completion_rejects_unowned_or_active_context();
     completion_pending_lifetime_and_bounded_batch();
+    exact_sdk_padding_preserves_packet_boundaries();
+    padding_bounds_and_exact_pattern_rejection();
     puts("VMU read-only Maple observer worker tests passed");
     return 0;
 }

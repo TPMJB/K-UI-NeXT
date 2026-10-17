@@ -34,7 +34,7 @@ This is the normal native game-launch module used by the released Games app.
    either bound can stop the test. The final pending DMA is deliberately not
    started because the game has stopped for the diagnostic.
    It stops earlier if a schedule cannot be safely decoded, exceeds the
-   32-descriptor observation bound, or has a receive buffer outside the
+   32-packet or 256-entry observation bound, or has a receive buffer outside the
    admitted RAM ranges. In particular, it stops before DMA can read or
    overwrite the observer's allocation or its allocator header. An early
    report is useful: photograph its pages just like the normal report.
@@ -67,6 +67,10 @@ No virtual card is mounted by this test and no new virtual save is expected.
   header gives the actual payload length. The memory-card function/location
   words are sampled; block-write save data after those words is never read or
   recorded. First/last lists overlap when there are fewer than eight requests.
+  On an unsafe stop, this page instead shows the last inspected cursor/control,
+  recognized packet RX/header fields, and SDK padding-word count. RX/header are
+  zero if rejection happened before a normal packet was recognized; unknown
+  controls never cause speculative RX/header or payload reads.
 - Page 3 records live trigger/enable/busy register values, the inherited CPU
   interrupt mask, and the game's live Maple register-base field. Nonzero
   "NONSW", "NONONE", "NONZERO", or "NONMAPLE" counters need investigation.
@@ -101,6 +105,13 @@ These samples can establish physical-card traffic and matched returned headers
 on the admitted path. They do not prove complete SDK coverage, response payload
 contents, or durable virtual save/load. The virtual-card packet/storage
 implementation is tested separately in the standalone harness.
+
+The admitted SDK also emits exact `00000700` one-word padding between packets
+for the same port. The observer advances four bytes for this value, without
+reading packet fields or creating a pending response. Padding counts toward
+the 256-entry walk limit, separately from the 32-packet limit and the command,
+port and unit counters. Other pattern encodings, including `80000700`, still
+stop before DMA starts. Source and receive protections are unchanged.
 
 ## If an image read fails
 

@@ -59,7 +59,7 @@ def inspect_worker(directory):
     typed = _linked_symbols(elf, {"_kui_vmu_maple_observer_init",
         "_kui_vmu_maple_observer_hook", "_kui_vmu_maple_observer_terminal",
         "_kui_vmu_maple_observer_snapshot", "_kui_vmu_maple_observer_complete_hook"})
-    if words[:3] != (0x564D4F31, 2, 56) or exports["lease_bytes"] != 0x30000:
+    if words[:3] != (0x564D4F31, 3, 56) or exports["lease_bytes"] != 0x30000:
         raise ValueError("Observer exports identity differs from profile")
     for key, symbol in (("initialize", "_kui_vmu_maple_observer_init"),
                         ("hook", "_kui_vmu_maple_observer_hook"),
@@ -73,8 +73,8 @@ def inspect_worker(directory):
                 not section[3] <= address < address + size <= section[3] + section[5]):
             raise ValueError("Worker export has no bounded typed symbol: " + key)
         if key == "snapshot":
-            if size != 532 or kind != 1 or section[1] != 8 or section[2] & 7 != 3:
-                raise ValueError("Worker snapshot must be its 532-byte private BSS object")
+            if size != 540 or kind != 1 or section[1] != 8 or section[2] & 7 != 3:
+                raise ValueError("Worker snapshot must be its 540-byte private BSS object")
         elif kind != 2 or size & 1 or section[2] & 7 != 6:
             raise ValueError("Worker entry must be a bounded cached-code function: " + key)
     if (not 0xACFD0000 <= exports["bss_begin"] <= exports["snapshot"] < exports["bss_end"]
@@ -84,7 +84,7 @@ def inspect_worker(directory):
             or exports["worker_end"] != image["memory_end"]
             or any(exports[key] & 31 for key in ("bss_begin", "bss_end", "stack_bottom", "stack_top"))
             or exports["snapshot"] & 3
-            or exports["snapshot"] + 532 > exports["bss_end"]
+            or exports["snapshot"] + 540 > exports["bss_end"]
             or exports["bss_begin"] - 0x20000000 < 0x8CFD0000 + len(payload)):
         raise ValueError("Observer private BSS/stack is outside owned lease")
     for key in ("initialize", "hook", "terminal", "complete_hook"):
