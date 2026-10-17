@@ -20,6 +20,8 @@ uint32_t kui_vmu_maple_observer_test_read(uint32_t address) {
         return UINT32_C(0x8c100000);
     if(address == UINT32_C(0xac1010f4))
         return UINT32_C(0xa05f6c00);
+    if(address == UINT32_C(0xacfcffc0))
+        return UINT32_C(0x80000008); /* Payload would cross the allocator header. */
     assert(address >= UINT32_C(0xac100000));
     assert(!(address & 3u));
     assert(address < UINT32_C(0xac100000) + sizeof(ram));
@@ -74,22 +76,28 @@ static void invalid_sources_and_patterns(void) {
     initialize(10u);
     source = UINT32_C(0x0d000000); /* Never dereferenced. */
     kui_vmu_maple_observer_visit(0u);
-    assert(s->malformed == 1u && reads == 6u);
+    assert(s->malformed == 1u && reads == 6u && stops == 1u);
+    initialize(10u);
     source = UINT32_C(0x0c100001); /* Never dereferenced. */
     kui_vmu_maple_observer_visit(0u);
-    assert(s->malformed == 2u && reads == 12u);
+    assert(s->malformed == 1u && reads == 6u && stops == 1u);
+    initialize(10u);
     source = UINT32_C(0x0c100000);
     ram[0] = UINT32_C(0x80000200); /* Unsupported gun descriptor. */
     kui_vmu_maple_observer_visit(0u);
-    assert(s->unsupported == 1u && s->incomplete == 1u && reads == 19u);
+    assert(s->unsupported == 1u && s->incomplete == 1u && reads == 7u && stops == 1u);
+    initialize(10u);
     ram[0] = UINT32_C(0x80000000);
     ram[1] = UINT32_C(0xac200000); /* CPU alias is not a physical RX address. */
     ram[2] = UINT32_C(0x00002001);
     kui_vmu_maple_observer_visit(0u);
-    assert(s->descriptors == 1u && s->rx_bad == 1u);
+    assert(s->descriptors == 1u && s->rx_bad == 1u && stops == 1u);
+    initialize(10u);
+    ram[0] = UINT32_C(0x80000000);
+    ram[1] = UINT32_C(0x0c200000);
     ram[2] = UINT32_C(0x01002001); /* Inconsistent packet length. */
     kui_vmu_maple_observer_visit(0u);
-    assert(s->malformed == 3u && s->descriptors == 1u);
+    assert(s->malformed == 1u && s->descriptors == 0u && stops == 1u);
 }
 
 static void maximum_bounded_walk(void) {
@@ -103,7 +111,35 @@ static void maximum_bounded_walk(void) {
     }
     kui_vmu_maple_observer_visit(0u);
     assert(s->descriptors == 32u && s->descriptors_max == 32u);
-    assert(s->incomplete == 1u && reads == 102u);
+    assert(s->incomplete == 1u && reads == 102u && stops == 1u);
+}
+
+static void protects_live_lease_before_dma(void) {
+    const struct kui_vmu_maple_observe_snapshot *s = &kui_vmu_maple_observer_snapshot;
+    const uint32_t bad_sources[] = {0x0cfcffe0u, 0x0cfd0000u, 0x0cfdffe0u,
+        0x0cfe0000u, 0xacfd0000u};
+    const uint32_t bad_rx[] = {0x0cfcfc00u, 0x0cfcffe0u, 0x0cfd0000u,
+        0x0cfdffe0u, 0xacfd0000u, 0x0cfd0001u};
+    for(unsigned i=0;i<sizeof(bad_sources)/sizeof(bad_sources[0]);i++) {
+        initialize(100u); source=bad_sources[i];
+        kui_vmu_maple_observer_visit(0u);
+        assert(stops==1u && s->malformed==1u && s->descriptors==0u && reads==6u);
+    }
+    initialize(100u);source=0x0cfcffc0u;
+    kui_vmu_maple_observer_visit(0u);
+    assert(stops==1u && s->malformed==1u && !s->descriptors && reads==7u);
+    for(unsigned i=0;i<sizeof(bad_rx)/sizeof(bad_rx[0]);i++) {
+        initialize(100u);
+        ram[0]=0x80000000u;ram[1]=bad_rx[i];ram[2]=0x00002001u;
+        kui_vmu_maple_observer_visit(0u);
+        assert(stops==1u && s->rx_bad==1u && s->descriptors==1u);
+        assert(s->last_rx==bad_rx[i] && s->initialized==2u);
+    }
+    /* The exact title already owns fixed high scratch beyond the worker. */
+    initialize(100u);
+    ram[0]=0x80000000u;ram[1]=0x0cfe0000u;ram[2]=0x00002001u;
+    kui_vmu_maple_observer_visit(0u);
+    assert(!stops && !s->rx_bad && s->descriptors==1u);
 }
 
 static void rejects_invalid_configuration(void) {
@@ -122,6 +158,7 @@ int main(void) {
     mixed_owned_observation();
     invalid_sources_and_patterns();
     maximum_bounded_walk();
+    protects_live_lease_before_dma();
     rejects_invalid_configuration();
     puts("VMU read-only Maple observer worker tests passed");
     return 0;

@@ -25,6 +25,11 @@ shell, save files, game image, or ordinary release loader.
    This is roughly 20 seconds if one schedule is submitted each video frame;
    actual timing depends on the game. The final pending DMA is deliberately not
    started because the game has stopped for the diagnostic.
+   It stops earlier if a schedule cannot be safely decoded, exceeds the
+   32-descriptor observation bound, or has a receive buffer outside the
+   admitted RAM ranges. In particular, it stops before DMA can read or
+   overwrite the observer's allocation or its allocator header. An early
+   report is useful: photograph its pages just like the normal report.
 6. Photograph **all four report pages**. Each remains visible for about ten
    seconds before the next appears. Page numbers are zero through three and
    all numeric values are hexadecimal. Power the console off afterward.
@@ -50,3 +55,19 @@ These counts provide evidence for a future pre-submit hook. They do not prove
 complete SDK call coverage, memory-card response timing, or durable virtual
 save/load in the game. The virtual-card packet/storage implementation is tested
 separately in the standalone harness.
+
+## Build checks and their limits
+
+The package audit binds the embedded reader, worker, stage and runtime module
+to their actual linked ELF bytes. It checks code and stack placement, compiler
+stack reports, absence of FPU instructions, and the exact protected P2 data
+layout. It also executes the linked hook's actual SH4 integer instructions
+against randomized inherited register states and a C callee that clobbers
+caller-saved state. That check requires one observer call, complete register
+and SR restoration, and exactly one replay of the game's original DMA-start
+store on schedules which return normally.
+
+The instruction model does not simulate caches, interrupts, bus timing or
+the real Maple controller. The bootstrap's cache handling and memory guards
+have been reviewed, but console results are still required before treating
+this hook as a route to in-game virtual saves.

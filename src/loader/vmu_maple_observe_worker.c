@@ -5,6 +5,7 @@
 
 #define PHYSICAL_BASE UINT32_C(0x0c000000)
 #define WORKER_BEGIN UINT32_C(0x0cfd0000)
+#define PROTECTED_BEGIN (WORKER_BEGIN - UINT32_C(32))
 #define RAM_END UINT32_C(0x0d000000)
 #define STACK_PATTERN UINT32_C(0x564d5531)
 
@@ -34,8 +35,8 @@ static void increment(uint32_t *value) {
 }
 
 static int source_span(uint32_t address, uint32_t bytes) {
-    return address >= PHYSICAL_BASE && address < WORKER_BEGIN
-        && !(address & 3u) && bytes <= WORKER_BEGIN - address;
+    return address >= PHYSICAL_BASE && address < PROTECTED_BEGIN
+        && !(address & 3u) && bytes <= PROTECTED_BEGIN - address;
 }
 
 static int response_span(uint32_t address) {
@@ -128,7 +129,7 @@ void kui_vmu_maple_observer_report(void) {
 void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
     struct kui_vmu_maple_observe_snapshot *s = &kui_vmu_maple_observer_snapshot;
     uint32_t source, cursor;
-    unsigned count = 0, last = 0;
+    unsigned count = 0, last = 0, unsafe_schedule = 0;
     if(s->initialized != 1u)
         return;
     if(STACK_BOTTOM[0] != STACK_PATTERN || STACK_BOTTOM[1] != STACK_PATTERN) {
@@ -163,6 +164,7 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
     if(source > s->source_max) s->source_max = source;
     if((source & 31u) || !source_span(source, 12u)) {
         increment(&s->malformed);
+        unsafe_schedule = 1u;
         goto done;
     }
     cursor = source;
@@ -171,16 +173,19 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
         unsigned command, destination, sender, words, unit, port;
         if(!source_span(cursor, 12u)) {
             increment(&s->malformed);
+            unsafe_schedule = 1u;
             break;
         }
         control = read_word(cursor | UINT32_C(0xa0000000));
         if(control & ~UINT32_C(0x800300ff)) {
             increment(&s->unsupported);
+            unsafe_schedule = 1u;
             break;
         }
         bytes = 12u + 4u * (control & 255u);
         if(!source_span(cursor, bytes)) {
             increment(&s->malformed);
+            unsafe_schedule = 1u;
             break;
         }
         rx = read_word((cursor + 4u) | UINT32_C(0xa0000000));
@@ -194,6 +199,7 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
         if(words != (control & 255u) || (destination >> 6) != port
             || sender != port << 6 || unit == 6u) {
             increment(&s->malformed);
+            unsafe_schedule = 1u;
             break;
         }
         increment(&s->descriptors);
@@ -205,7 +211,10 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
             increment(&s->controller_seen);
         if(rx < s->rx_min) s->rx_min = rx;
         if(rx > s->rx_max) s->rx_max = rx;
-        if(!response_span(rx)) increment(&s->rx_bad);
+        if(!response_span(rx)) {
+            increment(&s->rx_bad);
+            unsafe_schedule = 1u;
+        }
         s->source_fingerprint = (s->source_fingerprint ^ control) * UINT32_C(16777619);
         s->source_fingerprint = (s->source_fingerprint ^ rx) * UINT32_C(16777619);
         s->source_fingerprint = (s->source_fingerprint ^ header) * UINT32_C(16777619);
@@ -213,6 +222,15 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
         s->last_rx = rx;
         s->last_header = header;
         cursor += bytes;
+        /* Until live ownership is established, never start a DMA chain
+         * which might read our allocator header/worker as descriptors or
+         * receive over it. A bounded parse failure also leaves later RX
+         * addresses unproved. Report before replaying the original MDST. */
+        if(unsafe_schedule) {
+            last = !!(control & UINT32_C(0x80000000));
+            ++count;
+            break;
+        }
         if(control & UINT32_C(0x80000000)) {
             last = 1u;
             ++count;
@@ -220,8 +238,11 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
         }
     }
     if(count > s->descriptors_max) s->descriptors_max = count;
-    if(!last) increment(&s->incomplete);
+    if(!last) {
+        increment(&s->incomplete);
+        unsafe_schedule = 1u;
+    }
 done:
-    if(s->starts >= s->stop_after)
+    if(unsafe_schedule || s->starts >= s->stop_after)
         kui_vmu_maple_observer_report();
 }

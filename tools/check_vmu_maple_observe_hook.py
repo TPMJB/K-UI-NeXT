@@ -15,7 +15,7 @@ def check_hook(image, exports, *, cases=128):
     payload = image["payload"]
     hook = exports["hook"]
     visit = image["symbols"].get("_kui_vmu_maple_observer_visit")
-    if not visit:
+    if not visit or visit & 1 or not base <= visit < base + len(payload):
         raise ValueError("Hook proof lacks the linked observer visit symbol")
     rng = random.Random(0x564D5531)
     for case in range(cases):
@@ -24,7 +24,9 @@ def check_hook(image, exports, *, cases=128):
         registers[14] = 0x8C1223A4
         registers[15] = 0x8C00EF00
         original = list(registers)
-        initial_sr = 0x40000000 | (case % 16) << 4 | (case & 1) | (case & 2) << 8
+        initial_sr = (0x40000000 | (case % 16) << 4 | (case & 1) |
+                      (case & 2) << 8 | (case & 4) << 26 |
+                      (case & 8) << 26 | (case & 16) << 11)
         state = {"sr": initial_sr, "pr": rng.getrandbits(32),
                  "mach": rng.getrandbits(32), "macl": rng.getrandbits(32),
                  "gbr": rng.getrandbits(32)}
