@@ -6,6 +6,7 @@ import struct
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from check_loader_layout import EH, PH, SH, SYM
@@ -74,7 +75,10 @@ class ObserverPackageTests(unittest.TestCase):
             directory = Path(name)
             (directory / "worker.elf").write_bytes(data)
             (directory / "worker.bin").write_bytes(data[0x100:0x180])
-            return inspect_worker(directory)
+            # These fixtures exercise ELF admission independently of the
+            # actual authored trampoline, which has its own mutation suite.
+            with patch("package_vmu_maple_observe.check_hook", return_value={}):
+                return inspect_worker(directory)
 
     def test_exact_private_layout(self):
         report = self.inspect(worker())

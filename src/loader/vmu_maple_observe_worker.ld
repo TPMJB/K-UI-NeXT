@@ -10,7 +10,10 @@ SECTIONS {
     .text : { *(.text .text.*) } :worker
     .rodata : { *(.rodata .rodata.*) } :worker
     . = ALIGN(32);
-    .data (. + 0x20000000) : AT(ADDR(.data) - 0x20000000) {
+    /* Advance dot independently: an empty .data output section can be
+     * discarded by GNU ld, but the following BSS/stack must remain P2. */
+    . += 0x20000000;
+    .data : AT(ADDR(.data) - 0x20000000) {
         *(.data .data.*)
     } :private
     .private_align (NOLOAD) : AT(ADDR(.private_align) - 0x20000000) {

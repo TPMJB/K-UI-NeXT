@@ -14,6 +14,7 @@ from check_retail_instructions import audit
 from check_retail_loader_layout import check_bss, check_stack_usage
 from runtime_package import verify
 from toy_pilot_symbols import _linked_symbols
+from check_vmu_maple_observe_hook import check_hook
 import retail_package as layout
 
 
@@ -71,7 +72,8 @@ def inspect_worker(directory):
         if not 0x8CFD0034 <= exports[key] < 0x8CFD0000 + len(payload) or exports[key] & 1:
             raise ValueError("Worker entry is outside cached executable image: " + key)
     return {"exports": exports, "binary_bytes": len(payload),
-            "worker_sha256": hashlib.sha256(payload).hexdigest()}
+            "worker_sha256": hashlib.sha256(payload).hexdigest(),
+            "hook_integer_state": check_hook(image, exports)}
 
 
 def check_embedded_images(directory, worker, resident, stage, entry, module):
