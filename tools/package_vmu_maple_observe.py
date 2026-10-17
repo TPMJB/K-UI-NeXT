@@ -14,7 +14,7 @@ from check_retail_instructions import audit
 from check_retail_loader_layout import check_bss, check_stack_usage
 from runtime_package import verify
 from toy_pilot_symbols import _linked_symbols
-from check_vmu_maple_observe_hook import check_hook
+from check_vmu_maple_observe_hook import check_hook, check_completion_hook
 import retail_package as layout
 
 
@@ -51,19 +51,20 @@ def inspect_worker(directory):
     payload = image["payload"]
     if (directory / "worker.bin").read_bytes() != payload:
         raise ValueError("Worker objcopy bytes differ from admitted ELF")
-    words = struct.unpack_from("<13I", payload)
+    words = struct.unpack_from("<14I", payload)
     names = ("magic", "version", "bytes", "initialize", "hook", "bss_begin", "bss_end",
-             "stack_bottom", "stack_top", "worker_end", "lease_bytes", "snapshot", "terminal")
+             "stack_bottom", "stack_top", "worker_end", "lease_bytes", "snapshot", "terminal", "complete_hook")
     exports = dict(zip(names, words))
     symbols = image["symbols"]
     typed = _linked_symbols(elf, {"_kui_vmu_maple_observer_init",
         "_kui_vmu_maple_observer_hook", "_kui_vmu_maple_observer_terminal",
-        "_kui_vmu_maple_observer_snapshot"})
-    if words[:3] != (0x564D4F31, 1, 52) or exports["lease_bytes"] != 0x30000:
+        "_kui_vmu_maple_observer_snapshot", "_kui_vmu_maple_observer_complete_hook"})
+    if words[:3] != (0x564D4F31, 2, 56) or exports["lease_bytes"] != 0x30000:
         raise ValueError("Observer exports identity differs from profile")
     for key, symbol in (("initialize", "_kui_vmu_maple_observer_init"),
                         ("hook", "_kui_vmu_maple_observer_hook"),
                         ("terminal", "_kui_vmu_maple_observer_terminal"),
+                        ("complete_hook", "_kui_vmu_maple_observer_complete_hook"),
                         ("snapshot", "_kui_vmu_maple_observer_snapshot")):
         if exports[key] != symbols.get(symbol):
             raise ValueError("Worker export does not match linked symbol: " + key)
@@ -72,8 +73,8 @@ def inspect_worker(directory):
                 not section[3] <= address < address + size <= section[3] + section[5]):
             raise ValueError("Worker export has no bounded typed symbol: " + key)
         if key == "snapshot":
-            if size != 272 or kind != 1 or section[1] != 8 or section[2] & 7 != 3:
-                raise ValueError("Worker snapshot must be its 272-byte private BSS object")
+            if size != 532 or kind != 1 or section[1] != 8 or section[2] & 7 != 3:
+                raise ValueError("Worker snapshot must be its 532-byte private BSS object")
         elif kind != 2 or size & 1 or section[2] & 7 != 6:
             raise ValueError("Worker entry must be a bounded cached-code function: " + key)
     if (not 0xACFD0000 <= exports["bss_begin"] <= exports["snapshot"] < exports["bss_end"]
@@ -83,15 +84,16 @@ def inspect_worker(directory):
             or exports["worker_end"] != image["memory_end"]
             or any(exports[key] & 31 for key in ("bss_begin", "bss_end", "stack_bottom", "stack_top"))
             or exports["snapshot"] & 3
-            or exports["snapshot"] + 272 > exports["bss_end"]
+            or exports["snapshot"] + 532 > exports["bss_end"]
             or exports["bss_begin"] - 0x20000000 < 0x8CFD0000 + len(payload)):
         raise ValueError("Observer private BSS/stack is outside owned lease")
-    for key in ("initialize", "hook", "terminal"):
-        if not 0x8CFD0034 <= exports[key] < 0x8CFD0000 + len(payload) or exports[key] & 1:
+    for key in ("initialize", "hook", "terminal", "complete_hook"):
+        if not 0x8CFD0038 <= exports[key] < 0x8CFD0000 + len(payload) or exports[key] & 1:
             raise ValueError("Worker entry is outside cached executable image: " + key)
     return {"exports": exports, "binary_bytes": len(payload),
             "worker_sha256": hashlib.sha256(payload).hexdigest(),
-            "hook_integer_state": check_hook(image, exports)}
+            "hook_integer_state": check_hook(image, exports),
+            "completion_integer_state": check_completion_hook(image, exports)}
 
 
 def check_embedded_images(directory, worker, resident, stage, entry, module):
@@ -157,10 +159,10 @@ def main():
             if len(fields) != 3 or fields[2] != "static":
                 raise ValueError("Unbounded worker stack report: " + str(path))
             worker_frames.append(int(fields[1]))
-    if not worker_frames or sum(worker_frames) + 80 + 32 > 4096:
+    if not worker_frames or sum(worker_frames) + 84 + 32 > 4096:
         raise ValueError("Worker conservative C/ASM stack sum exceeds private stack")
     report["worker_stack"] = {"c_frame_sum": sum(worker_frames),
-                               "assembly_bytes": 80, "guard_bytes": 32,
+                               "assembly_bytes": 84, "guard_bytes": 32,
                                "available_bytes": 4096}
     module = (directory / "retail-maple-observe.kui").read_bytes()
     report["runtime"] = check_embedded_images(directory,

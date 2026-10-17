@@ -32,7 +32,7 @@ STAGE_SRC = src/loader/vmu_maple_observe_stage.c src/loader/sd_reader.c \
  src/core/retail_image.c src/loader/retail_display.c src/core/hash.c \
  src/core/retail_observe.c
 STAGE_OBJ = $(patsubst %.c,$(BUILD)/stage/%.o,$(STAGE_SRC)) $(BUILD)/stage_asm.o
-WORKER_SRC = src/loader/vmu_maple_observe_worker.c src/loader/retail_display.c
+WORKER_SRC = src/loader/vmu_maple_observe_worker.c src/loader/retail_display.c src/loader/minic.c
 WORKER_OBJ = $(patsubst %.c,$(BUILD)/worker/%.o,$(WORKER_SRC)) $(BUILD)/worker_asm.o
 
 .PHONY: all package host-tests
@@ -121,6 +121,7 @@ host-tests:
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-observer-io
 	python3 tests/test_vmu_maple_observe_package.py
 	python3 tests/test_vmu_maple_observe_hook.py
+	python3 tests/test_vmu_toy_completion_probe.py
 	python3 tests/test_vmu_observer_install_route.py
 
 -include $(RESIDENT_OBJ:.o=.d) $(STAGE_OBJ:.o=.d) $(WORKER_OBJ:.o=.d)

@@ -103,6 +103,23 @@ compact per-layer failure details, but the photographs above still show the
 older `87140926efd1` build. Console validation of the newer build is pending;
 the released 2.0.0 loader is unchanged.
 
+Subsequent photographs explicitly bearing `e17a57de4252` show all four report
+pages reaching the planned 1,200-schedule stop, with 4,800 descriptors and no
+shown parse, unsupported-pattern, missing-end, receive-range or stack-guard
+errors. Commands were 3,601 DEVINFO and 1,199 GETCOND requests; all addressed
+main units and none addressed a VMU subunit. Trigger/enable/busy samples were
+0/1/0, with no sampled deviations counted; the SDK manager base was `A05F6C00`.
+Entry SR `60000161` and mask bitmap `40` agree on interrupt mask 6. This
+establishes the pre-submit observer running on the console, without attributing
+the earlier image-I/O failure to the cache-line fix or proving completion or
+virtual saving. The next capture waits longer and retains bounded subunit
+metadata so a physical VMU's actual memory-card requests can be examined. The
+next experimental observer also samples response headers before the exact
+normal SDK consumer, with caller, DMA, SDK-ready/lock and private-memory guards.
+This additional completion path has host and instruction-model checks; it has
+not yet been demonstrated by console photographs. It changes no responses and
+does not mount a virtual card.
+
 ## Work required before in-game saves
 
 1. Prove exact game-side Maple ownership before submission and before the

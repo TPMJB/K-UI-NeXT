@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "scope": "Passive exact-Toy pre-submit observations; no virtual replies or writes",
+  "captures": [
+    {
+      "build": "87140926efd1",
+      "date": "2026-10-17",
+      "outcome": "image_io_failure",
+      "function": "0x2",
+      "command": "0x11",
+      "reject": "0x0",
+      "caller_pr": "0x8c08d55a",
+      "source_images": [
+        "62747.jpg",
+        "image-1792274965306.jpg"
+      ],
+      "cause": "unresolved"
+    },
+    {
+      "build": "87140926efd1",
+      "date": "2026-10-17",
+      "outcome": "planned_observer_stop",
+      "pages_present": [
+        0,
+        2,
+        3
+      ],
+      "duplicate_page": 2,
+      "missing_page": 1,
+      "source_images": [
+        "image-1792275455414.jpg",
+        "image-1792275462022.jpg",
+        "image-1792275468908.jpg",
+        "image-1792275476791.jpg"
+      ]
+    },
+    {
+      "build": "e17a57de4252",
+      "date": "2026-10-17",
+      "outcome": "planned_observer_stop",
+      "pages_present": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "source_images": [
+        "image-1792276009571.jpg",
+        "image-1792276017302.jpg",
+        "image-1792276029227.jpg",
+        "image-1792276039024.jpg"
+      ],
+      "starts": 1200,
+      "descriptors": 4800,
+      "descriptors_max": 4,
+      "stop_after": 1200,
+      "ports": [
+        1200,
+        1200,
+        1200,
+        1200
+      ],
+      "units": [
+        4800,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "commands": [
+        0,
+        3601,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1199,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "malformed": 0,
+      "unsupported": 0,
+      "stack_fault": 0,
+      "incomplete": 0,
+      "rx_bad": 0,
+      "source_min": "0x0c0ec0a0",
+      "source_max": "0x0c0ef0a0",
+      "source_last": "0x0c0ef0a0",
+      "source_changes": 1199,
+      "source_first_four": [
+        "0x0c0ec0a0",
+        "0x0c0ef0a0",
+        "0x0c0ec0a0",
+        "0x0c0ef0a0"
+      ],
+      "rx_min": "0x0c0ea080",
+      "rx_max": "0x0c0ea380",
+      "main_devinfo_requests": 3601,
+      "fingerprint": "0xb77a217c",
+      "last_control": "0x80030000",
+      "last_rx": "0x0c0ea380",
+      "last_header": "0x00c0e001",
+      "trigger_last": 0,
+      "trigger_other": 0,
+      "enable_last": 1,
+      "enable_other": 0,
+      "busy_last": 0,
+      "busy_active": 0,
+      "entry_sr_last": "0x60000161",
+      "entry_masks": "0x40",
+      "manager_last": "0xa05f6c00",
+      "manager_other": 0,
+      "limits": [
+        "The final counted schedule is intentionally not submitted.",
+        "No completion consumer or virtual saving is exercised.",
+        "No subunit requests were observed.",
+        "This run does not establish the cause of earlier image I/O failures.",
+        "Settings were requested as SCI/Standard/background off/CD music off/RAM patches off; the user supplied photographs without a separate settings confirmation."
+      ]
+    }
+  ]
+}

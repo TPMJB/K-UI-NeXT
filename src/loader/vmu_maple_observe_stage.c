@@ -50,6 +50,34 @@ static const struct observer_witness witnesses[]={
     {0x8c0bf26au,0x12c6u,2,OBS_CHECK},
     {0x8c0bf26cu,0x9029u,2,OBS_CHECK},
     {0x8c0bf26eu,0x63e2u,2,OBS_CHECK},
+    {0x8c0b533eu,0x400eu,2,OBS_CHECK},
+    {0x8c0b5340u,0xd231u,2,OBS_CHECK},
+    {0x8c0b5342u,0x420bu,2,OBS_CHECK},
+    {0x8c0b5354u,0x4d11u,2,OBS_CHECK},
+    {0x8c0b5356u,0x8901u,2,OBS_CHECK},
+    {0x8c0b535cu,0xd32bu,2,OBS_CHECK},
+    {0x8c0b535eu,0x430bu,2,OBS_CHECK},
+    {0x8c0b5360u,0x0009u,2,OBS_CHECK},
+    {0x8c0b5408u,0x8c0bf322u,4,OBS_CHECK},
+    {KUI_VMU_MAPLE_OBSERVE_COMPLETION_SLOT,KUI_VMU_MAPLE_OBSERVE_CONSUMER,4,OBS_CHECK},
+    {0x8c0bf33au,0x5036u,2,OBS_CHECK},
+    {0x8c0bf33cu,0xc801u,2,OBS_CHECK},
+    {0x8c0bf33eu,0x8902u,2,OBS_CHECK},
+    {0x8c0bf34au,0x401bu,2,OBS_CHECK},
+    {0x8c0bf34cu,0x8906u,2,OBS_CHECK},
+    {0x8c0bf35cu,0xe000u,2,OBS_CHECK},
+    {0x8c0bf3acu,0x420bu,2,OBS_CHECK},
+    {0x8c0bf414u,0x8c0bfebeu,4,OBS_CHECK},
+    {0x8c0bf3d2u,0x430bu,2,OBS_CHECK},
+    {0x8c0bf418u,0x8c0bff84u,4,OBS_CHECK},
+    {0x8c0b5394u,0x430bu,2,OBS_CHECK},
+    {0x8c0b541cu,0x8c0bf364u,4,OBS_CHECK},
+    {0x8c0b5470u,0x410bu,2,OBS_CHECK},
+    {0x8c0b54b6u,0x400eu,2,OBS_CHECK},
+    {0x8c0b4db6u,0x11e6u,2,OBS_CHECK},
+    {0x8c0b4e44u,0x80000200u,4,OBS_CHECK},
+    {0x8c0b4d2au,0x8b19u,2,OBS_CHECK},
+    {0x8c0b4f68u,0x8c0b4d10u,4,OBS_CHECK},
 };
 static const uint8_t executable_sha[32]={
     0xee,0x68,0xa3,0x26,0xda,0x96,0x4f,0xec,0x58,0x92,0xb7,0x22,0x63,0x11,0xf2,0x29,
@@ -117,7 +145,7 @@ static void observe_exports(struct kui_vmu_maple_observe_exports *e,uint32_t byt
     if(e->magic!=KUI_VMU_MAPLE_OBSERVE_MAGIC || e->version!=KUI_VMU_MAPLE_OBSERVE_VERSION ||
        e->bytes!=sizeof(*e) || e->lease_bytes!=KUI_VMU_TOY_LEASE_BYTES ||
        !observe_code(e->initialize,bytes) || !observe_code(e->hook,bytes) ||
-       !observe_code(e->terminal,bytes) ||
+       !observe_code(e->terminal,bytes) || !observe_code(e->complete_hook,bytes) ||
        bss_begin<KUI_VMU_TOY_LEASE_BEGIN+bytes || bss_begin>bss_end ||
        bss_end>stack_bottom || stack_bottom>stack_top || stack_top!=e->worker_end ||
        stack_top>KUI_VMU_TOY_WORKER_END ||
@@ -200,7 +228,8 @@ void kui_vmu_observe_stage_install(void) {
     if(memcmp((const void *)(uintptr_t)(c->lease+UINT32_C(0x20000000)),observer_blob,bytes))
         observe_fail(7,c->lease);
     struct kui_vmu_maple_observe_config config={KUI_VMU_MAPLE_OBSERVE_MAGIC,
-        KUI_VMU_MAPLE_OBSERVE_VERSION,sizeof(config),KUI_VMU_MAPLE_OBSERVE_DEFAULT_STOP,{0}};
+        KUI_VMU_MAPLE_OBSERVE_VERSION,sizeof(config),KUI_VMU_MAPLE_OBSERVE_DEFAULT_STOP,
+        KUI_VMU_MAPLE_OBSERVE_DEFAULT_POST,{0}};
     memcpy(config.display,display.regs,sizeof(config.display));
     int (*initialize)(const struct kui_vmu_maple_observe_config *)=
         (int (*)(const struct kui_vmu_maple_observe_config *))(uintptr_t)e.initialize;
@@ -212,6 +241,14 @@ void kui_vmu_observe_stage_install(void) {
         (uint16_t)e.hook,(uint16_t)(e.hook>>16)};
     memcpy((void *)(uintptr_t)KUI_VMU_TOY_HOOK_BEGIN,patch,sizeof(patch));
     observe_publish(KUI_VMU_TOY_HOOK_BEGIN,KUI_VMU_TOY_HOOK_END);
+    /* The normal SDK consumer is called through this admitted data literal.
+     * Only its operand-cache line needs publication; instructions are not
+     * patched here and no whole-cache operation is required. */
+    observe_write(KUI_VMU_MAPLE_OBSERVE_COMPLETION_SLOT,4,e.complete_hook);
+    uint32_t literal_line=KUI_VMU_MAPLE_OBSERVE_COMPLETION_SLOT&~31u;
+    __asm__ volatile("ocbp @%0"::"r"(literal_line):"memory");
+    if(observe_read(KUI_VMU_MAPLE_OBSERVE_COMPLETION_SLOT+UINT32_C(0x20000000),4)!=e.complete_hook)
+        observe_fail(13,KUI_VMU_MAPLE_OBSERVE_COMPLETION_SLOT);
     c->worker_end=e.worker_end;c->terminal=e.terminal;
     c->installer=0;c->stage_stack=0;c->status=KUI_VMU_OBS_BOOT_INSTALLED;
 }

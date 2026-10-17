@@ -10,18 +10,23 @@ import random
 import struct
 
 
-def check_hook(image, exports, *, cases=128):
+def _check_entry(image, exports, *, completion, cases):
     base = 0x8CFD0000
     payload = image["payload"]
-    hook = exports["hook"]
-    visit = image["symbols"].get("_kui_vmu_maple_observer_visit")
+    hook = exports["complete_hook" if completion else "hook"]
+    symbol = "_kui_vmu_maple_observer_complete" if completion else "_kui_vmu_maple_observer_visit"
+    visit = image["symbols"].get(symbol)
+    resume = 0x8C0BF37A if completion else 0x8C0BF270
     if not visit or visit & 1 or not base <= visit < base + len(payload):
-        raise ValueError("Hook proof lacks the linked observer visit symbol")
+        raise ValueError("Hook proof lacks the linked observer " + ("completion symbol" if completion else "visit symbol"))
     rng = random.Random(0x564D5531)
     for case in range(cases):
         registers = [rng.getrandbits(32) for _ in range(16)]
-        registers[0] = hook  # The installed JMP patch consumes dead R0.
-        registers[14] = 0x8C1223A4
+        if completion:
+            registers[3] = hook  # The substituted literal is loaded into R3.
+        else:
+            registers[0] = hook  # The installed JMP patch consumes dead R0.
+            registers[14] = 0x8C1223A4
         registers[15] = 0x8C00EF00
         original = list(registers)
         initial_sr = (0x40000000 | (case % 16) << 4 | (case & 1) |
@@ -49,6 +54,8 @@ def check_hook(image, exports, *, cases=128):
             if address & 3:
                 raise ValueError("Unaligned hook word write")
             if address == 0xA05F6C18:
+                if completion:
+                    raise ValueError("Completion hook must not start physical DMA")
                 stores.append((value, state["sr"]))
             elif not (original[15] - 128 <= address < original[15] or
                       exports["stack_bottom"] <= address < exports["stack_top"]):
@@ -118,7 +125,7 @@ def check_hook(image, exports, *, cases=128):
             return transfer
 
         for steps in range(256):
-            if pc == 0x8C0BF270:
+            if pc == resume:
                 break
             transfer = instruction(pc)
             if transfer is None:
@@ -128,13 +135,14 @@ def check_hook(image, exports, *, cases=128):
             if transfer == visit:
                 visits += 1
                 if (registers[4] != initial_sr or state["sr"] & 0xF0 != 0xF0 or
-                        registers[15] != exports["stack_top"] - 4):
+                        registers[15] != exports["stack_top"] - 4 or
+                        (completion and registers[5] != initial_state["pr"])):
                     raise ValueError("Observer C entry has incorrect SR argument, mask or stack")
-                # SH ABI permits R0..R7, SR.T, PR and MAC to change across C.
+                # SH ABI permits R0..R7, SR.T/Q/M, PR and MAC to change across C.
                 # Also clobber GBR to exercise the hook's explicit extra save.
                 for index in range(8):
                     registers[index] = rng.getrandbits(32)
-                state["sr"] ^= 1
+                state["sr"] ^= 0x301
                 for key in ("pr", "mach", "macl", "gbr"):
                     state[key] = rng.getrandbits(32)
                 pc += 4
@@ -143,11 +151,26 @@ def check_hook(image, exports, *, cases=128):
         else:
             raise ValueError("Hook did not resume within its instruction bound")
         expected = list(original)
-        expected[0], expected[2], expected[3] = 0xFD8, 0xA05F6C00, 0x8C100000
+        if completion:
+            expected[3] = resume  # Restore the target register the SDK originally loaded.
+        else:
+            expected[0], expected[2], expected[3] = 0xFD8, 0xA05F6C00, 0x8C100000
         if registers != expected or state != initial_state:
             raise ValueError("Hook changed inherited state beyond the six displaced instructions")
-        if visits != 1 or stores != [(original[12], initial_sr)]:
-            raise ValueError("Hook must visit once and replay the original DMA start exactly once")
+        expected_stores = [] if completion else [(original[12], initial_sr)]
+        if visits != 1 or stores != expected_stores:
+            raise ValueError("Hook must observe once with the exact original DMA-store count")
     return {"cases": cases, "integer_state_preserved": True,
-            "original_dma_start_writes": 1, "maximum_steps": steps + 1,
+            "original_dma_start_writes": 0 if completion else 1,
+            "resume": f"0x{resume:08x}", "maximum_steps": steps + 1,
             "model_limits": "integer trampoline only; no caches, exceptions or hardware timing"}
+
+
+def check_hook(image, exports, *, cases=128):
+    """Pre-submit trampoline: exact six-instruction replay and one MDST store."""
+    return _check_entry(image, exports, completion=False, cases=cases)
+
+
+def check_completion_hook(image, exports, *, cases=128):
+    """Consumer interposer: preserve all state and tail-call the original R3 target."""
+    return _check_entry(image, exports, completion=True, cases=cases)

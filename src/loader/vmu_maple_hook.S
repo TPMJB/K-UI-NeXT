@@ -15,6 +15,7 @@
     .long __vmu_observe_stack_bottom,__vmu_observe_stack_top
     .long __vmu_observe_worker_end,KUI_VMU_MAPLE_OBSERVE_LEASE_BYTES
     .long C(kui_vmu_maple_observer_snapshot),C(kui_vmu_maple_observer_terminal)
+    .long C(kui_vmu_maple_observer_complete_hook)
 
     .text
     .align 2
@@ -99,6 +100,80 @@ C(kui_vmu_maple_observer_hook):
 .Lmanager_pending_offset: .long 0x0fd8
 .Lresume: .long KUI_VMU_MAPLE_OBSERVE_RESUME
     .size C(kui_vmu_maple_observer_hook),.-C(kui_vmu_maple_observer_hook)
+
+    /* The admitted consumer call at 0x8c0b535e loads its target from the
+     * single literal at 0x8c0b540c. Only that literal is replaced. The SDK
+     * has already found MDST idle and taken its lock, with IMASK15 held.
+     * This observer reads completed headers; it changes no response bytes.
+     * R3 must become the original consumer target before the tail call. */
+    .align 2
+    .global C(kui_vmu_maple_observer_complete_hook)
+    .type C(kui_vmu_maple_observer_complete_hook),@function
+C(kui_vmu_maple_observer_complete_hook):
+    mov.l r0,@-r15
+    mov.l r1,@-r15
+    stc sr,r1
+    mov.l r1,@-r15
+    mov r1,r0
+    or #0xf0,r0
+    ldc r0,sr
+    mov.l r2,@-r15
+    mov.l r3,@-r15
+    mov.l r4,@-r15
+    mov.l r5,@-r15
+    mov.l r6,@-r15
+    mov.l r7,@-r15
+    mov.l r8,@-r15
+    mov.l r9,@-r15
+    mov.l r10,@-r15
+    mov.l r11,@-r15
+    mov.l r12,@-r15
+    mov.l r13,@-r15
+    mov.l r14,@-r15
+    sts.l pr,@-r15
+    sts.l mach,@-r15
+    sts.l macl,@-r15
+    stc.l gbr,@-r15
+    mov r15,r4
+    mov.l .Lcomplete_stack,r15
+    mov.l r4,@-r15
+    mov.l @(12,r4),r5 /* Exact SDK return PR at consumer entry. */
+    mov r4,r0
+    add #68,r0
+    mov.l @r0,r4
+    mov.l .Lcomplete_visit,r0
+    jsr @r0
+    nop
+    mov.l @r15,r15
+    ldc.l @r15+,gbr
+    lds.l @r15+,macl
+    lds.l @r15+,mach
+    lds.l @r15+,pr
+    mov.l @r15+,r14
+    mov.l @r15+,r13
+    mov.l @r15+,r12
+    mov.l @r15+,r11
+    mov.l @r15+,r10
+    mov.l @r15+,r9
+    mov.l @r15+,r8
+    mov.l @r15+,r7
+    mov.l @r15+,r6
+    mov.l @r15+,r5
+    mov.l @r15+,r4
+    mov.l @r15+,r3
+    mov.l @r15+,r2
+    mov.l @r15+,r1
+    ldc r1,sr
+    mov.l @r15+,r1
+    mov.l @r15+,r0
+    mov.l .Lcomplete_consumer,r3
+    jmp @r3
+    nop
+    .align 2
+.Lcomplete_stack: .long __vmu_observe_stack_top
+.Lcomplete_visit: .long C(kui_vmu_maple_observer_complete)
+.Lcomplete_consumer: .long 0x8c0bf37a
+    .size C(kui_vmu_maple_observer_complete_hook),.-C(kui_vmu_maple_observer_complete_hook)
 
     /* A terminal entry never returns to SDK teardown or a temporary stage. */
     .align 2

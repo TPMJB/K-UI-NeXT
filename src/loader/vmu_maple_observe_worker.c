@@ -11,6 +11,9 @@
 
 struct kui_vmu_maple_observe_snapshot kui_vmu_maple_observer_snapshot;
 static struct retail_display_state saved_display;
+struct pending_descriptor {uint32_t rx,header,ordinal;};
+static struct pending_descriptor pending[32];
+static uint32_t pending_source;
 
 #ifdef KUI_VMU_MAPLE_OBSERVE_HOST_TEST
 static uint32_t host_stack[KUI_VMU_MAPLE_OBSERVE_STACK_BYTES / 4u];
@@ -19,6 +22,9 @@ static uint32_t host_stack[KUI_VMU_MAPLE_OBSERVE_STACK_BYTES / 4u];
 static uint32_t read_word(uint32_t address) {
     return kui_vmu_maple_observer_test_read(address);
 }
+static uint32_t read_byte(uint32_t address) {
+    return kui_vmu_maple_observer_test_read(address)&255u;
+}
 #else
 extern uint32_t stack_bottom[] __asm__("__vmu_observe_stack_bottom");
 extern uint32_t stack_top[] __asm__("__vmu_observe_stack_top");
@@ -26,6 +32,9 @@ extern uint32_t stack_top[] __asm__("__vmu_observe_stack_top");
 #define STACK_TOP stack_top
 static uint32_t read_word(uint32_t address) {
     return *(volatile const uint32_t *)(uintptr_t)address;
+}
+static uint32_t read_byte(uint32_t address) {
+    return *(volatile const uint8_t *)(uintptr_t)address;
 }
 #endif
 
@@ -66,7 +75,8 @@ int kui_vmu_maple_observer_init(const struct kui_vmu_maple_observe_config *confi
     if(!config || config->magic != KUI_VMU_MAPLE_OBSERVE_MAGIC
         || config->version != KUI_VMU_MAPLE_OBSERVE_VERSION
         || config->bytes != sizeof(*config) || !config->stop_after
-        || config->stop_after > UINT32_C(1000000))
+        || config->stop_after > KUI_VMU_MAPLE_OBSERVE_MAX_STARTS
+        || !config->post_after || config->post_after > config->stop_after)
         return -1;
     for(i = 0; i < sizeof(kui_vmu_maple_observer_snapshot) / 4u; ++i)
         words[i] = 0;
@@ -78,14 +88,36 @@ int kui_vmu_maple_observer_init(const struct kui_vmu_maple_observe_config *confi
     kui_vmu_maple_observer_snapshot.version = KUI_VMU_MAPLE_OBSERVE_VERSION;
     kui_vmu_maple_observer_snapshot.bytes = sizeof(kui_vmu_maple_observer_snapshot);
     kui_vmu_maple_observer_snapshot.stop_after = config->stop_after;
+    kui_vmu_maple_observer_snapshot.post_after = config->post_after;
     kui_vmu_maple_observer_snapshot.source_min = UINT32_MAX;
     kui_vmu_maple_observer_snapshot.rx_min = UINT32_MAX;
     kui_vmu_maple_observer_snapshot.source_fingerprint = UINT32_C(2166136261);
     kui_vmu_maple_observer_snapshot.initialized = 1u;
+    pending_source=0;
     return 0;
 }
 
+#ifndef KUI_VMU_MAPLE_OBSERVE_HOST_TEST
+static void report_record(const struct kui_vmu_maple_observe_record *record) {
+    char line[46];
+    const uint32_t *words = (const uint32_t *)(const void *)record;
+    if(!record->ordinal) {
+        retail_display_line("EMPTY");
+        return;
+    }
+    for(unsigned w=0;w<5u;w++) {
+        for(unsigned digit=0;digit<8u;digit++)
+            line[w*9u+digit]="0123456789ABCDEF"[(words[w]>>(28u-digit*4u))&15u];
+        line[w*9u+8u]=' ';
+    }
+    line[45]=0;
+    retail_display_line(line);
+}
+#endif
+
 void kui_vmu_maple_observer_report(void) {
+    if(!kui_vmu_maple_observer_snapshot.stop_reason)
+        kui_vmu_maple_observer_snapshot.stop_reason=KUI_VMU_OBSERVE_OWNER_TERMINAL;
 #ifdef KUI_VMU_MAPLE_OBSERVE_HOST_TEST
     kui_vmu_maple_observer_snapshot.initialized = 2u;
     kui_vmu_maple_observer_test_stop();
@@ -95,35 +127,70 @@ void kui_vmu_maple_observer_report(void) {
     for(page = 0;;page = (page + 1u) % 4u) {
         retail_display_restore(&saved_display);
         retail_display_line("TOY MAPLE OBSERVER - READ ONLY");
-        retail_display_values("PAGE STARTS FRAMES BAD",
+        retail_display_values("PAGE SCHEDULES DESCRIPTORS BAD",
             (uint32_t[4]){page, s->starts, s->descriptors, s->malformed}, 4u);
         if(page == 0u) {
             retail_display_values("SOURCE MIN MAX LAST CHANGES", &s->source_min, 4u);
-            retail_display_values("MAX STOP STACK NO LAST", &s->descriptors_max, 4u);
+            retail_display_values("MAX HARD STOP STACK NO LAST", &s->descriptors_max, 4u);
             retail_display_values("PORT A B C D", s->ports, 4u);
-            retail_display_values("RX MIN MAX BAD CONTROLLER", &s->rx_min, 4u);
+            retail_display_values("RX MIN MAX BAD MAIN DEVINFO", &s->rx_min, 4u);
+            retail_display_values("CMP CALLS MATCH ORPHAN OVERWRITE", &s->completion_calls, 4u);
+            retail_display_values("PENDING BUSY MASKBAD RX HEADERS", &s->completion_pending, 4u);
         } else if(page == 1u) {
             retail_display_values("COMMAND 0 1 2 3", s->commands, 4u);
             retail_display_values("COMMAND 4 5 6 7", s->commands + 4u, 4u);
             retail_display_values("COMMAND 8 9 A B", s->commands + 8u, 4u);
             retail_display_values("COMMAND C D E F", s->commands + 12u, 4u);
-        } else if(page == 2u) {
             retail_display_values("MAIN UNIT1 UNIT2 UNIT3", s->units, 4u);
             retail_display_values("UNIT4 UNIT5 UNSUPPORTED",
                 (uint32_t[3]){s->units[4], s->units[5], s->unsupported}, 3u);
-            retail_display_values("SOURCE FIRST FOUR", s->source_samples, 4u);
-            retail_display_values("HASH CONTROL RX HEADER", &s->source_fingerprint, 4u);
+        } else if(page == 2u) {
+            unsigned total=s->subunit_requests;
+            unsigned oldest=total<KUI_VMU_MAPLE_OBSERVE_RECORDS?0u:
+                total%KUI_VMU_MAPLE_OBSERVE_RECORDS;
+            retail_display_values("SUBSTART CARDSTART POST SUBREQ WHY", &s->first_subunit_start, 5u);
+            retail_display_line("ORDINAL HEADER PAY0 PAY1 RX");
+            retail_display_line("FIRST FOUR SUBUNIT REQUESTS");
+            for(unsigned i=0;i<KUI_VMU_MAPLE_OBSERVE_RECORDS;i++) report_record(&s->first[i]);
+            retail_display_line("LAST FOUR SUBUNIT REQUESTS");
+            for(unsigned i=0;i<KUI_VMU_MAPLE_OBSERVE_RECORDS;i++) {
+                if(i<total) report_record(&s->last[(oldest+i)%KUI_VMU_MAPLE_OBSERVE_RECORDS]);
+                else retail_display_line("EMPTY");
+            }
         } else {
             retail_display_values("TRIGGER NONSW ENABLE NONONE", &s->trigger_last, 4u);
             retail_display_values("BUSY NONZERO ENTRY SR MASKS", &s->busy_last, 4u);
             retail_display_values("MANAGER BASE NONMAPLE",
                 (uint32_t[2]){s->manager_last, s->manager_other}, 2u);
+            retail_display_values("CMP SR MASKS MAIN-A INFO HDR RX", &s->completion_sr_last, 4u);
+            retail_display_values("SUB REQUEST RESPONSE RX ORDINAL", &s->subunit_request, 4u);
+            retail_display_values("CTXBAD FLAGS MDSTAR CALLER PR", &s->completion_bad_context, 4u);
             retail_display_line("FINAL PENDING DMA IS NOT STARTED");
         }
-        retail_display_line("PHOTO ALL FOUR PAGES THEN POWER OFF");
+        if(page!=2u && page!=3u) retail_display_line("PHOTO ALL FOUR PAGES THEN POWER OFF");
         retail_display_pause(600u);
     }
 #endif
+}
+
+static void record_subunit(uint32_t cursor,uint32_t header,uint32_t rx,unsigned words) {
+    struct kui_vmu_maple_observe_snapshot *s=&kui_vmu_maple_observer_snapshot;
+    struct kui_vmu_maple_observe_record record={s->descriptors,header,0,0,rx};
+    uint32_t n=s->subunit_requests;
+    /* Only the function and location words are sampled. In particular,
+     * the 128-byte BLOCKWRITE save payload is never read by this observer. */
+    if(words) record.payload0=read_word((cursor+12u)|UINT32_C(0xa0000000));
+    if(words>1u) record.payload1=read_word((cursor+16u)|UINT32_C(0xa0000000));
+    if(n<KUI_VMU_MAPLE_OBSERVE_RECORDS) s->first[n]=record;
+    s->last[n%KUI_VMU_MAPLE_OBSERVE_RECORDS]=record;
+    increment(&s->subunit_requests);
+    if(!s->first_subunit_start) s->first_subunit_start=s->starts;
+    /* Discovery can happen immediately with a VMU already inserted. Wait
+     * for actual memory-card media/read/write/sync requests before starting
+     * the shorter capture window, leaving time to navigate a LOAD menu. */
+    if(!s->first_card_start && words && record.payload0==UINT32_C(0x02000000) &&
+       (header&255u)>=10u && (header&255u)<=13u)
+        s->first_card_start=s->starts;
 }
 
 void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
@@ -134,6 +201,7 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
         return;
     if(STACK_BOTTOM[0] != STACK_PATTERN || STACK_BOTTOM[1] != STACK_PATTERN) {
         increment(&s->stack_fault);
+        s->stop_reason=KUI_VMU_OBSERVE_STACK_FAULT;
         kui_vmu_maple_observer_report();
         return;
     }
@@ -147,9 +215,10 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
     s->entry_sr_last = inherited_sr;
     s->entry_masks |= UINT32_C(1) << ((inherited_sr >> 4) & 15u);
     {
-        uint32_t manager = read_word(UINT32_C(0xac1223a4)) & UINT32_C(0x1fffffff);
-        if(source_span(manager, UINT32_C(0x10f8)))
-            s->manager_last = read_word((manager + UINT32_C(0x10f4)) | UINT32_C(0xa0000000));
+        uint32_t manager = read_word(UINT32_C(0x8c1223a4));
+        if((manager&UINT32_C(0xff000000))==UINT32_C(0x8c000000) &&
+           source_span(manager&UINT32_C(0x1fffffff), UINT32_C(0x10f8)))
+            s->manager_last = read_word(manager + UINT32_C(0x10f4));
         else
             s->manager_last = 0u;
         if(s->manager_last != UINT32_C(0xa05f6c00)) increment(&s->manager_other);
@@ -221,6 +290,10 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
         s->last_control = control;
         s->last_rx = rx;
         s->last_header = header;
+        if(!unsafe_schedule) {
+            pending[count].rx=rx;pending[count].header=header;pending[count].ordinal=s->descriptors;
+        }
+        if(unit && !unsafe_schedule) record_subunit(cursor,header,rx,words);
         cursor += bytes;
         /* Until live ownership is established, never start a DMA chain
          * which might read our allocator header/worker as descriptors or
@@ -243,6 +316,63 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
         unsafe_schedule = 1u;
     }
 done:
-    if(unsafe_schedule || s->starts >= s->stop_after)
+    if(unsafe_schedule) s->stop_reason=KUI_VMU_OBSERVE_UNSAFE;
+    else if(s->starts>=s->stop_after) s->stop_reason=KUI_VMU_OBSERVE_HARD_LIMIT;
+    else if(s->first_card_start && s->starts-s->first_card_start>=s->post_after)
+        s->stop_reason=KUI_VMU_OBSERVE_CARD_WINDOW;
+    if(s->stop_reason)
         kui_vmu_maple_observer_report();
+    else {
+        /* Publish only a complete schedule that will really reach MDST.
+         * The final diagnostic schedule is counted but never published. */
+        if(s->completion_pending) increment(&s->completion_overwritten);
+        pending_source=source;s->completion_pending=count;
+    }
+}
+
+void kui_vmu_maple_observer_complete(uint32_t inherited_sr,uint32_t inherited_pr) {
+    struct kui_vmu_maple_observe_snapshot *s=&kui_vmu_maple_observer_snapshot;
+    uint32_t flags=0,busy,source,manager,lock;
+    if(s->initialized!=1u) return;
+    increment(&s->completion_calls);
+    s->completion_sr_last=inherited_sr;
+    s->completion_masks|=UINT32_C(1)<<((inherited_sr>>4)&15u);
+    s->completion_pr_last=inherited_pr;
+    busy=read_word(UINT32_C(0xa05f6c18));
+    source=read_word(UINT32_C(0xa05f6c04));s->completion_source=source;
+    if(((inherited_sr>>4)&15u)!=15u) {increment(&s->completion_bad_mask);flags|=8u;}
+    if(busy) {increment(&s->completion_busy);flags|=4u;}
+    if(inherited_pr!=KUI_VMU_MAPLE_OBSERVE_COMPLETION_PR) flags|=1u;
+    if(s->completion_pending && source!=pending_source) flags|=2u;
+    /* Dynamic SDK words are cached P1 state; only its TAS lock byte is P2.
+     * Exact ownership and software-triggered idle DMA are required before
+     * reading any previously validated RX header. IMASK cannot stop a
+     * hardware-triggered DMA from modifying a buffer underneath this hook. */
+    manager=read_word(UINT32_C(0x8c1223a4));
+    lock=read_word(UINT32_C(0x8c0c0964));
+    if(manager!=UINT32_C(0x8c1212a8) || lock!=UINT32_C(0xac0c0968)) flags|=16u;
+    else if(read_word(manager+UINT32_C(0x0fc0))!=0u ||
+            read_word(manager+UINT32_C(0x10f4))!=UINT32_C(0xa05f6c00) ||
+            read_byte(lock)!=0x80u) flags|=16u;
+    if(read_word(UINT32_C(0xa05f6c10))!=0u ||
+       read_word(UINT32_C(0xa05f6c14))!=1u) flags|=32u;
+    if(STACK_BOTTOM[0]!=STACK_PATTERN || STACK_BOTTOM[1]!=STACK_PATTERN ||
+       s->completion_pending>32u) flags|=64u;
+    s->completion_guard_flags|=flags;
+    if(flags&UINT32_C(0x73)) increment(&s->completion_bad_context);
+    if(!s->completion_pending) {increment(&s->completion_orphan);return;}
+    if(flags) return;
+    for(unsigned i=0;i<s->completion_pending;i++) {
+        uint32_t header=read_word(pending[i].rx|UINT32_C(0xa0000000));
+        unsigned address=(pending[i].header>>8)&255u;
+        increment(&s->completion_rx_headers);
+        if(address==0x20u && (pending[i].header&255u)==1u) {
+            s->main_a_response=header;s->main_a_rx=pending[i].rx;
+        }
+        if((address&0x3fu)!=0x20u) {
+            s->subunit_request=pending[i].header;s->subunit_response=header;
+            s->subunit_rx=pending[i].rx;s->subunit_ordinal=pending[i].ordinal;
+        }
+    }
+    s->completion_pending=0;increment(&s->completion_matched);
 }
