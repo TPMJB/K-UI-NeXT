@@ -44,7 +44,8 @@ method.
 4. Photograph the **PASS / READY** screen. Switch the console off only after
    READY. Start the same tool again, choose the correct connection, and press
    **X**. It opens the highest numbered probe folder, recovers its own journal
-   if necessary, and compares all 512 proof bytes with the expected pattern.
+   if necessary, and compares the complete 1,024-byte proof save, its VMS package CRC16 and its
+   directory/FAT allocation with the expected data.
 5. Photograph the second PASS screen. That second result, when preceded by an
    actual power cycle, proves restart persistence on that card and connection.
 
@@ -64,13 +65,29 @@ the console is powered on.
 
 The shared image formatter admits only an exact all-zero newly created image,
 then writes and verifies standard empty 200-user-block VMU filesystem geometry.
-The shared read-only validator checks all blocks and filesystem allocation both
-before protocol requests and after persisted readback. The
-probe writes raw VMU block 42, which remains marked free in the empty VMU FAT.
-The deterministic marker is deliberately not presented as a valid game save.
-The command sequence uses the documented four 128-byte writes followed by the
-block-sync transaction. A read before sync must still return the old block;
-a read after success must return the complete new block.
+The tool first verifies that an unfinished write is discarded on virtual-device
+reset. It then builds a deterministic **KUIPROOF** data save from original test
+bytes: a standard 128-byte VMS header, one 512-byte icon, 64 application bytes,
+a correct package CRC16 and padding to two VMU blocks. No proprietary game save
+is included.
+
+The payload is written to user blocks 199 and 198. The FAT chain and directory
+entry are then installed, leaving 198 free user blocks. All four changed blocks
+use the shared software Maple adapter, four 128-byte writes and durable block
+sync. Each transaction verifies that reads still return the previous contents
+before sync and the new contents afterward. The shared image validator checks
+the complete allocation graph and rejects orphaned or shared chains; the
+existing VMS import parser checks the package structure and CRC16. The complete
+save, directory and FAT are checked again after a virtual-device reset,
+a fresh storage reconnect/remount, and the later X power-cycle check.
+
+This establishes a valid, allocated test save that the existing VMU Manager can
+browse and extract. It remains an owned test fixture, not evidence that a
+particular retail game can discover or use the virtual device. The four-block
+save is not atomic as a group: an interruption between its FAT and directory
+commits can leave an incomplete allocation, which the next verification refuses.
+Preserve such a failed probe; create a new folder with A rather than trying to
+continue it.
 
 The store is the same portable journal engine intended for a future resident
 service. This harness connects its logical sectors 0–255 to `card.vmd` and
@@ -93,12 +110,28 @@ proof of every SD card's power-loss behavior.
 ```sh
 make -f Makefile.vmu host-test
 python3 tests/test_vmu_harness_images.py
+make build/test-vmu-image-compat
+python3 tests/test_vmu_image_compat.py
 ```
 
 The host binary includes the actual console sequence and file callbacks. Only
 the display/controller and physical SD transport are substituted. ASan/UBSan
-cover creation, verify in a new process, repeat without overwriting the first
-card, exact identity/sidecar-length refusal, damaged VMU geometry/orphan-chain refusal,
-and filesystem checks on disposable
-FAT32/exFAT images. Unsupported FAT16 must be refused without changing a byte.
-These checks need `dosfstools` and `exfatprogs` installed.
+cover creation of the allocated CRC-valid VMS, incomplete and committed device
+reset, verify in a new process, repeat without overwriting the first card,
+identity/sidecar-length refusal, and damaged VMU geometry, orphan chains or save
+payload refusal. Refused probes must leave storage byte-for-byte unchanged.
+Filesystem checks run on disposable FAT32/exFAT images. Unsupported FAT16 must
+be refused without changing a byte. These checks need `dosfstools` and
+`exfatprogs` installed.
+
+The compatibility test runs the actual host harness to create a card image,
+then feeds that exact `card.vmd` to production `src/apps/vmu.c`. It checks blank
+and populated image browsing, extraction of the complete VMS and its directory
+metadata, the production VMS CRC parser, production external VMS import and
+verified restore into a newly formatted simulated physical VMU. Browsing,
+extraction and import must make no physical VMU calls. Only the explicitly
+exercised restore uses the existing physical-transport simulation. Existing
+backup/capture sentinel files and the original VMD remain unchanged; `fsck`
+checks both disposable filesystems afterward. This is software interoperability
+coverage; real physical VMU writes and real retail SDK traffic still need
+hardware tests.

@@ -69,7 +69,7 @@ jobs:
           source .deps/kos/environ.sh
           make -f Makefile.vmu -j2 package
           mkdir -p build/vmu-harness/transport
-          for unit in src/loader/vmu_backing.c src/loader/sci_sd_bus.c src/loader/sd_reader.c src/dreamcast/sci_sd_storage.c; do
+          for unit in src/loader/vmu_service.c src/loader/vmu_backing.c src/loader/sci_sd_bus.c src/loader/sd_reader.c src/dreamcast/sci_sd_storage.c; do
             kos-cc -std=c11 -Os -Wall -Wextra -Werror -ffreestanding -fno-builtin -fstack-usage \
               -Iinclude -Isrc/loader -Isrc/dreamcast -DKUI_ON_CONSOLE=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_VMU_EXPERIMENTAL=1 \
               -c "$unit" -o "build/vmu-harness/transport/$(basename "$unit" .c).o"
@@ -98,25 +98,26 @@ jobs:
           cp build/vmu-harness/KUI/tools.kui build/vmu-harness/package/KUI/
           cp docs/vmu-harness-test.md build/vmu-harness/package/README.md
           cp docs/vmu-protocol.md docs/vmu-store.md docs/vmu-maple-interception.md docs/vmu-runtime-design.md \
-            docs/vmu-image.md docs/vmu-backing.md docs/vmu-emulation-status.md build/vmu-harness/package/
+            docs/vmu-image.md docs/vmu-backing.md docs/vmu-service.md docs/vmu-emulation-status.md build/vmu-harness/package/
           git rev-parse HEAD > build/vmu-harness/package/SOURCE-COMMIT.txt
           (cd build/vmu-harness/package && sha256sum KUI/tools.kui > SHA256SUMS)
+      - name: Upload standalone persistence test
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-VMU-console-test
+          path: build/vmu-harness/package/
+          if-no-files-found: error
+          retention-days: 30
       - name: Build isolated Toy Commander observer
         shell: bash
         run: |
           source .deps/kos/environ.sh
-          make -f Makefile.vmu-toy -j2 package
+          make -k -f Makefile.vmu-toy -j2 package
       - name: Upload exact-title observer test
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: K-UI-experimental-Toy-Maple-observer
           path: build/vmu-toy/vmu-maple-observer-test.zip
-          if-no-files-found: error
-          retention-days: 30
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: K-UI-experimental-VMU-console-test
-          path: build/vmu-harness/package/
           if-no-files-found: error
           retention-days: 30
       - name: Retain native proof

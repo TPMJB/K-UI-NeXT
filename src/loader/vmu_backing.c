@@ -186,6 +186,11 @@ static int finish(struct kui_vmu_backing *b,bool entered,bool acquired,int resul
         if(b->bus.healthy && !b->bus.healthy(b->bus.context) && !result)
             result=poison(b,KUI_VMU_BACKING_IO);
         b->bus.release(b->bus.context);
+        /* Bus restoration itself can latch a hardware fault. Sample while
+         * the shared lock/IRQ mask still belongs to us, after the lease is
+         * returned, so a save ACK never hides a failed release. */
+        if(b->bus.healthy && !b->bus.healthy(b->bus.context) && !result)
+            result=poison(b,KUI_VMU_BACKING_IO);
     }
     b->inflight=false;b->bus.leave(b->bus.context);
     return b->last_result=result;

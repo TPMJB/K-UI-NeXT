@@ -21,9 +21,19 @@ virtual VMU responses from this prototype.
   game-data exclusions, pinned card identity and serialized bus ownership.
   The existing original SD command reader/writer serves actual I/O. Writes
   require a separate experimental compile flag and runtime permission.
+- A resident service that composes the protocol, journal and SCI backend.
+  It reserves storage before a transaction, reports initial contention as a
+  retry, and requires healthy release before the final save acknowledgement.
+  Its raw SD path is host tested and SH4 compiled; it is not installed in games.
+- A blank-only formatter and bounded validator for canonical 200-block cards.
+  Existing images are never reformatted automatically.
 - A standalone KOS program that exercises the shared software layers through
   real microSD storage. Its synthetic FatFs sector map is not a retail-game
   extent handoff. See [the console test](vmu-harness-test.md).
+- An independently selected Toy Commander observation loader. It validates the
+  complete executable and exact hook instructions, then records real Maple
+  schedules in a guarded title-owned allocation. It injects no VMU commands or
+  responses. See [the observer test](vmu-maple-observer-test.md).
 - A read-only SH4 executable analyzer and an exact match for the owner's
   Toy Commander executable. Static hook candidates do not authorize generic
   patches to other executables.
@@ -40,7 +50,11 @@ errors, card changes and malformed schedules.
 `python3 tests/test_vmu_harness_images.py` execute the actual console sequence
 through real FatFs on disposable FAT32/exFAT images. Fresh processes verify
 persistence; refused invalid pairs leave the storage image unchanged. fsck
-checks the outer filesystem. The pinned SH4/KOS workflow compiles and packages
+checks the outer filesystem. The harness creates a real allocated, CRC-valid
+two-block VMS save through the protocol and verifies reset and remount behavior.
+`python3 tests/test_vmu_image_compat.py` feeds that same image through the
+production VMU Manager, extraction, VMS import and verified restore.
+The pinned SH4/KOS workflow compiles and packages
 an independently selectable `KUI/tools.kui` and retains source and native build
 records.
 
@@ -82,4 +96,5 @@ and SH4 behavior were checked against primary documentation and the project's
 pinned KallistiOS sources; the new project modules are independently authored.
 See [protocol](vmu-protocol.md), [journal](vmu-store.md),
 [Maple ownership](vmu-maple-interception.md), and
-[runtime design](vmu-runtime-design.md) for the precise contracts.
+[runtime design](vmu-runtime-design.md) for the precise contracts. The
+[service contract](vmu-service.md) describes the composed resident API.

@@ -9,7 +9,7 @@ BUILD ?= build/vmu-harness
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 TARGET := $(BUILD)/vmu-harness.elf
 SOURCES := src/experimental/vmu_harness/main.c \
-    src/core/vmu_emulation.c src/core/vmu_image.c src/loader/vmu_maple_dma.c src/core/vmu_store.c \
+    src/core/vmu_emulation.c src/core/vmu_image.c src/core/vmu_save_format.c src/core/crc16.c src/loader/vmu_maple_dma.c src/core/vmu_store.c \
     src/core/retail_image.c src/core/data.c src/core/diskio.c src/core/clock.c src/core/storage_probe.c \
     src/core/storage_policy.c src/core/ata.c src/dreamcast/ata_bus.c \
     src/dreamcast/sd.c src/dreamcast/sci_sd_storage.c src/loader/sd_reader.c \
@@ -49,7 +49,7 @@ $(BUILD)/KUI/tools.kui: $(TARGET) tools/runtime_package.py
 # image with VMU_HARNESS_IMAGE; no test ever formats a user's card.
 HOST_CC ?= cc
 HOST_SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie
-HOST_SOURCES := src/experimental/vmu_harness/host.c src/core/vmu_emulation.c src/core/vmu_image.c \
+HOST_SOURCES := src/experimental/vmu_harness/host.c src/core/vmu_emulation.c src/core/vmu_image.c src/core/vmu_save_format.c src/core/crc16.c \
     src/loader/vmu_maple_dma.c src/core/vmu_store.c src/core/retail_image.c src/core/data.c \
     src/core/diskio.c src/core/clock.c src/core/storage_probe.c \
     .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c

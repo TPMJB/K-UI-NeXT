@@ -12,6 +12,7 @@
 #define KUI_VMU_MAPLE_OBSERVE_STACK_BYTES 4096
 #define KUI_VMU_MAPLE_OBSERVE_EXPORT_BYTES 52
 #define KUI_VMU_MAPLE_OBSERVE_CONFIG_BYTES 72
+#define KUI_VMU_MAPLE_OBSERVE_SNAPSHOT_BYTES 272
 #define KUI_VMU_MAPLE_OBSERVE_DEFAULT_STOP 1200
 
 #ifndef __ASSEMBLER__
@@ -49,6 +50,8 @@ _Static_assert(sizeof(struct kui_vmu_maple_observe_exports) ==
     KUI_VMU_MAPLE_OBSERVE_EXPORT_BYTES, "Maple observer exports ABI");
 _Static_assert(sizeof(struct kui_vmu_maple_observe_config) ==
     KUI_VMU_MAPLE_OBSERVE_CONFIG_BYTES, "Maple observer config ABI");
+_Static_assert(sizeof(struct kui_vmu_maple_observe_snapshot) ==
+    KUI_VMU_MAPLE_OBSERVE_SNAPSHOT_BYTES, "Maple observer snapshot ABI");
 
 int kui_vmu_maple_observer_init(const struct kui_vmu_maple_observe_config *);
 void kui_vmu_maple_observer_visit(uint32_t inherited_sr);

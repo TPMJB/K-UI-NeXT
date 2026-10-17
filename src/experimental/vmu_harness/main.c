@@ -5,6 +5,8 @@
 #include "kui/shell_font.h"
 #include "kui/vmu_emulation.h"
 #include "kui/vmu_image.h"
+#include "kui/vmu_import.h"
+#include "kui/crc16.h"
 #include "kui/vmu_maple_dma.h"
 #include "kui/vmu_store.h"
 #include <kos.h>
@@ -19,7 +21,10 @@ KOS_INIT_FLAGS(INIT_IRQ | INIT_CONTROLLER | INIT_NO_DCLOAD | INIT_QUIET);
 #endif
 
 #define PROBE_ROOT "0:/KUI/vmu-test"
-#define PROBE_BLOCK 42u
+#define PROBE_FIRST_BLOCK 199u
+#define PROBE_SECOND_BLOCK 198u
+#define PROBE_SAVE_BYTES 1024u
+#define PROBE_PACKAGE_BYTES 704u
 #define LOG_ROWS 15u
 #define LOG_COLS 96u
 
@@ -33,7 +38,8 @@ static struct kui_vmu_image_workspace image_workspace;
 static FATFS volume;
 struct file_pair { FIL image,journal; bool image_open,journal_open; };
 static struct file_pair pair;
-static uint8_t request[140],expected[512],actual[512];
+static uint8_t request[140],expected[PROBE_SAVE_BYTES],actual[PROBE_SAVE_BYTES];
+static uint8_t original[512],metadata[512];
 static _Alignas(32) uint8_t reply[1024];
 
 /* Existing SD adapter's optical arbitration seam. This standalone program
@@ -65,13 +71,30 @@ void kui_log(const char *format,...) {
     render();
 }
 static bool fail(const char *message) {kui_log("FAIL: %s",message);return false;}
+static void put16(uint8_t *p,unsigned value) {p[0]=(uint8_t)value;p[1]=(uint8_t)(value>>8);}
 static void put32(uint8_t *p,uint32_t value) {for(unsigned i=0;i<4;i++) p[i]=(uint8_t)(value>>(i*8));}
 static void identity(unsigned number,uint8_t out[16]) {
     memcpy(out,"KUI-VMU-PB01",12);put32(out+12,number);
 }
-static void pattern(unsigned number,uint8_t out[512]) {
-    for(unsigned i=0;i<512;i++) out[i]=(uint8_t)((i*37u)^(i>>2)^number^(number>>8));
-    memcpy(out,"KUI virtual VMU persistent block proof v1",40);put32(out+40,number);
+/* A constructed, nonproprietary VMS package: 128-byte header, one 512-byte
+ * icon, 64 application bytes and zero padding to two VMU blocks. The ordinary
+ * import parser checks the actual CRC/lengths after every persisted reopen. */
+static void pattern(unsigned number,uint8_t out[PROBE_SAVE_BYTES]) {
+    memset(out,0,PROBE_SAVE_BYTES);
+    memcpy(out,"K-UI VMU proof",14);
+    memcpy(out+16,"Owned emulation persistence test",31);
+    memcpy(out+48,"KUI-VMU-PROOF",13);
+    put16(out+64,1);put32(out+72,64);
+    for(unsigned i=96;i<640;i++) out[i]=(uint8_t)(i*37u+(i>>2));
+    memcpy(out+640,"KUI virtual VMU allocated save proof v2",38);
+    put32(out+680,number);
+    for(unsigned i=684;i<PROBE_PACKAGE_BYTES;i++) out[i]=(uint8_t)(i^number^(number>>8));
+    put16(out+70,kui_crc16_nibble(0,out,PROBE_PACKAGE_BYTES));
+}
+static void directory_entry(uint8_t out[32]) {
+    static const uint8_t timestamp[8]={0x20,0,1,1,0,0,0,5};
+    memset(out,0,32);out[0]=0x33;put16(out+2,PROBE_FIRST_BLOCK);
+    memcpy(out+4,"KUIPROOF",8);memcpy(out+16,timestamp,8);put16(out+24,2);
 }
 static bool path(char out[96],unsigned number,const char *leaf) {
     int n=snprintf(out,96,PROBE_ROOT "/p%04u/%s",number,leaf);
@@ -115,14 +138,16 @@ static int image_read(void *context,uint16_t block,void *data) {
 static int image_write(void *context,uint16_t block,const void *data) {
     return block<256u?file_write(context,block,data):-1;
 }
-static bool validate_image(void) {
+static bool validate_image(bool populated) {
     const struct kui_vmu_image_io io={&pair,image_read,NULL,NULL};
     struct kui_vmu_image_summary summary;
     int status=kui_vmu_image_validate(&io,131072,&image_workspace,&summary);
-    if(status!=KUI_VMU_IMAGE_OK || summary.files || summary.used_blocks || summary.free_blocks!=200) {
+    if(status!=KUI_VMU_IMAGE_OK || summary.files!=(populated?1u:0u) ||
+       summary.used_blocks!=(populated?2u:0u) || summary.free_blocks!=(populated?198u:200u)) {
         kui_log("FAIL image filesystem validation: status=%d",status);return false;
     }
-    kui_log("PASS image filesystem: 200 free blocks, no orphan chains");return true;
+    kui_log(populated?"PASS VMU allocation: one save, two used / 198 free blocks":
+                      "PASS empty VMU allocation: 200 free blocks");return true;
 }
 static int block_read(void *context,uint16_t block,uint8_t data[512]) {
     return kui_vmu_store_read(context,block,data)==KUI_VMU_STORE_OK?0:-1;
@@ -154,23 +179,23 @@ static bool exchange(size_t request_bytes,unsigned response_command,size_t respo
         return fail("virtual protocol reply / length");
     return true;
 }
-static void command(unsigned cmd,unsigned words,unsigned phase) {
+static void command(unsigned cmd,unsigned words,unsigned phase,unsigned block) {
     memset(request,0,sizeof(request));request[0]=(uint8_t)cmd;request[1]=1;
     request[3]=(uint8_t)words;request[7]=2;request[9]=(uint8_t)phase;
-    request[11]=PROBE_BLOCK;
+    request[10]=(uint8_t)(block>>8);request[11]=(uint8_t)block;
 }
-static bool virtual_read(uint8_t out[512]) {
-    command(0x0b,2,0);
+static bool virtual_read(unsigned block,uint8_t out[512]) {
+    command(0x0b,2,0,block);
     if(!exchange(12,0x08,524)) return false;
     memcpy(out,reply+12,512);return true;
 }
 static bool protocol_setup(void) {
     const struct kui_vmu_emulation_io io={&store,block_read,block_commit};
     if(kui_vmu_emulation_init(&device,0x01,&io)) return fail("virtual device initialization");
-    command(0x01,0,0);
+    command(0x01,0,0,0);
     if(!exchange(4,0x05,116)) return false;
     kui_log("PASS virtual device discovery (software chain)");
-    command(0x0a,2,0);request[11]=0;
+    command(0x0a,2,0,0);
     if(!exchange(12,0x08,32)) return false;
     kui_log("PASS virtual memory geometry");return true;
 }
@@ -205,7 +230,7 @@ static bool prepare_store(unsigned number,bool fresh) {
             return fail("format only the newly created zero image");
         kui_log("PASS shared formatter created and verified empty VMU");
     }
-    return validate_image() && protocol_setup();
+    return validate_image(!fresh) && protocol_setup();
 }
 static bool make_file(unsigned number,const char *leaf,unsigned sectors) {
     char name[96];FIL file;
@@ -271,6 +296,39 @@ static bool disconnect_volume(void) {
     if(f_mount(NULL,"0:",0)!=FR_OK) ok=false;
     kui_sd_disconnect();return ok;
 }
+/* The same four-phase transaction is used for payload, FAT and directory
+ * blocks. No byte becomes visible until the durable block-sync succeeds. */
+static bool virtual_write(unsigned block,const uint8_t bytes[512]) {
+    if(!virtual_read(block,original)) return false;
+    for(unsigned phase=0;phase<4;phase++) {
+        command(0x0c,34,phase,block);memcpy(request+12,bytes+phase*128,128);
+        if(!exchange(140,0x07,4)) return false;
+    }
+    if(!virtual_read(block,actual) || memcmp(actual,original,512))
+        return fail("staged bytes became visible before block sync");
+    command(0x0d,2,4,block);
+    if(!exchange(12,0x07,4) || !virtual_read(block,actual) || memcmp(actual,bytes,512))
+        return fail("durable virtual block readback");
+    return true;
+}
+static bool verify_save(unsigned number) {
+    char error[128];struct kui_vmu_save_info parsed;
+    pattern(number,expected);
+    if(!virtual_read(PROBE_FIRST_BLOCK,actual) || !virtual_read(PROBE_SECOND_BLOCK,actual+512) ||
+       memcmp(actual,expected,PROBE_SAVE_BYTES)) return fail("persisted VMS bytes differ");
+    if(!kui_vmu_save_parse(KUI_VMU_SAVE_VMS,actual,sizeof(actual),NULL,"KUIPROOF",
+                           &parsed,error,sizeof(error)) || parsed.padded_bytes!=PROBE_SAVE_BYTES)
+        return fail("existing VMS parser rejected package / CRC16");
+    if(!virtual_read(253,metadata)) return false;
+    directory_entry(original);
+    if(memcmp(metadata,original,32)) return fail("persisted VMU directory entry differs");
+    for(unsigned i=32;i<512;i++) if(metadata[i]) return fail("unexpected second directory entry");
+    if(!virtual_read(254,metadata) || metadata[PROBE_FIRST_BLOCK*2]!=PROBE_SECOND_BLOCK ||
+       metadata[PROBE_FIRST_BLOCK*2+1] || metadata[PROBE_SECOND_BLOCK*2]!=0xfa ||
+       metadata[PROBE_SECOND_BLOCK*2+1]!=0xff) return fail("persisted VMU save chain differs");
+    kui_log("PASS allocated KUIPROOF VMS: exact bytes and package CRC16");
+    return validate_image(true);
+}
 static bool run_test(bool create) {
     unsigned number=0;
     if(!connect_volume()) return false;
@@ -279,32 +337,38 @@ static bool run_test(bool create) {
     if(!prepare_store(number,create)) return false;
     pattern(number,expected);
     if(create) {
-        memset(actual,0xa5,sizeof(actual));
-        if(!virtual_read(actual)) return false;
-        for(unsigned i=0;i<512;i++) if(actual[i]) return fail("new block is not empty");
-        for(unsigned phase=0;phase<4;phase++) {
-            command(0x0c,34,phase);memcpy(request+12,expected+phase*128,128);
-            if(!exchange(140,0x07,4)) return false;
-        }
-        if(!virtual_read(actual)) return false;
-        for(unsigned i=0;i<512;i++) if(actual[i]) return fail("staged bytes became visible before sync");
-        kui_log("PASS four 128-byte writes remain staged until sync");
-        command(0x0d,2,4);
-        if(!exchange(12,0x07,4)) return false;
-        if(!virtual_read(actual) || memcmp(actual,expected,512)) return fail("durable block readback");
+        /* Reset must discard an unfinished block without changing storage. */
+        if(!virtual_read(PROBE_FIRST_BLOCK,original)) return false;
+        command(0x0c,34,0,PROBE_FIRST_BLOCK);memcpy(request+12,expected,128);
+        if(!exchange(140,0x07,4)) return false;
+        command(0x03,0,0,0);
+        if(!exchange(4,0x07,4) || !virtual_read(PROBE_FIRST_BLOCK,actual) ||
+           memcmp(actual,original,512)) return fail("reset published an unfinished transaction");
+        kui_log("PASS reset discards unfinished write without publishing it");
+        /* Publish allocated metadata only after both package blocks exist.
+         * Per-block journaling does not make this four-block save atomic. */
+        if(!virtual_write(PROBE_FIRST_BLOCK,expected) || !virtual_write(PROBE_SECOND_BLOCK,expected+512))
+            return false;
+        if(!virtual_read(254,metadata)) return false;
+        put16(metadata+PROBE_FIRST_BLOCK*2,PROBE_SECOND_BLOCK);
+        put16(metadata+PROBE_SECOND_BLOCK*2,0xfffa);
+        if(!virtual_write(254,metadata)) return false;
+        memset(metadata,0,sizeof(metadata));directory_entry(metadata);
+        if(!virtual_write(253,metadata)) return false;
+        kui_log("PASS four-phase durable writes: VMS data, FAT and directory");
+        command(0x03,0,0,0);
+        if(!exchange(4,0x07,4) || !verify_save(number)) return false;
         if(kui_vmu_store_sync(&store)!=KUI_VMU_STORE_OK) return fail("final store barrier");
-        kui_log("PASS journaled commit and virtual readback");
+        kui_log("PASS committed save survives virtual device reset");
         if(!disconnect_volume()) return fail("close / unmount after commit");
         memset(&store,0,sizeof(store));memset(&device,0,sizeof(device));
         if(!connect_volume() || !prepare_store(number,false)) return false;
     }
-    if(!virtual_read(actual) || memcmp(actual,expected,512)) return fail("persisted block differs");
-    kui_log(create?"PASS fresh reopen after remount / reconnect":"PASS latest persisted block matches expected bytes");
-    if(!validate_image()) return false;
+    if(!verify_save(number)) return false;
+    kui_log(create?"PASS fresh reopen after remount / reconnect":"PASS latest persisted save matches expected bytes");
     if(kui_vmu_store_checkpoint(&store)!=KUI_VMU_STORE_OK) return fail("clean image / journal checkpoint");
     kui_log("PASS clean checkpoint; base image is synced");
     if(!disconnect_volume()) return fail("final close / unmount");
-    if(create) kui_log("PASS protocol: discovery, geometry, write phases and sync");
     kui_log("READY: power may now be switched off.");
     if(create) kui_log("After a power cycle, relaunch this tool and press X.");
     else kui_log("If you power-cycled first, this proves restart persistence.");

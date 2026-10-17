@@ -95,7 +95,8 @@ static void compat_native_layout(void) {
 }
 
 int main(int argc, char **argv) {
-    assert(argc == 2);
+    assert(argc == 2 || (argc == 3 && !strcmp(argv[2],"harness")));
+    bool from_harness = argc == 3;
     char *seed_args[] = {argv[0],argv[1],"seed",NULL};
     assert(!kui_existing_vmu_fixture_main(3,seed_args));
     image = fopen(argv[1],"r+b"); assert(image);
@@ -106,7 +107,9 @@ int main(int argc, char **argv) {
     FATFS fs;
     const char *empty_path = "0:/KUI/backups/vmu/A1-0001/empty.vmd";
     const char *proof_path = "0:/KUI/backups/vmu/A1-0001/proof.vmd";
-    const char *bundle = "0:/KUI/backups/vmu/A1-0002/001_VMUPROOF.vms";
+    const char *stem = from_harness ? "KUIPROOF" : "VMUPROOF";
+    char bundle[128];
+    snprintf(bundle,sizeof(bundle),"0:/KUI/backups/vmu/A1-0002/001_%s.vms",stem);
 
     compat_format(); compat_native_layout();
     memcpy(compat_root,card[255],512);
@@ -120,26 +123,40 @@ int main(int argc, char **argv) {
     assert(view.status.passed && view.present && !view.total && view.free_blocks == 200);
     assert(reads == physical_reads && enumerations == physical_enumerations && !vmu_writes);
 
-    compat_make_save();
+    if(from_harness) {
+        mount_image(&fs);FIL source;UINT got=0;
+        assert(f_open(&source,"0:/KUI/vmu-test/p0001/card.vmd",FA_READ)==FR_OK);
+        assert(f_size(&source)==sizeof(card));
+        assert(f_read(&source,card,sizeof(card),&got)==FR_OK && got==sizeof(card));
+        assert(f_close(&source)==FR_OK && f_mount(NULL,"0:",0)==FR_OK);
+        memcpy(compat_payload,card[199],512);memcpy(compat_payload+512,card[198],512);
+        memcpy(compat_entry,card[253],32);
+        struct kui_vmu_save_info parsed;char error[128];
+        assert(kui_vmu_save_parse(KUI_VMU_SAVE_VMS,compat_payload,sizeof(compat_payload),NULL,
+            stem,&parsed,error,sizeof(error)));
+        assert(parsed.padded_bytes==1024 && !memcmp(parsed.entry+4,stem,strlen(stem)));
+    } else compat_make_save();
     assert(!kui_vmu_image_validate(&compat_io,sizeof(card),&compat_work,&result));
     assert(result.files == 1 && result.used_blocks == 2 && result.free_blocks == 198);
     kui_vmu_app_run(0,0,0,0,&view,log_line,cancelled,progress);
     assert(view.status.passed && view.total == 1 && view.free_blocks == 198);
-    assert(view.entries[0].bytes == 1024 && !strcmp(view.entries[0].name,"VMUPROOF"));
+    assert(view.entries[0].bytes == 1024 && !strcmp(view.entries[0].name,stem));
     memcpy(compat_expected_image,card,sizeof(card));
     mount_image(&fs); write_file(proof_path,card,sizeof(card));
     assert(f_mount(NULL,"0:",0)==FR_OK);
     physical_reads = reads; physical_enumerations = enumerations;
     kui_vmu_image_run(proof_path,0,0,0,&view,log_line,cancelled,image_progress);
     assert(view.status.passed && view.total == 1 && view.free_blocks == 198);
-    assert(!strcmp(view.entries[0].name,"VMUPROOF"));
+    assert(!strcmp(view.entries[0].name,stem));
     kui_vmu_image_run(proof_path,0,0,1,&view,log_line,cancelled,image_progress);
     assert(view.status.passed && view.status.complete && view.status.done == 1024);
     assert(reads == physical_reads && enumerations == physical_enumerations && !vmu_writes);
     mount_image(&fs);
     equal_file(bundle,compat_payload,sizeof(compat_payload));
-    equal_file("0:/KUI/backups/vmu/A1-0002/001_VMUPROOF.dir",compat_entry,32);
+    char entry_path[128];snprintf(entry_path,sizeof(entry_path),"0:/KUI/backups/vmu/A1-0002/001_%s.dir",stem);
+    equal_file(entry_path,compat_entry,32);
     equal_file(proof_path,compat_expected_image,sizeof(compat_expected_image));
+    if(from_harness) equal_file("0:/KUI/vmu-test/p0001/card.vmd",compat_expected_image,sizeof(compat_expected_image));
     verify_preserved(); assert(f_mount(NULL,"0:",0)==FR_OK);
 
     /* Existing restore admission + commit into another freshly formatted
@@ -159,8 +176,38 @@ int main(int argc, char **argv) {
     assert(view.status.passed && view.total == 1 && view.free_blocks == 198);
     mount_image(&fs);
     equal_file(proof_path,compat_expected_image,sizeof(compat_expected_image));
+    if(from_harness) equal_file("0:/KUI/vmu-test/p0001/card.vmd",compat_expected_image,sizeof(compat_expected_image));
     verify_preserved(); assert(f_mount(NULL,"0:",0)==FR_OK);
+    /* Run the real current external VMS import UI service, publish its own
+     * verified bundle, and then restore that bundle through the real manager.
+     * Import itself must not enumerate, read or write any physical VMU. */
+    mount_image(&fs);assert(f_mkdir("0:/imports")==FR_OK);
+    char input[128];snprintf(input,sizeof(input),"0:/imports/%s.vms",stem);
+    write_file(input,compat_payload,sizeof(compat_payload));
+    assert(f_mount(NULL,"0:",0)==FR_OK);
+    physical_reads=reads;physical_enumerations=enumerations;
+    unsigned physical_writes=vmu_writes;
+    kui_vmu_import_run(input,false,&view,log_line,cancelled,progress);
+    assert(view.status.passed && view.import_ready && vmu_writes==physical_writes);
+    kui_vmu_import_run(input,true,&view,log_line,cancelled,progress);
+    assert(view.status.passed && !view.import_ready && view.backup_path[0]);
+    assert(reads==physical_reads && enumerations==physical_enumerations && vmu_writes==physical_writes);
+    char imported[KUI_VMU_BACKUP_PATH_CAP];strcpy(imported,view.backup_path);
+    mount_image(&fs);equal_file(input,compat_payload,sizeof(compat_payload));
+    equal_file(proof_path,compat_expected_image,sizeof(compat_expected_image));
+    if(from_harness) equal_file("0:/KUI/vmu-test/p0001/card.vmd",compat_expected_image,sizeof(compat_expected_image));
+    verify_preserved();assert(f_mount(NULL,"0:",0)==FR_OK);
+    compat_format();
+    kui_vmu_restore_run(imported,0,false,&view,log_line,cancelled,progress);
+    assert(view.status.passed && view.restore_ready && vmu_writes==physical_writes);
+    kui_vmu_restore_run(imported,0,true,&view,log_line,cancelled,progress);
+    assert(view.status.passed && view.status.complete && vmu_writes>physical_writes);
+    assert(!memcmp(card[199],compat_payload,512) && !memcmp(card[198],compat_payload+512,512));
+    assert(!kui_vmu_image_validate(&compat_io,sizeof(card),&compat_work,&result));
+    assert(result.files==1 && result.used_blocks==2 && result.free_blocks==198);
+    kui_vmu_app_run(0,0,0,0,&view,log_line,cancelled,progress);
+    assert(view.status.passed && view.total==1 && !strcmp(view.entries[0].name,stem));
     assert(!locks && !fclose(image));
-    puts("PASS VMU image compatibility: current manager, VMS parser, VMD browse/extract, verified restore");
+    puts("PASS VMU image compatibility: current manager, VMS parser, VMD browse/extract, VMS import, verified restore");
     return 0;
 }

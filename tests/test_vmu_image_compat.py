@@ -26,6 +26,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path,
                         default=ROOT / "build/test-vmu-image-compat")
+    parser.add_argument("--harness-binary",type=Path,
+                        default=ROOT / "build/vmu-harness/host-sequence")
     args = parser.parse_args()
     for tool in ("mkfs.fat", "fsck.fat", "mkfs.exfat", "fsck.exfat"):
         if not shutil.which(tool):
@@ -39,11 +41,13 @@ def main():
                 run("mkfs.fat", "-F", "32", image)
             else:
                 run("mkfs.exfat", image)
-            output = run(args.binary, image)
+            output = run(args.harness_binary,image,"create")
+            assert "PASS native harness host sequence" in output, output
+            output = run(args.binary, image,"harness")
             assert "PASS VMU image compatibility" in output, output
             run("fsck.fat" if filesystem == "fat32" else "fsck.exfat", "-n", image)
             print(f"PASS {filesystem}: canonical blank/populated VMD, current manager, "
-                  "VMS CRC parser, extract, verified restore, fsck", flush=True)
+                  "actual harness save, VMS CRC parser, extract/import, verified restore, fsck", flush=True)
 
 
 if __name__ == "__main__":

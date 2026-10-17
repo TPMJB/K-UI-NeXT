@@ -47,7 +47,9 @@ static uint32_t image_crc(unsigned number) {
     uint32_t crc=0;uint8_t bytes[512];
     for(unsigned i=0;i<256;i++) {
         UINT done=0;assert(f_read(&file,bytes,512,&done)==FR_OK && done==512);
-        if(i==PROBE_BLOCK) {pattern(number,expected);assert(!memcmp(bytes,expected,512));}
+        if(i==PROBE_FIRST_BLOCK || i==PROBE_SECOND_BLOCK) {
+            pattern(number,expected);assert(!memcmp(bytes,expected+(i==PROBE_FIRST_BLOCK?0:512),512));
+        }
         crc=kui_crc32(crc,bytes,512);
     }
     assert(f_close(&file)==FR_OK);assert(disconnect_volume());return crc;
@@ -82,6 +84,13 @@ int main(int argc,char **argv) {
         assert(f_lseek(&file,geometry?255u*512u+70u:254u*512u+43u*2u)==FR_OK);
         uint8_t changed[2]={0xff,0xff};if(!geometry) changed[0]=0xfa;
         UINT done=0;assert(f_write(&file,changed,2,&done)==FR_OK && done==2);
+        assert(f_close(&file)==FR_OK);assert(disconnect_volume());ok=true;
+    } else if(!strcmp(argv[2],"bad-vms-crc")) {
+        assert(connect_volume());char name[96];assert(path(name,2,"card.vmd"));
+        FIL file;assert(f_open(&file,name,FA_READ|FA_WRITE)==FR_OK);
+        assert(f_lseek(&file,PROBE_SECOND_BLOCK*512u+128u)==FR_OK);
+        uint8_t changed=0xff;UINT done=0;
+        assert(f_write(&file,&changed,1,&done)==FR_OK && done==1);
         assert(f_close(&file)==FR_OK);assert(disconnect_volume());ok=true;
     } else if(!strcmp(argv[2],"repeat")) {
         uint32_t before=image_crc(1);ok=run_test(true);

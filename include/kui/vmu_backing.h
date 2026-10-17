@@ -39,7 +39,8 @@ struct kui_vmu_backing_bus {
     void (*leave)(void *);
     int (*acquire)(void *); /* KUI_LOADER_SD_OK (zero) on success. */
     void (*release)(void *);
-    bool (*healthy)(void *); /* Optional bus fault latch, sampled under lock. */
+    bool (*healthy)(void *); /* Optional bus fault latch, sampled under lock,
+                             * including after release restores the bus. */
     struct kui_loader_sd_stream *reader_stream;
     bool *reader_lease;
 };

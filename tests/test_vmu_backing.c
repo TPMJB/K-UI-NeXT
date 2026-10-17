@@ -16,7 +16,7 @@ struct mock {
     size_t frame_n,reply_at,reply_n;
     uint32_t ticks,bytes,reads,writes,syncs,stops,acquires,releases;
     bool selected,locked,acquired,reader_lease,deny_enter,deny_acquire;
-    bool health,bad_crc,no_reply,reject,stall,frozen_ticks,reenter,reenter_callback;
+    bool health,bad_crc,no_reply,reject,stall,frozen_ticks,reenter,reenter_callback,fail_release;
     int read_result,write_result,sync_result,stop_result;
     char events[128];size_t event_n;
     uint8_t media[1024][512];
@@ -88,6 +88,7 @@ static int acquire(void *ctx) {
 static void release(void *ctx) {
     assert(ctx==&m && m.locked && m.acquired && !m.selected);
     ++m.releases;event('R');m.acquired=false;
+    if(m.fail_release) m.health=false;
 }
 static bool healthy(void *ctx) {assert(ctx==&m && m.locked);return m.health;}
 enum kui_loader_sd_result kui_loader_sd_read(struct kui_loader_sd *card,
@@ -203,6 +204,9 @@ static void read_cases(void) {
     assert(!strcmp(m.events,"ESRL") && m.backing.poisoned && !m.bytes && !m.card.ready);idle();
     setup();m.read_result=KUI_LOADER_SD_CRC;
     assert(kui_vmu_backing_read(&m.backing,100,data)==KUI_VMU_BACKING_IO && m.backing.poisoned);idle();
+    setup();m.fail_release=true;
+    assert(kui_vmu_backing_read(&m.backing,100,data)==KUI_VMU_BACKING_IO);
+    assert(m.reads==1 && m.releases==1 && m.backing.poisoned && !m.card.ready);idle();
 }
 static void identity_cases(void) {
     uint8_t data[512];
@@ -286,17 +290,18 @@ static void reservation_cases(void) {
     setup();m.cid[2]^=1;
     assert(kui_vmu_backing_reserve(&m.backing)==KUI_VMU_BACKING_IDENTITY && m.backing.poisoned);
     assert(m.acquires==1 && m.releases==1 && !m.backing.reserved);idle();
-    for(unsigned kind=0;kind<4;kind++) {
+    for(unsigned kind=0;kind<5;kind++) {
         setup();assert(kui_vmu_backing_reserve(&m.backing)==0);
         if(kind==0) m.write_result=KUI_LOADER_SD_TIMEOUT;
         if(kind==1) m.sync_result=KUI_LOADER_SD_TIMEOUT;
         if(kind==2) m.cid[2]^=1;
         int result=kind==1?kui_vmu_backing_sync(&m.backing):
-            kind==3?KUI_VMU_BACKING_OK:kui_vmu_backing_write(&m.backing,100,data);
-        if(kind==3) {
+            kind>=3?KUI_VMU_BACKING_OK:kui_vmu_backing_write(&m.backing,100,data);
+        if(kind>=3) {
             /* Final health failure is observable even when every store I/O
              * returned success; the bridge must withhold its final ACK. */
-            m.health=false;
+            if(kind==3) m.health=false;
+            else m.fail_release=true;
             assert(kui_vmu_backing_unreserve(&m.backing)==KUI_VMU_BACKING_IO);
         } else {
             assert(result && m.backing.poisoned && m.backing.reserved && !m.releases);

@@ -1093,7 +1093,7 @@ build/test-vmu-lcd: tests/test_vmu_lcd.c src/core/vmu_lcd.c src/dreamcast/vmu_lc
 
 # Experimental VMU components are kept outside the ordinary retail resident.
 .PHONY: test-vmu-prototype
-test-vmu-prototype: build/test-vmu-emulation build/test-vmu-image build/test-vmu-store build/test-vmu-maple-dma build/test-vmu-backing build/test-vmu-backing-read-only build/test-vmu-integration build/test-vmu-sci-bus build/test-sci-sd-storage
+test-vmu-prototype: build/test-vmu-emulation build/test-vmu-image build/test-vmu-store build/test-vmu-maple-dma build/test-vmu-backing build/test-vmu-backing-read-only build/test-vmu-integration build/test-vmu-service build/test-vmu-sci-bus build/test-sci-sd-storage
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-emulation
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-image
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-store
@@ -1101,6 +1101,7 @@ test-vmu-prototype: build/test-vmu-emulation build/test-vmu-image build/test-vmu
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-backing
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-backing-read-only
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-integration
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-service
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-sci-bus
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-sci-sd-storage
 	python3 tests/test_vmu_retail_probe.py
@@ -1113,7 +1114,7 @@ build/test-vmu-store: tests/test_vmu_store.c src/core/vmu_store.c src/core/retai
 build/test-vmu-image: tests/test_vmu_image.c src/core/vmu_image.c include/kui/vmu_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_vmu_image.c src/core/vmu_image.c -o $@
-VMU_IMAGE_COMPAT_SOURCES = $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) src/apps/vmu.c src/core/vmu_image.c src/core/vmu_save_format.c src/core/crc16.c
+VMU_IMAGE_COMPAT_SOURCES = $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) src/apps/vmu.c src/core/vmu_image.c src/core/vmu_save_format.c src/core/crc16.c src/core/files_path.c src/core/hash.c src/apps/vmu_import.c
 build/test-vmu-image-compat: tests/test_vmu_image_compat.c tests/test_vmu_app.c $(VMU_IMAGE_COMPAT_SOURCES) include/kui/vmu_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(VMU_IMAGE_COMPAT_SOURCES) tests/test_vmu_image_compat.c -o $@
@@ -1125,9 +1126,12 @@ build/test-vmu-backing: VMU_BACKING_FLAGS := -DKUI_VMU_EXPERIMENTAL=1
 build/test-vmu-backing build/test-vmu-backing-read-only: tests/test_vmu_backing.c src/loader/vmu_backing.c include/kui/vmu_backing.h include/kui/vmu_store.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) $(VMU_BACKING_FLAGS) tests/test_vmu_backing.c src/loader/vmu_backing.c -o $@
-build/test-vmu-integration: tests/test_vmu_integration.c src/core/vmu_emulation.c src/core/vmu_store.c src/core/retail_image.c src/loader/vmu_backing.c src/loader/sd_reader.c src/dreamcast/sci_sd_storage.c
+build/test-vmu-integration: tests/test_vmu_integration.c tests/vmu_sd_model.h src/core/vmu_emulation.c src/core/vmu_store.c src/core/retail_image.c src/loader/vmu_backing.c src/loader/sd_reader.c src/dreamcast/sci_sd_storage.c
 	@mkdir -p $(@D)
-	$(CC) $(filter-out -O1,$(HOST_FLAGS)) -O2 $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Isrc/loader -Isrc/dreamcast -DKUI_VMU_EXPERIMENTAL=1 $^ -o $@
+	$(CC) $(filter-out -O1,$(HOST_FLAGS)) -O2 $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Isrc/loader -Isrc/dreamcast -DKUI_VMU_EXPERIMENTAL=1 $(filter %.c,$^) -o $@
+build/test-vmu-service: tests/test_vmu_service.c tests/vmu_sd_model.h include/kui/vmu_service.h include/kui/vmu_backing.h include/kui/vmu_store.h include/kui/vmu_emulation.h src/loader/vmu_service.c src/core/vmu_emulation.c src/core/vmu_store.c src/core/retail_image.c src/loader/vmu_backing.c src/loader/sd_reader.c src/dreamcast/sci_sd_storage.c
+	@mkdir -p $(@D)
+	$(CC) $(filter-out -O1,$(HOST_FLAGS)) -O2 $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Isrc/loader -Isrc/dreamcast -DKUI_VMU_EXPERIMENTAL=1 $(filter %.c,$^) -o $@
 build/test-vmu-sci-bus: tests/test_vmu_sci_bus.c tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -ffunction-sections -fdata-sections -DKUI_SCI_SD_TEST=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_VMU_EXPERIMENTAL=1 -Iinclude -Isrc/loader tests/test_vmu_sci_bus.c src/loader/sci_sd_bus.c -Wl,--gc-sections -o $@
