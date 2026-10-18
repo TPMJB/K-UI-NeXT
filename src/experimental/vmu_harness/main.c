@@ -582,10 +582,29 @@ static bool persist_open_raw(const struct kui_vmu_fs_input *input) {
         return fail("preparation raw card identity / read-only ownership");
     return true;
 }
-static bool persist_fs_result(int status,const char *phase) {
+static void persist_log_u64(const char *label,uint64_t value) {
+    kui_log("%s %08lx:%08lx",label,(unsigned long)(uint32_t)(value>>32),
+        (unsigned long)(uint32_t)value);
+}
+static bool persist_fs_result(int status,const char *phase,const struct kui_vmu_fs_input *input) {
     if(!status) return true;
-    kui_log("FAIL %s: status=%d detail=%lu LBA=%08lx",phase,status,
-        (unsigned long)persist_workspace.stats.detail,(unsigned long)persist_workspace.stats.last_lba);
+    /* These are the exact VBR bytes captured by the refusing scan, rather
+     * than a reread. Printing cannot alter the failure or perform more I/O. */
+    const struct kui_vmu_fs_stats *stats=&persist_workspace.stats;
+    kui_log("FS %s STATUS %d DETAIL %lu",phase,status,(unsigned long)stats->detail);
+    kui_log("FS LBA %08lx READS %lu",(unsigned long)stats->last_lba,(unsigned long)stats->reads);
+    if(!stats->boot.valid) {kui_log("BOOT DIAG: EXFAT FIELDS UNAVAILABLE");return false;}
+    kui_log("EXFAT FLAGS %04lx REV %04lx ZERO53 %02lx",(unsigned long)stats->boot.flags,
+        (unsigned long)stats->boot.revision,(unsigned long)stats->boot.zero_or);
+    kui_log("EXFAT SHIFTS BYTE %lu CLUSTER %lu FATS %lu",(unsigned long)stats->boot.sector_shift,
+        (unsigned long)stats->boot.cluster_shift,(unsigned long)stats->boot.fat_count);
+    persist_log_u64("PART ACT",stats->boot.partition_offset);
+    persist_log_u64("PART EXP",input->partition_first);
+    persist_log_u64("LEN ACT",stats->boot.volume_sectors);
+    persist_log_u64("LEN EXP",input->partition_end-input->partition_first);
+    kui_log("EXFAT GATE15 MASK %02lx (DIAGNOSTIC ONLY)",(unsigned long)stats->boot.reject_mask);
+    kui_log("EXPECT REV0100 BYTE9 SPC<=16 FATS1 ZERO0 FLAGS0/8");
+    kui_log("PART0 IS ALLOWED; NONZERO OFFSET MUST MATCH");
     return false;
 }
 static bool export_persistent_profile(void) {
@@ -610,7 +629,7 @@ static bool export_persistent_profile(void) {
     input.pair_path=pair_path;
     if(!disconnect_volume() || !persist_open_raw(&input)) goto finished;
     if(!persist_fs_result(kui_vmu_fs_collect(&input,&persist_profile,&persist_workspace),
-        "source allocation / exclusive ownership")) goto finished;
+        "SOURCE",&input)) goto finished;
     persist_raw.profile=&persist_profile;
     /* A valid or torn pending marker is deliberately NOT recovered here.
      * Old synthetic258-sector records cannot be rebound to physical maps. */
@@ -662,7 +681,7 @@ static bool export_persistent_profile(void) {
      * compare all source contents and the exactzero journal marker afresh. */
     if(!persist_open_raw(&input) ||
        !persist_fs_result(kui_vmu_fs_collect(&input,&persist_verify,&persist_workspace),
-           "final allocation / exclusive ownership") ||
+           "FINAL",&input) ||
        !kui_vmu_persist_profile_same_ownership(&persist_profile,&persist_verify) ||
        kui_vmu_persist_profile_verify_snapshot(&persist_profile,persist_read_role,&persist_raw) ||
        !persist_card_matches(&input)) {

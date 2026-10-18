@@ -20,6 +20,7 @@ static struct {
     uint8_t boot[24][512],dirs[4][512],bitmap[512],upcase[512],identity[512];
     uint32_t fat[FS_CLUSTERS+2u];
     unsigned calls,fail_at;
+    uint32_t partition;
 } disk;
 static void p16(uint8_t *p,unsigned value) {p[0]=(uint8_t)value;p[1]=(uint8_t)(value>>8);}
 static void p32(uint8_t *p,uint32_t value) {p16(p,value&65535u);p16(p+2u,value>>16);}
@@ -52,9 +53,14 @@ static void file_entry(uint8_t *p,const char *name,unsigned attributes,unsigned 
     entry_checksum(p);
 }
 static int read_sector(void *context,uint32_t sector,uint8_t out[512]) {
-    assert(context==&disk && sector<FS_SECTORS);++disk.calls;
+    assert(context==&disk);++disk.calls;
     if(disk.fail_at && disk.calls==disk.fail_at) return -1;
     memset(out,0,512u);
+    if(!sector && disk.partition) {
+        out[446u+4u]=7u;p32(out+446u+8u,disk.partition);p32(out+446u+12u,FS_SECTORS);
+        p16(out+510u,0xaa55u);return 0;
+    }
+    assert(sector>=disk.partition && sector-disk.partition<FS_SECTORS);sector-=disk.partition;
     if(sector<24u) memcpy(out,disk.boot[sector],512u);
     else if(sector>=FS_FAT && sector<FS_FAT+FS_FAT_SECTORS) {
         unsigned start=(sector-FS_FAT)*128u;
@@ -165,9 +171,43 @@ static void malformed_sets_boot_and_io(void) {
     fresh();assert(collect()==0);unsigned calls=disk.calls;
     for(unsigned failure=1u;failure<=calls;failure++) {fresh();disk.fail_at=failure;refusal();}
 }
+static void exfat_partition_offset_and_stale_backup_flags(void) {
+    for(unsigned exact=0;exact<2u;exact++) {
+        fresh();disk.partition=2048u;disk.input.partition_first=2048u;
+        disk.input.partition_end=disk.input.card_sectors=2048u+FS_SECTORS;
+        p64(disk.boot[0]+64u,exact?2048u:0u);boot_checksum();
+        assert(collect()==0);
+        assert(disk.work.stats.boot.valid && !disk.work.stats.boot.reject_mask);
+        assert(disk.work.stats.boot.partition_offset==(exact?2048u:0u));
+        assert(disk.work.stats.boot.volume_sectors==FS_SECTORS && disk.work.stats.boot.flags==0u);
+        assert(disk.profile.partition_first==2048u && disk.profile.files[0].useful[0].lba==2048u+lba(20u));
+    }
+    fresh();disk.partition=2048u;disk.input.partition_first=2048u;
+    disk.input.partition_end=disk.input.card_sectors=2048u+FS_SECTORS;
+    p64(disk.boot[0]+64u,4096u);boot_checksum();refusal();
+    assert(disk.work.stats.boot.reject_mask==KUI_VMU_FS_BOOT_PARTITION_OFFSET);
+    assert(disk.work.stats.boot.partition_offset==4096u && disk.work.stats.detail==15u);
+    /* Flags do not contribute to boot checksums. Backup flags are stale even
+     * when their dirty/media/active/reserved bits differ from the clean main. */
+    fresh();disk.boot[12u][106u]=7u;disk.boot[12u][107u]=0x80u;
+    assert(collect()==0 && !disk.work.stats.boot.flags && !disk.work.stats.boot.reject_mask);
+    const unsigned flags[]={1u,2u,4u,0x10u,0x8000u};
+    for(unsigned i=0;i<sizeof(flags)/sizeof(flags[0]);i++) {
+        fresh();p16(disk.boot[0]+106u,flags[i]);refusal();
+        assert(disk.work.stats.boot.reject_mask==KUI_VMU_FS_BOOT_FLAGS);
+        assert(disk.work.stats.boot.flags==flags[i] && disk.work.stats.detail==15u);
+    }
+    fresh();p64(disk.boot[0]+72u,FS_SECTORS-1u);boot_checksum();refusal();
+    assert(disk.work.stats.boot.reject_mask==KUI_VMU_FS_BOOT_VOLUME_LENGTH);
+    fresh();disk.boot[12u][100u]^=1u;refusal();assert(disk.work.stats.detail==17u);
+    fresh();disk.boot[11u][3u]^=1u;refusal();assert(disk.work.stats.detail==18u);
+    fresh();disk.boot[0][11u]=0x40u;refusal();
+    assert(disk.work.stats.boot.reject_mask==KUI_VMU_FS_BOOT_ZERO && disk.work.stats.boot.zero_or==0x40u);
+}
 int main(void) {
     valid_contiguous_and_fresh_comparison();fragmented_map_and_exact_tail();
     crosslinks_bitmap_metadata_and_attributes();malformed_sets_boot_and_io();
+    exfat_partition_offset_and_stale_backup_flags();
     puts("VMU filesystem admission: exFAT live maps, full allocation, bitmap/directory ownership, crosslinks, metadata and I/O refusals passed");
     return 0;
 }

@@ -745,6 +745,28 @@
         "The SD base remained read-only by construction. Power-off intentionally discards every RAM change.",
         "Absolute physical SD LBA and card CID are omitted from this repository record."
       ]
+    },
+    {
+      "build": "3b9617257eb1",
+      "date": "2026-10-17",
+      "outcome": "persistent_preparation_filesystem_refusal",
+      "source_images": [
+        "image-1792290937236.jpg"
+      ],
+      "storage": "SCI",
+      "filesystem": "exFAT",
+      "cluster_bytes": 131072,
+      "failure_phase": "source allocation / exclusive ownership",
+      "status": -4,
+      "detail": 15,
+      "profile_exported": false,
+      "cause": "individual exFAT boot-field condition not captured",
+      "limits": [
+        "The refusal occurs before source snapshot collection and create-new profile output.",
+        "The old console message combines several exFAT boot-field checks and truncates the LBA at the right edge.",
+        "Code review found that PartitionOffset=0 was incorrectly rejected and backup VolumeFlags were incorrectly treated as current; this photograph does not identify either as the actual cause.",
+        "Probe image, journal and identity should be preserved. Retail SD saving remains disabled."
+      ]
     }
   ]
 }

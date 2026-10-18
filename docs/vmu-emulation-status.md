@@ -267,6 +267,16 @@ and real FatFs image tests pass. This preparation work does not enable retail
 SD writes; a console export is still needed before the persistent runtime can
 be bound to this card. See `vmu-persistent-profile-prep.md`.
 
+The first P2 console run (`3b9617257eb1`) refused the exFAT boot-field gate
+with status -4/detail 15 before creating an output. That combined message did
+not identify the failing field. Review found and corrected two compatibility
+bugs: exFAT PartitionOffset zero is unspecified rather than a mismatch, and
+backup VolumeFlags are stale. Current main flags, nonzero offset mismatches,
+volume length, checksums and allocation ownership remain guarded. Refusals now
+display the exact captured boot fields and rejection bits on short rows, with
+no extra media reads. The photograph alone does not establish which field
+caused that first refusal.
+
 ## Work required before in-game saves
 
 1. Prove exact game-side Maple ownership before submission and before the

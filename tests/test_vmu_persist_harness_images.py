@@ -156,7 +156,7 @@ def crosslink_journal(image, wire):
         change_at(image, offset, entries)
 
 
-def partition_boot_geometry(image, first, kind):
+def partition_boot_geometry(image, first, kind, boot_offset=None):
     """Turn the wrapped superfloppy into a coherent actual partition VBR."""
     if kind == "fat32":
         boot = bytearray(read_at(image, first * 512, 512))
@@ -170,7 +170,7 @@ def partition_boot_geometry(image, first, kind):
     else:
         for start in (first, first + 12):
             boot = bytearray(read_at(image, start * 512, 11 * 512))
-            struct.pack_into("<Q", boot, 64, first)
+            struct.pack_into("<Q", boot, 64, first if boot_offset is None else boot_offset)
             checksum = 0
             for index, value in enumerate(boot):
                 if index not in (106, 107, 112):
@@ -179,7 +179,19 @@ def partition_boot_geometry(image, first, kind):
             change_at(image, (start + 11) * 512, struct.pack("<I", checksum) * 128)
 
 
+def exfat_zero_partition_offset(image, first, baseline_wire, baseline_files):
+    """A valid zero boot offset is ignored; actual ownership stays absolute."""
+    partition_boot_geometry(image, first, "exfat", boot_offset=0)
+    assert struct.unpack("<Q", read_at(image, first * 512 + 64, 8))[0] == 0
+    assert struct.unpack("<Q", read_at(image, (first + 12) * 512 + 64, 8))[0] == 0
+    _, zero_wire, zero_files = exported(image, run(PREP, image, "export-persist"), first)
+    assert zero_wire == baseline_wire and zero_files == baseline_files
+
+
 def exercise(image, partition_first=0):
+    before_diagnostics = digest(image)
+    run(PREP, image, "prep-boot-diagnostics")
+    assert digest(image) == before_diagnostics, "boot diagnostic formatting performed I/O"
     path1, wire1, files1 = exported(image, run(PREP, image, "export-persist"), partition_first)
     path2, wire2, files2 = exported(image, run(PREP, image, "export-persist"), partition_first)
     assert path1.endswith("retail-persistent-profile-0001.bin")
@@ -250,7 +262,10 @@ def main():
             partition_boot_geometry(partitioned, first, kind)
             # New profile numbers continue, and old absolute-map files are
             # unrelated namespace entries rather than ownership authority.
-            exported(partitioned, run(PREP, partitioned, "export-persist"), first)
+            _, partition_wire, partition_files = exported(partitioned, run(PREP, partitioned, "export-persist"), first)
+            if kind == "exfat":
+                exfat_zero_partition_offset(partitioned, first, partition_wire, partition_files)
+                print("PASS exfat: MBR2048 with valid zero boot PartitionOffset retains absolute maps and unchanged sources", flush=True)
             print(f"PASS {kind}: P2 image/journal/identity maps+hashes, whole-cluster ownership, generic VMU, unchanged sources, disabled recovery, unique outputs and final fresh checks", flush=True)
 
 

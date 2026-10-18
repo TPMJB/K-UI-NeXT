@@ -133,11 +133,24 @@ static int vmu_fs_volume(struct vmu_fs_state *s) {
     if(b[510]!=0x55u || b[511]!=0xaau) return vmu_fs_fail(s,KUI_VMU_FS_VOLUME,14u);
     g->sector_bytes=512u;
     if(!memcmp(b+3u,"EXFAT   ",8u)) {
-        if(!vmu_fs_zero(b+11u,53u) || vmu_fs_u16(b+104u)!=0x100u ||
-           b[108]!=9u || b[109]>16u || b[110]!=1u ||
-           (vmu_fs_u16(b+106u)&~UINT16_C(0x0008)) ||
-           vmu_fs_u64(b+64u)!=in->partition_first ||
-           vmu_fs_u64(b+72u)!=in->partition_end-in->partition_first)
+        struct kui_vmu_fs_boot_diagnostics *boot=&s->stats->boot;
+        boot->valid=1u;boot->partition_offset=vmu_fs_u64(b+64u);boot->volume_sectors=vmu_fs_u64(b+72u);
+        boot->revision=vmu_fs_u16(b+104u);boot->flags=vmu_fs_u16(b+106u);
+        boot->sector_shift=b[108];boot->cluster_shift=b[109];boot->fat_count=b[110];
+        for(unsigned i=11u;i<64u;i++) boot->zero_or|=b[i];
+        if(boot->zero_or) boot->reject_mask|=KUI_VMU_FS_BOOT_ZERO;
+        if(boot->revision!=0x100u) boot->reject_mask|=KUI_VMU_FS_BOOT_REVISION;
+        if(boot->sector_shift!=9u) boot->reject_mask|=KUI_VMU_FS_BOOT_SECTOR_SHIFT;
+        if(boot->cluster_shift>16u) boot->reject_mask|=KUI_VMU_FS_BOOT_CLUSTER_SHIFT;
+        if(boot->fat_count!=1u) boot->reject_mask|=KUI_VMU_FS_BOOT_FAT_COUNT;
+        if(boot->flags&~UINT32_C(0x0008)) boot->reject_mask|=KUI_VMU_FS_BOOT_FLAGS;
+        /* exFAT specification 3.1.4: zero means ignore PartitionOffset.
+         * MBR selection remains independent and every map uses that start. */
+        if(boot->partition_offset && boot->partition_offset!=in->partition_first)
+            boot->reject_mask|=KUI_VMU_FS_BOOT_PARTITION_OFFSET;
+        if(boot->volume_sectors!=in->partition_end-in->partition_first)
+            boot->reject_mask|=KUI_VMU_FS_BOOT_VOLUME_LENGTH;
+        if(boot->reject_mask)
             return vmu_fs_fail(s,KUI_VMU_FS_UNSUPPORTED,15u);
         g->fs_type=KUI_VMU_PERSIST_EXFAT;g->sectors_per_cluster=UINT32_C(1)<<b[109];
         g->fat_count=1u;g->fat_sectors=vmu_fs_u32(b+84u);
@@ -154,8 +167,12 @@ static int vmu_fs_volume(struct vmu_fs_state *s) {
             uint32_t sum=0;
             for(unsigned sector=0;sector<11u;sector++) {
                 if(vmu_fs_read(s,in->partition_first+copy*12u+sector,b)) return s->stats->result;
+                /* Backup VolumeFlags are explicitly stale (spec 3.1.13).
+                 * The current main flags were admitted above; stable fields
+                 * and both complete boot-region checksums remain mandatory. */
                 if(!sector && (memcmp(b,geometry,106u) || memcmp(b+108u,geometry+108u,4u) ||
-                   b[510]!=0x55u || b[511]!=0xaau || (vmu_fs_u16(b+106u)&~UINT16_C(0x0008))))
+                   b[510]!=0x55u || b[511]!=0xaau ||
+                   (!copy && (vmu_fs_u16(b+106u)&~UINT16_C(0x0008)))))
                     return vmu_fs_fail(s,KUI_VMU_FS_CORRUPT,17u);
                 for(unsigned i=0;i<512u;i++) if(sector || (i!=106u && i!=107u && i!=112u))
                     sum=((sum&1u)?UINT32_C(0x80000000):0u)+(sum>>1)+b[i];

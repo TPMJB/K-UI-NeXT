@@ -91,6 +91,42 @@ static uint32_t image_crc(unsigned number) {
     assert(f_close(&file)==FR_OK);assert(disconnect_volume());return crc;
 }
 #if KUI_VMU_PERSIST_PREP
+static int diagnostic_read_forbidden(void *context,uint32_t lba,uint8_t bytes[512]) {
+    (void)context;(void)lba;(void)bytes;
+    assert(!"Diagnostic display must not reread or replace the original refusal");return -1;
+}
+static void check_persist_boot_diagnostics(void) {
+    struct kui_vmu_fs_input input={.read_sector=diagnostic_read_forbidden,
+        .partition_first=UINT64_C(0x300000004),.partition_end=UINT64_C(0x80000000a)};
+    memset(&persist_workspace.stats,0,sizeof(persist_workspace.stats));
+    persist_workspace.stats.result=KUI_VMU_FS_UNSUPPORTED;
+    persist_workspace.stats.detail=15u;persist_workspace.stats.last_lba=0x12345678u;
+    persist_workspace.stats.reads=2u;persist_workspace.stats.boot.valid=1u;
+    persist_workspace.stats.boot.reject_mask=0xe2u;
+    persist_workspace.stats.boot.partition_offset=UINT64_C(0x100000002);
+    persist_workspace.stats.boot.volume_sectors=UINT64_C(0x700000008);
+    persist_workspace.stats.boot.revision=0x101u;persist_workspace.stats.boot.flags=2u;
+    persist_workspace.stats.boot.sector_shift=9u;persist_workspace.stats.boot.cluster_shift=7u;
+    persist_workspace.stats.boot.fat_count=1u;
+    const char *const expected[]={"STATUS -4 DETAIL 15","FS LBA 12345678 READS 2",
+        "FLAGS 0002 REV 0101 ZERO53 00","BYTE 9 CLUSTER 7 FATS 1",
+        "PART ACT 00000001:00000002","PART EXP 00000003:00000004",
+        "LEN ACT 00000007:00000008","LEN EXP 00000005:00000006","MASK e2"};
+    for(unsigned phase=0;phase<2u;phase++) {
+        line_count=0;struct kui_vmu_fs_stats before=persist_workspace.stats;
+        assert(!persist_fs_result(KUI_VMU_FS_UNSUPPORTED,phase?"FINAL":"SOURCE",&input));
+        assert(line_count==11u && !memcmp(&before,&persist_workspace.stats,sizeof(before)));
+        for(unsigned row=0;row<line_count;row++) assert(strlen(lines[row])<=65u && !strstr(lines[row],"READY"));
+        for(unsigned item=0;item<sizeof(expected)/sizeof(expected[0]);item++) {
+            bool found=false;
+            for(unsigned row=0;row<line_count;row++) if(strstr(lines[row],expected[item])) found=true;
+            assert(found);
+        }
+    }
+    persist_workspace.stats.boot.valid=0u;line_count=0;
+    assert(!persist_fs_result(KUI_VMU_FS_IO,"SOURCE",&input) && line_count==3u);
+    assert(strstr(lines[2],"UNAVAILABLE") && !connected && !exported_profile_path[0]);
+}
 static void pair_content_hashes(unsigned number,uint8_t hashes[3][32]) {
     static const char *const leaves[]={"card.vmd","card.journal","identity.bin"};
     assert(connect_volume());
@@ -133,7 +169,9 @@ int main(int argc,char **argv) {
         ok=run_test(false);
     }
 #if KUI_VMU_PERSIST_PREP
-    else if(!strcmp(argv[2],"export-persist") || !strcmp(argv[2],"refuse-persist") ||
+    else if(!strcmp(argv[2],"prep-boot-diagnostics")) {
+        check_persist_boot_diagnostics();ok=true;
+    } else if(!strcmp(argv[2],"export-persist") || !strcmp(argv[2],"refuse-persist") ||
             !strcmp(argv[2],"refuse-persist-scif") || !strcmp(argv[2],"refuse-persist-raw") ||
             !strcmp(argv[2],"refuse-persist-identity") || !strcmp(argv[2],"refuse-persist-final-raw") ||
             !strcmp(argv[2],"refuse-persist-final-identity")) {

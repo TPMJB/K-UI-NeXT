@@ -37,11 +37,26 @@ struct kui_vmu_fs_input {
     const struct kui_vmu_fs_range *forbidden;
     size_t forbidden_count;
 };
+enum kui_vmu_fs_boot_reject {
+    KUI_VMU_FS_BOOT_ZERO=1u, KUI_VMU_FS_BOOT_REVISION=2u,
+    KUI_VMU_FS_BOOT_SECTOR_SHIFT=4u, KUI_VMU_FS_BOOT_CLUSTER_SHIFT=8u,
+    KUI_VMU_FS_BOOT_FAT_COUNT=16u, KUI_VMU_FS_BOOT_FLAGS=32u,
+    KUI_VMU_FS_BOOT_PARTITION_OFFSET=64u, KUI_VMU_FS_BOOT_VOLUME_LENGTH=128u
+};
+/* Diagnostics from the main VBR bytes already read by admission. valid=1
+ * means an exFAT main VBR was recognized, not that it passed admission.
+ * No additional reads, changes to the card, or write authority are implied. */
+struct kui_vmu_fs_boot_diagnostics {
+    uint32_t valid,reject_mask;
+    uint64_t partition_offset,volume_sectors;
+    uint32_t revision,flags,sector_shift,cluster_shift,fat_count,zero_or;
+};
 struct kui_vmu_fs_stats {
     uint32_t reads,directory_sectors,entries,directory_clusters,fat_entries;
     uint32_t target_clusters,last_lba,last_cluster,last_role;
     int32_t result;
     uint32_t detail;
+    struct kui_vmu_fs_boot_diagnostics boot;
 };
 /* Exclusive caller-owned scratch, zeroed by each API. Internal storage has
  * max_align_t alignment; it is never retained after return. Diagnostics remain

@@ -32,6 +32,16 @@ journal marker must be recovered using its original physical binding; this
 preparation program never attempts recovery through the old synthetic test
 mapping.
 
+The exFAT boot diagnostics show the exact captured fields and rejection mask
+on separate short rows when a scan fails. `PartitionOffset=0` is accepted as
+unspecified; physical placement still comes from the independently checked MBR.
+A different nonzero offset is refused. Backup volume flags are stale, while
+the current main-boot dirty/media-failure and unsupported-layout checks still
+refuse. The tool does not clear flags or repair the filesystem.
+
+These rules follow the [Microsoft exFAT specification, sections 3.1.4 and
+3.1.13](https://learn.microsoft.com/en-us/windows/win32/fileio/exfat-specification).
+
 ## What the profile proves
 
 The canonical 4,096-byte version-2 profile is separate from the earlier
