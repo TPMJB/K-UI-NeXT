@@ -63,7 +63,7 @@ int kui_vmu_durable_handoff_validate(const struct kui_vmu_durable_handoff *h) {
         h->seal!=kui_retail_crc32(0,h,offsetof(struct kui_vmu_durable_handoff,seal))?-1:0;
 }
 static void durable_card_increment(uint32_t *n) {if(*n!=UINT32_MAX) ++*n;}
-static int durable_card_fault(struct kui_vmu_durable *s,int reason) {
+static int __attribute__((noipa)) durable_card_fault(struct kui_vmu_durable *s,int reason) {
     if(!s->faulted) {s->sd_last_result=reason;durable_card_increment(&s->sd_faults);}
     s->faulted=1u;s->store.ready=0u;return -1;
 }
