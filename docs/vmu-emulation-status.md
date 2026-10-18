@@ -5,9 +5,10 @@ This branch develops an original virtual memory card for K-UI. The public
 proof has delivered virtual responses and user-reported same-session save,
 load and deletion. The separate Card tools physical-journal proof has now
 committed generation `01` and reopened the same generation and image hash on the
-console. An isolated Toy durable-save loader is implemented, with native build
-audits and retail hardware testing still pending. Durable saving in a retail
-game has not yet been established.
+console. The isolated Toy durable-save build `fc05c8e259e2` has passed host and
+native audits. The user created profile `ABC` and reports finding it after
+reboot; the supplied game screenshot lists that profile. General game support,
+physical-save migration and virtual-card selection remain unfinished.
 
 ## Implemented
 
@@ -338,8 +339,19 @@ sync uses the existing real-map redo store under one complete SCI lease, with
 ordered barriers and exact base readback. Stage and worker writes use PIO.
 Current CRCs and the save acknowledgement become visible only after successful
 lease release/restoration. Focused session, stage and backend sanitizer tests
-pass. Native linked memory/stack/code audits and console testing are pending. No retail persistence result is claimed. See
-`vmu-persistent-card-test.md` for the intended isolated hardware procedure.
+pass. Build `fc05c8e259e2` also passed the exact-source native workflow: low
+stack 1,224/1,232 bytes, combined worker stack 3,304/4,096 bytes, 9,536 bytes
+spare inside the protected 64 KiB worker reservation, and both linked PIO
+adapters passing all 16 argument/callback execution cases. The actual user P2
+was personalized within its exact permitted span and the saved ZIP was checked
+byte-for-byte. See `vmu-persistent-card-test.md`.
+
+The user then created the Toy profile `ABC` and reports that it remained after
+reboot. Photograph `image-1792298257262.jpg` shows `ABC` in the save selector.
+This establishes user-reported named-profile restart persistence for this
+exact experiment. It does not yet establish loading saved gameplay progress,
+deliberate power-loss recovery during a write, or compatibility with other
+titles and reader modes.
 
 Mode 4 keeps the exact original Toy/SCI/Standard route, CDDA and RAM patches
 off, the 64 KiB protected worker limit and 4 KiB private stack. Its stop bounds
@@ -350,20 +362,21 @@ work; the public 2.0.0 runtime is unchanged.
 
 ## Work required before durable retail release
 
-1. Complete the mode 4 native linked audits for the exact Toy hook, ownership
-   guards, filtered DMA chain, PIO writer and typed storage callback.
-2. Verify the durable worker fits the unchanged 64 KiB/4 KiB memory and stack
-   budgets. Toy's 192 KiB allocator lease does not authorize using its remaining
-   memory, which can contain direct SDK scratch.
-3. Validate the fresh ownership/recovery/checkpoint handoff on the console,
-   including the image already changed by the physical-journal proof.
-4. Exercise actual Toy save/load and named-save persistence across a complete
-   restart. Confirm healthy shared-bus release before acknowledgement and
-   controlled recovery after uncertain I/O. The journal remains atomic per
-   block, not across an entire game save.
-5. Design broader image/journal selection and lifecycle management, imported
-   image validation and deliberate shared identities for related discs.
-   Formatting, other titles and additional reader modes need their own proofs.
+1. Confirm loading saved gameplay progress after restart and repeat Toy
+   create/load/update/delete cycles beyond the initial named-profile result.
+2. Exercise controlled recovery after uncertain retail I/O. The journal remains
+   atomic per block, not across an entire game save.
+3. Add migration from verified physical-VMU backups into new persistent pairs.
+   The existing VMU Manager already captures complete 128 KiB VMD backups and
+   verifies them after SD readback. Its save import and VMD extraction currently
+   stage backup bundles; they do not populate a live virtual card.
+4. Add selectable standard 200-block virtual cards and per-game assignments,
+   broader title hooks, and deliberate shared identities for related discs.
+   A backup must become a new image/journal/identity pair with fresh allocation
+   admission; replacing the active image alone could replay an unrelated old
+   redo record. Keep the working `ABC` pair intact during migration work.
+5. Validate other titles and reader modes independently. Formatting and general
+   virtual-card management remain separate work; the public runtime is unchanged.
 
 The chosen virtual address shadows a complete Maple subunit. Keeping a
 physical VMU's LCD at that same address would require an additional function

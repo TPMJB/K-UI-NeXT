@@ -894,6 +894,31 @@
         "This tests the owned KUIPROOF fixture in Card tools; no retail-game SD writer was enabled in this build.",
         "The valid physical redo record remains bound to this image/journal pair; the old synthetic A/X recovery must not reopen it."
       ]
+    },
+    {
+      "build": "fc05c8e259e2",
+      "date": "2026-10-17",
+      "outcome": "retail_toy_named_profile_survived_user_reported_reboot",
+      "source_images": [
+        "image-1792298257262.jpg"
+      ],
+      "transport": "SCI",
+      "pair_path": "/KUI/vmu-test/p0001",
+      "proof_mode": 4,
+      "profile_name": "ABC",
+      "user_report": "I created a profile ABC and on reboot it was there.",
+      "observed_screen": "Toy Commander Selecting Save Files lists ABC and New Game.",
+      "validation": [
+        "User reports creating the named profile and finding it after reboot.",
+        "Photograph shows ABC listed in the game save selector.",
+        "The delivered fc05c8e259e2 artifact passed host and native CI, strict P2 personalization, native PIO/stack/memory audits and exact saved-byte verification."
+      ],
+      "limits": [
+        "Reboot timing is user-reported; the photograph itself shows the post-reboot save selector.",
+        "This proves reported named-profile persistence for the exact Toy SCI Standard experiment, not other games or reader modes.",
+        "No selected-profile gameplay/progress load, deliberate torn-write recovery, imported physical save, or general card-selection UI is claimed.",
+        "The active image, physical journal and identity remain one bound pair; do not replace card.vmd alone."
+      ]
     }
   ]
 }
