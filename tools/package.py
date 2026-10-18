@@ -25,7 +25,7 @@ NATIVE_CDDA_PROFILES = {
     "mdk2": ("cdda-native-mdk2.kui", "retail-mdk2-cdda.kui"),
 }
 NATIVE_CDDA_FILES = tuple(names[0] for names in NATIVE_CDDA_PROFILES.values())
-GAME_FILES = ("probe.kui", "image-probe.kui", "retail-boot.kui", "zso-boot.kui", "lzo-boot.kui", "ce-probe.kui", "probe.dat",
+GAME_FILES = ("probe.kui", "image-probe.kui", "retail-boot.kui", "zso-boot.kui", "lzo-boot.kui", "cso-boot.kui", "ce-probe.kui", "probe.dat",
               *WINCE_CDDA_FILES, *NATIVE_CDDA_FILES)
 NATIVE_RELEASE_FLAGS = {"LOW": "1", "TRACE": "0", "SONIC": "0",
                         "SCI_RESUME_FIX": "1", "NATIVE_DISC_CHECK": "1",
@@ -513,6 +513,7 @@ def main():
     retail_ce = ROOT / "build/retail-ce/entry.elf"
     retail_zso = ROOT / "build/retail-zso/entry.elf"
     retail_lzo = ROOT / "build/retail-lzo/entry.elf"
+    retail_cso = ROOT / "build/retail-cso/entry.elf"
     run("python3", "tools/check_loader_layout.py")
     run("python3", "tools/check_image_loader_layout.py")
     run("python3", "tools/check_retail_loader_layout.py")
@@ -523,7 +524,8 @@ def main():
     run("python3", "tools/check_retail_instructions.py", "build/retail-ce")
     run("python3", "tools/check_zso_loader.py", "build/retail-zso")
     run("python3", "tools/check_zso_loader.py", "--codec", "lzo", "build/retail-lzo")
-    for image in (elf, runtime, probe, image_probe, retail, retail_bench, retail_ce, retail_zso, retail_lzo):
+    run("python3", "tools/check_zso_loader.py", "--codec", "cso", "build/retail-cso")
+    for image in (elf, runtime, probe, image_probe, retail, retail_bench, retail_ce, retail_zso, retail_lzo, retail_cso):
         compiled = json.loads(image.with_suffix(".compile.json").read_text())
         if (compiled["source_dirty"] or compiled["commit"] != commit or
                 compiled["elf_sha256"] != hashlib.sha256(image.read_bytes()).hexdigest()):
@@ -581,6 +583,10 @@ def main():
     lzo_package = envelope(lzo_payload, lzo_memory, commit[:12])
     lzo_info = inspect_zso(lzo_package, "lzo")
     (games / "lzo-boot.kui").write_bytes(lzo_package)
+    cso_payload, cso_memory = flatten_elf(retail_cso.read_bytes())
+    cso_package = envelope(cso_payload, cso_memory, commit[:12])
+    cso_info = inspect_zso(cso_package, "cso")
+    (games / "cso-boot.kui").write_bytes(cso_package)
     bench_payload, bench_memory = flatten_elf(retail_bench.read_bytes())
     bench_package = envelope(bench_payload, bench_memory, commit[:12])
     bench_info = inspect_retail(bench_package)
@@ -698,7 +704,7 @@ def main():
               "kind": package_kind(release, candidate),
               "runtime": runtime_info, "loader_probe": probe_info,
               "image_probe": image_probe_info,
-              "retail_boot": retail_info, "zso_boot": zso_info, "lzo_boot": lzo_info, "ce_probe": ce_info,
+              "retail_boot": retail_info, "zso_boot": zso_info, "lzo_boot": lzo_info, "cso_boot": cso_info, "ce_probe": ce_info,
               "native_release_baseline": native_baseline,
               "wince_cdda_profiles": wince_profiles,
               "native_cdda_profiles": native_profiles,

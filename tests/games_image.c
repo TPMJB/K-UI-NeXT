@@ -892,6 +892,7 @@ static void check_formats(void) {
             char path[96];snprintf(path,sizeof(path),"/Games/%s",names[i]);struct kui_games_detail detail;
             assert(!kui_games_inspect(path,&detail,log_line,cancel) && !detail.valid && !detail.stopped);
             if(i==1) assert(strstr(detail.message,"selected codec") && strstr(detail.message,"LZ4 or LZO1X"));
+            else if(i==0) assert(strstr(detail.message,"Invalid track length"));
             else assert(strstr(detail.message,"offline import") && strstr(detail.message,"direct launch unavailable"));
         }
         assert(!test.read_calls);return;

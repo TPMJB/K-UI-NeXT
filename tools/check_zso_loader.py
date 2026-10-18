@@ -174,7 +174,7 @@ def check_stack_usage(directory, symbols, init_proof, codec="lz4"):
             rows += 1
             if function_base(name) == "kui_retail_resident_init":
                 init_frames.append((name, frame))
-    required = REQUIRED_FRAMES + (("kui_lzo1x_decode",) if codec == "lzo" else ())
+    required = REQUIRED_FRAMES + (("kui_lzo1x_decode",) if codec == "lzo" else ("kui_deflate_decode",) if codec == "cso" else ())
     for name in required:
         if name not in frames or "_" + name not in symbols:
             raise ValueError(f"Missing ZSO runtime stack-usage frame: {name}")
@@ -226,7 +226,7 @@ def check_instructions(directory):
 def check_directory(directory, codec="lz4"):
     directory = Path(directory)
     profile = (directory / "layout-config").read_text().strip()
-    codec_profile = " CODEC=1" if codec == "lzo" else ""
+    codec_profile = " CODEC=1" if codec == "lzo" else " CODEC=2" if codec == "cso" else ""
     if not re.fullmatch(r"ZSO=1" + codec_profile + r" LOW=1 TRANSPORT=1 READER=0 SLOTS=32 PATCHES=0 BUILD=[0-9a-f]{12}", profile):
         raise ValueError("ZSO build profile must be native SCI Standard, low, 32 slots and no RAM patches")
     images = {
@@ -249,7 +249,7 @@ def check_directory(directory, codec="lz4"):
             raise ValueError(f"ZSO {name}.bin differs from linked ELF bytes")
         check_bss(images[name], base, prefix)
     rs, ss, es = resident["symbols"], stage["symbols"], entry["symbols"]
-    required = REQUIRED_RESIDENT + (("_kui_lzo1x_decode",) if codec == "lzo" else ())
+    required = REQUIRED_RESIDENT + (("_kui_lzo1x_decode",) if codec == "lzo" else ("_kui_deflate_decode",) if codec == "cso" else ())
     for symbol in required:
         code_symbol(resident, symbol, layout.RESIDENT_ADDRESS)
     if (rs.get("__retail_hook_stack") != layout.HOOK_STACK or

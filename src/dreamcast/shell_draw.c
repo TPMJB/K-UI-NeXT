@@ -1429,7 +1429,7 @@ static void games_variant_line(struct paint *p,const struct kui_shell *s,unsigne
     }
 }
 static const char *game_background(const struct kui_shell *s) {
-    if(s->games_detail.format==KUI_GAME_IMAGE_ZSO) return "Off";
+    if(kui_game_image_format_compressed(s->games_detail.format)) return "Off";
     if(kui_shell_games_ce_probe_ready(s)) return "On (required)";
     return s->games_launch_reader==KUI_GAME_READER_STANDARD?"Off":"On";
 }
@@ -1446,8 +1446,8 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
     if(cover) cover_image(p,440,214,KUI_COVER_LARGE,v->game_detail_cover);
     if(kui_shell_games_launch_ready(s)) {
         char line[128];
-        words(p,48,218,right,WHITE,d->format==KUI_GAME_IMAGE_ZSO?
-            "ZSO launch test; compatibility untested":"Ready to launch",false);
+        words(p,48,218,right,WHITE,kui_game_image_format_compressed(d->format)?
+            "Compressed launch test; compatibility untested":"Ready to launch",false);
         snprintf(line,sizeof(line),"Background loading: %s",game_background(s));
         words(p,48,256,right,MUTED,line,false);
         words(p,48,282,right,MUTED,s->games_launch_cdda?"CD music: On":"CD music: Off",false);
@@ -1460,7 +1460,7 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
         words(p,48,218,right,AMBER,d->message[0]?d->message:
             "This image cannot be launched yet.",false);
         words(p,48,256,right,MUTED,v->busy?"Reading image information from SD.":
-            d->valid && d->format==KUI_GAME_IMAGE_ZSO?"Image information remains available in Options.":
+            d->valid && kui_game_image_format_compressed(d->format)?"Image information remains available in Options.":
             "Check the image files and inspect again.",false);
         words(p,48,294,right,MUTED,kui_shell_games_image_ready(s)?
             "Y Options   X Inspect again":kui_shell_games_zso_selected(s)?"Y Select ZSO codec   X Inspect again":"X Inspect again",false);
@@ -1477,11 +1477,11 @@ static void games_information(struct paint *p,const struct kui_shell *s) {
     label(p,48,202,WHITE,line);
     snprintf(line,sizeof(line),"Boot file: %s   %lu bytes",d->boot_file,(unsigned long)d->boot_bytes);
     label(p,48,230,WHITE,line);
-    if(d->format==KUI_GAME_IMAGE_ZSO)
+    if(kui_game_image_format_compressed(d->format))
         snprintf(line,sizeof(line),"Tracks: %u   Data: %u   Audio: unknown",d->tracks,d->data_tracks);
     else snprintf(line,sizeof(line),"Tracks: %u   Data: %u   Audio: %u",d->tracks,d->data_tracks,d->audio_tracks);
     label(p,48,258,WHITE,line);
-    static const char *const formats[]={"GDI","ISO","CUE/BIN","CDI","BIN/IMG","ZSO"};
+    static const char *const formats[]={"GDI","ISO","CUE/BIN","CDI","BIN/IMG","ZSO","CSO (DEFLATE)"};
     const char *format=(unsigned)d->format<sizeof(formats)/sizeof(formats[0])?formats[d->format]:"Unknown";
     if(d->format==KUI_GAME_IMAGE_ZSO)format=d->zso_codec==KUI_ZSO_LZO1X?"ZSO (LZO1X)":"ZSO (standard LZ4)";
     snprintf(line,sizeof(line),"Format: %s   %llu bytes",format,(unsigned long long)d->bytes);
@@ -1587,7 +1587,7 @@ static void games_launch_options(struct paint *p,const struct kui_shell *s) {
         label(p,40,350,AMBER,kui_shell_games_cdda_status(s));
     const char *hint="Extra settings, image information and developer tests.";
     if(s->games_launch_selected==KUI_SHELL_GAME_OPTION_READER)
-        hint=s->games_detail.format==KUI_GAME_IMAGE_ZSO?"ZSO uses the Standard reader; background loading is unavailable.":
+        hint=kui_game_image_format_compressed(s->games_detail.format)?"Compressed images use the Standard reader; background loading is unavailable.":
             kui_shell_games_ce_probe_ready(s)?"This Windows CE game requires background loading.":
             s->games_launch_cdda?"Changing background loading turns CD music off.":
             "Load from SD while the game continues working.";
@@ -1655,11 +1655,11 @@ static void games_extra_options(struct paint *p,const struct kui_shell *s) {
         "Check the executable and launch package without starting the game.",
         "Use defaults without saving. Select again to restore choices."};
     const char *hint=hints[s->game_tools_selected<KUI_SHELL_GAME_TOOL_COUNT?s->game_tools_selected:0];
-    if(s->games_detail.format==KUI_GAME_IMAGE_ZSO) {
+    if(kui_game_image_format_compressed(s->games_detail.format)) {
         if(s->game_tools_selected==KUI_SHELL_GAME_TOOL_SPEED)
-            hint="ZSO uses the Standard reader; background loading is unavailable.";
+            hint="Compressed images use the Standard reader; background loading is unavailable.";
         else if(s->game_tools_selected==KUI_SHELL_GAME_TOOL_PATCHES)
-            hint="RAM patches are unavailable for ZSO images.";
+            hint="RAM patches are unavailable for compressed images.";
     }
     words(p,40,374,608,MUTED,hint,false);
     game_options_notice(p,s);

@@ -30,7 +30,8 @@ HEADER = struct.Struct("<8s14I")
 MAP_SLOTS = 32
 MAX_EXTENTS = 31
 CODECS = {"lz4": (MAGIC, WIRE_MAGIC, "standard LZ4 ZISO v1; independent 2048-byte blocks"),
-          "lzo": (b"KUIRLB01", b"KUIRLS01", "historical LZO1X ZISO v0/v1; independent 2048-byte blocks")}
+          "lzo": (b"KUIRLB01", b"KUIRLS01", "historical LZO1X ZISO v0/v1; independent 2048-byte blocks"),
+          "cso": (b"KUIRCB01", b"KUIRCS01", "CSO CISO v1 raw DEFLATE; independent 2048-byte blocks")}
 
 
 def relocation_header(stage_bytes, codec="lz4"):

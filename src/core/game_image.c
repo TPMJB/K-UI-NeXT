@@ -166,7 +166,7 @@ enum kui_game_result kui_game_image_open(const void *gdi, size_t size,
 enum kui_game_result kui_game_image_audio_info(const struct kui_game_image *image,
     struct kui_game_audio_info *out) {
     if(!image || !out || !image->count || image->count > KUI_GAME_TRACK_MAX ||
-       image->format < KUI_GAME_IMAGE_GDI || image->format > KUI_GAME_IMAGE_ZSO)
+       image->format < KUI_GAME_IMAGE_GDI || image->format > KUI_GAME_IMAGE_CSO)
         return KUI_GAME_INVALID;
     struct kui_game_audio_info info = {KUI_GAME_AUDIO_NONE, 0, 0, 0};
     for(unsigned i = 0; i < image->count; ++i) {
@@ -183,7 +183,7 @@ enum kui_game_result kui_game_image_audio_info(const struct kui_game_image *imag
         }
     }
     if(image->format == KUI_GAME_IMAGE_ISO || image->format == KUI_GAME_IMAGE_RAW ||
-       image->format == KUI_GAME_IMAGE_ZSO) {
+       (image->format == KUI_GAME_IMAGE_ZSO || image->format == KUI_GAME_IMAGE_CSO)) {
         /* The parser publishes one data track for these formats; a bare data
          * file cannot preserve the original disc's audio-track inventory. */
         if(image->count != 1u || info.audio_tracks) return KUI_GAME_INVALID;
@@ -204,16 +204,17 @@ enum kui_game_result kui_game_image_audio_info(const struct kui_game_image *imag
 static bool valid_image(const struct kui_game_image *image) {
     if(!image || !image->count || image->count > KUI_GAME_TRACK_MAX ||
        !image->files.stat || !image->files.read) return false;
-    if(image->compressed && (image->format != KUI_GAME_IMAGE_ZSO || image->count != 1u ||
+    if(image->compressed && ((image->format != KUI_GAME_IMAGE_ZSO && image->format != KUI_GAME_IMAGE_CSO) || image->count != 1u ||
        !image->zso.total_bytes || image->zso.total_bytes > KUI_ZSO_MAX_BYTES ||
        image->zso.total_bytes % KUI_ZSO_BLOCK_BYTES ||
        image->zso.block_count != image->zso.total_bytes / KUI_ZSO_BLOCK_BYTES ||
        image->zso.index_bytes != (image->zso.block_count + 1u) * 4u ||
-       image->zso.shift > KUI_ZSO_MAX_SHIFT || image->zso.codec > KUI_ZSO_LZO1X ||
+       image->zso.shift > KUI_ZSO_MAX_SHIFT || image->zso.codec > KUI_ZSO_DEFLATE ||
+       ((image->format == KUI_GAME_IMAGE_CSO) != (image->zso.codec == KUI_ZSO_DEFLATE)) ||
        image->zso.file_bytes < KUI_ZSO_HEADER_BYTES + image->zso.index_bytes ||
        image->tracks[0].file_offset || image->tracks[0].file_bytes != image->zso.total_bytes ||
        image->tracks[0].sector_bytes != KUI_GAME_DATA_BYTES)) return false;
-    if(!image->compressed && image->format == KUI_GAME_IMAGE_ZSO) return false;
+    if(!image->compressed && (image->format == KUI_GAME_IMAGE_ZSO || image->format == KUI_GAME_IMAGE_CSO)) return false;
     for(unsigned i = 0; i < image->count; ++i) {
         const struct kui_game_image_track *track = &image->tracks[i];
         if(track->number != i + 1u || track->start_lba >= track->end_lba ||
@@ -398,7 +399,7 @@ static bool extension(const char *name, const char *suffix) {
 bool kui_game_image_name_supported(const char *name) {
     return safe_name(name) && (extension(name, ".gdi") || extension(name, ".cue") ||
         extension(name, ".iso") || extension(name, ".bin") ||
-        extension(name, ".img") || extension(name, ".cdi") || extension(name, ".zso"));
+        extension(name, ".img") || extension(name, ".cdi") || extension(name, ".zso") || extension(name, ".cso"));
 }
 const char *kui_game_image_format_name(enum kui_game_image_format format) {
     switch(format) {
@@ -408,6 +409,7 @@ const char *kui_game_image_format_name(enum kui_game_image_format format) {
     case KUI_GAME_IMAGE_CDI: return "CDI";
     case KUI_GAME_IMAGE_RAW: return "Raw BIN/IMG";
     case KUI_GAME_IMAGE_ZSO: return "ZSO";
+    case KUI_GAME_IMAGE_CSO: return "CSO";
     default: return "Unknown";
     }
 }
@@ -913,7 +915,7 @@ static enum kui_game_result single_parse(const char *name, uint64_t bytes,
     if(track->start_lba >= KUI_GAME_LBA_LIMIT ||
        sectors > KUI_GAME_LBA_LIMIT - track->start_lba) return KUI_GAME_RANGE;
     track->end_lba = track->start_lba + (uint32_t)sectors;
-    image->format = image->compressed ? KUI_GAME_IMAGE_ZSO : raw ? KUI_GAME_IMAGE_RAW : KUI_GAME_IMAGE_ISO;
+    image->format = image->compressed ? (image->zso.codec == KUI_ZSO_DEFLATE ? KUI_GAME_IMAGE_CSO : KUI_GAME_IMAGE_ZSO) : raw ? KUI_GAME_IMAGE_RAW : KUI_GAME_IMAGE_ISO;
     image->cd_image = track->start_lba < 45000u;
     image->data_lba = track->start_lba;
     return mapped(image);
@@ -952,13 +954,13 @@ enum kui_game_result kui_game_image_open_named_codec(const char *name,
     }
     struct kui_game_image image = {0};
     image.files = *files;
-    if(extension(name, ".zso")) {
+    if(extension(name, ".zso") || extension(name, ".cso")) {
         uint8_t header[KUI_ZSO_HEADER_BYTES];
         if(bytes < sizeof(header)) return KUI_GAME_FILE_SIZE;
         result = files->read(files->ctx, name, 0, header, sizeof(header));
         if(result != KUI_GAME_OK) return result;
         struct zso_context context = {&image, name, KUI_GAME_OK};
-        result = zso_result(kui_zso_header_parse_codec(header, bytes, codec, &image.zso), &context);
+        result = zso_result(kui_zso_header_parse_codec(header, bytes, extension(name, ".cso") ? KUI_ZSO_DEFLATE : codec, &image.zso), &context);
         if(result != KUI_GAME_OK) return result;
         if(image.zso.block_count > KUI_GAME_LBA_LIMIT) return KUI_GAME_RANGE;
         result = zso_result(kui_zso_validate_index(&image.zso, zso_read, &context), &context);

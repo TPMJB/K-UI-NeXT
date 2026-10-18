@@ -50,8 +50,12 @@ struct kui_game_image_track {
 
 enum kui_game_image_format {
     KUI_GAME_IMAGE_GDI, KUI_GAME_IMAGE_ISO, KUI_GAME_IMAGE_CUE,
-    KUI_GAME_IMAGE_CDI, KUI_GAME_IMAGE_RAW, KUI_GAME_IMAGE_ZSO
+    KUI_GAME_IMAGE_CDI, KUI_GAME_IMAGE_RAW, KUI_GAME_IMAGE_ZSO, KUI_GAME_IMAGE_CSO
 };
+
+static inline bool kui_game_image_format_compressed(enum kui_game_image_format format) {
+    return format == KUI_GAME_IMAGE_ZSO || format == KUI_GAME_IMAGE_CSO;
+}
 
 struct kui_game_image {
     struct kui_game_file_ops files;
@@ -97,7 +101,7 @@ enum kui_game_result kui_game_image_open(const void *gdi, size_t size,
 enum kui_game_result kui_game_gdi_layout(const void *gdi,size_t size,struct kui_game_image *out);
 
 /* Open a named GDI/CUE descriptor, ISO, raw BIN/IMG, DiscJuggler CDI or standard
- * LZ4 ZSO v1 containing independent 2048-byte ISO blocks.
+ * LZ4 ZSO v1 or DEFLATE CSO v1 containing independent 2048-byte ISO blocks.
  * Descriptor reads are bounded by KUI_GAME_GDI_LIMIT; CDI uses bounded random
  * reads of its footer and never loads the container. All callbacks use the same
  * relative single-component names. On failure out is unchanged. Unsupported
@@ -105,7 +109,7 @@ enum kui_game_result kui_game_gdi_layout(const void *gdi,size_t size,struct kui_
 enum kui_game_result kui_game_image_open_named(const char *name,
     const struct kui_game_file_ops *files, struct kui_game_image *out);
 /* Explicit ambiguous-ZISO dialect. Non-ZSO images require the default LZ4
- * value. Never retries inspection with another codec after a decode error. */
+ * value; CSO selects its mandatory DEFLATE decoder automatically. Never retries inspection with another codec after a decode error. */
 enum kui_game_result kui_game_image_open_named_codec(const char *name,
     const struct kui_game_file_ops *files, enum kui_zso_codec codec,
     struct kui_game_image *out);
