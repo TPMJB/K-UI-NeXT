@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from check_loader_layout import EH, PH, SH, SYM
 from package_vmu_maple_observe import (inspect_worker, write_test_archive,
     inspect_sd_profile, check_sd_gateway, check_sd_stacks, linked_stack_rows,
-    require_worker_stack_coverage, inspect_persistent_io, check_pio_callgraph)
+    require_worker_stack_coverage, inspect_persistent_io, check_pio_callgraph, linked_function_names)
 from check_loader_layout import inspect_elf
 from vmu_maple_observe_symbols import generate
 from test_vmu_sd_profile_tool import fixture as sd_profile_fixture
@@ -578,6 +578,25 @@ class ObserverPackageTests(unittest.TestCase):
                              "durable_card_pio_write")
             with self.assertRaises(ValueError):
                 check_pio_callgraph(directory, "durable_card_pio_write", live | {"_dead_pio_write"})
+
+    def test_linked_callers_allow_unrelated_duplicate_local_function_names(self):
+        data = worker(4)
+        table = list(SH.unpack_from(data, 0x3a0))
+        strings = list(SH.unpack_from(data, 0x3c8))
+        name_at = strings[5]
+        label = b"_get32\0"
+        data[strings[4] + name_at:strings[4] + name_at + len(label)] = label
+        strings[5] += len(label)
+        for address in (0x8cfd0078, 0x8cfd007c):
+            SYM.pack_into(data, table[4] + table[5], name_at, address, 2, 0x02, 0, 1)
+            table[5] += SYM.size
+        SH.pack_into(data, 0x3a0, *table)
+        SH.pack_into(data, 0x3c8, *strings)
+        image = inspect_elf(bytes(data), 0x8cfd0000, 0x8cfe0000, private_p2=True,
+            entry_symbol="_kui_vmu_maple_observer_init", entry_at_base=False)
+        names = linked_function_names(bytes(data), image)
+        self.assertIn("_get32", names)
+        self.assertIn("_durable_card_pio_write", names)
 
     def test_persistent_archive_is_distinct_and_uses_existing_retail_install_route(self):
         with tempfile.TemporaryDirectory() as name:

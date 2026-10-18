@@ -10,7 +10,7 @@ import subprocess
 import sys
 import zipfile
 
-from check_loader_layout import EH, PH, inspect_elf, padded, region
+from check_loader_layout import EH, PH, SH, SYM, inspect_elf, padded, region
 from check_retail_instructions import audit
 from check_retail_loader_layout import check_bss, check_stack_usage
 import check_retail_loader_layout as resident_layout
@@ -231,9 +231,30 @@ def check_pio_callgraph(directory, adapter, linked_functions):
 
 
 def linked_function_names(elf, image):
-    typed = _linked_symbols(elf, set(image["symbols"]))
-    return {name for name, (_, size, kind, section) in typed.items()
-            if kind == 2 and size and section is not None and section[2] & 7 == 6}
+    """Enumerate live typed code without imposing uniqueness on other locals.
+
+    The exact writer/adapter symbols are checked independently with
+    _linked_symbols. Unrelated C units may retain identically named locals.
+    """
+    del image  # inspect_elf has already admitted this ELF and its tables.
+    header = EH.unpack_from(elf)
+    sections = [SH.unpack_from(elf, header[6] + index * header[11])
+                for index in range(header[12])]
+    result = set()
+    for table in sections:
+        if table[1] != 2:
+            continue
+        strings = sections[table[6]]
+        names = region(elf, strings[4], strings[5], "linked function names")
+        for at in range(table[4], table[4] + table[5], table[9]):
+            name, address, size, info, _, owner = SYM.unpack_from(elf, at)
+            if info & 15 != 2 or not size or owner >= len(sections):
+                continue
+            section = sections[owner]
+            if (section[1] == 1 and section[2] & 7 == 6 and
+                    section[3] <= address < address + size <= section[3] + section[5]):
+                result.add(names[name:names.find(b"\0", name)].decode("ascii"))
+    return result
 
 
 def inspect_persistent_io(directory, worker_elf, worker, exports, resident):
