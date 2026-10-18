@@ -833,6 +833,34 @@
         "This photograph does not identify whether this particular source word belongs to a live chain, an unused cluster, or a NoFatChain allocation.",
         "The replacement proof must inspect every live FAT-chain owner and retain bitmap, exact-tail and target-overlap protection; no SD runtime writer is enabled."
       ]
+    },
+    {
+      "build": "482122bf7a8a",
+      "date": "2026-10-17",
+      "outcome": "persistent_preparation_ready",
+      "source_images": [
+        "image-1792293756847.jpg"
+      ],
+      "transport": "SCI",
+      "filesystem": "exFAT",
+      "pair_path": "/KUI/vmu-test/p0001",
+      "profile_exported": true,
+      "profile_file": "retail-persistent-profile-0001.bin",
+      "profile_bytes": 4096,
+      "profile_sha256": "4590e0d6aa0109c743576d64d557c3481c644d55ea431e365ed75b30957731c5",
+      "base_sha256": "4edbef747fb15d17755a0d5053076457553e9152e6c727bd7ada45251c5ec1b1",
+      "image_extents": 1,
+      "journal_extents": 1,
+      "validation": [
+        "Independent Python canonical P2 decoder passed.",
+        "Native C P2 decoder and exact re-encoding passed.",
+        "Console reached PROFILE / READY after final current-ownership and source-snapshot recheck."
+      ],
+      "limits": [
+        "Preparation descriptor only; no retail SD writer is enabled.",
+        "Future recovery must use this real physical binding after a fresh filesystem ownership scan.",
+        "CID and raw profile bytes are deliberately not included in repository evidence."
+      ]
     }
   ]
 }

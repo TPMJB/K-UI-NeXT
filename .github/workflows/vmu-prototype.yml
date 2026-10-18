@@ -48,6 +48,13 @@ jobs:
           make -f Makefile.vmu BUILD=build/vmu-persist-prep PERSIST_PREP=1 host-test
           python3 tests/test_vmu_persist_harness_images.py
           python3 tests/test_package_vmu_persist_prep.py
+      - name: Verify isolated physical-journal proof through real filesystems
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: |
+          make -f Makefile.vmu BUILD=build/vmu-physical-proof PERSIST_PROOF=1 host-test
+          python3 tests/test_vmu_physical_proof_images.py
+          python3 tests/test_package_vmu_physical_proof.py
       - name: Verify workflow hygiene
         run: python3 tests/test_workflow_hygiene.py
       - name: Verify exact-title observer admission and bounded telemetry
@@ -102,6 +109,21 @@ jobs:
         with:
           name: K-UI-experimental-VMU-persistence-preparation
           path: build/vmu-persist-prep/vmu-persistence-preparation-test.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Build isolated physical-journal proof program
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          make -f Makefile.vmu -j2 BUILD=build/vmu-physical-proof PERSIST_PROOF=1 package
+          sh-elf-objdump -d build/vmu-physical-proof/vmu-harness.elf > build/vmu-physical-proof/vmu-harness.dis
+          python3 tools/package_vmu_physical_proof.py build/vmu-physical-proof \
+            --expected-commit "$(git rev-parse HEAD)" --guide docs/vmu-physical-journal-proof.md
+      - name: Upload physical-journal proof program
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-VMU-physical-journal-proof
+          path: build/vmu-physical-proof/vmu-physical-journal-proof-test.zip
           if-no-files-found: error
           retention-days: 30
       - name: Prove default native SCI transport is unchanged
@@ -219,6 +241,11 @@ jobs:
             build/vmu-persist-prep/*.json
             build/vmu-persist-prep/*.dis
             build/vmu-persist-prep/**/*.su
+            build/vmu-physical-proof/*.elf
+            build/vmu-physical-proof/*.map
+            build/vmu-physical-proof/*.json
+            build/vmu-physical-proof/*.dis
+            build/vmu-physical-proof/**/*.su
             build/vmu-toy/*.elf
             build/vmu-toy/*.map
             build/vmu-toy/*.json

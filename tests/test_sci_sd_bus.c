@@ -805,7 +805,7 @@ static void test_borrower_baud_cache(const struct kui_loader_sd_bus *bus) {
     kui_sci_sd_release();restored();
 }
 
-#if KUI_VMU_READONLY_PROOF >= 2
+#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF
 static void test_persistent_release_fault(void) {
     reset();assert(kui_sci_sd_acquire()==KUI_LOADER_SD_OK);
     assert(!kui_sci_sd_faulted());
@@ -855,7 +855,7 @@ int main(void) {
     test_dma_failures(bus);
     test_dma_profile(bus);
     test_borrower_baud_cache(bus);
-#if KUI_VMU_READONLY_PROOF >= 2
+#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF
     test_persistent_release_fault();
 #endif
     puts("SCI SD bus: polled/DMA data, CRC, profiling, bounded faults and ownership restoration passed");

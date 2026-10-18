@@ -1,10 +1,11 @@
 # Experimental VMU implementation status
 
 This branch develops an original virtual memory card for K-UI. The public
-2.0.0 release remains the stable runtime. The isolated exact-Toy synthetic
-read-only proof has delivered virtual VMU responses on the console. The next
-separate proof reads a verified prepared image from the same SCI card used by
-the game loader; hardware validation of that SD arbitration is pending.
+2.0.0 release remains the stable runtime. The exact-Toy SCI-backed RAM-save
+proof has delivered virtual responses and user-reported same-session save,
+load and deletion. The physical image/journal preparation profile has now
+passed on the console. The next isolated Card tools proof tests real mapped
+journal commits and restart recovery before a retail SD writer is enabled.
 
 ## Implemented
 
@@ -252,10 +253,9 @@ loading, and deletion. This establishes the intended retail RAM-write/read
 path in Toy Commander; it does not establish restart persistence. The captured
 WHY5 is the owner terminal/reset-return reporting route, with no VMU fault.
 
-Durable SD saving still requires a freshly verified journal allocation and a
-per-launch allocation/identity contract that remains valid after legitimate
-image changes. The current profile describes the base image only; journal
-placement cannot be inferred from it.
+The earlier R1 profile describes the base image only; journal placement cannot
+be inferred from it. Durable SD saving requires a verified journal allocation
+and a per-launch allocation/identity contract that survives legitimate saves.
 
 A separate persistent-profile preparation tool now exports the base, journal
 and identity allocations in a 4,096-byte P2 profile. Its raw FAT32/exFAT verifier
@@ -264,8 +264,7 @@ allocation bitmaps and incoming links. The exporter preserves source contents,
 requires a zero journal marker, and repeats ownership and snapshot checks after
 creating and reading back the output. Host sanitizer, adversarial filesystem
 and real FatFs image tests pass. This preparation work does not enable retail
-SD writes; a console export is still needed before the persistent runtime can
-be bound to this card. See `vmu-persistent-profile-prep.md`.
+SD writes. See `vmu-persistent-profile-prep.md`.
 
 The first P2 console run (`3b9617257eb1`) refused the exFAT boot-field gate
 with status -4/detail 15 before creating an output. That combined message did
@@ -286,6 +285,26 @@ proof now traverses all live FAT-chained regular files with exact tails,
 allocation-bit checks and target exclusions, alongside the existing directory,
 system and contiguous-range checks. FAT32's incoming-link scan is retained.
 The captured refusal did not identify which live or stale source triggered it.
+
+Build `482122bf7a8a` then reached PROFILE / READY on SCI/exFAT. The uploaded
+4,096-byte P2 passed the independent decoder and native C codec: canonical
+p0001 identity/ownership, one image extent, one journal extent, exact useful
+lengths and the original image SHA256. The final export scan had rechecked
+ownership and source snapshots after creating the profile. This is successful
+preparation evidence; it does not itself establish durable retail saving.
+
+The next isolated program uses a pinned persistent session: current device
+identity and full semantic filesystem admission precede physical-map journal
+recovery, then VMU validation and fresh image hashes/CRCs. Prepared content
+hashes are provenance rather than permanent expectations. Bound callbacks
+authorize only useful image/journal sectors, with identity/health checks and
+readback before commit success. The owned test updates the KUIPROOF short
+description and package CRC16 within one block, leaving all other VMU blocks
+and outer filesystem metadata unchanged. It retains the real redo record for
+restart verification; the older synthetic A/X harness must not reopen this
+binding. Strict sanitizer, independent failure-cut and real FAT32/exFAT image
+tests pass; physical-console results remain pending. See
+`vmu-physical-journal-proof.md`.
 
 ## Work required before in-game saves
 

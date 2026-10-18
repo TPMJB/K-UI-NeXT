@@ -248,6 +248,28 @@ bool kui_sd_raw_read_ops(struct kui_media_ops *out) {
     *out=(struct kui_media_ops){.blocks=blocks,.read=read_blocks};
     return true;
 }
+#if KUI_VMU_PERSIST_PROOF
+bool kui_sd_vmu_proof_healthy(void) {
+    return connected && active==KUI_STORAGE_SCI && sci.ready && !sci.slow &&
+        !kui_disc_read_pending(NULL) && kui_sci_sd_healthy();
+}
+bool kui_sd_vmu_proof_raw_ops(struct kui_media_ops *out) {
+    if(!out) return false;
+    *out=(struct kui_media_ops){0};
+    const struct kui_volume *view=kui_media_volume();
+    /* A fresh connection has no initialized filesystem view. Refuse a caller
+     * that merely asks for raw writes while an old mounted view still exists. */
+    if(!kui_sd_vmu_proof_healthy() || !view || view->count) return false;
+    *out=(struct kui_media_ops){.blocks=blocks,.read=read_blocks,
+        .write=write_blocks,.sync=sync_card};
+    return true;
+}
+bool kui_sd_vmu_proof_disconnect(void) {
+    bool ok=!connected || kui_sd_vmu_proof_healthy();
+    kui_sd_disconnect();
+    return ok && !kui_sci_sd_faulted();
+}
+#endif
 static bool open_device(unsigned transport) {
     bool ok=false;
     if(transport==KUI_STORAGE_SCIF) {

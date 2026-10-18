@@ -37,6 +37,18 @@ struct kui_vmu_sd_identity;
  * output is cleared on failure. Never initializes or changes the card. */
 bool kui_sd_vmu_profile_identity(struct kui_vmu_sd_identity *out);
 #endif
+#if KUI_VMU_PERSIST_PROOF
+/* Isolated owned physical-journal proof only. Filesystem must be unmounted;
+ * the sole proof worker keeps the initialized SCI connection throughout.
+ * These raw callbacks are NOT allocation authority: the session independently
+ * admits the live filesystem and restricts writes to exact image/journal
+ * sectors. Never available in the preparation tool or retail runtimes. */
+bool kui_sd_vmu_proof_raw_ops(struct kui_media_ops *out);
+bool kui_sd_vmu_proof_healthy(void);
+/* Unmount first. Includes the persistent fault latch AFTER SCI release, so
+ * the proof cannot publish READY after a final restoration failure. */
+bool kui_sd_vmu_proof_disconnect(void);
+#endif
 void kui_disc_probe(void);
 void kui_drive_init_bus(void);
 /* Exclusive optical owner only, with no read in flight. STOP has a 3-second
