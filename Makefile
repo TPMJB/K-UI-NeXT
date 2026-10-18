@@ -19,6 +19,22 @@ CAPTURE = $(DESTINATION) src/core/hash.c src/core/capture_plan.c src/core/captur
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 
 include config/lwext4.mk
+include config/libchdr.mk
+LIBCHDR_OBJECTS := $(patsubst %.c,build/host-chd/%.o,$(LIBCHDR_SOURCES))
+# Upstream codec warning policy is separate from K-UI's strict application
+# builds. Its forced configuration also isolates miniz public symbols.
+build/host-chd/%.o: %.c $(LIBCHDR_HEADERS)
+	@mkdir -p $(@D)
+	$(CC) -std=c11 -O1 -g -Wall -Wextra $(SANITIZERS) $(LIBCHDR_CPPFLAGS) -c $< -o $@
+CHD_GAMES = src/apps/games_chd.c src/core/chd_lib.c src/core/chd_cache.c src/core/destination_file.c $(LIBCHDR_OBJECTS)
+.PHONY: test-chd
+test-chd:
+	python3 tests/test_chd_dependencies.py
+	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_chd_reader.py
+	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_chd_cache.py
+	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_chd_modern.py
+	$(MAKE) build/games-chd-image
+	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_games_chd.py
 LWEXT4_HOST_OBJECTS := $(patsubst %.c,build/host/%.o,$(LWEXT4_SOURCES))
 
 .PHONY: test test-recovery test-images deps diagnostic clean
@@ -864,14 +880,19 @@ build/test-cover-image: tests/test_cover_image.c src/apps/cover_image.c include/
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests src/apps/cover_image.c tests/test_cover_image.c -o $@
 
-GAMES = src/apps/games.c src/core/game_image.c src/core/zso.c src/core/deflate.c src/core/lzo1x.c src/core/game_metadata.c src/core/destination.c src/core/storage_probe.c src/core/hash.c
+GAMES = src/apps/games.c src/core/game_image.c src/core/zso.c src/core/deflate.c src/core/lzo1x.c src/core/game_metadata.c src/core/destination.c src/core/storage_probe.c src/core/hash.c $(CHD_GAMES)
 GAMES_COVERS = $(GAMES) src/core/game_launch_settings.c src/core/game_ram_patches.c src/apps/game_launch_settings_file.c src/apps/games_covers.c src/apps/cover_image.c src/core/game_cover.c src/core/pvr_texture.c src/core/retail_image.c
 
 GAMES_COVERS_WRAP = -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_opendir,--wrap=f_closedir,--wrap=f_write
 GAMES_WRAP = -Wl,--wrap=f_open,--wrap=f_read,--wrap=f_lseek,--wrap=f_close,--wrap=f_write,--wrap=f_mkdir,--wrap=f_unlink,--wrap=f_rename,--wrap=f_opendir,--wrap=f_readdir,--wrap=f_closedir,--wrap=f_stat
 build/games-image: tests/games_image.c $(GAMES) $(CORE) $(FATFS) include/kui/games.h include/kui/game_image.h include/kui/game_metadata.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast $(GAMES) $(CORE) $(FATFS) tests/games_image.c $(GAMES_WRAP) -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Ithird_party/libchdr/include -Isrc/dreamcast $(GAMES) $(CORE) $(FATFS) tests/games_image.c $(GAMES_WRAP) -lm -o $@
+
+GAMES_CHD_WRAP = -Wl,--wrap=f_open,--wrap=f_read,--wrap=f_write,--wrap=f_lseek,--wrap=f_sync,--wrap=f_close,--wrap=f_opendir,--wrap=f_closedir,--wrap=f_mkdir,--wrap=f_unlink,--wrap=f_rename,--wrap=f_getfree
+build/games-chd-image: tests/games_chd_image.c $(GAMES) $(CORE) $(FATFS) include/kui/games_chd.h include/kui/chd_cache.h include/kui/chd_lib.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Ithird_party/libchdr/include -Isrc/dreamcast $(GAMES) $(CORE) $(FATFS) tests/games_chd_image.c $(GAMES_CHD_WRAP) -lm -o $@
 
 FILES = src/apps/files.c src/apps/files_picture.c src/core/files_path.c src/core/destination.c src/core/storage_probe.c \
         src/apps/cover_image.c src/core/game_cover.c src/core/pvr_texture.c
@@ -914,7 +935,7 @@ build/ftp-image: tests/ftp_image.c $(FTP) $(CORE) $(FATFS) $(W5500_MODEL) $(WIFI
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -Ifirmware/kui-wifi/main -Itests $(FTP) $(CORE) $(FATFS) tests/w5500_model.c $(WIFI_MODEL) tests/ftp_image.c $(FTP_WRAP) -o $@
 build/games-covers-image: tests/games_covers_image.c $(GAMES_COVERS) $(CORE) $(FATFS) include/kui/games_covers.h include/kui/games.h include/kui/game_cover.h include/kui/pvr_texture.h include/kui/cover_image.h third_party/stb/stb_image.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast $(GAMES_COVERS) $(CORE) $(FATFS) tests/games_covers_image.c $(GAMES_COVERS_WRAP) -lm -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Ithird_party/libchdr/include -Isrc/dreamcast $(GAMES_COVERS) $(CORE) $(FATFS) tests/games_covers_image.c $(GAMES_COVERS_WRAP) -lm -o $@
 
 # Read-only ext4 bootstrap: upstream warnings remain visible, as for FatFs.
 build/host/third_party/lwext4/src/%.o: third_party/lwext4/src/%.c $(LWEXT4_HEADERS)

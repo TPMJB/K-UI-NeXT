@@ -2197,6 +2197,82 @@ static void games_codec_controls(void) {
     assert(!kui_shell_games_zso_selected(&s));press(KUI_SHELL_Y,false);assert(s.page==KUI_SHELL_GAMES_DETAIL);
     puts("PASS explicit ZSO codecs: chooser before valid inspection, cancel/no launch, saved hydration and typed LZO dispatch");
 }
+static void games_chd_controls(void) {
+    struct kui_games_detail detail={.chd=true,.chd_prepare=true,.tracks=3,.cache_bytes=1200000000u};
+    strcpy(detail.path,"/Games/CHD game/disc.ChD");strcpy(detail.title,"CHD GAME");
+    reset(KUI_SHELL_GAMES_DETAIL);strcpy(s.games_selected_path,detail.path);
+    kui_shell_set_games_detail(&s,&detail);
+    assert(kui_shell_games_chd_prepare_ready(&s) && !kui_shell_games_launch_ready(&s));
+    assert(kui_shell_games_launch_path(&s)==NULL);
+    assert(press(KUI_SHELL_A|KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_CHD_CONFIRM);
+    assert(press(KUI_SHELL_A|KUI_SHELL_X,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_CHD_PREPARE);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_GAMES_CHD_CONFIRM);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_DETAIL);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_CHD_CONFIRM);
+    struct kui_games_detail stale=detail;strcpy(stale.path,"/Games/Other.chd");
+    kui_shell_set_games_detail(&s,&stale);assert(s.page==KUI_SHELL_GAMES_CHD_CONFIRM && !s.games_detail.valid);
+    detail=launch_detail(false,false);detail.chd=detail.chd_ready=true;
+    strcpy(detail.path,"/Games/CHD game/disc.ChD");
+    strcpy(detail.cache_path,"/KUI/Cache/CHD/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/disc.gdi");
+    kui_shell_set_games_detail(&s,&detail);
+    assert(s.page==KUI_SHELL_GAMES_DETAIL && !strcmp(s.games_selected_path,detail.path));
+    assert(kui_shell_games_launch_ready(&s) && !kui_shell_games_chd_prepare_ready(&s));
+    assert(!strcmp(kui_shell_games_launch_path(&s),detail.cache_path));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL);
+    static const char *const bad[]={"/Games/disc.gdi","/KUI/Cache/CHD/../disc.gdi",
+        "/KUI/Cache/CHD/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeF/disc.gdi",
+        "/KUI/Cache/CHD/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/other.gdi",
+        "/KUI/Cache/CHD/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/disc.gdi/extra"};
+    for(unsigned i=0;i<sizeof(bad)/sizeof(bad[0]);i++) {
+        strcpy(s.games_detail.cache_path,bad[i]);
+        assert(!kui_shell_games_launch_path(&s) && !kui_shell_games_launch_ready(&s));
+    }
+    s.games_detail=detail;s.games_detail.chd_ready=false;
+    assert(!kui_shell_games_launch_path(&s) && !kui_shell_games_launch_ready(&s));
+    s.games_detail=detail;s.games_detail.format=KUI_GAME_IMAGE_ISO;
+    assert(!kui_shell_games_launch_path(&s));
+    s.games_detail=detail;memset(s.games_detail.cache_path,'x',sizeof(s.games_detail.cache_path));
+    assert(!kui_shell_games_launch_path(&s));
+    struct kui_games_detail cd=launch_detail(false,true);cd.chd=cd.chd_ready=true;
+    strcpy(cd.path,detail.path);cd.native_gd=false;cd.native_cd=cd.cd_image=true;cd.boot_lba=20;
+    strcpy(cd.cache_path,"/KUI/Cache/CHD/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/disc.cue");
+    s.page=KUI_SHELL_GAMES_DETAIL;kui_shell_set_games_detail(&s,&cd);
+    assert(kui_shell_games_launch_ready(&s) && !strcmp(kui_shell_games_launch_path(&s),cd.cache_path));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL && !strcmp(s.games_selected_path,cd.path));
+    strcpy(s.games_detail.cache_path,detail.cache_path);assert(!kui_shell_games_launch_path(&s));
+    s.games_detail=cd;s.games_detail.format=KUI_GAME_IMAGE_GDI;assert(!kui_shell_games_launch_path(&s));
+    s.games_detail=cd;strcpy(s.games_detail.cache_path,"/KUI/Cache/CHD/../disc.cue");
+    assert(!kui_shell_games_launch_path(&s));
+    s.games_detail=detail;s.games_detail.chd_ready=false;s.games_detail.chd_prepare=true;
+    strcpy(s.games_selected_path,"/Games/Other.chd");assert(!kui_shell_games_chd_prepare_ready(&s));
+    puts("PASS CHD controls: explicit prepare confirmation, cancellation, source identity, stale results and strict complete-cache launch paths");
+}
+
+static void games_chd_rendering(void) {
+    struct kui_shell_view view={0};
+    struct kui_games_detail detail={.chd=true,.chd_prepare=true,.tracks=3,.cache_bytes=1200000000u};
+    strcpy(detail.path,"/Games/CHD game/disc.chd");strcpy(detail.title,"CHD GAME");
+    reset(KUI_SHELL_GAMES_DETAIL);strcpy(s.games_selected_path,detail.path);
+    kui_shell_set_games_detail(&s,&detail);render(&view);
+    assert(strstr(drawn,"CHD GAME") && strstr(drawn,"A Prepare CHD") && strstr(drawn,"Expanded cache: 1144.4 MiB"));
+    assert(!strstr(drawn,"Could not inspect image") && !strstr(drawn,"A Launch game"));
+    press(KUI_SHELL_A,false);render(&view);
+    assert(strstr(drawn,"Create a reusable expanded disc on SD?") && strstr(drawn,"1144.4 MiB of free SD space"));
+    struct kui_app_status status={.done=500000000,.total=1000000000,.line_count=1};
+    strcpy(status.message,"Expanding track 3");strcpy(status.lines[0],"Checking decoded sectors");
+    view.app_status=&status;view.busy=true;render(&view);
+    assert(strstr(drawn,"Expanding track 3") && strstr(drawn,"50.0%") && strstr(drawn,"Checking decoded sectors"));
+    assert(strstr(drawn,"B stops safely; an incomplete cache cannot launch.") && !strstr(drawn,"A Prepare CHD"));
+    view.cancel_requested=true;render(&view);assert(strstr(drawn,"Stopping safely..."));
+    puts("PASS CHD rendering: expanded space, reusable cache, progress, Stop and no automatic launch");
+}
+
 static void games_check_baseline_controls(void) {
     struct kui_games_detail detail=launch_detail(false,true);
     install_launch_detail(&detail);
@@ -3795,9 +3871,9 @@ int main(int argc,char **argv) {
     }
     small_tools_controls();small_tools_rendering();
     vmu_copy_all_controls();vmu_import_controls();vmu_bulk_import_rendering();
-    games_remembered_selection(); games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_cdda_compatibility_status(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_zso_controls(); games_cso_controls(); games_codec_controls(); games_check_baseline_controls(); games_variant_controls();
+    games_remembered_selection(); games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_cdda_compatibility_status(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_zso_controls(); games_cso_controls(); games_chd_controls(); games_codec_controls(); games_check_baseline_controls(); games_variant_controls();
     if(argc==2 && !strcmp(argv[1],"--games-controls")) { puts("PASS Games navigation and launch controls"); return 0; }
-    games_rendering(); games_patch_rendering(); games_zso_rendering(); games_selected_art_rendering(); games_variant_rendering();
+    games_rendering(); games_patch_rendering(); games_zso_rendering(); games_chd_rendering(); games_selected_art_rendering(); games_variant_rendering();
     if(argc==2 && !strcmp(argv[1],"--games")) { puts("PASS Games navigation, launch eligibility and rendering"); return 0; }
     storage_test_controls();storage_test_rendering();
     launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction(); ripper_export_rendering();

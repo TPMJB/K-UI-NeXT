@@ -158,7 +158,9 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_GAMES ? (kui_shell_games_view(s)==KUI_GAMES_VIEW_LIST?
             "A Open   Y View   LEFT/RIGHT Page   START More":"A Open   Y View   D-pad Move   START More") :
         s->page==KUI_SHELL_GAMES_VARIANTS ? "D-pad Select   A Inspect   B Games" :
-        s->page==KUI_SHELL_GAMES_DETAIL ? (kui_shell_games_retail_ready(s)?
+        s->page==KUI_SHELL_GAMES_CHD_CONFIRM ? "A Prepare CHD   B Selected image" :
+        s->page==KUI_SHELL_GAMES_DETAIL ? (kui_shell_games_chd_prepare_ready(s)?
+            "A Prepare CHD   X Inspect again   B Back":kui_shell_games_retail_ready(s)?
             (s->games_from_files?"A Launch   Y Options   B Files":kui_shell_games_variant_label(s)?
                 "A Launch   Y Options   B Versions":"A Launch   Y Options   B Games"):
             kui_shell_games_ce_probe_ready(s)?
@@ -1435,8 +1437,9 @@ static const char *game_background(const struct kui_shell *s) {
 }
 static void game_detail(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     const struct kui_games_detail *d=&s->games_detail;
+    bool prepare=kui_shell_games_chd_prepare_ready(s);
     title(p,40,108,kui_shell_games_launch_ready(s)?"Games / Ready to play":"Games / Selected image");
-    words(p,40,140,608,d->valid?CYAN:AMBER,d->valid?(d->title[0]?d->title:"Untitled image"):
+    words(p,40,140,608,d->valid || prepare?CYAN:AMBER,d->valid || prepare?(d->title[0]?d->title:"CHD disc image"):
         v->busy?"Inspecting image...":d->stopped?"Inspection stopped":"Could not inspect image",false);
     words(p,40,158,608,MUTED,s->games_selected_path,false);
     games_variant_line(p,s,176);
@@ -1444,10 +1447,20 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
     bool cover=d->cover && v->game_detail_cover;
     unsigned right=cover?428:592;
     if(cover) cover_image(p,440,214,KUI_COVER_LARGE,v->game_detail_cover);
-    if(kui_shell_games_launch_ready(s)) {
+    if(prepare) {
+        char line[96];
+        words(p,48,218,right,WHITE,"Prepare this CHD on the console",false);
+        words(p,48,246,right,MUTED,"First use expands the disc onto the SD card.",false);
+        snprintf(line,sizeof(line),"Expanded cache: %llu.%llu MiB",(unsigned long long)(d->cache_bytes/1048576u),
+            (unsigned long long)((d->cache_bytes%1048576u)*10u/1048576u));
+        words(p,48,274,right,MUTED,line,false);
+        words(p,48,302,right,MUTED,"The complete cache is reused for later launches.",false);
+        words(p,48,338,right,CYAN,"A Prepare CHD",false);
+        words(p,48,378,right,MUTED,d->message[0]?d->message:"SD space is checked before preparation starts.",false);
+    } else if(kui_shell_games_launch_ready(s)) {
         char line[128];
         words(p,48,218,right,WHITE,kui_game_image_format_compressed(d->format)?
-            "Compressed launch test; compatibility untested":"Ready to launch",false);
+            "Compressed launch test; compatibility untested":d->chd?"CHD cache ready to launch":"Ready to launch",false);
         snprintf(line,sizeof(line),"Background loading: %s",game_background(s));
         words(p,48,256,right,MUTED,line,false);
         words(p,48,282,right,MUTED,s->games_launch_cdda?"CD music: On":"CD music: Off",false);
@@ -1465,6 +1478,39 @@ static void game_detail(struct paint *p,const struct kui_shell *s,const struct k
         words(p,48,294,right,MUTED,kui_shell_games_image_ready(s)?
             "Y Options   X Inspect again":kui_shell_games_zso_selected(s)?"Y Select ZSO codec   X Inspect again":"X Inspect again",false);
     }
+}
+static void games_chd_confirmation(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    const struct kui_app_status *st=v->app_status;
+    title(p,40,108,v->busy?"Games / Preparing CHD":"Games / Prepare CHD");
+    words(p,40,140,608,CYAN,s->games_selected_path,false);
+    panel(p,32,176,576,228,PANEL);
+    if(v->busy) {
+        char line[96];
+        words(p,48,190,592,WHITE,v->cancel_requested?"Stopping safely...":
+            st && st->message[0]?st->message:"Checking CHD and available SD space...",false);
+        unsigned tenths=st?kui_shell_progress_tenths(st->done,st->total):0;
+        box(p,48,228,544,12,EDGE);
+        if(tenths)box(p,48,228,544u*tenths/1000u,12,CYAN);
+        if(st && st->total) {
+            snprintf(line,sizeof(line),"%u.%u%%   %llu / %llu MiB",tenths/10u,tenths%10u,
+                (unsigned long long)(st->done/1048576u),(unsigned long long)(st->total/1048576u));
+            label(p,48,256,MUTED,line);
+        }
+        for(unsigned i=0;st && i<st->line_count && i<3;i++)
+            words(p,48,282+i*24,592,MUTED,st->lines[i],false);
+        label(p,48,378,MUTED,"B stops safely; an incomplete cache cannot launch.");
+        return;
+    }
+    char line[96];
+    label(p,48,190,WHITE,"Create a reusable expanded disc on SD?");
+    snprintf(line,sizeof(line),"Needs at least %llu.%llu MiB of free SD space.",
+        (unsigned long long)(s->games_detail.cache_bytes/1048576u),
+        (unsigned long long)((s->games_detail.cache_bytes%1048576u)*10u/1048576u));
+    label(p,48,222,MUTED,line);
+    label(p,48,254,MUTED,"This may take a while. Progress and Stop are available.");
+    label(p,48,286,MUTED,"The source CHD is kept; later launches reuse this cache.");
+    label(p,48,330,CYAN,"A Prepare CHD   B Selected image");
+    label(p,48,378,MUTED,"Preparation finishes before you choose Launch game.");
 }
 static void games_information(struct paint *p,const struct kui_shell *s) {
     const struct kui_games_detail *d=&s->games_detail;
@@ -1484,7 +1530,7 @@ static void games_information(struct paint *p,const struct kui_shell *s) {
     static const char *const formats[]={"GDI","ISO","CUE/BIN","CDI","BIN/IMG","ZSO","CSO (DEFLATE)"};
     const char *format=(unsigned)d->format<sizeof(formats)/sizeof(formats[0])?formats[d->format]:"Unknown";
     if(d->format==KUI_GAME_IMAGE_ZSO)format=d->zso_codec==KUI_ZSO_LZO1X?"ZSO (LZO1X)":"ZSO (standard LZ4)";
-    snprintf(line,sizeof(line),"Format: %s   %llu bytes",format,(unsigned long long)d->bytes);
+    snprintf(line,sizeof(line),"Format: %s   %llu bytes",d->chd?"CHD (expanded SD cache)":format,(unsigned long long)d->bytes);
     label(p,48,286,MUTED,line);
     snprintf(line,sizeof(line),"Boot file starts at LBA %lu",(unsigned long)d->boot_lba);
     label(p,48,314,MUTED,line);
@@ -2190,6 +2236,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_MUSIC: music_player(&p,s,v); break;
     case KUI_SHELL_GAMES: games(&p,s,v); break;
     case KUI_SHELL_GAMES_DETAIL: game_detail(&p,s,v); break;
+    case KUI_SHELL_GAMES_CHD_CONFIRM: games_chd_confirmation(&p,s,v); break;
     case KUI_SHELL_GAMES_VARIANTS: games_variants(&p,s); break;
     case KUI_SHELL_GAMES_ADVANCED: games_advanced(&p,s); break;
     case KUI_SHELL_GAMES_PROBE_CONFIRM: games_probe_confirmation(&p,v); break;

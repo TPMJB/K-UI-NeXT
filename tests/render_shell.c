@@ -11,6 +11,7 @@
  * system-compare, bios-image-pick, flash-image-pick, crc-scan, scan-folder, home-games,
  * games, games-variants, games-variants-2048, games-detail-2048, games-retail-2048,
  * games-detail, games-error, games-advanced, games-probe,
+ * games-chd, games-chd-confirm, games-chd-working, games-chd-stopping, games-chd-ready,
  * games-probe-loading, games-image-probe, games-image-probe-loading,
  * games-retail, games-retail-loading, games-retail-invalid, games-ce-probe, games-list-art,
  * games-retail-cd-plain, games-retail-cd-scrambled,
@@ -850,6 +851,26 @@ int main(int argc,char **argv) {
             shell.page=KUI_SHELL_GAMES_CHECK;view.app_status=&status;
             strcpy(status.message,"Executable preparation passed. The game was not started.");
         } else {shell.page=KUI_SHELL_GAMES_EXTRA_OPTIONS;shell.games_baseline=true;shell.game_tools_selected=KUI_SHELL_GAME_TOOL_BASELINE;}
+    }
+    if(!strncmp(argv[1],"games-chd",9)) {
+        struct kui_games_detail *d=&shell.games_detail;memset(d,0,sizeof(*d));
+        shell.page=KUI_SHELL_GAMES_DETAIL;view.busy=false;
+        strcpy(shell.games_selected_path,"/Games/Grandia II/Grandia II.chd");
+        strcpy(d->path,shell.games_selected_path);strcpy(d->title,"GRANDIA II");
+        d->chd=true;d->chd_prepare=true;d->cache_bytes=1185767203u;
+        if(strcmp(argv[1],"games-chd"))shell.page=KUI_SHELL_GAMES_CHD_CONFIRM;
+        if(!strcmp(argv[1],"games-chd-working") || !strcmp(argv[1],"games-chd-stopping")) {
+            view.busy=true;view.cancel_requested=!strcmp(argv[1],"games-chd-stopping");
+            view.app_status=&status;status=(struct kui_app_status){.done=576000000,.total=1185767203u,.line_count=2};
+            strcpy(status.message,"Expanding track 3 of 3");
+            strcpy(status.lines[0],"Decoding disc sectors to the SD cache");
+            strcpy(status.lines[1],"The source CHD is kept");
+        } else if(!strcmp(argv[1],"games-chd-ready")) {
+            shell.page=KUI_SHELL_GAMES_DETAIL;d->chd_prepare=false;d->chd_ready=true;
+            d->valid=d->native_gd=true;d->tracks=3;d->format=KUI_GAME_IMAGE_GDI;
+            d->boot_lba=45166;d->boot_bytes=123456;strcpy(d->boot_file,"1ST_READ.BIN");
+            strcpy(d->cache_path,"/KUI/Cache/CHD/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/disc.gdi");
+        }
     }
     if(press_mode) {
         view.build="UI SAMPLE";

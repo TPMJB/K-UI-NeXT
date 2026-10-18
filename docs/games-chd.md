@@ -1,162 +1,111 @@
-# Direct CHD Games milestone
+# CHD loading test
 
-Design review: 2026-10-15. **Direct CHD launch is not implemented.** The existing
-Games route is PC import through `tools/game_image_import.py` and MAME
-`chdman`; that remains available. CHD capture export is a separate working
-capability and does not establish that the detached game reader can decode
-CHDs. Do not enable a Play option merely because a header is recognized.
+This candidate adds **on-console CHD preparation and loading**. Select a CHD
+in Games, choose **Prepare CHD**, confirm the required space, and wait for
+conversion and verification. Return to the detail screen and choose Play.
+Later visits reuse the completed cache.
 
-## Formats we actually need to handle
+Preparation expands the image into a GDI and tracks under
+`KUI/Cache/CHD/<source identity>/`. CD images also receive a checked CUE
+descriptor so the normal reader preserves CD media and sector modes.
+The existing game reader then owns in-game reads.
+This is **not direct compressed streaming during gameplay**: the card
+needs room for the CHD plus its expanded tracks. First preparation can take a
+long time on serial storage. The displayed expanded size excludes allocation
+overhead; preparation checks that additional space too.
 
-| Profile | Container/map | Hunk decoding and track semantics |
-| --- | --- | --- |
-| K-UI ripper output | CHDv4, 108-byte header, fixed 16-byte big-endian map entries; own writer emits compressed/raw types 1/2 without a parent | Raw DEFLATE or raw 19584-byte hunks; eight 2448-byte frames. `CHGD` metadata preserves original disc addresses using explicit PAD tails, four-frame storage alignment and zero omitted subchannels. Audio is stored in canonical big-endian sample order. |
-| General CHDv4 | Same basic header/map family, additional entry types | Generic files can use mini/repeated, self-referenced, parent-referenced or secondary-compression hunks. Supporting only our writer's types must be labeled a restricted v4 profile. |
-| Common modern CD/GD CHDv5 | 124-byte header, up to four codec identifiers, compressed Huffman/RLE map; normalized entries are 12 bytes. Uncompressed v5 has a different map | MAME's default CD/GD codec set is `cdlz` (CD LZMA), `cdzl` (CD DEFLATE), `cdfl` (CD FLAC). Default hunks are also eight 2448-byte frames. Raw/self/parent map entries are distinct from codec slots. |
+## Preserve the current VMU installation
 
-Sources: current `src/core/capture_chd.c`; MAME
-[CHD format definitions](https://github.com/mamedev/mame/blob/master/src/lib/util/chd.h),
-[CD geometry](https://github.com/mamedev/mame/blob/master/src/lib/util/cdrom.h),
-and [chdman CD defaults](https://github.com/mamedev/mame/blob/master/src/tools/chdman.cpp).
-These are format/defaults evidence, not a census of the user's game files.
-An admitted v5 reader must examine actual codec identifiers and map entry types.
+The CHD runtime overlay contains `KUI/runtime.kui`, guides and licenses. Copy
+that overlay onto the existing installation. Keep the personalized
+`KUI/apps/games/retail-boot.kui`, `KUI/tools.kui`, and VMU profile/card files.
+The ordinary GDI manifest and relocation ABI are unchanged. The runtime
+accepts each existing module's own identifier and checked layout; module and
+shell build identifiers do not have to match.
 
-CD codecs are more than ordinary DEFLATE/LZMA/FLAC on a raw hunk. The CD layer
-separates mainchannel and subcode streams and can reconstruct omitted sync/ECC
-bytes. A reader must restore the declared frame representation before checking
-the hunk CRC or returning raw sectors. Declared FLAC support cannot be replaced
-by assuming all audio is unused. See libchdr's
-[CD transform](https://github.com/rtissera/libchdr/blob/master/src/libchdr_cdrom.c)
-and [CD FLAC decoder](https://github.com/rtissera/libchdr/blob/master/src/libchdr_codec_cdfl.c).
+A separate full candidate package replaces Games modules. Use it only on a
+separate test installation. The overlay neither installs nor activates a new
+VMU engine. CSO support still needs the previously supplied `cso-boot.kui`
+and its original SCI Standard restrictions.
 
-Track normalization needs separate physical-storage and disc-LBA coordinates.
-Parse `CHTR`/`CHT2` CD metadata, `CHGT` legacy GD metadata and `CHGD` current GD
-metadata explicitly; account for pregaps/postgaps, four-frame storage padding,
-PAD tails, the GD density boundary and audio byte order. Newer CD session
-metadata also needs an explicit policy. Track 3 is not universally a sufficient
-boot-session rule. Reject unsupported legacy binary metadata, ambiguous
-sessions, stored subchannels or parent/delta dependencies clearly until their
-semantics are implemented. Do not silently discard tracks or claim original
-subchannels were absent merely because a game read requests 2048 data bytes.
+## Initial supported profile
 
-The PC importer already has bounded header/metadata checks and GD PAD geometry
-validation, but `chdman verify` and `extractcd` do the actual container/hunk
-decoding. Its supported versions 3/4/5 are not evidence of a built-in decoder.
+| Container or feature | Admission |
+| --- | --- |
+| Parentless CHDv4 / CHDv5 optical images | Supported through the pinned libchdr decoder |
+| Default CD codecs `cdlz`, `cdzl`, `cdfl` | Tested against independently generated MAME images |
+| Raw and self-reference hunks | Supported; reference chains are bounded and iterative |
+| `cdzs`, general DEFLATE/LZMA/Huffman/FLAC/Zstd | Built; the current oracle matrix targets the default three CD codecs |
+| GD metadata `CHGD`, legacy `CHGT`; CD `CHTR` / `CHT2` | Explicit normalization; PAD, disc addresses and storage alignment stay distinct |
+| MODE1 / MODE1_RAW, MODE2_FORM1 / MODE2_RAW, AUDIO | Cooked 2048-byte or raw 2352-byte output; little-endian GDI audio |
+| Parent/delta images, stored subchannels, nonzero pregaps/postgaps, unknown session extensions | Refused with a profile error |
+| Size bounds | Optical 2448-byte frames, hunks at most 512 KiB, logical content at most 4 GiB; bounded GDI disc geometry |
 
-## The memory gate
+K-UI's restricted v4 CHD exports also retain independent reader tests. Game
+compatibility still depends on the ordinary native/WinCE/CDDA admission rules.
+A CHD does not expand those rules. This candidate has host and target-build
+validation; console acceptance is still required.
 
-Vendored `third_party/miniz` provides a usable raw-DEFLATE decoder, documented
-in `third_party/capture-codecs.md`. The current export wrapper has shared static
-worker state and cannot be called from a departed KOS runtime. No libchdr,
-LZMA or FLAC CHD decoder is presently vendored.
+## Publication, cancellation and reuse
 
-An isolated size check against the existing SH-4 compiler measured
-`sizeof(tinfl_decompressor) = 8364` bytes. One 19584-byte hunk plus that state
-already needs **27948 bytes**, before input buffers, code, metadata, map/cache
-or stack. This is a concrete estimate for the existing miniz-based path, not a
-universal theoretical lower bound. It exceeds the **14336-byte entire ordinary
-native code/BSS reservation**, `0x8c004000..0x8c007800`.
+Inspection is read-only. Preparation creates an exclusive work directory,
+decodes each exported track, syncs it, reads every output byte back and compares
+SHA-256, then closes it. The source must also close successfully. After the
+GDI and manifest pass sync/readback, one directory rename makes the cache
+visible. Sources, existing caches, settings and VMU files are preserved.
+B stops preparation; cleanup removes only files created by that attempt.
+Power loss can leave an unpublished `.workNNN` folder, removable with Files.
 
-Unlike ZSO's independent 2048-byte LZ4 block, a CHD hunk spans multiple sectors.
-A game can request only one sector from its middle. Ordinary DEFLATE and LZMA
-back references can need earlier output within that hunk, so direct decoding
-into an arbitrary 2048-byte game destination does not supply a valid history
-buffer. FLAC and the CD transforms add their own working state. Measure those
-workspaces with the exact pinned implementation and SH-4 configuration.
+The key binds source path, file size, FAT date/time, complete CHD header and
+normalized geometry. Reuse checks manifest CRC, identity, track lengths and
+GDI SHA-256 and exact regenerated CUE content for CD images.
+It **does not rehash every track on each launch**. Creation
+verification is not fresh full-media verification. The ordinary reader repeats
+its IP/executable checks before handoff. If a completed cache is damaged,
+remove that source's cache directory and prepare again. An incomplete existing
+final directory is never overwritten.
 
-The v5 map also needs a plan: materializing it costs
-`12 * ceil(logical_bytes / hunk_bytes)` bytes, around a megabyte for a large GD
-image at default geometry. Fixed-entry v4 maps can be read on demand. For v5,
-evaluate bounded decode checkpoints or a validated normalized index sidecar
-prepared while KOS is alive; neither removes the hunk/codec memory requirement.
-Current libchdr has low-memory map techniques worth auditing, but its heap and
-stdio implementation is not a freestanding drop-in:
-[container reader](https://github.com/rtissera/libchdr/blob/master/src/libchdr_chd.c).
+## Console acceptance sequence
 
-Before detached launch, choose and prove a protected reservation for code,
-decoded hunk, codec state and map/cache. The high staging area becomes ordinary
-game RAM after handoff and is not automatically free. A smaller supported hunk
-profile, a verified owner memory lease, or another established loader memory
-contract needs its own design and acceptance. Do not hide an arbitrary
-128 KiB reservation in game RAM. The larger CE reservation does not solve the
-native case and is not permission to change the WinCE/CDDA finishing branch.
+1. Keep the previous runtime for rollback. Install only the CHD overlay.
+2. Check that a known-working original GDI still boots normally.
+3. Select its matching CHD. Confirm tracks/expanded size and prepare it.
+   B during another attempt should stop without a selectable partial cache.
+4. Play with Standard, CD music Off and RAM patches Off first. Compare boot,
+   a real gameplay load and sustained reads with the original image.
+5. Reboot and select the CHD again: Play should be available directly.
+   Record the exact build, image release and any failure screen.
+6. Try optional CDDA/WinCE only for an image already admitted by that loader.
+   The exact-owner VMU profile retains its image fingerprint; re-encoding can
+   change that fingerprint.
 
-## Implemented portable reader milestone
+Original synthetic console tests, when included in the bundle, exercise the
+codec/cache/normal-read handoff without commercial game data. Their guide
+states the expected screens. Host results do not establish console success.
 
-The compressed-reader branch now contains `include/kui/chd.h` and
-`src/core/chd.c`, a real callback-based reader for the restricted K-UI CHDv4
-export profile. It validates the fixed map and contiguous CHGD metadata,
-checks raw/DEFLATE hunk CRCs and exact decoded lengths, separates disc addresses
-from padded storage frames, refuses omitted PAD as captured data and restores
-little-endian audio at the sector boundary. Its caller-owned host workspace is
-28,496 bytes; the exact target size must still be measured.
+## Automated checks
 
-`ASAN_OPTIONS=detect_leaks=0 python3 tests/test_chd_reader.py` verifies the real
-capture-writer fixture against independent Python zlib and all five original
-data/audio tracks. Corruption, metadata/maps, cancellation, short reads,
-cache invalidation and output guards are covered. This is decoder
-infrastructure; it is not connected to Play, does not fit the ordinary native
-reservation and does not support common v5 CHDs.
+Run `make test-chd` with MAME `chdman` on PATH. Set
+`KUI_REQUIRE_CODEC_ORACLES=1` in CI to make missing independent codecs fatal.
+`KUI_CHDMAN` selects the modern-reader oracle; `CHDMAN` selects the filesystem
+oracle. AddressSanitizer and UndefinedBehaviorSanitizer are enabled.
 
-## Remaining implementation: portable reader breadth and launch
+The matrix compares canonical storage and exported data/audio with MAME and
+original synthetic tracks, including GD PAD, the 45000-LBA density boundary,
+alignment, raw/self/codec entries and cache seeks. Real FAT32/exFAT tests cover
+prepare/reuse, changed identity, full readback, storage failures, cancellation,
+cleanup and unchanged VMU sentinels. Core tests inject faults at every callback
+and cancellation boundary. Dreamcast game readers retain placement, stack and
+instruction audits.
 
-The next source change should be a callback-based CHD reader prototype, with
-caller-owned workspace, independent of `capture_chd.c` and detached placement.
-Proposed files: `include/kui/chd.h`, `src/core/chd.c` and focused metadata/codec
-modules as needed. Keep physical file offsets, normalized hunk entries and
-disc-track geometry distinct. Do not allocate a complete map implicitly.
+## Direct streaming remains separate
 
-1. Implement the restricted K-UI CHDv4 profile first: strict header/parent
-   refusal, streamed fixed-entry map validation, exact raw/DEFLATE hunk output
-   and CRC32. Decode a hunk once, then return bounded requested frame slices.
-   This gives an independently testable real reader for our own CHD exports.
-2. Normalize CHGD tracks and compare data/audio/addresses with the original
-   capture and MAME extraction. Preserve canonical bytes for hunk CRC; convert
-   audio sample order only at the disc-reader boundary. Treat synthetic PAD
-   separately from captured sectors.
-3. Add v5 map decoding and raw/self entries with bounded reference resolution,
-   cycle detection, map CRC16 and hunk CRC16. Start controlled `cdzl` fixtures,
-   then add `cdlz` and `cdfl` before describing common default CHDs as supported.
-   Parent files remain an explicit later capability, not an implicit search.
-4. Run a KOS-side benchmark with caller-owned heap workspace to measure
-   worst-case memory, random-read latency, sequential throughput and corruption
-   handling. This is inspection/benchmark capability, not game launch.
-5. Only then design a separate CHD manifest/package and protected runtime
-   workspace. Preserve the native/CE/CDDA/ZSO readers and their layout gates.
+The ordinary native service has 14,336 bytes for code and BSS at
+`0x8c004000..0x8c007800`. A default CHD hunk alone is 19,584 bytes, before codec
+state. This shell-side decoder is closed before game handoff and takes no new
+reservation from game RAM. A future direct reader needs a demonstrated
+protected workspace and separate console acceptance.
 
-Codec libraries may be independently sourced from their original maintainers
-with a pinned revision, retained licenses and a dependency record; no
-DreamShell implementation is needed. Existing miniz is already documented.
-Do not copy the complete capture worker, its compressor or its shared globals
-into the resident to obtain one inflate operation.
-
-## Integration and acceptance
-
-`game_image.c` currently normalizes physical files into tracks and supports the
-separate ZSO adapter. CHD adds multi-track hunk storage and a larger mutable
-decode cache. Define an explicit caller-owned reader/workspace lifetime before
-integrating it; no borrowed opener-stack context or hidden heap allocation
-without a close/release path. Audit Games inspection, artwork, cancellation
-and every error exit. Runtime manifest preparation must map the physical CHD
-file plus any normalized index, not pretend logical sector bytes are file
-extents. Detached IP/executable CRC checks remain mandatory.
-
-Use the current original capture fixture in `tests/test_capture_chd_oracle.py`
-as an independent baseline; extend it with real `chdman createcd` v5 fixtures
-using each default codec and their mixture, raw and self hunks, CD and GD
-geometry and hunk-boundary seeks. Compare decoded canonical hunks and returned
-sectors byte for byte. Existing PC-import tests remain in place.
-
-Required negative cases include truncated/oversized headers/maps/hunks,
-metadata cycles/ranges/duplicates, integer overflow, invalid codec slots,
-out-of-range and cyclic references, wrong parents, CRC failures, invalid
-pregap/PAD/storage geometry, unknown subchannels, short reads and cancellation.
-Require bounded work, unchanged publication on failed open, invalidated caches
-after failed reads and intact output redzones under ASan/UBSan.
-
-A detached prototype additionally needs linked code/BSS/stack and instruction
-audits, proven workspace ownership, file-fragment bounds, read-error cleanup
-and console comparison against the same uncompressed owner image. Test native
-data loading first; container audio inventory does not enable CDDA emulation.
-WinCE and CDDA are later admission milestones. Publish the actual version,
-codec, hunk-size, metadata and transport scope only after those gates pass.
+The independently pinned decoder, licenses and hardening changes are recorded
+in [the dependency record](../third_party/chd-codecs.md). No DreamShell decoder
+implementation is used.

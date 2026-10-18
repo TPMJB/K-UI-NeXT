@@ -894,7 +894,7 @@ static void check_formats(void) {
             assert(!kui_games_inspect(path,&detail,log_line,cancel) && !detail.valid && !detail.stopped);
             if(i==1) assert(strstr(detail.message,"selected codec") && strstr(detail.message,"LZ4 or LZO1X"));
             else if(i==0) assert(strstr(detail.message,"Invalid track length"));
-            else assert(strstr(detail.message,"offline import") && strstr(detail.message,"direct launch unavailable"));
+            else assert(detail.chd && !detail.chd_ready && !detail.chd_prepare && !detail.valid);
         }
         assert(!test.read_calls);return;
     }

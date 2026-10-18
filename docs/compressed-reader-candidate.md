@@ -18,9 +18,12 @@ Normal menu return reboots directly; a read fault keeps its diagnostic screen.
 The separate LZ4/LZO ZSO options remain experimental. The ordinary native,
 WinCE and CDDA loaders retain their own admission rules and release baseline.
 
-CHD cannot be launched directly in this candidate. The new portable reader
-covers K-UI's restricted v4 exports; common v5 codecs and protected runtime
-workspace remain unfinished. See [GAMES-CHD.md](games-chd.md).
+CHD now has an on-console preparation path: it expands and verifies a reusable
+GDI cache before launching through the normal reader. Parentless v4/v5 images
+and the default CD codecs are supported within the stated optical profile.
+It needs expanded SD space; it does not stream compressed hunks during gameplay.
+Use the runtime-only CHD overlay to preserve the personalized VMU loader.
+See [GAMES-CHD.md](games-chd.md).
 
 ATA DMA remains future work. The target is a shared standards-based driver for
 ordinary IDE/CF mods and the K-UI board, with board activation kept separate.

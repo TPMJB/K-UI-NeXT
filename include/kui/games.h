@@ -38,9 +38,13 @@ enum kui_game_cdda_compatibility {
 };
 struct kui_games_detail {
     char path[KUI_GAMES_FILE_CAP];
+    /* A CHD keeps its source path as the settings/selection identity. Only a
+     * complete, verified expanded cache supplies the separate launch path. */
+    char cache_path[KUI_GAMES_FILE_CAP];
     char title[129], product[17], region[9], boot_file[17];
     char message[128];
     uint64_t bytes;
+    uint64_t cache_bytes;
     uint32_t boot_bytes, boot_lba;
     unsigned tracks, audio_tracks, data_tracks;
     struct kui_game_audio_info audio;
@@ -48,6 +52,7 @@ struct kui_games_detail {
      * executable and native-runtime guards still run before handoff. */
     enum kui_game_cdda_compatibility cdda_compatibility;
     bool valid, stopped;
+    bool chd, chd_prepare, chd_ready;
     /* Inspection is useful even when this loader cannot boot the image.
      * CD music is optional and uses checked runtime adapters; unfamiliar
      * images remain experimental. With music Off, CD audio is silent.
@@ -102,4 +107,9 @@ bool kui_games_inspect_with_codec(const char *path,enum kui_zso_codec codec,stru
     kui_games_mounted_fn mounted,void *ctx,kui_log_fn log,kui_cancel_fn cancel);
 bool kui_games_inspect_with(const char *path, struct kui_games_detail *out,
                             kui_games_mounted_fn mounted, void *ctx, kui_log_fn log, kui_cancel_fn cancel);
+/* Explicit storage-worker write. Expands the source into a reusable SD cache;
+ * inspection alone never creates it. Cancellation leaves no launchable partial
+ * cache. The returned detail retains source identity and reports the result. */
+bool kui_games_chd_prepare(const char *source,struct kui_games_detail *out,
+    kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
 #endif

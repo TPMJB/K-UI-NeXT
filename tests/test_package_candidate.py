@@ -444,12 +444,13 @@ class CompressedCandidateSelection(unittest.TestCase):
             release = package_metadata(True)
             self.assertTrue(release["artifact_prefix"].endswith("-compressed-candidate"))
             self.assertNotIn("ATA readiness", release["name"])
-            self.assertEqual(candidate_evidence()["chd"], "restricted v4 portable reader only; no direct launch")
+            self.assertEqual(candidate_evidence()["chd"], "on-console v4/v5 verified GDI cache; console acceptance pending")
             write_release_guides(Path(temporary), True)
             guide = (Path(temporary) / "START-HERE.md").read_text()
             self.assertIn("cso-boot.kui", guide)
             self.assertIn("(GAMES-CSO.md)", guide)
-            self.assertIn("CHD cannot be launched directly", guide)
+            self.assertIn("on-console preparation path", guide)
+            self.assertIn("does not stream compressed hunks", guide)
 
     def test_unknown_profile_is_refused(self):
         with patch.dict(os.environ, {"KUI_CANDIDATE_PROFILE": "arbitrary"}), \

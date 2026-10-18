@@ -173,6 +173,12 @@ class CsoReleaseInstallation(unittest.TestCase):
                        for name in ("games-cso", "games-chd", "ata-dma-plan")}
         for name, contents in self.guides.items():
             (self.fixture.dist / name).write_bytes(contents)
+        # The install omits the vendor source tree. Its dependency link must
+        # identify the exact source commit rather than break inside the ZIP.
+        self.guides["GAMES-CHD.md"] = self.guides["GAMES-CHD.md"].replace(
+            b"(../third_party/chd-codecs.md)",
+            ("(https://github.com/TPMJB/K-UI-NeXT/blob/" + self.fixture.commit +
+             "/third_party/chd-codecs.md)").encode("ascii"))
 
     def test_typed_cso_payload_and_exact_source_identity_survive_install_archives(self):
         bundle, release = self.fixture.assemble(False)

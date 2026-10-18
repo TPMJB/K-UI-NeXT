@@ -15,6 +15,7 @@ from image_probe_package import inspect_image_probe
 from retail_package import inspect_retail
 from zso_package import inspect_zso
 from boot_badge import BADGE, inspect_badge, verify_cdi_badge
+from chd_notices import write_chd_codec_notices
 
 ROOT = Path(__file__).resolve().parents[1]
 WINCE_CDDA_PROFILES = {"armada": "armada-us", "bam4": "bam4-us", "worms": "worms-us", "wwp": "wwp-us"}
@@ -128,7 +129,7 @@ def package_metadata(candidate=None):
 def candidate_evidence():
     if candidate_profile() == "compressed":
         return {"name": "Compressed readers", "cso": "SCI Standard; console acceptance pending",
-                "chd": "restricted v4 portable reader only; no direct launch",
+                "chd": "on-console v4/v5 verified GDI cache; console acceptance pending",
                 "ata_dma": "not implemented"}
     return {"name": "ATA readiness", "ata_hardware": "untested",
             "sci512_hardware": "rejected; restored 256-byte allowance", "ata_io": "synchronous PIO",
@@ -139,7 +140,7 @@ def candidate_notice():
     if candidate_profile() == "compressed":
         return ("Experimental compressed-reader candidate; not a public release.\n"
                 "CSO is SCI Standard only and needs console acceptance.\n"
-                "CHD direct launch and ATA DMA are not implemented.\n"
+                "CHD uses an expanded GDI cache; direct streaming and ATA DMA are not implemented.\n"
                 "Install the complete matching runtime and Games folder; keep originals.\n\n")
     return ("ATA readiness release candidate; not a hardware-validated release.\n"
             "ATA hardware is untested; the SCI512 test was rejected after degraded audio.\n"
@@ -230,6 +231,7 @@ def storage_image(elf_data, build, label):
 def write_capture_codec_notices(directory):
     """Retain the vendored codec licenses in every distributable install/source tree."""
     directory.mkdir(parents=True, exist_ok=True)
+    write_chd_codec_notices(directory)
     for source, target in (("third_party/capture-codecs.md", "capture-codecs.md"),
                            ("third_party/minilzo/COPYING", "minilzo-COPYING"),
                            ("third_party/minilzo/README.LZO", "minilzo-README.LZO")):
@@ -447,7 +449,7 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
         "Native standard/background and Windows CE launch payloads are installed.\n"
         "Separate LZ4/LZO1X ZSO modules are included; see GAMES-ZSO.md for their limits.\n"
         "GAMES-CSO.md covers the experimental SCI Standard CSO module and test limits.\n"
-        "GAMES-CHD.md describes the portable reader milestone; direct CHD Play is unavailable.\n"
+        "GAMES-CHD.md covers on-console CHD preparation into a reusable GDI cache.\n"
         "ATA-DMA-PLAN.md describes the shared ATA engine and board acceptance work.\n"
         "Optional WinCE CD music uses four checked kernel/sound adapters established\n"
         "from Armada, Bust-A-Move 4, Worms Armageddon and Worms World Party. Other\n"
@@ -806,7 +808,7 @@ def main():
         "Update runtime.kui and the complete Games folder from this same package.\n"
         "That folder includes separate LZ4/LZO1X ZSO modules; see GAMES-ZSO.md.\n"
         "GAMES-CSO.md covers the experimental SCI Standard CSO module and test limits.\n"
-        "GAMES-CHD.md describes the portable reader milestone; direct CHD Play is unavailable.\n"
+        "GAMES-CHD.md covers on-console CHD preparation into a reusable GDI cache.\n"
         "ATA-DMA-PLAN.md describes the shared ATA engine and board acceptance work.\n"
         "KUI/apps/games/ce-probe.kui is the Windows CE boot test; see WINDOWS-CE-PLACEMENT-TEST.md.\n"
         "The native reader retains the accepted Skies/Time Stalkers/Evolution settings.\n"
