@@ -13,7 +13,10 @@
 static FILE *disk_image;
 static uint64_t image_blocks;
 static bool connected,profile_raw_phase,inject_raw_failure,inject_identity_change;
-static unsigned profile_raw_reads,identity_reads;
+static unsigned profile_raw_reads,identity_reads,profile_raw_connections,phase_reads;
+#if KUI_VMU_PERSIST_PREP
+static bool inject_final_raw_failure,inject_final_identity_change;
+#endif
 static uint8_t observed_image_hash[32];
 static const uint8_t host_cid[16]={0x12,0x34,0x56,0x78,0x9a,0xbc,0xde,0xf0,
                                  0x13,0x57,0x9b,0xdf,0x24,0x68,0xac,0xe0};
@@ -33,8 +36,11 @@ static int raw_read(void *context,uint32_t lba,size_t count,uint8_t *bytes) {
     (void)context;assert((uint64_t)lba+count<=image_blocks);
     assert(connected);
     if(profile_raw_phase) {
-        assert(count==1u);++profile_raw_reads;
+        assert(count==1u);++profile_raw_reads;++phase_reads;
         if(inject_raw_failure && profile_raw_reads==7u) return -1;
+#if KUI_VMU_PERSIST_PREP
+        if(inject_final_raw_failure && profile_raw_connections==2u && phase_reads==7u) return -1;
+#endif
     }
     return fseeko(disk_image,(off_t)lba*512,SEEK_SET) || fread(bytes,512,count,disk_image)!=count?-1:0;
 }
@@ -56,11 +62,15 @@ bool kui_sd_vmu_profile_identity(struct kui_vmu_sd_identity *out) {
     memset(out,0,sizeof(*out));memcpy(out->cid,host_cid,sizeof(host_cid));
     out->sectors=image_blocks;out->high_capacity=true;++identity_reads;
     if(inject_identity_change && identity_reads>=2u) out->cid[0]^=1u;
+#if KUI_VMU_PERSIST_PREP
+    if(inject_final_identity_change && identity_reads>=5u) out->cid[0]^=1u;
+#endif
     return true;
 }
 bool kui_sd_raw_read_ops(struct kui_media_ops *out) {
     if(!out || !connected) return false;
     assert(!volume.fs_type);profile_raw_phase=true;
+    ++profile_raw_connections;phase_reads=0;
     *out=(struct kui_media_ops){.blocks=blocks,.read=raw_read};return true;
 }
 void kui_storage_boot_begin(void) {}
@@ -80,6 +90,38 @@ static uint32_t image_crc(unsigned number) {
     kui_sha256_digest(&hash,observed_image_hash);
     assert(f_close(&file)==FR_OK);assert(disconnect_volume());return crc;
 }
+#if KUI_VMU_PERSIST_PREP
+static void pair_content_hashes(unsigned number,uint8_t hashes[3][32]) {
+    static const char *const leaves[]={"card.vmd","card.journal","identity.bin"};
+    assert(connect_volume());
+    for(unsigned role=0;role<3u;role++) {
+        char name[96];FIL file;uint8_t bytes[512];struct kui_sha256 hash;
+        assert(path(name,number,leaves[role]));FRESULT opened=f_open(&file,name,FA_READ);
+        if(opened==FR_NO_FILE || opened==FR_NO_PATH) {memset(hashes[role],0,32u);continue;}
+        assert(opened==FR_OK);
+        kui_sha256_init(&hash);
+        for(;;) {
+            UINT done=0;assert(f_read(&file,bytes,sizeof(bytes),&done)==FR_OK);
+            if(!done) break;
+            kui_sha256_update(&hash,bytes,done);
+        }
+        kui_sha256_digest(&hash,hashes[role]);assert(f_close(&file)==FR_OK);
+    }
+    assert(disconnect_volume());
+}
+static void persisted_prep_profile(void) {
+    assert(connect_volume());FIL file;UINT done=0;
+    assert(f_open(&file,exported_profile_path,FA_READ)==FR_OK);
+    assert(f_size(&file)==sizeof(persist_check));
+    assert(f_read(&file,persist_check,sizeof(persist_check),&done)==FR_OK && done==sizeof(persist_check));
+    assert(f_close(&file)==FR_OK && disconnect_volume());
+    assert(kui_vmu_persist_profile_decode(&persist_verify,persist_check,sizeof(persist_check))==0);
+    assert(kui_vmu_persist_profile_same_ownership(&persist_profile,&persist_verify));
+    printf("PERSIST-PATH %s\nPERSIST-WIRE ",exported_profile_path);
+    for(size_t i=0;i<sizeof(persist_check);i++) printf("%02x",persist_check[i]);
+    putchar('\n');
+}
+#endif
 int main(int argc,char **argv) {
     if(argc!=3) return 2;
     struct stat info;assert(stat(argv[1],&info)==0 && info.st_size%512==0);
@@ -89,7 +131,33 @@ int main(int argc,char **argv) {
         ok=run_test(true);
     } else if(!strcmp(argv[2],"verify")) {
         ok=run_test(false);
-    } else if(!strcmp(argv[2],"export")) {
+    }
+#if KUI_VMU_PERSIST_PREP
+    else if(!strcmp(argv[2],"export-persist") || !strcmp(argv[2],"refuse-persist") ||
+            !strcmp(argv[2],"refuse-persist-scif") || !strcmp(argv[2],"refuse-persist-raw") ||
+            !strcmp(argv[2],"refuse-persist-identity") || !strcmp(argv[2],"refuse-persist-final-raw") ||
+            !strcmp(argv[2],"refuse-persist-final-identity")) {
+        expect_failure=strcmp(argv[2],"export-persist")!=0;
+        assert(connect_volume());unsigned number;assert(latest_probe(&number));assert(disconnect_volume());
+        uint8_t before[3][32],after[3][32];pair_content_hashes(number,before);
+        if(!strcmp(argv[2],"refuse-persist-scif")) transport=KUI_STORAGE_SCIF;
+        inject_raw_failure=!strcmp(argv[2],"refuse-persist-raw");
+        inject_identity_change=!strcmp(argv[2],"refuse-persist-identity");
+        inject_final_raw_failure=!strcmp(argv[2],"refuse-persist-final-raw");
+        inject_final_identity_change=!strcmp(argv[2],"refuse-persist-final-identity");
+        ok=export_persistent_profile();assert(!connected);
+        if(ok) {
+            assert(profile_raw_connections==2u && profile_raw_reads>=518u && identity_reads==6u);
+            persisted_prep_profile();
+        } else assert(!exported_profile_path[0]);
+        transport=KUI_STORAGE_SCI;
+        pair_content_hashes(number,after);assert(!memcmp(before,after,sizeof(before)));
+    } else if(!strcmp(argv[2],"prep-refuse-create") || !strcmp(argv[2],"prep-refuse-verify")) {
+        expect_failure=true;ok=run_test(!strcmp(argv[2],"prep-refuse-create"));
+        assert(!connected && !profile_raw_reads && !identity_reads);
+    }
+#endif
+    else if(!strcmp(argv[2],"export")) {
         assert(connect_volume());unsigned number;assert(latest_probe(&number));assert(disconnect_volume());
         uint32_t before=image_crc(number);uint8_t before_hash[32];
         memcpy(before_hash,observed_image_hash,sizeof(before_hash));ok=export_readonly_profile();

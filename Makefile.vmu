@@ -6,6 +6,13 @@ $(error Source .deps/kos/environ.sh before building)
 endif
 endif
 BUILD ?= build/vmu-harness
+PERSIST_PREP ?= 0
+ifneq ($(PERSIST_PREP),0)
+ifneq ($(PERSIST_PREP),1)
+$(error PERSIST_PREP must be 0 or 1)
+endif
+endif
+PERSIST_SOURCES := src/core/vmu_persist_profile.c src/core/vmu_fs_admission.c
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 TARGET := $(BUILD)/vmu-harness.elf
 SOURCES := src/experimental/vmu_harness/main.c \
@@ -15,6 +22,9 @@ SOURCES := src/experimental/vmu_harness/main.c \
     src/core/storage_policy.c src/core/ata.c src/dreamcast/ata_bus.c \
     src/dreamcast/sd.c src/dreamcast/sci_sd_storage.c src/loader/sd_reader.c \
     src/loader/sci_sd_bus.c src/dreamcast/shell_font.c
+ifeq ($(PERSIST_PREP),1)
+SOURCES += $(PERSIST_SOURCES)
+endif
 OBJECTS := $(patsubst %.c,$(BUILD)/%.o,$(SOURCES)) $(BUILD)/ff.o $(BUILD)/ffunicode.o
 .DEFAULT_GOAL := all
 .PHONY: all package
@@ -25,8 +35,18 @@ include $(KOS_BASE)/Makefile.rules
 endif
 CPPFLAGS += -Iinclude -Isrc/dreamcast -Isrc/loader -I.deps/fatfs/source \
     -DKUI_ON_CONSOLE=1 -DKUI_RETAIL_FAST_IO=1 -DKUI_VMU_PROFILE_PREP=1 -DKUI_VMU_EXPERIMENTAL=0 \
-    -DKUI_BUILD_ID='"$(BUILD_ID)"'
+    -DKUI_VMU_PERSIST_PREP=$(PERSIST_PREP) -DKUI_BUILD_ID='"$(BUILD_ID)"'
 CFLAGS += -std=c11 -Os -Wall -Wextra -Werror -ffunction-sections -fdata-sections -fstack-usage
+# Changing preparation mode in one directory invalidates all native objects.
+.PHONY: force-prep-config
+force-prep-config:
+$(BUILD)/prep-config: force-prep-config
+	@mkdir -p $(BUILD)
+	@printf '%s\n' 'PERSIST_PREP=$(PERSIST_PREP)' > $(BUILD)/prep-config.tmp
+	@cmp -s $(BUILD)/prep-config.tmp $(BUILD)/prep-config || cp $(BUILD)/prep-config.tmp $(BUILD)/prep-config
+	@rm -f $(BUILD)/prep-config.tmp
+$(OBJECTS): $(BUILD)/prep-config
+
 $(BUILD)/%.o: %.c
 	@mkdir -p $(@D)
 	kos-cc $(CFLAGS) $(CPPFLAGS) -MMD -MP -c $< -o $@
@@ -56,21 +76,55 @@ HOST_SOURCES := src/experimental/vmu_harness/host.c src/core/vmu_emulation.c src
     src/loader/vmu_maple_dma.c src/core/vmu_store.c src/core/retail_image.c src/core/data.c \
     src/core/diskio.c src/core/clock.c src/core/storage_probe.c \
     .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
+ifeq ($(PERSIST_PREP),1)
+HOST_SOURCES += $(PERSIST_SOURCES)
+PREP_TEST_TARGETS := $(BUILD)/test-persist-profile $(BUILD)/test-fs-admission $(BUILD)/test-fs-admission-adversarial
+endif
 .PHONY: host-test
-host-test: $(BUILD)/host-sequence $(BUILD)/test-sd-profile
+host-test: $(BUILD)/host-sequence $(BUILD)/test-sd-profile $(PREP_TEST_TARGETS)
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-sd-profile
+ifeq ($(PERSIST_PREP),1)
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-persist-profile
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-fs-admission
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-fs-admission-adversarial
+	python3 tests/test_vmu_persist_profile_tool.py
+endif
 	$(if $(VMU_HARNESS_IMAGE),$(BUILD)/host-sequence $(VMU_HARNESS_IMAGE) $(or $(VMU_HARNESS_MODE),create),@echo "Built host sequence; supply VMU_HARNESS_IMAGE to run")
 $(BUILD)/host-sequence: $(HOST_SOURCES) src/experimental/vmu_harness/main.c \
     src/experimental/vmu_harness/host-stubs/kos.h \
-    src/experimental/vmu_harness/host-stubs/dc/maple/controller.h include/kui/vmu_sd_profile.h
+    src/experimental/vmu_harness/host-stubs/dc/maple/controller.h include/kui/vmu_sd_profile.h $(BUILD)/prep-config
 	@mkdir -p $(@D)
 	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
         -Isrc/experimental/vmu_harness/host-stubs -Iinclude -Isrc/dreamcast \
-        -I.deps/fatfs/source -DKUI_VMU_PROFILE_PREP=1 $(HOST_SOURCES) -o $@
+        -I.deps/fatfs/source -DKUI_VMU_PROFILE_PREP=1 -DKUI_VMU_PERSIST_PREP=$(PERSIST_PREP) $(HOST_SOURCES) -o $@
 $(BUILD)/test-sd-profile: tests/test_vmu_sd_profile.c src/core/vmu_sd_profile.c \
     src/core/hash.c src/core/retail_image.c include/kui/vmu_sd_profile.h
 	@mkdir -p $(@D)
 	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
         -ffunction-sections -fdata-sections -Wl,--gc-sections \
         -Iinclude tests/test_vmu_sd_profile.c src/core/vmu_sd_profile.c src/core/hash.c \
+        src/core/retail_image.c -o $@
+
+$(BUILD)/test-persist-profile: tests/test_vmu_persist_profile.c src/core/vmu_persist_profile.c \
+    src/core/hash.c src/core/retail_image.c include/kui/vmu_persist_profile.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
+        -ffunction-sections -fdata-sections -Wl,--gc-sections -Iinclude \
+        tests/test_vmu_persist_profile.c src/core/vmu_persist_profile.c src/core/hash.c \
+        src/core/retail_image.c -o $@
+
+$(BUILD)/test-fs-admission: tests/test_vmu_fs_admission.c $(PERSIST_SOURCES) \
+    src/core/hash.c src/core/retail_image.c include/kui/vmu_fs_admission.h include/kui/vmu_persist_profile.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
+        -ffunction-sections -fdata-sections -Wl,--gc-sections -Iinclude \
+        tests/test_vmu_fs_admission.c $(PERSIST_SOURCES) src/core/hash.c \
+        src/core/retail_image.c -o $@
+
+$(BUILD)/test-fs-admission-adversarial: tests/test_vmu_fs_admission_adversarial.c $(PERSIST_SOURCES) \
+    src/core/hash.c src/core/retail_image.c include/kui/vmu_fs_admission.h include/kui/vmu_persist_profile.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
+        -ffunction-sections -fdata-sections -Wl,--gc-sections -Iinclude \
+        tests/test_vmu_fs_admission_adversarial.c $(PERSIST_SOURCES) src/core/hash.c \
         src/core/retail_image.c -o $@

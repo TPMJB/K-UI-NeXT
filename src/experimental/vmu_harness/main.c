@@ -23,6 +23,19 @@ KOS_INIT_FLAGS(INIT_IRQ | INIT_CONTROLLER | INIT_NO_DCLOAD | INIT_QUIET);
 #ifndef KUI_BUILD_ID
 #define KUI_BUILD_ID "local"
 #endif
+#ifndef KUI_VMU_PERSIST_PREP
+#define KUI_VMU_PERSIST_PREP 0
+#endif
+#if KUI_VMU_PERSIST_PREP != 0 && KUI_VMU_PERSIST_PREP != 1
+#error Persistent preparation must be explicitly enabled or disabled
+#endif
+#if KUI_VMU_PERSIST_PREP
+#include "kui/vmu_persist_profile.h"
+#include "kui/vmu_fs_admission.h"
+#endif
+
+/* Typed linked identity: the packager checks the actual allocated word. */
+const uint32_t kui_vmu_persist_prep_build_mode=KUI_VMU_PERSIST_PREP;
 
 #define PROBE_ROOT "0:/KUI/vmu-test"
 #define PROBE_FIRST_BLOCK 199u
@@ -35,7 +48,9 @@ KOS_INIT_FLAGS(INIT_IRQ | INIT_CONTROLLER | INIT_NO_DCLOAD | INIT_QUIET);
 static char lines[LOG_ROWS][LOG_COLS];
 static unsigned line_count;
 static unsigned transport=KUI_STORAGE_SCI;
-static const char *result="A new probe; X verify; Y export SCI read-only profile.";
+static const char *result=KUI_VMU_PERSIST_PREP?
+    "Y prepare SCI persistence profile; source files stay unchanged.":
+    "A new probe; X verify; Y export SCI read-only profile.";
 static struct kui_vmu_store store;
 static kui_vmu_emulation_t device;
 static struct kui_vmu_image_workspace image_workspace;
@@ -48,6 +63,17 @@ static _Alignas(32) uint8_t reply[1024];
 static struct kui_vmu_sd_profile readonly_profile;
 static uint8_t profile_bytes[KUI_VMU_SD_PROFILE_WIRE_BYTES],profile_check[KUI_VMU_SD_PROFILE_WIRE_BYTES];
 static char exported_profile_path[96];
+#if KUI_VMU_PERSIST_PREP
+static struct kui_vmu_persist_profile persist_profile,persist_verify;
+static struct kui_vmu_fs_workspace persist_workspace;
+static uint8_t persist_wire[4096],persist_check[4096];
+static _Alignas(32) uint8_t persist_sector[512];
+struct persist_raw_reader {
+    const struct kui_vmu_persist_profile *profile;
+    struct kui_media_ops operations;
+};
+static struct persist_raw_reader persist_raw;
+#endif
 
 /* Existing SD adapter's optical arbitration seam. This standalone program
  * never starts an optical request. No drive initialization is performed. */
@@ -56,8 +82,11 @@ bool kui_cancelled(void) {return false;}
 
 static void render(void) {
     for(unsigned i=0;i<640u*480u;i++) vram_s[i]=0x0841;
-    kui_shell_font_draw(vram_s,28,24,0xfe2d,"Virtual VMU - native proof harness",true);
-    kui_shell_font_draw(vram_s,28,56,0xffff,"OWNED TEST PROGRAM / SOFTWARE MAPLE CHAIN",false);
+    kui_shell_font_draw(vram_s,28,24,0xfe2d,KUI_VMU_PERSIST_PREP?
+        "Virtual VMU - persistence preparation":"Virtual VMU - native proof harness",true);
+    kui_shell_font_draw(vram_s,28,56,0xffff,KUI_VMU_PERSIST_PREP?
+        "PREPARATION ONLY / NO RETAIL WRITES OR RECOVERY":
+        "OWNED TEST PROGRAM / SOFTWARE MAPLE CHAIN",false);
     kui_shell_font_draw(vram_s,28,80,0xc618,"Retail games cannot use the virtual card in this build.",false);
     char heading[100];
     snprintf(heading,sizeof(heading),"Build %.12s   Storage: %s   Card: /KUI/vmu-test",KUI_BUILD_ID,
@@ -66,7 +95,9 @@ static void render(void) {
     for(unsigned row=0;row<line_count;row++)
         kui_shell_font_draw(vram_s,28,139+(int)row*18,0xffff,lines[row],false);
     kui_shell_font_draw(vram_s,28,418,0xfe2d,result,false);
-    kui_shell_font_draw(vram_s,28,444,0xc618,"A New   X Verify   Y SCI profile   Left/Right SCI/SCIF",false);
+    kui_shell_font_draw(vram_s,28,444,0xc618,KUI_VMU_PERSIST_PREP?
+        "Y Prepare profile   A/X disabled   Left/Right SCI/SCIF":
+        "A New   X Verify   Y SCI profile   Left/Right SCI/SCIF",false);
     vid_waitvbl();vid_flip(-1);
 }
 void kui_log(const char *format,...) {
@@ -337,6 +368,9 @@ static bool verify_save(unsigned number) {
     return validate_image(true);
 }
 static bool run_test(bool create) {
+    /* The dedicated preparation binary can never rebind/recover a retail
+     * journal through this legacy synthetic258-sector store namespace. */
+    if(KUI_VMU_PERSIST_PREP) return fail("preparation disables source writes and journal recovery");
     unsigned number=0;
     if(!connect_volume()) return false;
     if(create?!new_probe(&number):!latest_probe(&number)) return false;
@@ -521,33 +555,174 @@ finished:
     if(!ok) exported_profile_path[0]=0;
     return ok;
 }
+#if KUI_VMU_PERSIST_PREP
+static bool persist_card_matches(const struct kui_vmu_fs_input *input) {
+    struct kui_vmu_sd_identity current;
+    return kui_sd_vmu_profile_identity(&current) && current.sectors==input->card_sectors &&
+        (unsigned)current.high_capacity==input->high_capacity && !memcmp(current.cid,input->cid,16u);
+}
+static int persist_read_sector(void *context,uint32_t lba,uint8_t bytes[512]) {
+    struct persist_raw_reader *reader=context;
+    return reader->operations.read(reader->operations.ctx,lba,1u,bytes);
+}
+static int persist_read_role(void *context,unsigned role,uint32_t block,uint8_t bytes[512]) {
+    struct persist_raw_reader *reader=context;uint32_t lba;
+    if(kui_vmu_persist_profile_map_lba(reader->profile,role,block,&lba)) return -1;
+    return persist_read_sector(context,lba,bytes);
+}
+static int persist_image_read(void *context,uint16_t block,void *bytes) {
+    return persist_read_role(context,KUI_VMU_PERSIST_BASE,block,bytes);
+}
+static bool persist_open_raw(const struct kui_vmu_fs_input *input) {
+    if(!kui_sd_connect()) return fail("preparation fresh raw connection");
+    if(!persist_card_matches(input) || !kui_sd_raw_read_ops(&persist_raw.operations) ||
+       !persist_raw.operations.blocks || !persist_raw.operations.read ||
+       persist_raw.operations.write || persist_raw.operations.sync ||
+       persist_raw.operations.blocks(persist_raw.operations.ctx)!=input->card_sectors)
+        return fail("preparation raw card identity / read-only ownership");
+    return true;
+}
+static bool persist_fs_result(int status,const char *phase) {
+    if(!status) return true;
+    kui_log("FAIL %s: status=%d detail=%lu LBA=%08lx",phase,status,
+        (unsigned long)persist_workspace.stats.detail,(unsigned long)persist_workspace.stats.last_lba);
+    return false;
+}
+static bool export_persistent_profile(void) {
+    bool ok=false,file_open=false;unsigned number=0;FIL file;
+    struct kui_vmu_fs_input input={.read_sector=persist_read_sector,.context=&persist_raw};
+    char pair_path[96];UINT done=0;
+    exported_profile_path[0]=0;
+    memset(&persist_profile,0,sizeof(persist_profile));
+    memset(&persist_verify,0,sizeof(persist_verify));
+    if(transport!=KUI_STORAGE_SCI) return fail("preparation requires SCI; no file was written");
+    kui_log("Preparation only: existing image, identity and journal stay unchanged.");
+    if(!connect_volume() || !latest_probe(&number)) goto finished;
+    const struct kui_volume *view=kui_media_volume();struct kui_vmu_sd_identity card;
+    if(!view || !view->count || !kui_sd_vmu_profile_identity(&card)) {
+        fail("preparation card identity / partition unavailable");goto finished;
+    }
+    input.card_sectors=card.sectors;input.partition_first=view->start;
+    input.partition_end=(uint64_t)view->start+view->count;input.high_capacity=card.high_capacity?1u:0u;
+    memcpy(input.cid,card.cid,16u);identity(number,input.image_id);
+    int path_bytes=snprintf(pair_path,sizeof(pair_path),"/KUI/vmu-test/p%04u",number);
+    if(path_bytes<=0 || (size_t)path_bytes>=sizeof(pair_path)) {fail("preparation source path");goto finished;}
+    input.pair_path=pair_path;
+    if(!disconnect_volume() || !persist_open_raw(&input)) goto finished;
+    if(!persist_fs_result(kui_vmu_fs_collect(&input,&persist_profile,&persist_workspace),
+        "source allocation / exclusive ownership")) goto finished;
+    persist_raw.profile=&persist_profile;
+    /* A valid or torn pending marker is deliberately NOT recovered here.
+     * Old synthetic258-sector records cannot be rebound to physical maps. */
+    if(persist_read_role(&persist_raw,KUI_VMU_PERSIST_JOURNAL,1u,persist_sector)) {
+        fail("preparation journal marker read; preserve both source files");goto finished;
+    }
+    for(unsigned i=0;i<512u;i++) if(persist_sector[i]) {
+        fail("journal is not clean; preserve card.vmd and card.journal for recovery");goto finished;
+    }
+    int snapshot=kui_vmu_persist_profile_collect_snapshot(&persist_profile,persist_read_role,&persist_raw);
+    if(snapshot) {kui_log("FAIL preparation source snapshot: %d; preserve the pair",snapshot);goto finished;}
+    const struct kui_vmu_image_io image_io={&persist_raw,persist_image_read,NULL,NULL};
+    struct kui_vmu_image_summary summary;
+    int valid=kui_vmu_image_validate(&image_io,131072u,&image_workspace,&summary);
+    if(valid) {kui_log("FAIL preparation VMU filesystem: %d",valid);goto finished;}
+    if(!persist_card_matches(&input)) {fail("preparation source card changed");goto finished;}
+    kui_sd_disconnect();
+    if(kui_vmu_persist_profile_encode(&persist_profile,persist_wire)) {
+        fail("persistent preparation profile encoding");goto finished;
+    }
+    if(!connect_volume() || !persist_card_matches(&input)) {fail("preparation output card changed");goto finished;}
+    view=kui_media_volume();
+    if(!view || view->start!=input.partition_first ||
+       (uint64_t)view->start+view->count!=input.partition_end) {
+        fail("preparation output partition changed");goto finished;
+    }
+    for(unsigned attempt=1;attempt<=9999u;attempt++) {
+        char leaf[48];snprintf(leaf,sizeof(leaf),"retail-persistent-profile-%04u.bin",attempt);
+        if(!path(exported_profile_path,number,leaf)) {fail("persistent profile output path");goto finished;}
+        FRESULT opened=f_open(&file,exported_profile_path,FA_WRITE|FA_CREATE_NEW);
+        if(opened==FR_EXIST) continue;
+        if(opened!=FR_OK) {fail("create-new persistent profile output");goto finished;}
+        file_open=true;break;
+    }
+    if(!file_open) {fail("all persistent profile output names already exist");goto finished;}
+    FRESULT written=f_write(&file,persist_wire,sizeof(persist_wire),&done);
+    FRESULT synced=f_sync(&file),closed=f_close(&file);file_open=false;
+    if(written!=FR_OK || synced!=FR_OK || closed!=FR_OK || done!=sizeof(persist_wire)) {
+        fail("persistent profile write / sync / close");goto finished;
+    }
+    if(f_open(&file,exported_profile_path,FA_READ)!=FR_OK) {fail("persistent profile reopen");goto finished;}
+    file_open=true;FRESULT read=f_read(&file,persist_check,sizeof(persist_check),&done);
+    bool exact=f_size(&file)==sizeof(persist_check) && read==FR_OK && done==sizeof(persist_check) &&
+        !memcmp(persist_wire,persist_check,sizeof(persist_wire));
+    closed=f_close(&file);file_open=false;
+    if(!exact || closed!=FR_OK || !disconnect_volume()) {fail("persistent profile exact readback / unmount");goto finished;}
+    /* Profile allocation itself changed filesystem metadata. Re-prove full
+     * namespace ownership on a fresh connection AFTER that allocation, then
+     * compare all source contents and the exactzero journal marker afresh. */
+    if(!persist_open_raw(&input) ||
+       !persist_fs_result(kui_vmu_fs_collect(&input,&persist_verify,&persist_workspace),
+           "final allocation / exclusive ownership") ||
+       !kui_vmu_persist_profile_same_ownership(&persist_profile,&persist_verify) ||
+       kui_vmu_persist_profile_verify_snapshot(&persist_profile,persist_read_role,&persist_raw) ||
+       !persist_card_matches(&input)) {
+        fail("final preparation identity / allocation / image / clean journal changed");goto finished;
+    }
+    kui_sd_disconnect();
+    char prefix[17];kui_hex(persist_profile.base_sha256,8u,prefix);
+    kui_log("PERSISTENT PROFILE %s",exported_profile_path+2u);
+    kui_log("Source p%04u; image %lu extents; journal %lu extents; SHA %.16s",number,
+        (unsigned long)persist_profile.files[KUI_VMU_PERSIST_BASE].useful_count,
+        (unsigned long)persist_profile.files[KUI_VMU_PERSIST_JOURNAL].useful_count,prefix);
+    kui_log("READY: attach this .bin. Retail saving is still disabled.");ok=true;
+finished:
+    if(file_open) (void)f_close(&file);
+    close_pair();(void)f_mount(NULL,"0:",0);kui_sd_disconnect();
+    if(!ok) exported_profile_path[0]=0;
+    return ok;
+}
+#endif
+static bool export_selected_profile(void) {
+#if KUI_VMU_PERSIST_PREP
+    if(KUI_VMU_PERSIST_PREP) return export_persistent_profile();
+#endif
+    return export_readonly_profile();
+}
 static uint32_t buttons(void) {
     maple_device_t *controller=maple_enum_type(0,MAPLE_FUNC_CONTROLLER);
     cont_state_t *state=controller?maple_dev_status(controller):NULL;
     return state?state->buttons:0;
 }
 int main(void) {
+    const uint32_t preparation_mode=*(const volatile uint32_t *)&kui_vmu_persist_prep_build_mode;
     vid_set_mode(DM_640x480|DM_MULTIBUFFER,PM_RGB565);
     kui_storage_boot_begin();
     unsigned inherited=kui_storage_selected();
     if(inherited==KUI_STORAGE_SCI || inherited==KUI_STORAGE_SCIF) transport=inherited;
-    kui_log("Virtual card commands use our bounded software DMA adapter.");
+    kui_log(preparation_mode?"Y prepares an existing pair; A/X source writes are disabled.":
+        "Virtual card commands use our bounded software DMA adapter.");
     kui_log("The real controller is polled normally by KOS.");
-    kui_log("Only new probe folders or their own card/journal are written.");
+    kui_log(KUI_VMU_PERSIST_PREP?"Only a unique new profile file may be written.":
+        "Only new probe folders or their own card/journal are written.");
     kui_log("No physical VMU read or write operation is called.");
     uint32_t previous=buttons();
     for(;;) {
         uint32_t now=buttons(),pressed=now&~previous;previous=now;
         if(pressed&(CONT_DPAD_LEFT|CONT_DPAD_RIGHT)) {
             transport=transport==KUI_STORAGE_SCI?KUI_STORAGE_SCIF:KUI_STORAGE_SCI;
-            result="A new probe; X verify; Y export SCI read-only profile.";
+            result=KUI_VMU_PERSIST_PREP?"Y prepare SCI profile; A/X disabled; source pair unchanged.":
+                "A new probe; X verify; Y export SCI read-only profile.";
         }
         if(pressed&(CONT_A|CONT_X|CONT_Y)) {
             bool create=(pressed&CONT_A)!=0;line_count=0;
             bool exporting=(pressed&CONT_Y)!=0 && !create;
-            result=exporting?"Exporting SCI read-only profile; keep power on...":
+            if(KUI_VMU_PERSIST_PREP && !exporting) {
+                result="A/X disabled: use Y to prepare an existing clean pair.";continue;
+            }
+            result=exporting?(KUI_VMU_PERSIST_PREP?"Preparing SCI profile; keep power on...":
+                "Exporting SCI read-only profile; keep power on..."):
                 create?"Running isolated persistence write test...":"Checking latest probe (may replay its journal)...";
-            render();bool ok=exporting?export_readonly_profile():run_test(create);
+            render();bool ok=exporting?export_selected_profile():run_test(create);
             /* A failed callback blocks this session; never acknowledge a save
              * or silently retry. Retain files, close, and show the failure. */
             close_pair();(void)f_mount(NULL,"0:",0);kui_sd_disconnect();

@@ -239,14 +239,33 @@ original SDK transmit buffers and bookkeeping remain unchanged. Completion
 validates and restores the original MDSTAR before publishing the virtual
 batch to the SDK consumer. An all-virtual schedule or unsupported physical
 traffic is a controlled stop. Native/host proofs must pass before delivery;
-console save/load behavior remains unproved until the owner tests it.
+the owner's first RAM-save test is recorded below.
 ABI6 retains64-byte exports and88-byte config, extending the snapshot to708
 bytes for RAM and filtered-chain counters. See `vmu-volatile-card-test.md`.
+
+The owner's `906eb3e3ce83` run completed5,247filtered batches with no parser,
+RX, stack, ownership, conflict, storage or private-chain faults. Its80write
+phases and20sync commands yielded20RAM block commits across14distinct blocks;
+38reads came from those committed RAM blocks and15from the immutable SD base.
+The owner reports creating differently named saves, apparent same-session
+loading, and deletion. This establishes the intended retail RAM-write/read
+path in Toy Commander; it does not establish restart persistence. The captured
+WHY5 is the owner terminal/reset-return reporting route, with no VMU fault.
 
 Durable SD saving still requires a freshly verified journal allocation and a
 per-launch allocation/identity contract that remains valid after legitimate
 image changes. The current profile describes the base image only; journal
 placement cannot be inferred from it.
+
+A separate persistent-profile preparation tool now exports the base, journal
+and identity allocations in a 4,096-byte P2 profile. Its raw FAT32/exFAT verifier
+checks current ownership, full clusters including slack, metadata exclusions,
+allocation bitmaps and incoming links. The exporter preserves source contents,
+requires a zero journal marker, and repeats ownership and snapshot checks after
+creating and reading back the output. Host sanitizer, adversarial filesystem
+and real FatFs image tests pass. This preparation work does not enable retail
+SD writes; a console export is still needed before the persistent runtime can
+be bound to this card. See `vmu-persistent-profile-prep.md`.
 
 ## Work required before in-game saves
 

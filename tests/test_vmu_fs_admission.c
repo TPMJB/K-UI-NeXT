@@ -1,0 +1,173 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Independently constructed sparse exFAT image. No formatter/parser shares
+ * implementation with admission, and no write callback exists. */
+#include "kui/vmu_fs_admission.h"
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
+
+#define FS_CLUSTERS 1024u
+#define FS_SPC 8u
+#define FS_FAT 24u
+#define FS_FAT_SECTORS 9u
+#define FS_HEAP 40u
+#define FS_SECTORS (FS_HEAP+FS_CLUSTERS*FS_SPC)
+
+static struct {
+    struct kui_vmu_fs_input input;
+    struct kui_vmu_fs_workspace work;
+    struct kui_vmu_persist_profile profile;
+    uint8_t boot[24][512],dirs[4][512],bitmap[512],upcase[512],identity[512];
+    uint32_t fat[FS_CLUSTERS+2u];
+    unsigned calls,fail_at;
+} disk;
+static void p16(uint8_t *p,unsigned value) {p[0]=(uint8_t)value;p[1]=(uint8_t)(value>>8);}
+static void p32(uint8_t *p,uint32_t value) {p16(p,value&65535u);p16(p+2u,value>>16);}
+static void p64(uint8_t *p,uint64_t value) {p32(p,(uint32_t)value);p32(p+4u,(uint32_t)(value>>32));}
+static uint32_t lba(unsigned c) {return FS_HEAP+(c-2u)*FS_SPC;}
+static unsigned upper(unsigned c) {return c>='a' && c<='z'?c-32u:c;}
+static void allocated(unsigned c,int value) {
+    unsigned byte=(c-2u)/8u,bit=(c-2u)%8u;
+    if(value) disk.bitmap[byte]|=(uint8_t)(1u<<bit);else disk.bitmap[byte]&=(uint8_t)~(1u<<bit);
+}
+static void entry_checksum(uint8_t *p) {
+    uint16_t sum=0;unsigned bytes=((unsigned)p[1]+1u)*32u;
+    for(unsigned i=0;i<bytes;i++) if(i!=2u && i!=3u)
+        sum=(uint16_t)(((sum&1u)?0x8000u:0u)+(sum>>1)+p[i]);
+    p16(p+2u,sum);
+}
+static void file_entry(uint8_t *p,const char *name,unsigned attributes,unsigned first,
+    uint64_t bytes,unsigned flags) {
+    size_t n=strlen(name);assert(n && n<=15u);memset(p,0,96u);
+    p[0]=0x85u;p[1]=2u;p16(p+4u,attributes);
+    p[32]=0xc0u;p[33]=(uint8_t)flags;p[35]=(uint8_t)n;
+    uint16_t hash=0;
+    for(unsigned i=0;i<n;i++) {
+        unsigned c=upper((unsigned char)name[i]);
+        hash=(uint16_t)(((hash&1u)?0x8000u:0u)+(hash>>1)+c);
+        hash=(uint16_t)(((hash&1u)?0x8000u:0u)+(hash>>1));
+        p16(p+66u+i*2u,(unsigned char)name[i]);
+    }
+    p16(p+36u,hash);p64(p+40u,bytes);p32(p+52u,first);p64(p+56u,bytes);p[64]=0xc1u;
+    entry_checksum(p);
+}
+static int read_sector(void *context,uint32_t sector,uint8_t out[512]) {
+    assert(context==&disk && sector<FS_SECTORS);++disk.calls;
+    if(disk.fail_at && disk.calls==disk.fail_at) return -1;
+    memset(out,0,512u);
+    if(sector<24u) memcpy(out,disk.boot[sector],512u);
+    else if(sector>=FS_FAT && sector<FS_FAT+FS_FAT_SECTORS) {
+        unsigned start=(sector-FS_FAT)*128u;
+        for(unsigned i=0;i<128u && start+i<FS_CLUSTERS+2u;i++) p32(out+i*4u,disk.fat[start+i]);
+    } else {
+        if(sector==lba(2u)) memcpy(out,disk.bitmap,512u);
+        if(sector==lba(3u)) memcpy(out,disk.upcase,512u);
+        for(unsigned i=0;i<4u;i++) if(sector==lba(4u+i)) memcpy(out,disk.dirs[i],512u);
+        if(sector==lba(61u)) memcpy(out,disk.identity,512u);
+    }
+    return 0;
+}
+static void boot_checksum(void) {
+    uint32_t sum=0;
+    for(unsigned sector=0;sector<11u;sector++) for(unsigned i=0;i<512u;i++)
+        if(sector || (i!=106u && i!=107u && i!=112u))
+            sum=((sum&1u)?UINT32_C(0x80000000):0u)+(sum>>1)+disk.boot[sector][i];
+    for(unsigned i=0;i<512u;i+=4u) p32(disk.boot[11]+i,sum);
+    memcpy(disk.boot+12u,disk.boot,12u*512u);
+}
+static void fresh(void) {
+    memset(&disk,0,sizeof(disk));
+    disk.input=(struct kui_vmu_fs_input){.read_sector=read_sector,.context=&disk,
+        .card_sectors=FS_SECTORS,.partition_end=FS_SECTORS,.high_capacity=1,
+        .pair_path="/KUI/vmu-test/p0001"};
+    for(unsigned i=0;i<16u;i++) {disk.input.cid[i]=(uint8_t)(0x21u+i);disk.input.image_id[i]=(uint8_t)(0x71u+i);}
+    memcpy(disk.identity,disk.input.image_id,16u);
+    uint8_t *b=disk.boot[0];b[0]=0xebu;b[1]=0x76u;b[2]=0x90u;memcpy(b+3u,"EXFAT   ",8u);
+    p64(b+72u,FS_SECTORS);p32(b+80u,FS_FAT);p32(b+84u,FS_FAT_SECTORS);
+    p32(b+88u,FS_HEAP);p32(b+92u,FS_CLUSTERS);p32(b+96u,4u);p32(b+100u,0x12345678u);
+    p16(b+104u,0x100u);b[108]=9u;b[109]=3u;b[110]=1u;b[111]=0x80u;p16(b+510u,0xaa55u);
+    for(unsigned i=1;i<=8u;i++) p32(disk.boot[i]+508u,UINT32_C(0xaa550000));
+    boot_checksum();
+    disk.fat[0]=UINT32_C(0xfffffff8);disk.fat[1]=UINT32_MAX;
+    disk.fat[2]=disk.fat[3]=disk.fat[4]=UINT32_MAX;
+    /* A complete compressed upcase table with the required ASCII mappings. */
+    for(unsigned i=0;i<128u;i++) p16(disk.upcase+i*2u,upper(i));
+    p16(disk.upcase+256u,0xffffu);p16(disk.upcase+258u,65536u-128u);
+    uint32_t sum=0;for(unsigned i=0;i<260u;i++) sum=((sum&1u)?UINT32_C(0x80000000):0u)+(sum>>1)+disk.upcase[i];
+    disk.dirs[0][0]=0x81u;p32(disk.dirs[0]+20u,2u);p64(disk.dirs[0]+24u,128u);
+    disk.dirs[0][32u]=0x82u;p32(disk.dirs[0]+36u,sum);p32(disk.dirs[0]+52u,3u);p64(disk.dirs[0]+56u,260u);
+    file_entry(disk.dirs[0]+64u,"KUI",16u,5u,4096u,3u);
+    file_entry(disk.dirs[1],"vmu-test",16u,6u,4096u,3u);
+    file_entry(disk.dirs[2],"p0001",16u,7u,4096u,3u);
+    file_entry(disk.dirs[3],"card.vmd",32u,20u,131072u,3u);
+    file_entry(disk.dirs[3]+96u,"card.journal",32u,60u,1024u,3u);
+    file_entry(disk.dirs[3]+192u,"identity.bin",32u,61u,16u,3u);
+    for(unsigned i=2u;i<=7u;i++) allocated(i,1);
+    for(unsigned i=20u;i<52u;i++) allocated(i,1);
+    allocated(60u,1);allocated(61u,1);
+}
+static int collect(void) {return kui_vmu_fs_collect(&disk.input,&disk.profile,&disk.work);}
+static void refusal(void) {
+    memset(&disk.profile,0xa5,sizeof(disk.profile));int result=collect();
+    assert(result && result==disk.work.stats.result);
+    const uint8_t *p=(const uint8_t *)&disk.profile;
+    for(size_t i=0;i<sizeof(disk.profile);i++) assert(!p[i]);
+    assert(disk.calls<=KUI_VMU_FS_MAX_READS);
+}
+static void valid_contiguous_and_fresh_comparison(void) {
+    fresh();assert(collect()==0);
+    assert(disk.profile.geometry.fs_type==KUI_VMU_PERSIST_EXFAT && disk.profile.geometry.bitmap_first_cluster==2u);
+    assert(disk.profile.files[0].useful[0].blocks==256u && disk.profile.files[0].allocated[0].blocks==256u);
+    assert(disk.profile.files[1].useful[0].blocks==2u && disk.profile.files[1].allocated[0].blocks==8u);
+    assert(disk.profile.files[2].file_bytes==16u && disk.profile.files[2].allocated[0].blocks==8u);
+    struct kui_vmu_persist_profile expected=disk.profile;
+    memset(expected.base_sha256,0x42,sizeof(expected.base_sha256));expected.journal_sequence=99u;
+    assert(kui_vmu_fs_admit(&disk.input,&expected,&disk.work)==0); /* Content provenance is not authority. */
+    file_entry(disk.dirs[3]+96u,"card.journal",32u,62u,1024u,3u);allocated(62u,1);
+    assert(kui_vmu_fs_admit(&disk.input,&expected,&disk.work)==KUI_VMU_FS_CHANGED);
+    /* NoFatChain uses no FAT data; its old entries cannot manufacture links. */
+    fresh();disk.fat[20u]=60u;disk.fat[21u]=UINT32_C(0xabcdef01);assert(collect()==0);
+}
+static void fragmented_map_and_exact_tail(void) {
+    fresh();file_entry(disk.dirs[3],"card.vmd",32u,20u,131072u,1u);
+    for(unsigned i=20u;i<35u;i++) disk.fat[i]=i+1u;
+    disk.fat[35u]=100u;
+    for(unsigned i=100u;i<115u;i++) {disk.fat[i]=i+1u;allocated(i,1);}
+    allocated(115u,1);disk.fat[115u]=UINT32_MAX;
+    assert(collect()==0 && disk.profile.files[0].allocated_count==2u);
+    disk.fat[120u]=100u;refusal();
+    fresh();file_entry(disk.dirs[3]+96u,"card.journal",32u,60u,1024u,1u);
+    disk.fat[60u]=62u;disk.fat[62u]=UINT32_MAX;allocated(62u,1);refusal();
+}
+static void crosslinks_bitmap_metadata_and_attributes(void) {
+    fresh();file_entry(disk.dirs[0]+160u,"alias",32u,59u,8192u,3u);allocated(59u,1);refusal();
+    fresh();file_entry(disk.dirs[0]+160u,"alias",32u,21u,16u,1u);refusal();
+    fresh();disk.fat[100u]=60u;refusal();
+    for(unsigned cluster=2u;cluster<=7u;cluster++) {fresh();allocated(cluster,0);refusal();}
+    fresh();allocated(60u,0);refusal();
+    fresh();p64(disk.dirs[3]+96u+40u,1023u);entry_checksum(disk.dirs[3]+96u);refusal();
+    fresh();disk.dirs[3][96u+4u]|=1u;entry_checksum(disk.dirs[3]+96u);refusal();
+    fresh();disk.dirs[3][96u+4u]|=4u;entry_checksum(disk.dirs[3]+96u);refusal();
+    fresh();disk.identity[7u]^=1u;refusal();
+    fresh();disk.upcase[194u]^=1u;refusal();
+    fresh();struct kui_vmu_fs_range range={lba(60u)+7u,1u};
+    disk.input.forbidden=&range;disk.input.forbidden_count=1u;refusal();
+}
+static void malformed_sets_boot_and_io(void) {
+    fresh();disk.dirs[3][2u]^=1u;refusal();
+    fresh();disk.dirs[0][160u]=0xa0u;refusal();
+    fresh();disk.dirs[3][32u]=0xc2u;entry_checksum(disk.dirs[3]);refusal();
+    fresh();file_entry(disk.dirs[0]+160u,"cycle",16u,4u,4096u,3u);refusal();
+    fresh();disk.boot[0][106u]=2u;boot_checksum();refusal();
+    fresh();disk.boot[12u][100u]^=1u;refusal();
+    fresh();disk.boot[11u][23u]^=1u;refusal();
+    fresh();p32(disk.boot[0]+92u,KUI_VMU_FS_MAX_FAT_ENTRIES);boot_checksum();refusal();
+    fresh();assert(collect()==0);unsigned calls=disk.calls;
+    for(unsigned failure=1u;failure<=calls;failure++) {fresh();disk.fail_at=failure;refusal();}
+}
+int main(void) {
+    valid_contiguous_and_fresh_comparison();fragmented_map_and_exact_tail();
+    crosslinks_bitmap_metadata_and_attributes();malformed_sets_boot_and_io();
+    puts("VMU filesystem admission: exFAT live maps, full allocation, bitmap/directory ownership, crosslinks, metadata and I/O refusals passed");
+    return 0;
+}

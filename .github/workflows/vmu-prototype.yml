@@ -41,6 +41,13 @@ jobs:
           python3 tests/test_vmu_harness_images.py
           make build/test-vmu-image-compat
           python3 tests/test_vmu_image_compat.py
+      - name: Verify persistent-preparation profile and raw allocation ownership
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: |
+          make -f Makefile.vmu BUILD=build/vmu-persist-prep PERSIST_PREP=1 host-test
+          python3 tests/test_vmu_persist_harness_images.py
+          python3 tests/test_package_vmu_persist_prep.py
       - name: Verify workflow hygiene
         run: python3 tests/test_workflow_hygiene.py
       - name: Verify exact-title observer admission and bounded telemetry
@@ -82,6 +89,21 @@ jobs:
           done
           sh-elf-size build/vmu-harness/vmu-harness.elf build/vmu-harness/transport/*.o
           sh-elf-objdump -d build/vmu-harness/vmu-harness.elf > build/vmu-harness/vmu-harness.dis
+      - name: Build isolated persistent-profile preparation program
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          make -f Makefile.vmu -j2 BUILD=build/vmu-persist-prep PERSIST_PREP=1 package
+          sh-elf-objdump -d build/vmu-persist-prep/vmu-harness.elf > build/vmu-persist-prep/vmu-harness.dis
+          python3 tools/package_vmu_persist_prep.py build/vmu-persist-prep \
+            --expected-commit "$(git rev-parse HEAD)" --guide docs/vmu-persistent-profile-prep.md
+      - name: Upload persistent-profile preparation program
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-VMU-persistence-preparation
+          path: build/vmu-persist-prep/vmu-persistence-preparation-test.zip
+          if-no-files-found: error
+          retention-days: 30
       - name: Prove default native SCI transport is unchanged
         shell: bash
         run: |
@@ -192,6 +214,11 @@ jobs:
             build/vmu-harness/**/*.su
             build/vmu-harness/transport/
             build/vmu-harness/default-proof/
+            build/vmu-persist-prep/*.elf
+            build/vmu-persist-prep/*.map
+            build/vmu-persist-prep/*.json
+            build/vmu-persist-prep/*.dis
+            build/vmu-persist-prep/**/*.su
             build/vmu-toy/*.elf
             build/vmu-toy/*.map
             build/vmu-toy/*.json
