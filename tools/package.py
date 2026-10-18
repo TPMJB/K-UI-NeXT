@@ -105,25 +105,42 @@ def development_notice(release=None):
             "this build's matching runtime and Games payloads together.\n\n")
 
 
+def candidate_profile():
+    value = os.environ.get("KUI_CANDIDATE_PROFILE", "ata-readiness")
+    if value not in ("ata-readiness", "compressed"):
+        raise ValueError("Unsupported KUI_CANDIDATE_PROFILE")
+    return value
+
+
 def package_metadata(candidate=None):
     """Name candidate downloads apart without changing the console's version."""
     if candidate is None:
         candidate = candidate_requested()
     release = release_metadata()
     if candidate and not development_test(release) and not release_is_rc(release):
+        compressed = candidate_profile() == "compressed"
         release = {**release,
-                   "name": release["name"] + " — ATA readiness candidate",
-                   "artifact_prefix": release["artifact_prefix"] + "-ata-readiness-candidate"}
+                   "name": release["name"] + (" — compressed reader candidate" if compressed else " — ATA readiness candidate"),
+                   "artifact_prefix": release["artifact_prefix"] + ("-compressed-candidate" if compressed else "-ata-readiness-candidate")}
     return release
 
 
 def candidate_evidence():
+    if candidate_profile() == "compressed":
+        return {"name": "Compressed readers", "cso": "SCI Standard; console acceptance pending",
+                "chd": "restricted v4 portable reader only; no direct launch",
+                "ata_dma": "not implemented"}
     return {"name": "ATA readiness", "ata_hardware": "untested",
             "sci512_hardware": "rejected; restored 256-byte allowance", "ata_io": "synchronous PIO",
             "ata_dma": "not implemented", "windows_ce_ide": "unsupported"}
 
 
 def candidate_notice():
+    if candidate_profile() == "compressed":
+        return ("Experimental compressed-reader candidate; not a public release.\n"
+                "CSO is SCI Standard only and needs console acceptance.\n"
+                "CHD direct launch and ATA DMA are not implemented.\n"
+                "Install the complete matching runtime and Games folder; keep originals.\n\n")
     return ("ATA readiness release candidate; not a hardware-validated release.\n"
             "ATA hardware is untested; the SCI512 test was rejected after degraded audio.\n"
             "The prior 256-byte SCI token allowance is restored.\n"
@@ -135,7 +152,7 @@ def candidate_notice():
 def guide(source):
     text = (ROOT / "docs" / source).read_text()
     for name in ("storage-testing", "storage-transports", "ext4-bootstrap", "bootloader-refresh", "boot-recovery",
-                 "games-formats-test", "games-formats", "games-zso", "gdi-2048-test", "capture-format",
+                 "games-formats-test", "games-formats", "games-zso", "games-cso", "games-chd", "ata-dma-plan", "gdi-2048-test", "capture-format",
                  "network-rip", "repair-copy", "cd-capture",
                  "wifi", "wifi-performance-test", "wifi-flash-arch", "sci-connector", "ftp"):
         # Preserve section anchors while matching the packaged uppercase names.
@@ -157,7 +174,7 @@ def write_release_guides(dist, candidate=False):
               ("RELEASE-NOTES.md", f"release-v{version}-notes.md"))
     for target, source in guides:
         if candidate and not experimental and not release_is_rc():
-            source = "ata-readiness-candidate.md"
+            source = "compressed-reader-candidate.md" if candidate_profile() == "compressed" else "ata-readiness-candidate.md"
         (dist / target).write_text(guide(source), encoding="utf-8")
     if version == "2.0":
         if release_is_rc():
@@ -372,7 +389,7 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
     shutil.copyfile(cdi, bundle / "boot-cd" / cdi_name)
     splash = ROOT / "resources/branding/startup.png"
     shutil.copyfile(splash, bundle / "splash-preview.png")
-    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "GAMES-ZSO.md", "WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md", "LICENSE", "THIRD_PARTY.md"):
+    for name in ("START-HERE.md", "RELEASE-NOTES.md", "STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md", "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "GAMES-ZSO.md", "GAMES-CSO.md", "GAMES-CHD.md", "ATA-DMA-PLAN.md", "WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md", "LICENSE", "THIRD_PARTY.md"):
         shutil.copyfile(dist / name, bundle / name)
     if release["version"].endswith("-formats-test"):
         shutil.copyfile(dist / "GAMES-FORMATS-TEST.md", bundle / "GAMES-FORMATS-TEST.md")
@@ -429,6 +446,9 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
         "artifact supplies optional tools.kui for read-only load measurement.\n"
         "Native standard/background and Windows CE launch payloads are installed.\n"
         "Separate LZ4/LZO1X ZSO modules are included; see GAMES-ZSO.md for their limits.\n"
+        "GAMES-CSO.md covers the experimental SCI Standard CSO module and test limits.\n"
+        "GAMES-CHD.md describes the portable reader milestone; direct CHD Play is unavailable.\n"
+        "ATA-DMA-PLAN.md describes the shared ATA engine and board acceptance work.\n"
         "Optional WinCE CD music uses four checked kernel/sound adapters established\n"
         "from Armada, Bust-A-Move 4, Worms Armageddon and Worms World Party. Other\n"
         "images require a matching checked runtime contract; unknown kernels are refused.\n"
@@ -618,6 +638,11 @@ def main():
     (dist / "retail-lzo-build/linked-audit.json").write_text(
         subprocess.check_output(["python3", "tools/check_zso_loader.py", "--codec", "lzo", "build/retail-lzo"],
                                 cwd=ROOT, text=True), encoding="utf-8")
+    shutil.copytree(ROOT / "build/retail-cso", dist / "retail-cso-build",
+                    ignore=shutil.ignore_patterns("*.o", "*.d"), dirs_exist_ok=True)
+    (dist / "retail-cso-build/linked-audit.json").write_text(
+        subprocess.check_output(["python3", "tools/check_zso_loader.py", "--codec", "cso", "build/retail-cso"],
+                                cwd=ROOT, text=True), encoding="utf-8")
     # Menu music ships as the committed Ogg encodings recorded in the manifest.
     # A fresh folder cannot carry WAVs from an earlier local package.
     music_manifest = json.loads((ROOT / "resources/music/manifest.json").read_text())
@@ -652,7 +677,7 @@ def main():
     (dist / "M15-SHELL-TEST.md").write_text(guide("m15-shell-test.md"))
     (dist / "APPS-TEST.md").write_text(guide("apps-test.md"))
     write_release_guides(dist, candidate)
-    for name in ("games-zso", "wifi", "wifi-performance-test", "wifi-flash-arch", "sci-connector", "ftp", "windows-ce-placement-test", "games-sd-benchmark", "games-background-reader", "games-covers", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
+    for name in ("games-zso", "games-cso", "games-chd", "ata-dma-plan", "wifi", "wifi-performance-test", "wifi-flash-arch", "sci-connector", "ftp", "windows-ce-placement-test", "games-sd-benchmark", "games-background-reader", "games-covers", "games-retail-test", "games-image-probe", "gd-bios-contract", "games-loader-probe", "games-test", "games-milestone-plan", "apps-round-five", "music-round-five", "network-connection-test", "system-backups", "salvage-worker", "apps-round-four", "clock-and-file-dates", "vmu-restore", "advanced-crc-scan", "apps-round-three", "apps-round-two", "resume-and-retries", "independent-app-parity"):
         (dist / (name.upper()+".md")).write_text(guide(name+".md"))
     run("make", "build/render-shell")
     run("python3", "tools/render_app_previews.py", "--output", str(dist / "ui-previews"))
@@ -731,7 +756,8 @@ def main():
     shutil.copyfile(dist / "GAMES-RETAIL-TEST.md", update / "GAMES-RETAIL-TEST.md")
     shutil.copyfile(dist / "WINDOWS-CE-PLACEMENT-TEST.md", update / "WINDOWS-CE-PLACEMENT-TEST.md")
     shutil.copyfile(dist / "GAMES-COVERS.md", update / "GAMES-COVERS.md")
-    shutil.copyfile(dist / "GAMES-ZSO.md", update / "GAMES-ZSO.md")
+    for name in ("GAMES-ZSO.md", "GAMES-CSO.md", "GAMES-CHD.md", "ATA-DMA-PLAN.md"):
+        shutil.copyfile(dist / name, update / name)
     for name in ("redump.db", "tosec.db"):
         shutil.copyfile(sd / name, update / "KUI" / name)
     for name in ("WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md", "GAMES-IMAGE-PROBE.md", "GD-BIOS-CONTRACT.md", "GAMES-TEST.md", "GAMES-MILESTONE-PLAN.md", "APPS-ROUND-FIVE.md", "MUSIC-ROUND-FIVE.md", "NETWORK-CONNECTION-TEST.md", "SYSTEM-BACKUPS.md", "SALVAGE-WORKER.md", "verify_salvage.py", "APPS-ROUND-FOUR.md", "CLOCK-AND-FILE-DATES.md", "VMU-RESTORE.md", "ADVANCED-CRC-SCAN.md", "APPS-ROUND-THREE.md", "APPS-ROUND-TWO.md", "RESUME-AND-RETRIES.md", "INDEPENDENT-APP-PARITY.md", "APPS-TEST.md", "APP-ARCHITECTURE.md", "MUSIC.md", "music-manifest.json", "M15-SHELL-TEST.md", "PRIOR-WORK-REUSE.md", "RIPPER-CONTROLS.md", "SALVAGE-PLAN.md", "CAPTURE-TEST.md", "CAPTURE-FORMAT.md", "MEMORY-STATS.md", "OPTICAL-TEST.md", "PERFORMANCE-TEST-PLAN.md", "verify_dump.py", "build.json", "LICENSE", "THIRD_PARTY.md"):
@@ -779,6 +805,9 @@ def main():
         "Games: A inspects a GDI; A on its detail opens confirmation; A confirms launch.\n"
         "Update runtime.kui and the complete Games folder from this same package.\n"
         "That folder includes separate LZ4/LZO1X ZSO modules; see GAMES-ZSO.md.\n"
+        "GAMES-CSO.md covers the experimental SCI Standard CSO module and test limits.\n"
+        "GAMES-CHD.md describes the portable reader milestone; direct CHD Play is unavailable.\n"
+        "ATA-DMA-PLAN.md describes the shared ATA engine and board acceptance work.\n"
         "KUI/apps/games/ce-probe.kui is the Windows CE boot test; see WINDOWS-CE-PLACEMENT-TEST.md.\n"
         "The native reader retains the accepted Skies/Time Stalkers/Evolution settings.\n"
         "RELEASE-NOTES.md records the tested baseline and remaining compatibility limits.\n"

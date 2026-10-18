@@ -963,7 +963,7 @@ bool kui_games_inspect_with_codec(const char *path,enum kui_zso_codec codec,stru
     out->zso_launch=image->compressed && !out->windows_ce && (out->native_gd || out->native_cd) &&
         kui_storage_active()==KUI_STORAGE_SCI && out->boot_bytes>=KUI_RETAIL_TRAMPOLINE_BYTES &&
         out->boot_bytes<=KUI_RETAIL_EXEC_MAX_BYTES;
-    problem=image->compressed?(out->windows_ce?"Compressed image inspected; Windows CE launch unavailable":
+    problem=image->compressed?(out->windows_ce?"Compressed image inspected; Windows CE compressed launch unavailable":
         !(out->native_gd || out->native_cd)?"Compressed image inspected; native IP flags required":
         kui_storage_active()!=KUI_STORAGE_SCI?"Compressed image inspected; direct launch needs SCI microSD":
         !out->zso_launch?"Compressed image inspected; boot size unsupported":

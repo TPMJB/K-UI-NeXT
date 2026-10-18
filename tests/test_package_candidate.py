@@ -55,7 +55,7 @@ class CandidateInstallation(unittest.TestCase):
             if name.endswith(".kui"):
                 (self.sd / name).write_bytes(envelope(b"\x09\0\x09\0", 4, self.commit[:12]))
         for name in ("STORAGE-TRANSPORTS.md", "EXT4-BOOTSTRAP.md", "BOOT-RECOVERY.md",
-                     "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "GAMES-ZSO.md", "WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md",
+                     "WINDOWS-CE-PLACEMENT-TEST.md", "GAMES-BACKGROUND-READER.md", "GAMES-ZSO.md", "GAMES-CSO.md", "GAMES-CHD.md", "ATA-DMA-PLAN.md", "WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md",
                      "SCI-CONNECTOR.md", "FTP.md", "LICENSE", "THIRD_PARTY.md"):
             (self.dist / name).write_text(name + "\n")
         (self.dist / "LICENSES").mkdir()
@@ -106,7 +106,7 @@ class CandidateInstallation(unittest.TestCase):
         self.assertEqual(record["candidate"]["ata_hardware"], "untested")
         self.assertEqual(record["candidate"]["sci512_hardware"], "rejected; restored 256-byte allowance")
         self.assertEqual(record["commit"], self.commit)
-        for name in ("runtime.kui", "apps/games/retail-boot.kui", "apps/games/zso-boot.kui", "apps/games/lzo-boot.kui", "apps/games/ce-probe.kui"):
+        for name in ("runtime.kui", "apps/games/retail-boot.kui", "apps/games/zso-boot.kui", "apps/games/lzo-boot.kui", "apps/games/cso-boot.kui", "apps/games/ce-probe.kui"):
             self.assertEqual((bundle / "KUI" / name).read_bytes(), (self.sd / name).read_bytes())
         self.assertTrue((bundle / "WINDOWS-CE-PLACEMENT-TEST.md").is_file())
         for name in ("WIFI.md", "WIFI-PERFORMANCE-TEST.md", "WIFI-FLASH-ARCH.md", "SCI-CONNECTOR.md", "FTP.md"):
@@ -305,11 +305,11 @@ class TyrfingFinalInstallation(unittest.TestCase):
         for name in GAME_FILES:
             if (name == "retail-boot.kui" or name == "ce-probe.kui" or
                     name.startswith(("ce-cdda-", "cdda-native-")) or
-                    name in ("zso-boot.kui", "lzo-boot.kui")):
+                    name in ("zso-boot.kui", "lzo-boot.kui", "cso-boot.kui")):
                 ce = name == "ce-probe.kui" or name.startswith("ce-cdda-")
                 payload = bytearray(STAGE_BLOB_OFFSET + 4)
-                header = (zso_relocation_header(4, "lzo" if name == "lzo-boot.kui" else "lz4")
-                          if name in ("zso-boot.kui", "lzo-boot.kui") else
+                header = (zso_relocation_header(4, "cso" if name == "cso-boot.kui" else "lzo" if name == "lzo-boot.kui" else "lz4")
+                          if name in ("zso-boot.kui", "lzo-boot.kui", "cso-boot.kui") else
                           relocation_header(4, ce=ce, low=not ce))
                 payload[HEADER_OFFSET:HEADER_OFFSET + 64] = header
                 payload[-4:] = b"\x09\0\x09\0"
@@ -319,7 +319,7 @@ class TyrfingFinalInstallation(unittest.TestCase):
     def test_final_installs_all_matching_payloads_and_family_guides_without_rc_instructions(self):
         bundle, release = self.fixture.assemble(False)
         self.assertEqual(release, FINAL_RELEASE)
-        self.assertEqual(len(self.payload_names), 14)
+        self.assertEqual(len(self.payload_names), 15)
         for name in self.payload_names:
             self.assertEqual((bundle / "KUI" / name).read_bytes(), (self.fixture.sd / name).read_bytes())
         self.assertEqual(json.loads((bundle / "build.json").read_text())["kind"], "release")
@@ -363,7 +363,7 @@ class TyrfingFinalInstallation(unittest.TestCase):
                     verify_assets(self.fixture.dist / "release-assets", release, self.fixture.commit)
 
     def test_final_promotion_rejects_wrong_typed_compressed_and_music_modules(self):
-        for name in ("zso-boot.kui", "lzo-boot.kui", "ce-cdda-wwp.kui", "cdda-native-mdk2.kui"):
+        for name in ("zso-boot.kui", "lzo-boot.kui", "cso-boot.kui", "ce-cdda-wwp.kui", "cdda-native-mdk2.kui"):
             with self.subTest(module=name):
                 bundle, release = self.fixture.assemble(False)
                 (bundle / "KUI/apps/games" / name).write_bytes(
@@ -434,6 +434,28 @@ class CandidateSelection(unittest.TestCase):
                 self.assertEqual(package_kind(release, True), "development-test")
                 self.assertIn(development_experiment(release), development_notice())
         self.assertFalse(development_test(STABLE_RELEASE))
+
+
+class CompressedCandidateSelection(unittest.TestCase):
+    def test_profile_names_and_guides_do_not_inherit_historical_ata_candidate(self):
+        with patch.dict(os.environ, {"KUI_CANDIDATE_PROFILE": "compressed"}), \
+             patch("package.release_metadata", return_value=FINAL_RELEASE), \
+             tempfile.TemporaryDirectory() as temporary:
+            release = package_metadata(True)
+            self.assertTrue(release["artifact_prefix"].endswith("-compressed-candidate"))
+            self.assertNotIn("ATA readiness", release["name"])
+            self.assertEqual(candidate_evidence()["chd"], "restricted v4 portable reader only; no direct launch")
+            write_release_guides(Path(temporary), True)
+            guide = (Path(temporary) / "START-HERE.md").read_text()
+            self.assertIn("cso-boot.kui", guide)
+            self.assertIn("(GAMES-CSO.md)", guide)
+            self.assertIn("CHD cannot be launched directly", guide)
+
+    def test_unknown_profile_is_refused(self):
+        with patch.dict(os.environ, {"KUI_CANDIDATE_PROFILE": "arbitrary"}), \
+             patch("package.release_metadata", return_value=FINAL_RELEASE), \
+             self.assertRaisesRegex(ValueError, "KUI_CANDIDATE_PROFILE"):
+            package_metadata(True)
 
 
 if __name__ == "__main__":

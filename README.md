@@ -60,7 +60,8 @@ baseline retained for 2.0.0; see the
 [accepted-fix audit](docs/release-v2.0-accepted-fix-audit.md).
 Toy Commander FMV stalls are not fixed by the WinCE work. Native SCI Standard
 has experimental direct LZ4/LZO1X ZSO readers with explicit codec selection;
-console acceptance is pending. CSO and CHD require PC import.
+console acceptance is pending. This development branch adds a separate experimental SCI Standard CSO reader;
+console acceptance is pending. CHD still requires PC import. See [CSO limits](docs/games-cso.md).
 IDE/CF remains untested synchronous PIO;
 ATA DMA and CE on IDE/SCIF remain future work. ext4 is available only to the
 read-only bootstrap, not runtime apps or Games.
@@ -250,7 +251,8 @@ Local storage remains the default. Console adapter acceptance is pending; see
 Games directly launches supported GDI, ISO, BIN/CUE, CDI v2/v3/v3.5 and
 standalone BIN/IMG layouts. Standard LZ4 and explicitly selected historical
 LZO1X ZSO have separate experimental native SCI Standard readers; console
-acceptance is pending. CSO and CHD use the supplied PC importer. See [ZSO limits](docs/games-zso.md) and
+acceptance is pending. The separate CSO development reader is SCI Standard only and needs console acceptance;
+CHD uses the supplied PC importer. See [CSO limits](docs/games-cso.md). See [ZSO limits](docs/games-zso.md) and
 [format and import limits](docs/games-formats.md).
 
 Matching `Game` and `Game-2048` folders collapse into one Games entry. Choose

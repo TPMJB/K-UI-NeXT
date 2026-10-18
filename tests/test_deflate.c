@@ -46,8 +46,11 @@ static enum kui_zso_result decode(uint32_t bytes, uint32_t *consumed) {
     assert(bytes <= source.size && bytes <= UINT32_MAX - source.base);
     source.limit = source.base + bytes; source.calls = 0;
     memset(&output, 0xa6, sizeof(output)); memset(&work, 0xa6, sizeof(work));
-    enum kui_zso_result result = kui_deflate_decode(read_source, NULL, source.base,
+    enum kui_zso_result result = kui_deflate_decode(read_source, &source, source.base,
         source.limit, output.data, &work.data, consumed);
+    if(bytes && bytes <= KUI_ZSO_MAX_SPAN) {
+        assert(work.data.input.read == NULL && work.data.input.context == NULL);
+    }
     canaries(); return result;
 }
 static void begin(void) {
@@ -71,6 +74,20 @@ static void fixed_symbol(unsigned value) {
     else huffman(value - 280u + 192u, 8u);
 }
 static void fixed_header(bool final) {put(final ? 1u : 0u, 1u); put(1u, 2u);}
+static void singleton_header(bool final) {
+    /* Code-length tree: symbol18 has code0/1bit; symbols0,1 have
+     * codes10,11/2bits. A literal tree with only EOB and no distance tree
+     * is permitted when this DEFLATE block emits no matches. */
+    static const unsigned order[19] = {16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15};
+    put(final ? 1u : 0u, 1u); put(2, 2u); put(0, 5u); put(0, 5u); put(14, 4u);
+    for(unsigned i = 0; i < 18u; ++i)
+        put(order[i] == 18u ? 1u : order[i] <= 1u ? 2u : 0u, 3u);
+    huffman(0, 1u); put(127, 7u); /* 138 zero widths. */
+    huffman(0, 1u); put(107, 7u); /* 118 zero widths. */
+    huffman(3, 2u); /* Literal EOB256 has width1. */
+    huffman(2, 2u); /* Sole declared distance symbol has width0. */
+    huffman(0, 1u); /* EOB. */
+}
 static void stored(unsigned bytes, bool final) {
     put(final ? 1u : 0u, 1u); put(0, 2u);
     while(bit_count & 7u) put(1u, 1u); /* Ignored alignment bits may be nonzero. */
@@ -124,6 +141,9 @@ static void token_forms(void) {
     begin(); fixed_header(false);
     for(unsigned i = 0; i < 2048; ++i) {expected[i] = (uint8_t)i; fixed_symbol(expected[i]);}
     fixed_symbol(256); stored(0, true); valid(true);
+    begin(); singleton_header(false); stored(2048, true);
+    for(unsigned i = 0; i < 2048; ++i) expected[i] = (uint8_t)(i * 37u);
+    valid(true);
     puts("PASS DEFLATE tokens: stored/fixed ranges, arbitrary alignment bits, cross-block matches and empty final blocks against zlib");
 }
 static void compress_sample(unsigned sample, int strategy, int level) {
@@ -180,6 +200,15 @@ static void malformed(void) {
     assert(decode(source.size, &consumed) == KUI_ZSO_OK && consumed == full);
     source.base = 37;
     source.data[3] ^= 1u; reject(); /* Bad stored LEN/NLEN complement. */
+    for(unsigned dynamic = 0; dynamic < 2u; ++dynamic) {
+        compress_sample(6, dynamic ? Z_HUFFMAN_ONLY : Z_FIXED, 6);
+        assert(((source.data[0] >> 1) & 3u) == (dynamic ? 2u : 1u));
+        full = source.size;
+        for(unsigned n = 0; n < full; ++n) {
+            uint32_t used = 0xdeadbeefu;
+            assert(decode(n, &used) == KUI_ZSO_INVALID && used == 0xdeadbeefu);
+        }
+    }
     begin(); stored(2049, true); reject();
     begin(); stored(2047, true); reject();
     begin(); put(7, 3u); reject(); /* Reserved block type. */
@@ -219,7 +248,8 @@ static void malformed(void) {
     puts("PASS DEFLATE bounds: every stored truncation, padding/UINT32 boundary, reserved symbols, invalid trees, runs, lookbehind and output overflow");
 }
 static void mutations(void) {
-    compress_sample(4, Z_DEFAULT_STRATEGY, 6);
+    compress_sample(4, Z_HUFFMAN_ONLY, 6);
+    assert(((source.data[0] >> 1) & 3u) == 2u);
     unsigned bytes = source.size; memcpy(backup, source.data, bytes);
     for(unsigned sample = 0; sample < 30000; ++sample) {
         source.size = bytes; memcpy(source.data, backup, bytes);

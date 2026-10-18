@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Original cooked ISO bytes and independently emitted standard LZ4 ZISO v1.
+"""Original cooked ISO bytes and independently emitted ZISO/CISO v1 fixtures.
 
 No game payloads or production codec helpers are used. The small greedy encoder
 emits overlapping matches and the required final literal sequence; an independent
@@ -13,6 +13,21 @@ import zlib
 from game_format_fixture import payloads
 from games_fixture import dual32
 
+CSO_CASES = (
+    "cso-gd-shift0", "cso-cd11700-shift9", "cso-cd0-shift0",
+    "cso-fragments31", "cso-fragments32", "cso-index-underflow",
+    "cso-index-descending", "cso-index-past-end", "cso-payload-invalid",
+    "cso-header-version", "cso-header-blocksize", "cso-header-reserved",
+    "cso-header-shift", "cso-windows-ce", "cso-ce-reader", "cso-cdda",
+    "cso-background", "cso-patches", "cso-scif", "cso-ide",
+    "cso-source-header-change", "cso-source-index-change",
+    "cso-wrong-magic", "cso-wrong-package", "cso-lzo-selection",
+    "cso-zlib-wrapped",
+)
+CSO_PREPARED = (
+    "cso-gd-shift0", "cso-cd11700-shift9", "cso-cd0-shift0", "cso-fragments31",
+    "cso-source-header-change", "cso-source-index-change",
+)
 ZSO_CASES = (
     "zso-gd-shift0", "zso-cd11700-shift9", "zso-cd0-shift0",
     "zso-fragments31", "zso-fragments32",
@@ -24,12 +39,12 @@ ZSO_CASES = (
     "zso-lzo-gd-shift0", "zso-lzo-cd11700-shift9", "zso-lzo-cd0-shift0",
     "zso-lzo-fragments31", "zso-lzo-fragments32", "zso-lzo-wrong-codec",
     "zso-lz4-as-lzo", "zso-lzo-wrong-package", "zso-lzo-payload-invalid",
-)
+) + CSO_CASES
 ZSO_PREPARED = (
     "zso-gd-shift0", "zso-cd11700-shift9", "zso-cd0-shift0", "zso-fragments31",
     "zso-source-header-change", "zso-source-index-change",
     "zso-lzo-gd-shift0", "zso-lzo-cd11700-shift9", "zso-lzo-cd0-shift0", "zso-lzo-fragments31",
-)
+) + CSO_PREPARED
 
 
 def length_bytes(value):
@@ -122,13 +137,24 @@ def lzo_block(source):
     return bytes((0,)) + extended(2048 - 18) + source + bytes((17, 0, 0))
 
 
+def deflate_block(source):
+    """Independent CISO emitter, using raw RFC 1951 blocks from Python zlib."""
+    encoder = zlib.compressobj(level=6, wbits=-15)
+    data = encoder.compress(source) + encoder.flush()
+    decoder = zlib.decompressobj(wbits=-15)
+    assert decoder.decompress(data) + decoder.flush() == source
+    assert decoder.eof and not decoder.unused_data and not decoder.unconsumed_tail
+    return data
+
+
 def ziso(logical, shift, codec="lz4"):
     count, align = len(logical) // 2048, 1 << shift
     first = (24 + (count + 1) * 4 + align - 1) // align * align
     body, index, raw_count = bytearray(first), [], 0
     for block in range(count):
         source = logical[block * 2048:(block + 1) * 2048]
-        compressed = lzo_block(source) if codec == "lzo" else lz4_block(source)
+        compressed = (deflate_block(source) if codec == "deflate" else
+                      lzo_block(source) if codec == "lzo" else lz4_block(source))
         if codec == "lz4":
             assert decode_emitted(compressed) == source
         raw = block % 3 == 1 or len(compressed) >= 2048
@@ -138,7 +164,8 @@ def ziso(logical, shift, codec="lz4"):
         body.extend(bytes((-len(body)) % align))
     index.append(len(body) >> shift)
     assert 0 < raw_count < count
-    struct.pack_into("<4sIQIBB2x", body, 0, b"ZISO", 24, len(logical), 2048, 1, shift)
+    struct.pack_into("<4sIQIBB2x", body, 0, b"CISO" if codec == "deflate" else b"ZISO",
+                     24, len(logical), 2048, 1, shift)
     struct.pack_into(f"<{len(index)}I", body, 24, *index)
     return body, index
 
@@ -155,32 +182,40 @@ def make_zso_fixture(folder, case):
         sectors.extend(bytearray(bytes((n * 7 + i // 8) & 255 for i in range(2048)))
                        for n in range(64, 256))
         dual32(sectors[16], 80, len(sectors))
-    if case == "zso-windows-ce":
+    if case.endswith("-windows-ce"):
         sectors[0][62] = ord("1")
     logical = b"".join(sectors)
     shift = 9 if "shift9" in case or "fragments" in case else 0
-    data, index = ziso(logical, shift, "lzo" if "-lzo-" in case else "lz4")
-    if case == "zso-index-underflow":
+    cso = case in CSO_CASES
+    data, index = ziso(logical, shift, "deflate" if cso else "lzo" if "-lzo-" in case else "lz4")
+    if case.endswith("-index-underflow"):
         struct.pack_into("<I", data, 24, 0)
-    if case == "zso-index-descending":
+    if case.endswith("-index-descending"):
         struct.pack_into("<I", data, 24 + 32 * 4, index[31])
-    if case == "zso-index-past-end":
+    if case.endswith("-index-past-end"):
         struct.pack_into("<I", data, 24 + len(sectors) * 4, (len(data) >> shift) + 1)
-    if case in ("zso-payload-invalid", "zso-lzo-payload-invalid"):
+    if case.endswith("-payload-invalid"):
         offset = (index[0] & 0x7fffffff) << shift
-        data[offset:offset + 3] = bytes(3)
+        data[offset:offset + 3] = b"\x07\0\0" if cso else bytes(3)
         if "-lzo-" in case:
             # The first metadata block may be raw; corrupt its IP signature.
             data[offset:offset + 16] = b"INVALID-IP-BLOCK!"
-    if case == "zso-header-version":
+    if case.endswith("-header-version"):
         data[20] = 2
-    if case == "zso-header-blocksize":
+    if case.endswith("-header-blocksize"):
         struct.pack_into("<I", data, 16, 4096)
-    if case == "zso-header-reserved":
+    if case.endswith("-header-reserved"):
         data[22] = 1
-    if case == "zso-header-shift":
+    if case.endswith("-header-shift"):
         data[21] = 10
-    (folder / "selected.zso").write_bytes(data)
+    if case == "cso-wrong-magic":
+        data[:4] = b"ZISO"
+    if case == "cso-zlib-wrapped":
+        # A CISO block must be raw RFC 1951, without a zlib RFC 1950 wrapper.
+        offset = (index[0] & 0x7fffffff) << shift
+        wrapped = zlib.compress(logical[:2048])
+        data[offset:offset + len(wrapped)] = wrapped
+    (folder / ("selected.cso" if cso else "selected.zso")).write_bytes(data)
     (folder / "zso-expected.iso").write_bytes(logical)
     expected_extents = 31 if case.endswith("fragments31") else 0
     (folder / "zso.expect").write_text(

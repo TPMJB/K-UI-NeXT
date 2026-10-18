@@ -7,26 +7,21 @@
  * fixed trees use the RFC's arithmetic ranges instead of a lookup table.
  * Dynamic lookup scans the bounded alphabet only after finding a code group.
  * This deliberately trades some dynamic-tree speed for resident RAM. */
-struct input {
-    kui_zso_read_fn read;
-    void *context;
-    uint32_t at, end, hold;
-    unsigned bits;
-};
-static enum kui_zso_result bits(struct input *in, unsigned count, unsigned *out) {
+static unsigned bits(struct kui_deflate_input *in, unsigned count) {
+    if(in->error != KUI_ZSO_OK) return 0;
     while(in->bits < count) {
-        if(in->at == in->end) return KUI_ZSO_INVALID;
+        if(in->at == in->end) { in->error = KUI_ZSO_INVALID; return 0; }
         uint8_t byte;
-        enum kui_zso_result result = in->read(in->context, in->at, &byte, 1u);
-        if(result != KUI_ZSO_OK) return result;
+        in->error = in->read(in->context, in->at, &byte, 1u);
+        if(in->error != KUI_ZSO_OK) return 0;
         ++in->at;
         in->hold |= (uint32_t)byte << in->bits;
         in->bits += 8u;
     }
-    *out = in->hold & ((1u << count) - 1u);
+    unsigned out = in->hold & ((1u << count) - 1u);
     in->hold >>= count;
     in->bits -= count;
-    return KUI_ZSO_OK;
+    return out;
 }
 static unsigned width(const uint8_t *widths, unsigned index) {
     return (widths[index >> 1] >> ((index & 1u) * 4u)) & 15u;
@@ -37,7 +32,7 @@ static void set_width(uint8_t *widths, unsigned index, unsigned value) {
 }
 static enum kui_zso_result tree(uint16_t *counts, const uint8_t *widths,
     unsigned base, unsigned size, unsigned maximum, unsigned empty) {
-    memset(counts, 0, (maximum + 1u) * sizeof(*counts));
+    for(unsigned n = 0; n <= maximum; ++n) counts[n] = 0;
     unsigned total = 0;
     for(unsigned i = 0; i < size; ++i) {
         unsigned n = width(widths, base + i);
@@ -56,170 +51,145 @@ static enum kui_zso_result tree(uint16_t *counts, const uint8_t *widths,
     return left && (maximum == 7u || total != 1u || counts[1] != 1u) ?
         KUI_ZSO_INVALID : KUI_ZSO_OK;
 }
-static enum kui_zso_result symbol(struct input *in, const uint16_t *counts,
-    const uint8_t *widths, unsigned base, unsigned size, unsigned maximum,
-    unsigned *out) {
-    unsigned code = 0, first = 0;
-    for(unsigned n = 1; n <= maximum; ++n) {
-        unsigned bit;
-        enum kui_zso_result result = bits(in, 1u, &bit);
-        if(result != KUI_ZSO_OK) return result;
-        code = (code << 1) | bit;
-        if(code >= first && code - first < counts[n]) {
-            unsigned ordinal = code - first;
-            for(unsigned i = 0; i < size; ++i) if(width(widths, base + i) == n) {
-                if(!ordinal) { *out = i; return KUI_ZSO_OK; }
+static unsigned symbol(struct kui_deflate_input *in, const uint16_t *counts,
+    const uint8_t *widths, unsigned base, unsigned size, unsigned maximum) {
+    in->code = 0; in->first = 0; in->maximum = maximum;
+    in->counts = counts; in->widths = widths; in->base = base; in->size = size;
+    for(in->depth = 1; in->depth <= in->maximum; ++in->depth) {
+        unsigned bit = bits(in, 1u);
+        if(in->error != KUI_ZSO_OK) return UINT32_MAX;
+        in->code = (in->code << 1) | bit;
+        if(in->code >= in->first && in->code - in->first < in->counts[in->depth]) {
+            unsigned ordinal = in->code - in->first;
+            for(unsigned i = 0; i < in->size; ++i) if(width(in->widths, in->base + i) == in->depth) {
+                if(!ordinal) return i;
                 --ordinal;
             }
-            return KUI_ZSO_INVALID;
+            return UINT32_MAX;
         }
-        first = (first + counts[n]) << 1;
+        in->first = (in->first + in->counts[in->depth]) << 1;
     }
-    return KUI_ZSO_INVALID;
+    return UINT32_MAX;
 }
-static enum kui_zso_result dynamic(struct input *in,
+static unsigned dynamic(struct kui_deflate_input *in,
     struct kui_deflate_workspace *work, unsigned *literal_count,
     unsigned *distance_count) {
     static const uint8_t order[19] = {16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15};
-    unsigned literals, distances, codes;
-    enum kui_zso_result result = bits(in, 5u, &literals);
-    if(result != KUI_ZSO_OK) return result;
-    result = bits(in, 5u, &distances);
-    if(result != KUI_ZSO_OK) return result;
-    result = bits(in, 4u, &codes);
-    if(result != KUI_ZSO_OK) return result;
+    unsigned literals = bits(in, 5u), distances = bits(in, 5u), codes = bits(in, 4u);
     literals += 257u; distances += 1u; codes += 4u;
-    if(literals > 286u) return KUI_ZSO_INVALID;
+    if(literals > 286u || in->error != KUI_ZSO_OK) return 0;
     memset(work->code_widths, 0, sizeof(work->code_widths));
     for(unsigned i = 0; i < codes; ++i) {
-        unsigned value;
-        result = bits(in, 3u, &value);
-        if(result != KUI_ZSO_OK) return result;
+        unsigned value = bits(in, 3u);
         /* Code-length order is not sequential, so assign both nibble values. */
         unsigned n = order[i], shift = (n & 1u) * 4u;
         work->code_widths[n >> 1] |= (uint8_t)(value << shift);
     }
-    result = tree(work->code_counts, work->code_widths, 0, 19u, 7u, 0);
-    if(result != KUI_ZSO_OK) return result;
+    /* The literal counts are not needed until all code widths are decoded,
+     * so this first array temporarily holds the code-length tree counts. */
+    if(in->error != KUI_ZSO_OK ||
+       tree(work->literal_counts, work->code_widths, 0, 19u, 7u, 0) != KUI_ZSO_OK) return 0;
     unsigned at = 0, previous = 0, size = literals + distances;
     while(at < size) {
-        unsigned value, count = 1;
-        result = symbol(in, work->code_counts, work->code_widths, 0, 19u, 7u, &value);
-        if(result != KUI_ZSO_OK) return result;
+        unsigned value = symbol(in, work->literal_counts, work->code_widths, 0, 19u, 7u), count = 1;
+        if(value == UINT32_MAX) return 0;
         if(value >= 16u) {
-            if(value == 16u && !at) return KUI_ZSO_INVALID;
-            unsigned extra;
-            result = bits(in, value == 18u ? 7u : value == 17u ? 3u : 2u, &extra);
-            if(result != KUI_ZSO_OK) return result;
+            if(value == 16u && !at) return 0;
+            unsigned extra = bits(in, value == 18u ? 7u : value == 17u ? 3u : 2u);
             count = extra + (value == 18u ? 11u : 3u);
             value = value == 16u ? previous : 0u;
         }
-        if(count > size - at) return KUI_ZSO_INVALID;
+        if(count > size - at || in->error != KUI_ZSO_OK) return 0;
         previous = value;
         while(count--) set_width(work->widths, at++, value);
     }
-    if(!width(work->widths, 256u)) return KUI_ZSO_INVALID;
-    result = tree(work->counts[0], work->widths, 0, literals, 15u, 0);
-    if(result != KUI_ZSO_OK) return result;
-    result = tree(work->counts[1], work->widths, literals, distances, 15u, 1);
-    if(result != KUI_ZSO_OK) return result;
+    if(!width(work->widths, 256u) ||
+       tree(work->literal_counts, work->widths, 0, literals, 15u, 0) != KUI_ZSO_OK ||
+       tree(work->distance_counts, work->widths, literals, distances, 15u, 1) != KUI_ZSO_OK) return 0;
     *literal_count = literals; *distance_count = distances;
-    return KUI_ZSO_OK;
+    return 1;
 }
 static unsigned reversed(unsigned value, unsigned count) {
     unsigned out = 0;
     do { out = (out << 1) | (value & 1u); value >>= 1; } while(--count);
     return out;
 }
-static enum kui_zso_result fixed(struct input *in, unsigned *out) {
-    unsigned code, extra;
-    enum kui_zso_result result = bits(in, 7u, &code);
-    if(result != KUI_ZSO_OK) return result;
+static unsigned fixed(struct kui_deflate_input *in) {
+    unsigned code = bits(in, 7u), extra;
+    if(in->error != KUI_ZSO_OK) return UINT32_MAX;
     code = reversed(code, 7u);
-    if(code < 24u) { *out = code + 256u; return KUI_ZSO_OK; }
-    result = bits(in, 1u, &extra);
-    if(result != KUI_ZSO_OK) return result;
+    if(code < 24u) return code + 256u;
+    extra = bits(in, 1u);
     code = (code << 1) | extra;
-    if(code < 192u) { *out = code - 48u; return KUI_ZSO_OK; }
-    if(code < 200u) { *out = code - 192u + 280u; return KUI_ZSO_OK; }
-    result = bits(in, 1u, &extra);
-    if(result != KUI_ZSO_OK) return result;
-    *out = ((code << 1) | extra) - 400u + 144u;
-    return KUI_ZSO_OK;
+    if(code < 192u) return code - 48u;
+    if(code < 200u) return code - 192u + 280u;
+    extra = bits(in, 1u);
+    return ((code << 1) | extra) - 400u + 144u;
 }
 enum kui_zso_result kui_deflate_decode(kui_zso_read_fn read, void *context,
     uint32_t start, uint32_t end, uint8_t out[KUI_ZSO_BLOCK_BYTES],
     struct kui_deflate_workspace *work, uint32_t *consumed) {
     if(!read || !out || !work || !consumed || start >= end ||
        end - start > KUI_ZSO_MAX_SPAN) return KUI_ZSO_INVALID;
-    struct input in = {read, context, start, end, 0, 0};
-    unsigned done = 0, final;
+    struct kui_deflate_input *in = &work->input;
+    in->read = read; in->context = context; in->at = start; in->end = end;
+    in->hold = 0; in->bits = 0; in->error = KUI_ZSO_OK;
+    work->done = 0;
     do {
-        unsigned type;
-        enum kui_zso_result result = bits(&in, 1u, &final);
-        if(result != KUI_ZSO_OK) return result;
-        result = bits(&in, 2u, &type);
-        if(result != KUI_ZSO_OK) return result;
-        if(type == 3u) return KUI_ZSO_INVALID;
-        if(!type) {
-            unsigned count, inverse;
-            in.hold = 0; in.bits = 0; /* Stored blocks begin on a byte boundary. */
-            result = bits(&in, 16u, &count);
-            if(result != KUI_ZSO_OK) return result;
-            result = bits(&in, 16u, &inverse);
-            if(result != KUI_ZSO_OK) return result;
-            if((count ^ inverse) != 65535u || count > KUI_ZSO_BLOCK_BYTES - done ||
-               count > in.end - in.at) return KUI_ZSO_INVALID;
+        unsigned header = bits(in, 3u); work->type = header >> 1;
+        work->final = header & 1u;
+        if(work->type == 3u || in->error != KUI_ZSO_OK) goto invalid;
+        if(!work->type) {
+            in->hold = 0; in->bits = 0; /* Stored blocks begin on a byte boundary. */
+            unsigned count = bits(in, 16u), inverse = bits(in, 16u);
+            if((count ^ inverse) != 65535u || count > KUI_ZSO_BLOCK_BYTES - work->done ||
+               count > in->end - in->at || in->error != KUI_ZSO_OK) goto invalid;
             if(count) {
-                result = read(context, in.at, out + done, count);
-                if(result != KUI_ZSO_OK) return result;
-                in.at += count; done += count;
+                in->error = in->read(in->context, in->at, out + work->done, count);
+                if(in->error != KUI_ZSO_OK) goto invalid;
+                in->at += count; work->done += count;
             }
             continue;
         }
-        unsigned literals = 0, distances = 0;
-        if(type == 2u) {
-            result = dynamic(&in, work, &literals, &distances);
-            if(result != KUI_ZSO_OK) return result;
+        if(work->type == 2u) {
+            if(!dynamic(in, work, &work->literals, &work->distances)) goto invalid;
         }
         for(;;) {
-            unsigned value;
-            result = type == 1u ? fixed(&in, &value) :
-                symbol(&in, work->counts[0], work->widths, 0, literals, 15u, &value);
-            if(result != KUI_ZSO_OK) return result;
+            unsigned value = work->type == 1u ? fixed(in) :
+                symbol(in, work->literal_counts, work->widths, 0, work->literals, 15u);
+            if(value == UINT32_MAX || in->error != KUI_ZSO_OK) goto invalid;
             if(value < 256u) {
-                if(done == KUI_ZSO_BLOCK_BYTES) return KUI_ZSO_INVALID;
-                out[done++] = (uint8_t)value;
+                if(work->done == KUI_ZSO_BLOCK_BYTES) goto invalid;
+                out[work->done++] = (uint8_t)value;
                 continue;
             }
             if(value == 256u) break;
-            if(value > 285u) return KUI_ZSO_INVALID;
+            if(value > 285u) goto invalid;
             unsigned count, extra = value < 265u ? 0u : (value - 261u) >> 2;
             if(value == 285u) count = 258u;
             else {
-                result = bits(&in, extra, &count);
-                if(result != KUI_ZSO_OK) return result;
-                count += extra ? (1u << (extra + 2u)) + 3u + ((value - 265u) & 3u) * (1u << extra) : value - 254u;
+                count = bits(in, extra);
+                count += extra ? ((4u + ((value - 265u) & 3u)) << extra) + 3u : value - 254u;
             }
-            if(count > KUI_ZSO_BLOCK_BYTES - done) return KUI_ZSO_INVALID;
-            if(type == 1u) {
-                result = bits(&in, 5u, &value);
-                if(result != KUI_ZSO_OK) return result;
+            if(count > KUI_ZSO_BLOCK_BYTES - work->done) goto invalid;
+            if(work->type == 1u) {
+                value = bits(in, 5u);
                 value = reversed(value, 5u);
-            } else result = symbol(&in, work->counts[1], work->widths,
-                                    literals, distances, 15u, &value);
-            if(result != KUI_ZSO_OK) return result;
-            if(value > 29u) return KUI_ZSO_INVALID;
-            unsigned distance;
+            } else value = symbol(in, work->distance_counts, work->widths,
+                                    work->literals, work->distances, 15u);
+            if(value > 29u) goto invalid;
             extra = value < 4u ? 0u : (value >> 1) - 1u;
-            result = bits(&in, extra, &distance);
-            if(result != KUI_ZSO_OK) return result;
-            distance += extra ? (1u << (extra + 1u)) + 1u + (value & 1u) * (1u << extra) : value + 1u;
-            if(distance > done) return KUI_ZSO_INVALID;
-            while(count--) { out[done] = out[done - distance]; ++done; }
+            unsigned distance = bits(in, extra);
+            distance += extra ? ((2u + (value & 1u)) << extra) + 1u : value + 1u;
+            if(distance > work->done || in->error != KUI_ZSO_OK) goto invalid;
+            while(count--) { out[work->done] = out[work->done - distance]; ++work->done; }
         }
-    } while(!final);
-    if(done != KUI_ZSO_BLOCK_BYTES) return KUI_ZSO_INVALID;
-    *consumed = in.at - start;
+    } while(!work->final);
+    if(work->done != KUI_ZSO_BLOCK_BYTES) goto invalid;
+    *consumed = in->at - start;
+    in->read = NULL; in->context = NULL;
     return KUI_ZSO_OK;
+invalid:
+    in->read = NULL; in->context = NULL;
+    return in->error == KUI_ZSO_OK ? KUI_ZSO_INVALID : in->error;
 }

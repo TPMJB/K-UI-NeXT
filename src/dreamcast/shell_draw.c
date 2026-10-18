@@ -1587,7 +1587,7 @@ static void games_launch_options(struct paint *p,const struct kui_shell *s) {
         label(p,40,350,AMBER,kui_shell_games_cdda_status(s));
     const char *hint="Extra settings, image information and developer tests.";
     if(s->games_launch_selected==KUI_SHELL_GAME_OPTION_READER)
-        hint=kui_game_image_format_compressed(s->games_detail.format)?"Compressed images use the Standard reader; background loading is unavailable.":
+        hint=kui_game_image_format_compressed(s->games_detail.format)?"Compressed images use the Standard reader.":
             kui_shell_games_ce_probe_ready(s)?"This Windows CE game requires background loading.":
             s->games_launch_cdda?"Changing background loading turns CD music off.":
             "Load from SD while the game continues working.";
@@ -1657,7 +1657,7 @@ static void games_extra_options(struct paint *p,const struct kui_shell *s) {
     const char *hint=hints[s->game_tools_selected<KUI_SHELL_GAME_TOOL_COUNT?s->game_tools_selected:0];
     if(kui_game_image_format_compressed(s->games_detail.format)) {
         if(s->game_tools_selected==KUI_SHELL_GAME_TOOL_SPEED)
-            hint="Compressed images use the Standard reader; background loading is unavailable.";
+            hint="Compressed images use the Standard reader.";
         else if(s->game_tools_selected==KUI_SHELL_GAME_TOOL_PATCHES)
             hint="RAM patches are unavailable for compressed images.";
     }

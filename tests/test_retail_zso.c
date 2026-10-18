@@ -205,12 +205,12 @@ static void wire_and_maps(void) {
     fixture(45000,true,31);assert(map.manifest.extent_count==31);
     assert(kui_retail_zso_manifest_encode(&map,wire)==KUI_GAME_OK);
     fixture(0,false,31);map.manifest.card_sectors=map.manifest.partition_end=UINT64_C(0x100000000);
-    struct kui_retail_extent *last=&map.manifest.slots[map.manifest.extent_count].extent;assert(last->blocks==1);
-    last->card_lba=UINT32_MAX;assert(kui_retail_zso_manifest_validate(&map)==KUI_GAME_OK);
+    struct kui_retail_extent *last=&map.manifest.slots[map.manifest.extent_count].extent;
+    last->card_lba=UINT32_MAX-last->blocks+1u;assert(kui_retail_zso_manifest_validate(&map)==KUI_GAME_OK);
     assert(kui_retail_zso_manifest_encode(&map,wire)==KUI_GAME_OK);
     assert(kui_retail_zso_manifest_decode(wire,&decoded)==KUI_GAME_OK);
     assert(decoded.manifest.card_sectors==UINT64_C(0x100000000) && decoded.manifest.partition_end==UINT64_C(0x100000000));
-    last->blocks=2;map.zso.file_bytes+=512;
+    last->blocks++;map.zso.file_bytes+=512;
     assert(kui_retail_zso_manifest_validate(&map)!=KUI_GAME_OK); /* last physical end must not wrap32bits */
     puts("PASS ZSO retail wire: independent bytes/CRC, disjoint ABI, canonical reserved bytes,31 extents and64-bit physical bounds");
 }

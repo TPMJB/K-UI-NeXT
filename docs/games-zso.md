@@ -26,8 +26,8 @@ cannot identify a codec. Do not rename another container to `.zso`.
 Use a known codec and a complete Dreamcast data-session ISO, and retain the
 original image. The existing
 [PC import workflow](games-formats.md#compressed-image-import) remains available
-for other supported compressed containers. This reader does not add CSO or CHD
-resident decoding.
+for other supported compressed containers. CSO has a separate [experimental SCI Standard reader](games-cso.md) in the
+development branch. ZSO does not add CHD resident decoding.
 
 ## Current launch scope
 

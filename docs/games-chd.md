@@ -81,7 +81,24 @@ contract needs its own design and acceptance. Do not hide an arbitrary
 128 KiB reservation in game RAM. The larger CE reservation does not solve the
 native case and is not permission to change the WinCE/CDDA finishing branch.
 
-## Next implementation: portable hunk reader and oracles
+## Implemented portable reader milestone
+
+The compressed-reader branch now contains `include/kui/chd.h` and
+`src/core/chd.c`, a real callback-based reader for the restricted K-UI CHDv4
+export profile. It validates the fixed map and contiguous CHGD metadata,
+checks raw/DEFLATE hunk CRCs and exact decoded lengths, separates disc addresses
+from padded storage frames, refuses omitted PAD as captured data and restores
+little-endian audio at the sector boundary. Its caller-owned host workspace is
+28,496 bytes; the exact target size must still be measured.
+
+`ASAN_OPTIONS=detect_leaks=0 python3 tests/test_chd_reader.py` verifies the real
+capture-writer fixture against independent Python zlib and all five original
+data/audio tracks. Corruption, metadata/maps, cancellation, short reads,
+cache invalidation and output guards are covered. This is decoder
+infrastructure; it is not connected to Play, does not fit the ordinary native
+reservation and does not support common v5 CHDs.
+
+## Remaining implementation: portable reader breadth and launch
 
 The next source change should be a callback-based CHD reader prototype, with
 caller-owned workspace, independent of `capture_chd.c` and detached placement.

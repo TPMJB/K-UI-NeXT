@@ -202,11 +202,11 @@ enum kui_zso_result kui_zso_read_block(const struct kui_zso_info *info,
 const char *kui_zso_result_name(enum kui_zso_result result) {
     switch(result) {
     case KUI_ZSO_OK: return "OK";
-    case KUI_ZSO_INVALID: return "Invalid block/header for selected ZSO codec";
-    case KUI_ZSO_UNSUPPORTED: return "Unsupported ZSO format or selected codec; independent 2048-byte blocks required";
-    case KUI_ZSO_IO: return "ZSO read failed";
+    case KUI_ZSO_INVALID: return "Invalid ZSO/CSO block or header";
+    case KUI_ZSO_UNSUPPORTED: return "Unsupported ZSO/CSO format or codec; independent 2048-byte blocks required";
+    case KUI_ZSO_IO: return "ZSO/CSO read failed";
     case KUI_ZSO_CANCELLED: return "Cancelled";
-    case KUI_ZSO_RANGE: return "ZSO container outside admitted bounds";
-    default: return "Unknown ZSO error";
+    case KUI_ZSO_RANGE: return "ZSO/CSO container outside admitted bounds";
+    default: return "Unknown ZSO/CSO error";
     }
 }

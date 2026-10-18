@@ -46,7 +46,8 @@ CASES += ("format-capture-zso", "format-capture-chd", "format-capture-gdi", "for
 CASES += ("format-alias-cue", "format-alias-reverse", "format-alias-gdi", "format-alias-independent",
           "format-alias-scrambled", "format-alias-media", "format-alias-layout",
           "format-alias-malformed", "format-alias-read-once", "format-alias-cancel")
-ZSO_INSPECT_CASES = ("inspect-zso-sci", "inspect-zso-scif", "inspect-zso-ce", "inspect-zso-lzo")
+ZSO_INSPECT_CASES = ("inspect-zso-sci", "inspect-zso-scif", "inspect-zso-ce", "inspect-zso-lzo",
+                     "inspect-cso-sci", "inspect-cso-scif", "inspect-cso-ce")
 CASES += ZSO_INSPECT_CASES
 ORDERING_CASES = ("sort-cache", "sort-overflow")
 CASES += ORDERING_CASES
@@ -81,7 +82,9 @@ def main():
                 selected_fixture = fixture
                 if case in ZSO_INSPECT_CASES:
                     selected_fixture = base / "zso-inspect"
-                    make_zso_fixture(selected_fixture, "zso-windows-ce" if case == "inspect-zso-ce" else "zso-lzo-gd-shift0" if case == "inspect-zso-lzo" else "zso-gd-shift0")
+                    cso = case.startswith("inspect-cso-")
+                    prefix = "cso" if cso else "zso"
+                    make_zso_fixture(selected_fixture, f"{prefix}-windows-ce" if case.endswith("-ce") else "zso-lzo-gd-shift0" if case == "inspect-zso-lzo" else f"{prefix}-gd-shift0")
                 image = base / f"{kind}-{case}.img"
                 shutil.copyfile(clean, image)
                 run(BINARY, str(image), str(selected_fixture), "seed", case)
@@ -90,8 +93,8 @@ def main():
                 assert f"PASS Games check {case}; no active-operation writes" in output
                 assert digest(image) == before, f"Games changed {kind} card image in {case}"
                 if case in ZSO_INSPECT_CASES:
-                    physical_bytes = (selected_fixture / "selected.zso").stat().st_size
-                    assert f"physical bytes={physical_bytes}, native SCI admission={int(case in ('inspect-zso-sci', 'inspect-zso-lzo'))}, Windows CE={int(case == 'inspect-zso-ce')}" in output
+                    physical_bytes = (selected_fixture / ("selected.cso" if case.startswith("inspect-cso-") else "selected.zso")).stat().st_size
+                    assert f"physical bytes={physical_bytes}, native SCI admission={int(case in ('inspect-zso-sci', 'inspect-cso-sci', 'inspect-zso-lzo'))}, Windows CE={int(case.endswith('-ce'))}" in output
                 run("fsck.fat" if kind == "fat32" else "fsck.exfat", "-n", str(image))
                 image.unlink()
                 print(f"PASS {kind} Games: {case}; whole-card SHA256 unchanged", flush=True)

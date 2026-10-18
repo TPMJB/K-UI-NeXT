@@ -147,6 +147,19 @@ int main(int argc,char **argv) {
     assert(compressed<info.hunk_count);uint8_t *map=s.data+108u+16u*compressed;payload=be64(map);s.data[payload]^=0xff;
     assert(kui_chd_workspace_init(work,work_bytes)==KUI_CHD_OK);
     assert(kui_chd_read_frames(&info,&io,work,work_bytes,compressed*8u,1,out,CHUNK)!=KUI_CHD_OK);
+    memcpy(s.data,original,s.size);map=s.data+108u+16u*compressed;payload=be64(map);
+    uint32_t packed=(uint32_t)map[12]<<8|map[13]|(uint32_t)map[14]<<16;assert(packed>2u);
+    uint32_t cut=packed-1u;map[12]=(uint8_t)(cut>>8);map[13]=(uint8_t)cut;map[14]=(uint8_t)(cut>>16);
+    assert(kui_chd_workspace_init(work,work_bytes)==KUI_CHD_OK);
+    assert(kui_chd_read_frames(&info,&io,work,work_bytes,compressed*8u,1,out,CHUNK)!=KUI_CHD_OK);
+    memcpy(s.data,original,s.size);map=s.data+108u+16u*compressed;cut=packed+1u;
+    map[12]=(uint8_t)(cut>>8);map[13]=(uint8_t)cut;map[14]=(uint8_t)(cut>>16);
+    assert(kui_chd_workspace_init(work,work_bytes)==KUI_CHD_OK);
+    assert(kui_chd_read_frames(&info,&io,work,work_bytes,compressed*8u,1,out,CHUNK)==KUI_CHD_INVALID);
+    memcpy(s.data,original,s.size);map=s.data+108u+16u*compressed;
+    map[12]=0;map[13]=2;map[14]=0;s.data[payload]=3;s.data[payload+1u]=0; /* Empty raw DEFLATE stream. */
+    assert(kui_chd_workspace_init(work,work_bytes)==KUI_CHD_OK);
+    assert(kui_chd_read_frames(&info,&io,work,work_bytes,compressed*8u,1,out,CHUNK)==KUI_CHD_INVALID);
     memcpy(s.data,original,s.size);reset(&s);s.fail_on=3;
     assert(kui_chd_workspace_init(work,work_bytes)==KUI_CHD_OK);
     assert(kui_chd_read_frames(&info,&io,work,work_bytes,compressed*8u,1,out,CHUNK)==KUI_CHD_IO);

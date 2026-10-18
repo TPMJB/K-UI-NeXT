@@ -155,5 +155,81 @@ class LzoReleaseInstallation(unittest.TestCase):
         self.assertEqual(Path(failure.exception.filename), self.path)
 
 
+class CsoReleaseInstallation(unittest.TestCase):
+    def setUp(self):
+        self.fixture = candidate.CandidateInstallation(methodName="runTest")
+        self.addCleanup(self.fixture.doCleanups)
+        self.fixture.setUp()
+        metadata = patch("package.release_metadata", return_value=TYRFING)
+        metadata.start()
+        self.addCleanup(metadata.stop)
+        self.path = self.fixture.sd / "apps/games/cso-boot.kui"
+        payload = bytearray(STAGE_BLOB_OFFSET + 64)
+        payload[HEADER_OFFSET:HEADER_OFFSET + HEADER_BYTES] = relocation_header(64, "cso")
+        payload[STAGE_BLOB_OFFSET:STAGE_BLOB_OFFSET + 4] = b"\x09\0\x09\0"
+        self.expected = envelope(payload, len(payload), self.fixture.commit[:12])
+        self.path.write_bytes(self.expected)
+        self.guides = {name.upper() + ".md": package.guide(name + ".md").encode("utf-8")
+                       for name in ("games-cso", "games-chd", "ata-dma-plan")}
+        for name, contents in self.guides.items():
+            (self.fixture.dist / name).write_bytes(contents)
+
+    def test_typed_cso_payload_and_exact_source_identity_survive_install_archives(self):
+        bundle, release = self.fixture.assemble(False)
+        self.assertEqual((bundle / "KUI/apps/games/cso-boot.kui").read_bytes(), self.expected)
+        info = inspect_zso(self.expected, "cso")
+        self.assertEqual(info["manifest_magic"], "KUIRCS01")
+        self.assertEqual((info["transport"], info["reader"]), ("SCI", "Standard"))
+        self.assertIn("raw DEFLATE", info["codec"])
+        for codec in ("lz4", "lzo"):
+            with self.subTest(codec=codec), self.assertRaisesRegex(ValueError, "relocation header"):
+                inspect_zso(self.expected, codec)
+        assets = self.fixture.dist / "release-assets"
+        with zipfile.ZipFile(assets / (release["artifact_prefix"] + "-release.zip")) as install:
+            self.assertEqual(install.read("KUI/apps/games/cso-boot.kui"), self.expected)
+            for name, contents in self.guides.items():
+                self.assertEqual((bundle / name).read_bytes(), contents)
+                self.assertEqual(install.read(name), contents)
+            self.assertIn(b"(GAMES-CHD.md)", install.read("GAMES-CSO.md"))
+            self.assertNotIn(b"(games-chd.md)", install.read("GAMES-CSO.md"))
+            record = json.loads(install.read("build.json"))
+            self.assertEqual(record["commit"], self.fixture.commit)
+            self.assertEqual(record["kind"], "release-candidate")
+            self.assertFalse(record["hardware_tested"])
+            self.assertEqual(verify(install.read("KUI/apps/games/cso-boot.kui"))["build"], record["commit"][:12])
+            sums = dict(reversed(line.split("  ", 1)) for line in install.read("SHA256SUMS").decode().splitlines())
+            self.assertEqual(sums["KUI/apps/games/cso-boot.kui"], hashlib.sha256(self.expected).hexdigest())
+            for name, contents in self.guides.items():
+                self.assertEqual(sums[name], hashlib.sha256(contents).hexdigest())
+        with zipfile.ZipFile(assets / (release["artifact_prefix"] + "-source.zip")) as source:
+            record = json.loads(source.read("build.json"))
+            self.assertEqual((record["commit"], record["release"], record["kind"]),
+                             (self.fixture.commit, TYRFING, "release-candidate"))
+            for name in ("kui-source.tar.gz", "kos-source.tar.gz"):
+                self.assertEqual(source.read("source/" + name), (self.fixture.source / name).read_bytes())
+        self.fixture.assert_checksums(bundle, "SHA256SUMS")
+        self.fixture.assert_checksums(assets, "SHA256SUMS.txt")
+
+    def test_missing_cso_refuses_install_assembly_before_any_release_archive(self):
+        self.path.unlink()
+        with self.assertRaises(FileNotFoundError) as failure:
+            self.fixture.assemble(False)
+        self.assertEqual(Path(failure.exception.filename), self.path)
+        self.assertFalse((self.fixture.dist / "release-assets").exists())
+
+    def test_missing_compressed_or_dma_guide_refuses_install_assembly(self):
+        for name, contents in self.guides.items():
+            path = self.fixture.dist / name
+            with self.subTest(guide=name):
+                path.unlink()
+                try:
+                    with self.assertRaises(FileNotFoundError) as failure:
+                        self.fixture.assemble(False)
+                    self.assertEqual(Path(failure.exception.filename), path)
+                    self.assertFalse((self.fixture.dist / "release-assets").exists())
+                finally:
+                    path.write_bytes(contents)
+
+
 if __name__ == "__main__":
     unittest.main()
