@@ -52,11 +52,16 @@ including slack. It also records the current VMU block CRCs and image/journal
 hashes. The initial journal marker must be exactly zero.
 
 A bounded read-only raw verifier checks the live filesystem rather than
-accepting old physical addresses. Its checks include FAT copies and incoming
-links, live directory ownership, exFAT allocation bitmaps and contiguous-file
-ranges, filesystem metadata exclusions, and overlap among the three owned
-files. Unsupported layouts, cycles, read failures and scan-limit exhaustion
-are refusals. Source files are opened read-only; the output profile uses
+accepting old physical addresses. FAT32 retains FAT-copy and incoming-link
+checks. For exFAT, the verifier walks every live FAT-chained regular file,
+checks each allocation bit and exact chain length, and rejects any intersection
+with the owned VMU allocations. Contiguous files use their directory-declared
+ranges; their unused FAT words do not authorize links. Root, directory and
+system allocations remain checked independently. This follows the exFAT
+allocation rules without treating stale FAT contents as live crosslinks.
+Unsupported layouts, cycles, read failures and scan-limit exhaustion are
+refusals; regular-file chain walks have a separate CPU-step limit as well as
+the existing media-read limit. Source files are opened read-only; the output profile uses
 create-new semantics, sync and exact readback. After output creation, a fresh
 raw connection checks the same card, ownership and source snapshots again.
 

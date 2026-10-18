@@ -674,6 +674,62 @@ static int vmu_fs_path(struct vmu_fs_state *s) {
     return 0;
 }
 
+static void vmu_fs_link(struct vmu_fs_state *s,uint32_t source,uint32_t target,
+    uint32_t allocated,uint32_t kind,uint32_t decision,uint32_t raw,uint32_t word_valid) {
+    struct kui_vmu_fs_link_diagnostics *link=&s->stats->link;
+    int index=vmu_fs_target_index(s,target);
+    link->valid=1u;link->source_cluster=source;link->target_cluster=target;
+    link->target_role=index<0?UINT32_MAX:s->targets[index].role;
+    link->source_allocated=allocated;link->source_kind=kind;link->decision=decision;
+    link->fat_lba=(uint32_t)(s->profile.geometry.fat_first_lba+source/128u);
+    link->raw_word=raw;link->word_valid=word_valid;
+}
+/* exFAT FAT words are meaningful only for live FAT-chained streams. A free
+ * cluster, orphan allocation or NoFatChain file can retain arbitrary words.
+ * Positively walk EVERY other live regular FAT stream, not just suspicious
+ * incoming words: a corrupt live stream can traverse a cluster also claimed
+ * by a NoFatChain file or marked free in the bitmap. Both must still refuse.
+ * Root, directories, system streams and owned files have their complete
+ * bounded walks elsewhere. NoFatChain objects use the full range checks below.
+ */
+static int vmu_fs_live_file(struct vmu_fs_state *s,const struct vmu_fs_object *o) {
+    if(!o->bytes) return o->first?vmu_fs_fail(s,KUI_VMU_FS_CORRUPT,130u):0;
+    uint64_t clusters=vmu_fs_clusters(s,o->bytes);
+    uint32_t current=o->first,previous=0u;
+    for(uint64_t i=0;i<clusters;i++) {
+        if(s->stats->chain_steps>=KUI_VMU_FS_MAX_CHAIN_STEPS) {
+            vmu_fs_link(s,current,0u,UINT32_MAX,KUI_VMU_FS_LINK_LIVE_EXFAT_FILE,KUI_VMU_FS_LINK_LIMIT,0u,0u);
+            return vmu_fs_fail(s,KUI_VMU_FS_LIMIT,131u);
+        }
+        ++s->stats->chain_steps;
+        if(!vmu_fs_cluster(s,current)) {
+            vmu_fs_link(s,previous,current,previous?1u:UINT32_MAX,
+                KUI_VMU_FS_LINK_LIVE_EXFAT_FILE,KUI_VMU_FS_LINK_MALFORMED,current,!!previous);
+            return vmu_fs_fail(s,KUI_VMU_FS_CORRUPT,132u);
+        }
+        if(vmu_fs_bitmap_bit(s,current)) {
+            if(s->stats->result==KUI_VMU_FS_ALLOCATION && s->stats->detail==70u)
+                vmu_fs_link(s,current,0u,0u,KUI_VMU_FS_LINK_LIVE_EXFAT_FILE,KUI_VMU_FS_LINK_BITMAP_FREE,0u,0u);
+            return s->stats->result;
+        }
+        if(vmu_fs_target_index(s,current)>=0) {
+            vmu_fs_link(s,previous,current,previous?1u:UINT32_MAX,
+                KUI_VMU_FS_LINK_LIVE_EXFAT_FILE,KUI_VMU_FS_LINK_TARGET,current,!!previous);
+            return vmu_fs_fail(s,KUI_VMU_FS_CROSSLINK,110u);
+        }
+        uint32_t raw;
+        if(vmu_fs_fat_value(s,current,&raw)) return s->stats->result;
+        ++s->stats->fat_entries;
+        uint32_t next=raw>=UINT32_C(0xfffffff8)?0u:raw;
+        if((next && !vmu_fs_cluster(s,next)) || !!next!=(i+1u<clusters)) {
+            vmu_fs_link(s,current,next,1u,KUI_VMU_FS_LINK_LIVE_EXFAT_FILE,KUI_VMU_FS_LINK_MALFORMED,raw,1u);
+            return vmu_fs_fail(s,KUI_VMU_FS_CORRUPT,133u);
+        }
+        previous=current;current=next;
+    }
+    return 0;
+}
+
 static int vmu_fs_namespace(struct vmu_fs_state *s) {
     unsigned depth=1u,owners[3]={0,0,0};s->visited_count=0u;
     if(vmu_fs_open_dir(s,&s->dirs[0],s->profile.geometry.root_cluster,
@@ -717,6 +773,8 @@ static int vmu_fs_namespace(struct vmu_fs_state *s) {
             if(vmu_fs_open_dir(s,&s->dirs[depth],o->first,d->first,o->bytes,o->flags&2u))
                 return s->stats->result;
             ++depth;
+        } else if(s->profile.geometry.fs_type==KUI_VMU_PERSIST_EXFAT && owner<0 && !(o->flags&2u)) {
+            if(vmu_fs_live_file(s,o)) return s->stats->result;
         }
     }
     for(unsigned role=0;role<3u;role++) if(owners[role]!=1u)
@@ -725,6 +783,9 @@ static int vmu_fs_namespace(struct vmu_fs_state *s) {
 }
 static int vmu_fs_incoming(struct vmu_fs_state *s) {
     const struct kui_vmu_persist_geometry *g=&s->profile.geometry;
+    /* Only after the complete exFAT namespace and every live chain passed.
+     * Unreferenced exFAT FAT words are not allocation/ownership authority. */
+    if(g->fs_type==KUI_VMU_PERSIST_EXFAT) return 0;
     for(uint32_t sector=0;sector<g->fat_sectors;sector++) {
         if(vmu_fs_fat_sector(s,sector)) return s->stats->result;
         for(unsigned i=0;i<128u;i++) {
@@ -735,13 +796,12 @@ static int vmu_fs_incoming(struct vmu_fs_state *s) {
             if(g->fs_type==KUI_VMU_PERSIST_FAT32) value&=UINT32_C(0x0fffffff);
             int target=vmu_fs_target_index(s,value);if(target<0) continue;
             int source=vmu_fs_target_index(s,cluster);
-            /* NoFatChain objects never interpret their own FAT entries. A
-             * stale word there is not an active link. Unexpected external
-             * links conservatively refuse, including stale unused entries. */
-            if(source>=0 && (s->profile.files[s->targets[source].role].allocation_flags&2u)) continue;
             if(source<0 || s->targets[target].previous!=cluster ||
-               s->targets[source].role!=s->targets[target].role)
+               s->targets[source].role!=s->targets[target].role) {
+                vmu_fs_link(s,cluster,value,UINT32_MAX,KUI_VMU_FS_LINK_FAT32_TABLE,
+                    KUI_VMU_FS_LINK_TARGET,vmu_fs_u32(s->fat+i*4u),1u);
                 return vmu_fs_fail(s,KUI_VMU_FS_CROSSLINK,110u);
+            }
         }
     }
     return 0;

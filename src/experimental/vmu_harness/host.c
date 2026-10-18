@@ -127,6 +127,45 @@ static void check_persist_boot_diagnostics(void) {
     assert(!persist_fs_result(KUI_VMU_FS_IO,"SOURCE",&input) && line_count==3u);
     assert(strstr(lines[2],"UNAVAILABLE") && !connected && !exported_profile_path[0]);
 }
+static void check_persist_allocation_diagnostics(void) {
+    struct kui_vmu_fs_input input={.read_sector=diagnostic_read_forbidden};
+    memset(&persist_workspace.stats,0,sizeof(persist_workspace.stats));
+    struct kui_vmu_fs_stats *stats=&persist_workspace.stats;
+    stats->result=KUI_VMU_FS_CROSSLINK;stats->detail=110u;
+    stats->last_lba=0x3210u;stats->reads=1175u;stats->chain_steps=123u;
+    stats->fat_entries=456u;stats->directory_sectors=7u;stats->entries=8u;stats->target_clusters=9u;
+    stats->boot.valid=1u;stats->link.valid=1u;
+    stats->link.source_cluster=0xabcu;stats->link.target_cluster=0xdefu;
+    stats->link.target_role=1u;stats->link.source_allocated=1u;stats->link.source_kind=1u;
+    stats->link.decision=1u;stats->link.fat_lba=0x320fu;stats->link.raw_word=0xdefu;stats->link.word_valid=1u;
+    const char *const expected[]={"STATUS -9 DETAIL 110","FS LBA 00003210 READS 1175",
+        "LINK SRC 00000abc TARGET 00000def","LINK ROLE JOURNAL (00000001)",
+        "SOURCE LIVE EXFAT FILE ALLOC ALLOCATED","DECISION 1 TARGET CROSSLINK",
+        "FAT LBA 0000320f WORD 00000def VALID 1","SCAN CHAIN 123 FAT 456",
+        "SCAN DIR 7 ENTRIES 8 TARGETS 9","BOOT GATE MASK 00"};
+    struct kui_vmu_fs_stats before=*stats;line_count=0;
+    assert(!persist_fs_result(KUI_VMU_FS_CROSSLINK,"SOURCE",&input));
+    assert(line_count==10u && !memcmp(&before,stats,sizeof(before)));
+    for(unsigned row=0;row<line_count;row++) assert(strlen(lines[row])<=65u && !strstr(lines[row],"READY"));
+    for(unsigned item=0;item<sizeof(expected)/sizeof(expected[0]);item++) {
+        bool found=false;
+        for(unsigned row=0;row<line_count;row++) if(strstr(lines[row],expected[item])) found=true;
+        assert(found);
+    }
+    /* A refusal before a FAT-word read must expose VALID0 and no false owner.
+     * FAT32 allocation-bitmap state is intentionally not applicable. */
+    stats->boot.valid=0u;stats->link.source_kind=2u;stats->link.source_allocated=UINT32_MAX;
+    stats->link.target_role=UINT32_MAX;stats->link.decision=3u;
+    stats->link.raw_word=0u;stats->link.word_valid=0u;before=*stats;line_count=0;
+    assert(!persist_fs_result(KUI_VMU_FS_CROSSLINK,"FINAL",&input));
+    assert(line_count==9u && !memcmp(&before,stats,sizeof(before)));
+    assert(strstr(lines[3],"NONE (ffffffff)") && strstr(lines[4],"FAT32 TABLE ALLOC N/A"));
+    assert(strstr(lines[5],"MALFORMED CHAIN") && strstr(lines[6],"WORD 00000000 VALID 0"));
+    stats->link.valid=0u;stats->boot.valid=1u;line_count=0;
+    assert(!persist_fs_result(KUI_VMU_FS_LIMIT,"FINAL",&input) && line_count==6u);
+    assert(strstr(lines[2],"BOOT GATE MASK 00") && strstr(lines[4],"SCAN CHAIN"));
+    assert(!connected && !exported_profile_path[0]);
+}
 static void pair_content_hashes(unsigned number,uint8_t hashes[3][32]) {
     static const char *const leaves[]={"card.vmd","card.journal","identity.bin"};
     assert(connect_volume());
@@ -171,6 +210,8 @@ int main(int argc,char **argv) {
 #if KUI_VMU_PERSIST_PREP
     else if(!strcmp(argv[2],"prep-boot-diagnostics")) {
         check_persist_boot_diagnostics();ok=true;
+    } else if(!strcmp(argv[2],"prep-allocation-diagnostics")) {
+        check_persist_allocation_diagnostics();ok=true;
     } else if(!strcmp(argv[2],"export-persist") || !strcmp(argv[2],"refuse-persist") ||
             !strcmp(argv[2],"refuse-persist-scif") || !strcmp(argv[2],"refuse-persist-raw") ||
             !strcmp(argv[2],"refuse-persist-identity") || !strcmp(argv[2],"refuse-persist-final-raw") ||

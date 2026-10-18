@@ -767,6 +767,72 @@
         "Code review found that PartitionOffset=0 was incorrectly rejected and backup VolumeFlags were incorrectly treated as current; this photograph does not identify either as the actual cause.",
         "Probe image, journal and identity should be preserved. Retail SD saving remains disabled."
       ]
+    },
+    {
+      "build": "941ea939c1bb",
+      "date": "2026-10-17",
+      "outcome": "persistent_preparation_dirty_volume_refusal",
+      "source_images": [
+        "image-1792291869788.jpg"
+      ],
+      "failure_phase": "source allocation / exclusive ownership",
+      "status": -4,
+      "detail": 15,
+      "reads": 2,
+      "last_lba": "0x00000800",
+      "boot": {
+        "flags": "0x0002",
+        "revision": "0x0100",
+        "zero_or": 0,
+        "sector_shift": 9,
+        "cluster_shift": 8,
+        "fat_count": 1,
+        "partition_offset": 2048,
+        "partition_expected": 2048,
+        "volume_sectors": 249997312,
+        "volume_expected": 249997312,
+        "reject_mask": "0x20"
+      },
+      "profile_exported": false,
+      "cause": "main exFAT VolumeDirty flag; all other captured boot gate fields match",
+      "limits": [
+        "This preparation attempt refused before output creation and does not set or clear VolumeFlags.",
+        "Subsequent read-only fsck.exfat 1.4.3 reported two unattached secondary records in /KUI despite its clean summary.",
+        "A user-supplied 1024-byte metadata dump identifies a deleted primary and active secondary remnants for tosec.db, recording zero length and cluster zero; origin and time of the inconsistent deletion are unknown.",
+        "Interactive repair of those two records was recommended, with source VMU files preserved and follow-up verification before retry."
+      ]
+    },
+    {
+      "build": "941ea939c1bb",
+      "date": "2026-10-17",
+      "outcome": "persistent_preparation_incoming_fat_refusal",
+      "source_images": [
+        "image-1792292664153.jpg"
+      ],
+      "failure_phase": "source allocation / exclusive ownership",
+      "status": -9,
+      "detail": 110,
+      "reads": 1175,
+      "last_lba": "0x0000320f",
+      "boot": {
+        "flags": "0x0000",
+        "revision": "0x0100",
+        "zero_or": 0,
+        "sector_shift": 9,
+        "cluster_shift": 8,
+        "fat_count": 1,
+        "partition_offset": 2048,
+        "volume_sectors": 249997312,
+        "reject_mask": "0x00"
+      },
+      "profile_exported": false,
+      "cause": "unexpected incoming raw FAT word targeting an owned VMU allocation; source ownership not captured",
+      "limits": [
+        "Boot admission now passes with the main dirty flag cleared.",
+        "The earlier guard conservatively treats external stale exFAT FAT words as possible incoming links.",
+        "This photograph does not identify whether this particular source word belongs to a live chain, an unused cluster, or a NoFatChain allocation.",
+        "The replacement proof must inspect every live FAT-chain owner and retain bitmap, exact-tail and target-overlap protection; no SD runtime writer is enabled."
+      ]
     }
   ]
 }

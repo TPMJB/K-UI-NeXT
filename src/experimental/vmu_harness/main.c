@@ -586,6 +586,12 @@ static void persist_log_u64(const char *label,uint64_t value) {
     kui_log("%s %08lx:%08lx",label,(unsigned long)(uint32_t)(value>>32),
         (unsigned long)(uint32_t)value);
 }
+static void persist_log_scan(const struct kui_vmu_fs_stats *stats) {
+    kui_log("SCAN CHAIN %lu FAT %lu",(unsigned long)stats->chain_steps,
+        (unsigned long)stats->fat_entries);
+    kui_log("SCAN DIR %lu ENTRIES %lu TARGETS %lu",(unsigned long)stats->directory_sectors,
+        (unsigned long)stats->entries,(unsigned long)stats->target_clusters);
+}
 static bool persist_fs_result(int status,const char *phase,const struct kui_vmu_fs_input *input) {
     if(!status) return true;
     /* These are the exact VBR bytes captured by the refusing scan, rather
@@ -593,7 +599,36 @@ static bool persist_fs_result(int status,const char *phase,const struct kui_vmu_
     const struct kui_vmu_fs_stats *stats=&persist_workspace.stats;
     kui_log("FS %s STATUS %d DETAIL %lu",phase,status,(unsigned long)stats->detail);
     kui_log("FS LBA %08lx READS %lu",(unsigned long)stats->last_lba,(unsigned long)stats->reads);
+    if(stats->link.valid) {
+        const struct kui_vmu_fs_link_diagnostics *link=&stats->link;
+        const char *role=link->target_role==KUI_VMU_PERSIST_BASE?"BASE":
+            link->target_role==KUI_VMU_PERSIST_JOURNAL?"JOURNAL":
+            link->target_role==KUI_VMU_PERSIST_IDENTITY?"IDENTITY":"NONE";
+        const char *kind=link->source_kind==KUI_VMU_FS_LINK_LIVE_EXFAT_FILE?"LIVE EXFAT FILE":
+            link->source_kind==KUI_VMU_FS_LINK_FAT32_TABLE?"FAT32 TABLE":"UNKNOWN";
+        const char *allocation=link->source_allocated==0u?"FREE":link->source_allocated==1u?"ALLOCATED":"N/A";
+        const char *decision=link->decision==KUI_VMU_FS_LINK_TARGET?"TARGET CROSSLINK":
+            link->decision==KUI_VMU_FS_LINK_BITMAP_FREE?"BITMAP FREE":
+            link->decision==KUI_VMU_FS_LINK_MALFORMED?"MALFORMED CHAIN":
+            link->decision==KUI_VMU_FS_LINK_LIMIT?"WALK LIMIT":"UNKNOWN";
+        kui_log("LINK SRC %08lx TARGET %08lx",(unsigned long)link->source_cluster,
+            (unsigned long)link->target_cluster);
+        kui_log("LINK ROLE %s (%08lx)",role,(unsigned long)link->target_role);
+        kui_log("SOURCE %s ALLOC %s",kind,allocation);
+        kui_log("DECISION %lu %s",(unsigned long)link->decision,decision);
+        kui_log("FAT LBA %08lx WORD %08lx VALID %lu",(unsigned long)link->fat_lba,
+            (unsigned long)link->raw_word,(unsigned long)link->word_valid);
+        persist_log_scan(stats);
+        if(stats->boot.valid) kui_log("BOOT GATE MASK %02lx",(unsigned long)stats->boot.reject_mask);
+        return false;
+    }
     if(!stats->boot.valid) {kui_log("BOOT DIAG: EXFAT FIELDS UNAVAILABLE");return false;}
+    if(!stats->boot.reject_mask) {
+        kui_log("BOOT GATE MASK 00");
+        kui_log("ALLOC LAST CLUSTER %08lx ROLE %08lx",(unsigned long)stats->last_cluster,
+            (unsigned long)stats->last_role);
+        persist_log_scan(stats);return false;
+    }
     kui_log("EXFAT FLAGS %04lx REV %04lx ZERO53 %02lx",(unsigned long)stats->boot.flags,
         (unsigned long)stats->boot.revision,(unsigned long)stats->boot.zero_or);
     kui_log("EXFAT SHIFTS BYTE %lu CLUSTER %lu FATS %lu",(unsigned long)stats->boot.sector_shift,
@@ -628,6 +663,7 @@ static bool export_persistent_profile(void) {
     if(path_bytes<=0 || (size_t)path_bytes>=sizeof(pair_path)) {fail("preparation source path");goto finished;}
     input.pair_path=pair_path;
     if(!disconnect_volume() || !persist_open_raw(&input)) goto finished;
+    kui_log("Checking file allocation; keep power on.");
     if(!persist_fs_result(kui_vmu_fs_collect(&input,&persist_profile,&persist_workspace),
         "SOURCE",&input)) goto finished;
     persist_raw.profile=&persist_profile;
@@ -679,6 +715,7 @@ static bool export_persistent_profile(void) {
     /* Profile allocation itself changed filesystem metadata. Re-prove full
      * namespace ownership on a fresh connection AFTER that allocation, then
      * compare all source contents and the exactzero journal marker afresh. */
+    kui_log("Rechecking allocation and source bytes; keep power on.");
     if(!persist_open_raw(&input) ||
        !persist_fs_result(kui_vmu_fs_collect(&input,&persist_verify,&persist_workspace),
            "FINAL",&input) ||

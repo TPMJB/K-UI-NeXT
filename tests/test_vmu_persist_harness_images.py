@@ -188,9 +188,40 @@ def exfat_zero_partition_offset(image, first, baseline_wire, baseline_files):
     assert zero_wire == baseline_wire and zero_files == baseline_files
 
 
+def exfat_stale_fat_words(image, wire, files):
+    """Free/NoFatChain FAT entries do not describe live allocation links."""
+    assert struct.unpack_from("<I", wire, 288)[0] == 2
+    spc = struct.unpack_from("<I", wire, 296)[0]
+    data_first = struct.unpack_from("<Q", wire, 328)[0]
+    clusters = struct.unpack_from("<I", wire, 336)[0]
+    bitmap_first = struct.unpack_from("<I", wire, 352)[0]
+    bitmap_bytes = struct.unpack_from("<Q", wire, 360)[0]
+    # The actual mkfs fixture's bitmap fits one cluster, so this direct
+    # fixture edit does not assume any unverified fragmented bitmap mapping.
+    assert bitmap_bytes <= spc * 512
+    bitmap_offset = (data_first + (bitmap_first - 2) * spc) * 512
+    bitmap = read_at(image, bitmap_offset, bitmap_bytes)
+    free_cluster = next(cluster for cluster in range(clusters + 1, 1, -1)
+                        if not bitmap[(cluster - 2) // 8] & (1 << ((cluster - 2) & 7)))
+    base_cluster, base_flags = struct.unpack_from("<II", wire, 512 + 8)
+    assert base_flags & 2, "actual base fixture must use NoFatChain"
+    assert bitmap[(base_cluster - 2) // 8] & (1 << ((base_cluster - 2) & 7))
+    journal_cluster = struct.unpack_from("<I", wire, 512 + 448 + 8)[0]
+    fat_first = struct.unpack_from("<Q", wire, 312)[0]
+    stale = struct.pack("<I", journal_cluster)
+    offsets = [(fat_first * 512 + cluster * 4) for cluster in (free_cluster, base_cluster)]
+    for offset in offsets:
+        change_at(image, offset, stale)
+    _, changed_wire, changed_files = exported(image, run(PREP, image, "export-persist"))
+    assert changed_wire == wire and changed_files == files
+    assert all(read_at(image, offset, 4) == stale for offset in offsets)
+    assert not read_at(image, bitmap_offset + (free_cluster - 2) // 8, 1)[0] & (1 << ((free_cluster - 2) & 7))
+
+
 def exercise(image, partition_first=0):
     before_diagnostics = digest(image)
     run(PREP, image, "prep-boot-diagnostics")
+    run(PREP, image, "prep-allocation-diagnostics")
     assert digest(image) == before_diagnostics, "boot diagnostic formatting performed I/O"
     path1, wire1, files1 = exported(image, run(PREP, image, "export-persist"), partition_first)
     path2, wire2, files2 = exported(image, run(PREP, image, "export-persist"), partition_first)
@@ -229,6 +260,11 @@ def main():
             change_at(image, logical_lba(wire, 0, 253) * 512 + 4, b"USER SAVE   ")
             _, named_wire, named_files = exported(image, run(PREP, image, "export-persist"))
             assert named_files[0] != files[0] and named_wire[88:120] != wire[88:120]
+            if kind == "exfat":
+                stale = base / "exfat-stale-fat.img"
+                shutil.copyfile(image, stale)
+                exfat_stale_fat_words(stale, named_wire, named_files)
+                print("PASS exfat: stale free/NoFatChain FAT words pointing at journal are ignored; source bytes and stale words unchanged", flush=True)
             checker = "fsck.fat" if kind == "fat32" else "fsck.exfat"
             run(checker, "-n", image)
             for refusal in ("dirty-marker", "valid-old-marker", "bad-identity", "bad-vmu", "crosslink"):

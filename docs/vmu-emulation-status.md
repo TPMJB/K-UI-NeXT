@@ -277,6 +277,16 @@ display the exact captured boot fields and rejection bits on short rows, with
 no extra media reads. The photograph alone does not establish which field
 caused that first refusal.
 
+A second `941ea939c1bb` capture showed the current dirty flag cleared and boot
+admission passing. Its status -9/detail 110 came from the conservative raw FAT
+incoming-link scan. A raw exFAT FAT word is not a live reference merely because
+it contains a VMU cluster number: contiguous allocations do not interpret FAT
+entries, and stale words may survive past allocations. The exFAT ownership
+proof now traverses all live FAT-chained regular files with exact tails,
+allocation-bit checks and target exclusions, alongside the existing directory,
+system and contiguous-range checks. FAT32's incoming-link scan is retained.
+The captured refusal did not identify which live or stale source triggered it.
+
 ## Work required before in-game saves
 
 1. Prove exact game-side Maple ownership before submission and before the

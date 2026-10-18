@@ -21,6 +21,7 @@ static struct {
     uint32_t fat[FS_CLUSTERS+2u];
     unsigned calls,fail_at;
     uint32_t partition;
+    unsigned generated_files,generated_chain_clusters,generated_root_clusters;
 } disk;
 static void p16(uint8_t *p,unsigned value) {p[0]=(uint8_t)value;p[1]=(uint8_t)(value>>8);}
 static void p32(uint8_t *p,uint32_t value) {p16(p,value&65535u);p16(p+2u,value>>16);}
@@ -66,6 +67,26 @@ static int read_sector(void *context,uint32_t sector,uint8_t out[512]) {
         unsigned start=(sector-FS_FAT)*128u;
         for(unsigned i=0;i<128u && start+i<FS_CLUSTERS+2u;i++) p32(out+i*4u,disk.fat[start+i]);
     } else {
+        if(disk.generated_files) {
+            unsigned cluster=(sector-FS_HEAP)/FS_SPC+2u,part=(sector-FS_HEAP)%FS_SPC;
+            unsigned logical=UINT32_MAX;
+            if(cluster==4u) logical=part;
+            else if(cluster>=880u && cluster<880u+disk.generated_root_clusters-1u)
+                logical=(cluster-880u+1u)*FS_SPC+part;
+            if(logical!=UINT32_MAX) {
+                for(unsigned i=0;i<16u;i++) {
+                    unsigned slot=logical*16u+i;
+                    if(slot<5u) memcpy(out+i*32u,disk.dirs[0]+slot*32u,32u);
+                    else if((slot-5u)/3u<disk.generated_files) {
+                        uint8_t entry[96];char name[16];unsigned n=(slot-5u)/3u;
+                        snprintf(name,sizeof(name),"f%05u",n);
+                        file_entry(entry,name,32u,100u,(uint64_t)disk.generated_chain_clusters*4096u,1u);
+                        memcpy(out+i*32u,entry+((slot-5u)%3u)*32u,32u);
+                    }
+                }
+                return 0;
+            }
+        }
         if(sector==lba(2u)) memcpy(out,disk.bitmap,512u);
         if(sector==lba(3u)) memcpy(out,disk.upcase,512u);
         for(unsigned i=0;i<4u;i++) if(sector==lba(4u+i)) memcpy(out,disk.dirs[i],512u);
@@ -141,14 +162,14 @@ static void fragmented_map_and_exact_tail(void) {
     for(unsigned i=100u;i<115u;i++) {disk.fat[i]=i+1u;allocated(i,1);}
     allocated(115u,1);disk.fat[115u]=UINT32_MAX;
     assert(collect()==0 && disk.profile.files[0].allocated_count==2u);
-    disk.fat[120u]=100u;refusal();
+    disk.fat[120u]=100u;assert(collect()==0); /* Inactive exFAT word, not a live owner. */
     fresh();file_entry(disk.dirs[3]+96u,"card.journal",32u,60u,1024u,1u);
     disk.fat[60u]=62u;disk.fat[62u]=UINT32_MAX;allocated(62u,1);refusal();
 }
 static void crosslinks_bitmap_metadata_and_attributes(void) {
     fresh();file_entry(disk.dirs[0]+160u,"alias",32u,59u,8192u,3u);allocated(59u,1);refusal();
     fresh();file_entry(disk.dirs[0]+160u,"alias",32u,21u,16u,1u);refusal();
-    fresh();disk.fat[100u]=60u;refusal();
+    fresh();disk.fat[100u]=60u;assert(collect()==0); /* Free cluster's old word. */
     for(unsigned cluster=2u;cluster<=7u;cluster++) {fresh();allocated(cluster,0);refusal();}
     fresh();allocated(60u,0);refusal();
     fresh();p64(disk.dirs[3]+96u+40u,1023u);entry_checksum(disk.dirs[3]+96u);refusal();
@@ -204,10 +225,82 @@ static void exfat_partition_offset_and_stale_backup_flags(void) {
     fresh();disk.boot[0][11u]=0x40u;refusal();
     assert(disk.work.stats.boot.reject_mask==KUI_VMU_FS_BOOT_ZERO && disk.work.stats.boot.zero_or==0x40u);
 }
+static void positive_live_fat_stream_ownership(void) {
+    fresh();disk.fat[100u]=60u;assert(collect()==0 && !disk.work.stats.link.valid);
+    fresh();allocated(100u,1);disk.fat[100u]=60u;assert(collect()==0); /* Allocated orphan has no live stream. */
+    fresh();allocated(100u,1);allocated(101u,1);disk.fat[100u]=60u;
+    file_entry(disk.dirs[0]+160u,"contiguous",32u,100u,8192u,3u);
+    assert(collect()==0); /* NoFatChain's FAT contents are undefined. */
+    fresh();allocated(100u,1);disk.fat[100u]=60u;
+    file_entry(disk.dirs[0]+160u,"live",32u,100u,8192u,1u);refusal();
+    assert(disk.work.stats.detail==110u && disk.work.stats.link.valid);
+    assert(disk.work.stats.link.source_cluster==100u && disk.work.stats.link.target_cluster==60u);
+    assert(disk.work.stats.link.target_role==KUI_VMU_PERSIST_JOURNAL && disk.work.stats.link.source_allocated==1u);
+    assert(disk.work.stats.link.raw_word==60u && disk.work.stats.link.word_valid==1u);
+    assert(disk.work.stats.link.fat_lba==FS_FAT && disk.work.stats.link.decision==KUI_VMU_FS_LINK_TARGET);
+    fresh();disk.fat[100u]=60u;
+    file_entry(disk.dirs[0]+160u,"live",32u,100u,8192u,1u);refusal();
+    assert(disk.work.stats.detail==70u && disk.work.stats.link.source_allocated==0u);
+    assert(!disk.work.stats.link.word_valid && disk.work.stats.link.decision==KUI_VMU_FS_LINK_BITMAP_FREE);
+    fresh();allocated(99u,1);disk.fat[99u]=100u;disk.fat[100u]=60u;
+    file_entry(disk.dirs[0]+160u,"middlefree",32u,99u,12288u,1u);refusal();
+    assert(disk.work.stats.detail==70u && disk.work.stats.link.source_cluster==100u);
+    assert(!disk.work.stats.link.source_allocated && !disk.work.stats.link.word_valid);
+    /* A NoFatChain claim must never hide a distinct live chained file
+     * reaching that same cluster and then the journal. */
+    fresh();for(unsigned i=99u;i<=101u;i++) allocated(i,1);
+    file_entry(disk.dirs[0]+160u,"contiguous",32u,100u,8192u,3u);
+    file_entry(disk.dirs[0]+256u,"live",32u,99u,12288u,1u);
+    disk.fat[99u]=100u;disk.fat[100u]=60u;refusal();assert(disk.work.stats.detail==110u);
+    fresh();file_entry(disk.dirs[0]+160u,"fragmented",32u,100u,12288u,1u);
+    allocated(100u,1);allocated(102u,1);allocated(104u,1);
+    disk.fat[100u]=102u;disk.fat[102u]=104u;disk.fat[104u]=UINT32_MAX;
+    assert(collect()==0 && disk.work.stats.chain_steps==3u);
+    fresh();file_entry(disk.dirs[0]+160u,"empty",32u,0u,0u,1u);assert(collect()==0);
+    file_entry(disk.dirs[0]+160u,"empty",32u,100u,0u,1u);refusal();
+    for(unsigned kind=0;kind<3u;kind++) {
+        fresh();allocated(100u,1);allocated(101u,1);
+        file_entry(disk.dirs[0]+160u,"badchain",32u,100u,kind==0u?8192u:kind==1u?4096u:12288u,1u);
+        disk.fat[100u]=kind==0u?UINT32_MAX:101u;
+        disk.fat[101u]=kind==2u?100u:UINT32_MAX;
+        refusal();assert(disk.work.stats.link.decision==KUI_VMU_FS_LINK_MALFORMED);
+    }
+}
+static void positive_live_chain_budgets(void) {
+    for(unsigned random=0;random<2u;random++) {
+        fresh();disk.generated_files=random?200u:6000u;
+        disk.generated_chain_clusters=random?736u:768u;
+        unsigned slots=5u+disk.generated_files*3u+1u;
+        disk.generated_root_clusters=((slots+15u)/16u+FS_SPC-1u)/FS_SPC;
+        disk.fat[4u]=880u;
+        for(unsigned i=0;i<disk.generated_root_clusters-1u;i++) {
+            unsigned cluster=880u+i;allocated(cluster,1);
+            disk.fat[cluster]=i+1u<disk.generated_root_clusters-1u?cluster+1u:UINT32_MAX;
+        }
+        if(random) {
+            /* Alternate distant FAT sectors for a real read-budget refusal. */
+            for(unsigned i=0;i<368u;i++) {
+                allocated(100u+i,1);allocated(500u+i,1);
+                disk.fat[100u+i]=500u+i;disk.fat[500u+i]=i+1u<368u?101u+i:UINT32_MAX;
+            }
+        } else for(unsigned i=0;i<768u;i++) {
+            allocated(100u+i,1);disk.fat[100u+i]=i+1u<768u?101u+i:UINT32_MAX;
+        }
+        refusal();assert(disk.work.stats.result==KUI_VMU_FS_LIMIT);
+        if(random) {
+            assert(disk.work.stats.detail==1u && disk.work.stats.reads==KUI_VMU_FS_MAX_READS);
+            assert(disk.work.stats.chain_steps<KUI_VMU_FS_MAX_CHAIN_STEPS);
+        } else {
+            assert(disk.work.stats.detail==131u && disk.work.stats.chain_steps==KUI_VMU_FS_MAX_CHAIN_STEPS);
+            assert(disk.work.stats.link.decision==KUI_VMU_FS_LINK_LIMIT);
+        }
+    }
+}
 int main(void) {
     valid_contiguous_and_fresh_comparison();fragmented_map_and_exact_tail();
     crosslinks_bitmap_metadata_and_attributes();malformed_sets_boot_and_io();
     exfat_partition_offset_and_stale_backup_flags();
+    positive_live_fat_stream_ownership();positive_live_chain_budgets();
     puts("VMU filesystem admission: exFAT live maps, full allocation, bitmap/directory ownership, crosslinks, metadata and I/O refusals passed");
     return 0;
 }

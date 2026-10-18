@@ -8,6 +8,7 @@
 #define KUI_VMU_FS_MAX_DIRECTORY_SECTORS 4096u
 #define KUI_VMU_FS_MAX_DIRECTORY_CLUSTERS 8192u
 #define KUI_VMU_FS_MAX_FAT_ENTRIES 4194304u
+#define KUI_VMU_FS_MAX_CHAIN_STEPS 4194304u
 #define KUI_VMU_FS_MAX_READS 70000u
 #define KUI_VMU_FS_WORK_BYTES 49152u
 
@@ -51,12 +52,29 @@ struct kui_vmu_fs_boot_diagnostics {
     uint64_t partition_offset,volume_sectors;
     uint32_t revision,flags,sector_shift,cluster_shift,fat_count,zero_or;
 };
+enum kui_vmu_fs_link_source {KUI_VMU_FS_LINK_LIVE_EXFAT_FILE=1u,KUI_VMU_FS_LINK_FAT32_TABLE=2u};
+enum kui_vmu_fs_link_decision {
+    KUI_VMU_FS_LINK_TARGET=1u,KUI_VMU_FS_LINK_BITMAP_FREE=2u,
+    KUI_VMU_FS_LINK_MALFORMED=3u,KUI_VMU_FS_LINK_LIMIT=4u
+};
+/* Captured only on a chain refusal; FAT/bitmap reads may subsequently change
+ * last_lba, so fat_lba explicitly identifies the inspected word. raw_word is
+ * meaningful only when word_valid=1. source_allocated is0/1, orUINT32_MAX for
+ * FAT32 without a bitmap; target_role isUINT32_MAX when there is no target. */
+struct kui_vmu_fs_link_diagnostics {
+    uint32_t valid,source_cluster,target_cluster,target_role;
+    uint32_t source_allocated,source_kind,decision,fat_lba,raw_word,word_valid;
+};
 struct kui_vmu_fs_stats {
     uint32_t reads,directory_sectors,entries,directory_clusters,fat_entries;
     uint32_t target_clusters,last_lba,last_cluster,last_role;
     int32_t result;
     uint32_t detail;
     struct kui_vmu_fs_boot_diagnostics boot;
+    /* Aggregate non-target live exFAT regular FAT-stream steps. Directory,
+     * system and owned-file walks retain their separate smaller bounds. */
+    uint32_t chain_steps;
+    struct kui_vmu_fs_link_diagnostics link;
 };
 /* Exclusive caller-owned scratch, zeroed by each API. Internal storage has
  * max_align_t alignment; it is never retained after return. Diagnostics remain
