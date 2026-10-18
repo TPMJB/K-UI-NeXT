@@ -578,7 +578,10 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
         increment(&s->proof_bank_fail);proof_stop(UINT32_C(0x10000));return;
     }
 #if KUI_VMU_READONLY_PROOF == 3
-    if(chain_state!=CHAIN_IDLE && chain_state!=CHAIN_RESTORED) {
+    /* The trampoline restores inherited SR before its one original MDST
+     * store. Holly IRQ levels 6/4/2 must remain masked during that handoff. */
+    if(((inherited_sr>>4)&15u)<6u ||
+       (chain_state!=CHAIN_IDLE && chain_state!=CHAIN_RESTORED)) {
         chain_fail(UINT32_C(0x200000));return;
     }
 #endif

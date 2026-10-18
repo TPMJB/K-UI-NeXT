@@ -162,10 +162,27 @@ static void full_cache_refuses_before_dma(void) {
     assert(!memcmp(saved_media,sd.media,sizeof(saved_media)));
 }
 
+static void inherited_mask_guards_hardware_handoff(void) {
+    for(unsigned mask=0;mask<16u;mask++) {
+        reset();build(0u,9u,11u,2u,0x02000000u,42u<<24);preserve();
+        kui_vmu_maple_observer_visit(UINT32_C(0x60000101)|(mask<<4));unchanged();
+        if(mask<6u) {
+            assert(stops==1u && !mdstar_writes && !snapshot->chain_switched);
+            assert(snapshot->chain_faults==1u && !snapshot->proof_prepared);
+            assert(!snapshot->ram_write_phases && !sd.lease_calls);
+        } else {
+            assert(!stops && mdstar_writes==1u && snapshot->chain_switched==1u);
+            filtered_chain(4u);physical_complete(9u);preserve();complete();
+            success_bytes(524u);assert(!stops && snapshot->chain_restored==1u);
+        }
+    }
+}
+
 int main(void) {
     filtered_writes_and_ram_load();failed_completion_preserves_rx_and_ram();
     strict_physical_whitelist_and_stale_virtual_slot();
     full_cache_refuses_before_dma();
+    inherited_mask_guards_hardware_handoff();
     puts("VMU volatile worker: private physical-only DMA, original source restore, RAM save/load, immutable SD and fail-closed completion guards passed");
     return 0;
 }
