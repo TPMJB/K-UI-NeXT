@@ -11,14 +11,18 @@
 #include "retail_storage.h"
 #include "retail_display.h"
 #include "kui/vmu_maple_observe_io.h"
+#if KUI_VMU_READONLY_PROOF != 2
 static void observe_display_restore(const struct retail_display_state *);
+#endif
 #define kui_retail_storage_acquire(...) \
     KUI_VMU_OBSERVE_IO_ACQUIRE(service.diag.read_flags, \
         kui_retail_storage_acquire(__VA_ARGS__))
 #define kui_retail_image_read(...) \
     KUI_VMU_OBSERVE_IO_IMAGE(service.diag.read_flags, \
         kui_retail_image_read(__VA_ARGS__))
+#if KUI_VMU_READONLY_PROOF != 2
 #define retail_display_restore observe_display_restore
+#endif
 #define kui_retail_resident_init kui_vmu_observe_base_init
 #include "retail_resident.c"
 #undef kui_retail_resident_init
@@ -36,6 +40,11 @@ static void observe_display_restore(const struct retail_display_state *);
 #error Observer I/O telemetry requires the standard native diagnostic fields
 #endif
 
+#if KUI_VMU_READONLY_PROOF != 2
+/* The SD-backed worker has its own storage diagnostics. Keep these optional
+ * extra native-GD rows in the passive/blank-card modes: mode2 needs their low
+ * code bytes and C frame for the shared lease and restoration checks. The
+ * ordinary native fault page remains present in every mode. */
 static void observe_display_restore(const struct retail_display_state *state) {
     retail_display_restore(state);
     if(service.error != KUI_GD_ERROR_IO) return;
@@ -61,6 +70,7 @@ static void observe_display_restore(const struct retail_display_state *state) {
     retail_display_values("ACQ SD IMAGE REQLBA REQCOUNT",row,5u);
     retail_display_values("DEST DONE BOOTERR LEASE CCR",row+5,5u);
 }
+#endif
 
 static uint8_t *observe_map(void *context,uint32_t address,uint32_t bytes,int writing) {
     if(!kui_vmu_toy_observe_destination(address,bytes)) return NULL;
@@ -89,7 +99,14 @@ void kui_vmu_observe_low_failure(void) {
         ((void (*)(void))(uintptr_t)terminal)();
     retail_display_restore(&display);
     retail_display_line("TOY MAPLE OBSERVER STOPPED");
+#if KUI_VMU_READONLY_PROOF == 2
+    /* Terminal state is immutable under the masked failure entry. These four
+     * P2 words are already adjacent; avoid a diagnostic-only stack copy. */
+    retail_display_values("STATE LEASE ERROR HEAP",
+        (const uint32_t *)(uintptr_t)&c->status,4u);
+#else
     retail_display_values("STATE ERROR LEASE HEAP",(uint32_t[4]){
         c->status,c->error,c->lease,c->heap_begin},4u);
+#endif
     for(;;) __asm__ volatile("nop");
 }
