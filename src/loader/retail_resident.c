@@ -4,7 +4,7 @@
 #include "kui/retail_image.h"
 #if KUI_RETAIL_ZSO
 #include "kui/retail_zso.h"
-#if KUI_ZSO_CODECS != 1 && KUI_ZSO_CODECS != 2
+#if KUI_ZSO_CODECS != 1 && KUI_ZSO_CODECS != 2 && KUI_ZSO_CODECS != 4
 #error Detached compressed resident must admit exactly one explicit codec
 #endif
 #if defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_ASYNC) || KUI_RETAIL_TRANSPORT != 1 || !KUI_RETAIL_LOW_RESIDENT || KUI_RETAIL_TOY_PILOT || KUI_RETAIL_MDK2_CDDA
@@ -366,10 +366,10 @@ static void ce_trace(unsigned earlier) {
         retail_display_values("EARLIER",ce_calls[(ce_count-1u-i)&3u],4);
 }
 #endif
-#if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC) && !KUI_RETAIL_OBSERVE
 /* retail_display_values uses alias-qualified reads of these aligned words. */
 #define terminal_row(legend, snapshot, count) \
     retail_display_values((legend), (const uint32_t *)(const void *)(snapshot), (count))
+#if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC) && !KUI_RETAIL_OBSERVE && !(KUI_RETAIL_ZSO && KUI_ZSO_CODECS == 4)
 #if KUI_RETAIL_RETURN_TRACE != 3
 static void capture_native_fault(uint32_t function, uint32_t current_param) {
 #if KUI_RETAIL_RETURN_TRACE >= 2
@@ -420,6 +420,23 @@ static void capture_native_fault(uint32_t function, uint32_t current_param) {
 #if KUI_RETAIL_OBSERVE
 static void report_fault(const char *reason,uint32_t function,uint32_t param) {
     observe_fault_report(reason,function,param);
+    for(;;) __asm__ volatile("nop");
+}
+#elif KUI_RETAIL_ZSO && KUI_ZSO_CODECS == 4
+/* CSO keeps the same protected memory and stack budgets. A terminal storage
+ * failure retains actionable request/error data without walking owner RAM. */
+static void report_fault(const char *reason,uint32_t function,uint32_t param) {
+    retail_display_restore(&display);
+    retail_display_line("K-UI CSO READER");
+    retail_display_line(RETAIL_MANIFEST->title);
+    retail_display_line(reason);
+    typedef uint32_t terminal_word __attribute__((__may_alias__));
+    terminal_word *terminal=(terminal_word *)(void *)image.block;
+    terminal[0]=function;terminal[1]=param;
+    terminal[2]=(uint32_t)card_result;terminal[3]=service.diag.reject_reason;
+    retail_display_values("FN PARAM CARD REJECT",terminal,4);
+    retail_display_values("CMD LBA COUNT DEST",&service.diag.last_command,4);
+    retail_display_line("STOPPED: PHOTO SCREEN / POWER CYCLE");
     for(;;) __asm__ volatile("nop");
 }
 #else
@@ -598,6 +615,12 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack
     retail_display_pause(1200u);
     ((void (*)(void))(uintptr_t)0xa0000000u)();
     for(;;) __asm__ volatile("nop");
+#elif KUI_RETAIL_ZSO && KUI_ZSO_CODECS == 4
+    /* Normal CSO menu return reboots directly through ROM. Terminal read
+     * faults keep the screen above; optional return-counter pages do not
+     * occupy this codec's fixed resident reservation. Interrupts stay masked. */
+    ((void (*)(void))(uintptr_t)0xa0000000u)();
+    for(;;) __asm__ volatile("nop");
 #else
 #if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
     /* The return path never resumes game I/O. Capture its terminal fields
@@ -772,10 +795,19 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
         return KUI_RETAIL_RESIDENT_ARGUMENT;
     mdk2_manifest=prepared;
 #elif KUI_RETAIL_ZSO
-    /* Both separately linked images use the same32-slot prefix/wrapper.
-     * Validate before copying; retain no pointer into temporary stage RAM. */
+    /* Each compressed high stage fully validates its typed map, source index
+     * and owner CRCs before calling this entry. Retain no temporary pointer. */
     const struct kui_retail_zso_manifest *compressed=(const struct kui_retail_zso_manifest *)(const void *)prepared;
+#if KUI_ZSO_CODECS == 4
+    /* Like the ordinary resident above, the CSO resident receives an already
+     * validated immutable map. Keep admission here bounded to its exact
+     * runtime profile; full string/extents/boot checks belong to high stage. */
+    if(prepared->track_count!=1u || prepared->extent_count>KUI_RETAIL_ZSO_EXTENTS ||
+       prepared->storage_transport!=KUI_STORAGE_SCI || prepared->reader!=KUI_RETAIL_READER_STANDARD ||
+       compressed->zso.codec!=KUI_ZSO_DEFLATE)return KUI_RETAIL_RESIDENT_MAP;
+#else
     if(kui_retail_zso_manifest_validate(compressed)!=KUI_GAME_OK)return KUI_RETAIL_RESIDENT_MAP;
+#endif
     zso_manifest=*compressed;
 #else
     manifest = *prepared;

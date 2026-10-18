@@ -53,10 +53,10 @@ struct kui_games_detail {
      * images remain experimental. With music Off, CD audio is silent.
      * Bare ISO/raw files do not reveal the original audio-track inventory. */
     bool native_gd, native_cd, windows_ce, scrambled, cd_image;
-    /* Explicit inspection capability: native ZSO on a supported SCI path.
+    /* Explicit inspection capability: native ZSO/CSO on a supported SCI path.
      * Valid metadata alone never grants compressed-image launch support. */
     bool zso_launch;
-    unsigned zso_codec; /* Explicit decoder used by inspection, including errors. */
+    unsigned zso_codec; /* Decoder used by inspection; CSO automatically uses DEFLATE. */
     enum kui_game_image_format format;
     bool cover; /* Large box art was loaded for this image. */
 };

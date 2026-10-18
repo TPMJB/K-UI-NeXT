@@ -52,7 +52,7 @@ static int sync_image(void *ctx) {
 }
 static const struct kui_media_ops media = {NULL, blocks, read_image, write_image, sync_image};
 unsigned kui_storage_active(void) {
-    return !strcmp(test.fault,"inspect-zso-sci") || !strcmp(test.fault,"inspect-zso-ce") || !strcmp(test.fault,"inspect-zso-lzo")?
+    return !strcmp(test.fault,"inspect-zso-sci") || !strcmp(test.fault,"inspect-zso-ce") || !strcmp(test.fault,"inspect-zso-lzo") || !strcmp(test.fault,"inspect-cso-sci") || !strcmp(test.fault,"inspect-cso-ce")?
         KUI_STORAGE_SCI:KUI_STORAGE_SCIF;
 }
 bool kui_sd_connect(void) {
@@ -469,12 +469,13 @@ static void seed_formats(const char *host) {
 }
 static void seed(const char *host) {
     if(!strncmp(test.fault,"sort-",5)) {seed_ordering(host);return;}
-    if(!strncmp(test.fault,"inspect-zso-",12)) {
+    if(!strncmp(test.fault,"inspect-zso-",12) || !strncmp(test.fault,"inspect-cso-",12)) {
         assert(f_mkdir("0:/Games")==FR_OK && f_mkdir(folder)==FR_OK);
-        char path[1024];assert(snprintf(path,sizeof(path),"%s/selected.zso",host)<(int)sizeof(path));
+        bool cso=!strncmp(test.fault,"inspect-cso-",12);
+        char path[1024];assert(snprintf(path,sizeof(path),"%s/selected.%s",host,cso?"cso":"zso")<(int)sizeof(path));
         FILE *file=fopen(path,"rb");assert(file);uint8_t data[200000];
         size_t bytes=fread(data,1,sizeof(data),file);assert(bytes<sizeof(data) && !ferror(file) && !fclose(file));
-        write_file("0:/Games/Reader Test/selected.zso",data,bytes);return;
+        write_file(cso?"0:/Games/Reader Test/selected.cso":"0:/Games/Reader Test/selected.zso",data,bytes);return;
     }
     if(!strncmp(test.fault,"format-",7)) {seed_formats(host);return;}
     if(!strncmp(test.fault,"variant-",8)) {seed_variants(host);return;}
@@ -892,6 +893,7 @@ static void check_formats(void) {
             char path[96];snprintf(path,sizeof(path),"/Games/%s",names[i]);struct kui_games_detail detail;
             assert(!kui_games_inspect(path,&detail,log_line,cancel) && !detail.valid && !detail.stopped);
             if(i==1) assert(strstr(detail.message,"selected codec") && strstr(detail.message,"LZ4 or LZO1X"));
+            else if(i==0) assert(strstr(detail.message,"Invalid track length"));
             else assert(strstr(detail.message,"offline import") && strstr(detail.message,"direct launch unavailable"));
         }
         assert(!test.read_calls);return;
@@ -1008,16 +1010,18 @@ static void check_ordering(void) {
 }
 static void check(void) {
     if(!strncmp(test.fault,"sort-",5)) {check_ordering();return;}
-    if(!strncmp(test.fault,"inspect-zso-",12)) {
+    if(!strncmp(test.fault,"inspect-zso-",12) || !strncmp(test.fault,"inspect-cso-",12)) {
         struct kui_games_page page;
         assert(kui_games_list("/Games",0,&page,log_line,cancel) && page.count==1 && !page.entries[0].directory);
-        assert(!strcmp(page.entries[0].path,"/Games/Reader Test/selected.zso"));
+        bool cso=!strncmp(test.fault,"inspect-cso-",12);
+        assert(!strcmp(page.entries[0].path,cso?"/Games/Reader Test/selected.cso":"/Games/Reader Test/selected.zso"));
         struct kui_games_detail detail;bool lzo=!strcmp(test.fault,"inspect-zso-lzo");
         if(lzo)assert(!kui_games_inspect(page.entries[0].path,&detail,log_line,cancel) && !detail.valid);
         assert(kui_games_inspect_codec(page.entries[0].path,lzo?KUI_ZSO_LZO1X:KUI_ZSO_LZ4,&detail,log_line,cancel));
-        assert(detail.zso_codec==(unsigned)(lzo?KUI_ZSO_LZO1X:KUI_ZSO_LZ4));
-        bool ce=!strcmp(test.fault,"inspect-zso-ce"),sci=!strcmp(test.fault,"inspect-zso-sci") || lzo;
-        assert(detail.valid && !detail.stopped && detail.format==KUI_GAME_IMAGE_ZSO && detail.zso_launch==sci);
+        assert(detail.zso_codec==(unsigned)(cso?KUI_ZSO_DEFLATE:lzo?KUI_ZSO_LZO1X:KUI_ZSO_LZ4));
+        bool ce=!strcmp(test.fault,"inspect-zso-ce") || !strcmp(test.fault,"inspect-cso-ce"),
+            sci=!strcmp(test.fault,"inspect-zso-sci") || !strcmp(test.fault,"inspect-cso-sci") || lzo;
+        assert(detail.valid && !detail.stopped && detail.format==(cso?KUI_GAME_IMAGE_CSO:KUI_GAME_IMAGE_ZSO) && detail.zso_launch==sci);
         assert(detail.windows_ce==ce && !detail.cd_image && detail.tracks==1 && detail.data_tracks==1 && !detail.audio_tracks);
         assert(detail.boot_lba==45021u && detail.boot_bytes==3001u && detail.bytes && detail.bytes<64u*2048u);
         assert(!strcmp(detail.title,"Independent Games Fixture") && !strcmp(detail.boot_file,"1ST_READ.BIN"));

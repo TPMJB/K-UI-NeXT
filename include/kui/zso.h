@@ -13,12 +13,12 @@
 /* Explicit out-of-band selection: historical LZO1X and standard LZ4 files
  * share ZISO magic. No reader may infer a codec by retrying a failed block.
  * Detached builds admit exactly one decoder; ordinary host/runtime builds
- * admit both. These values also identify the separately typed launch maps. */
-enum kui_zso_codec { KUI_ZSO_LZ4 = 0, KUI_ZSO_LZO1X = 1 };
+ * admit all three. DEFLATE is selected only for CISO v1 CSO files. These values also identify the separately typed launch maps. */
+enum kui_zso_codec { KUI_ZSO_LZ4 = 0, KUI_ZSO_LZO1X = 1, KUI_ZSO_DEFLATE = 2 };
 #ifndef KUI_ZSO_CODECS
-#define KUI_ZSO_CODECS 3
+#define KUI_ZSO_CODECS 7
 #endif
-#if KUI_ZSO_CODECS < 1 || KUI_ZSO_CODECS > 3
+#if KUI_ZSO_CODECS < 1 || KUI_ZSO_CODECS > 7
 #error Invalid ZSO codec build mask
 #endif
 
@@ -48,7 +48,8 @@ enum kui_zso_result kui_zso_header_parse(const uint8_t header[KUI_ZSO_HEADER_BYT
 /* LZ4 requires standard version1/header24/reserved-zero geometry. LZO1X
  * additionally admits historical version0 and ignored header-size/reserved
  * fields; its physical index still begins at24. Other bounds are identical.
- * Existing header_parse remains the strict LZ4 default. */
+ * DEFLATE admits only CISO v1/header24/reserved-zero CSO with 2048-byte
+ * independent raw-DEFLATE blocks. Existing header_parse remains strict LZ4. */
 enum kui_zso_result kui_zso_header_parse_codec(const uint8_t header[KUI_ZSO_HEADER_BYTES],
     uint64_t file_bytes, enum kui_zso_codec codec, struct kui_zso_info *info);
 /* Bounded-page scan checks every offset, index exclusion and terminal/tail

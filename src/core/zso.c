@@ -3,6 +3,9 @@
 #if KUI_ZSO_CODECS & 2
 #include "kui/lzo1x.h"
 #endif
+#if KUI_ZSO_CODECS & 4
+#include "kui/deflate.h"
+#endif
 #include <string.h>
 
 /* Independent implementation of the ZSO container and LZ4 block formats:
@@ -18,7 +21,7 @@ static int valid(const struct kui_zso_info *info) {
         !(info->total_bytes % KUI_ZSO_BLOCK_BYTES) &&
         info->block_count == info->total_bytes / KUI_ZSO_BLOCK_BYTES &&
         info->index_bytes == (info->block_count + 1u) * 4u &&
-        info->shift <= KUI_ZSO_MAX_SHIFT && info->codec <= KUI_ZSO_LZO1X &&
+        info->shift <= KUI_ZSO_MAX_SHIFT && info->codec <= KUI_ZSO_DEFLATE &&
         (KUI_ZSO_CODECS & (1u << info->codec)) &&
         info->file_bytes >= KUI_ZSO_HEADER_BYTES + info->index_bytes;
 }
@@ -29,13 +32,13 @@ enum kui_zso_result kui_zso_header_parse(const uint8_t header[KUI_ZSO_HEADER_BYT
 enum kui_zso_result kui_zso_header_parse_codec(const uint8_t header[KUI_ZSO_HEADER_BYTES],
     uint64_t file_bytes, enum kui_zso_codec codec, struct kui_zso_info *info) {
     if(!header || !info) return KUI_ZSO_INVALID;
-    if((unsigned)codec > KUI_ZSO_LZO1X || !(KUI_ZSO_CODECS & (1u << codec)))
+    if((unsigned)codec > KUI_ZSO_DEFLATE || !(KUI_ZSO_CODECS & (1u << codec)))
         return KUI_ZSO_UNSUPPORTED;
-    if(memcmp(header, "ZISO", 4) || header[20] > 1u ||
-       (codec == KUI_ZSO_LZ4 && (little32(header + 4) != KUI_ZSO_HEADER_BYTES || header[20] != 1u)) ||
+    if(memcmp(header, codec == KUI_ZSO_DEFLATE ? "CISO" : "ZISO", 4) || header[20] > 1u ||
+       (codec != KUI_ZSO_LZO1X && (little32(header + 4) != KUI_ZSO_HEADER_BYTES || header[20] != 1u)) ||
        little32(header + 16) != KUI_ZSO_BLOCK_BYTES ||
        header[21] > KUI_ZSO_MAX_SHIFT) return KUI_ZSO_UNSUPPORTED;
-    if(codec == KUI_ZSO_LZ4 && (header[22] || header[23])) return KUI_ZSO_INVALID;
+    if(codec != KUI_ZSO_LZO1X && (header[22] || header[23])) return KUI_ZSO_INVALID;
     uint64_t total = (uint64_t)little32(header + 8) | (uint64_t)little32(header + 12) << 32;
     if(!total || total % KUI_ZSO_BLOCK_BYTES) return KUI_ZSO_INVALID;
     if(total > KUI_ZSO_MAX_BYTES || file_bytes > UINT32_MAX) return KUI_ZSO_RANGE;
@@ -144,6 +147,22 @@ enum kui_zso_result kui_zso_read_block(const struct kui_zso_info *info,
         return end - start - consumed < (1u << info->shift) ? KUI_ZSO_OK : KUI_ZSO_INVALID;
     }
 #endif
+#if KUI_ZSO_CODECS & 4
+    if(info->codec == KUI_ZSO_DEFLATE) {
+#if defined(KUI_RETAIL_ZSO) && KUI_RETAIL_ZSO && KUI_ZSO_CODECS == 4
+        /* Detached disc requests are serialized with interrupts guarded. Keep
+         * transient tables in resident BSS to preserve the IRQ stack budget;
+         * this profile is nonreentrant, like its physical sector cache. */
+        static struct kui_deflate_workspace workspace;
+#else
+        struct kui_deflate_workspace workspace;
+#endif
+        uint32_t consumed;
+        result = kui_deflate_decode(read, context, start, end, out, &workspace, &consumed);
+        if(result != KUI_ZSO_OK) return result;
+        return end - start - consumed < (1u << info->shift) ? KUI_ZSO_OK : KUI_ZSO_INVALID;
+    }
+#endif
 #if KUI_ZSO_CODECS & 1
     struct input input = {read, context, start, end};
     uint32_t done = 0, last_match = UINT32_MAX;
@@ -183,11 +202,11 @@ enum kui_zso_result kui_zso_read_block(const struct kui_zso_info *info,
 const char *kui_zso_result_name(enum kui_zso_result result) {
     switch(result) {
     case KUI_ZSO_OK: return "OK";
-    case KUI_ZSO_INVALID: return "Invalid block/header for selected ZSO codec";
-    case KUI_ZSO_UNSUPPORTED: return "Unsupported ZSO format or selected codec; independent 2048-byte blocks required";
-    case KUI_ZSO_IO: return "ZSO read failed";
+    case KUI_ZSO_INVALID: return "Invalid ZSO/CSO block or header";
+    case KUI_ZSO_UNSUPPORTED: return "Unsupported ZSO/CSO format or codec; independent 2048-byte blocks required";
+    case KUI_ZSO_IO: return "ZSO/CSO read failed";
     case KUI_ZSO_CANCELLED: return "Cancelled";
-    case KUI_ZSO_RANGE: return "ZSO container outside admitted bounds";
-    default: return "Unknown ZSO error";
+    case KUI_ZSO_RANGE: return "ZSO/CSO container outside admitted bounds";
+    default: return "Unknown ZSO/CSO error";
     }
 }

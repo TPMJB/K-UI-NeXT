@@ -123,7 +123,7 @@ def verify_assets(directory, release, commit):
                                 for name in GAME_FILES if name.endswith(".kui")))
                     for entry in ("KUI/apps/games/probe.dat", "KUI/redump.db", "KUI/tosec.db",
                                   "ACCEPTED-FIX-AUDIT.md", "CDDA-ACCEPTANCE-AUDIT.md",
-                                  "GAMES-ZSO.md", "NETWORK-RIP.md", "REPAIR-COPY.md", "CD-CAPTURE.md",
+                                  "GAMES-ZSO.md", "GAMES-CSO.md", "GAMES-CHD.md", "ATA-DMA-PLAN.md", "NETWORK-RIP.md", "REPAIR-COPY.md", "CD-CAPTURE.md",
                                   "tools/network_rip_server.py", "tools/verify_dump.py"):
                         require(entry in archive.namelist(), "Incomplete release: " + entry)
                 for entry in (*payloads, f"boot-cd/kui-v{release['version']}.cdi",
@@ -155,8 +155,8 @@ def verify_assets(directory, release, commit):
                     for entry in payloads:
                         module_name = Path(entry).name
                         try:
-                            if module_name in ("zso-boot.kui", "lzo-boot.kui"):
-                                inspect_zso(archive.read(entry), "lzo" if module_name == "lzo-boot.kui" else "lz4")
+                            if module_name in ("zso-boot.kui", "lzo-boot.kui", "cso-boot.kui"):
+                                inspect_zso(archive.read(entry), {"zso-boot.kui": "lz4", "lzo-boot.kui": "lzo", "cso-boot.kui": "cso"}[module_name])
                             elif module_name.startswith("ce-cdda-"):
                                 inspect_retail(archive.read(entry), ce=True)
                             elif module_name.startswith("cdda-native-"):

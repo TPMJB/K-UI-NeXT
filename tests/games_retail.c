@@ -70,8 +70,11 @@ static bool audio_unmapped(void) {
 }
 static bool fault(const char *name) { return test.active && !strcmp(test.fault, name); }
 static bool launch_case(void) {return !strncmp(test.fault,"launch-",7);}
-static bool zso_case(void) {return !strncmp(test.fault,"zso-",4);}
+static bool cso_case(void) {return !strncmp(test.fault,"cso-",4);}
+static bool zso_case(void) {return !strncmp(test.fault,"zso-",4) || cso_case();}
 static bool lzo_case(void) {return strstr(test.fault,"-lzo-") || !strcmp(test.fault,"zso-lz4-as-lzo");}
+static const char *compressed_name(void) {return cso_case()?"selected.cso":"selected.zso";}
+static bool compressed_fault(const char *suffix) {return zso_case() && !strcmp(test.fault+4,suffix);}
 static bool launch_success(void) {
     return !strcmp(test.fault,"launch-check") || !strcmp(test.fault,"launch-report") || !strcmp(test.fault,"launch-patches") ||
         !strcmp(test.fault,"launch-report-readonly") || !strcmp(test.fault,"launch-report-full") || source_directory_case();
@@ -136,8 +139,9 @@ static int sync_image(void *ctx) {
 static const struct kui_media_ops media = {NULL, blocks, read_image, write_image, sync_image};
 unsigned kui_storage_active(void) {
     /* The CE boot test needs SCI; ce-probe-scif checks the refusal. */
+    if(!strcmp(test.fault,"cso-ide")) return KUI_STORAGE_IDE;
     return !strcmp(test.fault, "async-on-sci") || !strcmp(test.fault, "async-cooked-2048") ||
-        (zso_case() && strcmp(test.fault,"zso-scif")) ||
+        (zso_case() && !compressed_fault("scif")) ||
         !strncmp(test.fault, "async-tracks", 12) ||
         (format_case() && strstr(test.fault, "-async")) ||
         (!strncmp(test.fault, "ce-probe", 8) && strcmp(test.fault, "ce-probe-scif")) ?
@@ -171,7 +175,7 @@ FRESULT __wrap_f_open(FIL *file, const TCHAR *path, BYTE flags) {
     if(test.active && result == FR_OK) {
         ++test.files;
         if(writes) {assert(!test.report_write);test.report_write=file;}
-        if(strstr(path, "track") || (zso_case() && strstr(path,"selected.zso")) || (source_directory_case() && report_path(path)) ||
+        if(strstr(path, "track") || (zso_case() && strstr(path,compressed_name())) || (source_directory_case() && report_path(path)) ||
             (format_case() && !strncmp(path,"0:/Games/Reader Test/",21))) {
             test.track = file;
             snprintf(test.track_name, sizeof(test.track_name), "%s", path);
@@ -314,8 +318,10 @@ static void seed_zso(const char *directory) {
     write_file(KUI_GAMES_RETAIL_ZSO_PACKAGE,data,bytes);free(data);
     data=host_file(directory,"lzo-boot.kui",&bytes);
     write_file(KUI_GAMES_RETAIL_LZO_PACKAGE,data,bytes);free(data);
-    data=host_file(directory,"selected.zso",&bytes);
-    const char *path="0:/Games/Reader Test/selected.zso";
+    data=host_file(directory,"cso-boot.kui",&bytes);
+    write_file(KUI_GAMES_RETAIL_CSO_PACKAGE,data,bytes);free(data);
+    data=host_file(directory,compressed_name(),&bytes);
+    char path[128];assert(snprintf(path,sizeof(path),"0:/Games/Reader Test/%s",compressed_name())<(int)sizeof(path));
     if(strstr(test.fault,"fragments31") || strstr(test.fault,"fragments32")) {
         unsigned splits=strstr(test.fault,"fragments31")?30u:31u;
         size_t chunk=(size_t)fs.csize*512u;assert(bytes>(splits+1u)*chunk);
@@ -426,8 +432,8 @@ static int detached_block(void *ctx, uint32_t lba, uint8_t out[512]) {
     (void)ctx; assert(!test.connected && !test.files); ++test.physical_reads;
     int result=read_image(NULL,lba,1,out);
     if(!result && lba==test.zso_first_card && test.zso_first_card) {
-        if(fault("zso-source-header-change")) {out[0]^=1;test.injected=true;}
-        if(fault("zso-source-index-change")) {memset(out+28,0,4);test.injected=true;}
+        if(compressed_fault("source-header-change")) {out[0]^=1;test.injected=true;}
+        if(compressed_fault("source-index-change")) {memset(out+28,0,4);test.injected=true;}
     }
     return result;
 }
@@ -730,7 +736,11 @@ static void export_zso_files(const char *directory) {
     unsigned writes=test.writes;test.active=false;kui_media_set(&media);assert(kui_mount(&fs,log_line));
     export_file(directory,KUI_GAMES_RETAIL_ZSO_PACKAGE,"after-zso-boot.kui",false);
     export_file(directory,KUI_GAMES_RETAIL_LZO_PACKAGE,"after-lzo-boot.kui",false);
-    export_file(directory,"0:/Games/Reader Test/selected.zso","after-selected.zso",false);
+    export_file(directory,KUI_GAMES_RETAIL_CSO_PACKAGE,"after-cso-boot.kui",false);
+    char source[128],output[128];
+    assert(snprintf(source,sizeof(source),"0:/Games/Reader Test/%s",compressed_name())<(int)sizeof(source));
+    assert(snprintf(output,sizeof(output),"after-%s",compressed_name())<(int)sizeof(output));
+    export_file(directory,source,output,false);
     export_file(directory,KUI_GAME_LAUNCH_REPORT_PATH_A,"after-last-launch-a.txt",true);
     export_file(directory,KUI_GAME_LAUNCH_REPORT_PATH_B,"after-last-launch-b.txt",true);
     assert(f_mount(NULL,"0:",0)==FR_OK);kui_media_set(NULL);test.active=true;assert(writes==test.writes);
@@ -755,12 +765,15 @@ static void check_zso(const char *directory) {
         &file_bytes,&shift,&extents,&ip_crc,&boot_crc)==9 && !fclose(expect));
     uint32_t reader=KUI_RETAIL_READER_STANDARD;
     if(lzo_case() && !fault("zso-lzo-wrong-codec"))reader|=KUI_GAMES_RETAIL_LZO;
-    if(fault("zso-cdda")) reader|=KUI_GAMES_RETAIL_CDDA;
-    if(fault("zso-background")) reader=KUI_RETAIL_READER_ASYNC;
+    if(fault("cso-lzo-selection"))reader|=KUI_GAMES_RETAIL_LZO;
+    if(compressed_fault("cdda")) reader|=KUI_GAMES_RETAIL_CDDA;
+    if(compressed_fault("background")) reader=KUI_RETAIL_READER_ASYNC;
+    if(compressed_fault("ce-reader"))reader|=KUI_GAMES_RETAIL_CE_PROBE;
     struct kui_game_ram_patches patches={0};
-    if(fault("zso-patches"))patches.entries[0]=(struct kui_game_ram_patch){0x8c010004u,0x12345678u,true};
+    if(compressed_fault("patches"))patches.entries[0]=(struct kui_game_ram_patch){0x8c010004u,0x12345678u,true};
     struct kui_runtime_image image={0};
-    bool result=kui_games_retail_prepare_launch("/Games/Reader Test/selected.zso",reader,&patches,&image,log_line,cancel);
+    char source_path[128];assert(snprintf(source_path,sizeof(source_path),"/Games/Reader Test/%s",compressed_name())<(int)sizeof(source_path));
+    bool result=kui_games_retail_prepare_launch(source_path,reader,&patches,&image,log_line,cancel);
     assert(result==(bool)prepared);
     if(result) {
         struct kui_retail_zso_manifest *map=malloc(sizeof(*map));assert(map);
@@ -768,7 +781,7 @@ static void check_zso(const char *directory) {
         assert(kui_retail_zso_manifest_decode((const uint8_t *)image.data+0x1000u,map)==KUI_GAME_OK);
         assert(map->zso.file_bytes==file_bytes && map->zso.total_bytes==sectors*2048u &&
             map->zso.block_count==sectors && map->zso.shift==shift);
-        assert(map->zso.codec==(lzo_case()?KUI_ZSO_LZO1X:KUI_ZSO_LZ4));
+        assert(map->zso.codec==(cso_case()?KUI_ZSO_DEFLATE:lzo_case()?KUI_ZSO_LZO1X:KUI_ZSO_LZ4));
         assert(map->manifest.track_count==1 && map->manifest.extent_count<=31u);
         assert(map->manifest.session_lba==session && map->manifest.boot_lba==session+21u && map->manifest.boot_bytes==boot_bytes);
         assert(map->manifest.ip_crc32==ip_crc && map->manifest.boot_crc32==boot_crc);
@@ -779,7 +792,7 @@ static void check_zso(const char *directory) {
         assert(kui_retail_zso_image_init(&detached,map,detached_block,map)==KUI_GAME_OK);
         detached.read_run=detached_zso_run;
         test.zso_first_card=map->manifest.slots[1].extent.card_lba;
-        bool changed=fault("zso-source-header-change") || fault("zso-source-index-change");
+        bool changed=compressed_fault("source-header-change") || compressed_fault("source-index-change");
         enum kui_game_result verified=kui_retail_zso_verify_source(&detached);
         if(changed) {
             assert(verified!=KUI_GAME_OK && test.injected);
@@ -806,7 +819,8 @@ static void check_zso(const char *directory) {
         free(map);
     } else {
         assert(!image.data && !image.info.payload_bytes && !image.info.memory_bytes && !test.writes);
-        if(fault("zso-cdda") || fault("zso-background") || fault("zso-patches"))assert(!test.connects && !test.read_calls);
+        if(compressed_fault("cdda") || compressed_fault("background") || compressed_fault("patches") ||
+           compressed_fault("ce-reader") || fault("cso-lzo-selection"))assert(!test.connects && !test.read_calls);
     }
     kui_runtime_free(&image);export_zso_files(directory);
 }

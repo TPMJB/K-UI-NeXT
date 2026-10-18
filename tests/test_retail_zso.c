@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef KUI_TEST_CSO
+#define KUI_TEST_CSO 0
+#endif
 #define LOGICAL_BLOCKS 128u
 #define FILE_CAP (LOGICAL_BLOCKS*2048u+4096u)
 #define CARD_BLOCKS 8192u
@@ -31,11 +34,19 @@ static size_t extension(uint8_t *out,unsigned n) {
 static void fixture(uint32_t session,bool all_raw,unsigned requested_extents) {
     memset(&map,0,sizeof(map));memset(&storage,0,sizeof(storage));
     memset(card,0xe9,sizeof(card));memset(file,0,sizeof(file));
-    memcpy(file,"ZISO",4);put(file+4,24);put(file+8,LOGICAL_BLOCKS*2048u);put(file+16,2048);file[20]=1;
+    memcpy(file,KUI_TEST_CSO?"CISO":"ZISO",4);put(file+4,24);put(file+8,LOGICAL_BLOCKS*2048u);put(file+16,2048);file[20]=1;
     uint32_t at=24u+(LOGICAL_BLOCKS+1u)*4u;
     for(unsigned block=0;block<LOGICAL_BLOCKS;block++) {
         bool raw=all_raw || block==0;
         put(file+24u+block*4u,at|(raw?UINT32_C(0x80000000):0));
+#if KUI_TEST_CSO
+        if(!raw) {
+            /* Final RFC1951 stored block, independent of a production encoder. */
+            for(unsigned i=0;i<2048;i++)expected[block][i]=(uint8_t)(block*11u+i*37u+(i>>8)*19u);
+            file[at++]=1;file[at++]=0;file[at++]=8;file[at++]=255;file[at++]=247;
+            memcpy(file+at,expected[block],2048);at+=2048;
+        } else
+#endif
         if(raw || block==LOGICAL_BLOCKS-1u) {
             for(unsigned i=0;i<2048;i++)expected[block][i]=(uint8_t)(block*11u+i*37u+(i>>8)*19u);
             if(!raw){
@@ -65,7 +76,9 @@ static void fixture(uint32_t session,bool all_raw,unsigned requested_extents) {
     put(file+24u+LOGICAL_BLOCKS*4u,at);file_bytes=at;
     map.zso=(struct kui_zso_info){.file_bytes=at,.total_bytes=LOGICAL_BLOCKS*2048u,
         .block_count=LOGICAL_BLOCKS,.index_bytes=(LOGICAL_BLOCKS+1u)*4u,.shift=0};
-#if KUI_TEST_LZO
+#if KUI_TEST_CSO
+    map.zso.codec=KUI_ZSO_DEFLATE;
+#elif KUI_TEST_LZO
     map.zso.codec=KUI_ZSO_LZO1X;
 #endif
     struct kui_retail_manifest *m=&map.manifest;
@@ -124,7 +137,9 @@ static int read_run(void *context,uint32_t lba,uint32_t available,uint8_t out[51
 static void independent_wire(uint8_t wire[4096]) {
     const struct kui_retail_manifest *m=&map.manifest;
     memset(wire,0,4096);
-#if KUI_TEST_LZO
+#if KUI_TEST_CSO
+    memcpy(wire,"KUIRCS01",8);
+#elif KUI_TEST_LZO
     memcpy(wire,"KUIRLS01",8);
 #else
     memcpy(wire,"KUIRZS01",8);
@@ -161,7 +176,7 @@ static void wire_and_maps(void) {
         memcpy(bad,wire,4096);put(bad+offsets[i],values[i]);reseal(bad);wire_reject(bad);
     }
     memcpy(bad,wire,4096);memcpy(bad,"KUIRTI03",8);reseal(bad);wire_reject(bad);
-#if KUI_TEST_LZO
+#if KUI_TEST_LZO || KUI_TEST_CSO
     memcpy(bad,wire,4096);memcpy(bad,"KUIRZS01",8);reseal(bad);wire_reject(bad);
 #endif
     memcpy(bad,wire,4096);bad[320u+(1u+map.manifest.extent_count)*12u]=1;reseal(bad);wire_reject(bad);
@@ -190,12 +205,12 @@ static void wire_and_maps(void) {
     fixture(45000,true,31);assert(map.manifest.extent_count==31);
     assert(kui_retail_zso_manifest_encode(&map,wire)==KUI_GAME_OK);
     fixture(0,false,31);map.manifest.card_sectors=map.manifest.partition_end=UINT64_C(0x100000000);
-    struct kui_retail_extent *last=&map.manifest.slots[map.manifest.extent_count].extent;assert(last->blocks==1);
-    last->card_lba=UINT32_MAX;assert(kui_retail_zso_manifest_validate(&map)==KUI_GAME_OK);
+    struct kui_retail_extent *last=&map.manifest.slots[map.manifest.extent_count].extent;
+    last->card_lba=UINT32_MAX-last->blocks+1u;assert(kui_retail_zso_manifest_validate(&map)==KUI_GAME_OK);
     assert(kui_retail_zso_manifest_encode(&map,wire)==KUI_GAME_OK);
     assert(kui_retail_zso_manifest_decode(wire,&decoded)==KUI_GAME_OK);
     assert(decoded.manifest.card_sectors==UINT64_C(0x100000000) && decoded.manifest.partition_end==UINT64_C(0x100000000));
-    last->blocks=2;map.zso.file_bytes+=512;
+    last->blocks++;map.zso.file_bytes+=512;
     assert(kui_retail_zso_manifest_validate(&map)!=KUI_GAME_OK); /* last physical end must not wrap32bits */
     puts("PASS ZSO retail wire: independent bytes/CRC, disjoint ABI, canonical reserved bytes,31 extents and64-bit physical bounds");
 }

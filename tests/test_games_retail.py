@@ -10,7 +10,7 @@ import tempfile
 import zlib
 from games_fixture import make_fixture, dual32
 from game_format_fixture import make_format_fixture
-from zso_fixture import make_zso_fixture, ZSO_CASES, ZSO_PREPARED
+from zso_fixture import make_zso_fixture, ZSO_CASES, ZSO_PREPARED, CSO_CASES
 from test_images import run
 from test_loader_probe_images import digest, partition_image, check_fs, envelope
 
@@ -143,12 +143,12 @@ def make_checksum_fixture(folder, case):
     (folder / "checksum.expect").write_text(f"{zlib.crc32(ip):08x} {expected_boot:08x}\n", encoding="ascii")
 
 
-def synthetic_package(ce=False, ram_seed=False, zso=False, lzo=False):
+def synthetic_package(ce=False, ram_seed=False, zso=False, lzo=False, cso=False):
     # Structural preparation fixture. The stage is original data, never code
     # executed on the host; every retail-looking IP field is generated here.
     # ce: the Windows CE boot test's package, with its higher stage.
     payload = bytearray(0x2010 + (64 if ram_seed else 0))
-    payload[0x100:0x108] = b"KUIRLB01" if lzo else b"KUIRZB01" if zso else b"KUIRCE01" if ce else b"KUIRBT01"
+    payload[0x100:0x108] = b"KUIRCB01" if cso else b"KUIRLB01" if lzo else b"KUIRZB01" if zso else b"KUIRCE01" if ce else b"KUIRBT01"
     stage = 0x8CE10000 if ce else 0x8CE00000
     struct.pack_into("<14I", payload, 0x108,
                      1, 64, 0x1000, 4096, stage, 16 + (64 if ram_seed else 0),
@@ -166,7 +166,8 @@ def make_retail_fixture(folder, case):
         for name, package_bytes in (("retail-boot.kui", synthetic_package()),
                                     ("ce-probe.kui", synthetic_package(ce=True)),
                                     ("zso-boot.kui", synthetic_package(zso=True)),
-                                    ("lzo-boot.kui", synthetic_package(zso=True, lzo=case != "zso-lzo-wrong-package"))):
+                                    ("lzo-boot.kui", synthetic_package(zso=True, lzo=case != "zso-lzo-wrong-package")),
+                                    ("cso-boot.kui", synthetic_package(zso=True, cso=case != "cso-wrong-package"))):
             (folder / name).write_bytes(package_bytes)
         return
     if case in LAUNCH_CASES and folder.exists():
@@ -303,8 +304,10 @@ def check_launch_outputs(folder, case):
 
 
 def check_zso_outputs(folder, case):
+    cso = case in CSO_CASES
     lzo = "-lzo-" in case or case == "zso-lz4-as-lzo"
-    for name in ("zso-boot.kui", "lzo-boot.kui", "selected.zso"):
+    source_name = "selected.cso" if cso else "selected.zso"
+    for name in ("zso-boot.kui", "lzo-boot.kui", "cso-boot.kui", source_name):
         assert (folder / f"after-{name}").read_bytes() == (folder / name).read_bytes(), name
     report_path = folder / "after-last-launch-a.txt"
     if case not in ZSO_PREPARED:
@@ -316,8 +319,8 @@ def check_zso_outputs(folder, case):
     fields = dict(line.split(": ", 1) for line in body.decode("ascii").splitlines()[1:])
     assert fields["sequence"] == f"{1:020d}"
     assert fields["state"] == "prepared before handoff; game start unconfirmed"
-    assert fields["image"] == "/games/reader test/selected.zso"
-    package_name = "lzo-boot.kui" if lzo else "zso-boot.kui"
+    assert fields["image"] == "/games/reader test/" + source_name
+    package_name = "cso-boot.kui" if cso else "lzo-boot.kui" if lzo else "zso-boot.kui"
     assert fields["package"] == "/kui/apps/games/" + package_name
     assert fields["reader"] == "Standard" and fields["storage"] == "SCI microSD"
     assert fields["cd music"] == "off" and fields["profile"] == "Off"
@@ -330,14 +333,14 @@ def check_zso_outputs(folder, case):
     original = (folder / package_name).read_bytes()[64:]
     assert payload[:0x1000] == original[:0x1000] and payload[0x2000:] == original[0x2000:]
     wire = bytearray(payload[0x1000:0x2000])
-    assert wire[:8] == (b"KUIRLS01" if lzo else b"KUIRZS01")
+    assert wire[:8] == (b"KUIRCS01" if cso else b"KUIRLS01" if lzo else b"KUIRZS01")
     saved_crc, = struct.unpack_from("<I", wire, 16)
     struct.pack_into("<I", wire, 16, 0)
     assert zlib.crc32(wire) == saved_crc
     valid, session, boot_bytes, sectors, physical_bytes, shift, expected_extents = map(
         int, (folder / "zso.expect").read_text().splitlines()[0].split())
     assert valid and struct.unpack_from("<3I", wire, 56) == (session, session + 21, boot_bytes)
-    source = (folder / "selected.zso").read_bytes()
+    source = (folder / source_name).read_bytes()
     assert struct.unpack_from("<I", wire, 68)[0] == zlib.crc32(source[:32768])
     assert struct.unpack_from("<2I", wire, 256) == (zlib.crc32(executable), zlib.crc32(logical[:32768]))
     assert struct.unpack_from("<5I", wire, 272) == (physical_bytes, len(logical), sectors, (sectors + 1) * 4, shift)
@@ -363,7 +366,9 @@ def main():
     parser.add_argument("--launch-only", action="store_true",
                         help="Only pre-handoff reports and native RAM patches, on MBR FAT32/exFAT")
     parser.add_argument("--zso-only", action="store_true",
-                        help="Only direct standard-LZ4 ZSO launch/physical-map cases, on MBR FAT32/exFAT")
+                        help="Only direct ZSO/CSO launch/physical-map cases, on MBR FAT32/exFAT")
+    parser.add_argument("--cso-only", action="store_true",
+                        help="Only direct raw-DEFLATE CISO launch/physical-map cases, on MBR FAT32/exFAT")
     args = parser.parse_args()
     for binary in ("mkfs.fat", "mkfs.exfat", "fsck.fat", "fsck.exfat"):
         if not shutil.which(binary):
@@ -378,7 +383,7 @@ def main():
             run("mkfs.fat", "-F", "32", str(volume)) if kind == "fat32" else run("mkfs.exfat", str(volume))
             partitioned_clean = base / f"{kind}-mbr.img"
             partition_image(volume, partitioned_clean, kind)
-            layouts = ((True, ZSO_CASES),) if args.zso_only else ((True, LAUNCH_CASES),) if args.launch_only else ((True, CHECKSUM_CASES),) if args.checksums_only else ((True, FORMAT_CASES),) if args.formats_only else ((True, RC_CASES),) if args.rc_only else (
+            layouts = ((True, CSO_CASES),) if args.cso_only else ((True, ZSO_CASES),) if args.zso_only else ((True, LAUNCH_CASES),) if args.launch_only else ((True, CHECKSUM_CASES),) if args.checksums_only else ((True, FORMAT_CASES),) if args.formats_only else ((True, RC_CASES),) if args.rc_only else (
                 (True, CASES + FORMAT_CASES + LAUNCH_CASES + ZSO_CASES), (False, ("valid", "boot-tail", "fragmented", "cooked-2048")))
             for partitioned, cases in layouts:
                 clean = partitioned_clean if partitioned else volume
@@ -401,9 +406,9 @@ def main():
                             assert "Detached ZSO exact decode PASS" in output
                         if case.endswith("fragments32"):
                             assert "31 physical extents" in output
-                        if case in ("zso-cdda", "zso-background", "zso-patches"):
-                            assert "needs native Standard reader, CD music Off and RAM patches Off" in output
-                        if case == "zso-scif":
+                        if case in ("zso-cdda", "zso-background", "zso-patches", "cso-cdda", "cso-background", "cso-patches", "cso-ce-reader"):
+                            assert "need native Standard reader, CD music Off and RAM patches Off" in output
+                        if case in ("zso-scif", "cso-scif", "cso-ide"):
                             assert "needs SCI microSD" in output
                         check_fs(image, base / "check-volume.img", kind, partitioned)
                         image.unlink()

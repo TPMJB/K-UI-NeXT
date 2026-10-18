@@ -6,6 +6,7 @@
 #define KUI_GAMES_RETAIL_PACKAGE "0:/KUI/apps/games/retail-boot.kui"
 #define KUI_GAMES_RETAIL_ZSO_PACKAGE "0:/KUI/apps/games/zso-boot.kui"
 #define KUI_GAMES_RETAIL_LZO_PACKAGE "0:/KUI/apps/games/lzo-boot.kui"
+#define KUI_GAMES_RETAIL_CSO_PACKAGE "0:/KUI/apps/games/cso-boot.kui"
 #define KUI_GAMES_RETAIL_CE_PACKAGE "0:/KUI/apps/games/ce-probe.kui"
 #define KUI_GAMES_RETAIL_CE_EXCERPT_PACKAGE "0:/KUI/apps/games/ce-cdda-armada.kui"
 #define KUI_GAMES_RETAIL_CE_BAM4_PACKAGE "0:/KUI/apps/games/ce-cdda-bam4.kui"

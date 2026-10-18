@@ -904,7 +904,7 @@ bool kui_games_inspect_with_codec(const char *path,enum kui_zso_codec codec,stru
     const char *problem="Cannot mount SD card";
     if(!kui_mount(&fs,log)) goto done;
     mounted_card=true;
-    if(extension(descriptor,".cso") || extension(descriptor,".chd")) {
+    if(extension(descriptor,".chd")) {
         problem="Compressed image requires offline import; direct launch unavailable";goto done;
     }
     image=malloc(sizeof(*image));
@@ -921,6 +921,7 @@ bool kui_games_inspect_with_codec(const char *path,enum kui_zso_codec codec,stru
     result=kui_game_image_audio_info(image,&out->audio);
     if(result!=KUI_GAME_OK) {problem=kui_game_result_name(result);goto done;}
     out->format=image->format;out->scrambled=image->scrambled;
+    if(image->compressed) out->zso_codec=image->zso.codec;
     out->cd_image=image->cd_image;
     out->tracks=image->count;
     out->audio_tracks=out->audio.audio_tracks;
@@ -962,11 +963,11 @@ bool kui_games_inspect_with_codec(const char *path,enum kui_zso_codec codec,stru
     out->zso_launch=image->compressed && !out->windows_ce && (out->native_gd || out->native_cd) &&
         kui_storage_active()==KUI_STORAGE_SCI && out->boot_bytes>=KUI_RETAIL_TRAMPOLINE_BYTES &&
         out->boot_bytes<=KUI_RETAIL_EXEC_MAX_BYTES;
-    problem=image->compressed?(out->windows_ce?"ZSO inspected; Windows CE compressed launch unavailable":
-        !(out->native_gd || out->native_cd)?"ZSO inspected; native IP flags required":
-        kui_storage_active()!=KUI_STORAGE_SCI?"ZSO inspected; direct launch needs SCI microSD":
-        !out->zso_launch?"ZSO inspected; boot size unsupported":
-        "ZSO; native Standard reader, console compatibility untested"):
+    problem=image->compressed?(out->windows_ce?"Compressed image inspected; Windows CE compressed launch unavailable":
+        !(out->native_gd || out->native_cd)?"Compressed image inspected; native IP flags required":
+        kui_storage_active()!=KUI_STORAGE_SCI?"Compressed image inspected; direct launch needs SCI microSD":
+        !out->zso_launch?"Compressed image inspected; boot size unsupported":
+        "Compressed image; native Standard reader, console compatibility untested"):
         out->windows_ce?"Image inspected; Windows CE SCI launch test, compatibility varies":
         !(out->native_gd || out->native_cd)?"Image inspected; valid GD-ROM/CD-ROM IP flags required":
         out->tracks>KUI_RETAIL_IMAGE_TRACKS?"Image inspected; launch map supports at most 99 tracks":

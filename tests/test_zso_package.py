@@ -129,5 +129,34 @@ class LzoPackage(unittest.TestCase):
                 layout.inspect_zso(envelope(payload, len(payload), "012345abcdef"), "lzo")
 
 
+class CsoPackage(unittest.TestCase):
+    def package(self, codec="cso"):
+        payload = bytearray(layout.STAGE_BLOB_OFFSET + 128)
+        payload[layout.HEADER_OFFSET:layout.HEADER_OFFSET + layout.HEADER_BYTES] = layout.relocation_header(128, codec)
+        return envelope(payload, len(payload), "012345abcdef")
+
+    def test_exact_ciso_contract_and_every_codec_substitution_are_distinct(self):
+        expected = struct.pack("<8s14I", b"KUIRCB01", 1, 64, 4096, 4096,
+                               0x8CE00000, 128, 0x8CE00000, 0x8C010000,
+                               0xC00000, 0x8CFF0000, 8192, 0x8C004000, 0x8C007800, 0)
+        self.assertEqual(layout.relocation_header(128, "cso"), expected)
+        result = layout.inspect_zso(self.package(), "cso")
+        self.assertEqual(result["manifest_magic"], "KUIRCS01")
+        self.assertIn("CISO v1 raw DEFLATE", result["codec"])
+        self.assertEqual((result["transport"], result["reader"]), ("SCI", "Standard"))
+        for selected, packaged in (("cso", "lz4"), ("cso", "lzo"), ("lz4", "cso"), ("lzo", "cso")):
+            with self.subTest(selected=selected, packaged=packaged), self.assertRaisesRegex(ValueError, "relocation header"):
+                layout.inspect_zso(self.package(packaged), selected)
+
+    def test_every_typed_header_byte_and_manifest_boundaries_remain_checked(self):
+        clean = self.package()[64:]
+        for offset in (*range(layout.HEADER_OFFSET, layout.HEADER_OFFSET + layout.HEADER_BYTES),
+                       layout.MAP_OFFSET, layout.MAP_OFFSET + layout.MAP_BYTES - 1):
+            payload = bytearray(clean)
+            payload[offset] ^= 1
+            with self.subTest(offset=offset), self.assertRaises(ValueError):
+                layout.inspect_zso(envelope(payload, len(payload), "012345abcdef"), "cso")
+
+
 if __name__ == "__main__":
     unittest.main()
