@@ -56,7 +56,7 @@ void kui_vmu_maple_observer_test_stop(void) {
 static void initialize_window(unsigned stop_after,unsigned post_after) {
     struct kui_vmu_maple_observe_config config = {
         KUI_VMU_MAPLE_OBSERVE_MAGIC, KUI_VMU_MAPLE_OBSERVE_VERSION,
-        sizeof(config), stop_after, post_after, {0}
+        sizeof(config), stop_after, post_after, {0},0,0,0
     };
     source = UINT32_C(0x0c100000);
     reads = stops = 0;

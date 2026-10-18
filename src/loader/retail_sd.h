@@ -19,6 +19,10 @@
  * to fail without writes. The pins cannot simultaneously serve a serial device.
  * Protocol timeout values become finite byte-work budgets, NOT elapsed time;
  * no hardware timer is borrowed from the game. */
+/* The isolated SD-backed VMU worker uses vmu_sd_lease.h to borrow the native
+ * reader's existing card/SCI instance under the same GD lock. A descriptor
+ * loan never owns this bus: it must not initialize, adopt, stop another read
+ * stream, or release the enclosing lease. The gateway handles final release. */
 enum kui_loader_sd_result kui_retail_sd_init(struct kui_loader_sd *card);
 /* High stage has already initialized the card, enabled CRC and closed its
  * last read. Copy protocol state while binding every bus callback to this

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "Passive exact-Toy normal Maple pre-submit and completion observations; no virtual replies or writes",
+  "scope": "Exact-Toy Maple observations and isolated synthetic read-only proof; standalone SD profile preparation; no game-time writes",
   "captures": [
     {
       "build": "87140926efd1",
@@ -453,6 +453,29 @@
         "The final four main-unit requests were deliberately not submitted.",
         "The photographs contain diagnostic pages only; the game menu itself is not shown.",
         "The proof last-request/RX fields are overwritten by later controller-only polls while last-response remains the previous virtual reply; use last-subunit fields on page3 for the correlated virtual request/reply."
+      ]
+    },
+    {
+      "build": "399d10269c83",
+      "date": "2026-10-17",
+      "outcome": "profile_export_ready",
+      "source_images": [
+        "image-1792284340017.jpg"
+      ],
+      "storage_transport": "SCI",
+      "filesystem": "exFAT",
+      "partition_first": 2048,
+      "probe": "p0001",
+      "latest_persisted_save_matches": true,
+      "clean_checkpoint": true,
+      "raw_profile_verified": true,
+      "profile_bytes": 1536,
+      "extent_count": 1,
+      "image_sha256": "4edbef747fb15d17755a0d5053076457553e9152e6c727bd7ada45251c5ec1b1",
+      "profile_sha256": "2d72e4b4fbac3764e807b992241cbbedf8f3540c2622ebf989e99fcd053c1704",
+      "limits": [
+        "A physical power cycle before Y was not explicitly reported; the screen makes restart-persistence evidence conditional on it.",
+        "This prepares metadata; no game-time SD-backed VMU read or save is shown."
       ]
     }
   ]

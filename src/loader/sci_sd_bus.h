@@ -31,6 +31,12 @@ struct kui_sci_sd_port {
 };
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void);
 bool kui_sci_sd_healthy(void);
+#if KUI_VMU_READONLY_PROOF == 2
+/* Isolated shared-reader gateway: unlike healthy(), this fault latch remains
+ * meaningful AFTER release. Read it before acquisition can clear old faults
+ * and after release can latch a final TEND/restoration failure. */
+bool kui_sci_sd_faulted(void);
+#endif
 #if KUI_RETAIL_SCI_DIAGNOSTIC
 /* Isolated retail test only. The first failing bus branch is captured before
  * SCR/CHCR cleanup. Register words are read-only samples at capture, not a

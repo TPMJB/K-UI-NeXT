@@ -57,8 +57,8 @@ requests stop this proof rather than extending it into save emulation.
 
 ## Evidence to retain
 
-The package's `observer-artifact-audit.json` identifies ABI version 4, the
-60-byte export table with `readonly_mode: 1`, and the 612-byte private snapshot.
+The package's `observer-artifact-audit.json` identifies ABI version5, the
+64-byte export table with `readonly_mode: 1`, and the644-byte private snapshot.
 It reports `virtual_vmu_enabled: true`, `storage_writes_enabled: false`, and
 `mode: "READ-ONLY virtual blank A1 proof"`. The passive observer retains
 `readonly_mode: 0` and `virtual_vmu_enabled: false`.

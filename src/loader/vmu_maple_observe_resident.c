@@ -27,6 +27,10 @@ static void observe_display_restore(const struct retail_display_state *);
 #undef kui_retail_storage_acquire
 #include "kui/vmu_maple_observe_boot.h"
 #include "kui/vmu_toy_observe_admission.h"
+#if KUI_VMU_READONLY_PROOF == 2
+#include "kui/vmu_maple_observe.h"
+#include "vmu_sd_lease.inc"
+#endif
 
 #if !KUI_RETAIL_GD_REJECTION_DETAILS
 #error Observer I/O telemetry requires the standard native diagnostic fields

@@ -7,9 +7,12 @@ BUILD ?= build/vmu-toy
 READONLY_PROOF ?= 0
 ifneq ($(READONLY_PROOF),0)
 ifneq ($(READONLY_PROOF),1)
-$(error READONLY_PROOF must be 0 or 1)
+ifneq ($(READONLY_PROOF),2)
+$(error READONLY_PROOF must be 0, 1 or 2)
 endif
 endif
+endif
+SD_PROFILE ?=
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD)
 CPU = -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,fpul-fpul
 FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
@@ -42,10 +45,24 @@ STAGE_OBJ = $(patsubst %.c,$(BUILD)/stage/%.o,$(STAGE_SRC)) $(BUILD)/stage_asm.o
 WORKER_SRC = src/loader/vmu_maple_observe_worker.c src/loader/retail_display.c src/loader/minic.c
 READONLY_SRC = src/core/vmu_readonly.c src/core/vmu_emulation.c src/core/vmu_image.c \
  src/loader/vmu_readonly_overlay.c
-ifeq ($(READONLY_PROOF),1)
+ifneq ($(READONLY_PROOF),0)
 WORKER_SRC += $(READONLY_SRC)
+ifeq ($(READONLY_PROOF),2)
+ifeq ($(strip $(SD_PROFILE)),)
+$(error READONLY_PROOF=2 requires an explicit SD_PROFILE file)
+endif
+FLAGS += -DKUI_VMU_EXPERIMENTAL=0
+VMU_CALLGRAPH_FLAGS = -fcallgraph-info=su
+VMU_SD_RESIDENT_EXPORTS = -Wl,-u,_kui_vmu_observe_sd_lease
+FLAGS += $(VMU_CALLGRAPH_FLAGS)
+STAGE_SRC += src/core/vmu_sd_profile.c src/loader/vmu_backing.c
+WORKER_SRC += src/core/vmu_sd_profile.c src/core/hash.c src/core/retail_image.c src/loader/sd_reader.c src/loader/vmu_backing.c
+TEST_ZIP = vmu-sd-readonly-card-test.zip
+TEST_GUIDE = docs/vmu-sd-readonly-card-test.md
+else
 TEST_ZIP = vmu-readonly-card-test.zip
 TEST_GUIDE = docs/vmu-readonly-card-test.md
+endif
 else
 TEST_ZIP = vmu-maple-observer-test.zip
 TEST_GUIDE = docs/vmu-maple-observer-test.md
@@ -61,12 +78,24 @@ package: $(BUILD)/$(TEST_ZIP)
 force-mode-config:
 $(BUILD)/readonly-config: force-mode-config
 	@mkdir -p $(BUILD)
-	@printf '%s\n' 'READONLY_PROOF=$(READONLY_PROOF)' > $(BUILD)/readonly-config.tmp
+	@printf '%s\n' 'READONLY_PROOF=$(READONLY_PROOF)' 'SD_PROFILE=$(SD_PROFILE)' > $(BUILD)/readonly-config.tmp
+ifeq ($(READONLY_PROOF),2)
+	@sha256sum '$(SD_PROFILE)' >> $(BUILD)/readonly-config.tmp
+endif
 	@cmp -s $(BUILD)/readonly-config.tmp $(BUILD)/readonly-config || \
 	 cp $(BUILD)/readonly-config.tmp $(BUILD)/readonly-config
 	@rm -f $(BUILD)/readonly-config.tmp
 
 $(RESIDENT_OBJ) $(STAGE_OBJ) $(WORKER_OBJ): $(BUILD)/readonly-config
+
+ifeq ($(READONLY_PROOF),2)
+$(BUILD)/vmu-sd-profile.bin: $(SD_PROFILE) $(BUILD)/readonly-config tools/vmu_sd_profile.py
+	@mkdir -p $(BUILD)
+	python3 tools/vmu_sd_profile.py '$(SD_PROFILE)'
+	cp '$(SD_PROFILE)' $@
+$(STAGE_OBJ): $(BUILD)/vmu-sd-profile.bin
+FLAGS += -DKUI_VMU_SD_PROFILE_BIN='"$(BUILD)/vmu-sd-profile.bin"'
+endif
 
 $(BUILD)/resident/%.o: %.c
 	@mkdir -p $(@D)
@@ -79,16 +108,19 @@ $(BUILD)/observe_boot_asm.o: src/loader/vmu_maple_observe_boot.S
 	$(CC) $(RESIDENT_FLAGS) -MMD -MP -c $< -o $@
 $(BUILD)/resident-sci.elf: $(RESIDENT_OBJ) src/loader/retail_resident_low.ld
 	@mkdir -p $(BUILD)/resident/lto
-	$(CC) $(LINK) -flto -mrelax -Os -fno-tree-scev-cprop -fstack-usage -save-temps=obj -Wl,--relax \
+	$(CC) $(LINK) -flto -mrelax -Os -fno-tree-scev-cprop -fstack-usage $(VMU_CALLGRAPH_FLAGS) -save-temps=obj -Wl,--relax \
 	 -Wl,-u,_memcpy -Wl,-u,_memset -Wl,-u,_kui_retail_resident_init \
 	 -Wl,-u,_kui_retail_resident_dispatch -Wl,-u,_kui_retail_gd_dispatch \
 	 -Wl,-u,_kui_retail_image_read -Wl,-u,_kui_loader_sd_stream_next \
 	 -Wl,-u,_kui_sci_sd_acquire -Wl,-u,_kui_sci_sd_release \
 	 -Wl,-u,_kui_vmu_observe_heap_hook -Wl,-u,_kui_vmu_observe_return_hook \
-	 -Wl,-u,_kui_vmu_observe_boot_control \
+	 -Wl,-u,_kui_vmu_observe_boot_control $(VMU_SD_RESIDENT_EXPORTS) \
 	 -Tsrc/loader/retail_resident_low.ld -Wl,-Map,$(BUILD)/resident-sci.map \
 	 -o $@ $(RESIDENT_OBJ) -lgcc
 	cp $(BUILD)/resident-sci.elf.ltrans*.su $(BUILD)/resident/lto/
+ifeq ($(READONLY_PROOF),2)
+	cp $(BUILD)/resident-sci.elf*.ci $(BUILD)/resident/lto/
+endif
 $(BUILD)/resident-sci.bin: $(BUILD)/resident-sci.elf
 	$(OBJCOPY) -O binary $< $@
 $(BUILD)/vmu_maple_observe_symbols.h: $(BUILD)/resident-sci.elf tools/vmu_maple_observe_symbols.py
@@ -161,9 +193,31 @@ host-tests:
 	 src/loader/vmu_maple_observe_worker.c $(READONLY_SRC) tests/test_vmu_maple_readonly_worker.c \
 	 -o $(BUILD)/test-readonly-worker
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-readonly-worker
+	$(HOST_CC) -std=c11 -O0 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -ffunction-sections -fdata-sections -Wl,--gc-sections -g -Iinclude \
+	 src/core/vmu_sd_profile.c src/core/hash.c src/core/retail_image.c \
+	 tests/test_vmu_sd_stage_admission.c -o $(BUILD)/test-sd-stage-admission
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-sd-stage-admission
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -g -Iinclude -Isrc/loader -DKUI_VMU_READONLY_PROOF=2 \
+	 tests/test_vmu_sd_lease.c -o $(BUILD)/test-sd-lease
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-sd-lease
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -g -Iinclude -Isrc/loader -DKUI_SCI_SD_TEST=1 -DKUI_VMU_READONLY_PROOF=2 \
+	 src/loader/sci_sd_bus.c tests/test_sci_sd_bus.c -o $(BUILD)/test-sd-restore
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-sd-restore
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -ffunction-sections -fdata-sections -Wl,--gc-sections -g -Iinclude -Isrc/loader \
+	 -DKUI_VMU_MAPLE_OBSERVE_HOST_TEST=1 -DKUI_VMU_READONLY_PROOF=2 -DKUI_VMU_EXPERIMENTAL=0 \
+	 src/loader/vmu_maple_observe_worker.c $(READONLY_SRC) src/loader/sd_reader.c \
+	 src/loader/vmu_backing.c src/core/vmu_sd_profile.c src/core/hash.c src/core/retail_image.c \
+	 tests/test_vmu_maple_sd_worker.c -o $(BUILD)/test-sd-readonly-worker
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-sd-readonly-worker
 	python3 tests/test_vmu_maple_observe_package.py
 	python3 tests/test_vmu_maple_observe_hook.py
 	python3 tests/test_vmu_toy_completion_probe.py
 	python3 tests/test_vmu_observer_install_route.py
+	python3 tests/test_vmu_sd_profile_tool.py
+	python3 tests/test_personalize_vmu_sd_proof.py
 
 -include $(RESIDENT_OBJ:.o=.d) $(STAGE_OBJ:.o=.d) $(WORKER_OBJ:.o=.d)

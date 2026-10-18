@@ -1,12 +1,22 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* An isolated exact-Toy Maple diagnostic. Its separate readonly mode supplies
- * synthetic blank-card replies without storage I/O. The normal stage is unchanged. */
+/* Isolated exact-Toy observer and read-only virtual-card proofs. The normal
+ * retail stage remains unchanged; only this translation unit adds admission. */
 #if !KUI_VMU_MAPLE_OBSERVE || !KUI_RETAIL_LOW_RESIDENT || defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_ASYNC) || KUI_RETAIL_TOY_PILOT
 #error VMU observation stage requires its separate synchronous native build
+#endif
+#if KUI_VMU_READONLY_PROOF == 2
+/* Admit the real declarations before replacing this call in the included
+ * base stage. Its initialized SCI card remains our sole prehandoff device. */
+#include "retail_storage.h"
+static enum kui_loader_sd_result observe_sd_storage_init(struct kui_retail_storage *,uint32_t);
+#define kui_retail_storage_init observe_sd_storage_init
 #endif
 #define kui_retail_stage_relay kui_vmu_observe_base_relay
 #define kui_retail_stage_main kui_vmu_observe_base_main
 #include "retail_stage.c"
+#if KUI_VMU_READONLY_PROOF == 2
+#undef kui_retail_storage_init
+#endif
 #undef kui_retail_stage_relay
 #undef kui_retail_stage_main
 #include "kui/hash.h"
@@ -15,6 +25,60 @@
 #include "kui/vmu_toy_observe_admission.h"
 #include "kui/retail_observe.h"
 #include "vmu_maple_observe_symbols.h"
+#if KUI_VMU_READONLY_PROOF == 2
+#include "kui/vmu_sd_stage_admission.h"
+#include "kui/vmu_sd_lease.h"
+#include "sci_sd_bus.h"
+#ifndef KUI_VMU_SD_PROFILE_BIN
+#error SD-backed virtual VMU proof requires an explicit per-card profile input
+#endif
+__asm__(".section .rodata.vmu_sd_profile,\"a\"\n"
+        ".balign 4\n.global __vmu_sd_profile_blob_start\n"
+        "__vmu_sd_profile_blob_start:\n.incbin \"" KUI_VMU_SD_PROFILE_BIN "\"\n"
+        ".global __vmu_sd_profile_blob_end\n__vmu_sd_profile_blob_end:\n.previous\n");
+extern const uint8_t sd_profile_wire[] __asm__("__vmu_sd_profile_blob_start");
+extern const uint8_t sd_profile_wire_end[] __asm__("__vmu_sd_profile_blob_end");
+static struct kui_vmu_sd_profile observe_sd_profile;
+static bool observe_sd_admitted,observe_sd_verified;
+
+static void observe_sd_profile_admit(void) {
+    size_t bytes=(size_t)(sd_profile_wire_end-sd_profile_wire);
+    if(bytes!=KUI_VMU_SD_PROFILE_WIRE_BYTES ||
+       kui_vmu_sd_profile_decode(&observe_sd_profile,sd_profile_wire,bytes))
+        stopped("SD VMU PROFILE BYTES / CRC REFUSED",(uint32_t)bytes);
+    if(!kui_vmu_sd_stage_admit(&observe_sd_profile,&manifest))
+        stopped("SD VMU PROFILE / GAME MAP CONFLICT",0);
+    observe_sd_admitted=true;
+}
+static int observe_sd_profile_read(void *context,uint16_t block,uint8_t out[512]) {
+    struct kui_retail_storage *storage=context;uint32_t lba;
+    if(kui_vmu_sd_profile_map_lba(&observe_sd_profile,block,&lba)) return -1;
+    last_card_result=kui_loader_sd_read(&storage->device.sd,lba,1u,out);
+    return last_card_result==KUI_LOADER_SD_OK?0:-1;
+}
+static enum kui_loader_sd_result observe_sd_storage_init(struct kui_retail_storage *storage,uint32_t selected) {
+    enum kui_loader_sd_result result=kui_retail_storage_init(storage,selected);
+    if(result!=KUI_LOADER_SD_OK) return result;
+    if(!observe_sd_admitted || !kui_vmu_sd_stage_admit(&observe_sd_profile,&manifest) ||
+       selected!=KUI_STORAGE_SCI || storage->transport!=KUI_STORAGE_SCI || storage->stream.active)
+        stopped("SD VMU PROFILE PREFLIGHT MISSING",selected);
+    result=kui_retail_storage_acquire(storage);
+    if(result!=KUI_LOADER_SD_OK) return result;
+    struct kui_vmu_sd_identity actual;
+    int identity=kui_vmu_sd_identity_read(&storage->device.sd,&actual);
+    bool same=identity==KUI_VMU_BACKING_OK && kui_vmu_sd_stage_identity(&observe_sd_profile,&actual);
+    int verified=same?kui_vmu_sd_profile_verify_image(&observe_sd_profile,observe_sd_profile_read,storage):-1;
+    enum kui_loader_sd_result stopped_stream=kui_retail_storage_stop(storage);
+    bool healthy=kui_sci_sd_healthy() && storage->device.sd.ready;
+    kui_retail_storage_release(storage);
+    if(!same) stopped("SD VMU CID / CAPACITY CHANGED",(uint32_t)identity);
+    if(verified || stopped_stream!=KUI_LOADER_SD_OK || !healthy || kui_sci_sd_faulted())
+        stopped("SD VMU RAW BLOCK CRC / SHA FAILED",(uint32_t)verified);
+    observe_sd_verified=true;
+    retail_display_line("SD VMU PROFILE: CID / MAP / 256 CRC / SHA PASSED");
+    return KUI_LOADER_SD_OK;
+}
+#endif
 
 #ifndef KUI_VMU_OBSERVE_WORKER_BIN
 #error The independent observer worker binary must be embedded explicitly
@@ -148,6 +212,11 @@ static void observe_exports(struct kui_vmu_maple_observe_exports *e,uint32_t byt
        e->lease_bytes!=KUI_VMU_TOY_LEASE_BYTES ||
        !observe_code(e->initialize,bytes) || !observe_code(e->hook,bytes) ||
        !observe_code(e->terminal,bytes) || !observe_code(e->complete_hook,bytes) ||
+#if KUI_VMU_READONLY_PROOF == 2
+       !observe_code(e->sd_transaction,bytes) ||
+#else
+       e->sd_transaction!=0u ||
+#endif
        bss_begin<KUI_VMU_TOY_LEASE_BEGIN+bytes || bss_begin>bss_end ||
        bss_end>stack_bottom || stack_bottom>stack_top || stack_top!=e->worker_end ||
        stack_top>KUI_VMU_TOY_WORKER_END ||
@@ -195,6 +264,12 @@ static bool observe_no_interior_references(void) {
 void kui_vmu_observe_stage_install(void) {
     volatile struct kui_vmu_observe_boot_control *c=observe_control();
     c->status=KUI_VMU_OBS_BOOT_INITIALIZING;
+#if KUI_VMU_READONLY_PROOF == 2
+    if(!observe_sd_admitted || !observe_sd_verified) observe_fail(14,0);
+    /* Bootstrap/heap initialization has run since the first preflight. Copy
+     * the immutable embedded wire afresh, rather than trusting old BSS. */
+    observe_sd_profile_admit();
+#endif
     if((observe_read(0xff00001cu,4)&0x105u)!=0x105u ||
        c->heap_begin!=KUI_VMU_TOY_HEAP_BEGIN || c->heap_bytes!=KUI_VMU_TOY_HEAP_BYTES ||
        c->entry_sp<0x8c00c100u || c->entry_sp>0x8c00f400u || (c->entry_sp&3u) ||
@@ -229,13 +304,25 @@ void kui_vmu_observe_stage_install(void) {
     memset((void *)(uintptr_t)e.bss_begin,0,e.bss_end-e.bss_begin);
     if(memcmp((const void *)(uintptr_t)(c->lease+UINT32_C(0x20000000)),observer_blob,bytes))
         observe_fail(7,c->lease);
-    struct kui_vmu_maple_observe_config config={KUI_VMU_MAPLE_OBSERVE_MAGIC,
-        KUI_VMU_MAPLE_OBSERVE_VERSION,sizeof(config),KUI_VMU_MAPLE_OBSERVE_DEFAULT_STOP,
-        KUI_VMU_MAPLE_OBSERVE_DEFAULT_POST,{0}};
+    struct kui_vmu_maple_observe_config config={.magic=KUI_VMU_MAPLE_OBSERVE_MAGIC,
+        .version=KUI_VMU_MAPLE_OBSERVE_VERSION,.bytes=sizeof(config),
+        .stop_after=KUI_VMU_MAPLE_OBSERVE_DEFAULT_STOP,.post_after=KUI_VMU_MAPLE_OBSERVE_DEFAULT_POST};
     memcpy(config.display,display.regs,sizeof(config.display));
+#if KUI_VMU_READONLY_PROOF == 2
+    if(!observe_sd_admitted || !observe_sd_verified || !kui_vmu_sd_stage_admit(&observe_sd_profile,&manifest) ||
+       KUI_VMU_OBSERVE_LOW_SD_LEASE<KUI_RETAIL_RESIDENT_ADDRESS ||
+       KUI_VMU_OBSERVE_LOW_SD_LEASE>=KUI_RETAIL_RESIDENT_ADDRESS+resident_bytes ||
+       (KUI_VMU_OBSERVE_LOW_SD_LEASE&1u)) observe_fail(14,0);
+    config.sd_lease=KUI_VMU_OBSERVE_LOW_SD_LEASE;
+    config.sd_profile=(uint32_t)(uintptr_t)&observe_sd_profile;
+    config.sd_profile_bytes=sizeof(observe_sd_profile);
+#endif
     int (*initialize)(const struct kui_vmu_maple_observe_config *)=
         (int (*)(const struct kui_vmu_maple_observe_config *))(uintptr_t)e.initialize;
     if(initialize(&config)) observe_fail(8,e.initialize);
+    /* The low gateway accepts this one typed worker callback only after the
+     * remaining hook publication completes and status becomes INSTALLED. */
+    c->sd_transaction=e.sd_transaction;
     observe_witnesses(true);
     /* One masked RAM transaction. R0 is dead at the first original load;
      * the worker replays every displaced instruction then resumes at 270. */
@@ -263,9 +350,14 @@ void kui_retail_stage_main(const uint8_t *wire) {
     if(kui_retail_manifest_decode(wire,&manifest)!=KUI_GAME_OK ||
        !kui_vmu_toy_observe_manifest(&manifest))
         stopped("OBSERVER NEEDS ORIGINAL TOY / SCI / STANDARD",0);
+#if KUI_VMU_READONLY_PROOF == 2
+    observe_sd_profile_admit();
+    retail_display_line("VIRTUAL A1: READ-ONLY SD IMAGE / NO SAVING");
+#else
     retail_display_line(KUI_VMU_READONLY_PROOF?
         "VIRTUAL A1: READ-ONLY EMPTY CARD / NO STORAGE":
         "PASSIVE MAPLE OBSERVER / NO VIRTUAL VMU YET");
+#endif
     kui_vmu_observe_base_main(wire);
 }
 

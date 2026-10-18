@@ -11,24 +11,24 @@ from check_vmu_maple_observe_hook import check_hook, check_completion_hook
 
 
 def fixture():
-    # Our authored vmu_maple_hook.S assembled as SH4, with four local RTS
-    # stubs for C entry points. This fixture contains no owner-game bytes.
+    # Authored vmu_maple_hook.S, assembled as little-endian SH4 with four
+    # local RTS C-entry stubs. No owner-game bytes are included.
     payload = bytes.fromhex(
-        "314f4d56040000003c0000006c01fd8c3c00fd8c8001fdac0004fdac0004fdac"
-        "0014fdac0014fd8c000003008001fdac5401fd8cd000fd8c00000000162f0201"
-        "162f1360f0cb0e40262f362f462f562f662f762f862f962fa62fb62fc62fd62f"
-        "e62f224f024f124f134ff36413df462f43604470026412d00b400900f26f174f"
-        "164f064f264ff66ef66df66cf66bf66af669f668f667f666f665f664f663f662"
-        "f6610e41f66107d0e2633e02c61206d0e263262f05d22b42f66209000014fdac"
-        "7001fd8cf4100000d80f000070f20b8c062f162f0201162f1360f0cb0e40262f"
-        "362f462f562f662f762f862f962fa62fb62fc62fd62fe62f224f024f124f134f"
-        "f36411df462f43554360447002640fd00b400900f26f174f164f064f264ff66e"
-        "f66df66cf66bf66af669f668f667f666f665f664f663f662f6610e41f661f660"
-        "03d32b43090009000014fdac7401fd8c7af30b8c0200f0cb0e4002df02d02b40"
-        "090009000014fdac7801fd8c0b0009000b0009000b0009000b000900")
-    keys = ('magic', 'version', 'bytes', 'initialize', 'hook', 'bss_begin', 'bss_end', 'stack_bottom', 'stack_top', 'worker_end', 'lease_bytes', 'snapshot', 'terminal', 'complete_hook', 'readonly_mode')
-    exports = dict(zip(keys, struct.unpack_from("<15I", payload)))
-    return {"payload": payload, "symbols": {'_kui_vmu_maple_observer_visit': 2365391216, '_kui_vmu_maple_observer_complete': 2365391220}}, exports
+        "314f4d5605000000400000007001fd8c4000fd8c0002fdaca004fdaca004fdac"
+        "a014fdaca014fd8c000003000002fdac5801fd8cd400fd8c0000000000000000"
+        "162f0201162f1360f0cb0e40262f362f462f562f662f762f862f962fa62fb62f"
+        "c62fd62fe62f224f024f124f134ff36413df462f43604470026412d00b400900"
+        "f26f174f164f064f264ff66ef66df66cf66bf66af669f668f667f666f665f664"
+        "f663f662f6610e41f66107d0e2633e02c61206d0e263262f05d22b42f6620900"
+        "a014fdac7401fd8cf4100000d80f000070f20b8c062f162f0201162f1360f0cb"
+        "0e40262f362f462f562f662f762f862f962fa62fb62fc62fd62fe62f224f024f"
+        "124f134ff36411df462f43554360447002640fd00b400900f26f174f164f064f"
+        "264ff66ef66df66cf66bf66af669f668f667f666f665f664f663f662f6610e41"
+        "f661f66003d32b4309000900a014fdac7801fd8c7af30b8c0200f0cb0e4002df"
+        "02d02b4009000900a014fdac7c01fd8c0b0009000b0009000b0009000b000900")
+    keys = ('magic', 'version', 'bytes', 'initialize', 'hook', 'bss_begin', 'bss_end', 'stack_bottom', 'stack_top', 'worker_end', 'lease_bytes', 'snapshot', 'terminal', 'complete_hook', 'readonly_mode', 'sd_transaction')
+    exports = dict(zip(keys, struct.unpack_from("<16I", payload)))
+    return {"payload": payload, "symbols": {'_kui_vmu_maple_observer_visit': 2365391220, '_kui_vmu_maple_observer_complete': 2365391224}}, exports
 
 
 class ObserverHookTests(unittest.TestCase):

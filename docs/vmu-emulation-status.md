@@ -1,8 +1,10 @@
 # Experimental VMU implementation status
 
 This branch develops an original virtual memory card for K-UI. The public
-2.0.0 release remains the stable runtime. No retail game currently receives
-virtual VMU responses from this prototype.
+2.0.0 release remains the stable runtime. The isolated exact-Toy synthetic
+read-only proof has delivered virtual VMU responses on the console. The next
+separate proof reads a verified prepared image from the same SCI card used by
+the game loader; hardware validation of that SD arbitration is pending.
 
 ## Implemented
 
@@ -34,6 +36,12 @@ virtual VMU responses from this prototype.
   complete executable and exact hook instructions, then records real Maple
   schedules in a guarded title-owned allocation. It injects no VMU commands or
   responses. See [the observer test](vmu-maple-observer-test.md).
+- Separate synthetic and SD-backed read-only A1 proofs. The SD variant checks
+  a canonical per-card profile against every game allocation, verifies CID and
+  all256 image sectors before handoff, then uses the resident GD ownership
+  lock and SCI bus through a scoped typed lease. Its worker validates CID and
+  block CRCs before publishing a virtual reply. Storage contention and faults
+  stop this proof; no unproved retry or game-time write is enabled.
 - A read-only SH4 executable analyzer and an exact match for the owner's
   Toy Commander executable. Static hook candidates do not authorize generic
   patches to other executables.
@@ -68,8 +76,9 @@ The journal protects a block, not an entire game's multi-block save.
 The standalone harness from source `87140926efd1` passed on SCI/exFAT:
 allocated `KUIPROOF` bytes and package CRC16, two used/198 free blocks,
 virtual-device reset, fresh reopen after remount/reconnect, and a synced clean
-checkpoint. A photograph of the post-power-cycle **X** verification is still
-needed; the successful checkpoint screen alone does not prove that step.
+checkpoint. The later Y export also verifies the latest persisted save, but
+the user did not explicitly report whether a power cycle preceded it; the
+checkpoint screen alone does not establish that timing.
 
 The same source's Toy observer stopped during an accepted GD DMAREAD with
 CD music off, before completing its four report pages. The terminal screen
@@ -185,11 +194,34 @@ full-image SHA-256. After closing/unmounting/disconnecting, a fresh raw SCI
 connection verifies every mapped sector and the same card identity before the
 profile is written. Real FAT32/exFAT host tests cover superfloppies, partition
 offsets, unique exports, source preservation and identity/read failure refusal.
-This exports preparation metadata; it does not install game-time SD reads.
-The next retail build still needs a shared resident read lease, immutable
-profile handoff, raw-data admission against game extents and a runtime fault
-latch. It must retain the zero-write game-time policy until read arbitration
-is separately proven. A page-2 request/reply display mismatch after later
+The console's399d10269c83 Y result is PROFILE/READY forp0001, one physical
+extent and image SHA prefix4edbef747fb15d17. Both independent Python and the
+C codec admit the supplied1536-byte profile. This preparation result does not
+by itself establish game-time SD arbitration.
+
+The separate `READONLY_PROOF=2` target now copies the admitted profile into
+worker-owned P2 data. The high stage verifies CID/capacity, all256 block CRCs
+and image SHA against its existing initialized SCI card before game-file
+reads, rejecting overlap with every game extent including audio tracks. The
+completion worker borrows the same resident SCI bus under the same cached P1
+GD lock, using a scoped descriptor copy and an aligned512-byte private buffer.
+Each bounded read checks CID, CMD18/data/stop success and the image block CRC;
+only successful lease release permits reply publication. Any post-acquisition
+uncertainty or restoration failure poisons the resident card session. Initial
+contention is a diagnostic stop, with no wire traffic or fabricated Maple
+retry. The zero-write game-time policy remains in force.
+
+ABI5 separates passive mode0, synthetic mode1 and SD-backed mode2. Native
+packaging audits the linked gateway's lack of incoming resident calls before
+excluding its frame from the unchanged low GD stack budget; all linked worker
+and resident callback frames fit the worker's4 KiB stack. CI compiles only a
+deterministic non-owner profile template. Local personalization validates the
+clean native provenance and changes only the fixed1536-byte ROdata span in
+stage/entry plus runtime envelope checksums, retaining original bytes and a
+complete transformation audit. The owner's CID/map never enters Git history.
+See `vmu-sd-readonly-card-test.md` for the next hardware test.
+
+A page-2 request/reply display mismatch after later
 controller-only polls is also corrected; that issue did not affect replies.
 
 ## Work required before in-game saves

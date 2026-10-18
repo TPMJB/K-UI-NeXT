@@ -4,6 +4,12 @@ on:
   push:
     branches: ['milestone/vmu-*']
   workflow_dispatch:
+    inputs:
+      sd_profile_base64:
+        description: Optional base64-encoded1536-byte read-only VMU SD profile
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -118,6 +124,27 @@ jobs:
         run: |
           source .deps/kos/environ.sh
           make -f Makefile.vmu-toy -j2 BUILD=build/vmu-toy-readonly READONLY_PROOF=1 package
+      - name: Admit supplied per-card read-only profile
+        env:
+          VMU_PROFILE_BASE64: ${{ inputs.sd_profile_base64 }}
+        run: |
+          python3 - <<'PY'
+          import base64, json, os, sys
+          from pathlib import Path
+          sys.path.insert(0, 'tools')
+          from vmu_sd_profile import decode_profile, template_profile
+          supplied = os.environ.get('VMU_PROFILE_BASE64', '')
+          data = base64.b64decode(supplied, validate=True) if supplied else template_profile()
+          summary = decode_profile(data)
+          (Path(os.environ['RUNNER_TEMP']) / 'vmu-sd-profile.bin').write_bytes(data)
+          print(json.dumps(summary, indent=2))
+          PY
+      - name: Build isolated SD-backed read-only A1 proof
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          make -f Makefile.vmu-toy -j2 BUILD=build/vmu-toy-sd-readonly READONLY_PROOF=2 \
+            SD_PROFILE="$RUNNER_TEMP/vmu-sd-profile.bin" package
       - name: Upload exact-title observer test
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -130,6 +157,13 @@ jobs:
         with:
           name: K-UI-experimental-Toy-Read-Only-VMU
           path: build/vmu-toy-readonly/vmu-readonly-card-test.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload per-card SD-backed read-only proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-Toy-SD-Read-Only-VMU
+          path: build/vmu-toy-sd-readonly/vmu-sd-readonly-card-test.zip
           if-no-files-found: error
           retention-days: 30
       - name: Retain native proof
@@ -155,5 +189,13 @@ jobs:
             build/vmu-toy-readonly/*.json
             build/vmu-toy-readonly/*.dis
             build/vmu-toy-readonly/**/*.su
+            build/vmu-toy-sd-readonly/*.elf
+            build/vmu-toy-sd-readonly/*.bin
+            build/vmu-toy-sd-readonly/*.map
+            build/vmu-toy-sd-readonly/*.json
+            build/vmu-toy-sd-readonly/*.dis
+            build/vmu-toy-sd-readonly/**/*.su
+            build/vmu-toy-sd-readonly/**/*.ci
+            build/vmu-toy-sd-readonly/vmu-sd-profile.bin
           if-no-files-found: ignore
           retention-days: 30

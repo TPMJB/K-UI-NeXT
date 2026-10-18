@@ -15,6 +15,9 @@ def generate(path):
         "KUI_VMU_OBSERVE_LOW_RETURN_HOOK": "_kui_vmu_observe_return_hook",
         "KUI_VMU_OBSERVE_LOW_CONTROL": "_kui_vmu_observe_boot_control",
     }
+    optional_lease = "_kui_vmu_observe_sd_lease"
+    if optional_lease in image["symbols"]:
+        names["KUI_VMU_OBSERVE_LOW_SD_LEASE"] = optional_lease
     typed = _linked_symbols(data, set(names.values()))
     values = {}
     for macro, name in names.items():
@@ -22,13 +25,13 @@ def generate(path):
         if not size or section is None or not section[3] <= address < address + size <= section[3] + section[5]:
             raise ValueError("Missing or unbounded typed observer symbol: " + name)
         if macro.endswith("CONTROL"):
-            if (size != 52 or kind != 1 or address & 31 or section[1] != 8 or
+            if (size != 56 or kind != 1 or address & 31 or section[1] != 8 or
                     section[2] & 7 != 3 or
                     not 0x8C004000 <= address < address + 64 <= 0x8C007800 or
                     address + 64 > section[3] + section[5]):
                 raise ValueError("Observer control must own two complete low BSS cache lines")
             # No other runtime symbol may occupy the control's padding.
-            # The typed object's ABI is52bytes; its allocation reserves64.
+            # The typed object's ABI is56bytes; its allocation reserves64.
             if any(address + size <= value < address + 64
                    for value in image["symbols"].values()):
                 raise ValueError("Observer control cache-line padding is shared")

@@ -191,10 +191,47 @@ static void invalid_api_arguments(void) {
     assert(!card.requests && !card.reads && !card.refused && !card.commit_attempts);
 }
 
+struct readonly_source {unsigned reads;int result;};
+static int fixed_read(void *context,uint16_t block,uint8_t out[512]) {
+    struct readonly_source *source=context;assert(block<256u);++source->reads;
+    for(unsigned i=0;i<512u;i++) out[i]=(uint8_t)(block^i);
+    return source->result;
+}
+static void fixed_image_reader_is_readonly_and_fail_closed(void) {
+    struct readonly_source source={0,0};uint8_t frame[12],response[524];size_t n;
+    assert(kui_vmu_readonly_init_reader(NULL,fixed_read,&source)==KUI_VMU_READONLY_ARGUMENT);
+    assert(kui_vmu_readonly_init_reader(&card,NULL,&source)==KUI_VMU_READONLY_ARGUMENT);
+    assert(kui_vmu_readonly_init_reader(&card,fixed_read,&source)==0 && !source.reads);
+    request(frame,2u,0u);
+    assert(kui_vmu_readonly_handle(&card,frame,4u,response,sizeof(response),&n)==1);
+    assert(!memcmp(response+22u,"K-UI Read-Only SD",16u));
+    assert(!memcmp(response+116u,"K-UI read-only fixed SD image; no writes or persistence",53u));
+    assert(!source.reads);
+    request(frame,11u,42u);
+    assert(kui_vmu_readonly_handle(&card,frame,12u,response,523u,&n)==KUI_VMU_READONLY_CAPACITY && !source.reads);
+    for(unsigned block=0;block<256u;block++) {
+        request(frame,11u,block);
+        assert(kui_vmu_readonly_handle(&card,frame,12u,response,sizeof(response),&n)==1 && n==524u);
+        for(unsigned i=0;i<512u;i++) assert(response[12u+i]==(uint8_t)(block^i));
+    }
+    assert(source.reads==256u && card.reads==256u && !card.commit_attempts);
+    request(frame,11u,0u);frame[0]=12u;refused(frame,12u);assert(source.reads==256u);
+    for(unsigned fault=0;fault<2u;fault++) {
+        source=(struct readonly_source){0,fault?1:-1};
+        assert(kui_vmu_readonly_init_reader(&card,fixed_read,&source)==0);
+        request(frame,11u,42u);
+        assert(kui_vmu_readonly_handle(&card,frame,12u,response,sizeof(response),&n)==KUI_VMU_READONLY_INTERNAL);
+        assert(!n && source.reads==1u && card.faulted && !card.reads && !card.requests);
+        assert(kui_vmu_readonly_handle(&card,frame,12u,response,sizeof(response),&n)==KUI_VMU_READONLY_INTERNAL);
+        assert(!n && source.reads==1u && !card.commit_attempts); /* No implicit busy retry. */
+    }
+}
+
 int main(void) {
     blank_generator_and_protocol_reads();information_shapes();
     rejects_mutations_and_unknowns_before_protocol();strict_packet_fields();
     capacities_and_fault_sentinel();invalid_api_arguments();
+    fixed_image_reader_is_readonly_and_fail_closed();
     puts("VMU read-only blank-card backend: all blocks, canonical image, strict refusals and commit sentinel passed");
     return 0;
 }

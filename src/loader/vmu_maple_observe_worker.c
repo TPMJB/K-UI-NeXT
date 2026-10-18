@@ -5,6 +5,13 @@
 #include "kui/vmu_readonly.h"
 #include "kui/vmu_readonly_overlay.h"
 #endif
+#if KUI_VMU_READONLY_PROOF == 2
+#include "kui/vmu_sd_profile.h"
+#include "kui/vmu_backing.h"
+#include "kui/retail_image.h"
+#include "sd_reader.h"
+#include <string.h>
+#endif
 #include "retail_display.h"
 
 #define PHYSICAL_BASE UINT32_C(0x0c000000)
@@ -23,6 +30,17 @@ void kui_vmu_maple_observer_report(void);
 static struct kui_vmu_readonly blank_card;
 static struct kui_vmu_readonly_overlay overlay;
 static struct kui_vmu_readonly_overlay_frame proof_frames[32];
+#endif
+#if KUI_VMU_READONLY_PROOF == 2
+struct observe_sd_state {
+    struct kui_vmu_sd_profile profile;
+    _Alignas(32) uint8_t bounce[512];
+    uint16_t block;
+    uint8_t inflight,invoked,verified,failed;
+};
+static struct observe_sd_state sd_state;
+static int (*sd_lease)(kui_vmu_sd_transaction,void *);
+_Static_assert(sizeof(struct kui_vmu_sd_profile)==1320u,"SD profile decoded ABI");
 #endif
 
 #ifdef KUI_VMU_MAPLE_OBSERVE_HOST_TEST
@@ -52,6 +70,91 @@ static void increment(uint32_t *value) {
     if(*value != UINT32_MAX)
         ++*value;
 }
+
+#if KUI_VMU_READONLY_PROOF == 2
+/* The resident gateway invokes this exact exported entry with a temporary
+ * protocol descriptor, while it owns the real GD lock and SCI lease. Only
+ * our private aligned bounce can receive the DMA-facing card bytes. */
+int kui_vmu_maple_observer_sd_transaction(void *context,struct kui_loader_sd *loan) {
+    struct kui_vmu_maple_observe_snapshot *s=&kui_vmu_maple_observer_snapshot;
+    if(context!=&sd_state || !loan || s->initialized!=1u ||
+       !sd_state.inflight || sd_state.invoked || sd_state.failed) {
+        s->sd_last_result=KUI_VMU_OBSERVE_SD_CONTEXT;
+        if(loan) loan->ready=false;
+        return -1;
+    }
+    sd_state.invoked=1u;
+    if(!loan->ready || loan->slow || loan->blocks!=sd_state.profile.card_sectors ||
+       loan->high_capacity!=!!sd_state.profile.high_capacity) {
+        s->sd_last_result=KUI_VMU_OBSERVE_SD_IDENTITY;goto fail;
+    }
+    struct kui_vmu_sd_identity identity;
+    increment(&s->sd_cid_checks);
+    if(kui_vmu_sd_identity_read(loan,&identity)!=KUI_VMU_BACKING_OK ||
+       identity.sectors!=sd_state.profile.card_sectors ||
+       identity.high_capacity!=!!sd_state.profile.high_capacity ||
+       memcmp(identity.cid,sd_state.profile.cid,16u)) {
+        s->sd_last_result=KUI_VMU_OBSERVE_SD_IDENTITY;goto fail;
+    }
+    struct kui_loader_sd_stream stream={0};
+    enum kui_loader_sd_result result=kui_loader_sd_stream_start(loan,&stream,s->sd_last_lba,1u);
+    if(result==KUI_LOADER_SD_OK) result=kui_loader_sd_stream_next(loan,&stream,sd_state.bounce);
+    enum kui_loader_sd_result stopped=kui_loader_sd_stream_stop(loan,&stream);
+    if(result!=KUI_LOADER_SD_OK || stopped!=KUI_LOADER_SD_OK || !loan->ready) {
+        s->sd_last_result=KUI_VMU_OBSERVE_SD_READ;goto fail;
+    }
+    s->sd_crc_actual=kui_retail_crc32(0,sd_state.bounce,sizeof(sd_state.bounce));
+    if(s->sd_crc_actual!=s->sd_crc_expected) {
+        s->sd_last_result=KUI_VMU_OBSERVE_SD_CRC;goto fail;
+    }
+    sd_state.verified=1u;
+    return 0;
+fail:
+    loan->ready=false;
+    return -1;
+}
+
+static int sd_read_block(void *context,uint16_t block,uint8_t out[512]) {
+    struct kui_vmu_maple_observe_snapshot *s=&kui_vmu_maple_observer_snapshot;
+    if(context!=&sd_state || !out || sd_state.failed || sd_state.inflight) {
+        s->sd_last_result=KUI_VMU_OBSERVE_SD_CONTEXT;
+        sd_state.failed=1u;increment(&s->sd_faults);
+        return KUI_VMU_EMU_IO_ERROR;
+    }
+    s->sd_crc_actual=0u;
+    if(kui_vmu_sd_profile_map_lba(&sd_state.profile,block,&s->sd_last_lba)) {
+        s->sd_last_result=KUI_VMU_OBSERVE_SD_MAPPING;
+        sd_state.failed=1u;increment(&s->sd_faults);return KUI_VMU_EMU_IO_ERROR;
+    }
+    sd_state.block=block;s->sd_crc_expected=sd_state.profile.block_crc[block];
+    sd_state.inflight=1u;sd_state.invoked=sd_state.verified=0u;
+    s->sd_last_result=KUI_VMU_OBSERVE_SD_OK;
+#ifdef KUI_VMU_MAPLE_OBSERVE_HOST_TEST
+    int result=kui_vmu_maple_observer_test_sd_lease(kui_vmu_maple_observer_sd_transaction,&sd_state);
+#else
+    int result=sd_lease(kui_vmu_maple_observer_sd_transaction,&sd_state);
+#endif
+    sd_state.inflight=0u;
+    if(STACK_BOTTOM[0]!=STACK_PATTERN || STACK_BOTTOM[1]!=STACK_PATTERN) {
+        increment(&s->stack_fault);s->sd_last_result=KUI_VMU_OBSERVE_SD_CONTEXT;
+        sd_state.verified=0u;
+    }
+    if(result!=KUI_VMU_SD_LEASE_OK || !sd_state.invoked || !sd_state.verified) {
+        sd_state.failed=1u;
+        if(result==KUI_VMU_SD_LEASE_BUSY) {
+            s->sd_last_result=KUI_VMU_OBSERVE_SD_BUSY;increment(&s->sd_busy);
+        } else {
+            if(s->sd_last_result==KUI_VMU_OBSERVE_SD_OK) s->sd_last_result=KUI_VMU_OBSERVE_SD_LEASE_FAULT;
+            increment(&s->sd_faults);
+        }
+        return KUI_VMU_EMU_IO_ERROR;
+    }
+    /* Cleanup/health must succeed before any byte reaches the staged reply.
+     * The overlay publishes only after every response in its batch succeeds. */
+    for(unsigned i=0;i<512u;i++) out[i]=sd_state.bounce[i];
+    increment(&s->sd_reads);return KUI_VMU_EMU_IO_OK;
+}
+#endif
 
 static int source_span(uint32_t address, uint32_t bytes) {
     return address >= PHYSICAL_BASE && address < PROTECTED_BEGIN
@@ -165,13 +268,33 @@ int kui_vmu_maple_observer_init(const struct kui_vmu_maple_observe_config *confi
     kui_vmu_maple_observer_snapshot.source_min = UINT32_MAX;
     kui_vmu_maple_observer_snapshot.rx_min = UINT32_MAX;
     kui_vmu_maple_observer_snapshot.source_fingerprint = UINT32_C(2166136261);
-    kui_vmu_maple_observer_snapshot.initialized = 1u;
     pending_source=0;
 #if KUI_VMU_READONLY_PROOF
-    kui_vmu_maple_observer_snapshot.proof_mode=1u;
-    if(kui_vmu_readonly_init(&blank_card) ||
-       kui_vmu_readonly_overlay_init(&overlay,blank_packet,&blank_card)) return -1;
+    kui_vmu_maple_observer_snapshot.proof_mode=KUI_VMU_READONLY_PROOF;
+#if KUI_VMU_READONLY_PROOF == 2
+    if(config->sd_profile_bytes!=sizeof(struct kui_vmu_sd_profile) ||
+       (config->sd_profile&3u) || (config->sd_profile&UINT32_C(0xff000000))!=UINT32_C(0x8c000000) ||
+       !source_span(config->sd_profile&UINT32_C(0x1fffffff),config->sd_profile_bytes) ||
+       (config->sd_lease&1u) || config->sd_lease<UINT32_C(0x8c004000) ||
+       config->sd_lease>=UINT32_C(0x8c007800)) return -1;
+#ifdef KUI_VMU_MAPLE_OBSERVE_HOST_TEST
+    const struct kui_vmu_sd_profile *prepared=kui_vmu_maple_observer_test_sd_profile(config->sd_profile);
+#else
+    const struct kui_vmu_sd_profile *prepared=(const struct kui_vmu_sd_profile *)(uintptr_t)config->sd_profile;
 #endif
+    if(!prepared || kui_vmu_sd_profile_validate(prepared)) return -1;
+    memset(&sd_state,0,sizeof(sd_state));memcpy(&sd_state.profile,prepared,sizeof(*prepared));
+    sd_lease=(int (*)(kui_vmu_sd_transaction,void *))(uintptr_t)config->sd_lease;
+    if(kui_vmu_readonly_init_reader(&blank_card,sd_read_block,&sd_state) ||
+#else
+    if(config->sd_lease || config->sd_profile || config->sd_profile_bytes) return -1;
+    if(kui_vmu_readonly_init(&blank_card) ||
+#endif
+       kui_vmu_readonly_overlay_init(&overlay,blank_packet,&blank_card)) return -1;
+#else
+    if(config->sd_lease || config->sd_profile || config->sd_profile_bytes) return -1;
+#endif
+    kui_vmu_maple_observer_snapshot.initialized = 1u;
     return 0;
 }
 
@@ -204,8 +327,8 @@ void kui_vmu_maple_observer_report(void) {
     uint32_t page;
     for(page = 0;;page = (page + 1u) % 4u) {
         retail_display_restore(&saved_display);
-        retail_display_line(KUI_VMU_READONLY_PROOF?
-            "VIRTUAL VMU - READ ONLY BLANK CARD":"TOY MAPLE OBSERVER - READ ONLY");
+        retail_display_line(KUI_VMU_READONLY_PROOF==2?"VIRTUAL VMU - READ ONLY SD IMAGE":
+            KUI_VMU_READONLY_PROOF?"VIRTUAL VMU - READ ONLY BLANK CARD":"TOY MAPLE OBSERVER - READ ONLY");
         retail_display_values("PAGE SCHEDULES DESCRIPTORS BAD",
             (uint32_t[4]){page, s->starts, s->descriptors, s->malformed}, 4u);
         if(page == 0u) {
@@ -236,7 +359,8 @@ void kui_vmu_maple_observer_report(void) {
                 (uint32_t[4]){s->proof_flags,s->proof_last_request,s->proof_last_response,s->proof_last_rx},4u);
             retail_display_values("BLOCK BYTES COMMITS",&s->proof_last_block,3u);
             retail_display_values("MODE PREPARED COMPLETED",&s->proof_mode,3u);
-            retail_display_line("SYNTHETIC EMPTY CARD / NO PERSISTENCE");
+            retail_display_line(KUI_VMU_READONLY_PROOF==2?
+                "FIXED SD IMAGE / NO WRITES OR PERSISTENCE":"SYNTHETIC EMPTY CARD / NO PERSISTENCE");
             retail_display_pause(600u);
             continue;
 #endif
@@ -258,10 +382,16 @@ void kui_vmu_maple_observer_report(void) {
                 else retail_display_line("EMPTY");
             }
         } else {
+#if KUI_VMU_READONLY_PROOF == 2
+            retail_display_values("SD READS BUSY FAULTS RESULT",&s->sd_reads,4u);
+            retail_display_values("LBA EXPECT CRC ACTUAL CRC CID CHECKS",&s->sd_last_lba,4u);
+            retail_display_values("PROOF FLAGS REQUEST RESPONSE RX",&s->proof_flags,4u);
+#else
             retail_display_values("TRIGGER NONSW ENABLE NONONE", &s->trigger_last, 4u);
             retail_display_values("BUSY NONZERO ENTRY SR MASKS", &s->busy_last, 4u);
             retail_display_values("MANAGER BASE NONMAPLE",
                 (uint32_t[2]){s->manager_last, s->manager_other}, 2u);
+#endif
             retail_display_values("CMP SR MASKS MAIN-A INFO HDR RX", &s->completion_sr_last, 4u);
             retail_display_values("SUB REQUEST RESPONSE RX ORDINAL", &s->subunit_request, 4u);
             retail_display_values("CTXBAD FLAGS MDSTAR CALLER PR", &s->completion_bad_context, 4u);
