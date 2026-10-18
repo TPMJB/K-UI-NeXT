@@ -16,6 +16,7 @@ import check_retail_loader_layout as resident_layout
 from check_retail_stack import EDGE, NODE
 from runtime_package import verify
 from toy_pilot_symbols import _linked_symbols
+from vmu_maple_observe_symbols import sd_gateway_span
 from check_vmu_maple_observe_hook import check_hook, check_completion_hook
 import retail_package as layout
 
@@ -170,13 +171,7 @@ def linked_stack_rows(reports, symbols):
 
 def check_sd_gateway(directory, resident, elf):
     """No resident GD path may enter the lease-only worker-stack gateway."""
-    name = "_kui_vmu_observe_sd_lease"
-    address, size, kind, section = _linked_symbols(elf, {name}).get(name, (0, 0, 0, None))
-    if (section is None or kind != 2 or not size or address & 1 or size & 1 or
-            section[2] & 7 != 6 or resident["symbols"].get(name) != address or
-            not section[3] <= address < address + size <= section[3] + section[5] or
-            not 0x8C004000 <= address < address + size <= 0x8C004000 + len(resident["payload"])):
-        raise ValueError("SD lease gateway requires one bounded typed low-code function")
+    address, size, declared = sd_gateway_span(elf, resident)
     reports = sorted((directory / "resident/lto").glob("*.ltrans*.ci"))
     nodes = set()
     if not reports:
@@ -202,6 +197,7 @@ def check_sd_gateway(directory, resident, elf):
             if address <= canonical < address + size:
                 raise ValueError("Resident literal references worker-stack SD lease gateway")
     return {"address": f"0x{address:08x}", "bytes": size,
+            "declared_symbol_bytes": declared, "bounds": "exclusive allocated linker section",
             "incoming_resident_edges": 0, "resident_pointer_references": 0,
             "callgraph_reports": [path.name for path in reports]}
 

@@ -61,9 +61,9 @@ def low_reader(sd_lease=False):
     base = 0x8C004000
     data = bytearray(4096)
     EH.pack_into(data, 0, b"\x7fELF\x01\x01\x01" + bytes(9), 2, 42, 1,
-                 base, 52, 0x300, 0, 52, 32, 1, 40, 5, 0)
+                 base, 52, 0x300, 0, 52, 32, 1, 40, 7 if sd_lease else 5, 0)
     PH.pack_into(data, 52, 1, 0x100, base, base, 128, 192, 7, 4)
-    SH.pack_into(data, 0x328, 0, 1, 6, base, 0x100, 128, 0, 0, 4, 0)
+    SH.pack_into(data, 0x328, 0, 1, 6, base, 0x100, 64 if sd_lease else 128, 0, 0, 4, 0)
     SH.pack_into(data, 0x350, 0, 8, 3, base + 128, 0x180, 64, 0, 0, 32, 0)
     names = bytearray(b"\0")
     symbols = (("_start", base, 4, 0x12, 1),
@@ -71,7 +71,14 @@ def low_reader(sd_lease=False):
                ("_kui_vmu_observe_return_hook", base + 36, 20, 0x12, 1),
                ("_kui_vmu_observe_boot_control", base + 128, 56, 0x11, 2))
     if sd_lease:
-        symbols += (("_kui_vmu_observe_sd_lease", base + 60, 4, 0x12, 1),)
+        # --relax leaves a12-byte nominal symbol around this8-byte section;
+        # the adjacent normal end callback owns its separate4-byte section.
+        SH.pack_into(data, 0x3C8, 0, 1, 6, base + 64, 0x140, 8, 0, 0, 4, 0)
+        SH.pack_into(data, 0x3F0, 0, 1, 6, base + 72, 0x148, 4, 0, 0, 4, 0)
+        symbols += (("_kui_vmu_observe_sd_lease", base + 64, 12, 0x12, 5),
+                    ("_end", base + 72, 4, 0x12, 6),
+                    ("__vmu_sd_lease_begin", base + 64, 0, 0x10, 5),
+                    ("__vmu_sd_lease_end", base + 72, 0, 0x10, 5))
     SH.pack_into(data, 0x378, 0, 2, 0, 0, 0x500, (len(symbols) + 1) * 16, 4, 1, 4, 16)
     for index, (name, address, size, kind, section) in enumerate(symbols, 1):
         SYM.pack_into(data, 0x500 + index * 16, len(names), address,
@@ -290,13 +297,24 @@ class ObserverPackageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as name:
             directory = Path(name);reports = directory / "resident/lto";reports.mkdir(parents=True)
             path = reports / "resident.elf.ltrans0.ltrans.ci";path.write_text(graph)
-            self.assertEqual(check_sd_gateway(directory, resident, elf)["incoming_resident_edges"], 0)
+            proof = check_sd_gateway(directory, resident, elf)
+            self.assertEqual(proof["incoming_resident_edges"], 0)
+            self.assertEqual(proof["bytes"], 8)
+            self.assertEqual(proof["declared_symbol_bytes"], 12)
+            # An actual neighbouring routine is not gateway code, even when
+            # the pre-relaxation ST_SIZE overlaps its independent section.
+            neighbour = dict(resident, payload=bytearray(resident["payload"]))
+            struct.pack_into("<I", neighbour["payload"], 100, 0x8C004048)
+            self.assertEqual(check_sd_gateway(directory, neighbour, elf)["bytes"], 8)
+            with tempfile.TemporaryDirectory() as sym_name:
+                sym_path = Path(sym_name) / "resident.elf";sym_path.write_bytes(elf)
+                self.assertIn("KUI_VMU_OBSERVE_LOW_SD_LEASE 0x8c004040u", generate(sym_path))
             path.write_text(graph + 'edge: { sourcename: "kui_retail_resident_dispatch" '
                             'targetname: "kui_vmu_observe_sd_lease" label: "resident.c:1" }\n')
             with self.assertRaisesRegex(ValueError, "Resident call enters"):
                 check_sd_gateway(directory, resident, elf)
             path.write_text(graph)
-            for value in (0x8C00403C, 0x0C00403C, 0xAC00403E):
+            for value in (0x8C004040, 0x0C004040, 0xAC004046):
                 changed = dict(resident, payload=bytearray(resident["payload"]))
                 struct.pack_into("<I", changed["payload"], 100, value)
                 with self.subTest(value=value), self.assertRaisesRegex(ValueError, "literal references"):

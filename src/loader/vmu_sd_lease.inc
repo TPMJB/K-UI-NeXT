@@ -20,7 +20,9 @@ static inline uint32_t lease_sr(void) {
     ((uintptr_t)&kui_vmu_observe_boot_control+UINT32_C(0x20000000)))
 #endif
 
-int __attribute__((noipa)) kui_vmu_observe_sd_lease(
+/* A separate linker output section owns the exact relaxed code/literal span.
+ * SH --relax can leave ST_SIZE at its larger pre-relaxation value. */
+int __attribute__((noipa,section(".vmu_sd_lease"))) kui_vmu_observe_sd_lease(
     kui_vmu_sd_transaction callback,void *context) {
     const volatile struct kui_vmu_observe_boot_control *control=LEASE_CONTROL;
     uintptr_t target=(uintptr_t)callback;

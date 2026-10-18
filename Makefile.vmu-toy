@@ -13,6 +13,7 @@ endif
 endif
 endif
 SD_PROFILE ?=
+RESIDENT_LAYOUT = src/loader/retail_resident_low.ld
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD)
 CPU = -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,fpul-fpul
 FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
@@ -54,6 +55,7 @@ endif
 FLAGS += -DKUI_VMU_EXPERIMENTAL=0
 VMU_CALLGRAPH_FLAGS = -fcallgraph-info=su
 VMU_SD_RESIDENT_EXPORTS = -Wl,-u,_kui_vmu_observe_sd_lease
+RESIDENT_LAYOUT = src/loader/vmu_sd_readonly_resident.ld
 FLAGS += $(VMU_CALLGRAPH_FLAGS)
 STAGE_SRC += src/core/vmu_sd_profile.c src/loader/vmu_backing.c
 WORKER_SRC += src/core/vmu_sd_profile.c src/core/hash.c src/core/retail_image.c src/loader/sd_reader.c src/loader/vmu_backing.c
@@ -106,7 +108,7 @@ $(BUILD)/resident_asm.o: src/loader/retail_resident.S
 $(BUILD)/observe_boot_asm.o: src/loader/vmu_maple_observe_boot.S
 	@mkdir -p $(@D)
 	$(CC) $(RESIDENT_FLAGS) -MMD -MP -c $< -o $@
-$(BUILD)/resident-sci.elf: $(RESIDENT_OBJ) src/loader/retail_resident_low.ld
+$(BUILD)/resident-sci.elf: $(RESIDENT_OBJ) $(RESIDENT_LAYOUT)
 	@mkdir -p $(BUILD)/resident/lto
 	$(CC) $(LINK) -flto -mrelax -Os -fno-tree-scev-cprop -fstack-usage $(VMU_CALLGRAPH_FLAGS) -save-temps=obj -Wl,--relax \
 	 -Wl,-u,_memcpy -Wl,-u,_memset -Wl,-u,_kui_retail_resident_init \
@@ -115,7 +117,7 @@ $(BUILD)/resident-sci.elf: $(RESIDENT_OBJ) src/loader/retail_resident_low.ld
 	 -Wl,-u,_kui_sci_sd_acquire -Wl,-u,_kui_sci_sd_release \
 	 -Wl,-u,_kui_vmu_observe_heap_hook -Wl,-u,_kui_vmu_observe_return_hook \
 	 -Wl,-u,_kui_vmu_observe_boot_control $(VMU_SD_RESIDENT_EXPORTS) \
-	 -Tsrc/loader/retail_resident_low.ld -Wl,-Map,$(BUILD)/resident-sci.map \
+	 -T$(RESIDENT_LAYOUT) -Wl,-Map,$(BUILD)/resident-sci.map \
 	 -o $@ $(RESIDENT_OBJ) -lgcc
 	cp $(BUILD)/resident-sci.elf.ltrans*.su $(BUILD)/resident/lto/
 ifeq ($(READONLY_PROOF),2)

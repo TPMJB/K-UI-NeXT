@@ -3,8 +3,43 @@
 """Bind the observation stage to typed symbols in its actual low reader."""
 import argparse
 from pathlib import Path
-from check_loader_layout import inspect_elf
+from check_loader_layout import EH, SH, SYM, inspect_elf, region
 from toy_pilot_symbols import _linked_symbols
+
+
+def sd_gateway_span(data, image):
+    """Use the isolated linked section, since SH relaxation can stale ST_SIZE."""
+    name = "_kui_vmu_observe_sd_lease"
+    names = {name, "__vmu_sd_lease_begin", "__vmu_sd_lease_end"}
+    typed = _linked_symbols(data, names)
+    address, declared, kind, section = typed.get(name, (0, 0, 0, None))
+    if (section is None or kind != 2 or not declared or address & 1 or declared & 1 or
+            section[1] != 1 or section[2] & 7 != 6 or image["symbols"].get(name) != address or
+            not 0x8C004000 <= address < address + declared <= 0x8C004000 + len(image["payload"])):
+        raise ValueError("SD lease gateway requires one bounded typed low-code function")
+    begin = typed.get("__vmu_sd_lease_begin", (0, 0, 0, None))
+    end = typed.get("__vmu_sd_lease_end", (0, 0, 0, None))
+    size = section[5]
+    if (not size or size & 1 or declared < size or address != section[3] or
+            begin != (address, 0, 0, section) or end != (address + size, 0, 0, section) or
+            region(data, section[4], size, "SD gateway section") !=
+            region(image["payload"], address - 0x8C004000, size, "SD gateway load")):
+        raise ValueError("SD lease gateway must own its exact allocated linker section")
+    header = EH.unpack_from(data)
+    sections = [SH.unpack_from(data, header[6] + index * header[11])
+                for index in range(header[12])]
+    index = sections.index(section)
+    functions = []
+    for table in sections:
+        if table[1] != 2:
+            continue
+        for at in range(table[4], table[4] + table[5], table[9]):
+            _, value, _, info, _, owner = SYM.unpack_from(data, at)
+            if info & 15 == 2 and owner == index:
+                functions.append(value)
+    if functions != [address]:
+        raise ValueError("SD gateway section must contain exactly one typed function")
+    return address, size, declared
 
 
 def generate(path):
@@ -21,6 +56,9 @@ def generate(path):
     typed = _linked_symbols(data, set(names.values()))
     values = {}
     for macro, name in names.items():
+        if macro == "KUI_VMU_OBSERVE_LOW_SD_LEASE":
+            values[macro] = sd_gateway_span(data, image)[0]
+            continue
         address, size, kind, section = typed.get(name, (0, 0, 0, None))
         if not size or section is None or not section[3] <= address < address + size <= section[3] + section[5]:
             raise ValueError("Missing or unbounded typed observer symbol: " + name)
