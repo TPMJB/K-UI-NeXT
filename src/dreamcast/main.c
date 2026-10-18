@@ -150,6 +150,7 @@ static unsigned music_listing_generation,music_offset_pending;
 static char music_path_pending[256];
 static struct kui_games_page games_listing;
 static struct kui_games_detail games_detail;
+static struct kui_app_status games_chd_status;
 static unsigned games_listing_generation,games_detail_generation;
 static struct kui_game_launch_settings games_detail_launch_settings,games_launch_settings_pending;
 static struct kui_game_ram_patches games_patches_pending;
@@ -1566,6 +1567,9 @@ static void publish_cd_audio(void) {
 static void games_scan_progress(const struct kui_app_status *status) {
     mutex_lock(&lock);games_scan_status=*status;mutex_unlock(&lock);
 }
+static void games_chd_progress(const struct kui_app_status *status) {
+    mutex_lock(&lock);games_chd_status=*status;mutex_unlock(&lock);
+}
 static void ftp_publish(const struct kui_ftp_status *status) {
     mutex_lock(&lock);ftp_status=*status;ftp_seen=true;mutex_unlock(&lock);
 }
@@ -1592,6 +1596,7 @@ static bool games_page(enum kui_shell_page page) {
     return page==KUI_SHELL_GAMES || page==KUI_SHELL_GAMES_ADVANCED ||
         page==KUI_SHELL_GAMES_DETAIL || page==KUI_SHELL_GAMES_VARIANTS ||
         page==KUI_SHELL_GAMES_PROBE_CONFIRM || page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
+        page==KUI_SHELL_GAMES_CHD_CONFIRM ||
         page==KUI_SHELL_GAMES_RETAIL_CONFIRM || page==KUI_SHELL_GAMES_LAUNCH_OPTIONS ||
         page==KUI_SHELL_GAMES_EXTRA_OPTIONS || page==KUI_SHELL_GAMES_TESTS || page==KUI_SHELL_GAMES_INFO ||
         page==KUI_SHELL_GAMES_PATCHES || page==KUI_SHELL_GAMES_CODEC || page==KUI_SHELL_GAMES_CHECK;
@@ -1619,7 +1624,7 @@ static bool games_action_invalidates(unsigned action) {
         action==25 || action==30 || action==33 || action==38 || action==40 ||
         (action>=42 && action<=48) || (action>=56 && action<=59) || action==62 ||
         action==64 || action==65 || action==67 || action==79 || action==81 || action==82 ||
-        action==83 || action==85 || action==86 || action==90 || action==92 || (action>=68 && action<=71);
+        action==83 || action==85 || action==86 || action==90 || action==92 || action==93 || (action>=68 && action<=71);
 }
 static bool games_idle_cancelled(void) {
     mutex_lock(&lock);
@@ -1910,10 +1915,11 @@ static void *worker(void *unused) {
                 ++files_picture_generation;
             }
             if(action==24 && files_music) files_song_result(&player_status);
-            if(action==55) {
+            if(action==55 || action==93) {
                 memset(&games_detail,0,sizeof(games_detail));games_detail.stopped=true;
                 strcpy(games_detail.path,games_path_pending);
-                snprintf(games_detail.message,sizeof(games_detail.message),"Games inspection stopped before starting");
+                snprintf(games_detail.message,sizeof(games_detail.message),"%s",action==93?
+                    "CHD preparation stopped before starting. Inspect again to retry.":"Games inspection stopped before starting");
                 kui_game_launch_settings_default(&games_detail_launch_settings);games_detail_launch_loaded=false;
                 ++games_detail_generation;
             }
@@ -2202,6 +2208,17 @@ static void *worker(void *unused) {
                 }
                 kui_games_inspect_cover_codec(games_path_pending,(enum kui_zso_codec)value.codec,
                     &detail,games_detail_cover,kui_log,kui_cancelled);
+                mutex_lock(&lock);
+                games_detail=detail;games_detail_launch_settings=value;games_detail_launch_loaded=loaded;
+                ++games_detail_generation;
+                mutex_unlock(&lock);
+            }
+            if(action==93) {
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
+                struct kui_games_detail detail;
+                struct kui_game_launch_settings value;
+                bool loaded=game_launch_settings_load(games_path_pending,&value);
+                (void)kui_games_chd_prepare(games_path_pending,&detail,kui_log,kui_cancelled,games_chd_progress);
                 mutex_lock(&lock);
                 games_detail=detail;games_detail_launch_settings=value;games_detail_launch_loaded=loaded;
                 ++games_detail_generation;
@@ -2627,6 +2644,7 @@ static void draw_shell(void) {
         shell.page==KUI_SHELL_FILES_PICK || shell.page==KUI_SHELL_FILES_CONFIRM ||
         shell.page==KUI_SHELL_FILES_INFO || shell.page==KUI_SHELL_FILES_VIEW;
     app_status=shell.page==KUI_SHELL_SCI_ASYNC_PROBE?sci_async_status:
+        shell.page==KUI_SHELL_GAMES_CHD_CONFIRM?games_chd_status:
         files_page?files_status:
         shell.page==KUI_SHELL_GAMES?games_scan_status:
         shell.page==KUI_SHELL_MEMORY?memory_test_status:
@@ -2765,6 +2783,7 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_VMU_COPY_ALL_COMMIT:return 90;
         case KUI_SHELL_VMU_IMPORT_PREVIEW:return 91;
         case KUI_SHELL_VMU_IMPORT_COMMIT:return 92;
+        case KUI_SHELL_GAMES_CHD_PREPARE:return 93;
         default: return 0;
     }
 }
@@ -2908,7 +2927,10 @@ int main(void) {
 #else
     kui_boot_ui_init(&boot_ui,timer_ms_gettime64());
 #endif
-    kthread_attr_t attrs = {.stack_size = 64 * 1024, .label = "kui-io"};
+    /* CHD preparation finishes with normal image inspection, whose bounded
+     * parser frames can nest. This is KOS-owned shell memory and is released
+     * at game handoff; the detached game stack/reservation is unchanged. */
+    kthread_attr_t attrs = {.stack_size = 96 * 1024, .label = "kui-io"};
     kthread_t *io_worker=thd_create_ex(&attrs,worker,NULL);
 #ifndef KUI_SD_RUNTIME
     boot_worker_available=io_worker!=NULL;
@@ -3268,9 +3290,12 @@ int main(void) {
                 music_offset_pending=shell.music_page*KUI_MUSIC_PLAYER_ROWS;
                 player_status=(struct kui_app_status){0};
             }
-            if(action==54 || action==55 || action==57 || action==58 || action==79) {
+            if(action==54 || action==55 || action==57 || action==58 || action==79 || action==93) {
+                bool launch_request=action==57 || action==58 || action==79;
+                const char *launch=launch_request?
+                    kui_shell_games_launch_path(&shell):NULL;
                 snprintf(games_path_pending,sizeof(games_path_pending),"%s",
-                    action==54?shell.games_path:shell.games_selected_path);
+                    action==54?shell.games_path:launch_request?(launch?launch:""):shell.games_selected_path);
                 games_offset_pending=shell.games_page*KUI_GAMES_ROWS;
                 games_reader_pending=shell.games_retail_reader;
                 games_patches_pending=shell.games_launch_patches;
@@ -3315,6 +3340,10 @@ int main(void) {
             if(action==59) {
                 games_scan_status=(struct kui_app_status){0};
                 snprintf(games_scan_status.message,sizeof(games_scan_status.message),"Finding games...");
+            }
+            if(action==93) {
+                games_chd_status=(struct kui_app_status){.total=shell.games_detail.cache_bytes};
+                snprintf(games_chd_status.message,sizeof(games_chd_status.message),"Checking CHD and available SD space...");
             }
             if(action==79) {
                 probe_status=(struct kui_app_status){0};

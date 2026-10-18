@@ -12,6 +12,7 @@ SOURCES := src/core/command.c src/core/data.c src/core/diskio.c src/core/clock.c
            src/dreamcast/main.c src/dreamcast/clock.c src/dreamcast/disc.c src/dreamcast/drive_bus.c src/dreamcast/sd.c
 OBJECTS := $(patsubst %.c,build/dc/%.o,$(SOURCES)) build/dc/ff.o build/dc/ffunicode.o
 include config/lwext4.mk
+include config/libchdr.mk
 LWEXT4_OBJECTS := $(patsubst %.c,build/dc/%.o,$(LWEXT4_SOURCES))
 LOADER_OBJECTS := build/dc/src/core/runtime_image.o build/dc/src/core/runtime_file.o build/dc/src/dreamcast/bootstrap.o
 LOADER_OBJECTS += build/dc/src/core/boot_volume.o build/dc/src/core/boot_image.o build/dc/src/core/ext4_boot.o $(LWEXT4_OBJECTS)
@@ -36,6 +37,8 @@ RUNTIME_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recov
 RUNTIME_OBJECTS += build/dc/src/core/network_rip.o
 RUNTIME_OBJECTS += build/dc/src/core/games_selection.o build/dc/src/core/game_launch_settings.o build/dc/src/core/game_ram_patches.o
 RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadata.o
+RUNTIME_OBJECTS += build/dc/src/core/chd_lib.o build/dc/src/core/chd_cache.o
+RUNTIME_OBJECTS += $(patsubst %.c,build/dc/%.o,$(LIBCHDR_SOURCES))
 RUNTIME_OBJECTS += build/dc/src/core/zso.o build/dc/src/core/deflate.o build/dc/src/core/lzo1x.o build/dc/src/core/retail_zso.o
 RUNTIME_OBJECTS += build/dc/src/core/game_cover.o build/dc/src/core/pvr_texture.o
 RUNTIME_OBJECTS += build/dc/src/core/files_path.o build/dc/src/core/vmu_save_format.o
@@ -74,6 +77,8 @@ include $(KOS_BASE)/Makefile.rules
 
 CPPFLAGS += -Iinclude -Isrc/dreamcast -Isrc/loader -I.deps/fatfs/source -Ifirmware/kui-wifi/components/kwlink/include -DKUI_BUILD_ID='"$(BUILD_ID)"'
 CPPFLAGS += -DKUI_RETAIL_EXTENDED_MAP=1
+build/dc/src/core/chd_lib.o: CPPFLAGS += -Ithird_party/libchdr/include
+$(patsubst %.c,build/dc/%.o,$(LIBCHDR_SOURCES)): CPPFLAGS += $(LIBCHDR_CPPFLAGS)
 CPPFLAGS += -Ithird_party/miniz -Ithird_party/minilzo -DMINIZ_NO_ARCHIVE_APIS \
     -DMINIZ_NO_STDIO -DMINIZ_NO_TIME -DMINIZ_NO_ZLIB_APIS -DMINIZ_NO_MALLOC -DLZO_CFG_NO_UNALIGNED=1
 # Shared freestanding buses also serve the CD bootstrap/runtime. Keep the
@@ -94,6 +99,10 @@ force-build-id:
 build/dc/%.o: %.c
 	@mkdir -p $(@D)
 	kos-cc -std=c11 -Wall -Wextra -Werror -MMD -MP $(CPPFLAGS) -c $< -o $@
+# Keep upstream codec warnings separate from the application's strict policy.
+build/dc/third_party/libchdr/%.o: third_party/libchdr/%.c $(LIBCHDR_HEADERS)
+	@mkdir -p $(@D)
+	kos-cc -std=c11 -Os -Wall -Wextra -fstack-usage -MMD -MP $(CPPFLAGS) -c $< -o $@
 build/dc/src/core/ext4_boot.o: CPPFLAGS += $(LWEXT4_CPPFLAGS)
 build/dc/third_party/lwext4/src/%.o: third_party/lwext4/src/%.c $(LWEXT4_HEADERS)
 	@mkdir -p $(@D)

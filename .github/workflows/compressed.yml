@@ -1,7 +1,7 @@
 name: Compressed reader candidate
 on:
   push:
-    branches: [feature/native-cso-chd]
+    branches: [feature/native-cso-chd, feature/chd-cache-loader]
 permissions:
   contents: read
 concurrency:
@@ -16,7 +16,14 @@ jobs:
       - name: Install prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential git curl wget patch python3 bison flex texinfo gettext libgmp-dev libmpfr-dev libmpc-dev libisl-dev libpng-dev libjpeg-dev meson ninja-build pkg-config libisofs-dev ffmpeg dosfstools exfatprogs
+          sudo apt-get install -y build-essential git curl wget patch python3 bison flex texinfo gettext libgmp-dev libmpfr-dev libmpc-dev libisl-dev libpng-dev libjpeg-dev meson ninja-build pkg-config libisofs-dev ffmpeg dosfstools exfatprogs mame-tools
+      - name: Verify CHD codecs, byte oracles and cancellation
+        env:
+          KUI_REQUIRE_CODEC_ORACLES: '1'
+          ASAN_OPTIONS: detect_leaks=0
+        run: |
+          python3 tools/fetch_deps.py --fatfs-only
+          make test-chd
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: |
@@ -44,6 +51,14 @@ jobs:
         run: |
           source .deps/kos/environ.sh
           python3 tools/package.py
+          python3 tools/build_chd_console_tests.py build/chd-console-test-set --build-id="$(git rev-parse --short=12 HEAD)"
+          python3 tools/package_chd_test.py --fixtures build/chd-console-test-set --output "dist/K-UI-CHD-Test-$(git rev-parse --short=12 HEAD).zip"
+      - name: Retain VMU-preserving CHD runtime overlay and original tests
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chd-runtime-overlay
+          path: dist/K-UI-CHD-Test-*.zip
+          if-no-files-found: error
       - name: Retain matching SD test update
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

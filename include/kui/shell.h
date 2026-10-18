@@ -51,7 +51,8 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_FTP, KUI_SHELL_STORAGE_TESTS, KUI_SHELL_STORAGE_TEST_HISTORY,
     KUI_SHELL_SCI_ASYNC_PROBE, KUI_SHELL_GAMES_VARIANTS, KUI_SHELL_WIFI,
     KUI_SHELL_GAMES_LAUNCH_OPTIONS, KUI_SHELL_GAMES_EXTRA_OPTIONS,
-    KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK, KUI_SHELL_VMU_IMAGE, KUI_SHELL_VMU_IMPORT };
+    KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK, KUI_SHELL_VMU_IMAGE, KUI_SHELL_VMU_IMPORT,
+    KUI_SHELL_GAMES_CHD_CONFIRM };
 enum kui_shell_game_option {
     KUI_SHELL_GAME_OPTION_READER, KUI_SHELL_GAME_OPTION_CDDA,
     KUI_SHELL_GAME_OPTION_ADVANCED, KUI_SHELL_GAME_OPTION_CODEC, KUI_SHELL_GAME_OPTION_COUNT
@@ -105,7 +106,8 @@ enum kui_shell_action {
     KUI_SHELL_VMU_IMAGE_EXTRACT, KUI_SHELL_VMU_IMAGE_EXTRACT_ALL,
     KUI_SHELL_FLASH_COMPARE, KUI_SHELL_BIOS_COMPARE,
     KUI_SHELL_VMU_COPY_ALL_PREVIEW, KUI_SHELL_VMU_COPY_ALL_COMMIT,
-    KUI_SHELL_VMU_IMPORT_PREVIEW, KUI_SHELL_VMU_IMPORT_COMMIT
+    KUI_SHELL_VMU_IMPORT_PREVIEW, KUI_SHELL_VMU_IMPORT_COMMIT,
+    KUI_SHELL_GAMES_CHD_PREPARE
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -305,6 +307,9 @@ bool kui_shell_set_games_rows(struct kui_shell *,const struct kui_games_page *,
 void kui_shell_set_games_detail(struct kui_shell *shell, const struct kui_games_detail *detail);
 bool kui_shell_games_zso_selected(const struct kui_shell *);
 bool kui_shell_games_image_ready(const struct kui_shell *shell);
+bool kui_shell_games_chd_prepare_ready(const struct kui_shell *shell);
+/* NULL rejects an unprepared or malformed cache; source identity is preserved. */
+const char *kui_shell_games_launch_path(const struct kui_shell *shell);
 /* The view to draw: the saved view once known, else the list. */
 unsigned kui_shell_games_view(const struct kui_shell *shell);
 bool kui_shell_games_art_key(const struct kui_shell *,struct kui_shell_games_art_key *);

@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/games.h"
+#include "kui/games_chd.h"
 #include "kui/game_image.h"
 #include "kui/game_metadata.h"
 #include "kui/games_cdda_status.h"
@@ -901,11 +902,20 @@ bool kui_games_inspect_with_codec(const char *path,enum kui_zso_codec codec,stru
     if(stopped(cancel)) {out->stopped=true;snprintf(out->message,sizeof(out->message),"Games inspection stopped");return false;}
     if(!kui_sd_connect()) {snprintf(out->message,sizeof(out->message),"SD card unavailable");return false;}
     FATFS fs;struct kui_game_image *image=NULL;bool mounted_card=false;
-    const char *problem="Cannot mount SD card";
+    const char *problem="Cannot mount SD card";char chd_message[128];
     if(!kui_mount(&fs,log)) goto done;
     mounted_card=true;
     if(extension(descriptor,".chd")) {
-        problem="Compressed image requires offline import; direct launch unavailable";goto done;
+        bool accepted=kui_games_chd_inspect_mounted(path,out,log,cancel);
+        snprintf(chd_message,sizeof(chd_message),"%s",out->message);
+        problem=chd_message;
+        if(!accepted || !out->chd_ready) goto done;
+        if(!split_file(out->cache_path,files.root,descriptor)) {
+            problem="Invalid prepared CHD cache path";goto done;
+        }
+        /* Source remains the selection/settings identity. All metadata and
+         * detached preparation use the published, verified GDI cache. */
+        out->tracks=out->audio_tracks=out->data_tracks=0;out->bytes=0;
     }
     image=malloc(sizeof(*image));
     if(!image) {problem="Insufficient memory for Games inspection";goto done;}
@@ -977,6 +987,7 @@ bool kui_games_inspect_with_codec(const char *path,enum kui_zso_codec codec,stru
         out->audio.classification==KUI_GAME_AUDIO_UNKNOWN?
             "Image inspected; audio track inventory unavailable in this format":
         "Image inspected; native game launch available, compatibility varies";
+    if(out->chd && out->valid) problem="Prepared CHD cache inspected; uses the normal game image reader";
 done:
     if(stopped(cancel)) {out->valid=false;out->stopped=true;problem="Games inspection stopped";}
     if(mounted_card && mounted && !out->stopped) mounted(ctx,log,cancel);

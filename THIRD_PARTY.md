@@ -153,3 +153,20 @@ It does not import or translate DreamShell CDDA code, select sound channels,
 write sound registers, install a new IRQ handler or claim a sound-memory lease.
 The earlier source-aware boundary remains unchanged; this is not a formal
 clean-room claim. Existing notices and `LICENSES/LICENSE.KOS` are retained.
+
+## Shell-side CHD decoding
+
+`third_party/libchdr` is independently vendored from the original
+[rtissera/libchdr](https://github.com/rtissera/libchdr) repository at
+`47d794151b2b64f6aba60304e6480f4f5a2bc24b`. Its BSD-licensed container and
+CD transforms use the bundled public-domain LZMA SDK 26.02, MIT/Unlicense miniz 3.1.2,
+dr_flac (public domain/MIT-0) and Zstandard 1.5.7 (BSD license selected).
+Sources, notices and the additional original Zstandard BSD license are
+retained. [CHD dependency details](third_party/chd-codecs.md) records the
+configuration and exact sources.
+
+K-UI's new callback adapter and cache preparation are project code. They run
+under the KOS shell, close all decoder allocations before game handoff and use
+the existing uncompressed loader. No DreamShell source or detached CHD decoder
+is imported. The libchdr miniz has private `kui_chdr_` symbols and does not
+replace the older miniz already used by capture export.
