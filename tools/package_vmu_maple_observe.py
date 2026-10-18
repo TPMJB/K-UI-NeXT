@@ -232,7 +232,9 @@ def require_worker_stack_coverage(directory, worker, rows):
               "full", "geometry", "classify", "receive_geometry", "pointer_physical_overlap"}
     candidates = {name for name, address in worker["symbols"].items()
                   if 0x8CFD0040 <= address < 0x8CFE0000 and
-                  (_function_base(name).startswith(("kui_", "ram_", "chain_", "volatile_chain_")) or
+                  (_function_base(name).startswith(("kui_", "ram_", "chain_",
+                                                    "volatile_chain_", "volatile_card_",
+                                                    "readonly_overlay_")) or
                    _function_base(name) in guards)}
     elf_path = directory / "worker.elf"
     if elf_path.exists():

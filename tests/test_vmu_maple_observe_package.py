@@ -438,6 +438,11 @@ class ObserverPackageTests(unittest.TestCase):
                    "chain_physical", "original_fingerprint", "physical_response_valid",
                    "source_span", "proof_layout", "read_block", "commit_ram",
                    "shape", "slot", "geometry", "classify", "receive_geometry",
+                   "volatile_chain_geometry", "volatile_chain_classify",
+                   "volatile_chain_ram_span", "volatile_chain_pointer_physical_overlap",
+                   "volatile_card_read_block", "volatile_card_commit_ram", "volatile_card_shape",
+                   "readonly_overlay_ram_span", "readonly_overlay_put32",
+                   "readonly_overlay_increment", "readonly_overlay_parent_response",
                    "kui_vmu_sd_identity_read.constprop.0")
         assembly = ("kui_vmu_maple_observer_hook", "kui_vmu_maple_observer_complete_hook",
                     "kui_vmu_maple_observer_terminal")
@@ -463,8 +468,9 @@ class ObserverPackageTests(unittest.TestCase):
         resident = {"symbols": {"_" + name: 1 for name in (*roots, "kui_vmu_observe_sd_lease")}}
         worker_image = {"symbols": {"_kui_vmu_maple_observer_visit": 0x8CFD0040,
                                     "_kui_vmu_volatile_handle": 0x8CFD0080,
-                                    "_commit_ram": 0x8CFD00C0,
-                                    "_kui_vmu_volatile_chain_build": 0x8CFD0100}}
+                                    "_volatile_card_commit_ram": 0x8CFD00C0,
+                                    "_kui_vmu_volatile_chain_build": 0x8CFD0100,
+                                    "_volatile_chain_geometry": 0x8CFD0140}}
         def row(name):
             return f"unit.c:1:1:{name}\t16\tstatic\n"
         with tempfile.TemporaryDirectory() as name:
@@ -475,11 +481,11 @@ class ObserverPackageTests(unittest.TestCase):
             high = directory / "worker/worker.su";high.parent.mkdir()
             high.write_text(row("kui_vmu_maple_observer_visit"))
             volatile = directory / "worker/vmu_volatile.su"
-            volatile.write_text(row("kui_vmu_volatile_handle") + row("commit_ram"))
+            volatile.write_text(row("kui_vmu_volatile_handle") + row("volatile_card_commit_ram"))
             chain = directory / "worker/vmu_volatile_chain.su"
-            chain.write_text(row("kui_vmu_volatile_chain_build"))
+            chain.write_text(row("kui_vmu_volatile_chain_build") + row("volatile_chain_geometry"))
             _, report = check_sd_stacks(directory, resident, worker_image, {})
-            self.assertEqual(report["required_worker_frame_coverage"], 4)
+            self.assertEqual(report["required_worker_frame_coverage"], 5)
             for path in (volatile, chain):
                 before = path.read_text()
                 path.unlink()
