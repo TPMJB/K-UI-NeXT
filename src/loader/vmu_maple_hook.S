@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* Optional exact-owner Toy Commander diagnostic. Separate readonly modes
- * supply a synthetic blank card or verified SD-image replies.
+/* Optional exact-owner Toy Commander diagnostic. Separate proof modes supply
+ * synthetic/verified SD reads or filtered A1 requests with volatile RAM saves.
  * Installed at 0x8c0bf264 only after complete executable/window admission.
  * The patch's r0 is dead: the first replaced instruction overwrote it. */
 #include "kui/vmu_maple_observe.h"
@@ -18,7 +18,7 @@
     .long C(kui_vmu_maple_observer_snapshot),C(kui_vmu_maple_observer_terminal)
     .long C(kui_vmu_maple_observer_complete_hook)
     .long KUI_VMU_READONLY_PROOF
-#if KUI_VMU_READONLY_PROOF == 2
+#if KUI_VMU_READONLY_PROOF >= 2
     .long C(kui_vmu_maple_observer_sd_transaction)
 #else
     .long 0
@@ -111,7 +111,8 @@ C(kui_vmu_maple_observer_hook):
     /* The admitted consumer call at 0x8c0b535e loads its target from the
      * single literal at 0x8c0b540c. Only that literal is replaced. The SDK
      * has already found MDST idle and taken its lock, with IMASK15 held.
-     * This observer reads completed headers; it changes no response bytes.
+     * Proof modes stage and publish admitted virtual replies here. Volatile
+     * mode first validates its physical-only chain and restores owner MDSTAR.
      * R3 must become the original consumer target before the tail call. */
     .align 2
     .global C(kui_vmu_maple_observer_complete_hook)

@@ -63,7 +63,7 @@ def owner_profile():
     return bytes(data)
 
 
-def build_fixture(base, *, entry_bin=True, profile_flags=2):
+def build_fixture(base, *, entry_bin=True, profile_flags=2, mode=2, abi=None):
     base.mkdir()
     wire = template_profile()
     stage = b"\x09\x00" * 32 + wire + b"\x77\x88\x99\xaa" * 64
@@ -80,7 +80,8 @@ def build_fixture(base, *, entry_bin=True, profile_flags=2):
              MODULE: envelope(payload, memory, COMMIT[:12]),
              "entry.compile.json": (json.dumps(dict(commit=COMMIT, source_dirty=False,
                 elf_sha256=digest(entry_elf)), indent=2) + "\n").encode(),
-             "worker.bin": struct.pack("<16I", 0x564D4F31, 5, 64, *([0] * 11), 2, 0),
+             "worker.bin": struct.pack("<16I", 0x564D4F31, abi or (6 if mode == 3 else 5),
+                                       64, *([0] * 11), mode, 0),
              "worker.elf": b"independent-worker-proof-fixture",
              "worker/frame.su": b"worker.c:1:1:function\t32\tstatic\n",
              "resident/lto/graph.ci": b"retained final compiler graph\n",
@@ -156,6 +157,46 @@ class PersonalizationTest(unittest.TestCase):
     def test_without_optional_entry_binary(self):
         (self.base / "entry.bin").unlink()
         self.assertNotIn("entry.bin", self.run_personalize()["artifacts"])
+
+    def test_volatile_mode_is_explicit_and_bound_to_preserved_worker(self):
+        other = self.root / "volatile-base"
+        build_fixture(other, mode=3)
+        with self.assertRaisesRegex(ValueError, "requested SD proof mode"):
+            personalize(other, self.profile, self.output, expected_commit=COMMIT)
+        report = personalize(other, self.profile, self.output,
+                             expected_commit=COMMIT, expected_mode=3)
+        self.assertEqual(report["proof_mode"], 3)
+        self.assertEqual(validate_personalized(self.output), report)
+        audit_path = self.output / "personalization-audit.json"
+        for value in (None, 2, True, "3"):
+            changed = json.loads(json.dumps(report))
+            if value is None:
+                del changed["proof_mode"]
+            else:
+                changed["proof_mode"] = value
+            audit_path.write_text(json.dumps(changed))
+            with self.assertRaises(ValueError):
+                validate_personalized(self.output)
+
+    def test_readonly_mode_cannot_be_relabelled_as_volatile(self):
+        with self.assertRaisesRegex(ValueError, "requested SD proof mode"):
+            personalize(self.base, self.profile, self.output, expected_mode=3)
+        report = self.run_personalize()
+        self.assertNotIn("proof_mode", report)  # Preserve the original mode-2 audit shape.
+        report["proof_mode"] = 3
+        (self.output / "personalization-audit.json").write_text(json.dumps(report))
+        with self.assertRaises(ValueError):
+            validate_personalized(self.output)
+
+    def test_volatile_mode_refuses_old_abi_and_readonly_accepts_old_and_new_abi(self):
+        old = self.root / "old-volatile"
+        build_fixture(old, mode=3, abi=5)
+        with self.assertRaisesRegex(ValueError, "requested SD proof mode"):
+            personalize(old, self.profile, self.output, expected_mode=3)
+        new = self.root / "new-readonly"
+        build_fixture(new, mode=2, abi=6)
+        report = personalize(new, self.profile, self.output, expected_mode=2)
+        self.assertEqual(validate_personalized(self.output), report)
 
     def test_refuses_invalid_or_template_owner_profile(self):
         for data in (template_profile(), owner_profile()[:-1], bytes(1536)):

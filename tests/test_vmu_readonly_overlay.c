@@ -34,7 +34,7 @@ static uint32_t header(unsigned cmd,unsigned address,unsigned words) {
 static void frame(unsigned index,unsigned cmd,unsigned address,unsigned words,
     uint32_t payload0,uint32_t payload1) {
     frames[index]=(struct kui_vmu_readonly_overlay_frame){header(cmd,address,words),
-        payload0,payload1,0x0c200000u+1024u*index,1024u,(uint8_t *)(void *)rx[index]};
+        payload0,payload1,0x0c200000u+1024u*index,1024u,(uint8_t *)(void *)rx[index],NULL};
 }
 static void physical(unsigned parent_command,unsigned subunits) {
     memset(rx,0xa5,sizeof(rx));

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Inspect isolated passive/blank/SD-card proof workers and package their module."""
+"""Inspect isolated passive/blank/SD/volatile proof workers and package their module."""
 import hashlib
 import json
 from pathlib import Path
@@ -22,27 +22,34 @@ import retail_package as layout
 
 
 def write_test_archive(directory, module, report_bytes, *, readonly_proof=False,
-                       sd_readonly_proof=False):
+                       sd_readonly_proof=False, volatile_proof=False):
     """Install through the ordinary native-game route in the released shell."""
-    if type(readonly_proof) is not bool or type(sd_readonly_proof) is not bool:
+    if any(type(value) is not bool for value in
+           (readonly_proof, sd_readonly_proof, volatile_proof)):
         raise ValueError("Read-only proof selection must be boolean")
-    if readonly_proof and sd_readonly_proof:
+    if sum((readonly_proof, sd_readonly_proof, volatile_proof)) > 1:
         raise ValueError("Select exactly one read-only proof mode")
-    guide = ("vmu-sd-readonly-card-test.md" if sd_readonly_proof else
+    guide = ("vmu-volatile-card-test.md" if volatile_proof else
+             "vmu-sd-readonly-card-test.md" if sd_readonly_proof else
              "vmu-readonly-card-test.md" if readonly_proof else "vmu-maple-observer-test.md")
     files = {"KUI/apps/games/retail-boot.kui": module,
              "README-FIRST.md": (Path("docs") / guide).read_bytes(),
              "observer-artifact-audit.json": report_bytes}
-    if sd_readonly_proof and (directory / "personalization-audit.json").exists():
+    if (sd_readonly_proof or volatile_proof) and (directory / "personalization-audit.json").exists():
         from personalize_vmu_sd_proof import validate_personalized
         derivation = validate_personalized(directory)
+        if derivation.get("proof_mode", 2) != (3 if volatile_proof else 2):
+            raise ValueError("Personalization mode differs from the selected test archive")
+        if hashlib.sha256(module).hexdigest() != derivation["artifacts"]["retail-maple-observe.kui"]["personalized_sha256"]:
+            raise ValueError("Archive module differs from the personalized runtime")
         files["personalization-audit.json"] = (directory / "personalization-audit.json").read_bytes()
         original_record = derivation["base_compile_provenance"]["name"]
         files[original_record] = (directory / original_record).read_bytes()
     files["SHA256SUMS.txt"] = "".join(
         hashlib.sha256(data).hexdigest() + "  " + name + "\n"
         for name, data in sorted(files.items())).encode()
-    target = directory / ("vmu-sd-readonly-card-test.zip" if sd_readonly_proof else
+    target = directory / ("vmu-volatile-card-test.zip" if volatile_proof else
+                          "vmu-sd-readonly-card-test.zip" if sd_readonly_proof else
                           "vmu-readonly-card-test.zip" if readonly_proof else "vmu-maple-observer-test.zip")
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
         for name, data in sorted(files.items()):
@@ -78,16 +85,19 @@ def inspect_worker(directory):
         "_kui_vmu_maple_observer_hook", "_kui_vmu_maple_observer_terminal",
         "_kui_vmu_maple_observer_snapshot", "_kui_vmu_maple_observer_complete_hook",
         "_kui_vmu_maple_observer_sd_transaction"})
-    if (words[:3] != (0x564D4F31, 5, 64) or exports["lease_bytes"] != 0x30000 or
-            exports["readonly_mode"] not in (0, 1, 2) or
-            (exports["readonly_mode"] != 2 and exports["sd_transaction"])):
+    if (words[0] != 0x564D4F31 or words[1] not in (5, 6) or words[2] != 64 or
+            exports["lease_bytes"] != 0x30000 or
+            exports["readonly_mode"] not in (0, 1, 2, 3) or
+            (exports["readonly_mode"] == 3 and words[1] != 6) or
+            (exports["readonly_mode"] < 2 and exports["sd_transaction"])):
         raise ValueError("Observer exports identity differs from profile")
+    snapshot_bytes = 708 if words[1] == 6 else 644
     entries = [("initialize", "_kui_vmu_maple_observer_init"),
                         ("hook", "_kui_vmu_maple_observer_hook"),
                         ("terminal", "_kui_vmu_maple_observer_terminal"),
                         ("complete_hook", "_kui_vmu_maple_observer_complete_hook"),
                         ("snapshot", "_kui_vmu_maple_observer_snapshot")]
-    if exports["readonly_mode"] == 2:
+    if exports["readonly_mode"] >= 2:
         entries.append(("sd_transaction", "_kui_vmu_maple_observer_sd_transaction"))
     for key, symbol in entries:
         if exports[key] != symbols.get(symbol):
@@ -97,8 +107,8 @@ def inspect_worker(directory):
                 not section[3] <= address < address + size <= section[3] + section[5]):
             raise ValueError("Worker export has no bounded typed symbol: " + key)
         if key == "snapshot":
-            if size != 644 or kind != 1 or section[1] != 8 or section[2] & 7 != 3:
-                raise ValueError("Worker snapshot must be its 644-byte private BSS object")
+            if size != snapshot_bytes or kind != 1 or section[1] != 8 or section[2] & 7 != 3:
+                raise ValueError(f"Worker snapshot must be its {snapshot_bytes}-byte private BSS object")
         elif kind != 2 or size & 1 or section[2] & 7 != 6:
             raise ValueError("Worker entry must be a bounded cached-code function: " + key)
     if (not 0xACFD0000 <= exports["bss_begin"] <= exports["snapshot"] < exports["bss_end"]
@@ -108,7 +118,7 @@ def inspect_worker(directory):
             or exports["worker_end"] != image["memory_end"]
             or any(exports[key] & 31 for key in ("bss_begin", "bss_end", "stack_bottom", "stack_top"))
             or exports["snapshot"] & 3
-            or exports["snapshot"] + 644 > exports["bss_end"]
+            or exports["snapshot"] + snapshot_bytes > exports["bss_end"]
             or exports["bss_begin"] - 0x20000000 < 0x8CFD0000 + len(payload)):
         raise ValueError("Observer private BSS/stack is outside owned lease")
     for key, _ in entries:
@@ -117,20 +127,57 @@ def inspect_worker(directory):
         if not 0x8CFD0040 <= exports[key] < 0x8CFD0000 + len(payload) or exports[key] & 1:
             raise ValueError("Worker entry is outside cached executable image: " + key)
     mode = exports["readonly_mode"]
-    return {"exports": exports, "binary_bytes": len(payload),
-            "mode": ("READ-ONLY SD-backed virtual A1 proof" if mode == 2 else
+    report = {"exports": exports, "binary_bytes": len(payload),
+            "mode": ("VOLATILE RAM-save virtual A1 proof; SD read-only" if mode == 3 else
+                     "READ-ONLY SD-backed virtual A1 proof" if mode == 2 else
                      "READ-ONLY virtual blank A1 proof" if mode == 1 else "read-only Toy Maple observation"),
             "virtual_vmu_enabled": bool(mode), "storage_writes_enabled": False,
+            "virtual_writes_enabled": mode == 3,
+            "volatile_writes_enabled": mode == 3,
+            "persistence": False,
             "worker_sha256": hashlib.sha256(payload).hexdigest(),
             "hook_integer_state": check_hook(image, exports),
             "completion_integer_state": check_completion_hook(image, exports)}
+    private_dma = inspect_private_dma(elf, image, exports)
+    if private_dma is not None:
+        report["private_dma"] = private_dma
+    return report
+
+
+def inspect_private_dma(elf, image, exports):
+    """Mode 3 owns exact uncached chain/capture/write objects before MDSTAR."""
+    required = (("issued_chain", "_issued_chain", 512, 32),
+                ("captured_chain", "_captured_chain", 512, 4),
+                ("write_payloads", "_write_payloads", 4096, 4))
+    typed = _linked_symbols(elf, {symbol for _, symbol, _, _ in required})
+    if exports["readonly_mode"] != 3:
+        if typed:
+            raise ValueError("Non-volatile proof contains private mutating DMA buffers")
+        return None
+    result = {}
+    ranges = [(exports["snapshot"], exports["snapshot"] + 708)]
+    for key, symbol, expected, alignment in required:
+        address, size, kind, section = typed.get(symbol, (0, 0, 0, None))
+        if (size != expected or kind != 1 or address % alignment or
+                section is None or section[1] != 8 or section[2] & 7 != 3 or
+                image["symbols"].get(symbol) != address or
+                not 0xACFD0000 <= address < address + size <= 0xACFE0000 or
+                not exports["bss_begin"] <= address < address + size <= exports["bss_end"] or
+                not section[3] <= address < address + size <= section[3] + section[5] or
+                any(address < end and begin < address + size for begin, end in ranges)):
+            raise ValueError("Volatile proof requires its exact private P2 DMA object: " + symbol)
+        ranges.append((address, address + size))
+        result[key] = dict(address=f"0x{address:08x}", bytes=size, alignment=alignment)
+    result["issued_chain"]["physical_address"] = (
+        f"0x{int(result['issued_chain']['address'], 16) & 0x1fffffff:08x}")
+    return result
 
 
 def inspect_sd_profile(directory, stage, mode):
     """Bind the strict decoded profile to the bytes actually embedded in stage."""
     start = stage["symbols"].get("__vmu_sd_profile_blob_start")
     end = stage["symbols"].get("__vmu_sd_profile_blob_end")
-    if mode != 2:
+    if mode < 2:
         if start is not None or end is not None:
             raise ValueError("Non-SD proof stage must not embed an SD profile")
         return None
@@ -167,6 +214,36 @@ def linked_stack_rows(reports, symbols):
     if not rows:
         raise ValueError("Missing linked compiler stack reports")
     return rows
+
+
+def require_worker_stack_coverage(directory, worker, rows):
+    """Every linked VMU C entry and ownership helper needs its own C frame.
+
+    A missing .su file must not silently shrink the conservative sum. Assembly
+    trampolines have a separate fixed allowance; their three exact names are
+    the only excluded VMU entries. Inlined functions have no linked symbol.
+    """
+    assembly = {"kui_vmu_maple_observer_hook", "kui_vmu_maple_observer_complete_hook",
+                "kui_vmu_maple_observer_terminal"}
+    guards = {"original_fingerprint", "physical_response_valid", "source_span",
+              "response_span", "proof_response", "proof_layout", "proof_stats",
+              "proof_stop", "sd_read_block", "read_word", "read_byte", "write_word",
+              "unit_index", "record_subunit", "read_block", "commit_ram", "shape", "slot",
+              "full", "geometry", "classify", "receive_geometry", "pointer_physical_overlap"}
+    candidates = {name for name, address in worker["symbols"].items()
+                  if 0x8CFD0040 <= address < 0x8CFE0000 and
+                  (_function_base(name).startswith(("kui_", "ram_", "chain_")) or
+                   _function_base(name) in guards)}
+    elf_path = directory / "worker.elf"
+    if elf_path.exists():
+        typed = _linked_symbols(elf_path.read_bytes(), candidates)
+        candidates = {name for name in candidates if typed.get(name, (0, 0, 0, None))[2] == 2}
+    required = {name.lstrip("_") for name in candidates if _function_base(name) not in assembly}
+    reported = {name.lstrip("_") for name, _ in rows}
+    missing = sorted(required - reported)
+    if missing:
+        raise ValueError("Missing linked worker stack-usage frame: " + ", ".join(missing))
+    return len(required)
 
 
 def check_sd_gateway(directory, resident, elf):
@@ -206,6 +283,7 @@ def check_sd_stacks(directory, resident, worker, gateway):
     resident_rows = linked_stack_rows(sorted((directory / "resident/lto").glob("*.ltrans*.su")),
                                       resident["symbols"])
     worker_rows = linked_stack_rows(sorted((directory / "worker").rglob("*.su")), worker["symbols"])
+    covered_worker_frames = require_worker_stack_coverage(directory, worker, worker_rows)
     for required in ("kui_retail_resident_dispatch", "kui_retail_gd_dispatch",
                      "kui_retail_image_read", "kui_loader_sd_stream_next"):
         if not any(_function_base(name) == required for name, _ in resident_rows):
@@ -232,7 +310,8 @@ def check_sd_stacks(directory, resident, worker, gateway):
             {"c_frame_sum": worker_sum, "resident_callback_c_frame_sum": resident_sum,
              "assembly_bytes": 84, "guard_bytes": 32, "available_bytes": 4096,
              "conservative_bytes": worker_sum + resident_sum + 84 + 32,
-             "linked_worker_frames": len(worker_rows), "linked_resident_frames": len(resident_rows)})
+             "linked_worker_frames": len(worker_rows), "linked_resident_frames": len(resident_rows),
+             "required_worker_frame_coverage": covered_worker_frames})
 
 
 def check_embedded_images(directory, worker, resident, stage, entry, module):
@@ -291,11 +370,12 @@ def main():
         if (directory / "personalization-audit.json").exists():
             from personalize_vmu_sd_proof import validate_personalized
             derivation = validate_personalized(directory)
-            if (derivation["profile_sha256"] != profile["wire_sha256"] or
+            if (derivation.get("proof_mode", 2) != mode or
+                    derivation["profile_sha256"] != profile["wire_sha256"] or
                     derivation["profile_address"] != profile["embedded_address"]):
                 raise ValueError("Personalization audit differs from embedded SD profile")
             report["personalization"] = derivation
-    if mode != 2:
+    if mode < 2:
         if "_kui_vmu_observe_sd_lease" in resident["symbols"]:
             raise ValueError("Non-SD proof resident contains the SD lease gateway")
         report["resident_stack"] = check_stack_usage(directory / "resident",
@@ -306,7 +386,7 @@ def main():
             ["sh-elf-objdump", "-d", str(directory / (name + ".elf"))], text=True)
         (directory / (name + ".dis")).write_text(disassembly)
         report["instructions"][name] = audit(name, disassembly)
-    if mode == 2:
+    if mode >= 2:
         worker = inspect_elf((directory / "worker.elf").read_bytes(), 0x8CFD0000,
                              0x8CFE0000, private_p2=True,
                              entry_symbol="_kui_vmu_maple_observer_init", entry_at_base=False)
@@ -334,7 +414,8 @@ def main():
     report_bytes = (json.dumps(report, indent=2, sort_keys=True) + "\n").encode()
     (directory / "observer-artifact-audit.json").write_bytes(report_bytes)
     print(write_test_archive(directory, module, report_bytes,
-                             readonly_proof=mode == 1, sd_readonly_proof=mode == 2))
+                             readonly_proof=mode == 1, sd_readonly_proof=mode == 2,
+                             volatile_proof=mode == 3))
 
 
 if __name__ == "__main__":

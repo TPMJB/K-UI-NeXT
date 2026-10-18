@@ -11,7 +11,7 @@
 #include "retail_storage.h"
 #include "retail_display.h"
 #include "kui/vmu_maple_observe_io.h"
-#if KUI_VMU_READONLY_PROOF != 2
+#if KUI_VMU_READONLY_PROOF < 2
 static void observe_display_restore(const struct retail_display_state *);
 #endif
 #define kui_retail_storage_acquire(...) \
@@ -20,7 +20,7 @@ static void observe_display_restore(const struct retail_display_state *);
 #define kui_retail_image_read(...) \
     KUI_VMU_OBSERVE_IO_IMAGE(service.diag.read_flags, \
         kui_retail_image_read(__VA_ARGS__))
-#if KUI_VMU_READONLY_PROOF != 2
+#if KUI_VMU_READONLY_PROOF < 2
 #define retail_display_restore observe_display_restore
 #endif
 #define kui_retail_resident_init kui_vmu_observe_base_init
@@ -31,7 +31,7 @@ static void observe_display_restore(const struct retail_display_state *);
 #undef kui_retail_storage_acquire
 #include "kui/vmu_maple_observe_boot.h"
 #include "kui/vmu_toy_observe_admission.h"
-#if KUI_VMU_READONLY_PROOF == 2
+#if KUI_VMU_READONLY_PROOF >= 2
 #include "kui/vmu_maple_observe.h"
 #include "vmu_sd_lease.inc"
 #endif
@@ -40,10 +40,10 @@ static void observe_display_restore(const struct retail_display_state *);
 #error Observer I/O telemetry requires the standard native diagnostic fields
 #endif
 
-#if KUI_VMU_READONLY_PROOF != 2
+#if KUI_VMU_READONLY_PROOF < 2
 /* The SD-backed worker has its own storage diagnostics. Keep these optional
- * extra native-GD rows in the passive/blank-card modes: mode2 needs their low
- * code bytes and C frame for the shared lease and restoration checks. The
+ * extra native-GD rows in passive/blank-card modes. SD-backed modes need
+ * their low code bytes and C frame for the lease and restoration checks. The
  * ordinary native fault page remains present in every mode. */
 static void observe_display_restore(const struct retail_display_state *state) {
     retail_display_restore(state);
@@ -99,7 +99,7 @@ void kui_vmu_observe_low_failure(void) {
         ((void (*)(void))(uintptr_t)terminal)();
     retail_display_restore(&display);
     retail_display_line("TOY MAPLE OBSERVER STOPPED");
-#if KUI_VMU_READONLY_PROOF == 2
+#if KUI_VMU_READONLY_PROOF >= 2
     /* Terminal state is immutable under the masked failure entry. These four
      * P2 words are already adjacent; avoid a diagnostic-only stack copy. */
     retail_display_values("STATE LEASE ERROR HEAP",

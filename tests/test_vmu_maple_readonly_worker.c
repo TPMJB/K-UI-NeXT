@@ -17,9 +17,22 @@ static uint32_t sdk[0x10f8u/4u];
 static uint32_t source,manager,lock_pointer,lock_byte,gun,trigger,enable,busy;
 static unsigned bank,stops,rx_reads,tx_words,last_control,target_command;
 static uint32_t target_rx,parent_rx;
-#if KUI_VMU_READONLY_PROOF == 2
+#if KUI_VMU_READONLY_PROOF >= 2
 void kui_vmu_test_sd_reset(void);
 void kui_vmu_test_sd_configure(struct kui_vmu_maple_observe_config *);
+#endif
+#if KUI_VMU_READONLY_PROOF == 3
+static uint8_t *private_chain;
+static unsigned mdstar_writes;
+static unsigned deny_mdstar_write;
+uint32_t kui_vmu_maple_observer_test_private_chain(uint8_t *bytes,size_t capacity) {
+    assert(bytes && !((uintptr_t)bytes&31u) && capacity==512u);
+    private_chain=bytes;return UINT32_C(0x0cfde000);
+}
+void kui_vmu_maple_observer_test_write(uint32_t address,uint32_t value) {
+    assert(address==UINT32_C(0xa05f6c04));++mdstar_writes;
+    if(mdstar_writes!=deny_mdstar_write) source=value;
+}
 #endif
 
 static uint32_t le32(const uint8_t *p) {
@@ -63,7 +76,11 @@ void kui_vmu_maple_observer_test_stop(void) {++stops;}
 static void reset(void) {
     struct kui_vmu_maple_observe_config config={
         KUI_VMU_MAPLE_OBSERVE_MAGIC,KUI_VMU_MAPLE_OBSERVE_VERSION,
+#if KUI_VMU_READONLY_PROOF == 3
+        sizeof(config),100u,100u,{0},0,0,0};
+#else
         sizeof(config),100u,20u,{0},0,0,0};
+#endif
     memset(sdk,0,sizeof(sdk));memset(tx,0,sizeof(tx));memset(rx,0xa5,sizeof(rx));
     manager=MANAGER;lock_pointer=0xac0c0968u;lock_byte=0x80u;
     gun=trigger=busy=0u;enable=1u;bank=0;stops=rx_reads=0;
@@ -71,8 +88,11 @@ static void reset(void) {
     *field(0x10a8)=0xac0ec0a0u;*field(0x10ac)=0xac0ef0a0u;
     *field(0x10f4)=0xa05f6c00u;
     for(unsigned i=0;i<48u;i++) *field(0xfe8u+i*4u)=0xac0e0080u+i*1024u;
-#if KUI_VMU_READONLY_PROOF == 2
+#if KUI_VMU_READONLY_PROOF >= 2
     kui_vmu_test_sd_reset();kui_vmu_test_sd_configure(&config);
+#endif
+#if KUI_VMU_READONLY_PROOF == 3
+    private_chain=NULL;mdstar_writes=deny_mdstar_write=0;
 #endif
     assert(kui_vmu_maple_observer_init(&config)==0);
     assert(kui_vmu_maple_observer_snapshot.proof_mode==KUI_VMU_READONLY_PROOF);

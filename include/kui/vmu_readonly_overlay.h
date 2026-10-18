@@ -15,10 +15,15 @@ struct kui_vmu_readonly_overlay_frame {
     uint32_t header, payload0, payload1;
     uint32_t rx_physical, rx_capacity;
     uint8_t *rx_bytes;
+    /* Only filtered-transport A1 WRITE: caller-owned immutable128-byte
+     * snapshot from the original validated pre-DMA packet. prepare() copies
+     * it into private staging and retains no access to this pointer. */
+    const uint8_t *write_payload;
 };
 
 typedef int (*kui_vmu_readonly_overlay_handler)(void *, const uint8_t *, size_t,
     uint8_t *, size_t, size_t *);
+typedef int (*kui_vmu_readonly_overlay_admit)(void *, uint32_t, uint32_t, uint32_t);
 
 enum kui_vmu_readonly_overlay_result {
     KUI_VMU_OVERLAY_OK = 0,
@@ -57,6 +62,7 @@ struct kui_vmu_readonly_overlay_stats {
 struct kui_vmu_readonly_overlay {
     struct kui_vmu_readonly_overlay_stats stats;
     kui_vmu_readonly_overlay_handler handler;
+    kui_vmu_readonly_overlay_admit admit;
     void *context;
     uint32_t magic, admitted, pending;
     uint32_t frame_count, parent_index, target_count;
@@ -71,13 +77,26 @@ _Static_assert(sizeof(struct kui_vmu_readonly_overlay) <= 20u * 1024u,
 int kui_vmu_readonly_overlay_init(struct kui_vmu_readonly_overlay *,
     kui_vmu_readonly_overlay_handler, void *context);
 
+/* Explicit filtered-transport variant. Non-NULL admit returns1 only for an
+ * allowed metadata shape, performs NO I/O/protocol staging, and may latch a
+ * terminal capacity fault. The caller MUST prove ALL A1 packets were removed
+ * from the submitted hardware chain; hardware cannot update their RX slots.
+ * Consequently complete() does not interpret those stale A1 RX bytes as a
+ * physical reply. The real parent's A1-absent guard remains mandatory.
+ * C/D are allowed only here, with exact MEMCARD shape; C payloads are copied
+ * before DMA. The backend must be explicitly volatile, never an SD writer.
+ * Existing init() keeps the read-only physical-timeout admission contract. */
+int kui_vmu_readonly_overlay_init_backend(struct kui_vmu_readonly_overlay *,
+    kui_vmu_readonly_overlay_handler, kui_vmu_readonly_overlay_admit, void *context);
+
 /* Before MDST: snapshots must describe the entire real packet batch. The
  * physical source span includes ALL descriptors, payload and SDK padding up
  * to LAST. The protected span includes worker code/data/stack and its allocator
  * header. All spans are physical main RAM addresses; no aliases are accepted.
  * Exactly one main-A controller request is required in every admitted batch.
- * A1 accepts only DEVINFO, ALLINFO, MEMINFO and BLOCKREAD. CMD12/13, unknown
- * commands and invalid shapes terminate admission before hardware starts.
+ * Default A1 accepts only DEVINFO, ALLINFO, MEMINFO and BLOCKREAD. The explicit
+ * filtered backend also permits exact WRITE/SYNC subject to its admit gate.
+ * Unknown commands and invalid shapes terminate before hardware starts.
  * Every full RX slot must be disjoint from source, protected state and all
  * other slots. This checks geometry, not SDK bank ownership.
  *
@@ -94,9 +113,12 @@ int kui_vmu_readonly_overlay_prepare(struct kui_vmu_readonly_overlay *,
  * lock, IMASK and cache-coherence proof. No MMIO/IRQ/cache operations occur here.
  * Validate the complete batch and stage all A1 replies before any guest store.
  * The real parent must be a valid controller response with A1 absent, and every
- * A1 response must be exactly the hardware FFFFFFFF timeout. Payloads publish
+ * A1 response in default mode must be the hardware FFFFFFFF timeout; filtered
+ * mode instead relies on caller-proved exclusion of every A1 wire packet.
+ * Payloads publish
  * before their headers; the parent's advertised A1 bit is written last. Parent
  * payload and all unrelated responses remain unchanged. Any failure clears
- * admission and preserves every RX byte. No physical saves are intercepted. */
+ * admission and preserves every RX byte. Backend private state may have
+ * advanced before a later staging failure; failure is terminal. */
 int kui_vmu_readonly_overlay_complete(struct kui_vmu_readonly_overlay *);
 #endif

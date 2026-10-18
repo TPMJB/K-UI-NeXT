@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-# Isolated exact-Toy Maple observer and optional read-only blank-card proof.
+# Isolated exact-Toy Maple observer and bounded virtual-card proofs.
 CC = sh-elf-gcc
 OBJCOPY = sh-elf-objcopy
 HOST_CC ?= cc
@@ -8,7 +8,9 @@ READONLY_PROOF ?= 0
 ifneq ($(READONLY_PROOF),0)
 ifneq ($(READONLY_PROOF),1)
 ifneq ($(READONLY_PROOF),2)
-$(error READONLY_PROOF must be 0, 1 or 2)
+ifneq ($(READONLY_PROOF),3)
+$(error READONLY_PROOF must be 0, 1, 2 or 3)
+endif
 endif
 endif
 endif
@@ -48,9 +50,9 @@ READONLY_SRC = src/core/vmu_readonly.c src/core/vmu_emulation.c src/core/vmu_ima
  src/loader/vmu_readonly_overlay.c
 ifneq ($(READONLY_PROOF),0)
 WORKER_SRC += $(READONLY_SRC)
-ifeq ($(READONLY_PROOF),2)
+ifneq ($(filter $(READONLY_PROOF),2 3),)
 ifeq ($(strip $(SD_PROFILE)),)
-$(error READONLY_PROOF=2 requires an explicit SD_PROFILE file)
+$(error SD-backed proof requires an explicit SD_PROFILE file)
 endif
 FLAGS += -DKUI_VMU_EXPERIMENTAL=0
 VMU_CALLGRAPH_FLAGS = -fcallgraph-info=su
@@ -59,8 +61,14 @@ RESIDENT_LAYOUT = src/loader/vmu_sd_readonly_resident.ld
 FLAGS += $(VMU_CALLGRAPH_FLAGS)
 STAGE_SRC += src/core/vmu_sd_profile.c src/loader/vmu_backing.c
 WORKER_SRC += src/core/vmu_sd_profile.c src/core/hash.c src/core/retail_image.c src/loader/sd_reader.c src/loader/vmu_backing.c
+ifeq ($(READONLY_PROOF),3)
+WORKER_SRC += src/core/vmu_volatile.c src/loader/vmu_volatile_chain.c
+TEST_ZIP = vmu-volatile-card-test.zip
+TEST_GUIDE = docs/vmu-volatile-card-test.md
+else
 TEST_ZIP = vmu-sd-readonly-card-test.zip
 TEST_GUIDE = docs/vmu-sd-readonly-card-test.md
+endif
 else
 TEST_ZIP = vmu-readonly-card-test.zip
 TEST_GUIDE = docs/vmu-readonly-card-test.md
@@ -81,7 +89,7 @@ force-mode-config:
 $(BUILD)/readonly-config: force-mode-config
 	@mkdir -p $(BUILD)
 	@printf '%s\n' 'READONLY_PROOF=$(READONLY_PROOF)' 'SD_PROFILE=$(SD_PROFILE)' > $(BUILD)/readonly-config.tmp
-ifeq ($(READONLY_PROOF),2)
+ifneq ($(filter $(READONLY_PROOF),2 3),)
 	@sha256sum '$(SD_PROFILE)' >> $(BUILD)/readonly-config.tmp
 endif
 	@cmp -s $(BUILD)/readonly-config.tmp $(BUILD)/readonly-config || \
@@ -90,7 +98,7 @@ endif
 
 $(RESIDENT_OBJ) $(STAGE_OBJ) $(WORKER_OBJ): $(BUILD)/readonly-config
 
-ifeq ($(READONLY_PROOF),2)
+ifneq ($(filter $(READONLY_PROOF),2 3),)
 $(BUILD)/vmu-sd-profile.bin: $(SD_PROFILE) $(BUILD)/readonly-config tools/vmu_sd_profile.py
 	@mkdir -p $(BUILD)
 	python3 tools/vmu_sd_profile.py '$(SD_PROFILE)'
@@ -120,7 +128,7 @@ $(BUILD)/resident-sci.elf: $(RESIDENT_OBJ) $(RESIDENT_LAYOUT)
 	 -T$(RESIDENT_LAYOUT) -Wl,-Map,$(BUILD)/resident-sci.map \
 	 -o $@ $(RESIDENT_OBJ) -lgcc
 	cp $(BUILD)/resident-sci.elf.ltrans*.su $(BUILD)/resident/lto/
-ifeq ($(READONLY_PROOF),2)
+ifneq ($(filter $(READONLY_PROOF),2 3),)
 	cp $(BUILD)/resident-sci.elf*.ci $(BUILD)/resident/lto/
 endif
 $(BUILD)/resident-sci.bin: $(BUILD)/resident-sci.elf
@@ -215,6 +223,26 @@ host-tests:
 	 src/loader/vmu_backing.c src/core/vmu_sd_profile.c src/core/hash.c src/core/retail_image.c \
 	 tests/test_vmu_maple_sd_worker.c -o $(BUILD)/test-sd-readonly-worker
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-sd-readonly-worker
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -g -Iinclude src/core/vmu_volatile.c src/core/vmu_emulation.c \
+	 tests/test_vmu_volatile.c -o $(BUILD)/test-volatile-backend
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-volatile-backend
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -g -Iinclude $(READONLY_SRC) src/core/vmu_volatile.c tests/test_vmu_volatile_overlay.c \
+	 -o $(BUILD)/test-volatile-overlay
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-volatile-overlay
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -g -Iinclude src/loader/vmu_volatile_chain.c tests/test_vmu_volatile_chain.c \
+	 -o $(BUILD)/test-volatile-chain
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-volatile-chain
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -ffunction-sections -fdata-sections -Wl,--gc-sections -g -Iinclude -Isrc/loader \
+	 -DKUI_VMU_MAPLE_OBSERVE_HOST_TEST=1 -DKUI_VMU_READONLY_PROOF=3 -DKUI_VMU_EXPERIMENTAL=0 \
+	 src/loader/vmu_maple_observe_worker.c $(READONLY_SRC) src/core/vmu_volatile.c \
+	 src/loader/vmu_volatile_chain.c src/loader/sd_reader.c src/loader/vmu_backing.c \
+	 src/core/vmu_sd_profile.c src/core/hash.c src/core/retail_image.c \
+	 tests/test_vmu_maple_volatile_worker.c -o $(BUILD)/test-volatile-worker
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-volatile-worker
 	python3 tests/test_vmu_maple_observe_package.py
 	python3 tests/test_vmu_maple_observe_hook.py
 	python3 tests/test_vmu_toy_completion_probe.py

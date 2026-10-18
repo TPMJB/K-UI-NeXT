@@ -145,6 +145,12 @@ jobs:
           source .deps/kos/environ.sh
           make -f Makefile.vmu-toy -j2 BUILD=build/vmu-toy-sd-readonly READONLY_PROOF=2 \
             SD_PROFILE="$RUNNER_TEMP/vmu-sd-profile.bin" package
+      - name: Build isolated RAM-save A1 proof with read-only SD base
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          make -f Makefile.vmu-toy -j2 BUILD=build/vmu-toy-volatile READONLY_PROOF=3 \
+            SD_PROFILE="$RUNNER_TEMP/vmu-sd-profile.bin" package
       - name: Upload exact-title observer test
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -164,6 +170,13 @@ jobs:
         with:
           name: K-UI-experimental-Toy-SD-Read-Only-VMU
           path: build/vmu-toy-sd-readonly/vmu-sd-readonly-card-test.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload per-card volatile RAM-save proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-Toy-Volatile-VMU
+          path: build/vmu-toy-volatile/vmu-volatile-card-test.zip
           if-no-files-found: error
           retention-days: 30
       - name: Retain native proof
@@ -197,5 +210,13 @@ jobs:
             build/vmu-toy-sd-readonly/**/*.su
             build/vmu-toy-sd-readonly/**/*.ci
             build/vmu-toy-sd-readonly/vmu-sd-profile.bin
+            build/vmu-toy-volatile/*.elf
+            build/vmu-toy-volatile/*.bin
+            build/vmu-toy-volatile/*.map
+            build/vmu-toy-volatile/*.json
+            build/vmu-toy-volatile/*.dis
+            build/vmu-toy-volatile/**/*.su
+            build/vmu-toy-volatile/**/*.ci
+            build/vmu-toy-volatile/vmu-sd-profile.bin
           if-no-files-found: ignore
           retention-days: 30

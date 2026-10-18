@@ -9,7 +9,7 @@
 #include "test_vmu_maple_readonly_worker.c"
 #undef main
 
-#if KUI_VMU_READONLY_PROOF != 2
+#if KUI_VMU_READONLY_PROOF < 2
 #error This test exercises only the explicit SD-backed proof mode
 #endif
 
@@ -285,7 +285,10 @@ static void invalid_configuration_and_profile_have_no_wire(void) {
     }
 }
 
-int main(void) {
+#ifndef KUI_VMU_SD_WORKER_ENTRY
+#define KUI_VMU_SD_WORKER_ENTRY main
+#endif
+int KUI_VMU_SD_WORKER_ENTRY(void) {
     assert(readonly_base_main()==0);
     actual_image_and_profile_copy();identity_data_and_cleanup_failures();
     busy_bad_loans_and_transaction_context();invalid_configuration_and_profile_have_no_wire();

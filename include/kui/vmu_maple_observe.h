@@ -3,12 +3,12 @@
 #define KUI_VMU_MAPLE_OBSERVE_H
 
 #define KUI_VMU_MAPLE_OBSERVE_MAGIC 0x564d4f31
-#define KUI_VMU_MAPLE_OBSERVE_VERSION 5
+#define KUI_VMU_MAPLE_OBSERVE_VERSION 6
 #ifndef KUI_VMU_READONLY_PROOF
 #define KUI_VMU_READONLY_PROOF 0
 #endif
-#if KUI_VMU_READONLY_PROOF < 0 || KUI_VMU_READONLY_PROOF > 2
-#error VMU proof mode must be explicitly zero, one or two
+#if KUI_VMU_READONLY_PROOF < 0 || KUI_VMU_READONLY_PROOF > 3
+#error VMU proof mode must be explicitly zero, one, two or three
 #endif
 #define KUI_VMU_MAPLE_OBSERVE_SITE 0x8c0bf264
 #define KUI_VMU_MAPLE_OBSERVE_RESUME 0x8c0bf270
@@ -18,13 +18,19 @@
 #define KUI_VMU_MAPLE_OBSERVE_STACK_BYTES 4096
 #define KUI_VMU_MAPLE_OBSERVE_EXPORT_BYTES 64
 #define KUI_VMU_MAPLE_OBSERVE_CONFIG_BYTES 88
-#define KUI_VMU_MAPLE_OBSERVE_SNAPSHOT_BYTES 644
+#define KUI_VMU_MAPLE_OBSERVE_SNAPSHOT_BYTES 708
 #define KUI_VMU_MAPLE_OBSERVE_CONSUMER 0x8c0bf37a
 #define KUI_VMU_MAPLE_OBSERVE_COMPLETION_SLOT 0x8c0b540c
 #define KUI_VMU_MAPLE_OBSERVE_COMPLETION_PR 0x8c0b5362
+#if KUI_VMU_READONLY_PROOF == 3
+#define KUI_VMU_MAPLE_OBSERVE_DEFAULT_STOP 36000
+#define KUI_VMU_MAPLE_OBSERVE_DEFAULT_POST 18000
+#define KUI_VMU_MAPLE_OBSERVE_MAX_STARTS 36000
+#else
 #define KUI_VMU_MAPLE_OBSERVE_DEFAULT_STOP 18000
 #define KUI_VMU_MAPLE_OBSERVE_DEFAULT_POST 1200
 #define KUI_VMU_MAPLE_OBSERVE_MAX_STARTS 18000
+#endif
 #define KUI_VMU_MAPLE_OBSERVE_RECORDS 4
 
 #ifndef __ASSEMBLER__
@@ -91,6 +97,10 @@ struct kui_vmu_maple_observe_snapshot {
     uint32_t proof_bytes, proof_commit_attempts;
     uint32_t sd_reads,sd_busy,sd_faults,sd_last_result;
     uint32_t sd_last_lba,sd_crc_expected,sd_crc_actual,sd_cid_checks;
+    uint32_t ram_write_phases,ram_commits,ram_blocks,ram_reads;
+    uint32_t ram_refused,ram_full,ram_last_block,ram_faults;
+    uint32_t chain_prepared,chain_switched,chain_restored,chain_bytes;
+    uint32_t chain_physical,chain_crc,chain_faults,chain_state;
 };
 
 _Static_assert(sizeof(struct kui_vmu_maple_observe_exports) ==
@@ -107,7 +117,7 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr);
 void kui_vmu_maple_observer_complete(uint32_t inherited_sr,uint32_t inherited_pr);
 void kui_vmu_maple_observer_hook(void);
 void kui_vmu_maple_observer_complete_hook(void);
-#if KUI_VMU_READONLY_PROOF == 2
+#if KUI_VMU_READONLY_PROOF >= 2
 #include "kui/vmu_sd_lease.h"
 int kui_vmu_maple_observer_sd_transaction(void *,struct kui_loader_sd *);
 #endif
@@ -117,10 +127,14 @@ extern struct kui_vmu_maple_observe_snapshot kui_vmu_maple_observer_snapshot;
 #ifdef KUI_VMU_MAPLE_OBSERVE_HOST_TEST
 uint32_t kui_vmu_maple_observer_test_read(uint32_t address);
 void kui_vmu_maple_observer_test_stop(void);
+#if KUI_VMU_READONLY_PROOF == 3
+void kui_vmu_maple_observer_test_write(uint32_t address,uint32_t value);
+uint32_t kui_vmu_maple_observer_test_private_chain(uint8_t *bytes,size_t capacity);
+#endif
 #if KUI_VMU_READONLY_PROOF
 uint8_t *kui_vmu_maple_observer_test_response(uint32_t physical);
 #endif
-#if KUI_VMU_READONLY_PROOF == 2
+#if KUI_VMU_READONLY_PROOF >= 2
 struct kui_vmu_sd_profile;
 const struct kui_vmu_sd_profile *kui_vmu_maple_observer_test_sd_profile(uint32_t address);
 int kui_vmu_maple_observer_test_sd_lease(kui_vmu_sd_transaction transaction,void *context);

@@ -224,6 +224,30 @@ See `vmu-sd-readonly-card-test.md` for the next hardware test.
 A page-2 request/reply display mismatch after later
 controller-only polls is also corrected; that issue did not affect replies.
 
+The owner's four pages for `34279291cb07` establish the first actual SD-backed
+retail read proof:15virtual block reads and15CID checks, no SD busy/faults,
+and matching expected/actual CRC `b2aa7578` for block241. All1,223 completed
+schedules matched; the first34-word CMD0C memory-write request was refused
+before hardware submission as designed. No sync or game save completed.
+
+The next isolated `READONLY_PROOF=3` experiment keeps the SD base read-only
+and adds at most16committed512-byte RAM blocks. Four128-byte write phases
+and WRSYNC use the existing memory-card protocol; a successful sync commits
+only to that RAM overlay. A private hardware chain contains only admitted main
+controller packets, with every virtual A1 packet removed before MDST. The
+original SDK transmit buffers and bookkeeping remain unchanged. Completion
+validates and restores the original MDSTAR before publishing the virtual
+batch to the SDK consumer. An all-virtual schedule or unsupported physical
+traffic is a controlled stop. Native/host proofs must pass before delivery;
+console save/load behavior remains unproved until the owner tests it.
+ABI6 retains64-byte exports and88-byte config, extending the snapshot to708
+bytes for RAM and filtered-chain counters. See `vmu-volatile-card-test.md`.
+
+Durable SD saving still requires a freshly verified journal allocation and a
+per-launch allocation/identity contract that remains valid after legitimate
+image changes. The current profile describes the base image only; journal
+placement cannot be inferred from it.
+
 ## Work required before in-game saves
 
 1. Prove exact game-side Maple ownership before submission and before the

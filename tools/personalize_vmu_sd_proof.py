@@ -92,9 +92,11 @@ def replace_span(data, offset, expected, replacement):
     return data[:offset] + replacement + data[offset + len(expected):]
 
 
-def _transformation(base_directory, profile, *, expected_commit=None):
+def _transformation(base_directory, profile, *, expected_commit=None, expected_mode=2):
     """Derive all permitted bytes and audit fields from independent base files."""
     base = Path(base_directory).resolve()
+    if type(expected_mode) is not int or expected_mode not in (2, 3):
+        raise ValueError("Personalization requires explicit SD proof mode 2 or 3")
     summary = decode_profile(profile)
     template = template_profile()
     if profile == template:
@@ -144,11 +146,13 @@ def _transformation(base_directory, profile, *, expected_commit=None):
         original["entry.bin"] = (base / "entry.bin").read_bytes()
         if original["entry.bin"] != entry["payload"]:
             raise ValueError("Optional entry binary differs from its ELF")
-    if (base / "worker.bin").exists():
-        worker = (base / "worker.bin").read_bytes()
-        if (len(worker) < 64 or struct.unpack_from("<3I", worker) != (0x564D4F31, 5, 64) or
-                struct.unpack_from("<I", worker, 56)[0] != 2):
-            raise ValueError("Personalization requires the SD-read-only worker mode")
+    worker = (base / "worker.bin").read_bytes()
+    if (len(worker) < 64 or struct.unpack_from("<I", worker)[0] != 0x564D4F31 or
+            struct.unpack_from("<I", worker, 4)[0] not in (5, 6) or
+            struct.unpack_from("<I", worker, 8)[0] != 64 or
+            (expected_mode == 3 and struct.unpack_from("<I", worker, 4)[0] != 6) or
+            struct.unpack_from("<I", worker, 56)[0] != expected_mode):
+        raise ValueError("Personalization worker differs from the requested SD proof mode")
     entry_profile_offset = entry_offset + stage_offset
     replacements = {
         "stage.elf": replace_span(original["stage.elf"], stage_file_offset, template, profile),
@@ -178,6 +182,8 @@ def _transformation(base_directory, profile, *, expected_commit=None):
                   profile_summary=summary, profile_address=f"0x{profile_address:08x}",
                   base_compile_provenance=dict(name="base-provenance/entry.compile.json",
                       sha256=sha(record_bytes), record=record), artifacts=artifacts)
+    if expected_mode == 3:
+        report["proof_mode"] = 3
     return original, replacements, report
 
 
@@ -199,7 +205,8 @@ def validate_personalized(directory):
         raise ValueError("Personalization audit must be an object")
     provenance = directory / "base-provenance"
     profile = (directory / "vmu-sd-profile.bin").read_bytes()
-    _, replacements, expected = _transformation(provenance, profile)
+    _, replacements, expected = _transformation(provenance, profile,
+                                               expected_mode=report.get("proof_mode", 2))
     if set(report) != set(expected) | {"unchanged_artifacts"}:
         raise ValueError("Personalization audit has unexpected or missing fields")
     for key, value in expected.items():
@@ -236,7 +243,7 @@ def validate_personalized(directory):
     return report
 
 
-def personalize(base_directory, profile_path, output_directory, *, expected_commit=None):
+def personalize(base_directory, profile_path, output_directory, *, expected_commit=None, expected_mode=2):
     base = Path(base_directory).resolve()
     output = Path(output_directory).absolute()
     if output.exists() or output.is_symlink():
@@ -244,7 +251,8 @@ def personalize(base_directory, profile_path, output_directory, *, expected_comm
     if base == output.resolve() or base in output.resolve().parents:
         raise ValueError("Personalization output must be outside the base directory")
     original, replacements, report = _transformation(base, Path(profile_path).read_bytes(),
-                                                     expected_commit=expected_commit)
+                                                     expected_commit=expected_commit,
+                                                     expected_mode=expected_mode)
     # Retain untouched base bytes and their compiler record as evidence. The
     # personalized directory deliberately has no entry.compile.json claiming
     # the new profile was the native compiler input.
@@ -293,9 +301,12 @@ def main():
     parser.add_argument("profile", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--expected-commit", required=True)
+    parser.add_argument("--mode", type=int, choices=(2, 3), default=2,
+                        help="Require this exact native worker mode (default: 2, SD read-only)")
     args = parser.parse_args()
     try:
-        report = personalize(args.base, args.profile, args.output, expected_commit=args.expected_commit)
+        report = personalize(args.base, args.profile, args.output, expected_commit=args.expected_commit,
+                             expected_mode=args.mode)
         print(json.dumps({key: report[key] for key in
             ("source_commit", "profile_sha256", "profile_address")}, indent=2))
     except (OSError, ValueError, struct.error, UnicodeError) as error:
