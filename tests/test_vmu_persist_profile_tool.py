@@ -15,7 +15,7 @@ import zlib
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 from vmu_persist_profile import (decode_profile, encode_profile, validate_ownership,
-    same_ownership, collect_snapshot, verify_snapshot, MARKER_SHA)
+    same_ownership, collect_snapshot, verify_snapshot, MARKER_SHA, template_profile)
 from vmu_sd_profile import decode_profile as decode_readonly
 
 
@@ -90,6 +90,12 @@ class PersistProfileToolTest(unittest.TestCase):
         self.assertEqual(p["base_sha256"], hashlib.sha256(b"".join(sector(0, i) for i in range(256))).hexdigest())
         self.assertEqual(p["identity_sha256"], hashlib.sha256(bytes(range(17, 33))).hexdigest())
         self.check_c(expected)
+
+    def test_public_build_template_is_canonical_and_admitted_by_independent_c(self):
+        wire = template_profile()
+        self.assertEqual(len(wire), 4096)
+        self.assertEqual(encode_profile(decode_profile(wire)), wire)
+        self.check_c(wire)
 
     def test_all_wire_bytes_and_short_lengths_are_admitted_strictly(self):
         data = encode_profile(fixture())

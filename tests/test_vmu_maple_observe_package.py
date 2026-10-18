@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from check_loader_layout import EH, PH, SH, SYM
 from package_vmu_maple_observe import (inspect_worker, write_test_archive,
     inspect_sd_profile, check_sd_gateway, check_sd_stacks, linked_stack_rows,
-    require_worker_stack_coverage)
+    require_worker_stack_coverage, inspect_persistent_io, check_pio_callgraph)
 from check_loader_layout import inspect_elf
 from vmu_maple_observe_symbols import generate
 from test_vmu_sd_profile_tool import fixture as sd_profile_fixture
@@ -31,7 +31,7 @@ def worker(readonly_mode=0, abi=6):
     EH.pack_into(data, 0, b"\x7fELF\x01\x01\x01" + bytes(9), 2, 42, 1,
                  base + 64, 52, 0x300, 0, 52, 32, 2, 40, 6, 0)
     PH.pack_into(data, 52, 1, 0x100, base, base, 128, 128, 5, 32)
-    bss_end = 0x1800 if readonly_mode == 3 else 0x400
+    bss_end = 0x2c00 if readonly_mode == 4 else 0x1800 if readonly_mode == 3 else 0x400
     PH.pack_into(data, 84, 1, 0x200, private + 0x100, base + 0x100,
                  0, bss_end + 4096 - 0x100, 6, 32)
     SH.pack_into(data, 0x328, 0, 1, 6, base, 0x100, 128, 0, 0, 32, 0)
@@ -45,17 +45,25 @@ def worker(readonly_mode=0, abi=6):
                ("_kui_vmu_maple_observer_complete_hook", base + 76, 2, 0x12, 1))
     if readonly_mode >= 2:
         symbols += (("_kui_vmu_maple_observer_sd_transaction", base + 80, 2, 0x12, 1),)
-    if readonly_mode == 3:
+    if readonly_mode in (3, 4):
         symbols += (("_issued_chain", private + 0x400, 512, 0x11, 2),
                     ("_captured_chain", private + 0x600, 512, 0x11, 2),
                     ("_write_payloads", private + 0x800, 4096, 0x11, 2))
-    SH.pack_into(data, 0x3A0, 0, 2, 0, 0, 0x500, (len(symbols) + 1) * 16, 5, 1, 4, 16)
+    if readonly_mode == 4:
+        symbols += tuple((name, base + 84 + index * 4, 2, 0x12, 1)
+                         for index, name in enumerate(("_kui_vmu_durable_handoff_validate",
+                             "_kui_vmu_durable_init", "_kui_vmu_durable_transaction",
+                             "_kui_vmu_durable_admit", "_kui_vmu_durable_handle",
+                             "_kui_sci_sd_write", "_kui_sci_sd_sync", "_durable_card_pio_write")))
+        symbols += (("_durable_card", private + 0x1800, 4608, 0x11, 2),)
+    symbols_at, names_at = (0x800, 0xa00) if readonly_mode == 4 else (0x500, 0x600)
+    SH.pack_into(data, 0x3A0, 0, 2, 0, 0, symbols_at, (len(symbols) + 1) * 16, 5, 1, 4, 16)
     for index, (name, address, size, kind, section) in enumerate(symbols, 1):
-        SYM.pack_into(data, 0x500 + index * 16, len(names), address,
+        SYM.pack_into(data, symbols_at + index * 16, len(names), address,
                       size, kind, 0, section)
         names.extend(name.encode() + b"\0")
-    SH.pack_into(data, 0x3C8, 0, 3, 0, 0, 0x600, len(names), 0, 0, 1, 0)
-    data[0x600:0x600 + len(names)] = names
+    SH.pack_into(data, 0x3C8, 0, 3, 0, 0, names_at, len(names), 0, 0, 1, 0)
+    data[names_at:names_at + len(names)] = names
     exports = (0x564D4F31, abi, 64, base + 64, base + 68,
                private + 0x100, private + bss_end, private + bss_end,
                private + bss_end + 4096, base + bss_end + 4096, 0x30000,
@@ -163,6 +171,18 @@ class ObserverPackageTests(unittest.TestCase):
             with self.subTest(at=at), self.assertRaises(ValueError):
                 self.inspect(data)
 
+    def test_persistent_mode_reuses_exact_abi_and_private_chain_with_explicit_writes(self):
+        report = self.inspect(worker(4))
+        self.assertEqual(report["exports"]["readonly_mode"], 4)
+        self.assertTrue(report["storage_writes_enabled"])
+        self.assertTrue(report["virtual_writes_enabled"])
+        self.assertTrue(report["persistence"])
+        self.assertFalse(report["volatile_writes_enabled"])
+        self.assertEqual(report["exports"]["lease_bytes"], 0x30000)
+        self.assertEqual(report["private_dma"]["write_payloads"]["bytes"], 4096)
+        with self.assertRaises(ValueError):
+            self.inspect(worker(4, abi=5))
+
     def test_abi6_snapshot_is_exact_while_abi5_readonly_profiles_remain_admitted(self):
         for mode in (0, 1, 2):
             self.assertEqual(self.inspect(worker(mode, abi=5))["exports"]["version"], 5)
@@ -215,13 +235,13 @@ class ObserverPackageTests(unittest.TestCase):
                         "3": "vmu-volatile-card-test.zip"}[expected])
                     included = set(lines[2].split())
                     self.assertEqual(included & backend, backend if expected != "0" else set())
-        for invalid in ("4", "yes", "0 1"):
+        for invalid in ("5", "yes", "0 1"):
             with self.subTest(invalid=invalid):
                 result = subprocess.run(["make", "--no-print-directory", "-s", "-f", "Makefile.vmu-toy",
                                          "--eval=" + query, "READONLY_PROOF=" + invalid, "show-mode"],
                                         cwd=root, text=True, capture_output=True)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertIn("READONLY_PROOF must be 0, 1, 2 or 3", result.stderr)
+                self.assertIn("READONLY_PROOF must be 0, 1, 2, 3 or 4", result.stderr)
 
     def test_switching_native_build_mode_rebuilds_dependants_immediately(self):
         root = Path(__file__).resolve().parents[1]
@@ -443,6 +463,9 @@ class ObserverPackageTests(unittest.TestCase):
                    "volatile_card_read_block", "volatile_card_commit_ram", "volatile_card_shape",
                    "readonly_overlay_ram_span", "readonly_overlay_put32",
                    "readonly_overlay_increment", "readonly_overlay_parent_response",
+                   "durable_card_pio_write", "durable_card_sector_write",
+                   "durable_packet", "durable_admit", "durable_worker_lease",
+                   "kui_vmu_durable_handle", "sci_storage_command", "sci_storage_crc16",
                    "kui_vmu_sd_identity_read.constprop.0")
         assembly = ("kui_vmu_maple_observer_hook", "kui_vmu_maple_observer_complete_hook",
                     "kui_vmu_maple_observer_terminal")
@@ -509,6 +532,56 @@ class ObserverPackageTests(unittest.TestCase):
             for invalid in (1, "3", None):
                 with self.assertRaises(ValueError):
                     write_test_archive(directory, b"module", b"{}", volatile_proof=invalid)
+
+    def test_persistent_writer_functions_and_card_remain_only_in_private_high_worker(self):
+        data = bytes(worker(4))
+        image = inspect_elf(data, 0x8cfd0000, 0x8cfe0000, private_p2=True,
+            entry_symbol="_kui_vmu_maple_observer_init", entry_at_base=False)
+        exports = dict(zip(("magic", "version", "bytes", "initialize", "hook", "bss_begin", "bss_end",
+            "stack_bottom", "stack_top", "worker_end", "lease_bytes", "snapshot", "terminal",
+            "complete_hook", "readonly_mode", "sd_transaction"), struct.unpack_from("<16I", image["payload"])))
+        with tempfile.TemporaryDirectory() as name, \
+                patch("package_vmu_maple_observe.check_pio_entry", return_value={}), \
+                patch("package_vmu_maple_observe.check_pio_callgraph", return_value={}):
+            directory = Path(name)
+            result = inspect_persistent_io(directory, data, image, exports, {"symbols": {}})
+            self.assertEqual(result["handoff_bytes"], 1272)
+            self.assertEqual(result["sdk_lease_bytes"], 0x30000)
+            for symbol in ("_kui_sci_sd_write", "_kui_sci_sd_sync", "_kui_vmu_durable_transaction"):
+                with self.subTest(symbol=symbol), self.assertRaisesRegex(ValueError, "low resident"):
+                    inspect_persistent_io(directory, data, image, exports, {"symbols": {symbol: 0x8c004100}})
+            # Typed durable object may not overlap chain/snapshot or exceed its explicit ABI RAM bound.
+            for value, field in ((0xacfd0800, 4), (4640, 8), (0x8cfd1800, 4)):
+                changed = bytearray(data)
+                struct.pack_into("<I", changed, 0x800 + 18 * 16 + field, value)
+                with self.subTest(value=value), self.assertRaises(ValueError):
+                    inspect_persistent_io(directory, bytes(changed), image, exports, {"symbols": {}})
+
+    def test_pio_callgraph_requires_sole_explicit_adapter_writer_entry(self):
+        with tempfile.TemporaryDirectory() as name:
+            directory = Path(name)
+            path = directory / "durable.ci"
+            graph = 'node: { title: "durable_card_pio_write" label: "adapter\\n4 bytes (static)" }\n'
+            edge = 'edge: { sourcename: "durable_card_pio_write" targetname: "kui_sci_sd_write" label: "core.c:1" }\n'
+            for contents in ("", graph, graph + edge.replace("durable_card_pio_write", "unsafe_entry", 1)):
+                path.write_text(contents)
+                with self.assertRaises(ValueError):
+                    check_pio_callgraph(directory, "durable_card_pio_write")
+            path.write_text(graph + edge)
+            self.assertEqual(check_pio_callgraph(directory, "durable_card_pio_write")["callgraph_reports"], 1)
+
+    def test_persistent_archive_is_distinct_and_uses_existing_retail_install_route(self):
+        with tempfile.TemporaryDirectory() as name:
+            directory = Path(name)
+            with patch("package_vmu_maple_observe.Path.read_bytes", return_value=b"Persistent SD saves"):
+                target = write_test_archive(directory, b"persistent module", b"{}", persistent_proof=True)
+            self.assertEqual(target.name, "vmu-persistent-card-test.zip")
+            with zipfile.ZipFile(target) as archive:
+                self.assertEqual(archive.read("KUI/apps/games/retail-boot.kui"), b"persistent module")
+                self.assertNotIn("KUI/tools.kui", archive.namelist())
+            for other in ("readonly_proof", "sd_readonly_proof", "volatile_proof"):
+                with self.assertRaises(ValueError):
+                    write_test_archive(directory, b"module", b"{}", persistent_proof=True, **{other: True})
 
     def test_personalized_archive_binds_mode_module_and_original_compile_record(self):
         original_read = Path.read_bytes

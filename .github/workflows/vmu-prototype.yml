@@ -195,6 +195,13 @@ jobs:
           source .deps/kos/environ.sh
           make -f Makefile.vmu-toy -j2 BUILD=build/vmu-toy-volatile READONLY_PROOF=3 \
             SD_PROFILE="$RUNNER_TEMP/vmu-sd-profile.bin" package
+      - name: Build isolated persistent A1 proof with public P2 template
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          python3 tools/vmu_persist_profile.py --template "$RUNNER_TEMP/vmu-persist-profile.bin"
+          make -f Makefile.vmu-toy -j2 BUILD=build/vmu-toy-persistent READONLY_PROOF=4 \
+            SD_PROFILE="$RUNNER_TEMP/vmu-persist-profile.bin" package
       - name: Upload exact-title observer test
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -221,6 +228,13 @@ jobs:
         with:
           name: K-UI-experimental-Toy-Volatile-VMU
           path: build/vmu-toy-volatile/vmu-volatile-card-test.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload generic persistent virtual-card proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-Toy-Persistent-VMU
+          path: build/vmu-toy-persistent/vmu-persistent-card-test.zip
           if-no-files-found: error
           retention-days: 30
       - name: Retain native proof
@@ -272,5 +286,13 @@ jobs:
             build/vmu-toy-volatile/**/*.su
             build/vmu-toy-volatile/**/*.ci
             build/vmu-toy-volatile/vmu-sd-profile.bin
+            build/vmu-toy-persistent/*.elf
+            build/vmu-toy-persistent/*.bin
+            build/vmu-toy-persistent/*.map
+            build/vmu-toy-persistent/*.json
+            build/vmu-toy-persistent/*.dis
+            build/vmu-toy-persistent/**/*.su
+            build/vmu-toy-persistent/**/*.ci
+            build/vmu-toy-persistent/vmu-sd-profile.bin
           if-no-files-found: ignore
           retention-days: 30

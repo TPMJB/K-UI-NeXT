@@ -3,9 +3,11 @@
 This branch develops an original virtual memory card for K-UI. The public
 2.0.0 release remains the stable runtime. The exact-Toy SCI-backed RAM-save
 proof has delivered virtual responses and user-reported same-session save,
-load and deletion. The physical image/journal preparation profile has now
-passed on the console. The next isolated Card tools proof tests real mapped
-journal commits and restart recovery before a retail SD writer is enabled.
+load and deletion. The separate Card tools physical-journal proof has now
+committed generation `01` and reopened the same generation and image hash on the
+console. An isolated Toy durable-save loader is implemented, with native build
+audits and retail hardware testing still pending. Durable saving in a retail
+game has not yet been established.
 
 ## Implemented
 
@@ -293,9 +295,10 @@ lengths and the original image SHA256. The final export scan had rechecked
 ownership and source snapshots after creating the profile. This is successful
 preparation evidence; it does not itself establish durable retail saving.
 
-The next isolated program uses a pinned persistent session: current device
-identity and full semantic filesystem admission precede physical-map journal
-recovery, then VMU validation and fresh image hashes/CRCs. Prepared content
+The separate physical-journal program uses a pinned persistent session:
+current device identity and full semantic filesystem admission precede
+physical-map journal recovery, then VMU validation and fresh image hashes/CRCs.
+Prepared content
 hashes are provenance rather than permanent expectations. Bound callbacks
 authorize only useful image/journal sectors, with identity/health checks and
 readback before commit success. The owned test updates the KUIPROOF short
@@ -303,32 +306,64 @@ description and package CRC16 within one block, leaving all other VMU blocks
 and outer filesystem metadata unchanged. It retains the real redo record for
 restart verification; the older synthetic A/X harness must not reopen this
 binding. Strict sanitizer, independent failure-cut and real FAT32/exFAT image
-tests pass; physical-console results remain pending. See
-`vmu-physical-journal-proof.md`.
+tests pass. See `vmu-physical-journal-proof.md`.
 
-## Work required before in-game saves
+The two supplied screenshots for build `1100516b4411` show the physical proof
+passing on SCI/exFAT: **A** changes generation `00` to `01`, and the reopened
+**X** run finds generation `01`. Both screens report the current image SHA256
+prefix `75a42e93ded7d958`. The successful paths include fresh live allocation and
+identity checks, the real physical journal binding, VMU filesystem/package
+CRC16 validation, exact block readback and checked final SCI release. The
+screens were supplied following the requested power-cycle sequence; the
+photographs alone do not independently measure removal of power. This is
+evidence for the owned single-block Card tools transaction and fresh reopen,
+not a retail-game save or whole-save atomicity. Its valid redo record remains
+bound to the same image/journal pair; the old synthetic A/X harness must not
+reopen that binding.
 
-1. Prove exact game-side Maple ownership before submission and before the
-   original completion consumer sees responses. Controller discovery, mixed
-   physical/virtual schedules, no-hardware schedules and IRQ bookkeeping all
-   need correct behavior. A write watchpoint that fires after MDST starts is
-   too late to provide this contract.
-2. Reserve memory that the game cannot overwrite. Toy Commander's admitted
-   allocator leases 192 KiB, but existing live-use evidence protects only the
-   first 64 KiB; direct SDK scratch may use the remainder. The new service
-   streams blocks and does not assume a safe 128 KiB RAM mirror.
-3. Prepare a per-game image and journal while the shell owns the filesystem,
-   establish immutable physical extents and exclusive allocation, pin the SD
-   card identity, sync, unmount, and hand off only resident-owned state.
-   Imported images require validation; related discs need deliberate shared
-   card identities.
-4. Reserve storage transaction ownership before a commit. Contention after a
-   journal transaction has started cannot be reported as a harmless retry.
-   Any uncertain I/O must stop writes until controlled recovery.
-5. Validate discovery, formatting, saving, loading and restart persistence in
-   the admitted game on the owner's console. Start with synchronous native
-   SCI loading; async/background CDDA and WinCE require separate ownership and
-   scheduling work.
+The new isolated `READONLY_PROOF=4` Toy loader implements the next durable
+retail experiment. Before game loading, its high stage decodes the embedded
+P2, excludes all game/audio extents from all three VMU files' whole allocated
+clusters, checks actual card identity, and performs fresh semantic filesystem
+admission before real-map recovery. VMU validation, an explicit checkpoint,
+fresh image SHA/CRCs and a final zero-marker check produce a sealed 1,272-byte
+handoff. Preparation hashes remain provenance and do not reject legitimate
+saved changes. The installer rechecks the handoff's seal, identity and maps
+against the embedded P2 without replacing its current hashes.
+
+The mode 4 worker retains the filtered physical-only Maple chain and guarded
+MDSTAR restoration from the RAM proof. Its first storage transaction requires
+the handoff's marker to remain exactly zero. Four write phases stage one block;
+sync uses the existing real-map redo store under one complete SCI lease, with
+ordered barriers and exact base readback. Stage and worker writes use PIO.
+Current CRCs and the save acknowledgement become visible only after successful
+lease release/restoration. Focused session, stage and backend sanitizer tests
+pass. Native linked memory/stack/code audits and console testing are pending. No retail persistence result is claimed. See
+`vmu-persistent-card-test.md` for the intended isolated hardware procedure.
+
+Mode 4 keeps the exact original Toy/SCI/Standard route, CDDA and RAM patches
+off, the 64 KiB protected worker limit and 4 KiB private stack. Its stop bounds
+remain 18,000 schedules after first card traffic and 36,000 overall,
+approximately five and ten minutes at 60 schedules per second. Other titles, async/background
+readers, WinCE, formatting and general virtual-card management remain separate
+work; the public 2.0.0 runtime is unchanged.
+
+## Work required before durable retail release
+
+1. Complete the mode 4 native linked audits for the exact Toy hook, ownership
+   guards, filtered DMA chain, PIO writer and typed storage callback.
+2. Verify the durable worker fits the unchanged 64 KiB/4 KiB memory and stack
+   budgets. Toy's 192 KiB allocator lease does not authorize using its remaining
+   memory, which can contain direct SDK scratch.
+3. Validate the fresh ownership/recovery/checkpoint handoff on the console,
+   including the image already changed by the physical-journal proof.
+4. Exercise actual Toy save/load and named-save persistence across a complete
+   restart. Confirm healthy shared-bus release before acknowledgement and
+   controlled recovery after uncertain I/O. The journal remains atomic per
+   block, not across an entire game save.
+5. Design broader image/journal selection and lifecycle management, imported
+   image validation and deliberate shared identities for related discs.
+   Formatting, other titles and additional reader modes need their own proofs.
 
 The chosen virtual address shadows a complete Maple subunit. Keeping a
 physical VMU's LCD at that same address would require an additional function

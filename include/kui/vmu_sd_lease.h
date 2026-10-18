@@ -12,8 +12,12 @@ enum kui_vmu_sd_lease_result {
 /* A scoped copy of the resident's initialized card descriptor, borrowing its
  * existing SCI bus. The callback and context belong to the admitted worker.
  * Do not retain loan, initialize/adopt/shutdown a card, call bus.begin/end,
- * release the bus, change IRQ state, or issue writes. Only bounded read-only
- * commands are permitted. Return zero only after identity/data verification;
+ * release the bus or change IRQ state. Modes2/3 permit bounded read-only
+ * commands. The separately compiled mode4 permits the exact admitted worker
+ * callback to perform bounded PIO writes ONLY through its prepared physical
+ * image/journal map, holding this one lease across the complete transaction.
+ * Mode4 has no resident TX-DMA writer or persistent pointer to this loan.
+ * Return zero only after identity/data/durability verification;
  * any other result after acquisition is a permanent session fault.
  * This interface exports no address of the resident's mutable card or port. */
 typedef int (*kui_vmu_sd_transaction)(void *context,struct kui_loader_sd *loan);

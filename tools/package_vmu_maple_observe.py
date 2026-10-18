@@ -4,6 +4,7 @@
 import hashlib
 import json
 from pathlib import Path
+import re
 import struct
 import subprocess
 import sys
@@ -18,37 +19,46 @@ from runtime_package import verify
 from toy_pilot_symbols import _linked_symbols
 from vmu_maple_observe_symbols import sd_gateway_span
 from check_vmu_maple_observe_hook import check_hook, check_completion_hook
+from check_vmu_pio_write import check_pio_entry
 import retail_package as layout
 
 
 def write_test_archive(directory, module, report_bytes, *, readonly_proof=False,
-                       sd_readonly_proof=False, volatile_proof=False):
+                       sd_readonly_proof=False, volatile_proof=False, persistent_proof=False):
     """Install through the ordinary native-game route in the released shell."""
     if any(type(value) is not bool for value in
-           (readonly_proof, sd_readonly_proof, volatile_proof)):
+           (readonly_proof, sd_readonly_proof, volatile_proof, persistent_proof)):
         raise ValueError("Read-only proof selection must be boolean")
-    if sum((readonly_proof, sd_readonly_proof, volatile_proof)) > 1:
+    if sum((readonly_proof, sd_readonly_proof, volatile_proof, persistent_proof)) > 1:
         raise ValueError("Select exactly one read-only proof mode")
-    guide = ("vmu-volatile-card-test.md" if volatile_proof else
+    guide = ("vmu-persistent-card-test.md" if persistent_proof else
+             "vmu-volatile-card-test.md" if volatile_proof else
              "vmu-sd-readonly-card-test.md" if sd_readonly_proof else
              "vmu-readonly-card-test.md" if readonly_proof else "vmu-maple-observer-test.md")
     files = {"KUI/apps/games/retail-boot.kui": module,
              "README-FIRST.md": (Path("docs") / guide).read_bytes(),
              "observer-artifact-audit.json": report_bytes}
-    if (sd_readonly_proof or volatile_proof) and (directory / "personalization-audit.json").exists():
-        from personalize_vmu_sd_proof import validate_personalized
+    if (sd_readonly_proof or volatile_proof or persistent_proof) and (directory / "personalization-audit.json").exists():
+        if persistent_proof:
+            from personalize_vmu_persist_proof import validate_personalized
+        else:
+            from personalize_vmu_sd_proof import validate_personalized
         derivation = validate_personalized(directory)
-        if derivation.get("proof_mode", 2) != (3 if volatile_proof else 2):
+        if derivation.get("proof_mode", 2) != (4 if persistent_proof else 3 if volatile_proof else 2):
             raise ValueError("Personalization mode differs from the selected test archive")
         if hashlib.sha256(module).hexdigest() != derivation["artifacts"]["retail-maple-observe.kui"]["personalized_sha256"]:
             raise ValueError("Archive module differs from the personalized runtime")
         files["personalization-audit.json"] = (directory / "personalization-audit.json").read_bytes()
         original_record = derivation["base_compile_provenance"]["name"]
         files[original_record] = (directory / original_record).read_bytes()
+        if persistent_proof:
+            original_audit = derivation["base_package_audit"]["name"]
+            files[original_audit] = (directory / original_audit).read_bytes()
     files["SHA256SUMS.txt"] = "".join(
         hashlib.sha256(data).hexdigest() + "  " + name + "\n"
         for name, data in sorted(files.items())).encode()
-    target = directory / ("vmu-volatile-card-test.zip" if volatile_proof else
+    target = directory / ("vmu-persistent-card-test.zip" if persistent_proof else
+                          "vmu-volatile-card-test.zip" if volatile_proof else
                           "vmu-sd-readonly-card-test.zip" if sd_readonly_proof else
                           "vmu-readonly-card-test.zip" if readonly_proof else "vmu-maple-observer-test.zip")
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -87,8 +97,8 @@ def inspect_worker(directory):
         "_kui_vmu_maple_observer_sd_transaction"})
     if (words[0] != 0x564D4F31 or words[1] not in (5, 6) or words[2] != 64 or
             exports["lease_bytes"] != 0x30000 or
-            exports["readonly_mode"] not in (0, 1, 2, 3) or
-            (exports["readonly_mode"] == 3 and words[1] != 6) or
+            exports["readonly_mode"] not in (0, 1, 2, 3, 4) or
+            (exports["readonly_mode"] >= 3 and words[1] != 6) or
             (exports["readonly_mode"] < 2 and exports["sd_transaction"])):
         raise ValueError("Observer exports identity differs from profile")
     snapshot_bytes = 708 if words[1] == 6 else 644
@@ -128,13 +138,14 @@ def inspect_worker(directory):
             raise ValueError("Worker entry is outside cached executable image: " + key)
     mode = exports["readonly_mode"]
     report = {"exports": exports, "binary_bytes": len(payload),
-            "mode": ("VOLATILE RAM-save virtual A1 proof; SD read-only" if mode == 3 else
+            "mode": ("PERSISTENT SD-save virtual A1 proof; owned image/journal writes" if mode == 4 else
+                     "VOLATILE RAM-save virtual A1 proof; SD read-only" if mode == 3 else
                      "READ-ONLY SD-backed virtual A1 proof" if mode == 2 else
                      "READ-ONLY virtual blank A1 proof" if mode == 1 else "read-only Toy Maple observation"),
-            "virtual_vmu_enabled": bool(mode), "storage_writes_enabled": False,
-            "virtual_writes_enabled": mode == 3,
+            "virtual_vmu_enabled": bool(mode), "storage_writes_enabled": mode == 4,
+            "virtual_writes_enabled": mode in (3, 4),
             "volatile_writes_enabled": mode == 3,
-            "persistence": False,
+            "persistence": mode == 4,
             "worker_sha256": hashlib.sha256(payload).hexdigest(),
             "hook_integer_state": check_hook(image, exports),
             "completion_integer_state": check_completion_hook(image, exports)}
@@ -145,12 +156,12 @@ def inspect_worker(directory):
 
 
 def inspect_private_dma(elf, image, exports):
-    """Mode 3 owns exact uncached chain/capture/write objects before MDSTAR."""
+    """Mutating virtual cards own exact uncached objects before MDSTAR."""
     required = (("issued_chain", "_issued_chain", 512, 32),
                 ("captured_chain", "_captured_chain", 512, 4),
                 ("write_payloads", "_write_payloads", 4096, 4))
     typed = _linked_symbols(elf, {symbol for _, symbol, _, _ in required})
-    if exports["readonly_mode"] != 3:
+    if exports["readonly_mode"] not in (3, 4):
         if typed:
             raise ValueError("Non-volatile proof contains private mutating DMA buffers")
         return None
@@ -181,15 +192,106 @@ def inspect_sd_profile(directory, stage, mode):
         if start is not None or end is not None:
             raise ValueError("Non-SD proof stage must not embed an SD profile")
         return None
-    if start is None or end is None or start & 3 or end - start != 1536:
-        raise ValueError("SD profile requires one bounded 1536-byte stage blob")
+    count = 4096 if mode == 4 else 1536
+    if start is None or end is None or start & 3 or end - start != count:
+        raise ValueError(f"SD profile requires one bounded {count}-byte stage blob")
     wire = (directory / "vmu-sd-profile.bin").read_bytes()
-    if len(wire) != 1536 or region(stage["payload"], start - 0x8CE00000,
+    if len(wire) != count or region(stage["payload"], start - 0x8CE00000,
                                   end - start, "embedded SD profile") != wire:
         raise ValueError("Stage contains a different SD profile")
-    from vmu_sd_profile import decode_profile
+    if mode == 4:
+        from vmu_persist_profile import decode_profile
+    else:
+        from vmu_sd_profile import decode_profile
     summary = decode_profile(wire)
+    if mode == 4:
+        from personalize_vmu_sd_proof import readonly_blob
+        elf = (directory / "stage.elf").read_bytes()
+        actual_address, _ = readonly_blob(elf, stage,
+            "__vmu_sd_profile_blob_start", "__vmu_sd_profile_blob_end", 4096)
+        if actual_address != start:
+            raise ValueError("Persistent profile differs from its typed read-only stage span")
     return dict(summary, embedded_address=f"0x{start:08x}", embedded_bytes=len(wire))
+
+
+def check_pio_callgraph(directory, adapter):
+    reports = sorted(directory.rglob("*.ci"))
+    nodes, incoming = set(), []
+    for report in reports:
+        data = report.read_text()
+        nodes.update(_function_base(title) for title, _ in NODE.findall(data))
+        incoming.extend(_function_base(source) for source, target, _ in EDGE.findall(data)
+                        if _function_base(target) == "kui_sci_sd_write")
+    if (not reports or adapter not in nodes or not incoming or
+            set(incoming) != {adapter}):
+        raise ValueError("High SD writer must have only its explicit PIO adapter as caller")
+    return {"sole_writer_caller": adapter, "callgraph_reports": len(reports)}
+
+
+def inspect_persistent_io(directory, worker_elf, worker, exports, resident):
+    """Mode4 writes run only in bounded high code with private high state."""
+    functions = ("_kui_vmu_durable_handoff_validate", "_kui_vmu_durable_init",
+                 "_kui_vmu_durable_transaction", "_kui_vmu_durable_admit",
+                 "_kui_vmu_durable_handle", "_kui_sci_sd_write", "_kui_sci_sd_sync",
+                 "_durable_card_pio_write")
+    forbidden = {"kui_sci_sd_write", "kui_sci_sd_sync", "kui_vmu_durable_transaction"}
+    if any(_function_base(name) in forbidden for name in resident["symbols"]):
+        raise ValueError("Persistent writes must not add SD writer code to the low resident")
+    typed = _linked_symbols(worker_elf, set(functions) | {"_durable_card"})
+    result = {}
+    for name in functions:
+        address, size, kind, section = typed.get(name, (0, 0, 0, None))
+        if (kind != 2 or not size or size & 1 or address & 1 or
+                section is None or section[1] != 1 or section[2] & 7 != 6 or
+                not 0x8CFD0040 <= address < address + size <= 0x8CFD0000 + len(worker["payload"]) or
+                not section[3] <= address < address + size <= section[3] + section[5]):
+            raise ValueError("Persistent writer lacks its typed high-worker function: " + name)
+        result[name] = dict(address=f"0x{address:08x}", bytes=size)
+    address, size, kind, section = typed.get("_durable_card", (0, 0, 0, None))
+    if (kind != 1 or not 0 < size <= 4608 or size % 32 or address % 32 or
+            section is None or section[1] != 8 or section[2] & 7 != 3 or
+            not exports["bss_begin"] <= address < address + size <= exports["bss_end"] or
+            not section[3] <= address < address + size <= section[3] + section[5]):
+        raise ValueError("Persistent card must own its bounded aligned private high BSS object")
+    state_ranges = [(exports["snapshot"], exports["snapshot"] + 708)]
+    for row in inspect_private_dma(worker_elf, worker, exports).values():
+        state_ranges.append((int(row["address"], 16), int(row["address"], 16) + row["bytes"]))
+    if any(address < end and begin < address + size for begin, end in state_ranges):
+        raise ValueError("Persistent card overlaps snapshot or private DMA state")
+    result["private_card"] = dict(address=f"0x{address:08x}", bytes=size,
+                                  maximum_bytes=4608, alignment=32)
+    adapter = typed["_durable_card_pio_write"]
+    pio = check_pio_entry(worker, adapter[0], adapter[1], typed["_kui_sci_sd_write"][0],
+                          base=0x8CFD0000)
+    pio.update(check_pio_callgraph(directory / "worker", "durable_card_pio_write"))
+    return {"high_worker_functions": result, "resident_sd_writer_functions": 0,
+            "pio_payload": pio,
+            "handoff_bytes": 1272, "worker_reservation_bytes": 65536,
+            "sdk_lease_bytes": exports["lease_bytes"]}
+
+
+def inspect_persistent_stage(directory, stage_elf, stage):
+    functions = {"_observe_persist_pio_write", "_kui_sci_sd_write", "_kui_sci_sd_sync",
+                 "_kui_vmu_persist_stage_prepare", "_kui_vmu_persist_stage_admit"}
+    typed = _linked_symbols(stage_elf, functions | {"_observe_sd_handoff"})
+    for name in functions:
+        address, size, kind, section = typed.get(name, (0, 0, 0, None))
+        if (kind != 2 or not size or size & 1 or address & 1 or section is None or
+                section[1] != 1 or section[2] & 7 != 6 or
+                not 0x8CE00000 <= address < address + size <= 0x8CE00000 + len(stage["payload"]) or
+                not section[3] <= address < address + size <= section[3] + section[5]):
+            raise ValueError("Persistent preflight lacks its typed high-stage function: " + name)
+    address, size, kind, section = typed.get("_observe_sd_handoff", (0, 0, 0, None))
+    if (kind != 1 or size != 1272 or address & 3 or section is None or
+            section[1] != 8 or section[2] & 7 != 3 or
+            not section[3] <= address < address + size <= section[3] + section[5]):
+        raise ValueError("Persistent preflight requires its exact1272-byte high handoff")
+    adapter = typed["_observe_persist_pio_write"]
+    pio = check_pio_entry(stage, adapter[0], adapter[1], typed["_kui_sci_sd_write"][0],
+                          base=0x8CE00000)
+    pio.update(check_pio_callgraph(directory / "stage", "observe_persist_pio_write"))
+    return {"handoff_address": f"0x{address:08x}", "handoff_bytes": size,
+            "pio_payload": pio}
 
 
 def _function_base(name):
@@ -234,7 +336,7 @@ def require_worker_stack_coverage(directory, worker, rows):
                   if 0x8CFD0040 <= address < 0x8CFE0000 and
                   (_function_base(name).startswith(("kui_", "ram_", "chain_",
                                                     "volatile_chain_", "volatile_card_",
-                                                    "readonly_overlay_")) or
+                                                    "readonly_overlay_", "durable_", "sci_storage_")) or
                    _function_base(name) in guards)}
     elf_path = directory / "worker.elf"
     if elf_path.exists():
@@ -353,8 +455,36 @@ def check_embedded_images(directory, worker, resident, stage, entry, module):
     return runtime
 
 
+def inspect_mode4_source(directory, entry, module):
+    """Keep native compilation provenance distinct from local personalization."""
+    if (directory / "personalization-audit.json").exists():
+        from personalize_vmu_persist_proof import validate_personalized
+        derivation = validate_personalized(directory)
+        commit = derivation["source_commit"]
+        provenance_sha = derivation["base_compile_provenance"]["sha256"]
+        kind = "clean generic compilation plus independently verified fixed-span personalization"
+    else:
+        record_bytes = (directory / "entry.compile.json").read_bytes()
+        record = json.loads(record_bytes)
+        if (not isinstance(record, dict) or record.get("source_dirty") is not False or
+                not isinstance(record.get("commit"), str) or
+                not re.fullmatch(r"[0-9a-f]{40}", record["commit"]) or
+                record.get("elf_sha256") != hashlib.sha256((directory / "entry.elf").read_bytes()).hexdigest()):
+            raise ValueError("Mode4 requires matching clean source compile provenance")
+        commit = record["commit"]
+        provenance_sha = hashlib.sha256(record_bytes).hexdigest()
+        kind = "clean generic native compilation"
+    if (not re.fullmatch(r"[0-9a-f]{40}", commit) or
+            verify(module)["build"] != commit[:12] or module[64:] != entry["payload"]):
+        raise ValueError("Mode4 source commit differs from its exact compiled runtime identity")
+    return {"source_commit": commit, "source_dirty": False,
+            "source_provenance": kind, "compile_provenance_sha256": provenance_sha}
+
+
 def main():
     directory = Path(sys.argv[1])
+    # A refused new mode4 audit must never leave a prior deliverable ZIP.
+    (directory / "vmu-persistent-card-test.zip").unlink(missing_ok=True)
     report = inspect_worker(directory)
     mode = report["exports"]["readonly_mode"]
     resident_elf = (directory / "resident-sci.elf").read_bytes()
@@ -370,7 +500,10 @@ def main():
         report["sd_profile"] = profile
         report["sd_profile_sha256"] = profile["wire_sha256"]
         if (directory / "personalization-audit.json").exists():
-            from personalize_vmu_sd_proof import validate_personalized
+            if mode == 4:
+                from personalize_vmu_persist_proof import validate_personalized
+            else:
+                from personalize_vmu_sd_proof import validate_personalized
             derivation = validate_personalized(directory)
             if (derivation.get("proof_mode", 2) != mode or
                     derivation["profile_sha256"] != profile["wire_sha256"] or
@@ -395,6 +528,11 @@ def main():
         gateway = check_sd_gateway(directory, resident, resident_elf)
         report["resident_stack"], report["worker_stack"] = check_sd_stacks(
             directory, resident, worker, gateway)
+        if mode == 4:
+            report["persistent_io"] = inspect_persistent_io(
+                directory, (directory / "worker.elf").read_bytes(), worker, report["exports"], resident)
+            report["persistent_preflight"] = inspect_persistent_stage(
+                directory, (directory / "stage.elf").read_bytes(), stage)
     else:
         worker_frames = []
         for path in (directory / "worker").rglob("*.su"):
@@ -413,11 +551,13 @@ def main():
         (directory / "worker.bin").read_bytes(), resident, stage, entry, module)
     report.update({"module_sha256": hashlib.sha256(module).hexdigest(),
                    "module_bytes": len(module)})
+    if mode == 4:
+        report.update(inspect_mode4_source(directory, entry, module))
     report_bytes = (json.dumps(report, indent=2, sort_keys=True) + "\n").encode()
     (directory / "observer-artifact-audit.json").write_bytes(report_bytes)
     print(write_test_archive(directory, module, report_bytes,
                              readonly_proof=mode == 1, sd_readonly_proof=mode == 2,
-                             volatile_proof=mode == 3))
+                             volatile_proof=mode == 3, persistent_proof=mode == 4))
 
 
 if __name__ == "__main__":

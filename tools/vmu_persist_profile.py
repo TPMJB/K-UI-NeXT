@@ -265,11 +265,47 @@ def verify_snapshot(p, read):
         raise ValueError("Preparation snapshot differs from current file data")
 
 
+def template_profile():
+    """Canonical synthetic build placeholder; never an owner's admitted card.
+
+    CI compiles this public descriptor. Local personalization replaces its exact
+    fixed span, and the stage must still admit the owner's live filesystem.
+    """
+    p = dict(transport=1, high_capacity=1, flags=1, card_sectors=1048576,
+             partition_first=2048, partition_end=1048576,
+             cid=b"KUI-P2-TEMPLATE!".hex(), image_id=bytes(range(0xa0, 0xb0)).hex(),
+             pair_path="/KUI/vmu-test/p0001",
+             geometry=dict(fs_type=1, sector_bytes=512, sectors_per_cluster=1,
+                 volume_serial=0x4b554932, fat_count=2, active_fat=0,
+                 fat_first_lba=4096, fat_sectors=1024, data_first_lba=8192,
+                 cluster_count=65536, root_cluster=2, fat_mirrored=1,
+                 bitmap_first_cluster=0, upcase_first_cluster=0,
+                 bitmap_bytes=0, upcase_bytes=0), files=[])
+    for role, (size, sectors, cluster) in enumerate(zip(FILE_BYTES, FILE_SECTORS, (10, 1000, 2000))):
+        extent = dict(logical_block=0, lba=8192 + cluster - 2, blocks=sectors)
+        p["files"].append(dict(file_bytes=size, valid_bytes=size, first_cluster=cluster,
+            allocation_flags=0, directory_first_cluster=5, entry_offset=role * 64,
+            entry_lba=8195, entry_count=1, entry_kind=1,
+            useful=[dict(extent)], allocated=[dict(extent)]))
+    def read(role, block):
+        del block
+        return bytes.fromhex(p["image_id"]) + bytes(496) if role == 2 else bytes(512)
+    return encode_profile(collect_snapshot(p, read))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("profile", type=Path)
+    parser.add_argument("profile", type=Path, nargs="?")
+    parser.add_argument("--template", type=Path,
+                        help="Write the deterministic non-owner CI build profile")
     args = parser.parse_args()
     try:
+        if (args.profile is None) == (args.template is None):
+            raise ValueError("Select one input profile or --template output")
+        if args.template is not None:
+            args.template.parent.mkdir(parents=True, exist_ok=True)
+            args.template.write_bytes(template_profile())
+            args.profile = args.template
         p = decode_profile(args.profile.read_bytes())
         print(json.dumps({"format": "KUIVMUP2", "prep_only": True,
             "retail_writers_enabled": False, "wire_sha256": p["wire_sha256"],

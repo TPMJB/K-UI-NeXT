@@ -7,8 +7,8 @@
 #ifndef KUI_VMU_READONLY_PROOF
 #define KUI_VMU_READONLY_PROOF 0
 #endif
-#if KUI_VMU_READONLY_PROOF < 0 || KUI_VMU_READONLY_PROOF > 3
-#error VMU proof mode must be explicitly zero, one, two or three
+#if KUI_VMU_READONLY_PROOF < 0 || KUI_VMU_READONLY_PROOF > 4
+#error VMU proof mode must be explicitly zero, one, two, three or four
 #endif
 #define KUI_VMU_MAPLE_OBSERVE_SITE 0x8c0bf264
 #define KUI_VMU_MAPLE_OBSERVE_RESUME 0x8c0bf270
@@ -22,7 +22,7 @@
 #define KUI_VMU_MAPLE_OBSERVE_CONSUMER 0x8c0bf37a
 #define KUI_VMU_MAPLE_OBSERVE_COMPLETION_SLOT 0x8c0b540c
 #define KUI_VMU_MAPLE_OBSERVE_COMPLETION_PR 0x8c0b5362
-#if KUI_VMU_READONLY_PROOF == 3
+#if KUI_VMU_READONLY_PROOF >= 3
 #define KUI_VMU_MAPLE_OBSERVE_DEFAULT_STOP 36000
 #define KUI_VMU_MAPLE_OBSERVE_DEFAULT_POST 18000
 #define KUI_VMU_MAPLE_OBSERVE_MAX_STARTS 36000
@@ -97,6 +97,9 @@ struct kui_vmu_maple_observe_snapshot {
     uint32_t proof_bytes, proof_commit_attempts;
     uint32_t sd_reads,sd_busy,sd_faults,sd_last_result;
     uint32_t sd_last_lba,sd_crc_expected,sd_crc_actual,sd_cid_checks;
+    /* ABI6 mode4 reuses these rows for durable phases/commits/reads/refusals/
+     * last block/faults. ram_blocks and ram_full are zero: no RAM-save cache.
+     * proof_mode determines the interpretation; layout remains708 bytes. */
     uint32_t ram_write_phases,ram_commits,ram_blocks,ram_reads;
     uint32_t ram_refused,ram_full,ram_last_block,ram_faults;
     uint32_t chain_prepared,chain_switched,chain_restored,chain_bytes;
@@ -127,7 +130,7 @@ extern struct kui_vmu_maple_observe_snapshot kui_vmu_maple_observer_snapshot;
 #ifdef KUI_VMU_MAPLE_OBSERVE_HOST_TEST
 uint32_t kui_vmu_maple_observer_test_read(uint32_t address);
 void kui_vmu_maple_observer_test_stop(void);
-#if KUI_VMU_READONLY_PROOF == 3
+#if KUI_VMU_READONLY_PROOF >= 3
 void kui_vmu_maple_observer_test_write(uint32_t address,uint32_t value);
 uint32_t kui_vmu_maple_observer_test_private_chain(uint8_t *bytes,size_t capacity);
 #endif
@@ -137,6 +140,10 @@ uint8_t *kui_vmu_maple_observer_test_response(uint32_t physical);
 #if KUI_VMU_READONLY_PROOF >= 2
 struct kui_vmu_sd_profile;
 const struct kui_vmu_sd_profile *kui_vmu_maple_observer_test_sd_profile(uint32_t address);
+#if KUI_VMU_READONLY_PROOF == 4
+struct kui_vmu_durable_handoff;
+const struct kui_vmu_durable_handoff *kui_vmu_maple_observer_test_durable_handoff(uint32_t address);
+#endif
 int kui_vmu_maple_observer_test_sd_lease(kui_vmu_sd_transaction transaction,void *context);
 #endif
 #endif

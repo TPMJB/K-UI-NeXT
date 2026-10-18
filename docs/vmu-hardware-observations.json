@@ -861,6 +861,39 @@
         "Future recovery must use this real physical binding after a fresh filesystem ownership scan.",
         "CID and raw profile bytes are deliberately not included in repository evidence."
       ]
+    },
+    {
+      "build": "1100516b4411",
+      "date": "2026-10-17",
+      "outcome": "physical_journal_commit_and_reopen_passed",
+      "source_images": [
+        "image-1792295683917.jpg",
+        "image-1792295721133.jpg"
+      ],
+      "transport": "SCI",
+      "filesystem": "exFAT",
+      "pair_path": "/KUI/vmu-test/p0001",
+      "generation_before": "00",
+      "generation_after": "01",
+      "reopened_generation": "01",
+      "committed_base_sha256_prefix": "75a42e93ded7d958",
+      "reopened_base_sha256_prefix": "75a42e93ded7d958",
+      "commit_passes": [
+        "Fresh live filesystem ownership and physical journal binding.",
+        "VMU filesystem and test package CRC16.",
+        "One-block physical journal commit and exact base readback.",
+        "Final checked SCI release and READY."
+      ],
+      "reopen_passes": [
+        "Fresh live ownership and matching real journal recovery binding.",
+        "Stored generation01 with matching image hash prefix.",
+        "VMU filesystem/package CRC16 and READY."
+      ],
+      "limits": [
+        "User supplied the two requested A/X test screens following the power-cycle instructions; photographs alone do not independently measure removal of power.",
+        "This tests the owned KUIPROOF fixture in Card tools; no retail-game SD writer was enabled in this build.",
+        "The valid physical redo record remains bound to this image/journal pair; the old synthetic A/X recovery must not reopen it."
+      ]
     }
   ]
 }

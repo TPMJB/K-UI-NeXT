@@ -26,7 +26,13 @@ static enum kui_loader_sd_result observe_sd_storage_init(struct kui_retail_stora
 #include "kui/retail_observe.h"
 #include "vmu_maple_observe_symbols.h"
 #if KUI_VMU_READONLY_PROOF >= 2
+#if KUI_VMU_READONLY_PROOF == 4
+#include "kui/vmu_persist_stage.h"
+#include "kui/vmu_backing.h"
+#include "../dreamcast/sci_sd_storage.h"
+#else
 #include "kui/vmu_sd_stage_admission.h"
+#endif
 #include "kui/vmu_sd_lease.h"
 #include "sci_sd_bus.h"
 #ifndef KUI_VMU_SD_PROFILE_BIN
@@ -38,8 +44,91 @@ __asm__(".section .rodata.vmu_sd_profile,\"a\"\n"
         ".global __vmu_sd_profile_blob_end\n__vmu_sd_profile_blob_end:\n.previous\n");
 extern const uint8_t sd_profile_wire[] __asm__("__vmu_sd_profile_blob_start");
 extern const uint8_t sd_profile_wire_end[] __asm__("__vmu_sd_profile_blob_end");
-static struct kui_vmu_sd_profile observe_sd_profile;
 static bool observe_sd_admitted,observe_sd_verified;
+#if KUI_VMU_READONLY_PROOF == 4
+static struct kui_vmu_persist_profile observe_persist_profile;
+static struct kui_vmu_durable_handoff observe_sd_handoff;
+static struct kui_vmu_persist_stage_workspace observe_persist_work;
+
+static void observe_sd_profile_admit(void) {
+    size_t bytes=(size_t)(sd_profile_wire_end-sd_profile_wire);
+    if(bytes!=KUI_VMU_PERSIST_PROFILE_WIRE_BYTES ||
+       kui_vmu_persist_profile_decode(&observe_persist_profile,sd_profile_wire,bytes))
+        stopped("DURABLE VMU P2 BYTES / CRC REFUSED",(uint32_t)bytes);
+    if(kui_vmu_persist_stage_admit(&observe_persist_profile,&manifest))
+        stopped("DURABLE VMU WHOLE ALLOCATION / GAME CONFLICT",0);
+    observe_sd_admitted=true;
+}
+static int observe_persist_identity(void *context,struct kui_vmu_persist_session_identity *out) {
+    struct kui_retail_storage *storage=context;struct kui_vmu_sd_identity actual;
+    int result=kui_vmu_sd_identity_read(&storage->device.sd,&actual);
+    if(result!=KUI_VMU_BACKING_OK) return -1;
+    memcpy(out->cid,actual.cid,16u);out->card_sectors=actual.sectors;out->high_capacity=actual.high_capacity;
+    return 0;
+}
+static bool observe_persist_healthy(void *context) {
+    struct kui_retail_storage *storage=context;
+    return storage->transport==KUI_STORAGE_SCI && storage->device.sd.ready &&
+        !storage->stream.active && kui_sci_sd_healthy() && !kui_sci_sd_faulted();
+}
+static int observe_persist_read(void *context,uint64_t lba,void *out) {
+    struct kui_retail_storage *storage=context;
+    if(lba>UINT32_MAX) return -1;
+    last_card_result=kui_loader_sd_read(&storage->device.sd,(uint32_t)lba,1u,out);
+    return last_card_result==KUI_LOADER_SD_OK?0:-1;
+}
+/* Stage-only writes borrow the initialized card and force byte PIO. Preserve
+ * its receive-DMA callback for the subsequent ordinary executable loading. */
+static enum kui_loader_sd_result __attribute__((noipa)) observe_persist_pio_write(
+    struct kui_loader_sd *sd,uint32_t lba,const void *data) {
+    bool (*block)(void *,const uint8_t *,uint8_t *,size_t,bool,uint16_t *)=sd->bus.transfer_block;
+    sd->bus.transfer_block=NULL;
+    enum kui_loader_sd_result result=kui_sci_sd_write(sd,lba,1u,data);
+    sd->bus.transfer_block=block;
+    return result;
+}
+static int observe_persist_write(void *context,uint64_t lba,const void *data) {
+    struct kui_retail_storage *storage=context;
+    if(lba>UINT32_MAX) return -1;
+    last_card_result=observe_persist_pio_write(&storage->device.sd,(uint32_t)lba,data);
+    return last_card_result==KUI_LOADER_SD_OK?0:-1;
+}
+static int observe_persist_sync(void *context) {
+    struct kui_retail_storage *storage=context;
+    last_card_result=kui_sci_sd_sync(&storage->device.sd);
+    return last_card_result==KUI_LOADER_SD_OK?0:-1;
+}
+static enum kui_loader_sd_result observe_sd_storage_init(struct kui_retail_storage *storage,uint32_t selected) {
+    enum kui_loader_sd_result result=kui_retail_storage_init(storage,selected);
+    if(result!=KUI_LOADER_SD_OK) return result;
+    if(!observe_sd_admitted || kui_vmu_persist_stage_admit(&observe_persist_profile,&manifest) ||
+       selected!=KUI_STORAGE_SCI || storage->transport!=KUI_STORAGE_SCI || storage->stream.active)
+        stopped("DURABLE VMU PREFLIGHT MISSING",selected);
+    result=kui_retail_storage_acquire(storage);
+    if(result!=KUI_LOADER_SD_OK) return result;
+    retail_display_line("DURABLE VMU: LIVE OWNERSHIP SCAN / KEEP POWER ON");
+    const struct kui_vmu_persist_session_ops ops={storage,observe_persist_identity,observe_persist_read,
+        observe_persist_write,observe_persist_sync,observe_persist_healthy};
+    int prepared=kui_vmu_persist_stage_prepare(&observe_persist_profile,&manifest,&ops,
+        &observe_persist_work,&observe_sd_handoff);
+    enum kui_loader_sd_result stopped_stream=kui_retail_storage_stop(storage);
+    bool healthy=observe_persist_healthy(storage);
+    kui_retail_storage_release(storage);
+    healthy=healthy && storage->device.sd.ready && !storage->stream.active && !kui_sci_sd_faulted();
+    if(prepared || stopped_stream!=KUI_LOADER_SD_OK || !healthy) {
+        memset(&observe_sd_handoff,0,sizeof(observe_sd_handoff));
+        retail_display_hex("DURABLE STAGE PHASE",observe_persist_work.phase);
+        retail_display_hex("SESSION RESULT",(uint32_t)observe_persist_work.session.last_result);
+        retail_display_hex("OWNERSHIP RESULT",(uint32_t)observe_persist_work.filesystem.stats.result);
+        retail_display_hex("OWNERSHIP DETAIL",observe_persist_work.filesystem.stats.detail);
+        stopped("DURABLE VMU ADMISSION / CHECKPOINT FAILED",(uint32_t)prepared);
+    }
+    observe_sd_verified=true;
+    retail_display_line("DURABLE VMU: LIVE MAP / RECOVERY / CLEAN HANDOFF PASSED");
+    return KUI_LOADER_SD_OK;
+}
+#else
+static struct kui_vmu_sd_profile observe_sd_profile;
 
 static void observe_sd_profile_admit(void) {
     size_t bytes=(size_t)(sd_profile_wire_end-sd_profile_wire);
@@ -78,6 +167,7 @@ static enum kui_loader_sd_result observe_sd_storage_init(struct kui_retail_stora
     retail_display_line("SD VMU PROFILE: CID / MAP / 256 CRC / SHA PASSED");
     return KUI_LOADER_SD_OK;
 }
+#endif /* mode4 / original R1 modes */
 #endif
 
 #ifndef KUI_VMU_OBSERVE_WORKER_BIN
@@ -309,13 +399,24 @@ void kui_vmu_observe_stage_install(void) {
         .stop_after=KUI_VMU_MAPLE_OBSERVE_DEFAULT_STOP,.post_after=KUI_VMU_MAPLE_OBSERVE_DEFAULT_POST};
     memcpy(config.display,display.regs,sizeof(config.display));
 #if KUI_VMU_READONLY_PROOF >= 2
-    if(!observe_sd_admitted || !observe_sd_verified || !kui_vmu_sd_stage_admit(&observe_sd_profile,&manifest) ||
+    if(!observe_sd_admitted || !observe_sd_verified ||
+#if KUI_VMU_READONLY_PROOF == 4
+       kui_vmu_persist_stage_admit(&observe_persist_profile,&manifest) ||
+       kui_vmu_persist_stage_handoff_matches(&observe_persist_profile,&observe_sd_handoff) ||
+#else
+       !kui_vmu_sd_stage_admit(&observe_sd_profile,&manifest) ||
+#endif
        KUI_VMU_OBSERVE_LOW_SD_LEASE<KUI_RETAIL_RESIDENT_ADDRESS ||
        KUI_VMU_OBSERVE_LOW_SD_LEASE>=KUI_RETAIL_RESIDENT_ADDRESS+resident_bytes ||
        (KUI_VMU_OBSERVE_LOW_SD_LEASE&1u)) observe_fail(14,0);
     config.sd_lease=KUI_VMU_OBSERVE_LOW_SD_LEASE;
+#if KUI_VMU_READONLY_PROOF == 4
+    config.sd_profile=(uint32_t)(uintptr_t)&observe_sd_handoff;
+    config.sd_profile_bytes=sizeof(observe_sd_handoff);
+#else
     config.sd_profile=(uint32_t)(uintptr_t)&observe_sd_profile;
     config.sd_profile_bytes=sizeof(observe_sd_profile);
+#endif
 #endif
     int (*initialize)(const struct kui_vmu_maple_observe_config *)=
         (int (*)(const struct kui_vmu_maple_observe_config *))(uintptr_t)e.initialize;
@@ -352,7 +453,9 @@ void kui_retail_stage_main(const uint8_t *wire) {
         stopped("OBSERVER NEEDS ORIGINAL TOY / SCI / STANDARD",0);
 #if KUI_VMU_READONLY_PROOF >= 2
     observe_sd_profile_admit();
-#if KUI_VMU_READONLY_PROOF == 3
+#if KUI_VMU_READONLY_PROOF == 4
+    retail_display_line("VIRTUAL A1: DURABLE SD SAVES / ISOLATED TOY PROOF");
+#elif KUI_VMU_READONLY_PROOF == 3
     retail_display_line("VIRTUAL A1: RAM SAVES ONLY / SD READ-ONLY");
 #else
     retail_display_line("VIRTUAL A1: READ-ONLY SD IMAGE / NO SAVING");

@@ -21,7 +21,7 @@ static uint32_t target_rx,parent_rx;
 void kui_vmu_test_sd_reset(void);
 void kui_vmu_test_sd_configure(struct kui_vmu_maple_observe_config *);
 #endif
-#if KUI_VMU_READONLY_PROOF == 3
+#if KUI_VMU_READONLY_PROOF >= 3
 static uint8_t *private_chain;
 static unsigned mdstar_writes;
 static unsigned deny_mdstar_write;
@@ -76,7 +76,7 @@ void kui_vmu_maple_observer_test_stop(void) {++stops;}
 static void reset(void) {
     struct kui_vmu_maple_observe_config config={
         KUI_VMU_MAPLE_OBSERVE_MAGIC,KUI_VMU_MAPLE_OBSERVE_VERSION,
-#if KUI_VMU_READONLY_PROOF == 3
+#if KUI_VMU_READONLY_PROOF >= 3
         sizeof(config),100u,100u,{0},0,0,0};
 #else
         sizeof(config),100u,20u,{0},0,0,0};
@@ -91,7 +91,7 @@ static void reset(void) {
 #if KUI_VMU_READONLY_PROOF >= 2
     kui_vmu_test_sd_reset();kui_vmu_test_sd_configure(&config);
 #endif
-#if KUI_VMU_READONLY_PROOF == 3
+#if KUI_VMU_READONLY_PROOF >= 3
     private_chain=NULL;mdstar_writes=deny_mdstar_write=0;
 #endif
     assert(kui_vmu_maple_observer_init(&config)==0);

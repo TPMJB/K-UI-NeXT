@@ -9,7 +9,9 @@ ifneq ($(READONLY_PROOF),0)
 ifneq ($(READONLY_PROOF),1)
 ifneq ($(READONLY_PROOF),2)
 ifneq ($(READONLY_PROOF),3)
-$(error READONLY_PROOF must be 0, 1, 2 or 3)
+ifneq ($(READONLY_PROOF),4)
+$(error READONLY_PROOF must be 0, 1, 2, 3 or 4)
+endif
 endif
 endif
 endif
@@ -50,7 +52,7 @@ READONLY_SRC = src/core/vmu_readonly.c src/core/vmu_emulation.c src/core/vmu_ima
  src/loader/vmu_readonly_overlay.c
 ifneq ($(READONLY_PROOF),0)
 WORKER_SRC += $(READONLY_SRC)
-ifneq ($(filter $(READONLY_PROOF),2 3),)
+ifneq ($(filter $(READONLY_PROOF),2 3 4),)
 ifeq ($(strip $(SD_PROFILE)),)
 $(error SD-backed proof requires an explicit SD_PROFILE file)
 endif
@@ -59,8 +61,19 @@ VMU_CALLGRAPH_FLAGS = -fcallgraph-info=su
 VMU_SD_RESIDENT_EXPORTS = -Wl,-u,_kui_vmu_observe_sd_lease
 RESIDENT_LAYOUT = src/loader/vmu_sd_readonly_resident.ld
 FLAGS += $(VMU_CALLGRAPH_FLAGS)
-STAGE_SRC += src/core/vmu_sd_profile.c src/loader/vmu_backing.c
-WORKER_SRC += src/core/vmu_sd_profile.c src/core/hash.c src/core/retail_image.c src/loader/sd_reader.c src/loader/vmu_backing.c
+STAGE_SRC += src/loader/vmu_backing.c
+WORKER_SRC += src/core/hash.c src/core/retail_image.c src/loader/sd_reader.c src/loader/vmu_backing.c
+ifeq ($(READONLY_PROOF),4)
+STAGE_SRC += src/loader/vmu_persist_stage.c src/core/vmu_fs_admission.c \
+ src/core/vmu_persist_profile.c src/core/vmu_persist_session.c src/core/vmu_store.c \
+ src/core/vmu_image.c src/core/vmu_durable.c src/dreamcast/sci_sd_storage.c
+WORKER_SRC += src/core/vmu_durable.c src/core/vmu_store.c \
+ src/dreamcast/sci_sd_storage.c src/loader/vmu_volatile_chain.c
+TEST_ZIP = vmu-persistent-card-test.zip
+TEST_GUIDE = docs/vmu-persistent-card-test.md
+else
+STAGE_SRC += src/core/vmu_sd_profile.c
+WORKER_SRC += src/core/vmu_sd_profile.c
 ifeq ($(READONLY_PROOF),3)
 WORKER_SRC += src/core/vmu_volatile.c src/loader/vmu_volatile_chain.c
 TEST_ZIP = vmu-volatile-card-test.zip
@@ -68,6 +81,7 @@ TEST_GUIDE = docs/vmu-volatile-card-test.md
 else
 TEST_ZIP = vmu-sd-readonly-card-test.zip
 TEST_GUIDE = docs/vmu-sd-readonly-card-test.md
+endif
 endif
 else
 TEST_ZIP = vmu-readonly-card-test.zip
@@ -89,7 +103,7 @@ force-mode-config:
 $(BUILD)/readonly-config: force-mode-config
 	@mkdir -p $(BUILD)
 	@printf '%s\n' 'READONLY_PROOF=$(READONLY_PROOF)' 'SD_PROFILE=$(SD_PROFILE)' > $(BUILD)/readonly-config.tmp
-ifneq ($(filter $(READONLY_PROOF),2 3),)
+ifneq ($(filter $(READONLY_PROOF),2 3 4),)
 	@sha256sum '$(SD_PROFILE)' >> $(BUILD)/readonly-config.tmp
 endif
 	@cmp -s $(BUILD)/readonly-config.tmp $(BUILD)/readonly-config || \
@@ -98,10 +112,11 @@ endif
 
 $(RESIDENT_OBJ) $(STAGE_OBJ) $(WORKER_OBJ): $(BUILD)/readonly-config
 
-ifneq ($(filter $(READONLY_PROOF),2 3),)
-$(BUILD)/vmu-sd-profile.bin: $(SD_PROFILE) $(BUILD)/readonly-config tools/vmu_sd_profile.py
+ifneq ($(filter $(READONLY_PROOF),2 3 4),)
+PROFILE_TOOL = $(if $(filter 4,$(READONLY_PROOF)),tools/vmu_persist_profile.py,tools/vmu_sd_profile.py)
+$(BUILD)/vmu-sd-profile.bin: $(SD_PROFILE) $(BUILD)/readonly-config $(PROFILE_TOOL)
 	@mkdir -p $(BUILD)
-	python3 tools/vmu_sd_profile.py '$(SD_PROFILE)'
+	python3 $(PROFILE_TOOL) '$(SD_PROFILE)'
 	cp '$(SD_PROFILE)' $@
 $(STAGE_OBJ): $(BUILD)/vmu-sd-profile.bin
 FLAGS += -DKUI_VMU_SD_PROFILE_BIN='"$(BUILD)/vmu-sd-profile.bin"'
@@ -128,7 +143,7 @@ $(BUILD)/resident-sci.elf: $(RESIDENT_OBJ) $(RESIDENT_LAYOUT)
 	 -T$(RESIDENT_LAYOUT) -Wl,-Map,$(BUILD)/resident-sci.map \
 	 -o $@ $(RESIDENT_OBJ) -lgcc
 	cp $(BUILD)/resident-sci.elf.ltrans*.su $(BUILD)/resident/lto/
-ifneq ($(filter $(READONLY_PROOF),2 3),)
+ifneq ($(filter $(READONLY_PROOF),2 3 4),)
 	cp $(BUILD)/resident-sci.elf*.ci $(BUILD)/resident/lto/
 endif
 $(BUILD)/resident-sci.bin: $(BUILD)/resident-sci.elf
@@ -243,11 +258,46 @@ host-tests:
 	 src/core/vmu_sd_profile.c src/core/hash.c src/core/retail_image.c \
 	 tests/test_vmu_maple_volatile_worker.c -o $(BUILD)/test-volatile-worker
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-volatile-worker
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -g -Iinclude -Isrc/loader -DKUI_VMU_READONLY_PROOF=4 -DKUI_VMU_EXPERIMENTAL=0 \
+	 tests/test_vmu_durable.c src/core/vmu_durable.c src/core/vmu_store.c \
+	 src/core/vmu_emulation.c src/loader/sd_reader.c src/loader/vmu_backing.c \
+	 src/dreamcast/sci_sd_storage.c src/core/hash.c src/core/retail_image.c src/core/data.c \
+	 -o $(BUILD)/test-durable-backend
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-durable-backend
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -ffunction-sections -fdata-sections -Wl,--gc-sections -g -Iinclude -Isrc/loader \
+	 -DKUI_VMU_READONLY_PROOF=4 -DKUI_VMU_EXPERIMENTAL=0 \
+	 tests/test_vmu_persist_stage.c src/loader/vmu_persist_stage.c src/core/vmu_durable.c \
+	 src/core/vmu_persist_session.c src/core/vmu_fs_admission.c src/core/vmu_persist_profile.c \
+	 src/core/vmu_store.c src/core/vmu_image.c src/core/hash.c src/core/retail_image.c \
+	 -o $(BUILD)/test-persist-stage
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-persist-stage
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -g -Iinclude -Isrc/loader -DKUI_VMU_MAPLE_OBSERVE_HOST_TEST=1 \
+	 -DKUI_VMU_READONLY_PROOF=4 -DKUI_VMU_EXPERIMENTAL=0 \
+	 tests/test_vmu_maple_durable_worker.c src/loader/vmu_maple_observe_worker.c \
+	 src/loader/vmu_readonly_overlay.c src/loader/vmu_volatile_chain.c \
+	 src/core/vmu_durable.c src/core/vmu_store.c src/core/vmu_emulation.c src/core/vmu_image.c \
+	 src/loader/sd_reader.c src/loader/vmu_backing.c src/dreamcast/sci_sd_storage.c \
+	 src/core/hash.c src/core/retail_image.c src/core/data.c -o $(BUILD)/test-durable-worker
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-durable-worker
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -g -Iinclude -Isrc/loader -DKUI_VMU_READONLY_PROOF=4 \
+	 tests/test_vmu_sd_lease.c -o $(BUILD)/test-durable-lease
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-durable-lease
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -g -Iinclude -Isrc/loader -DKUI_SCI_SD_TEST=1 -DKUI_VMU_READONLY_PROOF=4 \
+	 src/loader/sci_sd_bus.c tests/test_sci_sd_bus.c -o $(BUILD)/test-durable-restore
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-durable-restore
 	python3 tests/test_vmu_maple_observe_package.py
 	python3 tests/test_vmu_maple_observe_hook.py
 	python3 tests/test_vmu_toy_completion_probe.py
 	python3 tests/test_vmu_observer_install_route.py
 	python3 tests/test_vmu_sd_profile_tool.py
 	python3 tests/test_personalize_vmu_sd_proof.py
+	python3 tests/test_vmu_persist_profile_tool.py
+	python3 tests/test_vmu_pio_write.py
+	python3 tests/test_personalize_vmu_persist_proof.py
 
 -include $(RESIDENT_OBJ:.o=.d) $(STAGE_OBJ:.o=.d) $(WORKER_OBJ:.o=.d)

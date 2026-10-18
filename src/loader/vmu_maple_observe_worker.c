@@ -7,7 +7,12 @@
 #endif
 #if KUI_VMU_READONLY_PROOF == 3
 #include "kui/vmu_volatile.h"
+#endif
+#if KUI_VMU_READONLY_PROOF >= 3
 #include "kui/vmu_volatile_chain.h"
+#endif
+#if KUI_VMU_READONLY_PROOF == 4
+#include "kui/vmu_durable.h"
 #endif
 #if KUI_VMU_READONLY_PROOF >= 2
 #include "kui/vmu_sd_profile.h"
@@ -33,6 +38,12 @@ void kui_vmu_maple_observer_report(void);
 #if KUI_VMU_READONLY_PROOF
 #if KUI_VMU_READONLY_PROOF == 3
 static struct kui_vmu_volatile ram_card;
+#elif KUI_VMU_READONLY_PROOF == 4
+static struct kui_vmu_durable durable_card;
+#else
+static struct kui_vmu_readonly blank_card;
+#endif
+#if KUI_VMU_READONLY_PROOF >= 3
 static _Alignas(32) uint8_t issued_chain[512];
 static struct kui_vmu_volatile_chain_frame captured_chain[32];
 static uint32_t write_payloads[32][32];
@@ -41,13 +52,13 @@ static uint32_t original_hash,chain_state;
 enum {CHAIN_IDLE,CHAIN_PREPARED,CHAIN_ISSUED,CHAIN_RESTORED,CHAIN_FAULT};
 _Static_assert(sizeof(issued_chain)==512u && sizeof(captured_chain)==512u &&
     sizeof(write_payloads)==4096u,"Volatile DMA private buffer ABI");
-#else
-static struct kui_vmu_readonly blank_card;
 #endif
 static struct kui_vmu_readonly_overlay overlay;
 static struct kui_vmu_readonly_overlay_frame proof_frames[32];
 #endif
 #if KUI_VMU_READONLY_PROOF >= 2
+static int (*sd_lease)(kui_vmu_sd_transaction,void *);
+#if KUI_VMU_READONLY_PROOF < 4
 struct observe_sd_state {
     struct kui_vmu_sd_profile profile;
     _Alignas(32) uint8_t bounce[512];
@@ -55,8 +66,8 @@ struct observe_sd_state {
     uint8_t inflight,invoked,verified,failed;
 };
 static struct observe_sd_state sd_state;
-static int (*sd_lease)(kui_vmu_sd_transaction,void *);
 _Static_assert(sizeof(struct kui_vmu_sd_profile)==1320u,"SD profile decoded ABI");
+#endif
 #endif
 
 #ifdef KUI_VMU_MAPLE_OBSERVE_HOST_TEST
@@ -87,7 +98,7 @@ static void increment(uint32_t *value) {
         ++*value;
 }
 
-#if KUI_VMU_READONLY_PROOF == 3
+#if KUI_VMU_READONLY_PROOF >= 3
 static void write_word(uint32_t address,uint32_t value) {
 #ifdef KUI_VMU_MAPLE_OBSERVE_HOST_TEST
     kui_vmu_maple_observer_test_write(address,value);
@@ -127,7 +138,27 @@ static int physical_response_valid(const struct pending_descriptor *frame) {
 }
 #endif
 
-#if KUI_VMU_READONLY_PROOF >= 2
+#if KUI_VMU_READONLY_PROOF == 4
+int kui_vmu_maple_observer_sd_transaction(void *context,struct kui_loader_sd *loan) {
+    if(context!=&durable_card || !loan || kui_vmu_maple_observer_snapshot.initialized!=1u) {
+        if(loan) loan->ready=false;
+        return -1;
+    }
+    return kui_vmu_durable_transaction(context,loan);
+}
+static int durable_worker_lease(kui_vmu_sd_transaction transaction,void *context) {
+#ifdef KUI_VMU_MAPLE_OBSERVE_HOST_TEST
+    int result=kui_vmu_maple_observer_test_sd_lease(transaction,context);
+#else
+    int result=sd_lease(transaction,context);
+#endif
+    if(STACK_BOTTOM[0]!=STACK_PATTERN || STACK_BOTTOM[1]!=STACK_PATTERN) {
+        increment(&kui_vmu_maple_observer_snapshot.stack_fault);
+        return KUI_VMU_SD_LEASE_FAULT;
+    }
+    return result;
+}
+#elif KUI_VMU_READONLY_PROOF >= 2
 /* The resident gateway invokes this exact exported entry with a temporary
  * protocol descriptor, while it owns the real GD lock and SCI lease. Only
  * our private aligned bounce can receive the DMA-facing card bytes. */
@@ -238,7 +269,15 @@ static unsigned unit_index(uint8_t address) {
 }
 
 #if KUI_VMU_READONLY_PROOF
-#if KUI_VMU_READONLY_PROOF == 3
+#if KUI_VMU_READONLY_PROOF == 4
+static int durable_packet(void *context,const uint8_t *request,size_t bytes,
+    uint8_t *response,size_t capacity,size_t *response_bytes) {
+    return kui_vmu_durable_handle(context,request,bytes,response,capacity,response_bytes);
+}
+static int durable_admit(void *context,uint32_t header,uint32_t payload0,uint32_t payload1) {
+    return kui_vmu_durable_admit(context,header,payload0,payload1);
+}
+#elif KUI_VMU_READONLY_PROOF == 3
 static int ram_packet(void *context,const uint8_t *request,size_t bytes,
     uint8_t *response,size_t capacity,size_t *response_bytes) {
     return kui_vmu_volatile_handle(context,request,bytes,response,capacity,response_bytes);
@@ -300,7 +339,18 @@ static void proof_stats(void) {
     s->proof_last_request=p->last_request;s->proof_last_response=p->last_reply;
     s->proof_last_rx=p->last_rx;
     s->proof_bytes=p->replies*4u+p->devinfo*112u+p->allinfo*192u+p->media*28u+p->reads*520u;
-#if KUI_VMU_READONLY_PROOF == 3
+#if KUI_VMU_READONLY_PROOF == 4
+    s->proof_last_block=durable_card.protocol.read_block;
+    s->proof_commit_attempts=durable_card.commit_attempts;
+    s->ram_write_phases=durable_card.write_phases;s->ram_commits=durable_card.commits;
+    s->ram_blocks=0u;s->ram_reads=durable_card.reads;
+    s->ram_refused=durable_card.refused;s->ram_full=0u;
+    s->ram_last_block=durable_card.last_block;s->ram_faults=durable_card.faulted;
+    s->sd_reads=durable_card.sd_reads;s->sd_busy=durable_card.sd_busy;
+    s->sd_faults=durable_card.sd_faults;s->sd_last_result=(uint32_t)durable_card.sd_last_result;
+    s->sd_last_lba=durable_card.last_lba;s->sd_crc_expected=durable_card.crc_expected;
+    s->sd_crc_actual=durable_card.crc_actual;s->sd_cid_checks=durable_card.cid_checks;
+#elif KUI_VMU_READONLY_PROOF == 3
     s->proof_last_block=ram_card.protocol.read_block;s->proof_commit_attempts=0u;
     s->ram_write_phases=ram_card.write_phases;s->ram_commits=ram_card.ram_commits;
     s->ram_blocks=ram_card.cached_blocks;s->ram_reads=ram_card.cache_reads;
@@ -315,14 +365,14 @@ static void proof_stats(void) {
 }
 static void proof_stop(uint32_t flags) {
     struct kui_vmu_maple_observe_snapshot *s=&kui_vmu_maple_observer_snapshot;
-#if KUI_VMU_READONLY_PROOF == 3
+#if KUI_VMU_READONLY_PROOF >= 3
     chain_status(CHAIN_FAULT);
 #endif
     s->proof_flags|=flags;proof_stats();
     s->stop_reason=KUI_VMU_OBSERVE_PROOF_REFUSED;
     kui_vmu_maple_observer_report();
 }
-#if KUI_VMU_READONLY_PROOF == 3
+#if KUI_VMU_READONLY_PROOF >= 3
 static void chain_fail(uint32_t flags) {
     increment(&kui_vmu_maple_observer_snapshot.chain_faults);
     chain_status(CHAIN_FAULT);proof_stop(flags);
@@ -358,11 +408,23 @@ int kui_vmu_maple_observer_init(const struct kui_vmu_maple_observe_config *confi
 #if KUI_VMU_READONLY_PROOF
     kui_vmu_maple_observer_snapshot.proof_mode=KUI_VMU_READONLY_PROOF;
 #if KUI_VMU_READONLY_PROOF >= 2
+#if KUI_VMU_READONLY_PROOF == 4
+    if(config->sd_profile_bytes!=sizeof(struct kui_vmu_durable_handoff) ||
+#else
     if(config->sd_profile_bytes!=sizeof(struct kui_vmu_sd_profile) ||
+#endif
        (config->sd_profile&3u) || (config->sd_profile&UINT32_C(0xff000000))!=UINT32_C(0x8c000000) ||
        !source_span(config->sd_profile&UINT32_C(0x1fffffff),config->sd_profile_bytes) ||
        (config->sd_lease&1u) || config->sd_lease<UINT32_C(0x8c004000) ||
        config->sd_lease>=UINT32_C(0x8c007800)) return -1;
+#if KUI_VMU_READONLY_PROOF == 4
+#ifdef KUI_VMU_MAPLE_OBSERVE_HOST_TEST
+    const struct kui_vmu_durable_handoff *prepared=kui_vmu_maple_observer_test_durable_handoff(config->sd_profile);
+#else
+    const struct kui_vmu_durable_handoff *prepared=(const struct kui_vmu_durable_handoff *)(uintptr_t)config->sd_profile;
+#endif
+    if(!prepared || kui_vmu_durable_handoff_validate(prepared)) return -1;
+#else
 #ifdef KUI_VMU_MAPLE_OBSERVE_HOST_TEST
     const struct kui_vmu_sd_profile *prepared=kui_vmu_maple_observer_test_sd_profile(config->sd_profile);
 #else
@@ -370,12 +432,18 @@ int kui_vmu_maple_observer_init(const struct kui_vmu_maple_observe_config *confi
 #endif
     if(!prepared || kui_vmu_sd_profile_validate(prepared)) return -1;
     memset(&sd_state,0,sizeof(sd_state));memcpy(&sd_state.profile,prepared,sizeof(*prepared));
+#endif
     sd_lease=(int (*)(kui_vmu_sd_transaction,void *))(uintptr_t)config->sd_lease;
 #else
     if(config->sd_lease || config->sd_profile || config->sd_profile_bytes) return -1;
 #endif
-#if KUI_VMU_READONLY_PROOF == 3
+#if KUI_VMU_READONLY_PROOF >= 3
     memset(&issued_plan,0,sizeof(issued_plan));original_hash=0;chain_status(CHAIN_IDLE);
+#endif
+#if KUI_VMU_READONLY_PROOF == 4
+    if(kui_vmu_durable_init(&durable_card,prepared,durable_worker_lease,kui_vmu_maple_observer_sd_transaction) ||
+       kui_vmu_readonly_overlay_init_backend(&overlay,durable_packet,durable_admit,&durable_card)) return -1;
+#elif KUI_VMU_READONLY_PROOF == 3
     if(kui_vmu_volatile_init(&ram_card,sd_read_block,&sd_state) ||
        kui_vmu_readonly_overlay_init_backend(&overlay,ram_packet,ram_admit,&ram_card)) return -1;
 #elif KUI_VMU_READONLY_PROOF == 2
@@ -419,9 +487,10 @@ void kui_vmu_maple_observer_report(void) {
 #else
     const struct kui_vmu_maple_observe_snapshot *s = &kui_vmu_maple_observer_snapshot;
     uint32_t page;
-    for(page = 0;;page = (page + 1u) % (KUI_VMU_READONLY_PROOF==3?5u:4u)) {
+    for(page = 0;;page = (page + 1u) % (KUI_VMU_READONLY_PROOF>=3?5u:4u)) {
         retail_display_restore(&saved_display);
-        retail_display_line(KUI_VMU_READONLY_PROOF==3?"VIRTUAL VMU - VOLATILE RAM SAVES ONLY":
+        retail_display_line(KUI_VMU_READONLY_PROOF==4?"VIRTUAL VMU - PERSISTENT SD SAVES":
+            KUI_VMU_READONLY_PROOF==3?"VIRTUAL VMU - VOLATILE RAM SAVES ONLY":
             KUI_VMU_READONLY_PROOF==2?"VIRTUAL VMU - READ ONLY SD IMAGE":
             KUI_VMU_READONLY_PROOF?"VIRTUAL VMU - READ ONLY BLANK CARD":"TOY MAPLE OBSERVER - READ ONLY");
         retail_display_values("PAGE SCHEDULES DESCRIPTORS BAD",
@@ -454,7 +523,8 @@ void kui_vmu_maple_observer_report(void) {
                 (uint32_t[4]){s->proof_flags,s->proof_last_request,s->proof_last_response,s->proof_last_rx},4u);
             retail_display_values("BLOCK BYTES SD COMMITS",&s->proof_last_block,3u);
             retail_display_values("MODE PREPARED COMPLETED",&s->proof_mode,3u);
-            retail_display_line(KUI_VMU_READONLY_PROOF==3?"RAM SAVES LOST ON POWER OFF / SD UNCHANGED":
+            retail_display_line(KUI_VMU_READONLY_PROOF==4?"PERSISTENT SD SAVES / KEEP IMAGE AND JOURNAL":
+                KUI_VMU_READONLY_PROOF==3?"RAM SAVES LOST ON POWER OFF / SD UNCHANGED":
                 KUI_VMU_READONLY_PROOF==2?
                 "FIXED SD IMAGE / NO WRITES OR PERSISTENCE":"SYNTHETIC EMPTY CARD / NO PERSISTENCE");
             retail_display_pause(600u);
@@ -479,7 +549,8 @@ void kui_vmu_maple_observer_report(void) {
             }
         } else if(page==3u) {
 #if KUI_VMU_READONLY_PROOF >= 2
-            retail_display_values("SD READS BUSY FAULTS RESULT",&s->sd_reads,4u);
+            retail_display_values(KUI_VMU_READONLY_PROOF==4?
+                "SD SECTOR READS BUSY FAULTS RESULT":"SD READS BUSY FAULTS RESULT",&s->sd_reads,4u);
             retail_display_values("LBA EXPECT CRC ACTUAL CRC CID CHECKS",&s->sd_last_lba,4u);
             retail_display_values("PROOF FLAGS REQUEST RESPONSE RX",&s->proof_flags,4u);
 #else
@@ -491,17 +562,22 @@ void kui_vmu_maple_observer_report(void) {
             retail_display_values("CMP SR MASKS MAIN-A INFO HDR RX", &s->completion_sr_last, 4u);
             retail_display_values("SUB REQUEST RESPONSE RX ORDINAL", &s->subunit_request, 4u);
             retail_display_values("CTXBAD FLAGS MDSTAR CALLER PR", &s->completion_bad_context, 4u);
-            retail_display_line(KUI_VMU_READONLY_PROOF==3?"VOLATILE PROOF STOPPED / PHOTO SCREEN":
+            retail_display_line(KUI_VMU_READONLY_PROOF==4?"PERSISTENT PROOF STOPPED / PHOTO SCREEN":
+                KUI_VMU_READONLY_PROOF==3?"VOLATILE PROOF STOPPED / PHOTO SCREEN":
                 KUI_VMU_READONLY_PROOF?
                 "READ-ONLY PROOF STOPPED / PHOTO SCREEN":"FINAL PENDING DMA IS NOT STARTED");
         } else {
-            retail_display_values("RAM PHASES COMMITS BLOCKS READS",&s->ram_write_phases,4u);
-            retail_display_values("RAM REFUSED FULL BLOCK FAULTS",&s->ram_refused,4u);
+            retail_display_values(KUI_VMU_READONLY_PROOF==4?
+                "SD PHASES COMMITS NO CACHE READS":"RAM PHASES COMMITS BLOCKS READS",&s->ram_write_phases,4u);
+            retail_display_values(KUI_VMU_READONLY_PROOF==4?
+                "SD REFUSED UNUSED BLOCK FAULTS":"RAM REFUSED FULL BLOCK FAULTS",&s->ram_refused,4u);
             retail_display_values("CHAIN PREP SWITCH RESTORE BYTES",&s->chain_prepared,4u);
             retail_display_values("CHAIN PHYSICAL CRC FAULTS STATE",&s->chain_physical,4u);
-            retail_display_line("RAM SAVES LOST ON POWER OFF / SD UNCHANGED");
+            retail_display_line(KUI_VMU_READONLY_PROOF==4?
+                "SAVE ACK REQUIRES DURABLE SD AND RESTORATION":
+                "RAM SAVES LOST ON POWER OFF / SD UNCHANGED");
         }
-        if(page!=2u && page!=3u) retail_display_line(KUI_VMU_READONLY_PROOF==3?
+        if(page!=2u && page!=3u) retail_display_line(KUI_VMU_READONLY_PROOF>=3?
             "PHOTO ALL FIVE PAGES THEN POWER OFF":"PHOTO ALL FOUR PAGES THEN POWER OFF");
         retail_display_pause(600u);
     }
@@ -512,7 +588,7 @@ static void record_subunit(uint32_t cursor,uint32_t header,uint32_t rx,unsigned 
     struct kui_vmu_maple_observe_snapshot *s=&kui_vmu_maple_observer_snapshot;
     struct kui_vmu_maple_observe_record record={s->descriptors,header,0,0,rx};
     uint32_t n=s->subunit_requests;
-    /* Diagnostic records contain only function/location. Mode 3 separately
+    /* Diagnostic records contain only function/location. Filtered modes separately
      * captures BLOCKWRITE bytes into the exclusive private request snapshot. */
     if(words) record.payload0=read_word((cursor+12u)|UINT32_C(0xa0000000));
     if(words>1u) record.payload1=read_word((cursor+16u)|UINT32_C(0xa0000000));
@@ -577,7 +653,7 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
     if(s->completion_pending || !proof_layout(source,0u)) {
         increment(&s->proof_bank_fail);proof_stop(UINT32_C(0x10000));return;
     }
-#if KUI_VMU_READONLY_PROOF == 3
+#if KUI_VMU_READONLY_PROOF >= 3
     /* The trampoline restores inherited SR before its one original MDST
      * store. Holly IRQ levels 6/4/2 must remain masked during that handoff. */
     if(((inherited_sr>>4)&15u)<6u ||
@@ -672,7 +748,7 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
                 if(words) proof_frames[count].payload0=read_word((cursor+12u)|UINT32_C(0xa0000000));
                 if(words>1u) proof_frames[count].payload1=read_word((cursor+16u)|UINT32_C(0xa0000000));
             }
-#if KUI_VMU_READONLY_PROOF == 3
+#if KUI_VMU_READONLY_PROOF >= 3
             captured_chain[count].control=control;captured_chain[count].rx=rx;
             captured_chain[count].header=header;
             captured_chain[count].payload0=proof_frames[count].payload0;
@@ -735,7 +811,7 @@ done:
          * The final diagnostic schedule is counted but never published. */
         if(s->completion_pending) increment(&s->completion_overwritten);
         pending_source=source;s->completion_pending=count;
-#if KUI_VMU_READONLY_PROOF == 3
+#if KUI_VMU_READONLY_PROOF >= 3
         uint32_t physical=chain_physical();
         if(!physical || kui_vmu_volatile_chain_build(&issued_plan,captured_chain,count,
             source,cursor-source,issued_chain,sizeof(issued_chain),physical) ||
@@ -769,7 +845,7 @@ void kui_vmu_maple_observer_complete(uint32_t inherited_sr,uint32_t inherited_pr
     if(((inherited_sr>>4)&15u)!=15u) {increment(&s->completion_bad_mask);flags|=8u;}
     if(busy) {increment(&s->completion_busy);flags|=4u;}
     if(inherited_pr!=KUI_VMU_MAPLE_OBSERVE_COMPLETION_PR) flags|=1u;
-#if KUI_VMU_READONLY_PROOF == 3
+#if KUI_VMU_READONLY_PROOF >= 3
     if(s->completion_pending && source!=issued_plan.output_physical) flags|=2u;
     if(chain_state!=CHAIN_ISSUED) flags|=128u;
 #else
@@ -808,7 +884,7 @@ void kui_vmu_maple_observer_complete(uint32_t inherited_sr,uint32_t inherited_pr
     if(!proof_layout(pending_source,1u)) {
         increment(&s->proof_bank_fail);proof_stop(UINT32_C(0x10000));return;
     }
-#if KUI_VMU_READONLY_PROOF == 3
+#if KUI_VMU_READONLY_PROOF >= 3
     if(issued_plan.source_physical!=pending_source ||
        issued_plan.frame_count!=s->completion_pending ||
        issued_plan.output_physical!=chain_physical() ||
@@ -816,7 +892,7 @@ void kui_vmu_maple_observer_complete(uint32_t inherited_sr,uint32_t inherited_pr
        original_fingerprint(pending_source,issued_plan.source_bytes)!=original_hash) {
         chain_fail(UINT32_C(0x200000));return;
     }
-    /* Validate the entire physical result before any RAM write phase, commit
+    /* Validate the entire physical result before any virtual write phase, commit
      * or virtual reply. A1 slots are untouched by hardware and are not read. */
     for(unsigned i=0;i<s->completion_pending;i++)
         if(!physical_response_valid(&pending[i])) {
