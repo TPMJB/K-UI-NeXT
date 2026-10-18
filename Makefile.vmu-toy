@@ -185,7 +185,7 @@ $(BUILD)/retail-maple-observe.kui: $(BUILD)/entry.elf
 	python3 tools/runtime_package.py verify $@
 $(BUILD)/$(TEST_ZIP): $(BUILD)/retail-maple-observe.kui \
  $(BUILD)/worker.elf $(BUILD)/worker.bin tools/package_vmu_maple_observe.py \
- tools/check_vmu_maple_observe_hook.py \
+ tools/check_vmu_maple_observe_hook.py tools/check_vmu_pio_write.py \
  $(TEST_GUIDE) include/kui/games_retail.h \
  tests/test_vmu_observer_install_route.py
 	python3 tools/package_vmu_maple_observe.py $(BUILD)

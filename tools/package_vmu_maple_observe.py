@@ -214,18 +214,26 @@ def inspect_sd_profile(directory, stage, mode):
     return dict(summary, embedded_address=f"0x{start:08x}", embedded_bytes=len(wire))
 
 
-def check_pio_callgraph(directory, adapter):
+def check_pio_callgraph(directory, adapter, linked_functions):
     reports = sorted(directory.rglob("*.ci"))
     nodes, incoming = set(), []
+    live = {name.rsplit(":", 1)[-1].lstrip("_") for name in linked_functions}
     for report in reports:
         data = report.read_text()
         nodes.update(_function_base(title) for title, _ in NODE.findall(data))
         incoming.extend(_function_base(source) for source, target, _ in EDGE.findall(data)
-                        if _function_base(target) == "kui_sci_sd_write")
-    if (not reports or adapter not in nodes or not incoming or
+                        if (_function_base(target) == "kui_sci_sd_write" and
+                            source.rsplit(":", 1)[-1].lstrip("_") in live))
+    if (not reports or adapter not in live or adapter not in nodes or not incoming or
             set(incoming) != {adapter}):
         raise ValueError("High SD writer must have only its explicit PIO adapter as caller")
     return {"sole_writer_caller": adapter, "callgraph_reports": len(reports)}
+
+
+def linked_function_names(elf, image):
+    typed = _linked_symbols(elf, set(image["symbols"]))
+    return {name for name, (_, size, kind, section) in typed.items()
+            if kind == 2 and size and section is not None and section[2] & 7 == 6}
 
 
 def inspect_persistent_io(directory, worker_elf, worker, exports, resident):
@@ -263,7 +271,8 @@ def inspect_persistent_io(directory, worker_elf, worker, exports, resident):
     adapter = typed["_durable_card_pio_write"]
     pio = check_pio_entry(worker, adapter[0], adapter[1], typed["_kui_sci_sd_write"][0],
                           base=0x8CFD0000)
-    pio.update(check_pio_callgraph(directory / "worker", "durable_card_pio_write"))
+    pio.update(check_pio_callgraph(directory / "worker", "durable_card_pio_write",
+                                  linked_function_names(worker_elf, worker)))
     return {"high_worker_functions": result, "resident_sd_writer_functions": 0,
             "pio_payload": pio,
             "handoff_bytes": 1272, "worker_reservation_bytes": 65536,
@@ -289,7 +298,8 @@ def inspect_persistent_stage(directory, stage_elf, stage):
     adapter = typed["_observe_persist_pio_write"]
     pio = check_pio_entry(stage, adapter[0], adapter[1], typed["_kui_sci_sd_write"][0],
                           base=0x8CE00000)
-    pio.update(check_pio_callgraph(directory / "stage", "observe_persist_pio_write"))
+    pio.update(check_pio_callgraph(directory / "stage", "observe_persist_pio_write",
+                                  linked_function_names(stage_elf, stage)))
     return {"handoff_address": f"0x{address:08x}", "handoff_bytes": size,
             "pio_payload": pio}
 

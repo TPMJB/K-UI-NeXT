@@ -566,9 +566,18 @@ class ObserverPackageTests(unittest.TestCase):
             for contents in ("", graph, graph + edge.replace("durable_card_pio_write", "unsafe_entry", 1)):
                 path.write_text(contents)
                 with self.assertRaises(ValueError):
-                    check_pio_callgraph(directory, "durable_card_pio_write")
+                    check_pio_callgraph(directory, "durable_card_pio_write", {"_durable_card_pio_write"})
             path.write_text(graph + edge)
-            self.assertEqual(check_pio_callgraph(directory, "durable_card_pio_write")["callgraph_reports"], 1)
+            live = {"_durable_card_pio_write"}
+            self.assertEqual(check_pio_callgraph(directory, "durable_card_pio_write", live)["callgraph_reports"], 1)
+            # Compiler reports precede section GC. A dead durable writer in
+            # the stage cannot count as another linked writer entry.
+            dead_edge = 'edge: { sourcename: "core.c:dead_pio_write" targetname: "kui_sci_sd_write" label: "core.c:2" }\n'
+            path.write_text(graph + edge + dead_edge)
+            self.assertEqual(check_pio_callgraph(directory, "durable_card_pio_write", live)["sole_writer_caller"],
+                             "durable_card_pio_write")
+            with self.assertRaises(ValueError):
+                check_pio_callgraph(directory, "durable_card_pio_write", live | {"_dead_pio_write"})
 
     def test_persistent_archive_is_distinct_and_uses_existing_retail_install_route(self):
         with tempfile.TemporaryDirectory() as name:
