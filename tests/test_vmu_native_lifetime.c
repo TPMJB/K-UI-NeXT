@@ -96,5 +96,38 @@ int main(void) {
     for(unsigned i=1u;i<=total;i++) {
         fixture(0u);fail_read=i;CHECK(!allowed(0u));
     }
+    fixture(0u);
+    struct kui_vmu_native_lifetime_range ranges[KUI_VMU_NATIVE_LIFETIME_RANGES+1u];
+    for(unsigned i=0;i<KUI_VMU_NATIVE_LIFETIME_RANGES+1u;i++)
+        ranges[i]=(struct kui_vmu_native_lifetime_range){UINT32_C(0x8c100000)+i*32u,32u};
+#define ALLOWED_RANGES(p,n) kui_vmu_native_lifetime_release_safe_ranges(&lease,read_word,NULL,1u,(p),ranges,(n))
+    CHECK(ALLOWED_RANGES(candidate,0u));CHECK(ALLOWED_RANGES(candidate,KUI_VMU_NATIVE_LIFETIME_RANGES));
+    CHECK(!ALLOWED_RANGES(candidate,KUI_VMU_NATIVE_LIFETIME_RANGES+1u));
+    CHECK(!kui_vmu_native_lifetime_release_safe_ranges(&lease,read_word,NULL,1u,candidate,NULL,1u));
+    CHECK(kui_vmu_native_lifetime_release_safe_ranges(&lease,read_word,NULL,1u,candidate,NULL,0u));
+    for(unsigned a=0;a<3u;a++) {
+        ranges[0]=(struct kui_vmu_native_lifetime_range){(candidate-32u)|aliases[a],1u};
+        CHECK(!ALLOWED_RANGES(candidate,1u));CHECK(ALLOWED_RANGES(0u,1u));
+        ranges[0]=(struct kui_vmu_native_lifetime_range){(candidate+UINT32_C(0x3df))|aliases[a],1u};
+        CHECK(!ALLOWED_RANGES(candidate,1u));
+        ranges[0]=(struct kui_vmu_native_lifetime_range){(candidate+UINT32_C(0x3e0))|aliases[a],1u};
+        CHECK(ALLOWED_RANGES(candidate,1u));
+        ranges[0]=(struct kui_vmu_native_lifetime_range){(candidate-33u)|aliases[a],1u};
+        CHECK(ALLOWED_RANGES(candidate,1u));ranges[0].bytes=2u;
+        CHECK(!ALLOWED_RANGES(candidate,1u));
+    }
+    const struct kui_vmu_native_lifetime_range invalid[]={
+        {0u,1u},{UINT32_C(0x8c100000),0u},{UINT32_C(0x8c100000),UINT32_MAX},
+        {UINT32_C(0xcc100000),32u},{UINT32_C(0x8d000000),1u},
+        {UINT32_C(0x8cffffff),2u},{UINT32_MAX,32u}};
+    for(unsigned i=0;i<sizeof(invalid)/sizeof(invalid[0]);i++) {
+        ranges[0]=invalid[i];reads=0u;
+        CHECK(!ALLOWED_RANGES(candidate,1u));CHECK(!ALLOWED_RANGES(0u,1u));CHECK(reads==0u);
+    }
+    ranges[0]=(struct kui_vmu_native_lifetime_range){UINT32_C(0x8c100000),32u};
+    CHECK(ALLOWED_RANGES(candidate,1u));
+    CHECK(!kui_vmu_native_lifetime_release_safe_ranges(&lease,read_word,NULL,2u,candidate,ranges,1u));
+    fixture(0u);put(lease.header+4u,lease.units+1u);CHECK(!ALLOWED_RANGES(0u,1u));
+#undef ALLOWED_RANGES
     printf("Native release admission: %u checks passed\n",checks);return 0;
 }

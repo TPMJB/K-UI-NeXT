@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-static unsigned char image[65536],wire[131144],out[65536],expected[65536];
+static unsigned char image[131072],wire[262216],out[131072],expected[131072];
 static uint32_t get32(const unsigned char *p) {return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;}
 static void put32(unsigned char *p,uint32_t v) {for(unsigned i=0;i<4;i++)p[i]=(unsigned char)(v>>(8*i));}
 static size_t readfile(const char *path,void *p,size_t cap) {

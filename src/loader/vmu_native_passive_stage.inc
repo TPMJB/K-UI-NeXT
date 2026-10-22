@@ -26,9 +26,13 @@ __asm__(".section .text.native_passive_publish,\"ax\"\n.align 2\n"
     "nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nrts\nnop\n.align 2\n"
     "5: .long 0xff00001c\n6: .long 0x00000800\n.previous\n");
 static bool passive_entry(uint32_t entry,uint32_t begin,uint32_t bytes) {
-    return !(entry&1u) && entry>=begin+64u && entry<begin+bytes;
+    return !(entry&1u) && entry>=begin+sizeof(struct kui_vmu_native_passive_exports) && entry<begin+bytes;
 }
 static struct kui_vmu_native_layout passive_layout;
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+static struct kui_vmu_native_exit native_exits;
+static uint16_t persistent_exit_windows[KUI_VMU_NATIVE_EXIT_ENTRIES][6];
+#endif
 #if KUI_VMU_NATIVE_READONLY_PROBE
 static uint16_t readonly_init_window[6],readonly_release_window[10];
 static bool readonly_release_replay_valid(void) {
@@ -51,23 +55,36 @@ static void readonly_patch_entry(uint32_t address,uint32_t target) {
 #endif
 static void native_passive_prepare(void) {
 #if KUI_VMU_NATIVE_READONLY_PROBE
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    if(!kui_vmu_native_exit_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_exits)) native_report(2u,13u);
+    const struct kui_vmu_native_patch_window windows[6]={{native_driver.submit,12u},
+        {native_heap.initializer,12u},{native_heap.release,20u},
+        {native_exits.entries[0],12u},{native_exits.entries[1],12u},{native_exits.entries[2],12u}};
+#else
     const struct kui_vmu_native_patch_window windows[3]={{native_driver.submit,12u},
         {native_heap.initializer,12u},{native_heap.release,20u}};
+#endif
     if(((native_heap.initializer|native_heap.release)&3u) || !readonly_release_replay_valid() ||
        !kui_vmu_native_patch_no_interiors((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
-       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,windows,3u)) native_report(2u,12u);
+       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,windows,sizeof(windows)/sizeof(windows[0]))) native_report(2u,12u);
     memcpy(readonly_init_window,(const void *)(uintptr_t)native_heap.initializer,sizeof(readonly_init_window));
     memcpy(readonly_release_window,(const void *)(uintptr_t)native_heap.release,sizeof(readonly_release_window));
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    for(unsigned i=0;i<KUI_VMU_NATIVE_EXIT_ENTRIES;i++)
+        memcpy(persistent_exit_windows[i],(const void *)(uintptr_t)native_exits.entries[i],12u);
+#endif
 #else
     if(!kui_vmu_native_patch_no_interior((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
        exec_bytes,KUI_RETAIL_EXEC_ADDRESS,native_driver.submit,12u)) native_report(2u,11u);
 #endif
 }
 static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
+    const uint32_t span=KUI_VMU_NATIVE_PASSIVE_SPAN;
     uint32_t load=lease->payload|0x80000000u,dest=load+0x20000000u;
     uint32_t bytes=(uint32_t)(__native_worker_blob_end-__native_worker_blob_begin);
     uint32_t reloc_bytes=(uint32_t)(__native_worker_reloc_end-__native_worker_reloc_begin);
-    if(bytes<64u || bytes>=0xf000u || (native_driver.submit&3u) ||
+    if(bytes<sizeof(struct kui_vmu_native_passive_exports) || bytes>=span-0x1000u || (native_driver.submit&3u) ||
        !kui_vmu_native_heap_lease_valid(lease,native_read,NULL,1u)) native_report(8u,1u);
     struct kui_vmu_native_passive_config cfg;memset(&cfg,0,sizeof(cfg));
     cfg.version=1u;cfg.bytes=sizeof(cfg);cfg.driver=native_driver;cfg.lease=*lease;
@@ -79,23 +96,35 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
         .timer1_callback=cfg.layout.timer1_callback,.timer2_callback=cfg.layout.timer2_callback,
         .rx_layout=cfg.layout.rx_layout,.rx_base=cfg.layout.rx_base};
     memcpy(cfg.display,display.regs,sizeof(cfg.display));
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    if(!native_persist_ready ||
+       kui_vmu_persist_stage_handoff_matches(&native_persist_profile,&native_persist_handoff))
+        native_report(8u,5u);
+    cfg.durable=native_persist_handoff;cfg.sd_lease=KUI_VMU_OBSERVE_LOW_SD_LEASE;
+    cfg.low_terminal=KUI_VMU_OBSERVE_LOW_RETURN_HOOK;cfg.low_heap_hook=KUI_VMU_OBSERVE_LOW_HEAP_HOOK;
+    cfg.exits=native_exits;
+#endif
     retail_display_restore(&display);retail_display_line("RELOCATING PASSIVE MAPLE WORKER");
-    for(uint32_t at=load;at<load+0x10000u;at+=32u)
+    for(uint32_t at=load;at<load+span;at+=32u)
         __asm__ volatile("ocbp @%0"::"r"(at):"memory");
     int relocated=kui_vmu_native_relocate(__native_worker_blob_begin,bytes,
-        __native_worker_reloc_begin,reloc_bytes,(void *)(uintptr_t)dest,0x10000u,load);
+        __native_worker_reloc_begin,reloc_bytes,(void *)(uintptr_t)dest,span,load);
     if(relocated) native_report(8u,(uint32_t)relocated);
-    memset((void *)(uintptr_t)(dest+bytes),0,0x10000u-bytes);
+    memset((void *)(uintptr_t)(dest+bytes),0,span-bytes);
     const struct kui_vmu_native_passive_exports *e=(const void *)(uintptr_t)dest;
     if(e->magic!=KUI_VMU_NATIVE_PASSIVE_MAGIC || e->version!=1u || e->bytes!=sizeof(*e) ||
        !passive_entry(e->arm,dest,bytes) || !passive_entry(e->submit_hook,dest,bytes) ||
        !passive_entry(e->complete_hook,dest,bytes) || !passive_entry(e->terminal,dest,bytes) ||
        e->bss_begin!=dest+bytes || e->bss_end<e->bss_begin || e->bss_end>e->stack_bottom ||
-       e->stack_bottom!=dest+0xf000u || e->stack_top!=dest+0x10000u || e->memory_end!=e->stack_top ||
+       e->stack_bottom!=dest+span-0x1000u || e->stack_top!=dest+span || e->memory_end!=e->stack_top ||
        (e->resume_cell&3u) || (e->consumer_cell&3u) || e->resume_cell==e->consumer_cell ||
        e->resume_cell<dest+64u || e->resume_cell>dest+bytes-4u ||
        e->consumer_cell<dest+64u || e->consumer_cell>dest+bytes-4u)
         native_report(8u,2u);
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    if(!passive_entry(e->sd_transaction,dest,bytes) || e->reserved_persistent[0] ||
+       e->reserved_persistent[1] || e->reserved_persistent[2]) native_report(8u,6u);
+#endif
 #if KUI_VMU_NATIVE_READONLY_PROBE
     if(!passive_entry(e->release_hook,dest,bytes) || (e->release_resume_cell&3u) ||
        e->release_resume_cell<dest+64u || e->release_resume_cell>dest+bytes-4u ||
@@ -127,6 +156,13 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
      * Every later direct/indirect entry now stops before reclaiming it. */
     readonly_patch_entry(native_heap.initializer,KUI_VMU_OBSERVE_LOW_RETURN_HOOK);
     readonly_patch_entry(native_heap.release,e->release_hook);
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    for(unsigned i=0;i<KUI_VMU_NATIVE_EXIT_ENTRIES;i++) {
+        if(memcmp((const void *)(uintptr_t)native_exits.entries[i],persistent_exit_windows[i],12u))
+            native_report(9u,7u);
+        readonly_patch_entry(native_exits.entries[i],KUI_VMU_OBSERVE_LOW_RETURN_HOOK);
+    }
+#endif
 #endif
     const uint16_t patch[6]={0xd001u,0x402bu,0x0009u,0x0009u,
         (uint16_t)e->submit_hook,(uint16_t)(e->submit_hook>>16)};
@@ -139,8 +175,13 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
         native_report(9u,4u);
     volatile struct kui_vmu_observe_boot_control *c=control();
     c->worker_end=e->memory_end;c->terminal=e->terminal;c->lease=lease->payload;
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    c->sd_transaction=e->sd_transaction;
+#endif
     c->installer=0;c->stage_stack=0;c->status=KUI_VMU_OBS_BOOT_INSTALLED;
-#if KUI_VMU_NATIVE_READONLY_PROBE
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    retail_display_line("PERSISTENT VIRTUAL A1 ARMED - STARTING GAME");
+#elif KUI_VMU_NATIVE_READONLY_PROBE
     retail_display_line("READ ONLY VIRTUAL A1 ARMED - STARTING GAME");
 #else
     retail_display_line("PASSIVE WORKER ARMED - STARTING GAME");

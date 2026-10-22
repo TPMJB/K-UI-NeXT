@@ -17,6 +17,14 @@ static unsigned acquisitions,releases,callbacks,wire_bytes;
 static int acquisition_result,callback_result;
 static bool acquired,fault,callback_fault,release_fault,loan_not_ready,reenter;
 static unsigned bus_context;
+#ifdef KUI_VMU_SD_LEASE_NATIVE_HOST_TEST
+#include "vmu_native_resident_guards.h"
+static int transaction(void *,struct kui_loader_sd *);
+static uintptr_t native_target;
+uintptr_t kui_vmu_sd_lease_test_target(kui_vmu_sd_transaction callback) {
+    return callback==transaction?native_target:0u;
+}
+#endif
 uint32_t kui_vmu_sd_lease_test_sr(void) {return entry_sr;}
 static uint8_t transfer(void *context,uint8_t value,bool slow) {
     assert(context==&bus_context && !slow && acquired && kui_retail_hook_active==1u);
@@ -65,6 +73,13 @@ static void fresh(void) {
     card.device.sd.bus.ctx=&bus_context;card.device.sd.bus.transfer=transfer;
     kui_vmu_observe_boot_control=(struct kui_vmu_observe_boot_control){
         .status=KUI_VMU_OBS_BOOT_INSTALLED,.sd_transaction=(uint32_t)(uintptr_t)transaction};
+#ifdef KUI_VMU_SD_LEASE_NATIVE_HOST_TEST
+    native_target=UINT32_C(0xac38a980);
+    kui_vmu_observe_boot_control.lease=UINT32_C(0x0c38a880);
+    kui_vmu_observe_boot_control.worker_end=UINT32_C(0xac3aa880);
+    kui_vmu_observe_boot_control.terminal=UINT32_C(0xac38aa80);
+    kui_vmu_observe_boot_control.sd_transaction=(uint32_t)native_target;
+#endif
     entry_sr=UINT32_C(0x600000f3);kui_retail_hook_active=0;
     acquisitions=releases=callbacks=wire_bytes=0;
     acquisition_result=callback_result=0;
@@ -131,7 +146,77 @@ static void faults_poison_after_exactly_one_release(void) {
         assert(acquisitions==1u && releases==1u && callbacks==1u && wire_bytes==1u);
     }
 }
+#ifdef KUI_VMU_SD_LEASE_NATIVE_HOST_TEST
+static void native_control_and_exact_pin(void) {
+    const uint32_t payloads[]={UINT32_C(0x0c010020),UINT32_C(0x0c38a880),UINT32_C(0x0cfd0000)};
+    for(unsigned p=0;p<sizeof(payloads)/sizeof(payloads[0]);p++) {
+        fresh();
+        struct kui_vmu_observe_boot_control *c=&kui_vmu_observe_boot_control;
+        c->lease=payloads[p];c->worker_end=(payloads[p]|UINT32_C(0xa0000000))+UINT32_C(0x20000);
+        c->terminal=(payloads[p]|UINT32_C(0xa0000000))+UINT32_C(0x200);
+        native_target=(payloads[p]|UINT32_C(0xa0000000))+80u;c->sd_transaction=(uint32_t)native_target;
+        assert(native_resident_transaction(c,native_target));
+        assert(call()==KUI_VMU_SD_LEASE_OK);
+        uint32_t first=payloads[p]-32u,end=payloads[p]+UINT32_C(0x30000);
+        const uint32_t aliases[]={0u,UINT32_C(0x80000000),UINT32_C(0xa0000000)};
+        for(unsigned a=0;a<3u;a++) {
+            assert(native_resident_destination(c,(first-4u)|aliases[a],4u));
+            assert(!native_resident_destination(c,(first-4u)|aliases[a],5u));
+            assert(!native_resident_destination(c,first|aliases[a],1u));
+            assert(!native_resident_destination(c,(end-1u)|aliases[a],1u));
+            if(end<UINT32_C(0x0d000000)) assert(native_resident_destination(c,end|aliases[a],1u));
+        }
+        c->sd_transaction=(uint32_t)native_target+2u;
+        unsigned prior=acquisitions;assert(call()==KUI_VMU_SD_LEASE_FAULT && acquisitions==prior);
+    }
+    for(unsigned variant=0;variant<14u;variant++) {
+        fresh();struct kui_vmu_observe_boot_control *c=&kui_vmu_observe_boot_control;
+        switch(variant) {
+        case 0:c->installer=UINT32_C(0x8ce00100);break;
+        case 1:c->stage_stack=UINT32_C(0x8cfe0000);break;
+        case 2:c->lease=0u;break;
+        case 3:c->lease|=1u;break;
+        case 4:c->lease|=UINT32_C(0x80000000);break;
+        case 5:c->lease=UINT32_C(0x0cfd0020);break;
+        case 6:c->worker_end-=UINT32_C(0x10000);break;
+        case 7:c->worker_end+=UINT32_C(0x10000);break;
+        case 8:c->terminal|=1u;break;
+        case 9:c->terminal=UINT32_C(0x8ce00100);break;
+        case 10:native_target=UINT32_C(0x8c38a980);c->sd_transaction=(uint32_t)native_target;break;
+        case 11:native_target=UINT32_C(0x0c38a980);c->sd_transaction=(uint32_t)native_target;break;
+        case 12:native_target=UINT32_C(0xac38a880)+78u;c->sd_transaction=(uint32_t)native_target;break;
+        default:native_target=c->worker_end;c->sd_transaction=(uint32_t)native_target;break;
+        }
+        assert(call()==KUI_VMU_SD_LEASE_FAULT);no_io();
+    }
+    for(unsigned status=0;status<16u;status++) {
+        fresh();kui_vmu_observe_boot_control.status=status;
+        assert((call()==KUI_VMU_SD_LEASE_OK)==(status==KUI_VMU_OBS_BOOT_INSTALLED));
+        if(status!=KUI_VMU_OBS_BOOT_INSTALLED) no_io();
+    }
+    /* Independently compare the native callback interval/pin/control shape,
+     * rather than reimplementing the function's sequence of predicates. */
+    uint32_t random=UINT32_C(0x728f1251);
+    for(unsigned trial=0;trial<20000u;trial++) {
+        fresh();struct kui_vmu_observe_boot_control c=kui_vmu_observe_boot_control;
+        random=random*UINT32_C(1664525)+UINT32_C(1013904223);
+        c.lease=UINT32_C(0x0c010020)+(random%UINT32_C(0x7d7ff))*32u;
+        uint32_t worker=c.lease|UINT32_C(0xa0000000);
+        c.worker_end=worker+UINT32_C(0x20000);c.terminal=worker+256u;
+        random=random*UINT32_C(1664525)+UINT32_C(1013904223);
+        uintptr_t target=(uintptr_t)worker+(random&UINT32_C(0x3ffff));
+        c.sd_transaction=(uint32_t)target;
+        int expected=!(target&1u) && target>=(uintptr_t)worker+80u && target<(uintptr_t)worker+UINT32_C(0x20000);
+        assert(native_resident_transaction(&c,target)==expected);
+        c.sd_transaction^=2u;assert(!native_resident_transaction(&c,target));
+    }
+    puts("Native SCI lease: exact P2 callback, dynamic128KiB worker/192KiB lease, control mutations and20000 interval cases passed");
+}
+#endif
 int main(void) {
+#ifdef KUI_VMU_SD_LEASE_NATIVE_HOST_TEST
+    native_control_and_exact_pin();
+#endif
     successful_borrow_and_reentry();reject_before_io();
     refusal_never_releases_another_owner();faults_poison_after_exactly_one_release();
     puts("VMU SD lease: shared GD ownership, scoped descriptor, busy/no-I/O and persistent faults passed");

@@ -1,11 +1,20 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* Isolated allocator/worker proof. Terminal report, never resumes the game. */
+/* Isolated native allocator adapter and separately enabled worker probes. */
 #if !KUI_VMU_NATIVE_HEAP_PROBE || KUI_VMU_READONLY_PROOF != 0
-#error Native heap probe requires its isolated non-saving build
+#error Native heap adapter requires its isolated native build
+#endif
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+#include "retail_storage.h"
+static enum kui_loader_sd_result native_persist_storage_init(struct kui_retail_storage *,uint32_t);
+#define kui_retail_storage_init native_persist_storage_init
 #endif
 #define kui_retail_stage_relay kui_native_heap_base_relay
 #include "retail_stage.c"
 #undef kui_retail_stage_relay
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+#undef kui_retail_storage_init
+#include "vmu_native_persist_stage.inc"
+#endif
 #include "kui/vmu_native_discovery.h"
 #include "kui/vmu_native_heap.h"
 #include "kui/vmu_maple_observe_boot.h"
@@ -61,7 +70,11 @@ static void native_report(uint32_t phase,uint32_t detail) {
     c->error=detail;
     retail_display_restore(&display);
     retail_display_line("AUTOMATIC NATIVE ALLOCATOR PROBE");
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    retail_display_line("PERSISTENT VMU PREPARATION STOPPED");
+#else
     retail_display_line("NO VIRTUAL VMU / NO SAVE WRITES");
+#endif
     retail_display_hex("PHASE",phase);retail_display_hex("DETAIL",detail);
     retail_display_hex("SDK SUBMIT",native_driver.submit);
     retail_display_hex("INITIALIZER",native_heap.initializer);

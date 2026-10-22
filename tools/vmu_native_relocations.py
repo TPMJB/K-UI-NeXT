@@ -18,7 +18,7 @@ SYM = struct.Struct("<IIIBBH")
 REL = struct.Struct("<II")
 RELA = struct.Struct("<IIi")
 HEADER = 72
-MAX_SPAN = 0x10000
+MAX_SPAN = 0x20000
 
 
 def region(data, at, count):

@@ -19,4 +19,16 @@ bool kui_vmu_native_lifetime_release_safe(
     const struct kui_vmu_native_heap_lease *lease,
     kui_vmu_native_heap_read read,void *context,
     uint32_t initializations,uint32_t payload);
+struct kui_vmu_native_lifetime_range {uint32_t begin,bytes;};
+#define KUI_VMU_NATIVE_LIFETIME_RANGES 64u
+/* Same admission plus exclusion of SDK-owned RX/TX/control spans. Ranges must
+ * describe valid nonempty direct RAM spans; aliases are compared physically.
+ * Input ranges are caller-owned and remain immutable throughout the check.
+ * NULL with count0 preserves the original API. NULL payload still validates
+ * every range and the complete lease before succeeding. */
+bool kui_vmu_native_lifetime_release_safe_ranges(
+    const struct kui_vmu_native_heap_lease *lease,
+    kui_vmu_native_heap_read read,void *context,
+    uint32_t initializations,uint32_t payload,
+    const struct kui_vmu_native_lifetime_range *ranges,size_t count);
 #endif

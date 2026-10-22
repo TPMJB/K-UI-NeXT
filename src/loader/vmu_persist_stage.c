@@ -6,7 +6,7 @@ _Static_assert(sizeof(struct kui_vmu_persist_stage_workspace)<=65536u,"High-stag
 
 /* Only this isolated native stage needs the scanner's dot-entry comparison.
  * Ordinary minic and every existing release/observer mode remain unchanged. */
-#if defined(__sh__) && KUI_VMU_READONLY_PROOF == 4
+#if defined(__sh__) && (KUI_VMU_READONLY_PROOF == 4 || KUI_VMU_NATIVE_PERSISTENT_PROBE)
 int strcmp(const char *left,const char *right) {
     const unsigned char *a=(const unsigned char *)left,*b=(const unsigned char *)right;
     while(*a && *a==*b) {++a;++b;}

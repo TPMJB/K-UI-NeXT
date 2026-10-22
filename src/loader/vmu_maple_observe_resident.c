@@ -11,16 +11,18 @@
 #include "retail_storage.h"
 #include "retail_display.h"
 #include "kui/vmu_maple_observe_io.h"
-#if KUI_VMU_READONLY_PROOF < 2
+#if KUI_VMU_READONLY_PROOF < 2 && !KUI_VMU_NATIVE_PERSISTENT_PROBE
 static void observe_display_restore(const struct retail_display_state *);
 #endif
+#if !KUI_VMU_NATIVE_PERSISTENT_PROBE
 #define kui_retail_storage_acquire(...) \
     KUI_VMU_OBSERVE_IO_ACQUIRE(service.diag.read_flags, \
         kui_retail_storage_acquire(__VA_ARGS__))
 #define kui_retail_image_read(...) \
     KUI_VMU_OBSERVE_IO_IMAGE(service.diag.read_flags, \
         kui_retail_image_read(__VA_ARGS__))
-#if KUI_VMU_READONLY_PROOF < 2
+#endif
+#if KUI_VMU_READONLY_PROOF < 2 && !KUI_VMU_NATIVE_PERSISTENT_PROBE
 #define retail_display_restore observe_display_restore
 #endif
 #define kui_retail_resident_init kui_vmu_observe_base_init
@@ -31,16 +33,12 @@ static void observe_display_restore(const struct retail_display_state *);
 #undef kui_retail_storage_acquire
 #include "kui/vmu_maple_observe_boot.h"
 #include "kui/vmu_maple_observe_profile.h"
-#if KUI_VMU_READONLY_PROOF >= 2
-#include "kui/vmu_maple_observe.h"
-#include "vmu_sd_lease.inc"
-#endif
 
 #if !KUI_RETAIL_GD_REJECTION_DETAILS
 #error Observer I/O telemetry requires the standard native diagnostic fields
 #endif
 
-#if KUI_VMU_READONLY_PROOF < 2
+#if KUI_VMU_READONLY_PROOF < 2 && !KUI_VMU_NATIVE_PERSISTENT_PROBE
 /* The SD-backed worker has its own storage diagnostics. Keep these optional
  * extra native-GD rows in passive/blank-card modes. SD-backed modes need
  * their low code bytes and C frame for the lease and restoration checks. The
@@ -77,6 +75,13 @@ static void observe_display_restore(const struct retail_display_state *state) {
  * Pure admission predicates are also compiled by the host adversarial test.
  * The low control retains physical payload addresses; all worker entries and
  * its end use P2. No temporary-stage pointer is a valid runtime dependency. */
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+#define NATIVE_RESIDENT_WORKER_BYTES UINT32_C(0x20000)
+#define NATIVE_RESIDENT_HEADER_BYTES 80u
+#else
+#define NATIVE_RESIDENT_WORKER_BYTES UINT32_C(0x10000)
+#define NATIVE_RESIDENT_HEADER_BYTES 64u
+#endif
 static bool native_resident_lease(const volatile struct kui_vmu_observe_boot_control *c,
     uint32_t *begin,uint32_t *end) {
     uint32_t lease=c->lease;
@@ -95,21 +100,52 @@ static bool native_resident_destination(const volatile struct kui_vmu_observe_bo
      * published yet, so ordinary resident mapping supplies their guards. */
     if(status<=KUI_VMU_OBS_BOOT_INITIALIZING) return !c->lease;
     uint32_t begin,end;
-    if(status!=KUI_VMU_OBS_BOOT_INSTALLED || c->installer || c->stage_stack ||
+    if(status!=KUI_VMU_OBS_BOOT_INSTALLED ||
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+       (c->installer|c->stage_stack) ||
+#else
+       c->installer || c->stage_stack ||
+#endif
        !native_resident_lease(c,&begin,&end) ||
-       c->worker_end!=(c->lease|UINT32_C(0xa0000000))+UINT32_C(0x10000)) return false;
+       c->worker_end!=(c->lease|UINT32_C(0xa0000000))+NATIVE_RESIDENT_WORKER_BYTES) return false;
     return physical>=end || physical+bytes<=begin;
 }
 static bool native_resident_terminal(const volatile struct kui_vmu_observe_boot_control *c) {
-    uint32_t begin,end,terminal=c->terminal;
-    if(c->status!=KUI_VMU_OBS_BOOT_INSTALLED || c->installer || c->stage_stack ||
+    uint32_t terminal=c->terminal;
+    uint32_t begin,end;
+    if(c->status!=KUI_VMU_OBS_BOOT_INSTALLED ||
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+       (c->installer|c->stage_stack) ||
+#else
+       c->installer || c->stage_stack ||
+#endif
        !native_resident_lease(c,&begin,&end)) return false;
     (void)begin;(void)end;
     uint32_t worker=c->lease|UINT32_C(0xa0000000);
-    return c->worker_end==worker+UINT32_C(0x10000) && !(terminal&1u) &&
-        terminal>=worker+64u && terminal<c->worker_end;
+    return c->worker_end==worker+NATIVE_RESIDENT_WORKER_BYTES && !(terminal&1u) &&
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+        terminal-worker-NATIVE_RESIDENT_HEADER_BYTES<NATIVE_RESIDENT_WORKER_BYTES-NATIVE_RESIDENT_HEADER_BYTES;
+#else
+        terminal>=worker+NATIVE_RESIDENT_HEADER_BYTES && terminal<c->worker_end;
+#endif
 }
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+/* The stage publishes one typed relocated callback after arming. The pure
+ * low guard verifies its exact pin plus the complete runtime control shape;
+ * no temporary-stage or physical/P1 callback is a valid dependency. */
+static bool native_resident_transaction(const volatile struct kui_vmu_observe_boot_control *c,
+    uintptr_t target) {
+    uint32_t worker=c->lease|UINT32_C(0xa0000000);
+    return native_resident_terminal(c) && target==c->sd_transaction && !(target&1u) &&
+        (uint32_t)target-worker-NATIVE_RESIDENT_HEADER_BYTES<NATIVE_RESIDENT_WORKER_BYTES-NATIVE_RESIDENT_HEADER_BYTES;
+}
+#endif
 /* NATIVE_RESIDENT_GUARDS_END */
+#endif
+
+#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_NATIVE_PERSISTENT_PROBE
+#include "kui/vmu_maple_observe.h"
+#include "vmu_sd_lease.inc"
 #endif
 
 static uint8_t *observe_map(void *context,uint32_t address,uint32_t bytes,int writing) {
@@ -149,12 +185,17 @@ void kui_vmu_observe_low_failure(void) {
 #endif
         ((void (*)(void))(uintptr_t)terminal)();
     retail_display_restore(&display);
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    /* Valid installed workers own the detailed report above. An invalid
+     * control cannot safely enter them: the restored build header is the
+     * bounded fallback, followed by a permanent stop. */
+#else
 #if KUI_VMU_NATIVE_PASSIVE_PROBE
     retail_display_line("NATIVE MAPLE OBSERVER STOPPED");
 #else
     retail_display_line(KUI_VMU_OBS_TITLE " MAPLE OBSERVER STOPPED");
 #endif
-#if KUI_VMU_READONLY_PROOF >= 2
+#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_NATIVE_PERSISTENT_PROBE
     /* Terminal state is immutable under the masked failure entry. These four
      * P2 words are already adjacent; avoid a diagnostic-only stack copy. */
     retail_display_values("STATE LEASE ERROR HEAP",
@@ -162,6 +203,7 @@ void kui_vmu_observe_low_failure(void) {
 #else
     retail_display_values("STATE ERROR LEASE HEAP",(uint32_t[4]){
         c->status,c->error,c->lease,c->heap_begin},4u);
+#endif
 #endif
     for(;;) __asm__ volatile("nop");
 }

@@ -4,8 +4,16 @@
 #include "kui/vmu_native_heap.h"
 #include "kui/vmu_native_runtime.h"
 #include "kui/vmu_native_layout.h"
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+#include "kui/vmu_durable.h"
+#include "kui/vmu_native_exit.h"
+#endif
 #define KUI_VMU_NATIVE_PASSIVE_MAGIC UINT32_C(0x4b4e5031)
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+#define KUI_VMU_NATIVE_PASSIVE_SPAN 0x20000u
+#else
 #define KUI_VMU_NATIVE_PASSIVE_SPAN 0x10000u
+#endif
 struct kui_vmu_native_passive_exports {
     uint32_t magic,version,bytes,arm,submit_hook,complete_hook,terminal;
     uint32_t bss_begin,bss_end,stack_bottom,stack_top,memory_end;
@@ -15,8 +23,15 @@ struct kui_vmu_native_passive_exports {
 #else
     uint32_t reserved[2];
 #endif
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    uint32_t sd_transaction,reserved_persistent[3];
+#endif
 };
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+_Static_assert(sizeof(struct kui_vmu_native_passive_exports)==80u,"Persistent worker exports ABI");
+#else
 _Static_assert(sizeof(struct kui_vmu_native_passive_exports)==64u,"Passive worker exports ABI");
+#endif
 struct kui_vmu_native_passive_config {
     uint32_t version,bytes,tx_base;
     struct kui_vmu_native_discovery driver;
@@ -24,6 +39,11 @@ struct kui_vmu_native_passive_config {
     struct kui_vmu_native_layout layout;
     struct kui_vmu_native_runtime_config runtime;
     uint32_t display[14];
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    struct kui_vmu_durable_handoff durable;
+    uint32_t sd_lease,low_terminal,low_heap_hook;
+    struct kui_vmu_native_exit exits;
+#endif
 };
 /* Frame order is shared with the SH gateway. R0 is dead at submission. */
 struct kui_vmu_native_passive_frame {

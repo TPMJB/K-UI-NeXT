@@ -39,6 +39,7 @@ static void unchanged(void) {
 }
 static void refused(void) {CHECK(relocate()!=KUI_VMU_NATIVE_RELOCATED);unchanged();}
 int main(void) {
+    static uint8_t large_output[KUI_VMU_NATIVE_RELOCATE_MAX_SPAN];
     fixture();CHECK(relocate()==KUI_VMU_NATIVE_RELOCATED);
     CHECK(get32(output)==load);CHECK(get32(output+4u)==0xac38a8a0u);
     CHECK(get32(output+8u)==0x0c38a8beu);CHECK(get32(output+12u)==0xac38a8c0u);
@@ -78,6 +79,24 @@ int main(void) {
         CHECK(kui_vmu_native_relocate(image,sizeof(image),(const void *)(aliases[a]|0x0c010000u),
             sizeof(wire),(void *)(aliases[b]|0x0c00ffe0u),64u,load)==KUI_VMU_NATIVE_RELOCATE_OVERLAP);
     }
+    /* The native persistent worker uses128KiB of its192KiB lease. The
+     * relocator still requires the complete output allocation and RAM bound. */
+    const uint32_t spans[]={0x10000u,0x20000u};
+    for(unsigned i=0;i<2u;i++) {
+        fixture();put32(wire+20u,spans[i]);checksum();memset(large_output,0xa5,sizeof(large_output));
+        CHECK(kui_vmu_native_relocate(image,sizeof(image),wire,sizeof(wire),large_output,
+            spans[i],load)==KUI_VMU_NATIVE_RELOCATED);
+        CHECK(get32(large_output)==load && get32(large_output+4u)==0xac38a8a0u);
+        for(size_t at=sizeof(image);at<sizeof(large_output);at++) CHECK(large_output[at]==0xa5u);
+        memset(large_output,0xa5,sizeof(large_output));
+        CHECK(kui_vmu_native_relocate(image,sizeof(image),wire,sizeof(wire),large_output,
+            spans[i]-32u,load)==KUI_VMU_NATIVE_RELOCATE_INVALID);
+        for(size_t at=0;at<sizeof(large_output);at++) CHECK(large_output[at]==0xa5u);
+    }
+    fixture();put32(wire+20u,0x20020u);checksum();
+    CHECK(kui_vmu_native_relocate(image,sizeof(image),wire,sizeof(wire),large_output,
+        sizeof(large_output),load)==KUI_VMU_NATIVE_RELOCATE_TABLE);
+    for(size_t at=0;at<sizeof(large_output);at++) CHECK(large_output[at]==0xa5u);
     printf("Native worker relocation: %u checks passed; no hook authority\n",checks);
     return 0;
 }

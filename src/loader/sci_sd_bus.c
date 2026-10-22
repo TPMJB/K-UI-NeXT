@@ -184,7 +184,7 @@ void kui_sci_sd_release(void) {
     wr32(PCTR, (rd32(PCTR) & ~CS_MODE) | port.mode);
     wr16(PDTR, (rd16(PDTR) & (uint16_t)~CS) | port.data);
     wr8(SCR, port.scr);
-#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF || KUI_VMU_PERSIST_IMPORT || KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF || KUI_VMU_PERSIST_IMPORT || KUI_ARMADA_CE_VMU_WRITE_RUNTIME || KUI_VMU_NATIVE_PERSISTENT_PROBE
     /* The shared VMU lease acknowledges only after ownership restoration.
      * Check SCI while its module is still running: a saved standby setting
      * can make subsequent SCI-register reads invalid. GPIO comparisons cover
@@ -194,7 +194,7 @@ void kui_sci_sd_release(void) {
        (rd16(PDTR)&CS)!=port.data) port.fault=true;
 #endif
     wr8(STB, (rd8(STB) & ~1u) | port.standby);
-#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF || KUI_VMU_PERSIST_IMPORT || KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF || KUI_VMU_PERSIST_IMPORT || KUI_ARMADA_CE_VMU_WRITE_RUNTIME || KUI_VMU_NATIVE_PERSISTENT_PROBE
     if((rd8(STB)&1u)!=port.standby) port.fault=true;
 #endif
     port.acquired = false;
@@ -613,7 +613,7 @@ static const struct kui_loader_sd_bus bus = {
 #endif
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void) { return &bus; }
 bool kui_sci_sd_healthy(void) { return port.acquired && !port.fault; }
-#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF || KUI_VMU_PERSIST_IMPORT || KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF || KUI_VMU_PERSIST_IMPORT || KUI_ARMADA_CE_VMU_WRITE_RUNTIME || KUI_VMU_NATIVE_PERSISTENT_PROBE
 bool kui_sci_sd_faulted(void) { return port.fault; }
 #endif
 #if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
@@ -628,7 +628,7 @@ enum kui_loader_sd_result kui_sci_sd_acquire(void) { return KUI_LOADER_SD_UNSUPP
 void kui_sci_sd_release(void) {}
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void) { return NULL; }
 bool kui_sci_sd_healthy(void) { return false; }
-#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF || KUI_VMU_PERSIST_IMPORT || KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF || KUI_VMU_PERSIST_IMPORT || KUI_ARMADA_CE_VMU_WRITE_RUNTIME || KUI_VMU_NATIVE_PERSISTENT_PROBE
 bool kui_sci_sd_faulted(void) { return true; }
 #endif
 #ifndef KUI_RETAIL_TRANSPORT

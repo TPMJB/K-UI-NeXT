@@ -84,7 +84,10 @@ int kui_vmu_readonly_overlay_init(struct kui_vmu_readonly_overlay *,
  * Consequently complete() does not interpret those stale A1 RX bytes as a
  * physical reply. The real parent's A1-absent guard remains mandatory.
  * C/D are allowed only here, with exact MEMCARD shape; C payloads are copied
- * before DMA. The backend must be explicitly volatile, never an SD writer.
+ * before DMA. The backend must establish its own commit contract: the
+ * volatile backend acknowledges private RAM only; the prepared durable
+ * backend requires its exact scoped SCI loan and completed journal/readback
+ * verification before ACK. This overlay grants no storage ownership itself.
  * Existing init() keeps the read-only physical-timeout admission contract. */
 int kui_vmu_readonly_overlay_init_backend(struct kui_vmu_readonly_overlay *,
     kui_vmu_readonly_overlay_handler, kui_vmu_readonly_overlay_admit, void *context);

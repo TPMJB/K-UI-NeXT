@@ -20,18 +20,30 @@ static inline uint32_t lease_sr(void) {
     ((uintptr_t)&kui_vmu_observe_boot_control+UINT32_C(0x20000000)))
 #endif
 
+#ifdef KUI_VMU_SD_LEASE_NATIVE_HOST_TEST
+/* Host function pointers cannot carry the console's relocated P2 address.
+ * The fixture supplies only that address; the real callback still executes. */
+extern uintptr_t kui_vmu_sd_lease_test_target(kui_vmu_sd_transaction);
+#define LEASE_TARGET(callback) kui_vmu_sd_lease_test_target(callback)
+#else
+#define LEASE_TARGET(callback) ((uintptr_t)(callback))
+#endif
+
 /* A separate linker output section owns the exact relaxed code/literal span.
  * SH --relax can leave ST_SIZE at its larger pre-relaxation value. */
 int __attribute__((noipa,section(".vmu_sd_lease"))) kui_vmu_observe_sd_lease(
     kui_vmu_sd_transaction callback,void *context) {
     const volatile struct kui_vmu_observe_boot_control *control=LEASE_CONTROL;
-    uintptr_t target=(uintptr_t)callback;
-    if((LEASE_SR()&UINT32_C(0xf0))!=UINT32_C(0xf0) || !target ||
-       control->status!=KUI_VMU_OBS_BOOT_INSTALLED ||
-       target!=control->sd_transaction
+    uintptr_t target=LEASE_TARGET(callback);
+    if((LEASE_SR()&UINT32_C(0xf0))!=UINT32_C(0xf0)
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+       || !native_resident_transaction(control,target)
+#else
+       || !target || control->status!=KUI_VMU_OBS_BOOT_INSTALLED || target!=control->sd_transaction
 #ifndef KUI_VMU_SD_LEASE_HOST_TEST
        || (target&1u) || target<KUI_VMU_MAPLE_OBSERVE_LEASE ||
        target>=KUI_VMU_MAPLE_OBSERVE_LIMIT
+#endif
 #endif
        ) return KUI_VMU_SD_LEASE_FAULT;
     if(kui_retail_hook_active) return KUI_VMU_SD_LEASE_BUSY;
@@ -66,3 +78,5 @@ int __attribute__((noipa,section(".vmu_sd_lease"))) kui_vmu_observe_sd_lease(
 
 #undef LEASE_CONTROL
 #undef LEASE_SR
+
+#undef LEASE_TARGET

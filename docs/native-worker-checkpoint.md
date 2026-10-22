@@ -242,3 +242,93 @@ python3 tools/package_vmu_native_readonly.py build/native-readonly-release
 Commit first and build into a fresh directory for the packaged source/build
 identity check. Install by copying the supplied KUI folder; no installer or
 backup/restore receipt is involved. Use the included README for hardware steps.
+
+## Read-only hardware pass and native durable save test
+
+The owner supplied the successful `65699ce32aa2` Power Stone 2 screen on
+22 October 2026. Phase was `0000000d`, detail zero, submitted/completed both
+`00000065` (101), 24 RX slots, 101 advertisements and three virtual replies:
+one INFO, one media reply and one block read. Refused, overlay, flags and
+runtime CHECK were zero. Last request `0200010b`, reply `82010008`, RX
+`0c30f820`; lease remained `0c38a880`. This establishes returning completions
+and real game-driven card reads. It does not establish native persistence.
+
+The new separate `Makefile.vmu-native-persistent` uses the existing durable
+backend and live ownership/checkpoint pipeline. Its worker uses 128KiB of
+the unchanged192KiB allocator lease, with an80-byte typed export header and
+private last4KiB stack. Passive and read-only modes retain64KiB. Exact linker
+relocation extraction and the C relocator now support at most128KiB; the
+actual table still enumerates every internal pointer and fails before writes
+on malformed input. No permanent high-stage pointers survive installation.
+
+The stage accepts a4096-byte prepared P2 profile, scans its live filesystem
+ownership, recovers/checkpoints the image and journal, verifies card identity
+and release health, and copies only the1272-byte sealed runtime handoff.
+The worker filters every A1 packet out of physical Maple DMA using the
+established physical-controller chain builder. It snapshots full128-byte
+write payloads, validates the filtered source at idle completion, restores
+the original MDSTAR and rechecks the original SDK chain before handling the
+virtual request. Final write ACK requires the existing journal/data readback
+and successful restoration of the exact scoped SCI loan shared with GD I/O.
+
+The persistent-only low reader pins the exact relocated transaction callback,
+validates the installed dynamic worker/lease/control shape, and protects the
+complete lease plus header from GD destinations. The SCI fault/restoration
+checks include this new mode; the ordinary low game reader contains no
+storage writer. Native release excludes all admitted SDK RX/TX/control spans
+and the preloaded executable, as well as the worker. Every boundary checks
+the exact submit/release/initializer/exit patches and original callback cells.
+
+Strict exit discovery now finds three complete reviewed SDK families:
+normal exit, cleanup exit and executable-loader entry. The PS2 sample resolves
+`8c2b3a98`, `8c2b3ac8`, `8c2aeaa0`; its exec thunk transports`8c008300`.
+Additional encoded BIOS-vector/bootstrap consumers, ambiguous families and
+interior targets are refused. All three entries stop before cleanup or image
+replacement. This is not a proof of arbitrary synthesized indirect exits.
+
+The save test continues after reads and commits, with a180,000-pair diagnostic
+limit. Console save, full power-off and reboot/load remain the acceptance
+test; host commits alone never count as verified hardware save/load. CDDA,
+SCIF backing, other initializer/exit families and general frontend routing
+remain outside this test. Previously proven Toy/Silver/Armada paths retain
+their existing admission gates.
+
+The ZIP's single `personalize.py MOUNT_ROOT` command selects an existing
+prepared pair, validates its exported profile and identity, and installs only
+the personalized loader. It changes only the module's typed profile span
+and envelope CRCs; it never copies or edits the pair. Historical snapshot
+hashes may differ after legitimate saves; live console recovery produces the
+new handoff. Ambiguous pairs require explicit `--profile`. This setup is
+card binding, with no backup/restore installer flow.
+
+Host validation of this continuation: 1,187,929 integrated worker/protocol/
+store/SPI checks, including four RAM-only write phases, durable commit,
+readback, management checkpoint/reseal and reopened-card loading; torn base
+writes and failed release never produce a final ACK. Lifetime ranges pass
+18,695 checks; exit discovery passes309 with the real startup. The extended
+relocator passes769,073 checks, and the actual worker table is compared at
+three destinations. Native SCI restoration, 20,000 dynamic callback-interval
+cases, original fixed-loan regressions and12 personalizer integration tests
+pass. Linked code/stack/gateway audits are required before packaging.
+
+The completed linked audit passes: worker30,016 initialized bytes,461 exact
+relocations, unchanged192KiB game allocation. The low resident ends exactly
+at`8c007800`; its scoped SCI gateway is312 bytes with a76-byte C frame.
+Source-qualified emitted call graphs, bounded indirect callback sets and an
+assembly margin bound the worker/SCI path to1,736 of4,096 bytes; the ordinary
+GD path is1,228 of1,232 guarded bytes. Unknown callbacks, missing frames and
+cycles fail the audit. Both actual PIO adapters prove callback-NULL and
+one-sector writer entry. Gateway/bootstrap/artifact mutation regressions pass.
+
+```sh
+export PATH="$PWD/.deps/sh-elf/bin:$PATH"
+make -f Makefile.vmu-native-persistent BUILD=build/native-persistent-release -j4 all
+make -f Makefile.vmu-native-persistent BUILD=build/native-persistent-release persistent-host-tests STARTUP=/path/to/1ST_READ.BIN
+python3 tools/check_vmu_native_persistent.py build/native-persistent-release --self-test
+python3 tools/package_vmu_native_persistent.py build/native-persistent-release
+```
+
+Use a fresh build directory after the final commit. The generic package has
+an intentionally non-owner CI profile; run its personalizer before console
+testing. Console success is a save that survives full power-off and loads on
+the next launch. Record the owner result and build ID before broadening gates.

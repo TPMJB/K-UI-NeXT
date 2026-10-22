@@ -22,6 +22,8 @@ NATIVE_SRC = src/loader/vmu_native_passive.c src/core/vmu_native_heap.c \
  src/core/data.c src/loader/retail_display.c src/loader/minic.c
 NATIVE_OBJ = $(patsubst %.c,$(BUILD)/native/%.o,$(NATIVE_SRC)) \
  $(BUILD)/native_passive_exports.o $(BUILD)/native_passive_hooks.o
+NATIVE_LAYOUT ?= src/loader/vmu_native_worker.ld
+NATIVE_SPAN ?= 0x10000
 $(BUILD)/native/%.o: %.c
 	@mkdir -p $(@D)
 	$(CC) $(NATIVE_FLAGS) -MMD -MP -c $< -o $@
@@ -34,13 +36,13 @@ $(BUILD)/native_passive_hooks.o: src/loader/vmu_native_passive_hooks.S
 $(BUILD)/native_worker_call.o: src/loader/vmu_native_worker_call.S
 	@mkdir -p $(@D)
 	$(CC) $(FLAGS) -c $< -o $@
-$(BUILD)/native-worker.elf: $(NATIVE_OBJ) src/loader/vmu_native_worker.ld
+$(BUILD)/native-worker.elf: $(NATIVE_OBJ) $(NATIVE_LAYOUT)
 	$(CC) $(LINK) -Wl,--emit-relocs -Wl,-e,_kui_vmu_native_passive_arm \
-	 -Tsrc/loader/vmu_native_worker.ld -Wl,-Map,$(BUILD)/native-worker.map -o $@ $(NATIVE_OBJ) -lgcc
+	 -T$(NATIVE_LAYOUT) -Wl,-Map,$(BUILD)/native-worker.map -o $@ $(NATIVE_OBJ) -lgcc
 $(BUILD)/native-worker.bin: $(BUILD)/native-worker.elf
 	$(OBJCOPY) -O binary $< $@
 $(BUILD)/native-worker.reloc: $(BUILD)/native-worker.elf $(BUILD)/native-worker.bin tools/vmu_native_relocations.py
-	python3 tools/vmu_native_relocations.py $< $(BUILD)/native-worker.bin $@ --link-base 0x8c100000 --span-bytes 0x10000
+	python3 tools/vmu_native_relocations.py $< $(BUILD)/native-worker.bin $@ --link-base 0x8c100000 --span-bytes $(NATIVE_SPAN)
 $(BUILD)/stage/src/loader/vmu_native_heap_probe_stage.o: $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc
 -include $(NATIVE_OBJ:.o=.d)
 

@@ -6,7 +6,7 @@
 
 #define KUI_VMU_NATIVE_RELOCATE_HEADER_BYTES 72u
 #define KUI_VMU_NATIVE_RELOCATE_RECORD_BYTES 8u
-#define KUI_VMU_NATIVE_RELOCATE_MAX_SPAN 0x10000u
+#define KUI_VMU_NATIVE_RELOCATE_MAX_SPAN 0x20000u
 /* Explicit LE wire: magic "KUIVRL01"; version/header/image/span/link/count/
  * wire/CRC32 words at8..36; exact image SHA256 at40; sorted records
  * (image offset, original pointer word) at72. Produced from --emit-relocs.

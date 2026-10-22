@@ -31,7 +31,7 @@ struct kui_sci_sd_port {
 };
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void);
 bool kui_sci_sd_healthy(void);
-#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF || KUI_VMU_PERSIST_IMPORT || KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF || KUI_VMU_PERSIST_IMPORT || KUI_ARMADA_CE_VMU_WRITE_RUNTIME || KUI_VMU_NATIVE_PERSISTENT_PROBE
 /* Isolated shared-reader gateway: unlike healthy(), this fault latch remains
  * meaningful AFTER release. Read it before acquisition can clear old faults
  * and after release can latch a final TEND/restoration failure. */
