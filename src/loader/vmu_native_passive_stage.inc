@@ -32,8 +32,6 @@ static struct kui_vmu_native_layout passive_layout;
 static void native_passive_prepare(void) {
     if(!kui_vmu_native_patch_no_interior((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
        exec_bytes,KUI_RETAIL_EXEC_ADDRESS,native_driver.submit,12u)) native_report(2u,11u);
-    if(!kui_vmu_native_layout_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
-       exec_bytes,&native_driver,&passive_layout)) native_report(2u,10u);
 }
 static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     uint32_t load=lease->payload|0x80000000u,dest=load+0x20000000u;

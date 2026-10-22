@@ -79,6 +79,10 @@ static bool timers(const uint8_t *p,size_t n,uint32_t base,uint32_t *one,uint32_
         {20,0x6141},{22,0x2129},{24,0x2411},{30,0x6012},{32,0x402b},{34,0x6432}};
     unsigned counts[2]={0,0};uint32_t chosen[2]={0,0};
     for(size_t s=0;s<n && n-s>=36u;s+=2u) {
+        /* Most halfwords are not a dispatch prologue. Avoid entering the
+         * bounded witness decoder on every instruction/data halfword while
+         * retaining the complete witness and uniqueness checks below. */
+        if((u16(p+s)&0xff00u)!=0xd300u || u16(p+s+2u)!=0x6030u) continue;
         if(!WORDS(p,n,s,w)) continue;
         uint32_t tstr,tcr,callback,arg;
         if(!literal(p,n,base,s,3u,&tstr) || tstr!=0xffd80004u || !literal(p,n,base,s+8u,4u,&tcr) ||
@@ -100,6 +104,7 @@ static bool gun(const uint8_t *p,size_t n,uint32_t base,const struct kui_vmu_nat
         {80,0xe300},{82,0x2432},{86,0x6242},{88,0x7201},{90,0x2422}};
     unsigned count=0;uint32_t chosen=0;
     for(size_t s=0;s<n && n-s>=92u;s+=2u) {
+        if(u16(p+s)!=0x2fe6u || u16(p+s+2u)!=0x2fd6u || u16(p+s+4u)!=0x0002u) continue;
         if(!WORDS(p,n,s,w) || !word_literal(p,n,base,s+8u,3u,0xff0fu) ||
            d->completion_call<0x4au || !bsr_target(p,n,base,s+36u,d->completion_call-0x4au)) continue;
         uint32_t flag,cleared;
@@ -110,13 +115,11 @@ static bool gun(const uint8_t *p,size_t n,uint32_t base,const struct kui_vmu_nat
     *out=chosen;return true;
 }
 
-bool kui_vmu_native_layout_discover(const void *image,size_t n,const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out) {
-    if(!image || !d || !out || n>0xc00000u || n<0x300u ||
-       (uintptr_t)image>UINTPTR_MAX-n || (uintptr_t)out>UINTPTR_MAX-sizeof(*out) ||
-       ((uintptr_t)out<(uintptr_t)image+n && (uintptr_t)image<(uintptr_t)out+sizeof(*out))) return false;
-    memset(out,0,sizeof(*out));
+/* Called only after an exact image-bound driver resolution, either produced
+ * immediately by the combined API or replayed by the strict cached API. */
+static bool layout_from_bound(const void *image,size_t n,
+    const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out) {
     uint32_t base=d->load_address;
-    if(!kui_vmu_native_discovery_cache_valid(d,image,n,base)) return false;
     const uint8_t *p=image;size_t init;
     if(!at(d->initializer+0x11cu,base,n,0x148u,&init) || !variable(p,n,base,init,d)) return false;
     struct kui_vmu_native_layout r={0};r.version=1u;r.bytes=sizeof(r);r.initializer=base+(uint32_t)init;r.rx_layout=KUI_VMU_NATIVE_RX_EXPLICIT48;
@@ -126,7 +129,8 @@ bool kui_vmu_native_layout_discover(const void *image,size_t n,const struct kui_
         {16,0x1f61},{18,0xc90f},{20,0x2f72},{22,0x1f04},{24,0x0002},{26,0x2039},{28,0xcbf0},{30,0x400e},
         {36,0x6242},{38,0x223b},{42,0x2422},{44,0x55f2},{48,0x67f2},{50,0x56f1},{52,0x430b},{54,0x54f3}};
     unsigned found=0;size_t wrapper=0;
-    for(size_t s=0;s<n && n-s>=56u;s+=2u) if(WORDS(p,n,s,wrap) &&
+    for(size_t s=0;s<n && n-s>=56u;s+=2u) if(u16(p+s)==0x4f22u &&
+       u16(p+s+2u)==0x7fecu && u16(p+s+4u)==0x0002u && WORDS(p,n,s,wrap) &&
        word_literal(p,n,base,s+6u,3u,0xff0fu) && target(p,n,base,s+46u,3u,r.initializer)) {wrapper=s;++found;}
     if(found!=1u) return false;
     r.initializer_wrapper=base+(uint32_t)wrapper;
@@ -137,7 +141,9 @@ bool kui_vmu_native_layout_discover(const void *image,size_t n,const struct kui_
         {48,0x2012},{50,0x23e2},{52,0x420b},{54,0x64c3},{56,0x53f1},{58,0x2338},{60,0x890b},
         {62,0x63f2},{64,0x2338},{66,0x8908},{70,0xe301},{72,0x2232},{74,0x65f2},{78,0x57fb},{80,0x56f1},{82,0x430b},{84,0x54f2}};
     found=0;size_t upper_site=0;
-    for(size_t s=0;s<n && n-s>=86u;s+=2u) if(WORDS(p,n,s,upper) && target(p,n,base,s+76u,3u,r.initializer_wrapper)) {upper_site=s;++found;}
+    for(size_t s=0;s<n && n-s>=86u;s+=2u) if(u16(p+s)==0x2fe6u &&
+       u16(p+s+2u)==0x2fd6u && u16(p+s+4u)==0x2fc6u && WORDS(p,n,s,upper) &&
+       target(p,n,base,s+76u,3u,r.initializer_wrapper)) {upper_site=s;++found;}
     if(found!=1u) return false;
     /* Root's reviewed leaf call supplies three immutable pointers and an
      * immediate count on the stack. Its unrelated first argument is forwarded
@@ -152,62 +158,158 @@ bool kui_vmu_native_layout_discover(const void *image,size_t n,const struct kui_
          * R4 is deliberately not interpreted as a constant by this adapter. */
         if(s<28u || u16(p+s-20u)!=0x6ad3u || u16(p+s-18u)!=0x2029u ||
            u16(p+s-16u)!=0xcbe0u || u16(p+s-14u)!=0x400eu) continue;
-        tx=a;index=b;input=c;count=u16(p+s-10u)&255u;r.initializer_call=base+(uint32_t)s;++found;
+        /* Upper wrapper reloads R5 from its saved caller R6 and R6 from
+         * saved caller R7. The SDK stores R5 to fc8 (raw RX pointer array)
+         * and R6 to fc4 (TX storage). Keep that transport explicit. */
+        input=a;index=b;tx=c;count=u16(p+s-10u)&255u;r.initializer_call=base+(uint32_t)s;++found;
     }
     /* This runtime family uses two 0x3000 TX banks; the variable initializer
      * computes the bank distance as input count * 1024. */
     if(found!=1u || count!=12u || !ram(tx,0x6020u,4u) ||
-       !ram(input,count*4u,32u) || !ram(index,count*4u,4u)) return false;
-    size_t indices;if(!at(index,base,n,count*4u,&indices)) return false;
-    r.tx_base=((tx+31u)&~31u)|0xa0000000u;r.rx_base=input|0xa0000000u;r.inputs=count;r.input_array=input;r.index_array=index;
+       !ram(input,count*4u,4u) || !ram(index,count*4u,4u)) return false;
+    size_t indices,inputs;
+    if(!at(index,base,n,count*4u,&indices) || !at(input,base,n,count*4u,&inputs)) return false;
+    r.tx_base=((tx+31u)&~31u)|0xa0000000u;r.rx_base=((input+31u)&~31u)|0xa0000000u;
+    r.inputs=count;r.input_array=input;r.index_array=index;
     for(unsigned i=0;i<count;i++) {
         uint32_t entry=u32(p+indices+4u*i);if(entry>=24u) return false;
         for(unsigned j=0;j<i;j++) if(entry==r.indices[j]) return false;
         r.indices[i]=entry;
+        uint32_t raw=u32(p+inputs+4u*i);
+        if(!ram(raw,0x820u,4u)) return false;
+        uint32_t buffer=((raw+31u)&~31u)|0xa0000000u;
+        r.input_values[i]=raw;r.rx_slots[entry]=buffer;r.rx_slots[entry+24u]=buffer+0x400u;
     }
     if(!gun(p,n,base,d,&r.gun_flag) || !timers(p,n,base,&r.timer1_callback,&r.timer2_callback)) return false;
     *out=r;return true;
 }
 
-bool kui_vmu_native_layout_bind(const struct kui_vmu_native_layout *l,const struct kui_vmu_native_discovery *d,
-    kui_vmu_native_runtime_read read,void *context,struct kui_vmu_native_runtime_config *out) {
-    if(!l || !d || !read || !out || l->version!=1u || l->bytes!=sizeof(*l) ||
-       d->version!=1u || d->bytes!=sizeof(*d) || d->family!=KUI_VMU_NATIVE_FAMILY_UNIFORM_V1 ||
-       d->requirements!=KUI_VMU_NATIVE_REQUIREMENTS || !ram(d->load_address,d->image_bytes,4u) ||
-       !ram(d->manager_cell,4u,4u) || !ram(d->lock_cell,5u,4u) ||
-       out->version!=1u || out->bytes!=sizeof(*out) || out->lease_header_bytes>32u ||
-       out->lease_address<out->lease_header_bytes || !ram(out->lease_address,out->lease_bytes,32u) ||
-       !ram(out->lease_address-out->lease_header_bytes,out->lease_bytes+out->lease_header_bytes,1u) ||
-       l->inputs!=12u || l->rx_layout!=KUI_VMU_NATIVE_RX_EXPLICIT48 ||
-       l->rx_base!=(l->input_array|0xa0000000u) || !ram(l->input_array,l->inputs*4u,32u) ||
-       !ram(l->tx_base,0x6000u,32u) || !ram(d->manager_initial,0x1100u,4u) ||
-       !ram(l->gun_flag,4u,4u) || !ram(l->timer1_callback,4u,4u) || !ram(l->timer2_callback,4u,4u)) return false;
+static bool main_ram_object(uintptr_t address,size_t bytes,uint32_t *physical) {
+#if UINTPTR_MAX > UINT32_MAX
+    if(address>UINT32_MAX) return false;
+#endif
+    uint32_t a=(uint32_t)address,area=a&0xe0000000u,p=phys(a);
+    if((area!=0u && area!=0x80000000u && area!=0xa0000000u) ||
+       p<0x0c000000u || p>=0x0d000000u || bytes>0x0d000000u-p) return false;
+    *physical=p;return true;
+}
+static bool object_overlap(const void *a,size_t an,const void *b,size_t bn) {
+    uintptr_t ap=(uintptr_t)a,bp=(uintptr_t)b;
+    if(ap<bp+bn && bp<ap+an) return true;
+    uint32_t ar,br;
+    return main_ram_object(ap,an,&ar) && main_ram_object(bp,bn,&br) && ar<br+bn && br<ar+an;
+}
+static bool layout_arguments(const void *image,size_t n,
+    const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out) {
+    return image && d && out && n>=0x300u && n<=0xc00000u &&
+        (uintptr_t)image<=UINTPTR_MAX-n && (uintptr_t)d<=UINTPTR_MAX-sizeof(*d) &&
+        (uintptr_t)out<=UINTPTR_MAX-sizeof(*out) &&
+        !object_overlap(image,n,out,sizeof(*out)) && !object_overlap(d,sizeof(*d),out,sizeof(*out));
+}
+bool kui_vmu_native_layout_discover(const void *image,size_t n,
+    const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out) {
+    if(!layout_arguments(image,n,d,out)) return false;
+    memset(out,0,sizeof(*out));
+    return kui_vmu_native_discovery_cache_valid(d,image,n,d->load_address) && layout_from_bound(image,n,d,out);
+}
+bool kui_vmu_native_discover_layout(const void *image,size_t n,uint32_t load,
+    struct kui_vmu_native_discovery *driver,struct kui_vmu_native_layout *out) {
+    if(!layout_arguments(image,n,driver,out) || object_overlap(image,n,driver,sizeof(*driver))) return false;
+    memset(driver,0,sizeof(*driver));memset(out,0,sizeof(*out));
+    struct kui_vmu_native_discovery fresh;
+    struct kui_vmu_native_layout layout;
+    if(kui_vmu_native_discover(image,n,load,&fresh)!=KUI_VMU_NATIVE_RESOLVED ||
+       !layout_from_bound(image,n,&fresh,&layout)) return false;
+    *driver=fresh;*out=layout;return true;
+}
+
+static bool bind_failure(struct kui_vmu_native_layout_diagnostic *diag,uint32_t code,
+    uint32_t address,uint32_t value,uint32_t expected) {
+    if(diag) *diag=(struct kui_vmu_native_layout_diagnostic){code,address,value,expected};
+    return false;
+}
+bool kui_vmu_native_layout_bind_checked(const struct kui_vmu_native_layout *l,const struct kui_vmu_native_discovery *d,
+    kui_vmu_native_runtime_read read,void *context,struct kui_vmu_native_runtime_config *out,
+    struct kui_vmu_native_layout_diagnostic *diag) {
+    if(diag) memset(diag,0,sizeof(*diag));
+    if(!l || !d || !read || !out) return bind_failure(diag,KUI_VMU_LAYOUT_BIND_ARGUMENT,0u,0u,1u);
+#define SCHEMA(field,want) do {uint32_t expect=(want);if((field)!=expect) \
+    return bind_failure(diag,KUI_VMU_LAYOUT_BIND_SCHEMA,(uint32_t)(uintptr_t)&(field),(field),expect);} while(0)
+#define SPAN(address,bytes,align) do {if(!ram((address),(bytes),(align))) \
+    return bind_failure(diag,KUI_VMU_LAYOUT_BIND_SPAN,(address),(bytes),(align));} while(0)
+    SCHEMA(l->version,1u);SCHEMA(l->bytes,sizeof(*l));SCHEMA(d->version,1u);SCHEMA(d->bytes,sizeof(*d));
+    SCHEMA(d->family,KUI_VMU_NATIVE_FAMILY_UNIFORM_V1);SCHEMA(d->requirements,KUI_VMU_NATIVE_REQUIREMENTS);
+    SCHEMA(out->version,1u);SCHEMA(out->bytes,sizeof(*out));SCHEMA(out->lease_header_bytes,32u);
+    SCHEMA(l->inputs,12u);SCHEMA(l->rx_layout,KUI_VMU_NATIVE_RX_EXPLICIT48);
+    SCHEMA(l->rx_base,((l->input_array+31u)&~31u)|0xa0000000u);
+    SPAN(d->load_address,d->image_bytes,4u);SPAN(d->manager_cell,4u,4u);SPAN(d->lock_cell,5u,4u);
+    SPAN(out->lease_address,out->lease_bytes,32u);
+    SPAN(out->lease_address-out->lease_header_bytes,out->lease_bytes+out->lease_header_bytes,1u);
+    SPAN(l->input_array,l->inputs*4u,4u);SPAN(l->tx_base,0x6000u,32u);SPAN(d->manager_initial,0x1100u,4u);
+    SPAN(l->gun_flag,4u,4u);SPAN(l->timer1_callback,4u,4u);SPAN(l->timer2_callback,4u,4u);
+#undef SPAN
+#undef SCHEMA
     uint32_t guard=out->lease_address-out->lease_header_bytes,guard_bytes=out->lease_bytes+out->lease_header_bytes;
     const uint32_t blocked[][2]={{guard,guard_bytes},{l->tx_base,0x6000u},{d->manager_initial,0x1100u},{d->lock_cell,5u},
         {d->load_address,d->image_bytes},{l->gun_flag,4u},{l->timer1_callback,4u},{l->timer2_callback,4u}};
+    /* The reviewed caller passes the original 4-byte-aligned immutable
+     * pointer array. The SDK stores an aligned alias in fc8, but its loop
+     * still reads the original saved R5, not the fc8 alias. */
+    uint32_t array_offset=phys(l->input_array)-phys(d->load_address);
+    if(phys(l->input_array)<phys(d->load_address) || array_offset>d->image_bytes ||
+       l->inputs*4u>d->image_bytes-array_offset)
+        return bind_failure(diag,KUI_VMU_LAYOUT_BIND_ARRAY_LOCATION,l->input_array,array_offset,d->image_bytes);
     for(unsigned j=0;j<sizeof(blocked)/sizeof(blocked[0]);j++)
-        if(overlaps(l->input_array,l->inputs*4u,blocked[j][0],blocked[j][1])) return false;
+        if(j!=4u && overlaps(l->input_array,l->inputs*4u,blocked[j][0],blocked[j][1]))
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_ARRAY_CONFLICT,l->input_array,blocked[j][0],blocked[j][1]);
     struct kui_vmu_native_runtime_config c=*out;
     c.rx_layout=l->rx_layout;c.rx_base=l->rx_base;c.gun_flag=l->gun_flag;
     c.timer1_callback=l->timer1_callback;c.timer2_callback=l->timer2_callback;memset(c.rx_slots,0,sizeof(c.rx_slots));
     uint32_t raw[24]={0};
     for(unsigned i=0;i<l->inputs;i++) {
-        if(l->indices[i]>=24u) return false;
-        for(unsigned j=0;j<i;j++) if(l->indices[i]==l->indices[j]) return false;
-        if(!read(context,l->input_array+4u*i,4u,&raw[i]) || !ram(raw[i],0x820u,4u)) return false;
+        if(l->indices[i]>=24u) return bind_failure(diag,KUI_VMU_LAYOUT_BIND_INDEX,l->index_array+4u*i,l->indices[i],24u);
+        for(unsigned j=0;j<i;j++) if(l->indices[i]==l->indices[j])
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_INDEX,l->index_array+4u*i,l->indices[i],l->indices[j]);
+        if(!read(context,l->input_array+4u*i,4u,&raw[i]))
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_INPUT_READ,l->input_array+4u*i,0u,l->input_values[i]);
+        if(raw[i]!=l->input_values[i])
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_INPUT_VALUE,l->input_array+4u*i,raw[i],l->input_values[i]);
+        if(!ram(raw[i],0x820u,4u)) return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_SPAN,raw[i],0x820u,4u);
         uint32_t buffer=((raw[i]+31u)&~31u)|0xa0000000u;
-        if(!ram(buffer,0x800u,32u)) return false;
+        if(!ram(buffer,0x800u,32u)) return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_SPAN,buffer,0x800u,32u);
         for(unsigned j=0;j<sizeof(blocked)/sizeof(blocked[0]);j++)
-            if(overlaps(buffer,0x800u,blocked[j][0],blocked[j][1])) return false;
-        if(overlaps(buffer,0x800u,l->input_array,l->inputs*4u)) return false;
-        for(unsigned j=0;j<i;j++) if(overlaps(buffer,0x800u,c.rx_slots[l->indices[j]],0x800u)) return false;
+            if(overlaps(buffer,0x800u,blocked[j][0],blocked[j][1]))
+                return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_CONFLICT,buffer,blocked[j][0],blocked[j][1]);
+        if(overlaps(buffer,0x800u,l->input_array,l->inputs*4u))
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_CONFLICT,buffer,l->input_array,l->inputs*4u);
+        for(unsigned j=0;j<i;j++) if(overlaps(buffer,0x800u,c.rx_slots[l->indices[j]],0x800u))
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_CONFLICT,buffer,c.rx_slots[l->indices[j]],0x800u);
         c.rx_slots[l->indices[i]]=buffer;c.rx_slots[l->indices[i]+24u]=buffer+0x400u;
     }
+    for(unsigned i=0;i<48u;i++) if(c.rx_slots[i]!=l->rx_slots[i])
+        return bind_failure(diag,KUI_VMU_LAYOUT_BIND_SLOT_PROVENANCE,d->manager_initial+0xfe8u+4u*i,c.rx_slots[i],l->rx_slots[i]);
     uint32_t value;
-    if(!read(context,d->manager_cell,4u,&value) || !ram(value,0x1100u,4u) || phys(value)!=phys(d->manager_initial)) return false;
-    if(!read(context,value+0xfc4u,4u,&value) || value!=l->tx_base) return false;
-    if(!read(context,d->manager_initial+0xfc8u,4u,&value) || value!=l->rx_base) return false;
-    for(unsigned i=0;i<48u;i++) if(!read(context,d->manager_initial+0xfe8u+4u*i,4u,&value) || value!=c.rx_slots[i]) return false;
-    for(unsigned i=0;i<l->inputs;i++) if(!read(context,l->input_array+4u*i,4u,&value) || value!=raw[i]) return false;
+    if(!read(context,d->manager_cell,4u,&value)) return bind_failure(diag,KUI_VMU_LAYOUT_BIND_MANAGER_READ,d->manager_cell,0u,d->manager_initial);
+    if(!ram(value,0x1100u,4u) || phys(value)!=phys(d->manager_initial))
+        return bind_failure(diag,KUI_VMU_LAYOUT_BIND_MANAGER_VALUE,d->manager_cell,value,d->manager_initial);
+    uint32_t manager=value;
+    if(!read(context,manager+0xfc4u,4u,&value)) return bind_failure(diag,KUI_VMU_LAYOUT_BIND_TX_READ,manager+0xfc4u,0u,l->tx_base);
+    if(value!=l->tx_base) return bind_failure(diag,KUI_VMU_LAYOUT_BIND_TX_VALUE,manager+0xfc4u,value,l->tx_base);
+    if(!read(context,manager+0xfc8u,4u,&value)) return bind_failure(diag,KUI_VMU_LAYOUT_BIND_RX_READ,manager+0xfc8u,0u,l->rx_base);
+    if(value!=l->rx_base) return bind_failure(diag,KUI_VMU_LAYOUT_BIND_RX_VALUE,manager+0xfc8u,value,l->rx_base);
+    for(unsigned i=0;i<48u;i++) {
+        uint32_t address=manager+0xfe8u+4u*i;
+        if(!read(context,address,4u,&value)) return bind_failure(diag,KUI_VMU_LAYOUT_BIND_SLOT_READ,address,0u,c.rx_slots[i]);
+        if(value!=c.rx_slots[i]) return bind_failure(diag,KUI_VMU_LAYOUT_BIND_SLOT_VALUE,address,value,c.rx_slots[i]);
+    }
+    for(unsigned i=0;i<l->inputs;i++) {
+        value=0u;
+        if(!read(context,l->input_array+4u*i,4u,&value) || value!=raw[i])
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_INPUT_CHANGED,l->input_array+4u*i,value,raw[i]);
+    }
     *out=c;return true;
+}
+bool kui_vmu_native_layout_bind(const struct kui_vmu_native_layout *l,const struct kui_vmu_native_discovery *d,
+    kui_vmu_native_runtime_read read,void *context,struct kui_vmu_native_runtime_config *out) {
+    return kui_vmu_native_layout_bind_checked(l,d,read,context,out,NULL);
 }

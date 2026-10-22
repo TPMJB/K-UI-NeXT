@@ -98,10 +98,12 @@ installer and stack pointers are cleared before publishing installed state.
 
 The new layout adapter decodes the reviewed variable initializer and its actual
 argument/index provenance, plus gun and TMU1/TMU2 callback cells. For the PS2
-sample this yields TX `ac20ea60`, input pointer array `ac315180`, twelve inputs
-and twenty-four nonzero slots across two banks. Buffer pointers originate in
-BSS: the worker binds them at first submission, reproduces alignment/P2/bank
-assignment, checks all 48 manager entries and rereads the array for stability.
+sample the corrected mapping is TX `ac315180`, raw RX pointer array `0c20ea4c`,
+aligned `fc8` value `ac20ea60`, twelve inputs and twenty-four nonzero slots
+across two banks. The RX pointer array is preloaded executable data; its buffer
+pointers address BSS. The worker compares the live array to its exact captured
+immutable values at first submission, reproduces alignment/P2/bank assignment,
+checks all 48 manager entries and rereads the array for stability.
 Completion rebinds and compares that layout again. There is no production
 title hash or per-game address table. This adapter currently admits only the
 reviewed twelve-input variable initializer family.
@@ -116,6 +118,19 @@ continuing ownership and every unchanged TX word before a terminal report.
 Success is phase `0000000b` / `PASSIVE PAIR VERIFIED`. No virtual replies or
 storage writes are enabled; the original consumer is not called.
 
+Build `ac097cf48ff0` was tested on hardware and refused at phase `0000000c`,
+detail `0000000e`, with zero submitted/completed transfers, inherited SR
+`60000161` and lease `0c38a880`. The binding refusal caught a reversed argument
+mapping in the adapter: root R6 is the RX array and R7 is TX storage. The upper
+wrapper reloads R5 from saved R6, and R6 from saved R7, immediately before the
+variable-initializer wrapper. Tests that merely repeated the mistaken mapping
+did not catch this; the correction adds an independent actual-instruction
+argument-transport regression. No physical DMA was started by the refused
+submission gateway. The owner reported a one-to-two-minute pause during layout
+discovery. Combined fresh driver/layout discovery removes the duplicate SDK
+scan and SHA, and cheap opcode prefilters avoid most witness-helper calls.
+Console timing of that optimization has not yet been measured.
+
 The isolated resident route now uses ordinary GD destination mapping plus
 dynamic exclusion of the complete 192 KiB lease and its 32-byte allocator
 header. The heap initializer remains intercepted: repeat initialization stops
@@ -124,7 +139,8 @@ The immutable patch-window scan rejects direct branches or aligned RAM
 literals into the displaced instructions' interior. It cannot prove arbitrary
 indirect flow. Power Stone 2 passes that conservative scan.
 
-Validation: 602 ASan/UBSan passive protocol/boundary checks, 250 layout checks
+Validation of the corrected mapping: 605 ASan/UBSan passive protocol/boundary
+checks and 1,509 layout checks
 including 21 actual-startup mutations and duplicate timer ambiguity, 206 patch
 window checks, and 80,175 resident destination/terminal checks. The actual
 linked passive gateways pass 5,760 register-state scenarios at three relocated
@@ -132,7 +148,17 @@ addresses plus four corrupted-gateway cases; the stage gateway retains its
 1,288 scenarios. Exact ELF/flat image/export/relocation/stage/module binding
 audits pass, including bootstrap and artifact mutations. Relocation extraction
 now correctly scopes duplicate local C symbols by index while refusing global
-name conflicts; its nine extractor regressions pass.
+name conflicts; its nine extractor regressions pass. Scan instrumentation on
+the actual startup image counted 6,194,862 full witness-decoder calls before
+opcode prefilters and 1,927 afterward, with identical discovery constraints.
+The combined API additionally avoids one full driver scan/hash replay. No
+cache-mode changes were made.
+
+The failure screen now retains exact live-bind code/address/value/expected.
+`CHECK` values `00010001`..`00010014` encode layout codes 1..20, documented in
+`vmu_native_layout.h`. Other nonzero CHECK values are runtime checker results;
+their AT/VALUE fields show the last sampled word, and EXPECT `ffffffff` means
+that the runtime validator did not supply an expected value.
 
 Build, test and audit (supply the unpacked PS2 startup only for real-image
 mutation tests; copyrighted game binaries are not included in source):

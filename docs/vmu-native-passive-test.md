@@ -1,6 +1,9 @@
 # Native Maple submission/completion test
 
-The previous relocated worker passed on Power Stone 2. This build resumes the
+The previous relocated worker passed on Power Stone 2. This corrected build
+fixes the buffer-layout refusal seen in the first passive test and removes a
+repeated image scan/hash. Its console timing still needs confirmation.
+It resumes the
 game briefly, observes one real Maple submission and its completion, then
 stops before the original consumer runs. Physical peripheral requests remain
 unchanged. No virtual card is advertised and no saves are written.

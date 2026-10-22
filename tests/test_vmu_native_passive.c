@@ -63,11 +63,14 @@ static void fixture(void) {
     static const unsigned ids[12]={0,1,2,6,7,8,12,13,14,18,19,20};
     input.layout=(struct kui_vmu_native_layout){.version=1u,.bytes=sizeof(input.layout),
         .initializer=0x8c011ac4u,.initializer_wrapper=0x8c020000u,.initializer_call=0x8c020020u,
-        .tx_base=0xac400000u,.rx_layout=KUI_VMU_NATIVE_RX_EXPLICIT48,.rx_base=0xac220020u,
+        .tx_base=0xac400000u,.rx_layout=KUI_VMU_NATIVE_RX_EXPLICIT48,.rx_base=0xac020040u,
         .gun_flag=0x0c012300u,.timer1_callback=0x8c012304u,.timer2_callback=0xac012308u,
-        .inputs=12u,.input_array=0x0c220020u,.index_array=0x0c020060u};
+        .inputs=12u,.input_array=0x0c02002cu,.index_array=0x0c020060u};
     for(unsigned i=0;i<12u;i++) {
-        input.layout.indices[i]=ids[i];put(input.layout.input_array+i*4u,4u,0xac500000u+i*0x820u);
+        input.layout.indices[i]=ids[i];input.layout.input_values[i]=0xac500000u+i*0x820u;
+        input.layout.rx_slots[ids[i]]=0xac500000u+i*0x820u;
+        input.layout.rx_slots[ids[i]+24u]=0xac500400u+i*0x820u;
+        put(input.layout.input_array+i*4u,4u,input.layout.input_values[i]);
         put(0x0c300fe8u+ids[i]*4u,4u,0xac500000u+i*0x820u);
         put(0x0c300fe8u+(ids[i]+24u)*4u,4u,0xac500400u+i*0x820u);
     }
@@ -77,7 +80,7 @@ static void fixture(void) {
     }
     put(0xa05f6c18u,4u,0u);put(0xa05f6c10u,4u,0u);put(0xa05f6c14u,4u,1u);put(0xa05f6c04u,4u,0x0c400000u);
     put(input.driver.manager_cell,4u,0x0c300000u);put(input.driver.lock_cell,4u,0xac011004u);
-    put(0x0c300fc4u,4u,0xac400000u);put(0x0c300fc8u,4u,0xac220020u);
+    put(0x0c300fc4u,4u,0xac400000u);put(0x0c300fc8u,4u,input.layout.rx_base);
     put(0x0c3010a8u,4u,0xac400000u);put(0x0c3010acu,4u,0xac403000u);put(0x0c3010b0u,4u,0xac400000u);
     put(0x0c3010c4u,4u,0u);put(0x0c3010f4u,4u,0xa05f6c00u);put(0xac011004u,1u,0x80u);
     put(input.layout.gun_flag,4u,0u);put(input.layout.timer1_callback,4u,0u);put(input.layout.timer2_callback,4u,0u);
@@ -140,6 +143,10 @@ int main(void) {
     fixture();arm();put(0x0c400008u,4u,0x01000109u);rejected_submit();
     fixture();arm();put(0x0c400000u,4u,0x80000101u);rejected_submit();
     fixture();arm();put(0x0c400000u,4u,0x00000001u);rejected_submit();
+    fixture();arm();put(input.layout.input_array,4u,0xac510000u);rejected_submit();
+    CHECK(state.fault_at==input.layout.input_array && state.fault_value==0xac510000u &&
+        state.fault_expect==input.layout.input_values[0] &&
+        state.runtime_result==(0x10000u|KUI_VMU_LAYOUT_BIND_INPUT_VALUE));
     fixture();arm();put(0x0c6fffe4u,4u,0x1802u);rejected_submit();
     fixture();arm();runtime_phase(1u);rejected_complete();
     fixture();arm();submit();runtime_phase(1u);frame.pr+=2u;rejected_complete();
@@ -147,7 +154,7 @@ int main(void) {
     fixture();arm();submit();runtime_phase(1u);put(0xa05f6c04u,4u,0x0c403000u);rejected_complete();
     fixture();arm();submit();runtime_phase(1u);put(0x0c3010b4u,4u,0u);rejected_complete();
     fixture();arm();submit();runtime_phase(1u);put(0x0c6fffe4u,4u,0x1802u);rejected_complete();
-    fixture();arm();submit();runtime_phase(1u);put(0x0c220020u,4u,0xac510000u);rejected_complete();
+    fixture();arm();submit();runtime_phase(1u);put(input.layout.input_array,4u,0xac510000u);rejected_complete();
     fixture();arm();submit();runtime_phase(1u);put(0x0c300fe8u,4u,0xac510000u);rejected_complete();
     fixture();arm();reads=0u;submit();unsigned successful_reads=reads;
     for(volatile unsigned i=1;i<=successful_reads;i++) {

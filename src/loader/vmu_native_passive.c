@@ -13,7 +13,7 @@ static struct kui_vmu_native_passive_config config;
 static struct {
     uint32_t armed,pending,submitted,completed,error,source,bytes,descriptors,nops;
     uint32_t submit_sr,complete_sr,rx_slots,hash,first_rx,first_response,last_response;
-    uint32_t fault_at,fault_value,runtime_result;
+    uint32_t fault_at,fault_value,fault_expect,runtime_result;
 } state;
 static uint32_t captured[TX_WORDS];
 static uint32_t receivers[48];
@@ -84,8 +84,8 @@ static void report(void) {
         state.source,state.bytes,state.hash,state.submit_sr,state.complete_sr},5u);
     retail_display_values("FIRST RX FIRST RESPONSE LAST RESPONSE",(uint32_t[3]){
         state.first_rx,state.first_response,state.last_response},3u);
-    retail_display_values("FAULT AT VALUE RUNTIME LEASE",(uint32_t[4]){
-        state.fault_at,state.fault_value,state.runtime_result,config.lease.payload},4u);
+    retail_display_values("AT VALUE EXPECT CHECK LEASE",(uint32_t[5]){
+        state.fault_at,state.fault_value,state.fault_expect,state.runtime_result,config.lease.payload},5u);
     retail_display_line(state.completed?"PASSIVE PAIR VERIFIED - PHOTO THEN POWER OFF":"PASSIVE PROBE REFUSED - PHOTO THEN POWER OFF");
     retail_display_line("STORAGE WAS READ ONLY");
     for(;;) __asm__ volatile("nop");
@@ -122,12 +122,28 @@ static unsigned unit_index(uint32_t destination) {
     switch(destination&63u) {case 32:return 0u;case 1:return 1u;case 2:return 2u;
         case 4:return 3u;case 8:return 4u;case 16:return 5u;default:return 6u;}
 }
+static bool boundary_read(void *context,uint32_t address,unsigned width,uint32_t *value) {
+    bool ok=read_value(context,address,width,value);
+    /* A runtime state failure can precede chain parsing. Retain its last
+     * sampled word rather than an all-zero diagnostic. This validator does
+     * not expose the expected value: UINT32_MAX explicitly marks it unknown. */
+    state.fault_at=address;state.fault_value=ok?*value:UINT32_MAX;
+    state.fault_expect=UINT32_MAX;return ok;
+}
 static bool boundary(const struct kui_vmu_native_passive_frame *f,unsigned phase,unsigned bytes,
     struct kui_vmu_native_runtime_snapshot *snapshot) {
     struct kui_vmu_native_runtime_boundary b={phase,current_sr(),f->sr,f->pr,state.source,state.source,bytes};
-    int r=kui_vmu_native_runtime_check(&config.driver,&config.runtime,&b,read_value,NULL,snapshot);
+    int r=kui_vmu_native_runtime_check(&config.driver,&config.runtime,&b,boundary_read,NULL,snapshot);
     state.runtime_result=(uint32_t)r;
     return r==KUI_VMU_NATIVE_RUNTIME_VALID && snapshot->tx_base==config.tx_base;
+}
+static bool bind_runtime(struct kui_vmu_native_runtime_config *runtime) {
+    struct kui_vmu_native_layout_diagnostic diagnostic;
+    if(kui_vmu_native_layout_bind_checked(&config.layout,&config.driver,read_value,NULL,
+       runtime,&diagnostic)) return true;
+    state.fault_at=diagnostic.address;state.fault_value=diagnostic.value;
+    state.fault_expect=diagnostic.expected;state.runtime_result=0x10000u|diagnostic.code;
+    return false;
 }
 /* Parse the exact software-trigger chain, retaining all descriptor and payload
  * words. No RX address is followed until its exact slot has been established. */
@@ -172,7 +188,7 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
     if(!ram(f->r14,4u,4u) || physical(f->r14)!=physical(config.driver.manager_cell) || f->r12!=1u) fail(2u);
     if(!lease_valid() || kui_vmu_native_passive_resume!=config.driver.resume ||
        kui_vmu_native_passive_consumer!=config.driver.consumer) fail(3u);
-    if(!kui_vmu_native_layout_bind(&config.layout,&config.driver,read_value,NULL,&config.runtime)) fail(14u);
+    if(!bind_runtime(&config.runtime)) fail(14u);
     uint32_t source;
     if(!read_value(NULL,UINT32_C(0xa05f6c04),4u,&source) || source!=physical(source) ||
        !ram(source,KUI_VMU_NATIVE_TX_BANK_BYTES,32u)) fail(4u);
@@ -188,7 +204,7 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
     state.complete_sr=f->sr;
     if(!lease_valid()) fail(9u);
     struct kui_vmu_native_runtime_config rebound=config.runtime;
-    if(!kui_vmu_native_layout_bind(&config.layout,&config.driver,read_value,NULL,&rebound) ||
+    if(!bind_runtime(&rebound) ||
        memcmp(&rebound,&config.runtime,sizeof(rebound))) fail(15u);
     struct kui_vmu_native_runtime_snapshot snapshot;
     if(!boundary(f,1u,state.bytes,&snapshot)) fail(10u);

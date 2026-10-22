@@ -124,11 +124,18 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
        (manifest.flags&(KUI_RETAIL_IMAGE_CD|KUI_RETAIL_IMAGE_SCRAMBLED)) ||
        !kui_retail_observe_native_ip((const uint8_t *)(uintptr_t)KUI_RETAIL_IP_ADDRESS))
         native_report(1u,manifest.storage_transport);
-#if KUI_VMU_NATIVE_WORKER_PROBE || KUI_VMU_NATIVE_PASSIVE_PROBE
+#if KUI_VMU_NATIVE_PASSIVE_PROBE
+    retail_display_line("RESOLVING MAPLE DRIVER AND BUFFER LAYOUT");
+    if(!kui_vmu_native_discover_layout((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_driver,&passive_layout)) native_report(2u,10u);
+    int driver=KUI_VMU_NATIVE_RESOLVED;
+#else
+#if KUI_VMU_NATIVE_WORKER_PROBE
     retail_display_line("SCANNING MAPLE DRIVER AND IMAGE HASH");
 #endif
     int driver=kui_vmu_native_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
         exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_driver);
+#endif
 #if KUI_VMU_NATIVE_WORKER_PROBE || KUI_VMU_NATIVE_PASSIVE_PROBE
     retail_display_line("SCANNING ALLOCATOR FAMILY");
 #endif
@@ -140,8 +147,8 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
        exec_bytes,&native_heap,&native_call) || !allocation_safe(native_call.entry_begin,native_call.entry_bytes))
         native_report(2u,native_heap.initializer_slot);
 #if KUI_VMU_NATIVE_PASSIVE_PROBE
-    /* Resolve provenance while the startup executable is still immutable. */
-    retail_display_line("CHECKING NATIVE INITIALIZER AND PATCH WINDOW");
+    /* Layout already shares the driver's one fresh immutable-image pass. */
+    retail_display_line("CHECKING DISPLACED INSTRUCTION WINDOW");
     native_passive_prepare();
 #endif
     code_sha(native_heap_code_sha);
