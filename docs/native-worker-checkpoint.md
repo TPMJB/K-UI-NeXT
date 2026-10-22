@@ -18,7 +18,9 @@ exactly the same 86,048 bytes as the saved tested module:
 The current git history is a synthetic recovery history; it does not recreate
 the original commit identities. Do not merge this root commit over main. Port
 the new files and focused changes onto the real feature branch when available.
-The test ZIP includes the complete current source to preserve this checkpoint.
+The test ZIP includes a complete, cloneable git bundle preserving the current
+source and its exact synthetic recovery commits. Clone that bundle to continue
+without reconstructing source or changing these new commit identities.
 
 ## New execution proof
 

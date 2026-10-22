@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 """Audit/package the terminal-only relocated native VMU worker proof."""
-import argparse,gzip,hashlib,json,subprocess,zipfile
+import argparse,hashlib,json,subprocess,zipfile
 from pathlib import Path
 from check_vmu_native_heap_probe import inspect
 from check_vmu_native_worker_gateway import check
@@ -25,8 +25,12 @@ def package(build):
            'README-FIRST.md':(root/'docs/vmu-native-worker-test.md').read_bytes(),
            'probe-report.json':(json.dumps(report,indent=2)+'\n').encode(),
            'LICENSE':(root/'LICENSE').read_bytes(),'THIRD_PARTY.md':(root/'THIRD_PARTY.md').read_bytes()}
-    tar=subprocess.check_output(['git','archive','--format=tar',f'--prefix=K-UI-native-worker-{revision}/','HEAD'],cwd=root)
-    files[f'source/K-UI-native-worker-{revision}.tar.gz']=gzip.compress(tar,compresslevel=6,mtime=0)
+    # Preserve exact commit identities and a cloneable branch as well as source.
+    branch=subprocess.check_output(['git','branch','--show-current'],cwd=root,text=True).strip()
+    checkpoint=(build/'native-worker-source.bundle').resolve()
+    subprocess.run(['git','bundle','create',str(checkpoint),'HEAD',branch],cwd=root,check=True)
+    subprocess.run(['git','bundle','verify',str(checkpoint)],cwd=root,check=True,stdout=subprocess.DEVNULL)
+    files[f'source/K-UI-native-worker-{revision}.bundle']=checkpoint.read_bytes()
     files['SHA256SUMS.txt']=''.join(hashlib.sha256(data).hexdigest()+'  '+name+'\n' for name,data in sorted(files.items())).encode()
     output=build/'K-UI-Native-Worker-Test.zip'
     with zipfile.ZipFile(output,'w',compression=zipfile.ZIP_DEFLATED) as z:
