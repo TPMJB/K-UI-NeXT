@@ -72,8 +72,55 @@ static void observe_display_restore(const struct retail_display_state *state) {
 }
 #endif
 
+#if KUI_VMU_NATIVE_PASSIVE_PROBE
+/* NATIVE_RESIDENT_GUARDS_BEGIN
+ * Pure admission predicates are also compiled by the host adversarial test.
+ * The low control retains physical payload addresses; all worker entries and
+ * its end use P2. No temporary-stage pointer is a valid runtime dependency. */
+static bool native_resident_lease(const volatile struct kui_vmu_observe_boot_control *c,
+    uint32_t *begin,uint32_t *end) {
+    uint32_t lease=c->lease;
+    if((lease&31u) || lease<UINT32_C(0x0c010020) ||
+       lease>UINT32_C(0x0cfd0000)) return false;
+    *begin=lease-32u;*end=lease+UINT32_C(0x30000);return true;
+}
+static bool native_resident_destination(const volatile struct kui_vmu_observe_boot_control *c,
+    uint32_t address,uint32_t bytes) {
+    uint32_t area=address&UINT32_C(0xe0000000),physical=address&UINT32_C(0x1fffffff);
+    if((area!=0u && area!=UINT32_C(0x80000000) && area!=UINT32_C(0xa0000000)) ||
+       !bytes || physical<UINT32_C(0x0c000000) || physical>=UINT32_C(0x0d000000) ||
+       bytes>UINT32_C(0x0d000000)-physical) return false;
+    uint32_t status=c->status;
+    /* Bootstrap reads precede the allocator hook. No lease has been
+     * published yet, so ordinary resident mapping supplies their guards. */
+    if(status<=KUI_VMU_OBS_BOOT_INITIALIZING) return !c->lease;
+    uint32_t begin,end;
+    if(status!=KUI_VMU_OBS_BOOT_INSTALLED || c->installer || c->stage_stack ||
+       !native_resident_lease(c,&begin,&end) ||
+       c->worker_end!=(c->lease|UINT32_C(0xa0000000))+UINT32_C(0x10000)) return false;
+    return physical>=end || physical+bytes<=begin;
+}
+static bool native_resident_terminal(const volatile struct kui_vmu_observe_boot_control *c) {
+    uint32_t begin,end,terminal=c->terminal;
+    if(c->status!=KUI_VMU_OBS_BOOT_INSTALLED || c->installer || c->stage_stack ||
+       !native_resident_lease(c,&begin,&end)) return false;
+    (void)begin;(void)end;
+    uint32_t worker=c->lease|UINT32_C(0xa0000000);
+    return c->worker_end==worker+UINT32_C(0x10000) && !(terminal&1u) &&
+        terminal>=worker+64u && terminal<c->worker_end;
+}
+/* NATIVE_RESIDENT_GUARDS_END */
+#endif
+
 static uint8_t *observe_map(void *context,uint32_t address,uint32_t bytes,int writing) {
+#if KUI_VMU_NATIVE_PASSIVE_PROBE
+    const volatile struct kui_vmu_observe_boot_control *c=
+        (const volatile struct kui_vmu_observe_boot_control *)
+        ((uintptr_t)&kui_vmu_observe_boot_control+UINT32_C(0x20000000));
+    if(!native_resident_destination(c,address,bytes)) return NULL;
+#else
     if(!kui_vmu_observe_destination(address,bytes)) return NULL;
+#endif
     return map_guest(context,address,bytes,writing);
 }
 
@@ -94,11 +141,19 @@ void kui_vmu_observe_low_failure(void) {
     /* A validated worker entry is published only after its initialization
      * succeeded. A late heap reset stops without destroying the live lease. */
     uint32_t terminal=c->terminal;
+#if KUI_VMU_NATIVE_PASSIVE_PROBE
+    if(native_resident_terminal(c))
+#else
     if(c->status==KUI_VMU_OBS_BOOT_INSTALLED && !(terminal&1u) &&
        terminal>=KUI_VMU_OBS_LEASE_BEGIN && terminal<KUI_VMU_OBS_WORKER_END)
+#endif
         ((void (*)(void))(uintptr_t)terminal)();
     retail_display_restore(&display);
+#if KUI_VMU_NATIVE_PASSIVE_PROBE
+    retail_display_line("NATIVE MAPLE OBSERVER STOPPED");
+#else
     retail_display_line(KUI_VMU_OBS_TITLE " MAPLE OBSERVER STOPPED");
+#endif
 #if KUI_VMU_READONLY_PROOF >= 2
     /* Terminal state is immutable under the masked failure entry. These four
      * P2 words are already adjacent; avoid a diagnostic-only stack copy. */

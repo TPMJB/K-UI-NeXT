@@ -39,7 +39,11 @@ SYNC before protocol entry. The reference blank image CRC is `3d826179`.
 The stage checks its return, unchanged initialized-image SHA, all stack guard
 words and continuing allocator exclusion, then stops at phase `0000000a`.
 It never installs submission/completion hooks, submits Maple DMA, accesses SD
-from the worker, or resumes the game. Hardware execution is still pending.
+from the worker, or resumes the game. Hardware execution passed on Power Stone
+2 on 22 October 2026, build `e08ad48e2c8a`: phase `0000000a`, allocated payload
+`0c38a880`, relocated entry `ac38a914`, private SP `ac39a860`, 259 requests,
+256 reads and blank image CRC `3d826179`. The photographed final message was
+`WORKER VERIFIED - PHOTO THEN POWER OFF`.
 
 ## Verification
 
@@ -84,11 +88,66 @@ FatFs integration tests and cache-expanded discovery tests are not recreated in
 this recovery snapshot. The include remains dormant; broad VMU routing is not
 enabled. Reintegrate and retest those pieces when continuing the generic loader.
 
-The next runtime step is a relocated passive submission/completion window,
-using Power Stone 2's variable initializer layout rather than Silver's uniform
-one. Admit exact RX pointer arrays, gun/timer cells, original R14 manager-cell
-identity and R12 == 1, then check lease/header and DMA/IRQ state at both
-boundaries. Keep reinitialization and teardown intercepted before memory can be
-reclaimed. Copy every retained configuration object into the lease; no pointer
-to the temporary stage may survive the final installer. Only then add synthetic
-read-only VMU replies, followed by persistence using the existing durable core.
+## One-pair passive continuation
+
+`Makefile.vmu-native-passive` builds the next hardware test. Its console result
+is pending. It copies the driver, allocator lease, immutable initializer layout,
+display registers and runtime configuration into the relocated worker. All
+retained addresses are game/lease/low-resident addresses. The high-stage
+installer and stack pointers are cleared before publishing installed state.
+
+The new layout adapter decodes the reviewed variable initializer and its actual
+argument/index provenance, plus gun and TMU1/TMU2 callback cells. For the PS2
+sample this yields TX `ac20ea60`, input pointer array `ac315180`, twelve inputs
+and twenty-four nonzero slots across two banks. Buffer pointers originate in
+BSS: the worker binds them at first submission, reproduces alignment/P2/bank
+assignment, checks all 48 manager entries and rereads the array for stability.
+Completion rebinds and compares that layout again. There is no production
+title hash or per-game address table. This adapter currently admits only the
+reviewed twelve-input variable initializer family.
+
+The submission gateway captures original R14/R12, checks manager-cell identity
+and R12==1, preserves integer/SR/PR/MAC/GBR state, and replays the six displaced
+instructions including exactly one original MDST store. Before allowing it,
+the worker checks the stack guards, lease/header, idle software-trigger DMA,
+IRQ context and full bounded TX chain, with exact RX-slot membership and
+lease exclusion. Completion checks exact original PR, phase-1 SDK state,
+continuing ownership and every unchanged TX word before a terminal report.
+Success is phase `0000000b` / `PASSIVE PAIR VERIFIED`. No virtual replies or
+storage writes are enabled; the original consumer is not called.
+
+The isolated resident route now uses ordinary GD destination mapping plus
+dynamic exclusion of the complete 192 KiB lease and its 32-byte allocator
+header. The heap initializer remains intercepted: repeat initialization stops
+before reclamation. Dynamic terminal entry is bounded to the first 64 KiB.
+The immutable patch-window scan rejects direct branches or aligned RAM
+literals into the displaced instructions' interior. It cannot prove arbitrary
+indirect flow. Power Stone 2 passes that conservative scan.
+
+Validation: 602 ASan/UBSan passive protocol/boundary checks, 250 layout checks
+including 21 actual-startup mutations and duplicate timer ambiguity, 206 patch
+window checks, and 80,175 resident destination/terminal checks. The actual
+linked passive gateways pass 5,760 register-state scenarios at three relocated
+addresses plus four corrupted-gateway cases; the stage gateway retains its
+1,288 scenarios. Exact ELF/flat image/export/relocation/stage/module binding
+audits pass, including bootstrap and artifact mutations. Relocation extraction
+now correctly scopes duplicate local C symbols by index while refusing global
+name conflicts; its nine extractor regressions pass.
+
+Build, test and audit (supply the unpacked PS2 startup only for real-image
+mutation tests; copyrighted game binaries are not included in source):
+
+```sh
+export PATH="$PWD/.deps/sh-elf/bin:$PATH"
+make -f Makefile.vmu-native-passive BUILD=build/native-passive-release -j4 all
+make -f Makefile.vmu-native-passive BUILD=build/native-passive-release passive-host-tests STARTUP=/path/to/1ST_READ.BIN
+python3 tools/check_vmu_native_passive.py build/native-passive-release --self-test
+python3 tools/package_vmu_native_passive.py build/native-passive-release
+```
+
+After a successful console pair, add synthetic read-only VMU replies, followed
+by persistence using the existing durable core. Before allowing sustained
+gameplay, prove generic teardown/exit provenance and all lifetime paths, then
+restore frontend/cache integration and test more initializer families. CDDA
+coexistence and SCIF VMU backing remain outstanding. Keep the previously proven
+Toy, Silver and Armada paths unchanged; do not remove their admission gates.

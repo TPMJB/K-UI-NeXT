@@ -75,6 +75,8 @@ static void native_report(uint32_t phase,uint32_t detail) {
 }
 #if KUI_VMU_NATIVE_WORKER_PROBE
 #include "vmu_native_worker_stage.inc"
+#elif KUI_VMU_NATIVE_PASSIVE_PROBE
+#include "vmu_native_passive_stage.inc"
 #endif
 void kui_vmu_observe_stage_install(void) {
     volatile struct kui_vmu_observe_boot_control *c=control();uint8_t digest[32];
@@ -105,12 +107,14 @@ void kui_vmu_observe_stage_install(void) {
     c->status=KUI_VMU_OBS_BOOT_LEASED;
 #if KUI_VMU_NATIVE_WORKER_PROBE
     native_worker_run(&lease);
+#elif KUI_VMU_NATIVE_PASSIVE_PROBE
+    native_passive_run(&lease);
 #else
     native_report(7u,lease.lease_bytes);
 #endif
 }
 void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
-#if KUI_VMU_NATIVE_WORKER_PROBE
+#if KUI_VMU_NATIVE_WORKER_PROBE || KUI_VMU_NATIVE_PASSIVE_PROBE
     retail_display_restore(&display);
     retail_display_line("BOOTSTRAP 2 RETURNED");
     retail_display_line("VERIFYING EXECUTABLE AND RESIDENT");
@@ -120,12 +124,12 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
        (manifest.flags&(KUI_RETAIL_IMAGE_CD|KUI_RETAIL_IMAGE_SCRAMBLED)) ||
        !kui_retail_observe_native_ip((const uint8_t *)(uintptr_t)KUI_RETAIL_IP_ADDRESS))
         native_report(1u,manifest.storage_transport);
-#if KUI_VMU_NATIVE_WORKER_PROBE
+#if KUI_VMU_NATIVE_WORKER_PROBE || KUI_VMU_NATIVE_PASSIVE_PROBE
     retail_display_line("SCANNING MAPLE DRIVER AND IMAGE HASH");
 #endif
     int driver=kui_vmu_native_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
         exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_driver);
-#if KUI_VMU_NATIVE_WORKER_PROBE
+#if KUI_VMU_NATIVE_WORKER_PROBE || KUI_VMU_NATIVE_PASSIVE_PROBE
     retail_display_line("SCANNING ALLOCATOR FAMILY");
 #endif
     int heap=kui_vmu_native_heap_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
@@ -135,6 +139,11 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     if(!kui_vmu_native_heap_call_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
        exec_bytes,&native_heap,&native_call) || !allocation_safe(native_call.entry_begin,native_call.entry_bytes))
         native_report(2u,native_heap.initializer_slot);
+#if KUI_VMU_NATIVE_PASSIVE_PROBE
+    /* Resolve provenance while the startup executable is still immutable. */
+    retail_display_line("CHECKING NATIVE INITIALIZER AND PATCH WINDOW");
+    native_passive_prepare();
+#endif
     code_sha(native_heap_code_sha);
     volatile struct kui_vmu_observe_boot_control *c=control();
     for(unsigned i=0;i<sizeof(*c)/4u;i++)

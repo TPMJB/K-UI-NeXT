@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# One physical Maple submission and completion, then a terminal report.
+BUILD ?= build/vmu-native-passive
+override TEST_ZIP := K-UI-Native-Passive-Test.zip
+override TEST_GUIDE := docs/vmu-native-passive-test.md
+VMU_PACKAGE_TOOL := tools/package_vmu_native_passive.py
+VMU_PACKAGE_ARGS :=
+include Makefile.vmu-native-heap-probe
+override STAGE_SRC += src/core/vmu_native_relocate.c src/core/data.c src/core/vmu_native_layout.c src/core/vmu_native_patch.c
+STAGE_OBJ += $(BUILD)/native_worker_call.o
+$(BUILD)/stage.elf: $(STAGE_OBJ)
+$(STAGE_OBJ): $(BUILD)/readonly-config
+FLAGS += -DKUI_VMU_NATIVE_PASSIVE_PROBE=1 \
+ -DKUI_NATIVE_WORKER_BIN='"$(BUILD)/native-worker.bin"' \
+ -DKUI_NATIVE_WORKER_RELOC='"$(BUILD)/native-worker.reloc"'
+NATIVE_FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
+ -ffreestanding -fno-builtin -fno-stack-protector -fno-pic \
+ -ffunction-sections -fdata-sections -fno-jump-tables -fstack-usage \
+ -DKUI_RETAIL_FAST_IO=1 -DKUI_BUILD_ID='"$(BUILD_ID)"' -Iinclude -Isrc/loader
+NATIVE_SRC = src/loader/vmu_native_passive.c src/core/vmu_native_heap.c \
+ src/core/vmu_native_runtime.c src/core/vmu_native_layout.c src/core/hash.c \
+ src/core/data.c src/loader/retail_display.c src/loader/minic.c
+NATIVE_OBJ = $(patsubst %.c,$(BUILD)/native/%.o,$(NATIVE_SRC)) \
+ $(BUILD)/native_passive_exports.o $(BUILD)/native_passive_hooks.o
+$(BUILD)/native/%.o: %.c
+	@mkdir -p $(@D)
+	$(CC) $(NATIVE_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/native_passive_exports.o: src/loader/vmu_native_passive_exports.S
+	@mkdir -p $(@D)
+	$(CC) $(NATIVE_FLAGS) -c $< -o $@
+$(BUILD)/native_passive_hooks.o: src/loader/vmu_native_passive_hooks.S
+	@mkdir -p $(@D)
+	$(CC) $(NATIVE_FLAGS) -c $< -o $@
+$(BUILD)/native_worker_call.o: src/loader/vmu_native_worker_call.S
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -c $< -o $@
+$(BUILD)/native-worker.elf: $(NATIVE_OBJ) src/loader/vmu_native_worker.ld
+	$(CC) $(LINK) -Wl,--emit-relocs -Wl,-e,_kui_vmu_native_passive_arm \
+	 -Tsrc/loader/vmu_native_worker.ld -Wl,-Map,$(BUILD)/native-worker.map -o $@ $(NATIVE_OBJ) -lgcc
+$(BUILD)/native-worker.bin: $(BUILD)/native-worker.elf
+	$(OBJCOPY) -O binary $< $@
+$(BUILD)/native-worker.reloc: $(BUILD)/native-worker.elf $(BUILD)/native-worker.bin tools/vmu_native_relocations.py
+	python3 tools/vmu_native_relocations.py $< $(BUILD)/native-worker.bin $@ --link-base 0x8c100000 --span-bytes 0x10000
+$(BUILD)/stage/src/loader/vmu_native_heap_probe_stage.o: $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc
+-include $(NATIVE_OBJ:.o=.d)
+
+PASSIVE_HOST_FLAGS = -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+ -ffunction-sections -fdata-sections -fsanitize=address,undefined \
+ -fno-omit-frame-pointer -fno-pie -no-pie -Iinclude -Isrc/loader
+PASSIVE_HOST_COMMON = src/core/vmu_native_layout.c src/core/vmu_native_discovery.c src/core/hash.c src/core/data.c
+.PHONY: passive-host-tests
+passive-host-tests: $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_passive.c src/core/vmu_native_heap.c \
+	 src/core/vmu_native_runtime.c $(PASSIVE_HOST_COMMON) -Wl,--gc-sections -o $(BUILD)/test-passive
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-passive
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_layout.c $(PASSIVE_HOST_COMMON) -o $(BUILD)/test-layout
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-layout $(if $(STARTUP),'$(STARTUP)',)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_patch.c src/core/vmu_native_patch.c -o $(BUILD)/test-patch
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-patch $(if $(STARTUP),'$(STARTUP)',)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_worker_relocate.c src/core/vmu_native_relocate.c \
+	 src/core/hash.c src/core/data.c -o $(BUILD)/test-real-relocation
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-real-relocation $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc
+	python3 tests/test_vmu_native_resident.py
+	python3 tools/vmu_native_relocations.py --self-test

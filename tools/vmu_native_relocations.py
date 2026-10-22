@@ -68,7 +68,12 @@ def generate(data, binary, link_base=0x8CFD0000, span_bytes=None):
                 raise ValueError("malformed symbol name")
             name = bytes(names[symbol[0]:].split(b"\0", 1)[0])
             table.append(symbol)
-            if name:
+            # Local symbols are scoped to their translation unit. Different
+            # C files can legitimately define their own static ram()/read()
+            # helpers. Relocations still bind by table INDEX below; only
+            # externally visible names share a namespace. The end symbol is
+            # retained for the older explicit-span inference fixture too.
+            if name and (symbol[3] >> 4 or name == b"__vmu_observe_worker_end"):
                 if name in symbol_values and symbol_values[name] != symbol[1]:
                     raise ValueError("conflicting symbol values")
                 symbol_values[name] = symbol[1]
@@ -201,6 +206,16 @@ def self_test():
     changed = bytearray(data);struct.pack_into("<I", changed, chunks[3][0] + 4, 0);refused(changed, binary)
     changed = bytearray(binary);changed[-1] ^= 1;refused(data, changed)
     changed = bytearray(data);struct.pack_into("<I", changed, offset + 5 * SH.size + 4, 1);refused(changed, binary)
+    # Two same-named local functions at distinct addresses are valid; both
+    # relocation indices must remain independently bound to their symbols.
+    changed = bytearray(data)
+    struct.pack_into("<I", changed, chunks[2][0] + 2 * SYM.size, names.index(b"text"))
+    assert generate(changed, binary) == wire
+    checks += 1
+    # The equivalent pair of global definitions remains a conflict.
+    changed[chunks[2][0] + SYM.size + 12] = 0x10
+    changed[chunks[2][0] + 2 * SYM.size + 12] = 0x10
+    refused(changed, binary)
     print(f"Native relocation ELF extraction: {checks} checks passed")
 
 
