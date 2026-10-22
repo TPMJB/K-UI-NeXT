@@ -14,5 +14,9 @@ C(kui_vmu_native_worker_exports):
     .long __vmu_native_worker_stack_bottom,__vmu_native_worker_stack_top
     .long __vmu_native_worker_end
     .long C(kui_vmu_native_passive_resume),C(kui_vmu_native_passive_consumer)
+#if KUI_VMU_NATIVE_READONLY_PROBE
+    .long C(kui_vmu_native_readonly_release_hook),C(kui_vmu_native_readonly_release_resume)
+#else
     .long 0,0
+#endif
     .size C(kui_vmu_native_worker_exports),.-C(kui_vmu_native_worker_exports)

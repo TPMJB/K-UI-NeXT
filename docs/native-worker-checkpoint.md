@@ -90,8 +90,8 @@ enabled. Reintegrate and retest those pieces when continuing the generic loader.
 
 ## One-pair passive continuation
 
-`Makefile.vmu-native-passive` builds the next hardware test. Its console result
-is pending. It copies the driver, allocator lease, immutable initializer layout,
+`Makefile.vmu-native-passive` builds the one-pair hardware test. It passed on
+Power Stone 2 with build `abd30e1d97cc` (details below). It copies the driver, allocator lease, immutable initializer layout,
 display registers and runtime configuration into the relocated worker. All
 retained addresses are game/lease/low-resident addresses. The high-stage
 installer and stack pointers are cleared before publishing installed state.
@@ -171,9 +171,74 @@ python3 tools/check_vmu_native_passive.py build/native-passive-release --self-te
 python3 tools/package_vmu_native_passive.py build/native-passive-release
 ```
 
-After a successful console pair, add synthetic read-only VMU replies, followed
-by persistence using the existing durable core. Before allowing sustained
-gameplay, prove generic teardown/exit provenance and all lifetime paths, then
+After the read-only console test below, add persistence using the existing
+durable core. Before allowing sustained gameplay, prove generic teardown/exit provenance and all lifetime paths, then
 restore frontend/cache integration and test more initializer families. CDDA
 coexistence and SCIF VMU backing remain outstanding. Keep the previously proven
 Toy, Silver and Armada paths unchanged; do not remove their admission gates.
+
+## Hardware passive result and read-only continuation
+
+The owner supplied the successful `abd30e1d97cc` hardware screen: phase
+`0000000b`, detail zero, one submitted/completed pair, 24 RX slots, four
+descriptors, no NOP descriptors. Source was `0c315180`, 48 bytes, fingerprint
+`88230d29`; inherited submit/complete SR were `60000161`/`600001f1`.
+First RX `0c30f000` contained `1c200005`; the last reply was `ffffffff`.
+The runtime check returned zero and the lease remained `0c38a880`.
+This proves one physical pair, not completion return or virtual responses.
+
+`Makefile.vmu-native-readonly` now builds a separate bounded blank-A1 test.
+The worker retains the original physical descriptor chain and admits only
+the existing read-only overlay protocol. Each completion rechecks ownership,
+layout, bank, TX snapshot, original PR/context and the dynamic consumer cell.
+The overlay stages every reply, requires a physical main-A controller with
+A1 absent and target timeout, preserves unrelated replies, publishes payload
+before header and advertises A1 last. The returning gateway preserves the
+original consumer's register/SR/PR/MAC/GBR context, including inherited SP.
+Success stops at phase `0000000d` after INFO or ALLINFO, media and one block
+read. Writes, sync and unsupported A1 requests stop before physical DMA;
+there are no persistent storage operations in the relocated worker.
+The window is limited to 3,600 matched pairs. This build has not yet run on
+hardware and does not enable ordinary native-game saving.
+
+The initializer pointer-slot guard remains installed. After the first real
+initializer and our allocation return, its entry also becomes a terminal
+guard. A guarded release entry validates the live lease, candidate chunk and
+free-list exclusion before native free; unrelated valid frees remain allowed.
+The release gateway keeps IMASK15 continuously through validation and the
+original mask-setting prologue, while retaining the inherited mask in R7 for
+the original epilogue. Its exact ten-instruction replay resumes at release+20;
+the signed word literal is `ffffff0f`. Admission checks both original entry
+windows again before patching and scans submit, initializer and the full
+20-byte release replay window in one immutable image pass.
+
+This is still bounded lifetime evidence. The release predicate does not prove
+that every arbitrary aligned pointer was actually allocated. Power Stone 2's
+observed TX/RX buffers are static and below its managed arena. Broader games
+with heap-allocated SDK buffers need their release exclusion too. Generic
+BIOS exit can use both `8c008300` and the firmware vector, with cleanup before
+the latter: the ordinary top-level return guard does not cover every such
+path. Generic teardown must be established before long gameplay/persistence.
+
+Host validation includes 1,966 read-only worker/protocol/overlay checks,
+18,648 release-admission checks, 1,143 patch-window checks with the actual
+startup, and the existing passive/layout/resident/relocation regressions.
+The actual read-only gateways are modeled at three relocation destinations
+and all interrupt masks: 7,680 cases, including 1,920 release cases compared
+with the independent original twenty-byte prologue. Mutation cases include a
+transient interrupt gap that would preserve final registers. The artifact
+audit binds the ELF, flat worker, exact relocation table, stage embeddings and
+final module, and rejects storage/persistence links in the worker.
+
+```sh
+export PATH="$PWD/.deps/sh-elf/bin:$PATH"
+make -f Makefile.vmu-native-readonly BUILD=build/native-readonly-release -j4 all
+make -f Makefile.vmu-native-readonly BUILD=build/native-readonly-release readonly-host-tests
+make -f Makefile.vmu-native-readonly BUILD=build/native-readonly-release passive-host-tests STARTUP=/path/to/1ST_READ.BIN
+python3 tools/check_vmu_native_readonly.py build/native-readonly-release --self-test
+python3 tools/package_vmu_native_readonly.py build/native-readonly-release
+```
+
+Commit first and build into a fresh directory for the packaged source/build
+identity check. Install by copying the supplied KUI folder; no installer or
+backup/restore receipt is involved. Use the included README for hardware steps.

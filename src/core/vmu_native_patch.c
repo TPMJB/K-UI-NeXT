@@ -6,14 +6,19 @@ static bool ram(uint32_t a,uint32_t n) {
     return (area==0u || area==0x80000000u || area==0xa0000000u) && n &&
         p>=0x0c010000u && p<0x0d000000u && n<=0x0d000000u-p;
 }
-bool kui_vmu_native_patch_no_interior(const void *image,size_t bytes,uint32_t load,
-    uint32_t begin,uint32_t span) {
+bool kui_vmu_native_patch_no_interiors(const void *image,size_t bytes,uint32_t load,
+    const struct kui_vmu_native_patch_window *windows,size_t count) {
     if(!image || bytes>0xc00000u || bytes<2u ||
        bytes>UINTPTR_MAX-(uintptr_t)image || !ram(load,(uint32_t)bytes) ||
-       !ram(begin,span) || ((load|begin|span)&1u) || span<2u ||
-       physical(begin)<physical(load) || physical(begin)-physical(load)>bytes ||
-       span>bytes-(physical(begin)-physical(load))) return false;
-    uint32_t first=physical(begin),end=first+span;
+       !windows || !count || count>8u || (load&1u)) return false;
+    for(size_t i=0;i<count;i++) {
+        uint32_t begin=windows[i].begin,span=windows[i].bytes;
+        if(!ram(begin,span) || ((begin|span)&1u) || span<2u ||
+           physical(begin)<physical(load) || physical(begin)-physical(load)>bytes ||
+           span>bytes-(physical(begin)-physical(load))) return false;
+        for(size_t j=0;j<i;j++) if(physical(begin)<physical(windows[j].begin)+windows[j].bytes &&
+           physical(windows[j].begin)<physical(begin)+span) return false;
+    }
     const uint8_t *data=image;
     for(uint32_t at=0;at+2u<=bytes;at+=2u) {
         uint32_t op=(uint32_t)data[at]|(uint32_t)data[at+1u]<<8;
@@ -27,12 +32,19 @@ bool kui_vmu_native_patch_no_interior(const void *image,size_t bytes,uint32_t lo
             branch=true;
         }
         uint32_t target=physical(load+at+4u+(uint32_t)(displacement*2));
-        if(branch && target>first && target<end) return false;
+        for(size_t i=0;branch && i<count;i++) if(target>physical(windows[i].begin) &&
+           target<physical(windows[i].begin)+windows[i].bytes) return false;
         if(!((load+at)&3u) && at+4u<=bytes) {
             uint32_t pointer=op|(uint32_t)data[at+2u]<<16|(uint32_t)data[at+3u]<<24;
             target=physical(pointer);
-            if(ram(pointer,1u) && target>first && target<end) return false;
+            for(size_t i=0;ram(pointer,1u) && i<count;i++) if(target>physical(windows[i].begin) &&
+               target<physical(windows[i].begin)+windows[i].bytes) return false;
         }
     }
     return true;
+}
+bool kui_vmu_native_patch_no_interior(const void *image,size_t bytes,uint32_t load,
+    uint32_t begin,uint32_t span) {
+    const struct kui_vmu_native_patch_window window={begin,span};
+    return kui_vmu_native_patch_no_interiors(image,bytes,load,&window,1u);
 }

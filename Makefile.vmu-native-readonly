@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Automatically placed A1 blank card: read-only, bounded native SDK window.
+BUILD ?= build/vmu-native-readonly
+include Makefile.vmu-native-passive
+override TEST_ZIP := K-UI-Native-ReadOnly-Test.zip
+override TEST_GUIDE := docs/vmu-native-readonly-test.md
+VMU_PACKAGE_TOOL := tools/package_vmu_native_readonly.py
+VMU_PACKAGE_ARGS :=
+FLAGS += -DKUI_VMU_NATIVE_READONLY_PROBE=1
+NATIVE_FLAGS += -DKUI_VMU_NATIVE_READONLY_PROBE=1
+NATIVE_SRC += src/core/vmu_readonly.c src/core/vmu_emulation.c src/core/vmu_image.c \
+ src/loader/vmu_readonly_overlay.c src/core/vmu_native_lifetime.c
+$(BUILD)/native-worker.elf: $(NATIVE_OBJ)
+-include $(NATIVE_OBJ:.o=.d)
+
+.PHONY: readonly-host-tests
+readonly-host-tests: $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_readonly.c src/core/vmu_native_heap.c \
+	 src/core/vmu_native_runtime.c src/core/vmu_native_lifetime.c $(PASSIVE_HOST_COMMON) \
+	 src/core/vmu_readonly.c src/core/vmu_emulation.c src/core/vmu_image.c \
+	 src/loader/vmu_readonly_overlay.c -Wl,--gc-sections -o $(BUILD)/test-readonly
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-readonly
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_lifetime.c \
+	 src/core/vmu_native_heap.c src/core/vmu_native_lifetime.c -o $(BUILD)/test-lifetime
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-lifetime

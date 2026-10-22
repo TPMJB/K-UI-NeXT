@@ -9,7 +9,12 @@
 struct kui_vmu_native_passive_exports {
     uint32_t magic,version,bytes,arm,submit_hook,complete_hook,terminal;
     uint32_t bss_begin,bss_end,stack_bottom,stack_top,memory_end;
-    uint32_t resume_cell,consumer_cell,reserved[2];
+    uint32_t resume_cell,consumer_cell;
+#if KUI_VMU_NATIVE_READONLY_PROBE
+    uint32_t release_hook,release_resume_cell;
+#else
+    uint32_t reserved[2];
+#endif
 };
 _Static_assert(sizeof(struct kui_vmu_native_passive_exports)==64u,"Passive worker exports ABI");
 struct kui_vmu_native_passive_config {

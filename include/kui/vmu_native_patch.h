@@ -9,4 +9,8 @@
  * It does not establish arbitrary indirect control flow. */
 bool kui_vmu_native_patch_no_interior(const void *,size_t,uint32_t load,
     uint32_t begin,uint32_t bytes);
+struct kui_vmu_native_patch_window {uint32_t begin,bytes;};
+/* One immutable-image pass for several disjoint entry windows. */
+bool kui_vmu_native_patch_no_interiors(const void *,size_t,uint32_t load,
+    const struct kui_vmu_native_patch_window *,size_t count);
 #endif
