@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/vmu-heap-test
+HOST_CC ?= cc
+HOST_FLAGS := -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+ -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie
+.DEFAULT_GOAL := test
+.PHONY: test native-object
+$(BUILD)/heap: tests/test_vmu_native_heap.c src/core/vmu_native_heap.c include/kui/vmu_native_heap.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) -Iinclude tests/test_vmu_native_heap.c -o $@
+test: $(BUILD)/heap
+	ASAN_OPTIONS=detect_leaks=0 $<
+native-object:
+	@mkdir -p $(BUILD)
+	sh-elf-gcc -std=c11 -Os -Wall -Wextra -Werror -m4-single -ml -ffreestanding \
+	 -fno-builtin -fstack-usage -Iinclude -c src/core/vmu_native_heap.c -o $(BUILD)/native-heap.o

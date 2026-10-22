@@ -129,6 +129,9 @@ WORKER_OBJ = $(patsubst %.c,$(BUILD)/worker/%.o,$(WORKER_SRC)) $(BUILD)/worker_a
 
 .PHONY: all package host-tests force-mode-config
 .DELETE_ON_ERROR:
+VMU_PACKAGE_TOOL ?= tools/package_vmu_maple_observe.py
+VMU_PACKAGE_ARGS ?= --maple-profile $(MAPLE_PROFILE)
+VMU_INSTALL_ROUTE_TEST ?= python3 tests/test_vmu_observer_install_route.py
 all: $(BUILD)/retail-maple-observe.kui
 package: $(BUILD)/$(TEST_ZIP)
 
@@ -218,12 +221,12 @@ $(BUILD)/retail-maple-observe.kui: $(BUILD)/entry.elf
 	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
 	python3 tools/runtime_package.py verify $@
 $(BUILD)/$(TEST_ZIP): $(BUILD)/retail-maple-observe.kui \
- $(BUILD)/worker.elf $(BUILD)/worker.bin tools/package_vmu_maple_observe.py \
+ $(BUILD)/worker.elf $(BUILD)/worker.bin $(VMU_PACKAGE_TOOL) \
  tools/check_vmu_maple_observe_hook.py tools/check_vmu_pio_write.py \
  $(TEST_GUIDE) include/kui/games_retail.h \
  tests/test_vmu_observer_install_route.py
-	python3 tools/package_vmu_maple_observe.py $(BUILD) --maple-profile $(MAPLE_PROFILE)
-	python3 tests/test_vmu_observer_install_route.py
+	python3 $(VMU_PACKAGE_TOOL) $(BUILD) $(VMU_PACKAGE_ARGS)
+	$(VMU_INSTALL_ROUTE_TEST)
 
 host-tests:
 	@mkdir -p $(BUILD)

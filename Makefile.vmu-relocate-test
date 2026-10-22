@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/vmu-relocate-test
+HOST_CC ?= cc
+HOST_FLAGS := -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+ -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie
+.DEFAULT_GOAL := test
+.PHONY: test native-object
+$(BUILD)/relocate: tests/test_vmu_native_relocate.c src/core/vmu_native_relocate.c \
+ include/kui/vmu_native_relocate.h src/core/hash.c src/core/data.c
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) -Iinclude tests/test_vmu_native_relocate.c src/core/vmu_native_relocate.c src/core/hash.c src/core/data.c -o $@
+test: $(BUILD)/relocate
+	ASAN_OPTIONS=detect_leaks=0 $<
+	python3 tools/vmu_native_relocations.py --self-test
+native-object:
+	@mkdir -p $(BUILD)
+	sh-elf-gcc -std=c11 -Os -Wall -Wextra -Werror -m4-single -ml -ffreestanding \
+	 -fno-builtin -fstack-usage -Iinclude -c src/core/vmu_native_relocate.c -o $(BUILD)/native-relocate.o

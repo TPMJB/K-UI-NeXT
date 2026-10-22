@@ -36,9 +36,35 @@ C(kui_vmu_observe_heap_hook):
     mov.l r1,@(KUI_VMU_OBS_BOOT_ORIGINAL_PR,r2)
     mov.l r9,@(KUI_VMU_OBS_BOOT_SAVED_R9,r2)
     mov.l r10,@(KUI_VMU_OBS_BOOT_SAVED_R10,r2)
+#if KUI_VMU_NATIVE_HEAP_PROBE
+    mov.l .Loriginal_init,r3
+    mov.l @(4,r3),r0
+    cmp/eq r4,r0
+    bf .Lrepeat
+    mov.l @(8,r3),r0
+    cmp/eq r5,r0
+    bf .Lrepeat
+    mov.l @(12,r3),r0
+    mov.l @(KUI_VMU_OBS_BOOT_ORIGINAL_PR,r2),r1
+    mov.l .Lphysical_mask,r3
+    and r3,r1
+    cmp/eq r1,r0
+    bf .Lrepeat
+    mov.l @(KUI_VMU_OBS_BOOT_ENTRY_SP,r2),r1
+    and r3,r1
+    mov.l .Lentry_stack_low,r0
+    cmp/hs r0,r1
+    bf .Lrepeat
+    mov.l .Lentry_stack_high,r0
+    cmp/hi r0,r1
+    bt .Lrepeat
+#endif
     /* Restore native SR/SP before the actual title heap initializer. */
     ldc.l @r15+,sr
     mov.l .Loriginal_init,r3
+#if KUI_VMU_NATIVE_HEAP_PROBE
+    mov.l @r3,r3
+#endif
     jsr @r3
     nop
     /* Original initializer preserves R9/R10. Capture its exact post-call
@@ -47,6 +73,10 @@ C(kui_vmu_observe_heap_hook):
     mov.l .Lmask,r10
     or r9,r10
     ldc r10,sr
+#if KUI_VMU_NATIVE_HEAP_PROBE
+    /* Keep linker relaxation from pushing before interrupt masking. */
+    nop
+#endif
     mov.l r9,@-r15
     sts.l mach,@-r15
     sts.l macl,@-r15
@@ -114,7 +144,14 @@ C(kui_vmu_observe_heap_hook):
     .align 2
 .Lcontrol: .long C(kui_vmu_observe_boot_control)+0x20000000
 .Lmask: .long 0x100000f0
+#if KUI_VMU_NATIVE_HEAP_PROBE
+.Loriginal_init: .long C(kui_vmu_native_heap_original)+0x20000000
+.Lphysical_mask: .long 0x1fffffff
+.Lentry_stack_low: .long 0x0c00c100
+.Lentry_stack_high: .long 0x0c00f400
+#else
 .Loriginal_init: .long KUI_VMU_OBS_HEAP_INIT
+#endif
 .Lreturn: .long C(kui_vmu_observe_return_hook)
     .size C(kui_vmu_observe_heap_hook),.-C(kui_vmu_observe_heap_hook)
 
@@ -175,3 +212,11 @@ C(kui_vmu_observe_boot_control):
     .space KUI_VMU_OBS_BOOT_BYTES
     .size C(kui_vmu_observe_boot_control),.-C(kui_vmu_observe_boot_control)
     .balign 32
+#if KUI_VMU_NATIVE_HEAP_PROBE
+    .global C(kui_vmu_native_heap_original)
+    .type C(kui_vmu_native_heap_original),@object
+C(kui_vmu_native_heap_original):
+    .space 32
+    .size C(kui_vmu_native_heap_original),32
+    .balign 32
+#endif

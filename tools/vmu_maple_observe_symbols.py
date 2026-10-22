@@ -80,6 +80,8 @@ def generate(path):
         names["KUI_VMU_OBSERVE_LOW_SD_LEASE"] = optional_lease
     if "_kui_vmu_observe_exit_target" in image["symbols"]:
         names["KUI_VMU_OBSERVE_LOW_EXIT_TARGET"] = "_kui_vmu_observe_exit_target"
+    if "_kui_vmu_native_heap_original" in image["symbols"]:
+        names["KUI_VMU_NATIVE_HEAP_ORIGINAL"] = "_kui_vmu_native_heap_original"
     typed = _linked_symbols(data, set(names.values()))
     values = {}
     for macro, name in names.items():
@@ -92,15 +94,16 @@ def generate(path):
         address, size, kind, section = typed.get(name, (0, 0, 0, None))
         if not size or section is None or not section[3] <= address < address + size <= section[3] + section[5]:
             raise ValueError("Missing or unbounded typed observer symbol: " + name)
-        if macro.endswith("CONTROL"):
-            if (size != 56 or kind != 1 or address & 31 or section[1] != 8 or
+        if macro.endswith("CONTROL") or macro=="KUI_VMU_NATIVE_HEAP_ORIGINAL":
+            expected,reserved=(32,32) if macro=="KUI_VMU_NATIVE_HEAP_ORIGINAL" else (56,64)
+            if (size != expected or kind != 1 or address & 31 or section[1] != 8 or
                     section[2] & 7 != 3 or
-                    not 0x8C004000 <= address < address + 64 <= 0x8C007800 or
-                    address + 64 > section[3] + section[5]):
+                    not 0x8C004000 <= address < address + reserved <= 0x8C007800 or
+                    address + reserved > section[3] + section[5]):
                 raise ValueError("Observer control must own two complete low BSS cache lines")
             # No other runtime symbol may occupy the control's padding.
             # The typed object's ABI is56bytes; its allocation reserves64.
-            if any(address + size <= value < address + 64
+            if any(address + size <= value < address + reserved
                    for value in image["symbols"].values()):
                 raise ValueError("Observer control cache-line padding is shared")
         elif (kind != 2 or address & 1 or section[2] & 7 != 6 or
