@@ -1,0 +1,342 @@
+{
+  "received_date": "2026-09-20",
+  "runtime_build": "f54c8cc44068 (experimental build: KUI_EXPERIMENTAL=1)",
+  "experiment": "Trip 6a: does the GD-ROM drive complete a polled DMA read of raw 2352-byte sectors, are the bytes identical to PIO, and how much CPU does it leave for other work? Chunk 32 and 128, PIO and DMA, with and without a competing CPU-bound thread; two runs.",
+  "inputs": [
+    {
+      "file": "T6A_bench_no__3.txt",
+      "kept_as": "t6a-dma-probe-2026-09-20.txt",
+      "bytes": 15317,
+      "sha256": "37e8837807d7e21fb4b823734530d26693e43ee8d0ddc56c29c7e77f214b50aa"
+    }
+  ],
+  "config": {
+    "file": "docs/bench-cfgs/t6a-dma-probe.cfg",
+    "ui_hz": [
+      1
+    ],
+    "sweep_fads": [
+      45150
+    ],
+    "sweep_chunks": [
+      32,
+      128
+    ],
+    "sweep_mode": [
+      "pio",
+      "dma"
+    ],
+    "sweep_spin": [
+      "off",
+      "on"
+    ],
+    "sweep_sectors": 2048,
+    "sweep_verify": true
+  },
+  "hardware": {
+    "disc": "MDK2",
+    "sd": "exFAT, SCIF (bit-banged SPI)",
+    "note": "Image+BSS grew 2237668 -> 2545892 bytes (+308 KB) for the probe's static DMA buffer; heap 92956 -> 124700 for the competing thread's stack. Both are the experiment's, not a capture's."
+  },
+  "results": {
+    "dma_check": [
+      {
+        "result": "OK",
+        "dma_crc32": "2d863bc3",
+        "pio_crc32": "2d863bc3",
+        "identical": true
+      },
+      {
+        "result": "OK",
+        "dma_crc32": "2d863bc3",
+        "pio_crc32": "2d863bc3",
+        "identical": true
+      }
+    ],
+    "verify_lines": 8,
+    "all_verify_ok": true,
+    "table": [
+      {
+        "chunk": 128,
+        "mode": "dma",
+        "competing_thread": false,
+        "rd_kib_s": 1158.4,
+        "worker_cpu_ms": 18,
+        "cpu_used_pct": 0.4,
+        "free_pct": null
+      },
+      {
+        "chunk": 128,
+        "mode": "dma",
+        "competing_thread": true,
+        "rd_kib_s": 1154.4,
+        "worker_cpu_ms": 19,
+        "cpu_used_pct": 0.5,
+        "free_pct": 96.4
+      },
+      {
+        "chunk": 128,
+        "mode": "pio",
+        "competing_thread": false,
+        "rd_kib_s": 1156.6,
+        "worker_cpu_ms": 3971,
+        "cpu_used_pct": 97.6,
+        "free_pct": null
+      },
+      {
+        "chunk": 128,
+        "mode": "pio",
+        "competing_thread": true,
+        "rd_kib_s": 1032.0,
+        "worker_cpu_ms": 1538,
+        "cpu_used_pct": 33.3,
+        "free_pct": 65.0
+      },
+      {
+        "chunk": 32,
+        "mode": "dma",
+        "competing_thread": false,
+        "rd_kib_s": 1185.5,
+        "worker_cpu_ms": 34,
+        "cpu_used_pct": 0.9,
+        "free_pct": null
+      },
+      {
+        "chunk": 32,
+        "mode": "dma",
+        "competing_thread": true,
+        "rd_kib_s": 1196.5,
+        "worker_cpu_ms": 30,
+        "cpu_used_pct": 0.7,
+        "free_pct": 98.2
+      },
+      {
+        "chunk": 32,
+        "mode": "pio",
+        "competing_thread": false,
+        "rd_kib_s": 1232.2,
+        "worker_cpu_ms": 3756,
+        "cpu_used_pct": 98.0,
+        "free_pct": null
+      },
+      {
+        "chunk": 32,
+        "mode": "pio",
+        "competing_thread": true,
+        "rd_kib_s": 1075.2,
+        "worker_cpu_ms": 1560,
+        "cpu_used_pct": 35.1,
+        "free_pct": 62.5
+      }
+    ],
+    "points": {
+      "chunk32-pio-alone": [
+        {
+          "run": 1,
+          "rd_kib_s": 1270.7,
+          "min_us": 24581,
+          "free": null,
+          "wall_ms": 3715,
+          "worker_cpu_ms": 3649,
+          "ui_ms": 64,
+          "other_ms": 3
+        },
+        {
+          "run": 2,
+          "rd_kib_s": 1193.8,
+          "min_us": 24609,
+          "free": null,
+          "wall_ms": 3953,
+          "worker_cpu_ms": 3862,
+          "ui_ms": 90,
+          "other_ms": 2
+        }
+      ],
+      "chunk32-pio-spin": [
+        {
+          "run": 1,
+          "rd_kib_s": 1194.3,
+          "min_us": 48921,
+          "free": 78.8,
+          "wall_ms": 3952,
+          "worker_cpu_ms": 1575,
+          "ui_ms": 97,
+          "other_ms": 2280
+        },
+        {
+          "run": 2,
+          "rd_kib_s": 956.0,
+          "min_us": 48117,
+          "free": 46.2,
+          "wall_ms": 4933,
+          "worker_cpu_ms": 1546,
+          "ui_ms": 1074,
+          "other_ms": 2314
+        }
+      ],
+      "chunk32-dma-alone": [
+        {
+          "run": 1,
+          "rd_kib_s": 1181.1,
+          "min_us": 9631,
+          "free": null,
+          "wall_ms": 4005,
+          "worker_cpu_ms": 34,
+          "ui_ms": 84,
+          "other_ms": 3887
+        },
+        {
+          "run": 2,
+          "rd_kib_s": 1190.0,
+          "min_us": 9629,
+          "free": null,
+          "wall_ms": 3975,
+          "worker_cpu_ms": 35,
+          "ui_ms": 64,
+          "other_ms": 3876
+        }
+      ],
+      "chunk32-dma-spin": [
+        {
+          "run": 1,
+          "rd_kib_s": 1199.4,
+          "min_us": 9628,
+          "free": 100.0,
+          "wall_ms": 3944,
+          "worker_cpu_ms": 25,
+          "ui_ms": 146,
+          "other_ms": 3773
+        },
+        {
+          "run": 2,
+          "rd_kib_s": 1193.5,
+          "min_us": 9626,
+          "free": 96.3,
+          "wall_ms": 3964,
+          "worker_cpu_ms": 34,
+          "ui_ms": 103,
+          "other_ms": 3827
+        }
+      ],
+      "chunk128-pio-alone": [
+        {
+          "run": 1,
+          "rd_kib_s": 1158.5,
+          "min_us": 249482,
+          "free": null,
+          "wall_ms": 4060,
+          "worker_cpu_ms": 3953,
+          "ui_ms": 107,
+          "other_ms": 0
+        },
+        {
+          "run": 2,
+          "rd_kib_s": 1154.7,
+          "min_us": 250038,
+          "free": null,
+          "wall_ms": 4074,
+          "worker_cpu_ms": 3989,
+          "ui_ms": 80,
+          "other_ms": 5
+        }
+      ],
+      "chunk128-pio-spin": [
+        {
+          "run": 1,
+          "rd_kib_s": 1152.5,
+          "min_us": 229651,
+          "free": 81.0,
+          "wall_ms": 4081,
+          "worker_cpu_ms": 1527,
+          "ui_ms": 109,
+          "other_ms": 2446
+        },
+        {
+          "run": 2,
+          "rd_kib_s": 911.6,
+          "min_us": 231182,
+          "free": 49.0,
+          "wall_ms": 5160,
+          "worker_cpu_ms": 1549,
+          "ui_ms": 1084,
+          "other_ms": 2528
+        }
+      ],
+      "chunk128-dma-alone": [
+        {
+          "run": 1,
+          "rd_kib_s": 1159.8,
+          "min_us": 249105,
+          "free": null,
+          "wall_ms": 4064,
+          "worker_cpu_ms": 20,
+          "ui_ms": 97,
+          "other_ms": 3947
+        },
+        {
+          "run": 2,
+          "rd_kib_s": 1157.0,
+          "min_us": 249106,
+          "free": null,
+          "wall_ms": 4075,
+          "worker_cpu_ms": 16,
+          "ui_ms": 75,
+          "other_ms": 3984
+        }
+      ],
+      "chunk128-dma-spin": [
+        {
+          "run": 2,
+          "rd_kib_s": 1154.4,
+          "min_us": 249008,
+          "free": 96.4,
+          "wall_ms": 4084,
+          "worker_cpu_ms": 19,
+          "ui_ms": 123,
+          "other_ms": 3942
+        }
+      ]
+    }
+  },
+  "derived": {
+    "projection_for_a_whole_disc": {
+      "today_min": 26.7,
+      "overlapped_min": 19.4,
+      "overlapped_pct_faster": 27.6,
+      "overlapped_plus_software_min": 17.3,
+      "method": "T7's categories do not overlap, so today's wall is their sum. With the disc read moved off the CPU, a chunk costs the LARGER of the two instead: max(CPU work, disc). An ideal upper bound; real double-buffering has switching costs and cannot overlap the first and last chunk."
+    },
+    "dma_cpu_cost_pct": [
+      0.9,
+      0.4
+    ],
+    "pio_cpu_cost_pct": [
+      98.0,
+      97.6
+    ],
+    "competing_thread_cost_to_the_read_pct": {
+      "pio": [
+        -12.7,
+        -10.8
+      ],
+      "dma": [
+        0.9,
+        -0.3
+      ]
+    },
+    "conclusions": [
+      "GD-ROM DMA works on this drive and returns the SAME BYTES as PIO: both runs' check passed with identical CRC32 (2d863bc3), and all 8 verify lines matched the PIO reference at both read sizes.",
+      "DMA costs essentially no CPU: the worker used 18-34 ms of a ~4000 ms point (0.4-0.9%), against 3756-3971 ms for PIO (97.6-98.0%). That is the whole point: with PIO the drive read owns the CPU, with DMA it does not.",
+      "DMA is not slower at the size a capture uses: at chunk 128 DMA read 1158.4 KiB/s against PIO's 1156.6; at chunk 32, 1185.5 against 1232.2 (-3.8%), and the DMA timing still includes up to one 10 ms scheduler tick of completion latency.",
+      "A competing thread costs a PIO read 12.7-10.8% but costs a DMA read nothing (+0.9% and -0.3%). So a plain PIO thread split would pay for itself; DMA does not.",
+      "Projected: overlapping the disc read with the SD write and hashing would take a whole-disc capture from 26.7 to about 19.4 minutes (27.6% faster), or about 17.3 with the measured CRC16 and CRC32 replacements as well. An ideal bound, not a measurement of a working design.",
+      "Nothing here is a capture: the probe is bench-only and the capture engine still reads with PIO."
+    ]
+  },
+  "limitations": [
+    "One drive, one disc, one console; two runs.",
+    "The free= figures are soft: the spin calibration differed between runs ( iterations/ms) and run 2's census shows the UI taking 21% during the PIO+spin points against 2% in run 1, so scheduling was not the same. The worker-CPU milliseconds are the robust measure and they agree closely between runs.",
+    "The probe polls with sleeps rather than taking the DMA-end interrupt, so a production design could do slightly better.",
+    "The projection assumes a double-buffered loop with free switching; it cannot overlap the first read or the last write, and the real engine must still checkpoint, retry and cancel correctly."
+  ]
+}

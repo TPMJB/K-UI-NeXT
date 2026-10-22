@@ -1,0 +1,56 @@
+{
+  "status": "synthetic recovery checkout; not original commit identities",
+  "retained_base_source_commit": "aefd6c40b38a683df4a7fef6938a193255e6e824",
+  "base_snapshot_sha256": "af12cb9adcb8fd8e9870441c16dc2ad9921909851898f045551593f2346d76f4",
+  "patches": [
+    {
+      "file": "00-K-UI-VMU-Launch-Fix-Proof-94d479abcbbb.patch",
+      "sha256": "beb287dba280f7fc6c8142a7c99a135d6cad62da4067eaa10c274489b63edcf7",
+      "applied": "all paths"
+    },
+    {
+      "file": "01-K-UI-Silver-VMU-Proof-7c0cd589610e.patch",
+      "sha256": "817a096a8a00b8395ce2208f28ebc3369202b6f6c2db12324d44815f3b800f68",
+      "applied": "all paths"
+    },
+    {
+      "file": "02-K-UI-Silver-ReadOnly-efa1f3885c5e.patch",
+      "sha256": "7051f71209b0a0c932b747fa9b5102585cb6f79d9b0dbf7ac47649da98de7c6f",
+      "applied": "all paths"
+    },
+    {
+      "file": "03-K-UI-Silver-ReadOnly-LongWindow-0cdd543d8e4f.patch",
+      "sha256": "071decfe7345bee58bb8ab1ba2ebbfa55857afa9102bb0e475f04a305d122402",
+      "applied": "all paths"
+    },
+    {
+      "file": "04-K-UI-Silver-Imported-ReadOnly-e5f8f76e8923.patch",
+      "sha256": "871d9a39febe5989ac780af8bd6809f9b20a1eafb7fa784113241f832e454df1",
+      "applied": "all paths"
+    },
+    {
+      "file": "05-K-UI-Silver-Card-Preparation-a077644ede4c.patch",
+      "sha256": "1e8c7758a80841ebf5ad71bf21ddd09e07c0fa569902d6216369059fd300d355",
+      "applied": "all paths"
+    },
+    {
+      "file": "06-K-UI-Silver-Virtual-Card-3c80d14a0529-p0003.patch",
+      "sha256": "cbe563b980b9ae3c8447b9ff846f185bfe3c2977635544469409069a3f12bbdc",
+      "applied": "all paths except listed historical docs for patch06"
+    },
+    {
+      "file": "07-50e01b23ae4f.patch",
+      "sha256": "56babca65bdd53e6331896a7d9fd6bad7bc6aca43a390c9864098d9374bca484",
+      "applied": "all paths"
+    }
+  ],
+  "historical_document_limit": {
+    "reason": "Retained 3c patch starts at missing71382de prerequisite; source code/build/tool changes apply cleanly without it. Two historical evidence docs excluded from the06 multi-commit patch to avoid inventing prior historical content.",
+    "excluded_from_patch06": [
+      "docs/vmu-silver-pair-preparation.md",
+      "docs/vmu-hardware-observations.json"
+    ]
+  },
+  "original_target_code_commit": "50e01b23ae4fe3f4cca4bde6b79fd46afd955757",
+  "testing": "Recovery only; no native compilation or runtime retesting in this subtask."
+}

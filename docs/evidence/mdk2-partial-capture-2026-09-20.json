@@ -1,0 +1,92 @@
+{
+  "received_date": "2026-09-20",
+  "runtime_build": "dbd8bd76fea0",
+  "experiment": "Intended as Trip 5c on MDK2 (audio-track capture). The bench never ran: /KUI/bench.cfg was larger than the runtime's 2048-byte limit and was ignored, so the bench refused. The session then probed the disc and started a NEW capture of MDK2 with the DEFAULT options (SHA-256+CRC32, end read-back on, ui_hz=2), which was stopped during track 1.",
+  "inputs": [
+    {
+      "file": "T5C_diag.txt (second upload)",
+      "kept_as": "mdk2-partial-capture-2026-09-20.txt",
+      "bytes": 28055,
+      "sha256": "686e02e986d7f5c7f2c8f25d88f3b348c8b6b692773912b1d91794f82580d27f"
+    }
+  ],
+  "disc": {
+    "title": "MDK2",
+    "identity": "f838eac34967ae1693217ed313906954d4a6644dd59f5aa50f0accba8cf54727",
+    "tracks": 31,
+    "data_tracks": [
+      1,
+      3,
+      31
+    ],
+    "audio_tracks": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      2
+    ],
+    "note": "FAD 63000, which t5c-capture-audio.cfg ships, IS inside track 4 (52440-74365, audio) on this disc: the disc choice was right."
+  },
+  "what_happened": [
+    "/KUI/bench.cfg is larger than 2048 bytes; ignored (twice), then 'Bench refused'. The only shipped file over that limit is docs/bench.cfg.example at 5347 bytes.",
+    "DISC PROBE PASS: both TOCs, 93 samples.",
+    "NEW CAPTURE of MDK2 with default options; stopped by the user during track 1 after 32212992 bytes; 'Partial job preserved: /KUI/dumps/df838eac34967ae16-0001'; retries=0."
+  ],
+  "measured": {
+    "track": "T01 (data), 13696 of 14451 sectors",
+    "bytes": 32212992,
+    "wall_us": 57675936,
+    "kib_s": 545.4,
+    "parts_pct": {
+      "disc": 22.0,
+      "edc": 2.1,
+      "write": 48.2,
+      "sha256": 23.0,
+      "crc32": 4.2
+    },
+    "ui_pct": 4.7,
+    "retries": 0,
+    "checkpoints": 1
+  },
+  "derived": {
+    "comparison_with_t5a": {
+      "t5a_same_settings_kib_s": 551.2,
+      "here_kib_s": 545.4,
+      "difference_pct": -1.0
+    },
+    "conclusions": [
+      "The capture engine ran at 545.4 KiB/s on MDK2's data track 1 with the old defaults at ui_hz=2, against 551.2 KiB/s for the same settings on Sword in Trip 5a (-1.0%): the engine behaves the same on a second disc.",
+      "Time split: SD write 48.2%, SHA-256 23.0%, disc 22.0%, CRC32 4.2%, EDC 2.1%. SHA-256 alone is 23.0% here, which is what capture_hash=crc32 removes. (The setup phase's own disc figure of 92.1% is the 93-sample disc probe, a different block.)",
+      "Stop-and-checkpoint worked on a 31-track disc: the job was preserved with a committed byte count and no retries. The RESUME half of that test has still not been run.",
+      "No audio-track read rate yet: the capture stopped inside data track 1, and the bench that would have measured track 4 never ran."
+    ]
+  },
+  "limitations": [
+    "A single partial track of one disc, stopped by hand; not a repeatable measurement.",
+    "Old capture defaults (SHA-256 + end read-back), not the fast settings."
+  ]
+}

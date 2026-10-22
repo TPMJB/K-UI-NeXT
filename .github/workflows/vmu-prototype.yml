@@ -1,0 +1,326 @@
+name: Experimental VMU prototype
+
+on:
+  push:
+    branches: ['milestone/vmu-*']
+  workflow_dispatch:
+    inputs:
+      sd_profile_base64:
+        description: Optional base64-encoded1536-byte read-only VMU SD profile
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vmu-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install filesystem test tools
+        run: sudo apt-get update && sudo apt-get install -y dosfstools exfatprogs python3-yaml
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .deps/downloads
+          key: fatfs-downloads-v1-${{ hashFiles('dependencies.json') }}
+      - run: python3 tools/fetch_deps.py --fatfs-only
+      - name: Verify protocol, persistence, DMA filtering and exclusive SD transport
+        run: make -j2 test-vmu-prototype
+      - name: Exercise exact harness through real FAT32 and exFAT
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: |
+          make -f Makefile.vmu host-test
+          python3 tests/test_vmu_harness_images.py
+          make build/test-vmu-image-compat
+          python3 tests/test_vmu_image_compat.py
+      - name: Verify persistent-preparation profile and raw allocation ownership
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: |
+          make -f Makefile.vmu BUILD=build/vmu-persist-prep PERSIST_PREP=1 host-test
+          python3 tests/test_vmu_persist_harness_images.py
+          python3 tests/test_package_vmu_persist_prep.py
+      - name: Verify isolated physical-journal proof through real filesystems
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: |
+          make -f Makefile.vmu BUILD=build/vmu-physical-proof PERSIST_PROOF=1 host-test
+          python3 tests/test_vmu_physical_proof_images.py
+          python3 tests/test_package_vmu_physical_proof.py
+      - name: Verify physical VMU import preparation through real filesystems
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: |
+          make -f Makefile.vmu BUILD=build/vmu-import-prep PERSIST_IMPORT=1 host-test
+          python3 tests/test_vmu_import_prep_images.py
+          python3 tests/test_package_vmu_import_prep.py
+      - name: Verify workflow hygiene
+        run: python3 tests/test_workflow_hygiene.py
+      - name: Verify exact-title observer admission and bounded telemetry
+        run: make -f Makefile.vmu-toy host-tests
+  dreamcast:
+    needs: host
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git curl wget patch python3 \
+            bison flex texinfo gettext libgmp-dev libmpfr-dev libmpc-dev libisl-dev \
+            meson ninja-build pkg-config libisofs-dev libpng-dev libjpeg-dev ffmpeg
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .deps/downloads
+          key: fatfs-downloads-v1-${{ hashFiles('dependencies.json') }}
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            .deps/sh-elf
+            .deps/kos/utils/kos-chain/*.tar.*
+          key: sh-elf-ubuntu24-v1-${{ hashFiles('dependencies.json', 'tools/setup_kos.sh') }}
+          restore-keys: sh-elf-ubuntu24-v1-
+      - run: bash tools/setup_kos.sh
+      - name: Build standalone console harness and experimental transport objects
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          make -f Makefile.vmu -j2 package
+          mkdir -p build/vmu-harness/transport
+          for unit in src/loader/vmu_service.c src/loader/vmu_backing.c src/loader/sci_sd_bus.c src/loader/sd_reader.c src/dreamcast/sci_sd_storage.c; do
+            kos-cc -std=c11 -Os -Wall -Wextra -Werror -ffreestanding -fno-builtin -fstack-usage \
+              -Iinclude -Isrc/loader -Isrc/dreamcast -DKUI_ON_CONSOLE=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_VMU_EXPERIMENTAL=1 \
+              -c "$unit" -o "build/vmu-harness/transport/$(basename "$unit" .c).o"
+          done
+          sh-elf-size build/vmu-harness/vmu-harness.elf build/vmu-harness/transport/*.o
+          sh-elf-objdump -d build/vmu-harness/vmu-harness.elf > build/vmu-harness/vmu-harness.dis
+      - name: Build isolated persistent-profile preparation program
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          make -f Makefile.vmu -j2 BUILD=build/vmu-persist-prep PERSIST_PREP=1 package
+          sh-elf-objdump -d build/vmu-persist-prep/vmu-harness.elf > build/vmu-persist-prep/vmu-harness.dis
+          python3 tools/package_vmu_persist_prep.py build/vmu-persist-prep \
+            --expected-commit "$(git rev-parse HEAD)" --guide docs/vmu-persistent-profile-prep.md
+      - name: Upload persistent-profile preparation program
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-VMU-persistence-preparation
+          path: build/vmu-persist-prep/vmu-persistence-preparation-test.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Build isolated physical-journal proof program
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          make -f Makefile.vmu -j2 BUILD=build/vmu-physical-proof PERSIST_PROOF=1 package
+          sh-elf-objdump -d build/vmu-physical-proof/vmu-harness.elf > build/vmu-physical-proof/vmu-harness.dis
+          python3 tools/package_vmu_physical_proof.py build/vmu-physical-proof \
+            --expected-commit "$(git rev-parse HEAD)" --guide docs/vmu-physical-journal-proof.md
+      - name: Upload physical-journal proof program
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-VMU-physical-journal-proof
+          path: build/vmu-physical-proof/vmu-physical-journal-proof-test.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Build isolated physical VMU import preparation
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          make -f Makefile.vmu -j2 BUILD=build/vmu-import-prep PERSIST_IMPORT=1 package
+          sh-elf-objdump -d build/vmu-import-prep/vmu-harness.elf > build/vmu-import-prep/vmu-harness.dis
+          python3 tools/package_vmu_import_prep.py build/vmu-import-prep \
+            --expected-commit "$(git rev-parse HEAD)" --guide docs/vmu-import-prep-test.md
+      - name: Upload physical VMU import preparation
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-VMU-import-preparation
+          path: build/vmu-import-prep/vmu-import-prep-test.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Prove default native SCI transport is unchanged
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          mkdir -p "$RUNNER_TEMP/vmu-baseline" build/vmu-harness/default-proof
+          git fetch --no-tags --depth=1 origin 194a94483132c8dd30b0a21d7c20887c0e1eaed3
+          git show 194a94483132c8dd30b0a21d7c20887c0e1eaed3:src/loader/sci_sd_bus.c > "$RUNNER_TEMP/vmu-baseline/sci_sd_bus.c"
+          for mode in baseline current; do
+            unit=src/loader/sci_sd_bus.c
+            if [ "$mode" = baseline ]; then unit="$RUNNER_TEMP/vmu-baseline/sci_sd_bus.c"; fi
+            kos-cc -std=c11 -Os -Wall -Wextra -Werror -ffreestanding -fno-builtin -g0 \
+              -Iinclude -Isrc/loader -DKUI_ON_CONSOLE=1 -DKUI_RETAIL_TRANSPORT=1 \
+              -c "$unit" -o "build/vmu-harness/default-proof/$mode.o"
+          done
+          cmp build/vmu-harness/default-proof/baseline.o build/vmu-harness/default-proof/current.o
+          sha256sum build/vmu-harness/default-proof/*.o > build/vmu-harness/default-proof/SHA256SUMS
+      - name: Assemble console test files
+        run: |
+          mkdir -p build/vmu-harness/package/KUI
+          cp build/vmu-harness/KUI/tools.kui build/vmu-harness/package/KUI/
+          cp docs/vmu-harness-test.md build/vmu-harness/package/README.md
+          cp docs/vmu-protocol.md docs/vmu-store.md docs/vmu-maple-interception.md docs/vmu-runtime-design.md \
+            docs/vmu-image.md docs/vmu-backing.md docs/vmu-service.md docs/vmu-emulation-status.md build/vmu-harness/package/
+          git rev-parse HEAD > build/vmu-harness/package/SOURCE-COMMIT.txt
+          (cd build/vmu-harness/package && sha256sum KUI/tools.kui > SHA256SUMS)
+      - name: Upload standalone persistence test
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-VMU-console-test
+          path: build/vmu-harness/package/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Build isolated Toy Commander observer
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          make -k -f Makefile.vmu-toy -j2 package
+      - name: Build isolated read-only Toy Commander A1 proof
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          make -f Makefile.vmu-toy -j2 BUILD=build/vmu-toy-readonly READONLY_PROOF=1 package
+      - name: Admit supplied per-card read-only profile
+        env:
+          VMU_PROFILE_BASE64: ${{ inputs.sd_profile_base64 }}
+        run: |
+          python3 - <<'PY'
+          import base64, json, os, sys
+          from pathlib import Path
+          sys.path.insert(0, 'tools')
+          from vmu_sd_profile import decode_profile, template_profile
+          supplied = os.environ.get('VMU_PROFILE_BASE64', '')
+          data = base64.b64decode(supplied, validate=True) if supplied else template_profile()
+          summary = decode_profile(data)
+          (Path(os.environ['RUNNER_TEMP']) / 'vmu-sd-profile.bin').write_bytes(data)
+          print(json.dumps(summary, indent=2))
+          PY
+      - name: Build isolated SD-backed read-only A1 proof
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          make -f Makefile.vmu-toy -j2 BUILD=build/vmu-toy-sd-readonly READONLY_PROOF=2 \
+            SD_PROFILE="$RUNNER_TEMP/vmu-sd-profile.bin" package
+      - name: Build isolated RAM-save A1 proof with read-only SD base
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          make -f Makefile.vmu-toy -j2 BUILD=build/vmu-toy-volatile READONLY_PROOF=3 \
+            SD_PROFILE="$RUNNER_TEMP/vmu-sd-profile.bin" package
+      - name: Build isolated persistent A1 proof with public P2 template
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          python3 tools/vmu_persist_profile.py --template "$RUNNER_TEMP/vmu-persist-profile.bin"
+          make -f Makefile.vmu-toy -j2 BUILD=build/vmu-toy-persistent READONLY_PROOF=4 \
+            SD_PROFILE="$RUNNER_TEMP/vmu-persist-profile.bin" package
+      - name: Upload exact-title observer test
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-Toy-Maple-observer
+          path: build/vmu-toy/vmu-maple-observer-test.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload read-only blank-card proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-Toy-Read-Only-VMU
+          path: build/vmu-toy-readonly/vmu-readonly-card-test.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload per-card SD-backed read-only proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-Toy-SD-Read-Only-VMU
+          path: build/vmu-toy-sd-readonly/vmu-sd-readonly-card-test.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload per-card volatile RAM-save proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-Toy-Volatile-VMU
+          path: build/vmu-toy-volatile/vmu-volatile-card-test.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload generic persistent virtual-card proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-Toy-Persistent-VMU
+          path: build/vmu-toy-persistent/vmu-persistent-card-test.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Retain native proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: K-UI-experimental-VMU-native-proof
+          path: |
+            build/vmu-harness/*.elf
+            build/vmu-harness/*.map
+            build/vmu-harness/*.json
+            build/vmu-harness/*.dis
+            build/vmu-harness/**/*.su
+            build/vmu-harness/transport/
+            build/vmu-harness/default-proof/
+            build/vmu-persist-prep/*.elf
+            build/vmu-persist-prep/*.map
+            build/vmu-persist-prep/*.json
+            build/vmu-persist-prep/*.dis
+            build/vmu-persist-prep/**/*.su
+            build/vmu-physical-proof/*.elf
+            build/vmu-physical-proof/*.map
+            build/vmu-physical-proof/*.json
+            build/vmu-physical-proof/*.dis
+            build/vmu-physical-proof/**/*.su
+            build/vmu-import-prep/*.elf
+            build/vmu-import-prep/*.map
+            build/vmu-import-prep/*.json
+            build/vmu-import-prep/*.dis
+            build/vmu-import-prep/**/*.su
+            build/vmu-import-prep/**/*.ci
+            build/vmu-toy/*.elf
+            build/vmu-toy/*.map
+            build/vmu-toy/*.json
+            build/vmu-toy/*.dis
+            build/vmu-toy/**/*.su
+            build/vmu-toy-readonly/*.elf
+            build/vmu-toy-readonly/*.map
+            build/vmu-toy-readonly/*.json
+            build/vmu-toy-readonly/*.dis
+            build/vmu-toy-readonly/**/*.su
+            build/vmu-toy-sd-readonly/*.elf
+            build/vmu-toy-sd-readonly/*.bin
+            build/vmu-toy-sd-readonly/*.map
+            build/vmu-toy-sd-readonly/*.json
+            build/vmu-toy-sd-readonly/*.dis
+            build/vmu-toy-sd-readonly/**/*.su
+            build/vmu-toy-sd-readonly/**/*.ci
+            build/vmu-toy-sd-readonly/vmu-sd-profile.bin
+            build/vmu-toy-volatile/*.elf
+            build/vmu-toy-volatile/*.bin
+            build/vmu-toy-volatile/*.map
+            build/vmu-toy-volatile/*.json
+            build/vmu-toy-volatile/*.dis
+            build/vmu-toy-volatile/**/*.su
+            build/vmu-toy-volatile/**/*.ci
+            build/vmu-toy-volatile/vmu-sd-profile.bin
+            build/vmu-toy-persistent/*.elf
+            build/vmu-toy-persistent/*.bin
+            build/vmu-toy-persistent/*.map
+            build/vmu-toy-persistent/*.json
+            build/vmu-toy-persistent/*.dis
+            build/vmu-toy-persistent/**/*.su
+            build/vmu-toy-persistent/**/*.ci
+            build/vmu-toy-persistent/vmu-sd-profile.bin
+          if-no-files-found: ignore
+          retention-days: 30

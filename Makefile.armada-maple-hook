@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Isolated pre-NK Maple completion counter. No virtual VMU or save writes.
+override ARMADA_AUDIO_DIR := build/armada-ce-maple-hook
+override ARMADA_AUDIO_EXTRA_FLAGS := -DKUI_ARMADA_CE_RAM_BIND=1 -DKUI_ARMADA_CE_MAPLE_OBSERVE=1 -DKUI_ARMADA_CE_MAPLE_PROOF=1 -DKUI_ARMADA_CE_MAPLE_STATE=1 -DKUI_ARMADA_CE_MAPLE_HOOK=1
+override ARMADA_AUDIO_EXTRA_STAGE_FLAGS := -DKUI_ARMADA_CE_RAM_BIND_STAGE=1 -DKUI_ARMADA_CE_MAPLE_OBSERVE=1 -DKUI_ARMADA_CE_MAPLE_HOOK_STAGE=1
+override ARMADA_AUDIO_EXTRA_STAGE_DEPS := $(ARMADA_AUDIO_DIR)/bind-probe.bin $(ARMADA_AUDIO_DIR)/hook.bin $(ARMADA_AUDIO_DIR)/bridge.bin
+override ARMADA_AUDIO_EXTRA_ASM_FLAGS := -DKUI_ARMADA_CE_MAPLE_HOOK_STAGE=1 -DKUI_ARMADA_CE_MAPLE_HOOK_BIN='"$(ARMADA_AUDIO_DIR)/hook.bin"' -DKUI_ARMADA_CE_MAPLE_BRIDGE_BIN='"$(ARMADA_AUDIO_DIR)/bridge.bin"' -DKUI_ARMADA_CE_RAM_BIND_STAGE=1 -DKUI_ARMADA_CE_RAM_BIND_BIN='"$(ARMADA_AUDIO_DIR)/bind-probe.bin"'
+override ARMADA_AUDIO_EXTRA_LINK_FLAGS := -Wl,--defsym,_kui_armada_ce_bind_probe=0x8c004000
+override ARMADA_AUDIO_EXTRA_CHECK := python3 tools/check_armada_ce_maple_hook_package.py $(ARMADA_AUDIO_DIR)
+include Makefile.armada-audio
+
+$(ARMADA_AUDIO_DIR)/bind-probe.o: src/loader/armada_ce_maple_probe.c include/kui/armada_ce_maple_probe.h include/kui/armada_ce_maple_observe.h include/kui/armada_ce_maple_proof.h include/kui/armada_ce_maple_mapping.h include/kui/armada_ce_cache_word.h include/kui/armada_ce_maple_state.h include/kui/armada_ce_maple_owner_pointer.h include/kui/armada_ce_maple_headers.h include/kui/armada_ce_maple_headers_types.h
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -DKUI_ARMADA_CE_MAPLE_PROOF=1 -DKUI_ARMADA_CE_MAPLE_STATE=1 -DKUI_ARMADA_CE_MAPLE_HOOK=1 -fcallgraph-info=su -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/maple-array.o: src/loader/armada_ce_maple_array.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -c $< -o $@
+$(ARMADA_AUDIO_DIR)/bind-probe.elf: $(ARMADA_AUDIO_DIR)/bind-probe.o $(ARMADA_AUDIO_DIR)/maple-array.o src/loader/armada_ce_maple_probe.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/armada_ce_maple_probe.ld -Wl,-Map,$(@:.elf=.map) -o $@ $(filter %.o,$^) -lgcc
+$(ARMADA_AUDIO_DIR)/bind-probe.bin: $(ARMADA_AUDIO_DIR)/bind-probe.elf
+	sh-elf-objcopy -O binary $< $@
+$(ARMADA_AUDIO_DIR)/entry.elf: tools/check_armada_ce_maple_hook_package.py tools/check_armada_ce_bind.py tools/check_retail_stack.py tools/check_armada_ce_excerpt.py
+
+-include $(ARMADA_AUDIO_DIR)/bind-probe.d
+
+$(ARMADA_AUDIO_DIR)/hook.o: src/loader/armada_ce_maple_hook.S include/kui/armada_ce_maple_hook.h
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -c $< -o $@
+$(ARMADA_AUDIO_DIR)/hook.elf: $(ARMADA_AUDIO_DIR)/hook.o src/loader/armada_ce_maple_hook.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/armada_ce_maple_hook.ld -Wl,-Map,$(@:.elf=.map) -o $@ $<
+$(ARMADA_AUDIO_DIR)/hook.bin: $(ARMADA_AUDIO_DIR)/hook.elf
+	sh-elf-objcopy -O binary --only-section=.hook $< $@
+$(ARMADA_AUDIO_DIR)/bridge.bin: $(ARMADA_AUDIO_DIR)/hook.elf
+	sh-elf-objcopy -O binary --only-section=.bridge $< $@
+$(ARMADA_AUDIO_DIR)/retail_stage.o: include/kui/armada_ce_maple_reservation.h include/kui/armada_ce_maple_hook.h
+$(ARMADA_AUDIO_DIR)/entry.elf: tools/check_armada_ce_maple_hook.py

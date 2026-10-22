@@ -1,0 +1,81 @@
+{
+  "build": "9ed8d6d90cfd",
+  "variant": "held-comparisons/02-proof-only",
+  "source_images": [
+    "image-1792599454017.jpg",
+    "image-1792599459366.jpg",
+    "image-1792599463514.jpg",
+    "image-1792599468035.jpg",
+    "image-1792599473507.jpg"
+  ],
+  "auto": {
+    "reason": 6,
+    "phase": 2,
+    "mode": 2,
+    "proof_initial": 1199,
+    "proof_final": 1199
+  },
+  "traffic": {
+    "visits": 1200,
+    "accepted": 1200,
+    "refused": 0,
+    "reads_last_visit": 195,
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "fence": {
+    "pre": 1200,
+    "post": 1200,
+    "leases": 1200,
+    "restores": 1200,
+    "busy": 0,
+    "refused": 0,
+    "poll_peak": 1,
+    "active": 0,
+    "flags": 0,
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "a2": {
+    "advertisements": 0,
+    "replies": 0,
+    "backend_calls": 0,
+    "guest_rx_stores": 0,
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "mapping_report_zero": true,
+  "driver_report_zero": true,
+  "user_observation": "That was a horrendous fail. Video stopped early, audio repeated early",
+  "interpretation": {
+    "functional_proof_counters_pair": true,
+    "playback_performance_pass": false,
+    "planned_terminal_capture": true,
+    "additional_ownership_check_path_is_principal_remaining_suspect": true,
+    "masked_duration_measured": false,
+    "publication_or_sd_virtual_save_writes_exercised": false,
+    "full_mode_test_held": true
+  },
+  "source_cost_analysis": {
+    "representative_extra_initial_and_final_query_loads": 660,
+    "representative_extra_bulk_leaf_calls": 24,
+    "generic_mapping_resolves_per_query": 14,
+    "byte_clear_stores_per_query": 448,
+    "note": "Budgeted guest inspection loads exclude uncached instruction fetches and private stack/workspace traffic."
+  }
+}

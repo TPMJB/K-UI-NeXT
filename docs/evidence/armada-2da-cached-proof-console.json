@@ -1,0 +1,77 @@
+{
+  "build": "2da67add6637",
+  "variant": "cached-proof-only",
+  "source_images": [
+    "image-1792601189792.jpg",
+    "image-1792601194739.jpg",
+    "image-1792601199170.jpg",
+    "image-1792601203926.jpg",
+    "image-1792601209527.jpg"
+  ],
+  "auto": {
+    "reason": 6,
+    "phase": 2,
+    "mode": 2,
+    "proof_initial": 1199,
+    "proof_final": 1199
+  },
+  "traffic": {
+    "visits": 1200,
+    "accepted": 1200,
+    "refused": 0,
+    "reads_last_visit": 195,
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "fence": {
+    "pre": 1200,
+    "post": 1200,
+    "leases": 1200,
+    "restores": 1200,
+    "busy": 0,
+    "refused": 0,
+    "poll_peak": 1,
+    "active": 0,
+    "flags": 0,
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "a2": {
+    "advertisements": 0,
+    "replies": 0,
+    "backend_calls": 0,
+    "guest_rx_stores": 0,
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "mapping_report_zero": true,
+  "driver_report_zero": true,
+  "user_playback_observation": "It was better. Still not as good as baseline, which wasn't perfect to begin with. I think we never could get playback to reach parity with the disc",
+  "interpretation": {
+    "planned_terminal_capture": true,
+    "functional_proof_counters_pair": true,
+    "recorded_fault": false,
+    "playback_performance_pass": null,
+    "masked_duration_measured": false,
+    "full_mode_remains_held_pending_playback_result": false,
+    "playback_improved_vs_uncached_proof": true,
+    "baseline_playback_parity": false,
+    "matched_cached_readonly_full_comparison_prepared_next": true,
+    "comparison_baseline": "Existing same-image/transport loader without the experimental VMU hook; not physical-disc playback."
+  }
+}

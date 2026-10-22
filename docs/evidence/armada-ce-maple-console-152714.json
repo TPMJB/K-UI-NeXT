@@ -1,0 +1,57 @@
+{
+  "kind": "owner-console-photo-transcription",
+  "source_attachment": "image-1792533865536.jpg",
+  "build": "152714b9e725",
+  "guard": "0x00000000",
+  "reader_steps": "0x00007ca3",
+  "reader_sectors": "0x00002347",
+  "discovery": {
+    "samples": 4,
+    "stable_samples": 4,
+    "refused_samples": 0,
+    "last_reads": 339,
+    "last_status": 2,
+    "status_meaning": "stable list with missing ROM module",
+    "nodes": 16
+  },
+  "cpu": {
+    "ttb": "0x8c1458a0",
+    "pteh": "0xfffffc03",
+    "ccr": "0x00000105",
+    "process": "0x8c14e8b4",
+    "module_head": "0x8cc8e000"
+  },
+  "maple": {
+    "node": "0x8cfca408",
+    "base": "0x03dd0000",
+    "span": "0x0000a000",
+    "sections": 3,
+    "attachment_mask": "0x00000008"
+  },
+  "mapledev_rom_row": [0, 0, 0, 0, 0],
+  "registers": {
+    "mdstar": "0x0cfd3000",
+    "mdtsel": "0x00000001",
+    "mden": "0x00000001",
+    "mdst": "0x00000001",
+    "istnrm": "0x80000000"
+  },
+  "fault": {
+    "reason": 2,
+    "address": "0x8c145b24",
+    "observed": "0x8cfca408",
+    "expected": "0x00000000",
+    "detail": "0x00000010"
+  },
+  "interpretation": [
+    "The read count equals 19 + 20*16, consistent with a complete repeated 16-node walk.",
+    "PROCESS is the fourth array entry (index 3), and the MAPLE attachment mask includes bit 3.",
+    "The five register values are separate observations; no DMA idleness or ownership is established.",
+    "MAPLEDEV's ROM marker was not seen. Armada imports MAPLEDEV for saves; absence of this marker does not prove the driver is absent.",
+    "The footer wrapped over the guard legend. All six discovery rows remain visible."
+  ],
+  "virtual_vmu_enabled": false,
+  "code_backing_proven": false,
+  "driver_extension_proven": false,
+  "save_read_write_tested": false
+}

@@ -1,0 +1,73 @@
+{
+  "format": "armada-ce-maple-owner-pointer-v1",
+  "source": {
+    "file": "0WINCEOS.BIN",
+    "bytes": 1253376,
+    "sha256": "a7628c78090fce2c93012d5e4db6142096e138dceb7ebbf555142e902ca03c1f"
+  },
+  "contracts": [
+    {
+      "module": "coredll.dll",
+      "name": "MapPtrToProcess export598 stub",
+      "rva": "0x8b44",
+      "bytes": 8,
+      "rom_storage_address": "0x8c038b44",
+      "kernel_file_offset": "0x29344",
+      "sha256": "3afccea9193f655310f4c325f69c9c41f18ae3b16af56485f40cd7033c0f6775",
+      "syscall_target": "0xfffffd8b",
+      "win32_method_index": 59,
+      "win32_table": "0x8c0118e0",
+      "win32_entry_address": "0x8c0119cc",
+      "win32_entry_value": "0x8c015c98"
+    },
+    {
+      "module": "nk.exe",
+      "name": "MapPtrToProcess implementation",
+      "rva": "0x5c98",
+      "bytes": 144,
+      "rom_storage_address": "0x8c015c98",
+      "kernel_file_offset": "0x6498",
+      "sha256": "e77da3cd5940fe66042611da269465fa75cf0f37e2a0af49bfe67488584ccc6b",
+      "rule": "After validating the supplied process handle, pointer>>25==0 and pointer>0x10000 takes the PROCESS+12 slot-OR path at RVA0x5d06..0x5d08. The kernel leaves pointers<=0x10000 unnormalized; the passive helper refuses them. Explicit pointers use a separate access-check path, which this helper does not emulate."
+    },
+    {
+      "module": "nk.exe",
+      "name": "Current-process and slot0 table switch",
+      "rva": "0x2118",
+      "bytes": 56,
+      "rom_storage_address": "0x8c012118",
+      "kernel_file_offset": "0x2918",
+      "sha256": "4dcf9dd146f0e4a6e5cd100408ca7852eb66b2c3bb6090afaadbdd939fd4c116",
+      "rule": "THREAD+12 selects PROCESS. The switch publishes PROCESS at0x8c145890, loads PROCESS+12, indexes TTB by slot>>23 and copies that table-root word to TTB[0]; PROCESS byte0 supplies the MMU ASID."
+    },
+    {
+      "module": "nk.exe",
+      "name": "Ordinary software page translator",
+      "rva": "0x259c",
+      "bytes": 160,
+      "rom_storage_address": "0x8c01259c",
+      "kernel_file_offset": "0x2d9c",
+      "sha256": "49862e587f854b4d880ac8e09efc4b80e4cc53361d43d2933b80f9f957a45dbe",
+      "rule": "TTB[VA>>25], second-level[(VA>>16)&511], negative ordinary MEMBLOCK+12+4*((VA>>12)&15), committed page bit0. Physical observation does not reproduce native access-key permissions."
+    }
+  ],
+  "reported_console_candidate": {
+    "build_prefix": "b2c4355",
+    "process": "0x8c14e8b4",
+    "process_index": 3,
+    "owner_slot": "0x08000000",
+    "owner_handle": "0x8cfcbf0e",
+    "root_holder_va": "0x09dd72b8",
+    "raw_root_value": "0x00030a60",
+    "normalized_candidate_va": "0x08030a60",
+    "requested_metadata_bytes": "0x198",
+    "candidate_only": true
+  },
+  "required_separate_live_witnesses": [
+    "Repeat current PROCESS, process index/slot/handle, MAPLE attachment/refcount and owner root mapping/value.",
+    "Require stable equal TTB[0] and TTB[4] root words at0x8c1458a0 and0x8c1458b0 before and after the bounded observation.",
+    "Resolve each requested explicit owner VA through repeated ordinary committed main-RAM page mappings and use the reviewed coherent data-word reader.",
+    "Never dereference the raw zero-slot pointer or infer extension type, allocated size, lifetime, ownership, native permissions or a hook lease from normalization alone."
+  ],
+  "scope": "Metadata and contract hashes only. The normalizer performs scalar arithmetic and no reads, native CE calls, hardware access or guest writes."
+}

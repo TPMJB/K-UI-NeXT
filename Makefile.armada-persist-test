@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Host-only synthetic filesystem/card fixtures. No card access or package.
+HOST_CC ?= cc
+BUILD ?= build/armada-persist-test
+SOURCES := tests/test_armada_ce_vmu_persist_stage.c src/loader/armada_ce_vmu_persist_stage.c \
+ src/loader/vmu_persist_stage.c src/core/vmu_durable.c src/core/vmu_persist_session.c \
+ src/core/vmu_fs_admission.c src/core/vmu_persist_profile.c src/core/vmu_store.c \
+ src/core/vmu_image.c src/core/hash.c src/core/retail_image.c src/core/armada_ce_vmu_runtime_contract.c
+FLAGS := -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic \
+ -fsanitize=address,undefined -ffunction-sections -fdata-sections -Wl,--gc-sections -g \
+ -Iinclude -Isrc/loader -DKUI_VMU_READONLY_PROOF=4 -DKUI_VMU_EXPERIMENTAL=0
+.PHONY: test
+test: $(BUILD)/test-persist-stage
+	ASAN_OPTIONS=detect_leaks=0 $<
+$(BUILD)/test-persist-stage: $(SOURCES) tests/test_vmu_persist_stage.c tests/test_vmu_fs_admission.c
+	@mkdir -p $(@D)
+	$(HOST_CC) $(FLAGS) $(SOURCES) -o $@

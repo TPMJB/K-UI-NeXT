@@ -1,0 +1,18 @@
+K-UI CD bootstrap addd439aaea5
+Log truncated: no
+Running CD bootstrap build addd439aaea5
+Video: 640x480 NTSC interlaced, buffered
+Hold B during startup for built-in diagnostics.
+Otherwise load /KUI/runtime.kui from SD.
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Loading SD runtime 96ee4ef2d025 (225060 bytes)
+SD runtime not started: runtime checksum mismatch
+Using built-in CD diagnostics; SD runtime is not running.
+Diagnostic code and fonts are loaded entirely in RAM.
+Replace boot CD with a known-good retail GD-ROM; close lid.
+A reads disc samples. X writes new test files to SD.
+Use a spare test card. No formatting; existing files preserved.
+This diagnostic does not dump games yet.
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)

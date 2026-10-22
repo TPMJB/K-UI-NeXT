@@ -1,0 +1,772 @@
+K-UI SD runtime 0946e29defd4
+Log truncated: YES
+Report trigger: auto bench
+Capture result: complete
+New dumps use separate /KUI/dumps/ folders. Keep a known-good disc inserted.
+Reports say if a dump matches Redump/TOSEC (copy data/known-dumps/*.db to KU
+I/).
+Capture defaults: SHA-256+CRC32, full readback; /KUI/bench.cfg can change th
+em.
+Capture/Resume/Verify auto-save a report after ending. Wait for READY.
+R trigger: isolated benchmarks from /KUI/bench.cfg (see docs/benchmarks.md).
+The screen redraws 2x a second while working, which frees CPU (ui_hz=full: o
+ff).
+mstats [runtime ready] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=3000632 available~=13776584
+RAM sampled peak used/reserved=3000632
+Image+BSS=2780612 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=90684
+Heap system bytes=90684 in use bytes=88948 free bytes=1736
+Unclaimed main RAM=13774848; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+mstats [L trigger] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=3000632 available~=13776584
+RAM sampled peak used/reserved=3000632
+Image+BSS=2780612 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=90684
+Heap system bytes=90684 in use bytes=88948 free bytes=1736
+Unclaimed main RAM=13774848; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+mstats [bench start] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=3000632 available~=13776584
+RAM sampled peak used/reserved=3000632
+Image+BSS=2780612 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=90684
+Heap system bytes=90684 in use bytes=88948 free bytes=1736
+Unclaimed main RAM=13774848; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Loaded /KUI/bench.cfg
+OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
+OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
+OPTIONS sd_if=scif sd_crc=on
+OPTIONS ui_hz=2 sections=capture
+OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
+OPTIONS sweep_fads=(optical_fad)
+OPTIONS sweep_gap_us=0 sweep_service_us=0
+OPTIONS sweep_mode=pio sweep_spin=off
+OPTIONS sd_bytes=(none)
+OPTIONS capture_hash=crc32 end_readback=off resume_check=full capture_read=p
+io,dma
+OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
+OPTIONS capture_fad=45150
+OPTIONS note=T10 overlapped capture. card=<model> disc=<title>
+LOW TOC first=01010000 last=41020000 end=41002f7a
+  T01 ctrl=0 start=150 next=11852
+  T02 ctrl=4 start=11852 next=12154
+CMD 19 FAILED
+  sense=5/0 size=0 ATA=32
+No readable disc; hash and SD benches will still run
+BENCH: isolated measurements; each line is one component alone
+BENCH pass 1/1 uihz=2
+BENCH capture skipped: no readable disc
+BENCH complete but NOTHING was measured: every selected section was skipped 
+(see the lines above; a capture or sweep section needs a readable disc)
+mstats [bench end] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=3000632 available~=13776584
+RAM sampled peak used/reserved=3000632
+Image+BSS=2780612 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=90684
+Heap system bytes=90684 in use bytes=88948 free bytes=1736
+Unclaimed main RAM=13774848; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+Bench result: complete
+Saving diagnostic report automatically; B cancels log save.
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=3000632 available~=13776584
+RAM sampled peak used/reserved=3000632
+Image+BSS=2780612 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=90684
+Heap system bytes=90684 in use bytes=88948 free bytes=1736
+Unclaimed main RAM=13774848; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Report saved: /KUI/probes/p0004/diagnostics.txt
+Operation ended. Diagnostics page: Y saves the log to SD.
+mstats [L trigger] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=3000632 available~=13776584
+RAM sampled peak used/reserved=3000632
+Image+BSS=2780612 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=90684
+Heap system bytes=90684 in use bytes=88948 free bytes=1736
+Unclaimed main RAM=13774848; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+DISC PROBE: insert a known-good retail GD-ROM first
+CMD 24 FAILED
+  sense=6/40 size=10 ATA=0
+LOW TOC first=41010000 last=01020000 end=01003bad
+  T01 ctrl=4 start=150 next=14751
+  T02 ctrl=0 start=14751 next=15277
+HIGH TOC first=41030000 last=411f0000 end=410861b4
+  T03 ctrl=4 start=45150 next=52440
+  T04 ctrl=0 start=52440 next=74365
+  T05 ctrl=0 start=74365 next=94869
+  T06 ctrl=0 start=94869 next=115179
+  T07 ctrl=0 start=115179 next=134728
+  T08 ctrl=0 start=134728 next=154770
+  T09 ctrl=0 start=154770 next=175115
+  T10 ctrl=0 start=175115 next=194021
+  T11 ctrl=0 start=194021 next=213613
+  T12 ctrl=0 start=213613 next=235268
+  T13 ctrl=0 start=235268 next=253844
+  T14 ctrl=0 start=253844 next=278526
+  T15 ctrl=0 start=278526 next=298167
+  T16 ctrl=0 start=298167 next=314259
+  T17 ctrl=0 start=314259 next=331123
+  T18 ctrl=0 start=331123 next=349624
+  T19 ctrl=0 start=349624 next=368357
+  T20 ctrl=0 start=368357 next=373197
+  T21 ctrl=0 start=373197 next=378099
+  T22 ctrl=0 start=378099 next=382778
+  T23 ctrl=0 start=382778 next=387562
+  T24 ctrl=0 start=387562 next=396538
+  T25 ctrl=0 start=396538 next=401038
+  T26 ctrl=0 start=401038 next=402698
+  T27 ctrl=0 start=402698 next=416725
+  T28 ctrl=0 start=416725 next=420202
+  T29 ctrl=0 start=420202 next=425104
+  T30 ctrl=0 start=425104 next=429648
+  T31 ctrl=4 start=429648 next=549300
+Track 01 FAD=150 LBA=0
+  raw repeat/guards OK CRC32=c005bb82
+  raw mode=1 header=00:02:00
+  cooked repeat/guards and raw payload MATCH
+Track 01 FAD=7450 LBA=7300
+  raw repeat/guards OK CRC32=62786fd5
+  raw mode=1 header=01:39:25
+  cooked repeat/guards and raw payload MATCH
+Track 01 FAD=14600 LBA=14450
+  raw repeat/guards OK CRC32=7ffc74b2
+  raw mode=1 header=03:14:50
+  cooked repeat/guards and raw payload MATCH
+Track 02 FAD=14751 LBA=14601
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 02 FAD=15013 LBA=14863
+  raw repeat/guards OK CRC32=29164dff
+  audio sample (no offset/subchannel validation)
+Track 02 FAD=15126 LBA=14976
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 03 FAD=45150 LBA=45000
+  raw repeat/guards OK CRC32=ad0d4dcc
+  raw mode=1 header=10:02:00
+  cooked repeat/guards and raw payload MATCH
+Track 03 FAD=48794 LBA=48644
+  raw repeat/guards OK CRC32=873191f1
+  raw mode=1 header=10:50:44
+  cooked repeat/guards and raw payload MATCH
+Track 03 FAD=52289 LBA=52139
+  raw repeat/guards OK CRC32=1e782721
+  raw mode=1 header=11:37:14
+  cooked repeat/guards and raw payload MATCH
+Track 04 FAD=52440 LBA=52290
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 04 FAD=63402 LBA=63252
+  raw repeat/guards OK CRC32=a711a713
+  audio sample (no offset/subchannel validation)
+Track 04 FAD=74214 LBA=74064
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 05 FAD=74365 LBA=74215
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 05 FAD=84616 LBA=84466
+  raw repeat/guards OK CRC32=c42700cd
+  audio sample (no offset/subchannel validation)
+Track 05 FAD=94718 LBA=94568
+  raw repeat/guards OK CRC32=8d72537a
+  audio sample (no offset/subchannel validation)
+Track 06 FAD=94869 LBA=94719
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 06 FAD=105023 LBA=104873
+  raw repeat/guards OK CRC32=7379e5a3
+  audio sample (no offset/subchannel validation)
+Track 06 FAD=115028 LBA=114878
+  raw repeat/guards OK CRC32=5b699eee
+  audio sample (no offset/subchannel validation)
+Track 07 FAD=115179 LBA=115029
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 07 FAD=124953 LBA=124803
+  raw repeat/guards OK CRC32=04745175
+  audio sample (no offset/subchannel validation)
+Track 07 FAD=134577 LBA=134427
+  raw repeat/guards OK CRC32=a1659faf
+  audio sample (no offset/subchannel validation)
+Track 08 FAD=134728 LBA=134578
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 08 FAD=144748 LBA=144598
+  raw repeat/guards OK CRC32=c7d584cf
+  audio sample (no offset/subchannel validation)
+Track 08 FAD=154619 LBA=154469
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 09 FAD=154770 LBA=154620
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 09 FAD=164942 LBA=164792
+  raw repeat/guards OK CRC32=2a923642
+  audio sample (no offset/subchannel validation)
+Track 09 FAD=174964 LBA=174814
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 10 FAD=175115 LBA=174965
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 10 FAD=184567 LBA=184417
+  raw repeat/guards OK CRC32=51072a30
+  audio sample (no offset/subchannel validation)
+Track 10 FAD=193870 LBA=193720
+  raw repeat/guards OK CRC32=37696237
+  audio sample (no offset/subchannel validation)
+Track 11 FAD=194021 LBA=193871
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 11 FAD=203816 LBA=203666
+  raw repeat/guards OK CRC32=c9fd7e8f
+  audio sample (no offset/subchannel validation)
+Track 11 FAD=213462 LBA=213312
+  raw repeat/guards OK CRC32=ce395ea0
+  audio sample (no offset/subchannel validation)
+Track 12 FAD=213613 LBA=213463
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 12 FAD=224440 LBA=224290
+  raw repeat/guards OK CRC32=f32b2a38
+  audio sample (no offset/subchannel validation)
+Track 12 FAD=235117 LBA=234967
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 13 FAD=235268 LBA=235118
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 13 FAD=244555 LBA=244405
+  raw repeat/guards OK CRC32=7acb5726
+  audio sample (no offset/subchannel validation)
+Track 13 FAD=253693 LBA=253543
+  raw repeat/guards OK CRC32=85806ca4
+  audio sample (no offset/subchannel validation)
+Track 14 FAD=253844 LBA=253694
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 14 FAD=266184 LBA=266034
+  raw repeat/guards OK CRC32=cde0f817
+  audio sample (no offset/subchannel validation)
+Track 14 FAD=278375 LBA=278225
+  raw repeat/guards OK CRC32=55b3b47e
+  audio sample (no offset/subchannel validation)
+Track 15 FAD=278526 LBA=278376
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 15 FAD=288346 LBA=288196
+  raw repeat/guards OK CRC32=6385e3a6
+  audio sample (no offset/subchannel validation)
+Track 15 FAD=298016 LBA=297866
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 16 FAD=298167 LBA=298017
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 16 FAD=306212 LBA=306062
+  raw repeat/guards OK CRC32=1c6a1969
+  audio sample (no offset/subchannel validation)
+Track 16 FAD=314108 LBA=313958
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 17 FAD=314259 LBA=314109
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 17 FAD=322690 LBA=322540
+  raw repeat/guards OK CRC32=2b9a6c63
+  audio sample (no offset/subchannel validation)
+Track 17 FAD=330972 LBA=330822
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 18 FAD=331123 LBA=330973
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 18 FAD=340373 LBA=340223
+  raw repeat/guards OK CRC32=6aff466e
+  audio sample (no offset/subchannel validation)
+Track 18 FAD=349473 LBA=349323
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 19 FAD=349624 LBA=349474
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 19 FAD=358990 LBA=358840
+  raw repeat/guards OK CRC32=321aae32
+  audio sample (no offset/subchannel validation)
+Track 19 FAD=368206 LBA=368056
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 20 FAD=368357 LBA=368207
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 20 FAD=370776 LBA=370626
+  raw repeat/guards OK CRC32=f0868e69
+  audio sample (no offset/subchannel validation)
+Track 20 FAD=373046 LBA=372896
+  raw repeat/guards OK CRC32=855fed71
+  audio sample (no offset/subchannel validation)
+Track 21 FAD=373197 LBA=373047
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 21 FAD=375647 LBA=375497
+  raw repeat/guards OK CRC32=61688214
+  audio sample (no offset/subchannel validation)
+Track 21 FAD=377948 LBA=377798
+  raw repeat/guards OK CRC32=269b4316
+  audio sample (no offset/subchannel validation)
+Track 22 FAD=378099 LBA=377949
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 22 FAD=380438 LBA=380288
+  raw repeat/guards OK CRC32=f12a897d
+  audio sample (no offset/subchannel validation)
+Track 22 FAD=382627 LBA=382477
+  raw repeat/guards OK CRC32=0de7c6a7
+  audio sample (no offset/subchannel validation)
+Track 23 FAD=382778 LBA=382628
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 23 FAD=385169 LBA=385019
+  raw repeat/guards OK CRC32=7b19fa15
+  audio sample (no offset/subchannel validation)
+Track 23 FAD=387411 LBA=387261
+  raw repeat/guards OK CRC32=a4c3bf4e
+  audio sample (no offset/subchannel validation)
+Track 24 FAD=387562 LBA=387412
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 24 FAD=392049 LBA=391899
+  raw repeat/guards OK CRC32=f1dc33e4
+  audio sample (no offset/subchannel validation)
+Track 24 FAD=396387 LBA=396237
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 25 FAD=396538 LBA=396388
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 25 FAD=398787 LBA=398637
+  raw repeat/guards OK CRC32=eadb0006
+  audio sample (no offset/subchannel validation)
+Track 25 FAD=400887 LBA=400737
+  raw repeat/guards OK CRC32=f8cfe592
+  audio sample (no offset/subchannel validation)
+Track 26 FAD=401038 LBA=400888
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 26 FAD=401867 LBA=401717
+  raw repeat/guards OK CRC32=8b29c3c8
+  audio sample (no offset/subchannel validation)
+Track 26 FAD=402547 LBA=402397
+  raw repeat/guards OK CRC32=e1bbabe7
+  audio sample (no offset/subchannel validation)
+Track 27 FAD=402698 LBA=402548
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 27 FAD=409711 LBA=409561
+  raw repeat/guards OK CRC32=6a57bb98
+  audio sample (no offset/subchannel validation)
+Track 27 FAD=416574 LBA=416424
+  raw repeat/guards OK CRC32=ee089eb8
+  audio sample (no offset/subchannel validation)
+Track 28 FAD=416725 LBA=416575
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 28 FAD=418463 LBA=418313
+  raw repeat/guards OK CRC32=d0acd934
+  audio sample (no offset/subchannel validation)
+Track 28 FAD=420051 LBA=419901
+  raw repeat/guards OK CRC32=e5b94f2f
+  audio sample (no offset/subchannel validation)
+Track 29 FAD=420202 LBA=420052
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 29 FAD=422652 LBA=422502
+  raw repeat/guards OK CRC32=7a009521
+  audio sample (no offset/subchannel validation)
+Track 29 FAD=424953 LBA=424803
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 30 FAD=425104 LBA=424954
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 30 FAD=427375 LBA=427225
+  raw repeat/guards OK CRC32=938f95d3
+  audio sample (no offset/subchannel validation)
+Track 30 FAD=429497 LBA=429347
+  raw repeat/guards OK CRC32=be97ce3f
+  audio sample (no offset/subchannel validation)
+Track 31 FAD=429648 LBA=429498
+  raw repeat/guards OK CRC32=7b99de7a
+  raw mode=1 header=95:28:48
+  cooked repeat/guards and raw payload MATCH
+Track 31 FAD=489473 LBA=489323
+  raw repeat/guards OK CRC32=3e6b05ec
+  raw mode=1 header=a8:46:23
+  cooked repeat/guards and raw payload MATCH
+Track 31 FAD=549149 LBA=548999
+  raw repeat/guards OK CRC32=1070b597
+  raw mode=1 header=c2:01:74
+  cooked repeat/guards and raw payload MATCH
+DISC PROBE PASS: both TOCs, 93 samples
+Samples only; full-disc accuracy and compatibility unproven
+Operation ended. Diagnostics page: Y saves the log to SD.
+mstats [bench start] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=3000632 available~=13776584
+RAM sampled peak used/reserved=3000632
+Image+BSS=2780612 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=90684
+Heap system bytes=90684 in use bytes=88948 free bytes=1736
+Unclaimed main RAM=13774848; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Loaded /KUI/bench.cfg
+OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
+OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
+OPTIONS sd_if=scif sd_crc=on
+OPTIONS ui_hz=2 sections=capture
+OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
+OPTIONS sweep_fads=(optical_fad)
+OPTIONS sweep_gap_us=0 sweep_service_us=0
+OPTIONS sweep_mode=pio sweep_spin=off
+OPTIONS sd_bytes=(none)
+OPTIONS capture_hash=crc32 end_readback=off resume_check=full capture_read=p
+io,dma
+OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
+OPTIONS capture_fad=45150
+OPTIONS note=T10 overlapped capture. card=<model> disc=<title>
+LOW TOC first=41010000 last=01020000 end=01003bad
+  T01 ctrl=4 start=150 next=14751
+  T02 ctrl=0 start=14751 next=15277
+HIGH TOC first=41030000 last=411f0000 end=410861b4
+  T03 ctrl=4 start=45150 next=52440
+  T04 ctrl=0 start=52440 next=74365
+  T05 ctrl=0 start=74365 next=94869
+  T06 ctrl=0 start=94869 next=115179
+  T07 ctrl=0 start=115179 next=134728
+  T08 ctrl=0 start=134728 next=154770
+  T09 ctrl=0 start=154770 next=175115
+  T10 ctrl=0 start=175115 next=194021
+  T11 ctrl=0 start=194021 next=213613
+  T12 ctrl=0 start=213613 next=235268
+  T13 ctrl=0 start=235268 next=253844
+  T14 ctrl=0 start=253844 next=278526
+  T15 ctrl=0 start=278526 next=298167
+  T16 ctrl=0 start=298167 next=314259
+  T17 ctrl=0 start=314259 next=331123
+  T18 ctrl=0 start=331123 next=349624
+  T19 ctrl=0 start=349624 next=368357
+  T20 ctrl=0 start=368357 next=373197
+  T21 ctrl=0 start=373197 next=378099
+  T22 ctrl=0 start=378099 next=382778
+  T23 ctrl=0 start=382778 next=387562
+  T24 ctrl=0 start=387562 next=396538
+  T25 ctrl=0 start=396538 next=401038
+  T26 ctrl=0 start=401038 next=402698
+  T27 ctrl=0 start=402698 next=416725
+  T28 ctrl=0 start=416725 next=420202
+  T29 ctrl=0 start=420202 next=425104
+  T30 ctrl=0 start=425104 next=429648
+  T31 ctrl=4 start=429648 next=549300
+BENCH: isolated measurements; each line is one component alone
+BENCH pass 1/1 uihz=2
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+BENCH cpu capture hash=crc32 end=off sample=0 read=pio wall=14431 wk=13436 u
+i=712 oth=283 ui_pct=4.9
+BENCH capture uihz=2 hash=crc32 end=off sample=0 read=pio sectors=4096 resul
+t=ok bytes=9633792 us=13157405 kib_s=715.0
+BENCH capture total hash=crc32 end=off sample=0 read=pio verify_us=0 total_k
+ib_s=715.0 sampled=0 verified=0
+BENCH capture parts hash=crc32 end=off sample=0 read=pio ms disc=3804 edc=37
+6 write=8208 read=0 sha=0 crc=735 ckpt=25
+BENCH resume uihz=2 hash=crc32 check=full sectors=4096 result=ok bytes=96337
+92 us=15390090 kib_s=611.3
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+BENCH cpu capture hash=crc32 end=off sample=0 read=dma wall=10625 wk=9807 ui
+=512 oth=307 ui_pct=4.8
+BENCH capture uihz=2 hash=crc32 end=off sample=0 read=dma sectors=4096 resul
+t=ok bytes=9633792 us=9726835 kib_s=967.2
+BENCH capture total hash=crc32 end=off sample=0 read=dma verify_us=0 total_k
+ib_s=967.2 sampled=0 verified=0
+BENCH capture parts hash=crc32 end=off sample=0 read=dma ms disc=144 edc=403
+ write=8380 read=0 sha=0 crc=744 ckpt=24
+BENCH resume uihz=2 hash=crc32 check=full sectors=4096 result=ok bytes=96337
+92 us=15378826 kib_s=611.7
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+BENCH complete
+OPTICAL setup: subtimers inside TIMING disc
+opt policy=paired PIO yield_us=2000
+opt wall_us=1262130 requests=12 bytes=28224
+opt mode_us=73 calls=12 failed=0
+opt buffers_us=89746 other_us=206
+opt requests ok=12 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=1154852 max_us=448385
+opt read1 calls=12 bytes=28224
+opt read1 max_fad=45150 max_sectors=1
+opt read1 submit_us=253 submits=12
+opt read1 poll_us=541135 polls=111782
+opt read1 wait_us=52149 waits=545
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=561315
+opt read1 poll_n 111737/33/0/12/0
+opt read1 poll_ms 530/1/0/8/0
+opt read1 ok=12 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=17253 max_us=1494
+opt read2 calls=12 bytes=28224
+opt read2 max_fad=47197 max_sectors=1
+opt read2 submit_us=286 submits=12
+opt read2 poll_us=12572 polls=835
+opt read2 wait_us=0 waits=0
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=4395
+opt read2 poll_n 823/0/0/12/0
+opt read2 poll_ms 3/0/0/8/0
+opt read2 ok=12 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+OPTICAL capture: subtimers inside TIMING disc
+opt policy=single PIO yield_us=2000
+opt wall_us=3936626 requests=129 bytes=9709056
+opt mode_us=785 calls=129 failed=0
+opt buffers_us=238860 other_us=1641
+opt requests ok=129 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=3695340 max_us=140084
+opt read1 calls=129 bytes=9709056
+opt read1 max_fad=45150 max_sectors=32
+opt read1 submit_us=2775 submits=129
+opt read1 poll_us=3404705 polls=39169
+opt read1 wait_us=95445 waits=378
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=192415
+opt read1 poll_n 38843/11/0/60/255
+opt read1 poll_ms 179/0/0/43/3180
+opt read1 ok=129 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=0 max_us=0
+opt read2 calls=0 bytes=0
+opt read2 max_fad=0 max_sectors=0
+opt read2 submit_us=0 submits=0
+opt read2 poll_us=0 polls=0
+opt read2 wait_us=0 waits=0
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=0
+opt read2 ok=0 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+mstats [bench end] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=3000632 available~=13776584
+RAM sampled peak used/reserved=3000632
+Image+BSS=2780612 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=90684
+Heap system bytes=90684 in use bytes=88948 free bytes=1736
+Unclaimed main RAM=13774848; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+Bench result: complete
+Saving diagnostic report automatically; B cancels log save.
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=3000632 available~=13776584
+RAM sampled peak used/reserved=3000632
+Image+BSS=2780612 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=90684
+Heap system bytes=90684 in use bytes=88948 free bytes=1736
+Unclaimed main RAM=13774848; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Report saved: /KUI/probes/p0005/diagnostics.txt
+Operation ended. Diagnostics page: Y saves the log to SD.
+mstats [bench start] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=3000632 available~=13776584
+RAM sampled peak used/reserved=3000632
+Image+BSS=2780612 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=90684
+Heap system bytes=90684 in use bytes=88948 free bytes=1736
+Unclaimed main RAM=13774848; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+Loaded /KUI/bench.cfg
+OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
+OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
+OPTIONS sd_if=scif sd_crc=on
+OPTIONS ui_hz=2 sections=capture
+OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
+OPTIONS sweep_fads=(optical_fad)
+OPTIONS sweep_gap_us=0 sweep_service_us=0
+OPTIONS sweep_mode=pio sweep_spin=off
+OPTIONS sd_bytes=(none)
+OPTIONS capture_hash=crc32 end_readback=off resume_check=full capture_read=p
+io,dma
+OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
+OPTIONS capture_fad=45150
+OPTIONS note=T10 overlapped capture. card=<model> disc=<title>
+LOW TOC first=41010000 last=01020000 end=01003bad
+  T01 ctrl=4 start=150 next=14751
+  T02 ctrl=0 start=14751 next=15277
+HIGH TOC first=41030000 last=411f0000 end=410861b4
+  T03 ctrl=4 start=45150 next=52440
+  T04 ctrl=0 start=52440 next=74365
+  T05 ctrl=0 start=74365 next=94869
+  T06 ctrl=0 start=94869 next=115179
+  T07 ctrl=0 start=115179 next=134728
+  T08 ctrl=0 start=134728 next=154770
+  T09 ctrl=0 start=154770 next=175115
+  T10 ctrl=0 start=175115 next=194021
+  T11 ctrl=0 start=194021 next=213613
+  T12 ctrl=0 start=213613 next=235268
+  T13 ctrl=0 start=235268 next=253844
+  T14 ctrl=0 start=253844 next=278526
+  T15 ctrl=0 start=278526 next=298167
+  T16 ctrl=0 start=298167 next=314259
+  T17 ctrl=0 start=314259 next=331123
+  T18 ctrl=0 start=331123 next=349624
+  T19 ctrl=0 start=349624 next=368357
+  T20 ctrl=0 start=368357 next=373197
+  T21 ctrl=0 start=373197 next=378099
+  T22 ctrl=0 start=378099 next=382778
+  T23 ctrl=0 start=382778 next=387562
+  T24 ctrl=0 start=387562 next=396538
+  T25 ctrl=0 start=396538 next=401038
+  T26 ctrl=0 start=401038 next=402698
+  T27 ctrl=0 start=402698 next=416725
+  T28 ctrl=0 start=416725 next=420202
+  T29 ctrl=0 start=420202 next=425104
+  T30 ctrl=0 start=425104 next=429648
+  T31 ctrl=4 start=429648 next=549300
+BENCH: isolated measurements; each line is one component alone
+BENCH pass 1/1 uihz=2
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+BENCH cpu capture hash=crc32 end=off sample=0 read=pio wall=14027 wk=13127 u
+i=629 oth=271 ui_pct=4.4
+BENCH capture uihz=2 hash=crc32 end=off sample=0 read=pio sectors=4096 resul
+t=ok bytes=9633792 us=13135328 kib_s=716.2
+BENCH capture total hash=crc32 end=off sample=0 read=pio verify_us=0 total_k
+ib_s=716.2 sampled=0 verified=0
+BENCH capture parts hash=crc32 end=off sample=0 read=pio ms disc=3655 edc=37
+6 write=8342 read=0 sha=0 crc=727 ckpt=25
+BENCH resume uihz=2 hash=crc32 check=full sectors=4096 result=ok bytes=96337
+92 us=15447867 kib_s=609.0
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+BENCH cpu capture hash=crc32 end=off sample=0 read=dma wall=10683 wk=9803 ui
+=609 oth=272 ui_pct=5.7
+BENCH capture uihz=2 hash=crc32 end=off sample=0 read=dma sectors=4096 resul
+t=ok bytes=9633792 us=9772753 kib_s=962.6
+BENCH capture total hash=crc32 end=off sample=0 read=dma verify_us=0 total_k
+ib_s=962.6 sampled=0 verified=0
+BENCH capture parts hash=crc32 end=off sample=0 read=dma ms disc=146 edc=388
+ write=8475 read=0 sha=0 crc=708 ckpt=24
+BENCH resume uihz=2 hash=crc32 check=full sectors=4096 result=ok bytes=96337
+92 us=15452577 kib_s=608.8
+SD exFAT, 249997312 sectors, cluster=131072 bytes
+Volume start=2048 (MBR)
+BENCH complete
+OPTICAL setup: subtimers inside TIMING disc
+opt policy=paired PIO yield_us=2000
+opt wall_us=869491 requests=12 bytes=28224
+opt mode_us=74 calls=12 failed=0
+opt buffers_us=89793 other_us=216
+opt requests ok=12 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=762365 max_us=81167
+opt read1 calls=12 bytes=28224
+opt read1 max_fad=45150 max_sectors=1
+opt read1 submit_us=253 submits=12
+opt read1 poll_us=359385 polls=73560
+opt read1 wait_us=32621 waits=357
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=370106
+opt read1 poll_n 73519/29/0/12/0
+opt read1 poll_ms 349/1/0/8/0
+opt read1 ok=12 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=17043 max_us=1477
+opt read2 calls=12 bytes=28224
+opt read2 max_fad=49245 max_sectors=1
+opt read2 submit_us=252 submits=12
+opt read2 poll_us=12494 polls=818
+opt read2 wait_us=0 waits=0
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=4297
+opt read2 poll_n 805/1/0/12/0
+opt read2 poll_ms 3/0/0/8/0
+opt read2 ok=12 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+OPTICAL capture: subtimers inside TIMING disc
+opt policy=single PIO yield_us=2000
+opt wall_us=3789934 requests=129 bytes=9709056
+opt mode_us=824 calls=129 failed=0
+opt buffers_us=228744 other_us=1654
+opt requests ok=129 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=3558712 max_us=144416
+opt read1 calls=129 bytes=9709056
+opt read1 max_fad=45150 max_sectors=32
+opt read1 submit_us=5277 submits=129
+opt read1 poll_us=3294836 polls=42144
+opt read1 wait_us=54360 waits=391
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=204239
+opt read1 poll_n 41810/16/0/64/254
+opt read1 poll_ms 193/0/0/46/3054
+opt read1 ok=129 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=0 max_us=0
+opt read2 calls=0 bytes=0
+opt read2 max_fad=0 max_sectors=0
+opt read2 submit_us=0 submits=0
+opt read2 poll_us=0 polls=0
+opt read2 wait_us=0 waits=0
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=0
+opt read2 ok=0 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+mstats [bench end] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=3000632 available~=13776584
+RAM sampled peak used/reserved=3000632
+Image+BSS=2780612 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=90684
+Heap system bytes=90684 in use bytes=88948 free bytes=1736
+Unclaimed main RAM=13774848; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+Bench result: complete
+Saving diagnostic report automatically; B cancels log save.
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=3000632 available~=13776584
+RAM sampled peak used/reserved=3000632
+Image+BSS=2780612 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=90684
+Heap system bytes=90684 in use bytes=88948 free bytes=1736
+Unclaimed main RAM=13774848; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on

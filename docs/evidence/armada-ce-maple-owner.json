@@ -1,0 +1,488 @@
+{
+  "format": "armada-ce-maple-audit-v1",
+  "inputs": [
+    {
+      "file": "0WINCEOS.BIN",
+      "bytes": 1253376,
+      "sha256": "a7628c78090fce2c93012d5e4db6142096e138dceb7ebbf555142e902ca03c1f"
+    },
+    {
+      "file": "WINCE/MAPLE.DLL",
+      "bytes": 26191,
+      "sha256": "b8eb7afc2b13fcec8551af4fa75288fca1881f671181b88ea042aa9d77524e6e"
+    },
+    {
+      "file": "WINCE/MAPLEDEV.DLL",
+      "bytes": 55381,
+      "sha256": "16dfc7b3bb6519af633e09e7886e36cbaf73c74ffc387c5c6d6369e26862ac28"
+    }
+  ],
+  "rom_header_address": 2350126112,
+  "rom_header": {
+    "dllfirst": 30539776,
+    "dlllast": 33554432,
+    "physfirst": 2348875776,
+    "physlast": 2350126968,
+    "nummods": 21,
+    "ram_start": 2350129152,
+    "ram_free": 2350186496,
+    "ram_end": 2365390848,
+    "copy_count": 1,
+    "copy_address": 2350126952,
+    "profile_bytes": 0,
+    "profile_address": 0,
+    "files_count": 3,
+    "kernel_flags": 1,
+    "fs_ram_percent": 0,
+    "driver_globals_address": 2365390848,
+    "driver_globals_bytes": 196608,
+    "interrupt_stack_address": 0,
+    "interrupt_stack_bytes": 0,
+    "tracking_address": 0,
+    "tracking_bytes": 0
+  },
+  "copy_records": [
+    {
+      "source": 2349001436,
+      "destination": 2350144512,
+      "copied_bytes": 1261,
+      "total_bytes": 41096,
+      "initialized_sha256": "4a8f895d299f73699fb3d9918b9043b6bb1a70bb21270f9cfbbe9a246a225692"
+    }
+  ],
+  "modules": [
+    {
+      "name": "maple.dll",
+      "toc_address": 2350126612,
+      "e32_address": 2349439856,
+      "o32_address": 2349439956,
+      "load_address": 2349867008,
+      "nominal_virtual_base": 31260672,
+      "entry_rva": 25592,
+      "virtual_bytes": 40960,
+      "object_flags": 8462,
+      "directories": [
+        [
+          26480,
+          50
+        ],
+        [
+          25832,
+          80
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          32768,
+          600
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          36864,
+          948
+        ],
+        [
+          4096,
+          28
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 22434,
+          "rva": 4096,
+          "stored_bytes": 22528,
+          "data_address": 2349527040,
+          "real_address_field": 64819200,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 653312,
+          "stored_sha256": "adad8872616d92a7553a7b1d5c1a58a54f955d15b647a2cfed8766633e5ccbb8"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 704,
+          "rva": 28672,
+          "stored_bytes": 173,
+          "data_address": 2349195055,
+          "real_address_field": 64843776,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 321327,
+          "stored_sha256": "8394ec95a320d29f81767b7e7f7eb31be94b4aab66873117798c8d9f6427bd39"
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 600,
+          "rva": 32768,
+          "stored_bytes": 485,
+          "data_address": 2349223332,
+          "real_address_field": 64847872,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 349604,
+          "stored_sha256": "3c177d9bae829309f6041ff59cae134aed1a956b0dd3409536aa459a984dc469"
+        }
+      ],
+      "section_count": 3
+    },
+    {
+      "name": "mapledev.dll",
+      "toc_address": 2350126836,
+      "e32_address": 2349465316,
+      "o32_address": 2349465416,
+      "load_address": 2350432256,
+      "nominal_virtual_base": 30539776,
+      "entry_rva": 50920,
+      "virtual_bytes": 65536,
+      "object_flags": 8462,
+      "directories": [
+        [
+          51504,
+          171
+        ],
+        [
+          51312,
+          40
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          57344,
+          1944
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          61440,
+          2948
+        ],
+        [
+          4096,
+          28
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 47579,
+          "rva": 4096,
+          "stored_bytes": 47616,
+          "data_address": 2349891584,
+          "real_address_field": 64098304,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 1017856,
+          "stored_sha256": "88940ab3422b15e7bff4811a114264ddbd6b5b13ee60ad3db07997436e87f0b7"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 1364,
+          "rva": 53248,
+          "stored_bytes": 380,
+          "data_address": 2349428330,
+          "real_address_field": 64147456,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 554602,
+          "stored_sha256": "bffc5b97be812fba9384d38479338e6357221647b00882ef197cd42bb70ca092"
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 1944,
+          "rva": 57344,
+          "stored_bytes": 1497,
+          "data_address": 2349480405,
+          "real_address_field": 64151552,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 606677,
+          "stored_sha256": "baf657e4a8ecc6cfafc724e062f3119496b2cb81e5f01f28e4589a5288a4098f"
+        }
+      ],
+      "section_count": 3
+    }
+  ],
+  "probe_profile": {
+    "constants": {
+      "KUI_ARMADA_CE_MAPLE_ROM_TOC": 2350126612,
+      "KUI_ARMADA_CE_MAPLE_NOMINAL": 31260672,
+      "KUI_ARMADA_CE_MAPLE_SPAN": 40960,
+      "KUI_ARMADA_CE_MAPLEDEV_ROM_TOC": 2350126836,
+      "KUI_ARMADA_CE_MAPLEDEV_NOMINAL": 30539776,
+      "KUI_ARMADA_CE_MAPLEDEV_SPAN": 65536
+    },
+    "matched": true
+  },
+  "external_text_equivalence": [
+    {
+      "module": "maple.dll",
+      "external_image_base": 268435456,
+      "rom_nominal_base": 31260672,
+      "relocation_kind": "HIGHLOW",
+      "fixups": 443,
+      "text_fixups": 368,
+      "compared_bytes": 22528,
+      "virtual_text_bytes": 22434,
+      "text_sha256": "adad8872616d92a7553a7b1d5c1a58a54f955d15b647a2cfed8766633e5ccbb8",
+      "complete_stored_text_equal": true
+    },
+    {
+      "module": "mapledev.dll",
+      "external_image_base": 268435456,
+      "rom_nominal_base": 30539776,
+      "relocation_kind": "HIGHLOW",
+      "fixups": 1411,
+      "text_fixups": 1166,
+      "compared_bytes": 47616,
+      "virtual_text_bytes": 47579,
+      "text_sha256": "88940ab3422b15e7bff4811a114264ddbd6b5b13ee60ad3db07997436e87f0b7",
+      "complete_stored_text_equal": true
+    }
+  ],
+  "sysintr18_descriptor": {
+    "destination": 2350145240,
+    "source": 2349002164,
+    "file_offset": 128436,
+    "bytes": 24,
+    "sha256": "5510ff681327e7d0bf3eb17cdc2be921f731096288acb4d41bc2cd4aa07b707d",
+    "fields": {
+      "status_register": 2690607360,
+      "mask_register": 2690607392,
+      "all_bits": 12288,
+      "software_mask": 0,
+      "latched": 0,
+      "desired": 12288
+    }
+  },
+  "sysintr18_callbacks": {
+    "destination": 2350145516,
+    "source": 2349002440,
+    "file_offset": 128712,
+    "bytes": 12,
+    "sha256": "d77fb4c086ab6a41067c1803bac5a79a8e64561da1879b2ca387d1dcfdbf074d",
+    "fields": {
+      "enable": 2348991844,
+      "disable": 2348991892,
+      "done": 2348991944
+    }
+  },
+  "contracts": [
+    {
+      "module": "nk.exe",
+      "name": "install_ce_vbr",
+      "rva": 8528,
+      "bytes": 88,
+      "nominal_va": 2348884304,
+      "rom_storage_address": 2348884304,
+      "sha256": "b8b9742c9e0ddf68268207489e89367bb73dd0c354269da76dea214e6aff4a9e",
+      "crc32": "c232af98",
+      "description": "Installs VBR0x8c0120f0 at RVA0x2166.",
+      "file_offset": 10576
+    },
+    {
+      "module": "nk.exe",
+      "name": "interrupt_dispatch",
+      "rva": 9968,
+      "bytes": 160,
+      "nominal_va": 2348885744,
+      "rom_storage_address": 2348885744,
+      "sha256": "5b5e3a3c3823427df844f732692f59a5c6f51310592b41e63414ba336b93f4d6",
+      "crc32": "ae155e59",
+      "description": "CE handler-table dispatch and pending SYSINTR ring.",
+      "file_offset": 12016
+    },
+    {
+      "module": "nk.exe",
+      "name": "asic_lifecycle",
+      "rva": 116068,
+      "bytes": 136,
+      "nominal_va": 2348991844,
+      "rom_storage_address": 2348991844,
+      "sha256": "79c9cbbd9dc93c083b96358c978d6b16192c8bcb892922fb45cf96c5c251a09e",
+      "crc32": "fd0c06d3",
+      "description": "CE ASIC enable, disable and InterruptDone callbacks.",
+      "file_offset": 118116
+    },
+    {
+      "module": "nk.exe",
+      "name": "interrupt_registration",
+      "rva": 116600,
+      "bytes": 296,
+      "nominal_va": 2348992376,
+      "rom_storage_address": 2348992376,
+      "sha256": "5f5f97252c461d4bbca386ca35f1cffaf5c2312eebab5b123df5e61de76ee652",
+      "crc32": "00bb5520",
+      "description": "Registers normal ASIC handler for INTEVT0x360.",
+      "file_offset": 118648
+    },
+    {
+      "module": "nk.exe",
+      "name": "normal_asic_dispatch",
+      "rva": 119128,
+      "bytes": 152,
+      "nominal_va": 2348994904,
+      "rom_storage_address": 2348994904,
+      "sha256": "aacd327bc5df1f55e1efe74063afc681167b51729b8adb67f3f5091bc8e03b00",
+      "crc32": "8261b81a",
+      "description": "Masks normal bits12/13 and returns SYSINTR18.",
+      "file_offset": 121176
+    },
+    {
+      "module": "maple.dll",
+      "name": "map_registers",
+      "rva": 7342,
+      "bytes": 68,
+      "nominal_va": 31268014,
+      "rom_storage_address": 2349530286,
+      "sha256": "f48dffade45b18e1cdc8203be73a95f62ca1ef56e2b032ceebf8a0b9102bd5c5",
+      "crc32": "66313906",
+      "description": "Maps physical0x005f6c00 bytes0x100 into extension+0x100.",
+      "file_offset": 656558
+    },
+    {
+      "module": "maple.dll",
+      "name": "hardware_initialize",
+      "rva": 7716,
+      "bytes": 132,
+      "nominal_va": 31268388,
+      "rom_storage_address": 2349530660,
+      "sha256": "887bf8212c5aebc0b6237e5de8a48d5ca04d2704b4c2703f4dc137e91d868106",
+      "crc32": "388afd03",
+      "description": "Sets MDTSEL1, MDSTAR common-buffer bus address and MDEN1.",
+      "file_offset": 656932
+    },
+    {
+      "module": "maple.dll",
+      "name": "descriptor_builder",
+      "rva": 22572,
+      "bytes": 502,
+      "nominal_va": 31283244,
+      "rom_storage_address": 2349545516,
+      "sha256": "df75f1ba377ec110c41daa5d6c4a5b29bfd82f6a3713e27ef928c246ae53f978",
+      "crc32": "7a939946",
+      "description": "Ordinary shared descriptor-list builder.",
+      "file_offset": 671788
+    },
+    {
+      "module": "maple.dll",
+      "name": "completion_preamble",
+      "rva": 23308,
+      "bytes": 12,
+      "nominal_va": 31283980,
+      "rom_storage_address": 2349546252,
+      "sha256": "d80a834aa8c67bda56e1fb24c26bdb8586ad4e03c0b1c1751c9715a2f6459c6d",
+      "crc32": "b6e7c2a6",
+      "description": "Six register pushes; no branch or PC-relative instruction.",
+      "file_offset": 672524
+    },
+    {
+      "module": "maple.dll",
+      "name": "completion_walker",
+      "rva": 23308,
+      "bytes": 540,
+      "nominal_va": 31283980,
+      "rom_storage_address": 2349546252,
+      "sha256": "171c5335957be9b7cc646a2543d6520296583741be22726f341a3b317c2c694d",
+      "crc32": "04354275",
+      "description": "Processes physical response buffers before ordinary consumers.",
+      "file_offset": 672524
+    },
+    {
+      "module": "maple.dll",
+      "name": "main_loop",
+      "rva": 23884,
+      "bytes": 188,
+      "nominal_va": 31284556,
+      "rom_storage_address": 2349546828,
+      "sha256": "49a74121d929f431c489bc96bf624886d7fc83b3347c4a54996d152262339a35",
+      "crc32": "437a1931",
+      "description": "Writes mapped+0x88, waits SYSINTR18, completes and calls InterruptDone18.",
+      "file_offset": 673100
+    },
+    {
+      "module": "maple.dll",
+      "name": "list_ready",
+      "rva": 23944,
+      "bytes": 12,
+      "nominal_va": 31284616,
+      "rom_storage_address": 2349546888,
+      "sha256": "a9e155720669c9210f76fbd586f007de06066a30109d5669e05d559dbed85222",
+      "crc32": "604a24fe",
+      "description": "Writes mapped+0x88 value1; includes PC-relative loads.",
+      "file_offset": 673160
+    },
+    {
+      "module": "maple.dll",
+      "name": "special_descriptor_path",
+      "rva": 22148,
+      "bytes": 424,
+      "nominal_va": 31282820,
+      "rom_storage_address": 2349545092,
+      "sha256": "8929fd596ca6786610110ce939b187b3b261e2e5b30c6ee127804dbcd27de53b",
+      "crc32": "68dcaf49",
+      "description": "Separate special-descriptor path also writes mapped+0x88.",
+      "file_offset": 671364
+    }
+  ],
+  "interrupt_ownership": {
+    "vbr": 2348884208,
+    "dispatch": 2348885744,
+    "normal_intevt": 864,
+    "handler_slot": 2350144624,
+    "handler": 2348994904,
+    "maple_sysintr": 18,
+    "normal_bits": 12288,
+    "conclusion": "CE masks and rearms Maple completion through its own SYSINTR lifecycle."
+  },
+  "transport": {
+    "trigger_select": 1,
+    "trigger_select_write_rva": 7778,
+    "main_list_ready_rva": 23944,
+    "main_write_call_rva": 23952,
+    "main_write_register": 6253704,
+    "main_write_value": 1,
+    "mdst_register": 6253592,
+    "conclusion": "VBlank-triggered DMA is configured; mapped+0x88 is not MDST+0x18. The native5 pre-MDST software-start contract does not apply."
+  },
+  "memory_conflict": {
+    "driver_globals_begin": 2365390848,
+    "driver_globals_end": 2365587456,
+    "native5_worker_begin": 2365390848,
+    "native5_worker_end": 2365587456,
+    "overlap_bytes": 196608,
+    "conclusion": "The native5 top-RAM worker range overlaps CE driver globals; no CE VMU lease is established."
+  },
+  "limitations": [
+    "Storage addresses, TOC load addresses and nominal VAs are not observed live mappings.",
+    "Text equivalence proves contracts by RVA, not which copy CE executes.",
+    "Completion RVA0x5b0c is a static passive candidate; live backing, legal trampoline entry and caller state remain unproven.",
+    "An idle MDST sample does not exclude a VBlank transfer during or after the sample.",
+    "No executable bytes are exported; no runtime patch, register write or virtual reply is performed."
+  ]
+}

@@ -1,0 +1,1097 @@
+{
+  "sha256": "a7628c78090fce2c93012d5e4db6142096e138dceb7ebbf555142e902ca03c1f",
+  "file_bytes": 1253376,
+  "load_header": {
+    "count": 1,
+    "address": 201392128,
+    "file_offset": 2048,
+    "bytes": 1251328,
+    "entry": 201392128
+  },
+  "prefix_crc32": "6200729c",
+  "body_crc32": "b9f755bc",
+  "rom_header_address": 2350126112,
+  "rom_header": {
+    "dllfirst": 30539776,
+    "dlllast": 33554432,
+    "physfirst": 2348875776,
+    "physlast": 2350126968,
+    "nummods": 21,
+    "ram_start": 2350129152,
+    "ram_free": 2350186496,
+    "ram_end": 2365390848,
+    "copy_count": 1,
+    "copy_address": 2350126952,
+    "profile_bytes": 0,
+    "profile_address": 0,
+    "files_count": 3,
+    "kernel_flags": 1,
+    "fs_ram_percent": 0,
+    "driver_globals_address": 2365390848,
+    "driver_globals_bytes": 196608,
+    "interrupt_stack_address": 0,
+    "interrupt_stack_bytes": 0,
+    "tracking_address": 0,
+    "tracking_bytes": 0
+  },
+  "modules": [
+    {
+      "name": "nk.exe",
+      "toc_address": 2350126196,
+      "e32_address": 2349223820,
+      "o32_address": 2349227772,
+      "load_address": 2348875776,
+      "nominal_virtual_base": 2348875776,
+      "entry_rva": 8384,
+      "virtual_bytes": 196608,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 121564,
+          "rva": 4096,
+          "stored_bytes": 121856,
+          "data_address": 2348879872,
+          "real_address_field": 69632,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 6144,
+          "initialized_bytes": 121564,
+          "initialized_sha256": "d45ba7dcfb5b2fb8b36de3ad5eac8d41c966684b39d136bfae608bd6773f32bc"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 7168,
+          "rva": 126976,
+          "stored_bytes": 0,
+          "data_address": 2349001436,
+          "real_address_field": 192512,
+          "flags": 3221225600,
+          "compressed": false,
+          "file_offset": null
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 41096,
+          "rva": 135168,
+          "stored_bytes": 1261,
+          "data_address": 2349001436,
+          "real_address_field": 200704,
+          "flags": 3221225536,
+          "compressed": false,
+          "file_offset": 127708,
+          "initialized_bytes": 1261,
+          "initialized_sha256": "4a8f895d299f73699fb3d9918b9043b6bb1a70bb21270f9cfbbe9a246a225692"
+        },
+        {
+          "index": 3,
+          "virtual_bytes": 4464,
+          "rva": 126976,
+          "stored_bytes": 4608,
+          "data_address": 2349002752,
+          "real_address_field": 192512,
+          "flags": 1073741888,
+          "compressed": false,
+          "file_offset": 129024,
+          "initialized_bytes": 4464,
+          "initialized_sha256": "b1741263b0cbfe2d5cba6746850dd3dabd98716db9cd553606e3026599417f9b"
+        }
+      ]
+    },
+    {
+      "name": "coredll.dll",
+      "toc_address": 2350126228,
+      "e32_address": 2349227868,
+      "o32_address": 2349420176,
+      "load_address": 2349400064,
+      "nominal_virtual_base": 31784960,
+      "entry_rva": 11820,
+      "virtual_bytes": 212992,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 183492,
+          "rva": 4096,
+          "stored_bytes": 183808,
+          "data_address": 2349010944,
+          "real_address_field": 65343488,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 137216,
+          "initialized_bytes": 183492,
+          "initialized_sha256": "483d00fddda276339e6cf61d64136c5d187630464f44f17f1af1d79630137a9e"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 356,
+          "rva": 188416,
+          "stored_bytes": 8,
+          "data_address": 2349002697,
+          "real_address_field": 65527808,
+          "flags": 3224371264,
+          "compressed": false,
+          "file_offset": 128969,
+          "initialized_bytes": 8,
+          "initialized_sha256": "9402bb655bc3b7331a00f1219ef647565bbe517c74aa0e41026885785867d1cd"
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 6216,
+          "rva": 192512,
+          "stored_bytes": 4680,
+          "data_address": 2349940736,
+          "real_address_field": 65531904,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 1067008
+        },
+        {
+          "index": 3,
+          "virtual_bytes": 536,
+          "rva": 200704,
+          "stored_bytes": 1024,
+          "data_address": 2349195264,
+          "real_address_field": 65540096,
+          "flags": 1073741888,
+          "compressed": false,
+          "file_offset": 321536,
+          "initialized_bytes": 536,
+          "initialized_sha256": "ae85bb63786cbd06d93dcc218fdd949ef314d020c52c48e773853c75272f0617"
+        }
+      ]
+    },
+    {
+      "name": "filesys.exe",
+      "toc_address": 2350126260,
+      "e32_address": 2349420272,
+      "o32_address": 2349420372,
+      "load_address": 2349076480,
+      "nominal_virtual_base": 65536,
+      "entry_rva": 14336,
+      "virtual_bytes": 49152,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 23972,
+          "rva": 4096,
+          "stored_bytes": 24064,
+          "data_address": 2349199360,
+          "real_address_field": 69632,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 325632,
+          "initialized_bytes": 23972,
+          "initialized_sha256": "4ebc9ff1e83bdae139698f4f0834b973db2acaa15747d629a6a0bdeef0553469"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 9488,
+          "rva": 28672,
+          "stored_bytes": 1416,
+          "data_address": 2349007216,
+          "real_address_field": 94208,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 133488
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 1264,
+          "rva": 40960,
+          "stored_bytes": 900,
+          "data_address": 2349008632,
+          "real_address_field": 106496,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 134904
+        },
+        {
+          "index": 3,
+          "virtual_bytes": 172,
+          "rva": 45056,
+          "stored_bytes": 512,
+          "data_address": 2349223936,
+          "real_address_field": 110592,
+          "flags": 1073741888,
+          "compressed": false,
+          "file_offset": 350208,
+          "initialized_bytes": 172,
+          "initialized_sha256": "6c942a090545b8cc2e2a0b5a5a934c87a1c62a637c22565503d6ac7e42ba2da3"
+        }
+      ]
+    },
+    {
+      "name": "gwes.exe",
+      "toc_address": 2350126292,
+      "e32_address": 2349431340,
+      "o32_address": 2349420468,
+      "load_address": 2349129728,
+      "nominal_virtual_base": 65536,
+      "entry_rva": 12380,
+      "virtual_bytes": 225280,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 191020,
+          "rva": 4096,
+          "stored_bytes": 191488,
+          "data_address": 2349228032,
+          "real_address_field": 69632,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 354304,
+          "initialized_bytes": 191020,
+          "initialized_sha256": "5a4ef18c78e799f1f97d2184cf3595e2ae6ddf3a496ad755577b600da1fa32f5"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 13740,
+          "rva": 196608,
+          "stored_bytes": 1585,
+          "data_address": 2349195800,
+          "real_address_field": 262144,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 322072
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 8848,
+          "rva": 212992,
+          "stored_bytes": 6354,
+          "data_address": 2349945416,
+          "real_address_field": 278528,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 1071688
+        }
+      ]
+    },
+    {
+      "name": "ole32.dll",
+      "toc_address": 2350126324,
+      "e32_address": 2349431440,
+      "o32_address": 2349431540,
+      "load_address": 2349617152,
+      "nominal_virtual_base": 31719424,
+      "entry_rva": 9712,
+      "virtual_bytes": 24576,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 6754,
+          "rva": 4096,
+          "stored_bytes": 7168,
+          "data_address": 2349420544,
+          "real_address_field": 65277952,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 546816,
+          "initialized_bytes": 6754,
+          "initialized_sha256": "51019103288b65df8409b064c487b481dce013a904b02858640127db6539f3b7"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 204,
+          "rva": 12288,
+          "stored_bytes": 106,
+          "data_address": 2349009532,
+          "real_address_field": 65286144,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 135804
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 320,
+          "rva": 16384,
+          "stored_bytes": 259,
+          "data_address": 2349009638,
+          "real_address_field": 65290240,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 135910
+        }
+      ]
+    },
+    {
+      "name": "sysstart.exe",
+      "toc_address": 2350126356,
+      "e32_address": 2349431612,
+      "o32_address": 2349431712,
+      "load_address": 2349359104,
+      "nominal_virtual_base": 65536,
+      "entry_rva": 4584,
+      "virtual_bytes": 16384,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 2604,
+          "rva": 4096,
+          "stored_bytes": 3072,
+          "data_address": 2349428736,
+          "real_address_field": 69632,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 555008,
+          "initialized_bytes": 2604,
+          "initialized_sha256": "9e6b2db6d194b2095018e6bf1f132a246e57e3ad0879504b654d738fc8185d06"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 148,
+          "rva": 8192,
+          "stored_bytes": 103,
+          "data_address": 2349009897,
+          "real_address_field": 73728,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 136169
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 64,
+          "rva": 12288,
+          "stored_bytes": 61,
+          "data_address": 2349010000,
+          "real_address_field": 77824,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 136272
+        }
+      ]
+    },
+    {
+      "name": "timer.dll",
+      "toc_address": 2350126388,
+      "e32_address": 2349431784,
+      "o32_address": 2349431884,
+      "load_address": 2349645824,
+      "nominal_virtual_base": 31653888,
+      "entry_rva": 8160,
+      "virtual_bytes": 24576,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 4738,
+          "rva": 4096,
+          "stored_bytes": 5120,
+          "data_address": 2349432832,
+          "real_address_field": 65212416,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 559104,
+          "initialized_bytes": 4738,
+          "initialized_sha256": "33b2322748fef057f2ddd155099f2cec3ac256836d36cc008461239d3f7fbd61"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 1492,
+          "rva": 12288,
+          "stored_bytes": 123,
+          "data_address": 2349010061,
+          "real_address_field": 65220608,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 136333
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 224,
+          "rva": 16384,
+          "stored_bytes": 181,
+          "data_address": 2349010184,
+          "real_address_field": 65224704,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 136456
+        }
+      ]
+    },
+    {
+      "name": "ddi.dll",
+      "toc_address": 2350126420,
+      "e32_address": 2349431956,
+      "o32_address": 2349432056,
+      "load_address": 2349674496,
+      "nominal_virtual_base": 31588352,
+      "entry_rva": 27516,
+      "virtual_bytes": 49152,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 24218,
+          "rva": 4096,
+          "stored_bytes": 24576,
+          "data_address": 2349441024,
+          "real_address_field": 65146880,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 567296,
+          "initialized_bytes": 24218,
+          "initialized_sha256": "719f5bc81eeae1755db0abb8908926b08ee3ea6b17ce6dad680688834caed418"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 8480,
+          "rva": 28672,
+          "stored_bytes": 153,
+          "data_address": 2349010365,
+          "real_address_field": 65171456,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 136637
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 744,
+          "rva": 40960,
+          "stored_bytes": 581,
+          "data_address": 2349194436,
+          "real_address_field": 65183744,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 320708
+        }
+      ]
+    },
+    {
+      "name": "platutil.dll",
+      "toc_address": 2350126452,
+      "e32_address": 2349432128,
+      "o32_address": 2349432228,
+      "load_address": 2349727744,
+      "nominal_virtual_base": 31522816,
+      "entry_rva": 5212,
+      "virtual_bytes": 36864,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 12463,
+          "rva": 4096,
+          "stored_bytes": 12800,
+          "data_address": 2349465600,
+          "real_address_field": 65081344,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 591872,
+          "initialized_bytes": 12463,
+          "initialized_sha256": "1bf5761b5f17b0a89b391fc26764affa428957eefc56d4047ef5a1051d404183"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 68,
+          "rva": 20480,
+          "stored_bytes": 512,
+          "data_address": 2349481984,
+          "real_address_field": 65097728,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 608256,
+          "initialized_bytes": 68,
+          "initialized_sha256": "237b247d0f80d78e79d4851bb2745c84f01cad1ba194dd3f3ea184d21c1fbb7a"
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 288,
+          "rva": 24576,
+          "stored_bytes": 130,
+          "data_address": 2349010518,
+          "real_address_field": 65101824,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 136790
+        },
+        {
+          "index": 3,
+          "virtual_bytes": 592,
+          "rva": 28672,
+          "stored_bytes": 442,
+          "data_address": 2349197385,
+          "real_address_field": 65105920,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 323657
+        }
+      ]
+    },
+    {
+      "name": "wdevice.exe",
+      "toc_address": 2350126484,
+      "e32_address": 2349432324,
+      "o32_address": 2349432424,
+      "load_address": 2349379584,
+      "nominal_virtual_base": 65536,
+      "entry_rva": 4500,
+      "virtual_bytes": 16384,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 2404,
+          "rva": 4096,
+          "stored_bytes": 2560,
+          "data_address": 2349486080,
+          "real_address_field": 69632,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 612352,
+          "initialized_bytes": 2404,
+          "initialized_sha256": "a3004ac48e467f0da3f363609a18e39cf9484232553ef7ea2e4e65eeff3cfc7b"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 144,
+          "rva": 8192,
+          "stored_bytes": 106,
+          "data_address": 2349010648,
+          "real_address_field": 73728,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 136920
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 72,
+          "rva": 12288,
+          "stored_bytes": 59,
+          "data_address": 2349010754,
+          "real_address_field": 77824,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 137026
+        }
+      ]
+    },
+    {
+      "name": "wdmlib.dll",
+      "toc_address": 2350126516,
+      "e32_address": 2349432496,
+      "o32_address": 2349432596,
+      "load_address": 2349768704,
+      "nominal_virtual_base": 31457280,
+      "entry_rva": 4360,
+      "virtual_bytes": 28672,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 11065,
+          "rva": 4096,
+          "stored_bytes": 11264,
+          "data_address": 2349490176,
+          "real_address_field": 65015808,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 616448,
+          "initialized_bytes": 11065,
+          "initialized_sha256": "97396a54b0761770b092773bb430bad157612e03f0cd6332f2c84cbf5149fea1"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 276,
+          "rva": 16384,
+          "stored_bytes": 126,
+          "data_address": 2349010813,
+          "real_address_field": 65028096,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 137085
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 528,
+          "rva": 20480,
+          "stored_bytes": 418,
+          "data_address": 2349197827,
+          "real_address_field": 65032192,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 324099
+        }
+      ]
+    },
+    {
+      "name": "wdmoem.dll",
+      "toc_address": 2350126548,
+      "e32_address": 2349432668,
+      "o32_address": 2349439612,
+      "load_address": 2349801472,
+      "nominal_virtual_base": 31391744,
+      "entry_rva": 4672,
+      "virtual_bytes": 20480,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 997,
+          "rva": 4096,
+          "stored_bytes": 1024,
+          "data_address": 2349502464,
+          "real_address_field": 64950272,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 628736,
+          "initialized_bytes": 997,
+          "initialized_sha256": "b221f44f97d393f574247948c0472d7d745c40ffc4b97c1d6afbf328eb7dd27c"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 788,
+          "rva": 8192,
+          "stored_bytes": 16,
+          "data_address": 2349002705,
+          "real_address_field": 64954368,
+          "flags": 3224371264,
+          "compressed": false,
+          "file_offset": 128977,
+          "initialized_bytes": 16,
+          "initialized_sha256": "f58e65344a49d47f46d350351c81b9354ecb782cab0c25df1b0e01d84022c33f"
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 40,
+          "rva": 12288,
+          "stored_bytes": 38,
+          "data_address": 2349195017,
+          "real_address_field": 64958464,
+          "flags": 1076887616,
+          "compressed": false,
+          "file_offset": 321289,
+          "initialized_bytes": 38,
+          "initialized_sha256": "309cd1dad82086bc879b6a0fecf239a8d651c25726a2777567961598dd0d12b4"
+        }
+      ]
+    },
+    {
+      "name": "wsegacd.dll",
+      "toc_address": 2350126580,
+      "e32_address": 2349439684,
+      "o32_address": 2349439784,
+      "load_address": 2349826048,
+      "nominal_virtual_base": 31326208,
+      "entry_rva": 23012,
+      "virtual_bytes": 36864,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 19827,
+          "rva": 4096,
+          "stored_bytes": 19968,
+          "data_address": 2349506560,
+          "real_address_field": 64884736,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 632832,
+          "initialized_bytes": 19827,
+          "initialized_sha256": "347c8b3811f50fcb7e94d36d960bf262e59d04b059aaa62c95b3707a3dc896b8"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 352,
+          "rva": 24576,
+          "stored_bytes": 261,
+          "data_address": 2349198245,
+          "real_address_field": 64905216,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 324517
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 896,
+          "rva": 28672,
+          "stored_bytes": 667,
+          "data_address": 2349198506,
+          "real_address_field": 64909312,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 324778
+        }
+      ]
+    },
+    {
+      "name": "maple.dll",
+      "toc_address": 2350126612,
+      "e32_address": 2349439856,
+      "o32_address": 2349439956,
+      "load_address": 2349867008,
+      "nominal_virtual_base": 31260672,
+      "entry_rva": 25592,
+      "virtual_bytes": 40960,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 22434,
+          "rva": 4096,
+          "stored_bytes": 22528,
+          "data_address": 2349527040,
+          "real_address_field": 64819200,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 653312,
+          "initialized_bytes": 22434,
+          "initialized_sha256": "9f9903afa313b5b9a469b3d0f7c0e3b3af00064f1800be2f6efb61bcc88db71c"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 704,
+          "rva": 28672,
+          "stored_bytes": 173,
+          "data_address": 2349195055,
+          "real_address_field": 64843776,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 321327
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 600,
+          "rva": 32768,
+          "stored_bytes": 485,
+          "data_address": 2349223332,
+          "real_address_field": 64847872,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 349604
+        }
+      ]
+    },
+    {
+      "name": "ddraw.dll",
+      "toc_address": 2350126644,
+      "e32_address": 2349440028,
+      "o32_address": 2349440128,
+      "load_address": 2349912064,
+      "nominal_virtual_base": 31129600,
+      "entry_rva": 52736,
+      "virtual_bytes": 81920,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 57533,
+          "rva": 4096,
+          "stored_bytes": 57856,
+          "data_address": 2349551616,
+          "real_address_field": 64688128,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 677888,
+          "initialized_bytes": 57533,
+          "initialized_sha256": "ccdea93831430d5effe8d7dd8edc71352a13f0aa719ff6993f3e2548ed57520b"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 2684,
+          "rva": 65536,
+          "stored_bytes": 638,
+          "data_address": 2349224108,
+          "real_address_field": 64749568,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 350380
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 1592,
+          "rva": 69632,
+          "stored_bytes": 1280,
+          "data_address": 2349224746,
+          "real_address_field": 64753664,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 351018
+        },
+        {
+          "index": 3,
+          "virtual_bytes": 24,
+          "rva": 73728,
+          "stored_bytes": 0,
+          "data_address": 2349002721,
+          "real_address_field": 64757760,
+          "flags": 3489660992,
+          "compressed": false,
+          "file_offset": null
+        }
+      ]
+    },
+    {
+      "name": "d3dim.dll",
+      "toc_address": 2350126676,
+      "e32_address": 2349440224,
+      "o32_address": 2349440324,
+      "load_address": 2349998080,
+      "nominal_virtual_base": 30998528,
+      "entry_rva": 56368,
+      "virtual_bytes": 110592,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 77754,
+          "rva": 4096,
+          "stored_bytes": 77824,
+          "data_address": 2349613056,
+          "real_address_field": 64557056,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 739328,
+          "initialized_bytes": 77754,
+          "initialized_sha256": "c73a053ca7733567124e496b1498f509676edaa0703db3b173be7e22db25cf9c"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 15344,
+          "rva": 81920,
+          "stored_bytes": 1308,
+          "data_address": 2349226026,
+          "real_address_field": 64634880,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 352298
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 2672,
+          "rva": 98304,
+          "stored_bytes": 2040,
+          "data_address": 2349437572,
+          "real_address_field": 64651264,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 563844
+        }
+      ]
+    },
+    {
+      "name": "ddhal.dll",
+      "toc_address": 2350126708,
+      "e32_address": 2349440396,
+      "o32_address": 2349440496,
+      "load_address": 2350112768,
+      "nominal_virtual_base": 30801920,
+      "entry_rva": 142184,
+      "virtual_bytes": 192512,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 139540,
+          "rva": 4096,
+          "stored_bytes": 139776,
+          "data_address": 2349690880,
+          "real_address_field": 64360448,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 817152,
+          "initialized_bytes": 139540,
+          "initialized_sha256": "3dd8c991b26a9a4463b8ce7652de429c9a9b5e7340f152216e5ccaa0901e0c21"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 30900,
+          "rva": 147456,
+          "stored_bytes": 2341,
+          "data_address": 2349478064,
+          "real_address_field": 64503808,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 604336
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 3376,
+          "rva": 180224,
+          "stored_bytes": 2548,
+          "data_address": 2349482052,
+          "real_address_field": 64536576,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 608324
+        }
+      ]
+    },
+    {
+      "name": "sndcore.dll",
+      "toc_address": 2350126740,
+      "e32_address": 2349440568,
+      "o32_address": 2349440668,
+      "load_address": 2350309376,
+      "nominal_virtual_base": 30736384,
+      "entry_rva": 4312,
+      "virtual_bytes": 36864,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 15397,
+          "rva": 4096,
+          "stored_bytes": 15872,
+          "data_address": 2349834240,
+          "real_address_field": 64294912,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 960512,
+          "initialized_bytes": 15397,
+          "initialized_sha256": "ab7ca7300da304d7173a0aeb677ec49d3d5963ca0dd8fedfe14a776a02fcf844"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 4492,
+          "rva": 20480,
+          "stored_bytes": 146,
+          "data_address": 2349199173,
+          "real_address_field": 64311296,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 325445
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 976,
+          "rva": 28672,
+          "stored_bytes": 721,
+          "data_address": 2349419052,
+          "real_address_field": 64319488,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 545324
+        }
+      ]
+    },
+    {
+      "name": "dsound.dll",
+      "toc_address": 2350126772,
+      "e32_address": 2349440740,
+      "o32_address": 2349440840,
+      "load_address": 2350350336,
+      "nominal_virtual_base": 30670848,
+      "entry_rva": 5404,
+      "virtual_bytes": 45056,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 24998,
+          "rva": 4096,
+          "stored_bytes": 25088,
+          "data_address": 2349850624,
+          "real_address_field": 64229376,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 976896,
+          "initialized_bytes": 24998,
+          "initialized_sha256": "d838f9d9837165e24913298c0998ec088dd5edf0d0d1ef233fd6c8799ee1c04d"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 1120,
+          "rva": 32768,
+          "stored_bytes": 311,
+          "data_address": 2349227334,
+          "real_address_field": 64258048,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 353606
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 1360,
+          "rva": 36864,
+          "stored_bytes": 1030,
+          "data_address": 2349427300,
+          "real_address_field": 64262144,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 553572
+        }
+      ]
+    },
+    {
+      "name": "dinputx.dll",
+      "toc_address": 2350126804,
+      "e32_address": 2349440912,
+      "o32_address": 2349465244,
+      "load_address": 2350399488,
+      "nominal_virtual_base": 30605312,
+      "entry_rva": 15304,
+      "virtual_bytes": 28672,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 11825,
+          "rva": 4096,
+          "stored_bytes": 12288,
+          "data_address": 2349879296,
+          "real_address_field": 64163840,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 1005568,
+          "initialized_bytes": 11825,
+          "initialized_sha256": "cd5579afea028d1f3b527f3867662cbd6612c63b575fb7abbb6c3b1953b8ee94"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 200,
+          "rva": 16384,
+          "stored_bytes": 124,
+          "data_address": 2349227645,
+          "real_address_field": 64176128,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 353917
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 496,
+          "rva": 20480,
+          "stored_bytes": 400,
+          "data_address": 2349419773,
+          "real_address_field": 64180224,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 546045
+        }
+      ]
+    },
+    {
+      "name": "mapledev.dll",
+      "toc_address": 2350126836,
+      "e32_address": 2349465316,
+      "o32_address": 2349465416,
+      "load_address": 2350432256,
+      "nominal_virtual_base": 30539776,
+      "entry_rva": 50920,
+      "virtual_bytes": 65536,
+      "sections": [
+        {
+          "index": 0,
+          "virtual_bytes": 47579,
+          "rva": 4096,
+          "stored_bytes": 47616,
+          "data_address": 2349891584,
+          "real_address_field": 64098304,
+          "flags": 1610612768,
+          "compressed": false,
+          "file_offset": 1017856,
+          "initialized_bytes": 47579,
+          "initialized_sha256": "21b9c6c214b850ed9703cad25b130efb4a9c078c70701ec8b8a788f72975e052"
+        },
+        {
+          "index": 1,
+          "virtual_bytes": 1364,
+          "rva": 53248,
+          "stored_bytes": 380,
+          "data_address": 2349428330,
+          "real_address_field": 64147456,
+          "flags": 3221233728,
+          "compressed": true,
+          "file_offset": 554602
+        },
+        {
+          "index": 2,
+          "virtual_bytes": 1944,
+          "rva": 57344,
+          "stored_bytes": 1497,
+          "data_address": 2349480405,
+          "real_address_field": 64151552,
+          "flags": 1073750080,
+          "compressed": true,
+          "file_offset": 606677
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "schema": "kui.armada.ce.vmu.loading.freeze.v1",
+  "date": "2026-10-21",
+  "failed_build": "10ca880dcf73",
+  "observed": "User reports freeze on loading screen immediately before VMU selection; no automatic diagnostic pages",
+  "hardware_root_cause_confirmed": false,
+  "reproduced_defect": {
+    "condition": "Completed GD DMA result retained before CHECK, no pending/active DMA, fully filled output piece",
+    "old_behavior": "VMU loan returns BUSY despite idle physical storage",
+    "corrected_behavior": "Loan may use SCI; the real terminal token, status, parameters and output stay intact; CHECK during loan performs no SPI I/O"
+  },
+  "fault_reporting_correction": {
+    "provider_failure": 112,
+    "queue_or_deadline_failure": 113,
+    "fault_words": [
+      "reason",
+      "SD provider reason",
+      "PIO result in high16 and SD result in low16",
+      "loan result",
+      "first PIO stage<<16 | SCR<<8 | SSR"
+    ],
+    "cleanup_overwrites_first_cause": false,
+    "unsafe_sampling": "stage only; no SCI register reads before wake or after standby"
+  },
+  "verification": {
+    "reader_loan_asan_ubsan_checks": 168291,
+    "audio_exclusion_asan_ubsan_checks": 724001,
+    "continuation_asan_ubsan_checks": 27912,
+    "runtime_and_real_sd_model_checks": 55049,
+    "hardware_save_load_verified": false,
+    "pio_asan_ubsan_checks": 116454,
+    "provider_asan_ubsan_checks": 1235674,
+    "runtime_sd_fresh_state_cases": 19
+  },
+  "preserved": [
+    "active pending commands, DMA, callbacks, spill and unfinished pieces still exclude a loan",
+    "all SD identity, exact readback and release guards",
+    "permanent quarantine and no acknowledgement after uncertain physical I/O",
+    "accepted readonly rollback module"
+  ],
+  "scope": "Revised source-specific Armada CE SCI test; universal and physical GD-ROM integration remain outside this correction",
+  "module_off_cleanup_correction": "A captured but unexpectedly stopped SCI module is never accessed during release; ownership stays acquired, first fault persists, and no save acknowledgement is generated",
+  "later_hardware_result": {
+    "build": "4371ec6189e7",
+    "observed": "Same loading screen freeze after two minutes without blue diagnostics",
+    "software_defect": "CE native wait omitted16B caller argument area; old corruption reproduced and ABI adapter added",
+    "evidence": "armada-ce-vmu-ce-wait-abi.json"
+  }
+}

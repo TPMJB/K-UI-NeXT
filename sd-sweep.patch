@@ -1,0 +1,12 @@
+diff -ruN a/src/dreamcast/platform.h b/src/dreamcast/platform.h
+--- a/src/dreamcast/platform.h	2026-09-19 03:59:41.601630657 +0000
++++ b/src/dreamcast/platform.h	2026-09-19 03:59:41.612899334 +0000
+@@ -10,6 +10,8 @@
+  * (synchronous serial, DMA capable) over the SD_IF_SCIF bit-bang default;
+  * check_crc verifies the data-block CRC16 on reads. */
+ void kui_sd_set_params(unsigned use_sci, bool check_crc);
++/* Which transport the last successful connect opened, after any fallback. */
++unsigned kui_sd_active_sci(void);
+ bool kui_sd_connect(void);
+ void kui_sd_disconnect(void);
+ void kui_disc_probe(void);

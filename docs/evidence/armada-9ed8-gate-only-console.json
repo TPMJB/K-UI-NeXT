@@ -1,0 +1,83 @@
+{
+  "build": "9ed8d6d90cfd",
+  "variant": "01-gate-only",
+  "source_images": [
+    "image-1792598743070.jpg",
+    "image-1792598746988.jpg",
+    "image-1792598752008.jpg",
+    "image-1792598756855.jpg",
+    "image-1792598762054.jpg"
+  ],
+  "auto": {
+    "reason": 6,
+    "phase": 2,
+    "mode": 1,
+    "proof_initial": 0,
+    "proof_final": 0
+  },
+  "traffic": {
+    "visits": 1200,
+    "accepted": 1200,
+    "refused": 0,
+    "reads_last_visit": 195,
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "fence": {
+    "pre": 1200,
+    "post": 1200,
+    "leases": 1200,
+    "restores": 1200,
+    "busy": 0,
+    "refused": 0,
+    "poll_peak": 1,
+    "active": 0,
+    "flags": 0,
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "a2": {
+    "advertisements": 0,
+    "replies": 0,
+    "backend_calls": 0,
+    "guest_rx_stores": 0,
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "mapping_report_zero": true,
+  "driver_report_zero": true,
+  "user_observation": "That was better. Wasn't as good as baseline, but definitely do-able",
+  "interpretation": {
+    "planned_limit_stop": true,
+    "observed_sampler_budgeted_loads_match_candidate": true,
+    "old_control_reads_last_visit": 291,
+    "playback_improved_vs_old_gate_control": true,
+    "baseline_playback_parity": false,
+    "supports_checking_overhead_theory": true,
+    "masked_duration_measured": false,
+    "native_rx_ownership_queries_exercised": false,
+    "full_a2_publication_exercised": false
+  },
+  "next_comparison": {
+    "existing_archive": "K-UI-Armada-CE-VMU-Cache-Snapshot-Test.zip",
+    "variant": "held-comparisons/02-proof-only",
+    "build": "9ed8d6d90cfd",
+    "mode": 2,
+    "purpose": "Compare optimized initial/final ownership checks without A2 publication before full mode."
+  }
+}

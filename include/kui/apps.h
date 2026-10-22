@@ -1,0 +1,98 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+#ifndef KUI_APPS_H
+#define KUI_APPS_H
+#include "kui/probe.h"
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#define KUI_APP_LINES 12u
+#define KUI_APP_LINE_CAP 80u
+#define KUI_VMU_ROWS 8u
+#define KUI_VMU_BACKUP_PATH_CAP 192u
+struct kui_app_status {
+    char message[128];
+    char lines[KUI_APP_LINES][KUI_APP_LINE_CAP];
+    unsigned line_count;
+    uint64_t done,total;
+    unsigned errors;
+    bool complete,passed,stopped;
+};
+typedef void (*kui_app_progress_fn)(const struct kui_app_status *status);
+struct kui_vmu_entry {
+    char name[16];
+    uint32_t bytes;
+    /* Optional, sanitized embedded VMS text. Empty when unavailable. */
+    char description[33],app_id[17];
+};
+struct kui_vmu_view {
+    struct kui_app_status status;
+    struct kui_vmu_entry entries[KUI_VMU_ROWS];
+    char backup_path[KUI_VMU_BACKUP_PATH_CAP];
+    unsigned slot,page,count,total,free_blocks;
+    unsigned bulk_total,bulk_completed,bulk_remaining;
+    bool present,restore_ready,delete_ready,copy_ready,import_ready,bulk_unverified;
+};
+struct kui_vmu_backup_entry {
+    char name[16],folder[16],path[KUI_VMU_BACKUP_PATH_CAP];
+    uint32_t bytes;
+};
+struct kui_vmu_backup_view {
+    struct kui_app_status status;
+    struct kui_vmu_backup_entry entries[KUI_VMU_ROWS];
+    unsigned page,count,total;
+};
+void kui_memory_app_run(struct kui_app_status *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+void kui_network_app_run(struct kui_app_status *out,kui_log_fn log,kui_cancel_fn cancel);
+/* action 0=list, 1=backup selected row, 2=backup all saves, 3=full-card VMD.
+ * These actions are read-only
+ * on the VMU. New backups include .crc records required for restore. */
+void kui_vmu_app_run(unsigned action,unsigned slot,unsigned page,unsigned selected,
+    struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+void kui_vmu_backups_run(unsigned page,struct kui_vmu_backup_view *out,
+    kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+/* Exact 128 KiB raw VMD only. action 0=browse, 1=extract selected row,
+ * 2=extract all into new .vms/.dir/.crc bundles. Source is always read-only;
+ * these tools do not access any physical VMU or implement image restoration. */
+void kui_vmu_image_run(const char *path,unsigned page,unsigned selected,unsigned action,
+    struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+/* Preview (commit=false) reads/checks the entire backup and destination. Commit
+ * requires that exact preview, rechecks both, and adds a new file only. Existing
+ * names are refused. Never formats, deletes, or overwrites. Once VMU metadata
+ * commit starts, Stop is deferred through verification. */
+void kui_vmu_restore_run(const char *path,unsigned slot,bool commit,
+    struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+/* Delete preview pins the listed source and complete payload. Confirmation
+ * first creates a verified, restorable SD backup and metadata snapshot; only
+ * then removes its directory entry and frees that entry's blocks. No format,
+ * overwrite or automatic retry/rollback after an uncertain metadata commit. */
+void kui_vmu_delete_run(unsigned slot,unsigned page,unsigned selected,bool commit,
+    struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+/* Copy previews both cards and pins the source bytes. Confirmation stages a
+ * verified SD backup, then restores to a free name on the destination. Source
+ * is read-only; existing destination names are refused. */
+void kui_vmu_copy_run(unsigned source_slot,unsigned page,unsigned selected,
+    unsigned destination_slot,bool commit,struct kui_vmu_view *out,
+    kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+/* Full-batch preview pins both cards and all source payloads. Confirmation
+ * stages verified SD bundles before any destination write; existing names
+ * refuse the entire batch. remaining includes any unverified current item.
+ * A failed metadata commit stops the batch without retry or rollback. */
+void kui_vmu_copy_all_run(unsigned source_slot,unsigned destination_slot,bool commit,
+    struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+/* Creates a new managed 200-block virtual card on SD. Selected copy preserves
+ * only the exact selected file; all preserves every source save. Preview pins
+ * the source and commit rechecks it. Existing cards and physical VMUs are never
+ * written. Stored cards can be browsed/extracted; game activation is pending. */
+void kui_vmu_collection_copy_run(unsigned source_slot,unsigned page,unsigned selected,
+    bool all,bool commit,struct kui_vmu_view *out,
+    kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+void kui_vmu_collection_run(unsigned page,struct kui_vmu_backup_view *out,
+    kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+/* Caller owns an already connected/mounted SD filesystem. Creates one new
+ * organizational A1-NNNN verified backup bundle, never accesses a physical VMU,
+ * and never mounts/unmounts storage. Inputs remain caller-owned. out is reset;
+ * backup_path becomes usable after .dir/.vms/.crc publication succeeds. */
+bool kui_vmu_import_publish(const uint8_t entry[32],const uint8_t *data,size_t length,
+    struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+
+#endif

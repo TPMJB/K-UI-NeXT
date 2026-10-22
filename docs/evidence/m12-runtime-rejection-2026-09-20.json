@@ -1,0 +1,63 @@
+{
+  "received_date": "2026-09-20",
+  "bootstrap_build": "addd439aaea5 (the burned CD bootstrap)",
+  "fixtures_from": "the diagnostic artifact's loader-tests/, generated from runtime build 96ee4ef2d025",
+  "experiment": "M1.2: every malformed-runtime fixture on real hardware. Each copied to the card as /KUI/runtime.kui, booted without holding B, then the log saved with Y.",
+  "results": [
+    {
+      "fixture": "truncated.kui",
+      "rejected_with": "invalid, truncated or oversized runtime",
+      "fell_back_to_cd_diagnostics": true,
+      "log_saved_with_Y": true,
+      "kept_as": "m12-truncated-2026-09-20.txt",
+      "sha256": "37e7ebec12e28f8cef45b423a5772e153b0078da4a5ecfc544a7da324c5f4db1"
+    },
+    {
+      "fixture": "bad-magic.kui",
+      "rejected_with": "invalid runtime header",
+      "fell_back_to_cd_diagnostics": true,
+      "log_saved_with_Y": true,
+      "kept_as": "m12-bad-magic-2026-09-20.txt",
+      "sha256": "0ecb91439d1cd6fa9a03df76140e8837753ca4d0d310ff25ac18308986f61727"
+    },
+    {
+      "fixture": "oversized.kui",
+      "rejected_with": "invalid, truncated or oversized runtime",
+      "fell_back_to_cd_diagnostics": true,
+      "log_saved_with_Y": true,
+      "kept_as": "m12-oversized-2026-09-20.txt",
+      "sha256": "37e7ebec12e28f8cef45b423a5772e153b0078da4a5ecfc544a7da324c5f4db1"
+    },
+    {
+      "fixture": "wrong-version.kui",
+      "rejected_with": "unsupported runtime format version",
+      "fell_back_to_cd_diagnostics": true,
+      "log_saved_with_Y": true,
+      "kept_as": "m12-wrong-version-2026-09-20.txt",
+      "sha256": "bb174e8a91d11c06bc135499601e9c59f81f751fe9899a25d817819471d49227"
+    },
+    {
+      "fixture": "bad-checksum.kui",
+      "rejected_with": "runtime checksum mismatch",
+      "fell_back_to_cd_diagnostics": true,
+      "log_saved_with_Y": true,
+      "kept_as": "m12-bad-checksum-2026-09-20.txt",
+      "sha256": "e349baad2447f48969b8d738b01037a20c3bd448d51e04c354cf82ec6b47622f"
+    }
+  ],
+  "derived": {
+    "conclusions": [
+      "All five fixtures are rejected on hardware, each for its own reason: a bad header, a bad format version, a truncated or oversized image, and a checksum mismatch.",
+      "The checksum case is the only one that starts loading (it prints the runtime's build ID and size) because its header is valid; the check fails after the payload is read. The others are refused at the header, before any payload is read.",
+      "Every one fell back to the built-in CD diagnostics, and each log was saved to the card with Y, so the controller and SD writes work in the fallback.",
+      "With the missing-file and good-runtime-restoration checks already reported, M1.2 is complete on hardware."
+    ]
+  },
+  "hardware": {
+    "console": "NTSC video (from every log); motherboard reported as 'V1A', most likely the VA1 revision; region not stated",
+    "video_cable": "RF",
+    "card": "SanDisk 128 GB microSD, Endurance line (reported as 'ultra endurance'); exFAT, 249,997,312 sectors, 128 KiB clusters",
+    "sd_adapter": "not recorded",
+    "cold_boots": "dozens, with no controller problems (user report); the plan asked for five"
+  }
+}

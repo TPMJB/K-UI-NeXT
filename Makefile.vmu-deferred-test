@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/vmu-deferred-test
+HOST_CC ?= cc
+HOST_FLAGS ?= -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic
+HOST_SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie
+.DEFAULT_GOAL := host-tests
+.PHONY: host-test host-tests
+
+$(BUILD)/test-vmu-deferred-io: tests/test_vmu_deferred_io.c src/core/vmu_deferred_io.c src/core/vmu_emulation.c include/kui/vmu_deferred_io.h include/kui/vmu_emulation.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude tests/test_vmu_deferred_io.c src/core/vmu_deferred_io.c src/core/vmu_emulation.c -o $@
+
+host-test host-tests: $(BUILD)/test-vmu-deferred-io
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-vmu-deferred-io

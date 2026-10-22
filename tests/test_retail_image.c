@@ -1,0 +1,839 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+#include "kui/retail_image.h"
+#include <assert.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
+
+_Static_assert(sizeof(struct kui_retail_image) <= 576, "one aligned physical block cache only");
+_Static_assert(_Alignof(struct kui_retail_image) >= 32, "DMA sector cache alignment");
+static struct kui_retail_manifest manifest, decoded, backup, empty;
+static struct kui_retail_image image;
+static uint8_t card[2048u * 512u], wire[KUI_RETAIL_IMAGE_WIRE_BYTES];
+static uint8_t clean_wire[KUI_RETAIL_IMAGE_WIRE_BYTES], output[64u * 2352u + 1];
+static uint32_t calls, fail_call;
+static uint32_t edge_source, run_calls;
+static struct { uint32_t lba, available; } run_trace[512];
+static unsigned checks;
+#define CHECK(test) do { ++checks; assert(test); } while(0)
+/* Track i, and extent j: the slot after the tracks and earlier extents. */
+#define TRACK(m, i) ((m).slots[(i)].track)
+#define EXTENT(m, j) ((m).slots[(m).track_count + (j)].extent)
+
+static uint8_t source(uint32_t track, uint32_t file_byte) {
+    uint32_t sector = file_byte / 2352u, inside = file_byte % 2352u;
+    if(track != 1) {
+        if(inside == 0 || inside == 11) return 0;
+        if(inside < 11) return 255;
+        if(inside == 15) return 1;
+    }
+    return (uint8_t)(track * 91u + sector * 53u + inside * 11u + (inside >> 8));
+}
+static int read_block(void *context, uint32_t lba, uint8_t out[512]) {
+    CHECK(((uintptr_t)out & 31u) == 0);
+    CHECK(context == card);
+    CHECK(lba >= manifest.partition_start && lba < manifest.partition_end);
+    bool allocated = false;
+    for(uint32_t i = 0; i < manifest.extent_count; ++i)
+        if(lba >= EXTENT(manifest, i).card_lba &&
+           lba - EXTENT(manifest, i).card_lba < EXTENT(manifest, i).blocks)
+            allocated = true;
+    CHECK(allocated);
+    ++calls;
+    if(fail_call && calls == fail_call) { memset(out, 0xdd, 512); return -1; }
+    if(lba == UINT32_MAX) { CHECK(edge_source != 0); lba = edge_source; }
+    CHECK(lba < 2048);
+    memcpy(out, card + lba * 512u, 512);
+    return 0;
+}
+static int read_run(void *context, uint32_t lba, uint32_t available, uint8_t out[512]) {
+    CHECK(available != 0 && run_calls < sizeof(run_trace) / sizeof(run_trace[0]));
+    CHECK((uint64_t)lba + available <= manifest.card_sectors);
+    CHECK(lba >= manifest.partition_start && (uint64_t)lba + available <= manifest.partition_end);
+    bool bounded = false;
+    for(uint32_t i = 0; i < manifest.extent_count; ++i) {
+        const struct kui_retail_extent *e = &EXTENT(manifest, i);
+        if(lba >= e->card_lba && lba - e->card_lba < e->blocks) {
+            CHECK(available <= e->blocks - (lba - e->card_lba));
+            bounded = true;
+        }
+    }
+    CHECK(bounded);
+    run_trace[run_calls].lba = lba;
+    run_trace[run_calls++].available = available;
+    return read_block(context, lba, out);
+}
+static void fixture_format(bool fragmented, unsigned cooked_mask) {
+    memset(&manifest, 0, sizeof(manifest));
+    memset(card, 0xf3, sizeof(card));
+    manifest.card_sectors = 2048;
+    manifest.partition_start = 50; manifest.partition_end = 2000;
+    manifest.track_count = 4;
+    manifest.session_lba = 45000; manifest.boot_lba = 45001; manifest.boot_bytes = 4567;
+    manifest.gdi_crc32 = 0x89abcdef;
+    manifest.boot_crc32 = 0x10293847; manifest.ip_crc32 = 0x67584930;
+    strcpy(manifest.title, "Original retail image test");
+    strcpy(manifest.product, "KUITEST"); strcpy(manifest.region, "JUE");
+    strcpy(manifest.bootfile, "1ST_READ.BIN");
+    static const uint32_t starts[4] = {0, 3, 45000, 45070};
+    static const uint32_t ends[4] = {3, 5, 45070, 45072};
+    uint32_t physical_index = 0;
+    for(unsigned i = 0; i < 4; ++i) {
+        struct kui_retail_track *t = &TRACK(manifest, i);
+        *t = (struct kui_retail_track){.start_lba=starts[i], .end_lba=ends[i],
+            .control=i == 1 ? 0u : (4u | (cooked_mask & (1u << i) ? KUI_RETAIL_TRACK_COOKED : 0u)),
+            .first_extent=(uint16_t)(4u + manifest.extent_count)};
+        uint32_t stride = cooked_mask & (1u << i) ? 2048u : 2352u;
+        uint32_t bytes = (t->end_lba - t->start_lba) * stride;
+        uint32_t blocks = (bytes + 511u) / 512u;
+        for(uint32_t n = 0; n < blocks;) {
+            uint32_t take = fragmented && blocks - n > 3 ? 3 : blocks - n;
+            uint32_t physical = fragmented ? 100u + physical_index * 3u : 100u + physical_index;
+            CHECK(4u + manifest.extent_count < KUI_RETAIL_IMAGE_SLOTS);
+            EXTENT(manifest, manifest.extent_count++) =
+                (struct kui_retail_extent){n, physical, take};
+            ++t->extent_count;
+            for(uint32_t p = 0; p < take * 512u; ++p) {
+                uint32_t at = n * 512u + p;
+                if(at < bytes) {
+                    uint32_t original = stride == 2048u ? at / 2048u * 2352u + 16u + at % 2048u : at;
+                    card[physical * 512u + p] = source(i, original);
+                }
+            }
+            n += take; physical_index += take;
+        }
+    }
+    CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_OK);
+    calls = fail_call = edge_source = run_calls = 0;
+    CHECK(kui_retail_image_init(&image, &manifest, read_block, card) == KUI_GAME_OK);
+}
+static void fixture(bool fragmented) { fixture_format(fragmented, 0); }
+static void put32(uint8_t *p, uint32_t value) {
+    for(unsigned i = 0; i < 4; ++i) p[i] = (uint8_t)(value >> (8u * i));
+}
+static void refresh_crc(void) {
+    memset(wire + 16, 0, 4);
+    put32(wire + 16, kui_retail_crc32(0, wire, sizeof(wire)));
+}
+static void wire_tests(void) {
+    fixture(true);
+    CHECK(kui_retail_crc32(0, "123456789", 9) == 0xcbf43926);
+    CHECK(kui_retail_crc32(kui_retail_crc32(0, "1234", 4), "56789", 5) == 0xcbf43926);
+    CHECK(kui_retail_crc32(0xabcdef01, NULL, 0) == 0xabcdef01);
+    CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_OK);
+    /* Version3 changes the magic/version, retaining this raw map's records. */
+    CHECK(wire[16] == 0xc2 && wire[17] == 0x3c && wire[18] == 0xed && wire[19] == 0x14);
+    CHECK(!memcmp(wire, "KUIRTI03", 8));
+    CHECK(wire[8] == 3 && wire[12] == 0 && wire[13] == 16 && wire[14] == 0);
+    CHECK(wire[20] == 4 && wire[24] == 121 && wire[32] == 0 && wire[33] == 8 && wire[68] == 0xef);
+    CHECK(wire[256] == 0x47 && wire[259] == 0x10 && wire[260] == 0x30 && wire[263] == 0x67);
+    /* Records from byte 320: a track's start, end, control, extent count and
+     * two zero bytes (its 108 extents of 3 blocks), then the extents, here
+     * the first one's file block, card block and length. */
+    const uint8_t third_track[12] = {0xc8,0xaf,0,0, 0x0e,0xb0,0,0, 4,108,0,0};
+    CHECK(!memcmp(wire + 320 + 2 * 12, third_track, sizeof(third_track)));
+    const uint8_t first_extent[12] = {0,0,0,0, 100,0,0,0, 3,0,0,0};
+    CHECK(!memcmp(wire + 320 + 4 * 12, first_extent, sizeof(first_extent)));
+    CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_OK);
+    CHECK(!memcmp(&decoded, &manifest, sizeof(manifest)));
+    /* Preserve old SCIF wire maps, carry SCI/IDE, reject discovery/unknown IDs
+     * even when the wire CRC is valid. Encode errors leave output unchanged. */
+    for(uint32_t transport = KUI_STORAGE_SCIF; transport <= KUI_STORAGE_IDE; ++transport) {
+        manifest.storage_transport = transport;
+        CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_OK);
+        CHECK(wire[28] == transport);
+        CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_OK);
+        CHECK(decoded.storage_transport == transport);
+    }
+    /* The background reader (wire offset 264) needs SCI and at most
+     * KUI_RETAIL_ASYNC_SLOTS slots (this map has more; the reader's own
+     * test round-trips a small one); old maps carry zero there. */
+    CHECK(manifest.track_count + manifest.extent_count > KUI_RETAIL_ASYNC_SLOTS);
+    for(uint32_t reader = KUI_RETAIL_READER_ASYNC; reader <= KUI_RETAIL_READER_ASYNC_EAGER; ++reader) {
+        manifest.reader = reader;
+        for(uint32_t transport = KUI_STORAGE_SCIF; transport <= KUI_STORAGE_IDE; ++transport) {
+            manifest.storage_transport = transport;
+            CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_INVALID);
+            CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_INVALID);
+        }
+    }
+    manifest.reader = 3;
+    manifest.storage_transport = KUI_STORAGE_SCIF;
+    CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_INVALID);
+    manifest.reader = KUI_RETAIL_READER_STANDARD;
+    manifest.storage_transport = KUI_STORAGE_SCIF;
+    CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_OK);
+    put32(wire + 28, KUI_STORAGE_AUTO); refresh_crc();
+    CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
+    CHECK(!memcmp(&decoded, &empty, sizeof(decoded)));
+    CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_OK);
+    memcpy(clean_wire, wire, sizeof(wire));
+    /* Every byte is covered by the CRC, including unused space. */
+    for(unsigned i = 0; i < sizeof(wire); ++i) {
+        wire[i] ^= 1;
+        CHECK(kui_retail_manifest_decode(wire, &decoded) != KUI_GAME_OK);
+        CHECK(!memcmp(&decoded, &empty, sizeof(decoded)));
+        wire[i] ^= 1;
+    }
+    /* Valid CRC cannot bless noncanonical fields, unused entries or text tails. */
+    const unsigned reserved[] = {31, 265, 272, 319, 331,
+        320 + (4 + manifest.extent_count) * 12, 3000, 4095,
+        72 + sizeof("Original retail image test"), 200 + sizeof("KUITEST"),
+        216 + sizeof("1ST_READ.BIN"), 240 + sizeof("JUE")};
+    for(unsigned i = 0; i < sizeof(reserved) / sizeof(reserved[0]); ++i) {
+        wire[reserved[i]] = 1; refresh_crc();
+        CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
+        CHECK(!memcmp(&decoded, &empty, sizeof(decoded)));
+        memcpy(wire, clean_wire, sizeof(wire));
+    }
+    const unsigned fields[] = {8, 12, 20, 24, 24};
+    const uint32_t values[] = {4, 4097, 100, KUI_RETAIL_IMAGE_SLOTS - 3, 120};
+    for(unsigned i = 0; i < sizeof(fields) / sizeof(fields[0]); ++i) {
+        put32(wire + fields[i], values[i]); refresh_crc();
+        CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
+        CHECK(!memcmp(&decoded, &empty, sizeof(decoded)));
+        memcpy(wire, clean_wire, sizeof(wire));
+    }
+    put32(wire + 320 + 4 * 12 + 4, 0); refresh_crc();
+    CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_RANGE);
+    CHECK(!memcmp(&decoded, &empty, sizeof(decoded)));
+    memcpy(wire, clean_wire, sizeof(wire));
+    manifest.extent_count = KUI_RETAIL_IMAGE_SLOTS - 3;
+    CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_INVALID);
+    CHECK(!memcmp(wire, clean_wire, sizeof(wire)));
+    CHECK(kui_retail_manifest_encode(NULL, wire) == KUI_GAME_INVALID);
+    CHECK(!memcmp(wire, clean_wire, sizeof(wire)));
+    CHECK(kui_retail_manifest_encode(&manifest, NULL) == KUI_GAME_INVALID);
+    CHECK(kui_retail_manifest_decode(NULL, &decoded) == KUI_GAME_INVALID);
+    CHECK(!memcmp(&decoded, &empty, sizeof(decoded)));
+    CHECK(kui_retail_manifest_decode(wire, NULL) == KUI_GAME_INVALID);
+}
+static void invalid_map_tests(void) {
+    fixture(true); backup = manifest;
+    /* A track cannot cross the low/high-density boundary. The high stage
+     * proves this once before the resident adopts the GD service state. */
+    TRACK(manifest, 2).start_lba = 44999;
+    CHECK(kui_retail_image_check(&manifest, 44999, 1, KUI_GAME_SECTOR_RAW) == KUI_GAME_INVALID);
+    manifest = backup;
+#define BAD(field, value) do { manifest = backup; manifest.field = (value); \
+    CHECK(kui_retail_manifest_validate(&manifest) != KUI_GAME_OK); } while(0)
+    BAD(track_count, 0); BAD(track_count, 3); BAD(track_count, 5);
+    BAD(track_count, KUI_RETAIL_IMAGE_TRACKS + 1); BAD(extent_count, 0);
+    BAD(extent_count, manifest.extent_count - 1); BAD(extent_count, manifest.extent_count + 1);
+    BAD(extent_count, KUI_RETAIL_IMAGE_SLOTS - 3); BAD(card_sectors, 0);
+    BAD(card_sectors, UINT64_C(0x100000001)); BAD(partition_start, 2000);
+    BAD(partition_start, UINT64_MAX); BAD(partition_end, 2049); BAD(partition_end, 101);
+    BAD(slots[1].track.start_lba, 2);
+    BAD(slots[1].track.control, 1); BAD(slots[0].track.end_lba, 0);
+    BAD(slots[3].track.end_lba, KUI_GAME_LBA_LIMIT + 1);
+    BAD(slots[3].track.end_lba, UINT32_MAX);
+    BAD(slots[2].track.first_extent, 4); BAD(slots[2].track.first_extent, UINT16_MAX);
+    BAD(slots[2].track.extent_count, UINT8_MAX); BAD(slots[3].track.extent_count, 0);
+    /* An audio track may go unmapped only without extents of its own. */
+    BAD(slots[1].track.extent_count, 0);
+    BAD(slots[4].extent.file_block, 1); BAD(slots[4].extent.blocks, 0);
+    BAD(slots[4].extent.blocks, UINT32_MAX); BAD(slots[4].extent.card_lba, 49);
+    BAD(slots[4].extent.card_lba, UINT32_MAX); BAD(slots[5].extent.file_block, 0);
+    BAD(slots[5].extent.card_lba, 100); BAD(slots[5].extent.card_lba, 102);
+    BAD(slots[34].extent.card_lba, manifest.slots[4].extent.card_lba);
+    BAD(slots[4 + manifest.extent_count - 1].extent.blocks, 2);
+    BAD(session_lba, 45001); BAD(session_lba, 0);
+    BAD(boot_lba, 4); BAD(boot_lba, 45072); BAD(boot_lba, UINT32_MAX);
+    BAD(boot_bytes, 0); BAD(boot_bytes, KUI_RETAIL_IMAGE_BOOT_MAX + 1);
+    BAD(boot_bytes, UINT32_MAX);
+    BAD(title[0], 0); BAD(title[2], '\n'); BAD(bootfile[0], 0);
+    manifest = backup; memset(manifest.title, 'a', sizeof(manifest.title));
+    CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_INVALID);
+    /* Zero CRCs are legal values; they are protected by the wire CRC. */
+    manifest = backup; manifest.boot_crc32 = manifest.ip_crc32 = manifest.gdi_crc32 = 0;
+    CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_OK);
+    manifest = backup;
+    /* Maximum physical block is representable; exclusive end requires u64. */
+    manifest.card_sectors = manifest.partition_end = UINT64_C(0x100000000);
+    EXTENT(manifest, manifest.extent_count - 1).card_lba = UINT32_MAX;
+    CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_OK);
+    EXTENT(manifest, 0).card_lba = UINT32_MAX - 2;
+    CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_OVERLAP);
+    EXTENT(manifest, 0).card_lba = UINT32_MAX - 1;
+    CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_RANGE);
+#undef BAD
+}
+static void compare(uint32_t lba, uint32_t count, enum kui_game_sector_format format) {
+    memset(output, 0x77, sizeof(output));
+    CHECK(kui_retail_image_read(&image, lba, count, format, output, sizeof(output)) == KUI_GAME_OK);
+    unsigned stride = format == KUI_GAME_SECTOR_RAW ? 2352u : 2048u;
+    for(uint32_t n = 0; n < count; ++n) {
+        unsigned t = 0;
+        while(TRACK(manifest, t).end_lba <= lba + n) ++t;
+        uint32_t base = (lba + n - TRACK(manifest, t).start_lba) * 2352u;
+        if(format == KUI_GAME_SECTOR_MODE1) base += 16;
+        for(unsigned j = 0; j < stride; ++j) CHECK(output[n * stride + j] == source(t, base + j));
+    }
+    CHECK(output[count * stride] == 0x77);
+}
+/* Byte ranges of the user data (Windows CE's DMA stream pieces) equal the
+ * same bytes of a whole-sector read, across sector, block and file edges. */
+static uint8_t whole[64u * 2352u];
+static void compare_part(uint32_t lba, uint32_t skip, uint32_t bytes,
+                         enum kui_game_sector_format format) {
+    uint32_t stride = format == KUI_GAME_SECTOR_RAW ? 2352u : 2048u;
+    uint32_t first = skip / stride, count = (skip % stride + bytes + stride - 1u) / stride;
+    run_calls = 0;
+    CHECK(kui_retail_image_read(&image, lba + first, count, format, whole, sizeof(whole)) == KUI_GAME_OK);
+    run_calls = 0;
+    memset(output, 0x77, sizeof(output));
+    CHECK(kui_retail_image_read_part(&image, lba, skip, bytes, format, output) == KUI_GAME_OK);
+    CHECK(!memcmp(output, whole + skip % stride, bytes));
+    CHECK(output[bytes] == 0x77);
+}
+static void part_tests(bool fragmented, bool streaming) {
+    fixture(fragmented);
+    if(streaming) image.read_run = read_run;
+    compare_part(45000, 0, 2048, KUI_GAME_SECTOR_MODE1);
+    compare_part(45000, 0x120, 0xee0, KUI_GAME_SECTOR_MODE1);
+    compare_part(45000, 0xee0, 0x1000, KUI_GAME_SECTOR_MODE1);
+    compare_part(45000, 5u * 2048u + 32u, 32, KUI_GAME_SECTOR_MODE1);
+    compare_part(45069, 0x7e0, 0x1020, KUI_GAME_SECTOR_MODE1);
+    compare_part(45000, 0, 64u * 2048u, KUI_GAME_SECTOR_MODE1);
+    compare_part(45000, 2047, 63u * 2048u + 1u, KUI_GAME_SECTOR_MODE1);
+    compare_part(0, 100, 2u * 2352u + 7u, KUI_GAME_SECTOR_RAW);
+    compare_part(2, 2000, 1000, KUI_GAME_SECTOR_RAW); /* Data/audio file boundary. */
+    compare_part(3, 2352u + 2000u, 352, KUI_GAME_SECTOR_RAW); /* Final padded block. */
+    for(unsigned i = 0; i < 16; ++i)
+        compare_part(45000, i * 1184u % 30000u, 32u + i * 288u, KUI_GAME_SECTOR_MODE1);
+    memset(output, 0x77, sizeof(output));
+    unsigned before = calls;
+    CHECK(kui_retail_image_read_part(&image, 45000, 1, 64u * 2048u, KUI_GAME_SECTOR_MODE1, output) == KUI_GAME_RANGE);
+    CHECK(kui_retail_image_read_part(&image, 45000, 0, 0, KUI_GAME_SECTOR_MODE1, output) == KUI_GAME_INVALID);
+    CHECK(kui_retail_image_read_part(&image, 45071, 2048, 16, KUI_GAME_SECTOR_MODE1, output) == KUI_GAME_RANGE);
+    CHECK(kui_retail_image_read_part(&image, 2, 2048, 16, KUI_GAME_SECTOR_MODE1, output) == KUI_GAME_AUDIO);
+    CHECK(kui_retail_image_read_part(&image, 4, 2000, 1000, KUI_GAME_SECTOR_RAW, output) == KUI_GAME_GAP);
+    CHECK(kui_retail_image_read_part(&image, UINT32_MAX, 2352, 16, KUI_GAME_SECTOR_RAW, output) == KUI_GAME_RANGE);
+    CHECK(kui_retail_image_read_part(&image, 45000, 0, 16, KUI_GAME_SECTOR_MODE1, NULL) == KUI_GAME_INVALID);
+    CHECK(kui_retail_image_read_part(NULL, 45000, 0, 16, KUI_GAME_SECTOR_MODE1, output) == KUI_GAME_INVALID);
+    CHECK(calls == before);
+    for(size_t i = 0; i < sizeof(output); ++i) CHECK(output[i] == 0x77);
+    /* A failed block leaves the cache invalid; the next read recovers. */
+    fail_call = calls + 2;
+    CHECK(kui_retail_image_read_part(&image, 45010, 100, 4000, KUI_GAME_SECTOR_MODE1, output) == KUI_GAME_IO);
+    CHECK(!image.cache_valid);
+    fail_call = 0;
+    compare_part(45010, 100, 4000, KUI_GAME_SECTOR_MODE1);
+}
+static void reader_tests(bool fragmented) {
+    fixture(fragmented);
+    compare(0, 3, KUI_GAME_SECTOR_RAW);
+    compare(0, 3, KUI_GAME_SECTOR_MODE1);
+    compare(2, 2, KUI_GAME_SECTOR_RAW); /* Data/audio boundary across two files. */
+    compare(3, 2, KUI_GAME_SECTOR_RAW); /* Final block contains nonfile padding. */
+    compare(45000, 64, KUI_GAME_SECTOR_MODE1);
+    compare(45000, 64, KUI_GAME_SECTOR_RAW);
+    compare(45069, 3, KUI_GAME_SECTOR_MODE1);
+    compare(45071, 1, KUI_GAME_SECTOR_RAW);
+    for(unsigned i = 0; i < 20; ++i) compare(45000 + i * 31 % 70, 1, KUI_GAME_SECTOR_MODE1);
+    CHECK(image.blocks_read == calls);
+    unsigned before = calls;
+    compare(45071, 1, KUI_GAME_SECTOR_RAW);
+    CHECK(calls > before); /* A last-block cache cannot satisfy a whole sector. */
+    before = calls;
+    compare(1, 1, KUI_GAME_SECTOR_MODE1);
+    CHECK(calls == before + 5); /* Header+payload share the one-block cache. */
+    before = calls;
+    compare(1, 1, KUI_GAME_SECTOR_RAW);
+    CHECK(calls == before + 6); /* MODE1 omitted the final parity-only block. */
+    before = calls;
+    memset(output, 0x77, sizeof(output));
+    CHECK(kui_retail_image_read(&image, 2, 2, KUI_GAME_SECTOR_MODE1, output, sizeof(output)) == KUI_GAME_AUDIO);
+    CHECK(kui_retail_image_read(&image, 4, 2, KUI_GAME_SECTOR_RAW, output, sizeof(output)) == KUI_GAME_GAP);
+    CHECK(kui_retail_image_read(&image, 45071, 2, KUI_GAME_SECTOR_RAW, output, sizeof(output)) == KUI_GAME_RANGE);
+    CHECK(kui_retail_image_read(&image, UINT32_MAX, 2, KUI_GAME_SECTOR_RAW, output, sizeof(output)) == KUI_GAME_RANGE);
+    CHECK(kui_retail_image_read(&image, 45000, 65, KUI_GAME_SECTOR_RAW, output, sizeof(output)) == KUI_GAME_RANGE);
+    CHECK(kui_retail_image_read(&image, 45000, 0, KUI_GAME_SECTOR_RAW, output, sizeof(output)) == KUI_GAME_INVALID);
+    CHECK(kui_retail_image_read(&image, 45000, 1, (enum kui_game_sector_format)7, output, sizeof(output)) == KUI_GAME_INVALID);
+    CHECK(kui_retail_image_read(&image, 45000, 1, KUI_GAME_SECTOR_RAW, output, 2351) == KUI_GAME_RANGE);
+    CHECK(kui_retail_image_read(&image, 45000, 1, KUI_GAME_SECTOR_MODE1, output, 2047) == KUI_GAME_RANGE);
+    CHECK(kui_retail_image_read(&image, 45000, 1, KUI_GAME_SECTOR_RAW, NULL, sizeof(output)) == KUI_GAME_INVALID);
+    CHECK(kui_retail_image_check(NULL, 0, 1, KUI_GAME_SECTOR_RAW) == KUI_GAME_INVALID);
+    CHECK(calls == before);
+    for(size_t i = 0; i < sizeof(output); ++i) CHECK(output[i] == 0x77);
+    /* Header IO failure cannot touch caller output, payload failures invalidate
+     * poisoned callback data; both recover on the following fresh command. */
+    fail_call = calls + 1;
+    CHECK(kui_retail_image_read(&image, 45000, 1, KUI_GAME_SECTOR_MODE1, output, sizeof(output)) == KUI_GAME_IO);
+    CHECK(!image.cache_valid);
+    for(size_t i = 0; i < sizeof(output); ++i) CHECK(output[i] == 0x77);
+    fail_call = calls + 3;
+    CHECK(kui_retail_image_read(&image, 45000, 3, KUI_GAME_SECTOR_MODE1, output, sizeof(output)) == KUI_GAME_IO);
+    CHECK(!image.cache_valid);
+    fail_call = 0; compare(45000, 3, KUI_GAME_SECTOR_MODE1);
+    uint32_t physical = EXTENT(manifest, 0).card_lba;
+    static const uint32_t corrupt[] = {0, 1, 5, 10, 11, 15};
+    for(unsigned i = 0; i < sizeof(corrupt) / sizeof(corrupt[0]); ++i) {
+        card[physical * 512u + corrupt[i]] ^= 1;
+        /* Mutating the fixture starts a new immutable media session. */
+        CHECK(kui_retail_image_init(&image, &manifest, read_block, card) == KUI_GAME_OK);
+        CHECK(!image.cache_valid);
+        memset(output, 0x77, sizeof(output));
+        CHECK(kui_retail_image_read(&image, 0, 1, KUI_GAME_SECTOR_MODE1, output, sizeof(output)) == KUI_GAME_MODE);
+        CHECK(output[0] == 0x77 && output[2047] == 0x77);
+        CHECK(kui_retail_image_read(&image, 0, 1, KUI_GAME_SECTOR_RAW, output, sizeof(output)) == KUI_GAME_OK);
+        card[physical * 512u + corrupt[i]] ^= 1;
+    }
+    CHECK(kui_retail_image_init(&image, &manifest, NULL, card) == KUI_GAME_INVALID);
+    CHECK(image.manifest == NULL && image.read_block == NULL);
+    CHECK(kui_retail_image_read(&image, 0, 1, KUI_GAME_SECTOR_RAW, output, sizeof(output)) == KUI_GAME_INVALID);
+    CHECK(kui_retail_image_init(NULL, &manifest, read_block, card) == KUI_GAME_INVALID);
+}
+static void sequential_cache_tests(bool fragmented) {
+    static const uint32_t chunks[] = {1, 2, 8};
+    static const enum kui_game_sector_format formats[] = {
+        KUI_GAME_SECTOR_MODE1, KUI_GAME_SECTOR_RAW
+    };
+    for(unsigned format = 0; format < sizeof(formats) / sizeof(formats[0]); ++format) {
+        for(unsigned chunk = 0; chunk < sizeof(chunks) / sizeof(chunks[0]); ++chunk) {
+            for(unsigned streaming = 0; streaming < 2; ++streaming) {
+                fixture(fragmented);
+                CHECK(!image.cache_valid && !image.blocks_read && !calls);
+                if(streaming) image.read_run = read_run;
+                for(uint32_t done = 0; done < 32; done += chunks[chunk])
+                    compare(45000 + done, chunks[chunk], formats[format]);
+                /* 32 raw sectors occupy exactly 147 physical blocks. All formats
+                 * and chunk sizes must reach each block once, including when the
+                 * extents are fragmented. compare checks every returned payload
+                 * byte and the destination canary after each separate read call. */
+                CHECK(calls == 147 && image.blocks_read == 147);
+                CHECK(run_calls == (streaming ? 147u : 0u));
+                CHECK(image.cache_valid);
+                /* New initialization discards the prior session's cached block. */
+                CHECK(kui_retail_image_init(&image, &manifest, read_block, card) == KUI_GAME_OK);
+                CHECK(!image.cache_valid && !image.blocks_read && !image.read_run);
+            }
+        }
+    }
+}
+static void run_span(uint32_t at, uint32_t physical, uint32_t blocks) {
+    CHECK(at + blocks <= run_calls);
+    for(uint32_t i = 0; i < blocks; ++i) {
+        CHECK(run_trace[at + i].lba == physical + i);
+        CHECK(run_trace[at + i].available == blocks - i);
+    }
+}
+static void run_span_tests(void) {
+    fixture(false); image.read_run = read_run;
+    uint32_t physical = manifest.slots[TRACK(manifest, 2).first_extent].extent.card_lba;
+    compare(45000, 2, KUI_GAME_SECTOR_MODE1);
+    CHECK(run_calls == 9); run_span(0, physical, 9);
+    /* Request scope includes the second sector, never its parity-only tail. */
+    run_calls = 0;
+    compare(45001, 1, KUI_GAME_SECTOR_MODE1);
+    CHECK(run_calls == 5); run_span(0, physical + 4, 5);
+    run_calls = 0;
+    compare(45001, 1, KUI_GAME_SECTOR_RAW);
+    CHECK(run_calls == 6); run_span(0, physical + 4, 6);
+    /* Its last block is reused by the next RAW request without a callback. */
+    run_calls = 0;
+    compare(45002, 2, KUI_GAME_SECTOR_RAW);
+    CHECK(run_calls == 9); run_span(0, physical + 10, 9);
+    run_calls = 0;
+    compare(45000, 8, KUI_GAME_SECTOR_MODE1);
+    CHECK(run_calls == 37); run_span(0, physical, 37);
+    /* Separate tracks bound runs even when their physical blocks are adjacent.
+     * MODE1 also omits a final parity-only block in the first track. */
+    run_calls = 0;
+    compare(45069, 3, KUI_GAME_SECTOR_MODE1);
+    uint32_t following = manifest.slots[TRACK(manifest, 3).first_extent].extent.card_lba;
+    CHECK(run_calls == 14);
+    run_span(0, physical + 316, 5); run_span(5, following, 9);
+    run_calls = 0;
+    compare(45069, 3, KUI_GAME_SECTOR_RAW);
+    CHECK(run_calls == 16);
+    run_span(0, physical + 316, 6); run_span(6, following, 10);
+
+    fixture(true); image.read_run = read_run;
+    uint32_t first = TRACK(manifest, 2).first_extent;
+    compare(45000, 2, KUI_GAME_SECTOR_RAW);
+    CHECK(run_calls == 10);
+    for(uint32_t i = 0; i < 3; ++i)
+        run_span(i * 3, manifest.slots[first + i].extent.card_lba, 3);
+    run_span(9, manifest.slots[first + 3].extent.card_lba, 1);
+
+    /* A declared extent boundary still ends a run without a physical gap. */
+    fixture(false);
+    first = TRACK(manifest, 2).first_extent;
+    struct kui_retail_extent original = manifest.slots[first].extent;
+    memmove(&manifest.slots[first + 2], &manifest.slots[first + 1],
+        (manifest.track_count + manifest.extent_count - first - 1) * sizeof(manifest.slots[0]));
+    manifest.slots[first].extent.blocks = 4;
+    manifest.slots[first + 1].extent = (struct kui_retail_extent){
+        4, original.card_lba + 4, original.blocks - 4};
+    ++manifest.extent_count; ++TRACK(manifest, 2).extent_count;
+    ++TRACK(manifest, 3).first_extent;
+    CHECK(kui_retail_image_init(&image, &manifest, read_block, card) == KUI_GAME_OK);
+    image.read_run = read_run;
+    compare(45000, 2, KUI_GAME_SECTOR_MODE1);
+    CHECK(run_calls == 9);
+    run_span(0, original.card_lba, 4); run_span(4, original.card_lba + 4, 5);
+
+    /* A partial final file block at UINT32_MAX cannot advertise a wrapped run. */
+    fixture(true);
+    struct kui_retail_extent *last = &EXTENT(manifest, manifest.extent_count - 1);
+    CHECK(last->blocks == 1);
+    edge_source = last->card_lba;
+    last->card_lba = UINT32_MAX;
+    manifest.card_sectors = manifest.partition_end = UINT64_C(0x100000000);
+    CHECK(kui_retail_image_init(&image, &manifest, read_block, card) == KUI_GAME_OK);
+    image.read_run = read_run;
+    compare(45071, 1, KUI_GAME_SECTOR_RAW);
+    CHECK(run_calls == 6);
+    CHECK(run_trace[5].lba == UINT32_MAX && run_trace[5].available == 1);
+}
+static void run_failure_tests(void) {
+    fixture(false); image.read_run = read_run;
+    memset(output, 0x77, sizeof(output));
+    CHECK(kui_retail_image_read(&image, 45000, 2, KUI_GAME_SECTOR_MODE1,
+        output, 4095) == KUI_GAME_RANGE);
+    CHECK(kui_retail_image_read(&image, 2, 2, KUI_GAME_SECTOR_MODE1,
+        output, sizeof(output)) == KUI_GAME_AUDIO);
+    CHECK(run_calls == 0 && calls == 0);
+    fail_call = 3;
+    CHECK(kui_retail_image_read(&image, 45000, 2, KUI_GAME_SECTOR_MODE1,
+        output, sizeof(output)) == KUI_GAME_IO);
+    CHECK(run_calls == 3 && calls == 3 && !image.cache_valid);
+    CHECK(run_trace[0].available == 9 && run_trace[2].available == 7);
+    fail_call = 0; run_calls = 0;
+    compare(45000, 2, KUI_GAME_SECTOR_MODE1);
+    CHECK(run_calls == 9 && image.cache_valid);
+    uint32_t cached = image.cached_lba;
+    run_calls = 0;
+    CHECK(kui_retail_image_read(&image, 45071, 2, KUI_GAME_SECTOR_RAW,
+        output, sizeof(output)) == KUI_GAME_RANGE);
+    CHECK(!run_calls && image.cache_valid && image.cached_lba == cached);
+
+    fixture(false);
+    uint32_t physical = manifest.slots[TRACK(manifest, 2).first_extent].extent.card_lba;
+    card[physical * 512u + 15] = 2;
+    CHECK(kui_retail_image_init(&image, &manifest, read_block, card) == KUI_GAME_OK);
+    image.read_run = read_run;
+    memset(output, 0x77, sizeof(output));
+    CHECK(kui_retail_image_read(&image, 45000, 2, KUI_GAME_SECTOR_MODE1,
+        output, sizeof(output)) == KUI_GAME_MODE);
+    /* A mode error can return early with unused advertised blocks. The caller
+     * must stop its transport; the image layer must consume no further blocks. */
+    CHECK(run_calls == 1 && calls == 1 && run_trace[0].available == 9);
+    for(size_t i = 0; i < sizeof(output); ++i) CHECK(output[i] == 0x77);
+}
+/* A synthetic map of count tracks: data tracks 1, 3 (the session, 100
+ * sectors, split over spare + 1 extents) and the last; audio between,
+ * mapped with one extent each only when audio_mapped. Every other track
+ * is 10 sectors long. */
+static void many_tracks(uint32_t count, bool audio_mapped, uint32_t spare) {
+    fixture(false);
+    memset(manifest.slots, 0, sizeof(manifest.slots));
+    manifest.card_sectors = manifest.partition_end = 100000;
+    manifest.track_count = count; manifest.extent_count = 0;
+    manifest.session_lba = manifest.boot_lba = 45000; manifest.boot_bytes = 2048;
+    uint32_t start = 0, card_lba = 100;
+    for(uint32_t i = 0; i < count; ++i) {
+        if(i == 2) start = 45000;
+        uint32_t sectors = i == 2 ? 100 : 10;
+        bool data = i == 0 || i == 2 || i == count - 1;
+        struct kui_retail_track *t = &TRACK(manifest, i);
+        *t = (struct kui_retail_track){.start_lba=start, .end_lba=start + sectors,
+            .control=data ? 4u : 0u, .first_extent=(uint16_t)(count + manifest.extent_count)};
+        start += sectors;
+        if(!data && !audio_mapped) continue;
+        uint32_t blocks = (sectors * 2352u + 511u) / 512u, pieces = i == 2 ? spare + 1 : 1;
+        for(uint32_t n = 0, file_block = 0; n < pieces; ++n) {
+            uint32_t take = n + 1 < pieces ? 1 : blocks - file_block;
+            EXTENT(manifest, manifest.extent_count++) =
+                (struct kui_retail_extent){file_block, card_lba, take};
+            ++t->extent_count; file_block += take; card_lba += take + 1;
+        }
+    }
+}
+static void round_trip(void) {
+    CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_OK);
+    CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_OK);
+    CHECK(!memcmp(&manifest, &decoded, sizeof(manifest)));
+}
+static void maximum_map_tests(void) {
+    /* GD-ROM's 99 tracks, audio listed without extents: every slot used. */
+    many_tracks(KUI_RETAIL_IMAGE_TRACKS, false, KUI_RETAIL_IMAGE_SLOTS - 99 - 3);
+    CHECK(manifest.track_count + manifest.extent_count == KUI_RETAIL_IMAGE_SLOTS);
+    round_trip();
+    CHECK(kui_retail_image_check(&decoded, 45100, 1, KUI_GAME_SECTOR_RAW) == KUI_GAME_AUDIO);
+    CHECK(kui_retail_image_check(&decoded, 45099, 2, KUI_GAME_SECTOR_RAW) == KUI_GAME_AUDIO);
+    CHECK(kui_retail_image_check(&decoded, 45099, 1, KUI_GAME_SECTOR_MODE1) == KUI_GAME_OK);
+    CHECK(kui_retail_image_check(&decoded, 45000 + 100 + 95 * 10 + 9, 1,
+                                 KUI_GAME_SECTOR_MODE1) == KUI_GAME_OK);
+    CHECK(TRACK(decoded, 98).first_extent == KUI_RETAIL_IMAGE_SLOTS - 1);
+    /* One more extent, or one more track, does not fit. */
+    ++manifest.extent_count;
+    CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_INVALID);
+    many_tracks(KUI_RETAIL_IMAGE_TRACKS + 1, false, 0);
+    CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_INVALID);
+    /* 31 tracks (MDK2's), audio mapped: 62 slots, and the background reader's
+     * 64 with two more extents; a 65th is the standard reader's alone. */
+    many_tracks(31, true, 2);
+    CHECK(manifest.track_count + manifest.extent_count == KUI_RETAIL_ASYNC_SLOTS);
+    manifest.reader = KUI_RETAIL_READER_ASYNC; manifest.storage_transport = KUI_STORAGE_SCI;
+    round_trip();
+    many_tracks(31, true, 3);
+    manifest.reader = KUI_RETAIL_READER_ASYNC; manifest.storage_transport = KUI_STORAGE_SCI;
+    CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_INVALID);
+    manifest.reader = KUI_RETAIL_READER_STANDARD;
+    round_trip();
+    /* One track's file in every other slot, including a final partly used block. */
+    fixture(false);
+    memset(manifest.slots, 0, sizeof(manifest.slots));
+    manifest.card_sectors = manifest.partition_end = 100000;
+    manifest.session_lba = manifest.boot_lba = 45000; manifest.boot_bytes = 2048;
+    manifest.track_count = 1;
+    const uint32_t most = KUI_RETAIL_IMAGE_SLOTS - 1;
+    TRACK(manifest, 0) = (struct kui_retail_track){.start_lba=45000, .end_lba=46000,
+        .control=4, .first_extent=1, .extent_count=(uint8_t)most};
+    manifest.extent_count = most;
+    uint32_t total = (1000u * 2352u + 511u) / 512u, file_block = 0;
+    for(uint32_t i = 0; i < most; ++i) {
+        uint32_t blocks = i == most - 1 ? total - file_block : 1;
+        EXTENT(manifest, i) = (struct kui_retail_extent){file_block, 100 + i * 3, blocks};
+        file_block += blocks;
+    }
+    round_trip();
+    /* Entire bounded disc / 12MiB boot exercise arithmetic without huge files. */
+    TRACK(manifest, 0).end_lba = KUI_GAME_LBA_LIMIT;
+    TRACK(manifest, 0).extent_count = 1; manifest.extent_count = 1;
+    memset(&manifest.slots[1], 0, sizeof(manifest.slots) - sizeof(manifest.slots[0]));
+    total = ((KUI_GAME_LBA_LIMIT - 45000) * 2352u + 511u) / 512u;
+    EXTENT(manifest, 0) = (struct kui_retail_extent){0, 100, total};
+    manifest.card_sectors = manifest.partition_end = (uint64_t)total + 100;
+    manifest.boot_bytes = KUI_RETAIL_IMAGE_BOOT_MAX;
+    CHECK(kui_retail_manifest_encode(&manifest, wire) == KUI_GAME_OK);
+    CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_OK);
+    CHECK(kui_retail_image_check(&decoded, KUI_GAME_LBA_LIMIT - 1, 1, KUI_GAME_SECTOR_RAW) == KUI_GAME_OK);
+    CHECK(kui_retail_image_check(&decoded, KUI_GAME_LBA_LIMIT - 1, 2, KUI_GAME_SECTOR_RAW) == KUI_GAME_RANGE);
+}
+/* An audio track listed without its file mapped (K-UI does this only when a
+ * map would not fit otherwise): its sectors are refused before any card
+ * read, and the tracks around it read as before. */
+static void unmapped_audio_tests(bool streaming) {
+    fixture(true);
+    struct kui_retail_track *audio = &TRACK(manifest, 1);
+    uint32_t first = audio->first_extent, count = audio->extent_count;
+    uint32_t used = manifest.track_count + manifest.extent_count;
+    memmove(&manifest.slots[first], &manifest.slots[first + count],
+            (used - first - count) * sizeof(manifest.slots[0]));
+    memset(&manifest.slots[used - count], 0, count * sizeof(manifest.slots[0]));
+    manifest.extent_count -= count; audio->extent_count = 0;
+    TRACK(manifest, 2).first_extent -= (uint16_t)count;
+    TRACK(manifest, 3).first_extent -= (uint16_t)count;
+    round_trip();
+    CHECK(kui_retail_image_init(&image, &manifest, read_block, card) == KUI_GAME_OK);
+    if(streaming) image.read_run = read_run;
+    unsigned before = calls;
+    memset(output, 0x77, sizeof(output));
+    CHECK(kui_retail_image_read(&image, 3, 1, KUI_GAME_SECTOR_RAW, output, sizeof(output)) == KUI_GAME_AUDIO);
+    CHECK(kui_retail_image_read(&image, 2, 2, KUI_GAME_SECTOR_RAW, output, sizeof(output)) == KUI_GAME_AUDIO);
+    CHECK(kui_retail_image_read(&image, 4, 1, KUI_GAME_SECTOR_MODE1, output, sizeof(output)) == KUI_GAME_AUDIO);
+    CHECK(kui_retail_image_read_part(&image, 3, 100, 16, KUI_GAME_SECTOR_RAW, output) == KUI_GAME_AUDIO);
+    CHECK(kui_retail_image_check(&manifest, 4, 1, KUI_GAME_SECTOR_RAW) == KUI_GAME_AUDIO);
+    CHECK(calls == before);
+    for(size_t i = 0; i < sizeof(output); ++i) CHECK(output[i] == 0x77);
+    compare(0, 3, KUI_GAME_SECTOR_RAW); compare(1, 2, KUI_GAME_SECTOR_MODE1);
+    compare(45000, 64, KUI_GAME_SECTOR_MODE1); compare(45069, 3, KUI_GAME_SECTOR_RAW);
+    compare_part(45069, 0x7e0, 0x1020, KUI_GAME_SECTOR_MODE1);
+}
+static void header_sector(uint8_t raw[KUI_GAME_RAW_BYTES], const uint8_t address[3]) {
+    memset(raw, 0x5a, KUI_GAME_RAW_BYTES);
+    raw[0] = 0; memset(raw + 1, 255, 10); raw[11] = 0;
+    memcpy(raw + 12, address, 3); raw[15] = 1;
+}
+static void header_tests(void) {
+    /* Addresses written out independently: LBA 45021 is FAD 45171 = 10:02:21;
+     * LBA 0 is 00:02:00; LBA 500000 is FAD 500150 = 111:08:50, whose minute
+     * carries into the tens nibble (0xb1) like recovery_sector.c. */
+    const struct { uint32_t lba; uint8_t address[3]; } cases[] = {
+        {45021, {0x10, 0x02, 0x21}}, {0, {0x00, 0x02, 0x00}},
+        {500000, {0xb1, 0x08, 0x50}}, {KUI_GAME_LBA_LIMIT - 1u, {0xf9, 0x59, 0x74}}
+    };
+    uint8_t raw[KUI_GAME_RAW_BYTES];
+    for(unsigned i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        header_sector(raw, cases[i].address);
+        CHECK(kui_retail_sector_header(raw, cases[i].lba) == KUI_RETAIL_HEADER_OK);
+        /* The data, EDC and ECC fields are deliberately not examined. */
+        raw[16] ^= 0xff; raw[2064] ^= 0xff; raw[2300] ^= 0xff;
+        CHECK(kui_retail_sector_header(raw, cases[i].lba) == KUI_RETAIL_HEADER_OK);
+        CHECK(kui_retail_sector_header(raw, cases[i].lba + 1u) == KUI_RETAIL_HEADER_ADDRESS);
+        if(cases[i].lba) CHECK(kui_retail_sector_header(raw, cases[i].lba - 1u) == KUI_RETAIL_HEADER_ADDRESS);
+        for(unsigned byte = 12; byte < 15; ++byte) {
+            raw[byte] ^= 0x01;
+            CHECK(kui_retail_sector_header(raw, cases[i].lba) == KUI_RETAIL_HEADER_ADDRESS);
+            raw[byte] ^= 0x01;
+        }
+        raw[15] = 2;
+        CHECK(kui_retail_sector_header(raw, cases[i].lba) == KUI_RETAIL_HEADER_MODE);
+        raw[15] = 1;
+        for(unsigned byte = 0; byte < 12; ++byte) {
+            raw[byte] ^= 0x80;
+            CHECK(kui_retail_sector_header(raw, cases[i].lba) == KUI_RETAIL_HEADER_SYNC);
+            raw[byte] ^= 0x80;
+        }
+    }
+    header_sector(raw, cases[0].address);
+    CHECK(kui_retail_sector_header(raw, KUI_GAME_LBA_LIMIT) == KUI_RETAIL_HEADER_ADDRESS);
+}
+static void cooked_tests(bool fragmented, bool streaming) {
+    /* Raw audio and the last data track surround cooked data tracks. */
+    fixture_format(fragmented, (1u << 0) | (1u << 2));
+    if(streaming) image.read_run = read_run;
+    round_trip();
+    CHECK(wire[320 + 8] == (4u | KUI_RETAIL_TRACK_COOKED) && wire[320 + 10] == 0 && wire[320 + 11] == 0);
+    CHECK(wire[320 + 12 + 8] == 0 && wire[320 + 12 + 10] == 0);
+    CHECK(sizeof(union kui_retail_slot) == 12);
+    compare(0, 3, KUI_GAME_SECTOR_MODE1);
+    compare(3, 2, KUI_GAME_SECTOR_RAW);
+    run_calls = 0;
+    compare(45000, 64, KUI_GAME_SECTOR_MODE1);
+    run_calls = 0;
+    compare(45069, 3, KUI_GAME_SECTOR_MODE1); /* cooked -> raw */
+    compare_part(45000, 0xee0, 0x1000, KUI_GAME_SECTOR_MODE1);
+    compare_part(45069, 0x7e0, 0x1020, KUI_GAME_SECTOR_MODE1);
+    compare_part(45000, 2047, 63u * 2048u + 1u, KUI_GAME_SECTOR_MODE1);
+    run_calls = 0;
+    image.cache_valid = 0;
+    run_calls = 0;
+    unsigned before = calls;
+    compare(45001, 1, KUI_GAME_SECTOR_MODE1);
+    CHECK(calls == before + 4); /* exactly four aligned card blocks per sector */
+    image.cache_valid = 0;
+    before = calls;
+    compare(45000, 64, KUI_GAME_SECTOR_MODE1);
+    CHECK(calls == before + 256);
+    before = calls;
+    memset(output, 0x77, sizeof(output));
+    CHECK(kui_retail_image_read(&image, 45069, 2, KUI_GAME_SECTOR_RAW, output, sizeof(output)) == KUI_GAME_UNSUPPORTED);
+    CHECK(kui_retail_image_read_part(&image, 45000, 16, 2048, KUI_GAME_SECTOR_RAW, output) == KUI_GAME_UNSUPPORTED);
+    CHECK(calls == before);
+    for(size_t i = 0; i < sizeof(output); ++i) CHECK(output[i] == 0x77);
+    /* Invalid packed layouts remain rejected even with a recomputed CRC. */
+    memcpy(clean_wire, wire, sizeof(wire));
+    wire[320 + 12 + 8] = KUI_RETAIL_TRACK_COOKED; refresh_crc();
+    CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
+    memcpy(wire, clean_wire, sizeof(wire));
+    wire[320 + 8] |= 1u; refresh_crc();
+    CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
+    memcpy(wire, clean_wire, sizeof(wire));
+    wire[320 + 8] |= KUI_RETAIL_TRACK_2336; refresh_crc();
+    CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
+    memcpy(wire, clean_wire, sizeof(wire));wire[320 + 11] = 1; refresh_crc();
+    CHECK(kui_retail_manifest_decode(wire, &decoded) == KUI_GAME_INVALID);
+    TRACK(manifest, 1).control = KUI_RETAIL_TRACK_COOKED;
+    CHECK(kui_retail_manifest_validate(&manifest) == KUI_GAME_INVALID);
+}
+
+static uint8_t payload_byte(uint32_t sector,uint32_t at) {
+    return (uint8_t)(sector*53u+at*17u+(at>>8));
+}
+static void offset_fixture(uint8_t layout,uint32_t offset) {
+    memset(&manifest,0,sizeof(manifest));memset(card,0xf3,sizeof(card));
+    manifest.card_sectors=2048;manifest.partition_start=50;manifest.partition_end=2000;
+    manifest.flags=KUI_RETAIL_IMAGE_CD|KUI_RETAIL_IMAGE_BOOT_CRC;
+    manifest.track_count=manifest.extent_count=1;manifest.boot_bytes=128;
+    strcpy(manifest.title,"Offset CD");strcpy(manifest.bootfile,"1ST_READ.BIN");
+    struct kui_retail_track *t=&TRACK(manifest,0);
+    *t=(struct kui_retail_track){.end_lba=3,.extent_count=1,
+        .first_extent=(uint16_t)(1u | (offset&255u)<<8),
+        .control=(uint8_t)(4u|layout|(offset&256u?KUI_RETAIL_TRACK_OFFSET_HIGH:0u))};
+    uint32_t stride=kui_retail_track_sector_bytes(t),header=kui_retail_track_header_bytes(t);
+    EXTENT(manifest,0)=(struct kui_retail_extent){0,100,(offset+3u*stride+511u)/512u};
+    for(uint32_t sector=0;sector<3;sector++) {
+        uint8_t *p=card+100u*512u+offset+sector*stride;
+        memset(p,0xee,stride);
+        if(header) {
+            unsigned sub=0;
+            if(!(layout&KUI_RETAIL_TRACK_2336)) {
+                p[0]=p[11]=0;memset(p+1,255,10);p[15]=(layout&KUI_RETAIL_TRACK_MODE2)?2:1;sub=16;
+            }
+            if(layout&KUI_RETAIL_TRACK_MODE2) {
+                const uint8_t sh[]={7,3,8,1};memcpy(p+sub,sh,4);memcpy(p+sub+4,sh,4);
+            }
+        }
+        for(uint32_t i=0;i<2048;i++) p[header+i]=payload_byte(sector,i);
+    }
+    calls=fail_call=edge_source=run_calls=0;
+    CHECK(kui_retail_image_init(&image,&manifest,read_block,card)==KUI_GAME_OK);
+}
+static void offset_layout_tests(void) {
+    static const uint8_t layouts[]={0,KUI_RETAIL_TRACK_COOKED,KUI_RETAIL_TRACK_MODE2,
+        KUI_RETAIL_TRACK_MODE2|KUI_RETAIL_TRACK_2336,KUI_RETAIL_TRACK_2448,
+        KUI_RETAIL_TRACK_MODE2|KUI_RETAIL_TRACK_2448};
+    static const uint32_t offsets[]={1,255,256,491,497,511};
+    for(unsigned l=0;l<sizeof(layouts);l++) for(unsigned o=0;o<sizeof(offsets)/sizeof(*offsets);o++) {
+        offset_fixture(layouts[l],offsets[o]);
+        const struct kui_retail_track *t=&TRACK(manifest,0);
+        CHECK(kui_retail_track_first_extent(t)==1 && kui_retail_track_file_offset(t)==offsets[o]);
+        CHECK(kui_retail_manifest_encode(&manifest,wire)==KUI_GAME_OK);
+        CHECK(wire[268]==manifest.flags && wire[328]==t->control && wire[330]==(offsets[o]&255u));
+        CHECK(kui_retail_manifest_decode(wire,&decoded)==KUI_GAME_OK && !memcmp(&decoded,&manifest,sizeof(manifest)));
+        image.read_run=read_run;
+        memset(output,0x77,sizeof(output));
+        CHECK(kui_retail_image_read(&image,0,3,KUI_GAME_SECTOR_MODE1,output,sizeof(output))==KUI_GAME_OK);
+        for(uint32_t n=0;n<3;n++) for(uint32_t i=0;i<2048;i++) CHECK(output[n*2048u+i]==payload_byte(n,i));
+        CHECK(output[3u*2048u]==0x77);
+        CHECK(kui_retail_image_read_part(&image,0,2047,4097,KUI_GAME_SECTOR_MODE1,output)==KUI_GAME_OK);
+        for(uint32_t i=0;i<4097;i++) CHECK(output[i]==payload_byte((i+2047u)/2048u,(i+2047u)%2048u));
+        uint32_t before=calls,stride=kui_retail_track_sector_bytes(t);
+        enum kui_game_result raw=kui_retail_image_read(&image,0,3,KUI_GAME_SECTOR_RAW,output,sizeof(output));
+        if(stride==2352 || stride==2448) {
+            CHECK(raw==KUI_GAME_OK);
+            for(uint32_t n=0;n<3;n++) CHECK(!memcmp(output+n*2352u,card+100u*512u+offsets[o]+n*stride,2352));
+        } else CHECK(raw==KUI_GAME_UNSUPPORTED && calls==before);
+        if(layouts[l]&KUI_RETAIL_TRACK_MODE2) {
+            uint32_t sub=layouts[l]&KUI_RETAIL_TRACK_2336?0u:16u;
+            uint8_t *p=card+100u*512u+offsets[o];
+            p[sub+4]^=1;image.cache_valid=0;memset(output,0x77,2048);
+            CHECK(kui_retail_image_read(&image,0,1,KUI_GAME_SECTOR_MODE1,output,sizeof(output))==KUI_GAME_MODE && output[0]==0x77);
+            p[sub+4]^=1;p[sub+2]|=0x20;p[sub+6]|=0x20;image.cache_valid=0;
+            CHECK(kui_retail_image_read_part(&image,0,10,100,KUI_GAME_SECTOR_MODE1,output)==KUI_GAME_MODE);
+        }
+    }
+    offset_fixture(0,0);manifest.flags=8;
+    CHECK(kui_retail_manifest_validate(&manifest)==KUI_GAME_INVALID);
+    manifest.flags=KUI_RETAIL_IMAGE_SCRAMBLED;
+    CHECK(kui_retail_manifest_validate(&manifest)==KUI_GAME_INVALID);
+    offset_fixture(0,0);TRACK(manifest,0).start_lba=44999;TRACK(manifest,0).end_lba=45002;
+    manifest.session_lba=manifest.boot_lba=44999;
+    CHECK(kui_retail_manifest_validate(&manifest)==KUI_GAME_OK);
+    manifest.flags=0;CHECK(kui_retail_manifest_validate(&manifest)==KUI_GAME_INVALID);
+}
+static void shared_boundary_tests(void) {
+    offset_fixture(0,123);
+    manifest.track_count=manifest.extent_count=2;
+    TRACK(manifest,0).end_lba=2;TRACK(manifest,0).first_extent=(uint16_t)(2u|123u<<8);
+    TRACK(manifest,1)=(struct kui_retail_track){.start_lba=2,.end_lba=4,
+        .first_extent=(uint16_t)(3u|219u<<8),.extent_count=1,.control=4};
+    EXTENT(manifest,0)=(struct kui_retail_extent){0,100,10};
+    EXTENT(manifest,1)=(struct kui_retail_extent){0,109,10};
+    CHECK(kui_retail_manifest_validate(&manifest)==KUI_GAME_OK);
+    CHECK(kui_retail_manifest_encode(&manifest,wire)==KUI_GAME_OK);
+    CHECK(kui_retail_manifest_decode(wire,&decoded)==KUI_GAME_OK);
+    TRACK(manifest,1).first_extent=(uint16_t)(3u|218u<<8);
+    CHECK(kui_retail_manifest_validate(&manifest)==KUI_GAME_OVERLAP);
+    TRACK(manifest,1).first_extent=(uint16_t)(3u|219u<<8);
+    EXTENT(manifest,1).card_lba=108;
+    CHECK(kui_retail_manifest_validate(&manifest)==KUI_GAME_OVERLAP);
+    EXTENT(manifest,1).card_lba=100;
+    CHECK(kui_retail_manifest_validate(&manifest)==KUI_GAME_OVERLAP);
+}
+int main(void) {
+    offset_layout_tests();shared_boundary_tests();
+    header_tests();
+    wire_tests(); invalid_map_tests(); reader_tests(false); reader_tests(true);
+    for(unsigned i = 0; i < 4; ++i) part_tests(i & 1u, i >= 2);
+    sequential_cache_tests(false); sequential_cache_tests(true);
+    run_span_tests(); run_failure_tests();
+    maximum_map_tests(); unmapped_audio_tests(false); unmapped_audio_tests(true);
+    for(unsigned i = 0; i < 4; ++i) cooked_tests(i & 1u, i >= 2);
+    printf("retail image: %u checks passed (canonical wire, fragmented bounds, cached runs, IO, 99 tracks)\n", checks);
+    return 0;
+}

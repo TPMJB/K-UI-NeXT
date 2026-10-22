@@ -1,0 +1,29 @@
+{
+  "received_date": "2026-09-20",
+  "runtime_build": "e643add5850c",
+  "experiment": "The retry path on real damage: a copy of Omikron - The Nomad Soul scratched through the label side, with material missing from the data layer in tracks 1 and 2. The console still boots it (it boots from track 3).",
+  "inputs": [
+    {
+      "file": "Bad_read__retry.txt",
+      "kept_as": "scratched-omikron-retry-2026-09-20.txt",
+      "bytes": 9922,
+      "sha256": "1017f38c0c5a816412e236a37b86fe07ba4097c5116aeed2dd9482b2003405c5"
+    }
+  ],
+  "observed": [
+    "Setup: FAD 8345 (last sector of audio track 2) failed twice with sense 3/2 (medium error), then read on the third attempt",
+    "Capture, track 1: the opening 32-sector PIO read at FAD 150 failed; single-sector recovery read FAD 150 on its first retry and committed it",
+    "FAD 151 failed all 10 retries with sense 3/2: 'Read retries exhausted: track 01 FAD=151'",
+    "CAPTURE/VERIFY FAILED: last committed bytes=2352; retries=13 / Partial job preserved",
+    "the capture phase took 5.0 s; no hang (each failed read is bounded)"
+  ],
+  "derived": {
+    "conclusions": [
+      "The retry path works on real media: a failed multi-sector read drops to single-sector reads, which pinned the damage to the exact sector (FAD 151) and kept the good sector before it.",
+      "It gives up after a fixed 10 retries (11 attempts, the same bound the host tests assert), names the sector, keeps the partial job and stops cleanly. It never zero-fills or skips, so no dump is ever produced with a sector that was not read.",
+      "The failing reads were the track's opening PIO chunk (CMD 16), not DMA, so the DMA stop flaw fixed in v6.2 was not involved; with the damage mid-track, v6.2 logs 'GD-ROM DMA read failed ... re-reading this chunk with PIO' first.",
+      "The disc cannot be dumped by any drive: the data layer is physically gone. The same title's good copy was dumped and verified separately (lid-open-omikron-2026-09-20.json)."
+    ]
+  },
+  "note": "This copy gets a different disc identity from the good one (8cd1c022... against def8ea0e...), so its partial job is kept apart and cannot be resumed into the good copy's job."
+}

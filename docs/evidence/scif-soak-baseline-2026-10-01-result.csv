@@ -1,0 +1,2 @@
+id,build,card_label,transport,filesystem,cluster_bytes,music_playing,ui_hz,preset,outcome,repeat,chunk_bytes,bytes,write_us,read_us,sync_us,verified
+1,"3a368ddcfaff","scif",0,"exFAT",131072,0,2,2,2,1,65536,352321536,318596398,561905911,198940,1

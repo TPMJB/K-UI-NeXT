@@ -1,0 +1,160 @@
+{
+  "schema": 1,
+  "date": "2026-09-23",
+  "kind": "Console app evidence from user-uploaded snapshots; no new reader measurements",
+  "runtime": "6f1be4cf53c3",
+  "sources": [
+    {
+      "upload": "diagnostics(20260923-222030).txt",
+      "bytes": 14274,
+      "sha256": "1bd620124bc5181182ace8a2d08421fdb9cc1c2410f569a803f2b3297fb6e39f",
+      "truncated": false,
+      "trigger": "manual",
+      "operation_result": "see operation log"
+    },
+    {
+      "upload": "diagnostics(20260923-222000).txt",
+      "bytes": 26361,
+      "sha256": "9cf463c02fa199116680624f06448e8a3d89b50fdb67e4b9024a67ad3558bea5",
+      "truncated": false,
+      "trigger": "auto new capture",
+      "operation_result": "failed"
+    },
+    {
+      "upload": "diagnostics(20260923-221957).txt",
+      "bytes": 33533,
+      "sha256": "9327e2ef382b0272eff582e102ad54664140a17d4d7e3d4c488d87e01f4ab1a8",
+      "truncated": false,
+      "trigger": "auto quick resume",
+      "operation_result": "stopped"
+    },
+    {
+      "upload": "diagnostics(20260923-221953).txt",
+      "bytes": 32384,
+      "sha256": "5554563992b95c6af6ce5a97e791b950c3079afaddf747f3a075ced19b66ddae",
+      "truncated": true,
+      "trigger": "auto quick resume",
+      "operation_result": "complete"
+    },
+    {
+      "upload": "diagnostics(20260923-221951).txt",
+      "bytes": 32385,
+      "sha256": "efa339083c8a55d04e4b3f09782572e3f676823b530c423ecf882d03e7f813f3",
+      "truncated": true,
+      "trigger": "manual",
+      "operation_result": "see operation log"
+    },
+    {
+      "upload": "scan-0001.txt",
+      "bytes": 967,
+      "sha256": "76f8805c1d705ecfd82b045eafe591240c82fb0e1ca37ee9efa6ec79672c063d"
+    }
+  ],
+  "snapshot_caveat": "Five overlapping snapshots of one boot/session, not five independent tests. Filename times do not define operation order. Later snapshots truncate earlier log entries.",
+  "advanced_crc": {
+    "damaged_fixture": {
+      "result": "ISSUES",
+      "data_sectors": 10,
+      "audio_sectors": 4,
+      "bad_sectors": 2,
+      "unsupported_sectors": 0,
+      "crc_mismatches": 3,
+      "sha_mismatches": 0,
+      "bytes": 32928,
+      "suspects": [
+        {
+          "track": 1,
+          "fad": 150,
+          "flags": "0x08"
+        },
+        {
+          "track": 3,
+          "fad": 45152,
+          "flags": "0x0c"
+        }
+      ],
+      "report": "scan-0001.txt",
+      "expected_result_confirmed": true
+    },
+    "existing_folder_attempts": {
+      "attempts": 2,
+      "result": "failed before track scan",
+      "logged_error": "Required metadata is missing or cannot be read",
+      "cause_unresolved": "Old error omitted selected folder, metadata filename, and FatFs code; these logs cannot distinguish wrong parent selection, missing K-UI manifest, missing GDI, or storage failure."
+    },
+    "clean_fixture_hardware_acceptance": "not present in supplied evidence"
+  },
+  "music": {
+    "cached_bytes": 6473566,
+    "loading_bytes": 0,
+    "peak_file_bytes": 8061166,
+    "file_budget_bytes": 8388608,
+    "allocations": 12,
+    "frees": 7,
+    "live_cached_files": 5,
+    "cached_mask": "0x3d",
+    "main_ram_after_cache": 10745736,
+    "main_ram_sampled_peak": 12333336,
+    "interpretation": "The custom-song slot is retained (mask bit 5). Cache allocation/free counts and current RAM stay constant across scans and capture/resumes in these snapshots. This supports retained bounded cache, not continuing allocation growth in this run; it is not a universal no-leak proof.",
+    "user_report": "Harbor Lights plays, but custom song cannot be reached with Home/Ripper trigger cycling. Prior cycling code covered only five bundled tracks."
+  },
+  "capture": {
+    "title": "DEAD OR ALIVE 2",
+    "folder": "/Games/DEAD OR ALIVE 2",
+    "sequence": [
+      {
+        "action": "new capture",
+        "result": "failed",
+        "committed_bytes": 823364640,
+        "cumulative_retries": 11,
+        "retries_by_fad": [
+          {
+            "fad": 380094,
+            "attempts": 1
+          },
+          {
+            "fad": 380111,
+            "attempts": 10
+          }
+        ],
+        "capture_wall_us": 918572251
+      },
+      {
+        "action": "quick resume",
+        "result": "stopped",
+        "committed_bytes": 823364640,
+        "cumulative_retries": 13,
+        "additional_retry_attempts": 2,
+        "additional_bytes": 0,
+        "size_check_wall_us": 419433,
+        "capture_wall_us": 10932659
+      },
+      {
+        "action": "quick resume",
+        "result": "complete",
+        "additional_bytes": 397932528,
+        "size_check_wall_us": 397359,
+        "capture_wall_us": 415107971,
+        "dma_chunks": 5286,
+        "pio_chunks": 2
+      }
+    ],
+    "final_tracks": 3,
+    "reference": "TOSEC FULL TRACK MATCH: Dead or Alive 2 v1.100 (2000)(Tecmo)(US)[!]",
+    "saved_bytes_reread": false,
+    "independent_pc_verification": "No track files supplied; not performed",
+    "retry_display": "11 is the cumulative job count: one earlier retry plus all ten at the terminal sector. First resume adds two, so cumulative count becomes 13. A stale on-screen 1 does not mean the engine skipped retries.",
+    "title_display": "Log identifies DEAD OR ALIVE 2 before/after work. User reports Identifying during capture; exact screen state is not logged.",
+    "dma_latch": "Not observed this boot"
+  },
+  "clock": {
+    "logged": "2026-09-23 16:51:30 local (RTC); new file dates follow it",
+    "interpretation": "Runtime reads the RTC date; no filesystem timestamp artifact supplied for independent date confirmation"
+  },
+  "not_established": [
+    "No VMU delete/restore hardware acceptance in these logs",
+    "No clean-fixture hardware pass recorded",
+    "No independent saved-file CRC check of this DOA2 job",
+    "New round-five compatibility/UI changes remain untested on console"
+  ]
+}

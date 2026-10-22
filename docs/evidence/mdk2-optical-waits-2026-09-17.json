@@ -1,0 +1,398 @@
+{
+  "received_date": "2026-09-17",
+  "input": {
+    "file": "diagnostics(20260917-220946).txt",
+    "bytes": 9870,
+    "sha256": "86ce3e8f7b20aedc61a4858e36d2284ee330dcddabbe7c1fe120803772a6bd26",
+    "log_truncated": false,
+    "report_trigger": "manual"
+  },
+  "runtime_build": "92484724c538",
+  "disc_title": "MDK2",
+  "disc_identity": "f838eac34967ae1693217ed313906954d4a6644dd59f5aa50f0accba8cf54727",
+  "profile": "gdi-raw2352-typegap150-v1",
+  "job": "/KUI/dumps/df838eac34967ae16-0002",
+  "phases": {
+    "setup": {
+      "wall_us": 12528616,
+      "buckets": {
+        "disc": {
+          "us": 12349937,
+          "bytes": 218736,
+          "calls": 93,
+          "logged_pct": 98.5,
+          "calculated_pct": 98.57383289582825
+        },
+        "edc": {
+          "us": 1059,
+          "bytes": 21168,
+          "calls": 9,
+          "logged_pct": 0.0,
+          "calculated_pct": 0.008452649518510266
+        },
+        "other": {
+          "us": 177620,
+          "calculated_pct": 1.4177144546532514
+        }
+      }
+    },
+    "resume": {
+      "wall_us": 212448470,
+      "buckets": {
+        "read": {
+          "us": 160577146,
+          "bytes": 75576816,
+          "calls": 1006,
+          "logged_pct": 75.5,
+          "calculated_pct": 75.5840444508732
+        },
+        "sha256": {
+          "us": 42687048,
+          "bytes": 75576816,
+          "calls": 1010,
+          "logged_pct": 20.0,
+          "calculated_pct": 20.092894997078588
+        },
+        "crc32": {
+          "us": 8412623,
+          "bytes": 75576816,
+          "calls": 1006,
+          "logged_pct": 3.9,
+          "calculated_pct": 3.959841650071662
+        },
+        "other": {
+          "us": 771653,
+          "calculated_pct": 0.36321890197655926
+        }
+      }
+    },
+    "capture": {
+      "wall_us": 305611520,
+      "buckets": {
+        "disc": {
+          "us": 270600197,
+          "bytes": 17837568,
+          "calls": 238,
+          "logged_pct": 88.5,
+          "calculated_pct": 88.54384710366939
+        },
+        "write": {
+          "us": 21921474,
+          "bytes": 17837568,
+          "calls": 237,
+          "logged_pct": 7.1,
+          "calculated_pct": 7.172986803638816
+        },
+        "sha256": {
+          "us": 11033157,
+          "bytes": 17837568,
+          "calls": 237,
+          "logged_pct": 3.6,
+          "calculated_pct": 3.6101901525178106
+        },
+        "crc32": {
+          "us": 1989986,
+          "bytes": 17837568,
+          "calls": 237,
+          "logged_pct": 0.6,
+          "calculated_pct": 0.6511488833928774
+        },
+        "checkpoint": {
+          "us": 50895,
+          "bytes": 8192,
+          "calls": 2,
+          "logged_pct": 0.0,
+          "calculated_pct": 0.01665349526091163
+        },
+        "other": {
+          "us": 15811,
+          "calculated_pct": 0.0051735615201940035
+        }
+      }
+    }
+  },
+  "optical": {
+    "setup": {
+      "read1": {
+        "us": 8512455,
+        "max_us": 596666,
+        "calls": 93,
+        "bytes": 218736,
+        "max_fad": 14600,
+        "max_sectors": 1,
+        "submit_us": 1901,
+        "submits": 93,
+        "poll_us": 73875,
+        "polls": 1126,
+        "wait_us": 8428196,
+        "waits": 1033,
+        "abort_us": 0,
+        "aborts": 0,
+        "other_us": 8483,
+        "ok": 93,
+        "failed": 0,
+        "timeout": 0,
+        "cancelled": 0,
+        "abort_failed": 0,
+        "invalid": 0,
+        "average_wait_us": 8158.950629235237,
+        "polls_per_call": 12.10752688172043,
+        "average_command_us": 91531.7741935484
+      },
+      "read2": {
+        "us": 3136909,
+        "max_us": 528865,
+        "calls": 93,
+        "bytes": 218736,
+        "max_fad": 14600,
+        "max_sectors": 1,
+        "submit_us": 1913,
+        "submits": 93,
+        "poll_us": 70319,
+        "polls": 496,
+        "wait_us": 3060137,
+        "waits": 403,
+        "abort_us": 0,
+        "aborts": 0,
+        "other_us": 4540,
+        "ok": 93,
+        "failed": 0,
+        "timeout": 0,
+        "cancelled": 0,
+        "abort_failed": 0,
+        "invalid": 0,
+        "average_wait_us": 7593.39205955335,
+        "polls_per_call": 5.333333333333333,
+        "average_command_us": 33730.20430107527
+      },
+      "wall_us": 12349489,
+      "requests": 93,
+      "bytes": 218736,
+      "mode": {
+        "mode_us": 572,
+        "calls": 93,
+        "failed": 0
+      },
+      "buffers_us": 698035,
+      "other_us": 1518,
+      "results": {
+        "ok": 93,
+        "retry": 0,
+        "fatal": 0
+      },
+      "mismatch": 0,
+      "guards": 0,
+      "refused": 0
+    },
+    "capture": {
+      "read1": {
+        "us": 130570325,
+        "max_us": 2294372,
+        "calls": 238,
+        "bytes": 17912832,
+        "max_fad": 62456,
+        "max_sectors": 32,
+        "submit_us": 5160,
+        "submits": 238,
+        "poll_us": 5675713,
+        "polls": 15925,
+        "wait_us": 124779241,
+        "waits": 15687,
+        "abort_us": 0,
+        "aborts": 0,
+        "other_us": 110211,
+        "ok": 238,
+        "failed": 0,
+        "timeout": 0,
+        "cancelled": 0,
+        "abort_failed": 0,
+        "invalid": 0,
+        "average_wait_us": 7954.308726971378,
+        "polls_per_call": 66.91176470588235,
+        "average_command_us": 548614.8109243697
+      },
+      "read2": {
+        "us": 138971324,
+        "max_us": 618502,
+        "calls": 238,
+        "bytes": 17837568,
+        "max_fad": 64568,
+        "max_sectors": 32,
+        "submit_us": 4783,
+        "submits": 238,
+        "poll_us": 5643713,
+        "polls": 16922,
+        "wait_us": 133207952,
+        "waits": 16684,
+        "abort_us": 3,
+        "aborts": 1,
+        "other_us": 114873,
+        "ok": 237,
+        "failed": 0,
+        "timeout": 0,
+        "cancelled": 1,
+        "abort_failed": 0,
+        "invalid": 0,
+        "average_wait_us": 7984.173579477344,
+        "polls_per_call": 71.10084033613445,
+        "average_command_us": 583913.1260504202
+      },
+      "wall_us": 270585026,
+      "requests": 238,
+      "bytes": 17837568,
+      "mode": {
+        "mode_us": 5312,
+        "calls": 238,
+        "failed": 0
+      },
+      "buffers_us": 1033794,
+      "other_us": 4271,
+      "results": {
+        "ok": 237,
+        "retry": 0,
+        "fatal": 1
+      },
+      "mismatch": 0,
+      "guards": 0,
+      "refused": 0
+    }
+  },
+  "resume": {
+    "checkpoint_sequence": 11,
+    "committed_bytes_before": 75576816,
+    "prefix_mib": 72.07566833496094,
+    "duration_seconds": 212.44847,
+    "average_kib_s": 347.4041699382443,
+    "console_verified_prefixes": [
+      {
+        "track": 1,
+        "bytes": 33988752,
+        "crc32": "97aad8a5",
+        "sha256": "62f9981ec7d99987c7f850bc7814f91425d0464f34fed4864fd2df633fd23754",
+        "scope": "completed track",
+        "result": "Console readback matches checkpoint; bytes were not supplied for independent recomputation in this upload"
+      },
+      {
+        "track": 2,
+        "bytes": 1237152,
+        "crc32": "48fff429",
+        "sha256": "483662b5c19f78b23fc738ad028fbb7a7bcf1cf15488c0db1c1e1b59f3726370",
+        "scope": "completed track",
+        "result": "Console readback matches checkpoint; bytes were not supplied for independent recomputation in this upload"
+      },
+      {
+        "track": 3,
+        "bytes": 16793280,
+        "crc32": "4e3c1f3e",
+        "sha256": "f29a394f64dc12ffb31f74489f3c1b4ce5a2d99da0d29ae009666d2a9e32fbe4",
+        "scope": "completed track",
+        "result": "Console readback matches checkpoint; bytes were not supplied for independent recomputation in this upload"
+      },
+      {
+        "track": 4,
+        "bytes": 23557632,
+        "crc32": "03d1b973",
+        "sha256": "44ab1b2e09aa2224c2d935ac939fc0224470a820f09023d0c65bafa9a765f6d7",
+        "scope": "committed partial-track prefix",
+        "result": "Console readback matches checkpoint; bytes were not supplied for independent recomputation in this upload"
+      }
+    ],
+    "new_writes_after_prefix_check": true
+  },
+  "capture": {
+    "track": 4,
+    "track_type": "audio",
+    "start_fad": 62456,
+    "next_fad": 70040,
+    "new_bytes": 17837568,
+    "new_sectors": 7584,
+    "duration_seconds": 305.61152,
+    "average_kib_s": 56.99883302828375,
+    "committed_bytes_after": 93414384,
+    "track_sectors_after_derived": 17600,
+    "recorded_application_retries": 0,
+    "cancelled_disc_commands": 1,
+    "cancellation_read": 2,
+    "stop": "Controlled B cancellation with confirmed command abort and checkpointed committed prefix",
+    "full_disc_complete": false,
+    "final_full_saved_file_verification": false
+  },
+  "per_track": {
+    "track": 4,
+    "type": "audio",
+    "first_fad": 62456,
+    "next_fad": 70040,
+    "wall_us": 305611428,
+    "bytes": 17837568,
+    "buckets_us": {
+      "disc": 270600197,
+      "write": 21921474,
+      "sha256": 11033157,
+      "crc32": 1989986,
+      "edc": 0,
+      "checkpoint": 50895,
+      "other": 15719
+    }
+  },
+  "derived": {
+    "sd_read_call_kib_s": 459.6263304804284,
+    "sd_write_call_kib_s": 794.6317843407793,
+    "paired_optical_callback_logical_kib_s": 64.37356732596909,
+    "combined_wait_us": 257987193,
+    "combined_wait_count": 32371,
+    "average_wait_us": 7969.701059590374,
+    "wait_share_capture_pct": 84.41671079676578,
+    "wait_share_optical_pct": 95.34422388916673,
+    "second_read_share_capture_pct": 45.47319551304872,
+    "mode_share_capture_pct": 0.0017381543732382864,
+    "buffers_share_capture_pct": 0.3382706254005085,
+    "resume_hash_seconds": 51.099671,
+    "capture_hash_share_pct": 4.261339035910688,
+    "remove_second_read_fixed_other_costs_kib_s": 104.5336024448747,
+    "remove_second_read_estimate_is_prediction": false
+  },
+  "automatic_report": {
+    "save_confirmed_by_log": true,
+    "path": "/KUI/probes/p0005/diagnostics.txt",
+    "uploaded_file_is_automatic_report": false,
+    "uploaded_manual_report_contains_preceding_automatic_save_success": true,
+    "saved_file_independently_inspected": false
+  },
+  "memory": {
+    "used_reserved_bytes": 900888,
+    "available_bytes": 15876328,
+    "sampled_peak_bytes": 900888,
+    "image_bss_bytes": 680868,
+    "firmware_reserve_bytes": 65536,
+    "main_stack_reserve_bytes": 65536,
+    "heap_system_bytes": 89180,
+    "heap_in_use_bytes": 88948,
+    "heap_free_bytes": 232,
+    "unclaimed_main_ram_bytes": 15876096,
+    "framebuffers_separate_vram_bytes": 7987200,
+    "change_observed": false
+  },
+  "continuity_checks": {
+    "prior_log": "diagnostics(10).txt",
+    "prior_evidence_file": "mdk2-audio-resume-2026-09-17.json",
+    "prior_saved_count_matches_resume_prefix": true,
+    "verified_track_prefix_lengths_sum_to_checkpoint_bytes": true,
+    "new_bytes_plus_prefix_equal_final_committed_bytes": true,
+    "new_bytes_equal_237_chunks_of_32_raw_sectors": true,
+    "new_sectors_equal_fad_interval": true,
+    "all_phase_buckets_sum_exactly": true,
+    "all_optical_subtimers_sum_exactly": true,
+    "per_track_buckets_sum_exactly": true
+  },
+  "limitations": [
+    "Wait timers measure elapsed time inside the scheduler wait callback, including time while the drive can make progress and time other threads run; this does not establish that all recorded wait time is avoidable.",
+    "The mean wait duration of about 8 ms is an elapsed average, not a distribution or proof that each requested 1 ms sleep lasted exactly that long.",
+    "Polling statistics and read repetition identify concrete optimization targets, but any throughput gain from fewer reads or a different polling policy needs hardware measurement.",
+    "The fixed-other-cost estimate subtracts the second-read timer only; changing sequential access can also change first-read latency and other costs.",
+    "Zero application retries does not reveal internal drive retry activity. One optical fatal result is the controlled cancellation, not an unrecoverable media failure.",
+    "The track-4 interval is directly measured; this report does not contain an instantaneous 50 KiB/s screen sample or a track-5 timing interval.",
+    "Only the log is supplied; prefix hashes are console-reported and have not been independently recomputed from raw track files in this upload.",
+    "MDK2 remains incomplete. Final saved-file verification, uninterrupted-versus-resumed equality and independent reference comparison remain pending.",
+    "An automatic report save succeeds according to the later manual log; that automatic report file was not independently uploaded or inspected."
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "date_received": "2026-09-24",
+  "evidence_type": "owner-supplied photograph of a physical console result screen",
+  "source": {
+    "filename": "fa847470-d131-4c5b-8ed2-85f2e318f409.png",
+    "sha256": "1a3acf5dc38df855c84d6b3f671dc14bf504de0283e512daa0889f716bf9e342",
+    "transcription": "games-resident-probe-hardware-2026-09-24.txt"
+  },
+  "build": "7a8493ae825e",
+  "source_commit": "aaa73e9d246f27c2c3dea995d984e3088b794e8b",
+  "packaged_commit": "7a8493ae825e381e0eeef205f3f7a4a6bcf75778",
+  "source_tree": "ad2ec15a441a6e42985f27e1185d77e93025c6d4",
+  "result": "PROBE PASSED",
+  "passed_checks": [
+    "Status ABI", "Synthetic TOC", "Sequential data reads", "Random data reads",
+    "Raw audio read", "Raw track boundary", "Rejected requests",
+    "Cancel before SD read", "Read after cancel", "Physical SD reads"
+  ],
+  "post_handoff_sd_blocks_read": 84,
+  "accepted": "G3 original-fixture resident SD read/handoff foundation on this console: separately linked client verifies returned data after launcher shutdown and retired RAM erasure, using K-UI probe ABI v1",
+  "filesystem_reported": null,
+  "not_established": [
+    "Retail GD BIOS ABI or game execution",
+    "Selected retail GDI mapping in the resident service",
+    "SD throughput, streaming performance, DMA or retail interrupt/cache behavior",
+    "CDDA/audio playback (raw audio-sector bytes were checked)",
+    "Both FAT32 and exFAT, or fragmentation on this specific console run",
+    "Repeated cold boots, hot return or the subsequent power cycle",
+    "Independent whole-card before/after checksum"
+  ],
+  "next": "Map selected GDI track files into the resident service; implement independently sourced GD BIOS request compatibility and retail boot/memory ownership; then attempt the owner's Dead or Alive 2 image",
+  "repeat_probe_requested": false,
+  "optical_reader_changes": false
+}

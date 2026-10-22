@@ -1,0 +1,29 @@
+{
+  "received_date": "2026-09-20",
+  "runtime_build": "5a5cada85a90 (normal build)",
+  "experiment": "A full Sword of the Berserk rip on a FAT32 card (no-name 32 GB microSD, 32 KiB clusters) with the normal build's DMA engine.",
+  "inputs": [
+    {
+      "file": "diagnostics.txt",
+      "kept_as": "fat32-sword-dma-2026-09-20.txt",
+      "bytes": 16015,
+      "sha256": "f739cbc5f20c36bc768dd7c98deebc4e0ea5ac2529fe40bf643c4f43e271093e"
+    }
+  ],
+  "capture": {
+    "wall_s": 1207.1,
+    "average_kib_s": 961.8,
+    "disc_pct": 0.4,
+    "sd_write_kib_s": 1099,
+    "dma_chunks": 15794,
+    "pio_chunks": 3,
+    "console_reference": "Reference check (TOSEC): FULL TRACK MATCH"
+  },
+  "pc_verification": "SAVED DATA VERIFIED, 3/3 PASS; CRC32 bcec7767 / 0ff934e3 / 2cfb5dcb equal the reference file, and SHA-256 equal every earlier Sword rip",
+  "conclusions": [
+    "FAT32 works end to end: the runtime loads from it, the storage test passes, and a whole disc rips byte-exact.",
+    "The normal build's DMA works on hardware: 15,794 of 15,797 chunks by DMA; the 3 PIO chunks are each track's opening read.",
+    "FAT32 costs about 2.4%: 961.8 KiB/s against 985.9 on the exFAT card, from writes about 3% slower (32 KiB clusters against 128 KiB)."
+  ],
+  "not_covered": "No stop and same-boot resume in this run, so the v6.2 DMA-stop fix is not yet confirmed on hardware."
+}

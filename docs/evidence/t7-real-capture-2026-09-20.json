@@ -1,0 +1,150 @@
+{
+  "received_date": "2026-09-20",
+  "runtime_build": "bea895bb93b4",
+  "experiment": "Trip 7: one REAL, complete capture of Sword of the Berserk with the fast settings (ui_hz=2, capture_hash=crc32, end_readback=off), then checked on a PC.",
+  "disc_title": "SWORD OF THE BERSERK GUTS RAGE (identity f4db30d38d4d8926df1cdd72945007948cf363d278614289e783478a380de69c)",
+  "inputs": [
+    {
+      "file": "T7_diag.txt",
+      "kept_as": "t7-real-capture-2026-09-20.txt",
+      "bytes": 23831,
+      "sha256": "4b821aa0cbe50fbe77d44aa933cf759ce62c8d167d90ea96baee32f0f5c8d7c1",
+      "note": "the saved log holds an R-trigger benchmark first (the config has no sections=, so the defaults ran), then the capture; the benchmark half is recorded in t1b-crc16-and-sd-sizes-from-the-t7-bench-2026-09-20.json"
+    }
+  ],
+  "config": {
+    "file": "docs/bench-cfgs/t7-real-capture-fast.cfg",
+    "ui_hz": [
+      2
+    ],
+    "capture_hash": "crc32",
+    "end_readback": "off"
+  },
+  "capture": {
+    "job": "/KUI/dumps/df4db30d38d4d8926-0001",
+    "console_result": "CAPTURED: all 3 tracks; stream CRC32 recorded; saved data NOT re-read",
+    "console_reference_check": "TOSEC: FULL TRACK MATCH (Sword of the Berserk - Guts' Rage v1.000 (2000)(Eidos)(US)[!]); computed from the CRC32 accumulated while reading, not from the saved files",
+    "wall_s": 1604.6,
+    "setup_s": 4.95,
+    "finish_s": 1.28,
+    "bytes": 1188823104,
+    "average_kib_s": 723.5,
+    "ui_pct": 4.9,
+    "parts": {
+      "disc": {
+        "us": 438817602,
+        "pct": 27.3
+      },
+      "edc": {
+        "us": 46387997,
+        "pct": 2.8
+      },
+      "write": {
+        "us": 1024924560,
+        "pct": 63.8
+      },
+      "crc32": {
+        "us": 90370887,
+        "pct": 5.6
+      },
+      "checkpoint": {
+        "us": 3670681,
+        "pct": 0.2
+      }
+    },
+    "tracks": [
+      {
+        "track": "T01",
+        "bytes": 1825152,
+        "wall_s": 4.7,
+        "kib_s": 379.5,
+        "disc_s": 2.85,
+        "write_s": 1.61
+      },
+      {
+        "track": "T02",
+        "bytes": 1237152,
+        "wall_s": 1.88,
+        "kib_s": 641.2,
+        "disc_s": 0.73,
+        "write_s": 1.03
+      },
+      {
+        "track": "T03",
+        "bytes": 1185760800,
+        "wall_s": 1598.05,
+        "kib_s": 724.6,
+        "disc_s": 435.24,
+        "write_s": 1022.29
+      }
+    ],
+    "reads": {
+      "requests": 15797,
+      "retry": 0,
+      "fatal": 0,
+      "mismatch": 0,
+      "guards": 0,
+      "refused": 0
+    }
+  },
+  "pc_verification": {
+    "reported_by": "the user (pasted output; the assistant did not run it)",
+    "command": "python3 verify_dump.py df4db30d38d4d8926-0001/ --reference docs/evidence/sword-of-the-berserk-reference.json   (run from tools/)",
+    "output": [
+      "PASS track01.bin 1825152 bytes CRC32=bcec7767 SHA256=ee221a533016b6bddbc7676f4278fffe446eb05d5dc1932da1a73c6269ef2202 (computed here; not in the manifest)",
+      "PASS track02.raw 1237152 bytes CRC32=0ff934e3 SHA256=8438ed3913c4b9a0f1f3b480a3b9c6e114e9ce30d623f02985d04a1b117502e8 (computed here; not in the manifest)",
+      "PASS track03.bin 1185760800 bytes CRC32=2cfb5dcb SHA256=1f3be789259cdbd82089f23100765a9bb7039e56450d9b0af3a6988d1c1e5713 (computed here; not in the manifest)",
+      "SAVED DATA VERIFIED: sizes, CRC32 and GDI layout agree",
+      "FAIL: Missing/unsafe metadata: sword-of-the-berserk-reference.json"
+    ],
+    "dump_result": "SAVED DATA VERIFIED: sizes, CRC32 and GDI layout agree (every track's saved file matches the CRC32 the console recorded while reading)",
+    "reference_step": "FAILED with 'Missing/unsafe metadata' only because the relative path was taken from tools/ (looked for tools/docs/evidence/...). Not a data problem; reproduced exactly, and the message now names the path it looked for.",
+    "reference_rerun": {
+      "method": "the real load_json and compare_reference, on the hashes above, from the repository root",
+      "result": [
+        true,
+        3
+      ]
+    },
+    "identical_to_the_2026_09_17_capture_made_with_the_old_defaults": [
+      {
+        "file": "track01.bin",
+        "sha256_identical": true,
+        "crc32_identical": true,
+        "bytes_identical": true
+      },
+      {
+        "file": "track02.raw",
+        "sha256_identical": true,
+        "crc32_identical": true,
+        "bytes_identical": true
+      },
+      {
+        "file": "track03.bin",
+        "sha256_identical": true,
+        "crc32_identical": true,
+        "bytes_identical": true
+      }
+    ]
+  },
+  "derived": {
+    "estimated_old_default_minutes": 105.0,
+    "speedup_vs_old_estimate": 3.9,
+    "prediction_from_trip_5a": {
+      "track3_minutes": 27.4,
+      "actual_track3_minutes": 26.6,
+      "error_pct": -2.7
+    },
+    "conclusions": [
+      "The whole disc took 26.7 minutes (1605 s) at an average of 723.5 KiB/s, with 0 retries and 0 failed, mismatched, guarded or refused reads in 15797 requests.",
+      "Trip 5a predicted 27.4 minutes for track 3 from the inner-edge bench; it took 26.6 (-2.7%). The time split matched the bench's: SD write 63.8%, disc 27.3%, CRC32 5.6%, EDC 2.8% (bench: 64 / 27 / 5.8 / 2.9).",
+      "Against the old defaults' rate from Trip 5a this is about 3.9x faster (an estimate of 105 minutes; no old-default run of this disc was timed).",
+      "Two independent checks agree. On the console, the CRC32 accumulated while reading matches the TOSEC catalogue for every track, so the disc was read correctly. On the PC, every saved file matches the CRC32 the console recorded (SAVED DATA VERIFIED) and the SHA-256 values match the reference for tracks 1-2.",
+      "All three tracks are byte-identical (SHA-256, CRC32 and size) to the capture made on 2026-09-17 with SHA-256 and a full read-back: [True, True, True]. That also corroborates that capture's track 3 SHA-256, which had only been computed by the console.",
+      "The console did not re-read the saved tracks; the PC check is what covers the path from memory to the card."
+    ]
+  },
+  "limitations": [
+    "One disc, one card, one console, one capture. The reference step's SHA-256 covers tracks 1-2 only (track 3's reference entry is CRC32 plus size); track 3's SHA-256 equality is against the 2026-09-17 capture."
+  ]
+}

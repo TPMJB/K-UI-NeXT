@@ -1,0 +1,164 @@
+{
+  "kind": "owner-console-photo-transcription",
+  "source_attachments": [
+    "image-1792548245180.jpg",
+    "image-1792548247896.jpg",
+    "image-1792548253369.jpg"
+  ],
+  "build": "00cec9b6ee9a",
+  "guard": "0x00000000",
+  "reader_steps": "0x000078ef",
+  "reader_sectors": "0x00002292",
+  "hook": {
+    "counts": [
+      "0x314b484d",
+      "0x00001a90",
+      "0x00000020",
+      "0x00000020",
+      "0x00000000"
+    ],
+    "first": [
+      "0x00030a60",
+      "0x0814fe98",
+      "0x01dd5db6",
+      "0x40008000",
+      "0x00000000",
+      "0x8c1458a0",
+      "0xffffffc3",
+      "0x00000105",
+      "0x8c14e8b4",
+      "0x00000000"
+    ],
+    "last": [
+      "0x00030a60",
+      "0x0814fe98",
+      "0x01dd5db6",
+      "0x40008000",
+      "0x00000000",
+      "0x8c1458a0",
+      "0xffffffc3",
+      "0x00000105",
+      "0x8c14e8b4",
+      "0x00000000"
+    ],
+    "reserved_zero_fields": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "visits_decimal": 6800,
+    "samples_decimal": 32,
+    "reserved_fields_are_runtime_failure_detector": false
+  },
+  "mapping": {
+    "counts": [
+      "0x00000001",
+      "0x00000296",
+      "0x576e75e7",
+      "0x576e75e7",
+      "0x0000001f"
+    ],
+    "code": [
+      "0x03dd5b0c",
+      "0x8c14cb60",
+      "0x8cfc9370",
+      "0x0c0b3359",
+      "0x8c0b3b0c"
+    ],
+    "owner": [
+      "0x8c14e8b4",
+      "0x08000000",
+      "0x0cfcaefe",
+      "0x00000008",
+      "0x03dd72b8"
+    ],
+    "root": [
+      "0x8cf762b8",
+      "0x0cf76170",
+      "0x00030a60",
+      "0x8cf752b8",
+      "0x00000000"
+    ],
+    "map": [
+      "0x00000000",
+      "0x00000000",
+      "0x00000000",
+      "0x0009a64a",
+      "0x03dd72b8"
+    ],
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "driver": {
+    "counts": [
+      "0x00000001",
+      "0x00000405",
+      "0x0000001f",
+      "0x00030a60",
+      "0x08030a60"
+    ],
+    "extension": [
+      "0x8cf93a60",
+      "0x0cf93170",
+      "0x00000000",
+      "0x00120c00",
+      "0x00000198"
+    ],
+    "tx": [
+      "0x0cfd3000",
+      "0x00130000",
+      "0x00130028",
+      "0x00130034",
+      "0x8cfd3000"
+    ],
+    "rx": [
+      "0x0cfd1000",
+      "0x00000000",
+      "0x00100000",
+      "0x0ced1000",
+      "0x8cfd1000"
+    ],
+    "maps": [
+      "0x0cfd3175",
+      "0x0cfd1175",
+      "0x0cfd2175",
+      "0x8cf92000",
+      "0x8cf92000"
+    ],
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "interpretation": [
+    "The authored completion-entry bridge executed 6800 times (0x1a90). The private log has the expected MHK1 magic and reached its sample cap of 32; visits continued after capture stopped.",
+    "The first and last retained samples agree on the extension argument, incoming stack/return address and CPU/process context. These are samples one and 32, not the endpoints of all 6800 visits.",
+    "Both retained samples report previous KMode boolean zero and recorder entry SR 0x40008000 with MD set. This supports the source-specific explicit transition into kernel mode before the P2 recorder. It does not imply that the original worker normally runs in kernel mode.",
+    "The captured original PR 0x01dd5db6 agrees with the reviewed MAPLE worker completion-call return address. The raw extension argument 0x00030a60 agrees with this run's DRIVER raw extension and its CE VA 0x08030a60.",
+    "MAPPING status is 1 with full mask 0x1f. Expected and actual entry CRC both equal the deliberate patched CRC 0x576e75e7, and the canonical entry word is 0x0009a64a. Mapping fault values are all zero.",
+    "DRIVER status is 1 with full mask 0x1f and 1029 reads (0x405). All driver fault values are zero. Its resolved extension moved to physical 0x8cf93a60 in this run, while TX/RX allocations remain at physical 0x8cfd3000 and 0x8cfd1000.",
+    "HOOK reserved fields are all zero as designed; these fields are not a runtime failure detector and are not independent evidence that every hook execution completed without error.",
+    "The result establishes actual completion-entry execution and bounded call/CPU-context capture on this exact owner build. The hook did not dereference the extension, stack, DMA or save-data pointers.",
+    "No VMU request/response, block read/write, save payload or emulated-card service was captured or enabled. This result does not establish DMA ownership, request lifetime, allocation pinning or CE virtual-save compatibility."
+  ],
+  "completion_entry_execution_observed": true,
+  "bounded_call_context_captured": true,
+  "mapping_validated": true,
+  "driver_metadata_validated": true,
+  "completion_hook_guest_data_pointers_followed": false,
+  "dma_chain_followed": false,
+  "dma_payload_read": false,
+  "virtual_vmu_enabled": false,
+  "save_read_write_tested": false,
+  "allocation_identity_or_lifetime_proven": false
+}

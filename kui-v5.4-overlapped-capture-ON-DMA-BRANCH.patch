@@ -1,0 +1,597 @@
+diff --git a/docs/bench-cfgs/t10-capture-dma.cfg b/docs/bench-cfgs/t10-capture-dma.cfg
+new file mode 100644
+index 0000000..681cb94
+--- /dev/null
++++ b/docs/bench-cfgs/t10-capture-dma.cfg
+@@ -0,0 +1,32 @@
++# TRIP 10 - the overlapped capture engine, on the real engine.  (about 6 minutes)
++# EXPERIMENTAL build only (a branch whose name ends in -experimental).
++#
++# capture_read=pio,dma runs the SAME capture twice: once reading the disc as the engine
++# always has, once reading it with GD-ROM DMA and starting the next chunk's read while the
++# current one is written and hashed. Everything else is identical, so the difference is the
++# overlap and nothing else.
++#
++# What to read:
++#   BENCH capture ... kib_s      the two rates. Trip 9 measured the loop at +34%; this is the
++#                                engine, which also does EDC, checkpoints and the plan.
++#   BENCH capture parts ... disc  should collapse on the dma row: that time is now hidden.
++#
++# The engine falls back to an ordinary PIO read for any chunk it cannot overlap: an odd
++# sector count, or the single-sector reads that follow a bad sector. The bytes are the same
++# either way; tests/test_capture_options.py proves that on the host against a byte-for-byte
++# reference, including a bad EDC, a stop and resume, and a drive that refuses DMA.
++#
++# This publishes nothing and deletes its jobs. Do a real rip (t7 with capture_read=dma) and
++# verify it on the PC before trusting it.
++
++ui_hz=2
++sections=capture
++
++capture_fad=45150
++capture_sectors=4096
++capture_type=data
++capture_hash=crc32
++end_readback=off
++capture_read=pio,dma
++
++note=T10 overlapped capture. card=<model> disc=<title>
+diff --git a/docs/benchmarks.md b/docs/benchmarks.md
+index 72d49a7..f019842 100644
+--- a/docs/benchmarks.md
++++ b/docs/benchmarks.md
+@@ -229,6 +229,15 @@ CRC16 candidates, and the capture engine at the four settings that matter), and
+ setting, plus what the measured-but-unbuilt changes would be worth. Run it before and after a
+ change. Lines it marks PROJECTED are arithmetic on measured rates, never an end-to-end run.
+ 
++**`capture_read=pio,dma`** (`docs/bench-cfgs/t10-capture-dma.cfg`) runs the real capture engine
++both ways: reading the disc as it always has, and reading it with GD-ROM DMA while the next
++chunk's read runs during this one's write and hash. Experimental build only; in an ordinary
++build the engine sees no DMA ops and reads with PIO whatever `bench.cfg` says. The engine falls
++back to a PIO read for any chunk it cannot overlap - an odd sector count, or the single-sector
++reads that follow a bad sector - so the bytes are the same either way. The host suite proves
++that against a byte-for-byte reference, including a bad EDC, a stop and resume, a drive that
++refuses to start a DMA, and one whose DMA completes with an error.
++
+ **`sections=pipeline`** (`docs/bench-cfgs/t9-pipeline.cfg`) measures a capture's inner loop -
+ read a chunk, write it to the card, CRC32 it - three ways on the real hardware: `pio-sequential`
+ (what the engine does today), `dma-sequential`, and `dma-overlapped`, which double-buffers so the
+diff --git a/docs/experiment-plan.md b/docs/experiment-plan.md
+index 2ccf290..bd14666 100644
+--- a/docs/experiment-plan.md
++++ b/docs/experiment-plan.md
+@@ -468,11 +468,15 @@ drive and card, writing no dump. **Result, 2026-09-20, two runs**
+ - What this is NOT: the pipeline has no EDC check, no checkpoints, no SHA-256, no retries and no
+   resume. It measures the loop, not the engine.
+ 
+-**Next, and not yet built: an overlapped capture.** The engine still reads with PIO; nothing in a
+-capture changed. Realising this means double-buffering `kui_capture`: start the DMA read of chunk
+-N+1, write and hash chunk N while it runs, then swap. The risk is not the DMA, which is now
+-measured, but the loop around it: checkpoint ordering, cancellation, the retry path and the guard
+-bytes all have to keep working at every interleaving.
++**Built, 2026-09-20: the overlapped capture engine (`capture_read=dma`, Trip 10).** `kui_capture`
++now double-buffers: the DMA read of chunk N+1 is begun as soon as chunk N is in hand, and runs
++while N is written and hashed. It is opt-in and defaults to PIO, and the console only offers the
++DMA ops in the experimental build. Any chunk it cannot overlap falls back to the ordinary PIO
++read, which keeps the retry and recovery behaviour unchanged. Two bugs the host suite caught
++while building it: a fatal DMA result was falling back to a PIO retry instead of stopping, and
++`sample_readback` compared against `job.data` when the chunk could now be in the second buffer
++(the existing sampled read-back scenario failed, which is what it is for). What is NOT yet
++measured: the engine's real rate on hardware (Trip 10) and a full disc verified on a PC.
+ 
+ Caveats that shape how to read it: the DMA probe **polls** rather than taking the
+ interrupt (this runtime never starts KOS's CD-ROM subsystem, so nothing installs
+diff --git a/include/kui/capture.h b/include/kui/capture.h
+index 963f2f3..406c6c1 100644
+--- a/include/kui/capture.h
++++ b/include/kui/capture.h
+@@ -51,6 +51,12 @@ struct kui_capture_options {
+     /* While capturing, re-read and byte-compare 1 chunk in this many right after
+      * it is written; a mismatch stops the capture. 0 = off. */
+     unsigned sample_every;
++    /* Read the disc with GD-ROM DMA and start the NEXT chunk's read while this one is written
++     * and hashed. Needs ops->read_begin/read_end; ignored without them. Measured on hardware
++     * (docs/evidence/t9-pipeline-overlap-2026-09-20.json): it hides 92% of the read time.
++     * The bytes are the same either way, and any chunk it cannot overlap - an odd sector count,
++     * or single-sector reads after a bad sector - falls back to the ordinary PIO read. */
++    bool read_dma;
+     /* Benchmark run: publish no metadata and skip the reference check. */
+     bool bench;
+ };
+@@ -76,6 +82,10 @@ struct kui_capture_ops {
+     uint64_t (*now_us)(void *);
+     /* Optional adapter profiling label; never changes the read policy. */
+     void (*read_phase)(void *, bool capturing);
++    /* Optional split GD-ROM DMA read (see read_dma). begin returns at once; end must always
++     * follow a true begin, because until it does the firmware owns the buffer. */
++    bool (*read_begin)(void *, uint32_t fad, unsigned sectors, uint8_t *out);
++    enum kui_read_result (*read_end)(void *);
+     const struct kui_capture_options *options;   /* NULL = defaults */
+     struct kui_capture_stats *stats;             /* NULL = not wanted */
+ };
+diff --git a/include/kui/options.h b/include/kui/options.h
+index a7fae42..9517081 100644
+--- a/include/kui/options.h
++++ b/include/kui/options.h
+@@ -69,6 +69,9 @@
+  *   capture_hash=both,crc32    both = SHA-256 and CRC32 per track; crc32 = CRC32
+  *                              only (a schema 2 manifest; a job keeps the mode
+  *                              it started with)
++ *   capture_read=pio,dma       EXPERIMENTAL build only: read the disc with GD-ROM DMA and
++ *                              overlap it with the SD write. Same bytes; falls back to PIO
++ *                              wherever it cannot overlap
+  *   end_readback=on,off        re-read every saved byte after capture. off
+  *                              applies to crc32 jobs only; Verify always reads
+  *   resume_check=full,size     full re-reads the committed bytes on resume;
+@@ -130,6 +133,7 @@ struct kui_options {
+     /* Capture engine choices; every list always has at least one value. */
+     bool capture_crc_only[KUI_OPT_SD_MAX];   unsigned capture_hash_count;
+     bool end_readback[KUI_OPT_SD_MAX];       unsigned end_readback_count;
++    bool capture_dma[KUI_OPT_SD_MAX];        unsigned capture_read_count;
+     bool resume_size[KUI_OPT_SD_MAX];        unsigned resume_check_count;
+     unsigned sample_readback[KUI_OPT_CAPTURE_MAX], sample_readback_count;
+     unsigned capture_sectors, capture_fad;   /* capture_fad 0 = optical_fad */
+diff --git a/src/core/bench.c b/src/core/bench.c
+index d6db9fb..9c830ec 100644
+--- a/src/core/bench.c
++++ b/src/core/bench.c
+@@ -821,7 +821,8 @@ static enum kui_bench_result bench_capture(const struct kui_options *o) {
+     unsigned fad = o->capture_fad ? o->capture_fad : o->optical_fad;
+     for(unsigned h = 0; h < o->capture_hash_count; ++h)
+     for(unsigned e = 0; e < o->end_readback_count; ++e)
+-    for(unsigned s = 0; s < o->sample_readback_count; ++s) {
++    for(unsigned s = 0; s < o->sample_readback_count; ++s)
++    for(unsigned d = 0; d < o->capture_read_count; ++d) {
+         struct kui_capture_options co;
+         struct kui_capture_stats st;
+         char brief[64], detail[112];
+@@ -830,8 +831,9 @@ static enum kui_bench_result bench_capture(const struct kui_options *o) {
+         co.crc_only = o->capture_crc_only[h];
+         co.skip_end_readback = !o->end_readback[e];
+         co.sample_every = o->sample_readback[s];
+-        snprintf(brief, sizeof(brief), "hash=%s end=%s sample=%u", co.crc_only ? "crc32" : "both",
+-            o->end_readback[e] ? "on" : "off", co.sample_every);
++        co.read_dma = o->capture_dma[d];
++        snprintf(brief, sizeof(brief), "hash=%s end=%s sample=%u read=%s", co.crc_only ? "crc32" : "both",
++            o->end_readback[e] ? "on" : "off", co.sample_every, co.read_dma ? "dma" : "pio");
+         cpu_begin();
+         enum kui_capture_result r = ops->capture_run(ops->ctx, fad, o->capture_sectors,
+             o->capture_audio, KUI_CAPTURE_NEW, &co, &st);
+diff --git a/src/core/capture.c b/src/core/capture.c
+index 0c751b6..05d34ef 100644
+--- a/src/core/capture.c
++++ b/src/core/capture.c
+@@ -13,7 +13,12 @@ static struct {
+     const struct kui_capture_ops *ops;
+     struct kui_checkpoint state;
+     struct kui_sha256 hashes[99];
+-    uint8_t data[KUI_CAPTURE_CHUNK*KUI_RAW_BYTES], record[KUI_CHECKPOINT_BYTES];
++    /* Two chunk buffers so a DMA read of the next chunk can run while this one is written
++     * (opt->read_dma). 32-byte aligned because the DMA engine requires it; the second costs
++     * 75 KB of BSS and is untouched unless the option is on. */
++    _Alignas(32) uint8_t data[KUI_CAPTURE_CHUNK*KUI_RAW_BYTES];
++    _Alignas(32) uint8_t data_b[KUI_CAPTURE_CHUNK*KUI_RAW_BYTES];
++    uint8_t record[KUI_CHECKPOINT_BYTES];
+     char dir[80], path[112], title[129], identity[65], text[32768];
+     uint64_t started, committed;
+     /* Options for this run (see kui_capture_options). crc_only is the JOB's mode:
+@@ -141,24 +146,31 @@ static bool sync_file(FIL *file) {
+ 
+ /* An unsuccessful batch is retried as a single sector at the same FAD.
+  * The ten additional attempts are not reset by reducing the request size. */
+-static bool read_raw(unsigned i,uint32_t fad,unsigned *count) {
++/* Every data sector's EDC. Shared by the ordinary read and the overlapped one, so both check
++ * exactly the same thing. */
++static bool edc_ok(unsigned i,const uint8_t *data,unsigned count,uint32_t fad) {
++    if(job.plan->tracks[i].control!=4) return true;
++    uint64_t start=kui_timing_begin(&job.timing);
++    bool ok=true;
++    unsigned checked=0;
++    for(unsigned s=0;s<count;s++) {
++        ++checked;
++        if(!kui_sector_edc_valid(data+s*KUI_RAW_BYTES)) {
++            job.ops->log("Invalid data-sector layout/EDC at FAD=%" PRIu32,fad+s);
++            ok=false;break;
++        }
++    }
++    kui_timing_end(&job.timing,KUI_TIME_EDC,start,checked*KUI_RAW_BYTES);
++    return ok;
++}
++static bool read_raw(unsigned i,uint32_t fad,unsigned *count,uint8_t *out) {
+     for(unsigned attempt=0;attempt<=KUI_CAPTURE_RETRIES;attempt++) {
+         if(cancelled()) return false;
+         uint64_t start=kui_timing_begin(&job.timing);
+-        enum kui_read_result r=job.ops->read(job.ops->ctx,fad,*count,job.data);
++        enum kui_read_result r=job.ops->read(job.ops->ctx,fad,*count,out);
+         kui_timing_end(&job.timing,KUI_TIME_DISC,start,r==KUI_READ_OK?*count*KUI_RAW_BYTES:0);
+         if(r==KUI_READ_FATAL) return false;
+-        if(r==KUI_READ_OK && job.plan->tracks[i].control==4) {
+-            unsigned checked=0;start=kui_timing_begin(&job.timing);
+-            for(unsigned s=0;s<*count;s++) {
+-                ++checked;
+-                if(!kui_sector_edc_valid(job.data+s*KUI_RAW_BYTES)) {
+-                    job.ops->log("Invalid data-sector layout/EDC at FAD=%" PRIu32,fad+s);
+-                    r=KUI_READ_RETRY;break;
+-                }
+-            }
+-            kui_timing_end(&job.timing,KUI_TIME_EDC,start,checked*KUI_RAW_BYTES);
+-        }
++        if(r==KUI_READ_OK && !edc_ok(i,out,*count,fad)) r=KUI_READ_RETRY;
+         if(r==KUI_READ_OK) return true;
+         if(attempt==KUI_CAPTURE_RETRIES) break;
+         if(job.state.retries!=UINT32_MAX) ++job.state.retries;
+@@ -186,7 +198,7 @@ static bool identify(void) {
+         uint32_t points[3]={t->start,t->start+(t->end-t->start-1)/2,t->end-1};
+         for(unsigned k=0;k<3;k++) {
+             unsigned one=1;
+-            if(!read_raw(i,points[k],&one)) return false;
++            if(!read_raw(i,points[k],&one,job.data)) return false;
+             hash_u32(&hash,points[k]);kui_sha256_update(&hash,job.data,KUI_RAW_BYTES);
+             if(t->start==45150 && k==0) {
+                 int offset=kui_data_offset(job.data);
+@@ -363,14 +375,17 @@ static bool check_files(bool exact,enum kui_capture_phase phase) {
+  * in memory (in 4 KiB slices, so no second buffer). The chunk-aligned offsets are
+  * whole sectors, so FatFs reads them from the card rather than a cache. The file
+  * pointer ends where it started: at the end of the chunk. */
+-static bool sample_readback(FIL *file,FSIZE_t offset,UINT bytes) {
++/* `data` is the chunk as it was written. It is NOT always job.data: with the overlapped read
++ * the chunks alternate between the two buffers, and comparing against the wrong one reported a
++ * mismatch on every other chunk. */
++static bool sample_readback(FIL *file,FSIZE_t offset,UINT bytes,const uint8_t *data) {
+     uint8_t slice[4096];
+     uint64_t start=kui_timing_begin(&job.timing);
+     bool ok=f_lseek(file,offset)==FR_OK && f_tell(file)==offset;
+     UINT at=0;
+     while(ok && at<bytes) {
+         UINT n=bytes-at>sizeof(slice)?sizeof(slice):bytes-at;
+-        ok=exact_read(file,slice,n) && !memcmp(slice,job.data+at,n);at+=n;
++        ok=exact_read(file,slice,n) && !memcmp(slice,data+at,n);at+=n;
+     }
+     kui_timing_end(&job.timing,KUI_TIME_READ,start,ok?bytes:0);
+     if(ok) ++job.sampled;
+@@ -397,23 +412,62 @@ static bool capture_tracks(void) {
+         uint32_t checkpoint_at=position,recovery_until=position;
+         job.ops->log("Capturing T%02u at FAD=%" PRIu32 "; B stops safely",i+1,t->start+position);
+         bool storage_failed=!ok;
++        /* Two buffers, so the drive can fill the next chunk while this one is written and
++         * hashed (opt->read_dma). `pending` means a DMA read is in flight into buf[cur^1];
++         * from the moment it is begun the firmware owns that buffer, so EVERY path out of
++         * this loop must end it. Anything the overlap cannot handle - an odd sector count,
++         * the single-sector reads that follow a bad sector, a completion that fails or whose
++         * EDC fails - falls back to the ordinary PIO read for that chunk, which keeps the
++         * retry and recovery behaviour exactly as it was. */
++        uint8_t *buf[2]={job.data,job.data_b};
++        unsigned cur=0;
++        bool pending=false;
++        uint32_t pending_fad=0;unsigned pending_n=0;
++        const bool overlap=job.opt&&job.opt->read_dma&&job.ops->read_begin&&job.ops->read_end;
+         while(ok && position<total && !cancelled()) {
+             unsigned n=total-position>KUI_CAPTURE_CHUNK?KUI_CAPTURE_CHUNK:total-position;
+             if(position<recovery_until) n=1;
+             unsigned requested=n;
+-            if(!read_raw(i,t->start+position,&n)) {ok=false;break;}
++            uint8_t *data=buf[cur];
++            bool have=false;
++            if(pending) {
++                /* Use it only if it is exactly the chunk now wanted; otherwise finish and drop it. */
++                bool wanted=pending_fad==t->start+position && pending_n==n;
++                uint64_t start=kui_timing_begin(&job.timing);
++                enum kui_read_result r=job.ops->read_end(job.ops->ctx);
++                kui_timing_end(&job.timing,KUI_TIME_DISC,start,
++                    wanted&&r==KUI_READ_OK?(uint64_t)n*KUI_RAW_BYTES:0);
++                pending=false;
++                /* FATAL means do not continue (media changed, cancelled, or the bus is
++                 * poisoned), so it ends the capture rather than falling back: a PIO read
++                 * would fail the same way, and retrying it would only hide the reason.
++                 * RETRY and a failed EDC do fall back, which is the ordinary retry path. */
++                if(r==KUI_READ_FATAL) {ok=false;break;}
++                have=wanted&&r==KUI_READ_OK&&edc_ok(i,data,n,t->start+position);
++            }
++            if(!have&&!read_raw(i,t->start+position,&n,data)) {ok=false;break;}
+             if(n<requested) recovery_until=position+requested;
+             if(cancelled()) break;
++            /* Start the next chunk's read NOW: it runs while this one is written and hashed. */
++            if(overlap&&!pending) {
++                uint32_t done=position+n,left=total-done;
++                unsigned next=left>KUI_CAPTURE_CHUNK?KUI_CAPTURE_CHUNK:(unsigned)left;
++                if(left&&!(next&1u)&&done>=recovery_until&&
++                   job.ops->read_begin(job.ops->ctx,t->start+done,next,buf[cur^1])) {
++                    pending=true;pending_fad=t->start+done;pending_n=next;
++                }
++            }
+             UINT bytes=n*KUI_RAW_BYTES;
+             uint64_t start=kui_timing_begin(&job.timing);
+-            bool write_ok=exact_write(&file,job.data,bytes);
++            bool write_ok=exact_write(&file,data,bytes);
+             kui_timing_end(&job.timing,KUI_TIME_WRITE,start,write_ok?bytes:0);
+             if(!write_ok) {ok=false;storage_failed=true;break;}
+-            if(!job.crc_only) hash_track(&job.hashes[i],job.data,bytes);
+-            job.state.track[i].crc32=crc_track(job.state.track[i].crc32,job.data,bytes);
++            if(!job.crc_only) hash_track(&job.hashes[i],data,bytes);
++            job.state.track[i].crc32=crc_track(job.state.track[i].crc32,data,bytes);
+             if(job.sample_every && ++job.chunks%job.sample_every==0 &&
+-               !sample_readback(&file,(FSIZE_t)position*KUI_RAW_BYTES,bytes)) {ok=false;storage_failed=true;break;}
++               !sample_readback(&file,(FSIZE_t)position*KUI_RAW_BYTES,bytes,data)) {ok=false;storage_failed=true;break;}
+             position+=n;job.state.track[i].sectors=position;
++            cur^=1;   /* next iteration reads from where the prefetch landed */
+             progress(KUI_CAPTURING,i,saved_bytes(),job.plan->bytes);
+             if(position-checkpoint_at>=KUI_CHECKPOINT_SECTORS || position==total) {
+                 if(!save_checkpoint(&file)) {ok=false;storage_failed=true;break;}
+@@ -421,6 +475,8 @@ static bool capture_tracks(void) {
+                 job.ops->log("T%02u %" PRIu32 "/%" PRIu32 " sectors; checkpoint saved",i+1,position,total);
+             }
+         }
++        /* A begun read still owns its buffer, whatever went wrong: always end it. */
++        if(pending) job.ops->read_end(job.ops->ctx);
+         /* Stop/read errors can still commit the successfully written prefix.
+          * Storage failures never advance the committed checkpoint. */
+         if(!storage_failed && position!=checkpoint_at && !save_checkpoint(&file)) ok=false;
+diff --git a/src/core/options.c b/src/core/options.c
+index f0164ee..0ad3dfc 100644
+--- a/src/core/options.c
++++ b/src/core/options.c
+@@ -33,6 +33,7 @@ void kui_options_default(struct kui_options *out) {
+     out->sections = KUI_SEC_OPTICAL | KUI_SEC_HASH | KUI_SEC_SD;
+     out->sweep_sectors = 2048;
+     out->sweep_verify = true;
++    out->capture_read_count = 1;   /* PIO: the overlapped read is opt-in */
+     out->sweep_mode_count = 1;   /* PIO only */
+     out->sweep_spin_count = 1;   /* no competing thread */
+     /* Capture engine: the engine as it has always been. */
+@@ -246,6 +247,7 @@ static bool apply(struct kui_options *o, const char *key, size_t klen,
+     if(KEY("sd_bytes")) return parse_ulist(v, vend, 4096, (unsigned long)KUI_OPT_CHUNK_MAX * KUI_RAW_BYTES,
+         512, KUI_OPT_SDBYTES_MAX, o->sd_bytes, &o->sd_bytes_count);
+     if(KEY("capture_hash")) return parse_two_words(v, vend, "both", "crc32", o->capture_crc_only, &o->capture_hash_count);
++    if(KEY("capture_read")) return parse_two_words(v, vend, "pio", "dma", o->capture_dma, &o->capture_read_count);
+     if(KEY("end_readback")) return parse_sd_list(v, vend, o->end_readback, &o->end_readback_count, true);
+     if(KEY("resume_check")) return parse_two_words(v, vend, "full", "size", o->resume_size, &o->resume_check_count);
+     if(KEY("sample_readback")) return parse_ulist(v, vend, 0, 1024, 1, KUI_OPT_CAPTURE_MAX,
+@@ -318,7 +320,7 @@ bool kui_options_parse(struct kui_options *opt, const char *text, size_t size,
+             "ui_hz", "sections", "sweep_chunks", "sweep_fads", "sweep_gap_us",
+             "sweep_service_us", "sweep_sectors", "sweep_verify", "sd_bytes",
+             "sweep_mode", "sweep_spin",
+-            "capture_hash", "end_readback", "resume_check", "sample_readback",
++            "capture_hash", "end_readback", "resume_check", "sample_readback", "capture_read",
+             "capture_sectors", "capture_fad", "capture_type"};
+         bool is_known = false;
+         for(size_t i = 0; i < sizeof(known) / sizeof(known[0]); ++i)
+@@ -412,7 +414,10 @@ void kui_options_log(const struct kui_options *o, kui_log_fn log) {
+     for(unsigned i = 0; i < o->resume_check_count; ++i)
+         append_word(checks, sizeof(checks), o->resume_size[i] ? "size" : "full", i == 0);
+     list_string(samples, sizeof(samples), o->sample_readback, o->sample_readback_count, "0");
+-    log("OPTIONS capture_hash=%s end_readback=%s resume_check=%s", hashes, ends, checks);
++    char reads[16] = "";
++    for(unsigned i = 0; i < o->capture_read_count; ++i)
++        append_word(reads, sizeof(reads), o->capture_dma[i] ? "dma" : "pio", i == 0);
++    log("OPTIONS capture_hash=%s end_readback=%s resume_check=%s capture_read=%s", hashes, ends, checks, reads);
+     log("OPTIONS sample_readback=%s capture_sectors=%u capture_type=%s", samples, o->capture_sectors,
+         o->capture_audio ? "audio" : "data");
+     if(o->capture_fad) log("OPTIONS capture_fad=%u", o->capture_fad);
+diff --git a/src/dreamcast/capture.c b/src/dreamcast/capture.c
+index e0d3d84..cc18cb0 100644
+--- a/src/dreamcast/capture.c
++++ b/src/dreamcast/capture.c
+@@ -1,5 +1,17 @@
+ /* SPDX-License-Identifier: GPL-3.0-only */
+ #include "platform.h"
++
++/* The overlapped read exists only in the experimental build; without it the engine sees NULL
++ * and reads with PIO whatever bench.cfg asks for. */
++#ifdef KUI_EXPERIMENTAL_DMA
++static bool capture_read_begin(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
++    return kui_disc_read_begin(ctx,fad,sectors,out);
++}
++static enum kui_read_result capture_read_end(void *ctx) { return kui_disc_read_end(ctx); }
++#define KUI_CAPTURE_DMA_OPS capture_read_begin,capture_read_end
++#else
++#define KUI_CAPTURE_DMA_OPS NULL,NULL
++#endif
+ #include <kos/timer.h>
+ #include <stdarg.h>
+ #include <stdio.h>
+@@ -21,7 +33,7 @@ enum kui_capture_result kui_capture_bench_run(uint32_t fad,unsigned sectors,bool
+      * the job, and the console closes it when the bench ends. Opening and closing it here left
+      * it closed for both of those. */
+     struct kui_capture_ops ops={NULL,kui_disc_read_raw,cancelled,now,NULL,bench_log,"000000000000",now_us,
+-        kui_disc_timing_phase,options,stats};
++        kui_disc_timing_phase,KUI_CAPTURE_DMA_OPS,options,stats};
+     return kui_capture_bench(&ops,fad,sectors,audio,mode);
+ }
+ enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build) {
+@@ -38,9 +50,10 @@ enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char
+      * it has always been. A resumed job keeps the hash mode it started with. */
+     struct kui_capture_options options={
+         .crc_only=kui_options.capture_crc_only[0],.skip_end_readback=!kui_options.end_readback[0],
+-        .resume_size_only=kui_options.resume_size[0],.sample_every=kui_options.sample_readback[0]};
++        .resume_size_only=kui_options.resume_size[0],.sample_every=kui_options.sample_readback[0],
++        .read_dma=kui_options.capture_dma[0]};
+     struct kui_capture_ops ops={NULL,kui_disc_read_raw,cancelled,now,kui_capture_status,
+-        kui_log,build,now_us,kui_disc_timing_phase,&options,NULL};
++        kui_log,build,now_us,kui_disc_timing_phase,KUI_CAPTURE_DMA_OPS,&options,NULL};
+     /* Whole-operation CPU split: how much of this capture the UI thread took. */
+     struct kui_cpu_census cpu_before,cpu_after;
+     kui_cpu_census_mark(&cpu_before);
+diff --git a/tests/bench_image.c b/tests/bench_image.c
+index 0775f99..3669f32 100644
+--- a/tests/bench_image.c
++++ b/tests/bench_image.c
+@@ -170,7 +170,7 @@ static enum kui_capture_result capture_run(void *p, uint32_t fad, unsigned secto
+      * the link for the whole section, so it must already be open. */
+     assert(t.linked);
+     struct kui_capture_ops cops = {NULL, read_valid, cancelled, now_ms, NULL, quiet_log, "0123456789ab",
+-                                   now_us, NULL, opt, st};
++                                   now_us, NULL, read_begin, read_end, opt, st};
+     return kui_capture_bench(&cops, fad, sectors, audio, mode);
+ }
+ /* Job directories still on the card: the bench must leave none behind. */
+@@ -255,6 +255,8 @@ int main(int argc, char **argv) {
+         o.capture_crc_only[0] = false; o.capture_crc_only[1] = true; o.capture_hash_count = 2;
+         o.end_readback[0] = true; o.end_readback[1] = false; o.end_readback_count = 2;
+         o.sample_readback[0] = 0; o.sample_readback[1] = 3; o.sample_readback_count = 2;
++        /* Both read modes, so the overlapped engine is exercised end to end here too. */
++        o.capture_dma[0] = false; o.capture_dma[1] = true; o.capture_read_count = 2;
+         o.resume_size[0] = false; o.resume_size[1] = true; o.resume_check_count = 2;
+         if(!strcmp(scenario, "capture-noop")) ops.capture_run = NULL;
+         if(!strcmp(scenario, "capture-nolink")) t.reconnect_fail = true;   /* the card will not come back */
+diff --git a/tests/capture_image.c b/tests/capture_image.c
+index d3000f7..bdc87cf 100644
+--- a/tests/capture_image.c
++++ b/tests/capture_image.c
+@@ -13,6 +13,9 @@
+ static struct {
+     FILE *image;uint64_t blocks,ticks,profile_ticks;unsigned writes,reads,failures,bad_attempts;
+     const char *fault;bool stop,injected;enum kui_capture_phase phase;
++    /* Split DMA. `pend` is a read in flight; the harness asserts it is always ended. */
++    bool pend;uint32_t pend_fad;unsigned pend_n;uint8_t *pend_out;
++    unsigned begins,ends,end_fails;
+     struct kui_capture_plan plan;
+ } test;
+ static void log_line(const char *format,...) {
+@@ -95,6 +98,23 @@ static enum kui_read_result read_disc(void *p,uint32_t fad,unsigned count,uint8_
+     }
+     return KUI_READ_OK;
+ }
++static bool read_begin_fake(void *p,uint32_t fad,unsigned sectors,uint8_t *out) {
++    (void)p;
++    assert(!test.pend);                       /* one in flight at a time, ever */
++    assert(out && sectors && !(sectors&1u));  /* DMA needs an even sector count */
++    assert(((uintptr_t)out&31u)==0);          /* and a 32-byte aligned buffer */
++    if(fault("dma-nobegin")) return false;
++    ++test.begins;test.pend=true;test.pend_fad=fad;test.pend_n=sectors;test.pend_out=out;
++    return true;
++}
++static enum kui_read_result read_end_fake(void *p) {
++    assert(test.pend);
++    ++test.ends;test.pend=false;
++    if(fault("dma-endfail")&&test.end_fails++<2) return KUI_READ_RETRY;
++    if(fault("dma-endfatal")) return KUI_READ_FATAL;
++    /* Same bytes the synchronous path would produce, faults included. */
++    return read_disc(p,test.pend_fad,test.pend_n,test.pend_out);
++}
+ static bool first_job(char path[128]) {
+     DIR d;FILINFO info;
+     if(f_opendir(&d,"0:/KUI/dumps")!=FR_OK) return false;
+@@ -175,6 +195,7 @@ static struct kui_capture_options test_options(void) {
+     o.crc_only=strstr(env,"crc32")!=NULL;o.skip_end_readback=strstr(env,"noend")!=NULL;
+     o.resume_size_only=strstr(env,"size")!=NULL;
+     const char *sample=strstr(env,"sample=");if(sample) o.sample_every=(unsigned)atoi(sample+7);
++    o.read_dma=strstr(env,"dma")!=NULL;
+     return o;
+ }
+ static void print_stats(const struct kui_capture_stats *st) {
+@@ -196,7 +217,7 @@ int main(int argc,char **argv) {
+     if(!strcmp(argv[2],"bench")) {   /* bench new|resume <sectors>: the benchmark entry point, real engine */
+         assert(argc==5);
+         struct kui_capture_options opts=test_options();struct kui_capture_stats stats;
+-        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us,NULL,&opts,&stats};
++        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us,NULL,read_begin_fake,read_end_fake,&opts,&stats};
+         enum kui_capture_result r=kui_capture_bench(&ops,45150,(unsigned)atoi(argv[4]),false,
+             !strcmp(argv[3],"resume")?KUI_CAPTURE_RESUME:KUI_CAPTURE_NEW);
+         printf("RESULT %u\n",r);print_stats(&stats);
+@@ -213,9 +234,11 @@ int main(int argc,char **argv) {
+         enum kui_capture_mode mode=!strcmp(argv[2],"new")?KUI_CAPTURE_NEW:
+             !strcmp(argv[2],"resume")?KUI_CAPTURE_RESUME:KUI_CAPTURE_VERIFY;
+         struct kui_capture_options opts=test_options();struct kui_capture_stats stats;
+-        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us,NULL,&opts,&stats};
++        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us,NULL,read_begin_fake,read_end_fake,&opts,&stats};
+         enum kui_capture_result r=kui_capture(&test.plan,&ops,mode);
+         printf("RESULT %u WRITES %u BAD_ATTEMPTS %u FATAL %u\n",r,test.writes,test.bad_attempts,test.failures);
++        /* Every begun read must have been ended: an unfinished one still owns its buffer. */
++        printf("DMA BEGINS %u ENDS %u PENDING %u\n",test.begins,test.ends,test.pend?1u:0u);
+         print_stats(&stats);
+         result=r==KUI_CAPTURE_COMPLETE?0:r==KUI_CAPTURE_STOPPED?3:1;
+     }
+diff --git a/tests/test_bench_images.py b/tests/test_bench_images.py
+index 829e470..1026c79 100644
+--- a/tests/test_bench_images.py
++++ b/tests/test_bench_images.py
+@@ -161,8 +161,10 @@ def check_capture(out):
+     assert re.search(r"^RECONNECTS 1 LAST sci=0 crc=1$", out, re.M), out
+     assert not matching(out, r"Mount failed|not connected")
+     combos = [(h, e, s) for h in ("both", "crc32") for e in ("on", "off") for s in (0, 3)]
++    # Both read modes run: the overlapped engine must produce the same shape of result.
++    assert len(matching(out, r"^BENCH capture uihz=full .* read=dma sectors=256 result=ok ")) == 8
+     for h, e, s in combos:
+-        brief = f"hash={h} end={e} sample={s}"
++        brief = f"hash={h} end={e} sample={s} read=pio"
+         run_line = matching(out, rf"^BENCH capture uihz=full {brief} sectors=256 result=ok bytes=602112 ")
+         assert len(run_line) == 1 and field(run_line[0], "us") > 0, brief
+         total = matching(out, rf"^BENCH capture total {brief} ")
+@@ -182,7 +184,8 @@ def check_capture(out):
+     full = matching(out, r"^BENCH resume uihz=full hash=\w+ check=full sectors=256 result=ok")
+     size = matching(out, r"^BENCH resume uihz=full hash=crc32 check=size sectors=256 result=ok")
+     skipped = matching(out, r"^BENCH resume uihz=full hash=both check=size skipped")
+-    assert (len(full), len(size), len(skipped)) == (8, 4, 4), (len(full), len(size), len(skipped))
++    # Doubled against the pre-DMA suite: every combination now runs with read=pio and read=dma.
++    assert (len(full), len(size), len(skipped)) == (16, 8, 8), (len(full), len(size), len(skipped))
+     # Not re-reading the prefix is the whole difference, and it must show.
+     crc_full = [field(line, "us") for line in full if "hash=crc32" in line]
+     assert max(field(line, "us") for line in size) * 10 < min(crc_full), (crc_full, size)
+diff --git a/tests/test_capture_options.py b/tests/test_capture_options.py
+index 9db249a..36324ef 100644
+--- a/tests/test_capture_options.py
++++ b/tests/test_capture_options.py
+@@ -81,6 +81,63 @@ def main():
+             baseline = digests(export(image, base / f"{kind}-base"))
+             assert len(baseline) == 6
+ 
++            # --- capture_read=dma: the overlapped engine ------------------------------
++            # The whole point: identical bytes. Everything else about this option is a
++            # performance claim, but correctness is the thing a dump depends on.
++            image = fresh()
++            output = run(image, "new", opts="dma")
++            assert "SAVED DATA VERIFIED: all 6 tracks; CRC32 and SHA-256" in output
++            assert digests(export(image, base / f"{kind}-dma")) == baseline, "DMA changed the bytes"
++            begins, ends, pending = (int(x) for x in re.search(r"^DMA BEGINS (\d+) ENDS (\d+) PENDING (\d+)$", output, re.M).groups())
++            assert begins > 0 and begins == ends and pending == 0, (begins, ends, pending)
++
++            # A drive that refuses to start a DMA: the engine falls back to PIO and still
++            # produces the same dump.
++            image = fresh()
++            output = run(image, "new", "dma-nobegin", opts="dma")
++            assert "SAVED DATA VERIFIED" in output
++            assert digests(export(image, base / f"{kind}-dma-nobegin")) == baseline
++            begins, ends, pending = (int(x) for x in re.search(r"^DMA BEGINS (\d+) ENDS (\d+) PENDING (\d+)$", output, re.M).groups())
++            assert begins == 0 and ends == 0 and pending == 0
++
++            # A DMA that completes with a failure: the chunk is re-read the ordinary way.
++            image = fresh()
++            output = run(image, "new", "dma-endfail", opts="dma")
++            assert "SAVED DATA VERIFIED" in output
++            assert digests(export(image, base / f"{kind}-dma-endfail")) == baseline
++            assert re.search(r"^DMA BEGINS (\d+) ENDS \1 PENDING 0$", output, re.M)
++
++            # A DMA that reports a fatal error ends the capture, and nothing is left in flight.
++            image = fresh()
++            output = run(image, "new", "dma-endfatal", opts="dma", expected=1)
++            assert re.search(r"^DMA BEGINS (\d+) ENDS \1 PENDING 0$", output, re.M)
++
++            # Stopping mid-capture with a read in flight, then resuming with DMA, must still
++            # land on the same bytes: the interleaving a real B press produces.
++            image = fresh()
++            output = run(image, "new", "stop-middle", opts="dma", expected=3)
++            assert "STOPPED" in output and re.search(r"^DMA BEGINS (\d+) ENDS \1 PENDING 0$", output, re.M)
++            output = run(image, "resume", opts="dma")
++            assert "SAVED DATA VERIFIED" in output
++            assert digests(export(image, base / f"{kind}-dma-resume")) == baseline
++
++            # A bad EDC must still be caught when the chunk arrived by DMA, and must still
++            # exhaust the same bounded retries as the PIO path: the overlap must not become a
++            # way to skip the sector check.
++            image = fresh()
++            output = run(image, "new", "edc-fail", opts="dma", expected=1)
++            assert "SAVED DATA VERIFIED" not in output
++            assert "Invalid data-sector layout/EDC at FAD=45250" in output
++            assert "BAD_ATTEMPTS 11" in output, output
++            assert re.search(r"^DMA BEGINS (\d+) ENDS \1 PENDING 0$", output, re.M)
++
++            # A bad sector forces single-sector reads, which cannot be overlapped: the engine
++            # must fall back and still recover.
++            image = fresh()
++            output = run(image, "new", "transient", opts="dma")
++            assert "SAVED DATA VERIFIED" in output
++            assert digests(export(image, base / f"{kind}-dma-transient")) == baseline
++
+             # --- crc32: no SHA-256 anywhere, and the data is byte-identical -------------
+             image = fresh()
+             output = run(image, "new", opts="crc32")

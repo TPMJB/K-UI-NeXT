@@ -1,0 +1,11 @@
+References,Quantity,Value,Footprint,Description,Suggested part
+C1,1,10u,Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder,"10 uF 16 V X5R, 0805",10 uF 16 V X5R 0805
+C2 C3,2,100n,Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder,"100 nF X7R, 0805",100 nF 50 V X7R 0805
+D1,1,ACT,LED_SMD:LED_0805_2012Metric_Pad1.15x1.40mm_HandSolder,"Activity LED, green, 0805",green LED 0805 (about 2 V at 2 mA)
+H1 H2,2,M2,MountingHole:MountingHole_2.2mm_M2,Mounting hole,"nothing, or a nylon M2 screw"
+J1,1,CF socket,cf-board:CF-Card_3M_N7E50-E516xx-30_SmallRing,"CompactFlash header, Type I, SMT, 3M N7E50-E516PG-30",3M N7E50-E516PG-30
+J2,1,To CN503,Connector_PinHeader_2.00mm:PinHeader_2x21_P2.00mm_Vertical,"Wire pads, 2.0 mm grid (fit nothing, or a 2 x 21 2.0 mm header)","nothing (wires), or a 2 x 21 2.0 mm pin header"
+JP1,1,3V3/5V,Jumper:SolderJumper-3_P1.3mm_Bridged12_RoundedPad1.0x1.5mm,Card supply: 3.3 V as made (cut the trace and bridge 2-3 for 5 V),nothing: solder jumper on the board
+JP2,1,CSEL,Jumper:SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm,Open: slave (as needed in the Dreamcast); bridged: master,nothing: solder jumper on the board
+R1,1,470,Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder,"Activity LED resistor, 0805",470 ohm 1% 0805
+R2,1,10k,Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder,"PDIAG pull-up, 0805",10 kohm 1% 0805

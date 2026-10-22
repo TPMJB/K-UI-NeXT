@@ -1,0 +1,26 @@
+Transcription of the owner's console photograph, received 2026-09-24.
+Source: fa847470-d131-4c5b-8ed2-85f2e318f409.png
+SHA256: 1a3acf5dc38df855c84d6b3f671dc14bf504de0283e512daa0889f716bf9e342
+This is a photograph transcription, not an exported runtime log.
+
+K-UI: resident loader probe
+Build 7a8493ae825e
+Own test program / direct SD reads / no KOS
+
+Resident entered; launcher has shut down.
+Old launcher RAM erased; own client installed.
+Initializing independent read-only SD backend...
+PASS Status ABI
+PASS Synthetic TOC
+PASS Sequential data reads
+PASS Random data reads
+PASS Raw audio read
+PASS Raw track boundary
+PASS Rejected requests
+PASS Cancel before SD read
+PASS Read after cancel
+PASS Physical SD reads
+Post-handoff SD blocks read: 84
+
+PROBE PASSED - photograph this screen
+Power off/on to return. The SD card was read only.

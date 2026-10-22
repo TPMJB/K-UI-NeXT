@@ -1,0 +1,160 @@
+{
+  "kind": "owner-console-photo-transcription",
+  "source_attachments": [
+    "image-1792537081684.jpg",
+    "image-1792537086017.jpg",
+    "image-1792537090647.jpg"
+  ],
+  "build": "b5bcde4bcf64",
+  "guard": "0x00000000",
+  "reader_steps": "0x00007804",
+  "reader_sectors": "0x000021a7",
+  "discovery": {
+    "counts": [
+      4,
+      4,
+      0,
+      339,
+      2
+    ],
+    "cpu": [
+      "0x8c1458a0",
+      "0xfffffc03",
+      "0x00000105",
+      "0x8c14e8b4",
+      "0x8cc8e000"
+    ],
+    "maple": [
+      "0x8cfca408",
+      "0x03dd0000",
+      "0x0000a000",
+      "0x00000003",
+      "0x00000008"
+    ],
+    "mapledev": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "registers": [
+      "0x0cfd3000",
+      "0x00000001",
+      "0x00000001",
+      "0x00000000",
+      "0x00000000"
+    ],
+    "fault": [
+      "0x00000002",
+      "0x8c145b24",
+      "0x8cfca408",
+      "0x00000000",
+      "0x00000010"
+    ]
+  },
+  "mapping": {
+    "counts": [
+      "0x00000001",
+      "0x00000296",
+      "0x7bd7ff55",
+      "0x7bd7ff55",
+      "0x0000001f"
+    ],
+    "code": [
+      "0x03dd5b0c",
+      "0x8c14cb60",
+      "0x8cfca370",
+      "0x0c0b3359",
+      "0x8c0b3b0c"
+    ],
+    "owner": [
+      "0x8c14e8b4",
+      "0x08000000",
+      "0x8cfcbf0e",
+      "0x00000008",
+      "0x09dd72b8"
+    ],
+    "root": [
+      "0x8cf772b8",
+      "0x0cf7717d",
+      "0x00030a60",
+      "0x8cf762b8",
+      "0x00000000"
+    ],
+    "context": [
+      "0x00000000",
+      "0x00000000",
+      "0x00000000",
+      "0x2f962f86",
+      "0x03dd72b8"
+    ],
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "interpretation": [
+    "The last mapping proof completed all steps and repeated witnesses, with matching 32-byte source CRC and no proof fault.",
+    "The last DRIVER observation completed all steps (mask 0x1f) in 1029 reads, with no driver-observation fault.",
+    "The current owner root value 0x00030a60 normalizes through independently validated slot 0x08000000 to extension VA 0x08030a60. The canonical PROCESS0 root remains zero.",
+    "The sampled extension metadata records shutdown zero and raw MMIO VA 0x00120c00. The reviewed source allocation size 0x198 is not an in-memory identity signature.",
+    "The TX raw VA 0x00130000 and RX raw VA 0x00100000 map to the recorded physical ranges 0x0cfd3000 and 0x0cfd1000. All three observed buffer PTEs have cache bit 0x8 clear.",
+    "The sampled TX last cursor is 0x28 bytes after its start and end is 0x34 bytes after its start; these scalar bounds fit the allocation. No descriptor or response headers were read.",
+    "TTB slot 0 and the owner entry both read 0x8cf93000. Repeated context, metadata and page witnesses were unchanged for this observation.",
+    "The missing ROM-backed MAPLEDEV entry remains a stable discovery result, not a crash or evidence that no external instance exists.",
+    "MDST and ISTNRM were zero in the discovery sample. Repeated metadata and register samples do not establish a DMA ownership window, allocation identity or pinned lifetime."
+  ],
+  "virtual_vmu_enabled": false,
+  "save_read_write_tested": false,
+  "driver": {
+    "counts": [
+      "0x00000001",
+      "0x00000405",
+      "0x0000001f",
+      "0x00030a60",
+      "0x08030a60"
+    ],
+    "extension": [
+      "0x8cf94a60",
+      "0x0cf9417d",
+      "0x00000000",
+      "0x00120c00",
+      "0x00000198"
+    ],
+    "tx": [
+      "0x0cfd3000",
+      "0x00130000",
+      "0x00130028",
+      "0x00130034",
+      "0x8cfd3000"
+    ],
+    "rx": [
+      "0x0cfd1000",
+      "0x00000000",
+      "0x00100000",
+      "0x0ced1000",
+      "0x8cfd1000"
+    ],
+    "maps": [
+      "0x0cfd3175",
+      "0x0cfd1175",
+      "0x0cfd2175",
+      "0x8cf93000",
+      "0x8cf93000"
+    ],
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "driver_metadata_validated": true,
+  "transfer_buffer_addresses_dereferenced": false,
+  "allocation_identity_or_lifetime_proven": false
+}

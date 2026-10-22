@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "date": "2026-09-24",
+  "runtime": "57d53841c1ea",
+  "kind": "Console Games inspection evidence",
+  "source": {
+    "upload": "diagnostics(20260924-024105).txt",
+    "bytes": 7433,
+    "physical_lines": 153,
+    "sha256": "0cb29a7b9332da5ac9b2156a2732d89a180341c23ad03675d861439f9a185f3d",
+    "log_truncated": false,
+    "line_numbering": "One-based physical lines in the original uploaded report, including wrapped lines."
+  },
+  "armada": {
+    "successful_inspections": 3,
+    "line_ranges": [
+      [
+        107,
+        112
+      ],
+      [
+        125,
+        130
+      ],
+      [
+        135,
+        140
+      ]
+    ],
+    "path": "/Games/ARMADA/ARMADA.gdi",
+    "title": "ARMADA",
+    "product": "T40301N 00",
+    "region": "U",
+    "tracks": 5,
+    "data_tracks": 3,
+    "audio_tracks": 2,
+    "stored_bytes": 1187764704,
+    "boot_file": "0WINCEOS.BIN",
+    "boot_lba": 548388,
+    "boot_bytes": 1253376,
+    "metadata_bytes_per_inspection": 7199,
+    "result": "Image inspected; game launching is not available yet",
+    "interpretation": "Three successful, consistent metadata inspections on the console. Boot extent identified, not boot executable contents read or executed. No new full-file verification."
+  },
+  "cancelled_inspection": {
+    "line_range": [
+      100,
+      102
+    ],
+    "path": "/Games/BUST_A_MOVE_4/BUST_A_MOVE_4.gdi",
+    "metadata_bytes": 3143,
+    "result": "Games inspection stopped",
+    "interpretation": "Cancellation observed; neither a successful inspection nor a demonstrated parse failure. Later ARMADA inspections succeed."
+  },
+  "earlier_optical_event": {
+    "line_range": [
+      54,
+      59
+    ],
+    "event": "Inserted-disc identification reports CMD 19 FAILED before Games inspection.",
+    "interpretation": "Separate optical query, not a Games saved-image read failure. Inserted medium is not identified by the log."
+  },
+  "memory_context": {
+    "line_ranges": [
+      [
+        34,
+        40
+      ],
+      [
+        142,
+        152
+      ]
+    ],
+    "used_reserved_at_ready": 4517656,
+    "used_reserved_at_log_save": 9818272,
+    "increase": 5300616,
+    "music_cached_bytes": 5234866,
+    "music_loading_bytes": 0,
+    "music_file_allocations": 6,
+    "music_file_frees": 0,
+    "interpretation": "Retained music files account for nearly all the rise; this is not an isolated Games memory/leak test."
+  },
+  "accepted": "Repeated ARMADA GDI metadata inspection on exFAT and a stopped inspection followed by usable subsequent inspections.",
+  "not_established": [
+    "Retail game execution or compatibility",
+    "Resident post-handoff reads",
+    "Full track reread or hashes",
+    "Timing or throughput",
+    "Exact browser route, pagination, numbered-duplicate navigation or FAT32 console Games acceptance",
+    "All-title image compatibility"
+  ],
+  "next": "G3 resident read proof with an independently authored test program; no repeat ARMADA scan/rip requested."
+}

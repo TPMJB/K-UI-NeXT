@@ -1,0 +1,354 @@
+{
+  "schema": 1,
+  "date": "2026-09-24",
+  "kind": "Console app evidence from one owner-uploaded session; no new reader measurements",
+  "runtime": "cc2320bb6d3a",
+  "source": {
+    "upload": "diagnostics(20260924-012053).txt",
+    "bytes": 27448,
+    "physical_lines": 570,
+    "sha256": "73edfeb9d147ed5fac4b5434b096edccdcb342055993c9707503a4a47efab2b5",
+    "header_line_range": [
+      1,
+      7
+    ],
+    "log_truncated_flag": false,
+    "trigger": "manual",
+    "operation_result": "see operation log",
+    "line_numbering": "One-based physical lines in the original uploaded file, including wrapped lines.",
+    "scope": "One session retaining multiple report-save events. The last line begins another SD operation; the file contains completed scan results above it. Raw report, storage geometry and private device data are not published."
+  },
+  "music": {
+    "clear_cache": {
+      "line_range": [
+        164,
+        178
+      ],
+      "cached_bytes": 0,
+      "loading_bytes": 0,
+      "peak_file_bytes": 5234866,
+      "file_budget_bytes": 8388608,
+      "allocations": 9,
+      "frees": 9,
+      "cached_mask": "0x0"
+    },
+    "post_clear_memory": {
+      "snapshot_line_ranges": [
+        [
+          168,
+          178
+        ],
+        [
+          325,
+          335
+        ],
+        [
+          380,
+          390
+        ],
+        [
+          434,
+          444
+        ],
+        [
+          488,
+          498
+        ],
+        [
+          504,
+          514
+        ],
+        [
+          543,
+          553
+        ],
+        [
+          559,
+          569
+        ]
+      ],
+      "snapshot_count": 8,
+      "main_ram_used_reserved_estimate_bytes": 4447688,
+      "main_ram_sampled_peak_bytes": 9682608,
+      "heap_system_bytes": 1316844,
+      "heap_in_use_bytes": 189876,
+      "heap_free_bytes": 1126968,
+      "interpretation": "All eight post-clear snapshots retain zero live cached/loading bytes, balanced file allocations/frees and the same heap-in-use count. Free heap pages remain held by the allocator. This confirms the clear-cache path in this session, not every playback path or a universal absence of leaks."
+    },
+    "playback_limit": "The log does not identify selected song filenames or prove uninterrupted Ogg/WAV looping or trigger-cycle behavior."
+  },
+  "audio_cd": {
+    "mixed_disc_refusal": {
+      "toc_line_range": [
+        193,
+        210
+      ],
+      "refusal_line_ranges": [
+        [
+          213,
+          257
+        ],
+        [
+          262,
+          267
+        ]
+      ],
+      "tracks": 17,
+      "audio_tracks": 16,
+      "data_tracks": 1,
+      "data_track_number": 17,
+      "result": "Audio CDs only; GD-ROM and data/mixed CDs are not played",
+      "interpretation": "The logged refusal is consistent with this build rejecting the disc because its TOC includes a data track. The log does not identify the album or prove its physical condition."
+    },
+    "audio_only_disc": {
+      "toc_line_range": [
+        273,
+        286
+      ],
+      "tracks": 13,
+      "audio_tracks": 13,
+      "play_messages": [
+        {
+          "track": 1,
+          "line_range": [
+            301,
+            306
+          ],
+          "result": "Playing audio CD track 1 followed by Drive not ready; wait, then Refresh"
+        },
+        {
+          "track": 2,
+          "line_range": [
+            314,
+            319
+          ],
+          "result": "Playing audio CD track 2 followed by Drive not ready; wait, then Refresh"
+        },
+        {
+          "track": 3,
+          "line_range": [
+            323,
+            324
+          ],
+          "result": "Playing audio CD track 3"
+        }
+      ],
+      "interpretation": "The owner heard playback from the second disc. The success messages followed by not-ready messages leave transport/status behavior unresolved; this is partial acceptance, not full CD-player acceptance."
+    }
+  },
+  "advanced_crc": {
+    "clean_fixture": {
+      "line_range": [
+        371,
+        379
+      ],
+      "tracks": [
+        {
+          "track": 1,
+          "crc32": "247078c7",
+          "match": true
+        },
+        {
+          "track": 2,
+          "crc32": "d18e6eae",
+          "match": true
+        },
+        {
+          "track": 3,
+          "crc32": "6e67f7aa",
+          "match": true
+        }
+      ],
+      "result": "Saved hashes and Mode 1 checks passed; audio hash only",
+      "acceptance": "expected pass"
+    },
+    "damaged_fixture": {
+      "line_range": [
+        423,
+        433
+      ],
+      "bad_data_sectors": [
+        {
+          "track": 1,
+          "fad": 150,
+          "flags": "0x08"
+        },
+        {
+          "track": 3,
+          "fad": 45152,
+          "flags": "0x0c"
+        }
+      ],
+      "crc_mismatch_tracks": [
+        1,
+        2,
+        3
+      ],
+      "result": "Scan finished with issues; see the sector report",
+      "acceptance": "expected rejection"
+    },
+    "gdi_only_fixture": {
+      "line_range": [
+        477,
+        487
+      ],
+      "manifest_present": false,
+      "expected_hashes_available": false,
+      "crcs": [
+        "247078c7",
+        "d18e6eae",
+        "6e67f7aa"
+      ],
+      "result": "Mode 1 structure passed; no expected hashes; audio unverified",
+      "acceptance": "expected structural-only result"
+    },
+    "armada": {
+      "line_range": [
+        531,
+        542
+      ],
+      "title_from_selected_folder": "ARMADA",
+      "manifest_present": false,
+      "expected_hashes_available_to_scanner": false,
+      "tracks": [
+        {
+          "track": 1,
+          "crc32": "1108978f"
+        },
+        {
+          "track": 2,
+          "crc32": "ab76df4f"
+        },
+        {
+          "track": 3,
+          "crc32": "c5fcfc90"
+        },
+        {
+          "track": 4,
+          "crc32": "3d541896"
+        },
+        {
+          "track": 5,
+          "crc32": "78c77a47"
+        }
+      ],
+      "result": "Mode 1 structure passed; no expected hashes; audio unverified",
+      "interpretation": "The console completed a full scan of the selected saved files with no bad/unsupported Mode 1 sectors. Its UI had no manifest hashes and made no catalogue comparison. A later read-only comparison of its reported CRCs and aggregate lengths agrees with the bundled TOSEC entry.",
+      "standalone_report": {
+        "source": "scan-0005.txt",
+        "line_range": [
+          1,
+          18
+        ],
+        "track_crc_line_range": [
+          12,
+          16
+        ],
+        "summary_line_range": [
+          17,
+          18
+        ],
+        "complete": true,
+        "data_sectors": 220386,
+        "audio_sectors": 284616,
+        "bad_sectors": 0,
+        "unsupported_sectors": 0,
+        "bytes": 1187764704,
+        "crc_mismatches": 0,
+        "sha_mismatches": 0,
+        "mismatch_count_limit": "Zero mismatch counters in this structural-only report mean no expected hashes were compared, not a reference-match result."
+      },
+      "offline_catalogue_comparison": {
+        "performed_on": "2026-09-24",
+        "input": "CRCs and sector/byte totals recorded by the console, not direct reads of the track files by this reviewer.",
+        "catalogue_path": "data/known-dumps/tosec.db",
+        "catalogue_sha256": "2d3501bef9b26dac4a897e9cc35a6ffdef18a7615c91e698f353a9a895266e12",
+        "catalogue_line_range": [
+          8607,
+          8613
+        ],
+        "entry": "Armada v1.000 (1999)(Metro3D)(US)[!]",
+        "track_count": 5,
+        "all_five_ordered_crc32_match": true,
+        "expected_track_bytes": [
+          1425312,
+          1284192,
+          246235584,
+          668132640,
+          270686976
+        ],
+        "expected_track_sectors": [
+          606,
+          546,
+          104692,
+          284070,
+          115088
+        ],
+        "expected_total_bytes": 1187764704,
+        "expected_data_sectors": 220386,
+        "expected_audio_sectors": 284616,
+        "reported_total_bytes_match": true,
+        "reported_data_audio_sector_totals_match": true,
+        "provenance": "data/known-dumps/README.txt: official TOSEC 2025-03-13 DAT pack, Sega Dreamcast US TOSEC-v2025-02-09_CM DAT; source DAT SHA256 fdf463cee179196d1b089ee16bf8785511f0189f85e75e7d10c068860245f019.",
+        "interpretation": "All five saved-track CRCs, including both audio tracks, and the aggregate saved lengths agree with this independent TOSEC entry. The console UI did not make this comparison. The report omits individual track lengths, so strict per-track size-plus-CRC matching is not asserted. No additional whole-file reread is needed to establish the recorded CRC comparison."
+      }
+    }
+  },
+  "owner_reports": {
+    "source": "User message accompanying the uploaded report on 2026-09-24; these observations have no source-log line range.",
+    "vmu": {
+      "game": "Tony Hawk\u2019s Pro Skater 2",
+      "sequence": [
+        "Backed up one save to SD",
+        "Deleted that save from the VMU",
+        "Game behaved as if the save were absent",
+        "Restored the save from SD",
+        "Game loaded the restored save correctly"
+      ],
+      "acceptance": "One-card backup/delete/restore round trip passed by owner report. Two-VMU copy, metadata comparison and interrupted-write handling are not established. No per-operation VMU audit details appear in this uploaded log."
+    },
+    "audio_cd": "First selected CD did not play; second CD played audibly. The owner identified the first as an Eminem disc; the log does not independently establish album identity.",
+    "network": "Hardware test unavailable until an adapter/connection solution is found.",
+    "salvage": "Item 8 deferred by owner to a future version.",
+    "advanced_crc_duration": "Owner reports ARMADA scan took a long time; no scan duration is logged.",
+    "log_retention": "Owner requests approximately 1500 log lines instead of the present roughly 750-line limit; this file itself has no log-truncation flag."
+  },
+  "not_established": [
+    "No new reader throughput, capture or full saved-file verification benchmark",
+    "No settings persistence, screen safe-area, menu-sound, flash/BIOS-backup or restart hardware acceptance from this report",
+    "No complete audio-CD transport/volume/navigation acceptance",
+    "No network hardware acceptance; deferred until suitable hardware exists",
+    "No salvage hardware acceptance; deferred by owner",
+    "No independent PC track reread or per-track file-size evidence supplied; the completed console scan report and its aggregate sizes were supplied."
+  ],
+  "additional_sources": [
+    {
+      "upload": "scan-0005.txt",
+      "bytes": 1186,
+      "physical_lines": 18,
+      "sha256": "4842d0feb85a0c8fb03b26816b26285f0adf91030abc534ff36f4dbf91456183",
+      "kind": "Original completed Advanced CRC report for ARMADA",
+      "line_numbering": "One-based physical lines in the original uploaded file."
+    }
+  ],
+  "followup_host_validation": {
+    "scope": "Follow-up implementation after runtime cc2320bb6d3a; these are host checks, not new console results",
+    "scan_fat32_exfat_cases": 84,
+    "scan_properties": [
+      "one saved-track pass including catalogue lookup",
+      "full reference includes audio and per-track length",
+      "partial/missing/invalid references do not become full matches",
+      "structural or manifest mismatch still wins over a matching reference",
+      "cancellation preserves incomplete result and original files"
+    ],
+    "cd_audio": [
+      "enhanced/mixed CD audio filtering with data/GD-ROM refusal",
+      "bounded stop/init readiness transitions",
+      "cancellation and unchanged TOC guard",
+      "firmware initialization before server/command calls"
+    ],
+    "ui": "shell tests and rendered 7-line catalogue summary passed",
+    "sanitizers": "ASan/UBSan; local LeakSanitizer disabled under ptrace; CI runs normal suite",
+    "hardware_acceptance": "Pending for the new catalogue display and CD follow-up fixes; network and salvage remain deferred"
+  }
+}

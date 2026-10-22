@@ -1,0 +1,237 @@
+{
+  "status": "PASS",
+  "scope": "Native object compilation of gated WRITE/PENDING branch; no runtime backend binding or module release",
+  "flags": {
+    "write_layout": 1,
+    "write_staging": 1,
+    "auto_stop": 6,
+    "auto_phase": 2,
+    "diagnostic_mode": 0,
+    "build_id_for_comparison": "af18576dba18"
+  },
+  "objects": {
+    "a2-publish.o": {
+      "sha256": "3d8cf32bb464ddc5d7ed34e91f993dd264ff26a25a3ba1a81f89159e56c17239",
+      "text_bytes_before_gc": 2416,
+      "rodata_bytes_before_gc": 13,
+      "bss_bytes": 0,
+      "integer_instructions_checked": 1141
+    },
+    "traffic.o": {
+      "sha256": "ecca1927fc1a51a5c5501b6223cff88000e9d802fe2b466cd7109d52f22f8b29",
+      "text_bytes_before_gc": 12346,
+      "rodata_bytes_before_gc": 178,
+      "bss_bytes": 3412,
+      "integer_instructions_checked": 5434
+    }
+  },
+  "stack": {
+    "c_frame_bytes": 1000,
+    "shim_frame_bytes": 16,
+    "margin_bytes": 64,
+    "available_bytes": 1536,
+    "static_call_graph": true,
+    "source_qualified_locals": true,
+    "worst_path": [
+      {
+        "function": "kui_armada_ce_maple_traffic_run",
+        "frame_bytes": 204
+      },
+      {
+        "function": "kui_armada_ce_vmu_a2_publish",
+        "frame_bytes": 108
+      },
+      {
+        "function": "src/loader/armada_ce_maple_traffic.c:a2_recheck",
+        "frame_bytes": 64
+      },
+      {
+        "function": "src/loader/armada_ce_maple_traffic.c:kui_armada_ce_maple_rx_slice_query.constprop.0",
+        "frame_bytes": 276
+      },
+      {
+        "function": "src/loader/armada_ce_maple_traffic.c:kui_armada_ce_maple_rx_slice_witness",
+        "frame_bytes": 96
+      },
+      {
+        "function": "src/loader/armada_ce_maple_traffic.c:kui_armada_ce_maple_rx_slice_word",
+        "frame_bytes": 20
+      },
+      {
+        "function": "src/loader/armada_ce_maple_traffic.c:kui_armada_ce_maple_rx_slice_word_miss",
+        "frame_bytes": 84
+      },
+      {
+        "function": "src/loader/armada_ce_maple_traffic.c:kui_armada_ce_maple_resolve",
+        "frame_bytes": 80
+      },
+      {
+        "function": "src/loader/armada_ce_maple_traffic.c:kui_armada_ce_maple_rx_slice_table",
+        "frame_bytes": 28
+      },
+      {
+        "function": "src/loader/armada_ce_maple_traffic.c:kui_armada_ce_maple_rx_slice_read",
+        "frame_bytes": 20
+      },
+      {
+        "function": "src/loader/armada_ce_maple_traffic.c:traffic_read_p2",
+        "frame_bytes": 20
+      },
+      {
+        "function": "src/loader/armada_ce_maple_traffic.c:kui_armada_ce_ram_p1",
+        "frame_bytes": 0
+      }
+    ],
+    "indirect_callbacks": [
+      "traffic_read_p1",
+      "traffic_read_cache",
+      "traffic_read_p2",
+      "fence_read_mmio",
+      "fence_write_mmio",
+      "kui_armada_ce_maple_traffic_table",
+      "kui_armada_ce_maple_rx_slice_table",
+      "kui_armada_ce_maple_traffic_cache",
+      "kui_armada_ce_maple_rx_slice_cache",
+      "read_blank",
+      "commit_refused",
+      "a2_store32",
+      "a2_backend_call",
+      "a2_recheck"
+    ],
+    "indirect_sites": [
+      {
+        "function": "kui_armada_ce_vmu_a2_publish",
+        "site": "armada_ce_vmu_a2_publish.c:192:73",
+        "callbacks": [
+          "a2_store32",
+          "a2_backend_call",
+          "a2_recheck"
+        ]
+      },
+      {
+        "function": "kui_armada_ce_vmu_a2_publish",
+        "site": "armada_ce_vmu_a2_publish.c:198:21",
+        "callbacks": [
+          "a2_store32",
+          "a2_backend_call",
+          "a2_recheck"
+        ]
+      },
+      {
+        "function": "kui_armada_ce_vmu_a2_publish",
+        "site": "armada_ce_vmu_a2_publish.c:212:17",
+        "callbacks": [
+          "a2_store32",
+          "a2_backend_call",
+          "a2_recheck"
+        ]
+      },
+      {
+        "function": "kui_armada_ce_vmu_a2_publish",
+        "site": "armada_ce_vmu_a2_publish.c:250:9",
+        "callbacks": [
+          "a2_store32",
+          "a2_backend_call",
+          "a2_recheck"
+        ]
+      },
+      {
+        "function": "kui_vmu_emulation_handle",
+        "site": "vmu_emulation.c:189:21",
+        "callbacks": [
+          "read_blank",
+          "commit_refused"
+        ]
+      },
+      {
+        "function": "kui_vmu_emulation_handle",
+        "site": "vmu_emulation.c:257:17",
+        "callbacks": [
+          "read_blank",
+          "commit_refused"
+        ]
+      },
+      {
+        "function": "src/loader/armada_ce_maple_traffic.c:kui_armada_ce_maple_resolve",
+        "site": "armada_ce_maple_mapping.h:46:9",
+        "callbacks": [
+          "traffic_read_p1",
+          "kui_armada_ce_maple_traffic_table",
+          "kui_armada_ce_maple_rx_slice_table"
+        ]
+      },
+      {
+        "function": "src/loader/armada_ce_maple_traffic.c:kui_armada_ce_maple_resolve",
+        "site": "armada_ce_maple_mapping.h:55:9",
+        "callbacks": [
+          "traffic_read_p1",
+          "kui_armada_ce_maple_traffic_table",
+          "kui_armada_ce_maple_rx_slice_table"
+        ]
+      },
+      {
+        "function": "src/loader/armada_ce_maple_traffic.c:kui_armada_ce_maple_resolve",
+        "site": "armada_ce_maple_mapping.h:65:9",
+        "callbacks": [
+          "traffic_read_p1",
+          "kui_armada_ce_maple_traffic_table",
+          "kui_armada_ce_maple_rx_slice_table"
+        ]
+      },
+      {
+        "function": "src/loader/armada_ce_maple_traffic.c:kui_armada_ce_maple_resolve",
+        "site": "armada_ce_maple_mapping.h:73:13",
+        "callbacks": [
+          "traffic_read_p1",
+          "kui_armada_ce_maple_traffic_table",
+          "kui_armada_ce_maple_rx_slice_table"
+        ]
+      },
+      {
+        "function": "src/loader/armada_ce_maple_traffic.c:kui_armada_ce_maple_rx_slice_read",
+        "site": "armada_ce_maple_rx_slice.h:59:23",
+        "callbacks": [
+          "traffic_read_p1",
+          "traffic_read_cache",
+          "traffic_read_p2"
+        ]
+      },
+      {
+        "function": "src/loader/armada_ce_maple_traffic.c:kui_armada_ce_maple_traffic_read",
+        "site": "armada_ce_maple_traffic.h:61:8",
+        "callbacks": [
+          "traffic_read_p1",
+          "traffic_read_cache",
+          "traffic_read_p2"
+        ]
+      },
+      {
+        "function": "src/loader/armada_ce_vmu_a2_publish.c:a2_publish_store",
+        "site": "armada_ce_vmu_a2_publish.c:89:9",
+        "callbacks": [
+          "a2_store32"
+        ]
+      }
+    ],
+    "null_optional_reader_branch_guarded": true,
+    "null_optional_reader_sites": [
+      {
+        "function": "src/core/vmu_readonly.c:read_blank",
+        "site": "vmu_readonly.c:14:26"
+      }
+    ],
+    "retained_frame_count": 61
+  },
+  "stack_total_with_shim_and_margin": 1080,
+  "stack_spare_after_required_margin": 456,
+  "stack_scope": "Current callback closure including existing readonly backend; does not admit a new worker/provider call graph",
+  "pending_branch_native_compiled": true,
+  "module_linked": false,
+  "module_audit_pass_claimed": false,
+  "hardware_package_created": false,
+  "source_sha256": {
+    "src/loader/armada_ce_vmu_a2_publish.c": "8b41c52ab850a96856af1b0a7f62dc8f720a85f7fa172ee7bb29685484d7092d",
+    "include/kui/armada_ce_vmu_a2_publish.h": "b7e008a71b7e35d40c78fe11bebd14e438be3e0a2e6b2f98bae1a98965356cb0",
+    "src/loader/armada_ce_maple_traffic.c": "a3daffe74c511b76e45e469134a09773962e88520e1074751e342912b23ccf1a"
+  }
+}

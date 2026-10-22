@@ -1,0 +1,70 @@
+{
+  "schema": "kui.armada.ce.vmu.write.runtime.v1",
+  "date": "2026-10-21",
+  "source_base": "e1d8e3811a9497a6229bb499129a36974e6065d1",
+  "scope": "Connected source-specific Armada CE SCI durable A2 runtime",
+  "host_aggregate": "pass: Makefile.armada-maple-test write-runtime-tests a2-tests with exact private owner fixture",
+  "host_sanitizers": [
+    "AddressSanitizer",
+    "UndefinedBehaviorSanitizer"
+  ],
+  "connected_path": "Actual CE endpoint, deferred queue, SD provider and redo store with byte-level SPI model",
+  "end_to_end_storage_checks": 55049,
+  "coverage": [
+    "write phases0..3 and CMD13 phase4",
+    "immutable deferred requests and fresh owner proof",
+    "unmasked private storage stack and ordinary CE wait stack",
+    "real pending GD token during SD loan",
+    "four torn journal writes and eight post-write/sync failures",
+    "physical writer and reader release failures",
+    "bounded pre-acquisition BUSY without card I/O",
+    "irreversible fault quarantine and rejected late completion",
+    "original MDEN0 retained across IRQ-unmasked service; late-status replay regression and strict held-MMIO admission"
+  ],
+  "native_admission": "pass: full private-profile preflight package; final clean compile stamp recorded in console bundle",
+  "native_mutations_rejected": 1420,
+  "proof_stack": {
+    "used_with_shim_and_margin": 1100,
+    "available": 1536
+  },
+  "service_stack": {
+    "used_with_nested_irq_and_margin": 1268,
+    "available": 4096
+  },
+  "workspace_headroom": 32,
+  "default_payloads_byte_identical_to_accepted_baseline": 8,
+  "console_build_configuration": {
+    "write_layout": 1,
+    "write_staging": 1,
+    "write_runtime": 1,
+    "diagnostic_mode": 0,
+    "auto_stop": 6,
+    "auto_phase": 2,
+    "auto_limit": 36000,
+    "prepared_pair": "/KUI/vmu-test/p0001"
+  },
+  "hardware_save_load_verified": false,
+  "remaining": [
+    "physical A2 save, full power off and reload",
+    "forced CE teardown during acquired loan lifecycle",
+    "universal adapter detection",
+    "general SCIF and retained physical GD-ROM integration"
+  ],
+  "private_source_policy": "No SD profile, game, kernel or DLL bytes in source; personalized module and stage proof contain the selected existing SD preparation",
+  "native_ce_wait_abi": {
+    "mandatory_caller_homes_bytes": 16,
+    "adapter_frame_bytes": 24,
+    "saved": [
+      "PR",
+      "GBR"
+    ],
+    "stack": "original CE worker",
+    "old_corruption_reproduced": true,
+    "hardware_fix_verified": false
+  },
+  "parked_dma_regression": {
+    "asan_ubsan_checks": 60220,
+    "hardware_fix_verified": false,
+    "evidence": "armada-ce-vmu-dma-replay.json"
+  }
+}

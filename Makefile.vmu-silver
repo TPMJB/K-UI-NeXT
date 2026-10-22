@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Exact T15108N V1.001 observer, read-only A1, or isolated durable SD saves.
+override MAPLE_PROFILE := silver
+BUILD ?= build/vmu-silver
+include Makefile.vmu-toy

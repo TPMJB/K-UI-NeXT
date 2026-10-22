@@ -1,0 +1,58 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Isolated physical-read observations; no SD or ordinary runtime object list.
+BUILD ?= build/vmu-read-probe
+BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
+TARGET := $(BUILD)/vmu-read-probe.elf
+SOURCES := src/experimental/vmu_read_probe/main.c src/experimental/vmu_read_probe/boot_handoff.c \
+    src/dreamcast/vmu_read_bounded.c \
+    src/dreamcast/shell_font.c src/core/data.c
+OBJECTS := $(patsubst %.c,$(BUILD)/%.o,$(SOURCES))
+.DEFAULT_GOAL := all
+ifneq ($(filter host-test,$(MAKECMDGOALS)),host-test)
+ifndef KOS_BASE
+$(error Source .deps/kos/environ.sh before building)
+endif
+include $(KOS_BASE)/Makefile.rules
+endif
+CPPFLAGS += -Iinclude -DKUI_BUILD_ID='"$(BUILD_ID)"'
+CFLAGS += -std=c11 -Os -Wall -Wextra -Werror -ffunction-sections -fdata-sections \
+    -fstack-usage -fcallgraph-info=su
+.PHONY: all package host-test
+all: $(TARGET)
+package: $(BUILD)/KUI/tools.kui $(BUILD)/check-package
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/check-package $<
+$(BUILD)/%.o: %.c
+	@mkdir -p $(@D)
+	kos-cc $(CFLAGS) $(CPPFLAGS) -MMD -MP -c $< -o $@
+$(TARGET): $(OBJECTS) Makefile.vmu-read-probe
+	kos-cc -o $@ $(OBJECTS) -Wl,--gc-sections \
+        -Wl,--require-defined=_kui_vmu_read_probe_boot_marker -Wl,-Map,$(BUILD)/vmu-read-probe.map
+	python3 tools/record_build.py $@
+$(BUILD)/KUI/tools.kui: $(TARGET) tools/runtime_package.py
+	@mkdir -p $(@D)
+	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
+	python3 tools/runtime_package.py verify $@
+
+HOST_CC ?= cc
+HOST_SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie
+$(BUILD)/check-package: tests/vmu_read_probe_package.c src/core/runtime_image.c \
+    src/core/storage_policy.c src/core/data.c include/kui/runtime.h \
+    include/kui/storage_policy.h include/kui/storage.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -pedantic $(HOST_SANITIZERS) \
+        -Iinclude -I.deps/fatfs/source tests/vmu_read_probe_package.c \
+        src/core/runtime_image.c src/core/storage_policy.c src/core/data.c -o $@
+HOST_HEADERS := $(wildcard src/experimental/vmu_read_probe/host-stubs/*.h \
+    src/experimental/vmu_read_probe/host-stubs/dc/*.h \
+    src/experimental/vmu_read_probe/host-stubs/dc/maple/*.h)
+$(BUILD)/host-sequence: src/experimental/vmu_read_probe/host.c src/experimental/vmu_read_probe/main.c \
+    src/core/data.c include/kui/vmu_read_bounded.h include/kui/core.h $(HOST_HEADERS)
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -pedantic $(HOST_SANITIZERS) \
+        -Isrc/experimental/vmu_read_probe/host-stubs -Iinclude \
+        src/experimental/vmu_read_probe/host.c src/core/data.c -o $@
+host-test: $(BUILD)/host-sequence $(BUILD)/check-package
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/host-sequence
+	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_vmu_read_probe_package.py $(BUILD)/check-package
+
+-include $(OBJECTS:.o=.d)

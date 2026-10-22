@@ -1,0 +1,279 @@
+{
+  "received_date": "2026-09-23",
+  "runtime_build": "69dc33c0ff87",
+  "privacy": "Sanitized aggregates only. Raw console text, hardware identifiers, storage geometry, unique disc identities and card paths are excluded.",
+  "inputs": [
+    {
+      "filename": "Music.txt",
+      "bytes": 4273,
+      "lines": 91,
+      "sha256": "bdb159d32f4bb24a0d59f91f028184e84cea2b6e058520c58348964a0a2454db",
+      "log_truncated": false,
+      "report_trigger": "manual"
+    },
+    {
+      "filename": "Rip and resume.txt",
+      "bytes": 32773,
+      "lines": 773,
+      "sha256": "c57e76297a039224a1b9f7685d80ad6a5da9882ebcc2d35e0dcba9b3a194a46c",
+      "log_truncated": true,
+      "report_trigger": "manual"
+    }
+  ],
+  "disc_title": "OMIKRON THE NOMAD SOUL",
+  "effective_capture_options": {
+    "capture_hash": "crc32",
+    "end_readback": "off",
+    "capture_read": "dma",
+    "configured_resume_check": "full",
+    "invocation_resume_check": "size-only / Quick Resume",
+    "ui_hz": 2,
+    "sample_readback": 0,
+    "sd_crc": "on"
+  },
+  "capture_operations": [
+    {
+      "operation": "new_capture",
+      "result": "stopped",
+      "capture_bytes": 1050417312,
+      "capture_wall_us": 1090432820,
+      "average_new_capture_kib_s": 940.7256801478151,
+      "setup_wall_us": 5370872,
+      "resume_check_wall_us": null,
+      "finish_wall_us": null,
+      "capture_read_calls": 13958,
+      "capture_bucket_us": {
+        "disc": 9704813,
+        "edc": 42130259,
+        "write": 946350620,
+        "crc32": 83561839,
+        "checkpoint": 5408876,
+        "other": 3276413
+      },
+      "reported_committed_bytes": 1050417312,
+      "reported_job_retries": 0,
+      "retry_events_visible": 0,
+      "dma_chunks_reported": null,
+      "pio_chunks_reported": null,
+      "transfer_summary_occurrences": 0,
+      "pio_only_subtimers": {
+        "wall_us": 2310353,
+        "requests": 7,
+        "bytes": 451584,
+        "successful": 7,
+        "retry_results": 0,
+        "fatal_results": 0
+      },
+      "cpu_census_ms": {
+        "wall": 1095807,
+        "worker": 977948,
+        "ui": 97011,
+        "other": 20849
+      },
+      "ui_pct_reported": 8.8,
+      "resume_policy": null
+    },
+    {
+      "operation": "quick_resume",
+      "result": "stopped",
+      "capture_bytes": 18364416,
+      "capture_wall_us": 19396087,
+      "average_new_capture_kib_s": 924.6194863943433,
+      "setup_wall_us": 4673719,
+      "resume_check_wall_us": 483950,
+      "finish_wall_us": null,
+      "capture_read_calls": 244,
+      "capture_bucket_us": {
+        "disc": 249857,
+        "edc": 756888,
+        "write": 16747901,
+        "crc32": 1447527,
+        "checkpoint": 110459,
+        "other": 83455
+      },
+      "reported_committed_bytes": 1068781728,
+      "reported_job_retries": 0,
+      "retry_events_visible": 0,
+      "dma_chunks_reported": null,
+      "pio_chunks_reported": null,
+      "transfer_summary_occurrences": 0,
+      "pio_only_subtimers": {
+        "wall_us": 227338,
+        "requests": 1,
+        "bytes": 75264,
+        "successful": 1,
+        "retry_results": 0,
+        "fatal_results": 0
+      },
+      "cpu_census_ms": {
+        "wall": 24556,
+        "worker": 21954,
+        "ui": 2037,
+        "other": 565
+      },
+      "ui_pct_reported": 8.2,
+      "checkpoint_sequence": 113,
+      "checkpoint_committed_bytes": 1050417312,
+      "resume_policy": "Explicit size-only check; saved prefix bytes not reread"
+    },
+    {
+      "operation": "quick_resume",
+      "result": "complete",
+      "capture_bytes": 135197664,
+      "capture_wall_us": 139928756,
+      "average_new_capture_kib_s": 943.5442186736799,
+      "setup_wall_us": 4868664,
+      "resume_check_wall_us": 414696,
+      "finish_wall_us": 1507019,
+      "capture_read_calls": 1797,
+      "capture_bucket_us": {
+        "disc": 440739,
+        "edc": 5744017,
+        "write": 121741952,
+        "crc32": 10778732,
+        "checkpoint": 749567,
+        "other": 473749
+      },
+      "reported_committed_bytes": 1203979392,
+      "reported_job_retries": null,
+      "retry_events_visible": 0,
+      "dma_chunks_reported": 1796,
+      "pio_chunks_reported": 1,
+      "transfer_summary_occurrences": 2,
+      "pio_only_subtimers": {
+        "wall_us": 248858,
+        "requests": 1,
+        "bytes": 75264,
+        "successful": 1,
+        "retry_results": 0,
+        "fatal_results": 0
+      },
+      "cpu_census_ms": {
+        "wall": 146721,
+        "worker": 131694,
+        "ui": 13282,
+        "other": 1746
+      },
+      "ui_pct_reported": 9.0,
+      "checkpoint_sequence": 115,
+      "checkpoint_committed_bytes": 1068781728,
+      "resume_policy": "Explicit size-only check; saved prefix bytes not reread"
+    }
+  ],
+  "combined_capture": {
+    "bytes": 1203979392,
+    "tracks": 5,
+    "capture_wall_us": 1249757663,
+    "capture_seconds": 1249.757663,
+    "average_capture_kib_s": 940.7912908312369,
+    "definition": "Sum of three capture phases only; excludes setup, resume checking, pauses, logging and final catalogue lookup. Not a new uninterrupted whole-disc benchmark."
+  },
+  "completed_result": {
+    "console_result": "CAPTURED: all 5 tracks; stream CRC32 recorded; saved data NOT re-read",
+    "reference": "TOSEC FULL TRACK MATCH",
+    "matched_catalogue_title": "Omikron - The Nomad Soul v1.001 (2000)(Eidos)(US)(M5)[!][2S]",
+    "final_resume_dma_chunks": 1796,
+    "final_resume_pio_chunks": 1,
+    "summary_printed_twice": true,
+    "dma_failure_latch": "not observed this boot"
+  },
+  "verification_scope": {
+    "automatic_saved_readback": false,
+    "quick_resumes_reread_existing_prefix": false,
+    "completed_saved_file_verification_supplied": false,
+    "pc_verification_supplied": false,
+    "interpretation": "The catalogue agrees with retained checkpoint CRCs plus newly captured stream CRCs. It does not prove that the existing prefixes or final saved files were reread in this session."
+  },
+  "memory": {
+    "main_ram_total_bytes": 16777216,
+    "music_log_snapshots": [
+      {
+        "reason": "runtime ready",
+        "total_bytes": 16777216,
+        "used_reserved_bytes": 4162232,
+        "available_bytes": 12614984,
+        "sampled_peak_bytes": 4162232,
+        "image_bss_bytes": 3908220,
+        "firmware_reserve_bytes": 65536,
+        "main_stack_reserve_bytes": 65536,
+        "heap_max_system_bytes": 126340,
+        "heap_system_bytes": 126340,
+        "heap_in_use_bytes": 122940,
+        "heap_free_bytes": 3400,
+        "unclaimed_bytes": 12611584
+      },
+      {
+        "reason": "save log",
+        "total_bytes": 16777216,
+        "used_reserved_bytes": 11548184,
+        "available_bytes": 5229032,
+        "sampled_peak_bytes": 11548184,
+        "image_bss_bytes": 3908220,
+        "firmware_reserve_bytes": 65536,
+        "main_stack_reserve_bytes": 65536,
+        "heap_max_system_bytes": 7576964,
+        "heap_system_bytes": 7576964,
+        "heap_in_use_bytes": 7508892,
+        "heap_free_bytes": 68072,
+        "unclaimed_bytes": 5160960
+      }
+    ],
+    "rip_log_snapshot_count": 10,
+    "rip_log_all_snapshots_identical": {
+      "total_bytes": 16777216,
+      "used_reserved_bytes": 9671936,
+      "available_bytes": 7105280,
+      "sampled_peak_bytes": 11019032,
+      "image_bss_bytes": 3908220,
+      "firmware_reserve_bytes": 65536,
+      "main_stack_reserve_bytes": 65536,
+      "heap_max_system_bytes": 7048580,
+      "heap_system_bytes": 6643076,
+      "heap_in_use_bytes": 5632644,
+      "heap_free_bytes": 1010432,
+      "unclaimed_bytes": 6094848
+    },
+    "rip_log_sample_reasons": [
+      "capture/verify start",
+      "capture/verify end",
+      "save log",
+      "capture/verify start",
+      "capture/verify end",
+      "save log",
+      "capture/verify start",
+      "capture/verify end",
+      "save log",
+      "save log"
+    ],
+    "music_log_growth_bytes": 7385952,
+    "music_log_final_used_reserved_mib": 11.013206481933594,
+    "rip_log_used_reserved_mib": 9.223876953125,
+    "rip_log_sampled_peak_mib": 10.508567810058594,
+    "interpretation": "Music report grows from 3.9694 to 11.0132 MiB after a background WAV selection. The capture report stays at 9.2239 MiB across all ten recorded snapshots, with a previously sampled peak of 10.5086 MiB. The older runtime lacks music cache-byte/allocation counters, so these snapshots do not distinguish cache population from every possible leak. Peak is historical, not live RAM. Allocator free bytes and unclaimed RAM are separately included in the available estimate.",
+    "session_limit": "Music is untruncated and includes startup; Rip and resume is truncated. No common session identifier or timestamps establish their cross-file chronology. Treat their memory samples separately; do not infer an in-session memory decrease by ordering the two uploads.",
+    "scope": "Main-RAM estimate excludes separate VRAM and audio RAM. This is not an apples-to-apples DreamShell RAM comparison."
+  },
+  "music_evidence": {
+    "owner_report": "The supplied Music folder/demo was copied and played.",
+    "log_observation": "Both logs report a background song selected and return to normal navigation; the older log does not name the selected WAV or show cache occupancy.",
+    "exact_song_or_duration_logged": false,
+    "audio_continuity_measured": false,
+    "music_on_off_throughput_comparison": false,
+    "interpretation": "Owner listening/playback report is accepted as such. No claim of zero music overhead, glitch-free duration or codec support follows from these logs."
+  },
+  "disc_insertion": {
+    "lid_open_and_waiting_transitions_present": true,
+    "identified_title_after_transition": "OMIKRON THE NOMAD SOUL"
+  },
+  "limits": [
+    "The rip report is truncated before the preserved three-operation capture sequence; earlier actions and allocations are absent.",
+    "Both stopped capture phases omit their final DMA/PIO chunk summary. Their PIO subtimers cover only PIO requests, not total acquisition. Do not describe them as PIO-only or invent exact DMA chunk counts.",
+    "The final resumed phase explicitly used 1796 DMA and 1 PIO chunks after two recorded stops. The repeated summary is one result printed twice, not two runs.",
+    "Both stopped operations explicitly report zero cumulative retries. The final phase contains no retry event and its recorded PIO requests have zero retry/fatal results; no final cumulative job-retry field was printed.",
+    "The retained configured resume_check=full line is followed by an explicit size-only check on each resume. The invocation-local Quick Resume policy takes effect without changing the saved option.",
+    "The free-text experiment note names MDK2; actual identification and catalogue result establish Omikron.",
+    "No automatic or explicit completed saved-file reread or PC verification is supplied.",
+    "Music cache occupancy and allocation/free counters were not present in runtime 69dc33c0ff87. Stable sampled capture RAM is useful evidence but cannot establish absence of all leaks.",
+    "The user-reported song playback and these ordinary capture phases are not a controlled music-on/off performance experiment. No reader redesign or repeated benchmark is required."
+  ]
+}

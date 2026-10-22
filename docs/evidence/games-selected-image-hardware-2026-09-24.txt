@@ -1,0 +1,26 @@
+Owner-supplied photograph received 2026-09-24.
+Source filename: image-1790251292152.jpg
+Transcribed directly from the visible result screen; photograph not committed.
+
+K-UI: selected-image GD probe
+Build c4cfd4585ec5
+DEAD OR ALIVE 2
+
+Resident entered; launcher has shut down.
+Old launcher RAM erased; BIOS client installed.
+Initializing independent read-only SD backend...
+PASS  GD vector init/status
+PASS  Sector mode query/set
+PASS  Selected image TOCs
+PASS  PIO reference CRCs
+PASS  DMA-command reference CRCs
+PASS  Repeated random CRCs
+PASS  Rejected requests
+PASS  Cancel before SD read
+PASS  Read after cancel CRC
+PASS  Physical SD reads
+PASS  Resident hook stack guard
+Post-handoff SD blocks read: 93
+
+PROBE PASSED - photograph this screen
+Power off/on to return. The SD card was read only.

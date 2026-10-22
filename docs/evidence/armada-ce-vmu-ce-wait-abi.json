@@ -1,0 +1,43 @@
+{
+  "schema": "kui.armada.ce.vmu.ce.wait.abi.v1",
+  "date": "2026-10-21",
+  "failed_builds": [
+    "10ca880dcf73",
+    "4371ec6189e7"
+  ],
+  "hardware_observation": "Loading screen before VMU selection; latest attempt remained frozen after two minutes without automatic diagnostic pages",
+  "software_defect_confirmed": true,
+  "hardware_fix_verified": false,
+  "trigger": "First pre-acquisition BUSY invokes the authored CE WaitForSingleObject on the ordinary CE stack",
+  "old_call": {
+    "gcc_saved_frame_bytes": 8,
+    "required_native_caller_home_bytes": 16,
+    "native_callee_stores": "r4,r5,r6,r7 to incoming SP+0,+4,+8,+12",
+    "saved_pr_overwritten_with": "thread HANDLE",
+    "saved_r8_overwritten_with": "1 millisecond timeout",
+    "diagnostic_unreachable": "Corrupted return occurs before phase2 and terminal capture"
+  },
+  "adapter": {
+    "code_bytes": 26,
+    "frame_bytes": 24,
+    "caller_home_bytes": 16,
+    "saved_register_bytes": 8,
+    "saved_registers": [
+      "PR",
+      "GBR"
+    ],
+    "callee_saved_gprs": "r8..r14 untouched",
+    "stack": "Original CE source worker stack"
+  },
+  "focused_tests": {
+    "actual_assembly_executed": true,
+    "native_tests": 9,
+    "c_asan_ubsan_checks": 27912,
+    "all_four_native_home_stores_modeled": true,
+    "old_corruption_reproduced": true,
+    "safe_return_through_exactly_one_original_consumer": true,
+    "default_objects_byte_identical": true
+  },
+  "privacy": "Source contract records authored native function metadata and hashes only; no kernel or DLL bytes exported",
+  "hardware_acceptance": "A2 selection, save, full power off and reload remains required"
+}

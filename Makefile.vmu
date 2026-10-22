@@ -1,0 +1,244 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Standalone owned KOS program. Never changes ordinary runtime/game loaders.
+ifneq ($(filter host-test,$(MAKECMDGOALS)),host-test)
+ifndef KOS_BASE
+$(error Source .deps/kos/environ.sh before building)
+endif
+endif
+BUILD ?= build/vmu-harness
+PERSIST_PREP ?= 0
+PERSIST_PROOF ?= 0
+PERSIST_IMPORT ?= 0
+ifneq ($(PERSIST_PREP),0)
+ifneq ($(PERSIST_PREP),1)
+$(error PERSIST_PREP must be 0 or 1)
+endif
+endif
+ifneq ($(PERSIST_PROOF),0)
+ifneq ($(PERSIST_PROOF),1)
+$(error PERSIST_PROOF must be 0 or 1)
+endif
+ifneq ($(PERSIST_PREP),0)
+$(error PERSIST_PREP and PERSIST_PROOF are separate applications)
+endif
+endif
+ifneq ($(PERSIST_IMPORT),0)
+ifneq ($(PERSIST_IMPORT),1)
+$(error PERSIST_IMPORT must be 0 or 1)
+endif
+ifneq ($(filter 1,$(PERSIST_PREP) $(PERSIST_PROOF)),)
+$(error PERSIST_IMPORT is a separate application from PERSIST_PREP/PERSIST_PROOF)
+endif
+endif
+PERSIST_SOURCES := src/core/vmu_persist_profile.c src/core/vmu_fs_admission.c
+HARNESS_MAIN := src/experimental/vmu_harness/main.c
+HARNESS_HOST := src/experimental/vmu_harness/host.c
+ifeq ($(PERSIST_PROOF),1)
+HARNESS_MAIN := src/experimental/vmu_persist_proof/main.c
+HARNESS_HOST := src/experimental/vmu_persist_proof/host.c
+PERSIST_SOURCES += src/core/vmu_persist_session.c
+endif
+ifeq ($(PERSIST_IMPORT),1)
+HARNESS_MAIN := src/experimental/vmu_import_prep/main.c
+HARNESS_HOST := src/experimental/vmu_import_prep/host.c
+PERSIST_SOURCES += src/core/vmu_image_clone.c src/core/vmu_save_snapshot.c
+IMPORT_HOST_INCLUDES := -Isrc/experimental/vmu_import_prep/host-stubs
+IMPORT_HOST_HEADERS := $(wildcard src/experimental/vmu_import_prep/host-stubs/*.h src/experimental/vmu_import_prep/host-stubs/dc/*.h src/experimental/vmu_import_prep/host-stubs/dc/maple/*.h)
+endif
+BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
+TARGET := $(BUILD)/vmu-harness.elf
+SOURCES := $(HARNESS_MAIN) \
+    src/core/vmu_emulation.c src/core/vmu_image.c src/core/vmu_save_format.c src/core/crc16.c src/loader/vmu_maple_dma.c src/core/vmu_store.c \
+    src/core/vmu_sd_profile.c src/core/hash.c src/loader/vmu_backing.c \
+    src/core/retail_image.c src/core/data.c src/core/diskio.c src/core/clock.c src/core/storage_probe.c \
+    src/core/storage_policy.c src/core/ata.c src/dreamcast/ata_bus.c \
+    src/dreamcast/sd.c src/dreamcast/sci_sd_storage.c src/loader/sd_reader.c \
+    src/loader/sci_sd_bus.c src/dreamcast/shell_font.c
+ifneq ($(filter 1,$(PERSIST_PREP) $(PERSIST_PROOF) $(PERSIST_IMPORT)),)
+SOURCES += $(PERSIST_SOURCES)
+endif
+ifeq ($(PERSIST_IMPORT),1)
+SOURCES += src/dreamcast/vmu_read_bounded.c
+endif
+OBJECTS := $(patsubst %.c,$(BUILD)/%.o,$(SOURCES)) $(BUILD)/ff.o $(BUILD)/ffunicode.o
+.DEFAULT_GOAL := all
+.PHONY: all package
+all: $(TARGET)
+package: $(BUILD)/KUI/tools.kui
+ifneq ($(filter host-test,$(MAKECMDGOALS)),host-test)
+include $(KOS_BASE)/Makefile.rules
+endif
+CPPFLAGS += -Iinclude -Isrc/dreamcast -Isrc/loader -I.deps/fatfs/source \
+    -DKUI_ON_CONSOLE=1 -DKUI_RETAIL_FAST_IO=1 -DKUI_VMU_PROFILE_PREP=1 -DKUI_VMU_EXPERIMENTAL=0 \
+    -DKUI_VMU_PERSIST_PREP=$(PERSIST_PREP) -DKUI_VMU_PERSIST_PROOF=$(PERSIST_PROOF) -DKUI_VMU_PERSIST_IMPORT=$(PERSIST_IMPORT) -DKUI_BUILD_ID='"$(BUILD_ID)"'
+CFLAGS += -std=c11 -Os -Wall -Wextra -Werror -ffunction-sections -fdata-sections -fstack-usage
+ifeq ($(PERSIST_IMPORT),1)
+CFLAGS += -fcallgraph-info=su
+endif
+# Changing preparation mode in one directory invalidates all native objects.
+.PHONY: force-prep-config
+force-prep-config:
+$(BUILD)/prep-config: force-prep-config
+	@mkdir -p $(BUILD)
+ifeq ($(PERSIST_IMPORT),1)
+	@printf '%s\n' 'PERSIST_IMPORT=1' > $(BUILD)/prep-config.tmp
+else ifeq ($(PERSIST_PROOF),1)
+	@printf '%s\n' 'PERSIST_PROOF=1' > $(BUILD)/prep-config.tmp
+else
+	@printf '%s\n' 'PERSIST_PREP=$(PERSIST_PREP)' > $(BUILD)/prep-config.tmp
+endif
+	@cmp -s $(BUILD)/prep-config.tmp $(BUILD)/prep-config || cp $(BUILD)/prep-config.tmp $(BUILD)/prep-config
+	@rm -f $(BUILD)/prep-config.tmp
+$(OBJECTS): $(BUILD)/prep-config
+
+$(BUILD)/%.o: %.c
+	@mkdir -p $(@D)
+	kos-cc $(CFLAGS) $(CPPFLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/ff.o: .deps/fatfs/source/ff.c .deps/fatfs/source/ffconf.h
+	@mkdir -p $(@D)
+	kos-cc $(filter-out -Werror,$(CFLAGS)) $(CPPFLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/ffunicode.o: .deps/fatfs/source/ffunicode.c .deps/fatfs/source/ffconf.h
+	@mkdir -p $(@D)
+	kos-cc $(filter-out -Werror,$(CFLAGS)) $(CPPFLAGS) -MMD -MP -c $< -o $@
+$(TARGET): $(OBJECTS)
+	kos-cc -o $@ $(OBJECTS) -Wl,--gc-sections -Wl,-Map,$(BUILD)/vmu-harness.map
+	python3 tools/record_build.py $@
+-include $(OBJECTS:.o=.d)
+
+$(BUILD)/KUI/tools.kui: $(TARGET) tools/runtime_package.py
+	@mkdir -p $(@D)
+	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
+	python3 tools/runtime_package.py verify $@
+
+# Host sequence uses the exact console main.c through real FatFs, replacing
+# display/controller/physical media only. Supply existing disposable FAT/exFAT
+# image with VMU_HARNESS_IMAGE; no test ever formats a user's card.
+HOST_CC ?= cc
+HOST_SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie
+HOST_SOURCES := $(HARNESS_HOST) src/core/vmu_emulation.c src/core/vmu_image.c src/core/vmu_save_format.c src/core/crc16.c \
+    src/core/vmu_sd_profile.c src/core/hash.c \
+    src/loader/vmu_maple_dma.c src/core/vmu_store.c src/core/retail_image.c src/core/data.c \
+    src/core/diskio.c src/core/clock.c src/core/storage_probe.c \
+    .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
+ifneq ($(filter 1,$(PERSIST_PREP) $(PERSIST_PROOF) $(PERSIST_IMPORT)),)
+HOST_SOURCES += $(PERSIST_SOURCES)
+PREP_TEST_TARGETS := $(BUILD)/test-persist-profile $(BUILD)/test-fs-admission $(BUILD)/test-fs-admission-adversarial
+endif
+ifeq ($(PERSIST_PROOF),1)
+PREP_TEST_TARGETS += $(BUILD)/test-persist-session $(BUILD)/test-persist-session-adversarial $(BUILD)/test-proof-sci-restore
+endif
+ifeq ($(PERSIST_IMPORT),1)
+PREP_TEST_TARGETS += $(BUILD)/test-image-clone $(BUILD)/test-save-snapshot $(BUILD)/test-import-sci-restore $(BUILD)/test-bounded-vmu-read
+endif
+.PHONY: host-test
+host-test: $(BUILD)/host-sequence $(BUILD)/test-sd-profile $(PREP_TEST_TARGETS)
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-sd-profile
+ifneq ($(filter 1,$(PERSIST_PREP) $(PERSIST_PROOF) $(PERSIST_IMPORT)),)
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-persist-profile
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-fs-admission
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-fs-admission-adversarial
+	python3 tests/test_vmu_persist_profile_tool.py
+endif
+ifeq ($(PERSIST_PROOF),1)
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-persist-session
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-persist-session-adversarial
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-proof-sci-restore
+endif
+ifeq ($(PERSIST_IMPORT),1)
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-image-clone
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-save-snapshot
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-import-sci-restore
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-bounded-vmu-read
+endif
+	$(if $(VMU_HARNESS_IMAGE),$(BUILD)/host-sequence $(VMU_HARNESS_IMAGE) $(or $(VMU_HARNESS_MODE),create),@echo "Built host sequence; supply VMU_HARNESS_IMAGE to run")
+$(BUILD)/host-sequence: $(HOST_SOURCES) $(HARNESS_MAIN) $(IMPORT_HOST_HEADERS) \
+    src/experimental/vmu_harness/host-stubs/kos.h \
+    src/experimental/vmu_harness/host-stubs/dc/maple/controller.h include/kui/vmu_sd_profile.h $(BUILD)/prep-config
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
+        $(IMPORT_HOST_INCLUDES) -Isrc/experimental/vmu_harness/host-stubs -Iinclude -Isrc/dreamcast \
+        -I.deps/fatfs/source -DKUI_VMU_PROFILE_PREP=1 -DKUI_VMU_PERSIST_PREP=$(PERSIST_PREP) \
+        -DKUI_VMU_PERSIST_PROOF=$(PERSIST_PROOF) -DKUI_VMU_PERSIST_IMPORT=$(PERSIST_IMPORT) $(HOST_SOURCES) -o $@
+$(BUILD)/test-sd-profile: tests/test_vmu_sd_profile.c src/core/vmu_sd_profile.c \
+    src/core/hash.c src/core/retail_image.c include/kui/vmu_sd_profile.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
+        -ffunction-sections -fdata-sections -Wl,--gc-sections \
+        -Iinclude tests/test_vmu_sd_profile.c src/core/vmu_sd_profile.c src/core/hash.c \
+        src/core/retail_image.c -o $@
+
+$(BUILD)/test-persist-profile: tests/test_vmu_persist_profile.c src/core/vmu_persist_profile.c \
+    src/core/hash.c src/core/retail_image.c include/kui/vmu_persist_profile.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
+        -ffunction-sections -fdata-sections -Wl,--gc-sections -Iinclude \
+        tests/test_vmu_persist_profile.c src/core/vmu_persist_profile.c src/core/hash.c \
+        src/core/retail_image.c -o $@
+
+$(BUILD)/test-fs-admission: tests/test_vmu_fs_admission.c $(PERSIST_SOURCES) \
+    src/core/hash.c src/core/retail_image.c include/kui/vmu_fs_admission.h include/kui/vmu_persist_profile.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
+        -ffunction-sections -fdata-sections -Wl,--gc-sections -Iinclude \
+        tests/test_vmu_fs_admission.c $(PERSIST_SOURCES) src/core/hash.c \
+        src/core/retail_image.c -o $@
+
+$(BUILD)/test-fs-admission-adversarial: tests/test_vmu_fs_admission_adversarial.c $(PERSIST_SOURCES) \
+    src/core/hash.c src/core/retail_image.c include/kui/vmu_fs_admission.h include/kui/vmu_persist_profile.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
+        -ffunction-sections -fdata-sections -Wl,--gc-sections -Iinclude \
+        tests/test_vmu_fs_admission_adversarial.c $(PERSIST_SOURCES) src/core/hash.c \
+        src/core/retail_image.c -o $@
+
+$(BUILD)/test-persist-session: tests/test_vmu_persist_session.c tests/test_vmu_fs_admission.c $(PERSIST_SOURCES) \
+    src/core/vmu_store.c src/core/vmu_image.c src/core/hash.c src/core/retail_image.c include/kui/vmu_persist_session.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
+        -ffunction-sections -fdata-sections -Wl,--gc-sections -Iinclude \
+        tests/test_vmu_persist_session.c $(PERSIST_SOURCES) src/core/vmu_store.c \
+        src/core/vmu_image.c src/core/hash.c src/core/retail_image.c -o $@
+
+$(BUILD)/test-persist-session-adversarial: tests/test_vmu_persist_session_adversarial.c $(PERSIST_SOURCES) \
+    src/core/vmu_store.c src/core/vmu_image.c src/core/hash.c src/core/retail_image.c include/kui/vmu_persist_session.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
+        -ffunction-sections -fdata-sections -Wl,--gc-sections -Iinclude \
+        tests/test_vmu_persist_session_adversarial.c $(PERSIST_SOURCES) src/core/vmu_store.c \
+        src/core/vmu_image.c src/core/hash.c src/core/retail_image.c src/core/data.c -o $@
+
+$(BUILD)/test-proof-sci-restore: tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
+        -Iinclude -Isrc/loader -DKUI_SCI_SD_TEST=1 -DKUI_VMU_PERSIST_PROOF=1 \
+        src/loader/sci_sd_bus.c tests/test_sci_sd_bus.c -o $@
+
+$(BUILD)/test-image-clone: tests/test_vmu_image_clone.c src/core/vmu_image_clone.c src/core/vmu_image.c \
+    src/core/hash.c src/core/retail_image.c src/core/data.c include/kui/vmu_image_clone.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
+        -ffunction-sections -fdata-sections -Wl,--gc-sections -Iinclude \
+        tests/test_vmu_image_clone.c src/core/vmu_image_clone.c src/core/vmu_image.c \
+        src/core/hash.c src/core/retail_image.c src/core/data.c -o $@
+
+$(BUILD)/test-import-sci-restore: tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
+        -Iinclude -Isrc/loader -DKUI_SCI_SD_TEST=1 -DKUI_VMU_PERSIST_IMPORT=1 \
+        src/loader/sci_sd_bus.c tests/test_sci_sd_bus.c -o $@
+
+$(BUILD)/test-save-snapshot: tests/test_vmu_save_snapshot.c src/core/vmu_save_snapshot.c \
+    src/core/vmu_image_clone.c src/core/vmu_image.c src/core/hash.c src/core/retail_image.c \
+    src/core/data.c include/kui/vmu_save_snapshot.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic $(HOST_SANITIZERS) \
+        -ffunction-sections -fdata-sections -Wl,--gc-sections -Iinclude \
+        tests/test_vmu_save_snapshot.c src/core/vmu_save_snapshot.c src/core/vmu_image_clone.c \
+        src/core/vmu_image.c src/core/hash.c src/core/retail_image.c src/core/data.c -o $@
+
+$(BUILD)/test-bounded-vmu-read: tests/test_vmu_read_bounded.c src/dreamcast/vmu_read_bounded.c \
+    src/core/data.c include/kui/core.h include/kui/vmu_read_bounded.h $(wildcard tests/vmu_read_bounded_stubs/dc/*.h tests/vmu_read_bounded_stubs/kos/*.h)
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -pedantic $(HOST_SANITIZERS) \
+        -Itests/vmu_read_bounded_stubs -Iinclude \
+        tests/test_vmu_read_bounded.c src/dreamcast/vmu_read_bounded.c src/core/data.c -o $@

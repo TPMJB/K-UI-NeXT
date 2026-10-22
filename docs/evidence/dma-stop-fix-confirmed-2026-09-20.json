@@ -1,0 +1,39 @@
+{
+  "received_date": "2026-09-20",
+  "runtime_build": "5a5cada85a90 (normal build, v6.2)",
+  "experiment": "The v6.2 DMA-stop fix on hardware: in ONE boot on the FAT32 card, a new Sword of the Berserk dump was stopped with B, resumed with X, interrupted by opening the lid, and resumed again to the end.",
+  "inputs": [
+    {
+      "file": "diagnostics.txt",
+      "kept_as": "dma-stop-fix-confirmed-2026-09-20.txt",
+      "bytes": 28472,
+      "sha256": "87f22a7e1bc4cebaae5ae0703e3c5b1c4212463b14ab50c5570706f00bad1e80"
+    }
+  ],
+  "segments": [
+    {
+      "ended": "STOPPED (B)",
+      "seconds": 86.2,
+      "kib_s": 940.7,
+      "disc_pct": 4.2
+    },
+    {
+      "ended": "CAPTURE/VERIFY FAILED (lid opened)",
+      "seconds": 81.3,
+      "kib_s": 962.3,
+      "disc_pct": 0.7
+    },
+    {
+      "ended": "CAPTURED all 3 tracks; Reference check (TOSEC): FULL TRACK MATCH",
+      "seconds": 1034.2,
+      "kib_s": 968.5,
+      "disc_pct": 0.2,
+      "disc_read": "13627 chunks by DMA, 1 by PIO"
+    }
+  ],
+  "conclusions": [
+    "DMA stayed on after a B stop and after a lid-open in the same boot: both resumed segments ran at DMA speed with disc time under 1%, and 'DMA stays off until reboot' appears nowhere.",
+    "The dump, interrupted twice and resumed twice, matched TOSEC on every track.",
+    "Minor: the 'Disc read:' summary prints only when a capture finishes, not on a stop or failure."
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "received_date": "2026-09-20",
+  "runtime_build": "bea895bb93b4",
+  "experiment": "Trip 1b (CRC16 microbenchmark): REJECTED before measuring anything, both runs.",
+  "inputs": [
+    {
+      "file": "T1B_Diag.txt",
+      "kept_as": "t1b-crc16-rejected-2026-09-20.txt",
+      "bytes": 7122,
+      "sha256": "2d5ce7e85423a7fe04fe5adb77616998d6bf22c4b4ce1a81e1615f113e78c7da"
+    }
+  ],
+  "result": "Each run printed 'bench.cfg line 1: expected key=value', 'Bench refused: bench.cfg rejected' and fell back to defaults. Nothing was measured.",
+  "reading": "The parser skips blank lines and lines whose first character is '#'; anything else needs '='. The shipped t1b-crc16.cfg is plain ASCII, LF, and its line 1 is a '#' comment (the same parser accepts it in the host tests), so line 1 of the file on the card began with something else, most likely an invisible byte-order mark added by an editor. Unconfirmed: the bytes were not seen.",
+  "next": "The loader will skip a UTF-8 byte-order mark and name what it found on a bad line (bytes shown in hex, UTF-16 called out)."
+}

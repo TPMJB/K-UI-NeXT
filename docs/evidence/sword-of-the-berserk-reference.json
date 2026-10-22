@@ -1,0 +1,24 @@
+{
+  "profile": "gdi-raw2352-typegap150-v1",
+  "source": "docs/evidence/sword-of-the-berserk-2026-09-17.json (a capture verified on a PC for tracks 1-2; track 3's CRC32 and size match TOSEC and Redump)",
+  "note": "track03 has CRC32 only: its SHA-256 in the evidence came from the console, not a PC, so it is left out rather than risk a false alarm.",
+  "tracks": [
+    {
+      "file": "track01.bin",
+      "bytes": 1825152,
+      "crc32": "bcec7767",
+      "sha256": "ee221a533016b6bddbc7676f4278fffe446eb05d5dc1932da1a73c6269ef2202"
+    },
+    {
+      "file": "track02.raw",
+      "bytes": 1237152,
+      "crc32": "0ff934e3",
+      "sha256": "8438ed3913c4b9a0f1f3b480a3b9c6e114e9ce30d623f02985d04a1b117502e8"
+    },
+    {
+      "file": "track03.bin",
+      "bytes": 1185760800,
+      "crc32": "2cfb5dcb"
+    }
+  ]
+}

@@ -1,0 +1,131 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+#ifndef KUI_PLATFORM_H
+#define KUI_PLATFORM_H
+#include "kui/target.h"
+#include "kui/probe.h"
+#include "kui/capture.h"
+#include "kui/bench.h"
+#include "kui/storage.h"
+#include "kui/boot_image.h"
+
+void kui_log(const char *format, ...);
+bool kui_cancelled(void);
+/* AUTO reopens the boot-selected device; the first call discovers a usable
+ * SCIF, SCI or IDE/CF volume. Explicit IDs are benchmark/bootstrap only and
+ * fail without switching devices. SCI always verifies data CRCs. */
+void kui_sd_set_params(unsigned transport, bool check_crc);
+unsigned kui_storage_active(void);
+/* Stable boot-selected device; an explicit legacy benchmark cannot change it. */
+unsigned kui_storage_selected(void);
+const char *kui_storage_name(unsigned transport);
+bool kui_storage_sci_reserved(void);
+void kui_storage_boot_begin(void);
+/* Latched before consuming the transport marker; unchanged by later probes. */
+bool kui_storage_boot_from_card(void);
+/* Benchmark compatibility: returns the full transport ID, not a bool. */
+unsigned kui_sd_active_sci(void);
+bool kui_sd_connect(void);
+void kui_sd_disconnect(void);
+/* Bootstrap-only raw view, obtained while connected and FatFs is unmounted.
+ * Contains no write/sync callbacks; invalid immediately after disconnect. */
+struct kui_media_ops;
+bool kui_sd_raw_read_ops(struct kui_media_ops *out);
+#if KUI_VMU_PROFILE_PREP
+struct kui_vmu_sd_identity;
+/* Experimental preparation tool only. Caller exclusively owns connected SCI
+ * storage, with no filesystem request/optical read running. Read-only CMD10;
+ * output is cleared on failure. Never initializes or changes the card. */
+bool kui_sd_vmu_profile_identity(struct kui_vmu_sd_identity *out);
+#endif
+#if KUI_VMU_PERSIST_PROOF
+/* Isolated owned physical-journal proof only. Filesystem must be unmounted;
+ * the sole proof worker keeps the initialized SCI connection throughout.
+ * These raw callbacks are NOT allocation authority: the session independently
+ * admits the live filesystem and restricts writes to exact image/journal
+ * sectors. Never available in the preparation tool or retail runtimes. */
+bool kui_sd_vmu_proof_raw_ops(struct kui_media_ops *out);
+bool kui_sd_vmu_proof_healthy(void);
+/* Unmount first. Includes the persistent fault latch AFTER SCI release, so
+ * the proof cannot publish READY after a final restoration failure. */
+bool kui_sd_vmu_proof_disconnect(void);
+#endif
+#if KUI_VMU_PERSIST_IMPORT
+/* Isolated import preparation only. Unmount before disconnecting. A final
+ * SCI restoration fault suppresses READY; no raw writer is exposed here. */
+bool kui_sd_vmu_import_disconnect(void);
+#endif
+void kui_disc_probe(void);
+void kui_drive_init_bus(void);
+/* Exclusive optical owner only, with no read in flight. STOP has a 3-second
+ * deadline and 1-second abort recovery; it never resets a poisoned adapter or
+ * submits disc INIT/TOC/read. Cleanup completes even while B is held. */
+bool kui_disc_stop(void);
+void kui_bootstrap_load(kui_cancel_fn cancelled,bool recovery_only);
+/* Caller owns storage exclusively; no diagnostic job may be running. */
+enum kui_runtime_result kui_bootstrap_start(unsigned transport_filter,
+    enum kui_boot_mode mode,kui_cancel_fn cancelled);
+/* Same exclusive/read-only boot path and normal/recovery fallback, timed.
+ * Releases the validated image and returns; never executes it or waits for
+ * the boot handoff delay. The rate includes validation and UI callback work. */
+enum kui_runtime_result kui_bootstrap_measure(unsigned transport_filter,
+    kui_cancel_fn cancelled);
+bool kui_disc_prepare(struct kui_toc sessions[2]);
+bool kui_disc_prepare_capture(struct kui_toc sessions[2],bool *is_cd);
+enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out);
+/* Normal capture uses a normalized card-root destination (for example /Games)
+ * and game-named output. Invalid paths fail before preference or drive I/O. */
+enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build,
+    const char *destination);
+/* Session choices copied by the sole worker. Exact job applies only to
+ * Resume/Verify; folder label applies only to New. NULL/empty uses defaults. */
+enum kui_capture_result kui_capture_start_selected(enum kui_capture_mode mode,const char *build,
+    const char *destination,const char *job_directory,const char *folder_label,bool quick_resume);
+enum kui_capture_result kui_capture_start_target(enum kui_capture_mode mode,const char *build,
+    const char *destination,const char *job_directory,const char *folder_label,bool quick_resume,bool network,bool cd_toc);
+/* Explicit one-operation size-only resume. CRC32 jobs continue the checkpoint's
+ * CRC without rereading committed bytes, so same-size corruption is not checked.
+ * SHA-256 jobs still require the engine's full prefix reread. This does not
+ * change persistent settings or the next normal capture/resume/verify action. */
+enum kui_capture_result kui_capture_resume_quick(const char *build,const char *destination);
+/* Read after kui_capture_start returns, on the same I/O worker. Observation
+ * only: the existing engine fills its optional statistics structure. */
+const struct kui_capture_stats *kui_capture_last_stats(void);
+void kui_disc_timing_reset(void);
+void kui_disc_timing_phase(void *ctx,bool capturing);
+void kui_disc_timing_report(void);
+/* PIO service quantum for pause_worker; 0 restores the built-in default. */
+void kui_disc_set_yield_us(unsigned us);
+/* Bench-only optical read for the sweep (see kui/bench.h). */
+enum kui_read_result kui_disc_read_probe(void *ctx,uint32_t fad,unsigned sectors,unsigned service_us,
+    const uint8_t **data,struct kui_probe_stats *stats);
+/* Split GD-ROM DMA read: begin returns at once, end waits and must always follow a true begin.
+ * `out` must be 32-byte aligned and stay untouched until end returns. In every build. */
+bool kui_disc_read_begin(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out);
+bool kui_disc_read_pending(void *ctx);
+enum kui_read_result kui_disc_read_end(void *ctx);
+#ifdef KUI_EXPERIMENTAL_DMA
+/* Bench-only GD-ROM DMA read of raw sectors (EXPERIMENTAL, opt-in build; even sector counts only). */
+enum kui_read_result kui_disc_read_probe_dma(void *ctx,uint32_t fad,unsigned sectors,
+    const uint8_t **data,struct kui_probe_stats *stats);
+#endif
+/* Cap UI redraws per second while an operation runs. KUI_OPT_UI_FULL restores
+ * the unthrottled loop. Input is still polled at the same rate, so B still stops. */
+void kui_ui_set_hz(unsigned hz);
+/* Scheduler CPU accounting snapshot: how the CPU split between the worker, the
+ * UI thread and everything else. Called from the worker thread. */
+void kui_cpu_census_mark(struct kui_cpu_census *out);
+/* Bench: the real capture engine on `sectors` sectors from `fad` (see kui_capture_bench). */
+enum kui_capture_result kui_capture_bench_run(uint32_t fad,unsigned sectors,bool audio,
+    enum kui_capture_mode mode,const struct kui_capture_options *options,struct kui_capture_stats *stats);
+/* src/dreamcast/bench.c: options loaded from /KUI/bench.cfg and the bench entry. */
+extern struct kui_options kui_options;
+bool kui_options_refresh(void);
+enum kui_bench_result kui_bench_start(void);
+void kui_capture_status(void *ctx,const struct kui_capture_progress *progress);
+struct kui_memory_stats {
+    uint32_t physical,firmware,image,main_stack,heap_system,heap_used,heap_free;
+    uint32_t heap_max_system,unclaimed,used,available,sampled_peak,framebuffers;
+};
+bool kui_memory_snapshot(struct kui_memory_stats *out);
+void kui_memory_log(const char *reason);
+#endif

@@ -1,0 +1,1604 @@
+diff --git a/.github/workflows/diagnostic.yml b/.github/workflows/diagnostic.yml
+index 3a91dc0..ee2f4a7 100644
+--- a/.github/workflows/diagnostic.yml
++++ b/.github/workflows/diagnostic.yml
+@@ -5,6 +5,11 @@ on:
+     branches: [main, 'milestone/**']
+   pull_request:
+   workflow_dispatch:
++    inputs:
++      experimental:
++        description: 'Also build the EXPERIMENTAL GD-ROM DMA probe (Trip 6a). Never run on hardware; not for normal builds.'
++        type: boolean
++        default: false
+ 
+ permissions:
+   contents: read
+@@ -64,6 +69,10 @@ jobs:
+         run: bash tools/setup_kos.sh
+       - name: Compile CD bootstrap and SD runtime
+         shell: bash
++        env:
++          # Empty on every push and pull request, so ordinary builds are untouched. It is set only
++          # when the box is ticked on a manual run (Actions -> Diagnostic build -> Run workflow).
++          KUI_EXPERIMENTAL_FLAG: ${{ inputs.experimental && 'KUI_EXPERIMENTAL=1' || '' }}
+         run: |
+           source .deps/kos/environ.sh
+           # -k keeps compiling after a failure, so one run lists every file the pinned compiler
+@@ -74,7 +83,8 @@ jobs:
+           # The log must NOT live inside the checkout: record_build.py (at link time) and package.py
+           # both refuse a dirty tree, and an untracked build.log counts. That broke packaging once.
+           LOG="${RUNNER_TEMP:-/tmp}/kui-build.log"
+-          make -k diagnostic BUILD_ID="${GITHUB_SHA:0:12}" 2>&1 | tee "$LOG"
++          echo "experimental GD-ROM DMA probe: ${KUI_EXPERIMENTAL_FLAG:-off}"
++          make -k diagnostic BUILD_ID="${GITHUB_SHA:0:12}" $KUI_EXPERIMENTAL_FLAG 2>&1 | tee "$LOG"
+           status=${PIPESTATUS[0]}
+           if [ "$status" -ne 0 ]; then
+             echo
+@@ -91,14 +101,14 @@ jobs:
+       - name: Upload diagnostic test artifact
+         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+         with:
+-          name: diagnostic
++          name: diagnostic${{ inputs.experimental && '-experimental' || '' }}
+           path: dist/
+           if-no-files-found: error
+           retention-days: 30
+       - name: Upload small SD update for existing bootstrap discs
+         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+         with:
+-          name: sd-update
++          name: sd-update${{ inputs.experimental && '-experimental' || '' }}
+           path: dist/sd-update/
+           if-no-files-found: error
+           retention-days: 30
+diff --git a/docs/bench-cfgs/t8-full-profile.cfg b/docs/bench-cfgs/t8-full-profile.cfg
+new file mode 100644
+index 0000000..19e2e64
+--- /dev/null
++++ b/docs/bench-cfgs/t8-full-profile.cfg
+@@ -0,0 +1,39 @@
++# TRIP 8 - the whole speed picture in one run.  (about 12 minutes, disc in the drive)
++# Everything that decides how long a rip takes, measured in one boot so the numbers are
++# comparable: the drive at four radii, the SD card at three command sizes, the hashes
++# (including the CRC16 candidates), and the real capture engine at the four settings
++# combinations that matter. Run it before and after any change and compare.
++#
++# Feed the saved report to the PC tool for whole-disc times in minutes:
++#   python3 tools/rip_time.py /path/to/diagnostics.txt
++# It prints the measured rate of any real capture in the file, a projected whole-disc time
++# for every setting, and what the not-yet-built changes would be worth.
++#
++# Reference, measured 2026-09-20 on Sword of the Berserk (evidence/t7-real-capture...json):
++# a whole disc took 26.7 minutes at ui_hz=2, capture_hash=crc32, end_readback=off.
++
++ui_hz=2
++sections=optical,hash,sd,sweep,capture
++
++optical_fad=45150
++optical_sectors=4096
++sweep_fads=45150,150000,300000,450000
++sweep_chunks=32
++sweep_sectors=2048
++sweep_verify=on
++
++chunks=32,128,512
++sd_mib=8
++expand=off
++sd_if=scif
++sd_crc=on
++hash_mib=8
++
++capture_fad=45150
++capture_sectors=4096
++capture_type=data
++capture_hash=both,crc32
++end_readback=on,off
++resume_check=full
++
++note=T8 full profile. card=<model> disc=<title>
+diff --git a/docs/benchmarks.md b/docs/benchmarks.md
+index 42fdf7d..11cf9f6 100644
+--- a/docs/benchmarks.md
++++ b/docs/benchmarks.md
+@@ -222,6 +222,17 @@ loop. With no other new keys in `bench.cfg` the bench runs the same sections in
+ the same order as before and adds only the `BENCH cpu` and `BENCH lat` lines and
+ the CRC16 lines in the hash section, described below.
+ 
++**Whole-disc times from a report.** `docs/bench-cfgs/t8-full-profile.cfg` measures everything that
++decides rip time in one run (drive at four radii, SD at three command sizes, the hashes and the
++CRC16 candidates, and the capture engine at the four settings that matter), and
++`python3 tools/rip_time.py REPORT` turns any saved report into projected whole-disc minutes per
++setting, plus what the measured-but-unbuilt changes would be worth. Run it before and after a
++change. Lines it marks PROJECTED are arithmetic on measured rates, never an end-to-end run.
++
++**The experimental GD-ROM DMA probe** is not in normal builds. To get one: GitHub → Actions →
++"Diagnostic build" → "Run workflow", tick **experimental**. That build's artifacts are named
++`diagnostic-experimental` and `sd-update-experimental`; every push build is unaffected.
++
+ **Two guards on a mis-aimed run:** before a capture section the bench checks `capture_fad` against the
+ disc's TOC and warns (`BENCH WARNING: ...`) if it is not inside a track of the configured `capture_type`,
+ or is not on the disc at all; and a run in which every section was skipped ends
+diff --git a/docs/evidence/mdk2-full-capture-resume-verify-2026-09-20.json b/docs/evidence/mdk2-full-capture-resume-verify-2026-09-20.json
+new file mode 100644
+index 0000000..7174cc1
+--- /dev/null
++++ b/docs/evidence/mdk2-full-capture-resume-verify-2026-09-20.json
+@@ -0,0 +1,420 @@
++{
++  "received_date": "2026-09-20",
++  "runtime_build": "dbd8bd76fea0",
++  "experiment": "MDK2 (31 tracks, 27 of them audio over 5 MB) captured with the DEFAULT options (SHA-256+CRC32, end read-back on, ui_hz=2) across three sessions with two deliberate interruptions and two resumes, then verified.",
++  "inputs": [
++    {
++      "file": "MDK2_dump_and_verify_diag.txt",
++      "kept_as": "mdk2-full-capture-resume-verify-2026-09-20.txt",
++      "bytes": 32451,
++      "sha256": "b4e9427e6c5da0455f77cb9c6065c7b9d34e68a969572a5245e8c52f7a0bb1c2"
++    }
++  ],
++  "disc": {
++    "title": "MDK2",
++    "identity": "f838eac34967ae1693217ed313906954d4a6644dd59f5aa50f0accba8cf54727",
++    "tracks": 31,
++    "job": "/KUI/dumps/df838eac34967ae16-0001"
++  },
++  "result": {
++    "console": "SAVED DATA VERIFIED: all 31 tracks; CRC32 and SHA-256",
++    "reference": "Reference check (TOSEC): FULL TRACK MATCH",
++    "retries": 0,
++    "interruptions": 2,
++    "resumes": 2,
++    "resume_prefix_check_s": [
++      65,
++      432
++    ],
++    "whole_disc_read_back_s": 2454,
++    "final_operation_s": 4704
++  },
++  "by_track_type": {
++    "data": {
++      "tracks": 2,
++      "bytes": 298214784,
++      "capture_kib_s": 553.0,
++      "transfer_only_kib_s": 2534.6,
++      "write_pct": 48.0,
++      "sha256_pct": 23.3,
++      "edc_pct": 2.2
++    },
++    "audio": {
++      "tracks": 27,
++      "bytes": 882936096,
++      "capture_kib_s": 539.8,
++      "transfer_only_kib_s": 2119.7,
++      "write_pct": 47.0,
++      "sha256_pct": 22.9,
++      "edc_pct": 0.0
++    }
++  },
++  "tracks": [
++    {
++      "track": "T01",
++      "kind": "data",
++      "bytes": 1775760,
++      "wall_us": 4385821,
++      "disc_us": 1815317,
++      "write_us": 1595100,
++      "sha_us": 742236,
++      "crc_us": 130598,
++      "edc_us": 69036
++    },
++    {
++      "track": "T02",
++      "kind": "audio",
++      "bytes": 1237152,
++      "wall_us": 2481571,
++      "disc_us": 680692,
++      "write_us": 1191045,
++      "sha_us": 492680,
++      "crc_us": 91102,
++      "edc_us": 0
++    },
++    {
++      "track": "T03",
++      "kind": "data",
++      "bytes": 16793280,
++      "wall_us": 30548913,
++      "disc_us": 7350585,
++      "write_us": 14255690,
++      "sha_us": 6883921,
++      "crc_us": 1336496,
++      "edc_us": 656622
++    },
++    {
++      "track": "T04",
++      "kind": "audio",
++      "bytes": 51567600,
++      "wall_us": 92622353,
++      "disc_us": 23343953,
++      "write_us": 43601202,
++      "sha_us": 21427318,
++      "crc_us": 4074715,
++      "edc_us": 0
++    },
++    {
++      "track": "T05",
++      "kind": "audio",
++      "bytes": 48225408,
++      "wall_us": 86913291,
++      "disc_us": 21670513,
++      "write_us": 41237113,
++      "sha_us": 20013831,
++      "crc_us": 3775841,
++      "edc_us": 0
++    },
++    {
++      "track": "T06",
++      "kind": "audio",
++      "bytes": 47769120,
++      "wall_us": 85844157,
++      "disc_us": 21589558,
++      "write_us": 40530504,
++      "sha_us": 19837313,
++      "crc_us": 3736086,
++      "edc_us": 0
++    },
++    {
++      "track": "T07",
++      "kind": "audio",
++      "bytes": 14977536,
++      "wall_us": 26968059,
++      "disc_us": 6740860,
++      "write_us": 12807978,
++      "sha_us": 6194918,
++      "crc_us": 1155749,
++      "edc_us": 0
++    },
++    {
++      "track": "T07",
++      "kind": "audio",
++      "bytes": 31001712,
++      "wall_us": 57237344,
++      "disc_us": 15693399,
++      "write_us": 26086518,
++      "sha_us": 12947634,
++      "crc_us": 2404180,
++      "edc_us": 0
++    },
++    {
++      "track": "T08",
++      "kind": "audio",
++      "bytes": 47138784,
++      "wall_us": 84986174,
++      "disc_us": 21499833,
++      "write_us": 40106276,
++      "sha_us": 19598317,
++      "crc_us": 3646229,
++      "edc_us": 0
++    },
++    {
++      "track": "T09",
++      "kind": "audio",
++      "bytes": 47851440,
++      "wall_us": 86320192,
++      "disc_us": 21839435,
++      "write_us": 40690377,
++      "sha_us": 19810779,
++      "crc_us": 3838087,
++      "edc_us": 0
++    },
++    {
++      "track": "T10",
++      "kind": "audio",
++      "bytes": 44466912,
++      "wall_us": 80091085,
++      "disc_us": 20172603,
++      "write_us": 37808944,
++      "sha_us": 18493695,
++      "crc_us": 3476801,
++      "edc_us": 0
++    },
++    {
++      "track": "T11",
++      "kind": "audio",
++      "bytes": 46080384,
++      "wall_us": 83145409,
++      "disc_us": 21276827,
++      "write_us": 39038327,
++      "sha_us": 19086101,
++      "crc_us": 3601901,
++      "edc_us": 0
++    },
++    {
++      "track": "T12",
++      "kind": "audio",
++      "bytes": 50932560,
++      "wall_us": 92160529,
++      "disc_us": 23330481,
++      "write_us": 43437995,
++      "sha_us": 21195594,
++      "crc_us": 3995153,
++      "edc_us": 0
++    },
++    {
++      "track": "T13",
++      "kind": "audio",
++      "bytes": 43690752,
++      "wall_us": 79121741,
++      "disc_us": 19933244,
++      "write_us": 37539360,
++      "sha_us": 18055985,
++      "crc_us": 3432015,
++      "edc_us": 0
++    },
++    {
++      "track": "T14",
++      "kind": "audio",
++      "bytes": 58052064,
++      "wall_us": 104695944,
++      "disc_us": 26682824,
++      "write_us": 49161867,
++      "sha_us": 24021099,
++      "crc_us": 4611371,
++      "edc_us": 0
++    },
++    {
++      "track": "T15",
++      "kind": "audio",
++      "bytes": 46195632,
++      "wall_us": 83552111,
++      "disc_us": 21513727,
++      "write_us": 39160969,
++      "sha_us": 19137647,
++      "crc_us": 3597602,
++      "edc_us": 0
++    },
++    {
++      "track": "T16",
++      "kind": "audio",
++      "bytes": 37848384,
++      "wall_us": 68560316,
++      "disc_us": 17569946,
++      "write_us": 32231219,
++      "sha_us": 15689528,
++      "crc_us": 2955696,
++      "edc_us": 0
++    },
++    {
++      "track": "T17",
++      "kind": "audio",
++      "bytes": 39664128,
++      "wall_us": 71677943,
++      "disc_us": 18329261,
++      "write_us": 33642556,
++      "sha_us": 16484615,
++      "crc_us": 3085435,
++      "edc_us": 0
++    },
++    {
++      "track": "T18",
++      "kind": "audio",
++      "bytes": 43514352,
++      "wall_us": 78914544,
++      "disc_us": 20206561,
++      "write_us": 37084415,
++      "sha_us": 18083257,
++      "crc_us": 3374162,
++      "edc_us": 0
++    },
++    {
++      "track": "T19",
++      "kind": "audio",
++      "bytes": 44060016,
++      "wall_us": 79653379,
++      "disc_us": 20203495,
++      "write_us": 37458240,
++      "sha_us": 18366087,
++      "crc_us": 3445330,
++      "edc_us": 0
++    },
++    {
++      "track": "T20",
++      "kind": "audio",
++      "bytes": 11383680,
++      "wall_us": 20745665,
++      "disc_us": 5266633,
++      "write_us": 9742556,
++      "sha_us": 4748951,
++      "crc_us": 899343,
++      "edc_us": 0
++    },
++    {
++      "track": "T21",
++      "kind": "audio",
++      "bytes": 11529504,
++      "wall_us": 21049510,
++      "disc_us": 5316555,
++      "write_us": 9928258,
++      "sha_us": 4824054,
++      "crc_us": 917654,
++      "edc_us": 0
++    },
++    {
++      "track": "T22",
++      "kind": "audio",
++      "bytes": 11005008,
++      "wall_us": 20020856,
++      "disc_us": 5098186,
++      "write_us": 9519284,
++      "sha_us": 4482405,
++      "crc_us": 859055,
++      "edc_us": 0
++    },
++    {
++      "track": "T23",
++      "kind": "audio",
++      "bytes": 11251968,
++      "wall_us": 20360332,
++      "disc_us": 5201377,
++      "write_us": 9671228,
++      "sha_us": 4582209,
++      "crc_us": 843680,
++      "edc_us": 0
++    },
++    {
++      "track": "T24",
++      "kind": "audio",
++      "bytes": 21111552,
++      "wall_us": 38382945,
++      "disc_us": 9826598,
++      "write_us": 17843144,
++      "sha_us": 8902909,
++      "crc_us": 1721739,
++      "edc_us": 0
++    },
++    {
++      "track": "T25",
++      "kind": "audio",
++      "bytes": 10584000,
++      "wall_us": 19182528,
++      "disc_us": 4897779,
++      "write_us": 9069055,
++      "sha_us": 4318710,
++      "crc_us": 822080,
++      "edc_us": 0
++    },
++    {
++      "track": "T26",
++      "kind": "audio",
++      "bytes": 3904320,
++      "wall_us": 7255927,
++      "disc_us": 1856167,
++      "write_us": 3442114,
++      "sha_us": 1610452,
++      "crc_us": 307228,
++      "edc_us": 0
++    },
++    {
++      "track": "T27",
++      "kind": "audio",
++      "bytes": 32991504,
++      "wall_us": 59864756,
++      "disc_us": 15410489,
++      "write_us": 27967950,
++      "sha_us": 13744981,
++      "crc_us": 2619201,
++      "edc_us": 0
++    },
++    {
++      "track": "T28",
++      "kind": "audio",
++      "bytes": 8177904,
++      "wall_us": 14899480,
++      "disc_us": 3801454,
++      "write_us": 6986666,
++      "sha_us": 3435637,
++      "crc_us": 633080,
++      "edc_us": 0
++    },
++    {
++      "track": "T29",
++      "kind": "audio",
++      "bytes": 11529504,
++      "wall_us": 21109020,
++      "disc_us": 5514700,
++      "write_us": 9837006,
++      "sha_us": 4802729,
++      "crc_us": 888725,
++      "edc_us": 0
++    },
++    {
++      "track": "T30",
++      "kind": "audio",
++      "bytes": 10334688,
++      "wall_us": 19135665,
++      "disc_us": 4849793,
++      "write_us": 8955193,
++      "sha_us": 4274204,
++      "crc_us": 787341,
++      "edc_us": 0
++    },
++    {
++      "track": "T31",
++      "kind": "data",
++      "bytes": 281421504,
++      "wall_us": 496114672,
++      "disc_us": 107550616,
++      "write_us": 238717098,
++      "sha_us": 115760078,
++      "crc_us": 22180610,
++      "edc_us": 10966919
++    }
++  ],
++  "derived": {
++    "conclusions": [
++      "Resume works on real media: interrupted twice mid-disc and resumed twice, the job finished and the console verified every saved byte of all 31 tracks and matched TOSEC on every track, with 0 read retries.",
++      "Audio tracks capture at 539.8 KiB/s against 553.0 for data (-2.4%), so audio is NOT drive-bound and NOT cheaper. Skipping EDC saves audio 2.2% of the time, but its raw transfer costs more per byte (2119.7 against 2534.6 KiB/s), which cancels the saving.",
++      "The mix is the same either way: SD write 47.0% of audio and 48.0% of data, SHA-256 22.9% and 23.3%. Everything measured on Sword therefore carries over to an audio-heavy disc.",
++      "The whole-disc end read-back took 41 minutes of the 78-minute operation, which is the cost the fast settings remove.",
++      "resume_check=full re-read 432 s of prefix on the second resume (214 MB committed): the cost grows with how much is already done, and resume_check=size would make it instant at the price of not seeing a corrupted prefix."
++    ]
++  },
++  "limitations": [
++    "One disc, one card, one console, one capture; old defaults, not the fast settings.",
++    "Every read succeeded (retries=0), so the retry and read-failure paths are still unexercised on real media.",
++    "Verified by the console and against TOSEC; no independent PC check of this dump."
++  ]
++}
+diff --git a/docs/evidence/mdk2-full-capture-resume-verify-2026-09-20.txt b/docs/evidence/mdk2-full-capture-resume-verify-2026-09-20.txt
+new file mode 100644
+index 0000000..bb8ee0e
+--- /dev/null
++++ b/docs/evidence/mdk2-full-capture-resume-verify-2026-09-20.txt
+@@ -0,0 +1,772 @@
++K-UI SD runtime dbd8bd76fea0
++Log truncated: YES
++Report trigger: manual
++Capture result: see operation log
++T06 12288/20310 sectors; checkpoint saved
++T06 16384/20310 sectors; checkpoint saved
++T06 20310/20310 sectors; checkpoint saved
++Capturing T07 at FAD=115179; B stops safely
++T07 4096/19549 sectors; checkpoint saved
++STOPPED: last committed bytes=214558848; retries=0
++Partial job preserved: /KUI/dumps/df838eac34967ae16-0001; Resume checks save
++d bytes first
++TIMING: wall time in microseconds; categories do not overlap
++TIMING setup wall_us=8816658
++disc us=8666737 pct=98.2 bytes=218736 calls=93
++edc us=934 pct=0.0 bytes=21168 calls=9
++other us=148987
++TIMING resume wall_us=65156483
++read us=48837467 pct=74.9 bytes=32212992 calls=428
++sha256 us=13345511 pct=20.4 bytes=32212992 calls=429
++crc32 us=2542151 pct=3.9 bytes=32212992 calls=428
++other us=431354
++TIMING capture wall_us=329764303
++disc us=83191478 pct=25.2 bytes=182345856 calls=2426
++edc us=725658 pct=0.2 bytes=18569040 calls=248
++write us=155218632 pct=47.0 bytes=182345856 calls=2426
++sha256 us=75592217 pct=22.9 bytes=182345856 calls=2426
++crc32 us=14300587 pct=4.3 bytes=182345856 calls=2426
++checkpoint us=607921 pct=0.1 bytes=94208 calls=23
++other us=127810
++TRACK TIMING: capture intervals, including checkpoints and close
++TRACK T01 data FAD=[13846,14601)
++track wall_us=4385821 bytes=1775760
++track disc_us=1815317 write_us=1595100
++track sha256_us=742236 crc32_us=130598
++track edc_us=69036 checkpoint_us=23822
++track other_us=9712
++TRACK T02 audio FAD=[14751,15277)
++track wall_us=2481571 bytes=1237152
++track disc_us=680692 write_us=1191045
++track sha256_us=492680 crc32_us=91102
++track edc_us=0 checkpoint_us=21550
++track other_us=4502
++TRACK T03 data FAD=[45150,52290)
++track wall_us=30548913 bytes=16793280
++track disc_us=7350585 write_us=14255690
++track sha256_us=6883921 crc32_us=1336496
++track edc_us=656622 checkpoint_us=50136
++track other_us=15463
++TRACK T04 audio FAD=[52440,74365)
++track wall_us=92622353 bytes=51567600
++track disc_us=23343953 write_us=43601202
++track sha256_us=21427318 crc32_us=4074715
++track edc_us=0 checkpoint_us=145872
++track other_us=29293
++TRACK T05 audio FAD=[74365,94869)
++track wall_us=86913291 bytes=48225408
++track disc_us=21670513 write_us=41237113
++track sha256_us=20013831 crc32_us=3775841
++track edc_us=0 checkpoint_us=188190
++track other_us=27803
++TRACK T06 audio FAD=[94869,115179)
++track wall_us=85844157 bytes=47769120
++track disc_us=21589558 write_us=40530504
++track sha256_us=19837313 crc32_us=3736086
++track edc_us=0 checkpoint_us=123150
++track other_us=27546
++TRACK T07 audio FAD=[115179,121547)
++track wall_us=26968059 bytes=14977536
++track disc_us=6740860 write_us=12807978
++track sha256_us=6194918 crc32_us=1155749
++track edc_us=0 checkpoint_us=55201
++track other_us=13353
++BENCH cpu operation (setup+capture+verify) wall=403740 wk=382186 ui=18947 ot
++h=2608 ui_pct=4.6
++OPTICAL setup: subtimers inside TIMING disc
++opt policy=paired PIO yield_us=2000
++opt wall_us=8666249 requests=93 bytes=218736
++opt mode_us=541 calls=93 failed=0
++opt buffers_us=725231 other_us=1523
++opt requests ok=93 retry=0 fatal=0
++opt mismatch=0 guards=0 refused=0
++opt short=0
++opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
++opt read1 us=6748937 max_us=634007
++opt read1 calls=93 bytes=218736
++opt read1 max_fad=14600 max_sectors=1
++opt read1 submit_us=1915 submits=93
++opt read1 poll_us=3076796 polls=781118
++opt read1 wait_us=245879 waits=3175
++opt read1 abort_us=0 aborts=0
++opt read1 other_us=3424347
++opt read1 poll_n 780825/194/0/93/6
++opt read1 poll_ms 2978/8/0/67/22
++opt read1 ok=93 failed=0 timeout=0
++opt read1 cancelled=0 abort_failed=0 invalid=0
++opt read2 us=1190017 max_us=542601
++opt read2 calls=93 bytes=218736
++opt read2 max_fad=14600 max_sectors=1
++opt read2 submit_us=1941 submits=93
++opt read2 poll_us=572439 polls=131809
++opt read2 wait_us=37190 waits=502
++opt read2 abort_us=0 aborts=0
++opt read2 other_us=578447
++opt read2 poll_n 131680/36/0/93/0
++opt read2 poll_ms 502/1/0/67/0
++opt read2 ok=93 failed=0 timeout=0
++opt read2 cancelled=0 abort_failed=0 invalid=0
++OPTICAL capture: subtimers inside TIMING disc
++opt policy=single PIO yield_us=2000
++opt wall_us=83179097 requests=2426 bytes=182345856
++opt mode_us=14188 calls=2426 failed=0
++opt buffers_us=4383815 other_us=28382
++opt requests ok=2426 retry=0 fatal=0
++opt mismatch=0 guards=0 refused=0
++opt short=0
++opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
++opt read1 us=78752712 max_us=696991
++opt read1 calls=2426 bytes=182345856
++opt read1 max_fad=13846 max_sectors=32
++opt read1 submit_us=51577 submits=2426
++opt read1 poll_us=65237003 polls=1982401
++opt read1 wait_us=3932668 waits=28654
++opt read1 abort_us=0 aborts=0
++opt read1 other_us=9531464
++opt read1 poll_n 1911665/528/0/69627/581
++opt read1 poll_ms 7984/25/0/50746/6480
++opt read1 ok=2426 failed=0 timeout=0
++opt read1 cancelled=0 abort_failed=0 invalid=0
++opt read2 us=0 max_us=0
++opt read2 calls=0 bytes=0
++opt read2 max_fad=0 max_sectors=0
++opt read2 submit_us=0 submits=0
++opt read2 poll_us=0 polls=0
++opt read2 wait_us=0 waits=0
++opt read2 abort_us=0 aborts=0
++opt read2 other_us=0
++opt read2 ok=0 failed=0 timeout=0
++opt read2 cancelled=0 abort_failed=0 invalid=0
++mstats [capture/verify end] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2458456 available~=14318760
++RAM sampled peak used/reserved=2458456
++Image+BSS=2238436 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92188
++Heap system bytes=92188 in use bytes=88948 free bytes=3240
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++Capture result: stopped
++Saving diagnostic report automatically; B cancels log save.
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2458456 available~=14318760
++RAM sampled peak used/reserved=2458456
++Image+BSS=2238436 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92188
++Heap system bytes=92188 in use bytes=88948 free bytes=3240
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Report saved: /KUI/probes/p0001/diagnostics.txt
++Operation ended. Diagnostics page: Y saves the log to SD.
++mstats [capture/verify start] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2458456 available~=14318760
++RAM sampled peak used/reserved=2458456
++Image+BSS=2238436 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92188
++Heap system bytes=92188 in use bytes=88948 free bytes=3240
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Loaded /KUI/bench.cfg
++OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
++OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
++OPTIONS sd_if=scif sd_crc=on
++OPTIONS ui_hz=2 sections=optical,hash,sd
++OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
++OPTIONS sweep_fads=(optical_fad)
++OPTIONS sweep_gap_us=0 sweep_service_us=0
++OPTIONS sweep_mode=pio sweep_spin=off
++OPTIONS sd_bytes=(none)
++OPTIONS capture_hash=crc32 end_readback=off resume_check=full
++OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
++OPTIONS capture_fad=(optical_fad)
++OPTIONS note=T7 real capture, fast settings. card=<model> disc=Sword of the 
++LOW TOC first=41010000 last=01020000 end=01003bad
++  T01 ctrl=4 start=150 next=14751
++  T02 ctrl=0 start=14751 next=15277
++HIGH TOC first=41030000 last=411f0000 end=410861b4
++  T03 ctrl=4 start=45150 next=52440
++  T04 ctrl=0 start=52440 next=74365
++  T05 ctrl=0 start=74365 next=94869
++  T06 ctrl=0 start=94869 next=115179
++  T07 ctrl=0 start=115179 next=134728
++  T08 ctrl=0 start=134728 next=154770
++  T09 ctrl=0 start=154770 next=175115
++  T10 ctrl=0 start=175115 next=194021
++  T11 ctrl=0 start=194021 next=213613
++  T12 ctrl=0 start=213613 next=235268
++  T13 ctrl=0 start=235268 next=253844
++  T14 ctrl=0 start=253844 next=278526
++  T15 ctrl=0 start=278526 next=298167
++  T16 ctrl=0 start=298167 next=314259
++  T17 ctrl=0 start=314259 next=331123
++  T18 ctrl=0 start=331123 next=349624
++  T19 ctrl=0 start=349624 next=368357
++  T20 ctrl=0 start=368357 next=373197
++  T21 ctrl=0 start=373197 next=378099
++  T22 ctrl=0 start=378099 next=382778
++  T23 ctrl=0 start=382778 next=387562
++  T24 ctrl=0 start=387562 next=396538
++  T25 ctrl=0 start=396538 next=401038
++  T26 ctrl=0 start=401038 next=402698
++  T27 ctrl=0 start=402698 next=416725
++  T28 ctrl=0 start=416725 next=420202
++  T29 ctrl=0 start=420202 next=425104
++  T30 ctrl=0 start=425104 next=429648
++  T31 ctrl=4 start=429648 next=549300
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++RESUME LATEST MATCHING JOB: guarded raw reads, data EDC, no zero-fill
++Disc: MDK2
++Identity: f838eac34967ae1693217ed313906954d4a6644dd59f5aa50f0accba8cf54727
++Profile: gdi-raw2352-typegap150-v1
++T01 FAD [150,14601) data; gap excluded=150
++T02 FAD [14751,15277) audio; gap excluded=0
++T03 FAD [45150,52290) data; gap excluded=150
++T04 FAD [52440,74365) audio; gap excluded=0
++T05 FAD [74365,94869) audio; gap excluded=0
++T06 FAD [94869,115179) audio; gap excluded=0
++T07 FAD [115179,134728) audio; gap excluded=0
++T08 FAD [134728,154770) audio; gap excluded=0
++T09 FAD [154770,175115) audio; gap excluded=0
++T10 FAD [175115,194021) audio; gap excluded=0
++T11 FAD [194021,213613) audio; gap excluded=0
++T12 FAD [213613,235268) audio; gap excluded=0
++T13 FAD [235268,253844) audio; gap excluded=0
++T14 FAD [253844,278526) audio; gap excluded=0
++T15 FAD [278526,298167) audio; gap excluded=0
++T16 FAD [298167,314259) audio; gap excluded=0
++T17 FAD [314259,331123) audio; gap excluded=0
++T18 FAD [331123,349624) audio; gap excluded=0
++T19 FAD [349624,368357) audio; gap excluded=0
++T20 FAD [368357,373197) audio; gap excluded=0
++T21 FAD [373197,378099) audio; gap excluded=0
++T22 FAD [378099,382778) audio; gap excluded=0
++T23 FAD [382778,387562) audio; gap excluded=0
++T24 FAD [387562,396538) audio; gap excluded=0
++T25 FAD [396538,401038) audio; gap excluded=0
++T26 FAD [401038,402698) audio; gap excluded=0
++T27 FAD [402698,416725) audio; gap excluded=0
++T28 FAD [416725,420202) audio; gap excluded=0
++T29 FAD [420202,425104) audio; gap excluded=0
++T30 FAD [425104,429498) audio; gap excluded=150
++T31 FAD [429648,549300) data; gap excluded=0
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Job: /KUI/dumps/df838eac34967ae16-0001
++Checkpoint #28: 214558848 committed bytes
++This job records SHA-256 and CRC32; resuming it that way
++Checking saved bytes before any resume writes...
++T01 verified 33988752 bytes; CRC32=97aad8a5
++SHA256: 62f9981ec7d99987c7f850bc7814f91425d0464f34fed4864fd2df633fd23754
++T02 verified 1237152 bytes; CRC32=48fff429
++SHA256: 483662b5c19f78b23fc738ad028fbb7a7bcf1cf15488c0db1c1e1b59f3726370
++T03 verified 16793280 bytes; CRC32=4e3c1f3e
++SHA256: f29a394f64dc12ffb31f74489f3c1b4ce5a2d99da0d29ae009666d2a9e32fbe4
++T04 verified 51567600 bytes; CRC32=cc87fec7
++SHA256: 4331317a38a5daafbcb72d4372244af2d596af6cfb66a29008c89e7ca678db43
++T05 verified 48225408 bytes; CRC32=d47cd9cb
++SHA256: b18fcedbc27af3573cfbf01b37d9cfbab992b84f89066aa4fd870fd433656cf2
++T06 verified 47769120 bytes; CRC32=3f6896f5
++SHA256: 5ab3b88aa1ea9a3a4a022c7f5092046b56cf4c08ed8bb6df67824b1def4dab8e
++T07 verified 14977536 bytes; CRC32=9cc8c8fc
++SHA256: 572a9bd103c3e782bb1abb0570d594d4c01f18b53563eeedb400f8ea225cf33c
++End read-back stays on: this job records SHA-256
++Capturing T07 at FAD=121547; B stops safely
++T07 10464/19549 sectors; checkpoint saved
++T07 14560/19549 sectors; checkpoint saved
++T07 18656/19549 sectors; checkpoint saved
++T07 19549/19549 sectors; checkpoint saved
++Capturing T08 at FAD=134728; B stops safely
++T08 4096/20042 sectors; checkpoint saved
++T08 8192/20042 sectors; checkpoint saved
++T08 12288/20042 sectors; checkpoint saved
++T08 16384/20042 sectors; checkpoint saved
++T08 20042/20042 sectors; checkpoint saved
++Capturing T09 at FAD=154770; B stops safely
++T09 4096/20345 sectors; checkpoint saved
++T09 8192/20345 sectors; checkpoint saved
++T09 12288/20345 sectors; checkpoint saved
++T09 16384/20345 sectors; checkpoint saved
++T09 20345/20345 sectors; checkpoint saved
++Capturing T10 at FAD=175115; B stops safely
++T10 4096/18906 sectors; checkpoint saved
++T10 8192/18906 sectors; checkpoint saved
++T10 12288/18906 sectors; checkpoint saved
++T10 16384/18906 sectors; checkpoint saved
++T10 18906/18906 sectors; checkpoint saved
++Capturing T11 at FAD=194021; B stops safely
++T11 4096/19592 sectors; checkpoint saved
++T11 8192/19592 sectors; checkpoint saved
++T11 12288/19592 sectors; checkpoint saved
++T11 16384/19592 sectors; checkpoint saved
++T11 19592/19592 sectors; checkpoint saved
++Capturing T12 at FAD=213613; B stops safely
++T12 4096/21655 sectors; checkpoint saved
++T12 8192/21655 sectors; checkpoint saved
++T12 12288/21655 sectors; checkpoint saved
++T12 16384/21655 sectors; checkpoint saved
++T12 20480/21655 sectors; checkpoint saved
++T12 21655/21655 sectors; checkpoint saved
++Capturing T13 at FAD=235268; B stops safely
++T13 4096/18576 sectors; checkpoint saved
++T13 8192/18576 sectors; checkpoint saved
++T13 12288/18576 sectors; checkpoint saved
++T13 16384/18576 sectors; checkpoint saved
++T13 18576/18576 sectors; checkpoint saved
++Capturing T14 at FAD=253844; B stops safely
++T14 4096/24682 sectors; checkpoint saved
++T14 8192/24682 sectors; checkpoint saved
++T14 12288/24682 sectors; checkpoint saved
++T14 16384/24682 sectors; checkpoint saved
++T14 20480/24682 sectors; checkpoint saved
++T14 24576/24682 sectors; checkpoint saved
++T14 24682/24682 sectors; checkpoint saved
++Capturing T15 at FAD=278526; B stops safely
++T15 4096/19641 sectors; checkpoint saved
++T15 8192/19641 sectors; checkpoint saved
++T15 12288/19641 sectors; checkpoint saved
++T15 16384/19641 sectors; checkpoint saved
++T15 19641/19641 sectors; checkpoint saved
++Capturing T16 at FAD=298167; B stops safely
++T16 4096/16092 sectors; checkpoint saved
++T16 8192/16092 sectors; checkpoint saved
++T16 12288/16092 sectors; checkpoint saved
++T16 16092/16092 sectors; checkpoint saved
++Capturing T17 at FAD=314259; B stops safely
++T17 4096/16864 sectors; checkpoint saved
++T17 8192/16864 sectors; checkpoint saved
++T17 12288/16864 sectors; checkpoint saved
++T17 16384/16864 sectors; checkpoint saved
++T17 16864/16864 sectors; checkpoint saved
++Capturing T18 at FAD=331123; B stops safely
++T18 4096/18501 sectors; checkpoint saved
++T18 8192/18501 sectors; checkpoint saved
++T18 12288/18501 sectors; checkpoint saved
++T18 16384/18501 sectors; checkpoint saved
++T18 18501/18501 sectors; checkpoint saved
++Capturing T19 at FAD=349624; B stops safely
++T19 4096/18733 sectors; checkpoint saved
++T19 8192/18733 sectors; checkpoint saved
++T19 12288/18733 sectors; checkpoint saved
++T19 16384/18733 sectors; checkpoint saved
++T19 18733/18733 sectors; checkpoint saved
++Capturing T20 at FAD=368357; B stops safely
++T20 4096/4840 sectors; checkpoint saved
++T20 4840/4840 sectors; checkpoint saved
++Capturing T21 at FAD=373197; B stops safely
++T21 4096/4902 sectors; checkpoint saved
++T21 4902/4902 sectors; checkpoint saved
++Capturing T22 at FAD=378099; B stops safely
++T22 4096/4679 sectors; checkpoint saved
++T22 4679/4679 sectors; checkpoint saved
++Capturing T23 at FAD=382778; B stops safely
++T23 4096/4784 sectors; checkpoint saved
++T23 4784/4784 sectors; checkpoint saved
++Capturing T24 at FAD=387562; B stops safely
++T24 4096/8976 sectors; checkpoint saved
++T24 8192/8976 sectors; checkpoint saved
++T24 8976/8976 sectors; checkpoint saved
++Capturing T25 at FAD=396538; B stops safely
++T25 4096/4500 sectors; checkpoint saved
++T25 4500/4500 sectors; checkpoint saved
++Capturing T26 at FAD=401038; B stops safely
++T26 1660/1660 sectors; checkpoint saved
++Capturing T27 at FAD=402698; B stops safely
++T27 4096/14027 sectors; checkpoint saved
++T27 8192/14027 sectors; checkpoint saved
++T27 12288/14027 sectors; checkpoint saved
++T27 14027/14027 sectors; checkpoint saved
++Capturing T28 at FAD=416725; B stops safely
++T28 3477/3477 sectors; checkpoint saved
++Capturing T29 at FAD=420202; B stops safely
++T29 4096/4902 sectors; checkpoint saved
++T29 4902/4902 sectors; checkpoint saved
++Capturing T30 at FAD=425104; B stops safely
++T30 4096/4394 sectors; checkpoint saved
++T30 4394/4394 sectors; checkpoint saved
++Capturing T31 at FAD=429648; B stops safely
++T31 4096/119652 sectors; checkpoint saved
++T31 8192/119652 sectors; checkpoint saved
++T31 12288/119652 sectors; checkpoint saved
++T31 16384/119652 sectors; checkpoint saved
++T31 20480/119652 sectors; checkpoint saved
++T31 24576/119652 sectors; checkpoint saved
++T31 28672/119652 sectors; checkpoint saved
++T31 32768/119652 sectors; checkpoint saved
++T31 36864/119652 sectors; checkpoint saved
++T31 40960/119652 sectors; checkpoint saved
++T31 45056/119652 sectors; checkpoint saved
++T31 49152/119652 sectors; checkpoint saved
++T31 53248/119652 sectors; checkpoint saved
++T31 57344/119652 sectors; checkpoint saved
++T31 61440/119652 sectors; checkpoint saved
++T31 65536/119652 sectors; checkpoint saved
++T31 69632/119652 sectors; checkpoint saved
++T31 73728/119652 sectors; checkpoint saved
++T31 77824/119652 sectors; checkpoint saved
++T31 81920/119652 sectors; checkpoint saved
++T31 86016/119652 sectors; checkpoint saved
++T31 90112/119652 sectors; checkpoint saved
++T31 94208/119652 sectors; checkpoint saved
++T31 98304/119652 sectors; checkpoint saved
++T31 102400/119652 sectors; checkpoint saved
++T31 106496/119652 sectors; checkpoint saved
++T31 110592/119652 sectors; checkpoint saved
++T31 114688/119652 sectors; checkpoint saved
++T31 118784/119652 sectors; checkpoint saved
++T31 119652/119652 sectors; checkpoint saved
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Capture written. Rereading all saved tracks...
++T01 verified 33988752 bytes; CRC32=97aad8a5
++SHA256: 62f9981ec7d99987c7f850bc7814f91425d0464f34fed4864fd2df633fd23754
++T02 verified 1237152 bytes; CRC32=48fff429
++SHA256: 483662b5c19f78b23fc738ad028fbb7a7bcf1cf15488c0db1c1e1b59f3726370
++T03 verified 16793280 bytes; CRC32=4e3c1f3e
++SHA256: f29a394f64dc12ffb31f74489f3c1b4ce5a2d99da0d29ae009666d2a9e32fbe4
++T04 verified 51567600 bytes; CRC32=cc87fec7
++SHA256: 4331317a38a5daafbcb72d4372244af2d596af6cfb66a29008c89e7ca678db43
++T05 verified 48225408 bytes; CRC32=d47cd9cb
++SHA256: b18fcedbc27af3573cfbf01b37d9cfbab992b84f89066aa4fd870fd433656cf2
++T06 verified 47769120 bytes; CRC32=3f6896f5
++SHA256: 5ab3b88aa1ea9a3a4a022c7f5092046b56cf4c08ed8bb6df67824b1def4dab8e
++T07 verified 45979248 bytes; CRC32=8f5342b6
++SHA256: bcd3d6c7a9e5ccb761d02b3bd5a1494fedb87dbe481d448bb7c1dbcca1d33dcd
++T08 verified 47138784 bytes; CRC32=adee1d4c
++SHA256: 8ca572357c39e94f132d316711d82106a88db1ce226afd272679a3ed8256c0d8
++T09 verified 47851440 bytes; CRC32=dab41b3a
++SHA256: 1963d2210f6c029108259e9ee802b4d2f7f2678c56c110dca316275d82fa12bc
++T10 verified 44466912 bytes; CRC32=7f6cc66e
++SHA256: 78f7386bc5f31a7f17b25ba7a2ca1d2ec71d9b87b07ea59fdcf51b28935edd35
++T11 verified 46080384 bytes; CRC32=5e67208d
++SHA256: aca247bc8d4feaccf068a90a37e56817bc4514f887583d68dcad9ed0cb4eb3f2
++T12 verified 50932560 bytes; CRC32=4a413a6c
++SHA256: 768cd198c984fa7a359a6d99285eba9fd11e71fabc94339bae0d824883b85b5b
++T13 verified 43690752 bytes; CRC32=94835dd9
++SHA256: d1da906f051c32cbb29716776eee4dfa1c5537d980eb183918fd91e7e2aaa8eb
++T14 verified 58052064 bytes; CRC32=723757dd
++SHA256: 92095ccf2cb6cd54dcfd1419d205d934bf0d655e1dc77bb2b3afe756eef27e46
++T15 verified 46195632 bytes; CRC32=b68d3cb3
++SHA256: 51532e0506ec03601a46b71d00178135eb79cf77ec2ecec5c9ab90f87a350529
++T16 verified 37848384 bytes; CRC32=44227b4a
++SHA256: c615b539c631bf39c6bb1e0f47389838ca43d86ecd5747f60c6a068e2e2405d0
++T17 verified 39664128 bytes; CRC32=07bcaa27
++SHA256: c6a5f590892d6eed2e59a316e356a5f1de232599046f2f3532cecfee7a36f188
++T18 verified 43514352 bytes; CRC32=798fa247
++SHA256: 2e2d25066a7097fb1093ea9ff2075b22e7482ccecec6d706d0af300689d4043d
++T19 verified 44060016 bytes; CRC32=dd4640f0
++SHA256: f55f4d4f56b8b1e54829f92476f0263c927ece1047016fd12f3b62b304b74277
++T20 verified 11383680 bytes; CRC32=dd78b00f
++SHA256: 69cea49ac6331fa96b8f46639aefd38880bc90fe6e4739d2c65e514c6ab30331
++T21 verified 11529504 bytes; CRC32=9f16a7a8
++SHA256: 2b09c05ae2c06a78f266f22dc72a2e008159c3dce454f88216c28f263b931864
++T22 verified 11005008 bytes; CRC32=7dbb512c
++SHA256: d609e8bee181963aa5326ed49053cc9d06bb832a6dd72916cc3d030ffbdf987e
++T23 verified 11251968 bytes; CRC32=55a76a18
++SHA256: db36ff38e7f80b77a4488c0d24b2ae652f00eefd767506e1e28e961aaa8f7b12
++T24 verified 21111552 bytes; CRC32=37ae3a5a
++SHA256: eb340c973a5259b0a1953ff787970daf04821bd4a64cec06dfe731dd10a1934d
++T25 verified 10584000 bytes; CRC32=17ea1393
++SHA256: 339c60c73ca51a1830a23c446693c155cb039e5dc0d228547e8bb570617aa0df
++T26 verified 3904320 bytes; CRC32=54a5c001
++SHA256: 0e548720456fdded266b829c243761e70f72967784d5585b5b626bf4c67f0635
++T27 verified 32991504 bytes; CRC32=fe0036c4
++SHA256: dca7e4adc03670ae2564193f4c532f502e15e915f47d9b07d0e44755ece6608f
++T28 verified 8177904 bytes; CRC32=2faab9ea
++SHA256: 9f1856d1a139ab013ff589b029efaef754ccdd787aade625da400610971f8c85
++T29 verified 11529504 bytes; CRC32=e66436be
++SHA256: 5a6e67616999fedf427091ef4293794becf709dbc748485cbd3610a03f761032
++T30 verified 10334688 bytes; CRC32=647dd299
++SHA256: 7b51631a6b11c6dc9336d4a85d77ffc0acbfcd2b14edd6d9df013356faeddf4a
++T31 verified 281421504 bytes; CRC32=b2d0ccdb
++SHA256: d6a7397cc45224865b6569f7ac995929e774266e99fc2ac20123c696fcf2a387
++SAVED DATA VERIFIED: all 31 tracks; CRC32 and SHA-256
++Reference check (TOSEC): FULL TRACK MATCH
++  MDK 2 v1.100 (2000)(Interplay)(US)[!]
++Output: /KUI/dumps/df838eac34967ae16-0001/disc.gdi
++TIMING: wall time in microseconds; categories do not overlap
++TIMING setup wall_us=8721775
++disc us=8562150 pct=98.1 bytes=218736 calls=93
++edc us=841 pct=0.0 bytes=21168 calls=9
++other us=158784
++TIMING resume wall_us=432009954
++read us=326739989 pct=75.6 bytes=214558848 calls=2854
++sha256 us=88017293 pct=20.3 bytes=214558848 calls=2861
++crc32 us=16701841 pct=3.8 bytes=214558848 calls=2854
++other us=550831
++TIMING capture wall_us=1808238303
++disc us=442841983 pct=24.4 bytes=1005722256 calls=13375
++edc us=10966919 pct=0.6 bytes=281421504 calls=3740
++write us=855126615 pct=47.2 bytes=1005722256 calls=13375
++sha256 us=416457657 pct=23.0 bytes=1005722256 calls=13375
++crc32 us=78943698 pct=4.3 bytes=1005722256 calls=13375
++checkpoint us=3110305 pct=0.1 bytes=487424 calls=119
++other us=791126
++TIMING verify wall_us=2454107076
++read us=1857463197 pct=75.6 bytes=1220281104 calls=16229
++sha256 us=501476598 pct=20.4 bytes=1220281104 calls=16260
++crc32 us=94430959 pct=3.8 bytes=1220281104 calls=16229
++other us=736322
++TIMING finish wall_us=972675
++other us=972675
++TRACK TIMING: capture intervals, including checkpoints and close
++TRACK T07 audio FAD=[121547,134728)
++track wall_us=57237344 bytes=31001712
++track disc_us=15693399 write_us=26086518
++track sha256_us=12947634 crc32_us=2404180
++track edc_us=0 checkpoint_us=86933
++track other_us=18680
++TRACK T08 audio FAD=[134728,154770)
++track wall_us=84986174 bytes=47138784
++track disc_us=21499833 write_us=40106276
++track sha256_us=19598317 crc32_us=3646229
++track edc_us=0 checkpoint_us=108124
++track other_us=27395
++TRACK T09 audio FAD=[154770,175115)
++track wall_us=86320192 bytes=47851440
++track disc_us=21839435 write_us=40690377
++track sha256_us=19810779 crc32_us=3838087
++track edc_us=0 checkpoint_us=111813
++track other_us=29701
++TRACK T10 audio FAD=[175115,194021)
++track wall_us=80091085 bytes=44466912
++track disc_us=20172603 write_us=37808944
++track sha256_us=18493695 crc32_us=3476801
++track edc_us=0 checkpoint_us=110669
++track other_us=28373
++TRACK T11 audio FAD=[194021,213613)
++track wall_us=83145409 bytes=46080384
++track disc_us=21276827 write_us=39038327
++track sha256_us=19086101 crc32_us=3601901
++track edc_us=0 checkpoint_us=113015
++track other_us=29238
++TRACK T12 audio FAD=[213613,235268)
++track wall_us=92160529 bytes=50932560
++track disc_us=23330481 write_us=43437995
++track sha256_us=21195594 crc32_us=3995153
++track edc_us=0 checkpoint_us=160214
++track other_us=41092
++TRACK T13 audio FAD=[235268,253844)
++track wall_us=79121741 bytes=43690752
++track disc_us=19933244 write_us=37539360
++track sha256_us=18055985 crc32_us=3432015
++track edc_us=0 checkpoint_us=133282
++track other_us=27855
++TRACK T14 audio FAD=[253844,278526)
++track wall_us=104695944 bytes=58052064
++track disc_us=26682824 write_us=49161867
++track sha256_us=24021099 crc32_us=4611371
++track edc_us=0 checkpoint_us=180404
++track other_us=38379
++TRACK T15 audio FAD=[278526,298167)
++track wall_us=83552111 bytes=46195632
++track disc_us=21513727 write_us=39160969
++track sha256_us=19137647 crc32_us=3597602
++track edc_us=0 checkpoint_us=111150
++track other_us=31016
++TRACK T16 audio FAD=[298167,314259)
++track wall_us=68560316 bytes=37848384
++track disc_us=17569946 write_us=32231219
++track sha256_us=15689528 crc32_us=2955696
++track edc_us=0 checkpoint_us=86580
++track other_us=27347
++TRACK T17 audio FAD=[314259,331123)
++track wall_us=71677943 bytes=39664128
++track disc_us=18329261 write_us=33642556
++track sha256_us=16484615 crc32_us=3085435
++track edc_us=0 checkpoint_us=107908
++track other_us=28168
++TRACK T18 audio FAD=[331123,349624)
++track wall_us=78914544 bytes=43514352
++track disc_us=20206561 write_us=37084415
++track sha256_us=18083257 crc32_us=3374162
++track edc_us=0 checkpoint_us=136083
++track other_us=30066
++TRACK T19 audio FAD=[349624,368357)
++track wall_us=79653379 bytes=44060016
++track disc_us=20203495 write_us=37458240
++track sha256_us=18366087 crc32_us=3445330
++track edc_us=0 checkpoint_us=145976
++track other_us=34251
++TRACK T20 audio FAD=[368357,373197)
++track wall_us=20745665 bytes=11383680
++track disc_us=5266633 write_us=9742556
++track sha256_us=4748951 crc32_us=899343
++track edc_us=0 checkpoint_us=70152
++track other_us=18030
++TRACK T21 audio FAD=[373197,378099)
++track wall_us=21049510 bytes=11529504
++track disc_us=5316555 write_us=9928258
++track sha256_us=4824054 crc32_us=917654
++track edc_us=0 checkpoint_us=44910
++track other_us=18079
++TRACK T22 audio FAD=[378099,382778)
++track wall_us=20020856 bytes=11005008
++track disc_us=5098186 write_us=9519284
++track sha256_us=4482405 crc32_us=859055
++track edc_us=0 checkpoint_us=44035
++track other_us=17891
++TRACK T23 audio FAD=[382778,387562)
++track wall_us=20360332 bytes=11251968
++track disc_us=5201377 write_us=9671228
++track sha256_us=4582209 crc32_us=843680
++track edc_us=0 checkpoint_us=43895
++track other_us=17943
++TRACK T24 audio FAD=[387562,396538)
++track wall_us=38382945 bytes=21111552
++track disc_us=9826598 write_us=17843144
++track sha256_us=8902909 crc32_us=1721739
++track edc_us=0 checkpoint_us=66254
++track other_us=22301
++TRACK T25 audio FAD=[396538,401038)
++track wall_us=19182528 bytes=10584000
++track disc_us=4897779 write_us=9069055
++track sha256_us=4318710 crc32_us=822080
++track edc_us=0 checkpoint_us=45114
++track other_us=29790
++TRACK T26 audio FAD=[401038,402698)
++track wall_us=7255927 bytes=3904320
++track disc_us=1856167 write_us=3442114
++track sha256_us=1610452 crc32_us=307228
++track edc_us=0 checkpoint_us=23150
++track other_us=16816
++TRACK T27 audio FAD=[402698,416725)
++track wall_us=59864756 bytes=32991504
++track disc_us=15410489 write_us=27967950
++track sha256_us=13744981 crc32_us=2619201
++track edc_us=0 checkpoint_us=92652
++track other_us=29483
++TRACK T28 audio FAD=[416725,420202)
++track wall_us=14899480 bytes=8177904
++track disc_us=3801454 write_us=6986666
++track sha256_us=3435637 crc32_us=633080
++track edc_us=0 checkpoint_us=23944
++track other_us=18699
++TRACK T29 audio FAD=[420202,425104)
++track wall_us=21109020 bytes=11529504
++track disc_us=5514700 write_us=9837006
++track sha256_us=4802729 crc32_us=888725
++track edc_us=0 checkpoint_us=45655
++track other_us=20205
++TRACK T30 audio FAD=[425104,429498)
++track wall_us=19135665 bytes=10334688
++track disc_us=4849793 write_us=8955193
++track sha256_us=4274204 crc32_us=787341
++track edc_us=0 checkpoint_us=245219
++track other_us=23915
++TRACK T31 data FAD=[429648,549300)
++track wall_us=496114672 bytes=281421504
++track disc_us=107550616 write_us=238717098
++track sha256_us=115760078 crc32_us=22180610
++track edc_us=10966919 checkpoint_us=773174
++track other_us=166177
++BENCH cpu operation (setup+capture+verify) wall=4704176 wk=4450026 ui=229815
++ oth=24335 ui_pct=4.8
++OPTICAL setup: subtimers inside TIMING disc
++opt policy=paired PIO yield_us=2000
++opt wall_us=8561655 requests=93 bytes=218736
++opt mode_us=547 calls=93 failed=0
++opt buffers_us=699755 other_us=1531
++opt requests ok=93 retry=0 fatal=0
++opt mismatch=0 guards=0 refused=0
++opt short=0
++opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
++opt read1 us=6677315 max_us=594213
++opt read1 calls=93 bytes=218736
++opt read1 max_fad=14600 max_sectors=1
++opt read1 submit_us=1906 submits=93
++opt read1 poll_us=3021713 polls=762188
++opt read1 wait_us=311794 waits=3100
++opt read1 abort_us=0 aborts=0
++opt read1 other_us=3341902
++opt read1 poll_n 761911/178/0/92/7
++opt read1 poll_ms 2906/7/0/67/40
++opt read1 ok=93 failed=0 timeout=0
++opt read1 cancelled=0 abort_failed=0 invalid=0
++opt read2 us=1182507 max_us=525827
++opt read2 calls=93 bytes=218736
++opt read2 max_fad=14600 max_sectors=1
++opt read2 submit_us=1945 submits=93
++opt read2 poll_us=568426 polls=130805
++opt read2 wait_us=30016 waits=494
++opt read2 abort_us=0 aborts=0
++opt read2 other_us=582120
++opt read2 poll_n 130682/30/0/93/0
++opt read2 poll_ms 499/1/0/67/0
++opt read2 ok=93 failed=0 timeout=0
++opt read2 cancelled=0 abort_failed=0 invalid=0
++OPTICAL capture: subtimers inside TIMING disc
++opt policy=single PIO yield_us=2000
++opt wall_us=442773717 requests=13375 bytes=1005722256
++opt mode_us=78087 calls=13375 failed=0
++opt buffers_us=24032731 other_us=158946
++opt requests ok=13375 retry=0 fatal=0
++opt mismatch=0 guards=0 refused=0
++opt short=0
++opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
++opt read1 us=418503953 max_us=1569840
++opt read1 calls=13375 bytes=1005722256
++opt read1 max_fad=121547 max_sectors=32
++opt read1 submit_us=304501 submits=13375
++opt read1 poll_us=354794755 polls=9126819
++opt read1 wait_us=19140083 waits=134048
++opt read1 abort_us=0 aborts=0
++opt read1 other_us=44264614
++opt read1 poll_n 8808966/2342/0/307635/7876
++opt read1 poll_ms 36726/117/0/224226/93723
++opt read1 ok=13375 failed=0 timeout=0
++opt read1 cancelled=0 abort_failed=0 invalid=0
++opt read2 us=0 max_us=0
++opt read2 calls=0 bytes=0
++opt read2 max_fad=0 max_sectors=0
++opt read2 submit_us=0 submits=0
++opt read2 poll_us=0 polls=0
++opt read2 wait_us=0 waits=0
++opt read2 abort_us=0 aborts=0
++opt read2 other_us=0
++opt read2 ok=0 failed=0 timeout=0
++opt read2 cancelled=0 abort_failed=0 invalid=0
++mstats [capture/verify end] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2458456 available~=14318760
++RAM sampled peak used/reserved=2458456
++Image+BSS=2238436 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92188
++Heap system bytes=92188 in use bytes=88948 free bytes=3240
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++Capture result: complete
++Saving diagnostic report automatically; B cancels log save.
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2458456 available~=14318760
++RAM sampled peak used/reserved=2458456
++Image+BSS=2238436 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92188
++Heap system bytes=92188 in use bytes=88948 free bytes=3240
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
++SD exFAT, 249997312 sectors, cluster=131072 bytes
++Volume start=2048 (MBR)
++Report saved: /KUI/probes/p0002/diagnostics.txt
++Operation ended. Diagnostics page: Y saves the log to SD.
++mstats [L trigger] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2458456 available~=14318760
++RAM sampled peak used/reserved=2458456
++Image+BSS=2238436 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92188
++Heap system bytes=92188 in use bytes=88948 free bytes=3240
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++mstats [save log] (bytes; main RAM excludes VRAM/audio)
++RAM total=16777216 used/reserved~=2458456 available~=14318760
++RAM sampled peak used/reserved=2458456
++Image+BSS=2238436 firmware reserve=65536 main stack reserve=65536
++Heap max system bytes=92188
++Heap system bytes=92188 in use bytes=88948 free bytes=3240
++Unclaimed main RAM=14315520; worker stacks included in heap
++Video framebuffers=7987200 bytes in separate VRAM
++SD transport: SCIF (bit-banged SPI), CRC check on reads on
+diff --git a/docs/experiment-plan.md b/docs/experiment-plan.md
+index 838ba42..5ec32eb 100644
+--- a/docs/experiment-plan.md
++++ b/docs/experiment-plan.md
+@@ -636,6 +636,12 @@ the read itself, so a catalogue match (or a second dump) is the check there.
+   shipped file exceeds the runtime's limit. The run did show the engine at 545.4 KiB/s on MDK2's data track 1
+   with the old defaults, within 1.0% of Trip 5a on Sword, and a clean stop-and-checkpoint on a 31-track
+   disc. **Lesson: a limit that the project's own example violates is a bug in the limit or the example.**
++- **"Audio is drive-bound" was wrong (2026-09-20).** The plan and `t5c-capture-audio.cfg` assumed audio tracks
++  would be limited by the drive, so the CPU choices would matter less there. A full MDK2 capture says otherwise:
++  audio runs at 539.8 KiB/s against 553.0 for data, 2.4% SLOWER, with the same mix (SD write 47.0%, SHA-256 22.9%).
++  Audio skips EDC (2.2% of a data track) but its raw transfer costs more per byte (2119.7 against 2534.6 KiB/s),
++  which cancels it. So every result measured on Sword carries over to an audio-heavy disc, and no separate audio
++  tuning is needed. [Evidence](evidence/mdk2-full-capture-resume-verify-2026-09-20.json).
+ - **The 28% "slack".** The earlier analysis called the worker's yielded time idle
+   slack a second thread could reclaim. It was the UI thread running. That is the
+   reason Trip 1 exists.
+diff --git a/tests/test_rip_time.py b/tests/test_rip_time.py
+new file mode 100644
+index 0000000..b5601ee
+--- /dev/null
++++ b/tests/test_rip_time.py
+@@ -0,0 +1,78 @@
++# SPDX-License-Identifier: GPL-3.0-only
++"""tools/rip_time.py: the projections must come from the report, and from the right pass.
++
++The first version keyed `BENCH capture total` by settings alone. That line carries no uihz=, so
++the totals of every UI pass were averaged together and the tool reported the same finished time
++for a full-speed pass and a 2 Hz one, and a finished time that differed from the capture time even
++where the end read-back was off (where they are the same run)."""
++import pathlib
++import subprocess
++import sys
++import tempfile
++import unittest
++
++ROOT = pathlib.Path(__file__).resolve().parent.parent
++TOOL = ROOT / "tools" / "rip_time.py"
++sys.path.insert(0, str(ROOT / "tools"))
++import rip_time as r
++
++# 1000 sectors of plan = 2,352,000 bytes; at 1000 KiB/s that is 2352000/1024/1000 = 2.297 s.
++REPORT = """T01 FAD [150,1150) data; gap excluded=0
++BENCH pass 1/2 uihz=full
++BENCH capture uihz=full hash=both end=on sample=0 sectors=256 result=ok bytes=602112 us=1000000 kib_s=100.0
++BENCH capture total hash=both end=on sample=0 verify_us=1000000 total_kib_s=50.0 sampled=0 verified=1
++BENCH capture uihz=full hash=crc32 end=off sample=0 sectors=256 result=ok bytes=602112 us=500000 kib_s=200.0
++BENCH capture total hash=crc32 end=off sample=0 verify_us=0 total_kib_s=200.0 sampled=0 verified=0
++BENCH pass 2/2 uihz=2
++BENCH capture uihz=2 hash=both end=on sample=0 sectors=256 result=ok bytes=602112 us=250000 kib_s=400.0
++BENCH capture total hash=both end=on sample=0 verify_us=250000 total_kib_s=200.0 sampled=0 verified=1
++BENCH capture uihz=2 hash=crc32 end=off sample=0 sectors=256 result=ok bytes=602112 us=125000 kib_s=800.0
++BENCH capture total hash=crc32 end=off sample=0 verify_us=0 total_kib_s=800.0 sampled=0 verified=0
++"""
++
++
++class RipTime(unittest.TestCase):
++    def test_disc_size_comes_from_the_plan_then_the_toc(self):
++        size, where = r.disc_bytes("T01 FAD [150,1150) data; gap excluded=0")
++        self.assertEqual(size, 1000 * 2352)
++        self.assertIn("plan", where)
++        size, where = r.disc_bytes("  T01 ctrl=4 start=150 next=1150\n  T01 ctrl=4 start=150 next=1150")
++        self.assertEqual(size, 1000 * 2352, "a TOC repeated by a second run must not be counted twice")
++        self.assertIn("TOC", where)
++        self.assertEqual(r.disc_bytes("nothing here"), (None, None))
++
++    def test_each_total_belongs_to_its_own_pass(self):
++        rates = r.settings_rates(REPORT)
++        self.assertEqual(rates[("full", "both", "on", "0")], (100.0, 50.0))
++        self.assertEqual(rates[("2", "both", "on", "0")], (400.0, 200.0))
++        # Where the read-back is off, the finished rate IS the capture rate.
++        self.assertEqual(rates[("full", "crc32", "off", "0")], (200.0, 200.0))
++        self.assertEqual(rates[("2", "crc32", "off", "0")], (800.0, 800.0))
++
++    def test_repeats_of_one_setting_average(self):
++        doubled = REPORT + REPORT.split("BENCH pass 2/2", 1)[0].split("\n", 1)[1]
++        rates = r.settings_rates(doubled)
++        self.assertAlmostEqual(rates[("full", "both", "on", "0")][0], 100.0)
++
++    def test_minutes_and_the_whole_tool_on_a_synthetic_report(self):
++        self.assertAlmostEqual(r.minutes(1000 * 2352, 1000.0), 2352000 / 1024 / 1000 / 60)
++        with tempfile.TemporaryDirectory() as d:
++            path = pathlib.Path(d) / "report.txt"
++            path.write_text(REPORT)
++            out = subprocess.run([sys.executable, str(TOOL), str(path)], capture_output=True, text=True, check=True).stdout
++        self.assertIn("from the capture plan", out)
++        # 2,352,000 bytes at 800 KiB/s = 0.05 min; at 100 KiB/s = 0.4 min.
++        self.assertRegex(out, r"2\s+crc32\s+off\s+0\s+800\.0\s+0\.0 min")
++        self.assertRegex(out, r"full\s+both\s+on\s+0\s+100\.0\s+0\.4 min")
++
++    def test_a_wrapped_log_is_rejoined(self):
++        line = "BENCH capture uihz=2 hash=crc32 end=off sample=0 sectors=256 result=ok bytes=602112 us=125000 kib_s=800.0"
++        wrapped = "\n".join(line[i:i + 76] for i in range(0, len(line), 76))
++        with tempfile.TemporaryDirectory() as d:
++            path = pathlib.Path(d) / "wrapped.txt"
++            path.write_text(wrapped + "\n")
++            self.assertIn(line, r.read([str(path)]))
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tools/rip_time.py b/tools/rip_time.py
+new file mode 100755
+index 0000000..ccaba68
+--- /dev/null
++++ b/tools/rip_time.py
+@@ -0,0 +1,172 @@
++#!/usr/bin/env python3
++# SPDX-License-Identifier: GPL-3.0-only
++"""Turn a saved K-UI diagnostics report into projected whole-disc rip times.
++
++Usage: python3 tools/rip_time.py REPORT [REPORT ...] [--bytes N]
++
++Feed it any report: a `sections=capture` bench, a real capture, or both. It reads the rates the
++console actually measured and prints how long a whole disc takes at each of them, so the choice
++between settings is a number of minutes rather than a percentage.
++
++What it reads, all optional:
++  BENCH capture ... hash= end= sample= ... kib_s=   one rate per settings combination
++  BENCH capture total ... total_kib_s=              the same including the end read-back
++  TIMING capture wall_us= / disc us= write us= ...  a real capture: its rate and where time went
++  BENCH hash ... crc16-* cyc_b= / sha256 / crc32    the microbenchmarks, for the "what if" lines
++  Tn FAD [a,b) data|audio  or  Tnn ctrl=c start= next=   the disc's size
++
++A projection is arithmetic on measured rates, not a prediction: it assumes the rest of the disc
++behaves like the part that was measured. The inner radius is the slowest part of a disc, so a
++projection from FAD 45150 is conservative. Lines marked PROJECTED were never run end to end.
++"""
++import argparse
++import re
++import sys
++
++RAW = 2352
++GD_ROM_BYTES = 1185760800 + 1825152 + 1237152   # a typical single-density-plus-GD layout, for reference
++
++
++def read(paths):
++    text = []
++    for p in paths:
++        raw = open(p, encoding="utf-8", errors="replace").read().split("\n")
++        joined, i = [], 0
++        while i < len(raw):                      # the on-screen log wraps at 76 characters
++            line = raw[i]
++            while len(line) == 76 and i + 1 < len(raw):
++                i += 1
++                line += raw[i]
++            joined.append(line)
++            i += 1
++        text.append("\n".join(joined))
++    return "\n".join(text)
++
++
++def disc_bytes(text):
++    """Total raw bytes of the disc, from the capture plan if present, else the TOC."""
++    plan = re.findall(r"^T\d\d FAD \[(\d+),(\d+)\) (?:data|audio)", text, re.M)
++    if plan:
++        return sum((int(b) - int(a)) * RAW for a, b in plan), "the capture plan in this report"
++    toc = re.findall(r"^\s*T(\d\d) ctrl=\w+ start=(\d+) next=(\d+)", text, re.M)
++    if toc:
++        seen, total = set(), 0
++        for n, a, b in toc:
++            if n in seen:
++                continue
++            seen.add(n)
++            total += (int(b) - int(a)) * RAW
++        return total, "the TOC in this report (no gap exclusions, so a little high)"
++    return None, None
++
++
++def settings_rates(text):
++    """{(ui, hash, end, sample): (capture KiB/s, finished KiB/s or None)} averaged over repeats.
++
++    Scanned in order, not by regex over the whole file: `BENCH capture total` carries no uihz=,
++    so the only thing that says which pass it belongs to is the `BENCH pass ... uihz=` line above
++    it. Keying the totals without that averaged every pass together and reported, for instance,
++    the same finished time for the full-speed and 2 Hz passes.
++    """
++    cap, fin, ui = {}, {}, "?"
++    for line in text.split("\n"):
++        m = re.match(r"BENCH pass \d+/\d+ uihz=(\S+)", line)
++        if m:
++            ui = m[1]
++            continue
++        m = re.match(r"BENCH capture uihz=(\S+) hash=(\w+) end=(\w+) sample=(\d+) sectors=\d+ "
++                     r"result=ok bytes=\d+ us=\d+ kib_s=([\d.]+)", line)
++        if m:
++            ui = m[1]
++            cap.setdefault((ui, m[2], m[3], m[4]), []).append(float(m[5]))
++            continue
++        m = re.match(r"BENCH capture total hash=(\w+) end=(\w+) sample=(\d+) verify_us=\d+ "
++                     r"total_kib_s=([\d.]+)", line)
++        if m:
++            fin.setdefault((ui, m[1], m[2], m[3]), []).append(float(m[4]))
++    mean = lambda v: sum(v) / len(v)
++    return {k: (mean(v), mean(fin[k]) if k in fin else None) for k, v in cap.items()}
++
++
++def real_capture(text):
++    """A real capture's rate and where its time went, if the report holds one."""
++    m = re.search(r"TIMING capture wall_us=(\d+)\n((?:\w+ us=\d+ pct=[\d.]+[^\n]*\n)+)", text)
++    if not m:
++        return None
++    wall = int(m[1])
++    parts, total = {}, 0
++    for line in m[2].strip().split("\n"):
++        g = re.match(r"(\w+) us=(\d+) pct=([\d.]+)(?: bytes=(\d+))?", line)
++        if g:
++            parts[g[1]] = float(g[3])
++            if g[1] == "disc" and g[4]:
++                total = int(g[4])
++    return dict(wall_us=wall, bytes=total, kib_s=total / 1024 / (wall / 1e6) if total and wall else 0, parts=parts)
++
++
++def minutes(byte_count, kib_s):
++    return byte_count / 1024 / kib_s / 60 if kib_s else float("inf")
++
++
++def savings(text, parts):
++    """Candidate changes, each as a percentage of capture time, from measurements in this report."""
++    out = []
++    cyc = {}
++    for m in re.finditer(r"BENCH cpu (crc16-\w+) uihz=\S+ wall=(\d+) wk=(\d+)", text):
++        cyc[m[1]] = int(m[3])
++    if {"crc16-kos", "crc16-slice2"} <= set(cyc) and cyc["crc16-kos"]:
++        # The SD write spends ~13.4% of its cycles in KOS's CRC16 (docs/evidence/sd-crc-read-cost).
++        share = 1 - cyc["crc16-slice2"] / cyc["crc16-kos"]
++        out.append(("a faster CRC16 inside the SD write (slice2)", parts.get("write", 0) * 0.134 * share))
++    if parts.get("crc32"):
++        # 22 arithmetic operations a byte today (nibble table) against 12 for a 256-entry table.
++        out.append(("a byte-table CRC32 in place of the nibble table", parts["crc32"] * (1 - 12 / 22)))
++    return [(name, pct) for name, pct in out if pct > 0.05]
++
++
++def main():
++    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
++    ap.add_argument("report", nargs="+")
++    ap.add_argument("--bytes", type=int, help="disc size in bytes, if the report has no plan or TOC")
++    args = ap.parse_args()
++    text = read(args.report)
++
++    size, where = disc_bytes(text)
++    if args.bytes:
++        size, where = args.bytes, "the --bytes you gave"
++    if not size:
++        size, where = GD_ROM_BYTES, "a typical GD-ROM (no plan or TOC in the report)"
++    print(f"Disc: {size / 1e9:.2f} GB of raw sectors, from {where}.\n")
++
++    real = real_capture(text)
++    if real and real["bytes"]:
++        print(f"MEASURED, this report's own capture: {real['kib_s']:.1f} KiB/s"
++              f" over {real['bytes'] / 1e6:.0f} MB, {minutes(real['bytes'], real['kib_s']):.1f} min for that much.")
++        if real["bytes"] < size * 0.9:
++            print(f"  PROJECTED to the whole disc at the same rate: {minutes(size, real['kib_s']):.1f} min.")
++        print("  where the time went: " + ", ".join(f"{k} {v}%" for k, v in real["parts"].items()) + "\n")
++
++    rates = settings_rates(text)
++    if rates:
++        print("PROJECTED whole-disc time at each measured setting (capture / finished dump):")
++        print(f"  {'ui':>5} {'hash':>6} {'read-back':>10} {'sample':>7} {'KiB/s':>8} {'capture':>9} {'finished':>9}")
++        for (ui, h, e, s), (c, f) in sorted(rates.items(), key=lambda kv: -kv[1][0]):
++            fin = f"{minutes(size, f):.1f} min" if f else "same"
++            print(f"  {ui:>5} {h:>6} {e:>10} {s:>7} {c:>8.1f} {minutes(size, c):>6.1f} min {fin:>9}")
++        print()
++
++    if real:
++        rest = savings(text, real["parts"])
++        if rest:
++            base = minutes(size, real["kib_s"])
++            print("PROJECTED effect of changes that are measured but NOT yet built:")
++            done = 0.0
++            for name, pct in rest:
++                done += pct
++                print(f"  {name}: -{pct:.1f}% of capture time ({base * pct / 100:.1f} min of {base:.1f})")
++            print(f"  together: {base * (1 - done / 100):.1f} min, from {base:.1f}.")
++            print("  Arithmetic on measured rates. Nothing here has been run end to end.")
++
++
++if __name__ == "__main__":
++    main()

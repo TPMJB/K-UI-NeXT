@@ -1,0 +1,17 @@
+{
+  "schema":1,"id":9,"build":"6cc2abb460b5","card_label":"",
+  "preset":0,"repeats":1,"soak_minutes":15,"outcome":2,
+  "transport":1,"filesystem":"exFAT","cluster_bytes":131072,"volume_start":2048,"volume_sectors":249997312,"free_bytes":82727403520,
+  "music_playing":false,"ui_hz":2,"local_seconds":1790874080,
+  "elapsed_us":8573500,"written_bytes":4194304,"verified_bytes":4194304,"cycles":1,
+  "write_latency": {"calls":64,"total_us":3596242,"over_20ms":64,"over_100ms":1,"min_us":47693,"max_us":148728,"p95_upper_us":131071},
+  "read_latency": {"calls":64,"total_us":3834513,"over_20ms":64,"over_100ms":3,"min_us":53698,"max_us":105945,"p95_upper_us":131071},
+  "sci_profile":{"timing_scope":"successful_dma_payloads","rx_dma_blocks":8192,"tx_dma_blocks":8488,"polled_blocks":496,"dma_failures":0,
+    "profiled_rx_blocks":8192,"profiled_tx_blocks":8488,"rx_setup_us":15979,"rx_transfer_us":2707999,"rx_check_us":561706,"tx_setup_us":171803,"tx_transfer_us":2804816},
+  "errors":{"total":0,"read":0,"write":0,"sync":0,"init":0,"timeout":0,"crc":0,"rejected":0,"io":0,
+    "operation":0,"result":0,"transport":0,"lba":0,"count":0,"sd_command":0,"sd_response":0,"sd_detail_valid":false},
+  "fatfs_error":0,"failure_offset":0,"cleanup_failed":false,"failure_phase":"","message":"Verified after remount; DMA R/W 8192/8488; PIO 496; faults 0",
+  "samples":[
+    {"chunk_bytes":65536,"repeat":1,"bytes":4194304,"write_us":3596242,"read_us":3834513,"sync_us":7659,"verified":true}
+  ]
+}

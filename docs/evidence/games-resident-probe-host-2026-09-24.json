@@ -1,0 +1,33 @@
+{
+  "date": "2026-09-24",
+  "scope": "G3 original resident loader probe; host validation before first console run",
+  "previous_source": "509f93848a6ab8ec806a2123fdafa205d363d7a9",
+  "hardware_tested": false,
+  "retail_compatibility_claimed": false,
+  "commands": ["make test", "make test-images"],
+  "result": "passed",
+  "sanitizers": "ASan and UBSan; local LeakSanitizer disabled under ptrace; CI retains default sanitizers",
+  "new_checks": {
+    "resident_protocol": "manifest CRC and reserved fields, contiguous and 111-fragment maps, status/TOC/read lifecycle, range/gap/audio rejection, cancellation, I/O failure and independent client byte mismatch detection",
+    "fixture": "Python and C independently reproduce all 56832 bytes of the original 24-sector fixture",
+    "sd_backend_assertions": 23359,
+    "sd_backend_scope": "SDHC/SDSC protocol simulation, CRC7/CRC16, malformed responses/capacity, timeout and stopped/wrapping timer, bounds and read-only command allowlist",
+    "filesystem_cases": 74,
+    "filesystem_scope": "35 MBR cases plus two superfloppy cases per filesystem, FAT32 and exFAT; forced fragmentation, raw mapped-sector reread after unmount/disconnect, failed preparation cleanup; whole-card SHA256 unchanged",
+    "package_and_ui": "runtime envelope and inner relocation-header mutation rejection, blank manifest enforcement, Games Advanced confirmation, busy and B priority, rendered screen layout"
+  },
+  "reproduce_from": [
+    "tests/test_loader_probe.c",
+    "tests/test_loader_sd.c",
+    "tests/loader_probe_image.c",
+    "tests/test_loader_probe_images.py",
+    "tests/test_loader_package.py",
+    "tests/test_shell.c"
+  ],
+  "frozen_sha256": {
+    "src/core/capture.c": "74bc14786561bc5b4f0a1936711235f1cba8cb66027c49a0d9761e74e746815b",
+    "src/dreamcast/disc.c": "b365e0529cfd60d26ed7bae392305ec2d235ca5760415ee4d6d3efa2b396f5c4",
+    "src/core/command.c": "1261a6a77ea69d7afcf1189650200d17ce35192c216638117c1ff88215740afd"
+  },
+  "remaining_gate": "SH-4 build/package validation and console proof of actual post-KOS SD reads; no new rip or full verification requested"
+}

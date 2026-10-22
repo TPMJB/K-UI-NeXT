@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "date": "2026-09-23",
+  "scope": "Host music file-allocation audit; hardware memory report pending",
+  "source_sha256": {
+    "src/apps/music.c": "79ea42bc3e9e0e085ce130cd3607749c2d9cbc3e2defa5c312035611179c59e2",
+    "include/kui/music.h": "a7d5a2c33bc04e9594a79d8cce626343624e962e8a02ac509cc8e984f3e6895d",
+    "tests/test_music.c": "b5c352ae1b93b9d170dac932c469027fa5f52b86d7fee04468431abb057249d8",
+    "resources/music/manifest.json": "f4047fe95ade6df3b8b5add19e13d2b43be59d77e5ab440d2f8d2cb9b4b1b05d",
+    "tests/stubs/kos/mutex.h": "d984afc80eebd4c4c83ebce7a5055bd58c968a1cbd85b5f36ce8989930ccee7b"
+  },
+  "commands": [
+    "make build/test-music build/test-music-thread",
+    "ASAN_OPTIONS=detect_leaks=0 ./build/test-music",
+    "ASAN_OPTIONS=detect_leaks=0 ./build/test-music-thread"
+  ],
+  "validation": {
+    "both_targets_passed": true,
+    "asan_ubsan_enabled": true,
+    "leak_sanitizer_disabled_in_local_ptrace_environment": true,
+    "independent_allocation_ledger": "Linker wraps real malloc/free; tracks live pointer sizes independently of player status",
+    "fake_console_path": "KUI_ON_CONSOLE mutex/thread stubs validate lock contracts; not actual hardware scheduling"
+  },
+  "assertions": {
+    "bundled_cache_bytes": 4674286,
+    "cached_song_switches": 1000,
+    "additional_file_allocations_during_cached_switches": 0,
+    "card_reads_during_cached_switches": 0,
+    "custom_replacements": 300,
+    "failed_or_cancelled_custom_replacements": 300,
+    "large_replacements": 16,
+    "exact_peak_file_bytes_in_large_replacement_case": 8388608,
+    "live_file_bytes_after_shutdown": 0,
+    "manual_bundled_path_shares_menu_cache": true,
+    "case_insensitive_known_path_shares_menu_cache": true,
+    "failed_allocation_preserves_playing_song": true,
+    "selected_replacement_resume_interleavings_passed": true,
+    "selected_replacements_with_resume_hook": 16
+  },
+  "interpretation": [
+    "The five retained bundled WAVs occupy about 4.46 MiB; temporary and custom files are accounted separately.",
+    "Manual selection of a bundled path formerly duplicated its bytes in a custom slot. It now shares the corresponding bundled cache.",
+    "No retained file-allocation leak was reproduced by these host cases. This does not establish the absence of a console audio-stack leak.",
+    "No Omikron hardware log accompanied this report. The owner's approximate 9 MiB observation is not a measured hardware result in this record.",
+    "Existing main-RAM accounting treats allocator free space as available; a peak or arena size must not be mistaken for current live memory.",
+    "A separate replacement/Resume use-after-free race was reproduced and fixed. It is not evidence that the reported 9 MiB was a leak."
+  ],
+  "replacement_resume_regression": {
+    "before_fix_music_source_sha256": "f2119bbddae0998fe90e4e223ff709bf141127681ea2fade621c411e358dc9a0",
+    "test": "Fake-console mutex unlock hook calls public Resume at every release boundary during selected custom replacements",
+    "before_fix_result": "AddressSanitizer heap-use-after-free, exit status 1",
+    "before_fix_stack": [
+      "kui_music_test_unlock_hook",
+      "kui_music_resume",
+      "resume_locked",
+      "snd_stream_start",
+      "stream_data",
+      "kui_pcm_loop_fill",
+      "memcpy"
+    ],
+    "before_fix_freed_region_bytes": 70044,
+    "fix": "Cache publication and custom PCM selection occur under the same audio lock; no freed prior loop is exposed to Resume",
+    "after_fix_result": "Both music test targets pass; sixteen selected custom replacements with more than sixteen Resume interleavings",
+    "hardware_reproduction_claimed": false
+  }
+}

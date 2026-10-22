@@ -1,0 +1,208 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/armada-maple-test
+HOST_CC ?= cc
+HOST_SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie
+HOST_FLAGS := -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic
+.DEFAULT_GOAL := host-tests
+.PHONY: host-test host-tests
+$(BUILD)/test-armada-ce-maple-observe: tests/test_armada_ce_maple_observe.c src/loader/armada_ce_maple_probe.c include/kui/armada_ce_maple_observe.h include/kui/armada_ce_maple_probe.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude \
+	 -DKUI_ARMADA_CE_MAPLE_PROBE_HOST_TEST=1 tests/test_armada_ce_maple_observe.c \
+	 src/loader/armada_ce_maple_probe.c -o $@
+$(BUILD)/test-armada-ce-maple-mapping: tests/test_armada_ce_maple_mapping.c include/kui/armada_ce_maple_mapping.h include/kui/armada_ce_ram_bind.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude $< -o $@
+$(BUILD)/test-armada-ce-maple-mapping-native: tests/test_armada_ce_maple_mapping.c include/kui/armada_ce_maple_mapping.h include/kui/armada_ce_ram_bind.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude -DKUI_ARMADA_CE_CACHE_SNAPSHOT_NATIVE=1 $< -o $@
+$(BUILD)/test-armada-ce-maple-proof: tests/test_armada_ce_maple_proof.c include/kui/armada_ce_maple_proof.h include/kui/armada_ce_maple_mapping.h include/kui/armada_ce_cache_word.h include/kui/armada_ce_maple_observe.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude $< -o $@
+$(BUILD)/test-armada-ce-maple-probe-proof: tests/test_armada_ce_maple_probe_proof.c tests/test_armada_ce_maple_proof.c src/loader/armada_ce_maple_probe.c include/kui/armada_ce_maple_probe.h include/kui/armada_ce_maple_proof.h include/kui/armada_ce_maple_mapping.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude \
+	 -DKUI_ARMADA_CE_MAPLE_PROBE_HOST_TEST=1 -DKUI_ARMADA_CE_MAPLE_PROOF=1 \
+	 $< src/loader/armada_ce_maple_probe.c -o $@
+$(BUILD)/test-armada-ce-maple-owner-pointer: tests/test_armada_ce_maple_owner_pointer.c include/kui/armada_ce_maple_owner_pointer.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude $< -o $@
+$(BUILD)/test-armada-ce-maple-state: tests/test_armada_ce_maple_state.c tests/test_armada_ce_maple_proof.c include/kui/armada_ce_maple_state.h include/kui/armada_ce_maple_owner_pointer.h include/kui/armada_ce_maple_proof.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude $< -o $@
+$(BUILD)/test-armada-ce-maple-probe-state: tests/test_armada_ce_maple_probe_state.c tests/test_armada_ce_maple_state.c tests/test_armada_ce_maple_proof.c src/loader/armada_ce_maple_probe.c include/kui/armada_ce_maple_probe.h include/kui/armada_ce_maple_state.h include/kui/armada_ce_maple_owner_pointer.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude \
+	 -DKUI_ARMADA_CE_MAPLE_PROBE_HOST_TEST=1 -DKUI_ARMADA_CE_MAPLE_PROOF=1 -DKUI_ARMADA_CE_MAPLE_STATE=1 \
+	 $< src/loader/armada_ce_maple_probe.c -o $@
+$(BUILD)/test-armada-ce-maple-headers: tests/test_armada_ce_maple_headers.c include/kui/armada_ce_maple_headers.h include/kui/armada_ce_maple_headers_types.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude $< -o $@
+$(BUILD)/test-armada-ce-maple-probe-headers: tests/test_armada_ce_maple_probe_headers.c tests/test_armada_ce_maple_state.c tests/test_armada_ce_maple_proof.c src/loader/armada_ce_maple_probe.c include/kui/armada_ce_maple_headers.h include/kui/armada_ce_maple_headers_types.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude \
+	 -DKUI_ARMADA_CE_MAPLE_PROBE_HOST_TEST=1 -DKUI_ARMADA_CE_MAPLE_PROOF=1 -DKUI_ARMADA_CE_MAPLE_STATE=1 -DKUI_ARMADA_CE_MAPLE_HEADERS=1 \
+	 $< src/loader/armada_ce_maple_probe.c -o $@
+host-test host-tests: $(BUILD)/test-armada-ce-maple-observe $(BUILD)/test-armada-ce-maple-mapping $(BUILD)/test-armada-ce-maple-proof $(BUILD)/test-armada-ce-maple-probe-proof $(BUILD)/test-armada-ce-maple-owner-pointer $(BUILD)/test-armada-ce-maple-state $(BUILD)/test-armada-ce-maple-probe-state $(BUILD)/test-armada-ce-maple-headers $(BUILD)/test-armada-ce-maple-probe-headers
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-observe
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-mapping
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-proof
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-probe-proof
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-owner-pointer
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-state
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-probe-state
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-headers
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-probe-headers
+	python3 tests/test_armada_ce_maple_stack.py
+
+$(BUILD)/test-armada-ce-maple-reservation: tests/test_armada_ce_maple_reservation.c include/kui/armada_ce_maple_reservation.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude -DKUI_WINCE_CDDA_WORMS=0 $< -o $@
+$(BUILD)/test-armada-ce-maple-probe-hook: tests/test_armada_ce_maple_probe_hook.c src/loader/armada_ce_maple_probe.c include/kui/armada_ce_maple_hook.h include/kui/armada_ce_maple_probe.h include/kui/armada_ce_maple_proof.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude \
+	 -DKUI_ARMADA_CE_MAPLE_PROBE_HOST_TEST=1 -DKUI_ARMADA_CE_MAPLE_PROOF=1 -DKUI_ARMADA_CE_MAPLE_STATE=1 -DKUI_ARMADA_CE_MAPLE_HOOK=1 \
+	 $< src/loader/armada_ce_maple_probe.c -o $@
+.PHONY: hook-tests
+hook-tests: host-tests $(BUILD)/test-armada-ce-maple-reservation $(BUILD)/test-armada-ce-maple-probe-hook
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-reservation
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-probe-hook
+	python3 tests/test_armada_ce_maple_hook.py
+
+$(BUILD)/test-armada-ce-cache-line: tests/test_armada_ce_cache_line.c include/kui/armada_ce_cache_line.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude $< -o $@
+$(BUILD)/armada-ce-cache-snapshot-wrapper.inc: tests/test_armada_ce_cache_snapshot_wrapper.py src/loader/armada_ce_maple_traffic.c
+	python3 tests/test_armada_ce_cache_snapshot_wrapper.py --output $@
+$(BUILD)/test-armada-ce-cache-snapshot-wrapper: tests/test_armada_ce_cache_snapshot_wrapper.c $(BUILD)/armada-ce-cache-snapshot-wrapper.inc include/kui/armada_ce_cache_line.h include/kui/armada_ce_cache_snapshot.h include/kui/armada_ce_maple_traffic.h include/kui/armada_ce_maple_rx_slice.h
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude -I$(BUILD) -DKUI_ARMADA_CE_CACHE_SNAPSHOT_NATIVE=1 -DKUI_ARMADA_CE_MAPLE_A2=1 $< -o $@
+.PHONY: cache-snapshot-wrapper-tests
+cache-snapshot-wrapper-tests: $(BUILD)/test-armada-ce-cache-snapshot-wrapper
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-cache-snapshot-wrapper
+# Optional machine-instruction model; requires the pinned sh-elf toolchain.
+.PHONY: cache-snapshot-native-tests
+cache-snapshot-native-tests:
+	python3 tests/test_armada_ce_cache_snapshot_native.py
+$(BUILD)/test-armada-ce-maple-traffic: tests/test_armada_ce_maple_traffic.c include/kui/armada_ce_maple_traffic.h include/kui/armada_ce_maple_traffic_types.h include/kui/armada_ce_cache_line.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude $< -o $@
+$(BUILD)/test-armada-ce-maple-probe-traffic: tests/test_armada_ce_maple_probe_hook.c src/loader/armada_ce_maple_probe.c include/kui/armada_ce_maple_probe.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude \
+	 -DKUI_ARMADA_CE_MAPLE_PROBE_HOST_TEST=1 -DKUI_ARMADA_CE_MAPLE_PROOF=1 -DKUI_ARMADA_CE_MAPLE_STATE=1 -DKUI_ARMADA_CE_MAPLE_HOOK=1 -DKUI_ARMADA_CE_MAPLE_TRAFFIC=1 \
+	 $< src/loader/armada_ce_maple_probe.c -o $@
+.PHONY: traffic-tests
+traffic-tests: hook-tests $(BUILD)/test-armada-ce-cache-line $(BUILD)/test-armada-ce-maple-traffic $(BUILD)/test-armada-ce-maple-probe-traffic $(BUILD)/test-armada-ce-maple-traffic-reservation
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-cache-line
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-traffic
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-probe-traffic
+	python3 tests/test_armada_ce_maple_traffic_bridge.py
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-traffic-reservation
+
+$(BUILD)/test-armada-ce-maple-traffic-reservation: tests/test_armada_ce_maple_reservation.c include/kui/armada_ce_maple_reservation.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude -DKUI_WINCE_CDDA_WORMS=0 -DKUI_ARMADA_CE_MAPLE_TRAFFIC_STAGE=1 $< -o $@
+
+$(BUILD)/test-armada-ce-maple-fence: tests/test_armada_ce_maple_fence.c include/kui/armada_ce_maple_fence.h include/kui/armada_ce_maple_fence_types.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude $< -o $@
+$(BUILD)/test-armada-ce-maple-probe-fence: tests/test_armada_ce_maple_probe_hook.c src/loader/armada_ce_maple_probe.c include/kui/armada_ce_maple_probe.h include/kui/armada_ce_maple_proof.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude \
+	 -DKUI_ARMADA_CE_MAPLE_PROBE_HOST_TEST=1 -DKUI_ARMADA_CE_MAPLE_PROOF=1 -DKUI_ARMADA_CE_MAPLE_STATE=1 -DKUI_ARMADA_CE_MAPLE_HOOK=1 -DKUI_ARMADA_CE_MAPLE_TRAFFIC=1 -DKUI_ARMADA_CE_MAPLE_FENCE=1 \
+	 $< src/loader/armada_ce_maple_probe.c -o $@
+$(BUILD)/test-armada-ce-maple-fence-reservation: tests/test_armada_ce_maple_reservation.c include/kui/armada_ce_maple_reservation.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude -DKUI_WINCE_CDDA_WORMS=0 -DKUI_ARMADA_CE_MAPLE_FENCE_STAGE=1 $< -o $@
+.PHONY: fence-tests
+fence-tests: traffic-tests $(BUILD)/test-armada-ce-maple-fence $(BUILD)/test-armada-ce-maple-probe-fence $(BUILD)/test-armada-ce-maple-fence-reservation
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-fence
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-probe-fence
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-fence-reservation
+	python3 tests/test_armada_ce_maple_fence_bridge.py
+
+A2_PROTOCOL_SOURCES := src/core/armada_ce_vmu_readonly.c src/core/vmu_readonly.c src/core/vmu_emulation.c src/core/vmu_image.c
+$(BUILD)/test-armada-ce-vmu-write: tests/test_armada_ce_vmu_write.c src/core/armada_ce_vmu_write.c src/core/vmu_emulation.c include/kui/armada_ce_vmu_write.h include/kui/vmu_emulation.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude tests/test_armada_ce_vmu_write.c src/core/armada_ce_vmu_write.c src/core/vmu_emulation.c -o $@
+.PHONY: write-protocol-tests
+write-protocol-tests: $(BUILD)/test-armada-ce-vmu-write
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-vmu-write
+	python3 tests/test_armada_ce_maple_write_owner.py
+$(BUILD)/test-armada-ce-vmu-readonly: tests/test_armada_ce_vmu_readonly.c $(A2_PROTOCOL_SOURCES)
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude -DKUI_VMU_READONLY_ADDRESS=2 -DKUI_ARMADA_CE_VMU_READONLY_HOST_TEST=1 $^ -o $@
+$(BUILD)/test-armada-ce-vmu-readonly-production: tests/test_armada_ce_vmu_readonly.c $(A2_PROTOCOL_SOURCES)
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude -DKUI_VMU_READONLY_ADDRESS=2 $^ -o $@
+$(BUILD)/test-armada-ce-maple-rx-slice: tests/test_armada_ce_maple_rx_slice.c include/kui/armada_ce_maple_rx_slice.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude -DKUI_ARMADA_CE_MAPLE_A2=1 $< -o $@
+$(BUILD)/test-armada-ce-maple-rx-slice-native: tests/test_armada_ce_maple_rx_slice.c tests/armada_ce_cache_snapshot_reference.c $(BUILD)/armada-ce-cache-snapshot-wrapper.inc include/kui/armada_ce_maple_rx_slice.h include/kui/armada_ce_maple_mapping.h include/kui/armada_ce_cache_snapshot.h include/kui/armada_ce_cache_line.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude -I$(BUILD) -DKUI_ARMADA_CE_MAPLE_A2=1 -DKUI_ARMADA_CE_CACHE_SNAPSHOT_NATIVE=1 tests/test_armada_ce_maple_rx_slice.c tests/armada_ce_cache_snapshot_reference.c -o $@
+$(BUILD)/test-armada-ce-vmu-a2-publish: tests/test_armada_ce_vmu_a2_publish.c src/loader/armada_ce_vmu_a2_publish.c $(A2_PROTOCOL_SOURCES)
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude -DKUI_VMU_READONLY_ADDRESS=2 $^ -o $@
+$(BUILD)/test-armada-ce-vmu-a2-publish-write-staging: tests/test_armada_ce_vmu_a2_publish.c src/loader/armada_ce_vmu_a2_publish.c src/core/armada_ce_vmu_write.c src/core/vmu_deferred_io.c include/kui/vmu_deferred_io.h include/kui/armada_ce_vmu_a2_publish.h $(A2_PROTOCOL_SOURCES)
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude -DKUI_VMU_READONLY_ADDRESS=2 -DKUI_ARMADA_CE_MAPLE_WRITE_STAGING=1 $(filter %.c,$^) -o $@
+.PHONY: write-staging-tests
+write-staging-tests: $(BUILD)/test-armada-ce-vmu-a2-publish-write-staging tests/test_armada_ce_write_capture.py
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-vmu-a2-publish-write-staging
+	python3 tests/test_armada_ce_write_capture.py
+$(BUILD)/test-armada-ce-vmu-sd: tests/test_armada_ce_vmu_sd.c src/loader/armada_ce_vmu_sd.c src/core/vmu_durable.c src/core/vmu_store.c src/core/retail_image.c src/loader/sd_reader.c src/dreamcast/sci_sd_storage.c include/kui/armada_ce_vmu_sd.h include/kui/armada_ce_vmu_sd_pio.h tests/vmu_sd_model.h tests/armada_ce_vmu_sd_fixture.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -ffunction-sections -fdata-sections -Iinclude -Isrc/loader -DKUI_ARMADA_CE_VMU_WRITE_RUNTIME=1 -DKUI_ARMADA_CE_VMU_SD_TEST=1 $(filter %.c,$^) -Wl,--gc-sections -o $@
+$(BUILD)/test-armada-ce-vmu-sd-pio: tests/test_armada_ce_vmu_sd_pio.c src/loader/armada_ce_vmu_sd_pio.c include/kui/armada_ce_vmu_sd_pio.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude -Isrc/loader -DKUI_ARMADA_CE_VMU_SD_PIO_TEST=1 $(filter %.c,$^) -o $@
+.PHONY: sd-provider-tests
+sd-provider-tests: $(BUILD)/test-armada-ce-vmu-sd $(BUILD)/test-armada-ce-vmu-sd-pio
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-vmu-sd
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-vmu-sd-pio
+$(BUILD)/test-armada-ce-maple-probe-a2: tests/test_armada_ce_maple_probe_hook.c src/loader/armada_ce_maple_probe.c
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude \
+	 -DKUI_ARMADA_CE_MAPLE_PROBE_HOST_TEST=1 -DKUI_ARMADA_CE_MAPLE_PROOF=1 -DKUI_ARMADA_CE_MAPLE_STATE=1 -DKUI_ARMADA_CE_MAPLE_HOOK=1 -DKUI_ARMADA_CE_MAPLE_TRAFFIC=1 -DKUI_ARMADA_CE_MAPLE_FENCE=1 -DKUI_ARMADA_CE_MAPLE_A2=1 $^ -o $@
+$(BUILD)/test-armada-ce-maple-a2-reservation: tests/test_armada_ce_maple_reservation.c include/kui/armada_ce_maple_reservation.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude -DKUI_WINCE_CDDA_WORMS=0 -DKUI_ARMADA_CE_MAPLE_FENCE_STAGE=1 -DKUI_ARMADA_CE_MAPLE_A2_STAGE=1 $< -o $@
+.PHONY: a2-tests
+a2-tests: fence-tests cache-snapshot-wrapper-tests $(BUILD)/test-armada-ce-maple-mapping-native $(BUILD)/test-armada-ce-vmu-readonly $(BUILD)/test-armada-ce-vmu-readonly-production $(BUILD)/test-armada-ce-maple-rx-slice $(BUILD)/test-armada-ce-maple-rx-slice-native $(BUILD)/test-armada-ce-vmu-a2-publish $(BUILD)/test-armada-ce-maple-probe-a2 $(BUILD)/test-armada-ce-maple-a2-reservation
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-mapping-native
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-vmu-readonly
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-vmu-readonly-production
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-rx-slice
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-rx-slice-native
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-vmu-a2-publish
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-probe-a2
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-a2-reservation
+	python3 tests/test_armada_ce_vmu_a2_bridge.py
+
+$(BUILD)/test-armada-ce-maple-auto: tests/test_armada_ce_maple_auto.c include/kui/armada_ce_maple_auto.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude $< -o $@
+.PHONY: auto-tests
+auto-tests: $(BUILD)/test-armada-ce-maple-auto
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-auto
+
+# Experimental reservation-only profile. This does not connect a writer.
+$(BUILD)/test-armada-ce-maple-a2-write-reservation: tests/test_armada_ce_maple_reservation.c include/kui/armada_ce_maple_reservation.h include/kui/armada_ce_vmu_layout.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude -DKUI_WINCE_CDDA_WORMS=0 -DKUI_ARMADA_CE_MAPLE_FENCE_STAGE=1 -DKUI_ARMADA_CE_MAPLE_A2_STAGE=1 -DKUI_ARMADA_CE_MAPLE_WRITE_LAYOUT=1 $< -o $@
+.PHONY: write-layout-tests
+write-layout-tests: $(BUILD)/test-armada-ce-maple-a2-write-reservation
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-armada-ce-maple-a2-write-reservation
+	python3 tests/test_armada_ce_vmu_layout.py
+
+# Opt-in writable integration; each component uses the actual production
+# endpoint/queue/provider/reader definitions with synthetic device fixtures.
+.PHONY: write-runtime-tests
+write-runtime-tests: write-protocol-tests write-staging-tests write-layout-tests sd-provider-tests
+	$(MAKE) -f Makefile.armada-vmu-runtime-test host-tests
+	$(MAKE) -f Makefile.armada-vmu-runtime-sd-test host-tests
+	$(MAKE) -f Makefile.armada-vmu-loan-test host-tests
+	$(MAKE) -f Makefile.armada-persist-test test
+	python3 tests/test_armada_ce_maple_continuation.py
+	python3 tests/test_armada_ce_maple_continuation_native.py

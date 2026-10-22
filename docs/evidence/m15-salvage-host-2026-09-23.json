@@ -1,0 +1,20 @@
+{
+  "kind": "host implementation evidence",
+  "date": "2026-09-23",
+  "hardware_acceptance": "pending",
+  "protected_reader_changed": false,
+  "tests": "tests/test_salvage_images.py",
+  "filesystems": ["FAT32", "exFAT"],
+  "cases_per_filesystem": 41,
+  "synthetic_sectors": 84,
+  "target_count": 2,
+  "data_chunks_cross_32_sector_boundary": true,
+  "final_saved_bytes_and_crcs": "compared independently with original generated fixture",
+  "restart": "queue, baseline, backup, torn patch, repaired event and finalization faults",
+  "readback": "header, journal, candidate backup and track patch",
+  "recovery_passes": "five bounded sweeps alternate target order; invalid pass limits rejected before any I/O",
+  "audio_backup_substitution": "self-consistent substitute with recomputed CRCs must fail exact optical-candidate comparison",
+  "failure_dominance": "queue storage failure plus cancellation remains FAILED",
+  "pc_verifier": "tools/verify_salvage.py validates complete journal, all patch bytes, full track CRC/SHA and original baseline reconstructed with zero target regions",
+  "limitations": ["No physical power-cut or damaged-disc hardware recovery evidence yet", "No independent catalogue match is implied", "Normal DMA acquisition remains unchanged"]
+}

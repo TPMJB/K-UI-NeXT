@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Standalone real-FatFs collection host test; no external formatting tools.
+CC ?= cc
+HOST_FLAGS ?= -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic
+SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer
+COLLECTION_TEST_SOURCES = tests/test_vmu_collection.c \
+ src/core/vmu_collection.c src/core/vmu_image.c src/core/hash.c \
+ src/core/data.c src/core/diskio.c src/core/clock.c \
+ src/core/destination.c src/core/destination_file.c \
+ .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
+
+.PHONY: test-vmu-collection
+test-vmu-collection: build/test-vmu-collection
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-collection
+
+build/test-vmu-collection: $(COLLECTION_TEST_SOURCES) include/kui/vmu_collection.h include/kui/vmu_image.h config/ffconf.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -Iinclude -I.deps/fatfs/source $(COLLECTION_TEST_SOURCES) -Wl,--wrap=f_mkdir -Wl,--wrap=f_open -o $@

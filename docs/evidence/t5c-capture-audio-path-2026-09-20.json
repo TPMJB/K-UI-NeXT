@@ -1,0 +1,143 @@
+{
+  "received_date": "2026-09-20",
+  "runtime_build": "bd0a4d90b357",
+  "experiment": "Trip 5c: the capture engine's AUDIO code path (no EDC, no data-sector layout check), 1024 sectors at FAD 63000; two runs.",
+  "inputs": [
+    {
+      "file": "T5C_diag.txt",
+      "kept_as": "t5c-capture-audio-path-2026-09-20.txt",
+      "bytes": 17879,
+      "sha256": "fe7adff9d9d44d33d6bb0b857350a988c95233b99f38a9ac51de9f6e2f33e0a2"
+    }
+  ],
+  "config": {
+    "file": "docs/bench-cfgs/t5c-capture-audio.cfg",
+    "ui_hz": [
+      2
+    ],
+    "capture_type": "audio",
+    "capture_fad": 63000,
+    "capture_sectors": 1024,
+    "capture_hash": [
+      "both",
+      "crc32"
+    ],
+    "end_readback": [
+      "on",
+      "off"
+    ]
+  },
+  "hardware": {
+    "sd": {
+      "filesystem": "exFAT",
+      "sectors": 249997312,
+      "cluster_bytes": 131072,
+      "transport": "SCIF (bit-banged SPI)"
+    },
+    "disc": "Sword of the Berserk (TOC: T01 data 150-1076, T02 audio 1076-1602, T03 data 45150-549300)"
+  },
+  "important": "FAD 63000 is inside track 3, which on this disc is a DATA track. So this measured the audio code path on data sectors: the timings are real and isolate the EDC cost, but it says nothing about how fast a real audio track reads. The bench now warns about exactly this (kui_bench_fad_note).",
+  "rows": [
+    {
+      "hash": "both",
+      "end_readback": "off",
+      "capture_kib_s": 550.4,
+      "finished_kib_s": 550.4,
+      "resume_full_kib_s": 483.1,
+      "parts_ms": {
+        "disc": 936,
+        "edc": 0,
+        "write": 2147,
+        "sha": 978,
+        "crc": 182,
+        "ckpt": 23
+      }
+    },
+    {
+      "hash": "both",
+      "end_readback": "on",
+      "capture_kib_s": 551.0,
+      "finished_kib_s": 257.3,
+      "resume_full_kib_s": 484.0,
+      "parts_ms": {
+        "disc": 963,
+        "edc": 0,
+        "write": 2114,
+        "sha": 985,
+        "crc": 178,
+        "ckpt": 21
+      }
+    },
+    {
+      "hash": "crc32",
+      "end_readback": "off",
+      "capture_kib_s": 722.5,
+      "finished_kib_s": 722.5,
+      "resume_full_kib_s": 609.8,
+      "parts_ms": {
+        "disc": 986,
+        "edc": 0,
+        "write": 2045,
+        "sha": 0,
+        "crc": 196,
+        "ckpt": 22
+      }
+    },
+    {
+      "hash": "crc32",
+      "end_readback": "on",
+      "capture_kib_s": 725.8,
+      "finished_kib_s": 330.8,
+      "resume_full_kib_s": 613.9,
+      "parts_ms": {
+        "disc": 956,
+        "edc": 0,
+        "write": 2068,
+        "sha": 0,
+        "crc": 188,
+        "ckpt": 21
+      }
+    }
+  ],
+  "comparison_with_t5a_data_path": [
+    {
+      "hash": "both",
+      "end_readback": "on",
+      "t5a_data_path_kib_s": 551.2,
+      "t5c_audio_path_kib_s": 551.0,
+      "difference_pct": -0.0
+    },
+    {
+      "hash": "both",
+      "end_readback": "off",
+      "t5a_data_path_kib_s": 552.5,
+      "t5c_audio_path_kib_s": 550.4,
+      "difference_pct": -0.4
+    },
+    {
+      "hash": "crc32",
+      "end_readback": "on",
+      "t5a_data_path_kib_s": 717.3,
+      "t5c_audio_path_kib_s": 725.8,
+      "difference_pct": 1.2
+    },
+    {
+      "hash": "crc32",
+      "end_readback": "off",
+      "t5a_data_path_kib_s": 704.9,
+      "t5c_audio_path_kib_s": 722.5,
+      "difference_pct": 2.5
+    }
+  ],
+  "derived": {
+    "conclusions": [
+      "The audio path skips EDC and is +2.5% faster than the data path at crc32/no-read-back (722.5 against 704.9 KiB/s), which matches the 2.8% EDC share Trip 5a measured. Every parts line shows edc=0 ms.",
+      "With SHA-256 on, the difference disappears (-0.0% and -0.4%): SHA-256 dominates, so removing EDC changes little.",
+      "What this does NOT answer: the read rate of real audio tracks. On this disc the only audio track is 526 sectors in the low-density area; an audio-heavy disc (MDK2, 29 audio tracks) is still untested."
+    ]
+  },
+  "limitations": [
+    "Measured on data sectors read through the audio code path, not on an audio track.",
+    "One card, one disc, one console; two runs; 1024 sectors per point."
+  ]
+}

@@ -1,0 +1,168 @@
+{
+  "schema": "kui.armada.ce.vmu.runtime.stage.v1",
+  "date": "2026-10-21",
+  "source_base": "e1d8e3811a9497a6229bb499129a36974e6065d1",
+  "scope": "Native preflight measurements for parked Maple DMA continuation; private profile bytes excluded",
+  "hardware_package_created": false,
+  "hardware_tested": false,
+  "native_link_passed": true,
+  "full_runtime_native_admission": "pass; complete helper, stage, resident and package audit",
+  "host_tests": {
+    "asan_ubsan_persistent_stage": "pass",
+    "layout_and_capability_selection": "pass"
+  },
+  "profile": {
+    "source": "Existing private prepared p0001 profile; not included in source",
+    "format": "KUIVMUP2",
+    "bytes": 4096,
+    "contains_user_card_identity": true
+  },
+  "default_payload_identity": {
+    "hook.bin": {
+      "bytes": 18816,
+      "sha256": "cbcd0beeabf83dec06214fe5dca03ae1f3f96da623e683bb93094d4322164bb4",
+      "accepted_baseline_equal": true
+    },
+    "bridge.bin": {
+      "bytes": 92,
+      "sha256": "f40e9492fd883233ee0c9f0947ca060c014851e3d242eba2d32e95b14a9766fb",
+      "accepted_baseline_equal": true
+    },
+    "bind-probe.bin": {
+      "bytes": 10544,
+      "sha256": "61873b6a748e06b6a22b6802c04d5e8163125fd328a66de5ce3c46b40648ae57",
+      "accepted_baseline_equal": true
+    },
+    "resident-scif.bin": {
+      "bytes": 10688,
+      "sha256": "6dd4c964943c00092b2f6bda2a64515ceab20caac19974573014dfbec2baee7e",
+      "accepted_baseline_equal": true
+    },
+    "resident-sci.bin": {
+      "bytes": 13208,
+      "sha256": "4ceca3945f15be480e44491882bc5d9803b011608bbd6bf456c0b7703a14915b",
+      "accepted_baseline_equal": true
+    },
+    "resident-ide.bin": {
+      "bytes": 10448,
+      "sha256": "933ebca2bb9e3695ce9ab963a333e3ccac3d10df00275107b0e474db623ee73f",
+      "accepted_baseline_equal": true
+    },
+    "resident-scia.bin": {
+      "bytes": 16516,
+      "sha256": "ebe7291339fa52092acc6a5bd9434e2e4fb6c7438f164b26f1b5cccbd6fb4d95",
+      "accepted_baseline_equal": true
+    },
+    "stage.bin": {
+      "bytes": 109456,
+      "sha256": "a556fc2ec9ed01180d98c6eeb86db68b103c9dc16984d48e3307c0231d39463d",
+      "accepted_baseline_equal": true
+    }
+  },
+  "retained": {
+    "reserve_p1": [
+      "0x8cfc4000",
+      "0x8cfd0000"
+    ],
+    "helper_binary_end_p2": "0xacfcc0c0",
+    "workspace_end_p2": "0xacfce1e0",
+    "headroom_before_handoff_bytes": 32,
+    "handoff_p2": "0xacfce200",
+    "handoff_bytes": 1272,
+    "services_p2": "0xacfce700",
+    "services_bytes": 32,
+    "worker_stack_p2": [
+      "0xacfce800",
+      "0xacfcf800"
+    ],
+    "maple_stack_p2": [
+      "0xacfcf800",
+      "0xacfcfe00"
+    ]
+  },
+  "low_resident": {
+    "code_end_p1": "0x8c00c75c",
+    "bss_end_p1": "0x8c00db00",
+    "stack_p1": [
+      "0x8c00dc00",
+      "0x8c00e000"
+    ],
+    "stack_total_bytes": 1024,
+    "guard_alignment_bytes": 48,
+    "audit_margin_bytes": 64,
+    "spare_bytes": 460,
+    "paths": {
+      "kui_retail_resident_dispatch": {
+        "bytes": 452,
+        "path": "kui_retail_resident_dispatch(36) -> kui_armada_ce_bind_probe(136) -> kui_armada_ce_maple_state_prior.constprop.0(88) -> kui_armada_ce_maple_state_map_repeat.constprop.0(56) -> kui_armada_ce_maple_state_map.constprop.0(12) -> kui_armada_ce_maple_resolve.constprop.0(80) -> kui_armada_ce_maple_proof_read(20) -> read_word(12) -> kui_armada_ce_maple_read_address(12)"
+      },
+      "kui_retail_ce_irq": {
+        "bytes": 244,
+        "path": "kui_retail_ce_irq(4) -> kui_retail_async_irq(20) -> deliver(80) -> kui_sci_stream_fetch.constprop.0(40) -> stop_card(28) -> command(20) -> byte(0) -> transfer.lto_priv.1(24)"
+      },
+      "kui_retail_menu_return": {
+        "bytes": 452,
+        "path": "kui_retail_menu_return(36) -> kui_armada_ce_bind_probe(136) -> kui_armada_ce_maple_state_prior.constprop.0(88) -> kui_armada_ce_maple_state_map_repeat.constprop.0(56) -> kui_armada_ce_maple_state_map.constprop.0(12) -> kui_armada_ce_maple_resolve.constprop.0(80) -> kui_armada_ce_maple_proof_read(20) -> read_word(12) -> kui_armada_ce_maple_read_address(12)"
+      }
+    },
+    "loan_paths_on_high_worker_stack": {
+      "kui_retail_async_vmu_loan_begin": {
+        "bytes": 128,
+        "path": "kui_retail_async_vmu_loan_begin(56) -> stop_card(28) -> command(20) -> byte(0) -> transfer.lto_priv.1(24)"
+      },
+      "kui_retail_async_vmu_loan_end": {
+        "bytes": 180,
+        "path": "kui_retail_async_vmu_loan_end(16) -> ce_events(12) -> report_fault(20) -> retail_display_values(80) -> retail_display_line(52)"
+      }
+    },
+    "gd_entry_assembly_original_ce_stack_bytes": 36,
+    "deferred_callback_assembly_original_ce_stack_bytes": 28,
+    "irq_assembly_included_bytes": 28,
+    "irq_does_not_switch_to_private_stack_when_gd_active": true
+  },
+  "high_stage": {
+    "binary_end_p1": "0x8ce368b8",
+    "bss_end_p1": "0x8ce521a4"
+  },
+  "preparation_verified": [
+    "exact admitted CE source before preparation",
+    "original SCI/ASYNC manifest unchanged",
+    "private reader selector normalization only",
+    "whole allocation and game/audio extent exclusion",
+    "fresh filesystem and card identity admission",
+    "existing journal recovery and VMU checkpoint",
+    "zero journal marker and current per-block CRC handoff",
+    "physical release and persistent fault check",
+    "resident descriptor P1 bounds and sealed services",
+    "P1 publication before full RAM cache purge",
+    "relay byte comparison and seal validation"
+  ],
+  "remaining": [
+    "hardware WRITE finalizer completion",
+    "hardware exact save readback and restart recovery",
+    "writable hardware performance relative to accepted readonly baseline",
+    "universal owner-hook discovery",
+    "physical GD-ROM launch integration"
+  ],
+  "native_mutations_rejected": {
+    "critical_helper": 1318,
+    "stage_resident_markers": 22,
+    "loan_descriptor_and_profile": 50,
+    "total": 1420,
+    "mixed_stage_address_markers": 23,
+    "parked_dma_call_graph": 7
+  },
+  "native_stack_budgets": {
+    "proof_including_shim_and_margin": 1100,
+    "proof_available": 1536,
+    "unmasked_service_including_nested_irq_and_margin": 1268,
+    "unmasked_service_available": 4096
+  },
+  "native_ce_wait_adapter": {
+    "bytes": 26,
+    "frame_bytes": 24,
+    "caller_argument_home_bytes": 16,
+    "original_ce_stack_local_graph_bytes": 280,
+    "external_ce_stack_depth_included": false
+  }
+}

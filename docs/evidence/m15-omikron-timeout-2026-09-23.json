@@ -1,0 +1,85 @@
+{
+  "received_date": "2026-09-23",
+  "runtime_build": "0599097a8bfb",
+  "privacy": "Sanitized aggregates only. The raw log, hardware identifiers, storage geometry, unique disc identifiers and card paths are not included.",
+  "input": {
+    "filename": "diagnostics(20260923-181009).txt",
+    "bytes": 18001,
+    "sha256": "513621483b3e2aa2f297d91b956f9176c4e92640aa9223751a4d00ddc12b0adc",
+    "log_truncated": false,
+    "report_trigger": "manual"
+  },
+  "disc_title": "OMIKRON THE NOMAD SOUL",
+  "operation": "NEW CAPTURE",
+  "effective_options": {
+    "capture_hash": "crc32",
+    "end_readback": "off",
+    "resume_check": "full",
+    "capture_read": "dma",
+    "sample_readback": 0,
+    "ui_hz": 2,
+    "sd_crc": "on"
+  },
+  "capture": {
+    "result": "failed during acquisition of the final track",
+    "tracks_planned": 5,
+    "tracks_complete": 4,
+    "bytes_planned": 1203979392,
+    "bytes_committed": 1201396896,
+    "bytes_remaining": 2582496,
+    "percent_committed": 99.7855033053589,
+    "wall_us": 1257766055,
+    "average_committed_kib_s": 932.7960089128021,
+    "setup_us": 5407525,
+    "setup_plus_capture_us": 1263173580,
+    "application_retries": 0,
+    "zero_fill": false,
+    "partial_checkpoint_preserved_reported": true,
+    "final_gdi_manifest_completion_reported": false
+  },
+  "failure_sequence": [
+    "One initial drive initialization failed, then initialization and disc identification succeeded. Capture proceeded through four complete tracks.",
+    "A late DMA read did not complete before its deadline. The adapter logged that DMA remains disabled until reboot.",
+    "The subsequent guarded PIO fallback could not finish abort recovery. The adapter logged RESET REQUIRED and refused further acquisition.",
+    "The application reported the committed prefix preserved and the capture failed. Its automatic diagnostic report save succeeded."
+  ],
+  "verification_scope": {
+    "saved_file_verification_started": false,
+    "reference_catalogue_check_started": false,
+    "reference_match_reported": false,
+    "pc_verification_supplied": false,
+    "interpretation": "The generic CAPTURE/VERIFY FAILED message covers both actions. This operation was explicitly NEW CAPTURE and failed before acquisition completed; no verification phase appears, and automatic end readback was off."
+  },
+  "timing": {
+    "capture_bucket_us": {
+      "disc": 30693120,
+      "edc": 46970268,
+      "write": 1075583835,
+      "crc32": 94279013,
+      "checkpoint": 6670152,
+      "other": 3569667
+    },
+    "cpu_census_ms": {
+      "wall": 1263176,
+      "worker": 1125217,
+      "ui": 107425,
+      "other": 30535
+    },
+    "ui_pct_reported": 8.5,
+    "ui_pct_derived": 8.504357270879117,
+    "meaning": "Capture rate includes the late failure and recovery waits. UI is scheduled main-thread CPU time, including drawing and busy waits; it overlaps the per-stage wall timers."
+  },
+  "memory": {
+    "used_reserved_estimate_bytes": 2859544,
+    "sampled_peak_used_reserved_bytes": 2859544,
+    "growth_observed": false
+  },
+  "limits": [
+    "The log does not establish whether the terminal drive stall originated in the disc, drive, firmware or another physical cause.",
+    "No final DMA/PIO chunk-count summary was printed for this failed capture; do not invent a completed-transfer count.",
+    "The configured free-text experiment note names a different game; the actual identified title is Omikron.",
+    "This is a different workload from prior completed UI runs, not a controlled comparison of rendering performance.",
+    "The preserved bytes and checkpoint are reported by the console. Their saved-file contents have not been independently verified in this submission.",
+    "No reader, command recovery or acquisition policy change is authorized by this record. The existing failed-recovery latch remains in effect until console reset."
+  ]
+}

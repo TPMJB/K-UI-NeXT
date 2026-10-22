@@ -1,0 +1,70 @@
+{
+  "received_date": "2026-09-20",
+  "runtime_build": "0946e29defd4 (experimental)",
+  "experiment": "Trip 11: a REAL, complete capture of Sword of the Berserk with the overlapped DMA engine (ui_hz=2, capture_hash=crc32, end_readback=off, capture_read=dma), checked on the console against TOSEC and on a PC against the reference.",
+  "inputs": [
+    {
+      "file": "Sword_of_the_Berserk.txt",
+      "kept_as": "t11-real-capture-dma-2026-09-20.txt",
+      "bytes": 17230,
+      "sha256": "dec50f26de70cec36e5601b24f5c67b0c5464e50459f90d9719a6d589229a1a3"
+    }
+  ],
+  "capture": {
+    "job": "/KUI/dumps/df4db30d38d4d8926-0001",
+    "wall_s": 1177.5,
+    "bytes": 1188823104,
+    "average_kib_s": 985.9,
+    "parts_s": {
+      "disc": 5.9,
+      "edc": 48.4,
+      "write": 1025.0,
+      "crc32": 91.2,
+      "checkpoint": 3.7
+    },
+    "parts_pct": {
+      "disc": 0.5,
+      "edc": 4.1,
+      "write": 87.0,
+      "crc32": 7.7,
+      "checkpoint": 0.3
+    },
+    "retries": 0,
+    "dma_failures": 0,
+    "console_result": "CAPTURED: all 3 tracks; stream CRC32 recorded; saved data NOT re-read",
+    "console_reference": "Reference check (TOSEC): FULL TRACK MATCH"
+  },
+  "pc_verification": {
+    "reported_by": "the user (pasted output)",
+    "output": [
+      "PASS track01.bin 1825152 bytes CRC32=bcec7767 SHA256=ee221a533016b6bddbc7676f4278fffe446eb05d5dc1932da1a73c6269ef2202 (computed here; not in the manifest)",
+      "PASS track02.raw 1237152 bytes CRC32=0ff934e3 SHA256=8438ed3913c4b9a0f1f3b480a3b9c6e114e9ce30d623f02985d04a1b117502e8 (computed here; not in the manifest)",
+      "PASS track03.bin 1185760800 bytes CRC32=2cfb5dcb SHA256=1f3be789259cdbd82089f23100765a9bb7039e56450d9b0af3a6988d1c1e5713 (computed here; not in the manifest)",
+      "SAVED DATA VERIFIED: sizes, CRC32 and GDI layout agree",
+      "REFERENCE MATCH: 3/3 tracks from .../docs/evidence/sword-of-the-berserk-reference.json"
+    ]
+  },
+  "comparison": {
+    "t7_pio": {
+      "wall_s": 1604.6,
+      "average_kib_s": 723.5,
+      "disc_s": 438.8,
+      "write_s": 1024.9
+    },
+    "sha256_identical_to_t7_fast_pio": true,
+    "sha256_identical_to_2026_09_17_old_defaults": true
+  },
+  "derived": {
+    "conclusions": [
+      "The overlapped DMA engine captured the whole disc in 19.6 minutes at 985.9 KiB/s against 26.7 minutes and 723.5 KiB/s with PIO (Trip 7): +36.3%, 427 s saved, landing on Trip 10's 19.8-minute projection.",
+      "Disc time went from 438.8 s to 5.9 s (98.7% hidden). Every other part is unchanged to within a second (SD write 1025.0 s against 1024.9 s), which is what should happen when only the read moves.",
+      "Correct by two independent checks: on the console the CRC32 accumulated while reading matches TOSEC on every track, so the DMA read was byte-perfect; on the PC every saved file matches that CRC32 and the reference (REFERENCE MATCH 3/3), so the card wrote it correctly.",
+      "Byte-identical by SHA-256 to two earlier captures of the same disc: the 2026-09-17 old-defaults capture (SHA-256, full read-back) and Trip 7 (fast settings, PIO). Three different read paths, one set of bytes.",
+      "The SD write is now 87% of a capture and the disc 0.5%: the SD card over SCIF is the whole remaining bottleneck."
+    ]
+  },
+  "limitations": [
+    "One disc, one card, one console, one capture.",
+    "The overlapped read exists only in the experimental build."
+  ]
+}

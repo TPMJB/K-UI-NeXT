@@ -1,0 +1,1168 @@
+{
+  "format": "armada-ce-maple-write-owner-contracts-v1",
+  "license": "GPL-3.0-only",
+  "scope": "Exact-source static protocol/control-flow evidence; no owner executable bytes or disassembly exported, no owner execution or patching.",
+  "source_identities": [
+    {
+      "file": "0WINCEOS.BIN",
+      "bytes": 1253376,
+      "sha256": "a7628c78090fce2c93012d5e4db6142096e138dceb7ebbf555142e902ca03c1f"
+    },
+    {
+      "file": "WINCE/MAPLE.DLL",
+      "bytes": 26191,
+      "sha256": "b8eb7afc2b13fcec8551af4fa75288fca1881f671181b88ea042aa9d77524e6e"
+    },
+    {
+      "file": "WINCE/MAPLEDEV.DLL",
+      "bytes": 55381,
+      "sha256": "16dfc7b3bb6519af633e09e7886e36cbaf73c74ffc387c5c6d6369e26862ac28"
+    }
+  ],
+  "external_text_equivalence": [
+    {
+      "module": "mapledev.dll",
+      "external_image_base": 268435456,
+      "rom_nominal_base": 30539776,
+      "relocation_kind": "HIGHLOW",
+      "fixups": 1411,
+      "text_fixups": 1166,
+      "compared_bytes": 47616,
+      "virtual_text_bytes": 47579,
+      "text_sha256": "88940ab3422b15e7bff4811a114264ddbd6b5b13ee60ad3db07997436e87f0b7",
+      "complete_stored_text_equal": true
+    },
+    {
+      "module": "maple.dll",
+      "external_image_base": 268435456,
+      "rom_nominal_base": 31260672,
+      "relocation_kind": "HIGHLOW",
+      "fixups": 443,
+      "text_fixups": 368,
+      "compared_bytes": 22528,
+      "virtual_text_bytes": 22434,
+      "text_sha256": "adad8872616d92a7553a7b1d5c1a58a54f955d15b647a2cfed8766633e5ccbb8",
+      "complete_stored_text_equal": true
+    }
+  ],
+  "source_contracts": [
+    {
+      "id": "phase_geometry",
+      "module": "mapledev.dll",
+      "rva": "0x000038a8",
+      "end_rva_exclusive": "0x00003934",
+      "bytes": 140,
+      "rom_storage_address": "0x8c10a8a8",
+      "kernel_file_offset": "0x000fb0a8",
+      "sha256": "25fd08566ca81c11058df793fa35db771490008080b1e7a5d69173f6770086b8",
+      "crc32_ieee": "406b03d1",
+      "finding": "Block bytes are32*(decoded size field+1). Read/write phase counts are the low/high nibbles of the decoded geometry byte. Phase byte sizes are ceiling(block bytes/phase count), stored at state+48/+50."
+    },
+    {
+      "id": "command13_finalizer",
+      "module": "mapledev.dll",
+      "rva": "0x000042a0",
+      "end_rva_exclusive": "0x00004324",
+      "bytes": 132,
+      "rom_storage_address": "0x8c10b2a0",
+      "kernel_file_offset": "0x000fbaa0",
+      "sha256": "c63d7192c4c26c3d8a779dedc72bd4c17c754cf78e4c6c16954074ae664f66ab",
+      "crc32_ieee": "c909554f",
+      "finding": "Copies the supplied phase directly into the location selector, submits MEMCARD CMD13 with8-byte receive capacity, accepts response7, maps FILEERR251 to0x86850010 and every other response including AGAIN252 to0x868500b0. There is no response retry in this function."
+    },
+    {
+      "id": "packet_submit_wait_and_timeout_poke",
+      "module": "mapledev.dll",
+      "rva": "0x00004c14",
+      "end_rva_exclusive": "0x00004d8c",
+      "bytes": 376,
+      "rom_storage_address": "0x8c10bc14",
+      "kernel_file_offset": "0x000fc414",
+      "sha256": "058c09aa24c6b10ea191ee3f221b7f3889e62927dc9e58198318f89a64b34205",
+      "crc32_ieee": "5a9c9fea",
+      "finding": "Builds the generic raw-frame IOCTL request and derives its payload/receive word counts from caller byte sizes. The loop waits16ms and submits a current-token validation IOCTL after a wait timeout; this historical cancel/poke does not cancel the original raw IRP or replay an AGAIN response. The submitted location block field is restored on the normal completed-response path; early submission/wait errors can bypass that restoration."
+    },
+    {
+      "id": "whole_read_retry",
+      "module": "mapledev.dll",
+      "rva": "0x00007c74",
+      "end_rva_exclusive": "0x00007cc0",
+      "bytes": 76,
+      "rom_storage_address": "0x8c10ec74",
+      "kernel_file_offset": "0x000ff474",
+      "sha256": "672886c05448ee69bcbced1a6e309241fdd4a6cfca66c52fa553358e3ced82f0",
+      "crc32_ieee": "a81ec2ad",
+      "finding": "Invokes the whole block reader at0x7d0c up to3 total attempts, repeating only for0x86850010. It does not retry0x868500b0."
+    },
+    {
+      "id": "whole_write_retry",
+      "module": "mapledev.dll",
+      "rva": "0x00007cc0",
+      "end_rva_exclusive": "0x00007d0c",
+      "bytes": 76,
+      "rom_storage_address": "0x8c10ecc0",
+      "kernel_file_offset": "0x000ff4c0",
+      "sha256": "c5fb57540452514671e5291cdfa348ad89f303b6a066d4e78fb0a7aa5fc70c4b",
+      "crc32_ieee": "ade5da49",
+      "finding": "Invokes the whole block writer at0x7ea0 up to3 total attempts, repeating only for0x86850010. A repeat starts all write phases again; this is not a final-SYNC-only retry."
+    },
+    {
+      "id": "read_phases_and_finalizer",
+      "module": "mapledev.dll",
+      "rva": "0x00007d0c",
+      "end_rva_exclusive": "0x00007ea0",
+      "bytes": 404,
+      "rom_storage_address": "0x8c10ed0c",
+      "kernel_file_offset": "0x000ff50c",
+      "sha256": "c1b5b4ae1e58fb26e10cd42625fb9b2b73aed37e91f23a960743e75f2ec717ae",
+      "crc32_ieee": "5e2239f4",
+      "finding": "Reads phase data and checks response8, word count, function and full echoed location. After the loop, the one-phase path passes phase0 to the command13 finalizer. Other phase counts pass the advanced phase byte."
+    },
+    {
+      "id": "write_phases_and_finalizer",
+      "module": "mapledev.dll",
+      "rva": "0x00007ea0",
+      "end_rva_exclusive": "0x0000801c",
+      "bytes": 380,
+      "rom_storage_address": "0x8c10eea0",
+      "kernel_file_offset": "0x000ff6a0",
+      "sha256": "5bf583416ca5383e49e4b73ce10da1d2afaa70bf48dcce3337a56fbfdc512a2a",
+      "crc32_ieee": "96ce6a04",
+      "finding": "Starts location.phase at0; copies/pads one geometry-sized phase into the outgoing request, submits CMD12 with4-byte receive capacity, accepts only response7 with zero payload words, then increments phase and byte offset. After all block bytes, passes the advanced phase byte directly to finalizer0x42a0. A phase response other than this ACK maps to0x86850010; finalizer errors are propagated."
+    },
+    {
+      "id": "raw_ioctl_dispatch",
+      "module": "maple.dll",
+      "rva": "0x00002170",
+      "end_rva_exclusive": "0x000023b8",
+      "bytes": 584,
+      "rom_storage_address": "0x8c0b0170",
+      "kernel_file_offset": "0x000a0970",
+      "sha256": "74969200cdbc9e83d607facefbcaa9506faf2a7ccb2d4ef58450d0f9db32434d",
+      "crc32_ieee": "c2a92603",
+      "finding": "IOCTL0x220480 dispatches to raw submission0x2e60; IOCTL0x220484 dispatches to0x2f2c. Neither dispatch path supplies a worker critical-section lease."
+    },
+    {
+      "id": "token_lookup",
+      "module": "maple.dll",
+      "rva": "0x000023b8",
+      "end_rva_exclusive": "0x00002448",
+      "bytes": 144,
+      "rom_storage_address": "0x8c0b03b8",
+      "kernel_file_offset": "0x000a0bb8",
+      "sha256": "f595a062aca736bb221f1862d813de5e5db8aa72ec310af8d37ff944177f60a7",
+      "crc32_ieee": "3cf613e2",
+      "finding": "Decodes and resolves the token to a current unit/function and compares the complete function token. Failure reports an invalid/currently missing owner; success returns its unit/function coordinates."
+    },
+    {
+      "id": "raw_request_enqueue",
+      "module": "maple.dll",
+      "rva": "0x00002e60",
+      "end_rva_exclusive": "0x00002f1c",
+      "bytes": 188,
+      "rom_storage_address": "0x8c0b0e60",
+      "kernel_file_offset": "0x000a1660",
+      "sha256": "650171923d2332ba4604d6dfa4a4b7053cc75ec517f143333faf2d2685f19ae4",
+      "crc32_ieee": "ebf9bdf5",
+      "finding": "Retains the raw IRP in function+28, sets expected_response+21 to zero, captures request/capacity fields and allocates the pooled RX. A second raw request on that function is refused while its IRP is pending."
+    },
+    {
+      "id": "timeout_poke_ioctl",
+      "module": "maple.dll",
+      "rva": "0x00002f2c",
+      "end_rva_exclusive": "0x00002f7c",
+      "bytes": 80,
+      "rom_storage_address": "0x8c0b0f2c",
+      "kernel_file_offset": "0x000a172c",
+      "sha256": "4d697b75f39f03adc967f9a4bca1e06edfde1ea3794a4a21eae8bedd921aea6c",
+      "crc32_ieee": "1ae3f766",
+      "finding": "IOCTL0x220484 loads the supplied token, calls current-token lookup, and on success sets this IOCTL IRP status/information to zero. It neither cancels nor completes the original pending raw IRP and does not clear/free its RX or function state."
+    },
+    {
+      "id": "generic_response_completion",
+      "module": "maple.dll",
+      "rva": "0x00002bd4",
+      "end_rva_exclusive": "0x00002c4c",
+      "bytes": 120,
+      "rom_storage_address": "0x8c0b0bd4",
+      "kernel_file_offset": "0x000a13d4",
+      "sha256": "e4ccb9f83149ffc64e341d1a6d2330d66b7cbac1bcaa2edd7cd49b882880a9c7",
+      "crc32_ieee": "a0292dc7",
+      "finding": "Copies min(received payload bytes+4, caller output capacity) into the original raw IRP output, frees the pooled RX, clears pending request fields, sets successful status and completes the original IRP. No AGAIN-specific replay occurs here."
+    },
+    {
+      "id": "response_walker",
+      "module": "maple.dll",
+      "rva": "0x00005b0c",
+      "end_rva_exclusive": "0x00005d28",
+      "bytes": 540,
+      "rom_storage_address": "0x8c0b3b0c",
+      "kernel_file_offset": "0x000a430c",
+      "sha256": "171c5335957be9b7cc646a2543d6520296583741be22726f341a3b317c2c694d",
+      "crc32_ieee": "04354275",
+      "finding": "Expected-response zero bypasses response-code filtering, so raw storage AGAIN/FILEERR reach generic completion. The all-FF timeout path can remove a unit. This ordinary consumer runs on the same main worker; the window does not acquire a critical section."
+    },
+    {
+      "id": "main_worker_completion_lifetime",
+      "module": "maple.dll",
+      "rva": "0x00005d4c",
+      "end_rva_exclusive": "0x00005dd6",
+      "bytes": 138,
+      "rom_storage_address": "0x8c0b3d4c",
+      "kernel_file_offset": "0x000a454c",
+      "sha256": "76760eb4a395bfcc932f57eea999b66b5d20320f79437201903a5b8f7036ebdc",
+      "crc32_ieee": "a6df4757",
+      "finding": "The main worker invokes completion0x5b0c only after the ordinary interrupt status, then calls InterruptDone18 and reads the mapped port. No Enter/LeaveCriticalSection encloses completion. The call to0x16dc queries interrupt flags through KernelIoControl; it is not a critical-section operation."
+    },
+    {
+      "id": "root_shutdown_lifetime",
+      "module": "maple.dll",
+      "rva": "0x00001934",
+      "end_rva_exclusive": "0x00001abe",
+      "bytes": 394,
+      "rom_storage_address": "0x8c0af934",
+      "kernel_file_offset": "0x000a0134",
+      "sha256": "e35cb6be1e6482367744afbbbb6663f6bedbb64a10a992583bb783d7dbb7100f",
+      "crc32_ieee": "447e02fe",
+      "finding": "Root shutdown sets extension word0 to1, signals the worker, waits1000ms and may TerminateThread before releasing transport/RX-pool state. Ordinary timeout-poke behavior does not establish exclusion of this external lifecycle."
+    },
+    {
+      "id": "raw_ioctl_request_dispatch",
+      "module": "wdmlib.dll",
+      "rva": "0x000014dc",
+      "end_rva_exclusive": "0x00001634",
+      "bytes": 344,
+      "rom_storage_address": "0x8c0a64dc",
+      "kernel_file_offset": "0x00096cdc",
+      "sha256": "6cb68cd9ef43acaeacecf13d2daec31591a441144689e37fd9c0d98673f851e6",
+      "crc32_ieee": "445bf661",
+      "finding": "ControlWDMDevice builds a separate IRP for each IOCTL, assigns its own completion/overlapped context and calls IoCallDriver. STATUS_PENDING handling and optional per-file event serialization do not establish a critical section held by the MAPLE worker. The timeout poke uses a different IOCTL IRP from the pending raw request."
+    },
+    {
+      "id": "call_driver",
+      "module": "wdmlib.dll",
+      "rva": "0x00001dbc",
+      "end_rva_exclusive": "0x00001df4",
+      "bytes": 56,
+      "rom_storage_address": "0x8c0a6dbc",
+      "kernel_file_offset": "0x000975bc",
+      "sha256": "1fbb5659999e770354fb3773cafac040a27999a8a52ac16132bb04a40d792984",
+      "crc32_ieee": "fccb82e8",
+      "finding": "IoCallDriver advances the IRP stack and invokes the selected driver major-function pointer. This wrapper does not acquire or release a critical section around MAPLE dispatch."
+    },
+    {
+      "id": "gd_read_submit_and_completion",
+      "module": "wsegacd.dll",
+      "rva": "0x00002d82",
+      "end_rva_exclusive": "0x00002dd8",
+      "bytes": 86,
+      "rom_storage_address": "0x8c0abd82",
+      "kernel_file_offset": "0x0009c582",
+      "sha256": "1d4cded9d416a9d8a516727ebeacf8655dfa8d07eee010473e937a6125aa33ed",
+      "crc32_ieee": "a0e244e7",
+      "finding": "GD request commands17 and38 call the request vector, retain its returned token in r10, then pass that token as the completion helper argument. A zero request token therefore reaches the same helper as an immediate failure, not a pending job."
+    },
+    {
+      "id": "gd_zero_token_is_io_error",
+      "module": "wsegacd.dll",
+      "rva": "0x000019bc",
+      "end_rva_exclusive": "0x00001a14",
+      "bytes": 88,
+      "rom_storage_address": "0x8c0aa9bc",
+      "kernel_file_offset": "0x0009b1bc",
+      "sha256": "91fd2f77cf9dca3a899038bd1f6a45e747a2d535715e87bed16ad9ea984f55b8",
+      "crc32_ieee": "948c4598",
+      "finding": "The completion helper tests its token argument first. Zero returns STATUS_IO_DEVICE_ERROR0xc0000185 immediately, without resubmitting a GD request. A nonzero token is stored for the ordinary completion path."
+    },
+    {
+      "id": "ce_wait_argument_homes",
+      "module": "coredll.dll",
+      "rva": "0x0000877c",
+      "end_rva_exclusive": "0x00008788",
+      "bytes": 12,
+      "rom_storage_address": "0x8c03877c",
+      "kernel_file_offset": "0x00028f7c",
+      "sha256": "eb4ff033e28645b20333d091360c6f2b3c616b3be66fa24dc1994bb625ebc6ef",
+      "crc32_ieee": "3da9df2c",
+      "finding": "COREDLL export497 WaitForSingleObject pushes8 callee bytes, then writes all four argument homes at incoming caller SP+0,+4,+8,+12. The caller must reserve16 writable bytes independently of its saved PR/callee-saved registers."
+    },
+    {
+      "id": "ce_wait_body",
+      "module": "coredll.dll",
+      "rva": "0x0000877c",
+      "end_rva_exclusive": "0x000087bc",
+      "bytes": 64,
+      "rom_storage_address": "0x8c03877c",
+      "kernel_file_offset": "0x00028f7c",
+      "sha256": "69da824d76fa7ee8c4ccedfc9553fdf2e242d826688e4ebc64a0d1edccc4e598",
+      "crc32_ieee": "dce93764",
+      "finding": "Reviewed original WaitForSingleObject body and literals containing the argument-home prologue. An authored GNU-SH caller requires an explicit ABI adapter before entering this WinCE import."
+    },
+    {
+      "id": "vblank_dma_configuration",
+      "module": "maple.dll",
+      "rva": "0x00001e24",
+      "end_rva_exclusive": "0x00001ea8",
+      "bytes": 132,
+      "rom_storage_address": "0x8c0afe24",
+      "kernel_file_offset": "0x000a0624",
+      "sha256": "887bf8212c5aebc0b6237e5de8a48d5ca04d2704b4c2703f4dc137e91d868106",
+      "crc32_ieee": "388afd03",
+      "finding": "Initializes MDTSEL1, MDSTAR and MDEN1. Re-enabling MDEN permits a later VBlank to replay the current descriptor list without the ordinary worker advancing it."
+    },
+    {
+      "id": "builder_receive_clear",
+      "module": "maple.dll",
+      "rva": "0x0000582c",
+      "end_rva_exclusive": "0x00005a22",
+      "bytes": 502,
+      "rom_storage_address": "0x8c0b382c",
+      "kernel_file_offset": "0x000a402c",
+      "sha256": "df75f1ba377ec110c41daa5d6c4a5b29bfd82f6a3713e27ef928c246ae53f978",
+      "crc32_ieee": "7a939946",
+      "finding": "Rebuilds the ordinary descriptor list. The call at5964 passes function RX+0c, value0 and capacity+10 to COREDLL memset1047 through stub63b0, zeroing the receive allocation before the next DMA response. Worker call5d84 performs this rebuild before ready-write5d90 and event-wait5d9a."
+    },
+    {
+      "id": "completion_status_query",
+      "module": "nk.exe",
+      "rva": "0x0001c928",
+      "end_rva_exclusive": "0x0001c95a",
+      "bytes": 50,
+      "rom_storage_address": "0x8c02c928",
+      "kernel_file_offset": "0x0001d128",
+      "sha256": "1a3df3816153c237d1c3a58e675795080d9de093100a950f441ed6bf869c992d",
+      "crc32_ieee": "6a2c04d7",
+      "finding": "KernelIoControl10000 obtains the interrupt descriptor cached status+16. When zero, it reads the raw ASIC status through descriptor+0, masks by+12, caches the result at+16 and acknowledges those captured raw bits at1c94c. MAPLE queries this before entering its original completion consumer."
+    },
+    {
+      "id": "normal_completion_interrupt_dispatch",
+      "module": "nk.exe",
+      "rva": "0x0001d158",
+      "end_rva_exclusive": "0x0001d1f0",
+      "bytes": 152,
+      "rom_storage_address": "0x8c02d158",
+      "kernel_file_offset": "0x0001d958",
+      "sha256": "aacd327bc5df1f55e1efe74063afc681167b51729b8adb67f3f5091bc8e03b00",
+      "crc32_ieee": "8261b81a",
+      "finding": "Masks normal Maple interrupt bits and returns SYSINTR18. Masking interrupt delivery does not clear a later raw completion status bit or prevent a VBlank-triggered DMA while MDEN remains enabled."
+    },
+    {
+      "id": "completion_interrupt_done",
+      "module": "nk.exe",
+      "rva": "0x0001c5c8",
+      "end_rva_exclusive": "0x0001c5ec",
+      "bytes": 36,
+      "rom_storage_address": "0x8c02c5c8",
+      "kernel_file_offset": "0x0001cdc8",
+      "sha256": "ee91850d795f509679dba18f1367b53d79c7dce1a158909821383f6e0e26158b",
+      "crc32_ieee": "57d26816",
+      "finding": "Re-enables the descriptor interrupt mask and clears its cached status+16. It does not acknowledge a raw ASIC completion bit set after the earlier status query. A late coalesced completion can therefore be delivered to the next worker wait after RX has been rebuilt and zeroed."
+    }
+  ],
+  "external_source_windows": [
+    {
+      "id": "phase_geometry",
+      "rva": "0x000038a8",
+      "end_rva_exclusive": "0x00003934",
+      "bytes": 140,
+      "sha256": "25fd08566ca81c11058df793fa35db771490008080b1e7a5d69173f6770086b8"
+    },
+    {
+      "id": "command13_finalizer",
+      "rva": "0x000042a0",
+      "end_rva_exclusive": "0x00004324",
+      "bytes": 132,
+      "sha256": "64d8eee74cfa8cdc07fcafbe723efadf4636af4620ad17ba353fb0c81152071e"
+    },
+    {
+      "id": "packet_submit_wait_and_timeout_poke",
+      "rva": "0x00004c14",
+      "end_rva_exclusive": "0x00004d8c",
+      "bytes": 376,
+      "sha256": "c50c932e8960deab431b04f36e4b14f5f705480435f0cdba63fff64deecc4d26"
+    },
+    {
+      "id": "whole_read_retry",
+      "rva": "0x00007c74",
+      "end_rva_exclusive": "0x00007cc0",
+      "bytes": 76,
+      "sha256": "bb47cebab9ea3a00aae37356fc5f5868b0e1237c39f653f4e2b3570830890e3c"
+    },
+    {
+      "id": "whole_write_retry",
+      "rva": "0x00007cc0",
+      "end_rva_exclusive": "0x00007d0c",
+      "bytes": 76,
+      "sha256": "fee0864eeeb284f7d3f5ad3ae5727e863a6a8611640eba2190f81020da253c14"
+    },
+    {
+      "id": "read_phases_and_finalizer",
+      "rva": "0x00007d0c",
+      "end_rva_exclusive": "0x00007ea0",
+      "bytes": 404,
+      "sha256": "c64c142c3d73960ec0fd965fa49f4977a7fe8a969177c628596c088964edfee1"
+    },
+    {
+      "id": "write_phases_and_finalizer",
+      "rva": "0x00007ea0",
+      "end_rva_exclusive": "0x0000801c",
+      "bytes": 380,
+      "sha256": "60813770ed4f8ca25c8e476714dac65706c97d95b44e6b533940e7bc16a99769"
+    }
+  ],
+  "decoded_scalar_checks": [
+    {
+      "id": "block_size_shift",
+      "module": "mapledev.dll",
+      "rva": "0x000038dc",
+      "value": 5
+    },
+    {
+      "id": "block_size_addend",
+      "module": "mapledev.dll",
+      "rva": "0x000038e0",
+      "value": 32
+    },
+    {
+      "id": "write_phase_count_shift",
+      "module": "mapledev.dll",
+      "rva": "0x000038f0",
+      "value": -4
+    },
+    {
+      "id": "write_phase_zero",
+      "module": "mapledev.dll",
+      "rva": "0x00007ee2",
+      "value": 0
+    },
+    {
+      "id": "write_location_phase_offset",
+      "module": "mapledev.dll",
+      "rva": "0x00007eea",
+      "value": 17
+    },
+    {
+      "id": "write_receive_capacity_bytes",
+      "module": "mapledev.dll",
+      "rva": "0x00007f5a",
+      "value": 4
+    },
+    {
+      "id": "write_command",
+      "module": "mapledev.dll",
+      "rva": "0x00007f5e",
+      "value": 12
+    },
+    {
+      "id": "write_phase_increment",
+      "module": "mapledev.dll",
+      "rva": "0x00007f9e",
+      "value": 1
+    },
+    {
+      "id": "finalizer_phase_offset",
+      "module": "mapledev.dll",
+      "rva": "0x000042b2",
+      "value": 49
+    },
+    {
+      "id": "finalizer_receive_capacity_bytes",
+      "module": "mapledev.dll",
+      "rva": "0x000042d2",
+      "value": 8
+    },
+    {
+      "id": "finalizer_command",
+      "module": "mapledev.dll",
+      "rva": "0x000042d4",
+      "value": 13
+    },
+    {
+      "id": "finalizer_request_bytes_before_raw_header_conversion",
+      "module": "mapledev.dll",
+      "rva": "0x000042d6",
+      "value": 20
+    },
+    {
+      "id": "single_read_final_phase",
+      "module": "mapledev.dll",
+      "rva": "0x00007e4e",
+      "value": 0
+    },
+    {
+      "id": "whole_write_attempt_counter_initial",
+      "module": "mapledev.dll",
+      "rva": "0x00007cd2",
+      "value": 0
+    },
+    {
+      "id": "whole_write_attempt_counter_step",
+      "module": "mapledev.dll",
+      "rva": "0x00007cd6",
+      "value": 1
+    },
+    {
+      "id": "whole_write_attempt_limit",
+      "module": "mapledev.dll",
+      "rva": "0x00007cea",
+      "value": 3
+    },
+    {
+      "id": "whole_read_attempt_limit",
+      "module": "mapledev.dll",
+      "rva": "0x00007c9e",
+      "value": 3
+    },
+    {
+      "id": "packet_event_wait_ms",
+      "module": "mapledev.dll",
+      "rva": "0x00004ce8",
+      "value": 16
+    },
+    {
+      "id": "packet_wait_failed_result",
+      "module": "mapledev.dll",
+      "rva": "0x00004d26",
+      "value": -1
+    },
+    {
+      "id": "write_packet_submit_target",
+      "module": "mapledev.dll",
+      "rva": "0x00007f54",
+      "value": "0x00004c14"
+    },
+    {
+      "id": "write_finalizer_target",
+      "module": "mapledev.dll",
+      "rva": "0x00007fbe",
+      "value": "0x000042a0"
+    },
+    {
+      "id": "read_finalizer_target",
+      "module": "mapledev.dll",
+      "rva": "0x00007e50",
+      "value": "0x000042a0"
+    },
+    {
+      "id": "finalizer_packet_submit_target",
+      "module": "mapledev.dll",
+      "rva": "0x000042c8",
+      "value": "0x00004c14"
+    },
+    {
+      "id": "whole_write_target",
+      "module": "mapledev.dll",
+      "rva": "0x00007cd4",
+      "value": "0x00007ea0"
+    },
+    {
+      "id": "whole_read_target",
+      "module": "mapledev.dll",
+      "rva": "0x00007c88",
+      "value": "0x00007d0c"
+    },
+    {
+      "id": "write_invalid_ack_error",
+      "module": "mapledev.dll",
+      "rva": "0x00007f92",
+      "value": "0x86850010"
+    },
+    {
+      "id": "finalizer_file_error",
+      "module": "mapledev.dll",
+      "rva": "0x000042f8",
+      "value": "0x86850010"
+    },
+    {
+      "id": "finalizer_other_response_error",
+      "module": "mapledev.dll",
+      "rva": "0x000042fe",
+      "value": "0x868500b0"
+    },
+    {
+      "id": "whole_write_retry_error",
+      "module": "mapledev.dll",
+      "rva": "0x00007ce4",
+      "value": "0x86850010"
+    },
+    {
+      "id": "raw_frame_ioctl",
+      "module": "mapledev.dll",
+      "rva": "0x00004cca",
+      "value": "0x00220480"
+    },
+    {
+      "id": "timeout_poke_frame_ioctl",
+      "module": "mapledev.dll",
+      "rva": "0x00004d12",
+      "value": "0x00220484"
+    },
+    {
+      "id": "memory_card_function",
+      "module": "mapledev.dll",
+      "rva": "0x000042a4",
+      "value": "0x02000000"
+    },
+    {
+      "id": "packet_submit_error",
+      "module": "mapledev.dll",
+      "rva": "0x00004ce0",
+      "value": "0x86850050"
+    },
+    {
+      "id": "packet_timeout_poke_error",
+      "module": "mapledev.dll",
+      "rva": "0x00004d1c",
+      "value": "0x86850050"
+    },
+    {
+      "id": "packet_wait_failed_error",
+      "module": "mapledev.dll",
+      "rva": "0x00004d2c",
+      "value": "0x868500b0"
+    },
+    {
+      "id": "write_required_ack",
+      "module": "mapledev.dll",
+      "rva": "0x00007f7e",
+      "value": 7
+    },
+    {
+      "id": "write_phase_increment_load_offset",
+      "module": "mapledev.dll",
+      "rva": "0x00007f9a",
+      "value": 17
+    },
+    {
+      "id": "write_phase_increment_store_offset",
+      "module": "mapledev.dll",
+      "rva": "0x00007fa0",
+      "value": 17
+    },
+    {
+      "id": "write_finalizer_phase_load_offset",
+      "module": "mapledev.dll",
+      "rva": "0x00007fba",
+      "value": 17
+    },
+    {
+      "id": "decoded_read_phase_count_offset",
+      "module": "mapledev.dll",
+      "rva": "0x00003908",
+      "value": 46
+    },
+    {
+      "id": "decoded_write_phase_count_offset",
+      "module": "mapledev.dll",
+      "rva": "0x00003920",
+      "value": 47
+    },
+    {
+      "id": "packet_pending_win32_error",
+      "module": "mapledev.dll",
+      "rva": "0x00004cda",
+      "value": 997
+    },
+    {
+      "id": "packet_wait_timeout_result",
+      "module": "mapledev.dll",
+      "rva": "0x00004cf2",
+      "value": 258
+    },
+    {
+      "id": "write_non_ack_error_branch",
+      "module": "mapledev.dll",
+      "rva": "0x00007f80",
+      "value": "0x00007f8c"
+    },
+    {
+      "id": "write_zero_payload_success_branch",
+      "module": "mapledev.dll",
+      "rva": "0x00007f8a",
+      "value": "0x00007f98"
+    },
+    {
+      "id": "finalizer_ack_success_branch",
+      "module": "mapledev.dll",
+      "rva": "0x000042f0",
+      "value": "0x00004304"
+    },
+    {
+      "id": "finalizer_non_file_error_branch",
+      "module": "mapledev.dll",
+      "rva": "0x000042f6",
+      "value": "0x000042fe"
+    },
+    {
+      "id": "whole_write_error_retry_backedge",
+      "module": "mapledev.dll",
+      "rva": "0x00007cf2",
+      "value": "0x00007cd4"
+    },
+    {
+      "id": "whole_read_error_retry_backedge",
+      "module": "mapledev.dll",
+      "rva": "0x00007ca6",
+      "value": "0x00007c88"
+    },
+    {
+      "id": "packet_wait_loop_backedge",
+      "module": "mapledev.dll",
+      "rva": "0x00004d24",
+      "value": "0x00004ce6"
+    },
+    {
+      "id": "packet_pending_submit_enters_wait",
+      "module": "mapledev.dll",
+      "rva": "0x00004cde",
+      "value": "0x00004ce6"
+    },
+    {
+      "id": "packet_non_timeout_wait_branch",
+      "module": "mapledev.dll",
+      "rva": "0x00004cf8",
+      "value": "0x00004d22"
+    },
+    {
+      "id": "packet_successful_timeout_poke_branch",
+      "module": "mapledev.dll",
+      "rva": "0x00004d1a",
+      "value": "0x00004d22"
+    },
+    {
+      "id": "packet_non_failed_wait_branch",
+      "module": "mapledev.dll",
+      "rva": "0x00004d2a",
+      "value": "0x00004d32"
+    },
+    {
+      "id": "raw_function_expected_response_zero",
+      "module": "maple.dll",
+      "rva": "0x00002eb2",
+      "value": 0
+    },
+    {
+      "id": "raw_function_expected_response_offset",
+      "module": "maple.dll",
+      "rva": "0x00002eb8",
+      "value": 21
+    },
+    {
+      "id": "completion_received_header_bytes",
+      "module": "maple.dll",
+      "rva": "0x00002bfa",
+      "value": 4
+    },
+    {
+      "id": "zero_expected_response_accepts_raw_reply",
+      "module": "maple.dll",
+      "rva": "0x00005c5c",
+      "value": "0x00005c68"
+    },
+    {
+      "id": "completion_within_caller_capacity_branch",
+      "module": "maple.dll",
+      "rva": "0x00002c02",
+      "value": "0x00002c06"
+    },
+    {
+      "id": "timeout_poke_token_lookup",
+      "module": "maple.dll",
+      "rva": "0x00002f44",
+      "value": "0x000023b8"
+    },
+    {
+      "id": "timeout_poke_success_status",
+      "module": "maple.dll",
+      "rva": "0x00002f60",
+      "value": 0
+    },
+    {
+      "id": "worker_completion_target",
+      "module": "maple.dll",
+      "rva": "0x00005db0",
+      "value": "0x00005b0c"
+    },
+    {
+      "id": "worker_interrupt_status_query_target",
+      "module": "maple.dll",
+      "rva": "0x00005d9e",
+      "value": "0x000016dc"
+    },
+    {
+      "id": "worker_interrupt_status_query_import",
+      "module": "maple.dll",
+      "rva": "0x000016e8",
+      "value": "0x000062cc"
+    },
+    {
+      "id": "worker_interrupt_status_query_ioctl",
+      "module": "maple.dll",
+      "rva": "0x000016f4",
+      "value": "0x00010000"
+    },
+    {
+      "id": "worker_dma_event_wait_ms",
+      "module": "maple.dll",
+      "rva": "0x00005d9c",
+      "value": 60
+    },
+    {
+      "id": "shutdown_requested_value",
+      "module": "maple.dll",
+      "rva": "0x00001992",
+      "value": 1
+    },
+    {
+      "id": "shutdown_worker_wait_ms",
+      "module": "maple.dll",
+      "rva": "0x000019b0",
+      "value": 1000
+    },
+    {
+      "id": "gd_dma_read_request_command",
+      "module": "wsegacd.dll",
+      "rva": "0x00002d8a",
+      "value": 17
+    },
+    {
+      "id": "gd_stream_request_command",
+      "module": "wsegacd.dll",
+      "rva": "0x00002db6",
+      "value": 38
+    },
+    {
+      "id": "gd_dma_read_request_vector",
+      "module": "wsegacd.dll",
+      "rva": "0x00002d88",
+      "value": "0x8c0010f0"
+    },
+    {
+      "id": "gd_stream_request_vector",
+      "module": "wsegacd.dll",
+      "rva": "0x00002db4",
+      "value": "0x8c0010f0"
+    },
+    {
+      "id": "gd_dma_read_preserves_returned_token",
+      "module": "wsegacd.dll",
+      "rva": "0x00002d96",
+      "value": {
+        "source": 0,
+        "destination": 10
+      }
+    },
+    {
+      "id": "gd_stream_preserves_returned_token",
+      "module": "wsegacd.dll",
+      "rva": "0x00002dc2",
+      "value": {
+        "source": 0,
+        "destination": 10
+      }
+    },
+    {
+      "id": "gd_completion_receives_returned_token",
+      "module": "wsegacd.dll",
+      "rva": "0x00002dca",
+      "value": {
+        "source": 10,
+        "destination": 5
+      }
+    },
+    {
+      "id": "gd_completion_helper_target",
+      "module": "wsegacd.dll",
+      "rva": "0x00002dd2",
+      "value": "0x000019bc"
+    },
+    {
+      "id": "gd_completion_tests_token",
+      "module": "wsegacd.dll",
+      "rva": "0x000019c6",
+      "value": [
+        5,
+        5
+      ]
+    },
+    {
+      "id": "gd_nonzero_token_completion_branch",
+      "module": "wsegacd.dll",
+      "rva": "0x000019c8",
+      "value": "0x000019d0"
+    },
+    {
+      "id": "gd_zero_token_error",
+      "module": "wsegacd.dll",
+      "rva": "0x000019ca",
+      "value": "0xc0000185"
+    },
+    {
+      "id": "ce_wait_saved_r8",
+      "module": "coredll.dll",
+      "rva": "0x0000877c",
+      "value": {
+        "source": 8,
+        "stack_delta": -4
+      }
+    },
+    {
+      "id": "ce_wait_saved_pr",
+      "module": "coredll.dll",
+      "rva": "0x0000877e",
+      "value": {
+        "source": "pr",
+        "stack_delta": -4
+      }
+    },
+    {
+      "id": "ce_wait_home_r5",
+      "module": "coredll.dll",
+      "rva": "0x00008780",
+      "value": {
+        "source": 5,
+        "base": 15,
+        "byte_offset": 12
+      }
+    },
+    {
+      "id": "ce_wait_home_r4",
+      "module": "coredll.dll",
+      "rva": "0x00008782",
+      "value": {
+        "source": 4,
+        "base": 15,
+        "byte_offset": 8
+      }
+    },
+    {
+      "id": "ce_wait_home_r6",
+      "module": "coredll.dll",
+      "rva": "0x00008784",
+      "value": {
+        "source": 6,
+        "base": 15,
+        "byte_offset": 16
+      }
+    },
+    {
+      "id": "ce_wait_home_r7",
+      "module": "coredll.dll",
+      "rva": "0x00008786",
+      "value": {
+        "source": 7,
+        "base": 15,
+        "byte_offset": 20
+      }
+    }
+  ],
+  "resolved_coredll_imports": [
+    {
+      "module": "mapledev.dll",
+      "stub_rva": "0x0000c598",
+      "iat_rva": "0x0000d010",
+      "ordinal": 179,
+      "resolved_name": "DeviceIoControl",
+      "export_rva": "0x00008640",
+      "export_entry_sha256": "de84a81a12f0fbf90b0511ca5b99f61c7514ef8277ff9d580eed577411b4359a"
+    },
+    {
+      "module": "mapledev.dll",
+      "stub_rva": "0x0000c664",
+      "iat_rva": "0x0000d054",
+      "ordinal": 497,
+      "resolved_name": "WaitForSingleObject",
+      "export_rva": "0x0000877c",
+      "export_entry_sha256": "4ece6bc21a17a1aa94a39b198b566615915f32c020c417165d8287ef3e5f07dc"
+    },
+    {
+      "module": "mapledev.dll",
+      "stub_rva": "0x0000c64c",
+      "iat_rva": "0x0000d04c",
+      "ordinal": 516,
+      "resolved_name": "GetLastError",
+      "export_rva": "0x00008844",
+      "export_entry_sha256": "5cc688b9e35f506cb7ab5baa6dfe37b966806d926f786865ed21469dfbba8caf"
+    },
+    {
+      "module": "maple.dll",
+      "stub_rva": "0x0000638c",
+      "iat_rva": "0x0000704c",
+      "ordinal": 535,
+      "resolved_name": "GetTickCount",
+      "export_rva": "0x0000890c",
+      "export_entry_sha256": "61e78f86e465b48b299f2e8672ac9727cc603aabc511093f96ab71c2f97a6bde"
+    },
+    {
+      "module": "maple.dll",
+      "stub_rva": "0x00006398",
+      "iat_rva": "0x00007050",
+      "ordinal": 4,
+      "resolved_name": "EnterCriticalSection",
+      "export_rva": "0x00008ea0",
+      "export_entry_sha256": "d0df31cd46660b8219b14cbd133aef546815ee2b4c2206e8c14124b13a0dd294"
+    },
+    {
+      "module": "maple.dll",
+      "stub_rva": "0x000063a4",
+      "iat_rva": "0x00007054",
+      "ordinal": 5,
+      "resolved_name": "LeaveCriticalSection",
+      "export_rva": "0x00008efc",
+      "export_entry_sha256": "d7223af94d3e2e7f43ef03f7c67bd220c050e3bd6dc5569d800512f6ecb18250"
+    },
+    {
+      "module": "maple.dll",
+      "stub_rva": "0x000062cc",
+      "iat_rva": "0x0000700c",
+      "ordinal": 557,
+      "resolved_name": "KernelIoControl",
+      "export_rva": "0x000089d4",
+      "export_entry_sha256": "ae55ccd4cd11a3b43f93c1f6d6dde168573798c16d42893b3ecf705a2685e49f"
+    },
+    {
+      "module": "maple.dll",
+      "stub_rva": "0x00006314",
+      "iat_rva": "0x00007024",
+      "ordinal": 497,
+      "resolved_name": "WaitForSingleObject",
+      "export_rva": "0x0000877c",
+      "export_entry_sha256": "4ece6bc21a17a1aa94a39b198b566615915f32c020c417165d8287ef3e5f07dc"
+    }
+  ],
+  "ce_wait_abi": {
+    "module": "coredll.dll",
+    "ordinal": 497,
+    "name": "WaitForSingleObject",
+    "kernel_bytes": 1253376,
+    "kernel_sha256": "a7628c78090fce2c93012d5e4db6142096e138dceb7ebbf555142e902ca03c1f",
+    "export_rva": "0x0000877c",
+    "rom_storage_address": "0x8c03877c",
+    "kernel_file_offset": "0x00028f7c",
+    "callee_frame_bytes": 8,
+    "caller_home_bytes": 16,
+    "caller_home_offsets": [
+      0,
+      4,
+      8,
+      12
+    ],
+    "prologue_rva": "0x0000877c",
+    "prologue_end_rva_exclusive": "0x00008788",
+    "prologue_bytes": 12,
+    "prologue_sha256": "eb4ff033e28645b20333d091360c6f2b3c616b3be66fa24dc1994bb625ebc6ef",
+    "body_rva": "0x0000877c",
+    "body_end_rva_exclusive": "0x000087bc",
+    "body_bytes": 64,
+    "body_sha256": "69da824d76fa7ee8c4ccedfc9553fdf2e242d826688e4ebc64a0d1edccc4e598",
+    "home_stores": [
+      {
+        "rva": "0x00008780",
+        "source_register": 5,
+        "callee_sp_offset": 12,
+        "caller_sp_offset": 4
+      },
+      {
+        "rva": "0x00008782",
+        "source_register": 4,
+        "callee_sp_offset": 8,
+        "caller_sp_offset": 0
+      },
+      {
+        "rva": "0x00008784",
+        "source_register": 6,
+        "callee_sp_offset": 16,
+        "caller_sp_offset": 8
+      },
+      {
+        "rva": "0x00008786",
+        "source_register": 7,
+        "callee_sp_offset": 20,
+        "caller_sp_offset": 12
+      }
+    ]
+  },
+  "advertised_geometry": {
+    "normalized_function_definition": "0x000f4100",
+    "dma_function_definition": "0x00410f00",
+    "block_bytes": 512,
+    "read_phases": 1,
+    "write_phases": 4,
+    "write_phase_bytes": 128,
+    "write_selector_phases": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "write_payload_words": 34,
+    "write_request_bytes": 140,
+    "write_final_selector_phase": 4,
+    "single_read_final_selector_phase": 0
+  },
+  "response_contract": {
+    "write_phase_success": {
+      "command": 7,
+      "payload_words": 0,
+      "receive_capacity_bytes": 4
+    },
+    "finalizer_success": {
+      "command": 7,
+      "receive_capacity_bytes": 8
+    },
+    "write_phase_again": "Maps to0x86850010, causing at most3 whole-block attempts in the reviewed outer wrapper.",
+    "finalizer_again": "Maps to0x868500b0, which does not enter the reviewed whole-block retry.",
+    "finalizer_file_error": "Maps to0x86850010, causing at most3 whole-block attempts; it is not final-SYNC-only retry.",
+    "deferred_commit_busy_is_transparent": false
+  },
+  "pending_request_lifetime": {
+    "event_wait_ms": 16,
+    "pending_error": 997,
+    "wait_timeout": 258,
+    "timeout_ioctl": "0x00220484",
+    "timeout_ioctl_cancels_original_request": false,
+    "successful_timeout_poke_repeats_wait": true,
+    "caller_buffer_retained_through_ordinary_timeout_pokes": true,
+    "worker_critical_section_lease_proved": false,
+    "worker_dma_event_wait_ms": 60,
+    "root_shutdown_worker_wait_ms": 1000,
+    "note": "These are the reviewed ordinary owner paths. A timeout-poke name does not imply cancellation, and lack of cancellation does not exclude thread/process teardown or root unload."
+  },
+  "completion_epoch_contract": {
+    "status_query_before_consumer": true,
+    "status_query_acknowledges_captured_raw_bits": true,
+    "interrupt_done_clears_later_raw_status": false,
+    "builder_zeros_receive_before_next_completion": true,
+    "raw_completion_is_coalesced_status": true,
+    "required_service_policy": "Retain the original admitted MDEN0 DMA park while executing the bounded service with CPU interrupts unmasked. Repeat full owner/context/traffic/RX and parked-MMIO witnesses before publication and the one original consumer; perform its paired POST only after that consumer.",
+    "invalid_source_may_be_skipped": false,
+    "note": "An enabled-DMA interval inside one held completion can create a late completion bit for the next worker cycle. Matching owner pointers alone does not establish that a zeroed RX belongs to a fresh completed DMA; no FIFO of completion events is assumed."
+  },
+  "sci_backpressure_contract": {
+    "request_commands": [
+      17,
+      38
+    ],
+    "zero_request_token_error": "0xc0000185",
+    "zero_token_is_transparent_busy": false,
+    "completion_helper_reissues_zero_token_request": false,
+    "requires_loan_aware_gd_wait_or_deferral": true,
+    "requires_cdda_exclusion": true,
+    "hardware_storage_write_admitted": false,
+    "note": "Holding the shared GD/SCI owner busy and returning REQUEST0 can make WSEGACD fail an incoming game read. A separate storage worker or an unmasked Maple service does not itself supply transparent SCI backpressure."
+  },
+  "implications": [
+    "The current generic four-phase/phase4 commit selector matches this CE write owner for the advertised standard geometry; no phase3 translation is warranted.",
+    "Do not acknowledge a merely queued or volatile commit as durable. Returning AGAIN from the finalizer is visible failure to this owner, not a transparent asynchronous completion protocol.",
+    "Each whole-block retry restarts phase0; an attempted storage transaction must retain exact immutable bytes and reject changed replacements until its outcome is resolved.",
+    "Exact CMD12 has only4 bytes of guest receive capacity. Validate a complete FILEERR privately; its canonical4-byte header may be published for this exact CMD12/capacity4 owner because the caller examines only its response header and the unchanged generic consumer clips to4 bytes. A full8-byte FILEERR must not be published into that4-byte requested allocation. CMD13 finalizer capacity is8 bytes.",
+    "A same-worker storage service can leave the original raw IRP pending through ordinary timeout pokes. Its scoped original MDEN0 DMA park must survive the bounded unmasked service so the source status query, consumer, rebuild and InterruptDone cycle cannot gain a replayed completion. CPU interrupts must be restored during I/O, with fresh full source/ownership/capacity and parked-MMIO witnesses before publication; no across-I/O native critical-section lease was established.",
+    "Before hardware storage writes, the SCI loan needs an explicit GD wait/deferral path and CDDA exclusion. REQUEST0 is an immediate WSEGACD I/O error, so an idle-GD check followed by a busy return for later reads is insufficient.",
+    "A GNU-SH call to the original CE WaitForSingleObject must reserve16 caller argument-home bytes. Without this adapter, its home stores overwrite the caller saved PR/registers before any wait result can be captured."
+  ],
+  "limitations": [
+    "Static analysis of these exact owner files does not establish hardware timing, bus ownership, durable storage, or application-level save success.",
+    "Application-level retry outside the reviewed owner chain is not proved. The16ms packet event wait and60ms worker DMA-event wait are not global storage deadlines or permission to hold the CPU interrupt mask across scheduling. A scoped retained DMA park is separate and requires fresh owner/MMIO witnesses; external thread/process teardown remains unproved.",
+    "Generic MAPLE response dispatch and every guest publication still require the separately reviewed live ownership/fence/capacity witnesses."
+  ]
+}

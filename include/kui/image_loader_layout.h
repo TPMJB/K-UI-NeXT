@@ -1,0 +1,41 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+#ifndef KUI_IMAGE_LAYOUT_H
+#define KUI_IMAGE_LAYOUT_H
+
+/* The outer .kui envelope describes only the temporary packed payload. This
+ * inner header describes the fixed, bounded selected-image relocation contract. These are
+ * probe addresses, not a claim that this map accommodates retail games. */
+#define KUI_IMAGE_PACKAGE_HEADER_OFFSET 0x100
+#define KUI_IMAGE_PACKAGE_HEADER_BYTES 64
+#define KUI_IMAGE_PACKAGE_VERSION 1
+#define KUI_IMAGE_MANIFEST_OFFSET 0x1000
+#define KUI_IMAGE_MANIFEST_BYTES 65536
+#define KUI_IMAGE_RESIDENT_BLOB_OFFSET 0x12000
+#define KUI_IMAGE_RESIDENT_ADDRESS 0x8ce00000
+#define KUI_IMAGE_RESIDENT_MAX_BYTES 0x100000
+#define KUI_IMAGE_HOOK_STACK 0x8cfd0000
+#define KUI_IMAGE_HOOK_STACK_BOTTOM 0x8cfc0000
+#define KUI_IMAGE_RESIDENT_MEMORY_END 0x8cfe0000
+#define KUI_IMAGE_RESIDENT_STACK 0x8cff0000
+#define KUI_IMAGE_CLIENT_ADDRESS 0x8c010000
+#define KUI_IMAGE_CLIENT_MAX_BYTES 0x100000
+#define KUI_IMAGE_CLIENT_STACK 0x8cd00000
+#define KUI_IMAGE_PACKAGE_MAGIC "KUIIMG01"
+
+/* Header LE u32 offsets; bytes 0..7 hold KUI_IMAGE_PACKAGE_MAGIC. */
+#define KUI_IH_VERSION 8
+#define KUI_IH_BYTES 12
+#define KUI_IH_MANIFEST_OFFSET 16
+#define KUI_IH_MANIFEST_BYTES 20
+#define KUI_IH_RESIDENT_ADDRESS 24
+#define KUI_IH_RESIDENT_BYTES 28
+#define KUI_IH_RESIDENT_ENTRY 32
+#define KUI_IH_CLIENT_ADDRESS 36
+#define KUI_IH_CLIENT_STACK 40
+#define KUI_IH_RESIDENT_STACK 44
+#define KUI_IH_RESIDENT_BLOB_OFFSET 48
+#define KUI_IH_CLIENT_MAX_BYTES 52
+#define KUI_IH_FLAGS 56
+#define KUI_IH_RESERVED 60
+
+#endif

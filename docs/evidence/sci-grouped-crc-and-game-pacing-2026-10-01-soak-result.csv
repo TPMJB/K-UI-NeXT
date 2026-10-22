@@ -1,0 +1,2 @@
+id,build,card_label,transport,filesystem,cluster_bytes,music_playing,ui_hz,preset,outcome,repeat,chunk_bytes,bytes,write_us,read_us,sync_us,verified
+10,"6cc2abb460b5","sci dma3",1,"exFAT",131072,0,2,2,2,1,65536,167772160,136724933,153859717,93114,1

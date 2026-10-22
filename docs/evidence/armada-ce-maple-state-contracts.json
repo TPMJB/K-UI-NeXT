@@ -1,0 +1,683 @@
+{
+  "format": "armada-ce-maple-state-contracts-v1",
+  "license": "GPL-3.0-only",
+  "scope": "Metadata-only static findings from exact owner ROM/PE, plus separately labeled prior-photo values; contains no executable bytes or disassembly. Not a callable-address, DMAownership, lifetime or hook contract.",
+  "source_identities": [
+    {
+      "file": "0WINCEOS.BIN",
+      "bytes": 1253376,
+      "sha256": "a7628c78090fce2c93012d5e4db6142096e138dceb7ebbf555142e902ca03c1f"
+    },
+    {
+      "file": "WINCE/MAPLE.DLL",
+      "bytes": 26191,
+      "sha256": "b8eb7afc2b13fcec8551af4fa75288fca1881f671181b88ea042aa9d77524e6e"
+    },
+    {
+      "file": "WINCE/WDMLIB.DLL",
+      "bytes": 14931,
+      "sha256": "0bca0d93052dff273b776cc63041316a0a3c469951ab054b63cef933400ad913"
+    },
+    {
+      "file": "WINCE/WDMOEM.DLL",
+      "bytes": 3664,
+      "sha256": "9438a3b761255e18873cd682a788c92e8a0d98aa13f958a03ec05413521c086b"
+    }
+  ],
+  "ROM_modules": [
+    {
+      "name": "maple.dll",
+      "toc_address": "0x8c141614",
+      "nominal_virtual_base": "0x1dd0000",
+      "image_bytes": "0xa000",
+      "header_entry_rva": "0x63f8"
+    },
+    {
+      "name": "coredll.dll",
+      "toc_address": "0x8c141494",
+      "nominal_virtual_base": "0x1e50000",
+      "image_bytes": "0x34000",
+      "header_entry_rva": "0x2e2c"
+    },
+    {
+      "name": "wdmlib.dll",
+      "toc_address": "0x8c1415b4",
+      "nominal_virtual_base": "0x1e00000",
+      "image_bytes": "0x7000",
+      "header_entry_rva": "0x1108"
+    },
+    {
+      "name": "wdmoem.dll",
+      "toc_address": "0x8c1415d4",
+      "nominal_virtual_base": "0x1df0000",
+      "image_bytes": "0x5000",
+      "header_entry_rva": "0x1240"
+    },
+    {
+      "name": "nk.exe",
+      "toc_address": "0x8c141474",
+      "nominal_virtual_base": "0x8c010000",
+      "image_bytes": "0x30000",
+      "header_entry_rva": "0x20c0"
+    }
+  ],
+  "source_contracts": [
+    {
+      "id": "driver_entry_allocate_publish_cleanup",
+      "module": "maple.dll",
+      "rva": "0x1514",
+      "end_rva_exclusive": "0x15e4",
+      "bytes": 208,
+      "rom_storage_address": "0x8c0af514",
+      "kernel_file_offset": "0x9fd14",
+      "rom_sha256": "4ed4c5f03a0ef49bca33bfb9825dc2b14329a0eb4b40cae287338da21b33cc63",
+      "rom_crc32_ieee": "0ff130f3",
+      "finding": "Allocates 0x198 bytes using operator new and calls the constructor. Publishes the raw result at root RVA 0x72b8 in delay slot 0x1540 before init 0x1af8 finishes. Failure destroys, deletes and clears the root. Success stores the raw extension pointer through DeviceObject+0x18 into a separate four-byte area.",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x914",
+        "sha256": "4ed4c5f03a0ef49bca33bfb9825dc2b14329a0eb4b40cae287338da21b33cc63",
+        "crc32_ieee": "0ff130f3",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "all_overlaps_contained": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      }
+    },
+    {
+      "id": "driver_entry_literals",
+      "module": "maple.dll",
+      "rva": "0x15e4",
+      "end_rva_exclusive": "0x162c",
+      "bytes": 72,
+      "rom_storage_address": "0x8c0af5e4",
+      "kernel_file_offset": "0x9fde4",
+      "rom_sha256": "e018b1f481d4bfe1a14fbc205c81729dfd817e8dbd011ae8d6d5fba50bf3ddc6",
+      "rom_crc32_ieee": "eb5a127b",
+      "finding": "Reviewed allocation-size, root, constructor, destructor, init and thunk targets. This range includes literals as well as instructions.",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x9e4",
+        "sha256": "05eeeff90837dc01fd7a48fac46850ce0b07ea23d48cccdc7183bbceed8c988f",
+        "crc32_ieee": "a39e1f6d",
+        "HIGHLOW_overlap_rvas": [
+          "0x15ec",
+          "0x15f0",
+          "0x15f4",
+          "0x15f8",
+          "0x15fc",
+          "0x1600",
+          "0x1604",
+          "0x1608",
+          "0x160c",
+          "0x1610",
+          "0x1614",
+          "0x1618",
+          "0x161c",
+          "0x1620",
+          "0x1624",
+          "0x1628"
+        ],
+        "exact_bytes_equal": false,
+        "all_overlaps_contained": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      }
+    },
+    {
+      "id": "extension_constructor",
+      "module": "maple.dll",
+      "rva": "0x186c",
+      "end_rva_exclusive": "0x1934",
+      "bytes": 200,
+      "rom_storage_address": "0x8c0af86c",
+      "kernel_file_offset": "0xa006c",
+      "rom_sha256": "dafc50ce610cb66be22cc3a5f3f992c3f6c97c05e33b9c3e83b07afe58c0c73c",
+      "rom_crc32_ieee": "aa176864",
+      "finding": "Calls the RX pool constructor with extension+0xa8. Sets shutdown, TX VA and TX bus address to zero. Establishes no self-pointer, size or magic member. Includes the reviewed literal pool.",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0xc6c",
+        "sha256": "5d340fe6556391ed0e36e7fb1f6599456ab5ddc754e105464a0e2520c31e4b9a",
+        "crc32_ieee": "164510cc",
+        "HIGHLOW_overlap_rvas": [
+          "0x1928",
+          "0x192c",
+          "0x1930"
+        ],
+        "exact_bytes_equal": false,
+        "all_overlaps_contained": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      }
+    },
+    {
+      "id": "extension_shutdown",
+      "module": "maple.dll",
+      "rva": "0x198c",
+      "end_rva_exclusive": "0x1996",
+      "bytes": 10,
+      "rom_storage_address": "0x8c0af98c",
+      "kernel_file_offset": "0xa018c",
+      "rom_sha256": "9fe8dff471e12b266c1dd7beade56c3044085b29245742f4df9be7b97aea213f",
+      "rom_crc32_ieee": "9c80a2f9",
+      "finding": "Destructor stores 1 at extension+0 at RVA 0x1994. This is a shutdown indicator, not a lifetime lock.",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0xd8c",
+        "sha256": "9fe8dff471e12b266c1dd7beade56c3044085b29245742f4df9be7b97aea213f",
+        "crc32_ieee": "9c80a2f9",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "all_overlaps_contained": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      }
+    },
+    {
+      "id": "mmio_and_tx_initialization",
+      "module": "maple.dll",
+      "rva": "0x1cae",
+      "end_rva_exclusive": "0x1d16",
+      "bytes": 104,
+      "rom_storage_address": "0x8c0afcae",
+      "kernel_file_offset": "0xa04ae",
+      "rom_sha256": "7246f0bc6e155cc23f04253f2b2f414156319a81e7711b6dff4d97f9a5c192b1",
+      "rom_crc32_ieee": "6e27c76f",
+      "finding": "Translates bus address 0x005f6c00 and maps 0x100 bytes with cacheEnabled=0 into extension+0x100. Separately allocates a 0x1000-byte TX common buffer with cacheEnabled=0; stores its VA at +0x88 and physicalLow at +0x84.",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x10ae",
+        "sha256": "7246f0bc6e155cc23f04253f2b2f414156319a81e7711b6dff4d97f9a5c192b1",
+        "crc32_ieee": "6e27c76f",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "all_overlaps_contained": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      }
+    },
+    {
+      "id": "mmio_and_tx_init_literals",
+      "module": "maple.dll",
+      "rva": "0x1d6a",
+      "end_rva_exclusive": "0x1db4",
+      "bytes": 74,
+      "rom_storage_address": "0x8c0afd6a",
+      "kernel_file_offset": "0xa056a",
+      "rom_sha256": "dd83a4409f943da7693fba8cfa871cbea203ed5ac006ccc65f3615d212e6349c",
+      "rom_crc32_ieee": "f497b10e",
+      "finding": "Reviewed offset, size, physical base and import-thunk literal pool for MMIO and TX initialization.",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x116a",
+        "sha256": "f76abd24a2a8b428ac82905bf20222462d8a26349ef78dbbacabdfcfa12e7246",
+        "crc32_ieee": "e65f20a8",
+        "HIGHLOW_overlap_rvas": [
+          "0x1d84",
+          "0x1d88",
+          "0x1d8c",
+          "0x1d90",
+          "0x1d94",
+          "0x1d98",
+          "0x1d9c",
+          "0x1da0",
+          "0x1da4",
+          "0x1da8",
+          "0x1dac",
+          "0x1db0"
+        ],
+        "exact_bytes_equal": false,
+        "all_overlaps_contained": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      }
+    },
+    {
+      "id": "tx_last_end_publication",
+      "module": "maple.dll",
+      "rva": "0x59dc",
+      "end_rva_exclusive": "0x59ee",
+      "bytes": 18,
+      "rom_storage_address": "0x8c0b39dc",
+      "kernel_file_offset": "0xa41dc",
+      "rom_sha256": "21565245a7cdab118c54fb7c064b5dd10e433d749008721d3c197088c17ab6f9",
+      "rom_crc32_ieee": "f722d287",
+      "finding": "Builder marks the last descriptor and stores its VA at extension+0x8c (RVA 0x59e8), then stores the end VA at extension+0x90 (RVA 0x59ec). Both fields can change during sampling.",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x4ddc",
+        "sha256": "21565245a7cdab118c54fb7c064b5dd10e433d749008721d3c197088c17ab6f9",
+        "crc32_ieee": "f722d287",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "all_overlaps_contained": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      }
+    },
+    {
+      "id": "rx_pool_initialization",
+      "module": "maple.dll",
+      "rva": "0x5e60",
+      "end_rva_exclusive": "0x5ec4",
+      "bytes": 100,
+      "rom_storage_address": "0x8c0b3e60",
+      "kernel_file_offset": "0xa4660",
+      "rom_sha256": "1cf4f31e300ff40cee88bbe94ca150743b89af427c34d02aaa1d30c36731269c",
+      "rom_crc32_ieee": "5d6ac6d6",
+      "finding": "Allocates a 0x2000-byte common buffer with cacheEnabled=0. Passes pool+0x18 as the physical output; stores original VA at +0x24, VA cursor at +0x28, physical cursor at +0x20, assigned bytes=0 at +0x2c, and physicalLow-minus-VA at +0x30. The pool is at extension+0xa8.",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x5260",
+        "sha256": "cac8f9533926c838008b1ffa28e6a2a3b049c7d51bb81c1389bc0c253d2c5f33",
+        "crc32_ieee": "e138be7e",
+        "HIGHLOW_overlap_rvas": [
+          "0x5eb8",
+          "0x5ebc",
+          "0x5ec0"
+        ],
+        "exact_bytes_equal": false,
+        "all_overlaps_contained": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      }
+    },
+    {
+      "id": "completion_identity",
+      "module": "maple.dll",
+      "rva": "0x5b0c",
+      "end_rva_exclusive": "0x5b2c",
+      "bytes": 32,
+      "rom_storage_address": "0x8c0b3b0c",
+      "kernel_file_offset": "0xa430c",
+      "rom_sha256": "394934ea008c9f96b8655aa9d23bfa1e45850c550485cfb02c8ff7fde819180c",
+      "rom_crc32_ieee": "7bd7ff55",
+      "finding": "32-byte runtime identity window with no PE HIGHLOW overlap and exact ROM/external equality.",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x4f0c",
+        "sha256": "394934ea008c9f96b8655aa9d23bfa1e45850c550485cfb02c8ff7fde819180c",
+        "crc32_ieee": "7bd7ff55",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "all_overlaps_contained": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      }
+    },
+    {
+      "id": "dllmain_driver_registration",
+      "module": "maple.dll",
+      "rva": "0x63f8",
+      "end_rva_exclusive": "0x6420",
+      "bytes": 40,
+      "rom_storage_address": "0x8c0b43f8",
+      "kernel_file_offset": "0xa4bf8",
+      "rom_sha256": "2e653546e39e650b150134bf00cb0b3bf87bc29f73bb3cab45c36163b36a1a21",
+      "rom_crc32_ieee": "c47969f5",
+      "finding": "On process attach, saves incoming r4 separately at RVA 0x72bc and registers DriverEntry 0x1514 through WDMLIB InitWDMDriver. The PE header entry is not DriverEntry.",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x57f8",
+        "sha256": "193d3d3c7c8c73b5d1553eefd484f64a938536b80e159cb9794f86a630318266",
+        "crc32_ieee": "9a5ff255",
+        "HIGHLOW_overlap_rvas": [
+          "0x641c"
+        ],
+        "exact_bytes_equal": false,
+        "all_overlaps_contained": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      }
+    },
+    {
+      "id": "operator_new",
+      "module": "coredll.dll",
+      "rva": "0x2ef0",
+      "end_rva_exclusive": "0x2f08",
+      "bytes": 24,
+      "rom_storage_address": "0x8c032ef0",
+      "kernel_file_offset": "0x236f0",
+      "rom_sha256": "e01878fad5778f177744e043a33b08dea764b3df3e5f3abc16acc32686f0b955",
+      "rom_crc32_ieee": "dc7fc32c",
+      "finding": "COREDLL export ordinal 1095, operator new, calls LocalAlloc(flags=0, size) and returns its pointer unchanged."
+    },
+    {
+      "id": "local_alloc",
+      "module": "coredll.dll",
+      "rva": "0xc5e0",
+      "end_rva_exclusive": "0xc61c",
+      "bytes": 60,
+      "rom_storage_address": "0x8c03c5e0",
+      "kernel_file_offset": "0x2cde0",
+      "rom_sha256": "e726c0dc59aed5195b2e8bdf93d9f5f1bf79466650a7b46496ff65a7e9a1c7f1",
+      "rom_crc32_ieee": "6115dfbd",
+      "finding": "LocalAlloc passes the size and nonzeroing flags=0 to HeapAlloc, using the same process-heap literal as GetProcessHeap."
+    },
+    {
+      "id": "heap_alloc",
+      "module": "coredll.dll",
+      "rva": "0xc830",
+      "end_rva_exclusive": "0xc8a4",
+      "bytes": 116,
+      "rom_storage_address": "0x8c03c830",
+      "kernel_file_offset": "0x2d030",
+      "rom_sha256": "849f44ebc9c43af4d46de81fb381fa75233c83653358a31d3925848b6126fca3",
+      "rom_crc32_ieee": "e9c29784",
+      "finding": "HeapAlloc passes the process heap, size and zeroing boolean to internal allocator RVA 0xe6d0 and returns its result unchanged."
+    },
+    {
+      "id": "get_process_heap",
+      "module": "coredll.dll",
+      "rva": "0xca84",
+      "end_rva_exclusive": "0xca90",
+      "bytes": 12,
+      "rom_storage_address": "0x8c03ca84",
+      "kernel_file_offset": "0x2d284",
+      "rom_sha256": "4349597e6464f9d3bdcc576a9aa9949db0656d556a28412195269742c08c537c",
+      "rom_crc32_ieee": "11254642",
+      "finding": "Returns process-heap descriptor literal 0x01e7e0e0. This descriptor is not a driver extension or physical address."
+    },
+    {
+      "id": "owner_pointer_broad_helper",
+      "module": "nk.exe",
+      "rva": "0x5bdc",
+      "end_rva_exclusive": "0x5c44",
+      "bytes": 104,
+      "rom_storage_address": "0x8c015bdc",
+      "kernel_file_offset": "0x63dc",
+      "rom_sha256": "aaeb9bd8095ac9bde30972329de40a233e0c9cf6bce2a22738117906b48ff10f",
+      "rom_crc32_ieee": "798bed36",
+      "finding": "Broader process-pointer helper: after process-handle validation, null remains null; a nonzero pointer with pointer>>25==0 ORs PROCESS+0x0c. Explicit pointers retain their value. The probe uses the stricter low-address exclusion reviewed separately at RVA 0x5c98."
+    },
+    {
+      "id": "wdmh_api_resolution",
+      "module": "wdmlib.dll",
+      "rva": "0x2d40",
+      "end_rva_exclusive": "0x2da4",
+      "bytes": 100,
+      "rom_storage_address": "0x8c0a7d40",
+      "kernel_file_offset": "0x98540",
+      "rom_sha256": "f70b601483c855a8e79a29de5b945f86f03223c9270b605c3e678bbccbe3242b",
+      "rom_crc32_ieee": "0afc8b1c",
+      "finding": "Queries the WDMH API set and populates an ordinal-indexed callback table at module RVA 0x40a0. Common-buffer allocation uses slot 2.",
+      "external_PE": {
+        "file": "WINCE/WDMLIB.DLL",
+        "file_offset": "0x2140",
+        "sha256": "fc0f71fa00185f88dc30c467ae71da53055faff0e8bcbaac903a67d58e56170e",
+        "crc32_ieee": "72091694",
+        "HIGHLOW_overlap_rvas": [
+          "0x2d90",
+          "0x2d94",
+          "0x2d98",
+          "0x2d9c"
+        ],
+        "exact_bytes_equal": false,
+        "all_overlaps_contained": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      }
+    },
+    {
+      "id": "common_buffer_allocate_map",
+      "module": "wdmlib.dll",
+      "rva": "0x2e64",
+      "end_rva_exclusive": "0x2f0c",
+      "bytes": 168,
+      "rom_storage_address": "0x8c0a7e64",
+      "kernel_file_offset": "0x98664",
+      "rom_sha256": "455ed1cda094f93251b70afb3718916787f48c495e24cb5a06d6adbf07e88690",
+      "rom_crc32_ieee": "a68c3ab0",
+      "finding": "WDMH slot 2 allocates a physical extent and fills the physical output. VirtualAlloc reserves the requested length and VirtualCopy maps the physical allocation. cacheEnabled=0 selects flags 0x604; cacheEnabled=1 selects 0x404. Returns the virtual pointer.",
+      "external_PE": {
+        "file": "WINCE/WDMLIB.DLL",
+        "file_offset": "0x2264",
+        "sha256": "c15edf6ba0da89b114b9ed2dc5b818808729962fbdca24d8df6cbc6c82e99642",
+        "crc32_ieee": "eab77426",
+        "HIGHLOW_overlap_rvas": [
+          "0x2ef8",
+          "0x2efc",
+          "0x2f00",
+          "0x2f04",
+          "0x2f08"
+        ],
+        "exact_bytes_equal": false,
+        "all_overlaps_contained": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      }
+    },
+    {
+      "id": "mmio_map",
+      "module": "wdmoem.dll",
+      "rva": "0x101c",
+      "end_rva_exclusive": "0x1110",
+      "bytes": 244,
+      "rom_storage_address": "0x8c0a901c",
+      "kernel_file_offset": "0x9981c",
+      "rom_sha256": "827a7d6838061c81584c51fc9d7d6d43f472de782bf914680fee1bb643b009e6",
+      "rom_crc32_ieee": "84217ff5",
+      "finding": "MmMapIoSpace reserves a CE virtual address and maps physical memory with VirtualCopy. cacheEnabled=0 selects flags 0x604 after the flags OR. Returns the mapped VA plus physical page offset; no fixed P2 shape is established.",
+      "external_PE": {
+        "file": "WINCE/WDMOEM.DLL",
+        "file_offset": "0x41c",
+        "sha256": "7578017db082f8e6e613b4f726c70820575bf4f9486792906378038686abcca8",
+        "crc32_ieee": "d805fb3f",
+        "HIGHLOW_overlap_rvas": [
+          "0x1100",
+          "0x1104",
+          "0x1108",
+          "0x110c"
+        ],
+        "exact_bytes_equal": false,
+        "all_overlaps_contained": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      }
+    },
+    {
+      "id": "translate_bus",
+      "module": "wdmoem.dll",
+      "rva": "0x1224",
+      "end_rva_exclusive": "0x1240",
+      "bytes": 28,
+      "rom_storage_address": "0x8c0a9224",
+      "kernel_file_offset": "0x99a24",
+      "rom_sha256": "6ab667832624d5cc1b5b3f097724e28bc91e8b3ea5722b7bcb4ab7c6fe7461dc",
+      "rom_crc32_ieee": "ae215880",
+      "finding": "HalTranslateBusAddress copies the full 64-bit bus address to the output, sets addressSpace=0 and returns 1.",
+      "external_PE": {
+        "file": "WINCE/WDMOEM.DLL",
+        "file_offset": "0x624",
+        "sha256": "6ab667832624d5cc1b5b3f097724e28bc91e8b3ea5722b7bcb4ab7c6fe7461dc",
+        "crc32_ieee": "ae215880",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "all_overlaps_contained": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      }
+    },
+    {
+      "id": "default_common_buffer_region_caller",
+      "module": "nk.exe",
+      "rva": "0x1cd20",
+      "end_rva_exclusive": "0x1cd40",
+      "bytes": 32,
+      "rom_storage_address": "0x8c02cd20",
+      "kernel_file_offset": "0x1d520",
+      "rom_sha256": "a47cc103f8fed19d6ab060c1b57760cda9e618ea434764d7ca5b0d839bc1d0b6",
+      "rom_crc32_ieee": "15920a69",
+      "finding": "Invokes common-buffer initializer RVA 0x1d6fc with count, address and size arguments all zero. The default ROMHDR region is selected on this path."
+    },
+    {
+      "id": "wdmh_api_registration",
+      "module": "nk.exe",
+      "rva": "0x1d6a8",
+      "end_rva_exclusive": "0x1d6e4",
+      "bytes": 60,
+      "rom_storage_address": "0x8c02d6a8",
+      "kernel_file_offset": "0x1dea8",
+      "rom_sha256": "4e14c793be225582773d3b6aee563d1369845af7cec13548fed2f6c5d2746255",
+      "rom_crc32_ieee": "0ca78471",
+      "finding": "Registers the WDMH API set with 12 entries. The table at 0x8c011fe8 has index 2 pointing to 0x8c02d81c."
+    },
+    {
+      "id": "physical_region_initialization",
+      "module": "nk.exe",
+      "rva": "0x1d6fc",
+      "end_rva_exclusive": "0x1d81c",
+      "bytes": 288,
+      "rom_storage_address": "0x8c02d6fc",
+      "kernel_file_offset": "0x1defc",
+      "rom_sha256": "5644e5c6a498eed9edcecc5ef07031834f5a18e7c1436fc880cb8c7fa83fbfab",
+      "rom_crc32_ieee": "114c5676",
+      "finding": "Default count=0 selects ROMHDR driver globals, masks the initial address with 0x1fffffff and creates one extent. The routine also supports explicit alternate extents."
+    },
+    {
+      "id": "physical_common_buffer_allocator",
+      "module": "nk.exe",
+      "rva": "0x1d81c",
+      "end_rva_exclusive": "0x1d8e0",
+      "bytes": 196,
+      "rom_storage_address": "0x8c02d81c",
+      "kernel_file_offset": "0x1e01c",
+      "rom_sha256": "de54dc2dc738aa439f9ed5f0d65590057bd302818434aed5973acc7e2075f8a3",
+      "rom_crc32_ieee": "9e4f3d17",
+      "finding": "Rounds the requested length up to 4 KiB and chooses an extent. Writes physicalLow=extentStart-global[0x8c1460dc] and physicalHigh=0, then advances the start by the rounded length. This does not establish live buffer ownership."
+    },
+    {
+      "id": "owner_pointer_checked_helper",
+      "module": "nk.exe",
+      "rva": "0x5c98",
+      "end_rva_exclusive": "0x5d28",
+      "bytes": 144,
+      "rom_storage_address": "0x8c015c98",
+      "kernel_file_offset": "0x6498",
+      "rom_sha256": "e77da3cd5940fe66042611da269465fa75cf0f37e2a0af49bfe67488584ccc6b",
+      "rom_crc32_ieee": "6c1db722",
+      "finding": "After process-handle validation, the zero-section path at RVA 0x5cea requires pointer>0x00010000 before ORing the validated PROCESS+0x0c slot. Pointers at or below 0x00010000 return unchanged in this helper; the probe refuses them. Nonzero-section pointers follow an additional access-check path that this probe does not call."
+    }
+  ],
+  "extension_model": {
+    "allocation_bytes": "0x198",
+    "root_rva": "0x72b8",
+    "root_pointer_is": "Unmodified process-heap allocation result. A nonzero local VA requires validated owner-slot normalization; it is not a physical bus address, P1 alias or module RVA.",
+    "publication": "DriverEntry RVA 0x1540 publishes the root before init RVA 0x1af8 completes. Failure paths clear the root only after destruction and deletion.",
+    "object_signature": "No self-pointer, magic or size field was established. Constant 0x198 is the source allocation size, not an observed object member.",
+    "device_object_relation": "IoCreateDevice requests four extension bytes. Success RVAs 0x15d0..0x15d6 store the raw heap pointer through DeviceObject+0x18 into that separate area. Do not interpret the 0x198-byte allocation as DeviceObject.",
+    "sampled_words": [
+      {
+        "offset": "0x0",
+        "name": "shutdown",
+        "source_finding": "Constructor RVA 0x1880 stores 0; destructor RVA 0x1994 stores 1. Record only; this is not object magic or size."
+      },
+      {
+        "offset": "0x84",
+        "name": "tx_physical_low",
+        "source_finding": "Init RVA 0x1d14 stores physicalLow from HalAllocateCommonBuffer(length=0x1000)."
+      },
+      {
+        "offset": "0x88",
+        "name": "tx_virtual_original",
+        "source_finding": "Init RVA 0x1d02 stores the common-buffer returned VA; constructor RVA 0x1888 zeroes the field."
+      },
+      {
+        "offset": "0x8c",
+        "name": "tx_last_descriptor_virtual",
+        "source_finding": "Builder RVA 0x59e8 stores the last descriptor VA; the constructor does not initialize this field."
+      },
+      {
+        "offset": "0x90",
+        "name": "tx_end_virtual",
+        "source_finding": "Builder RVA 0x59ec stores the address immediately after the list; the constructor does not initialize this field."
+      },
+      {
+        "offset": "0x100",
+        "name": "mmio_virtual",
+        "source_finding": "Init RVA 0x1ce8 stores the MmMapIoSpace return. Record raw only; this is not a buffer address."
+      },
+      {
+        "offset": "0xc0",
+        "name": "rx_physical_low",
+        "source_finding": "Pool+0x18 is the 64-bit physical output passed at RVA 0x5e74; pool begins at extension+0xa8."
+      },
+      {
+        "offset": "0xc4",
+        "name": "rx_physical_high",
+        "source_finding": "Pool+0x1c is physicalHigh; WDMH allocator RVA 0x1d87c writes zero."
+      },
+      {
+        "offset": "0xcc",
+        "name": "rx_virtual_original",
+        "source_finding": "Pool+0x24 receives the original returned VA at RVA 0x5e76."
+      },
+      {
+        "offset": "0xd8",
+        "name": "rx_physical_minus_virtual",
+        "source_finding": "Pool+0x30 stores uint32(physicalLow-originalVA) at RVA 0x5e8c."
+      }
+    ],
+    "unsampled_pool_offsets": {
+      "0xc8": "physical page cursor",
+      "0xd0": "virtual page cursor",
+      "0xd4": "assigned page bytes",
+      "0xdc": "current suballocation VA",
+      "0xe0": "current suballocation physical address",
+      "0xe4": "remaining suballocation bytes"
+    },
+    "source_initial_relationships": [
+      "TX allocation length is 0x1000; RX allocation length is 0x2000; both pass cacheEnabled=0.",
+      "RX high word is zero from the exact WDMH allocator. RX low word equals uint32(RX raw VA + RX bias).",
+      "Initially, RX physical cursor equals RX low, virtual cursor equals RX raw VA, and assigned bytes is zero. These are mutable allocation state and need not remain at their initial values.",
+      "TX last/end are mutable builder cursors, not object identity. No aggregate source capacity check was established."
+    ]
+  },
+  "pointer_normalization": {
+    "reviewed_rule": "The probe admits a local pointer only when 0x00010000 < raw < 0x02000000, then ORs the validated owner PROCESS slot. NK helper RVA 0x5c98 has this strict lower bound in its zero-section path; pointers at or below 0x00010000 remain unchanged there and are refused by the probe. Explicit addresses retain their value for normalization, then undergo independent owner, full-span and main-RAM mapping checks. This is not a claim that the probe implements every path of the kernel helper.",
+    "reviewed_kernel_helper_rva": "0x5c98",
+    "reported_prior_photo": {
+      "provenance": "Root-provided reading of the b2 console photograph; not reread by this static audit.",
+      "owner_process": "0x8c14e8b4",
+      "owner_slot": "0x08000000",
+      "owner_handle": "0x8cfcbf0e",
+      "maple_attachment_mask": "0x8",
+      "owner_root_va": "0x09dd72b8",
+      "owner_root_p1_backing": "0x8cf772b8",
+      "owner_root_raw_value": "0x00030a60",
+      "canonical_root_va": "0x03dd72b8",
+      "canonical_root_p1_backing": "0x8cf762b8",
+      "canonical_root_value": "0x0"
+    },
+    "derived_candidate": {
+      "extension_va": "0x08030a60",
+      "extension_end_exclusive": "0x08030bf8",
+      "candidate_page": "0x08030000",
+      "meaning": "Address arithmetic from the validated prior context only. The next probe must independently translate and reread metadata; the previous sample does not pin the allocation."
+    },
+    "broader_helper_rva": "0x5bdc"
+  },
+  "common_buffer_source_facts": {
+    "WDMH_API_table_address": "0x8c011fe8",
+    "WDMH_slot2_target": "0x8c02d81c",
+    "default_ROMHDR_driver_globals_address": "0x8cfd0000",
+    "default_region_bus_start": "0x0cfd0000",
+    "default_region_bytes": "0x30000",
+    "default_region_bus_end_exclusive": "0x0d000000",
+    "allocator_bias_global": "0x8c1460dc",
+    "allocator_bias_initial_value": "0x0",
+    "bias_evidence_limit": "Initially zero in NK zero-fill; the reviewed literal references only read it. This does not prove that all runtime writes are impossible.",
+    "physical_high": "The allocator explicitly writes zero. The TX caller does not retain the high word.",
+    "alignment_evidence": "The default region is 4 KiB aligned, requested lengths round up to 4 KiB, and the start advances by the rounded length. Alternate extent initialization is supported; the probe independently checks alignment.",
+    "cache_mapping": "MAPLE passes cacheEnabled=0 to WDMLIB; WDMLIB uses VirtualCopy flags 0x604. Require an observed uncached PTE rather than treating source flags as proof of the current mapping."
+  },
+  "conservative_probe_geometry": {
+    "classification": "Fail-closed read-only probe restrictions, not universal source guarantees or proof of active DMA ownership.",
+    "extension": "Read only the ten listed 32-bit metadata words through admitted coherent main-RAM mappings. Static size 0x198 is used for bounds. Require shutdown==0 for an accepted active sample, and revalidate context, root, mappings and words. A nonzero shutdown value is diagnostic evidence, not an active-state success.",
+    "TX": "Normalize the original VA with the validated owner. Require 4 KiB virtual and bus alignment and a complete 0x1000-byte span in admitted main RAM. Inspect mapping metadata for one page; require uncached attributes and physical backing equal to the bus address. Do not read buffer contents.",
+    "RX": "Normalize the original VA. Require 4 KiB virtual and low-bus alignment, high=0, and uint32(rawVA+bias)==lowBus. Inspect only mapping metadata for two pages; require uncached attributes and contiguous physical bus agreement. Do not read buffer contents.",
+    "TX_cursors": "Both zero may be recorded as unbuilt. Otherwise normalize both; require the last descriptor within TX and at least 12 bytes before the end, and the end within the TX allocation. These bounds are acceptance policy; fields are mutable and uninitialized before the first builder.",
+    "MMIO": "Record extension+0x100 raw only. The mapping is an ordinary CE VA and may carry the physical address page offset 0xc00. Assume no P2 shape, perform no main-RAM translation and read no MMIO through this pointer.",
+    "address_domains": "Compare buffer bus addresses with page-table physical backing after explicit RAM-alias normalization. The RX bias relation uses the raw local VA before applying the owner prefix.",
+    "lifetime": "Repeated words and mappings establish sampled consistency only. They grant no allocation lifetime, IRQ ownership, DMA quiescence or hook lease.",
+    "disjointness": "Require the complete TX and RX virtual spans to be disjoint and their complete physical bus spans to be disjoint. These are conservative probe restrictions consistent with separate successful allocations; they do not establish ownership or lifetime.",
+    "extension_alias_policy": "Successful samples require the extension virtual span and all ten sampled physical words to be disjoint from TX/RX allocations. Initial metadata words must be sampled before their buffer-address fields are known; a corrupt root can therefore alias other RAM before refusal. No TX/RX pointer is dereferenced for buffer data."
+  },
+  "known_gaps": [
+    "No photograph from the next DRIVER test was reviewed by this static audit.",
+    "Root publication precedes full initialization; metadata acceptance does not prove initialization completed.",
+    "A zero shutdown word is not a lifetime lease.",
+    "No TX/RX descriptor, payload or response content is needed or read.",
+    "These contracts authorize no CE API call, native Maple call, guest-memory write, MMIO write or hook.",
+    "The native virtual-A2 backend remains disconnected.",
+    "Root allocation identity is inferred from reviewed source and repeated metadata, not a retained allocation lease; initial metadata reads precede buffer identity checks."
+  ]
+}

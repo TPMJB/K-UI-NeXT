@@ -1,0 +1,31 @@
+{
+  "received_date": "2026-09-20",
+  "runtime_build": "e643add5850c",
+  "experiment": "The lid opened mid-capture, on a good copy of Omikron - The Nomad Soul (5 tracks), with the DMA engine; then resumed in the SAME boot and verified.",
+  "inputs": [
+    {
+      "file": "Lid_open.txt",
+      "kept_as": "lid-open-omikron-2026-09-20.txt",
+      "bytes": 27549,
+      "sha256": "1826a9fb83431f7b693332fc19d898104ab2e024975cb3e4beb6fa546fea7561"
+    }
+  ],
+  "observed": [
+    "GD-ROM DMA read did not complete (FAILED); DMA stays off until reboot",
+    "Partial job preserved: /KUI/dumps/ddef8ea0e44107842-0001 (after 37.5 s of capture)",
+    "RESUME LATEST MATCHING JOB in the same boot: CAPTURED all 5 tracks; Reference check (TOSEC): FULL TRACK MATCH",
+    "the resumed capture took 1586.7 s (26.4 minutes): PIO speed, because DMA had been switched off"
+  ],
+  "pc_verification": {
+    "result": "SAVED DATA VERIFIED, 5/5 PASS (run without --reference)",
+    "reference_check_done_afterwards": "The five sizes and CRC32s match TOSEC 'Omikron - The Nomad Soul v1.001 (2000)(Eidos)(US)(M5)[!][2S]' 5/5; the [1S] entry matches 3/5."
+  },
+  "derived": {
+    "conclusions": [
+      "The failure path works on hardware: opening the lid stopped the capture cleanly, kept the partial job, and a resume finished it byte-exact against TOSEC on the console and on the PC.",
+      "It also confirmed a flaw on hardware: any DMA read cut short switched DMA off until reboot, so the same-boot resume ran at PIO speed (26.4 minutes against about 19.6).",
+      "Two causes, both fixed: (1) the policy treated every unfinished DMA read as a DMA fault, including a stop, a disc change and a damaged sector; now only a timeout or three failures in a row on an unchanged disc turn DMA off. (2) The async read never latched a disc change (the blocking path checks the drive's sense code; the async one did not), so the change was only noticed by the PIO re-read that followed.",
+      "tests/test_disc.c now pins both (dma-async-stop, -change, -fail, -timeout); reverting either fix fails a scenario. Hardware confirmation of the fix: the next same-boot resume should keep DMA."
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "date": "2026-09-23",
+  "scope": "App round four host validation; new console behavior pending",
+  "reader_files_unchanged_sha256": {
+    "src/core/capture.c": "74bc14786561bc5b4f0a1936711235f1cba8cb66027c49a0d9761e74e746815b",
+    "src/dreamcast/disc.c": "b365e0529cfd60d26ed7bae392305ec2d235ca5760415ee4d6d3efa2b396f5c4",
+    "src/core/command.c": "1261a6a77ea69d7afcf1189650200d17ce35192c216638117c1ff88215740afd"
+  },
+  "passed": {
+    "portable_suite": true,
+    "music_replacement_and_resume_regression": true,
+    "shell_reducer_and_render_checks": true,
+    "vmu_fat32_exfat_cases": 128,
+    "system_settings_fat32_exfat_cases": 42,
+    "advanced_crc_fat32_exfat_cases": 40,
+    "clock_fat32_exfat_creation_modification_remount": true,
+    "existing_storage_loader_capture_reports_bench_settings_destination_named_dump_suites": true
+  },
+  "limits": [
+    "ASan and UBSan enabled; local LeakSanitizer disabled under executor ptrace restrictions. Music file allocations have a separate malloc/free ledger.",
+    "The image target stopped once on an inherited non-executable local bench-image file. Executable permission was restored and every remaining suite passed; this was not a source change.",
+    "Hardware clock, restore and scan checks remain pending. Existing hardware reader acceptance is retained."
+  ]
+}

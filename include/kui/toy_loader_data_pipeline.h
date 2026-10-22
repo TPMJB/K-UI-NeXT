@@ -1,0 +1,49 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+#ifndef KUI_TOY_LOADER_DATA_PIPELINE_H
+#define KUI_TOY_LOADER_DATA_PIPELINE_H
+
+/* Zero preserves every admitted reader. AO retains AN's one-step policy;
+ * AP retains AM's admission; AQ stops foreground work after one checked
+ * block, with independent finite time, step and token allowances. */
+#ifndef KUI_TOY_PILOT_DATA_PIPELINE_PROFILE
+#define KUI_TOY_PILOT_DATA_PIPELINE_PROFILE 0
+#endif
+#ifndef KUI_TOY_PIPELINE_HIGH_STREAM
+#define KUI_TOY_PIPELINE_HIGH_STREAM 0
+#endif
+#if KUI_TOY_PILOT_DATA_PIPELINE_PROFILE < 0 || KUI_TOY_PILOT_DATA_PIPELINE_PROFILE > 3
+#error Toy DATA pipeline profile must be 0, 1, 2 or 3
+#endif
+#if KUI_TOY_PIPELINE_HIGH_STREAM != 0 && KUI_TOY_PIPELINE_HIGH_STREAM != 1
+#error Toy DATA pipeline high-stream marker must be 0 or 1
+#endif
+#if KUI_TOY_PIPELINE_HIGH_STREAM && !KUI_TOY_PILOT_DATA_PIPELINE_PROFILE
+#error Toy DATA pipeline high stream requires an admitted nonzero profile
+#endif
+#if KUI_TOY_PILOT_DATA_PIPELINE_PROFILE && \
+    (KUI_TOY_PILOT_DATA_TUNING_PROFILE != 1 || \
+     KUI_TOY_PILOT_AD_FOLLOWUP_PROFILE != 2 || \
+     KUI_TOY_PILOT_DATA_BUDGET_PROFILE != 4 || \
+     KUI_TOY_PILOT_DATA_SCHEDULE_MODE != 2 || \
+     KUI_TOY_PILOT_PRIVATE_P2 != 1 || KUI_TOY_PILOT_NATIVE_CACHE || \
+     KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_ASYNC_CDDA || \
+     KUI_TOY_PILOT_SYNTHETIC_SOURCE || KUI_TOY_PILOT_LOADER_TRACE != 1 || \
+     KUI_TOY_PILOT_DATA_PROBE != 1 || KUI_TOY_PILOT_DATA_PAYLOAD_MODE || \
+     KUI_TOY_PILOT_GD_FIXED_STEP != 2 || KUI_SCI_DMA_REUSE_TDRE || \
+     (KUI_TOY_PILOT_DATA_PIPELINE_PROFILE == 1 ? \
+      KUI_TOY_PILOT_STARTUP_IRQ_PROFILE != 2 : KUI_TOY_PILOT_STARTUP_IRQ_PROFILE != 1))
+#error Toy DATA pipeline requires the exact admitted AN or AM parent
+#endif
+
+#define KUI_TOY_PIPELINE_RESUME_FIX (KUI_TOY_PILOT_DATA_PIPELINE_PROFILE != 0)
+#define KUI_TOY_PIPELINE_RECEIVE_AHEAD (KUI_TOY_PILOT_DATA_PIPELINE_PROFILE >= 2)
+#if KUI_TOY_PILOT_DATA_PIPELINE_PROFILE
+#define KUI_TOY_PIPELINE_REPORT_PROFILE (14u + KUI_TOY_PILOT_DATA_PIPELINE_PROFILE)
+#endif
+#if KUI_TOY_PILOT_DATA_PIPELINE_PROFILE == 3
+#define KUI_TOY_PIPELINE_SERVICE_BLOCKS 1u
+#define KUI_TOY_PIPELINE_SERVICE_TICKS 1500u
+#define KUI_TOY_PIPELINE_SERVICE_STEPS 2048u
+#endif
+
+#endif

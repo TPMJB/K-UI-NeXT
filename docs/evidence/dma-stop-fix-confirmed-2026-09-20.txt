@@ -1,0 +1,676 @@
+K-UI SD runtime 5a5cada85a90
+Log truncated: no
+Report trigger: manual
+Capture result: see operation log
+Running SD runtime build 5a5cada85a90
+Video: 640x480 NTSC interlaced, buffered
+Diagnostic code and fonts are loaded entirely in RAM.
+Replace boot CD with a known-good retail GD-ROM; close lid.
+Diagnostics page: A disc samples; X SD test; Y save log.
+Use a spare test card. No formatting; existing files preserved.
+Capture page: A new dump; X resume latest matching disc; Y verify.
+Left/Right switches capture/diagnostics. B stops and checkpoints.
+New dumps use separate /KUI/dumps/ folders. Keep a known-good disc inserted.
+Reports say if a dump matches Redump/TOSEC (copy data/known-dumps/*.db to KU
+I/).
+Capture defaults: SHA-256+CRC32, full readback; /KUI/bench.cfg can change th
+em.
+Capture/Resume/Verify auto-save a report after ending. Wait for READY.
+R trigger: isolated benchmarks from /KUI/bench.cfg (see docs/benchmarks.md).
+The screen redraws 2x a second while working, which frees CPU (ui_hz=full: o
+ff).
+mstats [runtime ready] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2691448 available~=14085768
+RAM sampled peak used/reserved=2691448
+Image+BSS=2471428 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14082048; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+mstats [capture/verify start] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2691448 available~=14085768
+RAM sampled peak used/reserved=2691448
+Image+BSS=2471428 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14082048; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD FAT32, 61067232 sectors, cluster=32768 bytes
+Volume start=32 (MBR)
+Loaded /KUI/bench.cfg
+OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
+OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
+OPTIONS sd_if=scif sd_crc=on
+OPTIONS ui_hz=2 sections=optical,hash,sd
+OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
+OPTIONS sweep_fads=(optical_fad)
+OPTIONS sweep_gap_us=0 sweep_service_us=0
+OPTIONS sweep_mode=pio sweep_spin=off
+OPTIONS sd_bytes=(none)
+OPTIONS capture_hash=crc32 end_readback=off resume_check=full capture_read=d
+ma
+OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
+OPTIONS capture_fad=(optical_fad)
+OPTIONS note=T7 real capture, fast settings. card=<model> disc=Sword of the 
+CMD 24 FAILED
+  sense=6/40 size=10 ATA=0
+LOW TOC first=41010000 last=01020000 end=01000642
+  T01 ctrl=4 start=150 next=1076
+  T02 ctrl=0 start=1076 next=1602
+HIGH TOC first=41030000 last=41030000 end=410861b4
+  T03 ctrl=4 start=45150 next=549300
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+NEW CAPTURE: guarded raw reads, data EDC, no zero-fill
+Disc: SWORD OF THE BERSERK GUTS RAGE
+Identity: f4db30d38d4d8926df1cdd72945007948cf363d278614289e783478a380de69c
+Profile: gdi-raw2352-typegap150-v1
+T01 FAD [150,926) data; gap excluded=150
+T02 FAD [1076,1602) audio; gap excluded=0
+T03 FAD [45150,549300) data; gap excluded=0
+SD FAT32, 61067232 sectors, cluster=32768 bytes
+Volume start=32 (MBR)
+Job: /KUI/dumps/df4db30d38d4d8926-0001
+Capturing T01 at FAD=150; B stops safely
+T01 776/776 sectors; checkpoint saved
+Capturing T02 at FAD=1076; B stops safely
+T02 526/526 sectors; checkpoint saved
+Capturing T03 at FAD=45150; B stops safely
+T03 4096/504150 sectors; checkpoint saved
+T03 8192/504150 sectors; checkpoint saved
+T03 12288/504150 sectors; checkpoint saved
+T03 16384/504150 sectors; checkpoint saved
+T03 20480/504150 sectors; checkpoint saved
+T03 24576/504150 sectors; checkpoint saved
+T03 28672/504150 sectors; checkpoint saved
+T03 32768/504150 sectors; checkpoint saved
+STOPPED: last committed bytes=82992672; retries=0
+Partial job preserved: /KUI/dumps/df4db30d38d4d8926-0001; Resume checks save
+d bytes first
+TIMING: wall time in microseconds; categories do not overlap
+TIMING setup wall_us=3902145
+disc us=3743100 pct=95.9 bytes=21168 calls=9
+edc us=620 pct=0.0 bytes=14112 calls=6
+checkpoint us=21297 pct=0.5 bytes=4096 calls=1
+other us=137128
+TIMING capture wall_us=86159501
+disc us=3635262 pct=4.2 bytes=82992672 calls=1104
+edc us=3234395 pct=3.7 bytes=81755520 calls=1087
+write us=72475714 pct=84.1 bytes=82992672 calls=1104
+crc32 us=6216550 pct=7.2 bytes=82992672 calls=1104
+checkpoint us=337697 pct=0.3 bytes=45056 calls=11
+other us=259883
+TRACK TIMING: capture intervals, including checkpoints and close
+TRACK T01 data FAD=[150,926)
+track wall_us=4262200 bytes=1825152
+track disc_us=2404557 write_us=1599290
+track sha256_us=0 crc32_us=149398
+track edc_us=70804 checkpoint_us=28905
+track other_us=9246
+TRACK T02 audio FAD=[1076,1602)
+track wall_us=1813050 bytes=1237152
+track disc_us=624605 write_us=1058328
+track sha256_us=0 crc32_us=93674
+track edc_us=0 checkpoint_us=29007
+track other_us=7436
+TRACK T03 data FAD=[45150,79134)
+track wall_us=80084139 bytes=79930368
+track disc_us=606100 write_us=69818096
+track sha256_us=0 crc32_us=5973478
+track edc_us=3163591 checkpoint_us=279785
+track other_us=243089
+BENCH cpu operation (setup+capture+verify) wall=90064 wk=83473 ui=3857 oth=2
+734 ui_pct=4.2
+OPTICAL setup: subtimers inside TIMING disc
+opt policy=paired PIO yield_us=2000
+opt wall_us=3743061 requests=9 bytes=21168
+opt mode_us=55 calls=9 failed=0
+opt buffers_us=67357 other_us=175
+opt requests ok=9 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=2693370 max_us=981049
+opt read1 calls=9 bytes=21168
+opt read1 max_fad=925 max_sectors=1
+opt read1 submit_us=182 submits=9
+opt read1 poll_us=1139633 polls=216736
+opt read1 wait_us=157613 waits=1250
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=1395942
+opt read1 poll_n 216644/81/0/9/2
+opt read1 poll_ms 1116/3/0/6/12
+opt read1 ok=9 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=982104 max_us=970595
+opt read2 calls=9 bytes=21168
+opt read2 max_fad=925 max_sectors=1
+opt read2 submit_us=187 submits=9
+opt read2 poll_us=445123 polls=82256
+opt read2 wait_us=41738 waits=457
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=495056
+opt read2 poll_n 82226/19/0/9/2
+opt read2 poll_ms 425/0/0/6/12
+opt read2 ok=9 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+OPTICAL capture: subtimers inside TIMING disc
+opt policy=single PIO yield_us=2000
+opt wall_us=1543729 requests=3 bytes=225792
+opt mode_us=19 calls=3 failed=0
+opt buffers_us=5396 other_us=37
+opt requests ok=3 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=1538277 max_us=880969
+opt read1 calls=3 bytes=225792
+opt read1 max_fad=150 max_sectors=32
+opt read1 submit_us=64 submits=3
+opt read1 poll_us=727885 polls=123982
+opt read1 wait_us=64861 waits=724
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=745467
+opt read1 poll_n 123840/45/0/96/1
+opt read1 poll_ms 645/2/0/70/10
+opt read1 ok=3 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=0 max_us=0
+opt read2 calls=0 bytes=0
+opt read2 max_fad=0 max_sectors=0
+opt read2 submit_us=0 submits=0
+opt read2 poll_us=0 polls=0
+opt read2 wait_us=0 waits=0
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=0
+opt read2 ok=0 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+mstats [capture/verify end] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2691448 available~=14085768
+RAM sampled peak used/reserved=2691448
+Image+BSS=2471428 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14082048; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+Capture result: stopped
+Saving diagnostic report automatically; B cancels log save.
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2691448 available~=14085768
+RAM sampled peak used/reserved=2691448
+Image+BSS=2471428 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14082048; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD FAT32, 61067232 sectors, cluster=32768 bytes
+Volume start=32 (MBR)
+Report saved: /KUI/probes/p0005/diagnostics.txt
+Operation ended. Diagnostics page: Y saves the log to SD.
+mstats [capture/verify start] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2691448 available~=14085768
+RAM sampled peak used/reserved=2691448
+Image+BSS=2471428 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14082048; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD FAT32, 61067232 sectors, cluster=32768 bytes
+Volume start=32 (MBR)
+Loaded /KUI/bench.cfg
+OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
+OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
+OPTIONS sd_if=scif sd_crc=on
+OPTIONS ui_hz=2 sections=optical,hash,sd
+OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
+OPTIONS sweep_fads=(optical_fad)
+OPTIONS sweep_gap_us=0 sweep_service_us=0
+OPTIONS sweep_mode=pio sweep_spin=off
+OPTIONS sd_bytes=(none)
+OPTIONS capture_hash=crc32 end_readback=off resume_check=full capture_read=d
+ma
+OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
+OPTIONS capture_fad=(optical_fad)
+OPTIONS note=T7 real capture, fast settings. card=<model> disc=Sword of the 
+LOW TOC first=41010000 last=01020000 end=01000642
+  T01 ctrl=4 start=150 next=1076
+  T02 ctrl=0 start=1076 next=1602
+HIGH TOC first=41030000 last=41030000 end=410861b4
+  T03 ctrl=4 start=45150 next=549300
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+RESUME LATEST MATCHING JOB: guarded raw reads, data EDC, no zero-fill
+Disc: SWORD OF THE BERSERK GUTS RAGE
+Identity: f4db30d38d4d8926df1cdd72945007948cf363d278614289e783478a380de69c
+Profile: gdi-raw2352-typegap150-v1
+T01 FAD [150,926) data; gap excluded=150
+T02 FAD [1076,1602) audio; gap excluded=0
+T03 FAD [45150,549300) data; gap excluded=0
+SD FAT32, 61067232 sectors, cluster=32768 bytes
+Volume start=32 (MBR)
+Job: /KUI/dumps/df4db30d38d4d8926-0001
+Checkpoint #12: 82992672 committed bytes
+Checking saved bytes before any resume writes...
+T01 verified 1825152 bytes; CRC32=bcec7767
+T02 verified 1237152 bytes; CRC32=0ff934e3
+T03 verified 79930368 bytes; CRC32=418a96f1
+Capturing T03 at FAD=79134; B stops safely
+T03 38080/504150 sectors; checkpoint saved
+T03 42176/504150 sectors; checkpoint saved
+T03 46272/504150 sectors; checkpoint saved
+T03 50368/504150 sectors; checkpoint saved
+T03 54464/504150 sectors; checkpoint saved
+T03 58560/504150 sectors; checkpoint saved
+T03 62656/504150 sectors; checkpoint saved
+T03 66752/504150 sectors; checkpoint saved
+CAPTURE/VERIFY FAILED: last committed bytes=163148832; retries=0
+Partial job preserved: /KUI/dumps/df4db30d38d4d8926-0001; Resume checks save
+d bytes first
+TIMING: wall time in microseconds; categories do not overlap
+TIMING setup wall_us=3960199
+disc us=3923017 pct=99.0 bytes=21168 calls=9
+edc us=546 pct=0.0 bytes=14112 calls=6
+other us=36636
+TIMING resume wall_us=133558797
+read us=127029266 pct=95.1 bytes=82992672 calls=1104
+crc32 us=6479498 pct=4.8 bytes=82992672 calls=1104
+other us=50033
+TIMING capture wall_us=81343681
+disc us=640076 pct=0.7 bytes=80156160 calls=1066
+edc us=3200649 pct=3.9 bytes=80156160 calls=1065
+write us=70929157 pct=87.1 bytes=80156160 calls=1065
+crc32 us=6011833 pct=7.3 bytes=80156160 calls=1065
+checkpoint us=319165 pct=0.3 bytes=36864 calls=9
+other us=242801
+TRACK TIMING: capture intervals, including checkpoints and close
+TRACK T03 data FAD=[79134,113214)
+track wall_us=81343589 bytes=80156160
+track disc_us=640076 write_us=70929157
+track sha256_us=0 crc32_us=6011833
+track edc_us=3200649 checkpoint_us=319165
+track other_us=242709
+BENCH cpu operation (setup+capture+verify) wall=218865 wk=206481 ui=10680 ot
+h=1704 ui_pct=4.8
+OPTICAL setup: subtimers inside TIMING disc
+opt policy=paired PIO yield_us=2000
+opt wall_us=3922980 requests=9 bytes=21168
+opt mode_us=55 calls=9 failed=0
+opt buffers_us=79831 other_us=160
+opt requests ok=9 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=2817737 max_us=1036098
+opt read1 calls=9 bytes=21168
+opt read1 max_fad=925 max_sectors=1
+opt read1 submit_us=182 submits=9
+opt read1 poll_us=1193612 polls=229593
+opt read1 wait_us=142809 waits=1326
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=1481134
+opt read1 poll_n 229501/83/0/9/0
+opt read1 poll_ms 1183/3/0/6/0
+opt read1 ok=9 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=1025197 max_us=1013729
+opt read2 calls=9 bytes=21168
+opt read2 max_fad=925 max_sectors=1
+opt read2 submit_us=186 submits=9
+opt read2 poll_us=448181 polls=85212
+opt read2 wait_us=61709 waits=474
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=515121
+opt read2 poll_n 85177/26/0/9/0
+opt read2 poll_ms 440/1/0/6/0
+opt read2 ok=9 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+OPTICAL capture: subtimers inside TIMING disc
+opt policy=single PIO yield_us=2000
+opt wall_us=527655 requests=1 bytes=75264
+opt mode_us=7 calls=1 failed=0
+opt buffers_us=1807 other_us=13
+opt requests ok=1 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=525828 max_us=525828
+opt read1 calls=1 bytes=75264
+opt read1 max_fad=79134 max_sectors=32
+opt read1 submit_us=21 submits=1
+opt read1 poll_us=235912 polls=40885
+opt read1 wait_us=41377 waits=239
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=248518
+opt read1 poll_n 40841/13/0/31/0
+opt read1 poll_ms 212/0/0/23/0
+opt read1 ok=1 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=0 max_us=0
+opt read2 calls=0 bytes=0
+opt read2 max_fad=0 max_sectors=0
+opt read2 submit_us=0 submits=0
+opt read2 poll_us=0 polls=0
+opt read2 wait_us=0 waits=0
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=0
+opt read2 ok=0 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+mstats [capture/verify end] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2691448 available~=14085768
+RAM sampled peak used/reserved=2691448
+Image+BSS=2471428 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14082048; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+Capture result: failed
+Saving diagnostic report automatically; B cancels log save.
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2691448 available~=14085768
+RAM sampled peak used/reserved=2691448
+Image+BSS=2471428 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14082048; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD FAT32, 61067232 sectors, cluster=32768 bytes
+Volume start=32 (MBR)
+Report saved: /KUI/probes/p0006/diagnostics.txt
+Operation ended. Diagnostics page: Y saves the log to SD.
+mstats [capture/verify start] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2691448 available~=14085768
+RAM sampled peak used/reserved=2691448
+Image+BSS=2471428 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14082048; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD FAT32, 61067232 sectors, cluster=32768 bytes
+Volume start=32 (MBR)
+Loaded /KUI/bench.cfg
+OPTIONS chunks=32,128,512 sd_mib=8 expand=on hash_mib=8
+OPTIONS optical_fad=45150 optical_sectors=4096 yield_us=2000
+OPTIONS sd_if=scif sd_crc=on
+OPTIONS ui_hz=2 sections=optical,hash,sd
+OPTIONS sweep_chunks=(sweep off) sweep_sectors=2048 verify=on
+OPTIONS sweep_fads=(optical_fad)
+OPTIONS sweep_gap_us=0 sweep_service_us=0
+OPTIONS sweep_mode=pio sweep_spin=off
+OPTIONS sd_bytes=(none)
+OPTIONS capture_hash=crc32 end_readback=off resume_check=full capture_read=d
+ma
+OPTIONS sample_readback=0 capture_sectors=4096 capture_type=data
+OPTIONS capture_fad=(optical_fad)
+OPTIONS note=T7 real capture, fast settings. card=<model> disc=Sword of the 
+CMD 24 FAILED
+  sense=6/40 size=10 ATA=0
+LOW TOC first=41010000 last=01020000 end=01000642
+  T01 ctrl=4 start=150 next=1076
+  T02 ctrl=0 start=1076 next=1602
+HIGH TOC first=41030000 last=41030000 end=410861b4
+  T03 ctrl=4 start=45150 next=549300
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+RESUME LATEST MATCHING JOB: guarded raw reads, data EDC, no zero-fill
+Disc: SWORD OF THE BERSERK GUTS RAGE
+Identity: f4db30d38d4d8926df1cdd72945007948cf363d278614289e783478a380de69c
+Profile: gdi-raw2352-typegap150-v1
+T01 FAD [150,926) data; gap excluded=150
+T02 FAD [1076,1602) audio; gap excluded=0
+T03 FAD [45150,549300) data; gap excluded=0
+SD FAT32, 61067232 sectors, cluster=32768 bytes
+Volume start=32 (MBR)
+Job: /KUI/dumps/df4db30d38d4d8926-0001
+Checkpoint #21: 163148832 committed bytes
+Checking saved bytes before any resume writes...
+T01 verified 1825152 bytes; CRC32=bcec7767
+T02 verified 1237152 bytes; CRC32=0ff934e3
+T03 verified 160086528 bytes; CRC32=a44c9e02
+Capturing T03 at FAD=113214; B stops safely
+T03 72160/504150 sectors; checkpoint saved
+T03 76256/504150 sectors; checkpoint saved
+T03 80352/504150 sectors; checkpoint saved
+T03 84448/504150 sectors; checkpoint saved
+T03 88544/504150 sectors; checkpoint saved
+T03 92640/504150 sectors; checkpoint saved
+T03 96736/504150 sectors; checkpoint saved
+T03 100832/504150 sectors; checkpoint saved
+T03 104928/504150 sectors; checkpoint saved
+T03 109024/504150 sectors; checkpoint saved
+T03 113120/504150 sectors; checkpoint saved
+T03 117216/504150 sectors; checkpoint saved
+T03 121312/504150 sectors; checkpoint saved
+T03 125408/504150 sectors; checkpoint saved
+T03 129504/504150 sectors; checkpoint saved
+T03 133600/504150 sectors; checkpoint saved
+T03 137696/504150 sectors; checkpoint saved
+T03 141792/504150 sectors; checkpoint saved
+T03 145888/504150 sectors; checkpoint saved
+T03 149984/504150 sectors; checkpoint saved
+T03 154080/504150 sectors; checkpoint saved
+T03 158176/504150 sectors; checkpoint saved
+T03 162272/504150 sectors; checkpoint saved
+T03 166368/504150 sectors; checkpoint saved
+T03 170464/504150 sectors; checkpoint saved
+T03 174560/504150 sectors; checkpoint saved
+T03 178656/504150 sectors; checkpoint saved
+T03 182752/504150 sectors; checkpoint saved
+T03 186848/504150 sectors; checkpoint saved
+T03 190944/504150 sectors; checkpoint saved
+T03 195040/504150 sectors; checkpoint saved
+T03 199136/504150 sectors; checkpoint saved
+T03 203232/504150 sectors; checkpoint saved
+T03 207328/504150 sectors; checkpoint saved
+T03 211424/504150 sectors; checkpoint saved
+T03 215520/504150 sectors; checkpoint saved
+T03 219616/504150 sectors; checkpoint saved
+T03 223712/504150 sectors; checkpoint saved
+T03 227808/504150 sectors; checkpoint saved
+T03 231904/504150 sectors; checkpoint saved
+T03 236000/504150 sectors; checkpoint saved
+T03 240096/504150 sectors; checkpoint saved
+T03 244192/504150 sectors; checkpoint saved
+T03 248288/504150 sectors; checkpoint saved
+T03 252384/504150 sectors; checkpoint saved
+T03 256480/504150 sectors; checkpoint saved
+T03 260576/504150 sectors; checkpoint saved
+T03 264672/504150 sectors; checkpoint saved
+T03 268768/504150 sectors; checkpoint saved
+T03 272864/504150 sectors; checkpoint saved
+T03 276960/504150 sectors; checkpoint saved
+T03 281056/504150 sectors; checkpoint saved
+T03 285152/504150 sectors; checkpoint saved
+T03 289248/504150 sectors; checkpoint saved
+T03 293344/504150 sectors; checkpoint saved
+T03 297440/504150 sectors; checkpoint saved
+T03 301536/504150 sectors; checkpoint saved
+T03 305632/504150 sectors; checkpoint saved
+T03 309728/504150 sectors; checkpoint saved
+T03 313824/504150 sectors; checkpoint saved
+T03 317920/504150 sectors; checkpoint saved
+T03 322016/504150 sectors; checkpoint saved
+T03 326112/504150 sectors; checkpoint saved
+T03 330208/504150 sectors; checkpoint saved
+T03 334304/504150 sectors; checkpoint saved
+T03 338400/504150 sectors; checkpoint saved
+T03 342496/504150 sectors; checkpoint saved
+T03 346592/504150 sectors; checkpoint saved
+T03 350688/504150 sectors; checkpoint saved
+T03 354784/504150 sectors; checkpoint saved
+T03 358880/504150 sectors; checkpoint saved
+T03 362976/504150 sectors; checkpoint saved
+T03 367072/504150 sectors; checkpoint saved
+T03 371168/504150 sectors; checkpoint saved
+T03 375264/504150 sectors; checkpoint saved
+T03 379360/504150 sectors; checkpoint saved
+T03 383456/504150 sectors; checkpoint saved
+T03 387552/504150 sectors; checkpoint saved
+T03 391648/504150 sectors; checkpoint saved
+T03 395744/504150 sectors; checkpoint saved
+T03 399840/504150 sectors; checkpoint saved
+T03 403936/504150 sectors; checkpoint saved
+T03 408032/504150 sectors; checkpoint saved
+T03 412128/504150 sectors; checkpoint saved
+T03 416224/504150 sectors; checkpoint saved
+T03 420320/504150 sectors; checkpoint saved
+T03 424416/504150 sectors; checkpoint saved
+T03 428512/504150 sectors; checkpoint saved
+T03 432608/504150 sectors; checkpoint saved
+T03 436704/504150 sectors; checkpoint saved
+T03 440800/504150 sectors; checkpoint saved
+T03 444896/504150 sectors; checkpoint saved
+T03 448992/504150 sectors; checkpoint saved
+T03 453088/504150 sectors; checkpoint saved
+T03 457184/504150 sectors; checkpoint saved
+T03 461280/504150 sectors; checkpoint saved
+T03 465376/504150 sectors; checkpoint saved
+T03 469472/504150 sectors; checkpoint saved
+T03 473568/504150 sectors; checkpoint saved
+T03 477664/504150 sectors; checkpoint saved
+T03 481760/504150 sectors; checkpoint saved
+T03 485856/504150 sectors; checkpoint saved
+T03 489952/504150 sectors; checkpoint saved
+T03 494048/504150 sectors; checkpoint saved
+T03 498144/504150 sectors; checkpoint saved
+T03 502240/504150 sectors; checkpoint saved
+T03 504150/504150 sectors; checkpoint saved
+Capture written. Saved tracks NOT re-read (end read-back off)
+Disc read: 13627 chunks by DMA, 1 by PIO
+Disc read: 13627 chunks by DMA, 1 by PIO
+CAPTURED: all 3 tracks; stream CRC32 recorded; saved data NOT re-read
+Reference check (TOSEC): FULL TRACK MATCH
+  Sword of the Berserk - Guts' Rage v1.000 (2000)(Eidos)(US)[!]
+Output: /KUI/dumps/df4db30d38d4d8926-0001/disc.gdi
+TIMING: wall time in microseconds; categories do not overlap
+TIMING setup wall_us=3788868
+disc us=3751560 pct=99.0 bytes=21168 calls=9
+edc us=547 pct=0.0 bytes=14112 calls=6
+other us=36761
+TIMING resume wall_us=261622900
+read us=248947268 pct=95.1 bytes=163148832 calls=2169
+crc32 us=12616897 pct=4.8 bytes=163148832 calls=2169
+other us=58735
+TIMING capture wall_us=1034202011
+disc us=3086483 pct=0.2 bytes=1025674272 calls=13628
+edc us=40940473 pct=3.9 bytes=1025674272 calls=13628
+write us=905872633 pct=87.5 bytes=1025674272 calls=13628
+crc32 us=77004200 pct=7.4 bytes=1025674272 calls=13628
+checkpoint us=4406493 pct=0.4 bytes=438272 calls=107
+other us=2891729
+TIMING finish wall_us=1328312
+other us=1328312
+TRACK TIMING: capture intervals, including checkpoints and close
+TRACK T03 data FAD=[113214,549300)
+track wall_us=1034201972 bytes=1025674272
+track disc_us=3086483 write_us=905872633
+track sha256_us=0 crc32_us=77004200
+track edc_us=40940473 checkpoint_us=4406493
+track other_us=2891690
+BENCH cpu operation (setup+capture+verify) wall=1300944 wk=1223427 ui=58299 
+oth=19219 ui_pct=4.4
+OPTICAL setup: subtimers inside TIMING disc
+opt policy=paired PIO yield_us=2000
+opt wall_us=3751521 requests=9 bytes=21168
+opt mode_us=52 calls=9 failed=0
+opt buffers_us=67157 other_us=162
+opt requests ok=9 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=2706901 max_us=1019704
+opt read1 calls=9 bytes=21168
+opt read1 max_fad=925 max_sectors=1
+opt read1 submit_us=181 submits=9
+opt read1 poll_us=1159620 polls=222118
+opt read1 wait_us=106312 waits=1284
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=1440788
+opt read1 poll_n 222041/66/0/9/2
+opt read1 poll_ms 1145/2/0/6/5
+opt read1 ok=9 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=977249 max_us=966061
+opt read2 calls=9 bytes=21168
+opt read2 max_fad=925 max_sectors=1
+opt read2 submit_us=187 submits=9
+opt read2 poll_us=435852 polls=82331
+opt read2 wait_us=46089 waits=457
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=495121
+opt read2 poll_n 82291/30/0/9/1
+opt read2 poll_ms 425/1/0/6/2
+opt read2 ok=9 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+OPTICAL capture: subtimers inside TIMING disc
+opt policy=single PIO yield_us=2000
+opt wall_us=1597238 requests=1 bytes=75264
+opt mode_us=7 calls=1 failed=0
+opt buffers_us=1776 other_us=14
+opt requests ok=1 retry=0 fatal=0
+opt mismatch=0 guards=0 refused=0
+opt short=0
+opt poll buckets: call <25us/<100us/<400us/<1.6ms/more
+opt read1 us=1595441 max_us=1595441
+opt read1 calls=1 bytes=75264
+opt read1 max_fad=113214 max_sectors=32
+opt read1 submit_us=22 submits=1
+opt read1 poll_us=722757 polls=134336
+opt read1 wait_us=64652 waits=762
+opt read1 abort_us=0 aborts=0
+opt read1 other_us=808010
+opt read1 poll_n 134272/31/0/32/1
+opt read1 poll_ms 695/1/0/23/2
+opt read1 ok=1 failed=0 timeout=0
+opt read1 cancelled=0 abort_failed=0 invalid=0
+opt read2 us=0 max_us=0
+opt read2 calls=0 bytes=0
+opt read2 max_fad=0 max_sectors=0
+opt read2 submit_us=0 submits=0
+opt read2 poll_us=0 polls=0
+opt read2 wait_us=0 waits=0
+opt read2 abort_us=0 aborts=0
+opt read2 other_us=0
+opt read2 ok=0 failed=0 timeout=0
+opt read2 cancelled=0 abort_failed=0 invalid=0
+mstats [capture/verify end] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2691448 available~=14085768
+RAM sampled peak used/reserved=2691448
+Image+BSS=2471428 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14082048; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+Capture result: complete
+Saving diagnostic report automatically; B cancels log save.
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2691448 available~=14085768
+RAM sampled peak used/reserved=2691448
+Image+BSS=2471428 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14082048; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on
+SD FAT32, 61067232 sectors, cluster=32768 bytes
+Volume start=32 (MBR)
+Report saved: /KUI/probes/p0007/diagnostics.txt
+Operation ended. Diagnostics page: Y saves the log to SD.
+mstats [L trigger] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2691448 available~=14085768
+RAM sampled peak used/reserved=2691448
+Image+BSS=2471428 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14082048; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+mstats [save log] (bytes; main RAM excludes VRAM/audio)
+RAM total=16777216 used/reserved~=2691448 available~=14085768
+RAM sampled peak used/reserved=2691448
+Image+BSS=2471428 firmware reserve=65536 main stack reserve=65536
+Heap max system bytes=92668
+Heap system bytes=92668 in use bytes=88948 free bytes=3720
+Unclaimed main RAM=14082048; worker stacks included in heap
+Video framebuffers=7987200 bytes in separate VRAM
+SD transport: SCIF (bit-banged SPI), CRC check on reads on

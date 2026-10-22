@@ -1,0 +1,59 @@
+{
+  "date": "2026-09-24",
+  "source_commit": "07b3a8a7497c22dd268c16e9d4d4afabbaf608ec",
+  "packaged_commit": "c4cfd4585ec56b68ee4810f5594984159b014189",
+  "source_tree": "0f711b05ff04d96f30296d7ac9a655e6c4ca31b7",
+  "run_id": 35993291859,
+  "host": {
+    "job_id": 107612219237,
+    "result": "success",
+    "command": "make test test-images",
+    "sanitizers": [
+      "AddressSanitizer",
+      "UndefinedBehaviorSanitizer"
+    ]
+  },
+  "dreamcast": {
+    "job_id": 107614485011,
+    "result": "success",
+    "compiler": "sh-elf-gcc (GCC) 15.2.0",
+    "layout": {
+      "image_client": {
+        "memory_end": "0x8c013140",
+        "payload_bytes": 2706,
+        "unresolved_symbols": 0
+      },
+      "image_entry": {
+        "memory_end": "0x8c028f2c",
+        "payload_bytes": 102188,
+        "unresolved_symbols": 0
+      },
+      "image_resident": {
+        "memory_end": "0x8ce159c8",
+        "payload_bytes": 28460,
+        "unresolved_symbols": 0
+      }
+    }
+  },
+  "packaging_fix": {
+    "failed_run_id": 35992293803,
+    "cause": "The independent display helper sd_failure matched the validator's forbidden _sd_ runtime-driver prefix.",
+    "resolution": "Rename it display_sd_failure; retain all dependency and layout checks."
+  },
+  "sd_update": {
+    "artifact_id": 10805331976,
+    "bytes": 8107019,
+    "sha256": "e914b837b34439f0dc98a2571656da2b50817a5dfdcf2648bc7d194e68148da4",
+    "download": "https://github.com/TPMJB/K-UI-NeXT/actions/runs/35993291859/artifacts/10805331976",
+    "runtime_build": "c4cfd4585ec5",
+    "local_validation": [
+      "ZIP CRCs",
+      "Every SHA256SUMS entry",
+      "Runtime envelope CRC and memory bounds",
+      "Selected-image relocation contract and empty manifest",
+      "Source tree matches PR merge build"
+    ]
+  },
+  "hardware_tested": false,
+  "remaining_gate": "One selected-image test with the owner's existing Dead or Alive 2 GDI; photograph final screen. No repeat synthetic probe, new rip, verification or CD burn. Retail execution remains unimplemented."
+}

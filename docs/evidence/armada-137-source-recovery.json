@@ -1,0 +1,129 @@
+{
+  "kind": "reconstructed-armada-137-source-baseline",
+  "claimed_original_commit": "137ca964caad",
+  "exact_original_tree_recovered": false,
+  "base_snapshot": {
+    "archive": "K-UI-VMU-Manager-Copy-Scroll-Fix-eccc0c228bd7.zip",
+    "member": "source/source-snapshot.tar.gz",
+    "sha256": "8992b569b902b0d1e8fcbc743b2a671b7c5a2deb13f4485dd9600d391f130b48",
+    "verified_files": 1621
+  },
+  "ordered_patches": [
+    {
+      "file": "changes-from-fbef039.patch",
+      "sha256": "55f93e7c1746f11a8a1ed50d4c5aae4e3b8e4fb9e39b22ec3d2a4598bc5b3f6f"
+    },
+    {
+      "file": "changes-from-152714.patch",
+      "sha256": "714d610a6c7a94adf8c98e8dab6aa6feebcda631775fb9013ddca9bb56cf5045"
+    },
+    {
+      "file": "changes-from-b2c435.patch",
+      "sha256": "181642a2a55555ae82a76cbcc1b804b91a7b3e8c5f7f8cbe20692f1a441b7bb4"
+    },
+    {
+      "file": "changes-from-b5bcde.patch",
+      "sha256": "5000d6f7151edf9519e27b53783962638389ade474d414ffa0fe6e3a65d4eeb7"
+    },
+    {
+      "file": "changes-from-e98e4a.patch",
+      "sha256": "d94e03749402c8cd666c65eef7193420a567de10c0fb69be90f1f0566fd9246d"
+    },
+    {
+      "file": "changes-from-00cec9.patch",
+      "sha256": "2e078f0597b1a91dec34e0046347f0e7608750858b07eaec8a0df5dff9c64f6f"
+    },
+    {
+      "file": "changes-from-2c0fd6.patch",
+      "sha256": "0b9f4f6004480b3628f7abb38df2a653d62cdbb215c2db62035e3436d218547e"
+    },
+    {
+      "file": "changes-from-cbfe369.patch",
+      "sha256": "c71ee3fbd8a550edf1f641a17cc9487b3ce2d5606fdd7384524808e9712eadbd"
+    }
+  ],
+  "patch_postimages": {
+    "checked": 109,
+    "matches": 108,
+    "mismatches": [
+      {
+        "path": "src/loader/retail_stage.c",
+        "expected_prefix": "7741ecf",
+        "actual": "436136025eb7f591be1247325929a4a76de8afbd",
+        "matches": false
+      }
+    ]
+  },
+  "reconstruction_edits": [
+    {
+      "path": "include/kui/vmu_readonly.h",
+      "change": "Wrap the A1 default ADDRESS definition with #ifndef/#endif so the retained A2 compile flag can override it.",
+      "original_exact_source_unavailable": true
+    }
+  ],
+  "remaining_limitations": [
+    "retail_stage.c lacks an earlier pre-discovery change: expected first preimage prefix2731068; restored snapshot has4a3a548. Final patch target prefix7741ecf differs from recovered4361360.",
+    "Files untouched by the retained patch chain are inherited from the manager snapshot, not claimed identical to every file in original137.",
+    "The old commit object and exact history are unavailable. This is an orphan reconstructed source baseline.",
+    "Before issuing a comparison build, compare recompiled helper/bridge/resident/stage native bytes against retained137 native-proof; record any differences."
+  ],
+  "preserved_untracked_directories": [
+    ".deps",
+    "build"
+  ],
+  "archives": [
+    {
+      "file": "K-UI-VMU-Manager-Copy-Scroll-Fix-eccc0c228bd7.zip",
+      "sha256": "5c14a1f9aadd2d38e16b02139e48f755f318fb0ef4609438cf88fdd8589799f4"
+    },
+    {
+      "file": "K-UI-Armada-CE-Loaded-Layout-Fix.zip",
+      "sha256": "144cd598f9e13feee09f6eac9f67bb89fb5e1fd30d1ee93b477418d6ddbee2ce"
+    },
+    {
+      "file": "K-UI-Armada-CE-Maple-Mapping-Test.zip",
+      "sha256": "1ec5d30e8f372b36ff8b06e2279e309528e1cb7236d2f02b26be0746915e6f29"
+    },
+    {
+      "file": "K-UI-Armada-CE-Driver-State-Test.zip",
+      "sha256": "91aa813f0e5dc05cc498def97da8ef22183ad0c10bd71a8803babfab9c823efd"
+    },
+    {
+      "file": "K-UI-Armada-CE-ReadOnly-A2-Test.zip",
+      "sha256": "60acb3c72a6dfe8c3d6f5038f2c3ad668385192e0b78de636e1e1d92b596f78b"
+    },
+    {
+      "file": "K-UI-Armada-CE-Cache-Fix.zip",
+      "sha256": "cdfe519f007b891454f9292a87f8f0fccc7ee0565eed8b777e376fbfb47110e6"
+    },
+    {
+      "file": "K-UI-Armada-CE-Completion-Test.zip",
+      "sha256": "9760d04e911c0307a8538d09451595ad085908064011a529a605d384b910f6fe"
+    },
+    {
+      "file": "K-UI-Armada-CE-Header-Test.zip",
+      "sha256": "a838061fe216408091f5b8c22b3884fec7040464a32b8597ab7c2aec612d1b2c"
+    },
+    {
+      "file": "K-UI-Armada-CE-Maple-Discovery-Test.zip",
+      "sha256": "dd85d0672b987e4a1aa2872fbd8d561c6672889ccc750166d866c40b265cbd4e"
+    },
+    {
+      "file": "K-UI-Armada-CE-Traffic-Test.zip",
+      "sha256": "e21cd531257ffa68c1b1278206168b5424f9c303fd44153340bbb203888d84d0"
+    },
+    {
+      "file": "K-UI-Armada-CE-Module-Fix.zip",
+      "sha256": "375f585a65c862a5e9326fa2f1a8c0a1863a9b2810abbd393ea782cc36ff29c7"
+    },
+    {
+      "file": "K-UI-Armada-CE-DMA-Gate-Test.zip",
+      "sha256": "2420180cc22db897dc4b1e6046260831212a4df2b442484f054dfc8ad300e756"
+    },
+    {
+      "file": "K-UI-Armada-CE-VMU-Batched-Proof-Test.zip",
+      "sha256": "fb600bf15b6ea040b5ecba49344cfa27c0cd2f88c7d31298e4ba9fd0bd1969ed"
+    }
+  ],
+  "native_binary_equivalence_verified": false
+}

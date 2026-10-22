@@ -1,0 +1,111 @@
+{
+  "status": "PASS",
+  "scope": "Opt-in experimental reservation/native admission only; readonly backend retained",
+  "reference_build": "af18576dba18",
+  "comparison_settings": {
+    "auto_stop": 6,
+    "auto_phase": 2,
+    "auto_limit": 1200,
+    "diagnostic_mode": 0,
+    "write_staging": 0
+  },
+  "profiles": {
+    "readonly": {
+      "begin": "0x8cfca000",
+      "end": "0x8cfd0000",
+      "bytes": 24576
+    },
+    "expanded": {
+      "begin": "0x8cfc4000",
+      "end": "0x8cfd0000",
+      "bytes": 49152
+    }
+  },
+  "readonly_binary_equivalence": {
+    "hook.bin": {
+      "bytes": 18816,
+      "sha256": "cbcd0beeabf83dec06214fe5dca03ae1f3f96da623e683bb93094d4322164bb4",
+      "identical": true
+    },
+    "bridge.bin": {
+      "bytes": 92,
+      "sha256": "f40e9492fd883233ee0c9f0947ca060c014851e3d242eba2d32e95b14a9766fb",
+      "identical": true
+    },
+    "bind-probe.bin": {
+      "bytes": 10544,
+      "sha256": "61873b6a748e06b6a22b6802c04d5e8163125fd328a66de5ce3c46b40648ae57",
+      "identical": true
+    },
+    "stage.bin": {
+      "bytes": 109456,
+      "sha256": "a556fc2ec9ed01180d98c6eeb86db68b103c9dc16984d48e3307c0231d39463d",
+      "identical": true
+    },
+    "resident-scif.bin": {
+      "bytes": 10688,
+      "sha256": "6dd4c964943c00092b2f6bda2a64515ceab20caac19974573014dfbec2baee7e",
+      "identical": true
+    },
+    "resident-sci.bin": {
+      "bytes": 13208,
+      "sha256": "4ceca3945f15be480e44491882bc5d9803b011608bbd6bf456c0b7703a14915b",
+      "identical": true
+    },
+    "resident-ide.bin": {
+      "bytes": 10448,
+      "sha256": "933ebca2bb9e3695ce9ab963a333e3ccac3d10df00275107b0e474db623ee73f",
+      "identical": true
+    },
+    "resident-scia.bin": {
+      "bytes": 16516,
+      "sha256": "ebe7291339fa52092acc6a5bd9434e2e4fb6c7438f164b26f1b5cccbd6fb4d95",
+      "identical": true
+    }
+  },
+  "expanded_link": {
+    "helper_bytes": 18816,
+    "workspace_bytes": 3284,
+    "workspace_end_p2": "0xacfc9654",
+    "maple_stack_bottom_p2": "0xacfcf800",
+    "maple_stack_bytes": 1536,
+    "headroom_before_maple_stack_bytes": 25004,
+    "c_stack_worst_bytes": 992,
+    "shim_bytes": 16,
+    "required_margin_bytes": 64,
+    "stage_bss_end_p1": "0x8ce365e4"
+  },
+  "validation": {
+    "reservation_checks": 40930,
+    "source_and_dma_boundary_profiles": 2,
+    "native_mutations": {
+      "readonly_mutations_rejected": 614,
+      "expanded_mutations_rejected": 623,
+      "stage_resident_mutations_rejected": 18,
+      "complete_store_and_snapshot_bodies_pinned": true,
+      "mixed_layouts_rejected": true,
+      "scope": "Native admission only; no hardware validation"
+    },
+    "snapshot_models": {
+      "layout-default": {
+        "checks": 5710,
+        "complete_byte_mutations_rejected": 488
+      },
+      "write-layout": {
+        "checks": 5710,
+        "complete_byte_mutations_rejected": 488
+      }
+    },
+    "readonly_a2_regression_suite": "PASS",
+    "full_native_builds": "PASS",
+    "expanded_native_audit_sha256": "1f13c6596d5f9f8fb60ccf1b4ab04ec16c481352e511c83b515f12afc2e6ee55",
+    "stage_resident_profile_markers": "Exact ABS/STT_NOTYPE/size0/value1 in expanded profile; absent in default"
+  },
+  "not_established": [
+    "Expanded layout hardware acceptance",
+    "Physical CE SD provider/worker",
+    "Held CE pending IRP completion integration",
+    "Save/reload/power-cycle behavior"
+  ],
+  "hardware_package_created": false
+}

@@ -1,0 +1,332 @@
+{
+  "format": "armada-ce-maple-rx-slice-owner-contracts-v1",
+  "license": "GPL-3.0-only",
+  "scope": "Metadata-only exact-source evidence for live included-function pooled RX provenance and parent/A2 read-only response publication. No owner instructions, binaries or disassembly are exported.",
+  "source_identities": [
+    {
+      "file": "0WINCEOS.BIN",
+      "bytes": 1253376,
+      "sha256": "a7628c78090fce2c93012d5e4db6142096e138dceb7ebbf555142e902ca03c1f"
+    },
+    {
+      "file": "WINCE/MAPLE.DLL",
+      "bytes": 26191,
+      "sha256": "b8eb7afc2b13fcec8551af4fa75288fca1881f671181b88ea042aa9d77524e6e"
+    },
+    {
+      "file": "WINCE/MAPLEDEV.DLL",
+      "bytes": 55381,
+      "sha256": "16dfc7b3bb6519af633e09e7886e36cbaf73c74ffc387c5c6d6369e26862ac28"
+    }
+  ],
+  "reused_fence_contract": {
+    "tool": "armada_ce_maple_fence_owner_audit.py",
+    "canonical_audit_json_sha256": "f605afb88853064bb813bb3d3fd7be55f65e8c5c5a1af5dd6689cc5a53cce564"
+  },
+  "external_text_equivalence": {
+    "maple": {
+      "module": "maple.dll",
+      "external_image_base": 268435456,
+      "rom_nominal_base": 31260672,
+      "relocation_kind": "HIGHLOW",
+      "fixups": 443,
+      "text_fixups": 368,
+      "compared_bytes": 22528,
+      "virtual_text_bytes": 22434,
+      "text_sha256": "adad8872616d92a7553a7b1d5c1a58a54f955d15b647a2cfed8766633e5ccbb8",
+      "complete_stored_text_equal": true
+    },
+    "mapledev": {
+      "module": "mapledev.dll",
+      "external_image_base": 268435456,
+      "rom_nominal_base": 30539776,
+      "relocation_kind": "HIGHLOW",
+      "fixups": 1411,
+      "text_fixups": 1166,
+      "compared_bytes": 47616,
+      "virtual_text_bytes": 47579,
+      "text_sha256": "88940ab3422b15e7bff4811a114264ddbd6b5b13ee60ad3db07997436e87f0b7",
+      "complete_stored_text_equal": true
+    }
+  },
+  "source_contracts": [
+    {
+      "id": "initial_parent_receive_allocations",
+      "module": "maple.dll",
+      "rva": "0x00001cf2",
+      "end_rva_exclusive": "0x00001d44",
+      "bytes": 82,
+      "rom_storage_address": "0x8c0afcf2",
+      "kernel_file_offset": "0x000a04f2",
+      "sha256": "e7105981102465a366117d8b1d5831a9fa880c213b3feeb89d59b07baca5aecb",
+      "crc32_ieee": "453b7245",
+      "finding": "The uncached TX common buffer is4096 bytes. Four initial parent-discovery RX allocations request116 bytes each and are stored at extension+94+port*4; these have no live function provenance and are excluded by the slice query."
+    },
+    {
+      "id": "generic_raw_frame_request_capacity",
+      "module": "maple.dll",
+      "rva": "0x00002e60",
+      "end_rva_exclusive": "0x00002f1c",
+      "bytes": 188,
+      "rom_storage_address": "0x8c0b0e60",
+      "kernel_file_offset": "0x000a1660",
+      "sha256": "650171923d2332ba4604d6dfa4a4b7053cc75ec517f143333faf2d2685f19ae4",
+      "crc32_ieee": "ebf9bdf5",
+      "finding": "Request byte7 is zero-extended and multiplied by4 into function+10. A token resolves the unit/function. The driver rejects an already pending IRP, stores pending IRP+1c, payload/command fields and rebuild flag. The ordinary branch allocates function+0c from the pool; the explicit-physical branch instead writes+20 and clears+0c and is excluded."
+    },
+    {
+      "id": "generic_completion_receive_lifetime",
+      "module": "maple.dll",
+      "rva": "0x00002bd4",
+      "end_rva_exclusive": "0x00002c4c",
+      "bytes": 120,
+      "rom_storage_address": "0x8c0b0bd4",
+      "kernel_file_offset": "0x000a13d4",
+      "sha256": "e4ccb9f83149ffc64e341d1a6d2330d66b7cbac1bcaa2edd7cd49b882880a9c7",
+      "crc32_ieee": "a0292dc7",
+      "finding": "The unchanged completion copies min(received payload+4, caller output capacity), frees the pooled RX using function+10, clears RX/capacity/pending/physical fields, rebuilds and completes the IRP. Publication must finish before this original consumer; an earlier allocation pointer must never be reused across visits."
+    },
+    {
+      "id": "unit_and_function_factory",
+      "module": "maple.dll",
+      "rva": "0x00003564",
+      "end_rva_exclusive": "0x000036c4",
+      "bytes": 352,
+      "rom_storage_address": "0x8c0b1564",
+      "kernel_file_offset": "0x000a1d64",
+      "sha256": "82b3adf940f119df835192f3a46bdc00e3494ed18e6e4c056358a7db51fa4bb0",
+      "crc32_ieee": "c77ceb9f",
+      "finding": "A unit is28 bytes, has byte8 function count and function pointers at12+4*i. Functions are244 bytes and start with zero command/expected/payload/included/RX/capacity/pending/physical fields. Unit creation sets rebuild and notifications."
+    },
+    {
+      "id": "device_info_function_transition",
+      "module": "maple.dll",
+      "rva": "0x00003968",
+      "end_rva_exclusive": "0x00003ac0",
+      "bytes": 344,
+      "rom_storage_address": "0x8c0b1968",
+      "kernel_file_offset": "0x000a2168",
+      "sha256": "bb0467649ccbd9ba263efda858fa743eb72a49ecd65b27b09be5c0deff26b81e",
+      "crc32_ieee": "7692829a",
+      "finding": "DEVINFO function bitmap is endian-converted and at most three functions are admitted. The first factory function is reused, its discovery RX is freed and cleared, and dispatch value2 follows the ordinary generic completion route. The existing controller dispatch1 remains separate."
+    },
+    {
+      "id": "controller_poll_setup",
+      "module": "maple.dll",
+      "rva": "0x00003ec0",
+      "end_rva_exclusive": "0x00003f94",
+      "bytes": 212,
+      "rom_storage_address": "0x8c0b1ec0",
+      "kernel_file_offset": "0x000a26c0",
+      "sha256": "3d06726e48e433b2fa9b1850a88cef1bc64e3e2441b557a388bd3575e2a57703",
+      "crc32_ieee": "f99ba0cd",
+      "finding": "Controller initializer chooses command9, one payload word and expected response8, replaces its RX allocation according to its controller data size and requests a list rebuild. Parent publication uses this normal live function path, not the initial discovery buffer."
+    },
+    {
+      "id": "ordinary_tx_builder_and_receive_clear",
+      "module": "maple.dll",
+      "rva": "0x0000582c",
+      "end_rva_exclusive": "0x00005a22",
+      "bytes": 502,
+      "rom_storage_address": "0x8c0b382c",
+      "kernel_file_offset": "0x000a402c",
+      "sha256": "df75f1ba377ec110c41daa5d6c4a5b29bfd82f6a3713e27ef928c246ae53f978",
+      "crc32_ieee": "7a939946",
+      "finding": "The builder omits NULL units, iterates function byte8 count and marks active functions byte17 included. It writes control, RX VA+pool bias, command/destination/source/word count and outgoing payload, clears exactly function+10 bytes at function+0c, and publishes last/end. PortA unit2 encodes wire destination02. No appended synthetic descriptor is needed or permitted."
+    },
+    {
+      "id": "attached_unit_creation_and_devinfo_capacity",
+      "module": "maple.dll",
+      "rva": "0x00005a2c",
+      "end_rva_exclusive": "0x00005b0c",
+      "bytes": 224,
+      "rom_storage_address": "0x8c0b3a2c",
+      "kernel_file_offset": "0x000a422c",
+      "sha256": "224ca60a3f5ade39342c347110d29c82c4e09df4604bf5a3ddf260c7d02df5e8",
+      "crc32_ieee": "ea8696ae",
+      "finding": "A changed parent mask is copied to main-unit byte24. Newly set bit1 creates unit index2, assigns command1/expected5/no payload and exact116-byte RX capacity, allocates and clears that pooled RX. New included byte17 remains zero until the next real list rebuild."
+    },
+    {
+      "id": "ordinary_reply_walker_attachment_and_dispatch",
+      "module": "maple.dll",
+      "rva": "0x00005b0c",
+      "end_rva_exclusive": "0x00005d28",
+      "bytes": 540,
+      "rom_storage_address": "0x8c0b3b0c",
+      "kernel_file_offset": "0x000a430c",
+      "sha256": "171c5335957be9b7cc646a2543d6520296583741be22726f341a3b317c2c694d",
+      "crc32_ieee": "04354275",
+      "finding": "The consumer visits live units and included functions, dereferences function+0c, treats FFFFFFFF as missing response, and extracts attached bits from reply byte2&1f. For main unit0 a changed mask calls5a2c; response5 for dispatch0 calls3968; other storage dispatch uses2bd4. The body and interrupt completion remain original."
+    },
+    {
+      "id": "uncached_receive_pool_initialization",
+      "module": "maple.dll",
+      "rva": "0x00005e60",
+      "end_rva_exclusive": "0x00005f48",
+      "bytes": 232,
+      "rom_storage_address": "0x8c0b3e60",
+      "kernel_file_offset": "0x000a4660",
+      "sha256": "2f1afdba338810b61d9054e33d91fac6f565d79a41604c25739a3fabedb991f2",
+      "crc32_ieee": "56ca2615",
+      "finding": "Pool size is8192 bytes from HalAllocateCommonBuffer cache0, independently allocated from TX. Pool low/high/originalVA/bias and page cursors are driver-owned. Runtime must independently repeat both uncached RX PTE witnesses and reject workspace/TX overlap."
+    },
+    {
+      "id": "receive_bucket_allocator",
+      "module": "maple.dll",
+      "rva": "0x00005f78",
+      "end_rva_exclusive": "0x00006168",
+      "bytes": 496,
+      "rom_storage_address": "0x8c0b3f78",
+      "kernel_file_offset": "0x000a4778",
+      "sha256": "492d3fbea94ced59b7fa386d14797945116c67a43605bc04dd4d79ac7894655c",
+      "crc32_ieee": "eb07d00c",
+      "finding": "Requested sizes select32,64,256,512,1024-byte buckets using strict greater-than thresholds32,64,256,512. A matching bucket freelist record is popped or a fresh bucket is taken from a page cursor. Requested capacity0 is excluded by the authored query. Generic request byte7 caps requested capacity at1020."
+    },
+    {
+      "id": "receive_bucket_free_and_record_storage",
+      "module": "maple.dll",
+      "rva": "0x00006168",
+      "end_rva_exclusive": "0x00006274",
+      "bytes": 268,
+      "rom_storage_address": "0x8c0b4168",
+      "kernel_file_offset": "0x000a4968",
+      "sha256": "a5081f9c91e431e7ca4f65296de896b13124a0a8a95b97768a610ccd60df92ad",
+      "crc32_ieee": "94b68fef",
+      "finding": "Free reconstructs missing VA/physical through pool bias and puts a12-byte record onto the selected bucket freelist. Pool+54 stores spare bookkeeping records. It is not an active allocation list: fresh allocations are not represented there. Live included function ownership and exact requested capacity are the usable publication provenance."
+    },
+    {
+      "id": "bounded_receive_pool_pages",
+      "module": "maple.dll",
+      "rva": "0x00006274",
+      "end_rva_exclusive": "0x000062b4",
+      "bytes": 64,
+      "rom_storage_address": "0x8c0b4274",
+      "kernel_file_offset": "0x000a4a74",
+      "sha256": "ac945cba310f4fee582169eb05782efdf017306c6ccd0847196bd1d3609f92e2",
+      "crc32_ieee": "a41200f1",
+      "finding": "Page supplier refuses assigned bytes+4096 greater than8192, returns the next physical and virtual page and advances both by4096. Every bucket is at least32 bytes and at most1024, wholly within an admitted pool page."
+    },
+    {
+      "id": "memcard_read_write_phase_geometry",
+      "module": "mapledev.dll",
+      "rva": "0x000038a8",
+      "end_rva_exclusive": "0x00003934",
+      "bytes": 140,
+      "rom_storage_address": "0x8c10a8a8",
+      "kernel_file_offset": "0x000fb0a8",
+      "sha256": "25fd08566ca81c11058df793fa35db771490008080b1e7a5d69173f6770086b8",
+      "crc32_ieee": "406b03d1",
+      "finding": "MAPLEDEV decodes media function geometry and read/write phase counts. This exact owner path is relevant to the read-only emulator phase and block bounds, independently of persistent writes."
+    },
+    {
+      "id": "memcard_command13_finalizer",
+      "module": "mapledev.dll",
+      "rva": "0x000042a0",
+      "end_rva_exclusive": "0x00004324",
+      "bytes": 132,
+      "rom_storage_address": "0x8c10b2a0",
+      "kernel_file_offset": "0x000fbaa0",
+      "sha256": "c63d7192c4c26c3d8a779dedc72bd4c17c754cf78e4c6c16954074ae664f66ab",
+      "crc32_ieee": "c909554f",
+      "finding": "Owner finalizer submits MEMCARD command13 with the block location and expects response7. A read-only transport may acknowledge only the independently admitted read-finalization form; this does not admit write phases or durable commits."
+    },
+    {
+      "id": "single_phase_read_calls_finalizer",
+      "module": "mapledev.dll",
+      "rva": "0x00007d0c",
+      "end_rva_exclusive": "0x00007ea0",
+      "bytes": 404,
+      "rom_storage_address": "0x8c10ed0c",
+      "kernel_file_offset": "0x000ff50c",
+      "sha256": "c1b5b4ae1e58fb26e10cd42625fb9b2b73aed37e91f23a960743e75f2ec717ae",
+      "crc32_ieee": "5e2239f4",
+      "finding": "Owner read path performs a single read phase and calls the command13 finalizer with phase0. Returning only block-read data is insufficient for the owner API to finish the read successfully."
+    }
+  ],
+  "external_mapledev_read_finalizer_windows": [
+    {
+      "rva": "0x000038a8",
+      "end_rva_exclusive": "0x00003934",
+      "bytes": 140,
+      "sha256": "25fd08566ca81c11058df793fa35db771490008080b1e7a5d69173f6770086b8"
+    },
+    {
+      "rva": "0x000042a0",
+      "end_rva_exclusive": "0x00004324",
+      "bytes": 132,
+      "sha256": "64d8eee74cfa8cdc07fcafbe723efadf4636af4620ad17ba353fb0c81152071e"
+    },
+    {
+      "rva": "0x00007d0c",
+      "end_rva_exclusive": "0x00007ea0",
+      "bytes": 404,
+      "sha256": "c64c142c3d73960ec0fd965fa49f4977a7fe8a969177c628596c088964edfee1"
+    }
+  ],
+  "allocation_contract": {
+    "extension_bytes": 408,
+    "unit_bytes": 28,
+    "function_bytes": 244,
+    "unit_pointer_offset": "4 + port*32 + unit_index*4",
+    "function_count_offset": 8,
+    "function_pointer_offset": "12 + function_index*4",
+    "function_fields": {
+      "dispatch": 0,
+      "rx_virtual": 12,
+      "requested_capacity": 16,
+      "command": 20,
+      "expected_response": 21,
+      "payload_words": 22,
+      "included": 23,
+      "pending_irp": 28,
+      "explicit_rx_physical": 32
+    },
+    "generic_requested_capacity": "zero_extend(request.byte7) * 4",
+    "generic_max_requested_capacity": 1020,
+    "discovery_requested_capacity": 116,
+    "buckets": [
+      32,
+      64,
+      256,
+      512,
+      1024
+    ],
+    "receive_pool_bytes": 8192,
+    "receive_page_bytes": 4096,
+    "pool_spare_record_head_offset": 84,
+    "pool_has_active_allocation_list": false,
+    "source_lifetime": "Match a current unit/function and current built descriptor while DMA is disabled and the uniprocessor helper has IMASK15. The original consumer owns/free-clears the allocation after publication; retain no RX pointer for the next visit."
+  },
+  "publication_contract": {
+    "ports": [
+      0
+    ],
+    "unit_indices": [
+      0,
+      2
+    ],
+    "a2_wire_address": 2,
+    "parent_advertise_mask": 2,
+    "initial_parent_discovery_excluded": true,
+    "append_descriptors": false,
+    "source_reply_consumer_unchanged": true,
+    "required_checks": [
+      "Accepted exact-owner traffic capture and acquired DMA-off fence.",
+      "Repeat context, extension geometry, four admitted mappings and target descriptor/RX header after acquisition.",
+      "Coherently follow live unit and at most three functions; require exactly one RX match, included1 and exact command/word-count.",
+      "Require nonzero pooled RX VA, zero explicit physical RX field, valid requested capacity at least the staged response length.",
+      "Match RX VA+source pool bias to descriptor bus; require exact uncached pool VA offset and whole allocated bucket within pool.",
+      "Retain/recheck all metadata PTE witnesses; reject dirty aliases, mutations, read failures and other current RX headers inside target bucket.",
+      "Stage complete response privately, requery and compare proof, then store payload before header; advertise validated parent last.",
+      "Validate real A controller response and absence of physical A2; preserve A1 and all non-target words.",
+      "Allow only read-only protocol shapes with independently admitted response lengths; no write or SD persistence."
+    ]
+  },
+  "limitations": [
+    "Runtime still must hold the tested fence and IMASK15 until publication; repeated reads alone grant no lease.",
+    "Source allocator disjointness is inherited from the exact driver; a source live function pointer is not an arbitrary game-owned frame.",
+    "The pure slice query exports metadata and performs no guest writes; publisher and protocol tests remain independently required.",
+    "Root-controller/driver unload, asynchronous worker termination and concurrent lifecycle initialization remain outside this test.",
+    "No source or design is borrowed from DreamShell or SWAT."
+  ]
+}

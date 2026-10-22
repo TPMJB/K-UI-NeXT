@@ -1,0 +1,23 @@
+{
+  "build": "af18576dba18",
+  "variant": "cached-readonly-full",
+  "source_images": ["image-1792602541006.jpg", "image-1792602545591.jpg", "image-1792602550232.jpg", "image-1792602555434.jpg", "image-1792602560767.jpg"],
+  "auto": {"reason": 6, "phase": 2, "mode": 0, "proof_initial": 1199, "proof_final": 1199},
+  "traffic": {"visits": 1200, "accepted": 1200, "refused": 0, "reads_last_visit": 195, "subunit_commands": [2, 0, 0, 0, 0, 0], "fault": [0, 0, 0, 0, 0]},
+  "fence": {"pre": 1200, "post": 1200, "leases": 1200, "restores": 1200, "busy": 0, "refused": 0, "poll_peak": 1, "active": 0, "flags": 0, "fault": [0, 0, 0, 0, 0]},
+  "a2": {"visits": 1199, "completions": 1199, "advertisements": 1199, "replies": 1, "info": 1, "allinfo": 0, "media": 0, "read": 0, "read_finalize": 0, "refused": 0, "backend_calls": 1, "guest_rx_stores": 1228, "flags": 0, "last_attempts": 1, "fault": [0, 0, 0, 0, 0]},
+  "mapping_report_zero": true,
+  "driver_report_zero": true,
+  "user_playback_observation": "That's pretty much like baseline. Really I think the remaining problem with playback likely requires fine-tuning of the loader. Let's continue the VMU work",
+  "interpretation": {
+    "planned_terminal_capture": true,
+    "recorded_fault": false,
+    "baseline_playback_parity": true,
+    "baseline_parity_basis": "User qualitative report against existing same-image/settings loader; no cycle, FPS or masked-duration measurement.",
+    "physical_disc_parity_claimed": false,
+    "cached_info_discovery_demonstrated": true,
+    "cached_read_media_finalize_demonstrated_this_run": false,
+    "write_or_durable_storage_demonstrated": false,
+    "next_work": "CE write transport, exact finalization semantics and deferred durable provider integration. Playback fine-tuning is separate."
+  }
+}

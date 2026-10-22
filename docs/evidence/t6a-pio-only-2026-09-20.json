@@ -1,0 +1,64 @@
+{
+  "received_date": "2026-09-20",
+  "runtime_build": "bea895bb93b4",
+  "experiment": "Trip 6a on the DEFAULT build: DMA and competing-thread points were skipped (experimental code is opt-in), so this is a PIO-only chunk 32 vs 128 comparison at FAD 45150; two runs.",
+  "inputs": [
+    {
+      "file": "T6A_diag.txt",
+      "kept_as": "t6a-pio-only-2026-09-20.txt",
+      "bytes": 9529,
+      "sha256": "0ab2798dc9368e282c68e160d66c13d370fd2f48daf0501d4c3351653dfa7a31"
+    }
+  ],
+  "points": {
+    "32": [
+      {
+        "run": 1,
+        "rd_kib_s": 1282.3,
+        "min_us": 24783,
+        "max_us": 66526,
+        "us": 3681420
+      },
+      {
+        "run": 2,
+        "rd_kib_s": 1208.0,
+        "min_us": 24548,
+        "max_us": 64323,
+        "us": 3907224
+      }
+    ],
+    "128": [
+      {
+        "run": 1,
+        "rd_kib_s": 1165.5,
+        "min_us": 244589,
+        "max_us": 293731,
+        "us": 4036240
+      },
+      {
+        "run": 2,
+        "rd_kib_s": 1171.1,
+        "min_us": 239775,
+        "max_us": 299497,
+        "us": 4016827
+      }
+    ]
+  },
+  "skipped_lines": [
+    "BENCH spin skipped: no competing-thread support here",
+    "BENCH dma skipped: this platform has no GD-ROM DMA probe"
+  ],
+  "derived": {
+    "mean_rd_kib_s": {
+      "32": 1245.2,
+      "128": 1168.3
+    },
+    "chunk128_vs_chunk32_pct": -6.2,
+    "run2_vs_run1_pct_chunk32": -5.8,
+    "conclusions": [
+      "As designed, the default build skips DMA and the competing thread: ['BENCH spin skipped: no competing-thread support here', 'BENCH dma skipped: this platform has no GD-ROM DMA probe'].",
+      "PIO at FAD 45150: chunk 32 averages 1245.2 KiB/s and chunk 128 1168.3 (-6.2%): 32 sectors is the better command size; the capture engine already uses it.",
+      "Run 2 read -5.8% against run 1 at chunk 32: the same direction as Trips 2c (-7.6%) and 2d (-5.6%), so three of three sweep files. It is not in Trip 1's optical bench at a quiet UI, and in Trip 5a the real capture's disc time differs by only -0.2% (full) and -0.7% (2 Hz) between runs, so it does not appear in a capture."
+    ]
+  }
+}

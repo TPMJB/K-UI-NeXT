@@ -1,0 +1,85 @@
+{
+  "received_date": "2026-09-23",
+  "runtime_build": "8bae3efe7c2f",
+  "source": {
+    "kind": "User-supplied diagnostic log; only sanitized aggregates are published",
+    "sha256": "e63757ee596afc057af0caef475fd659a6a4cb005bbd91ffc63d3379500f70c8",
+    "log_truncated": false,
+    "report_trigger": "manual"
+  },
+  "context": "Completed MDK2 capture using the restored K-UI launcher and optimized display clear. This is physical evidence for runtime 8bae3efe7c2f, not for the subsequent destination-browser feature package.",
+  "disc": "MDK 2 v1.100 (2000)(Interplay)(US)[!]",
+  "capture": {
+    "tracks": 31,
+    "bytes": 1220281104,
+    "wall_us": 1223545181,
+    "elapsed_seconds": 1223.545181,
+    "average_kib_s": 973.9573038496566,
+    "setup_us": 9346378,
+    "finish_us": 1456494,
+    "setup_capture_finish_us": 1234348053,
+    "whole_operation_average_kib_s": 965.4333416970197,
+    "dma_chunks": 16187,
+    "pio_chunks": 42,
+    "capture_retry_messages": 0,
+    "console_result": "CAPTURED: all 31 tracks; stream CRC32 recorded; saved data NOT re-read",
+    "console_reference": "Reference check (TOSEC): FULL TRACK MATCH",
+    "stage_wall_us": {
+      "disc": 14281939,
+      "edc": 13787799,
+      "write": 1092140421,
+      "crc32": 95803790,
+      "checkpoint": 3720469,
+      "other": 3810763
+    }
+  },
+  "policy": {
+    "capture_hash": "crc32",
+    "end_readback": "off",
+    "capture_read": "dma",
+    "sample_readback": 0,
+    "ui_hz": 2,
+    "storage_transport": "SCIF",
+    "filesystem": "exFAT",
+    "storage_read_crc": "on"
+  },
+  "ui_census": {
+    "wall_ms": 1234355,
+    "worker_ms": 1108037,
+    "ui_ms": 103446,
+    "other_ms": 22872,
+    "ui_pct_reported": 8.3,
+    "meaning": "Scheduled time of the whole main/UI thread, not redraw duration alone. This interval encloses core setup/capture/finish and excludes outer disc preparation, settings refresh and report saving. It overlaps per-stage wall timers."
+  },
+  "comparison": {
+    "same_disc_accepted_baseline": {
+      "evidence": "t12-mdk2-capture-dma-2026-09-20.txt",
+      "runtime_build": "e643add5850c",
+      "capture_bytes": 1220281104,
+      "capture_wall_us": 1177937681,
+      "average_kib_s": 1011.6670727549296,
+      "ui_pct_reported": 4.9,
+      "census_wall_ms": 1188419,
+      "census_worker_ms": 1104981,
+      "census_ui_ms": 58414,
+      "census_other_ms": 25024
+    },
+    "capture_rate_pct_below_baseline": 3.727488016643987,
+    "extra_capture_seconds": 45.6075,
+    "extra_census_wall_ms": 45936,
+    "extra_census_ui_ms": 45032,
+    "extra_census_worker_ms": 3056,
+    "first_shell_ui_pct_reported": 12.4,
+    "first_shell_disc": "The House of the Dead 2",
+    "other_accepted_ui_pct_reported": [5.1, 4.1],
+    "interpretation": "The new MDK2 run reaches about 96.3% of the accepted same-disc capture rate, with about 46 seconds added to a roughly 20-minute operation. The additional UI scheduled time nearly equals the additional operation wall time, supporting residual UI overhead. The 12.4% to 8.3% comparison uses different games and is descriptive, not a controlled measurement of the display-clear change. These results do not call for redesigning or rebenchmarking the accepted reader."
+  },
+  "limitations": [
+    "Reference matching uses captured-stream CRC32. Saved tracks were not reread and no PC verification was supplied for this job.",
+    "There are no capture retry messages, and the PIO subreport records zero retries/timeouts. A preparatory command failure precedes the successful capture; this is not a claim that every command in the entire session succeeded.",
+    "The duplicate DMA/PIO summary describes the same operation, not two sets of reads.",
+    "UI scheduled time overlaps write/hash stage wall times and must not be added to them as a separate cost.",
+    "Same-disc comparisons across sessions support an overhead diagnosis but do not isolate individual UI drawing costs or guarantee an exact recoverable speed gain.",
+    "The source report's raw text, hardware identifiers, card geometry and storage paths are intentionally excluded from this aggregate."
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "source_commit": "120829c4637480d21b672ba9f146599836451353",
+  "original_build": "137ca964caad",
+  "source_tree_exact": false,
+  "all_flat_binaries_equal_after_only_build_id_normalization": true,
+  "files": [
+    {
+      "file": "bind-probe.bin",
+      "old_bytes": 10544,
+      "new_bytes": 10544,
+      "exact": true,
+      "build_id_only": true
+    },
+    {
+      "file": "bridge.bin",
+      "old_bytes": 92,
+      "new_bytes": 92,
+      "exact": true,
+      "build_id_only": true
+    },
+    {
+      "file": "hook.bin",
+      "old_bytes": 18240,
+      "new_bytes": 18240,
+      "exact": true,
+      "build_id_only": true
+    },
+    {
+      "file": "resident-ide.bin",
+      "old_bytes": 10448,
+      "new_bytes": 10448,
+      "exact": false,
+      "build_id_only": true
+    },
+    {
+      "file": "resident-sci.bin",
+      "old_bytes": 13208,
+      "new_bytes": 13208,
+      "exact": false,
+      "build_id_only": true
+    },
+    {
+      "file": "resident-scia.bin",
+      "old_bytes": 16484,
+      "new_bytes": 16484,
+      "exact": false,
+      "build_id_only": true
+    },
+    {
+      "file": "resident-scif.bin",
+      "old_bytes": 10688,
+      "new_bytes": 10688,
+      "exact": false,
+      "build_id_only": true
+    },
+    {
+      "file": "stage.bin",
+      "old_bytes": 108848,
+      "new_bytes": 108848,
+      "exact": false,
+      "build_id_only": true
+    }
+  ]
+}

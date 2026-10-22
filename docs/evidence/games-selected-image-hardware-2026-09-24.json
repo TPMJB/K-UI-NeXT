@@ -1,0 +1,45 @@
+{
+  "date_received": "2026-09-24",
+  "evidence_type": "owner-supplied photograph of a physical console result screen",
+  "source": {
+    "filename": "image-1790251292152.jpg",
+    "transcription": "games-selected-image-hardware-2026-09-24.txt",
+    "inspection": "Directly viewed photograph; original image not committed"
+  },
+  "build": "c4cfd4585ec5",
+  "source_commit": "07b3a8a7497c22dd268c16e9d4d4afabbaf608ec",
+  "packaged_commit": "c4cfd4585ec56b68ee4810f5594984159b014189",
+  "source_tree": "0f711b05ff04d96f30296d7ac9a655e6c4ca31b7",
+  "title": "DEAD OR ALIVE 2",
+  "result": "PROBE PASSED",
+  "passed_checks": [
+    "GD vector init/status",
+    "Sector mode query/set",
+    "Selected image TOCs",
+    "PIO reference CRCs",
+    "DMA-command reference CRCs",
+    "Repeated random CRCs",
+    "Rejected requests",
+    "Cancel before SD read",
+    "Read after cancel CRC",
+    "Physical SD reads",
+    "Resident hook stack guard"
+  ],
+  "post_handoff_sd_blocks_read": 93,
+  "accepted": "Selected DOA2 GDI resident-read path on this console: the independent client used the actual GD BIOS vector after launcher shutdown and retired RAM erasure; sampled CRCs, request lifecycle, physical SD activity and hook-stack guard passed",
+  "filesystem_reported": null,
+  "not_established": [
+    "Retail boot executable execution, title screen, gameplay or VMU save/load",
+    "Hardware DMA or DMA completion interrupts; command 17 uses CPU-backed serial SD reads",
+    "Retail cache/interrupt state, callbacks or streamed reads",
+    "SD throughput or game performance",
+    "Image-backed CDDA or Windows CE",
+    "Both FAT32 and exFAT, or fragmented allocation on this particular run",
+    "Full-image verification or a new TOSEC/Redump comparison",
+    "Repeated cold boots, hot return or the subsequent power cycle",
+    "Independent whole-card before/after checksum"
+  ],
+  "next": "Implement retail boot-executable loading and handoff with a protected resident memory layout and correct cache/interrupt state; address the retail request/interrupt behavior needed for the first DOA2 launch attempt",
+  "repeat_probe_requested": false,
+  "optical_reader_changes": false
+}

@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: GPL-3.0-only
+KUI_WINCE_CDDA_PROFILE := wwp
+include Makefile.armada-stream

@@ -1,0 +1,414 @@
+{
+  "format": "armada-ce-maple-header-contracts-v1",
+  "license": "GPL-3.0-only",
+  "scope": "Metadata-only exact owner ROM/PE findings. No executable bytes, payload, disassembly, callable address, DMA ownership, lifetime or hook contract is exported.",
+  "source_identities": [
+    {
+      "file": "0WINCEOS.BIN",
+      "bytes": 1253376,
+      "sha256": "a7628c78090fce2c93012d5e4db6142096e138dceb7ebbf555142e902ca03c1f"
+    },
+    {
+      "file": "WINCE/MAPLE.DLL",
+      "bytes": 26191,
+      "sha256": "b8eb7afc2b13fcec8551af4fa75288fca1881f671181b88ea042aa9d77524e6e"
+    }
+  ],
+  "external_text_equivalence": {
+    "module": "maple.dll",
+    "external_image_base": 268435456,
+    "rom_nominal_base": 31260672,
+    "relocation_kind": "HIGHLOW",
+    "fixups": 443,
+    "text_fixups": 368,
+    "compared_bytes": 22528,
+    "virtual_text_bytes": 22434,
+    "text_sha256": "adad8872616d92a7553a7b1d5c1a58a54f955d15b647a2cfed8766633e5ccbb8",
+    "complete_stored_text_equal": true
+  },
+  "source_contracts": [
+    {
+      "id": "builder_port_bound",
+      "module": "maple.dll",
+      "rva": "0x582c",
+      "end_rva_exclusive": "0x586a",
+      "bytes": 62,
+      "rom_storage_address": "0x8c0b382c",
+      "kernel_file_offset": "0xa402c",
+      "rom_sha256": "72be576adf01479227e254bea9d946913765d17b9df9a9d8ece8f0afa2c5bbd0",
+      "rom_crc32_ieee": "65124d6a",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x4c2c",
+        "sha256": "72be576adf01479227e254bea9d946913765d17b9df9a9d8ece8f0afa2c5bbd0",
+        "crc32_ieee": "65124d6a",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      },
+      "finding": "Starts at TX raw VA from extension+0x88; iterates port indices 0..3."
+    },
+    {
+      "id": "missing_main_descriptor",
+      "module": "maple.dll",
+      "rva": "0x5876",
+      "end_rva_exclusive": "0x58ce",
+      "bytes": 88,
+      "rom_storage_address": "0x8c0b3876",
+      "kernel_file_offset": "0xa4076",
+      "rom_sha256": "b7c89220347b2bf79c3f9424b0b19aa39326515ac7afa5ba912b650df25b179c",
+      "rom_crc32_ieee": "4ab64f85",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x4c76",
+        "sha256": "b7c89220347b2bf79c3f9424b0b19aa39326515ac7afa5ba912b650df25b179c",
+        "crc32_ieee": "4ab64f85",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      },
+      "finding": "For a missing main unit, W0=port<<16, W1=the per-port receive VA plus RX bias (or zero), and W2 bytes are command1, (port<<6)|0x20, port<<6, zero."
+    },
+    {
+      "id": "builder_unit_function_bound",
+      "module": "maple.dll",
+      "rva": "0x58ce",
+      "end_rva_exclusive": "0x5922",
+      "bytes": 84,
+      "rom_storage_address": "0x8c0b38ce",
+      "kernel_file_offset": "0xa40ce",
+      "rom_sha256": "a0425b16f92ddb46b22486b945560161d97338e5c3dd52d8577400d6a4f8c561",
+      "rom_crc32_ieee": "25504d15",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x4cce",
+        "sha256": "a0425b16f92ddb46b22486b945560161d97338e5c3dd52d8577400d6a4f8c561",
+        "crc32_ieee": "25504d15",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      },
+      "finding": "Iterates eight unit slots and each unit object function count. A zero command omits that function. This is not an aggregate descriptor-count bound."
+    },
+    {
+      "id": "ordinary_w0_and_pool_destination",
+      "module": "maple.dll",
+      "rva": "0x5922",
+      "end_rva_exclusive": "0x596c",
+      "bytes": 74,
+      "rom_storage_address": "0x8c0b3922",
+      "kernel_file_offset": "0xa4122",
+      "rom_sha256": "4004303ce8556d08b192be53968b91aa28767ff25ce416ed932b466af3eff7c3",
+      "rom_crc32_ieee": "c793150b",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x4d22",
+        "sha256": "4004303ce8556d08b192be53968b91aa28767ff25ce416ed932b466af3eff7c3",
+        "crc32_ieee": "c793150b",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      },
+      "finding": "Marks object included; takes the unsigned byte payload word count from function+0x16. W0=(port<<16)|payloadWords. Pool-backed W1=receiveVA+RXbias. Clears the receive allocation before emitting its packet header."
+    },
+    {
+      "id": "explicit_physical_destination",
+      "module": "maple.dll",
+      "rva": "0x5978",
+      "end_rva_exclusive": "0x597c",
+      "bytes": 4,
+      "rom_storage_address": "0x8c0b3978",
+      "kernel_file_offset": "0xa4178",
+      "rom_sha256": "1994e6b5b367b9ce3fbd16bbf49afa85f417b402dbaa7006e4031c137f2473ee",
+      "rom_crc32_ieee": "b8fbe9b3",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x4d78",
+        "sha256": "1994e6b5b367b9ce3fbd16bbf49afa85f417b402dbaa7006e4031c137f2473ee",
+        "crc32_ieee": "b8fbe9b3",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      },
+      "finding": "When the function receive VA is zero, emits function+0x20 as an explicit physical W1. The probe does not follow this unsupported destination branch."
+    },
+    {
+      "id": "ordinary_wire_header",
+      "module": "maple.dll",
+      "rva": "0x597c",
+      "end_rva_exclusive": "0x59c0",
+      "bytes": 68,
+      "rom_storage_address": "0x8c0b397c",
+      "kernel_file_offset": "0xa417c",
+      "rom_sha256": "558148980bb2d59048104278bf68e75413e362e1877d7059fef47b1cac9f3aab",
+      "rom_crc32_ieee": "71120234",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x4d7c",
+        "sha256": "558148980bb2d59048104278bf68e75413e362e1877d7059fef47b1cac9f3aab",
+        "crc32_ieee": "71120234",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      },
+      "finding": "W2 bytes: command from function+0x14, destination=(port<<6)|(unit==0?0x20:1<<(unit-1)), source=port<<6, payloadWords. The source loop has eight unit slots; the probe admits only ordinary one-hot subunit bits1/2/4/8/16 or main0x20."
+    },
+    {
+      "id": "ordinary_payload_stride",
+      "module": "maple.dll",
+      "rva": "0x59c0",
+      "end_rva_exclusive": "0x59d8",
+      "bytes": 24,
+      "rom_storage_address": "0x8c0b39c0",
+      "kernel_file_offset": "0xa41c0",
+      "rom_sha256": "72610b81c3c687423dd9fc5f20687ae7faa46df27c8f2c93a0fea592d64d8992",
+      "rom_crc32_ieee": "4bf1e210",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x4dc0",
+        "sha256": "72610b81c3c687423dd9fc5f20687ae7faa46df27c8f2c93a0fea592d64d8992",
+        "crc32_ieee": "4bf1e210",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      },
+      "finding": "Copies exactly payloadWords 32-bit words after the three descriptor words. The next descriptor therefore begins 12+4*payloadWords bytes later."
+    },
+    {
+      "id": "last_descriptor_publication",
+      "module": "maple.dll",
+      "rva": "0x59dc",
+      "end_rva_exclusive": "0x59ee",
+      "bytes": 18,
+      "rom_storage_address": "0x8c0b39dc",
+      "kernel_file_offset": "0xa41dc",
+      "rom_sha256": "21565245a7cdab118c54fb7c064b5dd10e433d749008721d3c197088c17ab6f9",
+      "rom_crc32_ieee": "f722d287",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x4ddc",
+        "sha256": "21565245a7cdab118c54fb7c064b5dd10e433d749008721d3c197088c17ab6f9",
+        "crc32_ieee": "f722d287",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      },
+      "finding": "ORs bit31 into the most recent descriptor W0, publishes its VA at extension+0x8c, and publishes the end VA at extension+0x90."
+    },
+    {
+      "id": "last_descriptor_mask_literal",
+      "module": "maple.dll",
+      "rva": "0x5a28",
+      "end_rva_exclusive": "0x5a2c",
+      "bytes": 4,
+      "rom_storage_address": "0x8c0b3a28",
+      "kernel_file_offset": "0xa4228",
+      "rom_sha256": "6d58692645c9d1cfaf13541cbd258f86193ef63c2f1d38f6bbca9617372d7bd6",
+      "rom_crc32_ieee": "ccfc5c3c",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x4e28",
+        "sha256": "6d58692645c9d1cfaf13541cbd258f86193ef63c2f1d38f6bbca9617372d7bd6",
+        "crc32_ieee": "ccfc5c3c",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      },
+      "finding": "The reviewed last-descriptor literal is 0x80000000."
+    },
+    {
+      "id": "missing_main_response_header",
+      "module": "maple.dll",
+      "rva": "0x5b5a",
+      "end_rva_exclusive": "0x5b76",
+      "bytes": 28,
+      "rom_storage_address": "0x8c0b3b5a",
+      "kernel_file_offset": "0xa435a",
+      "rom_sha256": "79157cc3aa6b4403217830c6630da8f0981515fbde7dcdab090e9a2f85fd7775",
+      "rom_crc32_ieee": "e389144b",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x4f5a",
+        "sha256": "79157cc3aa6b4403217830c6630da8f0981515fbde7dcdab090e9a2f85fd7775",
+        "crc32_ieee": "e389144b",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      },
+      "finding": "Reads response word0 from the per-port receive buffer; 0xffffffff means no response. Command byte5 is the expected main device-info response on this path."
+    },
+    {
+      "id": "function_response_word0",
+      "module": "maple.dll",
+      "rva": "0x5bd6",
+      "end_rva_exclusive": "0x5bea",
+      "bytes": 20,
+      "rom_storage_address": "0x8c0b3bd6",
+      "kernel_file_offset": "0xa43d6",
+      "rom_sha256": "6680585bb7fb4c1c57e8f7bfe9a56f16ef8f40f3807208a91d9229d3f3dafe0f",
+      "rom_crc32_ieee": "7194ed18",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x4fd6",
+        "sha256": "6680585bb7fb4c1c57e8f7bfe9a56f16ef8f40f3807208a91d9229d3f3dafe0f",
+        "crc32_ieee": "7194ed18",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      },
+      "finding": "Only included function objects are examined. Reads their receive VA word0; 0xffffffff means no response."
+    },
+    {
+      "id": "function_response_fields",
+      "module": "maple.dll",
+      "rva": "0x5c28",
+      "end_rva_exclusive": "0x5c3e",
+      "bytes": 22,
+      "rom_storage_address": "0x8c0b3c28",
+      "kernel_file_offset": "0xa4428",
+      "rom_sha256": "e2df3390667186dd8489d38ae6394d48de77e5b667eb868b6e2ffcafb0555a11",
+      "rom_crc32_ieee": "df423c55",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x5028",
+        "sha256": "e2df3390667186dd8489d38ae6394d48de77e5b667eb868b6e2ffcafb0555a11",
+        "crc32_ieee": "df423c55",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      },
+      "finding": "Reads response command byte0, attached-unit mask byte2&0x1f, and payload byte count=byte3*4."
+    },
+    {
+      "id": "expected_response_command",
+      "module": "maple.dll",
+      "rva": "0x5c54",
+      "end_rva_exclusive": "0x5c68",
+      "bytes": 20,
+      "rom_storage_address": "0x8c0b3c54",
+      "kernel_file_offset": "0xa4454",
+      "rom_sha256": "90f9b55093c6b47013baa90fc4071354d8b9af1cef3bf2b12c4ffa29dab680dd",
+      "rom_crc32_ieee": "9d1d299e",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x5054",
+        "sha256": "90f9b55093c6b47013baa90fc4071354d8b9af1cef3bf2b12c4ffa29dab680dd",
+        "crc32_ieee": "9d1d299e",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      },
+      "finding": "A nonzero expected response byte from function+0x15 must equal the received command; zero accepts any command."
+    },
+    {
+      "id": "generic_response_copy_and_release",
+      "module": "maple.dll",
+      "rva": "0x2bd4",
+      "end_rva_exclusive": "0x2c4c",
+      "bytes": 120,
+      "rom_storage_address": "0x8c0b0bd4",
+      "kernel_file_offset": "0xa13d4",
+      "rom_sha256": "e4ccb9f83149ffc64e341d1a6d2330d66b7cbac1bcaa2edd7cd49b882880a9c7",
+      "rom_crc32_ieee": "a0292dc7",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x1fd4",
+        "sha256": "e4ccb9f83149ffc64e341d1a6d2330d66b7cbac1bcaa2edd7cd49b882880a9c7",
+        "crc32_ieee": "a0292dc7",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      },
+      "finding": "Default completion copies response header plus bounded payload into the pending IRP, frees receive storage, clears pending object state and completes the IRP. The passive sample establishes no lease across this release."
+    },
+    {
+      "id": "vblank_hardware_initialization",
+      "module": "maple.dll",
+      "rva": "0x1e24",
+      "end_rva_exclusive": "0x1ea8",
+      "bytes": 132,
+      "rom_storage_address": "0x8c0afe24",
+      "kernel_file_offset": "0xa0624",
+      "rom_sha256": "887bf8212c5aebc0b6237e5de8a48d5ca04d2704b4c2703f4dc137e91d868106",
+      "rom_crc32_ieee": "388afd03",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x1224",
+        "sha256": "054a7ebc92f83c74d1601597e7c265cdfb736a4c58c4a5938da5886b4993fc29",
+        "crc32_ieee": "958cd760",
+        "HIGHLOW_overlap_rvas": [
+          "0x1ea0",
+          "0x1ea4"
+        ],
+        "exact_bytes_equal": false,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      },
+      "finding": "Configures MDTSEL=1, MDSTAR=the TX physical allocation and MDEN=1. DMA can start on VBlank independently of CPU interrupt masking."
+    },
+    {
+      "id": "main_loop_completion_lifecycle",
+      "module": "maple.dll",
+      "rva": "0x5d4c",
+      "end_rva_exclusive": "0x5dd6",
+      "bytes": 138,
+      "rom_storage_address": "0x8c0b3d4c",
+      "kernel_file_offset": "0xa454c",
+      "rom_sha256": "76760eb4a395bfcc932f57eea999b66b5d20320f79437201903a5b8f7036ebdc",
+      "rom_crc32_ieee": "a6df4757",
+      "external_PE": {
+        "file": "WINCE/MAPLE.DLL",
+        "file_offset": "0x514c",
+        "sha256": "76760eb4a395bfcc932f57eea999b66b5d20320f79437201903a5b8f7036ebdc",
+        "crc32_ieee": "a6df4757",
+        "HIGHLOW_overlap_rvas": [],
+        "exact_bytes_equal": true,
+        "equal_after_reviewed_HIGHLOW_delta": true
+      },
+      "finding": "Writes mapped+0x88 (not MDST+0x18), waits for the event, gates ordinary completion on interrupt status bit0x1000 and calls InterruptDone(18). No DMA-idle fence is established by the GD callback."
+    }
+  ],
+  "source_derived_header_geometry": {
+    "descriptor_header_words": 3,
+    "descriptor_header_bytes": 12,
+    "source_port_count": 4,
+    "source_unit_slots_per_port": 8,
+    "payload_word_bits": 8,
+    "payload_word_mask": "0x000000ff",
+    "port_mask": "0x00030000",
+    "last_mask": "0x80000000",
+    "ordinary_allowed_w0_bits": "0x800300ff",
+    "descriptor_bytes": "12 + 4 * (W0 & 0xff)",
+    "request_payload_count": "(W2 >> 24) == (W0 & 0xff)",
+    "request_port": "(W0 >> 16) & 3",
+    "request_source": "((W2 >> 16) & 0xff) == (port << 6)",
+    "response_absent_word": "0xffffffff",
+    "wire_A2": {
+      "port": 0,
+      "builder_unit_index": 2,
+      "destination_byte": "0x02"
+    }
+  },
+  "conservative_probe_policy": {
+    "classification": "Probe acceptance limits, not bounds guaranteed by CE source.",
+    "maximum_records": 8,
+    "passes": 2,
+    "words_per_record_per_pass": 4,
+    "maximum_direct_buffer_word_reads": 64,
+    "direct_read_budget_scope": "Counts three TX header words and one RX header word per record per pass only; existing metadata, mapping, cache and final witness reads are separate.",
+    "contents": "TX W0/W1/W2 and RX word0 only. No TX or RX payload is followed, copied or interpreted.",
+    "TX_bounds": "Require the prior uncached, page-aligned 0x1000 TX mapping. Validate all three header words are in the captured used span before reading; validate the payload stride against remaining bytes before advancing. Reject excess records, missing last flag, premature last flag, special descriptors, invalid ordinary bits or disagreement with published last/end.",
+    "RX_bounds": "Follow W1 only if four-byte aligned and the complete word is inside the prior admitted contiguous uncached 0x2000 RX physical allocation. An explicit/zero/outside-pool destination is never followed.",
+    "destinations": "Require matching port in destination upper two bits; low six bits must be a single ordinary main/subunit bit (0x20, 0x01, 0x02, 0x04, 0x08 or 0x10). This is narrower than all eight source unit-loop indices.",
+    "repeated_observation": "Repeat the same header addresses and values, then repeat extension words, mappings, module/process/context witnesses. A mismatch refuses the observation. This is sampled consistency, not DMA idleness or allocation ownership.",
+    "timing": "Existing accepted GD PLAY/PLAY2 sample boundaries are not Maple completion fences and do not identify save traffic.",
+    "effects": "Writes only probe-owned report/scratch memory; no guest code/data, MMIO, driver state, request, response, IRQ, native backend or virtual VMU write is authorized."
+  },
+  "limitations": [
+    "An idle MDST value or masked CPU interrupts cannot prevent a new VBlank DMA operation.",
+    "No aggregate source TX capacity check or eight-record source guarantee was established.",
+    "Matching metadata/header samples grant no allocation identity, lifetime, IRQ ownership or hook lease.",
+    "RX word0 may change during DMA; a refused changing sample is not proof of game or memory-card corruption.",
+    "A sample of controller queries is not evidence that CE VMU save traffic has been intercepted.",
+    "The native virtual-A2 backend remains disconnected."
+  ]
+}

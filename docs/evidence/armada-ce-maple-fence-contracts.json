@@ -1,0 +1,402 @@
+{
+  "format": "armada-ce-maple-fence-owner-contracts-v1",
+  "license": "GPL-3.0-only",
+  "scope": "Metadata-only exact-source evidence for a pre-NK worker call wrapper. No owner executable bytes or disassembly are exported. This is not a runtime fence, DMA ownership, unwind recovery or save-emulation result.",
+  "source_identities": [
+    {
+      "file": "0WINCEOS.BIN",
+      "bytes": 1253376,
+      "sha256": "a7628c78090fce2c93012d5e4db6142096e138dceb7ebbf555142e902ca03c1f"
+    },
+    {
+      "file": "WINCE/MAPLE.DLL",
+      "bytes": 26191,
+      "sha256": "b8eb7afc2b13fcec8551af4fa75288fca1881f671181b88ea042aa9d77524e6e"
+    }
+  ],
+  "external_text_equivalence": {
+    "module": "maple.dll",
+    "external_image_base": 268435456,
+    "rom_nominal_base": 31260672,
+    "relocation_kind": "HIGHLOW",
+    "fixups": 443,
+    "text_fixups": 368,
+    "compared_bytes": 22528,
+    "virtual_text_bytes": 22434,
+    "text_sha256": "adad8872616d92a7553a7b1d5c1a58a54f955d15b647a2cfed8766633e5ccbb8",
+    "complete_stored_text_equal": true
+  },
+  "reused_mode_and_tail_contract": {
+    "tool": "armada_ce_maple_hook_owner_audit.py",
+    "canonical_audit_json_sha256": "c0f92a3fd849762618b4c3de609186efb0ecc89f15d9ca5ed7f88b61a9f6194d",
+    "source_contracts": 22,
+    "regular_worker_MD": 0,
+    "mapped_restore_required": true
+  },
+  "source_contracts": [
+    {
+      "id": "root_lifecycle_wiring",
+      "module": "maple.dll",
+      "rva": "0x00001514",
+      "end_rva_exclusive": "0x000015e4",
+      "bytes": 208,
+      "rom_storage_address": "0x8c0af514",
+      "kernel_file_offset": "0x0009fd14",
+      "sha256": "4ed4c5f03a0ef49bca33bfb9825dc2b14329a0eb4b40cae287338da21b33cc63",
+      "crc32_ieee": "0ff130f3",
+      "finding": "DriverEntry creates one extension, initializes transport, publishes it and registers the root cleanup callback."
+    },
+    {
+      "id": "root_shutdown_lifecycle",
+      "module": "maple.dll",
+      "rva": "0x00001934",
+      "end_rva_exclusive": "0x00001abe",
+      "bytes": 394,
+      "rom_storage_address": "0x8c0af934",
+      "kernel_file_offset": "0x000a0134",
+      "sha256": "e35cb6be1e6482367744afbbbb6663f6bedbb64a10a992583bb783d7dbb7100f",
+      "crc32_ieee": "447e02fe",
+      "finding": "Cleanup sets extension shutdown word0 to1, signals the worker event, waits up to1000ms and may terminate an unresponsive worker before freeing transport state. A PRE/POST wrapper must not claim arbitrary concurrent root-unload recovery."
+    },
+    {
+      "id": "initialize_before_worker_creation",
+      "module": "maple.dll",
+      "rva": "0x00001af8",
+      "end_rva_exclusive": "0x00001bb4",
+      "bytes": 188,
+      "rom_storage_address": "0x8c0afaf8",
+      "kernel_file_offset": "0x000a02f8",
+      "sha256": "3ed71ad2b5c3104fcd83b257e174729dd0aee0462223f8dddaad027846847795",
+      "crc32_ieee": "417fb53e",
+      "finding": "Transport calls hardware initialization0x1e24 before creating its ordinary workers. Normal steady-state completion does not call this initializer."
+    },
+    {
+      "id": "map_register_block",
+      "module": "maple.dll",
+      "rva": "0x00001cae",
+      "end_rva_exclusive": "0x00001cf2",
+      "bytes": 68,
+      "rom_storage_address": "0x8c0afcae",
+      "kernel_file_offset": "0x000a04ae",
+      "sha256": "f48dffade45b18e1cdc8203be73a95f62ca1ef56e2b032ceebf8a0b9102bd5c5",
+      "crc32_ieee": "66313906",
+      "finding": "Hardware mapping starts from physical0x005f6c00, translates bus address and maps0x100 bytes into extension+0x100. A runtime fence must independently admit the actual live mapping before MMIO access."
+    },
+    {
+      "id": "hardware_initialization_port_writes",
+      "module": "maple.dll",
+      "rva": "0x00001e24",
+      "end_rva_exclusive": "0x00001ea8",
+      "bytes": 132,
+      "rom_storage_address": "0x8c0afe24",
+      "kernel_file_offset": "0x000a0624",
+      "sha256": "887bf8212c5aebc0b6237e5de8a48d5ca04d2704b4c2703f4dc137e91d868106",
+      "crc32_ieee": "388afd03",
+      "finding": "Six WRITE_PORT_ULONG calls initialize mapped offsets14=0,8c=6155007f,80=c3501000,10=1,04=TX bus,14=1. The only two MDEN writes in this reviewed module call family are in initialization."
+    },
+    {
+      "id": "generic_request_enqueue",
+      "module": "maple.dll",
+      "rva": "0x00002e60",
+      "end_rva_exclusive": "0x00002f1c",
+      "bytes": 188,
+      "rom_storage_address": "0x8c0b0e60",
+      "kernel_file_offset": "0x000a1660",
+      "sha256": "650171923d2332ba4604d6dfa4a4b7053cc75ec517f143333faf2d2685f19ae4",
+      "crc32_ieee": "ebf9bdf5",
+      "finding": "Generic requests update function-object fields and extension rebuild flag11c. They do not enable DMA or build a new hardware list directly."
+    },
+    {
+      "id": "generic_response_completion",
+      "module": "maple.dll",
+      "rva": "0x00002bd4",
+      "end_rva_exclusive": "0x00002c4c",
+      "bytes": 120,
+      "rom_storage_address": "0x8c0b0bd4",
+      "kernel_file_offset": "0x000a13d4",
+      "sha256": "e4ccb9f83149ffc64e341d1a6d2330d66b7cbac1bcaa2edd7cd49b882880a9c7",
+      "crc32_ieee": "a0292dc7",
+      "finding": "Ordinary completion copies received header/payload into the IRP output, frees the receive suballocation, clears request state and completes the IRP. A fence-only test must not modify this payload."
+    },
+    {
+      "id": "completion_software_interrupt_signal",
+      "module": "maple.dll",
+      "rva": "0x00003930",
+      "end_rva_exclusive": "0x00003968",
+      "bytes": 56,
+      "rom_storage_address": "0x8c0b1930",
+      "kernel_file_offset": "0x000a2130",
+      "sha256": "dfc901a82d096ed9d787eaa534cd0b58e9a34d20f0c44cd6fa04abf009853f72",
+      "crc32_ieee": "70910dec",
+      "finding": "The completion helper temporarily enters kernel mode and writes extension[118] OR01000000 to PVR/ASIC mask addressa05f8084. It does not access Maple MDEN or MDST."
+    },
+    {
+      "id": "special_operation_port_write",
+      "module": "maple.dll",
+      "rva": "0x00005684",
+      "end_rva_exclusive": "0x0000582c",
+      "bytes": 424,
+      "rom_storage_address": "0x8c0b3684",
+      "kernel_file_offset": "0x000a3e84",
+      "sha256": "8929fd596ca6786610110ce939b187b3b261e2e5b30c6ee127804dbcd27de53b",
+      "crc32_ieee": "68dcaf49",
+      "finding": "Special light-gun operation writes mapped+88. It is selected before ordinary completion by this same main worker, not concurrently inside the wrapped completion body."
+    },
+    {
+      "id": "unmodified_completion_body",
+      "module": "maple.dll",
+      "rva": "0x00005b0c",
+      "end_rva_exclusive": "0x00005d28",
+      "bytes": 540,
+      "rom_storage_address": "0x8c0b3b0c",
+      "kernel_file_offset": "0x000a430c",
+      "sha256": "171c5335957be9b7cc646a2543d6520296583741be22726f341a3b317c2c694d",
+      "crc32_ieee": "04354275",
+      "finding": "Ordinary response walker remains wholly unchanged. It pushes r8..r13/PR, handles responses and returns normally. The authored call wrapper must restore the previous CPU mode and ordinary CE stack before calling it."
+    },
+    {
+      "id": "main_worker_sequence",
+      "module": "maple.dll",
+      "rva": "0x00005d4c",
+      "end_rva_exclusive": "0x00005dd6",
+      "bytes": 138,
+      "rom_storage_address": "0x8c0b3d4c",
+      "kernel_file_offset": "0x000a454c",
+      "sha256": "76760eb4a395bfcc932f57eea999b66b5d20320f79437201903a5b8f7036ebdc",
+      "crc32_ieee": "a6df4757",
+      "finding": "The worker handles special/rebuild, writes mapped+88, waits and checks normal interrupt bit1000. Only then it calls completion. InterruptDone18 and mapped+18 read follow the completion return."
+    },
+    {
+      "id": "worker_call_and_interruptdone",
+      "module": "maple.dll",
+      "rva": "0x00005da8",
+      "end_rva_exclusive": "0x00005dc6",
+      "bytes": 30,
+      "rom_storage_address": "0x8c0b3da8",
+      "kernel_file_offset": "0x000a45a8",
+      "sha256": "9e38c8a6515d6d1c21e53c4525df714344c1bcf312425b2fe8fabf4f86f13ac8",
+      "crc32_ieee": "d11a051e",
+      "finding": "The bit1000 branch skips directly to5db6 when no completion is needed. The original call uses extension r8 as r4 and PR5db6; code5db6 overwrites r0 then calls InterruptDone18, so the completion r0 result is not consumed."
+    },
+    {
+      "id": "secondary_interrupt_worker",
+      "module": "maple.dll",
+      "rva": "0x00005e08",
+      "end_rva_exclusive": "0x00005e60",
+      "bytes": 88,
+      "rom_storage_address": "0x8c0b3e08",
+      "kernel_file_offset": "0x000a4608",
+      "sha256": "48263de815c3e1134135537692fd4ff0a1de6c680d9df86099234bd51ff29462",
+      "crc32_ieee": "7e21e3d5",
+      "finding": "The second worker handles SYSINTR19 and only sets extension rebuild flag11c when its status bit800 is seen. This window contains no Maple-port write."
+    },
+    {
+      "id": "write_port_import_stub",
+      "module": "maple.dll",
+      "rva": "0x00006488",
+      "end_rva_exclusive": "0x00006494",
+      "bytes": 12,
+      "rom_storage_address": "0x8c0b4488",
+      "kernel_file_offset": "0x000a4c88",
+      "sha256": "31d848c4e02ed84c6c98bed2f61f2b8540b9976f6e7f6e72a1f14aa7727ffc7d",
+      "crc32_ieee": "607c2cba",
+      "finding": "Tail-jump stub uses the WDMLIB WRITE_PORT_ULONG IAT at RVA70ac. All complete-text literal references to this stub and their direct r0 callsites are enumerated below."
+    }
+  ],
+  "worker_patch": {
+    "rom_storage_address": "0x8c0b3db0",
+    "rva": "0x00005db0",
+    "bytes": 4,
+    "original_word": "0x400bd013",
+    "authored_word": "0xb4f70009",
+    "check_window_bytes": 32,
+    "original_crc32_ieee": "d48fad4a",
+    "authored_crc32_ieee": "004742ae",
+    "BSR_instruction_rva": "0x00005db2",
+    "BSR_target_rva": "0x000067a4",
+    "BSR_displacement_halfwords": "0x000004f7",
+    "retained_delay_instruction_rva": "0x00005db4",
+    "retained_return_rva": "0x00005db6",
+    "skipped_completion_target_rva": "0x00005db6",
+    "HIGHLOW_overlap_rvas": [],
+    "publication_rule": "Validate original worker32 and wholly original completion entry, admit bridge and helper, publish this aligned four-byte callsite word last. Do not also install the earlier completion-entry detour."
+  },
+  "completion_entry": {
+    "rom_storage_address": "0x8c0b3b0c",
+    "rva": "0x00005b0c",
+    "bytes": 32,
+    "expected_crc32_ieee": "7bd7ff55",
+    "original_body_remains_unchanged": true
+  },
+  "port_write_scan": {
+    "complete_stored_text_bytes": 22528,
+    "thunk_rva": "0x00006488",
+    "IAT_rva": "0x000070ac",
+    "unaligned_absolute_thunk_references": [
+      "0x00001ea0",
+      "0x00005808",
+      "0x00005de4"
+    ],
+    "unaligned_absolute_IAT_references": [
+      "0x00006490"
+    ],
+    "reviewed_calls": [
+      {
+        "load_rva": "0x00001e38",
+        "literal_rva": "0x00001ea0",
+        "call_rva": "0x00001e3c",
+        "mapped_register_offset": "0x00000014",
+        "role": "initialization"
+      },
+      {
+        "load_rva": "0x00001e46",
+        "literal_rva": "0x00001ea0",
+        "call_rva": "0x00001e4a",
+        "mapped_register_offset": "0x0000008c",
+        "role": "initialization"
+      },
+      {
+        "load_rva": "0x00001e54",
+        "literal_rva": "0x00001ea0",
+        "call_rva": "0x00001e58",
+        "mapped_register_offset": "0x00000080",
+        "role": "initialization"
+      },
+      {
+        "load_rva": "0x00001e60",
+        "literal_rva": "0x00001ea0",
+        "call_rva": "0x00001e62",
+        "mapped_register_offset": "0x00000010",
+        "role": "initialization"
+      },
+      {
+        "load_rva": "0x00001e72",
+        "literal_rva": "0x00001ea0",
+        "call_rva": "0x00001e74",
+        "mapped_register_offset": "0x00000004",
+        "role": "initialization"
+      },
+      {
+        "load_rva": "0x00001e78",
+        "literal_rva": "0x00001ea0",
+        "call_rva": "0x00001e7c",
+        "mapped_register_offset": "0x00000014",
+        "role": "initialization"
+      },
+      {
+        "load_rva": "0x000056d4",
+        "literal_rva": "0x00005808",
+        "call_rva": "0x000056d6",
+        "mapped_register_offset": "0x00000088",
+        "role": "same-worker-special-operation"
+      },
+      {
+        "load_rva": "0x00005d8e",
+        "literal_rva": "0x00005de4",
+        "call_rva": "0x00005d90",
+        "mapped_register_offset": "0x00000088",
+        "role": "same-worker-cycle"
+      }
+    ],
+    "MDEN_write_calls": [
+      "0x00001e3c",
+      "0x00001e7c"
+    ],
+    "ordinary_completion_port_write_calls": [],
+    "limitation": "Exact-source literal/IAT and direct-r0-call enumeration plus reviewed call windows; not a proof that unrelated modules or a concurrent root lifecycle cannot access this hardware."
+  },
+  "wrapper_contract": {
+    "mapped_bridge_rva": "0x000067a4",
+    "mapped_bridge_bytes": 92,
+    "original_body_rva": "0x00005b0c",
+    "worker_return_rva": "0x00005db6",
+    "helper_p2_entry": "0xacfcd000",
+    "pre_phase": 0,
+    "post_phase": 1,
+    "CE_owned_frame_bytes": 28,
+    "SetKMode_wrapper_bytes": 20,
+    "combined_mode_call_frame_bytes": 48,
+    "saved_registers": [
+      "r8",
+      "r9",
+      "r10",
+      "PR",
+      "MACH",
+      "MACL",
+      "GBR"
+    ],
+    "body_runs_with_previous_mode": true,
+    "body_runs_on_ordinary_CE_stack": true,
+    "body_runs_before_original_InterruptDone18": true,
+    "ordinary_worker_result_r0_consumed": false,
+    "incoming_T_live": false,
+    "C_helper_ABI": "r4 extension, r5 phase; PRE r6 original KMode Boolean, POST r6 KMode Boolean observed before its second explicit kernel entry; r8..r14 must be preserved by the helper and original body."
+  },
+  "stage_guard_regions": [
+    {
+      "id": "ROMHDR",
+      "address": "0x8c141420",
+      "kernel_file_offset": "0x00131c20",
+      "bytes": 84,
+      "sha256": "013e737f57376d0a3b82ce81d6c797e3805fa0984cefe10fcfd744f8f6f179c9",
+      "crc32_ieee": "7ddd77a1"
+    },
+    {
+      "id": "MAPLE_TOC",
+      "address": "0x8c141614",
+      "kernel_file_offset": "0x00131e14",
+      "bytes": 32,
+      "sha256": "9fb5b61a06d5a0c0020c913ff4fbf465b98dffcf15385f5e8202812f845a14b9",
+      "crc32_ieee": "3dd790b3"
+    },
+    {
+      "id": "MAPLE_E32",
+      "address": "0x8c099b70",
+      "kernel_file_offset": "0x0008a370",
+      "bytes": 100,
+      "sha256": "21bb242c1817bc5caefaff3b0d94e7f638de4cca07c72c03a4c6fa0d5357bd82",
+      "crc32_ieee": "908a5539"
+    },
+    {
+      "id": "MAPLE_text_O32",
+      "address": "0x8c099bd4",
+      "kernel_file_offset": "0x0008a3d4",
+      "bytes": 24,
+      "sha256": "4c958649c233fd405bc5483f4ca55bbf34755d6a1963c92ee1bb097ec196be68",
+      "crc32_ieee": "94183a25"
+    },
+    {
+      "id": "completion_entry32",
+      "address": "0x8c0b3b0c",
+      "kernel_file_offset": "0x000a430c",
+      "bytes": 32,
+      "sha256": "394934ea008c9f96b8655aa9d23bfa1e45850c550485cfb02c8ff7fde819180c",
+      "crc32_ieee": "7bd7ff55"
+    },
+    {
+      "id": "aligned_text_tail",
+      "address": "0x8c0b47a4",
+      "kernel_file_offset": "0x000a4fa4",
+      "bytes": 92,
+      "sha256": "62b14867e4e79d50673d2f7474335229f54c478f56d2a910235e1953c6d29206",
+      "crc32_ieee": "c2b526e7"
+    },
+    {
+      "id": "ordinary_worker_call32",
+      "address": "0x8c0b3db0",
+      "kernel_file_offset": "0x000a45b0",
+      "bytes": 32,
+      "sha256": "0e41ce819d1f053f409b1af494506a67c5da068c98dd036addfe210a76d692c4",
+      "crc32_ieee": "d48fad4a"
+    }
+  ],
+  "limitations": [
+    "A live lease must validate the exact mapped MMIO instance, MDEN/MDTSEL/MDSTAR values and bounded MDST-idle transition; this source metadata does not provide those observations.",
+    "The fence-only test must not alter a TX/RX descriptor, response, payload, virtual card or SD file.",
+    "Ordinary root-driver initialization and unload are excluded during the test. Cleanup may terminate a stalled worker after1000ms, which could bypass an authored POST hook.",
+    "The padding wrapper has no added CE pdata unwind record. This design specifies ordinary ABI returns, not recovery from an exception or asynchronous thread termination.",
+    "Disabling DMA over the original walker can delay physical input/device polls. Hardware tests must verify controls and normal completion after restoration.",
+    "Physical VMU enumeration is an ordinary device-list path; it does not justify arbitrary root-controller or driver hot-unload.",
+    "No source or metadata here is borrowed from DreamShell or SWAT."
+  ]
+}

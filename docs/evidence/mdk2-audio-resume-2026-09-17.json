@@ -1,0 +1,207 @@
+{
+  "received_date": "2026-09-17",
+  "input": {
+    "file": "diagnostics(10).txt",
+    "bytes": 7019,
+    "sha256": "7affb90fc13cb0ee86de657dfd763755d354119ff6d1f252ea7f287a72ebd309",
+    "log_truncated": false
+  },
+  "runtime_build": "0ef58878ccdd",
+  "disc_title": "MDK2",
+  "disc_identity": "f838eac34967ae1693217ed313906954d4a6644dd59f5aa50f0accba8cf54727",
+  "job": "/KUI/dumps/df838eac34967ae16-0002",
+  "phases": {
+    "setup": {
+      "wall_us": 12615276,
+      "buckets": {
+        "disc": {
+          "us": 12462971,
+          "logged_pct": 98.7,
+          "bytes": 218736,
+          "calls": 93,
+          "calculated_pct": 98.7926938736814
+        },
+        "edc": {
+          "us": 1075,
+          "logged_pct": 0.0,
+          "bytes": 21168,
+          "calls": 9,
+          "calculated_pct": 0.008521414830717933
+        },
+        "other": {
+          "us": 151230,
+          "calculated_pct": 1.1987847114878818
+        }
+      }
+    },
+    "resume": {
+      "wall_us": 167466368,
+      "buckets": {
+        "read": {
+          "us": 126206689,
+          "logged_pct": 75.3,
+          "bytes": 59620848,
+          "calls": 794,
+          "calculated_pct": 75.36240888678019
+        },
+        "sha256": {
+          "us": 34167135,
+          "logged_pct": 20.4,
+          "bytes": 59620848,
+          "calls": 798,
+          "calculated_pct": 20.402386107758662
+        },
+        "crc32": {
+          "us": 6431161,
+          "logged_pct": 3.8,
+          "bytes": 59620848,
+          "calls": 794,
+          "calculated_pct": 3.8402701848767626
+        },
+        "other": {
+          "us": 661383,
+          "calculated_pct": 0.3949348205843934
+        }
+      }
+    },
+    "capture": {
+      "wall_us": 271160576,
+      "buckets": {
+        "disc": {
+          "us": 240661598,
+          "logged_pct": 88.7,
+          "bytes": 15955968,
+          "calls": 213,
+          "calculated_pct": 88.7524291141792
+        },
+        "write": {
+          "us": 19840484,
+          "logged_pct": 7.3,
+          "bytes": 15955968,
+          "calls": 212,
+          "calculated_pct": 7.316876329396792
+        },
+        "sha256": {
+          "us": 8596927,
+          "logged_pct": 3.1,
+          "bytes": 15955968,
+          "calls": 212,
+          "calculated_pct": 3.1704192131528734
+        },
+        "crc32": {
+          "us": 1983868,
+          "logged_pct": 0.7,
+          "bytes": 15955968,
+          "calls": 212,
+          "calculated_pct": 0.7316211040944242
+        },
+        "checkpoint": {
+          "us": 65075,
+          "logged_pct": 0.0,
+          "bytes": 8192,
+          "calls": 2,
+          "calculated_pct": 0.023998695149548582
+        },
+        "other": {
+          "us": 12624,
+          "calculated_pct": 0.004655544027167135
+        }
+      }
+    }
+  },
+  "resume": {
+    "checkpoint_sequence": 9,
+    "committed_bytes_before": 59620848,
+    "prefix_mib": 56.85887145996094,
+    "duration_seconds": 167.466368,
+    "average_kib_s": 347.67270031795283,
+    "console_verified_prefixes": [
+      {
+        "track": 1,
+        "bytes": 33988752,
+        "crc32": "97aad8a5",
+        "sha256": "62f9981ec7d99987c7f850bc7814f91425d0464f34fed4864fd2df633fd23754",
+        "scope": "completed track",
+        "result": "Console readback matches checkpoint; no raw bytes supplied for independent recomputation in this upload"
+      },
+      {
+        "track": 2,
+        "bytes": 1237152,
+        "crc32": "48fff429",
+        "sha256": "483662b5c19f78b23fc738ad028fbb7a7bcf1cf15488c0db1c1e1b59f3726370",
+        "scope": "completed track",
+        "result": "Console readback matches checkpoint; no raw bytes supplied for independent recomputation in this upload"
+      },
+      {
+        "track": 3,
+        "bytes": 16793280,
+        "crc32": "4e3c1f3e",
+        "sha256": "f29a394f64dc12ffb31f74489f3c1b4ce5a2d99da0d29ae009666d2a9e32fbe4",
+        "scope": "completed track",
+        "result": "Console readback matches checkpoint; no raw bytes supplied for independent recomputation in this upload"
+      },
+      {
+        "track": 4,
+        "bytes": 7601664,
+        "crc32": "bb5a72d8",
+        "sha256": "3a10c93c89bb9a0cc7e1e816eb6b97f9e22662f4f1beb51d6644c30682768383",
+        "scope": "committed partial-track prefix",
+        "result": "Console readback matches checkpoint; no raw bytes supplied for independent recomputation in this upload"
+      }
+    ],
+    "new_writes_after_prefix_check": true,
+    "fresh_runtime_startup_logged": true,
+    "restart_method_independently_established": false
+  },
+  "capture": {
+    "track": 4,
+    "track_type": "audio",
+    "start_fad": 55672,
+    "new_bytes": 15955968,
+    "new_sectors": 6784,
+    "duration_seconds": 271.160576,
+    "average_kib_s": 57.46410569654491,
+    "committed_bytes_after": 75576816,
+    "track_sectors_after_derived": 10016,
+    "next_fad_derived": 62456,
+    "recorded_application_retries": 0,
+    "cancelled_disc_commands": 1,
+    "stop": "Controlled B cancellation followed by checkpointed committed prefix",
+    "standalone_audio_timing": true,
+    "instantaneous_50_kib_s_recorded": false,
+    "full_disc_complete": false,
+    "final_full_saved_file_verification": false
+  },
+  "derived": {
+    "sd_read_call_kib_s": 461.334378045525,
+    "sd_write_call_kib_s": 785.3639054369843,
+    "paired_optical_callback_logical_kib_s": 64.74651597717721,
+    "resume_sha256_plus_crc32_seconds": 40.598296
+  },
+  "continuity_checks": {
+    "prior_log": "diagnostics(9).txt",
+    "prior_evidence_file": "mdk2-audio-entry-2026-09-17.json",
+    "prior_saved_count_matches_resume_prefix": true,
+    "verified_track_prefix_lengths_sum_to_checkpoint_bytes": true,
+    "new_bytes_plus_prefix_equal_final_committed_bytes": true,
+    "new_bytes_equal_212_chunks_of_32_raw_sectors": true,
+    "all_timing_phases_sum_exactly": true
+  },
+  "memory": {
+    "used_reserved_bytes": 881976,
+    "available_bytes": 15895240,
+    "sampled_peak_bytes": 881976,
+    "heap_in_use_bytes": 88948,
+    "heap_system_bytes": 91708,
+    "change_observed": false
+  },
+  "limitations": [
+    "Optical timer includes both reads, mode setup, polling/waits, buffer checks and copy; individual costs are not separated.",
+    "Application retry counter does not expose internal drive retries.",
+    "This trace directly measures an audio-only average, not individual instantaneous screen rates or the earlier reported track-5 duration.",
+    "Only console log data is supplied for this resumed job; recorded track-prefix hashes have not been independently recomputed on PC.",
+    "A fresh runtime startup is logged but the restart method is not independently established.",
+    "The resumed MDK2 job is incomplete; final readback, uninterrupted-versus-resumed equality and independent reference comparison remain pending.",
+    "Documentation/evidence update only; no fast-resume, automatic logging or optical optimization is implemented."
+  ]
+}
