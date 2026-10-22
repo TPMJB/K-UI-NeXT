@@ -407,3 +407,77 @@ publication, which precedes the first worker entry. Stack bounds are 1,568 of
 persistent audit also passes with its original cache policy. Read-only and
 passive regressions pass 1,966 and 605 checks respectively; the new exit guard
 passes 595 checks with the real executable and the patch guard passes 1,143.
+
+## Cached mappings, lower runtime cost and broader native families
+
+The owner tested performance build `2e5314bd582f`: approximately five seconds
+to the bootloader and another thirty seconds through startup; Power Stone 2
+FMV and gameplay were smooth. The owner correctly requested heavier titles
+before treating that result as general performance acceptance. Persistence
+had previously passed on `d503f1aa423d` using p0005. Neither report establishes
+all native titles or all transport/music combinations.
+
+`Makefile.vmu-native-compat` now combines independently reviewed changes:
+
+- Complete 1024-byte versioned resolution records, bound to executable SHA,
+  size, load address and detector epoch. Replay skips immutable discovery
+  after fresh image hashing and an independently pinned record digest.
+  The immutable 1120-byte seed has exact typed ELF/module provenance. Invalid
+  or other-image seeds take the original full discovery path. Live allocation
+  safety, fresh patch windows, initializer/release replay and all lifetime,
+  layout and storage proofs remain mandatory. Actual linked-SH models check
+  6,144 replay/guard/ABI cases and 2,688 surrounding relay routes; ten cache
+  gateway mutations are rejected.
+- Generic contiguous initializer/root/wrapper and bounded allocator-expression
+  discovery, plus reviewed PVR cleanup/compact/pair-only exit families. A
+  shared twelve-byte veneer supports halfword-aligned cleanup entries while
+  submit, initializer and release retain their original four-byte alignment.
+  Independent instruction-transport and live-binding models pass Power Stone
+  2, Skies of Arcadia Disc 1 and Sonic Adventure 2. RECV static discovery passes
+  but its loaded-image/buffer overlap remains refused. Five other uploaded
+  startup families remain unadmitted with distinct evidence reasons.
+- Once-per-launch immutable geometry preparation, retaining all live witness
+  sampling; full original proofs still surround every external SCI loan.
+  Combined release/lease validation walks the same free list once. Actual
+  production-C instrumentation reduces steady two-controller reads 450→344,
+  four controllers 476→366 and a 256-node unrelated free guard 1056→543.
+  These are work counts, not measured console frame rates or timings.
+- Zero-payload virtual RESET discards staged RAM without SD access. Bounded
+  physical non-target INFO/ALLINFO/GETCOND queries preserve typed real replies.
+  SETCOND/physical storage/virtual KILL and parent-free/all-virtual schedules
+  remain deferred. The existing A1 conflict and physical-DMA exclusions stay.
+
+The actual Games frontend now prepares and persists `.nvr` records while FatFs
+is still mounted, after final module choice and before map encoding/unmount.
+It only opts in for a unique cache-bearing native SCI/Standard module, handles
+corrupt/stale files, cancellation, low memory and optional write failures, and
+never treats a cache as live ownership. Its real include passes 111,646 focused
+ASan/UBSan checks with the actual PS2 startup. The recovered checkout lacks
+complete KOS/FatFs headers/build dependencies; there is no newly built UI
+runtime. The console ZIP instead supplies three exact-image precomputed
+metadata records selected by `personalize.py --game ps2|skies|sa2`, keeping the
+owner's working UI binary. Installing without `--game` provides a cold-scan
+control. See `vmu-native-launch-cache.md` and `vmu-native-compat-test.md`.
+
+Verification includes 67,277 resolution-cache, 63,936 C seed-codec, 1,196,760
+persistent-worker, 5,401 prepared-live, 10,247 peripheral/RESET and 33,276
+workload checks under ASan/UBSan. The Python personalizer preserves all twelve
+legacy tests and passes thirty-two total; the independent seed-artifact audit
+passes thirteen mutation tests. Real metadata fixtures contain no executable,
+track, IP or save bytes. All three records were rebuilt and fully verified
+against the external owner startup inputs before versioning.
+
+After committing, build into a new directory, run `compat-host-tests` with
+`STARTUP` set to PS2, `HEAP_NEGATIVE` to CT2 and `CACHE_STARTUPS` to the Skies,
+SA2 and RECV executable paths. Then run
+`tools/check_vmu_native_persistent.py BUILD --self-test` and
+`tools/package_vmu_native_persistent.py BUILD`. The package requires a clean
+source commit and matching fresh build ID and includes its full git bundle.
+The next console work is the cached/cold, streaming, gameplay, save/poweroff/
+reload matrix on Skies and SA2, followed by a brief PS2 regression.
+
+The read-only SWAT comparison is in `vmu-feature-comparison.md`. Important
+remaining work is broader Maple schedules, automatic card selection, CDDA
+storage arbitration, SCIF/IDE loans and orderly reset/return/multi-disc
+lifecycle. The ordered journal/base-block readback/healthy-bus ACK contract is
+an explicit K-UI advantage; it is not a whole-game-save atomicity guarantee.

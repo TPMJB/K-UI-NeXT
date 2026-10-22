@@ -42,10 +42,35 @@ static bool word_literal(const uint8_t *p,size_t n,uint32_t base,size_t instruct
 static bool target(const uint8_t *p,size_t n,uint32_t base,size_t instruction,unsigned reg,uint32_t expected) {
     uint32_t got;return literal(p,n,base,instruction,reg,&got) && phys(got)==phys(expected);
 }
+static bool exact_literal(const uint8_t *p,size_t n,uint32_t base,size_t instruction,unsigned reg,uint32_t expected) {
+    uint32_t got;return literal(p,n,base,instruction,reg,&got) && got==expected;
+}
 static bool bsr_target(const uint8_t *p,size_t n,uint32_t base,size_t instruction,uint32_t expected) {
     if(instruction>n || n-instruction<2u) return false;
     uint16_t code=u16(p+instruction);int32_t displacement=(int32_t)((code&4095u)^2048u)-2048;
     return (code&0xf000u)==0xb000u && phys(base+(uint32_t)instruction+4u+(uint32_t)(2*displacement))==phys(expected);
+}
+static bool bsr_code(const uint8_t *p,size_t n,uint32_t base,size_t instruction) {
+    if(instruction>n || n-instruction<2u) return false;
+    uint16_t code=u16(p+instruction);int32_t displacement=(int32_t)((code&4095u)^2048u)-2048;
+    uint32_t destination=base+(uint32_t)instruction+4u+(uint32_t)(2*displacement);size_t offset;
+    return (code&0xf000u)==0xb000u && at(destination,base,n,2u,&offset);
+}
+/* Decode every gap in the upper wrapper's argument-save prefix. These are
+ * real instructions: leaving even an otherwise unrelated literal load
+ * unconstrained would permit a replacement that corrupts R15 or R5/R6 before
+ * their saved arguments are reloaded. Both wrappers use the same context. */
+static bool upper_context(const uint8_t *p,size_t n,uint32_t base,size_t s,bool variable) {
+    uint32_t mode,flag,base_cell,context,other,clear,again;size_t code;
+    return literal(p,n,base,s+18u,3u,&mode) && literal(p,n,base,s+22u,2u,&flag) &&
+        literal(p,n,base,s+26u,0u,&base_cell) && literal(p,n,base,s+28u,12u,&context) &&
+        literal(p,n,base,s+(variable?44u:38u),3u,&other) &&
+        literal(p,n,base,s+(variable?46u:44u),2u,&clear) &&
+        literal(p,n,base,s+(variable?68u:66u),2u,&again) &&
+        word_literal(p,n,base,s+(variable?36u:42u),6u,0x4e0u) &&
+        ram(flag,12u,4u) && ram(base_cell,4u,4u) && ram(context,0x544u,4u) &&
+        base_cell==flag-4u && context==flag+8u && other==flag+4u && mode==context+0x540u &&
+        again==flag && !(clear&1u) && at(clear,base,n,2u,&code);
 }
 /* Variable-initializer contract: two input banks selected by immutable
  * indices, each 1 KiB; fc8 remains the aligned pointer-array address. */
@@ -99,13 +124,21 @@ static bool timers(const uint8_t *p,size_t n,uint32_t base,uint32_t *one,uint32_
 }
 static bool gun(const uint8_t *p,size_t n,uint32_t base,const struct kui_vmu_native_discovery *d,uint32_t *out) {
     static const struct witness w[]={{0,0x2fe6},{2,0x2fd6},{4,0x0002},{6,0x2fc6},{10,0x2fb6},{12,0x4f22},
-        {14,0x2039},{16,0xcbf0},{18,0x400e},{22,0x6242},{24,0x2228},{26,0x8b19},
-        {30,0x6232},{32,0x7201},{34,0x2322},{38,0x0009},{40,0xb01e},{42,0x0009},
+        {16,0xcbf0},{18,0x400e},{26,0x8b19},
+        {30,0x6232},{32,0x7201},{34,0x2322},{38,0x0009},{42,0x0009},
         {80,0xe300},{82,0x2432},{86,0x6242},{88,0x7201},{90,0x2422}};
     unsigned count=0;uint32_t chosen=0;
     for(size_t s=0;s<n && n-s>=92u;s+=2u) {
         if(u16(p+s)!=0x2fe6u || u16(p+s+2u)!=0x2fd6u || u16(p+s+4u)!=0x0002u) continue;
-        if(!WORDS(p,n,s,w) || !word_literal(p,n,base,s+8u,3u,0xff0fu) ||
+        if(!WORDS(p,n,s,w)) continue;
+        /* Both reviewed IRQ wrappers mask SR and test the same flag. The
+         * second compiler shape exchanges R2/R3 and relocates its following
+         * direct helper across a small group of extra public thunks. */
+        bool old=u16(p+s+14u)==0x2039u && u16(p+s+22u)==0x6242u &&
+            u16(p+s+24u)==0x2228u && u16(p+s+40u)==0xb01eu;
+        bool alternate=u16(p+s+14u)==0x2029u && u16(p+s+22u)==0x6342u &&
+            u16(p+s+24u)==0x2338u && u16(p+s+40u)==0xb03au;
+        if((!old && !alternate) || !word_literal(p,n,base,s+8u,old?3u:2u,0xff0fu) ||
            d->completion_call<0x4au || !bsr_target(p,n,base,s+36u,d->completion_call-0x4au)) continue;
         uint32_t flag,cleared;
         if(!literal(p,n,base,s+20u,4u,&flag) || !literal(p,n,base,s+84u,4u,&cleared) || !ram(flag,4u,4u) || flag==cleared) continue;
@@ -117,7 +150,7 @@ static bool gun(const uint8_t *p,size_t n,uint32_t base,const struct kui_vmu_nat
 
 /* Called only after an exact image-bound driver resolution, either produced
  * immediately by the combined API or replayed by the strict cached API. */
-static bool layout_from_bound(const void *image,size_t n,
+static bool variable_from_bound(const void *image,size_t n,
     const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out) {
     uint32_t base=d->load_address;
     const uint8_t *p=image;size_t init;
@@ -131,7 +164,9 @@ static bool layout_from_bound(const void *image,size_t n,
     unsigned found=0;size_t wrapper=0;
     for(size_t s=0;s<n && n-s>=56u;s+=2u) if(u16(p+s)==0x4f22u &&
        u16(p+s+2u)==0x7fecu && u16(p+s+4u)==0x0002u && WORDS(p,n,s,wrap) &&
-       word_literal(p,n,base,s+6u,3u,0xff0fu) && target(p,n,base,s+46u,3u,r.initializer)) {wrapper=s;++found;}
+       word_literal(p,n,base,s+6u,3u,0xff0fu) && target(p,n,base,s+32u,4u,d->lock_cell) &&
+       exact_literal(p,n,base,s+34u,3u,0xa0000000u) && bsr_code(p,n,base,s+40u) &&
+       target(p,n,base,s+46u,3u,r.initializer)) {wrapper=s;++found;}
     if(found!=1u) return false;
     r.initializer_wrapper=base+(uint32_t)wrapper;
     /* Reviewed upper wrapper transports caller R5/R6/R7 and stack argument
@@ -142,7 +177,7 @@ static bool layout_from_bound(const void *image,size_t n,
         {62,0x63f2},{64,0x2338},{66,0x8908},{70,0xe301},{72,0x2232},{74,0x65f2},{78,0x57fb},{80,0x56f1},{82,0x430b},{84,0x54f2}};
     found=0;size_t upper_site=0;
     for(size_t s=0;s<n && n-s>=86u;s+=2u) if(u16(p+s)==0x2fe6u &&
-       u16(p+s+2u)==0x2fd6u && u16(p+s+4u)==0x2fc6u && WORDS(p,n,s,upper) &&
+       u16(p+s+2u)==0x2fd6u && u16(p+s+4u)==0x2fc6u && WORDS(p,n,s,upper) && upper_context(p,n,base,s,true) &&
        target(p,n,base,s+76u,3u,r.initializer_wrapper)) {upper_site=s;++found;}
     if(found!=1u) return false;
     /* Root's reviewed leaf call supplies three immutable pointers and an
@@ -182,6 +217,127 @@ static bool layout_from_bound(const void *image,size_t n,
     }
     if(!gun(p,n,base,d,&r.gun_flag) || !timers(p,n,base,&r.timer1_callback,&r.timer2_callback)) return false;
     *out=r;return true;
+}
+
+/* Original SDK initializer: caller R4/R6 become aligned P2 TX/RX bases;
+ * its constructor assigns every one of the 48 contiguous 1 KiB RX slots.
+ * The optional pointer-array initializer may coexist without being called. */
+static bool uniform_initializer(const uint8_t *p,size_t n,uint32_t base,
+    const struct kui_vmu_native_discovery *d) {
+    static const struct witness init[]={
+        {0,0x2fe6},{8,0x6233},{10,0x2fd6},{12,0x2fc6},{14,0x2fb6},{16,0x2fa6},{18,0x4f22},
+        {20,0x2e32},{22,0x0246},{24,0x7004},{26,0x63e2},{28,0x0366},{30,0x70fc},
+        {32,0x63e2},{34,0xe61f},{36,0x023e},{38,0x2268},{40,0x8d09},{42,0xe5e0},
+        {46,0x61e2},{48,0x031e},{50,0x7320},{52,0x0136},{54,0x63e2},{56,0x023e},{58,0x2259},{60,0x0326},
+        {64,0x64e2},{66,0x034e},{68,0x2638},{70,0x8906},{72,0x034e},{74,0x7320},{76,0x0436},
+        {78,0x63e2},{80,0x023e},{82,0x2259},{84,0x0326},
+        {88,0x63e2},{92,0x023e},{94,0x224b},{96,0x0326},{98,0x7004},{100,0x63e2},{102,0x023e},{104,0x224b},{106,0x0326},
+        {110,0x430b},{112,0x0009}
+    };
+    static const struct witness construct[]={
+        {0,0x2fe6},{2,0x2fd6},{4,0x2fc6},{6,0x2fb6},{8,0x2fa6},{10,0x2f96},{12,0x2f86},{14,0x4f22},{16,0x7ff8},
+        {20,0xed00},{24,0x64d3},{26,0x63e2},{28,0xec60},{32,0x67d3},{34,0x03d6},{36,0x7004},
+        {38,0x63e2},{42,0x03d6},{46,0x63e2},{50,0x013e},{52,0x323c},{54,0x317c},{56,0x324c},{58,0x2212},
+        {62,0x63e2},{64,0x013e},{66,0x323c},{68,0x324c},{70,0x7404},{72,0x316c},{74,0x34c2},{76,0x7260},{78,0x2212},
+        {80,0x365c},{82,0x8feb},{84,0x375c},{86,0x62e2},{88,0xe608},{92,0xe500},{94,0x6323},
+        {96,0x013e},{100,0x0216},{102,0x63e2},{106,0x6233},{110,0x022e},{114,0x321c},{116,0x0326},
+        {118,0x70fc},{120,0x63e2},{122,0x6233},{124,0x022e},{128,0x0326}
+    };
+    size_t s,c;uint32_t alias,constructor;
+    if(!at(d->initializer,base,n,114u,&s) || !WORDS(p,n,s,init) ||
+       !target(p,n,base,s+2u,14u,d->manager_cell) || !target(p,n,base,s+4u,3u,d->manager_initial) ||
+       !word_literal(p,n,base,s+6u,0u,0xfc4u) || !word_literal(p,n,base,s+44u,0u,0xfc4u) ||
+       !word_literal(p,n,base,s+62u,0u,0xfc8u) || !word_literal(p,n,base,s+86u,0u,0xfc4u) ||
+       !literal(p,n,base,s+90u,4u,&alias) || alias!=0xa0000000u ||
+       !literal(p,n,base,s+108u,3u,&constructor) || !at(constructor,base,n,130u,&c) || !WORDS(p,n,c,construct)) return false;
+    return target(p,n,base,c+18u,14u,d->manager_cell) &&
+        word_literal(p,n,base,c+22u,0u,0x10b4u) && word_literal(p,n,base,c+30u,6u,0x6000u) &&
+        word_literal(p,n,base,c+40u,5u,0x400u) && word_literal(p,n,base,c+44u,0u,0xfc8u) &&
+        word_literal(p,n,base,c+48u,2u,0xfe8u) && word_literal(p,n,base,c+60u,2u,0xfe8u) &&
+        word_literal(p,n,base,c+90u,0u,0xfc4u) && word_literal(p,n,base,c+98u,0u,0x10a8u) &&
+        word_literal(p,n,base,c+104u,0u,0xfc4u) && word_literal(p,n,base,c+108u,1u,0x3000u) &&
+        word_literal(p,n,base,c+112u,0u,0x10acu) && word_literal(p,n,base,c+126u,0u,0xfccu);
+}
+static bool uniform_root(const uint8_t *p,size_t n,uint32_t base,size_t call,
+    uint32_t upper,uint32_t *rx_slot,uint32_t *rx,uint32_t *tx_slot,uint32_t *tx) {
+    if(call<8u || call>n || n-call<4u || u16(p+call)!=0x430bu) return false;
+    unsigned known=0;
+    for(size_t s=call-8u;s<=call+2u;s+=2u) {
+        /* SH samples the indirect target before executing its delay slot.
+         * Argument registers may be prepared there, but R3 must already name
+         * the proved upper wrapper when JSR itself executes. */
+        if(s==call) {if(!(known&8u)) return false;continue;}
+        uint16_t op=u16(p+s);
+        if(op==0x0009u) continue;
+        if(op==0xe400u) {if(known&16u) return false;known|=16u;continue;}
+        unsigned reg=(op>>8)&15u;uint32_t value;
+        if((op&0xf000u)!=0xd000u || (reg!=3u && reg!=5u && reg!=6u) ||
+           (known&(1u<<reg)) || !literal(p,n,base,s,reg,&value)) return false;
+        known|=1u<<reg;
+        if(reg==3u) {if(phys(value)!=phys(upper)) return false;}
+        else {
+            uint32_t slot=((base+(uint32_t)s+4u)&~3u)+4u*(op&255u);
+            if(reg==5u) {*rx_slot=slot;*rx=value;} else {*tx_slot=slot;*tx=value;}
+        }
+    }
+    return known==0x78u;
+}
+static bool uniform_from_bound(const void *image,size_t n,
+    const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out) {
+    const uint8_t *p=image;uint32_t base=d->load_address;
+    if(!uniform_initializer(p,n,base,d)) return false;
+    static const struct witness wrap[]={
+        {0,0x4f22},{2,0x7ff4},{4,0x0002},{8,0x2f42},{10,0x4009},{12,0x1f51},{14,0x4009},
+        {16,0xc90f},{18,0x1f02},{20,0x0002},{22,0x2039},{24,0xcbf0},{26,0x400e},
+        {32,0x6242},{34,0x223b},{38,0x2422},{44,0x66f2},{46,0x6573},{48,0x430b},{50,0x54f1}
+    };
+    unsigned found=0;size_t wrapper=0;
+    for(size_t s=0;s<n && n-s>=52u;s+=2u) {
+        uint32_t alias,capacity;
+        if(u16(p+s)!=0x4f22u || u16(p+s+2u)!=0x7ff4u || !WORDS(p,n,s,wrap) ||
+           !word_literal(p,n,base,s+6u,3u,0xff0fu) || !target(p,n,base,s+28u,4u,d->lock_cell) ||
+           !literal(p,n,base,s+30u,3u,&alias) || alias!=0xa0000000u ||
+           !literal(p,n,base,s+40u,7u,&capacity) || capacity!=0xc000u ||
+           !bsr_code(p,n,base,s+36u) ||
+           !target(p,n,base,s+42u,3u,d->initializer)) continue;
+        wrapper=s;if(++found>1u) return false;
+    }
+    if(found!=1u) return false;
+    static const struct witness upper[]={
+        {0,0x2fe6},{2,0x2fd6},{4,0x2fc6},{6,0x2fb6},{8,0x2fa6},{10,0x2f96},{12,0x2f86},{14,0x4f22},{16,0x7ff8},
+        {20,0xee00},{24,0xe101},{30,0x1f51},{32,0x65e3},{34,0x2f62},{36,0x2342},{40,0x22e2},
+        {46,0x2012},{48,0x23e2},{50,0x420b},{52,0x64c3},{54,0x63f2},{56,0x2338},{58,0x8909},
+        {60,0x53f1},{62,0x2338},{64,0x8906},{68,0xe301},{70,0x2232},{74,0x65f2},{76,0x430b},{78,0x54f1}
+    };
+    found=0;size_t upper_site=0;
+    for(size_t s=0;s<n && n-s>=80u;s+=2u) if(u16(p+s)==0x2fe6u && u16(p+s+2u)==0x2fd6u &&
+       WORDS(p,n,s,upper) && upper_context(p,n,base,s,false) && target(p,n,base,s+72u,3u,base+(uint32_t)wrapper)) {
+        upper_site=s;if(++found>1u) return false;
+    }
+    if(found!=1u) return false;
+    struct kui_vmu_native_layout r={0};uint32_t rx=0,tx=0;found=0;
+    for(size_t s=8u;s<n && n-s>=4u;s+=2u) {
+        uint32_t rx_at=0,raw_rx=0,tx_at=0,raw_tx=0;
+        if(u16(p+s)!=0x430bu ||
+           !uniform_root(p,n,base,s,base+(uint32_t)upper_site,&rx_at,&raw_rx,&tx_at,&raw_tx)) continue;
+        r.input_array=rx_at;rx=raw_rx;r.index_array=tx_at;tx=raw_tx;
+        r.initializer_call=base+(uint32_t)s;if(++found>1u) return false;
+    }
+    if(found!=1u || !ram(rx,0xc020u,4u) || !ram(tx,0x6020u,4u)) return false;
+    r.version=1u;r.bytes=sizeof(r);r.initializer=d->initializer;r.initializer_wrapper=base+(uint32_t)wrapper;
+    r.rx_layout=KUI_VMU_NATIVE_RX_UNIFORM48;r.inputs=1u;r.input_values[0]=rx;r.indices[0]=tx;
+    r.rx_base=((rx+31u)&~31u)|0xa0000000u;r.tx_base=((tx+31u)&~31u)|0xa0000000u;
+    for(unsigned i=0;i<48u;i++) r.rx_slots[i]=r.rx_base+1024u*i;
+    if(!gun(p,n,base,d,&r.gun_flag) || !timers(p,n,base,&r.timer1_callback,&r.timer2_callback)) return false;
+    *out=r;return true;
+}
+static bool layout_from_bound(const void *image,size_t n,
+    const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out) {
+    struct kui_vmu_native_layout variable_layout,uniform_layout;
+    bool variable_found=variable_from_bound(image,n,d,&variable_layout);
+    bool uniform_found=uniform_from_bound(image,n,d,&uniform_layout);
+    if(variable_found==uniform_found) return false;
+    *out=variable_found?variable_layout:uniform_layout;return true;
 }
 
 static bool main_ram_object(uintptr_t address,size_t bytes,uint32_t *physical) {
@@ -240,18 +396,26 @@ bool kui_vmu_native_layout_bind_checked(const struct kui_vmu_native_layout *l,co
     SCHEMA(l->version,1u);SCHEMA(l->bytes,sizeof(*l));SCHEMA(d->version,1u);SCHEMA(d->bytes,sizeof(*d));
     SCHEMA(d->family,KUI_VMU_NATIVE_FAMILY_UNIFORM_V1);SCHEMA(d->requirements,KUI_VMU_NATIVE_REQUIREMENTS);
     SCHEMA(out->version,1u);SCHEMA(out->bytes,sizeof(*out));SCHEMA(out->lease_header_bytes,32u);
-    SCHEMA(l->inputs,12u);SCHEMA(l->rx_layout,KUI_VMU_NATIVE_RX_EXPLICIT48);
-    SCHEMA(l->rx_base,((l->input_array+31u)&~31u)|0xa0000000u);
+    bool uniform=l->rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48;
+    if(l->rx_layout>KUI_VMU_NATIVE_RX_EXPLICIT48)
+        return bind_failure(diag,KUI_VMU_LAYOUT_BIND_SCHEMA,0u,l->rx_layout,KUI_VMU_NATIVE_RX_EXPLICIT48);
+    SCHEMA(l->inputs,uniform?1u:12u);
+    SCHEMA(l->rx_base,(((uniform?l->input_values[0]:l->input_array)+31u)&~31u)|0xa0000000u);
+    if(uniform) {SCHEMA(l->tx_base,((l->indices[0]+31u)&~31u)|0xa0000000u);}
     SPAN(d->load_address,d->image_bytes,4u);SPAN(d->manager_cell,4u,4u);SPAN(d->lock_cell,5u,4u);
     SPAN(out->lease_address,out->lease_bytes,32u);
     SPAN(out->lease_address-out->lease_header_bytes,out->lease_bytes+out->lease_header_bytes,1u);
     SPAN(l->input_array,l->inputs*4u,4u);SPAN(l->tx_base,0x6000u,32u);SPAN(d->manager_initial,0x1100u,4u);
+    if(uniform) {SPAN(l->index_array,4u,4u);SPAN(l->input_values[0],0xc020u,4u);SPAN(l->indices[0],0x6020u,4u);}
     SPAN(l->gun_flag,4u,4u);SPAN(l->timer1_callback,4u,4u);SPAN(l->timer2_callback,4u,4u);
 #undef SPAN
 #undef SCHEMA
     uint32_t guard=out->lease_address-out->lease_header_bytes,guard_bytes=out->lease_bytes+out->lease_header_bytes;
     const uint32_t blocked[][2]={{guard,guard_bytes},{l->tx_base,0x6000u},{d->manager_initial,0x1100u},{d->lock_cell,5u},
         {d->load_address,d->image_bytes},{l->gun_flag,4u},{l->timer1_callback,4u},{l->timer2_callback,4u}};
+    for(unsigned j=0;j<sizeof(blocked)/sizeof(blocked[0]);j++)
+        if(j!=1u && overlaps(l->tx_base,0x6000u,blocked[j][0],blocked[j][1]))
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_CONFLICT,l->tx_base,blocked[j][0],blocked[j][1]);
     /* The reviewed caller passes the original 4-byte-aligned immutable
      * pointer array. The SDK stores an aligned alias in fc8, but its loop
      * still reads the original saved R5, not the fc8 alias. */
@@ -266,7 +430,26 @@ bool kui_vmu_native_layout_bind_checked(const struct kui_vmu_native_layout *l,co
     c.rx_layout=l->rx_layout;c.rx_base=l->rx_base;c.gun_flag=l->gun_flag;
     c.timer1_callback=l->timer1_callback;c.timer2_callback=l->timer2_callback;memset(c.rx_slots,0,sizeof(c.rx_slots));
     uint32_t raw[24]={0};
-    for(unsigned i=0;i<l->inputs;i++) {
+    if(uniform) {
+        uint32_t offset=phys(l->index_array)-phys(d->load_address);
+        if(phys(l->index_array)<phys(d->load_address) || offset>d->image_bytes || d->image_bytes-offset<4u)
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_ARRAY_LOCATION,l->index_array,offset,d->image_bytes);
+        for(unsigned j=0;j<sizeof(blocked)/sizeof(blocked[0]);j++) {
+            if(j!=4u && overlaps(l->index_array,4u,blocked[j][0],blocked[j][1]))
+                return bind_failure(diag,KUI_VMU_LAYOUT_BIND_ARRAY_CONFLICT,l->index_array,blocked[j][0],blocked[j][1]);
+            if(overlaps(l->rx_base,0xc000u,blocked[j][0],blocked[j][1]))
+                return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_CONFLICT,l->rx_base,blocked[j][0],blocked[j][1]);
+        }
+        if(!read(context,l->input_array,4u,&raw[0]))
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_INPUT_READ,l->input_array,0u,l->input_values[0]);
+        if(raw[0]!=l->input_values[0])
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_INPUT_VALUE,l->input_array,raw[0],l->input_values[0]);
+        if(!read(context,l->index_array,4u,&raw[1]))
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_INPUT_READ,l->index_array,0u,l->indices[0]);
+        if(raw[1]!=l->indices[0])
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_INPUT_VALUE,l->index_array,raw[1],l->indices[0]);
+        for(unsigned i=0;i<48u;i++) c.rx_slots[i]=l->rx_base+1024u*i;
+    } else for(unsigned i=0;i<l->inputs;i++) {
         if(l->indices[i]>=24u) return bind_failure(diag,KUI_VMU_LAYOUT_BIND_INDEX,l->index_array+4u*i,l->indices[i],24u);
         for(unsigned j=0;j<i;j++) if(l->indices[i]==l->indices[j])
             return bind_failure(diag,KUI_VMU_LAYOUT_BIND_INDEX,l->index_array+4u*i,l->indices[i],l->indices[j]);
@@ -307,6 +490,8 @@ bool kui_vmu_native_layout_bind_checked(const struct kui_vmu_native_layout *l,co
         if(!read(context,l->input_array+4u*i,4u,&value) || value!=raw[i])
             return bind_failure(diag,KUI_VMU_LAYOUT_BIND_INPUT_CHANGED,l->input_array+4u*i,value,raw[i]);
     }
+    if(uniform && (!read(context,l->index_array,4u,&value) || value!=raw[1]))
+        return bind_failure(diag,KUI_VMU_LAYOUT_BIND_INPUT_CHANGED,l->index_array,value,raw[1]);
     *out=c;return true;
 }
 bool kui_vmu_native_layout_bind(const struct kui_vmu_native_layout *l,const struct kui_vmu_native_discovery *d,

@@ -152,7 +152,7 @@ static void stage_batch(unsigned command,unsigned block) {
     put(source,4u,1u);put(source+4u,4u,rx_at(0));put(source+8u,4u,0x01002009u);put(source+12u,4u,0x01000000u);
     source+=16u;
     if(command) {
-        unsigned words=command==1u || command==2u?0u:command==12u?34u:2u;
+        unsigned words=command==1u || command==2u || command==3u?0u:command==12u?34u:2u;
         put(source,4u,words);put(source+4u,4u,rx_at(1));
         put(source+8u,4u,(words<<24)|0x00000100u|command);
         if(words) put(source+12u,4u,0x02000000u);
@@ -249,20 +249,25 @@ static void prepare_handoff(void) {
     }
     kui_sha256_digest(&hash,h->base_sha256);CHECK(!kui_vmu_durable_handoff_seal(h));
 }
-static void cold_worker(void) {
-    fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
-    lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
-    release_saw_unpublished=false;arm();
+static void install_hooks(void) {
     const uint32_t entries[]={input.driver.submit,input.lease.owner.release,
         input.lease.owner.initializer,input.exits.entries[0],input.exits.entries[1],input.exits.entries[2]};
     for(unsigned i=0;i<sizeof(entries)/sizeof(entries[0]);i++) {
+        if(i>=3u+input.exits.count) break;
         uint32_t target=i==0u?kui_vmu_native_worker_exports.submit_hook:
             i==1u?kui_vmu_native_worker_exports.release_hook:input.low_terminal;
-        put(entries[i],4u,0x402bd001u);put(entries[i]+4u,4u,0x00090009u);put(entries[i]+8u,4u,target);
+        uint16_t patch[6];CHECK(kui_vmu_native_patch_encode(entries[i],target,patch));
+        for(unsigned byte=0;byte<12u;byte++)
+            put(entries[i]+byte,1u,(patch[byte/2u]>>(8u*(byte&1u)))&255u);
     }
     put(input.lease.owner.initializer_slot,4u,input.low_heap_hook);
     put(input.driver.completion_slot,4u,kui_vmu_native_worker_exports.complete_hook);
     CHECK(durable_card.ready && !durable_card.bound && !durable_card.store.io.context);
+}
+static void cold_worker(void) {
+    fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
+    lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
+    release_saw_unpublished=false;arm();install_hooks();
 }
 static void setup(void) {model_reset();cold_worker();}
 static void idle(void) {
@@ -287,7 +292,7 @@ static void inspect_physical_chain(void) {
 static void begin_batch(unsigned cmd,unsigned block,unsigned phase,const uint8_t *payload) {
     stage_batch(cmd,block);
     uint32_t source=physical(input.tx_base)+packet_bank*0x3000u;
-    if(cmd!=1u && cmd!=2u && cmd) put(source+32u,4u,(block<<24)|(phase<<8));
+    if(cmd!=1u && cmd!=2u && cmd!=3u && cmd) put(source+32u,4u,(block<<24)|(phase<<8));
     if(cmd==12u) {
         CHECK(payload);memcpy(memory+source+36u-0x0c000000u,payload,128u);
     }
@@ -348,12 +353,14 @@ static unsigned measure_batch(unsigned cmd,unsigned phase,const uint8_t *payload
     return measured_submit_reads+measured_complete_reads;
 }
 static void bounded_controller_work(void) {
-    setup();unsigned controller=measure_batch(0u,0u,NULL);
-    CHECK(controller<=512u && full_work()<=12u && !measured_work.storage && !lease_calls);
+    setup();unsigned first=measure_batch(0u,0u,NULL);
+    CHECK(first<=400u && full_work()<=10u && !measured_work.storage && !lease_calls);
+    unsigned controller=measure_batch(0u,0u,NULL);
+    CHECK(controller<=350u && full_work()<=8u && !measured_work.storage && !lease_calls);
     unsigned info=measure_batch(1u,0u,NULL);
-    CHECK(info<=512u && full_work()<=12u && !measured_work.storage);
+    CHECK(info<=360u && full_work()<=8u && !measured_work.storage);
     unsigned read=measure_batch(11u,0u,NULL);
-    CHECK(read<=1024u && full_work()<=24u && measured_work.storage==2u && lease_calls==1u);
+    CHECK(read<=800u && full_work()<=20u && measured_work.storage==2u && lease_calls==1u);
     /* A valid fragmented free-list used to multiply every redundant proof.
      * All ranges remain below the still-owned worker chunk. */
     for(unsigned i=0;i<64u;i++) {
@@ -361,9 +368,39 @@ static void bounded_controller_work(void) {
         put(node,4u,i==63u?input.lease.owner.sentinel:node+64u);put(node+4u,4u,1u);
     }
     unsigned fragmented=measure_batch(0u,0u,NULL);
-    CHECK(fragmented<=800u && full_work()<=12u && !measured_work.storage);
-    printf("Native worker guest reads/pair: controller=%u INFO=%u READ=%u fragmented64=%u\n",
-        controller,info,read,fragmented);
+    CHECK(fragmented<=600u && full_work()<=8u && !measured_work.storage);
+    printf("Native worker guest reads/pair: first=%u controller=%u INFO=%u READ=%u fragmented64=%u\n",
+        first,controller,info,read,fragmented);
+}
+static void halfword_exit_hooks(void) {
+    for(unsigned family=KUI_VMU_NATIVE_EXIT_PVR_CLEAR;family<=KUI_VMU_NATIVE_EXIT_PVR_COMPACT;family++) {
+        model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
+        lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
+        input.exits.family=family;input.exits.entries[1]+=2u;arm();install_hooks();
+        transfer_batch(1u,0u,0u,NULL);read_compare(255u,sd.media[image_lba(255u)]);
+        CHECK(installed_hooks_valid());
+        /* The unaligned literal and trailing NOP are both witnessed before
+         * any later DMA. A changed halfword cannot masquerade as a patch. */
+        for(unsigned byte=0u;byte<12u;byte+=2u) {
+            uint32_t address=input.exits.entries[1]+byte;
+            uint8_t old=memory[physical(address)-0x0c000000u];put(address,1u,old^1u);
+            CHECK(!installed_hooks_valid());put(address,1u,old);
+        }
+        CHECK(installed_hooks_valid());idle();
+    }
+    model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
+    lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
+    input.exits.family=KUI_VMU_NATIVE_EXIT_PAIR_ONLY;input.exits.count=2u;
+    input.exits.entries[2]=input.exits.exec_thunk=0u;arm();install_hooks();
+    transfer_batch(1u,0u,0u,NULL);CHECK(installed_hooks_valid() && !sd.bytes);
+    for(unsigned invalid=0;invalid<3u;invalid++) {
+        fixture();prepare_handoff();input.exits.family=KUI_VMU_NATIVE_EXIT_PAIR_ONLY;input.exits.count=2u;
+        input.exits.entries[2]=input.exits.exec_thunk=0u;
+        if(invalid==0u) input.exits.count=3u;
+        if(invalid==1u) input.exits.entries[2]=0x8c013200u;
+        if(invalid==2u) input.exits.exec_thunk=0x8c013200u;
+        CHECK(kui_vmu_native_passive_arm(&input,NULL)<0 && !state.armed);
+    }
 }
 static void external_boundary_mutations(void) {
     uint8_t next[512],before[1024];memset(next,0x73,sizeof(next));
@@ -420,7 +457,7 @@ int main(void) {
     memcpy(parent,rx_bytes(0),sizeof(parent));memcpy(target,rx_bytes(1),sizeof(target));reject_complete();
     CHECK(!lease_calls && !sd.bytes && !memcmp(parent,rx_bytes(0),sizeof(parent)));
     CHECK(!memcmp(target,rx_bytes(1),sizeof(target)));
-    const unsigned unsupported[]={3u,4u,9u};
+    const unsigned unsupported[]={4u,9u};
     for(unsigned i=0;i<sizeof(unsupported)/sizeof(unsupported[0]);i++) {
         setup();stage_batch(unsupported[i],0u);reject_submit();CHECK(!sd.bytes && !lease_calls);
     }
@@ -438,7 +475,7 @@ int main(void) {
     memcpy(target,rx_bytes(1),sizeof(target));reject_complete();
     CHECK(!durable_card.commits && durable_card.faulted && !memcmp(target,rx_bytes(1),sizeof(target)));
     CHECK(!memcmp(sd.media[image_lba(42u)],next,512u));
-    bounded_controller_work();external_boundary_mutations();
+    bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();
     printf("Native persistent bridge: %u checks passed; filtered hardware chain, PIO save, reboot recovery and no false ACK\n",checks);
     return 0;
 }

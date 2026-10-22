@@ -17,7 +17,7 @@ RESIDENT_LAYOUT := src/loader/vmu_sd_readonly_resident.ld
 VMU_SD_RESIDENT_EXPORTS := -Wl,-u,_kui_vmu_observe_sd_lease
 NATIVE_SRC += src/core/vmu_durable.c src/core/vmu_store.c src/core/retail_image.c \
  src/loader/sd_reader.c src/loader/vmu_backing.c src/dreamcast/sci_sd_storage.c \
- src/loader/vmu_volatile_chain.c
+ src/loader/vmu_volatile_chain.c src/core/vmu_native_live.c
 override STAGE_SRC += src/loader/vmu_persist_stage.c src/core/vmu_fs_admission.c \
  src/core/vmu_persist_profile.c src/core/vmu_persist_session.c src/core/vmu_store.c \
  src/core/vmu_image.c src/core/vmu_durable.c src/dreamcast/sci_sd_storage.c \
@@ -34,8 +34,8 @@ $(BUILD)/stage/src/loader/vmu_native_heap_probe_stage.o: $(BUILD)/vmu-sd-profile
 .PHONY: persistent-host-tests
 persistent-host-tests: $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_persistent.c \
-	 src/core/vmu_native_heap.c src/core/vmu_native_runtime.c src/core/vmu_native_layout.c \
-	 src/core/vmu_native_lifetime.c src/core/vmu_native_discovery.c src/core/hash.c src/core/data.c \
+ src/core/vmu_native_heap.c src/core/vmu_native_runtime.c src/core/vmu_native_layout.c src/core/vmu_native_live.c \
+ src/core/vmu_native_lifetime.c src/core/vmu_native_discovery.c src/core/vmu_native_patch.c src/core/hash.c src/core/data.c \
 	 src/core/vmu_durable.c src/core/vmu_store.c src/core/vmu_emulation.c src/core/retail_image.c \
 	 src/loader/vmu_readonly_overlay.c src/loader/vmu_volatile_chain.c src/loader/sd_reader.c \
 	 src/loader/vmu_backing.c src/dreamcast/sci_sd_storage.c -Wl,--gc-sections -o $(BUILD)/test-native-persistent

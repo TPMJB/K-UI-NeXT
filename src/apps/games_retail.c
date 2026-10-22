@@ -458,6 +458,8 @@ static bool fill_ram_patches(struct kui_runtime_image *package,
     return found!=SIZE_MAX && kui_game_ram_patch_seed_encode((uint8_t *)package->data+found,
         KUI_GAME_RAM_PATCH_SEED_BYTES,patches,exec_bytes);
 }
+#include "games_native_cache.inc"
+
 static bool prepare_launch(const char *path,uint32_t reader,const struct kui_game_ram_patches *patches,
     bool reporting,struct kui_runtime_image *package,kui_log_fn log,kui_cancel_fn cancel) {
     if(!package) return false;
@@ -817,6 +819,10 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         kui_runtime_free(package);*package=candidate;
         launch_package=vmu_package;
         log("Virtual card: separate persistent A1 module selected; startup will show its card path");
+    }
+    if(native_cache_prepare(image,map,!ce && metadata.native_gd,requested_options,patched,
+       package,files.root,log,cancel)==NATIVE_CACHE_CANCELLED) {
+        problem="cancelled during native executable mapping";goto done;
     }
     if(zso) {
         zso_map=malloc(sizeof(*zso_map));

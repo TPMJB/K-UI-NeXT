@@ -52,4 +52,15 @@ bool kui_vmu_native_heap_postallocate(struct kui_vmu_native_heap_lease *,
     kui_vmu_native_heap_read,void *,uint32_t initializations,uint32_t actual_payload);
 bool kui_vmu_native_heap_lease_valid(const struct kui_vmu_native_heap_lease *,
     kui_vmu_native_heap_read,void *,uint32_t initializations);
+/* One coherent ownership walk with an optional release candidate. A nonzero
+ * payload must use the arena's raw alias and its complete allocated chunk must
+ * exclude the lease and every current free block. This retains the SDK's
+ * ordinary valid-free contract; an invented aligned interior pointer is not
+ * proved to have been returned by allocate. NULL payload preserves the lease
+ * validator's behavior. On success release_bytes, when nonnull, receives the
+ * whole chunk size including its 32-byte header (zero for NULL payload).
+ * The caller excludes allocator mutation for the complete call. */
+bool kui_vmu_native_heap_lease_valid_with_release(const struct kui_vmu_native_heap_lease *,
+    kui_vmu_native_heap_read,void *,uint32_t initializations,uint32_t payload,
+    uint32_t *release_bytes);
 #endif

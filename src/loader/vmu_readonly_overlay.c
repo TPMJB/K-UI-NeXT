@@ -62,6 +62,7 @@ static int readonly_overlay_unicast_request(uint32_t header) {
 static unsigned readonly_overlay_target_response_bytes(const struct kui_vmu_readonly_overlay_frame *f,int filtered) {
     unsigned cmd=readonly_overlay_command(f->header),words=readonly_overlay_payload_words(f->header);
     if(cmd==1u || cmd==2u) return words?0u:cmd==1u?116u:196u;
+    if(filtered && cmd==3u) return words?0u:4u;
     if(filtered && (cmd==12u || cmd==13u)) {
         unsigned phase=(f->payload1>>8)&255u;
         return f->payload0==MEMCARD && !(f->payload1&UINT32_C(0x00ff00ff)) &&
@@ -163,11 +164,11 @@ static int readonly_overlay_parent_response(const struct kui_vmu_readonly_overla
 }
 static int readonly_overlay_generated_response(const struct kui_vmu_readonly_overlay_frame *f,
     const uint8_t *r,size_t bytes,int filtered) {
-    unsigned cmd=readonly_overlay_command(f->header),expected=cmd==1u?5u:cmd==2u?6u:cmd==12u || cmd==13u?7u:8u;
+    unsigned cmd=readonly_overlay_command(f->header),expected=cmd==1u?5u:cmd==2u?6u:cmd==3u || cmd==12u || cmd==13u?7u:8u;
     unsigned needed=readonly_overlay_target_response_bytes(f,filtered);
     return bytes==needed && bytes<=f->rx_capacity && r[0]==expected &&
         r[1]==0u && r[2]==1u && 4u+4u*r[3]==bytes &&
-        ((cmd==12u || cmd==13u) || readonly_overlay_le32(r+4u)==MEMCARD) &&
+        ((cmd==3u || cmd==12u || cmd==13u) || readonly_overlay_le32(r+4u)==MEMCARD) &&
         (cmd!=11u || readonly_overlay_le32(r+8u)==f->payload1);
 }
 

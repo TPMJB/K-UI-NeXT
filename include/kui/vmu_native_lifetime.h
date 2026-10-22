@@ -12,7 +12,8 @@
  * Nonnull payloads must retain the arena's actual virtual alias: this allocator
  * orders its free list using raw pointers. The candidate header/size must fit
  * the managed arena, exclude the protected lease/header, and not overlap any
- * current free block. These checks do not establish that an arbitrary aligned
+ * current free block. Lease ownership and candidate exclusion share one live
+ * bounded free-list walk. These checks do not establish that an arbitrary aligned
  * pointer was returned by allocate; the SDK's ordinary valid-free contract
  * remains necessary. A false result requires stopping before original code. */
 bool kui_vmu_native_lifetime_release_safe(

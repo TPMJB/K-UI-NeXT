@@ -1,0 +1,62 @@
+{
+  "schema": "kui.native.resolution-cache.inputs.v1",
+  "detector_epoch": 1,
+  "scope": "Derived static metadata records only; no retail executable, IP, track or save bytes are versioned. Input paths are relative to the original external corpus root, not the repository. Live ownership/lifetime/storage checks remain independent on every launch.",
+  "generator": "tools/vmu_native_resolution_cache_tool.c build, then full verify against each exact external executable",
+  "inputs": [
+    {
+      "slug": "ps2",
+      "title": "Power Stone 2",
+      "ip_title": "POWER STONE 2 USA",
+      "product": "T1211N",
+      "version": "V1.000",
+      "region": "U",
+      "input_relative": "next-native-input/ps2/1ST_READ.BIN",
+      "image_bytes": 3097497,
+      "image_sha256": "a3dcd09a96045839dbbc35697eb4336e4eba79b52203a46bb2f8ee9a4ba2eed8",
+      "load_address": "8c010000",
+      "record_fixture": "tests/fixtures/native-cache/ps2.nvr",
+      "record_bytes": 1024,
+      "record_sha256": "dc88ee1fcaeaceeeb4917fb9ef17efb039307dfdfa952365b08154d9f7477864",
+      "record_digest": "13c4f7ef56b4279ad4f2c6962a161ef58efd594f91af4678aac5a17f370d55f0",
+      "static_layout": 1,
+      "exit_family": 1
+    },
+    {
+      "slug": "skies",
+      "title": "Skies of Arcadia (Disc 1)",
+      "ip_title": "SKIES OF ARCADIA DISC 1",
+      "product": "MK-51052",
+      "version": "V1.002",
+      "region": "U",
+      "input_relative": "native-stress-inputs/skies/1ST_READ.BIN",
+      "image_bytes": 5460080,
+      "image_sha256": "4218c07829d63080be2da86413ec023e6d77001c13a1494648db6e2e5cb73611",
+      "load_address": "8c010000",
+      "record_fixture": "tests/fixtures/native-cache/skies.nvr",
+      "record_bytes": 1024,
+      "record_sha256": "d33522081fd9faef70fe28265f91d95cb2fe20f797a19bb9dc1d52c73f776b20",
+      "record_digest": "d91b1fa4aa35638aea2a134e43dc009ab2c14dde6a68fbc5b22ecfc300db6262",
+      "static_layout": 0,
+      "exit_family": 3
+    },
+    {
+      "slug": "sa2",
+      "title": "Sonic Adventure 2",
+      "ip_title": "SONIC ADVENTURE 2",
+      "product": "MK-51117",
+      "version": "V1.008",
+      "region": "U",
+      "input_relative": "native-stress-inputs/sa2/1ST_READ.BIN",
+      "image_bytes": 1578116,
+      "image_sha256": "6919ed8bc96782d041be41ba86f90bf86d99632b8b7787391969721bc0991736",
+      "load_address": "8c010000",
+      "record_fixture": "tests/fixtures/native-cache/sa2.nvr",
+      "record_bytes": 1024,
+      "record_sha256": "e7e9de078984e66c50203de9095604e1a2bb5deac905626f27aadca870bdb89c",
+      "record_digest": "f4ad08642cac4589acb6a8f7520f59f52371ba7e6a209b19eccd934661f18d2a",
+      "static_layout": 0,
+      "exit_family": 2
+    }
+  ]
+}

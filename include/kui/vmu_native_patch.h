@@ -10,6 +10,11 @@
 bool kui_vmu_native_patch_no_interior(const void *,size_t,uint32_t load,
     uint32_t begin,uint32_t bytes);
 struct kui_vmu_native_patch_window {uint32_t begin,bytes;};
+/* Exact twelve-byte SH jump veneer. Its MOV.L literal is four-byte aligned
+ * for either possible halfword-aligned entry; aligned entries retain the
+ * original encoding. target must be a P1/P2 executable RAM address. This
+ * constructs bytes only and grants no authority to install a patch. */
+bool kui_vmu_native_patch_encode(uint32_t address,uint32_t target,uint16_t out[6]);
 /* One immutable-image pass for several disjoint entry windows. */
 bool kui_vmu_native_patch_no_interiors(const void *,size_t,uint32_t load,
     const struct kui_vmu_native_patch_window *,size_t count);

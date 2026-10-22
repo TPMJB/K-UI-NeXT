@@ -123,25 +123,89 @@ enum kui_vmu_native_heap_result kui_vmu_native_heap_discover(
     }
     *out=found;return KUI_VMU_NATIVE_HEAP_FOUND;
 }
+/* Evaluate only a bounded straight-line integer argument expression. All
+ * memory reads must name immutable words inside the supplied executable;
+ * unknown instructions, branches and caller state are never inferred. The
+ * eventual live initializer hook independently checks both arguments and PR.
+ * This admits equivalent SDK startup expressions (BSS-tail or fixed arena),
+ * rather than a title-specific instruction/register arrangement. */
+static bool call_expression(const uint8_t *p,size_t n,const struct kui_vmu_native_heap *h,
+    size_t begin,size_t target_load,size_t call,unsigned target,uint32_t *first,uint32_t *bytes) {
+    uint32_t value[16]={0},known=0;
+    for(size_t at=begin;at<=call+2u;at+=2u) {
+        if(at==call) {
+            if(!(known&(1u<<target)) || value[target]!=h->initializer_target) return false;
+            continue;
+        }
+        uint16_t op=h16(p+at);unsigned r=(op>>8)&15u,m=(op>>4)&15u;
+        uint32_t bit=1u<<r,other=1u<<m;
+        if(op==0x0009u) continue;
+        /* Argument evaluation cannot authorize changing the inherited stack.
+         * Only the explicit displacement store below may name R15. */
+        if(r==15u && (op&0xff00u)!=0x1f00u) return false;
+        /* The installer replaces this literal with its low hook. Preserve
+         * the transport itself, not just the original computed target: a
+         * later mask/add could otherwise transform the replacement pointer. */
+        if(at>target_load && at<call && r==target && (op&0xff00u)!=0x1f00u) return false;
+        if((op&0xf000u)==0xd000u) {
+            if(!literal(p,n,h->load,at,r,&value[r])) return false;
+            known|=bit;
+        } else if((op&0xf000u)==0xe000u) {
+            value[r]=(uint32_t)(int32_t)(int8_t)op;known|=bit;
+        } else if((op&0xf000u)==0x7000u) {
+            if(!(known&bit)) return false;
+            value[r]+=(uint32_t)(int32_t)(int8_t)op;
+        } else if((op&0xf00fu)==0x6002u) {
+            size_t slot;
+            if(!(known&other) || !index(value[m],h->load,n,4u,&slot)) return false;
+            value[r]=h32(p+slot);known|=bit;
+        } else if((op&0xf00fu)==0x6003u) {
+            if(!(known&other)) return false;
+            value[r]=value[m];known|=bit;
+        } else if((op&0xff00u)==0x1f00u) {
+            /* Reviewed startup spills a computed boundary to its own stack.
+             * No stack loads are accepted, so this cannot supply knowledge
+             * to the argument expression or follow an unproved pointer. */
+            if(!(known&other)) return false;
+        } else if((op&0xf00fu)==0x2009u || (op&0xf00fu)==0x200bu ||
+                  (op&0xf00fu)==0x3008u || (op&0xf00fu)==0x300cu) {
+            if((known&(bit|other))!=(bit|other)) return false;
+            if((op&0xf00fu)==0x2009u) value[r]&=value[m];
+            else if((op&0xf00fu)==0x200bu) value[r]|=value[m];
+            else if((op&0xf00fu)==0x3008u) value[r]-=value[m];
+            else value[r]+=value[m];
+        } else return false;
+    }
+    if((known&0x30u)!=0x30u || !span(value[4],32u) || value[5]<64u ||
+       ((value[4]|value[5])&31u) || !span(value[4],value[5])) return false;
+    *first=value[4];*bytes=value[5];return true;
+}
 bool kui_vmu_native_heap_call_discover(const void *image,size_t n,
     const struct kui_vmu_native_heap *h,struct kui_vmu_native_heap_call *out) {
     if(!image || !out || !metadata(h) || !h->initializer_slot || n!=h->image_bytes ||
        overlaps((uintptr_t)image,n,(uintptr_t)out,sizeof(*out))) return false;
     const uint8_t *p=image;struct kui_vmu_native_heap_call chosen={0};unsigned found=0;
-    for(size_t at=6u;at<n && n-at>=8u;at+=2u) {
-        uint16_t op=h16(p+at);uint32_t first,bytes,target;
-        if((op&0xff00u)!=0xd200u || h16(p+at+2u)!=0x2439u ||
-           h16(p+at+4u)!=0x420bu || h16(p+at+6u)!=0x7420u ||
+    for(size_t at=0;at<n && n-at>=6u;at+=2u) {
+        uint16_t op=h16(p+at);uint32_t target;
+        unsigned reg=(op>>8)&15u;
+        if((op&0xf000u)!=0xd000u || (reg!=2u && reg!=3u) ||
            phys(((h->load+(uint32_t)at+4u)&~3u)+4u*(op&255u))!=phys(h->initializer_slot) ||
-           !literal(p,n,h->load,at-6u,4u,&first) ||
-           h16(p+at-4u)!=0xe3e0u || !literal(p,n,h->load,at-2u,5u,&bytes) ||
-           !literal(p,n,h->load,at,2u,&target) || target!=h->initializer_target ||
-           !span(first,32u) || bytes<64u || (bytes&31u)) continue;
-        uint32_t begin=(first&~31u)+32u;
-        if(!span(begin,bytes)) continue;
-        if(++found>1u) return false;
-        chosen=(struct kui_vmu_native_heap_call){h->load+(uint32_t)at,
-            h->load+(uint32_t)at+4u,h->load+(uint32_t)at+8u,begin,bytes};
+           !literal(p,n,h->load,at,reg,&target) || target!=h->initializer_target) continue;
+        for(size_t call=at+2u;call<=at+16u && call<n && n-call>=4u;call+=2u) {
+            if(h16(p+call)!=(0x400bu|(reg<<8))) continue;
+            bool resolved=false;uint32_t first=0,bytes=0;
+            size_t earliest=call<48u?0u:call-48u;
+            for(size_t start=earliest;start<=at;start+=2u) {
+                uint32_t got_first,got_bytes;
+                if(!call_expression(p,n,h,start,at,call,reg,&got_first,&got_bytes)) continue;
+                if(resolved && (first!=got_first || bytes!=got_bytes)) return false;
+                first=got_first;bytes=got_bytes;resolved=true;
+            }
+            if(!resolved) continue;
+            if(++found>1u) return false;
+            chosen=(struct kui_vmu_native_heap_call){h->load+(uint32_t)at,
+                h->load+(uint32_t)call,h->load+(uint32_t)call+4u,first,bytes};
+        }
     }
     if(!found) return false;
     *out=chosen;return true;
@@ -214,24 +278,46 @@ bool kui_vmu_native_heap_postallocate(struct kui_vmu_native_heap_lease *l,
     }
     l->phase=2u;return true;
 }
-bool kui_vmu_native_heap_lease_valid(const struct kui_vmu_native_heap_lease *l,
-    kui_vmu_native_heap_read read,void *ctx,uint32_t initializations) {
+bool kui_vmu_native_heap_lease_valid_with_release(const struct kui_vmu_native_heap_lease *l,
+    kui_vmu_native_heap_read read,void *ctx,uint32_t initializations,uint32_t payload,
+    uint32_t *release_bytes) {
     if(!l || l->phase!=2u || !identity(l,read,ctx,initializations) ||
        !read_is(read,ctx,l->header+4u,l->units)) return false;
+    uint32_t alias=l->begin&UINT32_C(0xe0000000),release_begin=0u,release_end=0u;
+    if(payload) {
+        uint32_t at=phys(payload),begin=phys(l->begin),end=begin+l->heap_bytes,units;
+        if((payload&UINT32_C(0xe0000000))!=alias || (at&31u) ||
+           at<begin+32u || at>end) return false;
+        release_begin=at-32u;
+        uint32_t guard=phys(l->header),guard_end=phys(l->payload)+l->lease_bytes;
+        if((at>=guard && at<guard_end) || !read(ctx,(release_begin|alias)+4u,&units) ||
+           !units || units>(end-release_begin)/32u) return false;
+        release_end=release_begin+units*32u;
+        if(release_begin<guard_end && guard<release_end) return false;
+    }
     uint32_t node,cursor;bool cursor_seen=false;
     if(!read(ctx,l->owner.sentinel,&node) || !read(ctx,l->owner.cursor_cell,&cursor)) return false;
     if(cursor==l->owner.sentinel) cursor_seen=true;
     uint32_t previous_end=0u;
     for(unsigned i=0;i<KUI_VMU_NATIVE_HEAP_FREE_LIMIT;i++) {
-        if(node==l->owner.sentinel) return cursor_seen;
+        if(node==l->owner.sentinel) {
+            if(cursor_seen && release_bytes) *release_bytes=release_end-release_begin;
+            return cursor_seen;
+        }
         uint32_t at=phys(node),begin=phys(l->begin),units,next;
-        if((node&31u) || !span(node,8u) || at<begin || at-begin>=l->heap_bytes ||
+        if((payload && (node&UINT32_C(0xe0000000))!=alias) ||
+           (node&31u) || !span(node,8u) || at<begin || at-begin>=l->heap_bytes ||
            (previous_end && at<previous_end) || !read(ctx,node+4u,&units) || !units ||
            units>(l->heap_bytes-(at-begin))/32u ||
            (at<phys(l->payload)+l->lease_bytes && phys(l->header)<at+units*32u) ||
+           (payload && at<release_end && release_begin<at+units*32u) ||
            !read(ctx,node,&next)) return false;
         if(node==cursor) cursor_seen=true;
         previous_end=at+units*32u;node=next;
     }
     return false;
+}
+bool kui_vmu_native_heap_lease_valid(const struct kui_vmu_native_heap_lease *l,
+    kui_vmu_native_heap_read read,void *ctx,uint32_t initializations) {
+    return kui_vmu_native_heap_lease_valid_with_release(l,read,ctx,initializations,0u,NULL);
 }

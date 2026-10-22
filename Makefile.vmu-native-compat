@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Broader reviewed native SDK families, optional pinned discovery cache.
+BUILD ?= build/vmu-native-compat
+include Makefile.vmu-native-performance
+override TEST_ZIP := K-UI-Native-Compatibility-Test.zip
+override TEST_GUIDE := docs/vmu-native-compat-test.md
+FLAGS += -DKUI_VMU_NATIVE_CACHE_PROBE=1
+override STAGE_SRC += src/core/vmu_native_resolution_cache.c src/core/vmu_native_cache_seed.c
+$(BUILD)/stage.elf: $(STAGE_OBJ)
+
+COMPAT_WORKER_HOST_SRC = src/core/vmu_native_heap.c src/core/vmu_native_runtime.c \
+ src/core/vmu_native_layout.c src/core/vmu_native_live.c src/core/vmu_native_lifetime.c \
+ src/core/vmu_native_discovery.c src/core/vmu_native_patch.c src/core/hash.c src/core/data.c \
+ src/core/vmu_durable.c src/core/vmu_store.c src/core/vmu_emulation.c src/core/retail_image.c \
+ src/loader/vmu_readonly_overlay.c src/loader/vmu_volatile_chain.c src/loader/sd_reader.c \
+ src/loader/vmu_backing.c src/dreamcast/sci_sd_storage.c
+COMPAT_CACHE_HOST_SRC = src/core/vmu_native_resolution_cache.c src/core/vmu_native_discovery.c \
+ src/core/vmu_native_layout.c src/core/vmu_native_heap.c src/core/vmu_native_exit.c \
+ src/core/vmu_native_patch.c src/core/hash.c src/core/data.c
+
+.PHONY: compat-host-tests
+compat-host-tests: persistent-host-tests passive-host-tests readonly-host-tests
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_heap.c -o $(BUILD)/test-heap
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-heap $(if $(and $(STARTUP),$(HEAP_NEGATIVE)),'$(STARTUP)' '$(HEAP_NEGATIVE)',)
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-layout $(if $(STARTUP),'$(STARTUP)',) $(CACHE_STARTUPS)
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-exit $(if $(STARTUP),'$(STARTUP)',) $(CACHE_STARTUPS)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_live.c \
+	 $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-live
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-live
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_lifetime_stress.c \
+	 src/core/vmu_native_heap.c src/core/vmu_native_lifetime.c -o $(BUILD)/test-lifetime-stress
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-lifetime-stress
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_stress.c \
+	 $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-native-stress
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-native-stress
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_peripherals.c \
+	 $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-peripherals
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-peripherals
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_resolution_cache.c \
+	 $(COMPAT_CACHE_HOST_SRC) -o $(BUILD)/test-cache
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-cache $(if $(STARTUP),'$(STARTUP)',) $(CACHE_STARTUPS)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_cache_seed.c src/core/vmu_native_cache_seed.c \
+	 $(COMPAT_CACHE_HOST_SRC) -o $(BUILD)/test-seed
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-seed tests/fixtures/native-cache/ps2.nvr \
+	 tests/fixtures/native-cache/skies.nvr tests/fixtures/native-cache/sa2.nvr
+	KUI_NATIVE_STARTUP=$(if $(STARTUP),'$(STARTUP)',) python3 tests/test_vmu_native_resolution_cache_tool.py
+	python3 tests/test_vmu_native_cache_seed_artifact.py
+	python3 tests/test_package_vmu_native_catalog.py
+	$(MAKE) -s -f Makefile test-games-native-cache STARTUP=$(if $(STARTUP),'$(STARTUP)',)

@@ -137,6 +137,12 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
        (manifest.flags&(KUI_RETAIL_IMAGE_CD|KUI_RETAIL_IMAGE_SCRAMBLED)) ||
        !kui_retail_observe_native_ip((const uint8_t *)(uintptr_t)KUI_RETAIL_IP_ADDRESS))
         native_report(1u,manifest.storage_transport);
+#if KUI_VMU_NATIVE_CACHE_PROBE
+    bool mapping_cached=native_resolution_replay();
+    if(mapping_cached) retail_display_line("USING VERIFIED NATIVE MAPPING CACHE");
+    else {
+        retail_display_line("NO MATCHING NATIVE CACHE - SCANNING");
+#endif
 #if KUI_VMU_NATIVE_PASSIVE_PROBE
     retail_display_line("RESOLVING MAPLE DRIVER AND BUFFER LAYOUT");
     if(!kui_vmu_native_discover_layout((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
@@ -163,6 +169,9 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     /* Layout already shares the driver's one fresh immutable-image pass. */
     retail_display_line("CHECKING DISPLACED INSTRUCTION WINDOW");
     native_passive_prepare();
+#endif
+#if KUI_VMU_NATIVE_CACHE_PROBE
+    }
 #endif
     code_sha(native_heap_code_sha);
     volatile struct kui_vmu_observe_boot_control *c=control();

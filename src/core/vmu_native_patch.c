@@ -6,6 +6,17 @@ static bool ram(uint32_t a,uint32_t n) {
     return (area==0u || area==0x80000000u || area==0xa0000000u) && n &&
         p>=0x0c010000u && p<0x0d000000u && n<=0x0d000000u-p;
 }
+bool kui_vmu_native_patch_encode(uint32_t address,uint32_t target,uint16_t out[6]) {
+    uint32_t area=target&UINT32_C(0xe0000000);
+    if(!out || (address&1u) || (target&1u) || !ram(address,12u) ||
+       (area!=UINT32_C(0x80000000) && area!=UINT32_C(0xa0000000)) ||
+       physical(target)<UINT32_C(0x0c000000) || physical(target)>UINT32_C(0x0cfffffe)) return false;
+    uint16_t patch[6]={UINT16_C(0xd001),UINT16_C(0x402b),9u,9u,9u,9u};
+    unsigned literal=(address&2u)?3u:4u;
+    patch[literal]=(uint16_t)target;patch[literal+1u]=(uint16_t)(target>>16);
+    for(unsigned i=0;i<6u;i++) out[i]=patch[i];
+    return true;
+}
 bool kui_vmu_native_patch_no_interiors(const void *image,size_t bytes,uint32_t load,
     const struct kui_vmu_native_patch_window *windows,size_t count) {
     if(!image || bytes>0xc00000u || bytes<2u ||

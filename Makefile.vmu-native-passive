@@ -18,7 +18,7 @@ NATIVE_FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
  -ffunction-sections -fdata-sections -fno-jump-tables -fstack-usage \
  -DKUI_RETAIL_FAST_IO=1 -DKUI_BUILD_ID='"$(BUILD_ID)"' -Iinclude -Isrc/loader
 NATIVE_SRC = src/loader/vmu_native_passive.c src/core/vmu_native_heap.c \
- src/core/vmu_native_runtime.c src/core/vmu_native_layout.c src/core/hash.c \
+ src/core/vmu_native_runtime.c src/core/vmu_native_layout.c src/core/vmu_native_patch.c src/core/hash.c \
  src/core/data.c src/loader/retail_display.c src/loader/minic.c
 NATIVE_OBJ = $(patsubst %.c,$(BUILD)/native/%.o,$(NATIVE_SRC)) \
  $(BUILD)/native_passive_exports.o $(BUILD)/native_passive_hooks.o
@@ -49,7 +49,7 @@ $(BUILD)/stage/src/loader/vmu_native_heap_probe_stage.o: $(BUILD)/native-worker.
 PASSIVE_HOST_FLAGS = -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
  -ffunction-sections -fdata-sections -fsanitize=address,undefined \
  -fno-omit-frame-pointer -fno-pie -no-pie -Iinclude -Isrc/loader
-PASSIVE_HOST_COMMON = src/core/vmu_native_layout.c src/core/vmu_native_discovery.c src/core/hash.c src/core/data.c
+PASSIVE_HOST_COMMON = src/core/vmu_native_layout.c src/core/vmu_native_discovery.c src/core/vmu_native_patch.c src/core/hash.c src/core/data.c
 .PHONY: passive-host-tests
 passive-host-tests: $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_passive.c src/core/vmu_native_heap.c \

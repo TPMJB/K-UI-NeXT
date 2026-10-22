@@ -94,7 +94,7 @@ static int volatile_chain_geometry(const struct kui_vmu_volatile_chain_plan *pla
     return KUI_VMU_VOLATILE_CHAIN_OK;
 }
 
-/* 0 is a filtered A1 request; 1 is an admitted physical MAIN request. */
+/* 0 is filtered A1. Physical subunit queries never program a device. */
 static int volatile_chain_classify(const struct kui_vmu_volatile_chain_frame *frame) {
     uint32_t control=frame->control, header=frame->header;
     unsigned words=header>>24, port=(control>>16)&3u;
@@ -103,10 +103,15 @@ static int volatile_chain_classify(const struct kui_vmu_volatile_chain_frame *fr
        destination>>6!=port || ((header>>16)&255u)!=(port<<6))
         return KUI_VMU_VOLATILE_CHAIN_DESCRIPTOR;
     if(destination==1u) return 0;
-    if((destination&63u)!=32u)
+    unsigned unit=destination&63u;
+    if(unit!=32u && (!unit || unit>=32u || (unit&(unit-1u))))
         return KUI_VMU_VOLATILE_CHAIN_UNSUPPORTED;
     if(((command==1u || command==2u) && !words) ||
-       (command==9u && words==1u && frame->payload0==CONTROLLER)) return 1;
+       (command==9u && words==1u &&
+        (unit==32u?frame->payload0==CONTROLLER:
+         frame->payload0==CONTROLLER || frame->payload0==UINT32_C(0x02000000) ||
+         frame->payload0==UINT32_C(0x04000000) || frame->payload0==UINT32_C(0x08000000) ||
+         frame->payload0==UINT32_C(0x00010000)))) return 1;
     return KUI_VMU_VOLATILE_CHAIN_UNSUPPORTED;
 }
 

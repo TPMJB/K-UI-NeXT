@@ -4,9 +4,11 @@
 #include "kui/vmu_native_runtime.h"
 #define KUI_VMU_NATIVE_LAYOUT_VERSION 1u
 #define KUI_VMU_NATIVE_LAYOUT_INPUTS 24u
-/* Immutable provenance for the reviewed variable SDK initializer. Its raw
- * pointer array and indices are both in the preloaded executable. Binding
- * checks their exact admitted values, reproduces the initializer's
+/* Immutable provenance for the reviewed SDK initializers. Explicit mode's
+ * raw pointer array and indices are both in the preloaded executable.
+ * Uniform mode has inputs==1: input_array/index_array name the immutable
+ * RX/TX literal slots, and input_values[0]/indices[0] hold their raw bases.
+ * Binding checks their exact admitted values, reproduces the initializer's
  * align/P2/two-bank assignment and validates every live manager entry.
  * Neither operation writes game memory. */
 struct kui_vmu_native_layout {

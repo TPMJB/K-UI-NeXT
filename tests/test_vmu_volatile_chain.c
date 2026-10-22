@@ -153,7 +153,10 @@ static void strict_physical_whitelist(void) {
             } else untouched_failure();
         }
         for(unsigned unit=0; unit<64u; ++unit) if(unit!=32u && (port || unit!=1u)) {
-            reset();append(1,(port<<6)|unit,0,0,1);untouched_failure();
+            reset();append(1,(port<<6)|unit,0,0,1);
+            if(unit && unit<32u && !(unit&(unit-1u))) {
+                assert(build()==0);assert(kui_vmu_volatile_chain_verify(&fixture.plan,fixture.output,512)==0);
+            } else untouched_failure();
         }
     }
     for(unsigned words=0; words<3u; ++words) {
@@ -163,6 +166,20 @@ static void strict_physical_whitelist(void) {
     reset();append(9,0x20,1,UINT32_C(0x02000000),1);untouched_failure();
     reset();append(1,0x20,1,0,1);untouched_failure();
     reset();append(2,0x20,1,0,1);untouched_failure();
+    const uint32_t functions[]={0x01000000u,0x02000000u,0x04000000u,0x08000000u,0x00010000u};
+    for(unsigned port=0;port<4u;port++) for(unsigned unit=1u;unit<32u;unit<<=1u) {
+        if(!port && unit==1u) continue;
+        for(unsigned f=0;f<sizeof(functions)/sizeof(functions[0]);f++) {
+            reset();append(9,(port<<6)|unit,1u,functions[f],1);
+            assert(build()==0 && fixture.plan.physical_count==1u && !fixture.plan.virtual_count);
+            assert(word(fixture.output+12u)==functions[f]);
+            assert(kui_vmu_volatile_chain_verify(&fixture.plan,fixture.output,512)==0);
+        }
+        const uint32_t bad[]={0u,0x03000000u,0x10000000u,0x00000002u};
+        for(unsigned f=0;f<sizeof(bad)/sizeof(bad[0]);f++) {
+            reset();append(9,(port<<6)|unit,1u,bad[f],1);untouched_failure();
+        }
+    }
 }
 
 static void invalid_descriptors_are_atomic(void) {

@@ -18,42 +18,17 @@ bool kui_vmu_native_lifetime_release_safe_ranges(
            !ranges[i].bytes || at<UINT32_C(0x0c000000) || at>=UINT32_C(0x0d000000) ||
            ranges[i].bytes>UINT32_C(0x0d000000)-at) return false;
     }
-    if(!lease || !read || !kui_vmu_native_heap_lease_valid(lease,read,context,initializations))
-        return false;
+    uint32_t bytes;
+    if(!kui_vmu_native_heap_lease_valid_with_release(lease,read,context,
+        initializations,payload,&bytes)) return false;
     if(!payload) return true;
-    uint32_t alias=lease->begin&UINT32_C(0xe0000000);
-    uint32_t first=physical(lease->begin),end=first+lease->heap_bytes;
-    uint32_t actual=physical(payload),units;
-    if((payload&UINT32_C(0xe0000000))!=alias || (actual&31u) ||
-       actual<first+32u || actual>end) return false;
-    uint32_t header=actual-32u;
-    uint32_t guard=physical(lease->header),guard_end=physical(lease->payload)+lease->lease_bytes;
-    if((actual>=guard && actual<guard_end) ||
-       !read(context,(header|alias)+4u,&units) || !units || units>(end-header)/32u)
-        return false;
-    uint32_t candidate_end=header+units*32u;
-    if(overlap(header,candidate_end,guard,guard_end)) return false;
+    uint32_t header=physical(payload)-32u,candidate_end=header+bytes;
     for(size_t i=0;i<count;i++) {
         uint32_t at=physical(ranges[i].begin);
         if(overlap(header,candidate_end,at,at+ranges[i].bytes)) return false;
     }
 
-    /* A second bounded walk excludes ordinary double-free/coalesced-free
-     * inputs. The first walk above proves the worker still owns its lease;
-     * neither check substitutes for the caller's uninterrupted ownership. */
-    uint32_t node,previous_end=0u;
-    if(!read(context,lease->owner.sentinel,&node)) return false;
-    for(unsigned i=0;i<KUI_VMU_NATIVE_HEAP_FREE_LIMIT;i++) {
-        if(node==lease->owner.sentinel) return true;
-        uint32_t at=physical(node),next;
-        if((node&UINT32_C(0xe0000000))!=alias || (at&31u) || at<first || at>=end ||
-           (previous_end && at<previous_end) || !read(context,node+4u,&units) ||
-           !units || units>(end-at)/32u || !read(context,node,&next)) return false;
-        uint32_t free_end=at+units*32u;
-        if(overlap(header,candidate_end,at,free_end)) return false;
-        previous_end=free_end;node=next;
-    }
-    return false;
+    return true;
 }
 bool kui_vmu_native_lifetime_release_safe(
     const struct kui_vmu_native_heap_lease *lease,

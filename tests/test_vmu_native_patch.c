@@ -11,7 +11,38 @@ static void single_matches_batch(const void *data,size_t bytes,uint32_t load,uin
     CHECK(kui_vmu_native_patch_no_interior(data,bytes,load,start,span)==
         kui_vmu_native_patch_no_interiors(data,bytes,load,&w,1u));
 }
+static void veneers(void) {
+    const uint32_t targets[]={UINT32_C(0x8c004000),UINT32_C(0x8c38a914),
+        UINT32_C(0xac38a914),UINT32_C(0xacfffffe)};
+    for(unsigned offset=0;offset<512u;offset+=2u) for(unsigned t=0;t<4u;t++) {
+        uint32_t address=UINT32_C(0x8c010000)+offset;
+        uint16_t patch[6];CHECK(kui_vmu_native_patch_encode(address,targets[t],patch));
+        CHECK((patch[0]&UINT16_C(0xff00))==UINT16_C(0xd000));
+        uint32_t literal=((address+4u)&~3u)+4u*(patch[0]&255u);
+        CHECK(!(literal&3u) && literal>=address+6u && literal+4u<=address+12u);
+        unsigned word_index=(literal-address)/2u;
+        uint32_t loaded=(uint32_t)patch[word_index]|(uint32_t)patch[word_index+1u]<<16;
+        CHECK(loaded==targets[t]);CHECK(patch[1]==UINT16_C(0x402b));CHECK(patch[2]==9u);
+        if(!(address&3u)) {
+            const uint16_t old[6]={UINT16_C(0xd001),UINT16_C(0x402b),9u,9u,
+                (uint16_t)targets[t],(uint16_t)(targets[t]>>16)};
+            CHECK(!memcmp(patch,old,sizeof(old)));
+        }
+    }
+    const uint32_t invalid_address[]={0u,UINT32_C(0x8c010001),UINT32_C(0x8cfffff6),UINT32_MAX};
+    const uint32_t invalid_target[]={0u,UINT32_C(0x0c38a914),UINT32_C(0x8c38a915),
+        UINT32_C(0x8bfffffe),UINT32_C(0xad000000),UINT32_C(0xcc38a914)};
+    uint16_t out[6],before[6];memset(out,0xa5,sizeof(out));memcpy(before,out,sizeof(out));
+    for(unsigned i=0;i<sizeof(invalid_address)/sizeof(invalid_address[0]);i++) {
+        CHECK(!kui_vmu_native_patch_encode(invalid_address[i],targets[0],out));CHECK(!memcmp(out,before,sizeof(out)));
+    }
+    for(unsigned i=0;i<sizeof(invalid_target)/sizeof(invalid_target[0]);i++) {
+        CHECK(!kui_vmu_native_patch_encode(UINT32_C(0x8c010000),invalid_target[i],out));CHECK(!memcmp(out,before,sizeof(out)));
+    }
+    CHECK(!kui_vmu_native_patch_encode(UINT32_C(0x8c010000),targets[0],NULL));
+}
 int main(int argc,char **argv) {
+    veneers();
     unsigned char data[128];const uint32_t load=0x8c010000u,start=load+64u;
     memset(data,0,sizeof(data));CHECK(kui_vmu_native_patch_no_interior(data,sizeof(data),load,start,12u));
     const uint32_t aliases[]={0u,0x80000000u,0xa0000000u};

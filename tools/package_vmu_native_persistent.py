@@ -13,10 +13,38 @@ from check_loader_layout import inspect_elf
 from personalize_vmu_sd_proof import readonly_blob
 from runtime_package import ADDRESS,verify
 from vmu_persist_profile import template_profile
+from vmu_native_cache_seed import template_seed,record_metadata,DETECTOR_EPOCH
 
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def cache_catalog(root,commit):
+    """Package reviewed metadata fixtures only; never copy external game bytes."""
+    root=Path(root)
+    evidence=json.loads((root/'docs/evidence/native-cache-catalog-inputs.json').read_bytes())
+    if (evidence.get('schema')!='kui.native.resolution-cache.inputs.v1' or
+        evidence.get('detector_epoch')!=DETECTOR_EPOCH or
+        {entry.get('slug') for entry in evidence.get('inputs',[])}!={'ps2','skies','sa2'} or
+        len(evidence['inputs'])!=3):
+        raise ValueError('Requires the three reviewed native cache fixtures')
+    files={};games=[]
+    for entry in evidence['inputs']:
+        slug=entry['slug'];fixture=f'tests/fixtures/native-cache/{slug}.nvr'
+        if entry['record_fixture']!=fixture:raise ValueError('Unexpected cache fixture path')
+        record=(root/fixture).read_bytes()
+        metadata=record_metadata(record,entry['record_digest'])
+        for field in ('record_bytes','record_sha256','image_sha256','image_bytes','load_address'):
+            if entry[field]!=metadata[field]:raise ValueError('Cache fixture/evidence mismatch: '+field)
+        path=f'native-cache/{slug}.nvr';files[path]=record
+        games.append(dict(slug=slug,title=entry['title'],record_path=path,
+            **{key:metadata[key] for key in ('record_sha256','record_digest','image_sha256','image_bytes','load_address')}))
+    catalog=dict(schema='kui.native.resolution-cache.catalog.v1',source_commit=commit,
+        detector_epoch=DETECTOR_EPOCH,games=games)
+    wire=(json.dumps(catalog,indent=2)+'\n').encode()
+    files['native-cache/catalog.json']=wire
+    return wire,files
 
 
 def package(build):
@@ -28,7 +56,9 @@ def package(build):
         raise ValueError('Commit source changes before packaging')
     report=check(build,self_test=True)
     cached=report['worker_load_policy']['cached_code']
-    flavor='performance' if cached else 'persistent'
+    seed=report.get('resolution_cache_seed',{})
+    compat=seed.get('enabled',False)
+    flavor='compat' if compat else ('performance' if cached else 'persistent')
     source=report['source_provenance']
     if source['commit']!=commit or source['source_dirty'] or report['runtime']['build']!=revision:
         raise ValueError('Requires a fresh build from the current clean source commit')
@@ -46,6 +76,27 @@ def package(build):
     manifest=dict(schema='kui.native.persistent.personalization.v1',source_commit=commit,build=revision,
         module_sha256=sha(module),module_bytes=len(module),profile_module_offset=offset,
         profile_bytes=4096,profile_sha256=sha(template),storage_writes_enabled=True)
+    extra={}
+    if compat:
+        seed_offset=seed['seed_module_offset'];seed_template=template_seed()
+        if (seed['seed_bytes']!=len(seed_template) or
+            module[seed_offset:seed_offset+len(seed_template)]!=seed_template or
+            seed['empty_template_sha256']!=sha(seed_template) or
+            not (seed_offset+len(seed_template)<=offset or seed_offset>=offset+4096)):
+            raise ValueError('Cache seed differs from the audited disjoint canonical template')
+        catalog,extra=cache_catalog(root,commit)
+        manifest.update(cache_seed_module_offset=seed_offset,cache_seed_bytes=len(seed_template),
+            cache_seed_sha256=sha(seed_template),cache_record_bytes=1024,
+            cache_detector_epoch=DETECTOR_EPOCH,cache_catalog_path='native-cache/catalog.json',
+            cache_catalog_sha256=sha(catalog))
+        extra['tools/vmu_native_cache_seed.py']=(root/'tools/vmu_native_cache_seed.py').read_bytes()
+        for name in ('vmu-feature-comparison.md','vmu-native-resolution-cache.md',
+                     'vmu-native-launch-cache.md','vmu-native-runtime-cost.md'):
+            extra['docs/'+name]=(root/'docs'/name).read_bytes()
+        extra['docs/native-sdk-family-corpus.json']=(root/'docs/evidence/native-sdk-family-corpus-2026-10-22.json').read_bytes()
+        extra['TEST-RESULTS.csv']=(
+            'game,build,profile,cache_message,bootloader_seconds,startup_after_bootloader_seconds,fmv_audio,gameplay,save,poweroff_reload,controllers,notes\n'
+            'Skies of Arcadia,,,,,,,,,,,\nSonic Adventure 2,,,,,,,,,,,\nPower Stone 2,,,,,,,,,,,\n').encode()
     report.update(source_commit=commit,source_build_id=revision,console_execution_verified=False,
         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
@@ -68,8 +119,10 @@ def package(build):
         'THIRD_PARTY.md':(root/'THIRD_PARTY.md').read_bytes(),
         f'source/K-UI-native-{flavor}-{revision}.bundle':bundle.read_bytes(),
     }
+    files.update(extra)
     files['SHA256SUMS.txt']=''.join(sha(data)+'  '+name+'\n' for name,data in sorted(files.items())).encode()
-    output=build/('K-UI-Native-Performance-Test.zip' if cached else 'K-UI-Native-Persistent-Test.zip')
+    output=build/('K-UI-Native-Compatibility-Test.zip' if compat else
+        ('K-UI-Native-Performance-Test.zip' if cached else 'K-UI-Native-Persistent-Test.zip'))
     with zipfile.ZipFile(output,'w',compression=zipfile.ZIP_DEFLATED) as archive:
         for name,data in files.items():archive.writestr(name,data)
     with zipfile.ZipFile(output) as archive:

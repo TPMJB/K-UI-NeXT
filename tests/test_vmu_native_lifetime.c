@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 struct cell {uint32_t address,value;};
-static struct cell memory[256];
+static struct cell memory[4096];
 static unsigned used,reads,fail_read,checks;
 static struct kui_vmu_native_heap_lease lease;
 static uint32_t candidate;
@@ -51,7 +51,7 @@ int main(void) {
     const uint32_t aliases[]={0u,UINT32_C(0x80000000),UINT32_C(0xa0000000)};
     for(unsigned a=0;a<3u;a++) {
         fixture(aliases[a]);CHECK(allowed(candidate));CHECK(allowed(0u));
-        struct cell before[256];memcpy(before,memory,sizeof(before));
+        struct cell before[4096];memcpy(before,memory,sizeof(before));
         CHECK(allowed(candidate));CHECK(!memcmp(before,memory,sizeof(before)));
         for(unsigned b=0;b<3u;b++) {
             CHECK(allowed(physical(candidate)|aliases[b])==(a==b));

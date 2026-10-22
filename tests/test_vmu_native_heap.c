@@ -66,6 +66,59 @@ static void owner(const char *path,bool reference) {
           phys(h.release)==phys(h.initializer)+0x1b0u);
     free(data);
 }
+static struct kui_vmu_native_heap call_fixture(void) {
+    struct kui_vmu_native_heap h=fixture(0x800u,0x80000000u,true);
+    put32(0x100u,0u);put32(0x700u,h.initializer_target);
+    CHECK(kui_vmu_native_heap_discover(image,sizeof(image),0x8c010000u,&h)==KUI_VMU_NATIVE_HEAP_FOUND);
+    CHECK(h.initializer_slot==0x8c010700u);return h;
+}
+static void call_expression_tests(void) {
+    struct kui_vmu_native_heap h=call_fixture();struct kui_vmu_native_heap_call call;
+    /* An independently authored BSS-tail expression with immutable pointer
+     * dereferences and the final alignment adjustment in the delay slot. */
+    load_literal(0x400u,1u,0x600u,0x8c010720u);put32(0x720u,0x8c500004u);
+    put16(0x402u,0x6012u);put16(0x404u,0xe2e0u);put16(0x406u,0x2029u);
+    load_literal(0x408u,5u,0x604u,0x8d000000u);put16(0x40au,0x3508u);
+    put16(0x40cu,0x75e0u);put16(0x40eu,0x6403u);put16(0x410u,0x1f03u);
+    load_literal(0x412u,3u,0x700u,h.initializer_target);
+    put16(0x414u,0x430bu);put16(0x416u,0x7420u);
+    CHECK(kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
+    CHECK(call.load==0x8c010412u && call.call==0x8c010414u && call.return_pr==0x8c010418u);
+    CHECK(call.entry_begin==0x8c500020u && call.entry_bytes==0xafffe0u);
+    const size_t mutations[]={0x400u,0x402u,0x404u,0x406u,0x408u,0x40au,0x40cu,0x40eu,0x410u,0x412u,0x414u,0x416u};
+    for(unsigned i=0;i<sizeof(mutations)/sizeof(mutations[0]);i++) {
+        uint16_t saved=h16(image+mutations[i]);put16(mutations[i],0x0000u);
+        CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));put16(mutations[i],saved);
+    }
+    /* Neither an out-of-image load nor caller-dependent stack reads can
+     * establish a startup argument. A later live BSS mismatch is separately
+     * checked by the installer against the returned exact values. */
+    put32(0x600u,0x8c700000u);CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));put32(0x600u,0x8c010720u);
+    put16(0x402u,0x50f1u);CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));put16(0x402u,0x6012u);
+    put16(0x410u,0x2f06u);CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));put16(0x410u,0x1f03u);
+    put16(0x410u,0xef00u);CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));put16(0x410u,0x1f03u);
+    put32(0x604u,0x8c400000u);CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));put32(0x604u,0x8d000000u);
+    /* A second fully known call is ambiguous even when both arenas agree. */
+    load_literal(0x500u,4u,0x608u,0x8c500020u);load_literal(0x502u,5u,0x60cu,0xafffe0u);
+    load_literal(0x504u,2u,0x700u,h.initializer_target);put16(0x506u,0x420bu);put16(0x508u,0x0009u);
+    CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
+    h=call_fixture();
+    /* Different allocation-register scheduling and a fixed four-MiB arena
+     * use the same bounded decoder, with no title or address allowlist. */
+    load_literal(0x400u,2u,0x600u,0x8c010720u);put32(0x720u,0x8c500004u);
+    load_literal(0x402u,3u,0x604u,0xe0000000u);put16(0x404u,0x6422u);
+    load_literal(0x406u,1u,0x608u,0x0d000000u);put16(0x408u,0x2439u);
+    put16(0x40au,0x241bu);load_literal(0x40cu,2u,0x60cu,0xffc00000u);
+    load_literal(0x40eu,5u,0x610u,0x400000u);load_literal(0x410u,3u,0x700u,h.initializer_target);
+    put16(0x412u,0x430bu);put16(0x414u,0x342cu);
+    CHECK(kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
+    CHECK(call.entry_begin==0x8cc00000u && call.entry_bytes==0x400000u);
+    put16(0x414u,0x341cu);CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
+    /* Even a pointer transform that happens to preserve the original target
+     * is refused: the installer must preserve its replacement hook value. */
+    put16(0x412u,0x2339u);put16(0x414u,0x430bu);put16(0x416u,0x342cu);
+    CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
+}
 int main(int argc,char **argv) {
     const uint32_t aliases[]={0u,0x80000000u,0xa0000000u};
     for(unsigned a=0;a<3u;a++) for(unsigned half=0;half<2u;half++) {
@@ -135,6 +188,7 @@ int main(int argc,char **argv) {
         CHECK(kui_vmu_native_heap_discover((void *)(uintptr_t)(aliases[a]|0x0c010000u),
             sizeof(image),0x8c010000u,(void *)(uintptr_t)(aliases[b]|0x0c010000u))==KUI_VMU_NATIVE_HEAP_INVALID);
     CHECK(kui_vmu_native_heap_discover(NULL,0u,0x8c010000u,&h)==KUI_VMU_NATIVE_HEAP_INVALID);
+    call_expression_tests();
     if(argc==3) {owner(argv[1],true);owner(argv[2],false);} else CHECK(argc==1);
     printf("Native heap family / lease checks: %u passed; no allocator calls or lifetime authority\n",checks);
     return 0;

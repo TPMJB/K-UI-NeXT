@@ -13,7 +13,7 @@
 #define KUI_VMU_VOLATILE_CHAIN_LAST UINT32_C(0x80000000)
 
 /* One real descriptor captured by the caller's admitted SDK parser. Exact
- * one-word 00000700 padding is omitted. payload0 is required only for MAIN
+ * one-word 00000700 padding is omitted. payload0 is required for physical
  * GETCOND; no virtual request payload is copied into the physical DMA chain. */
 struct kui_vmu_volatile_chain_frame {
     uint32_t control, rx, header, payload0;
@@ -46,7 +46,10 @@ enum kui_vmu_volatile_chain_result {
 /* Pure bounded preparation: filter EVERY port-A unit-1 packet, regardless of
  * command, including BLOCKWRITE/BLOCKSYNC. Retain only MAIN A-D DEVINFO or
  * ALLINFO with no payload, or GETCOND with the one-word controller function.
- * Refuse all other physical units, commands and patterns. The retained bytes
+ * Other one-hot physical subunits admit INFO/ALLINFO, or one-word GETCOND for
+ * controller, memory-card, LCD, clock or rumble functions. No physical writes, RESET/KILL,
+ * SETCOND, storage MEDIA/READ, or unknown function queries are admitted.
+ * Refuse all other commands and patterns. The retained bytes
  * match the captured descriptors except LAST moves to the last retained one.
  * At least one retained packet is required; this API never starts an empty DMA.
  *

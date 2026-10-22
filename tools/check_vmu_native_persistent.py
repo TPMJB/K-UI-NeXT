@@ -33,6 +33,8 @@ from package_vmu_maple_observe import (linked_stack_rows, _function_base, check_
 from check_retail_stack import EDGE, NODE, load as load_graph
 from vmu_maple_observe_symbols import sd_gateway_span
 from check_vmu_pio_write import check_pio_entry
+from check_vmu_native_cache_seed import audit as audit_cache_seed
+from check_vmu_native_cache_gateway import check as check_cache_gateway
 from vmu_native_relocations import generate, validate_loads
 from test_armada_ce_maple_hook import CPU
 
@@ -249,20 +251,36 @@ def check_worker_publication(stage, cached, disassembly):
         op = words[index]
         at = ((begin + index * 2 + 4) & ~3) + 4 * (op & 255)
         return struct.unpack("<I", region(body, at - begin, 4, "installer literal"))[0]
-    candidates = [i for i, op in enumerate(words[:-20]) if op & 0xff00 == 0xde00 and
-                  literal(i) == address and words[i + 1:i + 10] ==
-                  [0x6593, 0x57b7, 0x358c, 0x2372, 0x57be, 0x53ad, 0x2372, 0x4e0b, 0x1f23] and
-                  words[i + 10] & 0xff00 == 0xd000 and
-                  literal(i + 10) == symbols["_kui_vmu_native_worker_call"][0] and
-                  words[i + 11:i + 20] ==
-                  [0x67f3, 0x52f3, 0x7720, 0x55aa, 0x66f3, 0x54a3, 0x7630, 0x400b, 0x1f28]]
+    candidates = []
+    for i in range(len(words) - 20):
+        # Original configuration layout: the publisher uses callee-saved R14.
+        old = (words[i] & 0xff00 == 0xde00 and literal(i) == address and
+               words[i + 1:i + 10] ==
+               [0x6593, 0x57b7, 0x358c, 0x2372, 0x57be, 0x53ad, 0x2372, 0x4e0b, 0x1f23] and
+               words[i + 10] & 0xff00 == 0xd000 and
+               literal(i + 10) == symbols["_kui_vmu_native_worker_call"][0] and
+               words[i + 11:i + 20] ==
+               [0x67f3, 0x52f3, 0x7720, 0x55aa, 0x66f3, 0x54a3, 0x7630, 0x400b, 0x1f28])
+        if old:
+            require(words[i - 1] & 0xff00 == 0xdb00 and
+                    literal(i - 1) == symbols["_native_driver"][0], "publisher uses a different driver witness")
+            candidates.append((i, 8, 18))
+        # Prepared-plan configuration: exactly the same two dynamic writes,
+        # [load,load+worker_bytes) publication and immediate arm; R2 carries
+        # the publisher and the result/config stack offsets increase by8B.
+        new = (words[i] & 0xff00 == 0xdb00 and literal(i) == symbols["_native_driver"][0] and
+               words[i + 1:i + 8] == [0x6593, 0x358c, 0x53b7, 0x2232, 0x53be, 0x52ad, 0x2232] and
+               words[i + 8] & 0xff00 == 0xd200 and literal(i + 8) == address and
+               words[i + 9:i + 11] == [0x420b, 0x1f23] and words[i + 11] & 0xff00 == 0xd000 and
+               literal(i + 11) == symbols["_kui_vmu_native_worker_call"][0] and
+               words[i + 12:i + 20] == [0x67f3, 0x55aa, 0x7728, 0x54a3, 0x66f3, 0x1fea, 0x400b, 0x7638])
+        if new:
+            candidates.append((i, 9, 18))
     require(len(candidates) == 1, "missing unique linked worker-publication/first-arm block")
-    first = candidates[0]
+    first, publish_at, arm_at = candidates[0]
     # This bounded block loads the worker's own two dynamic target cells,
     # publishes exactly [load,load+worker_bytes), and immediately calls arm.
-    publish, arm = begin + (first + 8) * 2, begin + (first + 18) * 2
-    require(words[first - 1] & 0xff00 == 0xdb00 and
-            literal(first - 1) == symbols["_native_driver"][0], "publisher uses a different driver witness")
+    publish, arm = begin + (first + publish_at) * 2, begin + (first + arm_at) * 2
     relocate = symbols["_kui_vmu_native_relocate"][0]
     relocations = [i for i, op in enumerate(words[:-11]) if op & 0xff00 == 0xd000 and
                    literal(i) == relocate and words[i + 1] & 0xff00 == 0xd200 and
@@ -738,6 +756,7 @@ def worker_stack_paths(directory, worker, resident):
             "vmu_native_heap.c": ("read_heap",),
             "vmu_native_layout.c": ("read_value",),
             "vmu_native_lifetime.c": ("read_heap",),
+            "vmu_native_live.c": ("boundary_read",),
             "vmu_native_runtime.c": ("boundary_read",),
             "vmu_store.c": ("durable_card_sector_read", "durable_card_sector_write", "durable_card_sector_sync"),
             "vmu_readonly_overlay.c": ("persistent_admit", "persistent_handler"),
@@ -745,9 +764,10 @@ def worker_stack_paths(directory, worker, resident):
         owners = {
             "vmu_durable.c": {"durable_card_execute"},
             "vmu_emulation.c": {"kui_vmu_emulation_handle"},
-            "vmu_native_heap.c": {"read_is", "kui_vmu_native_heap_lease_valid"},
+            "vmu_native_heap.c": {"read_is", "kui_vmu_native_heap_lease_valid", "kui_vmu_native_heap_lease_valid_with_release"},
             "vmu_native_layout.c": {"kui_vmu_native_layout_bind_checked"},
             "vmu_native_lifetime.c": {"kui_vmu_native_lifetime_release_safe_ranges"},
+            "vmu_native_live.c": {"kui_vmu_native_live_check"},
             "vmu_native_runtime.c": {"kui_vmu_native_runtime_check"},
             "vmu_store.c": {"write_sync", "kui_vmu_store_open", "kui_vmu_store_read", "kui_vmu_store_sync"},
             "vmu_readonly_overlay.c": {"kui_vmu_readonly_overlay_prepare", "kui_vmu_readonly_overlay_complete"},
@@ -923,6 +943,12 @@ def check(directory, *, self_test=False):
     objdump = shutil.which("sh-elf-objdump") or str(ROOT / ".deps/sh-elf/bin/sh-elf-objdump")
     stage_disassembly = subprocess.check_output([objdump, "-d", str(directory / "stage.elf")], text=True)
     publisher = check_worker_publication(stage, cached, stage_disassembly)
+    seed = audit_cache_seed(stage[0], (directory / "entry.elf").read_bytes(),
+                            (directory / "retail-maple-observe.kui").read_bytes(), cached_code=cached)
+    cache_gateway = check_cache_gateway(stage, self_test=self_test) if seed["enabled"] else {"enabled": False}
+    require(not any(name.startswith(("__native_resolution_cache_seed_", "_kui_vmu_native_resolution_cache_",
+                                    "_native_cached_resolution", "_native_resolution_replay"))
+                    for name in symbols), "temporary resolution cache is retained in the gameplay worker")
     for begin, end, payload in (("__native_worker_blob_begin", "__native_worker_blob_end", binary),
                                 ("__native_worker_reloc_begin", "__native_worker_reloc_end", wire)):
         a, b = stage[4][begin][0], stage[4][end][0]
@@ -954,6 +980,8 @@ def check(directory, *, self_test=False):
               "worker_load_policy": policy, "cached_code": cached,
               "stage_cache_publication": publication,
               "worker_icache_publication": publisher,
+              "resolution_cache_seed": seed,
+              "resolution_cache_gateway": cache_gateway,
               "relocation_records": relocations, "worker_instructions": instructions,
               "stage_gateway_model_cases": stage_cases, "persistent_gateway_model_cases": hook_cases,
               "original_release_mask_model_cases": hook_cases // 4,

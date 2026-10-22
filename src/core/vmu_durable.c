@@ -238,6 +238,7 @@ static unsigned durable_card_shape(uint32_t h,uint32_t p0,uint32_t p1) {
     unsigned cmd=h&255u,words=h>>24,phase=(p1>>8)&255u;
     if((h&UINT32_C(0x00ffff00))!=UINT32_C(0x00000100)) return 0u;
     if(cmd==1u || cmd==2u) return words?0u:cmd==1u?116u:196u;
+    if(cmd==3u) return words?0u:4u; /* Discard staged RAM only; no SD access. */
     if(p0!=KUI_VMU_EMU_FUNC_MEMCARD || (p1&UINT32_C(0x00ff00ff))) return 0u;
     if(cmd==10u) return words==2u && !p1?32u:0u;
     if(cmd==11u) return words==2u && !phase?524u:0u;

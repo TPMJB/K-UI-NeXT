@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
 import personalize_vmu_native_persistent as tool
+import vmu_native_cache_seed as cache
 from runtime_package import envelope,verify
 from vmu_persist_profile import decode_profile,encode_profile,template_profile
 
@@ -174,5 +175,169 @@ class NativePersonalizationTests(unittest.TestCase):
             with self.assertRaisesRegex(OSError,'injected'):self.install()
         self.assertEqual(self.destination.read_bytes(),old);self.assertEqual(self.snapshots(),before)
         self.assertFalse(list(self.destination.parent.glob('.native-vmu-*')))
+
+def record_fixture(slug='ps2'):
+    """Synthetic canonical metadata; never a production game certificate."""
+    wire=bytearray(1024);wire[:8]=b'KUINVR01'
+    values={8:1,12:1024,16:1,20:1,24:1024,28:0x8c010000,
+        64:1,68:104,72:1,76:1024,80:0x8c010000,84:7,132:12,
+        168:1,172:440,192:1,404:12,608:1,612:72,616:1,620:1,
+        624:1024,628:0x8c010000,700:1,704:48,708:1,712:0x8c010000,716:1024,720:3}
+    for offset,value in values.items():struct.pack_into('<I',wire,offset,value)
+    wire[32:64]=hashlib.sha256(('synthetic '+slug).encode()).digest();wire[136:168]=wire[32:64]
+    wire[992:]=hashlib.sha256(wire[:992]).digest()
+    cache.decode_record(wire)
+    return bytes(wire)
+
+class NativeCachePersonalizationTests(NativePersonalizationTests):
+    def setUp(self):
+        super().setUp()
+        self.seed_offset=len(self.module)
+        payload=self.module[64:]+cache.template_seed()+bytes(32)
+        self.module=envelope(payload,len(payload),COMMIT[:12])
+        self.manifest.update(module_bytes=len(self.module),module_sha256=tool.sha(self.module),
+            cache_seed_module_offset=self.seed_offset,cache_seed_bytes=1120,
+            cache_seed_sha256=tool.sha(cache.template_seed()),cache_record_bytes=1024,
+            cache_detector_epoch=1,cache_catalog_path=tool.CATALOG_PATH)
+        self.catalog={'schema':tool.CATALOG_SCHEMA,'source_commit':COMMIT,'detector_epoch':1,'games':[]}
+        directory=self.package/'native-cache';directory.mkdir()
+        for slug,title in (('ps2','Power Stone 2'),('skies','Skies of Arcadia'),('sa2','Sonic Adventure 2')):
+            wire=record_fixture(slug);metadata=cache.decode_record(wire)
+            (directory/(slug+'.nvr')).write_bytes(wire)
+            self.catalog['games'].append(dict(slug=slug,title=title,record_path='native-cache/'+slug+'.nvr',
+                **{key:metadata[key] for key in ('record_sha256','record_digest','image_sha256','image_bytes','load_address')}))
+        self.save_package()
+
+    def save_package(self):
+        raw=(json.dumps(self.catalog,indent=2,sort_keys=True)+'\n').encode()
+        (self.package/tool.CATALOG_PATH).write_bytes(raw)
+        self.manifest['cache_catalog_sha256']=tool.sha(raw)
+        (self.package/tool.BASE_MODULE).write_bytes(self.module)
+        (self.package/tool.MANIFEST).write_text(json.dumps(self.manifest))
+
+    def install(self,profile=None,game=None):
+        return tool.install(self.card,package=self.package,profile=profile,game=game)
+
+    # Inherited legacy tests run against a legacy package only. This class's
+    # extra manifest/seed spans require their own explicit expectations.
+    def test_only_exact_profile_and_two_runtime_checksums_change(self):
+        before=self.snapshots();self.install();after=self.destination.read_bytes()
+        self.assertEqual(before,self.snapshots())
+        self.assertEqual(after[self.seed_offset:self.seed_offset+1120],cache.template_seed())
+
+    def test_extracted_zip_layout_runs_with_only_two_shipped_codecs(self):
+        tools=self.package/'tools';tools.mkdir();source=Path(tool.__file__).parent
+        for name in ('runtime_package.py','vmu_persist_profile.py','vmu_native_cache_seed.py'):
+            (tools/name).write_bytes((source/name).read_bytes())
+        (self.package/'personalize.py').write_bytes(Path(tool.__file__).read_bytes())
+        listed=subprocess.run([sys.executable,str(self.package/'personalize.py'),'--list-games'],
+            cwd=self.root,capture_output=True,text=True,check=True)
+        self.assertIn('ps2\tPower Stone 2',listed.stdout)
+        self.assertIn('sa2\tSonic Adventure 2',listed.stdout)
+        before=self.snapshots()
+        installed=subprocess.run([sys.executable,str(self.package/'personalize.py'),str(self.card),'--game','ps2',
+            '--profile','KUI/vmu-test/p0001/retail-persistent-profile-0001.bin'],
+            cwd=self.root,capture_output=True,text=True,check=True)
+        self.assertIn('Power Stone 2 (ps2)',installed.stdout);self.assertEqual(before,self.snapshots())
+
+    def test_game_selection_changes_only_seed_profile_checksums(self):
+        before=self.snapshots();report=self.install(game='ps2');after=self.destination.read_bytes()
+        self.assertEqual(report['game'],'ps2');self.assertEqual(before,self.snapshots())
+        selected=(self.package/'native-cache/ps2.nvr').read_bytes()
+        seed=after[self.seed_offset:self.seed_offset+1120]
+        self.assertEqual(cache.decode_seed(seed),cache.decode_record(selected))
+        self.assertEqual(seed[64:1088],selected)
+        allowed=((32,36),(60,64),(self.manifest['profile_module_offset'],self.manifest['profile_module_offset']+4096),
+            (self.seed_offset,self.seed_offset+1120))
+        self.assertTrue(all(a==b or any(first<=i<end for first,end in allowed)
+            for i,(a,b) in enumerate(zip(self.module,after))))
+        with patch.object(tool.os,'replace',side_effect=AssertionError('must not rewrite')):
+            self.assertTrue(self.install(game='ps2')['already_installed'])
+        self.install(game='skies');self.assertNotEqual(self.destination.read_bytes(),after)
+
+    def test_listing_does_not_open_card_or_change_loader(self):
+        old=self.destination.read_bytes();before=self.snapshots()
+        self.assertEqual(set(tool.list_games(self.package)),{'ps2','skies','sa2'})
+        self.assertEqual(old,self.destination.read_bytes());self.assertEqual(before,self.snapshots())
+
+    def test_catalog_pins_and_schema_refuse_corruption(self):
+        old=self.destination.read_bytes()
+        raw=(self.package/tool.CATALOG_PATH).read_bytes()
+        (self.package/tool.CATALOG_PATH).write_bytes(raw+b' ')
+        with self.assertRaisesRegex(ValueError,'catalog differs'):self.install(game='ps2')
+        self.save_package()
+        original=json.loads(json.dumps(self.catalog))
+        for mutate in (
+            lambda p:p.update(source_commit='f'*40),lambda p:p.update(detector_epoch=True),
+            lambda p:p.update(detector_epoch=2),lambda p:p['games'][0].update(slug='recv'),
+            lambda p:p['games'].append(p['games'][0]),lambda p:p['games'][0].update(record_path='../ps2.nvr'),
+            lambda p:p['games'][0].update(record_digest='0'*64),lambda p:p['games'][0].update(record_sha256='0'*64),
+            lambda p:p['games'][0].update(image_sha256='0'*64),lambda p:p['games'][0].update(image_bytes=True),
+            lambda p:p['games'][0].update(load_address='ac010000'),lambda p:p['games'][0].update(title='bad\ntitle')):
+            self.catalog=json.loads(json.dumps(original));mutate(self.catalog);self.save_package()
+            with self.subTest(catalog=self.catalog),self.assertRaises(ValueError):self.install(game='ps2')
+            self.assertEqual(old,self.destination.read_bytes())
+        self.catalog=original;self.save_package()
+        with self.assertRaisesRegex(ValueError,'Unknown packaged'):self.install(game='recv')
+
+    def test_record_corruption_and_resealed_forgery_never_replaces_loader(self):
+        path=self.package/'native-cache/ps2.nvr';original=path.read_bytes();old=self.destination.read_bytes()
+        for length in (0,1023,1025):
+            path.write_bytes((original+b'X')[:length])
+            with self.assertRaises(ValueError):self.install(game='ps2')
+        path.write_bytes(original)
+        forged=bytearray(original);forged[88]^=4;forged[992:]=hashlib.sha256(forged[:992]).digest()
+        path.write_bytes(forged)
+        self.catalog['games'][0]['record_sha256']=tool.sha(forged);self.save_package()
+        with self.assertRaisesRegex(ValueError,'independently pinned'):self.install(game='ps2')
+        self.assertEqual(old,self.destination.read_bytes())
+
+    def test_complete_optional_manifest_and_disjoint_seed_required(self):
+        for field in tool.CACHE_FIELDS:
+            changed=dict(self.manifest);del changed[field]
+            (self.package/tool.MANIFEST).write_text(json.dumps(changed))
+            with self.subTest(missing=field),self.assertRaises(ValueError):self.install(game='ps2')
+        self.save_package()
+        for changes in ({'cache_seed_module_offset':True},{'cache_seed_bytes':True},
+            {'cache_record_bytes':1023},{'cache_detector_epoch':2},
+            {'cache_seed_module_offset':self.manifest['profile_module_offset']},
+            {'cache_seed_module_offset':self.seed_offset+4},{'cache_seed_sha256':'0'*64}):
+            self.manifest_write(**changes)
+            with self.subTest(changes=changes),self.assertRaises(ValueError):self.install(game='ps2')
+        self.save_package()
+        payload=self.module[64:]+cache.template_seed();self.module=envelope(payload,len(payload),COMMIT[:12])
+        self.manifest.update(module_bytes=len(self.module),module_sha256=tool.sha(self.module));self.save_package()
+        with self.assertRaisesRegex(ValueError,'duplicated|ambiguous'):self.install(game='ps2')
+
+    def test_game_and_explicit_p0005_preserve_pair(self):
+        pair(self.card,'p0005',number='0005');before=self.snapshots()
+        report=self.install(Path('KUI/vmu-test/p0005/retail-persistent-profile-0005.bin'),game='sa2')
+        self.assertEqual(report['pair_path'],'/KUI/vmu-test/p0005');self.assertEqual(report['game'],'sa2')
+        self.assertEqual(before,self.snapshots())
+
+    def test_cache_record_symlinks_and_directory_entries_are_refused(self):
+        path=self.package/'native-cache/ps2.nvr';wire=path.read_bytes();path.unlink()
+        external=self.root/'record';external.write_bytes(wire);path.symlink_to(external)
+        with self.assertRaisesRegex(ValueError,'ordinary'):self.install(game='ps2')
+        path.unlink();path.mkdir()
+        with self.assertRaisesRegex(ValueError,'ordinary'):self.install(game='ps2')
+
+class NativeCacheCodecTests(unittest.TestCase):
+    def test_seed_and_record_corruptions(self):
+        wire=record_fixture();metadata=cache.decode_record(wire)
+        seed=cache.fill_seed(cache.template_seed(),wire,metadata['record_digest'])
+        self.assertEqual(cache.decode_seed(seed),metadata)
+        self.assertIsNone(cache.decode_seed(cache.template_seed()))
+        self.assertEqual(cache.find_seed(b'prefix'+seed+b'tail'),6)
+        with self.assertRaisesRegex(ValueError,'duplicated'):
+            cache.find_seed(seed+cache.template_seed())
+        for index in range(1120):
+            changed=bytearray(seed);changed[index]^=1
+            with self.subTest(index=index),self.assertRaises(ValueError):cache.decode_seed(changed)
+        for index in (0,8,12,16,20,24,28,64,68,72,76,80,84,132,136,168,172,192,404,608,612,616,620,624,628,700,704,708,712,716,720,748):
+            changed=bytearray(wire);changed[index]^=0x80;changed[992:]=hashlib.sha256(changed[:992]).digest()
+            with self.subTest(index=index),self.assertRaises(ValueError):cache.decode_record(changed)
+        with self.assertRaises(ValueError):cache.fill_seed(cache.template_seed(),wire,None)
+        with self.assertRaises(ValueError):cache.decode_record(wire,10**10)
 
 if __name__=='__main__':unittest.main()

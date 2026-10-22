@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Bind the native save test to an existing prepared card and install its loader.
 
-Only the audited module's exact4096-byte placeholder and runtime envelope
-checksums change. VMU image/journal/identity/profile files are read only. No
+Only the audited module's exact4096-byte profile, optional1120-byte cache seed
+and runtime envelope checksums change. VMU pair/profile files are read only. No
 card is created, cloned, restored or reformatted by this command.
 """
 import argparse
@@ -30,6 +30,17 @@ PROFILE_NAME=re.compile(r'retail-persistent-profile-[0-9]{4}\.bin')
 PAIR_NAME=re.compile(r'p(?!0000)[0-9]{4}')
 FIELDS={'schema','source_commit','build','module_sha256','module_bytes',
         'profile_module_offset','profile_bytes','profile_sha256','storage_writes_enabled'}
+CACHE_FIELDS={'cache_seed_module_offset','cache_seed_bytes','cache_seed_sha256',
+        'cache_record_bytes','cache_detector_epoch','cache_catalog_path','cache_catalog_sha256'}
+CATALOG_SCHEMA='kui.native.resolution-cache.catalog.v1'
+CATALOG_PATH='native-cache/catalog.json'
+GAME_SLUGS={'ps2','skies','sa2'}
+
+def cache_codec():
+    # Legacy ZIPs intentionally need only the two original shipped codecs.
+    try:import vmu_native_cache_seed
+    except ImportError as error:raise ValueError('The package native cache codec is missing; extract the complete ZIP') from error
+    return vmu_native_cache_seed
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
@@ -64,7 +75,8 @@ def read_regular(path,root,expected=None,maximum=None):
 def generic_module(package):
     package=Path(package).resolve(strict=True)
     manifest=json.loads(read_regular(package/MANIFEST,package,maximum=16384))
-    require(isinstance(manifest,dict) and set(manifest)==FIELDS,'Unexpected personalization manifest fields')
+    require(isinstance(manifest,dict) and set(manifest) in (FIELDS,FIELDS|CACHE_FIELDS),
+            'Unexpected personalization manifest fields')
     require(manifest['schema']==SCHEMA and manifest['storage_writes_enabled'] is True,
             'Requires an audited native persistent save-test manifest')
     for field,length in (('source_commit',40),('module_sha256',64),('profile_sha256',64)):
@@ -84,7 +96,59 @@ def generic_module(package):
             'Generic module differs from its audited build')
     require(module[offset:offset+WIRE_BYTES]==template and module.find(template)==offset and
             module.find(template,offset+1)==-1,'Profile template is absent, misplaced or duplicated')
+    if CACHE_FIELDS<=set(manifest):
+        codec=cache_codec();seed_offset=manifest['cache_seed_module_offset'];seed=codec.template_seed()
+        for field in ('cache_seed_module_offset','cache_seed_bytes','cache_record_bytes','cache_detector_epoch'):
+            require(type(manifest[field]) is int,'Native cache manifest counts must be integers')
+        require(manifest['cache_seed_bytes']==codec.SEED_BYTES and
+                manifest['cache_record_bytes']==codec.RECORD_BYTES and
+                manifest['cache_detector_epoch']==codec.DETECTOR_EPOCH and
+                manifest['cache_seed_sha256']==sha(seed) and
+                seed_offset>=64 and not seed_offset&3 and seed_offset+len(seed)<=len(module),
+                'Native cache manifest does not bound its exact canonical seed')
+        require(seed_offset+len(seed)<=offset or offset+WIRE_BYTES<=seed_offset,
+                'Native cache seed overlaps the owner profile')
+        require(module[seed_offset:seed_offset+len(seed)]==seed and codec.find_seed(module)==seed_offset,
+                'Native cache seed is absent, misplaced or duplicated')
+        cache_catalog(package,manifest)
     return module,manifest,info
+
+def cache_catalog(package,manifest):
+    require(CACHE_FIELDS<=set(manifest),'This package has no audited native cache catalog')
+    require(manifest['cache_catalog_path']==CATALOG_PATH and
+            isinstance(manifest['cache_catalog_sha256'],str) and
+            re.fullmatch('[0-9a-f]{64}',manifest['cache_catalog_sha256']),
+            'Native cache catalog manifest fields differ')
+    raw=read_regular(Path(package)/CATALOG_PATH,package,maximum=16384)
+    require(sha(raw)==manifest['cache_catalog_sha256'],'Native cache catalog differs from its pinned digest')
+    catalog=json.loads(raw)
+    require(isinstance(catalog,dict) and set(catalog)=={'schema','source_commit','detector_epoch','games'} and
+            catalog['schema']==CATALOG_SCHEMA and catalog['source_commit']==manifest['source_commit'] and
+            type(catalog['detector_epoch']) is int and catalog['detector_epoch']==manifest['cache_detector_epoch'] and
+            isinstance(catalog['games'],list) and 1<=len(catalog['games'])<=len(GAME_SLUGS),
+            'Native cache catalog schema/source/epoch differs')
+    result={};codec=cache_codec()
+    for game in catalog['games']:
+        require(isinstance(game,dict) and set(game)=={'slug','title','record_path','record_sha256',
+                'record_digest','image_sha256','image_bytes','load_address'},'Unexpected native cache game fields')
+        slug=game['slug']
+        require(isinstance(slug,str) and slug in GAME_SLUGS and slug not in result,
+                'Unknown or duplicated native cache game')
+        require(isinstance(game['title'],str) and 1<=len(game['title'])<=80 and
+                all(32<=ord(c)<127 for c in game['title']),'Invalid native cache game title')
+        require(game['record_path']=='native-cache/'+slug+'.nvr' and type(game['image_bytes']) is int,
+                'Native cache record path/size differs')
+        wire=read_regular(Path(package)/game['record_path'],package,expected=codec.RECORD_BYTES)
+        metadata=codec.record_metadata(wire,game['record_digest'])
+        require(all(game[field]==metadata[field] for field in
+                ('record_sha256','record_digest','image_sha256','image_bytes','load_address')),
+                'Native cache game metadata differs from its pinned record')
+        result[slug]={**game,'wire':wire}
+    return result
+
+def list_games(package):
+    _,manifest,_=generic_module(package)
+    return cache_catalog(Path(package).resolve(strict=True),manifest)
 
 def inspect_profile(path,root):
     path=Path(path)
@@ -133,25 +197,38 @@ def select_profile(root,selected=None):
         raise ValueError('Several prepared cards/ownership maps are available; select one explicitly:\n'+choices)
     return groups[0][-1]
 
-def personalize_bytes(module,manifest,info,wire):
+def personalize_bytes(module,manifest,info,wire,*,cache_record=None,cache_digest=None):
     require(len(wire)==WIRE_BYTES and wire!=template_profile(),'Requires a real canonical owner profile')
     decode_profile(wire)
     offset=manifest['profile_module_offset']
     payload=bytearray(module[64:]);payload[offset-64:offset-64+WIRE_BYTES]=wire
+    allowed=[(32,36),(60,64),(offset,offset+WIRE_BYTES)]
+    if cache_record is not None or cache_digest is not None:
+        require(CACHE_FIELDS<=set(manifest) and cache_record is not None and cache_digest is not None,
+                'Requires the complete audited cache seed and independently pinned record')
+        codec=cache_codec();seed_offset=manifest['cache_seed_module_offset']
+        seed=codec.fill_seed(module[seed_offset:seed_offset+codec.SEED_BYTES],cache_record,cache_digest)
+        payload[seed_offset-64:seed_offset-64+len(seed)]=seed
+        allowed.append((seed_offset,seed_offset+len(seed)))
     result=envelope(bytes(payload),info['memory_bytes'],info['build'])
     after=verify(result)
     require(len(result)==len(module) and after['build']==info['build'],'Personalization changed module layout/build')
-    allowed=((32,36),(60,64),(offset,offset+WIRE_BYTES))
     require(all(old==new or any(begin<=index<end for begin,end in allowed)
                 for index,(old,new) in enumerate(zip(module,result))),
-            'Changed bytes escape the exact profile and runtime checksum spans')
+            'Changed bytes escape the exact profile/cache seed and runtime checksum spans')
     return result
 
-def install(root,*,package,profile=None):
+def install(root,*,package,profile=None,game=None):
     root=Path(root).resolve(strict=True)
     module,manifest,info=generic_module(package)
+    chosen=None
+    if game is not None:
+        catalog=cache_catalog(Path(package).resolve(strict=True),manifest)
+        require(isinstance(game,str) and game in catalog,'Unknown packaged native cache game; use --list-games')
+        chosen=catalog[game]
     selected=select_profile(root,profile)
-    personalized=personalize_bytes(module,manifest,info,selected['wire'])
+    personalized=personalize_bytes(module,manifest,info,selected['wire'],
+        cache_record=chosen['wire'] if chosen else None,cache_digest=chosen['record_digest'] if chosen else None)
     destination=root/INSTALL
     ordinary_path(destination.parent,root,directory=True)
     existed=destination.exists() or destination.is_symlink()
@@ -159,6 +236,7 @@ def install(root,*,package,profile=None):
     result={'build':info['build'],'pair_path':selected['summary']['pair_path'],
         'profile':str(selected['path'].relative_to(root)),'module_sha256':sha(personalized),
         'installed_file':str(INSTALL),'already_installed':previous==personalized}
+    if chosen:result.update(game=chosen['slug'],game_title=chosen['title'],image_sha256=chosen['image_sha256'])
     if previous==personalized:return result
     # Recheck association immediately before the sole destination mutation.
     require(read_regular(selected['path'],root,expected=WIRE_BYTES)==selected['wire'] and
@@ -183,15 +261,23 @@ def install(root,*,package,profile=None):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('sd_root',type=Path)
+    parser.add_argument('sd_root',type=Path,nargs='?')
     parser.add_argument('--profile',type=Path,help='Explicit canonical profile path on this card, relative to its root or absolute')
     parser.add_argument('--package',type=Path,default=Path(__file__).resolve().parent,
                         help=argparse.SUPPRESS)
+    selection=parser.add_mutually_exclusive_group()
+    selection.add_argument('--game',help='Bind one packaged immutable executable proof; see --list-games')
+    selection.add_argument('--list-games',action='store_true',help='List packaged cache records without opening an SD card')
     args=parser.parse_args()
     try:
-        result=install(args.sd_root,package=args.package,profile=args.profile)
+        if args.list_games:
+            for slug,item in sorted(list_games(args.package).items()):print(slug+'\t'+item['title'])
+            return
+        if args.sd_root is None:parser.error('sd_root is required unless --list-games is selected')
+        result=install(args.sd_root,package=args.package,profile=args.profile,game=args.game)
         action='Already installed' if result['already_installed'] else 'Installed'
         print(action+' native persistent VMU test '+result['build']+' using '+result['pair_path'])
+        if 'game' in result:print('Executable cache: '+result['game_title']+' ('+result['game']+'); live console guards remain enabled.')
         print('Image, journal, identity and preparation profiles were unchanged.')
         print('Safely eject the card, then follow README-FIRST.md.')
     except (OSError,ValueError,KeyError,TypeError,UnicodeError) as error:
