@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Native SDK-family virtual A1 with the existing prepared durable backing.
 BUILD ?= build/vmu-native-persistent
-NATIVE_LAYOUT := src/loader/vmu_native_persistent.ld
+NATIVE_LAYOUT ?= src/loader/vmu_native_persistent.ld
 NATIVE_SPAN := 0x20000
 include Makefile.vmu-native-readonly
 override TEST_ZIP := K-UI-Native-Persistent-Test.zip

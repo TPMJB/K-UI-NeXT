@@ -117,17 +117,26 @@ static bool aliases_overlap(uintptr_t a,size_t an,uintptr_t b,size_t bn) {
         physical((uint32_t)a)<physical((uint32_t)b)+bn &&
         physical((uint32_t)b)<physical((uint32_t)a)+an;
 }
-bool kui_vmu_native_exit_discover(const void *image,size_t bytes,uint32_t load,
+bool kui_vmu_native_exit_discover_guarded(const void *image,size_t bytes,uint32_t load,
+    const struct kui_vmu_native_patch_window *additional,size_t extra_count,
     struct kui_vmu_native_exit *out) {
     if(!out) return false;
     uintptr_t begin=(uintptr_t)image,dest=(uintptr_t)out;
     if(bytes>UINTPTR_MAX-begin || sizeof(*out)>UINTPTR_MAX-dest ||
        (dest<begin+bytes && begin<dest+sizeof(*out)) ||
        aliases_overlap(begin,bytes,dest,sizeof(*out))) return false;
+    uintptr_t extra=(uintptr_t)additional;
+    if(additional && extra_count) {
+        if(extra_count>(UINTPTR_MAX-extra)/sizeof(*additional)) return false;
+        size_t extra_bytes=extra_count*sizeof(*additional);
+        if((dest<extra+extra_bytes && extra<dest+sizeof(*out)) ||
+           aliases_overlap(extra,extra_bytes,dest,sizeof(*out))) return false;
+    }
     memset(out,0,sizeof(*out));
     if(!image || bytes<0x9cu || bytes>UINT32_C(0xc00000) || (load&3u) ||
        physical(load)<UINT32_C(0x0c010000) || !direct(load) ||
-       bytes>UINT32_C(0x0d000000)-physical(load)) return false;
+       bytes>UINT32_C(0x0d000000)-physical(load) || extra_count>5u ||
+       (extra_count && !additional)) return false;
     const uint8_t *p=image;unsigned count=0u;size_t pair=0u,exec=0u;uint32_t cleanup=0u;
     for(size_t at=0;at+0x60u<=bytes;at+=4u) {
         if((u16(p+at)&UINT16_C(0xff00))!=UINT16_C(0xd300) || u16(p+at+2u)!=UINT16_C(0x6030)) continue;
@@ -142,12 +151,17 @@ bool kui_vmu_native_exit_discover(const void *image,size_t bytes,uint32_t load,
         if(exec_loader(p,bytes,load,at,load+(uint32_t)pair)) {exec=at;if(++count>1u) return false;}
     }
     if(count!=1u || !consumers(p,bytes,load,pair,exec)) return false;
-    const struct kui_vmu_native_patch_window windows[]={
+    struct kui_vmu_native_patch_window windows[8]={
         {load+(uint32_t)pair,12u},{load+(uint32_t)pair+48u,12u},{load+(uint32_t)exec,12u}};
-    if(!kui_vmu_native_patch_no_interiors(image,bytes,load,windows,3u)) return false;
+    for(size_t i=0;i<extra_count;i++) windows[3u+i]=additional[i];
+    if(!kui_vmu_native_patch_no_interiors(image,bytes,load,windows,3u+extra_count)) return false;
     *out=(struct kui_vmu_native_exit){.version=KUI_VMU_NATIVE_EXIT_VERSION,.bytes=sizeof(*out),
         .family=KUI_VMU_NATIVE_EXIT_FAMILY,.load=load,.image_bytes=(uint32_t)bytes,.count=3u,
         .entries={windows[0].begin,windows[1].begin,windows[2].begin},
         .bios_vector_literal=load+(uint32_t)pair+0x58u,.exec_thunk=load+(uint32_t)exec+0x6au,.cleanup=cleanup};
     return true;
+}
+bool kui_vmu_native_exit_discover(const void *image,size_t bytes,uint32_t load,
+    struct kui_vmu_native_exit *out) {
+    return kui_vmu_native_exit_discover_guarded(image,bytes,load,NULL,0u,out);
 }

@@ -48,7 +48,14 @@ static struct kui_vmu_native_passive_frame completion_frame;
 static struct kui_vmu_native_lifetime_range protected_ranges[KUI_VMU_NATIVE_LIFETIME_RANGES];
 static unsigned protected_count;
 static bool persistent_storage_guard(void);
+static bool persistent_context_guard(void);
 static bool installed_hooks_valid(void);
+#ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+static struct {unsigned heap,layout,runtime,chain,hooks,storage;} measured_work;
+#define RECORD_WORK(field) (++measured_work.field)
+#else
+#define RECORD_WORK(field) ((void)0)
+#endif
 static int persistent_handler(void *context,const uint8_t *request,size_t request_bytes,
     uint8_t *response,size_t capacity,size_t *response_bytes) {
     return kui_vmu_durable_handle(context,request,request_bytes,response,capacity,response_bytes);
@@ -65,6 +72,9 @@ static int readonly_handler(void *context,const uint8_t *request,size_t request_
 #endif
 static struct kui_vmu_readonly_overlay overlay;
 static struct kui_vmu_readonly_overlay_frame overlay_frames[KUI_VMU_READONLY_OVERLAY_FRAMES];
+#endif
+#ifndef RECORD_WORK
+#define RECORD_WORK(field) ((void)0)
 #endif
 #ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
 extern bool kui_vmu_native_passive_test_read(uint32_t,unsigned,uint32_t *);
@@ -117,6 +127,7 @@ static bool stack_valid(void) {
     return true;
 }
 static bool lease_valid(void) {
+    RECORD_WORK(heap);
     return kui_vmu_native_heap_lease_valid(&config.lease,read_heap,NULL,1u);
 }
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
@@ -141,12 +152,12 @@ static uint32_t issued_physical(void) {
         address-config.lease.payload<=WORKER_SPAN-sizeof(issued_chain)?address:0u;
 }
 int kui_vmu_native_persistent_sd_transaction(void *context,struct kui_loader_sd *loan) {
-    if(context!=&durable_card || !loan || !persistent_storage_guard()) {
+    if(context!=&durable_card || !loan || !persistent_context_guard()) {
         if(loan) loan->ready=false;
         return -1;
     }
     int result=kui_vmu_durable_transaction(context,loan);
-    if(!persistent_storage_guard()) {loan->ready=false;return -1;}
+    if(!persistent_context_guard()) {loan->ready=false;return -1;}
     return result;
 }
 static int persistent_lease(kui_vmu_sd_transaction transaction,void *context) {
@@ -197,6 +208,7 @@ static bool patch_matches(uint32_t address,uint32_t target) {
     return true;
 }
 static bool installed_hooks_valid(void) {
+    RECORD_WORK(hooks);
     uint32_t value;
     if(!patch_matches(config.driver.submit,kui_vmu_native_worker_exports.submit_hook) ||
        !patch_matches(config.lease.owner.release,kui_vmu_native_worker_exports.release_hook) ||
@@ -387,12 +399,14 @@ static bool boundary_read(void *context,uint32_t address,unsigned width,uint32_t
 }
 static bool boundary(const struct kui_vmu_native_passive_frame *f,unsigned phase,unsigned bytes,
     struct kui_vmu_native_runtime_snapshot *snapshot) {
+    RECORD_WORK(runtime);
     struct kui_vmu_native_runtime_boundary b={phase,current_sr(),f->sr,f->pr,state.source,state.source,bytes};
     int r=kui_vmu_native_runtime_check(&config.driver,&config.runtime,&b,boundary_read,NULL,snapshot);
     state.runtime_result=(uint32_t)r;
     return r==KUI_VMU_NATIVE_RUNTIME_VALID && snapshot->tx_base==config.tx_base;
 }
 static bool bind_runtime(struct kui_vmu_native_runtime_config *runtime) {
+    RECORD_WORK(layout);
     struct kui_vmu_native_layout_diagnostic diagnostic;
     if(kui_vmu_native_layout_bind_checked(&config.layout,&config.driver,read_value,NULL,
        runtime,&diagnostic)) return true;
@@ -403,6 +417,7 @@ static bool bind_runtime(struct kui_vmu_native_runtime_config *runtime) {
 /* Parse the exact software-trigger chain, retaining all descriptor and payload
  * words. No RX address is followed until its exact slot has been established. */
 static bool chain(unsigned bank,bool compare) {
+    RECORD_WORK(chain);
     unsigned at=0u,count=0u,nops=0u;uint32_t hash=UINT32_C(2166136261);
     for(unsigned entry=0;entry<256u && at<TX_WORDS;entry++) {
         uint32_t control;
@@ -461,6 +476,7 @@ static bool chain(unsigned bank,bool compare) {
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 static bool filtered_boundary(const struct kui_vmu_native_passive_frame *f,
     struct kui_vmu_native_runtime_snapshot *snapshot) {
+    RECORD_WORK(runtime);
     struct kui_vmu_native_runtime_boundary b={1u,current_sr(),f->sr,f->pr,
         state.source,issued_plan.output_physical,issued_plan.output_bytes};
     int r=kui_vmu_native_runtime_check(&config.driver,&config.runtime,&b,boundary_read,NULL,snapshot);
@@ -480,6 +496,7 @@ static bool physical_response_valid(unsigned i,uint32_t response) {
         (cmd==9u?function==UINT32_C(0x01000000):!!(function&UINT32_C(0x01000000)));
 }
 static bool persistent_storage_guard(void) {
+    RECORD_WORK(storage);
     struct kui_vmu_native_runtime_config rebound=config.runtime;
     struct kui_vmu_native_runtime_snapshot snapshot;
     return state.armed && state.pending && state.submitted==state.completed+1u &&
@@ -490,28 +507,33 @@ static bool persistent_storage_guard(void) {
         issued_plan.output_physical==issued_physical() &&
         !kui_vmu_volatile_chain_verify(&issued_plan,issued_chain,sizeof(issued_chain));
 }
-static bool redirected_submit_valid(const struct kui_vmu_native_passive_frame *f,unsigned bank) {
+/* The full ownership proof is renewed at each external boundary. Between it
+ * and MDST/RX publication only reviewed private RAM work runs under IMASK15.
+ * Repeat the live MMIO/context witness here, not the complete geometry and
+ * free-list walks that were just proved without an intervening game caller. */
+static bool transfer_context_valid(const struct kui_vmu_native_passive_frame *f,
+    unsigned bank,unsigned phase,uint32_t dma) {
     const uint32_t address[4]={UINT32_C(0xa05f6c04),UINT32_C(0xa05f6c10),
         UINT32_C(0xa05f6c14),UINT32_C(0xa05f6c18)};
-    const uint32_t expected[4]={issued_plan.output_physical,0u,1u,0u};
-    struct kui_vmu_native_runtime_config rebound=config.runtime;
-    if(!lease_valid() || !stack_valid() || f->r12!=1u ||
-       !installed_hooks_valid() ||
-       physical(f->r14)!=physical(config.driver.manager_cell) ||
+    const uint32_t expected[4]={dma,0u,1u,0u};
+    unsigned mask=(f->sr>>4)&15u;
+    if(!stack_valid() || bank>1u || phase>1u || (mask!=6u && mask!=15u) ||
+       state.source!=physical(config.tx_base)+bank*KUI_VMU_NATIVE_TX_BANK_BYTES ||
+       (!phase && (f->r12!=1u || !ram(f->r14,4u,4u) ||
+        physical(f->r14)!=physical(config.driver.manager_cell))) ||
+       (phase && (!ram(f->pr,2u,2u) || physical(f->pr)!=physical(config.driver.completion_call)+4u)) ||
        kui_vmu_native_passive_resume!=config.driver.resume ||
-       kui_vmu_native_passive_consumer!=config.driver.consumer ||
-       !bind_runtime(&rebound) || memcmp(&rebound,&config.runtime,sizeof(rebound)) ||
-       !chain(bank,true) || issued_plan.output_physical!=issued_physical() ||
-       kui_vmu_volatile_chain_verify(&issued_plan,issued_chain,sizeof(issued_chain))) return false;
+       kui_vmu_native_passive_consumer!=config.driver.consumer) return false;
     for(unsigned i=0;i<4u;i++) {
         uint32_t value;
         if(!read_value(NULL,address[i],4u,&value) || value!=expected[i]) return false;
     }
-    /* The original SDK context was fully checked immediately before the
-     * source redirect under this uninterrupted IMASK15. Recheck its mutable
-     * selectors and lock after publishing MDSTAR, before the original MDST. */
+    /* Recheck live selectors and the lock around an MDSTAR change or scoped
+     * storage call. The full geometry proof belongs to this same IMASK15
+     * scope; these operations cannot resume game code between witnesses. */
     const uint32_t offsets[6]={0xfc0u,0x10b0u,0x10b4u,0x10b8u,0x10c4u,0x10f4u};
-    const uint32_t values[6]={1u,state.source|UINT32_C(0xa0000000),bank,bank,0u,UINT32_C(0xa05f6c00)};
+    const uint32_t values[6]={phase?0u:1u,state.source|UINT32_C(0xa0000000),
+        bank^phase,bank^phase,0u,UINT32_C(0xa05f6c00)};
     uint32_t manager,lock,value;
     if(!read_value(NULL,config.driver.manager_cell,4u,&manager) ||
        physical(manager)!=physical(config.driver.manager_initial) ||
@@ -521,6 +543,11 @@ static bool redirected_submit_valid(const struct kui_vmu_native_passive_frame *f
     for(unsigned i=0;i<6u;i++)
         if(!read_value(NULL,manager+offsets[i],4u,&value) || value!=values[i]) return false;
     return true;
+}
+static bool persistent_context_guard(void) {
+    unsigned bank=state.source==physical(config.tx_base)?0u:1u;
+    return state.armed && state.pending && state.submitted==state.completed+1u &&
+        transfer_context_valid(&completion_frame,bank,1u,state.source);
 }
 #endif
 void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f) {
@@ -550,16 +577,19 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
         state.source,state.bytes,config.lease.payload-32u,config.lease.lease_bytes+32u);
     state.overlay_result=(uint32_t)prepared;if(prepared) fail(21u);
 #endif
-    if(!boundary(f,0u,state.bytes,&snapshot) || !lease_valid() || !stack_valid()) fail(7u);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    /* Both builders touch private RAM only; the admission callback is the
+     * reviewed durable metadata whitelist. No game/SD call intervenes between
+     * the full submission proof above and the final MDST-context witness. */
     uint32_t target=issued_physical();
     if(!target || kui_vmu_volatile_chain_build(&issued_plan,chain_frames,state.descriptors,
        state.source,state.bytes,issued_chain,sizeof(issued_chain),target) ||
        kui_vmu_volatile_chain_verify(&issued_plan,issued_chain,sizeof(issued_chain)) ||
-       !boundary(f,0u,state.bytes,&snapshot) || !chain(snapshot.bank,true) ||
-       !lease_valid() || !stack_valid()) fail(0x40u);
+       !transfer_context_valid(f,snapshot.bank,0u,state.source)) fail(0x40u);
     write_mdstar(target);
-    if(!redirected_submit_valid(f,snapshot.bank)) fail(0x41u);
+    if(!transfer_context_valid(f,snapshot.bank,0u,target)) fail(0x41u);
+#else
+    if(!boundary(f,0u,state.bytes,&snapshot) || !lease_valid() || !stack_valid()) fail(7u);
 #endif
     state.rx_slots=snapshot.rx_slots_nonzero;state.pending=1u;
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
@@ -588,14 +618,17 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
        issued_plan.frame_count!=state.descriptors || issued_plan.output_physical!=issued_physical() ||
        kui_vmu_volatile_chain_verify(&issued_plan,issued_chain,sizeof(issued_chain)) ||
        !filtered_boundary(f,&snapshot) || !chain(snapshot.bank,true) ||
-       !lease_valid() || !stack_valid() ||
+       !stack_valid() ||
        kui_vmu_native_passive_consumer!=config.driver.consumer) fail(0x42u);
     /* Hardware is idle, software-triggered and owns exactly our immutable
      * physical-only chain. Restore MDSTAR before any SD callback or RX store. */
     write_mdstar(state.source);
-#endif
+    completion_frame=*f;
+    if(!persistent_context_guard()) fail(0x43u);
+#else
     if(!boundary(f,1u,state.bytes,&snapshot)) fail(10u);
     if(!chain(snapshot.bank,true) || !lease_valid() || !stack_valid()) fail(11u);
+#endif
     for(unsigned i=0;i<state.descriptors;i++) {
         uint32_t response;
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
@@ -608,20 +641,22 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
         if(!i) state.first_response=response;
         state.last_response=response;
     }
+#if !KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!boundary(f,1u,state.bytes,&snapshot)) fail(13u);
+#endif
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
     /* No consumer can run until this function returns. Revalidate immediately
      * before the overlay's all-or-nothing publication to the proved P2 slots. */
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    if(!persistent_context_guard()) fail(0x43u);
+#else
     if(!lease_valid() || !stack_valid() ||
        kui_vmu_native_passive_consumer!=config.driver.consumer) fail(22u);
-#if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    completion_frame=*f;
-    if(!persistent_storage_guard()) fail(0x43u);
 #endif
     int published=kui_vmu_readonly_overlay_complete(&overlay);
     state.overlay_result=(uint32_t)published;if(published) fail(23u);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    if(durable_card.faulted || !persistent_storage_guard()) fail(24u);
+    if(durable_card.faulted || !persistent_context_guard()) fail(24u);
 #else
     if(card.faulted || card.commit_attempts || !lease_valid() || !stack_valid() ||
        kui_vmu_native_passive_consumer!=config.driver.consumer ||

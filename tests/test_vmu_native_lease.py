@@ -19,6 +19,8 @@ with tempfile.TemporaryDirectory(prefix="kui-native-sci-lease-") as tmp:
         ("fixed4", ["-DKUI_VMU_READONLY_PROOF=4"]),
         ("native", ["-DKUI_VMU_READONLY_PROOF=0", "-DKUI_VMU_NATIVE_PERSISTENT_PROBE=1",
                     "-DKUI_VMU_SD_LEASE_NATIVE_HOST_TEST=1"]),
+        ("native-cached", ["-DKUI_VMU_READONLY_PROOF=0", "-DKUI_VMU_NATIVE_PERSISTENT_PROBE=1",
+                    "-DKUI_VMU_SD_LEASE_NATIVE_HOST_TEST=1", "-DKUI_VMU_NATIVE_CACHED_CODE=1"]),
     ):
         binary = directory / mode
         subprocess.run([

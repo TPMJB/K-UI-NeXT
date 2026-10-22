@@ -40,6 +40,13 @@ static bool discover(const void *data,size_t bytes,uint32_t address,struct kui_v
     if(!result) {struct kui_vmu_native_exit zero={0};CHECK(!memcmp(out,&zero,sizeof(*out)));}
     return result;
 }
+static bool guarded(const void *data,size_t bytes,uint32_t address,
+    const struct kui_vmu_native_patch_window *additional,size_t count,struct kui_vmu_native_exit *out) {
+    memset(out,0xa5,sizeof(*out));
+    bool result=kui_vmu_native_exit_discover_guarded(data,bytes,address,additional,count,out);
+    if(!result) {struct kui_vmu_native_exit zero={0};CHECK(!memcmp(out,&zero,sizeof(*out)));}
+    return result;
+}
 int main(int argc,char **argv) {
     struct kui_vmu_native_exit out;
     fixture();CHECK(discover(image,sizeof(image),load,&out));
@@ -106,6 +113,43 @@ int main(int argc,char **argv) {
     CHECK(!memcmp(before,image,sizeof(image)));
     CHECK(!kui_vmu_native_exit_discover((const void *)(uintptr_t)UINT32_C(0x8c010000),sizeof(image),load,
         (struct kui_vmu_native_exit *)(uintptr_t)UINT32_C(0xac010100)));
+    /* Combined discovery must be equivalent to the old two strict passes,
+     * including cross-window overlaps, aliases, boundary/gap pointers and
+     * caller-only interior targets. Both the image and output stay intact
+     * when a caller aliases its metadata with the result. */
+    for(unsigned a=0;a<3u;a++) for(unsigned target=0x680u;target<=0x6c0u;target++) {
+        fixture();word(image,(load&UINT32_C(0x1fffffff))+target+aliases[a]);
+        struct kui_vmu_native_patch_window extra[]={
+            {load+0x688u,12u},{load+0x6b0u,12u}};
+        bool baseline=discover(image,sizeof(image),load,&out);
+        struct kui_vmu_native_patch_window combined[]={
+            {out.entries[0],12u},{out.entries[1],12u},{out.entries[2],12u},extra[0],extra[1]};
+        baseline=baseline && kui_vmu_native_patch_no_interiors(image,sizeof(image),load,combined,5u);
+        CHECK(guarded(image,sizeof(image),load,extra,2u,&out)==baseline);
+    }
+    fixture();struct kui_vmu_native_patch_window extra[6];
+    for(unsigned i=0;i<6u;i++) extra[i]=(struct kui_vmu_native_patch_window){load+0x600u+i*16u,12u};
+    CHECK(guarded(image,sizeof(image),load,extra,5u,&out));
+    CHECK(!guarded(image,sizeof(image),load,extra,6u,&out));
+    CHECK(!guarded(image,sizeof(image),load,NULL,1u,&out));
+    extra[0]=(struct kui_vmu_native_patch_window){load+pair+10u,12u};
+    CHECK(!guarded(image,sizeof(image),load,extra,1u,&out));
+    extra[0]=(struct kui_vmu_native_patch_window){load+0x600u,11u};
+    CHECK(!guarded(image,sizeof(image),load,extra,1u,&out));
+    fixture();memcpy(before,image,sizeof(image));
+    CHECK(!kui_vmu_native_exit_discover_guarded(image,sizeof(image),load,extra,1u,
+        (struct kui_vmu_native_exit *)(void *)(image+0x100u)));
+    CHECK(!memcmp(before,image,sizeof(image)));
+    memset(&out,0xa5,sizeof(out));struct kui_vmu_native_exit original=out;
+    CHECK(!kui_vmu_native_exit_discover_guarded(image,sizeof(image),load,
+        (const struct kui_vmu_native_patch_window *)(const void *)&out,1u,&out));
+    CHECK(!memcmp(&out,&original,sizeof(out)));
+    CHECK(!kui_vmu_native_exit_discover_guarded(image,sizeof(image),load,
+        (const struct kui_vmu_native_patch_window *)(const void *)&out,6u,&out));
+    CHECK(!memcmp(&out,&original,sizeof(out)));
+    CHECK(!kui_vmu_native_exit_discover_guarded(image,sizeof(image),load,
+        (const struct kui_vmu_native_patch_window *)(uintptr_t)UINT32_C(0x8c020000),1u,
+        (struct kui_vmu_native_exit *)(uintptr_t)UINT32_C(0xac020004)));
     if(argc==2) {
         FILE *f=fopen(argv[1],"rb");CHECK(f);CHECK(!fseek(f,0,SEEK_END));long n=ftell(f);CHECK(n>0);rewind(f);
         unsigned char *actual=malloc((size_t)n);CHECK(actual);CHECK(fread(actual,1,(size_t)n,f)==(size_t)n);fclose(f);
@@ -117,7 +161,19 @@ int main(int argc,char **argv) {
         for(unsigned i=0;i<sizeof(sites)/sizeof(sites[0]);i++) {
             actual[sites[i]]^=1u;CHECK(!discover(actual,(size_t)n,load,&out));actual[sites[i]]^=1u;
         }
-        CHECK(discover(actual,(size_t)n,load,&out));free(actual);
+        CHECK(discover(actual,(size_t)n,load,&out));
+        const struct kui_vmu_native_patch_window actual_extra[]={
+            {UINT32_C(0x8c209868),12u},{UINT32_C(0x8c2b15c8),12u},{UINT32_C(0x8c2b1778),20u}};
+        struct kui_vmu_native_exit ordinary=out;
+        CHECK(guarded(actual,(size_t)n,load,actual_extra,3u,&out));
+        CHECK(!memcmp(&out,&ordinary,sizeof(out)));
+        unsigned char saved[4];memcpy(saved,actual,sizeof(saved));
+        for(unsigned i=0;i<3u;i++) {
+            word(actual,actual_extra[i].begin+2u);
+            CHECK(!guarded(actual,(size_t)n,load,actual_extra,3u,&out));
+            memcpy(actual,saved,sizeof(saved));
+        }
+        CHECK(guarded(actual,(size_t)n,load,actual_extra,3u,&out));free(actual);
     }
     printf("Native exit/exec family: %u checks passed\n",checks);return 0;
 }

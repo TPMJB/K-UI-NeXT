@@ -11,13 +11,16 @@ bool kui_vmu_native_patch_no_interiors(const void *image,size_t bytes,uint32_t l
     if(!image || bytes>0xc00000u || bytes<2u ||
        bytes>UINTPTR_MAX-(uintptr_t)image || !ram(load,(uint32_t)bytes) ||
        !windows || !count || count>8u || (load&1u)) return false;
+    uint32_t begins[8],ends[8],first=UINT32_MAX,last=0u;
     for(size_t i=0;i<count;i++) {
         uint32_t begin=windows[i].begin,span=windows[i].bytes;
         if(!ram(begin,span) || ((begin|span)&1u) || span<2u ||
            physical(begin)<physical(load) || physical(begin)-physical(load)>bytes ||
            span>bytes-(physical(begin)-physical(load))) return false;
-        for(size_t j=0;j<i;j++) if(physical(begin)<physical(windows[j].begin)+windows[j].bytes &&
-           physical(windows[j].begin)<physical(begin)+span) return false;
+        begins[i]=physical(begin);ends[i]=begins[i]+span;
+        for(size_t j=0;j<i;j++) if(begins[i]<ends[j] && begins[j]<ends[i]) return false;
+        if(begins[i]<first) first=begins[i];
+        if(ends[i]>last) last=ends[i];
     }
     const uint8_t *data=image;
     for(uint32_t at=0;at+2u<=bytes;at+=2u) {
@@ -31,14 +34,20 @@ bool kui_vmu_native_patch_no_interiors(const void *image,size_t bytes,uint32_t l
             displacement=(int32_t)(op&0xffu);if(displacement&0x80) displacement-=0x100;
             branch=true;
         }
-        uint32_t target=physical(load+at+4u+(uint32_t)(displacement*2));
-        for(size_t i=0;branch && i<count;i++) if(target>physical(windows[i].begin) &&
-           target<physical(windows[i].begin)+windows[i].bytes) return false;
+        /* The admitted windows are usually clustered in a small SDK region.
+         * Most executable/data halfwords cannot reach it. Do not reread and
+         * normalize every window for each unrelated branch or RAM literal. */
+        uint32_t target;
+        if(branch) {
+            target=physical(load+at+4u+(uint32_t)(displacement*2));
+            if(target>first && target<last)
+                for(size_t i=0;i<count;i++) if(target>begins[i] && target<ends[i]) return false;
+        }
         if(!((load+at)&3u) && at+4u<=bytes) {
             uint32_t pointer=op|(uint32_t)data[at+2u]<<16|(uint32_t)data[at+3u]<<24;
             target=physical(pointer);
-            for(size_t i=0;ram(pointer,1u) && i<count;i++) if(target>physical(windows[i].begin) &&
-               target<physical(windows[i].begin)+windows[i].bytes) return false;
+            if(target>first && target<last && ram(pointer,1u))
+                for(size_t i=0;i<count;i++) if(target>begins[i] && target<ends[i]) return false;
         }
     }
     return true;

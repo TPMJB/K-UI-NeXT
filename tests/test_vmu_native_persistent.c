@@ -17,6 +17,8 @@
 static uint8_t memory[0x1000000u];
 static uint32_t mmio[4];
 static unsigned used,bus_reads,fail_read,checks;
+static unsigned measured_submit_reads,measured_complete_reads;
+static unsigned corrupt_before_loan,corrupt_after_loan;
 static uint32_t live_sr=0xf0u,live_sp=0xac71ff00u,bad_guard;
 static jmp_buf terminal;static unsigned terminal_phase,terminal_error;
 uint32_t kui_vmu_native_passive_resume,kui_vmu_native_passive_consumer;
@@ -36,6 +38,14 @@ static void put(uint32_t a,unsigned width,uint32_t v) {
     int i=mmio_index(a);CHECK(i>=0 && width==4u);mmio[i]=v;
 }
 bool kui_vmu_native_passive_test_read(uint32_t a,unsigned width,uint32_t *v) {
+    /* The first ownership read after a request has staged an SD operation
+     * models a changed guest witness immediately before external acquisition. */
+    if(corrupt_before_loan && durable_card.inflight && !durable_card.invoked) {
+        unsigned which=corrupt_before_loan;corrupt_before_loan=0u;
+        uint32_t target=which==1u?config.lease.header+4u:
+            which==2u?config.layout.input_array:which==3u?state.source+12u:config.driver.submit;
+        put(target,4u,0u);
+    }
     ++bus_reads;if(fail_read && bus_reads==fail_read) return false;
     if(ram(a,width,width)) {*v=0u;memcpy(v,memory+physical(a)-0x0c000000u,width);return true;}
     int i=mmio_index(a);if(i<0 || width!=4u) return false;*v=mmio[i];return true;
@@ -161,12 +171,16 @@ static void physical_complete(void) {
 }
 static void arm(void) {CHECK(kui_vmu_native_passive_arm(&input,NULL)==0);}
 static void submit(void) {
-    if(setjmp(terminal)==0) {kui_vmu_native_passive_submit(&frame);CHECK(state.pending && state.submitted==state.completed+1u);return;}
+    unsigned before=bus_reads;
+    if(setjmp(terminal)==0) {kui_vmu_native_passive_submit(&frame);measured_submit_reads=bus_reads-before;
+        CHECK(state.pending && state.submitted==state.completed+1u);return;}
     fprintf(stderr,"Unexpected persistent submission refusal %u: %08x/%08x/%08x\n",terminal_error,state.overlay_result,state.fault_at,state.runtime_result);
     CHECK(false);
 }
 static void complete_return(void) {
-    if(setjmp(terminal)==0) {kui_vmu_native_passive_complete(&frame);CHECK(!state.pending && state.submitted==state.completed);return;}
+    unsigned before=bus_reads;
+    if(setjmp(terminal)==0) {kui_vmu_native_passive_complete(&frame);measured_complete_reads=bus_reads-before;
+        CHECK(!state.pending && state.submitted==state.completed);return;}
     fprintf(stderr,"Unexpected persistent completion refusal %u: %08x/%08x/%08x\n",terminal_error,state.overlay_result,state.fault_at,state.runtime_result);
     CHECK(false);
 }
@@ -211,6 +225,12 @@ int kui_vmu_native_persistent_test_lease(kui_vmu_sd_transaction callback,void *c
     CHECK(!memcmp(before,rx_bytes(1),sizeof(before)));
     release_saw_unpublished=true;release(&sd);leave(&sd);
     if(result || !loan.ready || !sd.health) {model_card.ready=false;return KUI_VMU_SD_LEASE_FAULT;}
+    if(corrupt_after_loan) {
+        unsigned which=corrupt_after_loan;corrupt_after_loan=0u;
+        uint32_t target=which==1u?config.lease.header+4u:
+            which==2u?config.layout.input_array:which==3u?state.source+12u:config.driver.submit;
+        put(target,4u,0u);
+    }
     return KUI_VMU_SD_LEASE_OK;
 }
 static void prepare_handoff(void) {
@@ -231,7 +251,8 @@ static void prepare_handoff(void) {
 }
 static void cold_worker(void) {
     fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
-    lease_calls=block_callbacks=0u;release_saw_unpublished=false;arm();
+    lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
+    release_saw_unpublished=false;arm();
     const uint32_t entries[]={input.driver.submit,input.lease.owner.release,
         input.lease.owner.initializer,input.exits.entries[0],input.exits.entries[1],input.exits.entries[2]};
     for(unsigned i=0;i<sizeof(entries)/sizeof(entries[0]);i++) {
@@ -317,6 +338,47 @@ static void recover_checkpoint(void) {
     CHECK(!sd.owned && !sd.locked && !sd.selected);
     cold_worker();
 }
+static unsigned full_work(void) {
+    return measured_work.heap+measured_work.layout+measured_work.runtime+
+        measured_work.chain+measured_work.hooks;
+}
+static unsigned measure_batch(unsigned cmd,unsigned phase,const uint8_t *payload) {
+    memset(&measured_work,0,sizeof(measured_work));
+    transfer_batch(cmd,cmd==10u?0u:42u,phase,payload);
+    return measured_submit_reads+measured_complete_reads;
+}
+static void bounded_controller_work(void) {
+    setup();unsigned controller=measure_batch(0u,0u,NULL);
+    CHECK(controller<=512u && full_work()<=12u && !measured_work.storage && !lease_calls);
+    unsigned info=measure_batch(1u,0u,NULL);
+    CHECK(info<=512u && full_work()<=12u && !measured_work.storage);
+    unsigned read=measure_batch(11u,0u,NULL);
+    CHECK(read<=1024u && full_work()<=24u && measured_work.storage==2u && lease_calls==1u);
+    /* A valid fragmented free-list used to multiply every redundant proof.
+     * All ranges remain below the still-owned worker chunk. */
+    for(unsigned i=0;i<64u;i++) {
+        uint32_t node=input.lease.begin+i*64u;
+        put(node,4u,i==63u?input.lease.owner.sentinel:node+64u);put(node+4u,4u,1u);
+    }
+    unsigned fragmented=measure_batch(0u,0u,NULL);
+    CHECK(fragmented<=800u && full_work()<=12u && !measured_work.storage);
+    printf("Native worker guest reads/pair: controller=%u INFO=%u READ=%u fragmented64=%u\n",
+        controller,info,read,fragmented);
+}
+static void external_boundary_mutations(void) {
+    uint8_t next[512],before[1024];memset(next,0x73,sizeof(next));
+    for(unsigned write=0;write<2u;write++) for(unsigned after=0;after<2u;after++)
+        for(unsigned which=1u;which<=4u;which++) {
+            setup();if(write) stage_block(42u,next);
+            begin_batch(write?13u:11u,42u,write?4u:0u,NULL);physical_complete();
+            memcpy(before,rx_bytes(1),sizeof(before));
+            if(after) corrupt_after_loan=which;else corrupt_before_loan=which;
+            reject_complete();
+            CHECK(!memcmp(before,rx_bytes(1),sizeof(before)) && !durable_card.commits);
+            if(after) CHECK(lease_calls==1u && sd.bytes && durable_card.faulted);
+            else CHECK(!lease_calls && !sd.bytes && !sd.writes && durable_card.faulted);
+        }
+}
 int main(void) {
     uint8_t next[512],old[512],parent[1024],target[1024],other[1024];
     memset(next,0x73,sizeof(next));memset(old,0x59,sizeof(old));
@@ -376,6 +438,7 @@ int main(void) {
     memcpy(target,rx_bytes(1),sizeof(target));reject_complete();
     CHECK(!durable_card.commits && durable_card.faulted && !memcmp(target,rx_bytes(1),sizeof(target)));
     CHECK(!memcmp(sd.media[image_lba(42u)],next,512u));
+    bounded_controller_work();external_boundary_mutations();
     printf("Native persistent bridge: %u checks passed; filtered hardware chain, PIO save, reboot recovery and no false ACK\n",checks);
     return 0;
 }

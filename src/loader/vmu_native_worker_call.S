@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Stage-only call gateway; never copied into the worker or a game hook.
- * int call(entry_p2,stack_top_p2,config,result) invokes int entry(config,result).
+ * int call(entry,stack_top_p2,config,result) invokes int entry(config,result).
  * The caller proves memory ownership and the exact relocated exports first.
  * All compiled worker/stage C uses the fixed no-FPU register policy. Neither
  * gateway nor worker may modify floating-point state. */
@@ -94,7 +94,12 @@ C(kui_vmu_native_worker_call):
     nop
     .align 2
 .Larea_mask: .long 0xff000000
-.Lram_p2: .long 0xac000000
+.Lram_p2:
+#if KUI_VMU_NATIVE_CACHED_CODE
+    .long 0x8c000000
+#else
+    .long 0xac000000
+#endif
 .Lstack_min: .long 0xac001000
 .Lram_end: .long 0xad000000
     .size C(kui_vmu_native_worker_call),.-C(kui_vmu_native_worker_call)

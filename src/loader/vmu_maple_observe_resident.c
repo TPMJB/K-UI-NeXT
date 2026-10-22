@@ -74,7 +74,8 @@ static void observe_display_restore(const struct retail_display_state *state) {
 /* NATIVE_RESIDENT_GUARDS_BEGIN
  * Pure admission predicates are also compiled by the host adversarial test.
  * The low control retains physical payload addresses; all worker entries and
- * its end use P2. No temporary-stage pointer is a valid runtime dependency. */
+ * mutable end use P2. The cached build admits P1 code only; legacy workers
+ * execute from P2. No temporary-stage pointer is a runtime dependency. */
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #define NATIVE_RESIDENT_WORKER_BYTES UINT32_C(0x20000)
 #define NATIVE_RESIDENT_HEADER_BYTES 80u
@@ -121,8 +122,14 @@ static bool native_resident_terminal(const volatile struct kui_vmu_observe_boot_
 #endif
        !native_resident_lease(c,&begin,&end)) return false;
     (void)begin;(void)end;
+#if KUI_VMU_NATIVE_CACHED_CODE
+    uint32_t worker=c->lease|UINT32_C(0x80000000);
+    const uint32_t end_bias=UINT32_C(0x20000000)+NATIVE_RESIDENT_WORKER_BYTES;
+#else
     uint32_t worker=c->lease|UINT32_C(0xa0000000);
-    return c->worker_end==worker+NATIVE_RESIDENT_WORKER_BYTES && !(terminal&1u) &&
+    const uint32_t end_bias=NATIVE_RESIDENT_WORKER_BYTES;
+#endif
+    return c->worker_end==worker+end_bias && !(terminal&1u) &&
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
         terminal-worker-NATIVE_RESIDENT_HEADER_BYTES<NATIVE_RESIDENT_WORKER_BYTES-NATIVE_RESIDENT_HEADER_BYTES;
 #else
@@ -132,10 +139,15 @@ static bool native_resident_terminal(const volatile struct kui_vmu_observe_boot_
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 /* The stage publishes one typed relocated callback after arming. The pure
  * low guard verifies its exact pin plus the complete runtime control shape;
- * no temporary-stage or physical/P1 callback is a valid dependency. */
+ * the code alias must match this build; no stage pointer is valid. */
 static bool native_resident_transaction(const volatile struct kui_vmu_observe_boot_control *c,
     uintptr_t target) {
-    uint32_t worker=c->lease|UINT32_C(0xa0000000);
+    uint32_t worker=c->lease|
+#if KUI_VMU_NATIVE_CACHED_CODE
+        UINT32_C(0x80000000);
+#else
+        UINT32_C(0xa0000000);
+#endif
     return native_resident_terminal(c) && target==c->sd_transaction && !(target&1u) &&
         (uint32_t)target-worker-NATIVE_RESIDENT_HEADER_BYTES<NATIVE_RESIDENT_WORKER_BYTES-NATIVE_RESIDENT_HEADER_BYTES;
 }

@@ -332,3 +332,78 @@ Use a fresh build directory after the final commit. The generic package has
 an intentionally non-owner CI profile; run its personalizer before console
 testing. Console success is a save that survives full power-off and loads on
 the next launch. Record the owner result and build ID before broadening gates.
+
+## Native persistence hardware pass and performance correction
+
+The owner tested `d503f1aa423d` with prepared pair `p0005`: Power Stone 2
+saved and loaded correctly, including a full power-off and reboot. Startup
+took roughly five minutes, the FMV crawled, and actual gameplay was very slow.
+Persistence is hardware-proven for that test; acceptable performance is not.
+
+Production-C instrumentation found that a controller-only Maple pair performed
+1,268 guest/MMIO reads, ten complete heap walks, five layout binds, eight
+runtime checks, seven TX parses and five hook checks. Sixty pairs per second
+would repeat 600 heap walks even with no SD request. A valid 64-node free list
+raised the pair to 2,528 reads. Every instruction also ran through uncached P2.
+
+The persistent worker now makes one complete submission proof and one complete
+completion proof. Reviewed private RAM operations within each uninterrupted
+IMASK15 call use compact live context/MMIO checks. Each external SCI loan keeps
+a complete proof immediately before acquisition and after restoration; failed
+proofs cannot publish the virtual reply or final save ACK. Heap reset/free,
+exit, exact hook, original TX and filtered DMA lifetime protections remain.
+Controller-only reads fall to 450, block reads from 2,094 to 880, and the
+64-node controller fixture to 702. These are host callback counts, not console
+speed claims. The integration suite passes 1,192,894 sanitizer checks,
+including pre-acquisition and post-restoration heap/layout/TX/hook mutations.
+
+`Makefile.vmu-native-performance` is a separate persistent build. Its mixed
+linker layout retains the immutable 80-byte P2 export header, puts instructions
+and constants in P1, and keeps every mutable object, DMA buffer and stack in
+P2. The immutable/mutable boundary is cache-line aligned. Exact physical
+PT_LOAD coverage, flat-image bytes, pointer aliases and all relocation records
+are audited. The stage purges the owned lease before P2 relocation and publishes
+instructions before the first P1 call; mutable aliases are never changed.
+Low terminal/SCI admission accepts only this build's canonical P1 code targets
+while retaining the P2 worker end and protecting the whole 192KiB allocation.
+
+Startup also removes a duplicate full executable patch-target pass while
+retaining all six guarded windows. The performance-only temporary relay enables
+instruction caching after the existing full-RAM publication and keeps data
+caching disabled. Its P2 return restores the owner's saved CCR mode bits.
+The separate startup profiling tools document scan CPU and preparation I/O;
+fresh filesystem ownership, recovery, checkpoint and post-checkpoint image
+verification are unchanged. See `vmu-native-startup-performance.md`.
+
+An upstream SWAT/DreamShell comparison was read-only. At pinned commit
+`f3cb6cd8f11cece3461244e2b6c92f1c539983ab`, its Maple implementation uses the
+VBR/ASIC DMA-completion interrupt path and hardware DMA source, with a bounded
+descriptor walk. Optional allocator discovery keeps a signature result. That
+path avoids K-UI's repeated per-poll ownership/layout proofs and runs normal
+loader code through P1. No upstream implementation was imported by this work.
+
+Build and audit after committing, using a fresh directory:
+
+```sh
+export PATH="$PWD/.deps/sh-elf/bin:$PATH"
+make -f Makefile.vmu-native-performance BUILD=build/native-performance-release -j4 all
+make -f Makefile.vmu-native-performance BUILD=build/native-performance-release persistent-host-tests passive-host-tests STARTUP=/path/to/1ST_READ.BIN
+python3 tools/check_vmu_native_persistent.py build/native-performance-release --self-test
+python3 tools/package_vmu_native_persistent.py build/native-performance-release
+```
+
+Install the performance ZIP with its `personalize.py` and the same explicit
+p0005 profile. The next console acceptance test compares startup, FMV and
+gameplay with baseline, then reconfirms the existing save and reboot/load.
+CDDA, SCIF backing and broad frontend routing have not been opened.
+
+Final linked performance audit: 29,920 initialized worker bytes, 452 exact
+relocations and three disjoint physical loads. Models pass 7,680 worker gateway,
+1,288 stage-call and 5,120 relay/cache cases; 17 gateway, eight relay and four
+artifact mutations are rejected. A 448-node linked installer flow proof checks
+that relocation, zero-fill and callback-cell initialization precede instruction
+publication, which precedes the first worker entry. Stack bounds are 1,568 of
+4,096 worker bytes and 1,228 of 1,232 guarded ordinary GD bytes. The legacy
+persistent audit also passes with its original cache policy. Read-only and
+passive regressions pass 1,966 and 605 checks respectively; the new exit guard
+passes 595 checks with the real executable and the patch guard passes 1,143.

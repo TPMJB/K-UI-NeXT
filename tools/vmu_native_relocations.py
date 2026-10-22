@@ -13,6 +13,7 @@ import struct
 import zlib
 
 EH = struct.Struct("<16sHHIIIIIHHHHHH")
+PH = struct.Struct("<IIIIIIII")
 SH = struct.Struct("<IIIIIIIIII")
 SYM = struct.Struct("<IIIBBH")
 REL = struct.Struct("<II")
@@ -39,6 +40,71 @@ def inside(address, base, span, endpoint=False):
     except ValueError:
         return False
     return 0 <= offset <= span if endpoint else 0 <= offset < span
+
+
+def validate_loads(data, binary, link_base, span_bytes, sections=None):
+    """Bind virtual aliases to nonoverlapping physical loads and flat bytes.
+
+    Production ELFs have program headers; the tiny section-only extractor
+    fixtures intentionally do not. No virtual-address subtraction is used
+    for the flat image: mixed cached/uncached loads share one physical span.
+    """
+    header = EH.unpack(region(data, 0, EH.size))
+    if not header[10]:
+        return []
+    if header[9] != PH.size or not 0 < header[10] <= 32:
+        raise ValueError("malformed worker program headers")
+    if sections is None:
+        sections = [SH.unpack(region(data, header[6] + i * SH.size, SH.size))
+                    for i in range(header[12])]
+    loads = []
+    start = physical(link_base)
+    for i in range(header[10]):
+        kind, offset, va, pa, size, memory, flags, alignment = PH.unpack(
+            region(data, header[5] + i * PH.size, PH.size))
+        if kind != 1:
+            continue
+        first = physical(pa)
+        if (not memory or size > memory or first != physical(va) or first < start or
+                memory > span_bytes - (first - start) or first - start > span_bytes or
+                size > len(binary) - (first - start) or first - start > len(binary) or
+                flags & ~7 or not flags & 4 or alignment and alignment & (alignment - 1)):
+            raise ValueError("invalid worker physical load span")
+        payload = region(data, offset, size)
+        if payload != binary[first - start:first - start + size]:
+            raise ValueError("worker PT_LOAD bytes differ from flat physical image")
+        loads.append(dict(offset=offset, virtual=va, physical=pa, first=first,
+                          bytes=size, memory=memory, flags=flags, alignment=alignment))
+    if not loads:
+        raise ValueError("worker program headers omit load segments")
+    loads.sort(key=lambda load: load["first"])
+    end = start
+    for load in loads:
+        if load["first"] < end:
+            raise ValueError("worker PT_LOAD physical ranges overlap")
+        gap_end = min(load["first"] - start, len(binary))
+        if any(binary[min(end - start, len(binary)):gap_end]):
+            raise ValueError("flat worker has nonzero bytes between physical loads")
+        end = load["first"] + load["memory"]
+    if loads[0]["first"] != start or end != start + span_bytes:
+        raise ValueError("worker physical loads do not bind exact allocation endpoints")
+    if max(load["first"] - start + load["bytes"] for load in loads) != len(binary):
+        raise ValueError("flat worker tail differs from physical initialized loads")
+    for section in sections:
+        if not section[2] & 2 or not section[5]:
+            continue
+        first, size = physical(section[3]), section[5]
+        owners = [load for load in loads if load["virtual"] <= section[3] and
+                  section[3] + size <= load["virtual"] + load["memory"] and
+                  load["first"] <= first and first + size <= load["first"] + load["memory"]]
+        if len(owners) != 1:
+            raise ValueError("allocated worker section lacks unique alias-matched PT_LOAD")
+        load = owners[0]
+        if (section[2] & 1 and not load["flags"] & 2 or
+                section[2] & 4 and not load["flags"] & 1 or
+                section[1] == 1 and first + size > load["first"] + load["bytes"]):
+            raise ValueError("worker section permissions/bytes disagree with its PT_LOAD")
+    return loads
 
 
 def generate(data, binary, link_base=0x8CFD0000, span_bytes=None):
@@ -87,6 +153,7 @@ def generate(data, binary, link_base=0x8CFD0000, span_bytes=None):
             not 0 < span_bytes <= MAX_SPAN or span_bytes & 31 or
             span_bytes > 0x8D000000 - link_base or not 0 < len(binary) <= span_bytes):
         raise ValueError("invalid worker binary or linked RAM span")
+    validate_loads(data, binary, link_base, span_bytes, sections)
     covered = bytearray(len(binary))
     occupied = bytearray(span_bytes)
     for section in sections:
@@ -216,6 +283,50 @@ def self_test():
     changed[chunks[2][0] + SYM.size + 12] = 0x10
     changed[chunks[2][0] + 2 * SYM.size + 12] = 0x10
     refused(changed, binary)
+    # A mixed-alias production-style flat image: immutable P2 header,
+    # cached P1 code, uncached P2 initialized/BSS state. The extractor must
+    # reason about physical adjacency rather than the large VMA alias gaps.
+    mixed_binary = bytes([0x31] * 128)
+    payload_offset = EH.size + 3 * PH.size
+    mixed = bytearray(payload_offset) + bytearray(mixed_binary)
+    EH.pack_into(mixed, 0, b"\x7fELF\x01\x01\x01" + b"\0" * 9, 2, 42, 1,
+                 base + 32, EH.size, 0, 0, EH.size, PH.size, 3, SH.size, 0, 0)
+    headers = [(1, payload_offset, base + 0x20000000, base, 32, 32, 4, 4),
+               (1, payload_offset + 32, base + 32, base + 32, 64, 64, 5, 4),
+               (1, payload_offset + 96, base + 0x20000000 + 96, base + 96, 32, 160, 6, 4)]
+    for i, program in enumerate(headers): PH.pack_into(mixed, EH.size + i * PH.size, *program)
+    allocated = [(0, 1, 2, base + 0x20000000, payload_offset, 32, 0, 0, 4, 0),
+                 (0, 1, 6, base + 32, payload_offset + 32, 64, 0, 0, 4, 0),
+                 (0, 1, 3, base + 0x20000000 + 96, payload_offset + 96, 32, 0, 0, 4, 0),
+                 (0, 8, 3, base + 0x20000000 + 128, 0, 128, 0, 0, 4, 0)]
+    assert len(validate_loads(mixed, mixed_binary, base, 256, allocated)) == 3
+    checks += 1
+    def load_refused(changed, blob=mixed_binary, sections=allocated):
+        nonlocal checks
+        try:
+            validate_loads(changed, blob, base, 256, sections)
+        except ValueError:
+            checks += 1
+        else:
+            raise AssertionError("bad mixed worker physical loads accepted")
+    changed = bytearray(mixed)
+    struct.pack_into("<I", changed, EH.size + PH.size + 12, base + 36)
+    load_refused(changed)  # VMA/LMA physical addresses differ.
+    changed = bytearray(mixed)
+    struct.pack_into("<I", changed, EH.size + 2 * PH.size + 8, base + 0x20000000 + 64)
+    struct.pack_into("<I", changed, EH.size + 2 * PH.size + 12, base + 64)
+    load_refused(changed)  # Aliases overlap the cached code physically.
+    changed = bytearray(mixed)
+    struct.pack_into("<I", changed, EH.size + 2 * PH.size + 24, 4)
+    load_refused(changed)  # Mutable section inside a read-only load.
+    changed = bytearray(mixed)
+    struct.pack_into("<II", changed, EH.size + 16, 24, 24)
+    load_refused(changed)  # Nonzero flat bytes in an unowned physical gap.
+    changed = bytearray(mixed)
+    struct.pack_into("<H", changed, 44, 2)
+    load_refused(changed)  # Missing state load/allocation endpoint.
+    load_refused(mixed, sections=allocated[:2] +
+                 [(0, 1, 3, base + 96, payload_offset + 96, 32, 0, 0, 4, 0)] + allocated[3:])
     print(f"Native relocation ELF extraction: {checks} checks passed")
 
 

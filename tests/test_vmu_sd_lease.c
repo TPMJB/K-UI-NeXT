@@ -19,6 +19,13 @@ static bool acquired,fault,callback_fault,release_fault,loan_not_ready,reenter;
 static unsigned bus_context;
 #ifdef KUI_VMU_SD_LEASE_NATIVE_HOST_TEST
 #include "vmu_native_resident_guards.h"
+#if KUI_VMU_NATIVE_CACHED_CODE
+#define TEST_CODE_ALIAS UINT32_C(0x80000000)
+#define TEST_WRONG_CODE_ALIAS UINT32_C(0xa0000000)
+#else
+#define TEST_CODE_ALIAS UINT32_C(0xa0000000)
+#define TEST_WRONG_CODE_ALIAS UINT32_C(0x80000000)
+#endif
 static int transaction(void *,struct kui_loader_sd *);
 static uintptr_t native_target;
 uintptr_t kui_vmu_sd_lease_test_target(kui_vmu_sd_transaction callback) {
@@ -74,10 +81,10 @@ static void fresh(void) {
     kui_vmu_observe_boot_control=(struct kui_vmu_observe_boot_control){
         .status=KUI_VMU_OBS_BOOT_INSTALLED,.sd_transaction=(uint32_t)(uintptr_t)transaction};
 #ifdef KUI_VMU_SD_LEASE_NATIVE_HOST_TEST
-    native_target=UINT32_C(0xac38a980);
+    native_target=UINT32_C(0x0c38a980)|TEST_CODE_ALIAS;
     kui_vmu_observe_boot_control.lease=UINT32_C(0x0c38a880);
     kui_vmu_observe_boot_control.worker_end=UINT32_C(0xac3aa880);
-    kui_vmu_observe_boot_control.terminal=UINT32_C(0xac38aa80);
+    kui_vmu_observe_boot_control.terminal=UINT32_C(0x0c38aa80)|TEST_CODE_ALIAS;
     kui_vmu_observe_boot_control.sd_transaction=(uint32_t)native_target;
 #endif
     entry_sr=UINT32_C(0x600000f3);kui_retail_hook_active=0;
@@ -153,8 +160,8 @@ static void native_control_and_exact_pin(void) {
         fresh();
         struct kui_vmu_observe_boot_control *c=&kui_vmu_observe_boot_control;
         c->lease=payloads[p];c->worker_end=(payloads[p]|UINT32_C(0xa0000000))+UINT32_C(0x20000);
-        c->terminal=(payloads[p]|UINT32_C(0xa0000000))+UINT32_C(0x200);
-        native_target=(payloads[p]|UINT32_C(0xa0000000))+80u;c->sd_transaction=(uint32_t)native_target;
+        c->terminal=(payloads[p]|TEST_CODE_ALIAS)+UINT32_C(0x200);
+        native_target=(payloads[p]|TEST_CODE_ALIAS)+80u;c->sd_transaction=(uint32_t)native_target;
         assert(native_resident_transaction(c,native_target));
         assert(call()==KUI_VMU_SD_LEASE_OK);
         uint32_t first=payloads[p]-32u,end=payloads[p]+UINT32_C(0x30000);
@@ -182,9 +189,9 @@ static void native_control_and_exact_pin(void) {
         case 7:c->worker_end+=UINT32_C(0x10000);break;
         case 8:c->terminal|=1u;break;
         case 9:c->terminal=UINT32_C(0x8ce00100);break;
-        case 10:native_target=UINT32_C(0x8c38a980);c->sd_transaction=(uint32_t)native_target;break;
+        case 10:native_target=UINT32_C(0x0c38a980)|TEST_WRONG_CODE_ALIAS;c->sd_transaction=(uint32_t)native_target;break;
         case 11:native_target=UINT32_C(0x0c38a980);c->sd_transaction=(uint32_t)native_target;break;
-        case 12:native_target=UINT32_C(0xac38a880)+78u;c->sd_transaction=(uint32_t)native_target;break;
+        case 12:native_target=(UINT32_C(0x0c38a880)|TEST_CODE_ALIAS)+78u;c->sd_transaction=(uint32_t)native_target;break;
         default:native_target=c->worker_end;c->sd_transaction=(uint32_t)native_target;break;
         }
         assert(call()==KUI_VMU_SD_LEASE_FAULT);no_io();
@@ -202,7 +209,8 @@ static void native_control_and_exact_pin(void) {
         random=random*UINT32_C(1664525)+UINT32_C(1013904223);
         c.lease=UINT32_C(0x0c010020)+(random%UINT32_C(0x7d7ff))*32u;
         uint32_t worker=c.lease|UINT32_C(0xa0000000);
-        c.worker_end=worker+UINT32_C(0x20000);c.terminal=worker+256u;
+        c.worker_end=worker+UINT32_C(0x20000);
+        worker=c.lease|TEST_CODE_ALIAS;c.terminal=worker+256u;
         random=random*UINT32_C(1664525)+UINT32_C(1013904223);
         uintptr_t target=(uintptr_t)worker+(random&UINT32_C(0x3ffff));
         c.sd_transaction=(uint32_t)target;
@@ -210,7 +218,7 @@ static void native_control_and_exact_pin(void) {
         assert(native_resident_transaction(&c,target)==expected);
         c.sd_transaction^=2u;assert(!native_resident_transaction(&c,target));
     }
-    puts("Native SCI lease: exact P2 callback, dynamic128KiB worker/192KiB lease, control mutations and20000 interval cases passed");
+    puts("Native SCI lease: exact code alias callback, dynamic128KiB worker/192KiB lease, control mutations and20000 interval cases passed");
 }
 #endif
 int main(void) {

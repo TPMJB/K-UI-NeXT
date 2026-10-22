@@ -261,7 +261,14 @@ C(kui_retail_game_resume):
     cmp/hs r1,r0
     bf .Lpurge
     mov.l .Lccr,r0
+#if KUI_VMU_NATIVE_CACHED_CODE
+    /* RAM is published above. The high-stage relay is called through P1:
+     * cache its instructions while keeping every mutable RAM access uncached.
+     * The return below still restores the owner's exact enable/mode bits. */
+    mov.l .Lscan_ccr,r1
+#else
     mov.l .Loff,r1
+#endif
     mov.l r1,@r0
     nop
     nop
@@ -326,6 +333,9 @@ C(kui_retail_game_resume):
 .Lram: .long 0x8c000000
 .Lramend: .long KUI_RETAIL_RAM_END
 .Loff: .long 0x00000808
+#if KUI_VMU_NATIVE_CACHED_CODE
+.Lscan_ccr: .long 0x00000908
+#endif
 .Lrelaymain: .long C(kui_retail_stage_relay)
 /* Owner bootstrap2 calls the uncached executable alias. Resume that same
  * alias while the original entry performs its own cache setup. */

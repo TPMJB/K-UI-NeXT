@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Persistent native A1 with cached immutable code and uncached mutable state.
+BUILD ?= build/vmu-native-performance
+NATIVE_LAYOUT := src/loader/vmu_native_performance.ld
+include Makefile.vmu-native-persistent
+override TEST_ZIP := K-UI-Native-Performance-Test.zip
+override TEST_GUIDE := docs/vmu-native-performance-test.md
+FLAGS += -DKUI_VMU_NATIVE_CACHED_CODE=1
+NATIVE_FLAGS += -DKUI_VMU_NATIVE_CACHED_CODE=1

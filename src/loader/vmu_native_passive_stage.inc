@@ -26,6 +26,10 @@ __asm__(".section .text.native_passive_publish,\"ax\"\n.align 2\n"
     "nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop\nrts\nnop\n.align 2\n"
     "5: .long 0xff00001c\n6: .long 0x00000800\n.previous\n");
 static bool passive_entry(uint32_t entry,uint32_t begin,uint32_t bytes) {
+#if KUI_VMU_NATIVE_CACHED_CODE
+    /* begin is the P2 export header; only the P1 alias is executable. */
+    begin-=UINT32_C(0x20000000);
+#endif
     return !(entry&1u) && entry>=begin+sizeof(struct kui_vmu_native_passive_exports) && entry<begin+bytes;
 }
 static struct kui_vmu_native_layout passive_layout;
@@ -55,19 +59,17 @@ static void readonly_patch_entry(uint32_t address,uint32_t target) {
 #endif
 static void native_passive_prepare(void) {
 #if KUI_VMU_NATIVE_READONLY_PROBE
-#if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    if(!kui_vmu_native_exit_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
-       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_exits)) native_report(2u,13u);
-    const struct kui_vmu_native_patch_window windows[6]={{native_driver.submit,12u},
-        {native_heap.initializer,12u},{native_heap.release,20u},
-        {native_exits.entries[0],12u},{native_exits.entries[1],12u},{native_exits.entries[2],12u}};
-#else
     const struct kui_vmu_native_patch_window windows[3]={{native_driver.submit,12u},
         {native_heap.initializer,12u},{native_heap.release,20u}};
-#endif
-    if(((native_heap.initializer|native_heap.release)&3u) || !readonly_release_replay_valid() ||
-       !kui_vmu_native_patch_no_interiors((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+    if(((native_heap.initializer|native_heap.release)&3u) || !readonly_release_replay_valid()) native_report(2u,12u);
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    if(!kui_vmu_native_exit_discover_guarded((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,windows,sizeof(windows)/sizeof(windows[0]),
+       &native_exits)) native_report(2u,13u);
+#else
+    if(!kui_vmu_native_patch_no_interiors((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
        exec_bytes,KUI_RETAIL_EXEC_ADDRESS,windows,sizeof(windows)/sizeof(windows[0]))) native_report(2u,12u);
+#endif
     memcpy(readonly_init_window,(const void *)(uintptr_t)native_heap.initializer,sizeof(readonly_init_window));
     memcpy(readonly_release_window,(const void *)(uintptr_t)native_heap.release,sizeof(readonly_release_window));
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
@@ -139,6 +141,12 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
         native_report(8u,3u);
     *(uint32_t *)(uintptr_t)e->resume_cell=native_driver.resume;
     *(uint32_t *)(uintptr_t)e->consumer_cell=native_driver.consumer;
+#if KUI_VMU_NATIVE_CACHED_CODE
+    /* The lease's P1 lines were purged before the P2 copy. Publish the new
+     * instructions once, after relocation and initialization, before entry.
+     * This preserves the game's cache mode; mutable state stays in P2. */
+    kui_native_passive_publish(load,load+bytes);
+#endif
     uint32_t unused=0;
     if(kui_vmu_native_worker_call(e->arm,e->stack_top,
        (const struct kui_vmu_native_worker_config *)(const void *)&cfg,

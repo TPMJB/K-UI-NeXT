@@ -27,6 +27,8 @@ def package(build):
     if git('status','--porcelain'):
         raise ValueError('Commit source changes before packaging')
     report=check(build,self_test=True)
+    cached=report['worker_load_policy']['cached_code']
+    flavor='performance' if cached else 'persistent'
     source=report['source_provenance']
     if source['commit']!=commit or source['source_dirty'] or report['runtime']['build']!=revision:
         raise ValueError('Requires a fresh build from the current clean source commit')
@@ -49,7 +51,7 @@ def package(build):
         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
             template_sha256=sha(template)),
         compatibility_claim='Save/load experiment for the reviewed native SDK family')
-    branch=git('branch','--show-current');bundle=(build/'native-persistent-source.bundle').resolve()
+    branch=git('branch','--show-current');bundle=(build/f'native-{flavor}-source.bundle').resolve()
     subprocess.run(['git','bundle','create',str(bundle),'HEAD',*([branch] if branch else [])],cwd=root,check=True)
     subprocess.run(['git','bundle','verify',str(bundle)],cwd=root,check=True,stdout=subprocess.DEVNULL)
     if git('rev-parse','HEAD')!=commit or git('status','--porcelain'):
@@ -60,14 +62,14 @@ def package(build):
         'personalize.py':(root/'tools/personalize_vmu_native_persistent.py').read_bytes(),
         'tools/runtime_package.py':(root/'tools/runtime_package.py').read_bytes(),
         'tools/vmu_persist_profile.py':(root/'tools/vmu_persist_profile.py').read_bytes(),
-        'README-FIRST.md':(root/'docs/vmu-native-persistent-test.md').read_bytes(),
+        'README-FIRST.md':(root/f'docs/vmu-native-{flavor}-test.md').read_bytes(),
         'probe-report.json':(json.dumps(report,indent=2)+'\n').encode(),
         'LICENSE':(root/'LICENSE').read_bytes(),
         'THIRD_PARTY.md':(root/'THIRD_PARTY.md').read_bytes(),
-        f'source/K-UI-native-persistent-{revision}.bundle':bundle.read_bytes(),
+        f'source/K-UI-native-{flavor}-{revision}.bundle':bundle.read_bytes(),
     }
     files['SHA256SUMS.txt']=''.join(sha(data)+'  '+name+'\n' for name,data in sorted(files.items())).encode()
-    output=build/'K-UI-Native-Persistent-Test.zip'
+    output=build/('K-UI-Native-Performance-Test.zip' if cached else 'K-UI-Native-Persistent-Test.zip')
     with zipfile.ZipFile(output,'w',compression=zipfile.ZIP_DEFLATED) as archive:
         for name,data in files.items():archive.writestr(name,data)
     with zipfile.ZipFile(output) as archive:
