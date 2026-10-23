@@ -55,8 +55,10 @@
     "compiled_prepared_mutation_rejections": 133
   },
   "hardware_status": {
-    "candidate_executed": false,
+    "candidate_executed": true,
+    "candidate_build": "1b5d9eb6e924",
+    "console_result": "User reports a freeze as the MPEG Sofdec screen disappears; SD activity stops. The mixed-port correction did not resolve it.",
     "freeze_fix_established": false,
-    "remaining_question": "Does lower ordinary polling latency resolve the hardware video synchronization stall? PROFILE can measure the candidate paths if needed."
+    "remaining_question": "The failure is not yet localized by a current CPU exception or phase capture. Linked C replay and private-memory cost measurements are required before another candidate."
   }
 }

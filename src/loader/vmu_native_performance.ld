@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Same physical 128KiB lease. Immutable instructions/constants use P1;
- * exports, mutable data, DMA state and stack retain their P2 aliases. */
+ * exports, persistent mutable data and DMA state retain P2. The owned stack
+ * is reserved/exported in P2 for cold arm; runtime ephemeral frames use P1. */
 OUTPUT_FORMAT("elf32-shl")
 OUTPUT_ARCH(sh)
 ENTRY(_kui_vmu_native_passive_arm)

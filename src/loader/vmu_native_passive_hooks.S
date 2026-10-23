@@ -4,6 +4,14 @@
 #define JOIN_I(a,b) a##b
 #define JOIN(a,b) JOIN_I(a,b)
 #define C(name) JOIN(__USER_LABEL_PREFIX__,name)
+#if KUI_VMU_NATIVE_CACHED_CODE
+/* The reservation/export symbols retain P2. Every runtime C entry shares
+ * one P1 stack alias, including failure-only entries: stale dirty P1 frames
+ * must never be allowed to overwrite a later live P2 diagnostic frame. */
+#define RUNTIME_STACK_TOP (__vmu_native_worker_stack_top-0x20000000)
+#else
+#define RUNTIME_STACK_TOP __vmu_native_worker_stack_top
+#endif
     .text
     .align 2
     .global C(kui_vmu_native_passive_submit_hook)
@@ -78,7 +86,7 @@ C(kui_vmu_native_passive_submit_hook):
     jmp @r2
     mov.l @r15+,r2
     .align 2
-.Lsubmit_stack: .long __vmu_native_worker_stack_top
+.Lsubmit_stack: .long RUNTIME_STACK_TOP
 .Lsubmit_visit: .long C(kui_vmu_native_passive_submit)
 .Lregister_offset: .long 0x10f4
 .Lpending_offset: .long 0x0fd8
@@ -162,7 +170,7 @@ C(kui_vmu_native_passive_complete_hook):
     nop
 #endif
     .align 2
-.Lcomplete_stack: .long __vmu_native_worker_stack_top
+.Lcomplete_stack: .long RUNTIME_STACK_TOP
 .Lcomplete_visit: .long C(kui_vmu_native_passive_complete)
 #if KUI_VMU_NATIVE_READONLY_PROBE
 .Lcomplete_consumer_cell: .long C(kui_vmu_native_passive_consumer)
@@ -261,7 +269,7 @@ C(kui_vmu_native_readonly_release_hook):
     jmp @r2
     mov.l @r15+,r2
     .align 2
-.Lrelease_stack: .long __vmu_native_worker_stack_top
+.Lrelease_stack: .long RUNTIME_STACK_TOP
 .Lrelease_check: .long C(kui_vmu_native_readonly_release_check)
 .Lrelease_mask: .long 0xffffff0f
 .Lrelease_resume_cell: .long C(kui_vmu_native_readonly_release_resume)
@@ -280,7 +288,7 @@ C(kui_vmu_native_passive_terminal):
     jmp @r0
     nop
     .align 2
-.Lterminal_stack: .long __vmu_native_worker_stack_top
+.Lterminal_stack: .long RUNTIME_STACK_TOP
 .Lterminal_report: .long C(kui_vmu_native_passive_report)
     .size C(kui_vmu_native_passive_terminal),.-C(kui_vmu_native_passive_terminal)
 
@@ -299,7 +307,7 @@ C(kui_vmu_native_runtime_fault_hook):
     jmp @r0
     nop
     .align 2
-.Lruntime_fault_stack: .long __vmu_native_worker_stack_top
+.Lruntime_fault_stack: .long RUNTIME_STACK_TOP
 .Lruntime_fault_report: .long C(kui_vmu_native_runtime_fault)
     .size C(kui_vmu_native_runtime_fault_hook),.-C(kui_vmu_native_runtime_fault_hook)
 

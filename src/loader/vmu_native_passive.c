@@ -17,6 +17,7 @@ extern uint32_t kui_vmu_native_readonly_release_resume;
 #include "kui/vmu_native_profile.h"
 #include "kui/vmu_volatile_chain.h"
 #include "kui/vmu_native_trace.h"
+#include "vmu_native_fault_capture.h"
 #include "sd_reader.h"
 #define WORKER_SPAN UINT32_C(0x20000)
 #define PAIR_LIMIT 180000u
@@ -111,7 +112,7 @@ static struct kui_vmu_readonly_overlay_frame overlay_frames[KUI_VMU_READONLY_OVE
 extern bool kui_vmu_native_passive_test_read(uint32_t,unsigned,uint32_t *);
 extern uint32_t kui_vmu_native_passive_test_sr(void);
 extern uint32_t kui_vmu_native_passive_test_sp(void);
-extern uint32_t kui_vmu_native_passive_test_guard(unsigned);
+extern uint32_t kui_vmu_native_passive_test_guard(uint32_t,unsigned);
 extern void kui_vmu_native_passive_test_terminal(uint32_t,uint32_t) __attribute__((noreturn));
 #ifndef KUI_VMU_NATIVE_TEST_SELF_ADDRESS
 #define KUI_VMU_NATIVE_TEST_SELF_ADDRESS UINT32_C(0xac700000)
@@ -121,7 +122,6 @@ extern void kui_vmu_native_passive_test_terminal(uint32_t,uint32_t) __attribute_
 #define STACK_HIGH (SELF_ADDRESS+WORKER_SPAN)
 static uint32_t current_sr(void) {return kui_vmu_native_passive_test_sr();}
 static uint32_t current_sp(void) {return kui_vmu_native_passive_test_sp();}
-static uint32_t guard(unsigned i) {return kui_vmu_native_passive_test_guard(i);}
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
 extern uint8_t *kui_vmu_native_passive_test_rx(uint32_t,unsigned);
 #endif
@@ -131,16 +131,41 @@ extern uint8_t *kui_vmu_native_passive_test_rx(uint32_t,unsigned);
 #define STACK_HIGH ((uint32_t)(uintptr_t)stack_top)
 static uint32_t current_sr(void) {uint32_t r;__asm__ volatile("stc sr,%0":"=r"(r));return r;}
 static uint32_t current_sp(void) {uint32_t r;__asm__ volatile("mov r15,%0":"=r"(r));return r;}
-static uint32_t guard(unsigned i) {return stack_bottom[i];}
 #endif
+/* Cold arm runs on the stage-admitted P2 stack. After arm, every runtime
+ * gateway uses its P1 alias; private C frames are dead before game code can
+ * change cache mode. Persistent worker state and DMA buffers stay in P2. */
+static uint32_t active_stack_low(void) {
+#if KUI_VMU_NATIVE_CACHED_CODE
+    return STACK_LOW-(state.armed?UINT32_C(0x20000000):0u);
+#else
+    return STACK_LOW;
+#endif
+}
+/* Call only after admitting SP against its exact active-alias bounds. Canary
+ * loads follow that same alias, so a dirty cached overflow cannot be hidden
+ * by sampling the old P2 backing bytes. The bottom256B remain a guard border. */
+static uint32_t guard(uint32_t sp,unsigned i) {
+    uint32_t address=(STACK_LOW&UINT32_C(0x1fffffff))|(sp&UINT32_C(0xe0000000));
+    address+=i*4u;
+#ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+    return kui_vmu_native_passive_test_guard(address,i);
+#else
+    return *(const uint32_t *)(uintptr_t)address;
+#endif
+}
 static uint32_t physical(uint32_t a) {return a&UINT32_C(0x1fffffff);}
-static bool ram(uint32_t a,unsigned bytes,unsigned alignment) {
+static inline __attribute__((always_inline)) bool ram(uint32_t a,unsigned bytes,unsigned alignment) {
     uint32_t area=a&UINT32_C(0xe0000000),p=physical(a);
     return (area==0u || area==UINT32_C(0x80000000) || area==UINT32_C(0xa0000000)) &&
         !(p&(alignment-1u)) && bytes && p>=UINT32_C(0x0c000000) &&
         p<UINT32_C(0x0d000000) && bytes<=UINT32_C(0x0d000000)-p;
 }
-static bool read_value(void *unused,uint32_t a,unsigned width,uint32_t *v) {
+/* Keep the exact address/width admission at every call site. Inlining lets
+ * SH GCC fold literal widths/MMIO addresses without rebuilding a private
+ * stack frame for each individual SDK word. Indirect callbacks retain the
+ * same independently callable checked reader. */
+static inline __attribute__((always_inline)) bool read_value(void *unused,uint32_t a,unsigned width,uint32_t *v) {
     (void)unused;
     if(width!=1u && width!=2u && width!=4u) return false;
     if(!ram(a,width,width) && !(width==4u &&
@@ -170,9 +195,9 @@ static inline __attribute__((always_inline)) bool read_heap_proved(void *unused,
 }
 #endif
 static bool stack_valid(void) {
-    uint32_t sp=current_sp();
-    if(((current_sr()>>4)&15u)!=15u || sp<STACK_LOW+256u || sp>=STACK_HIGH) return false;
-    for(unsigned i=0;i<16u;i++) if(guard(i)!=GUARD) return false;
+    uint32_t sp=current_sp(),low=active_stack_low();
+    if(((current_sr()>>4)&15u)!=15u || sp<low+256u || sp>=low+0x1000u) return false;
+    for(unsigned i=0;i<16u;i++) if(guard(sp,i)!=GUARD) return false;
     return true;
 }
 static bool lease_valid(void) {
@@ -296,6 +321,7 @@ static void diagnostic_report(void) {
     retail_display_values("PHASE ENABLED SAMPLES VALID WAIT WRAP",(uint32_t[5]){
         diagnostic_phase.enabled,diagnostic_phase.sequence,diagnostic_phase.valid,
         diagnostic_phase.waits,diagnostic_phase.wraps},5u);
+    retail_display_hex("OPTIONAL CPU FAULT VECTOR ARMED",kui_vmu_native_fault_capture_state[7]);
     retail_display_line("PHASE CAPTURE IS EXACT EVOLUTION ONLY");
     retail_display_line("WAIT IS VALIDATED INTERRUPTED SDK FRAME");
     retail_display_line("WRAP IS OBSERVED C BODY CROSSING LINE ZERO");
@@ -569,13 +595,16 @@ void kui_vmu_native_runtime_fault(uint32_t kind,uint32_t value,uint32_t context1
     struct retail_display_state display;memcpy(display.regs,config.display,sizeof(display.regs));
     retail_display_restore(&display);
     retail_display_line("NATIVE VMU RUNTIME FAILURE");
-    retail_display_line(kind==1u?"GAME ALLOCATION FAILED":"UNKNOWN RUNTIME FAILURE");
+    bool exception=(kind&UINT32_C(0xffff0000))==UINT32_C(0x00010000);
+    retail_display_line(exception?"CAPTURED CPU EXCEPTION":
+        kind==1u?"GAME ALLOCATION FAILED":"UNKNOWN RUNTIME FAILURE");
     retail_display_hex("PHASE",18u);retail_display_hex("DETAIL",kind);
-    retail_display_values("KIND VALUE CONTEXT1 CONTEXT2",(uint32_t[4]){
-        kind,value,context1,context2},4u);
+    retail_display_values(exception?"EXPEVT SPC SSR TEA":"KIND VALUE CONTEXT1 CONTEXT2",(uint32_t[4]){
+        exception?(kind&UINT32_C(0xffff)):kind,value,context1,context2},4u);
     retail_display_values("LEASE BYTES HEAP BEGIN HEAP BYTES",(uint32_t[4]){
         config.lease.payload,config.lease.lease_bytes,config.lease.begin,config.lease.heap_bytes},4u);
-    retail_display_line("VALUE REQUEST / CONTEXT CALLER SP");
+    retail_display_line(exception?"ACTUAL EXCEPTION STATE / NO SAVE COMMIT":
+        "VALUE REQUEST / CONTEXT CALLER SP");
     retail_display_line("LAUNCH STOPPED - PHOTO THEN POWER OFF");
     for(;;) __asm__ volatile("nop");
 #endif
@@ -668,6 +697,13 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
         memset(&config,0,sizeof(config));return -3;
     }
 #endif
+#endif
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE && !defined(KUI_VMU_NATIVE_PASSIVE_HOST_TEST)
+    /* Optional diagnosis only. NORMAL returns before any hardware access;
+     * unsupported live exception ownership leaves the original vector alone.
+     * All ordinary admission has completed; cold arm still owns its P2 stack. */
+    (void)kui_vmu_native_fault_capture_install(
+        config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE,&config.driver);
 #endif
     state.armed=1u;
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
@@ -884,13 +920,13 @@ static bool transfer_context_valid(const struct kui_vmu_native_passive_frame *f,
     const uint32_t expected[4]={dma,0u,1u,0u};
     unsigned mask=(f->sr>>4)&15u;
     if(!stack_valid()) {
-        uint32_t sr=current_sr(),sp=current_sp();
+        uint32_t sr=current_sr(),sp=current_sp(),low=active_stack_low();
         if(((sr>>4)&15u)!=15u) return context_reject(1u,0u,sr,0xf0u);
-        if(sp<STACK_LOW+256u) return context_reject(2u,sp,sp,STACK_LOW+256u);
-        if(sp>=STACK_HIGH) return context_reject(3u,sp,sp,STACK_HIGH);
+        if(sp<low+256u) return context_reject(2u,sp,sp,low+256u);
+        if(sp>=low+0x1000u) return context_reject(3u,sp,sp,low+0x1000u);
         for(unsigned i=0;i<16u;i++) {
-            uint32_t value=guard(i);
-            if(value!=GUARD) return context_reject(4u,STACK_LOW+i*4u,value,GUARD);
+            uint32_t value=guard(sp,i);
+            if(value!=GUARD) return context_reject(4u,low+i*4u,value,GUARD);
         }
         return context_reject(5u,sp,sr,0xf0u);
     }

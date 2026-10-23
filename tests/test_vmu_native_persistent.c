@@ -60,7 +60,14 @@ uint8_t *kui_vmu_native_passive_test_rx(uint32_t address,unsigned bytes) {
 }
 uint32_t kui_vmu_native_passive_test_sr(void) {return live_sr;}
 uint32_t kui_vmu_native_passive_test_sp(void) {return live_sp;}
-uint32_t kui_vmu_native_passive_test_guard(unsigned i) {return i+1u==bad_guard?0u:GUARD;}
+uint32_t kui_vmu_native_passive_test_guard(uint32_t address,unsigned i) {
+    uint32_t expected=STACK_LOW;
+#if KUI_VMU_NATIVE_CACHED_CODE
+    if(state.armed) expected-=UINT32_C(0x20000000);
+#endif
+    assert(address==expected+i*4u);
+    return i+1u==bad_guard?0u:GUARD;
+}
 void kui_vmu_native_persistent_test_clock(struct kui_vmu_native_profile_sample *sample,uint32_t *ccr) {
     ++clock_reads;*sample=test_clock;*ccr=test_ccr;test_clock.counter-=10u;
 }
@@ -179,7 +186,13 @@ static void physical_complete(void) {
     put(rx_at(6),4u,0x1c604005u);put(rx_at(6)+4u,4u,0x01000000u);
     put(0xa05f6c18u,4u,0u);
 }
-static void arm(void) {CHECK(kui_vmu_native_passive_arm(&input,NULL)==0);}
+static void arm(void) {
+    CHECK(kui_vmu_native_passive_arm(&input,NULL)==0);
+#if KUI_VMU_NATIVE_CACHED_CODE
+    /* The runtime gateway selects P1 only after cold P2 arm returns. */
+    live_sp-=UINT32_C(0x20000000);
+#endif
+}
 static void submit(void) {
     unsigned before=bus_reads;
     if(setjmp(terminal)==0) {kui_vmu_native_passive_submit(&frame);measured_submit_reads=bus_reads-before;

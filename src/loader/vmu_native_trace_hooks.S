@@ -2,6 +2,11 @@
 #define JI(a,b) a##b
 #define J(a,b) JI(a,b)
 #define C(n) J(__USER_LABEL_PREFIX__,n)
+#if KUI_VMU_NATIVE_CACHED_CODE
+#define RUNTIME_STACK_TOP (__vmu_native_worker_stack_top-0x20000000)
+#else
+#define RUNTIME_STACK_TOP __vmu_native_worker_stack_top
+#endif
     .text
     .align 2
     .global C(kui_vmu_native_trace_irq)
@@ -86,7 +91,7 @@ C(kui_vmu_native_trace_irq):
     bra .Lready\@
     nop
     .align 2
-.Lstack\@: .long __vmu_native_worker_stack_top
+.Lstack\@: .long RUNTIME_STACK_TOP
 .Lvisit\@: .long C(kui_vmu_native_trace_game)
 .Lready\@:
     .endm

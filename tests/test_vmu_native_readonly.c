@@ -36,7 +36,9 @@ uint8_t *kui_vmu_native_passive_test_rx(uint32_t address,unsigned bytes) {
 }
 uint32_t kui_vmu_native_passive_test_sr(void) {return live_sr;}
 uint32_t kui_vmu_native_passive_test_sp(void) {return live_sp;}
-uint32_t kui_vmu_native_passive_test_guard(unsigned i) {return i+1u==bad_guard?0u:GUARD;}
+uint32_t kui_vmu_native_passive_test_guard(uint32_t address,unsigned i) {
+    (void)address;return i+1u==bad_guard?0u:GUARD;
+}
 void kui_vmu_native_passive_test_terminal(uint32_t phase,uint32_t error) {terminal_phase=phase;terminal_error=error;longjmp(terminal,1);}
 static struct kui_vmu_native_passive_config input;
 static struct kui_vmu_native_passive_frame frame;

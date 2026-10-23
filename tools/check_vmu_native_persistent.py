@@ -40,6 +40,8 @@ from check_vmu_native_stage_stack import Machine
 from check_vmu_native_mode import audit as audit_runtime_mode
 from check_vmu_native_trace import check as audit_trace_gates, GATES as TRACE_GATES
 from check_vmu_native_map_refusal import check as audit_map_refusal
+from check_vmu_native_fault_capture import audit as audit_fault_capture
+from check_vmu_native_fault_capture import GATEWAY as FAULT_GATEWAY, PUBLISH as FAULT_PUBLISH, STATE as FAULT_STATE
 from vmu_native_relocations import generate, validate_loads
 from test_armada_ce_maple_hook import CPU
 
@@ -51,52 +53,55 @@ SPAN = 0x20000
 # typed object/function, local source owner and interior offset remain in the
 # signature. This admits relocation/layout changes, not new code or targets.
 PREPARED_PINS = {
+ '_kui_vmu_native_fault_capture_install': ('c82cde7ed25467a1f1a1552517c6057740afa935c889f6a25effee1697fd254b', 560),
+ '_read_heap': ('b102f5d502f2a2e45998b1555e7bd6e56d2b7048059ebb9bb37ed6ee415a58cd', 104),
+ '_stack_valid': ('f5e81a00f19db27641f67958161041e8a865061f49fd71fbe114b165b2666db6', 116),
  '_native_phase_span': ('eb173e6c2fcbdabc829a622ae3cf7f3430ecae15cc95e2bab92314eb885ee2f2', 136),
- '_diagnostic_phase_read': ('720273e1b3b52f9a5d9e7128446369796a221a8837b1a73153b7f98987be9586', 92),
+ '_diagnostic_phase_read': ('9be746502cbe97b305edc7c282c70dd68d3b6d43dfafea092fecd4d7b975fcfc', 136),
  '_diagnostic_gesture': ('798c8a977a6e0b1e49fca8135d6a944513c0e2c8cf5c9342f0dd0f5f291f828f', 34),
  '_diagnostic_phase_row': ('9d55c81d38773acb609b68c1d6684dfc6be503622f4078799864c49148f5426d', 92),
  '_diagnostic_sample': ('cb7e980cb399fa654e837a6896d3ec033fd9d844c8fd0a2c31c77399471411fe', 164),
  '_diagnostic_begin': ('3be33ddc079ec9db0760339daf470b64f4903769d66dc830e14c2fcd0008ccc1', 40),
  '_native_phase_word.constprop.0': ('1e94b1f6d66b2667c76e878575a2f3b2fa57f04d0d65e0e735be7b88e2b54704', 56),
- '_diagnostic_pair_begin': ('2c1d12aafa3bdbf9c752d520bdf1ed840b4cd3c374b20c9ee4474813d21a8e5f', 644),
- '_diagnostic_end': ('f15495b12411906341d1d79473ff95853e7a48a83eab6c573e2edbec0f0dc6de', 312),
- '_diagnostic_complete': ('2342139f4d7b88221766b1d4c6a49d9c1812e4277cf79b91af7a43b5a2b63193', 942),
+ '_diagnostic_pair_begin': ('c579977d4365a6b01f990fc9802e6db3a3bf75ad3b9fcb10ee2ac69c10ceecde', 584),
+ '_diagnostic_end': ('6f5f038044a4d92b72a929a0a55d6f3c06740fc336e4d94c1aa49282ea4fbf57', 272),
+ '_diagnostic_complete': ('87c8c9dd36656efd28b53bd8e43f8cf8fe3ba0d98925a91684e8c2ec2cc0d95d', 966),
  '_poll_lease_valid': ('b67c432db445f780a4b2e93871f7907b7f7de1fd8c0795faf112f30fe0673302', 64),
  '_installed_hooks_valid': ('819cc9127506f6790fa189371f453b3474bd2b3f9e39752d43a5d8501dd2e286', 76),
  '_kui_vmu_native_readonly_release_check': ('87433dd479877714f7773607b751f56b629a27792417dbb31ccfa430499e1474', 588),
- '_hook_word': ('6c579e60911823ed1fbf6a57622bab2d7de2ebf46228c2c2c21d27f8fc144249', 112),
- '_prepare_hook_entry': ('a725563c7ef1e7429dd214860f8f7ecfddac54cf0981577fe679602117bebca3', 188),
+ '_hook_word': ('69410002bf135878c32df63d2459603428947eadc760aa6309775f82b8801f9c', 132),
+ '_prepare_hook_entry': ('e46707ed62da6217391c4aee61d074980abd67826655c1b508159548cabefd74', 228),
  '_kui_vmu_native_lifetime_prepare': ('4691642d40ae532e2f81cfe46c3f81a019412c0da0e43fb4f7913d4a44b87312', 640),
- '_kui_vmu_native_passive_arm': ('4477fbe53f294966e9247c16602b9389a0f0503279fb92d541f31e90fc708734', 1476),
+ '_kui_vmu_native_passive_arm': ('ef6cc8281ada8638c21ad1ef27469dbcd04c2b2ec90b3d4385d34993cf4bfe3f', 1644),
  '_persistent_storage_guard': ('d230251892a758f65469e9cb692703a0270511756e1fbdc94cc28e04472a15fe', 396),
  '_persistent_lease': ('8658f150d0d4811335e46332a9a075f199fa8219edb5ccf1730223a4e34d78e3', 148),
- '_kui_vmu_native_passive_submit': ('a9e9c663780697cd6ff3d720c04b3b8d9e135d1c5a2af11a3bf793325d4cf0ac', 1440),
- '_kui_vmu_native_passive_complete': ('3ea497bbe7af8056b96b90104d2658fe998f039845c5b77b8d94bd95bbefc773', 1828),
- '_controller_context_valid': ('475104ef13c6350c759cd7c09714ece5cc3f71410114f3808d7d549743241084', 496),
+ '_kui_vmu_native_passive_submit': ('7d224a37aa183eaec433ad49a62232f05ae253bfede8ad31584b4bc109358245', 1380),
+ '_kui_vmu_native_passive_complete': ('75de7beccf9102d0606a649f3bdc84a5860891bcbbc1650bd5b648e607f783bd', 2360),
+ '_controller_context_valid': ('e8e1eee80b1bce155a8a68c9c91229c138e017daf5bd2d880d7d51195efde2a0', 1032),
  '_kui_vmu_readonly_overlay_complete_absent': ('6085deac9edfd8886b3300663daa32875389280d2daca88d509846e17f1b31e7', 284),
  '_kui_vmu_readonly_overlay_complete': ('6413dfd099e7eeb01b7f0b9bf12e07ca276bf3bc0b8080efcce61a067c8b1bb4', 888),
  '_readonly_overlay_parent_response': ('d396e68edd3158708ba5a8c9ff5235821bb62b71cc9dc40650cadb9098eaeb12', 116),
  '_readonly_overlay_increment': ('e3a6368a10593e4ae7510faf736d644a9d9e383e262070923241741b3f6893b1', 14),
  '_readonly_overlay_le32': ('1daa47eecc292df8356826c0e5a683e3a2c27cec212f901db7b1f01cf3b897df', 30),
- '_transfer_context_valid': ('0c5da7d93ef2136186e835382595b1da4c6907e903cdca76a992eead7ee65056', 1048),
+ '_transfer_context_valid': ('980e503eef4ef2bda0df53eaae475063952d924525bbbb06b69f26b172358efe', 1236),
  '_persistent_context_guard': ('7d7b44453ed058c85b22f3624a96001a93f68e06bd6dc581757cbff364c96df7', 132),
- '_kui_vmu_native_runtime_fault': ('44dba9bf19a281b422ca4c0411bf651ebce84cb87ecaf73b535716cfb6c94b65', 236),
- '.rodata': ('d17b650e22efd7656158d7f16937f6f1ca8690d4b3e3f38bc66f49cb40214695', 3552),
+ '_kui_vmu_native_runtime_fault': ('6e8cbbfc2dd1ddb64c80bb848a05d7c7574eafffbde53f4d2c0579bb7403c96a', 288),
+ '.rodata': ('9fe578b9dc9d7ae44c99b1014e51c29bb733c9665c9b59bcb2e77e38e94f2120', 3760),
  '_kui_vmu_native_trace_enabled': ('0a920c3cf23dad2c3aabfe188567a6d1425af67dd54b46b619555831e9748eac', 16),
  '_kui_vmu_native_trace_image': ('e85462a3e477dee0a0124220436dc355360013e47136f21eb8576af465cdd9a9', 60),
  '_kui_vmu_native_trace_point': ('f29078442d6ec0295e0d47680f02bdc96b3e656ddc2c0cd98d02975392b09db6', 1132),
- '_kui_vmu_native_trace_wait_loop': ('8d3fb2b39e884b13c0061c722bcca07d6082aaafbc8de4d6e3b1c446759560d8', 176),
+ '_kui_vmu_native_trace_wait_loop': ('14823a20fee8b883e5f8e7ebd6e7e10af9715be40c12e4674d8fa89f2839adcd', 176),
  '_kui_vmu_native_trace_init': ('bf7a45b36958e63813bfb7eef0800982671734ef8d4414b6c1ff477658b183e8', 96),
- '_kui_vmu_native_trace_wait_before': ('8d16ecf62a40b00531b18bb6d68b876b67be8c9cb7d4775c41e329babcedabcf', 152),
- '_kui_vmu_native_trace_frame_entry': ('d5949f5ee897f0fd40d653db5d53691e227882a1bb6aed384b44ea5f83104081', 164),
- '_kui_vmu_native_trace_report': ('28b3116b19194eddbe3113a9a3896b2c2f0ace750476889dab9599f9887d11e5', 1120),
- '_kui_vmu_native_trace_wait_after': ('399109af8351d1f2f0d0fa1541afa51056dfd44e86b607e10afd8fad1fe55015', 180),
+ '_kui_vmu_native_trace_wait_before': ('e9b3f06c9f25ba26990d028291ee7c37f06e4fae6df7069ac0086d316321b5d9', 152),
+ '_kui_vmu_native_trace_frame_entry': ('24be2fc972ae425d21e9fd5a0b8ad551f1f64bc20c8d7cb9118c00818bba1111', 164),
+ '_kui_vmu_native_trace_report': ('c59ce97fbaaacfef737d8214604efee06381e6ab6d6332a22e88c1bf95e65da9', 1120),
+ '_kui_vmu_native_trace_wait_after': ('36746417db83b1f0060aacf65c6ad9fb76ce55aea985779d0d1244b70c6f30e6', 180),
  '_kui_vmu_native_trace_game': ('367d93d9d799bac69baf843535f58f139cac582df3d494ff5e4e4721ece346e3', 112),
- '_trace_history': ('1d6790700d98feb6b94818d7ac659cc0031852e1fb62f5a9ee510ac24879b6ff', 164),
+ '_trace_history': ('6b10074a8bf40f99e2e0c28de40f40cda7043d59c3117475b1c9efab883562b0', 164),
  '_report': ('114ee02adbf996c428218611b859b7548b3f52b3fd501af9105bd11b760463a8', 440),
  '_kui_vmu_native_trace_failure': ('7db0cdf5462a9ddb02e0bfa486f9fdcd17b92f60a9a7769e4e835fcc4f5335d3', 120),
  '_trace_row.constprop.0': ('9d55c81d38773acb609b68c1d6684dfc6be503622f4078799864c49148f5426d', 92),
- '_trace_packets': ('b293b06701ad5a0849167e38ff3286529386e3fce1c3b41c8733699dfca5507a', 116),
+ '_trace_packets': ('1f84872a70874f397e80bc7eacbe2f43fc19914c4fcb461595cfc3707652d7dc', 116),
  '_kui_vmu_native_trace_irq': ('31b72b692190f12dabe3bee1767a9d43913918730d08b7c7c802bea816c8177e', 14)}
 
 
@@ -131,6 +136,9 @@ def prepared_symbol_records(worker):
     # zero-size linker-bound labels above, and admit an interior reference only
     # through this unique, allocated, private P2 NOBITS stack section. Its
     # complete4KiB extent must match both bound symbols and the worker lease.
+    # Runtime callbacks use its P1 alias for ephemeral frames; only this exact
+    # owned section and its two boundaries gain typed cached views. Persistent
+    # mutable objects must still resolve at their original P2 addresses.
     bottom = worker[4]["__vmu_native_worker_stack_bottom"]
     top = worker[4]["__vmu_native_worker_stack_top"]
     require(bottom[1:3] == top[1:3] == (0, 0) and bottom[3] == top[3] and
@@ -146,6 +154,35 @@ def prepared_symbol_records(worker):
     require(sum(names[s[0]:].split(b"\0", 1)[0] == b".stack" for s in sections) == 1,
             "prepared private stack section is ambiguous")
     records.append((".stack", stack[3], stack[5], 3, owner))
+    records.append((".stack.cached", stack[3] - 0x20000000, stack[5], 3, owner))
+    for name, record in (("__vmu_native_worker_stack_bottom", bottom),
+                         ("__vmu_native_worker_stack_top", top)):
+        records.append((name + ".cached", record[0] - 0x20000000, 0, 0, owner))
+    # The optional cold installer compares exact private BSS ownership
+    # boundaries, including the P1 form of the lower bound. This does not
+    # create a cached view of mutable BSS interiors.
+    begin=worker[4]["__vmu_native_worker_bss_begin"]
+    end=worker[4]["__vmu_native_worker_bss_end"]
+    require(begin[1:3]==end[1:3]==(0,0) and begin[3]==end[3] and begin[3]<len(sections),
+            "prepared private BSS boundary symbols differ")
+    bss=sections[begin[3]]
+    require(names[bss[0]:].split(b"\0",1)[0]==b".bss" and bss[1]==8 and bss[2]&7==3 and
+            bss[3]==begin[0] and begin[0]+bss[5]==end[0] and
+            P2+80<=begin[0]<end[0]<=bottom[0] and not(begin[0]&31) and not(end[0]&31),
+            "prepared private BSS lacks exact P2 NOBITS ownership")
+    require(sum(names[s[0]:].split(b"\0",1)[0]==b".bss" for s in sections)==1,
+            "prepared private BSS section is ambiguous")
+    records.append((".bss",begin[0],bss[5],3,begin[3]))
+    for name,record in (("__vmu_native_worker_bss_begin",begin),("__vmu_native_worker_bss_end",end)):
+        records.append((name,record[0],0,0,record[3]))
+        records.append((name+".cached",record[0]-0x20000000,0,0,record[3]))
+    exports=worker[4]["_kui_vmu_native_worker_exports"]
+    require(exports[:3]==(P2,80,1) and exports[3]<len(sections),
+            "prepared header boundary lacks exact immutable exports")
+    header=sections[exports[3]]
+    require(header[1]==1 and header[2]&7==2 and header[3]==P2 and header[5]==80,
+            "prepared header boundary lacks exact immutable exports")
+    records.append(("__vmu_native_worker_header_end.cached",P1+80,0,0,exports[3]))
     return records
 
 
@@ -185,6 +222,11 @@ def prepared_signature(worker, binary, wire, name, build=None):
         found = [r for r in records if r[1] <= value < r[1] + r[2] or
                  not r[2] and r[1] == value]
         require(found, "prepared pointer has no typed target: " + hex(value))
+        # Existing actual objects/functions retain their typed identities if
+        # a BSS boundary coincides with their first byte. Synthetic BSS views
+        # fill only the boundary/padding references with no prior typed owner.
+        ordinary=[r for r in found if r[0]!=".bss" and not r[0].startswith("__vmu_native_worker_bss_")]
+        if ordinary:found=ordinary
         target = min(found, key=lambda r: (r[2], r[0]))
         require(target[4] < len(worker[3]) and worker[3][target[4]][2] & 2,
                 "prepared pointer target is not allocated")
@@ -414,10 +456,12 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
         return {"prepared": False, "legacy_full_release_admission": True}
     if build is None:
         build = verify((directory / "retail-maple-observe.kui").read_bytes())["build"]
-    for name, size in (("_lifetime_plan", 616), ("_hook_witness", 384),
+    objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
                        ("_protected_ranges", 512), ("_protected_count", 4),
-                       ("_controller_pair", 188), ("_diagnostic_phase", 976), ("_diagnostic", 144)):
+                       ("_controller_pair", 188), ("_diagnostic_phase", 976), ("_diagnostic", 144)]
+    if FAULT_STATE in worker[4]:objects.append((FAULT_STATE,32))
+    for name,size in objects:
         address, actual, kind, owner = worker[4][name]
         section = worker[3][owner]
         require(kind == 1 and actual == size and address % 4 == 0 and
@@ -443,12 +487,21 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
             ("kui_vmu_native_passive_submit", (local + "installed_hooks_valid", local + "poll_lease_valid")),
             ("kui_vmu_native_passive_complete", (local + "installed_hooks_valid", local + "poll_lease_valid")),
             ("kui_vmu_native_readonly_release_check", (local + "installed_hooks_valid",)),
-            (local + "controller_context_valid", (local + "transfer_context_valid", local + "read_value.part.0")),
+            (local + "controller_context_valid", (local + "transfer_context_valid",)),
+            (local + "transfer_context_valid", (local + "stack_valid",)),
             (local + "persistent_storage_guard", ("kui_vmu_native_heap_lease_valid", local + "stack_valid",
                 local + "installed_hooks_valid", "kui_vmu_native_layout_bind_checked", "kui_vmu_native_runtime_check",
                 local + "chain", "kui_vmu_volatile_chain_verify"))):
         require(all((caller, target) in edges for target in required),
                 "prepared admission loses required emitted call: " + caller)
+    # The address/width/alias checks are compiled into these two complete
+    # pinned bodies. Reintroducing an out-of-line reader would move those
+    # predicates outside their reviewed byte signatures and restore the
+    # measured call/spill cost. The linked reader model below independently
+    # executes the same full predicate for4B RAM/MMIO boundaries.
+    for caller in (local+"controller_context_valid",local+"transfer_context_valid"):
+        require(not any(a==caller and b.startswith((local+"read_value",local+"ram"))
+                        for a,b in edges),"prepared context address checks are not inlined")
     require(edges.count((local + "persistent_lease", local + "persistent_storage_guard")) == 2,
             "storage loan must retain full guards at both boundaries")
     rejected = 0
@@ -1002,12 +1055,140 @@ def physical(address):
 
 
 class CachedGateway(ReadonlyGateway):
-    """Actual gateways fetch cached code/literals while frames/cells stayP2."""
+    """Actual gateways use P1 code and ephemeral stack; cells remain P2."""
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.private_top -= 0x20000000
+
     def code(self, address, size):
         assert address & 0xFF000000 == 0x8C000000, "gateway fetched uncached code/constant"
         offset = physical(address) - physical(self.base)
         assert 0 <= offset < offset + size <= len(self.blob)
         return self.blob[offset:offset + size]
+
+
+class CachedStackGuard(Machine):
+    """Execute the linked leaf; retain raw aliases instead of coalescing RAM."""
+    def __init__(self, worker, armed, mask, stack, bad_guard=None, *, body=None):
+        super().__init__(worker, "_stack_valid", 7, mask, stack, body=body)
+        self.armed, self.bad_guard = armed, bad_guard
+        self.owner = worker[4]["_state"][0]
+        self.bottom = worker[4]["__vmu_native_worker_stack_bottom"][0]
+        self.expected_bottom = self.bottom - (0x20000000 if armed else 0)
+        self.raw_guards = []
+
+    def read(self, address):
+        if address == self.owner:
+            return self.armed
+        if physical(self.bottom) <= physical(address) < physical(self.bottom) + 64:
+            index = (physical(address) - physical(self.bottom)) // 4
+            assert address == self.expected_bottom + index * 4, "stack guard sampled stale alternate alias"
+            self.raw_guards.append(address)
+            return 0 if index == self.bad_guard else 0x4b535431
+        return struct.unpack("<I", self.code(address, 4))[0]
+
+    def write(self, address, value):
+        raise AssertionError("stack guard is not a read-only leaf")
+
+    def plain(self, word, pc):
+        if word & 0xf00f == 0x000e:
+            self.r[word >> 8 & 15] = self.read((self.r[word >> 4 & 15] + self.r[0]) & MASK)
+            return
+        super().plain(word, pc)
+
+    def check(self, expected):
+        self.run()
+        assert self.r[0] == int(expected), "stack guard admitted wrong lifecycle/alias/boundary"
+        regs, pr, mach, macl, gbr, sr, fpscr, fr = self.before
+        assert self.r[8:] == regs[8:] and self.pr == pr
+        assert (self.mach, self.macl, self.gbr, self.sr & ~1, self.fpscr, self.fr) == (mach, macl, gbr, sr & ~1, fpscr, fr)
+        count = 16 if expected else self.bad_guard + 1 if self.bad_guard is not None and self.raw_guards else 0
+        assert self.raw_guards == [self.expected_bottom + i * 4 for i in range(count)]
+        return self
+
+
+def check_cached_stack_guard(worker, self_test=False):
+    """Admit only cold P2 and armed P1, including every actual canary load."""
+    prepared_symbol_records(worker)  # Independently establish the complete section ownership.
+    bottom=worker[4]["__vmu_native_worker_stack_bottom"][0]
+    cases=0
+    for armed in (0, 1):
+        for mask in range(16):
+            for alias in (bottom, bottom-0x20000000, physical(bottom)):
+                for offset in (0, 252, 256, 260, 2048, 4092, 4096, 4100):
+                    valid = mask==15 and alias==bottom-(0x20000000 if armed else 0) and 256<=offset<4096
+                    CachedStackGuard(worker,armed,mask,alias+offset).check(valid);cases+=1
+        for bad in range(16):
+            CachedStackGuard(worker,armed,15,bottom-(0x20000000 if armed else 0)+2048,bad).check(False);cases+=1
+    rejected=0
+    if self_test:
+        _,body,_=symbol_bytes(worker,"_stack_valid",2)
+        mask=struct.pack("<I",0x1fffffff)
+        require(body.count(mask)==1,"stack guard lacks unique physical-address mask")
+        # Preserving bit29 forces armed canary reads through P2 while both
+        # aliases contain good guard values. Raw-address checking must refuse.
+        changed=body.replace(mask,struct.pack("<I",0x3fffffff))
+        try:CachedStackGuard(worker,1,15,bottom-0x20000000+2048,body=changed).check(True)
+        except (ValueError,AssertionError,KeyError,struct.error):rejected+=1
+        else:raise ValueError("stack guard accepted stale alternate-alias canary sampling")
+    return {"instruction_cases":cases,"mutation_rejections":rejected,
+            "cold_arm_alias":"P2","armed_runtime_alias":"P1","raw_canary_alias_checked":True,
+            "guard_words":16,"guard_border_bytes":256,"owner_writes":0}
+
+
+class CompiledHeapReader(Machine):
+    """Execute the actual emitted4B reader, trapping disallowed source loads."""
+    def __init__(self,worker,address,valid,*,body=None):
+        super().__init__(worker,"_read_heap",11,15,0x8c11fff0,body=body)
+        self.address,self.valid=address,valid
+        self.output=self.start_sp-64
+        self.r[4:7]=[0,address,self.output]
+        self.source_reads,self.output_writes=[],[]
+
+    def read(self,address):
+        if address==self.address:
+            assert self.valid,"compiled reader dereferenced an unadmitted source"
+            self.source_reads.append(address);return 0x5a73c129
+        return struct.unpack("<I",self.code(address,4))[0]
+
+    def write(self,address,value):
+        assert self.valid and address==self.output,"compiled reader changed unexpected memory"
+        self.output_writes.append((address,value))
+
+    def check(self):
+        self.run()
+        assert self.r[0]==int(self.valid)
+        assert self.source_reads==([self.address] if self.valid else [])
+        assert self.output_writes==([(self.output,0x5a73c129)] if self.valid else [])
+        regs,pr,mach,macl,gbr,sr,fpscr,fr=self.before
+        assert self.r[8:]==regs[8:] and self.pr==pr
+        assert (self.mach,self.macl,self.gbr,self.sr&~1,self.fpscr,self.fr)==(mach,macl,gbr,sr&~1,fpscr,fr)
+
+
+def check_compiled_heap_reader(worker,self_test=False):
+    mmio={0xa05f6c04,0xa05f6c10,0xa05f6c14,0xa05f6c18}
+    addresses={area|offset for area in range(0,0x100000000,0x20000000)
+               for offset in (0,0xbfffffc,0xc000000,0xc000001,0xc000002,0xc000003,
+                              0xc000004,0xc800000,0xcfffff8,0xcfffffc,0xcfffffd,0xcfffffe,
+                              0xcffffff,0xd000000,0x1ffffffc)}
+    addresses|={base+offset for base in (0x005f6c00,0x805f6c00,0xa05f6c00,0xe05f6c00)
+                for offset in range(0,0x24)}
+    for address in sorted(addresses):
+        valid=(address in mmio or address&0xe0000000 in (0,0x80000000,0xa0000000) and
+               not address&3 and 0xc000000<=physical(address)<=0xcfffffc)
+        CompiledHeapReader(worker,address,valid).check()
+    rejected=0
+    if self_test:
+        _,body,_=symbol_bytes(worker,"_read_heap",2)
+        edits=((struct.pack("<H",0xc803),struct.pack("<H",0xc800),0x8c200001),
+               (struct.pack("<I",0x60000000),bytes(4),0xec200000))
+        for before,after,address in edits:
+            require(body.count(before)==1,"compiled reader lacks unique address predicate mutation site")
+            try:CompiledHeapReader(worker,address,False,body=body.replace(before,after)).check()
+            except (ValueError,AssertionError,KeyError,struct.error):rejected+=1
+            else:raise ValueError("compiled reader accepted weakened address predicate")
+    return {"instruction_cases":len(addresses),"mutation_rejections":rejected,
+            "width":4,"source_loaded_only_after_full_predicate":True,"mmio_addresses":sorted(mmio)}
 
 
 def model_cached_hooks(binary, wire, symbols):
@@ -1063,6 +1244,7 @@ def model_cached_stage(base, blob):
             CachedStageGateway(seed, mask, base, blob).run().check(int(mask == 15)); cases += 1
     entry = P2_ENTRY - 0x20000000
     invalid = (("entry", entry + 1), ("entry", P2_ENTRY), ("top", TOP + 4),
+               ("top", TOP - 0x20000000),
                ("top", 0xAD000020), ("top", 0xAC000FE0), ("config", 0), ("result", 0))
     for field, value in invalid:
         CachedStageGateway(1, 15, base, blob, **{field: value}).run().check(0); cases += 1
@@ -1151,26 +1333,32 @@ def model_cached_mutations(binary, symbols):
     changed = bytearray(binary)
     struct.pack_into("<H", changed, at + 6, 0x0009)
     tests.append((changed, "release", "transient release IRQ admission"))
-    # Cached code must never fall back to a P2 execution target, while its
-    # private stack and mutable consumer cell must never acquire P1 aliases.
-    for mode, hook, value, delta in (
-            ("submit", "_kui_vmu_native_passive_submit_hook", "_kui_vmu_native_passive_submit", 0x20000000),
-            ("complete", "_kui_vmu_native_passive_complete_hook", "_kui_vmu_native_passive_complete", 0x20000000),
-            ("terminal", "_kui_vmu_native_passive_terminal", "_kui_vmu_native_passive_report", 0x20000000),
-            ("release", "_kui_vmu_native_readonly_release_hook", "_kui_vmu_native_readonly_release_check", 0x20000000),
-            ("complete", "_kui_vmu_native_passive_complete_hook", "_kui_vmu_native_passive_consumer", -0x20000000),
-            ("complete", "_kui_vmu_native_passive_complete_hook", "__vmu_native_worker_stack_top", -0x20000000)):
+    # Runtime code and ephemeral frames must consistently use P1; mutable
+    # consumer cells remain P2. A P2 runtime stack after a previous P1 call
+    # could be corrupted by later dirty cached-frame eviction, so exercise
+    # the wrong-stack mutation at every returning and terminal gateway.
+    for mode, hook, value, alias, delta in (
+            ("submit", "_kui_vmu_native_passive_submit_hook", "_kui_vmu_native_passive_submit", 0, 0x20000000),
+            ("complete", "_kui_vmu_native_passive_complete_hook", "_kui_vmu_native_passive_complete", 0, 0x20000000),
+            ("terminal", "_kui_vmu_native_passive_terminal", "_kui_vmu_native_passive_report", 0, 0x20000000),
+            ("release", "_kui_vmu_native_readonly_release_hook", "_kui_vmu_native_readonly_release_check", 0, 0x20000000),
+            ("complete", "_kui_vmu_native_passive_complete_hook", "_kui_vmu_native_passive_consumer", 0, -0x20000000),
+            *((mode, hook, "__vmu_native_worker_stack_top", -0x20000000, 0x20000000)
+              for mode, hook in (("submit", "_kui_vmu_native_passive_submit_hook"),
+                                 ("complete", "_kui_vmu_native_passive_complete_hook"),
+                                 ("release", "_kui_vmu_native_readonly_release_hook"),
+                                 ("terminal", "_kui_vmu_native_passive_terminal")))):
         begin = physical(symbols[hook]) - physical(P2)
         references = []
         for offset in range(begin, min(begin + 256, len(binary)) - 1, 2):
             word = struct.unpack_from("<H", binary, offset)[0]
             if word >> 12 != 0xD: continue
             literal = ((P2 + offset + 4) & ~3) + 4 * (word & 255) - P2
-            if 0 <= literal <= len(binary) - 4 and struct.unpack_from("<I", binary, literal)[0] == symbols[value]:
+            if 0 <= literal <= len(binary) - 4 and struct.unpack_from("<I", binary, literal)[0] == symbols[value] + alias:
                 references.append(literal)
         require(references, "missing actual cached gateway alias literal")
         changed = bytearray(binary)
-        struct.pack_into("<I", changed, references[0], symbols[value] + delta)
+        struct.pack_into("<I", changed, references[0], symbols[value] + alias + delta)
         tests.append((changed, mode, "wrong cached code or mutable-state alias"))
     cases = 0
     for blob, mode, description in tests:
@@ -1189,10 +1377,11 @@ def check_runtime_fault_gateways(worker, binary, wire, self_test=False):
     runtime = "_kui_vmu_native_runtime_fault_hook"
     allocation = "_kui_vmu_native_allocation_failure_hook"
     report = "_kui_vmu_native_runtime_fault"
+    stack_delta = 0x20000000 if symbols["_kui_vmu_native_passive_arm"] & 0xff000000 == 0x8c000000 else 0
     def authored(image):
         for name, prefix, targets in (
                 (runtime, (0x0002, 0xcbf0, 0x400e, 0xdf02, 0xd002, 0x402b, 0x0009, 0x0009),
-                 (symbols["__vmu_native_worker_stack_top"], symbols[report])),
+                 (symbols["__vmu_native_worker_stack_top"] - stack_delta, symbols[report])),
                 (allocation, (0x65e3, 0x56f1, 0x67f3, 0xe401, 0xd001, 0x402b, 0x0009, 0x0009),
                  (symbols[runtime],))):
             address, body, section = symbol_bytes(image, name, 2)
@@ -1250,7 +1439,7 @@ def check_runtime_fault_gateways(worker, binary, wire, self_test=False):
                         elif op != 9:raise ValueError("unadmitted instruction/store in failure gateway")
                         pc += 2
                     else:raise ValueError("failure gateway did not terminate in bounded report")
-                    require(r[4:8] == expected and r[15] == mapped["__vmu_native_worker_stack_top"] and
+                    require(r[4:8] == expected and r[15] == mapped["__vmu_native_worker_stack_top"] - stack_delta and
                             sr == inherited_sr | 0xf0 and owner_reads == ([sp + 4] if mode == "allocation" else []),
                             "failure gateway lost arguments, private SP or IRQ exclusion")
                     cases += 1
@@ -1289,7 +1478,7 @@ def worker_load_policy(worker, binary):
     require(mutable["virtual"] == mutable["physical"] + 0x20000000 and mutable["flags"] == 6 and
             mutable["first"] == code["first"] + code["memory"] and not mutable["first"] & 31 and
             mutable["first"] + mutable["memory"] == physical(P1) + SPAN,
-            "mutable worker load must be P2 and disjoint from every cached line")
+            "mutable worker load must be P2 and disjoint from cached code/constants")
     shstrings = sections[worker[1][13]]
     section_names = region(data, shstrings[4], shstrings[5], "section names")
     for section in sections:
@@ -1308,7 +1497,14 @@ def worker_load_policy(worker, binary):
         else:
             require(section[3] & 0xFF000000 == 0x8C000000 and section[2] & 7 in (2, 6),
                     "code/const bytes do not exclusively use cached P1")
-    return {"cached_code": True, "code_alias": P1, "loads": loads}
+    # ELF reservation/export bounds stay P2. The only additional cached
+    # writable alias is the independently bounded ephemeral private stack;
+    # runtime gateways prove that alias at every entry below.
+    stack=next(r for r in prepared_symbol_records(worker) if r[0]==".stack.cached")
+    return {"cached_code": True, "code_alias": P1, "loads": loads,
+            "cold_arm_stack_alias": P2, "runtime_stack_alias": P1,
+            "runtime_stack_begin": stack[1], "runtime_stack_end": stack[1]+stack[2],
+            "persistent_mutable_alias": P2}
 
 
 def inspect_base(directory, *, self_test=False, objdump="sh-elf-objdump"):
@@ -1430,7 +1626,69 @@ def check_source(directory, runtime):
             "elf_sha256": record["elf_sha256"]}
 
 
-def worker_stack_paths(directory, worker, resident):
+def fault_capture_admission(worker,self_test=False):
+    """Run the exact fault gateway/publisher before granting narrow exceptions."""
+    names={FAULT_GATEWAY,FAULT_PUBLISH,FAULT_STATE,"_kui_vmu_native_fault_capture_install"}
+    present=names&worker[4].keys()
+    if not present:return {"available":False}
+    require(present==names,"partial fault-capture implementation cannot acquire special admission")
+    prepared_symbol_records(worker)
+    address,size,kind,owner=worker[4][FAULT_STATE]
+    section=worker[3][owner]
+    require(size==32 and kind==1 and not address&3 and address&0xff000000==0xac000000 and
+            owner==worker[4]["__vmu_native_worker_bss_begin"][3] and
+            section[3]<=address<address+size<=section[3]+section[5],
+            "fault capture scratch lacks exact32B private P2 BSS ownership")
+    result=audit_fault_capture(worker,self_test)
+    require(result["instruction_cases"] and result["publication_cases"]==5 and
+            result["publication_from_p2_after_two_operand_cache_purges"] and
+            result["interrupted_stack_accesses"]==0,
+            "fault capture lacks its complete stack/publication proof")
+    address,body,section=symbol_bytes(worker,FAULT_PUBLISH,2)
+    require(section[2]&7==6 and address&0xff000000==0x8c000000 and
+            len(body)>=16 and struct.unpack_from("<I",body,8)[0]==address+12+0x20000000,
+            "fault publisher lacks the exact unique P2 island literal")
+    result.update(available=True,mode="PROFILE; exact Evolution revision only",
+                  publisher_p2_reference_offset=physical(address)-physical(P1)+8,
+                  publisher_p2_reference_value=address+12+0x20000000,
+                  verified_zero_stack_assembly=[FAULT_GATEWAY[1:],FAULT_PUBLISH[1:]])
+    installer,body,_=symbol_bytes(worker,"_kui_vmu_native_fault_capture_install",2)
+    result.update(installer_first=physical(installer)-physical(P1),installer_bytes=len(body),
+                  cached_bss_boundaries=[worker[4][name][0]-0x20000000 for name in
+                      ("__vmu_native_worker_bss_begin","__vmu_native_worker_bss_end")],
+                  cached_header_end=P1+80)
+    return result
+
+
+def check_worker_pointer_aliases(wire,policy,fault_capture):
+    """Admit only the independently proved island and ownership comparisons."""
+    relocations=struct.unpack_from("<I",wire,28)[0]
+    fault_islands=0
+    for i in range(relocations):
+        at,value=struct.unpack_from("<II",wire,72+i*8)
+        area=value&0xff000000
+        require(area in ((0x8c000000,0xac000000) if policy["cached_code"] else (0xac000000,)),
+                "internal relocated pointer uses an unadmitted alias")
+        if not policy["cached_code"]:continue
+        code=policy["loads"][1]
+        if area==0x8c000000:
+            boundary=(fault_capture["available"] and
+                value in fault_capture["cached_bss_boundaries"]+[fault_capture["cached_header_end"]] and
+                fault_capture["installer_first"]<=at<fault_capture["installer_first"]+fault_capture["installer_bytes"])
+            require(code["first"]<=physical(value)<=code["first"]+code["memory"] or
+                    policy["runtime_stack_begin"]<=value<=policy["runtime_stack_end"] or boundary,
+                    "cached pointer aliases persistent mutable P2 state")
+        elif code["first"]<=physical(value)<code["first"]+code["memory"]:
+            require(fault_capture["available"] and at==fault_capture["publisher_p2_reference_offset"] and
+                    value==fault_capture["publisher_p2_reference_value"],
+                    "uncached pointer aliases immutable cached code/constants")
+            fault_islands+=1
+    require(fault_islands==int(fault_capture["available"]),
+            "fault publisher must own exactly one audited P2 island reference")
+    return relocations
+
+
+def worker_stack_paths(directory, worker, resident, fault_proof=None):
     """Walk source-qualified emitted graphs with finite authored callbacks."""
     report_sets = {"worker": sorted((directory / "native").rglob("*.ci")),
                    "low": sorted(directory.glob("resident-sci.elf*.ltrans*.ci"))}
@@ -1457,6 +1715,12 @@ def worker_stack_paths(directory, worker, resident):
             "saved exception reader is not the exact zero-stack read-only leaf")
     frames["worker:kui_vmu_native_trace_irq"] = 0
     calls["worker:kui_vmu_native_trace_irq"] = []
+    if fault_proof is None:fault_proof=fault_capture_admission(worker)
+    fault_leaves=fault_proof.get("verified_zero_stack_assembly",[])
+    for name in fault_leaves:
+        # The proof above executed these authored assembly bodies with
+        # unusable owner stacks; neither pushes a frame or calls C.
+        frames["worker:"+name]=0;calls["worker:"+name]=[]
     by_base = {}
     for name in frames:
         by_base.setdefault((name.split(":", 1)[0], _function_base(name)), []).append(name)
@@ -1548,18 +1812,22 @@ def worker_stack_paths(directory, worker, resident):
                  "kui_vmu_native_passive_report", "kui_vmu_native_runtime_fault",
                  "kui_vmu_native_trace_game"):
         answer = max((depth(node) for node in resolve("worker", root)), key=lambda item: item[0])
-        total = answer[0] + 80 + 64
+        # Keep a full256B untouched border above the stack-bottom canaries,
+        # plus the existing80B assembly/library-call allowance. Runtime
+        # stack_valid requires that border; the linked deepest call path
+        # must establish it independently of the sampled SP checks.
+        total = answer[0] + 80 + 256
         require(total <= 4096, f"private stack path {root} needs{total} bytes")
-        paths[root] = {"c_frame_bytes": answer[0], "assembly_and_guard_margin": 144,
+        paths[root] = {"c_frame_bytes": answer[0], "assembly_and_guard_margin": 336,
                        "conservative_bytes": total, "worst_path": answer[1]}
     require(null_sites, "missing independently guarded optional writer block callback")
     return {"paths": paths, "indirect_sites": len(indirect_sites),
             "null_writer_block_sites": [list(site) for site in sorted(null_sites)],
             "source_qualified_calls": True,
-            "verified_zero_stack_assembly_leaves": ["kui_vmu_native_trace_irq"]}
+            "verified_zero_stack_assembly_leaves": ["kui_vmu_native_trace_irq",*fault_leaves]}
 
 
-def check_stacks(directory, worker):
+def check_stacks(directory, worker, fault_proof=None):
     resident = inspect_elf((directory / "resident-sci.elf").read_bytes(), LOW, 0x8C007800)
     low_rows = linked_stack_rows(sorted((directory / "resident/lto").glob("*.ltrans*.su")), resident["symbols"])
     high_rows = linked_stack_rows(sorted((directory / "native").rglob("*.su")), worker[4])
@@ -1569,6 +1837,8 @@ def check_stacks(directory, worker):
                 "kui_vmu_native_runtime_fault_hook", "kui_vmu_native_allocation_failure_hook",
                 "kui_vmu_native_trace_irq"}
     assembly.update(name[1:] for name, *_ in TRACE_GATES)
+    if fault_proof is None:fault_proof=fault_capture_admission(worker)
+    assembly.update(fault_proof.get("verified_zero_stack_assembly",[]))
     required = {_function_base(name) for name, (_, _, kind, _) in worker[4].items()
                 if kind == 2 and _function_base(name).startswith(("kui_", "durable_", "readonly_overlay_", "sci_storage_"))
                 and _function_base(name) not in assembly}
@@ -1578,7 +1848,7 @@ def check_stacks(directory, worker):
     # Every retained C frame is included, including low bus callbacks called
     # from the worker. Summing them overstates any single actual path.
     high_sum, low_sum = sum(frame for _, frame in high_rows), sum(frame for _, frame in low_rows)
-    call_paths = worker_stack_paths(directory, worker, resident)
+    call_paths = worker_stack_paths(directory, worker, resident, fault_proof)
     total = max(path["conservative_bytes"] for path in call_paths["paths"].values())
     available = (resident_layout.stack_top("sci", False, True) -
                  resident_layout.stack_bottom("sci", False, True) -
@@ -1601,6 +1871,7 @@ def check(directory, *, self_test=False, trace_startup=None):
     symbols = {name: record[0] for name, record in raw_symbols.items()}
     binary = (directory / "native-worker.bin").read_bytes()
     wire = (directory / "native-worker.reloc").read_bytes()
+    fault_capture=fault_capture_admission(worker,self_test)
     policy = worker_load_policy(worker, binary)
     cached, code_base = policy["cached_code"], policy["code_alias"]
     require(base['gd_map_refusal_terminal']['cached_worker_terminal']==cached,
@@ -1672,21 +1943,10 @@ def check(directory, *, self_test=False, trace_startup=None):
         require(section[2] & 7 == 6, "missing bounded persistent bridge implementation: " + name)
     require(generate(data, binary, P1, SPAN) == wire, "relocation table differs from exact ELF extraction")
     runtime_fault = check_runtime_fault_gateways(worker, binary, wire, self_test)
+    stack_guard = check_cached_stack_guard(worker, self_test) if cached else {"cached_runtime":False}
+    compiled_reader = check_compiled_heap_reader(worker,self_test)
     prepared_lifetime = check_prepared_lifetime(directory, worker, binary, wire, self_test, build=base["runtime"]["build"])
-    relocations = struct.unpack_from("<I", wire, 28)[0]
-    for i in range(relocations):
-        value = struct.unpack_from("<I", wire, 76 + i * 8)[0]
-        area = value & 0xFF000000
-        require(area in ((0x8C000000, 0xAC000000) if cached else (0xAC000000,)),
-                "internal relocated pointer uses an unadmitted alias")
-        if cached:
-            code = policy["loads"][1]
-            if area == 0x8C000000:
-                require(code["first"] <= physical(value) <= code["first"] + code["memory"],
-                        "cached pointer aliases mutable P2 state")
-            else:
-                require(not code["first"] <= physical(value) < code["first"] + code["memory"],
-                        "uncached pointer aliases immutable cached code/constants")
+    relocations=check_worker_pointer_aliases(wire,policy,fault_capture)
 
     stage = read_elf(directory / "stage.elf")
     prepared = inspect_elf(stage[0], 0x8CE00000, 0x8CFE0000)
@@ -1725,13 +1985,14 @@ def check(directory, *, self_test=False, trace_startup=None):
         raise ValueError(str(error)) from error
     hook_ranges = [symbol_bytes(worker, name, 2)[:2] for name in
                    names[1:4] + (names[11], names[14]) + tuple(gate[0] for gate in TRACE_GATES)]
+    if fault_capture["available"]:hook_ranges.append(symbol_bytes(worker,FAULT_GATEWAY,2)[:2])
     for address, _, mnemonic, operands in literal_aware_instructions(disassembly):
         require(mnemonic not in ("trapa", "sleep", "rte", "ldtlb"), "unexpected privileged worker instruction")
         if mnemonic in ("ldc", "ldc.l") and operands.split("!", 1)[0].strip().endswith(",sr"):
             require(any(begin <= address < begin + len(body) for begin, body in hook_ranges),
                     "C worker changes SR outside audited gateways")
     pio = check_pio_writers(directory, worker)
-    stacks = check_stacks(directory, worker)
+    stacks = check_stacks(directory, worker, fault_capture)
     source = check_source(directory, base["runtime"])
     report = {"schema": "kui.native.persistent.probe.artifact.v1", "allocator_bootstrap_audit": base,
               "module_sha256": base["module_sha256"], "runtime": base["runtime"],
@@ -1739,6 +2000,9 @@ def check(directory, *, self_test=False, trace_startup=None):
               "worker_load_policy": policy, "cached_code": cached,
               "prepared_lifetime_admission": prepared_lifetime,
               "failure_only_gateways": runtime_fault,
+              "private_stack_guard": stack_guard,
+              "compiled_owner_reader": compiled_reader,
+              "optional_fault_capture": fault_capture,
               "evolution_consolidated_trace": trace_audit,
               "stage_cache_publication": publication,
               "worker_icache_publication": publisher,

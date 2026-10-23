@@ -101,7 +101,12 @@ class TraceGate(Machine):
   assert not self.original
   self.visits+=1
   assert self.r[4:6]==[self.event,self.start_sp-80]
-  assert self.r[15]==self.image[4]['__vmu_native_worker_stack_top'][0]-4
+  # Exported bounds retain their P2 ownership addresses, while every runtime
+  # callback sharing the ephemeral private stack uses its canonical P1 alias.
+  stack_top=self.image[4]['__vmu_native_worker_stack_top'][0]
+  if self.image[4]['_kui_vmu_native_passive_arm'][0]&0xff000000==0x8c000000:
+   stack_top-=0x20000000
+  assert self.r[15]==stack_top-4
   assert self.sr&0xf0==0xf0
   f=self.start_sp-80
   assert self.read(f+12)==self.initial[1] and self.read(f+68)==self.initial[5]
@@ -133,6 +138,11 @@ def check(directory,startup,self_test=False):
    callback=struct.pack('<I',worker[4]['_kui_vmu_native_trace_game'][0])
    assert body.count(callback)==1
    edits.append(body.replace(callback,struct.pack('<I',0x8c000000)))
+   if worker[4]['_kui_vmu_native_passive_arm'][0]&0xff000000==0x8c000000:
+    top=worker[4]['__vmu_native_worker_stack_top'][0]
+    cached_top=struct.pack('<I',top-0x20000000)
+    assert body.count(cached_top)==1
+    edits.append(body.replace(cached_top,struct.pack('<I',top)))
    at=body.find(b'\x07\x4f');assert at>=0
    edits.append(body[:at]+b'\x09\x00'+body[at+2:])
    for changed in edits:

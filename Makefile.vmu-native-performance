@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-# Persistent native A1 with cached immutable code and uncached mutable state.
+# Persistent native A1 with cached code/ephemeral frames; persistent state is uncached.
 BUILD ?= build/vmu-native-performance
 NATIVE_LAYOUT := src/loader/vmu_native_performance.ld
 include Makefile.vmu-native-persistent

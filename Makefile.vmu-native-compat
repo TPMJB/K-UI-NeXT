@@ -20,7 +20,27 @@ COMPAT_CACHE_HOST_SRC = src/core/vmu_native_resolution_cache.c src/core/vmu_nati
 
 .PHONY: compat-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-evolution-context-host-tests native-evolution-fault-host-tests
 .PHONY: native-evolution-trace-host-tests native-evolution-trace-persistent-host-tests
+.PHONY: native-exception-capture-host-tests
+native-exception-capture-host-tests:
+	@mkdir -p $(BUILD)
+	python3 tests/test_vmu_native_fault_capture.py
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_NATIVE_FAULT_CAPTURE_HOST_TEST \
+	 tests/test_vmu_native_fault_capture.c src/loader/vmu_native_fault_capture.c \
+	 src/core/hash.c src/core/data.c -Wl,--gc-sections -o $(BUILD)/test-exception-capture-install
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-exception-capture-install '$(EVOLUTION1_STARTUP)'
+
 .PHONY: native-controller-fast-host-tests
+.PHONY: native-cached-stack-host-tests
+native-cached-stack-host-tests:
+	@mkdir -p $(BUILD)
+	python3 tests/test_vmu_native_cached_stack.py
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 -DKUI_VMU_NATIVE_CACHED_CODE=1 \
+	 tests/test_vmu_native_persistent.c $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-persistent-cached-stack
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-persistent-cached-stack
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 -DKUI_VMU_NATIVE_CACHED_CODE=1 \
+	 tests/test_vmu_native_controller.c $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-controller-cached-stack
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-controller-cached-stack
+
 native-controller-fast-host-tests:
 	@mkdir -p $(BUILD)
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_controller.c \
@@ -56,7 +76,7 @@ native-evolution-fault-host-tests:
 	python3 tests/test_vmu_native_evolution_cache.py --startup '$(EVOLUTION1_STARTUP)'
 	python3 tests/test_vmu_native_map_refusal.py
 
-native-evolution-context-host-tests:
+native-evolution-context-host-tests: native-exception-capture-host-tests
 	@mkdir -p $(BUILD)
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_evolution_transfer.c \
 	 $(COMPAT_WORKER_HOST_SRC) src/core/vmu_native_resolution_cache.c src/core/vmu_native_exit.c \
@@ -105,7 +125,7 @@ native-placement-host-tests: $(BUILD)/stage.elf $(BUILD)/native-worker.bin
 	 $(if $(EVOLUTION1_STARTUP),--evolution1 '$(EVOLUTION1_STARTUP)',) $(if $(JGR_STARTUP),--jgr '$(JGR_STARTUP)',)
 	python3 tests/test_vmu_native_stage_stack_artifact.py
 
-compat-host-tests: $(BUILD)/retail-maple-observe.kui persistent-host-tests passive-host-tests readonly-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-controller-fast-host-tests native-phase-host-tests
+compat-host-tests: $(BUILD)/retail-maple-observe.kui persistent-host-tests passive-host-tests readonly-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-controller-fast-host-tests native-phase-host-tests native-cached-stack-host-tests
 	KUI_NATIVE_ARTIFACT_DIR=$(BUILD) python3 tests/test_vmu_native_prepared_artifact.py
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_mode.c src/core/vmu_native_mode.c -o $(BUILD)/test-mode
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-mode

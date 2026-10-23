@@ -53,6 +53,12 @@ class PreparedArtifact(unittest.TestCase):
         self.assertEqual(result["controller_fastlane"]["private_pair_bytes"], 188)
 
     def test_context_stack_interior_has_exact_private_bounds(self):
+        records=audit.prepared_symbol_records(self.worker)
+        bottom=self.worker[4]["__vmu_native_worker_stack_bottom"]
+        top=self.worker[4]["__vmu_native_worker_stack_top"]
+        self.assertIn((".stack.cached",bottom[0]-0x20000000,4096,3,bottom[3]),records)
+        self.assertIn(("__vmu_native_worker_stack_bottom.cached",bottom[0]-0x20000000,0,0,bottom[3]),records)
+        self.assertIn(("__vmu_native_worker_stack_top.cached",top[0]-0x20000000,0,0,top[3]),records)
         for name in ("__vmu_native_worker_stack_bottom", "__vmu_native_worker_stack_top"):
             for index, delta in ((0, 32), (1, 4), (2, 1), (3, -1)):
                 with self.subTest(name=name, index=index):
@@ -71,11 +77,11 @@ class PreparedArtifact(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "stack section is ambiguous"):
             audit.prepared_symbol_records(self.worker[:3]+(sections,self.worker[4]))
 
-    def test_context_cannot_shift_valid_stack_interior_literal(self):
+    def test_context_cannot_shift_valid_cached_stack_boundary(self):
         name="_transfer_context_valid"
         refs=audit.prepared_signature(self.worker,self.binary,self.wire,name)[2]
         offsets=[offset for offset,target,interior,kind in refs
-                 if target==".stack" and interior==256 and kind==3]
+                 if target=="__vmu_native_worker_stack_bottom.cached" and interior==0 and kind==0]
         self.assertEqual(len(offsets),1)
         address,_,section=audit.symbol_bytes(self.worker,name,2)
         changed=bytearray(self.worker[0]);wire=bytearray(self.wire)
@@ -90,6 +96,73 @@ class PreparedArtifact(unittest.TestCase):
         else:self.fail("missing context stack-bound relocation")
         with self.assertRaisesRegex(ValueError,"linked instructions/targets changed"):
             self.check(worker=(bytes(changed),)+self.worker[1:],wire=bytes(wire))
+
+    def test_private_bss_and_header_comparison_views_have_exact_ownership(self):
+        records=audit.prepared_symbol_records(self.worker)
+        self.assertFalse(any(name==".bss.cached" for name,*_ in records))
+        for name in ("__vmu_native_worker_bss_begin","__vmu_native_worker_bss_end"):
+            value,_,_,owner=self.worker[4][name]
+            self.assertIn((name+".cached",value-0x20000000,0,0,owner),records)
+            for index,delta in ((0,32),(1,4),(2,1),(3,-1)):
+                with self.subTest(name=name,field=index):
+                    symbols=copy.deepcopy(self.worker[4]);record=list(symbols[name]);record[index]+=delta
+                    symbols[name]=tuple(record)
+                    with self.assertRaisesRegex(ValueError,"prepared private BSS"):
+                        audit.prepared_symbol_records(self.worker[:4]+(symbols,))
+        owner=self.worker[4]["__vmu_native_worker_bss_begin"][3]
+        for index,value in ((1,1),(2,7),(3,audit.P2+80),(5,4092)):
+            with self.subTest(bss_section_field=index):
+                sections=copy.deepcopy(self.worker[3]);section=list(sections[owner]);section[index]=value
+                sections[owner]=tuple(section)
+                with self.assertRaisesRegex(ValueError,"prepared private BSS"):
+                    audit.prepared_symbol_records(self.worker[:3]+(sections,self.worker[4]))
+        sections=list(self.worker[3]);sections.append(sections[owner])
+        with self.assertRaisesRegex(ValueError,"BSS section is ambiguous"):
+            audit.prepared_symbol_records(self.worker[:3]+(sections,self.worker[4]))
+        for index,delta in ((0,4),(1,4),(2,1)):
+            with self.subTest(exports_field=index):
+                symbols=copy.deepcopy(self.worker[4]);record=list(symbols["_kui_vmu_native_worker_exports"])
+                record[index]+=delta;symbols["_kui_vmu_native_worker_exports"]=tuple(record)
+                with self.assertRaisesRegex(ValueError,"prepared header boundary"):
+                    audit.prepared_symbol_records(self.worker[:4]+(symbols,))
+
+    def test_fault_publication_alias_exception_is_exact(self):
+        if audit.FAULT_GATEWAY not in self.worker[4]:self.skipTest("optional fault capture is absent")
+        proof=audit.fault_capture_admission(self.worker)
+        policy=audit.worker_load_policy(self.worker,self.binary)
+        self.assertEqual(audit.check_worker_pointer_aliases(self.wire,policy,proof),
+                         struct.unpack_from("<I",self.wire,28)[0])
+        total=struct.unpack_from("<I",self.wire,28)[0]
+        records=[struct.unpack_from("<II",self.wire,72+i*8) for i in range(total)]
+        island=next(i for i,(at,value) in enumerate(records) if at==proof["publisher_p2_reference_offset"])
+        def changed(index,at=None,value=None):
+            wire=bytearray(self.wire);old_at,old_value=records[index]
+            struct.pack_into("<II",wire,72+index*8,old_at if at is None else at,old_value if value is None else value)
+            return bytes(wire)
+        for wire in (changed(island,value=records[island][1]+2),
+                     changed(island,at=records[island][0]+4)):
+            with self.assertRaisesRegex(ValueError,"uncached pointer aliases"):
+                audit.check_worker_pointer_aliases(wire,policy,proof)
+        # Removing or duplicating the island cannot broaden its authorization.
+        for extra in (-1,1):
+            wire=bytearray(self.wire)
+            if extra<0:del wire[72+island*8:80+island*8]
+            else:wire.extend(struct.pack("<II",records[island][0]+4,records[island][1]))
+            struct.pack_into("<I",wire,28,total+extra)
+            with self.assertRaises(ValueError):audit.check_worker_pointer_aliases(bytes(wire),policy,proof)
+        for boundary in proof["cached_bss_boundaries"]+[proof["cached_header_end"]]:
+            selected=[i for i,(_,value) in enumerate(records) if value==boundary]
+            for i in selected:
+                with self.subTest(boundary=hex(boundary)):
+                    with self.assertRaisesRegex(ValueError,"cached pointer aliases persistent"):
+                        audit.check_worker_pointer_aliases(changed(i,at=0),policy,proof)
+                    with self.assertRaisesRegex(ValueError,"cached pointer aliases persistent"):
+                        audit.check_worker_pointer_aliases(changed(i,value=boundary+4),policy,proof)
+        for index,delta in ((0,1),(1,4),(2,1)):
+            symbols=copy.deepcopy(self.worker[4]);record=list(symbols[audit.FAULT_STATE]);record[index]+=delta
+            symbols[audit.FAULT_STATE]=tuple(record)
+            with self.assertRaisesRegex(ValueError,"scratch lacks exact32B"):
+                audit.fault_capture_admission(self.worker[:4]+(symbols,))
 
     def test_identity_hook_and_free_walk_bounds_are_pinned(self):
         for name, offset, original in (
@@ -123,9 +196,29 @@ class PreparedArtifact(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "linked instructions/targets changed"):
             self.check(worker=(bytes(changed),) + self.worker[1:], wire=bytes(wire))
 
+    def test_cached_stack_view_cannot_admit_other_cached_mutable_objects(self):
+        name="_poll_lease_valid"
+        address,_,section=audit.symbol_bytes(self.worker,name,2)
+        pointer_offset=audit.prepared_signature(self.worker,self.binary,self.wire,name)[2][0][0]
+        changed=bytearray(self.worker[0]);wire=bytearray(self.wire)
+        # lifetime_plan has private P2 ownership. Adding a typed P1 stack
+        # view must not silently authorize an alias of this persistent state.
+        value=self.worker[4]["_lifetime_plan"][0]-0x20000000
+        struct.pack_into("<I",changed,section[4]+address-section[3]+pointer_offset,value)
+        first=audit.physical(address)-audit.physical(audit.P1)
+        for i in range(struct.unpack_from("<I",wire,28)[0]):
+            if struct.unpack_from("<I",wire,72+i*8)[0]==first+pointer_offset:
+                struct.pack_into("<I",wire,76+i*8,value)
+                break
+        else:self.fail("missing proved plan pointer relocation")
+        with self.assertRaisesRegex(ValueError,"prepared pointer has no typed target"):
+            audit.prepared_signature((bytes(changed),)+self.worker[1:],self.binary,bytes(wire),name)
+
     def test_private_plan_and_witness_geometry_is_required(self):
-        for name in ("_lifetime_plan", "_hook_witness", "_hook_witness_count", "_hook_witness_ready",
-                     "_controller_pair"):
+        names=["_lifetime_plan", "_hook_witness", "_hook_witness_count", "_hook_witness_ready",
+               "_controller_pair"]
+        if audit.FAULT_STATE in self.worker[4]:names.append(audit.FAULT_STATE)
+        for name in names:
             for index, delta in ((0, -0x20000000), (0, 1), (1, 4), (2, 1)):
                 with self.subTest(name=name, index=index):
                     symbols = copy.deepcopy(self.worker[4]); record = list(symbols[name])

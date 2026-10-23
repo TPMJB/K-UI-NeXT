@@ -11,9 +11,12 @@ VMU_PACKAGE_ARGS :=
 FLAGS += -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 \
  -DKUI_VMU_SD_PROFILE_BIN='"$(BUILD)/vmu-sd-profile.bin"'
 NATIVE_FLAGS += -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -fcallgraph-info=su
-NATIVE_SRC += src/loader/vmu_native_trace.c
-NATIVE_OBJ += $(BUILD)/native_trace_hooks.o
+NATIVE_SRC += src/loader/vmu_native_trace.c src/loader/vmu_native_fault_capture.c
+NATIVE_OBJ += $(BUILD)/native_trace_hooks.o $(BUILD)/native_fault_capture_hooks.o
 $(BUILD)/native_trace_hooks.o: src/loader/vmu_native_trace_hooks.S
+	@mkdir -p $(@D)
+	$(CC) $(NATIVE_FLAGS) -c $< -o $@
+$(BUILD)/native_fault_capture_hooks.o: src/loader/vmu_native_fault_capture.S
 	@mkdir -p $(@D)
 	$(CC) $(NATIVE_FLAGS) -c $< -o $@
 FLAGS += -fcallgraph-info=su
