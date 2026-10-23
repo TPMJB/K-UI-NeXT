@@ -541,3 +541,43 @@ mutations. It destroys the retired relay stack during installation and checks
 complete caller restoration. The legacy performance artifact still passes its
 original stack policy. Publication proofs retain exact compiler variants and
 reject three coherent but mismatched register/initialization mutations.
+
+## SA2 persistence acceptance and bounded ordinary polling
+
+The owner tested heap-fix build `c6b7bccdd7f2`: SA2 saves and loads successfully,
+but gameplay is choppy with substantial input lag. Skies reloaded successfully.
+A later report describes slightly gummy ship controls without establishing
+whether those controls behaved the same with virtual VMU disabled. Persistence
+acceptance does not establish acceptable gameplay latency or universal native
+support.
+
+Both submit and completion still walked the complete allocator free list under
+IMASK15. Ordinary polling now checks the eight arena/dispatch/allocated-header
+identity words after renewing installed initializer/release/terminal hooks.
+The full arm proof plus normal allocation's remove/split behavior and fully
+admitted intercepted frees preserve the reserved lease inductively. Full walks
+remain at arm, every release and both sides of every external SCI loan. The
+identity API explicitly cannot detect arbitrary unrelated free-list corruption;
+integration tests show that corruption still prevents storage acquisition and
+virtual RX publication. See `native-heap-poll-identity.md` for the exact scope.
+
+ASan/UBSan integration passes 1,197,394 persistent checks, 60,828 lifetime checks,
+1,013 full-release differential checks and 37,609 stress checks through 1,023
+free nodes and 64 free calls per batch. The two-controller measurement is
+387 reads for first preparation, 336 steady, 342 INFO and 758 block READ.
+A 64-node poll drops from 596 to 336 reads; four-controller polls remain 358
+reads independent of free-list length. Full release costs remain unchanged
+and may still contribute latency in games with high free frequency. Reader
+counts do not establish console timing or frame rate.
+
+The original SH allocator execution model now also runs 227 allocation/free
+operations per exact PS2, Skies and SA2 startup, exercising 32 free nodes,
+split/exact-fit/failure/coalescing paths while retaining worker contents and
+all eight identity witnesses. No new SH model opcode was needed. Review found
+no concrete steady cache-policy change; SA2's entry preserves the owner ICE bit,
+so changing cache policy speculatively is not warranted.
+
+Next hardware acceptance is the same SA2 gameplay scene and save/full-power-off/
+reload, then the reported ship-control scene and brief Skies/PS2 regressions.
+If lag persists, compare the same scene/settings with virtual VMU disabled and
+measure the remaining release-hook interrupt scope before claiming parity.

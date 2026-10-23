@@ -1,29 +1,42 @@
 # Native VMU runtime cost and bounded peripheral queries
 
 These host measurements compare the hardware-tested cached-code baseline
-`2e5314b` with the next native worker. They count actual guest RAM/MMIO reader
+`2e5314b`, the compatibility/heap-fix worker, and the bounded-polling worker.
+They count actual guest RAM/MMIO reader
 callbacks in production C, excluding fixture setup and test inspection reads.
 They measure work, not SH4 cycles or frame rate. Power Stone 2 hardware results
 from the baseline do not establish another title's performance or compatibility.
 
-| Workload | Baseline reads | New reads |
-| --- | ---: | ---: |
-| Steady two-controller pair, one free heap node | 450 | 344 |
-| Steady four-controller pair, one free heap node | 476 | 366 |
-| Two controllers plus virtual INFO | 458 | 350 |
-| Two controllers plus virtual block READ, including SD boundary proofs | 880 | 766 |
-| Two-controller pair, 64 free heap nodes | 702 | 596 |
-| First READ with five descriptors and 251 padding NOPs | 2,936 | 1,861 |
-| One unrelated release, 256 free heap nodes | 1,056 | 543 |
-| 64 unrelated releases, 256 free heap nodes | 67,584 | 34,752 |
+| Workload | Baseline reads | Compatibility/heap fix | Bounded polling |
+| --- | ---: | ---: | ---: |
+| Steady two-controller pair, one free heap node | 450 | 344 | 336 |
+| Steady four-controller pair, one free heap node | 476 | 366 | 358 |
+| Two controllers plus virtual INFO | 458 | 350 | 342 |
+| Two controllers plus virtual block READ, including SD boundary proofs | 880 | 766 | 758 |
+| Two-controller pair, 64 free heap nodes | 702 | 596 | 336 |
+| First READ with five descriptors and 251 padding NOPs | 2,936 | 1,861 | 1,853 |
+| One unrelated release, 256 free heap nodes | 1,056 | 543 | 543 |
+| 64 unrelated releases, 256 free heap nodes | 67,584 | 34,752 | 34,752 |
 
-The first two-controller pair costs 395 reads because it constructs the
+The first two-controller pair costs 387 reads because it constructs the
 launch-local prepared geometry once. It is never loaded from the address cache.
-Steady four-controller work is `362 + 4 * free_nodes` reads per pair; unrelated
-releases cost `31 + 2 * free_nodes` each. Heap fragmentation and free frequency
-therefore still affect performance. The maximum list remains bounded at 1,024
-walk entries. Malformed, overlapping, mixed-alias and unowned release inputs
-remain refused.
+Steady four-controller work is now 358 reads per pair, independent of heap
+fragmentation. The previous worker cost `362 + 4 * free_nodes` reads. Each
+polling boundary now uses an eight-read arena/dispatch/header identity witness,
+after checking the installed release and initializer hooks. Full arm proof,
+ordinary allocation's remove/split behavior, intercepted release admission and
+blocked reinitialization preserve the lease inductively; see
+`native-heap-poll-identity.md`. Identity alone does not audit arbitrary free-list
+corruption outside that reviewed allocator contract. The full list is still
+checked before every release and on both sides of each SCI loan.
+
+Unrelated releases still cost `31 + 2 * free_nodes` reads each, so high release
+frequency can still affect interrupt latency. The maximum list remains bounded
+at 1,024 walk entries. Malformed, overlapping, mixed-alias and unowned release
+inputs remain refused. The stress test now reaches 1,023 free nodes and confirms
+ordinary polling cost remains constant through that range. This removes a
+source of interrupt-masked work; hardware measurement must establish its effect
+on SA2's reported gameplay choppiness and input lag.
 
 The prepared geometry lives in final worker BSS and pins its own address. Its
 preparation calls the existing full layout binder and runtime validator. Later
@@ -73,4 +86,6 @@ maximum padding, varied descriptor/free counts and a frozen two-walk release
 reference. See `tests/test_vmu_native_live.c`,
 `tests/test_vmu_native_peripherals.c`, `tests/test_vmu_native_stress.c` and
 `tests/test_vmu_native_lifetime_stress.c`. These checks do not replace a real
-save, power cycle and reload on each newly admitted title.
+save, power cycle and reload on each newly admitted title. Actual original SH
+allocator execution also exercises split, exact-fit, allocation failure, free
+and coalescing transitions for PS2, Skies and SA2 while preserving the worker.

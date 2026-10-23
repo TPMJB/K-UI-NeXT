@@ -14,7 +14,9 @@ KUI_NATIVE_PS2_STARTUP, KUI_NATIVE_SKIES_STARTUP and KUI_NATIVE_SA2_STARTUP.
 The independent, bounded SH integer model follows the actual initializer,
 dispatch helper, bootstrap release and first tail allocation. It then models
 the worker's complete copy/zero write span, checking stage and installer-stack
-canaries. Unsupported instructions fail rather than being approximated.
+canaries, and executes subsequent original allocation/free operations while
+retaining the worker lease. Unsupported instructions fail rather than being
+approximated.
 """
 import argparse
 import hashlib
@@ -252,6 +254,147 @@ def stage_layout(build):
 
 
 class HeapExecutionTests(unittest.TestCase):
+    def allocator_evolution(self, model, heap, begin, count, payload, stack):
+        """Original SH transitions, checked against an independent interval set.
+
+        This exercises the ordinary SDK allocation/free contract. It does not
+        model arbitrary game writes or substitute for the runtime release-hook
+        admission tests. The retained worker is never passed to release.
+        """
+        allocate, release, sentinel, cursor = heap[9], heap[10], heap[13], heap[14]
+        header, alias = payload - 32, begin & 0xE0000000
+        arena_begin, arena_end = physical(begin), physical(begin) + count
+        lease_begin, lease_end = physical(header), physical(payload) + LEASE_BYTES
+        identity = {heap[15]: begin, heap[17]: begin, heap[16]: count,
+                    heap[11]: heap[12], heap[12]: allocate, heap[12] + 4: release,
+                    sentinel + 4: 0, header + 4: LEASE_BYTES // 32 + 1}
+        retained = model.block(header, LEASE_BYTES + 32)
+        live, operations, maximum_nodes, steps = {}, 0, 0, 0
+        exact_fits = split_fits = failed_allocations = 0
+
+        def merged(intervals):
+            result = []
+            for first, end in sorted(intervals):
+                if result and result[-1][1] == first:
+                    result[-1] = (result[-1][0], end)
+                else:
+                    if result:
+                        self.assertLess(result[-1][1], first)
+                    result.append((first, end))
+            return result
+
+        def check():
+            nonlocal maximum_nodes
+            for address, value in identity.items():
+                self.assertEqual(model.read(address), value, hex(address))
+            self.assertEqual(model.block(header, LEASE_BYTES + 32), retained)
+            nodes, intervals, node = {sentinel}, [], model.read(sentinel)
+            for _ in range(1024):
+                if node == sentinel:
+                    break
+                self.assertNotIn(node, nodes, "Free list must not cycle")
+                nodes.add(node)
+                self.assertEqual(node & 0xE0000000, alias)
+                self.assertEqual(node & 31, 0)
+                at, units = physical(node), model.read(node + 4)
+                self.assertGreaterEqual(at, arena_begin)
+                self.assertGreater(units, 0)
+                end = at + units * 32
+                self.assertLessEqual(end, arena_end)
+                self.assertTrue(end <= lease_begin or lease_end <= at)
+                if intervals:
+                    self.assertLess(intervals[-1][1], at, "Free nodes must be sorted and coalesced")
+                for address, (allocated_units, pattern) in live.items():
+                    first = physical(address) - 32
+                    self.assertTrue(end <= first or first + allocated_units * 32 <= at)
+                    self.assertEqual(model.read(address - 28), allocated_units)
+                    self.assertEqual(model.block(address, len(pattern)), pattern)
+                intervals.append((at, end))
+                node = model.read(node)
+            else:
+                self.fail("Original allocator free list exceeded 1024 nodes")
+            self.assertIn(model.read(cursor), nodes)
+            maximum_nodes = max(maximum_nodes, len(intervals))
+            return intervals
+
+        def alloc(size):
+            nonlocal operations, steps, exact_fits, split_fits, failed_allocations
+            before = check()
+            result, writes, instructions = model.run(allocate, [size], stack)
+            operations += 1
+            steps += instructions
+            units = (size + 31) // 32 + 1
+            if not result:
+                self.assertFalse(any(end - first >= units * 32 for first, end in before))
+                self.assertEqual(check(), before)
+                failed_allocations += 1
+                return result
+            self.assertEqual(result & 0xE0000000, alias)
+            self.assertEqual(result & 31, 0)
+            self.assertNotIn(result, live)
+            first, end = physical(result) - 32, physical(result) - 32 + units * 32
+            containing = [(a, b) for a, b in before if a <= first < end <= b]
+            self.assertEqual(len(containing), 1)
+            self.assertEqual(end, containing[0][1], "Reviewed allocator takes the free block tail")
+            expected = [interval for interval in before if interval != containing[0]]
+            if containing[0][0] < first:
+                expected.append((containing[0][0], first))
+                split_fits += 1
+            else:
+                exact_fits += 1
+            self.assertTrue(all(not intersects(address, width, header, LEASE_BYTES + 32)
+                                for _, address, _, width in writes))
+            pattern = bytes([0x30 + operations % 160]) * ((units - 1) * 32)
+            model.store_block(result, pattern)
+            live[result] = (units, pattern)
+            self.assertEqual(check(), sorted(expected))
+            return result
+
+        def free(address):
+            nonlocal operations, steps
+            before = check()
+            units, _ = live.pop(address)
+            _, writes, instructions = model.run(release, [address], stack)
+            operations += 1
+            steps += instructions
+            first = physical(address) - 32
+            self.assertTrue(all(not intersects(at, width, header, LEASE_BYTES + 32)
+                                for _, at, _, width in writes))
+            self.assertEqual(check(), merged(before + [(first, first + units * 32)]))
+
+        initial = check()
+        # An isolated hole is consumed exactly; then free it in the opposite
+        # order to exercise joining an adjacent upper and lower free block.
+        first, middle, last = alloc(33), alloc(64), alloc(32)
+        free(middle)
+        replacement = alloc(64)
+        self.assertEqual(replacement, middle)
+        free(first)
+        free(last)
+        free(replacement)
+        self.assertEqual(check(), initial)
+        varied = [alloc(size) for size in (1, 31, 32, 33, 63, 64, 65, 127, 128, 129, 1023, 4096, 8191)]
+        for address in varied[1::2] + varied[::2]:
+            free(address)
+        self.assertEqual(check(), initial)
+        fragmented = [alloc(1 + (i * 97) % 2048) for i in range(64)]
+        for address in fragmented[1::2]:
+            free(address)
+        replacements = [alloc((1, 20, 96, 320, 1024)[i % 5]) for i in range(32)]
+        # A request larger than the entire arena must fail without changing
+        # the free set or the retained header/worker, even when fragmented.
+        self.assertEqual(alloc(count), 0)
+        remaining = fragmented[::2] + replacements
+        for address in remaining[1::2] + remaining[::2]:
+            free(address)
+        self.assertFalse(live)
+        self.assertEqual(check(), initial)
+        self.assertGreaterEqual(maximum_nodes, 32)
+        self.assertGreater(exact_fits, 0)
+        self.assertGreater(split_fits, 0)
+        self.assertEqual(failed_allocations, 1)
+        return operations, maximum_nodes, steps
+
     def execute(self, slug):
         path = getattr(OPTIONS, slug)
         if not path:
@@ -321,6 +464,8 @@ class HeapExecutionTests(unittest.TestCase):
         self.assertEqual(model.block(stack, stack_bytes), stack_before_worker)
         self.assertEqual(model.read(header + 4), LEASE_BYTES // 32 + 1)
         self.assertEqual(model.read(begin), sentinel)
+        operations, free_nodes, evolution_steps = self.allocator_evolution(
+            model, heap, begin, count, payload, new_sp)
         # Reproduce the former overwrite, rather than merely comparing bounds.
         old_frame = OLD_INSTALLER_SP - 128
         model.store_block(old_frame, bytes([0x69]) * 160)
@@ -333,6 +478,9 @@ class HeapExecutionTests(unittest.TestCase):
         print(f"Actual {slug} heap: {init_steps} initializer/release + {alloc_steps} allocation instructions; "
               f"payload={payload:08x}, new SP={new_sp:08x}, stage/stack preserved, "
               f"old-stack overwrite={old_corrupted}")
+        print(f"Actual {slug} lifetime: {operations} allocation/free operations, "
+              f"{free_nodes} maximum free nodes, {evolution_steps} SH instructions; "
+              "exact/split/failure/coalescing transitions preserve owner/header/worker")
 
     def test_ps2(self):
         self.execute("ps2")

@@ -91,7 +91,8 @@ def package(build):
             cache_catalog_sha256=sha(catalog))
         extra['tools/vmu_native_cache_seed.py']=(root/'tools/vmu_native_cache_seed.py').read_bytes()
         for name in ('vmu-feature-comparison.md','vmu-native-resolution-cache.md',
-                     'vmu-native-launch-cache.md','vmu-native-runtime-cost.md'):
+                     'vmu-native-launch-cache.md','vmu-native-runtime-cost.md',
+                     'native-heap-poll-identity.md'):
             extra['docs/'+name]=(root/'docs'/name).read_bytes()
         extra['docs/native-sdk-family-corpus.json']=(root/'docs/evidence/native-sdk-family-corpus-2026-10-22.json').read_bytes()
         extra['docs/native-installer-stack-regression.json']=(root/'docs/evidence/native-sa2-installer-stack-2026-10-22.json').read_bytes()

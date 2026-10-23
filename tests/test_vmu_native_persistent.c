@@ -368,9 +368,31 @@ static void bounded_controller_work(void) {
         put(node,4u,i==63u?input.lease.owner.sentinel:node+64u);put(node+4u,4u,1u);
     }
     unsigned fragmented=measure_batch(0u,0u,NULL);
-    CHECK(fragmented<=600u && full_work()<=8u && !measured_work.storage);
+    CHECK(fragmented==controller && full_work()<=8u && !measured_work.storage);
     printf("Native worker guest reads/pair: first=%u controller=%u INFO=%u READ=%u fragmented64=%u\n",
         first,controller,info,read,fragmented);
+}
+static void polling_ownership_scope(void) {
+    /* Polling retains the continuously intercepted allocator's established
+     * lease; it does not re-audit arbitrary free-list corruption. Such a
+     * corrupt list must still fail before any storage loan or virtual reply. */
+    for(volatile unsigned release=0u;release<2u;release++) {
+        setup();transfer_batch(0u,0u,0u,NULL);
+        put(input.lease.begin,4u,input.lease.begin); /* Invalid circular list. */
+        CHECK(poll_lease_valid() && !lease_valid());
+        transfer_batch(0u,0u,0u,NULL);CHECK(!sd.bytes && !lease_calls);
+        uint8_t before[1024];memcpy(before,rx_bytes(1),sizeof(before));
+        if(release) {
+            frame.r4=0u;
+            if(setjmp(terminal)==0) {kui_vmu_native_readonly_release_check(&frame);CHECK(false);}
+            CHECK(terminal_error==0x30u);
+        } else {
+            begin_batch(11u,42u,0u,NULL);physical_complete();reject_complete();
+            CHECK(durable_card.faulted && !durable_card.commits);
+        }
+        CHECK(!sd.bytes && !lease_calls && !sd.writes);
+        CHECK(!memcmp(before,rx_bytes(1),sizeof(before)));
+    }
 }
 static void halfword_exit_hooks(void) {
     for(unsigned family=KUI_VMU_NATIVE_EXIT_PVR_CLEAR;family<=KUI_VMU_NATIVE_EXIT_PVR_COMPACT;family++) {
@@ -475,7 +497,7 @@ int main(void) {
     memcpy(target,rx_bytes(1),sizeof(target));reject_complete();
     CHECK(!durable_card.commits && durable_card.faulted && !memcmp(target,rx_bytes(1),sizeof(target)));
     CHECK(!memcmp(sd.media[image_lba(42u)],next,512u));
-    bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();
+    bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();polling_ownership_scope();
     printf("Native persistent bridge: %u checks passed; filtered hardware chain, PIO save, reboot recovery and no false ACK\n",checks);
     return 0;
 }

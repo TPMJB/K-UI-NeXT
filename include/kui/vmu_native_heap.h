@@ -50,6 +50,19 @@ bool kui_vmu_native_heap_preallocate(const struct kui_vmu_native_heap_lease *,
     kui_vmu_native_heap_read,void *,uint32_t initializations);
 bool kui_vmu_native_heap_postallocate(struct kui_vmu_native_heap_lease *,
     kui_vmu_native_heap_read,void *,uint32_t initializations,uint32_t actual_payload);
+/* Constant-size identity witness, NOT a free-list ownership proof. This checks
+ * the original arena/dispatch identity and allocated lease header without
+ * traversing mutable free blocks. A runtime may use it between full proofs
+ * only while retaining its independent lifetime contract: the reviewed
+ * allocator and its valid allocation/free callers remain unchanged, every
+ * reinitializer is intercepted, and every release is admitted against a full
+ * coherent free-list walk before its original code runs. Normal allocation
+ * only removes/splits existing free blocks; admitted releases cannot extend
+ * them into the tail lease. Initial arm and external storage boundaries still
+ * require kui_vmu_native_heap_lease_valid. The caller excludes mutation and
+ * supplies coherent reads throughout either check. */
+bool kui_vmu_native_heap_lease_identity_valid(const struct kui_vmu_native_heap_lease *,
+    kui_vmu_native_heap_read,void *,uint32_t initializations);
 bool kui_vmu_native_heap_lease_valid(const struct kui_vmu_native_heap_lease *,
     kui_vmu_native_heap_read,void *,uint32_t initializations);
 /* One coherent ownership walk with an optional release candidate. A nonzero

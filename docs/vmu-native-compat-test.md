@@ -1,19 +1,21 @@
 # Native VMU compatibility and performance test
 
-This update fixes the **Sonic Adventure 2 phase-2 allocator refusal** observed
-with build `3cd64df45cfe`. Its first allocation lands near the top of RAM,
-where the worker would overlap the old temporary installer stack. The installer
-now uses a separate 64 KiB stack inside its protected stage BSS. The original
-game heap size and allocator arguments are preserved. The worker also retains
-the allocator's original address alias for ownership checks while using
-physical addresses for DMA and protected-range comparisons.
+This update targets **gameplay choppiness and input lag** reported after SA2
+successfully saved and loaded with heap-fix build `c6b7bccdd7f2`. Skies also
+reloaded successfully. Slightly gummy ship controls were separately reported;
+their baseline behavior has not yet been compared.
 
-Start with **Sonic Adventure 2**, then briefly regress Power Stone 2. The owner
-reported successful Skies and Power Stone 2 launches on every boot; those
-reports alone do not establish that Skies exercised the virtual VMU route.
-The Skies startup predicts the same top-of-RAM allocation as SA2, so this fix
-also needs an explicit Skies virtual-card save and power-off/reload result.
-New-build console acceptance remains pending.
+Ordinary controller polls no longer traverse the whole heap free list twice.
+They use a bounded arena/header identity check after validating the installed
+allocator hooks. Every free and external storage loan retains its complete
+ownership proof. This prevents heap fragmentation from multiplying ordinary
+polling work under the interrupt mask. Host checks establish the reduction;
+console gameplay and latency acceptance remain pending.
+
+The previous top-of-RAM installer-stack and raw allocator-alias fixes remain.
+The game heap size and allocator arguments are preserved. Start with **Sonic
+Adventure 2**, then briefly regress Skies and Power Stone 2 using the same
+scenes and loader settings as before.
 
 ## Install and select a cached mapping
 
@@ -92,9 +94,13 @@ Once that frontend is built, it writes per-image mappings under
 `KUI/VMU/native-cache/v1/` before shutdown and supplies the same module seed.
 See `docs/vmu-native-launch-cache.md` for that integration boundary.
 
-Host instrumentation reduces a steady two-controller poll from 450 to 344
-guest-memory/MMIO reads and four controllers from 476 to 366. A fragmented
-heap release drops from 1,056 to 543 reads. Fresh-SHA-inclusive mapping replay
+Host instrumentation reduces a steady two-controller poll from 450 to 336
+guest-memory/MMIO reads and four controllers from 476 to 358. A two-controller
+poll with 64 free heap nodes now costs the same 336 reads, down from 596 in the
+previous compatibility/heap-fix worker. Ordinary polls retain an eight-read
+lease identity witness and checked allocator hooks; full ownership walks remain
+at arm, every free and every external storage boundary. A fragmented heap
+release remains 543 reads. Fresh-SHA-inclusive mapping replay
 uses roughly one-third the host CPU time of full discovery on these three
 startups. These are work measurements; console timings and frame rate must
 come from your tests. Save journal, readback and storage-restoration checks
@@ -105,8 +111,8 @@ remain enabled.
 | Uploaded startup | Result |
 | --- | --- |
 | Power Stone 2 | Existing hardware baseline; new build needs regression |
-| Skies of Arcadia, Disc 1 | New host-proven family; console candidate |
-| Sonic Adventure 2 | New host-proven family; console candidate |
+| Skies of Arcadia, Disc 1 | Owner reports reliable launches and successful reload; this performance update needs regression |
+| Sonic Adventure 2 | Heap fix saves and loads on hardware; gameplay/input latency regressed; this update targets polling overhead |
 | Resident Evil Code: Veronica | Static discovery passes; live buffer/image overlap correctly refuses |
 | Grandia II | Allocator discovery is ambiguous |
 | Crazy Taxi 2 | Allocator found; initializer family not yet admitted |
@@ -118,3 +124,10 @@ The ZIP includes a source checkpoint, detailed audit report, runtime cost
 measurements and the SWAT feature comparison. The source history is a recovered
 feature checkout: port focused changes onto the original branch rather than
 merging its synthetic recovery root over main.
+
+For this update, use the same SA2 stage/scene to compare gameplay and controller
+response, then verify save/power-off/reload. Also check the reported gummy ship
+controls. If either still feels delayed, compare that scene with virtual VMU
+disabled using the same loader settings; this separates remaining added latency
+from the game's usual controls. Neither host read counts nor persistence alone
+establish acceptable gameplay performance.

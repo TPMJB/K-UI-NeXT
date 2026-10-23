@@ -147,14 +147,22 @@ static void stress_pending_release_protection(void) {
     CHECK(value_at(0xa05f6c18u)==1u);
 }
 int main(void) {
-    static const unsigned fragments[]={1u,8u,64u,256u};
+    static const unsigned fragments[]={1u,8u,64u,256u,1023u};
     static const unsigned frequencies[]={0u,1u,8u,64u};
     uint8_t payload[512];memset(payload,0x73,sizeof(payload));
+    unsigned steady[4]={0};
     for(unsigned n=0;n<sizeof(fragments)/sizeof(fragments[0]);n++) {
         setup();fragment_heap(fragments[n]);
         for(unsigned controllers=1u;controllers<=4u;controllers++) {
             struct stress_cost c=stress_transfer(controllers,0u,0u,0u,NULL,0u,0u);
             CHECK(!c.wire && !c.reads && !c.writes);
+            /* First transfer prepares geometry once. All subsequent ordinary
+             * polls must be independent of the number of free heap nodes. */
+            unsigned reads=c.submit_reads+c.complete_reads;
+            if(controllers>1u) {
+                if(!n) steady[controllers-1u]=reads;
+                else CHECK(reads==steady[controllers-1u]);
+            }
             print_cost("controller",controllers,fragments[n],0u,0u,c);
         }
         for(unsigned f=0;f<sizeof(frequencies)/sizeof(frequencies[0]);f++) {
@@ -185,6 +193,6 @@ int main(void) {
     CHECK(state.completed==first+256u && durable_card.reads==257u);
     stress_rejected_batches();
     stress_pending_release_protection();
-    printf("Native workload stress: %u checks passed; 1..5 descriptors, 1..256 free nodes, 0..64 free calls, maximum padding, all256 SD reads and bounded refusals\n",checks);
+    printf("Native workload stress: %u checks passed; 1..5 descriptors, 1..1023 free nodes, 0..64 free calls, maximum padding, all256 SD reads and bounded refusals\n",checks);
     return 0;
 }

@@ -278,11 +278,15 @@ bool kui_vmu_native_heap_postallocate(struct kui_vmu_native_heap_lease *l,
     }
     l->phase=2u;return true;
 }
+bool kui_vmu_native_heap_lease_identity_valid(const struct kui_vmu_native_heap_lease *l,
+    kui_vmu_native_heap_read read,void *ctx,uint32_t initializations) {
+    return l && l->phase==2u && identity(l,read,ctx,initializations) &&
+        read_is(read,ctx,l->header+4u,l->units);
+}
 bool kui_vmu_native_heap_lease_valid_with_release(const struct kui_vmu_native_heap_lease *l,
     kui_vmu_native_heap_read read,void *ctx,uint32_t initializations,uint32_t payload,
     uint32_t *release_bytes) {
-    if(!l || l->phase!=2u || !identity(l,read,ctx,initializations) ||
-       !read_is(read,ctx,l->header+4u,l->units)) return false;
+    if(!kui_vmu_native_heap_lease_identity_valid(l,read,ctx,initializations)) return false;
     uint32_t alias=l->begin&UINT32_C(0xe0000000),release_begin=0u,release_end=0u;
     if(payload) {
         uint32_t at=phys(payload),begin=phys(l->begin),end=begin+l->heap_bytes,units;

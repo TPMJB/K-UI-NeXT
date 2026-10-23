@@ -138,6 +138,20 @@ static bool lease_valid(void) {
     return kui_vmu_native_heap_lease_valid(&config.lease,read_heap,NULL,1u);
 }
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
+/* Arm established complete free-list exclusion. Reviewed allocate only splits
+ * or removes free chunks; release and initializer entry remain intercepted.
+ * Both polling callers verify those installed hooks before this bounded
+ * identity witness. Full ownership is still renewed by every release check
+ * and on both sides of every external storage loan. This is not a replacement
+ * for a full check when admitting a new lease or an unobserved allocator. */
+static bool poll_lease_valid(void) {
+    RECORD_WORK(heap);
+    return kui_vmu_native_heap_lease_identity_valid(&config.lease,read_heap,NULL,1u);
+}
+#else
+#define poll_lease_valid lease_valid
+#endif
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
 static void write_mdstar(uint32_t source) {
 #ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
     extern void kui_vmu_native_passive_test_write(uint32_t,unsigned,uint32_t);
@@ -575,7 +589,7 @@ static bool persistent_storage_guard(void) {
         issued_plan.output_physical==issued_physical() &&
         !kui_vmu_volatile_chain_verify(&issued_plan,issued_chain,sizeof(issued_chain));
 }
-/* The full ownership proof is renewed at each external boundary. Between it
+/* The full ownership proof is renewed at each scoped storage boundary. Between it
  * and MDST/RX publication only reviewed private RAM work runs under IMASK15.
  * Repeat the live MMIO/context witness here, not the complete geometry and
  * free-list walks that were just proved without an intervening game caller. */
@@ -630,7 +644,7 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
     if(!installed_hooks_valid()) fail(0x45u);
 #endif
     if(!ram(f->r14,4u,4u) || physical(f->r14)!=physical(config.driver.manager_cell) || f->r12!=1u) fail(2u);
-    if(!lease_valid() || kui_vmu_native_passive_resume!=config.driver.resume ||
+    if(!poll_lease_valid() || kui_vmu_native_passive_resume!=config.driver.resume ||
        kui_vmu_native_passive_consumer!=config.driver.consumer) fail(3u);
 #if !KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!bind_runtime(&config.runtime)) fail(14u);
@@ -682,7 +696,7 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!installed_hooks_valid()) fail(0x45u);
 #endif
-    if(!lease_valid()) fail(9u);
+    if(!poll_lease_valid()) fail(9u);
 #if !KUI_VMU_NATIVE_PERSISTENT_PROBE
     struct kui_vmu_native_runtime_config rebound=config.runtime;
     if(!bind_runtime(&rebound) ||

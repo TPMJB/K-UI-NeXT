@@ -47,7 +47,122 @@ static void fixture(uint32_t alias) {
 static bool allowed(uint32_t payload) {
     return kui_vmu_native_lifetime_release_safe(&lease,read_word,NULL,1u,payload);
 }
+static bool identity_valid(void) {
+    return kui_vmu_native_heap_lease_identity_valid(&lease,read_word,NULL,1u);
+}
+/* Independent interval model: allocation removes a suffix from a free
+ * interval; release inserts the exact live chunk and merges neighbours.
+ * Publish its sorted linked representation only after the model operation,
+ * then ask both production validators about the resulting owner state. */
+static void allocator_evolution(uint32_t alias) {
+    struct interval {uint32_t at,units;};
+    struct interval free_blocks[65],allocated[64]={{0}};
+    fixture(alias);unsigned count=1u;
+    free_blocks[0]=(struct interval){lease.begin,lease.remaining};
+    put(lease.begin,lease.owner.sentinel);put(lease.begin+4u,lease.remaining);
+    CHECK(identity_valid());CHECK(allowed(0u));
+    uint32_t random=UINT32_C(0x913ca753);
+    for(unsigned step=0;step<1024u;step++) {
+        /* Before an original free runs, the complete release admission must
+         * accept its tracked allocation, not merely the identity witness. */
+        random=random*UINT32_C(1664525)+UINT32_C(1013904223);
+        unsigned slot=(random>>16)&63u;
+        if(allocated[slot].units) {
+            CHECK(allowed(allocated[slot].at+32u));
+            CHECK(count<sizeof(free_blocks)/sizeof(free_blocks[0]));
+            free_blocks[count++]=allocated[slot];allocated[slot].units=0u;
+            for(unsigned i=1u;i<count;i++) {
+                struct interval item=free_blocks[i];unsigned j=i;
+                while(j && free_blocks[j-1u].at>item.at) {free_blocks[j]=free_blocks[j-1u];--j;}
+                free_blocks[j]=item;
+            }
+            for(unsigned i=0u;i+1u<count;) {
+                CHECK(free_blocks[i].at+free_blocks[i].units*32u<=free_blocks[i+1u].at);
+                if(free_blocks[i].at+free_blocks[i].units*32u==free_blocks[i+1u].at) {
+                    free_blocks[i].units+=free_blocks[i+1u].units;
+                    memmove(&free_blocks[i+1u],&free_blocks[i+2u],(--count-i-1u)*sizeof(free_blocks[0]));
+                } else ++i;
+            }
+        } else {
+            uint32_t units=2u+((random>>8)&63u);unsigned chosen=count;
+            for(unsigned i=0;i<count;i++) if(free_blocks[i].units>=units) {chosen=i;break;}
+            CHECK(chosen<count);
+            free_blocks[chosen].units-=units;
+            uint32_t at=free_blocks[chosen].at+free_blocks[chosen].units*32u;
+            allocated[slot]=(struct interval){at,units};put(at+4u,units);
+            if(!free_blocks[chosen].units) {
+                memmove(&free_blocks[chosen],&free_blocks[chosen+1u],(--count-chosen)*sizeof(free_blocks[0]));
+            }
+        }
+        put(lease.owner.sentinel,count?free_blocks[0].at:lease.owner.sentinel);
+        for(unsigned i=0;i<count;i++) {
+            put(free_blocks[i].at,i+1u<count?free_blocks[i+1u].at:lease.owner.sentinel);
+            put(free_blocks[i].at+4u,free_blocks[i].units);
+        }
+        uint32_t cursor=step&1u && count?free_blocks[(random>>24)%count].at:lease.owner.sentinel;
+        put(lease.owner.cursor_cell,cursor);
+        reads=0u;CHECK(identity_valid());CHECK(reads==8u);CHECK(allowed(0u));
+    }
+}
+static void identity_witness(void) {
+    static const uint32_t aliases[]={0u,UINT32_C(0x80000000),UINT32_C(0xa0000000)};
+    static const unsigned fragments[]={1u,8u,64u,256u,512u};
+    for(unsigned a=0;a<3u;a++) {
+        allocator_evolution(aliases[a]);
+        for(unsigned n=0;n<sizeof(fragments)/sizeof(fragments[0]);n++) {
+            fixture(aliases[a]);unsigned nodes=fragments[n];
+            for(unsigned i=0;i<nodes;i++) {
+                uint32_t at=lease.begin+i*64u;
+                put(at,i+1u==nodes?lease.owner.sentinel:at+64u);put(at+4u,1u);
+            }
+            reads=0u;CHECK(identity_valid());CHECK(reads==8u);
+            reads=0u;CHECK(allowed(0u));CHECK(reads==10u+2u*nodes);
+        }
+        fixture(aliases[a]);
+        const uint32_t addresses[]={lease.owner.begin_cell,lease.owner.begin_copy_cell,
+            lease.owner.bytes_cell,lease.owner.dispatch_cell,lease.owner.dispatch_table,
+            lease.owner.dispatch_table+4u,lease.owner.sentinel+4u,lease.header+4u};
+        for(unsigned cell=0;cell<sizeof(addresses)/sizeof(addresses[0]);cell++) {
+            uint32_t original;CHECK(read_word(NULL,addresses[cell],&original));
+            for(unsigned bit=0;bit<32u;bit++) {
+                put(addresses[cell],original^(UINT32_C(1)<<bit));CHECK(!identity_valid());
+                CHECK(!allowed(0u));
+            }
+            put(addresses[cell],original);CHECK(identity_valid());CHECK(allowed(0u));
+        }
+        for(unsigned i=1u;i<=8u;i++) {
+            reads=0u;fail_read=i;CHECK(!identity_valid());
+        }
+        fail_read=0u;
+        struct kui_vmu_native_heap_lease original=lease;
+        static const size_t fields[]={offsetof(struct kui_vmu_native_heap_lease,version),
+            offsetof(struct kui_vmu_native_heap_lease,bytes),offsetof(struct kui_vmu_native_heap_lease,phase),
+            offsetof(struct kui_vmu_native_heap_lease,initializations),offsetof(struct kui_vmu_native_heap_lease,begin),
+            offsetof(struct kui_vmu_native_heap_lease,heap_bytes),offsetof(struct kui_vmu_native_heap_lease,lease_bytes),
+            offsetof(struct kui_vmu_native_heap_lease,header),offsetof(struct kui_vmu_native_heap_lease,payload),
+            offsetof(struct kui_vmu_native_heap_lease,units),offsetof(struct kui_vmu_native_heap_lease,remaining)};
+        for(unsigned field=0;field<sizeof(fields)/sizeof(fields[0]);field++) {
+            uint32_t word;memcpy(&word,(const uint8_t *)&original+fields[field],sizeof(word));
+            for(unsigned bit=0;bit<32u;bit++) {
+                lease=original;uint32_t bad=word^(UINT32_C(1)<<bit);
+                memcpy((uint8_t *)&lease+fields[field],&bad,sizeof(bad));CHECK(!identity_valid());
+            }
+        }
+        lease=original;CHECK(identity_valid());
+        CHECK(!kui_vmu_native_heap_lease_identity_valid(&lease,read_word,NULL,0u));
+        CHECK(!kui_vmu_native_heap_lease_identity_valid(&lease,read_word,NULL,2u));
+        CHECK(!kui_vmu_native_heap_lease_identity_valid(NULL,read_word,NULL,1u));
+        CHECK(!kui_vmu_native_heap_lease_identity_valid(&lease,NULL,NULL,1u));
+        /* The bounded witness deliberately grants no authority over a free
+         * list modified outside the reviewed allocator/caller contract.
+         * A damaged list is still rejected at release and storage boundaries. */
+        put(lease.begin+4u,lease.heap_bytes/32u);CHECK(identity_valid());CHECK(!allowed(0u));
+        fixture(aliases[a]);put(lease.begin,lease.begin);CHECK(identity_valid());CHECK(!allowed(0u));
+    }
+    printf("Native lease identity: 8 reads independent of 1..512 free blocks; full proofs remain 12..1034 reads\n");
+}
 int main(void) {
+    identity_witness();
     const uint32_t aliases[]={0u,UINT32_C(0x80000000),UINT32_C(0xa0000000)};
     for(unsigned a=0;a<3u;a++) {
         fixture(aliases[a]);CHECK(allowed(candidate));CHECK(allowed(0u));
