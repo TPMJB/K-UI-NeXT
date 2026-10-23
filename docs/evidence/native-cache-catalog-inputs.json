@@ -75,7 +75,7 @@
       "record_fixture": "tests/fixtures/native-cache/grandia2.nvr",
       "static_layout": 0,
       "exit_family": 4,
-      "console_status": "new test candidate; no current-build console acceptance"
+      "console_status": "owner reported Grandia was just fine on 7753391a62e4; no additional timing or save-cycle details supplied"
     },
     {
       "slug": "evolution1",
@@ -94,7 +94,7 @@
       "record_fixture": "tests/fixtures/native-cache/evolution1.nvr",
       "static_layout": 0,
       "exit_family": 4,
-      "console_status": "new test candidate; no current-build console acceptance"
+      "console_status": "first physical DEVINFO completion refused with detail 0x43 on 7753391a62e4; zero SD reads, write phases and commits; context diagnostic pending"
     }
   ]
 }

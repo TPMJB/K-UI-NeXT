@@ -37,7 +37,46 @@ class PreparedArtifact(unittest.TestCase):
     def test_actual_kernel_and_all_existing_mutation_families_pass(self):
         result = audit.check_prepared_lifetime(self.directory, self.worker, self.binary, self.wire, True)
         self.assertTrue(result["full_storage_guards_before_and_after_loan"])
-        self.assertEqual(result["mutation_rejections"], 33)
+        self.assertEqual(result["mutation_rejections"], 39)
+
+    def test_context_stack_interior_has_exact_private_bounds(self):
+        for name in ("__vmu_native_worker_stack_bottom", "__vmu_native_worker_stack_top"):
+            for index, delta in ((0, 32), (1, 4), (2, 1), (3, -1)):
+                with self.subTest(name=name, index=index):
+                    symbols=copy.deepcopy(self.worker[4]);record=list(symbols[name]);record[index]+=delta
+                    symbols[name]=tuple(record)
+                    with self.assertRaisesRegex(ValueError, "prepared private stack"):
+                        audit.prepared_symbol_records(self.worker[:4]+(symbols,))
+        owner=self.worker[4]["__vmu_native_worker_stack_bottom"][3]
+        for index, value in ((1, 1), (2, 7), (3, audit.P2+0x1e000), (5, 4092)):
+            with self.subTest(section_field=index):
+                sections=copy.deepcopy(self.worker[3]);section=list(sections[owner]);section[index]=value
+                sections[owner]=tuple(section)
+                with self.assertRaisesRegex(ValueError, "prepared private stack"):
+                    audit.prepared_symbol_records(self.worker[:3]+(sections,self.worker[4]))
+        sections=list(self.worker[3]);sections.append(sections[owner])
+        with self.assertRaisesRegex(ValueError, "stack section is ambiguous"):
+            audit.prepared_symbol_records(self.worker[:3]+(sections,self.worker[4]))
+
+    def test_context_cannot_shift_valid_stack_interior_literal(self):
+        name="_transfer_context_valid"
+        refs=audit.prepared_signature(self.worker,self.binary,self.wire,name)[2]
+        offsets=[offset for offset,target,interior,kind in refs
+                 if target==".stack" and interior==256 and kind==3]
+        self.assertEqual(len(offsets),1)
+        address,_,section=audit.symbol_bytes(self.worker,name,2)
+        changed=bytearray(self.worker[0]);wire=bytearray(self.wire)
+        first=audit.physical(address)-audit.physical(audit.P1)
+        offset=offsets[0]
+        for i in range(struct.unpack_from("<I",wire,28)[0]):
+            at,value=struct.unpack_from("<II",wire,72+i*8)
+            if at==first+offset:
+                struct.pack_into("<I",wire,76+i*8,value+4)
+                struct.pack_into("<I",changed,section[4]+address-section[3]+offset,value+4)
+                break
+        else:self.fail("missing context stack-bound relocation")
+        with self.assertRaisesRegex(ValueError,"linked instructions/targets changed"):
+            self.check(worker=(bytes(changed),)+self.worker[1:],wire=bytes(wire))
 
     def test_identity_hook_and_free_walk_bounds_are_pinned(self):
         for name, offset, original in (

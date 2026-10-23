@@ -1,0 +1,64 @@
+{
+  "schema": "kui.native.evolution-context-diagnostic.v1",
+  "date": "2026-10-23",
+  "source": "Owner report and console photo in this conversation",
+  "tested_build": "7753391a62e4",
+  "owner_report": "Grandia was just fine but this is what happened with Evolution",
+  "photo_sha256": "7fa68e916e63c792d4490f180d44bf1853e0bbf65b3a3d5794348c8239a4fd34",
+  "grandia_status": "Owner reported success without additional playtime/save-cycle details; no separate performance measurement inferred",
+  "evolution_status": "Refused on first physical four-port DEVINFO completion before SD I/O or virtual RX publication",
+  "photo": {
+    "phase": "00000010",
+    "detail": "00000043",
+    "submitted": 1,
+    "completed": 0,
+    "sd_reads": 0,
+    "write_phases": 0,
+    "commits": 0,
+    "last_chain_at": "0c248444",
+    "last_chain_value": "80030000",
+    "runtime_check": "00000000",
+    "worker_lease": "acfd0000"
+  },
+  "diagnosis": {
+    "failed_gate": "persistent_context_guard after MDSTAR restoration and completion-frame copy",
+    "specific_failed_comparison": "Not observable in the old diagnostic; unresolved",
+    "refused_hypotheses": [
+      "No confirmed layout mismatch: actual executable replay passes",
+      "No proved IRQ-stack collision",
+      "No confirmed code-generation, frame-copy, relocation or cached-constant publication error"
+    ],
+    "next_console_evidence": "Failure-only context CHECK code and exact AT/VALUE/EXPECT, plus original frame address/entry PR/SR and copied PR/SR"
+  },
+  "changes": {
+    "acceptance_predicates": "Retained; every prior context rejection still returns false",
+    "successful_bus_read_sequence": "Unchanged",
+    "frame_capture_cost": "Three state writes per completion; no extra controller polling or SD I/O",
+    "fix_claim": false,
+    "artifact_pins": "Updated independently reviewed completion/constants signatures; added exact transfer/final-context signatures and a strictly bounded unique 4 KiB P2 NOBITS stack-interior proof"
+  },
+  "host_validation": {
+    "persistent_bridge_checks": 1287343,
+    "faults_injected_after_full_transfer_check": 12,
+    "persistent_witness_fault_result": "All refuse detail0x43 before RX/SD publication and report actual failed witness",
+    "actual_evolution_first_transfer_checks": 76361,
+    "actual_evolution_alias_bank_mask_cases": 108,
+    "context_read_fault_refusals": 26,
+    "sanitizers": [
+      "AddressSanitizer",
+      "UndefinedBehaviorSanitizer"
+    ],
+    "personalizer_tests": 56,
+    "source_review": "Independent target-code and acceptance-predicate reviews found no blocking diagnostic regression",
+    "prepared_artifact_tests": 10,
+    "prepared_instruction_pointer_mutation_rejections": 39,
+    "compiled_worker_relocation_pointers": 523,
+    "compiled_target_audit": "Passed typed ELF, instruction/call-target, gateway, stack, relocation and mutation checks on the development artifact; the package command repeats the audit on the clean release build"
+  },
+  "limits": [
+    "Host replay does not establish target hardware equivalence or Evolution compatibility",
+    "Evolution still needs the diagnostic retry; no write-through bypass is authorized",
+    "Grandia observation does not establish every native title or SDK revision",
+    "A2, SCIF VMU backing, combined CDDA/VMU and physical-disc service are unchanged"
+  ]
+}

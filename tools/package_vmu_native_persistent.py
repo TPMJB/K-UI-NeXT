@@ -48,7 +48,7 @@ def cache_catalog(root,commit):
     return wire,files
 
 
-def package(build):
+def package(build,guide='broader'):
     root=Path(__file__).resolve().parents[1];build=Path(build)
     def git(*args):
         return subprocess.check_output(['git',*args],cwd=root,text=True).strip()
@@ -96,13 +96,13 @@ def package(build):
                      'native-heap-poll-identity.md','vmu-native-latency-test.md',
                      'vmu-native-compat-test.md','vmu-native-optimization-test.md',
                      'vmu-performance-design-review-2026-10-22.md','vmu-next-stages.md',
-                     'vmu-native-broader-test.md'):
+                     'vmu-native-broader-test.md','vmu-native-evolution-context-test.md'):
             extra['docs/'+name]=(root/'docs'/name).read_bytes()
         for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json',
                      'native-performance-acceptance-2026-10-23.json','native-uniform-root-family-2026-10-23.json',
                      'native-recv-ownership-2026-10-23.json','native-older-sdk-2026-10-23.json',
                      'native-broader-compatibility-2026-10-23.json','native-evolution1-layout-2026-10-23.json',
-                     'native-allocator-family-2026-10-23.json'):
+                     'native-allocator-family-2026-10-23.json','native-evolution-context-2026-10-23.json'):
             extra['docs/evidence/'+name]=(root/'docs/evidence'/name).read_bytes()
         extra['docs/native-sdk-family-corpus.json']=(root/'docs/evidence/native-sdk-family-corpus-2026-10-22.json').read_bytes()
         extra['docs/native-installer-stack-regression.json']=(root/'docs/evidence/native-sa2-installer-stack-2026-10-22.json').read_bytes()
@@ -125,7 +125,8 @@ def package(build):
         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
             template_sha256=sha(template)),
-        compatibility_claim='Save/load experiment for the reviewed native SDK family')
+        compatibility_claim=('Evolution first-transfer failure-witness diagnostic; no console fix established'
+            if guide=='evolution-context' else 'Save/load experiment for the reviewed native SDK family'))
     branch=git('branch','--show-current');bundle=(build/f'native-{flavor}-source.bundle').resolve()
     subprocess.run(['git','bundle','create',str(bundle),'HEAD',*([branch] if branch else [])],cwd=root,check=True)
     subprocess.run(['git','bundle','verify',str(bundle)],cwd=root,check=True,stdout=subprocess.DEVNULL)
@@ -137,7 +138,7 @@ def package(build):
         'personalize.py':(root/'tools/personalize_vmu_native_persistent.py').read_bytes(),
         'tools/runtime_package.py':(root/'tools/runtime_package.py').read_bytes(),
         'tools/vmu_persist_profile.py':(root/'tools/vmu_persist_profile.py').read_bytes(),
-        'README-FIRST.md':(root/('docs/vmu-native-broader-test.md' if compat else
+        'README-FIRST.md':(root/(f'docs/vmu-native-{guide}-test.md' if compat else
                                 f'docs/vmu-native-{flavor}-test.md')).read_bytes(),
         'probe-report.json':(json.dumps(report,indent=2)+'\n').encode(),
         'LICENSE':(root/'LICENSE').read_bytes(),
@@ -159,6 +160,8 @@ def package(build):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('build',type=Path)
-    try:package(parser.parse_args().build)
+    parser.add_argument('--guide',choices=('broader','evolution-context'),default='broader')
+    try:
+        args=parser.parse_args();package(args.build,args.guide)
     except (OSError,ValueError,KeyError,AssertionError,subprocess.CalledProcessError) as error:
         parser.exit(2,f'Native persistent package refused: {error}\n')

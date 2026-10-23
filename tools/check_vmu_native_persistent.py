@@ -58,8 +58,10 @@ PREPARED_PINS = {
     '_persistent_storage_guard': ('d230251892a758f65469e9cb692703a0270511756e1fbdc94cc28e04472a15fe', 396),
     '_persistent_lease': ('a57c23fdc9ce23429aaa19c44c21ea362afcf6d245c6185e4ed717de4c074f96', 144),
     '_kui_vmu_native_passive_submit': ('728ad170ab49ece06e8d5612e173300e0f2d08384c449a158bf02ae944c3c877', 580),
-    '_kui_vmu_native_passive_complete': ('3fdc8acf576a9ac6c1185e02566f253ddd058eab2226def2e81ffc729c1e2442', 1416),
-    '.rodata': ('ed79995b7e2020e6b92f75e343aec051d5d25f3bfff3091efcbbe12eecebdf9b', 1422),
+    '_kui_vmu_native_passive_complete': ('8e222ea73728a5e9f1cb0b63bf01abdbb1a43850293dbc00dd831b97b1ae6da7', 1428),
+    '_transfer_context_valid': ('59774c732db928bfe442ce87deeef6752c40e1b9c84e7bc46fcb6c9d91b34b3e', 1048),
+    '_persistent_context_guard': ('7d7b44453ed058c85b22f3624a96001a93f68e06bd6dc581757cbff364c96df7', 132),
+    '.rodata': ('a8f53954df98e3ae8f7f1fd9a4c353e8acd3ec4614de1c5fe50d7a4707ee3d54', 1454),
 }
 
 
@@ -86,9 +88,29 @@ def prepared_symbol_records(worker):
     for owner, section in enumerate(sections):
         # GCC's anonymous switch tables have no STT_OBJECT. Their complete
         # constant section is separately pinned, including relocations into
-        # exact function offsets. No other untyped data target is admitted.
+        # exact function offsets. The separately bounded stack below is the
+        # only other synthetic section target admitted here.
         if names[section[0]:].split(b"\0", 1)[0] == b".rodata" and section[2] & 7 == 2:
             records.append((".rodata", section[3], section[5], 3, owner))
+    # Failure diagnostics can materialize stack_bottom+256. Retain the exact
+    # zero-size linker-bound labels above, and admit an interior reference only
+    # through this unique, allocated, private P2 NOBITS stack section. Its
+    # complete4KiB extent must match both bound symbols and the worker lease.
+    bottom = worker[4]["__vmu_native_worker_stack_bottom"]
+    top = worker[4]["__vmu_native_worker_stack_top"]
+    require(bottom[1:3] == top[1:3] == (0, 0) and bottom[3] == top[3] and
+            bottom[3] < len(sections), "prepared private stack boundary symbols differ")
+    owner = bottom[3]
+    stack = sections[owner]
+    require(names[stack[0]:].split(b"\0", 1)[0] == b".stack" and
+            stack[1] == 8 and stack[2] & 7 == 3 and
+            bottom[0] == stack[3] == P2 + SPAN - 4096 and
+            top[0] == bottom[0] + stack[5] == P2 + SPAN and stack[5] == 4096 and
+            not (bottom[0] & 31) and not (top[0] & 31),
+            "prepared private stack lacks exact P2 NOBITS ownership")
+    require(sum(names[s[0]:].split(b"\0", 1)[0] == b".stack" for s in sections) == 1,
+            "prepared private stack section is ambiguous")
+    records.append((".stack", stack[3], stack[5], 3, owner))
     return records
 
 

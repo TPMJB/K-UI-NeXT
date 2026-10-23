@@ -22,6 +22,7 @@ static struct kui_vmu_native_profile_sample test_clock;
 static uint32_t test_ccr;
 static unsigned clock_reads;
 static unsigned corrupt_before_loan,corrupt_after_loan;
+static unsigned corrupt_on_restore;
 static uint32_t live_sr=0xf0u,live_sp=SELF_ADDRESS+WORKER_SPAN-0x100u,bad_guard;
 static jmp_buf terminal;static unsigned terminal_phase,terminal_error;
 uint32_t kui_vmu_native_passive_resume,kui_vmu_native_passive_consumer;
@@ -78,6 +79,7 @@ static void fixture(void) {
     used=bus_reads=fail_read=0u;live_sr=0xf0u;live_sp=SELF_ADDRESS+WORKER_SPAN-0x100u;bad_guard=0u;terminal_phase=terminal_error=0u;
     test_clock=(struct kui_vmu_native_profile_sample){0xe0au,UINT32_MAX,2u,1u,UINT32_MAX};
     test_ccr=0x105u;clock_reads=0u;
+    corrupt_on_restore=0u;
     input.version=1u;input.bytes=sizeof(input);input.tx_base=0xac400000u;
     input.driver=(struct kui_vmu_native_discovery){.version=1u,.bytes=sizeof(input.driver),.family=1u,
         .image_bytes=0x200000u,.load_address=0x8c010000u,.requirements=7u,
@@ -212,7 +214,27 @@ static bool block_transfer(void *context,const uint8_t *tx,uint8_t *rx,size_t co
     return true;
 }
 void kui_vmu_native_passive_test_write(uint32_t address,unsigned width,uint32_t value) {
-    CHECK(address==0xa05f6c04u && width==4u);put(address,width,value);
+    CHECK(address==0xa05f6c04u && width==4u);
+    if(corrupt_on_restore && state.pending && value==state.source) {
+        unsigned which=corrupt_on_restore;corrupt_on_restore=0u;
+        /* The detailed DMA/chain check has already succeeded. Model a
+         * changed witness in the exact first-completion window from the
+         * Evolution console refusal, before SD or virtual RX publication. */
+        if(which==1u) return; /* MDSTAR restoration was not observed. */
+        if(which==2u) frame.pr^=2u;
+        else if(which==3u) frame.sr=0u;
+        else if(which==4u) live_sp=STACK_HIGH;
+        else if(which==5u) bad_guard=1u;
+        else if(which==6u) put(config.driver.manager_cell,4u,config.driver.manager_initial+4u);
+        else if(which==7u) put(config.driver.lock_cell,4u,0xac011008u);
+        else if(which==8u) put(0xac011004u,1u,0u);
+        else if(which==9u) put(config.driver.manager_initial+0xfc0u,4u,1u);
+        else if(which==10u) kui_vmu_native_passive_consumer+=2u;
+        else if(which==11u) state.pending=0u;
+        else if(which==12u) ++state.submitted;
+        else CHECK(false);
+    }
+    put(address,width,value);
 }
 uint32_t kui_vmu_native_persistent_test_chain(const void *pointer,unsigned bytes) {
     CHECK(pointer==issued_chain && bytes==sizeof(issued_chain));return physical(SELF_ADDRESS)+0x18000u;
@@ -607,6 +629,31 @@ static void gameplay_diagnostics(void) {
     model_reset();fixture();prepare_handoff();input.diagnostics=2u;
     CHECK(kui_vmu_native_passive_arm(&input,NULL)<0 && !state.armed);
 }
+static void reject_context_complete(void) {
+    if(setjmp(terminal)==0) {kui_vmu_native_passive_complete(&frame);CHECK(false);}
+    CHECK(terminal_error==0x43u && !state.proof);
+}
+static void completion_context_failures(void) {
+    static const unsigned code[]={0x20u,12u,8u,3u,4u,0x30u,0x31u,0x32u,0x40u,14u,0x51u,0x52u};
+    for(unsigned which=1u;which<=sizeof(code)/sizeof(code[0]);which++) {
+        uint8_t before[3][1024];
+        setup();begin_batch(1u,0u,0u,NULL);physical_complete();
+        memcpy(before[0],rx_bytes(0),1024u);memcpy(before[1],rx_bytes(1),1024u);
+        memcpy(before[2],rx_bytes(6),1024u);
+        uint32_t entry_pr=frame.pr,entry_sr=frame.sr;corrupt_on_restore=which;
+        reject_context_complete();
+        CHECK(!corrupt_on_restore && terminal_error==0x43u && !state.proof);
+        CHECK(state.runtime_result==(0x20000u|code[which-1u]));
+        CHECK(state.frame_pr==entry_pr && state.frame_sr==entry_sr);
+        CHECK(!lease_calls && !sd.bytes && !sd.writes && !durable_card.commits);
+        CHECK(!memcmp(before[0],rx_bytes(0),1024u) && !memcmp(before[1],rx_bytes(1),1024u));
+        CHECK(!memcmp(before[2],rx_bytes(6),1024u));
+        if(which==1u) CHECK(state.fault_at==0xa05f6c04u &&
+            state.fault_value==issued_plan.output_physical && state.fault_expect==state.source);
+        if(which==2u) CHECK(completion_frame.pr==(entry_pr^2u) &&
+            state.fault_value==completion_frame.pr && state.fault_expect==config.driver.completion_call+4u);
+    }
+}
 int main(void) {
     uint8_t next[512],old[512],parent[1024],target[1024],other[1024];
     memset(next,0x73,sizeof(next));memset(old,0x59,sizeof(old));
@@ -667,7 +714,7 @@ int main(void) {
     CHECK(!durable_card.commits && durable_card.faulted && !memcmp(target,rx_bytes(1),sizeof(target)));
     CHECK(!memcmp(sd.media[image_lba(42u)],next,512u));
     bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();prepared_hook_witnesses();
-    polling_ownership_scope();gameplay_diagnostics();
+    polling_ownership_scope();gameplay_diagnostics();completion_context_failures();
     printf("Native persistent bridge: %u checks passed; filtered hardware chain, PIO save, reboot recovery and no false ACK\n",checks);
     return 0;
 }

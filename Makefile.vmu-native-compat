@@ -18,7 +18,14 @@ COMPAT_CACHE_HOST_SRC = src/core/vmu_native_resolution_cache.c src/core/vmu_nati
  src/core/vmu_native_layout.c src/core/vmu_native_heap.c src/core/vmu_native_exit.c \
  src/core/vmu_native_patch.c src/core/hash.c src/core/data.c
 
-.PHONY: compat-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests
+.PHONY: compat-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-evolution-context-host-tests
+native-evolution-context-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_evolution_transfer.c \
+	 $(COMPAT_WORKER_HOST_SRC) src/core/vmu_native_resolution_cache.c src/core/vmu_native_exit.c \
+	 -Wl,--gc-sections -o $(BUILD)/test-evolution-transfer
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-evolution-transfer '$(EVOLUTION1_STARTUP)' tests/fixtures/native-cache/evolution1.nvr
+
 native-layout-root-host-tests:
 	@mkdir -p $(BUILD)
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_layout_root.c \

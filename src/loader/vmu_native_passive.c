@@ -37,6 +37,9 @@ static struct {
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
     uint32_t proof,overlay_result;
 #endif
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    uint32_t frame_address,frame_pr,frame_sr;
+#endif
 } state;
 static uint32_t captured[TX_WORDS];
 static uint32_t receivers[48];
@@ -396,6 +399,8 @@ static void report(void) {
         overlay.stats.last_request,overlay.stats.last_reply,overlay.stats.last_rx,state.overlay_result,overlay.stats.flags},5u);
     retail_display_values("AT VALUE EXPECT CHECK LEASE",(uint32_t[5]){
         state.fault_at,state.fault_value,state.fault_expect,state.runtime_result,config.lease.payload},5u);
+    retail_display_values("FRAME ADDRESS PR SR COPY PR SR",(uint32_t[5]){
+        state.frame_address,state.frame_pr,state.frame_sr,completion_frame.pr,completion_frame.sr},5u);
     retail_display_line("PERSISTENT VMU STOPPED - PHOTO THEN POWER OFF");
 #elif KUI_VMU_NATIVE_READONLY_PROBE
     retail_display_line("AUTOMATIC NATIVE READ-ONLY VMU TEST");
@@ -716,22 +721,49 @@ static bool persistent_storage_guard(void) {
  * and MDST/RX publication only reviewed private RAM work runs under IMASK15.
  * Repeat the live MMIO/context witness here, not the complete geometry and
  * free-list walks that were just proved without an intervening game caller. */
+static bool context_reject(unsigned code,uint32_t address,uint32_t value,uint32_t expected) {
+    /* Failure-only witnesses: retain the existing refusal and the exact failed
+     * comparison instead of leaving a stale successful chain read on screen. */
+    state.fault_at=address;state.fault_value=value;state.fault_expect=expected;
+    state.runtime_result=UINT32_C(0x20000)|code;return false;
+}
 static bool transfer_context_valid(const struct kui_vmu_native_passive_frame *f,
     unsigned bank,unsigned phase,uint32_t dma) {
     const uint32_t address[4]={UINT32_C(0xa05f6c04),UINT32_C(0xa05f6c10),
         UINT32_C(0xa05f6c14),UINT32_C(0xa05f6c18)};
     const uint32_t expected[4]={dma,0u,1u,0u};
     unsigned mask=(f->sr>>4)&15u;
-    if(!stack_valid() || bank>1u || phase>1u || (mask!=6u && mask!=15u) ||
-       state.source!=physical(config.tx_base)+bank*KUI_VMU_NATIVE_TX_BANK_BYTES ||
-       (!phase && (f->r12!=1u || !ram(f->r14,4u,4u) ||
-        physical(f->r14)!=physical(config.driver.manager_cell))) ||
-       (phase && (!ram(f->pr,2u,2u) || physical(f->pr)!=physical(config.driver.completion_call)+4u)) ||
-       kui_vmu_native_passive_resume!=config.driver.resume ||
-       kui_vmu_native_passive_consumer!=config.driver.consumer) return false;
+    if(!stack_valid()) {
+        uint32_t sr=current_sr(),sp=current_sp();
+        if(((sr>>4)&15u)!=15u) return context_reject(1u,0u,sr,0xf0u);
+        if(sp<STACK_LOW+256u) return context_reject(2u,sp,sp,STACK_LOW+256u);
+        if(sp>=STACK_HIGH) return context_reject(3u,sp,sp,STACK_HIGH);
+        for(unsigned i=0;i<16u;i++) {
+            uint32_t value=guard(i);
+            if(value!=GUARD) return context_reject(4u,STACK_LOW+i*4u,value,GUARD);
+        }
+        return context_reject(5u,sp,sr,0xf0u);
+    }
+    if(bank>1u) return context_reject(6u,0u,bank,1u);
+    if(phase>1u) return context_reject(7u,0u,phase,1u);
+    if(mask!=6u && mask!=15u) return context_reject(8u,0u,f->sr,0xf0u);
+    uint32_t source=physical(config.tx_base)+bank*KUI_VMU_NATIVE_TX_BANK_BYTES;
+    if(state.source!=source) return context_reject(9u,0u,state.source,source);
+    if(!phase) {
+        if(f->r12!=1u) return context_reject(10u,0u,f->r12,1u);
+        if(!ram(f->r14,4u,4u) || physical(f->r14)!=physical(config.driver.manager_cell))
+            return context_reject(11u,0u,f->r14,config.driver.manager_cell);
+    } else if(!ram(f->pr,2u,2u) || physical(f->pr)!=physical(config.driver.completion_call)+4u)
+        return context_reject(12u,0u,f->pr,config.driver.completion_call+4u);
+    if(kui_vmu_native_passive_resume!=config.driver.resume)
+        return context_reject(13u,0u,kui_vmu_native_passive_resume,config.driver.resume);
+    if(kui_vmu_native_passive_consumer!=config.driver.consumer)
+        return context_reject(14u,0u,kui_vmu_native_passive_consumer,config.driver.consumer);
     for(unsigned i=0;i<4u;i++) {
         uint32_t value;
-        if(!read_value(NULL,address[i],4u,&value) || value!=expected[i]) return false;
+        if(!read_value(NULL,address[i],4u,&value))
+            return context_reject(0xa0u+i,address[i],UINT32_MAX,expected[i]);
+        if(value!=expected[i]) return context_reject(0x20u+i,address[i],value,expected[i]);
     }
     /* Recheck live selectors and the lock around an MDSTAR change or scoped
      * storage call. The full geometry proof belongs to this same IMASK15
@@ -740,19 +772,30 @@ static bool transfer_context_valid(const struct kui_vmu_native_passive_frame *f,
     const uint32_t values[6]={phase?0u:1u,state.source|UINT32_C(0xa0000000),
         bank^phase,bank^phase,0u,UINT32_C(0xa05f6c00)};
     uint32_t manager,lock,value;
-    if(!read_value(NULL,config.driver.manager_cell,4u,&manager) ||
-       physical(manager)!=physical(config.driver.manager_initial) ||
-       !read_value(NULL,config.driver.lock_cell,4u,&lock) ||
-       lock!=((physical(config.driver.lock_cell)+4u)|UINT32_C(0xa0000000)) ||
-       !read_value(NULL,lock,1u,&value) || value!=0x80u) return false;
-    for(unsigned i=0;i<6u;i++)
-        if(!read_value(NULL,manager+offsets[i],4u,&value) || value!=values[i]) return false;
+    if(!read_value(NULL,config.driver.manager_cell,4u,&manager))
+        return context_reject(0xb0u,config.driver.manager_cell,UINT32_MAX,config.driver.manager_initial);
+    if(physical(manager)!=physical(config.driver.manager_initial))
+        return context_reject(0x30u,config.driver.manager_cell,manager,config.driver.manager_initial);
+    uint32_t expected_lock=(physical(config.driver.lock_cell)+4u)|UINT32_C(0xa0000000);
+    if(!read_value(NULL,config.driver.lock_cell,4u,&lock))
+        return context_reject(0xb1u,config.driver.lock_cell,UINT32_MAX,expected_lock);
+    if(lock!=expected_lock) return context_reject(0x31u,config.driver.lock_cell,lock,expected_lock);
+    if(!read_value(NULL,lock,1u,&value)) return context_reject(0xb2u,lock,UINT32_MAX,0x80u);
+    if(value!=0x80u) return context_reject(0x32u,lock,value,0x80u);
+    for(unsigned i=0;i<6u;i++) {
+        if(!read_value(NULL,manager+offsets[i],4u,&value))
+            return context_reject(0xc0u+i,manager+offsets[i],UINT32_MAX,values[i]);
+        if(value!=values[i]) return context_reject(0x40u+i,manager+offsets[i],value,values[i]);
+    }
     return true;
 }
 static bool persistent_context_guard(void) {
     unsigned bank=state.source==physical(config.tx_base)?0u:1u;
-    return state.armed && state.pending && state.submitted==state.completed+1u &&
-        transfer_context_valid(&completion_frame,bank,1u,state.source);
+    if(!state.armed) return context_reject(0x50u,0u,state.armed,1u);
+    if(!state.pending) return context_reject(0x51u,0u,state.pending,1u);
+    if(state.submitted!=state.completed+1u)
+        return context_reject(0x52u,0u,state.submitted,state.completed+1u);
+    return transfer_context_valid(&completion_frame,bank,1u,state.source);
 }
 #endif
 void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f) {
@@ -828,6 +871,7 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
 #endif
     state.complete_sr=f->sr;
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    state.frame_address=(uint32_t)(uintptr_t)f;state.frame_pr=f->pr;state.frame_sr=f->sr;
     if(!installed_hooks_valid()) fail(0x45u);
 #endif
     if(!poll_lease_valid()) fail(9u);

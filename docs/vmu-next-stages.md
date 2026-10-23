@@ -20,7 +20,8 @@ a separate hardware milestone.
 
 The current generic native adapter exposes one virtual **A1** card. Power
 Stone 2, Sonic Adventure 2 and Skies of Arcadia Disc 1 have owner-reported
-save/reboot/load success. SA2 and Skies still need performance acceptance.
+save/reboot/load success. SA2 performance is accepted; Skies still needs its
+optimized-build performance retest.
 Those results establish useful native SDK families, not every standard
 Dreamcast game, every revision, or every peripheral combination.
 
@@ -65,8 +66,8 @@ The recovered corpus already identifies useful next targets:
 | Corpus case | Current gap | Useful next work |
 | --- | --- | --- |
 | Resident Evil Code: Veronica | Candidate RX/TX intervals overlap the startup image under the current proof | Determine the actual live ownership interval and lifetime; retain the overlap refusal until that proof is narrower and valid |
-| Grandia II | New generic console test candidate | A unique proved startup call now distinguishes its real initializer literal from an unused export-table copy; original allocator, layout and persistence models pass |
-| Evolution 1 | New generic console test candidate | Existing complete SDK family now has a pinned mapping and original-code allocator/layout/placement tests |
+| Grandia II | Owner reports the generic build was just fine | A unique proved startup call now distinguishes its real initializer literal from an unused export-table copy; original allocator, layout and persistence models pass |
+| Evolution 1 | Console first-transfer context refusal, detail `43` | Exact first-transfer host replay passes; collect the new failed-witness diagnostic before changing admission |
 | Crazy Taxi 2 | Allocator found; initializer pointer/root-call provenance incomplete | Extend dataflow and call-root evidence, then execute the discovered allocator contract in the host SH model |
 | Phantasy Star Online | Layout root now resolves; allocator-call and fourth terminal-consumer proofs remain | Review the additional consumer and dispatch lifetime together |
 | Jet Grind Radio | Allocator arguments now resolve; Maple root transport does not | Prove the actual root transport before using its otherwise matching initializer |
