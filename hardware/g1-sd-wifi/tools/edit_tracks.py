@@ -11,6 +11,9 @@ item or the board is left unchanged:
 
   {"op": "delete", "net": "C5_PWR_EN", "layer": "In2.Cu", "start": [x, y], "end": [x, y]}
   {"op": "add", "net": "C5_PWR_EN", "layer": "In2.Cu", "points": [[x, y], [x, y], ...]}
+  {"op": "width", "net": "+3V3_LOGIC", "layer": "F.Cu", "start": [x, y], "end": [x, y], "width": 0.2}
+
+"width" changes one track's width in place (same ends, same ID).
 
 Added tracks use the Default netclass width unless "width" (mm) is given;
 an added track needs at least two points, none repeated consecutively. The
@@ -53,15 +56,20 @@ def main():
         if e.get('layer') not in copper:
             raise SystemExit('Not a copper layer of this board: %s' % json.dumps(e))
         layer = copper[e['layer']]
-        if e['op'] == 'delete':
+        if e['op'] in ('delete', 'width'):
             a, b = pt(e['start']), pt(e['end'])
             hits = [t for t in board.GetTracks() if t.Type() == pcbnew.PCB_TRACE_T and t.GetNetname() == e['net']
                     and t.GetLayer() == layer and ((near(t.GetStart(), a) and near(t.GetEnd(), b))
                                                    or (near(t.GetStart(), b) and near(t.GetEnd(), a)))]
             if len(hits) != 1:
                 raise SystemExit('Edit matches %d tracks, not 1: %s' % (len(hits), json.dumps(e)))
-            board.Remove(hits[0])
-            graveyard.append(hits[0])
+            if e['op'] == 'width':
+                if not isinstance(e.get('width'), (int, float)) or not 0.05 <= e['width'] <= 5:
+                    raise SystemExit('A width edit needs "width" in mm (0.05-5): ' + json.dumps(e))
+                hits[0].SetWidth(pcbnew.FromMM(e['width']))
+            else:
+                board.Remove(hits[0])
+                graveyard.append(hits[0])
         elif e['op'] == 'add':
             if e['net'] not in nets:
                 raise SystemExit('No such net: ' + e['net'])

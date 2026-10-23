@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <export version="E">
   <design>
-    <source>/workspace/scratch/671921c7e6ab/review-4b8c7d6/hardware/g1-sd-wifi/flex/KUI-CN503-B-Flex-RevA.kicad_sch</source>
-    <date>2026-10-11T16:49:21</date>
-    <tool>Eeschema 10.0.7-10.0.7~ubuntu24.04.1</tool>
+    <source>/home/user/kui-g1/hardware/g1-sd-wifi/flex/KUI-CN503-B-Flex-RevA.kicad_sch</source>
+    <date>2026-10-23T04:49:17</date>
+    <tool>Eeschema 10.0.7</tool>
     <sheet number="1" name="/" tstamps="/">
       <title_block>
         <title>K-UI CN503 row B passive flex</title>

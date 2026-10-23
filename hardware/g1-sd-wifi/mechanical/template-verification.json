@@ -1,5 +1,5 @@
 {
-  "pcb_sha256": "3b52bedb1832483bfb08103dd08cba4ced4b851021ff90b177d7cd918f897843",
+  "pcb_sha256": "6b809188278f43a0f7a8c776976dc72cf207901cd439310714d7bc09ce60fe6a",
   "status": "pass_actual_size_pdf_geometry_and_render; physical_fit_unqualified",
   "files": [
     {
@@ -10,8 +10,8 @@
       ],
       "horizontal_bar_mm": 49.99999230702718,
       "vertical_bar_mm": 50.00001653035482,
-      "sha256": "ae01ac966f70f8130d3d3ca11cb7b87e806733d1e8ca24dfb8892697e6a6bc49",
-      "rendered_visual_inspection": "passed; no overlaps or clipping (re-rendered 2026-10-17)"
+      "sha256": "af35e68f0899a702db322842288f974ee3c2ad0a9341cb6c082932fa2212e85f",
+      "rendered_visual_inspection": "passed; no clipping, labels inside their boxes (re-rendered 2026-10-23 with socket, support-band, C5 clamp-envelope and microSD-corridor overlays)"
     },
     {
       "file": "carrier-fit-A4.pdf",
@@ -21,8 +21,8 @@
       ],
       "horizontal_bar_mm": 49.99999230702718,
       "vertical_bar_mm": 50.00000576443142,
-      "sha256": "b8ae32f28592125b2b92caf366d589f7fb685389b15658f2f881d46ec26a647f",
-      "rendered_visual_inspection": "passed; no overlaps or clipping (re-rendered 2026-10-17)"
+      "sha256": "c7c8228dfa7b9c5948c7ea4bcd52c18abfd06fcfa2f8a7e62552d34b347b5dde",
+      "rendered_visual_inspection": "passed; no clipping, labels inside their boxes (re-rendered 2026-10-23 with socket, support-band, C5 clamp-envelope and microSD-corridor overlays)"
     }
   ]
 }

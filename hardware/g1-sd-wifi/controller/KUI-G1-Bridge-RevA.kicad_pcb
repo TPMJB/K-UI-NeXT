@@ -11660,7 +11660,7 @@
 				)
 			)
 		)
-		(property "Value" "TPS62162 3.3V 1A"
+		(property "Value" "TPS62172 3.3V 0.5A"
 			(at 0 1.75 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -11672,7 +11672,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.ti.com/lit/ds/symlink/tps62162.pdf"
+		(property "Datasheet" "https://www.ti.com/lit/ds/symlink/tps62170.pdf"
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -11694,7 +11694,7 @@
 				)
 			)
 		)
-		(property "MPN" "TPS62162DSGR"
+		(property "MPN" "TPS62172DSGR"
 			(at 0 0 0)
 			(layer "F.SilkS")
 			(hide yes)
@@ -25359,7 +25359,7 @@
 				)
 			)
 		)
-		(property "Value" "TPS62162 3.3V 1A"
+		(property "Value" "TPS62172 3.3V 0.5A"
 			(at 0 1.75 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -25371,7 +25371,7 @@
 				)
 			)
 		)
-		(property "Datasheet" "https://www.ti.com/lit/ds/symlink/tps62162.pdf"
+		(property "Datasheet" "https://www.ti.com/lit/ds/symlink/tps62170.pdf"
 			(at 0 0 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -25393,7 +25393,7 @@
 				)
 			)
 		)
-		(property "MPN" "TPS62162DSGR"
+		(property "MPN" "TPS62172DSGR"
 			(at 0 0 0)
 			(layer "F.SilkS")
 			(hide yes)
@@ -74581,7 +74581,7 @@
 			)
 		)
 	)
-	(gr_text "59 x 105 mm provisional envelope; mechanical fit NOT QUALIFIED"
+	(gr_text "59 x 115 mm outline; mechanical fit NOT QUALIFIED"
 		(at 99.5 43 0)
 		(layer "Dwgs.User")
 		(uuid "26c84136-951e-4294-93a8-b9ab47a0fe02")
@@ -75614,7 +75614,7 @@
 	(segment
 		(start 110.6 72.05)
 		(end 111.2 72.05)
-		(width 0.15)
+		(width 0.2)
 		(layer "F.Cu")
 		(net "+3V3_LOGIC")
 		(uuid "13c7275c-07ac-4d3f-8204-3d0de1fd9ebb")
@@ -75988,7 +75988,7 @@
 	(segment
 		(start 111.3 72.1)
 		(end 111.4 72.2)
-		(width 0.15)
+		(width 0.2)
 		(layer "F.Cu")
 		(net "+3V3_LOGIC")
 		(uuid "1cbce68d-807c-46f9-9657-3faaa33de420")
@@ -81774,7 +81774,7 @@
 	(segment
 		(start 111.4 72.2)
 		(end 111.6426 72.8308)
-		(width 0.15)
+		(width 0.2)
 		(layer "F.Cu")
 		(net "+3V3_LOGIC")
 		(uuid "9dc5389c-2b88-4317-b8e1-94b6b2696570")

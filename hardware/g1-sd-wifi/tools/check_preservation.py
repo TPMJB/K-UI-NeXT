@@ -14,8 +14,10 @@ a track may instead have been trimmed or split on its own line, where new
 copper joins it. On nets outside --allow-net the pieces on that line must
 still cover the whole original track; on --allow-net nets, which the change
 lifts and reroutes, trimmed copper is reported as shortened. Removed items
-are listed by net and fail the check outside --allow-net. New copper is
-summarised by net and layer. Run with KiCad 10's Python.
+are listed by net and fail the check outside --allow-net. An item named
+with --allow-change (by UUID) may differ in one reviewed property only: a
+track's width or a drawing's text. New copper is summarised by net and
+layer. Run with KiCad 10's Python.
 
   tools/check_preservation.py --base-rev fedc570 --allow-net LINK_A1 ... \\
       --pad-net-change U201:21 ... --report design/.../preservation-check.json
@@ -86,7 +88,14 @@ def drawings(board):
         rec = {'class': d.GetClass(), 'layer': board.GetLayerName(d.GetLayer()),
                'bbox': (bb.GetLeft(), bb.GetTop(), bb.GetRight(), bb.GetBottom())}
         if hasattr(d, 'GetText'):
-            rec['text'] = d.GetText()
+            q, size = d.GetTextPos(), d.GetTextSize()
+            rec.update(text=d.GetText(), text_pos=(q.x, q.y), text_size=(size.x, size.y),
+                       text_angle=round(d.GetTextAngleDegrees(), 4), text_thickness=d.GetTextThickness(),
+                       text_justify=(int(d.GetHorizJustify()), int(d.GetVertJustify())),
+                       text_mirrored=d.IsMirrored())
+        elif hasattr(d, 'GetStart'):
+            a, b = d.GetStart(), d.GetEnd()
+            rec['ends'] = (a.x, a.y, b.x, b.y)
         out[d.m_Uuid.AsString()] = rec
     return out
 
@@ -147,6 +156,8 @@ def main():
     ap.add_argument('--base-rev', required=True, help='git revision holding the base board')
     ap.add_argument('--allow-net', action='append', default=[], help='net whose base copper may be removed or shortened')
     ap.add_argument('--pad-net-change', action='append', default=[], help='REF:PAD whose net may change')
+    ap.add_argument('--allow-change', action='append', default=[],
+                    help='UUID of a track whose width, or a drawing whose text, may change')
     ap.add_argument('--report', type=pathlib.Path)
     args = ap.parse_args()
     rel = args.board.resolve().relative_to(ROOT.parents[1])
@@ -174,6 +185,22 @@ def main():
         if mask(f['pads']) != mask(g['pads']):
             problems.append('pad geometry or net changed: ' + ref)
     compare('zone', bz, nz, problems)
+    allowed = set(args.allow_change)
+    reviewed = {}
+    for u in sorted(allowed):
+        # A text's bounding box follows its string; everything else that
+        # places or sizes it must be unchanged. Only texts may be allowed.
+        if u in bd and u in nd and 'text' in bd[u] and \
+                {k: v for k, v in bd[u].items() if k not in ('text', 'bbox')} == \
+                {k: v for k, v in nd[u].items() if k not in ('text', 'bbox')}:
+            reviewed[u] = {'drawing_text': [bd[u].get('text'), nd[u].get('text')]}
+            nd[u] = bd[u]
+        elif u in bi and u in ni and not bi[u]['via'] and \
+                {k: v for k, v in bi[u].items() if k != 'width'} == {k: v for k, v in ni[u].items() if k != 'width'}:
+            reviewed[u] = {'net': bi[u]['net'], 'width_mm': [bi[u]['width'] / 1e6, ni[u]['width'] / 1e6]}
+            ni[u] = bi[u]
+        else:
+            problems.append('--allow-change item missing or changed beyond width/text: ' + u)
     compare('drawing', bd, nd, problems)
     changed = [u for u in bi if u in ni and bi[u] != ni[u]]
     # The gap closer joins a new route to a track by splitting it at the
@@ -208,10 +235,13 @@ def main():
         'base_rev': args.base_rev,
         'board_sha256': hashlib.sha256(args.board.read_bytes()).hexdigest(),
         'allow_net': sorted(args.allow_net), 'pad_net_change': sorted(args.pad_net_change),
+        **({'reviewed_changes': reviewed} if args.allow_change else {}),
         'base_footprints': len(bf), 'footprints': len(nf), 'added_footprints': sorted(set(nf) - set(bf)),
         'zones_compared': len(bz), 'drawings_compared': len(bd),
         'base_tracks_and_vias': len(bi), 'tracks_and_vias': len(ni),
-        'base_items_kept_unchanged': len(bi) - len(removed) - len(changed),
+        'base_items_kept_unchanged': len(bi) - len(removed) - len(changed)
+                                     - sum(1 for u in reviewed if u in bi),
+        **({'base_items_changed_reviewed': sum(1 for u in reviewed if u in bi)} if args.allow_change else {}),
         'base_items_split_and_covered': dict(sorted(split.items())),
         'base_items_shortened': dict(sorted(shortened.items())),
         'base_items_removed': len(removed), 'base_items_removed_by_net': dict(sorted(removed_by_net.items())),

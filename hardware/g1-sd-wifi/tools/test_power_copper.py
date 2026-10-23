@@ -58,8 +58,8 @@ class CopperRegression(unittest.TestCase):
         self.assertAlmostEqual(abs(current[0][0]), 2.5)
         self.assertAlmostEqual(abs(current[1][0]), 2.5)
         self.assertAlmostEqual(abs(current[2][0]), 0.0)
-        self.assertEqual(copper.NETS['+3V3_LOGIC']['fault'], 2.5)
-        self.assertEqual(copper.NETS['+3V3_STORAGE']['fault'], 2.5)
+        self.assertEqual(copper.NETS['+3V3_LOGIC']['fault'], 1.35)
+        self.assertEqual(copper.NETS['+3V3_STORAGE']['fault'], 1.35)
 
     def test_native_plane_graph_keeps_local_stub_and_barrels(self):
         board = pcbnew.BOARD()

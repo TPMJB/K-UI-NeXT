@@ -427,8 +427,8 @@
   },
   {
     "ref": "U21",
-    "value": "TPS62162 3.3V 1A",
-    "mpn": "TPS62162DSGR",
+    "value": "TPS62172 3.3V 0.5A",
+    "mpn": "TPS62172DSGR",
     "footprint": "KUI_Footprints:TI_DSG0008A",
     "pins": {
       "1": {
@@ -478,7 +478,7 @@
       }
     },
     "sources": [
-      "https://www.ti.com/lit/ds/symlink/tps62162.pdf"
+      "https://www.ti.com/lit/ds/symlink/tps62170.pdf"
     ],
     "description": "Fixed 3.3-V buck; FB=AGND; kelvin VOS at output capacitor; EP soldered to AGND.",
     "populate": true,
@@ -606,8 +606,8 @@
   },
   {
     "ref": "U22",
-    "value": "TPS62162 3.3V 1A",
-    "mpn": "TPS62162DSGR",
+    "value": "TPS62172 3.3V 0.5A",
+    "mpn": "TPS62172DSGR",
     "footprint": "KUI_Footprints:TI_DSG0008A",
     "pins": {
       "1": {
@@ -657,7 +657,7 @@
       }
     },
     "sources": [
-      "https://www.ti.com/lit/ds/symlink/tps62162.pdf"
+      "https://www.ti.com/lit/ds/symlink/tps62170.pdf"
     ],
     "description": "Fixed 3.3-V buck; FB=AGND; kelvin VOS at output capacitor; EP soldered to AGND.",
     "populate": true,

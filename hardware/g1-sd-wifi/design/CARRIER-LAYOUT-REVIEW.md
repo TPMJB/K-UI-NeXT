@@ -1,6 +1,6 @@
-# Carrier layout review — 17 October 2026
+# Carrier layout review — 23 October 2026
 
-Status: **fully routed and native DRC/ERC/parity clean; normal-current screening passes, fault screening and mechanical qualification remain open.** The current PCB SHA-256 is **`3b52bedb1832483bfb08103dd08cba4ced4b851021ff90b177d7cd918f897843`**. The 17 October follow-up wires U10's JTAG port and PROGRAMn to the RP2350 (next section) and keeps everything else of the 11 October board (`8c891b8b…`, commit fedc570), which preserved Claude commit `4b8c7d6` routing, corrected the three protection land patterns and widened existing supply traces without moving routes or vias. The owner reviews in `manufacturing/review-evidence.json` still gate release.
+Status: **fully routed and native DRC/ERC/parity clean; the normal-current and selected fault-current copper screens pass; the flex sockets must move before either order (Mechanical findings, item 1), and protection coordination and mechanical qualification remain open.** The current PCB SHA-256 is **`6b809188278f43a0f7a8c776976dc72cf207901cd439310714d7bc09ce60fe6a`**. The 23 October follow-up bounds the converter fault current (next section); the 17 October follow-up wires U10's JTAG port and PROGRAMn to the RP2350 (the section after) and keeps everything else of the 11 October board (`8c891b8b…`, commit fedc570), which preserved Claude commit `4b8c7d6` routing, corrected the three protection land patterns and widened existing supply traces without moving routes or vias. The owner reviews in `manufacturing/review-evidence.json` still gate release.
 
 | Current native snapshot | Result |
 |---|---:|
@@ -12,8 +12,12 @@ Status: **fully routed and native DRC/ERC/parity clean; normal-current screening
 | Native DRC, all severities, zones refilled | **0 violations** |
 | Unconnected items | **0** |
 | Schematic parity issues | **0** |
-| Supply copper screen (IPC-2221) | Normal: pass; selected 2.5 A fault screen: 138 failed track/via entries |
+| Supply copper screen (IPC-2221) | Normal: pass; selected 1.35 A converter fault screen (TPS62172): pass, 0 failed entries |
 | Schematic ERC (carrier, flex A, flex B) | 0 / 0 / 0 |
+
+## Converter fault current (23 October 2026)
+
+U21 and U22 are now TI TPS62172DSGR (0.5 A, static high-side current limit 0.85/1.05/1.35 A min/typ/max at 12 V, 25 °C) instead of TPS62162DSGR (1 A, 2.45 A maximum): same DSG0008A pinout and FB = AGND connection, and the logic (0.35 A) and storage (0.5 A) budgets still fit, with about 0.61 A peak inductor current against the 0.85 A minimum limit. Three 0.15 mm `+3V3_LOGIC` F.Cu links between C2017.1 and C2001.1 were widened to 0.20 mm in place; one runs between R2038's pads, under the 0402 body, with 0.14 mm to each pad (DRC passes; worth a look in the assembly review). `tools/check_power_copper.py` at the exact 1.35 A maximum (not rounded) now reports **0 failures** under the unchanged IPC-2221 criteria; the 2.5 A screen of the old part had 138. The tightest margins are the 87 single `+3V3_LOGIC` plane-to-pad vias (84.7 °C against 90 °C): the screen passes up to about 1.386 A, only 2.7 % above 1.35 A, so rounding up as the old screen did (to 1.4 A) would fail those vias at about 92 °C. The pass therefore rests on the exact static maximum and on the limiter's behaviour: per TI's description, once the high side reaches the limit it stays off until the low-side current falls below the low-side limit (about 0.7 A typical), so the average short-circuit current sits below the 1.35 A peak. The storage trunk reaches 27 °C. The checker merges very short staircase pieces into nodes: between C2017.1 and C2001.1, ten 0.15 mm pieces 0.1–0.25 mm long carry the current physically but are modelled at zero; they are short necks between wider copper. `tools/power_fault_screen_2026_10_23.sh` replays the change from 6d50fc5 and ends with the DRC gates (0 / 0 / 0) and `tools/check_preservation.py`: every footprint, zone and track/via is unchanged apart from the three reviewed widths and the corrected Dwgs.User outline note; U21/U22 change only their value, MPN and datasheet fields. The LCSC code C59873 comes from a search index (parts list status `catalog_identity_search_index_only_assembly_pending`); TI suggests 3.3 µH for low input voltage at the full 0.5 A, so regulation at the hold-up minimum is a bench item.
 
 ## RP2350-driven FPGA configuration (17 October 2026)
 
@@ -52,36 +56,39 @@ Freerouting and the grid gap closer stopped at 4 open connections. The last ones
 |---|---|---|
 | Short or overload on the board's 5 V | F20, 1.5 A fast fuse at J20 | `design/power-and-isolation.md` |
 | 12 V connected to J20 by mistake | D21, High Diode SMF5.0CA shunt after F20; TVS/fuse clearing coordination remains unqualified | same; downstream parts can still be damaged while F20 clears |
-| Reversed 5 V | Q20 P-MOSFET blocks it; D21 stays off, F20 survives | same |
+| Reversed 5 V | Bench (flex unplugged): Q20 blocks it, D21 stays off, F20 survives. Installed: not protected on the board; a pair swapped at the carrier shorts console 5 V through the flex grounds and only the tap-end harness fuse clears it. Check harness polarity before connecting J20 | same; `manufacturing/BRINGUP.md` |
 | Short on the host-side 3.3 V buffers | F21, 0.5 A fast fuse at the only host 3.3 V entry (J51 B1) | `design/flex-interface.json`, flex checks |
-| Chafed or cut flex | No console 5 V on either flex arm; contacts A1, A3, B3 end at dead fingers | `flex/tools/check_flex.py` |
-| Supply copper overheating before a fuse acts | 5 V/storage nets use 1 oz outer layers; normal-current screening passes; fault-current and fuse-clearing qualification remains open | `design/power-copper-check.json` |
-| Thin return path | J20's ground pad has four 0.3 mm vias into the plane; each TPS62162 thermal pad two | `design/floorplan-2026-10-10/power-vias.json` |
-| Underside contact with the motherboard | Vias tented both sides; bare probe pads must be covered with Kapton after probing | `manufacturing/BRINGUP.md` |
-| Harness wire before F20 | Not on the board: a ~2 A fuse at the console tap is an owner step | `docs/OWNER-NEXT-STEPS.md` |
+| Chafed or cut flex | No console 5 V on either flex arm; contacts A1, A3, B3 end at dead fingers. Arm B's B1 trace carries console 3.3 V, unfused until F21 on the carrier: keep its coverlay intact and tape an unplugged tail | `flex/tools/check_flex.py` |
+| Supply copper overheating before a fuse acts | 5 V/storage nets use 1 oz outer layers; normal-current screening and the 1.35 A converter fault screen pass; fuse-clearing and transient qualification remain open | `design/power-copper-check.json` |
+| Thin return path | J20's ground pad has four 0.3 mm vias into the plane; each converter (U21/U22) thermal pad two | `design/floorplan-2026-10-10/power-vias.json` |
+| Underside contact with the motherboard | Vias tented both sides; the 39 bare probe pads and J10's ten plated holes are exposed underneath: tape the whole underside before the first console power | `manufacturing/BRINGUP.md` |
+| Harness wire before F20 | Not on the board: a 2 A Littelfuse 0251002.MXL in line at the console tap is an owner step | `design/PARTS-TO-BUY.md`, `docs/OWNER-NEXT-STEPS.md` |
 
 ## Supply copper screen and its limit
 
 The corrected checker models finite via barrels by copper layer and sums branch
 currents. It faults each local capacitor, IC and other rail pad, including the
-logic-plane stubs omitted by the previous checker. TI TPS6216x Rev E gives a
-2.45 A maximum static high-side threshold at VIN=12 V, TJ=25°C; the selected
-2.5 A screen is not a guaranteed continuous fault-current bound. Dynamic peaks
-may be higher. Fuse nameplate current is also not a fault-current bound.
+logic-plane stubs omitted by the previous checker. Since 23 October the
+converters are TPS62172; TI's TPS6217x table gives a 1.35 A maximum static
+high-side limit at VIN=12 V, TJ=25°C, and the 1.35 A screen is not a
+guaranteed continuous fault-current bound. Dynamic peaks may be higher. Fuse
+nameplate current is also not a fault-current bound. The history below is
+for the TPS62162 and its 2.5 A screen.
 
 A bounded widening pass changed 1,298 logic, eight storage and four FUSED_5V
 segments. Every route coordinate, layer, net, footprint placement and via
 geometry was preserved. All 92 attempted 0.5/0.8 mm via enlargements failed
 native spacing checks and were restored. Final DRC/parity/opens are zero.
-Normal-current screening passes; the fault screen still has 138 failed entries:
+Normal-current screening passed; the 2.5 A fault screen then had 138 failed entries:
 34 storage track pieces + five vias, and 12 logic track pieces + 87 vias.
 The IPC numbers are steady-current estimates, not measured transient heating.
 
 `power-copper-check.json`, `power-native-preservation-check.json`,
 `power-bounded-widths.json` and `power-bounded-vias.json` record the exact result.
-The former unconditional supply PASS is superseded. Remaining local paths
-require fault-current/clearing and transient thermal qualification or a layout/
-protection change. Neither a clean DRC nor owner acceptance supplies that evidence.
+The former unconditional supply PASS is superseded. The 23 October converter
+change (section above) closes the 138 entries; fuse clearing and transient
+heating still need first-article qualification. Neither a clean DRC nor owner
+acceptance supplies that evidence.
 
 ## Checks passed on this snapshot
 
@@ -99,15 +106,16 @@ protection change. Neither a clean DRC nor owner acceptance supplies that eviden
 
 ## Mechanical findings that block release
 
-1. **The larger outline is unregistered.** The carrier is now 59 × 115 mm and reaches 10 mm further north than the earlier draft; the C5 module and everything north of the BIOS opening moved 10 mm north relative to the motherboard. The paper template must show CE501, CE502 and CE504 outside the outline or under a cutout, the C5 inside the 8 mm region and clear of both zero-clearance thermal chips, and the north edge clear of the AV connector area. If north does not fit, the same band can be inserted south of the notch instead.
-2. **The C5 compression fixture has no finished mechanical design. All four old mounting holes hit the current copper/pads (`mechanical-support-review.md`); an independent support must use physically verified anchors.** An insulating rigid support and removable clamp must hold the copper-to-module gap at 0.90 mm, keep XY alignment and resist at least 6.24 N of spring reaction without bowing either board; hard stops must prevent over-compression.
-3. **C5 height without USB is not measured.** With the 2.5 mm stand-off, 0.8 mm carrier and 0.90 mm spring gap, the module plus clamp has at most 3.80 mm nominal, or 3.70 mm with maximum carrier thickness, before other tolerances in the 8 mm region.
-4. **Stand-off and insulation are not established by DRC.** FH12 closed height is 2.0 ±0.2 mm. At the 0.9 mm maximum carrier thickness, 2.5 +0.9 +2.2 =5.6 mm in the 6 mm BIOS/CN503 region, leaving 0.4 mm before other tolerances and insulation. See `sources/connector-height-review.json`. Shield contact with pads, springs, solder joints or connector shells is unacceptable.
-5. **Card, flex and harness service envelopes** (microSD access, flex insertion and bend, J20 harness route and strain relief) need physical fit checks.
+1. **The flex arms cannot reach their sockets; J50/J51 must move (blocks both the carrier and the flex orders).** J50 and J51 sit on the notch's west wall, rotated so their mouths face east into the 2–3 mm gap beside CN503, the same gap in which arm A is soldered to the A row. Arm B is soldered to the east (B) row and would have to go round CN503's north end and back south past J50 to reach J51: about 49–52 mm of path against the 39 mm it has, and nothing can cross over CN503, because the GD-ROM plugs in there. Arm A has the length but would have to fold or twist into the same gap over its own landing. The tails were drawn for unrotated sockets (tip north, `flex/README.md`), but the sockets were placed rotated. The fix is a layout revision that lets each arm run straight off one end of the connector into a socket facing it. The geometry is tight: the notch is 15.2 mm wide and an FH12-20 is 16.2 mm long, so the two 10.5 mm tails cannot climb side by side at one end, and each end has only about 3–5 mm between CN503 and the notch wall for a tail to climb 3.3 mm. The likely options are one socket per end (A off one end, B off the other), a longer notch, or sockets set back from the notch with longer arms; each means re-placing parts in the dense regions there (U201's supervisors and crystal to the north, the converters and J20 to the south), re-routing about 40 flex nets and redrawing both arms. Which option fits depends on the owner's fit check (CN503's real position, the parts and heights at each end of CN503, the AV connector and CN601), so this revision follows `docs/OWNER-NEXT-STEPS.md` items 1, 3, 3a, 3b and 5, and the owner repeats the affected fit checks on the new sheet before ordering. `ROUTING-CHECKPOINT.md` lists the other changes to fold into it. The fit sheet shows the current socket bodies in orange.
+2. **The larger outline is unregistered.** The carrier is now 59 × 115 mm and reaches 10 mm further north than the earlier draft; the C5 module and everything north of the BIOS opening moved 10 mm north relative to the motherboard. The paper template must show CE501, CE502 and CE504 outside the outline or under a cutout, the C5 inside the 8 mm region and clear of both zero-clearance thermal chips, and the north edge clear of the AV connector area. If north does not fit, the same band can be inserted south of the notch instead.
+3. **The C5 compression fixture has no finished mechanical design. All four old mounting holes hit the current copper/pads (`mechanical-support-review.md`); an independent support must use physically verified anchors.** An insulating rigid support and removable clamp must hold the copper-to-module gap at 0.90 mm, keep XY alignment and resist at least 6.24 N of spring reaction without bowing either board; hard stops must prevent over-compression.
+4. **C5 height without USB is not measured.** With the 2.5 mm stand-off, 0.8 mm carrier and 0.90 mm spring gap, the module plus clamp has at most 3.80 mm nominal, or 3.70 mm with maximum carrier thickness, before other tolerances in the 8 mm region.
+5. **Stand-off and insulation are not established by DRC.** FH12 closed height is 2.0 ±0.2 mm. At the 0.9 mm maximum carrier thickness, 2.5 +0.9 +2.2 =5.6 mm in the 6 mm BIOS/CN503 region, leaving 0.4 mm before other tolerances and insulation. See `sources/connector-height-review.json`. Shield contact with pads, springs, solder joints or connector shells is unacceptable.
+6. **Card, flex and harness service envelopes** (microSD access, flex insertion and bend, J20 harness route and strain relief) need physical fit checks.
 
 ## Manufacturing notes
 
-Gerbers, drill and the placement file are relative to the aux origin at the outline's south-west corner. The BIOS opening and notch are milled; their inside corners come out with the router radius (about 0.5 mm). Vias inside the J20 ground pad, the TPS62162 thermal pads and the RP2350 thermal pad are open and tented; take the fabricator's epoxy-filled, capped via option if it is free for six-layer boards. `tools/make_review_package.py` plots an unapproved review package (Gerbers, drill, BOM/CPL, renders, checks) for inspection; order only from `prepare_jlcpcb_release.py --export` after the reviews are accepted. The RP2350, microSD socket and 50 MHz oscillator have no published 3D model and render as bare pads.
+Gerbers, drill and the placement file are relative to the aux origin at the outline's south-west corner. The BIOS opening and notch are milled; their inside corners come out with the router radius (about 0.5 mm). Vias inside the J20 ground pad, the U21/U22 converter thermal pads and the RP2350 thermal pad are open and tented; take the fabricator's epoxy-filled, capped via option if it is free for six-layer boards. `tools/make_review_package.py` plots an unapproved review package (Gerbers, drill, BOM/CPL, renders, checks) for inspection; order only from `prepare_jlcpcb_release.py --export` after the reviews are accepted. The RP2350, microSD socket and 50 MHz oscillator have no published 3D model and render as bare pads.
 
 ## Primary source records
 

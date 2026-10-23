@@ -2,6 +2,25 @@
 
 Where the carrier stands, and how to continue in a new session or container without redoing work. Keep this file current with every routing commit.
 
+## Next layout revision: move the flex sockets
+
+J50/J51 sit on the notch's west wall facing east into the gap beside CN503; flex arm B cannot reach J51 and arm A would fold into the same gap (`CARRIER-LAYOUT-REVIEW.md`, Mechanical findings, item 1). The next revision moves both sockets, for example to the notch's north or south wall facing CN503, re-places the parts there, re-routes the flex nets and redraws both arms (`flex/tools/generate_flex.py`). Wait for the owner's row proof, fit check, flex route survey, shield-height check and C5 measurement (`docs/OWNER-NEXT-STEPS.md` items 1, 3, 3a, 3b and 5), which fix the row identity, choose the end and may also move an edge, the BIOS opening or the C5. The notch is 15.2 mm wide and an FH12-20 is 16.2 mm long, so expect one socket per end or a longer notch (`CARRIER-LAYOUT-REVIEW.md`).
+
+Fold these into the same revision, since it is the last cheap chance:
+
+- **Silkscreen.** Every reference is hidden and no text is on silkscreen; lines are 0.12 mm, below the usual 0.153 mm minimum. Mark J20 "+5V" and "GND" and make its pad 1 square; show references for J10, J20, J50 ("A"), J51 ("B"), J201–J204 and TP20–TP26; lines at least 0.153 mm, text at least 1 mm. Have `tools/make_review_package.py` plot an F.Fab assembly drawing.
+- **Fiducials:** none today; add three.
+- **BIOS_BANK0** off the In4 +3V3_LOGIC plane (28.9 mm slot), and shorter stubs to the unfitted U40.
+- **X201 pad 4** has an open via in a pasted pad; move it out.
+- **IORDY:** add a DNP pull-up pad (the bridge can only pull IORDY low and relies on the console's pull-up; `OWNER-NEXT-STEPS.md` item 1 records it).
+- **microSD withdrawal:** the card's path out of J201 crosses R2019, R2018, R2011, R2013 and C2025 (courtyards 0.6–1.7 mm from the north edge); check against the Molex 104031 card height and move them if needed.
+- **Supports:** decide the support concept first and add any keepouts or holes it needs, including a bearing under the strip between the BIOS opening and the notch.
+- **After the revision:** new fit sheets and 1:1 prints of the redrawn arms go back to the owner for the affected item 3 and 3a checks before ordering.
+
+## Converter fault screen (23 October 2026)
+
+`tools/power_fault_screen_2026_10_23.sh` rebuilds the current board from 6d50fc5: it syncs U21/U22's value and MPN (TPS62172DSGR, from `design/blocks/power-bus.json`), widens three `+3V3_LOGIC` links to 0.20 mm in place (`design/power-fault-screen-2026-10-23/widen.json` through `tools/edit_tracks.py`), corrects the Dwgs.User outline note, checks DRC/opens/parity and runs `tools/check_preservation.py` against 6d50fc5 with those four items as reviewed changes (`--allow-change`). Unlike the JTAG replay it adds no copper, so a rerun gives a byte-identical board. `tools/check_power_copper.py` now screens the converters at 1.35 A and passes with no failures. The hash-bound outputs listed below were regenerated, and the fit sheets gained socket, support-band and microSD overlays (`tools/generate_carrier_template.py`).
+
 ## FPGA configuration wiring (17 October 2026)
 
 `tools/rp_fpga_jtag_2026_10_17.sh` rebuilds the current board from the finished fedc570 carrier: it adds R2044–R2048 south of U201, lifts six slow-net segments that closed U201's pad exits, lays explicit escapes for U201 pads 21/22 and a fan-out for U10 pin 95, routes the five configuration nets and the lifted nets with `close_gaps.py` (crystal keepout; rip-up limited to named slow nets), applies the junction edits in `design/rp-fpga-jtag-2026-10-17/tidy.json`, checks DRC/opens/parity and runs `tools/check_preservation.py` against fedc570. Its reports, including `preservation-check.json` with the arguments used and the board hash, are in `design/rp-fpga-jtag-2026-10-17/`.
@@ -67,8 +86,8 @@ git add design/routing-checkpoint && git commit  # make the checkpoint durable
    - The status and owner docs.
 5. **Owner items (open):** see `docs/OWNER-NEXT-STEPS.md`. Also:
    - Confirm 0.127 mm track and space with the fabricator.
-   - Confirm the TPS62162 current limit; 1.5 A is assumed for the plane-feed and storage fault ratings.
-   - F20 runs at 87 % of its 1.5 A rating at the full 1.3 A worst-case budget. Measure the real load: sustained current should stay under about 1.1 A, or the fuse may open in normal use. That is a safe failure, but a nuisance.
+   - Confirm the converter current limit (done 11 October for the TPS62162; since 23 October the converters are TPS62172, screened at their 1.35 A maximum).
+   - F20 runs at 90 % of its 1.5 A rating at the full 1.35 A worst-case budget. Measure the real load: sustained current should stay under about 1.1 A, or the fuse may open in normal use. That is a safe failure, but a nuisance.
 
 ## How finishing went (11 October 2026)
 

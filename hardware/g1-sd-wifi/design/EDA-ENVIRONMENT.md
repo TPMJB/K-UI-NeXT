@@ -156,6 +156,21 @@ review, refill, native DRC, and schematic parity before fabrication. Import
 with `generate_board.py import-session`; do not rerun `place` over routed
 copper. A stale pad-net mapping is deliberately rejected.
 
+## Session notes, 23 October 2026 (converter fault screen, readiness review)
+
+- The KiCad 10.0.7 build from 17 October was reused (`/home/user/eda`); the
+  container kept it. iverilog 12.0 and Yosys 0.33 were installed and
+  `fpga/run_checks.sh` reproduced the recorded results.
+- **ti.com, lcsc.com and jlcpcb.com were unreachable** (proxy refusal or no
+  name resolution), so the TPS62172 current limit was read from TI
+  document-viewer pages through a search engine and its LCSC code C59873
+  from a search index. Both are listed for owner confirmation.
+- `edit_tracks.py` gained a `width` operation (one track's width changed in
+  place, same ends and ID) and `check_preservation.py` an `--allow-change
+  UUID` option for reviewed width or drawing-text changes.
+  `generate_carrier_template.py` draws the socket bodies, support bands, C5
+  clamp envelope and microSD corridor on the fit sheets.
+
 ## Session notes, 17 October 2026 (RP2350 FPGA configuration)
 
 - **KiCad 10.0.7.** The committed ERC/DRC reports name 10.0.7, so this session

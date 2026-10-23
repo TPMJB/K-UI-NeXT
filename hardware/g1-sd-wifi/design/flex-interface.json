@@ -348,5 +348,5 @@
     "A3",
     "B3"
   ],
-  "unconnected_supply_policy": "Console supply contacts the carrier does not use get no flex copper: no landing pad and no trace, only an unconnected mating finger. The console 5-V contacts A3/B3 therefore never reach the flex, and host 3.3 V reaches the carrier through B1 alone, into fuse F21. A chafed or cut flex cannot short a console supply."
+  "unconnected_supply_policy": "Console supply contacts the carrier does not use get no flex copper: no landing pad and no trace, only an unconnected mating finger. The console 5-V contacts A3/B3 therefore never reach the flex, and host 3.3 V reaches the carrier through B1 alone, into fuse F21. A chafed or cut flex cannot short console 5 V; arm B's B1 trace carries console 3.3 V unfused until F21, so keep its coverlay intact and tape an unplugged tail."
 }

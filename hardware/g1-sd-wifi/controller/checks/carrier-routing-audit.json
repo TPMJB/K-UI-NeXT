@@ -1,5 +1,5 @@
 {
-  "board_sha256": "3b52bedb1832483bfb08103dd08cba4ced4b851021ff90b177d7cd918f897843",
+  "board_sha256": "6b809188278f43a0f7a8c776976dc72cf207901cd439310714d7bc09ce60fe6a",
   "status": "routing_present_qualification_pending",
   "routing_qualified": false,
   "signal_integrity_qualified": false,
@@ -15,7 +15,7 @@
     "sum": 0,
     "matches_full_board_total": true,
     "counts_are_uncapped": true,
-    "board_sha256": "3b52bedb1832483bfb08103dd08cba4ced4b851021ff90b177d7cd918f897843",
+    "board_sha256": "6b809188278f43a0f7a8c776976dc72cf207901cd439310714d7bc09ce60fe6a",
     "method": "Independent fresh LoadBoard for each category; assign netcode0 to all pads/tracks/vias/zones outside that category; BuildConnectivity/RecalculateRatsnest/GetUnconnectedCount(False)",
     "power_net_classification": [
       "+1V1_MCU",
@@ -816,7 +816,7 @@
     "X201"
   ],
   "fitment_scope": "BASE population declared by integrated component contract; fabricated copper and DNP/offboard parts excluded",
-  "fitment_contract_sha256": "0d888380d2805acaee3d4ce4b64da31379cb5d697e56d986fbfc628303219220",
+  "fitment_contract_sha256": "0853cdfa89d01cac29e2e70023f0fd77609333cb61f26ab2987d2fd1af6a84bd",
   "physical_refs_missing_component_contract": [],
   "fabricated_copper_footprints": 52,
   "fabricated_copper_bottom_refs": [
@@ -1164,6 +1164,7 @@
       "total_trace_length_mm": 162.2819,
       "trace_widths_mm": [
         0.15,
+        0.2,
         0.25,
         0.3,
         0.4,

@@ -1,0 +1,54 @@
+{
+  "base_rev": "6d50fc5",
+  "board_sha256": "6b809188278f43a0f7a8c776976dc72cf207901cd439310714d7bc09ce60fe6a",
+  "allow_net": [],
+  "pad_net_change": [],
+  "reviewed_changes": {
+    "13c7275c-07ac-4d3f-8204-3d0de1fd9ebb": {
+      "net": "+3V3_LOGIC",
+      "width_mm": [
+        0.15,
+        0.2
+      ]
+    },
+    "1cbce68d-807c-46f9-9657-3faaa33de420": {
+      "net": "+3V3_LOGIC",
+      "width_mm": [
+        0.15,
+        0.2
+      ]
+    },
+    "26c84136-951e-4294-93a8-b9ab47a0fe02": {
+      "drawing_text": [
+        "59 x 105 mm provisional envelope; mechanical fit NOT QUALIFIED",
+        "59 x 115 mm outline; mechanical fit NOT QUALIFIED"
+      ]
+    },
+    "9dc5389c-2b88-4317-b8e1-94b6b2696570": {
+      "net": "+3V3_LOGIC",
+      "width_mm": [
+        0.15,
+        0.2
+      ]
+    }
+  },
+  "base_footprints": 356,
+  "footprints": 356,
+  "added_footprints": [],
+  "zones_compared": 15,
+  "drawings_compared": 29,
+  "base_tracks_and_vias": 13127,
+  "tracks_and_vias": 13127,
+  "base_items_kept_unchanged": 13124,
+  "base_items_changed_reviewed": 3,
+  "base_items_split_and_covered": {},
+  "base_items_shortened": {},
+  "base_items_removed": 0,
+  "base_items_removed_by_net": {},
+  "base_removed_and_shortened_mm_by_net": {},
+  "items_added": 0,
+  "added_by_net": {},
+  "added_track_length_mm": {},
+  "problems": [],
+  "pass": true
+}

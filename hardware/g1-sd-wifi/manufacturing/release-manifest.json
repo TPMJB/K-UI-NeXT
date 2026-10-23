@@ -2,7 +2,7 @@
   "schema_version": 1,
   "release_id": "KUI-G1-RevA-bringup-prototype",
   "status": "blocked_fault_mechanical_and_manufacturing_qualification",
-  "purpose": "Fully routed Claude4b8c7d6 baseline with source-verified protection parts and current order-data checks; fault and mechanical qualification remain open.",
+  "purpose": "Fully routed Claude4b8c7d6 baseline with source-verified protection parts, RP2350-driven FPGA configuration and a converter fault-copper screen that passes; flex-socket placement, fault-clearing and mechanical qualification remain open.",
   "claude_review_commit": "b207dd659565826ffd757ccf7abe1998f63c9202",
   "boards": {
     "rigid": {
@@ -153,7 +153,15 @@
     "hardware/g1-sd-wifi/design/rp-fpga-jtag-2026-10-17/fanout-u10.json",
     "hardware/g1-sd-wifi/design/rp-fpga-jtag-2026-10-17/close-gaps.json",
     "hardware/g1-sd-wifi/design/rp-fpga-jtag-2026-10-17/tidy-applied.json",
-    "hardware/g1-sd-wifi/design/rp-fpga-jtag-2026-10-17/dangling.json"
+    "hardware/g1-sd-wifi/design/rp-fpga-jtag-2026-10-17/dangling.json",
+    "hardware/g1-sd-wifi/tools/power_fault_screen_2026_10_23.sh",
+    "hardware/g1-sd-wifi/design/power-fault-screen-2026-10-23/widen.json",
+    "hardware/g1-sd-wifi/design/power-fault-screen-2026-10-23/value-sync.json",
+    "hardware/g1-sd-wifi/design/power-fault-screen-2026-10-23/widen-applied.json",
+    "hardware/g1-sd-wifi/design/power-fault-screen-2026-10-23/preservation-check.json",
+    "hardware/g1-sd-wifi/design/PARTS-TO-BUY.md",
+    "hardware/g1-sd-wifi/flex/README.md",
+    "hardware/g1-sd-wifi/mechanical/README.md"
   ],
   "review_evidence": "hardware/g1-sd-wifi/manufacturing/review-evidence.json",
   "requested_provisions": [
@@ -169,7 +177,7 @@
     "CN503 passive flex and carrier support provision with 6/8 mm/thermal keepouts",
     "Debug access, conservative bring-up protocol and K-UI filesystem/write ownership"
   ],
-  "measurement_capture": "Complete for first draft; owner can reassemble. Installed prototype fit/landing qualification remains.",
+  "measurement_capture": "Open: CN503 row/numbering proof, 1:1 fit check, flex route survey, shield height and C5 measurements (docs/OWNER-NEXT-STEPS.md items 1-5) feed the layout revision that moves J50/J51; installed prototype fit/landing qualification remains.",
   "order_outputs_missing": [
     "Released rigid carrier Gerber/drill archive",
     "Released flex-A/flex-B Gerber/drill/coverlay/stiffener archives",
@@ -184,7 +192,7 @@
     "rigid_schematic": "Complete native hierarchy; ERC 0 and physical pad-number audit pass",
     "rigid_layout": "Six-layer0.8mm59x115mm fully routed native carrier; current native checks recorded, power-fault and prototype mechanics qualification open",
     "fpga": "Original tested synthesizable logic; MachXO2 resource mapping passes, device P&R/timing open",
-    "assembly": "55 catalog-matched BASE SMT part types (RC0402FR-07220RL JLC entry pending),269 physical SMT parts; manufacturer rotation and fixture review pending"
+    "assembly": "55 catalog-matched BASE SMT part types (RC0402FR-07220RL and TPS62172DSGR JLC entries pending),269 physical SMT parts; manufacturer rotation and fixture review pending"
   },
   "claude_routed_baseline_commit": "4b8c7d6876aaa2a1808bc46c1ccce587e028ebf5"
 }

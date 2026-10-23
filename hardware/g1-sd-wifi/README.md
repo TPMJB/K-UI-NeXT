@@ -1,6 +1,6 @@
 # K-UI G1 microSD and Wi-Fi bridge — Rev A
 
-The design now has a complete native KiCad circuit, two routed CN503 flex arms, selected components and original FPGA logic. All 55 BASE SMT part types have catalog matches (the 220 Ω FPGA configuration resistor added on 17 October has an LCSC code, C112291, taken from a search index: confirm it on lcsc.com and its JLC SMT entry), and candidate BOM/CPL files exist. **Prototype fabrication is not released yet:** carrier routing and electrical layout review, mechanical support/fit and assembler placement/fixture review remain open. Device timing and firmware qualification are also outstanding. This directory supersedes the historical MCU-only starter.
+The design now has a complete native KiCad circuit, two routed CN503 flex arms, selected components and original FPGA logic. All 55 BASE SMT part types have catalog matches (two LCSC codes were taken from a search index and must be confirmed on lcsc.com with their JLC SMT entries: C112291 for the 220 Ω FPGA configuration resistor added on 17 October, and C59873 for the TPS62172 converters that replaced TPS62162 on 23 October), and candidate BOM/CPL files exist. **Prototype fabrication is not released yet:** carrier routing and electrical layout review, mechanical support/fit and assembler placement/fixture review remain open. Device timing and firmware qualification are also outstanding. This directory supersedes the historical MCU-only starter.
 
 The Dreamcast VA1 keeps its original 3.3 V GD-ROM as device0. The bridge supplies ATA device1, raw microSD sectors and Wi-Fi transport. K-UI is the sole filesystem owner; the C5 never independently mounts the card. exFAT is the baseline user choice; ext4 remains a software option. No FAT32 setup is prescribed.
 
@@ -11,8 +11,8 @@ The Dreamcast VA1 keeps its original 3.3 V GD-ROM as device0. The bridge supplie
 | Bridge cache | U203 APS6404L-3SQR-ZR, 8 MiB PSRAM on QMI CS1/GPIO47; does not add SH-4 system RAM |
 | microSD | Molex1040310811 socket, card detect, pullups and rail-qualified bidirectional isolation |
 | Wi-Fi | Manual USB-free XIAO ESP32-C5, sixteen Harwin spring contacts, switched5 V, isolated SPI/UART and EN/BOOT recovery |
-| Power | Dedicated fused/reverse-protected5 V pair, separate logic/storage bucks, power warning, supervisors and DNP reserve bank |
-| G1 attachment | Independent passive20-conductor A/B arms and Hirose FH12 bottom-contact sockets; audio/+12 V excluded |
+| Power | Dedicated fused 5 V pair (reverse-blocked on the bench only; installed, the tap-end harness fuse is the reverse-polarity protection), separate TPS62172 logic/storage bucks, power warning, supervisors and DNP reserve bank |
+| G1 attachment | Independent passive20-conductor A/B arms and Hirose FH12 bottom-contact sockets; audio/+12 V excluded. The sockets must move before an order: arm B cannot reach J51 as placed |
 | Optional BIOS | DNP x8 NOR, extra ROM taps, physical independent stock recovery and hardware-qualified write arm; active factory bank0 |
 
 ## Open the actual design
@@ -27,7 +27,7 @@ The [FPGA directory](fpga/) contains synthesizable logic, exact physical-pin LPF
 
 ## Measured mechanical limits
 
-The owner may reassemble the console; no further teardown is requested for this draft. Motherboard-top clearance is6 mm in the BIOS/CN503/lower-shield region,8 mm elsewhere, and zero over the two thermal-contact chips. Nominal carrier underside is2.5 mm above the motherboard;0.8 mm PCB puts its top at3.3 mm. A2 mm FPC connector reaches5.3 mm before tolerances. The C5 assembly is reserved for the8 mm region and needs a supported0.90 mm contact gap and removable clamp.
+One more console-open session is needed before the carrier or either flex arm is ordered: the unpowered CN503 row proof, the 1:1 fit check, the flex route survey and the shield-height check in [docs/OWNER-NEXT-STEPS.md](docs/OWNER-NEXT-STEPS.md) items 1, 3, 3a and 3b. Their results feed one more layout revision: the flex sockets J50/J51 must move, because arm B cannot reach J51 as placed. Motherboard-top clearance is6 mm in the BIOS/CN503/lower-shield region,8 mm elsewhere, and zero over the two thermal-contact chips. Nominal carrier underside is2.5 mm above the motherboard;0.8 mm PCB puts its top at3.3 mm. A2 mm FPC connector reaches5.3 mm before tolerances. The C5 assembly is reserved for the8 mm region and needs a supported0.90 mm contact gap and removable clamp.
 
 BIOS body26.68 ×12.65 mm, outer lead span16.66 mm, height approximately2 mm. Its long axis is west-east; CN503's long axis is north-south. CN503 is38.67 mm long,6.56 mm maximum housing width; accepted solder-contact pitch is1.00 mm with approximately0.44 mm metal width. The25-contact measured run is24.39 mm. BIOS-to-connector housing distance is approximately12 mm; the west BIOS strip and east connector strip are approximately7 mm each. Those strips contain existing parts and solder joints. The housing-derived5.03 mm row spacing does not constrain the independent flex arms.
 

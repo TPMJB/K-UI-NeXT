@@ -1,4 +1,4 @@
-G1 bridge synthesis/simulation checks — 2026-10-10
+G1 bridge synthesis/simulation checks — 2026-10-10, rerun 2026-10-23
 Status: PASS
 Tools: Icarus Verilog12.0; Yosys0.33
 
@@ -9,7 +9,7 @@ K-UI activation/probe software and RP2350 media/diagnostic firmware remain pendi
 DASP/PDIAG interdevice handshake is absent; full PATA discovery is not qualified.
 
 bridge.v: 7394929c95152be95d7190e820574213af514dd6cf0cff738e7d9eeac6832488
-bridge.lpf: d0a1b804d470ec2b84affe007d386899fb71bfa28b368ad0d18ac262ba7dad1a
+bridge.lpf: 3a542419c94cf3c698d49ff544573f0563990f16f5c20575662020a80c10bbdc (SYSCONFIG line added 2026-10-17; the 56 pin constraints are unchanged, and the rerun output below is identical apart from Yosys CPU time)
 tb_bridge.v: 8c28133cbde66d050ccac1151ad85a8eddd34c4890db0b02278f9b42e388769b
 tb_fifo.v: 8c70c605d13cf931aa86c98976e18250e3341901a1dd796da278da0b0cfd95dc
 tb_review.v: 96384fb2e105da32f98e5763f7398f4129e345a085e624e96a49531f5cda39b7

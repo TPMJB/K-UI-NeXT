@@ -10,8 +10,9 @@ Every capacitor, connector, test point and IC rail pad is faulted separately,
 including the +3V3_LOGIC plane's local stubs. Unmapped distribution stubs are
 also screened conservatively at the whole normal budget.
 
-The 2.5-A converter case rounds up TPS6216x Rev E's 2.45-A maximum static
-current limit at 12 V / 25 C. It is a selected peak-current engineering screen,
+The 1.35-A converter case is the TPS6217x maximum static high-side current
+limit at 12 V / 25 C (U21/U22 are TPS62172 since 23 October 2026; the earlier
+TPS62162 was screened at 2.5 A). It is a selected peak-current engineering screen,
 not a guaranteed bound over all operating conditions; the typical dynamic
 comparator delay and inductor ramp can produce higher peaks. Fuse cases use
 nameplate current and do not establish clearing/I-squared-t coordination or
@@ -41,7 +42,7 @@ FAULT_LIMIT_C = 45.0
 NECK_MM = 2.0
 UM_TO_MIL = 1 / 25.4
 # Source pads, load budgets and explicit screening currents (not fuse limits).
-CONVERTER_FAULT_SCREEN_A = 2.5
+CONVERTER_FAULT_SCREEN_A = 1.35
 NETS = {
     'CONSOLE_5V': dict(normal=1.35, fault=1.5, outer=True, source=['J20.1'], loads={'F20.1': 1.35}),
     'FUSED_5V': dict(normal=1.35, fault=1.5, outer=True, source=['F20.2'], loads={'Q20.3': 1.35}),
@@ -413,10 +414,11 @@ def main():
                         (outer_um, inner_um, VIA_PLATING_UM),
               'board_sha256': hashlib.sha256(args.board.read_bytes()).hexdigest(),
               'converter_screen_current_a': CONVERTER_FAULT_SCREEN_A,
-              'converter_screen_basis': 'TI TPS62160 family Rev E electrical characteristics: static ILIM max 2.45 A '
-                                       'at VIN=12 V, TJ=25 C, rounded to 2.5 A; dynamic comparator delay is typical '
-                                       '30 ns, so this is a screening envelope, not a guaranteed peak bound.',
-              'converter_primary_source': 'https://www.ti.com/lit/ds/symlink/tps62160.pdf',
+              'converter_screen_basis': 'TI TPS62170 family electrical characteristics: static high-side ILIMF max '
+                                       '1.35 A at VIN=12 V, TJ=25 C (not rounded); the datasheet notes the limit can be '
+                                       'temporarily higher through internal propagation delay, so this is a screening '
+                                       'envelope, not a guaranteed peak bound.',
+              'converter_primary_source': 'https://www.ti.com/lit/ds/symlink/tps62170.pdf',
               'protection_coordination_qualified': False,
               'limitations': ['Fuse cases use nameplate currents, not hard limits; source prospective current, '
                               'fuse time-current/clearing I-squared-t and short-pulse copper survival need validation.',
@@ -424,7 +426,7 @@ def main():
                               'requires its documented tap-end fuse, and the host 3.3-V entry short needs source review.',
                               'Filled planes are ideal electrical hubs; plane constrictions, ground return, '
                               'thermal environment and actual supplier stack/plating require engineering review.',
-                              '2.5-A converter screen does not bound dynamic peaks or all input/temperature conditions.'],
+                              '1.35-A converter screen does not bound dynamic peaks or all input/temperature conditions.'],
               'limits_c': {'normal': NORMAL_LIMIT_C, 'fault': FAULT_LIMIT_C, 'neck_mm': NECK_MM, 'neck_and_via_factor': 2},
               'nets': nets, 'failures': failures,
               'normal_screen_pass': not any(f.get('case') != 'fault' for f in failures),

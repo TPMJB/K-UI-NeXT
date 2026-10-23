@@ -10,7 +10,7 @@
     },
     {
       "path": "design/blocks/controller.json",
-      "sha256": "bc15974af6db31325d6ff9c7faaba3eaa42253cf16b9468eaa83545c90d19e68"
+      "sha256": "87b57b82fe3188ef3011d28879d1b5529a43703db7d5f2c0b01e0f4e4f9f2558"
     },
     {
       "path": "design/blocks/frontend.json",
@@ -18,11 +18,11 @@
     },
     {
       "path": "design/blocks/power-bus.json",
-      "sha256": "7db62a4633f06aaae56ad7c7adaa0ab73f66799f8115d1b656d7958e2bbcf9fd"
+      "sha256": "e27f97313bfff1f6ff2cb21e5296e5f1fb988968913dc84f4e50086ccf0d7075"
     },
     {
       "path": "design/flex-interface.json",
-      "sha256": "2fcee6e0acc78c7d8c799e0687c211fa49bbbc1af7ba152ec395a2c623cfa964"
+      "sha256": "6fe33bb8e714bccec9a0043d22e3d1ea209387ee91db1c2a5c54a898558ea849"
     },
     {
       "path": "design/sources/machxo2-2000-pinout.csv",
@@ -34,11 +34,11 @@
     },
     {
       "path": "design/integrated-components.json",
-      "sha256": "0d888380d2805acaee3d4ce4b64da31379cb5d697e56d986fbfc628303219220"
+      "sha256": "0853cdfa89d01cac29e2e70023f0fd77609333cb61f26ab2987d2fd1af6a84bd"
     },
     {
       "path": "controller/checks/netlist.xml",
-      "sha256": "0265650e7e71cc8f90e993149a5739d64b2af420b8cbff6107fe9dc115d9194f"
+      "sha256": "a18f8f1d235cad9ad72a2dc4ddc6d406ef789b9d7c032805a79e84554af902ff"
     },
     {
       "path": "tools/check_integration.py",

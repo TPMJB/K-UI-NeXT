@@ -1,5 +1,7 @@
 # C5 support reconciliation — 2026-10-11
 
+**23 October 2026:** the support design also needs a bearing under the 8.8 mm-wide laminate strip between the BIOS opening and the CN503 notch (carrier-local x 35–43.8, y 61–80), where J50 sits today: FH12 latch closing and flex spring-back load that strip, and its edges have no free clip band. The fit sheets now show 3 mm edge bands with no carrier parts (purple), and `docs/OWNER-NEXT-STEPS.md` item 3 asks for anchor positions and motherboard surface heights. J50/J51 move in the next layout revision (`CARRIER-LAYOUT-REVIEW.md`, Mechanical findings, item 1), so repeat the anchor review on that board. No PCB holes are planned; a hole-free concept (a west-edge clip plus an underside backer, or a bridge anchored to a case or shield boss) is geometrically available for the C5.
+
 The previous four-hole C5 support cannot be attached to the current 59 × 115 mm carrier without cutting populated pads and routed copper. Keep the current PCB unchanged and develop the independent support/retention fixture from verified console anchor and obstacle measurements. No fixture models were copied, no holes were added, and no new fixture CAD was generated.
 
 The reviewed native PCB has SHA-256 `7d7c3d2693fd01a43f67d1618dabdd9e908bb48c382820c1bf2be7a41367bfc9`. Coordinates below are millimetres from its north-west corner, whose native coordinate is (70, 45). The old support requires 1.8 mm NPTH holes, 0.30 mm copper clearance from each drill edge, and a 3.6 mm boss envelope.

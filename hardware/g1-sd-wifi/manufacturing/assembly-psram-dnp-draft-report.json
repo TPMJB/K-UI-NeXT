@@ -10,7 +10,7 @@
   "manual_offboard_refs": [
     "U206"
   ],
-  "exact_jlc_smt_catalog_rows": 53,
+  "exact_jlc_smt_catalog_rows": 52,
   "assembly_fixture_requirements": [
     {
       "mpn": "ASE-50.000MHZ-LC-T",
@@ -59,10 +59,19 @@
       ],
       "lcsc_code": "C112291",
       "sourcing_status": "catalog_identity_search_index_only_assembly_pending"
+    },
+    {
+      "mpn": "TPS62172DSGR",
+      "refs": [
+        "U21",
+        "U22"
+      ],
+      "lcsc_code": "C59873",
+      "sourcing_status": "catalog_identity_search_index_only_assembly_pending"
     }
   ],
-  "pcb_sha256": "3b52bedb1832483bfb08103dd08cba4ced4b851021ff90b177d7cd918f897843",
-  "parts_list_sha256": "e0202ea148740e8175615538ce1669d20b7ac6f08a98b0b1a5ec1e154d3eaa99",
+  "pcb_sha256": "6b809188278f43a0f7a8c776976dc72cf207901cd439310714d7bc09ce60fe6a",
+  "parts_list_sha256": "56b19b0256623e9e7ba5f22f87c53b64d01de968d10c312a2ca60fff8c5fb9f5",
   "origin_mm": [
     70.0,
     160.0

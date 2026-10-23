@@ -2,7 +2,7 @@
 <export version="E">
   <design>
     <source>/home/user/kui-g1/hardware/g1-sd-wifi/controller/KUI-G1-Bridge-RevA.kicad_sch</source>
-    <date>2026-10-17T17:33:02</date>
+    <date>2026-10-23T04:38:40</date>
     <tool>Eeschema 10.0.7</tool>
     <sheet number="1" name="/" tstamps="/">
       <title_block>
@@ -7234,19 +7234,19 @@
       </units>
     </comp>
     <comp ref="U21">
-      <value>TPS62162 3.3V 1A</value>
+      <value>TPS62172 3.3V 0.5A</value>
       <footprint>KUI_Footprints:TI_DSG0008A</footprint>
-      <datasheet>https://www.ti.com/lit/ds/symlink/tps62162.pdf</datasheet>
+      <datasheet>https://www.ti.com/lit/ds/symlink/tps62170.pdf</datasheet>
       <fields>
-        <field name="MPN">TPS62162DSGR</field>
+        <field name="MPN">TPS62172DSGR</field>
         <field name="LCSC"/>
         <field name="Variant">BASE</field>
         <field name="Footprint">KUI_Footprints:TI_DSG0008A</field>
-        <field name="Datasheet">https://www.ti.com/lit/ds/symlink/tps62162.pdf</field>
+        <field name="Datasheet">https://www.ti.com/lit/ds/symlink/tps62170.pdf</field>
         <field name="Description"/>
       </fields>
       <libsource lib="KUI_G1" part="U21" description=""/>
-      <property name="MPN" value="TPS62162DSGR"/>
+      <property name="MPN" value="TPS62172DSGR"/>
       <property name="LCSC" value=""/>
       <property name="Variant" value="BASE"/>
       <property name="Sheetname" value="power-bus-1"/>
@@ -7270,19 +7270,19 @@
       </units>
     </comp>
     <comp ref="U22">
-      <value>TPS62162 3.3V 1A</value>
+      <value>TPS62172 3.3V 0.5A</value>
       <footprint>KUI_Footprints:TI_DSG0008A</footprint>
-      <datasheet>https://www.ti.com/lit/ds/symlink/tps62162.pdf</datasheet>
+      <datasheet>https://www.ti.com/lit/ds/symlink/tps62170.pdf</datasheet>
       <fields>
-        <field name="MPN">TPS62162DSGR</field>
+        <field name="MPN">TPS62172DSGR</field>
         <field name="LCSC"/>
         <field name="Variant">BASE</field>
         <field name="Footprint">KUI_Footprints:TI_DSG0008A</field>
-        <field name="Datasheet">https://www.ti.com/lit/ds/symlink/tps62162.pdf</field>
+        <field name="Datasheet">https://www.ti.com/lit/ds/symlink/tps62170.pdf</field>
         <field name="Description"/>
       </fields>
       <libsource lib="KUI_G1" part="U22" description=""/>
-      <property name="MPN" value="TPS62162DSGR"/>
+      <property name="MPN" value="TPS62172DSGR"/>
       <property name="LCSC" value=""/>
       <property name="Variant" value="BASE"/>
       <property name="Sheetname" value="power-bus-1"/>
@@ -15722,7 +15722,7 @@
     <libpart lib="KUI_G1" part="U21">
       <fields>
         <field name="Reference">U</field>
-        <field name="Value">TPS62162 3.3V 1A</field>
+        <field name="Value">TPS62172 3.3V 0.5A</field>
         <field name="Footprint">KUI_Footprints:TI_DSG0008A</field>
         <field name="Datasheet"/>
         <field name="Description"/>
@@ -15742,7 +15742,7 @@
     <libpart lib="KUI_G1" part="U22">
       <fields>
         <field name="Reference">U</field>
-        <field name="Value">TPS62162 3.3V 1A</field>
+        <field name="Value">TPS62172 3.3V 0.5A</field>
         <field name="Footprint">KUI_Footprints:TI_DSG0008A</field>
         <field name="Datasheet"/>
         <field name="Description"/>

@@ -1,9 +1,10 @@
 {
   "review_date": "2026-10-11",
   "review_updates": [
-    "2026-10-17: RC0402FR-07220RL (R2044-R2048) added; LCSC identity C112291 from a search-engine index, lcsc.com and jlcpcb.com unreachable from the design environment."
+    "2026-10-17: RC0402FR-07220RL (R2044-R2048) added; LCSC identity C112291 from a search-engine index, lcsc.com and jlcpcb.com unreachable from the design environment.",
+    "2026-10-23: TPS62172DSGR (U21, U22) replaces TPS62162DSGR C40256 so the converter fault current is bounded at 1.35 A; LCSC identity C59873 from a search-engine index, lcsc.com and jlcpcb.com unreachable from the design environment."
   ],
-  "scope": "Exact purchasing identities and variant quantities derived from physical circuit contracts. All 54 BASE SMT purchase rows of the 2026-10-11 review, including D21 High Diode SMF5.0CA C22458622 and F21 Littelfuse 0467.500NR C206990, have exact official JLC SMT catalog identity evidence. The 2026-10-17 FPGA configuration resistor RC0402FR-07220RL (C112291) has LCSC catalog identity from a search index only, and its JLC SMT entry is pending. One BASE C5 module is a separate maker-SKU manual purchase. Optional BIOS/reserve sourcing may remain pending. Catalog identity is not inventory, allocation, quotation, assembler acceptance or production release.",
+  "scope": "Exact purchasing identities and variant quantities derived from physical circuit contracts. The 53 BASE SMT purchase rows still in use from the 2026-10-11 review, including D21 High Diode SMF5.0CA C22458622 and F21 Littelfuse 0467.500NR C206990, have exact official JLC SMT catalog identity evidence. The 2026-10-17 FPGA configuration resistor RC0402FR-07220RL (C112291) and the 2026-10-23 converter TPS62172DSGR (C59873) have LCSC catalog identity from a search index only, and their JLC SMT entries are pending. One BASE C5 module is a separate maker-SKU manual purchase. Optional BIOS/reserve sourcing may remain pending. Catalog identity is not inventory, allocation, quotation, assembler acceptance or production release.",
   "parts": {
     "046701.5NR": {
       "manufacturer": "Littelfuse",
@@ -1676,33 +1677,24 @@
         "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
       }
     },
-    "TPS62162DSGR": {
+    "TPS62172DSGR": {
       "manufacturer": "Texas Instruments",
-      "description": "TPS62162 3.3V 1A",
+      "description": "TPS62172 3.3V 0.5A",
       "physical_package": "TI DSG0008A WSON-8 with exposed pad, 2 x 2 mm, 0.5 mm pitch",
-      "electrical_spec": "Fixed 3.3 V synchronous buck, 3-17 V input, 1 A nominal output, 2.25 MHz nominal",
+      "electrical_spec": "Fixed 3.3 V synchronous buck, 3-17 V input, 0.5 A nominal output, 2.25 MHz nominal; high-side static current limit ILIMF 0.85/1.05/1.35 A min/typ/max at VIN = 12 V, TJ = 25 C",
       "manufacturer_sources": [
-        "https://www.ti.com/lit/ds/symlink/tps62162.pdf"
+        "https://www.ti.com/lit/ds/symlink/tps62170.pdf"
       ],
-      "spec_review_status": "TI package, fixed-output order code and passive selection tables reviewed; layout/bench qualification pending",
-      "notes": "TI recommends 2.2 uH XFL3012-222MEC, 10 uF input and 22 uF X5R/X7R output. Two fitted 22 uF parts are 44 uF nominal, not 44 uF effective. Qualify effective capacitance at actual bias/temp/tolerance and converter stability.",
+      "spec_review_status": "TI TPS6217x electrical table (ILIMF) and TI's pin-to-pin compatibility with TPS6216x read through TI document-viewer search excerpts; layout/bench qualification pending",
+      "notes": "Replaces TPS62162DSGR (1 A, C40256) on 23 October 2026 so both 3.3 V outputs pass the converter fault-copper screen at the 1.35 A static limit; same DSG0008A pinout and FB = AGND connection. Budgets: logic 0.35 A, storage 0.5 A. TI's TPS6217x inductor list includes XFL3012-222MEC and recommends 22 uF output, and suggests 3.3 uH for low input voltages to reach the full 0.5 A (the budgets here are 0.35/0.5 A, peak about 0.61 A against the 0.85 A minimum limit); two fitted 22 uF parts are 44 uF nominal, not 44 uF effective. Qualify effective capacitance, converter stability and regulation at low hold-up input.",
       "supplier_identity": {
-        "lcsc_code": "C40256",
-        "url": "https://jlcpcb.com/partdetail/TexasInstruments-TPS62162DSGR/C40256",
-        "verified_mpn": "TPS62162DSGR",
+        "lcsc_code": "C59873",
+        "url": "https://www.lcsc.com/product-detail/C59873.html",
+        "verified_mpn": "TPS62172DSGR",
         "verified_manufacturer": "Texas Instruments",
-        "verified_on": "2026-10-10",
-        "verification_scope": "Official catalog exact MPN, manufacturer and physical package identity only; no availability, allocation, basic/extended status or assembly acceptance guarantee."
-      },
-      "jlc_assembly": {
-        "url": "https://jlcpcb.com/partdetail/TexasInstruments-TPS62162DSGR/C40256",
-        "verified_mpn": "TPS62162DSGR",
-        "verified_lcsc_code": "C40256",
-        "verified_on": "2026-10-10",
-        "assembly_type": "SMT Assembly",
-        "pcba_type": "Economic and Standard",
-        "fixture_required_by_catalog": false,
-        "verification_scope": "Official exact part page lists SMT Assembly and PCBA service type. Fixture flag records explicit catalogue notice only; no stock, quotation, PCB acceptance or assembly-order release is promised."
+        "verified_on": "2026-10-23",
+        "verification_scope": "LCSC catalog page (exact MPN TPS62172DSGR, Texas Instruments, C59873) read through a search-engine index; lcsc.com, jlcpcb.com and ti.com were not reachable from the design environment. Confirm the page and the JLC SMT part entry before ordering; no availability, allocation, basic/extended status or assembly acceptance guarantee.",
+        "identity_source": "search_index"
       }
     },
     "W25Q128JVSIQ": {
@@ -1742,10 +1734,11 @@
       "electrical_spec": "2.2 uH +/-20%; DCR 81 mOhm nominal / 97 mOhm maximum; Isat 1.0/1.3/1.6 A at 10/20/30% L drop",
       "manufacturer_sources": [
         "https://www.coilcraft.com/getmedia/f76a3c9b-4fff-4397-8028-ef8e043eb200/xfl3012.pdf",
-        "https://www.ti.com/lit/ds/symlink/tps62162.pdf"
+        "https://www.ti.com/lit/ds/symlink/tps62162.pdf",
+        "https://www.ti.com/lit/ds/symlink/tps62170.pdf"
       ],
       "spec_review_status": "Coilcraft specification and TI recommended-inductor table reviewed; operating qualification pending",
-      "notes": "Irms 1.4 A at 20 C rise / 1.9 A at 40 C rise. TI TPS6216x table recommends this exact inductor. At 5 V to 3.3 V and nominal 2.25 MHz, minimum 1.76 uH gives about 0.283 A peak-to-peak ripple (ideal inference). Test peak current/temperature and transients; do not assume full-load qualification.",
+      "notes": "Irms 1.4 A at 20 C rise / 1.9 A at 40 C rise. TI's TPS6216x and TPS6217x inductor tables both list this exact inductor. At 5 V to 3.3 V and nominal 2.25 MHz, minimum 1.76 uH gives about 0.283 A peak-to-peak ripple (ideal inference). Test peak current/temperature and transients; do not assume full-load qualification.",
       "supplier_identity": {
         "lcsc_code": "C3911432",
         "url": "https://www.lcsc.com/product-detail/C3911432.html",
@@ -1874,6 +1867,7 @@
     "Optional BIOS requires separate mechanical/timing installation qualification, isolated stock CE, R410 removal and externally verified bank-0 preprogramming; no onboard flasher is provided.",
     "CN503 flex, optional BIOS FPC/selector harness, power leads, mounting/insulation fixture and microSD media are separate fabrication/installation items, not guessed catalog stock parts.",
     "JLC explicitly lists assembly support fixture requirements for Harwin S7221-45R C22445132 and Abracon ASE-50.000MHZ-LC-T C596955; confirm fixture process before assembly order release.",
-    "Confirm on lcsc.com that C112291 is Yageo RC0402FR-07220RL, and find its JLC SMT parts-library entry and Basic/Extended status, before ordering (R2044-R2048); the current identity is search-index derived."
+    "Confirm on lcsc.com that C112291 is Yageo RC0402FR-07220RL, and find its JLC SMT parts-library entry and Basic/Extended status, before ordering (R2044-R2048); the current identity is search-index derived.",
+    "Confirm on lcsc.com that C59873 is TI TPS62172DSGR, and find its JLC SMT parts-library entry and Basic/Extended status, before ordering (U21, U22); the current identity is search-index derived."
   ]
 }

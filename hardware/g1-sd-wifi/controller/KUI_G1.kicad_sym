@@ -2336,7 +2336,7 @@
 )
 (symbol "U21" (pin_names (offset 0.508)) (in_bom yes) (on_board yes)
  (property "Reference" "U" (at 0 10.16 0) (effects (font (size 1.27 1.27))))
- (property "Value" "TPS62162 3.3V 1A" (at 0 12.7 0) (effects (font (size 1.27 1.27))))
+ (property "Value" "TPS62172 3.3V 0.5A" (at 0 12.7 0) (effects (font (size 1.27 1.27))))
  (property "Footprint" "KUI_Footprints:TI_DSG0008A" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
  (symbol "U21_0_1" (rectangle (start -13.97 7.62) (end 13.97 -7.62) (stroke (width 0.254) (type default)) (fill (type background))))
  (symbol "U21_1_1"
@@ -2403,7 +2403,7 @@
 )
 (symbol "U22" (pin_names (offset 0.508)) (in_bom yes) (on_board yes)
  (property "Reference" "U" (at 0 10.16 0) (effects (font (size 1.27 1.27))))
- (property "Value" "TPS62162 3.3V 1A" (at 0 12.7 0) (effects (font (size 1.27 1.27))))
+ (property "Value" "TPS62172 3.3V 0.5A" (at 0 12.7 0) (effects (font (size 1.27 1.27))))
  (property "Footprint" "KUI_Footprints:TI_DSG0008A" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
  (symbol "U22_0_1" (rectangle (start -13.97 7.62) (end 13.97 -7.62) (stroke (width 0.254) (type default)) (fill (type background))))
  (symbol "U22_1_1"

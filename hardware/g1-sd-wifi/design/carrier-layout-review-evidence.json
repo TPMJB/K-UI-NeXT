@@ -1,7 +1,7 @@
 {
-  "status": "current_native_followup_checked; fabrication_fault_and_mechanical_qualification_open",
-  "review_time_utc": "2026-10-17",
-  "board_sha256": "3b52bedb1832483bfb08103dd08cba4ced4b851021ff90b177d7cd918f897843",
+  "status": "current_native_followup_checked; fault_copper_screen_passes; fabrication_and_mechanical_qualification_open",
+  "review_time_utc": "2026-10-23",
+  "board_sha256": "6b809188278f43a0f7a8c776976dc72cf207901cd439310714d7bc09ce60fe6a",
   "claude_routed_baseline_commit": "4b8c7d6876aaa2a1808bc46c1ccce587e028ebf5",
   "historical_review": "The previous fa3e8848 placement review, withdrawn candidates and source comparisons remain in Git history; they do not describe the routed current snapshot.",
   "board_footprints": 356,
@@ -243,12 +243,13 @@
   "current_assembly_counts": {
     "BASE_SMT_parts": 269,
     "BASE_BOM_rows": 55,
-    "exact_catalog_rows": 54
+    "exact_catalog_rows": 53,
+    "search_index_catalog_rows": 2
   },
   "normal_current_screen_pass": true,
-  "selected_fault_screen_pass": false,
-  "selected_converter_screen_a": 2.5,
-  "failed_track_via_entries": 138,
+  "selected_fault_screen_pass": true,
+  "selected_converter_screen_a": 1.35,
+  "failed_track_via_entries": 0,
   "protection_coordination_qualified": false,
   "mechanical_qualified": false,
   "electrical_layout_qualified": false,
@@ -256,16 +257,18 @@
   "reference_plane_limit": "In1 has no signal tracks; In4 includes9 signal-net plane hops. DC connectivity does not qualify return-path integrity or timing.",
   "file_sha256": {
     "controller/KUI-G1-Bridge-RevA.kicad_pro": "92373b92ed3e500ced97fd4eee1b0e234efeb1d24f4b35825dd824df5d732743",
-    "design/integrated-components.json": "0d888380d2805acaee3d4ce4b64da31379cb5d697e56d986fbfc628303219220",
+    "design/integrated-components.json": "0853cdfa89d01cac29e2e70023f0fd77609333cb61f26ab2987d2fd1af6a84bd",
     "design/sources/xiao-c5-spring-contact-placement.json": "285f926f3cc9023020b50a657f657363a763744bc2a762e0f123777631f4ea6c",
     "design/sources/input-protection-footprints.json": "0b841fa295075a4d3e4e68c64615e4587bdce7668ace139e02cf07cebc12557a",
-    "design/carrier-final-drc.json": "72bff505732456fbfde7f3b11f4a0add85cc90dc9c6026a1067d73e5f83ff7ce",
-    "design/power-copper-check.json": "23f29d36bc1427d39668837a88f54015ccfd578170bb2599053f051931ee4c03",
+    "design/carrier-final-drc.json": "3d353dbc6244c113b8aecda0ddb46b88b5420579780dcc1a485f16cc208c8417",
+    "design/power-copper-check.json": "423c56244afd5cc65d5d8bdd863320efbf14225990ff2abc8148eb5b3d0b4bd9",
     "design/power-native-preservation-check.json": "ded5379103e4ee329a7e25d057c8db4e617f1df5b511624d72b7204b7bae76ed",
-    "manufacturing/assembly-draft-report.json": "91f19a0667e7fa7453030222261a9e12a183029b3ec211e4c87e974cd5e0b1d7",
-    "flex/checks/summary.json": "c985f39b21682d3e2e65da3bc7c9c136ce7cb3853f14e07afc52f155ab1feabf",
+    "manufacturing/assembly-draft-report.json": "b4ba012e32f1a39548b86f07c30247c71d9bba1e476ccffcbc4a4b90a45608d6",
+    "flex/checks/summary.json": "61adeee0fc34b5a387a4062fa7015be7ff222472ba1302d1757798b5c0aa8948",
     "design/rp-fpga-jtag-2026-10-17/preservation-check.json": "37a19ac80bf1ce0e71545e1150b4990ba62dad6ec6b5cabe5d935163a4f3d8aa",
-    "design/rp-fpga-jtag-2026-10-17/tidy.json": "5af70275815a0086a49c59ad65a1d815440879b6f09ec816cf4d70816a6c2306"
+    "design/rp-fpga-jtag-2026-10-17/tidy.json": "5af70275815a0086a49c59ad65a1d815440879b6f09ec816cf4d70816a6c2306",
+    "design/power-fault-screen-2026-10-23/preservation-check.json": "c427bbd370097976b9e5aba3bbf8a3c18fcacd31d23b5750ad9ad00b67389fd8",
+    "design/power-fault-screen-2026-10-23/widen.json": "fa0b6fd5640ebce2d85078c2cff1690bc1709d8862e61d106beebb95534a5834"
   },
   "rp_fpga_jtag_followup": {
     "date": "2026-10-17",
@@ -370,5 +373,12 @@
     "not_in_plane": "No new copper on In1.Cu or In4.Cu.",
     "power_copper_screen": "Unchanged apart from the board hash: normal screen pass, 138 failed entries in the selected 2.5 A fault screen.",
     "review_status": "Technical snapshot only; owner reviews in manufacturing/review-evidence.json were made on fedc570 and must be repeated (input hashes are stale)."
+  },
+  "power_fault_screen_followup": {
+    "date": "2026-10-23",
+    "change": "U21/U22 TPS62162DSGR (1 A, static high-side limit 2.45 A max) replaced by pin-compatible TPS62172DSGR (0.5 A, 1.35 A max; LCSC C59873 from a search index); three 0.15 mm +3V3_LOGIC F.Cu links between C2017.1 and C2001.1 widened to 0.20 mm in place; stale Dwgs.User outline note corrected. Replayed by tools/power_fault_screen_2026_10_23.sh from 6d50fc5.",
+    "screen": "tools/check_power_copper.py at the exact 1.35 A static maximum (not rounded): 0 failures. +3V3_LOGIC fault rise 39.0 C track / 62.7 C neck / 84.7 C via; +3V3_STORAGE 27.0 C track / 43.4 C via; limits 45 C, necks and vias 90 C. The 2.5 A screen of the TPS62162 gave 138 entries. Margin: the screen passes up to about 1.386 A (2.7 % above 1.35 A); rounding up to 1.4 A would fail the 87 single +3V3_LOGIC plane-to-pad vias at about 92 C. The checker models ten 0.1-0.25 mm staircase pieces between C2017.1 and C2001.1 as zero-length nodes.",
+    "preservation": "design/power-fault-screen-2026-10-23/preservation-check.json: every footprint (pads, nets, positions), zone and track/via of 6d50fc5 unchanged apart from the three reviewed widths and the note text; no copper added or removed. U21/U22 change value, MPN and datasheet fields only. One widened link runs between R2038's pads with 0.14 mm clearance.",
+    "budgets": "Logic 0.35 A and storage 0.5 A budgets; peak inductor current about 0.61 A at 5 V input against the 0.85 A minimum limit. TI suggests 3.3 uH for low input voltage to reach the full 0.5 A; regulation at the hold-up minimum remains a bench item."
   }
 }
