@@ -667,3 +667,21 @@ contains the complete cloneable source bundle; use its revision rather than
 trying to reconstruct an earlier scratch checkout. Further console results
 must establish which original-DMA/hook/wait boundary fails before changing
 normal VMU behavior again.
+
+### Evolution video result and surface-loss capture
+
+Owner video `63254.mp4` from `62b24dc35d60`, reported raw-chain mode, still
+fails before FMV. Independent reads agree on last hook/game fields `1F44`;
+sequence digits keep changing until approximately48.63s and disappear about
+48.67s. Exact final sequence is unreadable. No root cause or fault PC is
+established. Raw-chain failing excludes DMA redirection/virtual replies as
+necessary conditions, not every active-hook/IRQ path.
+
+The sampler had a real observability gap: it silently returned on unsupported
+or disabled video. After the first accepted surface it now deliberately
+reports `E003` on those conditions, retaining current and prior accepted video
+registers in a fourth page. A legal transition can produce this diagnostic
+stop; it is not a game compatibility fix or general crash watchdog. If no
+hook reaches it, a black screen can still remain. Exact game windows and
+register gateways are unchanged. See the updated trace guide and
+`evidence/native-evolution-video-2026-10-23.json`.

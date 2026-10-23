@@ -60,27 +60,27 @@ PREPARED_PINS = {'_poll_lease_valid': ('b67c432db445f780a4b2e93871f7907b7f7de1fd
  '_persistent_storage_guard': ('d230251892a758f65469e9cb692703a0270511756e1fbdc94cc28e04472a15fe', 396),
  '_persistent_lease': ('8658f150d0d4811335e46332a9a075f199fa8219edb5ccf1730223a4e34d78e3', 148),
  '_kui_vmu_native_passive_submit': ('b61f117ba7339287465454c7a618ee6557eb1c970124f405298313c0b04397de', 648),
- '_kui_vmu_native_passive_complete': ('3798c51c539adb11c8db5f623dee128d34ddaf003f28d07527d73257038988d1', 1536),
+ '_kui_vmu_native_passive_complete': ('8511febcdeb938a482b5e040a7499aa8cf4c0b6e76f5f646f3c69d590a647ad6', 1536),
  '_kui_vmu_readonly_overlay_complete_absent': ('6085deac9edfd8886b3300663daa32875389280d2daca88d509846e17f1b31e7', 284),
  '_kui_vmu_readonly_overlay_complete': ('6413dfd099e7eeb01b7f0b9bf12e07ca276bf3bc0b8080efcce61a067c8b1bb4', 888),
  '_readonly_overlay_parent_response': ('d396e68edd3158708ba5a8c9ff5235821bb62b71cc9dc40650cadb9098eaeb12', 116),
  '_readonly_overlay_increment': ('e3a6368a10593e4ae7510faf736d644a9d9e383e262070923241741b3f6893b1', 14),
  '_readonly_overlay_le32': ('1daa47eecc292df8356826c0e5a683e3a2c27cec212f901db7b1f01cf3b897df', 30),
- '_transfer_context_valid': ('8a3301eda8375a7a6eb46f46c65dc18175de5c90f804c1fab6d85729ede615a7', 1048),
+ '_transfer_context_valid': ('7d35d2bc7b14adf7924784410ddae4b78a02829cb424d4542b4080a611af0aba', 1048),
  '_persistent_context_guard': ('7d7b44453ed058c85b22f3624a96001a93f68e06bd6dc581757cbff364c96df7', 132),
  '_kui_vmu_native_runtime_fault': ('7aecf42ff60104b0b146df6ddad0f1b74c5e380c4cc104680ab351d4592ef13c', 236),
- '.rodata': ('1225e29b2966c894f43df9acbb6b9246806a418880003b3dde718f5499e4af3a', 2380),
+ '.rodata': ('fb7f1d053890b907a63c725af5d98914d49196d5e4f643363f52e1802b61c925', 2532),
  '_kui_vmu_native_trace_enabled': ('0a920c3cf23dad2c3aabfe188567a6d1425af67dd54b46b619555831e9748eac', 16),
  '_kui_vmu_native_trace_image': ('e85462a3e477dee0a0124220436dc355360013e47136f21eb8576af465cdd9a9', 60),
- '_kui_vmu_native_trace_point': ('487ecbece4c87b56480005c10baab34066445424911a2a7c1cc8461427b88f2e', 770),
+ '_kui_vmu_native_trace_point': ('235da9572c08f143efe9fa0c11295d507ccc5caddf45cb219535555bae5dc90e', 884),
  '_kui_vmu_native_trace_wait_loop': ('8d3fb2b39e884b13c0061c722bcca07d6082aaafbc8de4d6e3b1c446759560d8', 176),
- '_kui_vmu_native_trace_init': ('a24bb1807dbfb831917e8d6f9390f7b7dcf705909b4d8bb0f7cb8c26109bcf79', 84),
+ '_kui_vmu_native_trace_init': ('fcbd12cbe4ccc68862cb090fac165c17d9d342c6730d82280f836c8b79a9fc74', 84),
  '_kui_vmu_native_trace_wait_before': ('8d16ecf62a40b00531b18bb6d68b876b67be8c9cb7d4775c41e329babcedabcf', 152),
  '_kui_vmu_native_trace_frame_entry': ('d5949f5ee897f0fd40d653db5d53691e227882a1bb6aed384b44ea5f83104081', 164),
- '_kui_vmu_native_trace_report': ('cb064327dbb2d945cc17184ac4036835773610fd16335cc285aa8e6e014b4231', 460),
+ '_kui_vmu_native_trace_report': ('2c934eb612f1d19b6235f5b1e2c51ed9c62b6d5be9b617ae09f2d359f27cab29', 636),
  '_kui_vmu_native_trace_wait_after': ('399109af8351d1f2f0d0fa1541afa51056dfd44e86b607e10afd8fad1fe55015', 180),
  '_kui_vmu_native_trace_game': ('367d93d9d799bac69baf843535f58f139cac582df3d494ff5e4e4721ece346e3', 112),
- '_trace_history': ('e771515da24e0b32575f35b88f416580647cd99a03531df167cc634ca309ff0c', 228)}
+ '_trace_history': ('17af8a3d4fc1f0ac8f4d975a5fa85c3a97f7c2c66a5dca0d67ef9f5b7a40175e', 224)}
 
 
 def prepared_symbol_records(worker):
@@ -680,6 +680,11 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
     def literal(index):
         op = words[index]
         at = ((begin + index * 2 + 4) & ~3) + 4 * (op & 255)
+        # This candidate scan also crosses embedded pool data. A data word
+        # resembling MOV.L is not a witness if its supposed literal escapes
+        # the function. Every accepted block still binds all exact targets.
+        if not begin <= at <= begin + len(body) - 4:
+            return None
         return struct.unpack("<I", region(body, at - begin, 4, "installer literal"))[0]
     candidates = []
     for i in range(len(words) - 20):

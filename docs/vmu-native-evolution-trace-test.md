@@ -1,17 +1,28 @@
 # Evolution: consolidated diagnostics
 
-This package contains the remaining planned Evolution diagnostics in one
-binary. It is an investigation build; an Evolution fix is not established.
-Your last `--hooks-only` result still froze. That mode still redirects DMA to
-a copied command list, so it did not isolate the game's original DMA list.
-The new `--raw-chain` comparison does.
+The owner's video from build `62b24dc35d60`, reported in `--raw-chain`
+mode, shows the marker still updating through approximately 48.63 seconds,
+then disappearing around 48.67 seconds. The confidently legible fields are
+`1F44`; the final sequence digits are not clear enough to report exactly.
+`1F` precedes the original DMA-start instruction replay, and `44` follows
+the instrumented external wait. This is a checkpoint, not a fault PC or proof
+that DMA itself stalled. Raw-chain failing shows the copied DMA list and
+virtual replies are not necessary for the observed failure.
 
-## First run
+This update closes a capture blind spot: after drawing on a valid surface,
+the old sampler silently skipped disabled video, 24-bit video, unsupported
+pitch/height or two out-of-range framebuffer addresses. It now stops with
+`E003` and preserves the current and last accepted video registers. A legal
+video transition can trigger this deliberate diagnostic stop. It is not a
+claim that the transition caused the underlying freeze or that Evolution is
+fixed. The original game hook/replay and virtual-card behavior are unchanged.
+
+## Surface-loss capture after the video result
 
 Extract into a fresh folder and run from that folder:
 
 ```sh
-python3 personalize.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --game evolution1
+python3 personalize.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --game evolution1 --raw-chain
 ```
 
 This installs the personalized loader directly. No backup/restore installer
@@ -22,7 +33,7 @@ background loading and RAM patches off for the comparison.
 Look for eight small hexadecimal digits at the top left of the game screen.
 If it freezes, allow about a minute for a possible watchdog page, then
 photograph the screen, including those digits. If blue trace pages appear,
-photograph all three; they cycle automatically roughly every five seconds.
+photograph all four; they cycle automatically roughly every five seconds.
 Power off afterward. A short video that captures the last changing digits
 is also useful, but a photo is enough to start.
 
@@ -31,9 +42,9 @@ It can report an excessive wait in the instrumented game loop. It cannot
 rescue every freeze or capture an arbitrary fault PC. If the game clears the
 framebuffer after its last checkpoint, the marker may disappear.
 
-## Second run, if normal mode freezes
+## Other comparisons in the same build
 
-Use the same package and command with `--raw-chain`:
+The command above uses the same original-DMA comparison as the video:
 
 ```sh
 python3 personalize.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --game evolution1 --raw-chain
@@ -88,7 +99,17 @@ registers, TMU0 state, the game's wait flag, counters and CCR. Pages 2 and 3
 show DMAC0 state, first/last wait-loop timer counts, PVR scan status and the
 last 16 sampled events, oldest first. Each history row is code, saved PR,
 Maple start state, timer count and wait flag. These are checkpoint snapshots;
-they may precede the final stall. `E002` means the instrumented wait reached
+they may precede the final stall. Page 4 shows the current video control, size, pitch and framebuffer addresses,
+plus the last accepted surface. For `E003`, reason 1 is disabled video; 2 is
+24-bit depth; 3 is unsupported pitch; 4 is unsupported height; 5 means both
+framebuffers fail the VRAM bounds check. If only one field is safe, the sampler
+continues drawing there. Unsafe video before the first valid surface is still
+skipped, preserving initial startup behavior. If the screen remains black
+without an `E003` page, no later hook may have reached that condition, or the
+framebuffer was cleared while retaining a supported mode. This is not a
+general crash watchdog.
+
+`E002` means the instrumented wait reached
 1,048,576 iterations; it does not by itself prove the timer stopped.
 
 The trace only activates for the exact reviewed Evolution executable:
@@ -100,7 +121,7 @@ trace patch. Other executable variants do not receive these trace patches.
 ## Validation and limits
 
 The build passed the persistent bridge host suite, sanitizer tests for the
-trace sampler and exact-image installer, and compiled-instruction audits.
+trace sampler (including all five lost-surface captures) and exact-image installer, and compiled-instruction audits.
 The four new gateways were executed against the original game instructions
 in 144 register/status cases, with eight negative mutations rejected.
 Installer tests rejected 49 changed witnesses before any trace patch.

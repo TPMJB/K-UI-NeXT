@@ -11,6 +11,8 @@ static struct {
  uint32_t enabled,sequence,hook,game,loops,first_tick,last_tick,pr,sr,sp;
  uint32_t submitted,completed,frees,mdstar,mdst,mden,mdtsel,tstr,tcr,tick,latch,elapsed,ccr;
  uint32_t dma_source,dma_target,dma_count,dma_control,scan;
+ uint32_t surface_seen,surface_reason,video_ctrl,video_size,video_sof1,video_sof2,video_pitch;
+ uint32_t last_video_ctrl,last_video_size,last_video_sof1,last_video_sof2;
  struct retail_display_state display;
  struct {uint32_t code,pr,sr,sp,mdstar,mdst,tick,latch;} ring[16];
 } trace;
@@ -42,9 +44,25 @@ static void trace_strip(void) {
  uint32_t ctrl=READ(0xa05f8044u,4),size=READ(0xa05f805cu,4),depth=(ctrl>>2)&3u;
  unsigned bpp=depth==3u?4u:2u;
  uint32_t pitch=((size&1023u)+((size>>20)&1023u))*4u;
- /* Never guess a 24-bit surface, an unrecognised pitch, or a VRAM span. */
- if(!(ctrl&1u) || depth==2u || pitch<256u || pitch>4096u || ((size>>10)&1023u)<15u) return;
  uint32_t starts[2]={READ(0xa05f8050u,4)&0x007ffffcu,READ(0xa05f8054u,4)&0x007ffffcu};
+ trace.video_ctrl=ctrl;trace.video_size=size;trace.video_sof1=starts[0];trace.video_sof2=starts[1];trace.video_pitch=pitch;
+ /* A disappearing marker is itself diagnostic evidence. Before any valid
+  * surface has been seen, leave startup video alone. Afterward report the
+  * first unsafe surface instead of silently discarding every later sample.
+  * This intentionally stops the diagnostic launch; it does not imply that
+  * a legal game video-mode transition caused the underlying freeze. */
+ unsigned reason=!(ctrl&1u)?1u:depth==2u?2u:(pitch<256u || pitch>4096u)?3u:
+  ((size>>10)&1023u)<15u?4u:0u;
+ if(!reason && starts[0]>0x800000u-12u*pitch-52u*bpp &&
+    starts[1]>0x800000u-12u*pitch-52u*bpp) reason=5u;
+ if(reason) {
+  trace.surface_reason=reason;
+  if(trace.surface_seen) kui_vmu_native_trace_report(0xe003u,reason,ctrl,size);
+  return;
+ }
+ trace.surface_seen=1u;trace.surface_reason=0u;
+ trace.last_video_ctrl=ctrl;trace.last_video_size=size;
+ trace.last_video_sof1=starts[0];trace.last_video_sof2=starts[1];
  uint32_t value=(trace.hook&255u)<<24|(trace.game&255u)<<16|(trace.sequence&65535u);
  for(unsigned field=0;field<2u;field++) {
   uint32_t start=starts[field];if(field && start==starts[0]) continue;
@@ -117,7 +135,7 @@ void kui_vmu_native_trace_report(uint32_t reason,uint32_t value,uint32_t a,uint3
 #else
  for(;;) {
  retail_display_restore(&trace.display);
- retail_display_line("EVOLUTION TRACE PAGE 1 OF 3");
+ retail_display_line("EVOLUTION TRACE PAGE 1 OF 4");
  retail_display_values("REASON VALUE CONTEXT1 CONTEXT2",(uint32_t[]){reason,value,a,b},4);
  retail_display_values("HOOK GAME SEQUENCE WAIT LOOPS",(uint32_t[]){trace.hook,trace.game,trace.sequence,trace.loops},4);
  retail_display_values("LAST CHECKPOINT PR SR SP",(uint32_t[]){trace.pr,trace.sr,trace.sp},3);
@@ -125,21 +143,31 @@ void kui_vmu_native_trace_report(uint32_t reason,uint32_t value,uint32_t a,uint3
  retail_display_values("TMU0 START CONTROL COUNT WAIT FLAG",(uint32_t[]){trace.tstr,trace.tcr,trace.tick,trace.latch},4);
  retail_display_values("SUBMIT COMPLETE FREE ELAPSED CCR",(uint32_t[]){trace.submitted,trace.completed,trace.frees,trace.elapsed,trace.ccr},5);
  retail_display_line("CHECKPOINT STATE / NOT FAULT PC");
- retail_display_line("PHOTO ALL THREE PAGES THEN POWER OFF");
+ retail_display_line("PHOTO ALL FOUR PAGES THEN POWER OFF");
  retail_display_pause(300u);
  retail_display_restore(&trace.display);
- retail_display_line("EVOLUTION TRACE PAGE 2 OF 3");
+ retail_display_line("EVOLUTION TRACE PAGE 2 OF 4");
  retail_display_values("DMAC0 SOURCE TARGET COUNT CONTROL",(uint32_t[]){trace.dma_source,trace.dma_target,trace.dma_count,trace.dma_control},4);
  retail_display_values("WAIT FIRST TICK LAST TICK PVR SCAN",(uint32_t[]){trace.first_tick,trace.last_tick,trace.scan},3);
  trace_history(0u);
- retail_display_line("PHOTO ALL THREE PAGES THEN POWER OFF");
+ retail_display_line("PHOTO ALL FOUR PAGES THEN POWER OFF");
  retail_display_pause(300u);
  retail_display_restore(&trace.display);
- retail_display_line("EVOLUTION TRACE PAGE 3 OF 3");
+ retail_display_line("EVOLUTION TRACE PAGE 3 OF 4");
  retail_display_values("REASON VALUE SEQUENCE",(uint32_t[]){reason,value,trace.sequence},3);
  trace_history(8u);
  retail_display_line("LAST CHECKPOINT / NOT FAULT PC");
- retail_display_line("PHOTO ALL THREE PAGES THEN POWER OFF");
+ retail_display_line("PHOTO ALL FOUR PAGES THEN POWER OFF");
+ retail_display_pause(300u);
+ retail_display_restore(&trace.display);
+ retail_display_line("EVOLUTION TRACE PAGE 4 OF 4");
+ retail_display_values("SURFACE SEEN REASON CTRL SIZE PITCH",(uint32_t[]){trace.surface_seen,trace.surface_reason,trace.video_ctrl,trace.video_size,trace.video_pitch},5);
+ retail_display_values("CURRENT FRAME SOF1 SOF2",(uint32_t[]){trace.video_sof1,trace.video_sof2},2);
+ retail_display_values("LAST DRAWN CTRL SIZE SOF1 SOF2",(uint32_t[]){trace.last_video_ctrl,trace.last_video_size,trace.last_video_sof1,trace.last_video_sof2},4);
+ retail_display_values("HOOK GAME SEQUENCE WAIT LOOPS",(uint32_t[]){trace.hook,trace.game,trace.sequence,trace.loops},4);
+ retail_display_line("E003 IS INTENTIONAL SURFACE CAPTURE");
+ retail_display_line("CHECKPOINT STATE / NOT FAULT PC");
+ retail_display_line("PHOTO ALL FOUR PAGES THEN POWER OFF");
  retail_display_pause(300u);
  }
 #endif
