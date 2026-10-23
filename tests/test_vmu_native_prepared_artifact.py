@@ -37,7 +37,7 @@ class PreparedArtifact(unittest.TestCase):
     def test_actual_kernel_and_all_existing_mutation_families_pass(self):
         result = audit.check_prepared_lifetime(self.directory, self.worker, self.binary, self.wire, True)
         self.assertTrue(result["full_storage_guards_before_and_after_loan"])
-        self.assertEqual(result["mutation_rejections"], 39)
+        self.assertEqual(result["mutation_rejections"], 42)
 
     def test_context_stack_interior_has_exact_private_bounds(self):
         for name in ("__vmu_native_worker_stack_bottom", "__vmu_native_worker_stack_top"):

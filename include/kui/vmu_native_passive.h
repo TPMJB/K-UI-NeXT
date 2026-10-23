@@ -10,8 +10,10 @@
 #endif
 #define KUI_VMU_NATIVE_PASSIVE_MAGIC UINT32_C(0x4b4e5031)
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
+#define KUI_VMU_NATIVE_PASSIVE_VERSION 2u
 #define KUI_VMU_NATIVE_PASSIVE_SPAN 0x20000u
 #else
+#define KUI_VMU_NATIVE_PASSIVE_VERSION 1u
 #define KUI_VMU_NATIVE_PASSIVE_SPAN 0x10000u
 #endif
 struct kui_vmu_native_passive_exports {
@@ -24,7 +26,7 @@ struct kui_vmu_native_passive_exports {
     uint32_t reserved[2];
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    uint32_t sd_transaction,reserved_persistent[3];
+    uint32_t sd_transaction,runtime_fault_hook,allocation_failure_hook,reserved_persistent;
 #endif
 };
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
@@ -55,4 +57,11 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *,void
 void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *);
 void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *);
 void kui_vmu_native_passive_terminal(void) __attribute__((noreturn));
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+/* Failure-only gateway: masks IRQs and switches to the private worker stack
+ * before reporting. It never resumes the owner or performs storage I/O. */
+void kui_vmu_native_runtime_fault_hook(uint32_t,uint32_t,uint32_t,uint32_t) __attribute__((noreturn));
+void kui_vmu_native_allocation_failure_hook(void) __attribute__((noreturn));
+void kui_vmu_native_runtime_fault(uint32_t,uint32_t,uint32_t,uint32_t) __attribute__((noreturn));
+#endif
 #endif

@@ -247,8 +247,11 @@ def stage_layout(build):
     worker = (build / "native-worker.bin").read_bytes()
     assert 80 <= len(worker) < WORKER_SPAN - 0x1000
     export = struct.unpack_from("<20I", worker)
-    assert export[:3] == (0x4B4E5031, 1, 80)
+    assert export[:3] == (0x4B4E5031, 2, 80)
     origin = physical(export[7]) - len(worker)
+    assert not export[19] and all(not pointer & 1 and
+        pointer & 0xe0000000 == export[3] & 0xe0000000 and
+        origin + 80 <= physical(pointer) < origin + len(worker) for pointer in export[16:19])
     assert physical(export[10]) == physical(export[11]) == origin + WORKER_SPAN
     assert physical(export[9]) == origin + WORKER_SPAN - 0x1000
     return begin, end, stack, size, loads, worker

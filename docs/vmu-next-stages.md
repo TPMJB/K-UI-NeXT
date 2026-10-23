@@ -67,7 +67,7 @@ The recovered corpus already identifies useful next targets:
 | --- | --- | --- |
 | Resident Evil Code: Veronica | Candidate RX/TX intervals overlap the startup image under the current proof | Determine the actual live ownership interval and lifetime; retain the overlap refusal until that proof is narrower and valid |
 | Grandia II | Owner reports the generic build was just fine | A unique proved startup call now distinguishes its real initializer literal from an unused export-table copy; original allocator, layout and persistence models pass |
-| Evolution 1 | Console first-transfer context refusal, detail `43` | Exact first-transfer host replay passes; collect the new failed-witness diagnostic before changing admission |
+| Evolution 1 | VMU launch reaches MPEG Sofdec then black; same `2bf215f0fb72` build with `--control` plays the opening FMV | Collect failure-only allocation diagnostic; keep the lease and transfer acceptance unchanged until its cause is observed; silent GD-destination refusal remains another hypothesis |
 | Crazy Taxi 2 | Allocator found; initializer pointer/root-call provenance incomplete | Extend dataflow and call-root evidence, then execute the discovered allocator contract in the host SH model |
 | Phantasy Star Online | Layout root now resolves; allocator-call and fourth terminal-consumer proofs remain | Review the additional consumer and dispatch lifetime together |
 | Jet Grind Radio | Allocator arguments now resolve; Maple root transport does not | Prove the actual root transport before using its otherwise matching initializer |

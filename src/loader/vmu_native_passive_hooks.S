@@ -284,6 +284,44 @@ C(kui_vmu_native_passive_terminal):
 .Lterminal_report: .long C(kui_vmu_native_passive_report)
     .size C(kui_vmu_native_passive_terminal),.-C(kui_vmu_native_passive_terminal)
 
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    /* Failure-only ABI: R4 kind, R5 value, R6/R7 context. No owner stack
+     * write or return path exists. All diagnostics run on private storage. */
+    .align 2
+    .global C(kui_vmu_native_runtime_fault_hook)
+    .type C(kui_vmu_native_runtime_fault_hook),@function
+C(kui_vmu_native_runtime_fault_hook):
+    stc sr,r0
+    or #0xf0,r0
+    ldc r0,sr
+    mov.l .Lruntime_fault_stack,r15
+    mov.l .Lruntime_fault_report,r0
+    jmp @r0
+    nop
+    .align 2
+.Lruntime_fault_stack: .long __vmu_native_worker_stack_top
+.Lruntime_fault_report: .long C(kui_vmu_native_runtime_fault)
+    .size C(kui_vmu_native_runtime_fault_hook),.-C(kui_vmu_native_runtime_fault_hook)
+
+    /* The exact Evolution malloc-failure block has the rounded request in
+     * R14 and the saved owner caller at SP+4. The reviewed stage veneer
+     * reaches this entry without modifying those inputs or SP. */
+    .align 2
+    .global C(kui_vmu_native_allocation_failure_hook)
+    .type C(kui_vmu_native_allocation_failure_hook),@function
+C(kui_vmu_native_allocation_failure_hook):
+    mov r14,r5
+    mov.l @(4,r15),r6
+    mov r15,r7
+    mov #1,r4
+    mov.l .Lallocation_runtime_fault,r0
+    jmp @r0
+    nop
+    .align 2
+.Lallocation_runtime_fault: .long C(kui_vmu_native_runtime_fault_hook)
+    .size C(kui_vmu_native_allocation_failure_hook),.-C(kui_vmu_native_allocation_failure_hook)
+#endif
+
     .data
     .align 2
     .global C(kui_vmu_native_passive_resume)

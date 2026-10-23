@@ -5,6 +5,9 @@
 #include "kui/vmu_native_patch.h"
 #include "kui/vmu_native_worker.h"
 #include "kui/vmu_native_relocate.h"
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+#include "vmu_native_evolution_fault_stage.inc"
+#endif
 __asm__(".section .rodata.native_worker,\"a\"\n.balign 32\n"
     ".global __native_worker_blob_begin\n__native_worker_blob_begin:\n.incbin \"" KUI_NATIVE_WORKER_BIN "\"\n"
     ".global __native_worker_blob_end\n__native_worker_blob_end:\n.balign 4\n"
@@ -146,7 +149,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     if(relocated) native_report(8u,(uint32_t)relocated);
     memset((void *)(uintptr_t)(dest+bytes),0,span-bytes);
     const struct kui_vmu_native_passive_exports *e=(const void *)(uintptr_t)dest;
-    if(e->magic!=KUI_VMU_NATIVE_PASSIVE_MAGIC || e->version!=1u || e->bytes!=sizeof(*e) ||
+    if(e->magic!=KUI_VMU_NATIVE_PASSIVE_MAGIC || e->version!=KUI_VMU_NATIVE_PASSIVE_VERSION || e->bytes!=sizeof(*e) ||
        !passive_entry(e->arm,dest,bytes) || !passive_entry(e->submit_hook,dest,bytes) ||
        !passive_entry(e->complete_hook,dest,bytes) || !passive_entry(e->terminal,dest,bytes) ||
        e->bss_begin!=dest+bytes || e->bss_end<e->bss_begin || e->bss_end>e->stack_bottom ||
@@ -156,8 +159,10 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
        e->consumer_cell<dest+64u || e->consumer_cell>dest+bytes-4u)
         native_report(8u,2u);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    if(!passive_entry(e->sd_transaction,dest,bytes) || e->reserved_persistent[0] ||
-       e->reserved_persistent[1] || e->reserved_persistent[2]) native_report(8u,6u);
+    if(!passive_entry(e->sd_transaction,dest,bytes) ||
+       !passive_entry(e->runtime_fault_hook,dest,bytes) ||
+       !passive_entry(e->allocation_failure_hook,dest,bytes) ||
+       e->reserved_persistent) native_report(8u,6u);
 #endif
 #if KUI_VMU_NATIVE_READONLY_PROBE
     if(!passive_entry(e->release_hook,dest,bytes) || (e->release_resume_cell&3u) ||
@@ -213,6 +218,13 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     if(native_word(native_driver.completion_slot|0x20000000u)!=e->complete_hook ||
        memcmp((const void *)(uintptr_t)(native_driver.submit|0x20000000u),patch,sizeof(patch)))
         native_report(9u,4u);
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    /* Exact Evolution revision only: replace its existing malloc-failure
+     * arm with a private diagnostic. Successful allocations are untouched. */
+    if(native_evolution_fault_install(&native_driver,(void *)KUI_RETAIL_EXEC_ADDRESS,
+       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,e->allocation_failure_hook,
+       kui_native_passive_publish)<0) native_report(9u,0x45u);
+#endif
     volatile struct kui_vmu_observe_boot_control *c=control();
     c->worker_end=e->memory_end;c->terminal=e->terminal;c->lease=lease->payload&UINT32_C(0x1fffffff);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE

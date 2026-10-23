@@ -18,7 +18,15 @@ COMPAT_CACHE_HOST_SRC = src/core/vmu_native_resolution_cache.c src/core/vmu_nati
  src/core/vmu_native_layout.c src/core/vmu_native_heap.c src/core/vmu_native_exit.c \
  src/core/vmu_native_patch.c src/core/hash.c src/core/data.c
 
-.PHONY: compat-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-evolution-context-host-tests
+.PHONY: compat-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-evolution-context-host-tests native-evolution-fault-host-tests
+native-evolution-fault-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_evolution_fault.c \
+	 src/core/vmu_native_discovery.c src/core/vmu_native_patch.c src/core/hash.c src/core/data.c \
+	 -Wl,--gc-sections -o $(BUILD)/test-evolution-fault
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-evolution-fault '$(EVOLUTION1_STARTUP)'
+	python3 tests/test_vmu_native_evolution_cache.py --startup '$(EVOLUTION1_STARTUP)'
+
 native-evolution-context-host-tests:
 	@mkdir -p $(BUILD)
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_evolution_transfer.c \

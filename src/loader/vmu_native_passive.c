@@ -440,6 +440,30 @@ static void report(void) {
 #endif
 }
 static void fail(uint32_t code) __attribute__((noreturn));
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+/* These are terminal failure witnesses, never an alternate admission path.
+ * The assembly gateway has already excluded IRQs and retired the owner SP.
+ * Reporting does not borrow storage, publish RX data, or modify owner RAM. */
+void kui_vmu_native_runtime_fault(uint32_t kind,uint32_t value,uint32_t context1,uint32_t context2) {
+#ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+    (void)value;(void)context1;(void)context2;
+    kui_vmu_native_passive_test_terminal(18u,kind);
+#else
+    struct retail_display_state display;memcpy(display.regs,config.display,sizeof(display.regs));
+    retail_display_restore(&display);
+    retail_display_line("NATIVE VMU RUNTIME FAILURE");
+    retail_display_line(kind==1u?"GAME ALLOCATION FAILED":"UNKNOWN RUNTIME FAILURE");
+    retail_display_hex("PHASE",18u);retail_display_hex("DETAIL",kind);
+    retail_display_values("KIND VALUE CONTEXT1 CONTEXT2",(uint32_t[4]){
+        kind,value,context1,context2},4u);
+    retail_display_values("LEASE BYTES HEAP BEGIN HEAP BYTES",(uint32_t[4]){
+        config.lease.payload,config.lease.lease_bytes,config.lease.begin,config.lease.heap_bytes},4u);
+    retail_display_line("VALUE REQUEST / CONTEXT CALLER SP");
+    retail_display_line("LAUNCH STOPPED - PHOTO THEN POWER OFF");
+    for(;;) __asm__ volatile("nop");
+#endif
+}
+#endif
 static void fail(uint32_t code) {state.error=code;
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
     state.proof=0u;

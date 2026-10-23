@@ -8,7 +8,7 @@
     .type C(kui_vmu_native_worker_exports),@object
 C(kui_vmu_native_worker_exports):
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    .long 0x4b4e5031,1,80,C(kui_vmu_native_passive_arm)
+    .long 0x4b4e5031,2,80,C(kui_vmu_native_passive_arm)
 #else
     .long 0x4b4e5031,1,64,C(kui_vmu_native_passive_arm)
 #endif
@@ -24,6 +24,7 @@ C(kui_vmu_native_worker_exports):
     .long 0,0
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    .long C(kui_vmu_native_persistent_sd_transaction),0,0,0
+    .long C(kui_vmu_native_persistent_sd_transaction)
+    .long C(kui_vmu_native_runtime_fault_hook),C(kui_vmu_native_allocation_failure_hook),0
 #endif
     .size C(kui_vmu_native_worker_exports),.-C(kui_vmu_native_worker_exports)

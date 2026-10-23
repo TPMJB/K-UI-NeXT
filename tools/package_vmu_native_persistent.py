@@ -96,13 +96,15 @@ def package(build,guide='broader'):
                      'native-heap-poll-identity.md','vmu-native-latency-test.md',
                      'vmu-native-compat-test.md','vmu-native-optimization-test.md',
                      'vmu-performance-design-review-2026-10-22.md','vmu-next-stages.md',
-                     'vmu-native-broader-test.md','vmu-native-evolution-context-test.md'):
+                     'vmu-native-broader-test.md','vmu-native-evolution-context-test.md',
+                     'vmu-native-evolution-fault-test.md'):
             extra['docs/'+name]=(root/'docs'/name).read_bytes()
         for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json',
                      'native-performance-acceptance-2026-10-23.json','native-uniform-root-family-2026-10-23.json',
                      'native-recv-ownership-2026-10-23.json','native-older-sdk-2026-10-23.json',
                      'native-broader-compatibility-2026-10-23.json','native-evolution1-layout-2026-10-23.json',
-                     'native-allocator-family-2026-10-23.json','native-evolution-context-2026-10-23.json'):
+                     'native-allocator-family-2026-10-23.json','native-evolution-context-2026-10-23.json',
+                     'native-evolution-fault-2026-10-23.json'):
             extra['docs/evidence/'+name]=(root/'docs/evidence'/name).read_bytes()
         extra['docs/native-sdk-family-corpus.json']=(root/'docs/evidence/native-sdk-family-corpus-2026-10-22.json').read_bytes()
         extra['docs/native-installer-stack-regression.json']=(root/'docs/evidence/native-sa2-installer-stack-2026-10-22.json').read_bytes()
@@ -125,7 +127,9 @@ def package(build,guide='broader'):
         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
             template_sha256=sha(template)),
-        compatibility_claim=('Evolution first-transfer failure-witness diagnostic; no console fix established'
+        compatibility_claim=('Evolution black-screen failure-path diagnostic; no console fix established'
+            if guide=='evolution-fault' else
+            'Evolution first-transfer failure-witness diagnostic; no console fix established'
             if guide=='evolution-context' else 'Save/load experiment for the reviewed native SDK family'))
     branch=git('branch','--show-current');bundle=(build/f'native-{flavor}-source.bundle').resolve()
     subprocess.run(['git','bundle','create',str(bundle),'HEAD',*([branch] if branch else [])],cwd=root,check=True)
@@ -160,7 +164,7 @@ def package(build,guide='broader'):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('build',type=Path)
-    parser.add_argument('--guide',choices=('broader','evolution-context'),default='broader')
+    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault'),default='broader')
     try:
         args=parser.parse_args();package(args.build,args.guide)
     except (OSError,ValueError,KeyError,AssertionError,subprocess.CalledProcessError) as error:
