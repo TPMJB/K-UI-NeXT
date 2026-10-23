@@ -35,7 +35,7 @@ CACHE_FIELDS={'cache_seed_module_offset','cache_seed_bytes','cache_seed_sha256',
 MODE_FIELDS={'runtime_mode_module_offset','runtime_mode_bytes','runtime_mode_sha256'}
 CATALOG_SCHEMA='kui.native.resolution-cache.catalog.v1'
 CATALOG_PATH='native-cache/catalog.json'
-GAME_SLUGS={'ps2','skies','sa2'}
+GAME_SLUGS={'ps2','skies','sa2','grandia2','evolution1'}
 
 def cache_codec():
     # Legacy ZIPs intentionally need only the two original shipped codecs.

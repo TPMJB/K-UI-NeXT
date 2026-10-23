@@ -12,6 +12,8 @@ import unittest
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools'))
 from package_vmu_native_persistent import cache_catalog
+import personalize_vmu_native_persistent as personalizer
+import vmu_native_cache_seed as seed_codec
 
 
 class CatalogTests(unittest.TestCase):
@@ -43,6 +45,30 @@ class CatalogTests(unittest.TestCase):
             self.assertEqual(hashlib.sha256(record).hexdigest(),game['record_sha256'])
             self.assertEqual(hashlib.sha256(record[:992]).hexdigest(),game['record_digest'])
         self.assertNotIn(b'input_relative',wire)
+
+    def test_personalizer_consumes_complete_release_catalog(self):
+        # Exercise the producer/consumer boundary using all real reviewed
+        # metadata records. Synthetic three-game personalizer fixtures cannot
+        # catch a stale release-side title allowlist.
+        commit='b'*40
+        wire,files=cache_catalog(self.root,commit)
+        for relative,data in files.items():
+            path=self.root/relative;path.parent.mkdir(parents=True,exist_ok=True)
+            path.write_bytes(data)
+        seed=seed_codec.template_seed()
+        manifest=dict(source_commit=commit,
+            cache_seed_module_offset=64,cache_seed_bytes=len(seed),
+            cache_seed_sha256=hashlib.sha256(seed).hexdigest(),
+            cache_record_bytes=seed_codec.RECORD_BYTES,
+            cache_detector_epoch=seed_codec.DETECTOR_EPOCH,
+            cache_catalog_path=personalizer.CATALOG_PATH,
+            cache_catalog_sha256=hashlib.sha256(wire).hexdigest())
+        accepted=personalizer.cache_catalog(self.root,manifest)
+        self.assertEqual(set(accepted),{'ps2','skies','sa2','grandia2','evolution1'})
+        for game in json.loads(wire)['games']:
+            with self.subTest(slug=game['slug']):
+                self.assertEqual(accepted[game['slug']],
+                    {**game,'wire':files[game['record_path']]})
 
     def test_bad_evidence_refuses(self):
         original=copy.deepcopy(self.evidence)
