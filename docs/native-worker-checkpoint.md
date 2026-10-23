@@ -481,3 +481,63 @@ remaining work is broader Maple schedules, automatic card selection, CDDA
 storage arbitration, SCIF/IDE loans and orderly reset/return/multi-disc
 lifecycle. The ordered journal/base-block readback/healthy-bus ACK contract is
 an explicit K-UI advantage; it is not a whole-game-save atomicity guarantee.
+
+## SA2 phase-2 refusal and actual first-allocation placement
+
+The owner reported Power Stone 2 and Skies launching successfully on every
+boot, then supplied an SA2 refusal from `3cd64df45cfe`: phase 2, detail and
+initializer slot `8c0101bc`, initializer `8c110144`, allocator `8c1101f6`,
+submit `8c1587bc`. This is before the heap initializer runs. The report does
+not separately establish a Skies virtual-card save/power-off/load cycle.
+
+Both SA2's fixed four-MiB arena and the Skies BSS-tail arena end at
+`8d000000`. Their first 192-KiB allocation returns raw P1 `8cfd0000`. The
+128-KiB worker would occupy physical `0cfd0000..0cff0000`, overlapping the
+post-initializer callback's old stack at `8cff0000-32`. The blanket high-tail
+placement refusal prevented that overwrite. Earlier full static-resolution
+tests did not exercise this gate with the actual first allocation; the linked
+wrapper's Boolean placement oracle and synthetic runtime lease did not expose
+this gap. Do not infer full-path readiness from static discovery alone.
+
+The native stage now owns an aligned, typed 64-KiB `native_installer_stack`
+in its BSS. The low heap hook switches to this stack after the original game
+initializer returns; the earlier relay stack and UI package header remain
+unchanged. The pure production placement guard protects the entire linked
+stage/BSS span, including the new stack, while preserving executable,
+arena-start, sentinel, dispatch and full predicted allocation exclusions.
+Game arena arguments and capacity are unchanged. The high stage is discarded
+before ordinary game allocation resumes.
+
+The same review found a second refusal: runtime worker admission and several
+DMA/RX protection calculations assumed raw allocator payloads were physical.
+Raw owner begin/header/payload and post-allocation/free alias checks now remain
+exact; self-location, runtime geometry, DMA exclusions and low-control bounds
+use canonical physical addresses. P2-to-P1 relocation first masks the source
+alias. No detector metadata, record schema or epoch change is needed: these
+live checks run afresh after every cache hit or miss.
+
+`test_vmu_native_stage_placement.c` passes 790,683 sanitizer checks using the
+three real metadata records and boundary/alias mutations. The new relocated
+persistent fixture passes 32,697 SA2/Skies and 16,349 actual-PS2-payload checks,
+including save/read/reopen, raw-alias refusal and RX/DMA exclusions. The old
+persistent regression remains 1,196,760 checks with unchanged polling counts.
+`test_vmu_native_heap_execution.py` independently executes the original
+initializer, dispatch, bootstrap release and first allocation from each exact
+external game image. It reproduces the former Skies/SA2 stack overwrite and
+checks real worker copy/zero spans against stage/BSS/new-stack canaries. No
+retail instructions are distributed. Native phase-2 reports omit zero-valued
+post-allocation rows so the stop message does not wrap over earlier fields.
+
+Run `native-placement-host-tests` with `STARTUP`, `SKIES_STARTUP` and
+`SA2_STARTUP`, and `native-lease-alias-host-tests`, in addition to persistent,
+passive/read-only and linked-artifact audits. See the detailed observed failure
+and contract in `evidence/native-sa2-installer-stack-2026-10-22.json`.
+The next console test is SA2 using `--game sa2`, followed by a save/full
+power-off/reload and a short PS2 regression. Skies needs an explicit virtual
+card result because the old exact-image geometry should also hit this guard.
+The linked stack audit executes 384 allocation-wrapper cases, 384 complete
+relay cache-hit/miss routes and 576 low-hook cases, rejecting six destructive
+mutations. It destroys the retired relay stack during installation and checks
+complete caller restoration. The legacy performance artifact still passes its
+original stack policy. Publication proofs retain exact compiler variants and
+reject three coherent but mismatched register/initialization mutations.

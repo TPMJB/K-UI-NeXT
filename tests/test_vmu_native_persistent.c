@@ -19,14 +19,14 @@ static uint32_t mmio[4];
 static unsigned used,bus_reads,fail_read,checks;
 static unsigned measured_submit_reads,measured_complete_reads;
 static unsigned corrupt_before_loan,corrupt_after_loan;
-static uint32_t live_sr=0xf0u,live_sp=0xac71ff00u,bad_guard;
+static uint32_t live_sr=0xf0u,live_sp=SELF_ADDRESS+WORKER_SPAN-0x100u,bad_guard;
 static jmp_buf terminal;static unsigned terminal_phase,terminal_error;
 uint32_t kui_vmu_native_passive_resume,kui_vmu_native_passive_consumer;
 uint32_t kui_vmu_native_readonly_release_resume;
 const struct kui_vmu_native_passive_exports kui_vmu_native_worker_exports={
     .magic=KUI_VMU_NATIVE_PASSIVE_MAGIC,.version=1u,.bytes=sizeof(struct kui_vmu_native_passive_exports),
-    .submit_hook=0xac700100u,.complete_hook=0xac700200u,.release_hook=0xac700300u,
-    .terminal=0xac700400u,.sd_transaction=0xac700500u};
+    .submit_hook=SELF_ADDRESS+0x100u,.complete_hook=SELF_ADDRESS+0x200u,.release_hook=SELF_ADDRESS+0x300u,
+    .terminal=SELF_ADDRESS+0x400u,.sd_transaction=SELF_ADDRESS+0x500u};
 #define CHECK(x) do {++checks;assert(x);} while(0)
 static int mmio_index(uint32_t a) {
     switch(a) {case 0xa05f6c04u:return 0;case 0xa05f6c10u:return 1;
@@ -69,7 +69,7 @@ static void fixture(void) {
     memset(&state,0,sizeof(state));memset(&config,0,sizeof(config));memset(captured,0,sizeof(captured));
     memset(receivers,0,sizeof(receivers));memset(&input,0,sizeof(input));memset(&frame,0,sizeof(frame));
     memset(memory,0,sizeof(memory));memset(mmio,0,sizeof(mmio));
-    used=bus_reads=fail_read=0u;live_sr=0xf0u;live_sp=0xac71ff00u;bad_guard=0u;terminal_phase=terminal_error=0u;
+    used=bus_reads=fail_read=0u;live_sr=0xf0u;live_sp=SELF_ADDRESS+WORKER_SPAN-0x100u;bad_guard=0u;terminal_phase=terminal_error=0u;
     input.version=1u;input.bytes=sizeof(input);input.tx_base=0xac400000u;
     input.driver=(struct kui_vmu_native_discovery){.version=1u,.bytes=sizeof(input.driver),.family=1u,
         .image_bytes=0x200000u,.load_address=0x8c010000u,.requirements=7u,
@@ -207,7 +207,7 @@ void kui_vmu_native_passive_test_write(uint32_t address,unsigned width,uint32_t 
     CHECK(address==0xa05f6c04u && width==4u);put(address,width,value);
 }
 uint32_t kui_vmu_native_persistent_test_chain(const void *pointer,unsigned bytes) {
-    CHECK(pointer==issued_chain && bytes==sizeof(issued_chain));return 0x0c718000u;
+    CHECK(pointer==issued_chain && bytes==sizeof(issued_chain));return physical(SELF_ADDRESS)+0x18000u;
 }
 int kui_vmu_native_persistent_test_lease(kui_vmu_sd_transaction callback,void *context) {
     CHECK(callback && context==&durable_card && state.pending);++lease_calls;
@@ -276,7 +276,7 @@ static void idle(void) {
     CHECK(model_card.bus.transfer_block==block_transfer);
 }
 static void inspect_physical_chain(void) {
-    CHECK(value_at(0xa05f6c04u)==0x0c718000u);
+    CHECK(value_at(0xa05f6c04u)==physical(SELF_ADDRESS)+0x18000u);
     unsigned at=0u,count=0u;
     for(;;) {
         CHECK(at+12u<=sizeof(issued_chain));uint32_t descriptor[3];

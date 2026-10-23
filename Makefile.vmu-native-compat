@@ -18,8 +18,28 @@ COMPAT_CACHE_HOST_SRC = src/core/vmu_native_resolution_cache.c src/core/vmu_nati
  src/core/vmu_native_layout.c src/core/vmu_native_heap.c src/core/vmu_native_exit.c \
  src/core/vmu_native_patch.c src/core/hash.c src/core/data.c
 
-.PHONY: compat-host-tests
-compat-host-tests: persistent-host-tests passive-host-tests readonly-host-tests
+.PHONY: compat-host-tests native-placement-host-tests native-lease-alias-host-tests
+native-lease-alias-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_lease_alias.c \
+	 $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-lease-alias
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-lease-alias tests/fixtures/native-cache/sa2.nvr tests/fixtures/native-cache/skies.nvr
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 \
+	 -DKUI_VMU_NATIVE_TEST_SELF_ADDRESS=0xac38a880u tests/test_vmu_native_lease_alias.c \
+	 $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-lease-alias-ps2
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-lease-alias-ps2 tests/fixtures/native-cache/ps2.nvr
+
+native-placement-host-tests: $(BUILD)/stage.elf $(BUILD)/native-worker.bin
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_stage_placement.c \
+	 src/core/vmu_native_stage_placement.c -o $(BUILD)/test-stage-placement
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-stage-placement tests/fixtures/native-cache/ps2.nvr \
+	 tests/fixtures/native-cache/skies.nvr tests/fixtures/native-cache/sa2.nvr
+	python3 tests/test_vmu_native_heap_execution.py --build $(BUILD) \
+	 $(if $(STARTUP),--ps2 '$(STARTUP)',) $(if $(SKIES_STARTUP),--skies '$(SKIES_STARTUP)',) \
+	 $(if $(SA2_STARTUP),--sa2 '$(SA2_STARTUP)',)
+	python3 tests/test_vmu_native_stage_stack_artifact.py
+
+compat-host-tests: persistent-host-tests passive-host-tests readonly-host-tests native-placement-host-tests native-lease-alias-host-tests
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_heap.c -o $(BUILD)/test-heap
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-heap $(if $(and $(STARTUP),$(HEAP_NEGATIVE)),'$(STARTUP)' '$(HEAP_NEGATIVE)',)
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-layout $(if $(STARTUP),'$(STARTUP)',) $(CACHE_STARTUPS)

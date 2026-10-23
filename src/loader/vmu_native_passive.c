@@ -85,7 +85,10 @@ extern uint32_t kui_vmu_native_passive_test_sr(void);
 extern uint32_t kui_vmu_native_passive_test_sp(void);
 extern uint32_t kui_vmu_native_passive_test_guard(unsigned);
 extern void kui_vmu_native_passive_test_terminal(uint32_t,uint32_t) __attribute__((noreturn));
-#define SELF_ADDRESS UINT32_C(0xac700000)
+#ifndef KUI_VMU_NATIVE_TEST_SELF_ADDRESS
+#define KUI_VMU_NATIVE_TEST_SELF_ADDRESS UINT32_C(0xac700000)
+#endif
+#define SELF_ADDRESS KUI_VMU_NATIVE_TEST_SELF_ADDRESS
 #define STACK_LOW (SELF_ADDRESS+WORKER_SPAN-UINT32_C(0x1000))
 #define STACK_HIGH (SELF_ADDRESS+WORKER_SPAN)
 static uint32_t current_sr(void) {return kui_vmu_native_passive_test_sr();}
@@ -152,8 +155,9 @@ static uint32_t issued_physical(void) {
     if((pointer&UINT32_C(0xe0000000))!=UINT32_C(0xa0000000)) return 0u;
     uint32_t address=physical(pointer);
 #endif
-    return ram(address,sizeof(issued_chain),32u) && address>=config.lease.payload &&
-        address-config.lease.payload<=WORKER_SPAN-sizeof(issued_chain)?address:0u;
+    uint32_t begin=physical(config.lease.payload);
+    return ram(address,sizeof(issued_chain),32u) && address>=begin &&
+        address-begin<=WORKER_SPAN-sizeof(issued_chain)?address:0u;
 }
 int kui_vmu_native_persistent_sd_transaction(void *context,struct kui_loader_sd *loan) {
     if(context!=&durable_card || !loan || !persistent_context_guard()) {
@@ -319,17 +323,22 @@ void kui_vmu_native_passive_report(void) {if(!state.error) state.error=UINT32_C(
     report();}
 int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,void *unused) {
     (void)unused;
+    /* Heap identity and valid-free checks retain the allocator's raw arena
+     * alias. Only worker location, DMA and protected bus spans use physical
+     * addresses; a physically equal but mixed-alias lease still fails the
+     * subsequent complete heap ownership proof. */
     if(!c || c->version!=1u || c->bytes!=sizeof(*c) || state.armed || state.pending ||
        c->driver.version!=1u || c->driver.bytes!=sizeof(c->driver) ||
        c->driver.family!=KUI_VMU_NATIVE_FAMILY_UNIFORM_V1 || c->driver.requirements!=KUI_VMU_NATIVE_REQUIREMENTS ||
        c->layout.version!=1u || c->layout.bytes!=sizeof(c->layout) ||
        c->layout.tx_base!=c->tx_base || c->layout.rx_layout>KUI_VMU_NATIVE_RX_EXPLICIT48 ||
-       c->lease.lease_bytes!=UINT32_C(0x30000) || c->lease.payload!=physical(c->lease.payload) ||
+       c->lease.lease_bytes!=UINT32_C(0x30000) ||
        !ram(c->lease.payload,c->lease.lease_bytes,32u) ||
-       SELF_ADDRESS!=(c->lease.payload|UINT32_C(0xa0000000)) ||
+       SELF_ADDRESS!=(physical(c->lease.payload)|UINT32_C(0xa0000000)) ||
        STACK_LOW!=SELF_ADDRESS+WORKER_SPAN-0x1000u || STACK_HIGH!=SELF_ADDRESS+WORKER_SPAN ||
        !stack_valid() || c->runtime.version!=1u || c->runtime.bytes!=sizeof(c->runtime) ||
-       physical(c->runtime.lease_address)!=c->lease.payload || c->runtime.lease_bytes!=c->lease.lease_bytes ||
+       !ram(c->runtime.lease_address,c->runtime.lease_bytes,32u) ||
+       physical(c->runtime.lease_address)!=physical(c->lease.payload) || c->runtime.lease_bytes!=c->lease.lease_bytes ||
        c->runtime.lease_header_bytes!=32u || c->runtime.required_lease_bytes<WORKER_SPAN ||
        c->runtime.required_lease_bytes>c->runtime.lease_bytes ||
        c->runtime.rx_layout>KUI_VMU_NATIVE_RX_EXPLICIT48 ||
@@ -468,7 +477,7 @@ static bool chain(unsigned bank,bool compare) {
         uint32_t expected=unit<6u?config.runtime.rx_slots[bank*24u+port*6u+unit]:0u;
         if((header>>24)!=(control&255u) || (destination>>6)!=port || sender!=port*64u ||
            !expected || rx!=physical(expected) || !ram(rx,1024u,32u)) return false;
-        uint32_t begin=config.lease.payload-32u,end=config.lease.payload+config.lease.lease_bytes;
+        uint32_t begin=physical(config.lease.payload)-32u,end=physical(config.lease.payload)+config.lease.lease_bytes;
         if(rx<end && begin<rx+1024u) return false;
         for(unsigned i=0;i<count;i++) if(receivers[i]==rx) return false;
         if(compare) {if(receivers[count]!=rx) return false;} else receivers[count]=rx;
@@ -639,7 +648,7 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
     if(!chain(snapshot.bank,false)) fail(6u);
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
     int prepared=kui_vmu_readonly_overlay_prepare(&overlay,overlay_frames,state.descriptors,
-        state.source,state.bytes,config.lease.payload-32u,config.lease.lease_bytes+32u);
+        state.source,state.bytes,physical(config.lease.payload)-32u,config.lease.lease_bytes+32u);
     state.overlay_result=(uint32_t)prepared;if(prepared) fail(21u);
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE

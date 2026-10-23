@@ -1,0 +1,58 @@
+{
+  "schema": "kui.native.installer-stack.regression.v1",
+  "date": "2026-10-22",
+  "hardware_failure": {
+    "build": "3cd64df45cfe",
+    "game": "Sonic Adventure 2",
+    "phase": "00000002",
+    "detail": "8c0101bc",
+    "sdk_submit": "8c1587bc",
+    "initializer": "8c110144",
+    "initializer_slot": "8c0101bc",
+    "allocate": "8c1101f6",
+    "heap_initializer_entered": false,
+    "image_name": "image-1792720910387.jpg",
+    "image_sha256": "895708410e0eac93875e35437cec909a3d66d904cee4caa9b0db911354da6fa5"
+  },
+  "owner_report": {
+    "power_stone_2_launches": "successful on every boot",
+    "skies_launches": "successful on every boot",
+    "new_build_skies_virtual_vmu_save_cycle": "not established by the launch report",
+    "sa2_launches": "does not work"
+  },
+  "cause": {
+    "sa2_arena_begin": "8cc00000",
+    "sa2_arena_bytes": "00400000",
+    "skies_arena_begin": "8c5e9ba0",
+    "skies_arena_bytes": "00a16460",
+    "predicted_lease_payload": "8cfd0000",
+    "predicted_lease_header": "8cfcffe0",
+    "worker_physical_span": ["0cfd0000", "0cff0000"],
+    "old_installer_sp": "8cfeffe0",
+    "guard": "The blanket >=0cfe0000 tail-allocation refusal catches a real worker/installer-stack collision.",
+    "secondary_issue": "Worker admission and DMA/exclusion arithmetic assumed raw lease payloads were already physical; Skies and SA2 use P1 owner addresses.",
+    "previous_test_gap": "Cached-wrapper tests stubbed placement safety; runtime fixtures used synthetic lease placement instead of the first actual allocation. Static resolution alone did not establish installer placement."
+  },
+  "fix_contract": {
+    "installer_stack": "A typed, aligned, 65536-byte object in linked stage BSS; the low hook switches to it only after the original initializer returns.",
+    "relay_stack_and_package_header": "unchanged",
+    "game_heap_arguments_and_capacity": "unchanged",
+    "placement_guards": "Executable, arena-start, metadata and complete tail-lease exclusions remain; complete linked stage BSS now includes the temporary installer stack.",
+    "owner_alias": "Raw begin/header/payload and actual allocation-return identity remain exact; only worker/DMA/control physical address views are normalized.",
+    "cache": "Immutable records remain valid; fresh live placement checks run on every hit and miss."
+  },
+  "verification": {
+    "placement_asan_ubsan_checks": 790683,
+    "sa2_skies_alias_checks": 32697,
+    "ps2_alias_checks": 16349,
+    "persistent_regression_checks": 1196760,
+    "actual_heap_execution": {
+      "ps2": {"initializer_release_instructions": 106, "allocation_instructions": 53, "payload": "0c38a880"},
+      "skies": {"initializer_release_instructions": 107, "allocation_instructions": 53, "payload": "8cfd0000"},
+      "sa2": {"initializer_release_instructions": 107, "allocation_instructions": 53, "payload": "8cfd0000"}
+    },
+    "new_stack_survives_actual_worker_copy_and_zero": true,
+    "old_stack_overwrite_reproduced_for_skies_and_sa2": true,
+    "new_console_acceptance": "pending"
+  }
+}

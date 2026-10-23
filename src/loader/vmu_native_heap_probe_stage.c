@@ -17,6 +17,7 @@ static enum kui_loader_sd_result native_persist_storage_init(struct kui_retail_s
 #endif
 #include "kui/vmu_native_discovery.h"
 #include "kui/vmu_native_heap.h"
+#include "kui/vmu_native_stage_placement.h"
 #include "kui/vmu_maple_observe_boot.h"
 #include "kui/retail_observe.h"
 #include "kui/hash.h"
@@ -27,23 +28,14 @@ static struct kui_vmu_native_discovery native_driver;
 static struct kui_vmu_native_heap native_heap;
 static struct kui_vmu_native_heap_call native_call;
 static uint8_t native_heap_code_sha[32];
+/* The relay's ordinary high stack is retired before the game calls its heap
+ * initializer. Its post-initializer callback must use separately protected
+ * stage memory: a legal tail allocation may contain the old relay stack. */
+static uint8_t native_installer_stack[UINT32_C(0x10000)] __attribute__((aligned(32)));
 extern const uint8_t __retail_stage_bss_end[] __asm__("__retail_stage_bss_end");
-static bool temporary_overlap(uint32_t address,uint32_t bytes) {
-    uint32_t p=address&0x1fffffffu,area=address&0xe0000000u;
-    if((area!=0u && area!=0x80000000u && area!=0xa0000000u) ||
-       !bytes || p<0x0c010000u || p>=0x0d000000u || bytes>0x0d000000u-p) return true;
-    uint32_t stage_end=(uint32_t)(uintptr_t)__retail_stage_bss_end&0x1fffffffu;
-    return (p<stage_end && 0x0ce00000u<p+bytes) || p+bytes>0x0cfe0000u;
-}
-static bool allocation_safe(uint32_t begin,uint32_t bytes) {
-    if(bytes<0x30040u || temporary_overlap(begin,64u) ||
-       temporary_overlap(native_heap.sentinel-4u,0x34u) ||
-       temporary_overlap(native_heap.dispatch_table,8u)) return false;
-    uint32_t p=begin&0x1fffffffu,area=begin&0xe0000000u;
-    if(bytes>0x0d000000u-p || (area!=0u && area!=0x80000000u && area!=0xa0000000u)) return false;
-    uint32_t header=begin+bytes-0x30020u;
-    return !temporary_overlap(header,0x30020u) &&
-        !(p<0x0c010000u+exec_bytes && 0x0c010000u<p+bytes);
+static bool __attribute__((noipa)) allocation_safe(uint32_t begin,uint32_t bytes) {
+    return kui_vmu_native_stage_allocation_safe(&native_heap,exec_bytes,
+        KUI_RETAIL_STAGE_ADDRESS,(uint32_t)(uintptr_t)__retail_stage_bss_end,begin,bytes);
 }
 static volatile struct kui_vmu_observe_boot_control *control(void) {
     return (volatile struct kui_vmu_observe_boot_control *)(uintptr_t)
@@ -80,10 +72,12 @@ static void native_report(uint32_t phase,uint32_t detail) {
     retail_display_hex("INITIALIZER",native_heap.initializer);
     retail_display_hex("INITIALIZER SLOT",native_heap.initializer_slot);
     retail_display_hex("ALLOCATE",native_heap.allocate);
-    retail_display_hex("ENTRY HEAP BEGIN",c->heap_begin);
-    retail_display_hex("ENTRY HEAP BYTES",c->heap_bytes);
-    retail_display_hex("ALLOCATED PAYLOAD",c->lease);
-    retail_display_hex("ORIGINAL RETURN",c->original_pr);
+    retail_display_hex(phase==2u?"SCANNED HEAP BEGIN":"ENTRY HEAP BEGIN",phase==2u?native_call.entry_begin:c->heap_begin);
+    retail_display_hex(phase==2u?"SCANNED HEAP BYTES":"ENTRY HEAP BYTES",phase==2u?native_call.entry_bytes:c->heap_bytes);
+    if(phase!=2u) {
+        retail_display_hex("ALLOCATED PAYLOAD",c->lease);
+        retail_display_hex("ORIGINAL RETURN",c->original_pr);
+    }
     stopped(phase==7u?"ALLOCATION VERIFIED - PHOTO THEN POWER OFF":"PROBE REFUSED - PHOTO THEN POWER OFF",phase);
 }
 #if KUI_VMU_NATIVE_WORKER_PROBE
@@ -185,7 +179,8 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     original[1]=native_call.entry_begin;original[2]=native_call.entry_bytes;
     original[3]=native_call.return_pr&0x1fffffffu;
     c->installer=(uint32_t)(uintptr_t)kui_vmu_observe_stage_install;
-    c->stage_stack=KUI_RETAIL_STAGE_STACK-32u;c->status=KUI_VMU_OBS_BOOT_ARMED;
+    c->stage_stack=(uint32_t)(uintptr_t)(native_installer_stack+sizeof(native_installer_stack)-32u);
+    c->status=KUI_VMU_OBS_BOOT_ARMED;
     *(volatile uint32_t *)(uintptr_t)native_heap.initializer_slot=KUI_VMU_OBSERVE_LOW_HEAP_HOOK;
     native_publish(native_heap.initializer_slot);
     if(native_word(native_heap.initializer_slot|UINT32_C(0x20000000))!=KUI_VMU_OBSERVE_LOW_HEAP_HOOK)

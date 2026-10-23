@@ -94,6 +94,7 @@ def package(build):
                      'vmu-native-launch-cache.md','vmu-native-runtime-cost.md'):
             extra['docs/'+name]=(root/'docs'/name).read_bytes()
         extra['docs/native-sdk-family-corpus.json']=(root/'docs/evidence/native-sdk-family-corpus-2026-10-22.json').read_bytes()
+        extra['docs/native-installer-stack-regression.json']=(root/'docs/evidence/native-sa2-installer-stack-2026-10-22.json').read_bytes()
         extra['TEST-RESULTS.csv']=(
             'game,build,profile,cache_message,bootloader_seconds,startup_after_bootloader_seconds,fmv_audio,gameplay,save,poweroff_reload,controllers,notes\n'
             'Skies of Arcadia,,,,,,,,,,,\nSonic Adventure 2,,,,,,,,,,,\nPower Stone 2,,,,,,,,,,,\n').encode()

@@ -35,6 +35,7 @@ from vmu_maple_observe_symbols import sd_gateway_span
 from check_vmu_pio_write import check_pio_entry
 from check_vmu_native_cache_seed import audit as audit_cache_seed
 from check_vmu_native_cache_gateway import check as check_cache_gateway
+from check_vmu_native_stage_stack import check as check_stage_stack
 from vmu_native_relocations import generate, validate_loads
 from test_armada_ce_maple_hook import CPU
 
@@ -228,7 +229,7 @@ def check_resume_publication(stage, cached, self_test=False):
             "gateway_mutation_rejections": rejected, "complete_linked_assembly_pinned": True}
 
 
-def check_worker_publication(stage, cached, disassembly):
+def check_worker_publication(stage, cached, disassembly, self_test=False):
     """Pin the P2 publisher and witness initialization before its first arm."""
     image = inspect_elf(stage[0], HIGH, LIMIT)
     symbols = stage[4]
@@ -264,42 +265,64 @@ def check_worker_publication(stage, cached, disassembly):
         if old:
             require(words[i - 1] & 0xff00 == 0xdb00 and
                     literal(i - 1) == symbols["_native_driver"][0], "publisher uses a different driver witness")
-            candidates.append((i, 8, 18))
+            candidates.append((i, 8, 18, 0))
         # Prepared-plan configuration: exactly the same two dynamic writes,
         # [load,load+worker_bytes) publication and immediate arm; R2 carries
         # the publisher and the result/config stack offsets increase by8B.
+        # The raw-lease alias check makes GCC exchange the cached load and
+        # worker byte-count registers (R8/R9). Pin both complete witnesses;
+        # the dynamic stores and their CFG domination remain identical.
+        prepared_setups = (
+            [0x6593, 0x358c, 0x53b7, 0x2232, 0x53be, 0x52ad, 0x2232],
+            [0x6583, 0x359c, 0x53b7, 0x2232, 0x53be, 0x52ad, 0x2232])
         new = (words[i] & 0xff00 == 0xdb00 and literal(i) == symbols["_native_driver"][0] and
-               words[i + 1:i + 8] == [0x6593, 0x358c, 0x53b7, 0x2232, 0x53be, 0x52ad, 0x2232] and
+               words[i + 1:i + 8] in prepared_setups and
                words[i + 8] & 0xff00 == 0xd200 and literal(i + 8) == address and
                words[i + 9:i + 11] == [0x420b, 0x1f23] and words[i + 11] & 0xff00 == 0xd000 and
                literal(i + 11) == symbols["_kui_vmu_native_worker_call"][0] and
                words[i + 12:i + 20] == [0x67f3, 0x55aa, 0x7728, 0x54a3, 0x66f3, 0x1fea, 0x400b, 0x7638])
         if new:
-            candidates.append((i, 9, 18))
+            candidates.append((i, 9, 18, prepared_setups.index(words[i + 1:i + 8])))
     require(len(candidates) == 1, "missing unique linked worker-publication/first-arm block")
-    first, publish_at, arm_at = candidates[0]
+    first, publish_at, arm_at, register_family = candidates[0]
     # This bounded block loads the worker's own two dynamic target cells,
     # publishes exactly [load,load+worker_bytes), and immediately calls arm.
     publish, arm = begin + (first + publish_at) * 2, begin + (first + arm_at) * 2
     relocate = symbols["_kui_vmu_native_relocate"][0]
-    relocations = [i for i, op in enumerate(words[:-11]) if op & 0xff00 == 0xd000 and
-                   literal(i) == relocate and words[i + 1] & 0xff00 == 0xd200 and
-                   literal(i + 1) == SPAN and words[i + 2] == 0x67e3 and
-                   words[i + 3] & 0xff00 == 0xd600 and literal(i + 3) == symbols["__native_worker_blob_end"][0] and
-                   words[i + 4] == 0x37d8 and words[i + 5] & 0xff00 == 0xd400 and
-                   literal(i + 5) == symbols["__native_worker_blob_begin"][0] and
-                   words[i + 6:i + 11] == [0x1f92, 0x1f21, 0x2fa2, 0x400b, 0x1f23]]
-    zeroes = [i for i in range(len(words) - 7) if words[i:i + 7] ==
-              [0x56f3, 0x6ba3, 0x3b8c, 0x3688, 0x64b3, 0x4c0b, 0xe500]]
+    relocations = []
+    for i, op in enumerate(words[:-12]):
+        if op & 0xff00 != 0xd000 or literal(i) != relocate:
+            continue
+        # Alias-normalized installation uses R8 for its destination and
+        # explicitly copies its R9 byte-count into argument R5. Legacy
+        # installation carries its byte-count in R8 and destination in R9.
+        for extra, destination_store in ((0, 0x1f92), (1, 0x1f82)):
+            j = i + extra
+            if extra and words[i + 1] != 0x6593:
+                continue
+            if (words[j + 1] & 0xff00 == 0xd200 and literal(j + 1) == SPAN and
+                words[j + 2] == 0x67e3 and words[j + 3] & 0xff00 == 0xd600 and
+                literal(j + 3) == symbols["__native_worker_blob_end"][0] and
+                words[j + 4] == 0x37d8 and words[j + 5] & 0xff00 == 0xd400 and
+                literal(j + 5) == symbols["__native_worker_blob_begin"][0] and
+                words[j + 6:j + 11] == [destination_store, 0x1f21, 0x2fa2, 0x400b, 0x1f23]):
+                relocations.append((i, j + 9, extra))
+    zero_patterns = (
+        [0x56f3, 0x6ba3, 0x3b8c, 0x3688, 0x64b3, 0x4c0b, 0xe500],
+        [0x56f3, 0x6ba3, 0x3b9c, 0x3698, 0x64b3, 0x4c0b, 0xe500])
+    zeroes = [(i, zero_patterns.index(words[i:i + 7])) for i in range(len(words) - 7)
+              if words[i:i + 7] in zero_patterns]
     releases = [i for i in range(len(words) - 3) if words[i:i + 3] == [0x53ca, 0x7314, 0x2032]]
     require(len(relocations) == len(zeroes) == len(releases) == 1,
             "missing linked relocation/BSS/release-cell initialization witnesses")
-    relocate_pc = begin + (relocations[0] + 9) * 2
-    zero_pc = begin + (zeroes[0] + 5) * 2
+    require(relocations[0][2] == zeroes[0][1] == register_family,
+            "installer relocation/BSS/publication use inconsistent load/length registers")
+    relocate_pc = begin + relocations[0][1] * 2
+    zero_pc = begin + (zeroes[0][0] + 5) * 2
     release_pc = begin + (releases[0] + 2) * 2
     # The compiler keeps memset in callee-saved R12 until this BSS call.
     # Pin its initializer and reject any intervening write to R12.
-    memset_loads = [i for i in range(zeroes[0]) if words[i] & 0xff00 == 0xdc00 and
+    memset_loads = [i for i in range(zeroes[0][0]) if words[i] & 0xff00 == 0xdc00 and
                     literal(i) == symbols["_memset"][0]]
     require(len(memset_loads) == 1, "BSS zeroing has no exact linked memset target")
     decoded = {pc: (op, mnemonic, operands.split("!", 1)[0].strip())
@@ -355,6 +378,30 @@ def check_worker_publication(stage, cached, disassembly):
                   dynamic_cells_before_publication=True, publication_dominates_first_arm=True,
                   first_worker_publish=hex(publish), first_worker_arm=hex(arm),
                   linked_installer_cfg_nodes=len(seen))
+    if self_test:
+        # An individually recognized register-family block must not be mixed
+        # with the other family's relocation/zero-fill/publication. Mutate the
+        # actual ELF instruction bytes, keeping its typed geometry unchanged.
+        mutations = [((zeroes[0][0] + 2, zero_patterns[1 - register_family][2]),
+                      (zeroes[0][0] + 3, zero_patterns[1 - register_family][3])),
+                     ((relocations[0][0] + 1, 0x0009),)]
+        if publish_at == 9:
+            mutations.append(((first + 1, prepared_setups[1 - register_family][0]),
+                              (first + 2, prepared_setups[1 - register_family][1])))
+        _, _, section = symbol_bytes(stage, "_native_passive_run", 2)
+        offset = section[4] + begin - section[3]
+        rejected = 0
+        for changes in mutations:
+            changed = bytearray(stage[0])
+            for index, value in changes:
+                struct.pack_into("<H", changed, offset + index * 2, value)
+            try:
+                check_worker_publication((bytes(changed), *stage[1:]), cached, disassembly)
+            except (ValueError, AssertionError, KeyError, struct.error):
+                rejected += 1
+            else:
+                raise ValueError("worker publication accepted inconsistent initialization witness")
+        report["initialization_witness_mutation_rejections"] = rejected
     return report
 
 
@@ -942,10 +989,12 @@ def check(directory, *, self_test=False):
     publication = check_resume_publication(stage, cached, self_test)
     objdump = shutil.which("sh-elf-objdump") or str(ROOT / ".deps/sh-elf/bin/sh-elf-objdump")
     stage_disassembly = subprocess.check_output([objdump, "-d", str(directory / "stage.elf")], text=True)
-    publisher = check_worker_publication(stage, cached, stage_disassembly)
+    publisher = check_worker_publication(stage, cached, stage_disassembly, self_test)
     seed = audit_cache_seed(stage[0], (directory / "entry.elf").read_bytes(),
                             (directory / "retail-maple-observe.kui").read_bytes(), cached_code=cached)
     cache_gateway = check_cache_gateway(stage, self_test=self_test) if seed["enabled"] else {"enabled": False}
+    installer_stack = check_stage_stack(stage, read_elf(directory / "resident-sci.elf"),
+                                        worker=worker, self_test=self_test)
     require(not any(name.startswith(("__native_resolution_cache_seed_", "_kui_vmu_native_resolution_cache_",
                                     "_native_cached_resolution", "_native_resolution_replay"))
                     for name in symbols), "temporary resolution cache is retained in the gameplay worker")
@@ -982,6 +1031,7 @@ def check(directory, *, self_test=False):
               "worker_icache_publication": publisher,
               "resolution_cache_seed": seed,
               "resolution_cache_gateway": cache_gateway,
+              "temporary_installer_stack": installer_stack,
               "relocation_records": relocations, "worker_instructions": instructions,
               "stage_gateway_model_cases": stage_cases, "persistent_gateway_model_cases": hook_cases,
               "original_release_mask_model_cases": hook_cases // 4,

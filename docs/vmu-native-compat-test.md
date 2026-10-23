@@ -1,10 +1,19 @@
 # Native VMU compatibility and performance test
 
-This build keeps the cached-code path that made Power Stone 2 smooth, reduces
-repeated runtime checks, and adds reviewed SDK initializer and exit families.
-The next console candidates are **Skies of Arcadia** and **Sonic Adventure 2**.
-They pass static discovery, independent instruction-transport tests, and live
-layout binding on the host. Their actual console save/load remains untested.
+This update fixes the **Sonic Adventure 2 phase-2 allocator refusal** observed
+with build `3cd64df45cfe`. Its first allocation lands near the top of RAM,
+where the worker would overlap the old temporary installer stack. The installer
+now uses a separate 64 KiB stack inside its protected stage BSS. The original
+game heap size and allocator arguments are preserved. The worker also retains
+the allocator's original address alias for ownership checks while using
+physical addresses for DMA and protected-range comparisons.
+
+Start with **Sonic Adventure 2**, then briefly regress Power Stone 2. The owner
+reported successful Skies and Power Stone 2 launches on every boot; those
+reports alone do not establish that Skies exercised the virtual VMU route.
+The Skies startup predicts the same top-of-RAM allocation as SA2, so this fix
+also needs an explicit Skies virtual-card save and power-off/reload result.
+New-build console acceptance remains pending.
 
 ## Install and select a cached mapping
 
@@ -12,10 +21,10 @@ Extract the ZIP into a new folder. Keep your existing KUI installation and
 prepared card. With the SD card mounted, run one command for the game to test:
 
 ```sh
-python3 personalize.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --game skies
+python3 personalize.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --game sa2
 ```
 
-Use `--game sa2` for Sonic Adventure 2 or `--game ps2` for Power Stone 2.
+Use `--game skies` for Skies of Arcadia or `--game ps2` for Power Stone 2.
 `python3 personalize.py --list-games` lists the exact executable hashes.
 These mappings were generated from your uploaded startup files; another
 revision automatically misses the cache and takes the full discovery path.
@@ -36,7 +45,7 @@ If the title requests formatting, stop and send the screen.
 
 ## Tests for your return
 
-Start with the two heavier candidates; use Power Stone 2 as a short regression.
+Start with SA2; use Power Stone 2 as a short regression, then test Skies.
 There is no need to complete every optional row if an earlier row fails.
 
 | Test | What to do | What to record |

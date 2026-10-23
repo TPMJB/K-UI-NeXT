@@ -114,7 +114,7 @@ static bool __attribute__((noipa)) native_resolution_replay(void) {
 #endif
 static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     const uint32_t span=KUI_VMU_NATIVE_PASSIVE_SPAN;
-    uint32_t load=lease->payload|0x80000000u,dest=load+0x20000000u;
+    uint32_t load=(lease->payload&UINT32_C(0x1fffffff))|UINT32_C(0x80000000),dest=load+UINT32_C(0x20000000);
     uint32_t bytes=(uint32_t)(__native_worker_blob_end-__native_worker_blob_begin);
     uint32_t reloc_bytes=(uint32_t)(__native_worker_reloc_end-__native_worker_reloc_begin);
     if(bytes<sizeof(struct kui_vmu_native_passive_exports) || bytes>=span-0x1000u || (native_driver.submit&3u) ||
@@ -213,7 +213,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
        memcmp((const void *)(uintptr_t)(native_driver.submit|0x20000000u),patch,sizeof(patch)))
         native_report(9u,4u);
     volatile struct kui_vmu_observe_boot_control *c=control();
-    c->worker_end=e->memory_end;c->terminal=e->terminal;c->lease=lease->payload;
+    c->worker_end=e->memory_end;c->terminal=e->terminal;c->lease=lease->payload&UINT32_C(0x1fffffff);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     c->sd_transaction=e->sd_transaction;
 #endif
