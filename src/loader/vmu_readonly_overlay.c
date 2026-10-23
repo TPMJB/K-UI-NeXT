@@ -234,3 +234,29 @@ int kui_vmu_readonly_overlay_complete(struct kui_vmu_readonly_overlay *s) {
     readonly_overlay_increment(&s->stats.advertisements);readonly_overlay_increment(&s->stats.completed);s->pending=0;
     return KUI_VMU_OVERLAY_OK;
 }
+
+int __attribute__((noipa)) kui_vmu_readonly_overlay_complete_absent(struct kui_vmu_readonly_overlay *s) {
+    if(!s) return KUI_VMU_OVERLAY_ARGUMENT;
+    if(s->magic!=OVERLAY_MAGIC || !s->admitted || !s->pending || !s->admit)
+        return readonly_overlay_fail(s,KUI_VMU_OVERLAY_STATE,KUI_VMU_OVERLAY_BAD_STATE);
+    const struct kui_vmu_readonly_overlay_frame *parent=&s->frames[s->parent_index];
+    s->stats.last_request=parent->header;s->stats.last_rx=parent->rx_physical;
+    s->stats.last_reply=readonly_overlay_le32(parent->rx_bytes);
+    if(!readonly_overlay_parent_response(parent))
+        return readonly_overlay_fail(s,KUI_VMU_OVERLAY_PARENT,KUI_VMU_OVERLAY_BAD_PARENT_REPLY);
+    if(parent->rx_bytes[2]&1u)
+        return readonly_overlay_fail(s,KUI_VMU_OVERLAY_CONFLICT,KUI_VMU_OVERLAY_PHYSICAL_CONFLICT);
+    /* All admission is complete before publishing the first absent header.
+     * A1 packets never reached hardware; do not interpret their stale bytes
+     * as physical replies, and never let the SDK consume those stale headers. */
+    for(unsigned i=0;i<s->frame_count;i++) {
+        const struct kui_vmu_readonly_overlay_frame *f=&s->frames[i];
+        if(readonly_overlay_destination(f->header)!=1u) continue;
+        volatile uint8_t *out=f->rx_bytes;
+        for(unsigned j=0;j<4u;j++) out[j]=UINT8_MAX;
+        s->stats.last_request=f->header;s->stats.last_rx=f->rx_physical;
+        s->stats.last_reply=UINT32_MAX;
+    }
+    readonly_overlay_increment(&s->stats.completed);s->pending=0;
+    return KUI_VMU_OVERLAY_OK;
+}

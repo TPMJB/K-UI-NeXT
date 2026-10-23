@@ -582,7 +582,7 @@ static void external_boundary_mutations(void) {
 static void diagnostic_setup(void) {
     model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
     lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
-    input.diagnostics=1u;arm();install_hooks();
+    input.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE;arm();install_hooks();
 }
 static void diagnostic_pair(bool gesture) {
     begin_batch(0u,0u,0u,NULL);physical_complete();
@@ -626,8 +626,60 @@ static void gameplay_diagnostics(void) {
     if(setjmp(terminal)==0) {kui_vmu_native_passive_complete(&frame);CHECK(false);}
     CHECK(terminal_phase==17u && !terminal_error && !state.pending);
     CHECK(!sd.bytes && !lease_calls && !durable_card.commits);idle();
-    model_reset();fixture();prepare_handoff();input.diagnostics=2u;
-    CHECK(kui_vmu_native_passive_arm(&input,NULL)<0 && !state.armed);
+    for(unsigned mode=3u;mode<=4u;mode++) {
+        model_reset();fixture();prepare_handoff();input.diagnostics=mode;
+        CHECK(kui_vmu_native_passive_arm(&input,NULL)<0 && !state.armed);
+    }
+}
+static void hooks_only_setup(void) {
+    model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
+    lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
+    input.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY;arm();install_hooks();
+}
+static void hooks_only_has_no_virtual_card_or_io(void) {
+    hooks_only_setup();
+    const unsigned commands[]={0u,1u,2u,3u,10u,11u,12u,13u};
+    uint8_t payload[128];memset(payload,0x62,sizeof(payload));
+    for(unsigned repeat=0;repeat<2u;repeat++) for(unsigned i=0;i<sizeof(commands)/sizeof(commands[0]);i++) {
+        unsigned cmd=commands[i];
+        begin_batch(cmd,cmd==10u?0u:42u,cmd==13u?4u:0u,cmd==12u?payload:NULL);
+        physical_complete();
+        uint8_t parent[1024],target[1024],other[1024];
+        memcpy(parent,rx_bytes(0),sizeof(parent));memcpy(target,rx_bytes(1),sizeof(target));
+        memcpy(other,rx_bytes(6),sizeof(other));
+        struct kui_vmu_durable saved_card=durable_card;
+        complete_return();idle();
+        CHECK(!memcmp(parent,rx_bytes(0),sizeof(parent)) && !(rx_bytes(0)[2]&1u));
+        CHECK(!memcmp(other,rx_bytes(6),sizeof(other)));
+        if(cmd) {
+            CHECK(value_at(rx_at(1))==UINT32_MAX);
+            CHECK(!memcmp(target+4u,rx_bytes(1)+4u,sizeof(target)-4u));
+        } else CHECK(!memcmp(target,rx_bytes(1),sizeof(target)));
+        CHECK(!memcmp(&saved_card,&durable_card,sizeof(durable_card)));
+        CHECK(!overlay.stats.backend_calls && !overlay.stats.advertisements && !overlay.stats.replies);
+        CHECK(!lease_calls && !block_callbacks && !sd.bytes && !sd.writes && !durable_card.commits);
+        CHECK(!clock_reads && !diagnostic.clock_samples && !diagnostic.active && !diagnostic.gesture_count);
+        CHECK(value_at(0xa05f6c04u)==state.source);
+    }
+    CHECK(state.submitted==16u && state.completed==16u && overlay.stats.completed==16u);
+    frame.r4=0u;kui_vmu_native_readonly_release_check(&frame);
+    CHECK(!clock_reads && !diagnostic.timing.metric[KUI_VMU_NATIVE_PROFILE_FREE].calls);
+
+    /* All ordinary physical/context/ownership guards remain mandatory before
+     * any absent publication. Both failure cases preserve stale A1 headers. */
+    for(unsigned failure=0;failure<3u;failure++) {
+        hooks_only_setup();begin_batch(11u,42u,0u,NULL);physical_complete();
+        if(!failure) rx_bytes(0)[2]|=1u;
+        else if(failure==1u) put(input.driver.completion_slot,4u,kui_vmu_native_worker_exports.complete_hook+2u);
+        else put(0x0c3010b4u,4u,packet_bank);
+        uint8_t before[3][1024];
+        memcpy(before[0],rx_bytes(0),1024u);memcpy(before[1],rx_bytes(1),1024u);
+        memcpy(before[2],rx_bytes(6),1024u);reject_complete();
+        CHECK(!memcmp(before[0],rx_bytes(0),1024u) && !memcmp(before[1],rx_bytes(1),1024u));
+        CHECK(!memcmp(before[2],rx_bytes(6),1024u));
+        CHECK(!lease_calls && !block_callbacks && !sd.bytes && !sd.writes && !overlay.stats.backend_calls);
+        CHECK(!clock_reads && !durable_card.commits);
+    }
 }
 static void reject_context_complete(void) {
     if(setjmp(terminal)==0) {kui_vmu_native_passive_complete(&frame);CHECK(false);}
@@ -714,7 +766,7 @@ int main(void) {
     CHECK(!durable_card.commits && durable_card.faulted && !memcmp(target,rx_bytes(1),sizeof(target)));
     CHECK(!memcmp(sd.media[image_lba(42u)],next,512u));
     bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();prepared_hook_witnesses();
-    polling_ownership_scope();gameplay_diagnostics();completion_context_failures();
+    polling_ownership_scope();gameplay_diagnostics();hooks_only_has_no_virtual_card_or_io();completion_context_failures();
     printf("Native persistent bridge: %u checks passed; filtered hardware chain, PIO save, reboot recovery and no false ACK\n",checks);
     return 0;
 }

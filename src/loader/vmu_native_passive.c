@@ -275,10 +275,10 @@ int kui_vmu_native_persistent_sd_transaction(void *context,struct kui_loader_sd 
 }
 static int persistent_lease(kui_vmu_sd_transaction transaction,void *context) {
     struct kui_vmu_native_profile_span span;
-    if(config.diagnostics) diagnostic_begin(&span);
+    if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) diagnostic_begin(&span);
     if(transaction!=kui_vmu_native_persistent_sd_transaction || context!=&durable_card ||
        !persistent_storage_guard()) {
-        if(config.diagnostics) diagnostic_end(KUI_VMU_NATIVE_PROFILE_STORAGE,&span);
+        if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) diagnostic_end(KUI_VMU_NATIVE_PROFILE_STORAGE,&span);
         return KUI_VMU_SD_LEASE_FAULT;
     }
 #ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
@@ -289,7 +289,7 @@ static int persistent_lease(kui_vmu_sd_transaction transaction,void *context) {
     int result=lease(transaction,context);
 #endif
     if(!persistent_storage_guard()) result=KUI_VMU_SD_LEASE_FAULT;
-    if(config.diagnostics) diagnostic_end(KUI_VMU_NATIVE_PROFILE_STORAGE,&span);
+    if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) diagnostic_end(KUI_VMU_NATIVE_PROFILE_STORAGE,&span);
     return result;
 }
 static bool protect_range(uint32_t begin,uint32_t bytes) {
@@ -507,7 +507,7 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
     memset(&diagnostic,0,sizeof(diagnostic));
     memset(&lifetime_plan,0,sizeof(lifetime_plan));
     hook_witness_ready=0u;hook_witness_count=0u;
-    if(config.diagnostics>1u) {memset(&config,0,sizeof(config));return -2;}
+    if(config.diagnostics>KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY) {memset(&config,0,sizeof(config));return -2;}
 #endif
     if(!lease_valid()) {memset(&config,0,sizeof(config));return -2;}
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
@@ -557,7 +557,7 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
 void kui_vmu_native_readonly_release_check(const struct kui_vmu_native_passive_frame *f) {
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     struct kui_vmu_native_profile_span span;
-    if(config.diagnostics) diagnostic_begin(&span);
+    if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) diagnostic_begin(&span);
 #endif
     state.fault_at=f?f->r4:0u;state.fault_value=state.fault_at;
     state.fault_expect=config.lease.payload;
@@ -572,7 +572,7 @@ void kui_vmu_native_readonly_release_check(const struct kui_vmu_native_passive_f
        !kui_vmu_native_lifetime_release_safe(&config.lease,read_heap,NULL,1u,f->r4)) fail(0x30u);
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    if(config.diagnostics) diagnostic_end(KUI_VMU_NATIVE_PROFILE_FREE,&span);
+    if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) diagnostic_end(KUI_VMU_NATIVE_PROFILE_FREE,&span);
 #endif
 }
 #endif
@@ -825,7 +825,7 @@ static bool persistent_context_guard(void) {
 void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f) {
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     struct kui_vmu_native_profile_span span;
-    if(config.diagnostics) diagnostic_begin(&span);
+    if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) diagnostic_begin(&span);
 #endif
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!state.armed || state.pending || state.submitted!=state.completed || !f || !stack_valid()) fail(1u);
@@ -880,13 +880,13 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
     state.submitted=1u;
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    if(config.diagnostics) diagnostic_end(KUI_VMU_NATIVE_PROFILE_SUBMIT,&span);
+    if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) diagnostic_end(KUI_VMU_NATIVE_PROFILE_SUBMIT,&span);
 #endif
 }
 void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *f) {
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     struct kui_vmu_native_profile_span span;
-    if(config.diagnostics) diagnostic_begin(&span);
+    if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) diagnostic_begin(&span);
 #endif
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!state.armed || !state.pending || state.submitted!=state.completed+1u || !f || !stack_valid()) fail(8u);
@@ -932,7 +932,7 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
         if(!read_value(NULL,receivers[i]|UINT32_C(0xa0000000),4u,&response)) fail(12u);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
         if(!physical_response_valid(i,response)) fail(0x44u);
-        if(config.diagnostics && ((chain_frames[i].header>>8)&255u)==32u &&
+        if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE && ((chain_frames[i].header>>8)&255u)==32u &&
            (chain_frames[i].header&255u)==9u) {
             uint32_t controls;
             if(!read_value(NULL,(receivers[i]+8u)|UINT32_C(0xa0000000),4u,&controls)) fail(12u);
@@ -958,7 +958,12 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
     if(!lease_valid() || !stack_valid() ||
        kui_vmu_native_passive_consumer!=config.driver.consumer) fail(22u);
 #endif
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    int published=config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY?
+        kui_vmu_readonly_overlay_complete_absent(&overlay):kui_vmu_readonly_overlay_complete(&overlay);
+#else
     int published=kui_vmu_readonly_overlay_complete(&overlay);
+#endif
     state.overlay_result=(uint32_t)published;if(published) fail(23u);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(durable_card.faulted || !persistent_context_guard()) fail(24u);
@@ -972,7 +977,7 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
     /* A durable commit remains visible to the game. Power-off/reboot readback
      * is a hardware test, never inferred from this in-session counter. */
     state.proof=durable_card.commits!=0u;
-    if(config.diagnostics) {
+    if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) {
         diagnostic_end(KUI_VMU_NATIVE_PROFILE_COMPLETE,&span);
         if(!diagnostic.active) {
             diagnostic.gesture_count=capture_gesture?diagnostic.gesture_count+1u:0u;

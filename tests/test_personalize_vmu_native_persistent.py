@@ -357,10 +357,10 @@ class NativeRuntimeModePersonalizationTests(NativeCachePersonalizationTests):
     def installed_mode(self):
         return mode.decode_mode(self.destination.read_bytes()[self.mode_offset:self.mode_offset+32])
 
-    def test_control_profile_lease_only_and_normal_preserve_pairs_and_only_permitted_spans(self):
+    def test_all_modes_preserve_pairs_and_only_permitted_spans(self):
         before=self.snapshots()
         for options,expected in (({},0),({'control':True},1),({'profile_runtime':True},2),
-                                 ({'lease_only':True},3),({},0)):
+                                 ({'lease_only':True},3),({'hooks_only':True},4),({},0)):
             report=self.install(game='sa2',**options);after=self.destination.read_bytes()
             self.assertEqual(report['runtime_mode'],mode.MODE_NAMES[expected]);self.assertEqual(self.installed_mode(),expected)
             self.assertEqual(before,self.snapshots())
@@ -389,7 +389,7 @@ class NativeRuntimeModePersonalizationTests(NativeCachePersonalizationTests):
 
     def test_noncanonical_or_duplicate_generic_modes_refused(self):
         original=self.module
-        for choice in (1,2,3):
+        for choice in (1,2,3,4):
             payload=bytearray(original[64:]);struct.pack_into('<I',payload,self.mode_offset-64+16,choice)
             self.module=envelope(payload,len(payload),COMMIT[:12])
             self.manifest.update(module_sha256=tool.sha(self.module));self.save_package()
@@ -401,7 +401,7 @@ class NativeRuntimeModePersonalizationTests(NativeCachePersonalizationTests):
 
     def test_legacy_package_refuses_explicit_runtime_modes(self):
         legacy=self.root/'legacy';generic(legacy);old=self.destination.read_bytes();before=self.snapshots()
-        for option in ({'control':True},{'profile_runtime':True},{'lease_only':True}):
+        for option in ({'control':True},{'profile_runtime':True},{'lease_only':True},{'hooks_only':True}):
             with self.subTest(option=option),self.assertRaisesRegex(ValueError,'no audited native runtime mode'):
                 tool.install(self.card,package=legacy,**option)
         self.assertEqual(old,self.destination.read_bytes());self.assertEqual(before,self.snapshots())
@@ -409,8 +409,10 @@ class NativeRuntimeModePersonalizationTests(NativeCachePersonalizationTests):
     def test_conflicting_or_nonboolean_options_refused(self):
         for options in ({'control':True,'profile_runtime':True}, {'control':True,'lease_only':True},
                         {'profile_runtime':True,'lease_only':True},
+                        {'control':True,'hooks_only':True}, {'profile_runtime':True,'hooks_only':True},
+                        {'lease_only':True,'hooks_only':True},
                         {'control':True,'profile_runtime':True,'lease_only':True},
-                        {'control':1},{'profile_runtime':1},{'lease_only':1}):
+                        {'control':1},{'profile_runtime':1},{'lease_only':1},{'hooks_only':1}):
             with self.subTest(options=options),self.assertRaisesRegex(ValueError,'at most one'):
                 self.install(**options)
 
@@ -421,12 +423,37 @@ class NativeRuntimeModePersonalizationTests(NativeCachePersonalizationTests):
             self.install(lease_only=True)
         self.assertEqual(old,self.destination.read_bytes());self.assertEqual(before,self.snapshots())
         # Earlier 0/1/2 packages remain installable with their original modes.
-        self.assertEqual(self.install(control=True)['runtime_mode'],'control')
+        for options,expected in (({},'normal'),({'control':True},'control'),({'profile_runtime':True},'profile')):
+            with self.subTest(options=options):self.assertEqual(self.install(**options)['runtime_mode'],expected)
+
+    def test_prior_mode_packages_refuse_hooks_only_before_profile_selection_or_replace(self):
+        before=self.snapshots();old=self.destination.read_bytes()
+        for choices in (None,tool.MODE_CHOICES_LEASE_ONLY):
+            if choices is None:self.manifest.pop('runtime_mode_choices',None)
+            else:self.manifest['runtime_mode_choices']=dict(choices)
+            self.save_package()
+            with self.subTest(choices=choices),\
+                 patch.object(tool,'select_profile',side_effect=AssertionError('must not select a profile')),\
+                 patch.object(tool.os,'replace',side_effect=AssertionError('must not replace loader')):
+                with self.assertRaisesRegex(ValueError,'no audited hooks-only'):
+                    self.install(hooks_only=True)
+            self.assertEqual(old,self.destination.read_bytes());self.assertEqual(before,self.snapshots())
+
+    def test_prior_lease_only_capability_retains_all_original_modes(self):
+        self.manifest['runtime_mode_choices']=dict(tool.MODE_CHOICES_LEASE_ONLY);self.save_package()
+        before=self.snapshots()
+        for options,expected in (({},0),({'control':True},1),({'profile_runtime':True},2),({'lease_only':True},3)):
+            with self.subTest(options=options):
+                self.install(**options);self.assertEqual(self.installed_mode(),expected)
+                self.assertEqual(before,self.snapshots())
 
     def test_mode_capability_declaration_requires_exact_integer_choices(self):
         old=self.destination.read_bytes();before=self.snapshots()
         for choices in ({'lease-only':3}, {'normal':False,'control':1,'profile':2,'lease-only':3},
-                        {'normal':0,'control':1,'profile':2,'lease-only':2}, [], 3):
+                        {'normal':0,'control':1,'profile':2,'lease-only':2},
+                        {**tool.MODE_CHOICES_LEASE_ONLY,'hooks-only':True},
+                        {**tool.MODE_CHOICES_LEASE_ONLY,'hooks-only':5},
+                        {**tool.MODE_CHOICES_HOOKS_ONLY,'extra':5}, [], 3):
             self.manifest_write(runtime_mode_choices=choices)
             with self.subTest(choices=choices),self.assertRaisesRegex(ValueError,'capabilities'):
                 self.install(lease_only=True)
@@ -440,13 +467,16 @@ class NativeRuntimeModePersonalizationTests(NativeCachePersonalizationTests):
         args=[sys.executable,str(self.package/'personalize.py'),str(self.card),'--game','sa2',
             '--profile','KUI/vmu-test/p0001/retail-persistent-profile-0001.bin']
         before=self.snapshots()
-        for flag,expected in (('--control',1),('--profile-runtime',2),('--lease-only',3),(None,0)):
+        for flag,expected in (('--control',1),('--profile-runtime',2),('--lease-only',3),('--hooks-only',4),(None,0)):
             result=subprocess.run(args+([flag] if flag else []),cwd=self.root,capture_output=True,text=True,check=True)
             self.assertEqual(self.installed_mode(),expected);self.assertEqual(before,self.snapshots())
-            expected_text={1:'virtual VMU is disabled',3:'reserved RAM remains allocated'}
+            expected_text={1:'virtual VMU is disabled',3:'reserved RAM remains allocated',
+                           4:'physical Maple traffic passes without virtual replies'}
             self.assertIn(expected_text.get(expected,'native persistent VMU test'),result.stdout)
         for flags in (['--control','--profile-runtime'],['--control','--lease-only'],
-                      ['--profile-runtime','--lease-only'],['--list-games','--lease-only']):
+                      ['--profile-runtime','--lease-only'],['--list-games','--lease-only'],
+                      ['--control','--hooks-only'],['--profile-runtime','--hooks-only'],
+                      ['--lease-only','--hooks-only'],['--list-games','--hooks-only']):
             result=subprocess.run(args+flags,cwd=self.root,capture_output=True,text=True)
             self.assertEqual(result.returncode,2);self.assertEqual(before,self.snapshots())
 

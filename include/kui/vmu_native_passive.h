@@ -9,6 +9,12 @@
 #include "kui/vmu_native_exit.h"
 #endif
 #define KUI_VMU_NATIVE_PASSIVE_MAGIC UINT32_C(0x4b4e5031)
+/* Canonical selector in the existing config word; no exports/config ABI growth. */
+enum kui_vmu_native_diagnostics {
+    KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL = 0,
+    KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE = 1,
+    KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY = 2
+};
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #define KUI_VMU_NATIVE_PASSIVE_VERSION 2u
 #define KUI_VMU_NATIVE_PASSIVE_SPAN 0x20000u

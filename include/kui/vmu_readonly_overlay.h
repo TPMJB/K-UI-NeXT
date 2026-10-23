@@ -124,4 +124,15 @@ int kui_vmu_readonly_overlay_prepare(struct kui_vmu_readonly_overlay *,
  * admission and preserves every RX byte. Backend private state may have
  * advanced before a later staging failure; failure is terminal. */
 int kui_vmu_readonly_overlay_complete(struct kui_vmu_readonly_overlay *);
+
+/* Diagnostic completion for an explicitly filtered backend only. Retain the
+ * same parent-response/A1-conflict admission before any external store. The
+ * caller has proved that every A1 wire packet was excluded, so stale A1 RX
+ * headers are replaced with the hardware FFFFFFFF no-response marker. Only
+ * those four header bytes change: every payload, parent and unrelated RX byte
+ * remains intact. No backend or storage callback runs and A1 is not advertised.
+ * Full caller-owned DMA/bank/lock/IMASK/cache proofs remain mandatory.
+ * completed increments, but virtual replies/advertisements/backend_calls do
+ * not. Invalid/default physical-timeout mode calls fail without RX writes. */
+int kui_vmu_readonly_overlay_complete_absent(struct kui_vmu_readonly_overlay *);
 #endif

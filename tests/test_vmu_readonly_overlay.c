@@ -28,6 +28,10 @@ static int handler(void *context,const uint8_t *request,size_t request_bytes,
     }
     return result;
 }
+static int filtered_admit(void *context,uint32_t request,uint32_t payload0,uint32_t payload1) {
+    (void)context;(void)request;(void)payload0;(void)payload1;
+    return 1;
+}
 static uint32_t header(unsigned cmd,unsigned address,unsigned words) {
     return cmd|(address<<8)|((address&192u)<<16)|(words<<24);
 }
@@ -253,11 +257,78 @@ static void bounded_batch_and_terminal_state(void) {
     assert(kui_vmu_readonly_overlay_complete(NULL)==KUI_VMU_OVERLAY_ARGUMENT);
 }
 
+static void filtered_absent_publication(void) {
+    const unsigned commands[]={1u,2u,9u};
+    for(unsigned mode=0;mode<3u;mode++) for(unsigned count=1u;count<=32u;count++) {
+        fresh();assert(!kui_vmu_readonly_overlay_init_backend(&overlay,handler,filtered_admit,&card));
+        unsigned command=commands[mode];
+        frame(0,command,32u,command==9u?1u:0u,0x01000000u,0);
+        physical(command,2u); /* Preserve the physical A2 bit and full payload. */
+        for(unsigned i=1u;i<count;i++) {
+            unsigned cmd=i%4u==0u?11u:i%4u==1u?1u:i%4u==2u?2u:10u;
+            frame(i,cmd,1u,cmd==10u || cmd==11u?2u:0u,0x02000000u,cmd==11u?i<<24:0u);
+            rx[i][0]=0x82010008u+i; /* Deliberately stale, valid-looking A1 headers. */
+        }
+        if(count<32u) {frame(count,1u,0x60u,0,0,0);rx[count][0]=0x12345678u;}
+        capture();assert(!prepare(count<32u?count+1u:count));
+        struct kui_vmu_readonly saved_card=card;
+        assert(!kui_vmu_readonly_overlay_complete_absent(&overlay));
+        assert(!memcmp(rx[0],before[0],sizeof(rx[0])));
+        for(unsigned i=1u;i<count;i++) {
+            assert(rx[i][0]==UINT32_MAX);
+            assert(!memcmp(rx[i]+1,before[i]+1,sizeof(rx[i])-4u));
+        }
+        if(count<32u) assert(!memcmp(rx[count],before[count],sizeof(rx)-count*sizeof(rx[0])));
+        assert(!calls && !overlay.stats.backend_calls && !overlay.stats.advertisements && !overlay.stats.replies);
+        assert(overlay.stats.completed==1u && overlay.admitted && !overlay.pending);
+        assert(!memcmp(&saved_card,&card,sizeof(card)));
+    }
+    /* Even write/sync packets are only absent headers in this mode. */
+    uint8_t write_payload[128];memset(write_payload,0x71,sizeof(write_payload));
+    const unsigned extra[]={3u,12u,13u};
+    for(unsigned i=0;i<3u;i++) {
+        fresh();assert(!kui_vmu_readonly_overlay_init_backend(&overlay,handler,filtered_admit,&card));
+        frame(1,extra[i],1u,extra[i]==3u?0u:extra[i]==12u?34u:2u,0x02000000u,extra[i]==13u?4u<<8:0u);
+        if(extra[i]==12u) frames[1].write_payload=write_payload;
+        rx[1][0]=0x00010007u;capture();assert(!prepare(2u));
+        struct kui_vmu_readonly saved_card=card;
+        assert(!kui_vmu_readonly_overlay_complete_absent(&overlay));
+        assert(rx[1][0]==UINT32_MAX && !memcmp(rx[1]+1,before[1]+1,sizeof(rx[1])-4u));
+        assert(!memcmp(rx[0],before[0],sizeof(rx[0])) && !memcmp(&saved_card,&card,sizeof(card)));
+        assert(!calls && !overlay.stats.backend_calls);
+    }
+}
+
+static void absent_publication_guards_are_atomic(void) {
+    /* The no-card completion is unavailable to an unfiltered physical chain. */
+    fresh();capture();assert(!prepare(2u));
+    assert(kui_vmu_readonly_overlay_complete_absent(&overlay)==KUI_VMU_OVERLAY_STATE);unchanged();
+    const uint32_t parent_bad[]={UINT32_MAX,0x1c002007u,0x1c002008u,0x1b002005u,
+        0x1c002105u,0x1c004005u,0x1c000005u,0x1c002305u};
+    for(unsigned i=0;i<sizeof(parent_bad)/sizeof(parent_bad[0]);i++) {
+        fresh();assert(!kui_vmu_readonly_overlay_init_backend(&overlay,handler,filtered_admit,&card));
+        rx[1][0]=0x00010007u;rx[2][0]=0x82010008u;
+        rx[0][0]=parent_bad[i];capture();assert(!prepare(3u));
+        assert(kui_vmu_readonly_overlay_complete_absent(&overlay)<0);unchanged();assert(!calls);
+    }
+    fresh();assert(!kui_vmu_readonly_overlay_init_backend(&overlay,handler,filtered_admit,&card));
+    physical(1u,1u);capture();assert(!prepare(3u));
+    assert(kui_vmu_readonly_overlay_complete_absent(&overlay)==KUI_VMU_OVERLAY_CONFLICT);unchanged();
+    assert(!calls && (overlay.stats.flags&KUI_VMU_OVERLAY_PHYSICAL_CONFLICT));
+    fresh();assert(!kui_vmu_readonly_overlay_init_backend(&overlay,handler,filtered_admit,&card));
+    rx[0][1]=0x02000000u;capture();assert(!prepare(2u));
+    assert(kui_vmu_readonly_overlay_complete_absent(&overlay)==KUI_VMU_OVERLAY_PARENT);unchanged();
+    fresh();assert(!kui_vmu_readonly_overlay_init_backend(&overlay,handler,filtered_admit,&card));
+    capture();assert(kui_vmu_readonly_overlay_complete_absent(&overlay)==KUI_VMU_OVERLAY_STATE);unchanged();
+    assert(kui_vmu_readonly_overlay_complete_absent(NULL)==KUI_VMU_OVERLAY_ARGUMENT);
+}
+
 int main(void) {
     discovery_and_all_blank_reads();request_reply_rx_telemetry_stays_correlated();
     strict_request_and_capacity_guards();
     span_alias_and_full_source_guards();physical_conflicts_and_parent_reply_guards();
     staging_failures_are_atomic();bounded_batch_and_terminal_state();
+    filtered_absent_publication();absent_publication_guards_are_atomic();
     puts("VMU read-only overlay: atomic batches, blank-card reads and conflict guards passed");
     return 0;
 }

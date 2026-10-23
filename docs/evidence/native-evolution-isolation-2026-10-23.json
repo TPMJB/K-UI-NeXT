@@ -4,8 +4,15 @@
   "console_evidence": {
     "build": "046252128e06",
     "owner_report": "It remained black. Also the light on the microsd reader is just off, so it's not trying to read any data",
-    "observations": ["Black screen persists before opening FMV", "Reader light off", "Allocation-failure page not observed"],
-    "limits": ["LED state does not prove no I/O was attempted", "No allocation report does not rule out every allocation failure or unrelated stall"],
+    "observations": [
+      "Black screen persists before opening FMV",
+      "Reader light off",
+      "Allocation-failure page not observed"
+    ],
+    "limits": [
+      "LED state does not prove no I/O was attempted",
+      "No allocation report does not rule out every allocation failure or unrelated stall"
+    ],
     "control_comparison": "2bf215f0fb72 with --control played the opening movie",
     "fix_established": false
   },
@@ -18,18 +25,34 @@
     "mapping_acceptance": "Unchanged",
     "new_callback_or_boot_abi": false,
     "writes_before_refusal": "No guest-buffer or SD writes",
-    "host_checks": {"legacy": 237446, "persistent_p2": 237449, "persistent_cached": 237449}
+    "host_checks": {
+      "legacy": 237446,
+      "persistent_p2": 237449,
+      "persistent_cached": 237449
+    }
   },
   "reservation_only": {
     "cli": "--lease-only",
     "mode": 3,
     "lease_bytes": "00030000",
-    "retained": ["Normal card preparation/recovery", "Original owner allocation", "Worker relocation/initialization", "Resident reservation mapping guard", "Owner bootstrap register restoration"],
-    "absent": ["Virtual card advertisement", "Maple interception", "Free/reinitializer/exit hooks", "In-game virtual save access", "Callable resident worker or SD-transaction pointer"],
+    "retained": [
+      "Normal card preparation/recovery",
+      "Original owner allocation",
+      "Worker relocation/initialization",
+      "Resident reservation mapping guard",
+      "Owner bootstrap register restoration"
+    ],
+    "absent": [
+      "Virtual card advertisement",
+      "Maple interception",
+      "Free/reinitializer/exit hooks",
+      "In-game virtual save access",
+      "Callable resident worker or SD-transaction pointer"
+    ],
     "initializer_restore": "Exact original initializer_target, including its raw alias",
     "lifetime_limit": "Heap reinitialization is not intercepted; zero resident callback pointers prevent execution of a reclaimed worker, while the mapping guard remains conservative",
     "purpose": "Separate reserved memory/layout from active Maple hooks/runtime, without changing reservation size or forcing cache/FPU modes",
-    "console_result": "Pending"
+    "console_result": "Owner reported --lease-only worked on 5b653775af85; normal again crashed before first FMV. No additional diagnostic photo supplied."
   },
   "additional_analysis": {
     "frame_pump": "Original 8c1663f8 waits while 8c3049a8 is nonzero and elapsed time is below threshold; a stopped TMU0 could stall it, but no VMU timer-write cause has been established",
@@ -58,5 +81,12 @@
     "private_worker_stack_capacity": 4096,
     "independent_review": "No blocking issue in original initializer restoration, callback retirement, owner-frame return or unchanged mapping admission"
   },
-  "release_validation": "Each packaged release includes clean-source provenance and repeated compiled target/relocation/stack/mutation results in probe-report.json"
+  "release_validation": "Each packaged release includes clean-source provenance and repeated compiled target/relocation/stack/mutation results in probe-report.json",
+  "followup_console_evidence": {
+    "build": "5b653775af85",
+    "owner_report": "It again crashed before the first FMV. With lease-only it worked.",
+    "normal": "Failed before first FMV",
+    "lease_only": "Worked per owner; no gameplay/save-cycle result inferred",
+    "inference": "Active hooks/runtime, including virtual visibility/storage, are the stronger focus than reservation alone; precise failure mechanism remains unestablished"
+  }
 }

@@ -36,6 +36,7 @@ from check_vmu_pio_write import check_pio_entry
 from check_vmu_native_cache_seed import audit as audit_cache_seed
 from check_vmu_native_cache_gateway import check as check_cache_gateway
 from check_vmu_native_stage_stack import check as check_stage_stack
+from check_vmu_native_stage_stack import Machine
 from check_vmu_native_mode import audit as audit_runtime_mode
 from check_vmu_native_map_refusal import check as audit_map_refusal
 from vmu_native_relocations import generate, validate_loads
@@ -51,15 +52,20 @@ SPAN = 0x20000
 PREPARED_PINS = {
     '_poll_lease_valid': ('b67c432db445f780a4b2e93871f7907b7f7de1fd8c0795faf112f30fe0673302', 64),
     '_installed_hooks_valid': ('819cc9127506f6790fa189371f453b3474bd2b3f9e39752d43a5d8501dd2e286', 76),
-    '_kui_vmu_native_readonly_release_check': ('29ffb0f2346cd6757c9f704080be9afc70c80945c03f540c84bdc0c1ab78b95d', 552),
+    '_kui_vmu_native_readonly_release_check': ('e8c856e9dc6237cdd0f7b1dadd8a636e1dc24df202f80b99b2153cc2e4c768c0', 552),
     '_hook_word': ('6c579e60911823ed1fbf6a57622bab2d7de2ebf46228c2c2c21d27f8fc144249', 112),
     '_prepare_hook_entry': ('a725563c7ef1e7429dd214860f8f7ecfddac54cf0981577fe679602117bebca3', 188),
     '_kui_vmu_native_lifetime_prepare': ('4691642d40ae532e2f81cfe46c3f81a019412c0da0e43fb4f7913d4a44b87312', 640),
-    '_kui_vmu_native_passive_arm': ('e9ba6682ce401f1f5660e1947d131eb195854513396b20bfd87591228718f32f', 1360),
+    '_kui_vmu_native_passive_arm': ('60030065bc9de0f2a77e7e9652c17b2012b9972d695d44bbc1a732bae0e3acd3', 1360),
     '_persistent_storage_guard': ('d230251892a758f65469e9cb692703a0270511756e1fbdc94cc28e04472a15fe', 396),
-    '_persistent_lease': ('a57c23fdc9ce23429aaa19c44c21ea362afcf6d245c6185e4ed717de4c074f96', 144),
-    '_kui_vmu_native_passive_submit': ('728ad170ab49ece06e8d5612e173300e0f2d08384c449a158bf02ae944c3c877', 580),
-    '_kui_vmu_native_passive_complete': ('7596972f83c37582f07b441ec74bdc54c715ad640b672d216150684f4ff59542', 1428),
+    '_persistent_lease': ('0958ceac492c42cacdd31c85226a9133d2aa94da38dec9946be5d8c95cba529a', 144),
+    '_kui_vmu_native_passive_submit': ('d64b9dfd69a90a880d8bdb359d1d62095e594a2e0c1ae0f1cfdb627aa5168fee', 580),
+    '_kui_vmu_native_passive_complete': ('a3df3b90f10d98c39071c51daa66333452aa55b6fb75466c9bc86fddfef36c07', 1440),
+    '_kui_vmu_readonly_overlay_complete_absent': ('6085deac9edfd8886b3300663daa32875389280d2daca88d509846e17f1b31e7', 284),
+    '_kui_vmu_readonly_overlay_complete': ('6413dfd099e7eeb01b7f0b9bf12e07ca276bf3bc0b8080efcce61a067c8b1bb4', 888),
+    '_readonly_overlay_parent_response': ('d396e68edd3158708ba5a8c9ff5235821bb62b71cc9dc40650cadb9098eaeb12', 116),
+    '_readonly_overlay_increment': ('e3a6368a10593e4ae7510faf736d644a9d9e383e262070923241741b3f6893b1', 14),
+    '_readonly_overlay_le32': ('1daa47eecc292df8356826c0e5a683e3a2c27cec212f901db7b1f01cf3b897df', 30),
     '_transfer_context_valid': ('f5b9f3cdc574caaac6365d45d0a3a5a76f50c4acdb70c683905c132ce729d551', 1048),
     '_persistent_context_guard': ('7d7b44453ed058c85b22f3624a96001a93f68e06bd6dc581757cbff364c96df7', 132),
     '_kui_vmu_native_runtime_fault': ('e6e465601a8e50d9efbbca6ea616d34b8bdfc08f44abca7830336acf549efe63', 212),
@@ -162,6 +168,211 @@ def prepared_signature(worker, binary, wire, name, build=None):
     return digest, len(body), references
 
 
+class AbsentCompletion(Machine):
+    """Execute the complete absent publisher and its closed integer callees.
+
+    The caller's independent prepare/DMA proofs supply a valid frame array.
+    No backend is substituted: any call outside these four actual linked
+    functions is rejected, including handler, admit and SD callbacks.
+    """
+    helper = '_kui_vmu_readonly_overlay_complete_absent'
+    closure = (helper, '_readonly_overlay_parent_response',
+               '_readonly_overlay_le32', '_readonly_overlay_increment')
+
+    def __init__(self, worker, seed, command, count, targets, outcome, *, body=None):
+        super().__init__(worker, self.helper, seed, 15, 0xAC11FFE0, body=body)
+        self.functions = [symbol_bytes(worker, name, 2)[:2] for name in self.closure]
+        if body is not None:
+            self.functions[0] = self.functions[0][0], body
+        self.data, self.external_stores, self.outcome = {}, [], outcome
+        self.overlay = worker[4]['_overlay'][0]
+        require(worker[4]['_overlay'][1:3] == (17820, 1), 'absent model needs exact private overlay object')
+        self.r[4] = 0 if outcome == 'null' else self.overlay
+        self.before_regs = self.r.copy(), self.pr, self.sr, self.fpscr, self.fr.copy()
+        self.overlay_end = self.overlay + 17820
+        for i in range(17820):
+            self.data[self.overlay + i] = (i * 13 + seed) & 255
+        self.put(self.overlay + 4, MASK if seed & 1 else 17)
+        self.put(self.overlay + 36, MASK if seed & 1 else 19)
+        self.put(self.overlay + 60, 0 if outcome == 'backend' else 0x8C155000)
+        self.put(self.overlay + 68, 0 if outcome == 'magic' else 0x56524F31)
+        self.put(self.overlay + 72, int(outcome != 'admitted'))
+        self.put(self.overlay + 76, int(outcome != 'pending'))
+        self.put(self.overlay + 80, count); self.put(self.overlay + 84, count - 1)
+        self.rx = []
+        for i in range(count):
+            rx = 0xAC200000 + 1024 * i
+            destination = 32 if i == count - 1 else (1 if i < targets else 96)
+            header = (0x01000000 if command == 9 else 0) | destination << 8 | command
+            frame = self.overlay + 92 + 28 * i
+            self.put(frame, header); self.put(frame + 12, rx & 0x1FFFFFFF); self.put(frame + 20, rx)
+            for j in range(1024): self.data[rx + j] = (i + j * 19 + seed) & 255
+            self.rx.append((rx, destination))
+        parent = self.rx[-1][0]
+        response = (28 if command == 1 else 48 if command == 2 else 3) << 24 | 32 << 16 | (5 if command == 1 else 6 if command == 2 else 8)
+        if outcome == 'parent': response ^= 1
+        if outcome == 'conflict': response |= 1 << 16
+        self.put(parent, response); self.put(parent + 4, 0x01000000)
+        self.before_data = self.data.copy()
+
+    def put(self, address, value):
+        for i in range(4): self.data[address + i] = value >> (8 * i) & 255
+
+    def code(self, address, size):
+        for first, body in self.functions:
+            if first <= address < address + size <= first + len(body):
+                return body[address - first:address - first + size]
+        raise ValueError('absent completion leaves its exact linked integer closure: ' + hex(address))
+
+    def read(self, address):
+        require(not address & 3, 'unaligned absent word read')
+        if all(address + i in self.data for i in range(4)):
+            return sum(self.data[address + i] << (8 * i) for i in range(4))
+        return struct.unpack('<I', self.code(address, 4))[0]
+
+    def byte(self, address):
+        require(address in self.data, 'absent byte read escapes prepared buffers')
+        value = self.data[address]
+        return (value - 256 if value & 128 else value) & MASK
+
+    def store(self, address, value, width):
+        if not self.start_sp - 256 <= address < address + width <= self.start_sp:
+            require(self.overlay <= address < address + width <= self.overlay_end or
+                    any(rx <= address < address + width <= rx + 1024 for rx, _ in self.rx),
+                    'absent publisher writes outside overlay and prepared RX')
+            self.external_stores.append((address, width))
+        for i in range(width): self.data[address + i] = value >> (8 * i) & 255
+
+    def write(self, address, value):
+        require(not address & 3, 'unaligned absent word store'); self.store(address, value, 4)
+
+    def plain(self, word, pc):
+        n, m = word >> 8 & 15, word >> 4 & 15
+        if word & 0xF00F == 0x6000:
+            self.r[n] = self.byte(self.r[m]); return
+        if word & 0xFF00 == 0x8400:
+            self.r[0] = self.byte(self.r[m] + (word & 15)); return
+        if word & 0xF00F == 0x2000:
+            self.store(self.r[n], self.r[m], 1); return
+        if word & 0xFF00 == 0x8000:
+            self.store(self.r[m] + (word & 15), self.r[0], 1); return
+        if word & 0xF00F == 0x600C:
+            self.r[n] = self.r[m] & 255; return
+        if word & 0xF00F == 0x6008:
+            self.r[n] = self.r[m] & 0xFFFF0000 | (self.r[m] & 255) << 8 | (self.r[m] >> 8 & 255); return
+        if word & 0xF0FF in (0x4018, 0x4028):
+            self.r[n] = self.r[n] << (8 if word & 0xFF == 0x18 else 16) & MASK; return
+        if word & 0xF00F == 0x0007:
+            self.macl = self.r[n] * self.r[m] & MASK; return
+        if word & 0xF0FF == 0x001A:
+            self.r[n] = self.macl; return
+        if word & 0xF00F == 0x600A:
+            value = -self.r[m] - (self.sr & 1); self.r[n] = value & MASK; self.t(value < 0); return
+        if word >> 8 == 0xCB:
+            self.r[0] |= word & 255; return
+        super().plain(word, pc)
+
+    def check(self):
+        r, pr, sr, fpscr, fr = self.before_regs
+        require(self.r[8:] == r[8:] and self.pr == pr and self.sr & ~1 == sr & ~1 and
+                self.fpscr == fpscr and self.fr == fr, 'absent publisher changes owner ABI state')
+        result = 0 if self.outcome == 'ok' else -1 if self.outcome == 'null' else -6 if self.outcome == 'parent' else -7 if self.outcome == 'conflict' else -2
+        require(self.r[0] == result & MASK, 'absent publisher changes refusal/return meaning')
+        expected = self.before_data.copy()
+        def old(offset):
+            return sum(self.before_data[self.overlay + offset + i] << (8 * i) for i in range(4))
+        def put(offset, value):
+            for i in range(4): expected[self.overlay + offset + i] = value >> (8 * i) & 255
+        if self.outcome in ('ok', 'parent', 'conflict'):
+            parent = self.rx[-1][0]
+            frame = self.overlay + 92 + 28 * (len(self.rx) - 1)
+            for offset, value in ((44, self.read(frame)), (48, self.read(parent)), (52, parent & 0x1FFFFFFF)):
+                put(offset, value)
+        if self.outcome == 'ok':
+            put(4, min(MASK, old(4) + 1)); put(76, 0)
+            for index, (rx, destination) in enumerate(self.rx):
+                if destination == 1:
+                    for j in range(4): expected[rx + j] = 255
+                    for offset, value in ((44, self.read(self.overlay + 92 + 28 * index)),
+                                          (48, MASK), (52, rx & 0x1FFFFFFF)):
+                        put(offset, value)
+        elif self.outcome != 'null':
+            put(72, 0); put(76, 0); put(36, min(MASK, old(36) + 1))
+            put(40, old(40) | (64 if self.outcome == 'parent' else 128 if self.outcome == 'conflict' else 2))
+        require(all(self.data[a] == value for a, value in expected.items()),
+                'absent publisher changes a payload/physical response/private state or refuses after an RX store')
+        for offset in (8, 12, 16):
+            require(self.read(self.overlay + offset) == sum(self.before_data[self.overlay + offset + i] << (8 * i) for i in range(4)),
+                    'absent publisher reports a virtual advertisement/reply/backend call')
+        if self.outcome == 'ok':
+            require(self.read(self.overlay + 76) == 0 and self.read(self.overlay + 72) == 1,
+                    'absent completion loses its prepared lifecycle')
+        require(all(self.overlay <= a < self.overlay_end or (width == 1 and
+                    any(destination == 1 and rx <= a < rx + 4 for rx, destination in self.rx))
+                    for a, width in self.external_stores), 'absent publisher has an unexpected store target')
+
+
+def audit_absent_completion(worker, *, self_test=False):
+    cases = 0
+    for seed in range(2):
+        for command in (1, 2, 9):
+            for count, targets in ((1, 0), (2, 1), (4, 0), (4, 2), (32, 31)):
+                for outcome in ('ok', 'null', 'magic', 'admitted', 'pending', 'backend', 'parent', 'conflict'):
+                    AbsentCompletion(worker, seed, command, count, targets, outcome).run().check(); cases += 1
+    # Execute the actual linked selector, with the config's exact last word.
+    base, body, _ = symbol_bytes(worker, '_kui_vmu_native_passive_complete', 2)
+    words = struct.unpack('<' + 'H' * (len(body) // 2), body)
+    positions = [i for i in range(len(words) - 8) if words[i] == 0x50DF and words[i + 2] == 0x8802 and
+                 words[i + 4] == 0x8900 and words[i + 6:i + 8] == (0x400B, 9)]
+    require(len(positions) == 1, 'missing unique actual hooks-only completion selector')
+    i = positions[0]; config, size, kind, _ = worker[4]['_config']
+    require((size, kind) == (2300, 1), 'hooks-only config word escaped its unchanged ABI')
+    routes = 0
+    for seed in range(16):
+        for mode in (0, 1, 2):
+            m = Machine(worker, '_kui_vmu_native_passive_complete', seed, 15, 0xAC11FFE0)
+            m.pc = base + 2 * i; m.r[13] = config + size - 64
+            m.mem[(config & ~0x20000000) + size - 4] = mode
+            m.stop_pc = base + 2 * (i + 8)
+            def call(target, m=m, mode=mode):
+                name = '_kui_vmu_readonly_overlay_complete_absent' if mode == 2 else '_kui_vmu_readonly_overlay_complete'
+                require(target == worker[4][name][0] and m.r[4] == worker[4]['_overlay'][0],
+                        'hooks-only selector changed mode or exact completion target')
+                m.pc = m.stop_pc; m.calls.append(name); return True
+            m.call = call; m.run(); require(len(m.calls) == 1, 'completion selector did not choose exactly one path'); routes += 1
+    rejected = 0
+    if self_test:
+        # Exact source closure and typed pins catch arbitrary changes; this
+        # independently exercises a changed header store and backend target.
+        _, original, _ = symbol_bytes(worker, AbsentCompletion.helper, 2)
+        mutations = [(struct.pack('<2H', 0xE300, 0xE0FF), struct.pack('<2H', 0xE300, 0xE000)),
+                     (struct.pack('<H', 0x8023), struct.pack('<H', 0x8024)),
+                     (struct.pack('<I', worker[4]['_readonly_overlay_le32'][0]),
+                      struct.pack('<I', worker[4]['_kui_vmu_native_persistent_sd_transaction'][0]))]
+        for old, new in mutations:
+            require(original.count(old) == 1, 'missing unique absent header/callback mutation site')
+            changed = original.replace(old, new)
+            try: AbsentCompletion(worker, 0, 1, 2, 1, 'ok', body=changed).run().check()
+            except (ValueError, AssertionError, KeyError): rejected += 1
+            else: raise ValueError('absent model accepted changed no-response/header extent')
+        changed = bytearray(body); struct.pack_into('<H', changed, 2 * (i + 2), 0x8801)
+        m = Machine(worker, '_kui_vmu_native_passive_complete', 0, 15, 0xAC11FFE0, body=bytes(changed))
+        m.pc = base + 2 * i; m.r[13] = config + size - 64
+        m.mem[(config & ~0x20000000) + size - 4] = 2; m.stop_pc = base + 2 * (i + 8)
+        def reject_route(target):
+            require(target == worker[4]['_kui_vmu_readonly_overlay_complete_absent'][0],
+                    'wrong mode reached ordinary virtual publication')
+            m.pc = m.stop_pc; return True
+        m.call = reject_route
+        try: m.run()
+        except (ValueError, AssertionError, KeyError): rejected += 1
+        else: raise ValueError('hooks-only selector accepted a profile/mode swap')
+    return dict(helper_instruction_cases=cases, selector_instruction_cases=routes,
+                mutation_rejections=rejected, actual_callees_only=True,
+                no_backend_or_sd_call=True, no_parent_advertisement=True,
+                only_filtered_a1_four_byte_headers_changed=True)
+
+
 def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *, build=None):
     """Keep the legacy proof, or require the complete prepared proof family."""
     if "_lifetime_plan" not in worker[4]:
@@ -246,7 +457,8 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
             "constant_build_identity_bound_to_verified_runtime": True, "identity_words": 8,
             "protected_interval_limit": 64, "hook_word_limit": 32, "free_node_limit": 1024,
             "full_dynamic_free_list_each_release": True, "full_storage_guards_before_and_after_loan": True,
-            "emitted_callgraph_bound": True, "mutation_rejections": rejected}
+            "emitted_callgraph_bound": True, "mutation_rejections": rejected,
+            "hooks_only": audit_absent_completion(worker, self_test=self_test)}
 
 # Whole integer trampoline, including its P2 resume literal and zero padding.
 TRAMPOLINE_PREFIX = bytes.fromhex(
@@ -502,7 +714,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
             literal(i + 11) == symbols["_kui_vmu_native_worker_call"][0] and
             words[i + 12:i + 20] == [0x67f3, 0x558a, 0x7728, 0x5483, 0x66f3, 0x1fca, 0x400b, 0x7644])
         if diagnostic:
-            require(i >= 4 and words[i - 4:i] == [0x8d02, 0x6493, 0xae49, 0xe503],
+            require(i >= 4 and words[i - 4:i] == [0x8d02, 0x6493, 0xae4d, 0xe503],
                     "v2 publisher lost unconditional delay-slot P1 span start")
             candidates.append((i, 9, 18, 2))
     require(len(candidates) == 1, "missing unique linked worker-publication/first-arm block")
@@ -623,10 +835,48 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
             "installer can enter P1 arm before initialization/publication")
     require(begin + 2 * memset_loads[0] in dom[zero_pc],
             "BSS memset target can be bypassed")
+    diagnostics_getter = None
+    if '_native_runtime_diagnostics' in symbols:
+        # The noipa getter returns a canonical 0/1/2. Bind that actual return
+        # to cfg.diagnostics: R13=SP+0x900, store R0 at+60, cfg=SP+0x44.
+        # The store is the next call's delay slot, before that call may
+        # clobber R0. Both getter and store must dominate the first arm.
+        choices = [j for j in range(len(words) - 9) if
+            words[j] & 0xFF00 == 0xD000 and literal(j) == symbols['_native_runtime_diagnostics'][0] and
+            words[j + 1] & 0xFF00 == 0xD800 and literal(j + 1) == 0x20000000 and
+            words[j + 2] & 0xFF00 == 0xDE00 and literal(j + 2) == symbols['__native_worker_blob_end'][0] and
+            words[j + 3:j + 5] == [0x400B, 0x389C] and
+            words[j + 5] & 0xFF00 == 0xD100 and literal(j + 5) == symbols['_retail_display_restore'][0] and
+            words[j + 6] & 0xFF00 == 0xD400 and literal(j + 6) == symbols['_display'][0] and
+            words[j + 7:j + 9] == [0x410B, 0x1D0F]]
+        require(len(choices) == 1, 'missing exact runtime diagnostics return-to-config store')
+        diagnostics_getter = choices[0]
+        bases = []
+        for j in range(diagnostics_getter - 3):
+            if words[j] & 0xFF00 != 0x9D00 or words[j + 1] != 0xE630 or words[j + 3] != 0x3DFC:
+                continue
+            at = begin + 2 * j + 4 + 2 * (words[j] & 255)
+            if struct.unpack('<h', region(body, at - begin, 2, 'diagnostics config stack offset'))[0] == 0x900:
+                bases.append(j)
+        require(len(bases) == 1 and 0x900 + 60 - 0x44 == 0x8F8,
+                'diagnostics store no longer names exact final config word')
+        getter_pc = begin + 2 * (diagnostics_getter + 3)
+        store_call_pc = begin + 2 * (diagnostics_getter + 7)
+        base_pc = begin + 2 * (bases[0] + 3)
+        require(base_pc in dom[getter_pc] and getter_pc in dom[store_call_pc] and store_call_pc in dom[arm],
+                'runtime mode/config store can be bypassed before worker arm')
+        for pc, (_, mnemonic, operands) in decoded.items():
+            if base_pc < pc < store_call_pc and mnemonic not in ('cmp/eq', 'cmp/hi', 'cmp/hs', 'tst'):
+                require(not re.search(r'(?:^|,)\s*r13$', operands), 'diagnostics config base is overwritten')
+            if base_pc < pc < arm:
+                require(not re.search(r'(?:^|,)\s*r15$', operands) and '@-r15' not in operands and '@r15+' not in operands,
+                        'config stack moves between diagnostics assignment and arm')
     report.update(worker_relocation_before_publication=True, worker_bss_zero_before_publication=True,
                   dynamic_cells_before_publication=True, publication_dominates_first_arm=True,
                   first_worker_publish=hex(publish), first_worker_arm=hex(arm),
                   mode_configuration_compiler_witness=mode_config,
+                  runtime_diagnostics_return_stored_in_exact_config=diagnostics_getter is not None,
+                  runtime_diagnostics_store_dominates_arm=diagnostics_getter is not None,
                   linked_installer_cfg_nodes=len(seen))
     if self_test:
         # An individually recognized register-family block must not be mixed
@@ -642,6 +892,15 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
         elif publish_at == 9:
             mutations.append(((first + 1, prepared_setups[1 - register_family][0]),
                               (first + 2, prepared_setups[1 - register_family][1])))
+        if diagnostics_getter is not None:
+            getter_literal = (((begin + 2 * diagnostics_getter + 4) & ~3) +
+                              4 * (words[diagnostics_getter] & 255) - begin) // 2
+            wrong_getter = symbols['_native_runtime_mode'][0]
+            mutations.extend([((diagnostics_getter + 8, 0x0009),),
+                              ((diagnostics_getter + 8, 0x1D0E),),
+                              ((diagnostics_getter, 0xE000),),
+                              ((getter_literal, wrong_getter & 0xFFFF),
+                               (getter_literal + 1, wrong_getter >> 16))])
         _, _, section = symbol_bytes(stage, "_native_passive_run", 2)
         offset = section[4] + begin - section[3]
         rejected = 0

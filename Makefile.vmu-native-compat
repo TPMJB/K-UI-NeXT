@@ -84,6 +84,7 @@ compat-host-tests: $(BUILD)/retail-maple-observe.kui persistent-host-tests passi
 	python3 tests/test_vmu_native_mode.py
 	KUI_NATIVE_ARTIFACT_DIR=$(BUILD) python3 tests/test_vmu_native_mode_artifact.py
 	KUI_NATIVE_ARTIFACT_DIR=$(BUILD) python3 tests/test_vmu_native_lease_only.py
+	KUI_NATIVE_ARTIFACT_DIR=$(BUILD) python3 tests/test_vmu_native_hooks_only.py
 	KUI_NATIVE_ARTIFACT_DIR=$(BUILD) python3 tests/test_vmu_native_map_refusal_artifact.py
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_heap.c -o $(BUILD)/test-heap
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-heap $(if $(and $(STARTUP),$(HEAP_NEGATIVE)),'$(STARTUP)' '$(HEAP_NEGATIVE)',)

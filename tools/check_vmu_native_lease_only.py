@@ -30,7 +30,7 @@ class LeaseOnly(Machine):
         self.end = 0xACFF0000
         self.r[4:6] = [self.lease, self.exports]
         self.before = self.r.copy(), self.pr, self.mach, self.macl, self.gbr, self.sr, self.fpscr, self.fr.copy()
-        self.stores, self.refused, self.lines, self.readback = [], False, [], False
+        self.stores, self.store_sites, self.refused, self.lines, self.readback = [], [], False, [], False
         heap, driver, exits = (self.symbols[s][0] for s in ("_native_heap", "_native_driver", "_native_exits"))
         self.exit_entries = (0x8C165730, 0x8C165760, 0x8C165790)[:2 + (seed & 1)]
         self.mem.update({heap + 28: self.slot, heap + 32: self.target,
@@ -67,7 +67,7 @@ class LeaseOnly(Machine):
             require(address == self.control + 0x20000000 + (key - self.control), "low control store is not P2")
             require(self.control <= key < self.control + 56 and self.readback and "lease" in self.calls,
                     "reservation publication precedes its final proofs or escapes low control")
-        self.stores.append((key, value)); self.mem[key] = value
+        self.stores.append((key, value)); self.store_sites.append(self.pc); self.mem[key] = value
 
     def string(self, address):
         for p in self.image[2]:
@@ -175,7 +175,7 @@ class LeaseDispatch(Machine):
                     self.r[4:6] == [self.lease, self.exports], "wrong reservation branch or ABI")
             self.route = "lease-only"; self.abi_return()
         else:
-            require(self.mode in (0, 1, 2) and self.calls == ["mode", "veneer"] and
+            require(self.mode in (0, 1, 2, 4) and self.calls == ["mode", "veneer"] and
                     self.r[4:6] == [0x8C1633A8, self.return_hook], "ordinary mode lost its original veneer route")
             self.route, self.pc = "veneer", self.stop_pc
         return True
@@ -203,12 +203,19 @@ def audit(stage, resident, *, self_test=False):
                     for outcome in ("ok", "window", "readback", "lease", "completion"):
                         LeaseOnly(stage, resident, seed, mask, slot_alias, target_alias, outcome).run().check()
                         cases += 1
-            for mode in (0, 1, 2, 3):
+            for mode in (0, 1, 2, 3, 4):
                 LeaseDispatch(stage, resident, seed, mask, mode).run().check(); dispatch_cases += 1
     rejected = 0
     if self_test:
         _, body, _ = symbol_bytes(stage, HELPER, 2)
         mutations = []
+        # Each actual external store is independently necessary: removing
+        # initializer restoration or callback retirement must fail the model.
+        witness = LeaseOnly(stage, resident, 7, 15, 0xA0000000, 0xA0000000).run()
+        witness.check()
+        for pc in sorted(set(witness.store_sites)):
+            changed = bytearray(body); struct.pack_into("<H", changed, pc - witness.base, 0x0009)
+            mutations.append((bytes(changed), "ok"))
         for name in ("_kui_vmu_native_heap_lease_valid", "_native_report", "_retail_display_line"):
             at = body.find(struct.pack("<I", stage[4][name][0])); require(at >= 0, "missing helper callback literal")
             changed = bytearray(body); struct.pack_into("<I", changed, at, stage[4][HELPER][0] + 2)

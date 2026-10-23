@@ -1,0 +1,83 @@
+{
+  "schema": "kui.native.evolution-hooks.v1",
+  "date": "2026-10-23",
+  "console_evidence": {
+    "build": "5b653775af85",
+    "owner_report": "It again crashed before the first FMV. With lease-only it worked.",
+    "normal": "Failed before first FMV",
+    "lease_only": "Worked per owner; no gameplay/save-cycle result inferred",
+    "inference": "Active hooks/runtime stronger suspect than same reservation alone; individual hook, virtual response or storage cause unestablished",
+    "fix_established": false
+  },
+  "hooks_only": {
+    "mode": 4,
+    "worker_diagnostic_selector": 2,
+    "cli": "--hooks-only",
+    "configuration_bytes_unchanged": true,
+    "same_reservation": true,
+    "same_initialized_worker": true,
+    "retained": [
+      "Submit/completion gateways",
+      "Free/reinitializer/exit protections",
+      "Failure-only Evolution malloc diagnostic",
+      "Ownership, hook, runtime and context guards",
+      "Filtered physical DMA chain and MDSTAR restoration",
+      "Normal startup card preparation/recovery"
+    ],
+    "disabled": [
+      "Virtual A1 advertisement",
+      "Virtual response/backend generation",
+      "In-game virtual-card SD transactions",
+      "Runtime profiler sampling"
+    ],
+    "receive_behavior": "Validate prepared filtered backend, original parent shape and no physical A1 conflict before any external store; overwrite only filtered A1 header four bytes with FFFFFFFF; parent, payload and unrelated RX bytes unchanged",
+    "lifetime": "All original protections retained; no acceptance predicate relaxed",
+    "console_execution_verified": false
+  },
+  "source_review": {
+    "gateway": "Original Evolution submit/consumer/free instruction contracts match current integer gateway replay; no ABI fix justified",
+    "lifetime": "Initializer, release and pair-only exit sites confirmed; intercepted failures should report, no proved lifetime corruption",
+    "normal_behavior": "Existing normal overlay completion unchanged; normal diagnostics0 takes normal backend path, profiling1 retains sampling, diagnostic2 takes absent path; malformed3+ worker selectors refused",
+    "limits": "Hooks-only shares filtered-chain/MMIO behavior with normal mode; success isolates virtual visibility/replies/backend as a group, not each individually",
+    "normal_artifact": "Normal completion C body unchanged; compiler shares integer parent helper, so compiled normal body is separately reviewed/pinned rather than claimed byte-identical"
+  },
+  "host_validation": {
+    "sanitizers": [
+      "AddressSanitizer",
+      "UndefinedBehaviorSanitizer"
+    ],
+    "persistent_bridge_checks": 1289333,
+    "absent_overlay_success_cases": 99,
+    "absent_overlay_refusal_api_cases": 13,
+    "persistent_hooks_only_batches": 16,
+    "mode_c_checks": 1702,
+    "mode_python_tests": 3,
+    "personalizer_tests": 60,
+    "unchanged_prepared_card_files": true,
+    "no_card_backend_storage_or_sampling": true
+  },
+  "linked_instruction_validation": {
+    "immutable_mode_helper_cases": 1152,
+    "storage_routes": 2880,
+    "worker_policy_cases": 960,
+    "mode_mutation_rejections": 9,
+    "lease_only_helper_cases": 540,
+    "lease_only_selector_cases": 60,
+    "lease_only_mutation_rejections": 16,
+    "release_packager": "Repeats exact compiled helper/worker, pointer, relocation, stack, mode/return, mutation and clean-source provenance checks; see probe-report.json",
+    "absent_helper_cases": 240,
+    "absent_selector_cases": 48,
+    "absent_mutation_rejections": 4,
+    "hooks_only_artifact_tests": 4,
+    "worker_publication_mutation_rejections": 9,
+    "worker_policy_store_bound": true,
+    "prepared_mutation_rejections": 55,
+    "worker_bytes": 38016,
+    "worker_relocation_records": 550,
+    "private_worker_stack_bytes": 1752,
+    "private_worker_stack_capacity": 4096,
+    "low_resident_stack_bytes": 1232,
+    "low_resident_stack_capacity": 1232
+  },
+  "scope": "Diagnostic comparison only; no new SDK family, virtual slot, transport, CDDA coexistence or physical-disc support"
+}

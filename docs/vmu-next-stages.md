@@ -67,7 +67,7 @@ The recovered corpus already identifies useful next targets:
 | --- | --- | --- |
 | Resident Evil Code: Veronica | Candidate RX/TX intervals overlap the startup image under the current proof | Determine the actual live ownership interval and lifetime; retain the overlap refusal until that proof is narrower and valid |
 | Grandia II | Owner reports the generic build was just fine | A unique proved startup call now distinguishes its real initializer literal from an unused export-table copy; original allocator, layout and persistence models pass |
-| Evolution 1 | VMU launch stays black before FMV on `046252128e06`, no allocation-failure page, reader LED off; `--control` plays movie | Compare normal mode with mapping-refusal report against `--lease-only`, which retains reservation/layout but installs no game hooks or virtual card |
+| Evolution 1 | `5b653775af85` normal failed before first FMV; the same reservation with `--lease-only` worked | Compare `--hooks-only`: retain active lifetime/Maple hooks and filtered DMA chain, hide virtual A1 and perform no in-game VMU storage calls |
 | Crazy Taxi 2 | Allocator found; initializer pointer/root-call provenance incomplete | Extend dataflow and call-root evidence, then execute the discovered allocator contract in the host SH model |
 | Phantasy Star Online | Layout root now resolves; allocator-call and fourth terminal-consumer proofs remain | Review the additional consumer and dispatch lifetime together |
 | Jet Grind Radio | Allocator arguments now resolve; Maple root transport does not | Prove the actual root transport before using its otherwise matching initializer |

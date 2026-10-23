@@ -120,6 +120,14 @@ static bool __attribute__((noipa)) native_resolution_replay(void) {
  * reservation; the low GD guard remains conservative, but cannot call a stale
  * worker. Ordinary card preparation/recovery has already run unchanged. */
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
+/* Keep the immutable launch selector separate from the worker's diagnostic
+ * policy. This never changes reservation or storage ownership admission. */
+static uint32_t __attribute__((noipa)) native_runtime_diagnostics(void) {
+    uint32_t mode=native_runtime_mode();
+    return mode==KUI_VMU_NATIVE_MODE_PROFILE?KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE:
+        mode==KUI_VMU_NATIVE_MODE_HOOKS_ONLY?KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY:
+        KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL;
+}
 static void __attribute__((noipa)) native_passive_lease_only(
     struct kui_vmu_native_heap_lease *lease,const struct kui_vmu_native_passive_exports *e) {
     for(unsigned i=0;i<native_exits.count;i++)
@@ -164,7 +172,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     cfg.durable=native_persist_handoff;cfg.sd_lease=KUI_VMU_OBSERVE_LOW_SD_LEASE;
     cfg.low_terminal=KUI_VMU_OBSERVE_LOW_RETURN_HOOK;cfg.low_heap_hook=KUI_VMU_OBSERVE_LOW_HEAP_HOOK;
     cfg.exits=native_exits;
-    cfg.diagnostics=native_runtime_mode()==KUI_VMU_NATIVE_MODE_PROFILE;
+    cfg.diagnostics=native_runtime_diagnostics();
 #endif
     retail_display_restore(&display);retail_display_line("RELOCATING PASSIVE MAPLE WORKER");
     for(uint32_t at=load;at<load+span;at+=32u)
@@ -262,7 +270,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #endif
     c->installer=0;c->stage_stack=0;c->status=KUI_VMU_OBS_BOOT_INSTALLED;
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    retail_display_line("PERSISTENT VIRTUAL A1 ARMED - STARTING GAME");
+    if(cfg.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY)
+        retail_display_line("ALL HOOKS ACTIVE / VIRTUAL VMU OFF");
+    else retail_display_line("PERSISTENT VIRTUAL A1 ARMED - STARTING GAME");
 #elif KUI_VMU_NATIVE_READONLY_PROBE
     retail_display_line("READ ONLY VIRTUAL A1 ARMED - STARTING GAME");
 #else
