@@ -1,0 +1,71 @@
+{
+  "schema": "kui.native.sa2.ccr-review.v1",
+  "date": "2026-10-22",
+  "source_commit_reviewed": "26b6d5d10fa637ccfa9651c5b9f8c8faf570f1bb",
+  "input": {
+    "title": "Sonic Adventure 2",
+    "product": "MK-51117",
+    "version": "V1.008",
+    "load_address": "8c010000",
+    "image_bytes": 1578116,
+    "image_sha256": "6919ed8bc96782d041be41ba86f90bf86d99632b8b7787391969721bc0991736"
+  },
+  "method": "Read-only disassembly and scalar-data inspection of the owner-provided IP/startup inputs, plus review of authored loader assembly. Addresses and conclusions only; no retail instruction bytes are included.",
+  "ccr_call_chain": [
+    {
+      "at": "8c00e056",
+      "target": "ac00e0d0",
+      "effect": "Original IP bootstrap2 calls its P2 cache-disable helper, which stores zero to CCR at 8c00e0d6 before executable entry."
+    },
+    {
+      "at": "8c01000c..8c010018",
+      "effect": "Original executable entry computes (CCR & 0x89af) | 0x800, preserving the existing cache enable bits rather than enabling instruction cache itself. This entry alone is insufficient evidence of steady cache mode."
+    },
+    {
+      "at": "8c0100aa..8c0100ae",
+      "target": "8c110bc8",
+      "effect": "Original startup invokes SDK initialization before the heap initializer."
+    },
+    {
+      "at": "8c110be0..8c110bea",
+      "target": "ac10f2dc",
+      "settings_cell": "8c17ab8c",
+      "settings_initial_value": "00000105",
+      "effect": "The SDK initialization calls the original cache-mode setter through P2 with the initialized 0x105 settings value: instruction cache enabled, operand cache enabled, write-through mode."
+    },
+    {
+      "at": "8c10f302..8c10f31a",
+      "effect": "The original setter writes its mode argument and performs instruction/operand invalidation. Its effective steady enable/mode bits retain 0x105 for the initialized argument."
+    },
+    {
+      "at": "8c0100c2",
+      "target": "8c110114",
+      "effect": "The original heap initialization call occurs after the explicit cache-mode initialization. The native VMU installer callback follows this heap initializer; the authored publisher preserves owner cache-mode bits."
+    }
+  ],
+  "authored_loader_review": {
+    "bootstrap_setup": "src/loader/retail_stage.S primes CCR 0x909 before original bootstrap2.",
+    "executable_relay": "game_resume captures the original bootstrap CCR, uses 0x908 for temporary cached-code scanning, then restores original enable/mode bits through P2. Original game initialization subsequently selects its own runtime mode.",
+    "worker_publication": "src/loader/vmu_native_passive_stage.inc purges patched code and requests I-cache invalidation without overriding the owner's cache mode.",
+    "worker_aliases": "src/loader/vmu_native_performance.ld places immutable code/constants in P1 and mutable state/stack in P2."
+  },
+  "polling_schedule_review": {
+    "submit": "8c15b7bc",
+    "submit_resume": "8c15b7c8",
+    "consumer": "8c15b8d2",
+    "completion_wrapper_call": "8c136346",
+    "findings": [
+      "The original submit sequence toggles bank selectors after MDST. The authored submit hook replays that MDST store once and resumes before the original selector updates.",
+      "Completion restores original MDSTAR, validates and publishes the current RX, then tail-jumps the original consumer with its original PR. No explicit additional-frame queue or stale-bank copy was found.",
+      "The original SA2 completion wrapper already establishes IMASK15 before calling the consumer. Added VMU work extends that masked scope.",
+      "Submit and completion gateways save the owner integer frame and restore original SR/SP before owner code. Raising IMASK by OR 0xf0 preserves SR.RB and SR.BL. The P1/P2 far jumps do not themselves change register banks.",
+      "The release gateway retains IMASK15 across validation and original prologue replay, preserving the original inherited-mask value in R7. Existing linked ABI models check the replayed register/SR state.",
+      "The physical parent overlay alters its VMU advertisement header byte, preserving controller input payload bytes."
+    ]
+  },
+  "limitations": [
+    "Static call-chain/default-settings evidence does not sample CCR during gameplay and does not establish that no later game code changes cache mode.",
+    "No concrete cache-policy or one-frame scheduling regression was identified. This does not establish console timing or rule out excessive interrupt-masked runtime work.",
+    "The 192 KiB retained heap lease is about 4.7 percent of SA2's fixed 4 MiB arena; a matched runtime-hooks-disabled control should retain that lease if it is intended to isolate hook overhead from changed memory budget. A pristine no-allocation control answers a different question."
+  ]
+}

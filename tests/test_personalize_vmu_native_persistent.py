@@ -14,6 +14,7 @@ from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
 import personalize_vmu_native_persistent as tool
 import vmu_native_cache_seed as cache
+import vmu_native_mode as mode
 from runtime_package import envelope,verify
 from vmu_persist_profile import decode_profile,encode_profile,template_profile
 
@@ -339,5 +340,88 @@ class NativeCacheCodecTests(unittest.TestCase):
             with self.subTest(index=index),self.assertRaises(ValueError):cache.decode_record(changed)
         with self.assertRaises(ValueError):cache.fill_seed(cache.template_seed(),wire,None)
         with self.assertRaises(ValueError):cache.decode_record(wire,10**10)
+
+class NativeRuntimeModePersonalizationTests(NativeCachePersonalizationTests):
+    def setUp(self):
+        super().setUp();self.mode_offset=len(self.module)
+        self.module=envelope(self.module[64:]+mode.template_mode()+bytes(32),len(self.module)-64+64,COMMIT[:12])
+        self.manifest.update(module_bytes=len(self.module),module_sha256=tool.sha(self.module),
+            runtime_mode_module_offset=self.mode_offset,runtime_mode_bytes=mode.MODE_BYTES,
+            runtime_mode_sha256=tool.sha(mode.template_mode()))
+        self.save_package()
+
+    def install(self,profile=None,game=None,**options):
+        return tool.install(self.card,package=self.package,profile=profile,game=game,**options)
+
+    def installed_mode(self):
+        return mode.decode_mode(self.destination.read_bytes()[self.mode_offset:self.mode_offset+32])
+
+    def test_control_profile_and_normal_preserve_pairs_and_only_permitted_spans(self):
+        before=self.snapshots()
+        for options,expected in (({},0),({'control':True},1),({'profile_runtime':True},2),({},0)):
+            report=self.install(game='sa2',**options);after=self.destination.read_bytes()
+            self.assertEqual(report['runtime_mode'],mode.MODE_NAMES[expected]);self.assertEqual(self.installed_mode(),expected)
+            self.assertEqual(before,self.snapshots())
+            allowed=((32,36),(60,64),(self.manifest['profile_module_offset'],self.manifest['profile_module_offset']+4096),
+                (self.seed_offset,self.seed_offset+1120),(self.mode_offset,self.mode_offset+32))
+            self.assertTrue(all(a==b or any(first<=i<end for first,end in allowed)
+                for i,(a,b) in enumerate(zip(self.module,after))))
+            with patch.object(tool.os,'replace',side_effect=AssertionError('must not rewrite')):
+                self.assertTrue(self.install(game='sa2',**options)['already_installed'])
+
+    def test_mode_manifest_is_complete_typed_and_disjoint(self):
+        old=self.destination.read_bytes()
+        for field in tool.MODE_FIELDS:
+            changed=dict(self.manifest);del changed[field]
+            (self.package/tool.MANIFEST).write_text(json.dumps(changed))
+            with self.subTest(missing=field),self.assertRaises(ValueError):self.install()
+        self.save_package()
+        for changes in ({'runtime_mode_module_offset':True},{'runtime_mode_bytes':True},
+            {'runtime_mode_bytes':31},{'runtime_mode_sha256':'0'*64},
+            {'runtime_mode_module_offset':self.manifest['profile_module_offset']},
+            {'runtime_mode_module_offset':self.seed_offset},
+            {'runtime_mode_module_offset':self.mode_offset+4}):
+            self.manifest_write(**changes)
+            with self.subTest(changes=changes),self.assertRaises(ValueError):self.install(control=True)
+        self.assertEqual(old,self.destination.read_bytes())
+
+    def test_noncanonical_or_duplicate_generic_modes_refused(self):
+        original=self.module
+        for choice in (1,2,3):
+            payload=bytearray(original[64:]);struct.pack_into('<I',payload,self.mode_offset-64+16,choice)
+            self.module=envelope(payload,len(payload),COMMIT[:12])
+            self.manifest.update(module_sha256=tool.sha(self.module));self.save_package()
+            with self.subTest(mode=choice),self.assertRaisesRegex(ValueError,'absent|misplaced|duplicated'):
+                self.install(control=True)
+        self.module=envelope(original[64:]+mode.fill_mode(mode.template_mode(),2),len(original)-64+32,COMMIT[:12])
+        self.manifest.update(module_bytes=len(self.module),module_sha256=tool.sha(self.module));self.save_package()
+        with self.assertRaisesRegex(ValueError,'duplicated'):self.install()
+
+    def test_legacy_package_refuses_explicit_runtime_modes(self):
+        legacy=self.root/'legacy';generic(legacy);old=self.destination.read_bytes();before=self.snapshots()
+        for option in ({'control':True},{'profile_runtime':True}):
+            with self.subTest(option=option),self.assertRaisesRegex(ValueError,'no audited native runtime mode'):
+                tool.install(self.card,package=legacy,**option)
+        self.assertEqual(old,self.destination.read_bytes());self.assertEqual(before,self.snapshots())
+
+    def test_conflicting_or_nonboolean_options_refused(self):
+        for options in ({'control':True,'profile_runtime':True},{'control':1},{'profile_runtime':1}):
+            with self.subTest(options=options),self.assertRaisesRegex(ValueError,'at most one'):
+                self.install(**options)
+
+    def test_extracted_zip_layout_runs_with_only_two_shipped_codecs(self):
+        tools=self.package/'tools';tools.mkdir();source=Path(tool.__file__).parent
+        for name in ('runtime_package.py','vmu_persist_profile.py','vmu_native_cache_seed.py','vmu_native_mode.py'):
+            (tools/name).write_bytes((source/name).read_bytes())
+        (self.package/'personalize.py').write_bytes(Path(tool.__file__).read_bytes())
+        args=[sys.executable,str(self.package/'personalize.py'),str(self.card),'--game','sa2',
+            '--profile','KUI/vmu-test/p0001/retail-persistent-profile-0001.bin']
+        before=self.snapshots()
+        for flag,expected in (('--control',1),('--profile-runtime',2),(None,0)):
+            result=subprocess.run(args+([flag] if flag else []),cwd=self.root,capture_output=True,text=True,check=True)
+            self.assertEqual(self.installed_mode(),expected);self.assertEqual(before,self.snapshots())
+            self.assertIn('virtual VMU is disabled' if expected==1 else 'native persistent VMU test',result.stdout)
+        result=subprocess.run(args+['--control','--profile-runtime'],cwd=self.root,capture_output=True,text=True)
+        self.assertEqual(result.returncode,2);self.assertEqual(before,self.snapshots())
 
 if __name__=='__main__':unittest.main()

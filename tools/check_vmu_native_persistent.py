@@ -36,6 +36,7 @@ from check_vmu_pio_write import check_pio_entry
 from check_vmu_native_cache_seed import audit as audit_cache_seed
 from check_vmu_native_cache_gateway import check as check_cache_gateway
 from check_vmu_native_stage_stack import check as check_stage_stack
+from check_vmu_native_mode import audit as audit_runtime_mode
 from vmu_native_relocations import generate, validate_loads
 from test_armada_ce_maple_hook import CPU
 
@@ -248,6 +249,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
         return report
     begin, body, _ = symbol_bytes(stage, "_native_passive_run", 2)
     words = list(struct.unpack("<" + "H" * (len(body) // 2), body))
+    mode_config = "_native_runtime_mode" in symbols
     def literal(index):
         op = words[index]
         at = ((begin + index * 2 + 4) & ~3) + 4 * (op & 255)
@@ -278,7 +280,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
         new = (words[i] & 0xff00 == 0xdb00 and literal(i) == symbols["_native_driver"][0] and
                words[i + 1:i + 8] in prepared_setups and
                words[i + 8] & 0xff00 == 0xd200 and literal(i + 8) == address and
-               words[i + 9:i + 11] == [0x420b, 0x1f23] and words[i + 11] & 0xff00 == 0xd000 and
+               words[i + 9:i + 11] == [0x420b, 0x1f24 if mode_config else 0x1f23] and words[i + 11] & 0xff00 == 0xd000 and
                literal(i + 11) == symbols["_kui_vmu_native_worker_call"][0] and
                words[i + 12:i + 20] == [0x67f3, 0x55aa, 0x7728, 0x54a3, 0x66f3, 0x1fea, 0x400b, 0x7638])
         if new:
@@ -306,17 +308,32 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
                 words[j + 4] == 0x37d8 and words[j + 5] & 0xff00 == 0xd400 and
                 literal(j + 5) == symbols["__native_worker_blob_begin"][0] and
                 words[j + 6:j + 11] == [destination_store, 0x1f21, 0x2fa2, 0x400b, 0x1f23]):
-                relocations.append((i, j + 9, extra))
+                relocations.append((i, j + 9, extra, False))
+        # The mode/diagnostics configuration retains R13 as the exact span
+        # and moves the P2 destination store into the relocation delay slot.
+        # Pin the entire argument block; a new callback literal alone is not
+        # an installation/publication witness.
+        if (mode_config and words[i + 1] == 0x6593 and
+            words[i + 2] & 0xff00 == 0xdd00 and literal(i + 2) == SPAN and
+            words[i + 3] == 0x37e8 and words[i + 4] & 0xff00 == 0xd600 and
+            literal(i + 4) == symbols["__native_worker_blob_end"][0] and
+            words[i + 5] & 0xff00 == 0xd400 and literal(i + 5) == symbols["__native_worker_blob_begin"][0] and
+            words[i + 6:i + 10] == [0x1f82, 0x1fd1, 0x400b, 0x2fa2]):
+            relocations.append((i, i + 8, 1, True))
     zero_patterns = (
         [0x56f3, 0x6ba3, 0x3b8c, 0x3688, 0x64b3, 0x4c0b, 0xe500],
-        [0x56f3, 0x6ba3, 0x3b9c, 0x3698, 0x64b3, 0x4c0b, 0xe500])
-    zeroes = [(i, zero_patterns.index(words[i:i + 7])) for i in range(len(words) - 7)
+        [0x56f3, 0x6ba3, 0x3b9c, 0x3698, 0x64b3, 0x4c0b, 0xe500],
+        [0x6ba3, 0x3b9c, 0xe500, 0x66d3, 0x64b3, 0x4c0b, 0x3698])
+    zero_families = (0, 1, 1)
+    zeroes = [(i, zero_families[zero_patterns.index(words[i:i + 7])], zero_patterns.index(words[i:i + 7])) for i in range(len(words) - 7)
               if words[i:i + 7] in zero_patterns]
     releases = [i for i in range(len(words) - 3) if words[i:i + 3] == [0x53ca, 0x7314, 0x2032]]
     require(len(relocations) == len(zeroes) == len(releases) == 1,
             "missing linked relocation/BSS/release-cell initialization witnesses")
     require(relocations[0][2] == zeroes[0][1] == register_family,
             "installer relocation/BSS/publication use inconsistent load/length registers")
+    require(relocations[0][3] == mode_config and (zeroes[0][2] == 2) == mode_config,
+            "installer mode configuration uses an unreviewed relocation/zero-fill ABI")
     relocate_pc = begin + relocations[0][1] * 2
     zero_pc = begin + (zeroes[0][0] + 5) * 2
     release_pc = begin + (releases[0] + 2) * 2
@@ -377,6 +394,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
     report.update(worker_relocation_before_publication=True, worker_bss_zero_before_publication=True,
                   dynamic_cells_before_publication=True, publication_dominates_first_arm=True,
                   first_worker_publish=hex(publish), first_worker_arm=hex(arm),
+                  mode_configuration_compiler_witness=mode_config,
                   linked_installer_cfg_nodes=len(seen))
     if self_test:
         # An individually recognized register-family block must not be mixed
@@ -992,6 +1010,9 @@ def check(directory, *, self_test=False):
     publisher = check_worker_publication(stage, cached, stage_disassembly, self_test)
     seed = audit_cache_seed(stage[0], (directory / "entry.elf").read_bytes(),
                             (directory / "retail-maple-observe.kui").read_bytes(), cached_code=cached)
+    runtime_mode = audit_runtime_mode(stage[0], (directory / "entry.elf").read_bytes(),
+        (directory / "retail-maple-observe.kui").read_bytes(), cached_code=cached,
+        stage_image=stage, self_test=self_test)
     cache_gateway = check_cache_gateway(stage, self_test=self_test) if seed["enabled"] else {"enabled": False}
     installer_stack = check_stage_stack(stage, read_elf(directory / "resident-sci.elf"),
                                         worker=worker, self_test=self_test)
@@ -1030,6 +1051,7 @@ def check(directory, *, self_test=False):
               "stage_cache_publication": publication,
               "worker_icache_publication": publisher,
               "resolution_cache_seed": seed,
+              "runtime_mode": runtime_mode,
               "resolution_cache_gateway": cache_gateway,
               "temporary_installer_stack": installer_stack,
               "relocation_records": relocations, "worker_instructions": instructions,

@@ -14,6 +14,7 @@ extern uint32_t kui_vmu_native_readonly_release_resume;
 #include "kui/vmu_durable.h"
 #include "kui/vmu_native_live.h"
 #include "kui/vmu_native_patch.h"
+#include "kui/vmu_native_profile.h"
 #include "kui/vmu_volatile_chain.h"
 #include "sd_reader.h"
 #define WORKER_SPAN UINT32_C(0x20000)
@@ -50,6 +51,11 @@ static struct kui_vmu_native_passive_frame completion_frame;
 static struct kui_vmu_native_live live_plan;
 static struct kui_vmu_native_lifetime_range protected_ranges[KUI_VMU_NATIVE_LIFETIME_RANGES];
 static unsigned protected_count;
+static struct {
+    struct kui_vmu_native_profile timing;
+    uint32_t clock_started,clock_first,clock_last,clock_samples,clock_invalid;
+    uint32_t ccr_first,ccr_last,ice_off,gesture_count,active,capture_poll_start;
+} diagnostic;
 static bool persistent_storage_guard(void);
 static bool persistent_context_guard(void);
 static bool installed_hooks_valid(void);
@@ -152,6 +158,69 @@ static bool poll_lease_valid(void) {
 #define poll_lease_valid lease_valid
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
+/* Read-only sampling of the game's timer. The profiler admits the exact
+ * existing free-running TMU0 profile; it never starts or reconfigures a clock.
+ * This path is opt-in and normal installations take only the flag branches. */
+static void diagnostic_sample(struct kui_vmu_native_profile_sample *sample) {
+    uint32_t ccr;
+#ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+    extern void kui_vmu_native_persistent_test_clock(struct kui_vmu_native_profile_sample *,uint32_t *);
+    kui_vmu_native_persistent_test_clock(sample,&ccr);
+#else
+    sample->frqcr=*(volatile const uint16_t *)(uintptr_t)UINT32_C(0xffc00000);
+    sample->tcor=*(volatile const uint32_t *)(uintptr_t)UINT32_C(0xffd80008);
+    sample->tcr=*(volatile const uint16_t *)(uintptr_t)UINT32_C(0xffd80010);
+    sample->tstr=*(volatile const uint8_t *)(uintptr_t)UINT32_C(0xffd80004);
+    sample->counter=*(volatile const uint32_t *)(uintptr_t)UINT32_C(0xffd8000c);
+    ccr=*(volatile const uint32_t *)(uintptr_t)UINT32_C(0xff00001c);
+#endif
+    if(!diagnostic.clock_samples) diagnostic.ccr_first=ccr;
+    diagnostic.ccr_last=ccr;
+    if(!(ccr&UINT32_C(0x100)) && diagnostic.ice_off!=UINT32_MAX) ++diagnostic.ice_off;
+    if(diagnostic.clock_samples!=UINT32_MAX) ++diagnostic.clock_samples;
+    if(kui_vmu_native_profile_sample_valid(sample)) {
+        if(!diagnostic.clock_started) {
+            diagnostic.clock_first=sample->counter;diagnostic.clock_started=1u;
+        }
+        diagnostic.clock_last=sample->counter;
+    } else if(diagnostic.clock_invalid!=UINT32_MAX) ++diagnostic.clock_invalid;
+}
+static void diagnostic_begin(struct kui_vmu_native_profile_span *span) {
+    struct kui_vmu_native_profile_sample sample;
+    diagnostic_sample(&sample);kui_vmu_native_profile_begin(span,&sample);
+}
+static void diagnostic_end(enum kui_vmu_native_profile_kind kind,
+    const struct kui_vmu_native_profile_span *span) {
+    struct kui_vmu_native_profile_sample sample;
+    diagnostic_sample(&sample);kui_vmu_native_profile_end(&diagnostic.timing,kind,span,&sample);
+}
+static void diagnostic_report(void) __attribute__((noreturn));
+static void diagnostic_report(void) {
+#ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+    kui_vmu_native_passive_test_terminal(17u,0u);
+#else
+    struct retail_display_state display;memcpy(display.regs,config.display,sizeof(display.regs));
+    retail_display_restore(&display);
+    retail_display_line("NATIVE VMU LATENCY CAPTURE");
+    retail_display_line("READ ONLY TMU0 - 781250 TICKS PER SECOND");
+    retail_display_line("C BODY TIMINGS INCLUDE SAMPLING OVERHEAD");
+    retail_display_line("STORAGE TIME IS ALSO IN COMPLETE TIME");
+    const char *const labels[4]={"SUBMIT CALLS VALID BAD TOTAL MAX","COMPLETE CALLS VALID BAD TOTAL MAX",
+        "FREE CALLS VALID BAD TOTAL MAX","STORAGE CALLS VALID BAD TOTAL MAX"};
+    for(unsigned i=0;i<4u;i++) {
+        const struct kui_vmu_native_profile_metric *m=&diagnostic.timing.metric[i];
+        retail_display_values(labels[i],(uint32_t[5]){m->calls,m->valid,m->invalid,m->ticks_total,m->ticks_max},5u);
+    }
+    retail_display_values("WALL TICKS CLOCK SAMPLES BAD FLAGS",(uint32_t[4]){
+        diagnostic.clock_started?diagnostic.clock_first-diagnostic.clock_last:0u,
+        diagnostic.clock_samples,diagnostic.clock_invalid,diagnostic.timing.flags},4u);
+    retail_display_values("CCR FIRST LAST ICE OFF POLLS COMMITS",(uint32_t[5]){
+        diagnostic.ccr_first,diagnostic.ccr_last,diagnostic.ice_off,
+        state.completed-diagnostic.capture_poll_start,durable_card.commits},5u);
+    retail_display_line("CAPTURE STOPPED - PHOTO THEN POWER OFF");
+    for(;;) __asm__ volatile("nop");
+#endif
+}
 static void write_mdstar(uint32_t source) {
 #ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
     extern void kui_vmu_native_passive_test_write(uint32_t,unsigned,uint32_t);
@@ -183,8 +252,13 @@ int kui_vmu_native_persistent_sd_transaction(void *context,struct kui_loader_sd 
     return result;
 }
 static int persistent_lease(kui_vmu_sd_transaction transaction,void *context) {
+    struct kui_vmu_native_profile_span span;
+    if(config.diagnostics) diagnostic_begin(&span);
     if(transaction!=kui_vmu_native_persistent_sd_transaction || context!=&durable_card ||
-       !persistent_storage_guard()) return KUI_VMU_SD_LEASE_FAULT;
+       !persistent_storage_guard()) {
+        if(config.diagnostics) diagnostic_end(KUI_VMU_NATIVE_PROFILE_STORAGE,&span);
+        return KUI_VMU_SD_LEASE_FAULT;
+    }
 #ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
     extern int kui_vmu_native_persistent_test_lease(kui_vmu_sd_transaction,void *);
     int result=kui_vmu_native_persistent_test_lease(transaction,context);
@@ -192,7 +266,8 @@ static int persistent_lease(kui_vmu_sd_transaction transaction,void *context) {
     int (*lease)(kui_vmu_sd_transaction,void *)=(void *)(uintptr_t)config.sd_lease;
     int result=lease(transaction,context);
 #endif
-    if(!persistent_storage_guard()) return KUI_VMU_SD_LEASE_FAULT;
+    if(!persistent_storage_guard()) result=KUI_VMU_SD_LEASE_FAULT;
+    if(config.diagnostics) diagnostic_end(KUI_VMU_NATIVE_PROFILE_STORAGE,&span);
     return result;
 }
 static bool protect_range(uint32_t begin,uint32_t bytes) {
@@ -363,6 +438,8 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
     memcpy(&config,c,sizeof(config));
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     memset(&live_plan,0,sizeof(live_plan));
+    memset(&diagnostic,0,sizeof(diagnostic));
+    if(config.diagnostics>1u) {memset(&config,0,sizeof(config));return -2;}
 #endif
     if(!lease_valid()) {memset(&config,0,sizeof(config));return -2;}
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
@@ -409,6 +486,10 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
 }
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
 void kui_vmu_native_readonly_release_check(const struct kui_vmu_native_passive_frame *f) {
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    struct kui_vmu_native_profile_span span;
+    if(config.diagnostics) diagnostic_begin(&span);
+#endif
     state.fault_at=f?f->r4:0u;state.fault_value=state.fault_at;
     state.fault_expect=config.lease.payload;
     /* Normal game frees can occur while Maple DMA is pending. They may
@@ -421,6 +502,9 @@ void kui_vmu_native_readonly_release_check(const struct kui_vmu_native_passive_f
            protected_ranges,protected_count)) fail(0x30u);
 #else
        !kui_vmu_native_lifetime_release_safe(&config.lease,read_heap,NULL,1u,f->r4)) fail(0x30u);
+#endif
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    if(config.diagnostics) diagnostic_end(KUI_VMU_NATIVE_PROFILE_FREE,&span);
 #endif
 }
 #endif
@@ -633,6 +717,10 @@ static bool persistent_context_guard(void) {
 }
 #endif
 void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f) {
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    struct kui_vmu_native_profile_span span;
+    if(config.diagnostics) diagnostic_begin(&span);
+#endif
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!state.armed || state.pending || state.submitted!=state.completed || !f || !stack_valid()) fail(1u);
     if(state.submitted>=PAIR_LIMIT) fail(20u);
@@ -685,8 +773,15 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
 #else
     state.submitted=1u;
 #endif
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    if(config.diagnostics) diagnostic_end(KUI_VMU_NATIVE_PROFILE_SUBMIT,&span);
+#endif
 }
 void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *f) {
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    struct kui_vmu_native_profile_span span;
+    if(config.diagnostics) diagnostic_begin(&span);
+#endif
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!state.armed || !state.pending || state.submitted!=state.completed+1u || !f || !stack_valid()) fail(8u);
 #else
@@ -719,6 +814,9 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
     if(!boundary(f,1u,state.bytes,&snapshot)) fail(10u);
     if(!chain(snapshot.bank,true) || !lease_valid() || !stack_valid()) fail(11u);
 #endif
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    bool capture_gesture=false;
+#endif
     for(unsigned i=0;i<state.descriptors;i++) {
         uint32_t response;
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
@@ -727,6 +825,16 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
         if(!read_value(NULL,receivers[i]|UINT32_C(0xa0000000),4u,&response)) fail(12u);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
         if(!physical_response_valid(i,response)) fail(0x44u);
+        if(config.diagnostics && ((chain_frames[i].header>>8)&255u)==32u &&
+           (chain_frames[i].header&255u)==9u) {
+            uint32_t controls;
+            if(!read_value(NULL,(receivers[i]+8u)|UINT32_C(0xa0000000),4u,&controls)) fail(12u);
+            /* KOS Maple raw condition: active-low buttons then right/left
+             * trigger bytes. B is bit1; no cooked host-stub masks. This
+             * gesture avoids pausing the game or requesting its reset. */
+            capture_gesture=!(controls&2u) && ((controls>>16)&255u)>=200u &&
+                (controls>>24)>=200u;
+        }
 #endif
         if(!i) state.first_response=response;
         state.last_response=response;
@@ -757,6 +865,20 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
     /* A durable commit remains visible to the game. Power-off/reboot readback
      * is a hardware test, never inferred from this in-session counter. */
     state.proof=durable_card.commits!=0u;
+    if(config.diagnostics) {
+        diagnostic_end(KUI_VMU_NATIVE_PROFILE_COMPLETE,&span);
+        if(!diagnostic.active) {
+            diagnostic.gesture_count=capture_gesture?diagnostic.gesture_count+1u:0u;
+            if(diagnostic.gesture_count>=30u) {
+                /* Begin a fresh gameplay window after the requesting pair
+                 * has fully completed; startup/menu work is discarded. */
+                memset(&diagnostic,0,sizeof(diagnostic));diagnostic.active=1u;
+                diagnostic.capture_poll_start=state.completed;
+            }
+        } else if((diagnostic.clock_started && !diagnostic.clock_invalid &&
+                   diagnostic.clock_first-diagnostic.clock_last>=20u*KUI_VMU_NATIVE_PROFILE_HZ) ||
+                  state.completed-diagnostic.capture_poll_start>=1200u) diagnostic_report();
+    }
 #else
     if((overlay.stats.devinfo || overlay.stats.allinfo) && overlay.stats.media && overlay.stats.reads) {
         state.proof=1u;report();

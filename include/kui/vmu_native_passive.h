@@ -43,6 +43,7 @@ struct kui_vmu_native_passive_config {
     struct kui_vmu_durable_handoff durable;
     uint32_t sd_lease,low_terminal,low_heap_hook;
     struct kui_vmu_native_exit exits;
+    uint32_t diagnostics;
 #endif
 };
 /* Frame order is shared with the SH gateway. R0 is dead at submission. */

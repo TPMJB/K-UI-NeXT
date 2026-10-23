@@ -5,11 +5,11 @@ include Makefile.vmu-native-performance
 override TEST_ZIP := K-UI-Native-Compatibility-Test.zip
 override TEST_GUIDE := docs/vmu-native-compat-test.md
 FLAGS += -DKUI_VMU_NATIVE_CACHE_PROBE=1
-override STAGE_SRC += src/core/vmu_native_resolution_cache.c src/core/vmu_native_cache_seed.c
+override STAGE_SRC += src/core/vmu_native_resolution_cache.c src/core/vmu_native_cache_seed.c src/core/vmu_native_mode.c
 $(BUILD)/stage.elf: $(STAGE_OBJ)
 
 COMPAT_WORKER_HOST_SRC = src/core/vmu_native_heap.c src/core/vmu_native_runtime.c \
- src/core/vmu_native_layout.c src/core/vmu_native_live.c src/core/vmu_native_lifetime.c \
+ src/core/vmu_native_layout.c src/core/vmu_native_live.c src/core/vmu_native_lifetime.c src/core/vmu_native_profile.c \
  src/core/vmu_native_discovery.c src/core/vmu_native_patch.c src/core/hash.c src/core/data.c \
  src/core/vmu_durable.c src/core/vmu_store.c src/core/vmu_emulation.c src/core/retail_image.c \
  src/loader/vmu_readonly_overlay.c src/loader/vmu_volatile_chain.c src/loader/sd_reader.c \
@@ -40,6 +40,10 @@ native-placement-host-tests: $(BUILD)/stage.elf $(BUILD)/native-worker.bin
 	python3 tests/test_vmu_native_stage_stack_artifact.py
 
 compat-host-tests: persistent-host-tests passive-host-tests readonly-host-tests native-placement-host-tests native-lease-alias-host-tests
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_mode.c src/core/vmu_native_mode.c -o $(BUILD)/test-mode
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-mode
+	python3 tests/test_vmu_native_mode.py
+	python3 tests/test_vmu_native_mode_artifact.py
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_heap.c -o $(BUILD)/test-heap
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-heap $(if $(and $(STARTUP),$(HEAP_NEGATIVE)),'$(STARTUP)' '$(HEAP_NEGATIVE)',)
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-layout $(if $(STARTUP),'$(STARTUP)',) $(CACHE_STARTUPS)

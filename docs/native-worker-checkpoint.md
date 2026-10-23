@@ -581,3 +581,52 @@ Next hardware acceptance is the same SA2 gameplay scene and save/full-power-off/
 reload, then the reported ship-control scene and brief Skies/PS2 regressions.
 If lag persists, compare the same scene/settings with virtual VMU disabled and
 measure the remaining release-hook interrupt scope before claiming parity.
+
+## Matched control and gameplay latency capture
+
+The owner found `26b6d5d10fa6` only marginally better: substantial SA2 lag and
+slightly gummy Skies controls remain, with no established no-VMU baseline.
+Further instruction-count reductions alone cannot attribute the console
+symptom. Review found no extra-frame queue or concrete stale-bank/SR/PR/stack
+restoration error. Exact SA2 startup explicitly enables CCR `0x105` before the
+heap initializer; its bootstrap's earlier CCR=0 does not establish disabled
+caching during gameplay. See `evidence/native-sa2-ccr-2026-10-22.json`.
+
+The compatibility module now contains a canonical typed 32-byte runtime mode:
+ordinary 0, control 1 and profile 2. The no-VMU control uses the same low GD reader
+and base relay but skips VMU preparation before any profile/recovery/write
+callback, then returns before native discovery, heap allocation or hook
+installation. It preserves the original return frame and zero low-control
+state. It cannot load a virtual save; compare SA2's initial stage/new game.
+It isolates the VMU path as a whole, including its 192 KiB reservation (about
+4.7% of SA2's four-MiB arena), rather than attributing a difference solely to
+hook execution.
+
+`personalize.py --control` and `--profile-runtime` modify only the audited mode
+span in addition to the existing profile/seed/envelope spans. They are mutually
+exclusive; omitting both restores normal mode. Legacy packages retain default
+behavior and reject unsupported explicit modes. C mode tests pass 871 checks,
+Python codec 3 tests, personalizer 56 tests and mode artifact 12 mutation tests.
+Actual linked proofs execute 768 helper cases, 1728 storage routes, 8064 cache/
+control routes, 1152 complete relay routes and 576 low-hook cases. They reject
+selector swaps and malformed modes before storage, and preserve legacy audits.
+The new strict compiler publication witness retains complete argument/zero/
+publication blocks and CFG domination rather than accepting broad opcodes.
+
+Profile mode retains the normal virtual card and samples the existing TMU0
+read-only at C submit/completion/free/storage boundaries. Exact existing clock
+admission permits 781250 Hz; unsupported/changed profiles, wrap/interval limits
+and counter saturation remain explicit. It also samples CCR. Both triggers+B
+for 30 consecutive controller replies resets startup statistics and starts a
+fresh gameplay window; the report stops after 20s or 1200 completed poll pairs,
+after pending clears and storage is idle. Completion includes storage timing;
+assembly gateway entry/exit and final accounting are outside each C span.
+The user guide describes the sampling overhead and comparison limits.
+
+Profiler core ASan/UBSan passes 1003 checks. Production worker integration
+passes 1,260,032 checks, including no normal-mode timer sampling, gesture
+debounce/window reset, both capture endings, invalid clocks and idle report
+state. Passive/read-only and actual placement/alias/save-reopen regressions
+also pass. Ordinary guest-read counts remain first 387, steady 336, INFO 342, READ 758.
+Run the focused instructions in `vmu-native-latency-test.md`; these artifacts
+provide attribution evidence, not an unmeasured claim that the lag is fixed.

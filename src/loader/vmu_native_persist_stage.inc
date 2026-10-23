@@ -49,7 +49,12 @@ static int native_persist_sync(void *context) {
     struct kui_retail_storage *storage=context;last_card_result=kui_sci_sd_sync(&storage->device.sd);
     return last_card_result==KUI_LOADER_SD_OK?0:-1;
 }
-static enum kui_loader_sd_result native_persist_storage_init(struct kui_retail_storage *storage,uint32_t selected) {
+static enum kui_loader_sd_result __attribute__((noipa)) native_persist_storage_init(struct kui_retail_storage *storage,uint32_t selected) {
+    /* Control never decodes or acquires the prepared pair, recovers a journal,
+     * writes a checkpoint or publishes a durable handoff. Only ordinary game
+     * storage is initialized. A malformed mode stops before this decision. */
+    if(native_runtime_mode()==KUI_VMU_NATIVE_MODE_CONTROL)
+        return kui_retail_storage_init(storage,selected);
     size_t bytes=(size_t)(native_persist_wire_end-native_persist_wire);
     if(native_persist_ready || bytes!=KUI_VMU_PERSIST_PROFILE_WIRE_BYTES ||
        kui_vmu_persist_profile_decode(&native_persist_profile,native_persist_wire,bytes) ||

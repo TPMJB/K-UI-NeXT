@@ -3,14 +3,34 @@
 #if !KUI_VMU_NATIVE_HEAP_PROBE || KUI_VMU_READONLY_PROOF != 0
 #error Native heap adapter requires its isolated native build
 #endif
+#include "kui/vmu_native_mode.h"
+#if KUI_VMU_NATIVE_CACHE_PROBE
+__asm__(".section .rodata.native_runtime_mode,\"a\"\n.balign 4\n"
+    ".global __native_runtime_mode_start\n"
+    ".type __native_runtime_mode_start,@object\n"
+    "__native_runtime_mode_start:\n.ascii \"KUINVM01\"\n.long 1,32,0\n.zero 12\n"
+    ".size __native_runtime_mode_start,32\n"
+    ".global __native_runtime_mode_end\n__native_runtime_mode_end:\n.previous\n");
+extern const uint8_t native_runtime_mode_wire[] __asm__("__native_runtime_mode_start");
+static uint32_t native_runtime_mode(void) __attribute__((noipa));
+#else
+static uint32_t native_runtime_mode(void) {return KUI_VMU_NATIVE_MODE_NORMAL;}
+#endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #include "retail_storage.h"
-static enum kui_loader_sd_result native_persist_storage_init(struct kui_retail_storage *,uint32_t);
+static enum kui_loader_sd_result native_persist_storage_init(struct kui_retail_storage *,uint32_t) __attribute__((noipa));
 #define kui_retail_storage_init native_persist_storage_init
 #endif
 #define kui_retail_stage_relay kui_native_heap_base_relay
 #include "retail_stage.c"
 #undef kui_retail_stage_relay
+#if KUI_VMU_NATIVE_CACHE_PROBE
+static uint32_t native_runtime_mode(void) {
+    int mode=kui_vmu_native_mode_decode(native_runtime_mode_wire,KUI_VMU_NATIVE_MODE_BYTES);
+    if(mode<0) stopped("NATIVE VMU RUNTIME MODE REFUSED",(uint32_t)mode);
+    return (uint32_t)mode;
+}
+#endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #undef kui_retail_storage_init
 #include "vmu_native_persist_stage.inc"
@@ -127,6 +147,13 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     retail_display_line("VERIFYING EXECUTABLE AND RESIDENT");
 #endif
     kui_native_heap_base_relay(frame,ccr);
+    /* The matched control uses the same reader, bootstrap verification and
+     * owner CPU/cache restoration, but never arms a native hook or lease.
+     * Storage preparation has independently taken its no-VMU branch. */
+    if(native_runtime_mode()==KUI_VMU_NATIVE_MODE_CONTROL) {
+        retail_display_line("NATIVE VMU CONTROL / NO VIRTUAL CARD");
+        return;
+    }
     if(manifest.storage_transport!=KUI_STORAGE_SCI || manifest.reader!=KUI_RETAIL_READER_STANDARD ||
        (manifest.flags&(KUI_RETAIL_IMAGE_CD|KUI_RETAIL_IMAGE_SCRAMBLED)) ||
        !kui_retail_observe_native_ip((const uint8_t *)(uintptr_t)KUI_RETAIL_IP_ADDRESS))

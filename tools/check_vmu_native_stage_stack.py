@@ -105,6 +105,8 @@ class Machine(CPU):
             self.r[n] = self.sr & 1; return
         if word & 0xF0FF == 0x4008:
             self.r[n] = self.r[n] << 2 & MASK; return
+        if word & 0xF0FF == 0x4011:  # cmp/pz Rn: signed Rn >= 0
+            self.t(not (self.r[n] & 0x80000000)); return
         if word & 0xF0FF == 0x00A3:
             self.published.append(self.r[n] & ~31); return
         if word & 0xF00F == 0x2009:
@@ -117,6 +119,8 @@ class Machine(CPU):
             self.t(self.r[n] > self.r[m]); return
         if word & 0xF00F == 0x300C:
             self.r[n] = (self.r[n] + self.r[m]) & MASK; return
+        if word & 0xF00F == 0x3008:
+            self.r[n] = (self.r[n] - self.r[m]) & MASK; return
         if word >> 8 == 0x88:
             immediate = word & 255; immediate -= 256 if immediate & 128 else 0
             self.t(self.r[0] == immediate & MASK); return
@@ -200,10 +204,10 @@ class AllocationWrapper(Machine):
 
 class ArmRoute(Machine):
     """Execute the complete relay through publication of the low boot control."""
-    def __init__(self, stage, resident, stack, seed, mask, *, body=None, cache_hit=True):
+    def __init__(self, stage, resident, stack, seed, mask, *, body=None, cache_hit=True, mode=0):
         super().__init__(stage, "_kui_retail_stage_relay", seed, mask, OLD_STACK, body=body)
         self.symbols, self.stack = stage[4], stack
-        self.cache_hit = cache_hit
+        self.cache_hit, self.mode = cache_hit, mode
         self.control = resident[4]["_kui_vmu_observe_boot_control"][0]
         self.cell = resident[4]["_kui_vmu_native_heap_original"][0]
         self.heap_hook = resident[4]["_kui_vmu_observe_heap_hook"][0]
@@ -231,9 +235,10 @@ class ArmRoute(Machine):
                   ("_native_passive_prepare", "prepare"), ("_native_report", "refused"),
                   ("_readonly_release_replay_valid", "release"),
                   ("_kui_vmu_native_exit_discover_guarded", "exits"),
-                  ("_native_passive_capture_windows", "capture"))
+                  ("_native_passive_capture_windows", "capture"), ("_native_runtime_mode", "mode"))
         self.targets = {self.symbols[name][0]: label for name, label in labels if name in self.symbols}
         self.armed = False
+        self.nonstack_writes = []
 
     def write(self, address, value):
         key = canonical(address)
@@ -242,6 +247,8 @@ class ArmRoute(Machine):
                    self.control <= key < self.control + 64 or self.cell <= key < self.cell + 32 or
                    key in (self.slot, self.frame + 20))
         assert not address & 3 and allowed, "relay store leaves its exact owned objects"
+        if not self.start_sp - 256 <= key < self.start_sp:
+            self.nonstack_writes.append((key, value & MASK))
         if key == self.control + 8 and value == 1:
             assert self.mem[self.control] == self.symbols["_kui_vmu_observe_stage_install"][0]
             assert self.mem[self.control + 4] == self.stack[2], "ARMED before publishing typed installer stack"
@@ -259,6 +266,9 @@ class ArmRoute(Machine):
         assert label != "refused", "valid stack route unexpectedly refused"
         if label == "restore":
             assert self.r[4:6] == [self.frame, 0x105]
+        if label == "mode":
+            assert self.calls.count("restore") == 1 and not any(value in self.calls for value in
+                ("ip", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "capture"))
         if label in ("ip", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "capture"):
             assert self.calls.count("restore") == 1
         # With a cache-bearing stage use the hit path; without it exercise the
@@ -269,16 +279,26 @@ class ArmRoute(Machine):
             assert self.r[4:8] == [0x8C010000, 0x200000, self.symbols["_native_heap"][0], self.symbols["_native_call"][0]]
         if label == "allocation":
             assert self.r[4:6] == [0x8CC00000, 0x00400000]
-        result = int(self.cache_hit) if label == "cache" else int(label in ("ip", "driver", "heap", "call", "allocation", "release", "exits"))
+        result = (self.mode if label == "mode" else int(self.cache_hit) if label == "cache"
+                  else int(label in ("ip", "driver", "heap", "call", "allocation", "release", "exits")))
         self.abi_return(result)
         return True
 
     def check(self):
         registers, pr, _, _, _, sr, fpscr, fr = self.before
-        assert self.armed and self.mem[self.control + 4] == self.stack[2]
-        assert self.mem[self.slot] == self.heap_hook and self.mem[self.frame + 20] == self.return_hook
-        assert self.mem[self.control + 8] == 1 and self.calls.count("sha") == 1
-        assert self.r[8:] == registers[8:] and self.pr == pr and self.sr & ~1 == sr & ~1
+        if self.mode == 1:
+            assert not self.armed and not self.nonstack_writes
+            assert self.calls.count("restore") == 1 and self.calls.count("mode") == 1
+            assert not any(value in self.calls for value in
+                ("ip", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "capture"))
+            assert all(self.mem[self.control + 4 * i] == 0 for i in range(16))
+            assert all(self.mem[self.cell + 4 * i] == 0 for i in range(8))
+            assert self.mem[self.slot] == self.original and self.mem[self.frame + 20] == 0x8C010000
+        else:
+            assert self.armed and self.mem[self.control + 4] == self.stack[2]
+            assert self.mem[self.slot] == self.heap_hook and self.mem[self.frame + 20] == self.return_hook
+            assert self.mem[self.control + 8] == 1 and self.calls.count("sha") == 1
+        assert self.r[8:] == registers[8:] and (self.mode == 1 or self.pr == pr) and self.sr & ~1 == sr & ~1
         assert self.fpscr == fpscr and self.fr == fr
 
 
@@ -357,12 +377,14 @@ def check(stage, resident, *, worker=None, self_test=False):
         require(STACK_SYMBOL not in worker[4] and HELPER not in worker[4],
                 "temporary installer stack/helper retained in gameplay worker")
     wrappers = routes = hooks = 0
+    modes = (0, 1, 2) if "_native_runtime_mode" in stage[4] else (0,)
     for seed in range(12):
         for mask in range(16):
             for outcome in (False, True):
                 AllocationWrapper(stage, seed, mask, outcome).run().check(); wrappers += 1
-            for hit in ((False, True) if "_native_resolution_replay" in stage[4] else (False,)):
-                ArmRoute(stage, resident, stack, seed, mask, cache_hit=hit).run().check(); routes += 1
+            for mode in modes:
+                for hit in ((False, True) if "_native_resolution_replay" in stage[4] else (False,)):
+                    ArmRoute(stage, resident, stack, seed, mask, cache_hit=hit, mode=mode).run().check(); routes += 1
             for alias in (0, 0x80000000, 0xA0000000):
                 HeapHook(resident, stage, stack, seed, mask, alias=alias).run().check(); hooks += 1
     mutations = 0
@@ -404,6 +426,7 @@ def check(stage, resident, *, worker=None, self_test=False):
             "typed_zero_fill_object": True, "complete_bss_in_live_allocation_guard": True,
             "actual_allocation_wrapper_cases": wrappers, "actual_relay_publication_cases": routes,
             "actual_low_hook_cases": hooks, "mutation_rejections": mutations,
+            "runtime_modes": list(modes), "control_preserves_original_frame_and_allocator": 1 in modes,
             "initializer_preserves_original_stack_and_sr": True,
             "private_stack_before_allocation_or_worker_writes": True,
             "departed_relay_stack_clobber_preserves_caller": True}

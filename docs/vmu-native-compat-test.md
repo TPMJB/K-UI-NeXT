@@ -1,18 +1,20 @@
 # Native VMU compatibility and performance test
 
-This update targets **gameplay choppiness and input lag** reported after SA2
-successfully saved and loaded with heap-fix build `c6b7bccdd7f2`. Skies also
-reloaded successfully. Slightly gummy ship controls were separately reported;
-their baseline behavior has not yet been compared.
+This package investigates the **remaining gameplay choppiness and input lag**.
+The owner found polling optimization `26b6d5d10fa6` only marginally better:
+SA2 remains laggy and Skies controls feel slightly gummy. Save/load works, but
+there is no matched baseline establishing how much of the lag belongs to the
+VMU path versus the retained GD loader or the game itself.
 
-Ordinary controller polls no longer traverse the whole heap free list twice.
-They use a bounded arena/header identity check after validating the installed
-allocator hooks. Every free and external storage loan retains its complete
-ownership proof. This prevents heap fragmentation from multiplying ordinary
-polling work under the interrupt mask. Host checks establish the reduction;
-console gameplay and latency acceptance remain pending.
+Start with the two focused tests in `docs/vmu-native-latency-test.md`: a no-VMU
+control using the same loader, then a read-only timer capture during gameplay.
+`--control` skips VMU preparation and every native hook/reservation.
+`--profile-runtime` enables the virtual card and opt-in timing; at gameplay,
+hold both triggers and B for about a second, release and play for about twenty
+seconds until the report appears. Rerun without either flag for ordinary VMU
+mode. The existing prepared pair is preserved in every mode.
 
-The previous top-of-RAM installer-stack and raw allocator-alias fixes remain.
+The previous bounded polling, top-of-RAM installer-stack and raw allocator-alias fixes remain.
 The game heap size and allocator arguments are preserved. Start with **Sonic
 Adventure 2**, then briefly regress Skies and Power Stone 2 using the same
 scenes and loader settings as before.

@@ -136,6 +136,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     cfg.durable=native_persist_handoff;cfg.sd_lease=KUI_VMU_OBSERVE_LOW_SD_LEASE;
     cfg.low_terminal=KUI_VMU_OBSERVE_LOW_RETURN_HOOK;cfg.low_heap_hook=KUI_VMU_OBSERVE_LOW_HEAP_HOOK;
     cfg.exits=native_exits;
+    cfg.diagnostics=native_runtime_mode()==KUI_VMU_NATIVE_MODE_PROFILE;
 #endif
     retail_display_restore(&display);retail_display_line("RELOCATING PASSIVE MAPLE WORKER");
     for(uint32_t at=load;at<load+span;at+=32u)

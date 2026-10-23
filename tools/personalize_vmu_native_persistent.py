@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Bind the native save test to an existing prepared card and install its loader.
 
-Only the audited module's exact4096-byte profile, optional1120-byte cache seed
-and runtime envelope checksums change. VMU pair/profile files are read only. No
+Only the audited module's exact4096-byte profile, optional1120-byte cache seed,
+optional32-byte runtime mode and runtime envelope checksums change. VMU pair/profile files are read only. No
 card is created, cloned, restored or reformatted by this command.
 """
 import argparse
@@ -32,6 +32,7 @@ FIELDS={'schema','source_commit','build','module_sha256','module_bytes',
         'profile_module_offset','profile_bytes','profile_sha256','storage_writes_enabled'}
 CACHE_FIELDS={'cache_seed_module_offset','cache_seed_bytes','cache_seed_sha256',
         'cache_record_bytes','cache_detector_epoch','cache_catalog_path','cache_catalog_sha256'}
+MODE_FIELDS={'runtime_mode_module_offset','runtime_mode_bytes','runtime_mode_sha256'}
 CATALOG_SCHEMA='kui.native.resolution-cache.catalog.v1'
 CATALOG_PATH='native-cache/catalog.json'
 GAME_SLUGS={'ps2','skies','sa2'}
@@ -41,6 +42,12 @@ def cache_codec():
     try:import vmu_native_cache_seed
     except ImportError as error:raise ValueError('The package native cache codec is missing; extract the complete ZIP') from error
     return vmu_native_cache_seed
+
+def mode_codec():
+    # Older packages intentionally carry no runtime-mode codec or selector.
+    try:import vmu_native_mode
+    except ImportError as error:raise ValueError('The package native runtime mode codec is missing; extract the complete ZIP') from error
+    return vmu_native_mode
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
@@ -75,7 +82,8 @@ def read_regular(path,root,expected=None,maximum=None):
 def generic_module(package):
     package=Path(package).resolve(strict=True)
     manifest=json.loads(read_regular(package/MANIFEST,package,maximum=16384))
-    require(isinstance(manifest,dict) and set(manifest) in (FIELDS,FIELDS|CACHE_FIELDS),
+    require(isinstance(manifest,dict) and set(manifest) in
+            (FIELDS,FIELDS|CACHE_FIELDS,FIELDS|MODE_FIELDS,FIELDS|CACHE_FIELDS|MODE_FIELDS),
             'Unexpected personalization manifest fields')
     require(manifest['schema']==SCHEMA and manifest['storage_writes_enabled'] is True,
             'Requires an audited native persistent save-test manifest')
@@ -111,6 +119,21 @@ def generic_module(package):
         require(module[seed_offset:seed_offset+len(seed)]==seed and codec.find_seed(module)==seed_offset,
                 'Native cache seed is absent, misplaced or duplicated')
         cache_catalog(package,manifest)
+    if MODE_FIELDS<=set(manifest):
+        codec=mode_codec();mode_offset=manifest['runtime_mode_module_offset'];mode=codec.template_mode()
+        require(type(mode_offset) is int and type(manifest['runtime_mode_bytes']) is int and
+                manifest['runtime_mode_bytes']==codec.MODE_BYTES and
+                manifest['runtime_mode_sha256']==sha(mode) and mode_offset>=64 and
+                not mode_offset&3 and mode_offset+len(mode)<=len(module),
+                'Native runtime mode manifest does not bound its canonical template')
+        require(mode_offset+len(mode)<=offset or offset+WIRE_BYTES<=mode_offset,
+                'Native runtime mode overlaps the owner profile')
+        if CACHE_FIELDS<=set(manifest):
+            seed_offset=manifest['cache_seed_module_offset'];seed_bytes=manifest['cache_seed_bytes']
+            require(mode_offset+len(mode)<=seed_offset or seed_offset+seed_bytes<=mode_offset,
+                    'Native runtime mode overlaps the cache seed')
+        require(module[mode_offset:mode_offset+len(mode)]==mode and codec.find_mode(module)==mode_offset,
+                'Native runtime mode is absent, misplaced or duplicated')
     return module,manifest,info
 
 def cache_catalog(package,manifest):
@@ -197,12 +220,19 @@ def select_profile(root,selected=None):
         raise ValueError('Several prepared cards/ownership maps are available; select one explicitly:\n'+choices)
     return groups[0][-1]
 
-def personalize_bytes(module,manifest,info,wire,*,cache_record=None,cache_digest=None):
+def personalize_bytes(module,manifest,info,wire,*,cache_record=None,cache_digest=None,runtime_mode=0):
     require(len(wire)==WIRE_BYTES and wire!=template_profile(),'Requires a real canonical owner profile')
     decode_profile(wire)
     offset=manifest['profile_module_offset']
     payload=bytearray(module[64:]);payload[offset-64:offset-64+WIRE_BYTES]=wire
     allowed=[(32,36),(60,64),(offset,offset+WIRE_BYTES)]
+    require(type(runtime_mode) is int and runtime_mode in (0,1,2),'Native runtime mode is unsupported')
+    if MODE_FIELDS<=set(manifest):
+        codec=mode_codec();mode_offset=manifest['runtime_mode_module_offset']
+        mode=codec.fill_mode(module[mode_offset:mode_offset+codec.MODE_BYTES],runtime_mode)
+        payload[mode_offset-64:mode_offset-64+len(mode)]=mode
+        allowed.append((mode_offset,mode_offset+len(mode)))
+    else:require(runtime_mode==0,'This package has no audited native runtime mode selector')
     if cache_record is not None or cache_digest is not None:
         require(CACHE_FIELDS<=set(manifest) and cache_record is not None and cache_digest is not None,
                 'Requires the complete audited cache seed and independently pinned record')
@@ -215,12 +245,17 @@ def personalize_bytes(module,manifest,info,wire,*,cache_record=None,cache_digest
     require(len(result)==len(module) and after['build']==info['build'],'Personalization changed module layout/build')
     require(all(old==new or any(begin<=index<end for begin,end in allowed)
                 for index,(old,new) in enumerate(zip(module,result))),
-            'Changed bytes escape the exact profile/cache seed and runtime checksum spans')
+            'Changed bytes escape the exact profile/cache seed/runtime mode and runtime checksum spans')
     return result
 
-def install(root,*,package,profile=None,game=None):
+def install(root,*,package,profile=None,game=None,control=False,profile_runtime=False):
     root=Path(root).resolve(strict=True)
     module,manifest,info=generic_module(package)
+    require(type(control) is bool and type(profile_runtime) is bool and not (control and profile_runtime),
+            'Select at most one of control and runtime profiling')
+    runtime_mode=1 if control else 2 if profile_runtime else 0
+    require(runtime_mode==0 or MODE_FIELDS<=set(manifest),
+            'This package has no audited native runtime mode selector')
     chosen=None
     if game is not None:
         catalog=cache_catalog(Path(package).resolve(strict=True),manifest)
@@ -228,7 +263,8 @@ def install(root,*,package,profile=None,game=None):
         chosen=catalog[game]
     selected=select_profile(root,profile)
     personalized=personalize_bytes(module,manifest,info,selected['wire'],
-        cache_record=chosen['wire'] if chosen else None,cache_digest=chosen['record_digest'] if chosen else None)
+        cache_record=chosen['wire'] if chosen else None,cache_digest=chosen['record_digest'] if chosen else None,
+        runtime_mode=runtime_mode)
     destination=root/INSTALL
     ordinary_path(destination.parent,root,directory=True)
     existed=destination.exists() or destination.is_symlink()
@@ -236,6 +272,7 @@ def install(root,*,package,profile=None,game=None):
     result={'build':info['build'],'pair_path':selected['summary']['pair_path'],
         'profile':str(selected['path'].relative_to(root)),'module_sha256':sha(personalized),
         'installed_file':str(INSTALL),'already_installed':previous==personalized}
+    if MODE_FIELDS<=set(manifest):result['runtime_mode']=mode_codec().MODE_NAMES[runtime_mode]
     if chosen:result.update(game=chosen['slug'],game_title=chosen['title'],image_sha256=chosen['image_sha256'])
     if previous==personalized:return result
     # Recheck association immediately before the sole destination mutation.
@@ -268,16 +305,26 @@ def main():
     selection=parser.add_mutually_exclusive_group()
     selection.add_argument('--game',help='Bind one packaged immutable executable proof; see --list-games')
     selection.add_argument('--list-games',action='store_true',help='List packaged cache records without opening an SD card')
+    mode=parser.add_mutually_exclusive_group()
+    mode.add_argument('--control',action='store_true',help='Compare the same loader with virtual VMU disabled')
+    mode.add_argument('--profile-runtime',action='store_true',help='Enable VMU runtime timing diagnostics')
     args=parser.parse_args()
     try:
         if args.list_games:
+            require(not (args.control or args.profile_runtime),'Runtime mode selection requires an SD card installation')
             for slug,item in sorted(list_games(args.package).items()):print(slug+'\t'+item['title'])
             return
         if args.sd_root is None:parser.error('sd_root is required unless --list-games is selected')
-        result=install(args.sd_root,package=args.package,profile=args.profile,game=args.game)
+        result=install(args.sd_root,package=args.package,profile=args.profile,game=args.game,
+            control=args.control,profile_runtime=args.profile_runtime)
         action='Already installed' if result['already_installed'] else 'Installed'
-        print(action+' native persistent VMU test '+result['build']+' using '+result['pair_path'])
-        if 'game' in result:print('Executable cache: '+result['game_title']+' ('+result['game']+'); live console guards remain enabled.')
+        if result.get('runtime_mode')=='control':
+            print(action+' native loader control '+result['build']+' using '+result['pair_path'])
+            print('Control mode: virtual VMU is disabled; existing prepared saves remain on the card.')
+        else:
+            print(action+' native persistent VMU test '+result['build']+' using '+result['pair_path'])
+            if 'game' in result:print('Executable cache: '+result['game_title']+' ('+result['game']+'); live console guards remain enabled.')
+            if result.get('runtime_mode')=='profile':print('VMU runtime profiling enabled; follow README-FIRST.md for the diagnostic report.')
         print('Image, journal, identity and preparation profiles were unchanged.')
         print('Safely eject the card, then follow README-FIRST.md.')
     except (OSError,ValueError,KeyError,TypeError,UnicodeError) as error:

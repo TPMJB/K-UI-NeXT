@@ -133,12 +133,14 @@ class CacheGateway(CPU):
             if self.pc == self.before[1]:
                 return self
             pc = self.pc; word = struct.unpack("<H", self.code(pc, 2))[0]
-            if word >> 12 == 0xa or word & 0xf0ff == 0x400b or word == 0xb:
+            if word >> 12 == 0xa or word & 0xf0ff in (0x400b, 0x402b) or word == 0xb:
                 if word >> 12 == 0xa:
                     d = word & 4095; d -= 4096 if d & 2048 else 0
                     target = pc + 4 + 2 * d
-                elif word & 0xf0ff == 0x400b:
-                    target = self.r[word >> 8 & 15]; self.pr = pc + 4
+                elif word & 0xf0ff in (0x400b, 0x402b):
+                    target = self.r[word >> 8 & 15]
+                    if word & 0xf0ff == 0x400b:
+                        self.pr = pc + 4
                 else:
                     target = self.pr
                 self.plain(struct.unpack("<H", self.code(pc + 2, 2))[0], pc + 2)
@@ -174,8 +176,10 @@ class CacheGateway(CPU):
 
 class CacheRoute(CacheGateway):
     """Execute the outer relay through cache-hit/cold-scan selection only."""
-    def __init__(self, stage, seed, mask, hit, invalid=0):
+    def __init__(self, stage, seed, mask, hit, invalid=0, *, mode=0, blob=None):
         begin, self.blob, _ = symbol_bytes(stage, "_kui_retail_stage_relay", 2)
+        if blob is not None:
+            self.blob = blob
         CPU.__init__(self, seed, begin, 1)
         self.pc, self.r[15], self.mem = begin, 0x8cff0000, {}
         self.start_sp = self.r[15]
@@ -183,7 +187,7 @@ class CacheRoute(CacheGateway):
         self.pr = begin + len(self.blob) + 0x100
         self.before = self.r.copy(), self.pr
         self.r[4:6] = [0x8c00ecac, 0x105]
-        self.hit, self.invalid, self.calls = hit, invalid, []
+        self.hit, self.invalid, self.calls, self.mode = hit, invalid, [], mode
         self.route = None
         symbols = stage[4]
         manifest = symbols["_manifest"][0]
@@ -196,6 +200,8 @@ class CacheRoute(CacheGateway):
             ("_kui_native_heap_base_relay", "restore"), ("_kui_retail_observe_native_ip", "ip"),
             ("_native_resolution_replay", "cache"), ("_code_sha", "cached"),
             ("_kui_vmu_native_discover_layout", "cold"), ("_native_report", "refused"))}
+        if "_native_runtime_mode" in symbols:
+            self.targets[symbols["_native_runtime_mode"][0]] = "mode"
 
     def api(self, target):
         name = self.targets[target]
@@ -203,6 +209,9 @@ class CacheRoute(CacheGateway):
         if name == "restore":
             assert self.r[4:6] == [0x8c00ecac, 0x105]
             assert "ip" not in self.calls and "cache" not in self.calls
+        if name == "mode":
+            assert self.calls.count("restore") == 1 and not any(
+                value in self.calls for value in ("ip", "cache", "cached", "cold", "refused"))
         if name in ("ip", "cache", "cached", "cold"):
             assert self.calls.count("restore") == 1, "mapping used before executable restoration"
         if name == "cache":
@@ -212,11 +221,20 @@ class CacheRoute(CacheGateway):
             return
         for i in range(8):
             self.r[i] = (0x9468ace0 + i * 0x13579bd + len(self.calls)) & MASK
-        self.r[0] = int(self.invalid != 5) if name == "ip" else int(self.hit) if name == "cache" else 0
+        self.r[0] = (self.mode if name == "mode" else int(self.invalid != 5) if name == "ip"
+                     else int(self.hit) if name == "cache" else 0)
         self.sr ^= 1; self.pr ^= 0x2468ace0; self.pc = return_pc
 
     def check(self):
         assert self.calls.count("restore") == 1
+        if self.mode == 1:
+            assert self.calls.count("mode") == 1 and self.route is None
+            assert not any(value in self.calls for value in ("ip", "cache", "cached", "cold", "refused"))
+            # Control ends in a legal sibling call to the display routine.
+            # PR is volatile at the C ABI; the enclosing relay assembly owns
+            # restoration of the game's separately saved return frame.
+            assert self.r[8:] == self.before[0][8:]
+            return
         if self.invalid:
             assert self.route == "refused" and "cache" not in self.calls
         else:
@@ -242,11 +260,13 @@ def check(stage, *, self_test=False):
                 outcomes = [(flags >> i) & 1 for i in range(4)]
                 CacheGateway(stage, seed, mask, outcomes).run().check(); cases += 1
     routes = 0
+    modes = (0, 1, 2) if "_native_runtime_mode" in symbols else (0,)
     for seed in range(24):
         for mask in range(16):
-            for hit, invalid in ((False, 0), (True, 0), (True, 1), (True, 2),
-                                 (True, 3), (True, 4), (True, 5)):
-                CacheRoute(stage, seed, mask, hit, invalid).run().check(); routes += 1
+            for mode in modes:
+                for hit, invalid in ((False, 0), (True, 0), (True, 1), (True, 2),
+                                     (True, 3), (True, 4), (True, 5)):
+                    CacheRoute(stage, seed, mask, hit, invalid, mode=mode).run().check(); routes += 1
     mutations = 0
     if self_test:
         # Mutate every actual callback literal and an exact memcpy length.

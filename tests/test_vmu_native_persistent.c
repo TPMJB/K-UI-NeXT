@@ -18,6 +18,9 @@ static uint8_t memory[0x1000000u];
 static uint32_t mmio[4];
 static unsigned used,bus_reads,fail_read,checks;
 static unsigned measured_submit_reads,measured_complete_reads;
+static struct kui_vmu_native_profile_sample test_clock;
+static uint32_t test_ccr;
+static unsigned clock_reads;
 static unsigned corrupt_before_loan,corrupt_after_loan;
 static uint32_t live_sr=0xf0u,live_sp=SELF_ADDRESS+WORKER_SPAN-0x100u,bad_guard;
 static jmp_buf terminal;static unsigned terminal_phase,terminal_error;
@@ -57,6 +60,9 @@ uint8_t *kui_vmu_native_passive_test_rx(uint32_t address,unsigned bytes) {
 uint32_t kui_vmu_native_passive_test_sr(void) {return live_sr;}
 uint32_t kui_vmu_native_passive_test_sp(void) {return live_sp;}
 uint32_t kui_vmu_native_passive_test_guard(unsigned i) {return i+1u==bad_guard?0u:GUARD;}
+void kui_vmu_native_persistent_test_clock(struct kui_vmu_native_profile_sample *sample,uint32_t *ccr) {
+    ++clock_reads;*sample=test_clock;*ccr=test_ccr;test_clock.counter-=10u;
+}
 void kui_vmu_native_passive_test_terminal(uint32_t phase,uint32_t error) {terminal_phase=phase;terminal_error=error;longjmp(terminal,1);}
 static struct kui_vmu_native_passive_config input;
 static struct kui_vmu_native_passive_frame frame;
@@ -70,6 +76,8 @@ static void fixture(void) {
     memset(receivers,0,sizeof(receivers));memset(&input,0,sizeof(input));memset(&frame,0,sizeof(frame));
     memset(memory,0,sizeof(memory));memset(mmio,0,sizeof(mmio));
     used=bus_reads=fail_read=0u;live_sr=0xf0u;live_sp=SELF_ADDRESS+WORKER_SPAN-0x100u;bad_guard=0u;terminal_phase=terminal_error=0u;
+    test_clock=(struct kui_vmu_native_profile_sample){0xe0au,UINT32_MAX,2u,1u,UINT32_MAX};
+    test_ccr=0x105u;clock_reads=0u;
     input.version=1u;input.bytes=sizeof(input);input.tx_base=0xac400000u;
     input.driver=(struct kui_vmu_native_discovery){.version=1u,.bytes=sizeof(input.driver),.family=1u,
         .image_bytes=0x200000u,.load_address=0x8c010000u,.requirements=7u,
@@ -356,6 +364,7 @@ static void bounded_controller_work(void) {
     setup();unsigned first=measure_batch(0u,0u,NULL);
     CHECK(first<=400u && full_work()<=10u && !measured_work.storage && !lease_calls);
     unsigned controller=measure_batch(0u,0u,NULL);
+    CHECK(!clock_reads); /* Ordinary mode never samples timer/cache MMIO. */
     CHECK(controller<=350u && full_work()<=8u && !measured_work.storage && !lease_calls);
     unsigned info=measure_batch(1u,0u,NULL);
     CHECK(info<=360u && full_work()<=8u && !measured_work.storage);
@@ -438,6 +447,56 @@ static void external_boundary_mutations(void) {
             else CHECK(!lease_calls && !sd.bytes && !sd.writes && durable_card.faulted);
         }
 }
+static void diagnostic_setup(void) {
+    model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
+    lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
+    input.diagnostics=1u;arm();install_hooks();
+}
+static void diagnostic_pair(bool gesture) {
+    begin_batch(0u,0u,0u,NULL);physical_complete();
+    put(rx_at(0)+8u,4u,gesture?UINT32_C(0xfffffffd):UINT32_MAX);
+    complete_return();idle();
+}
+static void gameplay_diagnostics(void) {
+    diagnostic_setup();
+    transfer_batch(11u,42u,0u,NULL);CHECK(diagnostic.timing.metric[KUI_VMU_NATIVE_PROFILE_STORAGE].calls==1u);
+    for(unsigned i=0;i<29u;i++) diagnostic_pair(true);
+    CHECK(!diagnostic.active && diagnostic.gesture_count==29u);
+    diagnostic_pair(false);CHECK(!diagnostic.gesture_count && !diagnostic.active);
+    for(unsigned i=0;i<30u;i++) diagnostic_pair(true);
+    CHECK(diagnostic.active && !diagnostic.clock_started);
+    for(unsigned i=0;i<KUI_VMU_NATIVE_PROFILE_KINDS;i++) CHECK(!diagnostic.timing.metric[i].calls);
+    diagnostic_pair(false);
+    CHECK(diagnostic.clock_started && diagnostic.clock_samples==4u && !diagnostic.clock_invalid);
+    CHECK(diagnostic.ccr_first==0x105u && !diagnostic.ice_off);
+    CHECK(diagnostic.timing.metric[KUI_VMU_NATIVE_PROFILE_SUBMIT].calls==1u);
+    CHECK(diagnostic.timing.metric[KUI_VMU_NATIVE_PROFILE_COMPLETE].calls==1u);
+    frame.r4=0u;kui_vmu_native_readonly_release_check(&frame);
+    CHECK(diagnostic.timing.metric[KUI_VMU_NATIVE_PROFILE_FREE].valid==1u);
+    transfer_batch(11u,43u,0u,NULL);
+    CHECK(diagnostic.timing.metric[KUI_VMU_NATIVE_PROFILE_STORAGE].valid==1u);
+    CHECK(diagnostic.timing.metric[KUI_VMU_NATIVE_PROFILE_COMPLETE].ticks_total>=
+          diagnostic.timing.metric[KUI_VMU_NATIVE_PROFILE_STORAGE].ticks_total);
+    test_clock.counter-=20u*KUI_VMU_NATIVE_PROFILE_HZ;
+    begin_batch(0u,0u,0u,NULL);physical_complete();
+    if(setjmp(terminal)==0) {kui_vmu_native_passive_complete(&frame);CHECK(false);}
+    CHECK(terminal_phase==17u && !terminal_error && !state.pending);
+    CHECK(state.submitted==state.completed && !durable_card.inflight && !durable_card.handling);
+    idle();
+    /* An incompatible owner timer never supplies guessed timing. Capture
+     * still terminates after the bounded fallback number of complete pairs. */
+    diagnostic_setup();test_clock.frqcr=0u;test_ccr=0u;
+    for(unsigned i=0;i<30u;i++) diagnostic_pair(true);
+    for(unsigned i=0;i<1199u;i++) diagnostic_pair(false);
+    CHECK(diagnostic.active && !diagnostic.clock_started && diagnostic.clock_invalid);
+    CHECK(diagnostic.ice_off && diagnostic.timing.metric[KUI_VMU_NATIVE_PROFILE_COMPLETE].invalid==1199u);
+    begin_batch(0u,0u,0u,NULL);physical_complete();
+    if(setjmp(terminal)==0) {kui_vmu_native_passive_complete(&frame);CHECK(false);}
+    CHECK(terminal_phase==17u && !terminal_error && !state.pending);
+    CHECK(!sd.bytes && !lease_calls && !durable_card.commits);idle();
+    model_reset();fixture();prepare_handoff();input.diagnostics=2u;
+    CHECK(kui_vmu_native_passive_arm(&input,NULL)<0 && !state.armed);
+}
 int main(void) {
     uint8_t next[512],old[512],parent[1024],target[1024],other[1024];
     memset(next,0x73,sizeof(next));memset(old,0x59,sizeof(old));
@@ -497,7 +556,7 @@ int main(void) {
     memcpy(target,rx_bytes(1),sizeof(target));reject_complete();
     CHECK(!durable_card.commits && durable_card.faulted && !memcmp(target,rx_bytes(1),sizeof(target)));
     CHECK(!memcmp(sd.media[image_lba(42u)],next,512u));
-    bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();polling_ownership_scope();
+    bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();polling_ownership_scope();gameplay_diagnostics();
     printf("Native persistent bridge: %u checks passed; filtered hardware chain, PIO save, reboot recovery and no false ACK\n",checks);
     return 0;
 }

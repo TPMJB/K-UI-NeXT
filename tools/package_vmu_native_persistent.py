@@ -14,6 +14,7 @@ from personalize_vmu_sd_proof import readonly_blob
 from runtime_package import ADDRESS,verify
 from vmu_persist_profile import template_profile
 from vmu_native_cache_seed import template_seed,record_metadata,DETECTOR_EPOCH
+from vmu_native_mode import template_mode,MODE_BYTES
 
 
 def sha(data):
@@ -92,13 +93,25 @@ def package(build):
         extra['tools/vmu_native_cache_seed.py']=(root/'tools/vmu_native_cache_seed.py').read_bytes()
         for name in ('vmu-feature-comparison.md','vmu-native-resolution-cache.md',
                      'vmu-native-launch-cache.md','vmu-native-runtime-cost.md',
-                     'native-heap-poll-identity.md'):
+                     'native-heap-poll-identity.md','vmu-native-latency-test.md'):
             extra['docs/'+name]=(root/'docs'/name).read_bytes()
         extra['docs/native-sdk-family-corpus.json']=(root/'docs/evidence/native-sdk-family-corpus-2026-10-22.json').read_bytes()
         extra['docs/native-installer-stack-regression.json']=(root/'docs/evidence/native-sa2-installer-stack-2026-10-22.json').read_bytes()
         extra['TEST-RESULTS.csv']=(
             'game,build,profile,cache_message,bootloader_seconds,startup_after_bootloader_seconds,fmv_audio,gameplay,save,poweroff_reload,controllers,notes\n'
             'Skies of Arcadia,,,,,,,,,,,\nSonic Adventure 2,,,,,,,,,,,\nPower Stone 2,,,,,,,,,,,\n').encode()
+    mode=report.get('runtime_mode',{})
+    if mode.get('enabled',False):
+        mode_offset=mode['module_offset'];mode_template=template_mode()
+        if (mode['bytes']!=MODE_BYTES or mode['template_sha256']!=sha(mode_template) or
+            mode_offset<64 or mode_offset&3 or mode_offset+MODE_BYTES>len(module) or
+            module[mode_offset:mode_offset+MODE_BYTES]!=mode_template or
+            not (mode_offset+MODE_BYTES<=offset or offset+4096<=mode_offset) or
+            (compat and not (mode_offset+MODE_BYTES<=seed_offset or seed_offset+len(seed_template)<=mode_offset))):
+            raise ValueError('Runtime mode differs from its audited disjoint canonical template')
+        manifest.update(runtime_mode_module_offset=mode_offset,runtime_mode_bytes=MODE_BYTES,
+            runtime_mode_sha256=sha(mode_template))
+        extra['tools/vmu_native_mode.py']=(root/'tools/vmu_native_mode.py').read_bytes()
     report.update(source_commit=commit,source_build_id=revision,console_execution_verified=False,
         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
