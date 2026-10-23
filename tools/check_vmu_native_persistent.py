@@ -60,31 +60,32 @@ PREPARED_PINS = {'_poll_lease_valid': ('b67c432db445f780a4b2e93871f7907b7f7de1fd
  '_persistent_storage_guard': ('d230251892a758f65469e9cb692703a0270511756e1fbdc94cc28e04472a15fe', 396),
  '_persistent_lease': ('8658f150d0d4811335e46332a9a075f199fa8219edb5ccf1730223a4e34d78e3', 148),
  '_kui_vmu_native_passive_submit': ('5ae6c15effdca34f14b65b706e41828b0309d3b1cf1d499916fa9e54bd32b10e', 712),
- '_kui_vmu_native_passive_complete': ('0cd13a458cd5522da2168434bbf03f2f9dd8d9c1cc3499ea9856170ac1d3bccc', 1536),
+ '_kui_vmu_native_passive_complete': ('4988188e25084626cee70c077fb2d26fb6141725c324e971e5a2adc6fdbde303', 1536),
  '_kui_vmu_readonly_overlay_complete_absent': ('6085deac9edfd8886b3300663daa32875389280d2daca88d509846e17f1b31e7', 284),
  '_kui_vmu_readonly_overlay_complete': ('6413dfd099e7eeb01b7f0b9bf12e07ca276bf3bc0b8080efcce61a067c8b1bb4', 888),
  '_readonly_overlay_parent_response': ('d396e68edd3158708ba5a8c9ff5235821bb62b71cc9dc40650cadb9098eaeb12', 116),
  '_readonly_overlay_increment': ('e3a6368a10593e4ae7510faf736d644a9d9e383e262070923241741b3f6893b1', 14),
  '_readonly_overlay_le32': ('1daa47eecc292df8356826c0e5a683e3a2c27cec212f901db7b1f01cf3b897df', 30),
- '_transfer_context_valid': ('e4b7f216f0905b8cfbce26e749bc086055aeda13b864f08b18403adbed2d602d', 1048),
+ '_transfer_context_valid': ('733f508a62ec00d8a34a05b654b27e4a2fe2477cdc0113ca419dd8946baf099e', 1048),
  '_persistent_context_guard': ('7d7b44453ed058c85b22f3624a96001a93f68e06bd6dc581757cbff364c96df7', 132),
  '_kui_vmu_native_runtime_fault': ('7aecf42ff60104b0b146df6ddad0f1b74c5e380c4cc104680ab351d4592ef13c', 236),
- '.rodata': ('1c0102f6345f871d8ec4e73d45137fd6de900485693a49ab67a3cb9c431d95e4', 2772),
+ '.rodata': ('79fca272a77490961924a12035bc15affc6b3be5584a07d54d1aca8d1163ea27', 3084),
  '_kui_vmu_native_trace_enabled': ('0a920c3cf23dad2c3aabfe188567a6d1425af67dd54b46b619555831e9748eac', 16),
  '_kui_vmu_native_trace_image': ('e85462a3e477dee0a0124220436dc355360013e47136f21eb8576af465cdd9a9', 60),
- '_kui_vmu_native_trace_point': ('235da9572c08f143efe9fa0c11295d507ccc5caddf45cb219535555bae5dc90e', 884),
+ '_kui_vmu_native_trace_point': ('6f2ba4de6adc4c0ee8edceacf435c15dfdec54be8d4d44b9d2f579c1b92c714f', 1168),
  '_kui_vmu_native_trace_wait_loop': ('8d3fb2b39e884b13c0061c722bcca07d6082aaafbc8de4d6e3b1c446759560d8', 176),
- '_kui_vmu_native_trace_init': ('46ced4fda3c8ecfb83a75d0b2cdbdbfcefcf9908e9c6de880c3ab9c06d6f1305', 84),
+ '_kui_vmu_native_trace_init': ('d0a4ebb9ca777341dfe3ee10679979f759d721b98b366538c23c6d2b8e5250a8', 84),
  '_kui_vmu_native_trace_wait_before': ('8d16ecf62a40b00531b18bb6d68b876b67be8c9cb7d4775c41e329babcedabcf', 152),
  '_kui_vmu_native_trace_frame_entry': ('d5949f5ee897f0fd40d653db5d53691e227882a1bb6aed384b44ea5f83104081', 164),
- '_kui_vmu_native_trace_report': ('106f83094bd72a9c29e2f5ed7a336bf9fdedc9151d5f49ac755f2f74f1eaa131', 848),
+ '_kui_vmu_native_trace_report': ('e6401bd806d7626717aec3ece819a5310b5da0d24502d834db8fbc25503086e9', 1120),
  '_kui_vmu_native_trace_wait_after': ('399109af8351d1f2f0d0fa1541afa51056dfd44e86b607e10afd8fad1fe55015', 180),
  '_kui_vmu_native_trace_game': ('367d93d9d799bac69baf843535f58f139cac582df3d494ff5e4e4721ece346e3', 112),
  '_trace_history': ('964a375e91521fb64ec60396925aad7c54b1027ef50d58d30ff7293af5c41cd9', 164),
  '_report': ('4eeafa97f7ee4fb103eb5f2133911baacd57e7434bd6418f2ed4a6f17f7b7933', 440),
  '_kui_vmu_native_trace_failure': ('7db0cdf5462a9ddb02e0bfa486f9fdcd17b92f60a9a7769e4e835fcc4f5335d3', 120),
  '_trace_row.constprop.0': ('16645f1e2adfcd48b40c4ead39f05787980996cfdb4e94dd0d573c88d3db4a82', 92),
- '_trace_packets': ('d8839c1de099f8119113b57748d05ac74037261f9c787118bb5105d694b96215', 116)}
+ '_trace_packets': ('d8839c1de099f8119113b57748d05ac74037261f9c787118bb5105d694b96215', 116),
+ '_kui_vmu_native_trace_irq': ('31b72b692190f12dabe3bee1767a9d43913918730d08b7c7c802bea816c8177e', 14)}
 
 
 def prepared_symbol_records(worker):
@@ -1417,6 +1418,14 @@ def worker_stack_paths(directory, worker, resident):
                 pieces = label.split(r"\n")
                 if len(pieces) >= 2:
                     origins[domain + ":" + title] = Path(pieces[1].rsplit(":", 2)[0]).name
+    # This authored leaf has no compiler .su/.ci file. Admit zero stack only
+    # after proving all seven actual instructions: three control-register
+    # reads, three stores through R4 and RTS. It neither pushes nor calls.
+    _, reader, owner = symbol_bytes(worker, "_kui_vmu_native_trace_irq", 2)
+    require(owner[2] & 7 == 6 and reader == bytes.fromhex("420002243200011422000b000214"),
+            "saved exception reader is not the exact zero-stack read-only leaf")
+    frames["worker:kui_vmu_native_trace_irq"] = 0
+    calls["worker:kui_vmu_native_trace_irq"] = []
     by_base = {}
     for name in frames:
         by_base.setdefault((name.split(":", 1)[0], _function_base(name)), []).append(name)
@@ -1515,7 +1524,8 @@ def worker_stack_paths(directory, worker, resident):
     require(null_sites, "missing independently guarded optional writer block callback")
     return {"paths": paths, "indirect_sites": len(indirect_sites),
             "null_writer_block_sites": [list(site) for site in sorted(null_sites)],
-            "source_qualified_calls": True}
+            "source_qualified_calls": True,
+            "verified_zero_stack_assembly_leaves": ["kui_vmu_native_trace_irq"]}
 
 
 def check_stacks(directory, worker):
@@ -1525,7 +1535,8 @@ def check_stacks(directory, worker):
     reported = {_function_base(name) for name, _ in high_rows}
     assembly = {"kui_vmu_native_passive_submit_hook", "kui_vmu_native_passive_complete_hook",
                 "kui_vmu_native_passive_terminal", "kui_vmu_native_readonly_release_hook",
-                "kui_vmu_native_runtime_fault_hook", "kui_vmu_native_allocation_failure_hook"}
+                "kui_vmu_native_runtime_fault_hook", "kui_vmu_native_allocation_failure_hook",
+                "kui_vmu_native_trace_irq"}
     assembly.update(name[1:] for name, *_ in TRACE_GATES)
     required = {_function_base(name) for name, (_, _, kind, _) in worker[4].items()
                 if kind == 2 and _function_base(name).startswith(("kui_", "durable_", "readonly_overlay_", "sci_storage_"))

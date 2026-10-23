@@ -4,6 +4,7 @@
 #include "kui/vmu_native_passive.h"
 #include "kui/vmu_volatile_chain.h"
 #define KUI_VMU_TRACE_WAIT_LIMIT UINT32_C(0x00100000)
+#define KUI_VMU_TRACE_BLANK_TICKS UINT32_C(1562500)
 /* Terminal-only snapshot. Packet headers contain no captured save payload.
  * The caller remains stopped while the bounded private frame array is shown. */
 struct kui_vmu_native_trace_failure {

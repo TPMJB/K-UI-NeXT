@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static struct {unsigned rows;char text[16][64];} pages[8];
+static struct {unsigned rows;char text[16][64];} pages[9];
 static unsigned page_count,expected_pages,pauses,row,checks;
 static unsigned packet_hits[KUI_VMU_VOLATILE_CHAIN_FRAMES],history_rows;
 static bool packet_page,guard_values_seen;
@@ -18,8 +18,12 @@ static struct kui_vmu_volatile_chain_frame frames[KUI_VMU_VOLATILE_CHAIN_FRAMES]
 static jmp_buf cycle_complete;
 #define CHECK(x) do {++checks;assert(x);} while(0)
 
+void kui_vmu_native_trace_irq(uint32_t out[3]) {
+    (void)out;CHECK(!"terminal rendering must not read live exception registers");
+}
+
 void retail_display_restore(const struct retail_display_state *display) {
-    CHECK(display==&trace.display && page_count<expected_pages && page_count<8u);
+    CHECK(display==&trace.display && page_count<expected_pages && page_count<9u);
     ++page_count;row=108u;packet_page=false;
 }
 void retail_display_line(const char *text) {
@@ -47,7 +51,7 @@ void retail_display_values(const char *legend,const uint32_t *values,unsigned co
     CHECK(count<=5u);retail_display_line(legend);
     if(!strcmp(legend,"CHECK AT VALUE EXPECT")) {
         CHECK(count==4u && !memcmp(values,expected_guard,sizeof(expected_guard)));
-        CHECK(page_count==5u);guard_values_seen=true;
+        CHECK(page_count==6u);guard_values_seen=true;
     }
     char out[46];unsigned n=0u;
     for(unsigned v=0u;v<count;v++) {
@@ -67,11 +71,15 @@ void retail_display_pause(uint32_t count) {
 static void render_cycle(bool failure,unsigned count) {
     memset(pages,0,sizeof(pages));memset(packet_hits,0,sizeof(packet_hits));
     page_count=pauses=history_rows=0u;guard_values_seen=false;
-    expected_pages=4u+(failure?1u+(count>6u?(count-6u+11u)/12u:0u):0u);
+    expected_pages=5u+(failure?1u+(count>6u?(count-6u+11u)/12u:0u):0u);
     struct kui_vmu_native_passive_config exact={0};
     exact.driver.image_bytes=2143652u;exact.driver.load_address=0x8c010000u;
     memcpy(exact.driver.image_sha256,evolution_digest,sizeof(evolution_digest));
     kui_vmu_native_trace_init(&exact);CHECK(trace.enabled);
+    trace.exception[0]=0x8c0f69e4u;trace.exception[1]=0x60000061u;trace.exception[2]=0x8c000000u;
+    trace.event=0x320u;trace.reload=UINT32_MAX;trace.vblank=7u;
+    trace.cached_ctrl=5u;trace.blank_flag=1u;trace.draw_off=1u;
+    trace.blank_active=1u;trace.blank_samples=200u;trace.blank_ticks=1562500u;
     trace.sequence=32u;
     for(unsigned i=0u;i<16u;i++) {
         trace.ring[i].code=0x10u+i;trace.ring[i].pr=0x8c010000u+2u*i;
@@ -91,6 +99,12 @@ static void render_cycle(bool failure,unsigned count) {
     if(!setjmp(cycle_complete)) kui_vmu_native_trace_report(0x40u,expected_guard[0],expected_guard[1],expected_guard[2]);
     CHECK(page_count==expected_pages && pauses==expected_pages && history_rows==16u);
     CHECK(guard_values_seen==failure);
+    const char *exception_words[]={"8C0F69E4","60000061","8C000000"};
+    for(unsigned word=0u;word<3u;word++) {
+        unsigned found=0u;
+        for(unsigned line=0u;line<pages[4].rows;line++) if(strstr(pages[4].text[line],exception_words[word])) ++found;
+        CHECK(found==1u);
+    }
     for(unsigned i=0u;i<KUI_VMU_VOLATILE_CHAIN_FRAMES;i++) CHECK(packet_hits[i]==(failure && i<count?1u:0u));
     for(unsigned i=0u;i<page_count;i++) CHECK(pages[i].rows>0u && pages[i].rows<=16u);
 }

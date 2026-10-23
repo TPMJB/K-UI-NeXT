@@ -3,6 +3,18 @@
 #define J(a,b) JI(a,b)
 #define C(n) J(__USER_LABEL_PREFIX__,n)
     .text
+    .align 2
+    .global C(kui_vmu_native_trace_irq)
+    .type C(kui_vmu_native_trace_irq),@function
+C(kui_vmu_native_trace_irq):
+    stc spc,r0
+    mov.l r0,@r4
+    stc ssr,r0
+    mov.l r0,@(4,r4)
+    stc vbr,r0
+    rts
+    mov.l r0,@(8,r4)
+    .size C(kui_vmu_native_trace_irq),.-C(kui_vmu_native_trace_irq)
     /* Private C callback; complete owner integer frame including R0. Reorder
      * the final three words before restoring so SR is consumed last, after
      * every GPR and the original SP. C uses no FR/FPUL registers. */

@@ -13,6 +13,53 @@ GATES=(
  ('_kui_vmu_native_trace_wait_before',0x43,0x8c1cd000,0x8c1cd000),
  ('_kui_vmu_native_trace_wait_after',0x44,0x8c166454,0x8c166464))
 
+class ExceptionReader(Machine):
+ def __init__(self,worker,seed,mask,*,body=None):
+  super().__init__(worker,'_kui_vmu_native_trace_irq',seed,mask,0xac11ff00,body=body)
+  self.r[4]=self.start_sp-16
+  self.control={0x0042:(0x8c000000+seed*0x202)&MASK,
+   0x0032:(0x60000100|(seed<<4))&MASK,0x0022:(0x8c010000+seed*0x100)&MASK}
+  self.expected=[self.control[op] for op in (0x0042,0x0032,0x0022)]
+  self.initial=self.r.copy(),self.pr,self.mach,self.macl,self.gbr,self.sr,self.fpscr,self.fr.copy()
+ def plain(self,op,pc):
+  if op&0xf0ff in self.control:self.r[op>>8&15]=self.control[op&0xf0ff];return
+  super().plain(op,pc)
+ def verified(self):
+  self.run()
+  assert self.r[1:]==self.initial[0][1:] and self.r[0]==self.expected[2]
+  assert (self.pr,self.mach,self.macl,self.gbr,self.sr,self.fpscr,self.fr)==self.initial[1:]
+  assert self.mem=={canonical(self.r[4])+4*i:v for i,v in enumerate(self.expected)}
+
+def exception_reader(worker,self_test):
+ _,body,_=symbol_bytes(worker,'_kui_vmu_native_trace_irq',2)
+ assert body==bytes.fromhex('420002243200011422000b000214'), 'saved exception reader is not the exact read-only leaf'
+ cases=0
+ for seed in range(32):
+  for mask in (0,6,15):ExceptionReader(worker,seed,mask).verified();cases+=1
+ mutations=0
+ if self_test:
+  for at in range(0,len(body),2):
+   changed=body[:at]+b'\x09\x00'+body[at+2:]
+   try:ExceptionReader(worker,7,6,body=changed).verified()
+   except (ValueError,AssertionError,KeyError,struct.error):mutations+=1
+   else:raise ValueError('saved exception reader mutation accepted')
+ return dict(instruction_cases=cases,mutation_rejections=mutations,
+  cpu_control_register_writes=False,output_words=3,arbitrary_fault_pc_claim=False)
+
+def video_witness(game):
+ def words(at,count):return struct.unpack_from('<'+'H'*count,game,at-0x8c010000)
+ def word(at):return struct.unpack_from('<I',game,at-0x8c010000)[0]
+ assert words(0x8c1cb9ce,2)==(0x4e0b,0xe444) and words(0x8c1cb9f2,2)==(0x4e0b,0xe444)
+ assert word(0x8c1cba24)==0x8c1f1f04 and word(0x8c1cba28)==0x8c358c70
+ assert words(0x8c1cba08,3)==(0x6132,0x3410,0x89fb) and word(0x8c1cba38)==0x8c358d18
+ assert words(0x8c1f1200,4)==(0xd122,0x6312,0x7301,0x2132) and word(0x8c1f128c)==0x8c358d18
+ assert words(0x8c1f1444,4)==(0xe3fe,0x6022,0x2039,0x2802)
+ assert words(0x8c1f1452,3)==(0x6123,0x6212,0x2822)
+ return dict(explicit_video_disable_calls=['8c1cb9ce','8c1cb9f2'],
+  counter_wait='8c1cba06..8c1cba0c',counter_address='8c358d18',
+  video_handler_counter_increment='8c1f1200..8c1f1206',
+  temporary_video_disable_restore=['8c1f144a','8c1f1456'],counter_can_also_be_reset=True)
+
 class TraceGate(Machine):
  def __init__(self,worker,game,gate,seed,mask,*,original=False,body=None):
   name,self.event,start,stop=gate
@@ -97,7 +144,8 @@ def check(directory,startup,self_test=False):
  return dict(original_instruction_equivalence_cases=cases,mutation_rejections=mutations,
    original_sha256=DIGEST,all_integer_sr_pr_mac_gbr_preserved=True,
    common_path_owner_writes='private gateway frame and original replay stores only',
-   arbitrary_stall_pc_capture=False)
+   arbitrary_stall_pc_capture=False,saved_exception_reader=exception_reader(worker,self_test),
+   original_video_witness=video_witness(game))
 
 if __name__=='__main__':
  p=argparse.ArgumentParser();p.add_argument('directory');p.add_argument('startup');p.add_argument('--self-test',action='store_true')

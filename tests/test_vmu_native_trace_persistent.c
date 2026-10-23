@@ -18,6 +18,10 @@ static unsigned sampler_reads,sampler_pixels,sampler_stops;
 static uint32_t sampler_control=4u;
 static uint32_t stop_reason,stop_value,stop_a,stop_b;
 
+void kui_vmu_native_trace_irq(uint32_t out[3]) {
+    out[0]=0x8c0f69e4u;out[1]=0x60000061u;out[2]=0x8c000000u;
+}
+
 uint32_t kui_vmu_trace_read(uint32_t address,unsigned width) {
     ++sampler_reads;
     int index=mmio_index(address);
@@ -30,6 +34,11 @@ uint32_t kui_vmu_trace_read(uint32_t address,unsigned width) {
     if(address==0xffd80010u) {CHECK(width==2u);return 2u;}
     CHECK(width==4u);
     if(address==0xffd8000cu) return UINT32_MAX-sampler_reads;
+    if(address==0xffd80008u) return UINT32_MAX;
+    if(address==0xff000028u) return 0x320u;
+    if(address==0x8c358d18u) return 7u;
+    if(address==0x8c358c70u) return 5u;
+    if(address==0x8c358c50u) return 1u;
     if(address==0xff00001cu) return 0x105u;
     if(address==0xa05f810cu) {
         /* This is the final observation before trace11 returns. The complete
@@ -75,11 +84,16 @@ static void traced_transfers(void) {
     for(unsigned mode=0u;mode<2u;mode++) {
         traced_setup(mode?KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN:KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL);
         sampler_control=5u;unsigned pixels_before=sampler_pixels,reads_before=sampler_reads;
+        unsigned transition_pixels=0u;
         for(unsigned i=0u;i<16u;i++) {
+            if(i==4u) {sampler_control=4u;transition_pixels=sampler_pixels;}
+            if(i==5u) sampler_control=5u;
             if(mode) {begin_batch(i&1u?1u:0u,0u,0u,NULL);physical_complete();complete_return();idle();}
             else transfer_batch(i&1u?1u:0u,0u,0u,NULL);
             CHECK(trace.hook==0x2fu && trace.submitted==i+1u && trace.completed==i+1u);
             CHECK(!trace.failure_present && !sampler_stops);
+            if(i>=4u) CHECK(trace.draw_off && sampler_pixels==transition_pixels);
+            if(i>=5u) CHECK(!trace.blank_active && trace.blank_ended==1u);
         }
         CHECK(sampler_pixels>pixels_before && sampler_reads>reads_before);
         CHECK(state.submitted==16u && state.completed==16u && trace.surface_seen);
