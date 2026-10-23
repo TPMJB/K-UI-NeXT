@@ -27,9 +27,9 @@ def cache_catalog(root,commit):
     evidence=json.loads((root/'docs/evidence/native-cache-catalog-inputs.json').read_bytes())
     if (evidence.get('schema')!='kui.native.resolution-cache.inputs.v1' or
         evidence.get('detector_epoch')!=DETECTOR_EPOCH or
-        {entry.get('slug') for entry in evidence.get('inputs',[])}!={'ps2','skies','sa2'} or
-        len(evidence['inputs'])!=3):
-        raise ValueError('Requires the three reviewed native cache fixtures')
+        {entry.get('slug') for entry in evidence.get('inputs',[])}!={'ps2','skies','sa2','grandia2','evolution1'} or
+        len(evidence['inputs'])!=5):
+        raise ValueError('Requires the five reviewed native cache fixtures')
     files={};games=[]
     for entry in evidence['inputs']:
         slug=entry['slug'];fixture=f'tests/fixtures/native-cache/{slug}.nvr'
@@ -95,15 +95,20 @@ def package(build):
                      'vmu-native-launch-cache.md','vmu-native-runtime-cost.md',
                      'native-heap-poll-identity.md','vmu-native-latency-test.md',
                      'vmu-native-compat-test.md','vmu-native-optimization-test.md',
-                     'vmu-performance-design-review-2026-10-22.md','vmu-next-stages.md'):
+                     'vmu-performance-design-review-2026-10-22.md','vmu-next-stages.md',
+                     'vmu-native-broader-test.md'):
             extra['docs/'+name]=(root/'docs'/name).read_bytes()
-        for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json'):
+        for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json',
+                     'native-performance-acceptance-2026-10-23.json','native-uniform-root-family-2026-10-23.json',
+                     'native-recv-ownership-2026-10-23.json','native-older-sdk-2026-10-23.json',
+                     'native-broader-compatibility-2026-10-23.json','native-evolution1-layout-2026-10-23.json',
+                     'native-allocator-family-2026-10-23.json'):
             extra['docs/evidence/'+name]=(root/'docs/evidence'/name).read_bytes()
         extra['docs/native-sdk-family-corpus.json']=(root/'docs/evidence/native-sdk-family-corpus-2026-10-22.json').read_bytes()
         extra['docs/native-installer-stack-regression.json']=(root/'docs/evidence/native-sa2-installer-stack-2026-10-22.json').read_bytes()
         extra['TEST-RESULTS.csv']=(
             'game,build,profile,cache_message,bootloader_seconds,startup_after_bootloader_seconds,fmv_audio,gameplay,save,poweroff_reload,controllers,notes\n'
-            'Skies of Arcadia,,,,,,,,,,,\nSonic Adventure 2,,,,,,,,,,,\nPower Stone 2,,,,,,,,,,,\n').encode()
+            'Grandia II,,,,,,,,,,,\nEvolution,,,,,,,,,,,\nSkies of Arcadia,,,,,,,,,,,\nSonic Adventure 2,,,,,,,,,,,\nPower Stone 2,,,,,,,,,,,\n').encode()
     mode=report.get('runtime_mode',{})
     if mode.get('enabled',False):
         mode_offset=mode['module_offset'];mode_template=template_mode()
@@ -132,7 +137,7 @@ def package(build):
         'personalize.py':(root/'tools/personalize_vmu_native_persistent.py').read_bytes(),
         'tools/runtime_package.py':(root/'tools/runtime_package.py').read_bytes(),
         'tools/vmu_persist_profile.py':(root/'tools/vmu_persist_profile.py').read_bytes(),
-        'README-FIRST.md':(root/('docs/vmu-native-optimization-test.md' if compat else
+        'README-FIRST.md':(root/('docs/vmu-native-broader-test.md' if compat else
                                 f'docs/vmu-native-{flavor}-test.md')).read_bytes(),
         'probe-report.json':(json.dumps(report,indent=2)+'\n').encode(),
         'LICENSE':(root/'LICENSE').read_bytes(),

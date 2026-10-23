@@ -57,6 +57,44 @@
       "record_digest": "f4ad08642cac4589acb6a8f7520f59f52371ba7e6a209b19eccd934661f18d2a",
       "static_layout": 0,
       "exit_family": 2
+    },
+    {
+      "slug": "grandia2",
+      "title": "Grandia II",
+      "ip_title": "GRANDIA2",
+      "product": "T17716N",
+      "version": "V1.001",
+      "region": "U",
+      "input_relative": "native-stress-inputs/grandia2/1ST_READ.BIN",
+      "record_bytes": 1024,
+      "record_digest": "dda1f1fefd978d79e89db020eb458c27d0c0a1a491b7aebbf81c8cae4f6026f4",
+      "record_sha256": "c865d6d7fa23969818a9f3b5ed10e37121bcfaa6af6d0f5b620b75861f1861a7",
+      "image_sha256": "dd583571969d275b479e33edfd98ed5e2097d16c37ff6aaba59a7abaf057dc45",
+      "image_bytes": 1279172,
+      "load_address": "8c010000",
+      "record_fixture": "tests/fixtures/native-cache/grandia2.nvr",
+      "static_layout": 0,
+      "exit_family": 4,
+      "console_status": "new test candidate; no current-build console acceptance"
+    },
+    {
+      "slug": "evolution1",
+      "title": "Evolution: The World of Sacred Device",
+      "ip_title": "EVOLUTION - THE WORLD OF SACRED DEVICE",
+      "product": "T17706N",
+      "version": "V1.290",
+      "region": "U",
+      "input_relative": "native-extra-corpus/evolution1/1ST_READ.BIN",
+      "record_bytes": 1024,
+      "record_digest": "7e57afdb7c3ccbd7f868b87beeedfdfeab3f2862af1ea2ca729f6e9ca9ff698d",
+      "record_sha256": "be2f1877d184ac06d38106af29656644bf5d04efc8538893af826c5aa81cfa5c",
+      "image_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+      "image_bytes": 2143652,
+      "load_address": "8c010000",
+      "record_fixture": "tests/fixtures/native-cache/evolution1.nvr",
+      "static_layout": 0,
+      "exit_family": 4,
+      "console_status": "new test candidate; no current-build console acceptance"
     }
   ]
 }

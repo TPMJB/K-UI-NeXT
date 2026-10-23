@@ -7,10 +7,11 @@ the exact external startups and a built stage/worker, for example:
 
   python3 tests/test_vmu_native_heap_execution.py --build build/native-compat \
     --ps2 /path/to/PS2/1ST_READ.BIN --skies /path/to/Skies/1ST_READ.BIN \
-    --sa2 /path/to/SA2/1ST_READ.BIN
+    --sa2 /path/to/SA2/1ST_READ.BIN --grandia2 /path/to/Grandia2/1ST_READ.BIN
 
 Equivalent environment variables are KUI_NATIVE_HEAP_BUILD,
-KUI_NATIVE_PS2_STARTUP, KUI_NATIVE_SKIES_STARTUP and KUI_NATIVE_SA2_STARTUP.
+KUI_NATIVE_PS2_STARTUP, KUI_NATIVE_SKIES_STARTUP, KUI_NATIVE_SA2_STARTUP and
+KUI_NATIVE_GRANDIA2_STARTUP and KUI_NATIVE_EVOLUTION1_STARTUP.
 The independent, bounded SH integer model follows the actual initializer,
 dispatch helper, bootstrap release and first tail allocation. It then models
 the worker's complete copy/zero write span, checking stage and installer-stack
@@ -32,7 +33,7 @@ RAM_BEGIN, RAM_END = 0x0C000000, 0x0D000000
 WORKER_SPAN, LEASE_BYTES = 0x20000, 0x30000
 OLD_INSTALLER_SP = 0x8CFF0000 - 32
 OPTIONS = argparse.Namespace(build=os.environ.get("KUI_NATIVE_HEAP_BUILD"),
-    **{game: os.environ.get(f"KUI_NATIVE_{game.upper()}_STARTUP") for game in ("ps2", "skies", "sa2")})
+    **{game: os.environ.get(f"KUI_NATIVE_{game.upper()}_STARTUP") for game in ("ps2", "skies", "sa2", "grandia2", "evolution1")})
 
 
 def signed(value, bits):
@@ -471,8 +472,8 @@ class HeapExecutionTests(unittest.TestCase):
         model.store_block(old_frame, bytes([0x69]) * 160)
         model.store_block(payload + len(worker), bytes(WORKER_SPAN - len(worker)))
         old_corrupted = model.block(old_frame, 160) != bytes([0x69]) * 160
-        self.assertEqual(old_corrupted, slug in ("skies", "sa2"))
-        if slug in ("skies", "sa2"):
+        self.assertEqual(old_corrupted, slug in ("skies", "sa2", "evolution1"))
+        if slug in ("skies", "sa2", "evolution1"):
             self.assertEqual(physical(payload), 0x0CFD0000)
             self.assertTrue(intersects(old_frame, 160, payload, WORKER_SPAN))
         print(f"Actual {slug} heap: {init_steps} initializer/release + {alloc_steps} allocation instructions; "
@@ -491,13 +492,19 @@ class HeapExecutionTests(unittest.TestCase):
     def test_sa2(self):
         self.execute("sa2")
 
+    def test_grandia2(self):
+        self.execute("grandia2")
+
+    def test_evolution1(self):
+        self.execute("evolution1")
+
 
 if __name__ == "__main__":
     if not __debug__:
         raise SystemExit("Run actual heap model with Python assertions enabled")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, default=os.environ.get("KUI_NATIVE_HEAP_BUILD"))
-    for game in ("ps2", "skies", "sa2"):
+    for game in ("ps2", "skies", "sa2", "grandia2", "evolution1"):
         parser.add_argument("--" + game, type=Path, default=os.environ.get(f"KUI_NATIVE_{game.upper()}_STARTUP"))
     OPTIONS, remaining = parser.parse_known_args()
     unittest.main(argv=[sys.argv[0], *remaining])

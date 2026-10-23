@@ -31,6 +31,24 @@ static void load_record(const char *path) {
 static void alias_worker(unsigned alias,unsigned runtime_alias) {
     CHECK(alias<3u && runtime_alias<3u);
     fixture();
+    /* Keep the independent synthetic SDK/DMA fixture below the smallest
+     * actual arena under test. Grandia's arena begins at 4 MiB; the original
+     * toy TX/RX spans at 4/5 MiB would invent an invalid ownership overlap. */
+    input.tx_base=input.layout.tx_base=UINT32_C(0xac240000);
+    for(unsigned i=0;i<input.layout.inputs;i++) {
+        unsigned id=input.layout.indices[i];
+        uint32_t first=UINT32_C(0xac250000)+i*UINT32_C(0x820);
+        input.layout.input_values[i]=first;
+        input.layout.rx_slots[id]=first;input.layout.rx_slots[id+24u]=first+0x400u;
+        put(input.layout.input_array+i*4u,4u,first);
+        put(UINT32_C(0x0c300fe8)+id*4u,4u,first);
+        put(UINT32_C(0x0c300fe8)+(id+24u)*4u,4u,first+0x400u);
+    }
+    put(UINT32_C(0x0c300fc4),4u,input.tx_base);
+    put(UINT32_C(0x0c3010a8),4u,input.tx_base);
+    put(UINT32_C(0x0c3010ac),4u,input.tx_base+0x3000u);
+    put(UINT32_C(0x0c3010b0),4u,input.tx_base);
+    put(UINT32_C(0xa05f6c04),4u,physical(input.tx_base));
     /* Model exactly the family initializer's fresh live ownership state,
      * then pass through production fresh/pre/post allocation validation. The
      * independent SH execution test establishes these real-image writes. */

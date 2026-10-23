@@ -15,7 +15,9 @@ enum kui_vmu_native_heap_result {
 };
 /* Immutable family metadata only. This grants no permission to call code,
  * patch an initializer, overwrite RAM, or retain memory across a reset.
- * A zero initializer_slot means no unique immutable pointer was present. */
+ * A zero initializer_slot means no immutable pointer was present. Multiple
+ * pointer copies require exactly one proved startup call among at most eight
+ * candidates; an unused export-table copy cannot select an initializer. */
 struct kui_vmu_native_heap {
     uint32_t version,bytes,family,layout,image_bytes,load;
     uint32_t initializer,initializer_slot,initializer_target,allocate,release;
@@ -25,6 +27,13 @@ struct kui_vmu_native_heap {
 enum kui_vmu_native_heap_result kui_vmu_native_heap_discover(
     const void *,size_t,uint32_t,struct kui_vmu_native_heap *);
 struct kui_vmu_native_heap_call {uint32_t load,call,return_pr,entry_begin,entry_bytes;};
+/* Resolve a bounded immutable argument path, including a forward conditional
+ * guard only when TST operands prove its decision before the selected target
+ * load. The selected pointer load must execute and remain untransformed until
+ * JSR samples it; argument preparation in the delay slot is decoded separately.
+ * The patched word has one encoded PC-relative consumer and no immutable
+ * address-of-slot references; its replacement target cannot feed data operands.
+ * Unknown state or multiple complete calls cannot authorize a hook. */
 bool kui_vmu_native_heap_call_discover(const void *,size_t,
     const struct kui_vmu_native_heap *,struct kui_vmu_native_heap_call *);
 

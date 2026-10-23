@@ -168,10 +168,12 @@ static void actual_record(const char *path) {
         uint32_t at=phys(writes[i]);CHECK(at+4u<=UINT32_C(0x0ce00000) || at>=UINT32_C(0x0ce40000));
     }
     CHECK(payload+0x20000u<=phys(begin)+bytes);
-    if(phys(begin)+bytes==end_ram) {
+    if(phys(begin)+bytes>UINT32_C(0x0cfe0000)) {
         CHECK(!old_safe(&h,image,UINT32_C(0x0ce40000),begin,bytes));
-        CHECK(header==UINT32_C(0x0cfcffe0) && payload==UINT32_C(0x0cfd0000));
     } else CHECK(old_safe(&h,image,UINT32_C(0x0ce40000),begin,bytes));
+    if(phys(begin)+bytes==end_ram) {
+        CHECK(header==UINT32_C(0x0cfcffe0) && payload==UINT32_C(0x0cfd0000));
+    }
 }
 int main(int argc,char **argv) {
     direct_cases();boundaries();malformed();

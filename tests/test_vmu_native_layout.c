@@ -311,9 +311,10 @@ static void uniform_image_tests(const char *path) {
      * call must remain a decoded instruction, rather than an arbitrary write
      * to R15 or to an argument before it is saved. */
     uint32_t upper_pc=l.initializer_call-2u;
+    unsigned target_reg=(sh_word(l.initializer_call)>>8)&15u;
     for(size_t s=physical(l.initializer_call)-physical(d.load_address)-8u;s<physical(l.initializer_call)-physical(d.load_address);s+=2u) {
         uint16_t op=(uint16_t)(original[s]|(uint16_t)original[s+1u]<<8);
-        if((op&0xff00u)==0xd300u) {
+        if((op&0xff00u)==(0xd000u|(target_reg<<8))) {
             size_t slot=((s+4u)&~3u)+4u*(op&255u);
             upper_pc=(uint32_t)original[slot]|(uint32_t)original[slot+1u]<<8|
                 (uint32_t)original[slot+2u]<<16|(uint32_t)original[slot+3u]<<24;
@@ -327,7 +328,7 @@ static void uniform_image_tests(const char *path) {
         struct kui_vmu_native_discovery bad_driver;struct kui_vmu_native_layout bad_layout;
         CHECK(!kui_vmu_native_discover_layout(p,n,0x8c010000u,&bad_driver,&bad_layout));
     }
-    /* An indirect call samples R3 before its delay slot. Moving the only
+    /* An indirect call samples its target before the delay slot. Moving the only
      * wrapper-target load into that slot cannot prove the actual target,
      * even though all four argument/target registers are known afterward. */
     memcpy(p,original,n);
@@ -335,7 +336,7 @@ static void uniform_image_tests(const char *path) {
     bool mode_before=false;
     for(size_t s=root-8u;s<root;s+=2u) {
         uint16_t op=(uint16_t)(p[s]|(uint16_t)p[s+1u]<<8);
-        if((op&0xff00u)==0xd300u) target_load=s;
+        if((op&0xff00u)==(0xd000u|(target_reg<<8))) target_load=s;
         if(op==0xe400u) mode_before=true;
     }
     CHECK(target_load);
@@ -344,7 +345,7 @@ static void uniform_image_tests(const char *path) {
     CHECK(slot>=new_pc && slot-new_pc<=1020u);
     uint16_t replacement=(uint16_t)(mode_before?0x0009u:0xe400u);
     p[target_load]=(uint8_t)replacement;p[target_load+1u]=(uint8_t)(replacement>>8);
-    uint16_t delayed=(uint16_t)(0xd300u|((slot-new_pc)/4u));
+    uint16_t delayed=(uint16_t)(0xd000u|(target_reg<<8)|((slot-new_pc)/4u));
     p[root+2u]=(uint8_t)delayed;p[root+3u]=(uint8_t)(delayed>>8);
     struct kui_vmu_native_discovery refused_driver;struct kui_vmu_native_layout refused_layout;
     CHECK(!kui_vmu_native_discover_layout(p,n,0x8c010000u,&refused_driver,&refused_layout));

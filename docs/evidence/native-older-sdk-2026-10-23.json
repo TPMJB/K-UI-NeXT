@@ -1,0 +1,260 @@
+{
+  "schema": "kui.native.older-sdk.triage.v1",
+  "date": "2026-10-23",
+  "baseline_commit": "920c86efc512f651f5146b76912159968a9b2203",
+  "scope": "Read-only original executable inspection and bounded independent SH integer execution; no production changes or hardware acceptance.",
+  "retail_code_embedded": false,
+  "inputs": [
+    {
+      "slug": "silver",
+      "title": "Silver",
+      "bytes": 2956128,
+      "sha256": "4460c60597d6c1f587c125c2dd4b2b491d0a568f31b52c91bce7d8c74f9d550d",
+      "image_end": "0x8c2e1b60",
+      "driver_discovery": "resolved_uniform_v1",
+      "driver": {
+        "submit": "0x8c1546d0",
+        "initializer": "0x8c154194",
+        "completion_call": "0x8c12b7a2",
+        "completion_slot": "0x8c12b850",
+        "manager": "0x8c290340"
+      },
+      "layout": {
+        "status": "refused",
+        "alternate_constructor": "0x8c154b3c",
+        "constructor_gap": "Different exact address-register transport and a four-byte-longer 48-slot construction body; current constructor contract does not match.",
+        "gun_wrapper_gap": "The sparse gun body matches, but its encoded BSR targets completion_call minus 0x3a; current reviewed wrapper family requires minus 0x4a. A complete shorter-wrapper contract is needed.",
+        "timer_pairs": [
+          {
+            "dispatch1": "0x8c11df98",
+            "dispatch2": "0x8c11dfbc",
+            "callback1": "0x8c238aac",
+            "callback2": "0x8c238ab4"
+          },
+          {
+            "dispatch1": "0x8c2dbaac",
+            "dispatch2": "0x8c2dbad0",
+            "callback1": "0x8ced3da0",
+            "callback2": "0x8ced3da8"
+          }
+        ],
+        "initializer_wrapper": "0x8c12b418",
+        "initializer_wrapper_gap": "Older prefix reaches JSR at+40 with delay at+42; current family reaches JSR at+48 with delay at+50. Both share the first 28 bytes of save/mask setup. Older prefix calls a lock-preparation helper with BSR+28/NOP; it loads R7 capacity at+32, initializer R3 at+34 and transports TX/RX at+36/+38. Current prefix performs inline lock-cell/P2 loads before its helper. Prove the older helper lock-pointer alias publication and inherited SR behavior independently, then its upper/root call chain."
+      },
+      "encoded_firmware_consumers": [
+        {
+          "site": "0x8c11dbcc",
+          "value": "0x8c0000e0"
+        },
+        {
+          "site": "0x8c11dbdc",
+          "value": "0x8c0000e0"
+        },
+        {
+          "site": "0x8c2da07e",
+          "value": "0xac0000e0"
+        },
+        {
+          "site": "0x8c2df40c",
+          "value": "0x8c0000e0"
+        },
+        {
+          "site": "0x8c2dfc60",
+          "value": "0x8c0000e0"
+        }
+      ],
+      "terminal_gap": "Older mode-1 / cleanup-mode-2 pair has entries eight bytes apart. Current independent 12-byte veneers would overlap. A new complete interception contract is required; the ordinary three-vector/bootstrap family does not match.",
+      "allocator": {
+        "status": "refused_unadmitted_direct_tail32_family",
+        "addresses": {
+          "initializer": "0x8c11e1e8",
+          "allocate": "0x8c11e296",
+          "release": "0x8c11e348",
+          "begin": "0x8c2d9b80",
+          "bytes": "0x00d26480",
+          "cursor": "0x8c238adc",
+          "sentinel": "0x8c238abc",
+          "target_load": "0x8c0dde86",
+          "call": "0x8c0dde92"
+        },
+        "shared_shape": "Initializer aligns to 32 bytes, stores arena/cursor/sentinel, and tail-branches to release; allocate is initializer+0xae and release is initializer+0x160. There is no two-entry dispatch-table identity used by the current generic family.",
+        "independent_original_sh_execution": {
+          "initializer_instructions": 85,
+          "initializer_writes": 11,
+          "allocation_bytes": 196608,
+          "allocation_instructions": 53,
+          "allocation_result": "0x8cfd0000",
+          "header_units": "0x1801",
+          "release_instructions": 73,
+          "release_restores_free_arena": true
+        },
+        "image_overlap": true
+      }
+    },
+    {
+      "slug": "timestalkers",
+      "title": "Time Stalkers",
+      "bytes": 661056,
+      "sha256": "a9fa66b6bcc482dfaa47683d552e42f24a8200c8efa5ed905d8184eedeba3ac0",
+      "image_end": "0x8c0b1640",
+      "driver_discovery": "resolved_uniform_v1",
+      "driver": {
+        "submit": "0x8c061a68",
+        "initializer": "0x8c06152c",
+        "completion_call": "0x8c03b78e",
+        "completion_slot": "0x8c03b83c",
+        "manager": "0x8c167920"
+      },
+      "layout": {
+        "status": "refused",
+        "alternate_constructor": "0x8c061ed4",
+        "constructor_gap": "Different exact address-register transport and a four-byte-longer 48-slot construction body; current constructor contract does not match.",
+        "gun_wrapper_gap": "The sparse gun body matches, but its encoded BSR targets completion_call minus 0x3a; current reviewed wrapper family requires minus 0x4a. A complete shorter-wrapper contract is needed.",
+        "timer_pairs": [
+          {
+            "dispatch1": "0x8c03aed4",
+            "dispatch2": "0x8c03aef8",
+            "callback1": "0x8c14f448",
+            "callback2": "0x8c14f450"
+          }
+        ],
+        "initializer_wrapper": "0x8c03b404",
+        "initializer_wrapper_gap": "Older prefix reaches JSR at+40 with delay at+42; current family reaches JSR at+48 with delay at+50. Both share the first 28 bytes of save/mask setup. Older prefix calls a lock-preparation helper with BSR+28/NOP; it loads R7 capacity at+32, initializer R3 at+34 and transports TX/RX at+36/+38. Current prefix performs inline lock-cell/P2 loads before its helper. Prove the older helper lock-pointer alias publication and inherited SR behavior independently, then its upper/root call chain."
+      },
+      "encoded_firmware_consumers": [
+        {
+          "site": "0x8c026ce8",
+          "value": "0x8c0000e0"
+        },
+        {
+          "site": "0x8c026cf8",
+          "value": "0x8c0000e0"
+        }
+      ],
+      "terminal_gap": "Older mode-1 / cleanup-mode-2 pair has entries eight bytes apart. Current independent 12-byte veneers would overlap. A new complete interception contract is required; the ordinary three-vector/bootstrap family does not match.",
+      "allocator": {
+        "status": "refused_unadmitted_direct_tail32_family",
+        "addresses": {
+          "initializer": "0x8c025840",
+          "allocate": "0x8c0258ee",
+          "release": "0x8c0259a0",
+          "begin": "0x8c3b0000",
+          "bytes": "0x00c50000",
+          "cursor": "0x8c14cb40",
+          "sentinel": "0x8c14cb20",
+          "target_load": "0x8c010230",
+          "call": "0x8c010236"
+        },
+        "shared_shape": "Initializer aligns to 32 bytes, stores arena/cursor/sentinel, and tail-branches to release; allocate is initializer+0xae and release is initializer+0x160. There is no two-entry dispatch-table identity used by the current generic family.",
+        "independent_original_sh_execution": {
+          "initializer_instructions": 85,
+          "initializer_writes": 11,
+          "allocation_bytes": 196608,
+          "allocation_instructions": 53,
+          "allocation_result": "0x8cfd0000",
+          "header_units": "0x1801",
+          "release_instructions": 73,
+          "release_restores_free_arena": true
+        },
+        "image_overlap": false
+      }
+    },
+    {
+      "slug": "hotd2",
+      "title": "The House of the Dead 2",
+      "bytes": 812268,
+      "sha256": "37817967c2949de6ca4c83522f7eff36fb18ea17a5f06d995f6e93319511ee6f",
+      "image_end": "0x8c0d64ec",
+      "driver_discovery": "resolved_uniform_v1",
+      "driver": {
+        "submit": "0x8c0ce3a0",
+        "initializer": "0x8c0cde64",
+        "completion_call": "0x8c0bfc9e",
+        "completion_slot": "0x8c0bfd4c",
+        "manager": "0x0c55e6dc"
+      },
+      "layout": {
+        "status": "refused",
+        "alternate_constructor": "0x0c0ce80c",
+        "constructor_gap": "Different exact address-register transport and a four-byte-longer 48-slot construction body; current constructor contract does not match.",
+        "gun_wrapper_gap": "The sparse gun body matches, but its encoded BSR targets completion_call minus 0x3a; current reviewed wrapper family requires minus 0x4a. A complete shorter-wrapper contract is needed.",
+        "timer_pairs": [
+          {
+            "dispatch1": "0x8c0bf3e4",
+            "dispatch2": "0x8c0bf408",
+            "callback1": "0x0c5233d4",
+            "callback2": "0x0c5233dc"
+          }
+        ],
+        "initializer_wrapper": "0x8c0bf914",
+        "initializer_wrapper_gap": "Older prefix reaches JSR at+40 with delay at+42; current family reaches JSR at+48 with delay at+50. Both share the first 28 bytes of save/mask setup. Older prefix calls a lock-preparation helper with BSR+28/NOP; it loads R7 capacity at+32, initializer R3 at+34 and transports TX/RX at+36/+38. Current prefix performs inline lock-cell/P2 loads before its helper. Prove the older helper lock-pointer alias publication and inherited SR behavior independently, then its upper/root call chain."
+      },
+      "encoded_firmware_consumers": [
+        {
+          "site": "0x8c0afeb0",
+          "value": "0x8c0000e0"
+        },
+        {
+          "site": "0x8c0afec0",
+          "value": "0x8c0000e0"
+        }
+      ],
+      "terminal_gap": "Older mode-1 / cleanup-mode-2 pair has entries eight bytes apart. Current independent 12-byte veneers would overlap. A new complete interception contract is required; the ordinary three-vector/bootstrap family does not match.",
+      "allocator": {
+        "status": "no_current_or_shared_direct_tail32_body_found",
+        "limit": "No assertion about the complete allocator implementation or its lifetime; requires separate discovery/provenance analysis."
+      }
+    }
+  ],
+  "recommendation": {
+    "next_family": "Time Stalkers direct-tail32 allocator, alternate uniform constructor and compact BIOS terminal pair",
+    "reason": "The same direct allocator appears in Silver and Soul Reaver, while Time Stalkers has a disjoint heap/image interval and a unique reviewed timer pair. This offers reusable family work after the smaller Grandia ambiguity fix.",
+    "requirements": [
+      "Define explicit direct-allocator metadata/identity admission; do not fabricate dispatch cells.",
+      "Prove actual initializer and release gateway stack/register/PC-relative transport before patching.",
+      "Add an independently constrained alternate constructor and shorter completion-wrapper family.",
+      "Prove nonoverlapping compact-exit interception covering every encoded firmware consumer.",
+      "Retain live RX/TX, image, heap, DMA, physical-card and storage ownership checks."
+    ],
+    "silver_extra": "Two complete timer pairs and stored image/heap overlap require additional provenance/typed ownership proof. Do not select the nearby timer pair or trim image bytes by heuristic.",
+    "hotd2_extra": "Allocator remains unproved; alternate constructor and terminal shape alone cannot admit the game."
+  },
+  "methods": [
+    "Public kui_vmu_native_discover compiled from current source resolves all three drivers.",
+    "Existing call_expression evaluator applied only as a private read-only probe reconstructs the two older startup argument transports.",
+    "Existing tests/test_vmu_native_heap_execution.py SH model executes original initializer/allocate/release code; does not simulate the entire game.",
+    "Every halfword PC-relative long load is conservatively checked for the two currently watched firmware literals. Encoded consumers are not a proof of actual runtime reachability."
+  ],
+  "common_constructor_semantics": {
+    "iterations": 24,
+    "first_bank": "manager+0xfe8+4*i stores RX+0x400*i",
+    "second_bank": "manager+0x1048+4*i stores RX+0x6000+0x400*i",
+    "counter_limit_bytes": 96,
+    "rx_stride_bytes": 1024,
+    "result": "The same 48 contiguous 1 KiB slots as the current uniform layout, produced by a different exact address-register transport; not a new wire ABI."
+  },
+  "related_direct_allocator_case": {
+    "slug": "soulreaver",
+    "bytes": 3455844,
+    "sha256": "775dc1d401c907f44ce1754017150e9b333dcccf32f563ed69cb4d7be8cb25d9",
+    "initializer": "0x8c044ed8",
+    "allocate": "0x8c044f86",
+    "release": "0x8c045038",
+    "target_load": "0x8c128b60",
+    "target_register": 1,
+    "call": "0x8c128b68",
+    "heap_begin": "0x8c33bb80",
+    "heap_bytes": "0x00cc4480",
+    "image_end": "0x8c35bb64",
+    "image_overlap": true,
+    "independent_original_sh_execution": {
+      "initializer_instructions": 85,
+      "initializer_writes": 11,
+      "allocation_bytes": 196608,
+      "allocation_instructions": 53,
+      "allocation_result": "0x8cfd0000",
+      "release_instructions": 73
+    },
+    "scope": "Related existing corpus input, not one of the three newly inspected bundles; same direct-tail32 shape, still blocked by other layout/terminal and image-ownership requirements."
+  }
+}

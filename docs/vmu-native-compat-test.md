@@ -1,5 +1,8 @@
 # Native VMU compatibility and performance test
 
+This is the earlier three-game comparison guide. The current broader batch
+and installation commands are in [vmu-native-broader-test.md](vmu-native-broader-test.md).
+
 This package investigates the **remaining gameplay choppiness and input lag**.
 The owner found polling optimization `26b6d5d10fa6` only marginally better:
 SA2 remains laggy and Skies controls feel slightly gummy. Save/load works, but

@@ -97,6 +97,8 @@ static bool candidate(const uint8_t *p,size_t n,uint32_t base,size_t at,
     h->image_bytes=(uint32_t)n;h->load=base;h->initializer=base+(uint32_t)at;
     return metadata(h);
 }
+static int call_discover(const void *,size_t,const struct kui_vmu_native_heap *,
+    struct kui_vmu_native_heap_call *);
 enum kui_vmu_native_heap_result kui_vmu_native_heap_discover(
     const void *image,size_t n,uint32_t base,struct kui_vmu_native_heap *out) {
     if(!out || overlaps((uintptr_t)image,n,(uintptr_t)out,sizeof(*out)))
@@ -113,28 +115,53 @@ enum kui_vmu_native_heap_result kui_vmu_native_heap_discover(
         found=h;
     }
     if(!count) return KUI_VMU_NATIVE_HEAP_NONE;
-    unsigned references=0;
+    /* An SDK export table can retain the initializer address in addition to
+     * its actual startup literal. Raw pointer multiplicity alone must not
+     * choose a slot: require one and only one complete immutable argument /
+     * call proof among the bounded candidates. Reinitialization by any entry
+     * remains intercepted independently once the worker owns its lease. */
+    enum {REFERENCE_LIMIT=8};
+    uint32_t slots[REFERENCE_LIMIT],targets[REFERENCE_LIMIT];unsigned references=0;
     for(size_t at=0;at<n && n-at>=4u;at+=4u) {
         uint32_t value=h32(p+at);
         if(span(value,2u) && phys(value)==phys(found.initializer)) {
-            if(++references>1u) return KUI_VMU_NATIVE_HEAP_AMBIGUOUS;
-            found.initializer_slot=base+(uint32_t)at;found.initializer_target=value;
+            if(references==REFERENCE_LIMIT) return KUI_VMU_NATIVE_HEAP_AMBIGUOUS;
+            slots[references]=base+(uint32_t)at;targets[references++]=value;
         }
+    }
+    if(references==1u) {
+        found.initializer_slot=slots[0];found.initializer_target=targets[0];
+    } else if(references>1u) {
+        unsigned calls=0u;struct kui_vmu_native_heap chosen={0};
+        for(unsigned i=0;i<references;i++) {
+            struct kui_vmu_native_heap trial=found;struct kui_vmu_native_heap_call call;
+            trial.initializer_slot=slots[i];trial.initializer_target=targets[i];
+            int result=call_discover(image,n,&trial,&call);
+            if(result<0) return KUI_VMU_NATIVE_HEAP_AMBIGUOUS;
+            if(!result) continue;
+            if(++calls>1u) return KUI_VMU_NATIVE_HEAP_AMBIGUOUS;
+            chosen=trial;
+        }
+        if(calls!=1u) return KUI_VMU_NATIVE_HEAP_AMBIGUOUS;
+        found=chosen;
     }
     *out=found;return KUI_VMU_NATIVE_HEAP_FOUND;
 }
-/* Evaluate only a bounded straight-line integer argument expression. All
+/* Evaluate only a bounded immutable integer argument expression. All
  * memory reads must name immutable words inside the supplied executable;
- * unknown instructions, branches and caller state are never inferred. The
+ * unknown instructions, branch outcomes and caller state are never inferred. The
+ * one admitted conditional form is a forward TST guard with known operands;
+ * its destination cannot skip the target load or call. A failure spin is
+ * never followed, and taken backward or unknown control flow refuses. The
  * eventual live initializer hook independently checks both arguments and PR.
  * This admits equivalent SDK startup expressions (BSS-tail or fixed arena),
  * rather than a title-specific instruction/register arrangement. */
 static bool call_expression(const uint8_t *p,size_t n,const struct kui_vmu_native_heap *h,
     size_t begin,size_t target_load,size_t call,unsigned target,uint32_t *first,uint32_t *bytes) {
-    uint32_t value[16]={0},known=0;
+    uint32_t value[16]={0},known=0;bool condition=false,condition_known=false,target_loaded=false;
     for(size_t at=begin;at<=call+2u;at+=2u) {
         if(at==call) {
-            if(!(known&(1u<<target)) || value[target]!=h->initializer_target) return false;
+            if(!target_loaded || !(known&(1u<<target)) || value[target]!=h->initializer_target) return false;
             continue;
         }
         uint16_t op=h16(p+at);unsigned r=(op>>8)&15u,m=(op>>4)&15u;
@@ -148,27 +175,52 @@ static bool call_expression(const uint8_t *p,size_t n,const struct kui_vmu_nativ
          * later mask/add could otherwise transform the replacement pointer. */
         if(at>target_load && at<call && r==target && (op&0xff00u)!=0x1f00u) return false;
         if((op&0xf000u)==0xd000u) {
+            uint32_t pool=((h->load+(uint32_t)at+4u)&~3u)+4u*(op&255u);
+            /* The selected word changes to the hook at installation. No
+             * earlier/other read may feed arguments or a conditional from
+             * its original value. Compare physical aliases as well. */
+            if(at!=target_load && phys(pool)==phys(h->initializer_slot)) return false;
             if(!literal(p,n,h->load,at,r,&value[r])) return false;
             known|=bit;
+            if(at==target_load) {
+                if(r!=target || value[r]!=h->initializer_target) return false;
+                target_loaded=true;
+            }
         } else if((op&0xf000u)==0xe000u) {
             value[r]=(uint32_t)(int32_t)(int8_t)op;known|=bit;
         } else if((op&0xf000u)==0x7000u) {
+            if(target_loaded && r==target) return false;
             if(!(known&bit)) return false;
             value[r]+=(uint32_t)(int32_t)(int8_t)op;
         } else if((op&0xf00fu)==0x6002u) {
             size_t slot;
-            if(!(known&other) || !index(value[m],h->load,n,4u,&slot)) return false;
+            if((target_loaded && m==target) || !(known&other) ||
+               phys(value[m])==phys(h->initializer_slot) ||
+               !index(value[m],h->load,n,4u,&slot)) return false;
             value[r]=h32(p+slot);known|=bit;
         } else if((op&0xf00fu)==0x6003u) {
+            if(target_loaded && m==target) return false;
             if(!(known&other)) return false;
             value[r]=value[m];known|=bit;
         } else if((op&0xff00u)==0x1f00u) {
             /* Reviewed startup spills a computed boundary to its own stack.
              * No stack loads are accepted, so this cannot supply knowledge
              * to the argument expression or follow an unproved pointer. */
-            if(!(known&other)) return false;
+            if((target_loaded && m==target) || !(known&other)) return false;
+        } else if((op&0xf00fu)==0x2008u) {
+            if(target_loaded && (r==target || m==target)) return false;
+            if((known&(bit|other))!=(bit|other)) return false;
+            condition=(value[r]&value[m])==0u;condition_known=true;
+        } else if((op&0xff00u)==0x8900u || (op&0xff00u)==0x8b00u) {
+            if(!condition_known || at>=target_load) return false;
+            if(condition==((op&0xff00u)==0x8900u)) {
+                int32_t delta=4+2*(int32_t)(int8_t)op;
+                if(delta<=0 || (size_t)delta>target_load-at) return false;
+                at+=(size_t)delta-2u;
+            }
         } else if((op&0xf00fu)==0x2009u || (op&0xf00fu)==0x200bu ||
                   (op&0xf00fu)==0x3008u || (op&0xf00fu)==0x300cu) {
+            if(target_loaded && (r==target || m==target)) return false;
             if((known&(bit|other))!=(bit|other)) return false;
             if((op&0xf00fu)==0x2009u) value[r]&=value[m];
             else if((op&0xf00fu)==0x200bu) value[r]|=value[m];
@@ -180,7 +232,7 @@ static bool call_expression(const uint8_t *p,size_t n,const struct kui_vmu_nativ
        ((value[4]|value[5])&31u) || !span(value[4],value[5])) return false;
     *first=value[4];*bytes=value[5];return true;
 }
-bool kui_vmu_native_heap_call_discover(const void *image,size_t n,
+static int call_discover(const void *image,size_t n,
     const struct kui_vmu_native_heap *h,struct kui_vmu_native_heap_call *out) {
     if(!image || !out || !metadata(h) || !h->initializer_slot || n!=h->image_bytes ||
        overlaps((uintptr_t)image,n,(uintptr_t)out,sizeof(*out))) return false;
@@ -188,7 +240,7 @@ bool kui_vmu_native_heap_call_discover(const void *image,size_t n,
     for(size_t at=0;at<n && n-at>=6u;at+=2u) {
         uint16_t op=h16(p+at);uint32_t target;
         unsigned reg=(op>>8)&15u;
-        if((op&0xf000u)!=0xd000u || (reg!=2u && reg!=3u) ||
+        if((op&0xf000u)!=0xd000u || (reg!=0u && reg!=2u && reg!=3u) ||
            phys(((h->load+(uint32_t)at+4u)&~3u)+4u*(op&255u))!=phys(h->initializer_slot) ||
            !literal(p,n,h->load,at,reg,&target) || target!=h->initializer_target) continue;
         for(size_t call=at+2u;call<=at+16u && call<n && n-call>=4u;call+=2u) {
@@ -198,17 +250,38 @@ bool kui_vmu_native_heap_call_discover(const void *image,size_t n,
             for(size_t start=earliest;start<=at;start+=2u) {
                 uint32_t got_first,got_bytes;
                 if(!call_expression(p,n,h,start,at,call,reg,&got_first,&got_bytes)) continue;
-                if(resolved && (first!=got_first || bytes!=got_bytes)) return false;
+                if(resolved && (first!=got_first || bytes!=got_bytes)) return -1;
                 first=got_first;bytes=got_bytes;resolved=true;
             }
             if(!resolved) continue;
-            if(++found>1u) return false;
+            if(++found>1u) return -1;
             chosen=(struct kui_vmu_native_heap_call){h->load+(uint32_t)at,
                 h->load+(uint32_t)call,h->load+(uint32_t)call+4u,first,bytes};
         }
     }
     if(!found) return false;
+    /* Patching a shared pool word could change an earlier conditional even
+     * when this bounded expression starts after that conditional. Require
+     * the selected literal to have exactly its chosen encoded PC-relative
+     * consumer across the entire image, and no immutable address-of-slot
+     * word that could supply an indirect consumer. This is deliberately
+     * conservative: coincidental data matches also prevent admission. It is
+     * not a whole-program proof of synthesized indirect memory accesses. */
+    unsigned consumers=0u;
+    for(size_t at=0;at<n && n-at>=2u;at+=2u) {
+        if(!(at&3u) && n-at>=4u && span(h32(p+at),4u) &&
+           phys(h32(p+at))==phys(h->initializer_slot)) return false;
+        uint16_t op=h16(p+at);
+        if((op&0xf000u)!=0xd000u ||
+           phys(((h->load+(uint32_t)at+4u)&~3u)+4u*(op&255u))!=phys(h->initializer_slot)) continue;
+        if(h->load+(uint32_t)at!=chosen.load || ++consumers>1u) return false;
+    }
+    if(consumers!=1u) return false;
     *out=chosen;return true;
+}
+bool kui_vmu_native_heap_call_discover(const void *image,size_t n,
+    const struct kui_vmu_native_heap *h,struct kui_vmu_native_heap_call *out) {
+    return call_discover(image,n,h,out)==1;
 }
 static bool read_is(kui_vmu_native_heap_read read,void *ctx,uint32_t at,uint32_t expected) {
     uint32_t value;return read && !(at&3u) && span(at,4u) && read(ctx,at,&value) && value==expected;

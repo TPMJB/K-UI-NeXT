@@ -260,27 +260,32 @@ static bool uniform_initializer(const uint8_t *p,size_t n,uint32_t base,
 }
 static bool uniform_root(const uint8_t *p,size_t n,uint32_t base,size_t call,
     uint32_t upper,uint32_t *rx_slot,uint32_t *rx,uint32_t *tx_slot,uint32_t *tx) {
-    if(call<8u || call>n || n-call<4u || u16(p+call)!=0x430bu) return false;
+    if(call<8u || call>n || n-call<4u || (u16(p+call)&0xf0ffu)!=0x400bu) return false;
+    unsigned target_reg=(u16(p+call)>>8)&15u;
+    /* Equivalent reviewed caller allocations use R0, R2 or R3 for the
+     * indirect target. RX/TX/mode remain R5/R6/R4; no inherited register or
+     * value inferred after the call may authorize its sampled target. */
+    if(target_reg!=0u && target_reg!=2u && target_reg!=3u) return false;
     unsigned known=0;
     for(size_t s=call-8u;s<=call+2u;s+=2u) {
         /* SH samples the indirect target before executing its delay slot.
-         * Argument registers may be prepared there, but R3 must already name
+         * Argument registers may be prepared there, but the target must name
          * the proved upper wrapper when JSR itself executes. */
-        if(s==call) {if(!(known&8u)) return false;continue;}
+        if(s==call) {if(!(known&(1u<<target_reg))) return false;continue;}
         uint16_t op=u16(p+s);
         if(op==0x0009u) continue;
         if(op==0xe400u) {if(known&16u) return false;known|=16u;continue;}
         unsigned reg=(op>>8)&15u;uint32_t value;
-        if((op&0xf000u)!=0xd000u || (reg!=3u && reg!=5u && reg!=6u) ||
+        if((op&0xf000u)!=0xd000u || (reg!=target_reg && reg!=5u && reg!=6u) ||
            (known&(1u<<reg)) || !literal(p,n,base,s,reg,&value)) return false;
         known|=1u<<reg;
-        if(reg==3u) {if(phys(value)!=phys(upper)) return false;}
+        if(reg==target_reg) {if(phys(value)!=phys(upper)) return false;}
         else {
             uint32_t slot=((base+(uint32_t)s+4u)&~3u)+4u*(op&255u);
             if(reg==5u) {*rx_slot=slot;*rx=value;} else {*tx_slot=slot;*tx=value;}
         }
     }
-    return known==0x78u;
+    return known==(0x70u|(1u<<target_reg));
 }
 static bool uniform_from_bound(const void *image,size_t n,
     const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out) {
@@ -318,7 +323,7 @@ static bool uniform_from_bound(const void *image,size_t n,
     struct kui_vmu_native_layout r={0};uint32_t rx=0,tx=0;found=0;
     for(size_t s=8u;s<n && n-s>=4u;s+=2u) {
         uint32_t rx_at=0,raw_rx=0,tx_at=0,raw_tx=0;
-        if(u16(p+s)!=0x430bu ||
+        if((u16(p+s)&0xf0ffu)!=0x400bu ||
            !uniform_root(p,n,base,s,base+(uint32_t)upper_site,&rx_at,&raw_rx,&tx_at,&raw_tx)) continue;
         r.input_array=rx_at;rx=raw_rx;r.index_array=tx_at;tx=raw_tx;
         r.initializer_call=base+(uint32_t)s;if(++found>1u) return false;

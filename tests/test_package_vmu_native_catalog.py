@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""The release catalog contains only three pinned, data-only records."""
+"""The release catalog contains only five pinned, data-only records."""
 import copy
 import hashlib
 import json
@@ -22,7 +22,7 @@ class CatalogTests(unittest.TestCase):
         (self.root/'docs/evidence').mkdir(parents=True)
         (self.root/'tests/fixtures/native-cache').mkdir(parents=True)
         self.evidence=json.loads((ROOT/'docs/evidence/native-cache-catalog-inputs.json').read_bytes())
-        for slug in ('ps2','skies','sa2'):
+        for slug in ('ps2','skies','sa2','grandia2','evolution1'):
             relative=f'tests/fixtures/native-cache/{slug}.nvr'
             shutil.copyfile(ROOT/relative,self.root/relative)
         self.write()
@@ -34,8 +34,8 @@ class CatalogTests(unittest.TestCase):
         wire,files=cache_catalog(self.root,'a'*40)
         catalog=json.loads(wire)
         self.assertEqual(catalog['source_commit'],'a'*40)
-        self.assertEqual({g['slug'] for g in catalog['games']},{'ps2','skies','sa2'})
-        self.assertEqual(set(files),{'native-cache/catalog.json',*(f'native-cache/{s}.nvr' for s in ('ps2','skies','sa2'))})
+        self.assertEqual({g['slug'] for g in catalog['games']},{'ps2','skies','sa2','grandia2','evolution1'})
+        self.assertEqual(set(files),{'native-cache/catalog.json',*(f'native-cache/{s}.nvr' for s in ('ps2','skies','sa2','grandia2','evolution1'))})
         self.assertEqual(files['native-cache/catalog.json'],wire)
         for game in catalog['games']:
             record=files[game['record_path']]
@@ -58,7 +58,7 @@ class CatalogTests(unittest.TestCase):
                 with self.assertRaises(ValueError):cache_catalog(self.root,'a'*40)
 
     def test_each_record_corruption_refuses(self):
-        for slug in ('ps2','skies','sa2'):
+        for slug in ('ps2','skies','sa2','grandia2','evolution1'):
             path=self.root/f'tests/fixtures/native-cache/{slug}.nvr';original=path.read_bytes()
             for offset in (0,16,32,88,608,748,991,992,1023):
                 with self.subTest(slug=slug,offset=offset):

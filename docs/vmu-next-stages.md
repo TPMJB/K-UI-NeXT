@@ -4,11 +4,11 @@ Planning assessment: 2026-10-23. This document separates future work from the
 current native performance build. It records source inspection and proposed
 acceptance criteria; it does not claim that these features are implemented.
 
-The immediate priority is smooth gameplay with a virtual card. The owner's
-same-loader VMU-off comparison was substantially smoother, and the latency
-capture recorded no VMU storage calls. That result directs the current work
-toward resident CPU and allocator overhead before changing storage transports.
-A faster SD connection would not cure that measured case.
+The optimized build `920c86efc512` has now passed the owner's SA2 gameplay
+comparison: any difference from VMU-off was imperceptible. Skies performance
+has not yet been retested. The earlier latency capture recorded no VMU storage
+calls; the correction removed repeated resident CPU work. Current work has
+moved to wider native compatibility while preserving that runtime.
 
 The owner wants the SCI and SCIF work completed, and the resulting lessons
 captured, before reopening the console for the G1 board. Some Kapton is already
@@ -65,9 +65,11 @@ The recovered corpus already identifies useful next targets:
 | Corpus case | Current gap | Useful next work |
 | --- | --- | --- |
 | Resident Evil Code: Veronica | Candidate RX/TX intervals overlap the startup image under the current proof | Determine the actual live ownership interval and lifetime; retain the overlap refusal until that proof is narrower and valid |
-| Grandia II | Generic allocator resolution is ambiguous | Resolve allocator provenance without choosing the first plausible signature; do not treat the older exact adapter as generic-family admission |
+| Grandia II | New generic console test candidate | A unique proved startup call now distinguishes its real initializer literal from an unused export-table copy; original allocator, layout and persistence models pass |
+| Evolution 1 | New generic console test candidate | Existing complete SDK family now has a pinned mapping and original-code allocator/layout/placement tests |
 | Crazy Taxi 2 | Allocator found; initializer pointer/root-call provenance incomplete | Extend dataflow and call-root evidence, then execute the discovered allocator contract in the host SH model |
-| Phantasy Star Online | Initializer candidate exists; root provenance and a fourth terminal consumer are outside current admission | Review the additional consumer and dispatch lifetime together |
+| Phantasy Star Online | Layout root now resolves; allocator-call and fourth terminal-consumer proofs remain | Review the additional consumer and dispatch lifetime together |
+| Jet Grind Radio | Allocator arguments now resolve; Maple root transport does not | Prove the actual root transport before using its otherwise matching initializer |
 | Evolution 2 / Soul Reaver | Different callback, timer or terminal-entry layouts | Model the layout explicitly; close terminal entries cannot accept overlapping veneers |
 
 There is a second compatibility axis after signature discovery. The present

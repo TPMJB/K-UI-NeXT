@@ -119,6 +119,139 @@ static void call_expression_tests(void) {
     put16(0x412u,0x2339u);put16(0x414u,0x430bu);put16(0x416u,0x342cu);
     CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
 }
+static void known_call(size_t at,size_t slot,uint32_t target) {
+    load_literal(at,4u,at+0x40u,0x8c500020u);
+    load_literal(at+2u,5u,at+0x44u,0xafffe0u);
+    load_literal(at+4u,3u,slot,target);
+    put16(at+6u,0x430bu);put16(at+8u,0x0009u);
+}
+static void exported_initializer_tests(void) {
+    struct kui_vmu_native_heap h=call_fixture(),found;
+    struct kui_vmu_native_heap_call call;
+    const uint32_t target=h.initializer_target;
+    /* A second raw address in an export table is not a startup-slot proof.
+     * Exactly one complete known call selects the actual literal. */
+    put32(0x704u,target);known_call(0x400u,0x700u,target);
+    CHECK(kui_vmu_native_heap_discover(image,sizeof(image),0x8c010000u,&found)==KUI_VMU_NATIVE_HEAP_FOUND);
+    CHECK(found.initializer_slot==0x8c010700u && found.initializer_target==target);
+    CHECK(kui_vmu_native_heap_call_discover(image,sizeof(image),&found,&call));
+    CHECK(call.load==0x8c010404u && call.call==0x8c010406u && call.return_pr==0x8c01040au);
+    CHECK(call.entry_begin==0x8c500020u && call.entry_bytes==0xafffe0u);
+    for(unsigned i=0;i<5u;i++) {
+        size_t at=0x400u+2u*i;uint16_t saved=h16(image+at);put16(at,0u);
+        CHECK(kui_vmu_native_heap_discover(image,sizeof(image),0x8c010000u,&found)==KUI_VMU_NATIVE_HEAP_AMBIGUOUS);
+        put16(at,saved);
+    }
+    /* Changing which literal has the sole proved call changes the selected
+     * slot. Neither pointer order nor a title/address allowlist selects it. */
+    known_call(0x400u,0x704u,target);
+    CHECK(kui_vmu_native_heap_discover(image,sizeof(image),0x8c010000u,&found)==KUI_VMU_NATIVE_HEAP_FOUND);
+    CHECK(found.initializer_slot==0x8c010704u);
+    known_call(0x500u,0x700u,target);
+    CHECK(kui_vmu_native_heap_discover(image,sizeof(image),0x8c010000u,&found)==KUI_VMU_NATIVE_HEAP_AMBIGUOUS);
+    /* An ambiguous slot cannot be ignored in favor of another unique call.
+     * Three fully known sites, two sharing the same literal, still refuse. */
+    known_call(0x580u,0x700u,target);
+    CHECK(kui_vmu_native_heap_discover(image,sizeof(image),0x8c010000u,&found)==KUI_VMU_NATIVE_HEAP_AMBIGUOUS);
+    memset(image+0x400u,0,0x200u);known_call(0x400u,0x700u,target);
+    for(unsigned i=2u;i<9u;i++) put32(0x700u+4u*i,target);
+    CHECK(kui_vmu_native_heap_discover(image,sizeof(image),0x8c010000u,&found)==KUI_VMU_NATIVE_HEAP_AMBIGUOUS);
+}
+static void guarded_r0_call_tests(void) {
+    struct kui_vmu_native_heap h=call_fixture();struct kui_vmu_native_heap_call call;
+    load_literal(0x400u,4u,0x600u,0x8c500020u);
+    load_literal(0x402u,5u,0x604u,0x8c800000u);put16(0x404u,0x3548u);
+    load_literal(0x406u,2u,0x608u,0x80000000u);put16(0x408u,0x6053u);
+    put16(0x40au,0x2029u);put16(0x40cu,0x2008u);put16(0x40eu,0x8901u);
+    put16(0x410u,0xaffeu);put16(0x412u,0x0009u);
+    load_literal(0x414u,0u,0x700u,h.initializer_target);put16(0x416u,0x400bu);put16(0x418u,0x0009u);
+    CHECK(kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
+    CHECK(call.load==0x8c010414u && call.call==0x8c010416u && call.return_pr==0x8c01041au);
+    CHECK(call.entry_begin==0x8c500020u && call.entry_bytes==0x2fffe0u);
+    /* The chosen initializer load is actually executed and its replacement
+     * value reaches the call unchanged. Known raw target values on another
+     * path cannot authorize skipping the patched literal instruction. */
+    const struct {size_t at;uint16_t op;} mutations[]={
+        {0x40cu,0x0009u}, /* inherited T flag */
+        {0x40cu,0x2068u}, /* unknown TST operand */
+        {0x40eu,0x89fdu}, /* backward branch */
+        {0x40eu,0x8902u}, /* skip chosen target load */
+        {0x40eu,0x8b01u}, /* known untaken guard reaches failure spin */
+        {0x416u,0x0009u}, /* no call */
+        {0x418u,0x0000u}, /* unknown delay instruction */
+        {0x418u,0x8901u}  /* branch after target load / in call delay slot */
+    };
+    for(unsigned i=0;i<sizeof(mutations)/sizeof(mutations[0]);i++) {
+        uint16_t saved=h16(image+mutations[i].at);put16(mutations[i].at,mutations[i].op);
+        CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));put16(mutations[i].at,saved);
+    }
+    put32(0x604u,0x8c400000u);
+    CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));put32(0x604u,0x8c800000u);
+    /* The inverse conditional has the same proof when both operands and
+     * the taken outcome are known. No instruction follows an inferred edge. */
+    put16(0x40cu,0x2448u);put16(0x40eu,0x8b01u);
+    CHECK(kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
+    /* Starting the guard after a second known-target load does not let an
+     * early branch bypass the literal selected by call discovery. */
+    put16(0x40eu,0x8b02u);
+    CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
+}
+static void patched_pool_guard(bool indirect,bool early_args,bool alternate,uint32_t alias) {
+    struct kui_vmu_native_heap h=call_fixture();struct kui_vmu_native_heap_call call;
+    size_t at=0x400u,pool=alternate?0x704u:0x700u;
+    if(alternate) put32(pool,h.initializer_target);
+    if(early_args) {
+        load_literal(at,4u,0x600u,0x8c500020u);at+=2u;
+        load_literal(at,5u,0x604u,0xafffe0u);at+=2u;
+    }
+    if(indirect) {
+        load_literal(at,1u,0x60cu,alias|phys(0x8c010000u+(uint32_t)pool));at+=2u;
+        put16(at,0x6112u);at+=2u;
+    } else {load_literal(at,1u,pool,h.initializer_target);at+=2u;}
+    load_literal(at,2u,0x608u,0x10000u);at+=2u;put16(at,0x2218u);at+=2u;
+    put16(at,0x8b01u);put16(at+2u,0xaffeu);put16(at+4u,0x0009u);at+=6u;
+    if(!early_args) {
+        load_literal(at,4u,0x600u,0x8c500020u);at+=2u;
+        load_literal(at,5u,0x604u,0xafffe0u);at+=2u;
+    }
+    load_literal(at,0u,0x700u,h.initializer_target);
+    put16(at+2u,0x400bu);put16(at+4u,0x0009u);
+    /* The original target has bit 16 set; a low hook does not. Patching a
+     * shared word would invert this guard and enter its failure spin. Late
+     * argument loads intentionally permit a local decoder to start after
+     * the guard: global encoded/address-of sharing checks must still refuse.
+     * An alternate unpatched export word leaves this conditional unchanged. */
+    CHECK(kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call)==alternate);
+}
+static void patch_dependency_tests(void) {
+    const uint32_t aliases[]={0u,0x80000000u,0xa0000000u};
+    for(unsigned indirect=0u;indirect<2u;indirect++) for(unsigned early=0u;early<2u;early++)
+        for(unsigned alternate=0u;alternate<2u;alternate++) for(unsigned alias=0u;alias<3u;alias++)
+            patched_pool_guard(indirect,early,alternate,aliases[alias]);
+    for(unsigned alias=0u;alias<3u;alias++) {
+        struct kui_vmu_native_heap h=call_fixture();struct kui_vmu_native_heap_call call;
+        known_call(0x400u,0x700u,h.initializer_target);
+        put32(0x780u,phys(h.initializer_slot)|aliases[alias]);
+        CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
+    }
+    struct kui_vmu_native_heap h=call_fixture();struct kui_vmu_native_heap_call call;
+    known_call(0x400u,0x700u,h.initializer_target);
+    load_literal(0x380u,1u,0x700u,h.initializer_target);
+    CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
+    /* Once the chosen target register contains the replacement-dependent
+     * value, no data use may clone it into args, guards, pointers or spills.
+     * JSR alone consumes it as a code target. Check pre-call and delay slots. */
+    const uint16_t uses[]={0x6403u,0x6603u,0x6102u,0x340cu,0x2409u,0x2208u,0x1f01u};
+    for(unsigned delay=0u;delay<2u;delay++) for(unsigned i=0u;i<sizeof(uses)/sizeof(uses[0]);i++) {
+        h=call_fixture();
+        load_literal(0x400u,4u,0x600u,0x8c500020u);
+        load_literal(0x402u,5u,0x604u,0x10000u);
+        load_literal(0x404u,0u,0x700u,h.initializer_target);
+        if(delay) {put16(0x406u,0x400bu);put16(0x408u,uses[i]);}
+        else {put16(0x406u,uses[i]);put16(0x408u,0x400bu);put16(0x40au,0x0009u);}
+        CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
+    }
+}
 int main(int argc,char **argv) {
     const uint32_t aliases[]={0u,0x80000000u,0xa0000000u};
     for(unsigned a=0;a<3u;a++) for(unsigned half=0;half<2u;half++) {
@@ -188,7 +321,7 @@ int main(int argc,char **argv) {
         CHECK(kui_vmu_native_heap_discover((void *)(uintptr_t)(aliases[a]|0x0c010000u),
             sizeof(image),0x8c010000u,(void *)(uintptr_t)(aliases[b]|0x0c010000u))==KUI_VMU_NATIVE_HEAP_INVALID);
     CHECK(kui_vmu_native_heap_discover(NULL,0u,0x8c010000u,&h)==KUI_VMU_NATIVE_HEAP_INVALID);
-    call_expression_tests();
+    call_expression_tests();exported_initializer_tests();guarded_r0_call_tests();patch_dependency_tests();
     if(argc==3) {owner(argv[1],true);owner(argv[2],false);} else CHECK(argc==1);
     printf("Native heap family / lease checks: %u passed; no allocator calls or lifetime authority\n",checks);
     return 0;
