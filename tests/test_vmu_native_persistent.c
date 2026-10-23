@@ -433,6 +433,116 @@ static void halfword_exit_hooks(void) {
         CHECK(kui_vmu_native_passive_arm(&input,NULL)<0 && !state.armed);
     }
 }
+/* Frozen pre-preparation witness scope. This independently rebuilds each
+ * veneer and compares its original 16/32-bit reads, so the prepared masks
+ * cannot accidentally omit a byte or acquire either adjacent halfword. */
+static bool legacy_patch_matches(uint32_t address,uint32_t target) {
+    uint16_t patch[6];
+    if(!ram(address,12u,2u) || !kui_vmu_native_patch_encode(address,target,patch)) return false;
+    unsigned width=(address&3u)?2u:4u;
+    for(unsigned i=0;i<12u/width;i++) {
+        uint32_t value,expected=patch[i*(width/2u)];
+        if(width==4u) expected|=(uint32_t)patch[i*2u+1u]<<16;
+        if(!read_value(NULL,(physical(address)+i*width)|UINT32_C(0xa0000000),width,&value) ||
+           value!=expected) return false;
+    }
+    return true;
+}
+static bool legacy_installed_hooks_valid(void) {
+    uint32_t value;
+    if((config.driver.submit|config.lease.owner.release|config.lease.owner.initializer)&3u ||
+       !legacy_patch_matches(config.driver.submit,kui_vmu_native_worker_exports.submit_hook) ||
+       !legacy_patch_matches(config.lease.owner.release,kui_vmu_native_worker_exports.release_hook) ||
+       !legacy_patch_matches(config.lease.owner.initializer,config.low_terminal) ||
+       !read_value(NULL,physical(config.lease.owner.initializer_slot)|UINT32_C(0xa0000000),4u,&value) ||
+       value!=config.low_heap_hook ||
+       !read_value(NULL,physical(config.driver.completion_slot)|UINT32_C(0xa0000000),4u,&value) ||
+       value!=kui_vmu_native_worker_exports.complete_hook) return false;
+    for(unsigned i=0;i<config.exits.count;i++)
+        if(!legacy_patch_matches(config.exits.entries[i],config.low_terminal)) return false;
+    return true;
+}
+static void prepared_hook_witnesses(void) {
+    unsigned mutations=0u,neighbors=0u,reader_faults=0u;
+    for(unsigned family=KUI_VMU_NATIVE_EXIT_FAMILY;family<=KUI_VMU_NATIVE_EXIT_PAIR_ONLY;family++)
+        for(unsigned half=0u;half<2u;half++) {
+            model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
+            lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
+            input.exits.family=family;
+            if(family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY) {
+                input.exits.count=2u;input.exits.entries[2]=input.exits.exec_thunk=0u;
+            }
+            for(unsigned i=0;i<input.exits.count;i++) input.exits.entries[i]+=half*2u;
+            arm();install_hooks();
+            CHECK(installed_hooks_valid() && legacy_installed_hooks_valid());
+            CHECK(hook_witness_count==11u+input.exits.count*(half?4u:3u));
+            for(unsigned i=0;i<hook_witness_count;i++) {
+                CHECK(ram(hook_witness[i].address,4u,4u));
+                CHECK((hook_witness[i].address&UINT32_C(0xe0000000))==UINT32_C(0xa0000000));
+                CHECK(hook_witness[i].mask && !(hook_witness[i].value&~hook_witness[i].mask));
+            }
+            const uint32_t entries[]={input.driver.submit,input.lease.owner.release,
+                input.lease.owner.initializer,input.exits.entries[0],input.exits.entries[1],input.exits.entries[2]};
+            /* Every bit of every instruction, literal and trailing NOP is
+             * mandatory, including both bytes of all halfword-aligned exits. */
+            for(unsigned i=0;i<3u+input.exits.count;i++) for(unsigned byte=0;byte<12u;byte++)
+                for(unsigned bit=0;bit<8u;bit++) {
+                    uint32_t address=entries[i]+byte;
+                    uint8_t old=memory[physical(address)-UINT32_C(0x0c000000)];
+                    put(address,1u,old^(1u<<bit));
+                    CHECK(!installed_hooks_valid() && !legacy_installed_hooks_valid());
+                    put(address,1u,old);
+                    CHECK(installed_hooks_valid() && legacy_installed_hooks_valid());++mutations;
+                }
+            const uint32_t slots[]={input.lease.owner.initializer_slot,input.driver.completion_slot};
+            for(unsigned i=0;i<2u;i++) for(unsigned byte=0;byte<4u;byte++)
+                for(unsigned bit=0;bit<8u;bit++) {
+                    uint32_t address=slots[i]+byte;
+                    uint8_t old=memory[physical(address)-UINT32_C(0x0c000000)];
+                    put(address,1u,old^(1u<<bit));
+                    CHECK(!installed_hooks_valid() && !legacy_installed_hooks_valid());
+                    put(address,1u,old);
+                    CHECK(installed_hooks_valid() && legacy_installed_hooks_valid());++mutations;
+                }
+            /* A 12-byte halfword-aligned window spans four aligned loads.
+             * The two neighboring halfwords in those loads remain outside
+             * the original witnessed bytes and must not trigger refusal. */
+            for(unsigned i=3u;i<3u+input.exits.count;i++) {
+                const uint32_t adjacent[]={entries[i]-2u,entries[i]-1u,entries[i]+12u,entries[i]+13u};
+                for(unsigned byte=0;byte<4u;byte++) for(unsigned bit=0;bit<8u;bit++) {
+                    uint32_t address=adjacent[byte];
+                    uint8_t old=memory[physical(address)-UINT32_C(0x0c000000)];
+                    put(address,1u,old^(1u<<bit));
+                    CHECK(installed_hooks_valid() && legacy_installed_hooks_valid());
+                    put(address,1u,old);++neighbors;
+                }
+            }
+            bus_reads=0u;CHECK(installed_hooks_valid());
+            unsigned prepared_reads=bus_reads;CHECK(prepared_reads==hook_witness_count);
+            for(unsigned fault=1u;fault<=prepared_reads;fault++) {
+                bus_reads=0u;fail_read=fault;CHECK(!installed_hooks_valid());
+                CHECK(bus_reads==fault);fail_read=0u;++reader_faults;
+            }
+            bus_reads=0u;CHECK(legacy_installed_hooks_valid());
+            unsigned legacy_reads=bus_reads;
+            CHECK(legacy_reads==11u+input.exits.count*(half?6u:3u));
+            CHECK(prepared_reads<=legacy_reads);
+            CHECK(installed_hooks_valid() && legacy_installed_hooks_valid());
+            uint32_t ready=hook_witness_ready;
+            for(unsigned bit=0u;bit<32u;bit++) {
+                hook_witness_ready=ready^(UINT32_C(1)<<bit);bus_reads=0u;
+                CHECK(!installed_hooks_valid() && !bus_reads);
+            }
+            hook_witness_ready=ready;
+            unsigned count=hook_witness_count;hook_witness_count=0u;bus_reads=0u;
+            CHECK(!installed_hooks_valid() && !bus_reads);
+            hook_witness_count=HOOK_WITNESSES+1u;
+            CHECK(!installed_hooks_valid() && !bus_reads);
+            hook_witness_count=count;CHECK(installed_hooks_valid());idle();
+        }
+    printf("Prepared hook witnesses: %u byte/bit mutations, %u ignored neighbor bits, %u read-fault positions\n",
+        mutations,neighbors,reader_faults);
+}
 static void external_boundary_mutations(void) {
     uint8_t next[512],before[1024];memset(next,0x73,sizeof(next));
     for(unsigned write=0;write<2u;write++) for(unsigned after=0;after<2u;after++)
@@ -556,7 +666,8 @@ int main(void) {
     memcpy(target,rx_bytes(1),sizeof(target));reject_complete();
     CHECK(!durable_card.commits && durable_card.faulted && !memcmp(target,rx_bytes(1),sizeof(target)));
     CHECK(!memcmp(sd.media[image_lba(42u)],next,512u));
-    bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();polling_ownership_scope();gameplay_diagnostics();
+    bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();prepared_hook_witnesses();
+    polling_ownership_scope();gameplay_diagnostics();
     printf("Native persistent bridge: %u checks passed; filtered hardware chain, PIO save, reboot recovery and no false ACK\n",checks);
     return 0;
 }

@@ -93,8 +93,12 @@ def package(build):
         extra['tools/vmu_native_cache_seed.py']=(root/'tools/vmu_native_cache_seed.py').read_bytes()
         for name in ('vmu-feature-comparison.md','vmu-native-resolution-cache.md',
                      'vmu-native-launch-cache.md','vmu-native-runtime-cost.md',
-                     'native-heap-poll-identity.md','vmu-native-latency-test.md'):
+                     'native-heap-poll-identity.md','vmu-native-latency-test.md',
+                     'vmu-native-compat-test.md','vmu-native-optimization-test.md',
+                     'vmu-performance-design-review-2026-10-22.md','vmu-next-stages.md'):
             extra['docs/'+name]=(root/'docs'/name).read_bytes()
+        for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json'):
+            extra['docs/evidence/'+name]=(root/'docs/evidence'/name).read_bytes()
         extra['docs/native-sdk-family-corpus.json']=(root/'docs/evidence/native-sdk-family-corpus-2026-10-22.json').read_bytes()
         extra['docs/native-installer-stack-regression.json']=(root/'docs/evidence/native-sa2-installer-stack-2026-10-22.json').read_bytes()
         extra['TEST-RESULTS.csv']=(
@@ -128,7 +132,8 @@ def package(build):
         'personalize.py':(root/'tools/personalize_vmu_native_persistent.py').read_bytes(),
         'tools/runtime_package.py':(root/'tools/runtime_package.py').read_bytes(),
         'tools/vmu_persist_profile.py':(root/'tools/vmu_persist_profile.py').read_bytes(),
-        'README-FIRST.md':(root/f'docs/vmu-native-{flavor}-test.md').read_bytes(),
+        'README-FIRST.md':(root/('docs/vmu-native-optimization-test.md' if compat else
+                                f'docs/vmu-native-{flavor}-test.md')).read_bytes(),
         'probe-report.json':(json.dumps(report,indent=2)+'\n').encode(),
         'LICENSE':(root/'LICENSE').read_bytes(),
         'THIRD_PARTY.md':(root/'THIRD_PARTY.md').read_bytes(),

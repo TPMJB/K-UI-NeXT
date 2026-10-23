@@ -18,7 +18,13 @@ COMPAT_CACHE_HOST_SRC = src/core/vmu_native_resolution_cache.c src/core/vmu_nati
  src/core/vmu_native_layout.c src/core/vmu_native_heap.c src/core/vmu_native_exit.c \
  src/core/vmu_native_patch.c src/core/hash.c src/core/data.c
 
-.PHONY: compat-host-tests native-placement-host-tests native-lease-alias-host-tests
+.PHONY: compat-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests
+native-lifetime-prepared-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_lifetime_prepared.c \
+	 src/core/vmu_native_heap.c src/core/vmu_native_lifetime.c -o $(BUILD)/test-lifetime-prepared
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-lifetime-prepared
+
 native-lease-alias-host-tests:
 	@mkdir -p $(BUILD)
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_lease_alias.c \
@@ -39,7 +45,8 @@ native-placement-host-tests: $(BUILD)/stage.elf $(BUILD)/native-worker.bin
 	 $(if $(SA2_STARTUP),--sa2 '$(SA2_STARTUP)',)
 	python3 tests/test_vmu_native_stage_stack_artifact.py
 
-compat-host-tests: persistent-host-tests passive-host-tests readonly-host-tests native-placement-host-tests native-lease-alias-host-tests
+compat-host-tests: persistent-host-tests passive-host-tests readonly-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests
+	KUI_NATIVE_ARTIFACT_DIR=$(BUILD) python3 tests/test_vmu_native_prepared_artifact.py
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_mode.c src/core/vmu_native_mode.c -o $(BUILD)/test-mode
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-mode
 	python3 tests/test_vmu_native_mode.py

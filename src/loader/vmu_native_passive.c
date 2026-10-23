@@ -51,6 +51,11 @@ static struct kui_vmu_native_passive_frame completion_frame;
 static struct kui_vmu_native_live live_plan;
 static struct kui_vmu_native_lifetime_range protected_ranges[KUI_VMU_NATIVE_LIFETIME_RANGES];
 static unsigned protected_count;
+static struct kui_vmu_native_lifetime_plan lifetime_plan;
+#define HOOK_WITNESSES 32u
+static struct {uint32_t address,value,mask;} hook_witness[HOOK_WITNESSES];
+static unsigned hook_witness_count;
+static uint32_t hook_witness_ready;
 static struct {
     struct kui_vmu_native_profile timing;
     uint32_t clock_started,clock_first,clock_last,clock_samples,clock_invalid;
@@ -133,6 +138,20 @@ static bool read_value(void *unused,uint32_t a,unsigned width,uint32_t *v) {
 #endif
 }
 static bool read_heap(void *unused,uint32_t a,uint32_t *v) {return read_value(unused,a,4u,v);}
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+/* The prepared lifetime kernel proves every dynamic address before following
+ * it; immutable hook addresses are admitted when their plan is constructed.
+ * This reader is private to those paths. General runtime readers keep their
+ * original independent span checks. */
+static inline __attribute__((always_inline)) bool read_heap_proved(void *unused,uint32_t a,uint32_t *v) {
+    (void)unused;
+#ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+    return kui_vmu_native_passive_test_read(a,4u,v);
+#else
+    *v=*(volatile const uint32_t *)(uintptr_t)a;return true;
+#endif
+}
+#endif
 static bool stack_valid(void) {
     uint32_t sp=current_sp();
     if(((current_sr()>>4)&15u)!=15u || sp<STACK_LOW+256u || sp>=STACK_HIGH) return false;
@@ -152,7 +171,7 @@ static bool lease_valid(void) {
  * for a full check when admitting a new lease or an unobserved allocator. */
 static bool poll_lease_valid(void) {
     RECORD_WORK(heap);
-    return kui_vmu_native_heap_lease_identity_valid(&config.lease,read_heap,NULL,1u);
+    return kui_vmu_native_lifetime_identity_prepared_inline(&lifetime_plan,read_heap_proved,NULL,1u);
 }
 #else
 #define poll_lease_valid lease_valid
@@ -291,34 +310,52 @@ static bool protect_sdk(void) {
        !protect_range(config.layout.timer2_callback,4u)) return false;
     for(unsigned i=0;i<KUI_VMU_NATIVE_RX_SLOTS;i++)
         if(config.layout.rx_slots[i] && !protect_range(config.layout.rx_slots[i],1024u)) return false;
-    return kui_vmu_native_lifetime_release_safe_ranges(&config.lease,read_heap,NULL,1u,0u,
+    return kui_vmu_native_lifetime_prepare(&lifetime_plan,&config.lease,read_heap,NULL,1u,
         protected_ranges,protected_count);
 }
-static bool patch_matches(uint32_t address,uint32_t target) {
+static bool hook_word(uint32_t address,uint32_t value,uint32_t mask) {
+    if(!mask || !ram(address,4u,4u) || hook_witness_count==HOOK_WITNESSES) return false;
+    unsigned i=hook_witness_count++;
+    hook_witness[i].address=physical(address)|UINT32_C(0xa0000000);
+    hook_witness[i].value=value&mask;hook_witness[i].mask=mask;return true;
+}
+static bool prepare_hook_entry(uint32_t address,uint32_t target) {
     uint16_t patch[6];
     if(!ram(address,12u,2u) || !kui_vmu_native_patch_encode(address,target,patch)) return false;
-    unsigned width=(address&3u)?2u:4u;
-    for(unsigned i=0;i<12u/width;i++) {
-        uint32_t value,expected=patch[i*(width/2u)];
-        if(width==4u) expected|=(uint32_t)patch[i*2u+1u]<<16;
-        if(!read_value(NULL,(physical(address)+i*width)|UINT32_C(0xa0000000),width,&value) ||
-           value!=expected) return false;
+    uint32_t word=physical(address)&~3u,value=0u,mask=0u;
+    for(unsigned i=0;i<12u;i++) {
+        uint32_t at=physical(address)+i;
+        if((at&~3u)!=word) {
+            if(!hook_word(word,value,mask)) return false;
+            word=at&~3u;value=mask=0u;
+        }
+        unsigned shift=(at&3u)*8u;
+        value|=(uint32_t)((patch[i/2u]>>((i&1u)*8u))&255u)<<shift;
+        mask|=UINT32_C(255)<<shift;
     }
-    return true;
+    return hook_word(word,value,mask);
+}
+static bool prepare_installed_hooks(void) {
+    hook_witness_ready=0u;hook_witness_count=0u;
+    if((config.driver.submit|config.lease.owner.release|config.lease.owner.initializer)&3u ||
+       !prepare_hook_entry(config.driver.submit,kui_vmu_native_worker_exports.submit_hook) ||
+       !prepare_hook_entry(config.lease.owner.release,kui_vmu_native_worker_exports.release_hook) ||
+       !prepare_hook_entry(config.lease.owner.initializer,config.low_terminal) ||
+       !hook_word(config.lease.owner.initializer_slot,config.low_heap_hook,UINT32_MAX) ||
+       !hook_word(config.driver.completion_slot,kui_vmu_native_worker_exports.complete_hook,UINT32_MAX)) return false;
+    for(unsigned i=0;i<config.exits.count;i++)
+        if(!prepare_hook_entry(config.exits.entries[i],config.low_terminal)) return false;
+    hook_witness_ready=UINT32_C(0x4e485031);return true;
 }
 static bool installed_hooks_valid(void) {
     RECORD_WORK(hooks);
-    uint32_t value;
-    if((config.driver.submit|config.lease.owner.release|config.lease.owner.initializer)&3u) return false;
-    if(!patch_matches(config.driver.submit,kui_vmu_native_worker_exports.submit_hook) ||
-       !patch_matches(config.lease.owner.release,kui_vmu_native_worker_exports.release_hook) ||
-       !patch_matches(config.lease.owner.initializer,config.low_terminal) ||
-       !read_value(NULL,physical(config.lease.owner.initializer_slot)|UINT32_C(0xa0000000),4u,&value) ||
-       value!=config.low_heap_hook ||
-       !read_value(NULL,physical(config.driver.completion_slot)|UINT32_C(0xa0000000),4u,&value) ||
-       value!=kui_vmu_native_worker_exports.complete_hook) return false;
-    for(unsigned i=0;i<config.exits.count;i++)
-        if(!patch_matches(config.exits.entries[i],config.low_terminal)) return false;
+    if(hook_witness_ready!=UINT32_C(0x4e485031) || !hook_witness_count ||
+       hook_witness_count>HOOK_WITNESSES) return false;
+    for(unsigned i=0;i<hook_witness_count;i++) {
+        uint32_t value;
+        if(!read_heap_proved(NULL,hook_witness[i].address,&value) ||
+           (value&hook_witness[i].mask)!=hook_witness[i].value) return false;
+    }
     return true;
 }
 #endif
@@ -439,6 +476,8 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     memset(&live_plan,0,sizeof(live_plan));
     memset(&diagnostic,0,sizeof(diagnostic));
+    memset(&lifetime_plan,0,sizeof(lifetime_plan));
+    hook_witness_ready=0u;hook_witness_count=0u;
     if(config.diagnostics>1u) {memset(&config,0,sizeof(config));return -2;}
 #endif
     if(!lease_valid()) {memset(&config,0,sizeof(config));return -2;}
@@ -476,6 +515,7 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
             memset(&config,0,sizeof(config));return -3;
         }
     }
+    if(!prepare_installed_hooks()) {memset(&config,0,sizeof(config));return -3;}
 #else
     if(kui_vmu_readonly_init(&card) || kui_vmu_readonly_overlay_init(&overlay,readonly_handler,&card)) {
         memset(&config,0,sizeof(config));return -3;
@@ -498,8 +538,7 @@ void kui_vmu_native_readonly_release_check(const struct kui_vmu_native_passive_f
        kui_vmu_native_readonly_release_resume!=config.lease.owner.release+20u ||
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
        !installed_hooks_valid() ||
-       !kui_vmu_native_lifetime_release_safe_ranges(&config.lease,read_heap,NULL,1u,f->r4,
-           protected_ranges,protected_count)) fail(0x30u);
+       !kui_vmu_native_lifetime_release_prepared_inline(&lifetime_plan,read_heap_proved,NULL,1u,f->r4)) fail(0x30u);
 #else
        !kui_vmu_native_lifetime_release_safe(&config.lease,read_heap,NULL,1u,f->r4)) fail(0x30u);
 #endif

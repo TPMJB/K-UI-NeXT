@@ -26,7 +26,7 @@ from check_vmu_native_worker_gateway import (
     MASK, P1, P2, literal_aware_instructions, model_gateway, read_elf, symbol_bytes,
     Gateway as StageGateway, ENTRY as P2_ENTRY, TOP, CONFIG, RESULT,
 )
-from check_loader_layout import inspect_elf, padded, region
+from check_loader_layout import inspect_elf, padded, region, SYM
 from check_retail_instructions import audit as instruction_audit
 from runtime_package import verify
 from package_vmu_maple_observe import (linked_stack_rows, _function_base, check_pio_callgraph, linked_function_names)
@@ -42,6 +42,187 @@ from test_armada_ce_maple_hook import CPU
 
 ROOT = Path(__file__).resolve().parents[1]
 SPAN = 0x20000
+
+# The prepared kernels are reviewed linked SH instructions, including their
+# literal pools. Only ELF-proven pointer words are normalized; their exact
+# typed object/function, local source owner and interior offset remain in the
+# signature. This admits relocation/layout changes, not new code or targets.
+PREPARED_PINS = {
+    '_poll_lease_valid': ('b67c432db445f780a4b2e93871f7907b7f7de1fd8c0795faf112f30fe0673302', 64),
+    '_installed_hooks_valid': ('819cc9127506f6790fa189371f453b3474bd2b3f9e39752d43a5d8501dd2e286', 76),
+    '_kui_vmu_native_readonly_release_check': ('29ffb0f2346cd6757c9f704080be9afc70c80945c03f540c84bdc0c1ab78b95d', 552),
+    '_hook_word': ('6c579e60911823ed1fbf6a57622bab2d7de2ebf46228c2c2c21d27f8fc144249', 112),
+    '_prepare_hook_entry': ('a725563c7ef1e7429dd214860f8f7ecfddac54cf0981577fe679602117bebca3', 188),
+    '_kui_vmu_native_lifetime_prepare': ('4691642d40ae532e2f81cfe46c3f81a019412c0da0e43fb4f7913d4a44b87312', 640),
+    '_kui_vmu_native_passive_arm': ('e9ba6682ce401f1f5660e1947d131eb195854513396b20bfd87591228718f32f', 1360),
+    '_persistent_storage_guard': ('d230251892a758f65469e9cb692703a0270511756e1fbdc94cc28e04472a15fe', 396),
+    '_persistent_lease': ('a57c23fdc9ce23429aaa19c44c21ea362afcf6d245c6185e4ed717de4c074f96', 144),
+    '_kui_vmu_native_passive_submit': ('728ad170ab49ece06e8d5612e173300e0f2d08384c449a158bf02ae944c3c877', 580),
+    '_kui_vmu_native_passive_complete': ('3fdc8acf576a9ac6c1185e02566f253ddd058eab2226def2e81ffc729c1e2442', 1416),
+    '.rodata': ('ed79995b7e2020e6b92f75e343aec051d5d25f3bfff3091efcbbe12eecebdf9b', 1422),
+}
+
+
+def prepared_symbol_records(worker):
+    data, _, _, sections, _ = worker
+    records = []
+    for section in sections:
+        if section[1] != 2:
+            continue
+        strings = sections[section[6]]
+        names = region(data, strings[4], strings[5], "prepared symbol strings")
+        source = ""
+        for at in range(section[4], section[4] + section[5], SYM.size):
+            name, value, size, info, _, owner = SYM.unpack(region(data, at, SYM.size, "prepared symbol"))
+            name = names[name:].split(b"\0", 1)[0].decode("ascii")
+            if info & 15 == 4:
+                source = name
+            elif name and (info & 15 in (1, 2) or name in
+                           ("__vmu_native_worker_stack_bottom", "__vmu_native_worker_stack_top")):
+                qualified = name + ("@" + source if not info >> 4 else "")
+                records.append((qualified, value, size, info & 15, owner))
+    strings = sections[worker[1][13]]
+    names = region(data, strings[4], strings[5], "prepared section names")
+    for owner, section in enumerate(sections):
+        # GCC's anonymous switch tables have no STT_OBJECT. Their complete
+        # constant section is separately pinned, including relocations into
+        # exact function offsets. No other untyped data target is admitted.
+        if names[section[0]:].split(b"\0", 1)[0] == b".rodata" and section[2] & 7 == 2:
+            records.append((".rodata", section[3], section[5], 3, owner))
+    return records
+
+
+def prepared_signature(worker, binary, wire, name, build=None):
+    """Closed signature over all body bytes and typed relocation bindings."""
+    records = prepared_symbol_records(worker)
+    if name == ".rodata":
+        strings = worker[3][worker[1][13]]
+        names = region(worker[0], strings[4], strings[5], "prepared section names")
+        sections = [s for s in worker[3] if names[s[0]:].split(b"\0", 1)[0] == b".rodata" and
+                    s[1] == 1 and s[2] & 7 == 2 and s[3] & 0xff000000 == 0x8c000000]
+        require(len(sections) == 1, "prepared worker lacks unique cached constant section")
+        section = sections[0]
+        address, body = section[3], bytearray(region(worker[0], section[4], section[5], name))
+        # Exactly one authored diagnostic label carries the independently
+        # verified module/entry build identity. Normalize only its twelve
+        # lowercase hexadecimal bytes; prefix, position and NUL stay pinned.
+        require(isinstance(build, str) and re.fullmatch(r"[0-9a-f]{12}", build),
+                "prepared constant signature needs verified runtime build identity")
+        label = b"BUILD " + build.encode("ascii") + b"\0"
+        require(body.count(b"BUILD ") == 1 and body.count(label) == 1,
+                "prepared build identity differs from verified runtime")
+        at = body.index(label) + 6
+        body[at:at + 12] = bytes(12)
+    else:
+        address, raw, section = symbol_bytes(worker, name, 2)
+        body = bytearray(raw)
+    first = physical(address) - physical(P1)
+    references = []
+    for i in range(struct.unpack_from("<I", wire, 28)[0]):
+        at, value = struct.unpack_from("<II", wire, 72 + 8 * i)
+        if not first <= at < first + len(body):
+            continue
+        offset = at - first
+        require(offset % 4 == 0 and offset + 4 <= len(body), "prepared pointer crosses body")
+        require(struct.unpack_from("<I", body, offset)[0] == value, "prepared pointer differs from ELF body")
+        found = [r for r in records if r[1] <= value < r[1] + r[2] or
+                 not r[2] and r[1] == value]
+        require(found, "prepared pointer has no typed target: " + hex(value))
+        target = min(found, key=lambda r: (r[2], r[0]))
+        require(target[4] < len(worker[3]) and worker[3][target[4]][2] & 2,
+                "prepared pointer target is not allocated")
+        references.append((offset, target[0], value - target[1], target[3]))
+        body[offset:offset + 4] = bytes(4)
+    value = {"body": body.hex(), "references": references}
+    digest = hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return digest, len(body), references
+
+
+def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *, build=None):
+    """Keep the legacy proof, or require the complete prepared proof family."""
+    if "_lifetime_plan" not in worker[4]:
+        _, _, section = symbol_bytes(worker, "_kui_vmu_native_lifetime_release_safe_ranges", 2)
+        require(section[2] & 7 == 6, "missing legacy lifetime admission")
+        return {"prepared": False, "legacy_full_release_admission": True}
+    if build is None:
+        build = verify((directory / "retail-maple-observe.kui").read_bytes())["build"]
+    for name, size in (("_lifetime_plan", 616), ("_hook_witness", 384),
+                       ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
+                       ("_protected_ranges", 512), ("_protected_count", 4)):
+        address, actual, kind, owner = worker[4][name]
+        section = worker[3][owner]
+        require(kind == 1 and actual == size and address % 4 == 0 and
+                section[2] & 7 == 3 and section[1] == 8 and
+                section[3] <= address < address + actual <= section[3] + section[5] and
+                P2 <= address < address + actual <= worker[4]["__vmu_native_worker_stack_bottom"][0],
+                "prepared object lacks exact private P2 BSS ownership: " + name)
+    functions = {}
+    for name, expected in PREPARED_PINS.items():
+        signature, size, references = prepared_signature(worker, binary, wire, name, build)
+        require((signature, size) == expected, "prepared linked instructions/targets changed: " + name)
+        functions[name] = {"normalized_sha256": signature, "bytes": size,
+                           "typed_pointer_bindings": len(references)}
+    require(PREPARED_PINS, "missing reviewed prepared linked signatures")
+    graph = (directory / "native/src/loader/vmu_native_passive.ci").read_text()
+    edges = [(a, b) for a, b, _ in EDGE.findall(graph)]
+    local = "src/loader/vmu_native_passive.c:"
+    for caller, required in (
+            ("kui_vmu_native_passive_arm", ("kui_vmu_native_lifetime_prepare", local + "prepare_hook_entry", local + "hook_word")),
+            ("kui_vmu_native_passive_submit", (local + "installed_hooks_valid", local + "poll_lease_valid")),
+            ("kui_vmu_native_passive_complete", (local + "installed_hooks_valid", local + "poll_lease_valid")),
+            ("kui_vmu_native_readonly_release_check", (local + "installed_hooks_valid",)),
+            (local + "persistent_storage_guard", ("kui_vmu_native_heap_lease_valid", local + "stack_valid",
+                local + "installed_hooks_valid", "kui_vmu_native_layout_bind_checked", "kui_vmu_native_runtime_check",
+                local + "chain", "kui_vmu_volatile_chain_verify"))):
+        require(all((caller, target) in edges for target in required),
+                "prepared admission loses required emitted call: " + caller)
+    require(edges.count((local + "persistent_lease", local + "persistent_storage_guard")) == 2,
+            "storage loan must retain full guards at both boundaries")
+    rejected = 0
+    if self_test:
+        # Independent code and valid-but-wrong pointer-target mutations. The
+        # signatures bind the loop bounds, fail branches and every literal.
+        for name in PREPARED_PINS:
+            signature, size, references = prepared_signature(worker, binary, wire, name, build)
+            if name == ".rodata":
+                continue
+            address, body, _ = symbol_bytes(worker, name, 2)
+            for at in (0, size - 2):
+                changed = bytearray(worker[0])
+                owner = worker[3][worker[4][name][3]]
+                changed[owner[4] + address - owner[3] + at] ^= 1
+                mutant = (bytes(changed),) + worker[1:]
+                try:
+                    different = prepared_signature(mutant, binary, wire, name)[:2] != (signature, size)
+                except ValueError:
+                    different = True
+                require(different,
+                        "prepared signature accepts instruction mutation: " + name)
+                rejected += 1
+            if references:
+                changed = bytearray(wire)
+                changed_elf = bytearray(worker[0])
+                first = physical(address) - physical(P1)
+                offset = references[0][0]
+                for i in range(struct.unpack_from("<I", wire, 28)[0]):
+                    at, value = struct.unpack_from("<II", wire, 72 + i * 8)
+                    if at == first + offset:
+                        struct.pack_into("<I", changed, 76 + i * 8, value + 4)
+                        owner = worker[3][worker[4][name][3]]
+                        struct.pack_into("<I", changed_elf, owner[4] + address - owner[3] + offset, value + 4)
+                        break
+                try:
+                    mutant = (bytes(changed_elf),) + worker[1:]
+                    different = prepared_signature(mutant, binary, bytes(changed), name)[:2] != (signature, size)
+                except ValueError:
+                    different = True
+                require(different, "prepared signature accepts changed typed pointer: " + name)
+                rejected += 1
+    return {"prepared": True, "exact_linked_kernels": functions, "build_identity": build,
+            "constant_build_identity_bound_to_verified_runtime": True, "identity_words": 8,
+            "protected_interval_limit": 64, "hook_word_limit": 32, "free_node_limit": 1024,
+            "full_dynamic_free_list_each_release": True, "full_storage_guards_before_and_after_loan": True,
+            "emitted_callgraph_bound": True, "mutation_rejections": rejected}
 
 # Whole integer trampoline, including its P2 resume literal and zero padding.
 TRAMPOLINE_PREFIX = bytes.fromhex(
@@ -981,10 +1162,11 @@ def check(directory, *, self_test=False):
                  "_kui_vmu_store_read", "_kui_sci_sd_write", "_kui_sci_sd_sync",
                  "_kui_vmu_readonly_overlay_prepare", "_kui_vmu_readonly_overlay_complete",
                  "_kui_vmu_volatile_chain_build", "_kui_vmu_volatile_chain_verify",
-                 "_kui_vmu_native_readonly_release_check", "_kui_vmu_native_lifetime_release_safe_ranges"):
+                 "_kui_vmu_native_readonly_release_check"):
         _, _, section = symbol_bytes(worker, name, 2)
         require(section[2] & 7 == 6, "missing bounded persistent bridge implementation: " + name)
     require(generate(data, binary, P1, SPAN) == wire, "relocation table differs from exact ELF extraction")
+    prepared_lifetime = check_prepared_lifetime(directory, worker, binary, wire, self_test, build=base["runtime"]["build"])
     relocations = struct.unpack_from("<I", wire, 28)[0]
     for i in range(relocations):
         value = struct.unpack_from("<I", wire, 76 + i * 8)[0]
@@ -1048,6 +1230,7 @@ def check(directory, *, self_test=False):
               "module_sha256": base["module_sha256"], "runtime": base["runtime"],
               "worker_bytes": len(binary), "worker_span": SPAN, "worker_stack_bytes": 4096,
               "worker_load_policy": policy, "cached_code": cached,
+              "prepared_lifetime_admission": prepared_lifetime,
               "stage_cache_publication": publication,
               "worker_icache_publication": publisher,
               "resolution_cache_seed": seed,

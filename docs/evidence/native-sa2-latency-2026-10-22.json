@@ -1,0 +1,565 @@
+{
+  "schema": "kui.native.latency.hardware-capture.v1",
+  "date": "2026-10-22",
+  "build": "1e5b595f9618",
+  "title_context": "Sonic Adventure 2, from the current paired test sequence; the photographed screen itself has a generic native GD header",
+  "screenshot": {
+    "uploaded_name": "01-image-1792729561693.jpg",
+    "sha256": "ed88b5e5113c74c393a6060d570f8069ac0672cdacdaab18e47e5cc2ff09fff1",
+    "image_bytes_included": false,
+    "transcription": "Independent direct visual read of the supplied original photograph; all displayed digits readable"
+  },
+  "owner_report": {
+    "no_vmu_control": "substantially better without the VMU",
+    "capture_gameplay_baseline": "No claim of disc parity or the complete absence of loader overhead"
+  },
+  "timer": {
+    "frequency_hz": 781250,
+    "microseconds_per_tick": 1.28,
+    "basis": "The build admits the existing exact read-only TMU0 owner profile; every displayed span is valid"
+  },
+  "raw_context_hex": {
+    "wall_ticks": "00EE0E14",
+    "clock_samples": "000094E4",
+    "bad_clock_samples": "00000000",
+    "flags": "00000000",
+    "ccr_first": "00000105",
+    "ccr_last": "00000105",
+    "ice_off_samples": "00000000",
+    "polls": "000004B0",
+    "commits": "00000000"
+  },
+  "metrics": {
+    "submit": {
+      "raw_hex": {
+        "calls": "000004B0",
+        "valid": "000004B0",
+        "invalid": "00000000",
+        "total_ticks": "0008000B",
+        "max_ticks": "000001D5"
+      },
+      "calls": 1200,
+      "valid": 1200,
+      "invalid": 0,
+      "total_ticks": 524299,
+      "max_ticks": 469,
+      "total_seconds": 0.67110272,
+      "wall_percent": 3.3606385468989126,
+      "mean_microseconds": 559.2522666666667,
+      "max_microseconds": 600.32
+    },
+    "complete": {
+      "raw_hex": {
+        "calls": "000004B0",
+        "valid": "000004B0",
+        "invalid": "00000000",
+        "total_ticks": "000727F0",
+        "max_ticks": "000001A6"
+      },
+      "calls": 1200,
+      "valid": 1200,
+      "invalid": 0,
+      "total_ticks": 468976,
+      "max_ticks": 422,
+      "total_seconds": 0.60028928,
+      "wall_percent": 3.0060305725749323,
+      "mean_microseconds": 500.24106666666665,
+      "max_microseconds": 540.1600000000001
+    },
+    "free": {
+      "raw_hex": {
+        "calls": "00004112",
+        "valid": "00004112",
+        "invalid": "00000000",
+        "total_ticks": "0059C73B",
+        "max_ticks": "00000206"
+      },
+      "calls": 16658,
+      "valid": 16658,
+      "invalid": 0,
+      "total_ticks": 5883707,
+      "max_ticks": 518,
+      "total_seconds": 7.53114496,
+      "wall_percent": 37.713237185001226,
+      "mean_microseconds": 452.10379157161725,
+      "max_microseconds": 663.0400000000001
+    },
+    "storage": {
+      "raw_hex": {
+        "calls": "00000000",
+        "valid": "00000000",
+        "invalid": "00000000",
+        "total_ticks": "00000000",
+        "max_ticks": "00000000"
+      },
+      "calls": 0,
+      "valid": 0,
+      "invalid": 0,
+      "total_ticks": 0,
+      "max_ticks": 0,
+      "total_seconds": 0.0,
+      "wall_percent": 0.0,
+      "mean_microseconds": null,
+      "max_microseconds": null
+    }
+  },
+  "derived": {
+    "wall_ticks": 15601172,
+    "wall_seconds": 19.96950016,
+    "poll_pairs": 1200,
+    "poll_pairs_per_second": 60.091639269152346,
+    "free_calls_per_second": 834.1721057879498,
+    "free_calls_per_poll_pair": 13.881666666666666,
+    "polling_total_seconds": 1.271392,
+    "polling_wall_percent": 6.366669119473845,
+    "nonoverlapping_measured_c_total_seconds": 8.80253696,
+    "nonoverlapping_measured_c_wall_percent": 44.079906304475074,
+    "measured_c_milliseconds_per_poll_pair": 7.3354474666666665,
+    "expected_clock_samples": 38116,
+    "observed_clock_samples": 38116,
+    "clock_sample_count_consistent": true
+  },
+  "interpretation": {
+    "largest_observed_cost": "Heap-release validation, 37.713237185001226 percent of captured wall time",
+    "storage_bottleneck_in_this_window": false,
+    "instruction_cache_disabled_in_this_window": false,
+    "cause_supported": "The VMU path adds a substantial measured interrupt-masked C execution cost, with release checks dominant",
+    "remaining_confounder": "The no-VMU control also omits the 192 KiB reservation, so this observation alone does not exclude an additional memory-budget effect"
+  },
+  "limits": [
+    "Measured C spans include timing-sample overhead; assembly entry/exit saves and final accounting lie outside those spans.",
+    "Completion normally includes nested storage time and must not be summed with storage as independent CPU usage. This window has zero storage calls, so submit, completion and release totals are nonoverlapping.",
+    "The timing report stops at 1200 polls before reaching exactly 20 seconds: wall time is approximately 19.97 seconds.",
+    "The timed scopes execute with IMASK15 in this build; the capture does not measure all loader or original-game work.",
+    "All metrics are from a single owner gameplay capture; no general per-title frame-rate guarantee follows."
+  ],
+  "static_range_coalescing": {
+    "basis": "Exact protect_sdk range construction applied to the pinned data-only metadata fixtures; physical alias canonicalization, union of overlapping or adjacent intervals only",
+    "changes_live_safety_checks": false,
+    "records": {
+      "sa2": {
+        "record_fixture": "tests/fixtures/native-cache/sa2.nvr",
+        "record_sha256": "e7e9de078984e66c50203de9095604e1a2bb5deac905626f27aadca870bdb89c",
+        "raw_range_count": 60,
+        "merged_range_count": 7,
+        "canonical_physical_ranges": [
+          {
+            "begin": "0c010000",
+            "end_exclusive": "0c191484",
+            "bytes": 1578116,
+            "members": [
+              "image",
+              "index_array",
+              "input_array",
+              "completion_slot",
+              "lock"
+            ]
+          },
+          {
+            "begin": "0c1914a0",
+            "end_exclusive": "0c19d4a0",
+            "bytes": 49152,
+            "members": [
+              "rx_base",
+              "rx0",
+              "rx1",
+              "rx2",
+              "rx3",
+              "rx4",
+              "rx5",
+              "rx6",
+              "rx7",
+              "rx8",
+              "rx9",
+              "rx10",
+              "rx11",
+              "rx12",
+              "rx13",
+              "rx14",
+              "rx15",
+              "rx16",
+              "rx17",
+              "rx18",
+              "rx19",
+              "rx20",
+              "rx21",
+              "rx22",
+              "rx23",
+              "rx24",
+              "rx25",
+              "rx26",
+              "rx27",
+              "rx28",
+              "rx29",
+              "rx30",
+              "rx31",
+              "rx32",
+              "rx33",
+              "rx34",
+              "rx35",
+              "rx36",
+              "rx37",
+              "rx38",
+              "rx39",
+              "rx40",
+              "rx41",
+              "rx42",
+              "rx43",
+              "rx44",
+              "rx45",
+              "rx46",
+              "rx47"
+            ]
+          },
+          {
+            "begin": "0c19d4c0",
+            "end_exclusive": "0c1a34c0",
+            "bytes": 24576,
+            "members": [
+              "tx"
+            ]
+          },
+          {
+            "begin": "0c28d884",
+            "end_exclusive": "0c28d888",
+            "bytes": 4,
+            "members": [
+              "timer1"
+            ]
+          },
+          {
+            "begin": "0c28d88c",
+            "end_exclusive": "0c28d890",
+            "bytes": 4,
+            "members": [
+              "timer2"
+            ]
+          },
+          {
+            "begin": "0c29becc",
+            "end_exclusive": "0c29bed0",
+            "bytes": 4,
+            "members": [
+              "gun"
+            ]
+          },
+          {
+            "begin": "0c2a23fc",
+            "end_exclusive": "0c2a34fc",
+            "bytes": 4352,
+            "members": [
+              "manager",
+              "manager_cell"
+            ]
+          }
+        ],
+        "predicted_arena_raw_begin": "8cc00000",
+        "predicted_arena_physical_begin": "0cc00000",
+        "predicted_arena_bytes": 4194304,
+        "predicted_arena_physical_end_exclusive": "0d000000",
+        "arena_clipped_range_count": 0,
+        "arena_clipped_ranges": []
+      },
+      "skies": {
+        "record_fixture": "tests/fixtures/native-cache/skies.nvr",
+        "record_sha256": "d33522081fd9faef70fe28265f91d95cb2fe20f797a19bb9dc1d52c73f776b20",
+        "raw_range_count": 60,
+        "merged_range_count": 7,
+        "canonical_physical_ranges": [
+          {
+            "begin": "0c010000",
+            "end_exclusive": "0c545070",
+            "bytes": 5460080,
+            "members": [
+              "image",
+              "index_array",
+              "input_array",
+              "completion_slot",
+              "lock"
+            ]
+          },
+          {
+            "begin": "0c545080",
+            "end_exclusive": "0c551080",
+            "bytes": 49152,
+            "members": [
+              "rx_base",
+              "rx0",
+              "rx1",
+              "rx2",
+              "rx3",
+              "rx4",
+              "rx5",
+              "rx6",
+              "rx7",
+              "rx8",
+              "rx9",
+              "rx10",
+              "rx11",
+              "rx12",
+              "rx13",
+              "rx14",
+              "rx15",
+              "rx16",
+              "rx17",
+              "rx18",
+              "rx19",
+              "rx20",
+              "rx21",
+              "rx22",
+              "rx23",
+              "rx24",
+              "rx25",
+              "rx26",
+              "rx27",
+              "rx28",
+              "rx29",
+              "rx30",
+              "rx31",
+              "rx32",
+              "rx33",
+              "rx34",
+              "rx35",
+              "rx36",
+              "rx37",
+              "rx38",
+              "rx39",
+              "rx40",
+              "rx41",
+              "rx42",
+              "rx43",
+              "rx44",
+              "rx45",
+              "rx46",
+              "rx47"
+            ]
+          },
+          {
+            "begin": "0c5510a0",
+            "end_exclusive": "0c5570a0",
+            "bytes": 24576,
+            "members": [
+              "tx"
+            ]
+          },
+          {
+            "begin": "0c5987fc",
+            "end_exclusive": "0c598800",
+            "bytes": 4,
+            "members": [
+              "timer1"
+            ]
+          },
+          {
+            "begin": "0c598804",
+            "end_exclusive": "0c598808",
+            "bytes": 4,
+            "members": [
+              "timer2"
+            ]
+          },
+          {
+            "begin": "0c5a3d78",
+            "end_exclusive": "0c5a3d7c",
+            "bytes": 4,
+            "members": [
+              "gun"
+            ]
+          },
+          {
+            "begin": "0c5e4c8c",
+            "end_exclusive": "0c5e5d8c",
+            "bytes": 4352,
+            "members": [
+              "manager",
+              "manager_cell"
+            ]
+          }
+        ],
+        "predicted_arena_raw_begin": "8c5e9ba0",
+        "predicted_arena_physical_begin": "0c5e9ba0",
+        "predicted_arena_bytes": 10576992,
+        "predicted_arena_physical_end_exclusive": "0d000000",
+        "arena_clipped_range_count": 0,
+        "arena_clipped_ranges": []
+      },
+      "ps2": {
+        "record_fixture": "tests/fixtures/native-cache/ps2.nvr",
+        "record_sha256": "dc88ee1fcaeaceeeb4917fb9ef17efb039307dfdfa952365b08154d9f7477864",
+        "raw_range_count": 36,
+        "merged_range_count": 18,
+        "canonical_physical_ranges": [
+          {
+            "begin": "0c010000",
+            "end_exclusive": "0c304399",
+            "bytes": 3097497,
+            "members": [
+              "image",
+              "index_array",
+              "input_array",
+              "rx_base",
+              "completion_slot",
+              "lock"
+            ]
+          },
+          {
+            "begin": "0c30f000",
+            "end_exclusive": "0c30f800",
+            "bytes": 2048,
+            "members": [
+              "rx0",
+              "rx24"
+            ]
+          },
+          {
+            "begin": "0c30f820",
+            "end_exclusive": "0c310020",
+            "bytes": 2048,
+            "members": [
+              "rx1",
+              "rx25"
+            ]
+          },
+          {
+            "begin": "0c310040",
+            "end_exclusive": "0c310840",
+            "bytes": 2048,
+            "members": [
+              "rx2",
+              "rx26"
+            ]
+          },
+          {
+            "begin": "0c310860",
+            "end_exclusive": "0c311060",
+            "bytes": 2048,
+            "members": [
+              "rx6",
+              "rx30"
+            ]
+          },
+          {
+            "begin": "0c311080",
+            "end_exclusive": "0c311880",
+            "bytes": 2048,
+            "members": [
+              "rx7",
+              "rx31"
+            ]
+          },
+          {
+            "begin": "0c3118a0",
+            "end_exclusive": "0c3120a0",
+            "bytes": 2048,
+            "members": [
+              "rx8",
+              "rx32"
+            ]
+          },
+          {
+            "begin": "0c3120c0",
+            "end_exclusive": "0c3128c0",
+            "bytes": 2048,
+            "members": [
+              "rx12",
+              "rx36"
+            ]
+          },
+          {
+            "begin": "0c3128e0",
+            "end_exclusive": "0c3130e0",
+            "bytes": 2048,
+            "members": [
+              "rx13",
+              "rx37"
+            ]
+          },
+          {
+            "begin": "0c313100",
+            "end_exclusive": "0c313900",
+            "bytes": 2048,
+            "members": [
+              "rx14",
+              "rx38"
+            ]
+          },
+          {
+            "begin": "0c313920",
+            "end_exclusive": "0c314120",
+            "bytes": 2048,
+            "members": [
+              "rx18",
+              "rx42"
+            ]
+          },
+          {
+            "begin": "0c314140",
+            "end_exclusive": "0c314940",
+            "bytes": 2048,
+            "members": [
+              "rx19",
+              "rx43"
+            ]
+          },
+          {
+            "begin": "0c314960",
+            "end_exclusive": "0c315160",
+            "bytes": 2048,
+            "members": [
+              "rx20",
+              "rx44"
+            ]
+          },
+          {
+            "begin": "0c315180",
+            "end_exclusive": "0c31b180",
+            "bytes": 24576,
+            "members": [
+              "tx"
+            ]
+          },
+          {
+            "begin": "0c8c1be8",
+            "end_exclusive": "0c8c1bec",
+            "bytes": 4,
+            "members": [
+              "timer1"
+            ]
+          },
+          {
+            "begin": "0c8c1bf0",
+            "end_exclusive": "0c8c1bf4",
+            "bytes": 4,
+            "members": [
+              "timer2"
+            ]
+          },
+          {
+            "begin": "0c8c2178",
+            "end_exclusive": "0c8c217c",
+            "bytes": 4,
+            "members": [
+              "gun"
+            ]
+          },
+          {
+            "begin": "0c8d3c88",
+            "end_exclusive": "0c8d4d88",
+            "bytes": 4352,
+            "members": [
+              "manager",
+              "manager_cell"
+            ]
+          }
+        ],
+        "predicted_arena_raw_begin": "0c33a880",
+        "predicted_arena_physical_begin": "0c33a880",
+        "predicted_arena_bytes": 524288,
+        "predicted_arena_physical_end_exclusive": "0c3ba880",
+        "arena_clipped_range_count": 0,
+        "arena_clipped_ranges": []
+      }
+    },
+    "arena_clipping_argument": "A validated release candidate must fit completely in the current admitted arena. An SDK exclusion span with no physical intersection with that arena cannot overlap any such candidate. Preparation can clip the immutable exclusions to that fixed arena and drop empty intersections, preserving candidate exclusion. Current production guard still performs its full dynamic release and free-list validation."
+  }
+}
