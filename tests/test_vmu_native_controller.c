@@ -9,6 +9,20 @@ static void warm(void) {
     setup();transfer_batch(0u,0u,0u,NULL);
     CHECK(live_plan.ready && !controller_pair.pending && !overlay.pending);
 }
+static void uniform_warm(void) {
+    model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
+    lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
+    struct kui_vmu_native_layout *l=&input.layout;
+    l->rx_layout=KUI_VMU_NATIVE_RX_UNIFORM48;l->inputs=1u;
+    memset(l->input_values,0,sizeof(l->input_values));memset(l->indices,0,sizeof(l->indices));
+    l->input_values[0]=0xac500004u;l->indices[0]=0xac400000u;l->rx_base=0xac500020u;
+    put(l->input_array,4u,l->input_values[0]);put(l->index_array,4u,l->indices[0]);
+    put(0x0c300fc8u,4u,l->rx_base);
+    for(unsigned i=0;i<48u;i++) {l->rx_slots[i]=l->rx_base+i*1024u;
+        put(0x0c300fe8u+i*4u,4u,l->rx_slots[i]);}
+    arm();install_hooks();transfer_batch(0u,0u,0u,NULL);
+    CHECK(live_plan.ready && !controller_pair.pending && !overlay.pending);
+}
 static void controllers(unsigned ports,unsigned nops) {
     stage_batch(0u,0u);
     uint32_t source=value_at(0xa05f6c04u);
@@ -45,9 +59,161 @@ static void same_rx(uint8_t before[5][1024]) {
     for(unsigned port=0;port<4u;port++) CHECK(!memcmp(before[port],rx_bytes(port*6u),1024u));
     CHECK(!memcmp(before[4],rx_bytes(1u),1024u));
 }
+static void save_all_rx(uint8_t before[KUI_VMU_NATIVE_RX_SLOTS][1024]) {
+    for(unsigned i=0u;i<KUI_VMU_NATIVE_RX_SLOTS;i++) if(config.runtime.rx_slots[i])
+        memcpy(before[i],readonly_rx(physical(config.runtime.rx_slots[i]),1024u),1024u);
+}
+static void same_all_rx(uint8_t before[KUI_VMU_NATIVE_RX_SLOTS][1024]) {
+    for(unsigned i=0u;i<KUI_VMU_NATIVE_RX_SLOTS;i++) if(config.runtime.rx_slots[i])
+        CHECK(!memcmp(before[i],readonly_rx(physical(config.runtime.rx_slots[i]),1024u),1024u));
+}
 static void no_storage(void) {
     CHECK(!sd.bytes && !sd.writes && !lease_calls && !block_callbacks && !durable_card.commits);
     CHECK(!overlay.stats.backend_calls && !overlay.stats.replies);idle();
+}
+/* Exact recurring protocol words emitted by the external Evolution SDK replay
+ * (ASIC2, one A controller, empty B-D). RX addresses are bound to this fixture's
+ * independently proved bank slots; no executable bytes are embedded. */
+static void mixed_stage(unsigned conditions,unsigned allinfo) {
+    controllers(1u,0u);uint32_t source=value_at(0xa05f6c04u);
+    unsigned at=0u;
+    for(unsigned port=0u;port<4u;port++) {
+        unsigned command=(conditions&(1u<<port))?9u:(allinfo&(1u<<port))?2u:1u;
+        unsigned words=command==9u?1u:0u;
+        put(source+at,4u,(port<<16)|words|(port==3u?0x80000000u:0u));
+        put(source+at+4u,4u,rx_at(port*6u));
+        put(source+at+8u,4u,(words<<24)|(port<<22)|(port<<14)|0x2000u|command);
+        if(words) put(source+at+12u,4u,0x01000000u);
+        memset(rx_bytes(port*6u),0xa5,1024u);at+=12u+4u*words;
+    }
+    if(conditions==1u && !allinfo) {
+        uint32_t original[]={0x00000001u,0u,0x01002009u,0x01000000u,
+            0x00010000u,0u,0x00406001u,0x00020000u,0u,0x0080a001u,
+            0x80030000u,0u,0x00c0e001u};
+        original[1]=rx_at(0u);original[5]=rx_at(6u);
+        original[8]=rx_at(12u);original[11]=rx_at(18u);
+        CHECK(at==sizeof(original) && !memcmp(original,memory+source-0x0c000000u,sizeof(original)));
+    }
+}
+static void mixed_done(unsigned conditions,unsigned allinfo,unsigned attached,const uint32_t functions[4]) {
+    physical_complete();
+    for(unsigned port=0u;port<4u;port++) {
+        if(!(attached&(1u<<port))) {put(rx_at(port*6u),4u,UINT32_MAX);continue;}
+        unsigned command=(conditions&(1u<<port))?9u:(allinfo&(1u<<port))?2u:1u;
+        unsigned words=command==9u?3u:command==2u?48u:28u;
+        unsigned reply=command==9u?8u:command==2u?6u:5u;
+        put(rx_at(port*6u),4u,(words<<24)|(port<<22)|(port<<14)|0x003e0000u|reply);
+        put(rx_at(port*6u)+4u,4u,functions[port]);
+    }
+}
+static void mixed_begin(unsigned conditions,unsigned allinfo) {
+    mixed_stage(conditions,allinfo);submit();
+    CHECK(controller_pair.pending && !overlay.pending && state.descriptors==4u);
+    CHECK(value_at(0xa05f6c04u)==state.source);put(0xa05f6c18u,4u,1u);
+}
+static void mixed_queries_and_cost(void) {
+    const uint32_t functions[4]={0x01000000u,0x01000000u,0x40000000u,0x04000000u};
+    unsigned fast=0u,full=0u;
+    for(unsigned layout=0u;layout<2u;layout++) for(unsigned allinfo=0u;allinfo<8u;allinfo++) {
+        if(layout) uniform_warm();else warm();
+        for(unsigned attached=1u;attached<16u;attached+=2u) {
+            uint8_t before[5][1024],all_before[KUI_VMU_NATIVE_RX_SLOTS][1024],original[0x3000];
+            mixed_stage(1u,allinfo<<1);
+            uint32_t source=value_at(0xa05f6c04u);
+            memcpy(original,memory+source-0x0c000000u,sizeof(original));
+            submit();CHECK(controller_pair.pending && !overlay.pending);
+            unsigned submit_reads=measured_submit_reads;
+            put(0xa05f6c18u,4u,1u);mixed_done(1u,allinfo<<1,attached,functions);
+            save_rx(before);save_all_rx(all_before);complete_return();
+            before[0][2]|=1u;same_rx(before);no_storage();
+            all_before[packet_bank*24u][2]|=1u;same_all_rx(all_before);
+            CHECK(!memcmp(original,memory+source-0x0c000000u,sizeof(original)));
+            CHECK(value_at(0xa05f6c04u)==source && !controller_pair.pending && !overlay.pending);
+            if(layout && !allinfo && attached==1u) fast=submit_reads+measured_complete_reads;
+        }
+    }
+    /* Newly connected B is enumerated physically, then its ordinary polling
+     * can share the lane with still-empty or noncontroller C/D queries. */
+    warm();mixed_begin(1u,0u);mixed_done(1u,0u,3u,functions);complete_return();
+    mixed_begin(3u,0u);mixed_done(3u,0u,15u,functions);complete_return();no_storage();
+    /* PROFILE uses the same wire fast lane. Timing/gesture bookkeeping is
+     * shared by its caller and checked by the persistent diagnostic suite. */
+    uniform_warm();config.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE;
+    mixed_begin(1u,0u);mixed_done(1u,0u,1u,functions);complete_return();no_storage();
+    /* Full reference uses identical A advertisement semantics and byte-for-
+     * byte output; host tracing is compiled out of this fixture. */
+    uniform_warm();config.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE;
+    mixed_stage(1u,0u);uint8_t full_original[0x3000];uint32_t full_source=value_at(0xa05f6c04u);
+    memcpy(full_original,memory+full_source-0x0c000000u,sizeof(full_original));
+    submit();CHECK(!controller_pair.pending && overlay.pending);
+    unsigned submit_reads=measured_submit_reads;put(0xa05f6c18u,4u,1u);
+    mixed_done(1u,0u,1u,functions);uint8_t before[5][1024],all_before[KUI_VMU_NATIVE_RX_SLOTS][1024];
+    save_rx(before);save_all_rx(all_before);
+    complete_return();before[0][2]|=1u;same_rx(before);no_storage();
+    all_before[packet_bank*24u][2]|=1u;same_all_rx(all_before);
+    CHECK(!memcmp(full_original,memory+full_source-0x0c000000u,sizeof(full_original)));
+    full=submit_reads+measured_complete_reads;
+    CHECK(fast<full);
+    printf("Actual recurring A GETCOND+empty B-D DEVINFO wire, uniform layout: fast=%u full=%u guest reads/pair\n",fast,full);
+    /* ASIC0's original constructor enables only A-C. Its recurring wire is
+     * the same prefix with C marked LAST: ten words /40 bytes. D is not read
+     * or rewritten by the worker, and both hardware banks remain coherent. */
+    uniform_warm();
+    for(unsigned repeat=0u;repeat<4u;repeat++) {
+        mixed_stage(1u,0u);uint32_t source=value_at(0xa05f6c04u);
+        put(source+28u,4u,0x80020000u);
+        uint8_t original[0x3000],all_rx[KUI_VMU_NATIVE_RX_SLOTS][1024];
+        memcpy(original,memory+source-0x0c000000u,sizeof(original));
+        submit();CHECK(controller_pair.pending && state.descriptors==3u && state.bytes==40u);
+        CHECK(controller_pair.words==10u && value_at(0xa05f6c04u)==source);
+        put(0xa05f6c18u,4u,1u);physical_complete();
+        put(rx_at(6u),4u,UINT32_MAX);put(rx_at(12u),4u,UINT32_MAX);
+        save_all_rx(all_rx);complete_return();all_rx[packet_bank*24u][2]|=1u;
+        same_all_rx(all_rx);no_storage();
+        CHECK(!memcmp(original,memory+source-0x0c000000u,sizeof(original)));
+    }
+}
+static void mixed_query_refusals(void) {
+    const uint32_t functions[4]={0x01000000u,0x01000000u,0x40000000u,0x04000000u};
+    for(unsigned allinfo=0u;allinfo<2u;allinfo++) for(unsigned mutation=0u;mutation<7u;mutation++) {
+        warm();mixed_begin(1u,allinfo?14u:0u);mixed_done(1u,allinfo?14u:0u,15u,functions);
+        uint32_t address=rx_at(18u),header=value_at(address);
+        switch(mutation) {
+        case 0:put(address,4u,header^0x100u);break;
+        case 1:put(address,4u,header^0x200000u);break;
+        case 2:put(address,4u,header^0x1000000u);break;
+        case 3:put(address,4u,header^1u);break;
+        case 4:put(address+4u,4u,0u);break;
+        case 5:put(state.source+48u,4u,value_at(state.source+48u)^1u);break;
+        default:rx_bytes(0u)[2]|=1u;break;
+        }
+        uint8_t before[5][1024];save_rx(before);reject_complete();same_rx(before);no_storage();
+    }
+    /* Every completion read of the proved recurring mixed batch is mandatory
+     * and fails before the sole advertisement store. */
+    warm();mixed_begin(1u,0u);mixed_done(1u,0u,1u,functions);complete_return();
+    unsigned reads=measured_complete_reads;
+    for(unsigned fault=1u;fault<=reads;fault++) {
+        uint8_t before[5][1024];warm();mixed_begin(1u,0u);mixed_done(1u,0u,1u,functions);
+        save_rx(before);bus_reads=0u;fail_read=fault;reject_complete();
+        CHECK(bus_reads==fault);same_rx(before);no_storage();
+    }
+}
+static void mixed_query_errors(void) {
+    const uint32_t functions[4]={0x01000000u,0x01000000u,0x40000000u,0x04000000u};
+    for(unsigned command=1u;command<=2u;command++) for(unsigned port=1u;port<4u;port++)
+        for(unsigned error=0xfcu;error<=0xfeu;error++) for(unsigned mutation=0u;mutation<4u;mutation++) {
+            warm();mixed_begin(1u,command==2u?14u:0u);
+            mixed_done(1u,command==2u?14u:0u,15u,functions);
+            uint32_t response=0x00200000u|(port<<14)|(port<<22)|error;
+            if(mutation==1u) response|=0x01000000u;
+            else if(mutation==2u) response^=0x100u;
+            else if(mutation==3u) response^=0x200000u;
+            put(rx_at(port*6u),4u,response);put(rx_at(port*6u)+4u,4u,0u);
+            uint8_t before[5][1024];save_rx(before);
+            if(mutation) reject_complete();else {complete_return();before[0][2]|=1u;}
+            same_rx(before);no_storage();
+        }
 }
 static void success_and_cost(void) {
     unsigned fast_submit=0u,fast_complete=0u,full=0u;
@@ -123,7 +289,10 @@ static void layouts_and_live_aliases(void) {
 static void fallback(void) {
     for(unsigned which=0;which<6u;which++) {
         warm();
-        if(which==0u) stage_batch(0u,0u); /* B DEVINFO: whole batch takes full path. */
+        if(which==0u) { /* Parent enumeration retains the complete path. */
+            controllers(1u,0u);uint32_t source=value_at(0xa05f6c04u);
+            put(source,4u,0x80000000u);put(source+8u,4u,0x00002001u);
+        }
         else if(which==1u) stage_batch(1u,0u); /* A1 enumeration retains full backend. */
         else if(which==2u) stage_batch(11u,42u); /* A1 read retains storage authority. */
         else if(which==3u) controllers(15u,17u); /* Valid but beyond fast bound. */
@@ -198,7 +367,8 @@ static void lane_switches_and_lease(void) {
     CHECK(terminal_error==0x30u && controller_pair.pending);
 }
 int main(void) {
-    success_and_cost();layouts_and_live_aliases();fallback();refused_without_publication();lane_switches_and_lease();
-    printf("Controller-only fast lane: %u checks; unchanged DMA, exact RX/header publication, full fallback and durable lane switching\n",checks);
+    success_and_cost();mixed_queries_and_cost();mixed_query_refusals();mixed_query_errors();layouts_and_live_aliases();fallback();
+    refused_without_publication();lane_switches_and_lease();
+    printf("Controller/main-unit query fast lane: %u checks; unchanged DMA, exact RX/header publication, full fallback and durable lane switching\n",checks);
     return 0;
 }

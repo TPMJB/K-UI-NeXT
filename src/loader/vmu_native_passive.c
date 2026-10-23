@@ -53,7 +53,7 @@ static uint32_t write_payloads[KUI_VMU_VOLATILE_CHAIN_FRAMES][32];
 static struct kui_vmu_volatile_chain_plan issued_plan;
 static struct kui_vmu_native_passive_frame completion_frame;
 static struct kui_vmu_native_live live_plan;
-/* A controller-only pair keeps the original SDK DMA chain. This private
+/* A controller/main-unit-query pair keeps the original SDK DMA chain. This private
  * snapshot grants only one parent-presence byte, never a virtual reply or
  * storage operation. A bounded miss uses the unchanged complete VMU path. */
 #define CONTROLLER_WORDS 32u
@@ -74,7 +74,10 @@ static struct {
     struct kui_vmu_native_profile timing;
     uint32_t clock_started,clock_first,clock_last,clock_samples,clock_invalid;
     uint32_t ccr_first,ccr_last,ice_off,gesture_count,active,capture_poll_start;
+    uint32_t fast_submit,full_submit,fast_complete,full_complete;
 } diagnostic;
+#include "vmu_native_phase.inc"
+static struct native_phase_state diagnostic_phase;
 static bool persistent_storage_guard(void);
 static bool persistent_context_guard(void);
 static bool installed_hooks_valid(void);
@@ -222,20 +225,53 @@ static void diagnostic_begin(struct kui_vmu_native_profile_span *span) {
     struct kui_vmu_native_profile_sample sample;
     diagnostic_sample(&sample);kui_vmu_native_profile_begin(span,&sample);
 }
+/* These reads are diagnostic observations, never additional authority for a
+ * transfer or storage loan. Stack reads keep the inherited cache alias. */
+static bool diagnostic_phase_read(void *unused,uint32_t address,unsigned width,uint32_t *value) {
+    (void)unused;
+    if(width!=4u || (!ram(address,4u,4u) && address!=UINT32_C(0xa05f80d8) &&
+       address!=UINT32_C(0xa05f80cc) && address!=UINT32_C(0xa05f80d0) &&
+       address!=UINT32_C(0xa05f810c) && address!=UINT32_C(0xff000028))) return false;
+#ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+    return kui_vmu_native_passive_test_read(address,width,value);
+#else
+    *value=*(volatile const uint32_t *)(uintptr_t)address;return true;
+#endif
+}
+static void diagnostic_pair_begin(struct kui_vmu_native_profile_span *span,
+    const struct kui_vmu_native_passive_frame *frame,unsigned kind) {
+    diagnostic_begin(span);
+    native_phase_begin(&diagnostic_phase,kind,(uint32_t)(uintptr_t)frame,
+        physical(config.lease.payload)-32u,config.lease.lease_bytes+32u,
+        &span->begin,diagnostic_phase_read,NULL);
+}
 static void diagnostic_end(enum kui_vmu_native_profile_kind kind,
     const struct kui_vmu_native_profile_span *span) {
     struct kui_vmu_native_profile_sample sample;
     diagnostic_sample(&sample);kui_vmu_native_profile_end(&diagnostic.timing,kind,span,&sample);
+    if(kind==KUI_VMU_NATIVE_PROFILE_SUBMIT || kind==KUI_VMU_NATIVE_PROFILE_COMPLETE)
+        native_phase_end(&diagnostic_phase,&sample,diagnostic_phase_read,NULL);
 }
 static void diagnostic_report(void) __attribute__((noreturn));
+#ifndef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+static void diagnostic_phase_row(const uint32_t values[5]) {
+    char line[46];
+    for(unsigned i=0;i<5u;i++) {
+        for(unsigned digit=0;digit<8u;digit++)
+            line[i*9u+digit]="0123456789ABCDEF"[(values[i]>>(28u-digit*4u))&15u];
+        line[i*9u+8u]=' ';
+    }
+    line[45]=0;retail_display_line(line);
+}
+#endif
 static void diagnostic_report(void) {
 #ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
     kui_vmu_native_passive_test_terminal(17u,0u);
 #else
     struct retail_display_state display;memcpy(display.regs,config.display,sizeof(display.regs));
+    for(;;) {
     retail_display_restore(&display);
     retail_display_line("NATIVE VMU LATENCY CAPTURE");
-    retail_display_line("READ ONLY TMU0 - 781250 TICKS PER SECOND");
     retail_display_line("C BODY TIMINGS INCLUDE SAMPLING OVERHEAD");
     retail_display_line("STORAGE TIME IS ALSO IN COMPLETE TIME");
     const char *const labels[4]={"SUBMIT CALLS VALID BAD TOTAL MAX","COMPLETE CALLS VALID BAD TOTAL MAX",
@@ -247,12 +283,70 @@ static void diagnostic_report(void) {
     retail_display_values("WALL TICKS CLOCK SAMPLES BAD FLAGS",(uint32_t[4]){
         diagnostic.clock_started?diagnostic.clock_first-diagnostic.clock_last:0u,
         diagnostic.clock_samples,diagnostic.clock_invalid,diagnostic.timing.flags},4u);
+    retail_display_values("FAST SUB FULL SUB FAST END FULL END",(uint32_t[4]){
+        diagnostic.fast_submit,diagnostic.full_submit,diagnostic.fast_complete,diagnostic.full_complete},4u);
+    retail_display_line("INTENTIONAL PROFILE STOP - PHOTO THEN OFF");
+    retail_display_pause(300u);
+    retail_display_restore(&display);
+    retail_display_line("PROFILE CLOCK AND VIDEO PHASE");
+    retail_display_line("READ ONLY TMU0 - 781250 TICKS PER SECOND");
     retail_display_values("CCR FIRST LAST ICE OFF POLLS COMMITS",(uint32_t[5]){
         diagnostic.ccr_first,diagnostic.ccr_last,diagnostic.ice_off,
         state.completed-diagnostic.capture_poll_start,durable_card.commits},5u);
-    retail_display_line("CAPTURE STOPPED - PHOTO THEN POWER OFF");
-    for(;;) __asm__ volatile("nop");
+    retail_display_values("PHASE ENABLED SAMPLES VALID WAIT WRAP",(uint32_t[5]){
+        diagnostic_phase.enabled,diagnostic_phase.sequence,diagnostic_phase.valid,
+        diagnostic_phase.waits,diagnostic_phase.wraps},5u);
+    retail_display_line("PHASE CAPTURE IS EXACT EVOLUTION ONLY");
+    retail_display_line("WAIT IS VALIDATED INTERRUPTED SDK FRAME");
+    retail_display_line("WRAP IS OBSERVED C BODY CROSSING LINE ZERO");
+    retail_display_line("SAMPLING ADDS WORK - NOT A NORMAL RUN PROOF");
+    retail_display_line("PAGES CYCLE - PHOTO THEN POWER OFF");
+    retail_display_pause(300u);
+    for(unsigned first=0;first<diagnostic_phase.count;first+=4u) {
+        retail_display_restore(&display);
+        retail_display_line("PHASE RECORDS - OLDEST FIRST");
+        retail_display_line("ROWS: KIND+FLAGS IN OUT TICKS INDEX");
+        retail_display_line("PC PR SR EVT FRAME / LOAD VBL CTRL BEGIN END");
+        for(unsigned i=first;i<first+4u && i<diagnostic_phase.count;i++) {
+            unsigned at=(diagnostic_phase.sequence-diagnostic_phase.count+i)&(NATIVE_PHASE_RECORDS-1u);
+            const struct native_phase_record *r=&diagnostic_phase.ring[at];
+            diagnostic_phase_row((uint32_t[5]){r->kind|(r->flags<<8),r->scan_begin,r->scan_end,
+                r->tick_begin-r->tick_end,i});
+            diagnostic_phase_row((uint32_t[5]){r->pc,r->pr,r->sr,r->event,r->video_counter});
+            diagnostic_phase_row((uint32_t[5]){r->load,r->vblank,r->control,r->tick_begin,r->tick_end});
+        }
+        retail_display_line("FLAGS CLOCK1 READ2 VIDEO4 FRAME8 WAIT10 WRAP20");
+        retail_display_pause(300u);
+    }
+    }
 #endif
+}
+static bool diagnostic_gesture(uint32_t controls) {
+    return !(controls&2u) && ((controls>>16)&255u)>=200u && (controls>>24)>=200u;
+}
+static bool diagnostic_fast_gesture(void) {
+    for(unsigned i=0;i<controller_pair.count;i++) {
+        uint32_t header=controller_pair.frames[i].header,controls;
+        if(((header>>14)&3u)==0u && (header&255u)==9u &&
+           read_value(NULL,(controller_pair.frames[i].rx+8u)|UINT32_C(0xa0000000),4u,&controls))
+            return diagnostic_gesture(controls);
+    }
+    return false;
+}
+static void diagnostic_complete(const struct kui_vmu_native_profile_span *span,bool gesture,bool fast) {
+    diagnostic_end(KUI_VMU_NATIVE_PROFILE_COMPLETE,span);
+    if(fast) ++diagnostic.fast_complete;else ++diagnostic.full_complete;
+    if(!diagnostic.active) {
+        diagnostic.gesture_count=gesture?diagnostic.gesture_count+1u:0u;
+        if(diagnostic.gesture_count>=30u) {
+            bool phase_enabled=diagnostic_phase.enabled!=0u;
+            memset(&diagnostic,0,sizeof(diagnostic));diagnostic.active=1u;
+            diagnostic.capture_poll_start=state.completed;
+            native_phase_reset(&diagnostic_phase,phase_enabled);
+        }
+    } else if((diagnostic.clock_started && !diagnostic.clock_invalid &&
+               diagnostic.clock_first-diagnostic.clock_last>=20u*KUI_VMU_NATIVE_PROFILE_HZ) ||
+              state.completed-diagnostic.capture_poll_start>=1200u) diagnostic_report();
 }
 static void write_mdstar(uint32_t source) {
 #ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
@@ -577,6 +671,8 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
 #endif
     state.armed=1u;
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    native_phase_reset(&diagnostic_phase,config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE &&
+        native_phase_image(config.driver.image_bytes,config.driver.load_address,config.driver.image_sha256));
     kui_vmu_native_trace_init(&config);
 #endif
     return 0;
@@ -854,7 +950,7 @@ static bool persistent_context_guard(void) {
 /* The full launch-local layout proof has already established every span and
  * free-hook exclusion. This narrower authority uses the same live SDK/IRQ
  * context, all initializer-input witnesses and only the RX entries actually
- * named by this main-unit GETCOND batch. Unused slots cannot authorize its
+ * named by this main-unit query batch. Unused slots cannot authorize its
  * single parent-header store. No external call or game code runs between this
  * witness and publication. Full VMU/storage paths retain all48-slot checks. */
 static bool controller_context_valid(const struct kui_vmu_native_passive_frame *f,unsigned phase) {
@@ -886,7 +982,8 @@ static bool controller_context_valid(const struct kui_vmu_native_passive_frame *
     return true;
 }
 static bool controller_prepare(const struct kui_vmu_native_passive_frame *f) {
-    if(config.diagnostics!=KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL || !live_plan.ready ||
+    if((config.diagnostics!=KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL &&
+        config.diagnostics!=KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) || !live_plan.ready ||
        overlay.pending || !overlay.admitted || controller_pair.pending) return false;
     controller_pair.count=controller_pair.nops=controller_pair.words=0u;
     controller_pair.source=state.source;controller_pair.parent=CONTROLLER_FRAMES;
@@ -899,22 +996,29 @@ static bool controller_prepare(const struct kui_vmu_native_passive_frame *f) {
         if(!read_value(NULL,(state.source+at*4u)|UINT32_C(0xa0000000),4u,&control)) fail(0x46u);
         controller_pair.snapshot[at]=control;
         if(control==UINT32_C(0x700)) {++controller_pair.nops;++at;continue;}
-        if((control&~UINT32_C(0x800300ff)) || (control&255u)!=1u ||
-           at>CONTROLLER_WORDS-4u || controller_pair.count==CONTROLLER_FRAMES) return false;
-        for(unsigned j=1u;j<4u;j++)
+        unsigned words=control&255u,width=3u+words;
+        if((control&~UINT32_C(0x800300ff)) || words>1u ||
+           width>CONTROLLER_WORDS-at || controller_pair.count==CONTROLLER_FRAMES) return false;
+        for(unsigned j=1u;j<width;j++)
             if(!read_value(NULL,(state.source+(at+j)*4u)|UINT32_C(0xa0000000),4u,
                 &controller_pair.snapshot[at+j])) fail(0x46u);
         uint32_t rx=controller_pair.snapshot[at+1u],header=controller_pair.snapshot[at+2u];
-        unsigned port=(control>>16)&3u;
-        if(header!=(UINT32_C(0x01002009)|(port<<14)|(port<<22)) ||
-           controller_pair.snapshot[at+3u]!=UINT32_C(0x01000000) || (ports&(1u<<port))) return false;
+        unsigned port=(control>>16)&3u,command=header&255u;
+        uint32_t endpoint=UINT32_C(0x00002000)|(port<<14)|(port<<22);
+        bool condition=words==1u && header==(endpoint|UINT32_C(0x01000009)) &&
+            controller_pair.snapshot[at+3u]==UINT32_C(0x01000000);
+        /* Empty ports are repeatedly queried by the original SDK. Retain
+         * their exact INFO/ALLINFO DMA and natural attachment responses;
+         * only the A controller GETCOND can authorize virtual A1 presence. */
+        bool query=port && !words && (command==1u || command==2u) && header==(endpoint|command);
+        if((!condition && !query) || (ports&(1u<<port))) return false;
         unsigned slot=controller_pair.bank*24u+port*6u;
         uint32_t expected=config.runtime.rx_slots[slot];
         if(!expected || rx!=physical(expected) || !ram(rx,1024u,32u)) return false;
         controller_pair.frames[controller_pair.count].rx=rx;
         controller_pair.frames[controller_pair.count].header=header;
         if(!port) controller_pair.parent=controller_pair.count;
-        ++controller_pair.count;ports|=1u<<port;at+=4u;
+        ++controller_pair.count;ports|=1u<<port;at+=width;
         if(control&UINT32_C(0x80000000)) {
             if(!(ports&1u)) return false;
             controller_pair.words=at;
@@ -946,11 +1050,20 @@ static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
     for(unsigned i=0;i<controller_pair.count;i++) {
         uint32_t response,function;uint32_t rx=controller_pair.frames[i].rx;
         unsigned port=(controller_pair.frames[i].header>>14)&3u;
+        unsigned command=controller_pair.frames[i].header&255u;
+        unsigned code=command==1u?5u:command==2u?6u:8u;
+        unsigned words=command==1u?28u:command==2u?48u:3u;
         if(!read_value(NULL,rx|UINT32_C(0xa0000000),4u,&response)) fail(0x47u);
         if(response!=UINT32_MAX) {
-            if((response&UINT32_C(0xffe0ffff))!=(UINT32_C(0x03200008)|(port<<14)|(port<<22)) ||
-               !read_value(NULL,(rx+4u)|UINT32_C(0xa0000000),4u,&function) ||
-               function!=UINT32_C(0x01000000)) fail(0x47u);
+            unsigned actual=response&255u;
+            if(port && command!=9u && (actual==0xfcu || actual==0xfdu || actual==0xfeu)) {
+                /* The same exact zero-word query errors accepted by the
+                 * generic physical accessory validator carry no function.
+                 * They remain untouched and cannot authorize A's overlay. */
+                if(response!=(UINT32_C(0x00200000)|(port<<14)|(port<<22)|actual)) fail(0x47u);
+            } else if((response&UINT32_C(0xffe0ffff))!=((words<<24)|UINT32_C(0x00200000)|(port<<14)|(port<<22)|code) ||
+                      !read_value(NULL,(rx+4u)|UINT32_C(0xa0000000),4u,&function) ||
+                      (command==9u?function!=UINT32_C(0x01000000):!function)) fail(0x47u);
         } else if(!port) fail(0x47u);
         if(i==controller_pair.parent) {
             if(response&UINT32_C(0x00010000)) fail(0x47u);
@@ -972,7 +1085,8 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     kui_vmu_native_trace_point(0x10u,f,state.submitted,state.completed);
     struct kui_vmu_native_profile_span span;
-    if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) diagnostic_begin(&span);
+    if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE)
+        diagnostic_pair_begin(&span,f,KUI_VMU_NATIVE_PROFILE_SUBMIT);
 #endif
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!state.armed || state.pending || state.submitted!=state.completed || !f || !stack_valid()) fail(1u);
@@ -995,7 +1109,13 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
        !ram(source,KUI_VMU_NATIVE_TX_BANK_BYTES,32u)) fail(4u);
     state.source=source;
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    if(controller_prepare(f)) return;
+    if(controller_prepare(f)) {
+        if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) {
+            ++diagnostic.fast_submit;diagnostic_end(KUI_VMU_NATIVE_PROFILE_SUBMIT,&span);
+        }
+        kui_vmu_native_trace_point(0x1fu,f,state.submitted,state.completed);
+        return;
+    }
 #endif
     struct kui_vmu_native_runtime_snapshot snapshot;
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
@@ -1046,7 +1166,9 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
     state.submitted=1u;
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) diagnostic_end(KUI_VMU_NATIVE_PROFILE_SUBMIT,&span);
+    if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) {
+        ++diagnostic.full_submit;diagnostic_end(KUI_VMU_NATIVE_PROFILE_SUBMIT,&span);
+    }
     kui_vmu_native_trace_point(0x1fu,f,state.submitted,state.completed);
 #endif
 }
@@ -1054,7 +1176,8 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     kui_vmu_native_trace_point(0x20u,f,state.submitted,state.completed);
     struct kui_vmu_native_profile_span span;
-    if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) diagnostic_begin(&span);
+    if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE)
+        diagnostic_pair_begin(&span,f,KUI_VMU_NATIVE_PROFILE_COMPLETE);
 #endif
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!state.armed || !state.pending || state.submitted!=state.completed+1u || !f || !stack_valid()) fail(8u);
@@ -1068,7 +1191,13 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
 #endif
     if(!poll_lease_valid()) fail(9u);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    if(controller_pair.pending) {controller_complete(f);return;}
+    if(controller_pair.pending) {
+        controller_complete(f);
+        if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE)
+            diagnostic_complete(&span,diagnostic_fast_gesture(),true);
+        kui_vmu_native_trace_point(0x2fu,f,state.submitted,state.completed);
+        return;
+    }
 #endif
 #if !KUI_VMU_NATIVE_PERSISTENT_PROBE
     struct kui_vmu_native_runtime_config rebound=config.runtime;
@@ -1114,8 +1243,7 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
             /* KOS Maple raw condition: active-low buttons then right/left
              * trigger bytes. B is bit1; no cooked host-stub masks. This
              * gesture avoids pausing the game or requesting its reset. */
-            capture_gesture=!(controls&2u) && ((controls>>16)&255u)>=200u &&
-                (controls>>24)>=200u;
+            capture_gesture=diagnostic_gesture(controls);
         }
 #endif
         if(!i) state.first_response=response;
@@ -1155,20 +1283,8 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
      * is a hardware test, never inferred from this in-session counter. */
     state.proof=durable_card.commits!=0u;
     kui_vmu_native_trace_point(0x2fu,f,state.submitted,state.completed);
-    if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) {
-        diagnostic_end(KUI_VMU_NATIVE_PROFILE_COMPLETE,&span);
-        if(!diagnostic.active) {
-            diagnostic.gesture_count=capture_gesture?diagnostic.gesture_count+1u:0u;
-            if(diagnostic.gesture_count>=30u) {
-                /* Begin a fresh gameplay window after the requesting pair
-                 * has fully completed; startup/menu work is discarded. */
-                memset(&diagnostic,0,sizeof(diagnostic));diagnostic.active=1u;
-                diagnostic.capture_poll_start=state.completed;
-            }
-        } else if((diagnostic.clock_started && !diagnostic.clock_invalid &&
-                   diagnostic.clock_first-diagnostic.clock_last>=20u*KUI_VMU_NATIVE_PROFILE_HZ) ||
-                  state.completed-diagnostic.capture_poll_start>=1200u) diagnostic_report();
-    }
+    if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE)
+        diagnostic_complete(&span,capture_gesture,false);
 #else
     if((overlay.stats.devinfo || overlay.stats.allinfo) && overlay.stats.media && overlay.stats.reads) {
         state.proof=1u;report();

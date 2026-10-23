@@ -305,19 +305,37 @@ static void idle(void) {
     CHECK(!durable_card.store.io.context && sd.acquires==sd.releases && sd.enters==sd.leaves);
     CHECK(model_card.bus.transfer_block==block_transfer);
 }
-static void inspect_physical_chain(void) {
-    CHECK(value_at(0xa05f6c04u)==(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN?state.source:physical(SELF_ADDRESS)+0x18000u));
+static void inspect_physical_chain(bool original_fast) {
+    const uint8_t *hardware=issued_chain;
+    size_t capacity=sizeof(issued_chain);
+    uint32_t target=config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN?
+        state.source:physical(SELF_ADDRESS)+0x18000u;
+    CHECK((controller_pair.pending!=0u)==original_fast);
+    if(original_fast) {
+        CHECK((config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL ||
+               config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) && !overlay.pending);
+        CHECK(state.bytes==28u && state.descriptors==2u && !state.nops);
+        CHECK(controller_pair.words==7u && controller_pair.count==2u && !controller_pair.nops);
+        hardware=memory+state.source-0x0c000000u;capacity=state.bytes;target=state.source;
+        /* This fixture's newly eligible batch is exactly A GETCOND plus
+         * B DEVINFO, including the original RX destinations and LAST bit. */
+        const uint32_t expected[7]={1u,rx_at(0),0x01002009u,0x01000000u,
+            0x80010000u,rx_at(6),0x00406001u};
+        CHECK(!memcmp(hardware,expected,sizeof(expected)));
+    }
+    CHECK(value_at(0xa05f6c04u)==target);
     unsigned at=0u,count=0u;
     for(;;) {
-        CHECK(at+12u<=sizeof(issued_chain));uint32_t descriptor[3];
-        memcpy(descriptor,issued_chain+at,sizeof(descriptor));
+        CHECK(at+12u<=capacity);uint32_t descriptor[3];
+        memcpy(descriptor,hardware+at,sizeof(descriptor));
         unsigned destination=(descriptor[2]>>8)&255u,cmd=descriptor[2]&255u;
         CHECK(destination!=1u && cmd!=12u && cmd!=13u);
         CHECK(destination==32u || destination==96u);
         at+=12u+4u*(descriptor[0]&255u);++count;
         if(descriptor[0]&0x80000000u) break;
     }
-    CHECK(count==2u && at<=sizeof(issued_chain));
+    CHECK(count==2u && at<=capacity);
+    if(original_fast) CHECK(at==capacity);
 }
 static void begin_batch(unsigned cmd,unsigned block,unsigned phase,const uint8_t *payload) {
     stage_batch(cmd,block);
@@ -327,7 +345,12 @@ static void begin_batch(unsigned cmd,unsigned block,unsigned phase,const uint8_t
         CHECK(payload);memcpy(memory+source+36u-0x0c000000u,payload,128u);
     }
     uint8_t before[0x3000];memcpy(before,memory+source-0x0c000000u,sizeof(before));
-    submit();inspect_physical_chain();
+    /* Eligibility follows this fixture's packet shape and prior full-path
+     * admission, independently of whichever lane production then chooses. */
+    bool original_fast=!cmd && live_plan.ready && overlay.admitted &&
+        (config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL ||
+         config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE);
+    submit();inspect_physical_chain(original_fast);
     CHECK(!memcmp(before,memory+source-0x0c000000u,sizeof(before)));
     /* Model the real MDST=1 instruction replayed by the assembly gateway. */
     put(0xa05f6c18u,4u,1u);
@@ -598,14 +621,20 @@ static void gameplay_diagnostics(void) {
     for(unsigned i=0;i<30u;i++) diagnostic_pair(true);
     CHECK(diagnostic.active && !diagnostic.clock_started);
     for(unsigned i=0;i<KUI_VMU_NATIVE_PROFILE_KINDS;i++) CHECK(!diagnostic.timing.metric[i].calls);
+    CHECK(!diagnostic.fast_submit && !diagnostic.fast_complete &&
+          !diagnostic.full_submit && !diagnostic.full_complete);
     diagnostic_pair(false);
     CHECK(diagnostic.clock_started && diagnostic.clock_samples==4u && !diagnostic.clock_invalid);
     CHECK(diagnostic.ccr_first==0x105u && !diagnostic.ice_off);
     CHECK(diagnostic.timing.metric[KUI_VMU_NATIVE_PROFILE_SUBMIT].calls==1u);
     CHECK(diagnostic.timing.metric[KUI_VMU_NATIVE_PROFILE_COMPLETE].calls==1u);
+    CHECK(diagnostic.fast_submit==1u && diagnostic.fast_complete==1u &&
+          !diagnostic.full_submit && !diagnostic.full_complete);
     frame.r4=0u;kui_vmu_native_readonly_release_check(&frame);
     CHECK(diagnostic.timing.metric[KUI_VMU_NATIVE_PROFILE_FREE].valid==1u);
     transfer_batch(11u,43u,0u,NULL);
+    CHECK(diagnostic.fast_submit==1u && diagnostic.fast_complete==1u &&
+          diagnostic.full_submit==1u && diagnostic.full_complete==1u);
     CHECK(diagnostic.timing.metric[KUI_VMU_NATIVE_PROFILE_STORAGE].valid==1u);
     CHECK(diagnostic.timing.metric[KUI_VMU_NATIVE_PROFILE_COMPLETE].ticks_total>=
           diagnostic.timing.metric[KUI_VMU_NATIVE_PROFILE_STORAGE].ticks_total);

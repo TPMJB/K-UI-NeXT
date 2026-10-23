@@ -62,6 +62,15 @@ struct kui_vmu_native_passive_frame {
 };
 _Static_assert(sizeof(struct kui_vmu_native_passive_frame)==76u,"Passive frame ABI");
 int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *,void *unused);
+/* Persistent NORMAL/PROFILE polling may retain the original SDK DMA for a
+ * bounded main-unit batch: A must be controller GETCOND, other distinct ports
+ * may also use zero-payload INFO/ALLINFO. Empty ports and newly connected
+ * devices remain physical; exact typed query responses with nonzero functions
+ * and exact zero-word FC/FD/FE query errors pass through unchanged. After
+ * complete source/response/context validation,
+ * only A's virtual-subunit presence bit is added. These batches cannot issue
+ * virtual replies or access storage. Subunits, VMU operations and other shapes
+ * retain the complete filtered-overlay/storage proof path. */
 void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *);
 void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *);
 void kui_vmu_native_passive_terminal(void) __attribute__((noreturn));

@@ -105,7 +105,7 @@ native-placement-host-tests: $(BUILD)/stage.elf $(BUILD)/native-worker.bin
 	 $(if $(EVOLUTION1_STARTUP),--evolution1 '$(EVOLUTION1_STARTUP)',) $(if $(JGR_STARTUP),--jgr '$(JGR_STARTUP)',)
 	python3 tests/test_vmu_native_stage_stack_artifact.py
 
-compat-host-tests: $(BUILD)/retail-maple-observe.kui persistent-host-tests passive-host-tests readonly-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-controller-fast-host-tests
+compat-host-tests: $(BUILD)/retail-maple-observe.kui persistent-host-tests passive-host-tests readonly-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-controller-fast-host-tests native-phase-host-tests
 	KUI_NATIVE_ARTIFACT_DIR=$(BUILD) python3 tests/test_vmu_native_prepared_artifact.py
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_mode.c src/core/vmu_native_mode.c -o $(BUILD)/test-mode
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-mode
@@ -141,3 +141,15 @@ compat-host-tests: $(BUILD)/retail-maple-observe.kui persistent-host-tests passi
 	python3 tests/test_vmu_native_cache_seed_artifact.py
 	python3 tests/test_package_vmu_native_catalog.py
 	$(MAKE) -s -f Makefile test-games-native-cache STARTUP=$(if $(STARTUP),'$(STARTUP)',)
+
+.PHONY: native-phase-host-tests
+native-phase-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_phase.c src/core/vmu_native_profile.c -o $(BUILD)/test-phase
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-phase
+
+.PHONY: native-sdk-poll-host-tests
+native-sdk-poll-host-tests:
+	@test -f '$(EVOLUTION1_STARTUP)' || (echo 'Set EVOLUTION1_STARTUP to the original Evolution executable'; exit 2)
+	@mkdir -p $(BUILD)
+	python3 tests/test_vmu_native_sdk_poll_execution.py --startup '$(EVOLUTION1_STARTUP)' --virtual-a1 --rounds 120 --output $(BUILD)/sdk-poll-execution.json

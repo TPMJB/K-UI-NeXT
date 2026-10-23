@@ -111,7 +111,11 @@ def package(build,guide='broader',trace_startup=None):
                      'native-evolution-hooks-2026-10-23.json','native-evolution-trace-2026-10-23.json',
                      'native-evolution-video-2026-10-23.json',
                      'native-evolution-video-progress-2026-10-23.json',
-                     'native-controller-fastlane-2026-10-23.json'):
+                     'native-controller-fastlane-2026-10-23.json',
+                     'native-mixed-main-poll-2026-10-23.json',
+                     'native-evolution-sdk-poll-2026-10-23.json',
+                     'native-evolution-phase-capture-2026-10-23.json',
+                     'native-original-video-wait-comparison-2026-10-23.md'):
             extra['docs/evidence/'+name]=(root/'docs/evidence'/name).read_bytes()
         extra['docs/native-sdk-family-corpus.json']=(root/'docs/evidence/native-sdk-family-corpus-2026-10-22.json').read_bytes()
         extra['docs/native-installer-stack-regression.json']=(root/'docs/evidence/native-sa2-installer-stack-2026-10-22.json').read_bytes()

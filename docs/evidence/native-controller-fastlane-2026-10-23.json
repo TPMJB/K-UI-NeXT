@@ -80,7 +80,7 @@
     "compiled_prepared_mutation_rejections": 105,
     "broader_compatibility_and_cache_tests_passed": true
   },
-  "console_execution_verified": false,
+  "console_execution_verified": true,
   "evolution_fix_established": false,
   "profile_runtime_limit": "PROFILE remains full path; does not measure optimized NORMAL controller polls",
   "primary_console_test": "Normal Evolution launch without diagnostic flags, openingFMV/menu/save/poweroff/reload",
@@ -89,5 +89,12 @@
     "CDDA coexistence",
     "SCIF",
     "physical-disc support"
-  ]
+  ],
+  "console_outcome": {
+    "build": "3a143db9cf2e",
+    "normal": "User reports black screen before first FMV",
+    "raw_chain": "User reports freeze again",
+    "important_limit": "RAW still executed the full C capture/validation and allocator/exit hooks. It was not an empty gateway control."
+  },
+  "superseded_measurement_limit": "The synthetic four-controller cost comparison did not establish eligibility for the real one-controller polling mix; original SDK replay now proves the strict lane missed every sampled steady pair for physical A only."
 }

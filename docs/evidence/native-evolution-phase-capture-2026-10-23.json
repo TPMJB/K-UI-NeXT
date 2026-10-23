@@ -1,0 +1,166 @@
+{
+  "schema": "kui.native.evolution.profile-phase.v1",
+  "date": "2026-10-23",
+  "scope": "Optional PROFILE observations; no hardware starvation or compatibility result inferred",
+  "image_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+  "enablement": {
+    "selector": "Existing PROFILE only, using the same admitted polling fast lane as NORMAL",
+    "image_gate": "Exact 2143652-byte image, load 8c010000 and complete digest before fixed Evolution stack reads",
+    "normal_sampling_mmio": false,
+    "game_patches_or_new_interrupts": false,
+    "timer_configuration_or_ownership": false,
+    "live_vram_writes": false,
+    "automatic_blank_deadline": false,
+    "report": "Existing B plus both triggers gesture starts the bounded capture window; its existing timed/pair-count stop reports retained private state"
+  },
+  "measurement": {
+    "timing": "Existing validated owner TMU0 samples at C-body begin/end; 781250 ticks per second only under the admitted clock profile",
+    "registers": {
+      "SPG_LOAD": "a05f80d8",
+      "SPG_VBLANK_INT": "a05f80cc",
+      "SPG_CONTROL": "a05f80d0",
+      "SPG_STATUS": "a05f810c",
+      "INTEVT": "ff000028",
+      "SDK_video_counter": "8c358d18"
+    },
+    "entry": "Actual hardware timing registers, scanline, TMU0 sample, raw INTEVT, SDK counter, and conditionally validated interrupted context",
+    "exit": "Actual hardware timing registers and scanline with the existing endpoint TMU0 sample",
+    "history": "Last sixteen completed hook records; private bounded ring, with independent valid/wait/wrap counters",
+    "flags": {
+      "1": "Both clock samples valid and elapsed interval admitted",
+      "2": "All diagnostic video/event/counter reads succeeded",
+      "4": "Entry/exit SPG_LOAD, SPG_VBLANK_INT and SPG_CONTROL unchanged",
+      "8": "Exact SDK caller chain and interrupted PR/SPC/SSR reads validated",
+      "16": "Validated interrupted SPC is in the exact-zero polling loop, or its getter with the second-phase return PR",
+      "32": "Valid unchanged-video sample has nonzero entry/exit scanlines and entry greater than exit; observed C-body interval crosses line zero"
+    },
+    "interpretation": "Wrap is independent of wait: require both flags 16 and 32 to associate an observed crossing with the interrupted exact-zero wait",
+    "limits": [
+      "C-body samples include observer overhead and exclude portions of the gateway and original IRQ handler",
+      "A PROFILE run does not establish identical timing in NORMAL",
+      "Raw INTEVT can reflect a nested interrupt and is not asserted to identify the unwound frame",
+      "The record's timing registers are actual active hardware values, not pending mode-setter shadow parameters"
+    ]
+  },
+  "unwind": {
+    "frame_pointer": "Original gateway frame f, read through its inherited U0/P1/P2 alias; never force a P2 alias for potentially dirty P1 stack words",
+    "bounds": "Aligned full 460-byte submit or 400-byte completion span in SDK RAM; physically disjoint from the entire owned lease including its 32-byte chunk header",
+    "generic_frame_bytes": 228,
+    "generic_frame_derivation": "Seven saved control/integer-special words (28), R14 through R0 (60), SR/FPUL/FPSCR (12), both sixteen-word FR banks (128)",
+    "generic_returns": [
+      "8c1da1bc",
+      "8c1da348"
+    ],
+    "submit": {
+      "subframe_bytes": [
+        32,
+        72,
+        8,
+        24,
+        20
+      ],
+      "subframes": [
+        "8c1f1830",
+        "8c1f1b74",
+        "8c1b0a02",
+        "8c1b182c",
+        "8c1dad26"
+      ],
+      "gateway_frame_bytes": 76,
+      "markers": {
+        "76": [
+          "8c1b1944",
+          "8c1b19b0"
+        ],
+        "96": [
+          "8c1b0a1c"
+        ],
+        "120": [
+          "8c1f1bac"
+        ],
+        "128": [
+          "8c1f1ad8"
+        ],
+        "200": [
+          "8c1da1bc",
+          "8c1da348"
+        ]
+      },
+      "interrupted_offsets": {
+        "PR": 448,
+        "SPC": 452,
+        "SSR": 456
+      }
+    },
+    "hardware_completion": {
+      "subframe_bytes": [
+        24,
+        8,
+        20,
+        40
+      ],
+      "subframes": [
+        "8c1b0a72",
+        "8c1b09de",
+        "8c1b14d8",
+        "8c1b1adc"
+      ],
+      "gateway_frame_bytes": 80,
+      "markers": {
+        "88": [
+          "8c1b1500"
+        ],
+        "120": [
+          "8c1b09f6"
+        ],
+        "140": [
+          "8c1b0ad2"
+        ],
+        "148": [
+          "8c1da1bc",
+          "8c1da348"
+        ]
+      },
+      "interrupted_offsets": {
+        "PR": 388,
+        "SPC": 392,
+        "SSR": 396
+      }
+    },
+    "wait": {
+      "direct_SPC_halfwords": "8c1f3628 through 8c1f362e",
+      "getter_SPC_halfwords": "8c1f1f36 through 8c1f1f3a",
+      "getter_required_PR": "8c1f362c",
+      "first_phase_PR_rejected": "8c1f3624"
+    },
+    "shared_stack_limit": "Both generic dispatchers use the same frame layout, but the shared-stack frame base is an IRQ-stack pointer, not necessarily the interrupted owner SP",
+    "failure": "Bad bounds, aliases, markers, reads, clocks or changed video invalidate observation only; no VMU or storage acceptance predicate changes"
+  },
+  "host_validation": {
+    "command": "make test-vmu-native-phase",
+    "sanitizers": [
+      "AddressSanitizer",
+      "UndefinedBehaviorSanitizer"
+    ],
+    "checks": 24710,
+    "persistent_bridge_checks": 1288444,
+    "trace_integration_checks": 1403519,
+    "controller_query_checks": 126894,
+    "profile_fast_finish": "Existing gesture, four clock samples per pair, shared successful completion, and explicit fast/full report-counter assertions pass",
+    "coverage": [
+      "exact digest bit mutations",
+      "both dispatcher return markers",
+      "all original RAM aliases",
+      "every caller-marker bit mutation",
+      "read failures",
+      "RAM and aliased lease boundaries",
+      "exact-zero/getter classification",
+      "invalid clock",
+      "changed SPG state",
+      "bounded ring and sequence wrap",
+      "disabled sampler performs no reads"
+    ],
+    "integrated_controller_checks": 127618,
+    "persistent_checks": 1288445
+  }
+}
