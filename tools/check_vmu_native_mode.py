@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Bind the optional native control/profile mode to exact immutable ELF bytes.
+"""Bind optional native comparison/profile modes to exact immutable ELF bytes.
 
 The linked instruction witnesses independently cover malformed-mode refusal
 and the first storage branch. Relay models additionally prove control leaves
@@ -110,7 +110,7 @@ class StorageRoute(Machine):
             self.route = "control"
             self.abi_return(self.result)
         else:
-            assert self.mode in (0, 2) and self.calls == ["mode", "profile"]
+            assert self.mode in (0, 2, 3) and self.calls == ["mode", "profile"]
             self.route, self.pc = "profile", self.stop_pc
         return True
 
@@ -131,9 +131,9 @@ def instruction_routes(stage, *, self_test=False):
     cases = storage = 0
     for seed in range(12):
         for mask in range(16):
-            for result in (0, 1, 2, MASK):
+            for result in (0, 1, 2, 3, MASK):
                 ModeHelper(stage, seed, mask, result).run().check(); cases += 1
-            for mode in (0, 1, 2):
+            for mode in (0, 1, 2, 3):
                 for result in (0, 1, MASK):
                     StorageRoute(stage, seed, mask, mode, result).run().check(); storage += 1
     mutations = 0
@@ -176,7 +176,7 @@ def instruction_routes(stage, *, self_test=False):
             "control_storage_bypasses_profile_acquire_recovery_and_writes": True}
 
 
-def audit(stage_data, entry_data, module, *, cached_code, stage_image=None, self_test=False):
+def audit(stage_data, entry_data, module, *, cached_code, stage_image=None, resident_image=None, self_test=False):
     require(type(cached_code) is bool, "mode audit requires an explicit worker alias policy")
     stage = inspect_elf(stage_data, STAGE, LIMIT)
     symbols = stage["symbols"]
@@ -226,9 +226,11 @@ def audit(stage_data, entry_data, module, *, cached_code, stage_image=None, self
     report = {"enabled": True, "module_offset": module_offset, "bytes": MODE_BYTES,
               "template_sha256": hashlib.sha256(wire).hexdigest(), "address": hex(address),
               "typed_immutable_unique_object": True, "profile_cache_worker_relocation_trampoline_disjoint": True,
-              "modes": {"normal": 0, "control": 1, "profile": 2}}
+              "modes": {"normal": 0, "control": 1, "profile": 2, "lease-only": 3}}
     if stage_image is not None:
         report.update(instruction_routes(stage_image, self_test=self_test))
+        from check_vmu_native_lease_only import audit as audit_lease_only
+        report["lease_only"] = audit_lease_only(stage_image, resident_image, self_test=self_test)
     return report
 
 
@@ -239,7 +241,8 @@ def main():
     try:
         report = audit((directory / "stage.elf").read_bytes(), (directory / "entry.elf").read_bytes(),
             (directory / "retail-maple-observe.kui").read_bytes(), cached_code=True,
-            stage_image=read_elf(directory / "stage.elf"), self_test=args.self_test)
+            stage_image=read_elf(directory / "stage.elf"),
+            resident_image=read_elf(directory / "resident-sci.elf"), self_test=args.self_test)
     except (OSError, ValueError, AssertionError, KeyError, struct.error) as error:
         parser.exit(2, "Native runtime mode audit refused: " + str(error) + "\n")
     print(json.dumps(report, indent=2))

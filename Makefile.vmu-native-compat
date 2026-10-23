@@ -26,6 +26,7 @@ native-evolution-fault-host-tests:
 	 -Wl,--gc-sections -o $(BUILD)/test-evolution-fault
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-evolution-fault '$(EVOLUTION1_STARTUP)'
 	python3 tests/test_vmu_native_evolution_cache.py --startup '$(EVOLUTION1_STARTUP)'
+	python3 tests/test_vmu_native_map_refusal.py
 
 native-evolution-context-host-tests:
 	@mkdir -p $(BUILD)
@@ -81,7 +82,9 @@ compat-host-tests: $(BUILD)/retail-maple-observe.kui persistent-host-tests passi
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_mode.c src/core/vmu_native_mode.c -o $(BUILD)/test-mode
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-mode
 	python3 tests/test_vmu_native_mode.py
-	python3 tests/test_vmu_native_mode_artifact.py
+	KUI_NATIVE_ARTIFACT_DIR=$(BUILD) python3 tests/test_vmu_native_mode_artifact.py
+	KUI_NATIVE_ARTIFACT_DIR=$(BUILD) python3 tests/test_vmu_native_lease_only.py
+	KUI_NATIVE_ARTIFACT_DIR=$(BUILD) python3 tests/test_vmu_native_map_refusal_artifact.py
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_heap.c -o $(BUILD)/test-heap
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-heap $(if $(and $(STARTUP),$(HEAP_NEGATIVE)),'$(STARTUP)' '$(HEAP_NEGATIVE)',)
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-layout $(if $(STARTUP),'$(STARTUP)',) $(CACHE_STARTUPS)

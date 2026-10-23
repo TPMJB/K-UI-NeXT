@@ -9,13 +9,13 @@ static unsigned checks;
 int main(void) {
     static const uint8_t canonical[32]={'K','U','I','N','V','M','0','1',1,0,0,0,32};
     uint8_t wire[33];
-    for(unsigned mode=0;mode<=2u;mode++) {
+    for(unsigned mode=0;mode<=3u;mode++) {
         memcpy(wire+1u,canonical,sizeof(canonical));wire[17u]=(uint8_t)mode;
         CHECK(kui_vmu_native_mode_decode(wire+1u,32u)==(enum kui_vmu_native_mode)mode);
         for(unsigned byte=0;byte<32u;byte++) for(unsigned bit=0;bit<8u;bit++) {
             wire[byte+1u]^=(uint8_t)(1u<<bit);
             int decoded=kui_vmu_native_mode_decode(wire+1u,32u);
-            if(byte==16u && ((mode^(1u<<bit))<=2u))
+            if(byte==16u && ((mode^(1u<<bit))<=3u))
                 CHECK(decoded==(int)(mode^(1u<<bit)));
             else CHECK(decoded==KUI_VMU_NATIVE_MODE_INVALID);
             wire[byte+1u]^=(uint8_t)(1u<<bit);

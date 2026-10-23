@@ -115,6 +115,31 @@ static bool __attribute__((noipa)) native_resolution_replay(void) {
     native_passive_capture_windows();return true;
 }
 #endif
+/* Diagnostic A/B: retain the exact armed worker allocation without leaving
+ * any guest callback into it. The original initializer may later reclaim the
+ * reservation; the low GD guard remains conservative, but cannot call a stale
+ * worker. Ordinary card preparation/recovery has already run unchanged. */
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+static void __attribute__((noipa)) native_passive_lease_only(
+    struct kui_vmu_native_heap_lease *lease,const struct kui_vmu_native_passive_exports *e) {
+    for(unsigned i=0;i<native_exits.count;i++)
+        if(memcmp((const void *)(uintptr_t)native_exits.entries[i],persistent_exit_windows[i],12u))
+            native_report(9u,7u);
+    uint32_t slot=(native_heap.initializer_slot&UINT32_C(0x1fffffff))|UINT32_C(0x80000000);
+    *(volatile uint32_t *)(uintptr_t)slot=native_heap.initializer_target;
+    native_publish(slot);
+    if(native_word(slot|UINT32_C(0x20000000))!=native_heap.initializer_target ||
+       !kui_vmu_native_heap_lease_valid(lease,native_read,NULL,1u) ||
+       native_word(native_driver.completion_slot)!=native_driver.consumer)
+        native_report(9u,9u);
+    volatile struct kui_vmu_observe_boot_control *c=control();
+    c->lease=lease->payload&UINT32_C(0x1fffffff);c->worker_end=e->memory_end;
+    c->terminal=0;c->sd_transaction=0;c->installer=0;c->stage_stack=0;
+    c->status=KUI_VMU_OBS_BOOT_INSTALLED;
+    retail_display_line("RAM RESERVATION ONLY / NO VIRTUAL VMU");
+    retail_display_line("NO IN-GAME SAVE WRITES - STARTING GAME");
+}
+#endif
 static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     const uint32_t span=KUI_VMU_NATIVE_PASSIVE_SPAN;
     uint32_t load=(lease->payload&UINT32_C(0x1fffffff))|UINT32_C(0x80000000),dest=load+UINT32_C(0x20000000);
@@ -197,6 +222,11 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     if(memcmp((const void *)(uintptr_t)native_heap.initializer,readonly_init_window,sizeof(readonly_init_window)) ||
        memcmp((const void *)(uintptr_t)native_heap.release,readonly_release_window,sizeof(readonly_release_window)) ||
        !readonly_release_replay_valid()) native_report(9u,5u);
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    if(native_runtime_mode()==KUI_VMU_NATIVE_MODE_LEASE_ONLY) {
+        native_passive_lease_only(lease,e);return;
+    }
+#endif
     /* The first real initializer has returned and our lease is allocated.
      * Every later direct/indirect entry now stops before reclaiming it. */
     readonly_patch_entry(native_heap.initializer,KUI_VMU_OBSERVE_LOW_RETURN_HOOK);

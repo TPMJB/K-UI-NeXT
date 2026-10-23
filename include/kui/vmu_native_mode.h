@@ -9,7 +9,8 @@ enum kui_vmu_native_mode {
     KUI_VMU_NATIVE_MODE_INVALID=-1,
     KUI_VMU_NATIVE_MODE_NORMAL=0,
     KUI_VMU_NATIVE_MODE_CONTROL=1,
-    KUI_VMU_NATIVE_MODE_PROFILE=2
+    KUI_VMU_NATIVE_MODE_PROFILE=2,
+    KUI_VMU_NATIVE_MODE_LEASE_ONLY=3
 };
 /* Canonical immutable launch mode. No pointer, storage authority or live
  * lifetime is serialized here. Invalid versions, lengths and reserved bytes

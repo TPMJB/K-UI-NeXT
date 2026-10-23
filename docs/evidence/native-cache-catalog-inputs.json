@@ -94,7 +94,7 @@
       "record_fixture": "tests/fixtures/native-cache/evolution1.nvr",
       "static_layout": 0,
       "exit_family": 4,
-      "console_status": "First DEVINFO completion refused detail 0x43 on 7753391a62e4; VMU build 2bf215f0fb72 passes company logos then black at MPEG Sofdec before FMV; same build with --control plays opening FMV; allocation-failure diagnostic pending"
+      "console_status": "First DEVINFO completion refused detail 0x43 on 7753391a62e4; VMU build 2bf215f0fb72 passes company logos then black at MPEG Sofdec before FMV; --control plays opening FMV; 046252128e06 still black with no allocation page and reader light off; reservation/hook isolation pending"
     }
   ]
 }

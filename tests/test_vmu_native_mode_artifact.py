@@ -57,7 +57,7 @@ class ModeArtifactTests(unittest.TestCase):
         self.assertTrue(report["enabled"])
         self.assertEqual(report["module_offset"], 64 + 0x2000 + MODE_AT)
         self.assertEqual(report["bytes"], 32)
-        self.assertEqual(report["modes"], {"normal": 0, "control": 1, "profile": 2})
+        self.assertEqual(report["modes"], {"normal": 0, "control": 1, "profile": 2, "lease-only": 3})
 
     def test_every_generic_byte_and_invalid_lengths(self):
         wire = template_mode()

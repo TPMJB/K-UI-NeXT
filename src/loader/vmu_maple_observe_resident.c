@@ -160,12 +160,22 @@ static bool native_resident_transaction(const volatile struct kui_vmu_observe_bo
 #include "vmu_sd_lease.inc"
 #endif
 
+void kui_vmu_observe_low_failure(void) __attribute__((noreturn));
 static uint8_t *observe_map(void *context,uint32_t address,uint32_t bytes,int writing) {
 #if KUI_VMU_NATIVE_PASSIVE_PROBE
     const volatile struct kui_vmu_observe_boot_control *c=
         (const volatile struct kui_vmu_observe_boot_control *)
         ((uintptr_t)&kui_vmu_observe_boot_control+UINT32_C(0x20000000));
-    if(!native_resident_destination(c,address,bytes)) return NULL;
+    if(!native_resident_destination(c,address,bytes)) {
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+        /* Failure-only probe: reuse the existing validated worker terminal.
+         * CHECK and other small result mappings can fail without an I/O
+         * error; stop here before any owner/cache/storage access. */
+        kui_vmu_observe_low_failure();
+#else
+        return NULL;
+#endif
+    }
 #else
     if(!kui_vmu_observe_destination(address,bytes)) return NULL;
 #endif
@@ -181,7 +191,6 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     return result;
 }
 
-void kui_vmu_observe_low_failure(void) __attribute__((noreturn));
 void kui_vmu_observe_low_failure(void) {
     const volatile struct kui_vmu_observe_boot_control *c=
         (const volatile struct kui_vmu_observe_boot_control *)

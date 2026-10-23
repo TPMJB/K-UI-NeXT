@@ -97,14 +97,14 @@ def package(build,guide='broader'):
                      'vmu-native-compat-test.md','vmu-native-optimization-test.md',
                      'vmu-performance-design-review-2026-10-22.md','vmu-next-stages.md',
                      'vmu-native-broader-test.md','vmu-native-evolution-context-test.md',
-                     'vmu-native-evolution-fault-test.md'):
+                     'vmu-native-evolution-fault-test.md','vmu-native-evolution-isolation-test.md'):
             extra['docs/'+name]=(root/'docs'/name).read_bytes()
         for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json',
                      'native-performance-acceptance-2026-10-23.json','native-uniform-root-family-2026-10-23.json',
                      'native-recv-ownership-2026-10-23.json','native-older-sdk-2026-10-23.json',
                      'native-broader-compatibility-2026-10-23.json','native-evolution1-layout-2026-10-23.json',
                      'native-allocator-family-2026-10-23.json','native-evolution-context-2026-10-23.json',
-                     'native-evolution-fault-2026-10-23.json'):
+                     'native-evolution-fault-2026-10-23.json','native-evolution-isolation-2026-10-23.json'):
             extra['docs/evidence/'+name]=(root/'docs/evidence'/name).read_bytes()
         extra['docs/native-sdk-family-corpus.json']=(root/'docs/evidence/native-sdk-family-corpus-2026-10-22.json').read_bytes()
         extra['docs/native-installer-stack-regression.json']=(root/'docs/evidence/native-sa2-installer-stack-2026-10-22.json').read_bytes()
@@ -121,13 +121,15 @@ def package(build,guide='broader'):
             (compat and not (mode_offset+MODE_BYTES<=seed_offset or seed_offset+len(seed_template)<=mode_offset))):
             raise ValueError('Runtime mode differs from its audited disjoint canonical template')
         manifest.update(runtime_mode_module_offset=mode_offset,runtime_mode_bytes=MODE_BYTES,
-            runtime_mode_sha256=sha(mode_template))
+            runtime_mode_sha256=sha(mode_template),runtime_mode_choices=mode['modes'])
         extra['tools/vmu_native_mode.py']=(root/'tools/vmu_native_mode.py').read_bytes()
     report.update(source_commit=commit,source_build_id=revision,console_execution_verified=False,
         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
             template_sha256=sha(template)),
-        compatibility_claim=('Evolution black-screen failure-path diagnostic; no console fix established'
+        compatibility_claim=('Evolution reservation/hook isolation diagnostic; no console fix established'
+            if guide=='evolution-isolation' else
+            'Evolution black-screen failure-path diagnostic; no console fix established'
             if guide=='evolution-fault' else
             'Evolution first-transfer failure-witness diagnostic; no console fix established'
             if guide=='evolution-context' else 'Save/load experiment for the reviewed native SDK family'))
@@ -164,7 +166,7 @@ def package(build,guide='broader'):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('build',type=Path)
-    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault'),default='broader')
+    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation'),default='broader')
     try:
         args=parser.parse_args();package(args.build,args.guide)
     except (OSError,ValueError,KeyError,AssertionError,subprocess.CalledProcessError) as error:

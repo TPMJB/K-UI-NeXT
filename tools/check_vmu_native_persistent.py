@@ -37,6 +37,7 @@ from check_vmu_native_cache_seed import audit as audit_cache_seed
 from check_vmu_native_cache_gateway import check as check_cache_gateway
 from check_vmu_native_stage_stack import check as check_stage_stack
 from check_vmu_native_mode import audit as audit_runtime_mode
+from check_vmu_native_map_refusal import check as audit_map_refusal
 from vmu_native_relocations import generate, validate_loads
 from test_armada_ce_maple_hook import CPU
 
@@ -1028,12 +1029,14 @@ def inspect_base(directory, *, self_test=False, objdump="sh-elf-objdump"):
         disassembly = subprocess.check_output([objdump, "-d", str(directory / (name + ".elf"))], text=True)
         instructions[name] = instruction_audit(name, disassembly)
     gateway = check_loan_gateway(directory, resident, elfs["resident-sci"])
+    map_refusal = audit_map_refusal(directory / "resident-sci.elf",self_test=self_test,objdump=objdump)
     report = {"schema": "kui.native.persistent.bootstrap.v1", "runtime": runtime,
               "module_sha256": hashlib.sha256(module).hexdigest(),
               "resident_memory_end": f"0x{resident['memory_end']:08x}",
               "stage_memory_end": f"0x{stage['memory_end']:08x}",
               "dynamic_bootstrap": inspect_dynamic_hook(elfs["resident-sci"], resident),
               "integer_instruction_counts": instructions, "sd_lease_gateway": gateway,
+              "gd_map_refusal_terminal":map_refusal,
               "old_fixed_worker_linked": False, "console_verified": False}
     if self_test:
         report["dynamic_bootstrap_mutation_rejections"] = regression(elfs["resident-sci"], resident)
@@ -1255,6 +1258,8 @@ def check(directory, *, self_test=False):
     wire = (directory / "native-worker.reloc").read_bytes()
     policy = worker_load_policy(worker, binary)
     cached, code_base = policy["cached_code"], policy["code_alias"]
+    require(base['gd_map_refusal_terminal']['cached_worker_terminal']==cached,
+            'low GD refusal terminal uses a different worker code alias')
     require(len(binary) >= 80, "worker header is truncated")
     fields = struct.unpack_from("<20I", binary)
     names = ("_kui_vmu_native_passive_arm", "_kui_vmu_native_passive_submit_hook",
@@ -1336,7 +1341,7 @@ def check(directory, *, self_test=False):
                             (directory / "retail-maple-observe.kui").read_bytes(), cached_code=cached)
     runtime_mode = audit_runtime_mode(stage[0], (directory / "entry.elf").read_bytes(),
         (directory / "retail-maple-observe.kui").read_bytes(), cached_code=cached,
-        stage_image=stage, self_test=self_test)
+        stage_image=stage,resident_image=read_elf(directory / "resident-sci.elf"),self_test=self_test)
     cache_gateway = check_cache_gateway(stage, self_test=self_test) if seed["enabled"] else {"enabled": False}
     installer_stack = check_stage_stack(stage, read_elf(directory / "resident-sci.elf"),
                                         worker=worker, self_test=self_test)
