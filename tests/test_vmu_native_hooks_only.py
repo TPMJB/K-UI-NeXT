@@ -31,7 +31,7 @@ class HooksOnlyArtifact(unittest.TestCase):
     def test_actual_helper_selector_and_negative_mutations(self):
         report = audit_absent_completion(self.worker, self_test=True)
         self.assertEqual(report['helper_instruction_cases'], 240)
-        self.assertEqual(report['selector_instruction_cases'], 48)
+        self.assertEqual(report['selector_instruction_cases'], 64)
         self.assertGreaterEqual(report['mutation_rejections'], 4)
         self.assertTrue(report['actual_callees_only'])
         self.assertTrue(report['no_backend_or_sd_call'])

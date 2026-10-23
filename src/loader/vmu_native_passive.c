@@ -16,6 +16,7 @@ extern uint32_t kui_vmu_native_readonly_release_resume;
 #include "kui/vmu_native_patch.h"
 #include "kui/vmu_native_profile.h"
 #include "kui/vmu_volatile_chain.h"
+#include "kui/vmu_native_trace.h"
 #include "sd_reader.h"
 #define WORKER_SPAN UINT32_C(0x20000)
 #define PAIR_LIMIT 180000u
@@ -274,6 +275,7 @@ int kui_vmu_native_persistent_sd_transaction(void *context,struct kui_loader_sd 
     return result;
 }
 static int persistent_lease(kui_vmu_sd_transaction transaction,void *context) {
+    if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN) return KUI_VMU_SD_LEASE_FAULT;
     struct kui_vmu_native_profile_span span;
     if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) diagnostic_begin(&span);
     if(transaction!=kui_vmu_native_persistent_sd_transaction || context!=&durable_card ||
@@ -374,6 +376,9 @@ static uint8_t *readonly_rx(uint32_t address,unsigned bytes) {
 #endif
 static void report(void) __attribute__((noreturn));
 static void report(void) {
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    if(kui_vmu_native_trace_enabled()) kui_vmu_native_trace_report(state.error,0u,0u,0u);
+#endif
 #ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     kui_vmu_native_passive_test_terminal(state.proof?15u:16u,state.error);
@@ -445,6 +450,7 @@ static void fail(uint32_t code) __attribute__((noreturn));
  * The assembly gateway has already excluded IRQs and retired the owner SP.
  * Reporting does not borrow storage, publish RX data, or modify owner RAM. */
 void kui_vmu_native_runtime_fault(uint32_t kind,uint32_t value,uint32_t context1,uint32_t context2) {
+    if(kui_vmu_native_trace_enabled()) kui_vmu_native_trace_report(kind,value,context1,context2);
 #ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
     (void)value;(void)context1;(void)context2;
     kui_vmu_native_passive_test_terminal(18u,kind);
@@ -507,7 +513,7 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
     memset(&diagnostic,0,sizeof(diagnostic));
     memset(&lifetime_plan,0,sizeof(lifetime_plan));
     hook_witness_ready=0u;hook_witness_count=0u;
-    if(config.diagnostics>KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY) {memset(&config,0,sizeof(config));return -2;}
+    if(config.diagnostics>KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN) {memset(&config,0,sizeof(config));return -2;}
 #endif
     if(!lease_valid()) {memset(&config,0,sizeof(config));return -2;}
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
@@ -551,11 +557,16 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
     }
 #endif
 #endif
-    state.armed=1u;return 0;
+    state.armed=1u;
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    kui_vmu_native_trace_init(&config);
+#endif
+    return 0;
 }
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
 void kui_vmu_native_readonly_release_check(const struct kui_vmu_native_passive_frame *f) {
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    kui_vmu_native_trace_point(0x30u,f,state.submitted,state.completed);
     struct kui_vmu_native_profile_span span;
     if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) diagnostic_begin(&span);
 #endif
@@ -573,6 +584,7 @@ void kui_vmu_native_readonly_release_check(const struct kui_vmu_native_passive_f
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) diagnostic_end(KUI_VMU_NATIVE_PROFILE_FREE,&span);
+    kui_vmu_native_trace_point(0x31u,f,state.submitted,state.completed);
 #endif
 }
 #endif
@@ -824,6 +836,7 @@ static bool persistent_context_guard(void) {
 #endif
 void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f) {
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    kui_vmu_native_trace_point(0x10u,f,state.submitted,state.completed);
     struct kui_vmu_native_profile_span span;
     if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) diagnostic_begin(&span);
 #endif
@@ -850,6 +863,7 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
     struct kui_vmu_native_runtime_snapshot snapshot;
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!live_boundary(f,0u,state.source,12u,&snapshot)) fail(5u);
+    kui_vmu_native_trace_point(0x11u,f,state.submitted,state.completed);
 #else
     if(!boundary(f,0u,12u,&snapshot)) fail(5u);
 #endif
@@ -868,8 +882,10 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
        state.source,state.bytes,issued_chain,sizeof(issued_chain),target) ||
        kui_vmu_volatile_chain_verify(&issued_plan,issued_chain,sizeof(issued_chain)) ||
        !transfer_context_valid(f,snapshot.bank,0u,state.source)) fail(0x40u);
-    write_mdstar(target);
-    if(!transfer_context_valid(f,snapshot.bank,0u,target)) fail(0x41u);
+    kui_vmu_native_trace_point(0x12u,f,state.submitted,state.completed);
+    if(config.diagnostics!=KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN) write_mdstar(target);
+    if(!transfer_context_valid(f,snapshot.bank,0u,
+       config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN?state.source:target)) fail(0x41u);
 #else
     if(!boundary(f,0u,state.bytes,&snapshot) || !lease_valid() || !stack_valid()) fail(7u);
 #endif
@@ -881,10 +897,12 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) diagnostic_end(KUI_VMU_NATIVE_PROFILE_SUBMIT,&span);
+    kui_vmu_native_trace_point(0x1fu,f,state.submitted,state.completed);
 #endif
 }
 void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *f) {
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    kui_vmu_native_trace_point(0x20u,f,state.submitted,state.completed);
     struct kui_vmu_native_profile_span span;
     if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) diagnostic_begin(&span);
 #endif
@@ -909,14 +927,18 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
     if(issued_plan.source_physical!=state.source || issued_plan.source_bytes!=state.bytes ||
        issued_plan.frame_count!=state.descriptors || issued_plan.output_physical!=issued_physical() ||
        kui_vmu_volatile_chain_verify(&issued_plan,issued_chain,sizeof(issued_chain)) ||
-       !filtered_boundary(f,&snapshot) || !chain(snapshot.bank,true) ||
+       !(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN?
+          live_boundary(f,1u,state.source,state.bytes,&snapshot):filtered_boundary(f,&snapshot)) ||
+       !chain(snapshot.bank,true) ||
        !stack_valid() ||
        kui_vmu_native_passive_consumer!=config.driver.consumer) fail(0x42u);
     /* Hardware is idle, software-triggered and owns exactly our immutable
      * physical-only chain. Restore MDSTAR before any SD callback or RX store. */
-    write_mdstar(state.source);
+    kui_vmu_native_trace_point(0x21u,f,state.submitted,state.completed);
+    if(config.diagnostics!=KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN) write_mdstar(state.source);
     completion_frame=*f;
     if(!persistent_context_guard()) fail(0x43u);
+    kui_vmu_native_trace_point(0x22u,f,state.submitted,state.completed);
 #else
     if(!boundary(f,1u,state.bytes,&snapshot)) fail(10u);
     if(!chain(snapshot.bank,true) || !lease_valid() || !stack_valid()) fail(11u);
@@ -959,7 +981,9 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
        kui_vmu_native_passive_consumer!=config.driver.consumer) fail(22u);
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    int published=config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY?
+    kui_vmu_native_trace_point(0x23u,f,state.submitted,state.completed);
+    int published=(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY ||
+                  config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN)?
         kui_vmu_readonly_overlay_complete_absent(&overlay):kui_vmu_readonly_overlay_complete(&overlay);
 #else
     int published=kui_vmu_readonly_overlay_complete(&overlay);
@@ -977,6 +1001,7 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
     /* A durable commit remains visible to the game. Power-off/reboot readback
      * is a hardware test, never inferred from this in-session counter. */
     state.proof=durable_card.commits!=0u;
+    kui_vmu_native_trace_point(0x2fu,f,state.submitted,state.completed);
     if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) {
         diagnostic_end(KUI_VMU_NATIVE_PROFILE_COMPLETE,&span);
         if(!diagnostic.active) {

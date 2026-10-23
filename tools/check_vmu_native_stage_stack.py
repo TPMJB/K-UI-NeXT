@@ -377,7 +377,7 @@ def check(stage, resident, *, worker=None, self_test=False):
         require(STACK_SYMBOL not in worker[4] and HELPER not in worker[4],
                 "temporary installer stack/helper retained in gameplay worker")
     wrappers = routes = hooks = 0
-    modes = (0, 1, 2, 3, 4) if "_native_runtime_mode" in stage[4] else (0,)
+    modes = (0, 1, 2, 3, 4, 5) if "_native_runtime_mode" in stage[4] else (0,)
     for seed in range(12):
         for mask in range(16):
             for outcome in (False, True):

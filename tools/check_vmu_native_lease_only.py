@@ -137,8 +137,9 @@ class LeaseDispatch(Machine):
         require(len(candidates) == 1, "missing unique linked lease-only selector")
         i = candidates[0]
         self.selector_offset = 2 * i
+        lease_offset = 36 if '_native_evolution_trace_install' in self.symbols else 32
         require(words[i + 4] >> 8 == 0x8F and words[i + 5] == 0x6583 and
-                words[i + 6] & 0xFF00 == 0xD100 and words[i + 7:i + 9] == (0x410B, 0x54F8) and
+                words[i + 6] & 0xFF00 == 0xD100 and words[i + 7:i + 9] == (0x410B, 0x54F0 + lease_offset // 4) and
                 words[i + 9] & 0xFF00 == 0x9700 and words[i + 10:i + 12] == (0x3F7C, 0x4F26) and
                 words[i + 12:i + 20] == (0x6EF6, 0x6DF6, 0x6CF6, 0x6BF6, 0x6AF6, 0x69F6,
                                           0x000B, 0x68F6),
@@ -151,7 +152,7 @@ class LeaseDispatch(Machine):
         self.owner = self.r.copy()
         self.lease, self.exports = 0x8CE90000, 0xACFD0000
         self.pc = self.base + 2 * i
-        self.mem[self.start_sp + 32] = self.lease
+        self.mem[self.start_sp + lease_offset] = self.lease
         self.mem[self.start_sp + local_bytes] = self.stop_pc
         for n, reg in enumerate(range(14, 7, -1), 1):
             self.mem[self.start_sp + local_bytes + 4 * n] = self.owner[reg]
@@ -175,7 +176,7 @@ class LeaseDispatch(Machine):
                     self.r[4:6] == [self.lease, self.exports], "wrong reservation branch or ABI")
             self.route = "lease-only"; self.abi_return()
         else:
-            require(self.mode in (0, 1, 2, 4) and self.calls == ["mode", "veneer"] and
+            require(self.mode in (0, 1, 2, 4, 5) and self.calls == ["mode", "veneer"] and
                     self.r[4:6] == [0x8C1633A8, self.return_hook], "ordinary mode lost its original veneer route")
             self.route, self.pc = "veneer", self.stop_pc
         return True
@@ -203,7 +204,7 @@ def audit(stage, resident, *, self_test=False):
                     for outcome in ("ok", "window", "readback", "lease", "completion"):
                         LeaseOnly(stage, resident, seed, mask, slot_alias, target_alias, outcome).run().check()
                         cases += 1
-            for mode in (0, 1, 2, 3, 4):
+            for mode in (0, 1, 2, 3, 4, 5):
                 LeaseDispatch(stage, resident, seed, mask, mode).run().check(); dispatch_cases += 1
     rejected = 0
     if self_test:

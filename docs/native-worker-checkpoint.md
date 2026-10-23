@@ -630,3 +630,40 @@ state. Passive/read-only and actual placement/alias/save-reopen regressions
 also pass. Ordinary guest-read counts remain first 387, steady 336, INFO 342, READ 758.
 Run the focused instructions in `vmu-native-latency-test.md`; these artifacts
 provide attribution evidence, not an unmeasured claim that the lag is fixed.
+
+## 23 October: consolidated Evolution diagnostics
+
+Continuation recovered the exact `99cfec5c62fd` bundle and the saved GCC
+15.2.0 toolchain; all 1,051 extracted compiler file hashes matched the
+checkpoint manifest. The owner reported that build's hooks-only comparison
+still froze. It retained copied/filtered Maple DMA, so it did not isolate the
+original DMA command list. No root cause or console fix has been established.
+
+The next package is documented in `vmu-native-evolution-trace-test.md`, with
+machine-readable evidence in `evidence/native-evolution-trace-2026-10-23.json`.
+It adds exact-Evolution frame/timer/external-wait checkpoints, a bounded live
+VRAM marker, 16-event ring, excessive-wait watchdog and three cycling terminal
+pages. Runtime fault/malloc and existing worker failures share those pages.
+It has no arbitrary fault-PC or general interrupt-masked-hang capture.
+`--raw-chain` retains active hooks and guards while keeping the original
+MDSTAR/command-list bytes and disabling the virtual card/in-game VMU storage.
+All previous comparison selections remain in the same binary.
+
+The trace is explicitly title-specific diagnostics, gated by exact immutable
+startup SHA/size/load and original windows. It does not introduce a normal
+compatibility exception or relax a guard. The source bundle contains no game
+bytes. Reproduce its exact-instruction/installer validation using the owner's
+original executable:
+
+```sh
+export PATH="$PWD/.deps/sh-elf/bin:$PATH"
+make -f Makefile.vmu-native-compat BUILD=build/evolution-trace-clean -j4 all
+make -f Makefile.vmu-native-compat BUILD=build/evolution-trace-clean native-evolution-trace-host-tests EVOLUTION1_STARTUP=/path/to/Evolution/1ST_READ.BIN
+python3 tools/package_vmu_native_persistent.py build/evolution-trace-clean --guide evolution-trace --trace-startup /path/to/Evolution/1ST_READ.BIN
+```
+
+Build only after committing for clean embedded provenance. The new full ZIP
+contains the complete cloneable source bundle; use its revision rather than
+trying to reconstruct an earlier scratch checkout. Further console results
+must establish which original-DMA/hook/wait boundary fails before changing
+normal VMU behavior again.

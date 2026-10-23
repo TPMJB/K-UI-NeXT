@@ -306,7 +306,7 @@ static void idle(void) {
     CHECK(model_card.bus.transfer_block==block_transfer);
 }
 static void inspect_physical_chain(void) {
-    CHECK(value_at(0xa05f6c04u)==physical(SELF_ADDRESS)+0x18000u);
+    CHECK(value_at(0xa05f6c04u)==(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN?state.source:physical(SELF_ADDRESS)+0x18000u));
     unsigned at=0u,count=0u;
     for(;;) {
         CHECK(at+12u<=sizeof(issued_chain));uint32_t descriptor[3];
@@ -626,7 +626,7 @@ static void gameplay_diagnostics(void) {
     if(setjmp(terminal)==0) {kui_vmu_native_passive_complete(&frame);CHECK(false);}
     CHECK(terminal_phase==17u && !terminal_error && !state.pending);
     CHECK(!sd.bytes && !lease_calls && !durable_card.commits);idle();
-    for(unsigned mode=3u;mode<=4u;mode++) {
+    for(unsigned mode=4u;mode<=5u;mode++) {
         model_reset();fixture();prepare_handoff();input.diagnostics=mode;
         CHECK(kui_vmu_native_passive_arm(&input,NULL)<0 && !state.armed);
     }
@@ -680,6 +680,24 @@ static void hooks_only_has_no_virtual_card_or_io(void) {
         CHECK(!lease_calls && !block_callbacks && !sd.bytes && !sd.writes && !overlay.stats.backend_calls);
         CHECK(!clock_reads && !durable_card.commits);
     }
+}
+static void raw_chain_preserves_original_dma(void) {
+    model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
+    lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
+    input.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN;arm();install_hooks();
+    for(unsigned i=0;i<32u;i++) {
+        stage_batch(i&1u?1u:0u,0u);
+        uint32_t source=value_at(0xa05f6c04u);
+        uint8_t original[0x3000];memcpy(original,memory+source-0x0c000000u,sizeof(original));
+        submit();CHECK(value_at(0xa05f6c04u)==source);
+        CHECK(!memcmp(original,memory+source-0x0c000000u,sizeof(original)));
+        put(0xa05f6c18u,4u,1u);physical_complete();complete_return();idle();
+        CHECK(value_at(0xa05f6c04u)==source);
+        CHECK(!sd.bytes && !sd.writes && !lease_calls && !overlay.stats.backend_calls);
+        CHECK(!overlay.stats.advertisements && !overlay.stats.replies);
+    }
+    CHECK(persistent_lease(kui_vmu_native_persistent_sd_transaction,&durable_card)==KUI_VMU_SD_LEASE_FAULT);
+    CHECK(!lease_calls);
 }
 static void reject_context_complete(void) {
     if(setjmp(terminal)==0) {kui_vmu_native_passive_complete(&frame);CHECK(false);}
@@ -766,7 +784,7 @@ int main(void) {
     CHECK(!durable_card.commits && durable_card.faulted && !memcmp(target,rx_bytes(1),sizeof(target)));
     CHECK(!memcmp(sd.media[image_lba(42u)],next,512u));
     bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();prepared_hook_witnesses();
-    polling_ownership_scope();gameplay_diagnostics();hooks_only_has_no_virtual_card_or_io();completion_context_failures();
+    polling_ownership_scope();gameplay_diagnostics();hooks_only_has_no_virtual_card_or_io();raw_chain_preserves_original_dma();completion_context_failures();
     printf("Native persistent bridge: %u checks passed; filtered hardware chain, PIO save, reboot recovery and no false ACK\n",checks);
     return 0;
 }

@@ -35,6 +35,9 @@ static bool passive_entry(uint32_t entry,uint32_t begin,uint32_t bytes) {
 #endif
     return !(entry&1u) && entry>=begin+sizeof(struct kui_vmu_native_passive_exports) && entry<begin+bytes;
 }
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+#include "vmu_native_evolution_trace_stage.inc"
+#endif
 static struct kui_vmu_native_layout passive_layout;
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 static struct kui_vmu_native_exit native_exits;
@@ -126,6 +129,7 @@ static uint32_t __attribute__((noipa)) native_runtime_diagnostics(void) {
     uint32_t mode=native_runtime_mode();
     return mode==KUI_VMU_NATIVE_MODE_PROFILE?KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE:
         mode==KUI_VMU_NATIVE_MODE_HOOKS_ONLY?KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY:
+        mode==KUI_VMU_NATIVE_MODE_RAW_CHAIN?KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN:
         KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL;
 }
 static void __attribute__((noipa)) native_passive_lease_only(
@@ -195,7 +199,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     if(!passive_entry(e->sd_transaction,dest,bytes) ||
        !passive_entry(e->runtime_fault_hook,dest,bytes) ||
        !passive_entry(e->allocation_failure_hook,dest,bytes) ||
-       e->reserved_persistent) native_report(8u,6u);
+       !e->trace_exports) native_report(8u,6u);
 #endif
 #if KUI_VMU_NATIVE_READONLY_PROBE
     if(!passive_entry(e->release_hook,dest,bytes) || (e->release_resume_cell&3u) ||
@@ -262,6 +266,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     if(native_evolution_fault_install(&native_driver,(void *)KUI_RETAIL_EXEC_ADDRESS,
        exec_bytes,KUI_RETAIL_EXEC_ADDRESS,e->allocation_failure_hook,
        kui_native_passive_publish)<0) native_report(9u,0x45u);
+    if(native_evolution_trace_install(e,dest,bytes)<0) native_report(9u,0x46u);
 #endif
     volatile struct kui_vmu_observe_boot_control *c=control();
     c->worker_end=e->memory_end;c->terminal=e->terminal;c->lease=lease->payload&UINT32_C(0x1fffffff);
@@ -270,7 +275,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #endif
     c->installer=0;c->stage_stack=0;c->status=KUI_VMU_OBS_BOOT_INSTALLED;
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    if(cfg.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY)
+    if(cfg.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN)
+        retail_display_line("ACTIVE HOOKS / ORIGINAL MAPLE DMA LIST");
+    else if(cfg.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY)
         retail_display_line("ALL HOOKS ACTIVE / VIRTUAL VMU OFF");
     else retail_display_line("PERSISTENT VIRTUAL A1 ARMED - STARTING GAME");
 #elif KUI_VMU_NATIVE_READONLY_PROBE

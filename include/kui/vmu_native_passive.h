@@ -13,10 +13,11 @@
 enum kui_vmu_native_diagnostics {
     KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL = 0,
     KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE = 1,
-    KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY = 2
+    KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY = 2,
+    KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN = 3
 };
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-#define KUI_VMU_NATIVE_PASSIVE_VERSION 2u
+#define KUI_VMU_NATIVE_PASSIVE_VERSION 3u
 #define KUI_VMU_NATIVE_PASSIVE_SPAN 0x20000u
 #else
 #define KUI_VMU_NATIVE_PASSIVE_VERSION 1u
@@ -32,7 +33,7 @@ struct kui_vmu_native_passive_exports {
     uint32_t reserved[2];
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    uint32_t sd_transaction,runtime_fault_hook,allocation_failure_hook,reserved_persistent;
+    uint32_t sd_transaction,runtime_fault_hook,allocation_failure_hook,trace_exports;
 #endif
 };
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE

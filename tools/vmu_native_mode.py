@@ -9,7 +9,8 @@ CONTROL=1
 PROFILE=2
 LEASE_ONLY=3
 HOOKS_ONLY=4
-MODE_NAMES={NORMAL:'normal',CONTROL:'control',PROFILE:'profile',LEASE_ONLY:'lease-only',HOOKS_ONLY:'hooks-only'}
+RAW_CHAIN=5
+MODE_NAMES={NORMAL:'normal',CONTROL:'control',PROFILE:'profile',LEASE_ONLY:'lease-only',HOOKS_ONLY:'hooks-only',RAW_CHAIN:'raw-chain'}
 
 def require(condition,message):
     if not condition:raise ValueError(message)

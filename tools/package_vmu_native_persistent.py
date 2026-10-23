@@ -48,14 +48,16 @@ def cache_catalog(root,commit):
     return wire,files
 
 
-def package(build,guide='broader'):
+def package(build,guide='broader',trace_startup=None):
     root=Path(__file__).resolve().parents[1];build=Path(build)
     def git(*args):
         return subprocess.check_output(['git',*args],cwd=root,text=True).strip()
     commit=git('rev-parse','HEAD');revision=commit[:12]
     if git('status','--porcelain'):
         raise ValueError('Commit source changes before packaging')
-    report=check(build,self_test=True)
+    if guide=='evolution-trace' and trace_startup is None:
+        raise ValueError('Evolution trace packaging requires --trace-startup with the exact original executable')
+    report=check(build,self_test=True,trace_startup=trace_startup)
     cached=report['worker_load_policy']['cached_code']
     seed=report.get('resolution_cache_seed',{})
     compat=seed.get('enabled',False)
@@ -98,7 +100,7 @@ def package(build,guide='broader'):
                      'vmu-performance-design-review-2026-10-22.md','vmu-next-stages.md',
                      'vmu-native-broader-test.md','vmu-native-evolution-context-test.md',
                      'vmu-native-evolution-fault-test.md','vmu-native-evolution-isolation-test.md',
-                     'vmu-native-evolution-hooks-test.md'):
+                     'vmu-native-evolution-hooks-test.md','vmu-native-evolution-trace-test.md'):
             extra['docs/'+name]=(root/'docs'/name).read_bytes()
         for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json',
                      'native-performance-acceptance-2026-10-23.json','native-uniform-root-family-2026-10-23.json',
@@ -106,7 +108,7 @@ def package(build,guide='broader'):
                      'native-broader-compatibility-2026-10-23.json','native-evolution1-layout-2026-10-23.json',
                      'native-allocator-family-2026-10-23.json','native-evolution-context-2026-10-23.json',
                      'native-evolution-fault-2026-10-23.json','native-evolution-isolation-2026-10-23.json',
-                     'native-evolution-hooks-2026-10-23.json'):
+                     'native-evolution-hooks-2026-10-23.json','native-evolution-trace-2026-10-23.json'):
             extra['docs/evidence/'+name]=(root/'docs/evidence'/name).read_bytes()
         extra['docs/native-sdk-family-corpus.json']=(root/'docs/evidence/native-sdk-family-corpus-2026-10-22.json').read_bytes()
         extra['docs/native-installer-stack-regression.json']=(root/'docs/evidence/native-sa2-installer-stack-2026-10-22.json').read_bytes()
@@ -129,7 +131,9 @@ def package(build,guide='broader'):
         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
             template_sha256=sha(template)),
-        compatibility_claim=('Evolution active-hook/no-card comparison; no console fix established'
+        compatibility_claim=('Evolution consolidated trace and original-DMA comparison; no console fix established'
+            if guide=='evolution-trace' else
+            'Evolution active-hook/no-card comparison; no console fix established'
             if guide=='evolution-hooks' else
             'Evolution reservation/hook isolation diagnostic; no console fix established'
             if guide=='evolution-isolation' else
@@ -170,8 +174,9 @@ def package(build,guide='broader'):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('build',type=Path)
-    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks'),default='broader')
+    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace'),default='broader')
+    parser.add_argument('--trace-startup',type=Path)
     try:
-        args=parser.parse_args();package(args.build,args.guide)
+        args=parser.parse_args();package(args.build,args.guide,args.trace_startup)
     except (OSError,ValueError,KeyError,AssertionError,subprocess.CalledProcessError) as error:
         parser.exit(2,f'Native persistent package refused: {error}\n')

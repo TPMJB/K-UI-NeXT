@@ -57,7 +57,7 @@ class ModeArtifactTests(unittest.TestCase):
         self.assertTrue(report["enabled"])
         self.assertEqual(report["module_offset"], 64 + 0x2000 + MODE_AT)
         self.assertEqual(report["bytes"], 32)
-        self.assertEqual(report["modes"], {"normal": 0, "control": 1, "profile": 2, "lease-only": 3, "hooks-only": 4})
+        self.assertEqual(report["modes"], {"normal": 0, "control": 1, "profile": 2, "lease-only": 3, "hooks-only": 4, "raw-chain": 5})
 
     def test_every_generic_byte_and_invalid_lengths(self):
         wire = template_mode()
@@ -70,7 +70,7 @@ class ModeArtifactTests(unittest.TestCase):
             with self.assertRaises(ValueError): generic_mode(changed)
 
     def test_generic_cannot_enable_control_or_profile(self):
-        for mode in (1, 2, 3, 4, 0xFFFFFFFF):
+        for mode in (1, 2, 3, 4, 5, 0xFFFFFFFF):
             raw = bytearray(stage_fixture()); struct.pack_into("<I", raw, 0x100 + MODE_AT + 16, mode)
             with self.subTest(mode=mode), self.assertRaisesRegex(ValueError, "normal template"):
                 self.audit(bytes(raw))

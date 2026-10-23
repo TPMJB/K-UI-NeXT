@@ -260,7 +260,7 @@ def check(stage, *, self_test=False):
                 outcomes = [(flags >> i) & 1 for i in range(4)]
                 CacheGateway(stage, seed, mask, outcomes).run().check(); cases += 1
     routes = 0
-    modes = (0, 1, 2, 3, 4) if "_native_runtime_mode" in symbols else (0,)
+    modes = (0, 1, 2, 3, 4, 5) if "_native_runtime_mode" in symbols else (0,)
     for seed in range(24):
         for mask in range(16):
             for mode in modes:

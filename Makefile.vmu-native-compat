@@ -19,6 +19,19 @@ COMPAT_CACHE_HOST_SRC = src/core/vmu_native_resolution_cache.c src/core/vmu_nati
  src/core/vmu_native_patch.c src/core/hash.c src/core/data.c
 
 .PHONY: compat-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-evolution-context-host-tests native-evolution-fault-host-tests
+.PHONY: native-evolution-trace-host-tests
+native-evolution-trace-host-tests: $(BUILD)/native-worker.elf
+	@test -f '$(EVOLUTION1_STARTUP)' || (echo 'Set EVOLUTION1_STARTUP to the original Evolution executable'; exit 2)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-pie -no-pie \
+	 -Iinclude -Isrc/loader tests/test_vmu_native_trace.c -o $(BUILD)/test-trace
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-trace
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -ffunction-sections -fdata-sections \
+	 -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -DKUI_VMU_NATIVE_READONLY_PROBE=1 -Iinclude -Isrc/loader \
+	 tests/test_vmu_native_trace_install.c src/core/vmu_native_patch.c src/loader/vmu_native_trace.c \
+	 -Wl,--gc-sections -o $(BUILD)/test-trace-install
+	$(BUILD)/test-trace-install '$(EVOLUTION1_STARTUP)'
+	python3 tools/check_vmu_native_trace.py $(BUILD) '$(EVOLUTION1_STARTUP)' --self-test
+
 native-evolution-fault-host-tests:
 	@mkdir -p $(BUILD)
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_evolution_fault.c \

@@ -110,7 +110,7 @@ class StorageRoute(Machine):
             self.route = "control"
             self.abi_return(self.result)
         else:
-            assert self.mode in (0, 2, 3, 4) and self.calls == ["mode", "profile"]
+            assert self.mode in (0, 2, 3, 4, 5) and self.calls == ["mode", "profile"]
             self.route, self.pc = "profile", self.stop_pc
         return True
 
@@ -142,9 +142,28 @@ class DiagnosticRoute(Machine):
         self.abi_return(self.mode)
         return True
 
+    def plain(self, word, pc):
+        n, m = word >> 8 & 15, word >> 4 & 15
+        if word & 0xF00F == 0x000C:  # signed byte from the actual linked switch table
+            address = (self.r[0] + self.r[m]) & MASK
+            tables = [(name, record) for name, record in self.symbols.items()
+                      if name.startswith('_CSWTCH.') and record[2] == 1 and
+                      record[0] <= address < record[0] + record[1]]
+            assert len(tables) == 1, 'policy byte read leaves its typed constant table'
+            name, record = tables[0]
+            _, data, section = symbol_bytes(self.image, name, 1)
+            assert section[2] & 7 == 2, 'policy table is writable or executable'
+            value = data[address - record[0]]
+            self.r[n] = (value - 256 if value & 128 else value) & MASK
+            return
+        if word & 0xF00F == 0x600C:
+            self.r[n] = self.r[m] & 255
+            return
+        super().plain(word, pc)
+
     def check(self):
         registers, pr, _, _, _, sr, fpscr, fr = self.before
-        assert self.calls == ["mode"] and self.r[0] == {2: 1, 4: 2}.get(self.mode, 0)
+        assert self.calls == ["mode"] and self.r[0] == {2: 1, 4: 2, 5: 3}.get(self.mode, 0)
         assert self.r[8:] == registers[8:] and self.pr == pr
         assert self.sr & ~1 == sr & ~1 and self.fpscr == fpscr and self.fr == fr
 
@@ -153,9 +172,9 @@ def instruction_routes(stage, *, self_test=False):
     cases = storage = diagnostics = 0
     for seed in range(12):
         for mask in range(16):
-            for result in (0, 1, 2, 3, 4, MASK):
+            for result in (0, 1, 2, 3, 4, 5, MASK):
                 ModeHelper(stage, seed, mask, result).run().check(); cases += 1
-            for mode in (0, 1, 2, 3, 4):
+            for mode in (0, 1, 2, 3, 4, 5):
                 DiagnosticRoute(stage, seed, mask, mode).run().check(); diagnostics += 1
                 for result in (0, 1, MASK):
                     StorageRoute(stage, seed, mask, mode, result).run().check(); storage += 1
@@ -200,14 +219,16 @@ def instruction_routes(stage, *, self_test=False):
         require(at >= 0, "worker policy lacks its exact immutable mode callback")
         changed = bytearray(policy); struct.pack_into("<I", changed, at, STAGE + 2)
         edits.append(bytes(changed))
-        for immediate in (0x8802, 0x8804):
+        # GCC lowers the four-element policy to a bounded byte table.
+        # Mutate the exact bounds/index arithmetic, then execute all modes.
+        for immediate in (0xE203, 0x71FE, 0x3126):
             at = policy.find(struct.pack("<H", immediate))
             require(at >= 0, "worker policy lacks exact canonical mode comparison")
             changed = bytearray(policy); struct.pack_into("<H", changed, at, immediate ^ 1)
             edits.append(bytes(changed))
         for changed in edits:
             try:
-                for mode in (0, 1, 2, 3, 4):
+                for mode in (0, 1, 2, 3, 4, 5):
                     DiagnosticRoute(stage, 7, 15, mode, body=changed).run().check()
             except (AssertionError, ValueError, struct.error, KeyError):
                 mutations += 1
@@ -269,7 +290,7 @@ def audit(stage_data, entry_data, module, *, cached_code, stage_image=None, resi
     report = {"enabled": True, "module_offset": module_offset, "bytes": MODE_BYTES,
               "template_sha256": hashlib.sha256(wire).hexdigest(), "address": hex(address),
               "typed_immutable_unique_object": True, "profile_cache_worker_relocation_trampoline_disjoint": True,
-              "modes": {"normal": 0, "control": 1, "profile": 2, "lease-only": 3, "hooks-only": 4}}
+              "modes": {"normal": 0, "control": 1, "profile": 2, "lease-only": 3, "hooks-only": 4, "raw-chain": 5}}
     if stage_image is not None:
         report.update(instruction_routes(stage_image, self_test=self_test))
         from check_vmu_native_lease_only import audit as audit_lease_only

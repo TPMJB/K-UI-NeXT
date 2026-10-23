@@ -28,7 +28,7 @@ class LeaseOnlyArtifact(unittest.TestCase):
     def test_actual_helper_selector_and_mutation_families(self):
         report = audit(self.stage, self.resident, self_test=True)
         self.assertEqual(report["instruction_cases"], 540)
-        self.assertEqual(report["selector_instruction_cases"], 60)
+        self.assertEqual(report["selector_instruction_cases"], 72)
         self.assertGreaterEqual(report["mutation_rejections"], 9)
         self.assertTrue(report["terminal_and_sd_callbacks_null"])
         self.assertTrue(report["mode_three_returns_before_first_retail_veneer"])
