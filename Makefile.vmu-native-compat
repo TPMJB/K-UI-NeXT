@@ -31,6 +31,8 @@ native-evolution-trace-host-tests: $(BUILD)/native-worker.elf
 	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-pie -no-pie \
 	 -Iinclude -Isrc/loader tests/test_vmu_native_trace.c -o $(BUILD)/test-trace
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-trace
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_trace_report.c -o $(BUILD)/test-trace-report
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-trace-report
 	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -ffunction-sections -fdata-sections \
 	 -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -DKUI_VMU_NATIVE_READONLY_PROBE=1 -Iinclude -Isrc/loader \
 	 tests/test_vmu_native_trace_install.c src/core/vmu_native_patch.c src/loader/vmu_native_trace.c \

@@ -74,7 +74,18 @@
     "real_sampler_and_bridge_checks": 1832473,
     "original_persistent_suite_checks": 1290816,
     "normal_real_storage_leases": 2,
-    "compiled_artifact_self_test_passed": true
+    "compiled_artifact_self_test_passed": true,
+    "actual_terminal_renderer_checks": 9411,
+    "maximum_body_rows": 15,
+    "body_row_capacity": 16,
+    "packet_pagination_counts": [
+      0,
+      6,
+      7,
+      18,
+      32
+    ],
+    "all_packet_headers_once": true
   },
   "console_fix_claimed": false,
   "new_console_execution_verified": false

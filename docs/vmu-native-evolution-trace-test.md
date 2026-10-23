@@ -99,7 +99,10 @@ the original MDSTAR and command bytes unchanged.
 The real sampler and persistent bridge now run together in a sanitizer test,
 including normal/raw transfers and real target/build/verify/context refusals.
 The tests verify exact terminal witnesses and unchanged MDSTAR, RX slots and
-storage on refusal. Separate tests cover bounded snapshot ownership, all five
+storage on refusal. The actual terminal renderer also passed 9,411 sanitizer
+checks: at most 15 of 16 available text rows, all guard words, and every
+packet exactly once across page boundaries. Separate tests cover bounded
+snapshot ownership, all five
 surface captures, the event ring and loop watchdog. Exact-image installer tests
 reject 49 changed witnesses before mutation; 144 original-instruction equivalence
 cases and 8 gateway mutations are checked against the original executable.
