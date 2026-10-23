@@ -20,6 +20,13 @@ COMPAT_CACHE_HOST_SRC = src/core/vmu_native_resolution_cache.c src/core/vmu_nati
 
 .PHONY: compat-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-evolution-context-host-tests native-evolution-fault-host-tests
 .PHONY: native-evolution-trace-host-tests native-evolution-trace-persistent-host-tests
+.PHONY: native-controller-fast-host-tests
+native-controller-fast-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_controller.c \
+	 $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-controller-fast
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-controller-fast
+
 native-evolution-trace-persistent-host-tests:
 	@mkdir -p $(BUILD)
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_trace_persistent.c \
@@ -98,7 +105,7 @@ native-placement-host-tests: $(BUILD)/stage.elf $(BUILD)/native-worker.bin
 	 $(if $(EVOLUTION1_STARTUP),--evolution1 '$(EVOLUTION1_STARTUP)',) $(if $(JGR_STARTUP),--jgr '$(JGR_STARTUP)',)
 	python3 tests/test_vmu_native_stage_stack_artifact.py
 
-compat-host-tests: $(BUILD)/retail-maple-observe.kui persistent-host-tests passive-host-tests readonly-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests
+compat-host-tests: $(BUILD)/retail-maple-observe.kui persistent-host-tests passive-host-tests readonly-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-controller-fast-host-tests
 	KUI_NATIVE_ARTIFACT_DIR=$(BUILD) python3 tests/test_vmu_native_prepared_artifact.py
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_mode.c src/core/vmu_native_mode.c -o $(BUILD)/test-mode
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-mode

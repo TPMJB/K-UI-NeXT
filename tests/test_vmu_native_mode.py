@@ -13,7 +13,7 @@ class ModeCodecTests(unittest.TestCase):
     def test_canonical_wire_and_modes(self):
         canonical=b'KUINVM01'+struct.pack('<6I',1,32,0,0,0,0)
         self.assertEqual(mode.template_mode(),canonical)
-        for choice in (mode.NORMAL,mode.CONTROL,mode.PROFILE,mode.LEASE_ONLY,mode.HOOKS_ONLY,mode.RAW_CHAIN):
+        for choice in (mode.NORMAL,mode.CONTROL,mode.PROFILE,mode.LEASE_ONLY,mode.HOOKS_ONLY,mode.RAW_CHAIN,mode.EVOLUTION_TRACE):
             wire=mode.fill_mode(canonical,choice)
             self.assertEqual(mode.decode_mode(wire),choice)
             self.assertEqual(wire[:16],canonical[:16]);self.assertEqual(wire[20:],bytes(12))
@@ -33,15 +33,15 @@ class ModeCodecTests(unittest.TestCase):
                         with self.assertRaises(ValueError):mode.decode_mode(wire)
         for length in (0,1,8,16,31,33,64):
             with self.subTest(length=length),self.assertRaises(ValueError):mode.decode_mode((canonical*2)[:length])
-        for choice in (-1,6,0xffffffff,None,True,False,'1',1.0):
+        for choice in (-1,7,0xffffffff,None,True,False,'1',1.0):
             with self.subTest(choice=choice),self.assertRaises(ValueError):mode.fill_mode(canonical,choice)
-        for choice in (6,7,255,256,0xffffffff):
+        for choice in (7,8,255,256,0xffffffff):
             wire=bytearray(canonical);struct.pack_into('<I',wire,16,choice)
             with self.subTest(raw_choice=choice),self.assertRaises(ValueError):mode.decode_mode(wire)
 
     def test_duplicate_valid_selectors_refused(self):
-        for first in range(6):
-            for second in range(6):
+        for first in range(7):
+            for second in range(7):
                 with self.subTest(first=first,second=second),self.assertRaisesRegex(ValueError,'duplicated'):
                     mode.find_mode(mode.fill_mode(mode.template_mode(),first)+mode.fill_mode(mode.template_mode(),second))
 

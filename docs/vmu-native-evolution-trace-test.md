@@ -1,123 +1,102 @@
-# Evolution: continue across video blanking
+# Evolution: controller-poll optimization candidate
 
-The owner's four photos from build `4995b8016518` show `E003`, reason 1:
-video control changed from 5 to 4 with the same size, pitch and frame addresses.
-The last checkpoint was completion entry 20, with 2,021 submissions and 2,020
-completions. This was an intentional diagnostic stop; that completion had
-not yet returned to the original SDK consumer.
+Evolution froze before the live-marker and video-progress diagnostics existed.
+Their overhead cannot explain the original failure. Removing that overhead is
+measurement hygiene, not an established fix.
 
-The original executable deliberately disables video at `8c1cb9ce` and
-`8c1cb9f2`, then waits for counter `8c358d18` to change. Its video handler
-increments that counter; other SDK code can also reset it. Another routine
-briefly disables/restores video at `8c1f144a`/`8c1f1456`. Therefore this capture
-does not prove a VMU fault or identify the earlier movie freeze. The exact
-original instructions and literals are checked by the artifact audit.
+Build `5aff8a276681` deliberately stopped after two seconds of disabled video
+with `E004`. At that snapshot all 2,119 submitted Maple pairs had completed,
+the game video counter had changed 120 times, and saved exception SPC was
+`8c1f362c`. The original executable maps that address to a video-mode routine
+polling the low ten bits of `a05f810c` for exactly scanline zero. Timing-register
+writes follow the wait. This is not a VMU or SD wait. One sampled SPC does not
+prove that execution stayed there throughout the blank interval.
 
-This build lets those video transitions resume. After its first loss of a
-valid surface it permanently stops drawing the live marker: a safe VRAM
-address span alone does not establish ownership during movie playback.
-The event ring and failure reporting continue. The disappearing marker is
-expected in this build.
+Long interrupt callbacks could make the game miss that short synchronization
+window. This remains a hypothesis. This candidate reduces pre-existing VMU
+callback work without bypassing the game's video synchronization.
 
-## Install and run
+## Install and test
 
-Extract into a fresh folder and run there:
+Extract into a fresh folder, then run:
 
 ```sh
-python3 personalize.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --game evolution1 --raw-chain
+python3 personalize.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --game evolution1
 ```
 
-This installs directly. Use the same Evolution GDI, SCI/Standard, Auto encoding
-and controller setup. Keep physical A1 unplugged; keep CDDA, background loading
-and RAM patches off. Raw-chain leaves the original DMA list unchanged and
-supplies no virtual VMU, so a missing-VMU message is expected.
+This installs directly; no backup/restore script is needed. Use the same
+Evolution GDI, SCI/Standard, Auto encoding, and controller setup. Keep physical
+A1 unplugged and CDDA, background loading, and RAM patches off for this test.
+The prepared card files are preserved by personalization.
 
-If it reaches the title/menu, use the same command **without `--raw-chain`**
-to test normal virtual-VMU operation and save/reload. Both modes are in this
-build; no additional download is needed. The personalizer leaves prepared
-card files unchanged. Normal startup validation/recovery may repair a journal.
+The primary test is a normal virtual-VMU launch: opening FMV, title/menu,
+new-game/save, power-off, and reload. There is no live marker or automatic
+video-blank stop in normal mode. A missing marker is expected. If it freezes,
+report the last visible screen and whether the card-reader LED remains active.
+There is no need to repeat the older diagnostic comparisons first.
 
-If blue pages appear, capture **EXCEPTION AND VIDEO PROGRESS**, page 1, and any
-**EVOLUTION GUARD DETAILS** or packet pages that follow. Pages cycle about
-every five seconds; a video of one full cycle is sufficient. Power off afterward.
+## What changed
 
-If it remains black without pages, report that and roughly how long you
-waited. This capture cannot rescue a stall that prevents every instrumented
-hook from running. No additional timer, vector, interrupt source or SD trace
-log is installed.
+After the first full layout validation, a strict controller-only batch can use
+a smaller callback path. It accepts one to four distinct main-unit GETCOND
+requests, including port A, with the controller function and exact prepared RX
+slots. Up to 32 source words, including optional SDK padding, are retained in
+private RAM. The original SDK DMA list stays in use.
 
-## What the new capture means
+Completion compares every captured source word, validates every physical reply,
+and checks the live manager alias, initializer inputs, used RX entries, lease,
+hooks, frame, lock and DMA context before changing one byte in the port-A parent
+header to retain virtual-A1 presence. No virtual payload or SD operation is
+permitted by this path. A changed admitted pair stops before that store.
 
-`E003` is no longer emitted for an ordinary lost surface. The sampler retires
-drawing and lets the original code continue.
+VMU enumeration, reads, writes, mixed traffic, unsupported batches and a cold
+layout use the existing full path. Full storage admission and free-hook lease
+protection are retained. An unrelated RX slot is not authority for the one-byte
+controller path, but is still checked before the full VMU/storage path.
 
-`E004` deliberately captures a **continued video-disabled interval while
-instrumented callbacks still run**. It requires 1,562,500 observed TMU0 ticks
-(about two seconds at the existing 781,250 Hz configuration), a running timer,
-prescaler 2, reload `FFFFFFFF`, and no ambiguous large inter-sample counter jump.
-An observed clock change or ambiguous timer jump invalidates that interval's deadline;
-normal timer wrap is supported. A long legal load may also trigger E004.
-It is a progress snapshot, not a crash assertion or a guaranteed wall-clock
-watchdog.
+The four-controller host fixture uses 170 guest reads per pair, versus 360 for
+the full path. These are bus-read counts, not hardware time or frame-rate
+measurements. Evolution's actual proportion of eligible batches is unmeasured.
 
-The new page preserves raw saved exception SPC/SSR/VBR and INTEVT, the video
-counter, cached display control and blanking flag, first/current counter,
-observed changes, stable timer duration and drawing retirement. Saved exception
-registers may reflect SDK handling or nesting; they are not an arbitrary fault
-PC. Counter changes are not asserted to be monotonically increasing frames.
+Exact Evolution tracing is now explicit with `--evolution-trace`. Normal,
+raw-chain, hooks-only and runtime-profile modes do not install its four game
+trace patches or perform its MMIO snapshots/VRAM marker writes. The allocation-
+failure diagnostic remains available without changing successful allocations.
+A disabled video output no longer triggers the artificial two-second E004 stop,
+even in opt-in tracing.
 
-`E002` still captures 1,048,576 iterations of the exact instrumented timer-wait
-loop; it does not by itself prove a stopped timer. The original game gateways
-and every VMU admission check are unchanged.
+## Included comparison modes
 
-## Guard details retained
-
-If reason `40` reappears, the guard page identifies the exact stage:
-
-| Check | Meaning |
-| --- | --- |
-| `00030001` | Private DMA target validation |
-| `00030002` | Filtered command-list builder |
-| `00030003` | Built command-list verification |
-| `000200xx` | Final context comparison `xx` |
-
-`AT`, `VALUE`, `EXPECT` retain the failed comparison. Builder/verifier results
-are signed integers printed as hex; `FFFFFFFB` means unsupported command/function,
-`FFFFFFF9` empty physical output, and `FFFFFFF8` changed output. Each packet row
-is index, control, RX address, header and first payload word. At most 32 private
-packet metadata records are copied after refusal; full save payloads are not
-dumped. All-A1 batches fail earlier at reason 21 because a parent is required.
-
-## Other modes retained
-
-| Selection | Reservation | Active hooks | DMA list | Virtual card |
+| Selection | Hooks | DMA list | Virtual card | Evolution live trace |
 | --- | --- | --- | --- | --- |
-| Normal, no flag | Yes | Yes | Filtered | Yes |
-| `--raw-chain` | Yes | Yes | Original | No |
-| `--hooks-only` | Yes | Yes | Filtered | No |
-| `--lease-only` | Yes | No | Original | No |
-| `--control` | No VMU worker | No VMU hooks | Original | No |
-| `--profile-runtime` | Yes | Yes | Filtered | Yes, timing capture |
+| Normal, no flag | Active; controller optimization eligible | Original for eligible controller polls, otherwise filtered | Yes | No |
+| `--raw-chain` | Full comparison path | Original | No | No |
+| `--hooks-only` | Full comparison path | Filtered | No | No |
+| `--lease-only` | Lease protection only | Original | No | No |
+| `--control` | No VMU hooks or worker reservation | Original | No | No |
+| `--profile-runtime` | Full timing path | Filtered | Yes | No |
+| `--evolution-trace` | Full diagnostic path | Filtered | Yes | Exact image only |
 
-Flags are mutually exclusive. The raw-chain candidate still passes the same
-private-chain/context checks before the original command list is used.
+Flags are exclusive. Runtime profiling currently measures the full route and
+must not be used as a timing measurement of optimized normal controller polls.
+The trace mode retains the bounded event ring, terminal guard details and exact
+instrumented timer-loop watchdog; it does not capture an arbitrary stalled PC.
+It changes timing and is not the primary compatibility test.
 
 ## Validation and limits
 
-ASan/UBSan tests cover brief blanking and resumption, all unsafe surface cases,
-permanent drawing retirement, stable-clock continued-blank capture, counter
-progress/freeze, timer wrap/reset/configuration changes, actual sampler with
-normal/raw bridge transfers and normal save/read operations. Refusal tests
-retain all four detailed witnesses and verify unchanged DMA/RX/storage.
+Sanitizer tests cover the eligible port subsets and banks, both prepared RX
+layouts, live manager aliases, unchanged source DMA, byte-exact parent-only
+publication, absent non-A controllers, physical A1 conflicts, every source-word
+mutation and completion-read failure, mixed/full fallback, durable save/read
+switching, and attempted release of the worker lease. Existing persistence and
+recovery tests remain required. Trace tests require zero sampler I/O in ordinary
+modes and allow long legal blanking without an artificial stop.
 
-The actual terminal renderer is checked for bounded rows and complete packet
-pagination through 32 records. Compiled audits check all original game gateways,
-the exact seven-instruction read-only exception-register leaf, zero stack use
-in that leaf, relocation, private stacks, cache publication and source provenance.
-The full archive includes a cloneable source checkpoint.
+Linked audits bind the new controller context helper and private state, the
+existing storage guards and gateway register/stack behavior, all seven immutable
+launch modes, relocation, cache publication and source provenance. The full
+archive contains a cloneable source checkpoint. No game executable is included.
 
-Exact trace image: 2,143,652 bytes, SHA-256
-`ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35`.
-No game executable is included. This diagnostic changes timing; console
-compatibility and an Evolution fix remain unverified. There is no new SDK
-family, CDDA coexistence, SCIF or physical-disc support in this package.
+An Evolution fix is not established until this candidate succeeds on the console.
+This package adds no SDK family, CDDA coexistence, SCIF or physical-disc support.

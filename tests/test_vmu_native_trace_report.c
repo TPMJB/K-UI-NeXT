@@ -72,7 +72,7 @@ static void render_cycle(bool failure,unsigned count) {
     memset(pages,0,sizeof(pages));memset(packet_hits,0,sizeof(packet_hits));
     page_count=pauses=history_rows=0u;guard_values_seen=false;
     expected_pages=5u+(failure?1u+(count>6u?(count-6u+11u)/12u:0u):0u);
-    struct kui_vmu_native_passive_config exact={0};
+    struct kui_vmu_native_passive_config exact={.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE};
     exact.driver.image_bytes=2143652u;exact.driver.load_address=0x8c010000u;
     memcpy(exact.driver.image_sha256,evolution_digest,sizeof(evolution_digest));
     kui_vmu_native_trace_init(&exact);CHECK(trace.enabled);

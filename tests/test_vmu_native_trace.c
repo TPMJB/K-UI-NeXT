@@ -79,13 +79,19 @@ static void blank_capture(const struct kui_vmu_native_passive_config *c,
  kui_vmu_native_trace_point(0x20u,f,1u,0u);
  assert(trace.blank_ticks==KUI_VMU_TRACE_BLANK_TICKS-1u && pixels==before);
  tick=start-KUI_VMU_TRACE_BLANK_TICKS;if(progress) ++vblank_counter;
- expected_reason=0xe004u;expected_value=KUI_VMU_TRACE_BLANK_TICKS;
- expected_a=progress?2u:0u;expected_b=irq_state[0];
- if(!setjmp(terminal)) {kui_vmu_native_trace_point(0x21u,f,1u,0u);assert(!"sustained blank must report");}
+ kui_vmu_native_trace_point(0x21u,f,1u,0u);
  assert(trace.blank_samples==3u && trace.blank_counter_changes==(progress?2u:0u));
  assert(trace.blank_last_counter==vblank_counter && trace.blank_ticks==KUI_VMU_TRACE_BLANK_TICKS);
  assert(trace.draw_off && pixels==before && trace.exception[0]==irq_state[0] && trace.event==interrupt_event);
  assert(trace.reload==UINT32_MAX && trace.vblank==vblank_counter && trace.cached_ctrl==cached_control && trace.blank_flag==blank_flag);
+ /* Ordinary video blanking must not become an artificial two-second stop.
+  * Continue well beyond the previous threshold with valid small deltas. */
+ for(unsigned i=0u;i<20u;i++) {
+  tick-=KUI_VMU_TRACE_BLANK_TICKS/2u;
+  if(progress) ++vblank_counter;
+  kui_vmu_native_trace_point(0x20u,f,1u,0u);
+ }
+ assert(trace.blank_ticks==11u*KUI_VMU_TRACE_BLANK_TICKS && pixels==before);
 }
 static void invalid_blank_clock(const struct kui_vmu_native_passive_config *c,
  const struct kui_vmu_native_passive_frame *f,unsigned invalid) {
@@ -122,6 +128,13 @@ int main(void) {
  struct kui_vmu_native_passive_config c={0};struct kui_vmu_native_passive_frame f={.pr=0x8c0f6c72,.sr=0x60000161,.r14=17};
  kui_vmu_native_trace_init(&c);kui_vmu_native_trace_point(0x10,&f,1,0);assert(!reads && !pixels && !irq_reads);
  c.driver.image_bytes=2143652;c.driver.load_address=0x8c010000;memcpy(c.driver.image_sha256,evolution_digest,32);
+ for(unsigned mode=0u;mode<KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE;mode++) {
+  c.diagnostics=mode;kui_vmu_native_trace_init(&c);
+  kui_vmu_native_trace_point(0x10u,&f,1u,0u);
+  kui_vmu_native_trace_game(0x41u,&f);
+  assert(!kui_vmu_native_trace_enabled() && !reads && !pixels && !irq_reads && !trace.sequence);
+ }
+ c.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE;
  for(unsigned bit=0;bit<256;bit++) {c.driver.image_sha256[bit/8]^=1u<<(bit%8);assert(!kui_vmu_native_trace_image(&c.driver));c.driver.image_sha256[bit/8]^=1u<<(bit%8);}
  fresh(&c);assert(kui_vmu_native_trace_enabled());
  control=0;kui_vmu_native_trace_point(0x10,&f,0,0);assert(!trace.surface_seen && !pixels && !trace.blank_active && !trace.draw_off);
@@ -164,6 +177,6 @@ int main(void) {
  kui_vmu_native_trace_init(&c);assert(!trace.failure_present && !trace.failure_count);
  c.driver.image_bytes=1u;kui_vmu_native_trace_init(&c);
  kui_vmu_native_trace_failure(&failure);assert(!trace.failure_present);
- puts("Native trace: exact image, bounded VRAM, nonterminal surface loss, stable-clock blank capture, exception state, ring, wait watchdog and owned guard snapshot passed");
+ puts("Native trace: opt-in only, no default MMIO/VRAM reads or writes, nonterminal long blanking, exact image, exception state, ring, wait watchdog and owned guard snapshot passed");
  return 0;
 }

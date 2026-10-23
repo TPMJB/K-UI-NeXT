@@ -53,6 +53,16 @@ static uint32_t write_payloads[KUI_VMU_VOLATILE_CHAIN_FRAMES][32];
 static struct kui_vmu_volatile_chain_plan issued_plan;
 static struct kui_vmu_native_passive_frame completion_frame;
 static struct kui_vmu_native_live live_plan;
+/* A controller-only pair keeps the original SDK DMA chain. This private
+ * snapshot grants only one parent-presence byte, never a virtual reply or
+ * storage operation. A bounded miss uses the unchanged complete VMU path. */
+#define CONTROLLER_WORDS 32u
+#define CONTROLLER_FRAMES 4u
+static struct {
+    uint32_t pending,bank,source,words,count,nops,parent;
+    uint32_t snapshot[CONTROLLER_WORDS];
+    struct {uint32_t rx,header;} frames[CONTROLLER_FRAMES];
+} controller_pair;
 static struct kui_vmu_native_lifetime_range protected_ranges[KUI_VMU_NATIVE_LIFETIME_RANGES];
 static unsigned protected_count;
 static struct kui_vmu_native_lifetime_plan lifetime_plan;
@@ -517,10 +527,11 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
     memcpy(&config,c,sizeof(config));
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     memset(&live_plan,0,sizeof(live_plan));
+    memset(&controller_pair,0,sizeof(controller_pair));
     memset(&diagnostic,0,sizeof(diagnostic));
     memset(&lifetime_plan,0,sizeof(lifetime_plan));
     hook_witness_ready=0u;hook_witness_count=0u;
-    if(config.diagnostics>KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN) {memset(&config,0,sizeof(config));return -2;}
+    if(config.diagnostics>KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE) {memset(&config,0,sizeof(config));return -2;}
 #endif
     if(!lease_valid()) {memset(&config,0,sizeof(config));return -2;}
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
@@ -840,6 +851,122 @@ static bool persistent_context_guard(void) {
         return context_reject(0x52u,0u,state.submitted,state.completed+1u);
     return transfer_context_valid(&completion_frame,bank,1u,state.source);
 }
+/* The full launch-local layout proof has already established every span and
+ * free-hook exclusion. This narrower authority uses the same live SDK/IRQ
+ * context, all initializer-input witnesses and only the RX entries actually
+ * named by this main-unit GETCOND batch. Unused slots cannot authorize its
+ * single parent-header store. No external call or game code runs between this
+ * witness and publication. Full VMU/storage paths retain all48-slot checks. */
+static bool controller_context_valid(const struct kui_vmu_native_passive_frame *f,unsigned phase) {
+    if(live_plan.self!=(uintptr_t)&live_plan || live_plan.ready!=UINT32_C(0x4e4c5031) ||
+       live_plan.input_count>24u || controller_pair.bank>1u || !controller_pair.count ||
+       controller_pair.count>CONTROLLER_FRAMES || controller_pair.parent>=controller_pair.count ||
+       !transfer_context_valid(f,controller_pair.bank,phase,controller_pair.source)) return false;
+    uint32_t value,manager;
+    if(!read_value(NULL,config.driver.manager_cell,4u,&manager) ||
+       !ram(manager,0x1100u,4u) || physical(manager)!=physical(config.driver.manager_initial)) return false;
+#define CONTROLLER_EXPECT(address,expected) do { \
+    if(!read_value(NULL,(address),4u,&value) || value!=(expected)) return false; \
+} while(0)
+    CONTROLLER_EXPECT(manager+0xfc4u,live_plan.tx);
+    CONTROLLER_EXPECT(manager+0xfc8u,live_plan.rx);
+    CONTROLLER_EXPECT(manager+0x10a8u,live_plan.tx);
+    CONTROLLER_EXPECT(manager+0x10acu,live_plan.tx+KUI_VMU_NATIVE_TX_BANK_BYTES);
+    CONTROLLER_EXPECT(live_plan.gun,0u);
+    CONTROLLER_EXPECT(live_plan.timer1,0u);
+    CONTROLLER_EXPECT(live_plan.timer2,0u);
+    for(unsigned i=0;i<live_plan.input_count;i++)
+        CONTROLLER_EXPECT(live_plan.input_address[i],live_plan.input_value[i]);
+    for(unsigned i=0;i<controller_pair.count;i++) {
+        unsigned port=(controller_pair.frames[i].header>>14)&3u;
+        unsigned slot=controller_pair.bank*24u+port*6u;
+        CONTROLLER_EXPECT(manager+0xfe8u+slot*4u,config.runtime.rx_slots[slot]);
+    }
+#undef CONTROLLER_EXPECT
+    return true;
+}
+static bool controller_prepare(const struct kui_vmu_native_passive_frame *f) {
+    if(config.diagnostics!=KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL || !live_plan.ready ||
+       overlay.pending || !overlay.admitted || controller_pair.pending) return false;
+    controller_pair.count=controller_pair.nops=controller_pair.words=0u;
+    controller_pair.source=state.source;controller_pair.parent=CONTROLLER_FRAMES;
+    if(state.source==physical(config.tx_base)) controller_pair.bank=0u;
+    else if(state.source==physical(config.tx_base)+KUI_VMU_NATIVE_TX_BANK_BYTES) controller_pair.bank=1u;
+    else return false;
+    unsigned at=0u,ports=0u;
+    while(at<CONTROLLER_WORDS) {
+        uint32_t control;
+        if(!read_value(NULL,(state.source+at*4u)|UINT32_C(0xa0000000),4u,&control)) fail(0x46u);
+        controller_pair.snapshot[at]=control;
+        if(control==UINT32_C(0x700)) {++controller_pair.nops;++at;continue;}
+        if((control&~UINT32_C(0x800300ff)) || (control&255u)!=1u ||
+           at>CONTROLLER_WORDS-4u || controller_pair.count==CONTROLLER_FRAMES) return false;
+        for(unsigned j=1u;j<4u;j++)
+            if(!read_value(NULL,(state.source+(at+j)*4u)|UINT32_C(0xa0000000),4u,
+                &controller_pair.snapshot[at+j])) fail(0x46u);
+        uint32_t rx=controller_pair.snapshot[at+1u],header=controller_pair.snapshot[at+2u];
+        unsigned port=(control>>16)&3u;
+        if(header!=(UINT32_C(0x01002009)|(port<<14)|(port<<22)) ||
+           controller_pair.snapshot[at+3u]!=UINT32_C(0x01000000) || (ports&(1u<<port))) return false;
+        unsigned slot=controller_pair.bank*24u+port*6u;
+        uint32_t expected=config.runtime.rx_slots[slot];
+        if(!expected || rx!=physical(expected) || !ram(rx,1024u,32u)) return false;
+        controller_pair.frames[controller_pair.count].rx=rx;
+        controller_pair.frames[controller_pair.count].header=header;
+        if(!port) controller_pair.parent=controller_pair.count;
+        ++controller_pair.count;ports|=1u<<port;at+=4u;
+        if(control&UINT32_C(0x80000000)) {
+            if(!(ports&1u)) return false;
+            controller_pair.words=at;
+            if(!controller_context_valid(f,0u)) fail(0x46u);
+            state.bytes=at*4u;state.descriptors=controller_pair.count;state.nops=controller_pair.nops;
+            state.first_rx=controller_pair.frames[0].rx;state.rx_slots=live_plan.nonzero;
+            controller_pair.pending=1u;state.pending=1u;++state.submitted;
+            ++overlay.stats.prepared;return true;
+        }
+    }
+    return false;
+}
+static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
+    if(!controller_pair.pending || controller_pair.source!=state.source ||
+       !controller_pair.words || controller_pair.words>CONTROLLER_WORDS ||
+       !controller_pair.count || controller_pair.count>CONTROLLER_FRAMES ||
+       controller_pair.parent>=controller_pair.count ||
+       controller_pair.words*4u!=state.bytes || controller_pair.count!=state.descriptors ||
+       overlay.pending || !overlay.admitted || !durable_card.ready || durable_card.faulted) fail(0x47u);
+    /* Validate the entire immutable source and every physical response before
+     * touching even the parent header. A failed fast completion is terminal;
+     * it cannot enter a partly prepared full-overlay transaction. */
+    for(unsigned i=0;i<controller_pair.words;i++) {
+        uint32_t value;
+        if(!read_value(NULL,(state.source+i*4u)|UINT32_C(0xa0000000),4u,&value) ||
+           value!=controller_pair.snapshot[i]) fail(0x47u);
+    }
+    uint32_t parent_response=0u;
+    for(unsigned i=0;i<controller_pair.count;i++) {
+        uint32_t response,function;uint32_t rx=controller_pair.frames[i].rx;
+        unsigned port=(controller_pair.frames[i].header>>14)&3u;
+        if(!read_value(NULL,rx|UINT32_C(0xa0000000),4u,&response)) fail(0x47u);
+        if(response!=UINT32_MAX) {
+            if((response&UINT32_C(0xffe0ffff))!=(UINT32_C(0x03200008)|(port<<14)|(port<<22)) ||
+               !read_value(NULL,(rx+4u)|UINT32_C(0xa0000000),4u,&function) ||
+               function!=UINT32_C(0x01000000)) fail(0x47u);
+        } else if(!port) fail(0x47u);
+        if(i==controller_pair.parent) {
+            if(response&UINT32_C(0x00010000)) fail(0x47u);
+            parent_response=response;
+        }
+        if(!i) state.first_response=response;
+        state.last_response=response;
+    }
+    if(!controller_context_valid(f,1u)) fail(0x47u);
+    uint8_t *parent=readonly_rx(controller_pair.frames[controller_pair.parent].rx,1024u);
+    if(!parent) fail(0x47u);
+    ((volatile uint8_t *)parent)[2]=(uint8_t)((parent_response>>16)|1u);
+    ++overlay.stats.advertisements;++overlay.stats.completed;
+    controller_pair.pending=0u;state.pending=0u;++state.completed;state.error=0u;
+    state.proof=durable_card.commits!=0u;
+}
 #endif
 void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f) {
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
@@ -867,6 +994,9 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
     if(!read_value(NULL,UINT32_C(0xa05f6c04),4u,&source) || source!=physical(source) ||
        !ram(source,KUI_VMU_NATIVE_TX_BANK_BYTES,32u)) fail(4u);
     state.source=source;
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    if(controller_prepare(f)) return;
+#endif
     struct kui_vmu_native_runtime_snapshot snapshot;
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!live_boundary(f,0u,state.source,12u,&snapshot)) fail(5u);
@@ -937,6 +1067,9 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
     if(!installed_hooks_valid()) fail(0x45u);
 #endif
     if(!poll_lease_valid()) fail(9u);
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    if(controller_pair.pending) {controller_complete(f);return;}
+#endif
 #if !KUI_VMU_NATIVE_PERSISTENT_PROBE
     struct kui_vmu_native_runtime_config rebound=config.runtime;
     if(!bind_runtime(&rebound) ||

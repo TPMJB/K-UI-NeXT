@@ -76,24 +76,45 @@ static struct stress_cost stress_transfer(unsigned controllers,unsigned command,
     unsigned phase,const uint8_t *payload,unsigned padding,unsigned frees) {
     struct stress_cost cost={0};
     stress_stage(controllers,command,block,phase,payload,padding);
+    uint32_t source=physical(input.tx_base)+packet_bank*KUI_VMU_NATIVE_TX_BANK_BYTES;
+    uint8_t original[KUI_VMU_NATIVE_TX_BANK_BYTES];
+    memcpy(original,memory+source-0x0c000000u,sizeof(original));
+    bool prepared=live_plan.ready!=0u;
     unsigned wire=sd.bytes,reads=sd.reads,writes=sd.writes,statuses=sd.statuses;
     memset(&measured_work,0,sizeof(measured_work));submit();cost.submit_reads=measured_submit_reads;
     CHECK(state.descriptors==stress_packets(controllers,command));
-    CHECK(issued_plan.physical_count==controllers && issued_plan.virtual_count==(command!=0u));
-    CHECK(issued_plan.padding_count==padding && issued_plan.output_bytes==controllers*16u);
+    bool fast=controller_pair.pending!=0u;
+    CHECK(fast==(prepared && !command && padding+controllers*4u<=CONTROLLER_WORDS));
+    if(fast) {
+        CHECK(!overlay.pending && controller_pair.bank==packet_bank && controller_pair.source==source);
+        CHECK(controller_pair.count==controllers && controller_pair.nops==padding &&
+            controller_pair.words==padding+controllers*4u && controller_pair.words*4u==state.bytes);
+        CHECK(value_at(0xa05f6c04u)==source);
+    } else {
+        CHECK(overlay.pending && issued_plan.source_physical==source && issued_plan.source_bytes==state.bytes);
+        CHECK(issued_plan.frame_count==stress_packets(controllers,command));
+        CHECK(issued_plan.physical_count==controllers && issued_plan.virtual_count==(command!=0u));
+        CHECK(issued_plan.padding_count==padding && issued_plan.output_bytes==controllers*16u);
+        CHECK(value_at(0xa05f6c04u)==issued_physical());
+        CHECK(!kui_vmu_volatile_chain_verify(&issued_plan,issued_chain,sizeof(issued_chain)));
+    }
+    CHECK(!memcmp(original,memory+source-0x0c000000u,sizeof(original)));
     put(0xa05f6c18u,4u,1u);
     uint32_t saved_r4=frame.r4;frame.r4=input.lease.header-32u;
     unsigned before=bus_reads;
     for(unsigned i=0;i<frees;i++) kui_vmu_native_readonly_release_check(&frame);
     cost.free_reads=bus_reads-before;frame.r4=saved_r4;
     stress_complete(controllers);
-    uint8_t unrelated[3][1024];
+    uint8_t parent[1024],unrelated[3][1024];memcpy(parent,rx_bytes(0u),sizeof(parent));
     for(unsigned port=1;port<controllers;port++)
         memcpy(unrelated[port-1u],kui_vmu_native_passive_test_rx(stress_rx(port),1024u),1024u);
     complete_return();cost.complete_reads=measured_complete_reads;idle();
+    CHECK(!controller_pair.pending && !overlay.pending);
+    parent[2]|=1u;CHECK(!memcmp(parent,rx_bytes(0u),sizeof(parent)));
     for(unsigned port=1;port<controllers;port++)
         CHECK(!memcmp(unrelated[port-1u],kui_vmu_native_passive_test_rx(stress_rx(port),1024u),1024u));
     CHECK(value_at(0xa05f6c04u)==physical(input.tx_base)+packet_bank*KUI_VMU_NATIVE_TX_BANK_BYTES);
+    CHECK(!memcmp(original,memory+source-0x0c000000u,sizeof(original)));
     cost.work=full_work();cost.wire=sd.bytes-wire;cost.reads=sd.reads-reads;
     cost.writes=sd.writes-writes;cost.statuses=sd.statuses-statuses;
     return cost;

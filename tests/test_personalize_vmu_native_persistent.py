@@ -360,7 +360,8 @@ class NativeRuntimeModePersonalizationTests(NativeCachePersonalizationTests):
     def test_all_modes_preserve_pairs_and_only_permitted_spans(self):
         before=self.snapshots()
         for options,expected in (({},0),({'control':True},1),({'profile_runtime':True},2),
-                                 ({'lease_only':True},3),({'hooks_only':True},4),({'raw_chain':True},5),({},0)):
+                                 ({'lease_only':True},3),({'hooks_only':True},4),({'raw_chain':True},5),
+                                 ({'evolution_trace':True},6),({},0)):
             report=self.install(game='sa2',**options);after=self.destination.read_bytes()
             self.assertEqual(report['runtime_mode'],mode.MODE_NAMES[expected]);self.assertEqual(self.installed_mode(),expected)
             self.assertEqual(before,self.snapshots())
@@ -389,7 +390,7 @@ class NativeRuntimeModePersonalizationTests(NativeCachePersonalizationTests):
 
     def test_noncanonical_or_duplicate_generic_modes_refused(self):
         original=self.module
-        for choice in (1,2,3,4,5):
+        for choice in (1,2,3,4,5,6):
             payload=bytearray(original[64:]);struct.pack_into('<I',payload,self.mode_offset-64+16,choice)
             self.module=envelope(payload,len(payload),COMMIT[:12])
             self.manifest.update(module_sha256=tool.sha(self.module));self.save_package()
@@ -401,7 +402,7 @@ class NativeRuntimeModePersonalizationTests(NativeCachePersonalizationTests):
 
     def test_legacy_package_refuses_explicit_runtime_modes(self):
         legacy=self.root/'legacy';generic(legacy);old=self.destination.read_bytes();before=self.snapshots()
-        for option in ({'control':True},{'profile_runtime':True},{'lease_only':True},{'hooks_only':True},{'raw_chain':True}):
+        for option in ({'control':True},{'profile_runtime':True},{'lease_only':True},{'hooks_only':True},{'raw_chain':True},{'evolution_trace':True}):
             with self.subTest(option=option),self.assertRaisesRegex(ValueError,'no audited native runtime mode'):
                 tool.install(self.card,package=legacy,**option)
         self.assertEqual(old,self.destination.read_bytes());self.assertEqual(before,self.snapshots())
@@ -412,8 +413,9 @@ class NativeRuntimeModePersonalizationTests(NativeCachePersonalizationTests):
                         {'control':True,'hooks_only':True}, {'profile_runtime':True,'hooks_only':True},
                         {'lease_only':True,'hooks_only':True},
                         {'control':True,'profile_runtime':True,'lease_only':True},
-                        {'control':1},{'profile_runtime':1},{'lease_only':1},{'hooks_only':1},{'raw_chain':1},
-                        *({name:True,'raw_chain':True} for name in ('control','profile_runtime','lease_only','hooks_only'))):
+                        {'control':1},{'profile_runtime':1},{'lease_only':1},{'hooks_only':1},{'raw_chain':1},{'evolution_trace':1},
+                        *({name:True,'raw_chain':True} for name in ('control','profile_runtime','lease_only','hooks_only')),
+                        *({name:True,'evolution_trace':True} for name in ('control','profile_runtime','lease_only','hooks_only','raw_chain'))):
             with self.subTest(options=options),self.assertRaisesRegex(ValueError,'at most one'):
                 self.install(**options)
 
@@ -461,6 +463,19 @@ class NativeRuntimeModePersonalizationTests(NativeCachePersonalizationTests):
                 self.install(**options);self.assertEqual(self.installed_mode(),expected)
                 self.assertEqual(before,self.snapshots())
 
+    def test_prior_packages_refuse_evolution_trace_before_profile_selection_or_replace(self):
+        before=self.snapshots();old=self.destination.read_bytes()
+        for choices in (None,tool.MODE_CHOICES_LEASE_ONLY,tool.MODE_CHOICES_HOOKS_ONLY,tool.MODE_CHOICES_RAW_CHAIN):
+            if choices is None:self.manifest.pop('runtime_mode_choices',None)
+            else:self.manifest['runtime_mode_choices']=dict(choices)
+            self.save_package()
+            with self.subTest(choices=choices),\
+                 patch.object(tool,'select_profile',side_effect=AssertionError('must not select a profile')),\
+                 patch.object(tool.os,'replace',side_effect=AssertionError('must not replace loader')):
+                with self.assertRaisesRegex(ValueError,'no audited evolution-trace'):
+                    self.install(evolution_trace=True)
+            self.assertEqual(old,self.destination.read_bytes());self.assertEqual(before,self.snapshots())
+
     def test_mode_capability_declaration_requires_exact_integer_choices(self):
         old=self.destination.read_bytes();before=self.snapshots()
         for choices in ({'lease-only':3}, {'normal':False,'control':1,'profile':2,'lease-only':3},
@@ -469,7 +484,9 @@ class NativeRuntimeModePersonalizationTests(NativeCachePersonalizationTests):
                         {**tool.MODE_CHOICES_LEASE_ONLY,'hooks-only':5},
                         {**tool.MODE_CHOICES_HOOKS_ONLY,'extra':5},
                         {**tool.MODE_CHOICES_RAW_CHAIN,'raw-chain':True},
-                        {**tool.MODE_CHOICES_RAW_CHAIN,'raw-chain':6}, [], 3):
+                        {**tool.MODE_CHOICES_RAW_CHAIN,'raw-chain':6},
+                        {**tool.MODE_CHOICES_EVOLUTION_TRACE,'evolution-trace':True},
+                        {**tool.MODE_CHOICES_EVOLUTION_TRACE,'evolution-trace':5}, [], 3):
             self.manifest_write(runtime_mode_choices=choices)
             with self.subTest(choices=choices),self.assertRaisesRegex(ValueError,'capabilities'):
                 self.install(lease_only=True)
@@ -483,18 +500,20 @@ class NativeRuntimeModePersonalizationTests(NativeCachePersonalizationTests):
         args=[sys.executable,str(self.package/'personalize.py'),str(self.card),'--game','sa2',
             '--profile','KUI/vmu-test/p0001/retail-persistent-profile-0001.bin']
         before=self.snapshots()
-        for flag,expected in (('--control',1),('--profile-runtime',2),('--lease-only',3),('--hooks-only',4),('--raw-chain',5),(None,0)):
+        for flag,expected in (('--control',1),('--profile-runtime',2),('--lease-only',3),('--hooks-only',4),('--raw-chain',5),('--evolution-trace',6),(None,0)):
             result=subprocess.run(args+([flag] if flag else []),cwd=self.root,capture_output=True,text=True,check=True)
             self.assertEqual(self.installed_mode(),expected);self.assertEqual(before,self.snapshots())
             expected_text={1:'virtual VMU is disabled',3:'reserved RAM remains allocated',
                            4:'physical Maple traffic passes without virtual replies',
-                           5:'active hooks, original DMA list'}
+                           5:'active hooks, original DMA list',
+                           6:'Evolution executable tracing enabled'}
             self.assertIn(expected_text.get(expected,'native persistent VMU test'),result.stdout)
         for flags in (['--control','--profile-runtime'],['--control','--lease-only'],
                       ['--profile-runtime','--lease-only'],['--list-games','--lease-only'],
                       ['--control','--hooks-only'],['--profile-runtime','--hooks-only'],
                       ['--lease-only','--hooks-only'],['--list-games','--hooks-only'],
-                      *([flag,'--raw-chain'] for flag in ('--control','--profile-runtime','--lease-only','--hooks-only','--list-games'))):
+                      *([flag,'--raw-chain'] for flag in ('--control','--profile-runtime','--lease-only','--hooks-only','--list-games')),
+                      *([flag,'--evolution-trace'] for flag in ('--control','--profile-runtime','--lease-only','--hooks-only','--raw-chain','--list-games'))):
             result=subprocess.run(args+flags,cwd=self.root,capture_output=True,text=True)
             self.assertEqual(result.returncode,2);self.assertEqual(before,self.snapshots())
 

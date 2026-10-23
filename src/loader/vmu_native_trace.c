@@ -75,8 +75,9 @@ static void trace_blank(uint32_t ctrl) {
   if(trace.blank_clock_valid) trace.blank_ticks=trace.blank_start_tick-trace.tick;
  }
  trace.blank_last_tick=trace.tick;
- if(trace.blank_clock_valid && trace.blank_ticks>=KUI_VMU_TRACE_BLANK_TICKS)
-  kui_vmu_native_trace_report(0xe004u,trace.blank_ticks,trace.blank_counter_changes,trace.exception[0]);
+ /* Video setup is allowed to leave output disabled while interrupts and
+  * controller traffic continue. Record progress without imposing a deadline
+  * on the original game. A long blank interval is not a failure witness. */
 }
 static void trace_strip(void) {
  uint32_t ctrl=READ(0xa05f8044u,4),size=READ(0xa05f805cu,4),depth=(ctrl>>2)&3u;
@@ -87,7 +88,7 @@ static void trace_strip(void) {
  /* Evolution deliberately blanks video. Let that code resume. Retire all
   * live VRAM writes after the first surface loss; later movie/rendering
   * ownership is not established by a safe address span alone. The event
-  * ring and bounded continued-blank capture remain active. */
+  * ring and continued-blank measurements remain active in opt-in tracing. */
  trace_blank(ctrl);
  unsigned reason=!(ctrl&1u)?1u:depth==2u?2u:(pitch<256u || pitch>4096u)?3u:
   ((size>>10)&1023u)<15u?4u:0u;
@@ -115,7 +116,8 @@ static void trace_strip(void) {
 }
 void kui_vmu_native_trace_init(const struct kui_vmu_native_passive_config *c) {
  memset(&trace,0,sizeof(trace));
- if(!c || !kui_vmu_native_trace_image(&c->driver)) return;
+ if(!c || c->diagnostics!=KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE ||
+    !kui_vmu_native_trace_image(&c->driver)) return;
  memcpy(trace.display.regs,c->display,sizeof(c->display));trace.enabled=1u;
 }
 int kui_vmu_native_trace_enabled(void) {return trace.enabled!=0u;}

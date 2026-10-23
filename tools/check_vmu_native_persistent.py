@@ -56,11 +56,12 @@ PREPARED_PINS = {'_poll_lease_valid': ('b67c432db445f780a4b2e93871f7907b7f7de1fd
  '_hook_word': ('6c579e60911823ed1fbf6a57622bab2d7de2ebf46228c2c2c21d27f8fc144249', 112),
  '_prepare_hook_entry': ('a725563c7ef1e7429dd214860f8f7ecfddac54cf0981577fe679602117bebca3', 188),
  '_kui_vmu_native_lifetime_prepare': ('4691642d40ae532e2f81cfe46c3f81a019412c0da0e43fb4f7913d4a44b87312', 640),
- '_kui_vmu_native_passive_arm': ('dec90e116a59a91ad1aaad45e1f3fe1a6ebd2cd6fe4ac3ebfd1e5c7c73d208c5', 1372),
+ '_kui_vmu_native_passive_arm': ('e57595f0aac0df61359e7c79052c02298b376e9683f869b1e022be80b722c6ab', 1388),
  '_persistent_storage_guard': ('d230251892a758f65469e9cb692703a0270511756e1fbdc94cc28e04472a15fe', 396),
  '_persistent_lease': ('8658f150d0d4811335e46332a9a075f199fa8219edb5ccf1730223a4e34d78e3', 148),
- '_kui_vmu_native_passive_submit': ('5ae6c15effdca34f14b65b706e41828b0309d3b1cf1d499916fa9e54bd32b10e', 712),
- '_kui_vmu_native_passive_complete': ('4988188e25084626cee70c077fb2d26fb6141725c324e971e5a2adc6fdbde303', 1536),
+ '_kui_vmu_native_passive_submit': ('c05e1537d6db77176d0050a9ed706ec2e6d7454df824e559d5bf774a25b51300', 1300),
+ '_kui_vmu_native_passive_complete': ('71cf577a9e8bdd29046e4bafe7d81fed589b3e4390ae197a3b97c049fdba62d9', 1992),
+ '_controller_context_valid': ('475104ef13c6350c759cd7c09714ece5cc3f71410114f3808d7d549743241084', 496),
  '_kui_vmu_readonly_overlay_complete_absent': ('6085deac9edfd8886b3300663daa32875389280d2daca88d509846e17f1b31e7', 284),
  '_kui_vmu_readonly_overlay_complete': ('6413dfd099e7eeb01b7f0b9bf12e07ca276bf3bc0b8080efcce61a067c8b1bb4', 888),
  '_readonly_overlay_parent_response': ('d396e68edd3158708ba5a8c9ff5235821bb62b71cc9dc40650cadb9098eaeb12', 116),
@@ -72,9 +73,9 @@ PREPARED_PINS = {'_poll_lease_valid': ('b67c432db445f780a4b2e93871f7907b7f7de1fd
  '.rodata': ('79fca272a77490961924a12035bc15affc6b3be5584a07d54d1aca8d1163ea27', 3084),
  '_kui_vmu_native_trace_enabled': ('0a920c3cf23dad2c3aabfe188567a6d1425af67dd54b46b619555831e9748eac', 16),
  '_kui_vmu_native_trace_image': ('e85462a3e477dee0a0124220436dc355360013e47136f21eb8576af465cdd9a9', 60),
- '_kui_vmu_native_trace_point': ('6f2ba4de6adc4c0ee8edceacf435c15dfdec54be8d4d44b9d2f579c1b92c714f', 1168),
+ '_kui_vmu_native_trace_point': ('f29078442d6ec0295e0d47680f02bdc96b3e656ddc2c0cd98d02975392b09db6', 1132),
  '_kui_vmu_native_trace_wait_loop': ('8d3fb2b39e884b13c0061c722bcca07d6082aaafbc8de4d6e3b1c446759560d8', 176),
- '_kui_vmu_native_trace_init': ('d0a4ebb9ca777341dfe3ee10679979f759d721b98b366538c23c6d2b8e5250a8', 84),
+ '_kui_vmu_native_trace_init': ('bf7a45b36958e63813bfb7eef0800982671734ef8d4414b6c1ff477658b183e8', 96),
  '_kui_vmu_native_trace_wait_before': ('8d16ecf62a40b00531b18bb6d68b876b67be8c9cb7d4775c41e329babcedabcf', 152),
  '_kui_vmu_native_trace_frame_entry': ('d5949f5ee897f0fd40d653db5d53691e227882a1bb6aed384b44ea5f83104081', 164),
  '_kui_vmu_native_trace_report': ('e6401bd806d7626717aec3ece819a5310b5da0d24502d834db8fbc25503086e9', 1120),
@@ -337,16 +338,22 @@ def audit_absent_completion(worker, *, self_test=False):
     # Execute the actual linked selector, with the config's exact last word.
     base, body, _ = symbol_bytes(worker, '_kui_vmu_native_passive_complete', 2)
     words = struct.unpack('<' + 'H' * (len(body) // 2), body)
-    positions = [i for i in range(len(words)-10) if words[i]==0xe201 and words[i+2]==0x51df and
+    positions = [i for i in range(1,len(words)-10) if words[i]==0xe201 and words[i+2]&0xff0f==0x510f and
                  words[i+4:i+7]==(0x71fe,0x3126,0x8b00) and words[i+8:i+10]==(0x400b,9)]
     require(len(positions) == 1, 'missing unique actual hooks-only completion selector')
     i = positions[0]; config, size, kind, _ = worker[4]['_config']
     require((size, kind) == (2300, 1), 'hooks-only config word escaped its unchanged ABI')
+    config_register=(words[i+2]>>4)&15
+    require(words[i-1]&0xff00==0xd000|(config_register<<8),
+            'completion selector lacks its exact config-base load')
+    literal=((base+2*(i-1)+4)&~3)+4*(words[i-1]&255)
+    require(struct.unpack_from('<I',body,literal-base)[0]==config+size-64,
+            'completion selector config-base literal escaped the exact final word')
     routes = 0
     for seed in range(16):
-        for mode in (0, 1, 2, 3):
+        for mode in (0, 1, 2, 3, 4):
             m = Machine(worker, '_kui_vmu_native_passive_complete', seed, 15, 0xAC11FFE0)
-            m.pc = base + 2 * i; m.r[13] = config + size - 64
+            m.pc = base + 2 * i; m.r[config_register] = config + size - 64
             m.mem[(config & ~0x20000000) + size - 4] = mode
             m.stop_pc = base + 2 * (i + 10)
             def call(target, m=m, mode=mode):
@@ -372,7 +379,7 @@ def audit_absent_completion(worker, *, self_test=False):
             else: raise ValueError('absent model accepted changed no-response/header extent')
         changed = bytearray(body); struct.pack_into('<H', changed, 2 * (i + 4), 0x71fd)
         m = Machine(worker, '_kui_vmu_native_passive_complete', 0, 15, 0xAC11FFE0, body=bytes(changed))
-        m.pc = base + 2 * i; m.r[13] = config + size - 64
+        m.pc = base + 2 * i; m.r[config_register] = config + size - 64
         m.mem[(config & ~0x20000000) + size - 4] = 2; m.stop_pc = base + 2 * (i + 10)
         def reject_route(target):
             require(target == worker[4]['_kui_vmu_readonly_overlay_complete_absent'][0],
@@ -398,7 +405,8 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
         build = verify((directory / "retail-maple-observe.kui").read_bytes())["build"]
     for name, size in (("_lifetime_plan", 616), ("_hook_witness", 384),
                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
-                       ("_protected_ranges", 512), ("_protected_count", 4)):
+                       ("_protected_ranges", 512), ("_protected_count", 4),
+                       ("_controller_pair", 188)):
         address, actual, kind, owner = worker[4][name]
         section = worker[3][owner]
         require(kind == 1 and actual == size and address % 4 == 0 and
@@ -415,12 +423,16 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
     require(PREPARED_PINS, "missing reviewed prepared linked signatures")
     graph = (directory / "native/src/loader/vmu_native_passive.ci").read_text()
     edges = [(a, b) for a, b, _ in EDGE.findall(graph)]
+    # GCC emits unlabeled edges for its split read_value.part.0 helper.
+    # Retain those real emitted calls rather than guessing a source location.
+    edges += re.findall(r'edge: \{ sourcename: "([^"]+)" targetname: "([^"]+)" \}', graph)
     local = "src/loader/vmu_native_passive.c:"
     for caller, required in (
             ("kui_vmu_native_passive_arm", ("kui_vmu_native_lifetime_prepare", local + "prepare_hook_entry", local + "hook_word")),
             ("kui_vmu_native_passive_submit", (local + "installed_hooks_valid", local + "poll_lease_valid")),
             ("kui_vmu_native_passive_complete", (local + "installed_hooks_valid", local + "poll_lease_valid")),
             ("kui_vmu_native_readonly_release_check", (local + "installed_hooks_valid",)),
+            (local + "controller_context_valid", (local + "transfer_context_valid", local + "read_value.part.0")),
             (local + "persistent_storage_guard", ("kui_vmu_native_heap_lease_valid", local + "stack_valid",
                 local + "installed_hooks_valid", "kui_vmu_native_layout_bind_checked", "kui_vmu_native_runtime_check",
                 local + "chain", "kui_vmu_volatile_chain_verify"))):
@@ -473,6 +485,11 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
             "protected_interval_limit": 64, "hook_word_limit": 32, "free_node_limit": 1024,
             "full_dynamic_free_list_each_release": True, "full_storage_guards_before_and_after_loan": True,
             "emitted_callgraph_bound": True, "mutation_rejections": rejected,
+            "controller_fastlane": {"source_word_limit": 32, "main_controller_limit": 4,
+                "private_pair_bytes": 188, "original_dma_unchanged": True,
+                "publication": "one parent-A presence byte after whole-batch validation",
+                "full_storage_guards_unchanged": True,
+                "synthetic_read_count_is_not_hardware_time": True},
             "hooks_only": audit_absent_completion(worker, self_test=self_test)}
 
 # Whole integer trampoline, including its P2 resume literal and zero padding.

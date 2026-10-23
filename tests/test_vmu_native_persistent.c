@@ -626,7 +626,8 @@ static void gameplay_diagnostics(void) {
     if(setjmp(terminal)==0) {kui_vmu_native_passive_complete(&frame);CHECK(false);}
     CHECK(terminal_phase==17u && !terminal_error && !state.pending);
     CHECK(!sd.bytes && !lease_calls && !durable_card.commits);idle();
-    for(unsigned mode=4u;mode<=5u;mode++) {
+    for(unsigned mode=KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE+1u;
+        mode<=KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE+2u;mode++) {
         model_reset();fixture();prepare_handoff();input.diagnostics=mode;
         CHECK(kui_vmu_native_passive_arm(&input,NULL)<0 && !state.armed);
     }

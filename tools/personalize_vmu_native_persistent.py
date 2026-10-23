@@ -37,6 +37,7 @@ MODE_CHOICES_FIELD='runtime_mode_choices'
 MODE_CHOICES_LEASE_ONLY={'normal':0,'control':1,'profile':2,'lease-only':3}
 MODE_CHOICES_HOOKS_ONLY={**MODE_CHOICES_LEASE_ONLY,'hooks-only':4}
 MODE_CHOICES_RAW_CHAIN={**MODE_CHOICES_HOOKS_ONLY,'raw-chain':5}
+MODE_CHOICES_EVOLUTION_TRACE={**MODE_CHOICES_RAW_CHAIN,'evolution-trace':6}
 CATALOG_SCHEMA='kui.native.resolution-cache.catalog.v1'
 CATALOG_PATH='native-cache/catalog.json'
 GAME_SLUGS={'ps2','skies','sa2','grandia2','evolution1'}
@@ -92,7 +93,7 @@ def generic_module(package):
             'Unexpected personalization manifest fields')
     if MODE_CHOICES_FIELD in manifest:
         choices=manifest[MODE_CHOICES_FIELD]
-        require(isinstance(choices,dict) and choices in (MODE_CHOICES_LEASE_ONLY,MODE_CHOICES_HOOKS_ONLY,MODE_CHOICES_RAW_CHAIN) and
+        require(isinstance(choices,dict) and choices in (MODE_CHOICES_LEASE_ONLY,MODE_CHOICES_HOOKS_ONLY,MODE_CHOICES_RAW_CHAIN,MODE_CHOICES_EVOLUTION_TRACE) and
                 all(type(value) is int for value in choices.values()),
                 'Native runtime mode capabilities differ from the audited choices')
     require(manifest['schema']==SCHEMA and manifest['storage_writes_enabled'] is True,
@@ -236,13 +237,15 @@ def personalize_bytes(module,manifest,info,wire,*,cache_record=None,cache_digest
     offset=manifest['profile_module_offset']
     payload=bytearray(module[64:]);payload[offset-64:offset-64+WIRE_BYTES]=wire
     allowed=[(32,36),(60,64),(offset,offset+WIRE_BYTES)]
-    require(type(runtime_mode) is int and runtime_mode in (0,1,2,3,4,5),'Native runtime mode is unsupported')
+    require(type(runtime_mode) is int and runtime_mode in (0,1,2,3,4,5,6),'Native runtime mode is unsupported')
     require(runtime_mode!=3 or manifest.get(MODE_CHOICES_FIELD,{}).get('lease-only')==3,
             'This package has no audited lease-only runtime mode capability')
     require(runtime_mode!=4 or manifest.get(MODE_CHOICES_FIELD,{}).get('hooks-only')==4,
             'This package has no audited hooks-only runtime mode capability')
     require(runtime_mode!=5 or manifest.get(MODE_CHOICES_FIELD,{}).get('raw-chain')==5,
             'This package has no audited raw-chain runtime mode capability')
+    require(runtime_mode!=6 or manifest.get(MODE_CHOICES_FIELD,{}).get('evolution-trace')==6,
+            'This package has no audited evolution-trace runtime mode capability')
     if MODE_FIELDS<=set(manifest):
         codec=mode_codec();mode_offset=manifest['runtime_mode_module_offset']
         mode=codec.fill_mode(module[mode_offset:mode_offset+codec.MODE_BYTES],runtime_mode)
@@ -264,13 +267,13 @@ def personalize_bytes(module,manifest,info,wire,*,cache_record=None,cache_digest
             'Changed bytes escape the exact profile/cache seed/runtime mode and runtime checksum spans')
     return result
 
-def install(root,*,package,profile=None,game=None,control=False,profile_runtime=False,lease_only=False,hooks_only=False,raw_chain=False):
+def install(root,*,package,profile=None,game=None,control=False,profile_runtime=False,lease_only=False,hooks_only=False,raw_chain=False,evolution_trace=False):
     root=Path(root).resolve(strict=True)
     module,manifest,info=generic_module(package)
-    require(all(type(value) is bool for value in (control,profile_runtime,lease_only,hooks_only,raw_chain)) and
-            sum((control,profile_runtime,lease_only,hooks_only,raw_chain))<=1,
-            'Select at most one of control, runtime profiling, lease-only, hooks-only and raw-chain')
-    runtime_mode=1 if control else 2 if profile_runtime else 3 if lease_only else 4 if hooks_only else 5 if raw_chain else 0
+    require(all(type(value) is bool for value in (control,profile_runtime,lease_only,hooks_only,raw_chain,evolution_trace)) and
+            sum((control,profile_runtime,lease_only,hooks_only,raw_chain,evolution_trace))<=1,
+            'Select at most one of control, runtime profiling, lease-only, hooks-only, raw-chain and evolution-trace')
+    runtime_mode=1 if control else 2 if profile_runtime else 3 if lease_only else 4 if hooks_only else 5 if raw_chain else 6 if evolution_trace else 0
     require(runtime_mode==0 or MODE_FIELDS<=set(manifest),
             'This package has no audited native runtime mode selector')
     require(runtime_mode!=3 or manifest.get(MODE_CHOICES_FIELD,{}).get('lease-only')==3,
@@ -279,6 +282,8 @@ def install(root,*,package,profile=None,game=None,control=False,profile_runtime=
             'This package has no audited hooks-only runtime mode capability')
     require(runtime_mode!=5 or manifest.get(MODE_CHOICES_FIELD,{}).get('raw-chain')==5,
             'This package has no audited raw-chain runtime mode capability')
+    require(runtime_mode!=6 or manifest.get(MODE_CHOICES_FIELD,{}).get('evolution-trace')==6,
+            'This package has no audited evolution-trace runtime mode capability')
     chosen=None
     if game is not None:
         catalog=cache_catalog(Path(package).resolve(strict=True),manifest)
@@ -336,17 +341,19 @@ def main():
     mode.add_argument('--hooks-only',action='store_true',
         help='Compare installed VMU hooks with physical Maple traffic and no virtual replies or game save writes')
     mode.add_argument('--raw-chain',action='store_true',
-        help='Trace active hooks with the original physical Maple DMA list and no virtual card')
+        help='Compare active hooks with the original physical Maple DMA list and no virtual card')
+    mode.add_argument('--evolution-trace',action='store_true',
+        help='Enable exact Evolution executable tracing with the persistent virtual VMU active')
     args=parser.parse_args()
     try:
         if args.list_games:
-            require(not (args.control or args.profile_runtime or args.lease_only or args.hooks_only or args.raw_chain),
+            require(not (args.control or args.profile_runtime or args.lease_only or args.hooks_only or args.raw_chain or args.evolution_trace),
                     'Runtime mode selection requires an SD card installation')
             for slug,item in sorted(list_games(args.package).items()):print(slug+'\t'+item['title'])
             return
         if args.sd_root is None:parser.error('sd_root is required unless --list-games is selected')
         result=install(args.sd_root,package=args.package,profile=args.profile,game=args.game,
-            control=args.control,profile_runtime=args.profile_runtime,lease_only=args.lease_only,hooks_only=args.hooks_only,raw_chain=args.raw_chain)
+            control=args.control,profile_runtime=args.profile_runtime,lease_only=args.lease_only,hooks_only=args.hooks_only,raw_chain=args.raw_chain,evolution_trace=args.evolution_trace)
         action='Already installed' if result['already_installed'] else 'Installed'
         if result.get('runtime_mode')=='control':
             print(action+' native loader control '+result['build']+' using '+result['pair_path'])
@@ -364,6 +371,7 @@ def main():
             print(action+' native persistent VMU test '+result['build']+' using '+result['pair_path'])
             if 'game' in result:print('Executable cache: '+result['game_title']+' ('+result['game']+'); live console guards remain enabled.')
             if result.get('runtime_mode')=='profile':print('VMU runtime profiling enabled; follow README-FIRST.md for the diagnostic report.')
+            if result.get('runtime_mode')=='evolution-trace':print('Evolution executable tracing enabled; persistent virtual VMU remains active.')
         print('Image, journal, identity and preparation profiles were unchanged.')
         print('Safely eject the card, then follow README-FIRST.md.')
     except (OSError,ValueError,KeyError,TypeError,UnicodeError) as error:

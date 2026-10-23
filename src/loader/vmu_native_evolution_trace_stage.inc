@@ -3,7 +3,8 @@
 /* All four windows must match before the first write. Original timestamp
  * helpers are integer leaf code; their exact replay/PR is tested separately. */
 static int __attribute__((noipa)) native_evolution_trace_install(const struct kui_vmu_native_passive_exports *e,
- uint32_t dest,uint32_t bytes) {
+ uint32_t dest,uint32_t bytes,uint32_t diagnostics) {
+ if(diagnostics!=KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE) return 0;
  if(!kui_vmu_native_trace_image(&native_driver)) return 0;
  uint32_t table=(e->trace_exports&0x1fffffffu)|0xa0000000u;
  if((table&3u) || table<dest+80u || table>dest+bytes-32u) return -1;

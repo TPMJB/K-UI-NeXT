@@ -37,7 +37,20 @@ class PreparedArtifact(unittest.TestCase):
     def test_actual_kernel_and_all_existing_mutation_families_pass(self):
         result = audit.check_prepared_lifetime(self.directory, self.worker, self.binary, self.wire, True)
         self.assertTrue(result["full_storage_guards_before_and_after_loan"])
-        self.assertEqual(result["mutation_rejections"], 42)
+        # Each non-constant kernel receives both end-instruction mutations,
+        # plus one coherent pointer mutation when it contains a relocation.
+        # Count from the ELF extents and relocation table independently of
+        # the audit's reported kernel metadata and mutation counter.
+        kernels = [name for name in audit.PREPARED_PINS if name != ".rodata"]
+        relocation_sites = {struct.unpack_from("<I", self.wire, 72 + i * 8)[0]
+                            for i in range(struct.unpack_from("<I", self.wire, 28)[0])}
+        pointer_kernels = 0
+        for name in kernels:
+            address, size, _, _ = self.worker[4][name]
+            first = audit.physical(address) - audit.physical(audit.P1)
+            pointer_kernels += any(first <= at < first + size for at in relocation_sites)
+        self.assertEqual(result["mutation_rejections"], 2 * len(kernels) + pointer_kernels)
+        self.assertEqual(result["controller_fastlane"]["private_pair_bytes"], 188)
 
     def test_context_stack_interior_has_exact_private_bounds(self):
         for name in ("__vmu_native_worker_stack_bottom", "__vmu_native_worker_stack_top"):
@@ -83,8 +96,10 @@ class PreparedArtifact(unittest.TestCase):
                 ("_poll_lease_valid", 0x1a, 0xe208),
                 ("_installed_hooks_valid", 0x0e, 0xe21f),
                 ("_installed_hooks_valid", 0x2e, 0x720c),
-                ("_kui_vmu_native_readonly_release_check", 0x7e, 0xe140),
-                ("_kui_vmu_native_readonly_release_check", 0x1e4, 0x0400)):
+                # mov #64,r1 feeds cmp/hi against plan.range_count.
+                ("_kui_vmu_native_readonly_release_check", 0x88, 0xe140),
+                # mov.w at +0x116 loads this 1024-node walk budget.
+                ("_kui_vmu_native_readonly_release_check", 0x200, 0x0400)):
             with self.subTest(name=name, offset=offset):
                 body = audit.symbol_bytes(self.worker, name, 2)[1]
                 self.assertEqual(struct.unpack_from("<H", body, offset)[0], original)
@@ -109,13 +124,22 @@ class PreparedArtifact(unittest.TestCase):
             self.check(worker=(bytes(changed),) + self.worker[1:], wire=bytes(wire))
 
     def test_private_plan_and_witness_geometry_is_required(self):
-        for name in ("_lifetime_plan", "_hook_witness", "_hook_witness_count", "_hook_witness_ready"):
-            for index, delta in ((0, -0x20000000), (1, 4), (2, 1)):
+        for name in ("_lifetime_plan", "_hook_witness", "_hook_witness_count", "_hook_witness_ready",
+                     "_controller_pair"):
+            for index, delta in ((0, -0x20000000), (0, 1), (1, 4), (2, 1)):
                 with self.subTest(name=name, index=index):
                     symbols = copy.deepcopy(self.worker[4]); record = list(symbols[name])
                     record[index] += delta; symbols[name] = tuple(record)
                     with self.assertRaisesRegex(ValueError, "private P2 BSS ownership"):
                         self.check(worker=self.worker[:4] + (symbols,))
+        # The controller snapshot must own its exact 188-byte private BSS
+        # object; a private but unrelated NOBITS stack is not a substitute.
+        self.assertEqual(self.worker[4]["_controller_pair"][1], 188)
+        symbols = copy.deepcopy(self.worker[4]); record = list(symbols["_controller_pair"])
+        record[3] = symbols["__vmu_native_worker_stack_bottom"][3]
+        symbols["_controller_pair"] = tuple(record)
+        with self.assertRaisesRegex(ValueError, "private P2 BSS ownership"):
+            self.check(worker=self.worker[:4] + (symbols,))
 
     def test_full_storage_guard_is_required_at_both_loan_boundaries(self):
         original = (self.directory / "native/src/loader/vmu_native_passive.ci").read_text()

@@ -109,7 +109,9 @@ def package(build,guide='broader',trace_startup=None):
                      'native-allocator-family-2026-10-23.json','native-evolution-context-2026-10-23.json',
                      'native-evolution-fault-2026-10-23.json','native-evolution-isolation-2026-10-23.json',
                      'native-evolution-hooks-2026-10-23.json','native-evolution-trace-2026-10-23.json',
-                     'native-evolution-video-2026-10-23.json'):
+                     'native-evolution-video-2026-10-23.json',
+                     'native-evolution-video-progress-2026-10-23.json',
+                     'native-controller-fastlane-2026-10-23.json'):
             extra['docs/evidence/'+name]=(root/'docs/evidence'/name).read_bytes()
         extra['docs/native-sdk-family-corpus.json']=(root/'docs/evidence/native-sdk-family-corpus-2026-10-22.json').read_bytes()
         extra['docs/native-installer-stack-regression.json']=(root/'docs/evidence/native-sa2-installer-stack-2026-10-22.json').read_bytes()
@@ -132,7 +134,7 @@ def package(build,guide='broader',trace_startup=None):
         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
             template_sha256=sha(template)),
-        compatibility_claim=('Evolution consolidated trace and original-DMA comparison; no console fix established'
+        compatibility_claim=('Controller-poll optimization and opt-in Evolution tracing; console outcome unverified'
             if guide=='evolution-trace' else
             'Evolution active-hook/no-card comparison; no console fix established'
             if guide=='evolution-hooks' else

@@ -40,7 +40,15 @@ int main(int argc,char **argv) {
  uint32_t words[]={0x4b545231,1,32,0x8c700100,0x8c700200,0x8c700300,0x8c700400,0};
  memcpy(t,words,32);
  struct kui_vmu_native_passive_exports e={.trace_exports=0x8c700080};
- reset();assert(native_evolution_trace_install(&e,0xac700000,0x2000)==1 && publishes==4);
+ /* Ordinary modes must bypass every trace-table/image access and mutation,
+  * even when given an unreadable export pointer. */
+ const uint32_t untraced[]={KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL,KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE,
+  KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY,KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN,5u,UINT32_MAX};
+ for(unsigned i=0;i<sizeof(untraced)/sizeof(untraced[0]);i++) {
+  reset();assert(native_evolution_trace_install(NULL,0,0,untraced[i])==0 && !publishes);
+  assert(!memcmp(live,original,exec_bytes) && !memcmp(mirror,original,exec_bytes));
+ }
+ reset();assert(native_evolution_trace_install(&e,0xac700000,0x2000,KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE)==1 && publishes==4);
  uint32_t sites[]={0x8c1663f8,0x8c166422,0x8c166454};
  unsigned lengths[]={12,16,12};
  for(unsigned i=0;i<3;i++) {
@@ -51,18 +59,18 @@ int main(int argc,char **argv) {
  unsigned refusals=0;
  for(unsigned i=0;i<3;i++) for(unsigned j=0;j<lengths[i];j++) {
   reset();*(unsigned char *)(uintptr_t)(sites[i]+j)^=1;
-  assert(native_evolution_trace_install(&e,0xac700000,0x2000)<0 && !publishes);
+  assert(native_evolution_trace_install(&e,0xac700000,0x2000,KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE)<0 && !publishes);
   *(unsigned char *)(uintptr_t)(sites[i]+j)^=1;assert(!memcmp(live,original,exec_bytes));++refusals;
  }
  for(unsigned i=0;i<8;i++) {
   reset();t[i]=words[i]^1u;
-  assert(native_evolution_trace_install(&e,0xac700000,0x2000)<0 && !publishes);
+  assert(native_evolution_trace_install(&e,0xac700000,0x2000,KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE)<0 && !publishes);
   assert(!memcmp(live,original,exec_bytes));t[i]=words[i];++refusals;
  }
  reset();*(uint16_t *)(uintptr_t)0x8c166000u=0xa210u;
- assert(native_evolution_trace_install(&e,0xac700000,0x2000)<0 && !publishes);++refusals;
+ assert(native_evolution_trace_install(&e,0xac700000,0x2000,KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE)<0 && !publishes);++refusals;
  reset();native_driver.image_sha256[0]^=1;
- assert(native_evolution_trace_install(&e,0xac700000,0x2000)==0 && !publishes);
+ assert(native_evolution_trace_install(&e,0xac700000,0x2000,KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE)==0 && !publishes);
  assert(!memcmp(live,original,exec_bytes));
  printf("Exact Evolution diagnostic installer: accepted original; %u refusals before mutation\n",refusals);
  free(original);return 0;

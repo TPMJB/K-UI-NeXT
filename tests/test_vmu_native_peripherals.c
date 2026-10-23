@@ -14,9 +14,14 @@ static void peripheral_stage(unsigned cmd,uint32_t function) {
     memset(rx_bytes(2u),0xa5,1024u);
 }
 static void peripheral_begin(unsigned cmd,uint32_t function) {
+    if(!live_plan.ready) transfer_batch(0u,0u,0u,NULL);
     peripheral_stage(cmd,function);submit();
+    /* A physical accessory and virtual enumeration are deliberately outside
+     * the controller-only lane, even after its launch proof has warmed. */
+    CHECK(!controller_pair.pending && overlay.pending);
     CHECK(issued_plan.frame_count==4u && issued_plan.physical_count==3u && issued_plan.virtual_count==1u);
     CHECK(issued_plan.output_bytes==(cmd==9u?44u:40u));
+    CHECK(value_at(0xa05f6c04u)==issued_physical());
     physical_complete();put(rx_at(0u),4u,0x03220008u); /* Real A2 remains advertised. */
 }
 static void peripheral_reply(unsigned cmd,uint32_t function,unsigned error) {

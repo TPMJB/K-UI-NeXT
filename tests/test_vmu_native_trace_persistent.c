@@ -74,6 +74,9 @@ static int integration_chain_verify(const struct kui_vmu_volatile_chain_plan *pl
 static void traced_setup(unsigned mode) {
     setup();config.diagnostics=mode;
     struct kui_vmu_native_passive_config exact=config;
+    /* Exercise the real sampler independently of the bridge's functional
+     * NORMAL/RAW mode. Production enables it only with --evolution-trace. */
+    exact.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE;
     exact.driver.image_bytes=2143652u;exact.driver.load_address=0x8c010000u;
     memcpy(exact.driver.image_sha256,evolution_digest,sizeof(evolution_digest));
     kui_vmu_native_trace_init(&exact);CHECK(trace.enabled && !trace.sequence);
@@ -107,6 +110,22 @@ static void traced_transfers(void) {
         }
         frame.r4=0u;kui_vmu_native_readonly_release_check(&frame);
         CHECK(trace.hook==0x31u && trace.frees==1u && !sampler_stops);
+    }
+}
+static void ordinary_modes_have_no_sampler(void) {
+    for(unsigned mode=KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL;
+        mode<KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE;mode++) {
+        traced_setup(mode);
+        struct kui_vmu_native_passive_config exact=config;
+        exact.driver.image_bytes=2143652u;exact.driver.load_address=0x8c010000u;
+        memcpy(exact.driver.image_sha256,evolution_digest,sizeof(evolution_digest));
+        kui_vmu_native_trace_init(&exact);CHECK(!kui_vmu_native_trace_enabled());
+        unsigned reads_before=sampler_reads,pixels_before=sampler_pixels;
+        begin_batch(1u,0u,0u,NULL);physical_complete();complete_return();idle();
+        CHECK(state.submitted==1u && state.completed==1u);
+        CHECK(sampler_reads==reads_before && sampler_pixels==pixels_before && !sampler_stops);
+        CHECK(!trace.sequence && !trace.surface_seen);
+        CHECK(!lease_calls && !sd.bytes && !sd.writes && !durable_card.commits);
     }
 }
 static void refusal_witness(unsigned which) {
@@ -155,7 +174,8 @@ static void all_a1_refused_before_builder(void) {
 }
 int main(void) {
     CHECK(persistent_suite_main()==0); /* Existing full suite, sampler disabled. */
-    traced_transfers();for(unsigned which=0u;which<4u;which++) refusal_witness(which);
+    ordinary_modes_have_no_sampler();traced_transfers();
+    for(unsigned which=0u;which<4u;which++) refusal_witness(which);
     all_a1_refused_before_builder();
     printf("Native trace/persistent integration: %u checks; real sampler with normal/raw transfers, target/build/verify/context witnesses and all-A1 refusal passed\n",checks);
     return 0;
