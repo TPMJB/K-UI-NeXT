@@ -74,6 +74,23 @@ int main(void) {
  kui_vmu_native_trace_game(0x41,&f);assert(!trace.loops);
  if(!setjmp(terminal)) for(unsigned i=0;i<KUI_VMU_TRACE_WAIT_LIMIT;i++) kui_vmu_native_trace_game(0x42,&f);
  assert(trace.loops==KUI_VMU_TRACE_WAIT_LIMIT);
- puts("Native trace: exact image, bounded VRAM, five lost-surface captures, ring and wait watchdog passed");
+ /* A terminal capture owns its packet snapshot: later caller mutation and
+  * oversized counts cannot change or extend the bounded report. */
+ struct kui_vmu_volatile_chain_frame packets[KUI_VMU_VOLATILE_CHAIN_FRAMES];
+ for(unsigned i=0;i<KUI_VMU_VOLATILE_CHAIN_FRAMES;i++)
+  packets[i]=(struct kui_vmu_volatile_chain_frame){i,0x0c300000u+1024u*i,0x201u,i+1u};
+ struct kui_vmu_native_trace_failure failure={0x30002u,0x0c248420u,
+  (uint32_t)-5,0u,0x0c248420u,48u,0x0cf10000u,512u,UINT32_MAX,0u,packets};
+ kui_vmu_native_trace_failure(&failure);
+ assert(trace.failure_present && trace.failure_count==KUI_VMU_VOLATILE_CHAIN_FRAMES);
+ assert(trace.failure.check==0x30002u && trace.failure.value==(uint32_t)-5);
+ assert(trace.failure.expected==0u && !trace.failure.frames);
+ packets[31].header=0u;assert(trace.failure_frames[31].header==0x201u);
+ failure.frames=NULL;kui_vmu_native_trace_failure(&failure);
+ assert(trace.failure_count==0u);
+ kui_vmu_native_trace_init(&c);assert(!trace.failure_present && !trace.failure_count);
+ c.driver.image_bytes=1u;kui_vmu_native_trace_init(&c);
+ kui_vmu_native_trace_failure(&failure);assert(!trace.failure_present);
+ puts("Native trace: exact image, bounded VRAM, five lost-surface captures, ring, wait watchdog and owned guard snapshot passed");
  return 0;
 }

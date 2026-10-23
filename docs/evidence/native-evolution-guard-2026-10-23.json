@@ -1,0 +1,81 @@
+{
+  "schema": "kui.native.evolution-guard.v1",
+  "date": "2026-10-23",
+  "console_evidence": {
+    "build": "72f684374902",
+    "reason": "0x40",
+    "value": 0,
+    "context1": 0,
+    "context2": 0,
+    "last_hook": "0x11",
+    "last_game": 0,
+    "sequence": 2,
+    "submitted": 0,
+    "completed": 0,
+    "frees": 0,
+    "pr": "8c1dae36",
+    "sr": "60000161",
+    "sp": "8c2ff988",
+    "mdstar": "0c248420",
+    "mdst": 0,
+    "mden": 1,
+    "mdtsel": 0,
+    "surface_seen": 0,
+    "surface_reason": 1,
+    "video_ctrl": 4,
+    "video_size": "1413b53f",
+    "pitch": "00000a00",
+    "conclusion": "First submission refused before DMA; individual stage was hidden by old reporting",
+    "earlier_fmv_root_cause_established": false
+  },
+  "review": {
+    "prior_worker_chain": "ac110780 / 512 bytes",
+    "prior_worker_span": "ac100000..ac120000",
+    "prior_bss_end": "ac1156c0",
+    "prior_stack_bottom": "ac11f000",
+    "layout_overrun_found": false,
+    "trace_10_11_framebuffer_writes": false,
+    "all_a1_reason": 21,
+    "all_a1_explains_reason40": false,
+    "context_checks_relaxed": false,
+    "game_gateway_changes": false,
+    "common_trace_point_changes": false
+  },
+  "changes": {
+    "terminal_witnesses": [
+      "check",
+      "address",
+      "actual",
+      "expected"
+    ],
+    "submit_stage_checks": {
+      "0x30001": "target",
+      "0x30002": "builder",
+      "0x30003": "verifier",
+      "0x200xx": "context"
+    },
+    "bounded_owned_packet_headers": 32,
+    "save_payload_dumped": false,
+    "new_sd_trace_writes": false,
+    "guard_details_page": true,
+    "additional_packet_rows_per_page": 12
+  },
+  "validation": {
+    "actual_sampler_and_bridge_integration": true,
+    "normal_pairs": 16,
+    "raw_pairs": 16,
+    "all_four_submit_refusal_branches": true,
+    "all_a1_earlier_refusal": true,
+    "no_mdstar_rx_or_storage_writes_on_refusal": true,
+    "sampler_snapshot_sanitizers": "ASan + UBSan",
+    "original_game_gateway_equivalence_cases": 144,
+    "gateway_mutations_rejected": 8,
+    "exact_installer_refusals_before_mutation": 49,
+    "real_sampler_and_bridge_checks": 1832473,
+    "original_persistent_suite_checks": 1290816,
+    "normal_real_storage_leases": 2,
+    "compiled_artifact_self_test_passed": true
+  },
+  "console_fix_claimed": false,
+  "new_console_execution_verified": false
+}

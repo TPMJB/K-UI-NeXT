@@ -15,6 +15,9 @@ static struct {
  uint32_t last_video_ctrl,last_video_size,last_video_sof1,last_video_sof2;
  struct retail_display_state display;
  struct {uint32_t code,pr,sr,sp,mdstar,mdst,tick,latch;} ring[16];
+ uint32_t failure_present,failure_count;
+ struct kui_vmu_native_trace_failure failure;
+ struct kui_vmu_volatile_chain_frame failure_frames[KUI_VMU_VOLATILE_CHAIN_FRAMES];
 } trace;
 bool kui_vmu_native_trace_image(const struct kui_vmu_native_discovery *d) {
  return d && d->image_bytes==2143652u && d->load_address==UINT32_C(0x8c010000) &&
@@ -80,6 +83,15 @@ void kui_vmu_native_trace_init(const struct kui_vmu_native_passive_config *c) {
  memcpy(trace.display.regs,c->display,sizeof(c->display));trace.enabled=1u;
 }
 int kui_vmu_native_trace_enabled(void) {return trace.enabled!=0u;}
+void kui_vmu_native_trace_failure(const struct kui_vmu_native_trace_failure *f) {
+ if(!trace.enabled || !f) return;
+ trace.failure=*f;
+ trace.failure_count=f->frames?(f->frame_count<KUI_VMU_VOLATILE_CHAIN_FRAMES?
+  f->frame_count:KUI_VMU_VOLATILE_CHAIN_FRAMES):0u;
+ if(trace.failure_count) memcpy(trace.failure_frames,f->frames,
+  trace.failure_count*sizeof(trace.failure_frames[0]));
+ trace.failure.frames=NULL;trace.failure_present=1u;
+}
 void kui_vmu_native_trace_point(uint32_t code,const struct kui_vmu_native_passive_frame *f,
  uint32_t submitted,uint32_t completed) {
  if(!trace.enabled) return;
@@ -113,6 +125,14 @@ void kui_vmu_native_trace_game(uint32_t code,const struct kui_vmu_native_passive
  kui_vmu_native_trace_point(code,f,trace.submitted,trace.completed);
 }
 #ifndef KUI_VMU_NATIVE_TRACE_HOST_TEST
+static void trace_row(const uint32_t *values,unsigned count) {
+ char line[46];
+ for(unsigned v=0;v<count;v++) {
+  for(unsigned j=0;j<8u;j++) line[v*9u+j]="0123456789ABCDEF"[(values[v]>>(28u-j*4u))&15u];
+  line[v*9u+8u]=' ';
+ }
+ line[count*9u]=0;retail_display_line(line);
+}
 static void trace_history(unsigned first) {
  retail_display_line("CODE PR MDST TICK WAIT FLAG / OLDEST FIRST");
  unsigned count=trace.sequence<16u?trace.sequence:16u;
@@ -120,12 +140,14 @@ static void trace_history(unsigned first) {
   unsigned n=(trace.sequence-count+i)&15u;
   uint32_t values[5]={trace.ring[n].code,trace.ring[n].pr,trace.ring[n].mdst,
    trace.ring[n].tick,trace.ring[n].latch};
-  char line[46];
-  for(unsigned v=0;v<5u;v++) {
-   for(unsigned j=0;j<8u;j++) line[v*9u+j]="0123456789ABCDEF"[(values[v]>>(28u-j*4u))&15u];
-   line[v*9u+8u]=' ';
-  }
-  line[45]=0;retail_display_line(line);
+  trace_row(values,5u);
+ }
+}
+static void trace_packets(unsigned first,unsigned count) {
+ retail_display_line("INDEX CONTROL RX HEADER PAYLOAD0");
+ for(unsigned i=first;i<first+count && i<trace.failure_count;i++) {
+  const struct kui_vmu_volatile_chain_frame *f=&trace.failure_frames[i];
+  trace_row((uint32_t[]){i,f->control,f->rx,f->header,f->payload0},5u);
  }
 }
 #endif
@@ -143,21 +165,21 @@ void kui_vmu_native_trace_report(uint32_t reason,uint32_t value,uint32_t a,uint3
  retail_display_values("TMU0 START CONTROL COUNT WAIT FLAG",(uint32_t[]){trace.tstr,trace.tcr,trace.tick,trace.latch},4);
  retail_display_values("SUBMIT COMPLETE FREE ELAPSED CCR",(uint32_t[]){trace.submitted,trace.completed,trace.frees,trace.elapsed,trace.ccr},5);
  retail_display_line("CHECKPOINT STATE / NOT FAULT PC");
- retail_display_line("PHOTO ALL FOUR PAGES THEN POWER OFF");
+ retail_display_line("PAGES CYCLE - PHOTO THEN POWER OFF");
  retail_display_pause(300u);
  retail_display_restore(&trace.display);
  retail_display_line("EVOLUTION TRACE PAGE 2 OF 4");
  retail_display_values("DMAC0 SOURCE TARGET COUNT CONTROL",(uint32_t[]){trace.dma_source,trace.dma_target,trace.dma_count,trace.dma_control},4);
  retail_display_values("WAIT FIRST TICK LAST TICK PVR SCAN",(uint32_t[]){trace.first_tick,trace.last_tick,trace.scan},3);
  trace_history(0u);
- retail_display_line("PHOTO ALL FOUR PAGES THEN POWER OFF");
+ retail_display_line("PAGES CYCLE - PHOTO THEN POWER OFF");
  retail_display_pause(300u);
  retail_display_restore(&trace.display);
  retail_display_line("EVOLUTION TRACE PAGE 3 OF 4");
  retail_display_values("REASON VALUE SEQUENCE",(uint32_t[]){reason,value,trace.sequence},3);
  trace_history(8u);
  retail_display_line("LAST CHECKPOINT / NOT FAULT PC");
- retail_display_line("PHOTO ALL FOUR PAGES THEN POWER OFF");
+ retail_display_line("PAGES CYCLE - PHOTO THEN POWER OFF");
  retail_display_pause(300u);
  retail_display_restore(&trace.display);
  retail_display_line("EVOLUTION TRACE PAGE 4 OF 4");
@@ -167,8 +189,27 @@ void kui_vmu_native_trace_report(uint32_t reason,uint32_t value,uint32_t a,uint3
  retail_display_values("HOOK GAME SEQUENCE WAIT LOOPS",(uint32_t[]){trace.hook,trace.game,trace.sequence,trace.loops},4);
  retail_display_line("E003 IS INTENTIONAL SURFACE CAPTURE");
  retail_display_line("CHECKPOINT STATE / NOT FAULT PC");
- retail_display_line("PHOTO ALL FOUR PAGES THEN POWER OFF");
+ retail_display_line("PAGES CYCLE - PHOTO THEN POWER OFF");
  retail_display_pause(300u);
+ if(trace.failure_present) {
+  retail_display_restore(&trace.display);
+  retail_display_line("EVOLUTION GUARD DETAILS");
+  retail_display_values("CHECK AT VALUE EXPECT",(uint32_t[]){trace.failure.check,
+   trace.failure.address,trace.failure.value,trace.failure.expected},4u);
+  retail_display_values("SOURCE BYTES FRAMES NOPS",(uint32_t[]){trace.failure.source,
+   trace.failure.source_bytes,trace.failure.frame_count,trace.failure.nops},4u);
+  retail_display_values("TARGET CAPACITY",(uint32_t[]){trace.failure.target,trace.failure.capacity},2u);
+  trace_packets(0u,6u);
+  retail_display_line("GUARD CAPTURE - PHOTO THEN POWER OFF");
+  retail_display_pause(300u);
+  for(unsigned first=6u;first<trace.failure_count;first+=12u) {
+   retail_display_restore(&trace.display);
+   retail_display_hex("EVOLUTION PACKETS FROM INDEX",first);
+   trace_packets(first,12u);
+   retail_display_line("PACKET HEADERS ONLY - PHOTO THEN OFF");
+   retail_display_pause(300u);
+  }
+ }
  }
 #endif
 }

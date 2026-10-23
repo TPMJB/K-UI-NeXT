@@ -377,7 +377,14 @@ static uint8_t *readonly_rx(uint32_t address,unsigned bytes) {
 static void report(void) __attribute__((noreturn));
 static void report(void) {
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    if(kui_vmu_native_trace_enabled()) kui_vmu_native_trace_report(state.error,0u,0u,0u);
+    if(kui_vmu_native_trace_enabled()) {
+        const struct kui_vmu_native_trace_failure failure={
+            state.runtime_result,state.fault_at,state.fault_value,state.fault_expect,
+            state.source,state.bytes,issued_physical(),sizeof(issued_chain),
+            state.descriptors,state.nops,chain_frames};
+        kui_vmu_native_trace_failure(&failure);
+        kui_vmu_native_trace_report(state.error,state.runtime_result,state.fault_at,state.fault_value);
+    }
 #endif
 #ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
@@ -878,10 +885,23 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
      * reviewed durable metadata whitelist. No game/SD call intervenes between
      * the full submission proof above and the final MDST-context witness. */
     uint32_t target=issued_physical();
-    if(!target || kui_vmu_volatile_chain_build(&issued_plan,chain_frames,state.descriptors,
-       state.source,state.bytes,issued_chain,sizeof(issued_chain),target) ||
-       kui_vmu_volatile_chain_verify(&issued_plan,issued_chain,sizeof(issued_chain)) ||
-       !transfer_context_valid(f,snapshot.bank,0u,state.source)) fail(0x40u);
+    if(!target) {
+        state.runtime_result=UINT32_C(0x30001);
+        state.fault_at=(uint32_t)(uintptr_t)issued_chain;state.fault_value=0u;
+        state.fault_expect=config.lease.payload;fail(0x40u);
+    }
+    int built=kui_vmu_volatile_chain_build(&issued_plan,chain_frames,state.descriptors,
+        state.source,state.bytes,issued_chain,sizeof(issued_chain),target);
+    if(built) {
+        state.runtime_result=UINT32_C(0x30002);state.fault_at=state.source;
+        state.fault_value=(uint32_t)built;state.fault_expect=0u;fail(0x40u);
+    }
+    int verified=kui_vmu_volatile_chain_verify(&issued_plan,issued_chain,sizeof(issued_chain));
+    if(verified) {
+        state.runtime_result=UINT32_C(0x30003);state.fault_at=target;
+        state.fault_value=(uint32_t)verified;state.fault_expect=0u;fail(0x40u);
+    }
+    if(!transfer_context_valid(f,snapshot.bank,0u,state.source)) fail(0x40u);
     kui_vmu_native_trace_point(0x12u,f,state.submitted,state.completed);
     if(config.diagnostics!=KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN) write_mdstar(target);
     if(!transfer_context_valid(f,snapshot.bank,0u,

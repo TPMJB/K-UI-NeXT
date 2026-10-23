@@ -19,7 +19,13 @@ COMPAT_CACHE_HOST_SRC = src/core/vmu_native_resolution_cache.c src/core/vmu_nati
  src/core/vmu_native_patch.c src/core/hash.c src/core/data.c
 
 .PHONY: compat-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-evolution-context-host-tests native-evolution-fault-host-tests
-.PHONY: native-evolution-trace-host-tests
+.PHONY: native-evolution-trace-host-tests native-evolution-trace-persistent-host-tests
+native-evolution-trace-persistent-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_trace_persistent.c \
+	 $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-trace-persistent
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-trace-persistent
+
 native-evolution-trace-host-tests: $(BUILD)/native-worker.elf
 	@test -f '$(EVOLUTION1_STARTUP)' || (echo 'Set EVOLUTION1_STARTUP to the original Evolution executable'; exit 2)
 	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-pie -no-pie \
