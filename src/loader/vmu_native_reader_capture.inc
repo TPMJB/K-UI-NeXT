@@ -29,6 +29,9 @@ static struct kui_reader_capture reader_capture;
 static kui_retail_async_region_type *reader_capture_region(void);
 #if KUI_NATIVE_COOP_PUMP
 __asm__(".global __kui_native_cooperative_reader\n.set __kui_native_cooperative_reader,1\n");
+#if KUI_NATIVE_PACED_CHECK
+__asm__(".global __kui_native_paced_reader\n.set __kui_native_paced_reader,1\n");
+#endif
 static struct {
     uint32_t calls,blocks,busy,faults;
     uint32_t max_lba,max_count;
@@ -54,6 +57,11 @@ static void __attribute__((noipa)) reader_window_clock(struct kui_vmu_native_pro
 }
 #endif
 static void __attribute__((noipa)) reader_cooperative_service(void) {
+#if KUI_NATIVE_PACED_CHECK
+    /* The measured controller callback supplied little data. This candidate
+     * schedules through GD/SCI only, leaving controller completion brief. */
+    return;
+#else
     /* Called only after successful, fully proved physical controller
      * completion, after publication. It neither issues VMU packets nor
      * grants the storage writer. Interrupts remain masked throughout. */
@@ -126,6 +134,7 @@ static void __attribute__((noipa)) reader_cooperative_service(void) {
     if(result==KUI_VMU_SD_LEASE_BUSY)++reader_cooperative.busy;
     else if(result!=KUI_VMU_SD_LEASE_OK)++reader_cooperative.faults;
     reader_cooperative.blocks+=r->engine.stats.irq_blocks-before;
+#endif
 }
 #endif
 static kui_retail_async_region_type *reader_capture_region(void) {
@@ -216,8 +225,13 @@ static void reader_capture_report(const struct retail_display_state *display) {
         b->foreign-a->foreign,b->repaired-a->repaired,b->overruns-a->overruns,
         b->deferred-a->deferred,diagnostic.clock_invalid},5u);
 #if KUI_NATIVE_REQUEST_TIMING
+#if KUI_NATIVE_PACED_CHECK
+    retail_display_line("CHECK WAIT BOOST NEEDS 16 TIGHT POLLS");
+    retail_display_line("CONTROLLER READER SERVICE DISABLED");
+#else
     retail_display_values("PUMPS BLOCKS BUSY FAULTS",(uint32_t[4]){
         reader_cooperative.calls,reader_cooperative.blocks,reader_cooperative.busy,reader_cooperative.faults},4u);
+#endif
     retail_display_values("LONGEST COMPLETE READ LBA SECTORS",(uint32_t[2]){
         reader_cooperative.max_lba,reader_cooperative.max_count},2u);
 #else

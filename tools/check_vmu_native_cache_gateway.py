@@ -233,10 +233,12 @@ class CacheRoute(CacheGateway):
                          manifest + 48: (0 if invalid==2 else 3 if invalid==7 else 2 if eager else 1)
                             if background else int(invalid == 2),
                          manifest + 52: 1 if invalid == 3 else 2 if invalid == 4 else 0})
+        extent_name=("_kui_vmu_native_cached_extent" if "__kui_native_cached_extent" in symbols
+                     else "_kui_vmu_native_program_extent")
         self.targets = {symbols[name][0]: label for name, label in (
             ("_retail_display_restore", "display"), ("_retail_display_line", "line"),
             ("_kui_native_heap_base_relay", "restore"), ("_kui_retail_observe_native_ip", "ip"),
-            ("_kui_vmu_native_program_extent", "extent"),
+            (extent_name, "extent"),
             ("_native_resolution_replay", "cache"), ("_code_sha", "cached"),
             ("_kui_vmu_native_discover_layout", "cold"), ("_native_report", "refused"))}
         if "_native_runtime_mode" in symbols:
@@ -300,6 +302,145 @@ class CacheRoute(CacheGateway):
             assert self.route == ("cached" if self.hit else "cold")
             assert ("cold" in self.calls) == (not self.hit)
             assert self.extent_writes==1 and self.mem[self.exec_address]==self.program_bytes
+
+
+class ExtentGateway(CacheGateway):
+    """Execute the linked pure-proof cache scope, including P1/P2 routing.
+
+    The only fold is the exact four-op normal-index whole-RAM OCBP loop.
+    Cached callee writes are withheld from uncached readers until that purge,
+    a stronger publication requirement than this scope's P1 write-through.
+    """
+    def __init__(self,stage,seed,mask,ccr,result,blob=None):
+        begin,body,_=symbol_bytes(stage,"_kui_vmu_native_cached_extent",2)
+        CPU.__init__(self,seed,begin,1)
+        self.blob=body if blob is None else blob
+        self.pc,self.r[15],self.mem=begin,0x8cff0000,{}
+        self.start_sp=self.r[15]
+        self.r[4:8]=[0x8c010000,0x3de7e0,0x8c010000,self.start_sp+32]
+        self.args=self.r[4:8].copy()
+        self.sr=(self.sr&~0xf0)|(mask<<4)
+        self.pr=begin+len(body)+0x100
+        self.before=(self.r.copy(),self.pr,self.sr,self.fpscr,self.fr.copy())
+        self.owner_ccr,self.ccr,self.result=ccr,ccr,result
+        self.calls,self.ccr_writes,self.wait,self.purged,self.dirty=[],[],0,False,set()
+        self.targets={stage[4]["_kui_vmu_native_program_extent"][0]:"extent"}
+        self.output_before=0xa5b6c7d8
+        self.mem[self.args[3]]=self.output_before
+
+    def code(self,address,size):
+        offset=(address-self.base)&MASK
+        if offset>=0x20000000:offset-=0x20000000
+        assert 0<=offset<offset+size<=len(self.blob)
+        return self.blob[offset:offset+size]
+
+    def read(self,address):
+        if address==0xff00001c:return self.ccr
+        if address in self.mem:
+            assert self.ccr&1 or address not in self.dirty,"unpublished proof output/stack read with operand cache off"
+            return self.mem[address]
+        return struct.unpack("<I",self.code(address,4))[0]
+
+    def write(self,address,value):
+        if address==0xff00001c:
+            assert self.base+0x20000000<=self.pc<self.base+0x20000000+len(self.blob)
+            assert not self.wait and self.owner_ccr==0x100
+            expected=0x909 if not self.ccr_writes else 0x908
+            assert value==expected and len(self.ccr_writes)<2,"unexpected pure-proof cache profile"
+            if self.ccr_writes:assert self.purged and not self.dirty,"cache disabled before proof publication"
+            self.ccr_writes.append(value);self.ccr=value&~0x808;self.wait=8
+            return
+        assert address%4==0 and self.start_sp-12<=address<self.start_sp
+        self.mem[address]=value&MASK
+        if self.ccr&1:self.dirty.add(address)
+
+    def plain(self,word,pc):
+        if self.wait:
+            assert word==9,"pure-proof CCR update lacks eight NOPs"
+            self.wait-=1
+        if word==0x00a3:
+            assert self.code(pc,8)==struct.pack("<4H",0x00a3,0x7020,0x3012,0x8bfb)
+            assert self.r[:2]==[0x8c000000,0x8d000000] and self.calls==["extent"]
+            assert self.ccr_writes==[0x909] and self.ccr==0x101 and not self.purged
+            self.r[0]=0x8d000000-32;self.purged=True;self.dirty.clear()
+            return
+        super().plain(word,pc)
+
+    def api(self,target):
+        assert target in self.targets and not self.wait and not self.calls
+        assert self.r[4:8]==self.args and self.r[15]==self.start_sp-12
+        assert self.sr&0xf0==self.before[2]&0xf0
+        assert self.ccr==(0x101 if self.owner_ccr==0x100 else self.owner_ccr)
+        assert self.ccr_writes==([0x909] if self.owner_ccr==0x100 else [])
+        self.calls.append("extent");return_pc=self.pr
+        # An ABI-compliant proof may use its own P1 frame and set output only
+        # on success. The caller's original output must survive a refusal.
+        for i in range(1,33):
+            a=self.r[15]-4*i;self.mem[a]=(0x13579bdf+7*i)&MASK
+            if self.ccr&1:self.dirty.add(a)
+        if self.result:
+            self.mem[self.args[3]]=self.args[1]-0x8000
+            if self.ccr&1:self.dirty.add(self.args[3])
+        for i in range(8):self.r[i]=(0x913579bd+0x13579bd*i)&MASK
+        self.r[0]=self.result;self.sr^=1;self.pr^=0x2468ace0;self.pc=return_pc
+
+    def check(self):
+        r,pr,sr,fpscr,fr=self.before
+        assert self.r[8:]==r[8:] and self.pr==pr and self.r[0]==self.result
+        assert self.sr&~1==sr&~1 and (self.fpscr,self.fr)==(fpscr,fr)
+        assert self.calls==["extent"] and self.ccr==self.owner_ccr and not self.wait
+        assert self.ccr_writes==([0x909,0x908] if self.owner_ccr==0x100 else [])
+        assert self.purged==(self.owner_ccr==0x100)
+        assert self.mem[self.args[3]]==(self.args[1]-0x8000 if self.result else self.output_before)
+        if self.owner_ccr==0x100:assert not self.dirty
+
+
+def check_extent_scope(stage,self_test=False):
+    marker=stage[4].get("__kui_native_cached_extent")
+    if marker is None:return {"enabled":False}
+    require(marker==(1,0,0,0xfff1),"invalid pure-proof cache marker")
+    begin,body,_=symbol_bytes(stage,"_kui_vmu_native_cached_extent",2)
+    ops=(0x2f86,0x2f96,0x4f22,0xd019,0x402b,9,0xd118,0x6012,0x6803,0xd218,
+         0x3020,0x8b09,0xd017,0x2102,9,9,9,9,9,9,9,9,0xd013,0x400b,9,0x6903,
+         0xd00f,0x3800,0x8b11,0xd011,0xd111,0x00a3,0x7020,0x3012,0x8bfb,
+         0xd010,0x208b,0xd109,0x2102,9,9,9,9,9,9,9,9,0x6093,0x4f26,0x69f6,0x68f6,0xb,9,9)
+    expected=struct.pack('<54H8I',*ops,begin+12+0x20000000,0xff00001c,0x100,0x909,
+                         stage[4]['_kui_vmu_native_program_extent'][0],0x8c000000,0x8d000000,0x808)
+    require(body==expected,'linked pure-proof cache scope instructions/literals changed')
+    cases=0
+    for seed in range(24):
+        for mask in range(16):
+            for ccr in (0,1,4,0x20,0x80,0x100,0x105,0x1a7):
+                for result in (0,1):
+                    ExtentGateway(stage,seed,mask,ccr,result).run().check();cases+=1
+    rejected=0
+    if self_test:
+        # Unsafe mode, publication, target and post-CCR spacing mutations
+        # must be rejected by execution, independently of the exact pin.
+        mutations=[]
+        for needle,replacement in ((struct.pack("<I",0x909),struct.pack("<I",0x908)),
+                                   (struct.pack("<I",0x808),struct.pack("<I",0x809)),
+                                   (struct.pack("<4H",0x00a3,0x7020,0x3012,0x8bfb),
+                                    struct.pack("<4H",9,0x7020,0x3012,0x8bfb))):
+            at=body.find(needle);require(at>=0,"missing cache-scope mutation target")
+            changed=bytearray(body);changed[at:at+len(needle)]=replacement;mutations.append(bytes(changed))
+        proof=struct.pack("<I",stage[4]["_kui_vmu_native_program_extent"][0])
+        at=body.find(proof);require(at>=0,"cache scope lacks exact pure-proof target")
+        changed=bytearray(body);struct.pack_into("<I",changed,at,0x8ce00002);mutations.append(bytes(changed))
+        for at in (*range(28,44,2),*range(78,94,2)):
+            changed=bytearray(body);struct.pack_into('<H',changed,at,0x6003);mutations.append(bytes(changed))
+        for changed in mutations:
+            try:ExtentGateway(stage,7,15,0x100,1,changed).run().check()
+            except (AssertionError,struct.error,KeyError):rejected+=1
+            else:raise ValueError("pure-proof cache scope accepted unsafe mutation")
+    return {"enabled":True,"entry":hex(begin),"bytes":len(body),
+        "actual_instruction_model_cases":cases,"mutation_rejections":rejected,
+        "complete_linked_assembly_pinned":True,
+        "eligible_entry_ccr":"0x100","proof_ccr":"0x101",
+        "other_ccr_profiles_unchanged":True,"same_pure_extent_proof":True,
+        "full_ram_purge_bytes":0x1000000,"cache_write_nops":[8,8],
+        "callee_preserved_integer_frame_bytes":12,"operand_cache_restored_off":True,
+        "proof_output_published_before_cache_restore":True,"console_speed_verified":False}
 
 
 def check(stage, *, self_test=False):
@@ -368,6 +509,7 @@ def check(stage, *, self_test=False):
                     break
             else:
                 raise ValueError("cache wrapper accepted a missing result guard")
+    extent_scope=check_extent_scope(stage,self_test)
     return {"enabled": True, "temporary_resolution_address": hex(address), "temporary_resolution_bytes": size,
             "temporary_high_bss_only": True, "wrapper_entry": hex(begin), "wrapper_bytes": len(body),
             "actual_instruction_model_cases": cases, "mutation_rejections": mutations,
@@ -376,7 +518,7 @@ def check(stage, *, self_test=False):
             "full_source_restored_before_extent_selection":True,
             "validated_extent_before_cache_or_discovery":True,
             "normal_and_shortened_extent_routes_checked":True,
-            "extent_failure_keeps_source_length_and_refuses":True,
+            "extent_failure_keeps_source_length_and_refuses":True,"pure_extent_cache_scope":extent_scope,
             "no_metadata_before_exact_image_replay": True, "fresh_allocation_and_release_guards": True,
             "fresh_sdk_initializer_slot_admission":True,"sdk_slot_admission_is_independent_image_predicate":True,
             "capture_only_after_all_guards": True}

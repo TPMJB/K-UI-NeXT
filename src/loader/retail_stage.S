@@ -341,6 +341,91 @@ C(kui_retail_game_resume):
  * alias while the original entry performs its own cache setup. */
 .Lgame: .long KUI_RETAIL_EXEC_ADDRESS+0x20000000
 
+#if KUI_NATIVE_CACHED_EXTENT
+#if !KUI_VMU_NATIVE_CACHED_CODE
+#error "The pure extent cache scope requires the native instruction-cached relay"
+#endif
+/* Pure immutable-image proof only, called on the relay's P1 high stack.
+ * The surrounding relay has already published RAM and selected CCR=0x100.
+ * Unknown cache profiles take the original call without changing CCR.
+ * Every CCR change executes through P2 and has eight following NOPs. */
+    .align 2
+    .global __kui_native_cached_extent
+    .set __kui_native_cached_extent,1
+    .global C(kui_vmu_native_cached_extent)
+    .type C(kui_vmu_native_cached_extent),@function
+C(kui_vmu_native_cached_extent):
+    mov.l r8,@-r15
+    mov.l r9,@-r15
+    sts.l pr,@-r15
+    mov.l .Lextent_p2_address,r0
+    jmp @r0
+    nop
+.Lextent_p2:
+    mov.l .Lextent_ccr,r1
+    mov.l @r1,r0
+    mov r0,r8
+    mov.l .Lextent_expected,r2
+    cmp/eq r2,r0
+    bf .Lextent_call
+    mov.l .Lextent_on,r0
+    mov.l r0,@r1
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+.Lextent_call:
+    mov.l .Lextent_proof,r0
+    jsr @r0
+    nop
+    mov r0,r9
+    mov.l .Lextent_expected,r0
+    cmp/eq r0,r8
+    bf .Lextent_done
+/* Publish the proof's P1 stack/output before returning to operand-cache-off
+ * relay code. A full normal-index RAM purge also includes this 12B frame. */
+    mov.l .Lextent_ram,r0
+    mov.l .Lextent_ramend,r1
+.Lextent_purge:
+    ocbp @r0
+    add #32,r0
+    cmp/hs r1,r0
+    bf .Lextent_purge
+    mov.l .Lextent_off,r0
+    or r8,r0
+    mov.l .Lextent_ccr,r1
+    mov.l r0,@r1
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+.Lextent_done:
+    mov r9,r0
+    lds.l @r15+,pr
+    mov.l @r15+,r9
+    mov.l @r15+,r8
+    rts
+    nop
+    .align 2
+.Lextent_p2_address: .long .Lextent_p2+0x20000000
+.Lextent_ccr: .long 0xff00001c
+.Lextent_expected: .long 0x100
+.Lextent_on: .long 0x909
+.Lextent_proof: .long C(kui_vmu_native_program_extent)
+.Lextent_ram: .long 0x8c000000
+.Lextent_ramend: .long KUI_RETAIL_RAM_END
+.Lextent_off: .long 0x808
+    .size C(kui_vmu_native_cached_extent),.-C(kui_vmu_native_cached_extent)
+#endif
+
 #if defined(KUI_RETAIL_SONIC_STACK_TEST) && KUI_RETAIL_SONIC_STACK_TEST && !defined(KUI_RETAIL_CE)
 /* All seven original-entry stubs have saved R0 before selecting P2. Save
  * the rest of the real integer CPU frame BEFORE using high bookkeeping.

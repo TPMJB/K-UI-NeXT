@@ -157,6 +157,20 @@ TIMED_PREPARED_PINS = {
  '_reader_window_clock': ('c416d56570b536794b03df8effe197babf770dd655364793aae27e1072304924', 60),
 }
 
+# Controller service is a pinned RTS/NOP in this experiment. Request timing
+# and its report remain; pointer/string offsets stay independently bound.
+PACED_PREPARED_PINS = {
+ '_diagnostic_complete': ('b82324e75590de63308be5e79b759ed5972736e4064bc80e7bc597c4d0a95944', 1604),
+ '_transfer_context_valid': ('ba4f7070be29872139d6b266cb4b83e2da696678828f1e8f0fa6c9aaccf91905', 1236),
+ '_kui_vmu_native_runtime_fault': ('40b69a31d59ab52d6f64b97b53880e1a4190931a8e72734ab191ec1c8bd80b2e', 332),
+ '.rodata': ('d9c1723c0db628355c2c9436cc6a29636749dade4519b48bdacab2c3b942a4f9', 4488),
+ '_kui_vmu_native_trace_report': ('b1c88399d075a00257be669f190aff9c73687dfc1b4e1a5221e4328be0240797', 1120),
+ '_trace_history': ('0ca4a7a7b2377a95a136ee07eb355767b6acf086f921e6ad21994ddc83fb820b', 164),
+ '_report': ('99fbb78034fb36d000c0865e703e04d6b8564863d1d5713ffe2d5f8bacc97cb6', 440),
+ '_trace_packets': ('cd06c541ee0b07d7bf0f6223d8f1b4ee70229edad46db9d09062850d6f47de1f', 116),
+ '_reader_cooperative_service': ('501ea5b89ab4d8ff1b044d90f0e7b770df4b0bc60a561f96ec3ca179d28f6c83', 4),
+}
+
 
 def prepared_symbol_records(worker):
     data, _, _, sections, _ = worker
@@ -669,9 +683,12 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
     if timed is not None:
         require(cooperative and timed==(1,0,0,0xfff1),'invalid timed reader marker')
         require(TIMED_PREPARED_PINS,'missing reviewed timed reader pins')
+    paced=worker[4].get('__kui_native_paced_reader')
+    if paced is not None:
+        require(cooperative and not timed and paced==(1,0,0,0xfff1),'invalid paced reader marker')
     pins={**PREPARED_PINS,**(STALL_PREPARED_PINS if stall_marker else {}),
           **(COOPERATIVE_PREPARED_PINS if cooperative else {}),
-          **(TIMED_PREPARED_PINS if timed else {})}
+          **(TIMED_PREPARED_PINS if timed else {}),**(PACED_PREPARED_PINS if paced else {})}
     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
                        ("_protected_ranges", 512), ("_protected_count", 4),
@@ -962,7 +979,9 @@ def check_resume_publication(stage, cached, self_test=False):
                 rejected += 1
             else:
                 raise ValueError("resume gateway model accepted mutation at" + str(at))
-    return {"instruction_cache_enabled_for_scan": cached, "operand_cache_disabled_for_scan": True,
+    pure_cached='__kui_native_cached_extent' in symbols
+    return {"instruction_cache_enabled_for_scan": cached, "operand_cache_disabled_for_scan": not pure_cached,
+            "operand_cache_off_except_scoped_pure_extent":pure_cached,
             "scan_ccr": "0x00000908" if cached else "0x00000808", "owner_ccr_restored": True,
             "full_ram_purge_bytes": 0x1000000, "cache_write_nops": [8, 8],
             "owner_integer_frame_bytes": 84, "gateway_model_cases": cases,
@@ -2421,6 +2440,10 @@ def check(directory, *, self_test=False, trace_startup=None):
     low_timed=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_timed_resident')
     require(bool(timed)==bool(low_timed),'timed reader worker/resident mismatch')
     if timed:require(cooperative and timed==low_timed==(1,0,0,0xfff1),'invalid paired timed reader markers')
+    paced=worker[4].get('__kui_native_paced_reader')
+    low_paced=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_paced_resident')
+    require(bool(paced)==bool(low_paced),'paced reader worker/resident mismatch')
+    if paced:require(cooperative and not timed and paced==low_paced==(1,0,0,0xfff1),'invalid paired paced reader markers')
     prepared_lifetime = check_prepared_lifetime(directory, worker, binary, wire, self_test, build=base["runtime"]["build"])
     relocations=check_worker_pointer_aliases(wire,policy,fault_capture,coherence)
 
@@ -2439,6 +2462,8 @@ def check(directory, *, self_test=False, trace_startup=None):
         (directory / "retail-maple-observe.kui").read_bytes(), cached_code=cached,
         stage_image=stage,resident_image=read_elf(directory / "resident-sci.elf"),self_test=self_test)
     cache_gateway = check_cache_gateway(stage, self_test=self_test) if seed["enabled"] else {"enabled": False}
+    require(bool(paced)==bool(cache_gateway.get('pure_extent_cache_scope',{}).get('enabled')),
+            'paced profile/pure extent cache scope mismatch')
     installer_stack = check_stage_stack(stage, read_elf(directory / "resident-sci.elf"),
                                         worker=worker, self_test=self_test)
     require(not any(name.startswith(("__native_resolution_cache_seed_", "_kui_vmu_native_resolution_cache_",
@@ -2483,9 +2508,17 @@ def check(directory, *, self_test=False, trace_startup=None):
                   "paired_resident_worker": bool(stall),"private_worker_state_bytes": 508 if stall else 0,
                   "diagnostic_sd_log_writes": False,"console_root_cause_established": False},
               "cooperative_reader": {"enabled": bool(cooperative),
-                  "pump_blocks_per_visit": 2 if cooperative else 0,
-                  "foreground_catchup_changed": False,"service_after_physical_controller_proof": bool(cooperative),
+                  "service_enabled":bool(cooperative and not paced),
+                  "pump_blocks_per_visit": 2 if cooperative and not paced else 0,
+                  "foreground_catchup_changed": bool(paced),"service_after_physical_controller_proof": bool(cooperative and not paced),
                   "completed_request_timing": bool(cooperative),"console_performance_verified": False},
+              "paced_reader": {"enabled":bool(paced),"paired_resident_worker":bool(paced),
+                  "tight_check_polls":16 if paced else 0,"near_scanline_delta_max":1 if paced else 0,
+                  "ordinary_check_waits":False if paced else None,
+                  "exec_catchup_blocks":[20,25] if paced else [],"irq_batch_limit":8 if paced else 0,
+                  "pio_blocks_per_entry_max":1 if paced else 0,"new_resident_ram_bytes":0,
+                  "controller_reader_service_enabled":False if paced else None,
+                  "console_performance_verified":False},
               "timed_reader": {"enabled":bool(timed),"window_ticks":586 if timed else 0,
                   "window_max_visits":64 if timed else 0,"blocks_per_window_max":2 if timed else 0,
                   "read_only_clock_admission":bool(timed),"invalid_clock_single_visit":bool(timed),

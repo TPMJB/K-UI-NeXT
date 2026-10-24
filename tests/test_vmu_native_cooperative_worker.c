@@ -48,6 +48,11 @@ int main(void) {
     CHECK(pump_visits==0u); /* Initial full proof precedes the fast path. */
     observed_region.engine.active=1u;
     unsigned leases=lease_calls,bytes=sd.bytes;
+#if KUI_NATIVE_PACED_CHECK
+    diagnostic_pair(false);reader_cooperative_service();
+    CHECK(!pump_visits && !restorations && !reader_cooperative.blocks);
+    CHECK(lease_calls==leases && sd.bytes==bytes);
+#else
     diagnostic_pair(false);
     CHECK(pump_visits==1u && reader_cooperative.blocks==2u);
     CHECK(restorations==1u && test_vbr==UINT32_C(0x8c00f400) && test_iprb==0xa500u);
@@ -60,6 +65,7 @@ int main(void) {
     durable_card.handling=1u;reader_cooperative_service();CHECK(pump_visits==before);durable_card.handling=0u;
     for(unsigned mode=2u;mode<=4u;++mode){config.diagnostics=mode;reader_cooperative_service();CHECK(pump_visits==before);}
     config.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE;
+#endif
     reader_capture_start();
     diagnostic.active=1u;
     observed_region.engine.stats.hooks=test_clock.counter+300000u;
@@ -106,6 +112,10 @@ int main(void) {
     CHECK(pump_visits==old+1u && reader_cooperative.clock_bad==1u);
     puts("timed reader: pending-then-ready, deadline, invalid/changed/frozen clocks, wrap and two-block window bound passed");
 #endif
+#if KUI_NATIVE_PACED_CHECK
+    puts("paced worker: original save/ownership suite, controller pump disabled, no storage lease and complete-request timing passed");
+#else
     puts("cooperative worker: original save/ownership suite, post-completion pump, busy/storage exclusions and request timing passed");
+#endif
     return 0;
 }

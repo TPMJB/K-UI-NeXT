@@ -75,7 +75,7 @@ def package(build,guide='broader',trace_startup=None):
     commit=git('rev-parse','HEAD');revision=commit[:12]
     if git('status','--porcelain'):
         raise ValueError('Commit source changes before packaging')
-    if guide in ('evolution-trace','a2-background','hybrid','stall','cooperative','timed') and trace_startup is None:
+    if guide in ('evolution-trace','a2-background','hybrid','stall','cooperative','timed','paced') and trace_startup is None:
         raise ValueError('This package requires --trace-startup with the exact original executable')
     graphs=list(build.rglob('*.ci'))
     if not graphs or any(not closed_callgraph(path.read_text()) for path in graphs):
@@ -93,6 +93,10 @@ def package(build,guide='broader',trace_startup=None):
     if guide=='timed' and (not report.get('timed_reader',{}).get('enabled') or
                           stage['symbols'].get('__kui_native_stage_fast_scan')!=1):
         raise ValueError('Timed package requires the paired timed reader and stage fast-scan build')
+    if guide=='paced' and (not report.get('paced_reader',{}).get('enabled') or
+                          stage['symbols'].get('__kui_native_stage_fast_scan')!=1 or
+                          not report.get('resolution_cache_gateway',{}).get('pure_extent_cache_scope',{}).get('enabled')):
+        raise ValueError('Paced package requires paired paced reader, fast scans and audited pure extent cache scope')
     entry=inspect_elf((build/'entry.elf').read_bytes(),ADDRESS,0x8c112000)
     template=template_profile()
     address,_=readonly_blob(stage_data,stage,'__vmu_sd_profile_blob_start',
@@ -128,7 +132,7 @@ def package(build,guide='broader',trace_startup=None):
                      'vmu-native-evolution-fault-test.md','vmu-native-evolution-isolation-test.md',
                      'vmu-native-evolution-hooks-test.md','vmu-native-evolution-trace-test.md'):
             extra['docs/'+name]=(root/'docs'/name).read_bytes()
-        if guide in ('a2-background','hybrid','stall','cooperative','timed'):
+        if guide in ('a2-background','hybrid','stall','cooperative','timed','paced'):
             extra['docs/vmu-native-a2-background-test.md']=(root/'docs/vmu-native-a2-background-test.md').read_bytes()
             extra['docs/evidence/native-a2-background-2026-10-24.json']=(root/'docs/evidence/native-a2-background-2026-10-24.json').read_bytes()
             extra['docs/evidence/native-retry-integration-2026-10-24.json']=(root/'docs/evidence/native-retry-integration-2026-10-24.json').read_bytes()
@@ -144,6 +148,8 @@ def package(build,guide='broader',trace_startup=None):
             extra['collect-native-startup.py']=(root/'tools/kui-native-startup-bundle.py').read_bytes()
         if guide=='timed':
             extra['docs/evidence/native-timed-reader-2026-10-24.json']=(root/'docs/evidence/native-timed-reader-2026-10-24.json').read_bytes()
+        if guide=='paced':
+            extra['docs/evidence/native-paced-reader-2026-10-24.json']=(root/'docs/evidence/native-paced-reader-2026-10-24.json').read_bytes()
         for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json',
                      'native-performance-acceptance-2026-10-23.json','native-uniform-root-family-2026-10-23.json',
                      'native-recv-ownership-2026-10-23.json','native-older-sdk-2026-10-23.json',
@@ -183,7 +189,9 @@ def package(build,guide='broader',trace_startup=None):
         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
             template_sha256=sha(template)),
-        compatibility_claim=('Clock-admitted bounded reader service window and faster executable-extent scanning; console performance remains unverified'
+        compatibility_claim=('Sparse nonblocking CHECK, tight-loop catch-up and scoped pure extent caching; console performance remains unverified'
+            if guide=='paced' else
+            'Clock-admitted bounded reader service window and faster executable-extent scanning; console performance remains unverified'
             if guide=='timed' else
             'Bounded cooperative native reader with complete-request timing; console performance remains unverified'
             if guide=='cooperative' else
@@ -238,7 +246,7 @@ def package(build,guide='broader',trace_startup=None):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('build',type=Path)
-    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall','cooperative','open','timed'),default='broader')
+    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall','cooperative','open','timed','paced'),default='broader')
     parser.add_argument('--trace-startup',type=Path)
     try:
         args=parser.parse_args();package(args.build,args.guide,args.trace_startup)

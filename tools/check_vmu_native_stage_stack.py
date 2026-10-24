@@ -238,9 +238,11 @@ class ArmRoute(Machine):
         heap, call = self.symbols["_native_heap"][0], self.symbols["_native_call"][0]
         self.mem.update({heap + 24: self.original, heap + 28: self.slot, heap + 32: self.original,
                          call + 8: 0x8C0100C6, call + 12: 0x8CC00000, call + 16: 0x00400000})
+        extent_name=("_kui_vmu_native_cached_extent" if "__kui_native_cached_extent" in self.symbols
+                     else "_kui_vmu_native_program_extent")
         labels = (("_retail_display_restore", "display"), ("_retail_display_line", "line"),
                   ("_kui_native_heap_base_relay", "restore"), ("_kui_retail_observe_native_ip", "ip"),
-                  ("_kui_vmu_native_program_extent", "extent"),
+                  (extent_name, "extent"),
                   ("_native_resolution_replay", "cache"), ("_code_sha", "sha"),
                   ("_kui_vmu_native_discover_layout", "driver"), ("_kui_vmu_native_heap_discover", "heap"),
                   ("_kui_vmu_native_heap_call_discover", "call"), ("_allocation_safe", "allocation"),

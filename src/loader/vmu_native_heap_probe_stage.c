@@ -178,8 +178,17 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #if KUI_NATIVE_STAGE_FAST_SCAN
     retail_display_line("VERIFYING EXECUTABLE LIFETIME EXTENT");
 #endif
-    if(!kui_vmu_native_program_extent((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+#if KUI_NATIVE_CACHED_EXTENT
+    /* Stage-only wrapper: exact same pure proof, with operand caching only
+     * during that proof. It publishes RAM before restoring the relay CCR. */
+    extern bool kui_vmu_native_cached_extent(const void *,size_t,uint32_t,size_t *);
+#define native_program_extent kui_vmu_native_cached_extent
+#else
+#define native_program_extent kui_vmu_native_program_extent
+#endif
+    if(!native_program_extent((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
        exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&program_bytes)) native_report(2u,13u);
+#undef native_program_extent
     if(program_bytes!=exec_bytes) retail_display_line("VERIFIED RECLAIMED BOOTSTRAP SUFFIX");
     exec_bytes=(uint32_t)program_bytes;
 #if KUI_VMU_NATIVE_CACHE_PROBE

@@ -2,6 +2,9 @@
  * Original K-UI background game reader (see retail_async.h). The stream
  * sequence is the one the SCI async probe proved on the console. */
 #include "retail_async.h"
+#if KUI_NATIVE_PACED_CHECK && (!KUI_NATIVE_REQUEST_TIMING || !KUI_RETAIL_NATIVE_HYBRID || defined(KUI_RETAIL_CE))
+#error "Paced CHECK requires native hybrid request-timing counter ownership"
+#endif
 #if KUI_NATIVE_READER_DIAGNOSTIC
 #if !KUI_RETAIL_NATIVE_HYBRID
 #error "Reader timing requires the unused native hybrid scheduler counters"
@@ -10,6 +13,9 @@ __asm__(".global __kui_native_reader_stall_resident\n"
         ".set __kui_native_reader_stall_resident,1\n");
 #if KUI_NATIVE_COOP_PUMP
 __asm__(".global __kui_native_cooperative_resident\n.set __kui_native_cooperative_resident,1\n");
+#if KUI_NATIVE_PACED_CHECK
+__asm__(".global __kui_native_paced_resident\n.set __kui_native_paced_resident,1\n");
+#endif
 #if KUI_NATIVE_TIMED_PUMP
 __asm__(".global __kui_native_timed_resident\n.set __kui_native_timed_resident,1\n");
 #endif
@@ -369,7 +375,21 @@ static void write_out(void *unused, uint32_t offset, const uint8_t *bytes, uint3
     else e.failed = KUI_GD_ERROR_MEMORY;
 }
 static bool topping(uint32_t function) { return function == KUI_GD_EXEC || function == KUI_GD_CHECK; }
-static bool tops_up(uint32_t function) { return topping(function); }
+static bool tops_up(uint32_t function) {
+#if KUI_NATIVE_PACED_CHECK
+    if(function==KUI_GD_EXEC) {e.stats.exec_int=0u;return true;}
+    if(function!=KUI_GD_CHECK)return false;
+    /* The Standard reader distinguishes one status poll from a game that
+     * is spinning on CHECK. Keep the same sixteen-close-poll criterion,
+     * using the two unused diagnostic words for scanline/count state. */
+    uint32_t line=rd32(UINT32_C(0xa05f810c))&0x3ffu;
+    uint32_t count=(line-e.stats.execs<=1u?e.stats.exec_int+1u:1u)&15u;
+    e.stats.execs=line;e.stats.exec_int=count;
+    return count==0u;
+#else
+    return topping(function);
+#endif
+}
 #endif
 /* Finish an arrived block, then deliver blocks in order: the next one of the
  * run is started before each block is checked and copied. Returns while a block is in
@@ -394,7 +414,7 @@ static void deliver_work(uint32_t wait) {
         /* Retain the proved 20/25-block catch-up and full DMA wait. Only
          * stop the formerly unlimited run of already-completed blocks. */
         if(delivered>=(
-#if KUI_NATIVE_COOP_PUMP
+#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
             e.in_irq==2u?KUI_RETAIL_NATIVE_PUMP_BATCH_LIMIT:
 #endif
             e.in_irq?KUI_RETAIL_NATIVE_IRQ_BATCH_LIMIT:e.target)) return;
@@ -568,6 +588,9 @@ static void start(void) {
     e.stats.hooks=rd32(UINT32_C(0xffd8000c));
 #endif
     e.failed = 0; e.retries = 0; e.active = 0;
+#if KUI_NATIVE_PACED_CHECK
+    e.stats.exec_int=0u;
+#endif
     e.cursor.done = 0; /* a read that fails here delivered nothing */
 #ifdef KUI_RETAIL_CE
     e.piece_set = 0; e.piece_begin = e.piece_bytes = e.piece_filled = 0;
@@ -909,7 +932,7 @@ uint32_t kui_retail_async_irq(void) {
     /* An SCI event without a reception: not ours, passed on as any other
      * (under CE: its level is dropped). */
     if(!kui_sci_stream_busy()
-#if KUI_NATIVE_COOP_PUMP
+#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
        && e.in_irq!=2u /* A cooperative visit also restarts an idle run. */
 #endif
       ) {
@@ -921,10 +944,10 @@ uint32_t kui_retail_async_irq(void) {
 #ifdef KUI_RETAIL_CE
     kui_sci_stream_token_budget(e.isr != 0);
 #endif
-#if KUI_NATIVE_COOP_PUMP
+#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
     if(e.in_irq==2u) hook();
 #endif
-#if KUI_NATIVE_COOP_PUMP
+#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
     if(!e.in_irq) e.in_irq = 1;
 #else
     e.in_irq = 1;
