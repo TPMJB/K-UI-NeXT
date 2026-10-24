@@ -1,0 +1,815 @@
+From 1baa80301a62764acb49ca44b2f380a39f869d12 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 24 Oct 2026 17:58:36 -0500
+Subject: [PATCH] Give native loader a bounded service window and speed
+ post-bootstrap scans
+
+---
+ Makefile.vmu-native-timed                     |  12 +
+ .../native-timed-reader-2026-10-24.json       | 219 ++++++++++++++++++
+ docs/vmu-native-timed-test.md                 |  72 ++++++
+ include/kui/native_scan_bytes.h               |  22 ++
+ src/core/vmu_native_exit.c                    |   6 +
+ src/core/vmu_native_heap.c                    |   6 +
+ src/core/vmu_native_program.c                 |  10 +-
+ src/loader/retail_async.c                     |   3 +
+ src/loader/vmu_native_heap_probe_stage.c      |   9 +
+ src/loader/vmu_native_reader_capture.inc      |  66 +++++-
+ tests/test_vmu_native_cooperative_worker.c    |  43 ++++
+ tests/test_vmu_native_program.c               |   9 +
+ tools/check_vmu_native_persistent.py          |  30 ++-
+ tools/package_vmu_native_persistent.py        |  15 +-
+ 14 files changed, 511 insertions(+), 11 deletions(-)
+ create mode 100644 Makefile.vmu-native-timed
+ create mode 100644 docs/evidence/native-timed-reader-2026-10-24.json
+ create mode 100644 docs/vmu-native-timed-test.md
+ create mode 100644 include/kui/native_scan_bytes.h
+
+diff --git a/Makefile.vmu-native-timed b/Makefile.vmu-native-timed
+new file mode 100644
+index 0000000..50b7c6d
+--- /dev/null
++++ b/Makefile.vmu-native-timed
+@@ -0,0 +1,12 @@
++# SPDX-License-Identifier: GPL-3.0-only
++BUILD ?= build/native-timed
++include Makefile.vmu-native-cooperative
++FLAGS += -DKUI_NATIVE_TIMED_PUMP=1 -DKUI_NATIVE_STAGE_FAST_SCAN=1
++NATIVE_FLAGS += -DKUI_NATIVE_TIMED_PUMP=1
++
++.PHONY: timed-host-tests
++timed-host-tests:
++	@mkdir -p $(BUILD)
++	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 -DKUI_NATIVE_TIMED_PUMP=1 tests/test_vmu_native_cooperative_worker.c $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-timed-worker
++	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-timed-worker
++	$(MAKE) -f Makefile.vmu-native-timed BUILD=$(BUILD) native-program-host-tests PASSIVE_HOST_FLAGS='$(PASSIVE_HOST_FLAGS) -DKUI_NATIVE_STAGE_FAST_SCAN=1' EVOLUTION2_STARTUP='$(EVOLUTION2_STARTUP)' EVOLUTION1_STARTUP='$(EVOLUTION1_STARTUP)'
+diff --git a/docs/evidence/native-timed-reader-2026-10-24.json b/docs/evidence/native-timed-reader-2026-10-24.json
+new file mode 100644
+index 0000000..9c9aa57
+--- /dev/null
++++ b/docs/evidence/native-timed-reader-2026-10-24.json
+@@ -0,0 +1,219 @@
++{
++  "schema": "kui.native.timed-reader.evidence.v1",
++  "date": "2026-10-24",
++  "source_parent": "f518592088f9e397aa11780514535d0dbd52b42a",
++  "previous_console_capture": {
++    "schema": "kui.native.cooperative.console.v1",
++    "build": "f518592088f9",
++    "date": "2026-10-24",
++    "owner_report": {
++      "fmv": "slightly better",
++      "movement": "same jarring lag every few seconds",
++      "startup": "bulk of remaining wait follows ENTIRE RESIDENT VERIFIED"
++    },
++    "samples": 1200,
++    "clock": {
++      "nominal_hz": 781250,
++      "bad": 0,
++      "wall_ticks": 14739236,
++      "ccr_first": "00000105",
++      "ccr_last": "00000105",
++      "instruction_cache_off_samples": 0
++    },
++    "reader": {
++      "gap_max_ticks": 18333,
++      "read_max_ticks": 1616572,
++      "read_max_seconds": 2.06921216,
++      "age_max_ticks": 1150520,
++      "age_max_seconds": 1.4726656,
++      "irq_blocks": 42,
++      "foreground_blocks": 2222,
++      "pio_blocks": 0,
++      "crc_errors": 0,
++      "token_errors": 0,
++      "foreign": 0,
++      "repairs": 48,
++      "overruns": 0,
++      "deferred": 48,
++      "pump_visits": 56,
++      "pump_blocks": 0,
++      "pump_busy": 0,
++      "pump_faults": 0,
++      "longest_completed_read_lba": 321538,
++      "longest_completed_read_sectors": 67
++    },
++    "vmu": {
++      "submit_calls": 1200,
++      "complete_calls": 1200,
++      "submit_max_ticks": 52,
++      "complete_max_ticks": 91,
++      "free_calls": 0,
++      "storage_calls": 0,
++      "commits": 0,
++      "fast_submits": 1200,
++      "fast_completes": 1200
++    },
++    "longest_poll_gaps": [
++      {
++        "index": 0,
++        "gap_ticks": 18333,
++        "read_max_ticks": 0,
++        "age_ticks": 23618,
++        "pending": 1,
++        "irq_blocks": 0,
++        "foreground_blocks": 40,
++        "pio_blocks": 0,
++        "crc_errors": 0,
++        "token_errors": 0,
++        "function": 1,
++        "command": 17,
++        "token": 2227,
++        "previous_token": 2227,
++        "sd_block": 1602625
++      },
++      {
++        "index": 1,
++        "gap_ticks": 18294,
++        "read_max_ticks": 0,
++        "age_ticks": 23581,
++        "pending": 1,
++        "irq_blocks": 0,
++        "foreground_blocks": 40,
++        "pio_blocks": 0,
++        "crc_errors": 0,
++        "token_errors": 0,
++        "function": 1,
++        "command": 17,
++        "token": 1789,
++        "previous_token": 1789,
++        "sd_block": 1599906
++      },
++      {
++        "index": 2,
++        "gap_ticks": 18272,
++        "read_max_ticks": 0,
++        "age_ticks": 23559,
++        "pending": 1,
++        "irq_blocks": 0,
++        "foreground_blocks": 40,
++        "pio_blocks": 0,
++        "crc_errors": 0,
++        "token_errors": 0,
++        "function": 1,
++        "command": 17,
++        "token": 1935,
++        "previous_token": 1935,
++        "sd_block": 1600471
++      },
++      {
++        "index": 3,
++        "gap_ticks": 18235,
++        "read_max_ticks": 0,
++        "age_ticks": 22753,
++        "pending": 1,
++        "irq_blocks": 0,
++        "foreground_blocks": 40,
++        "pio_blocks": 0,
++        "crc_errors": 0,
++        "token_errors": 0,
++        "function": 1,
++        "command": 17,
++        "token": 2081,
++        "previous_token": 2081,
++        "sd_block": 1601036
++      }
++    ],
++    "photos": [
++      {
++        "name": "01-image-1792881726445.jpg",
++        "sha256": "261bde3504ad86091c3a572b62550ee1452f89cb8db6a9ef55267968cf917143"
++      },
++      {
++        "name": "02-image-1792881730335.jpg",
++        "sha256": "36508aea019caa261d6bb87134321f64dd11d41d195d83ab7e3d1ed881f71862"
++      },
++      {
++        "name": "03-image-1792881735802.jpg",
++        "sha256": "b6d955aade12148579d0715a3247e9c8ba24ba317e2e34302ee6942aa4b7c244"
++      },
++      {
++        "name": "04-image-1792881740868.jpg",
++        "sha256": "6b373f0ba52cb7be517f62f99292a793f40f805fd46da4b8dc73989cfe724a2e"
++      },
++      {
++        "name": "05-image-1792881746053.jpg",
++        "sha256": "ae336c9461ed3e6e2fca1fc1f4329c4793fd39cd791184153a6d33c5a4b50bde"
++      },
++      {
++        "name": "06-image-1792881750642.jpg",
++        "sha256": "34dd31bf8a3a818875442387f46623c025831abef6af1dff7b7d1914dc2ab627"
++      }
++    ],
++    "distinct_pages": 5,
++    "last_photo": "blurred duplicate of first longest-gap page",
++    "interpretation": {
++      "observed": "A complete 67-sector data read took about2.07s while sampled controller polling continued; the added cooperative path delivered no blocks.",
++      "limits": "No exact synchronization to the visible pause; the capture does not identify which IRQ/cooperative visits deferred repairs or why each zero-output pump returned.",
++      "root_cause_established": false
++    }
++  },
++  "design": {
++    "foreground_normal_blocks": 20,
++    "foreground_aggressive_blocks": 25,
++    "true_irq_cap": 8,
++    "whole_window_block_cap": 2,
++    "pio_visit_cap": 1,
++    "clock_deadline_ticks": 586,
++    "nominal_deadline_ms": 0.75008,
++    "visit_ceiling": 64,
++    "first_delivery_ends_window": true,
++    "invalid_clock_single_visit": true,
++    "changed_clock_aborts": true,
++    "timer_configuration_writes": false,
++    "hard_elapsed_deadline": false,
++    "deadline_checked_between_visits": true,
++    "save_protocol_changes": false,
++    "ram_reservation_changes": false
++  },
++  "boot": {
++    "after_resident_phase": "native program lifetime/extent proof followed by cache image SHA256 and installation",
++    "evolution2_source_bytes": 4057056,
++    "evolution2_program_bytes": 4024288,
++    "all_extent_allocator_exit_hash_proofs_retained": true,
++    "stage_scan_decoding": "aligned little-endian halfword/word, exact unaligned fallback",
++    "signature_first_byte_filter": true,
++    "new_phase_labels": true,
++    "cache_mode_changed": false,
++    "console_boot_speed_measured": false
++  },
++  "host_validation": {
++    "persistent_original_checks": 2077754,
++    "program_extent_checks": 69880,
++    "real_originals": [
++      "Evolution 1",
++      "Evolution 2"
++    ],
++    "sanitizers": [
++      "address",
++      "undefined"
++    ],
++    "new_cases": [
++      "pending twice then ready without another game call",
++      "first delivery ends whole window",
++      "deadline expiry",
++      "unsupported clock single visit",
++      "changed clock abort",
++      "frozen counter visit ceiling",
++      "down-counter wrap",
++      "all eight input alignments",
++      "original footer/reference/allocator/exit refusal mutations"
++    ]
++  },
++  "console_execution_verified": false,
++  "console_performance_improvement_verified": false,
++  "limitations": [
++    "Each existing low-reader command/recovery visit can exceed the between-visit clock deadline.",
++    "Clock samples are observations of the admitted running owner timer; no timer is borrowed or configured.",
++    "The added window runs within controller completion and contributes to its measured latency."
++  ]
++}
+diff --git a/docs/vmu-native-timed-test.md b/docs/vmu-native-timed-test.md
+new file mode 100644
+index 0000000..08b87cf
+--- /dev/null
++++ b/docs/vmu-native-timed-test.md
+@@ -0,0 +1,72 @@
++<!-- SPDX-License-Identifier: GPL-3.0-only -->
++# Native reader service-window candidate
++
++The owner-tested f518592088f9 hybrid retained slightly improved FMVs but the
++same movement pauses. Its capture measured a 2.06921216-second completed
++67-sector read while controller polling continued (largest gap 23.46624 ms).
++There were 56 cooperative visits but zero delivered blocks. That did not
++demonstrate useful cooperative production on the console.
++
++This candidate keeps the full 20/25-block foreground catch-up, eight-block
++true SCI interrupt cap, existing one-block PIO allowance, and the same VMU
++packet/save protocol. After a proved physical controller completion, it can
++now repeat the nonblocking reader visit until the first delivery, a validated
++read-only clock deadline, or 64 attempts. The first delivery ends the window;
++each low visit remains capped at two blocks, so the complete window is too.
++
++The deadline is 586 ticks (0.75008 ms) only with the existing admitted 781250-Hz
++TMU0 profile. The code never configures a timer. An invalid clock gets one
++ordinary nonblocking visit; a changed clock aborts repetition. An independent
++64-visit ceiling also terminates a frozen counter. Deadline checks occur
++between visits. Existing card command/token/recovery limits remain, so this
++is not a hard elapsed-time guarantee.
++
++## Install
++
++From this folder, using the existing prepared pair:
++
++```sh
++python3 personalize.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --game evolution2
++```
++
++Use SCI, Background On, Normal speed, Auto/default encoding, CD music Off,
++and RAM patches Off. Safely eject and cold boot. Compare intro pace/audio
++and the same movement area first. The ordinary mode has no intentional stop.
++
++For a capture, add `--profile-runtime` to that command. Hold both triggers
++fully plus B for about one second during gameplay, then release. Continue
++through the problem for roughly 20 seconds until the intentional stop. Record
++at least 25 seconds of all cycling pages.
++
++READ MAX remains the whole accepted read through final checked destination
++delivery. AGE MAX samples pending age, which can include data waiting for a
++game CHECK. PUMPS now counts individual low-reader visits; WINDOWS counts
++controller-completion opportunities. BLOCKS shows useful cooperative output.
++EXPIRED counts time/attempt exhaustion without delivery. CLOCK BAD records
++unsupported/changed clocks; MAX TICKS is the largest admitted observed window.
++VMU COMPLETE includes all the added loader service and its observations.
++
++## Startup after resident verification
++
++The full executable CRC and byte-for-byte resident comparison still run.
++After those checks, Evolution 2 must validate its appended 32 KiB bootstrap's
++reclaimed lifetime before replaying the native cache. That proof includes
++whole-program reference scans, allocator/caller checks, and exit discovery;
++the cache replay then independently checks the loaded program's SHA256.
++
++The candidate uses aligned little-endian halfword/word decoding in the
++stage's extent/allocator/exit scans, with exact unaligned byte fallbacks.
++It also rejects nonmatching bootstrap-signature first bytes before calling
++memcmp. All ranges, mutations, lifetime proofs and complete hashes remain.
++The game/runtime worker's heap decoders and cache mode are unchanged.
++
++The new messages identify the remaining phases:
++
++* VERIFYING EXECUTABLE LIFETIME EXTENT
++* VERIFYING NATIVE CACHE AND IMAGE SHA256
++* USING VERIFIED NATIVE MAPPING CACHE, or the existing cold-scan messages
++* NATIVE DISCOVERY COMPLETE - ARMING HOOK
++
++No boot-time improvement or gameplay fix has yet been measured on console.
++The earlier Native-A2 package remains available for broader Standard-reader
++compatibility investigation; this candidate changes no SDK-family admission.
+diff --git a/include/kui/native_scan_bytes.h b/include/kui/native_scan_bytes.h
+new file mode 100644
+index 0000000..6c96398
+--- /dev/null
++++ b/include/kui/native_scan_bytes.h
+@@ -0,0 +1,22 @@
++/* SPDX-License-Identifier: GPL-3.0-only */
++#ifndef KUI_NATIVE_SCAN_BYTES_H
++#define KUI_NATIVE_SCAN_BYTES_H
++#include <stdint.h>
++/* Immutable-image decoders only. Callers retain their existing range checks.
++ * SH-4 cannot load unaligned words; preserve exact byte accesses there and
++ * on big-endian hosts. may_alias permits arbitrary executable bytes. */
++static inline __attribute__((__always_inline__)) uint16_t kui_native_scan_le16(const uint8_t *p) {
++#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
++    typedef uint16_t scan_half __attribute__((__may_alias__));
++    if(!((uintptr_t)p&1u))return *(const scan_half *)(const void *)p;
++#endif
++    return (uint16_t)(p[0]|(uint16_t)p[1]<<8);
++}
++static inline __attribute__((__always_inline__)) uint32_t kui_native_scan_le32(const uint8_t *p) {
++#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
++    typedef uint32_t scan_word __attribute__((__may_alias__));
++    if(!((uintptr_t)p&3u))return *(const scan_word *)(const void *)p;
++#endif
++    return (uint32_t)kui_native_scan_le16(p)|(uint32_t)kui_native_scan_le16(p+2u)<<16;
++}
++#endif
+diff --git a/src/core/vmu_native_exit.c b/src/core/vmu_native_exit.c
+index 42d8b9f..05d8356 100644
+--- a/src/core/vmu_native_exit.c
++++ b/src/core/vmu_native_exit.c
+@@ -3,8 +3,14 @@
+ #include "kui/vmu_native_patch.h"
+ #include <string.h>
+ struct witness {uint16_t at,word;};
++#if KUI_NATIVE_STAGE_FAST_SCAN
++#include "kui/native_scan_bytes.h"
++#define u16 kui_native_scan_le16
++#define u32 kui_native_scan_le32
++#else
+ static uint16_t u16(const uint8_t *p) {return (uint16_t)(p[0]|(uint16_t)p[1]<<8);}
+ static uint32_t u32(const uint8_t *p) {return (uint32_t)u16(p)|(uint32_t)u16(p+2u)<<16;}
++#endif
+ static uint32_t physical(uint32_t a) {return a&UINT32_C(0x1fffffff);}
+ static bool direct(uint32_t a) {
+     uint32_t area=a&UINT32_C(0xe0000000),p=physical(a);
+diff --git a/src/core/vmu_native_heap.c b/src/core/vmu_native_heap.c
+index 3e8905b..b03eb28 100644
+--- a/src/core/vmu_native_heap.c
++++ b/src/core/vmu_native_heap.c
+@@ -20,8 +20,14 @@ static const struct heap_word heap_words[]={
+     {0x1b0,0x0002},{0x1b4,0x4009},{0x1b6,0x4009},{0x1b8,0xc90f},
+     {0x1c0,0xcbf0},{0x1c2,0x400e},{0x1c4,0x2448},{0x1cc,0x75e0}
+ };
++#if KUI_NATIVE_STAGE_FAST_SCAN
++#include "kui/native_scan_bytes.h"
++#define h16 kui_native_scan_le16
++#define h32 kui_native_scan_le32
++#else
+ static uint16_t h16(const uint8_t *p) {return (uint16_t)(p[0]|(uint16_t)p[1]<<8);}
+ static uint32_t h32(const uint8_t *p) {return (uint32_t)h16(p)|(uint32_t)h16(p+2)<<16;}
++#endif
+ static uint32_t phys(uint32_t a) {return a&0x1fffffffu;}
+ static bool span(uint32_t a,uint32_t n) {
+     uint32_t area=a&0xe0000000u,p=phys(a);
+diff --git a/src/core/vmu_native_program.c b/src/core/vmu_native_program.c
+index 603774d..a560d26 100644
+--- a/src/core/vmu_native_program.c
++++ b/src/core/vmu_native_program.c
+@@ -6,8 +6,15 @@
+ 
+ enum { IP_BYTES=0x8000, IP_SEARCH_BYTES=0x10000 };
+ static const uint8_t signature[]="SEGA SEGAKATANA SEGA ENTERPRISES";
++#if KUI_NATIVE_STAGE_FAST_SCAN
++__asm__(".global __kui_native_stage_fast_scan\n.set __kui_native_stage_fast_scan,1\n");
++#include "kui/native_scan_bytes.h"
++#define u16 kui_native_scan_le16
++#define u32 kui_native_scan_le32
++#else
+ static uint16_t u16(const uint8_t *p) {return (uint16_t)(p[0]|(uint16_t)p[1]<<8);}
+ static uint32_t u32(const uint8_t *p) {return (uint32_t)u16(p)|(uint32_t)u16(p+2u)<<16;}
++#endif
+ static uint32_t physical(uint32_t a) {return a&UINT32_C(0x1fffffff);}
+ static bool direct(uint32_t a) {
+     uint32_t area=a&UINT32_C(0xe0000000),p=physical(a);
+@@ -31,7 +38,8 @@ static bool bootstrap_hint(const uint8_t *p,size_t n) {
+      * remain mandatory. Limit the search to a possible trailing bootstrap. */
+     size_t first=n>IP_SEARCH_BYTES?n-IP_SEARCH_BYTES:0u;
+     for(size_t at=first;at+32u<=n;at++)
+-        if(!memcmp(p+at,signature,16u) || !memcmp(p+at+16u,signature+16u,16u)) return true;
++        if((p[at]==signature[0] && !memcmp(p+at,signature,16u)) ||
++           (p[at+16u]==signature[16] && !memcmp(p+at+16u,signature+16u,16u))) return true;
+     return false;
+ }
+ static bool bootstrap(const uint8_t *p) {
+diff --git a/src/loader/retail_async.c b/src/loader/retail_async.c
+index df183a4..c3f06b5 100644
+--- a/src/loader/retail_async.c
++++ b/src/loader/retail_async.c
+@@ -10,6 +10,9 @@ __asm__(".global __kui_native_reader_stall_resident\n"
+         ".set __kui_native_reader_stall_resident,1\n");
+ #if KUI_NATIVE_COOP_PUMP
+ __asm__(".global __kui_native_cooperative_resident\n.set __kui_native_cooperative_resident,1\n");
++#if KUI_NATIVE_TIMED_PUMP
++__asm__(".global __kui_native_timed_resident\n.set __kui_native_timed_resident,1\n");
++#endif
+ #endif
+ #endif
+ #include "sci_sd_bus.h"
+diff --git a/src/loader/vmu_native_heap_probe_stage.c b/src/loader/vmu_native_heap_probe_stage.c
+index a7c7484..0a8520d 100644
+--- a/src/loader/vmu_native_heap_probe_stage.c
++++ b/src/loader/vmu_native_heap_probe_stage.c
+@@ -175,11 +175,17 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
+      * being part of the live executable before immutable native discovery.
+      * This changes neither the loaded bytes nor the source CRC contract. */
+     size_t program_bytes;
++#if KUI_NATIVE_STAGE_FAST_SCAN
++    retail_display_line("VERIFYING EXECUTABLE LIFETIME EXTENT");
++#endif
+     if(!kui_vmu_native_program_extent((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+        exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&program_bytes)) native_report(2u,13u);
+     if(program_bytes!=exec_bytes) retail_display_line("VERIFIED RECLAIMED BOOTSTRAP SUFFIX");
+     exec_bytes=(uint32_t)program_bytes;
+ #if KUI_VMU_NATIVE_CACHE_PROBE
++#if KUI_NATIVE_STAGE_FAST_SCAN
++    retail_display_line("VERIFYING NATIVE CACHE AND IMAGE SHA256");
++#endif
+     bool mapping_cached=native_resolution_replay();
+     if(mapping_cached) retail_display_line("USING VERIFIED NATIVE MAPPING CACHE");
+     else {
+@@ -216,6 +222,9 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
+     }
+ #endif
+     code_sha(native_heap_code_sha);
++#if KUI_NATIVE_STAGE_FAST_SCAN
++    retail_display_line("NATIVE DISCOVERY COMPLETE - ARMING HOOK");
++#endif
+     volatile struct kui_vmu_observe_boot_control *c=control();
+     for(unsigned i=0;i<sizeof(*c)/4u;i++)
+         if(((volatile uint32_t *)c)[i]) native_report(2u,KUI_VMU_OBSERVE_LOW_CONTROL+4u*i);
+diff --git a/src/loader/vmu_native_reader_capture.inc b/src/loader/vmu_native_reader_capture.inc
+index addf906..55e606f 100644
+--- a/src/loader/vmu_native_reader_capture.inc
++++ b/src/loader/vmu_native_reader_capture.inc
+@@ -32,7 +32,27 @@ __asm__(".global __kui_native_cooperative_reader\n.set __kui_native_cooperative_
+ static struct {
+     uint32_t calls,blocks,busy,faults;
+     uint32_t max_lba,max_count;
++#if KUI_NATIVE_TIMED_PUMP
++    uint32_t opportunities,expired,clock_bad,max_ticks;
++#endif
+ } reader_cooperative;
++#if KUI_NATIVE_TIMED_PUMP
++__asm__(".global __kui_native_timed_reader\n.set __kui_native_timed_reader,1\n");
++#define READER_WINDOW_TICKS 586u /* 0.75008 ms in the admitted profile. */
++#define READER_WINDOW_VISITS 64u /* Also stops if the sampled timer freezes. */
++static void __attribute__((noipa)) reader_window_clock(struct kui_vmu_native_profile_sample *s) {
++#ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
++    extern void kui_native_timed_test_clock(struct kui_vmu_native_profile_sample *);
++    kui_native_timed_test_clock(s);
++#else
++    s->frqcr=*(volatile const uint16_t *)(uintptr_t)UINT32_C(0xffc00000);
++    s->tcor=*(volatile const uint32_t *)(uintptr_t)UINT32_C(0xffd80008);
++    s->tcr=*(volatile const uint16_t *)(uintptr_t)UINT32_C(0xffd80010);
++    s->tstr=*(volatile const uint8_t *)(uintptr_t)UINT32_C(0xffd80004);
++    s->counter=*(volatile const uint32_t *)(uintptr_t)UINT32_C(0xffd8000c);
++#endif
++}
++#endif
+ static void __attribute__((noipa)) reader_cooperative_service(void) {
+     /* Called only after successful, fully proved physical controller
+      * completion, after publication. It neither issues VMU packets nor
+@@ -42,20 +62,52 @@ static void __attribute__((noipa)) reader_cooperative_service(void) {
+     kui_retail_async_region_type *r=reader_capture_region();
+     if(!r || !r->engine.active || durable_card.inflight || durable_card.handling) return;
+     uint32_t before=r->engine.stats.irq_blocks;
+-    ++reader_cooperative.calls;
++#if KUI_NATIVE_TIMED_PUMP
++    struct kui_vmu_native_profile_sample begin,end;
++    reader_window_clock(&begin);
++    bool clock_ok=kui_vmu_native_profile_sample_valid(&begin);
++    ++reader_cooperative.opportunities;
++    if(!clock_ok)++reader_cooperative.clock_bad;
++#endif
+ #ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+     extern uint32_t kui_native_cooperative_test_vbr(void);
+     extern uint16_t kui_native_cooperative_test_iprb(void);
+     extern void kui_native_cooperative_test_restore(uint32_t,uint16_t);
+     uint32_t caller_vbr=kui_native_cooperative_test_vbr();
+     uint16_t caller_iprb=kui_native_cooperative_test_iprb();
+-    extern int kui_native_cooperative_test_visit(void);
+-    int result=kui_native_cooperative_test_visit();
+ #else
+     uint32_t caller_vbr;__asm__ volatile("stc vbr,%0":"=r"(caller_vbr)::"memory");
+     uint16_t caller_iprb=*(volatile const uint16_t *)(uintptr_t)UINT32_C(0xffd00008);
+     int (*visit)(kui_vmu_sd_transaction,void *)=(void *)(uintptr_t)config.sd_lease;
+-    int result=visit(NULL,(void *)(uintptr_t)KUI_RETAIL_NATIVE_PUMP_COOKIE);
++#endif
++    int result;
++#if KUI_NATIVE_TIMED_PUMP
++    for(unsigned attempt=0u;;++attempt) {
++#endif
++        ++reader_cooperative.calls;
++#ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
++        extern int kui_native_cooperative_test_visit(void);
++        result=kui_native_cooperative_test_visit();
++#else
++        result=visit(NULL,(void *)(uintptr_t)KUI_RETAIL_NATIVE_PUMP_COOKIE);
++#endif
++#if KUI_NATIVE_TIMED_PUMP
++        /* Stop after the first visit that delivers data: each low visit
++         * remains capped at two blocks, so the whole window is too. No
++         * second wait is hidden behind a successful publication. */
++        if(result!=KUI_VMU_SD_LEASE_OK || !clock_ok)break;
++        reader_window_clock(&end);
++        uint32_t elapsed=begin.counter-end.counter;
++        if(!kui_vmu_native_profile_sample_valid(&end) ||
++           elapsed>KUI_VMU_NATIVE_PROFILE_MAX_INTERVAL) {
++            ++reader_cooperative.clock_bad;break;
++        }
++        if(elapsed>reader_cooperative.max_ticks)reader_cooperative.max_ticks=elapsed;
++        if(r->engine.stats.irq_blocks!=before || !r->engine.active)break;
++        if(elapsed>=READER_WINDOW_TICKS || attempt+1u>=READER_WINDOW_VISITS) {
++            ++reader_cooperative.expired;break;
++        }
++    }
+ #endif
+     /* The original SDK handler must resume with its own vectors and SCI
+      * field, as on the reader's existing releasing entries. Its pending
+@@ -171,8 +223,14 @@ static void reader_capture_report(const struct retail_display_state *display) {
+ #else
+     retail_display_line("CALL AND IRQ ARE DELIVERY VISIT TIMES");
+ #endif
++#if KUI_NATIVE_TIMED_PUMP
++    retail_display_values("WINDOWS EXPIRED CLOCK BAD MAX TICKS",(uint32_t[4]){
++        reader_cooperative.opportunities,reader_cooperative.expired,
++        reader_cooperative.clock_bad,reader_cooperative.max_ticks},4u);
++#else
+     retail_display_line("GAP IS BETWEEN MAPLE COMPLETION SAMPLES");
+     retail_display_line("BAD CLOCK MEANS DO NOT CONVERT TO TIME");
++#endif
+     retail_display_line("NEXT TWO PAGES KEEP THE FOUR LONGEST GAPS");
+     retail_display_pause(300u);
+     for(unsigned first=0u;first<reader_capture.top_count;first+=2u) {
+diff --git a/tests/test_vmu_native_cooperative_worker.c b/tests/test_vmu_native_cooperative_worker.c
+index 9197cdd..a335fda 100644
+--- a/tests/test_vmu_native_cooperative_worker.c
++++ b/tests/test_vmu_native_cooperative_worker.c
+@@ -13,6 +13,13 @@ static int pump_result;
+ static uint32_t test_vbr=UINT32_C(0x8c00f400);
+ static uint16_t test_iprb=0xa500u;
+ static unsigned restorations;
++#if KUI_NATIVE_TIMED_PUMP
++static unsigned pump_ready_after,window_clock_step=10u;
++static bool window_changes_clock;
++void kui_native_timed_test_clock(struct kui_vmu_native_profile_sample *s) {
++    *s=test_clock;test_clock.counter-=window_clock_step;
++}
++#endif
+ uint32_t kui_native_cooperative_test_vbr(void) {return test_vbr;}
+ uint16_t kui_native_cooperative_test_iprb(void) {return test_iprb;}
+ void kui_native_cooperative_test_restore(uint32_t vbr,uint16_t iprb) {
+@@ -28,6 +35,10 @@ int kui_native_cooperative_test_visit(void) {
+     CHECK((live_sr&0xf0u)==0xf0u);
+     ++pump_visits;
+     test_vbr=UINT32_C(0x8c6ff000);test_iprb=0xa510u;
++#if KUI_NATIVE_TIMED_PUMP
++    if(window_changes_clock)test_clock.tstr=0u;
++    if(pump_visits>=pump_ready_after)
++#endif
+     if(!pump_result)observed_region.engine.stats.irq_blocks+=2u;
+     return pump_result;
+ }
+@@ -63,6 +74,38 @@ int main(void) {
+     diagnostic_pair(false);
+     CHECK(reader_capture.call_max==500000u && reader_cooperative.max_lba==56789u && reader_cooperative.max_count==128u);
+     CHECK(reader_capture.previous.irq_blocks==observed_region.engine.stats.irq_blocks-reader_cooperative.blocks);
++#if KUI_NATIVE_TIMED_PUMP
++    /* A receiver that is still pending on the first two opportunities
++     * must deliver in the same bounded window without another game call. */
++    diagnostic_setup();diagnostic_pair(false);observed_region.engine.active=1u;
++    pump_result=0;unsigned old=pump_visits,restored=restorations;
++    window_clock_step=20u;pump_ready_after=old+3u;
++    reader_capture_start();reader_cooperative_service();
++    CHECK(pump_visits==old+3u && restorations==restored+1u);
++    CHECK(reader_cooperative.calls==3u && reader_cooperative.blocks==2u && !reader_cooperative.expired);
++    CHECK(reader_cooperative.opportunities==1u && !reader_cooperative.clock_bad);
++    /* A never-ready receiver ends at the read-only deadline. */
++    old=pump_visits;pump_ready_after=UINT32_MAX;window_clock_step=300u;
++    reader_capture_start();reader_cooperative_service();
++    CHECK(pump_visits==old+2u && reader_cooperative.expired==1u);
++    CHECK(reader_cooperative.max_ticks==600u && !reader_cooperative.blocks);
++    /* An unsupported clock gets one ordinary nonblocking visit. */
++    old=pump_visits;test_clock.tstr=0u;
++    reader_capture_start();reader_cooperative_service();
++    CHECK(pump_visits==old+1u && reader_cooperative.clock_bad==1u && !reader_cooperative.expired);
++    /* An unchanged/frozen counter cannot make this an infinite loop. */
++    test_clock.tstr=1u;window_clock_step=0u;old=pump_visits;
++    reader_capture_start();reader_cooperative_service();
++    CHECK(pump_visits==old+READER_WINDOW_VISITS && reader_cooperative.expired==1u);
++    /* Down-counter wrap remains admitted; a profile change aborts. */
++    test_clock.counter=5u;window_clock_step=20u;old=pump_visits;pump_ready_after=old+3u;
++    reader_capture_start();reader_cooperative_service();
++    CHECK(pump_visits==old+3u && reader_cooperative.blocks==2u && !reader_cooperative.clock_bad);
++    old=pump_visits;pump_ready_after=UINT32_MAX;window_changes_clock=true;
++    reader_capture_start();reader_cooperative_service();
++    CHECK(pump_visits==old+1u && reader_cooperative.clock_bad==1u);
++    puts("timed reader: pending-then-ready, deadline, invalid/changed/frozen clocks, wrap and two-block window bound passed");
++#endif
+     puts("cooperative worker: original save/ownership suite, post-completion pump, busy/storage exclusions and request timing passed");
+     return 0;
+ }
+diff --git a/tests/test_vmu_native_program.c b/tests/test_vmu_native_program.c
+index 1f97933..2422890 100644
+--- a/tests/test_vmu_native_program.c
++++ b/tests/test_vmu_native_program.c
+@@ -105,6 +105,15 @@ static void actual(const char *path) {
+     CHECK(fread(p,1,n,f)==n);CHECK(!fclose(f));memcpy(original,p,n);
+     size_t prefix=0;CHECK(kui_vmu_native_program_extent(p,n,load,&prefix));
+     CHECK(prefix==n || n-prefix==0x8000u);CHECK(!memcmp(p,original,n));
++    /* The fast aligned decoder must retain the exact byte fallback at
++     * every host alignment, with no read outside the supplied file. */
++    uint8_t *shifted=malloc(n+8u);CHECK(shifted);
++    for(unsigned offset=0u;offset<8u;offset++) {
++        memcpy(shifted+offset,original,n);size_t same=0u;
++        CHECK(kui_vmu_native_program_extent(shifted+offset,n,load,&same));
++        CHECK(same==prefix && !memcmp(shifted+offset,original,n));
++    }
++    free(shifted);
+     if(prefix!=n) normalized_mutations(p,original,n,prefix);
+     printf("  Program extent: %s source=%zu program=%zu\n",path,n,prefix);
+     free(original);free(p);
+diff --git a/tools/check_vmu_native_persistent.py b/tools/check_vmu_native_persistent.py
+index e468856..8899d12 100644
+--- a/tools/check_vmu_native_persistent.py
++++ b/tools/check_vmu_native_persistent.py
+@@ -144,6 +144,19 @@ COOPERATIVE_PREPARED_PINS = {
+  '_reader_cooperative_service': ('bea9cb6d7bc3577b9bfe2ee4ae7072083c945c0cbc7b27fad426e9b9be38667e', 200),
+ }
+ 
++TIMED_PREPARED_PINS = {
++ '_diagnostic_complete': ('ee4030db7c1ba544f3b94174f26f720a5dbb4dd068fa783cb89d762570aafa5c', 1660),
++ '_transfer_context_valid': ('c0643890f7423a7d2dc3a3978c063bb51431296ee2fd3527d013acb9edea1c4c', 1236),
++ '_kui_vmu_native_runtime_fault': ('46ca6d85e1e795284808228ae2190599b518254284aec54cb6dc5e447bed5600', 332),
++ '.rodata': ('8abb79edefa93fc768da07069005c8668970eb0fa235e5b4944e0ce00cd4f6b0', 4396),
++ '_kui_vmu_native_trace_report': ('72e77855533038e2b36eaffe49c3c30b4849b66a9167db950db180e89111587f', 1120),
++ '_trace_history': ('508ed02675ed370b486988d3f8494a5258a55cf393c73f501abb728d7416309c', 164),
++ '_report': ('d3041ea663d14edc888423ca13380461c4e86ba7f6f450f6dfdd58461504d656', 440),
++ '_trace_packets': ('e3e6dc04111ec2dceb78c4be4d100964a9cc3f5b81c99f1c8e266412a1b1ff33', 116),
++ '_reader_cooperative_service': ('ad10663ade0ab6bde347e07ca31df0691a8f2f1c7ae05c8bb2b6b3cd4e51465a', 380),
++ '_reader_window_clock': ('c416d56570b536794b03df8effe197babf770dd655364793aae27e1072304924', 60),
++}
++
+ 
+ def prepared_symbol_records(worker):
+     data, _, _, sections, _ = worker
+@@ -652,15 +665,20 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
+     if cooperative is not None:
+         require(stall_marker and cooperative==(1,0,0,0xfff1),'invalid cooperative reader marker')
+         require(COOPERATIVE_PREPARED_PINS,'missing reviewed cooperative reader pins')
++    timed=worker[4].get('__kui_native_timed_reader')
++    if timed is not None:
++        require(cooperative and timed==(1,0,0,0xfff1),'invalid timed reader marker')
++        require(TIMED_PREPARED_PINS,'missing reviewed timed reader pins')
+     pins={**PREPARED_PINS,**(STALL_PREPARED_PINS if stall_marker else {}),
+-          **(COOPERATIVE_PREPARED_PINS if cooperative else {})}
++          **(COOPERATIVE_PREPARED_PINS if cooperative else {}),
++          **(TIMED_PREPARED_PINS if timed else {})}
+     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
+                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
+                        ("_protected_ranges", 512), ("_protected_count", 4),
+                        ("_controller_pair", 188), ("_diagnostic_phase", 976), ("_diagnostic", 144)]
+     if FAULT_STATE in worker[4]:objects.append((FAULT_STATE,32))
+     if stall_marker:objects.append(('_reader_capture',508))
+-    if cooperative:objects.append(('_reader_cooperative',24))
++    if cooperative:objects.append(('_reader_cooperative',40 if timed else 24))
+     for name,size in objects:
+         address, actual, kind, owner = worker[4][name]
+         section = worker[3][owner]
+@@ -2399,6 +2417,10 @@ def check(directory, *, self_test=False, trace_startup=None):
+     require(bool(cooperative)==bool(low_cooperative),'cooperative reader worker/resident mismatch')
+     if cooperative:
+         require(cooperative==low_cooperative==(1,0,0,0xfff1),'invalid paired cooperative reader markers')
++    timed=worker[4].get('__kui_native_timed_reader')
++    low_timed=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_timed_resident')
++    require(bool(timed)==bool(low_timed),'timed reader worker/resident mismatch')
++    if timed:require(cooperative and timed==low_timed==(1,0,0,0xfff1),'invalid paired timed reader markers')
+     prepared_lifetime = check_prepared_lifetime(directory, worker, binary, wire, self_test, build=base["runtime"]["build"])
+     relocations=check_worker_pointer_aliases(wire,policy,fault_capture,coherence)
+ 
+@@ -2464,6 +2486,10 @@ def check(directory, *, self_test=False, trace_startup=None):
+                   "pump_blocks_per_visit": 2 if cooperative else 0,
+                   "foreground_catchup_changed": False,"service_after_physical_controller_proof": bool(cooperative),
+                   "completed_request_timing": bool(cooperative),"console_performance_verified": False},
++              "timed_reader": {"enabled":bool(timed),"window_ticks":586 if timed else 0,
++                  "window_max_visits":64 if timed else 0,"blocks_per_window_max":2 if timed else 0,
++                  "read_only_clock_admission":bool(timed),"invalid_clock_single_visit":bool(timed),
++                  "checks_deadline_between_visits":bool(timed),"hard_elapsed_deadline":False},
+               "failure_only_gateways": runtime_fault,
+               "private_stack_guard": stack_guard,
+               "compiled_owner_reader": compiled_reader,
+diff --git a/tools/package_vmu_native_persistent.py b/tools/package_vmu_native_persistent.py
+index 0d59e2e..0b59027 100644
+--- a/tools/package_vmu_native_persistent.py
++++ b/tools/package_vmu_native_persistent.py
+@@ -75,7 +75,7 @@ def package(build,guide='broader',trace_startup=None):
+     commit=git('rev-parse','HEAD');revision=commit[:12]
+     if git('status','--porcelain'):
+         raise ValueError('Commit source changes before packaging')
+-    if guide in ('evolution-trace','a2-background','hybrid','stall','cooperative') and trace_startup is None:
++    if guide in ('evolution-trace','a2-background','hybrid','stall','cooperative','timed') and trace_startup is None:
+         raise ValueError('This package requires --trace-startup with the exact original executable')
+     graphs=list(build.rglob('*.ci'))
+     if not graphs or any(not closed_callgraph(path.read_text()) for path in graphs):
+@@ -90,6 +90,9 @@ def package(build,guide='broader',trace_startup=None):
+         raise ValueError('Requires a fresh build from the current clean source commit')
+     module=(build/'retail-maple-observe.kui').read_bytes()
+     stage_data=(build/'stage.elf').read_bytes();stage=inspect_elf(stage_data,0x8ce00000,0x8cfe0000)
++    if guide=='timed' and (not report.get('timed_reader',{}).get('enabled') or
++                          stage['symbols'].get('__kui_native_stage_fast_scan')!=1):
++        raise ValueError('Timed package requires the paired timed reader and stage fast-scan build')
+     entry=inspect_elf((build/'entry.elf').read_bytes(),ADDRESS,0x8c112000)
+     template=template_profile()
+     address,_=readonly_blob(stage_data,stage,'__vmu_sd_profile_blob_start',
+@@ -125,7 +128,7 @@ def package(build,guide='broader',trace_startup=None):
+                      'vmu-native-evolution-fault-test.md','vmu-native-evolution-isolation-test.md',
+                      'vmu-native-evolution-hooks-test.md','vmu-native-evolution-trace-test.md'):
+             extra['docs/'+name]=(root/'docs'/name).read_bytes()
+-        if guide in ('a2-background','hybrid','stall','cooperative'):
++        if guide in ('a2-background','hybrid','stall','cooperative','timed'):
+             extra['docs/vmu-native-a2-background-test.md']=(root/'docs/vmu-native-a2-background-test.md').read_bytes()
+             extra['docs/evidence/native-a2-background-2026-10-24.json']=(root/'docs/evidence/native-a2-background-2026-10-24.json').read_bytes()
+             extra['docs/evidence/native-retry-integration-2026-10-24.json']=(root/'docs/evidence/native-retry-integration-2026-10-24.json').read_bytes()
+@@ -139,6 +142,8 @@ def package(build,guide='broader',trace_startup=None):
+                 extra['docs/'+name]=(root/'docs'/name).read_bytes()
+             extra['docs/evidence/native-cooperative-2026-10-24.json']=(root/'docs/evidence/native-cooperative-2026-10-24.json').read_bytes()
+             extra['collect-native-startup.py']=(root/'tools/kui-native-startup-bundle.py').read_bytes()
++        if guide=='timed':
++            extra['docs/evidence/native-timed-reader-2026-10-24.json']=(root/'docs/evidence/native-timed-reader-2026-10-24.json').read_bytes()
+         for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json',
+                      'native-performance-acceptance-2026-10-23.json','native-uniform-root-family-2026-10-23.json',
+                      'native-recv-ownership-2026-10-23.json','native-older-sdk-2026-10-23.json',
+@@ -178,7 +183,9 @@ def package(build,guide='broader',trace_startup=None):
+         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
+         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
+             template_sha256=sha(template)),
+-        compatibility_claim=('Bounded cooperative native reader with complete-request timing; console performance remains unverified'
++        compatibility_claim=('Clock-admitted bounded reader service window and faster executable-extent scanning; console performance remains unverified'
++            if guide=='timed' else
++            'Bounded cooperative native reader with complete-request timing; console performance remains unverified'
+             if guide=='cooperative' else
+             'Standard native reader and cold SDK-family discovery; universal virtual-A2 compatibility remains unverified'
+             if guide=='open' else
+@@ -231,7 +238,7 @@ def package(build,guide='broader',trace_startup=None):
+ 
+ if __name__=='__main__':
+     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('build',type=Path)
+-    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall','cooperative','open'),default='broader')
++    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall','cooperative','open','timed'),default='broader')
+     parser.add_argument('--trace-startup',type=Path)
+     try:
+         args=parser.parse_args();package(args.build,args.guide,args.trace_startup)
+-- 
+2.51.1
+

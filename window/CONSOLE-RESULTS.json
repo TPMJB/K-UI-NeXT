@@ -1,0 +1,155 @@
+{
+  "schema": "kui.native.cooperative.console.v1",
+  "build": "f518592088f9",
+  "date": "2026-10-24",
+  "owner_report": {
+    "fmv": "slightly better",
+    "movement": "same jarring lag every few seconds",
+    "startup": "bulk of remaining wait follows ENTIRE RESIDENT VERIFIED"
+  },
+  "samples": 1200,
+  "clock": {
+    "nominal_hz": 781250,
+    "bad": 0,
+    "wall_ticks": 14739236,
+    "ccr_first": "00000105",
+    "ccr_last": "00000105",
+    "instruction_cache_off_samples": 0
+  },
+  "reader": {
+    "gap_max_ticks": 18333,
+    "read_max_ticks": 1616572,
+    "read_max_seconds": 2.06921216,
+    "age_max_ticks": 1150520,
+    "age_max_seconds": 1.4726656,
+    "irq_blocks": 42,
+    "foreground_blocks": 2222,
+    "pio_blocks": 0,
+    "crc_errors": 0,
+    "token_errors": 0,
+    "foreign": 0,
+    "repairs": 48,
+    "overruns": 0,
+    "deferred": 48,
+    "pump_visits": 56,
+    "pump_blocks": 0,
+    "pump_busy": 0,
+    "pump_faults": 0,
+    "longest_completed_read_lba": 321538,
+    "longest_completed_read_sectors": 67
+  },
+  "vmu": {
+    "submit_calls": 1200,
+    "complete_calls": 1200,
+    "submit_max_ticks": 52,
+    "complete_max_ticks": 91,
+    "free_calls": 0,
+    "storage_calls": 0,
+    "commits": 0,
+    "fast_submits": 1200,
+    "fast_completes": 1200
+  },
+  "longest_poll_gaps": [
+    {
+      "index": 0,
+      "gap_ticks": 18333,
+      "read_max_ticks": 0,
+      "age_ticks": 23618,
+      "pending": 1,
+      "irq_blocks": 0,
+      "foreground_blocks": 40,
+      "pio_blocks": 0,
+      "crc_errors": 0,
+      "token_errors": 0,
+      "function": 1,
+      "command": 17,
+      "token": 2227,
+      "previous_token": 2227,
+      "sd_block": 1602625
+    },
+    {
+      "index": 1,
+      "gap_ticks": 18294,
+      "read_max_ticks": 0,
+      "age_ticks": 23581,
+      "pending": 1,
+      "irq_blocks": 0,
+      "foreground_blocks": 40,
+      "pio_blocks": 0,
+      "crc_errors": 0,
+      "token_errors": 0,
+      "function": 1,
+      "command": 17,
+      "token": 1789,
+      "previous_token": 1789,
+      "sd_block": 1599906
+    },
+    {
+      "index": 2,
+      "gap_ticks": 18272,
+      "read_max_ticks": 0,
+      "age_ticks": 23559,
+      "pending": 1,
+      "irq_blocks": 0,
+      "foreground_blocks": 40,
+      "pio_blocks": 0,
+      "crc_errors": 0,
+      "token_errors": 0,
+      "function": 1,
+      "command": 17,
+      "token": 1935,
+      "previous_token": 1935,
+      "sd_block": 1600471
+    },
+    {
+      "index": 3,
+      "gap_ticks": 18235,
+      "read_max_ticks": 0,
+      "age_ticks": 22753,
+      "pending": 1,
+      "irq_blocks": 0,
+      "foreground_blocks": 40,
+      "pio_blocks": 0,
+      "crc_errors": 0,
+      "token_errors": 0,
+      "function": 1,
+      "command": 17,
+      "token": 2081,
+      "previous_token": 2081,
+      "sd_block": 1601036
+    }
+  ],
+  "photos": [
+    {
+      "name": "01-image-1792881726445.jpg",
+      "sha256": "261bde3504ad86091c3a572b62550ee1452f89cb8db6a9ef55267968cf917143"
+    },
+    {
+      "name": "02-image-1792881730335.jpg",
+      "sha256": "36508aea019caa261d6bb87134321f64dd11d41d195d83ab7e3d1ed881f71862"
+    },
+    {
+      "name": "03-image-1792881735802.jpg",
+      "sha256": "b6d955aade12148579d0715a3247e9c8ba24ba317e2e34302ee6942aa4b7c244"
+    },
+    {
+      "name": "04-image-1792881740868.jpg",
+      "sha256": "6b373f0ba52cb7be517f62f99292a793f40f805fd46da4b8dc73989cfe724a2e"
+    },
+    {
+      "name": "05-image-1792881746053.jpg",
+      "sha256": "ae336c9461ed3e6e2fca1fc1f4329c4793fd39cd791184153a6d33c5a4b50bde"
+    },
+    {
+      "name": "06-image-1792881750642.jpg",
+      "sha256": "34dd31bf8a3a818875442387f46623c025831abef6af1dff7b7d1914dc2ab627"
+    }
+  ],
+  "distinct_pages": 5,
+  "last_photo": "blurred duplicate of first longest-gap page",
+  "interpretation": {
+    "observed": "A complete 67-sector data read took about2.07s while sampled controller polling continued; the added cooperative path delivered no blocks.",
+    "limits": "No exact synchronization to the visible pause; the capture does not identify which IRQ/cooperative visits deferred repairs or why each zero-output pump returned.",
+    "root_cause_established": false
+  }
+}
