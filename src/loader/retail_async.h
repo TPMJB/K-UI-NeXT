@@ -8,6 +8,7 @@
 #include "sci_stream.h"
 #include "sci_sd_bus.h"
 #include "kui/armada_ce_vmu_sd_loan.h"
+#include "kui/vmu_native_async_loan.h"
 #include <stddef.h>
 
 /* Background game reader for SCI microSD. A read REQUEST starts a CMD18
@@ -80,6 +81,10 @@ struct kui_retail_async {
     uint32_t token, destination, since;
     uint32_t active, failed, opened, retries, in_irq, hooked, target;
     struct kui_retail_async_stats stats;
+#if KUI_VMU_NATIVE_BACKGROUND
+    /* Fits the unused native vector gap; release-frame offsets stay fixed. */
+    uint32_t native_loan_state;
+#endif
 #ifdef KUI_RETAIL_CE
     /* The current piece: request output bytes [piece_begin, piece_begin +
      * piece_bytes) go to guest address piece_destination (or, from
@@ -165,7 +170,15 @@ _Static_assert(offsetof(struct kui_retail_async, release) == 0 &&
 _Static_assert(sizeof(struct kui_retail_async_shared) <= 0x1e0u, "shared fits gap B");
 #endif
 #endif
+typedef struct kui_retail_async_region kui_retail_async_region_type;
+#if KUI_VMU_NATIVE_BACKGROUND
+/* The stage supplies the initial protected workspace; the native allocator
+ * binder moves the complete idle region into the already owned lease tail. */
+extern kui_retail_async_region_type *kui_retail_async_region_storage;
+#define kui_retail_async_region (*kui_retail_async_region_storage)
+#else
 extern struct kui_retail_async_region kui_retail_async_region;
+#endif
 
 /* Once, at resident init: install nothing yet, copy the vectors; the
  * manifest's reader chooses how long GD calls may wait for blocks. */

@@ -230,7 +230,9 @@ class ArmRoute(Machine):
         self.program_bytes=self.source_bytes-(0x8000 if normalized else 0)
         self.mem[self.exec_address] = self.source_bytes
         manifest = self.symbols["_manifest"][0]
-        self.mem.update({manifest + 44: 1, manifest + 48: 0, manifest + 52: 0})
+        self.mem.update({manifest + 44: 1,
+                         manifest + 48: 1 if '_native_background_boot_region' in self.symbols else 0,
+                         manifest + 52: 0})
         for name, count in (("_native_heap", 18), ("_native_call", 5), ("_native_driver", 26)):
             self.mem.update({self.symbols[name][0] + 4 * i: 0 for i in range(count)})
         heap, call = self.symbols["_native_heap"][0], self.symbols["_native_call"][0]
@@ -353,7 +355,8 @@ class HeapHook(Machine):
                          self.cell: self.initializer, self.cell + 4: self.r[4], self.cell + 8: self.r[5],
                          self.cell + 12: self.pr & 0x1FFFFFFF})
         # Include the local publisher helper immediately after its typed caller.
-        payload = inspect_elf(resident[0], 0x8C004000, 0x8C007800)["payload"]
+        payload = inspect_elf(resident[0], 0x8C004000,
+            0x8c007ba0 if '_kui_vmu_native_background_manifest_bind' in resident[4] else 0x8C007800)["payload"]
         count = len(self.blob)
         self.blob += payload[self.base - 0x8C004000 + count:self.base - 0x8C004000 + count + 28]
         self.post = None
@@ -413,7 +416,11 @@ def check(stage, resident, *, worker=None, self_test=False):
         require(STACK_SYMBOL not in worker[4] and HELPER not in worker[4],
                 "temporary installer stack/helper retained in gameplay worker")
     wrappers = routes = hooks = refusals = 0
-    modes = (0, 1, 2, 3, 4, 5, 6) if "_native_runtime_mode" in stage[4] else (0,)
+    background='_kui_vmu_native_background_manifest_bind' in resident[4]
+    require(background==('_native_background_boot_region' in stage[4]),'Installer stage/reader profile mismatch')
+    # The separate actual mode-helper proof covers Background's refused1/3
+    # before this relay can be entered. Exercise all reachable live modes.
+    modes = ((0,2,4,5,6) if background else (0,1,2,3,4,5,6)) if "_native_runtime_mode" in stage[4] else (0,)
     for seed in range(12):
         for mask in range(16):
             for outcome in (False, True):

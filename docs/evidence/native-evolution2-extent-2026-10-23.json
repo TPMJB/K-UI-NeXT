@@ -100,5 +100,14 @@
     "A zero run alone cannot authorize a DMA buffer or discarded footer. Original SDK derivation and full independent provenance are mandatory.",
     "No original executable, IP, tracks or save bytes are included.",
     "Final package artifact report and release replay identify the actual release module; development counts above are explicitly not hardware results."
-  ]
+  ],
+  "console_status_update": {
+    "date": "2026-10-24",
+    "build": "df035a8cae47",
+    "evolution2": "Owner reports the corrected virtual card/save-load path working; remaining slowdown is still reported.",
+    "virtual_slot": "A1",
+    "power_cycle_explicitly_confirmed": false,
+    "new_a2_background_package_console_verified": false,
+    "evidence": "docs/vmu-hardware-observations.json: evolution2_native_virtual_card_save_load_reported"
+  }
 }

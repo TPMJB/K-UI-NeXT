@@ -5,6 +5,9 @@
 #include "kui/vmu_native_patch.h"
 #include "kui/vmu_native_worker.h"
 #include "kui/vmu_native_relocate.h"
+#if KUI_VMU_NATIVE_BACKGROUND
+#include "kui/vmu_native_background.h"
+#endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #include "vmu_native_evolution_fault_stage.inc"
 #endif
@@ -182,6 +185,34 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     cfg.low_terminal=KUI_VMU_OBSERVE_LOW_RETURN_HOOK;cfg.low_heap_hook=KUI_VMU_OBSERVE_LOW_HEAP_HOOK;
     cfg.exits=native_exits;
     cfg.diagnostics=native_runtime_diagnostics();
+#endif
+#if KUI_VMU_NATIVE_BACKGROUND
+    /* The last 64 KiB of this proved 192 KiB allocation is outside the worker's
+     * copied/zeroed 128 KiB span. Retain the validated 64-slot map there before
+     * the temporary stage can retire. Both aliases are checked by the low
+     * binder; every P1 line reaches RAM before the P2 copy and comparison. */
+    uint32_t map_address=load+KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES;
+    if(lease->lease_bytes!=KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES ||
+       !kui_vmu_native_background_map_address(lease->payload,map_address))
+        native_report(8u,0x48u);
+    for(uint32_t at=map_address;at<map_address+KUI_VMU_NATIVE_BACKGROUND_MAP_BYTES;at+=32u)
+        __asm__ volatile("ocbp @%0"::"r"(at):"memory");
+    memcpy((void *)(uintptr_t)(map_address+UINT32_C(0x20000000)),&manifest,
+        KUI_VMU_NATIVE_BACKGROUND_MAP_BYTES);
+    uint32_t region_address=load+KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET;
+    if(!kui_vmu_native_background_region_address(lease->payload,region_address))
+        native_report(8u,0x4au);
+    for(uint32_t at=region_address;at<region_address+KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES;at+=32u)
+        __asm__ volatile("ocbp @%0"::"r"(at):"memory");
+    memcpy((void *)(uintptr_t)(region_address+UINT32_C(0x20000000)),native_background_boot_region,
+        KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES);
+    /* Publish vector bytes and invalidate old instruction tags before the
+     * low region pointer can change. The binder subsequently changes only
+     * the listed data pointers in the gaps between these vector entries. */
+    kui_native_passive_publish(region_address,region_address+KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES);
+    int (*bind_map)(const struct kui_retail_manifest *,const struct kui_retail_manifest *)=
+        (void *)(uintptr_t)KUI_VMU_NATIVE_BACKGROUND_BIND;
+    if(bind_map(&manifest,(const void *)(uintptr_t)map_address)!=1) native_report(8u,0x49u);
 #endif
     retail_display_restore(&display);retail_display_line("RELOCATING PASSIVE MAPLE WORKER");
     for(uint32_t at=load;at<load+span;at+=32u)

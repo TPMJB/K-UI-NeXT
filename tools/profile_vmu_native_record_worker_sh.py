@@ -3,7 +3,7 @@
 """Replay an NVR-resolved original SDK with the actual linked native worker C.
 
 All game addresses come from a freshly verified NVR and its original image.
-The supported replay shape is the reviewed uniform SDK/contiguous RX family.
+The supported replay shapes are the reviewed uniform and explicit-slot SDKs.
 This is flat coherent RAM and synchronous Maple DMA, not cache, IRQ scheduling,
 cycle timing, a game mainloop, FMV or storage-transport evidence. No original
 executable bytes are embedded in this tool or its report.
@@ -26,6 +26,8 @@ from sh4_delay_slots import validate_delay_slot
 OWNER_STACK = 0x8c00e000
 RETURN = 0xdeadbeee
 MDSTAR, MDST = 0xa05f6c04, 0xa05f6c18
+VIRTUAL_ADDRESS = 2
+MEMCARD, LCD, CLOCK = 0x02000000, 0x04000000, 0x08000000
 
 
 def fresh_verify(startup, record):
@@ -56,11 +58,15 @@ class Record:
         self.exits = struct.unpack_from('<12I', wire, 700)
         d, l = self.driver, self.layout
         assert d[:6] == (1, 104, 1, self.image_bytes, self.load, 7)
-        assert l[0] in (1,2) and l[1:3] == (440,d[8]) and l[6] == 0 and l[59] == 1, 'Uniform RX replay schema'
+        assert (l[0] in (1,2) and l[1] == 440 and l[6] in (0,1) and
+                l[59] == (1 if l[6] == 0 else 12) and
+                (l[6] == 1 or l[2] == d[8])), 'Reviewed RX replay schema'
         assert self.heap_call[2] == self.heap_call[1] + 4
-        self.submit_hook, self.initializer = d[6], d[8]
+        self.submit_hook, self.initializer = d[6], l[2]
         self.gate, self.ready, self.consumer = d[15:17] + (d[14],)
         self.tx, self.rx = l[5] & 0x1fffffff, l[7] & 0x1fffffff
+        self.rx_slots = tuple(value & 0x1fffffff if value else 0 for value in l[8:56])
+        self.rx_ranges = tuple((address,address+1024) for address in self.rx_slots if address)
         # Exact family-relative reviewed submit prologue; no title addresses.
         self.submit_entry = self.submit_hook - 0x112
         assert self.half(self.submit_entry) == 0x2fe6
@@ -89,12 +95,14 @@ class Record:
             if self.half(pc + 2) != (0x400b | register << 8) or self.half(pc + 4) != 9:
                 continue
             try:
-                if self.literal(pc, register)[1] == self.submit_entry:
+                if self.literal(pc, register)[1] & 0x1fffffff == self.submit_entry & 0x1fffffff:
                     callers.append(pc)
             except AssertionError:
                 pass
         assert callers, 'No actual original submit caller fragment'
         self.submit_caller, self.submit_callers = min(callers), callers
+        caller_register = self.half(self.submit_caller) >> 8 & 15
+        self.submit_entry = self.literal(self.submit_caller,caller_register)[1]
 
     def bytes(self, address, count):
         offset = (address & 0x1fffffff) - (self.load & 0x1fffffff)
@@ -117,12 +125,14 @@ class Record:
 
 
 class RecordWorker(WorkerSH):
-    def __init__(self, startup, build, handoff, record):
+    def __init__(self, startup, build, handoff, record, physical_a1=False):
         self.record = record
         self.build = build
         self.build_inputs = {name:(build/name).read_bytes() for name in
                              ('native-worker.elf','native-worker.bin','native-worker.reloc')}
-        super().__init__(startup, build, handoff, cached_stack=True)
+        begin,count = record.heap_call[3:5]
+        worker_base = (begin+count-0x30000)&0x1fffffff|0xa0000000
+        super().__init__(startup, build, handoff, cached_stack=True,worker_base=worker_base)
         self.check_build_unchanged()
         assert self.block(record.load,len(record.source_image)) == record.source_image, 'Executed image must match verified bytes'
         self.original_image = record.image
@@ -130,6 +140,17 @@ class RecordWorker(WorkerSH):
         self.patch_ranges = []  # Generic instruction masking below uses NVR load.
         self.callback_contexts = []
         self.submit_callbacks = self.complete_callbacks = 0
+        self.physical_a1 = physical_a1
+        self.physical_a1_packets = 0
+        self.physical_a1_reply_ranges = []
+        self.physical_a1_memory = {}
+        self.physical_a1_write_phases = {}
+        self.physical_a1_lcd = bytes(192)
+
+    def rx_snapshot(self):
+        """Logical SDK slot order, retaining holes in explicit-slot layouts."""
+        return b''.join(self.block(address,1024) if address else bytes(1024)
+                        for address in self.record.rx_slots)
 
     def check_build_unchanged(self):
         assert all((self.build/name).read_bytes() == data for name,data in self.build_inputs.items()), 'Worker build changed during replay'
@@ -179,7 +200,7 @@ class RecordWorker(WorkerSH):
         raise AssertionError('Record replay exceeded instruction bound')
 
     def plain(self, op, pc):
-        if pc == self.record.submit_hook and not getattr(self, 'inside_worker', False):
+        if pc & 0x1fffffff == self.record.submit_hook & 0x1fffffff and not getattr(self, 'inside_worker', False):
             self.bridge_submit()
         n,m = op >> 8 & 15,op >> 4 & 15
         if op & 0xf00f == 0x300e:
@@ -201,7 +222,9 @@ class RecordWorker(WorkerSH):
 
     def read(self, address, count=4):
         if count == 2 and not getattr(self, 'inside_worker', False) and any(
-                lo <= address < address + count <= hi for lo, hi in self.original_ranges):
+                lo & 0x1fffffff <= address & 0x1fffffff and
+                (address & 0x1fffffff)+count <= (hi & 0x1fffffff)
+                for lo, hi in self.original_ranges):
             return int.from_bytes(self.record.bytes(address, count), 'little')
         return super().read(address, count)
 
@@ -248,7 +271,8 @@ class RecordWorker(WorkerSH):
         begin, count = r.heap_call[3:5]
         _, _, self.heap_initializer_instructions = SH.run(self, hw[6], [begin, count], OWNER_STACK)
         payload, _, self.heap_allocate_instructions = SH.run(self, hw[9], [0x30000], OWNER_STACK)
-        assert payload == 0x8cfd0000, 'Linked replay requires worker tail allocation'
+        assert payload & 0x1fffffff == self.worker_physical_low, 'Original allocator tail allocation'
+        self.actual_heap_payload = payload
         lease = [1, 116, 2, 1, *hw, begin, count, 0x30000, payload-32, payload,
                  0x1801, count//32-0x1801]
         runtime = [1,236,payload,0x30000,32,0x20000,0,0,0,0,0] + [0]*48
@@ -267,7 +291,7 @@ class RecordWorker(WorkerSH):
         for i in range(16):
             self.write(bottom+i*4, GUARD)
         self.arm_counts = self.worker('_kui_vmu_native_passive_arm', [CFG,0])
-        assert self.arm_counts['result'] == 0
+        assert self.arm_counts['result'] == 0, ('Worker arm refused',self.arm_counts['result'])
         exports = self.symbols['_kui_vmu_native_worker_exports'][0]
         hooks = [(r.submit_hook,self.read(exports+16)),(hw[10],self.read(exports+56)),
                  (hw[6],0x8c004200)] + [(a,0x8c004200) for a in r.exits[6:6+r.exits[5]]]
@@ -283,22 +307,28 @@ class RecordWorker(WorkerSH):
     def initialize_sdk(self):
         r = self.record
         wrapper = r.layout[3]
-        assert r.half(wrapper+36) >> 12 == 0xb
+        irq_call = wrapper+(36 if r.layout[6] == 0 else 40)
+        after_initializer = wrapper+(52 if r.layout[6] == 0 else 56)
+        assert r.half(irq_call) >> 12 == 0xb
         self.pc, self.pr, self.r[15] = wrapper, RETURN, OWNER_STACK
         self.sr = 0x60000060  # Explicit external entry input; wrapper masks it itself.
-        self.r[4], self.r[5] = r.layout[86], r.layout[62]
-        prefix = self.until(wrapper+36)
+        if r.layout[6] == 0:
+            self.r[4], self.r[5] = r.layout[86], r.layout[62]
+        else:
+            self.r[4:8] = [r.layout[61],r.layout[60],r.literal(r.layout[4]-4,7)[1],r.layout[59]]
+        prefix = self.until(irq_call)
         # IRQ-registration scaffolding is outside this bounded model. Execute
         # its actual delay-slot lock normalization store without the call.
-        slot = self.read(wrapper+38,2)
-        validate_delay_slot(slot,wrapper+36)
-        self.plain(slot,wrapper+38)
-        self.pc = wrapper+40
-        continuation = self.until(wrapper+52)
+        slot = self.read(irq_call+2,2)
+        validate_delay_slot(slot,irq_call)
+        self.plain(slot,irq_call+2)
+        self.pc = irq_call+4
+        continuation = self.until(after_initializer)
         self.owner_sr = self.sr
         state = self.symbols['_kui_vmu_native_sdk_coherence_state'][0]
         assert self.read(state+44) == 1
-        assert [int(event['address'],16) for event in self.flat_ocbp] == [r.driver[11],r.driver[11]+4]
+        lock_p1 = (r.driver[11]&0x1fffffff)|0x80000000
+        assert [int(event['address'],16) for event in self.flat_ocbp] == [lock_p1,lock_p1+4]
         assert all(int(event['pc'],16)&0xe0000000 == 0xa0000000 for event in self.flat_ocbp)
         self.coherence_installation.update(actual_gate_executed=True,successful_handoffs=1)
         assert self.read(r.driver[9]) == r.driver[10]
@@ -364,32 +394,87 @@ class RecordWorker(WorkerSH):
         assert 0x0c000000 <= source < 0x0d000000
         # The actual full C path may submit its private filtered physical chain.
         at,frames = source,[]
+        self.physical_a1_reply_ranges = []
         for _ in range(256):
             control = self.read(at); at += 4
             if control == 0x700:
                 continue
             rx,header = self.read(at),self.read(at+4)
             words = control & 255
+            payload = self.block(at+8,4*words)
             at += 8 + 4*words
             dest,command = header >> 8 & 255,header & 255
             port = dest >> 6
-            assert dest & 63 == 32 and command in (1,2,9)
+            assert dest & 63 == 32 or (self.physical_a1 and dest == 1), hex(header)
+            assert dest != VIRTUAL_ADDRESS, 'Virtual A2 must never reach physical Maple DMA'
             assert at <= source+0x3000
             response = MASK
-            if self.controllers & (1 << port):
+            if dest == 1:
+                assert command in (1,2,3,9,10,11,12,13,14),hex(header)
+                self.physical_a1_packets += 1
+                packet = self.physical_a1_response(header,payload)
+                self.store_block(rx,packet)
+                response = int.from_bytes(packet[:4],'little')
+                self.physical_a1_reply_ranges.append((rx,self.block(rx,1024)))
+            elif self.controllers & (1 << port):
+                assert command in (1,2,9)
                 size = 28 if command == 1 else 48 if command == 2 else 3
                 response = size << 24 | dest << 16 | port << 14 | (5 if command == 1 else 6 if command == 2 else 8)
+                if self.physical_a1 and port == 0:
+                    response |= 1 << 16
                 self.store_block(rx,bytes((size+1)*4)); self.write(rx+4,0x01000000)
                 if command == 9:
                     self.write(rx+8,MASK); self.write(rx+12,0x80808080)
             self.write(rx,response)
-            frames.append(dict(control=hex(control),rx=hex(rx),header=hex(header)))
+            frames.append(dict(control=hex(control),rx=hex(rx),header=hex(header),
+                               payload_bytes=len(payload),payload_sha256=hashlib.sha256(payload).hexdigest(),
+                               model_response=hex(response)))
             if control & 0x80000000:
                 break
         else:
             raise AssertionError('No LAST within DMA bound')
         self.mmio[MDST] = 0
         self.batch = dict(source=hex(source),frames=frames)
+
+    def physical_a1_response(self,header,payload):
+        """Authored physical VMU wire fixture, independent of virtual backend."""
+        command = header & 255
+        if command in (1,2):
+            assert not payload
+            words = 28 if command == 1 else 48
+            body = struct.pack('<I',MEMCARD|LCD|CLOCK)+bytes(4*words-4)
+            return struct.pack('<I',(words<<24)|(1<<16)|(5 if command == 1 else 6))+body
+        if command == 3:
+            assert not payload
+            return struct.pack('<I',(1<<16)|7)
+        assert len(payload) >= 4
+        function = int.from_bytes(payload[:4],'little')
+        if command == 9:
+            assert len(payload) == 4 and function in (MEMCARD,LCD,CLOCK)
+            body = payload+bytes(8)
+            return struct.pack('<I',(3<<24)|(1<<16)|8)+body
+        if command == 14:
+            assert (function == LCD and len(payload) == 196) or (function == CLOCK and len(payload) == 8)
+            if function == LCD:
+                self.physical_a1_lcd = payload[4:]
+            return struct.pack('<I',(1<<16)|7)
+        if command == 12 and function == LCD:
+            assert len(payload) == 200 and payload[4:8] == bytes(4)
+            self.physical_a1_lcd = payload[8:]
+            return struct.pack('<I',(1<<16)|7)
+        assert function == MEMCARD and len(payload) == (136 if command == 12 else 8)
+        if command == 10:
+            assert payload[4:] == bytes(4)
+            body = payload[:4]+bytes(24)
+            return struct.pack('<I',(7<<24)|(1<<16)|8)+body
+        if command == 11:
+            body = payload+self.physical_a1_memory.get(payload[4:],bytes(512))
+            return struct.pack('<I',(130<<24)|(1<<16)|8)+body
+        if command == 12:
+            # The fixture records each exact physical phase; it does not model
+            # physical flash timing or promise physical write durability.
+            self.physical_a1_write_phases[payload[4:8]] = payload[8:]
+        return struct.pack('<I',(1<<16)|7)
 
 
 def negative_cases(cpu):
@@ -416,6 +501,7 @@ def negative_cases(cpu):
         ('private_rx_unsupported_area',lambda c:c.write(pair+156,0xec000000)),
         ('private_rx_function_past_ram',lambda c:(c.write(pair+156,0x0cfffffc),c.write(0x0cfffffc,0x03200008))),
         ('physical_response_header',lambda c:c.write(rx,c.read(rx)^1)),
+        ('physical_a2_attached',lambda c:c.write(rx,c.read(rx)|(VIRTUAL_ADDRESS<<16))),
         ('live_bank_selector',lambda c:c.write(manager+0x10b4,c.read(manager+0x10b4)^1)),
         ('stack_guard',lambda c:c.write(stack,0))]
     results = []
@@ -424,16 +510,42 @@ def negative_cases(cpu):
         trial.memory = bytearray(cpu.memory); trial.mmio = dict(cpu.mmio); trial.r = cpu.r.copy()
         trial.writes = []; trial.mmio_reads = []; trial.mmio_writes = []
         mutate(trial); trial.writes = []
-        tx,reply = trial.block(r.tx,0x6000),trial.block(r.rx,0xc000)
+        tx,reply = trial.block(r.tx,0x6000),trial.rx_snapshot()
         try:
             trial.worker('_kui_vmu_native_passive_complete',[trial.frame_address])
         except AssertionError as error:
             assert str(error).startswith('Actual worker refused with code '),(name,str(error))
-            assert trial.block(r.tx,0x6000) == tx and trial.block(r.rx,0xc000) == reply,name
+            assert trial.block(r.tx,0x6000) == tx and trial.rx_snapshot() == reply,name
             writes = [(pc,a,n) for pc,a,_,n in trial.writes if
-                      r.tx <= a&0x1fffffff < r.tx+0x6000 or r.rx <= a&0x1fffffff < r.rx+0xc000]
+                      r.tx <= a&0x1fffffff < r.tx+0x6000 or any(
+                          lo <= a&0x1fffffff < hi for lo,hi in r.rx_ranges)]
             assert not writes,(name,writes)
             results.append(dict(case=name,refusal=str(error),tx_writes=0,parent_or_reply_writes=0))
+        else:
+            raise AssertionError('Actual linked worker accepted '+name)
+    return results
+
+
+def cold_target_cases(startup,build,handoff,record):
+    """Mutate only the proved initializer target before actual cold arm."""
+    pc = record.layout[3]+(46 if record.layout[6] else 42)
+    slot,original = record.literal(pc,3)
+    results = []
+    for name,target in [('initializer_target_unsupported_area',(original&0x1fffffff)|0x40000000),
+                        ('initializer_target_wrong_physical',original+2)]:
+        class MutatedTarget(RecordWorker):
+            def worker(self,name,args):
+                if name == '_kui_vmu_native_passive_arm':
+                    self.write(slot,target)
+                    self.before_arm = self.block(record.load,len(record.image))
+                return super().worker(name,args)
+        trial = MutatedTarget(startup,build,handoff,record)
+        try:
+            trial.prepare()
+        except AssertionError as error:
+            assert error.args == (('Worker arm refused',0xfffffffd),),(name,error.args)
+            assert trial.block(record.load,len(record.image)) == trial.before_arm,name
+            results.append(dict(case=name,result='0xfffffffd',executable_writes_after_mutation=0))
         else:
             raise AssertionError('Actual linked worker accepted '+name)
     return results
@@ -447,6 +559,8 @@ def main():
     parser.add_argument('--rounds',type=int,default=64)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--negative-cases',action='store_true')
+    parser.add_argument('--physical-a1',action='store_true',
+                        help='Attach an authored physical A1 memory/LCD/clock VMU wire fixture')
     args = parser.parse_args()
     if not 6 <= args.rounds <= 1000:
         parser.error('--rounds must be between 6 and 1000')
@@ -456,7 +570,7 @@ def main():
     record = Record(args.record.read_bytes(),image,source)
     assert args.startup.read_bytes() == record.source_image and args.record.read_bytes() == record.wire
     handoff = make_handoff()
-    cpu = RecordWorker(args.startup,args.build,handoff,record)
+    cpu = RecordWorker(args.startup,args.build,handoff,record,args.physical_a1)
     cpu.prepare()
     initializer = cpu.initialize_sdk()
     history = []
@@ -464,11 +578,13 @@ def main():
         submit = cpu.submit()
         pending = cpu.read(cpu.symbols['_controller_pair'][0])
         live_ready = cpu.read(cpu.symbols['_live_plan'][0]+4)
-        tx = cpu.block(record.tx,0x6000); rx = cpu.block(record.rx,0xc000)
+        tx = cpu.block(record.tx,0x6000); rx = cpu.rx_snapshot()
         wrapper,complete = cpu.complete()
-        tx_after = cpu.block(record.tx,0x6000); rx_after = cpu.block(record.rx,0xc000)
+        tx_after = cpu.block(record.tx,0x6000); rx_after = cpu.rx_snapshot()
+        for address,packet in cpu.physical_a1_reply_ranges:
+            assert cpu.block(address,len(packet)) == packet, 'Physical A1 reply changed by virtual A2 publication'
         consumer = cpu.original_call(record.consumer)
-        consumer_rx = cpu.block(record.rx,0xc000)
+        consumer_rx = cpu.rx_snapshot()
         ready = cpu.original_call(record.ready)
         assert cpu.read(record.driver[11]+4,1) == 0
         state = cpu.symbols['_state'][0]
@@ -478,13 +594,15 @@ def main():
         assert tx == tx_after and consumer_rx == rx_after
         if i >= 2:
             assert pending == 1 and live_ready == 0x4e4c5031,(i,pending,hex(live_ready))
-            assert changes == [dict(offset=hex((i%2)*0x6000+2),before='0x20',after='0x21')],(i,changes)
+            before = 0x21 if args.physical_a1 else 0x20
+            assert changes == [dict(offset=hex((i%2)*0x6000+2),before=hex(before),after=hex(before|VIRTUAL_ADDRESS))],(i,changes)
         history.append(dict(round=i,original_submit_instructions=submit,completion_wrapper_instructions=wrapper,
                             submit=cpu.submit_counts,complete=complete,consumer_instructions=consumer,
                             ready_instructions=ready,controller_pair_pending=pending,live_ready=hex(live_ready),
                             physical_batch=cpu.batch,complete_rx_differences=changes,
                             complete_tx_differences=[],consumer_rx_differences=[]))
     negatives = negative_cases(cpu) if args.negative_cases else []
+    cold_negatives = cold_target_cases(args.startup,args.build,handoff,record) if args.negative_cases else []
     state = cpu.symbols['_state'][0]
     cpu.check_build_unchanged()
     report = dict(schema='kui.native.record-linked-worker.v1',executable_sha256=record.digest.hex(),
@@ -495,9 +613,16 @@ def main():
                   nvr_sha256=hashlib.sha256(record.wire).hexdigest(),
                   worker_elf_sha256=hashlib.sha256(cpu.build_inputs['native-worker.elf']).hexdigest(),
                   worker_binary_sha256=hashlib.sha256(cpu.build_inputs['native-worker.bin']).hexdigest(),
+                  worker_relocation=dict(actual_heap_payload=hex(cpu.actual_heap_payload),p2_base=hex(cpu.worker_base)),
+                  rx_snapshot_encoding='48 SDK slots in bank order; each slot 1024 bytes; absent slots zero-filled',
+                  sdk_rx_slots=[hex(address) if address else None for address in record.rx_slots],
                   handoff_sha256=hashlib.sha256(handoff).hexdigest(),
                   original_bytes_embedded=False,fresh_production_record_verification=True,worker_helper_stubs=False,
-                  hardware_inputs=dict(asic_revision=2,physical_controller_mask=1,physical_accessories=[],maple_dma='synchronous'),
+                  virtual_transport=dict(address=VIRTUAL_ADDRESS,slot='A2',parent_attach_bit=VIRTUAL_ADDRESS,
+                                         filtered_from_hardware=True),
+                  physical_a1_packets=cpu.physical_a1_packets,physical_a1_replies_preserved=True,
+                  hardware_inputs=dict(asic_revision=2,physical_controller_mask=1,
+                    physical_accessories=['A1 memory/LCD/clock VMU fixture'] if args.physical_a1 else [],maple_dma='synchronous'),
                   sh4_slot_legality_enforced=True,heap_initializer_instructions=cpu.heap_initializer_instructions,
                   heap_allocate_instructions=cpu.heap_allocate_instructions,arm=cpu.arm_counts,
                   sdk_initializer=initializer,cold_coherence=cpu.coherence_installation,flat_ocbp=cpu.flat_ocbp,
@@ -506,6 +631,7 @@ def main():
                     completion_wrapper=record.completion_wrapper,completion_call=record.driver[13],
                     gate=record.gate,consumer=record.consumer,ready=record.ready).items()},
                   callback_contexts=cpu.callback_contexts,rounds=history,negative_cases=negatives,
+                  cold_target_negative_cases=cold_negatives,
                   validated_callback_pairs=len(history),submit_caller_fragments=[hex(a) for a in record.submit_callers],
                   limitations=[
                     'Flat coherent RAM; no operand/instruction cache, bus latency, IRQ scheduling, video, FMV, game mainloop, SD transport, or cycle timing.',
@@ -515,7 +641,8 @@ def main():
                     'Completion wrapper prefix executes through actual gate and actual callback JSR. Its captured PR/SR are used in the callback frame; consumer and ready are called separately afterward.',
                     'Cold target installation validates the actual descriptor/slot then writes one target word; production stage installer does not execute in this flat model. OCBP is recorded as coherent-memory no-op.',
                     'Negative cases stop at the actual nonreturning _fail entry before display/reporting hardware; the failure entry is never substituted with a successful return.',
-                    'Valid blank-card durable handoff is generated by the existing host fixture; automatic INFO enumeration makes no storage request.'])
+                    'Valid blank-card durable handoff is generated by the existing host fixture; automatic INFO enumeration makes no storage request.',
+                    'Optional physical A1 is an independently authored protocol fixture. Its wire payloads and physical device effects are modeled, not real VMU firmware or flash timing.'])
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(dict(output=str(args.output),pairs=len(history),negative_cases=len(negatives),

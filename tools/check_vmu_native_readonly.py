@@ -418,7 +418,7 @@ def check(directory, *, self_test=False):
         require(not name.startswith(("_kui_loader_sd_", "_kui_sci_sd_", "_kui_vmu_durable_",
                                       "_kui_vmu_persist_", "_kui_vmu_volatile_", "_kui_retail_storage_")),
                 "read-only worker links a storage/persistence operation: " + name)
-    for name in ("_kui_vmu_readonly_init", "_kui_vmu_readonly_handle",
+    for name in ("_kui_vmu_readonly_init_address", "_kui_vmu_readonly_handle",
                  "_kui_vmu_readonly_overlay_prepare", "_kui_vmu_readonly_overlay_complete",
                  "_kui_vmu_native_readonly_release_check", "_kui_vmu_native_lifetime_release_safe"):
         _, _, section = symbol_bytes(worker, name, 2)

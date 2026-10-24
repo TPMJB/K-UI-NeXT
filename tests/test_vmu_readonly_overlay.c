@@ -25,6 +25,7 @@ static int handler(void *context,const uint8_t *request,size_t request_bytes,
         if(corrupt==3u) reply[4]^=1u;
         if(corrupt==4u) *reply_bytes=SIZE_MAX;
         if(corrupt==5u && request[0]==11u) reply[8]^=1u;
+        if(corrupt==6u) reply[2]^=1u;
     }
     return result;
 }
@@ -323,8 +324,45 @@ static void absent_publication_guards_are_atomic(void) {
     assert(kui_vmu_readonly_overlay_complete_absent(NULL)==KUI_VMU_OVERLAY_ARGUMENT);
 }
 
+static void a2_preserves_a1_and_conflicts_only_with_a2(void) {
+    fresh();
+    assert(!kui_vmu_readonly_init_address(&card,2u));
+    assert(!kui_vmu_readonly_overlay_init_address(&overlay,2u,handler,&card));
+    frame(1u,11u,2u,2u,0x02000000u,0xff000000u);
+    /* Physical A1 storage/LCD responses are outside this overlay. The native
+     * transport independently validates them before entering completion. */
+    frame(2u,12u,1u,34u,0x02000000u,0x2a000000u);
+    physical(1u,1u);rx[2][0]=0x00010007u;capture();
+    assert(!prepare(3u) && !kui_vmu_readonly_overlay_complete(&overlay));
+    assert(rx[0][0]==(before[0][0]|0x00020000u));
+    assert(rx[1][0]==0x82020008u && rx[1][1]==0x02000000u && rx[1][2]==0xff000000u);
+    assert(!memcmp(rx[2],before[2],1024u) && calls==1u);
+    assert(!memcmp((uint8_t *)rx[0]+4u,(uint8_t *)before[0]+4u,1020u));
+
+    fresh();assert(!kui_vmu_readonly_init_address(&card,2u));
+    assert(!kui_vmu_readonly_overlay_init_address(&overlay,2u,handler,&card));
+    frame(1u,1u,2u,0u,0u,0u);physical(1u,3u);
+    completion_refused(2u);assert(!calls && overlay.stats.flags&KUI_VMU_OVERLAY_PHYSICAL_CONFLICT);
+
+    fresh();assert(!kui_vmu_readonly_init_address(&card,2u));
+    assert(!kui_vmu_readonly_overlay_init_backend_address(&overlay,2u,handler,filtered_admit,&card));
+    frame(1u,1u,2u,0u,0u,0u);frame(2u,1u,1u,0u,0u,0u);
+    physical(1u,1u);rx[1][0]=0x00020005u;rx[2][0]=0x00010005u;capture();
+    assert(!prepare(3u) && !kui_vmu_readonly_overlay_complete_absent(&overlay));
+    assert(rx[1][0]==UINT32_MAX && !memcmp((uint8_t *)rx[1]+4u,(uint8_t *)before[1]+4u,1020u));
+    assert(!memcmp(rx[0],before[0],1024u) && !memcmp(rx[2],before[2],1024u) && !calls);
+
+    fresh();assert(!kui_vmu_readonly_init_address(&card,2u));
+    assert(!kui_vmu_readonly_overlay_init_address(&overlay,2u,handler,&card));
+    frame(1u,1u,2u,0u,0u,0u);physical(1u,1u);corrupt=6u;
+    completion_refused(2u);assert(overlay.stats.flags&KUI_VMU_OVERLAY_BAD_HANDLER); /* Wrong source refused. */
+    assert(kui_vmu_readonly_overlay_init_address(&overlay,4u,handler,&card)==KUI_VMU_OVERLAY_ARGUMENT);
+    assert(kui_vmu_readonly_init_address(&card,4u)==KUI_VMU_READONLY_ARGUMENT);
+}
+
 int main(void) {
     discovery_and_all_blank_reads();request_reply_rx_telemetry_stays_correlated();
+    a2_preserves_a1_and_conflicts_only_with_a2();
     strict_request_and_capacity_guards();
     span_alias_and_full_source_guards();physical_conflicts_and_parent_reply_guards();
     staging_failures_are_atomic();bounded_batch_and_terminal_state();

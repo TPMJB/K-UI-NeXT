@@ -41,7 +41,7 @@ static void controllers_done(unsigned ports,unsigned absent) {
     physical_complete();
     for(unsigned port=0;port<4u;port++) if(ports&(1u<<port)) {
         put(rx_at(port*6u),4u,(absent&(1u<<port))?UINT32_MAX:
-            0x033e0008u|(port<<14)|(port<<22));
+            0x033d0008u|(port<<14)|(port<<22));
         put(rx_at(port*6u)+4u,4u,0x01000000u);
     }
 }
@@ -53,11 +53,11 @@ static void begin_controllers(unsigned ports,unsigned nops) {
 }
 static void save_rx(uint8_t before[5][1024]) {
     for(unsigned port=0;port<4u;port++) memcpy(before[port],rx_bytes(port*6u),1024u);
-    memcpy(before[4],rx_bytes(1u),1024u);
+    memcpy(before[4],rx_bytes(2u),1024u);
 }
 static void same_rx(uint8_t before[5][1024]) {
     for(unsigned port=0;port<4u;port++) CHECK(!memcmp(before[port],rx_bytes(port*6u),1024u));
-    CHECK(!memcmp(before[4],rx_bytes(1u),1024u));
+    CHECK(!memcmp(before[4],rx_bytes(2u),1024u));
 }
 static void save_all_rx(uint8_t before[KUI_VMU_NATIVE_RX_SLOTS][1024]) {
     for(unsigned i=0u;i<KUI_VMU_NATIVE_RX_SLOTS;i++) if(config.runtime.rx_slots[i])
@@ -102,7 +102,7 @@ static void mixed_done(unsigned conditions,unsigned allinfo,unsigned attached,co
         unsigned command=(conditions&(1u<<port))?9u:(allinfo&(1u<<port))?2u:1u;
         unsigned words=command==9u?3u:command==2u?48u:28u;
         unsigned reply=command==9u?8u:command==2u?6u:5u;
-        put(rx_at(port*6u),4u,(words<<24)|(port<<22)|(port<<14)|0x003e0000u|reply);
+        put(rx_at(port*6u),4u,(words<<24)|(port<<22)|(port<<14)|0x003d0000u|reply);
         put(rx_at(port*6u)+4u,4u,functions[port]);
     }
 }
@@ -125,8 +125,8 @@ static void mixed_queries_and_cost(void) {
             unsigned submit_reads=measured_submit_reads;
             put(0xa05f6c18u,4u,1u);mixed_done(1u,allinfo<<1,attached,functions);
             save_rx(before);save_all_rx(all_before);complete_return();
-            before[0][2]|=1u;same_rx(before);no_storage();
-            all_before[packet_bank*24u][2]|=1u;same_all_rx(all_before);
+            before[0][2]|=2u;same_rx(before);no_storage();
+            all_before[packet_bank*24u][2]|=2u;same_all_rx(all_before);
             CHECK(!memcmp(original,memory+source-0x0c000000u,sizeof(original)));
             CHECK(value_at(0xa05f6c04u)==source && !controller_pair.pending && !overlay.pending);
             if(layout && !allinfo && attached==1u) fast=submit_reads+measured_complete_reads;
@@ -149,8 +149,8 @@ static void mixed_queries_and_cost(void) {
     unsigned submit_reads=measured_submit_reads;put(0xa05f6c18u,4u,1u);
     mixed_done(1u,0u,1u,functions);uint8_t before[5][1024],all_before[KUI_VMU_NATIVE_RX_SLOTS][1024];
     save_rx(before);save_all_rx(all_before);
-    complete_return();before[0][2]|=1u;same_rx(before);no_storage();
-    all_before[packet_bank*24u][2]|=1u;same_all_rx(all_before);
+    complete_return();before[0][2]|=2u;same_rx(before);no_storage();
+    all_before[packet_bank*24u][2]|=2u;same_all_rx(all_before);
     CHECK(!memcmp(full_original,memory+full_source-0x0c000000u,sizeof(full_original)));
     full=submit_reads+measured_complete_reads;
     CHECK(fast<full);
@@ -168,7 +168,7 @@ static void mixed_queries_and_cost(void) {
         CHECK(controller_pair.words==10u && value_at(0xa05f6c04u)==source);
         put(0xa05f6c18u,4u,1u);physical_complete();
         put(rx_at(6u),4u,UINT32_MAX);put(rx_at(12u),4u,UINT32_MAX);
-        save_all_rx(all_rx);complete_return();all_rx[packet_bank*24u][2]|=1u;
+        save_all_rx(all_rx);complete_return();all_rx[packet_bank*24u][2]|=2u;
         same_all_rx(all_rx);no_storage();
         CHECK(!memcmp(original,memory+source-0x0c000000u,sizeof(original)));
     }
@@ -185,7 +185,7 @@ static void mixed_query_refusals(void) {
         case 3:put(address,4u,header^1u);break;
         case 4:put(address+4u,4u,0u);break;
         case 5:put(state.source+48u,4u,value_at(state.source+48u)^1u);break;
-        default:rx_bytes(0u)[2]|=1u;break;
+        default:rx_bytes(0u)[2]|=2u;break;
         }
         uint8_t before[5][1024];save_rx(before);reject_complete();same_rx(before);no_storage();
     }
@@ -211,7 +211,7 @@ static void mixed_query_errors(void) {
             else if(mutation==3u) response^=0x200000u;
             put(rx_at(port*6u),4u,response);put(rx_at(port*6u)+4u,4u,0u);
             uint8_t before[5][1024];save_rx(before);
-            if(mutation) reject_complete();else {complete_return();before[0][2]|=1u;}
+            if(mutation) reject_complete();else {complete_return();before[0][2]|=2u;}
             same_rx(before);no_storage();
         }
 }
@@ -231,7 +231,7 @@ static void success_and_cost(void) {
             save_rx(before);complete_return();fast_complete=measured_complete_reads;
             CHECK(!controller_pair.pending && !overlay.pending);
             CHECK(value_at(0xa05f6c04u)==source);
-            before[0][2]|=1u;same_rx(before);no_storage();
+            before[0][2]|=2u;same_rx(before);no_storage();
             CHECK(!memcmp(original,memory+source-0x0c000000u,sizeof(original)));
         }
         CHECK(overlay.stats.prepared==5u && overlay.stats.completed==5u && overlay.stats.advertisements==5u);
@@ -241,7 +241,7 @@ static void success_and_cost(void) {
     warm();controllers(15u,1u);config.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE;
     submit();CHECK(!controller_pair.pending && overlay.pending);unsigned full_submit=measured_submit_reads;
     put(0xa05f6c18u,4u,1u);controllers_done(15u,0u);
-    uint8_t full_rx[5][1024];save_rx(full_rx);complete_return();full_rx[0][2]|=1u;same_rx(full_rx);
+    uint8_t full_rx[5][1024];save_rx(full_rx);complete_return();full_rx[0][2]|=2u;same_rx(full_rx);
     full=full_submit+measured_complete_reads;no_storage();
     CHECK(fast_submit+fast_complete<full);
     printf("Controller-only guest reads: submit=%u complete=%u pair=%u; same4-controller full path=%u\n",
@@ -293,8 +293,8 @@ static void fallback(void) {
             controllers(1u,0u);uint32_t source=value_at(0xa05f6c04u);
             put(source,4u,0x80000000u);put(source+8u,4u,0x00002001u);
         }
-        else if(which==1u) stage_batch(1u,0u); /* A1 enumeration retains full backend. */
-        else if(which==2u) stage_batch(11u,42u); /* A1 read retains storage authority. */
+        else if(which==1u) stage_batch(1u,0u); /* A2 enumeration retains full backend. */
+        else if(which==2u) stage_batch(11u,42u); /* A2 read retains storage authority. */
         else if(which==3u) controllers(15u,17u); /* Valid but beyond fast bound. */
         else if(which==4u) {controllers(1u,0u);config.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY;}
         else {controllers(1u,0u);config.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN;}
@@ -311,10 +311,10 @@ static void refused_without_publication(void) {
         switch(which) {
         case 0:put(state.source,4u,0x701u);break;
         case 1:put(state.source+4u,4u,0x00010001u);break;
-        case 2:put(state.source+8u,4u,rx_at(1u));break;
+        case 2:put(state.source+8u,4u,rx_at(2u));break;
         case 3:put(state.source+12u,4u,0x01002001u);break;
         case 4:put(state.source+16u,4u,0x02000000u);break;
-        case 5:rx_bytes(0u)[2]|=1u;break; /* Physical A1 conflict. */
+        case 5:rx_bytes(0u)[2]|=2u;break; /* Physical A2 conflict. */
         case 6:put(rx_at(0u),4u,UINT32_MAX);break;
         case 7:put(rx_at(0u)+4u,4u,0x02000000u);break;
         case 8:put(rx_at(18u),4u,0x03e00009u);break; /* Last descriptor: still no earlier write. */

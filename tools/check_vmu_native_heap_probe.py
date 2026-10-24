@@ -49,12 +49,12 @@ def typed_function(elf, image, name, base):
     return address, body
 
 
-def bss_object(elf, image, name, expected, reserved):
+def bss_object(elf, image, name, expected, reserved, *, low_limit=0x8C007800):
     address, size, kind, section = _linked_symbols(elf, {name}).get(name, (0, 0, 0, None))
     require(kind == 1 and size == expected and section is not None and not address & 31 and
             section[1] == 8 and section[2] & 7 == 3 and
             section[3] <= address < address + reserved <= section[3] + section[5] and
-            LOW <= address < address + reserved <= 0x8C007800 and
+            LOW <= address < address + reserved <= low_limit and
             image["symbols"].get(name) == address,
             "Low control must occupy its typed BSS cache lines: " + name)
     require(not any(address + size <= value < address + reserved
@@ -84,12 +84,12 @@ def startup_guard(ops, call):
     return candidates[0]
 
 
-def inspect_dynamic_hook(elf, image):
+def inspect_dynamic_hook(elf, image, *, low_limit=0x8C007800):
     name = "_kui_vmu_observe_heap_hook"
     address, body = typed_function(elf, image, name, LOW)
     ops = words(body)
-    cell = bss_object(elf, image, "_kui_vmu_native_heap_original", 32, 32)
-    control = bss_object(elf, image, "_kui_vmu_observe_boot_control", 56, 64)
+    cell = bss_object(elf, image, "_kui_vmu_native_heap_original", 32, 32, low_limit=low_limit)
+    control = bss_object(elf, image, "_kui_vmu_observe_boot_control", 56, 64, low_limit=low_limit)
     require(not (cell < control + 64 and control < cell + 32), "Low control objects overlap")
     if ops[0] & 0xFF00 == 0xD200:
         mask_load = 0
@@ -207,15 +207,15 @@ def inspect_dynamic_hook(elf, image):
             "mask_before_frame": True}
 
 
-def mutate_word(elf, image, address, value):
+def mutate_word(elf, image, address, value, *, low_limit=0x8C007800):
     raw = bytearray(elf)
     symbols = _linked_symbols(elf, {"_kui_vmu_observe_heap_hook"})
     section = symbols["_kui_vmu_observe_heap_hook"][3]
     struct.pack_into("<H", raw, section[4] + address - section[3], value)
-    return bytes(raw), inspect_elf(bytes(raw), LOW, 0x8C007800)
+    return bytes(raw), inspect_elf(bytes(raw), LOW, low_limit)
 
 
-def regression(elf, image):
+def regression(elf, image, *, low_limit=0x8C007800):
     address, body = typed_function(elf, image, "_kui_vmu_observe_heap_hook", LOW)
     ops = words(body)
     call = next(i for i in range(len(ops) - 3) if ops[i] & 0xFF00 == 0xD300 and
@@ -234,17 +234,17 @@ def regression(elf, image):
     for expected in (0x5127, 0x3102, 0x3106):
         cases.append((address + 2 * ops.index(expected), 0x0009))
     for at, value in cases:
-        changed_elf, changed_image = mutate_word(elf, image, at, value)
+        changed_elf, changed_image = mutate_word(elf, image, at, value, low_limit=low_limit)
         try:
-            inspect_dynamic_hook(changed_elf, changed_image)
+            inspect_dynamic_hook(changed_elf, changed_image, low_limit=low_limit)
         except ValueError:
             continue
         raise ValueError("Dynamic initializer/frame mutation was accepted")
     mask, push = ops.index(0x4A0E), ops.index(0x2F96)
-    changed_elf, changed_image = mutate_word(elf, image, address + 2 * mask, 0x2F96)
-    changed_elf, changed_image = mutate_word(changed_elf, changed_image, address + 2 * push, 0x4A0E)
+    changed_elf, changed_image = mutate_word(elf, image, address + 2 * mask, 0x2F96, low_limit=low_limit)
+    changed_elf, changed_image = mutate_word(changed_elf, changed_image, address + 2 * push, 0x4A0E, low_limit=low_limit)
     try:
-        inspect_dynamic_hook(changed_elf, changed_image)
+        inspect_dynamic_hook(changed_elf, changed_image, low_limit=low_limit)
     except ValueError:
         return len(cases) + 1
     raise ValueError("Relaxed push-before-interrupt-mask mutation was accepted")

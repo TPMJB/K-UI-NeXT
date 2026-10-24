@@ -164,7 +164,7 @@ int main(void) {
   * oversized counts cannot change or extend the bounded report. */
  struct kui_vmu_volatile_chain_frame packets[KUI_VMU_VOLATILE_CHAIN_FRAMES];
  for(unsigned i=0;i<KUI_VMU_VOLATILE_CHAIN_FRAMES;i++)
-  packets[i]=(struct kui_vmu_volatile_chain_frame){i,0x0c300000u+1024u*i,0x201u,i+1u};
+  packets[i]=(struct kui_vmu_volatile_chain_frame){i,0x0c300000u+1024u*i,0x201u,i+1u,NULL};
  struct kui_vmu_native_trace_failure failure={0x30002u,0x0c248420u,
   (uint32_t)-5,0u,0x0c248420u,48u,0x0cf10000u,512u,UINT32_MAX,0u,packets};
  kui_vmu_native_trace_failure(&failure);

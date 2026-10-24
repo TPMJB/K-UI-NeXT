@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "Exact-Toy Maple observations, read-only and volatile experiments, owned physical journal proof, bounded persistent Toy saving, and physical VMU import capture; no general compatibility claim",
+  "scope": "Scoped Maple/VMU experiments, physical import and durable-save observations, plus automatic native SDK-family owner reports; no general compatibility claim",
   "captures": [
     {
       "build": "87140926efd1",
@@ -1527,6 +1527,53 @@
       "limits": [
         "No new diagnostic counters, timing or gameplay screenshots were supplied.",
         "This does not establish Silver save updates, new saves, deletion, formatting, crash recovery or restart persistence after a new write."
+      ]
+    },
+    {
+      "build": "897ee7223b35",
+      "date": "2026-10-23",
+      "outcome": "evolution1_native_virtual_card_save_reload_reported",
+      "game": "Evolution: The World of Sacred Device",
+      "product": "T17706N",
+      "version": "V1.290",
+      "region": "U",
+      "source": "Owner report recorded in docs/evidence/native-evolution2-extent-2026-10-23.json",
+      "virtual_slot": "A1",
+      "virtual_vmu_enabled": true,
+      "storage_writes_enabled": true,
+      "accepted_scope": [
+        "Owner confirmed launch, save and reboot/load on this native adapter."
+      ],
+      "limits": [
+        "This earlier A1 result does not establish the new A2 transport, physical A1 coexistence or the Background reader.",
+        "No measured frame rate or FMV equivalence is inferred from save/load success."
+      ]
+    },
+    {
+      "build": "df035a8cae47",
+      "date": "2026-10-24",
+      "outcome": "evolution2_native_virtual_card_save_load_reported",
+      "game": "Evolution 2: Far Off Promise",
+      "product": "T1711N",
+      "version": "V1.000",
+      "region": "U",
+      "source": "Owner follow-up after the Evolution 2 extent-correction candidate",
+      "owner_report": "VMU seems to work for Evolution2 but I thought we were specifically doing A2 to keep A1 port free",
+      "accepted_scope": [
+        "Owner reports the Evolution 2 virtual card/save-load path working after the extent correction."
+      ],
+      "performance_report": "Owner reports the same slowdown compared with the older 2.0 FMV baseline.",
+      "requested_arrangement": "Keep physical A1 free for the real VMU, including the Skies LCD, and present the virtual card as A2.",
+      "virtual_slot": "A1",
+      "virtual_vmu_enabled": true,
+      "storage_writes_enabled": true,
+      "power_cycle_explicitly_confirmed": false,
+      "a2_console_verified": false,
+      "background_console_verified": false,
+      "limits": [
+        "The report accepts the extent-corrected A1 card path; the new A2/Background package has no console confirmation.",
+        "The supplied message does not separately describe a full power-off/reload sequence or provide timing measurements.",
+        "Save/load success does not accept the reported FMV slowdown."
       ]
     }
   ]

@@ -70,7 +70,7 @@ def replay(startup, build, handoff, rounds, oix):
         assert SH.read(cpu, LOCK, 1) == 0 and SH.read(cpu, LOCK_CELL) == LOCK
         if i >= 2:
             assert pending == 1 and live_ready == 0x4E4C5031, (i, pending, hex(live_ready))
-            assert rx_changes == [dict(offset=hex((i % 2) * 0x6000 + 2), before='0x20', after='0x21')], (i, rx_changes)
+            assert rx_changes == [dict(offset=hex((i % 2) * 0x6000 + 2), before='0x20', after='0x22')], (i, rx_changes)
         history.append(dict(round=i, submitted=True, completion_result=complete['result'],
             physical_frames=len(cpu.batch['frames']), controller_pair_pending=pending,
             live_ready=hex(live_ready), complete_rx_differences=rx_changes))

@@ -216,9 +216,9 @@ static int durable_card_commit(void *context,uint16_t block,const uint8_t data[5
     if(data!=s->protocol.staged) {durable_card_fault(s,KUI_VMU_DURABLE_SD_CONTEXT);return KUI_VMU_EMU_IO_ERROR;}
     return durable_card_execute(s,DURABLE_WRITE,block);
 }
-int kui_vmu_durable_init(struct kui_vmu_durable *s,const struct kui_vmu_durable_handoff *h,
+int kui_vmu_durable_init_address(struct kui_vmu_durable *s,uint8_t address,const struct kui_vmu_durable_handoff *h,
     int (*lease)(kui_vmu_sd_transaction,void *),kui_vmu_sd_transaction entry) {
-    if(!s || !h || !lease || !entry || durable_card_overlap(s,sizeof(*s),h,sizeof(*h)) ||
+    if(!s || (address!=1u && address!=2u) || !h || !lease || !entry || durable_card_overlap(s,sizeof(*s),h,sizeof(*h)) ||
        kui_vmu_durable_handoff_validate(h)) return KUI_VMU_DURABLE_ARGUMENT;
     if(s->started) return KUI_VMU_DURABLE_INTERNAL;
     memset(s,0,sizeof(*s));s->self=s;s->started=1u;s->handoff=*h;s->lease=lease;s->transaction_entry=entry;
@@ -228,15 +228,19 @@ int kui_vmu_durable_init(struct kui_vmu_durable *s,const struct kui_vmu_durable_
         for(unsigned i=0;i<count;i++) s->maps[offset+i]=(struct kui_vmu_store_extent){map[i].lba,map[i].blocks};
     }
     const struct kui_vmu_emulation_io io={s,durable_card_read,durable_card_commit};
-    if(kui_vmu_emulation_init(&s->protocol,1u,&io)) return KUI_VMU_DURABLE_INTERNAL;
+    if(kui_vmu_emulation_init(&s->protocol,address,&io)) return KUI_VMU_DURABLE_INTERNAL;
     s->ready=1u;return 0;
+}
+int kui_vmu_durable_init(struct kui_vmu_durable *s,const struct kui_vmu_durable_handoff *h,
+    int (*lease)(kui_vmu_sd_transaction,void *),kui_vmu_sd_transaction entry) {
+    return kui_vmu_durable_init_address(s,1u,h,lease,entry);
 }
 static uint32_t durable_card_le32(const uint8_t *p) {
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
 }
-static unsigned durable_card_shape(uint32_t h,uint32_t p0,uint32_t p1) {
+static unsigned durable_card_shape(uint8_t address,uint32_t h,uint32_t p0,uint32_t p1) {
     unsigned cmd=h&255u,words=h>>24,phase=(p1>>8)&255u;
-    if((h&UINT32_C(0x00ffff00))!=UINT32_C(0x00000100)) return 0u;
+    if((h&UINT32_C(0x00ffff00))!=((uint32_t)address<<8)) return 0u;
     if(cmd==1u || cmd==2u) return words?0u:cmd==1u?116u:196u;
     if(cmd==3u) return words?0u:4u; /* Discard staged RAM only; no SD access. */
     if(p0!=KUI_VMU_EMU_FUNC_MEMCARD || (p1&UINT32_C(0x00ff00ff))) return 0u;
@@ -249,7 +253,7 @@ static unsigned durable_card_shape(uint32_t h,uint32_t p0,uint32_t p1) {
 int kui_vmu_durable_admit(struct kui_vmu_durable *s,uint32_t h,uint32_t p0,uint32_t p1) {
     if(!s || s->self!=s || !s->ready) return KUI_VMU_DURABLE_ARGUMENT;
     if(s->faulted || s->handling || s->inflight) return KUI_VMU_DURABLE_INTERNAL;
-    return durable_card_shape(h,p0,p1)?KUI_VMU_DURABLE_HANDLED:KUI_VMU_DURABLE_REFUSED;
+    return durable_card_shape(s->protocol.address,h,p0,p1)?KUI_VMU_DURABLE_HANDLED:KUI_VMU_DURABLE_REFUSED;
 }
 int kui_vmu_durable_handle(struct kui_vmu_durable *s,const uint8_t *request,size_t bytes,
     uint8_t *response,size_t capacity,size_t *response_bytes) {
@@ -264,11 +268,11 @@ int kui_vmu_durable_handle(struct kui_vmu_durable *s,const uint8_t *request,size
     if(s->handling || s->inflight) return KUI_VMU_DURABLE_INTERNAL;
     uint32_t h=durable_card_le32(request),p0=0u,p1=0u;
     if(bytes>=12u) {p0=durable_card_le32(request+4u);p1=durable_card_le32(request+8u);}
-    unsigned needed=durable_card_shape(h,p0,p1);
+    unsigned needed=durable_card_shape(s->protocol.address,h,p0,p1);
     if(!needed || bytes!=4u+4u*(h>>24)) {durable_card_increment(&s->refused);return KUI_VMU_DURABLE_REFUSED;}
     if(capacity<(s->faulted?8u:needed)) return KUI_VMU_DURABLE_CAPACITY;
     if(s->faulted) {
-        memset(response,0,8u);response[0]=0xfbu;response[2]=1u;response[3]=1u;response[7]=8u;
+        memset(response,0,8u);response[0]=0xfbu;response[2]=s->protocol.address;response[3]=1u;response[7]=8u;
         *response_bytes=8u;return KUI_VMU_DURABLE_HANDLED;
     }
     s->handling=1u;int result=kui_vmu_emulation_handle(&s->protocol,request,bytes,response,capacity,response_bytes);

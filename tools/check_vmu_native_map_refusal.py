@@ -20,6 +20,14 @@ PINS={
     '_kui_vmu_observe_low_failure':('94257ebf984b9228fceb2d8095d87c71d33541227385dc5f6734f3d69fdd1d3b',36),
 }
 UNCACHED_TERMINAL=('bcde286f5c278522335115fa1fbb58bb635256fee2b08366de40735442d1519c',96)
+# Separately reviewed Background equivalents. The map guard retains the same
+# lease/destination predicate, then calls its typed async map_guest. Failure
+# retains the identical terminal guard and uses the owned region's display.
+BACKGROUND_PINS={
+    '_native_background_map':('4d2cb3fee34f3558e81ea762fce0f6d163e2c37827855d97f4e2f00b1980c1d9',188),
+    '_native_resident_terminal':PINS['_native_resident_terminal'],
+    '_kui_vmu_observe_low_failure':('4733a395aa815e4a3227afe93d42acaf69d9a076a84a4fe138e68874d6c6f22d',60),
+}
 
 def require(condition,message):
     if not condition:raise ValueError(message)
@@ -67,13 +75,19 @@ def check(path,*,self_test=False,objdump=None):
     path=Path(path);image=read_elf(path)
     objdump=objdump or shutil.which('sh-elf-objdump') or str(ROOT/'.deps/sh-elf/bin/sh-elf-objdump')
     disassembly=subprocess.check_output([objdump,'-d',str(path)],text=True)
-    layout=inspect_elf(image[0],LOW,0x8c007800)
-    bss_object(image[0],layout,'_kui_vmu_observe_boot_control',56,64)
+    background='_kui_vmu_native_background_manifest_bind' in image[4]
+    if background:
+        require(image[4]['_kui_vmu_native_background_manifest_bind'][2]==2 and
+                image[4].get('__kui_vmu_native_background_resident',(0,))[0]==1,
+                'Background refusal requires its typed binder and exact profile marker')
+    low_limit=0x8c007ba0 if background else 0x8c007800
+    layout=inspect_elf(image[0],LOW,low_limit)
+    bss_object(image[0],layout,'_kui_vmu_observe_boot_control',56,64,low_limit=low_limit)
     terminal=signature(image,disassembly,'_native_resident_terminal')[:2]
     require(terminal in (PINS['_native_resident_terminal'],UNCACHED_TERMINAL),
         'GD refusal terminal code alias/guard changed')
     cached=terminal==PINS['_native_resident_terminal']
-    selected=dict(PINS)
+    selected=dict(BACKGROUND_PINS if background else PINS)
     if not cached:selected['_native_resident_terminal']=UNCACHED_TERMINAL
     functions={}
     for name,expected in selected.items():
@@ -96,7 +110,8 @@ def check(path,*,self_test=False,objdump=None):
     return {'schema':'kui.native.gd-map-refusal.v1','functions':functions,
         'cached_worker_terminal':cached,
         'resident_memory_end':hex(layout['memory_end']),'mutation_rejections':rejected,
-        'no_new_callback_or_control_abi':True,'diagnostic_detail':'00000100',
+        'no_new_callback_or_control_abi':not background,'reader_profile':'background' if background else 'standard',
+        'diagnostic_detail':'00000100',
         'report_provenance':'differential only; existing late-heap/exit terminal uses same report'}
 
 if __name__=='__main__':

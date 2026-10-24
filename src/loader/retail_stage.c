@@ -200,6 +200,16 @@ static struct kui_retail_zso_image image;
 static struct kui_retail_manifest manifest;
 static struct kui_retail_image image;
 #endif
+#if KUI_VMU_NATIVE_BACKGROUND
+#include "kui/vmu_native_background.h"
+__asm__(".global __kui_vmu_native_background_stage\n"
+        ".set __kui_vmu_native_background_stage,1\n");
+/* Temporary workspace is covered by the native installer's full high-stage
+ * allocation exclusion. The first proved heap allocation retires it into
+ * that allocation's unused tail before the game can reclaim stage memory. */
+static uint8_t native_background_boot_region[KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES]
+    __attribute__((aligned(32)));
+#endif
 static struct kui_retail_storage card;
 static struct retail_display_state display;
 static enum kui_loader_sd_result last_card_result;
@@ -1084,8 +1094,15 @@ static void install_resident(void) {
     memcpy((void *)(uintptr_t)KUI_RETAIL_CE_KERNEL,ce_kernel,sizeof(ce_kernel));
 #endif
     kui_retail_stage_sync();
+#if KUI_VMU_NATIVE_BACKGROUND
+    typedef int (*native_background_entry)(const struct kui_retail_manifest *,
+        const struct kui_retail_storage *,uint32_t,const struct retail_display_state *,void *);
+    native_background_entry init=(native_background_entry)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
+    int initialized=init(&manifest,&card,firmware,&display,native_background_boot_region);
+#else
     kui_retail_resident_entry init=(kui_retail_resident_entry)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
     int initialized=init(&manifest,&card,firmware,&display);
+#endif
     if(initialized) stopped("RETAIL RESIDENT INIT FAILED",(uint32_t)initialized);
 }
 #if !KUI_RETAIL_ZSO

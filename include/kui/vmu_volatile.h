@@ -37,11 +37,14 @@ _Static_assert(sizeof(struct kui_vmu_volatile)<=KUI_VMU_VOLATILE_STATE_BYTES_MAX
 
 /* Reader returns zero only after all512 bytes have been verified. It may not
  * write storage or retain its output pointer. No callback runs during init. */
+/* Explicit A1/A2 selection, preserving init() as the A1 experiment. */
+int kui_vmu_volatile_init_address(struct kui_vmu_volatile *,uint8_t address,
+    int (*read_base)(void *, uint16_t, uint8_t[512]), void *context);
 int kui_vmu_volatile_init(struct kui_vmu_volatile *,
     int (*read_base)(void *, uint16_t, uint8_t[512]), void *context);
 
 /* Metadata-only pre-MDST gate: CPU/DMA little-endian header and first two
- * payload words. No I/O, protocol staging or cache commits occur. Exact A1,
+ * payload words. No I/O, protocol staging or cache commits occur. Exact selected address,
  * host0 and MEMCARD only: INFO/ALLINFO, MEDIA, READ, four128-byte WRITE phases,
  * and SYNC phases1(read status) or4(RAM commit). Unknown/reset/LCD are refused.
  * A new uncached WRITE with sixteen occupied slots latches terminal FULL

@@ -21,7 +21,12 @@ static int vmu_persist_stage_overlap(const void *a,size_t an,const void *b,size_
 int kui_vmu_persist_stage_admit(const struct kui_vmu_persist_profile *p,
     const struct kui_retail_manifest *m) {
     if(kui_vmu_persist_profile_validate(p) || kui_retail_manifest_validate(m)!=KUI_GAME_OK ||
-       m->storage_transport!=KUI_STORAGE_SCI || m->reader!=KUI_RETAIL_READER_STANDARD ||
+       m->storage_transport!=KUI_STORAGE_SCI ||
+#if KUI_VMU_NATIVE_BACKGROUND
+       (m->reader!=KUI_RETAIL_READER_ASYNC && m->reader!=KUI_RETAIL_READER_ASYNC_EAGER) ||
+#else
+       m->reader!=KUI_RETAIL_READER_STANDARD ||
+#endif
        (m->flags&(KUI_RETAIL_IMAGE_CD|KUI_RETAIL_IMAGE_SCRAMBLED)) ||
        m->card_sectors>p->card_sectors || m->partition_start!=p->partition_first ||
        m->partition_end!=p->partition_end) return KUI_VMU_PERSIST_STAGE_MAPPING;

@@ -38,6 +38,8 @@ MODE_CHOICES_LEASE_ONLY={'normal':0,'control':1,'profile':2,'lease-only':3}
 MODE_CHOICES_HOOKS_ONLY={**MODE_CHOICES_LEASE_ONLY,'hooks-only':4}
 MODE_CHOICES_RAW_CHAIN={**MODE_CHOICES_HOOKS_ONLY,'raw-chain':5}
 MODE_CHOICES_EVOLUTION_TRACE={**MODE_CHOICES_RAW_CHAIN,'evolution-trace':6}
+MODE_CHOICES_BACKGROUND={name:value for name,value in MODE_CHOICES_EVOLUTION_TRACE.items()
+                         if name not in ('control','lease-only')}
 CATALOG_SCHEMA='kui.native.resolution-cache.catalog.v1'
 CATALOG_PATH='native-cache/catalog.json'
 GAME_SLUGS={'ps2','skies','sa2','grandia2','evolution1','evolution2'}
@@ -93,7 +95,7 @@ def generic_module(package):
             'Unexpected personalization manifest fields')
     if MODE_CHOICES_FIELD in manifest:
         choices=manifest[MODE_CHOICES_FIELD]
-        require(isinstance(choices,dict) and choices in (MODE_CHOICES_LEASE_ONLY,MODE_CHOICES_HOOKS_ONLY,MODE_CHOICES_RAW_CHAIN,MODE_CHOICES_EVOLUTION_TRACE) and
+        require(isinstance(choices,dict) and choices in (MODE_CHOICES_LEASE_ONLY,MODE_CHOICES_HOOKS_ONLY,MODE_CHOICES_RAW_CHAIN,MODE_CHOICES_EVOLUTION_TRACE,MODE_CHOICES_BACKGROUND) and
                 all(type(value) is int for value in choices.values()),
                 'Native runtime mode capabilities differ from the audited choices')
     require(manifest['schema']==SCHEMA and manifest['storage_writes_enabled'] is True,
@@ -238,6 +240,8 @@ def personalize_bytes(module,manifest,info,wire,*,cache_record=None,cache_digest
     payload=bytearray(module[64:]);payload[offset-64:offset-64+WIRE_BYTES]=wire
     allowed=[(32,36),(60,64),(offset,offset+WIRE_BYTES)]
     require(type(runtime_mode) is int and runtime_mode in (0,1,2,3,4,5,6),'Native runtime mode is unsupported')
+    require(runtime_mode!=1 or manifest.get(MODE_CHOICES_FIELD,MODE_CHOICES_LEASE_ONLY).get('control')==1,
+            'This reader requires the persistent VMU allocation; control mode is unavailable')
     require(runtime_mode!=3 or manifest.get(MODE_CHOICES_FIELD,{}).get('lease-only')==3,
             'This package has no audited lease-only runtime mode capability')
     require(runtime_mode!=4 or manifest.get(MODE_CHOICES_FIELD,{}).get('hooks-only')==4,
@@ -276,6 +280,8 @@ def install(root,*,package,profile=None,game=None,control=False,profile_runtime=
     runtime_mode=1 if control else 2 if profile_runtime else 3 if lease_only else 4 if hooks_only else 5 if raw_chain else 6 if evolution_trace else 0
     require(runtime_mode==0 or MODE_FIELDS<=set(manifest),
             'This package has no audited native runtime mode selector')
+    require(runtime_mode!=1 or manifest.get(MODE_CHOICES_FIELD,MODE_CHOICES_LEASE_ONLY).get('control')==1,
+            'This reader requires the persistent VMU allocation; control mode is unavailable')
     require(runtime_mode!=3 or manifest.get(MODE_CHOICES_FIELD,{}).get('lease-only')==3,
             'This package has no audited lease-only runtime mode capability')
     require(runtime_mode!=4 or manifest.get(MODE_CHOICES_FIELD,{}).get('hooks-only')==4,

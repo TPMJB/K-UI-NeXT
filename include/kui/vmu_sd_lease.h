@@ -26,7 +26,9 @@ typedef int (*kui_vmu_sd_transaction)(void *context,struct kui_loader_sd *loan);
  * with IMASK15 already held; leaves the caller's interrupt mask unchanged.
  * Uses the SAME cached P1 GD-entry lock/card/SCI instance as the game reader.
  * The exact callback must match the worker transaction pinned by the stage.
- * BUSY is possible only before acquisition, with no wire traffic or release.
+ * Standard BUSY precedes acquisition, with no wire traffic or release. The
+ * separate Background gateway may first stop/release its idle game stream;
+ * Background BUSY still means no VMU transaction ran and retry is safe.
  * After acquisition all paths release once, check the persistent bus fault,
  * and poison the resident card on failure. No reinitialization is attempted.
  * A successful callback is acknowledged only after successful restoration. */

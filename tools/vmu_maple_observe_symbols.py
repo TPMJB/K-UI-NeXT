@@ -69,12 +69,17 @@ def sd_gateway_span(data, image):
 
 def generate(path):
     data = Path(path).read_bytes()
-    image = inspect_elf(data, 0x8C004000, 0x8C007800)
+    background_name="_kui_vmu_native_background_manifest_bind"
+    background=background_name in _linked_symbols(data,{background_name})
+    low_limit=0x8C007BA0 if background else 0x8C007800
+    image = inspect_elf(data, 0x8C004000, low_limit)
     names = {
         "KUI_VMU_OBSERVE_LOW_HEAP_HOOK": "_kui_vmu_observe_heap_hook",
         "KUI_VMU_OBSERVE_LOW_RETURN_HOOK": "_kui_vmu_observe_return_hook",
         "KUI_VMU_OBSERVE_LOW_CONTROL": "_kui_vmu_observe_boot_control",
     }
+    if background:
+        names["KUI_VMU_NATIVE_BACKGROUND_BIND"]=background_name
     optional_lease = "_kui_vmu_observe_sd_lease"
     if optional_lease in image["symbols"]:
         names["KUI_VMU_OBSERVE_LOW_SD_LEASE"] = optional_lease
@@ -98,7 +103,7 @@ def generate(path):
             expected,reserved=(32,32) if macro=="KUI_VMU_NATIVE_HEAP_ORIGINAL" else (56,64)
             if (size != expected or kind != 1 or address & 31 or section[1] != 8 or
                     section[2] & 7 != 3 or
-                    not 0x8C004000 <= address < address + reserved <= 0x8C007800 or
+                    not 0x8C004000 <= address < address + reserved <= low_limit or
                     address + reserved > section[3] + section[5]):
                 raise ValueError("Observer control must own two complete low BSS cache lines")
             # No other runtime symbol may occupy the control's padding.

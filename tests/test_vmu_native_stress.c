@@ -49,9 +49,9 @@ static void stress_stage(unsigned controllers,unsigned command,unsigned block,un
             unsigned words=command==1u || command==2u?0u:command==12u?34u:2u;
             uint32_t target_control=words;
             if(++ordinal==packets) target_control|=UINT32_C(0x80000000);
-            memset(rx_bytes(1),0xa5,1024u);
-            put(source+offset,4u,target_control);put(source+offset+4u,4u,rx_at(1));
-            put(source+offset+8u,4u,(words<<24)|0x100u|command);
+            memset(rx_bytes(2),0xa5,1024u);
+            put(source+offset,4u,target_control);put(source+offset+4u,4u,rx_at(2));
+            put(source+offset+8u,4u,(words<<24)|0x200u|command);
             if(words) put(source+offset+12u,4u,UINT32_C(0x02000000));
             if(words>1u) put(source+offset+16u,4u,(block<<24)|(phase<<8));
             if(command==12u) {
@@ -110,7 +110,7 @@ static struct stress_cost stress_transfer(unsigned controllers,unsigned command,
         memcpy(unrelated[port-1u],kui_vmu_native_passive_test_rx(stress_rx(port),1024u),1024u);
     complete_return();cost.complete_reads=measured_complete_reads;idle();
     CHECK(!controller_pair.pending && !overlay.pending);
-    parent[2]|=1u;CHECK(!memcmp(parent,rx_bytes(0u),sizeof(parent)));
+    parent[2]|=2u;CHECK(!memcmp(parent,rx_bytes(0u),sizeof(parent)));
     for(unsigned port=1;port<controllers;port++)
         CHECK(!memcmp(unrelated[port-1u],kui_vmu_native_passive_test_rx(stress_rx(port),1024u),1024u));
     CHECK(value_at(0xa05f6c04u)==physical(input.tx_base)+packet_bank*KUI_VMU_NATIVE_TX_BANK_BYTES);

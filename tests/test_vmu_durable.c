@@ -12,6 +12,7 @@ static struct kui_vmu_durable_handoff handoff;
 static uint8_t response[524];
 static size_t response_bytes;
 static unsigned lease_calls,block_callbacks;
+static uint8_t presentation_address=1u;
 static bool omit_callback,double_callback,busy_after_callback;
 static bool release_saw_unpublished;
 
@@ -64,7 +65,8 @@ static void cold_worker(void) {
     memset(&durable,0,sizeof(durable));card.bus.transfer_block=block_transfer;
     lease_calls=block_callbacks=0u;omit_callback=double_callback=busy_after_callback=false;
     release_saw_unpublished=false;
-    assert(!kui_vmu_durable_init(&durable,&handoff,gateway,exported_transaction));
+    assert(!(presentation_address==1u?kui_vmu_durable_init(&durable,&handoff,gateway,exported_transaction):
+        kui_vmu_durable_init_address(&durable,presentation_address,&handoff,gateway,exported_transaction)));
     assert(durable.ready && !durable.bound && !sd.bytes && !durable.store.io.context);
 }
 static void setup(void) {model_reset();prepare_handoff();cold_worker();}
@@ -74,14 +76,14 @@ static void idle(void) {
     assert(card.bus.transfer_block==block_transfer);
 }
 static void frame_for(uint8_t frame[140],unsigned cmd,unsigned block,unsigned phase) {
-    memset(frame,0,140u);frame[0]=(uint8_t)cmd;frame[1]=1u;
+    memset(frame,0,140u);frame[0]=(uint8_t)cmd;frame[1]=presentation_address;
     if(cmd==1u || cmd==2u) return;
     frame[3]=(uint8_t)(cmd==12u?34u:2u);frame[7]=2u;frame[9]=(uint8_t)phase;frame[11]=(uint8_t)block;
 }
 static void dispatch(const uint8_t *frame,size_t bytes) {
     memset(response,0xa5,sizeof(response));response_bytes=999u;
     assert(kui_vmu_durable_handle(&durable,frame,bytes,response,sizeof(response),&response_bytes)==1);
-    assert(response_bytes==4u+4u*response[3]);idle();
+    assert(response_bytes==4u+4u*response[3] && response[2]==presentation_address);idle();
 }
 static void stage(unsigned block,const uint8_t data[512]) {
     unsigned bytes=sd.bytes,calls=lease_calls;
@@ -137,7 +139,7 @@ static void assert_terminal(void) {
     kui_vmu_emulation_reset(&durable.protocol);
     uint8_t frame[140];frame_for(frame,11u,42u,0u);dispatch(frame,12u);
     assert(response[0]==0xfbu && response[7]==8u && sd.bytes==bytes);
-    assert(kui_vmu_durable_admit(&durable,UINT32_C(0x0200010b),UINT32_C(0x02000000),0u)<0);guards();
+    assert(kui_vmu_durable_admit(&durable,(UINT32_C(0x0200000b)|((uint32_t)presentation_address<<8)),UINT32_C(0x02000000),0u)<0);guards();
 }
 static void faults_never_publish_commit(void) {
     uint8_t next[512];memset(next,0xa7,sizeof(next));
@@ -200,8 +202,15 @@ static void handoff_and_api_bounds(void) {
     assert(kui_vmu_durable_handle(&moved,frame,140u,response,sizeof(response),&response_bytes)<0);
 }
 int main(void) {
-    success_and_release_order();first_read_and_copied_handoff();busy_before_acquisition_and_retry();
-    faults_never_publish_commit();pending_journal_and_bad_gateway();handoff_and_api_bounds();
+    for(presentation_address=1u;presentation_address<=2u;presentation_address++) {
+        success_and_release_order();first_read_and_copied_handoff();busy_before_acquisition_and_retry();
+        faults_never_publish_commit();pending_journal_and_bad_gateway();handoff_and_api_bounds();
+        /* An A2 worker rejects A1 requests before lease acquisition. */
+        uint8_t frame[140];frame_for(frame,1u,0u,0u);frame[1]=(uint8_t)(3u-presentation_address);
+        unsigned leases=lease_calls;response_bytes=99u;
+        assert(!kui_vmu_durable_handle(&durable,frame,4u,response,sizeof(response),&response_bytes));
+        assert(!response_bytes && lease_calls==leases);
+    }
     printf("Durable VMU: scoped identity/journal/readback/release, PIO writes, clean binding, retries and fault latching passed (state%zu handoff%zu)\n",
         sizeof(durable),sizeof(handoff));return 0;
 }

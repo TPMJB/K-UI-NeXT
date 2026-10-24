@@ -61,7 +61,7 @@ static size_t append(unsigned command, unsigned destination, unsigned words,
     f->control=((uint32_t)(destination>>6)<<16)|words|(last?LAST:0u);
     f->rx=RECEIVE+(uint32_t)fixture.count*1024u;
     f->header=command|destination<<8|(destination&0xc0u)<<16|words<<24;
-    f->payload0=payload0;
+    f->payload0=payload0;f->payload=words?fixture.raw+start+12u:NULL;
     store(fixture.raw+start,f->control);store(fixture.raw+start+4u,f->rx);
     store(fixture.raw+start+8u,f->header);
     for(unsigned i=0; i<words; ++i)
@@ -294,11 +294,124 @@ static void verify_rejects_mutation_even_with_recomputed_crc(void) {
     assert(kui_vmu_volatile_chain_verify(&fixture.plan,fixture.output,512)!=0);
 }
 
+static void set_selector(size_t frame_index,uint32_t selector) {
+    uint8_t *payload=(uint8_t *)(uintptr_t)fixture.frames[frame_index].payload;
+    store(payload+4u,selector);
+}
+
+static int build_a2(uint8_t *output,size_t capacity) {
+    return kui_vmu_volatile_chain_build_address(&fixture.plan,fixture.frames,fixture.count,
+        SOURCE,(uint32_t)fixture.raw_bytes,output,capacity,OUTPUT,2u);
+}
+
+static void a2_preserves_complete_physical_a1(void) {
+    static _Alignas(32) uint8_t output[KUI_VMU_VOLATILE_CHAIN_PASSTHROUGH_BYTES];
+    uint8_t expected[1024];size_t used=0,offsets[8],sizes[8];
+    reset();memset(output,0xa5,sizeof(output));
+    offsets[0]=append(9,0x20,1,UINT32_C(0x01000000),0);sizes[0]=16;
+    padding(3);
+    append(12,2,34,UINT32_C(0x02000000),0);
+    offsets[1]=append(10,1,2,UINT32_C(0x02000000),0);sizes[1]=20;set_selector(2,0);
+    offsets[2]=append(11,1,2,UINT32_C(0x02000000),0);sizes[2]=20;set_selector(3,0xff000000u);
+    offsets[3]=append(12,1,34,UINT32_C(0x02000000),0);sizes[3]=148;set_selector(4,0xf0000300u);
+    offsets[4]=append(13,1,2,UINT32_C(0x02000000),0);sizes[4]=20;set_selector(5,0xf0000400u);
+    offsets[5]=append(12,1,50,UINT32_C(0x04000000),0);sizes[5]=212;set_selector(6,0);
+    offsets[6]=append(14,1,49,UINT32_C(0x04000000),0);sizes[6]=208;
+    offsets[7]=append(1,0x60,0,0,0);sizes[7]=12;
+    append(11,2,2,UINT32_C(0x02000000),1);
+    for(unsigned i=0;i<8u;++i) {
+        memcpy(expected+used,fixture.raw+offsets[i],sizes[i]);
+        store(expected+used,word(expected+used)&~LAST);
+        if(i==7u) store(expected+used,word(expected+used)|LAST);
+        used+=sizes[i];
+    }
+    assert(used>512u);
+    uint8_t before[512];memcpy(before,fixture.output,sizeof(before));
+    struct kui_vmu_volatile_chain_plan plan=fixture.plan;
+    assert(build_a2(fixture.output,sizeof(fixture.output))==KUI_VMU_VOLATILE_CHAIN_CAPACITY);
+    assert(!memcmp(before,fixture.output,sizeof(before)) && !memcmp(&plan,&fixture.plan,sizeof(plan)));
+    assert(build_a2(output,sizeof(output))==0);
+    assert(fixture.plan.virtual_address==2u && fixture.plan.virtual_count==2u &&
+        fixture.plan.physical_count==8u && fixture.plan.output_bytes==used);
+    assert(!memcmp(output,expected,used));
+    for(size_t i=used;i<sizeof(output);++i) assert(output[i]==0xa5u);
+    assert(kui_vmu_volatile_chain_verify(&fixture.plan,output,sizeof(output))==0);
+    /* No live SDK payload is read after the captured bytes have been copied. */
+    memset(fixture.raw,0x69,fixture.raw_bytes);
+    assert(!memcmp(output,expected,used));
+    assert(kui_vmu_volatile_chain_verify(&fixture.plan,output,sizeof(output))==0);
+}
+
+static void a2_filters_only_a2(void) {
+    for(unsigned command=0;command<256u;++command) {
+        reset();append(1,1,0,0,0);
+        append(command,2,command,UINT32_C(0x02000000),1);
+        assert(build_a2(fixture.output,sizeof(fixture.output))==0);
+        assert(fixture.plan.physical_count==1u && fixture.plan.virtual_count==1u);
+        assert(word(fixture.output+8u)==0x00000101u);
+        assert(kui_vmu_volatile_chain_verify(&fixture.plan,fixture.output,sizeof(fixture.output))==0);
+    }
+}
+
+static void a2_preserves_reset_and_clock(void) {
+    reset();append(3,1,0,0,0);append(14,1,2,UINT32_C(0x08000000),1);
+    set_selector(1,UINT32_C(0xc000000f));
+    assert(build_a2(fixture.output,sizeof(fixture.output))==0);
+    assert(fixture.plan.output_bytes==32u && !fixture.plan.virtual_count);
+    assert(!memcmp(fixture.output,fixture.raw,fixture.raw_bytes));
+    assert(kui_vmu_volatile_chain_verify(&fixture.plan,fixture.output,sizeof(fixture.output))==0);
+    reset();append(4,1,0,0,1);
+    assert(build_a2(fixture.output,sizeof(fixture.output))==KUI_VMU_VOLATILE_CHAIN_UNSUPPORTED);
+}
+
+static void a2_revalidates_physical_memory_payload(void) {
+    reset();append(12,1,34,UINT32_C(0x02000000),1);set_selector(0,0);
+    assert(build_a2(fixture.output,sizeof(fixture.output))==0);
+    fixture.output[sizeof(uint32_t)*5u]^=0x40u;
+    assert(kui_vmu_volatile_chain_verify(&fixture.plan,fixture.output,sizeof(fixture.output))==
+        KUI_VMU_VOLATILE_CHAIN_CHANGED);
+    fixture.output[sizeof(uint32_t)*5u]^=0x40u;
+    store(fixture.output+16u,1u); /* Forbidden physical partition, despite a fresh CRC. */
+    fixture.plan.crc32=expected_crc(fixture.output,fixture.plan.output_bytes);
+    assert(kui_vmu_volatile_chain_verify(&fixture.plan,fixture.output,sizeof(fixture.output))==
+        KUI_VMU_VOLATILE_CHAIN_DESCRIPTOR);
+}
+
+static void a2_refuses_bad_physical_payloads_before_writing(void) {
+    const uint32_t selectors[]={1u,0x00010000u,0x00000400u};
+    for(size_t i=0;i<sizeof(selectors)/sizeof(selectors[0]);++i) {
+        reset();append(12,1,34,UINT32_C(0x02000000),1);set_selector(0,selectors[i]);
+        uint8_t before[512];memcpy(before,fixture.output,sizeof(before));
+        struct kui_vmu_volatile_chain_plan plan=fixture.plan;
+        assert(build_a2(fixture.output,sizeof(fixture.output))<0);
+        assert(!memcmp(before,fixture.output,sizeof(before)) && !memcmp(&plan,&fixture.plan,sizeof(plan)));
+    }
+    reset();append(12,1,34,UINT32_C(0x02000000),1);set_selector(0,0);
+    fixture.frames[0].payload=NULL;
+    assert(build_a2(fixture.output,sizeof(fixture.output))==KUI_VMU_VOLATILE_CHAIN_ARGUMENT);
+    reset();append(12,1,34,UINT32_C(0x02000000),1);set_selector(0,0);
+    fixture.frames[0].payload=fixture.output;
+    assert(build_a2(fixture.output,sizeof(fixture.output))==KUI_VMU_VOLATILE_CHAIN_OVERLAP);
+    reset();append(12,1,34,UINT32_C(0x02000000),1);set_selector(0,0);
+    fixture.frames[0].payload=(const uint8_t *)(uintptr_t)RECEIVE;
+    assert(build_a2(fixture.output,sizeof(fixture.output))==KUI_VMU_VOLATILE_CHAIN_OVERLAP);
+    reset();append(12,1,50,UINT32_C(0x04000000),1);set_selector(0,1u);
+    assert(build_a2(fixture.output,sizeof(fixture.output))<0);
+    reset();append(14,1,48,UINT32_C(0x04000000),1);
+    assert(build_a2(fixture.output,sizeof(fixture.output))<0);
+    reset();append(1,1,0,0,1);
+    assert(kui_vmu_volatile_chain_build_address(&fixture.plan,fixture.frames,fixture.count,
+        SOURCE,(uint32_t)fixture.raw_bytes,fixture.output,sizeof(fixture.output),OUTPUT,3u)==
+        KUI_VMU_VOLATILE_CHAIN_ARGUMENT);
+}
+
 int main(void) {
     assert(expected_crc((const uint8_t *)"123456789",9)==UINT32_C(0xcbf43926));
     mixed_byte_exact();every_virtual_command_is_filtered();strict_physical_whitelist();
     invalid_descriptors_are_atomic();full_rx_and_output_geometry();aliases_and_arguments();
     maximum_batch_and_padding();verify_rejects_mutation_even_with_recomputed_crc();
+    a2_preserves_complete_physical_a1();a2_filters_only_a2();a2_preserves_reset_and_clock();
+    a2_refuses_bad_physical_payloads_before_writing();a2_revalidates_physical_memory_payload();
     puts("volatile Maple chain tests passed");
     return 0;
 }

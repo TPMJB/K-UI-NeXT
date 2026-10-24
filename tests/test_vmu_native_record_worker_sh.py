@@ -9,7 +9,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT/'tools'),str(ROOT/'tests')]
-from profile_vmu_native_record_worker_sh import Record, RecordWorker
+from profile_vmu_native_record_worker_sh import Record, RecordWorker, VIRTUAL_ADDRESS, MEMCARD, LCD
 from test_vmu_native_heap_execution import SH
 from sh4_delay_slots import SlotIllegalInstruction
 
@@ -89,8 +89,44 @@ class RecordReplayTests(unittest.TestCase):
         for version in (0,3,0xffffffff):
             with self.subTest(version=version):
                 wire,image = fixture(layout_version=version)
-                with self.assertRaisesRegex(AssertionError,'Uniform RX replay schema'):
+                with self.assertRaisesRegex(AssertionError,'Reviewed RX replay schema'):
                     Record(wire,image)
+
+    def test_accepts_explicit_slot_layout_schema(self):
+        wire,image = fixture()
+        wire = bytearray(wire)
+        struct.pack_into('<I',wire,168+6*4,1)
+        struct.pack_into('<I',wire,168+59*4,12)
+        wire[992:] = hashlib.sha256(wire[:992]).digest()
+        self.assertEqual(Record(bytes(wire),image).layout[6],1)
+
+    def test_derives_physical_alias_submit_caller(self):
+        wire,image = fixture()
+        image = bytearray(image)
+        original = struct.unpack_from('<I',image,0xa80)[0]
+        struct.pack_into('<I',image,0xa80,original&0x1fffffff)
+        wire = bytearray(wire)
+        wire[32:64] = wire[136:168] = hashlib.sha256(image).digest()
+        wire[992:] = hashlib.sha256(wire[:992]).digest()
+        self.assertEqual(Record(bytes(wire),bytes(image)).submit_entry,original&0x1fffffff)
+
+    def test_virtual_slot_is_a2(self):
+        self.assertEqual(VIRTUAL_ADDRESS,2)
+
+    def test_physical_a1_long_payload_fixture(self):
+        cpu = RecordWorker.__new__(RecordWorker)
+        cpu.physical_a1_memory = {}
+        cpu.physical_a1_write_phases = {}
+        bitmap = bytes(range(192))
+        ack = struct.pack('<I',0x00010007)
+        self.assertEqual(cpu.physical_a1_response(0x3100010e,struct.pack('<I',LCD)+bitmap),ack)
+        self.assertEqual(cpu.physical_a1_lcd,bitmap)
+        other = bitmap[::-1]
+        self.assertEqual(cpu.physical_a1_response(0x3200010c,struct.pack('<2I',LCD,0)+other),ack)
+        self.assertEqual(cpu.physical_a1_lcd,other)
+        phase = struct.pack('<2I',MEMCARD,0x2a000000)+bytes(range(128))
+        self.assertEqual(cpu.physical_a1_response(0x2200010c,phase),ack)
+        self.assertEqual(cpu.physical_a1_write_phases[phase[4:8]],phase[8:])
 
     def test_rejects_changed_image(self):
         wire,image = fixture()

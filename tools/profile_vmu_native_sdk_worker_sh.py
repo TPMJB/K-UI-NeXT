@@ -28,7 +28,7 @@ BASE=0xacfd0000
 CFG=0x8c00a000
 FRAME=0x8c2ff800
 GUARD=0x4b535431
-def all_functions(elf):
+def all_functions(elf,relocation_delta=0xed0000):
  # read_elf exposes names as a dict; local static names can repeat by object.
  data,_,_,sections,_=elf
  records=[]
@@ -39,21 +39,24 @@ def all_functions(elf):
    name,value,size,info,_,_=SYM.unpack_from(data,offset)
    if info&15!=2 or not size:continue
    name=names[name:].split(b'\0',1)[0].decode('ascii')
-   records.append((value+0xed0000,value+0xed0000+size,name))
+   records.append((value+relocation_delta,value+relocation_delta+size,name))
  counts=Counter(name for _,_,name in records)
  return sorted((lo,hi,name if counts[name]==1 else name+'@'+hex(lo)) for lo,hi,name in records)
 class WorkerSH(PollSH):
- def __init__(self,startup,build,handoff,cached_stack=False):
+ def __init__(self,startup,build,handoff,cached_stack=False,worker_base=BASE):
   self.startup=startup;self.handoff=handoff;self.cached_stack=cached_stack
+  self.worker_base=worker_base
+  self.worker_physical_low=worker_base&0x1fffffff;self.worker_physical_high=self.worker_physical_low+0x30000
+  relocation_delta=self.worker_physical_low-0xc100000
   super().__init__(startup.read_bytes(),2,1,None)
   elf=read_elf(build/'native-worker.elf')
-  self.symbols={n:((v[0]+0xed0000)&MASK,*v[1:]) for n,v in elf[4].items()}
+  self.symbols={n:((v[0]+relocation_delta)&MASK,*v[1:]) for n,v in elf[4].items()}
   self.objects=sorted((a,a+z,n) for n,(a,z,t,_) in self.symbols.items() if t==1 and z)
-  self.functions=all_functions(elf);self.function_starts=[lo for lo,_,_ in self.functions]
+  self.functions=all_functions(elf,relocation_delta);self.function_starts=[lo for lo,_,_ in self.functions]
   self.stack_physical_low=self.symbols['__vmu_native_worker_stack_bottom'][0]&0x1fffffff;self.stack_physical_high=self.symbols['__vmu_native_worker_stack_top'][0]&0x1fffffff
   self.symbols.pop('_read_heap',None)
-  blob=relocated((build/'native-worker.bin').read_bytes(),(build/'native-worker.reloc').read_bytes(),BASE)
-  self.store_block(BASE,bytes(0x20000));self.store_block(BASE,blob)
+  blob=relocated((build/'native-worker.bin').read_bytes(),(build/'native-worker.reloc').read_bytes(),worker_base)
+  self.store_block(worker_base,bytes(0x20000));self.store_block(worker_base,blob)
   self.active=False;self.guest_words=set();self.stubs={};self.macl=0
   self.private_reads=self.private_writes=self.guest_reads=0
   self.flat_ocbp=[]
@@ -153,7 +156,7 @@ class WorkerSH(PollSH):
   op=self.read(load,2)
   assert op&0xff00==0xd300,(hex(load),hex(op))
   slot=((load+4)&~3)+4*(op&255)
-  assert self.read(slot)==initializer,(hex(slot),hex(self.read(slot)),hex(initializer))
+  assert self.read(slot)&0x1fffffff==initializer&0x1fffffff,(hex(slot),hex(self.read(slot)),hex(initializer))
   target=table[7+kind]
   expected=self.symbols[('_kui_vmu_native_sdk_coherence_uniform_gate','_kui_vmu_native_sdk_coherence_variable_gate')[kind]][0]+0x20000000
   assert target==expected and table[9]==self.symbols['_kui_vmu_native_sdk_coherence_state'][0]
@@ -190,7 +193,7 @@ class WorkerSH(PollSH):
     label=self.function(a);self.function_instructions[label]+=1
     if label=='unknown':self.unknown_instruction_pcs[a]+=1
    at=a&0x1fffffff
-   if 0x0cfd0000<=at<0x0d000000:
+   if self.worker_physical_low<=at<self.worker_physical_high:
     if a&0xe0000000==0xa0000000:
      self.private_reads+=1;self.access_reads[self.label(a)]+=1;self.function_p2_reads[self.function(self.pc)]+=1
     elif a&0xe0000000==0x80000000 and self.stack_physical_low<=at<self.stack_physical_high:
@@ -202,9 +205,9 @@ class WorkerSH(PollSH):
    return int.from_bytes(self.original_image[a-0x8c010000:a-0x8c010000+count],'little')
   return PollSH.read(self,a,count)
  def write(self,a,v,count=4):
-  if getattr(self,'active',False) and a&0xe0000000==0xa0000000 and 0xcfd0000<=a&0x1fffffff<0xd000000:
+  if getattr(self,'active',False) and a&0xe0000000==0xa0000000 and self.worker_physical_low<=a&0x1fffffff<self.worker_physical_high:
    self.private_writes+=1;self.access_writes[self.label(a)]+=1;self.function_p2_writes[self.function(self.pc)]+=1
-  elif getattr(self,'active',False) and a&0xe0000000==0x80000000 and 0xcfd0000<=a&0x1fffffff<0xd000000 and self.stack_physical_low<=a&0x1fffffff<self.stack_physical_high:
+  elif getattr(self,'active',False) and a&0xe0000000==0x80000000 and self.worker_physical_low<=a&0x1fffffff<self.worker_physical_high and self.stack_physical_low<=a&0x1fffffff<self.stack_physical_high:
    self.p1_stack_writes+=1;self.access_writes['p1.private_stack']+=1
   return PollSH.write(self,a,v,count)
  def bridge_submit(self):
@@ -270,6 +273,7 @@ def negative_cases(cpu):
   ('private_rx_unsupported_area',lambda c:c.write(pair+28+128,0xec000000)),
   ('private_rx_function_past_ram',lambda c:(c.write(pair+28+128,0x0cfffffc),c.write(0x0cfffffc,0x03200008))),
   ('physical_response_header',lambda c:c.write(rx,c.read(rx)^1)),
+  ('physical_a2_attached',lambda c:c.write(rx,c.read(rx)|0x00020000)),
   ('live_bank_selector',lambda c:c.write(manager+0x10b4,c.read(manager+0x10b4)^1)),
   ('stack_guard',lambda c:c.write(stack,0)),
  ]
@@ -347,7 +351,7 @@ def main():
   if i>=2 and not args.reference:assert live_ready==0x4e4c5031, (i,hex(live_ready))
   if i>=2 and not args.reference:
    assert pending==1
-   assert result['complete_rx_differences']==[{'offset':hex((i%2)*0x6000+2),'before':'0x20','after':'0x21'}]
+   assert result['complete_rx_differences']==[{'offset':hex((i%2)*0x6000+2),'before':'0x20','after':'0x22'}]
  negative_results=negative_cases(cpu) if args.negative_cases else []
  summary={'negative_cases':negative_results,'schema':'kui.native.original-sdk-linked-worker.v1','executable_sha256':DIGEST,'worker_elf_sha256':hashlib.sha256((args.build/'native-worker.elf').read_bytes()).hexdigest(),'worker_binary_sha256':hashlib.sha256((args.build/'native-worker.bin').read_bytes()).hexdigest(),'handoff_sha256':hashlib.sha256(handoff).hexdigest(),'retail_code_embedded':False,'reference_full_path':args.reference,'cached_callback_stack':args.cached_stack,'discard_dead_stack':args.discard_dead_stack,'heap_initializer_instructions':cpu.heap_initializer_instructions,'heap_allocate_instructions':cpu.heap_allocate_instructions,'arm':cpu.arm_counts,'sdk_initializer_instructions':sdk_initializer,'limitations':['Flat coherent memory; no cache, bus latency, interrupts, scheduled callbacks, FMV, game mainloop, SD transport, or cycle timing.','Actual SH C callbacks execute without worker helper stubs; original SDK submit hooks are bridged at the exact overwritten instruction boundary. Assembly save/restore gateways are not interpreted.','Actual original SDK upper initializer lock-normalization block executes; IRQ-registration scaffolding does not.','Completion caller PR and inherited SR are provided from original wrapper contract, then original consumer and ready functions execute.','Valid blank-card handoff comes from existing host model; no storage request occurs during automatic INFO-only VMU enumeration.','Reference mode changes diagnostics selector after NORMAL arm to require full C path while leaving trace disabled.'], 'rounds':history}
  summary['cold_coherence']=cpu.coherence_installation

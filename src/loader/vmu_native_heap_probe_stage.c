@@ -28,6 +28,12 @@ static enum kui_loader_sd_result native_persist_storage_init(struct kui_retail_s
 static uint32_t native_runtime_mode(void) {
     int mode=kui_vmu_native_mode_decode(native_runtime_mode_wire,KUI_VMU_NATIVE_MODE_BYTES);
     if(mode<0) stopped("NATIVE VMU RUNTIME MODE REFUSED",(uint32_t)mode);
+#if KUI_VMU_NATIVE_BACKGROUND
+    /* The Background manifest moves into the live worker reservation.
+     * These diagnostics either skip that allocation or permit its reclaim. */
+    if(mode==KUI_VMU_NATIVE_MODE_CONTROL || mode==KUI_VMU_NATIVE_MODE_LEASE_ONLY)
+        stopped("BACKGROUND VMU REQUIRES LIVE WORKER RESERVATION",(uint32_t)mode);
+#endif
     return (uint32_t)mode;
 }
 #endif
@@ -155,7 +161,12 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
         retail_display_line("NATIVE VMU CONTROL / NO VIRTUAL CARD");
         return;
     }
-    if(manifest.storage_transport!=KUI_STORAGE_SCI || manifest.reader!=KUI_RETAIL_READER_STANDARD ||
+    if(manifest.storage_transport!=KUI_STORAGE_SCI ||
+#if KUI_VMU_NATIVE_BACKGROUND
+       (manifest.reader!=KUI_RETAIL_READER_ASYNC && manifest.reader!=KUI_RETAIL_READER_ASYNC_EAGER) ||
+#else
+       manifest.reader!=KUI_RETAIL_READER_STANDARD ||
+#endif
        (manifest.flags&(KUI_RETAIL_IMAGE_CD|KUI_RETAIL_IMAGE_SCRAMBLED)) ||
        !kui_retail_observe_native_ip((const uint8_t *)(uintptr_t)KUI_RETAIL_IP_ADDRESS))
         native_report(1u,manifest.storage_transport);

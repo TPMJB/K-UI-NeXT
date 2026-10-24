@@ -131,7 +131,7 @@
       "input_relative": "native-extra-corpus/evolution2/1ST_READ.BIN",
       "static_layout": 0,
       "exit_family": 4,
-      "console_status": "Preparation refused before launch on897ee7223b35; this extent correction awaits console launch/save/reboot/load.",
+      "console_status": "Owner reports the extent-corrected virtual card/save-load path working on df035a8cae47 (A1), with remaining slowdown. The new A2/Background package awaits console acceptance.",
       "record_digest": "3440495928a6451c2720f7a4bd28567286a38ae6ca020c9bd87266efcb8a09ac",
       "image_sha256": "52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605",
       "image_bytes": 4024288,
@@ -143,7 +143,8 @@
       "discarded_suffix_bytes": 32768,
       "record_sha256": "f4d9db3b4c807f2b937c8c05cf177d2c5f73e202f1f0724e25317970ea901b1d",
       "record_fixture": "tests/fixtures/native-cache/evolution2.nvr",
-      "layout_version": 2
+      "layout_version": 2,
+      "console_evidence": "docs/vmu-hardware-observations.json: df035a8cae47 / evolution2_native_virtual_card_save_load_reported"
     }
   ]
 }

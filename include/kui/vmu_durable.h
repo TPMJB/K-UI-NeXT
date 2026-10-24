@@ -67,13 +67,18 @@ _Static_assert(sizeof(struct kui_vmu_durable)<=4608u,"Durable worker RAM bound")
 /* No I/O. Both functions and the card must remain in the admitted worker.
  * transaction_entry is the EXACT exported callback pinned by the stage, which
  * checks its context equals this card and forwards to transaction below. */
+/* A1 remains the default for existing workers. Native workers explicitly
+ * choose A2; profile/handoff bytes do not depend on the presentation address. */
+int kui_vmu_durable_init_address(struct kui_vmu_durable *,uint8_t address,
+    const struct kui_vmu_durable_handoff *,
+    int (*lease)(kui_vmu_sd_transaction,void *),kui_vmu_sd_transaction transaction_entry);
 int kui_vmu_durable_init(struct kui_vmu_durable *,const struct kui_vmu_durable_handoff *,
     int (*lease)(kui_vmu_sd_transaction,void *),kui_vmu_sd_transaction transaction_entry);
 /* Sole scoped callback body. Caller holds the existing initialized SCI loan
  * and shared GD lock throughout; never calls begin/end/init/releases/IRQ APIs.
  * The borrowed store context is stack-local and cleared before return. */
 int kui_vmu_durable_transaction(void *context,struct kui_loader_sd *loan);
-/* Strict A1 command whitelist and exact shapes, matching the sanitized chain.
+/* Strict selected-address command whitelist and exact shapes, matching the sanitized chain.
  * A faulted card cannot admit another physical schedule. No I/O/state staging. */
 int kui_vmu_durable_admit(struct kui_vmu_durable *,uint32_t header,uint32_t payload0,uint32_t payload1);
 /* Same frame convention as emulation. C stages only in RAM; B and final D

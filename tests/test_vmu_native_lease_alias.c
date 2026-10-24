@@ -154,7 +154,7 @@ static void save_read_and_reopen(unsigned alias,unsigned runtime_alias) {
     transfer_batch(1u,0u,0u,NULL);transfer_batch(2u,0u,0u,NULL);transfer_batch(10u,0u,0u,NULL);
     CHECK(overlay.stats.devinfo && overlay.stats.allinfo && overlay.stats.media && !lease_calls);
     read_compare(42u,old);stage_block(42u,next);transfer_batch(13u,42u,4u,NULL);
-    CHECK(value_at(rx_at(1))==0x00010007u && durable_card.commits==1u && release_saw_unpublished);
+    CHECK(value_at(rx_at(2))==0x00020007u && durable_card.commits==1u && release_saw_unpublished);
     read_compare(42u,next);CHECK(installed_hooks_valid() && lease_valid());idle();
     CHECK((config.lease.begin&0xe0000000u)==aliases[alias] &&
         (config.lease.payload&0xe0000000u)==aliases[alias]);

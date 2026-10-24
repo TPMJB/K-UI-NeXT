@@ -9,14 +9,18 @@
 #define KUI_VMU_VOLATILE_CHAIN_ENTRIES 256u
 #define KUI_VMU_VOLATILE_CHAIN_BYTES 512u
 #define KUI_VMU_VOLATILE_CHAIN_SOURCE_BYTES UINT32_C(0x3000)
+#define KUI_VMU_VOLATILE_CHAIN_PASSTHROUGH_BYTES KUI_VMU_VOLATILE_CHAIN_SOURCE_BYTES
 #define KUI_VMU_VOLATILE_CHAIN_RX_BYTES 1024u
 #define KUI_VMU_VOLATILE_CHAIN_LAST UINT32_C(0x80000000)
 
 /* One real descriptor captured by the caller's admitted SDK parser. Exact
  * one-word 00000700 padding is omitted. payload0 is required for physical
- * GETCOND; no virtual request payload is copied into the physical DMA chain. */
+ * GETCOND. For a physical request with more than one payload word, payload
+ * owns the entire immutable captured payload, including payload0. No virtual
+ * request payload is copied into the physical DMA chain. */
 struct kui_vmu_volatile_chain_frame {
     uint32_t control, rx, header, payload0;
+    const uint8_t *payload;
 };
 
 /* Private, immutable between build and verify. CRC is an accidental-change
@@ -24,11 +28,11 @@ struct kui_vmu_volatile_chain_frame {
 struct kui_vmu_volatile_chain_plan {
     uint32_t source_physical, source_bytes, output_physical, output_bytes;
     uint32_t output_capacity, frame_count, physical_count, virtual_count;
-    uint32_t padding_count, crc32;
+    uint32_t padding_count, crc32, virtual_address;
 };
-_Static_assert(sizeof(struct kui_vmu_volatile_chain_frame)==16u,
+_Static_assert(sizeof(struct kui_vmu_volatile_chain_frame)<=24u,
     "Captured chain frames must remain compact");
-_Static_assert(sizeof(struct kui_vmu_volatile_chain_plan)==40u,
+_Static_assert(sizeof(struct kui_vmu_volatile_chain_plan)==44u,
     "Filtered chain metadata must remain bounded");
 
 enum kui_vmu_volatile_chain_result {
@@ -77,6 +81,22 @@ int kui_vmu_volatile_chain_build(struct kui_vmu_volatile_chain_plan *,
     const struct kui_vmu_volatile_chain_frame *, size_t frame_count,
     uint32_t source_physical, uint32_t source_bytes,
     uint8_t *output, size_t output_capacity, uint32_t output_physical);
+
+/* Explicit native A2 transport. virtual_address is 1 (the legacy behavior
+ * above) or 2. Address 2 filters only A2 and also retains exact physical A1
+ * VMU MEDIA/READ/WRITE/SYNC, RESET, LCD BWRITE and LCD/clock SETCOND requests,
+ * including their complete captured payloads. A1 source descriptors and reply
+ * slots remain owned by
+ * the physical SDK device. A2 output capacity may be up to
+ * KUI_VMU_VOLATILE_CHAIN_PASSTHROUGH_BYTES. Payload snapshots must be disjoint
+ * from plan, frame metadata, output and all RX allocations and remain immutable
+ * through build. The caller separately validates every physical response before
+ * allowing the SDK to consume it. */
+int kui_vmu_volatile_chain_build_address(struct kui_vmu_volatile_chain_plan *,
+    const struct kui_vmu_volatile_chain_frame *, size_t frame_count,
+    uint32_t source_physical, uint32_t source_bytes,
+    uint8_t *output, size_t output_capacity, uint32_t output_physical,
+    uint8_t virtual_address);
 
 /* Before completion publication, recheck the immutable private chain's CRC,
  * complete descriptor structure, physical-only whitelist, LAST and RX geometry.

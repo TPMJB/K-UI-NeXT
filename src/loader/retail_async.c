@@ -78,9 +78,18 @@ static uint16_t rd16(uint32_t a) { return *(volatile uint16_t *)(uintptr_t)a; }
 static void wr16(uint32_t a, uint16_t v) { *(volatile uint16_t *)(uintptr_t)a = v; }
 #endif
 
+#if KUI_VMU_NATIVE_BACKGROUND
+kui_retail_async_region_type *kui_retail_async_region_storage;
+#else
 struct kui_retail_async_region kui_retail_async_region __attribute__((aligned(32)));
+#endif
 #define R kui_retail_async_region
 #define e kui_retail_async_region.engine
+#if KUI_VMU_NATIVE_BACKGROUND
+static bool native_loan_blocked(void) {
+    return e.native_loan_state!=KUI_VMU_NATIVE_ASYNC_LOAN_IDLE;
+}
+#endif
 #ifdef KUI_RETAIL_CE
 void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
     e.manifest = manifest;
@@ -185,6 +194,9 @@ static void unhook(void) {
 /* The bus is claimed at the first read and kept: the card waits mid-stream
  * between requests, deselected. */
 static bool open_bus(void) {
+#if KUI_VMU_NATIVE_BACKGROUND
+    if(native_loan_blocked()) return false;
+#endif
 #if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
     if(e.vmu_loan_state!=KUI_ARMADA_CE_VMU_LOAN_IDLE) return false;
 #endif
@@ -504,6 +516,82 @@ static void start(void) {
     }
 #endif
 }
+#if KUI_VMU_NATIVE_BACKGROUND
+extern volatile uint32_t kui_retail_hook_active,kui_retail_hook_fault;
+#ifdef KUI_RETAIL_ASYNC_TEST
+extern uint32_t kui_retail_async_vmu_test_sr(void);
+#define native_loan_sr kui_retail_async_vmu_test_sr
+#else
+static uint32_t native_loan_sr(void) {
+    uint32_t sr;
+    __asm__ __volatile__("stc sr,%0":"=r"(sr)::"memory");
+    return sr;
+}
+#endif
+static void native_loan_fault(void) {
+    e.native_loan_state=KUI_VMU_NATIVE_ASYNC_LOAN_QUARANTINED;
+    R.shared.card.device.sd.ready=false;
+    e.failed=KUI_GD_ERROR_IO;
+    kui_retail_hook_fault=1u;
+}
+enum kui_vmu_native_async_loan_result kui_retail_native_async_loan_begin(
+    struct kui_loader_sd *copied_card) {
+    if((native_loan_sr()&UINT32_C(0xf0))!=UINT32_C(0xf0))
+        return KUI_VMU_NATIVE_ASYNC_LOAN_CONTEXT;
+    if(!copied_card || e.native_loan_state==KUI_VMU_NATIVE_ASYNC_LOAN_QUARANTINED)
+        return KUI_VMU_NATIVE_ASYNC_LOAN_FAULT;
+    if(native_loan_blocked() || kui_retail_hook_active)
+        return KUI_VMU_NATIVE_ASYNC_LOAN_BUSY;
+    kui_retail_hook_active=1u;
+    const struct kui_retail_gd *s=&R.shared.service;
+    /* A completed command may still await CHECK. Its terminal result does
+     * not own SCI; a pending command, receiver or released handler does. */
+    if(!s->initialized || s->pending || s->executing || e.active || e.in_irq ||
+       e.release.depth || kui_sci_stream_busy()) {
+        kui_retail_hook_active=0u;return KUI_VMU_NATIVE_ASYNC_LOAN_BUSY;
+    }
+    if(R.shared.card.transport!=KUI_STORAGE_SCI || !R.shared.card.device.sd.ready ||
+       R.shared.card.device.sd.slow || !R.shared.card.device.sd.blocks ||
+       R.shared.card.stream.active || R.shared.port.fault ||
+       e.opened!=(uint32_t)R.shared.port.acquired) goto fault;
+    e.native_loan_state=KUI_VMU_NATIVE_ASYNC_LOAN_STOPPING;
+    unhook();
+    if((e.opened && kui_sci_stream_stop()!=KUI_SCI_STREAM_OK) ||
+       kui_sci_stream_busy() || R.shared.stream.state || R.shared.port.fault ||
+       e.opened!=(uint32_t)R.shared.port.acquired || e.release.armed ||
+       e.release.depth || e.hooked || vbr_get()==our_vbr()) goto fault;
+    kui_sci_stream_discard();
+    if(e.opened) kui_sci_sd_release();
+    if(R.shared.port.acquired || R.shared.port.fault) goto fault;
+    e.opened=0u;
+    *copied_card=R.shared.card.device.sd;
+    e.native_loan_state=KUI_VMU_NATIVE_ASYNC_LOAN_WRITER;
+    return KUI_VMU_NATIVE_ASYNC_LOAN_OK;
+fault:
+    native_loan_fault();kui_retail_hook_active=0u;
+    return KUI_VMU_NATIVE_ASYNC_LOAN_FAULT;
+}
+enum kui_vmu_native_async_loan_result kui_retail_native_async_loan_end(bool healthy) {
+    if((native_loan_sr()&UINT32_C(0xf0))!=UINT32_C(0xf0))
+        return KUI_VMU_NATIVE_ASYNC_LOAN_CONTEXT;
+    const struct kui_retail_gd *s=&R.shared.service;
+    if(e.native_loan_state!=KUI_VMU_NATIVE_ASYNC_LOAN_WRITER ||
+       kui_retail_hook_active!=1u || !healthy || R.shared.port.acquired ||
+       R.shared.port.fault || e.opened || kui_sci_stream_busy() || R.shared.stream.state ||
+       !R.shared.card.device.sd.ready || e.active || e.in_irq || e.release.depth ||
+       e.release.armed || e.hooked || vbr_get()==our_vbr() ||
+       !s->initialized || s->pending || s->executing) {
+        native_loan_fault();
+        if(kui_retail_hook_active==1u) kui_retail_hook_active=0u;
+        return KUI_VMU_NATIVE_ASYNC_LOAN_FAULT;
+    }
+    /* Preserve the completed handle and cursor; a future read starts its
+     * own cursor and reacquires the bus through open_bus, never here. */
+    e.native_loan_state=KUI_VMU_NATIVE_ASYNC_LOAN_IDLE;
+    kui_retail_hook_active=0u;
+    return KUI_VMU_NATIVE_ASYNC_LOAN_OK;
+}
+#endif
 #if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
 #if !defined(KUI_RETAIL_CE) || !defined(KUI_RETAIL_ASYNC)
 #error "CE VMU storage loans require the CE asynchronous reader"
@@ -644,6 +732,9 @@ enum kui_armada_ce_vmu_loan_result kui_retail_async_vmu_loan_end(bool healthy) {
 }
 #endif
 void kui_retail_async_call(uint32_t function) {
+#if KUI_VMU_NATIVE_BACKGROUND
+    if(native_loan_blocked()) return;
+#endif
     uint32_t wait = 0;
 #if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
     if(loan_blocked()) return;
@@ -677,6 +768,9 @@ void kui_retail_async_call(uint32_t function) {
     report();
 }
 void kui_retail_async_after(uint32_t function, int32_t result) {
+#if KUI_VMU_NATIVE_BACKGROUND
+    if(native_loan_blocked()) return;
+#endif
 #if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
     if(loan_blocked()) {
         if(e.vmu_loan_state==KUI_ARMADA_CE_VMU_LOAN_QUARANTINED) loan_fault();
@@ -721,6 +815,9 @@ void kui_retail_async_after(uint32_t function, int32_t result) {
 #endif
 }
 uint32_t kui_retail_async_irq(void) {
+#if KUI_VMU_NATIVE_BACKGROUND
+    if(native_loan_blocked()) return 1u;
+#endif
 #if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
     if(loan_blocked()) return 1u;
 #endif

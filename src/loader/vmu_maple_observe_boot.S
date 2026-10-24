@@ -4,8 +4,8 @@
 #include "kui/retail_loader_layout.h"
 #include "kui/vmu_maple_observe_boot.h"
 #include "kui/vmu_maple_observe_profile.h"
-#if !KUI_VMU_MAPLE_OBSERVE || !KUI_RETAIL_LOW_RESIDENT || defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_ASYNC)
-#error VMU observation bootstrap requires its separate synchronous native build
+#if !KUI_VMU_MAPLE_OBSERVE || !KUI_RETAIL_LOW_RESIDENT || defined(KUI_RETAIL_CE) || (defined(KUI_RETAIL_ASYNC) && !KUI_VMU_NATIVE_BACKGROUND)
+#error VMU observation bootstrap requires its separate native build
 #endif
 #define JOIN_I(a,b) a##b
 #define JOIN(a,b) JOIN_I(a,b)

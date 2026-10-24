@@ -88,7 +88,7 @@ static void render_cycle(bool failure,unsigned count) {
     expected_guard[0]=0x30002u;expected_guard[1]=0x0c248420u;
     expected_guard[2]=(uint32_t)-7;expected_guard[3]=0u;
     for(unsigned i=0u;i<KUI_VMU_VOLATILE_CHAIN_FRAMES;i++) frames[i]=
-        (struct kui_vmu_volatile_chain_frame){0x80000000u+i,0x0c500000u+1024u*i,0x01002009u+i,0x01000000u+i};
+        (struct kui_vmu_volatile_chain_frame){0x80000000u+i,0x0c500000u+1024u*i,0x01002009u+i,0x01000000u+i,NULL};
     if(failure) {
         struct kui_vmu_native_trace_failure snapshot={
             .check=expected_guard[0],.address=expected_guard[1],.value=expected_guard[2],.expected=expected_guard[3],

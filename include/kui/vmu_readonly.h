@@ -36,6 +36,8 @@ _Static_assert(sizeof(struct kui_vmu_readonly)<=KUI_VMU_READONLY_STATE_BYTES_MAX
 
 /* Zero on success; reinitializes caller-owned memory without external I/O. */
 int kui_vmu_readonly_init(struct kui_vmu_readonly *state);
+/* Explicit A1/A2 selection; existing init() retains its A1 default. */
+int kui_vmu_readonly_init_address(struct kui_vmu_readonly *state,uint8_t address);
 /* Read-only fixed-image variant. Callback is resident/caller-owned and returns
  * zero only with all512 bytes verified. Any nonzero result is terminal; this
  * first bridge never invents a Maple retry response. No callback may write
@@ -43,7 +45,7 @@ int kui_vmu_readonly_init(struct kui_vmu_readonly *state);
 int kui_vmu_readonly_init_reader(struct kui_vmu_readonly *state,
     int (*read_block)(void *,uint16_t,uint8_t[512]),void *context);
 
-/* CPU/DMA bytes, exact destination A1/source host0. Only DEVINFO, ALLINFO,
+/* CPU/DMA bytes, exact selected destination/source host0. Only DEVINFO, ALLINFO,
  * GETMINFO and BLOCKREAD are admitted, with exact packet lengths, MEMCARD
  * function and valid partition/phase/block fields. Everything else, including
  * RESET/KILL/LCD/WRITE/SYNC, is REFUSED before the protocol is entered.

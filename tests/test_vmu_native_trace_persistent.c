@@ -137,13 +137,13 @@ static void refusal_witness(unsigned which) {
         put(source+36u,4u,0x00406003u);
     } else injection=which==1u?INJECT_CONTEXT:which==2u?INJECT_TARGET:INJECT_VERIFY;
     uint8_t before[3][1024];memcpy(before[0],rx_bytes(0),1024u);
-    memcpy(before[1],rx_bytes(1),1024u);memcpy(before[2],rx_bytes(6),1024u);
+    memcpy(before[1],rx_bytes(2),1024u);memcpy(before[2],rx_bytes(6),1024u);
     unsigned pixels_before=sampler_pixels;
     if(!setjmp(terminal)) {kui_vmu_native_passive_submit(&frame);CHECK(false);}
     CHECK(sampler_stops==1u && stop_reason==0x40u && trace.hook==0x11u && trace.sequence==2u);
     CHECK(!state.pending && !state.submitted && !state.completed && !state.proof);
     CHECK(value_at(0xa05f6c04u)==source && value_at(0xa05f6c18u)==0u);
-    CHECK(!memcmp(before[0],rx_bytes(0),1024u) && !memcmp(before[1],rx_bytes(1),1024u));
+    CHECK(!memcmp(before[0],rx_bytes(0),1024u) && !memcmp(before[1],rx_bytes(2),1024u));
     CHECK(!memcmp(before[2],rx_bytes(6),1024u) && sampler_pixels==pixels_before);
     CHECK(!lease_calls && !block_callbacks && !sd.bytes && !sd.writes && !durable_card.commits);
     CHECK(trace.failure_present && trace.failure_count==3u && !trace.failure.frames);
@@ -161,22 +161,22 @@ static void refusal_witness(unsigned which) {
     else CHECK(state.runtime_result==0x30003u &&
         state.fault_value==(uint32_t)KUI_VMU_VOLATILE_CHAIN_CHANGED && state.fault_at==trace.failure.target);
 }
-static void all_a1_refused_before_builder(void) {
+static void all_a2_refused_before_builder(void) {
     traced_setup(KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN);stage_batch(1u,0u);
     uint32_t source=value_at(0xa05f6c04u);
-    put(source,4u,0x80000000u);put(source+4u,4u,rx_at(1));put(source+8u,4u,0x00000101u);
-    uint8_t before[1024];memcpy(before,rx_bytes(1),sizeof(before));
+    put(source,4u,0x80000000u);put(source+4u,4u,rx_at(2));put(source+8u,4u,0x00000201u);
+    uint8_t before[1024];memcpy(before,rx_bytes(2),sizeof(before));
     if(!setjmp(terminal)) {kui_vmu_native_passive_submit(&frame);CHECK(false);}
     CHECK(sampler_stops==1u && stop_reason==21u && trace.hook==0x11u);
     CHECK(state.overlay_result==(uint32_t)KUI_VMU_OVERLAY_PARENT && !state.submitted && !state.pending);
     CHECK(!lease_calls && !sd.bytes && !sd.writes && !durable_card.commits);
-    CHECK(value_at(0xa05f6c04u)==source && !memcmp(before,rx_bytes(1),sizeof(before)));
+    CHECK(value_at(0xa05f6c04u)==source && !memcmp(before,rx_bytes(2),sizeof(before)));
 }
 int main(void) {
     CHECK(persistent_suite_main()==0); /* Existing full suite, sampler disabled. */
     ordinary_modes_have_no_sampler();traced_transfers();
     for(unsigned which=0u;which<4u;which++) refusal_witness(which);
-    all_a1_refused_before_builder();
-    printf("Native trace/persistent integration: %u checks; real sampler with normal/raw transfers, target/build/verify/context witnesses and all-A1 refusal passed\n",checks);
+    all_a2_refused_before_builder();
+    printf("Native trace/persistent integration: %u checks; real sampler with normal/raw transfers, target/build/verify/context witnesses and all-A2 refusal passed\n",checks);
     return 0;
 }

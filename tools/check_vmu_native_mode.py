@@ -44,6 +44,8 @@ class ModeHelper(Machine):
         super().__init__(stage, HELPER, seed, mask, 0x8CFF0000, body=body)
         self.result, self.refused = result, False
         self.symbols = stage[4]
+        self.background="_native_background_boot_region" in self.symbols
+        self.must_refuse=bool(result&0x80000000) or self.background and result in (1,3)
         self.targets = {self.symbols[DECODER][0]: "decode", self.symbols["_stopped"][0]: "stop"}
 
     def call(self, target):
@@ -57,13 +59,13 @@ class ModeHelper(Machine):
             assert self.r[4:6] == [self.symbols[START][0], MODE_BYTES]
             self.abi_return(self.result)
         else:
-            assert self.result & 0x80000000 and self.calls == ["decode", "stop"]
+            assert self.must_refuse and self.calls == ["decode", "stop"]
             assert self.r[5] == self.result
             self.refused, self.pc = True, self.stop_pc
         return True
 
     def check(self):
-        if self.result & 0x80000000:
+        if self.must_refuse:
             assert self.refused and self.calls == ["decode", "stop"]
             return
         registers, pr, _, _, _, sr, fpscr, fr = self.before
@@ -170,21 +172,25 @@ class DiagnosticRoute(Machine):
 
 def instruction_routes(stage, *, self_test=False):
     cases = storage = diagnostics = 0
+    background="_native_background_boot_region" in stage[4]
+    modes=(0,2,4,5,6) if background else (0,1,2,3,4,5,6)
     for seed in range(12):
         for mask in range(16):
             for result in (0, 1, 2, 3, 4, 5, 6, MASK):
                 ModeHelper(stage, seed, mask, result).run().check(); cases += 1
-            for mode in (0, 1, 2, 3, 4, 5, 6):
+            for mode in modes:
                 DiagnosticRoute(stage, seed, mask, mode).run().check(); diagnostics += 1
                 for result in (0, 1, MASK):
                     StorageRoute(stage, seed, mask, mode, result).run().check(); storage += 1
     mutations = 0
     if self_test:
-        for symbol, target_name, factory in (
+        first_mutations=[
             (HELPER, DECODER, lambda body: ModeHelper(stage, 7, 15, MASK, body=body)),
-            (HELPER, "_stopped", lambda body: ModeHelper(stage, 7, 15, MASK, body=body)),
+            (HELPER, "_stopped", lambda body: ModeHelper(stage, 7, 15, MASK, body=body))]
+        if not background:first_mutations.extend((
             ("_native_persist_storage_init", HELPER, lambda body: StorageRoute(stage, 7, 15, 1, 0, body=body)),
-            ("_native_persist_storage_init", "_kui_retail_storage_init", lambda body: StorageRoute(stage, 7, 15, 1, 0, body=body))):
+            ("_native_persist_storage_init", "_kui_retail_storage_init", lambda body: StorageRoute(stage, 7, 15, 1, 0, body=body))))
+        for symbol,target_name,factory in first_mutations:
             _, body, _ = symbol_bytes(stage, symbol, 2)
             at = body.find(struct.pack("<I", stage[4][target_name][0]))
             require(at >= 0, "mode gate lacks its exact callback literal: " + target_name)
@@ -199,9 +205,10 @@ def instruction_routes(stage, *, self_test=False):
         # fail even though both values are canonical and every target is a
         # real admitted function. This independently tests the route's
         # meaning, rather than merely its callback addresses.
-        for symbol, factory in (
+        control_mutations=() if background else (
             ("_native_persist_storage_init", lambda body: StorageRoute(stage, 7, 15, 1, 0, body=body)),
-            ("_kui_retail_stage_relay", lambda body: CacheRoute(stage, 7, 15, True, mode=1, blob=body))):
+            ("_kui_retail_stage_relay", lambda body: CacheRoute(stage, 7, 15, True, mode=1, blob=body)))
+        for symbol, factory in control_mutations:
             _, body, _ = symbol_bytes(stage, symbol, 2)
             words = struct.unpack("<" + "H" * (len(body) // 2), body)
             selector = next((i for i, op in enumerate(words) if op == 0x8801), None)
@@ -213,6 +220,21 @@ def instruction_routes(stage, *, self_test=False):
                 mutations += 1
             else:
                 raise ValueError("runtime route accepted CONTROL/PROFILE confusion")
+        if background:
+            # Native Background must retain the 192KiB live reservation.
+            # Its real mode helper refuses CONTROL1 and LEASE_ONLY3 before
+            # returning to either storage preparation or the relay. Mutate
+            # each selector instruction and execute every canonical result.
+            _,body,_=symbol_bytes(stage,HELPER,2)
+            for opcode in (0xe0fd,0x2059,0x8801):
+                at=body.find(struct.pack('<H',opcode))
+                require(at>=0,'Background mode helper lacks exact live-reservation selector')
+                changed=bytearray(body);struct.pack_into('<H',changed,at,opcode^1)
+                try:
+                    for mode in (0,1,2,3,4,5,6,MASK):
+                        ModeHelper(stage,7,15,mode,body=bytes(changed)).run().check()
+                except (AssertionError,ValueError,struct.error,KeyError):mutations+=1
+                else:raise ValueError('Background mode helper accepted changed reservation selector')
         _, policy, _ = symbol_bytes(stage, "_native_runtime_diagnostics", 2)
         edits = []
         at = policy.find(struct.pack("<I", stage[4][HELPER][0]))
@@ -240,7 +262,8 @@ def instruction_routes(stage, *, self_test=False):
     return {"mode_helper_instruction_cases": cases, "storage_instruction_cases": storage,
             "worker_policy_instruction_cases": diagnostics,
             "mutation_rejections": mutations, "malformed_mode_stops_before_storage": True,
-            "control_storage_bypasses_profile_acquire_recovery_and_writes": True}
+            "control_storage_bypasses_profile_acquire_recovery_and_writes": not background,
+            "background_refuses_control_and_lease_only_before_storage":background}
 
 
 def audit(stage_data, entry_data, module, *, cached_code, stage_image=None, resident_image=None, self_test=False):
@@ -295,9 +318,17 @@ def audit(stage_data, entry_data, module, *, cached_code, stage_image=None, resi
               "typed_immutable_unique_object": True, "profile_cache_worker_relocation_trampoline_disjoint": True,
               "modes": {"normal": 0, "control": 1, "profile": 2, "lease-only": 3, "hooks-only": 4, "raw-chain": 5, "evolution-trace": 6}}
     if stage_image is not None:
+        background="_native_background_boot_region" in stage_image[4]
+        require(background==bool(resident_image is not None and
+                '_kui_vmu_native_background_manifest_bind' in resident_image[4]),
+                'Runtime mode stage/reader profile mismatch')
         report.update(instruction_routes(stage_image, self_test=self_test))
-        from check_vmu_native_lease_only import audit as audit_lease_only
-        report["lease_only"] = audit_lease_only(stage_image, resident_image, self_test=self_test)
+        if background:
+            report['modes']={name:value for name,value in report['modes'].items() if value not in (1,3)}
+            report['lease_only']={'enabled':False,'refused_by_exact_mode_helper':True}
+        else:
+            from check_vmu_native_lease_only import audit as audit_lease_only
+            report["lease_only"] = audit_lease_only(stage_image, resident_image, self_test=self_test)
     return report
 
 

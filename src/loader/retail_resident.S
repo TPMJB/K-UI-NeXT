@@ -8,7 +8,8 @@
 
 /* Called by the high stage before entering the owner's upper IP bootstrap.
  * Do not switch stacks here: state adoption/init use the temporary high stack.
- * R4..R7 hold all four C arguments and remain intact across BSS clearing. */
+ * R4..R7 hold the first four C arguments and remain intact across BSS clearing.
+ * The gated native VMU workspace argument stays on this unchanged stack. */
     .section .entry,"ax"
     .align 2
     .global _start
@@ -30,7 +31,11 @@ _start:
     .align 2
 .Lbss_begin: .long __retail_resident_bss_begin
 .Lbss_end: .long __retail_resident_bss_end
+#if KUI_VMU_NATIVE_BACKGROUND
+.Linit: .long C_SYMBOL(kui_vmu_native_background_init)
+#else
 .Linit: .long C_SYMBOL(kui_retail_resident_init)
+#endif
 #ifdef KUI_RETAIL_CE
 /* KUI_RETAIL_CE_KERNEL: where Windows CE's kernel keeps its interrupt
  * bookkeeping (pending mask, ring head, reschedule flag) and its interrupt
@@ -584,6 +589,11 @@ C_SYMBOL(kui_retail_release_600):
 .Lrelease:
     mov.l r3,@-r15
     mov.l .Lrelease_frame,r0
+#if KUI_VMU_NATIVE_BACKGROUND
+    mov.l @r0,r0
+    mov.w .Lrelease_frame_offset,r3
+    add r3,r0
+#endif
     mov.l @(r0,r1),r3
     add #1,r3
     mov.l r3,@(r0,r1)
@@ -634,8 +644,15 @@ C_SYMBOL(kui_retail_release_600):
 .Lrelease_100: .word 0x100
 .Lrelease_400: .word 0x400
 .Lrelease_600: .word 0x600
+#if KUI_VMU_NATIVE_BACKGROUND
+.Lrelease_frame_offset: .word 0x240
+#endif
     .align 2
+#if KUI_VMU_NATIVE_BACKGROUND
+.Lrelease_frame: .long C_SYMBOL(kui_retail_async_region_storage)
+#else
 .Lrelease_frame: .long C_SYMBOL(kui_retail_async_region)+0x240
+#endif
 .Lrelease_iprb: .long 0xffd00008
 .Lrelease_return: .long C_SYMBOL(kui_retail_rehook)
 
@@ -662,6 +679,11 @@ C_SYMBOL(kui_retail_rehook):
     ldc r0,sr
     ldc r3,ssr
     mov.l .Lrehook_frame,r0
+#if KUI_VMU_NATIVE_BACKGROUND
+    mov.l @r0,r0
+    mov.w .Lrehook_frame_offset,r3
+    add r3,r0
+#endif
     mov.l @(12,r0),r1
     mov r1,r2
     shll2 r2
@@ -687,6 +709,11 @@ C_SYMBOL(kui_retail_rehook):
     add #1,r1
     mov.l r1,@(40,r0)
     mov.l .Lrehook_vbr,r1
+#if KUI_VMU_NATIVE_BACKGROUND
+    mov.l @r1,r1
+    add #-128,r1
+    add #-128,r1
+#endif
     ldc r1,vbr
     mov.l .Lrehook_iprb,r1
     mov.w @r1,r0
@@ -701,9 +728,17 @@ C_SYMBOL(kui_retail_rehook):
     mov.l @r15+,r1
     rte
     mov.l @r15+,r0
+#if KUI_VMU_NATIVE_BACKGROUND
+.Lrehook_frame_offset: .word 0x240
+#endif
     .align 2
 .Lrehook_block: .long 0x100000f0
+#if KUI_VMU_NATIVE_BACKGROUND
+.Lrehook_frame: .long C_SYMBOL(kui_retail_async_region_storage)
+.Lrehook_vbr: .long C_SYMBOL(kui_retail_async_region_storage)
+#else
 .Lrehook_frame: .long C_SYMBOL(kui_retail_async_region)+0x240
 .Lrehook_vbr: .long C_SYMBOL(kui_retail_async_region)-0x100
+#endif
 .Lrehook_iprb: .long 0xffd00008
 #endif

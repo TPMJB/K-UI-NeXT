@@ -1,5 +1,7 @@
 # Broader native VMU test
 
+Historical A1 guide. Use [the A2 and Background candidate guide](vmu-native-a2-background-test.md) for the current package. Evolution 1 and Evolution 2 now have scoped owner-reported save/load results; the new A2/Background route still needs console acceptance.
+
 This batch adds **Grandia II** and **Evolution: The World of Sacred Device**
 as console test candidates for the automatic native VMU adapter. It retains
 the optimized runtime whose SA2 gameplay the owner reported as imperceptibly

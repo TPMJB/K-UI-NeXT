@@ -25,14 +25,18 @@ static int commit_refused(void *context,uint16_t block,const uint8_t data[512]) 
     return KUI_VMU_EMU_IO_ERROR;
 }
 
-int kui_vmu_readonly_init(struct kui_vmu_readonly *s) {
-    if(!s) return KUI_VMU_READONLY_ARGUMENT;
+int kui_vmu_readonly_init_address(struct kui_vmu_readonly *s,uint8_t address) {
+    if(!s || (address!=1u && address!=2u)) return KUI_VMU_READONLY_ARGUMENT;
     memset(s,0,sizeof(*s));
     const struct kui_vmu_emulation_io io={s,read_blank,commit_refused};
-    if(kui_vmu_emulation_init(&s->protocol,KUI_VMU_READONLY_ADDRESS,&io))
+    if(kui_vmu_emulation_init(&s->protocol,address,&io))
         return KUI_VMU_READONLY_INTERNAL;
     s->ready=1u;
     return 0;
+}
+
+int kui_vmu_readonly_init(struct kui_vmu_readonly *s) {
+    return kui_vmu_readonly_init_address(s,KUI_VMU_READONLY_ADDRESS);
 }
 
 int kui_vmu_readonly_init_reader(struct kui_vmu_readonly *s,
@@ -52,7 +56,7 @@ int kui_vmu_readonly_handle(struct kui_vmu_readonly *s,
         return KUI_VMU_READONLY_ARGUMENT;
     if(request_bytes<4u) goto refused;
     command=request[0];
-    if(request[1]!=KUI_VMU_READONLY_ADDRESS || request[2]!=0u) goto refused;
+    if(request[1]!=s->protocol.address || request[2]!=0u) goto refused;
     if(command==1u || command==2u) {
         if(request_bytes!=4u || request[3]!=0u) goto refused;
         needed=command==1u?116u:196u;

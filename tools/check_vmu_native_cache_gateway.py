@@ -68,6 +68,10 @@ class CacheGateway(CPU):
 
     def plain(self, word, pc):
         n, m = word >> 8 & 15, word >> 4 & 15
+        if word & 0xf00f == 0x3006:  # unsigned cmp/hi Rm,Rn
+            self.t(self.r[n]>self.r[m]);return
+        if word & 0xf00f == 0x2009:
+            self.r[n]&=self.r[m];return
         if word >> 12 == 9:
             value = struct.unpack("<h", self.code(pc + 4 + 2 * (word & 255), 2))[0]
             self.r[n] = value & MASK; return
@@ -198,7 +202,7 @@ class CacheGateway(CPU):
 
 class CacheRoute(CacheGateway):
     """Execute the outer relay through cache-hit/cold-scan selection only."""
-    def __init__(self, stage, seed, mask, hit, invalid=0, *, mode=0, normalized=False, blob=None):
+    def __init__(self, stage, seed, mask, hit, invalid=0, *, mode=0, normalized=False, blob=None, eager=False):
         begin, self.blob, _ = symbol_bytes(stage, "_kui_retail_stage_relay", 2)
         if blob is not None:
             self.blob = blob
@@ -218,6 +222,7 @@ class CacheRoute(CacheGateway):
         self.hit, self.invalid, self.calls, self.mode = hit, invalid, [], mode
         self.route = None
         symbols = stage[4]
+        background='_native_background_boot_region' in symbols
         manifest = symbols["_manifest"][0]
         self.exec_address=symbols["_exec_bytes"][0]
         self.source_bytes=0x200000
@@ -225,7 +230,8 @@ class CacheRoute(CacheGateway):
         self.extent_writes=0
         self.mem[self.exec_address] = self.source_bytes
         self.mem.update({manifest + 44: 0 if invalid == 1 else 1,
-                         manifest + 48: int(invalid == 2),
+                         manifest + 48: (0 if invalid==2 else 3 if invalid==7 else 2 if eager else 1)
+                            if background else int(invalid == 2),
                          manifest + 52: 1 if invalid == 3 else 2 if invalid == 4 else 0})
         self.targets = {symbols[name][0]: label for name, label in (
             ("_retail_display_restore", "display"), ("_retail_display_line", "line"),
@@ -313,14 +319,17 @@ def check(stage, *, self_test=False):
                 outcomes = [(flags >> i) & 1 for i in range(5)]
                 CacheGateway(stage, seed, mask, outcomes).run().check(); cases += 1
     routes = 0
-    modes = (0, 1, 2, 3, 4, 5, 6) if "_native_runtime_mode" in symbols else (0,)
+    background='_native_background_boot_region' in symbols
+    modes = ((0,2,4,5,6) if background else (0,1,2,3,4,5,6)) if "_native_runtime_mode" in symbols else (0,)
     for seed in range(24):
         for mask in range(16):
             for mode in modes:
                 for normalized in (False,True):
-                    for hit, invalid in ((False, 0), (True, 0), (True, 1), (True, 2),
-                                         (True, 3), (True, 4), (True, 5), (True,6)):
-                        CacheRoute(stage, seed, mask, hit, invalid, mode=mode,normalized=normalized).run().check(); routes += 1
+                    options=((False,0),(True,0),(True,1),(True,2),(True,3),(True,4),(True,5),(True,6))
+                    if background:options+=((True,7),)
+                    for eager in ((False,True) if background else (False,)):
+                        for hit,invalid in options:
+                            CacheRoute(stage,seed,mask,hit,invalid,mode=mode,normalized=normalized,eager=eager).run().check();routes+=1
     mutations = 0
     if self_test:
         # Mutate every actual callback literal and an exact memcpy length.

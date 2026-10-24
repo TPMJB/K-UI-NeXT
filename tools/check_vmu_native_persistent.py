@@ -56,6 +56,9 @@ SDK_COHERENCE_PREPARE = "_kui_vmu_native_sdk_coherence_prepare"
 # literal pools. Only ELF-proven pointer words are normalized; their exact
 # typed object/function, local source owner and interior offset remain in the
 # signature. This admits relocation/layout changes, not new code or targets.
+# The A2 revision changes only reviewed selected-address calls, physical A1
+# validation, the full DMA allocation and captured-frame stride. The SDK
+# initializer target still requires a valid RAM alias of its proved address.
 PREPARED_PINS = {
  '_kui_vmu_native_sdk_coherence_prepare': ('52ca590c4ac48e91620888af088aa871c0dfa4476cc386a73a828fc4af94ccbc', 436),
  '_kui_vmu_native_fault_capture_install': ('db26024d38eaa6e0c440fdadf83df04c43a91a653ab21637e427502550726afb', 560),
@@ -77,36 +80,36 @@ PREPARED_PINS = {
  '_hook_word': ('69410002bf135878c32df63d2459603428947eadc760aa6309775f82b8801f9c', 132),
  '_prepare_hook_entry': ('e46707ed62da6217391c4aee61d074980abd67826655c1b508159548cabefd74', 228),
  '_kui_vmu_native_lifetime_prepare': ('4691642d40ae532e2f81cfe46c3f81a019412c0da0e43fb4f7913d4a44b87312', 640),
- '_kui_vmu_native_passive_arm': ('142d471fc213f0da44ae1687c59bed39e28adb84300fa8b557e3cc5827c85e5a', 2052),
- '_persistent_storage_guard': ('d230251892a758f65469e9cb692703a0270511756e1fbdc94cc28e04472a15fe', 396),
+ '_kui_vmu_native_passive_arm': ('abdfa26b375d1bfbfc96c611aaaaabd02c66059e66b3d1b00d260f413cb20058', 2096),
+ '_persistent_storage_guard': ('c51bd14af15bb22af8ad0a384c1c700a5c23a90fcd25e012ad977b7e7b77fa04', 396),
  '_persistent_lease': ('8658f150d0d4811335e46332a9a075f199fa8219edb5ccf1730223a4e34d78e3', 148),
- '_kui_vmu_native_passive_submit': ('7d224a37aa183eaec433ad49a62232f05ae253bfede8ad31584b4bc109358245', 1380),
- '_kui_vmu_native_passive_complete': ('75de7beccf9102d0606a649f3bdc84a5860891bcbbc1650bd5b648e607f783bd', 2360),
+ '_kui_vmu_native_passive_submit': ('6648f29a9c2be60b35c930d062a16d100353cbac12e485cf039f319bd742885d', 1384),
+ '_kui_vmu_native_passive_complete': ('481728bfca6efd2ec8bf4663948e3b6c8f15dba21a0cbecf886467d9c1c323eb', 2704),
  '_controller_context_valid': ('e8e1eee80b1bce155a8a68c9c91229c138e017daf5bd2d880d7d51195efde2a0', 1032),
- '_kui_vmu_readonly_overlay_complete_absent': ('6085deac9edfd8886b3300663daa32875389280d2daca88d509846e17f1b31e7', 284),
- '_kui_vmu_readonly_overlay_complete': ('6413dfd099e7eeb01b7f0b9bf12e07ca276bf3bc0b8080efcce61a067c8b1bb4', 888),
+ '_kui_vmu_readonly_overlay_complete_absent': ('569ef7dcb97f1904c68ce440dd9a6bc3c0d143da123c0b8d37dc8c55da4f0a60', 284),
+ '_kui_vmu_readonly_overlay_complete': ('d6ea47fea620deaf7f177e01541585c9aac921b6d069b4e50de3b359f8199937', 878),
  '_readonly_overlay_parent_response': ('d396e68edd3158708ba5a8c9ff5235821bb62b71cc9dc40650cadb9098eaeb12', 116),
  '_readonly_overlay_increment': ('e3a6368a10593e4ae7510faf736d644a9d9e383e262070923241741b3f6893b1', 14),
  '_readonly_overlay_le32': ('1daa47eecc292df8356826c0e5a683e3a2c27cec212f901db7b1f01cf3b897df', 30),
  '_transfer_context_valid': ('6878e558790e8a9fa5a38a734e005735180821fb7f95ad98c6f30e2cc336de78', 1236),
  '_persistent_context_guard': ('7d7b44453ed058c85b22f3624a96001a93f68e06bd6dc581757cbff364c96df7', 132),
  '_kui_vmu_native_runtime_fault': ('602715b3a63ceb4cee060f7c4d3ddffd11d4158fadcf0b7f1602a10057a0bc44', 332),
- '.rodata': ('1d484951e93ec395156356e10c7473aabf689c6a08c0503119de89834503ff7f', 3864),
+ '.rodata': ('d8e3e0ee22d651048fd7853b6232536eb41c4045407aff6bf97a85b07490caea', 3864),
  '_kui_vmu_native_trace_enabled': ('0a920c3cf23dad2c3aabfe188567a6d1425af67dd54b46b619555831e9748eac', 16),
  '_kui_vmu_native_trace_image': ('e85462a3e477dee0a0124220436dc355360013e47136f21eb8576af465cdd9a9', 60),
- '_kui_vmu_native_trace_point': ('f29078442d6ec0295e0d47680f02bdc96b3e656ddc2c0cd98d02975392b09db6', 1132),
+ '_kui_vmu_native_trace_point': ('47f46b3337fb28b3281e2b5d56eacd66476fd830abdf74f3a1f67dc1068fae0b', 1132),
  '_kui_vmu_native_trace_wait_loop': ('14823a20fee8b883e5f8e7ebd6e7e10af9715be40c12e4674d8fa89f2839adcd', 176),
- '_kui_vmu_native_trace_init': ('bf7a45b36958e63813bfb7eef0800982671734ef8d4414b6c1ff477658b183e8', 96),
+ '_kui_vmu_native_trace_init': ('cb04d77bf380406ced6994e9daf684e88aac772eaf5dbb91c93d6e2063ba07a8', 96),
  '_kui_vmu_native_trace_wait_before': ('e9b3f06c9f25ba26990d028291ee7c37f06e4fae6df7069ac0086d316321b5d9', 152),
  '_kui_vmu_native_trace_frame_entry': ('24be2fc972ae425d21e9fd5a0b8ad551f1f64bc20c8d7cb9118c00818bba1111', 164),
- '_kui_vmu_native_trace_report': ('75033e5897d4eec08aead00f128991467a2d057e284416dfe449b83544ddf96d', 1120),
+ '_kui_vmu_native_trace_report': ('d1f939d33649583417dc3a83df4775ee0ada70f1dbee6326b998305ace6ef070', 1120),
  '_kui_vmu_native_trace_wait_after': ('36746417db83b1f0060aacf65c6ad9fb76ce55aea985779d0d1244b70c6f30e6', 180),
  '_kui_vmu_native_trace_game': ('367d93d9d799bac69baf843535f58f139cac582df3d494ff5e4e4721ece346e3', 112),
  '_trace_history': ('707a8e97e89cde6ff13821edf89b71fd1791571defc72156990d7f12959c0eb6', 164),
- '_report': ('114ee02adbf996c428218611b859b7548b3f52b3fd501af9105bd11b760463a8', 440),
- '_kui_vmu_native_trace_failure': ('7db0cdf5462a9ddb02e0bfa486f9fdcd17b92f60a9a7769e4e835fcc4f5335d3', 120),
+ '_report': ('b598ee84327026939e1788074d3cc6d1cec220f8e0618e9c2d07e7def344bf52', 440),
+ '_kui_vmu_native_trace_failure': ('bc5de95cdeaf5c8bbb975302655c91ac13a6e8058655665651019a647c655931', 120),
  '_trace_row.constprop.0': ('9d55c81d38773acb609b68c1d6684dfc6be503622f4078799864c49148f5426d', 92),
- '_trace_packets': ('c632837e427d667626be65ec2e9a636ba84bc29b14f2196d6b8d6cdc07e1fbbc', 116),
+ '_trace_packets': ('95fdb20909abe914630c4c450ddce61102706f6689bd02fb776d8ee5f99f0f81', 116),
  '_kui_vmu_native_trace_irq': ('31b72b692190f12dabe3bee1767a9d43913918730d08b7c7c802bea816c8177e', 14)}
 
 
@@ -268,11 +271,11 @@ class AbsentCompletion(Machine):
             self.functions[0] = self.functions[0][0], body
         self.data, self.external_stores, self.outcome = {}, [], outcome
         self.overlay = worker[4]['_overlay'][0]
-        require(worker[4]['_overlay'][1:3] == (17820, 1), 'absent model needs exact private overlay object')
+        require(worker[4]['_overlay'][1:3] == (17824, 1), 'absent model needs exact private overlay object')
         self.r[4] = 0 if outcome == 'null' else self.overlay
         self.before_regs = self.r.copy(), self.pr, self.sr, self.fpscr, self.fr.copy()
-        self.overlay_end = self.overlay + 17820
-        for i in range(17820):
+        self.overlay_end = self.overlay + 17824
+        for i in range(17824):
             self.data[self.overlay + i] = (i * 13 + seed) & 255
         self.put(self.overlay + 4, MASK if seed & 1 else 17)
         self.put(self.overlay + 36, MASK if seed & 1 else 19)
@@ -280,20 +283,20 @@ class AbsentCompletion(Machine):
         self.put(self.overlay + 68, 0 if outcome == 'magic' else 0x56524F31)
         self.put(self.overlay + 72, int(outcome != 'admitted'))
         self.put(self.overlay + 76, int(outcome != 'pending'))
-        self.put(self.overlay + 80, count); self.put(self.overlay + 84, count - 1)
+        self.put(self.overlay + 80, 2); self.put(self.overlay + 84, count); self.put(self.overlay + 88, count - 1); self.put(self.overlay + 92, targets)
         self.rx = []
         for i in range(count):
             rx = 0xAC200000 + 1024 * i
-            destination = 32 if i == count - 1 else (1 if i < targets else 96)
+            destination = 32 if i == count - 1 else (2 if i < targets else 1 if i == targets else 96)
             header = (0x01000000 if command == 9 else 0) | destination << 8 | command
-            frame = self.overlay + 92 + 28 * i
+            frame = self.overlay + 96 + 28 * i
             self.put(frame, header); self.put(frame + 12, rx & 0x1FFFFFFF); self.put(frame + 20, rx)
             for j in range(1024): self.data[rx + j] = (i + j * 19 + seed) & 255
             self.rx.append((rx, destination))
         parent = self.rx[-1][0]
-        response = (28 if command == 1 else 48 if command == 2 else 3) << 24 | 32 << 16 | (5 if command == 1 else 6 if command == 2 else 8)
+        response = (28 if command == 1 else 48 if command == 2 else 3) << 24 | 33 << 16 | (5 if command == 1 else 6 if command == 2 else 8)
         if outcome == 'parent': response ^= 1
-        if outcome == 'conflict': response |= 1 << 16
+        if outcome == 'conflict': response |= 2 << 16
         self.put(parent, response); self.put(parent + 4, 0x01000000)
         self.before_data = self.data.copy()
 
@@ -367,15 +370,15 @@ class AbsentCompletion(Machine):
             for i in range(4): expected[self.overlay + offset + i] = value >> (8 * i) & 255
         if self.outcome in ('ok', 'parent', 'conflict'):
             parent = self.rx[-1][0]
-            frame = self.overlay + 92 + 28 * (len(self.rx) - 1)
+            frame = self.overlay + 96 + 28 * (len(self.rx) - 1)
             for offset, value in ((44, self.read(frame)), (48, self.read(parent)), (52, parent & 0x1FFFFFFF)):
                 put(offset, value)
         if self.outcome == 'ok':
             put(4, min(MASK, old(4) + 1)); put(76, 0)
             for index, (rx, destination) in enumerate(self.rx):
-                if destination == 1:
+                if destination == 2:
                     for j in range(4): expected[rx + j] = 255
-                    for offset, value in ((44, self.read(self.overlay + 92 + 28 * index)),
+                    for offset, value in ((44, self.read(self.overlay + 96 + 28 * index)),
                                           (48, MASK), (52, rx & 0x1FFFFFFF)):
                         put(offset, value)
         elif self.outcome != 'null':
@@ -390,7 +393,7 @@ class AbsentCompletion(Machine):
             require(self.read(self.overlay + 76) == 0 and self.read(self.overlay + 72) == 1,
                     'absent completion loses its prepared lifecycle')
         require(all(self.overlay <= a < self.overlay_end or (width == 1 and
-                    any(destination == 1 and rx <= a < rx + 4 for rx, destination in self.rx))
+                    any(destination == 2 and rx <= a < rx + 4 for rx, destination in self.rx))
                     for a, width in self.external_stores), 'absent publisher has an unexpected store target')
 
 
@@ -433,8 +436,8 @@ def audit_absent_completion(worker, *, self_test=False):
         # Exact source closure and typed pins catch arbitrary changes; this
         # independently exercises a changed header store and backend target.
         _, original, _ = symbol_bytes(worker, AbsentCompletion.helper, 2)
-        mutations = [(struct.pack('<2H', 0xE300, 0xE0FF), struct.pack('<2H', 0xE300, 0xE000)),
-                     (struct.pack('<H', 0x8023), struct.pack('<H', 0x8024)),
+        mutations = [(struct.pack('<2H', 0xE2FF, 0x7160), struct.pack('<2H', 0xE200, 0x7160)),
+                     (struct.pack('<H', 0x8033), struct.pack('<H', 0x8034)),
                      (struct.pack('<I', worker[4]['_readonly_overlay_le32'][0]),
                       struct.pack('<I', worker[4]['_kui_vmu_native_persistent_sd_transaction'][0]))]
         for old, new in mutations:
@@ -458,7 +461,8 @@ def audit_absent_completion(worker, *, self_test=False):
     return dict(helper_instruction_cases=cases, selector_instruction_cases=routes,
                 mutation_rejections=rejected, actual_callees_only=True,
                 no_backend_or_sd_call=True, no_parent_advertisement=True,
-                only_filtered_a1_four_byte_headers_changed=True)
+                physical_a1_replies_preserved=True, virtual_address=2,
+                only_filtered_a2_four_byte_headers_changed=True)
 
 
 def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *, build=None):
@@ -497,7 +501,8 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
     local = "src/loader/vmu_native_passive.c:"
     for caller, required in (
             ("kui_vmu_native_passive_arm", ("kui_vmu_native_lifetime_prepare", local + "prepare_hook_entry", local + "hook_word")),
-            ("kui_vmu_native_passive_submit", (local + "installed_hooks_valid", local + "poll_lease_valid")),
+            ("kui_vmu_native_passive_submit", (local + "installed_hooks_valid", local + "poll_lease_valid",
+                "kui_vmu_volatile_chain_build_address", "kui_vmu_volatile_chain_verify")),
             ("kui_vmu_native_passive_complete", (local + "installed_hooks_valid", local + "poll_lease_valid")),
             ("kui_vmu_native_readonly_release_check", (local + "installed_hooks_valid",)),
             (local + "controller_context_valid", (local + "transfer_context_valid",)),
@@ -782,6 +787,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
     begin, body, _ = symbol_bytes(stage, "_native_passive_run", 2)
     words = list(struct.unpack("<" + "H" * (len(body) // 2), body))
     mode_config = "_native_runtime_mode" in symbols
+    background = '_native_background_boot_region' in symbols
     def literal(index):
         op = words[index]
         at = ((begin + index * 2 + 4) & ~3) + 4 * (op & 255)
@@ -846,6 +852,19 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
             require(i>=4 and words[i-4:i]==[0x8d02,0x64a3,0xae4a,0xe503],
                     'v3 trace publisher lost exact unconditional P1 start')
             candidates.append((i,8,17,3))
+        # The separately admitted Background stage retains the worker length
+        # in its fixed stack slot while copying/binding the owned async tail.
+        # Its final publication still writes both exact dynamic cells and
+        # immediately enters the identical worker ABI.
+        bg = (background and words[i]&0xff00==0xdd00 and literal(i)==symbols['_native_driver'][0] and
+            words[i+1]&0xff00==0xdc00 and literal(i+1)==address and
+            words[i+2:i+10]==[0x53d7,0x55f7,0x2232,0x53de,0x359c,0x528d,0x4c0b,0x2232] and
+            words[i+10]&0xff00==0xd000 and literal(i+10)==symbols['_kui_vmu_native_worker_call'][0] and
+            words[i+11:i+19]==[0x67f3,0x558a,0x772c,0x5483,0x66f3,0x1fbb,0x400b,0x7648])
+        if bg:
+            require(i>=4 and words[i-4:i]==[0x8d02,0x6493,0xadf3,0xe503],
+                    'Background publisher lost exact unconditional P1 start')
+            candidates.append((i,8,17,4))
     require(len(candidates) == 1, "missing unique linked worker-publication/first-arm block")
     first, publish_at, arm_at, register_family = candidates[0]
     # This bounded block loads the worker's own two dynamic target cells,
@@ -893,29 +912,39 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
             words[i+5]&0xff00==0xd400 and literal(i+5)==symbols['__native_worker_blob_begin'][0] and
             words[i+6:i+10]==[0x1fa2,0x1fb1,0x400b,0x2f82]):
             relocations.append((i,i+8,3,True))
+        if (background and words[i+1]==0x67e3 and words[i+2]&0xff00==0xda00 and literal(i+2)==SPAN and
+            words[i+3:i+5]==[0x37b8,0x55f7] and
+            words[i+5]&0xff00==0xd600 and literal(i+5)==symbols['__native_worker_blob_end'][0] and
+            words[i+6]&0xff00==0xd400 and literal(i+6)==symbols['__native_worker_blob_begin'][0] and
+            words[i+7:i+11]==[0x1f92,0x1fa1,0x400b,0x2f82]):
+            relocations.append((i,i+9,4,True))
     zero_patterns = (
         [0x56f3, 0x6ba3, 0x3b8c, 0x3688, 0x64b3, 0x4c0b, 0xe500],
         [0x56f3, 0x6ba3, 0x3b9c, 0x3698, 0x64b3, 0x4c0b, 0xe500],
         [0x6ba3, 0x3b9c, 0xe500, 0x66d3, 0x64b3, 0x4c0b, 0x3698],
         [0x6e83, 0x3eac, 0xe500, 0x66b3, 0x64e3, 0x4c0b, 0x36a8],
-        [0x6e83,0x3e9c,0xe500,0x66b3,0x64e3,0x4c0b,0x3698])
-    zero_families = (0, 1, 1, 2, 3)
-    zeroes = [(i, zero_families[zero_patterns.index(words[i:i + 7])], zero_patterns.index(words[i:i + 7])) for i in range(len(words) - 7)
-              if words[i:i + 7] in zero_patterns]
+        [0x6e83,0x3e9c,0xe500,0x66b3,0x64e3,0x4c0b,0x3698],
+        [0x5bf7,0xe500,0x51f7,0x66a3,0x3b8c,0x3618,0x4d0b,0x64b3])
+    zero_families = (0, 1, 1, 2, 3, 4)
+    zeroes = [(i,zero_families[j],j) for j,pattern in enumerate(zero_patterns)
+              for i in range(len(words)-len(pattern)) if words[i:i+len(pattern)]==pattern and
+              (j!=5 or background)]
     releases = [i for i in range(len(words) - 3) if words[i:i + 3] ==
-                ([0x52ba, 0x7214, 0x2022] if register_family in (2,3) else [0x53ca, 0x7314, 0x2032])]
+                ([0x52aa,0x7214,0x2022] if register_family==4 else
+                 [0x52ba, 0x7214, 0x2022] if register_family in (2,3) else [0x53ca, 0x7314, 0x2032])]
     require(len(relocations) == len(zeroes) == len(releases) == 1,
             "missing linked relocation/BSS/release-cell initialization witnesses")
     require(relocations[0][2] == zeroes[0][1] == register_family,
             "installer relocation/BSS/publication use inconsistent load/length registers")
-    require(relocations[0][3] == mode_config and (zeroes[0][2] in (2, 3, 4)) == mode_config,
+    require(relocations[0][3] == mode_config and (zeroes[0][2] in (2, 3, 4, 5)) == mode_config,
             "installer mode configuration uses an unreviewed relocation/zero-fill ABI")
     relocate_pc = begin + relocations[0][1] * 2
-    zero_pc = begin + (zeroes[0][0] + 5) * 2
+    zero_pc = begin + (zeroes[0][0] + (6 if register_family==4 else 5)) * 2
     release_pc = begin + (releases[0] + 2) * 2
     # The compiler keeps memset in callee-saved R12 until this BSS call.
     # Pin its initializer and reject any intervening write to R12.
-    memset_loads = [i for i in range(zeroes[0][0]) if words[i] & 0xff00 == 0xdc00 and
+    memset_reg=13 if register_family==4 else 12
+    memset_loads = [i for i in range(zeroes[0][0]) if words[i] & 0xff00 == 0xd000|(memset_reg<<8) and
                     literal(i) == symbols["_memset"][0]]
     require(len(memset_loads) == 1, "BSS zeroing has no exact linked memset target")
     decoded = {pc: (op, mnemonic, operands.split("!", 1)[0].strip())
@@ -923,7 +952,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
                if begin <= pc < begin + len(body)}
     for pc, (_, mnemonic, operands) in decoded.items():
         if begin + 2 * memset_loads[0] < pc < zero_pc and mnemonic not in ("cmp/eq", "cmp/hi", "cmp/hs", "tst"):
-            require(not re.search(r"(?:^|,)\s*r12$", operands), "BSS memset target register is overwritten")
+            require(not re.search(r"(?:^|,)\s*r"+str(memset_reg)+r"$", operands), "BSS memset target register is overwritten")
     # A conservative intraprocedural CFG treats every C call as returning.
     # The initialization witnesses must dominate the publication and arm;
     # byte order alone would allow a branch to bypass publication.
@@ -965,10 +994,10 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
     # v3 puts the consumer-cell store in the publisher JSR delay slot.
     # The exact block above pins that store; the JSR node represents both
     # instructions in this CFG, before control reaches the publisher.
-    dynamic_stores = (5, 8) if register_family in (2, 3) else (4, 7)
+    dynamic_stores = (4,8) if register_family==4 else (5, 8) if register_family in (2, 3) else (4, 7)
     witnesses = {relocate_pc, zero_pc, release_pc,
                  *(begin + (first + offset) * 2 for offset in dynamic_stores)}
-    if register_family in (2, 3):witnesses.add(begin + (first - 4) * 2)
+    if register_family in (2, 3, 4):witnesses.add(begin + (first - 4) * 2)
     require(witnesses <= dom[publish] and publish in dom[arm],
             "installer can enter P1 arm before initialization/publication")
     require(begin + 2 * memset_loads[0] in dom[zero_pc],
@@ -979,7 +1008,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
         # config word. v3 adds four stack bytes ahead of the configuration.
         # The store is the next call's delay slot, before that call may
         # clobber R0. Both getter and store must dominate the first arm.
-        config_start, config_base = (0x48, 0x904) if register_family == 3 else (0x44, 0x900)
+        config_start, config_base = (0x48, 0x904) if register_family in (3,4) else (0x44, 0x900)
         alias_add = 0x38AC if register_family == 3 else 0x389C
         choices = [j for j in range(len(words) - 9) if
             words[j] & 0xFF00 == 0xD000 and literal(j) == symbols['_native_runtime_diagnostics'][0] and
@@ -989,25 +1018,30 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
             words[j + 5] & 0xFF00 == 0xD100 and literal(j + 5) == symbols['_retail_display_restore'][0] and
             words[j + 6] & 0xFF00 == 0xD400 and literal(j + 6) == symbols['_display'][0] and
             words[j + 7:j + 9] == [0x410B, 0x1D0F]]
+        if register_family==4:
+            choices=[j for j in range(len(words)-7) if
+                words[j]&0xff00==0xd000 and literal(j)==symbols['_native_runtime_diagnostics'][0] and
+                words[j+1:j+7]==[0x400b,0x0009,0x51c8,0x31a0,0x8f09,0x1b0f]]
         require(len(choices) == 1, 'missing exact runtime diagnostics return-to-config store')
         diagnostics_getter = choices[0]
         bases = []
         for j in range(diagnostics_getter - 3):
-            if words[j] & 0xFF00 != 0x9D00 or words[j + 1] != 0xE630 or words[j + 3] != 0x3DFC:
+            config_register=11 if register_family==4 else 13
+            if words[j] & 0xFF00 != 0x9000|(config_register<<8) or words[j + 1] != 0xE630 or words[j + 3] != 0x300c|(config_register<<8)|0xf0:
                 continue
             at = begin + 2 * j + 4 + 2 * (words[j] & 255)
             if struct.unpack('<h', region(body, at - begin, 2, 'diagnostics config stack offset'))[0] == config_base:
                 bases.append(j)
         require(len(bases) == 1 and config_base + 60 - config_start == 0x8F8,
                 'diagnostics store no longer names exact final config word')
-        getter_pc = begin + 2 * (diagnostics_getter + 3)
-        store_call_pc = begin + 2 * (diagnostics_getter + 7)
+        getter_pc = begin + 2 * (diagnostics_getter + (1 if register_family==4 else 3))
+        store_call_pc = begin + 2 * (diagnostics_getter + (5 if register_family==4 else 7))
         base_pc = begin + 2 * (bases[0] + 3)
         require(base_pc in dom[getter_pc] and getter_pc in dom[store_call_pc] and store_call_pc in dom[arm],
                 'runtime mode/config store can be bypassed before worker arm')
         for pc, (_, mnemonic, operands) in decoded.items():
             if base_pc < pc < store_call_pc and mnemonic not in ('cmp/eq', 'cmp/hi', 'cmp/hs', 'tst'):
-                require(not re.search(r'(?:^|,)\s*r13$', operands), 'diagnostics config base is overwritten')
+                require(not re.search(r'(?:^|,)\s*r'+str(config_register)+r'$', operands), 'diagnostics config base is overwritten')
             if base_pc < pc < arm:
                 require(not re.search(r'(?:^|,)\s*r15$', operands) and '@-r15' not in operands and '@r15+' not in operands,
                         'config stack moves between diagnostics assignment and arm')
@@ -1022,11 +1056,14 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
         # An individually recognized register-family block must not be mixed
         # with the other family's relocation/zero-fill/publication. Mutate the
         # actual ELF instruction bytes, keeping its typed geometry unchanged.
-        alternate = 0 if register_family in (2, 3) else 1 - register_family
+        alternate = 0 if register_family in (2, 3, 4) else 1 - register_family
         mutations = [((zeroes[0][0] + 2, zero_patterns[alternate][2]),
                       (zeroes[0][0] + 3, zero_patterns[alternate][3])),
                      ((relocations[0][0] + 1, 0x0009),)]
-        if register_family == 3:
+        if register_family==4:
+            mutations.extend([((first+3,0x0009),),((first+6,0x35ac),),
+                              ((first+9,0x0009),),((first-3,0x64a3),),((first-2,0x0009),)])
+        elif register_family == 3:
             mutations.extend([((first + 4, 0x35ac),), ((first + 9, 0x0009),),
                               ((first - 3, 0x6493),), ((first - 2, 0x0009),)])
         elif register_family == 2:
@@ -1039,8 +1076,9 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
             getter_literal = (((begin + 2 * diagnostics_getter + 4) & ~3) +
                               4 * (words[diagnostics_getter] & 255) - begin) // 2
             wrong_getter = symbols['_native_runtime_mode'][0]
-            mutations.extend([((diagnostics_getter + 8, 0x0009),),
-                              ((diagnostics_getter + 8, 0x1D0E),),
+            store_index=diagnostics_getter+(6 if register_family==4 else 8)
+            mutations.extend([((store_index, 0x0009),),
+                              ((store_index, 0x1B0E if register_family==4 else 0x1D0E),),
                               ((diagnostics_getter, 0xE000),),
                               ((getter_literal, wrong_getter & 0xFFFF),
                                (getter_literal + 1, wrong_getter >> 16))])
@@ -1526,7 +1564,17 @@ def worker_load_policy(worker, binary):
 def inspect_base(directory, *, self_test=False, objdump="sh-elf-objdump"):
     """Reuse exact bootstrap/layout checks while admitting the one SCI loan."""
     images, elfs = {}, {}
-    for name, base, limit in (("resident-sci", LOW, 0x8C007800),
+    low_elf = read_elf(directory / "resident-sci.elf")
+    background = "_kui_vmu_native_background_manifest_bind" in low_elf[4]
+    low_limit = 0x8c007ba0 if background else 0x8c007800
+    background_audit = None
+    if background:
+        # The wider layout is admitted only by the separate exact Background
+        # profile proof, including its typed binder, fifth init argument,
+        # owned async region, source flags and low-stack call graph.
+        from check_vmu_native_background import check as audit_background
+        background_audit = audit_background(directory, self_test=self_test, require_stage=True)
+    for name, base, limit in (("resident-sci", LOW, low_limit),
                               ("stage", HIGH, LIMIT), ("entry", layout.EXEC_ADDRESS, 0x8C112000)):
         elfs[name] = (directory / (name + ".elf")).read_bytes()
         images[name] = inspect_elf(elfs[name], base, limit)
@@ -1564,7 +1612,7 @@ def inspect_base(directory, *, self_test=False, objdump="sh-elf-objdump"):
             "launch manifest must ship blank")
     require(region(entry["payload"], layout.HEADER_OFFSET, layout.HEADER_BYTES, "relocation header") ==
             layout.relocation_header(len(padded(stage["payload"])), False, True),
-            "persistent probe must select low synchronous native reader")
+            "persistent probe must select the low native reader ABI")
     module = (directory / "retail-maple-observe.kui").read_bytes()
     runtime = verify(module)
     require(module[64:] == entry["payload"] and runtime["memory_bytes"] == entry["memory_end"] - layout.EXEC_ADDRESS,
@@ -1579,12 +1627,14 @@ def inspect_base(directory, *, self_test=False, objdump="sh-elf-objdump"):
               "module_sha256": hashlib.sha256(module).hexdigest(),
               "resident_memory_end": f"0x{resident['memory_end']:08x}",
               "stage_memory_end": f"0x{stage['memory_end']:08x}",
-              "dynamic_bootstrap": inspect_dynamic_hook(elfs["resident-sci"], resident),
+              "dynamic_bootstrap": inspect_dynamic_hook(elfs["resident-sci"], resident,low_limit=low_limit),
               "integer_instruction_counts": instructions, "sd_lease_gateway": gateway,
               "gd_map_refusal_terminal":map_refusal,
-              "old_fixed_worker_linked": False, "console_verified": False}
+              "old_fixed_worker_linked": False, "console_verified": False,
+              "reader_profile": "background" if background else "standard"}
+    if background:report["background_reader"]=background_audit
     if self_test:
-        report["dynamic_bootstrap_mutation_rejections"] = regression(elfs["resident-sci"], resident)
+        report["dynamic_bootstrap_mutation_rejections"] = regression(elfs["resident-sci"], resident,low_limit=low_limit)
     return report
 
 
@@ -1781,6 +1831,20 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
     if not report_sets["low"]:
         report_sets["low"] = sorted((directory / "resident/lto").glob("*.ltrans*.ci"))
     images = {"worker": worker[4], "low": resident["symbols"]}
+    background="_kui_vmu_native_background_manifest_bind" in images["low"]
+    descriptor=None
+    if background:
+        low=read_elf(directory/'resident-sci.elf')
+        address,body,section=symbol_bytes(low,'_bus',1)
+        require(len(body)==28 and section[2]&7==2,
+                'Background loan needs its exact immutable seven-word descriptor')
+        select,transfer,ticks=(symbol_bytes(low,name,2)[0]
+            for name in ('_select_card','_transfer','_loan_ticks'))
+        require(struct.unpack('<7I',body)==(0,0,0,select,transfer,ticks,0),
+                'Background loan bus callbacks/NULL block callback differ')
+        descriptor={'address':hex(address),'bytes':28,'ctx_begin_end_null':True,
+                    'select':'select_card','transfer':'transfer','ticks':'loan_ticks',
+                    'transfer_block_null':True}
     frames, calls, origins = {}, {}, {}
     for domain, reports in report_sets.items():
         require(reports, "missing emitted callgraph: " + domain)
@@ -1822,15 +1886,20 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
     def high(*names):
         return [node for name in names for node in resolve("worker", name)]
     def bus(*names):
-        return [node for name in names for node in resolve("low", name, "sci_sd_bus.c")]
+        return [node for name in names for node in resolve("low",
+                "loan_ticks" if background and name=="ticks" else name,
+                "sci_sd_bus.c")]
     memo, paths, visiting, indirect_sites, null_sites = {}, {}, set(), set(), set()
     def indirect(name, label):
         domain, function = name.split(":", 1)[0], _function_base(name)
         source = Path(label.split(":", 1)[0]).name
         if domain == "low":
-            require((function, source) == ("kui_vmu_observe_sd_lease", "vmu_sd_lease.inc"),
-                    "unexpected low callback from worker stack: " + name + " at " + label)
-            return high("kui_vmu_native_persistent_sd_transaction")
+            if (function,source)==("kui_vmu_observe_sd_lease",
+                    "vmu_native_background_resident.c" if background else "vmu_sd_lease.inc"):
+                return high("kui_vmu_native_persistent_sd_transaction")
+            if background and (function,source) in (("byte","sci_stream.c"),("select","sci_stream.c")):
+                return bus("transfer" if function=="byte" else "select_card")
+            raise ValueError("unexpected low callback from worker stack: " + name + " at " + label)
         fixed = {
             "vmu_durable.c": ("persistent_lease",),
             "vmu_emulation.c": ("durable_card_read", "durable_card_commit"),
@@ -1859,6 +1928,12 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
         if (function, source) == ("persistent_lease", "vmu_native_passive.c"):
             return resolve("low", "kui_vmu_observe_sd_lease")
         if source == "sd_reader.c":
+            if background and function=='read_payload':
+                # The exact typed descriptor above, copied by the admitted
+                # native loan, has no transfer_block callback. The byte PIO
+                # fallback remains in the emitted graph through transfer.
+                require(descriptor['transfer_block_null'],'Background block callback lacks its immutable NULL proof')
+                null_sites.add((name,label));return []
             targets = {"transfer": ("transfer",), "ticks": ("ticks",), "release": ("select_card",),
                        "read_payload": ("transfer_block",), "kui_loader_sd_read": ("select_card",)}
             require(function in targets, "unexpected initialized-card reader callback: " + name)
@@ -1913,11 +1988,13 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
             "null_writer_block_sites": [list(site) for site in sorted(null_sites)],
             "source_qualified_calls": True,
             "verified_zero_stack_assembly_leaves": ["kui_vmu_native_trace_irq",*fault_leaves],
-            "verified_cold_owner_stack_gateways":cold_gates}
+            "verified_cold_owner_stack_gateways":cold_gates,
+            "background_loan_descriptor":descriptor}
 
 
-def check_stacks(directory, worker, fault_proof=None, coherence_proof=None):
-    resident = inspect_elf((directory / "resident-sci.elf").read_bytes(), LOW, 0x8C007800)
+def check_stacks(directory, worker, fault_proof=None, coherence_proof=None, *, background_audit=None):
+    resident = inspect_elf((directory / "resident-sci.elf").read_bytes(), LOW,
+                           0x8c007ba0 if background_audit else 0x8C007800)
     low_rows = linked_stack_rows(sorted((directory / "resident/lto").glob("*.ltrans*.su")), resident["symbols"])
     high_rows = linked_stack_rows(sorted((directory / "native").rglob("*.su")), worker[4])
     reported = {_function_base(name) for name, _ in high_rows}
@@ -1947,6 +2024,13 @@ def check_stacks(directory, worker, fault_proof=None, coherence_proof=None):
                  resident_layout.stack_bottom("sci", False, True) -
                  resident_layout.STACK_GUARD_BYTES - resident_layout.STACK_ALIGNMENT_GAP)
     ordinary = low_sum - lease[0][1] + resident_layout.ASSEMBLY_STACK_BYTES
+    if background_audit:
+        # Async GD/IRQ paths are mutually exclusive and independently walked
+        # by the typed Background proof. Keep worker loan+callbacks in the
+        # call graph above; do not replace them with a byte-identical worker
+        # assertion because the linked low loan implementation differs.
+        low_stack=background_audit["private_stack"]
+        ordinary,available=low_stack["worst_total_bytes"],low_stack["available_bytes"]
     require(ordinary <= available, f"ordinary native GD stack sum {ordinary} exceeds{available}")
     return {"worker_c_frame_sum": high_sum, "resident_callback_c_frame_sum": low_sum,
             "conservative_worker_bytes": total, "available_worker_bytes": 4096,
@@ -2029,11 +2113,11 @@ def check(directory, *, self_test=False, trace_startup=None):
         require(not name.startswith(("_kui_retail_storage_", "_kui_sci_sd_acquire", "_kui_sci_sd_release",
                                       "_kui_loader_sd_init", "_kui_loader_sd_adopt", "_kui_loader_sd_shutdown")),
                 "persistent worker independently owns/reinitializes resident storage: " + name)
-    for name in ("_kui_vmu_durable_init", "_kui_vmu_durable_handle", "_kui_vmu_durable_admit",
+    for name in ("_kui_vmu_durable_init_address", "_kui_vmu_durable_handle", "_kui_vmu_durable_admit",
                  "_kui_vmu_durable_transaction", "_kui_vmu_store_open", "_kui_vmu_store_write",
                  "_kui_vmu_store_read", "_kui_sci_sd_write", "_kui_sci_sd_sync",
                  "_kui_vmu_readonly_overlay_prepare", "_kui_vmu_readonly_overlay_complete",
-                 "_kui_vmu_volatile_chain_build", "_kui_vmu_volatile_chain_verify",
+                 "_kui_vmu_volatile_chain_build_address", "_kui_vmu_volatile_chain_verify",
                  "_kui_vmu_native_readonly_release_check"):
         _, _, section = symbol_bytes(worker, name, 2)
         require(section[2] & 7 == 6, "missing bounded persistent bridge implementation: " + name)
@@ -2089,7 +2173,8 @@ def check(directory, *, self_test=False, trace_startup=None):
             require(any(begin <= address < begin + len(body) for begin, body in hook_ranges),
                     "C worker changes SR outside audited gateways")
     pio = check_pio_writers(directory, worker)
-    stacks = check_stacks(directory, worker, fault_capture, coherence)
+    stacks = check_stacks(directory, worker, fault_capture, coherence,
+                          background_audit=base.get("background_reader"))
     source = check_source(directory, base["runtime"])
     report = {"schema": "kui.native.persistent.probe.artifact.v1", "allocator_bootstrap_audit": base,
               "module_sha256": base["module_sha256"], "runtime": base["runtime"],

@@ -125,12 +125,41 @@ static void full_cache_stops_before_dma_or_phase_ack(void) {
     assert(calls==prior_calls && ram_card.write_phases==prior_phases);
     assert(ram_card.full_faults==1u && ram_card.faulted && !base_calls);
 }
+static void a2_immutable_writes_and_physical_a1(void) {
+    volatile_fresh();
+    assert(!kui_vmu_volatile_init_address(&ram_card,2u,base_reader,&ram_card));
+    assert(!kui_vmu_readonly_overlay_init_backend_address(&overlay,2u,volatile_handler,
+        volatile_admit,&ram_card));
+    for(unsigned phase=0u;phase<4u;phase++) {
+        parent_next();rx[0][0]|=0x00010000u; /* Real A1 remains attached. */
+        frame(1u,12u,2u,34u,0x02000000u,(42u<<24)|(phase<<8));
+        memset(writes[1],0x40u+phase,128u);frames[1].write_payload=writes[1];
+        frame(2u,14u,1u,49u,0x04000000u,0u);rx[2][0]=0x00010007u;
+        capture();assert(!prepare(3u));memset(writes[1],0xccu,128u);
+        assert(!kui_vmu_readonly_overlay_complete(&overlay));
+        assert(rx[1][0]==0x00020007u && rx[0][0]==0x03230008u);
+        assert(!memcmp(rx[2],before[2],1024u));
+    }
+    parent_next();rx[0][0]|=0x00010000u;
+    frame(1u,13u,2u,2u,0x02000000u,(42u<<24)|(4u<<8));capture();
+    assert(!prepare(3u) && !kui_vmu_readonly_overlay_complete(&overlay));
+    assert(rx[1][0]==0x00020007u && ram_card.ram_commits==1u);
+    parent_next();rx[0][0]|=0x00010000u;
+    frame(1u,11u,2u,2u,0x02000000u,42u<<24);capture();
+    assert(!prepare(3u) && !kui_vmu_readonly_overlay_complete(&overlay));
+    assert(rx[1][0]==0x82020008u && ram_card.cache_reads==1u);
+    for(unsigned n=0u;n<512u;n++) assert(((uint8_t *)rx[1])[12u+n]==0x40u+n/128u);
+    assert(!memcmp(rx[2],before[2],1024u));
+    assert(kui_vmu_volatile_init_address(&ram_card,4u,base_reader,&ram_card)==KUI_VMU_VOLATILE_ARGUMENT);
+}
+
 int main(void) {
     assert(!readonly_overlay_baseline_main());
     immutable_write_snapshot_and_stale_rx();
     filtered_physical_guards_and_snapshot_spans();
     private_ram_commit_then_later_failure_never_publishes();
     full_cache_stops_before_dma_or_phase_ack();
+    a2_immutable_writes_and_physical_a1();
     puts("VMU volatile overlay: immutable phases, filtered stale RX and atomic publication passed");
     return 0;
 }

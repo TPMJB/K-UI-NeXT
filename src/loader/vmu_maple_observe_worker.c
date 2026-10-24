@@ -57,7 +57,8 @@ static uint32_t write_payloads[32][32];
 static struct kui_vmu_volatile_chain_plan issued_plan;
 static uint32_t original_hash,chain_state;
 enum {CHAIN_IDLE,CHAIN_PREPARED,CHAIN_ISSUED,CHAIN_RESTORED,CHAIN_FAULT};
-_Static_assert(sizeof(issued_chain)==512u && sizeof(captured_chain)==512u &&
+_Static_assert(sizeof(issued_chain)==512u &&
+    sizeof(captured_chain)==32u*sizeof(struct kui_vmu_volatile_chain_frame) &&
     sizeof(write_payloads)==4096u,"Volatile DMA private buffer ABI");
 #endif
 static struct kui_vmu_readonly_overlay overlay;
@@ -919,6 +920,7 @@ void kui_vmu_maple_observer_visit(uint32_t inherited_sr) {
             captured_chain[count].control=control;captured_chain[count].rx=rx;
             captured_chain[count].header=header;
             captured_chain[count].payload0=proof_frames[count].payload0;
+            captured_chain[count].payload=NULL;
             if(destination==1u && command==12u && words==34u) {
                 for(unsigned i=0;i<32u;i++)
                     write_payloads[count][i]=read_word((cursor+20u+i*4u)|UINT32_C(0xa0000000));

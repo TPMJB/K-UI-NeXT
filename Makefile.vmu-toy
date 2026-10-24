@@ -6,6 +6,7 @@ HOST_CC ?= cc
 BUILD ?= build/vmu-toy
 READONLY_PROOF ?= 0
 MAPLE_PROFILE ?= toy
+VMU_READER_PROFILE ?= standard
 ifeq ($(MAPLE_PROFILE),toy)
 MAPLE_PROFILE_ID = 1
 else ifeq ($(MAPLE_PROFILE),silver)
@@ -139,7 +140,7 @@ package: $(BUILD)/$(TEST_ZIP)
 force-mode-config:
 $(BUILD)/readonly-config: force-mode-config
 	@mkdir -p $(BUILD)
-	@printf '%s\n' 'READONLY_PROOF=$(READONLY_PROOF)' 'SD_PROFILE=$(SD_PROFILE)' 'MAPLE_PROFILE=$(MAPLE_PROFILE)' > $(BUILD)/readonly-config.tmp
+	@printf '%s\n' 'READONLY_PROOF=$(READONLY_PROOF)' 'SD_PROFILE=$(SD_PROFILE)' 'MAPLE_PROFILE=$(MAPLE_PROFILE)' 'VMU_READER_PROFILE=$(VMU_READER_PROFILE)' > $(BUILD)/readonly-config.tmp
 ifneq ($(filter $(READONLY_PROOF),2 3 4),)
 	@sha256sum '$(SD_PROFILE)' >> $(BUILD)/readonly-config.tmp
 endif
@@ -168,12 +169,14 @@ $(BUILD)/resident_asm.o: src/loader/retail_resident.S
 $(BUILD)/observe_boot_asm.o: src/loader/vmu_maple_observe_boot.S
 	@mkdir -p $(@D)
 	$(CC) $(RESIDENT_FLAGS) -MMD -MP -c $< -o $@
+VMU_INIT_EXPORT ?= -Wl,-u,_kui_retail_resident_init
+VMU_READER_EXPORTS ?= -Wl,-u,_kui_retail_image_read -Wl,-u,_kui_loader_sd_stream_next
 $(BUILD)/resident-sci.elf: $(RESIDENT_OBJ) $(RESIDENT_LAYOUT)
 	@mkdir -p $(BUILD)/resident/lto
 	$(CC) $(LINK) -flto -mrelax -Os -fno-tree-scev-cprop -fstack-usage $(VMU_CALLGRAPH_FLAGS) -save-temps=obj -Wl,--relax \
-	 -Wl,-u,_memcpy -Wl,-u,_memset -Wl,-u,_kui_retail_resident_init \
+	 -Wl,-u,_memcpy -Wl,-u,_memset $(VMU_INIT_EXPORT) \
 	 -Wl,-u,_kui_retail_resident_dispatch -Wl,-u,_kui_retail_gd_dispatch \
-	 -Wl,-u,_kui_retail_image_read -Wl,-u,_kui_loader_sd_stream_next \
+	 $(VMU_READER_EXPORTS) \
 	 -Wl,-u,_kui_sci_sd_acquire -Wl,-u,_kui_sci_sd_release \
 	 -Wl,-u,_kui_vmu_observe_heap_hook -Wl,-u,_kui_vmu_observe_return_hook \
 	 -Wl,-u,_kui_vmu_observe_boot_control $(VMU_SD_RESIDENT_EXPORTS) $(VMU_EXIT_EXPORT) \

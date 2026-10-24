@@ -15,7 +15,7 @@ struct kui_vmu_readonly_overlay_frame {
     uint32_t header, payload0, payload1;
     uint32_t rx_physical, rx_capacity;
     uint8_t *rx_bytes;
-    /* Only filtered-transport A1 WRITE: caller-owned immutable128-byte
+    /* Only filtered-transport virtual WRITE: caller-owned immutable128-byte
      * snapshot from the original validated pre-DMA packet. prepare() copies
      * it into private staging and retains no access to this pointer. */
     const uint8_t *write_payload;
@@ -64,7 +64,7 @@ struct kui_vmu_readonly_overlay {
     kui_vmu_readonly_overlay_handler handler;
     kui_vmu_readonly_overlay_admit admit;
     void *context;
-    uint32_t magic, admitted, pending;
+    uint32_t magic, admitted, pending, address;
     uint32_t frame_count, parent_index, target_count;
     struct kui_vmu_readonly_overlay_frame frames[KUI_VMU_READONLY_OVERLAY_FRAMES];
     uint16_t reply_bytes[KUI_VMU_READONLY_OVERLAY_FRAMES];
@@ -74,15 +74,21 @@ struct kui_vmu_readonly_overlay {
 _Static_assert(sizeof(struct kui_vmu_readonly_overlay) <= 20u * 1024u,
     "Read-only overlay requires bounded private BSS");
 
+/* Existing initializers retain the A1 experiment. Native workers select A2
+ * explicitly; only A1/A2 on controller A are supported by this overlay. */
+int kui_vmu_readonly_overlay_init_address(struct kui_vmu_readonly_overlay *, uint8_t address,
+    kui_vmu_readonly_overlay_handler, void *context);
+int kui_vmu_readonly_overlay_init_backend_address(struct kui_vmu_readonly_overlay *, uint8_t address,
+    kui_vmu_readonly_overlay_handler, kui_vmu_readonly_overlay_admit, void *context);
 int kui_vmu_readonly_overlay_init(struct kui_vmu_readonly_overlay *,
     kui_vmu_readonly_overlay_handler, void *context);
 
 /* Explicit filtered-transport variant. Non-NULL admit returns1 only for an
  * allowed metadata shape, performs NO I/O/protocol staging, and may latch a
- * terminal capacity fault. The caller MUST prove ALL A1 packets were removed
+ * terminal capacity fault. The caller MUST prove ALL virtual-address packets were removed
  * from the submitted hardware chain; hardware cannot update their RX slots.
- * Consequently complete() does not interpret those stale A1 RX bytes as a
- * physical reply. The real parent's A1-absent guard remains mandatory.
+ * Consequently complete() does not interpret those stale virtual RX bytes as a
+ * physical reply. The real parent's virtual-address-absent guard remains mandatory.
  * C/D are allowed only here, with exact MEMCARD shape; C payloads are copied
  * before DMA. The backend must establish its own commit contract: the
  * volatile backend acknowledges private RAM only; the prepared durable
@@ -97,7 +103,7 @@ int kui_vmu_readonly_overlay_init_backend(struct kui_vmu_readonly_overlay *,
  * to LAST. The protected span includes worker code/data/stack and its allocator
  * header. All spans are physical main RAM addresses; no aliases are accepted.
  * Exactly one main-A controller request is required in every admitted batch.
- * Default A1 accepts only DEVINFO, ALLINFO, MEMINFO and BLOCKREAD. The explicit
+ * The selected address accepts only DEVINFO, ALLINFO, MEMINFO and BLOCKREAD. The explicit
  * filtered backend also permits exact WRITE/SYNC subject to its admit gate.
  * Unknown commands and invalid shapes terminate before hardware starts.
  * Every full RX slot must be disjoint from source, protected state and all
@@ -114,23 +120,23 @@ int kui_vmu_readonly_overlay_prepare(struct kui_vmu_readonly_overlay *,
 /* After the unchanged physical DMA completes, before its SDK consumer: the
  * caller must independently enforce the exact bank, source, idle/software DMA,
  * lock, IMASK and cache-coherence proof. No MMIO/IRQ/cache operations occur here.
- * Validate the complete batch and stage all A1 replies before any guest store.
- * The real parent must be a valid controller response with A1 absent, and every
- * A1 response in default mode must be the hardware FFFFFFFF timeout; filtered
- * mode instead relies on caller-proved exclusion of every A1 wire packet.
+ * Validate the complete batch and stage all virtual replies before any guest store.
+ * The real parent must be a valid controller response with the selected address absent, and every
+ * virtual response in default mode must be the hardware FFFFFFFF timeout; filtered
+ * mode instead relies on caller-proved exclusion of every virtual wire packet.
  * Payloads publish
- * before their headers; the parent's advertised A1 bit is written last. Parent
+ * before their headers; the parent's selected attachment bit is written last. Parent
  * payload and all unrelated responses remain unchanged. Any failure clears
  * admission and preserves every RX byte. Backend private state may have
  * advanced before a later staging failure; failure is terminal. */
 int kui_vmu_readonly_overlay_complete(struct kui_vmu_readonly_overlay *);
 
 /* Diagnostic completion for an explicitly filtered backend only. Retain the
- * same parent-response/A1-conflict admission before any external store. The
- * caller has proved that every A1 wire packet was excluded, so stale A1 RX
+ * same parent-response/virtual-address conflict admission before any external store. The
+ * caller has proved that every virtual wire packet was excluded, so stale virtual RX
  * headers are replaced with the hardware FFFFFFFF no-response marker. Only
  * those four header bytes change: every payload, parent and unrelated RX byte
- * remains intact. No backend or storage callback runs and A1 is not advertised.
+ * remains intact. No backend or storage callback runs and the virtual address is not advertised.
  * Full caller-owned DMA/bank/lock/IMASK/cache proofs remain mandatory.
  * completed increments, but virtual replies/advertisements/backend_calls do
  * not. Invalid/default physical-timeout mode calls fail without RX writes. */

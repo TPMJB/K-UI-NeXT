@@ -601,10 +601,19 @@ static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
 #ifdef KUI_SCI_SD_NO_BLOCK
 /* The background game reader streams by its own DMA (sci_stream.c) and uses
  * this bus only to select the card and move command bytes: no block
- * transfer, work clock or end-of-use release is linked. */
+ * transfer or end-of-use release is linked. The separately gated native
+ * VMU borrower also needs the existing byte-work clock for bounded identity,
+ * PIO read/write and sync waits; this adds no timer or new port state. */
+#if KUI_VMU_NATIVE_BACKGROUND
+static uint32_t loan_ticks(void *ctx) { (void)ctx; return port.work; }
+#define SCI_LOAN_TICKS loan_ticks
+#else
+#define SCI_LOAN_TICKS NULL
+#endif
 static const struct kui_loader_sd_bus bus = {
-    NULL, NULL, NULL, select_card, transfer, NULL, NULL
+    NULL, NULL, NULL, select_card, transfer, SCI_LOAN_TICKS, NULL
 };
+#undef SCI_LOAN_TICKS
 #else
 static uint32_t ticks(void *ctx) { (void)ctx; return port.work; }
 static const struct kui_loader_sd_bus bus = {

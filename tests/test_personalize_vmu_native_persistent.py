@@ -463,6 +463,25 @@ class NativeRuntimeModePersonalizationTests(NativeCachePersonalizationTests):
                 self.install(**options);self.assertEqual(self.installed_mode(),expected)
                 self.assertEqual(before,self.snapshots())
 
+    def test_background_refuses_lease_releasing_modes_before_card_selection(self):
+        self.manifest['runtime_mode_choices']=dict(tool.MODE_CHOICES_BACKGROUND);self.save_package()
+        before=self.snapshots();old=self.destination.read_bytes()
+        for options in ({'control':True},{'lease_only':True}):
+            with self.subTest(options=options),\
+                 patch.object(tool,'select_profile',side_effect=AssertionError('must not select a profile')),\
+                 patch.object(tool.os,'replace',side_effect=AssertionError('must not replace loader')):
+                with self.assertRaises(ValueError):self.install(**options)
+            self.assertEqual(old,self.destination.read_bytes());self.assertEqual(before,self.snapshots())
+
+    def test_background_supported_modes_retain_existing_card_pair(self):
+        self.manifest['runtime_mode_choices']=dict(tool.MODE_CHOICES_BACKGROUND);self.save_package()
+        before=self.snapshots()
+        for options,expected in (({},0),({'profile_runtime':True},2),({'hooks_only':True},4),
+                                 ({'raw_chain':True},5),({'evolution_trace':True},6)):
+            with self.subTest(options=options):
+                self.install(game='sa2',**options);self.assertEqual(self.installed_mode(),expected)
+                self.assertEqual(before,self.snapshots())
+
     def test_prior_packages_refuse_evolution_trace_before_profile_selection_or_replace(self):
         before=self.snapshots();old=self.destination.read_bytes()
         for choices in (None,tool.MODE_CHOICES_LEASE_ONLY,tool.MODE_CHOICES_HOOKS_ONLY,tool.MODE_CHOICES_RAW_CHAIN):

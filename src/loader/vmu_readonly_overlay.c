@@ -37,14 +37,22 @@ static int readonly_overlay_fail(struct kui_vmu_readonly_overlay *s,int result,u
     return result;
 }
 
-int kui_vmu_readonly_overlay_init_backend(struct kui_vmu_readonly_overlay *s,
+int kui_vmu_readonly_overlay_init_backend_address(struct kui_vmu_readonly_overlay *s,uint8_t address,
     kui_vmu_readonly_overlay_handler handler,kui_vmu_readonly_overlay_admit admit,void *context) {
     if(!s) return KUI_VMU_OVERLAY_ARGUMENT;
     memset(s,0,sizeof(*s));
-    if(!handler) return readonly_overlay_fail(s,KUI_VMU_OVERLAY_ARGUMENT,KUI_VMU_OVERLAY_BAD_ARGUMENT);
-    s->magic=OVERLAY_MAGIC;s->handler=handler;s->admit=admit;
+    if(!handler || (address!=1u && address!=2u)) return readonly_overlay_fail(s,KUI_VMU_OVERLAY_ARGUMENT,KUI_VMU_OVERLAY_BAD_ARGUMENT);
+    s->magic=OVERLAY_MAGIC;s->handler=handler;s->admit=admit;s->address=address;
     s->context=context;s->admitted=1;
     return KUI_VMU_OVERLAY_OK;
+}
+int kui_vmu_readonly_overlay_init_backend(struct kui_vmu_readonly_overlay *s,
+    kui_vmu_readonly_overlay_handler handler,kui_vmu_readonly_overlay_admit admit,void *context) {
+    return kui_vmu_readonly_overlay_init_backend_address(s,1u,handler,admit,context);
+}
+int kui_vmu_readonly_overlay_init_address(struct kui_vmu_readonly_overlay *s,uint8_t address,
+    kui_vmu_readonly_overlay_handler handler,void *context) {
+    return kui_vmu_readonly_overlay_init_backend_address(s,address,handler,NULL,context);
 }
 int kui_vmu_readonly_overlay_init(struct kui_vmu_readonly_overlay *s,
     kui_vmu_readonly_overlay_handler handler,void *context) {
@@ -119,7 +127,7 @@ int kui_vmu_readonly_overlay_prepare(struct kui_vmu_readonly_overlay *s,
             unsigned needed=readonly_overlay_command(f->header)==1u?116u:readonly_overlay_command(f->header)==2u?196u:16u;
             if(!readonly_overlay_parent_request(f) || f->rx_capacity<needed)
                 return readonly_overlay_fail(s,KUI_VMU_OVERLAY_REQUEST,KUI_VMU_OVERLAY_BAD_REQUEST);
-        } else if(readonly_overlay_destination(f->header)==1u) {
+        } else if(readonly_overlay_destination(f->header)==s->address) {
             unsigned needed=readonly_overlay_target_response_bytes(f,s->admit!=NULL);
             if(!needed || f->rx_capacity<needed)
                 return readonly_overlay_fail(s,KUI_VMU_OVERLAY_REQUEST,KUI_VMU_OVERLAY_BAD_REQUEST);
@@ -130,7 +138,7 @@ int kui_vmu_readonly_overlay_prepare(struct kui_vmu_readonly_overlay *s,
         return readonly_overlay_fail(s,KUI_VMU_OVERLAY_PARENT,KUI_VMU_OVERLAY_BAD_PARENT_COUNT);
     if(source_bytes<minimum_source_bytes)
         return readonly_overlay_fail(s,KUI_VMU_OVERLAY_SPAN,KUI_VMU_OVERLAY_BAD_SPAN);
-    for(size_t i=0;i<count;i++) if(readonly_overlay_destination(frames[i].header)==1u) {
+    for(size_t i=0;i<count;i++) if(readonly_overlay_destination(frames[i].header)==s->address) {
         const struct kui_vmu_readonly_overlay_frame *f=&frames[i];
         if(s->admit && s->admit(s->context,f->header,f->payload0,f->payload1)!=1)
             return readonly_overlay_fail(s,KUI_VMU_OVERLAY_REQUEST,KUI_VMU_OVERLAY_BAD_REQUEST);
@@ -163,11 +171,11 @@ static int readonly_overlay_parent_response(const struct kui_vmu_readonly_overla
         (cmd==9u?function==CONTROLLER:!!(function&CONTROLLER));
 }
 static int readonly_overlay_generated_response(const struct kui_vmu_readonly_overlay_frame *f,
-    const uint8_t *r,size_t bytes,int filtered) {
+    const uint8_t *r,size_t bytes,int filtered,uint8_t address) {
     unsigned cmd=readonly_overlay_command(f->header),expected=cmd==1u?5u:cmd==2u?6u:cmd==3u || cmd==12u || cmd==13u?7u:8u;
     unsigned needed=readonly_overlay_target_response_bytes(f,filtered);
     return bytes==needed && bytes<=f->rx_capacity && r[0]==expected &&
-        r[1]==0u && r[2]==1u && 4u+4u*r[3]==bytes &&
+        r[1]==0u && r[2]==address && 4u+4u*r[3]==bytes &&
         ((cmd==3u || cmd==12u || cmd==13u) || readonly_overlay_le32(r+4u)==MEMCARD) &&
         (cmd!=11u || readonly_overlay_le32(r+8u)==f->payload1);
 }
@@ -181,10 +189,10 @@ int kui_vmu_readonly_overlay_complete(struct kui_vmu_readonly_overlay *s) {
     s->stats.last_reply=readonly_overlay_le32(parent->rx_bytes);
     if(!readonly_overlay_parent_response(parent))
         return readonly_overlay_fail(s,KUI_VMU_OVERLAY_PARENT,KUI_VMU_OVERLAY_BAD_PARENT_REPLY);
-    if(parent->rx_bytes[2]&1u)
+    if(parent->rx_bytes[2]&s->address)
         return readonly_overlay_fail(s,KUI_VMU_OVERLAY_CONFLICT,KUI_VMU_OVERLAY_PHYSICAL_CONFLICT);
     /* Every physical conflict is checked before invoking the backend. */
-    for(unsigned i=0;!s->admit && i<s->frame_count;i++) if(readonly_overlay_destination(s->frames[i].header)==1u) {
+    for(unsigned i=0;!s->admit && i<s->frame_count;i++) if(readonly_overlay_destination(s->frames[i].header)==s->address) {
         const struct kui_vmu_readonly_overlay_frame *f=&s->frames[i];
         s->stats.last_request=f->header;s->stats.last_rx=f->rx_physical;
         s->stats.last_reply=readonly_overlay_le32(f->rx_bytes);
@@ -193,7 +201,7 @@ int kui_vmu_readonly_overlay_complete(struct kui_vmu_readonly_overlay *s) {
     }
     for(unsigned i=0;i<s->frame_count;i++) {
         const struct kui_vmu_readonly_overlay_frame *f=&s->frames[i];
-        if(readonly_overlay_destination(f->header)!=1u) continue;
+        if(readonly_overlay_destination(f->header)!=s->address) continue;
         uint8_t request[12],*reply=(uint8_t *)(void *)s->staged[i];
         const uint8_t *input=request;size_t capacity=KUI_VMU_READONLY_OVERLAY_REPLY;
         size_t bytes=0;
@@ -209,7 +217,7 @@ int kui_vmu_readonly_overlay_complete(struct kui_vmu_readonly_overlay *s) {
                       capacity,&bytes);
         s->stats.last_reply=readonly_overlay_le32(reply);
         if(handled!=1 ||
-           !readonly_overlay_generated_response(f,reply,bytes,s->admit!=NULL))
+           !readonly_overlay_generated_response(f,reply,bytes,s->admit!=NULL,(uint8_t)s->address))
             return readonly_overlay_fail(s,KUI_VMU_OVERLAY_HANDLER,KUI_VMU_OVERLAY_BAD_HANDLER);
         s->reply_bytes[i]=(uint16_t)bytes;
     }
@@ -217,7 +225,7 @@ int kui_vmu_readonly_overlay_complete(struct kui_vmu_readonly_overlay *s) {
      * SDK consumption is excluded until the caller returns from this hook. */
     for(unsigned i=0;i<s->frame_count;i++) {
         const struct kui_vmu_readonly_overlay_frame *f=&s->frames[i];
-        if(readonly_overlay_destination(f->header)!=1u) continue;
+        if(readonly_overlay_destination(f->header)!=s->address) continue;
         const uint8_t *reply=(const uint8_t *)(const void *)s->staged[i];
         volatile uint8_t *out=f->rx_bytes;
         for(unsigned j=4u;j<s->reply_bytes[i];j++) out[j]=reply[j];
@@ -229,7 +237,7 @@ int kui_vmu_readonly_overlay_complete(struct kui_vmu_readonly_overlay *s) {
         else if(cmd==10u) readonly_overlay_increment(&s->stats.media);
         else if(cmd==11u) readonly_overlay_increment(&s->stats.reads);
     }
-    ((volatile uint8_t *)parent->rx_bytes)[2]=(uint8_t)(parent->rx_bytes[2]|1u);
+    ((volatile uint8_t *)parent->rx_bytes)[2]=(uint8_t)(parent->rx_bytes[2]|s->address);
     if(!s->target_count) s->stats.last_reply=readonly_overlay_le32(parent->rx_bytes);
     readonly_overlay_increment(&s->stats.advertisements);readonly_overlay_increment(&s->stats.completed);s->pending=0;
     return KUI_VMU_OVERLAY_OK;
@@ -244,14 +252,14 @@ int __attribute__((noipa)) kui_vmu_readonly_overlay_complete_absent(struct kui_v
     s->stats.last_reply=readonly_overlay_le32(parent->rx_bytes);
     if(!readonly_overlay_parent_response(parent))
         return readonly_overlay_fail(s,KUI_VMU_OVERLAY_PARENT,KUI_VMU_OVERLAY_BAD_PARENT_REPLY);
-    if(parent->rx_bytes[2]&1u)
+    if(parent->rx_bytes[2]&s->address)
         return readonly_overlay_fail(s,KUI_VMU_OVERLAY_CONFLICT,KUI_VMU_OVERLAY_PHYSICAL_CONFLICT);
     /* All admission is complete before publishing the first absent header.
-     * A1 packets never reached hardware; do not interpret their stale bytes
+     * Virtual packets never reached hardware; do not interpret their stale bytes
      * as physical replies, and never let the SDK consume those stale headers. */
     for(unsigned i=0;i<s->frame_count;i++) {
         const struct kui_vmu_readonly_overlay_frame *f=&s->frames[i];
-        if(readonly_overlay_destination(f->header)!=1u) continue;
+        if(readonly_overlay_destination(f->header)!=s->address) continue;
         volatile uint8_t *out=f->rx_bytes;
         for(unsigned j=0;j<4u;j++) out[j]=UINT8_MAX;
         s->stats.last_request=f->header;s->stats.last_rx=f->rx_physical;

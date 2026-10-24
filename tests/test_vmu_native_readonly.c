@@ -120,14 +120,14 @@ static void stage_batch(unsigned command,unsigned block) {
     put(0x0c3010b4u,4u,packet_bank);put(0x0c3010b8u,4u,packet_bank);
     put(0x0c300fc0u,4u,1u);frame.sr=0x60000161u;frame.pr=0x0c012226u;
     memset(memory+source-0x0c000000u,0,0x3000u);
-    memset(rx_bytes(0),0xa5,1024u);memset(rx_bytes(1),0xa5,1024u);memset(rx_bytes(6),0xa5,1024u);
+    memset(rx_bytes(0),0xa5,1024u);memset(rx_bytes(2),0xa5,1024u);memset(rx_bytes(6),0xa5,1024u);
     /* Main A controller polling is kept physical. */
     put(source,4u,1u);put(source+4u,4u,rx_at(0));put(source+8u,4u,0x01002009u);put(source+12u,4u,0x01000000u);
     source+=16u;
     if(command) {
         unsigned words=command==1u || command==2u?0u:command==12u?34u:2u;
-        put(source,4u,words);put(source+4u,4u,rx_at(1));
-        put(source+8u,4u,(words<<24)|0x00000100u|command);
+        put(source,4u,words);put(source+4u,4u,rx_at(2));
+        put(source+8u,4u,(words<<24)|0x00000200u|command);
         if(words) put(source+12u,4u,0x02000000u);
         if(words>1u) put(source+16u,4u,block<<24);
         source+=12u+4u*words;
@@ -139,7 +139,7 @@ static void physical_complete(void) {
     put(0x0c3010b4u,4u,packet_bank^1u);put(0x0c3010b8u,4u,packet_bank^1u);put(0x0c300fc0u,4u,0u);
     frame.sr=0x600001f1u;
     put(rx_at(0),4u,0x03200008u);put(rx_at(0)+4u,4u,0x01000000u);
-    put(rx_at(1),4u,UINT32_MAX);put(rx_at(6),4u,0x1c604005u);
+    put(rx_at(2),4u,UINT32_MAX);put(rx_at(6),4u,0x1c604005u);
 }
 static void arm(void) {CHECK(kui_vmu_native_passive_arm(&input,NULL)==0);}
 static void submit(void) {
@@ -164,39 +164,39 @@ int main(void) {
     uint8_t saved_parent[1024],saved_other[1024],saved_target[1024],expected_block[512];
     fixture();arm();stage_batch(0u,0u);submit();physical_complete();
     memcpy(saved_parent,rx_bytes(0),sizeof(saved_parent));memcpy(saved_other,rx_bytes(6),sizeof(saved_other));
-    complete_return();saved_parent[2]|=1u;
+    complete_return();saved_parent[2]|=2u;
     CHECK(!memcmp(saved_parent,rx_bytes(0),sizeof(saved_parent)));
     CHECK(!memcmp(saved_other,rx_bytes(6),sizeof(saved_other)));
     CHECK(overlay.stats.advertisements==1u && !overlay.stats.replies && !card.requests && !card.commit_attempts);
-    /* Alternate real SDK banks, advertise A1, then return DEVINFO and media. */
+    /* Alternate real SDK banks, advertise A2, then return DEVINFO and media. */
     stage_batch(1u,0u);CHECK(packet_bank==1u);submit();physical_complete();complete_return();
-    CHECK(value_at(rx_at(1))==0x1c010005u && overlay.stats.devinfo==1u && card.requests==1u);
+    CHECK(value_at(rx_at(2))==0x1c020005u && overlay.stats.devinfo==1u && card.requests==1u);
     stage_batch(10u,0u);CHECK(packet_bank==0u);submit();physical_complete();complete_return();
-    CHECK(value_at(rx_at(1))==0x07010008u && overlay.stats.media==1u && card.requests==2u);
+    CHECK(value_at(rx_at(2))==0x07020008u && overlay.stats.media==1u && card.requests==2u);
     stage_batch(11u,255u);submit();physical_complete();
     memcpy(saved_other,rx_bytes(6),sizeof(saved_other));
     if(setjmp(terminal)==0) {kui_vmu_native_passive_complete(&frame);CHECK(false);}
     CHECK(terminal_phase==13u && !terminal_error && state.proof && state.completed==4u && !state.pending);
-    CHECK(value_at(rx_at(1))==0x82010008u && overlay.stats.reads==1u && card.reads==1u && card.requests==3u);
+    CHECK(value_at(rx_at(2))==0x82020008u && overlay.stats.reads==1u && card.reads==1u && card.requests==3u);
     CHECK(!kui_vmu_image_blank_block(255u,expected_block));
-    CHECK(!memcmp(rx_bytes(1)+12u,expected_block,sizeof(expected_block)));
+    CHECK(!memcmp(rx_bytes(2)+12u,expected_block,sizeof(expected_block)));
     CHECK(!memcmp(saved_other,rx_bytes(6),sizeof(saved_other)) && !card.commit_attempts && !card.faulted);
 
-    /* A physical A1 attachment or reply is refused before any guest mutation. */
+    /* A physical A2 attachment or reply is refused before any guest mutation. */
     for(unsigned conflict=0;conflict<2u;conflict++) {
         fixture();arm();stage_batch(1u,0u);submit();physical_complete();
-        if(conflict) put(rx_at(1),4u,0x1c010005u);else rx_bytes(0)[2]|=1u;
+        if(conflict) put(rx_at(2),4u,0x1c020005u);else rx_bytes(0)[2]|=2u;
         memcpy(saved_parent,rx_bytes(0),sizeof(saved_parent));memcpy(saved_other,rx_bytes(6),sizeof(saved_other));
-        memcpy(saved_target,rx_bytes(1),sizeof(saved_target));reject_complete();
+        memcpy(saved_target,rx_bytes(2),sizeof(saved_target));reject_complete();
         CHECK(state.error==23u && !card.requests && !overlay.stats.replies && !overlay.stats.advertisements);
-        CHECK(!memcmp(saved_parent,rx_bytes(0),sizeof(saved_parent)) && !memcmp(saved_target,rx_bytes(1),sizeof(saved_target)));
+        CHECK(!memcmp(saved_parent,rx_bytes(0),sizeof(saved_parent)) && !memcmp(saved_target,rx_bytes(2),sizeof(saved_target)));
         CHECK(!memcmp(saved_other,rx_bytes(6),sizeof(saved_other)));
     }
     const unsigned unsupported[]={3u,4u,9u,12u,13u};
     for(unsigned i=0;i<sizeof(unsupported)/sizeof(unsupported[0]);i++) {
-        fixture();arm();stage_batch(unsupported[i],0u);memcpy(saved_target,rx_bytes(1),sizeof(saved_target));reject_submit();
+        fixture();arm();stage_batch(unsupported[i],0u);memcpy(saved_target,rx_bytes(2),sizeof(saved_target));reject_submit();
         CHECK(state.error==21u && !card.requests && !card.commit_attempts && !overlay.stats.backend_calls);
-        CHECK(!memcmp(saved_target,rx_bytes(1),sizeof(saved_target)));
+        CHECK(!memcmp(saved_target,rx_bytes(2),sizeof(saved_target)));
     }
     /* A TX, layout, lease or consumer-cell change after the physical transfer
      * cannot publish a virtual response or return to an unproved consumer. */
@@ -206,8 +206,8 @@ int main(void) {
         else if(corruption==1u) put(input.layout.input_array,4u,0xac510000u);
         else if(corruption==2u) put(input.lease.header+4u,4u,input.lease.units+1u);
         else kui_vmu_native_passive_consumer+=2u;
-        memcpy(saved_parent,rx_bytes(0),sizeof(saved_parent));memcpy(saved_target,rx_bytes(1),sizeof(saved_target));reject_complete();
-        CHECK(!memcmp(saved_parent,rx_bytes(0),sizeof(saved_parent)) && !memcmp(saved_target,rx_bytes(1),sizeof(saved_target)) && !card.requests);
+        memcpy(saved_parent,rx_bytes(0),sizeof(saved_parent));memcpy(saved_target,rx_bytes(2),sizeof(saved_target));reject_complete();
+        CHECK(!memcmp(saved_parent,rx_bytes(0),sizeof(saved_parent)) && !memcmp(saved_target,rx_bytes(2),sizeof(saved_target)) && !card.requests);
     }
     fixture();arm();stage_batch(0u,0u);submit();
     if(setjmp(terminal)==0) {kui_vmu_native_passive_submit(&frame);CHECK(false);}
