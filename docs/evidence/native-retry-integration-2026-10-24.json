@@ -1,0 +1,55 @@
+{
+  "schema": "kui.native.retry.integration.v1",
+  "failed_source": "d55fd228e049e313754d4b538c8ec4b79e2c370b",
+  "console_execution_verified_after_fix": false,
+  "capture": {
+    "sha256": "4c079b67dfa8ac0a3599b198d77069d7822f91376cdc419294f74c1a4cc67edc",
+    "phase": "00000010",
+    "detail": "00000017",
+    "submitted": "00000059",
+    "completed": "00000058",
+    "sd_reads": 0,
+    "sd_busy": 1,
+    "sd_faults": 0,
+    "lease_result": 1,
+    "reply": "000200fc",
+    "overlay_result": "fffffff8",
+    "overlay_flags": "00000100",
+    "commits": 0
+  },
+  "cause": "Filtered durable backend returned the protocol-correct four-byte A2 AGAIN on pre-acquisition BUSY. The shared overlay required the success DATA/ACK shape and raised BAD_HANDLER, causing native fail(23).",
+  "fix": "Permit exact four-byte zero-word AGAIN, destination00/source matching virtual address, only for filtered READ/WRITE/final SYNC; retain all success-shape, request, endpoint and atomic-publication validation.",
+  "coverage_gap": "Earlier original-SDK enumeration replays made no storage request. Isolated durable BUSY tests therefore did not detect the overlay rejecting the resulting retry.",
+  "native_regression": {
+    "pre_fix": "New full native bridge fixture fails with completion refusal23/overlay-8 at first BUSY READ.",
+    "post_fix_checks": 2075254,
+    "cases": [
+      "three consecutive READ BUSY responses then real successful read",
+      "both ownership-lock and acquisition refusal",
+      "four WRITE phases then final SYNC BUSY without ACK or commit",
+      "different WRITE cannot replace pending immutable data and returns AGAIN",
+      "original SYNC retry commits once, duplicate SYNC acknowledges without more I/O",
+      "physical A1 parent bit and unrelated physical RX unchanged",
+      "retry publishes only its four-byte header; remaining virtual RX unchanged"
+    ],
+    "scope": "Production native worker, overlay, protocol, durable store, CRC and PIO code execute on host with only the external SCI lease boundary and MMIO bus modeled; not console IRQ timing."
+  },
+  "ordinary_loading_correction": {
+    "owner_report": "Regular loading was used for smooth Evolution 2 FMVs after edf20f0f11a3.",
+    "previous_background_inference_withdrawn": true,
+    "source_comparison": "Ordinary SCI data loops/storage/pacing match the recovered EDF source. Later logical drive-state and mounted-disc-check differences remain, with no proven FMV causal link.",
+    "performance_fix_claimed": false
+  },
+  "linked_overlay_publisher": {
+    "actual_sh_cases": 44,
+    "retry_then_success_sequences": 6,
+    "instruction_mutation_refusals": 4,
+    "modeled_external_boundary": "Only the protocol handler response is authored; actual linked publisher and its helper functions execute. No hardware SD or original SDK retry scheduling is claimed.",
+    "reviewed_normalized_pin_changes": 1,
+    "other_pins_unchanged": 50,
+    "overlay_frame_before": 80,
+    "overlay_frame_after": 92,
+    "maximum_worker_stack_bytes": 1916,
+    "available_worker_stack_bytes": 4096
+  }
+}

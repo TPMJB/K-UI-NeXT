@@ -128,6 +128,7 @@ def package(build,guide='broader',trace_startup=None):
         if guide=='a2-background':
             extra['docs/vmu-native-a2-background-test.md']=(root/'docs/vmu-native-a2-background-test.md').read_bytes()
             extra['docs/evidence/native-a2-background-2026-10-24.json']=(root/'docs/evidence/native-a2-background-2026-10-24.json').read_bytes()
+            extra['docs/evidence/native-retry-integration-2026-10-24.json']=(root/'docs/evidence/native-retry-integration-2026-10-24.json').read_bytes()
         for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json',
                      'native-performance-acceptance-2026-10-23.json','native-uniform-root-family-2026-10-23.json',
                      'native-recv-ownership-2026-10-23.json','native-older-sdk-2026-10-23.json',

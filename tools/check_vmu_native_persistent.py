@@ -87,7 +87,7 @@ PREPARED_PINS = {
  '_kui_vmu_native_passive_complete': ('481728bfca6efd2ec8bf4663948e3b6c8f15dba21a0cbecf886467d9c1c323eb', 2704),
  '_controller_context_valid': ('e8e1eee80b1bce155a8a68c9c91229c138e017daf5bd2d880d7d51195efde2a0', 1032),
  '_kui_vmu_readonly_overlay_complete_absent': ('569ef7dcb97f1904c68ce440dd9a6bc3c0d143da123c0b8d37dc8c55da4f0a60', 284),
- '_kui_vmu_readonly_overlay_complete': ('d6ea47fea620deaf7f177e01541585c9aac921b6d069b4e50de3b359f8199937', 878),
+ '_kui_vmu_readonly_overlay_complete': ('d4fc62020bef09ab9056b5b7a16c8a47c616c446142d770d6a9e801ecf677601', 1004),
  '_readonly_overlay_parent_response': ('d396e68edd3158708ba5a8c9ff5235821bb62b71cc9dc40650cadb9098eaeb12', 116),
  '_readonly_overlay_increment': ('e3a6368a10593e4ae7510faf736d644a9d9e383e262070923241741b3f6893b1', 14),
  '_readonly_overlay_le32': ('1daa47eecc292df8356826c0e5a683e3a2c27cec212f901db7b1f01cf3b897df', 30),
@@ -465,6 +465,146 @@ def audit_absent_completion(worker, *, self_test=False):
                 only_filtered_a2_four_byte_headers_changed=True)
 
 
+class RetryCompletion(AbsentCompletion):
+    """Run the linked publisher with an explicitly authored backend reply.
+
+    This substitutes only the protocol handler, not any publisher predicate,
+    helper, store or return. It proves wire acceptance/publication, not SD
+    ownership, durable commit, original SDK resubmission or hardware timing.
+    """
+    helper='_kui_vmu_readonly_overlay_complete'
+    closure=(helper,'_readonly_overlay_parent_response','_readonly_overlay_le32',
+             '_readonly_overlay_increment','_readonly_overlay_put32',
+             '_readonly_overlay_target_response_bytes')
+
+    def __init__(self,worker,seed,command,outcome,*,body=None):
+        super().__init__(worker,seed,9,3,1,'ok',body=body)
+        self.command,self.outcome=command,outcome
+        self.callback=worker[4]['_persistent_handler'][0]
+        self.context=worker[4]['_durable_card'][0]
+        self.put(self.overlay+56,self.callback);self.put(self.overlay+64,self.context)
+        self.put(self.overlay+60,0 if outcome=='unfiltered' else worker[4]['_persistent_admit'][0])
+        self.target=self.rx[0][0];self.parent=self.rx[-1][0]
+        self.put(self.target,MASK)
+        self.phase=1 if outcome=='sync-phase-one' else 4
+        words=34 if command==12 else 2
+        self.header=(words<<24)|(2<<8)|command
+        self.location=0x2a000000|((self.phase<<8) if command==13 else 0)
+        self.put(self.overlay+96,self.header);self.put(self.overlay+100,0x02000000)
+        self.put(self.overlay+104,self.location)
+        if command==12:
+            request=self.overlay+1056+384
+            self.put(request,self.header);self.put(request+4,0x02000000);self.put(request+8,self.location)
+        for i in range(3):self.put(self.overlay+96+28*i+16,1024)
+        self.before_data=self.data.copy();self.calls=[]
+
+    def call(self,target):
+        if target!=self.callback:return False
+        require(self.r[4]==self.context and self.r[6]==(140 if self.command==12 else 12),
+                'retry publisher changes authored handler context/request length')
+        request,response=self.r[5],self.r[7]
+        require(self.read(request)==self.header and self.read(request+4)==0x02000000 and
+                self.read(request+8)==self.location and response==self.overlay+1056,
+                'retry publisher changes immutable request or private staging buffer')
+        require(all(self.data[rx+i]==self.before_data[rx+i] for rx,_ in self.rx for i in range(1024)),
+                'retry publisher stores external RX before handler completion')
+        self.calls.append('authored-handler')
+        packet=bytearray((0xfc,0,2,0))
+        if self.outcome=='success':
+            packet=bytearray(struct.pack('<I',0x82020008)+struct.pack('<II',0x02000000,self.location)+
+                bytes((i*7+3)&255 for i in range(512))) if self.command==11 else bytearray((7,0,2,0))
+        if self.outcome=='host':packet[1]=1
+        if self.outcome=='source':packet[2]=1
+        if self.outcome=='words':packet[3]=1
+        count=8 if self.outcome=='length' else 0 if self.outcome=='empty' else len(packet)
+        require(self.read(self.r[15])==(384 if self.command==12 else 524),
+                'retry handler changes exact private staged capacity')
+        count_pointer=self.read(self.r[15]+4)
+        require(self.start_sp-256<=count_pointer<count_pointer+4<=self.start_sp,
+                'retry publisher moved its reply-length result outside its private C frame')
+        for i,value in enumerate(packet):self.store(response+i,value,1)
+        self.write(count_pointer,count)
+        self.packet=bytes(packet);self.abi_return(1);return True
+
+    def plain(self,word,pc):
+        n,m=word>>8&15,word>>4&15
+        if word&0xF0FF in (0x4019,0x4029):
+            self.r[n]>>=8 if word&255==0x19 else 16;return
+        if word&0xF00F==0x6001:
+            address=self.r[m];value=self.data[address]|self.data[address+1]<<8
+            self.r[n]=(value-65536 if value&0x8000 else value)&MASK;return
+        if word&0xF00F==0x2001:self.store(self.r[n],self.r[m],2);return
+        if word&0xF00F==0x000C:self.r[n]=self.byte(self.r[0]+self.r[m]);return
+        if word&0xF00F==0x0004:self.store(self.r[0]+self.r[n],self.r[m],1);return
+        if word&0xF00F==0x600D:self.r[n]=self.r[m]&65535;return
+        if word&0xF00F==0x600B:self.r[n]=(-self.r[m])&MASK;return
+        super().plain(word,pc)
+
+    def run(self):
+        # The successful524-byte response's actual byte loop exceeds the
+        # stack-wrapper interpreter's1200-step slice. Retain a finite8-slice bound.
+        for _ in range(8):
+            try:return super().run()
+            except AssertionError as error:
+                if str(error)!='unbounded native stack instruction path':raise
+        raise ValueError('unbounded linked retry publisher')
+
+    def check(self):
+        regs,pr,sr,fpscr,fr=self.before_regs
+        require(self.r[8:]==regs[8:] and self.pr==pr and self.sr&~1==sr&~1 and
+                self.fpscr==fpscr and self.fr==fr,'retry publisher changes owner ABI')
+        ok=self.outcome in ('again','success')
+        require(self.calls==['authored-handler'] and self.r[0]==(0 if ok else -8)&MASK,
+                'retry publisher changes handler count or refusal meaning')
+        for rx,_ in self.rx:
+            expected=bytearray(self.before_data[rx+i] for i in range(1024))
+            if ok and rx==self.target:expected[:len(self.packet)]=self.packet
+            if ok and rx==self.parent:expected[2]|=2
+            require(bytes(self.data[rx+i] for i in range(1024))==expected,
+                    'retry publisher changes payload/physical A1 or publishes malformed reply')
+        require(self.read(self.overlay+76)==0 and self.read(self.overlay+72)==int(ok),
+                'retry completion changes prepared lifecycle')
+        if not ok:require(self.read(self.overlay+40)&256,'malformed retry lacks handler-fault flag')
+        return self
+
+    def next_success(self):
+        self.outcome='success';self.put(self.overlay+76,1)
+        self.put(self.parent,0x03210008)
+        self.pc=self.base;self.r[4]=self.overlay;self.r[15]=self.start_sp;self.pr=self.stop_pc
+        self.before_regs=self.r.copy(),self.pr,self.sr,self.fpscr,self.fr.copy()
+        self.before_data=self.data.copy();self.calls=[];self.external_stores=[]
+        return self.run().check()
+
+
+def audit_retry_completion(worker,*,self_test=False):
+    cases=successes=0
+    for seed in range(2):
+        for command in (11,12,13):
+            for outcome in ('again','host','source','words','length','empty','unfiltered'):
+                model=RetryCompletion(worker,seed,command,outcome).run().check();cases+=1
+                if outcome=='again':model.next_success();successes+=1
+        RetryCompletion(worker,seed,13,'sync-phase-one').run().check();cases+=1
+    rejected=0
+    if self_test:
+        _,original,_=symbol_bytes(worker,RetryCompletion.helper,2)
+        mutations=[(struct.pack('<H',0x88fc),struct.pack('<H',0x8800),'again'),
+            (struct.pack('<4H',0x84c1,0x2008,0x8b07,0x84c2),
+             struct.pack('<4H',0x84c1,0x2008,0x0009,0x84c2),'host'),
+            (struct.pack('<6H',0x84c2,0x51f9,0x600c,0x3010,0x8b02,0x84c3),
+             struct.pack('<6H',0x84c2,0x51f9,0x600c,0x3010,0x0009,0x84c3),'source'),
+            (struct.pack('<2H',0x60b3,0x8804),struct.pack('<2H',0x60b3,0x8808),'length')]
+        for old,new,outcome in mutations:
+            require(original.count(old)==1,'missing unique compiled retry predicate: '+outcome)
+            changed=original.replace(old,new)
+            try:RetryCompletion(worker,0,11,outcome,body=changed).run().check()
+            except (ValueError,AssertionError,KeyError):rejected+=1
+            else:raise ValueError('retry model accepts changed predicate: '+outcome)
+    return dict(linked_instruction_cases=cases,retry_then_success_cases=successes,
+        mutation_rejections=rejected,virtual_address=2,physical_a1_unchanged=True,
+        retry_header_only_publication=True,exact_endpoint_length_and_command_gates=True,
+        authored_backend_handler=True,storage_or_sdk_retry_scheduling_proved=False)
+
+
 def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *, build=None):
     """Keep the legacy proof, or require the complete prepared proof family."""
     if "_lifetime_plan" not in worker[4]:
@@ -578,7 +718,8 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
                 "publication": "one parent-A presence byte after whole-batch validation",
                 "full_storage_guards_unchanged": True,
                 "synthetic_read_count_is_not_hardware_time": True},
-            "hooks_only": audit_absent_completion(worker, self_test=self_test)}
+            "hooks_only": audit_absent_completion(worker, self_test=self_test),
+            "retry_publication":audit_retry_completion(worker,self_test=self_test)}
 
 # Whole integer trampoline, including its P2 resume literal and zero padding.
 TRAMPOLINE_PREFIX = bytes.fromhex(

@@ -45,10 +45,11 @@
     "resident_elf_sha256": "4f12f78f81edb102f55f8d20a07c8a08b63ab360de37405786b213ac2f5dae62",
     "enabled_scope": "Native Background X/Y SCI reader, 20/25 blocks per call; Standard SCI/SCIF/IDE behavior unchanged and CE separate.",
     "repair": "On RESUME, validate DMA1 ownership; snapshot SAR/DAR/TCR/CHCR at acquisition; foreign DMA forces stop/restart plus same-block PIO; cancellation fences DMA before CMD12.",
-    "console_source": "Owner recalled good/perfect FMV behavior following this repair; the recovered README establishes candidate scope and identities, not the later console result.",
+    "console_source": "Owner corrected the route on 2026-10-24: the reported smooth Evolution 2 FMVs after edf20f0f11a3 used regular loading. The repair scope in the recovered README does not establish the selected route.",
     "current_route_gap": "The later df035a8 native VMU module linked a Standard-only resident and refused Background, so that historical Background repair was unreachable.",
-    "candidate_response": "Provide a separate explicit Background module while retaining the current A2 worker, cache, lease/lifetime guards and controller fast lane.",
+    "candidate_response": "Background is an additional optional VMU reader, not an established explanation or correction for the ordinary-loading FMV report.",
     "limits": [
+      "Attributing the earlier smooth-FMV report to Background mode was unsupported and is withdrawn.",
       "This route difference does not prove that it is the only source of the reported slowdown.",
       "The new combined Background/A2 route still needs its own playback and power-off/save-load console result.",
       "No broad 2.0 binary or timing parity is claimed."

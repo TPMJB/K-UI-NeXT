@@ -174,6 +174,14 @@ static int readonly_overlay_generated_response(const struct kui_vmu_readonly_ove
     const uint8_t *r,size_t bytes,int filtered,uint8_t address) {
     unsigned cmd=readonly_overlay_command(f->header),expected=cmd==1u?5u:cmd==2u?6u:cmd==3u || cmd==12u || cmd==13u?7u:8u;
     unsigned needed=readonly_overlay_target_response_bytes(f,filtered);
+    /* The filtered durable backend may defer READ/final SYNC before acquiring
+     * SCI, or a changed WRITE while a commit remains pending. Its exact
+     * four-byte AGAIN is a retry, not a data/commit ACK. Publish no payload
+     * and keep the card present for the next request.
+     * Default physical-timeout readers retain their success-only contract. */
+    if(filtered && (cmd==11u || cmd==12u || (cmd==13u && ((f->payload1>>8)&255u)==4u)) &&
+       bytes==4u && bytes<=f->rx_capacity &&
+       r[0]==0xfcu && !r[1] && r[2]==address && !r[3]) return 1;
     return bytes==needed && bytes<=f->rx_capacity && r[0]==expected &&
         r[1]==0u && r[2]==address && 4u+4u*r[3]==bytes &&
         ((cmd==3u || cmd==12u || cmd==13u) || readonly_overlay_le32(r+4u)==MEMCARD) &&

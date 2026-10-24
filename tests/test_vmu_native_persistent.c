@@ -388,6 +388,63 @@ static void stage_block(unsigned block,const uint8_t data[512]) {
     }
     CHECK(sd.bytes==bytes && lease_calls==calls && durable_card.write_phases==4u);
 }
+static void read_compare(unsigned block,const uint8_t data[512]);
+static void protect_media(void);
+static void retry_batch(unsigned command,unsigned block,unsigned phase,const uint8_t *payload) {
+    uint8_t parent[1024],unrelated[1024],target[1024];
+    begin_batch(command,block,phase,payload);physical_complete();
+    /* Retain the physical A1 attachment while advertising virtual A2. */
+    rx_bytes(0)[2]|=1u;
+    memcpy(parent,rx_bytes(0),sizeof(parent));memcpy(unrelated,rx_bytes(6),sizeof(unrelated));
+    memcpy(target,rx_bytes(2),sizeof(target));
+    complete_return();idle();parent[2]|=2u;
+    CHECK(!memcmp(parent,rx_bytes(0),sizeof(parent)));
+    CHECK(!memcmp(unrelated,rx_bytes(6),sizeof(unrelated)));
+    CHECK(value_at(rx_at(2))==UINT32_C(0x000200fc));
+    CHECK(!memcmp(target+4u,rx_bytes(2)+4u,sizeof(target)-4u));
+    CHECK(!state.pending && !state.error && state.completed==state.submitted &&
+        overlay.admitted && !overlay.pending && !overlay.stats.flags && !durable_card.faulted);
+}
+static void storage_contention_retries(void) {
+    uint8_t old[512],next[512],different[128];
+    memset(next,0x73,sizeof(next));memset(different,0x92,sizeof(different));
+    for(unsigned deny=0;deny<2u;deny++) {
+        setup();memcpy(old,sd.media[image_lba(42u)],sizeof(old));
+        for(unsigned attempt=0;attempt<3u;attempt++) {
+            sd.deny_enter=deny==0u;sd.deny_acquire=deny==1u;
+            retry_batch(11u,42u,0u,NULL);
+            CHECK(lease_calls==attempt+1u && !block_callbacks && !sd.bytes && !sd.writes);
+            CHECK(durable_card.sd_busy==attempt+1u && !durable_card.reads &&
+                !durable_card.commits && !durable_card.bound && !durable_card.protocol.read_valid);
+        }
+        sd.deny_enter=sd.deny_acquire=false;
+        read_compare(42u,old);idle();CHECK(durable_card.reads==1u && durable_card.bound);
+
+        setup();stage_block(43u,next);
+        sd.deny_enter=deny==0u;sd.deny_acquire=deny==1u;
+        retry_batch(13u,43u,4u,NULL);
+        CHECK(lease_calls==1u && !block_callbacks && !sd.bytes && !sd.writes && !durable_card.commits);
+        CHECK(durable_card.protocol.active && durable_card.protocol.phases==15u &&
+            durable_card.protocol.staged_block==43u && durable_card.protocol.commit_attempted &&
+            !durable_card.protocol.committed_valid && !memcmp(durable_card.protocol.staged,next,512u));
+        /* A different write cannot replace the immutable pending commit. Its
+         * valid AGAIN reply requires no additional storage acquisition. */
+        retry_batch(12u,44u,0u,different);
+        CHECK(lease_calls==1u && !sd.bytes && !sd.writes && !durable_card.commits);
+        CHECK(durable_card.protocol.active && durable_card.protocol.phases==15u &&
+            durable_card.protocol.staged_block==43u && !memcmp(durable_card.protocol.staged,next,512u));
+        sd.deny_enter=sd.deny_acquire=false;
+        transfer_batch(13u,43u,4u,NULL);idle();
+        CHECK(value_at(rx_at(2))==UINT32_C(0x00020007) && durable_card.commits==1u &&
+            durable_card.protocol.committed_valid && !durable_card.protocol.active);
+        CHECK(!memcmp(sd.media[image_lba(43u)],next,512u));
+        unsigned bytes=sd.bytes,calls=lease_calls;
+        transfer_batch(13u,43u,4u,NULL);
+        CHECK(value_at(rx_at(2))==UINT32_C(0x00020007) && durable_card.commits==1u &&
+            sd.bytes==bytes && lease_calls==calls);
+        read_compare(43u,next);protect_media();
+    }
+}
 static void read_compare(unsigned block,const uint8_t data[512]) {
     transfer_batch(11u,block,0u,NULL);
     if(value_at(rx_at(2))!=0x82020008u || memcmp(rx_bytes(2)+12u,data,512u))
@@ -770,6 +827,7 @@ static void completion_context_failures(void) {
 int main(void) {
     uint8_t next[512],old[512],parent[1024],target[1024],other[1024];
     memset(next,0x73,sizeof(next));memset(old,0x59,sizeof(old));
+    storage_contention_retries();
     setup();transfer_batch(1u,0u,0u,NULL);transfer_batch(10u,0u,0u,NULL);
     CHECK(overlay.stats.devinfo==1u && overlay.stats.media==1u && !lease_calls);
     stage_block(42u,next);transfer_batch(13u,42u,4u,NULL);

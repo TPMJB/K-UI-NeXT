@@ -1575,6 +1575,25 @@
         "The supplied message does not separately describe a full power-off/reload sequence or provide timing measurements.",
         "Save/load success does not accept the reported FMV slowdown."
       ]
+    },
+    {
+      "build": "d55fd228e049",
+      "game": "Evolution 2: Far Off Promise",
+      "source": "Owner photo and report on 2026-10-24",
+      "result": "Background launch failed at first contended virtual READ; Background Off also failed with a different, unpictured error.",
+      "captured_failure": {
+        "detail": "17",
+        "overlay": "fffffff8",
+        "reply": "000200fc",
+        "sd_busy": 1,
+        "sd_faults": 0,
+        "commits": 0
+      },
+      "ordinary_fmv_route_correction": "Owner states earlier edf20f0f11a3 smooth-FMV result used regular loading.",
+      "limits": [
+        "Only one of the two error screens was supplied.",
+        "No hardware result for the retry correction yet."
+      ]
     }
   ]
 }

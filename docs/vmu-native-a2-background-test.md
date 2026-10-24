@@ -1,5 +1,16 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Native virtual A2 and Background reader test
+# Native virtual A2 retry correction
+
+This revision fixes a reproduced integration failure in `d55fd228e049`:
+a safe SCI BUSY result generated a valid four-byte Maple AGAIN reply, but
+the overlay accepted only successful DATA/ACK replies and stopped with
+detail `17`, overlay `FFFFFFF8`. Valid READ, pending WRITE and final SYNC
+retries now pass without publishing data or acknowledging a durable commit.
+Malformed replies and actual storage faults remain refused.
+
+Start with **Standard and Background Off**, matching the owner's reported
+ordinary-loading route. This is a VMU retry correction; an ordinary-loading
+FMV improvement has not been established by this revision.
 
 This candidate presents the prepared virtual card as **A2**. Physical **A1**
 remains available for the real VMU's memory and LCD, including the intended
@@ -67,15 +78,17 @@ The recovered SCI-resume source is
 `edf20f0f11a3ed6bb562929139cdad839d82655b`. Its repair applied to the native
 **Background X/Y** reader (20/25 blocks). It restored the shared SCI/DMA
 ownership checks after game activity. Standard SCI/SCIF/IDE kept their prior
-behavior, and Windows CE used its separate route. The owner's earlier report
-of good FMV behavior belongs to that scoped baseline.
+behavior, and Windows CE used its separate route. The owner corrected the
+earlier inference on 2026-10-24: the smooth Evolution 2 FMVs were observed
+with regular loading. A repair's scope does not establish the selected route.
 
-The later VMU package used a Standard-only resident, so the old Background
-repair could not run there. This candidate makes Background available with
-the current A2 worker and existing responsiveness improvements. The audit
-establishes that route difference; the console comparison must establish
-whether it restores the reported FMV behavior. It is not a claim of broad
-2.0 performance parity.
+The later VMU package used a Standard-only resident; the new Background
+resident adds another supported route. That difference does not explain
+the owner's ordinary-loading performance report. Comparison of the exact
+recovered source found the same ordinary SCI read loops and pacing code.
+The later drive-state/disc-check fixes remain enabled because reverting them
+would discard the Skies/Time Stalkers corrections without an established
+performance cause. Ordinary FMV performance remains an open console result.
 
 Software checks cover six original SDKs, A2 filtering/source identity,
 unchanged physical A1 packets and replies, invalid-batch refusal, journal

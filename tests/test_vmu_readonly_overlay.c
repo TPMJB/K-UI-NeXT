@@ -360,6 +360,97 @@ static void a2_preserves_a1_and_conflicts_only_with_a2(void) {
     assert(kui_vmu_readonly_init_address(&card,4u)==KUI_VMU_READONLY_ARGUMENT);
 }
 
+static unsigned retry_mutation,retry_mutate_call;
+static uint8_t retry_write_payload[128];
+static int retry_handler(void *context,const uint8_t *request,size_t request_bytes,
+    uint8_t *reply,size_t capacity,size_t *reply_bytes) {
+    (void)context;(void)request_bytes;
+    ++calls;assert(capacity>=4u && !memcmp(rx,before,sizeof(rx)));
+    reply[0]=0xfcu;reply[1]=0u;reply[2]=request[1];reply[3]=0u;*reply_bytes=4u;
+    if(!retry_mutate_call || retry_mutate_call==calls) {
+        if(retry_mutation==1u) reply[1]=1u;
+        if(retry_mutation==2u) reply[2]^=1u;
+        if(retry_mutation==3u) reply[3]=1u;
+        if(retry_mutation==4u) *reply_bytes=0u;
+        if(retry_mutation==5u) *reply_bytes=8u;
+        if(retry_mutation==6u) reply[0]=0xfeu;
+        if(retry_mutation==7u) {reply[0]=0xfbu;reply[3]=1u;*reply_bytes=8u;}
+        if(retry_mutation==8u) reply[0]=request[0]==11u?7u:8u;
+        if(retry_mutation==9u) *reply_bytes=SIZE_MAX;
+    }
+    return 1;
+}
+static void retry_fixture(unsigned address,unsigned command,int filtered) {
+    fresh();retry_mutation=retry_mutate_call=0u;
+    assert(!kui_vmu_readonly_init_address(&card,(uint8_t)address));
+    assert(!kui_vmu_readonly_overlay_init_backend_address(&overlay,(uint8_t)address,
+        retry_handler,filtered?filtered_admit:NULL,&card));
+    frame(0u,9u,32u,1u,0x01000000u,0u);
+    frame(1u,command,address,command==12u?34u:2u,0x02000000u,
+        command==13u?(42u<<24)|(4u<<8):42u<<24);
+    if(command==12u) {
+        memset(retry_write_payload,0x78,sizeof(retry_write_payload));
+        frames[1].write_payload=retry_write_payload;
+    }
+    frame(2u,1u,3u^address,0u,0u,0u);
+    physical(9u,3u^address);rx[2][0]=0x1c000005u|((3u^address)<<16);
+}
+static void filtered_backend_retry_replies(void) {
+    const unsigned commands[]={11u,12u,13u};
+    for(unsigned address=1u;address<=2u;address++) for(unsigned c=0u;c<3u;c++) {
+        retry_fixture(address,commands[c],1);capture();assert(!prepare(3u));
+        assert(!kui_vmu_readonly_overlay_complete(&overlay));
+        assert(rx[1][0]==((address<<16)|0xfcu));
+        /* A retry is only its four-byte header, never stale or fabricated data.
+         * Physical A1/A2, controller payload and every virtual payload byte stay intact. */
+        assert(!memcmp(rx[1]+1,before[1]+1,1020u));
+        assert(!memcmp(rx[2],before[2],1024u));
+        assert(rx[0][0]==(before[0][0]|(address<<16)));
+        assert(!memcmp(rx[0]+1,before[0]+1,1020u));
+        assert(overlay.admitted && !overlay.pending && !overlay.stats.failures &&
+            overlay.stats.replies==1u && overlay.stats.last_reply==((address<<16)|0xfcu));
+        if(commands[c]==11u) {
+            /* The next submitted READ may complete normally through the real
+             * read-only backend; accepting AGAIN must not poison admission. */
+            overlay.handler=handler;physical(9u,3u^address);capture();assert(!prepare(3u));
+            assert(!kui_vmu_readonly_overlay_complete(&overlay));
+            assert(rx[1][0]==(0x82000008u|(address<<16)) && card.reads==1u);
+            assert(!memcmp(rx[2],before[2],1024u));
+        }
+        for(unsigned mutation=1u;mutation<=9u;mutation++) {
+            retry_fixture(address,commands[c],1);retry_mutation=mutation;
+            completion_refused(3u);assert(calls==1u && overlay.stats.flags&KUI_VMU_OVERLAY_BAD_HANDLER);
+        }
+    }
+    for(unsigned address=1u;address<=2u;address++) {
+        /* Default physical-timeout/read-only contracts remain unchanged. */
+        retry_fixture(address,11u,0);completion_refused(3u);
+        assert(overlay.stats.flags&KUI_VMU_OVERLAY_BAD_HANDLER);
+        retry_fixture(address,13u,1);frames[1].payload1=(42u<<24)|(1u<<8);
+        completion_refused(3u);assert(overlay.stats.flags&KUI_VMU_OVERLAY_BAD_HANDLER);
+        const unsigned unsupported[]={1u,2u,3u,10u};
+        for(unsigned i=0u;i<sizeof(unsupported)/sizeof(unsupported[0]);i++) {
+            unsigned cmd=unsupported[i];retry_fixture(address,11u,1);
+            frame(1u,cmd,address,cmd<=3u?0u:2u,0x02000000u,0u);
+            completion_refused(3u);assert(calls==1u && overlay.stats.flags&KUI_VMU_OVERLAY_BAD_HANDLER);
+        }
+        /* A retry response does not relax admission of malformed WRITEs. */
+        for(unsigned bad=0u;bad<4u;bad++) {
+            retry_fixture(address,12u,1);
+            if(bad==0u) frames[1].header^=1u<<24;
+            if(bad==1u) frames[1].payload0=0x04000000u;
+            if(bad==2u) frames[1].payload1=(42u<<24)|(4u<<8);
+            if(bad==3u) frames[1].write_payload=NULL;
+            prepare_refused(3u);assert(!calls && overlay.stats.flags&
+                (bad==3u?KUI_VMU_OVERLAY_BAD_SPAN:KUI_VMU_OVERLAY_BAD_REQUEST));
+        }
+    }
+    /* A valid first retry does not publish before a later malformed reply. */
+    retry_fixture(2u,11u,1);frame(2u,11u,2u,2u,0x02000000u,43u<<24);
+    retry_mutation=2u;retry_mutate_call=2u;completion_refused(3u);
+    assert(calls==2u && !overlay.stats.replies && !overlay.stats.advertisements);
+}
+
 int main(void) {
     discovery_and_all_blank_reads();request_reply_rx_telemetry_stays_correlated();
     a2_preserves_a1_and_conflicts_only_with_a2();
@@ -367,6 +458,7 @@ int main(void) {
     span_alias_and_full_source_guards();physical_conflicts_and_parent_reply_guards();
     staging_failures_are_atomic();bounded_batch_and_terminal_state();
     filtered_absent_publication();absent_publication_guards_are_atomic();
+    filtered_backend_retry_replies();
     puts("VMU read-only overlay: atomic batches, blank-card reads and conflict guards passed");
     return 0;
 }
