@@ -75,7 +75,7 @@ def package(build,guide='broader',trace_startup=None):
     commit=git('rev-parse','HEAD');revision=commit[:12]
     if git('status','--porcelain'):
         raise ValueError('Commit source changes before packaging')
-    if guide in ('evolution-trace','a2-background','hybrid','stall') and trace_startup is None:
+    if guide in ('evolution-trace','a2-background','hybrid','stall','cooperative') and trace_startup is None:
         raise ValueError('This package requires --trace-startup with the exact original executable')
     graphs=list(build.rglob('*.ci'))
     if not graphs or any(not closed_callgraph(path.read_text()) for path in graphs):
@@ -125,7 +125,7 @@ def package(build,guide='broader',trace_startup=None):
                      'vmu-native-evolution-fault-test.md','vmu-native-evolution-isolation-test.md',
                      'vmu-native-evolution-hooks-test.md','vmu-native-evolution-trace-test.md'):
             extra['docs/'+name]=(root/'docs'/name).read_bytes()
-        if guide in ('a2-background','hybrid','stall'):
+        if guide in ('a2-background','hybrid','stall','cooperative'):
             extra['docs/vmu-native-a2-background-test.md']=(root/'docs/vmu-native-a2-background-test.md').read_bytes()
             extra['docs/evidence/native-a2-background-2026-10-24.json']=(root/'docs/evidence/native-a2-background-2026-10-24.json').read_bytes()
             extra['docs/evidence/native-retry-integration-2026-10-24.json']=(root/'docs/evidence/native-retry-integration-2026-10-24.json').read_bytes()
@@ -134,6 +134,11 @@ def package(build,guide='broader',trace_startup=None):
             extra['docs/evidence/native-throughput-recovery-2026-10-24.json']=(root/'docs/evidence/native-throughput-recovery-2026-10-24.json').read_bytes()
         if guide=='stall':
             extra['docs/evidence/native-b-stall-2026-10-24.json']=(root/'docs/evidence/native-b-stall-2026-10-24.json').read_bytes()
+        if guide in ('cooperative','open'):
+            for name in ('native-hybrid-design-2026-10-24.md','vmu-native-cooperative-test.md','vmu-native-open-test.md'):
+                extra['docs/'+name]=(root/'docs'/name).read_bytes()
+            extra['docs/evidence/native-cooperative-2026-10-24.json']=(root/'docs/evidence/native-cooperative-2026-10-24.json').read_bytes()
+            extra['collect-native-startup.py']=(root/'tools/kui-native-startup-bundle.py').read_bytes()
         for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json',
                      'native-performance-acceptance-2026-10-23.json','native-uniform-root-family-2026-10-23.json',
                      'native-recv-ownership-2026-10-23.json','native-older-sdk-2026-10-23.json',
@@ -173,7 +178,11 @@ def package(build,guide='broader',trace_startup=None):
         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
             template_sha256=sha(template)),
-        compatibility_claim=('B scheduling with RAM-only reader/VMU stall capture; root cause and faster boot await console measurements'
+        compatibility_claim=('Bounded cooperative native reader with complete-request timing; console performance remains unverified'
+            if guide=='cooperative' else
+            'Standard native reader and cold SDK-family discovery; universal virtual-A2 compatibility remains unverified'
+            if guide=='open' else
+            'B scheduling with RAM-only reader/VMU stall capture; root cause and faster boot await console measurements'
             if guide=='stall' else
             'Native SCI Background DMA with capped foreground work; gameplay and FMV performance await console testing'
             if guide=='hybrid' else
@@ -222,7 +231,7 @@ def package(build,guide='broader',trace_startup=None):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('build',type=Path)
-    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall'),default='broader')
+    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall','cooperative','open'),default='broader')
     parser.add_argument('--trace-startup',type=Path)
     try:
         args=parser.parse_args();package(args.build,args.guide,args.trace_startup)

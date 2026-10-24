@@ -17,6 +17,52 @@ static volatile uint32_t *reg(unsigned i) {
 }
 /* Original compact 5x7 glyphs, rows encoded low-five-bits, A-Z then 0-9.
  * The complete renderer/font belongs to each linked image. */
+#if KUI_NATIVE_COOP_PUMP && defined(KUI_RETAIL_ASYNC)
+/* Same exact 252 glyph rows, packed at five bits each to make room for
+ * the cooperative reader in the existing guarded low reservation. */
+static const uint8_t compact_glyphs[36][5]={
+ {46,198,31,99,4},
+ {62,70,31,163,7},
+ {46,66,8,163,3},
+ {62,198,24,163,7},
+ {31,66,15,225,7},
+ {31,66,15,33,4},
+ {46,194,27,227,3},
+ {49,198,31,99,4},
+ {142,16,66,136,3},
+ {71,8,33,37,3},
+ {81,82,76,101,4},
+ {16,66,8,225,7},
+ {113,215,26,99,4},
+ {49,215,25,99,4},
+ {46,198,24,163,3},
+ {62,70,15,33,4},
+ {46,198,88,101,3},
+ {62,70,79,101,4},
+ {15,66,23,130,7},
+ {159,16,66,8,1},
+ {49,198,24,163,3},
+ {49,198,24,21,1},
+ {49,198,90,119,4},
+ {49,42,162,98,4},
+ {49,42,66,8,1},
+ {63,8,130,224,7},
+ {46,206,154,163,3},
+ {132,17,66,136,3},
+ {46,6,65,208,7},
+ {62,4,23,130,7},
+ {194,40,249,133,0},
+ {31,66,31,130,7},
+ {14,66,31,163,3},
+ {63,8,130,16,2},
+ {46,70,23,163,3},
+ {46,198,23,130,3},
+};
+static unsigned glyph_row(unsigned glyph,unsigned row_index) {
+    unsigned bit=row_index*5u,at=bit>>3;
+    return ((compact_glyphs[glyph][at]|(unsigned)compact_glyphs[glyph][at+1u]<<8)>>(bit&7u))&31u;
+}
+#else
 static const uint8_t glyphs[36][7] = {
  {14,17,17,31,17,17,17},{30,17,17,30,17,17,30},
  {14,17,16,16,16,17,14},{30,17,17,17,17,17,30},
@@ -37,6 +83,8 @@ static const uint8_t glyphs[36][7] = {
  {14,16,16,30,17,17,14},{31,1,2,4,8,8,8},
  {14,17,17,14,17,17,14},{14,17,17,15,1,1,14}
 };
+static unsigned glyph_row(unsigned glyph,unsigned row_index) {return glyphs[glyph][row_index];}
+#endif
 static unsigned row;
 #ifdef KUI_RETAIL_CE
 /* The live status line draws on the frame Windows CE shows; every other
@@ -60,7 +108,7 @@ void retail_display_line(const char *text) {
         if(c>='a' && c<='z') c-=32;
         int n=c>='A'&&c<='Z'?c-'A':c>='0'&&c<='9'?c-'0'+26:-1;
         for(unsigned y=0;y<7;y++) {
-            unsigned bits=n>=0?glyphs[n][y]:c=='-'&&y==3?14:
+            unsigned bits=n>=0?glyph_row((unsigned)n,y):c=='-'&&y==3?14:
                 c==':'&&(y==2||y==5)?4:c=='.'&&y==6?4:
                 c=='/'?1u<<(y<5?y:4):0;
             for(unsigned a=0;a<5;a++) if(bits&(16u>>a))
@@ -80,7 +128,13 @@ void retail_display_restore(const struct retail_display_state *s) {
     for(unsigned i=0;i<640u*480u;i++) frame[i]=0x0864;
     row=20;
 #if KUI_NATIVE_READER_DIAGNOSTIC
+#if KUI_NATIVE_COOP_PUMP
+#if !defined(KUI_RETAIL_ASYNC)
+    retail_display_line("HYBRID");
+#endif
+#else
     retail_display_line("KUI B STALL");
+#endif
 #else
     retail_display_line("K-UI V" KUI_VERSION " LAUNCH");
 #endif
@@ -89,7 +143,9 @@ void retail_display_restore(const struct retail_display_state *s) {
     retail_display_line("WINDOWS CE BOOT TEST");
 #else
 #if KUI_NATIVE_READER_DIAGNOSTIC
+#if !KUI_NATIVE_COOP_PUMP || !defined(KUI_RETAIL_ASYNC)
     retail_display_line("NATIVE");
+#endif
 #else
     retail_display_line("NATIVE GD IMAGE");
 #endif

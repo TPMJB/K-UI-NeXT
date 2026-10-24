@@ -10,6 +10,8 @@ import os
 import re
 import subprocess
 import tempfile
+import sys
+COOPERATIVE='--cooperative' in sys.argv
 
 ROOT = Path(__file__).resolve().parents[1]
 source = (ROOT / "src/loader/vmu_native_background_resident.c").read_text()
@@ -49,7 +51,11 @@ static bool reject_target,callback_not_ready,callback_bus_fault,reenter;
 static int transaction(void *,struct kui_loader_sd *);
 static bool native_resident_transaction(const volatile struct kui_vmu_observe_boot_control *c,
     uintptr_t target) {
-    return c==&test_control && !reject_target && target==(uintptr_t)transaction;
+    return c==&test_control && !reject_target && (target==(uintptr_t)transaction
+#if KUI_NATIVE_COOP_PUMP
+        || !target
+#endif
+        );
 }
 enum kui_loader_sd_result kui_retail_storage_acquire(struct kui_retail_storage *owner) {
     CHECK(owner==&R.shared.card && kui_retail_hook_active==1u);
@@ -125,6 +131,24 @@ int main(void) {
     CHECK(invoke()==KUI_VMU_SD_LEASE_FAULT && !acquisitions && !callbacks && !releases);
     fresh_gateway(false);R.shared.service.pending=1u;
     CHECK(invoke()==KUI_VMU_SD_LEASE_BUSY && !acquisitions && !callbacks && !releases);
+#if KUI_NATIVE_COOP_PUMP
+    fresh_gateway(false);
+    CHECK(kui_vmu_observe_sd_lease(NULL,NULL)==KUI_VMU_SD_LEASE_FAULT);
+    CHECK(!acquisitions && !callbacks && !releases);
+    void *pump=(void *)(uintptr_t)KUI_RETAIL_NATIVE_PUMP_COOKIE;
+    CHECK(kui_vmu_observe_sd_lease(NULL,pump)==KUI_VMU_SD_LEASE_OK);
+    CHECK(!acquisitions && !callbacks && !releases && !R.engine.in_irq);
+    kui_retail_hook_active=1u;
+    CHECK(kui_vmu_observe_sd_lease(NULL,pump)==KUI_VMU_SD_LEASE_BUSY);
+    CHECK(kui_retail_hook_active==1u && !acquisitions && !callbacks && !releases);
+    fresh_gateway(false);R.engine.native_loan_state=KUI_VMU_NATIVE_ASYNC_LOAN_QUARANTINED;
+    CHECK(kui_vmu_observe_sd_lease(NULL,pump)==KUI_VMU_SD_LEASE_BUSY);
+    fresh_gateway(false);actual_sr=0u;
+    CHECK(kui_vmu_observe_sd_lease(NULL,pump)==KUI_VMU_SD_LEASE_FAULT);
+    fresh_gateway(false);reject_target=true;
+    CHECK(kui_vmu_observe_sd_lease(NULL,pump)==KUI_VMU_SD_LEASE_FAULT);
+    CHECK(!acquisitions && !callbacks && !releases);
+#endif
     printf("production native Background VMU gateway: %u checks passed\n",checks);
     return 0;
 }
@@ -137,6 +161,7 @@ with tempfile.TemporaryDirectory(prefix="kui-native-background-gateway-") as tmp
              "KUI_RETAIL_GD_ASYNC=1", "KUI_RETAIL_TRANSPORT=1", "KUI_SCI_SD_NO_BLOCK=1",
              "KUI_GENERAL_SCI_RESUME_FIX=1", "KUI_RETAIL_NATIVE_DRIVE_STATE=1",
              "KUI_VMU_NATIVE_BACKGROUND=1", "KUI_VMU_NATIVE_PERSISTENT_PROBE=1"]
+    if COOPERATIVE:flags += ['KUI_NATIVE_COOP_PUMP=1','KUI_RETAIL_NATIVE_HYBRID=1']
     subprocess.run([os.environ.get("HOST_CC", "cc"), "-std=c11", "-O2", "-g",
                     "-Wall", "-Wextra", "-Werror", "-Wpedantic",
                     "-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-fno-pie", "-no-pie",

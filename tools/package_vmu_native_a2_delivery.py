@@ -11,7 +11,7 @@ import tempfile
 import zipfile
 
 from runtime_package import verify
-from vmu_native_cache_seed import decode_seed
+from vmu_native_cache_seed import decode_seed, template_seed
 from vmu_native_mode import decode_mode
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -66,7 +66,7 @@ def smoke(files,label):
         before=snapshot()
         def run(game='evolution2',flag=None,expected=0,refused=False,idempotent=False):
             argv=[sys.executable,str(package/'personalize.py'),str(card),'--profile',
-                  str(profile.relative_to(card)),'--game',game]+([flag] if flag else [])
+                  str(profile.relative_to(card))]+(['--game',game] if game else [])+([flag] if flag else [])
             old=destination.read_bytes()
             result=subprocess.run(argv,cwd=base,text=True,capture_output=True)
             require(result.returncode==(2 if refused else 0),result.stderr or 'Installer status differs')
@@ -81,13 +81,18 @@ def smoke(files,label):
                 offset=manifest['profile_module_offset']
                 require(module[offset:offset+4096]==profile.read_bytes(),'Installed profile differs')
                 offset=manifest['cache_seed_module_offset']
-                seed=decode_seed(module[offset:offset+1120])
-                catalog=json.loads(files['native-cache/catalog.json'])
-                entry=next(g for g in catalog['games'] if g['slug']==game)
-                require(seed and seed['record_sha256']==entry['record_sha256'],'Installed game seed differs')
+                wire=module[offset:offset+1120]
+                seed=decode_seed(wire)
+                if game:
+                    catalog=json.loads(files['native-cache/catalog.json'])
+                    entry=next(g for g in catalog['games'] if g['slug']==game)
+                    require(seed and seed['record_sha256']==entry['record_sha256'],'Installed game seed differs')
+                else:
+                    require(seed is None and wire==template_seed(),'Cold discovery seed is not canonical empty')
                 if idempotent:require(module==old and result.stdout.startswith('Already installed'),
                                       'Repeated install was not idempotent')
             checks.append(dict(game=game,flag=flag or 'normal',refused=refused,idempotent=idempotent))
+        run(game=None);run(game=None,idempotent=True)
         for game in ('ps2','skies','sa2','grandia2','evolution1','evolution2'):run(game)
         for flag,value in (('--control',1),('--profile-runtime',2),('--lease-only',3),
                            ('--hooks-only',4),('--raw-chain',5),('--evolution-trace',6)):

@@ -8,6 +8,10 @@ enum kui_vmu_sd_lease_result {
     KUI_VMU_SD_LEASE_BUSY=1,
     KUI_VMU_SD_LEASE_FAULT=-1
 };
+/* The separate cooperative native Background build also admits a NULL
+ * callback with KUI_RETAIL_NATIVE_PUMP_COOKIE as context. This is a bounded
+ * read-only loader service command, with no storage loan or VMU operation;
+ * it uses the same verified worker-stack entry and preserves owner guards. */
 
 /* A scoped copy of the resident's initialized card descriptor, borrowing its
  * existing SCI bus. The callback and context belong to the admitted worker.

@@ -53,7 +53,9 @@
  * drive's too, so CE's driver calls again to take it. */
 struct kui_retail_async_stats {
     /* In the separate stall diagnostic execs/exec_int hold foreground/IRQ
-     * delivery-visit raw TMU0 maxima, reset by the serialized worker. */
+     * delivery-visit raw TMU0 maxima, reset by the serialized worker.
+     * REQUEST_TIMING instead uses hooks/releases for request-start ticks
+     * and longest completed-request ticks; legacy hook counts are omitted. */
     uint32_t irq_blocks, call_blocks, waits, execs, exec_int;
     uint32_t hooks, releases;
 };
@@ -87,6 +89,10 @@ struct kui_retail_async {
 #if KUI_VMU_NATIVE_BACKGROUND
     /* Fits the unused native vector gap; release-frame offsets stay fixed. */
     uint32_t native_loan_state;
+#endif
+#if KUI_NATIVE_REQUEST_TIMING
+    /* Exactly the eight spare bytes of the native vector gap. */
+    uint32_t native_max_lba,native_max_count;
 #endif
 #ifdef KUI_RETAIL_CE
     /* The current piece: request output bytes [piece_begin, piece_begin +

@@ -92,8 +92,12 @@ static bool native_resident_transaction(const volatile struct kui_vmu_observe_bo
 #else
         UINT32_C(0xa0000000);
 #endif
-    return native_resident_terminal(c) && target==c->sd_transaction && !(target&1u) &&
-        (uint32_t)target-worker-NATIVE_RESIDENT_HEADER_BYTES<NATIVE_RESIDENT_WORKER_BYTES-NATIVE_RESIDENT_HEADER_BYTES;
+    return native_resident_terminal(c) && (
+#if KUI_NATIVE_COOP_PUMP
+        !target ||
+#endif
+        (target==c->sd_transaction && !(target&1u) &&
+        (uint32_t)target-worker-NATIVE_RESIDENT_HEADER_BYTES<NATIVE_RESIDENT_WORKER_BYTES-NATIVE_RESIDENT_HEADER_BYTES));
 }
 #endif
 /* NATIVE_RESIDENT_GUARDS_END */
@@ -138,6 +142,19 @@ int __attribute__((noipa,section(".vmu_sd_lease"))) kui_vmu_observe_sd_lease(
     uint32_t sr;__asm__ volatile("stc sr,%0":"=r"(sr)::"memory");
     if((sr&UINT32_C(0xf0))!=UINT32_C(0xf0) ||
        !native_resident_transaction(c,(uintptr_t)callback)) return KUI_VMU_SD_LEASE_FAULT;
+#if KUI_NATIVE_COOP_PUMP
+    /* Explicit non-storage command on the existing typed worker gateway.
+     * Serialized on the worker's stack after its physical controller proof;
+     * no loan, virtual reply, bus acquisition or game interrupt setup occurs. */
+    if(!callback) {
+        if((uintptr_t)context!=KUI_RETAIL_NATIVE_PUMP_COOKIE) return KUI_VMU_SD_LEASE_FAULT;
+        if(kui_retail_hook_active || kui_retail_async_region.engine.native_loan_state)
+            return KUI_VMU_SD_LEASE_BUSY;
+        kui_retail_async_region.engine.in_irq=2u;
+        (void)kui_retail_async_irq();
+        return KUI_VMU_SD_LEASE_OK;
+    }
+#endif
     struct kui_loader_sd loan;
     int result=kui_retail_native_async_loan_begin(&loan);
     if(result==KUI_VMU_NATIVE_ASYNC_LOAN_BUSY) return KUI_VMU_SD_LEASE_BUSY;

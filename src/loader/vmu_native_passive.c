@@ -312,7 +312,11 @@ static void diagnostic_report(void) {
     retail_display_restore(&display);
     retail_display_line("NATIVE VMU LATENCY CAPTURE");
     retail_display_line("C BODY TIMINGS INCLUDE SAMPLING OVERHEAD");
+#if KUI_NATIVE_COOP_PUMP
+    retail_display_line("COMPLETE INCLUDES READER AND STORAGE");
+#else
     retail_display_line("STORAGE TIME IS ALSO IN COMPLETE TIME");
+#endif
     const char *const labels[4]={"SUBMIT CALLS VALID BAD TOTAL MAX","COMPLETE CALLS VALID BAD TOTAL MAX",
         "FREE CALLS VALID BAD TOTAL MAX","STORAGE CALLS VALID BAD TOTAL MAX"};
     for(unsigned i=0;i<4u;i++) {
@@ -1302,6 +1306,9 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(controller_pair.pending) {
         controller_complete(f);
+#if KUI_NATIVE_COOP_PUMP
+        reader_cooperative_service();
+#endif
         if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE)
             diagnostic_complete(&span,diagnostic_fast_gesture(),true);
         kui_vmu_native_trace_point(0x2fu,f,state.submitted,state.completed);

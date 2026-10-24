@@ -648,7 +648,13 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack
     (void)caller; (void)stack;
 #endif
 #if KUI_VMU_NATIVE_BACKGROUND
-    native_reader_report("GAME RETURN");
+    native_reader_report(
+#if KUI_NATIVE_COOP_PUMP
+        "RETURN"
+#else
+        "GAME RETURN"
+#endif
+    );
     retail_display_pause(900u);
     ((void (*)(void))(uintptr_t)0xa0000000u)();
     for(;;) __asm__ volatile("nop");

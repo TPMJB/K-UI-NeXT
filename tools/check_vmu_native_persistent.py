@@ -130,6 +130,21 @@ STALL_PREPARED_PINS = {
 }
 
 
+COOPERATIVE_PREPARED_PINS = {
+ '_diagnostic_end': ('0dc0630080b686611a6798d79bbcac0f6f6445770fda330da07ec57692cfa6c2', 1372),
+ '_diagnostic_complete': ('3dd34836554fc7fcf878b8f0df32bfd5202d0c1b380a3d8584bc5557fb1f07c0', 1636),
+ '_kui_vmu_native_passive_complete': ('95a9e3ed44a3cdf947f2510c04d2382cc9c95423d53350610c2a5cff2579e5e3', 2712),
+ '_transfer_context_valid': ('db4d82d003b435ec6f434203ab6e5e774cd2d0333ecad34f6130077e0b5b8dc3', 1236),
+ '_kui_vmu_native_runtime_fault': ('959aa6c0a741aa03b179c7818a44b83292a82d3e72232b25a35a8d1dde47da85', 332),
+ '.rodata': ('4042119b1c701edb28b921c75c41e07cbff6b3db2607363595953f4a15f32ec4', 4440),
+ '_kui_vmu_native_trace_report': ('63dacf440db2a06109f497a5a5837680c7375129c45d3c98403b5e4a65a734db', 1120),
+ '_trace_history': ('2dbd1fece83f2bf345714001904a2ea8a50bcd6712114d402fa7019e6c08e86b', 164),
+ '_report': ('aea31ae8abe199a187fade98bda0110ea26b9eebaed17b290045dfbc142af017', 440),
+ '_trace_packets': ('856815ab57af0c7101d9e36bfe8a01ad5e7e76486958c3d70516fa60d519e542', 116),
+ '_reader_cooperative_service': ('bea9cb6d7bc3577b9bfe2ee4ae7072083c945c0cbc7b27fad426e9b9be38667e', 200),
+}
+
+
 def prepared_symbol_records(worker):
     data, _, _, sections, _ = worker
     records = []
@@ -633,13 +648,19 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
     stall_marker=worker[4].get('__kui_native_reader_stall_capture')
     if stall_marker is not None:
         require(stall_marker==(1,0,0,0xfff1),'invalid reader stall diagnostic marker')
-    pins={**PREPARED_PINS,**(STALL_PREPARED_PINS if stall_marker else {})}
+    cooperative=worker[4].get('__kui_native_cooperative_reader')
+    if cooperative is not None:
+        require(stall_marker and cooperative==(1,0,0,0xfff1),'invalid cooperative reader marker')
+        require(COOPERATIVE_PREPARED_PINS,'missing reviewed cooperative reader pins')
+    pins={**PREPARED_PINS,**(STALL_PREPARED_PINS if stall_marker else {}),
+          **(COOPERATIVE_PREPARED_PINS if cooperative else {})}
     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
                        ("_protected_ranges", 512), ("_protected_count", 4),
                        ("_controller_pair", 188), ("_diagnostic_phase", 976), ("_diagnostic", 144)]
     if FAULT_STATE in worker[4]:objects.append((FAULT_STATE,32))
     if stall_marker:objects.append(('_reader_capture',508))
+    if cooperative:objects.append(('_reader_cooperative',24))
     for name,size in objects:
         address, actual, kind, owner = worker[4][name]
         section = worker[3][owner]
@@ -2046,7 +2067,8 @@ def check_worker_pointer_aliases(wire,policy,fault_capture,coherence=None):
     return relocations
 
 
-def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_proof=None):
+def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_proof=None,
+                       *, terminal_proof=None,terminal_gateway_cases=0):
     """Walk source-qualified emitted graphs with finite authored callbacks."""
     report_sets = {"worker": sorted((directory / "native").rglob("*.ci")),
                    "low": sorted(directory.glob("resident-sci.elf*.ltrans*.ci"))}
@@ -2112,6 +2134,7 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
                 "loan_ticks" if background and name=="ticks" else name,
                 "sci_sd_bus.c")]
     memo, paths, visiting, indirect_sites, null_sites = {}, {}, set(), set(), set()
+    terminal_escapes=set()
     def indirect(name, label):
         domain, function = name.split(":", 1)[0], _function_base(name)
         source = Path(label.split(":", 1)[0]).name
@@ -2121,6 +2144,20 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
                 return high("kui_vmu_native_persistent_sd_transaction")
             if background and (function,source) in (("byte","sci_stream.c"),("select","sci_stream.c")):
                 return bus("transfer" if function=="byte" else "select_card")
+            if background and (function,source) in (('deliver','retail_cursor.c'),('kui_retail_cursor_feed','retail_cursor.c')):
+                return resolve('low','write_out','retail_async.c')
+            if background and (function,source)==('write_out','retail_async.c'):
+                return resolve('low','native_background_map')
+            if background and (function,source)==('kui_vmu_observe_low_failure','vmu_native_background_resident.c'):
+                # The low map-refusal instruction proof binds this target to
+                # the relocated terminal; its actual gateway replaces SP
+                # before entering C. That report's root is walked separately
+                # below, not added to the abandoned caller's current stack.
+                require(terminal_proof and terminal_proof.get('schema')=='kui.native.gd-map-refusal.v1' and
+                        terminal_proof.get('cached_worker_terminal') and
+                        terminal_proof.get('mutation_rejections',0)>0 and terminal_gateway_cases>=7680,
+                        'cooperative map refusal lacks the independent terminal/stack-switch proof')
+                terminal_escapes.add((name,label));return []
             raise ValueError("unexpected low callback from worker stack: " + name + " at " + label)
         fixed = {
             "vmu_durable.c": ("persistent_lease",),
@@ -2149,6 +2186,8 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
             return high(*fixed[source])
         if (function, source) == ("persistent_lease", "vmu_native_passive.c"):
             return resolve("low", "kui_vmu_observe_sd_lease")
+        if (function, source)==('reader_cooperative_service','vmu_native_reader_capture.inc'):
+            return resolve('low','kui_vmu_observe_sd_lease')
         if source == "sd_reader.c":
             if background and function=='read_payload':
                 # The exact typed descriptor above, copied by the admitted
@@ -2211,10 +2250,12 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
             "source_qualified_calls": True,
             "verified_zero_stack_assembly_leaves": ["kui_vmu_native_trace_irq",*fault_leaves],
             "verified_cold_owner_stack_gateways":cold_gates,
+            "verified_stack_replacing_terminals": [list(site) for site in sorted(terminal_escapes)],
             "background_loan_descriptor":descriptor}
 
 
-def check_stacks(directory, worker, fault_proof=None, coherence_proof=None, *, background_audit=None):
+def check_stacks(directory, worker, fault_proof=None, coherence_proof=None, *, background_audit=None,
+                 terminal_proof=None,terminal_gateway_cases=0):
     resident = inspect_elf((directory / "resident-sci.elf").read_bytes(), LOW,
                            0x8c007ba0 if background_audit else 0x8C007800)
     low_rows = linked_stack_rows(sorted((directory / "resident/lto").glob("*.ltrans*.su")), resident["symbols"])
@@ -2240,7 +2281,8 @@ def check_stacks(directory, worker, fault_proof=None, coherence_proof=None, *, b
     # Every retained C frame is included, including low bus callbacks called
     # from the worker. Summing them overstates any single actual path.
     high_sum, low_sum = sum(frame for _, frame in high_rows), sum(frame for _, frame in low_rows)
-    call_paths = worker_stack_paths(directory, worker, resident, fault_proof, coherence_proof)
+    call_paths = worker_stack_paths(directory, worker, resident, fault_proof, coherence_proof,
+        terminal_proof=terminal_proof,terminal_gateway_cases=terminal_gateway_cases)
     total = max(path["conservative_bytes"] for path in call_paths["paths"].values())
     available = (resident_layout.stack_top("sci", False, True) -
                  resident_layout.stack_bottom("sci", False, True) -
@@ -2352,6 +2394,11 @@ def check(directory, *, self_test=False, trace_startup=None):
     require(bool(stall)==bool(low_stall),'reader stall worker/resident diagnostic mismatch')
     if stall:
         require(stall==low_stall==(1,0,0,0xfff1),'invalid paired reader stall markers')
+    cooperative=worker[4].get('__kui_native_cooperative_reader')
+    low_cooperative=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_cooperative_resident')
+    require(bool(cooperative)==bool(low_cooperative),'cooperative reader worker/resident mismatch')
+    if cooperative:
+        require(cooperative==low_cooperative==(1,0,0,0xfff1),'invalid paired cooperative reader markers')
     prepared_lifetime = check_prepared_lifetime(directory, worker, binary, wire, self_test, build=base["runtime"]["build"])
     relocations=check_worker_pointer_aliases(wire,policy,fault_capture,coherence)
 
@@ -2402,7 +2449,8 @@ def check(directory, *, self_test=False, trace_startup=None):
                     "C worker changes SR outside audited gateways")
     pio = check_pio_writers(directory, worker)
     stacks = check_stacks(directory, worker, fault_capture, coherence,
-                          background_audit=base.get("background_reader"))
+                          background_audit=base.get("background_reader"),
+                          terminal_proof=base.get('gd_map_refusal_terminal'),terminal_gateway_cases=hook_cases)
     source = check_source(directory, base["runtime"])
     report = {"schema": "kui.native.persistent.probe.artifact.v1", "allocator_bootstrap_audit": base,
               "module_sha256": base["module_sha256"], "runtime": base["runtime"],
@@ -2412,6 +2460,10 @@ def check(directory, *, self_test=False, trace_startup=None):
               "reader_stall_capture": {"enabled": bool(stall),
                   "paired_resident_worker": bool(stall),"private_worker_state_bytes": 508 if stall else 0,
                   "diagnostic_sd_log_writes": False,"console_root_cause_established": False},
+              "cooperative_reader": {"enabled": bool(cooperative),
+                  "pump_blocks_per_visit": 2 if cooperative else 0,
+                  "foreground_catchup_changed": False,"service_after_physical_controller_proof": bool(cooperative),
+                  "completed_request_timing": bool(cooperative),"console_performance_verified": False},
               "failure_only_gateways": runtime_fault,
               "private_stack_guard": stack_guard,
               "compiled_owner_reader": compiled_reader,

@@ -13,7 +13,7 @@ REJECTED = '1920659698ae'
 SOURCES = ('retail_async.c', 'retail_async.h', 'sci_stream.c', 'sci_stream.h')
 
 
-def run(output, diagnostic=False):
+def run(output, diagnostic=False, cooperative=False):
     output.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env['ASAN_OPTIONS'] = 'detect_leaks=0'
@@ -35,6 +35,8 @@ def run(output, diagnostic=False):
             flags.append('-DKUI_RETAIL_NATIVE_HYBRID=1')
         if label=='candidate' and diagnostic:
             flags.append('-DKUI_NATIVE_READER_DIAGNOSTIC=1')
+        if label=='candidate' and cooperative:
+            flags+=['-DKUI_NATIVE_COOP_PUMP=1','-DKUI_NATIVE_REQUEST_TIMING=1']
         flags += ['-I' + str(directory), '-Iinclude', '-Isrc/loader',
                   str(directory / 'retail_async.c'), str(directory / 'sci_stream.c'),
                   'src/core/retail_cursor.c', 'src/core/retail_image.c', 'src/core/retail_gd.c',
@@ -74,6 +76,7 @@ def run(output, diagnostic=False):
                   hot_irq_blocks=dict(baseline=256, rejected=1, candidate_normal=8, candidate_eager=8),
                   examples=examples, console_timing_measured=False,
                   reader_diagnostic_enabled=diagnostic,
+                  cooperative_reader_enabled=cooperative,
                   limitation='Rounds are synthetic caller opportunities, not video frames or milliseconds.')
     (output / 'comparison.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2))
@@ -83,5 +86,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=ROOT / 'build/native-reader-cadence')
     parser.add_argument('--diagnostic',action='store_true')
+    parser.add_argument('--cooperative',action='store_true')
     args=parser.parse_args()
-    run(args.output.resolve(),args.diagnostic)
+    run(args.output.resolve(),args.diagnostic or args.cooperative,args.cooperative)

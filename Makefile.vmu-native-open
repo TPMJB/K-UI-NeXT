@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Ordinary native A2 test route: original Standard reader and generic family
+# discovery, with the faster stage-only full CRC used by the hybrid candidate.
+BUILD ?= build/native-open
+include Makefile.vmu-native-compat
+FLAGS += -DKUI_NATIVE_STAGE_FAST_CRC=1

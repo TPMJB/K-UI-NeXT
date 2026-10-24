@@ -8,6 +8,9 @@
 #endif
 __asm__(".global __kui_native_reader_stall_resident\n"
         ".set __kui_native_reader_stall_resident,1\n");
+#if KUI_NATIVE_COOP_PUMP
+__asm__(".global __kui_native_cooperative_resident\n.set __kui_native_cooperative_resident,1\n");
+#endif
 #endif
 #include "sci_sd_bus.h"
 #include "kui/retail_loader_layout.h"
@@ -182,10 +185,12 @@ static void hook(void) {
     uint32_t vbr = vbr_get();
     if(vbr == our_vbr()) return;
     uint16_t b = rd16(IPRB);
+#if !KUI_NATIVE_REQUEST_TIMING
     if(e.hooked) {
         if(vbr == e.release.vbr) ++e.stats.releases;
         else ++e.release.vbr_changes;
     }
+#endif
     /* The game's own field, unless ours is still there (a game that set its
      * VBR again itself). */
     if(!e.hooked || (b & SCI_FIELD) != SCI_LEVEL) e.release.sci = b & SCI_FIELD;
@@ -193,7 +198,11 @@ static void hook(void) {
     vbr_set(our_vbr());
     wr16(IPRB, (uint16_t)((b & ~SCI_FIELD) | SCI_LEVEL));
     e.release.armed = 1;
-    if(!e.hooked) {e.hooked = 1; ++e.stats.hooks;}
+    if(!e.hooked) {e.hooked = 1;
+#if !KUI_NATIVE_REQUEST_TIMING
+        ++e.stats.hooks;
+#endif
+    }
 }
 /* The game's vectors and SCI level again, unless it changed them meanwhile
  * (or a releasing entry already gave them back). Returns still pending
@@ -363,7 +372,7 @@ static bool tops_up(uint32_t function) { return topping(function); }
  * run is started before each block is checked and copied. Returns while a block is in
  * flight, after up to wait blocks have been waited for. Without an active
  * read, only a finished reception is ended (its interrupt cleared). */
-#if !defined(KUI_RETAIL_CE) && !KUI_NATIVE_READER_DIAGNOSTIC
+#if !defined(KUI_RETAIL_CE) && (!KUI_NATIVE_READER_DIAGNOSTIC || KUI_NATIVE_REQUEST_TIMING)
 #define deliver_work deliver
 #endif
 static void deliver_work(uint32_t wait) {
@@ -381,7 +390,11 @@ static void deliver_work(uint32_t wait) {
 #if KUI_RETAIL_NATIVE_HYBRID
         /* Retain the proved 20/25-block catch-up and full DMA wait. Only
          * stop the formerly unlimited run of already-completed blocks. */
-        if(delivered>=(e.in_irq?KUI_RETAIL_NATIVE_IRQ_BATCH_LIMIT:e.target)) return;
+        if(delivered>=(
+#if KUI_NATIVE_COOP_PUMP
+            e.in_irq==2u?KUI_RETAIL_NATIVE_PUMP_BATCH_LIMIT:
+#endif
+            e.in_irq?KUI_RETAIL_NATIVE_IRQ_BATCH_LIMIT:e.target)) return;
 #endif
 #ifndef KUI_RETAIL_CE
         /* PIO fallback must not drain a whole request with interrupts
@@ -456,7 +469,17 @@ static void deliver_work(uint32_t wait) {
             ++e.since;
             if(e.in_irq) ++e.stats.irq_blocks;
             else ++e.stats.call_blocks;
-            if(e.cursor.done == e.cursor.count) e.active = 0;
+            if(e.cursor.done == e.cursor.count) {
+                e.active = 0;
+#if KUI_NATIVE_REQUEST_TIMING
+                uint32_t elapsed=e.stats.hooks-rd32(UINT32_C(0xffd8000c));
+                if(elapsed>e.stats.releases) {
+                    e.stats.releases=elapsed;
+                    e.native_max_lba=R.shared.service.lba;
+                    e.native_max_count=R.shared.service.count;
+                }
+#endif
+            }
 #if KUI_ARMADA_CE_STREAM
             if(stream_event(KUI_ARMADA_CE_STREAM_BUS_DATA_BLOCK,0)) return;
 #endif
@@ -486,7 +509,7 @@ static void deliver(uint32_t wait) {
     uint32_t *maximum = e.in_irq ? &e.polled_irq_max : &e.polled_call_max;
     if(blocks > *maximum) *maximum = blocks;
 }
-#elif KUI_NATIVE_READER_DIAGNOSTIC
+#elif KUI_NATIVE_READER_DIAGNOSTIC && !KUI_NATIVE_REQUEST_TIMING
 /* Diagnostic build only. These two counters are unused by the hybrid
  * scheduler. The worker samples/reset them under IMASK15; clock admission
  * happens at both capture endpoints. Never configure a game timer here. */
@@ -538,6 +561,9 @@ static bool reads(uint32_t command) {
 static void start(void) {
     struct kui_retail_gd *s = &R.shared.service;
     e.token = s->token;
+#if KUI_NATIVE_REQUEST_TIMING
+    e.stats.hooks=rd32(UINT32_C(0xffd8000c));
+#endif
     e.failed = 0; e.retries = 0; e.active = 0;
     e.cursor.done = 0; /* a read that fails here delivered nothing */
 #ifdef KUI_RETAIL_CE
@@ -879,7 +905,11 @@ uint32_t kui_retail_async_irq(void) {
 #endif
     /* An SCI event without a reception: not ours, passed on as any other
      * (under CE: its level is dropped). */
-    if(!kui_sci_stream_busy()) {
+    if(!kui_sci_stream_busy()
+#if KUI_NATIVE_COOP_PUMP
+       && e.in_irq!=2u /* A cooperative visit also restarts an idle run. */
+#endif
+      ) {
 #ifdef KUI_RETAIL_CE
         unhook();
 #endif
@@ -888,7 +918,14 @@ uint32_t kui_retail_async_irq(void) {
 #ifdef KUI_RETAIL_CE
     kui_sci_stream_token_budget(e.isr != 0);
 #endif
+#if KUI_NATIVE_COOP_PUMP
+    if(e.in_irq==2u) hook();
+#endif
+#if KUI_NATIVE_COOP_PUMP
+    if(!e.in_irq) e.in_irq = 1;
+#else
     e.in_irq = 1;
+#endif
     deliver(0);
     e.in_irq = 0;
 #ifdef KUI_RETAIL_CE

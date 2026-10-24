@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Full movie catch-up plus a small cooperative loader visit after a proved
+# physical controller completion. The VMU protocol remains unchanged.
+BUILD ?= build/native-cooperative
+include Makefile.vmu-native-stall
+FLAGS += -DKUI_NATIVE_COOP_PUMP=1 -DKUI_NATIVE_REQUEST_TIMING=1
+NATIVE_FLAGS += -DKUI_NATIVE_COOP_PUMP=1 -DKUI_NATIVE_REQUEST_TIMING=1
+
+.PHONY: cooperative-host-tests
+cooperative-host-tests:
+	@mkdir -p $(BUILD)
+	python3 tests/test_native_compact_font.py
+	python3 tests/test_vmu_native_background_gateway.py --cooperative
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -O2 $(STALL_READER_FLAGS) -DKUI_NATIVE_COOP_PUMP=1 -DKUI_NATIVE_REQUEST_TIMING=1 $(STALL_READER_SRC) tests/test_retail_async_cooperative.c -o $(BUILD)/test-cooperative-reader
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-cooperative-reader
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_cooperative_worker.c $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-cooperative-worker
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-cooperative-worker
+	python3 tools/compare_native_reader_cadence.py --cooperative --output $(BUILD)/cadence
