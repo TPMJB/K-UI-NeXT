@@ -1,0 +1,31 @@
+{
+  "schema": "kui.native-vmu.hardware-reports.v1",
+  "recorded_date": "2026-10-24",
+  "source_and_compiled_builds_modified_by_this_ledger": false,
+  "reports": [
+    {
+      "candidate_build": "9fa65fc1cae0",
+      "build_association": "Conversation sequence following delivery; this ledger does not independently establish a photographed runtime build ID.",
+      "reader": "Background",
+      "game_context": "Evolution 2",
+      "fmv": "User reported that Background avoided the FMV stall.",
+      "gameplay": "User reported occasional stalls of approximately three or four frames; Standard gameplay had much rarer single-frame interruptions.",
+      "performance_acceptance": "Gameplay latency issue remains."
+    },
+    {
+      "candidate_build": "74958b387827",
+      "build_association": "Latest report after receiving the bounded-fallback candidate; no runtime build screen supplied with the report.",
+      "reader": "Background",
+      "game_context": "Continuation of the Evolution 2 comparison; not independently verified by this ledger.",
+      "fmv": "User reported FMVs are still fine.",
+      "gameplay": "User reported that hangs during gameplay definitely remain.",
+      "save_load": "No new save/load result established by this specific report.",
+      "performance_acceptance": "Not accepted as a resolution of gameplay stalls. Further investigation required."
+    }
+  ],
+  "limits": [
+    "These are user-observed console results, separate from host and linked-artifact checks.",
+    "The reproduced whole-request PIO work defect was corrected in host tests; remaining console hangs may have additional causes.",
+    "The earlier flawless EDF FMV report used regular Standard loading, not Background; its difference remains unresolved."
+  ]
+}

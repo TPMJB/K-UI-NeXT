@@ -1,0 +1,5 @@
+stress X: irq 2739 call 19352 waits 3077 rehooks 179 releases 356 | dma 20200 polled 1979 starts 815 kept 1 repaired 81 deferred 57 ahead 45
+stress Y: irq 2196 call 19895 waits 2887 rehooks 136 releases 288 | dma 20200 polled 1979 starts 815 kept 1 repaired 81 deferred 57 ahead 45
+stress X: irq 2321 call 16811 waits 2665 rehooks 155 releases 300 | dma 17508 polled 1712 starts 725 kept 0 repaired 81 deferred 58 ahead 44
+stress Y: irq 1874 call 17258 waits 2509 rehooks 119 releases 250 | dma 17508 polled 1712 starts 725 kept 0 repaired 81 deferred 58 ahead 44
+retail async reader: 221255 checks passed

@@ -1,0 +1,9 @@
+{"cooked":false,"guest_dma_busy":false,"sectors":1,"request_pio_bytes":41,"request_output_bytes":0,"request_polled_blocks":0,"request_pending":1,"request_active":1,"dma_in_flight":1,"eventual_output_verified":true}
+{"cooked":false,"guest_dma_busy":false,"sectors":64,"request_pio_bytes":41,"request_output_bytes":0,"request_polled_blocks":0,"request_pending":1,"request_active":1,"dma_in_flight":1,"eventual_output_verified":true}
+{"cooked":false,"guest_dma_busy":true,"sectors":1,"request_pio_bytes":2619,"request_output_bytes":2048,"request_polled_blocks":5,"request_pending":0,"request_active":0,"dma_in_flight":0,"eventual_output_verified":true}
+{"cooked":false,"guest_dma_busy":true,"sectors":64,"request_pio_bytes":152259,"request_output_bytes":131072,"request_polled_blocks":295,"request_pending":0,"request_active":0,"dma_in_flight":0,"eventual_output_verified":true}
+{"cooked":true,"guest_dma_busy":false,"sectors":1,"request_pio_bytes":41,"request_output_bytes":0,"request_polled_blocks":0,"request_pending":1,"request_active":1,"dma_in_flight":1,"eventual_output_verified":true}
+{"cooked":true,"guest_dma_busy":false,"sectors":64,"request_pio_bytes":41,"request_output_bytes":0,"request_polled_blocks":0,"request_pending":1,"request_active":1,"dma_in_flight":1,"eventual_output_verified":true}
+{"cooked":true,"guest_dma_busy":true,"sectors":1,"request_pio_bytes":2103,"request_output_bytes":2048,"request_polled_blocks":4,"request_pending":0,"request_active":0,"dma_in_flight":0,"eventual_output_verified":true}
+{"cooked":true,"guest_dma_busy":true,"sectors":64,"request_pio_bytes":132135,"request_output_bytes":131072,"request_polled_blocks":256,"request_pending":0,"request_active":0,"dma_in_flight":0,"eventual_output_verified":true}
+{"case":"guest_dma_takeover_during_irq","irq_pio_bytes":132148,"irq_output_blocks":256,"polled_blocks":256,"cursor_sectors_done":64,"active_after_irq":0,"eventual_output_verified":true}

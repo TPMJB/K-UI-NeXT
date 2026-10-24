@@ -1,4 +1,0 @@
-# SPDX-License-Identifier: GPL-3.0-only
-# Separate console module; retains Armada RC9's source/refill/cache engine.
-KUI_WINCE_CDDA_PROFILE := bam4
-include Makefile.armada-stream

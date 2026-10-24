@@ -1,0 +1,3 @@
+stress CE: irq 7836 call 3023 waits 71 hooks 541 | dma 8740 polled 2122 repaired 35 deferred 21
+stress CE: irq 6746 call 2638 waits 71 hooks 524 | dma 7554 polled 1832 repaired 35 deferred 21
+retail async reader (Windows CE): 163486 checks passed

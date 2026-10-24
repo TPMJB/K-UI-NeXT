@@ -1,0 +1,13 @@
+{
+  "schema": "kui.edf.reference.provenance.v2",
+  "historical_runtime_build": "edf20f0f11a3ed6bb562929139cdad839d82655b",
+  "packaging_source_label": "e0e8a7546f9a",
+  "source_archive_sha256": "e1deff17c28423680a8827dba5a806ca4f2d13495b15b6f0783d4c6df7972a89",
+  "module_sha256": "c35054e7c53543ca0332d7d631b37f3452861233b0281ed592e6a7e237580248",
+  "original_package_name": "K-UI-SCI-Resume-Test.zip",
+  "original_package_sha256": "4976e02a2e9a06cd16703bd15da7024c5508968a24d7e6612db17a64d2f1787b",
+  "user_report": "The flawless Evolution 2 FMV result was with regular Standard loading, not Background loading.",
+  "historical_module_and_archive_authentic": true,
+  "current_fmv_root_cause_established": false,
+  "legacy_provenance_notice": "provenance-original.json is preserved unchanged as an archival record. Its Background inference, current_route_gap and candidate_response interpretation predate the user correction and are superseded by this file and the EDF Standard binary audit. Its immutable payload identities remain valid."
+}

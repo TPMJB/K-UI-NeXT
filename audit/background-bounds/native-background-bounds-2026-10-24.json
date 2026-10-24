@@ -1,0 +1,103 @@
+{
+  "schema": 1,
+  "baseline_source_commit": "9fa65fc1cae0441cb33d6b737e244ad6f4fa6946",
+  "console_execution_verified": false,
+  "scope": "Native Background SCI programmed-I/O fallback; unchanged DMA catch-up targets, stream protocol, CE scheduling and VMU worker",
+  "red": {
+    "test": "tests/test_retail_async_native_bounds.c linked against baseline production reader and stream",
+    "process_returncode": -6,
+    "failure": "test_request_yields_to_foreign_dma: polled<=1u",
+    "reproduced_cooked_request_sectors": 64,
+    "baseline_single_request_polled_blocks": 256,
+    "baseline_single_request_pio_bytes": 132135,
+    "baseline_single_irq_polled_blocks": 256,
+    "baseline_single_irq_pio_bytes": 132148
+  },
+  "green": {
+    "focused_checks": 10380,
+    "native_resume_checks": 221255,
+    "ce_checks": 163486,
+    "native_vmu_loan_checks": 226369,
+    "actual_sh_vector_cases": 111,
+    "background_gateway_checks": 668,
+    "background_map_aligned_leases": 516096,
+    "maximum_pio_data_blocks_per_native_gd_entry": 1,
+    "maximum_pio_data_blocks_per_native_reader_irq": 1,
+    "cases": [
+      "raw and cooked 64-sector requests with continuously occupied guest DMA1, X and Y targets",
+      "interrupt-time foreign DMA takeover with unchanged guest owner",
+      "paused PIO resumes through EXEC/CHECK without any SCI interrupt",
+      "PIO returns to actual background DMA when guest DMA1 becomes idle",
+      "CRC reread and receive-ahead share one PIO allowance",
+      "REQUEST before-work completes an owned command, rejects replacement until CHECK acknowledges it, then accepts a new request",
+      "all requested bytes compared against the ordinary reference image reader"
+    ],
+    "sanitizers": "AddressSanitizer and UndefinedBehaviorSanitizer for focused/native/CE host suites; detect_leaks=0 because runtime /proc access does not support LeakSanitizer"
+  },
+  "linked_background_artifact": {
+    "temporary_build_directory": "build/bounds-background-dev",
+    "temporary_build_label": "9fa65fc1cae0",
+    "temporary_artifact_is_deliverable": false,
+    "note": "Temporary label retains the final 12-character ID length for size verification; clean source commit and final package must be built separately.",
+    "baseline_binary_end": "0x8c007b10",
+    "candidate_binary_end": "0x8c007b14",
+    "binary_growth_bytes": 4,
+    "bss_end": "0x8c007ba0",
+    "guarded_stack_bottom": "0x8c007ba0",
+    "guarded_stack_top": "0x8c007d00",
+    "guarded_stack_bytes": 352,
+    "conservative_stack_total_bytes": 348,
+    "remaining_stack_bytes": 4,
+    "self_test_mutation_refusals": 8,
+    "worker_sha256": "fde5ded9b3a01192a06997cf43027ee1329e2d8326606d1cdf98d6e15b925f99",
+    "worker_byte_identical_to_baseline": true,
+    "linker_boundaries_relaxed": false
+  },
+  "remaining_limits": [
+    "The limit bounds PIO data blocks, not elapsed time: legacy command, token-search and recovery wait windows are unchanged.",
+    "Preserving the DMA scheduling sequence does not prove hardware FMV behavior when a particular movie read falls back to PIO.",
+    "This reproduces and fixes a concrete long masked-work path; it does not prove that every console gameplay stall had this cause.",
+    "The user reported historical EDF FMVs as regular loading; the historical difference is not reclassified as Background loading."
+  ],
+  "independent_dma_only_comparison": {
+    "scope": "Three reads totalling 188 game sectors, interleaved IRQ/EXEC/CHECK; production baseline versus candidate with no PIO fallback",
+    "trace_inputs": "DMA-start events, guest map events and cursor position",
+    "all_output_bytes_match": true,
+    "all_counters_match": true,
+    "cases": [
+      {
+        "format": "raw2352",
+        "target": 20,
+        "trace_hash": "a97b6bfb",
+        "irq_blocks": 373,
+        "call_blocks": 493,
+        "starts": 864
+      },
+      {
+        "format": "raw2352",
+        "target": 25,
+        "trace_hash": "e66b34b1",
+        "irq_blocks": 301,
+        "call_blocks": 565,
+        "starts": 864
+      },
+      {
+        "format": "cooked2048",
+        "target": 20,
+        "trace_hash": "bfd5e06b",
+        "irq_blocks": 330,
+        "call_blocks": 422,
+        "starts": 752
+      },
+      {
+        "format": "cooked2048",
+        "target": 25,
+        "trace_hash": "02d7170d",
+        "irq_blocks": 259,
+        "call_blocks": 493,
+        "starts": 752
+      }
+    ],
+    "timing_claim": "Deterministic scheduling and byte comparison only, not SH4 cycle or console frame timing."
+  }
+}

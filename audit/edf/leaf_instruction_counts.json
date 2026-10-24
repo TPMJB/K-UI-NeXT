@@ -1,0 +1,185 @@
+{
+  "edf": {
+    "memcpy": [
+      {
+        "bytes": 0,
+        "misalignment": 0,
+        "instructions": 25
+      },
+      {
+        "bytes": 0,
+        "misalignment": 1,
+        "instructions": 12
+      },
+      {
+        "bytes": 1,
+        "misalignment": 0,
+        "instructions": 35
+      },
+      {
+        "bytes": 1,
+        "misalignment": 1,
+        "instructions": 22
+      },
+      {
+        "bytes": 3,
+        "misalignment": 0,
+        "instructions": 55
+      },
+      {
+        "bytes": 3,
+        "misalignment": 1,
+        "instructions": 42
+      },
+      {
+        "bytes": 4,
+        "misalignment": 0,
+        "instructions": 31
+      },
+      {
+        "bytes": 4,
+        "misalignment": 1,
+        "instructions": 52
+      },
+      {
+        "bytes": 5,
+        "misalignment": 0,
+        "instructions": 41
+      },
+      {
+        "bytes": 5,
+        "misalignment": 1,
+        "instructions": 62
+      },
+      {
+        "bytes": 512,
+        "misalignment": 0,
+        "instructions": 793
+      },
+      {
+        "bytes": 512,
+        "misalignment": 1,
+        "instructions": 5132
+      },
+      {
+        "bytes": 2048,
+        "misalignment": 0,
+        "instructions": 3097
+      },
+      {
+        "bytes": 2048,
+        "misalignment": 1,
+        "instructions": 20492
+      }
+    ],
+    "release": {
+      "instructions": 80,
+      "mmio_reads": 6,
+      "mmio_writes": 9,
+      "read_addresses": [
+        "0xffe00010",
+        "0xff800030",
+        "0xffe00010",
+        "0xff80002c",
+        "0xff800030",
+        "0xffc00004"
+      ]
+    },
+    "map_without_cache_operation": 27
+  },
+  "current": {
+    "memcpy": [
+      {
+        "bytes": 0,
+        "misalignment": 0,
+        "instructions": 20
+      },
+      {
+        "bytes": 0,
+        "misalignment": 1,
+        "instructions": 12
+      },
+      {
+        "bytes": 1,
+        "misalignment": 0,
+        "instructions": 30
+      },
+      {
+        "bytes": 1,
+        "misalignment": 1,
+        "instructions": 22
+      },
+      {
+        "bytes": 3,
+        "misalignment": 0,
+        "instructions": 50
+      },
+      {
+        "bytes": 3,
+        "misalignment": 1,
+        "instructions": 42
+      },
+      {
+        "bytes": 4,
+        "misalignment": 0,
+        "instructions": 27
+      },
+      {
+        "bytes": 4,
+        "misalignment": 1,
+        "instructions": 52
+      },
+      {
+        "bytes": 5,
+        "misalignment": 0,
+        "instructions": 37
+      },
+      {
+        "bytes": 5,
+        "misalignment": 1,
+        "instructions": 62
+      },
+      {
+        "bytes": 512,
+        "misalignment": 0,
+        "instructions": 916
+      },
+      {
+        "bytes": 512,
+        "misalignment": 1,
+        "instructions": 5132
+      },
+      {
+        "bytes": 2048,
+        "misalignment": 0,
+        "instructions": 3604
+      },
+      {
+        "bytes": 2048,
+        "misalignment": 1,
+        "instructions": 20492
+      }
+    ],
+    "release": {
+      "instructions": 131,
+      "mmio_reads": 13,
+      "mmio_writes": 9,
+      "read_addresses": [
+        "0xffe00010",
+        "0xff800030",
+        "0xffe00010",
+        "0xff80002c",
+        "0xff800030",
+        "0xffe00000",
+        "0xffe00004",
+        "0xffe00018",
+        "0xffe00008",
+        "0xff80002c",
+        "0xff800030",
+        "0xffc00004",
+        "0xffc00004"
+      ]
+    },
+    "map_without_cache_operation": 84
+  }
+}

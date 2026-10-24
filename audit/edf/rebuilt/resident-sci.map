@@ -1,0 +1,236 @@
+Archive member included to satisfy reference by file (symbol)
+
+/workspace/scratch/45de2288a575/K-UI-recovery/.deps/sh-elf/bin/../lib/gcc/sh-elf/15.2.0/libgcc.a(_udivsi3.o)
+                              /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf.ltrans0.ltrans.o (__udivsi3)
+
+Discarded input sections
+
+ .data          0x00000000        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf.ltrans0.ltrans.o
+ .comment       0x00000000       0x13 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf.ltrans0.ltrans.o
+ .comment       0x00000000       0x13 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/0.o.debug.temp.o
+ .comment       0x00000000       0x13 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/1.o.debug.temp.o
+ .comment       0x00000000       0x13 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/2.o.debug.temp.o
+ .comment       0x00000000       0x13 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/3.o.debug.temp.o
+ .comment       0x00000000       0x13 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/4.o.debug.temp.o
+ .comment       0x00000000       0x13 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/5.o.debug.temp.o
+ .comment       0x00000000       0x13 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/6.o.debug.temp.o
+ .comment       0x00000000       0x13 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/7.o.debug.temp.o
+ .comment       0x00000000       0x13 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/8.o.debug.temp.o
+ .data          0x00000000        0x0 /workspace/scratch/45de2288a575/K-UI-recovery/.deps/sh-elf/bin/../lib/gcc/sh-elf/15.2.0/libgcc.a(_udivsi3.o)
+ .bss           0x00000000        0x0 /workspace/scratch/45de2288a575/K-UI-recovery/.deps/sh-elf/bin/../lib/gcc/sh-elf/15.2.0/libgcc.a(_udivsi3.o)
+ .text          0x00000000        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/9.o
+ .data          0x00000000        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/9.o
+ .bss           0x00000000        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/9.o
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+*default*        0x00000000         0xffffffff
+
+Linker script and memory map
+
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/0.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf.ltrans0.ltrans.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/0.o.debug.temp.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/1.o.debug.temp.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/2.o.debug.temp.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/3.o.debug.temp.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/4.o.debug.temp.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/5.o.debug.temp.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/6.o.debug.temp.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/7.o.debug.temp.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/8.o.debug.temp.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/1.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/2.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/3.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/4.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/5.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/6.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/7.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/8.o
+LOAD /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/9.o
+LOAD /workspace/scratch/45de2288a575/K-UI-recovery/.deps/sh-elf/bin/../lib/gcc/sh-elf/15.2.0/libgcc.a
+                0x8c004000                        . = 0x8c004000
+
+.entry          0x8c004000       0x24
+ *(.entry)
+ .entry         0x8c004000       0x24 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/9.o
+                0x8c004000                start
+
+.text           0x8c004024     0x28a8
+ *(.text .text.*)
+ .text          0x8c004024     0x2728 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf.ltrans0.ltrans.o
+                0x8c004d5c                kui_retail_menu_return
+                0x8c004e24                memset
+                0x8c004e3e                kui_retail_resident_init
+                0x8c0050e4                memcpy
+                0x8c00512c                kui_retail_gd_dispatch
+                0x8c005cb0                kui_retail_resident_dispatch
+                0x8c005efc                kui_retail_image_read
+                0x8c006174                kui_loader_sd_stream_next
+                0x8c0064d8                kui_sci_sd_acquire
+                0x8c0065a4                kui_sci_sd_release
+ .text          0x8c00674c       0x6c /workspace/scratch/45de2288a575/K-UI-recovery/.deps/sh-elf/bin/../lib/gcc/sh-elf/15.2.0/libgcc.a(_udivsi3.o)
+                0x8c00676e                __udivsi3
+ .text.retail_hook
+                0x8c0067b8      0x114 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/9.o
+                0x8c0067b8                kui_retail_resident_hook
+                0x8c0067be                kui_retail_gd_c0_hook
+                0x8c0067c4                kui_retail_gd_1000_hook
+                0x8c0067ca                kui_retail_gd_10f0_hook
+                0x8c006898                kui_retail_menu_hook
+
+.rodata         0x8c0068cc      0x2b8
+ *(.rodata .rodata.*)
+ .rodata.str1.4
+                0x8c0068cc      0x174 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf.ltrans0.ltrans.o
+ .rodata        0x8c006a40      0x144 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf.ltrans0.ltrans.o
+
+.rela.dyn       0x8c006b84        0x0
+ .rela.entry    0x8c006b84        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/9.o
+ .rela.text     0x8c006b84        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/9.o
+
+.data
+ *(.data .data.*)
+                0x8c006b84                        . = ALIGN (0x4)
+                0x8c006b84                        __retail_resident_binary_end = .
+
+.bss            0x8c006ba0      0xc54
+                0x8c006ba0                        __retail_resident_bss_begin = .
+ *(.bss .bss.* COMMON)
+ .bss           0x8c006ba0      0xc54 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf.ltrans0.ltrans.o
+                0x8c006ba0                kui_retail_hook_sr
+                0x8c006ba4                kui_retail_hook_active
+                0x8c006ba8                kui_retail_hook_source
+                0x8c006bac                kui_retail_original_menu
+                0x8c006bb0                kui_retail_hook_fault
+                0x8c006bb4                kui_retail_native_caller
+                0x8c0077f4                        . = ALIGN (0x4)
+                0x8c0077f4                        __retail_resident_bss_end = .
+                0x8c007800                        __retail_hook_stack_bottom = 0x8c007800
+                0x8c007d00                        __retail_hook_stack = 0x8c007d00
+                0x00000001                        ASSERT ((_start == 0x8c004000), resident entry moved)
+                0x00000001                        ASSERT ((__retail_resident_bss_end <= 0x8c007800), retail resident overlaps its guarded service stack)
+
+/DISCARD/
+ *(.comment)
+ *(.note*)
+ *(.eh_frame*)
+OUTPUT(/workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf elf32-shl)
+
+.debug_info     0x00000000     0x9262
+ .debug_info    0x00000000     0x3be0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf.ltrans0.ltrans.o
+ .debug_info    0x00003be0     0x1872 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/0.o.debug.temp.o
+                0x00003be0                retail_resident.c.9ef26d40
+ .debug_info    0x00005452      0xe9c /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/1.o.debug.temp.o
+                0x00005452                retail_gd.c.d3fb63e8
+ .debug_info    0x000062ee      0x24f /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/2.o.debug.temp.o
+                0x000062ee                retail_pace.c.9f498e78
+ .debug_info    0x0000653d      0x1e6 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/3.o.debug.temp.o
+                0x0000653d                minic.c.c3476ee5
+ .debug_info    0x00006723      0xf04 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/4.o.debug.temp.o
+                0x00006723                retail_image.c.2ea818c5
+ .debug_info    0x00007627      0x3e6 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/5.o.debug.temp.o
+                0x00007627                retail_display.c.9307d7db
+ .debug_info    0x00007a0d      0xba5 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/6.o.debug.temp.o
+                0x00007a0d                sd_reader.c.f1e342a1
+ .debug_info    0x000085b2      0x5e0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/7.o.debug.temp.o
+                0x000085b2                retail_sd.c.3957e73e
+ .debug_info    0x00008b92      0x6d0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/8.o.debug.temp.o
+                0x00008b92                sci_sd_bus.c.37d74ff7
+
+.debug_abbrev   0x00000000     0x12e5
+ .debug_abbrev  0x00000000      0x2cc /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf.ltrans0.ltrans.o
+ .debug_abbrev  0x000002cc      0x30d /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/0.o.debug.temp.o
+ .debug_abbrev  0x000005d9      0x282 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/1.o.debug.temp.o
+ .debug_abbrev  0x0000085b       0xf5 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/2.o.debug.temp.o
+ .debug_abbrev  0x00000950       0xab /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/3.o.debug.temp.o
+ .debug_abbrev  0x000009fb      0x262 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/4.o.debug.temp.o
+ .debug_abbrev  0x00000c5d       0xf3 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/5.o.debug.temp.o
+ .debug_abbrev  0x00000d50      0x203 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/6.o.debug.temp.o
+ .debug_abbrev  0x00000f53      0x190 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/7.o.debug.temp.o
+ .debug_abbrev  0x000010e3      0x202 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/8.o.debug.temp.o
+
+.debug_loclists
+                0x00000000     0x524a
+ .debug_loclists
+                0x00000000     0x524a /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf.ltrans0.ltrans.o
+
+.debug_aranges  0x00000000       0x20
+ .debug_aranges
+                0x00000000       0x20 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf.ltrans0.ltrans.o
+
+.debug_rnglists
+                0x00000000      0x6fe
+ .debug_rnglists
+                0x00000000      0x6fe /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf.ltrans0.ltrans.o
+
+.debug_line     0x00000000     0x696a
+ .debug_line    0x00000000     0x663f /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf.ltrans0.ltrans.o
+ .debug_line    0x0000663f       0x9b /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/0.o.debug.temp.o
+ .debug_line    0x000066da       0x64 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/1.o.debug.temp.o
+ .debug_line    0x0000673e       0x4c /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/2.o.debug.temp.o
+ .debug_line    0x0000678a       0x48 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/3.o.debug.temp.o
+ .debug_line    0x000067d2       0x64 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/4.o.debug.temp.o
+ .debug_line    0x00006836       0x48 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/5.o.debug.temp.o
+ .debug_line    0x0000687e       0x4d /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/6.o.debug.temp.o
+ .debug_line    0x000068cb       0x4d /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/7.o.debug.temp.o
+ .debug_line    0x00006918       0x52 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/8.o.debug.temp.o
+
+.debug_str      0x00000000     0x1dfc
+ .debug_str     0x00000000     0x1dfc /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf.ltrans0.ltrans.o
+                                0x15d (size before relaxing)
+ .debug_str     0x00001dfc        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/0.o.debug.temp.o
+                               0x1523 (size before relaxing)
+ .debug_str     0x00001dfc        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/1.o.debug.temp.o
+                                0xb40 (size before relaxing)
+ .debug_str     0x00001dfc        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/2.o.debug.temp.o
+                                0x25c (size before relaxing)
+ .debug_str     0x00001dfc        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/3.o.debug.temp.o
+                                0x1e2 (size before relaxing)
+ .debug_str     0x00001dfc        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/4.o.debug.temp.o
+                                0x93d (size before relaxing)
+ .debug_str     0x00001dfc        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/5.o.debug.temp.o
+                                0x2f5 (size before relaxing)
+ .debug_str     0x00001dfc        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/6.o.debug.temp.o
+                                0x62c (size before relaxing)
+ .debug_str     0x00001dfc        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/7.o.debug.temp.o
+                                0x528 (size before relaxing)
+ .debug_str     0x00001dfc        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/8.o.debug.temp.o
+                                0x467 (size before relaxing)
+
+.debug_line_str
+                0x00000000      0x2bf
+ .debug_line_str
+                0x00000000      0x2bf /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf.ltrans0.ltrans.o
+                                0x10d (size before relaxing)
+ .debug_line_str
+                0x000002bf        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/0.o.debug.temp.o
+                                0x201 (size before relaxing)
+ .debug_line_str
+                0x000002bf        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/1.o.debug.temp.o
+                                0x157 (size before relaxing)
+ .debug_line_str
+                0x000002bf        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/2.o.debug.temp.o
+                                 0xe5 (size before relaxing)
+ .debug_line_str
+                0x000002bf        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/3.o.debug.temp.o
+                                 0xcc (size before relaxing)
+ .debug_line_str
+                0x000002bf        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/4.o.debug.temp.o
+                                0x15b (size before relaxing)
+ .debug_line_str
+                0x000002bf        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/5.o.debug.temp.o
+                                 0xe6 (size before relaxing)
+ .debug_line_str
+                0x000002bf        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/6.o.debug.temp.o
+                                 0xe0 (size before relaxing)
+ .debug_line_str
+                0x000002bf        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/7.o.debug.temp.o
+                                 0xe0 (size before relaxing)
+ .debug_line_str
+                0x000002bf        0x0 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/8.o.debug.temp.o
+                                 0xef (size before relaxing)
+
+.debug_frame    0x00000000      0x830
+ .debug_frame   0x00000000      0x830 /workspace/scratch/45de2288a575/edf-binary-audit/rebuilt/resident-sci.elf.ltrans0.ltrans.o

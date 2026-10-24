@@ -1,0 +1,492 @@
+{
+  "_map_guest": {
+    "equal": true,
+    "instructions": [
+      31,
+      31
+    ],
+    "effective_bytes": [
+      84,
+      84
+    ],
+    "symbol_sizes": [
+      88,
+      88
+    ],
+    "differences": []
+  },
+  "_video_sample": {
+    "equal": true,
+    "instructions": [
+      58,
+      58
+    ],
+    "effective_bytes": [
+      132,
+      132
+    ],
+    "symbol_sizes": [
+      132,
+      132
+    ],
+    "differences": []
+  },
+  "_read_run": {
+    "equal": true,
+    "instructions": [
+      188,
+      188
+    ],
+    "effective_bytes": [
+      436,
+      436
+    ],
+    "symbol_sizes": [
+      444,
+      444
+    ],
+    "differences": []
+  },
+  "_read_sectors": {
+    "equal": true,
+    "instructions": [
+      100,
+      100
+    ],
+    "effective_bytes": [
+      228,
+      228
+    ],
+    "symbol_sizes": [
+      248,
+      248
+    ],
+    "differences": []
+  },
+  "_kui_loader_sd_stream_next": {
+    "equal": true,
+    "instructions": [
+      196,
+      196
+    ],
+    "effective_bytes": [
+      424,
+      424
+    ],
+    "symbol_sizes": [
+      424,
+      424
+    ],
+    "differences": []
+  },
+  "_kui_retail_image_read": {
+    "equal": true,
+    "instructions": [
+      304,
+      304
+    ],
+    "effective_bytes": [
+      632,
+      632
+    ],
+    "symbol_sizes": [
+      644,
+      644
+    ],
+    "differences": []
+  },
+  "_transfer_block": {
+    "equal": true,
+    "instructions": [
+      343,
+      343
+    ],
+    "effective_bytes": [
+      796,
+      796
+    ],
+    "symbol_sizes": [
+      816,
+      816
+    ],
+    "differences": []
+  },
+  "_transfer.lto_priv.0": {
+    "equal": true,
+    "instructions": [
+      7,
+      7
+    ],
+    "effective_bytes": [
+      14,
+      14
+    ],
+    "symbol_sizes": [
+      14,
+      14
+    ],
+    "differences": []
+  },
+  "_transfer.lto_priv.1": {
+    "equal": true,
+    "instructions": [
+      51,
+      51
+    ],
+    "effective_bytes": [
+      132,
+      132
+    ],
+    "symbol_sizes": [
+      140,
+      140
+    ],
+    "differences": []
+  },
+  "_kui_sci_sd_acquire": {
+    "equal": true,
+    "instructions": [
+      80,
+      80
+    ],
+    "effective_bytes": [
+      204,
+      204
+    ],
+    "symbol_sizes": [
+      204,
+      204
+    ],
+    "differences": []
+  },
+  "_kui_sci_sd_release": {
+    "equal": true,
+    "instructions": [
+      129,
+      129
+    ],
+    "effective_bytes": [
+      312,
+      312
+    ],
+    "symbol_sizes": [
+      312,
+      312
+    ],
+    "differences": []
+  },
+  "_prepare": {
+    "equal": true,
+    "instructions": [
+      50,
+      50
+    ],
+    "effective_bytes": [
+      116,
+      116
+    ],
+    "symbol_sizes": [
+      120,
+      120
+    ],
+    "differences": []
+  },
+  "_select_card": {
+    "equal": true,
+    "instructions": [
+      27,
+      27
+    ],
+    "effective_bytes": [
+      64,
+      64
+    ],
+    "symbol_sizes": [
+      72,
+      72
+    ],
+    "differences": []
+  },
+  "_ticks.lto_priv.1": {
+    "equal": true,
+    "instructions": [
+      3,
+      3
+    ],
+    "effective_bytes": [
+      12,
+      12
+    ],
+    "symbol_sizes": [
+      12,
+      12
+    ],
+    "differences": []
+  },
+  "_reverse": {
+    "equal": true,
+    "instructions": [
+      30,
+      30
+    ],
+    "effective_bytes": [
+      72,
+      72
+    ],
+    "symbol_sizes": [
+      72,
+      72
+    ],
+    "differences": []
+  },
+  "_stream_finish": {
+    "equal": true,
+    "instructions": [
+      71,
+      71
+    ],
+    "effective_bytes": [
+      152,
+      152
+    ],
+    "symbol_sizes": [
+      176,
+      176
+    ],
+    "differences": []
+  },
+  "_end": {
+    "equal": true,
+    "instructions": [
+      2,
+      2
+    ],
+    "effective_bytes": [
+      12,
+      12
+    ],
+    "symbol_sizes": [
+      12,
+      12
+    ],
+    "differences": []
+  },
+  "_release": {
+    "equal": true,
+    "instructions": [
+      12,
+      12
+    ],
+    "effective_bytes": [
+      28,
+      28
+    ],
+    "symbol_sizes": [
+      32,
+      32
+    ],
+    "differences": []
+  },
+  "_step": {
+    "equal": true,
+    "instructions": [
+      153,
+      153
+    ],
+    "effective_bytes": [
+      340,
+      340
+    ],
+    "symbol_sizes": [
+      352,
+      352
+    ],
+    "differences": []
+  },
+  "_file_read": {
+    "equal": true,
+    "instructions": [
+      153,
+      153
+    ],
+    "effective_bytes": [
+      316,
+      316
+    ],
+    "symbol_sizes": [
+      324,
+      324
+    ],
+    "differences": []
+  },
+  "_memcpy": {
+    "equal": false,
+    "instructions": [
+      32,
+      36
+    ],
+    "effective_bytes": [
+      64,
+      72
+    ],
+    "symbol_sizes": [
+      64,
+      72
+    ],
+    "differences": [
+      {
+        "index": 2,
+        "a": [
+          "0xc803",
+          "tst",
+          "#3,r0"
+        ],
+        "b": [
+          "0x2f86",
+          "mov.l",
+          "r8,@-r15"
+        ]
+      },
+      {
+        "index": 3,
+        "a": [
+          "0x6353",
+          "mov",
+          "r5,r3"
+        ],
+        "b": [
+          "0xc803",
+          "tst",
+          "#3,r0"
+        ]
+      },
+      {
+        "index": 4,
+        "a": [
+          "bt.s",
+          "local+0x2a"
+        ],
+        "b": [
+          "bf.s",
+          "local+0x26"
+        ]
+      },
+      {
+        "index": 6,
+        "a": [
+          "0x7601",
+          "add",
+          "#1,r6"
+        ],
+        "b": [
+          "0x6263",
+          "mov",
+          "r6,r2"
+        ]
+      },
+      {
+        "index": 7,
+        "a": [
+          "0x4610",
+          "dt",
+          "r6"
+        ],
+        "b": [
+          "0x4209",
+          "shlr2",
+          "r2"
+        ]
+      },
+      {
+        "index": 8,
+        "a": [
+          "bf.s",
+          "local+0x32"
+        ],
+        "b": [
+          "0x4208",
+          "shll2",
+          "r2"
+        ]
+      },
+      {
+        "index": 9,
+        "a": [
+          "0x6043",
+          "mov",
+          "r4,r0"
+        ],
+        "b": [
+          "0x6053",
+          "mov",
+          "r5,r0"
+        ]
+      },
+      {
+        "index": 10,
+        "a": [
+          "0xb",
+          "rts",
+          ""
+        ],
+        "b": [
+          "0x6323",
+          "mov",
+          "r2,r3"
+        ]
+      },
+      {
+        "index": 11,
+        "a": [
+          "0x9",
+          "nop",
+          ""
+        ],
+        "b": [
+          "0x4309",
+          "shlr2",
+          "r3"
+        ]
+      },
+      {
+        "index": 12,
+        "a": [
+          "0x6736",
+          "mov.l",
+          "@r3+,r7"
+        ],
+        "b": [
+          "0x312c",
+          "add",
+          "r2,r1"
+        ]
+      },
+      {
+        "index": 13,
+        "a": [
+          "0x76fc",
+          "add",
+          "#-4,r6"
+        ],
+        "b": [
+          "0x6743",
+          "mov",
+          "r4,r7"
+        ]
+      },
+      {
+        "index": 14,
+        "a": [
+          "0x2172",
+          "mov.l",
+          "r7,@r1"
+        ],
+        "b": [
+          "0x7301",
+          "add",
+          "#1,r3"
+        ]
+      }
+    ]
+  }
+}
