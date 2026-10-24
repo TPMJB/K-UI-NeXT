@@ -1,33 +1,19 @@
-# Native SCI hybrid test — 1920659698ae
+# REJECTED on console — native hybrid 1920659698ae
 
-The candidate keeps the Background DMA pipeline and caps foreground catch-up.
-REQUEST/CHECK/reader IRQ deliver at most one SD block; EXEC at most eight.
-DMA waits share 1,024 polls per entry. PIO fallback remains one block per entry.
-Card command/token/recovery waits retain their legacy timeouts.
+The owner reported a severe regression after installing this candidate: the intro video took about a minute longer than usual and audio glitched roughly every half second. Gameplay was not reached. Association follows the supplied build and test sequence; no separate runtime build screen was supplied.
 
-Console performance is unverified. This is a native Evolution 2 comparison,
-not a new Windows CE or CDDA/VMU build. Do not merge it over main as a release.
+Do not use this candidate as a performance baseline or merge it as a fix. The former host tests proved work limits and exact data, but did not establish sufficient service rate or movie playback deadlines. The capped CHECK path and shared 1,024-poll EXEC allowance are being removed from the next experiment.
 
-Download `K-UI-Native-Hybrid-1920659698ae.zip`, extract, and follow
-README-FIRST.md. Install using the existing prepared profile, leave real A2
-empty, and launch with SCI / Background On / Normal speed. Compare FMVs,
-gameplay hangs and A2 save → full power-off → reload.
+For the previously smooth Background FMV behavior, restore the retained [74958b387827 package](../builds/K-UI-Native-Background-Bounds-74958b387827.zip?raw=true), using the same existing profile and game selection. That prior build still has the owner's reported gameplay stalls; it is a rollback, not a gameplay fix.
 
-The build passed 42,274 hybrid host checks, native/CE regression suites,
-linked memory/stack/mutation checks and 15 extracted-installer cases preserving
-the prepared card/profile/journal. TEST-EVIDENCE.json and probe-report.json
-record the limits and results. These tests do not measure console frame timing.
+The rejected binary, original reports and exact source/history remain preserved for reproducibility. TEST-EVIDENCE.json records the earlier software results only; this console failure supersedes its pending hardware status. No save/load result is claimed for this test.
 
 ## Exact source and history
 
-This branch retains the complete earlier checkpoint files and original source
-history. From the repository root, run:
+From this branch's repository root, run:
 
 ```sh
 python3 hybrid/restore-hybrid.py
 ```
 
-The script restores the original 74958b387827 checkpoint, imports the small
-incremental bundle, and verifies the exact final commit and tree. It refuses
-a dirty source checkout. Original source authors/dates/commit IDs are retained.
-No user VMU image, disk profile, save, game executable or game track is included.
+The script restores the original 74958b387827 checkpoint, imports the incremental bundle, and verifies source commit 1920659698aeec78c1e812bbb76b2b9274f7558d and tree 569869f7b50ec1096c1cfb4a19664ad9e5f37973. Original commit identities are retained. No user card, profile, journal, saves or retail game files are included.
