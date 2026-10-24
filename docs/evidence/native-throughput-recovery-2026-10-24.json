@@ -1,0 +1,76 @@
+{
+  "schema": "kui.native.throughput.recovery.v1",
+  "rejected_console_build": "1920659698ae",
+  "rejected_console_result": {
+    "intro_video": "about one minute longer than usual",
+    "audio_glitches": "roughly every half second",
+    "gameplay_reached": false,
+    "build_association": "latest delivery and feedback sequence; no separate build screen supplied"
+  },
+  "candidate_console_verified": false,
+  "change": "Keep baseline DMA waits and CHECK/EXEC catch-up; cap ready-DMA drains at the selected original 20/25-block target",
+  "catchup_poll_slice_removed": true,
+  "comparison": {
+    "schema": "kui.native.service-cadence.comparison.v1",
+    "baseline_commit": "74958b387827",
+    "rejected_commit": "1920659698ae",
+    "schedules_per_reader": 50,
+    "delayed_schedules_matching_baseline": 32,
+    "all_outputs_exact": true,
+    "original_catchup_preserved": true,
+    "hot_irq_blocks": {
+      "baseline": 256,
+      "rejected": 1,
+      "candidate_normal": 20,
+      "candidate_eager": 25
+    },
+    "examples": [
+      {
+        "schedule": 0,
+        "baseline_rounds": 13,
+        "rejected_rounds": 261,
+        "candidate_rounds": 13
+      },
+      {
+        "schedule": 1,
+        "baseline_rounds": 7,
+        "rejected_rounds": 86,
+        "candidate_rounds": 7
+      },
+      {
+        "schedule": 2,
+        "baseline_rounds": 13,
+        "rejected_rounds": 256,
+        "candidate_rounds": 13
+      },
+      {
+        "schedule": 3,
+        "baseline_rounds": 7,
+        "rejected_rounds": 256,
+        "candidate_rounds": 7
+      }
+    ],
+    "console_timing_measured": false,
+    "limitation": "Rounds are synthetic caller opportunities, not video frames or milliseconds."
+  },
+  "bounded_reader_test": "native DMA ceiling: 23127 checks passed; original 20/25 catch-up retained",
+  "native_regression": "retail async reader: 221287 checks passed",
+  "pio_regression": "native background bounded fallback: 10388 checks passed",
+  "ce_regression": "retail async reader (Windows CE): 163486 checks passed",
+  "resident": {
+    "payload_bytes": 15096,
+    "memory_end": "0x8c007b80",
+    "stack_limit": 352,
+    "conservative_stack_bytes": 348
+  },
+  "source_sha256": {
+    "src/loader/retail_async.c": "663792ec313f42f1e3fe991b2ab8eebb95fe5f4ac1370b301e3899bc5e418ee9",
+    "src/loader/sci_stream.c": "c10813f76afb08e6e9ac303dbe7e7bbdc98b6e5529d5d31f253e25576b266f18",
+    "src/loader/sci_stream.h": "d1b7d692f34d143e6563f2cb432c72d619cda4867cd3aaa7ae82f792aef4b653"
+  },
+  "limitations": [
+    "No console FMV/gameplay timing claim",
+    "Service rounds are synthetic opportunities, not frames",
+    "Card command/token/recovery waits retain original timeouts"
+  ]
+}

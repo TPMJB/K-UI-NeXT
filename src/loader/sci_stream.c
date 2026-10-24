@@ -363,9 +363,6 @@ static enum kui_sci_stream_result handoff(bool overrun) {
  * without a transmitter, the channel takes each byte, and the receiver keeps
  * the one after the last in RDR and stops on the next one's overrun. */
 static enum kui_sci_stream_result start_dma(uint32_t area, uint32_t offset) {
-#if KUI_RETAIL_NATIVE_HYBRID
-    s.poll_used=0;
-#endif
     /* TxD latched high as GPIO before the transmitter is turned off. */
     wr8(SPTR, 0x83u);
     if((rd8(SPTR) & 0x8au) != 0x82u) return KUI_SCI_STREAM_RESET;
@@ -561,25 +558,9 @@ enum kui_sci_stream_result kui_sci_stream_poll(bool interrupt) {
     uint32_t control = rd32(CHCR);
     /* Still receiving, unless the channel stopped or the receiver overran. */
     if(!(control & 2u) && (control & 1u) && !(rd8(SSR) & ORER) &&
-       (rd32(DMAOR) & 7u) == 1u) {
-#if KUI_RETAIL_NATIVE_HYBRID
-        if(++s.poll_used>=200000u) return finish(interrupt);
-#endif
-        return KUI_SCI_STREAM_PENDING;
-    }
+       (rd32(DMAOR) & 7u) == 1u) return KUI_SCI_STREAM_PENDING;
     return finish(interrupt);
 }
-#if KUI_RETAIL_NATIVE_HYBRID
-void kui_sci_stream_begin_slice(void) {s.poll_budget=KUI_SCI_STREAM_POLL_SLICE;}
-enum kui_sci_stream_result kui_sci_stream_wait_slice(void) {
-    while(s.poll_budget) {
-        --s.poll_budget;
-        enum kui_sci_stream_result result=kui_sci_stream_poll(false);
-        if(result!=KUI_SCI_STREAM_PENDING) return result;
-    }
-    return KUI_SCI_STREAM_PENDING;
-}
-#endif
 enum kui_sci_stream_result kui_sci_stream_wait(void) {
     for(uint32_t n = 0; n < 200000u; ++n) {
         enum kui_sci_stream_result result = kui_sci_stream_poll(false);

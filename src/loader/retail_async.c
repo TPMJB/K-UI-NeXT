@@ -24,6 +24,9 @@ static uintptr_t stream_event(uint32_t event,uintptr_t argument) {
 #define SCI_LEVEL 0x0010u
 /* A fresh CMD18's token can take the card's whole access time. */
 #define TOKEN_LIMIT 65536u
+#if KUI_RETAIL_NATIVE_HYBRID && defined(KUI_RETAIL_CE)
+#error Native DMA batch ceiling must not change the CE reader
+#endif
 /* Consecutive failures at one block before the read is reported failed;
  * from the POLLED-th on, the block is read by programmed transfers, which
  * cannot overrun however long the game holds the bus. */
@@ -148,9 +151,7 @@ static void copy_words(volatile uint32_t *to, const uint32_t *from, unsigned wor
 }
 void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
     e.manifest = manifest;
-#if !KUI_RETAIL_NATIVE_HYBRID
     e.target = manifest->reader == KUI_RETAIL_READER_ASYNC_EAGER ? TARGET_Y : TARGET_X;
-#endif
     copy_words(R.vector100, kui_retail_vector_forward, 3);
     R.vector100[2] = (uint32_t)(uintptr_t)kui_retail_release_100;
     copy_words(R.vector400, kui_retail_vector_forward, 3);
@@ -341,10 +342,8 @@ static void write_out(void *unused, uint32_t offset, const uint8_t *bytes, uint3
     if(out) memcpy(out, bytes, count);
     else e.failed = KUI_GD_ERROR_MEMORY;
 }
-#if !KUI_RETAIL_NATIVE_HYBRID
 static bool topping(uint32_t function) { return function == KUI_GD_EXEC || function == KUI_GD_CHECK; }
 static bool tops_up(uint32_t function) { return topping(function); }
-#endif
 #endif
 /* Finish an arrived block, then deliver blocks in order: the next one of the
  * run is started before each block is checked and copied. Returns while a block is in
@@ -355,9 +354,6 @@ static bool tops_up(uint32_t function) { return topping(function); }
 #endif
 static void deliver_work(uint32_t wait) {
     uint32_t delivered = 0;
-#if KUI_RETAIL_NATIVE_HYBRID
-    uint32_t steps=0,limit=wait?wait:1u;
-#endif
 #ifndef KUI_RETAIL_CE
     /* A native GD entry has at most one active delivery visit: REQUEST
      * rejects an owned command even if before-work just completed it;
@@ -369,9 +365,9 @@ static void deliver_work(uint32_t wait) {
 #endif
     for(;;) {
 #if KUI_RETAIL_NATIVE_HYBRID
-        /* Count every visit, including CRC/error retries, and every ready
-         * DMA block. Fast completions must not bypass the entry's cap. */
-        if(delivered>=limit || steps++>=10u) return;
+        /* Retain the proved 20/25-block catch-up and full DMA wait. Only
+         * stop the formerly unlimited run of already-completed blocks. */
+        if(delivered>=e.target) return;
 #endif
 #ifndef KUI_RETAIL_CE
         /* PIO fallback must not drain a whole request with interrupts
@@ -402,12 +398,7 @@ static void deliver_work(uint32_t wait) {
                  * speculative refill after its destination is full. */
                 if(e.piece_set && e.piece_filled == e.piece_bytes) return;
 #endif
-#if KUI_RETAIL_NATIVE_HYBRID
-                r = kui_sci_stream_wait_slice();
-                if(r==KUI_SCI_STREAM_PENDING) return;
-#else
                 r = kui_sci_stream_wait();
-#endif
             }
         }
         if(!e.active || e.failed) return;
@@ -448,9 +439,7 @@ static void deliver_work(uint32_t wait) {
 #endif
             if(kui_retail_cursor_feed(&e.cursor, block) != KUI_GAME_OK) e.failed = KUI_GD_ERROR_IO;
             ++delivered;
-#if !KUI_RETAIL_NATIVE_HYBRID
             ++e.since;
-#endif
             if(e.in_irq) ++e.stats.irq_blocks;
             else ++e.stats.call_blocks;
             if(e.cursor.done == e.cursor.count) e.active = 0;
@@ -773,9 +762,6 @@ void kui_retail_async_call(uint32_t function) {
     if(native_loan_blocked()) return;
 #endif
     uint32_t wait = 0;
-#if KUI_RETAIL_NATIVE_HYBRID
-    kui_sci_stream_begin_slice();
-#endif
 #if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
     if(loan_blocked()) return;
     struct kui_retail_gd *s=&R.shared.service;
@@ -801,18 +787,10 @@ void kui_retail_async_call(uint32_t function) {
         /* An EXEC or CHECK waits for the blocks nothing delivered since the
          * previous one, up to the target: the data a game waits for keeps
          * coming while the interrupt is held off. */
-#if KUI_RETAIL_NATIVE_HYBRID
-        /* CHECK never waits for DMA. EXEC can catch up by at most two
-         * cooked sectors, with one shared poll slice. */
-        if(function==KUI_GD_EXEC) {
-            wait=8u;
-        }
-#else
         if(tops_up(function) && e.since < e.target) {
             wait = e.target - e.since;
             ++e.stats.waits;
         }
-#endif
     }
     deliver(wait);
     report();
@@ -854,9 +832,7 @@ void kui_retail_async_after(uint32_t function, int32_t result) {
 #else
     if(!kui_sci_stream_busy()) unhook();
 #endif
-#if !KUI_RETAIL_NATIVE_HYBRID
     if(topping(function)) e.since = 0;
-#endif
 #ifdef KUI_RETAIL_CE
     /* What the interrupt does not fill, CE's driver calls for again at once. */
     if(kui_sci_stream_token_pending() ||
@@ -884,12 +860,8 @@ uint32_t kui_retail_async_irq(void) {
 #endif
         return 1;
     }
-#if defined(KUI_RETAIL_CE) || KUI_RETAIL_NATIVE_HYBRID
-#if KUI_RETAIL_NATIVE_HYBRID
-    kui_sci_stream_begin_slice();
-#else
+#ifdef KUI_RETAIL_CE
     kui_sci_stream_token_budget(e.isr != 0);
-#endif
 #endif
     e.in_irq = 1;
     deliver(0);

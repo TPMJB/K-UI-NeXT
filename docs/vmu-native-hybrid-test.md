@@ -1,66 +1,67 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Native SCI hybrid scheduling test
+# Native SCI DMA burst ceiling test
 
-This candidate changes the Background reader that gave smooth Evolution 2
-movies but still interrupted gameplay in `74958b387827`. It retains background
-DMA reception and receive-ahead, with Standard-sized foreground work limits.
-Console performance is unverified until you test this build.
+Build 1920659698ae was rejected on console: the owner reported an intro video
+about a minute slower than usual, with audio glitches roughly every half
+second. Gameplay was not reached. Its one-block CHECK/IRQ caps and shared
+1,024-poll EXEC slice are removed from this candidate.
+
+This experiment starts from the reader in 74958b387827, whose Background FMV
+was smooth but whose gameplay still stalled. It retains that reader's full
+DMA waits and 20/25-block catch-up. The focused change puts a hard ceiling on
+the formerly unlimited drain of ready DMA blocks: 20 blocks for Normal and
+25 for Aggressive. The existing one-block PIO fallback remains.
+
+Console improvement is unverified. This is not a confirmed gameplay fix.
 
 ## Install
 
-Extract the ZIP, then run from its root:
+Extract the ZIP and run from its root:
 
 ```sh
 python3 personalize.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --game evolution2
 ```
 
-Use the same prepared profile and game image as the previous test. Change the
-mount path/profile if needed. `--list-games` lists the supplied mapping names.
-The installer updates `KUI/apps/games/retail-boot.kui`; the prepared card image,
-profile and journal are preserved. Safely eject, then cold boot.
+Use the same profile and exact game image as the previous comparison. Adjust
+the mount/profile only if different. This replaces the launch module; the
+installer preserves the prepared card image, profile and journal. Safely eject
+and cold boot.
 
-Use **SCI, Background loading On, Normal speed**, Auto/default encoding,
-CD music Off, and RAM patches Off. A real VMU can remain in **A1**; leave
-physical **A2 empty**. The virtual card still appears in A2. The Normal and
-Aggressive frontend choices use the same eight-block cap in this experiment.
-This package contains the native Background module; switching Background Off
-does not turn it into the independently linked Standard module.
+Use SCI, Background loading On, Normal speed first, Auto/default encoding,
+CD music Off and RAM patches Off. Physical A1 remains available; keep physical
+A2 empty. The virtual save card remains A2. The package contains the native
+Background module, not a Windows CE or combined CDDA/VMU implementation.
 
-## Test
+## Short comparison
 
-1. Play the same opening FMV that was smooth in the previous Background build.
-2. Repeat the gameplay section that had three- or four-frame hangs. Compare
-   their frequency and severity, and check input response and scene loads.
-3. Save to virtual A2, fully power off after saving completes, reboot, and load.
+First repeat the opening video. If its pacing and audio match the smooth
+74958b387827 baseline, continue to the same gameplay area that stalled.
+Then check A2 save, full power-off, reboot and reload. Record the displayed
+build and each result separately.
 
-Report the displayed build, FMV result, gameplay result, and save/reload result.
-Use the same image variant for both builds. Keep the previous installer ZIP to
-restore its module with the same profile and game selection.
+## What the software checks establish
 
-## What changed
+The finite-service test compares the actual baseline, rejected and current
+reader sources under identical caller/interrupt schedules. It includes
+CHECK-only, EXEC+CHECK, one available IRQ per round and repeated CHECK calls,
+with cooked/raw data and Normal/Aggressive settings. In all 32 delayed-DMA
+schedules, this candidate uses exactly the baseline's service-round count.
+The rejected candidate takes 261 rounds versus 13 in one example.
 
-| Entry | Maximum work |
-| --- | --- |
-| REQUEST, CHECK, ordinary GD entry, reader interrupt | One delivered 512-byte SD block |
-| EXEC | Eight delivered SD blocks, at most 4 KiB of source data |
-| Any delivery visit | Ten loop iterations, including failed/retry iterations |
-| Any entry using PIO fallback | One received SD block |
-| EXEC DMA wait | 1,024 poll iterations shared across its blocks |
+Those rounds are synthetic caller opportunities, not measured console frames
+or milliseconds. The tests now check relative service capacity as well as
+exact bytes and work bounds; they still do not simulate the game's decoder.
 
-CHECK polls DMA once without a DMA wait loop. An unfinished DMA remains active
-between entries, and SCI completion interrupts continue feeding the pipeline.
-Repeated EXEC visits can make progress when interrupts are masked. The DMA
-timeout accumulates pending polls across visits instead of treating a yielded
-visit as a failed transfer. Existing CRC/retry and guest DMA ownership rules
-remain enabled.
+With immediate DMA completion, the former 256-block IRQ drain stops at 20 or
+25 blocks. The original CRC, recovery, bus and guest DMA ownership rules remain.
+Card command/token/recovery waits keep their original timeouts, so the cap is
+not a hard elapsed-time deadline. Memory/stack boundaries are unchanged.
 
-These are work-count limits, not a measured millisecond deadline. Card-command,
-token-search, reset and VMU storage waits retain their existing timeouts.
-Slicing those waits is separate work; the larger prototype did not fit the
-unchanged resident boundary. The compiler's address-space workaround and the
-original stack/guard limits remain in force. This is a native-game test, not a
-new Windows CE or combined CDDA/VMU build.
+Reproduce the comparison from the recovered source:
 
-The ZIP includes exact source history, checksums, linked checks and the host
-regression evidence. Host tests establish bounds and correct output, not
-Dreamcast frame timing.
+```sh
+python3 tools/compare_native_reader_cadence.py
+make build/test-retail-async-native-hybrid
+ASAN_OPTIONS=detect_leaks=0 ./build/test-retail-async-native-hybrid
+```
+
