@@ -209,7 +209,7 @@ class AllocationWrapper(Machine):
 
 class ArmRoute(Machine):
     """Execute the complete relay through publication of the low boot control."""
-    def __init__(self, stage, resident, stack, seed, mask, *, body=None, cache_hit=True, mode=0, sdk_admitted=True):
+    def __init__(self, stage, resident, stack, seed, mask, *, body=None, cache_hit=True, mode=0, sdk_admitted=True, normalized=False):
         super().__init__(stage, "_kui_retail_stage_relay", seed, mask, OLD_STACK, body=body)
         self.symbols, self.stack = stage[4], stack
         self.cache_hit, self.mode = cache_hit, mode
@@ -225,7 +225,10 @@ class ArmRoute(Machine):
         self.mem.update({self.cell + 4 * i: 0 for i in range(8)})
         self.mem[self.slot] = self.original
         self.mem[self.frame + 20] = 0x8C010000
-        self.mem[self.symbols["_exec_bytes"][0]] = 0x200000
+        self.exec_address=self.symbols["_exec_bytes"][0]
+        self.source_bytes=0x200000
+        self.program_bytes=self.source_bytes-(0x8000 if normalized else 0)
+        self.mem[self.exec_address] = self.source_bytes
         manifest = self.symbols["_manifest"][0]
         self.mem.update({manifest + 44: 1, manifest + 48: 0, manifest + 52: 0})
         for name, count in (("_native_heap", 18), ("_native_call", 5), ("_native_driver", 26)):
@@ -235,6 +238,7 @@ class ArmRoute(Machine):
                          call + 8: 0x8C0100C6, call + 12: 0x8CC00000, call + 16: 0x00400000})
         labels = (("_retail_display_restore", "display"), ("_retail_display_line", "line"),
                   ("_kui_native_heap_base_relay", "restore"), ("_kui_retail_observe_native_ip", "ip"),
+                  ("_kui_vmu_native_program_extent", "extent"),
                   ("_native_resolution_replay", "cache"), ("_code_sha", "sha"),
                   ("_kui_vmu_native_discover_layout", "driver"), ("_kui_vmu_native_heap_discover", "heap"),
                   ("_kui_vmu_native_heap_call_discover", "call"), ("_allocation_safe", "allocation"),
@@ -257,6 +261,7 @@ class ArmRoute(Machine):
         if not self.start_sp - 256 <= key < self.start_sp:
             self.nonstack_writes.append((key, value & MASK))
         if key == self.control + 8 and value == 1:
+            assert self.calls.count("extent")==1 and self.mem[self.exec_address]==self.program_bytes
             assert self.mem[self.control] == self.symbols["_kui_vmu_observe_stage_install"][0]
             assert self.mem[self.control + 4] == self.stack[2], "ARMED before publishing typed installer stack"
             assert [self.mem[self.cell + i * 4] for i in range(4)] == [self.original, 0x8CC00000, 0x00400000, 0x0C0100C6]
@@ -276,17 +281,24 @@ class ArmRoute(Machine):
             self.refused,self.pc=True,self.stop_pc;return True
         if label == "restore":
             assert self.r[4:6] == [self.frame, 0x105]
+            assert self.mem[self.exec_address]==self.source_bytes
         if label == "mode":
             assert self.calls.count("restore") == 1 and not any(value in self.calls for value in
-                ("ip", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "sdk-slot", "capture"))
-        if label in ("ip", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "sdk-slot", "capture"):
+                ("ip", "extent", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "sdk-slot", "capture"))
+        if label in ("ip", "extent", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "sdk-slot", "capture"):
             assert self.calls.count("restore") == 1
+        if label=="extent":
+            assert self.calls.count("ip")==1 and self.r[4:7]==[0x8c010000,self.source_bytes,0x8c010000]
+            assert self.mem[self.exec_address]==self.source_bytes
+            self.write(self.r[7],self.program_bytes)
+        if label in ("cache","driver","heap","call"):
+            assert self.calls.count("extent")==1 and self.mem[self.exec_address]==self.program_bytes
         # With a cache-bearing stage use the hit path; without it exercise the
         # same common publisher after the reviewed full-discovery callbacks.
         if label in ("driver", "heap"):
-            assert self.r[4:7] == [0x8C010000, 0x200000, 0x8C010000]
+            assert self.r[4:7] == [0x8C010000, self.program_bytes, 0x8C010000]
         if label == "call":
-            assert self.r[4:8] == [0x8C010000, 0x200000, self.symbols["_native_heap"][0], self.symbols["_native_call"][0]]
+            assert self.r[4:8] == [0x8C010000, self.program_bytes, self.symbols["_native_heap"][0], self.symbols["_native_call"][0]]
         if label == "allocation":
             assert self.r[4:6] == [0x8CC00000, 0x00400000]
         if label=="sdk-slot":
@@ -296,7 +308,7 @@ class ArmRoute(Machine):
             assert self.sdk_admitted and self.calls[-2]=="sdk-slot","cold windows captured before SDK-slot admission"
         result = (self.mode if label == "mode" else int(self.cache_hit) if label == "cache"
                   else int(self.sdk_admitted) if label=="sdk-slot"
-                  else int(label in ("ip", "driver", "heap", "call", "allocation", "release", "exits")))
+                  else int(label in ("ip", "extent", "driver", "heap", "call", "allocation", "release", "exits")))
         self.abi_return(result)
         return True
 
@@ -312,7 +324,7 @@ class ArmRoute(Machine):
             assert not self.armed and not self.nonstack_writes
             assert self.calls.count("restore") == 1 and self.calls.count("mode") == 1
             assert not any(value in self.calls for value in
-                ("ip", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "sdk-slot", "capture"))
+                ("ip", "extent", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "sdk-slot", "capture"))
             assert all(self.mem[self.control + 4 * i] == 0 for i in range(16))
             assert all(self.mem[self.cell + 4 * i] == 0 for i in range(8))
             assert self.mem[self.slot] == self.original and self.mem[self.frame + 20] == 0x8C010000
@@ -408,7 +420,8 @@ def check(stage, resident, *, worker=None, self_test=False):
                 AllocationWrapper(stage, seed, mask, outcome).run().check(); wrappers += 1
             for mode in modes:
                 for hit in ((False, True) if "_native_resolution_replay" in stage[4] else (False,)):
-                    ArmRoute(stage, resident, stack, seed, mask, cache_hit=hit, mode=mode).run().check(); routes += 1
+                    for normalized in (False,True):
+                        ArmRoute(stage, resident, stack, seed, mask, cache_hit=hit, mode=mode,normalized=normalized).run().check(); routes += 1
                 if mode!=1 and "_native_sdk_coherence_cached_admit" in stage[4]:
                     ArmRoute(stage,resident,stack,seed,mask,cache_hit=False,mode=mode,sdk_admitted=False).run().check()
                     refusals+=1
@@ -454,6 +467,8 @@ def check(stage, resident, *, worker=None, self_test=False):
             "actual_allocation_wrapper_cases": wrappers, "actual_relay_publication_cases": routes,
             "actual_low_hook_cases": hooks, "mutation_rejections": mutations,
             "cold_sdk_slot_refusal_before_any_arming_cases":refusals,
+            "full_source_verified_before_program_extent":True,
+            "normal_and_shortened_extent_arming_routes":True,
             "runtime_modes": list(modes), "control_preserves_original_frame_and_allocator": 1 in modes,
             "initializer_preserves_original_stack_and_sr": True,
             "private_stack_before_allocation_or_worker_writes": True,

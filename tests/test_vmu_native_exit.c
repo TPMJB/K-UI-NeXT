@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/vmu_native_exit.h"
+#include "kui/vmu_native_program.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -195,9 +196,27 @@ static void pair_only_tests(void) {
     fixture();memset(image+exec,0,0x9cu);memcpy(image+0x600u,image+pair,0x60u);
     CHECK(!discover(image,sizeof(image),load,&out));
 }
+static void pair_fill_tests(void) {
+    struct kui_vmu_native_exit out;
+    const uint16_t fills[]={0u,UINT16_C(0xffff)};
+    for(unsigned no_loader=0u;no_loader<2u;no_loader++) for(unsigned f=0u;f<2u;f++) {
+        fixture();if(no_loader) memset(image+exec,0,0x9cu);
+        halfword(image+pair+66u,fills[f]);
+        CHECK(discover(image,sizeof(image),load,&out));
+        CHECK(out.family==(no_loader?KUI_VMU_NATIVE_EXIT_PAIR_ONLY:KUI_VMU_NATIVE_EXIT_FAMILY));
+        for(unsigned bit=0u;bit<16u;bit++) {
+            halfword(image+pair+66u,(uint16_t)(fills[f]^(1u<<bit)));
+            CHECK(!discover(image,sizeof(image),load,&out));
+        }
+        halfword(image+pair+66u,fills[f]);
+        /* The preceding JMP and its executed delay-slot restore remain
+         * mandatory under either canonical linker-fill convention. */
+        image[pair+64u]^=1u;CHECK(!discover(image,sizeof(image),load,&out));
+    }
+}
 int main(int argc,char **argv) {
     struct kui_vmu_native_exit out;
-    pvr_tests();pair_only_tests();
+    pvr_tests();pair_only_tests();pair_fill_tests();
     fixture();CHECK(discover(image,sizeof(image),load,&out));
     CHECK(out.version==1u && out.family==1u && out.bytes==sizeof(out) && out.count==3u);
     CHECK(out.load==load && out.image_bytes==sizeof(image));
@@ -328,6 +347,8 @@ int main(int argc,char **argv) {
     for(int arg=2;arg<argc;arg++) {
         FILE *f=fopen(argv[arg],"rb");CHECK(f);CHECK(!fseek(f,0,SEEK_END));long n=ftell(f);CHECK(n>0);rewind(f);
         unsigned char *actual=malloc((size_t)n);CHECK(actual);CHECK(fread(actual,1,(size_t)n,f)==(size_t)n);fclose(f);
+        size_t program_bytes;CHECK(kui_vmu_native_program_extent(actual,(size_t)n,load,&program_bytes));
+        CHECK(program_bytes<=(size_t)n);n=(long)program_bytes;
         CHECK(discover(actual,(size_t)n,load,&out));
         CHECK(out.family==KUI_VMU_NATIVE_EXIT_PVR_CLEAR || out.family==KUI_VMU_NATIVE_EXIT_PVR_COMPACT ||
             out.family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY);

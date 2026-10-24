@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""Host CLI integration. Set KUI_NATIVE_STARTUP to run actual-image cases."""
+"""Host CLI integration. Set KUI_NATIVE_STARTUP / KUI_NATIVE_EVOLUTION2 for real images."""
 from __future__ import annotations
 
 import hashlib
@@ -14,6 +14,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SOURCES = (
     "tools/vmu_native_resolution_cache_tool.c",
+    "src/core/vmu_native_program.c",
     "src/core/vmu_native_resolution_cache.c",
     "src/core/vmu_native_discovery.c",
     "src/core/vmu_native_layout.c",
@@ -23,6 +24,10 @@ SOURCES = (
     "src/core/hash.c",
     "src/core/data.c",
 )
+SOURCE_FIELDS = {"source_sha256", "source_bytes", "program_bytes", "discarded_suffix_bytes"}
+EVOLUTION2_SOURCE_SHA256 = "16b45fcc84992a60d5a64bf64bf22b699b27306b95f177ba3d9730ca380069ae"
+EVOLUTION2_SOURCE_BYTES = 4057056
+EVOLUTION2_PROGRAM_BYTES = 0x3D67E0
 
 
 class CacheToolTests(unittest.TestCase):
@@ -37,6 +42,8 @@ class CacheToolTests(unittest.TestCase):
         )
         actual = os.environ.get("KUI_NATIVE_STARTUP")
         cls.actual = Path(actual).resolve() if actual else None
+        evolution2 = os.environ.get("KUI_NATIVE_EVOLUTION2")
+        cls.evolution2 = Path(evolution2).resolve() if evolution2 else None
 
     @classmethod
     def tearDownClass(cls):
@@ -60,6 +67,29 @@ class CacheToolTests(unittest.TestCase):
         result = json.loads(self.invoke("build", self.actual, cache).stdout)
         self.assertEqual(len(cache.read_bytes()), 1024)
         return cache, result
+
+    def evolution2_source(self):
+        if self.evolution2 is None:
+            self.skipTest("Set KUI_NATIVE_EVOLUTION2 for original Evolution 2 source coverage")
+        source = self.evolution2.read_bytes()
+        self.assertEqual(len(source), EVOLUTION2_SOURCE_BYTES)
+        self.assertEqual(hashlib.sha256(source).hexdigest(), EVOLUTION2_SOURCE_SHA256)
+        return source
+
+    def assert_source_identity(self, metadata, source, program_bytes):
+        if not source[-0x8000:].startswith(b"SEGA SEGAKATANA SEGA ENTERPRISES"):
+            self.assertEqual(program_bytes, len(source))
+        self.assertEqual(metadata["source_sha256"], hashlib.sha256(source).hexdigest())
+        self.assertEqual(metadata["source_bytes"], len(source))
+        self.assertEqual(metadata["program_bytes"], program_bytes)
+        self.assertEqual(metadata["discarded_suffix_bytes"], len(source) - program_bytes)
+        self.assertEqual(metadata["image_bytes"], program_bytes)
+        self.assertEqual(metadata["image_sha256"], hashlib.sha256(source[:program_bytes]).hexdigest())
+
+    def assert_inspected_identity(self, cache, metadata):
+        inspected = json.loads(self.invoke("inspect", cache).stdout)
+        self.assertTrue(SOURCE_FIELDS.isdisjoint(inspected))
+        self.assertEqual(inspected, {key: value for key, value in metadata.items() if key not in SOURCE_FIELDS})
 
     def test_usage_and_load_or_pin_parsing(self):
         self.invoke(code=2)
@@ -91,8 +121,8 @@ class CacheToolTests(unittest.TestCase):
         wire = cache.read_bytes()
         self.assertEqual(metadata["record_digest"], hashlib.sha256(wire[:992]).hexdigest())
         self.assertEqual(bytes.fromhex(metadata["record_digest"]), wire[992:])
-        self.assertEqual(metadata["image_sha256"], hashlib.sha256(self.actual.read_bytes()).hexdigest())
-        self.assertEqual(metadata, json.loads(self.invoke("inspect", cache).stdout))
+        self.assert_source_identity(metadata, self.actual.read_bytes(), metadata["image_bytes"])
+        self.assert_inspected_identity(cache, metadata)
         self.assertEqual(metadata, json.loads(self.invoke("verify", self.actual, cache).stdout))
         self.assertEqual(metadata, json.loads(self.invoke("replay", self.actual, cache,
                                                         metadata["record_digest"]).stdout))
@@ -105,7 +135,65 @@ class CacheToolTests(unittest.TestCase):
         before = cache.read_bytes()
         self.invoke("build", self.actual, cache, code=1)
         self.assertEqual(cache.read_bytes(), before)
-        self.assertEqual(hashlib.sha256(self.actual.read_bytes()).hexdigest(), metadata["image_sha256"])
+        self.assertEqual(hashlib.sha256(self.actual.read_bytes()).hexdigest(), metadata["source_sha256"])
+
+    def test_evolution2_raw_source_and_program_prefix_share_cache_identity(self):
+        source = self.evolution2_source()
+        raw_cache = self.work / "source.nvr"
+        raw = json.loads(self.invoke("build", self.evolution2, raw_cache).stdout)
+        self.assert_source_identity(raw, source, EVOLUTION2_PROGRAM_BYTES)
+        self.assertNotEqual(raw["source_sha256"], raw["image_sha256"])
+        self.assert_inspected_identity(raw_cache, raw)
+        for command in ("verify", "replay"):
+            args = (raw["record_digest"],) if command == "replay" else ()
+            self.assertEqual(raw, json.loads(self.invoke(command, self.evolution2, raw_cache, *args).stdout))
+
+        prefix = source[:EVOLUTION2_PROGRAM_BYTES]
+        prefix_image, prefix_cache = self.work / "program.bin", self.work / "program.nvr"
+        prefix_image.write_bytes(prefix)
+        program = json.loads(self.invoke("build", prefix_image, prefix_cache).stdout)
+        self.assert_source_identity(program, prefix, len(prefix))
+        self.assertEqual(raw_cache.read_bytes(), prefix_cache.read_bytes())
+        self.assertEqual(program, json.loads(self.invoke("verify", prefix_image, raw_cache).stdout))
+        self.assertEqual(program, json.loads(self.invoke("replay", prefix_image, raw_cache,
+                                                       raw["record_digest"]).stdout))
+        self.assertEqual(hashlib.sha256(self.evolution2.read_bytes()).hexdigest(), EVOLUTION2_SOURCE_SHA256)
+
+    def test_evolution2_footer_contradictions_refused_and_arbitrary_suffix_retained(self):
+        source = self.evolution2_source()
+        cache = self.work / "source.nvr"
+        metadata = json.loads(self.invoke("build", self.evolution2, cache).stdout)
+        original_record = cache.read_bytes()
+        changed = []
+        for footer_offset in (0, 0x60, 0x7FFF):
+            data = bytearray(source)
+            data[EVOLUTION2_PROGRAM_BYTES + footer_offset] ^= 1
+            changed.append((f"changed footer {footer_offset:x}", data))
+        changed.append(("duplicate IP suffix", source + source[EVOLUTION2_PROGRAM_BYTES:]))
+        for index, (name, data) in enumerate(changed):
+            with self.subTest(source=name):
+                image, output = self.work / f"changed{index}.bin", self.work / f"changed{index}.nvr"
+                image.write_bytes(data)
+                self.invoke("build", image, output, code=1)
+                self.assertFalse(output.exists())
+                self.invoke("verify", image, cache, code=1)
+                self.invoke("replay", image, cache, metadata["record_digest"], code=1)
+                self.assertEqual(cache.read_bytes(), original_record)
+
+        # Arbitrary data is part of the executable. Its full identity must
+        # remain in the new record even where a known IP would be reclaimable.
+        data = source[:EVOLUTION2_PROGRAM_BYTES] + bytes(0x8000)
+        image, output = self.work / "non-IP.bin", self.work / "non-IP.nvr"
+        image.write_bytes(data)
+        retained = json.loads(self.invoke("build", image, output).stdout)
+        self.assert_source_identity(retained, data, len(data))
+        self.assertNotEqual(output.read_bytes(), original_record)
+        self.assertEqual(retained, json.loads(self.invoke("verify", image, output).stdout))
+        self.assertEqual(retained, json.loads(self.invoke("replay", image, output,
+                                                        retained["record_digest"]).stdout))
+        self.invoke("verify", image, cache, code=1)
+        self.invoke("replay", image, cache, metadata["record_digest"], code=1)
+        self.assertEqual(cache.read_bytes(), original_record)
 
     def test_actual_stale_image_misses(self):
         cache, metadata = self.build_actual()
@@ -128,7 +216,7 @@ class CacheToolTests(unittest.TestCase):
         self.assertNotEqual(inspected["record_digest"], metadata["record_digest"])
         self.invoke("replay", self.actual, cache, metadata["record_digest"], code=1)
         self.invoke("verify", self.actual, cache, code=1)
-        struct.pack_into("<I", wire, 16, 2)  # Stale detector epoch, even with a new local hash.
+        struct.pack_into("<I", wire, 16, metadata["detector_epoch"] + 1)  # A stale proof, even with a new local hash.
         wire[992:] = hashlib.sha256(wire[:992]).digest()
         cache.write_bytes(wire)
         self.invoke("inspect", cache, code=1)

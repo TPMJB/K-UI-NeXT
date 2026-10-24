@@ -134,11 +134,14 @@ static void setup(const uint8_t *boot,size_t bytes) {
 static void cache_path(char out[120],const uint8_t *boot,size_t bytes) {
     uint8_t hash[32];digest(boot,bytes,hash);char hex[65];
     for(unsigned i=0;i<32u;i++) snprintf(hex+2u*i,3u,"%02x",hash[i]);
-    CHECK(snprintf(out,120,"0:/KUI/VMU/native-cache/v1/%s.nvr",hex)<120);
+    CHECK(snprintf(out,120,"0:/KUI/VMU/native-cache/v%u/%s.nvr",KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH,hex)<120);
 }
 static unsigned seed_cache(const uint8_t *boot,size_t bytes,bool actual) {
     char path[120];cache_path(path,boot,bytes);unsigned n=node_add(path,false);
-    if(actual) CHECK(kui_vmu_native_resolution_cache_build(boot,bytes,load,disk[n].data,1024u,NULL));
+    if(actual) {
+        size_t program_bytes;CHECK(kui_vmu_native_program_extent(boot,bytes,load,&program_bytes));
+        CHECK(kui_vmu_native_resolution_cache_build(boot,program_bytes,load,disk[n].data,1024u,NULL));
+    }
     else {struct kui_vmu_native_resolution source;mock(boot,bytes,&source);CHECK(kui_vmu_native_resolution_cache_encode(&source,disk[n].data,1024u));}
     disk[n].size=1024u;return n;
 }
@@ -150,7 +153,9 @@ static enum native_cache_result prepare(bool native,uint32_t options,bool patche
         CHECK(!memcmp(module,before,128u) && !memcmp(module+128u+1120u,before+128u+1120u,sizeof(module)-128u-1120u));
         const uint8_t *wire=NULL,*pin=NULL;struct kui_vmu_native_resolution out;
         CHECK(kui_vmu_native_cache_seed_read(module+128u,1120u,&wire,&pin));
-        CHECK(kui_vmu_native_resolution_cache_replay(io.boot,io.bytes,load,wire,1024u,pin,&out));
+        size_t program_bytes;CHECK(kui_vmu_native_program_extent(io.boot,io.bytes,load,&program_bytes));
+        CHECK(kui_vmu_native_resolution_cache_replay(io.boot,program_bytes,load,wire,1024u,pin,&out));
+        CHECK(out.driver.image_bytes==program_bytes);
     }
     return result;
 }
@@ -196,6 +201,17 @@ static void actual_frontend(const char *path) {
     setup(boot,bytes);CHECK(prepare(true,0u,false,"/Games/PS2")==NATIVE_CACHE_READY);
     CHECK(io.builds==1u && io.writes==1u && io.syncs==1u && io.renames==1u);
     char name[120];cache_path(name,boot,bytes);int stored=node_find(name);CHECK(stored>=0 && disk[stored].size==1024u);
+    setup(boot,bytes);seed_cache(boot,bytes,true);
+    CHECK(prepare(true,0u,false,"/Games/PS2")==NATIVE_CACHE_READY);
+    CHECK(io.replays==1u && !io.builds && !io.writes && !io.renames);
+    size_t program_bytes;CHECK(kui_vmu_native_program_extent(boot,bytes,load,&program_bytes));
+    if(program_bytes!=bytes) {
+        /* A cache cannot authorize a changed or malformed source footer. */
+        uint8_t saved=boot[bytes-1u];boot[bytes-1u]^=1u;setup(boot,bytes);
+        CHECK(prepare(true,0u,false,"/Games/PS2")==NATIVE_CACHE_SKIPPED);
+        CHECK(!io.builds && !io.replays && !io.writes && !io.renames);
+        boot[bytes-1u]=saved;
+    }
     /* Corrupt, truncated, old epoch and other-image records all rebuild and
      * replace the stale name; successful next launch no longer rescans. */
     for(unsigned corruption=0;corruption<4u;corruption++) {
@@ -231,7 +247,7 @@ static void actual_frontend(const char *path) {
     free(boot);
 }
 int main(int argc,char **argv) {
-    CHECK(argc==1 || argc==2);codec_and_trust_tests();gates_and_hits();
-    if(argc==2) actual_frontend(argv[1]);
-    printf("Native launcher cache: %u checks passed%s\n",checks,argc==2?" including actual-image rebuild/publication faults":"");return 0;
+    CHECK(argc>=1 && argc<=3);codec_and_trust_tests();gates_and_hits();
+    for(int i=1;i<argc;i++) actual_frontend(argv[i]);
+    printf("Native launcher cache: %u checks passed%s\n",checks,argc>1?" including actual-image rebuild/publication faults":"");return 0;
 }

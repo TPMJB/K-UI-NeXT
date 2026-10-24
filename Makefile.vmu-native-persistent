@@ -45,15 +45,17 @@ $(BUILD)/stage/src/loader/vmu_native_heap_probe_stage.o: $(BUILD)/vmu-sd-profile
 .PHONY: persistent-host-tests native-sdk-coherence-host-tests
 native-sdk-coherence-host-tests: $(BUILD)/native-worker.elf
 	python3 tests/test_sh4_delay_slots.py
+	python3 tests/test_vmu_native_record_worker_sh.py
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -DKUI_VMU_NATIVE_READONLY_PROBE=1 \
 	 tests/test_vmu_native_sdk_coherence.c src/loader/vmu_native_sdk_coherence.c -o $(BUILD)/test-sdk-coherence
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-sdk-coherence tests/fixtures/native-cache/evolution1.nvr \
 	 tests/fixtures/native-cache/ps2.nvr tests/fixtures/native-cache/skies.nvr \
-	 tests/fixtures/native-cache/sa2.nvr tests/fixtures/native-cache/grandia2.nvr
+	 tests/fixtures/native-cache/sa2.nvr tests/fixtures/native-cache/grandia2.nvr \
+	 $(if $(EVOLUTION2_STARTUP),tests/fixtures/native-cache/evolution2.nvr,)
 	python3 tools/check_vmu_native_sdk_coherence.py $(BUILD)/native-worker.elf --self-test \
 	 $(if $(EVOLUTION1_STARTUP),--evolution1 '$(EVOLUTION1_STARTUP)',) $(if $(STARTUP),--ps2 '$(STARTUP)',) \
 	 $(if $(SKIES_STARTUP),--skies '$(SKIES_STARTUP)',) $(if $(SA2_STARTUP),--sa2 '$(SA2_STARTUP)',) \
-	 $(if $(GRANDIA2_STARTUP),--grandia2 '$(GRANDIA2_STARTUP)',)
+	 $(if $(GRANDIA2_STARTUP),--grandia2 '$(GRANDIA2_STARTUP)',) $(if $(EVOLUTION2_STARTUP),--evolution2 '$(EVOLUTION2_STARTUP)',)
 persistent-host-tests: $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc native-sdk-coherence-host-tests
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_profile.c src/core/vmu_native_profile.c -o $(BUILD)/test-profile
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-profile
@@ -68,7 +70,7 @@ persistent-host-tests: $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc n
 	 src/core/vmu_native_heap.c src/core/vmu_native_lifetime.c -o $(BUILD)/test-lifetime
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-lifetime
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_exit.c \
-	 src/core/vmu_native_exit.c src/core/vmu_native_patch.c -o $(BUILD)/test-exit
+	 src/core/vmu_native_program.c src/core/vmu_native_heap.c src/core/vmu_native_exit.c src/core/vmu_native_patch.c src/core/data.c -o $(BUILD)/test-exit
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-exit $(if $(STARTUP),'$(STARTUP)',)
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_worker_relocate.c \
 	 src/core/vmu_native_relocate.c src/core/hash.c src/core/data.c -o $(BUILD)/test-real-relocation

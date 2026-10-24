@@ -37,6 +37,7 @@ static uint32_t native_runtime_mode(void) {
 #endif
 #include "kui/vmu_native_discovery.h"
 #include "kui/vmu_native_heap.h"
+#include "kui/vmu_native_program.h"
 #include "kui/vmu_native_stage_placement.h"
 #include "kui/vmu_maple_observe_boot.h"
 #include "kui/retail_observe.h"
@@ -158,6 +159,15 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
        (manifest.flags&(KUI_RETAIL_IMAGE_CD|KUI_RETAIL_IMAGE_SCRAMBLED)) ||
        !kui_retail_observe_native_ip((const uint8_t *)(uintptr_t)KUI_RETAIL_IP_ADDRESS))
         native_report(1u,manifest.storage_transport);
+/* The base relay has verified the entire loaded file, including any
+     * appended bootstrap. Only a caller-proven reclaimed suffix may cease
+     * being part of the live executable before immutable native discovery.
+     * This changes neither the loaded bytes nor the source CRC contract. */
+    size_t program_bytes;
+    if(!kui_vmu_native_program_extent((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&program_bytes)) native_report(2u,13u);
+    if(program_bytes!=exec_bytes) retail_display_line("VERIFIED RECLAIMED BOOTSTRAP SUFFIX");
+    exec_bytes=(uint32_t)program_bytes;
 #if KUI_VMU_NATIVE_CACHE_PROBE
     bool mapping_cached=native_resolution_replay();
     if(mapping_cached) retail_display_line("USING VERIFIED NATIVE MAPPING CACHE");

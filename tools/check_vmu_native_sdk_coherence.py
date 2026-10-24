@@ -11,6 +11,10 @@ import hashlib
 import json
 from pathlib import Path
 import struct
+import sys
+
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tests"))
+from test_vmu_native_heap_execution import verified_program_image
 
 from check_vmu_native_stage_stack import Machine,canonical
 from check_vmu_native_worker_gateway import MASK,read_elf,symbol_bytes
@@ -181,8 +185,9 @@ def cases(image,*,body=None,name=None,compact=False):
 def original_prefix_cases(image,startups):
     count=0;records=[];extended=0
     for name,path in (startups or {}).items():
-        raw=Path(path).read_bytes()
-        cache=(Path(__file__).resolve().parents[1]/'tests/fixtures/native-cache'/f'{name}.nvr').read_bytes()
+        cache_path=Path(__file__).resolve().parents[1]/'tests/fixtures/native-cache'/f'{name}.nvr'
+        source,raw,extent=verified_program_image(path,cache_path)
+        cache=cache_path.read_bytes()
         d=struct.unpack_from('<18I',cache,64);l=struct.unpack_from('<7I',cache,168)
         assert len(raw)==d[3] and hashlib.sha256(raw).digest()==cache[136:168]
         kind=l[6];init=l[2]
@@ -227,7 +232,10 @@ def original_prefix_cases(image,startups):
                 assert (continuation.pr,continuation.sr)==(reference.pr,reference.sr)
                 extended+=1
             count+=1
-        records.append({'name':name,'sha256':hashlib.sha256(raw).hexdigest(),'kind':kind,'initializer':hex(init)})
+        records.append({'name':name,'sha256':hashlib.sha256(raw).hexdigest(),'program_bytes':len(raw),
+            'source_sha256':hashlib.sha256(source).hexdigest(),'source_bytes':len(source),
+            'discarded_suffix_bytes':len(source)-len(raw),'program_extent_production_verified':True,
+            'kind':kind,'initializer':hex(init)})
     return count,records,extended
 
 
@@ -271,6 +279,6 @@ def audit(image,self_test=False,startups=None):
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('worker',type=Path);p.add_argument('--self-test',action='store_true')
-    for name in ('evolution1','ps2','skies','sa2','grandia2'):p.add_argument('--'+name,type=Path)
-    a=p.parse_args();supplied={n:getattr(a,n) for n in ('evolution1','ps2','skies','sa2','grandia2') if getattr(a,n)}
+    for name in ('evolution1','ps2','skies','sa2','grandia2','evolution2'):p.add_argument('--'+name,type=Path)
+    a=p.parse_args();supplied={n:getattr(a,n) for n in ('evolution1','ps2','skies','sa2','grandia2','evolution2') if getattr(a,n)}
     print(json.dumps(audit(read_elf(a.worker),a.self_test,supplied),indent=2))

@@ -27,9 +27,9 @@ def cache_catalog(root,commit):
     evidence=json.loads((root/'docs/evidence/native-cache-catalog-inputs.json').read_bytes())
     if (evidence.get('schema')!='kui.native.resolution-cache.inputs.v1' or
         evidence.get('detector_epoch')!=DETECTOR_EPOCH or
-        {entry.get('slug') for entry in evidence.get('inputs',[])}!={'ps2','skies','sa2','grandia2','evolution1'} or
-        len(evidence['inputs'])!=5):
-        raise ValueError('Requires the five reviewed native cache fixtures')
+        {entry.get('slug') for entry in evidence.get('inputs',[])}!={'ps2','skies','sa2','grandia2','evolution1','evolution2'} or
+        len(evidence['inputs'])!=6):
+        raise ValueError('Requires the six reviewed native cache fixtures')
     files={};games=[]
     for entry in evidence['inputs']:
         slug=entry['slug'];fixture=f'tests/fixtures/native-cache/{slug}.nvr'

@@ -99,6 +99,27 @@ static bool variable(const uint8_t *p,size_t n,uint32_t base,size_t s,const stru
         word_literal(p,n,base,s+164u,7u,0x400u) && word_literal(p,n,base,s+196u,2u,0xfe8u) &&
         word_literal(p,n,base,s+224u,2u,0xfe8u) && literal(p,n,base,s+102u,10u,&alias) && alias==0xa0000000u;
 }
+/* Bind a timer dispatcher to the SDK setter which actually installs that
+ * as-loaded entry in VBR. Executable files may contain an unrelocated IP.BIN
+ * copy with matching dispatcher bytes but a different link address. Such a
+ * copy cannot authorize this runtime's callback cells. A second complete
+ * self-registered dispatcher remains ambiguous and is still refused. */
+static bool timer_registration(const uint8_t *p,size_t n,uint32_t base,size_t handler,
+    unsigned timer,uint32_t callback,uint32_t argument) {
+    static const struct witness one[]={{0,0x0122},{8,0x0126},{12,0x2352},{14,0x2262}};
+    static const struct witness two[]={{0,0x0222},{6,0x0236},{12,0x2242},{14,0x2352}};
+    size_t s;uint32_t entry;
+    if(timer>1u || handler>n || n-handler<36u) return false;
+    if(!timer) {if(handler<0xaeu) return false;s=handler-0xaeu;}
+    else {if(n-handler<0x62u) return false;s=handler+0x52u;}
+    if(s>n || n-s<16u || !word_literal(p,n,base,s+2u,0u,timer?0x248u:0x244u) ||
+       !literal(p,n,base,s+4u,timer?3u:2u,&entry) || !ram(entry,2u,2u) ||
+       phys(entry)!=phys(base+(uint32_t)handler)) return false;
+    if(!timer) return WORDS(p,n,s,one) &&
+        exact_literal(p,n,base,s+6u,3u,callback) && exact_literal(p,n,base,s+10u,2u,argument);
+    return WORDS(p,n,s,two) &&
+        exact_literal(p,n,base,s+8u,3u,argument) && exact_literal(p,n,base,s+10u,2u,callback);
+}
 static bool timers(const uint8_t *p,size_t n,uint32_t base,uint32_t *one,uint32_t *two) {
     static const struct witness w[]={{2,0x6030},{6,0x2300},{10,0xe3df},{12,0x6241},{14,0x2239},{16,0x2421},
         {20,0x6141},{22,0x2129},{24,0x2411},{30,0x6012},{32,0x402b},{34,0x6432}};
@@ -117,6 +138,7 @@ static bool timers(const uint8_t *p,size_t n,uint32_t base,uint32_t *one,uint32_
         if(u16(p+s+4u)==0xc9fdu && tcr==0xffd8001cu) i=0u;
         else if(u16(p+s+4u)==0xc9fbu && tcr==0xffd80028u) i=1u;
         else continue;
+        if(!timer_registration(p,n,base,s,i,callback,arg)) continue;
         chosen[i]=callback;++counts[i];
     }
     if(counts[0]!=1u || counts[1]!=1u || overlaps(chosen[0],8u,chosen[1],8u)) return false;
@@ -336,13 +358,66 @@ static bool uniform_from_bound(const void *image,size_t n,
     if(!gun(p,n,base,d,&r.gun_flag) || !timers(p,n,base,&r.timer1_callback,&r.timer2_callback)) return false;
     *out=r;return true;
 }
+/* SDK rings are derived from admitted initializer arguments, never inferred
+ * from zero runs. A source-file container may include their zero-initialized
+ * storage. Require a complete ring inside that container or a disjoint ring;
+ * a partial boundary crossing is not this provenance family. */
+static bool ring_image_location(uint32_t load,uint32_t image_bytes,uint32_t address,
+    uint32_t bytes,bool *inside) {
+    if(!inside || !ram(load,image_bytes,4u) || !ram(address,bytes,32u)) return false;
+    *inside=false;
+    if(!overlaps(address,bytes,load,image_bytes)) return true;
+    uint32_t start=phys(address),begin=phys(load);
+    if(start<begin || start-begin>image_bytes || bytes>image_bytes-(start-begin)) return false;
+    *inside=true;return true;
+}
+static bool source_ring(const uint8_t *p,size_t n,uint32_t load,uint32_t address,
+    uint32_t bytes,bool *inside) {
+    if(n>UINT32_MAX || !ring_image_location(load,(uint32_t)n,address,bytes,inside)) return false;
+    if(!*inside) return true;
+    size_t at_=phys(address)-phys(load);
+    for(uint32_t i=0;i<bytes;i++) if(p[at_+i]) return false;
+    return true;
+}
+static bool source_buffers(const uint8_t *p,size_t n,const struct kui_vmu_native_discovery *d,
+    const struct kui_vmu_native_layout *l,bool *infile) {
+    struct span {uint32_t address,bytes;} rings[KUI_VMU_NATIVE_LAYOUT_INPUTS+1u];
+    unsigned count=1u;rings[0]=(struct span){l->tx_base,0x6000u};*infile=false;
+    bool uniform=l->rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48;
+    if(l->rx_layout>KUI_VMU_NATIVE_RX_EXPLICIT48 || l->inputs!=(uniform?1u:12u)) return false;
+    if(uniform) rings[count++]=(struct span){l->rx_base,0xc000u};
+    else for(unsigned i=0;i<l->inputs;i++) {
+        if(l->indices[i]>=24u) return false;
+        rings[count++]=(struct span){l->rx_slots[l->indices[i]],0x800u};
+    }
+    const struct span protected[]={
+        {d->manager_initial,0x1100u},{d->manager_cell,4u},{d->lock_cell,5u},
+        {l->gun_flag,4u},{l->timer1_callback,8u},{l->timer2_callback,8u},
+        {l->input_array,l->inputs*4u},{l->index_array,(uniform?1u:l->inputs)*4u},
+        {d->submit,12u},{d->initializer,12u},{l->initializer,12u},
+        {l->initializer_wrapper,uniform?52u:56u},{l->initializer_call,4u},
+        {d->completion_call,4u},{d->consumer,2u},{d->gate,2u},{d->ready,2u}};
+    for(unsigned i=0;i<count;i++) {
+        bool inside;
+        if(!source_ring(p,n,d->load_address,rings[i].address,rings[i].bytes,&inside)) return false;
+        *infile|=inside;
+        for(unsigned j=0;j<i;j++)
+            if(overlaps(rings[i].address,rings[i].bytes,rings[j].address,rings[j].bytes)) return false;
+        for(unsigned j=0;j<sizeof(protected)/sizeof(protected[0]);j++)
+            if(overlaps(rings[i].address,rings[i].bytes,protected[j].address,protected[j].bytes)) return false;
+    }
+    return true;
+}
 static bool layout_from_bound(const void *image,size_t n,
     const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out) {
     struct kui_vmu_native_layout variable_layout,uniform_layout;
     bool variable_found=variable_from_bound(image,n,d,&variable_layout);
     bool uniform_found=uniform_from_bound(image,n,d,&uniform_layout);
     if(variable_found==uniform_found) return false;
-    *out=variable_found?variable_layout:uniform_layout;return true;
+    struct kui_vmu_native_layout chosen=variable_found?variable_layout:uniform_layout;bool infile;
+    if(!source_buffers(image,n,d,&chosen,&infile)) return false;
+    chosen.version=infile?KUI_VMU_NATIVE_LAYOUT_INFILE_VERSION:KUI_VMU_NATIVE_LAYOUT_VERSION;
+    *out=chosen;return true;
 }
 
 static bool main_ram_object(uintptr_t address,size_t bytes,uint32_t *physical) {
@@ -398,7 +473,10 @@ bool kui_vmu_native_layout_bind_checked(const struct kui_vmu_native_layout *l,co
     return bind_failure(diag,KUI_VMU_LAYOUT_BIND_SCHEMA,(uint32_t)(uintptr_t)&(field),(field),expect);} while(0)
 #define SPAN(address,bytes,align) do {if(!ram((address),(bytes),(align))) \
     return bind_failure(diag,KUI_VMU_LAYOUT_BIND_SPAN,(address),(bytes),(align));} while(0)
-    SCHEMA(l->version,1u);SCHEMA(l->bytes,sizeof(*l));SCHEMA(d->version,1u);SCHEMA(d->bytes,sizeof(*d));
+    bool infile=l->version==KUI_VMU_NATIVE_LAYOUT_INFILE_VERSION;
+    if(l->version!=KUI_VMU_NATIVE_LAYOUT_VERSION && !infile)
+        return bind_failure(diag,KUI_VMU_LAYOUT_BIND_SCHEMA,(uint32_t)(uintptr_t)&l->version,l->version,KUI_VMU_NATIVE_LAYOUT_VERSION);
+    SCHEMA(l->bytes,sizeof(*l));SCHEMA(d->version,1u);SCHEMA(d->bytes,sizeof(*d));
     SCHEMA(d->family,KUI_VMU_NATIVE_FAMILY_UNIFORM_V1);SCHEMA(d->requirements,KUI_VMU_NATIVE_REQUIREMENTS);
     SCHEMA(out->version,1u);SCHEMA(out->bytes,sizeof(*out));SCHEMA(out->lease_header_bytes,32u);
     bool uniform=l->rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48;
@@ -412,14 +490,23 @@ bool kui_vmu_native_layout_bind_checked(const struct kui_vmu_native_layout *l,co
     SPAN(out->lease_address-out->lease_header_bytes,out->lease_bytes+out->lease_header_bytes,1u);
     SPAN(l->input_array,l->inputs*4u,4u);SPAN(l->tx_base,0x6000u,32u);SPAN(d->manager_initial,0x1100u,4u);
     if(uniform) {SPAN(l->index_array,4u,4u);SPAN(l->input_values[0],0xc020u,4u);SPAN(l->indices[0],0x6020u,4u);}
-    SPAN(l->gun_flag,4u,4u);SPAN(l->timer1_callback,4u,4u);SPAN(l->timer2_callback,4u,4u);
+    SPAN(l->gun_flag,4u,4u);SPAN(l->timer1_callback,8u,4u);SPAN(l->timer2_callback,8u,4u);
+    if(infile && !uniform) {SPAN(l->index_array,l->inputs*4u,4u);}
 #undef SPAN
 #undef SCHEMA
     uint32_t guard=out->lease_address-out->lease_header_bytes,guard_bytes=out->lease_bytes+out->lease_header_bytes;
+    bool tx_inside,any_inside;
+    if(!ring_image_location(d->load_address,d->image_bytes,l->tx_base,0x6000u,&tx_inside) ||
+       (tx_inside && !infile))
+        return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_CONFLICT,l->tx_base,d->load_address,d->image_bytes);
+    any_inside=tx_inside;
+    enum {BLOCK_TX=1,BLOCK_IMAGE=4};
     const uint32_t blocked[][2]={{guard,guard_bytes},{l->tx_base,0x6000u},{d->manager_initial,0x1100u},{d->lock_cell,5u},
-        {d->load_address,d->image_bytes},{l->gun_flag,4u},{l->timer1_callback,4u},{l->timer2_callback,4u}};
+        {d->load_address,d->image_bytes},{l->gun_flag,4u},{l->timer1_callback,8u},{l->timer2_callback,8u},
+        {d->manager_cell,4u}};
     for(unsigned j=0;j<sizeof(blocked)/sizeof(blocked[0]);j++)
-        if(j!=1u && overlaps(l->tx_base,0x6000u,blocked[j][0],blocked[j][1]))
+        if(j!=BLOCK_TX && !(j==BLOCK_IMAGE && infile && tx_inside) &&
+           overlaps(l->tx_base,0x6000u,blocked[j][0],blocked[j][1]))
             return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_CONFLICT,l->tx_base,blocked[j][0],blocked[j][1]);
     /* The reviewed caller passes the original 4-byte-aligned immutable
      * pointer array. The SDK stores an aligned alias in fc8, but its loop
@@ -429,20 +516,36 @@ bool kui_vmu_native_layout_bind_checked(const struct kui_vmu_native_layout *l,co
        l->inputs*4u>d->image_bytes-array_offset)
         return bind_failure(diag,KUI_VMU_LAYOUT_BIND_ARRAY_LOCATION,l->input_array,array_offset,d->image_bytes);
     for(unsigned j=0;j<sizeof(blocked)/sizeof(blocked[0]);j++)
-        if(j!=4u && overlaps(l->input_array,l->inputs*4u,blocked[j][0],blocked[j][1]))
+        if(j!=BLOCK_IMAGE && overlaps(l->input_array,l->inputs*4u,blocked[j][0],blocked[j][1]))
             return bind_failure(diag,KUI_VMU_LAYOUT_BIND_ARRAY_CONFLICT,l->input_array,blocked[j][0],blocked[j][1]);
+    if(infile && !uniform) {
+        uint32_t offset=phys(l->index_array)-phys(d->load_address);
+        if(phys(l->index_array)<phys(d->load_address) || offset>d->image_bytes ||
+           l->inputs*4u>d->image_bytes-offset)
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_ARRAY_LOCATION,l->index_array,offset,d->image_bytes);
+        for(unsigned j=0;j<sizeof(blocked)/sizeof(blocked[0]);j++)
+            if(j!=BLOCK_IMAGE && overlaps(l->index_array,l->inputs*4u,blocked[j][0],blocked[j][1]))
+                return bind_failure(diag,KUI_VMU_LAYOUT_BIND_ARRAY_CONFLICT,l->index_array,blocked[j][0],blocked[j][1]);
+    }
     struct kui_vmu_native_runtime_config c=*out;
     c.rx_layout=l->rx_layout;c.rx_base=l->rx_base;c.gun_flag=l->gun_flag;
     c.timer1_callback=l->timer1_callback;c.timer2_callback=l->timer2_callback;memset(c.rx_slots,0,sizeof(c.rx_slots));
     uint32_t raw[24]={0};
     if(uniform) {
+        bool rx_inside;
+        if(!ring_image_location(d->load_address,d->image_bytes,l->rx_base,0xc000u,&rx_inside) ||
+           (rx_inside && !infile))
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_CONFLICT,l->rx_base,d->load_address,d->image_bytes);
+        any_inside|=rx_inside;
+        if(overlaps(l->rx_base,0xc000u,l->input_array,4u) || overlaps(l->rx_base,0xc000u,l->index_array,4u))
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_CONFLICT,l->rx_base,l->input_array,4u);
         uint32_t offset=phys(l->index_array)-phys(d->load_address);
         if(phys(l->index_array)<phys(d->load_address) || offset>d->image_bytes || d->image_bytes-offset<4u)
             return bind_failure(diag,KUI_VMU_LAYOUT_BIND_ARRAY_LOCATION,l->index_array,offset,d->image_bytes);
         for(unsigned j=0;j<sizeof(blocked)/sizeof(blocked[0]);j++) {
-            if(j!=4u && overlaps(l->index_array,4u,blocked[j][0],blocked[j][1]))
+            if(j!=BLOCK_IMAGE && overlaps(l->index_array,4u,blocked[j][0],blocked[j][1]))
                 return bind_failure(diag,KUI_VMU_LAYOUT_BIND_ARRAY_CONFLICT,l->index_array,blocked[j][0],blocked[j][1]);
-            if(overlaps(l->rx_base,0xc000u,blocked[j][0],blocked[j][1]))
+            if(!(j==BLOCK_IMAGE && infile && rx_inside) && overlaps(l->rx_base,0xc000u,blocked[j][0],blocked[j][1]))
                 return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_CONFLICT,l->rx_base,blocked[j][0],blocked[j][1]);
         }
         if(!read(context,l->input_array,4u,&raw[0]))
@@ -465,15 +568,23 @@ bool kui_vmu_native_layout_bind_checked(const struct kui_vmu_native_layout *l,co
         if(!ram(raw[i],0x820u,4u)) return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_SPAN,raw[i],0x820u,4u);
         uint32_t buffer=((raw[i]+31u)&~31u)|0xa0000000u;
         if(!ram(buffer,0x800u,32u)) return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_SPAN,buffer,0x800u,32u);
+        bool rx_inside;
+        if(!ring_image_location(d->load_address,d->image_bytes,buffer,0x800u,&rx_inside) || (rx_inside && !infile))
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_CONFLICT,buffer,d->load_address,d->image_bytes);
+        any_inside|=rx_inside;
         for(unsigned j=0;j<sizeof(blocked)/sizeof(blocked[0]);j++)
-            if(overlaps(buffer,0x800u,blocked[j][0],blocked[j][1]))
+            if(!(j==BLOCK_IMAGE && infile && rx_inside) && overlaps(buffer,0x800u,blocked[j][0],blocked[j][1]))
                 return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_CONFLICT,buffer,blocked[j][0],blocked[j][1]);
         if(overlaps(buffer,0x800u,l->input_array,l->inputs*4u))
             return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_CONFLICT,buffer,l->input_array,l->inputs*4u);
+        if(infile && overlaps(buffer,0x800u,l->index_array,l->inputs*4u))
+            return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_CONFLICT,buffer,l->index_array,l->inputs*4u);
         for(unsigned j=0;j<i;j++) if(overlaps(buffer,0x800u,c.rx_slots[l->indices[j]],0x800u))
             return bind_failure(diag,KUI_VMU_LAYOUT_BIND_BUFFER_CONFLICT,buffer,c.rx_slots[l->indices[j]],0x800u);
         c.rx_slots[l->indices[i]]=buffer;c.rx_slots[l->indices[i]+24u]=buffer+0x400u;
     }
+    if(infile && !any_inside)
+        return bind_failure(diag,KUI_VMU_LAYOUT_BIND_SCHEMA,(uint32_t)(uintptr_t)&l->version,l->version,KUI_VMU_NATIVE_LAYOUT_VERSION);
     for(unsigned i=0;i<48u;i++) if(c.rx_slots[i]!=l->rx_slots[i])
         return bind_failure(diag,KUI_VMU_LAYOUT_BIND_SLOT_PROVENANCE,d->manager_initial+0xfe8u+4u*i,c.rx_slots[i],l->rx_slots[i]);
     uint32_t value;

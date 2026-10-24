@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Host-only explicit-path cache builder/inspector. No card/device discovery. */
 #include "kui/vmu_native_resolution_cache.h"
+#include "kui/vmu_native_program.h"
+#include "kui/hash.h"
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,14 +51,24 @@ static bool write_new(const char *path,const uint8_t *wire,size_t n) {
     if(!written || !closed) {fprintf(stderr,"Cache write incomplete; discard %s\n",path);return false;}
     return true;
 }
-static void summary(const uint8_t wire[1024],const uint8_t pin[32]) {
+static void summary(const uint8_t wire[1024],const uint8_t pin[32],
+    const uint8_t *source,size_t source_bytes,size_t program_bytes) {
     char image[65],record[65];hex(wire+32u,image);hex(pin,record);
     printf("{\"schema\":\"kui.native.resolution-cache.v1\",\"detector_epoch\":%u,"
         "\"record_bytes\":1024,\"record_digest\":\"%s\",\"image_sha256\":\"%s\","
         "\"image_bytes\":%u,\"load_address\":\"%08x\",\"submit\":\"%08x\","
-        "\"heap_initializer\":\"%08x\",\"exit_family\":%u}\n",
+        "\"heap_initializer\":\"%08x\",\"exit_family\":%u",
         get32(wire+16u),record,image,get32(wire+24u),get32(wire+28u),get32(wire+88u),
         get32(wire+632u),get32(wire+708u));
+    if(source) {
+        uint8_t digest[32];char source_hash[65];struct kui_sha256 hash;
+        kui_sha256_init(&hash);kui_sha256_update(&hash,source,source_bytes);
+        kui_sha256_digest(&hash,digest);hex(digest,source_hash);
+        printf(",\"source_sha256\":\"%s\",\"source_bytes\":%zu,"
+            "\"program_bytes\":%zu,\"discarded_suffix_bytes\":%zu",
+            source_hash,source_bytes,program_bytes,source_bytes-program_bytes);
+    }
+    printf("}\n");
 }
 static int usage(const char *name) {
     fprintf(stderr,"Usage:\n  %s build IMAGE CACHE [LOAD_HEX]\n  %s inspect CACHE\n"
@@ -72,7 +84,7 @@ int main(int argc,char **argv) {
         if(argc!=3) return usage(argv[0]);
         uint8_t *record=read_file(argv[2],sizeof(wire),&bytes);if(!record) return 1;
         bool valid=kui_vmu_native_resolution_cache_record_digest(record,bytes,pin);
-        if(valid) summary(record,pin);else fprintf(stderr,"Cache integrity/schema refused\n");
+        if(valid) summary(record,pin,NULL,0u,0u);else fprintf(stderr,"Cache integrity/schema refused\n");
         free(record);return valid?0:1;
     }
     bool build=!strcmp(argv[1],"build"),verify=!strcmp(argv[1],"verify"),replay=!strcmp(argv[1],"replay");
@@ -85,21 +97,27 @@ int main(int argc,char **argv) {
     }
     if(replay && !parse_hex(argv[4],pin)) return usage(argv[0]);
     uint8_t *image=read_file(argv[2],UINT32_C(0xc00000),&bytes);if(!image) return 1;
+    size_t program_bytes=0u;
+    if(!kui_vmu_native_program_extent(image,bytes,load,&program_bytes) ||
+       !program_bytes || program_bytes>bytes) {
+        fprintf(stderr,"Native executable extent refused this source image\n");
+        free(image);return 1;
+    }
     struct kui_vmu_native_resolution resolution;bool success=false;
     if(build) {
-        success=kui_vmu_native_resolution_cache_build(image,bytes,load,wire,sizeof(wire),&resolution);
+        success=kui_vmu_native_resolution_cache_build(image,program_bytes,load,wire,sizeof(wire),&resolution);
         if(!success) fprintf(stderr,"Complete native discovery refused this executable\n");
         else success=kui_vmu_native_resolution_cache_record_digest(wire,sizeof(wire),pin) && write_new(argv[3],wire,sizeof(wire));
     } else {
         size_t record_bytes;uint8_t *record=read_file(argv[3],sizeof(wire),&record_bytes);
         if(record) {
-            success=replay?kui_vmu_native_resolution_cache_replay(image,bytes,load,record,record_bytes,pin,&resolution):
-                kui_vmu_native_resolution_cache_validate_untrusted(image,bytes,load,record,record_bytes,&resolution);
+            success=replay?kui_vmu_native_resolution_cache_replay(image,program_bytes,load,record,record_bytes,pin,&resolution):
+                kui_vmu_native_resolution_cache_validate_untrusted(image,program_bytes,load,record,record_bytes,&resolution);
             if(success) {memcpy(wire,record,sizeof(wire));success=kui_vmu_native_resolution_cache_record_digest(wire,sizeof(wire),pin);}
             free(record);
         }
         if(!success) fprintf(stderr,"Cache miss/refused; a launcher must run full discovery\n");
     }
-    if(success) summary(wire,pin);
+    if(success) summary(wire,pin,image,bytes,program_bytes);
     free(image);return success?0:1;
 }

@@ -21,9 +21,13 @@ approximated.
 """
 import argparse
 import hashlib
+import json
+from functools import lru_cache
 import os
 from pathlib import Path
 import struct
+import subprocess
+import tempfile
 import sys
 import unittest
 
@@ -37,7 +41,47 @@ RAM_BEGIN, RAM_END = 0x0C000000, 0x0D000000
 WORKER_SPAN, LEASE_BYTES = 0x20000, 0x30000
 OLD_INSTALLER_SP = 0x8CFF0000 - 32
 OPTIONS = argparse.Namespace(build=os.environ.get("KUI_NATIVE_HEAP_BUILD"),
-    **{game: os.environ.get(f"KUI_NATIVE_{game.upper()}_STARTUP") for game in ("ps2", "skies", "sa2", "grandia2", "evolution1")})
+    **{game: os.environ.get(f"KUI_NATIVE_{game.upper()}_STARTUP") for game in ("ps2", "skies", "sa2", "grandia2", "evolution1", "evolution2")})
+
+
+@lru_cache(maxsize=1)
+def _program_verify_tool():
+    directory = tempfile.TemporaryDirectory(prefix="kui-program-verify-")
+    program = Path(directory.name) / "verify"
+    sources = ("tools/vmu_native_resolution_cache_tool.c", "src/core/vmu_native_program.c",
+        "src/core/vmu_native_resolution_cache.c", "src/core/vmu_native_discovery.c",
+        "src/core/vmu_native_layout.c", "src/core/vmu_native_heap.c", "src/core/vmu_native_exit.c",
+        "src/core/vmu_native_patch.c", "src/core/hash.c", "src/core/data.c")
+    subprocess.run([os.environ.get("CC", "cc"), "-std=c11", "-O2", "-I", str(ROOT/"include"),
+                    *[str(ROOT/source) for source in sources], "-o", str(program)],
+                   check=True, capture_output=True)
+    return directory, program
+
+
+def verified_program_image(startup, record):
+    """Use the production extent proof and fresh NVR proof before slicing RAM.
+
+    Raw owner files remain unchanged. The CLI derives any reclaimable suffix
+    using the exact production helper; a matching prefix hash alone cannot
+    authorize truncation. Raw and effective identities are checked separately.
+    """
+    _, program = _program_verify_tool()
+    result = subprocess.run([str(program), "verify", str(Path(startup).resolve()),
+                             str(Path(record).resolve())], check=True, capture_output=True, text=True)
+    proof = json.loads(result.stdout)
+    source, wire = Path(startup).read_bytes(), Path(record).read_bytes()
+    assert len(source) == proof["source_bytes"]
+    assert hashlib.sha256(source).hexdigest() == proof["source_sha256"]
+    count = proof["program_bytes"]
+    assert 0 < count <= len(source) and count == proof["image_bytes"]
+    assert len(source)-count == proof["discarded_suffix_bytes"]
+    image = source[:count]
+    assert hashlib.sha256(image).hexdigest() == proof["image_sha256"]
+    assert len(wire) == 1024 and hashlib.sha256(wire[:992]).digest() == wire[992:]
+    assert wire[992:].hex() == proof["record_digest"]
+    assert count == struct.unpack_from("<I",wire,24)[0]
+    assert hashlib.sha256(image).digest() == wire[32:64]
+    return source, image, proof
 
 
 def signed(value, bits):
@@ -443,7 +487,8 @@ class HeapExecutionTests(unittest.TestCase):
         self.assertEqual(len(wire), 1024)
         self.assertEqual(wire[:8], b"KUINVR01")
         self.assertEqual(hashlib.sha256(wire[:992]).digest(), wire[992:])
-        image = Path(path).read_bytes()
+        source, image, extent = verified_program_image(
+            path, ROOT / "tests/fixtures/native-cache" / f"{slug}.nvr")
         self.assertEqual(hashlib.sha256(image).digest(), wire[32:64])
         self.assertEqual(len(image), struct.unpack_from("<I", wire, 24)[0])
         heap = struct.unpack_from("<18I", wire, 608)
@@ -451,7 +496,7 @@ class HeapExecutionTests(unittest.TestCase):
         initializer, allocate, dispatch, table, sentinel = heap[6], heap[9], heap[11], heap[12], heap[13]
         stage_begin, stage_end, stack, stack_bytes, loads, worker = stage_layout(Path(OPTIONS.build))
         new_sp = stack + stack_bytes - 32
-        model = SH(image)
+        model = SH(source)
         # Protect holes and BSS as well as file-backed stage text/rodata/data.
         model.store_block(stage_begin, bytes([0xA5]) * (stage_end - stage_begin))
         for address, stored, _, _ in loads:
@@ -509,8 +554,8 @@ class HeapExecutionTests(unittest.TestCase):
         model.store_block(old_frame, bytes([0x69]) * 160)
         model.store_block(payload + len(worker), bytes(WORKER_SPAN - len(worker)))
         old_corrupted = model.block(old_frame, 160) != bytes([0x69]) * 160
-        self.assertEqual(old_corrupted, slug in ("skies", "sa2", "evolution1"))
-        if slug in ("skies", "sa2", "evolution1"):
+        self.assertEqual(old_corrupted, slug in ("skies", "sa2", "evolution1", "evolution2"))
+        if slug in ("skies", "sa2", "evolution1", "evolution2"):
             self.assertEqual(physical(payload), 0x0CFD0000)
             self.assertTrue(intersects(old_frame, 160, payload, WORKER_SPAN))
         print(f"Actual {slug} heap: {init_steps} initializer/release + {alloc_steps} allocation instructions; "
@@ -535,13 +580,16 @@ class HeapExecutionTests(unittest.TestCase):
     def test_evolution1(self):
         self.execute("evolution1")
 
+    def test_evolution2(self):
+        self.execute("evolution2")
+
 
 if __name__ == "__main__":
     if not __debug__:
         raise SystemExit("Run actual heap model with Python assertions enabled")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, default=os.environ.get("KUI_NATIVE_HEAP_BUILD"))
-    for game in ("ps2", "skies", "sa2", "grandia2", "evolution1"):
+    for game in ("ps2", "skies", "sa2", "grandia2", "evolution1", "evolution2"):
         parser.add_argument("--" + game, type=Path, default=os.environ.get(f"KUI_NATIVE_{game.upper()}_STARTUP"))
     OPTIONS, remaining = parser.parse_known_args()
     unittest.main(argv=[sys.argv[0], *remaining])

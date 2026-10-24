@@ -5,6 +5,7 @@
  * The stage rehashes the loaded executable and always rebinds live ownership. */
 #include "kui/vmu_native_cache_seed.h"
 #include "kui/vmu_native_resolution_cache.h"
+#include "kui/vmu_native_program.h"
 #include "kui/hash.h"
 
 enum native_cache_result {NATIVE_CACHE_SKIPPED,NATIVE_CACHE_READY,NATIVE_CACHE_CANCELLED};
@@ -108,6 +109,12 @@ static enum native_cache_result native_cache_prepare(const struct kui_game_image
         memcpy(boot+done,sector,take);kui_sha256_update(&sha,sector,take);done+=take;
     }
     kui_sha256_digest(&sha,image_hash);
+    /* The cache filename binds the complete source read above. Its record
+     * describes only the caller-proven live program, matching stage replay.
+     * Do not shorten a source based on a cached record or an arbitrary tail. */
+    size_t program_bytes;
+    if(!kui_vmu_native_program_extent(boot,map->boot_bytes,KUI_RETAIL_EXEC_ADDRESS,
+       &program_bytes)) goto finished;
     char path[120],hex[65];
     for(unsigned i=0;i<32u;i++) snprintf(hex+2u*i,3u,"%02x",image_hash[i]);
     int length=snprintf(path,sizeof(path),"0:/KUI/VMU/native-cache/v%u/%s.nvr",
@@ -118,11 +125,11 @@ static enum native_cache_result native_cache_prepare(const struct kui_game_image
      * kept separate from the record, never passed as an aliased self-hash. */
     bool hit=disk && native_cache_file_read(path,work->wire) &&
         kui_vmu_native_resolution_cache_record_digest(work->wire,sizeof(work->wire),work->digest) &&
-        kui_vmu_native_resolution_cache_replay(boot,map->boot_bytes,KUI_RETAIL_EXEC_ADDRESS,
+        kui_vmu_native_resolution_cache_replay(boot,program_bytes,KUI_RETAIL_EXEC_ADDRESS,
             work->wire,sizeof(work->wire),work->digest,&work->resolution);
     if(!hit) {
         if(native_cache_cancelled(cancel)) {result=NATIVE_CACHE_CANCELLED;goto finished;}
-        if(!kui_vmu_native_resolution_cache_build(boot,map->boot_bytes,KUI_RETAIL_EXEC_ADDRESS,
+        if(!kui_vmu_native_resolution_cache_build(boot,program_bytes,KUI_RETAIL_EXEC_ADDRESS,
             work->wire,sizeof(work->wire),&work->resolution)) goto finished;
         if(native_cache_cancelled(cancel)) {result=NATIVE_CACHE_CANCELLED;goto finished;}
         if(disk && !native_cache_file_publish(path,work->wire,work->compare,cancel)) {

@@ -40,7 +40,7 @@ MODE_CHOICES_RAW_CHAIN={**MODE_CHOICES_HOOKS_ONLY,'raw-chain':5}
 MODE_CHOICES_EVOLUTION_TRACE={**MODE_CHOICES_RAW_CHAIN,'evolution-trace':6}
 CATALOG_SCHEMA='kui.native.resolution-cache.catalog.v1'
 CATALOG_PATH='native-cache/catalog.json'
-GAME_SLUGS={'ps2','skies','sa2','grandia2','evolution1'}
+GAME_SLUGS={'ps2','skies','sa2','grandia2','evolution1','evolution2'}
 
 def cache_codec():
     # Legacy ZIPs intentionally need only the two original shipped codecs.

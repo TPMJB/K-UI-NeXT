@@ -8,7 +8,8 @@ static bool __attribute__((noipa)) native_sdk_coherence_window_valid(void) {
     uint32_t load=native_driver.load_address;
     uint32_t first=at&UINT32_C(0x1fffffff),begin=load&UINT32_C(0x1fffffff);
     if(native_driver.image_bytes!=exec_bytes ||
-       passive_layout.version!=KUI_VMU_NATIVE_LAYOUT_VERSION ||
+       (passive_layout.version!=KUI_VMU_NATIVE_LAYOUT_VERSION &&
+        passive_layout.version!=KUI_VMU_NATIVE_LAYOUT_INFILE_VERSION) ||
        passive_layout.bytes!=sizeof(passive_layout) || (at&1u) ||
        first<begin || first-begin>exec_bytes || exec_bytes-(first-begin)<12u)
         return false;

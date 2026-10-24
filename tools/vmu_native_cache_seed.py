@@ -11,7 +11,7 @@ import struct
 
 SEED_BYTES=1120
 RECORD_BYTES=1024
-DETECTOR_EPOCH=1
+DETECTOR_EPOCH=2
 
 def require(condition,message):
     if not condition:raise ValueError(message)
@@ -43,7 +43,7 @@ def record_metadata(wire,expected_digest=None):
     require(tuple(_word(wire,n) for n in (64,68,72,76,80,84))==
             (1,104,1,image_bytes,load,7) and _word(wire,132) in (12,13) and
             wire[136:168]==wire[32:64],'Native cache driver schema differs')
-    require(tuple(_word(wire,n) for n in (168,172))==(1,440) and
+    require(_word(wire,168) in (1,2) and _word(wire,172)==440 and
             (_word(wire,192),_word(wire,404)) in ((1,12),(0,1)),
             'Native cache layout schema differs')
     require(tuple(_word(wire,n) for n in (608,612,616,620,624,628))==

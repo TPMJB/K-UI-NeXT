@@ -20,7 +20,7 @@ static void refused(const struct kui_vmu_native_passive_config *c) {
     CHECK(!memcmp(before,(const void *)kui_vmu_native_sdk_coherence_state,sizeof(before)));
 }
 int main(int argc,char **argv) {
-    CHECK(argc==6);
+    CHECK(argc==6 || argc==7);
     for(int file=1;file<argc;file++) {
         struct kui_vmu_native_passive_config c,bad;fixture(argv[file],&c);reset();refused(NULL);
         CHECK(kui_vmu_native_sdk_coherence_prepare(&c)==1);
@@ -30,7 +30,7 @@ int main(int argc,char **argv) {
         CHECK(!memcmp(expected,(const void *)kui_vmu_native_sdk_coherence_state,sizeof(expected)));refused(&c);
 #define BAD(field,value) do {reset();bad=c;bad.field=(value);refused(&bad);} while(0)
         BAD(version,0);BAD(bytes,sizeof(c)-4);BAD(driver.version,0);BAD(driver.bytes,0);
-        BAD(driver.family,0);BAD(driver.requirements,0);BAD(layout.version,0);BAD(layout.bytes,0);
+        BAD(driver.family,0);BAD(driver.requirements,0);BAD(layout.version,0);BAD(layout.version,KUI_VMU_NATIVE_LAYOUT_INFILE_VERSION+1u);BAD(layout.bytes,0);
         BAD(layout.rx_layout,2);BAD(driver.lock_cell,0x8d000000u);BAD(driver.lock_cell,c.driver.lock_cell+1u);
         BAD(driver.manager_cell,0x8d000000u);BAD(driver.manager_initial,0x8cfff000u);
         BAD(driver.initializer,0xfffffffeu);BAD(driver.initializer,c.driver.initializer+2u);

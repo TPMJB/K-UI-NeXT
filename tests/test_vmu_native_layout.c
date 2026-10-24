@@ -76,8 +76,8 @@ static void binding_tests(void) {
     CHECK(!kui_vmu_native_layout_bind_checked(&l,&d,read_memory,NULL,&c,&diag));
     CHECK(diag.code==KUI_VMU_LAYOUT_BIND_INPUT_VALUE && diag.address==l.input_array &&
         diag.value==(l.input_values[0]^32u) && diag.expected==l.input_values[0]);CHECK(!memcmp(&c,&before,sizeof(c)));
-    synthetic(&d,&l,&c);l.version=2u;CHECK(!kui_vmu_native_layout_bind_checked(&l,&d,read_memory,NULL,&c,&diag));
-    CHECK(diag.code==KUI_VMU_LAYOUT_BIND_SCHEMA && diag.value==2u && diag.expected==1u);
+    synthetic(&d,&l,&c);l.version=3u;CHECK(!kui_vmu_native_layout_bind_checked(&l,&d,read_memory,NULL,&c,&diag));
+    CHECK(diag.code==KUI_VMU_LAYOUT_BIND_SCHEMA && diag.value==3u && diag.expected==1u);
     synthetic(&d,&l,&c);put(d.manager_initial+0xfc4u,l.tx_base+32u);
     CHECK(!kui_vmu_native_layout_bind_checked(&l,&d,read_memory,NULL,&c,&diag));
     CHECK(diag.code==KUI_VMU_LAYOUT_BIND_TX_VALUE && diag.address==d.manager_initial+0xfc4u &&
@@ -259,10 +259,19 @@ static void image_tests(const char *path) {
         CHECK(!kui_vmu_native_layout_discover(p,n,&d,&l));
         CHECK(!kui_vmu_native_discover_layout(p,n,0x8c010000u,&coupled,&coupled_layout));
     }
-    /* A second otherwise genuine TMU1 dispatch candidate is ambiguous. */
-    /* Reuse a complete dispatch at a four-byte-aligned displacement inside
-     * the image while retaining identical PC-relative literal offsets. */
+    /* An unregistered copied dispatcher is inert data. A second candidate
+     * becomes ambiguous only when its VBR registration names that copy. */
     memcpy(p,original,n);memcpy(p+0x200u,p+0x2abf84u,0x100u);
+    CHECK(kui_vmu_native_discover(p,n,0x8c010000u,&d)==KUI_VMU_NATIVE_RESOLVED);
+    CHECK(kui_vmu_native_layout_discover(p,n,&d,&l));
+    CHECK(l.timer1_callback==0x0c8c1be8u && l.timer2_callback==0x0c8c1bf0u);
+    CHECK(kui_vmu_native_discover_layout(p,n,0x8c010000u,&coupled,&coupled_layout));
+    memcpy(p,original,n);memcpy(p+0x100u,p+0x2abe84u,0x200u);
+    size_t pc=0x156u;uint16_t op=(uint16_t)(p[pc]|(uint16_t)p[pc+1u]<<8);
+    CHECK((op&0xff00u)==0xd200u);
+    size_t handler_slot=((pc+4u)&~3u)+4u*(op&255u);CHECK(handler_slot>=0x100u && handler_slot+4u<=0x300u);
+    uint32_t copied_handler=0x8c010200u;
+    for(unsigned i=0;i<4u;i++) p[handler_slot+i]=(uint8_t)(copied_handler>>(8u*i));
     CHECK(kui_vmu_native_discover(p,n,0x8c010000u,&d)==KUI_VMU_NATIVE_RESOLVED);
     CHECK(!kui_vmu_native_layout_discover(p,n,&d,&l));
     CHECK(!kui_vmu_native_discover_layout(p,n,0x8c010000u,&coupled,&coupled_layout));
@@ -284,9 +293,9 @@ static void uniform_image_tests(const char *path) {
         (physical(l.tx_base)<image_end && image_begin<physical(l.tx_base)+0x6000u);
     struct kui_vmu_native_layout_diagnostic diag;
     bool bound=kui_vmu_native_layout_bind_checked(&l,&d,read_memory,NULL,&config,&diag);
-    CHECK(bound!=image_conflict);
-    if(bound) CHECK(config.rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48 && !memcmp(config.rx_slots,l.rx_slots,sizeof(l.rx_slots)));
-    else CHECK(diag.code==KUI_VMU_LAYOUT_BIND_BUFFER_CONFLICT);
+    CHECK(l.version==(image_conflict?KUI_VMU_NATIVE_LAYOUT_INFILE_VERSION:KUI_VMU_NATIVE_LAYOUT_VERSION));
+    CHECK(bound);
+    CHECK(config.rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48 && !memcmp(config.rx_slots,l.rx_slots,sizeof(l.rx_slots)));
     /* Resolve anew after each mutation: the witnesses, rather than a stale
      * outer hash, must reject changed initializer/constructor/root transport. */
     uint32_t pc=d.initializer+108u;uint16_t code=sh_word(pc);

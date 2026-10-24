@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* Exercise the actual temporary installer against all five owner-supplied
+/* Exercise the actual temporary installer against owner-supplied
  * SDK images and cache metadata, including both initializer replay families. */
 #define _GNU_SOURCE
 #define KUI_VMU_NATIVE_PERSISTENT_PROBE 1
@@ -7,6 +7,7 @@
 #define KUI_VMU_NATIVE_CACHED_CODE 1
 #include "kui/vmu_native_passive.h"
 #include "kui/vmu_native_patch.h"
+#include "kui/vmu_native_program.h"
 #include "kui/hash.h"
 #include <assert.h>
 #include <stdio.h>
@@ -38,7 +39,13 @@ static void kui_native_passive_publish(uint32_t begin,uint32_t end) {
 static struct kui_vmu_native_passive_exports exports;
 static uint32_t table_words[10],state_words[12];
 static uint8_t *original;
-static const char *const names[]={"evolution1","ps2","skies","sa2","grandia2"};
+static size_t source_bytes;
+static uint8_t source_digest[32];
+static void digest_bytes(const void *bytes,size_t count,uint8_t digest[32]) {
+    struct kui_sha256 hash;kui_sha256_init(&hash);
+    kui_sha256_update(&hash,bytes,count);kui_sha256_digest(&hash,digest);
+}
+static const char *const names[]={"evolution1","ps2","skies","sa2","grandia2","evolution2"};
 static uint32_t *table(void) {return (void *)(uintptr_t)(DEST+0x80u);}
 static uint32_t *state(void) {return (void *)(uintptr_t)(DEST+BYTES);}
 static void reset(void) {
@@ -71,8 +78,15 @@ static void map_ram(uint32_t at) {
 static void load(unsigned game,const char *path) {
     FILE *f=fopen(path,"rb");assert(f);assert(!fseek(f,0,SEEK_END));
     long bytes=ftell(f);assert(bytes>0 && bytes<=0xc00000);rewind(f);
-    exec_bytes=(uint32_t)bytes;original=malloc(exec_bytes);assert(original);
-    assert(fread(original,1,exec_bytes,f)==exec_bytes);assert(!fclose(f));
+    source_bytes=(size_t)bytes;original=malloc(source_bytes);assert(original);
+    assert(fread(original,1,source_bytes,f)==source_bytes);assert(!fclose(f));
+    /* The owner file remains the raw source. Only its independently proved
+     * loaded-program prefix participates in metadata binding and RAM copies. */
+    digest_bytes(original,source_bytes,source_digest);
+    size_t program_bytes=SIZE_MAX;
+    assert(kui_vmu_native_program_extent(original,source_bytes,KUI_RETAIL_EXEC_ADDRESS,&program_bytes));
+    assert(program_bytes>0u && program_bytes<=source_bytes && program_bytes<=UINT32_MAX);
+    exec_bytes=(uint32_t)program_bytes;
     char fixture[128];assert(snprintf(fixture,sizeof(fixture),"tests/fixtures/native-cache/%s.nvr",names[game])>0);
     f=fopen(fixture,"rb");assert(f);uint8_t wire[1024];
     assert(fread(wire,1,sizeof(wire),f)==sizeof(wire));assert(fgetc(f)==EOF);assert(!fclose(f));
@@ -80,9 +94,11 @@ static void load(unsigned game,const char *path) {
     memcpy(&passive_layout,wire+168u,sizeof(passive_layout));
     memcpy(&native_heap,wire+608u,sizeof(native_heap));memcpy(&native_exits,wire+700u,sizeof(native_exits));
     assert(native_driver.image_bytes==exec_bytes && native_driver.load_address==KUI_RETAIL_EXEC_ADDRESS);
-    struct kui_sha256 hash;uint8_t digest[32];kui_sha256_init(&hash);
-    kui_sha256_update(&hash,original,exec_bytes);kui_sha256_digest(&hash,digest);
+    assert(native_heap.image_bytes==exec_bytes && native_heap.load==KUI_RETAIL_EXEC_ADDRESS);
+    assert(native_exits.image_bytes==exec_bytes && native_exits.load==KUI_RETAIL_EXEC_ADDRESS);
+    uint8_t digest[32];digest_bytes(original,exec_bytes,digest);
     assert(!memcmp(digest,native_driver.image_sha256,sizeof(digest)));
+    if(program_bytes!=source_bytes) assert(memcmp(source_digest,digest,sizeof(digest)));
     const uint32_t words[10]={UINT32_C(0x4b545231),2u,40u,
         UINT32_C(0x8c700100),UINT32_C(0x8c700200),UINT32_C(0x8c700300),UINT32_C(0x8c700400),
         UINT32_C(0xac700500),UINT32_C(0xac700600),DEST+BYTES};
@@ -99,9 +115,9 @@ static void load(unsigned game,const char *path) {
     call_slot=((load+4u)&~3u)+4u*(instruction&255u);
 }
 int main(int argc,char **argv) {
-    assert(argc==6);map_ram(KUI_RETAIL_EXEC_ADDRESS);map_ram(KUI_RETAIL_EXEC_ADDRESS|UINT32_C(0x20000000));
+    assert(argc==6 || argc==7);map_ram(KUI_RETAIL_EXEC_ADDRESS);map_ram(KUI_RETAIL_EXEC_ADDRESS|UINT32_C(0x20000000));
     unsigned refusals=0u,interiors=0u;
-    for(unsigned game=0;game<5u;game++) {
+    for(unsigned game=0;game<(unsigned)argc-1u;game++) {
         load(game,argv[game+1u]);reset();assert(native_sdk_coherence_window_valid());
         assert(native_sdk_coherence_cached_admit());
         assert(native_sdk_coherence_install(&exports,DEST,BYTES)==1 && patches==1u && publishes==1u);
@@ -146,8 +162,10 @@ int main(int argc,char **argv) {
                 ((passive_layout.initializer+8u)&~3u)+4u*0x3eu,passive_layout.initializer+10u+2u*0x71u};
             for(unsigned i=0;i<3u;i++) {reset();*(uint8_t *)(uintptr_t)literals[i]^=1u;refused();++refusals;}
         }
-        printf("Cold SDK installer accepted %s %s initializer %08x; exact prefix, private state and P2 target\n",
-            names[game],state_words[9]?"variable":"uniform",passive_layout.initializer);
+        printf("Cold SDK installer accepted %s %s initializer %08x; source %zuB/program %uB; exact prefix, private state and P2 target\n",
+            names[game],state_words[9]?"variable":"uniform",passive_layout.initializer,source_bytes,exec_bytes);
+        uint8_t source_after[32];digest_bytes(original,source_bytes,source_after);
+        assert(!memcmp(source_after,source_digest,sizeof(source_after)));
         free(original);
     }
     printf("Cold SDK installer: %u mutation refusals before any write; %u untouched initializer interior pointers preserved\n",refusals,interiors);

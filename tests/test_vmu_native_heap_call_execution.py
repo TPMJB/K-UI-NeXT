@@ -3,7 +3,7 @@
 """Execute external original caller expressions and the patched hook transport.
 
 No retail instruction bytes are embedded. Existing complete cache records bind
-five inputs; JGR's partial static metadata is evidence only, never a cache or
+the reviewed inputs; JGR's partial static metadata is evidence only, never a cache or
 launch admission. This independent SH model executes real input words, checking
 both original and replacement target transport under unrelated caller states.
 """
@@ -16,10 +16,11 @@ import struct
 import sys
 import unittest
 
-from test_vmu_native_heap_execution import SH, MASK, physical, signed
+from test_vmu_native_heap_execution import SH, MASK, physical, signed, verified_program_image
+from sh4_delay_slots import validate_delay_slot
 
 ROOT = Path(__file__).resolve().parents[1]
-GAMES = ("ps2", "skies", "sa2", "grandia2", "evolution1", "jgr")
+GAMES = ("ps2", "skies", "sa2", "grandia2", "evolution1", "evolution2", "jgr")
 OPTIONS = argparse.Namespace(output=None, **{game: os.environ.get(
     f"KUI_NATIVE_{game.upper()}_STARTUP") for game in GAMES})
 RESULTS = []
@@ -62,7 +63,9 @@ class CallerSH(SH):
                 assert op & 0xF0FF == 0x400B
                 captured_target = self.r[(op >> 8) & 15]
                 self.pr = call + 4
-                self.plain(self.read(pc + 2, 2), pc + 2)
+                slot_word = self.read(pc + 2, 2)
+                validate_delay_slot(slot_word,pc)
+                self.plain(slot_word,pc + 2)
                 assert selected_seen == 1
                 assert captured_target == target, (hex(captured_target), hex(target))
                 assert (self.r[4], self.r[5], self.pr) == (first, count, call + 4)
@@ -108,7 +111,13 @@ class CallerExecution(unittest.TestCase):
         path = getattr(OPTIONS, game)
         if not path:
             self.skipTest(f"Supply --{game} or KUI_NATIVE_{game.upper()}_STARTUP")
-        image = Path(path).read_bytes()
+        source = Path(path).read_bytes()
+        extent = None
+        if game == "jgr":
+            image = source
+        else:
+            source, image, extent = verified_program_image(
+                path, ROOT / "tests/fixtures/native-cache" / f"{game}.nvr")
         load, slot, target, call = metadata(game, image)
         self.assertEqual(struct.unpack_from("<I", image, physical(slot) - physical(load))[0], target)
         # The production decoder grants no caller state. Execute every bounded
@@ -137,6 +146,9 @@ class CallerExecution(unittest.TestCase):
         self.assertTrue(accepted, f"No independent original/patched argument transport for {game}")
         start, trials = accepted[0]
         result = dict(game=game, image_sha256=hashlib.sha256(image).hexdigest(),
+                      image_bytes=len(image), source_sha256=hashlib.sha256(source).hexdigest(),
+                      source_bytes=len(source), discarded_suffix_bytes=len(source)-len(image),
+                      program_extent_production_verified=extent is not None,
                       start=f"0x{start:08x}", call=f"0x{call['call']:08x}",
                       selected=f"0x{call['load']:08x}", slot=f"0x{slot:08x}",
                       original_target=f"0x{target:08x}", hook_target=f"0x{HOOK:08x}",

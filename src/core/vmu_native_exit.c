@@ -74,9 +74,12 @@ static bool exit_pair(const uint8_t *p,size_t bytes,uint32_t load,size_t at,uint
         {16,0x8801},{18,0x8b02},{22,0x412b},{24,0x0009},{30,0x2012},
         {34,0x6312},{36,0x432b},{38,0xe403},{42,0x6212},{44,0x422b},{46,0xe401},
         {48,0x4f22},{52,0x430b},{54,0x0009},{58,0xe402},{60,0x6032},
-        {62,0x402b},{64,0x4f26},{66,0x0000}
+        {62,0x402b},{64,0x4f26}
     };
-    return bytes-at>=0x60u && WORDS(p,at,w) &&
+    /* The halfword after the unconditional JMP and its delay slot is
+     * linker fill. Admit only the two canonical fill values; no executable
+     * instruction or literal witness is optional. */
+    return bytes-at>=0x60u && (u16(p+at+66u)==0u || u16(p+at+66u)==UINT16_C(0xffff)) && WORDS(p,at,w) &&
         value_at(p,bytes,load,at,3u,at+0x44u,UINT32_C(0x8c0080fc)) &&
         value_at(p,bytes,load,at+10u,2u,at+0x48u,UINT32_C(0x8c0080fe)) &&
         value_at(p,bytes,load,at+20u,1u,at+0x4cu,UINT32_C(0x8c008300)) &&

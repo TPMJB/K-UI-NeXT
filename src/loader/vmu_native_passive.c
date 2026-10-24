@@ -663,7 +663,8 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
     if(!c || c->version!=1u || c->bytes!=sizeof(*c) || state.armed || state.pending ||
        c->driver.version!=1u || c->driver.bytes!=sizeof(c->driver) ||
        c->driver.family!=KUI_VMU_NATIVE_FAMILY_UNIFORM_V1 || c->driver.requirements!=KUI_VMU_NATIVE_REQUIREMENTS ||
-       c->layout.version!=1u || c->layout.bytes!=sizeof(c->layout) ||
+       (c->layout.version!=KUI_VMU_NATIVE_LAYOUT_VERSION &&
+        c->layout.version!=KUI_VMU_NATIVE_LAYOUT_INFILE_VERSION) || c->layout.bytes!=sizeof(c->layout) ||
        c->layout.tx_base!=c->tx_base || c->layout.rx_layout>KUI_VMU_NATIVE_RX_EXPLICIT48 ||
        c->lease.lease_bytes!=UINT32_C(0x30000) ||
        !ram(c->lease.payload,c->lease.lease_bytes,32u) ||

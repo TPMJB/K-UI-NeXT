@@ -180,7 +180,7 @@ class NativePersonalizationTests(unittest.TestCase):
 def record_fixture(slug='ps2'):
     """Synthetic canonical metadata; never a production game certificate."""
     wire=bytearray(1024);wire[:8]=b'KUINVR01'
-    values={8:1,12:1024,16:1,20:1,24:1024,28:0x8c010000,
+    values={8:1,12:1024,16:cache.DETECTOR_EPOCH,20:1,24:1024,28:0x8c010000,
         64:1,68:104,72:1,76:1024,80:0x8c010000,84:7,132:12,
         168:1,172:440,192:1,404:12,608:1,612:72,616:1,620:1,
         624:1024,628:0x8c010000,700:1,704:48,708:1,712:0x8c010000,716:1024,720:3}
@@ -199,8 +199,8 @@ class NativeCachePersonalizationTests(NativePersonalizationTests):
         self.manifest.update(module_bytes=len(self.module),module_sha256=tool.sha(self.module),
             cache_seed_module_offset=self.seed_offset,cache_seed_bytes=1120,
             cache_seed_sha256=tool.sha(cache.template_seed()),cache_record_bytes=1024,
-            cache_detector_epoch=1,cache_catalog_path=tool.CATALOG_PATH)
-        self.catalog={'schema':tool.CATALOG_SCHEMA,'source_commit':COMMIT,'detector_epoch':1,'games':[]}
+            cache_detector_epoch=cache.DETECTOR_EPOCH,cache_catalog_path=tool.CATALOG_PATH)
+        self.catalog={'schema':tool.CATALOG_SCHEMA,'source_commit':COMMIT,'detector_epoch':cache.DETECTOR_EPOCH,'games':[]}
         directory=self.package/'native-cache';directory.mkdir()
         for slug,title in (('ps2','Power Stone 2'),('skies','Skies of Arcadia'),('sa2','Sonic Adventure 2')):
             wire=record_fixture(slug);metadata=cache.decode_record(wire)
@@ -270,7 +270,7 @@ class NativeCachePersonalizationTests(NativePersonalizationTests):
         original=json.loads(json.dumps(self.catalog))
         for mutate in (
             lambda p:p.update(source_commit='f'*40),lambda p:p.update(detector_epoch=True),
-            lambda p:p.update(detector_epoch=2),lambda p:p['games'][0].update(slug='recv'),
+            lambda p:p.update(detector_epoch=cache.DETECTOR_EPOCH+1),lambda p:p['games'][0].update(slug='recv'),
             lambda p:p['games'].append(p['games'][0]),lambda p:p['games'][0].update(record_path='../ps2.nvr'),
             lambda p:p['games'][0].update(record_digest='0'*64),lambda p:p['games'][0].update(record_sha256='0'*64),
             lambda p:p['games'][0].update(image_sha256='0'*64),lambda p:p['games'][0].update(image_bytes=True),
@@ -300,7 +300,7 @@ class NativeCachePersonalizationTests(NativePersonalizationTests):
             with self.subTest(missing=field),self.assertRaises(ValueError):self.install(game='ps2')
         self.save_package()
         for changes in ({'cache_seed_module_offset':True},{'cache_seed_bytes':True},
-            {'cache_record_bytes':1023},{'cache_detector_epoch':2},
+            {'cache_record_bytes':1023},{'cache_detector_epoch':cache.DETECTOR_EPOCH+1},
             {'cache_seed_module_offset':self.manifest['profile_module_offset']},
             {'cache_seed_module_offset':self.seed_offset+4},{'cache_seed_sha256':'0'*64}):
             self.manifest_write(**changes)

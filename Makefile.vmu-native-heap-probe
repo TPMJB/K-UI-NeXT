@@ -6,6 +6,6 @@ override STAGE_SRC := src/loader/vmu_native_heap_probe_stage.c src/loader/sd_rea
  src/loader/retail_sd.c src/loader/retail_storage.c src/loader/sci_sd_bus.c \
  src/core/ata.c src/dreamcast/ata_bus.c src/loader/minic.c src/core/retail_image.c \
  src/loader/retail_display.c src/core/hash.c src/core/retail_observe.c \
- src/core/vmu_native_discovery.c src/core/vmu_native_heap.c src/core/vmu_native_stage_placement.c
+ src/core/vmu_native_discovery.c src/core/vmu_native_program.c src/core/vmu_native_heap.c src/core/vmu_native_stage_placement.c
 include Makefile.vmu-toy
 FLAGS += -DKUI_VMU_NATIVE_HEAP_PROBE=1

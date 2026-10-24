@@ -57,7 +57,7 @@ SDK_COHERENCE_PREPARE = "_kui_vmu_native_sdk_coherence_prepare"
 # typed object/function, local source owner and interior offset remain in the
 # signature. This admits relocation/layout changes, not new code or targets.
 PREPARED_PINS = {
- '_kui_vmu_native_sdk_coherence_prepare': ('090c9b38268398d00522927bae40ec03e4f869f516d71be46cc4635c8eec8bef', 432),
+ '_kui_vmu_native_sdk_coherence_prepare': ('52ca590c4ac48e91620888af088aa871c0dfa4476cc386a73a828fc4af94ccbc', 436),
  '_kui_vmu_native_fault_capture_install': ('db26024d38eaa6e0c440fdadf83df04c43a91a653ab21637e427502550726afb', 560),
  '_read_heap': ('b102f5d502f2a2e45998b1555e7bd6e56d2b7048059ebb9bb37ed6ee415a58cd', 104),
  '_stack_valid': ('f5e81a00f19db27641f67958161041e8a865061f49fd71fbe114b165b2666db6', 116),
@@ -77,7 +77,7 @@ PREPARED_PINS = {
  '_hook_word': ('69410002bf135878c32df63d2459603428947eadc760aa6309775f82b8801f9c', 132),
  '_prepare_hook_entry': ('e46707ed62da6217391c4aee61d074980abd67826655c1b508159548cabefd74', 228),
  '_kui_vmu_native_lifetime_prepare': ('4691642d40ae532e2f81cfe46c3f81a019412c0da0e43fb4f7913d4a44b87312', 640),
- '_kui_vmu_native_passive_arm': ('08ed7ceacda72c0638418b934d981a910d1df1fbe0d576c472029a8f364bff96', 2048),
+ '_kui_vmu_native_passive_arm': ('142d471fc213f0da44ae1687c59bed39e28adb84300fa8b557e3cc5827c85e5a', 2052),
  '_persistent_storage_guard': ('d230251892a758f65469e9cb692703a0270511756e1fbdc94cc28e04472a15fe', 396),
  '_persistent_lease': ('8658f150d0d4811335e46332a9a075f199fa8219edb5ccf1730223a4e34d78e3', 148),
  '_kui_vmu_native_passive_submit': ('7d224a37aa183eaec433ad49a62232f05ae253bfede8ad31584b4bc109358245', 1380),

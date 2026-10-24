@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/vmu_native_resolution_cache.h"
+#include "kui/vmu_native_program.h"
 #include "kui/hash.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,7 +53,7 @@ static void codec_and_trust_tests(void) {
         sizeof(source.call)==20u && sizeof(source.exits)==48u && sizeof(source)==684u);
     CHECK(kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
     memcpy(original,wire,sizeof(wire));CHECK(!memcmp(wire,"KUINVR01",8u));
-    CHECK(get32(wire+8u)==1u && get32(wire+12u)==1024u && get32(wire+16u)==1u && get32(wire+20u)==1u);
+    CHECK(get32(wire+8u)==1u && get32(wire+12u)==1024u && get32(wire+16u)==KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH && get32(wire+20u)==1u);
     CHECK(get32(wire+24u)==sizeof(image) && get32(wire+28u)==load && !memcmp(wire+32u,source.driver.image_sha256,32u));
     CHECK(get32(wire+64u)==source.driver.version && get32(wire+136u)==get32(source.driver.image_sha256));
     CHECK(get32(wire+168u)==source.layout.version && get32(wire+604u)==source.layout.input_values[23]);
@@ -180,10 +181,25 @@ static void actual_tests(const char *path) {
         CHECK(!kui_vmu_native_resolution_cache_build(image,n,load,second,sizeof(second),&out));
         for(unsigned j=0;j<sizeof(second);j++) CHECK(second[j]==0xa5u);
     }
-    /* A duplicated genuine timer candidate must still be ambiguous on first
-     * build, and an old record must miss after the executable changes. */
+    /* A copied but unregistered timer body has no authority over VBR. The
+     * unique immutable registration keeps the original callbacks selected;
+     * the changed source must still miss the previous independently pinned
+     * cache. Ambiguous registrations are covered by the timer-family tests. */
     memcpy(image,original,n);memcpy(image+0x200u,image+0x2abf84u,0x100u);
     CHECK(!replay(image,n,load,wire,sizeof(wire),pin,&out));
+    CHECK(kui_vmu_native_resolution_cache_build(image,n,load,second,sizeof(second),&out));
+    CHECK(out.layout.timer1_callback==fresh.layout.timer1_callback &&
+        out.layout.timer2_callback==fresh.layout.timer2_callback);
+    CHECK(out.driver.submit==fresh.driver.submit && out.heap.initializer==fresh.heap.initializer);
+    CHECK(memcmp(out.driver.image_sha256,fresh.driver.image_sha256,32u));
+    /* Give the clone its own exact VBR self-registration: unlike an inert
+     * body copy, this creates a second supported active timer binding. */
+    memcpy(image,original,n);memcpy(image+0x100u,image+0x2abe84u,0x200u);
+    uint16_t registration=(uint16_t)(image[0x156u]|(uint16_t)image[0x157u]<<8);
+    CHECK((registration&0xf000u)==0xd000u);
+    size_t registration_slot=((0x156u+4u)&~3u)+4u*(registration&255u);
+    CHECK(registration_slot+4u<=0x300u);
+    for(unsigned i=0;i<4u;i++) image[registration_slot+i]=(uint8_t)((load+0x200u)>>(8u*i));
     CHECK(!kui_vmu_native_resolution_cache_build(image,n,load,second,sizeof(second),&out));
     memcpy(image,original,n);CHECK(replay(image,n,load,wire,sizeof(wire),pin,&out));
     CHECK(!memcmp(image,original,n));free(original);free(image);
@@ -191,19 +207,35 @@ static void actual_tests(const char *path) {
 static void generic_actual_tests(const char *path) {
     FILE *f=fopen(path,"rb");CHECK(f);CHECK(!fseek(f,0,SEEK_END));long length=ftell(f);CHECK(length>0 && length<=0xc00000);rewind(f);
     size_t n=(size_t)length;uint8_t *image=malloc(n);CHECK(image);CHECK(fread(image,1,n,f)==n);CHECK(!fclose(f));
-    uint8_t wire[1024],again[1024],pin[32];struct kui_vmu_native_resolution fresh,out;
-    CHECK(kui_vmu_native_resolution_cache_build(image,n,load,wire,sizeof(wire),&fresh));
+    uint8_t wire[1024],again[1024],pin[32],source_hash[32],program_hash[32],after_hash[32];
+    struct kui_vmu_native_resolution fresh,out;size_t program_bytes=0u;
+    digest(image,n,source_hash);
+    CHECK(kui_vmu_native_program_extent(image,n,load,&program_bytes));
+    CHECK(program_bytes && program_bytes<=n && (program_bytes==n || n-program_bytes==0x8000u));
+    digest(image,program_bytes,program_hash);
+    CHECK(kui_vmu_native_resolution_cache_build(image,program_bytes,load,wire,sizeof(wire),&fresh));
+    CHECK(fresh.driver.image_bytes==program_bytes && !memcmp(fresh.driver.image_sha256,program_hash,32u));
+    CHECK(get32(wire+24u)==program_bytes && !memcmp(wire+32u,program_hash,32u));
     CHECK(kui_vmu_native_resolution_cache_record_digest(wire,sizeof(wire),pin));
-    CHECK(replay(image,n,load,wire,sizeof(wire),pin,&out));CHECK(!memcmp(&fresh,&out,sizeof(fresh)));
-    CHECK(strict(image,n,load,wire,sizeof(wire),&out));CHECK(!memcmp(&fresh,&out,sizeof(fresh)));
-    CHECK(kui_vmu_native_resolution_cache_build(image,n,load,again,sizeof(again),NULL));CHECK(!memcmp(wire,again,sizeof(wire)));
+    CHECK(replay(image,program_bytes,load,wire,sizeof(wire),pin,&out));CHECK(!memcmp(&fresh,&out,sizeof(fresh)));
+    CHECK(strict(image,program_bytes,load,wire,sizeof(wire),&out));CHECK(!memcmp(&fresh,&out,sizeof(fresh)));
+    CHECK(kui_vmu_native_resolution_cache_build(image,program_bytes,load,again,sizeof(again),NULL));CHECK(!memcmp(wire,again,sizeof(wire)));
+    if(program_bytes!=n) {
+        /* Live-image APIs retain their explicit extent contract: only the
+         * source-boundary helper has authority to discard the proven IP. */
+        CHECK(!replay(image,n,load,wire,sizeof(wire),pin,&out));
+        CHECK(!kui_vmu_native_resolution_cache_build(image,n,load,again,sizeof(again),NULL));
+    }
     CHECK((fresh.layout.rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48 && fresh.layout.inputs==1u) ||
         (fresh.layout.rx_layout==KUI_VMU_NATIVE_RX_EXPLICIT48 && fresh.layout.inputs==12u));
     CHECK(fresh.exits.family>=KUI_VMU_NATIVE_EXIT_FAMILY && fresh.exits.family<=KUI_VMU_NATIVE_EXIT_PAIR_ONLY);
     CHECK(fresh.exits.count==(fresh.exits.family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY?2u:3u));
-    image[n-1u]^=1u;CHECK(!replay(image,n,load,wire,sizeof(wire),pin,&out));
-    printf("  Complete cache corpus: %s layout=%u inputs=%u exit-family=%u\n",path,
-        fresh.layout.rx_layout,fresh.layout.inputs,fresh.exits.family);
+    digest(image,n,after_hash);CHECK(!memcmp(source_hash,after_hash,32u));
+    image[program_bytes-1u]^=1u;CHECK(!replay(image,program_bytes,load,wire,sizeof(wire),pin,&out));
+    char source_hex[65],program_hex[65];kui_hex(source_hash,32u,source_hex);kui_hex(program_hash,32u,program_hex);
+    printf("  Complete cache corpus: %s layout=%u inputs=%u exit-family=%u source-bytes=%zu program-bytes=%zu "
+        "discarded-suffix-bytes=%zu source-sha256=%s image-sha256=%s\n",path,
+        fresh.layout.rx_layout,fresh.layout.inputs,fresh.exits.family,n,program_bytes,n-program_bytes,source_hex,program_hex);
     free(image);
 }
 int main(int argc,char **argv) {

@@ -17,7 +17,8 @@ int kui_vmu_native_sdk_coherence_prepare(const struct kui_vmu_native_passive_con
        c->driver.version!=KUI_VMU_NATIVE_DISCOVERY_VERSION || c->driver.bytes!=sizeof(c->driver) ||
        c->driver.family!=KUI_VMU_NATIVE_FAMILY_UNIFORM_V1 ||
        c->driver.requirements!=KUI_VMU_NATIVE_REQUIREMENTS ||
-       c->layout.version!=KUI_VMU_NATIVE_LAYOUT_VERSION || c->layout.bytes!=sizeof(c->layout) ||
+       (c->layout.version!=KUI_VMU_NATIVE_LAYOUT_VERSION &&
+        c->layout.version!=KUI_VMU_NATIVE_LAYOUT_INFILE_VERSION) || c->layout.bytes!=sizeof(c->layout) ||
        c->layout.rx_layout>KUI_VMU_NATIVE_RX_EXPLICIT48 ||
        !ram(c->driver.load_address,c->driver.image_bytes,4u) ||
        !ram(c->driver.lock_cell,5u,4u) || !ram(c->driver.manager_cell,4u,4u) ||

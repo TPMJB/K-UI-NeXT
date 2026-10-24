@@ -89,7 +89,8 @@ static bool schema(const struct kui_vmu_native_resolution *r) {
         d->family==KUI_VMU_NATIVE_FAMILY_UNIFORM_V1 && d->requirements==KUI_VMU_NATIVE_REQUIREMENTS &&
         d->image_bytes>=0x300u && d->image_bytes<=UINT32_C(0xc00000) &&
         (d->gate_register==12u || d->gate_register==13u) &&
-        r->layout.version==KUI_VMU_NATIVE_LAYOUT_VERSION && r->layout.bytes==sizeof(r->layout) &&
+        (r->layout.version==KUI_VMU_NATIVE_LAYOUT_VERSION ||
+         r->layout.version==KUI_VMU_NATIVE_LAYOUT_INFILE_VERSION) && r->layout.bytes==sizeof(r->layout) &&
         ((r->layout.rx_layout==KUI_VMU_NATIVE_RX_EXPLICIT48 && r->layout.inputs==12u) ||
          (r->layout.rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48 && r->layout.inputs==1u)) &&
         r->heap.version==KUI_VMU_NATIVE_HEAP_VERSION && r->heap.bytes==sizeof(r->heap) &&

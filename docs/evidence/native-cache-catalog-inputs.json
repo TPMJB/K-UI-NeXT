@@ -1,8 +1,8 @@
 {
   "schema": "kui.native.resolution-cache.inputs.v1",
-  "detector_epoch": 1,
+  "detector_epoch": 2,
   "scope": "Derived static metadata records only; no retail executable, IP, track or save bytes are versioned. Input paths are relative to the original external corpus root, not the repository. Live ownership/lifetime/storage checks remain independent on every launch.",
-  "generator": "tools/vmu_native_resolution_cache_tool.c build, then full verify against each exact external executable",
+  "generator": "Epoch2 production extent normalization, build, complete fresh verify and trusted replay against each original external source; raw source identities retained separately.",
   "inputs": [
     {
       "slug": "ps2",
@@ -17,10 +17,15 @@
       "load_address": "8c010000",
       "record_fixture": "tests/fixtures/native-cache/ps2.nvr",
       "record_bytes": 1024,
-      "record_sha256": "dc88ee1fcaeaceeeb4917fb9ef17efb039307dfdfa952365b08154d9f7477864",
-      "record_digest": "13c4f7ef56b4279ad4f2c6962a161ef58efd594f91af4678aac5a17f370d55f0",
+      "record_sha256": "d721826cfd7cb250e7b75dde674a063f6425c5a0a0d57373fe3ec1380c446559",
+      "record_digest": "5a084d91998dac3ac3a3a53935c9b5994390d296bf2c210f197392d037521fda",
       "static_layout": 1,
-      "exit_family": 1
+      "exit_family": 1,
+      "source_sha256": "a3dcd09a96045839dbbc35697eb4336e4eba79b52203a46bb2f8ee9a4ba2eed8",
+      "source_bytes": 3097497,
+      "program_bytes": 3097497,
+      "discarded_suffix_bytes": 0,
+      "layout_version": 1
     },
     {
       "slug": "skies",
@@ -35,10 +40,15 @@
       "load_address": "8c010000",
       "record_fixture": "tests/fixtures/native-cache/skies.nvr",
       "record_bytes": 1024,
-      "record_sha256": "d33522081fd9faef70fe28265f91d95cb2fe20f797a19bb9dc1d52c73f776b20",
-      "record_digest": "d91b1fa4aa35638aea2a134e43dc009ab2c14dde6a68fbc5b22ecfc300db6262",
+      "record_sha256": "5cb2e7611b9600500f9e9a2919fc79a5a00e7cb402db2bf4cd293639b533c1a6",
+      "record_digest": "db6f24450768e9d9b59e944f2c3f9db3181821bcf31773c7c8f5144c5464f638",
       "static_layout": 0,
-      "exit_family": 3
+      "exit_family": 3,
+      "source_sha256": "4218c07829d63080be2da86413ec023e6d77001c13a1494648db6e2e5cb73611",
+      "source_bytes": 5460080,
+      "program_bytes": 5460080,
+      "discarded_suffix_bytes": 0,
+      "layout_version": 1
     },
     {
       "slug": "sa2",
@@ -53,10 +63,15 @@
       "load_address": "8c010000",
       "record_fixture": "tests/fixtures/native-cache/sa2.nvr",
       "record_bytes": 1024,
-      "record_sha256": "e7e9de078984e66c50203de9095604e1a2bb5deac905626f27aadca870bdb89c",
-      "record_digest": "f4ad08642cac4589acb6a8f7520f59f52371ba7e6a209b19eccd934661f18d2a",
+      "record_sha256": "2066dd8904c1519ec06f6dae3ce25d4b6ad7846de278287599a299ceab89d002",
+      "record_digest": "8e4290403e97a7cdd01b6031196f84c01421ccd77e5686d8e6289c0c6d236c09",
       "static_layout": 0,
-      "exit_family": 2
+      "exit_family": 2,
+      "source_sha256": "6919ed8bc96782d041be41ba86f90bf86d99632b8b7787391969721bc0991736",
+      "source_bytes": 1578116,
+      "program_bytes": 1578116,
+      "discarded_suffix_bytes": 0,
+      "layout_version": 1
     },
     {
       "slug": "grandia2",
@@ -67,15 +82,20 @@
       "region": "U",
       "input_relative": "native-stress-inputs/grandia2/1ST_READ.BIN",
       "record_bytes": 1024,
-      "record_digest": "dda1f1fefd978d79e89db020eb458c27d0c0a1a491b7aebbf81c8cae4f6026f4",
-      "record_sha256": "c865d6d7fa23969818a9f3b5ed10e37121bcfaa6af6d0f5b620b75861f1861a7",
+      "record_digest": "e9063e48cff58b88d5ee06a1fc17ed575af126382b41e4b5aa30b20dbc7ab50c",
+      "record_sha256": "56badc17361a1ca664997555035b47f0172ad11424af9b2b553e1413e3e39594",
       "image_sha256": "dd583571969d275b479e33edfd98ed5e2097d16c37ff6aaba59a7abaf057dc45",
       "image_bytes": 1279172,
       "load_address": "8c010000",
       "record_fixture": "tests/fixtures/native-cache/grandia2.nvr",
       "static_layout": 0,
       "exit_family": 4,
-      "console_status": "owner reported Grandia was just fine on 7753391a62e4; no additional timing or save-cycle details supplied"
+      "console_status": "owner reported Grandia was just fine on 7753391a62e4; no additional timing or save-cycle details supplied",
+      "source_sha256": "dd583571969d275b479e33edfd98ed5e2097d16c37ff6aaba59a7abaf057dc45",
+      "source_bytes": 1279172,
+      "program_bytes": 1279172,
+      "discarded_suffix_bytes": 0,
+      "layout_version": 1
     },
     {
       "slug": "evolution1",
@@ -86,15 +106,44 @@
       "region": "U",
       "input_relative": "native-extra-corpus/evolution1/1ST_READ.BIN",
       "record_bytes": 1024,
-      "record_digest": "7e57afdb7c3ccbd7f868b87beeedfdfeab3f2862af1ea2ca729f6e9ca9ff698d",
-      "record_sha256": "be2f1877d184ac06d38106af29656644bf5d04efc8538893af826c5aa81cfa5c",
+      "record_digest": "3f8f6bb825cacc8035b420125c078dda62d094e01a5fdb465bf6fd2a7d0f341e",
+      "record_sha256": "aa12bb0fa3dfd9c199bd6be01bb3a08aedbba7a6dc5a11a1019f93f31650ee1f",
       "image_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
       "image_bytes": 2143652,
       "load_address": "8c010000",
       "record_fixture": "tests/fixtures/native-cache/evolution1.nvr",
       "static_layout": 0,
       "exit_family": 4,
-      "console_status": "5b653775af85 normal crashed before first FMV; same reservation with --lease-only worked. Active-hook/no-card comparison pending; save/load compatibility unestablished."
+      "console_status": "Owner confirms897ee7223b35 boots, saves and loads; virtual card reported as slot1 (A1).",
+      "source_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+      "source_bytes": 2143652,
+      "program_bytes": 2143652,
+      "discarded_suffix_bytes": 0,
+      "layout_version": 1
+    },
+    {
+      "slug": "evolution2",
+      "title": "Evolution 2: Far Off Promise",
+      "ip_title": "EVOLUTION2",
+      "product": "T1711N",
+      "version": "V1.000",
+      "region": "U",
+      "input_relative": "native-extra-corpus/evolution2/1ST_READ.BIN",
+      "static_layout": 0,
+      "exit_family": 4,
+      "console_status": "Preparation refused before launch on897ee7223b35; this extent correction awaits console launch/save/reboot/load.",
+      "record_digest": "3440495928a6451c2720f7a4bd28567286a38ae6ca020c9bd87266efcb8a09ac",
+      "image_sha256": "52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605",
+      "image_bytes": 4024288,
+      "load_address": "8c010000",
+      "record_bytes": 1024,
+      "source_sha256": "16b45fcc84992a60d5a64bf64bf22b699b27306b95f177ba3d9730ca380069ae",
+      "source_bytes": 4057056,
+      "program_bytes": 4024288,
+      "discarded_suffix_bytes": 32768,
+      "record_sha256": "f4d9db3b4c807f2b937c8c05cf177d2c5f73e202f1f0724e25317970ea901b1d",
+      "record_fixture": "tests/fixtures/native-cache/evolution2.nvr",
+      "layout_version": 2
     }
   ]
 }

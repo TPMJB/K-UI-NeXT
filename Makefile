@@ -124,7 +124,7 @@ build/test-armada-ce-live-sound: tests/test_armada_ce_live_sound.c include/kui/a
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
 ARMADA_PREPARE_TEST_SOURCES := src/core/vmu_launch_package.c src/core/retail_zso.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/hash.c src/core/data.c src/core/destination.c src/core/retail_image.c
-NATIVE_CACHE_SOURCES := src/core/vmu_native_cache_seed.c src/core/vmu_native_resolution_cache.c \
+NATIVE_CACHE_SOURCES := src/core/vmu_native_program.c src/core/vmu_native_cache_seed.c src/core/vmu_native_resolution_cache.c \
     src/core/vmu_native_discovery.c src/core/vmu_native_layout.c src/core/vmu_native_heap.c \
     src/core/vmu_native_exit.c src/core/vmu_native_patch.c
 ARMADA_PREPARE_TEST_SOURCES += $(NATIVE_CACHE_SOURCES)
@@ -133,7 +133,7 @@ build/test-games-native-cache: tests/test_games_native_cache.c tests/test_vmu_na
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -Iinclude tests/test_games_native_cache.c $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c -o $@
 .PHONY: test-games-native-cache
 test-games-native-cache: build/test-games-native-cache
-	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-native-cache $(if $(STARTUP),'$(STARTUP)',)
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-native-cache $(if $(STARTUP),'$(STARTUP)',) $(if $(EVOLUTION2_STARTUP),'$(EVOLUTION2_STARTUP)',)
 build/test-vmu-launch-package: tests/test_vmu_launch_package.c src/core/vmu_launch_package.c src/core/retail_image.c src/core/hash.c include/kui/vmu_launch_package.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -ffunction-sections -fdata-sections tests/test_vmu_launch_package.c src/core/vmu_launch_package.c src/core/retail_image.c src/core/hash.c -Wl,--gc-sections -o $@

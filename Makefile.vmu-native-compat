@@ -14,7 +14,7 @@ COMPAT_WORKER_HOST_SRC = src/core/vmu_native_heap.c src/core/vmu_native_runtime.
  src/core/vmu_durable.c src/core/vmu_store.c src/core/vmu_emulation.c src/core/retail_image.c \
  src/loader/vmu_readonly_overlay.c src/loader/vmu_volatile_chain.c src/loader/sd_reader.c \
  src/loader/vmu_backing.c src/dreamcast/sci_sd_storage.c
-COMPAT_CACHE_HOST_SRC = src/core/vmu_native_resolution_cache.c src/core/vmu_native_discovery.c \
+COMPAT_CACHE_HOST_SRC = src/core/vmu_native_program.c src/core/vmu_native_resolution_cache.c src/core/vmu_native_discovery.c \
  src/core/vmu_native_layout.c src/core/vmu_native_heap.c src/core/vmu_native_exit.c \
  src/core/vmu_native_patch.c src/core/hash.c src/core/data.c
 
@@ -31,11 +31,13 @@ native-sdk-coherence-install-host-tests:
 	 src/loader/vmu_native_sdk_coherence.c -o $(BUILD)/test-sdk-coherence-prepare
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-sdk-coherence-prepare \
 	 tests/fixtures/native-cache/evolution1.nvr tests/fixtures/native-cache/ps2.nvr \
-	 tests/fixtures/native-cache/skies.nvr tests/fixtures/native-cache/sa2.nvr tests/fixtures/native-cache/grandia2.nvr
+	 tests/fixtures/native-cache/skies.nvr tests/fixtures/native-cache/sa2.nvr tests/fixtures/native-cache/grandia2.nvr \
+	 $(if $(EVOLUTION2_STARTUP),tests/fixtures/native-cache/evolution2.nvr,)
 	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -Iinclude -Isrc/loader \
-	 tests/test_vmu_native_sdk_coherence_install.c src/core/vmu_native_patch.c src/core/hash.c src/core/data.c \
+	 tests/test_vmu_native_sdk_coherence_install.c src/core/vmu_native_program.c src/core/vmu_native_heap.c \
+	 src/core/vmu_native_exit.c src/core/vmu_native_patch.c src/core/hash.c src/core/data.c \
 	 -o $(BUILD)/test-sdk-coherence-install
-	$(BUILD)/test-sdk-coherence-install '$(EVOLUTION1_STARTUP)' '$(STARTUP)' '$(SKIES_STARTUP)' '$(SA2_STARTUP)' '$(GRANDIA2_STARTUP)'
+	$(BUILD)/test-sdk-coherence-install '$(EVOLUTION1_STARTUP)' '$(STARTUP)' '$(SKIES_STARTUP)' '$(SA2_STARTUP)' '$(GRANDIA2_STARTUP)' $(if $(EVOLUTION2_STARTUP),'$(EVOLUTION2_STARTUP)',)
 
 native-exception-capture-host-tests:
 	@mkdir -p $(BUILD)
@@ -130,18 +132,19 @@ native-placement-host-tests: $(BUILD)/stage.elf $(BUILD)/native-worker.bin
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_stage_placement.c \
 	 src/core/vmu_native_stage_placement.c -o $(BUILD)/test-stage-placement
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-stage-placement tests/fixtures/native-cache/ps2.nvr \
-	 tests/fixtures/native-cache/skies.nvr tests/fixtures/native-cache/sa2.nvr tests/fixtures/native-cache/grandia2.nvr tests/fixtures/native-cache/evolution1.nvr
+	 tests/fixtures/native-cache/skies.nvr tests/fixtures/native-cache/sa2.nvr tests/fixtures/native-cache/grandia2.nvr tests/fixtures/native-cache/evolution1.nvr \
+	 $(if $(EVOLUTION2_STARTUP),tests/fixtures/native-cache/evolution2.nvr,)
 	python3 tests/test_vmu_native_heap_execution.py --build $(BUILD) \
 	 $(if $(STARTUP),--ps2 '$(STARTUP)',) $(if $(SKIES_STARTUP),--skies '$(SKIES_STARTUP)',) \
 	 $(if $(SA2_STARTUP),--sa2 '$(SA2_STARTUP)',) $(if $(GRANDIA2_STARTUP),--grandia2 '$(GRANDIA2_STARTUP)',) \
-	 $(if $(EVOLUTION1_STARTUP),--evolution1 '$(EVOLUTION1_STARTUP)',)
+	 $(if $(EVOLUTION1_STARTUP),--evolution1 '$(EVOLUTION1_STARTUP)',) $(if $(EVOLUTION2_STARTUP),--evolution2 '$(EVOLUTION2_STARTUP)',)
 	python3 tests/test_vmu_native_heap_call_execution.py \
 	 $(if $(STARTUP),--ps2 '$(STARTUP)',) $(if $(SKIES_STARTUP),--skies '$(SKIES_STARTUP)',) \
 	 $(if $(SA2_STARTUP),--sa2 '$(SA2_STARTUP)',) $(if $(GRANDIA2_STARTUP),--grandia2 '$(GRANDIA2_STARTUP)',) \
-	 $(if $(EVOLUTION1_STARTUP),--evolution1 '$(EVOLUTION1_STARTUP)',) $(if $(JGR_STARTUP),--jgr '$(JGR_STARTUP)',)
+	 $(if $(EVOLUTION1_STARTUP),--evolution1 '$(EVOLUTION1_STARTUP)',) $(if $(EVOLUTION2_STARTUP),--evolution2 '$(EVOLUTION2_STARTUP)',) $(if $(JGR_STARTUP),--jgr '$(JGR_STARTUP)',)
 	python3 tests/test_vmu_native_stage_stack_artifact.py
 
-compat-host-tests: $(BUILD)/retail-maple-observe.kui persistent-host-tests passive-host-tests readonly-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-controller-fast-host-tests native-phase-host-tests native-cached-stack-host-tests
+compat-host-tests: native-infile-buffers-host-tests native-program-host-tests native-timer-registration-host-tests $(BUILD)/retail-maple-observe.kui persistent-host-tests passive-host-tests readonly-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-controller-fast-host-tests native-phase-host-tests native-cached-stack-host-tests
 	KUI_NATIVE_ARTIFACT_DIR=$(BUILD) python3 tests/test_vmu_native_prepared_artifact.py
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_mode.c src/core/vmu_native_mode.c -o $(BUILD)/test-mode
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-mode
@@ -189,3 +192,33 @@ native-sdk-poll-host-tests:
 	@test -f '$(EVOLUTION1_STARTUP)' || (echo 'Set EVOLUTION1_STARTUP to the original Evolution executable'; exit 2)
 	@mkdir -p $(BUILD)
 	python3 tests/test_vmu_native_sdk_poll_execution.py --startup '$(EVOLUTION1_STARTUP)' --virtual-a1 --rounds 120 --output $(BUILD)/sdk-poll-execution.json
+
+.PHONY: native-program-host-tests native-timer-registration-host-tests
+native-timer-registration-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_timer_registration.c \
+	 src/core/vmu_native_discovery.c src/core/hash.c src/core/data.c -o $(BUILD)/test-timer-registration
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-timer-registration $(if $(EVOLUTION2_STARTUP),'$(EVOLUTION2_STARTUP)',) \
+	 $(if $(EVOLUTION1_STARTUP),'$(EVOLUTION1_STARTUP)',) $(if $(STARTUP),'$(STARTUP)',) \
+	 $(if $(SKIES_STARTUP),'$(SKIES_STARTUP)',) $(if $(SA2_STARTUP),'$(SA2_STARTUP)',) \
+	 $(if $(GRANDIA2_STARTUP),'$(GRANDIA2_STARTUP)',)
+
+native-program-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_program.c \
+	 src/core/vmu_native_program.c src/core/vmu_native_heap.c src/core/vmu_native_exit.c \
+	 src/core/vmu_native_patch.c src/core/data.c -o $(BUILD)/test-program
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-program $(if $(EVOLUTION2_STARTUP),'$(EVOLUTION2_STARTUP)',) \
+	 $(if $(EVOLUTION1_STARTUP),'$(EVOLUTION1_STARTUP)',) $(if $(STARTUP),'$(STARTUP)',) \
+	 $(if $(SKIES_STARTUP),'$(SKIES_STARTUP)',) $(if $(SA2_STARTUP),'$(SA2_STARTUP)',) \
+	 $(if $(GRANDIA2_STARTUP),'$(GRANDIA2_STARTUP)',)
+
+.PHONY: native-infile-buffers-host-tests
+native-infile-buffers-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_infile_buffers.c \
+	 src/core/vmu_native_discovery.c src/core/hash.c src/core/data.c -o $(BUILD)/test-infile-buffers
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-infile-buffers \
+	 $(if $(EVOLUTION2_STARTUP),'$(EVOLUTION2_STARTUP)' $(if $(EVOLUTION1_STARTUP),'$(EVOLUTION1_STARTUP)',) \
+	 $(if $(STARTUP),'$(STARTUP)',) $(if $(SKIES_STARTUP),'$(SKIES_STARTUP)',) \
+	 $(if $(SA2_STARTUP),'$(SA2_STARTUP)',) $(if $(GRANDIA2_STARTUP),'$(GRANDIA2_STARTUP)',),)

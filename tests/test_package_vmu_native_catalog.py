@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""The release catalog contains only five pinned, data-only records."""
+"""The release catalog contains only six pinned, data-only records."""
 import copy
 import hashlib
 import json
@@ -24,7 +24,7 @@ class CatalogTests(unittest.TestCase):
         (self.root/'docs/evidence').mkdir(parents=True)
         (self.root/'tests/fixtures/native-cache').mkdir(parents=True)
         self.evidence=json.loads((ROOT/'docs/evidence/native-cache-catalog-inputs.json').read_bytes())
-        for slug in ('ps2','skies','sa2','grandia2','evolution1'):
+        for slug in ('ps2','skies','sa2','grandia2','evolution1','evolution2'):
             relative=f'tests/fixtures/native-cache/{slug}.nvr'
             shutil.copyfile(ROOT/relative,self.root/relative)
         self.write()
@@ -36,8 +36,8 @@ class CatalogTests(unittest.TestCase):
         wire,files=cache_catalog(self.root,'a'*40)
         catalog=json.loads(wire)
         self.assertEqual(catalog['source_commit'],'a'*40)
-        self.assertEqual({g['slug'] for g in catalog['games']},{'ps2','skies','sa2','grandia2','evolution1'})
-        self.assertEqual(set(files),{'native-cache/catalog.json',*(f'native-cache/{s}.nvr' for s in ('ps2','skies','sa2','grandia2','evolution1'))})
+        self.assertEqual({g['slug'] for g in catalog['games']},{'ps2','skies','sa2','grandia2','evolution1','evolution2'})
+        self.assertEqual(set(files),{'native-cache/catalog.json',*(f'native-cache/{s}.nvr' for s in ('ps2','skies','sa2','grandia2','evolution1','evolution2'))})
         self.assertEqual(files['native-cache/catalog.json'],wire)
         for game in catalog['games']:
             record=files[game['record_path']]
@@ -64,7 +64,7 @@ class CatalogTests(unittest.TestCase):
             cache_catalog_path=personalizer.CATALOG_PATH,
             cache_catalog_sha256=hashlib.sha256(wire).hexdigest())
         accepted=personalizer.cache_catalog(self.root,manifest)
-        self.assertEqual(set(accepted),{'ps2','skies','sa2','grandia2','evolution1'})
+        self.assertEqual(set(accepted),{'ps2','skies','sa2','grandia2','evolution1','evolution2'})
         for game in json.loads(wire)['games']:
             with self.subTest(slug=game['slug']):
                 self.assertEqual(accepted[game['slug']],
@@ -72,7 +72,7 @@ class CatalogTests(unittest.TestCase):
 
     def test_bad_evidence_refuses(self):
         original=copy.deepcopy(self.evidence)
-        mutations=[lambda e:e.update(detector_epoch=2),lambda e:e.update(schema='other'),
+        mutations=[lambda e:e.update(detector_epoch=seed_codec.DETECTOR_EPOCH+1),lambda e:e.update(schema='other'),
             lambda e:e['inputs'].append(copy.deepcopy(e['inputs'][0])),
             lambda e:e['inputs'][0].update(slug='recv'),
             lambda e:e['inputs'][0].update(record_fixture='../external.bin')]
@@ -84,7 +84,7 @@ class CatalogTests(unittest.TestCase):
                 with self.assertRaises(ValueError):cache_catalog(self.root,'a'*40)
 
     def test_each_record_corruption_refuses(self):
-        for slug in ('ps2','skies','sa2','grandia2','evolution1'):
+        for slug in ('ps2','skies','sa2','grandia2','evolution1','evolution2'):
             path=self.root/f'tests/fixtures/native-cache/{slug}.nvr';original=path.read_bytes()
             for offset in (0,16,32,88,608,748,991,992,1023):
                 with self.subTest(slug=slug,offset=offset):

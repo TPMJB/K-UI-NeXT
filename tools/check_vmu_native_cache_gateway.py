@@ -10,6 +10,7 @@ import random
 import struct
 
 from check_vmu_native_worker_gateway import CPU, MASK, symbol_bytes
+from sh4_delay_slots import validate_delay_slot
 
 STAGE, LIMIT = 0x8CE00000, 0x8CFE0000
 
@@ -149,7 +150,9 @@ class CacheGateway(CPU):
                         self.pr = pc + 4
                 else:
                     target = self.pr
-                self.plain(struct.unpack("<H", self.code(pc + 2, 2))[0], pc + 2)
+                slot=struct.unpack("<H", self.code(pc + 2, 2))[0]
+                validate_delay_slot(slot,pc+2)
+                self.plain(slot, pc + 2)
                 if target in self.targets:
                     self.api(target)
                 else:
@@ -159,7 +162,9 @@ class CacheGateway(CPU):
                 taken = bool(self.sr & 1) == (word >> 8 in (0x89, 0x8d))
                 delayed = word >> 8 in (0x8d, 0x8f)
                 if delayed:
-                    self.plain(struct.unpack("<H", self.code(pc + 2, 2))[0], pc + 2)
+                    slot=struct.unpack("<H", self.code(pc + 2, 2))[0]
+                    validate_delay_slot(slot,pc+2)
+                    self.plain(slot, pc + 2)
                 self.pc = pc + 4 + 2 * d if taken else pc + (4 if delayed else 2)
             else:
                 self.plain(word, pc); self.pc += 2
@@ -193,13 +198,19 @@ class CacheGateway(CPU):
 
 class CacheRoute(CacheGateway):
     """Execute the outer relay through cache-hit/cold-scan selection only."""
-    def __init__(self, stage, seed, mask, hit, invalid=0, *, mode=0, blob=None):
+    def __init__(self, stage, seed, mask, hit, invalid=0, *, mode=0, normalized=False, blob=None):
         begin, self.blob, _ = symbol_bytes(stage, "_kui_retail_stage_relay", 2)
         if blob is not None:
             self.blob = blob
         CPU.__init__(self, seed, begin, 1)
         self.pc, self.r[15], self.mem = begin, 0x8cff0000, {}
         self.start_sp = self.r[15]
+        # A valid stack word can be speculatively loaded in a branch delay
+        # slot even when the failed callee left its out parameter untouched.
+        # Give every local an unrelated initial value; only a successful
+        # extent result may publish its output to exec_bytes.
+        self.mem.update({self.start_sp-4*i:(0xa5a50000+seed*97+i)&MASK
+                         for i in range(1,33)})
         self.sr = (self.sr & ~0xf0) | mask << 4
         self.pr = begin + len(self.blob) + 0x100
         self.before = self.r.copy(), self.pr
@@ -208,17 +219,31 @@ class CacheRoute(CacheGateway):
         self.route = None
         symbols = stage[4]
         manifest = symbols["_manifest"][0]
-        self.mem[symbols["_exec_bytes"][0]] = 0x200000
+        self.exec_address=symbols["_exec_bytes"][0]
+        self.source_bytes=0x200000
+        self.program_bytes=self.source_bytes-(0x8000 if normalized else 0)
+        self.extent_writes=0
+        self.mem[self.exec_address] = self.source_bytes
         self.mem.update({manifest + 44: 0 if invalid == 1 else 1,
                          manifest + 48: int(invalid == 2),
                          manifest + 52: 1 if invalid == 3 else 2 if invalid == 4 else 0})
         self.targets = {symbols[name][0]: label for name, label in (
             ("_retail_display_restore", "display"), ("_retail_display_line", "line"),
             ("_kui_native_heap_base_relay", "restore"), ("_kui_retail_observe_native_ip", "ip"),
+            ("_kui_vmu_native_program_extent", "extent"),
             ("_native_resolution_replay", "cache"), ("_code_sha", "cached"),
             ("_kui_vmu_native_discover_layout", "cold"), ("_native_report", "refused"))}
         if "_native_runtime_mode" in symbols:
             self.targets[symbols["_native_runtime_mode"][0]] = "mode"
+
+    def write(self,address,value):
+        if address==self.exec_address:
+            assert self.calls.count("extent")==1 and not self.invalid
+            assert value==self.program_bytes
+            self.extent_writes+=1
+            self.mem[address]=value
+        else:
+            super().write(address,value)
 
     def api(self, target):
         name = self.targets[target]
@@ -226,19 +251,28 @@ class CacheRoute(CacheGateway):
         if name == "restore":
             assert self.r[4:6] == [0x8c00ecac, 0x105]
             assert "ip" not in self.calls and "cache" not in self.calls
+            assert self.mem[self.exec_address]==self.source_bytes
         if name == "mode":
             assert self.calls.count("restore") == 1 and not any(
-                value in self.calls for value in ("ip", "cache", "cached", "cold", "refused"))
-        if name in ("ip", "cache", "cached", "cold"):
+                value in self.calls for value in ("ip", "extent", "cache", "cached", "cold", "refused"))
+        if name in ("ip", "extent", "cache", "cached", "cold"):
             assert self.calls.count("restore") == 1, "mapping used before executable restoration"
+        if name=="extent":
+            assert self.calls.count("ip")==1 and self.invalid in (0,6)
+            assert self.r[4:7]==[0x8c010000,self.source_bytes,0x8c010000]
+            assert self.mem[self.exec_address]==self.source_bytes
+            if self.invalid!=6:self.write(self.r[7],self.program_bytes)
         if name == "cache":
             assert self.calls.count("ip") == 1 and not self.invalid
+            assert self.calls.count("extent")==1 and self.extent_writes==1
+            assert self.mem[self.exec_address]==self.program_bytes
         if name in ("cached", "cold", "refused"):
             self.route = name; self.pc = self.before[1]
             return
         for i in range(8):
             self.r[i] = (0x9468ace0 + i * 0x13579bd + len(self.calls)) & MASK
         self.r[0] = (self.mode if name == "mode" else int(self.invalid != 5) if name == "ip"
+                     else int(self.invalid!=6) if name=="extent"
                      else int(self.hit) if name == "cache" else 0)
         self.sr ^= 1; self.pr ^= 0x2468ace0; self.pc = return_pc
 
@@ -246,7 +280,7 @@ class CacheRoute(CacheGateway):
         assert self.calls.count("restore") == 1
         if self.mode == 1:
             assert self.calls.count("mode") == 1 and self.route is None
-            assert not any(value in self.calls for value in ("ip", "cache", "cached", "cold", "refused"))
+            assert not any(value in self.calls for value in ("ip", "extent", "cache", "cached", "cold", "refused"))
             # Control ends in a legal sibling call to the display routine.
             # PR is volatile at the C ABI; the enclosing relay assembly owns
             # restoration of the game's separately saved return frame.
@@ -254,10 +288,12 @@ class CacheRoute(CacheGateway):
             return
         if self.invalid:
             assert self.route == "refused" and "cache" not in self.calls
+            assert not self.extent_writes and self.mem[self.exec_address]==self.source_bytes
         else:
             assert self.calls.count("cache") == 1
             assert self.route == ("cached" if self.hit else "cold")
             assert ("cold" in self.calls) == (not self.hit)
+            assert self.extent_writes==1 and self.mem[self.exec_address]==self.program_bytes
 
 
 def check(stage, *, self_test=False):
@@ -281,9 +317,10 @@ def check(stage, *, self_test=False):
     for seed in range(24):
         for mask in range(16):
             for mode in modes:
-                for hit, invalid in ((False, 0), (True, 0), (True, 1), (True, 2),
-                                     (True, 3), (True, 4), (True, 5)):
-                    CacheRoute(stage, seed, mask, hit, invalid, mode=mode).run().check(); routes += 1
+                for normalized in (False,True):
+                    for hit, invalid in ((False, 0), (True, 0), (True, 1), (True, 2),
+                                         (True, 3), (True, 4), (True, 5), (True,6)):
+                        CacheRoute(stage, seed, mask, hit, invalid, mode=mode,normalized=normalized).run().check(); routes += 1
     mutations = 0
     if self_test:
         # Mutate every actual callback literal and an exact memcpy length.
@@ -327,6 +364,10 @@ def check(stage, *, self_test=False):
             "actual_instruction_model_cases": cases, "mutation_rejections": mutations,
             "actual_outer_relay_route_cases": routes, "executable_restored_before_replay": True,
             "fresh_scan_selected_only_on_cache_miss": True, "launch_eligibility_before_replay": True,
+            "full_source_restored_before_extent_selection":True,
+            "validated_extent_before_cache_or_discovery":True,
+            "normal_and_shortened_extent_routes_checked":True,
+            "extent_failure_keeps_source_length_and_refuses":True,
             "no_metadata_before_exact_image_replay": True, "fresh_allocation_and_release_guards": True,
             "fresh_sdk_initializer_slot_admission":True,"sdk_slot_admission_is_independent_image_predicate":True,
             "capture_only_after_all_guards": True}
