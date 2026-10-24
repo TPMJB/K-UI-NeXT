@@ -12,7 +12,7 @@ override VMU_INIT_EXPORT := -Wl,-u,_kui_vmu_native_background_init
 override VMU_READER_EXPORTS := -Wl,-u,_kui_retail_async_irq -Wl,-u,_kui_retail_irq_entry \
  -Wl,-u,_kui_vmu_native_background_manifest_bind
 include Makefile.vmu-native-compat
-FLAGS += -DKUI_VMU_NATIVE_BACKGROUND=1
+FLAGS += -DKUI_VMU_NATIVE_BACKGROUND=1 -DKUI_RETAIL_NATIVE_HYBRID=1
 RESIDENT_FLAGS += -DKUI_RETAIL_ASYNC=1 -DKUI_RETAIL_GD_ASYNC=1 -DKUI_SCI_SD_NO_BLOCK=1
 
 .PHONY: background-host-tests

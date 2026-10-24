@@ -75,7 +75,7 @@ def package(build,guide='broader',trace_startup=None):
     commit=git('rev-parse','HEAD');revision=commit[:12]
     if git('status','--porcelain'):
         raise ValueError('Commit source changes before packaging')
-    if guide in ('evolution-trace','a2-background') and trace_startup is None:
+    if guide in ('evolution-trace','a2-background','hybrid') and trace_startup is None:
         raise ValueError('This package requires --trace-startup with the exact original executable')
     graphs=list(build.rglob('*.ci'))
     if not graphs or any(not closed_callgraph(path.read_text()) for path in graphs):
@@ -125,10 +125,12 @@ def package(build,guide='broader',trace_startup=None):
                      'vmu-native-evolution-fault-test.md','vmu-native-evolution-isolation-test.md',
                      'vmu-native-evolution-hooks-test.md','vmu-native-evolution-trace-test.md'):
             extra['docs/'+name]=(root/'docs'/name).read_bytes()
-        if guide=='a2-background':
+        if guide in ('a2-background','hybrid'):
             extra['docs/vmu-native-a2-background-test.md']=(root/'docs/vmu-native-a2-background-test.md').read_bytes()
             extra['docs/evidence/native-a2-background-2026-10-24.json']=(root/'docs/evidence/native-a2-background-2026-10-24.json').read_bytes()
             extra['docs/evidence/native-retry-integration-2026-10-24.json']=(root/'docs/evidence/native-retry-integration-2026-10-24.json').read_bytes()
+        if guide=='hybrid':
+            extra['docs/evidence/native-hybrid-schedule-2026-10-24.json']=(root/'docs/evidence/native-hybrid-schedule-2026-10-24.json').read_bytes()
         for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json',
                      'native-performance-acceptance-2026-10-23.json','native-uniform-root-family-2026-10-23.json',
                      'native-recv-ownership-2026-10-23.json','native-older-sdk-2026-10-23.json',
@@ -168,7 +170,9 @@ def package(build,guide='broader',trace_startup=None):
         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
             template_sha256=sha(template)),
-        compatibility_claim=('Native A2 with physical A1 passthrough; current Standard reader or opt-in Background SCI resume path, pending console comparison'
+        compatibility_claim=('Native SCI Background DMA with capped foreground work; gameplay and FMV performance await console testing'
+            if guide=='hybrid' else
+            'Native A2 with physical A1 passthrough; current Standard reader or opt-in Background SCI resume path, pending console comparison'
             if guide=='a2-background' else
             'SH-4 delay-slot and SDK cache-handoff regressions corrected in strict instruction replays; older Evolution FMV freeze remains unverified'
             if guide=='evolution-trace' else
@@ -213,7 +217,7 @@ def package(build,guide='broader',trace_startup=None):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('build',type=Path)
-    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background'),default='broader')
+    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid'),default='broader')
     parser.add_argument('--trace-startup',type=Path)
     try:
         args=parser.parse_args();package(args.build,args.guide,args.trace_startup)

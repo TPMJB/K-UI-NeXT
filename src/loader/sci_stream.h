@@ -2,6 +2,9 @@
 #ifndef KUI_SCI_STREAM_H
 #define KUI_SCI_STREAM_H
 #include "sd_reader.h"
+#if KUI_RETAIL_NATIVE_HYBRID && defined(KUI_RETAIL_CE)
+#error Native hybrid scheduling must not change the CE reader
+#endif
 #if defined(KUI_RETAIL_CE) || KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
 #define KUI_SCI_STREAM_TOKEN_SLICED 1
 #else
@@ -75,6 +78,9 @@ struct kui_sci_stream_state {
     uint8_t token_bounded, token_polled;
     uint32_t token_limit, token_used, token_budget;
 #endif
+#if KUI_RETAIL_NATIVE_HYBRID
+    uint32_t poll_budget, poll_used;
+#endif
     struct kui_sci_stream_stats stats;
 };
 /* Adopt the bus (acquired, card ready) and two 32-byte-aligned receive areas
@@ -104,6 +110,13 @@ bool kui_sci_stream_ready(uint32_t lba);
  * this slice (their original total byte limit still applies). */
 void kui_sci_stream_token_budget(bool bounded);
 bool kui_sci_stream_token_pending(void);
+#endif
+#if KUI_RETAIL_NATIVE_HYBRID
+/* One entry shares its receive-poll allowance across all blocks.
+ * Exhaustion keeps the current transfer; only the cumulative timeout fails it. */
+#define KUI_SCI_STREAM_POLL_SLICE 1024u
+void kui_sci_stream_begin_slice(void);
+enum kui_sci_stream_result kui_sci_stream_wait_slice(void);
 #endif
 /* If the in-flight block has arrived (or reception stopped), end it and hand
  * the SCI back: OK (the block is ready: kui_sci_stream_take), PENDING (still

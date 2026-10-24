@@ -1,0 +1,76 @@
+{
+  "schema": "kui.native.hybrid.schedule.v1",
+  "date": "2026-10-24",
+  "baseline_commit": "74958b3878279fc916199a7cd330f7f17b036138",
+  "console_execution_verified": false,
+  "scope": "native SCI Background plus virtual A2",
+  "limits": {
+    "request_delivered_blocks": 1,
+    "check_delivered_blocks": 1,
+    "irq_delivered_blocks": 1,
+    "exec_delivered_blocks": 8,
+    "pio_received_blocks_per_visit": 1,
+    "delivery_iterations": 10,
+    "exec_pending_dma_polls": 1024,
+    "cumulative_pending_dma_poll_timeout": 200000
+  },
+  "baseline_reproduction": {
+    "test": "test_retail_async_native_hybrid.c against original retail_async.c",
+    "result": "failed at first REQUEST bound as required",
+    "raw_64_sector_request_delivered_sd_blocks": 295,
+    "log": "unbounded REQUEST delivered 295 SD blocks\nhybrid-red-baseline: tests/test_retail_async_native_hybrid.c:32: fast_dma: Assertion `done<=1u && kui_retail_async_region.engine.active && !kui_sci_stream_stats()->polled' failed.\n"
+  },
+  "host_test": {
+    "sanitizers": [
+      "ASan",
+      "UBSan"
+    ],
+    "result": "native hybrid: 42274 checks passed; maximum blocks request=1 check=1 exec=8 irq=1",
+    "coverage": [
+      "fast DMA completion in REQUEST/CHECK/EXEC/IRQ",
+      "raw and cooked images",
+      "normal and eager settings use same cap",
+      "scattered extents",
+      "progress with no interrupts",
+      "shared DMA polling allowance",
+      "cumulative stalled DMA timeout",
+      "one continuous movie read stream",
+      "CRC retry and repeated errors",
+      "guest DMA owner and interrupt-time takeover",
+      "bounded PIO to DMA transition",
+      "cancel/reset and handle acknowledgment"
+    ]
+  },
+  "regressions": {
+    "native_resume_checks": 221287,
+    "native_pio_bounds_checks": 10388,
+    "windows_ce_checks": 163486,
+    "background_lease_geometry_checks": 516096,
+    "background_storage_gateway_checks": 682,
+    "background_integration": "gateway, zeroing, migration and rebinding passed"
+  },
+  "linked": {
+    "payload_bytes": 15132,
+    "memory_end": "0x8c007ba0",
+    "resident_sha256": "4cc50c304b27ab4abb6039bc15e99f573bc03bd44324224993beba83641e2c37",
+    "stack_bytes": 352,
+    "conservative_stack_total_bytes": 348,
+    "stack_mutations_refused": [
+      "guarded_map_stack_growth",
+      "unknown_irq_callback",
+      "worker_gateway_on_gd_stack",
+      "recursive_irq_path",
+      "hidden_library_stack_alias",
+      "unbalanced_library_pop",
+      "cyclic_library_helper",
+      "library_branch_outside_window"
+    ],
+    "actual_stage_tail_replay": true
+  },
+  "limitations": [
+    "No console timing or smoothness claim",
+    "Legacy command/token/recovery/reset/VMU storage waits retain existing timeouts",
+    "Not a Windows CE or CDDA+VMU change",
+    "No additional game RAM allocation and no relaxed resident/stack boundaries"
+  ]
+}

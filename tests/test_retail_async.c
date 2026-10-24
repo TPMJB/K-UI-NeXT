@@ -213,7 +213,10 @@ static void setup(uint32_t game_vbr, unsigned how, unsigned take_max, bool scatt
     CHECK(R.vector100[2] == (uint32_t)(uintptr_t)kui_retail_release_100 && R.vector100[0] == 0x11111111u);
     CHECK(R.vector400[2] == (uint32_t)(uintptr_t)kui_retail_release_400 && R.vector400[1] == 0x22222222u);
     CHECK(R.vector600[8] == 0xff000028u && R.vector600[10] == 11u);
-    CHECK(R.engine.target == (how == Y ? 25u : 20u) && !R.engine.release.armed);
+#if !KUI_RETAIL_NATIVE_HYBRID
+    CHECK(R.engine.target == (how == Y ? 25u : 20u));
+#endif
+    CHECK(!R.engine.release.armed);
     kui_retail_hook_sr = 0;
 }
 static void mode(uint32_t bytes) {

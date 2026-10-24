@@ -3,9 +3,11 @@
  * owner forces PIO; the requested output must span several bounded entries,
  * rather than turning one masked GD call or SCI interrupt into a whole read.
  * Reuse the existing byte-for-byte reference image and guest-vector fixture. */
+#ifndef KUI_NATIVE_BOUNDS_EMBED
 #define main existing_async_suite_main
 #include "test_retail_async.c"
 #undef main
+#endif
 
 static void test_request_yields_to_foreign_dma(bool cooked,unsigned how) {
     cooked_fixture=cooked;
@@ -120,6 +122,7 @@ static void test_request_before_after_keeps_one_allowance(void) {
     compare(45002u,1u,OUTPUT);
 }
 
+#ifndef KUI_NATIVE_BOUNDS_EMBED
 int main(void) {
     for(unsigned cooked=0;cooked<2u;++cooked)
         for(unsigned how=X;how<=Y;++how)
@@ -131,3 +134,4 @@ int main(void) {
     printf("native background bounded fallback: %u checks passed\n",checks);
     return 0;
 }
+#endif
