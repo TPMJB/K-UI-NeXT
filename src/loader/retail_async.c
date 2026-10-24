@@ -351,10 +351,22 @@ static bool tops_up(uint32_t function) { return topping(function); }
 #endif
 static void deliver_work(uint32_t wait) {
     uint32_t delivered = 0;
+#ifndef KUI_RETAIL_CE
+    /* A native GD entry has at most one active delivery visit: REQUEST
+     * rejects an owned command even if before-work just completed it;
+     * after-work delivers only a newly accepted REQUEST. */
+    uint32_t polled_entry=R.shared.stream.stats.polled;
+#endif
 #ifdef KUI_RETAIL_CE
     uint32_t irq_steps = 0;
 #endif
     for(;;) {
+#ifndef KUI_RETAIL_CE
+        /* PIO fallback must not drain a whole request with interrupts
+         * masked. Its ready block stays buffered for the next GD entry;
+         * DMA-only work keeps the existing target and receive-ahead path. */
+        if(R.shared.stream.stats.polled!=polled_entry) return;
+#endif
 #if KUI_ARMADA_CE_STREAM
         if(!stream_event(KUI_ARMADA_CE_STREAM_BUS_DATA_ENTER,delivered<wait)) return;
 #endif
@@ -430,7 +442,13 @@ static void deliver_work(uint32_t wait) {
         }
         if(r == KUI_SCI_STREAM_CRC) {
             failure(r);
+#ifdef KUI_RETAIL_CE
             if(e.failed) return;
+#else
+            /* Prefetch may already have spent this visit's PIO allowance.
+             * Check it at the loop head before attempting the reread. */
+            continue;
+#endif
         }
         /* BUSY: the next block, started early, still arrives; this one is
          * fetched again after it (not a failure of its own). */
