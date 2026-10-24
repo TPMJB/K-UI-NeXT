@@ -2,6 +2,7 @@
 #define _GNU_SOURCE
 #define KUI_VMU_NATIVE_PERSISTENT_PROBE 1
 #define KUI_VMU_NATIVE_READONLY_PROBE 1
+#define KUI_VMU_NATIVE_CACHED_CODE 1
 #include "kui/vmu_native_passive.h"
 #include "kui/vmu_native_patch.h"
 #include "kui/vmu_native_trace.h"
@@ -37,9 +38,11 @@ int main(int argc,char **argv) {
  const unsigned char digest[]={0xff,0xb5,0xa8,0xe5,0xff,0x55,0x47,0x02,0x6d,0x93,0x64,0x9e,0x1f,0x90,0x58,0xb7,0xee,0x5e,0x29,0xd8,0xd0,0xff,0x8a,0x89,0x33,0x57,0x01,0xf7,0xe9,0x64,0x7f,0x35};
  memcpy(native_driver.image_sha256,digest,32);
  uint32_t *t=(void *)(uintptr_t)0xac700080u;
- uint32_t words[]={0x4b545231,1,32,0x8c700100,0x8c700200,0x8c700300,0x8c700400,0};
- memcpy(t,words,32);
- struct kui_vmu_native_passive_exports e={.trace_exports=0x8c700080};
+ uint32_t words[]={0x4b545231,2,40,0x8c700100,0x8c700200,0x8c700300,0x8c700400,
+  0xac700500,0xac700600,0xac701000};
+ memcpy(t,words,sizeof(words));
+ struct kui_vmu_native_passive_exports e={.trace_exports=0x8c700080,
+  .bss_begin=0xac701000,.bss_end=0xac701100};
  /* Ordinary modes must bypass every trace-table/image access and mutation,
   * even when given an unreadable export pointer. */
  const uint32_t untraced[]={KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL,KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE,
@@ -62,7 +65,7 @@ int main(int argc,char **argv) {
   assert(native_evolution_trace_install(&e,0xac700000,0x2000,KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE)<0 && !publishes);
   *(unsigned char *)(uintptr_t)(sites[i]+j)^=1;assert(!memcmp(live,original,exec_bytes));++refusals;
  }
- for(unsigned i=0;i<8;i++) {
+ for(unsigned i=0;i<10;i++) {
   reset();t[i]=words[i]^1u;
   assert(native_evolution_trace_install(&e,0xac700000,0x2000,KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE)<0 && !publishes);
   assert(!memcmp(live,original,exec_bytes));t[i]=words[i];++refusals;

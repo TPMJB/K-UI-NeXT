@@ -56,6 +56,7 @@ class WorkerSH(PollSH):
   self.store_block(BASE,bytes(0x20000));self.store_block(BASE,blob)
   self.active=False;self.guest_words=set();self.stubs={};self.macl=0
   self.private_reads=self.private_writes=self.guest_reads=0
+  self.flat_ocbp=[]
  def plain(self,op,pc):
   if pc==0x8c1dae38 and not getattr(self,"inside_worker",False):
    self.bridge_submit()
@@ -66,6 +67,11 @@ class WorkerSH(PollSH):
    value=self.r[n]-self.r[m]-(self.sr&1);self.r[n]=value&MASK;self.flag(value<0)
   elif op&0xf00f==0x200e:self.macl=(self.r[n]&65535)*(self.r[m]&65535)
   elif op&0xf00f==0x200f:self.macl=(signed(self.r[n]&65535,16)*signed(self.r[m]&65535,16))&MASK
+  elif op&0xf0ff==0x00a3:
+   # This interpreter has one coherent physical RAM image, hence OCBP has
+   # no data effect. Cache-aware subclasses intercept this opcode and must
+   # implement real dirty write-back/invalidation instead of this no-op.
+   self.flat_ocbp.append({'pc':hex(pc),'address':hex(self.r[n]),'coherent_memory_noop':True})
   else:return super().plain(op,pc)
   self.executing=pc;self.instructions+=1
  def worker(self,name,args):
@@ -125,7 +131,41 @@ class WorkerSH(PollSH):
    result=self.worker('_kui_vmu_native_patch_encode',[at,target,0x8c00b000]);assert result['result']==1
    self.store_block(at,self.block(0x8c00b000,12));self.patch_ranges.append((at,at+12))
   self.write(hw[7],0x8c004300);self.write(d[12],self.read(exports+20))
+  self.install_sdk_initializer()
   self.original_image=self.startup.read_bytes()
+ def install_sdk_initializer(self):
+  # The flat orchestration writes the independently witnessed call-target
+  # word; the cache-aware integration executes the real stage installer.
+  # Never mask this slot as original code in patch_ranges: the actual cold
+  # gateway and original initializer continuation must both execute.
+  self.sdk_initializer_target=INITIALIZE
+  self.coherence_installation={'available':False,'production_stage_executed':False}
+  exports=self.symbols['_kui_vmu_native_worker_exports'][0]
+  descriptor=self.read(exports+76)
+  header=struct.unpack('<3I',self.block(descriptor,12))
+  if header==(0x4b545231,1,32):return
+  assert header==(0x4b545231,2,40),tuple(hex(v) for v in header)
+  table=struct.unpack('<10I',self.block(descriptor,40))
+  config=self.symbols['_config'][0]
+  initializer=self.read(config+232+8);wrapper=self.read(config+232+12);kind=self.read(config+232+24)
+  assert kind in (0,1)
+  load=wrapper+(46 if kind else 42)
+  op=self.read(load,2)
+  assert op&0xff00==0xd300,(hex(load),hex(op))
+  slot=((load+4)&~3)+4*(op&255)
+  assert self.read(slot)==initializer,(hex(slot),hex(self.read(slot)),hex(initializer))
+  target=table[7+kind]
+  expected=self.symbols[('_kui_vmu_native_sdk_coherence_uniform_gate','_kui_vmu_native_sdk_coherence_variable_gate')[kind]][0]+0x20000000
+  assert target==expected and table[9]==self.symbols['_kui_vmu_native_sdk_coherence_state'][0]
+  assert self.read(table[9]+28)==0x4e434f31
+  assert self.read(table[9]+12)==initializer+12 and self.read(table[9]+40)==initializer
+  before=self.block(initializer,12)
+  self.write(slot,target)
+  assert self.block(initializer,12)==before
+  self.sdk_initializer_target=target
+  self.coherence_installation={'available':True,'production_stage_executed':False,
+   'call_target_slot':hex(slot),'target':hex(target),'initializer':hex(initializer),
+   'original_initializer_prefix_unchanged':True}
  def function(self,a):
   index=bisect_right(self.function_starts,a)-1
   if index>=0:
@@ -259,48 +299,64 @@ def make_handoff():
  assert len(result)==1272
  return result
 
-parser=argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--startup',type=Path,default=os.environ.get('KUI_NATIVE_EVOLUTION1_STARTUP'))
-parser.add_argument('--build',type=Path,default=ROOT/'build/mixed-poll-final')
-parser.add_argument('--rounds',type=int,default=60)
-parser.add_argument('--output',type=Path,required=True)
-parser.add_argument('--negative-cases',action='store_true',help='Replay malformed completion contexts through actual linked C and require refusal before any RX/TX change')
-parser.add_argument('--discard-dead-stack',action='store_true',help='Poison dead private stack after returned callbacks; not a cache/timing model')
-parser.add_argument('--cached-stack',action='store_true',help='Use P1 private SP for C callbacks; requires linked worker admitting alias-normalized stack guards')
-parser.add_argument('--reference',action='store_true',help='Require full C guard path after NORMAL arm; tracing remains disabled')
-args=parser.parse_args()
-if not args.startup:parser.error('--startup is required')
-if not 6<=args.rounds<=1000:parser.error('--rounds must be between 6 and 1000')
-assert __debug__
-image=args.startup.read_bytes();assert len(image)==IMAGE_BYTES and hashlib.sha256(image).hexdigest()==DIGEST
-handoff=make_handoff()
-cpu=WorkerSH(args.startup,args.build,handoff,args.cached_stack);cpu.prepare()
-for pc in (0x8c1b1790,0x8c1b1792,0x8c1b1794,0x8c1b1796,0x8c1b179a):cpu.plain(cpu.read(pc,2),pc)
-sdk_initializer=cpu.original_call(INITIALIZE,[0x8c248408,0xc000,0x8c23c3e8,0xc000])
-if args.reference:
- cpu.write(cpu.symbols['_config'][0]+2296,4)
-history=[]
-for i in range(args.rounds):
- orig_submit=cpu.original_call(SUBMIT)
- if args.discard_dead_stack:cpu.discard_stack()
- pending=cpu.read(cpu.symbols['_controller_pair'][0]);live_ready=cpu.read(cpu.symbols['_live_plan'][0]+4)
- gate=cpu.original_call(0x8c1daef6)
- tx_before=cpu.block(TX,0x6000);rx_before=cpu.block(RX,0xc000)
- complete=cpu.complete_bridge()
- if args.discard_dead_stack:cpu.discard_stack()
- tx_after=cpu.block(TX,0x6000);rx_after=cpu.block(RX,0xc000)
- consumer=cpu.original_call(CONSUME)
- consumer_rx=cpu.block(RX,0xc000)
- ready=cpu.original_call(READY)
- result={'round':i,'original_submit_instructions':orig_submit,'gate_instructions':gate,'submit':cpu.submit_counts,'complete':complete,'consumer_instructions':consumer,'ready_instructions':ready,'controller_pair_pending_at_submit':pending,'live_ready':live_ready,'physical_batch':cpu.batch,'complete_tx_differences':diff(tx_before,tx_after),'complete_rx_differences':diff(rx_before,rx_after),'consumer_rx_differences':diff(rx_after,consumer_rx)}
- history.append(result)
- assert not result['complete_tx_differences']
- assert not result['consumer_rx_differences']
- if i>=2 and not args.reference:assert live_ready==0x4e4c5031, (i,hex(live_ready))
- if i>=2 and not args.reference:
-  assert pending==1
-  assert result['complete_rx_differences']==[{'offset':hex((i%2)*0x6000+2),'before':'0x20','after':'0x21'}]
-negative_results=negative_cases(cpu) if args.negative_cases else []
-summary={'negative_cases':negative_results,'schema':'kui.native.original-sdk-linked-worker.v1','executable_sha256':DIGEST,'worker_elf_sha256':hashlib.sha256((args.build/'native-worker.elf').read_bytes()).hexdigest(),'worker_binary_sha256':hashlib.sha256((args.build/'native-worker.bin').read_bytes()).hexdigest(),'handoff_sha256':hashlib.sha256(handoff).hexdigest(),'retail_code_embedded':False,'reference_full_path':args.reference,'cached_callback_stack':args.cached_stack,'discard_dead_stack':args.discard_dead_stack,'heap_initializer_instructions':cpu.heap_initializer_instructions,'heap_allocate_instructions':cpu.heap_allocate_instructions,'arm':cpu.arm_counts,'sdk_initializer_instructions':sdk_initializer,'limitations':['Flat coherent memory; no cache, bus latency, interrupts, scheduled callbacks, FMV, game mainloop, SD transport, or cycle timing.','Actual SH C callbacks execute without worker helper stubs; original SDK submit hooks are bridged at the exact overwritten instruction boundary. Assembly save/restore gateways are not interpreted.','Actual original SDK upper initializer lock-normalization block executes; IRQ-registration scaffolding does not.','Completion caller PR and inherited SR are provided from original wrapper contract, then original consumer and ready functions execute.','Valid blank-card handoff comes from existing host model; no storage request occurs during automatic INFO-only VMU enumeration.','Reference mode changes diagnostics selector after NORMAL arm to require full C path while leaving trace disabled.'], 'rounds':history}
-args.output.parent.mkdir(parents=True,exist_ok=True);args.output.write_text(json.dumps(summary,indent=2)+'\n')
-print(json.dumps({'output':str(args.output),'rounds':len(history),'reference':args.reference,'arm_instructions':cpu.arm_counts['instructions'],'first_pair_instructions':history[0]['submit']['instructions']+history[0]['complete']['instructions'],'steady_last_pair':{'instructions':history[-1]['submit']['instructions']+history[-1]['complete']['instructions'],'p2_reads':history[-1]['submit']['private_p2_reads']+history[-1]['complete']['private_p2_reads'],'p2_writes':history[-1]['submit']['private_p2_writes']+history[-1]['complete']['private_p2_writes'],'guest_reads':history[-1]['submit']['guest_reads']+history[-1]['complete']['guest_reads']}}))
+def main():
+ parser=argparse.ArgumentParser(description=__doc__)
+ parser.add_argument('--startup',type=Path,default=os.environ.get('KUI_NATIVE_EVOLUTION1_STARTUP'))
+ parser.add_argument('--build',type=Path,default=ROOT/'build/mixed-poll-final')
+ parser.add_argument('--rounds',type=int,default=60)
+ parser.add_argument('--output',type=Path,required=True)
+ parser.add_argument('--negative-cases',action='store_true',help='Replay malformed completion contexts through actual linked C and require refusal before any RX/TX change')
+ parser.add_argument('--discard-dead-stack',action='store_true',help='Poison dead private stack after returned callbacks; not a cache/timing model')
+ parser.add_argument('--cached-stack',action='store_true',help='Use P1 private SP for C callbacks; requires linked worker admitting alias-normalized stack guards')
+ parser.add_argument('--reference',action='store_true',help='Require full C guard path after NORMAL arm; tracing remains disabled')
+ args=parser.parse_args()
+ if not args.startup:parser.error('--startup is required')
+ if not 6<=args.rounds<=1000:parser.error('--rounds must be between 6 and 1000')
+ assert __debug__
+ image=args.startup.read_bytes();assert len(image)==IMAGE_BYTES and hashlib.sha256(image).hexdigest()==DIGEST
+ handoff=make_handoff()
+ cpu=WorkerSH(args.startup,args.build,handoff,args.cached_stack);cpu.prepare()
+ for pc in (0x8c1b1790,0x8c1b1792,0x8c1b1794,0x8c1b1796,0x8c1b179a):cpu.plain(cpu.read(pc,2),pc)
+ cpu.r[3]=cpu.sdk_initializer_target
+ sdk_initializer=cpu.original_call(cpu.sdk_initializer_target,[0x8c248408,0xc000,0x8c23c3e8,0xc000])
+ if cpu.coherence_installation['available']:
+  state=cpu.symbols['_kui_vmu_native_sdk_coherence_state'][0]
+  assert cpu.read(state+44)==1
+  assert [int(item['address'],16) for item in cpu.flat_ocbp]==[cpu.read(state),cpu.read(state)+4]
+  assert all(int(item['pc'],16)&0xe0000000==0xa0000000 for item in cpu.flat_ocbp)
+  cpu.coherence_installation.update(actual_gate_executed=True,successful_handoffs=1)
+ if args.reference:
+  cpu.write(cpu.symbols['_config'][0]+2296,4)
+ history=[]
+ for i in range(args.rounds):
+  orig_submit=cpu.original_call(SUBMIT)
+  if args.discard_dead_stack:cpu.discard_stack()
+  pending=cpu.read(cpu.symbols['_controller_pair'][0]);live_ready=cpu.read(cpu.symbols['_live_plan'][0]+4)
+  gate=cpu.original_call(0x8c1daef6)
+  tx_before=cpu.block(TX,0x6000);rx_before=cpu.block(RX,0xc000)
+  complete=cpu.complete_bridge()
+  if args.discard_dead_stack:cpu.discard_stack()
+  tx_after=cpu.block(TX,0x6000);rx_after=cpu.block(RX,0xc000)
+  consumer=cpu.original_call(CONSUME)
+  consumer_rx=cpu.block(RX,0xc000)
+  ready=cpu.original_call(READY)
+  result={'round':i,'original_submit_instructions':orig_submit,'gate_instructions':gate,'submit':cpu.submit_counts,'complete':complete,'consumer_instructions':consumer,'ready_instructions':ready,'controller_pair_pending_at_submit':pending,'live_ready':live_ready,'physical_batch':cpu.batch,'complete_tx_differences':diff(tx_before,tx_after),'complete_rx_differences':diff(rx_before,rx_after),'consumer_rx_differences':diff(rx_after,consumer_rx)}
+  history.append(result)
+  assert not result['complete_tx_differences']
+  assert not result['consumer_rx_differences']
+  if i>=2 and not args.reference:assert live_ready==0x4e4c5031, (i,hex(live_ready))
+  if i>=2 and not args.reference:
+   assert pending==1
+   assert result['complete_rx_differences']==[{'offset':hex((i%2)*0x6000+2),'before':'0x20','after':'0x21'}]
+ negative_results=negative_cases(cpu) if args.negative_cases else []
+ summary={'negative_cases':negative_results,'schema':'kui.native.original-sdk-linked-worker.v1','executable_sha256':DIGEST,'worker_elf_sha256':hashlib.sha256((args.build/'native-worker.elf').read_bytes()).hexdigest(),'worker_binary_sha256':hashlib.sha256((args.build/'native-worker.bin').read_bytes()).hexdigest(),'handoff_sha256':hashlib.sha256(handoff).hexdigest(),'retail_code_embedded':False,'reference_full_path':args.reference,'cached_callback_stack':args.cached_stack,'discard_dead_stack':args.discard_dead_stack,'heap_initializer_instructions':cpu.heap_initializer_instructions,'heap_allocate_instructions':cpu.heap_allocate_instructions,'arm':cpu.arm_counts,'sdk_initializer_instructions':sdk_initializer,'limitations':['Flat coherent memory; no cache, bus latency, interrupts, scheduled callbacks, FMV, game mainloop, SD transport, or cycle timing.','Actual SH C callbacks execute without worker helper stubs; original SDK submit hooks are bridged at the exact overwritten instruction boundary. Assembly save/restore gateways are not interpreted.','Actual original SDK upper initializer lock-normalization block executes; IRQ-registration scaffolding does not.','Completion caller PR and inherited SR are provided from original wrapper contract, then original consumer and ready functions execute.','Valid blank-card handoff comes from existing host model; no storage request occurs during automatic INFO-only VMU enumeration.','Reference mode changes diagnostics selector after NORMAL arm to require full C path while leaving trace disabled.'], 'rounds':history}
+ summary['cold_coherence']=cpu.coherence_installation
+ summary['flat_ocbp']=cpu.flat_ocbp
+ summary['limitations'].extend([
+  'Cold call-target orchestration validates the actual descriptor, MOV.L R3 slot and original target, then writes that one word; this flat replay does not execute the production stage installer.',
+  'The actual linked cold gate and original SDK initializer execute. OCBP is a recorded no-op ONLY because this flat model has one coherent RAM image; dirty-cache causality requires the separate cache-aware integration.'])
+ args.output.parent.mkdir(parents=True,exist_ok=True);args.output.write_text(json.dumps(summary,indent=2)+'\n')
+ print(json.dumps({'output':str(args.output),'rounds':len(history),'reference':args.reference,'arm_instructions':cpu.arm_counts['instructions'],'first_pair_instructions':history[0]['submit']['instructions']+history[0]['complete']['instructions'],'steady_last_pair':{'instructions':history[-1]['submit']['instructions']+history[-1]['complete']['instructions'],'p2_reads':history[-1]['submit']['private_p2_reads']+history[-1]['complete']['private_p2_reads'],'p2_writes':history[-1]['submit']['private_p2_writes']+history[-1]['complete']['private_p2_writes'],'guest_reads':history[-1]['submit']['guest_reads']+history[-1]['complete']['guest_reads']}}))
+
+if __name__=="__main__":
+ main()

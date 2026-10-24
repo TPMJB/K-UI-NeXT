@@ -114,6 +114,7 @@ def package(build,guide='broader',trace_startup=None):
                      'native-controller-fastlane-2026-10-23.json',
                      'native-mixed-main-poll-2026-10-23.json',
                      'native-linked-worker-cost-2026-10-24.json',
+                     'native-sdk-lock-cache-2026-10-24.json',
                      'native-evolution-sdk-poll-2026-10-23.json',
                      'native-evolution-phase-capture-2026-10-23.json',
                      'native-original-video-wait-comparison-2026-10-23.md'):
@@ -139,7 +140,7 @@ def package(build,guide='broader',trace_startup=None):
         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
             template_sha256=sha(template)),
-        compatibility_claim=('Measured private-stack/checked-reader optimization and optional CPU exception capture; console freeze unresolved'
+        compatibility_claim=('Cold SDK cache handoff corrects a reproduced first-transfer refusal; older Evolution FMV freeze remains unverified'
             if guide=='evolution-trace' else
             'Evolution active-hook/no-card comparison; no console fix established'
             if guide=='evolution-hooks' else

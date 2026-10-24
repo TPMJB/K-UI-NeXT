@@ -18,6 +18,7 @@ extern uint32_t kui_vmu_native_readonly_release_resume;
 #include "kui/vmu_volatile_chain.h"
 #include "kui/vmu_native_trace.h"
 #include "vmu_native_fault_capture.h"
+#include "vmu_native_sdk_coherence.h"
 #include "sd_reader.h"
 #define WORKER_SPAN UINT32_C(0x20000)
 #define PAIR_LIMIT 180000u
@@ -470,6 +471,28 @@ static bool prepare_hook_entry(uint32_t address,uint32_t target) {
     }
     return hook_word(word,value,mask);
 }
+#ifndef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+static bool prepare_sdk_coherence_hook(void) {
+    extern const uint32_t kui_vmu_native_trace_exports[10];
+    const uint32_t *table=kui_vmu_native_trace_exports;
+    unsigned kind=config.layout.rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48?0u:1u;
+    uint32_t pc=config.layout.initializer_wrapper+(kind?46u:42u),op,word;
+    uint32_t begin=physical(config.driver.load_address),bytes=config.driver.image_bytes;
+    if(table[0]!=UINT32_C(0x4b545231) || table[1]!=2u || table[2]!=40u ||
+       !ram(pc,10u,2u) || physical(pc)<begin || bytes<10u ||
+       physical(pc)-begin>bytes-10u || !read_value(NULL,pc,2u,&op) || (op&0xff00u)!=0xd300u)
+        return false;
+    const uint16_t uniform[4]={0x66f2u,0x6573u,0x430bu,0x54f1u};
+    const uint16_t variable[4]={0x67f2u,0x56f1u,0x430bu,0x54f3u};
+    for(unsigned i=0;i<4u;i++)
+        if(!read_value(NULL,pc+2u+2u*i,2u,&word) || word!=(kind?variable[i]:uniform[i]))
+            return false;
+    uint32_t slot=((pc+4u)&~3u)+4u*(op&255u);
+    if(!ram(slot,4u,4u) || physical(slot)<begin || physical(slot)-begin>bytes-4u ||
+       !read_value(NULL,slot,4u,&word) || word!=config.layout.initializer) return false;
+    return hook_word(slot,table[7u+kind],UINT32_MAX);
+}
+#endif
 static bool prepare_installed_hooks(void) {
     hook_witness_ready=0u;hook_witness_count=0u;
     if((config.driver.submit|config.lease.owner.release|config.lease.owner.initializer)&3u ||
@@ -480,6 +503,11 @@ static bool prepare_installed_hooks(void) {
        !hook_word(config.driver.completion_slot,kui_vmu_native_worker_exports.complete_hook,UINT32_MAX)) return false;
     for(unsigned i=0;i<config.exits.count;i++)
         if(!prepare_hook_entry(config.exits.entries[i],config.low_terminal)) return false;
+#ifndef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+    /* Witness the original initializer call-target word, independently
+     * decoded from its exact wrapper, alongside the ordinary DMA hooks. */
+    if(!prepare_sdk_coherence_hook()) return false;
+#endif
     hook_witness_ready=UINT32_C(0x4e485031);return true;
 }
 static bool installed_hooks_valid(void) {
@@ -596,14 +624,18 @@ void kui_vmu_native_runtime_fault(uint32_t kind,uint32_t value,uint32_t context1
     retail_display_restore(&display);
     retail_display_line("NATIVE VMU RUNTIME FAILURE");
     bool exception=(kind&UINT32_C(0xffff0000))==UINT32_C(0x00010000);
+    bool coherence=(kind&UINT32_C(0xffff0000))==UINT32_C(0x00020000);
     retail_display_line(exception?"CAPTURED CPU EXCEPTION":
+        coherence?"SDK CACHE HANDOFF REFUSED":
         kind==1u?"GAME ALLOCATION FAILED":"UNKNOWN RUNTIME FAILURE");
     retail_display_hex("PHASE",18u);retail_display_hex("DETAIL",kind);
-    retail_display_values(exception?"EXPEVT SPC SSR TEA":"KIND VALUE CONTEXT1 CONTEXT2",(uint32_t[4]){
-        exception?(kind&UINT32_C(0xffff)):kind,value,context1,context2},4u);
+    retail_display_values(exception?"EXPEVT SPC SSR TEA":coherence?"CHECK ADDRESS VALUE EXPECT":
+        "KIND VALUE CONTEXT1 CONTEXT2",(uint32_t[4]){
+        (exception || coherence)?(kind&UINT32_C(0xffff)):kind,value,context1,context2},4u);
     retail_display_values("LEASE BYTES HEAP BEGIN HEAP BYTES",(uint32_t[4]){
         config.lease.payload,config.lease.lease_bytes,config.lease.begin,config.lease.heap_bytes},4u);
     retail_display_line(exception?"ACTUAL EXCEPTION STATE / NO SAVE COMMIT":
+        coherence?"COLD SDK INITIALIZER STOP / NO TRANSFER":
         "VALUE REQUEST / CONTEXT CALLER SP");
     retail_display_line("LAUNCH STOPPED - PHOTO THEN POWER OFF");
     for(;;) __asm__ volatile("nop");
@@ -691,6 +723,9 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
             memset(&config,0,sizeof(config));return -3;
         }
     }
+#ifndef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+    if(!kui_vmu_native_sdk_coherence_prepare(&config)) {memset(&config,0,sizeof(config));return -3;}
+#endif
     if(!prepare_installed_hooks()) {memset(&config,0,sizeof(config));return -3;}
 #else
     if(kui_vmu_readonly_init(&card) || kui_vmu_readonly_overlay_init(&overlay,readonly_handler,&card)) {

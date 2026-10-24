@@ -172,7 +172,14 @@ C(kui_vmu_native_trace_wait_after):
     .global C(kui_vmu_native_trace_exports)
     .type C(kui_vmu_native_trace_exports),@object
 C(kui_vmu_native_trace_exports):
-    .long 0x4b545231,1,32
+    .long 0x4b545231,2,40
     .long C(kui_vmu_native_trace_frame_entry),C(kui_vmu_native_trace_wait_loop)
-    .long C(kui_vmu_native_trace_wait_before),C(kui_vmu_native_trace_wait_after),0
+    .long C(kui_vmu_native_trace_wait_before),C(kui_vmu_native_trace_wait_after)
+#if KUI_VMU_NATIVE_CACHED_CODE
+    .long C(kui_vmu_native_sdk_coherence_uniform_gate)+0x20000000
+    .long C(kui_vmu_native_sdk_coherence_variable_gate)+0x20000000
+#else
+    .long C(kui_vmu_native_sdk_coherence_uniform_gate),C(kui_vmu_native_sdk_coherence_variable_gate)
+#endif
+    .long C(kui_vmu_native_sdk_coherence_state)
     .size C(kui_vmu_native_trace_exports),.-C(kui_vmu_native_trace_exports)

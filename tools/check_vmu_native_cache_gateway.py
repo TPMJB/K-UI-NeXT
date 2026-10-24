@@ -31,7 +31,8 @@ class CacheGateway(CPU):
         self.sr = (self.sr & ~0xf0) | mask << 4
         self.pr = begin + len(self.blob) + 0x100
         self.before = self.r.copy(), self.pr, self.sr, self.fpscr, self.fr.copy()
-        self.outcomes = dict(zip(("seed", "replay", "allocation", "release"), outcomes))
+        require(len(outcomes)==5,"cache wrapper needs all five independently admitted callback results")
+        self.outcomes = dict(zip(("seed", "replay", "allocation", "release", "sdk-slot"), outcomes))
         self.symbols, self.calls, self.copies = symbols, [], []
         self.seed_address = symbols["__native_resolution_cache_seed_start"][0]
         self.state = symbols["_native_cached_resolution"][0]
@@ -47,6 +48,7 @@ class CacheGateway(CPU):
             ("_kui_vmu_native_resolution_cache_replay", "replay"),
             ("_memcpy", "memcpy"), ("_allocation_safe", "allocation"),
             ("_readonly_release_replay_valid", "release"),
+            ("_native_sdk_coherence_cached_admit", "sdk-slot"),
             ("_native_passive_capture_windows", "capture"))}
 
     def code(self, address, size):
@@ -118,6 +120,10 @@ class CacheGateway(CPU):
         elif name == "release":
             assert len(self.copies) == 5
             result = int(self.outcomes[name])
+        elif name == "sdk-slot":
+            assert len(self.copies)==5 and all(self.outcomes[name] for name in ("seed","replay","release","allocation"))
+            assert self.calls[-3:]==["release","allocation","sdk-slot"]
+            result=int(self.outcomes[name])
         else:
             assert name == "capture" and all(self.outcomes.values())
             assert len(self.copies) == 5 and "allocation" in self.calls and "release" in self.calls
@@ -166,6 +172,17 @@ class CacheGateway(CPU):
         expected = all(self.outcomes.values())
         assert self.r[0] == int(expected)
         assert self.calls.count("capture") == int(expected)
+        calls=["seed"]
+        if self.outcomes["seed"]:
+            calls.append("replay")
+            if self.outcomes["replay"]:
+                calls += ["memcpy"]*5+["release"]
+                if self.outcomes["release"]:
+                    calls.append("allocation")
+                    if self.outcomes["allocation"]:
+                        calls.append("sdk-slot")
+                        if self.outcomes["sdk-slot"]:calls.append("capture")
+        assert self.calls==calls,"cache wrapper bypassed/reordered a live metadata/ownership/SDK-slot admission"
         if self.outcomes["seed"] and self.outcomes["replay"]:
             assert len(self.copies) == 5 and "release" in self.calls
             if self.outcomes["release"]:
@@ -256,11 +273,11 @@ def check(stage, *, self_test=False):
     cases = 0
     for seed in range(24):
         for mask in range(16):
-            for flags in range(16):
-                outcomes = [(flags >> i) & 1 for i in range(4)]
+            for flags in range(32):
+                outcomes = [(flags >> i) & 1 for i in range(5)]
                 CacheGateway(stage, seed, mask, outcomes).run().check(); cases += 1
     routes = 0
-    modes = (0, 1, 2, 3, 4, 5) if "_native_runtime_mode" in symbols else (0,)
+    modes = (0, 1, 2, 3, 4, 5, 6) if "_native_runtime_mode" in symbols else (0,)
     for seed in range(24):
         for mask in range(16):
             for mode in modes:
@@ -272,6 +289,7 @@ def check(stage, *, self_test=False):
         # Mutate every actual callback literal and an exact memcpy length.
         targets = [symbols[name][0] for name in ("_kui_vmu_native_cache_seed_read",
             "_kui_vmu_native_resolution_cache_replay", "_allocation_safe", "_readonly_release_replay_valid",
+            "_native_sdk_coherence_cached_admit",
             "_native_passive_capture_windows")]
         changed_bodies = []
         for target in targets:
@@ -285,7 +303,7 @@ def check(stage, *, self_test=False):
         changed_bodies.append(bytes(changed))
         for changed in changed_bodies:
             try:
-                CacheGateway(stage, 7, 15, [1, 1, 1, 1], changed).run().check()
+                CacheGateway(stage, 7, 15, [1, 1, 1, 1, 1], changed).run().check()
             except (AssertionError, struct.error, KeyError):
                 mutations += 1
             else:
@@ -293,12 +311,12 @@ def check(stage, *, self_test=False):
         words = struct.unpack("<" + "H" * (len(body) // 2), body)
         gates = [i + 1 for i in range(len(words) - 1) if words[i] == 0x2008 and
                  words[i + 1] >> 8 in (0x89, 0x8b, 0x8d, 0x8f)]
-        require(len(gates) == 4, "cache wrapper must branch on all four callback results")
+        require(len(gates) == 5, "cache wrapper must branch on all five callback results")
         for gate in gates:
             changed = bytearray(body); struct.pack_into("<H", changed, gate * 2, 9)
-            for flags in range(16):
+            for flags in range(32):
                 try:
-                    CacheGateway(stage, 7, 15, [(flags >> i) & 1 for i in range(4)], bytes(changed)).run().check()
+                    CacheGateway(stage, 7, 15, [(flags >> i) & 1 for i in range(5)], bytes(changed)).run().check()
                 except (AssertionError, struct.error, KeyError):
                     mutations += 1
                     break
@@ -310,4 +328,5 @@ def check(stage, *, self_test=False):
             "actual_outer_relay_route_cases": routes, "executable_restored_before_replay": True,
             "fresh_scan_selected_only_on_cache_miss": True, "launch_eligibility_before_replay": True,
             "no_metadata_before_exact_image_replay": True, "fresh_allocation_and_release_guards": True,
+            "fresh_sdk_initializer_slot_admission":True,"sdk_slot_admission_is_independent_image_predicate":True,
             "capture_only_after_all_guards": True}

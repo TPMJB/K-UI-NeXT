@@ -21,6 +21,22 @@ COMPAT_CACHE_HOST_SRC = src/core/vmu_native_resolution_cache.c src/core/vmu_nati
 .PHONY: compat-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-evolution-context-host-tests native-evolution-fault-host-tests
 .PHONY: native-evolution-trace-host-tests native-evolution-trace-persistent-host-tests
 .PHONY: native-exception-capture-host-tests
+.PHONY: native-sdk-coherence-install-host-tests
+native-sdk-coherence-install-host-tests:
+	@test -f '$(EVOLUTION1_STARTUP)' && test -f '$(STARTUP)' && test -f '$(SKIES_STARTUP)' && \
+	 test -f '$(SA2_STARTUP)' && test -f '$(GRANDIA2_STARTUP)' || \
+	 (echo 'Set EVOLUTION1_STARTUP, STARTUP, SKIES_STARTUP, SA2_STARTUP and GRANDIA2_STARTUP to the five original executables'; exit 2)
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_sdk_coherence.c \
+	 src/loader/vmu_native_sdk_coherence.c -o $(BUILD)/test-sdk-coherence-prepare
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-sdk-coherence-prepare \
+	 tests/fixtures/native-cache/evolution1.nvr tests/fixtures/native-cache/ps2.nvr \
+	 tests/fixtures/native-cache/skies.nvr tests/fixtures/native-cache/sa2.nvr tests/fixtures/native-cache/grandia2.nvr
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -Iinclude -Isrc/loader \
+	 tests/test_vmu_native_sdk_coherence_install.c src/core/vmu_native_patch.c src/core/hash.c src/core/data.c \
+	 -o $(BUILD)/test-sdk-coherence-install
+	$(BUILD)/test-sdk-coherence-install '$(EVOLUTION1_STARTUP)' '$(STARTUP)' '$(SKIES_STARTUP)' '$(SA2_STARTUP)' '$(GRANDIA2_STARTUP)'
+
 native-exception-capture-host-tests:
 	@mkdir -p $(BUILD)
 	python3 tests/test_vmu_native_fault_capture.py
@@ -76,7 +92,7 @@ native-evolution-fault-host-tests:
 	python3 tests/test_vmu_native_evolution_cache.py --startup '$(EVOLUTION1_STARTUP)'
 	python3 tests/test_vmu_native_map_refusal.py
 
-native-evolution-context-host-tests: native-exception-capture-host-tests
+native-evolution-context-host-tests: native-exception-capture-host-tests native-sdk-coherence-install-host-tests
 	@mkdir -p $(BUILD)
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_evolution_transfer.c \
 	 $(COMPAT_WORKER_HOST_SRC) src/core/vmu_native_resolution_cache.c src/core/vmu_native_exit.c \

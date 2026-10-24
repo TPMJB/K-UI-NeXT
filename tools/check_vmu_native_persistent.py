@@ -47,13 +47,18 @@ from test_armada_ce_maple_hook import CPU
 
 ROOT = Path(__file__).resolve().parents[1]
 SPAN = 0x20000
+SDK_COHERENCE_GATES = ("_kui_vmu_native_sdk_coherence_uniform_gate",
+                       "_kui_vmu_native_sdk_coherence_variable_gate")
+SDK_COHERENCE_STATE = "_kui_vmu_native_sdk_coherence_state"
+SDK_COHERENCE_PREPARE = "_kui_vmu_native_sdk_coherence_prepare"
 
 # The prepared kernels are reviewed linked SH instructions, including their
 # literal pools. Only ELF-proven pointer words are normalized; their exact
 # typed object/function, local source owner and interior offset remain in the
 # signature. This admits relocation/layout changes, not new code or targets.
 PREPARED_PINS = {
- '_kui_vmu_native_fault_capture_install': ('c82cde7ed25467a1f1a1552517c6057740afa935c889f6a25effee1697fd254b', 560),
+ '_kui_vmu_native_sdk_coherence_prepare': ('090c9b38268398d00522927bae40ec03e4f869f516d71be46cc4635c8eec8bef', 432),
+ '_kui_vmu_native_fault_capture_install': ('db26024d38eaa6e0c440fdadf83df04c43a91a653ab21637e427502550726afb', 560),
  '_read_heap': ('b102f5d502f2a2e45998b1555e7bd6e56d2b7048059ebb9bb37ed6ee415a58cd', 104),
  '_stack_valid': ('f5e81a00f19db27641f67958161041e8a865061f49fd71fbe114b165b2666db6', 116),
  '_native_phase_span': ('eb173e6c2fcbdabc829a622ae3cf7f3430ecae15cc95e2bab92314eb885ee2f2', 136),
@@ -65,14 +70,14 @@ PREPARED_PINS = {
  '_native_phase_word.constprop.0': ('1e94b1f6d66b2667c76e878575a2f3b2fa57f04d0d65e0e735be7b88e2b54704', 56),
  '_diagnostic_pair_begin': ('c579977d4365a6b01f990fc9802e6db3a3bf75ad3b9fcb10ee2ac69c10ceecde', 584),
  '_diagnostic_end': ('6f5f038044a4d92b72a929a0a55d6f3c06740fc336e4d94c1aa49282ea4fbf57', 272),
- '_diagnostic_complete': ('87c8c9dd36656efd28b53bd8e43f8cf8fe3ba0d98925a91684e8c2ec2cc0d95d', 966),
+ '_diagnostic_complete': ('aa64408dc10b6fa647159977dee5cd8deb9230ceee7eb19eba82f19f605c9129', 966),
  '_poll_lease_valid': ('b67c432db445f780a4b2e93871f7907b7f7de1fd8c0795faf112f30fe0673302', 64),
  '_installed_hooks_valid': ('819cc9127506f6790fa189371f453b3474bd2b3f9e39752d43a5d8501dd2e286', 76),
  '_kui_vmu_native_readonly_release_check': ('87433dd479877714f7773607b751f56b629a27792417dbb31ccfa430499e1474', 588),
  '_hook_word': ('69410002bf135878c32df63d2459603428947eadc760aa6309775f82b8801f9c', 132),
  '_prepare_hook_entry': ('e46707ed62da6217391c4aee61d074980abd67826655c1b508159548cabefd74', 228),
  '_kui_vmu_native_lifetime_prepare': ('4691642d40ae532e2f81cfe46c3f81a019412c0da0e43fb4f7913d4a44b87312', 640),
- '_kui_vmu_native_passive_arm': ('ef6cc8281ada8638c21ad1ef27469dbcd04c2b2ec90b3d4385d34993cf4bfe3f', 1644),
+ '_kui_vmu_native_passive_arm': ('08ed7ceacda72c0638418b934d981a910d1df1fbe0d576c472029a8f364bff96', 2048),
  '_persistent_storage_guard': ('d230251892a758f65469e9cb692703a0270511756e1fbdc94cc28e04472a15fe', 396),
  '_persistent_lease': ('8658f150d0d4811335e46332a9a075f199fa8219edb5ccf1730223a4e34d78e3', 148),
  '_kui_vmu_native_passive_submit': ('7d224a37aa183eaec433ad49a62232f05ae253bfede8ad31584b4bc109358245', 1380),
@@ -83,10 +88,10 @@ PREPARED_PINS = {
  '_readonly_overlay_parent_response': ('d396e68edd3158708ba5a8c9ff5235821bb62b71cc9dc40650cadb9098eaeb12', 116),
  '_readonly_overlay_increment': ('e3a6368a10593e4ae7510faf736d644a9d9e383e262070923241741b3f6893b1', 14),
  '_readonly_overlay_le32': ('1daa47eecc292df8356826c0e5a683e3a2c27cec212f901db7b1f01cf3b897df', 30),
- '_transfer_context_valid': ('980e503eef4ef2bda0df53eaae475063952d924525bbbb06b69f26b172358efe', 1236),
+ '_transfer_context_valid': ('6878e558790e8a9fa5a38a734e005735180821fb7f95ad98c6f30e2cc336de78', 1236),
  '_persistent_context_guard': ('7d7b44453ed058c85b22f3624a96001a93f68e06bd6dc581757cbff364c96df7', 132),
- '_kui_vmu_native_runtime_fault': ('6e8cbbfc2dd1ddb64c80bb848a05d7c7574eafffbde53f4d2c0579bb7403c96a', 288),
- '.rodata': ('9fe578b9dc9d7ae44c99b1014e51c29bb733c9665c9b59bcb2e77e38e94f2120', 3760),
+ '_kui_vmu_native_runtime_fault': ('602715b3a63ceb4cee060f7c4d3ddffd11d4158fadcf0b7f1602a10057a0bc44', 332),
+ '.rodata': ('1d484951e93ec395156356e10c7473aabf689c6a08c0503119de89834503ff7f', 3864),
  '_kui_vmu_native_trace_enabled': ('0a920c3cf23dad2c3aabfe188567a6d1425af67dd54b46b619555831e9748eac', 16),
  '_kui_vmu_native_trace_image': ('e85462a3e477dee0a0124220436dc355360013e47136f21eb8576af465cdd9a9', 60),
  '_kui_vmu_native_trace_point': ('f29078442d6ec0295e0d47680f02bdc96b3e656ddc2c0cd98d02975392b09db6', 1132),
@@ -94,14 +99,14 @@ PREPARED_PINS = {
  '_kui_vmu_native_trace_init': ('bf7a45b36958e63813bfb7eef0800982671734ef8d4414b6c1ff477658b183e8', 96),
  '_kui_vmu_native_trace_wait_before': ('e9b3f06c9f25ba26990d028291ee7c37f06e4fae6df7069ac0086d316321b5d9', 152),
  '_kui_vmu_native_trace_frame_entry': ('24be2fc972ae425d21e9fd5a0b8ad551f1f64bc20c8d7cb9118c00818bba1111', 164),
- '_kui_vmu_native_trace_report': ('c59ce97fbaaacfef737d8214604efee06381e6ab6d6332a22e88c1bf95e65da9', 1120),
+ '_kui_vmu_native_trace_report': ('75033e5897d4eec08aead00f128991467a2d057e284416dfe449b83544ddf96d', 1120),
  '_kui_vmu_native_trace_wait_after': ('36746417db83b1f0060aacf65c6ad9fb76ce55aea985779d0d1244b70c6f30e6', 180),
  '_kui_vmu_native_trace_game': ('367d93d9d799bac69baf843535f58f139cac582df3d494ff5e4e4721ece346e3', 112),
- '_trace_history': ('6b10074a8bf40f99e2e0c28de40f40cda7043d59c3117475b1c9efab883562b0', 164),
+ '_trace_history': ('707a8e97e89cde6ff13821edf89b71fd1791571defc72156990d7f12959c0eb6', 164),
  '_report': ('114ee02adbf996c428218611b859b7548b3f52b3fd501af9105bd11b760463a8', 440),
  '_kui_vmu_native_trace_failure': ('7db0cdf5462a9ddb02e0bfa486f9fdcd17b92f60a9a7769e4e835fcc4f5335d3', 120),
  '_trace_row.constprop.0': ('9d55c81d38773acb609b68c1d6684dfc6be503622f4078799864c49148f5426d', 92),
- '_trace_packets': ('1f84872a70874f397e80bc7eacbe2f43fc19914c4fcb461595cfc3707652d7dc', 116),
+ '_trace_packets': ('c632837e427d667626be65ec2e9a636ba84bc29b14f2196d6b8d6cdc07e1fbbc', 116),
  '_kui_vmu_native_trace_irq': ('31b72b692190f12dabe3bee1767a9d43913918730d08b7c7c802bea816c8177e', 14)}
 
 
@@ -183,6 +188,14 @@ def prepared_symbol_records(worker):
     require(header[1]==1 and header[2]&7==2 and header[3]==P2 and header[5]==80,
             "prepared header boundary lacks exact immutable exports")
     records.append(("__vmu_native_worker_header_end.cached",P1+80,0,0,exports[3]))
+    coherence=sdk_coherence_metadata(worker)
+    if coherence["available"]:
+        # These are exact function-entry identities, never a P2 code span.
+        # Global relocation admission still requires the independently
+        # executed cold-gateway proof and the two exact descriptor sites.
+        for name in SDK_COHERENCE_GATES:
+            address,_,_,owner=worker[4][name]
+            records.append((name+".uncached",address+0x20000000,0,2,owner))
     return records
 
 
@@ -502,6 +515,9 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
     for caller in (local+"controller_context_valid",local+"transfer_context_valid"):
         require(not any(a==caller and b.startswith((local+"read_value",local+"ram"))
                         for a,b in edges),"prepared context address checks are not inlined")
+    if SDK_COHERENCE_STATE in worker[4]:
+        require(("kui_vmu_native_passive_arm","kui_vmu_native_sdk_coherence_prepare") in edges,
+                "SDK cold coherency state preparation is missing from worker arm")
     require(edges.count((local + "persistent_lease", local + "persistent_storage_guard")) == 2,
             "storage loan must retain full guards at both boundaries")
     rejected = 0
@@ -1626,19 +1642,79 @@ def check_source(directory, runtime):
             "elf_sha256": record["elf_sha256"]}
 
 
+def sdk_coherence_metadata(worker):
+    """Establish exact descriptor, code-entry and private-state ownership."""
+    names={*SDK_COHERENCE_GATES,SDK_COHERENCE_STATE,SDK_COHERENCE_PREPARE}
+    present=names&worker[4].keys()
+    if not present:return {"available":False}
+    require(present==names,"partial SDK cache-coherence implementation")
+    table,body,section=symbol_bytes(worker,"_kui_vmu_native_trace_exports",1)
+    require(section[2]&7==2 and table&0xff000000==0x8c000000 and
+            not table&3 and len(body)==40,
+            "SDK coherence descriptor lacks exact40B immutable P1 ownership")
+    state,size,kind,owner=worker[4][SDK_COHERENCE_STATE]
+    require(owner<len(worker[3]),"SDK coherence state has no section owner")
+    bss=worker[3][owner]
+    begin=worker[4]["__vmu_native_worker_bss_begin"]
+    end=worker[4]["__vmu_native_worker_bss_end"]
+    require(size==48 and kind==1 and not state&3 and
+            state&0xff000000==0xac000000 and owner==begin[3]==end[3] and
+            bss[1]==8 and bss[2]&7==3 and
+            begin[0]<=state<state+size<=end[0] and
+            bss[3]<=state<state+size<=bss[3]+bss[5],
+            "SDK coherence scratch lacks exact48B private P2 BSS ownership")
+    for name,(other,count,other_kind,_) in worker[4].items():
+        if name==SDK_COHERENCE_STATE or other_kind!=1 or not count:continue
+        require(physical(other)+count<=physical(state) or physical(state)+size<=physical(other),
+                "SDK coherence scratch overlaps another typed object: "+name)
+    targets=[]
+    for name in SDK_COHERENCE_GATES:
+        address,gate,code=symbol_bytes(worker,name,2)
+        require(code[2]&7==6 and address&0xff000000==0x8c000000 and
+                not address&1 and gate,
+                "SDK cold gate lacks an exact typed cached-code entry")
+        targets.append(address+0x20000000)
+    expected=(0x4b545231,2,40,*(worker[4][name][0] for name,*_ in TRACE_GATES),*targets,state)
+    require(struct.unpack("<10I",body)==expected,
+            "SDK coherence descriptor differs from exact typed entries/state")
+    return {"available":True,"descriptor_address":table,"descriptor_bytes":40,
+            "state_address":state,"state_bytes":48,
+            "p2_references":[[physical(table)-physical(P1)+28+4*i,value]
+                             for i,value in enumerate(targets)],
+            "verified_cold_owner_stack_gateways":[name[1:] for name in SDK_COHERENCE_GATES]}
+
+
+def sdk_coherence_admission(worker,self_test=False):
+    """Execute cold handoff before authorizing its two P2 entry pointers."""
+    metadata=sdk_coherence_metadata(worker)
+    if not metadata["available"]:return metadata
+    from check_vmu_native_sdk_coherence import audit
+    result=audit(worker,self_test=self_test)
+    require(result.get("instruction_cases",0)>0 and
+            result.get("owner_stack_accesses_before_purge")==0 and
+            result.get("purge_before_first_tas") is True and
+            result.get("no_private_stack_use") is True and
+            result.get("forced_lock_writes")==0 and
+            result.get("uniform_replay_stack_bytes")==8 and
+            result.get("variable_replay_stack_bytes")==24,
+            "SDK coherence gates lack the complete pre-acquisition/stack proof")
+    result.update(metadata)
+    return result
+
+
 def fault_capture_admission(worker,self_test=False):
     """Run the exact fault gateway/publisher before granting narrow exceptions."""
     names={FAULT_GATEWAY,FAULT_PUBLISH,FAULT_STATE,"_kui_vmu_native_fault_capture_install"}
     present=names&worker[4].keys()
     if not present:return {"available":False}
     require(present==names,"partial fault-capture implementation cannot acquire special admission")
-    prepared_symbol_records(worker)
     address,size,kind,owner=worker[4][FAULT_STATE]
     section=worker[3][owner]
     require(size==32 and kind==1 and not address&3 and address&0xff000000==0xac000000 and
             owner==worker[4]["__vmu_native_worker_bss_begin"][3] and
             section[3]<=address<address+size<=section[3]+section[5],
             "fault capture scratch lacks exact32B private P2 BSS ownership")
+    prepared_symbol_records(worker)
     result=audit_fault_capture(worker,self_test)
     require(result["instruction_cases"] and result["publication_cases"]==5 and
             result["publication_from_p2_after_two_operand_cache_purges"] and
@@ -1660,10 +1736,15 @@ def fault_capture_admission(worker,self_test=False):
     return result
 
 
-def check_worker_pointer_aliases(wire,policy,fault_capture):
+def check_worker_pointer_aliases(wire,policy,fault_capture,coherence=None):
     """Admit only the independently proved island and ownership comparisons."""
     relocations=struct.unpack_from("<I",wire,28)[0]
     fault_islands=0
+    coherence=coherence or {"available":False}
+    cold_sites={tuple(row) for row in coherence.get("p2_references",[])}
+    require(len(cold_sites)==(2 if coherence["available"] else 0),
+            "SDK cold gates require exactly two distinct descriptor references")
+    cold_seen=[]
     for i in range(relocations):
         at,value=struct.unpack_from("<II",wire,72+i*8)
         area=value&0xff000000
@@ -1679,16 +1760,21 @@ def check_worker_pointer_aliases(wire,policy,fault_capture):
                     policy["runtime_stack_begin"]<=value<=policy["runtime_stack_end"] or boundary,
                     "cached pointer aliases persistent mutable P2 state")
         elif code["first"]<=physical(value)<code["first"]+code["memory"]:
-            require(fault_capture["available"] and at==fault_capture["publisher_p2_reference_offset"] and
-                    value==fault_capture["publisher_p2_reference_value"],
-                    "uncached pointer aliases immutable cached code/constants")
-            fault_islands+=1
+            if (at,value) in cold_sites:
+                cold_seen.append((at,value))
+            else:
+                require(fault_capture["available"] and at==fault_capture["publisher_p2_reference_offset"] and
+                        value==fault_capture["publisher_p2_reference_value"],
+                        "uncached pointer aliases immutable cached code/constants")
+                fault_islands+=1
     require(fault_islands==int(fault_capture["available"]),
             "fault publisher must own exactly one audited P2 island reference")
+    require(len(cold_seen)==len(cold_sites) and set(cold_seen)==cold_sites,
+            "SDK cold descriptor must own exactly two audited P2 gate references")
     return relocations
 
 
-def worker_stack_paths(directory, worker, resident, fault_proof=None):
+def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_proof=None):
     """Walk source-qualified emitted graphs with finite authored callbacks."""
     report_sets = {"worker": sorted((directory / "native").rglob("*.ci")),
                    "low": sorted(directory.glob("resident-sci.elf*.ltrans*.ci"))}
@@ -1717,6 +1803,8 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None):
     calls["worker:kui_vmu_native_trace_irq"] = []
     if fault_proof is None:fault_proof=fault_capture_admission(worker)
     fault_leaves=fault_proof.get("verified_zero_stack_assembly",[])
+    if coherence_proof is None:coherence_proof=sdk_coherence_admission(worker)
+    cold_gates=coherence_proof.get("verified_cold_owner_stack_gateways",[])
     for name in fault_leaves:
         # The proof above executed these authored assembly bodies with
         # unusable owner stacks; neither pushes a frame or calls C.
@@ -1824,10 +1912,11 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None):
     return {"paths": paths, "indirect_sites": len(indirect_sites),
             "null_writer_block_sites": [list(site) for site in sorted(null_sites)],
             "source_qualified_calls": True,
-            "verified_zero_stack_assembly_leaves": ["kui_vmu_native_trace_irq",*fault_leaves]}
+            "verified_zero_stack_assembly_leaves": ["kui_vmu_native_trace_irq",*fault_leaves],
+            "verified_cold_owner_stack_gateways":cold_gates}
 
 
-def check_stacks(directory, worker, fault_proof=None):
+def check_stacks(directory, worker, fault_proof=None, coherence_proof=None):
     resident = inspect_elf((directory / "resident-sci.elf").read_bytes(), LOW, 0x8C007800)
     low_rows = linked_stack_rows(sorted((directory / "resident/lto").glob("*.ltrans*.su")), resident["symbols"])
     high_rows = linked_stack_rows(sorted((directory / "native").rglob("*.su")), worker[4])
@@ -1839,6 +1928,10 @@ def check_stacks(directory, worker, fault_proof=None):
     assembly.update(name[1:] for name, *_ in TRACE_GATES)
     if fault_proof is None:fault_proof=fault_capture_admission(worker)
     assembly.update(fault_proof.get("verified_zero_stack_assembly",[]))
+    if coherence_proof is None:coherence_proof=sdk_coherence_admission(worker)
+    # Cold gates replay the original owner's prologue only after the proved
+    # purge; they do not use this private C stack and are not zero-stack leaves.
+    assembly.update(coherence_proof.get("verified_cold_owner_stack_gateways",[]))
     required = {_function_base(name) for name, (_, _, kind, _) in worker[4].items()
                 if kind == 2 and _function_base(name).startswith(("kui_", "durable_", "readonly_overlay_", "sci_storage_"))
                 and _function_base(name) not in assembly}
@@ -1848,7 +1941,7 @@ def check_stacks(directory, worker, fault_proof=None):
     # Every retained C frame is included, including low bus callbacks called
     # from the worker. Summing them overstates any single actual path.
     high_sum, low_sum = sum(frame for _, frame in high_rows), sum(frame for _, frame in low_rows)
-    call_paths = worker_stack_paths(directory, worker, resident, fault_proof)
+    call_paths = worker_stack_paths(directory, worker, resident, fault_proof, coherence_proof)
     total = max(path["conservative_bytes"] for path in call_paths["paths"].values())
     available = (resident_layout.stack_top("sci", False, True) -
                  resident_layout.stack_bottom("sci", False, True) -
@@ -1872,6 +1965,7 @@ def check(directory, *, self_test=False, trace_startup=None):
     binary = (directory / "native-worker.bin").read_bytes()
     wire = (directory / "native-worker.reloc").read_bytes()
     fault_capture=fault_capture_admission(worker,self_test)
+    coherence=sdk_coherence_admission(worker,self_test)
     policy = worker_load_policy(worker, binary)
     cached, code_base = policy["cached_code"], policy["code_alias"]
     require(base['gd_map_refusal_terminal']['cached_worker_terminal']==cached,
@@ -1898,9 +1992,11 @@ def check(directory, *, self_test=False, trace_startup=None):
             "exports must be typed immutable header")
     trace_address, trace_exports, trace_section = symbol_bytes(worker, '_kui_vmu_native_trace_exports', 1)
     require(trace_address == fields[19] and trace_address % 4 == 0 and
-            trace_section[2] & 7 == 2 and len(trace_exports) == 32 and
-            struct.unpack('<8I', trace_exports) ==
-            (0x4B545231, 1, 32, *(symbols[name] for name, *_ in TRACE_GATES), 0),
+            trace_section[2] & 7 == 2 and
+            ((coherence["available"] and len(trace_exports)==40) or
+             (not coherence["available"] and len(trace_exports)==32 and
+              struct.unpack('<8I',trace_exports)==
+              (0x4B545231,1,32,*(symbols[name] for name,*_ in TRACE_GATES),0))),
             'trace exports differ from exact typed immutable gateways')
     for name, *_ in TRACE_GATES:
         _, _, owner = symbol_bytes(worker, name, 2)
@@ -1946,7 +2042,7 @@ def check(directory, *, self_test=False, trace_startup=None):
     stack_guard = check_cached_stack_guard(worker, self_test) if cached else {"cached_runtime":False}
     compiled_reader = check_compiled_heap_reader(worker,self_test)
     prepared_lifetime = check_prepared_lifetime(directory, worker, binary, wire, self_test, build=base["runtime"]["build"])
-    relocations=check_worker_pointer_aliases(wire,policy,fault_capture)
+    relocations=check_worker_pointer_aliases(wire,policy,fault_capture,coherence)
 
     stage = read_elf(directory / "stage.elf")
     prepared = inspect_elf(stage[0], 0x8CE00000, 0x8CFE0000)
@@ -1986,13 +2082,14 @@ def check(directory, *, self_test=False, trace_startup=None):
     hook_ranges = [symbol_bytes(worker, name, 2)[:2] for name in
                    names[1:4] + (names[11], names[14]) + tuple(gate[0] for gate in TRACE_GATES)]
     if fault_capture["available"]:hook_ranges.append(symbol_bytes(worker,FAULT_GATEWAY,2)[:2])
+    if coherence["available"]:hook_ranges.extend(symbol_bytes(worker,name,2)[:2] for name in SDK_COHERENCE_GATES)
     for address, _, mnemonic, operands in literal_aware_instructions(disassembly):
         require(mnemonic not in ("trapa", "sleep", "rte", "ldtlb"), "unexpected privileged worker instruction")
         if mnemonic in ("ldc", "ldc.l") and operands.split("!", 1)[0].strip().endswith(",sr"):
             require(any(begin <= address < begin + len(body) for begin, body in hook_ranges),
                     "C worker changes SR outside audited gateways")
     pio = check_pio_writers(directory, worker)
-    stacks = check_stacks(directory, worker, fault_capture)
+    stacks = check_stacks(directory, worker, fault_capture, coherence)
     source = check_source(directory, base["runtime"])
     report = {"schema": "kui.native.persistent.probe.artifact.v1", "allocator_bootstrap_audit": base,
               "module_sha256": base["module_sha256"], "runtime": base["runtime"],
@@ -2003,6 +2100,7 @@ def check(directory, *, self_test=False, trace_startup=None):
               "private_stack_guard": stack_guard,
               "compiled_owner_reader": compiled_reader,
               "optional_fault_capture": fault_capture,
+              "sdk_cold_cache_coherence":coherence,
               "evolution_consolidated_trace": trace_audit,
               "stage_cache_publication": publication,
               "worker_icache_publication": publisher,

@@ -1,0 +1,891 @@
+{
+  "schema": "kui.native.sdk-lock-cache.v1",
+  "date": "2026-10-24",
+  "status": "Exact immediate first-transfer refusal reproduced offline and corrected in the targeted model. Console candidate success and the older post-Sofdec freeze are not established.",
+  "failed_console_build": "f04a7045a384",
+  "original_executable_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+  "original_game_bytes_included": false,
+  "development_measurements": true,
+  "released_artifact_binding": "The packaged probe-report.json and compiled proof bind the final release separately. The replay hashes below identify the measured development artifacts.",
+  "console_screen": {
+    "phase": "0x10",
+    "detail": "0x5",
+    "submitted": 0,
+    "completed": 0,
+    "fault_at": "0xac1dc53c",
+    "fault_value": "0x0",
+    "fault_expect": "0xffffffff",
+    "runtime_result": "0xfffffffc"
+  },
+  "causal_sequence": [
+    {
+      "step": 1,
+      "source": "original SDK wrapper",
+      "operation": "Normalize the lock pointer from P1 to P2 and store it through its P1 cell.",
+      "pointer_cell": "0x8c1dc538",
+      "dirty_cache_line": "0x8c1dc520..0x8c1dc53f",
+      "cached_flag": "0x00"
+    },
+    {
+      "step": 2,
+      "source": "original SDK submit",
+      "operation": "TAS.B through the uncached P2 flag sets RAM to 0x80. A noncacheable TAS does not purge the cached alias.",
+      "pc": "0x8c1dad78",
+      "flag_address": "0xac1dc53c"
+    },
+    {
+      "step": 3,
+      "source": "released worker boundary reader",
+      "operation": "A P1 literal load uses the same operand-cache index. Eviction writes the old dirty SDK line back, changing the held RAM flag from 0x80 to 0x00.",
+      "pc": "0x8cfd04b0",
+      "literal_address": "0x8cfd053c",
+      "cache_index_byte_offset": "0x0520"
+    },
+    {
+      "step": 4,
+      "source": "actual compiled worker",
+      "operation": "The unchanged lock witness reads zero and refuses with detail 5 before any transfer.",
+      "fault_at": "0xac1dc53c",
+      "fault_value": "0x0"
+    }
+  ],
+  "hardware_rule_reference": {
+    "source": "Renesas SH-4 Software Manual",
+    "url": "https://www.renesas.com/en/document/mas/sh-4-software-manual",
+    "section": "9.99 TAS.B",
+    "printed_page": 400,
+    "rule": "A cacheable TAS purges a matching dirty line; a noncacheable TAS performs no cache purge."
+  },
+  "fix": {
+    "installation": "Redirect exactly the existing four-byte SDK initializer call-target literal after validating its exact wrapper, original initializer prefix, bindings and disjoint owned fields. SDK initializer code and the previous three code-window checks remain unchanged.",
+    "runtime": "Run the cold gateway through P2 after pointer normalization and before the original low initializer. Check masked interrupts, idle DMA, unlocked P2 and P1 flags and the expected normalized pointer; execute two ordered OCBP instructions on the pointer cell and the flag at cell+4, verify RAM publication, replay the original twelve-byte initializer prefix, and resume original SDK code.",
+    "scope": "SDK initialization only; no per-poll purge or lock-value replacement.",
+    "abi": "Main worker exports remain version 3 / 80 bytes. Private trace/coherence descriptor is version 2 / 40 bytes; the private coherence state is 48 bytes.",
+    "families": "Uniform and explicit-48-byte SDK initializer prefixes are handled separately.",
+    "cache_line_coverage": {
+      "rule": "Purge the cell address and cell+4 in that order. These can share one cache line; both addresses are covered when the flag begins the next line.",
+      "evolution": {
+        "pointer_cell": "0x8c1dc538",
+        "flag": "0x8c1dc53c",
+        "same_32_byte_line": true
+      },
+      "sonic_adventure_2": {
+        "pointer_cell": "0x8c15cebc",
+        "flag": "0x8c15cec0",
+        "same_32_byte_line": false
+      },
+      "scope": "Both purges run only at SDK initialization, before TAS; the path never forces a lock value."
+    }
+  },
+  "replay": {
+    "schema": "kui.native.sdk-cache-first-submit.v1",
+    "cases": 14,
+    "cache_primitive_cases": 12,
+    "conditions": [
+      "CCR 0x105 and 0x185, covering both modeled operand-cache index modes.",
+      "Original SDK normalization, initializer, TAS, submit and compiled worker execute.",
+      "Candidate cases execute the linked stage installer and cold gateway, with forced same-index pressure after TAS.",
+      "Both a first SDK initialization and two actual initializations pass for each cache mode.",
+      "Replacing both actual second-initialization OCBP instructions with NOP, with every other instruction unchanged, recreates detail 5 for each cache mode.",
+      "A P2-stack rollback alone retains the immediate refusal."
+    ],
+    "results": [
+      {
+        "build": "build/poll-cost-final",
+        "worker_elf_sha256": "ff33672392be6f364bf33b5cb2baa61bad7a42957d1fbe68878366dada9c1b7e",
+        "cached_stack": true,
+        "ccr": "0x105",
+        "pre_tas_clean": false,
+        "post_tas_pressure": false,
+        "initializations": 1,
+        "refusal": "Actual worker refused with code 0x5",
+        "first_transfer_submitted": false,
+        "variant": "failed_release",
+        "events": [
+          {
+            "kind": "original_tas_p2",
+            "pc": "0x8c1dad78",
+            "target": "0xac1dc53c",
+            "flag_before": 0,
+            "flag_after": 128
+          },
+          {
+            "kind": "dirty_eviction",
+            "pc": "0x8cfd04b0",
+            "trigger": "0x8cfd053c",
+            "line": "0xc1dc520",
+            "flag_before": 128,
+            "flag_after": 0
+          }
+        ],
+        "failure_state": {
+          "submitted": "0x0",
+          "completed": "0x0",
+          "fault_at": "0xac1dc53c",
+          "fault_value": "0x0",
+          "fault_expect": "0xffffffff",
+          "runtime_result": "0xfffffffc"
+        }
+      },
+      {
+        "build": "build/poll-cost-final",
+        "worker_elf_sha256": "ff33672392be6f364bf33b5cb2baa61bad7a42957d1fbe68878366dada9c1b7e",
+        "cached_stack": true,
+        "ccr": "0x105",
+        "pre_tas_clean": true,
+        "post_tas_pressure": false,
+        "initializations": 1,
+        "refusal": null,
+        "first_transfer_submitted": true,
+        "variant": "counterfactual_pre_tas_clean",
+        "events": [
+          {
+            "kind": "pre_tas_ocbp",
+            "pc": "0x8c1dad78",
+            "trigger": "0x8c1dc538",
+            "line": "0xc1dc520",
+            "flag_before": 0,
+            "flag_after": 0
+          },
+          {
+            "kind": "original_tas_p2",
+            "pc": "0x8c1dad78",
+            "target": "0xac1dc53c",
+            "flag_before": 0,
+            "flag_after": 128
+          }
+        ]
+      },
+      {
+        "build": "build/mixed-poll-final",
+        "worker_elf_sha256": "cdc79762d0dd0236d43608b1f627fdeb15dd4f94a1c19bb5c53267b09708839d",
+        "cached_stack": false,
+        "ccr": "0x105",
+        "pre_tas_clean": false,
+        "post_tas_pressure": false,
+        "initializations": 1,
+        "refusal": null,
+        "first_transfer_submitted": true,
+        "variant": "previous_mixed_port_build",
+        "events": [
+          {
+            "kind": "original_tas_p2",
+            "pc": "0x8c1dad78",
+            "target": "0xac1dc53c",
+            "flag_before": 0,
+            "flag_after": 128
+          }
+        ]
+      },
+      {
+        "build": "/tmp/evolution-p2-stack-counterfactual",
+        "worker_elf_sha256": "16f60dcb87508f93d2747fce5e313d76e73db06e12e1f7ca923e844b1114989f",
+        "cached_stack": false,
+        "ccr": "0x105",
+        "pre_tas_clean": false,
+        "post_tas_pressure": false,
+        "initializations": 1,
+        "refusal": "Actual worker refused with code 0x5",
+        "first_transfer_submitted": false,
+        "variant": "p2_stack_counterfactual",
+        "events": [
+          {
+            "kind": "original_tas_p2",
+            "pc": "0x8c1dad78",
+            "target": "0xac1dc53c",
+            "flag_before": 0,
+            "flag_after": 128
+          },
+          {
+            "kind": "dirty_eviction",
+            "pc": "0x8cfd04b0",
+            "trigger": "0x8cfd053c",
+            "line": "0xc1dc520",
+            "flag_before": 128,
+            "flag_after": 0
+          }
+        ],
+        "failure_state": {
+          "submitted": "0x0",
+          "completed": "0x0",
+          "fault_at": "0xac1dc53c",
+          "fault_value": "0x0",
+          "fault_expect": "0xffffffff",
+          "runtime_result": "0xfffffffc"
+        }
+      },
+      {
+        "build": "build/sdk-coherence-dev",
+        "worker_elf_sha256": "9c01ee5250367a11e1e1ce6896dc6694e36700aaea3efbdf57d80810076cc192",
+        "cached_stack": true,
+        "ccr": "0x105",
+        "pre_tas_clean": false,
+        "post_tas_pressure": true,
+        "initializations": 1,
+        "refusal": null,
+        "first_transfer_submitted": true,
+        "variant": "candidate_actual_stage_and_gate",
+        "events": [
+          {
+            "kind": "actual_ocbp",
+            "pc": "0xacfdbb34",
+            "trigger": "0x8c1dc538",
+            "line": "0xc1dc520",
+            "flag_before": 0,
+            "flag_after": 0
+          },
+          {
+            "kind": "original_tas_p2",
+            "pc": "0x8c1dad78",
+            "target": "0xac1dc53c",
+            "flag_before": 0,
+            "flag_after": 128
+          },
+          {
+            "kind": "post_tas_index_pressure",
+            "pc": "0x8c1dae38",
+            "target": "0x8cfd053c",
+            "flag_before": 128,
+            "flag_after": 128
+          }
+        ],
+        "stage": {
+          "stage_elf_sha256": "77b73557ab3e7ad0ef08d8b5147bbd7be4706eb73a52e7d72da25604b6534160",
+          "installer_instructions": 2778,
+          "call_target_slot": "0x8c1b1854",
+          "installed_target": "0xacfdbae8",
+          "changed_bytes": 4,
+          "original_initializer_prefix_unchanged": true
+        },
+        "actual_ocbp_instructions": [
+          {
+            "pc": "0xace00074",
+            "address": "0x8c1b1840"
+          },
+          {
+            "pc": "0xacfdbb34",
+            "address": "0x8c1dc538"
+          },
+          {
+            "pc": "0xacfdbb38",
+            "address": "0x8c1dc53c"
+          }
+        ]
+      },
+      {
+        "build": "build/sdk-coherence-dev",
+        "worker_elf_sha256": "9c01ee5250367a11e1e1ce6896dc6694e36700aaea3efbdf57d80810076cc192",
+        "cached_stack": true,
+        "ccr": "0x105",
+        "pre_tas_clean": false,
+        "post_tas_pressure": true,
+        "initializations": 2,
+        "refusal": null,
+        "first_transfer_submitted": true,
+        "variant": "candidate_actual_stage_and_gate",
+        "events": [
+          {
+            "kind": "actual_ocbp",
+            "pc": "0xacfdbb34",
+            "trigger": "0x8c1dc538",
+            "line": "0xc1dc520",
+            "flag_before": 0,
+            "flag_after": 0
+          },
+          {
+            "kind": "actual_ocbp",
+            "pc": "0xacfdbb34",
+            "trigger": "0x8c1dc538",
+            "line": "0xc1dc520",
+            "flag_before": 0,
+            "flag_after": 0
+          },
+          {
+            "kind": "original_tas_p2",
+            "pc": "0x8c1dad78",
+            "target": "0xac1dc53c",
+            "flag_before": 0,
+            "flag_after": 128
+          },
+          {
+            "kind": "post_tas_index_pressure",
+            "pc": "0x8c1dae38",
+            "target": "0x8cfd053c",
+            "flag_before": 128,
+            "flag_after": 128
+          }
+        ],
+        "stage": {
+          "stage_elf_sha256": "77b73557ab3e7ad0ef08d8b5147bbd7be4706eb73a52e7d72da25604b6534160",
+          "installer_instructions": 2778,
+          "call_target_slot": "0x8c1b1854",
+          "installed_target": "0xacfdbae8",
+          "changed_bytes": 4,
+          "original_initializer_prefix_unchanged": true
+        },
+        "actual_ocbp_instructions": [
+          {
+            "pc": "0xace00074",
+            "address": "0x8c1b1840"
+          },
+          {
+            "pc": "0xacfdbb34",
+            "address": "0x8c1dc538"
+          },
+          {
+            "pc": "0xacfdbb38",
+            "address": "0x8c1dc53c"
+          },
+          {
+            "pc": "0xacfdbb34",
+            "address": "0x8c1dc538"
+          },
+          {
+            "pc": "0xacfdbb38",
+            "address": "0x8c1dc53c"
+          }
+        ]
+      },
+      {
+        "build": "build/sdk-coherence-dev",
+        "worker_elf_sha256": "9c01ee5250367a11e1e1ce6896dc6694e36700aaea3efbdf57d80810076cc192",
+        "cached_stack": true,
+        "ccr": "0x105",
+        "pre_tas_clean": false,
+        "post_tas_pressure": true,
+        "initializations": 2,
+        "refusal": "Actual worker refused with code 0x5",
+        "first_transfer_submitted": false,
+        "variant": "candidate_purge_mutation",
+        "events": [
+          {
+            "kind": "actual_ocbp",
+            "pc": "0xacfdbb34",
+            "trigger": "0x8c1dc538",
+            "line": "0xc1dc520",
+            "flag_before": 0,
+            "flag_after": 0
+          },
+          {
+            "kind": "original_tas_p2",
+            "pc": "0x8c1dad78",
+            "target": "0xac1dc53c",
+            "flag_before": 0,
+            "flag_after": 128
+          },
+          {
+            "kind": "dirty_eviction",
+            "pc": "0x8c1dae38",
+            "trigger": "0x8cfd053c",
+            "line": "0xc1dc520",
+            "flag_before": 128,
+            "flag_after": 0
+          },
+          {
+            "kind": "post_tas_index_pressure",
+            "pc": "0x8c1dae38",
+            "target": "0x8cfd053c",
+            "flag_before": 128,
+            "flag_after": 0
+          }
+        ],
+        "stage": {
+          "stage_elf_sha256": "77b73557ab3e7ad0ef08d8b5147bbd7be4706eb73a52e7d72da25604b6534160",
+          "installer_instructions": 2778,
+          "call_target_slot": "0x8c1b1854",
+          "installed_target": "0xacfdbae8",
+          "changed_bytes": 4,
+          "original_initializer_prefix_unchanged": true
+        },
+        "actual_ocbp_instructions": [
+          {
+            "pc": "0xace00074",
+            "address": "0x8c1b1840"
+          },
+          {
+            "pc": "0xacfdbb34",
+            "address": "0x8c1dc538"
+          },
+          {
+            "pc": "0xacfdbb38",
+            "address": "0x8c1dc53c"
+          }
+        ],
+        "ocbp_mutation": {
+          "instructions": [
+            {
+              "pc": "0xacfdbb34",
+              "before": "0x2a3",
+              "after": "0x9"
+            },
+            {
+              "pc": "0xacfdbb38",
+              "before": "0x2a3",
+              "after": "0x9"
+            }
+          ],
+          "phase": "second actual SDK initialization"
+        },
+        "failure_state": {
+          "submitted": "0x0",
+          "completed": "0x0",
+          "fault_at": "0xac1dc53c",
+          "fault_value": "0x0",
+          "fault_expect": "0xffffffff",
+          "runtime_result": "0xfffffffc"
+        }
+      },
+      {
+        "build": "build/poll-cost-final",
+        "worker_elf_sha256": "ff33672392be6f364bf33b5cb2baa61bad7a42957d1fbe68878366dada9c1b7e",
+        "cached_stack": true,
+        "ccr": "0x185",
+        "pre_tas_clean": false,
+        "post_tas_pressure": false,
+        "initializations": 1,
+        "refusal": "Actual worker refused with code 0x5",
+        "first_transfer_submitted": false,
+        "variant": "failed_release",
+        "events": [
+          {
+            "kind": "original_tas_p2",
+            "pc": "0x8c1dad78",
+            "target": "0xac1dc53c",
+            "flag_before": 0,
+            "flag_after": 128
+          },
+          {
+            "kind": "dirty_eviction",
+            "pc": "0x8cfd04b0",
+            "trigger": "0x8cfd053c",
+            "line": "0xc1dc520",
+            "flag_before": 128,
+            "flag_after": 0
+          }
+        ],
+        "failure_state": {
+          "submitted": "0x0",
+          "completed": "0x0",
+          "fault_at": "0xac1dc53c",
+          "fault_value": "0x0",
+          "fault_expect": "0xffffffff",
+          "runtime_result": "0xfffffffc"
+        }
+      },
+      {
+        "build": "build/poll-cost-final",
+        "worker_elf_sha256": "ff33672392be6f364bf33b5cb2baa61bad7a42957d1fbe68878366dada9c1b7e",
+        "cached_stack": true,
+        "ccr": "0x185",
+        "pre_tas_clean": true,
+        "post_tas_pressure": false,
+        "initializations": 1,
+        "refusal": null,
+        "first_transfer_submitted": true,
+        "variant": "counterfactual_pre_tas_clean",
+        "events": [
+          {
+            "kind": "pre_tas_ocbp",
+            "pc": "0x8c1dad78",
+            "trigger": "0x8c1dc538",
+            "line": "0xc1dc520",
+            "flag_before": 0,
+            "flag_after": 0
+          },
+          {
+            "kind": "original_tas_p2",
+            "pc": "0x8c1dad78",
+            "target": "0xac1dc53c",
+            "flag_before": 0,
+            "flag_after": 128
+          }
+        ]
+      },
+      {
+        "build": "build/mixed-poll-final",
+        "worker_elf_sha256": "cdc79762d0dd0236d43608b1f627fdeb15dd4f94a1c19bb5c53267b09708839d",
+        "cached_stack": false,
+        "ccr": "0x185",
+        "pre_tas_clean": false,
+        "post_tas_pressure": false,
+        "initializations": 1,
+        "refusal": null,
+        "first_transfer_submitted": true,
+        "variant": "previous_mixed_port_build",
+        "events": [
+          {
+            "kind": "original_tas_p2",
+            "pc": "0x8c1dad78",
+            "target": "0xac1dc53c",
+            "flag_before": 0,
+            "flag_after": 128
+          }
+        ]
+      },
+      {
+        "build": "/tmp/evolution-p2-stack-counterfactual",
+        "worker_elf_sha256": "16f60dcb87508f93d2747fce5e313d76e73db06e12e1f7ca923e844b1114989f",
+        "cached_stack": false,
+        "ccr": "0x185",
+        "pre_tas_clean": false,
+        "post_tas_pressure": false,
+        "initializations": 1,
+        "refusal": "Actual worker refused with code 0x5",
+        "first_transfer_submitted": false,
+        "variant": "p2_stack_counterfactual",
+        "events": [
+          {
+            "kind": "original_tas_p2",
+            "pc": "0x8c1dad78",
+            "target": "0xac1dc53c",
+            "flag_before": 0,
+            "flag_after": 128
+          },
+          {
+            "kind": "dirty_eviction",
+            "pc": "0x8cfd04b0",
+            "trigger": "0x8cfd053c",
+            "line": "0xc1dc520",
+            "flag_before": 128,
+            "flag_after": 0
+          }
+        ],
+        "failure_state": {
+          "submitted": "0x0",
+          "completed": "0x0",
+          "fault_at": "0xac1dc53c",
+          "fault_value": "0x0",
+          "fault_expect": "0xffffffff",
+          "runtime_result": "0xfffffffc"
+        }
+      },
+      {
+        "build": "build/sdk-coherence-dev",
+        "worker_elf_sha256": "9c01ee5250367a11e1e1ce6896dc6694e36700aaea3efbdf57d80810076cc192",
+        "cached_stack": true,
+        "ccr": "0x185",
+        "pre_tas_clean": false,
+        "post_tas_pressure": true,
+        "initializations": 1,
+        "refusal": null,
+        "first_transfer_submitted": true,
+        "variant": "candidate_actual_stage_and_gate",
+        "events": [
+          {
+            "kind": "actual_ocbp",
+            "pc": "0xacfdbb34",
+            "trigger": "0x8c1dc538",
+            "line": "0xc1dc520",
+            "flag_before": 0,
+            "flag_after": 0
+          },
+          {
+            "kind": "original_tas_p2",
+            "pc": "0x8c1dad78",
+            "target": "0xac1dc53c",
+            "flag_before": 0,
+            "flag_after": 128
+          },
+          {
+            "kind": "post_tas_index_pressure",
+            "pc": "0x8c1dae38",
+            "target": "0x8cfd053c",
+            "flag_before": 128,
+            "flag_after": 128
+          }
+        ],
+        "stage": {
+          "stage_elf_sha256": "77b73557ab3e7ad0ef08d8b5147bbd7be4706eb73a52e7d72da25604b6534160",
+          "installer_instructions": 2778,
+          "call_target_slot": "0x8c1b1854",
+          "installed_target": "0xacfdbae8",
+          "changed_bytes": 4,
+          "original_initializer_prefix_unchanged": true
+        },
+        "actual_ocbp_instructions": [
+          {
+            "pc": "0xace00074",
+            "address": "0x8c1b1840"
+          },
+          {
+            "pc": "0xacfdbb34",
+            "address": "0x8c1dc538"
+          },
+          {
+            "pc": "0xacfdbb38",
+            "address": "0x8c1dc53c"
+          }
+        ]
+      },
+      {
+        "build": "build/sdk-coherence-dev",
+        "worker_elf_sha256": "9c01ee5250367a11e1e1ce6896dc6694e36700aaea3efbdf57d80810076cc192",
+        "cached_stack": true,
+        "ccr": "0x185",
+        "pre_tas_clean": false,
+        "post_tas_pressure": true,
+        "initializations": 2,
+        "refusal": null,
+        "first_transfer_submitted": true,
+        "variant": "candidate_actual_stage_and_gate",
+        "events": [
+          {
+            "kind": "actual_ocbp",
+            "pc": "0xacfdbb34",
+            "trigger": "0x8c1dc538",
+            "line": "0xc1dc520",
+            "flag_before": 0,
+            "flag_after": 0
+          },
+          {
+            "kind": "actual_ocbp",
+            "pc": "0xacfdbb34",
+            "trigger": "0x8c1dc538",
+            "line": "0xc1dc520",
+            "flag_before": 0,
+            "flag_after": 0
+          },
+          {
+            "kind": "original_tas_p2",
+            "pc": "0x8c1dad78",
+            "target": "0xac1dc53c",
+            "flag_before": 0,
+            "flag_after": 128
+          },
+          {
+            "kind": "post_tas_index_pressure",
+            "pc": "0x8c1dae38",
+            "target": "0x8cfd053c",
+            "flag_before": 128,
+            "flag_after": 128
+          }
+        ],
+        "stage": {
+          "stage_elf_sha256": "77b73557ab3e7ad0ef08d8b5147bbd7be4706eb73a52e7d72da25604b6534160",
+          "installer_instructions": 2778,
+          "call_target_slot": "0x8c1b1854",
+          "installed_target": "0xacfdbae8",
+          "changed_bytes": 4,
+          "original_initializer_prefix_unchanged": true
+        },
+        "actual_ocbp_instructions": [
+          {
+            "pc": "0xace00074",
+            "address": "0x8c1b1840"
+          },
+          {
+            "pc": "0xacfdbb34",
+            "address": "0x8c1dc538"
+          },
+          {
+            "pc": "0xacfdbb38",
+            "address": "0x8c1dc53c"
+          },
+          {
+            "pc": "0xacfdbb34",
+            "address": "0x8c1dc538"
+          },
+          {
+            "pc": "0xacfdbb38",
+            "address": "0x8c1dc53c"
+          }
+        ]
+      },
+      {
+        "build": "build/sdk-coherence-dev",
+        "worker_elf_sha256": "9c01ee5250367a11e1e1ce6896dc6694e36700aaea3efbdf57d80810076cc192",
+        "cached_stack": true,
+        "ccr": "0x185",
+        "pre_tas_clean": false,
+        "post_tas_pressure": true,
+        "initializations": 2,
+        "refusal": "Actual worker refused with code 0x5",
+        "first_transfer_submitted": false,
+        "variant": "candidate_purge_mutation",
+        "events": [
+          {
+            "kind": "actual_ocbp",
+            "pc": "0xacfdbb34",
+            "trigger": "0x8c1dc538",
+            "line": "0xc1dc520",
+            "flag_before": 0,
+            "flag_after": 0
+          },
+          {
+            "kind": "original_tas_p2",
+            "pc": "0x8c1dad78",
+            "target": "0xac1dc53c",
+            "flag_before": 0,
+            "flag_after": 128
+          },
+          {
+            "kind": "dirty_eviction",
+            "pc": "0x8c1dae38",
+            "trigger": "0x8cfd053c",
+            "line": "0xc1dc520",
+            "flag_before": 128,
+            "flag_after": 0
+          },
+          {
+            "kind": "post_tas_index_pressure",
+            "pc": "0x8c1dae38",
+            "target": "0x8cfd053c",
+            "flag_before": 128,
+            "flag_after": 0
+          }
+        ],
+        "stage": {
+          "stage_elf_sha256": "77b73557ab3e7ad0ef08d8b5147bbd7be4706eb73a52e7d72da25604b6534160",
+          "installer_instructions": 2778,
+          "call_target_slot": "0x8c1b1854",
+          "installed_target": "0xacfdbae8",
+          "changed_bytes": 4,
+          "original_initializer_prefix_unchanged": true
+        },
+        "actual_ocbp_instructions": [
+          {
+            "pc": "0xace00074",
+            "address": "0x8c1b1840"
+          },
+          {
+            "pc": "0xacfdbb34",
+            "address": "0x8c1dc538"
+          },
+          {
+            "pc": "0xacfdbb38",
+            "address": "0x8c1dc53c"
+          }
+        ],
+        "ocbp_mutation": {
+          "instructions": [
+            {
+              "pc": "0xacfdbb34",
+              "before": "0x2a3",
+              "after": "0x9"
+            },
+            {
+              "pc": "0xacfdbb38",
+              "before": "0x2a3",
+              "after": "0x9"
+            }
+          ],
+          "phase": "second actual SDK initialization"
+        },
+        "failure_state": {
+          "submitted": "0x0",
+          "completed": "0x0",
+          "fault_at": "0xac1dc53c",
+          "fault_value": "0x0",
+          "fault_expect": "0xffffffff",
+          "runtime_result": "0xfffffffc"
+        }
+      }
+    ],
+    "limitations": [
+      "Targeted P1-copy-back/direct-mapped operand cache model; P0 accesses and synchronous Maple DMA retain the existing flat model.",
+      "Original IRQ registration scaffolding is omitted; initial empty-cache input is explicit. This reproduces a reachable dirty-line history, not every prior console cache access.",
+      "No instruction cache timing, write-buffer timing, interrupts, bus latency, game mainloop or FMV model.",
+      "The pre-TAS-clean switch is a counterfactual. Candidate cases execute the linked stage installer, its four-byte call-target change, the actual cold gateway and original SDK; a separately labeled OCBP-to-NOP mutation tests causality."
+    ]
+  },
+  "older_sofdec_failure": {
+    "status": "Unresolved; no causal equivalence or console fix established.",
+    "reason": "The reproduced case stops before the first transfer. Previous console reports reached the Sofdec transition, so success of this startup correction alone cannot establish a fix for that later failure."
+  },
+  "reproduce": [
+    "python3 tools/profile_vmu_native_sdk_cache_sh.py --startup /path/to/original/Evolution/1ST_READ.BIN --build FAILED_BUILD --comparison-build PREVIOUS_BUILD --p2-stack-build P2_STACK_COUNTERFACTUAL_BUILD --candidate-build CANDIDATE_BUILD --output cache-replay.json",
+    "python3 tools/check_vmu_native_persistent.py CANDIDATE_BUILD --self-test --trace-startup /path/to/original/Evolution/1ST_READ.BIN",
+    "make -f Makefile.vmu-native-compat BUILD=CANDIDATE_BUILD native-sdk-coherence-host-tests native-sdk-coherence-install-host-tests EVOLUTION1_STARTUP=/path/to/original/Evolution/1ST_READ.BIN STARTUP=/path/to/original/PowerStone2/1ST_READ.BIN SKIES_STARTUP=/path/to/original/Skies/1ST_READ.BIN SA2_STARTUP=/path/to/original/SA2/1ST_READ.BIN GRANDIA2_STARTUP=/path/to/original/Grandia2/1ST_READ.BIN"
+  ],
+  "independent_validation": {
+    "metadata_preparation_checks": 236,
+    "actual_sh_gate_cases": 412,
+    "instruction_and_literal_mutation_rejections": 193,
+    "original_initializer_prefix_cases": 40,
+    "ps2_original_register_liveness_cases": 8,
+    "console_candidate_success": false
+  },
+  "steady_cache_replay": {
+    "schema": "kui.native.sdk-cache-steady.v1",
+    "worker_elf_sha256": "9c01ee5250367a11e1e1ce6896dc6694e36700aaea3efbdf57d80810076cc192",
+    "worker_binary_sha256": "ebe1b467b8c253626d70d245aaaf77d574a460a4c64be1d239dace1cabfc46b7",
+    "original_bytes_embedded": false,
+    "limitations": [
+      "Bounded P1 copy-back operand-cache model, both OIX index modes; P0 accesses remain flat.",
+      "Original normalization, SDK initializer, submit, consumer and ready code execute. IRQ-registration scaffolding and assembly save/restore frames are provided by the existing bridge.",
+      "The frame bridge models owner-stack saves as cached P1 stores, rather than an out-of-band RAM copy; no cache lines are discarded to make frame updates visible.",
+      "Maple DMA packets are synchronous. No interrupts, write-buffer timing, instruction-cache timing, SD transport, game mainloop, video or FMV model.",
+      "A forced same-index P1 data read after every original P2 TAS is explicit test pressure, not an observed full-console access trace."
+    ],
+    "results": [
+      {
+        "ccr": "0x105",
+        "rounds": 128,
+        "stage": {
+          "stage_elf_sha256": "77b73557ab3e7ad0ef08d8b5147bbd7be4706eb73a52e7d72da25604b6534160",
+          "installer_instructions": 2778,
+          "call_target_slot": "0x8c1b1854",
+          "installed_target": "0xacfdbae8",
+          "changed_bytes": 4,
+          "original_initializer_prefix_unchanged": true
+        },
+        "cold_handoffs": 1,
+        "tas_instructions": 256,
+        "forced_index_conflicts": 128,
+        "held_lock_preserved_for_every_conflict": true,
+        "final_lock": 0,
+        "cold_ocbp_instructions": [
+          {
+            "pc": "0xace00074",
+            "address": "0x8c1b1840"
+          },
+          {
+            "pc": "0xacfdbb34",
+            "address": "0x8c1dc538"
+          },
+          {
+            "pc": "0xacfdbb38",
+            "address": "0x8c1dc53c"
+          }
+        ],
+        "submitted_callbacks": 128,
+        "completed_callbacks": 128
+      },
+      {
+        "ccr": "0x185",
+        "rounds": 128,
+        "stage": {
+          "stage_elf_sha256": "77b73557ab3e7ad0ef08d8b5147bbd7be4706eb73a52e7d72da25604b6534160",
+          "installer_instructions": 2778,
+          "call_target_slot": "0x8c1b1854",
+          "installed_target": "0xacfdbae8",
+          "changed_bytes": 4,
+          "original_initializer_prefix_unchanged": true
+        },
+        "cold_handoffs": 1,
+        "tas_instructions": 256,
+        "forced_index_conflicts": 128,
+        "held_lock_preserved_for_every_conflict": true,
+        "final_lock": 0,
+        "cold_ocbp_instructions": [
+          {
+            "pc": "0xace00074",
+            "address": "0x8c1b1840"
+          },
+          {
+            "pc": "0xacfdbb34",
+            "address": "0x8c1dc538"
+          },
+          {
+            "pc": "0xacfdbb38",
+            "address": "0x8c1dc53c"
+          }
+        ],
+        "submitted_callbacks": 128,
+        "completed_callbacks": 128
+      }
+    ],
+    "pairs_passed": 256,
+    "reproduce": "python3 tools/profile_vmu_native_sdk_cache_steady_sh.py --startup /path/to/original/Evolution/1ST_READ.BIN --build BUILD --rounds 128 --output steady-cache.json"
+  }
+}

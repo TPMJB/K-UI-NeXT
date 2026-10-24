@@ -1,7 +1,7 @@
 {
   "schema": "kui.native.linked-worker-cost.v1",
   "date": "2026-10-24",
-  "status": "Measured overhead corrected; console freeze root cause and candidate success remain unproved.",
+  "status": "Historical flat-memory overhead measurements; build f04a7045a384 subsequently failed before its first transfer on hardware. A separate cache-aware replay reproduces that immediate regression; the older Sofdec freeze remains unresolved.",
   "previous_console_build": "1b5d9eb6e924",
   "previous_console_result": "Freeze immediately after MPEG Sofdec logo, no SD activity; mixed-port correction did not resolve it.",
   "executable_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
@@ -217,5 +217,19 @@
     "exception_installer_mutable_saved_r0_cases": 32,
     "compiled_artifact_self_test": "passed",
     "console_success": false
-  }
+  },
+  "subsequent_console_build": "f04a7045a384",
+  "subsequent_console_result": {
+    "phase": "0x10",
+    "detail": "0x5",
+    "submitted": 0,
+    "completed": 0,
+    "fault_at": "0xac1dc53c",
+    "fault_value": "0x0",
+    "fault_expect": "0xffffffff",
+    "runtime_result": "0xfffffffc",
+    "interpretation": "SDK transfer-lock witness saw zero before first submission, independently reproduced with dirty P1 writeback over the P2-held flag."
+  },
+  "cache_regression_evidence": "native-sdk-lock-cache-2026-10-24.json",
+  "flat_replay_does_not_prove_cache_correctness": true
 }

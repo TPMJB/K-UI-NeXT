@@ -7,10 +7,20 @@ static int __attribute__((noipa)) native_evolution_trace_install(const struct ku
  if(diagnostics!=KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE) return 0;
  if(!kui_vmu_native_trace_image(&native_driver)) return 0;
  uint32_t table=(e->trace_exports&0x1fffffffu)|0xa0000000u;
- if((table&3u) || table<dest+80u || table>dest+bytes-32u) return -1;
+ if((table&3u) || table<dest+80u || table>dest+bytes-40u) return -1;
  const uint32_t *t=(const uint32_t *)(uintptr_t)table;
- if(t[0]!=0x4b545231u || t[1]!=1u || t[2]!=32u || t[7]) return -1;
+ if(t[0]!=0x4b545231u || t[1]!=2u || t[2]!=40u) return -1;
  for(unsigned i=3;i<7;i++) if(!passive_entry(t[i],dest,bytes)) return -1;
+ for(unsigned i=7;i<9;i++) {
+  if((t[i]&0xe0000000u)!=0xa0000000u) return -1;
+  uint32_t entry=t[i];
+#if KUI_VMU_NATIVE_CACHED_CODE
+  entry-=0x20000000u;
+#endif
+  if(!passive_entry(entry,dest,bytes)) return -1;
+ }
+ if((t[9]&3u) || (t[9]&0xe0000000u)!=0xa0000000u ||
+    t[9]<e->bss_begin || t[9]>e->bss_end || e->bss_end-t[9]<48u) return -1;
  static const struct {uint32_t address,bytes;uint16_t ops[8];} w[3]={
   {0x8c1663f8u,12u,{0x2fe6,0x2fd6,0x2fc6,0x2fb6,0xeb00,0x2fa6}},
   {0x8c166422u,16u,{0x4d0b,0x0009,0x6503,0x4a0b,0x64c2,0x490b,0x6403,0x6e03}},

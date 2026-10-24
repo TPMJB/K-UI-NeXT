@@ -129,8 +129,9 @@ class PreparedArtifact(unittest.TestCase):
     def test_fault_publication_alias_exception_is_exact(self):
         if audit.FAULT_GATEWAY not in self.worker[4]:self.skipTest("optional fault capture is absent")
         proof=audit.fault_capture_admission(self.worker)
+        coherence=audit.sdk_coherence_admission(self.worker)
         policy=audit.worker_load_policy(self.worker,self.binary)
-        self.assertEqual(audit.check_worker_pointer_aliases(self.wire,policy,proof),
+        self.assertEqual(audit.check_worker_pointer_aliases(self.wire,policy,proof,coherence),
                          struct.unpack_from("<I",self.wire,28)[0])
         total=struct.unpack_from("<I",self.wire,28)[0]
         records=[struct.unpack_from("<II",self.wire,72+i*8) for i in range(total)]
@@ -142,27 +143,105 @@ class PreparedArtifact(unittest.TestCase):
         for wire in (changed(island,value=records[island][1]+2),
                      changed(island,at=records[island][0]+4)):
             with self.assertRaisesRegex(ValueError,"uncached pointer aliases"):
-                audit.check_worker_pointer_aliases(wire,policy,proof)
+                audit.check_worker_pointer_aliases(wire,policy,proof,coherence)
         # Removing or duplicating the island cannot broaden its authorization.
         for extra in (-1,1):
             wire=bytearray(self.wire)
             if extra<0:del wire[72+island*8:80+island*8]
             else:wire.extend(struct.pack("<II",records[island][0]+4,records[island][1]))
             struct.pack_into("<I",wire,28,total+extra)
-            with self.assertRaises(ValueError):audit.check_worker_pointer_aliases(bytes(wire),policy,proof)
+            with self.assertRaises(ValueError):audit.check_worker_pointer_aliases(bytes(wire),policy,proof,coherence)
         for boundary in proof["cached_bss_boundaries"]+[proof["cached_header_end"]]:
             selected=[i for i,(_,value) in enumerate(records) if value==boundary]
             for i in selected:
                 with self.subTest(boundary=hex(boundary)):
                     with self.assertRaisesRegex(ValueError,"cached pointer aliases persistent"):
-                        audit.check_worker_pointer_aliases(changed(i,at=0),policy,proof)
+                        audit.check_worker_pointer_aliases(changed(i,at=0),policy,proof,coherence)
                     with self.assertRaisesRegex(ValueError,"cached pointer aliases persistent"):
-                        audit.check_worker_pointer_aliases(changed(i,value=boundary+4),policy,proof)
+                        audit.check_worker_pointer_aliases(changed(i,value=boundary+4),policy,proof,coherence)
         for index,delta in ((0,1),(1,4),(2,1)):
             symbols=copy.deepcopy(self.worker[4]);record=list(symbols[audit.FAULT_STATE]);record[index]+=delta
             symbols[audit.FAULT_STATE]=tuple(record)
             with self.assertRaisesRegex(ValueError,"scratch lacks exact32B"):
                 audit.fault_capture_admission(self.worker[:4]+(symbols,))
+
+    def test_sdk_coherence_descriptor_and_scratch_have_exact_ownership(self):
+        if audit.SDK_COHERENCE_STATE not in self.worker[4]:self.skipTest("SDK coherence gates are absent")
+        metadata=audit.sdk_coherence_metadata(self.worker)
+        self.assertTrue(metadata["available"])
+        self.assertEqual(metadata["descriptor_bytes"],40)
+        self.assertEqual(metadata["state_bytes"],48)
+        table="_kui_vmu_native_trace_exports"
+        address,body,section=audit.symbol_bytes(self.worker,table,1)
+        first=section[4]+address-section[3]
+        values=list(struct.unpack("<10I",body))
+        for index,value in ((0,0),(1,1),(2,32),(7,values[7]-0x20000000),
+                            (7,values[8]),(8,values[8]+2),
+                            (9,values[9]-0x20000000),(9,values[9]+4)):
+            with self.subTest(field=index,value=hex(value)):
+                changed=bytearray(self.worker[0]);struct.pack_into("<I",changed,first+index*4,value)
+                with self.assertRaisesRegex(ValueError,"SDK coherence descriptor"):
+                    audit.sdk_coherence_metadata((bytes(changed),)+self.worker[1:])
+        for index,delta in ((0,1),(1,-4),(2,1),(3,-1)):
+            with self.subTest(descriptor_field=index):
+                symbols=copy.deepcopy(self.worker[4]);record=list(symbols[table])
+                record[index]+=delta;symbols[table]=tuple(record)
+                with self.assertRaises(ValueError):
+                    audit.sdk_coherence_metadata(self.worker[:4]+(symbols,))
+        owner=self.worker[4][table][3]
+        for index,value in ((1,8),(2,3),(3,address+4)):
+            with self.subTest(descriptor_section_field=index):
+                sections=copy.deepcopy(self.worker[3]);record=list(sections[owner])
+                record[index]=value;sections[owner]=tuple(record)
+                with self.assertRaises(ValueError):
+                    audit.sdk_coherence_metadata(self.worker[:3]+(sections,self.worker[4]))
+        for index,delta in ((0,1),(1,4),(2,1),(3,-1)):
+            with self.subTest(state_field=index):
+                symbols=copy.deepcopy(self.worker[4]);record=list(symbols[audit.SDK_COHERENCE_STATE])
+                record[index]+=delta;symbols[audit.SDK_COHERENCE_STATE]=tuple(record)
+                with self.assertRaisesRegex(ValueError,"SDK coherence scratch"):
+                    audit.sdk_coherence_metadata(self.worker[:4]+(symbols,))
+        # Updating the descriptor coherently must not let this scratch
+        # overlap an existing worker object, even within owned BSS.
+        symbols=copy.deepcopy(self.worker[4]);record=list(symbols[audit.SDK_COHERENCE_STATE])
+        record[0]=symbols["_config"][0];symbols[audit.SDK_COHERENCE_STATE]=tuple(record)
+        changed=bytearray(self.worker[0]);struct.pack_into("<I",changed,first+36,record[0])
+        with self.assertRaisesRegex(ValueError,"SDK coherence scratch overlaps"):
+            audit.sdk_coherence_metadata((bytes(changed),)+self.worker[1:4]+(symbols,))
+        records=audit.prepared_symbol_records(self.worker)
+        for name in audit.SDK_COHERENCE_GATES:
+            address,_,_,owner=self.worker[4][name]
+            self.assertIn((name+".uncached",address+0x20000000,0,2,owner),records)
+            self.assertFalse(any(target==name+".uncached" and size for target,_,size,*_ in records))
+
+    def test_sdk_coherence_uncached_entries_are_descriptor_only(self):
+        if audit.SDK_COHERENCE_STATE not in self.worker[4]:self.skipTest("SDK coherence gates are absent")
+        coherence=audit.sdk_coherence_admission(self.worker)
+        fault=audit.fault_capture_admission(self.worker)
+        policy=audit.worker_load_policy(self.worker,self.binary)
+        self.assertEqual(audit.check_worker_pointer_aliases(self.wire,policy,fault,coherence),
+                         struct.unpack_from("<I",self.wire,28)[0])
+        count=struct.unpack_from("<I",self.wire,28)[0]
+        records=[struct.unpack_from("<II",self.wire,72+8*i) for i in range(count)]
+        for site,target in coherence["p2_references"]:
+            index=records.index((site,target))
+            for at,value in ((site+4,target),(0,target),(site,target+2),
+                             (site,target-0x20000000)):
+                with self.subTest(site=hex(site),value=hex(value)):
+                    changed=bytearray(self.wire);struct.pack_into("<II",changed,72+8*index,at,value)
+                    with self.assertRaises(ValueError):
+                        audit.check_worker_pointer_aliases(bytes(changed),policy,fault,coherence)
+            for extra in (-1,1):
+                changed=bytearray(self.wire)
+                if extra<0:del changed[72+8*index:80+8*index]
+                else:changed.extend(struct.pack("<II",site,target))
+                struct.pack_into("<I",changed,28,count+extra)
+                with self.assertRaisesRegex(ValueError,"SDK cold descriptor"):
+                    audit.check_worker_pointer_aliases(bytes(changed),policy,fault,coherence)
+        # No code alias exception is available if the exact gate proof is not
+        # supplied; ordinary P1-code/P2-state admission must still reject it.
+        with self.assertRaisesRegex(ValueError,"uncached pointer aliases"):
+            audit.check_worker_pointer_aliases(self.wire,policy,fault)
 
     def test_identity_hook_and_free_walk_bounds_are_pinned(self):
         for name, offset, original in (

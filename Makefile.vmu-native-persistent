@@ -11,12 +11,15 @@ VMU_PACKAGE_ARGS :=
 FLAGS += -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 \
  -DKUI_VMU_SD_PROFILE_BIN='"$(BUILD)/vmu-sd-profile.bin"'
 NATIVE_FLAGS += -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -fcallgraph-info=su
-NATIVE_SRC += src/loader/vmu_native_trace.c src/loader/vmu_native_fault_capture.c
-NATIVE_OBJ += $(BUILD)/native_trace_hooks.o $(BUILD)/native_fault_capture_hooks.o
+NATIVE_SRC += src/loader/vmu_native_trace.c src/loader/vmu_native_fault_capture.c src/loader/vmu_native_sdk_coherence.c
+NATIVE_OBJ += $(BUILD)/native_trace_hooks.o $(BUILD)/native_fault_capture_hooks.o $(BUILD)/native_sdk_coherence_hooks.o
 $(BUILD)/native_trace_hooks.o: src/loader/vmu_native_trace_hooks.S
 	@mkdir -p $(@D)
 	$(CC) $(NATIVE_FLAGS) -c $< -o $@
 $(BUILD)/native_fault_capture_hooks.o: src/loader/vmu_native_fault_capture.S
+	@mkdir -p $(@D)
+	$(CC) $(NATIVE_FLAGS) -c $< -o $@
+$(BUILD)/native_sdk_coherence_hooks.o: src/loader/vmu_native_sdk_coherence.S
 	@mkdir -p $(@D)
 	$(CC) $(NATIVE_FLAGS) -c $< -o $@
 FLAGS += -fcallgraph-info=su
@@ -39,8 +42,18 @@ $(BUILD)/vmu-sd-profile.bin: tools/vmu_persist_profile.py
 $(BUILD)/stage/src/loader/vmu_native_heap_probe_stage.o: $(BUILD)/vmu-sd-profile.bin
 -include $(NATIVE_OBJ:.o=.d) $(STAGE_OBJ:.o=.d)
 
-.PHONY: persistent-host-tests
-persistent-host-tests: $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc
+.PHONY: persistent-host-tests native-sdk-coherence-host-tests
+native-sdk-coherence-host-tests: $(BUILD)/native-worker.elf
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -DKUI_VMU_NATIVE_READONLY_PROBE=1 \
+	 tests/test_vmu_native_sdk_coherence.c src/loader/vmu_native_sdk_coherence.c -o $(BUILD)/test-sdk-coherence
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-sdk-coherence tests/fixtures/native-cache/evolution1.nvr \
+	 tests/fixtures/native-cache/ps2.nvr tests/fixtures/native-cache/skies.nvr \
+	 tests/fixtures/native-cache/sa2.nvr tests/fixtures/native-cache/grandia2.nvr
+	python3 tools/check_vmu_native_sdk_coherence.py $(BUILD)/native-worker.elf --self-test \
+	 $(if $(EVOLUTION1_STARTUP),--evolution1 '$(EVOLUTION1_STARTUP)',) $(if $(STARTUP),--ps2 '$(STARTUP)',) \
+	 $(if $(SKIES_STARTUP),--skies '$(SKIES_STARTUP)',) $(if $(SA2_STARTUP),--sa2 '$(SA2_STARTUP)',) \
+	 $(if $(GRANDIA2_STARTUP),--grandia2 '$(GRANDIA2_STARTUP)',)
+persistent-host-tests: $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc native-sdk-coherence-host-tests
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_profile.c src/core/vmu_native_profile.c -o $(BUILD)/test-profile
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-profile
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_persistent.c \

@@ -64,6 +64,9 @@ static void readonly_patch_entry(uint32_t address,uint32_t target) {
     if(memcmp((const void *)(uintptr_t)(address|0x20000000u),patch,sizeof(patch))) native_report(9u,6u);
 }
 #endif
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+#include "vmu_native_sdk_coherence_stage.inc"
+#endif
 #if KUI_VMU_NATIVE_READONLY_PROBE
 static void native_passive_capture_windows(void) {
     memcpy(readonly_init_window,(const void *)(uintptr_t)native_heap.initializer,sizeof(readonly_init_window));
@@ -82,7 +85,7 @@ static void native_passive_prepare(void) {
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!kui_vmu_native_exit_discover_guarded((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
        exec_bytes,KUI_RETAIL_EXEC_ADDRESS,windows,sizeof(windows)/sizeof(windows[0]),
-       &native_exits)) native_report(2u,13u);
+       &native_exits) || !native_sdk_coherence_cached_admit()) native_report(2u,13u);
 #else
     if(!kui_vmu_native_patch_no_interiors((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
        exec_bytes,KUI_RETAIL_EXEC_ADDRESS,windows,sizeof(windows)/sizeof(windows[0]))) native_report(2u,12u);
@@ -114,7 +117,8 @@ static bool __attribute__((noipa)) native_resolution_replay(void) {
     native_heap=native_cached_resolution.heap;native_call=native_cached_resolution.call;
     native_exits=native_cached_resolution.exits;
     if(((native_heap.initializer|native_heap.release)&3u) || !readonly_release_replay_valid() ||
-       !allocation_safe(native_call.entry_begin,native_call.entry_bytes)) return false;
+       !allocation_safe(native_call.entry_begin,native_call.entry_bytes) ||
+       !native_sdk_coherence_cached_admit()) return false;
     native_passive_capture_windows();return true;
 }
 #endif
@@ -239,6 +243,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     if(native_runtime_mode()==KUI_VMU_NATIVE_MODE_LEASE_ONLY) {
         native_passive_lease_only(lease,e);return;
     }
+    if(native_sdk_coherence_install(e,dest,bytes)!=1) native_report(9u,0x47u);
 #endif
     /* The first real initializer has returned and our lease is allocated.
      * Every later direct/indirect entry now stops before reclaiming it. */

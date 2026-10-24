@@ -204,10 +204,11 @@ class AllocationWrapper(Machine):
 
 class ArmRoute(Machine):
     """Execute the complete relay through publication of the low boot control."""
-    def __init__(self, stage, resident, stack, seed, mask, *, body=None, cache_hit=True, mode=0):
+    def __init__(self, stage, resident, stack, seed, mask, *, body=None, cache_hit=True, mode=0, sdk_admitted=True):
         super().__init__(stage, "_kui_retail_stage_relay", seed, mask, OLD_STACK, body=body)
         self.symbols, self.stack = stage[4], stack
         self.cache_hit, self.mode = cache_hit, mode
+        self.sdk_admitted,self.refused=sdk_admitted,False
         self.control = resident[4]["_kui_vmu_observe_boot_control"][0]
         self.cell = resident[4]["_kui_vmu_native_heap_original"][0]
         self.heap_hook = resident[4]["_kui_vmu_observe_heap_hook"][0]
@@ -234,6 +235,7 @@ class ArmRoute(Machine):
                   ("_kui_vmu_native_heap_call_discover", "call"), ("_allocation_safe", "allocation"),
                   ("_native_passive_prepare", "prepare"), ("_native_report", "refused"),
                   ("_readonly_release_replay_valid", "release"),
+                  ("_native_sdk_coherence_cached_admit", "sdk-slot"),
                   ("_kui_vmu_native_exit_discover_guarded", "exits"),
                   ("_native_passive_capture_windows", "capture"), ("_native_runtime_mode", "mode"))
         self.targets = {self.symbols[name][0]: label for name, label in labels if name in self.symbols}
@@ -263,13 +265,16 @@ class ArmRoute(Machine):
             return False
         assert target in self.targets, "unexpected native relay callback"
         label = self.targets[target]; self.calls.append(label)
-        assert label != "refused", "valid stack route unexpectedly refused"
+        if label=="refused":
+            assert not self.sdk_admitted and not self.cache_hit and not self.armed and self.calls[-2]=="sdk-slot"
+            assert self.r[4:6]==[2,13],"cold SDK-slot refusal changed its exact terminal diagnostic"
+            self.refused,self.pc=True,self.stop_pc;return True
         if label == "restore":
             assert self.r[4:6] == [self.frame, 0x105]
         if label == "mode":
             assert self.calls.count("restore") == 1 and not any(value in self.calls for value in
-                ("ip", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "capture"))
-        if label in ("ip", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "capture"):
+                ("ip", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "sdk-slot", "capture"))
+        if label in ("ip", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "sdk-slot", "capture"):
             assert self.calls.count("restore") == 1
         # With a cache-bearing stage use the hit path; without it exercise the
         # same common publisher after the reviewed full-discovery callbacks.
@@ -279,18 +284,30 @@ class ArmRoute(Machine):
             assert self.r[4:8] == [0x8C010000, 0x200000, self.symbols["_native_heap"][0], self.symbols["_native_call"][0]]
         if label == "allocation":
             assert self.r[4:6] == [0x8CC00000, 0x00400000]
+        if label=="sdk-slot":
+            assert not self.cache_hit and not self.armed and self.calls[-2]=="exits"
+            assert all(self.calls.count(name)==1 for name in ("driver","heap","call","allocation","release","exits"))
+        if label=="capture" and "_native_sdk_coherence_cached_admit" in self.symbols:
+            assert self.sdk_admitted and self.calls[-2]=="sdk-slot","cold windows captured before SDK-slot admission"
         result = (self.mode if label == "mode" else int(self.cache_hit) if label == "cache"
+                  else int(self.sdk_admitted) if label=="sdk-slot"
                   else int(label in ("ip", "driver", "heap", "call", "allocation", "release", "exits")))
         self.abi_return(result)
         return True
 
     def check(self):
         registers, pr, _, _, _, sr, fpscr, fr = self.before
+        if not self.sdk_admitted and self.mode!=1:
+            assert self.refused and not self.armed and not any(label in self.calls for label in ("capture","sha"))
+            assert self.mem[self.slot]==self.original and self.mem[self.frame+20]==0x8C010000
+            assert all(self.mem[self.control+4*i]==0 for i in range(16))
+            assert all(self.mem[self.cell+4*i]==0 for i in range(8))
+            return
         if self.mode == 1:
             assert not self.armed and not self.nonstack_writes
             assert self.calls.count("restore") == 1 and self.calls.count("mode") == 1
             assert not any(value in self.calls for value in
-                ("ip", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "capture"))
+                ("ip", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "sdk-slot", "capture"))
             assert all(self.mem[self.control + 4 * i] == 0 for i in range(16))
             assert all(self.mem[self.cell + 4 * i] == 0 for i in range(8))
             assert self.mem[self.slot] == self.original and self.mem[self.frame + 20] == 0x8C010000
@@ -298,6 +315,8 @@ class ArmRoute(Machine):
             assert self.armed and self.mem[self.control + 4] == self.stack[2]
             assert self.mem[self.slot] == self.heap_hook and self.mem[self.frame + 20] == self.return_hook
             assert self.mem[self.control + 8] == 1 and self.calls.count("sha") == 1
+            if not self.cache_hit and "_native_sdk_coherence_cached_admit" in self.symbols:
+                assert self.calls.count("sdk-slot")==1 and self.calls.index("sdk-slot")<self.calls.index("capture")
         assert self.r[8:] == registers[8:] and (self.mode == 1 or self.pr == pr) and self.sr & ~1 == sr & ~1
         assert self.fpscr == fpscr and self.fr == fr
 
@@ -376,8 +395,8 @@ def check(stage, resident, *, worker=None, self_test=False):
     if worker is not None:
         require(STACK_SYMBOL not in worker[4] and HELPER not in worker[4],
                 "temporary installer stack/helper retained in gameplay worker")
-    wrappers = routes = hooks = 0
-    modes = (0, 1, 2, 3, 4, 5) if "_native_runtime_mode" in stage[4] else (0,)
+    wrappers = routes = hooks = refusals = 0
+    modes = (0, 1, 2, 3, 4, 5, 6) if "_native_runtime_mode" in stage[4] else (0,)
     for seed in range(12):
         for mask in range(16):
             for outcome in (False, True):
@@ -385,6 +404,9 @@ def check(stage, resident, *, worker=None, self_test=False):
             for mode in modes:
                 for hit in ((False, True) if "_native_resolution_replay" in stage[4] else (False,)):
                     ArmRoute(stage, resident, stack, seed, mask, cache_hit=hit, mode=mode).run().check(); routes += 1
+                if mode!=1 and "_native_sdk_coherence_cached_admit" in stage[4]:
+                    ArmRoute(stage,resident,stack,seed,mask,cache_hit=False,mode=mode,sdk_admitted=False).run().check()
+                    refusals+=1
             for alias in (0, 0x80000000, 0xA0000000):
                 HeapHook(resident, stage, stack, seed, mask, alias=alias).run().check(); hooks += 1
     mutations = 0
@@ -426,6 +448,7 @@ def check(stage, resident, *, worker=None, self_test=False):
             "typed_zero_fill_object": True, "complete_bss_in_live_allocation_guard": True,
             "actual_allocation_wrapper_cases": wrappers, "actual_relay_publication_cases": routes,
             "actual_low_hook_cases": hooks, "mutation_rejections": mutations,
+            "cold_sdk_slot_refusal_before_any_arming_cases":refusals,
             "runtime_modes": list(modes), "control_preserves_original_frame_and_allocator": 1 in modes,
             "initializer_preserves_original_stack_and_sr": True,
             "private_stack_before_allocation_or_worker_writes": True,

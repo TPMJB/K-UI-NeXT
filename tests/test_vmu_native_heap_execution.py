@@ -28,6 +28,9 @@ import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
+from check_vmu_native_worker_gateway import read_elf, symbol_bytes
+
 MASK = 0xFFFFFFFF
 RAM_BEGIN, RAM_END = 0x0C000000, 0x0D000000
 WORKER_SPAN, LEASE_BYTES = 0x20000, 0x30000
@@ -253,11 +256,33 @@ def stage_layout(build):
         pointer & 0xe0000000 == export[3] & 0xe0000000 and
         origin + 80 <= physical(pointer) < origin + len(worker) for pointer in export[16:19])
     table_at = physical(export[19]) - origin
-    assert not export[19] & 3 and 80 <= table_at <= len(worker) - 32
-    trace = struct.unpack_from('<8I', worker, table_at)
-    assert trace[:3] == (0x4b545231, 1, 32) and not trace[7]
-    assert all(not pointer & 1 and pointer & 0xe0000000 == export[3] & 0xe0000000 and
-               origin + 80 <= physical(pointer) < origin + len(worker) for pointer in trace[3:7])
+    assert not export[19] & 3 and 80 <= table_at <= len(worker) - 40
+    trace = struct.unpack_from('<10I', worker, table_at)
+    assert trace[:3] == (0x4b545231, 2, 40)
+    # The mixed-alias descriptor owns four ordinary P1 trace entries, two
+    # exact P2 cold SDK entries and one48B private P2 scratch object. Read
+    # their actual ELF types/owners instead of accepting any in-span address.
+    worker_image = read_elf(build / "native-worker.elf")
+    address, body, section = symbol_bytes(worker_image, "_kui_vmu_native_trace_exports", 1)
+    assert address == export[19] and section[2] & 7 == 2 and len(body) == 40
+    assert address & 0xff000000 == 0x8c000000 and body == worker[table_at:table_at + 40]
+    gate_names = ("_kui_vmu_native_trace_frame_entry", "_kui_vmu_native_trace_wait_loop",
+                  "_kui_vmu_native_trace_wait_before", "_kui_vmu_native_trace_wait_after",
+                  "_kui_vmu_native_sdk_coherence_uniform_gate",
+                  "_kui_vmu_native_sdk_coherence_variable_gate")
+    for index, name in enumerate(gate_names):
+        entry, _, code = symbol_bytes(worker_image, name, 2)
+        assert not entry & 1 and entry & 0xff000000 == 0x8c000000 and code[2] & 7 == 6
+        assert origin + 80 <= physical(entry) < origin + len(worker)
+        assert trace[3 + index] == entry + (0x20000000 if index >= 4 else 0)
+    state, count, kind, owner = worker_image[4]["_kui_vmu_native_sdk_coherence_state"]
+    bss = worker_image[3][owner]
+    bss_begin = worker_image[4]["__vmu_native_worker_bss_begin"]
+    bss_end = worker_image[4]["__vmu_native_worker_bss_end"]
+    assert (bss_begin[0], bss_end[0]) == export[7:9] and owner == bss_begin[3] == bss_end[3]
+    assert count == 48 and kind == 1 and not state & 3 and state & 0xff000000 == 0xac000000
+    assert bss[1] == 8 and bss[2] & 7 == 3 and export[7] <= state < state + count <= export[8]
+    assert bss[3] <= state < state + count <= bss[3] + bss[5] and trace[9] == state
     assert physical(export[10]) == physical(export[11]) == origin + WORKER_SPAN
     assert physical(export[9]) == origin + WORKER_SPAN - 0x1000
     return begin, end, stack, size, loads, worker

@@ -10,7 +10,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
-from check_vmu_native_lease_only import HELPER, LeaseDispatch, audit
+from check_vmu_native_lease_only import HELPER, SDK_INSTALL, LeaseDispatch, SdkInstall, audit
 from check_vmu_native_worker_gateway import read_elf, symbol_bytes
 
 
@@ -28,10 +28,16 @@ class LeaseOnlyArtifact(unittest.TestCase):
     def test_actual_helper_selector_and_mutation_families(self):
         report = audit(self.stage, self.resident, self_test=True)
         self.assertEqual(report["instruction_cases"], 540)
-        self.assertEqual(report["selector_instruction_cases"], 72)
+        self.assertEqual(report["selector_instruction_cases"], 228)
         self.assertGreaterEqual(report["mutation_rejections"], 9)
         self.assertTrue(report["terminal_and_sd_callbacks_null"])
         self.assertTrue(report["mode_three_returns_before_first_retail_veneer"])
+        self.assertTrue(report["mode_three_returns_before_sdk_call_target_install"])
+        install=report["sdk_call_target_installation"]
+        self.assertEqual(install["instruction_cases"],624)
+        self.assertEqual(install["mutation_rejections"],4)
+        self.assertEqual((install["success_return"],install["admission_refusal_return"],
+                          install["readback_refusal_return"]),(1,0xffffffff,0xfffffffe))
         self.assertTrue(report["installed_status_written_last"])
 
     def test_typed_exact_low_control_is_required(self):
@@ -56,6 +62,25 @@ class LeaseOnlyArtifact(unittest.TestCase):
             changed = bytearray(body); struct.pack_into("<H", changed, at, value)
             with self.subTest(value=value), self.assertRaises((ValueError, AssertionError)):
                 LeaseDispatch(self.stage, self.resident, 1, 6, 3, body=bytes(changed)).run().check()
+
+    def test_cold_install_precedes_veneer_in_all_nonlease_modes(self):
+        for mode in (0,1,2,4,5,6):
+            for result in (1,0xffffffff,0xfffffffe):
+                with self.subTest(mode=mode,result=result):
+                    selector=LeaseDispatch(self.stage,self.resident,1,6,mode,result).run()
+                    selector.check()
+                    self.assertEqual(selector.calls,["mode","sdk-install",
+                        "veneer" if result==1 else "refusal"])
+        lease=LeaseDispatch(self.stage,self.resident,1,6,3,0xffffffff).run();lease.check()
+        self.assertEqual(lease.calls,["mode","lease-only"])
+
+    def test_sdk_install_result_requires_actual_slot_store(self):
+        _,body,_=symbol_bytes(self.stage,SDK_INSTALL,2)
+        store=struct.pack("<H",0x2122)
+        self.assertEqual(body.count(store),1)
+        changed=bytearray(body);struct.pack_into("<H",changed,body.index(store),9)
+        with self.assertRaises((ValueError,AssertionError)):
+            SdkInstall(self.stage,1,6,0,body=bytes(changed)).run().check()
 
 
 if __name__ == "__main__":
