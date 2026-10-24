@@ -21,6 +21,26 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def closed_callgraph(text):
+    """A complete node at a truncated EOF is not a complete compiler graph."""
+    if not text.lstrip().startswith('graph: {'):return False
+    depth=0;quoted=False;escaped=False;closed=False
+    for char in text:
+        if closed:
+            if not char.isspace():return False
+        elif quoted:
+            if escaped:escaped=False
+            elif char=='\\':escaped=True
+            elif char=='"':quoted=False
+        elif char=='"':quoted=True
+        elif char=='{':depth+=1
+        elif char=='}':
+            depth-=1
+            if depth<0:return False
+            if depth==0:closed=True
+    return closed and not quoted and depth==0
+
+
 def cache_catalog(root,commit):
     """Package reviewed metadata fixtures only; never copy external game bytes."""
     root=Path(root)
@@ -58,7 +78,7 @@ def package(build,guide='broader',trace_startup=None):
     if guide in ('evolution-trace','a2-background') and trace_startup is None:
         raise ValueError('This package requires --trace-startup with the exact original executable')
     graphs=list(build.rglob('*.ci'))
-    if not graphs or any(not path.read_text().rstrip().endswith('}') for path in graphs):
+    if not graphs or any(not closed_callgraph(path.read_text()) for path in graphs):
         raise ValueError('Every emitted callgraph must be complete before packaging')
     report=check(build,self_test=True,trace_startup=trace_startup)
     cached=report['worker_load_policy']['cached_code']

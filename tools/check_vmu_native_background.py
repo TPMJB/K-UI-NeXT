@@ -240,6 +240,255 @@ def c_body(text, signature):
     return text[start:end]
 
 
+def compiled_tail_copy(stage, resident, *, self_test=False):
+    """Replay the linked installer tail through its first worker relocation.
+
+    The already audited prefix proves the native allocation and normalizes
+    its load address. This closed replay begins at its final lease-size
+    check, preserves every actual branch, OCBP loop and argument instruction,
+    executes the real P2 cache publisher, and supplies hostile ABI callees
+    only for memcpy, address admission, the separately tested low binder,
+    and display helpers. Invalid binder results must reach the real fatal
+    report call without reaching worker relocation.
+    """
+    sys.path.insert(0, str(ROOT / "tests"))
+    from test_vmu_native_heap_execution import SH, MASK, signed
+    begin, body, _ = symbol_bytes(stage, "_native_passive_run", 2)
+    symbols = stage[4]
+    words = list(struct.unpack("<" + "H" * (len(body) // 2), body))
+    def literal(index):
+        op = words[index]
+        if op >> 12 != 0xD:
+            return None
+        address = ((begin + index * 2 + 4) & ~3) + 4 * (op & 255)
+        if not begin <= address <= begin + len(body) - 4:
+            return None
+        return struct.unpack_from("<I", body, address - begin)[0]
+    starts = [begin + 2 * index for index in range(len(words) - 5)
+              if words[index:index + 2] == [0x51C8, 0x31A0] and
+              words[index + 2] >> 8 == 0x8F and words[index + 3] == 0x1B0F and
+              literal(index + 4) == 0x20000]
+    require(len(starts) == 1, "missing unique compiled Background lease-size/tail-copy entry")
+    start = starts[0]
+    manifest = symbols["_manifest"][0]
+    workspace = symbols["_native_background_boot_region"][0]
+    binder = resident["symbols"]["_kui_vmu_native_background_manifest_bind"]
+    publisher = symbols["_kui_native_passive_publish"][0]
+    copy = symbols["_memcpy"][0]
+    relocate = symbols["_kui_vmu_native_relocate"][0]
+    admission = symbols["_kui_vmu_native_background_map_address"][0]
+    report = symbols["_native_report"][0]
+    worker_bytes = symbols["__native_worker_blob_end"][0] - symbols["__native_worker_blob_begin"][0]
+
+    class Replay(SH):
+        def __init__(self, raw, outcome, changes=()):
+            super().__init__(b"")
+            for kind, offset, address, _, count, _, _, _ in stage[2]:
+                if kind == 1 and count:
+                    self.store_block(address, stage[0][offset:offset + count])
+            self.raw, self.load, self.outcome = raw, (raw & 0x1FFFFFFF) | 0x80000000, outcome
+            self.pc, self.r[15] = start, 0x8CDD0000
+            self.lease = 0x8CDF0000
+            self.r[8], self.r[9], self.r[10], self.r[11], self.r[12] = copy, self.load, 0x30000, self.r[15] + 0x904, self.lease
+            self.write(self.lease + 32, 0x30000)
+            self.write(self.lease + 40, raw)
+            self.write(self.r[15] + 32, self.lease - 64)
+            self.write(self.r[15] + 28, worker_bytes)
+            self.map_pattern = bytes((i * 17 + 3) & 255 for i in range(1020))
+            self.region_pattern = bytes((i * 23 + 7) & 255 for i in range(1888))
+            self.store_block(manifest, self.map_pattern)
+            self.store_block(workspace, self.region_pattern)
+            for address, value, size in changes:
+                self.write(address, value, size)
+            self.events, self.purges, self.witness, self.length_literals = [], [], {}, {}
+            self.volatile_calls, self.ccr, self.ccr_writes = 0, 0x105, []
+            self.in_publisher = False
+            self.publisher_return = None
+            self.stopped = None
+
+        def read(self, address, count=4):
+            if address == 0xFF00001C:
+                require(count == 4 and self.in_publisher, "cache state read outside the exact publisher")
+                return self.ccr
+            return super().read(address, count)
+
+        def write(self, address, value, count=4):
+            if address == 0xFF00001C:
+                require(count == 4 and self.in_publisher, "cache state write outside the exact publisher")
+                self.ccr_writes.append(value)
+                self.ccr = value
+                return
+            super().write(address, value, count)
+
+        def plain(self, op, pc):
+            n, m = op >> 8 & 15, op >> 4 & 15
+            if op & 0xF0FF == 0x00A3:
+                self.purges.append((pc, self.r[n], self.in_publisher))
+                return
+            if op >> 8 == 0x88:
+                self.flag(self.r[0] == signed(op & 255, 8) & MASK)
+                return
+            if op & 0xF0FF == 0x4010:
+                self.r[n] = (self.r[n] - 1) & MASK
+                self.flag(self.r[n] == 0)
+                return
+            if op & 0xF00F == 0x0006:
+                self.write(self.r[0] + self.r[n], self.r[m])
+                return
+            if op >> 12 == 9 and n == 6:
+                self.length_literals["current"] = pc + 4 + 2 * (op & 255)
+            super().plain(op, pc)
+
+        def abi_return(self, result=0):
+            self.volatile_calls += 1
+            for index in range(8):
+                self.r[index] = (0x13570000 + index * 0x10203 + self.volatile_calls) & MASK
+            self.r[0] = result & MASK
+            self.pc = self.pr
+
+        def purged(self, first, count, publication=False):
+            actual = [address for _, address, inside in self.purges if inside == publication and first <= address < first + count]
+            expected = list(range(first, first + count, 32))
+            require(actual == expected, "Background copy/publication lacks its exact ordered cache-line purge")
+
+        def call(self, target, pc):
+            if target == admission:
+                require(self.r[4:6] == [self.raw, self.load + 0x20000], "tail admission changed its exact native allocation/map")
+                self.abi_return(1)
+            elif target == copy:
+                index = len([event for event in self.events if event.startswith("copy_")])
+                name, offset, source, count, pattern = (("map", 0x20000, manifest, 1020, self.map_pattern) if index == 0 else
+                    ("region", 0x20400, workspace, 1888, self.region_pattern))
+                require(index < 2 and self.r[4:7] == [self.load + offset + 0x20000000, source, count],
+                        "compiled Background memcpy length/source/P2 destination changed")
+                self.purged(self.load + offset, count)
+                require(not self.in_publisher and (index == 0 or self.events == ["copy_map"]), "Background tail copies are out of order")
+                self.store_block(self.r[4], self.block(source, count))
+                require(self.block(self.load + offset, count) == pattern, "Background retained snapshot differs")
+                self.events.append("copy_" + name)
+                self.witness["copy_" + name] = pc
+                self.length_literals[name] = self.length_literals["current"]
+                self.abi_return()
+            elif target == publisher:
+                require(self.events == ["copy_map", "copy_region"] and self.r[4:6] == [self.load + 0x20400, self.load + 0x20B60],
+                        "region publication must follow both exact tail copies")
+                self.witness["publish"] = pc
+                self.in_publisher = True
+                self.publisher_return = self.pr
+                self.pc = target
+            elif target == binder:
+                require(self.events == ["copy_map", "copy_region", "publish"] and self.r[4:6] == [manifest, self.load + 0x20000],
+                        "typed low binder must follow complete vector publication")
+                require(self.block(self.load + 0x20000, 1020) == self.map_pattern and
+                        self.block(self.load + 0x20400, 1888) == self.region_pattern, "binder sees changed snapshots")
+                self.events.append("bind")
+                self.witness["bind"] = pc
+                self.witness["bind_success"] = pc + 4
+                self.abi_return(self.outcome)
+            elif target in (symbols["_retail_display_restore"][0], symbols["_retail_display_line"][0]):
+                require(self.outcome == 1 and self.events[-1] == "bind", "installer continued after failed binding")
+                self.abi_return()
+            elif target == relocate:
+                require(self.outcome == 1 and self.events == ["copy_map", "copy_region", "publish", "bind"],
+                        "worker relocation reached before successful typed binding")
+                require(self.r[4] == symbols["__native_worker_blob_begin"][0] and self.r[5] == worker_bytes and
+                        self.r[6] == symbols["__native_worker_reloc_begin"][0] and
+                        self.r[7] == symbols["__native_worker_reloc_end"][0] - symbols["__native_worker_reloc_begin"][0],
+                        "worker relocation inputs changed")
+                require([self.read(self.r[15] + 4 * index) for index in range(3)] ==
+                        [self.load + 0x20000000, 0x20000, self.load], "worker relocation overwrites the retained map/region tail")
+                self.purged(self.load, 0x20000)
+                self.witness["relocate"] = pc
+                self.stopped = "relocate"
+            elif target == report:
+                require(self.outcome != 1 and self.events == ["copy_map", "copy_region", "publish", "bind"],
+                        "valid Background binding failed before relocation")
+                self.stopped = "report"
+            else:
+                raise ValueError(f"unadmitted call in Background tail replay: {target:08x}")
+
+        def run(self):
+            for _ in range(100000):
+                if self.stopped:
+                    require(self.stopped == ("relocate" if self.outcome == 1 else "report"), "binder success predicate changed")
+                    return self
+                if self.in_publisher and self.pc == self.publisher_return:
+                    self.purged(self.load + 0x20400, 1888, publication=True)
+                    require(self.ccr_writes == [0x905], "vector publisher changed owner CCR or omitted I-cache invalidation")
+                    self.in_publisher = False
+                    self.events.append("publish")
+                pc, op = self.pc, self.read(self.pc, 2)
+                target, delayed, call = None, False, False
+                if op >> 12 in (0xA, 0xB):
+                    target, delayed = pc + 4 + 2 * signed(op & 4095, 12), True
+                    call = op >> 12 == 0xB
+                elif op & 0xF0FF in (0x400B, 0x402B):
+                    target, delayed = self.r[op >> 8 & 15], True
+                    call = op & 0xF0FF == 0x400B
+                elif op == 0x000B:
+                    target, delayed = self.pr, True
+                elif op >> 8 in (0x89, 0x8B, 0x8D, 0x8F):
+                    taken = bool(self.sr & 1) == (op >> 8 in (0x89, 0x8D))
+                    delayed = op >> 8 in (0x8D, 0x8F)
+                    if delayed:
+                        slot = self.read(pc + 2, 2); validate_delay_slot(slot, pc); self.plain(slot, pc + 2)
+                    self.pc = pc + 4 + 2 * signed(op & 255, 8) if taken else pc + (4 if delayed else 2)
+                    continue
+                if delayed:
+                    if call:
+                        self.pr = pc + 4
+                    slot = self.read(pc + 2, 2); validate_delay_slot(slot, pc); self.plain(slot, pc + 2)
+                    if call:
+                        self.call(target, pc)
+                    else:
+                        self.pc = target & MASK
+                else:
+                    self.plain(op, pc)
+                    self.pc += 2
+            raise ValueError("unbounded Background tail-copy replay")
+
+    cases, example = 0, None
+    for raw in (0x0C100000, 0x8C300000, 0xAC900000):
+        for outcome in (1, 0, 2, MASK):
+            completed = Replay(raw, outcome).run()
+            if outcome == 1:
+                example = completed
+            cases += 1
+    require(example is not None, "missing successful tail-copy replay")
+    rejected = []
+    if self_test:
+        def pool(value):
+            found = [begin + offset for offset in range(0, len(body) - 3, 2)
+                     if body[offset:offset + 4] == struct.pack("<I", value)]
+            require(len(found) == 1, "tail mutation requires a unique literal")
+            return found[0]
+        mutations = {
+            "map_copy_wrong_length": [(example.length_literals["map"], 1016, 2)],
+            "region_copy_wrong_length": [(example.length_literals["region"], 1884, 2)],
+            "map_copy_wrong_alias": [(pool(0x20020000), 0x20000, 4)],
+            "region_copy_wrong_offset": [(pool(0x20020400), 0x20020800, 4)],
+            "region_copy_wrong_source": [(pool(workspace), manifest, 4)],
+            "missing_map_purge": [(next(pc for pc, address, inside in example.purges if address == example.load + 0x20000 and not inside), 9, 2)],
+            "missing_region_publication": [(example.witness["publish"], 9, 2)],
+            "binding_before_publication": [(((example.witness["publish"] - 4 + 4) & ~3) +
+                4 * (words[(example.witness["publish"] - 4 - begin) // 2] & 255), binder, 4)],
+            "binder_accepts_zero": [(example.witness["bind_success"], 0x8800, 2)],
+        }
+        for name, changes in mutations.items():
+            try:
+                Replay(0x8C300000, 1, changes).run()
+                Replay(0x8C300000, 0, changes).run()
+            except (ValueError, AssertionError):
+                rejected.append(name)
+            else:
+                raise ValueError("compiled tail-copy replay accepted mutation: " + name)
+    return {"actual_sh_cases": cases, "entry": hex(start), "witnesses": {name: hex(address) for name, address in example.witness.items()},
+            "map_copy_bytes": 1020, "region_copy_bytes": 1888, "map_lines_before_p2_copy": 32,
+            "region_lines_before_p2_copy": 59, "actual_p2_publisher_executed": True,
+            "binder_result_must_equal_one": True, "worker_relocation_preserves_tail": True,
+            "hostile_abi_callees": True, "refused_mutations": rejected}
+
+
 def source_contract():
     paths = ("include/kui/vmu_native_background.h", "include/kui/vmu_native_async_loan.h",
              "src/loader/vmu_native_background_resident.c", "src/loader/retail_resident.c",
@@ -296,7 +545,7 @@ def source_contract():
             "sha256": {path: digest(text.encode()) for path, text in sources.items()}}
 
 
-def stage_contract(directory, resident):
+def stage_contract(directory, resident, *, self_test=False):
     path = directory / "stage.elf"
     if not path.is_file():
         return {"available": False, "complete_module_audited": False}
@@ -344,6 +593,7 @@ def stage_contract(directory, resident):
             "map": hex(manifest), "stage_map_object_bytes": 2172, "retained_map_prefix_bytes": 1020,
             "installer_stack": hex(installer), "installer_stack_bytes": 0x10000,
             "generated_binder": hex(binder), "embedded_resident_copies": embedded,
+            "tail_copy_replay": compiled_tail_copy(image, resident, self_test=self_test),
             "memory_end": hex(inspected["memory_end"]),
             "scope": "stage bounds/profile/workspaces; full envelope and worker audited separately"}
 
@@ -396,7 +646,7 @@ def check(directory, *, self_test=False, require_stage=False):
     total = worst + library["stack_bytes"] + EXTRA_MARGIN + GUARD + TOP_GAP
     require(total <= TOP - BOTTOM,
             f"Background private stack needs {total} bytes including its guard/top gap; available {TOP-BOTTOM}")
-    stage = stage_contract(directory, inspected)
+    stage = stage_contract(directory, inspected, self_test=self_test)
     require(not require_stage or stage["available"], "complete-profile audit requires the linked stage")
     source = source_contract()
     result = {"schema": "kui.native.background.audit.v1", "console_execution_verified": False,

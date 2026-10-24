@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-# Automatically placed A1 blank card: read-only, bounded native SDK window.
+# Automatically placed A2 blank card: read-only, bounded native SDK window.
 BUILD ?= build/vmu-native-readonly
 include Makefile.vmu-native-passive
 override TEST_ZIP := K-UI-Native-ReadOnly-Test.zip

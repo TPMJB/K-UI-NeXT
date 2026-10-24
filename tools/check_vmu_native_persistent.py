@@ -767,7 +767,7 @@ def check_resume_publication(stage, cached, self_test=False):
             "gateway_mutation_rejections": rejected, "complete_linked_assembly_pinned": True}
 
 
-def check_worker_publication(stage, cached, disassembly, self_test=False):
+def check_worker_publication(stage, cached, disassembly, self_test=False, *, background_tail=None):
     """Pin the P2 publisher and witness initialization before its first arm."""
     image = inspect_elf(stage[0], HIGH, LIMIT)
     symbols = stage[4]
@@ -1003,6 +1003,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
     require(begin + 2 * memset_loads[0] in dom[zero_pc],
             "BSS memset target can be bypassed")
     diagnostics_getter = None
+    background_prefix_mutations=[]
     if '_native_runtime_diagnostics' in symbols:
         # Bind the noipa getter's canonical 0/1/2/3 return to the exact last
         # config word. v3 adds four stack bytes ahead of the configuration.
@@ -1045,6 +1046,62 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
             if base_pc < pc < arm:
                 require(not re.search(r'(?:^|,)\s*r15$', operands) and '@-r15' not in operands and '@r15+' not in operands,
                         'config stack moves between diagnostics assignment and arm')
+    if background:
+        require(background_tail is not None,
+                'Background publication needs its independently executed compiled tail-copy proof')
+        tail_entry=int(background_tail['entry'],16)
+        tail={name:int(value,16) for name,value in background_tail['witnesses'].items()}
+        require(set(tail)=={'copy_map','copy_region','publish','bind','bind_success','relocate'} and
+                tail['relocate']==relocate_pc,'Background tail replay names a different worker relocation')
+        ordered=[tail_entry,*(tail[name] for name in
+            ('copy_map','copy_region','publish','bind','bind_success','relocate')),publish,arm]
+        require(all(before in dom[after] for before,after in zip(ordered,ordered[1:])),
+                'Background installer can bypass/reorder the complete tail-copy/bind/publication sequence')
+        # Close the replay's incoming callee-preserved register assumptions
+        # against the whole linked prefix. The lease is admitted before its
+        # raw payload is normalized to P1; the exact memcpy target, 192KiB
+        # lease constant and config stack base dominate the replay entry.
+        normalizers=[j for j in range(13,len(words)-11) if
+            words[j]&0xff00==0xd100 and literal(j)==0x1fffffff and
+            words[j+1]&0xff00==0xdd00 and literal(j+1)==symbols['_memset'][0] and
+            words[j+2]==0x64f3 and words[j+4]==0x2919 and
+            words[j+5]&0xff00==0xd100 and literal(j+5)==0x80000000 and
+            words[j+6:j+11]==[0x7448,0x6683,0xeb01,0x4d0b,0x291b]]
+        require(len(normalizers)==1,'Background prefix lacks its exact P1 payload normalization')
+        normal=normalizers[0]
+        require(words[normal-12]==0x5cf8 and words[normal-10]&0xff00==0xd000 and
+                literal(normal-10)==symbols['_kui_vmu_native_heap_lease_valid'][0] and
+                words[normal-9:normal-7]==[0xe600,0x7c40] and
+                words[normal-7]&0xff00==0xd500 and literal(normal-7)==symbols['_native_read'][0] and
+                words[normal-6:normal]==[0x59ca,0x400b,0x54f8,0x2008,0x8deb,0xe500],
+                'Background prefix does not bind the loaded payload to its admitted native lease')
+        memcpy_loads=[j for j in range(normal,(tail_entry-begin)//2) if
+            words[j]&0xff00==0xd800 and literal(j)==symbols['_memcpy'][0]]
+        lease_constants=[j for j in range(normal,(tail_entry-begin)//2) if
+            words[j]&0xff00==0xda00 and literal(j)==0x30000]
+        require(len(memcpy_loads)==len(lease_constants)==1,
+                'Background prefix needs exact unique memcpy/lease-size register initializers')
+        memcpy_pc=begin+2*memcpy_loads[0];lease_pc=begin+2*lease_constants[0]
+        norm_and=begin+2*(normal+4);norm_or=begin+2*(normal+9)
+        prefix={begin+2*(normal-5),begin+2*(normal-2),begin+2*(normal-6),
+                norm_and,norm_or,memcpy_pc,lease_pc,base_pc}
+        require(prefix<=dom[tail_entry],
+                'Background tail can be entered without lease admission/P1 normalization/exact callback setup')
+        stable=((9,norm_or+4,tail['relocate']),
+                (8,memcpy_pc+2,tail['copy_region']),
+                (10,lease_pc+2,tail_entry),(11,base_pc+2,tail_entry),
+                (12,begin+2*(normal-8)+2,tail_entry))
+        for register,first_pc,last_pc in stable:
+            for pc,(_,mnemonic,operands) in decoded.items():
+                if first_pc<=pc<last_pc and mnemonic not in ('cmp/eq','cmp/hi','cmp/hs','tst'):
+                    require(not re.search(r'(?:^|,)\s*r'+str(register)+r'$',operands),
+                            'Background replay incoming callee-preserved register is overwritten: r'+str(register))
+        report['background_tail_copy_and_prefix']={
+            'whole_function_cfg_domination':True,'ordered_witnesses':[hex(pc) for pc in ordered],
+            'lease_validation_dominates_copy':True,'normalized_p1_payload_dominates_copy':True,
+            'exact_memcpy_and_lease_size_setup':True,'callee_preserved_registers_stable':True}
+        background_prefix_mutations=[((normal+4,0x0009),),((normal+10,0x0009),),
+                                     ((memcpy_loads[0],0x0009),),((lease_constants[0],0x0009),)]
     report.update(worker_relocation_before_publication=True, worker_bss_zero_before_publication=True,
                   dynamic_cells_before_publication=True, publication_dominates_first_arm=True,
                   first_worker_publish=hex(publish), first_worker_arm=hex(arm),
@@ -1060,6 +1117,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
         mutations = [((zeroes[0][0] + 2, zero_patterns[alternate][2]),
                       (zeroes[0][0] + 3, zero_patterns[alternate][3])),
                      ((relocations[0][0] + 1, 0x0009),)]
+        mutations.extend(background_prefix_mutations)
         if register_family==4:
             mutations.extend([((first+3,0x0009),),((first+6,0x35ac),),
                               ((first+9,0x0009),),((first-3,0x64a3),),((first-2,0x0009),)])
@@ -1090,7 +1148,8 @@ def check_worker_publication(stage, cached, disassembly, self_test=False):
             for index, value in changes:
                 struct.pack_into("<H", changed, offset + index * 2, value)
             try:
-                check_worker_publication((bytes(changed), *stage[1:]), cached, disassembly)
+                check_worker_publication((bytes(changed), *stage[1:]), cached, disassembly,
+                                         background_tail=background_tail)
             except (ValueError, AssertionError, KeyError, struct.error):
                 rejected += 1
             else:
@@ -2135,7 +2194,8 @@ def check(directory, *, self_test=False, trace_startup=None):
     publication = check_resume_publication(stage, cached, self_test)
     objdump = shutil.which("sh-elf-objdump") or str(ROOT / ".deps/sh-elf/bin/sh-elf-objdump")
     stage_disassembly = subprocess.check_output([objdump, "-d", str(directory / "stage.elf")], text=True)
-    publisher = check_worker_publication(stage, cached, stage_disassembly, self_test)
+    publisher = check_worker_publication(stage, cached, stage_disassembly, self_test,
+        background_tail=base.get('background_reader',{}).get('stage',{}).get('tail_copy_replay'))
     seed = audit_cache_seed(stage[0], (directory / "entry.elf").read_bytes(),
                             (directory / "retail-maple-observe.kui").read_bytes(), cached_code=cached)
     runtime_mode = audit_runtime_mode(stage[0], (directory / "entry.elf").read_bytes(),
