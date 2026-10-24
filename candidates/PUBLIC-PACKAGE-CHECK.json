@@ -1,0 +1,26 @@
+{
+  "generic_unpersonalized_builds": true,
+  "embedded_profiles_equal_canonical_template": true,
+  "template_sha256": "147eb84a549e91b8121f363980f601bd2d80212c880f24ffeaa4fb180b6e9860",
+  "owner_card_profile_journal_and_save_files_included": false,
+  "retail_executables_or_tracks_included": false,
+  "contents": "project binaries and installer source; synthetic cache metadata; source delta; generated test evidence",
+  "candidates": {
+    "A": {
+      "source_commit": "a3e01cd78335c3a6dc27fb9b08ef9945b691af75",
+      "source_tree": "b4ec8dff760880ba919afaffbf4dbcfb6eff063e",
+      "build": "a3e01cd78335",
+      "module_sha256": "62da7d3b81086b578624bcd05b7fa2ef1b775e5c987bd46ab9d296fa1393f957",
+      "foreground_blocks": "20 Normal / 25 Aggressive",
+      "irq_blocks": "20 Normal / 25 Aggressive"
+    },
+    "B": {
+      "source_commit": "2204b6c31786c9226fddfbcfce0b69250765de36",
+      "source_tree": "76ff9adcf4f8d8081b970106f1f0263c34e3b567",
+      "build": "2204b6c31786",
+      "module_sha256": "4a3edebf36b234632edb606bad178a3de1bad220471c243efbafcc00153f5628",
+      "foreground_blocks": "20 Normal / 25 Aggressive",
+      "irq_blocks": "8"
+    }
+  }
+}
