@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Native SCI DMA burst ceiling test
+# Candidate B — eight-block SCI interrupt bursts
 
 Build 1920659698ae was rejected on console: the owner reported an intro video
 about a minute slower than usual, with audio glitches roughly every half
@@ -8,9 +8,11 @@ second. Gameplay was not reached. Its one-block CHECK/IRQ caps and shared
 
 This experiment starts from the reader in 74958b387827, whose Background FMV
 was smooth but whose gameplay still stalled. It retains that reader's full
-DMA waits and 20/25-block catch-up. The focused change puts a hard ceiling on
-the formerly unlimited drain of ready DMA blocks: 20 blocks for Normal and
-25 for Aggressive. The existing one-block PIO fallback remains.
+DMA waits and 20/25-block catch-up. Foreground calls keep a hard ceiling of 20 blocks for Normal and 25 for
+Aggressive. This B candidate caps each reader interrupt at eight SD blocks
+while retaining the full foreground catch-up and DMA waits. Candidate A
+(source a3e01cd78335) uses 20/25 blocks for interrupts as well. The existing
+one-block PIO fallback remains.
 
 Console improvement is unverified. This is not a confirmed gameplay fix.
 
@@ -52,8 +54,7 @@ Those rounds are synthetic caller opportunities, not measured console frames
 or milliseconds. The tests now check relative service capacity as well as
 exact bytes and work bounds; they still do not simulate the game's decoder.
 
-With immediate DMA completion, the former 256-block IRQ drain stops at 20 or
-25 blocks. The original CRC, recovery, bus and guest DMA ownership rules remain.
+With immediate DMA completion, the former 256-block IRQ drain stops at eight blocks. The original CRC, recovery, bus and guest DMA ownership rules remain.
 Card command/token/recovery waits keep their original timeouts, so the cap is
 not a hard elapsed-time deadline. Memory/stack boundaries are unchanged.
 
@@ -64,4 +65,3 @@ python3 tools/compare_native_reader_cadence.py
 make build/test-retail-async-native-hybrid
 ASAN_OPTIONS=detect_leaks=0 ./build/test-retail-async-native-hybrid
 ```
-

@@ -22,7 +22,7 @@ static void ready_batch(bool cooked,unsigned how,unsigned entry) {
         else (void)gd(entry==2u?KUI_GD_EXEC:KUI_GD_CHECK,
             entry==2u?0u:(uint32_t)token,entry==2u?0u:STATUS);
         unsigned delta=R.engine.stats.call_blocks+R.engine.stats.irq_blocks-before;
-        CHECK(delta==target && R.engine.active);
+        CHECK(delta==(entry==3u?KUI_RETAIL_NATIVE_IRQ_BATCH_LIMIT:target) && R.engine.active);
     }
     for(unsigned n=0;R.engine.active;++n) {
         unsigned before=R.engine.stats.call_blocks;
@@ -56,4 +56,3 @@ int main(void) {
     printf("native DMA ceiling: %u checks passed; original 20/25 catch-up retained\n",checks);
     return 0;
 }
-

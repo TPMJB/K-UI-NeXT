@@ -51,7 +51,7 @@ def run(output):
         target = 25 if new['how'] else 20
         if new.get('hot_irq'):
             assert old['blocks_in_one_irq'] == 256 and bad['blocks_in_one_irq'] == 1
-            assert new['blocks_in_one_irq'] == target
+            assert new['blocks_in_one_irq'] == 8
             continue
         assert all(old[k] == bad[k] == new[k] for k in ('how', 'cooked', 'delay', 'schedule'))
         assert all(new[k] <= target for k in ('request_max', 'check_max', 'exec_max', 'irq_max'))
@@ -69,7 +69,7 @@ def run(output):
                   baseline_commit=BASELINE, rejected_commit=REJECTED,
                   schedules_per_reader=50, delayed_schedules_matching_baseline=len(delayed),
                   all_outputs_exact=True, original_catchup_preserved=True,
-                  hot_irq_blocks=dict(baseline=256, rejected=1, candidate_normal=20, candidate_eager=25),
+                  hot_irq_blocks=dict(baseline=256, rejected=1, candidate_normal=8, candidate_eager=8),
                   examples=examples, console_timing_measured=False,
                   limitation='Rounds are synthetic caller opportunities, not video frames or milliseconds.')
     (output / 'comparison.json').write_text(json.dumps(report, indent=2) + '\n')

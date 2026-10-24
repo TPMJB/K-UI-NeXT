@@ -8,7 +8,7 @@
     "build_association": "latest delivery and feedback sequence; no separate build screen supplied"
   },
   "candidate_console_verified": false,
-  "change": "Keep baseline DMA waits and CHECK/EXEC catch-up; cap ready-DMA drains at the selected original 20/25-block target",
+  "change": "Retain baseline DMA waits and 20/25 foreground catch-up; cap native reader IRQs at eight blocks",
   "catchup_poll_slice_removed": true,
   "comparison": {
     "schema": "kui.native.service-cadence.comparison.v1",
@@ -21,8 +21,8 @@
     "hot_irq_blocks": {
       "baseline": 256,
       "rejected": 1,
-      "candidate_normal": 20,
-      "candidate_eager": 25
+      "candidate_normal": 8,
+      "candidate_eager": 8
     },
     "examples": [
       {
@@ -53,20 +53,22 @@
     "console_timing_measured": false,
     "limitation": "Rounds are synthetic caller opportunities, not video frames or milliseconds."
   },
-  "bounded_reader_test": "native DMA ceiling: 23127 checks passed; original 20/25 catch-up retained",
+  "bounded_reader_test": "native DMA ceiling: 23130 checks passed; original 20/25 catch-up retained",
   "native_regression": "retail async reader: 221287 checks passed",
   "pio_regression": "native background bounded fallback: 10388 checks passed",
   "ce_regression": "retail async reader (Windows CE): 163486 checks passed",
   "resident": {
-    "payload_bytes": 15096,
+    "payload_bytes": 15100,
     "memory_end": "0x8c007b80",
     "stack_limit": 352,
     "conservative_stack_bytes": 348
   },
   "source_sha256": {
-    "src/loader/retail_async.c": "663792ec313f42f1e3fe991b2ab8eebb95fe5f4ac1370b301e3899bc5e418ee9",
+    "src/loader/retail_async.c": "c9b777804809e8d3182e0932a5b7d0c30eb3330e70d832f6a686dc630935ea8f",
+    "src/loader/retail_async.h": "229ecf643d0f30dd9265772859e5b439714609013c6c4e3b3d2f9a9766925499",
     "src/loader/sci_stream.c": "c10813f76afb08e6e9ac303dbe7e7bbdc98b6e5529d5d31f253e25576b266f18",
-    "src/loader/sci_stream.h": "d1b7d692f34d143e6563f2cb432c72d619cda4867cd3aaa7ae82f792aef4b653"
+    "src/loader/sci_stream.h": "d1b7d692f34d143e6563f2cb432c72d619cda4867cd3aaa7ae82f792aef4b653",
+    "include/kui/native_background_budget.h": "6c57e5381f93321cd7850431b50b9707cb5ee82237677e3d9aee6c0b54ec6c10"
   },
   "limitations": [
     "No console FMV/gameplay timing claim",

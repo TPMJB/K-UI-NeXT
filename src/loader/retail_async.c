@@ -367,7 +367,7 @@ static void deliver_work(uint32_t wait) {
 #if KUI_RETAIL_NATIVE_HYBRID
         /* Retain the proved 20/25-block catch-up and full DMA wait. Only
          * stop the formerly unlimited run of already-completed blocks. */
-        if(delivered>=e.target) return;
+        if(delivered>=(e.in_irq?KUI_RETAIL_NATIVE_IRQ_BATCH_LIMIT:e.target)) return;
 #endif
 #ifndef KUI_RETAIL_CE
         /* PIO fallback must not drain a whole request with interrupts

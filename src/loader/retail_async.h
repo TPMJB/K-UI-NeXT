@@ -6,6 +6,7 @@
 #include "retail_storage.h"
 #include "retail_display.h"
 #include "sci_stream.h"
+#include "kui/native_background_budget.h"
 #include "sci_sd_bus.h"
 #include "kui/armada_ce_vmu_sd_loan.h"
 #include "kui/vmu_native_async_loan.h"
