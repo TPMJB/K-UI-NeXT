@@ -1,0 +1,231 @@
+{
+  "schema": "kui.native.cooperative.delivery.v1",
+  "source_commit": "f518592088f9e397aa11780514535d0dbd52b42a",
+  "source_tree": "004dbce46dc69187b952ec5bdb2a8cec18a43fed",
+  "build": "f518592088f9",
+  "installers": {
+    "Hybrid": {
+      "reader": "Background",
+      "extracted_cli_cases": 17,
+      "checks": [
+        {
+          "game": null,
+          "flag": "normal",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": null,
+          "flag": "normal",
+          "refused": false,
+          "idempotent": true
+        },
+        {
+          "game": "ps2",
+          "flag": "normal",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "skies",
+          "flag": "normal",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "sa2",
+          "flag": "normal",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "grandia2",
+          "flag": "normal",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution1",
+          "flag": "normal",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "normal",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "--control",
+          "refused": true,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "--profile-runtime",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "--lease-only",
+          "refused": true,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "--hooks-only",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "--raw-chain",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "--evolution-trace",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "normal",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "normal",
+          "refused": false,
+          "idempotent": true
+        },
+        {
+          "conflicting_modes_refused": true
+        }
+      ],
+      "prepared_pair_unchanged": true,
+      "module_sha256": "8743a1b856107680a219d29e653637200d182d0d3a5e24a9e2772052afcf9522"
+    },
+    "Native-A2": {
+      "reader": "Standard",
+      "extracted_cli_cases": 17,
+      "checks": [
+        {
+          "game": null,
+          "flag": "normal",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": null,
+          "flag": "normal",
+          "refused": false,
+          "idempotent": true
+        },
+        {
+          "game": "ps2",
+          "flag": "normal",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "skies",
+          "flag": "normal",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "sa2",
+          "flag": "normal",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "grandia2",
+          "flag": "normal",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution1",
+          "flag": "normal",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "normal",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "--control",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "--profile-runtime",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "--lease-only",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "--hooks-only",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "--raw-chain",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "--evolution-trace",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "normal",
+          "refused": false,
+          "idempotent": false
+        },
+        {
+          "game": "evolution2",
+          "flag": "normal",
+          "refused": false,
+          "idempotent": true
+        },
+        {
+          "conflicting_modes_refused": true
+        }
+      ],
+      "prepared_pair_unchanged": true,
+      "module_sha256": "75e9a4be2e582f118f96fd382942801a498d36826ee6c52f85d51b06b50614d2"
+    }
+  },
+  "generic_profile_matches_canonical_template": true,
+  "profile_sha256": "147eb84a549e91b8121f363980f601bd2d80212c880f24ffeaa4fb180b6e9860",
+  "prepared_owner_card_files_included": false,
+  "journal_or_save_payload_included": false,
+  "retail_executable_or_disc_tracks_included": false,
+  "user_photos_or_video_included": false,
+  "history_bundle_verified_in_independent_prior_source_checkout": true,
+  "actual_linked_artifact_audits_passed": true,
+  "console_execution_verified": false
+}

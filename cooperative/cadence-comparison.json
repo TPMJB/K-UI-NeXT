@@ -1,0 +1,45 @@
+{
+  "schema": "kui.native.service-cadence.comparison.v1",
+  "baseline_commit": "74958b387827",
+  "rejected_commit": "1920659698ae",
+  "schedules_per_reader": 50,
+  "delayed_schedules_matching_baseline": 32,
+  "all_outputs_exact": true,
+  "original_catchup_preserved": true,
+  "hot_irq_blocks": {
+    "baseline": 256,
+    "rejected": 1,
+    "candidate_normal": 8,
+    "candidate_eager": 8
+  },
+  "examples": [
+    {
+      "schedule": 0,
+      "baseline_rounds": 13,
+      "rejected_rounds": 261,
+      "candidate_rounds": 13
+    },
+    {
+      "schedule": 1,
+      "baseline_rounds": 7,
+      "rejected_rounds": 86,
+      "candidate_rounds": 7
+    },
+    {
+      "schedule": 2,
+      "baseline_rounds": 13,
+      "rejected_rounds": 256,
+      "candidate_rounds": 13
+    },
+    {
+      "schedule": 3,
+      "baseline_rounds": 7,
+      "rejected_rounds": 256,
+      "candidate_rounds": 7
+    }
+  ],
+  "console_timing_measured": false,
+  "reader_diagnostic_enabled": true,
+  "cooperative_reader_enabled": true,
+  "limitation": "Rounds are synthetic caller opportunities, not video frames or milliseconds."
+}

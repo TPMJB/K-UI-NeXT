@@ -1,0 +1,1701 @@
+From f518592088f9e397aa11780514535d0dbd52b42a Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 24 Oct 2026 17:25:26 -0500
+Subject: [PATCH] Add cooperative native reader progress and complete-request
+ diagnostics
+
+---
+ Makefile.vmu-native-cooperative               |  18 +
+ Makefile.vmu-native-open                      |   6 +
+ .../native-cooperative-2026-10-24.json        | 330 ++++++++++++++++++
+ docs/native-hybrid-design-2026-10-24.md       |  93 +++++
+ docs/vmu-native-cooperative-test.md           |  74 ++++
+ docs/vmu-native-open-test.md                  |  55 +++
+ include/kui/native_background_budget.h        |   2 +
+ include/kui/vmu_sd_lease.h                    |   4 +
+ src/loader/retail_async.c                     |  49 ++-
+ src/loader/retail_async.h                     |   8 +-
+ src/loader/retail_display.c                   |  58 ++-
+ src/loader/retail_resident.c                  |   8 +-
+ src/loader/vmu_native_background_resident.c   |  21 +-
+ src/loader/vmu_native_passive.c               |   7 +
+ src/loader/vmu_native_reader_capture.inc      | 114 +++++-
+ tests/test_native_compact_font.py             |  17 +
+ tests/test_retail_async_cooperative.c         |  59 ++++
+ tests/test_vmu_native_background_gateway.py   |  27 +-
+ tests/test_vmu_native_cooperative_worker.c    |  68 ++++
+ tools/check_vmu_native_persistent.py          |  62 +++-
+ tools/compare_native_reader_cadence.py        |   8 +-
+ tools/package_vmu_native_a2_delivery.py       |  17 +-
+ tools/package_vmu_native_persistent.py        |  17 +-
+ 23 files changed, 1089 insertions(+), 33 deletions(-)
+ create mode 100644 Makefile.vmu-native-cooperative
+ create mode 100644 Makefile.vmu-native-open
+ create mode 100644 docs/evidence/native-cooperative-2026-10-24.json
+ create mode 100644 docs/native-hybrid-design-2026-10-24.md
+ create mode 100644 docs/vmu-native-cooperative-test.md
+ create mode 100644 docs/vmu-native-open-test.md
+ create mode 100644 tests/test_native_compact_font.py
+ create mode 100644 tests/test_retail_async_cooperative.c
+ create mode 100644 tests/test_vmu_native_cooperative_worker.c
+
+diff --git a/Makefile.vmu-native-cooperative b/Makefile.vmu-native-cooperative
+new file mode 100644
+index 0000000..a7777fd
+--- /dev/null
++++ b/Makefile.vmu-native-cooperative
+@@ -0,0 +1,18 @@
++# SPDX-License-Identifier: GPL-3.0-only
++# Full movie catch-up plus a small cooperative loader visit after a proved
++# physical controller completion. The VMU protocol remains unchanged.
++BUILD ?= build/native-cooperative
++include Makefile.vmu-native-stall
++FLAGS += -DKUI_NATIVE_COOP_PUMP=1 -DKUI_NATIVE_REQUEST_TIMING=1
++NATIVE_FLAGS += -DKUI_NATIVE_COOP_PUMP=1 -DKUI_NATIVE_REQUEST_TIMING=1
++
++.PHONY: cooperative-host-tests
++cooperative-host-tests:
++	@mkdir -p $(BUILD)
++	python3 tests/test_native_compact_font.py
++	python3 tests/test_vmu_native_background_gateway.py --cooperative
++	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -O2 $(STALL_READER_FLAGS) -DKUI_NATIVE_COOP_PUMP=1 -DKUI_NATIVE_REQUEST_TIMING=1 $(STALL_READER_SRC) tests/test_retail_async_cooperative.c -o $(BUILD)/test-cooperative-reader
++	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-cooperative-reader
++	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_cooperative_worker.c $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-cooperative-worker
++	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-cooperative-worker
++	python3 tools/compare_native_reader_cadence.py --cooperative --output $(BUILD)/cadence
+diff --git a/Makefile.vmu-native-open b/Makefile.vmu-native-open
+new file mode 100644
+index 0000000..a4cd0cb
+--- /dev/null
++++ b/Makefile.vmu-native-open
+@@ -0,0 +1,6 @@
++# SPDX-License-Identifier: GPL-3.0-only
++# Ordinary native A2 test route: original Standard reader and generic family
++# discovery, with the faster stage-only full CRC used by the hybrid candidate.
++BUILD ?= build/native-open
++include Makefile.vmu-native-compat
++FLAGS += -DKUI_NATIVE_STAGE_FAST_CRC=1
+diff --git a/docs/evidence/native-cooperative-2026-10-24.json b/docs/evidence/native-cooperative-2026-10-24.json
+new file mode 100644
+index 0000000..e3ced69
+--- /dev/null
++++ b/docs/evidence/native-cooperative-2026-10-24.json
+@@ -0,0 +1,330 @@
++{
++  "schema": "kui.native.cooperative-reader.evidence.v1",
++  "date": "2026-10-24",
++  "source_parent": "2df1c301b26fe21620e4a48b7a7c67e11958b0fd",
++  "console_execution_verified": false,
++  "console_performance_improvement_verified": false,
++  "root_cause_established": false,
++  "design": {
++    "foreground_dma_catchup_blocks": {
++      "normal": 20,
++      "aggressive": 25
++    },
++    "true_sci_irq_delivery_limit": 8,
++    "cooperative_delivery_limit": 2,
++    "pio_blocks_per_visit_limit": 1,
++    "service_point": "after a completely proved physical controller fast completion, on the serialized worker stack",
++    "independent_idle_run_restart": true,
++    "game_gd_hook_busy_and_native_loan_guards": true,
++    "durable_inflight_and_handling_excluded": true,
++    "vbr_and_sci_caller_context_restored": true,
++    "new_timer_or_priority_change": false,
++    "new_game_ram_reservation": false,
++    "hard_elapsed_time_deadline": false,
++    "bounded_waits_retained": "card command, token and error recovery retain existing finite limits",
++    "save_packet_and_journal_protocol_changes": false,
++    "speculative_readahead_cache_implemented": false
++  },
++  "new_request_diagnostics": {
++    "read_max": "start of the accepted read through final checked destination block, across every service visit",
++    "age_max": "sampled pending GD age; may include completed data awaiting a game poll",
++    "longest_completed_request_lba_and_sector_count": true,
++    "cooperative_blocks_separate_from_true_irq_blocks": true,
++    "vmu_complete_includes_cooperative_loader_work": true,
++    "console_timer_configuration_unchanged": true,
++    "timing_conversion_requires_valid_profile_clock": true,
++    "no_diagnostic_sd_writes": true
++  },
++  "production_host_checks": {
++    "sanitizers": [
++      "address",
++      "undefined"
++    ],
++    "reader_original_checks": 23130,
++    "request_exactness": [
++      "raw2352",
++      "cooked2048",
++      "normal",
++      "aggressive"
++    ],
++    "new_cases": [
++      "active request with idle receiver stalls under ordinary IRQ and completes under independent pump",
++      "complete without another game GD call",
++      "two-block cooperative bound",
++      "in-flight DMA yields immediately",
++      "one-block PIO fallback preserves foreign DMA registers",
++      "unsigned timer wrap and whole request duration",
++      "request maximum correlated with exact LBA/count"
++    ],
++    "persistent_bridge_checks": 2077754,
++    "persistent_coverage": [
++      "physical fast completion proof before added service",
++      "VBR/SCI caller restore",
++      "storage and diagnostic exclusions",
++      "busy gateway refusal",
++      "save and reboot recovery",
++      "no false save ACK"
++    ],
++    "gateway_checks": 742,
++    "compact_font_rows_exact": 252
++  },
++  "cadence": {
++    "schema": "kui.native.service-cadence.comparison.v1",
++    "baseline_commit": "74958b387827",
++    "rejected_commit": "1920659698ae",
++    "schedules_per_reader": 50,
++    "delayed_schedules_matching_baseline": 32,
++    "all_outputs_exact": true,
++    "original_catchup_preserved": true,
++    "hot_irq_blocks": {
++      "baseline": 256,
++      "rejected": 1,
++      "candidate_normal": 8,
++      "candidate_eager": 8
++    },
++    "examples": [
++      {
++        "schedule": 0,
++        "baseline_rounds": 13,
++        "rejected_rounds": 261,
++        "candidate_rounds": 13
++      },
++      {
++        "schedule": 1,
++        "baseline_rounds": 7,
++        "rejected_rounds": 86,
++        "candidate_rounds": 7
++      },
++      {
++        "schedule": 2,
++        "baseline_rounds": 13,
++        "rejected_rounds": 256,
++        "candidate_rounds": 13
++      },
++      {
++        "schedule": 3,
++        "baseline_rounds": 7,
++        "rejected_rounds": 256,
++        "candidate_rounds": 7
++      }
++    ],
++    "console_timing_measured": false,
++    "reader_diagnostic_enabled": true,
++    "cooperative_reader_enabled": true,
++    "limitation": "Rounds are synthetic caller opportunities, not video frames or milliseconds."
++  },
++  "ce_provenance": {
++    "shared_source_worker_budget_commit": "3e5fce65537a",
++    "aligned_audio_copy_commit": "1aa16821209b",
++    "lesson": "small shared work budget and publishing partial checked progress before sleep",
++    "native_aligned_word_copy_already_present": true,
++    "ce_reader_changed_by_audio_copy_commit": false
++  },
++  "primary_manuals": [
++    {
++      "system": "Saturn",
++      "url": "https://www.infochunk.com/saturn/segahtml_en/prgg/prg1/file/hon/p08_14.htm",
++      "lesson": "immediate return I/O, CD-buffer lookahead and explicit server execution"
++    },
++    {
++      "system": "PlayStation",
++      "url": "https://psx.arthus.net/sdk/Psy-Q/DOCS/LIBOVR46.PDF",
++      "printed_pages": "11-34 to 11-36",
++      "lesson": "locked producer/consumer ring and deferred 2 KiB streaming DMA service"
++    }
++  ],
++  "open_native_a2": {
++    "reader": "Standard",
++    "cold_sdk_family_discovery_without_game_option": true,
++    "six_cache_entries_are_accelerators_not_title_whitelist": true,
++    "admission_checks_retained": [
++      "unique family",
++      "allocator",
++      "layout",
++      "lifetime",
++      "transport",
++      "memory ownership"
++    ],
++    "all_native_games_verified": false,
++    "ce_or_cdda_supported_by_this_experiment": false,
++    "standalone_original_raw_gdi_startup_collector_included": true
++  },
++  "prior_console_capture": {
++    "schema": "kui.native.b.console-capture.v1",
++    "date": "2026-10-24",
++    "build": "2df1c301b26f",
++    "source_commit": "2df1c301b26fe21620e4a48b7a7c67e11958b0fd",
++    "pages": {
++      "distinct": 5,
++      "photos": 6,
++      "duplicate": "63311 repeats indices 0/1"
++    },
++    "clock": {
++      "nominal_ticks_per_second": 781250,
++      "invalid_samples": 0,
++      "intervals_rejected": 0,
++      "wall_ticks": 14739189,
++      "wall_ms": 18866.16192,
++      "ccr_first": "00000105",
++      "ccr_last": "00000105",
++      "instruction_cache_off_samples": 0
++    },
++    "reader": {
++      "samples": 1200,
++      "max_poll_gap_ticks": 18505,
++      "max_poll_gap_ms": 23.6864,
++      "max_foreground_delivery_ticks": 6420,
++      "max_foreground_delivery_ms": 8.2176,
++      "max_irq_delivery_ticks": 0,
++      "irq_blocks": 0,
++      "foreground_blocks": 6506,
++      "pio_blocks": 0,
++      "crc_errors": 1,
++      "token_errors": 0,
++      "foreign": 0,
++      "repaired": 139,
++      "overrun_counter": 0,
++      "deferred": 0
++    },
++    "vmu": {
++      "submit_calls": 1200,
++      "complete_calls": 1200,
++      "invalid_timings": 0,
++      "submit_max_ticks": 59,
++      "submit_max_ms": 0.07552,
++      "complete_max_ticks": 84,
++      "complete_max_ms": 0.10752,
++      "submit_total_ticks": 46294,
++      "complete_total_ticks": 50037,
++      "free_calls": 5,
++      "free_max_ticks": 16,
++      "storage_calls": 0,
++      "commits": 0,
++      "fast_submit": 1200,
++      "full_submit": 0,
++      "fast_complete": 1200,
++      "full_complete": 0
++    },
++    "optional_phase_capture": {
++      "enabled": false,
++      "exact_image_scope": "Evolution 1 only; disabled for this Evolution 2 test"
++    },
++    "validation": {
++      "actual_linked_sh4_layout_comparison": "All eight sampled structure sizes and named member offsets match between reader and worker",
++      "stats_semantics": "irq_blocks increments only with e.in_irq; call_blocks otherwise; maxima are delivery visits, not complete request lifetimes"
++    },
++    "conclusion": {
++      "observed": "No measured long VMU operation, long individual reader delivery visit, or one-second controller polling interruption in this capture; all measured reader output was delivered through GD foreground calls.",
++      "hypothesis": "The game may wait for a request across multiple short reader calls while controller polling and audio continue.",
++      "limitation": "The photos do not identify the exact moment of a movement freeze or measure total GD request lifetimes. Zero IRQ-delivered blocks alone does not prove broken interrupts; foreground work may consume completions first.",
++      "root_cause_established": false
++    },
++    "longest_intervals": [
++      {
++        "index": 0,
++        "gap_ticks": 18505,
++        "gap_ms": 23.6864,
++        "foreground_visit_max_ticks": 5355,
++        "foreground_visit_max_ms": 6.8544,
++        "irq_visit_max_ticks": 0,
++        "pending": true,
++        "irq_blocks": 0,
++        "foreground_blocks": 40,
++        "pio_blocks": 0,
++        "crc_errors": 0,
++        "token_errors": 0,
++        "gd_function": 1,
++        "gd_command": 17,
++        "previous_token": 1515,
++        "current_token": 1515
++      },
++      {
++        "index": 1,
++        "gap_ticks": 18302,
++        "gap_ms": 23.42656,
++        "foreground_visit_max_ticks": 5356,
++        "foreground_visit_max_ms": 6.85568,
++        "irq_visit_max_ticks": 0,
++        "pending": true,
++        "irq_blocks": 0,
++        "foreground_blocks": 40,
++        "pio_blocks": 0,
++        "crc_errors": 0,
++        "token_errors": 0,
++        "gd_function": 1,
++        "gd_command": 17,
++        "previous_token": 1455,
++        "current_token": 1455
++      },
++      {
++        "index": 2,
++        "gap_ticks": 18249,
++        "gap_ms": 23.35872,
++        "foreground_visit_max_ticks": 5355,
++        "foreground_visit_max_ms": 6.8544,
++        "irq_visit_max_ticks": 0,
++        "pending": true,
++        "irq_blocks": 0,
++        "foreground_blocks": 40,
++        "pio_blocks": 0,
++        "crc_errors": 0,
++        "token_errors": 0,
++        "gd_function": 1,
++        "gd_command": 17,
++        "previous_token": 1284,
++        "current_token": 1284
++      },
++      {
++        "index": 3,
++        "gap_ticks": 18245,
++        "gap_ms": 23.3536,
++        "foreground_visit_max_ticks": 5355,
++        "foreground_visit_max_ms": 6.8544,
++        "irq_visit_max_ticks": 0,
++        "pending": true,
++        "irq_blocks": 0,
++        "foreground_blocks": 40,
++        "pio_blocks": 0,
++        "crc_errors": 0,
++        "token_errors": 0,
++        "gd_function": 1,
++        "gd_command": 17,
++        "previous_token": 1814,
++        "current_token": 1814
++      }
++    ],
++    "photo_identification": [
++      {
++        "filename": "63306.jpg",
++        "sha256": "4f42f67333bea1cfbe78c5b55c97cb11d99ce50824ba8527b0205f2f58618460"
++      },
++      {
++        "filename": "63307.jpg",
++        "sha256": "d7150592ae54d13d78fec5c4c7903c5f171aad3547564f9eaf021fa04ce365c1"
++      },
++      {
++        "filename": "63308.jpg",
++        "sha256": "3935bd3bb50a3baadf2762564927cd238363081db4211da6398f7de5f8453485"
++      },
++      {
++        "filename": "63309.jpg",
++        "sha256": "0bc9348e77e6239dbe09b596d1ad2413c57b492420190fa1243c89d42a3fb55f"
++      },
++      {
++        "filename": "63310.jpg",
++        "sha256": "c60fc72f781e5d9e3ad2edb446c10696d82e4dfba6e0e46c13a0bb40df005a82"
++      },
++      {
++        "filename": "63311.jpg",
++        "sha256": "447f6d58efbaf87a00040e02a823dfded2167ed89ea14e050b9491509134cd85"
++      }
++    ]
++  },
++  "limits": [
++    "Host service rounds are not console milliseconds or frames.",
++    "A two-block data-work limit is not a bound on total command/recovery time.",
++    "Whole request lifetime and the visible pause have not yet been correlated on console.",
++    "Independent service depends on successful recurring physical controller polls.",
++    "A supported cold SDK match does not prove every save/load path."
++  ]
++}
+diff --git a/docs/native-hybrid-design-2026-10-24.md b/docs/native-hybrid-design-2026-10-24.md
+new file mode 100644
+index 0000000..4687433
+--- /dev/null
++++ b/docs/native-hybrid-design-2026-10-24.md
+@@ -0,0 +1,93 @@
++<!-- SPDX-License-Identifier: GPL-3.0-only -->
++# Native loader: independent progress with bounded CPU work
++
++## What the successful CE work actually changed
++
++The owner-tested CE/CDDA sequence was `3e5fce65537a` followed by
++`1aa16821209b`. The first shared a 32-pump physical-work budget across the
++audio worker's whole turn, reducing its possible reception from about 75 KiB
++to about 16 KiB and publishing checked partial audio before sleeping. The
++second replaced volatile byte RAM copies with aligned integer word copies.
++The owner described the remaining lag as almost imperceptible. See
++`wince-cdda-worker-budget-test.md` and `wince-cdda-copy-test.md`.
++
++The native reader already has aligned word `memcpy`. Its 2df1c301b26f capture
++had 6506 foreground SD blocks and no IRQ-delivered blocks, with a maximum
++8.22 ms delivery visit. VMU completion was at most 0.108 ms. That does not prove
++the cause of a movement freeze; it makes independent data progress a useful
++next experiment, rather than another reduction of CHECK supply.
++
++## Lessons from Saturn and PlayStation
++
++Sega's file-system manual separates immediate-return requests, look-ahead to
++the CD buffer, and explicit server execution (`GFS_NwFread`, `GFS_NwCdRead`,
++`GFS_NwExecOne/Server`). Sony's streaming library separates arrival, locked
++ring-buffer data and consumer release. It also documents deferring a 2 KiB
++streaming DMA from the interrupt to an application-chosen service point to
++control bus occupation. These are producer/consumer and scheduling patterns;
++they are not evidence that a lower-powered CPU makes arbitrary Dreamcast
++software's I/O cheaper.
++
++Primary manuals:
++
++* https://www.infochunk.com/saturn/segahtml_en/prgg/prg1/file/hon/p08_14.htm
++* https://psx.arthus.net/sdk/Psy-Q/DOCS/LIBOVR46.PDF (CD/Streaming Library,
++  printed pp. 11-34 through 11-36)
++
++K-UI cannot apply the PSX movie library's frame-discard policy to opaque game
++reads. Every requested sector and the game's completion contract must remain
++exact. The useful adaptation is independent production, short service visits,
++and explicit publication of checked data.
++
++## This candidate
++
++The first prototype adds an opportunistic loader server after the existing
++physical-controller completion proof. It keeps the movie-tested 20/25-block
++foreground catch-up and true SCI IRQ cap 8. The independent server delivers
++at most 2 blocks, retains the one-block PIO fallback, and never waits for DMA.
++It can restart an idle run as well as consume an arrived block.
++
++A new test reproduces a capped batch leaving an active request without a
++receiver in flight; a future SCI completion cannot advance it. The server
++then completes the same read without another game GD entry. This establishes
++a liveness gap and recovery in the actual production reader model, not a
++measured cause of the owner's console stall.
++
++The service uses the existing worker-stack gateway under IMASK15, with a
++separate read-only command. It cannot enter the save writer, acquire a new
++bus, or issue virtual-card traffic. It runs only after a successful physical
++controller completion, skips storage-in-flight/handling and diagnostic control
++modes, respects the existing GD lock and native loan state, and preserves
++the SDK caller's VBR/SCI context. Existing return trampolines retain their
++normal re-arm role. No priority, timer setup or 192 KiB reservation changes.
++
++The low resident remains below the original 0x8c007ba0 boundary. Its font is
++bit-packed with all 252 decoded glyph rows tested against the original;
++redundant cold-report labels and unused hook-count diagnostics make room for
++the reader work and exact request timing. Guard and stack boundaries remain.
++
++The 2-block limit bounds data work, not total elapsed time. Existing command,
++token and recovery waits still have their original finite limits. The current
++prototype is not a hard real-time scheduler. Additional controller service
++also adds work to its completion hook, so console comparison is essential.
++
++## Follow-on design, after measuring this producer
++
++A 16–32 KiB read-ahead ring can fit within the already reserved lease tail.
++Use low/high watermarks to refill gradually, reset speculative state on a
++seek/cancel or image change, and prefetch only through validated immutable
++game-map extents. Foreground catch-up should respond to actual queued data
++and request progress. This avoids a title-based or movie/gameplay guess.
++
++This cache is a proposal, not part of the candidate. It cannot hide a sustained
++physical-bandwidth deficit or eliminate every game's synchronous asset load.
++First verify that cooperative/IRQ blocks actually occur, compare complete
++request times with the visible pauses, and retain the established FMV supply.
++
++## Broad native VMU coverage
++
++The separate Standard/A2 test route allows cold SDK-family discovery by
++omitting `--game`. It opens investigation beyond the six cached images while
++retaining unique discovery, lifetime, transport and ownership admission.
++Unknown families remain explicit adapter work. Neither this experiment nor
++an untested cold match is a claim that all native games can save correctly.
+diff --git a/docs/vmu-native-cooperative-test.md b/docs/vmu-native-cooperative-test.md
+new file mode 100644
+index 0000000..19f277d
+--- /dev/null
++++ b/docs/vmu-native-cooperative-test.md
+@@ -0,0 +1,74 @@
++<!-- SPDX-License-Identifier: GPL-3.0-only -->
++# Cooperative native reader candidate
++
++This experiment targets the native Background reader. It keeps the full
++20/25-block foreground catch-up that preserved movie supply, and the
++eight-block true SCI interrupt cap. It adds a separate service opportunity
++after a successfully validated physical controller completion. Each such
++visit delivers at most two SD blocks, with the existing one-block PIO limit.
++It never waits for an in-flight DMA to complete. Card command/token/recovery
++waits retain their existing finite limits, so this is not a hard millisecond
++deadline.
++
++The producer can also restart an idle SD run. The production-reader host test
++reproduces an active request with no receiver in flight: further ordinary SCI
++interrupt calls make no progress. The cooperative server completes that same
++request, with exact output bytes, without another game GD entry. This proves
++a software liveness gap and its tested recovery; it does not establish that
++this was the cause of the owner's visible console freeze.
++
++VMU packet handling, virtual A2, physical A1 passthrough and the save journal
++are unchanged. The existing proved controller hook supplies a recurring
++service point; the added work is game-data loading. The original handler's
++VBR/SCI context is restored before the SDK continues. No timer is borrowed,
++no IRQ priority is raised, and no new game-RAM allocation is made.
++
++## Install
++
++Run from this folder, using the same prepared profile as the previous test:
++
++```sh
++python3 personalize.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --game evolution2 --profile-runtime
++```
++
++Use SCI, Background loading On, Normal speed, Auto encoding, CD music Off
++and RAM patches Off. Safely eject and cold boot. First check the intro's
++pacing/audio, then the same gameplay area as 63304.mp4.
++
++During gameplay, hold both triggers fully and B for about a second, release,
++and play through the problematic area for roughly 20 seconds. The program
++then intentionally stops and cycles the report. Record at least 25 seconds
++starting at `HYBRID READER - COMPLETE REQUEST TIMING`.
++
++## Read the new report
++
++All values are hexadecimal. Valid clock samples use 781250 ticks/second.
++
++* READ MAX times an accepted read's start through the final checked block
++  reaching the game destination. It spans all foreground, IRQ and cooperative
++  visits. The following row gives that longest completed read's LBA/sectors.
++* AGE MAX is the longest sampled age while the GD request was still pending.
++  It can include time after data became ready but before the game next polled.
++* PUMPS/BLOCKS show whether the additional producer actually did work. BUSY
++  and FAULTS show refused visits. IRQ BLOCKS excludes cooperative blocks;
++  CALL BLOCKS remains game GD-entry work.
++* The older CALL/IRQ per-visit timing fields have been replaced in this
++  profile. Compare the new request durations rather than interpreting them
++  as the old 8.22-ms reader-visit measurement.
++* The VMU COMPLETE scope now includes cooperative reader work, as the screen
++  states. It is not a standalone measurement of virtual-card overhead.
++
++The capture includes completion of a request already underway when the
++gesture was accepted. It writes no diagnostic log to SD. Clock validity and
++sampling overhead retain their previous limits. No console performance or
++universal game compatibility is claimed by the host tests.
++
++Without `--profile-runtime`, the same cooperative reader runs normally and
++does not intentionally stop for a report.
++
++## Other ordinary native games
++
++For broad virtual-A2 discovery testing, use the separate `Native-A2` folder
++with Background Off. Its guide explains cold discovery without `--game`.
++The optional catalog selections are startup accelerators, not a title
++whitelist. Keep CE and CDDA outside this native test.
+diff --git a/docs/vmu-native-open-test.md b/docs/vmu-native-open-test.md
+new file mode 100644
+index 0000000..140a447
+--- /dev/null
++++ b/docs/vmu-native-open-test.md
+@@ -0,0 +1,55 @@
++<!-- SPDX-License-Identifier: GPL-3.0-only -->
++# Open native virtual-A2 test
++
++This is the ordinary native Standard reader with the current automatic
++virtual-A2 adapter. Use it to test ordinary non-Windows-CE, non-CDDA games on
++SCI independently of the Background-reader experiment. Physical A1 remains
++available; leave physical A2 empty.
++
++## Install without a title selection
++
++Run from this folder:
++
++```sh
++python3 personalize.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin
++```
++
++Omitting `--game` leaves the startup cache empty and runs fresh SDK-family
++discovery on the launched executable. This is an existing supported route,
++included here expressly for broader testing. The six optional packaged cache
++entries accelerate discovery for their exact images; they do not limit which
++titles may attempt a cold scan.
++
++Use SCI, Background loading Off, Auto/default encoding, CD music Off and RAM
++patches Off. Safely eject and cold boot. Existing prepared image, journal,
++identity and profile files are not rewritten by the installer.
++
++For each game, record recognition, existing-save load, gameplay/scene change,
++new save, full power-off, then reload. Include the title, image format and
++displayed build. Photograph a complete refusal or error screen.
++
++Automatic admission still needs a unique supported Maple/allocator/layout
++and lifetime proof. A cold scan may refuse an unknown SDK family; it does
++not guess offsets or install partial hooks. Passing one title does not prove
++all revisions or all games. The current generic route has reviewed fixtures
++for Power Stone 2, Skies, Sonic Adventure 2, Grandia II and both Evolutions.
++Known remaining family work includes the CT2/PSO/JGR cases, Time Stalkers'
++older allocator, and segmented ownership used by titles such as Silver,
++Soul Reaver and RECV. Legacy title-specific success is separate from this
++generic adapter's coverage.
++
++If a new game's family is refused, the included standalone collector can
++prepare a small analysis bundle from its original raw 2352-byte GDI:
++
++```sh
++python3 collect-native-startup.py /path/to/game.gdi --output Game-startup.zip
++```
++
++It collects the boot metadata and executable, not the whole disc. Its input
++is an original native GDI, not a converted 2048-byte image or a CE disc. The refusal
++photo and that bundle provide the next family adapter's inputs.
++
++For one of the six catalog images, an optional `--game` selection still works;
++run `python3 personalize.py --list-games` to list them. The runtime-profile
++option also remains available, with its usual trigger gesture and intentional
++stop, but ordinary compatibility testing does not require timing mode.
+diff --git a/include/kui/native_background_budget.h b/include/kui/native_background_budget.h
+index c861bea..3532813 100644
+--- a/include/kui/native_background_budget.h
++++ b/include/kui/native_background_budget.h
+@@ -3,4 +3,6 @@
+ #define KUI_NATIVE_BACKGROUND_BUDGET_H
+ /* Candidate B: retain full foreground catch-up; shorten interrupt bursts. */
+ #define KUI_RETAIL_NATIVE_IRQ_BATCH_LIMIT 8u
++#define KUI_RETAIL_NATIVE_PUMP_BATCH_LIMIT 2u
++#define KUI_RETAIL_NATIVE_PUMP_COOKIE UINT32_C(0x4b504d50)
+ #endif
+diff --git a/include/kui/vmu_sd_lease.h b/include/kui/vmu_sd_lease.h
+index 1d8d3f8..29815ea 100644
+--- a/include/kui/vmu_sd_lease.h
++++ b/include/kui/vmu_sd_lease.h
+@@ -8,6 +8,10 @@ enum kui_vmu_sd_lease_result {
+     KUI_VMU_SD_LEASE_BUSY=1,
+     KUI_VMU_SD_LEASE_FAULT=-1
+ };
++/* The separate cooperative native Background build also admits a NULL
++ * callback with KUI_RETAIL_NATIVE_PUMP_COOKIE as context. This is a bounded
++ * read-only loader service command, with no storage loan or VMU operation;
++ * it uses the same verified worker-stack entry and preserves owner guards. */
+ 
+ /* A scoped copy of the resident's initialized card descriptor, borrowing its
+  * existing SCI bus. The callback and context belong to the admitted worker.
+diff --git a/src/loader/retail_async.c b/src/loader/retail_async.c
+index 6dbd0d4..df183a4 100644
+--- a/src/loader/retail_async.c
++++ b/src/loader/retail_async.c
+@@ -8,6 +8,9 @@
+ #endif
+ __asm__(".global __kui_native_reader_stall_resident\n"
+         ".set __kui_native_reader_stall_resident,1\n");
++#if KUI_NATIVE_COOP_PUMP
++__asm__(".global __kui_native_cooperative_resident\n.set __kui_native_cooperative_resident,1\n");
++#endif
+ #endif
+ #include "sci_sd_bus.h"
+ #include "kui/retail_loader_layout.h"
+@@ -182,10 +185,12 @@ static void hook(void) {
+     uint32_t vbr = vbr_get();
+     if(vbr == our_vbr()) return;
+     uint16_t b = rd16(IPRB);
++#if !KUI_NATIVE_REQUEST_TIMING
+     if(e.hooked) {
+         if(vbr == e.release.vbr) ++e.stats.releases;
+         else ++e.release.vbr_changes;
+     }
++#endif
+     /* The game's own field, unless ours is still there (a game that set its
+      * VBR again itself). */
+     if(!e.hooked || (b & SCI_FIELD) != SCI_LEVEL) e.release.sci = b & SCI_FIELD;
+@@ -193,7 +198,11 @@ static void hook(void) {
+     vbr_set(our_vbr());
+     wr16(IPRB, (uint16_t)((b & ~SCI_FIELD) | SCI_LEVEL));
+     e.release.armed = 1;
+-    if(!e.hooked) {e.hooked = 1; ++e.stats.hooks;}
++    if(!e.hooked) {e.hooked = 1;
++#if !KUI_NATIVE_REQUEST_TIMING
++        ++e.stats.hooks;
++#endif
++    }
+ }
+ /* The game's vectors and SCI level again, unless it changed them meanwhile
+  * (or a releasing entry already gave them back). Returns still pending
+@@ -363,7 +372,7 @@ static bool tops_up(uint32_t function) { return topping(function); }
+  * run is started before each block is checked and copied. Returns while a block is in
+  * flight, after up to wait blocks have been waited for. Without an active
+  * read, only a finished reception is ended (its interrupt cleared). */
+-#if !defined(KUI_RETAIL_CE) && !KUI_NATIVE_READER_DIAGNOSTIC
++#if !defined(KUI_RETAIL_CE) && (!KUI_NATIVE_READER_DIAGNOSTIC || KUI_NATIVE_REQUEST_TIMING)
+ #define deliver_work deliver
+ #endif
+ static void deliver_work(uint32_t wait) {
+@@ -381,7 +390,11 @@ static void deliver_work(uint32_t wait) {
+ #if KUI_RETAIL_NATIVE_HYBRID
+         /* Retain the proved 20/25-block catch-up and full DMA wait. Only
+          * stop the formerly unlimited run of already-completed blocks. */
+-        if(delivered>=(e.in_irq?KUI_RETAIL_NATIVE_IRQ_BATCH_LIMIT:e.target)) return;
++        if(delivered>=(
++#if KUI_NATIVE_COOP_PUMP
++            e.in_irq==2u?KUI_RETAIL_NATIVE_PUMP_BATCH_LIMIT:
++#endif
++            e.in_irq?KUI_RETAIL_NATIVE_IRQ_BATCH_LIMIT:e.target)) return;
+ #endif
+ #ifndef KUI_RETAIL_CE
+         /* PIO fallback must not drain a whole request with interrupts
+@@ -456,7 +469,17 @@ static void deliver_work(uint32_t wait) {
+             ++e.since;
+             if(e.in_irq) ++e.stats.irq_blocks;
+             else ++e.stats.call_blocks;
+-            if(e.cursor.done == e.cursor.count) e.active = 0;
++            if(e.cursor.done == e.cursor.count) {
++                e.active = 0;
++#if KUI_NATIVE_REQUEST_TIMING
++                uint32_t elapsed=e.stats.hooks-rd32(UINT32_C(0xffd8000c));
++                if(elapsed>e.stats.releases) {
++                    e.stats.releases=elapsed;
++                    e.native_max_lba=R.shared.service.lba;
++                    e.native_max_count=R.shared.service.count;
++                }
++#endif
++            }
+ #if KUI_ARMADA_CE_STREAM
+             if(stream_event(KUI_ARMADA_CE_STREAM_BUS_DATA_BLOCK,0)) return;
+ #endif
+@@ -486,7 +509,7 @@ static void deliver(uint32_t wait) {
+     uint32_t *maximum = e.in_irq ? &e.polled_irq_max : &e.polled_call_max;
+     if(blocks > *maximum) *maximum = blocks;
+ }
+-#elif KUI_NATIVE_READER_DIAGNOSTIC
++#elif KUI_NATIVE_READER_DIAGNOSTIC && !KUI_NATIVE_REQUEST_TIMING
+ /* Diagnostic build only. These two counters are unused by the hybrid
+  * scheduler. The worker samples/reset them under IMASK15; clock admission
+  * happens at both capture endpoints. Never configure a game timer here. */
+@@ -538,6 +561,9 @@ static bool reads(uint32_t command) {
+ static void start(void) {
+     struct kui_retail_gd *s = &R.shared.service;
+     e.token = s->token;
++#if KUI_NATIVE_REQUEST_TIMING
++    e.stats.hooks=rd32(UINT32_C(0xffd8000c));
++#endif
+     e.failed = 0; e.retries = 0; e.active = 0;
+     e.cursor.done = 0; /* a read that fails here delivered nothing */
+ #ifdef KUI_RETAIL_CE
+@@ -879,7 +905,11 @@ uint32_t kui_retail_async_irq(void) {
+ #endif
+     /* An SCI event without a reception: not ours, passed on as any other
+      * (under CE: its level is dropped). */
+-    if(!kui_sci_stream_busy()) {
++    if(!kui_sci_stream_busy()
++#if KUI_NATIVE_COOP_PUMP
++       && e.in_irq!=2u /* A cooperative visit also restarts an idle run. */
++#endif
++      ) {
+ #ifdef KUI_RETAIL_CE
+         unhook();
+ #endif
+@@ -888,7 +918,14 @@ uint32_t kui_retail_async_irq(void) {
+ #ifdef KUI_RETAIL_CE
+     kui_sci_stream_token_budget(e.isr != 0);
+ #endif
++#if KUI_NATIVE_COOP_PUMP
++    if(e.in_irq==2u) hook();
++#endif
++#if KUI_NATIVE_COOP_PUMP
++    if(!e.in_irq) e.in_irq = 1;
++#else
+     e.in_irq = 1;
++#endif
+     deliver(0);
+     e.in_irq = 0;
+ #ifdef KUI_RETAIL_CE
+diff --git a/src/loader/retail_async.h b/src/loader/retail_async.h
+index 6efdc86..e90d1ae 100644
+--- a/src/loader/retail_async.h
++++ b/src/loader/retail_async.h
+@@ -53,7 +53,9 @@
+  * drive's too, so CE's driver calls again to take it. */
+ struct kui_retail_async_stats {
+     /* In the separate stall diagnostic execs/exec_int hold foreground/IRQ
+-     * delivery-visit raw TMU0 maxima, reset by the serialized worker. */
++     * delivery-visit raw TMU0 maxima, reset by the serialized worker.
++     * REQUEST_TIMING instead uses hooks/releases for request-start ticks
++     * and longest completed-request ticks; legacy hook counts are omitted. */
+     uint32_t irq_blocks, call_blocks, waits, execs, exec_int;
+     uint32_t hooks, releases;
+ };
+@@ -88,6 +90,10 @@ struct kui_retail_async {
+     /* Fits the unused native vector gap; release-frame offsets stay fixed. */
+     uint32_t native_loan_state;
+ #endif
++#if KUI_NATIVE_REQUEST_TIMING
++    /* Exactly the eight spare bytes of the native vector gap. */
++    uint32_t native_max_lba,native_max_count;
++#endif
+ #ifdef KUI_RETAIL_CE
+     /* The current piece: request output bytes [piece_begin, piece_begin +
+      * piece_bytes) go to guest address piece_destination (or, from
+diff --git a/src/loader/retail_display.c b/src/loader/retail_display.c
+index e34fd85..c9b0e68 100644
+--- a/src/loader/retail_display.c
++++ b/src/loader/retail_display.c
+@@ -17,6 +17,52 @@ static volatile uint32_t *reg(unsigned i) {
+ }
+ /* Original compact 5x7 glyphs, rows encoded low-five-bits, A-Z then 0-9.
+  * The complete renderer/font belongs to each linked image. */
++#if KUI_NATIVE_COOP_PUMP && defined(KUI_RETAIL_ASYNC)
++/* Same exact 252 glyph rows, packed at five bits each to make room for
++ * the cooperative reader in the existing guarded low reservation. */
++static const uint8_t compact_glyphs[36][5]={
++ {46,198,31,99,4},
++ {62,70,31,163,7},
++ {46,66,8,163,3},
++ {62,198,24,163,7},
++ {31,66,15,225,7},
++ {31,66,15,33,4},
++ {46,194,27,227,3},
++ {49,198,31,99,4},
++ {142,16,66,136,3},
++ {71,8,33,37,3},
++ {81,82,76,101,4},
++ {16,66,8,225,7},
++ {113,215,26,99,4},
++ {49,215,25,99,4},
++ {46,198,24,163,3},
++ {62,70,15,33,4},
++ {46,198,88,101,3},
++ {62,70,79,101,4},
++ {15,66,23,130,7},
++ {159,16,66,8,1},
++ {49,198,24,163,3},
++ {49,198,24,21,1},
++ {49,198,90,119,4},
++ {49,42,162,98,4},
++ {49,42,66,8,1},
++ {63,8,130,224,7},
++ {46,206,154,163,3},
++ {132,17,66,136,3},
++ {46,6,65,208,7},
++ {62,4,23,130,7},
++ {194,40,249,133,0},
++ {31,66,31,130,7},
++ {14,66,31,163,3},
++ {63,8,130,16,2},
++ {46,70,23,163,3},
++ {46,198,23,130,3},
++};
++static unsigned glyph_row(unsigned glyph,unsigned row_index) {
++    unsigned bit=row_index*5u,at=bit>>3;
++    return ((compact_glyphs[glyph][at]|(unsigned)compact_glyphs[glyph][at+1u]<<8)>>(bit&7u))&31u;
++}
++#else
+ static const uint8_t glyphs[36][7] = {
+  {14,17,17,31,17,17,17},{30,17,17,30,17,17,30},
+  {14,17,16,16,16,17,14},{30,17,17,17,17,17,30},
+@@ -37,6 +83,8 @@ static const uint8_t glyphs[36][7] = {
+  {14,16,16,30,17,17,14},{31,1,2,4,8,8,8},
+  {14,17,17,14,17,17,14},{14,17,17,15,1,1,14}
+ };
++static unsigned glyph_row(unsigned glyph,unsigned row_index) {return glyphs[glyph][row_index];}
++#endif
+ static unsigned row;
+ #ifdef KUI_RETAIL_CE
+ /* The live status line draws on the frame Windows CE shows; every other
+@@ -60,7 +108,7 @@ void retail_display_line(const char *text) {
+         if(c>='a' && c<='z') c-=32;
+         int n=c>='A'&&c<='Z'?c-'A':c>='0'&&c<='9'?c-'0'+26:-1;
+         for(unsigned y=0;y<7;y++) {
+-            unsigned bits=n>=0?glyphs[n][y]:c=='-'&&y==3?14:
++            unsigned bits=n>=0?glyph_row((unsigned)n,y):c=='-'&&y==3?14:
+                 c==':'&&(y==2||y==5)?4:c=='.'&&y==6?4:
+                 c=='/'?1u<<(y<5?y:4):0;
+             for(unsigned a=0;a<5;a++) if(bits&(16u>>a))
+@@ -80,7 +128,13 @@ void retail_display_restore(const struct retail_display_state *s) {
+     for(unsigned i=0;i<640u*480u;i++) frame[i]=0x0864;
+     row=20;
+ #if KUI_NATIVE_READER_DIAGNOSTIC
++#if KUI_NATIVE_COOP_PUMP
++#if !defined(KUI_RETAIL_ASYNC)
++    retail_display_line("HYBRID");
++#endif
++#else
+     retail_display_line("KUI B STALL");
++#endif
+ #else
+     retail_display_line("K-UI V" KUI_VERSION " LAUNCH");
+ #endif
+@@ -89,7 +143,9 @@ void retail_display_restore(const struct retail_display_state *s) {
+     retail_display_line("WINDOWS CE BOOT TEST");
+ #else
+ #if KUI_NATIVE_READER_DIAGNOSTIC
++#if !KUI_NATIVE_COOP_PUMP || !defined(KUI_RETAIL_ASYNC)
+     retail_display_line("NATIVE");
++#endif
+ #else
+     retail_display_line("NATIVE GD IMAGE");
+ #endif
+diff --git a/src/loader/retail_resident.c b/src/loader/retail_resident.c
+index 65483f0..41676ae 100644
+--- a/src/loader/retail_resident.c
++++ b/src/loader/retail_resident.c
+@@ -648,7 +648,13 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack
+     (void)caller; (void)stack;
+ #endif
+ #if KUI_VMU_NATIVE_BACKGROUND
+-    native_reader_report("GAME RETURN");
++    native_reader_report(
++#if KUI_NATIVE_COOP_PUMP
++        "RETURN"
++#else
++        "GAME RETURN"
++#endif
++    );
+     retail_display_pause(900u);
+     ((void (*)(void))(uintptr_t)0xa0000000u)();
+     for(;;) __asm__ volatile("nop");
+diff --git a/src/loader/vmu_native_background_resident.c b/src/loader/vmu_native_background_resident.c
+index b118b7d..6701648 100644
+--- a/src/loader/vmu_native_background_resident.c
++++ b/src/loader/vmu_native_background_resident.c
+@@ -92,8 +92,12 @@ static bool native_resident_transaction(const volatile struct kui_vmu_observe_bo
+ #else
+         UINT32_C(0xa0000000);
+ #endif
+-    return native_resident_terminal(c) && target==c->sd_transaction && !(target&1u) &&
+-        (uint32_t)target-worker-NATIVE_RESIDENT_HEADER_BYTES<NATIVE_RESIDENT_WORKER_BYTES-NATIVE_RESIDENT_HEADER_BYTES;
++    return native_resident_terminal(c) && (
++#if KUI_NATIVE_COOP_PUMP
++        !target ||
++#endif
++        (target==c->sd_transaction && !(target&1u) &&
++        (uint32_t)target-worker-NATIVE_RESIDENT_HEADER_BYTES<NATIVE_RESIDENT_WORKER_BYTES-NATIVE_RESIDENT_HEADER_BYTES));
+ }
+ #endif
+ /* NATIVE_RESIDENT_GUARDS_END */
+@@ -138,6 +142,19 @@ int __attribute__((noipa,section(".vmu_sd_lease"))) kui_vmu_observe_sd_lease(
+     uint32_t sr;__asm__ volatile("stc sr,%0":"=r"(sr)::"memory");
+     if((sr&UINT32_C(0xf0))!=UINT32_C(0xf0) ||
+        !native_resident_transaction(c,(uintptr_t)callback)) return KUI_VMU_SD_LEASE_FAULT;
++#if KUI_NATIVE_COOP_PUMP
++    /* Explicit non-storage command on the existing typed worker gateway.
++     * Serialized on the worker's stack after its physical controller proof;
++     * no loan, virtual reply, bus acquisition or game interrupt setup occurs. */
++    if(!callback) {
++        if((uintptr_t)context!=KUI_RETAIL_NATIVE_PUMP_COOKIE) return KUI_VMU_SD_LEASE_FAULT;
++        if(kui_retail_hook_active || kui_retail_async_region.engine.native_loan_state)
++            return KUI_VMU_SD_LEASE_BUSY;
++        kui_retail_async_region.engine.in_irq=2u;
++        (void)kui_retail_async_irq();
++        return KUI_VMU_SD_LEASE_OK;
++    }
++#endif
+     struct kui_loader_sd loan;
+     int result=kui_retail_native_async_loan_begin(&loan);
+     if(result==KUI_VMU_NATIVE_ASYNC_LOAN_BUSY) return KUI_VMU_SD_LEASE_BUSY;
+diff --git a/src/loader/vmu_native_passive.c b/src/loader/vmu_native_passive.c
+index 99d003c..5f8ba9a 100644
+--- a/src/loader/vmu_native_passive.c
++++ b/src/loader/vmu_native_passive.c
+@@ -312,7 +312,11 @@ static void diagnostic_report(void) {
+     retail_display_restore(&display);
+     retail_display_line("NATIVE VMU LATENCY CAPTURE");
+     retail_display_line("C BODY TIMINGS INCLUDE SAMPLING OVERHEAD");
++#if KUI_NATIVE_COOP_PUMP
++    retail_display_line("COMPLETE INCLUDES READER AND STORAGE");
++#else
+     retail_display_line("STORAGE TIME IS ALSO IN COMPLETE TIME");
++#endif
+     const char *const labels[4]={"SUBMIT CALLS VALID BAD TOTAL MAX","COMPLETE CALLS VALID BAD TOTAL MAX",
+         "FREE CALLS VALID BAD TOTAL MAX","STORAGE CALLS VALID BAD TOTAL MAX"};
+     for(unsigned i=0;i<4u;i++) {
+@@ -1302,6 +1306,9 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
+ #if KUI_VMU_NATIVE_PERSISTENT_PROBE
+     if(controller_pair.pending) {
+         controller_complete(f);
++#if KUI_NATIVE_COOP_PUMP
++        reader_cooperative_service();
++#endif
+         if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE)
+             diagnostic_complete(&span,diagnostic_fast_gesture(),true);
+         kui_vmu_native_trace_point(0x2fu,f,state.submitted,state.completed);
+diff --git a/src/loader/vmu_native_reader_capture.inc b/src/loader/vmu_native_reader_capture.inc
+index 7b91b16..addf906 100644
+--- a/src/loader/vmu_native_reader_capture.inc
++++ b/src/loader/vmu_native_reader_capture.inc
+@@ -26,6 +26,56 @@ __asm__(".global __kui_native_reader_stall_capture\n"
+ #undef KUI_READER_CAPTURE_LAYOUT_VIEW
+ #endif
+ static struct kui_reader_capture reader_capture;
++static kui_retail_async_region_type *reader_capture_region(void);
++#if KUI_NATIVE_COOP_PUMP
++__asm__(".global __kui_native_cooperative_reader\n.set __kui_native_cooperative_reader,1\n");
++static struct {
++    uint32_t calls,blocks,busy,faults;
++    uint32_t max_lba,max_count;
++} reader_cooperative;
++static void __attribute__((noipa)) reader_cooperative_service(void) {
++    /* Called only after successful, fully proved physical controller
++     * completion, after publication. It neither issues VMU packets nor
++     * grants the storage writer. Interrupts remain masked throughout. */
++    if(config.diagnostics!=KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL &&
++       config.diagnostics!=KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) return;
++    kui_retail_async_region_type *r=reader_capture_region();
++    if(!r || !r->engine.active || durable_card.inflight || durable_card.handling) return;
++    uint32_t before=r->engine.stats.irq_blocks;
++    ++reader_cooperative.calls;
++#ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
++    extern uint32_t kui_native_cooperative_test_vbr(void);
++    extern uint16_t kui_native_cooperative_test_iprb(void);
++    extern void kui_native_cooperative_test_restore(uint32_t,uint16_t);
++    uint32_t caller_vbr=kui_native_cooperative_test_vbr();
++    uint16_t caller_iprb=kui_native_cooperative_test_iprb();
++    extern int kui_native_cooperative_test_visit(void);
++    int result=kui_native_cooperative_test_visit();
++#else
++    uint32_t caller_vbr;__asm__ volatile("stc vbr,%0":"=r"(caller_vbr)::"memory");
++    uint16_t caller_iprb=*(volatile const uint16_t *)(uintptr_t)UINT32_C(0xffd00008);
++    int (*visit)(kui_vmu_sd_transaction,void *)=(void *)(uintptr_t)config.sd_lease;
++    int result=visit(NULL,(void *)(uintptr_t)KUI_RETAIL_NATIVE_PUMP_COOKIE);
++#endif
++    /* The original SDK handler must resume with its own vectors and SCI
++     * field, as on the reader's existing releasing entries. Its pending
++     * return trampoline may re-arm the reader after that handler returns.
++     * A caller already using the reader vectors retains normal idle unhook. */
++    if(caller_vbr!=(uint32_t)(uintptr_t)r-UINT32_C(0x100)) {
++#ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
++        kui_native_cooperative_test_restore(caller_vbr,caller_iprb);
++#else
++        __asm__ volatile("ldc %0,vbr"::"r"(caller_vbr):"memory");
++        volatile uint16_t *iprb=(volatile uint16_t *)(uintptr_t)UINT32_C(0xffd00008);
++        *iprb=(uint16_t)((*iprb&~0x00f0u)|(caller_iprb&0x00f0u));
++        (void)*iprb;
++#endif
++    }
++    if(result==KUI_VMU_SD_LEASE_BUSY)++reader_cooperative.busy;
++    else if(result!=KUI_VMU_SD_LEASE_OK)++reader_cooperative.faults;
++    reader_cooperative.blocks+=r->engine.stats.irq_blocks-before;
++}
++#endif
+ static kui_retail_async_region_type *reader_capture_region(void) {
+     uint32_t address=(config.lease.payload&UINT32_C(0x1fffffff))|UINT32_C(0x80000000);
+     address+=KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET;
+@@ -40,7 +90,12 @@ static kui_retail_async_region_type *reader_capture_region(void) {
+ static void reader_capture_start(void) {
+     kui_reader_capture_reset(&reader_capture);
+     kui_retail_async_region_type *r=reader_capture_region();
++#if KUI_NATIVE_REQUEST_TIMING
++    if(r)r->engine.stats.releases=0u;
++    memset(&reader_cooperative,0,sizeof(reader_cooperative));
++#else
+     if(r)r->engine.stats.execs=r->engine.stats.exec_int=0u;
++#endif
+ }
+ static void reader_capture_poll(const struct kui_vmu_native_profile_sample *clock) {
+     kui_retail_async_region_type *r=reader_capture_region();
+@@ -50,21 +105,55 @@ static void reader_capture_poll(const struct kui_vmu_native_profile_sample *cloc
+     const struct kui_retail_gd *g=&r->shared.service;
+     struct kui_reader_capture_sample sample={
+         .tick=clock->counter,.valid=kui_vmu_native_profile_sample_valid(clock)?1u:0u,
+-        .call_max=a->stats.execs,.irq_max=a->stats.exec_int,
+-        .irq_blocks=a->stats.irq_blocks,.call_blocks=a->stats.call_blocks,.polled=s->polled,
++#if KUI_NATIVE_REQUEST_TIMING
++        .call_max=a->stats.releases,
++        .irq_max=g->pending && a->token==g->token?a->stats.hooks-clock->counter:0u,
++        .irq_blocks=a->stats.irq_blocks-reader_cooperative.blocks,
++#else
++        .call_max=a->stats.execs,.irq_max=a->stats.exec_int,.irq_blocks=a->stats.irq_blocks,
++#endif
++        .call_blocks=a->stats.call_blocks,.polled=s->polled,
+         .crc=s->crc_errors,.token_errors=s->token_errors,.foreign=s->foreign,
+         .repaired=s->repaired,.overruns=s->overruns,.deferred=s->deferred,
+         .function=g->diag.last_function,.command=g->command,.token=g->token,
+         .block=a->cursor.block,.done=a->cursor.done,.pending=g->pending};
++#if KUI_NATIVE_REQUEST_TIMING
++    if(sample.valid && sample.call_max<=KUI_VMU_NATIVE_PROFILE_MAX_INTERVAL &&
++       sample.call_max>reader_capture.call_max) {
++        reader_cooperative.max_lba=a->native_max_lba;
++        reader_cooperative.max_count=a->native_max_count;
++    }
++    r->engine.stats.releases=0u;
++#else
+     r->engine.stats.execs=r->engine.stats.exec_int=0u;
++#endif
+     kui_reader_capture_add(&reader_capture,&sample);
++#if KUI_NATIVE_REQUEST_TIMING
++    /* The request maximum was cleared at the gesture, so unlike counter
++     * deltas this first interval already belongs to the capture window. */
++    if(reader_capture.samples==1u && sample.valid &&
++       sample.call_max<=KUI_VMU_NATIVE_PROFILE_MAX_INTERVAL &&
++       sample.irq_max<=KUI_VMU_NATIVE_PROFILE_MAX_INTERVAL) {
++        reader_capture.call_max=sample.call_max;reader_capture.irq_max=sample.irq_max;
++    }
++#endif
+ }
+ #ifndef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+ static void reader_capture_report(const struct retail_display_state *display) {
+     retail_display_restore(display);
++#if KUI_NATIVE_REQUEST_TIMING
++    retail_display_line("HYBRID READER - COMPLETE REQUEST TIMING");
++#else
+     retail_display_line("B READER STALL CAPTURE - RAM ONLY");
++#endif
+     retail_display_line("HEX VALUES - 781250 TICKS PER SECOND");
+-    retail_display_values("SAMPLES BAD GAP MAX CALL MAX IRQ MAX",(uint32_t[5]){
++    retail_display_values(
++#if KUI_NATIVE_REQUEST_TIMING
++        "SAMPLES BAD GAP MAX READ MAX AGE MAX",
++#else
++        "SAMPLES BAD GAP MAX CALL MAX IRQ MAX",
++#endif
++        (uint32_t[5]){
+         reader_capture.samples,reader_capture.bad,reader_capture.gap_max,
+         reader_capture.call_max,reader_capture.irq_max},5u);
+     const struct kui_reader_capture_sample *a=&reader_capture.first,*b=&reader_capture.previous;
+@@ -74,7 +163,14 @@ static void reader_capture_report(const struct retail_display_state *display) {
+     retail_display_values("FOREIGN REPAIRS OVERRUN DEFERRED CLOCK BAD",(uint32_t[5]){
+         b->foreign-a->foreign,b->repaired-a->repaired,b->overruns-a->overruns,
+         b->deferred-a->deferred,diagnostic.clock_invalid},5u);
++#if KUI_NATIVE_REQUEST_TIMING
++    retail_display_values("PUMPS BLOCKS BUSY FAULTS",(uint32_t[4]){
++        reader_cooperative.calls,reader_cooperative.blocks,reader_cooperative.busy,reader_cooperative.faults},4u);
++    retail_display_values("LONGEST COMPLETE READ LBA SECTORS",(uint32_t[2]){
++        reader_cooperative.max_lba,reader_cooperative.max_count},2u);
++#else
+     retail_display_line("CALL AND IRQ ARE DELIVERY VISIT TIMES");
++#endif
+     retail_display_line("GAP IS BETWEEN MAPLE COMPLETION SAMPLES");
+     retail_display_line("BAD CLOCK MEANS DO NOT CONVERT TO TIME");
+     retail_display_line("NEXT TWO PAGES KEEP THE FOUR LONGEST GAPS");
+@@ -82,10 +178,20 @@ static void reader_capture_report(const struct retail_display_state *display) {
+     for(unsigned first=0u;first<reader_capture.top_count;first+=2u) {
+         retail_display_restore(display);
+         retail_display_line("LONGEST CONTROLLER POLL GAPS - DESCENDING");
++#if KUI_NATIVE_REQUEST_TIMING
++        retail_display_line("GAP READ AGE TICKS - COUNTERS ARE DELTAS");
++#else
+         retail_display_line("GAP CALL IRQ ARE TICKS - COUNTERS ARE DELTAS");
++#endif
+         for(unsigned i=first;i<first+2u && i<reader_capture.top_count;++i) {
+             const struct kui_reader_capture_event *e=&reader_capture.top[i];
+-            retail_display_values("INDEX GAP CALL MAX IRQ MAX PENDING",(uint32_t[5]){
++            retail_display_values(
++#if KUI_NATIVE_REQUEST_TIMING
++                "INDEX GAP READ MAX AGE MAX PENDING",
++#else
++                "INDEX GAP CALL MAX IRQ MAX PENDING",
++#endif
++                (uint32_t[5]){
+                 i,e->gap,e->call_max,e->irq_max,e->pending},5u);
+             retail_display_values("IRQ BLOCKS CALL BLOCKS PIO CRC TOKEN ERR",(uint32_t[5]){
+                 e->irq_blocks,e->call_blocks,e->polled,e->crc,e->token_errors},5u);
+diff --git a/tests/test_native_compact_font.py b/tests/test_native_compact_font.py
+new file mode 100644
+index 0000000..b9bf2cd
+--- /dev/null
++++ b/tests/test_native_compact_font.py
+@@ -0,0 +1,17 @@
++#!/usr/bin/env python3
++# SPDX-License-Identifier: GPL-3.0-only
++"""Compare every decoded low-resident glyph row with the original font."""
++import os,re,subprocess,tempfile
++from pathlib import Path
++root=Path(__file__).resolve().parents[1]
++s=(root/'src/loader/retail_display.c').read_text()
++a=s.index('static const uint8_t glyphs[36][7]');b=s.index('\n};',a)
++expected=bytes(int(x) for row in re.findall(r'\{([^{}]+)\}',s[a:b]) for x in row.split(','))
++assert len(expected)==252
++with tempfile.TemporaryDirectory(prefix='kui-compact-font-') as t:
++ p=Path(t);source=p/'font.c';exe=p/'font'
++ source.write_text('#include <stdio.h>\n#include "'+str(root/'src/loader/retail_display.c')+'"\nint main(void){for(unsigned g=0;g<36u;++g)for(unsigned r=0;r<7u;++r)putchar((int)glyph_row(g,r));return 0;}\n')
++ subprocess.run([os.environ.get('HOST_CC','cc'),'-std=c11','-Os','-Wall','-Wextra','-Werror','-ffunction-sections','-fdata-sections',
++  '-DKUI_NATIVE_COOP_PUMP=1','-DKUI_RETAIL_ASYNC=1','-Iinclude','-Isrc/loader',str(source),'-Wl,--gc-sections','-o',str(exe)],cwd=root,check=True)
++ assert subprocess.check_output([str(exe)])==expected
++print('compact resident font: all 252 original glyph rows remain exact')
+diff --git a/tests/test_retail_async_cooperative.c b/tests/test_retail_async_cooperative.c
+new file mode 100644
+index 0000000..6b72759
+--- /dev/null
++++ b/tests/test_retail_async_cooperative.c
+@@ -0,0 +1,59 @@
++/* SPDX-License-Identifier: GPL-3.0-only */
++#include <assert.h>
++#include <stdint.h>
++static uint32_t clock_counter=100000u;
++uint32_t kui_retail_async_test_read32(uint32_t address) {
++    assert(address==UINT32_C(0xffd8000c));return clock_counter;
++}
++#define KUI_NATIVE_HYBRID_MAIN hybrid_suite_main
++#include "test_retail_async_native_hybrid.c"
++static unsigned pump(void) {
++    unsigned before=R.engine.stats.irq_blocks;
++    R.engine.in_irq=2u;(void)kui_retail_async_irq();R.engine.in_irq=0u;
++    unsigned delta=R.engine.stats.irq_blocks-before;
++    CHECK(delta<=2u);return delta;
++}
++int main(void) {
++    hybrid_suite_main();
++    /* Reproduce an active request with no reception left to generate the
++     * next interrupt, then recover it through the independent server. */
++    cooked_fixture=true;setup(GAME_VBR,X,32,false);mode(2048);m.delay=0u;
++    int32_t held=request(45001u,64u,OUTPUT);
++    for(unsigned n=0;R.engine.active && kui_sci_stream_busy();++n){elapse();(void)kui_retail_async_irq();CHECK(n<1000u);}
++    CHECK(R.engine.active && !kui_sci_stream_busy());
++    unsigned stopped=R.engine.cursor.done;
++    CHECK(kui_retail_async_irq()==1u && R.engine.cursor.done==stopped);
++    for(unsigned n=0;R.engine.active;++n){elapse();(void)pump();CHECK(n<1000u);}
++    CHECK(gd(KUI_GD_CHECK,(uint32_t)held,STATUS)==KUI_GD_COMPLETED);compare(45001u,64u,OUTPUT);
++    for(unsigned cooked=0;cooked<2u;++cooked)for(unsigned how=X;how<=Y;++how) {
++        cooked_fixture=cooked;setup(GAME_VBR,how,48,false);mode(2048);
++        m.delay=RECEIVE_POLLS;
++        clock_counter=100u;
++        int32_t token=request(45001u,64u,OUTPUT);
++        unsigned call_before=R.engine.stats.call_blocks;
++        CHECK(pump()==0u && R.engine.stats.call_blocks==call_before);
++        m.delay=0;elapse();
++        CHECK(pump()==2u && R.engine.active);
++        /* Complete the real request without supplying another game GD
++         * entry. The independent producer must preserve the exact bytes. */
++        clock_counter-=500000u;
++        for(unsigned n=0;R.engine.active;++n){elapse();CHECK(pump()<=2u && n<1000u);}
++        CHECK(R.engine.stats.call_blocks==call_before);
++        CHECK(R.engine.stats.releases==500000u);
++        CHECK(R.engine.native_max_lba==45001u && R.engine.native_max_count==64u);
++        CHECK(gd(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_COMPLETED);
++        compare(45001u,64u,OUTPUT);
++        CHECK(R.engine.in_irq==0u);
++    }
++    cooked_fixture=true;setup(GAME_VBR,X,48,false);mode(2048);
++    m.sar=0x0c123450u;m.dar=0x0c156780u;m.tcr=0x345u;m.chcr=1u;
++    int32_t token=request(45001u,64u,OUTPUT);
++    for(unsigned n=0;R.engine.active;++n) {
++        unsigned before=kui_sci_stream_stats()->polled;(void)pump();
++        CHECK(kui_sci_stream_stats()->polled-before<=1u && n<1000u);
++        CHECK(m.sar==0x0c123450u && m.dar==0x0c156780u && m.tcr==0x345u && m.chcr==1u);
++    }
++    CHECK(gd(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_COMPLETED);compare(45001u,64u,OUTPUT);
++    puts("cooperative reader: two-block bound, pending-DMA yield, independent completion, exact data and full request timing passed");
++    return 0;
++}
+diff --git a/tests/test_vmu_native_background_gateway.py b/tests/test_vmu_native_background_gateway.py
+index 73aab69..31fb03a 100644
+--- a/tests/test_vmu_native_background_gateway.py
++++ b/tests/test_vmu_native_background_gateway.py
+@@ -10,6 +10,8 @@ import os
+ import re
+ import subprocess
+ import tempfile
++import sys
++COOPERATIVE='--cooperative' in sys.argv
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+ source = (ROOT / "src/loader/vmu_native_background_resident.c").read_text()
+@@ -49,7 +51,11 @@ static bool reject_target,callback_not_ready,callback_bus_fault,reenter;
+ static int transaction(void *,struct kui_loader_sd *);
+ static bool native_resident_transaction(const volatile struct kui_vmu_observe_boot_control *c,
+     uintptr_t target) {
+-    return c==&test_control && !reject_target && target==(uintptr_t)transaction;
++    return c==&test_control && !reject_target && (target==(uintptr_t)transaction
++#if KUI_NATIVE_COOP_PUMP
++        || !target
++#endif
++        );
+ }
+ enum kui_loader_sd_result kui_retail_storage_acquire(struct kui_retail_storage *owner) {
+     CHECK(owner==&R.shared.card && kui_retail_hook_active==1u);
+@@ -125,6 +131,24 @@ int main(void) {
+     CHECK(invoke()==KUI_VMU_SD_LEASE_FAULT && !acquisitions && !callbacks && !releases);
+     fresh_gateway(false);R.shared.service.pending=1u;
+     CHECK(invoke()==KUI_VMU_SD_LEASE_BUSY && !acquisitions && !callbacks && !releases);
++#if KUI_NATIVE_COOP_PUMP
++    fresh_gateway(false);
++    CHECK(kui_vmu_observe_sd_lease(NULL,NULL)==KUI_VMU_SD_LEASE_FAULT);
++    CHECK(!acquisitions && !callbacks && !releases);
++    void *pump=(void *)(uintptr_t)KUI_RETAIL_NATIVE_PUMP_COOKIE;
++    CHECK(kui_vmu_observe_sd_lease(NULL,pump)==KUI_VMU_SD_LEASE_OK);
++    CHECK(!acquisitions && !callbacks && !releases && !R.engine.in_irq);
++    kui_retail_hook_active=1u;
++    CHECK(kui_vmu_observe_sd_lease(NULL,pump)==KUI_VMU_SD_LEASE_BUSY);
++    CHECK(kui_retail_hook_active==1u && !acquisitions && !callbacks && !releases);
++    fresh_gateway(false);R.engine.native_loan_state=KUI_VMU_NATIVE_ASYNC_LOAN_QUARANTINED;
++    CHECK(kui_vmu_observe_sd_lease(NULL,pump)==KUI_VMU_SD_LEASE_BUSY);
++    fresh_gateway(false);actual_sr=0u;
++    CHECK(kui_vmu_observe_sd_lease(NULL,pump)==KUI_VMU_SD_LEASE_FAULT);
++    fresh_gateway(false);reject_target=true;
++    CHECK(kui_vmu_observe_sd_lease(NULL,pump)==KUI_VMU_SD_LEASE_FAULT);
++    CHECK(!acquisitions && !callbacks && !releases);
++#endif
+     printf("production native Background VMU gateway: %u checks passed\n",checks);
+     return 0;
+ }
+@@ -137,6 +161,7 @@ with tempfile.TemporaryDirectory(prefix="kui-native-background-gateway-") as tmp
+              "KUI_RETAIL_GD_ASYNC=1", "KUI_RETAIL_TRANSPORT=1", "KUI_SCI_SD_NO_BLOCK=1",
+              "KUI_GENERAL_SCI_RESUME_FIX=1", "KUI_RETAIL_NATIVE_DRIVE_STATE=1",
+              "KUI_VMU_NATIVE_BACKGROUND=1", "KUI_VMU_NATIVE_PERSISTENT_PROBE=1"]
++    if COOPERATIVE:flags += ['KUI_NATIVE_COOP_PUMP=1','KUI_RETAIL_NATIVE_HYBRID=1']
+     subprocess.run([os.environ.get("HOST_CC", "cc"), "-std=c11", "-O2", "-g",
+                     "-Wall", "-Wextra", "-Werror", "-Wpedantic",
+                     "-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-fno-pie", "-no-pie",
+diff --git a/tests/test_vmu_native_cooperative_worker.c b/tests/test_vmu_native_cooperative_worker.c
+new file mode 100644
+index 0000000..9197cdd
+--- /dev/null
++++ b/tests/test_vmu_native_cooperative_worker.c
+@@ -0,0 +1,68 @@
++/* SPDX-License-Identifier: GPL-3.0-only */
++#define KUI_VMU_NATIVE_BACKGROUND 1
++#define KUI_RETAIL_ASYNC_TEST 1
++#define KUI_NATIVE_READER_DIAGNOSTIC 1
++#define KUI_NATIVE_COOP_PUMP 1
++#define KUI_NATIVE_REQUEST_TIMING 1
++#define main persistent_suite_main
++#include "test_vmu_native_persistent.c"
++#undef main
++static kui_retail_async_region_type observed_region;
++static unsigned pump_visits;
++static int pump_result;
++static uint32_t test_vbr=UINT32_C(0x8c00f400);
++static uint16_t test_iprb=0xa500u;
++static unsigned restorations;
++uint32_t kui_native_cooperative_test_vbr(void) {return test_vbr;}
++uint16_t kui_native_cooperative_test_iprb(void) {return test_iprb;}
++void kui_native_cooperative_test_restore(uint32_t vbr,uint16_t iprb) {
++    CHECK(vbr==UINT32_C(0x8c00f400) && iprb==0xa500u);
++    test_vbr=vbr;test_iprb=(uint16_t)((test_iprb&~0xf0u)|(iprb&0xf0u));++restorations;
++}
++void *kui_vmu_native_reader_test_region(uint32_t address) {
++    CHECK(kui_vmu_native_background_region_address(config.lease.payload,address));return &observed_region;
++}
++int kui_native_cooperative_test_visit(void) {
++    CHECK(state.armed && !state.pending && state.submitted==state.completed);
++    CHECK(!durable_card.inflight && !durable_card.handling);
++    CHECK((live_sr&0xf0u)==0xf0u);
++    ++pump_visits;
++    test_vbr=UINT32_C(0x8c6ff000);test_iprb=0xa510u;
++    if(!pump_result)observed_region.engine.stats.irq_blocks+=2u;
++    return pump_result;
++}
++int main(void) {
++    persistent_suite_main();
++    diagnostic_setup();diagnostic_pair(false);
++    CHECK(pump_visits==0u); /* Initial full proof precedes the fast path. */
++    observed_region.engine.active=1u;
++    unsigned leases=lease_calls,bytes=sd.bytes;
++    diagnostic_pair(false);
++    CHECK(pump_visits==1u && reader_cooperative.blocks==2u);
++    CHECK(restorations==1u && test_vbr==UINT32_C(0x8c00f400) && test_iprb==0xa500u);
++    CHECK(lease_calls==leases && sd.bytes==bytes);
++    pump_result=KUI_VMU_SD_LEASE_BUSY;diagnostic_pair(false);
++    CHECK(pump_visits==2u && reader_cooperative.busy==1u && reader_cooperative.blocks==2u);
++    pump_result=0;
++    unsigned before=pump_visits;
++    durable_card.inflight=1u;reader_cooperative_service();CHECK(pump_visits==before);durable_card.inflight=0u;
++    durable_card.handling=1u;reader_cooperative_service();CHECK(pump_visits==before);durable_card.handling=0u;
++    for(unsigned mode=2u;mode<=4u;++mode){config.diagnostics=mode;reader_cooperative_service();CHECK(pump_visits==before);}
++    config.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE;
++    reader_capture_start();
++    diagnostic.active=1u;
++    observed_region.engine.stats.hooks=test_clock.counter+300000u;
++    observed_region.engine.stats.releases=250000u;
++    observed_region.engine.native_max_lba=45678u;observed_region.engine.native_max_count=64u;
++    observed_region.shared.service.pending=1u;observed_region.shared.service.token=99u;observed_region.engine.token=99u;
++    diagnostic_pair(false);
++    CHECK(reader_capture.samples==1u && !observed_region.engine.stats.releases);
++    CHECK(reader_capture.call_max==250000u);
++    observed_region.engine.stats.releases=500000u;
++    observed_region.engine.native_max_lba=56789u;observed_region.engine.native_max_count=128u;
++    diagnostic_pair(false);
++    CHECK(reader_capture.call_max==500000u && reader_cooperative.max_lba==56789u && reader_cooperative.max_count==128u);
++    CHECK(reader_capture.previous.irq_blocks==observed_region.engine.stats.irq_blocks-reader_cooperative.blocks);
++    puts("cooperative worker: original save/ownership suite, post-completion pump, busy/storage exclusions and request timing passed");
++    return 0;
++}
+diff --git a/tools/check_vmu_native_persistent.py b/tools/check_vmu_native_persistent.py
+index 8f07262..e468856 100644
+--- a/tools/check_vmu_native_persistent.py
++++ b/tools/check_vmu_native_persistent.py
+@@ -130,6 +130,21 @@ STALL_PREPARED_PINS = {
+ }
+ 
+ 
++COOPERATIVE_PREPARED_PINS = {
++ '_diagnostic_end': ('0dc0630080b686611a6798d79bbcac0f6f6445770fda330da07ec57692cfa6c2', 1372),
++ '_diagnostic_complete': ('3dd34836554fc7fcf878b8f0df32bfd5202d0c1b380a3d8584bc5557fb1f07c0', 1636),
++ '_kui_vmu_native_passive_complete': ('95a9e3ed44a3cdf947f2510c04d2382cc9c95423d53350610c2a5cff2579e5e3', 2712),
++ '_transfer_context_valid': ('db4d82d003b435ec6f434203ab6e5e774cd2d0333ecad34f6130077e0b5b8dc3', 1236),
++ '_kui_vmu_native_runtime_fault': ('959aa6c0a741aa03b179c7818a44b83292a82d3e72232b25a35a8d1dde47da85', 332),
++ '.rodata': ('4042119b1c701edb28b921c75c41e07cbff6b3db2607363595953f4a15f32ec4', 4440),
++ '_kui_vmu_native_trace_report': ('63dacf440db2a06109f497a5a5837680c7375129c45d3c98403b5e4a65a734db', 1120),
++ '_trace_history': ('2dbd1fece83f2bf345714001904a2ea8a50bcd6712114d402fa7019e6c08e86b', 164),
++ '_report': ('aea31ae8abe199a187fade98bda0110ea26b9eebaed17b290045dfbc142af017', 440),
++ '_trace_packets': ('856815ab57af0c7101d9e36bfe8a01ad5e7e76486958c3d70516fa60d519e542', 116),
++ '_reader_cooperative_service': ('bea9cb6d7bc3577b9bfe2ee4ae7072083c945c0cbc7b27fad426e9b9be38667e', 200),
++}
++
++
+ def prepared_symbol_records(worker):
+     data, _, _, sections, _ = worker
+     records = []
+@@ -633,13 +648,19 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
+     stall_marker=worker[4].get('__kui_native_reader_stall_capture')
+     if stall_marker is not None:
+         require(stall_marker==(1,0,0,0xfff1),'invalid reader stall diagnostic marker')
+-    pins={**PREPARED_PINS,**(STALL_PREPARED_PINS if stall_marker else {})}
++    cooperative=worker[4].get('__kui_native_cooperative_reader')
++    if cooperative is not None:
++        require(stall_marker and cooperative==(1,0,0,0xfff1),'invalid cooperative reader marker')
++        require(COOPERATIVE_PREPARED_PINS,'missing reviewed cooperative reader pins')
++    pins={**PREPARED_PINS,**(STALL_PREPARED_PINS if stall_marker else {}),
++          **(COOPERATIVE_PREPARED_PINS if cooperative else {})}
+     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
+                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
+                        ("_protected_ranges", 512), ("_protected_count", 4),
+                        ("_controller_pair", 188), ("_diagnostic_phase", 976), ("_diagnostic", 144)]
+     if FAULT_STATE in worker[4]:objects.append((FAULT_STATE,32))
+     if stall_marker:objects.append(('_reader_capture',508))
++    if cooperative:objects.append(('_reader_cooperative',24))
+     for name,size in objects:
+         address, actual, kind, owner = worker[4][name]
+         section = worker[3][owner]
+@@ -2046,7 +2067,8 @@ def check_worker_pointer_aliases(wire,policy,fault_capture,coherence=None):
+     return relocations
+ 
+ 
+-def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_proof=None):
++def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_proof=None,
++                       *, terminal_proof=None,terminal_gateway_cases=0):
+     """Walk source-qualified emitted graphs with finite authored callbacks."""
+     report_sets = {"worker": sorted((directory / "native").rglob("*.ci")),
+                    "low": sorted(directory.glob("resident-sci.elf*.ltrans*.ci"))}
+@@ -2112,6 +2134,7 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
+                 "loan_ticks" if background and name=="ticks" else name,
+                 "sci_sd_bus.c")]
+     memo, paths, visiting, indirect_sites, null_sites = {}, {}, set(), set(), set()
++    terminal_escapes=set()
+     def indirect(name, label):
+         domain, function = name.split(":", 1)[0], _function_base(name)
+         source = Path(label.split(":", 1)[0]).name
+@@ -2121,6 +2144,20 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
+                 return high("kui_vmu_native_persistent_sd_transaction")
+             if background and (function,source) in (("byte","sci_stream.c"),("select","sci_stream.c")):
+                 return bus("transfer" if function=="byte" else "select_card")
++            if background and (function,source) in (('deliver','retail_cursor.c'),('kui_retail_cursor_feed','retail_cursor.c')):
++                return resolve('low','write_out','retail_async.c')
++            if background and (function,source)==('write_out','retail_async.c'):
++                return resolve('low','native_background_map')
++            if background and (function,source)==('kui_vmu_observe_low_failure','vmu_native_background_resident.c'):
++                # The low map-refusal instruction proof binds this target to
++                # the relocated terminal; its actual gateway replaces SP
++                # before entering C. That report's root is walked separately
++                # below, not added to the abandoned caller's current stack.
++                require(terminal_proof and terminal_proof.get('schema')=='kui.native.gd-map-refusal.v1' and
++                        terminal_proof.get('cached_worker_terminal') and
++                        terminal_proof.get('mutation_rejections',0)>0 and terminal_gateway_cases>=7680,
++                        'cooperative map refusal lacks the independent terminal/stack-switch proof')
++                terminal_escapes.add((name,label));return []
+             raise ValueError("unexpected low callback from worker stack: " + name + " at " + label)
+         fixed = {
+             "vmu_durable.c": ("persistent_lease",),
+@@ -2149,6 +2186,8 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
+             return high(*fixed[source])
+         if (function, source) == ("persistent_lease", "vmu_native_passive.c"):
+             return resolve("low", "kui_vmu_observe_sd_lease")
++        if (function, source)==('reader_cooperative_service','vmu_native_reader_capture.inc'):
++            return resolve('low','kui_vmu_observe_sd_lease')
+         if source == "sd_reader.c":
+             if background and function=='read_payload':
+                 # The exact typed descriptor above, copied by the admitted
+@@ -2211,10 +2250,12 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
+             "source_qualified_calls": True,
+             "verified_zero_stack_assembly_leaves": ["kui_vmu_native_trace_irq",*fault_leaves],
+             "verified_cold_owner_stack_gateways":cold_gates,
++            "verified_stack_replacing_terminals": [list(site) for site in sorted(terminal_escapes)],
+             "background_loan_descriptor":descriptor}
+ 
+ 
+-def check_stacks(directory, worker, fault_proof=None, coherence_proof=None, *, background_audit=None):
++def check_stacks(directory, worker, fault_proof=None, coherence_proof=None, *, background_audit=None,
++                 terminal_proof=None,terminal_gateway_cases=0):
+     resident = inspect_elf((directory / "resident-sci.elf").read_bytes(), LOW,
+                            0x8c007ba0 if background_audit else 0x8C007800)
+     low_rows = linked_stack_rows(sorted((directory / "resident/lto").glob("*.ltrans*.su")), resident["symbols"])
+@@ -2240,7 +2281,8 @@ def check_stacks(directory, worker, fault_proof=None, coherence_proof=None, *, b
+     # Every retained C frame is included, including low bus callbacks called
+     # from the worker. Summing them overstates any single actual path.
+     high_sum, low_sum = sum(frame for _, frame in high_rows), sum(frame for _, frame in low_rows)
+-    call_paths = worker_stack_paths(directory, worker, resident, fault_proof, coherence_proof)
++    call_paths = worker_stack_paths(directory, worker, resident, fault_proof, coherence_proof,
++        terminal_proof=terminal_proof,terminal_gateway_cases=terminal_gateway_cases)
+     total = max(path["conservative_bytes"] for path in call_paths["paths"].values())
+     available = (resident_layout.stack_top("sci", False, True) -
+                  resident_layout.stack_bottom("sci", False, True) -
+@@ -2352,6 +2394,11 @@ def check(directory, *, self_test=False, trace_startup=None):
+     require(bool(stall)==bool(low_stall),'reader stall worker/resident diagnostic mismatch')
+     if stall:
+         require(stall==low_stall==(1,0,0,0xfff1),'invalid paired reader stall markers')
++    cooperative=worker[4].get('__kui_native_cooperative_reader')
++    low_cooperative=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_cooperative_resident')
++    require(bool(cooperative)==bool(low_cooperative),'cooperative reader worker/resident mismatch')
++    if cooperative:
++        require(cooperative==low_cooperative==(1,0,0,0xfff1),'invalid paired cooperative reader markers')
+     prepared_lifetime = check_prepared_lifetime(directory, worker, binary, wire, self_test, build=base["runtime"]["build"])
+     relocations=check_worker_pointer_aliases(wire,policy,fault_capture,coherence)
+ 
+@@ -2402,7 +2449,8 @@ def check(directory, *, self_test=False, trace_startup=None):
+                     "C worker changes SR outside audited gateways")
+     pio = check_pio_writers(directory, worker)
+     stacks = check_stacks(directory, worker, fault_capture, coherence,
+-                          background_audit=base.get("background_reader"))
++                          background_audit=base.get("background_reader"),
++                          terminal_proof=base.get('gd_map_refusal_terminal'),terminal_gateway_cases=hook_cases)
+     source = check_source(directory, base["runtime"])
+     report = {"schema": "kui.native.persistent.probe.artifact.v1", "allocator_bootstrap_audit": base,
+               "module_sha256": base["module_sha256"], "runtime": base["runtime"],
+@@ -2412,6 +2460,10 @@ def check(directory, *, self_test=False, trace_startup=None):
+               "reader_stall_capture": {"enabled": bool(stall),
+                   "paired_resident_worker": bool(stall),"private_worker_state_bytes": 508 if stall else 0,
+                   "diagnostic_sd_log_writes": False,"console_root_cause_established": False},
++              "cooperative_reader": {"enabled": bool(cooperative),
++                  "pump_blocks_per_visit": 2 if cooperative else 0,
++                  "foreground_catchup_changed": False,"service_after_physical_controller_proof": bool(cooperative),
++                  "completed_request_timing": bool(cooperative),"console_performance_verified": False},
+               "failure_only_gateways": runtime_fault,
+               "private_stack_guard": stack_guard,
+               "compiled_owner_reader": compiled_reader,
+diff --git a/tools/compare_native_reader_cadence.py b/tools/compare_native_reader_cadence.py
+index 7d05fa2..d84df21 100644
+--- a/tools/compare_native_reader_cadence.py
++++ b/tools/compare_native_reader_cadence.py
+@@ -13,7 +13,7 @@ REJECTED = '1920659698ae'
+ SOURCES = ('retail_async.c', 'retail_async.h', 'sci_stream.c', 'sci_stream.h')
+ 
+ 
+-def run(output, diagnostic=False):
++def run(output, diagnostic=False, cooperative=False):
+     output.mkdir(parents=True, exist_ok=True)
+     env = os.environ.copy()
+     env['ASAN_OPTIONS'] = 'detect_leaks=0'
+@@ -35,6 +35,8 @@ def run(output, diagnostic=False):
+             flags.append('-DKUI_RETAIL_NATIVE_HYBRID=1')
+         if label=='candidate' and diagnostic:
+             flags.append('-DKUI_NATIVE_READER_DIAGNOSTIC=1')
++        if label=='candidate' and cooperative:
++            flags+=['-DKUI_NATIVE_COOP_PUMP=1','-DKUI_NATIVE_REQUEST_TIMING=1']
+         flags += ['-I' + str(directory), '-Iinclude', '-Isrc/loader',
+                   str(directory / 'retail_async.c'), str(directory / 'sci_stream.c'),
+                   'src/core/retail_cursor.c', 'src/core/retail_image.c', 'src/core/retail_gd.c',
+@@ -74,6 +76,7 @@ def run(output, diagnostic=False):
+                   hot_irq_blocks=dict(baseline=256, rejected=1, candidate_normal=8, candidate_eager=8),
+                   examples=examples, console_timing_measured=False,
+                   reader_diagnostic_enabled=diagnostic,
++                  cooperative_reader_enabled=cooperative,
+                   limitation='Rounds are synthetic caller opportunities, not video frames or milliseconds.')
+     (output / 'comparison.json').write_text(json.dumps(report, indent=2) + '\n')
+     print(json.dumps(report, indent=2))
+@@ -83,5 +86,6 @@ if __name__ == '__main__':
+     parser = argparse.ArgumentParser(description=__doc__)
+     parser.add_argument('--output', type=Path, default=ROOT / 'build/native-reader-cadence')
+     parser.add_argument('--diagnostic',action='store_true')
++    parser.add_argument('--cooperative',action='store_true')
+     args=parser.parse_args()
+-    run(args.output.resolve(),args.diagnostic)
++    run(args.output.resolve(),args.diagnostic or args.cooperative,args.cooperative)
+diff --git a/tools/package_vmu_native_a2_delivery.py b/tools/package_vmu_native_a2_delivery.py
+index 53eb399..3e2deee 100644
+--- a/tools/package_vmu_native_a2_delivery.py
++++ b/tools/package_vmu_native_a2_delivery.py
+@@ -11,7 +11,7 @@ import tempfile
+ import zipfile
+ 
+ from runtime_package import verify
+-from vmu_native_cache_seed import decode_seed
++from vmu_native_cache_seed import decode_seed, template_seed
+ from vmu_native_mode import decode_mode
+ 
+ ROOT=Path(__file__).resolve().parents[1]
+@@ -66,7 +66,7 @@ def smoke(files,label):
+         before=snapshot()
+         def run(game='evolution2',flag=None,expected=0,refused=False,idempotent=False):
+             argv=[sys.executable,str(package/'personalize.py'),str(card),'--profile',
+-                  str(profile.relative_to(card)),'--game',game]+([flag] if flag else [])
++                  str(profile.relative_to(card))]+(['--game',game] if game else [])+([flag] if flag else [])
+             old=destination.read_bytes()
+             result=subprocess.run(argv,cwd=base,text=True,capture_output=True)
+             require(result.returncode==(2 if refused else 0),result.stderr or 'Installer status differs')
+@@ -81,13 +81,18 @@ def smoke(files,label):
+                 offset=manifest['profile_module_offset']
+                 require(module[offset:offset+4096]==profile.read_bytes(),'Installed profile differs')
+                 offset=manifest['cache_seed_module_offset']
+-                seed=decode_seed(module[offset:offset+1120])
+-                catalog=json.loads(files['native-cache/catalog.json'])
+-                entry=next(g for g in catalog['games'] if g['slug']==game)
+-                require(seed and seed['record_sha256']==entry['record_sha256'],'Installed game seed differs')
++                wire=module[offset:offset+1120]
++                seed=decode_seed(wire)
++                if game:
++                    catalog=json.loads(files['native-cache/catalog.json'])
++                    entry=next(g for g in catalog['games'] if g['slug']==game)
++                    require(seed and seed['record_sha256']==entry['record_sha256'],'Installed game seed differs')
++                else:
++                    require(seed is None and wire==template_seed(),'Cold discovery seed is not canonical empty')
+                 if idempotent:require(module==old and result.stdout.startswith('Already installed'),
+                                       'Repeated install was not idempotent')
+             checks.append(dict(game=game,flag=flag or 'normal',refused=refused,idempotent=idempotent))
++        run(game=None);run(game=None,idempotent=True)
+         for game in ('ps2','skies','sa2','grandia2','evolution1','evolution2'):run(game)
+         for flag,value in (('--control',1),('--profile-runtime',2),('--lease-only',3),
+                            ('--hooks-only',4),('--raw-chain',5),('--evolution-trace',6)):
+diff --git a/tools/package_vmu_native_persistent.py b/tools/package_vmu_native_persistent.py
+index 8253942..0d59e2e 100644
+--- a/tools/package_vmu_native_persistent.py
++++ b/tools/package_vmu_native_persistent.py
+@@ -75,7 +75,7 @@ def package(build,guide='broader',trace_startup=None):
+     commit=git('rev-parse','HEAD');revision=commit[:12]
+     if git('status','--porcelain'):
+         raise ValueError('Commit source changes before packaging')
+-    if guide in ('evolution-trace','a2-background','hybrid','stall') and trace_startup is None:
++    if guide in ('evolution-trace','a2-background','hybrid','stall','cooperative') and trace_startup is None:
+         raise ValueError('This package requires --trace-startup with the exact original executable')
+     graphs=list(build.rglob('*.ci'))
+     if not graphs or any(not closed_callgraph(path.read_text()) for path in graphs):
+@@ -125,7 +125,7 @@ def package(build,guide='broader',trace_startup=None):
+                      'vmu-native-evolution-fault-test.md','vmu-native-evolution-isolation-test.md',
+                      'vmu-native-evolution-hooks-test.md','vmu-native-evolution-trace-test.md'):
+             extra['docs/'+name]=(root/'docs'/name).read_bytes()
+-        if guide in ('a2-background','hybrid','stall'):
++        if guide in ('a2-background','hybrid','stall','cooperative'):
+             extra['docs/vmu-native-a2-background-test.md']=(root/'docs/vmu-native-a2-background-test.md').read_bytes()
+             extra['docs/evidence/native-a2-background-2026-10-24.json']=(root/'docs/evidence/native-a2-background-2026-10-24.json').read_bytes()
+             extra['docs/evidence/native-retry-integration-2026-10-24.json']=(root/'docs/evidence/native-retry-integration-2026-10-24.json').read_bytes()
+@@ -134,6 +134,11 @@ def package(build,guide='broader',trace_startup=None):
+             extra['docs/evidence/native-throughput-recovery-2026-10-24.json']=(root/'docs/evidence/native-throughput-recovery-2026-10-24.json').read_bytes()
+         if guide=='stall':
+             extra['docs/evidence/native-b-stall-2026-10-24.json']=(root/'docs/evidence/native-b-stall-2026-10-24.json').read_bytes()
++        if guide in ('cooperative','open'):
++            for name in ('native-hybrid-design-2026-10-24.md','vmu-native-cooperative-test.md','vmu-native-open-test.md'):
++                extra['docs/'+name]=(root/'docs'/name).read_bytes()
++            extra['docs/evidence/native-cooperative-2026-10-24.json']=(root/'docs/evidence/native-cooperative-2026-10-24.json').read_bytes()
++            extra['collect-native-startup.py']=(root/'tools/kui-native-startup-bundle.py').read_bytes()
+         for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json',
+                      'native-performance-acceptance-2026-10-23.json','native-uniform-root-family-2026-10-23.json',
+                      'native-recv-ownership-2026-10-23.json','native-older-sdk-2026-10-23.json',
+@@ -173,7 +178,11 @@ def package(build,guide='broader',trace_startup=None):
+         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
+         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
+             template_sha256=sha(template)),
+-        compatibility_claim=('B scheduling with RAM-only reader/VMU stall capture; root cause and faster boot await console measurements'
++        compatibility_claim=('Bounded cooperative native reader with complete-request timing; console performance remains unverified'
++            if guide=='cooperative' else
++            'Standard native reader and cold SDK-family discovery; universal virtual-A2 compatibility remains unverified'
++            if guide=='open' else
++            'B scheduling with RAM-only reader/VMU stall capture; root cause and faster boot await console measurements'
+             if guide=='stall' else
+             'Native SCI Background DMA with capped foreground work; gameplay and FMV performance await console testing'
+             if guide=='hybrid' else
+@@ -222,7 +231,7 @@ def package(build,guide='broader',trace_startup=None):
+ 
+ if __name__=='__main__':
+     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('build',type=Path)
+-    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall'),default='broader')
++    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall','cooperative','open'),default='broader')
+     parser.add_argument('--trace-startup',type=Path)
+     try:
+         args=parser.parse_args();package(args.build,args.guide,args.trace_startup)
+-- 
+2.51.1
+

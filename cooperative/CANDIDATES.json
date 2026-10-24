@@ -1,0 +1,20 @@
+{
+  "schema": "kui.native.cooperative.candidates.v1",
+  "source_commit": "f518592088f9e397aa11780514535d0dbd52b42a",
+  "source_tree": "004dbce46dc69187b952ec5bdb2a8cec18a43fed",
+  "build": "f518592088f9",
+  "console_performance_verified": false,
+  "source_bundle_prerequisite": "74958b3878279fc916199a7cd330f7f17b036138",
+  "candidates": {
+    "Hybrid": {
+      "reader": "Background cooperative",
+      "module_sha256": "8743a1b856107680a219d29e653637200d182d0d3a5e24a9e2772052afcf9522",
+      "module_bytes": 226820
+    },
+    "Native-A2": {
+      "reader": "Standard",
+      "module_sha256": "75e9a4be2e582f118f96fd382942801a498d36826ee6c52f85d51b06b50614d2",
+      "module_bytes": 211800
+    }
+  }
+}
