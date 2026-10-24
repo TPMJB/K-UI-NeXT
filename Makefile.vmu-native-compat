@@ -6,6 +6,9 @@ override TEST_ZIP := K-UI-Native-Compatibility-Test.zip
 override TEST_GUIDE := docs/vmu-native-compat-test.md
 FLAGS += -DKUI_VMU_NATIVE_CACHE_PROBE=1
 override STAGE_SRC += src/core/vmu_native_resolution_cache.c src/core/vmu_native_cache_seed.c src/core/vmu_native_mode.c
+# Included profiles append objects after the base Makefile's prerequisite
+# expansion. Bind the final object sets to the reader/revision stamp as well.
+$(RESIDENT_OBJ) $(STAGE_OBJ) $(NATIVE_OBJ): $(BUILD)/readonly-config
 $(BUILD)/stage.elf: $(STAGE_OBJ)
 
 COMPAT_WORKER_HOST_SRC = src/core/vmu_native_heap.c src/core/vmu_native_runtime.c \
