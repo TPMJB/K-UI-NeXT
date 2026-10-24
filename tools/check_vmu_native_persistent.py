@@ -113,6 +113,23 @@ PREPARED_PINS = {
  '_kui_vmu_native_trace_irq': ('31b72b692190f12dabe3bee1767a9d43913918730d08b7c7c802bea816c8177e', 14)}
 
 
+# Separate reviewed diagnostic image. Scheduling, storage and owner guards
+# remain pinned; these additions bind RAM capture, its private state and new
+# text/typed string offsets. The ordinary worker retains its original pins.
+STALL_PREPARED_PINS = {
+ '_diagnostic_end': ('c88c8dc8002887cdd643729f4469438081017b4b1273efd02175da143afa3b57', 1248),
+ '_diagnostic_complete': ('b24624ba519db5e96771cc52668edf744d9c63f87b57ac91d27ef0485759813b', 1528),
+ '_transfer_context_valid': ('864afeda319c05fad5f87de8222c254541d296bc34cd81513aa95c90d712d8b9', 1236),
+ '_kui_vmu_native_runtime_fault': ('585ee839a421456d7aef53dca77e9558b6652d7b5c5198b67141cffac4352e79', 332),
+ '.rodata': ('8fcde010e837b8b43b6112473d3191684e4651747591ae81921471f1c7de2305', 4420),
+ '_kui_vmu_native_trace_report': ('06a3b3f1f6e3caf7e4a052c0232b45a5d01dd1ce8f2fc26bb6b9313059734f38', 1120),
+ '_trace_history': ('0326ba7ea22d4d60253a55cc1950f8d4db51a17945bd4f56c21441b844831523', 164),
+ '_report': ('5d48af4f97d25f73c0680f7c9a3f3589ed62e36e4373c551494ac65f1958cbb7', 440),
+ '_trace_packets': ('7fc54ea8dcae371c4c35092c6baf4fe758b4002ce0bd75769c5aebb1d3b88e28', 116),
+ '_reader_capture_region': ('13f1c4bb467b40f2f40ac8b27de13c73e5b0d90f098caec2c5b57d2b6bf95cfd', 100),
+}
+
+
 def prepared_symbol_records(worker):
     data, _, _, sections, _ = worker
     records = []
@@ -613,11 +630,16 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
         return {"prepared": False, "legacy_full_release_admission": True}
     if build is None:
         build = verify((directory / "retail-maple-observe.kui").read_bytes())["build"]
+    stall_marker=worker[4].get('__kui_native_reader_stall_capture')
+    if stall_marker is not None:
+        require(stall_marker==(1,0,0,0xfff1),'invalid reader stall diagnostic marker')
+    pins={**PREPARED_PINS,**(STALL_PREPARED_PINS if stall_marker else {})}
     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
                        ("_protected_ranges", 512), ("_protected_count", 4),
                        ("_controller_pair", 188), ("_diagnostic_phase", 976), ("_diagnostic", 144)]
     if FAULT_STATE in worker[4]:objects.append((FAULT_STATE,32))
+    if stall_marker:objects.append(('_reader_capture',508))
     for name,size in objects:
         address, actual, kind, owner = worker[4][name]
         section = worker[3][owner]
@@ -627,12 +649,12 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
                 P2 <= address < address + actual <= worker[4]["__vmu_native_worker_stack_bottom"][0],
                 "prepared object lacks exact private P2 BSS ownership: " + name)
     functions = {}
-    for name, expected in PREPARED_PINS.items():
+    for name, expected in pins.items():
         signature, size, references = prepared_signature(worker, binary, wire, name, build)
         require((signature, size) == expected, "prepared linked instructions/targets changed: " + name)
         functions[name] = {"normalized_sha256": signature, "bytes": size,
                            "typed_pointer_bindings": len(references)}
-    require(PREPARED_PINS, "missing reviewed prepared linked signatures")
+    require(pins, "missing reviewed prepared linked signatures")
     graph = (directory / "native/src/loader/vmu_native_passive.ci").read_text()
     edges = [(a, b) for a, b, _ in EDGE.findall(graph)]
     # GCC emits unlabeled edges for its split read_value.part.0 helper.
@@ -669,7 +691,7 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
     if self_test:
         # Independent code and valid-but-wrong pointer-target mutations. The
         # signatures bind the loop bounds, fail branches and every literal.
-        for name in PREPARED_PINS:
+        for name in pins:
             signature, size, references = prepared_signature(worker, binary, wire, name, build)
             if name == ".rodata":
                 continue
@@ -2325,6 +2347,11 @@ def check(directory, *, self_test=False, trace_startup=None):
     runtime_fault = check_runtime_fault_gateways(worker, binary, wire, self_test)
     stack_guard = check_cached_stack_guard(worker, self_test) if cached else {"cached_runtime":False}
     compiled_reader = check_compiled_heap_reader(worker,self_test)
+    stall=worker[4].get('__kui_native_reader_stall_capture')
+    low_stall=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_reader_stall_resident')
+    require(bool(stall)==bool(low_stall),'reader stall worker/resident diagnostic mismatch')
+    if stall:
+        require(stall==low_stall==(1,0,0,0xfff1),'invalid paired reader stall markers')
     prepared_lifetime = check_prepared_lifetime(directory, worker, binary, wire, self_test, build=base["runtime"]["build"])
     relocations=check_worker_pointer_aliases(wire,policy,fault_capture,coherence)
 
@@ -2382,6 +2409,9 @@ def check(directory, *, self_test=False, trace_startup=None):
               "worker_bytes": len(binary), "worker_span": SPAN, "worker_stack_bytes": 4096,
               "worker_load_policy": policy, "cached_code": cached,
               "prepared_lifetime_admission": prepared_lifetime,
+              "reader_stall_capture": {"enabled": bool(stall),
+                  "paired_resident_worker": bool(stall),"private_worker_state_bytes": 508 if stall else 0,
+                  "diagnostic_sd_log_writes": False,"console_root_cause_established": False},
               "failure_only_gateways": runtime_fault,
               "private_stack_guard": stack_guard,
               "compiled_owner_reader": compiled_reader,

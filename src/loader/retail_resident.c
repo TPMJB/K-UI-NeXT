@@ -459,12 +459,15 @@ static void capture_native_fault(uint32_t function, uint32_t current_param) {
 /* The separate VMU reader keeps compact terminal fields in its unchanged
  * low reservation; the worker owns the detailed VMU report. No counters or
  * labels on this terminal-only path participate in game read scheduling. */
-static void report_fault(uint32_t function) {
-    (void)function;
+static void __attribute__((noinline)) native_reader_report(const char *label) {
     retail_display_restore(&display);
-    retail_display_line("READER STOP");
+    retail_display_line(label);
     retail_display_values("FN CMD",&service.diag.last_function,2u);
     retail_display_values("LBA COUNT DEST",&service.diag.last_lba,3u);
+}
+static void report_fault(uint32_t function) {
+    (void)function;
+    native_reader_report("READER STOP");
     for(;;) __asm__ volatile("nop");
 }
 #elif KUI_RETAIL_OBSERVE
@@ -645,10 +648,7 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack
     (void)caller; (void)stack;
 #endif
 #if KUI_VMU_NATIVE_BACKGROUND
-    retail_display_restore(&display);
-    retail_display_line("GAME RETURN");
-    retail_display_values("FN CMD",&service.diag.last_function,2u);
-    retail_display_values("LBA COUNT DEST",&service.diag.last_lba,3u);
+    native_reader_report("GAME RETURN");
     retail_display_pause(900u);
     ((void (*)(void))(uintptr_t)0xa0000000u)();
     for(;;) __asm__ volatile("nop");

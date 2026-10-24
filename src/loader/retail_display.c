@@ -79,12 +79,20 @@ void retail_display_restore(const struct retail_display_state *s) {
     volatile uint16_t *frame=(volatile uint16_t *)(uintptr_t)0xa5000000u;
     for(unsigned i=0;i<640u*480u;i++) frame[i]=0x0864;
     row=20;
+#if KUI_NATIVE_READER_DIAGNOSTIC
+    retail_display_line("KUI B STALL");
+#else
     retail_display_line("K-UI V" KUI_VERSION " LAUNCH");
+#endif
     retail_display_line("BUILD " KUI_BUILD_ID);
 #ifdef KUI_RETAIL_CE
     retail_display_line("WINDOWS CE BOOT TEST");
 #else
+#if KUI_NATIVE_READER_DIAGNOSTIC
+    retail_display_line("NATIVE");
+#else
     retail_display_line("NATIVE GD IMAGE");
+#endif
 #endif
     row=108;
 }

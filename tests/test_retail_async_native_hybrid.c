@@ -40,7 +40,10 @@ static void pending_check_keeps_catchup(unsigned how) {
     CHECK(R.engine.stats.call_blocks-before==(how==Y?25u:20u));
     CHECK(finish(token,1,1)==KUI_GD_COMPLETED);compare(45001u,64u,OUTPUT);
 }
-int main(void) {
+#ifndef KUI_NATIVE_HYBRID_MAIN
+#define KUI_NATIVE_HYBRID_MAIN main
+#endif
+int KUI_NATIVE_HYBRID_MAIN(void) {
     for(unsigned cooked=0;cooked<2u;++cooked)
         for(unsigned how=X;how<=Y;++how)
             for(unsigned entry=0;entry<4u;++entry)ready_batch(cooked,how,entry);

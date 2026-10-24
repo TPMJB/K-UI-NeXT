@@ -29,6 +29,10 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#if KUI_NATIVE_STAGE_FAST_CRC
+#include "stage_fast_crc32.h"
+#define kui_retail_crc32 kui_stage_crc32
+#endif
 #include "kui/skies_read_diagnostic.h"
 #ifndef KUI_GAME_RAM_PATCHES_STAGE
 #define KUI_GAME_RAM_PATCHES_STAGE 0
@@ -2109,6 +2113,9 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     memcpy(boot,original_entry,ENTRY_PATCH_BYTES);
     uint32_t crc=kui_retail_crc32(0,boot,exec_bytes);
     if(crc!=boot_crc) relay_stopped("BOOTSTRAP ALTERED EXECUTABLE",crc);
+#if KUI_NATIVE_STAGE_FAST_CRC
+    retail_display_line("ENTIRE EXECUTABLE VERIFIED");
+#endif
     const uint8_t *resident=(const uint8_t *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
     size_t bytes=resident_bytes;
 #ifdef KUI_RETAIL_CE
@@ -2124,6 +2131,9 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
         /* Detail: the offset of the first changed byte. */
         if(resident[i]!=resident_blob[i]) relay_stopped("BOOTSTRAP ALTERED RESIDENT",(uint32_t)i);
     }
+#if KUI_NATIVE_STAGE_FAST_CRC
+    retail_display_line("ENTIRE RESIDENT VERIFIED");
+#endif
 #if KUI_ARMADA_CE_RAM_BIND_STAGE
     /* Bootstrap 2 has completed; caches are clean and disabled here. Prove
      * both the extra code and cleared state survived before the first CE

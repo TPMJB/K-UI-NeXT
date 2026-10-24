@@ -52,6 +52,8 @@
  * kui_retail_gd_progress); a block the interrupt cannot place raises the
  * drive's too, so CE's driver calls again to take it. */
 struct kui_retail_async_stats {
+    /* In the separate stall diagnostic execs/exec_int hold foreground/IRQ
+     * delivery-visit raw TMU0 maxima, reset by the serialized worker. */
     uint32_t irq_blocks, call_blocks, waits, execs, exec_int;
     uint32_t hooks, releases;
 };

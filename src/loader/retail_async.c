@@ -2,6 +2,13 @@
  * Original K-UI background game reader (see retail_async.h). The stream
  * sequence is the one the SCI async probe proved on the console. */
 #include "retail_async.h"
+#if KUI_NATIVE_READER_DIAGNOSTIC
+#if !KUI_RETAIL_NATIVE_HYBRID
+#error "Reader timing requires the unused native hybrid scheduler counters"
+#endif
+__asm__(".global __kui_native_reader_stall_resident\n"
+        ".set __kui_native_reader_stall_resident,1\n");
+#endif
 #include "sci_sd_bus.h"
 #include "kui/retail_loader_layout.h"
 #include <string.h>
@@ -59,11 +66,15 @@ extern void kui_retail_async_test_write16(uint32_t, uint16_t);
 #define vbr_set kui_retail_async_test_set_vbr
 #define rd16 kui_retail_async_test_read16
 #define wr16 kui_retail_async_test_write16
-#ifdef KUI_RETAIL_CE
+#if defined(KUI_RETAIL_CE) || KUI_NATIVE_READER_DIAGNOSTIC
 extern uint32_t kui_retail_async_test_read32(uint32_t);
+#ifdef KUI_RETAIL_CE
 extern void kui_retail_async_test_write32(uint32_t, uint32_t);
+#endif
 #define rd32 kui_retail_async_test_read32
+#ifdef KUI_RETAIL_CE
 #define wr32 kui_retail_async_test_write32
+#endif
 #endif
 #else
 #ifndef KUI_RETAIL_CE
@@ -73,8 +84,11 @@ static uint32_t vbr_get(void) {
     return value;
 }
 static void vbr_set(uint32_t value) { __asm__ __volatile__("ldc %0,vbr" : : "r"(value) : "memory"); }
-#else
+#endif
+#if defined(KUI_RETAIL_CE) || KUI_NATIVE_READER_DIAGNOSTIC
 static uint32_t rd32(uint32_t a) { return *(volatile uint32_t *)(uintptr_t)a; }
+#endif
+#ifdef KUI_RETAIL_CE
 static void wr32(uint32_t a, uint32_t v) { *(volatile uint32_t *)(uintptr_t)a = v; }
 #endif
 static uint16_t rd16(uint32_t a) { return *(volatile uint16_t *)(uintptr_t)a; }
@@ -349,7 +363,7 @@ static bool tops_up(uint32_t function) { return topping(function); }
  * run is started before each block is checked and copied. Returns while a block is in
  * flight, after up to wait blocks have been waited for. Without an active
  * read, only a finished reception is ended (its interrupt cleared). */
-#ifndef KUI_RETAIL_CE
+#if !defined(KUI_RETAIL_CE) && !KUI_NATIVE_READER_DIAGNOSTIC
 #define deliver_work deliver
 #endif
 static void deliver_work(uint32_t wait) {
@@ -471,6 +485,17 @@ static void deliver(uint32_t wait) {
     uint32_t blocks = R.shared.stream.stats.polled - before;
     uint32_t *maximum = e.in_irq ? &e.polled_irq_max : &e.polled_call_max;
     if(blocks > *maximum) *maximum = blocks;
+}
+#elif KUI_NATIVE_READER_DIAGNOSTIC
+/* Diagnostic build only. These two counters are unused by the hybrid
+ * scheduler. The worker samples/reset them under IMASK15; clock admission
+ * happens at both capture endpoints. Never configure a game timer here. */
+static void deliver(uint32_t wait) {
+    uint32_t before=rd32(UINT32_C(0xffd8000c));
+    deliver_work(wait);
+    uint32_t elapsed=before-rd32(UINT32_C(0xffd8000c));
+    uint32_t *maximum=e.in_irq?&e.stats.exec_int:&e.stats.execs;
+    if(elapsed>*maximum) *maximum=elapsed;
 }
 #endif
 static void report(void) {

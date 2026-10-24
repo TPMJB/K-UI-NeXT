@@ -2,6 +2,15 @@
 /* Compare identical finite GD/IRQ schedules against real reader revisions.
  * A round is a caller opportunity, not a Dreamcast video frame or timing
  * measurement. Unlike finish(), this never supplies unlimited interrupts. */
+#if KUI_NATIVE_READER_DIAGNOSTIC
+#include <assert.h>
+#include <stdint.h>
+uint32_t kui_retail_async_test_read32(uint32_t address) {
+    static uint32_t counter;
+    assert(address==UINT32_C(0xffd8000c));
+    counter-=19u;return counter;
+}
+#endif
 #define main original_async_main
 #include "test_retail_async.c"
 #undef main

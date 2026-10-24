@@ -80,6 +80,9 @@ static struct {
 } diagnostic;
 #include "vmu_native_phase.inc"
 static struct native_phase_state diagnostic_phase;
+#if KUI_NATIVE_READER_DIAGNOSTIC
+#include "vmu_native_reader_capture.inc"
+#endif
 static bool persistent_storage_guard(void);
 static bool persistent_context_guard(void);
 static bool installed_hooks_valid(void);
@@ -275,6 +278,13 @@ static void diagnostic_end(enum kui_vmu_native_profile_kind kind,
     const struct kui_vmu_native_profile_span *span) {
     struct kui_vmu_native_profile_sample sample;
     diagnostic_sample(&sample);kui_vmu_native_profile_end(&diagnostic.timing,kind,span,&sample);
+#if KUI_NATIVE_READER_DIAGNOSTIC
+    /* Completion reaches this only after the existing context/lease and
+     * response/publication guards passed. Only that proved scope may reset
+     * the two reader diagnostic counters in the owned lease tail. */
+    if(diagnostic.active && kind==KUI_VMU_NATIVE_PROFILE_COMPLETE)
+        reader_capture_poll(&sample);
+#endif
     if(kind==KUI_VMU_NATIVE_PROFILE_SUBMIT || kind==KUI_VMU_NATIVE_PROFILE_COMPLETE)
         native_phase_end(&diagnostic_phase,&sample,diagnostic_phase_read,NULL);
 }
@@ -296,6 +306,9 @@ static void diagnostic_report(void) {
 #else
     struct retail_display_state display;memcpy(display.regs,config.display,sizeof(display.regs));
     for(;;) {
+#if KUI_NATIVE_READER_DIAGNOSTIC
+    reader_capture_report(&display);
+#endif
     retail_display_restore(&display);
     retail_display_line("NATIVE VMU LATENCY CAPTURE");
     retail_display_line("C BODY TIMINGS INCLUDE SAMPLING OVERHEAD");
@@ -370,6 +383,9 @@ static void diagnostic_complete(const struct kui_vmu_native_profile_span *span,b
             memset(&diagnostic,0,sizeof(diagnostic));diagnostic.active=1u;
             diagnostic.capture_poll_start=state.completed;
             native_phase_reset(&diagnostic_phase,phase_enabled);
+#if KUI_NATIVE_READER_DIAGNOSTIC
+            reader_capture_start();
+#endif
         }
     } else if((diagnostic.clock_started && !diagnostic.clock_invalid &&
                diagnostic.clock_first-diagnostic.clock_last>=20u*KUI_VMU_NATIVE_PROFILE_HZ) ||
