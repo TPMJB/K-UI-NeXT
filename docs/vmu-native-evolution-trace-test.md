@@ -1,15 +1,16 @@
-# Evolution: cold SDK cache handoff
+# Evolution: SDK startup correction
 
-The immediate startup refusal in build `f04a7045a384` is now reproduced offline.
-The SDK acquired its transfer lock, then a cached old copy of the same memory
-line wrote zero back over that lock. The worker correctly stopped at
-`AC1DC53C`, detail `5`, before its first transfer. Earlier flat-memory replays
-could not expose this cache interaction.
+Build `f7f4ac7027e9` introduced an SH-4 slot-illegal instruction before the
+first logo. Its new uniform gateway put a PC-relative `MOV.W` immediately
+after `JMP`. The CPU raises exception `1A0` before the original SDK initializer
+can resume. The replay incorrectly executed that slot as an ordinary load.
+Its previous positive results did not validate this CPU rule.
 
-This candidate cleans that line during SDK initialization, before the lock can
-be acquired. The older freeze after MPEG Sofdec remains unresolved until the
-candidate passes that transition on the console. This is a verified correction
-to the new startup regression, not a claim of full Evolution compatibility.
+The gateway now loads the constant before the jump. A legal register move in
+the slot restores the original register state. The corrected instruction
+models and linked-code audit reject the failed release. The cache handoff
+remains in place. The older freeze after MPEG Sofdec still needs a console
+result; this package does not establish full Evolution compatibility.
 
 ## Install and test
 
@@ -27,7 +28,7 @@ NORMAL adds no game trace patches, live counters, automatic diagnostic stop or
 exception-vector redirect. The cold cache handoff runs at SDK initialization;
 it does not add a purge to every controller poll.
 
-## What failed and what changed
+## Earlier cache failure and retained handoff
 
 The original SDK wrapper normalizes its lock pointer to the uncached P2 alias.
 It stores that pointer through the cached P1 cell at `8C1DC538`. The surrounding
@@ -75,7 +76,7 @@ the held lock survives, TX stays intact, and completion publishes only the expec
 controller presence byte after enumeration. Assembly frame saves are modeled as
 cached CPU stores; their save/restore instructions are bridged.
 
-The cold gateways pass 412 independent instruction cases and reject 193
+The cold gateways pass 412 independent instruction cases and reject 194
 instruction/literal mutations. Preparation passes 236 metadata checks; original
 prefix replay covers 40 cases across five game startups, with eight additional
 Power Stone 2 register-liveness cases. Installer tests refuse malformed inputs

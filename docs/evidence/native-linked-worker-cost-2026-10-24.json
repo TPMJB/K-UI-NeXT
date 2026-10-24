@@ -231,5 +231,11 @@
     "interpretation": "SDK transfer-lock witness saw zero before first submission, independently reproduced with dirty P1 writeback over the P2-held flag."
   },
   "cache_regression_evidence": "native-sdk-lock-cache-2026-10-24.json",
-  "flat_replay_does_not_prove_cache_correctness": true
+  "flat_replay_does_not_prove_cache_correctness": true,
+  "later_startup_regression": {
+    "build": "f7f4ac7027e9",
+    "observation": "Black screen before first logo",
+    "defect": "Uniform gateway PC-relative MOV.W in JMP delay slot causes SH-4 exception 1a0",
+    "evidence": "native-sh4-delay-slot-2026-10-23.json"
+  }
 }

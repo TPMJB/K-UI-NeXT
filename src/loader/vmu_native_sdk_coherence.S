@@ -89,9 +89,12 @@ C(\name):
     mov.l @(8,r0),r3
     mov r3,r2
     mov.l r13,@-r15
-    mov.l @(12,r0),r0
-    jmp @r0
+    /* SH-4 forbids PC-relative loads in delay slots. Load R0 first;
+     * JMP captures R3 before the legal slot restores its original value. */
+    mov.l @(12,r0),r3
     mov.w .Lfc4\@,r0
+    jmp @r3
+    mov r2,r3
     .else
     mov.l r13,@-r15
     mov.l r12,@-r15

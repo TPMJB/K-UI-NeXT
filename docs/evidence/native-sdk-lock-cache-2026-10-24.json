@@ -1,7 +1,7 @@
 {
   "schema": "kui.native.sdk-lock-cache.v1",
   "date": "2026-10-24",
-  "status": "Exact immediate first-transfer refusal reproduced offline and corrected in the targeted model. Console candidate success and the older post-Sofdec freeze are not established.",
+  "status": "Historical cache-only evidence. The f7f4ac7027e9 candidate subsequently black-screened before logos: its uniform gateway has an SH-4 slot-illegal instruction omitted by these old models. Positive f7f4 replays are superseded by strict instruction replays after the delay-slot correction. The f04 detail-5 cache counterexample remains reproduced.",
   "failed_console_build": "f04a7045a384",
   "original_executable_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
   "original_game_bytes_included": false,
@@ -887,5 +887,6 @@
     ],
     "pairs_passed": 256,
     "reproduce": "python3 tools/profile_vmu_native_sdk_cache_steady_sh.py --startup /path/to/original/Evolution/1ST_READ.BIN --build BUILD --rounds 128 --output steady-cache.json"
-  }
+  },
+  "superseding_evidence": "native-sh4-delay-slot-2026-10-23.json"
 }

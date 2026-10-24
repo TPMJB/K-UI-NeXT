@@ -14,6 +14,7 @@ import struct
 
 from check_loader_layout import inspect_elf
 from check_vmu_native_worker_gateway import CPU, MASK, read_elf, symbol_bytes
+from sh4_delay_slots import validate_delay_slot
 
 STAGE, LIMIT, OLD_STACK = 0x8CE00000, 0x8CFE0000, 0x8CFF0000
 STACK_SYMBOL, STACK_BYTES = "_native_installer_stack", 65536
@@ -162,7 +163,9 @@ class Machine(CPU):
                     target = self.r[word >> 8 & 15]
                     if word & 0xF0FF == 0x400B:
                         self.pr = pc + 4
-                self.plain(struct.unpack("<H", self.code(pc + 2, 2))[0], pc + 2)
+                slot = struct.unpack("<H", self.code(pc + 2, 2))[0]
+                validate_delay_slot(slot, pc)
+                self.plain(slot, pc + 2)
                 if not self.call(target):
                     self.pc = target
             elif word >> 8 in (0x89, 0x8B, 0x8D, 0x8F):
@@ -170,7 +173,9 @@ class Machine(CPU):
                 taken = bool(self.sr & 1) == (word >> 8 in (0x89, 0x8D))
                 delayed = word >> 8 in (0x8D, 0x8F)
                 if delayed:
-                    self.plain(struct.unpack("<H", self.code(pc + 2, 2))[0], pc + 2)
+                    slot = struct.unpack("<H", self.code(pc + 2, 2))[0]
+                    validate_delay_slot(slot, pc)
+                    self.plain(slot, pc + 2)
                 self.pc = pc + 4 + 2 * d if taken else pc + (4 if delayed else 2)
             else:
                 self.plain(word, pc); self.pc += 2

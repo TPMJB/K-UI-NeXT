@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from sh4_delay_slots import delayed_branch, slot_illegal_reason
 
 IMAGES = ('resident-scif', 'resident-sci', 'resident-ide', 'resident-scia', 'stage', 'entry')
 
@@ -55,11 +56,23 @@ def audit(name, disassembly):
             literals.add(address + 4 + (opcode & 255) * 2)
     seen = 0
     setup_seen = 0
+    by_address = {row[0]: row for row in decoded}
     for address, opcode, mnemonic, operands, line in decoded:
         if address in literals:
             continue
         if mnemonic.startswith('.'):
             continue
+        # Inspect only decoded code, after classifying referenced literal
+        # pools. A load in a real branch slot is an SH-4 exception even if
+        # objdump helpfully prints its literal value as though it executed.
+        if delayed_branch(opcode):
+            slot = by_address.get(address + 2)
+            if slot is None:
+                fail(f'missing delay slot in {name} at {address:08x}')
+            reason = slot_illegal_reason(slot[1])
+            if reason:
+                fail(f'SH-4 slot illegal instruction in {name}: branch {address:08x}, '
+                     f'slot {address + 2:08x}, opcode {slot[1]:04x}: {reason}')
         operands = operands.split('!', 1)[0].split(';', 1)[0]
         if mnemonic.startswith('f') or re.search(
                 r'\b(?:fpul|fpscr|(?:fr|dr|xd|xf)\d+)\b', operands):

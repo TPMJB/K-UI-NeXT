@@ -44,6 +44,7 @@ $(BUILD)/stage/src/loader/vmu_native_heap_probe_stage.o: $(BUILD)/vmu-sd-profile
 
 .PHONY: persistent-host-tests native-sdk-coherence-host-tests
 native-sdk-coherence-host-tests: $(BUILD)/native-worker.elf
+	python3 tests/test_sh4_delay_slots.py
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -DKUI_VMU_NATIVE_READONLY_PROBE=1 \
 	 tests/test_vmu_native_sdk_coherence.c src/loader/vmu_native_sdk_coherence.c -o $(BUILD)/test-sdk-coherence
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-sdk-coherence tests/fixtures/native-cache/evolution1.nvr \

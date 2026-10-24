@@ -1,0 +1,122 @@
+{
+  "schema": "kui.native.sh4-slot-regression.v1",
+  "failed_console_build": "f7f4ac7027e9",
+  "failed_worker_elf_sha256": "cb68d95e4a2b7f1b65171ee0e941fcba49d4d4ff18fd327c17aba147ba4dfdd5",
+  "development_candidate_worker_elf_sha256": "1d8c225fca25ab9634c7747ffd7e5af70b8edbfa484ad3093560faf1ecec5885",
+  "user_observation": "Black screen before ESP and Sofdec; no console exception register capture supplied.",
+  "architecture_rule": {
+    "source": "Renesas SH-4 Software Manual Rev.6",
+    "url": "https://www.renesas.com/en/document/mas/sh-4-software-manual",
+    "sections": [
+      "5.6.2(10), printed page 108",
+      "9.57, printed page 336"
+    ],
+    "rule": "A PC-relative MOV load in a delay slot causes slot-illegal-instruction exception 0x1a0; SPC identifies the preceding branch."
+  },
+  "old_relocated_gateway_rejections": [
+    {
+      "ccr": "0x105",
+      "expevt": "0x1a0",
+      "spc": "0xacfdbb70",
+      "slot_pc": "0xacfdbb72",
+      "slot_opcode": "0x902b",
+      "initializer_continuation_reached": false
+    },
+    {
+      "ccr": "0x185",
+      "expevt": "0x1a0",
+      "spc": "0xacfdbb70",
+      "slot_pc": "0xacfdbb72",
+      "slot_opcode": "0x902b",
+      "initializer_continuation_reached": false
+    }
+  ],
+  "original_game_bytes_included": false,
+  "correction": {
+    "scope": "Uniform cold gateway only; explicit48 gateway unchanged.",
+    "old_tail": [
+      "mov.l @(12,r0),r0",
+      "jmp @r0",
+      "mov.w constant,r0  ; illegal slot"
+    ],
+    "new_tail": [
+      "mov.l @(12,r0),r3",
+      "mov.w constant,r0",
+      "jmp @r3",
+      "mov r2,r3  ; legal slot restores R3"
+    ],
+    "preserves_original_prefix_state": true,
+    "cache_handoff_retained": true,
+    "late_lock_repair_or_bypassed_guard": false
+  },
+  "previous_model_gap": "Delay slots were executed as ordinary instructions, so the old replay passed a hardware-illegal instruction. Historical positive f7f4 replay results are superseded.",
+  "development_gate_checks": {
+    "schema": "kui.native.sdk-cold-coherence.v1",
+    "instruction_cases": 412,
+    "mutation_rejections": 194,
+    "owner_stack_accesses_before_purge": 0,
+    "other_operand_reads_before_purge_are_p2": true,
+    "deliberate_cached_checks": [
+      "P1 flag equals zero",
+      "P1 pointer equals normalized P2 flag"
+    ],
+    "purge_before_first_tas": true,
+    "uniform_replay_stack_bytes": 8,
+    "variable_replay_stack_bytes": 24,
+    "ordered_purge_operands": [
+      "lock_cell",
+      "lock_cell+4"
+    ],
+    "same_and_separate_dirty_lines_checked": true,
+    "no_private_stack_use": true,
+    "forced_lock_writes": 0,
+    "original_prefix_cases": 40,
+    "variable_extended_liveness_cases": 8,
+    "call_target_register_r3_dead": true,
+    "original_startups": [
+      {
+        "name": "evolution1",
+        "sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+        "kind": 0,
+        "initializer": "0x8c1da8fc"
+      },
+      {
+        "name": "ps2",
+        "sha256": "a3dcd09a96045839dbbc35697eb4336e4eba79b52203a46bb2f8ee9a4ba2eed8",
+        "kind": 1,
+        "initializer": "0x8c2d9748"
+      },
+      {
+        "name": "skies",
+        "sha256": "4218c07829d63080be2da86413ec023e6d77001c13a1494648db6e2e5cb73611",
+        "kind": 0,
+        "initializer": "0x8c2e7004"
+      },
+      {
+        "name": "sa2",
+        "sha256": "6919ed8bc96782d041be41ba86f90bf86d99632b8b7787391969721bc0991736",
+        "kind": 0,
+        "initializer": "0x8c15b280"
+      },
+      {
+        "name": "grandia2",
+        "sha256": "dd583571969d275b479e33edfd98ed5e2097d16c37ff6aaba59a7abaf057dc45",
+        "kind": 0,
+        "initializer": "0x8c0c6e50"
+      }
+    ],
+    "hardware_freeze_reproduced": false
+  },
+  "limitations": [
+    "This reproduces a mandatory CPU exception in the released hook, not the console video output or its original exception handler.",
+    "The older freeze after Sofdec remains unverified on hardware.",
+    "Released artifact hashes and post-correction replays are bound separately in the packaged release evidence."
+  ],
+  "failed_module_sha256": "b846d893f3daa2f9a65a792f10964b346b0ee30c717a1a95b00167b0c6f3e50c",
+  "strict_regression_tests": {
+    "command": "python3 tests/test_sh4_delay_slots.py --failed-build build/sdk-coherence-final --startup /path/to/original/Evolution/1ST_READ.BIN",
+    "cases": 9,
+    "passed": true,
+    "default_host_target_runs_isa_unit_cases": true
+  }
+}

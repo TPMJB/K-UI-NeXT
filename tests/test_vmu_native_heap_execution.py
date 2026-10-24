@@ -30,6 +30,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 from check_vmu_native_worker_gateway import read_elf, symbol_bytes
+from sh4_delay_slots import validate_delay_slot
 
 MASK = 0xFFFFFFFF
 RAM_BEGIN, RAM_END = 0x0C000000, 0x0D000000
@@ -206,7 +207,9 @@ class SH:
             else:
                 self.instructions += 1
                 if delay:
-                    self.plain(self.read(pc + 2, 2), pc + 2)
+                    slot = self.read(pc + 2, 2)
+                    validate_delay_slot(slot, pc)
+                    self.plain(slot, pc + 2)
                 self.pc = target
         raise AssertionError("Heap model exceeded its instruction bound")
 

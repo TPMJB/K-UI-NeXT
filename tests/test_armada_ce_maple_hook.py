@@ -12,6 +12,7 @@ import unittest
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools'))
 from check_armada_ce_maple_hook import BRIDGE,HOOK,LOG,BRIDGE_BYTES,HOOK_BYTES,check,read_section_elf
+from sh4_delay_slots import validate_delay_slot
 MASK=0xffffffff
 
 class CPU:
@@ -93,7 +94,7 @@ class CPU:
                     if w>>12==0xb:self.pr=pc+4
                 elif w==0x400b:target=self.r[0];self.pr=pc+4
                 else:target=self.pr
-                slot=struct.unpack('<H',self.code(pc+2,2))[0];self.plain(slot,pc+2)
+                slot=struct.unpack('<H',self.code(pc+2,2))[0];validate_delay_slot(slot,pc);self.plain(slot,pc+2)
                 if target==self.base+0x6374:self.api()
                 else:self.pc=target
             elif w>>8 in (0x89,0x8b):
