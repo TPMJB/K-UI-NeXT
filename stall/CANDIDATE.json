@@ -1,0 +1,10 @@
+{
+  "source_commit": "2df1c301b26fe21620e4a48b7a7c67e11958b0fd",
+  "source_tree": "6c5a33cfbaac99fbe86aa2e4ef7b3a327709dc59",
+  "build": "2df1c301b26f",
+  "module_sha256": "cfd7837eabc9b52d1c00d110ffa78da723d57fdbda40af376feace5cdf6738f6",
+  "base_candidate": "2204b6c31786",
+  "scheduling": "20/25 foreground; eight IRQ; one PIO",
+  "diagnostic": true,
+  "console_root_cause_established": false
+}

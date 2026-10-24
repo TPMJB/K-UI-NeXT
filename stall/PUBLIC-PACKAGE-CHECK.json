@@ -1,0 +1,11 @@
+{
+  "schema": "kui.public.generic-package.check.v1",
+  "generic_profile_matches_canonical_template": true,
+  "profile_sha256": "147eb84a549e91b8121f363980f601bd2d80212c880f24ffeaa4fb180b6e9860",
+  "prepared_owner_card_files_included": false,
+  "journal_or_save_payload_included": false,
+  "retail_executable_or_disc_tracks_included": false,
+  "user_video_included": false,
+  "runtime_modes_unchanged": true,
+  "installer_extracted_cases": 15
+}

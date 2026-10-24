@@ -1,0 +1,70 @@
+{
+  "candidate": {
+    "source_commit": "2df1c301b26fe21620e4a48b7a7c67e11958b0fd",
+    "source_tree": "6c5a33cfbaac99fbe86aa2e4ef7b3a327709dc59",
+    "build": "2df1c301b26f",
+    "module_sha256": "cfd7837eabc9b52d1c00d110ffa78da723d57fdbda40af376feace5cdf6738f6",
+    "base_candidate": "2204b6c31786",
+    "scheduling": "20/25 foreground; eight IRQ; one PIO",
+    "diagnostic": true,
+    "console_root_cause_established": false
+  },
+  "zip_sha256": "ff37ae055414058cc4623b57e17834e1637157c65313a8f10fc29b028f70f4ab",
+  "zip_bytes": 228106,
+  "files": [
+    {
+      "path": "CANDIDATE.json",
+      "bytes": 398,
+      "sha256": "3d4574a80ef131b66a1272c46c384cb5e7ca6f9ca0cb32e390fb0d89b930d907",
+      "git_blob_sha": "3043b6ac8fd613491ffc3fe6f39e7e6029e5e4e7"
+    },
+    {
+      "path": "K-UI-B-Stall-Diagnostic-2df1c301b26f.zip",
+      "bytes": 228106,
+      "sha256": "ff37ae055414058cc4623b57e17834e1637157c65313a8f10fc29b028f70f4ab",
+      "git_blob_sha": "6d9109b63b4787280c1e7f7dcfea5c16368d488b"
+    },
+    {
+      "path": "PUBLIC-PACKAGE-CHECK.json",
+      "bytes": 444,
+      "sha256": "678bcae7be0201baa235e93b7aeeccab818479e42fc9af24533bd214023428a4",
+      "git_blob_sha": "a8bee47bf9b796e746ba0286bf1445e9d88f121c"
+    },
+    {
+      "path": "README.md",
+      "bytes": 4773,
+      "sha256": "24fbc3ca6a448c5e91417ea95e0613aac68955d0060f0d03f183747f1e5fde96",
+      "git_blob_sha": "7a8c78a65d8045ac2d979396896ecbbb348a8de5"
+    },
+    {
+      "path": "SOURCE-RECOVERY.md",
+      "bytes": 663,
+      "sha256": "a6d50c672efc2c98de011f71b6e3310dde0c9b472444df2aa09da5b41ce84f20",
+      "git_blob_sha": "61e7d8e2dbd59ad9d7002977c1155a2554f19b38"
+    },
+    {
+      "path": "TEST-EVIDENCE.json",
+      "bytes": 5092,
+      "sha256": "87efe651c116489def289939b99439d84a1d1dfffd5735fcd8b4d1744e502d3e",
+      "git_blob_sha": "f8277f9bbcd87a1d1f34912a8afb607abbf51883"
+    },
+    {
+      "path": "checkout-source.py",
+      "bytes": 845,
+      "sha256": "353fd8179cc52b43eb766154a534e8eae3528dd4a576000851a6121713691cb5",
+      "git_blob_sha": "5108221173cdf5ef2289ffe43336c4d39ad8a09a"
+    },
+    {
+      "path": "native-source-update.bundle",
+      "bytes": 40267,
+      "sha256": "0b9e203bd7c2dfbf1ec909b99725c329351a267b46c3bd1d4dec0f010f2676a4",
+      "git_blob_sha": "0ca9b183e01e3f5d2c9643b4293fc975c1a74d36"
+    },
+    {
+      "path": "probe-report.json",
+      "bytes": 41660,
+      "sha256": "df9b852a4448d6af8b55bd2da188a399e72d1c83c66457160f2d8c85605525da",
+      "git_blob_sha": "7b6ea410d022c38791da6cc7542ae8bcfc885bbe"
+    }
+  ]
+}
