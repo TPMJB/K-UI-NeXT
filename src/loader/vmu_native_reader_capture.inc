@@ -32,7 +32,27 @@ __asm__(".global __kui_native_cooperative_reader\n.set __kui_native_cooperative_
 static struct {
     uint32_t calls,blocks,busy,faults;
     uint32_t max_lba,max_count;
+#if KUI_NATIVE_TIMED_PUMP
+    uint32_t opportunities,expired,clock_bad,max_ticks;
+#endif
 } reader_cooperative;
+#if KUI_NATIVE_TIMED_PUMP
+__asm__(".global __kui_native_timed_reader\n.set __kui_native_timed_reader,1\n");
+#define READER_WINDOW_TICKS 586u /* 0.75008 ms in the admitted profile. */
+#define READER_WINDOW_VISITS 64u /* Also stops if the sampled timer freezes. */
+static void __attribute__((noipa)) reader_window_clock(struct kui_vmu_native_profile_sample *s) {
+#ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+    extern void kui_native_timed_test_clock(struct kui_vmu_native_profile_sample *);
+    kui_native_timed_test_clock(s);
+#else
+    s->frqcr=*(volatile const uint16_t *)(uintptr_t)UINT32_C(0xffc00000);
+    s->tcor=*(volatile const uint32_t *)(uintptr_t)UINT32_C(0xffd80008);
+    s->tcr=*(volatile const uint16_t *)(uintptr_t)UINT32_C(0xffd80010);
+    s->tstr=*(volatile const uint8_t *)(uintptr_t)UINT32_C(0xffd80004);
+    s->counter=*(volatile const uint32_t *)(uintptr_t)UINT32_C(0xffd8000c);
+#endif
+}
+#endif
 static void __attribute__((noipa)) reader_cooperative_service(void) {
     /* Called only after successful, fully proved physical controller
      * completion, after publication. It neither issues VMU packets nor
@@ -42,20 +62,52 @@ static void __attribute__((noipa)) reader_cooperative_service(void) {
     kui_retail_async_region_type *r=reader_capture_region();
     if(!r || !r->engine.active || durable_card.inflight || durable_card.handling) return;
     uint32_t before=r->engine.stats.irq_blocks;
-    ++reader_cooperative.calls;
+#if KUI_NATIVE_TIMED_PUMP
+    struct kui_vmu_native_profile_sample begin,end;
+    reader_window_clock(&begin);
+    bool clock_ok=kui_vmu_native_profile_sample_valid(&begin);
+    ++reader_cooperative.opportunities;
+    if(!clock_ok)++reader_cooperative.clock_bad;
+#endif
 #ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
     extern uint32_t kui_native_cooperative_test_vbr(void);
     extern uint16_t kui_native_cooperative_test_iprb(void);
     extern void kui_native_cooperative_test_restore(uint32_t,uint16_t);
     uint32_t caller_vbr=kui_native_cooperative_test_vbr();
     uint16_t caller_iprb=kui_native_cooperative_test_iprb();
-    extern int kui_native_cooperative_test_visit(void);
-    int result=kui_native_cooperative_test_visit();
 #else
     uint32_t caller_vbr;__asm__ volatile("stc vbr,%0":"=r"(caller_vbr)::"memory");
     uint16_t caller_iprb=*(volatile const uint16_t *)(uintptr_t)UINT32_C(0xffd00008);
     int (*visit)(kui_vmu_sd_transaction,void *)=(void *)(uintptr_t)config.sd_lease;
-    int result=visit(NULL,(void *)(uintptr_t)KUI_RETAIL_NATIVE_PUMP_COOKIE);
+#endif
+    int result;
+#if KUI_NATIVE_TIMED_PUMP
+    for(unsigned attempt=0u;;++attempt) {
+#endif
+        ++reader_cooperative.calls;
+#ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+        extern int kui_native_cooperative_test_visit(void);
+        result=kui_native_cooperative_test_visit();
+#else
+        result=visit(NULL,(void *)(uintptr_t)KUI_RETAIL_NATIVE_PUMP_COOKIE);
+#endif
+#if KUI_NATIVE_TIMED_PUMP
+        /* Stop after the first visit that delivers data: each low visit
+         * remains capped at two blocks, so the whole window is too. No
+         * second wait is hidden behind a successful publication. */
+        if(result!=KUI_VMU_SD_LEASE_OK || !clock_ok)break;
+        reader_window_clock(&end);
+        uint32_t elapsed=begin.counter-end.counter;
+        if(!kui_vmu_native_profile_sample_valid(&end) ||
+           elapsed>KUI_VMU_NATIVE_PROFILE_MAX_INTERVAL) {
+            ++reader_cooperative.clock_bad;break;
+        }
+        if(elapsed>reader_cooperative.max_ticks)reader_cooperative.max_ticks=elapsed;
+        if(r->engine.stats.irq_blocks!=before || !r->engine.active)break;
+        if(elapsed>=READER_WINDOW_TICKS || attempt+1u>=READER_WINDOW_VISITS) {
+            ++reader_cooperative.expired;break;
+        }
+    }
 #endif
     /* The original SDK handler must resume with its own vectors and SCI
      * field, as on the reader's existing releasing entries. Its pending
@@ -171,8 +223,14 @@ static void reader_capture_report(const struct retail_display_state *display) {
 #else
     retail_display_line("CALL AND IRQ ARE DELIVERY VISIT TIMES");
 #endif
+#if KUI_NATIVE_TIMED_PUMP
+    retail_display_values("WINDOWS EXPIRED CLOCK BAD MAX TICKS",(uint32_t[4]){
+        reader_cooperative.opportunities,reader_cooperative.expired,
+        reader_cooperative.clock_bad,reader_cooperative.max_ticks},4u);
+#else
     retail_display_line("GAP IS BETWEEN MAPLE COMPLETION SAMPLES");
     retail_display_line("BAD CLOCK MEANS DO NOT CONVERT TO TIME");
+#endif
     retail_display_line("NEXT TWO PAGES KEEP THE FOUR LONGEST GAPS");
     retail_display_pause(300u);
     for(unsigned first=0u;first<reader_capture.top_count;first+=2u) {

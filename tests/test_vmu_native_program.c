@@ -105,6 +105,15 @@ static void actual(const char *path) {
     CHECK(fread(p,1,n,f)==n);CHECK(!fclose(f));memcpy(original,p,n);
     size_t prefix=0;CHECK(kui_vmu_native_program_extent(p,n,load,&prefix));
     CHECK(prefix==n || n-prefix==0x8000u);CHECK(!memcmp(p,original,n));
+    /* The fast aligned decoder must retain the exact byte fallback at
+     * every host alignment, with no read outside the supplied file. */
+    uint8_t *shifted=malloc(n+8u);CHECK(shifted);
+    for(unsigned offset=0u;offset<8u;offset++) {
+        memcpy(shifted+offset,original,n);size_t same=0u;
+        CHECK(kui_vmu_native_program_extent(shifted+offset,n,load,&same));
+        CHECK(same==prefix && !memcmp(shifted+offset,original,n));
+    }
+    free(shifted);
     if(prefix!=n) normalized_mutations(p,original,n,prefix);
     printf("  Program extent: %s source=%zu program=%zu\n",path,n,prefix);
     free(original);free(p);

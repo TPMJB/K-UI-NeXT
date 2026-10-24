@@ -13,6 +13,13 @@ static int pump_result;
 static uint32_t test_vbr=UINT32_C(0x8c00f400);
 static uint16_t test_iprb=0xa500u;
 static unsigned restorations;
+#if KUI_NATIVE_TIMED_PUMP
+static unsigned pump_ready_after,window_clock_step=10u;
+static bool window_changes_clock;
+void kui_native_timed_test_clock(struct kui_vmu_native_profile_sample *s) {
+    *s=test_clock;test_clock.counter-=window_clock_step;
+}
+#endif
 uint32_t kui_native_cooperative_test_vbr(void) {return test_vbr;}
 uint16_t kui_native_cooperative_test_iprb(void) {return test_iprb;}
 void kui_native_cooperative_test_restore(uint32_t vbr,uint16_t iprb) {
@@ -28,6 +35,10 @@ int kui_native_cooperative_test_visit(void) {
     CHECK((live_sr&0xf0u)==0xf0u);
     ++pump_visits;
     test_vbr=UINT32_C(0x8c6ff000);test_iprb=0xa510u;
+#if KUI_NATIVE_TIMED_PUMP
+    if(window_changes_clock)test_clock.tstr=0u;
+    if(pump_visits>=pump_ready_after)
+#endif
     if(!pump_result)observed_region.engine.stats.irq_blocks+=2u;
     return pump_result;
 }
@@ -63,6 +74,38 @@ int main(void) {
     diagnostic_pair(false);
     CHECK(reader_capture.call_max==500000u && reader_cooperative.max_lba==56789u && reader_cooperative.max_count==128u);
     CHECK(reader_capture.previous.irq_blocks==observed_region.engine.stats.irq_blocks-reader_cooperative.blocks);
+#if KUI_NATIVE_TIMED_PUMP
+    /* A receiver that is still pending on the first two opportunities
+     * must deliver in the same bounded window without another game call. */
+    diagnostic_setup();diagnostic_pair(false);observed_region.engine.active=1u;
+    pump_result=0;unsigned old=pump_visits,restored=restorations;
+    window_clock_step=20u;pump_ready_after=old+3u;
+    reader_capture_start();reader_cooperative_service();
+    CHECK(pump_visits==old+3u && restorations==restored+1u);
+    CHECK(reader_cooperative.calls==3u && reader_cooperative.blocks==2u && !reader_cooperative.expired);
+    CHECK(reader_cooperative.opportunities==1u && !reader_cooperative.clock_bad);
+    /* A never-ready receiver ends at the read-only deadline. */
+    old=pump_visits;pump_ready_after=UINT32_MAX;window_clock_step=300u;
+    reader_capture_start();reader_cooperative_service();
+    CHECK(pump_visits==old+2u && reader_cooperative.expired==1u);
+    CHECK(reader_cooperative.max_ticks==600u && !reader_cooperative.blocks);
+    /* An unsupported clock gets one ordinary nonblocking visit. */
+    old=pump_visits;test_clock.tstr=0u;
+    reader_capture_start();reader_cooperative_service();
+    CHECK(pump_visits==old+1u && reader_cooperative.clock_bad==1u && !reader_cooperative.expired);
+    /* An unchanged/frozen counter cannot make this an infinite loop. */
+    test_clock.tstr=1u;window_clock_step=0u;old=pump_visits;
+    reader_capture_start();reader_cooperative_service();
+    CHECK(pump_visits==old+READER_WINDOW_VISITS && reader_cooperative.expired==1u);
+    /* Down-counter wrap remains admitted; a profile change aborts. */
+    test_clock.counter=5u;window_clock_step=20u;old=pump_visits;pump_ready_after=old+3u;
+    reader_capture_start();reader_cooperative_service();
+    CHECK(pump_visits==old+3u && reader_cooperative.blocks==2u && !reader_cooperative.clock_bad);
+    old=pump_visits;pump_ready_after=UINT32_MAX;window_changes_clock=true;
+    reader_capture_start();reader_cooperative_service();
+    CHECK(pump_visits==old+1u && reader_cooperative.clock_bad==1u);
+    puts("timed reader: pending-then-ready, deadline, invalid/changed/frozen clocks, wrap and two-block window bound passed");
+#endif
     puts("cooperative worker: original save/ownership suite, post-completion pump, busy/storage exclusions and request timing passed");
     return 0;
 }

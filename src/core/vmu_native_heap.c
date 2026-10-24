@@ -20,8 +20,14 @@ static const struct heap_word heap_words[]={
     {0x1b0,0x0002},{0x1b4,0x4009},{0x1b6,0x4009},{0x1b8,0xc90f},
     {0x1c0,0xcbf0},{0x1c2,0x400e},{0x1c4,0x2448},{0x1cc,0x75e0}
 };
+#if KUI_NATIVE_STAGE_FAST_SCAN
+#include "kui/native_scan_bytes.h"
+#define h16 kui_native_scan_le16
+#define h32 kui_native_scan_le32
+#else
 static uint16_t h16(const uint8_t *p) {return (uint16_t)(p[0]|(uint16_t)p[1]<<8);}
 static uint32_t h32(const uint8_t *p) {return (uint32_t)h16(p)|(uint32_t)h16(p+2)<<16;}
+#endif
 static uint32_t phys(uint32_t a) {return a&0x1fffffffu;}
 static bool span(uint32_t a,uint32_t n) {
     uint32_t area=a&0xe0000000u,p=phys(a);

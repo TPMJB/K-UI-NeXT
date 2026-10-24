@@ -6,8 +6,15 @@
 
 enum { IP_BYTES=0x8000, IP_SEARCH_BYTES=0x10000 };
 static const uint8_t signature[]="SEGA SEGAKATANA SEGA ENTERPRISES";
+#if KUI_NATIVE_STAGE_FAST_SCAN
+__asm__(".global __kui_native_stage_fast_scan\n.set __kui_native_stage_fast_scan,1\n");
+#include "kui/native_scan_bytes.h"
+#define u16 kui_native_scan_le16
+#define u32 kui_native_scan_le32
+#else
 static uint16_t u16(const uint8_t *p) {return (uint16_t)(p[0]|(uint16_t)p[1]<<8);}
 static uint32_t u32(const uint8_t *p) {return (uint32_t)u16(p)|(uint32_t)u16(p+2u)<<16;}
+#endif
 static uint32_t physical(uint32_t a) {return a&UINT32_C(0x1fffffff);}
 static bool direct(uint32_t a) {
     uint32_t area=a&UINT32_C(0xe0000000),p=physical(a);
@@ -31,7 +38,8 @@ static bool bootstrap_hint(const uint8_t *p,size_t n) {
      * remain mandatory. Limit the search to a possible trailing bootstrap. */
     size_t first=n>IP_SEARCH_BYTES?n-IP_SEARCH_BYTES:0u;
     for(size_t at=first;at+32u<=n;at++)
-        if(!memcmp(p+at,signature,16u) || !memcmp(p+at+16u,signature+16u,16u)) return true;
+        if((p[at]==signature[0] && !memcmp(p+at,signature,16u)) ||
+           (p[at+16u]==signature[16] && !memcmp(p+at+16u,signature+16u,16u))) return true;
     return false;
 }
 static bool bootstrap(const uint8_t *p) {

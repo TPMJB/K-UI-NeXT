@@ -144,6 +144,19 @@ COOPERATIVE_PREPARED_PINS = {
  '_reader_cooperative_service': ('bea9cb6d7bc3577b9bfe2ee4ae7072083c945c0cbc7b27fad426e9b9be38667e', 200),
 }
 
+TIMED_PREPARED_PINS = {
+ '_diagnostic_complete': ('ee4030db7c1ba544f3b94174f26f720a5dbb4dd068fa783cb89d762570aafa5c', 1660),
+ '_transfer_context_valid': ('c0643890f7423a7d2dc3a3978c063bb51431296ee2fd3527d013acb9edea1c4c', 1236),
+ '_kui_vmu_native_runtime_fault': ('46ca6d85e1e795284808228ae2190599b518254284aec54cb6dc5e447bed5600', 332),
+ '.rodata': ('8abb79edefa93fc768da07069005c8668970eb0fa235e5b4944e0ce00cd4f6b0', 4396),
+ '_kui_vmu_native_trace_report': ('72e77855533038e2b36eaffe49c3c30b4849b66a9167db950db180e89111587f', 1120),
+ '_trace_history': ('508ed02675ed370b486988d3f8494a5258a55cf393c73f501abb728d7416309c', 164),
+ '_report': ('d3041ea663d14edc888423ca13380461c4e86ba7f6f450f6dfdd58461504d656', 440),
+ '_trace_packets': ('e3e6dc04111ec2dceb78c4be4d100964a9cc3f5b81c99f1c8e266412a1b1ff33', 116),
+ '_reader_cooperative_service': ('ad10663ade0ab6bde347e07ca31df0691a8f2f1c7ae05c8bb2b6b3cd4e51465a', 380),
+ '_reader_window_clock': ('c416d56570b536794b03df8effe197babf770dd655364793aae27e1072304924', 60),
+}
+
 
 def prepared_symbol_records(worker):
     data, _, _, sections, _ = worker
@@ -652,15 +665,20 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
     if cooperative is not None:
         require(stall_marker and cooperative==(1,0,0,0xfff1),'invalid cooperative reader marker')
         require(COOPERATIVE_PREPARED_PINS,'missing reviewed cooperative reader pins')
+    timed=worker[4].get('__kui_native_timed_reader')
+    if timed is not None:
+        require(cooperative and timed==(1,0,0,0xfff1),'invalid timed reader marker')
+        require(TIMED_PREPARED_PINS,'missing reviewed timed reader pins')
     pins={**PREPARED_PINS,**(STALL_PREPARED_PINS if stall_marker else {}),
-          **(COOPERATIVE_PREPARED_PINS if cooperative else {})}
+          **(COOPERATIVE_PREPARED_PINS if cooperative else {}),
+          **(TIMED_PREPARED_PINS if timed else {})}
     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
                        ("_protected_ranges", 512), ("_protected_count", 4),
                        ("_controller_pair", 188), ("_diagnostic_phase", 976), ("_diagnostic", 144)]
     if FAULT_STATE in worker[4]:objects.append((FAULT_STATE,32))
     if stall_marker:objects.append(('_reader_capture',508))
-    if cooperative:objects.append(('_reader_cooperative',24))
+    if cooperative:objects.append(('_reader_cooperative',40 if timed else 24))
     for name,size in objects:
         address, actual, kind, owner = worker[4][name]
         section = worker[3][owner]
@@ -2399,6 +2417,10 @@ def check(directory, *, self_test=False, trace_startup=None):
     require(bool(cooperative)==bool(low_cooperative),'cooperative reader worker/resident mismatch')
     if cooperative:
         require(cooperative==low_cooperative==(1,0,0,0xfff1),'invalid paired cooperative reader markers')
+    timed=worker[4].get('__kui_native_timed_reader')
+    low_timed=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_timed_resident')
+    require(bool(timed)==bool(low_timed),'timed reader worker/resident mismatch')
+    if timed:require(cooperative and timed==low_timed==(1,0,0,0xfff1),'invalid paired timed reader markers')
     prepared_lifetime = check_prepared_lifetime(directory, worker, binary, wire, self_test, build=base["runtime"]["build"])
     relocations=check_worker_pointer_aliases(wire,policy,fault_capture,coherence)
 
@@ -2464,6 +2486,10 @@ def check(directory, *, self_test=False, trace_startup=None):
                   "pump_blocks_per_visit": 2 if cooperative else 0,
                   "foreground_catchup_changed": False,"service_after_physical_controller_proof": bool(cooperative),
                   "completed_request_timing": bool(cooperative),"console_performance_verified": False},
+              "timed_reader": {"enabled":bool(timed),"window_ticks":586 if timed else 0,
+                  "window_max_visits":64 if timed else 0,"blocks_per_window_max":2 if timed else 0,
+                  "read_only_clock_admission":bool(timed),"invalid_clock_single_visit":bool(timed),
+                  "checks_deadline_between_visits":bool(timed),"hard_elapsed_deadline":False},
               "failure_only_gateways": runtime_fault,
               "private_stack_guard": stack_guard,
               "compiled_owner_reader": compiled_reader,

@@ -175,11 +175,17 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
      * being part of the live executable before immutable native discovery.
      * This changes neither the loaded bytes nor the source CRC contract. */
     size_t program_bytes;
+#if KUI_NATIVE_STAGE_FAST_SCAN
+    retail_display_line("VERIFYING EXECUTABLE LIFETIME EXTENT");
+#endif
     if(!kui_vmu_native_program_extent((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
        exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&program_bytes)) native_report(2u,13u);
     if(program_bytes!=exec_bytes) retail_display_line("VERIFIED RECLAIMED BOOTSTRAP SUFFIX");
     exec_bytes=(uint32_t)program_bytes;
 #if KUI_VMU_NATIVE_CACHE_PROBE
+#if KUI_NATIVE_STAGE_FAST_SCAN
+    retail_display_line("VERIFYING NATIVE CACHE AND IMAGE SHA256");
+#endif
     bool mapping_cached=native_resolution_replay();
     if(mapping_cached) retail_display_line("USING VERIFIED NATIVE MAPPING CACHE");
     else {
@@ -216,6 +222,9 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     }
 #endif
     code_sha(native_heap_code_sha);
+#if KUI_NATIVE_STAGE_FAST_SCAN
+    retail_display_line("NATIVE DISCOVERY COMPLETE - ARMING HOOK");
+#endif
     volatile struct kui_vmu_observe_boot_control *c=control();
     for(unsigned i=0;i<sizeof(*c)/4u;i++)
         if(((volatile uint32_t *)c)[i]) native_report(2u,KUI_VMU_OBSERVE_LOW_CONTROL+4u*i);

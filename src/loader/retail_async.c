@@ -10,6 +10,9 @@ __asm__(".global __kui_native_reader_stall_resident\n"
         ".set __kui_native_reader_stall_resident,1\n");
 #if KUI_NATIVE_COOP_PUMP
 __asm__(".global __kui_native_cooperative_resident\n.set __kui_native_cooperative_resident,1\n");
+#if KUI_NATIVE_TIMED_PUMP
+__asm__(".global __kui_native_timed_resident\n.set __kui_native_timed_resident,1\n");
+#endif
 #endif
 #endif
 #include "sci_sd_bus.h"
