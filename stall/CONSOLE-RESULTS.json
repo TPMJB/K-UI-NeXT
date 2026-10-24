@@ -1,0 +1,171 @@
+{
+  "schema": "kui.native.b.console-capture.v1",
+  "date": "2026-10-24",
+  "build": "2df1c301b26f",
+  "source_commit": "2df1c301b26fe21620e4a48b7a7c67e11958b0fd",
+  "pages": {
+    "distinct": 5,
+    "photos": 6,
+    "duplicate": "63311 repeats indices 0/1"
+  },
+  "clock": {
+    "nominal_ticks_per_second": 781250,
+    "invalid_samples": 0,
+    "intervals_rejected": 0,
+    "wall_ticks": 14739189,
+    "wall_ms": 18866.16192,
+    "ccr_first": "00000105",
+    "ccr_last": "00000105",
+    "instruction_cache_off_samples": 0
+  },
+  "reader": {
+    "samples": 1200,
+    "max_poll_gap_ticks": 18505,
+    "max_poll_gap_ms": 23.6864,
+    "max_foreground_delivery_ticks": 6420,
+    "max_foreground_delivery_ms": 8.2176,
+    "max_irq_delivery_ticks": 0,
+    "irq_blocks": 0,
+    "foreground_blocks": 6506,
+    "pio_blocks": 0,
+    "crc_errors": 1,
+    "token_errors": 0,
+    "foreign": 0,
+    "repaired": 139,
+    "overrun_counter": 0,
+    "deferred": 0
+  },
+  "vmu": {
+    "submit_calls": 1200,
+    "complete_calls": 1200,
+    "invalid_timings": 0,
+    "submit_max_ticks": 59,
+    "submit_max_ms": 0.07552,
+    "complete_max_ticks": 84,
+    "complete_max_ms": 0.10752,
+    "submit_total_ticks": 46294,
+    "complete_total_ticks": 50037,
+    "free_calls": 5,
+    "free_max_ticks": 16,
+    "storage_calls": 0,
+    "commits": 0,
+    "fast_submit": 1200,
+    "full_submit": 0,
+    "fast_complete": 1200,
+    "full_complete": 0
+  },
+  "optional_phase_capture": {
+    "enabled": false,
+    "exact_image_scope": "Evolution 1 only; disabled for this Evolution 2 test"
+  },
+  "validation": {
+    "actual_linked_sh4_layout_comparison": "All eight sampled structure sizes and named member offsets match between reader and worker",
+    "stats_semantics": "irq_blocks increments only with e.in_irq; call_blocks otherwise; maxima are delivery visits, not complete request lifetimes"
+  },
+  "conclusion": {
+    "observed": "No measured long VMU operation, long individual reader delivery visit, or one-second controller polling interruption in this capture; all measured reader output was delivered through GD foreground calls.",
+    "hypothesis": "The game may wait for a request across multiple short reader calls while controller polling and audio continue.",
+    "limitation": "The photos do not identify the exact moment of a movement freeze or measure total GD request lifetimes. Zero IRQ-delivered blocks alone does not prove broken interrupts; foreground work may consume completions first.",
+    "root_cause_established": false
+  },
+  "longest_intervals": [
+    {
+      "index": 0,
+      "gap_ticks": 18505,
+      "gap_ms": 23.6864,
+      "foreground_visit_max_ticks": 5355,
+      "foreground_visit_max_ms": 6.8544,
+      "irq_visit_max_ticks": 0,
+      "pending": true,
+      "irq_blocks": 0,
+      "foreground_blocks": 40,
+      "pio_blocks": 0,
+      "crc_errors": 0,
+      "token_errors": 0,
+      "gd_function": 1,
+      "gd_command": 17,
+      "previous_token": 1515,
+      "current_token": 1515
+    },
+    {
+      "index": 1,
+      "gap_ticks": 18302,
+      "gap_ms": 23.42656,
+      "foreground_visit_max_ticks": 5356,
+      "foreground_visit_max_ms": 6.85568,
+      "irq_visit_max_ticks": 0,
+      "pending": true,
+      "irq_blocks": 0,
+      "foreground_blocks": 40,
+      "pio_blocks": 0,
+      "crc_errors": 0,
+      "token_errors": 0,
+      "gd_function": 1,
+      "gd_command": 17,
+      "previous_token": 1455,
+      "current_token": 1455
+    },
+    {
+      "index": 2,
+      "gap_ticks": 18249,
+      "gap_ms": 23.35872,
+      "foreground_visit_max_ticks": 5355,
+      "foreground_visit_max_ms": 6.8544,
+      "irq_visit_max_ticks": 0,
+      "pending": true,
+      "irq_blocks": 0,
+      "foreground_blocks": 40,
+      "pio_blocks": 0,
+      "crc_errors": 0,
+      "token_errors": 0,
+      "gd_function": 1,
+      "gd_command": 17,
+      "previous_token": 1284,
+      "current_token": 1284
+    },
+    {
+      "index": 3,
+      "gap_ticks": 18245,
+      "gap_ms": 23.3536,
+      "foreground_visit_max_ticks": 5355,
+      "foreground_visit_max_ms": 6.8544,
+      "irq_visit_max_ticks": 0,
+      "pending": true,
+      "irq_blocks": 0,
+      "foreground_blocks": 40,
+      "pio_blocks": 0,
+      "crc_errors": 0,
+      "token_errors": 0,
+      "gd_function": 1,
+      "gd_command": 17,
+      "previous_token": 1814,
+      "current_token": 1814
+    }
+  ],
+  "photo_identification": [
+    {
+      "filename": "63306.jpg",
+      "sha256": "4f42f67333bea1cfbe78c5b55c97cb11d99ce50824ba8527b0205f2f58618460"
+    },
+    {
+      "filename": "63307.jpg",
+      "sha256": "d7150592ae54d13d78fec5c4c7903c5f171aad3547564f9eaf021fa04ce365c1"
+    },
+    {
+      "filename": "63308.jpg",
+      "sha256": "3935bd3bb50a3baadf2762564927cd238363081db4211da6398f7de5f8453485"
+    },
+    {
+      "filename": "63309.jpg",
+      "sha256": "0bc9348e77e6239dbe09b596d1ad2413c57b492420190fa1243c89d42a3fb55f"
+    },
+    {
+      "filename": "63310.jpg",
+      "sha256": "c60fc72f781e5d9e3ad2edb446c10696d82e4dfba6e0e46c13a0bb40df005a82"
+    },
+    {
+      "filename": "63311.jpg",
+      "sha256": "447f6d58efbaf87a00040e02a823dfded2167ed89ea14e050b9491509134cd85"
+    }
+  ]
+}
