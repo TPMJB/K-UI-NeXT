@@ -1,0 +1,8 @@
+native-compat-pair-final-package.log
+/workspace/scratch/da50cf175784/hybrid-restore-check/restored-source/build/native-reader-compat-pair-final/native-compat-source.bundle is okay
+{"zip": "build/native-reader-compat-pair-final/K-UI-Native-Compatibility-Test.zip", "bytes": 27336806, "commit": "af401496961afdcc27f57cb0ba63bd1a8414ce67", "module_sha256": "1f4607b8144805937e3fa8a56f6bae0f45d5b3a54ac469ff2703151867a79397", "profile_module_offset": 92832}
+
+
+native-compat-open-final-package.log
+/workspace/scratch/da50cf175784/hybrid-restore-check/restored-source/build/native-reader-compat-open-final/native-compat-source.bundle is okay
+{"zip": "build/native-reader-compat-open-final/K-UI-Native-Compatibility-Test.zip", "bytes": 27277476, "commit": "af401496961afdcc27f57cb0ba63bd1a8414ce67", "module_sha256": "0a004cb812930ca197cbd34aea2c62b4c9509b376ae23ce3262e9585607a78be", "profile_module_offset": 88928}

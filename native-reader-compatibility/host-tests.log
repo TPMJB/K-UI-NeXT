@@ -1,0 +1,99 @@
+Original SDK route admission
+native SDK SCI route admission Evolution1: 734288 checks; original identity, immutable/live windows, both common modes, scratch, ownership and read faults passed
+native SDK SCI route admission Evolution2: 734288 checks; original identity, immutable/live windows, both common modes, scratch, ownership and read faults passed
+native SDK SCI route total: 1468577 checks passed
+
+
+Original SDK initializer/control-frame replay
+{
+  "schema": "kui.native.sdk-sci.owner-contract.v1",
+  "owners": [
+    {
+      "game": "evolution1",
+      "source_bytes": 2143652,
+      "program_bytes": 2143652,
+      "source_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+      "program_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+      "actual_table_initializer_cases": 16,
+      "actual_control_frame_roundtrip_cases": 32,
+      "callback_argument_register": "r4",
+      "callback_return": "RTS to original JSR continuation",
+      "owner_vbr": "0x8c00f400",
+      "eri_slot": "0x8c00f65c",
+      "rxi_slot": "0x8c00f660",
+      "default": "0x8c1d9f50",
+      "dispatch": "0x8c1da31a",
+      "event": "0x8c1da418",
+      "continuation": "0x8c1da348",
+      "full_fpu_prologue_modelled": false,
+      "console_execution_verified": false
+    },
+    {
+      "game": "evolution2",
+      "source_bytes": 4057056,
+      "program_bytes": 4024288,
+      "source_sha256": "16b45fcc84992a60d5a64bf64bf22b699b27306b95f177ba3d9730ca380069ae",
+      "program_sha256": "52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605",
+      "actual_table_initializer_cases": 16,
+      "actual_control_frame_roundtrip_cases": 32,
+      "callback_argument_register": "r4",
+      "callback_return": "RTS to original JSR continuation",
+      "owner_vbr": "0x8c00f400",
+      "eri_slot": "0x8c00f65c",
+      "rxi_slot": "0x8c00f660",
+      "default": "0x8c1add0c",
+      "dispatch": "0x8c1ae0d8",
+      "event": "0x8c1ae1d4",
+      "continuation": "0x8c1ae104",
+      "full_fpu_prologue_modelled": false,
+      "console_execution_verified": false
+    }
+  ]
+}
+
+
+Linked SDK audit summary
+{
+  "multi_owner": true,
+  "callback_instruction_cases": 1920,
+  "hook_ownership_instruction_cases": 7168,
+  "unhook_ownership_instruction_cases": 7168,
+  "dispatcher_instruction_cases": 17920,
+  "live_route_loss_transition_cases": 12288,
+  "mutation_rejections": 2726
+}
+
+Final original allocator proof summary
+{
+  "artifacts": {
+    "stage.elf": "3058bd04de4ca8eccd7c9704fdfe47869010075b3467a6c891d805fa0f2c9870",
+    "native-worker.elf": "d729a93f208d50cc98be93a4579ebf55a654a385a704edfa51ecdb14744ea5a5",
+    "native-worker.bin": "fa25c91499378ed033f4c2696aace1743b3665a6bb115135be428cdae4d3d061",
+    "native-ra-aux.bin": "61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974"
+  },
+  "original_cases": 4,
+  "live_worker_checks": 638772,
+  "cached_uncached_variants": 4
+}
+
+Compiler callgraph completion proof
+[
+  {
+    "callgraph": "build/native-reader-compat-pair-final/stage/src/core/vmu_fs_admission.ci",
+    "object_sha256": "dc5ab633be5d581c4d1af6b2e5b54fac7748add57a53807fc8cafcb4e17a9a53",
+    "exact_compile_repeated": true,
+    "object_unchanged": true,
+    "callgraph_closed": true
+  },
+  {
+    "callgraph": "build/native-reader-compat-open-final/stage/src/core/vmu_native_heap.ci",
+    "object_sha256": "9ced81b7512b93ddc80594620cc5fd1405b5b679cff9ae9a22ebc06a4a5cd7a3",
+    "exact_compile_repeated": true,
+    "object_unchanged": true,
+    "callgraph_closed": true
+  }
+]
+
+
+Source checks
+git diff --check and Python syntax checks passed; no runtime policy source changes.

@@ -1,0 +1,27 @@
+{
+  "schema": "kui.native.reader-compatibility.candidate.v1",
+  "source_commit": "af401496961afdcc27f57cb0ba63bd1a8414ce67",
+  "source_tree": "df094802583395676a75e3752de1cfbfb3a6720c",
+  "build": "af401496961a",
+  "source_bundle_prerequisite": "74958b3878279fc916199a7cd330f7f17b036138",
+  "variants": {
+    "reader-pair": {
+      "module_sha256": "1f4607b8144805937e3fa8a56f6bae0f45d5b3a54ac469ff2703151867a79397",
+      "module_bytes": 249184,
+      "console_verified": false
+    },
+    "native-a2": {
+      "module_sha256": "0a004cb812930ca197cbd34aea2c62b4c9509b376ae23ce3262e9585607a78be",
+      "module_bytes": 211832,
+      "console_verified": false
+    }
+  },
+  "reader_pair_admitted_games": [
+    "evolution1",
+    "evolution2"
+  ],
+  "generic_a2_is_separate_standard_reader": true,
+  "previous_successful_build": "d0aac421584c",
+  "full_cycle_captures_required": true,
+  "console_compatibility_verified": false
+}
