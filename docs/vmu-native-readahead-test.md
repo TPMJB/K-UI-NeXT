@@ -34,9 +34,15 @@ stops at **PHASE 0B**, photograph the detail code.
 
 Test the same new-game opening and movement area. Hold both triggers fully
 plus B for about one second, release, and keep moving until the intentional
-diagnostic stop after roughly 20 seconds. Record 90 seconds of the cycling
-pages, including the new **CRC VALIDATED PHYSICAL READ AHEAD** page. Capture
-is included in the command on every run; no separate switch is needed.
+diagnostic stop after roughly 20 seconds. Record one full page cycle, from
+**HYBRID READER - COMPLETE REQUEST TIMING** until that heading returns, then
+keep another two seconds. This build has 14 pages: approximately 62 seconds
+in the tested 60 Hz run, or 74 seconds at 50 Hz. If recording starts on a
+different page, stop once every page has appeared and the first one repeats.
+An 80-second recording covers a full cycle with margin at either rate;
+90 seconds is unnecessary. Include the **CRC VALIDATED PHYSICAL READ AHEAD**
+page. Pages repeat the same frozen capture; they do not collect more samples.
+Capture is included in the command on every run; no separate switch is needed.
 
 Compare the remaining in-engine hitches and confirm that FMVs stay fluid.
 The first uncached read and an unpredicted seek can still take the normal
@@ -61,3 +67,20 @@ This first cache candidate retains exact Evolution 2 executable admission.
 It does not establish broad native-game VMU compatibility. Existing CE/CDDA
 profiles keep their independently compiled paths. Console boot and performance
 of this new candidate require this hardware test.
+
+## First console result
+
+Capture 63352.mp4 booted this candidate and confirmed cache delivery, but it
+did not establish a perceptible improvement. During the capture, read-ahead
+produced only 62 physical blocks (31 KiB); 86 cache feeds represented about
+3.8% of demand feed operations. Seven requests received some cached data,
+and eight speculative attempts were abandoned without a reported CRC, token
+or guard fault. The cache never reached capacity. Whole requests still took
+up to approximately 139 ms. The preceding capture used a different workload,
+so its approximately 143 ms maximum is not a controlled comparison.
+
+The next diagnostic target is the exact abandonment stage and result code,
+with stream/cache ownership snapshots. Increasing cache capacity alone does
+not address the observed lack of production. See
+`docs/evidence/native-read-ahead-observed-2026-10-24.json` for the transcription,
+counter definitions, arithmetic checks and evidence limits.

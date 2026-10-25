@@ -1,0 +1,264 @@
+{
+  "schema": "kui.native.read-ahead.console-observation.v1",
+  "date": "2026-10-24",
+  "tested_source_commit": "afcf7e1524a9a00cd8f4c2cae6a59541eaf3ddef",
+  "tested_source_tree": "e8fad55a72404a3e991cb8fe1ee428905044ac1d",
+  "video": {
+    "name": "63352.mp4",
+    "bytes": 82311039,
+    "sha256": "6c515a840ffa5cabe8b723b492c89af1664de900882736eecf3e6038473fabe3",
+    "seconds": 91.146889,
+    "size": [
+      1280,
+      720
+    ],
+    "frame_rate": "30000/1001"
+  },
+  "frames": {
+    "read_ahead": 11,
+    "timeline": 15,
+    "requests": [
+      41,
+      45
+    ],
+    "reader": 61,
+    "vmu": 49
+  },
+  "user_observation": "I do not think that hurt anything, but I am skeptical that it helped.",
+  "read_ahead_hex": {
+    "capacity": "180",
+    "hits": "56",
+    "miss_visits": "3E",
+    "hit_requests": "7",
+    "produced": "3E",
+    "producer_visits": "52",
+    "heartbeat_visits": "4B0",
+    "irq_visits": "362",
+    "seeks": "0",
+    "quiesces": "0",
+    "resumes": "0",
+    "full": "0",
+    "extent_ends": "0",
+    "crc_errors": "0",
+    "token_errors": "0",
+    "abandoned": "8",
+    "guard_faults": "0",
+    "clock_bad": "0",
+    "max_aux_visit_ticks": "1706"
+  },
+  "reader_hex": {
+    "samples": "4B0",
+    "bad": "0",
+    "gap_max": "5760",
+    "read_max": "1A78C",
+    "age_max": "18B51",
+    "irq_blocks": "2E3",
+    "call_blocks": "5F5",
+    "pio": "0",
+    "crc": "0",
+    "token_errors": "0",
+    "foreign": "0",
+    "repairs": "43",
+    "overruns": "0",
+    "deferred": "43",
+    "clock_bad": "0",
+    "sci_level_rearms": "0",
+    "irq_entries": "362",
+    "rehooks": "0",
+    "r100": "0",
+    "r400": "0",
+    "r600": "0",
+    "vbr_total": "0",
+    "longest_lba": "4E6E6",
+    "longest_sectors": "49"
+  },
+  "timeline_hex": {
+    "events": "208A",
+    "valid": "208A",
+    "bad": "0",
+    "epoch": "1",
+    "clock_breaks": "0",
+    "unmatched": "0",
+    "overflow": "0",
+    "saturated": "0",
+    "max_gd_call": "17F3",
+    "max_gd_gap": "32C4",
+    "max_chain_length": "1",
+    "max_chain_ticks": "1A85B",
+    "max_chain_inside": "10BF7",
+    "active_token": "0",
+    "last_lba": "4E8A0",
+    "last_sectors": "32",
+    "active_flags": "0",
+    "stored_calls": "8",
+    "requests": "8",
+    "bins": "20"
+  },
+  "request_fields": [
+    "token",
+    "lba",
+    "sectors",
+    "total_ticks",
+    "inside_gd_ticks",
+    "outside_gd_ticks",
+    "gd_calls",
+    "completed_bytes"
+  ],
+  "request_rows_hex": [
+    [
+      "000006AE",
+      "0004E6E6",
+      "00000049",
+      "0001A85B",
+      "00010BF7",
+      "00009C64",
+      "00000014",
+      "00024800"
+    ],
+    [
+      "00000704",
+      "0004E72F",
+      "00000032",
+      "00010E21",
+      "0000704F",
+      "00009DD2",
+      "0000000E",
+      "00019000"
+    ],
+    [
+      "00000740",
+      "0004E761",
+      "00000049",
+      "00019F5E",
+      "0000C1D7",
+      "0000DD87",
+      "00000015",
+      "00024800"
+    ],
+    [
+      "00000776",
+      "0004E7AA",
+      "00000032",
+      "00012F51",
+      "00009838",
+      "00009719",
+      "0000000F",
+      "00019000"
+    ],
+    [
+      "000007D2",
+      "0004E7DC",
+      "00000049",
+      "0001A19B",
+      "0000DF93",
+      "0000C208",
+      "00000014",
+      "00024800"
+    ],
+    [
+      "00000829",
+      "0004E825",
+      "00000032",
+      "00010CBA",
+      "0000795E",
+      "0000935C",
+      "0000000E",
+      "00019000"
+    ],
+    [
+      "00000865",
+      "0004E857",
+      "00000049",
+      "0001A488",
+      "00010ACE",
+      "000099BA",
+      "00000014",
+      "00024800"
+    ],
+    [
+      "000008BC",
+      "0004E8A0",
+      "00000032",
+      "00012F76",
+      "0000C396",
+      "00006BE0",
+      "0000000F",
+      "00019000"
+    ]
+  ],
+  "all_request_epoch_flags_chain_hex": [
+    "00000001",
+    "00000000",
+    "00000001"
+  ],
+  "derived": {
+    "ticks_per_second": 781250,
+    "read_sectors": 492,
+    "read_bytes": 1007616,
+    "request_wall_seconds": 0.92520192,
+    "request_inside_gd_seconds": 0.50255104,
+    "request_outside_gd_seconds": 0.42265088,
+    "request_gd_calls": 139,
+    "produced_bytes": 31744,
+    "cache_feed_fraction": 0.037985865724381625,
+    "irq_feed_fraction": 0.32641342756183744,
+    "max_gd_call_ms": 7.84768,
+    "max_request_ms": 139.0528,
+    "max_reader_complete_ms": 138.78784,
+    "max_aux_visit_ms": 7.54432
+  },
+  "capture_cycle": {
+    "pages": 14,
+    "nominal_video_frames": 3660,
+    "seconds_at_60hz": 61,
+    "seconds_at_50hz": 73.2,
+    "observed_seconds_approx": 62,
+    "recording_instruction": "Record from HYBRID READER - COMPLETE REQUEST TIMING until the same heading returns; retain two more seconds. Stop once every page has appeared. Repeated pages are the same frozen data.",
+    "fixed_duration_fallback_seconds": 80,
+    "runtime_sampling_seconds_approx": 20
+  },
+  "findings": [
+    "Console boot and cache delivery are confirmed for this candidate.",
+    "Only 62 speculative 512-byte blocks were produced; the 384-block cache never reached full.",
+    "86 cache feed operations account for about 3.8 percent of measured demand feeds. Hits include reused raw-sector boundary and seed blocks, so they do not count unique speculative blocks.",
+    "Seven distinct requests received at least one cached block; this does not mean seven full requests were cache hits.",
+    "Eight abandonments with zero CRC, token, guard, clock, foreign or unrecovered-overrun errors need cause and call-site diagnostics. The current counters cannot identify their exact cause.",
+    "After abandonment, producer() returns before counting a producer visit until seed_completed() sees a new completed demand token. This can explain many heartbeat visits with little production, but the exact initiating failures are not captured.",
+    "The longest whole request remains about139ms versus about143ms previously; different sectors and capture phase prevent a controlled speedup claim.",
+    "The requested90seconds includes repeated pages; one complete cycle is sufficient."
+  ],
+  "limits": [
+    "The video shows frozen diagnostic pages, not synchronized game rendering.",
+    "The current sample has8requests/492sectors; the previous sample had7requests/419sectors and a different LBA range.",
+    "MISS VISITS counts delivery visits with zero cache feeds, not missing blocks.",
+    "IRQ ENTRIES and IRQ BLOCKS include demand work; they do not establish idle read-ahead throughput.",
+    "MAX AUX VISIT includes demand fallback; it is not a pure speculative-work budget or a rendered-frame duration.",
+    "Zero guard counters do not establish broad game compatibility.",
+    "Cache-hit counts include seed blocks already read on demand and retained raw boundary blocks; they do not count card reads avoided. Capture start resets counters but preserves warm cached data."
+  ],
+  "next_diagnostic": {
+    "target": "Identify the producer abandonment stage and exact return code before changing cache size, priority or batch pacing.",
+    "needed_fields": [
+      "fetch/poll/take/append cause",
+      "stream state and current LBA",
+      "speculative LBA and ownership/deferred flags",
+      "cache base/count/next and extent end",
+      "request token and active/pending state",
+      "first and latest failure snapshots",
+      "producer skip counts, especially abandoned/no-seed/active/pending/guest-DMA/stream-position"
+    ],
+    "hypotheses": [
+      "Transport RESET during receive/handoff or DMA restart.",
+      "TAKE returning no matching block/PENDING.",
+      "Cache APPEND rejecting validity or LBA continuity."
+    ],
+    "not_proven": "The cause of the eight abandonments is not recorded; do not select a cause or clear the latch blindly."
+  },
+  "checks": {
+    "request_inside_plus_outside_equals_wall": true,
+    "completed_bytes_equal_sectors_times2048": true,
+    "all_eight_requests_contiguous": true,
+    "two_independent_counter_decoders": true
+  },
+  "comparison_evidence": "docs/evidence/native-sdk-sci-progress-2026-10-24.json"
+}
