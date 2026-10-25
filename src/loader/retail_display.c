@@ -20,6 +20,25 @@ static volatile uint32_t *reg(unsigned i) {
 #if KUI_NATIVE_COOP_PUMP && defined(KUI_RETAIL_ASYNC)
 /* Same exact 252 glyph rows, packed at five bits each to make room for
  * the cooperative reader in the existing guarded low reservation. */
+#if KUI_NATIVE_LOADER_TIMELINE
+/* Same252 rows in a contiguous1260-bit stream; no per-glyph padding. */
+static const uint8_t timeline_glyphs[158]={
+ 46,198,31,99,244,49,250,24,189,139,16,194,232,124,140,49,
+ 70,255,33,244,16,254,15,161,135,16,186,8,111,140,47,198,
+ 248,99,140,142,16,66,136,59,66,8,41,89,148,20,83,25,
+ 33,132,16,194,31,119,173,49,198,152,235,140,49,186,24,99,
+ 140,206,199,232,33,132,46,198,88,101,243,49,122,42,227,131,
+ 208,133,224,63,33,132,16,18,99,140,49,186,24,99,140,138,
+ 196,24,107,221,49,70,69,84,140,49,42,66,8,249,65,16,
+ 4,191,139,179,230,232,8,35,132,16,231,98,16,4,125,31,
+ 130,11,193,11,163,228,23,226,67,232,67,240,14,66,31,163,
+ 251,65,16,132,144,139,209,197,232,92,140,47,4,7,
+};
+static unsigned glyph_row(unsigned glyph,unsigned row_index) {
+    unsigned bit=(glyph*7u+row_index)*5u,at=bit>>3;
+    return ((timeline_glyphs[at]|(unsigned)timeline_glyphs[at+1u]<<8)>>(bit&7u))&31u;
+}
+#else
 static const uint8_t compact_glyphs[36][5]={
  {46,198,31,99,4},
  {62,70,31,163,7},
@@ -62,6 +81,7 @@ static unsigned glyph_row(unsigned glyph,unsigned row_index) {
     unsigned bit=row_index*5u,at=bit>>3;
     return ((compact_glyphs[glyph][at]|(unsigned)compact_glyphs[glyph][at+1u]<<8)>>(bit&7u))&31u;
 }
+#endif
 #else
 static const uint8_t glyphs[36][7] = {
  {14,17,17,31,17,17,17},{30,17,17,30,17,17,30},

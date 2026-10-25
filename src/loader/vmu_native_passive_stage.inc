@@ -38,6 +38,30 @@ static bool passive_entry(uint32_t entry,uint32_t begin,uint32_t bytes) {
 #endif
     return !(entry&1u) && entry>=begin+sizeof(struct kui_vmu_native_passive_exports) && entry<begin+bytes;
 }
+#if KUI_NATIVE_LOADER_TIMELINE
+/* The existing40B trace table remains unchanged. Its new adjacent typed
+ * descriptor belongs to this immutable worker image and supplies one entry.
+ * Publish only after the region has moved into the protected live lease. */
+static void __attribute__((noipa)) native_loader_timeline_bind(const struct kui_vmu_native_passive_exports *e,
+    uint32_t dest,uint32_t bytes,uint32_t payload,uint32_t mode) {
+    uint32_t table=e->trace_exports;
+    uint32_t physical=table&UINT32_C(0x1fffffff),begin=dest&UINT32_C(0x1fffffff);
+    if((table&3u) || physical<begin+80u || bytes<52u || physical-begin>bytes-52u)
+        native_report(8u,0x54u);
+    const uint32_t *descriptor=(const void *)(uintptr_t)(table+40u);
+    if(descriptor[0]!=UINT32_C(0x4b4c5431) || descriptor[1]!=1u ||
+       !passive_entry(descriptor[2],dest,bytes)) native_report(8u,0x55u);
+    uint32_t region=(payload&UINT32_C(0x1fffffff))|UINT32_C(0x80000000);
+    region+=KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET;
+    if(!kui_vmu_native_background_region_address(payload,region))native_report(8u,0x56u);
+    volatile uint32_t *slot=(void *)(uintptr_t)(region+0x500u+11u*4u);
+    if(*slot)native_report(8u,0x57u);
+    if(mode==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) {
+        *slot=descriptor[2];
+        __asm__ volatile("ocbp @%0"::"r"(slot):"memory");
+    }
+}
+#endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #include "vmu_native_evolution_trace_stage.inc"
 #endif
@@ -311,6 +335,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     c->sd_transaction=e->sd_transaction;
 #endif
     c->installer=0;c->stage_stack=0;c->status=KUI_VMU_OBS_BOOT_INSTALLED;
+#if KUI_NATIVE_LOADER_TIMELINE
+    native_loader_timeline_bind(e,dest,bytes,lease->payload,cfg.diagnostics);
+#endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(cfg.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN)
         retail_display_line("ACTIVE HOOKS / ORIGINAL MAPLE DMA LIST");

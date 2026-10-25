@@ -17,7 +17,9 @@ REGION=0x8c420400
 FRAME=REGION+0x240
 HOOKED=REGION+0x2d0
 REARMS=REGION+0x2e4
+VBR_CHANGES=REGION+0x278
 HOOK_SHA='3617673b84fa38f4341fc072ca4485a1a13d748dbfa0fe3ef9799d4a539884af'
+TIMELINE_HOOK_SHA='a02b6467322a9aa97cfe8c7f57aa713573d0b17ec8558645285a1c3192796e07'
 
 
 def require(test,message):
@@ -25,7 +27,7 @@ def require(test,message):
 
 
 class Rearm(CacheGateway):
-    def __init__(self,resident,seed,mask,same,hooked,field,body=None):
+    def __init__(self,resident,seed,mask,same,hooked,field,body=None,*,same_owner=False):
         begin,original,_=symbol_bytes(resident,'_hook',2)
         CPU.__init__(self,seed,begin,1)
         self.pc,self.blob,self.mem=begin,original if body is None else body,{}
@@ -34,10 +36,12 @@ class Rearm(CacheGateway):
         self.before=self.r.copy(),self.pr,self.sr,self.fpscr,self.fr.copy()
         self.targets={}
         self.pointer=resident[4]['_kui_retail_async_region_storage'][0]
+        self.timeline='__kui_native_loader_timeline_resident' in resident[4]
         self.vbr=REGION-0x100 if same else 0x8c00f400
         self.iprb=(random.Random(seed+992).getrandbits(16)&~0xf0)|field
-        self.mem.update({self.pointer:REGION,FRAME+4:0x70,FRAME:0x8c00e800,
+        self.mem.update({self.pointer:REGION,FRAME+4:0x70,FRAME:self.vbr if same_owner else 0x8c00e800,
                          FRAME+8:1,HOOKED:int(hooked),REARMS:(0xfffffffc+seed)&MASK})
+        if self.timeline:self.mem[VBR_CHANGES]=(0xfffffffe+seed)&MASK
         self.old=self.vbr,self.iprb,self.mem.copy()
         self.same,self.hooked,self.field=same,hooked,field
         self.iprb_writes,self.vbr_writes=[],[]
@@ -47,7 +51,8 @@ class Rearm(CacheGateway):
         return struct.unpack('<I',self.code(address,4))[0]
 
     def write(self,address,value):
-        assert address in (FRAME,FRAME+4,FRAME+8,HOOKED,REARMS),'hook store escapes exact reader fields'
+        allowed=(FRAME,FRAME+4,FRAME+8,HOOKED,REARMS)+((VBR_CHANGES,) if self.timeline else ())
+        assert address in allowed,'hook store escapes exact reader fields'
         self.mem[address]=value&MASK
 
     def plain(self,w,pc):
@@ -81,6 +86,8 @@ class Rearm(CacheGateway):
             assert self.vbr_writes==[REGION-0x100] and self.vbr==REGION-0x100
             expected[FRAME]=vbr;expected[FRAME+8]=1;expected[HOOKED]=1
             if not self.hooked or changed:expected[FRAME+4]=self.field
+            if self.timeline and self.hooked and mem[FRAME]!=vbr:
+                expected[VBR_CHANGES]=(mem[VBR_CHANGES]+1)&MASK
         assert self.mem==expected,'hook corrupts owner/reader state or loses a rearm'
         wrote=not self.same or changed
         assert self.iprb_writes==([(iprb&~0xf0)|0x10] if wrote else [])
@@ -88,11 +95,15 @@ class Rearm(CacheGateway):
 
 
 def check(resident,*,self_test=False):
+    require(__debug__,'rearm instruction model requires Python assertions; run without -O/PYTHONOPTIMIZE')
     marker=resident[4].get('__kui_native_irq_rearm_resident')
     if marker is None:return {'enabled':False}
     require(marker==(1,0,0,0xfff1),'invalid native IRQ rearm marker')
     begin,body,_=symbol_bytes(resident,'_hook',2)
-    require(len(body)==132 and hashlib.sha256(body[:-8]).hexdigest()==HOOK_SHA,
+    timeline=resident[4].get('__kui_native_loader_timeline_resident')
+    require(timeline is None or timeline==(1,0,0,0xfff1),'invalid native timeline marker')
+    expected_size,expected_sha=(148,TIMELINE_HOOK_SHA) if timeline else (132,HOOK_SHA)
+    require(len(body)==expected_size and hashlib.sha256(body[:-8]).hexdigest()==expected_sha,
             'linked native IRQ rearm hook instructions changed')
     require(body[-8:]==struct.pack('<II',resident[4]['_kui_retail_async_region_storage'][0],IPRB),
             'linked native rearm region/IPRB binding changed')
@@ -102,26 +113,32 @@ def check(resident,*,self_test=False):
             for same in (False,True):
                 for hooked in (False,True):
                     for field in range(0,0x100,0x10):
-                        Rearm(resident,seed,mask,same,hooked,field).run().check();cases+=1
+                        for same_owner in ((False,True) if timeline else (False,)):
+                            Rearm(resident,seed,mask,same,hooked,field,same_owner=same_owner).run().check();cases+=1
     rejected=0
     if self_test:
         mutations=[]
-        for pattern in (0xcb10,0x2501,0x2101,0x7301,0x1302,0x472e):
-            for at in range(0,114,2):
+        patterns=(0xcb10,0x2501,0x2101,0x7301,0x1302,0x472e)
+        if timeline:patterns+=(0x452e,0x7701,0x117f,0x3730)
+        for pattern in patterns:
+            for at in range(0,len(body)-8,2):
                 if struct.unpack_from('<H',body,at)[0]==pattern:
                     altered=bytearray(body);struct.pack_into('<H',altered,at,9)
                     mutations.append(bytes(altered))
-        altered=bytearray(body);struct.pack_into('<I',altered,128,IPRB+4);mutations.append(bytes(altered))
+        altered=bytearray(body);struct.pack_into('<I',altered,len(body)-4,IPRB+4);mutations.append(bytes(altered))
         for altered in mutations:
             refused=False
             for same in (True,False):
-                try:Rearm(resident,7,15,same,True,0x90,altered).run().check()
-                except (AssertionError,ValueError,struct.error,KeyError):refused=True;break
+                for same_owner in ((False,True) if timeline else (False,)):
+                    try:Rearm(resident,7,15,same,True,0x90,altered,same_owner=same_owner).run().check()
+                    except (AssertionError,ValueError,struct.error,KeyError):refused=True;break
+                if refused:break
             require(refused,'native IRQ rearm model accepted an unsafe mutation');rejected+=1
     return dict(enabled=True,hook_address=hex(begin),hook_bytes=len(body),
         complete_linked_hook_pinned=True,actual_instruction_model_cases=cases,
         mutation_rejections=rejected,all_sci_fields_checked=True,
         same_vbr_priority_rechecked=True,other_iprb_fields_preserved=True,
+        vbr_change_counter_modelled=bool(timeline),
         owner_updated_priority_retained_for_release=True,reader_sci_level=1,
         unchanged_level_causes_no_mmio_write=True,new_resident_ram_bytes=0,
         console_cause_confirmed=False,console_performance_verified=False)

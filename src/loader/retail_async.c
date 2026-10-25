@@ -22,6 +22,9 @@ __asm__(".global __kui_native_cooperative_resident\n.set __kui_native_cooperativ
 #if KUI_NATIVE_IRQ_REARM
 __asm__(".global __kui_native_irq_rearm_resident\n.set __kui_native_irq_rearm_resident,1\n");
 #endif
+#if KUI_NATIVE_LOADER_TIMELINE
+__asm__(".global __kui_native_loader_timeline_resident\n.set __kui_native_loader_timeline_resident,1\n");
+#endif
 #if KUI_NATIVE_PACED_CHECK
 __asm__(".global __kui_native_paced_resident\n.set __kui_native_paced_resident,1\n");
 #endif
@@ -218,12 +221,14 @@ static void hook(void) {
     if(vbr == our_vbr()) return;
     uint16_t b = rd16(IPRB);
 #endif
-#if !KUI_NATIVE_REQUEST_TIMING
     if(e.hooked) {
-        if(vbr == e.release.vbr) ++e.stats.releases;
-        else ++e.release.vbr_changes;
-    }
+#if !KUI_NATIVE_REQUEST_TIMING || KUI_NATIVE_LOADER_TIMELINE
+        if(vbr != e.release.vbr) ++e.release.vbr_changes;
 #endif
+#if !KUI_NATIVE_REQUEST_TIMING
+        else ++e.stats.releases;
+#endif
+    }
     /* The game's own field, unless ours is still there (a game that set its
      * VBR again itself). */
     if(!e.hooked || (b & SCI_FIELD) != SCI_LEVEL) e.release.sci = b & SCI_FIELD;
@@ -896,6 +901,14 @@ void kui_retail_async_call(uint32_t function) {
     deliver(wait);
     report();
 }
+#if KUI_NATIVE_LOADER_TIMELINE
+/* Installed only after retained-region binding from the typed immutable
+ * worker descriptor. Bootstrap workspace and normal mode keep this zero. */
+void __attribute__((noipa)) kui_retail_async_trace(uint32_t exit,uint32_t function) {
+    void (*visit)(uint32_t,uint32_t,uint32_t,void *)=(void *)(uintptr_t)R.vector600[11];
+    if(visit)visit(exit,function,kui_retail_hook_sr,&R);
+}
+#endif
 void kui_retail_async_after(uint32_t function, int32_t result) {
 #if KUI_VMU_NATIVE_BACKGROUND
     if(native_loan_blocked()) return;

@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/native-timeline
+include Makefile.vmu-native-irq-rearm
+FLAGS += -DKUI_NATIVE_LOADER_TIMELINE=1
+NATIVE_FLAGS += -DKUI_NATIVE_LOADER_TIMELINE=1
+NATIVE_SRC += src/core/native_loader_timeline.c
+$(BUILD)/native-worker.elf: $(NATIVE_OBJ)
+override TEST_GUIDE := docs/vmu-native-timeline-test.md
+
+.PHONY: timeline-host-tests
+timeline-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_native_loader_timeline.c src/core/native_loader_timeline.c -o $(BUILD)/test-timeline
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-timeline
+	python3 tests/test_native_compact_font.py
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_loader_timeline_worker.c $(COMPAT_WORKER_HOST_SRC) src/core/native_loader_timeline.c -Wl,--gc-sections -o $(BUILD)/test-timeline-worker
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-timeline-worker

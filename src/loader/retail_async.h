@@ -63,6 +63,9 @@ struct kui_retail_async_stats {
 /* Returns the trampoline can hold pending: interrupts released while an
  * earlier released one's handler still runs. */
 #define KUI_RETAIL_ASYNC_RETURNS 3u
+#if KUI_NATIVE_LOADER_TIMELINE
+void kui_retail_async_trace(uint32_t exit,uint32_t function);
+#endif
 /* The releasing entries' and trampoline's state, at region + 0x240 with
  * these offsets (retail_resident.S). */
 struct kui_retail_async_release {

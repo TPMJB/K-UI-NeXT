@@ -35,6 +35,7 @@ COLD = frozenset({"kui_vmu_native_background_init", "kui_vmu_observe_background_
                   "kui_vmu_native_background_manifest_bind", "kui_vmu_observe_sd_lease",
                   "kui_retail_native_async_loan_begin", "kui_retail_native_async_loan_end"})
 CALLBACKS = {
+    ("kui_retail_async_trace", "retail_async.c"): ("kui_native_loader_timeline_visit",),
     ("guest", "retail_gd.c"): ("native_background_map",),
     ("kui_retail_gd_dispatch", "retail_gd.c"): ("check_sectors",),
     ("byte", "sci_stream.c"): ("transfer",),
@@ -640,7 +641,16 @@ def check(directory, *, self_test=False, require_stage=False):
     if not reports:
         reports = sorted((directory / "resident/lto").glob("*.ci"))
     require(reports, "missing actual LTO call-graph reports")
-    frames, calls = graph.load(reports)
+    if '__kui_native_loader_timeline_resident' in image[4]:
+        # The only new low-stack callback is pinned to the retained trace
+        # entry. Load its actual emitted frames and all pure callees; the
+        # same352B guard and margins continue to bound the combined path.
+        reports += [directory/'native/src/loader/vmu_native_passive.ci',
+                    directory/'native/src/core/native_loader_timeline.ci',
+                    directory/'native/src/core/vmu_native_profile.ci',
+                    directory/'native/src/loader/minic.ci']
+        require(all(p.is_file() for p in reports),'missing timeline callback stack graphs')
+    frames, calls = graph.load(reports,qualified='__kui_native_loader_timeline_resident' in image[4])
     paths, callbacks, escapes = stack_paths(frames, calls)
     worst = max(item["bytes"] for item in paths.values())
     total = worst + library["stack_bytes"] + EXTRA_MARGIN + GUARD + TOP_GAP
@@ -679,7 +689,8 @@ def check(directory, *, self_test=False, require_stage=False):
             else:
                 raise ValueError("Background audit accepted negative mutation: " + name)
         altered = dict(frames)
-        altered["native_background_map"] += 128
+        key=next(name for name in altered if graph.base(name)=="native_background_map")
+        altered[key] += 128
         def oversized():
             checks, _, _ = stack_paths(altered, calls)
             need = max(item["bytes"] for item in checks.values()) + 4 + EXTRA_MARGIN + GUARD + TOP_GAP

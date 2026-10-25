@@ -540,8 +540,13 @@ static void report_fault(const char *reason, uint32_t function) {
     retail_display_line("PHOTO SCREEN");
     retail_display_line("POWER CYCLE");
 #else
+#if KUI_NATIVE_LOADER_TIMELINE
+    retail_display_line("PHOTO SCREEN");
+    retail_display_line("POWER CYCLE");
+#else
     retail_display_line("STOPPED: PHOTO THIS SCREEN");
     retail_display_line("POWER CYCLE FOR K-UI");
+#endif
 #endif
 #endif
     for(;;) __asm__ volatile("nop");
@@ -1147,6 +1152,9 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
 #endif
     if(source>3) return -1;
     if(source!=1 && r6==UINT32_MAX) return 0;
+#if KUI_NATIVE_LOADER_TIMELINE
+    kui_retail_async_trace(0u,r7);
+#endif
     kui_retail_async_call(r7);
 #if KUI_WINCE_CDDA_WWP && KUI_ARMADA_CE_STREAM && KUI_ARMADA_CE_AUDIO_OBSERVE
     uint32_t drive_status=service.drive_status;
@@ -1163,6 +1171,9 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
     armada_ce_audio_record(r7, r4, result);
 #endif
     kui_retail_async_after(r7, result);
+#if KUI_NATIVE_LOADER_TIMELINE
+    kui_retail_async_trace(1u,r7);
+#endif
     if(service.error == KUI_GD_ERROR_IO)
         report_fault("IMAGE READ FAILED", r7, r5);
     if(r7 == KUI_GD_REQUEST && !service.command && result == 0)

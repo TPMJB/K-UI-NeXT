@@ -183,3 +183,10 @@ C(kui_vmu_native_trace_exports):
 #endif
     .long C(kui_vmu_native_sdk_coherence_state)
     .size C(kui_vmu_native_trace_exports),.-C(kui_vmu_native_trace_exports)
+#if KUI_NATIVE_LOADER_TIMELINE
+    .global C(kui_native_loader_timeline_exports)
+    .type C(kui_native_loader_timeline_exports),@object
+C(kui_native_loader_timeline_exports):
+    .long 0x4b4c5431,1,C(kui_native_loader_timeline_visit)
+    .size C(kui_native_loader_timeline_exports),.-C(kui_native_loader_timeline_exports)
+#endif

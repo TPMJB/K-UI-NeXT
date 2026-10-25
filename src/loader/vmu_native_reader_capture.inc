@@ -247,11 +247,21 @@ static void reader_capture_report(const struct retail_display_state *display) {
     const kui_retail_async_region_type *region=reader_capture_region();
     retail_display_values("SCI LEVEL REARMS IRQ ENTRIES",(uint32_t[2]){
         region?region->engine.stats.execs:0u,region?region->engine.stats.exec_int:0u},2u);
-    if(region)retail_display_values("REHOOKS RELEASE100 RELEASE400 RELEASE600",(uint32_t[4]){
+    if(region)retail_display_values(
+#if KUI_NATIVE_LOADER_TIMELINE
+        "REHOOK R100 R400 R600 VBR TOTAL",(uint32_t[5]){
+#else
+        "REHOOKS RELEASE100 RELEASE400 RELEASE600",(uint32_t[4]){
+#endif
         region->engine.release.rehooks-reader_cooperative.calls,
         region->engine.release.released[0]-reader_cooperative.blocks,
         region->engine.release.released[1]-reader_cooperative.busy,
-        region->engine.release.released[2]-reader_cooperative.faults},4u);
+        region->engine.release.released[2]-reader_cooperative.faults
+#if KUI_NATIVE_LOADER_TIMELINE
+        ,region->engine.release.vbr_changes},5u);
+#else
+        },4u);
+#endif
     retail_display_line("FULL CHECK AND EXEC CATCHUP - NO PUMP");
 #elif KUI_NATIVE_PACED_CHECK
     retail_display_line("CHECK WAIT BOOST NEEDS 16 TIGHT POLLS");

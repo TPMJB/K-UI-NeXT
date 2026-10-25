@@ -36,6 +36,7 @@ from check_vmu_pio_write import check_pio_entry
 from check_vmu_native_cache_seed import audit as audit_cache_seed
 from check_vmu_native_cache_gateway import check as check_cache_gateway
 from check_vmu_native_irq_rearm import check as check_irq_rearm
+from check_vmu_native_loader_timeline import check as check_loader_timeline
 from check_vmu_native_stage_stack import check as check_stage_stack
 from check_vmu_native_stage_stack import Machine
 from check_vmu_native_mode import audit as audit_runtime_mode
@@ -170,6 +171,22 @@ PACED_PREPARED_PINS = {
  '_report': ('99fbb78034fb36d000c0865e703e04d6b8564863d1d5713ffe2d5f8bacc97cb6', 440),
  '_trace_packets': ('cd06c541ee0b07d7bf0f6223d8f1b4ee70229edad46db9d09062850d6f47de1f', 116),
  '_reader_cooperative_service': ('501ea5b89ab4d8ff1b044d90f0e7b770df4b0bc60a561f96ec3ca179d28f6c83', 4),
+}
+
+TIMELINE_PREPARED_PINS = {
+ '_diagnostic_end': ('e42bc56b72fbbbf375b29b50d3ccd9a12a884248e2743dfc20ceae875f00f3b7', 1432),
+ '_diagnostic_complete': ('c9917fa2da939d407c8655b9b2b58c968fbcb7db1899d1dabdf447cca448e765', 2820),
+ '_transfer_context_valid': ('e8dfc67165fff7d12a1df60ac8e5785bf83ea16b0aa2574dd6450244698112a0', 1236),
+ '_kui_vmu_native_runtime_fault': ('4bdc586daa750bebacdcf191fe21a7c30125c2a3ed34453e565280f6a1468a35', 332),
+ '.rodata': ('6a88a132d4eab4019c9d02539abc1ece85cd3de726af74a300784689ea2aa31d', 5108),
+ '_kui_vmu_native_trace_report': ('f62e00328dff4479fa2705d7ec1126cf8077d3d706c9baa1809e28b8ea434306', 1120),
+ '_trace_history': ('2634123aeadfeec9b8d97b75568f50c0854067dbe5535244354ca62977c67a55', 164),
+ '_report': ('495b4faeea4abb6ae6aa2b447e47a53d83cbf80e5c55970f4051008d2e31b813', 440),
+ '_trace_packets': ('c3fa31e8b526e3936a387bbfc3d3debcecc696fab33613f3a6b8eee1f269cdfd', 116),
+ '_kui_native_loader_timeline_visit': ('eb70c2499182c9ba9d638aa8c931cb768c8459630e56f057575d9e923e619f5c', 148),
+ '_native_loader_snapshot': ('9592778ad157ebdd8b7f2ad0fd3efe92e05b17fc78c30d61ee6a0eba1c2410a0', 368),
+ '_kui_native_loader_timeline_add': ('4d6b8073d0a1fd8de7359127083bbf20843381ed99df20a2d1c3c1f8b80d5b26', 856),
+ '_kui_native_loader_timeline_reset': ('3e45ddcf599ecf09701486d6f30bc38a34bd5122e36349922416f6ee6d07ff0c', 24),
 }
 
 IRQ_REARM_PREPARED_PINS = {
@@ -705,10 +722,15 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
         require(cooperative and not paced and not timed and irq_rearm==(1,0,0,0xfff1),
                 'invalid IRQ rearm reader marker')
         require(IRQ_REARM_PREPARED_PINS,'missing reviewed IRQ rearm reader pins')
+    timeline=worker[4].get('__kui_native_loader_timeline_worker')
+    if timeline is not None:
+        require(irq_rearm and timeline==(1,0,0,0xfff1),'invalid loader timeline marker')
+        require(TIMELINE_PREPARED_PINS,'missing reviewed timeline pins')
     pins={**PREPARED_PINS,**(STALL_PREPARED_PINS if stall_marker else {}),
           **(COOPERATIVE_PREPARED_PINS if cooperative else {}),
           **(TIMED_PREPARED_PINS if timed else {}),**(PACED_PREPARED_PINS if paced else {}),
-          **(IRQ_REARM_PREPARED_PINS if irq_rearm else {})}
+          **(IRQ_REARM_PREPARED_PINS if irq_rearm else {}),
+          **(TIMELINE_PREPARED_PINS if timeline else {})}
     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
                        ("_protected_ranges", 512), ("_protected_count", 4),
@@ -2470,6 +2492,7 @@ def check(directory, *, self_test=False, trace_startup=None):
     if irq_rearm:require(cooperative and not timed and not paced and irq_rearm==low_rearm==(1,0,0,0xfff1),
                          'invalid paired IRQ rearm reader markers')
     irq_rearm_proof=check_irq_rearm(read_elf(directory/'resident-sci.elf'),self_test=self_test)
+    timeline_proof=check_loader_timeline(directory,self_test=self_test)
     prepared_lifetime = check_prepared_lifetime(directory, worker, binary, wire, self_test, build=base["runtime"]["build"])
     relocations=check_worker_pointer_aliases(wire,policy,fault_capture,coherence)
 
@@ -2548,6 +2571,7 @@ def check(directory, *, self_test=False, trace_startup=None):
               "irq_rearm_reader":dict(irq_rearm_proof,paired_resident_worker=bool(irq_rearm),
                   full_check_and_exec_catchup=bool(irq_rearm),controller_reader_service_enabled=False,
                   rearm_and_irq_entry_counters=bool(irq_rearm)),
+              "loader_timeline":timeline_proof,
               "timed_reader": {"enabled":bool(timed),"window_ticks":586 if timed else 0,
                   "window_max_visits":64 if timed else 0,"blocks_per_window_max":2 if timed else 0,
                   "read_only_clock_admission":bool(timed),"invalid_clock_single_visit":bool(timed),
