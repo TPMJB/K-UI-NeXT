@@ -39,7 +39,12 @@ static void __attribute__((noipa)) native_sdk_sci_route_bind(uint32_t payload) {
        exports.callback-KUI_RETAIL_RESIDENT_ADDRESS>=resident_bytes ||
        (exports.region_storage&3u) ||
        exports.region_storage<KUI_RETAIL_RESIDENT_ADDRESS+resident_bytes ||
-       exports.region_storage>KUI_RETAIL_RESIDENT_LIMIT-4u ||
+       /* The temporary stage is built without KUI_RETAIL_ASYNC. Its generic
+        * RESIDENT_LIMIT therefore names the standard reader, not this linked
+        * background resident. Use the already selected reader's bound and
+        * require the exact existing low asynchronous reservation. */
+       resident_limit!=KUI_RETAIL_LOW_ASYNC_LIMIT ||
+       exports.region_storage>resident_limit-4u ||
        memcmp((const void *)(uintptr_t)descriptor,&exports,sizeof(exports)))
         native_report(10u,3u);
     uint32_t address=((payload&UINT32_C(0x1fffffff))|UINT32_C(0x80000000))+

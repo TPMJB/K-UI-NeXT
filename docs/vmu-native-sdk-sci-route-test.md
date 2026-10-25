@@ -1,6 +1,15 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Evolution 2 SDK SCI callback route
 
+This candidate corrects the setup refusal in build b656d4934fb9. Its installer
+used the standard resident limit `0x8c007800` to validate the background
+reader's BSS pointer `0x8c007a34`, producing **PHASE 0A / DETAIL 03** before
+installing either SCI callback. The stage now requires the selected background
+reader's existing `0x8c007ba0` limit and validates the pointer against that
+bound. The memory reservation and priority-1 runtime are unchanged. A linked
+instruction regression executes the old refusal and the corrected setup.
+The rejected run provided no gameplay or stutter measurement for SDK routing.
+
 This is a new loader architecture following the failed priority-7 experiment
 8390fed1414d. That build black-screened after bootstrap 2; the SD adapter LED
 remained on. The LED is not a transfer-progress measurement.
