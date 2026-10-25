@@ -72,12 +72,37 @@ RA_DIAGNOSTIC_STAGE_PINS={
     '_native_sdk_sci_route_bind':(692,'ef87deb32dd2d9ccef7954459f244c269c60339c4531bca0e3de94f3b16f3f90'),
     '_kui_native_sdk_sci_route_admit':(800,'bbdb6f34b5fb0362a142ec4feed63718fbd7159bca475eccb3a2faaad5c3a5c2'),
 }
+# The one-block PIO report and auxiliary blob shift only cold-stage literal
+# bindings. Earlier SDK/read-ahead/diagnostic artifacts retain their pins.
+RA_PIO_STAGE_PINS={
+    '_native_sdk_sci_route_bind':(692,'0b8809cb4f2f5351de3d4d683ac6b17fab4d86c533b55d006b7c593a01891475'),
+    '_kui_native_sdk_sci_route_admit':(800,'7f220ee4bfbfca0150bbd6a2b6e84be26d325ba6a9307d0911bae18a1c328ae8'),
+}
 MEMORY_CACHE={}
 MEMORY_REFERENCES={}
 
 
 def require(test,message):
     if not test:raise ValueError(message)
+
+
+def pio_companion(worker,proof):
+    """Select new pins only for the independently executed exact PIO pair."""
+    marker=worker[4].get('__kui_native_readahead_pio_worker')
+    require(bool(marker)==bool(proof and proof.get('pio_candidate')),
+            'read-ahead PIO worker/auxiliary proof differs')
+    if marker:
+        producer=proof.get('pio_producer',{})
+        require(marker==(1,0,0,0xfff1) and proof.get('enabled') and
+                proof.get('paired_markers') and proof.get('diagnostic_capture') and
+                proof.get('schema')=='kui.native.read-ahead.audit.v1' and
+                proof.get('artifact_sha256',{}).get('worker')==hashlib.sha256(worker[0]).hexdigest() and
+                all(producer.get(key) is True for key in ('enabled','actual_linked_producer_executed',
+                    'tick_only','one_fresh_block_per_tick','no_optional_dma_or_new_commands',
+                    'fetch_polled_true','never_resume_or_seek_or_command')) and
+                producer.get('maximum_blocks_per_visit')==1 and producer.get('fetch_token_limit')==256,
+                'read-ahead PIO pins require the complete exact linked producer proof')
+    return bool(marker)
 
 
 def initialized_at(image,address,count):
@@ -119,11 +144,13 @@ def pin_bodies(resident):
     return found
 
 
-def stage_pins(stage,*,diagnostic=False):
+def stage_pins(stage,*,diagnostic=False,pio=False):
     result={}
     read_ahead='__kui_native_readahead_stage' in stage[4]
     require(not diagnostic or read_ahead,'SDK diagnostic stage pins require the read-ahead profile')
-    selected=RA_DIAGNOSTIC_STAGE_PINS if diagnostic else RA_STAGE_PINS if read_ahead else STAGE_PINS
+    require(not pio or diagnostic,'SDK PIO stage pins require the diagnostic profile')
+    selected=RA_PIO_STAGE_PINS if pio else RA_DIAGNOSTIC_STAGE_PINS if diagnostic else \
+        RA_STAGE_PINS if read_ahead else STAGE_PINS
     for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(stage,name,2)
         require(section[2]&4 and 0x8ce00000<=address<address+len(body)<=0x8cfe0000,
@@ -666,12 +693,14 @@ def check(resident,*,worker=None,stage=None,self_test=False,read_ahead_proof=Non
                 read_ahead_proof.get('diagnostics',{}).get('schema')==
                     'kui.native.read-ahead.diagnostics.audit.v1',
                 'SDK diagnostic profile requires the exact linked auxiliary snapshot proof')
+    pio=pio_companion(worker,read_ahead_proof)
+    require(not pio or diagnostic,'SDK PIO profile lacks its diagnostic worker')
     require(marker==callback==paired==(1,0,0,0xfff1),'SDK SCI paired marker mismatch')
     if stage is not None:require(staged==(1,0,0,0xfff1),'SDK SCI paired stage marker mismatch')
     require('__kui_native_sci_priority7_resident' not in resident[4],
             'SDK SCI route must retain level1 and exclude priority7')
     pins=pin_bodies(resident)
-    cold=stage_pins(stage,diagnostic=bool(diagnostic))
+    cold=stage_pins(stage,diagnostic=bool(diagnostic),pio=pio)
     binder=check_cold_binder(stage,resident,self_test=self_test)
     callbacks=callback_cases(resident)
     hooks,unhooks,dispatches,transitions=ownership_cases(resident)
@@ -688,7 +717,7 @@ def check(resident,*,worker=None,stage=None,self_test=False,read_ahead_proof=Non
             {name:(record[0],record[1]) for name,record in {
                 name:resident[4][name] for name in ('_kui_native_sdk_sci_route_entry','_kui_native_sdk_sci_route_exports')}.items()},
             pin_bodies),(stage,{name:(record[0],record[1]) for name,record in cold.items()},
-                lambda image:stage_pins(image,diagnostic=bool(diagnostic)))):
+                lambda image:stage_pins(image,diagnostic=bool(diagnostic),pio=pio))):
             if image is None:continue
             for name,(address,count) in pinned.items():
                 section=image[3][image[4][name][3]];start=section[4]+address-section[3]
@@ -702,6 +731,7 @@ def check(resident,*,worker=None,stage=None,self_test=False,read_ahead_proof=Non
         cold_binder_and_admission_pins=cold,cold_binder_instruction_modelled=True,cold_binder_execution=binder,
         cold_binder_source_reviewed=True,read_ahead_companion_required=bool(ra),
         read_ahead_diagnostic_companion_required=bool(diagnostic),
+        read_ahead_pio_companion_required=pio,
         cold_binder_source_sha256=hashlib.sha256((ROOT/'src/loader/vmu_native_sdk_sci_route_stage.inc').read_bytes()).hexdigest(),
         immutable_function_pins=pins,callback_instruction_cases=callbacks,
         hook_ownership_instruction_cases=hooks,unhook_ownership_instruction_cases=unhooks,

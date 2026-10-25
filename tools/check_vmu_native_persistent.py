@@ -37,7 +37,7 @@ from check_vmu_native_cache_seed import audit as audit_cache_seed
 from check_vmu_native_cache_gateway import check as check_cache_gateway
 from check_vmu_native_irq_rearm import check as check_irq_rearm
 from check_vmu_native_loader_timeline import check as check_loader_timeline
-from check_vmu_native_sdk_sci_route import check as check_sdk_sci_route
+from check_vmu_native_sdk_sci_route import check as check_sdk_sci_route,pio_companion
 from check_vmu_native_stage_stack import check as check_stage_stack
 from check_vmu_native_stage_stack import Machine
 from check_vmu_native_mode import audit as audit_runtime_mode
@@ -727,6 +727,18 @@ READ_AHEAD_DIAGNOSTIC_PREPARED_PINS={
  '_report':('4706198f8c69896b415aefbde23a3b0ddcae7331af212a17263d04288110f032',440),
  '_trace_packets':('6231888cd04b42e7e0490458c2fb33b9a198b4f2cc775c5dce1f7b607c9855d6',116),
 }
+# The isolated one-block PIO report adds one three-value row. Keep the
+# preceding diagnostic body's exact pins, including its string offsets.
+READ_AHEAD_PIO_PREPARED_PINS={
+ '_diagnostic_complete':('d1e5db3c76fc36728892a540a6df423ae10afdd908fab2081efdac358745f9d2',3296),
+ '_transfer_context_valid':('dbdef3280d3f1ead790f01e9dd58b8c85115104e310d556ec73f7b5e2457c635',1236),
+ '_kui_vmu_native_runtime_fault':('e81b98a7e3203847f5ec37a15588db47452d83d994ef6a4de418088cedd44e4b',332),
+ '.rodata':('7f4cbc0711524ba59b87b401aea50960c6de3ec04518df804e046c9239bf67f8',5824),
+ '_kui_vmu_native_trace_report':('28eebbd4da06fc5c8dbe2cae1663a38bcdb976e1b04b06f10166e6a67e2bfc87',1120),
+ '_trace_history':('c2ba15d88253f65d2cf9dce747012648b70051eca90e084ff526d828eff55d8d',164),
+ '_report':('496bd5eb4dbfbb986320ccb5ade6e3eef97a39e2e8a278b042e3bbd2fa03e97b',440),
+ '_trace_packets':('39babcd833d67ea240255738a48e2b3e59da709964f252e4b8b2799619b99cda',116),
+}
 
 def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *, build=None,
                             read_ahead_proof=None):
@@ -774,13 +786,16 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
                 read_ahead_proof.get('diagnostics',{}).get('enabled') and
                 read_ahead_proof.get('diagnostics',{}).get('schema')=='kui.native.read-ahead.diagnostics.audit.v1',
                 'prepared diagnostic pins require the complete exact auxiliary proof')
+    read_ahead_pio=pio_companion(worker,read_ahead_proof)
+    require(not read_ahead_pio or read_ahead_diagnostic,'prepared PIO profile lacks its diagnostic worker')
     pins={**PREPARED_PINS,**(STALL_PREPARED_PINS if stall_marker else {}),
           **(COOPERATIVE_PREPARED_PINS if cooperative else {}),
           **(TIMED_PREPARED_PINS if timed else {}),**(PACED_PREPARED_PINS if paced else {}),
           **(IRQ_REARM_PREPARED_PINS if irq_rearm else {}),
           **(TIMELINE_PREPARED_PINS if timeline else {}),
           **(READ_AHEAD_PREPARED_PINS if read_ahead else {}),
-          **(READ_AHEAD_DIAGNOSTIC_PREPARED_PINS if read_ahead_diagnostic else {})}
+          **(READ_AHEAD_DIAGNOSTIC_PREPARED_PINS if read_ahead_diagnostic else {}),
+          **(READ_AHEAD_PIO_PREPARED_PINS if read_ahead_pio else {})}
     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
                        ("_protected_ranges", 512), ("_protected_count", 4),
@@ -877,6 +892,7 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
                 rejected += 1
     return {"prepared": True, "exact_linked_kernels": functions, "build_identity": build,
             "read_ahead_diagnostic_companion_required":bool(read_ahead_diagnostic),
+            "read_ahead_pio_companion_required":read_ahead_pio,
             "constant_build_identity_bound_to_verified_runtime": True, "identity_words": 8,
             "protected_interval_limit": 64, "hook_word_limit": 32, "free_node_limit": 1024,
             "full_dynamic_free_list_each_release": True, "full_storage_guards_before_and_after_loan": True,

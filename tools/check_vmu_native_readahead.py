@@ -32,6 +32,8 @@ MARK='__kui_native_readahead_'
 CODE_PIN=(5120,'ad53f64817c9b65869bbe21e8d28a09ba98d75567709a6099bf51dd8551e2bd9')
 DIAGNOSTIC_CODE_PIN=(6016,'d355c1383364a52f8f3d1b82dad6359ea695b0e15287b1c0cd9a4ecba231db92')
 REPAIR_DIAGNOSTIC_CODE_PIN=(6016,'46c8f355865297918df512b6053328fc88579d32fbb19b3576f9b5b9fc85d1e9')
+PIO_CODE_PIN=(5920,'e7973080e08364c228ef9ecade3ab09e9ab3fe5b6c2ce3ade2ef2879e4a218cd')
+PIO_MARK='__kui_native_readahead_pio_'
 REPAIR_DIAGNOSTIC_MARKER='__kui_native_readahead_repair_diagnostic_auxiliary'
 DIAGNOSTIC_MARK='__kui_native_readahead_diagnostic_'
 LOW_PINS={
@@ -48,6 +50,12 @@ DIAGNOSTIC_WORKER_PINS={
     '_reader_readahead_visit':(56,'2af85f7d6a6a88765d1e8cf645b45683e794c2bf08ebca7a5c1bb6666a78186a'),
     '_reader_cooperative_service':(32,'774e6ef572a539374bec18f4954cf99399096f12899db0ea67cc0460c209391b'),
     '_reader_readahead_failure':(172,'908c6b98fec8dc12551a0c8ab889609b30478435bc26597b909299c5abec6da4'),
+}
+PIO_WORKER_PINS={
+    '_reader_readahead_exports':(160,'6c4c1a2f4cc98ff6457e0decac9ee1e4477235b990cb7aae75726f473ffe13e2'),
+    '_reader_readahead_visit':(56,'2af85f7d6a6a88765d1e8cf645b45683e794c2bf08ebca7a5c1bb6666a78186a'),
+    '_reader_cooperative_service':(32,'86b3e40e60ef13acabffe1461b97f7e0e7dda7a38248f486d08ab7c536a53a0f'),
+    '_reader_readahead_failure':(172,'cbbb1917d4795bc8eed2ab4568939f6f98c7aa7b11d0bfb5bd4c43e7ed7d1382'),
 }
 LOAN_PIN=(744,'a06ecbd795204545b4df1ca6f5efc3883a0a81b4e0391b088a12388203ff376c')
 GATEWAY_MEMORY={}
@@ -72,6 +80,13 @@ def repair_diagnostic_profile(aux):
                 'read-ahead repair diagnostic marker differs or lacks its diagnostic profile')
     return mark is not None
 
+def pio_profile(aux):
+    mark=aux[4].get(PIO_MARK+'auxiliary')
+    if mark is not None:
+        require(mark==(1,0,0,0xfff1) and repair_diagnostic_profile(aux),
+                'read-ahead PIO marker differs or lacks its diagnostic profile')
+    return mark is not None
+
 def code_payload(aux):
     parts=[]
     for sec in aux[3]:
@@ -86,7 +101,8 @@ def code_payload(aux):
 
 def pinned_code(aux):
     address,body=code_payload(aux)
-    selected=REPAIR_DIAGNOSTIC_CODE_PIN if repair_diagnostic_profile(aux) else \
+    selected=PIO_CODE_PIN if pio_profile(aux) else \
+        REPAIR_DIAGNOSTIC_CODE_PIN if repair_diagnostic_profile(aux) else \
         DIAGNOSTIC_CODE_PIN if diagnostic_profile(aux) else CODE_PIN
     require(selected is not None and (len(body),sha(body))==selected,
             'read-ahead immutable code pin changed')
@@ -301,9 +317,9 @@ class WorkerCPU(SDKCPU):
         # instruction proof establishes PR preservation around its C body.
         self.r[0]=1;self.sr^=1;self.pc=continuation
 
-def worker_bindings(resident,worker,*,diagnostic=False):
+def worker_bindings(resident,worker,*,diagnostic=False,pio=False):
     pins={}
-    selected=DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
+    selected=PIO_WORKER_PINS if pio else DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
     require(selected,'read-ahead reviewed worker pins are missing')
     public=656 if diagnostic else 76
     for name,(count,digest) in selected.items():
@@ -717,9 +733,13 @@ def check(directory,*,self_test=False):
     aux=read_elf(directory/'native-ra-aux.elf')
     require(aux[4].get(MARK+'auxiliary')==(1,0,0,0xfff1),'read-ahead auxiliary marker mismatch')
     diagnostic=diagnostic_profile(aux)
+    pio=pio_profile(aux)
     diagnostic_worker=worker[4].get(DIAGNOSTIC_MARK+'worker')
     require(bool(diagnostic_worker)==diagnostic and (not diagnostic or
             diagnostic_worker==(1,0,0,0xfff1)),'read-ahead diagnostic worker/auxiliary markers differ')
+    pio_worker=worker[4].get(PIO_MARK+'worker')
+    require(bool(pio_worker)==pio and (not pio or pio_worker==(1,0,0,0xfff1)),
+            'read-ahead PIO worker/auxiliary markers differ')
     geometry=image_contract(directory,aux,resident)
     code_at,code=pinned_code(aux)
     insns=instruction_audit('native-read-ahead',disassemble(directory/'native-ra-aux.elf'))
@@ -728,8 +748,12 @@ def check(directory,*,self_test=False):
     loan_pin=pinned_loan_boundary(resident)
     loan=loan_cases(resident)
     snapshots=diagnostic_snapshots(resident,aux)
+    producer={'enabled':False}
+    if pio:
+        from check_vmu_native_readahead_pio import pio_cases
+        producer=pio_cases(resident,aux,self_test=self_test)
     gateway=gateway_cases(resident,aux);stack=private_stack(directory,resident)
-    bindings=worker_bindings(resident,worker,diagnostic=diagnostic)
+    bindings=worker_bindings(resident,worker,diagnostic=diagnostic,pio=pio)
     display=worker_diagnostic_display(worker) if diagnostic else {'enabled':False}
     from check_vmu_native_readahead_stage import check_stage
     cold=check_stage(stage,resident,aux,self_test=self_test)
@@ -745,7 +769,7 @@ def check(directory,*,self_test=False):
         bindings_mutations+=byte_mutations(resident,[(n,2) for n in LOW_PINS],
             lambda image:pinned_functions(image,LOW_PINS,'read-ahead low binding'))
         bindings_mutations+=byte_mutations(resident,[('_kui_native_ra_reader_ops',1),('_kui_native_ra_reader_ops_entry',1)],typed_ops)
-        worker_pins=DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
+        worker_pins=PIO_WORKER_PINS if pio else DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
         bindings_mutations+=byte_mutations(worker,[(n,2) for n in worker_pins],
             lambda image:pinned_functions(image,worker_pins,'read-ahead worker binding'))
         if diagnostic:
@@ -759,6 +783,7 @@ def check(directory,*,self_test=False):
             else:raise ValueError('read-ahead auditor accepted a changed QUIESCE boundary')
     return dict(enabled=True,schema='kui.native.read-ahead.audit.v1',paired_markers=True,
         diagnostic_capture=diagnostic,repair_diagnostic_capture=repair_diagnostic_profile(aux),
+        pio_candidate=pio,pio_producer=producer,
         artifact_sha256=dict(resident=sha(resident[0]),worker=sha(worker[0]),
             stage=sha(stage[0]),auxiliary=sha(aux[0])),
         immutable_code_pin={'address':hex(code_at),'bytes':len(code),'sha256':sha(code)},

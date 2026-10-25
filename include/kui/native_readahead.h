@@ -65,6 +65,13 @@ enum kui_native_ra_failure_stage {
     KUI_NATIVE_RA_STAGE_QUIESCE,KUI_NATIVE_RA_STAGE_COUNT
 };
 #define KUI_NATIVE_RA_RESULT_COUNT 8u
+/* Under __kui_native_readahead_pio_auxiliary, the otherwise unused NONE
+ * histogram row contains producer-only metrics. Failure rows1..6 retain
+ * their original meaning; capture-start clears these metrics too. */
+enum kui_native_ra_pio_metric {
+    KUI_NATIVE_RA_PIO_ATTEMPTS=0u,KUI_NATIVE_RA_PIO_MAX_TICKS,
+    KUI_NATIVE_RA_PIO_CLOCK_BAD
+};
 enum kui_native_ra_skip {
     KUI_NATIVE_RA_SKIP_QUIESCED=0u,KUI_NATIVE_RA_SKIP_ABANDONED,
     KUI_NATIVE_RA_SKIP_NO_SEED,KUI_NATIVE_RA_SKIP_LOAN,

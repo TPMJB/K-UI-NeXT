@@ -6,7 +6,14 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#define kui_sci_stream_test_write model_stream_write
 #include "sci_stream_model.h"
+#undef kui_sci_stream_test_write
+static unsigned dma_register_writes;
+void kui_sci_stream_test_write(uint32_t address,uint32_t value,unsigned width) {
+    if(address>=SAR && address<=CHCR)++dma_register_writes;
+    model_stream_write(address,value,width);
+}
 
 #define C kui_native_readahead_aux_context
 static kui_retail_async_region_type region,other;
@@ -17,7 +24,7 @@ static struct kui_retail_manifest manifest;
 static unsigned checks,legacy_calls,fetches,stops,hooks,unhooks,feeds;
 static uint32_t pending_lba,kept_lba,token,clock_counter;
 static bool dma_available,receiving,kept_valid,raw,bad_clock;
-static bool real_model;
+static bool real_model,refuse_append;
 static enum {POLL_GOOD,POLL_EARLY,POLL_REPAIR,POLL_CRC,POLL_MISSING} poll_case;
 static enum kui_sci_stream_result fetch_result;
 static enum kui_sci_stream_result stop_result;
@@ -71,15 +78,15 @@ static void hook(void) {++hooks;region.engine.hooked=1u;region.engine.release.ar
 static void unhook(void) {++unhooks;region.engine.hooked=0u;region.engine.release.armed=0u;}
 static bool busy(void) {return receiving;}
 static enum kui_sci_stream_result fetch(uint32_t lba,uint32_t limit,bool polled) {
-    CHECK(!receiving && limit==256u && !polled && dma_available);
+    CHECK(!receiving && limit==256u && polled && dma_available);
     CHECK(lba>=CARD_BASE && lba-CARD_BASE<640u);
-    CHECK((region.shared.stream.state==PAUSED || region.shared.stream.state==RESUME) &&
-        region.shared.stream.position==lba);
+    CHECK(region.shared.stream.state==PAUSED && region.shared.stream.position==lba);
     ++fetches;
     if(fetch_result!=KUI_SCI_STREAM_OK) {
         region.shared.stream.state=LOST;return fetch_result;
     }
-    receiving=true;pending_lba=lba;region.shared.stream.state=DMA;
+    pending_lba=lba;kept_lba=lba;kept_valid=poll_case!=POLL_MISSING;
+    region.shared.stream.state=PAUSED;region.shared.stream.position=lba+1u;
     return KUI_SCI_STREAM_OK;
 }
 static enum kui_sci_stream_result poll(bool interrupt) {
@@ -99,6 +106,7 @@ static const uint8_t *take(uint32_t lba,enum kui_sci_stream_result *result) {
     if(poll_case==POLL_CRC) {
         poll_case=POLL_GOOD;kept_valid=false;*result=KUI_SCI_STREAM_CRC;return NULL;
     }
+    if(refuse_append)C.cache.count=KUI_NATIVE_RA_CACHE_BLOCKS;
     *result=KUI_SCI_STREAM_OK;return disk[lba-CARD_BASE];
 }
 static enum kui_sci_stream_result stop(void) {
@@ -134,7 +142,7 @@ static void setup(bool raw_sectors) {
     token=0u;receiving=kept_valid=false;dma_available=true;raw=raw_sectors;bad_clock=false;
     poll_case=POLL_GOOD;fetch_result=stop_result=KUI_SCI_STREAM_OK;
     clock_counter=UINT32_C(0x70000000);
-    real_model=false;
+    real_model=refuse_append=false;dma_register_writes=0u;
     kui_retail_async_region_storage=&region;
     manifest.card_sectors=10000u;manifest.partition_start=100u;manifest.partition_end=9000u;
     manifest.track_count=manifest.extent_count=1u;
@@ -248,13 +256,10 @@ static void partial_hit_cap(void) {
     report();complete(DISC_BASE+1u,8u);
 }
 static void seek_and_errors(void) {
-    setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);
-    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && receiving);
-    poll_case=POLL_EARLY;
+    setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);warm(1u);
     begin(DISC_BASE+90u,1u);complete(DISC_BASE+90u,1u);
-    CHECK(stops==1u && C.stats.seeks==1u);
+    CHECK(!stops && !C.stats.seeks); /* No optional receiver owns this seek. */
     setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);
-    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && receiving);
     poll_case=POLL_CRC;unsigned old_stops=stops;
     CHECK(visit(KUI_NATIVE_RA_TICK)==1u);
     CHECK(C.stats.crc_errors==1u && C.abandoned && !receiving && stops==old_stops &&
@@ -267,20 +272,17 @@ static void seek_and_errors(void) {
 static void repair_and_dma_owner(void) {
     setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);
     dma_available=false;CHECK(visit(KUI_NATIVE_RA_TICK)==1u && !fetches);
-    dma_available=true;CHECK(visit(KUI_NATIVE_RA_TICK)==1u && receiving);
-    poll_case=POLL_REPAIR;region.engine.in_irq=1u;unsigned old_fetch=fetches;
-    CHECK(visit(KUI_NATIVE_RA_DELIVER)==1u && C.deferred && !receiving && fetches==old_fetch);
-    CHECK(visit(KUI_NATIVE_RA_DELIVER)==1u && fetches==old_fetch);
-    region.engine.in_irq=0u;dma_available=false;
+    dma_available=true;CHECK(visit(KUI_NATIVE_RA_TICK)==1u && C.stats.producer_blocks==1u &&
+        !receiving && !C.spec_owned && !C.deferred);
+    unsigned old_fetch=fetches;
+    region.shared.stream.state=RESUME;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && fetches==old_fetch);
+    C.deferred=1u;
     CHECK(visit(KUI_NATIVE_RA_TICK)==1u && fetches==old_fetch && C.deferred);
-    dma_available=true;CHECK(visit(KUI_NATIVE_RA_TICK)==1u && receiving && !C.deferred &&
-        fetches==old_fetch+1u && !stops);
-    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && C.stats.producer_blocks==1u);
 }
 static void loan_and_pending(void) {
-    setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);
-    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && receiving);
-    uint32_t valid=C.cache.count;CHECK(visit(KUI_NATIVE_RA_QUIESCE)==1u && !receiving && stops==1u);
+    setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);warm(1u);
+    uint32_t valid=C.cache.count;CHECK(visit(KUI_NATIVE_RA_QUIESCE)==1u && !receiving && !stops);
     CHECK(C.quiesced && C.cache.count==valid && !C.spec_owned);
     unsigned old_fetch=fetches,old_legacy=legacy_calls;
     region.engine.native_loan_state=KUI_VMU_NATIVE_ASYNC_LOAN_WRITER;
@@ -289,7 +291,7 @@ static void loan_and_pending(void) {
     region.engine.native_loan_state=KUI_VMU_NATIVE_ASYNC_LOAN_IDLE;
     region.engine.opened=0u;region.shared.port.acquired=false;
     CHECK(visit(KUI_NATIVE_RA_TICK)==1u && fetches==old_fetch);
-    begin(DISC_BASE+20u,1u);CHECK(visit(KUI_NATIVE_RA_QUIESCE)==0u && stops==1u);
+    begin(DISC_BASE+20u,1u);CHECK(visit(KUI_NATIVE_RA_QUIESCE)==0u && !stops);
     complete(DISC_BASE+20u,1u);CHECK(!C.quiesced);
     CHECK(visit(KUI_NATIVE_RA_RESET)==1u && !C.cache.count && !C.have_seed);
     CHECK(visit(KUI_NATIVE_RA_TICK)==1u && !C.cache.count && !C.have_seed);
@@ -311,14 +313,14 @@ static void capture_preserves_cache(void) {
     uint8_t before[512];memcpy(before,arena,512u);
     CHECK(kui_native_readahead_aux_dispatch(KUI_NATIVE_RA_CAPTURE_START,0u,&region,0u)==1u);
     CHECK(!memcmp(&C,&expected,sizeof(C)) && !memcmp(before,arena,sizeof(before)) &&
-        receiving && C.spec_owned && C.cache.count==9u);
+        !receiving && !C.spec_owned && C.cache.count==9u);
 }
 static uint8_t real_content(uint32_t lba,unsigned byte) {
     CHECK(lba>=CARD_BASE && lba-CARD_BASE<640u && byte<512u);
     return disk[lba-CARD_BASE][byte];
 }
 static enum kui_sci_stream_result real_fetch(uint32_t lba,uint32_t limit,bool polled) {
-    CHECK(limit==256u && !polled);++fetches;
+    CHECK(limit==256u && polled);++fetches;
     return kui_sci_stream_fetch(lba,limit,polled);
 }
 static enum kui_sci_stream_result real_stop(void) {++stops;return kui_sci_stream_stop();}
@@ -386,35 +388,21 @@ static void real_stream_integration(void) {
     CHECK(legacy_calls==old_legacy && C.stats.hits && !C.stats.crc_errors);
     /* A real transport CRC failure abandons only optional work, without a
      * CMD12 stop from this IRQ/heartbeat path or publishing corrupt bytes. */
-    CHECK(kui_sci_stream_busy());
+    CHECK(!kui_sci_stream_busy());
     uint32_t bad=region.shared.stream.position;
     card.corrupt_lba=bad;card.corrupt_count=1u;m.rx_delay=0u;
     uint32_t valid=C.cache.count,old_stops=stops;
     CHECK(visit(KUI_NATIVE_RA_TICK)==1u && C.stats.crc_errors==1u && C.abandoned &&
         C.cache.count==valid && stops==old_stops);
 
-    /* Exercise the actual SCI mid-block-overrun repair path, including its
-     * saved DMA restoration and deferred restart, then check cached bytes. */
+    /* Optional PIO never enters a partial DMA RESUME, even when its
+     * caller supplies polled=true to fetch. Ordinary demand remains the
+     * only path authorized to adopt/recover such a partial block. */
     setup_real();begin(DISC_BASE,1u);complete(DISC_BASE,1u);
-    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && kui_sci_stream_busy());
-    uint32_t repairing=region.shared.stream.position;
-    m.overrun_after=180u;m.rx_delay=0u;region.engine.in_irq=1u;
-    unsigned before_fetch=fetches;
-    CHECK(visit(KUI_NATIVE_RA_DELIVER)==1u && C.deferred && !kui_sci_stream_busy() &&
-        fetches==before_fetch && region.shared.stream.state==RESUME);
-    region.engine.in_irq=0u;
-    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && kui_sci_stream_busy() && !C.deferred &&
-        fetches==before_fetch+1u && !stops);
-    m.rx_delay=0u;CHECK(visit(KUI_NATIVE_RA_TICK)==1u && C.stats.producer_blocks==1u);
-    const uint8_t *checked=kui_native_ra_cache_lookup(&C.cache,repairing);
-    CHECK(checked && !memcmp(checked,disk[repairing-CARD_BASE],512u) && !C.stats.crc_errors);
-
-    /* An unfinished speculative reception of precisely the next needed
-     * block becomes demand work without cancelling/restarting CMD18. */
-    setup_real();begin(DISC_BASE,1u);complete(DISC_BASE,1u);
-    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && kui_sci_stream_busy());
-    begin(DISC_BASE+1u,1u);complete(DISC_BASE+1u,1u);
-    CHECK(!stops && card.cmd18==1u && !card.cmd12 && C.stats.hits && C.stats.misses);
+    unsigned before_fetch=fetches,before_dma=m.dma_starts;
+    region.shared.stream.state=RESUME;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && fetches==before_fetch &&
+        m.dma_starts==before_dma && !C.spec_owned);
 
     /* RAW2352 demand copies the complete sector, while cache keys and
      * speculative production remain the same physical512-byte blocks. */
@@ -476,7 +464,7 @@ static void diagnostic_failures(void) {
     /* A receiver which reports completion without a matching checked block
      * must identify TAKE/PENDING, rather than masquerading as token/CRC. */
     setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);
-    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && receiving);poll_case=POLL_MISSING;
+    poll_case=POLL_MISSING;
     uint32_t valid=C.cache.count;
     CHECK(visit(KUI_NATIVE_RA_TICK)==1u && C.abandoned && C.cache.count==valid &&
         C.diagnostics.first.stage==KUI_NATIVE_RA_STAGE_TAKE &&
@@ -487,8 +475,7 @@ static void diagnostic_failures(void) {
     /* Inject a stale speculative frontier. APPEND refusal must preserve the
      * existing ring and record its own stage before LOST overwrites state. */
     setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);
-    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && receiving);
-    C.cache.count=KUI_NATIVE_RA_CACHE_BLOCKS;
+    refuse_append=true;
     CHECK(visit(KUI_NATIVE_RA_TICK)==1u && C.abandoned &&
         C.cache.count==KUI_NATIVE_RA_CACHE_BLOCKS && !C.stats.producer_blocks &&
         C.diagnostics.first.stage==KUI_NATIVE_RA_STAGE_APPEND &&
@@ -496,19 +483,11 @@ static void diagnostic_failures(void) {
         C.diagnostics.first.cache_count==KUI_NATIVE_RA_CACHE_BLOCKS &&
         C.diagnostics.first.post_stream_state==PAUSED && region.shared.stream.state==LOST);
 
+    /* Keep the old cancellation failure diagnostic covered through an
+     * explicitly injected owned reception, not a producer-created DMA. */
     setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);
-    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && receiving);
-    poll_case=POLL_REPAIR;region.engine.in_irq=1u;
-    CHECK(visit(KUI_NATIVE_RA_DELIVER)==1u && C.deferred);
-    region.engine.in_irq=0u;fetch_result=KUI_SCI_STREAM_RESET;
-    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && C.abandoned &&
-        C.diagnostics.first.stage==KUI_NATIVE_RA_STAGE_RESUME &&
-        C.diagnostics.first.stream_state==RESUME &&
-        (C.diagnostics.first.flags&KUI_NATIVE_RA_SNAP_DEFERRED));
-
-    setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);
-    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && receiving);
-    stop_result=KUI_SCI_STREAM_RESET;
+    C.spec_owned=1u;C.spec_lba=C.cache.base+C.cache.count;
+    receiving=true;region.shared.stream.state=DMA;stop_result=KUI_SCI_STREAM_RESET;
     CHECK(visit(KUI_NATIVE_RA_QUIESCE)==0u && C.abandoned &&
         C.diagnostics.first.stage==KUI_NATIVE_RA_STAGE_QUIESCE &&
         C.diagnostics.first.result==KUI_SCI_STREAM_RESET &&
@@ -523,7 +502,10 @@ static void diagnostic_bus_select(void *ctx,bool selected) {
 }
 static void diagnostic_real_handoff(void) {
     setup_real();begin(DISC_BASE,1u);complete(DISC_BASE,1u);
-    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && kui_sci_stream_busy());
+    /* Inject an old-style reception solely to keep PRE/POST handoff
+     * diagnostics exercised. New optional production never creates it. */
+    C.spec_lba=C.cache.base+C.cache.count;C.spec_owned=1u;
+    CHECK(kui_sci_stream_fetch(C.spec_lba,256u,false)==KUI_SCI_STREAM_OK);
     uint32_t valid=C.cache.count,old_stops=stops;
     region.shared.card.device.sd.bus.select=diagnostic_bus_select;
     inject_handoff_reset=true;m.rx_delay=0u;region.engine.in_irq=1u;
@@ -642,13 +624,122 @@ static void diagnostic_unrepaired_snapshots(void) {
         C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_ABANDONED]==1u &&
         region.shared.stream.unrepaired==255u);
 }
+static void real_no_optional_work(uint32_t event) {
+    unsigned clocks=card.clocks,old_fetch=fetches,dma_writes=dma_register_writes;
+    uint32_t attempts=C.diagnostics.stage_result[KUI_NATIVE_RA_STAGE_NONE][KUI_NATIVE_RA_PIO_ATTEMPTS];
+    struct kui_native_ra_cache cache=C.cache;
+    CHECK(visit(event)==1u && card.clocks==clocks && fetches==old_fetch &&
+        dma_register_writes==dma_writes && !memcmp(&cache,&C.cache,sizeof(cache)) &&
+        C.diagnostics.stage_result[KUI_NATIVE_RA_STAGE_NONE][KUI_NATIVE_RA_PIO_ATTEMPTS]==attempts);
+}
+static void real_pio_heartbeats(void) {
+    setup_real();begin(DISC_BASE,4u);complete(DISC_BASE,4u);
+    CHECK(!C.spec_owned && !C.deferred && !kui_sci_stream_busy());
+    /* Neither repeated GD entry nor an IRQ-context TICK may initiate PIO. */
+    for(unsigned n=0;n<4u;++n)real_no_optional_work(KUI_NATIVE_RA_DELIVER);
+    region.engine.in_irq=1u;
+    real_no_optional_work(KUI_NATIVE_RA_DELIVER);real_no_optional_work(KUI_NATIVE_RA_TICK);
+    region.engine.in_irq=0u;
+    region.shared.service.pending=1u;real_no_optional_work(KUI_NATIVE_RA_TICK);
+    region.shared.service.pending=0u;region.shared.service.executing=1u;
+    real_no_optional_work(KUI_NATIVE_RA_TICK);region.shared.service.executing=0u;
+    region.engine.active=1u;real_no_optional_work(KUI_NATIVE_RA_TICK);region.engine.active=0u;
+    region.engine.native_loan_state=KUI_VMU_NATIVE_ASYNC_LOAN_WRITER;
+    real_no_optional_work(KUI_NATIVE_RA_TICK);
+    region.engine.native_loan_state=KUI_VMU_NATIVE_ASYNC_LOAN_IDLE;
+    uint32_t position=region.shared.stream.position;
+    for(unsigned state=0u;state<=RESUME;++state)if(state!=PAUSED && state!=DMA) {
+        region.shared.stream.state=state;real_no_optional_work(KUI_NATIVE_RA_TICK);
+    }
+    region.shared.stream.state=PAUSED;region.shared.stream.position++;
+    real_no_optional_work(KUI_NATIVE_RA_TICK);region.shared.stream.position=position;
+    m.chcr=1u;real_no_optional_work(KUI_NATIVE_RA_TICK);m.chcr=0u;
+
+    /* Repeated DMA contention which defeated the old optional receiver is
+     * left armed. CPU-clocked PIO never starts that receive-only DMA. */
+    m.overrun_every=388u;m.overrun_again=458u;m.chcr2=1u;
+    region.shared.stream.unrepaired=1u;
+    unsigned writes=dma_register_writes,dma_starts=m.dma_starts,cmd18=card.cmd18,cmd12=card.cmd12;
+    uint32_t sar=m.sar,dar=m.dar,tcr=m.tcr,chcr=m.chcr,dmaor=m.dmaor;
+    uint32_t initial=C.stats.producer_blocks,polled=region.shared.stream.stats.polled;
+    for(unsigned n=0;n<32u;++n) {
+        uint32_t next;CHECK(kui_native_ra_cache_next(&C.cache,&next));
+        uint32_t count=C.cache.count;unsigned old_fetch=fetches;
+        CHECK(visit(KUI_NATIVE_RA_TICK)==1u && fetches==old_fetch+1u &&
+            C.cache.count==count+1u && !C.spec_owned && !C.deferred && !kui_sci_stream_busy() &&
+            dma_register_writes==writes && m.dma_starts==dma_starts &&
+            m.sar==sar && m.dar==dar && m.tcr==tcr && m.chcr==chcr && m.dmaor==dmaor &&
+            card.cmd18==cmd18 && card.cmd12==cmd12);
+        /* Inspect without advancing the cache's consumer frontier. */
+        uint32_t slot=C.cache.head+(next-C.cache.base);
+        if(slot>=KUI_NATIVE_RA_BLOCKS)slot-=KUI_NATIVE_RA_BLOCKS;
+        CHECK(!memcmp(C.cache.data+slot*512u,disk[next-CARD_BASE],512u));
+    }
+    uint32_t *metrics=C.diagnostics.stage_result[KUI_NATIVE_RA_STAGE_NONE];
+    CHECK(C.stats.producer_blocks-initial==32u && region.shared.stream.stats.polled-polled==32u &&
+        metrics[KUI_NATIVE_RA_PIO_ATTEMPTS]==32u && metrics[KUI_NATIVE_RA_PIO_MAX_TICKS] &&
+        !metrics[KUI_NATIVE_RA_PIO_CLOCK_BAD] && !C.diagnostics.failures && !C.abandoned &&
+        !region.shared.stream.stats.overruns && !region.shared.stream.stats.repaired &&
+        !region.shared.stream.stats.crc_errors && !region.shared.stream.stats.token_errors &&
+        region.shared.stream.unrepaired==1u && m.overrun_every==388u);
+    uint32_t maximum=metrics[KUI_NATIVE_RA_PIO_MAX_TICKS];bad_clock=true;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && metrics[KUI_NATIVE_RA_PIO_ATTEMPTS]==33u &&
+        metrics[KUI_NATIVE_RA_PIO_CLOCK_BAD]==1u && metrics[KUI_NATIVE_RA_PIO_MAX_TICKS]==maximum &&
+        C.stats.producer_blocks-initial==33u);
+    bad_clock=false;
+    CHECK(visit(KUI_NATIVE_RA_CAPTURE_START)==1u && !metrics[KUI_NATIVE_RA_PIO_ATTEMPTS] &&
+        !metrics[KUI_NATIVE_RA_PIO_MAX_TICKS] && !metrics[KUI_NATIVE_RA_PIO_CLOCK_BAD] &&
+        C.cache.count==34u && region.shared.stream.unrepaired==1u);
+}
+static void real_pio_byte_budget(void) {
+    setup_real();begin(DISC_BASE,4u);complete(DISC_BASE,4u);
+    card.frame=0u;card.gap=255u;
+    unsigned before=bus_bytes,writes=dma_register_writes,cmd18=card.cmd18,cmd12=card.cmd12;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && bus_bytes-before==256u+514u &&
+        C.stats.producer_blocks==1u && dma_register_writes==writes &&
+        card.cmd18==cmd18 && card.cmd12==cmd12 && !C.abandoned);
+    /* A missing token consumes exactly the admitted256 search bytes,
+     * publishes nothing, and leaves recovery to the ordinary demand path. */
+    card.frame=0u;card.gap=256u;before=bus_bytes;
+    uint32_t count=C.cache.count;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && bus_bytes-before==256u &&
+        C.cache.count==count && C.abandoned && C.stats.token_errors==1u &&
+        dma_register_writes==writes && card.cmd18==cmd18 && card.cmd12==cmd12 &&
+        !region.engine.failed && !C.spec_owned);
+}
+static unsigned pio_fault_at,pio_transfer_calls;
+static uint8_t pio_fault_transfer(void *ctx,uint8_t value,bool slow) {
+    if(++pio_transfer_calls==pio_fault_at)m.healthy=false;
+    return bus_transfer(ctx,value,slow);
+}
+static void real_pio_bus_faults(void) {
+    static const unsigned fault_at[]={1u,260u,514u};
+    for(unsigned n=0;n<sizeof(fault_at)/sizeof(fault_at[0]);++n) {
+        setup_real();begin(DISC_BASE,4u);complete(DISC_BASE,4u);
+        pio_fault_at=fault_at[n];pio_transfer_calls=0u;
+        region.shared.card.device.sd.bus.transfer=pio_fault_transfer;
+        struct kui_native_ra_cache cache=C.cache;
+        unsigned writes=dma_register_writes,cmd12=card.cmd12;
+        CHECK(visit(KUI_NATIVE_RA_TICK)==1u && !m.healthy && C.abandoned &&
+            !C.spec_owned && !C.stats.producer_blocks && !region.engine.failed &&
+            !memcmp(&cache,&C.cache,sizeof(cache)) && dma_register_writes==writes &&
+            card.cmd12==cmd12 && pio_transfer_calls<=770u &&
+            C.diagnostics.first.stage==KUI_NATIVE_RA_STAGE_FETCH &&
+            C.diagnostics.first.result==KUI_SCI_STREAM_RESET);
+        unsigned calls=pio_transfer_calls;
+        CHECK(visit(KUI_NATIVE_RA_TICK)==1u && pio_transfer_calls==calls);
+    }
+    /* This transport model proves bounded byte-call flow after a latched
+     * fault; real SCI flag-wait timeout bounds belong to sci_sd_bus tests. */
+}
 int main(void) {
     init_guards();sequential();shared_raw_boundary();partial_hit_cap();seek_and_errors();
     repair_and_dma_owner();loan_and_pending();bounded_window();capture_preserves_cache();
     real_stream_integration();real_full_refill();diagnostic_failures();diagnostic_real_handoff();
     diagnostic_skip_reasons();diagnostic_unrepaired_snapshots();
+    real_pio_heartbeats();real_pio_byte_budget();real_pio_bus_faults();
     printf("native read-ahead auxiliary: %u checks; real cursor bytes, strict visit caps, "
-        "seeks, CRC/token abandonment, real SCI/card/DMA warm cache and deferred repair, "
-        "DMA ownership, VMU loan, classified failures and pre/post handoff snapshots passed\n",checks);
+        "fresh-PAUSED heartbeat-only PIO, one checked block per visit, exact token/byte budgets, "
+        "no optional DMA writes, full raw warm cache, demand caps, VMU loan and failure snapshots passed\n",checks);
     return 0;
 }

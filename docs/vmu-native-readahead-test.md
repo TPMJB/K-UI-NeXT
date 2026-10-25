@@ -1,11 +1,24 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Evolution 2 read-ahead repair-limit diagnostics
+# Evolution 2 bounded PIO read-ahead candidate
 
-This diagnostic extends the read-ahead candidate with the stage and result
-of each failed speculative operation, first/last failure snapshots, and
-counters for skipped production opportunities. Scheduling, recovery and
-transport limits retain the preceding candidate's policy. The extra register
-sampling adds work, so this run is intended to identify the failure path.
+This candidate tests one fresh 512-byte PIO cache fill at each eligible
+controller heartbeat. It replaces optional DMA speculation, which the
+preceding capture repeatedly abandoned after another loss in the same block.
+Demand reads retain their existing DMA path, completion rules and budgets.
+Console performance of this new candidate has not yet been verified.
+
+One block per 60 Hz heartbeat has a 30 KiB/s ideal ceiling (25 KiB/s at
+50 Hz). The preceding capture's recent reads alone required about 56.5 KiB/s
+of raw backing data over its 20-second window. This first control is intended
+to measure reliable cache filling and its CPU cost; expect partial warming,
+not proof that every read can already be served entirely from cache.
+
+The optional producer runs only from the controller heartbeat, with no active
+demand request or VMU loan. It admits only a paused stream whose next physical
+card block exactly matches the cache's next block, inside the validated extent.
+One bounded fetch is followed by the existing CRC validation and cache append.
+It does not open or seek a stream to create a speculative opportunity.
+First/last failure snapshots and skip counters remain enabled.
 
 SCI remains at priority 1. A 192 KiB physical-card cache fills after a demand
 read completes, using the time before the game asks for the next chunk.
@@ -22,7 +35,7 @@ Speculation stays inside the current validated track extent and never crosses
 an unproved physical-card boundary. A block becomes valid only after the
 existing SCI CRC check and a complete 512-byte copy. Speculative failures do
 not complete or fail an unrelated game request. VMU storage loans quiesce
-speculative DMA; checked cached disc bytes survive the loan.
+the optional producer; checked cached disc bytes survive the loan.
 
 ## Install and capture every run
 
@@ -63,9 +76,19 @@ All values are hexadecimal. **CAP** is 384 physical 512-byte blocks, not
 Dreamcast sectors. **HITS** counts cached blocks fed to the original cursor;
 **HIT REQS** counts requests receiving at least one cached block, including
 partial hits. **MADE** counts CRC-checked speculative blocks. **HEARTBEAT**
-and **IRQ** show the service opportunities; **MAX AUX VISIT TICKS** is elapsed
-visit time at 781250 ticks/second and includes demand fallback work. Counters
-reset at the capture gesture while valid cache data remains available.
+and **IRQ** show the existing service opportunities. **PIO WORK MAX TICKS BAD**
+shows three values: attempted fresh PIO fills, the largest clock-valid duration
+of one producer operation, and invalid producer timing samples. A work count
+includes failed attempts; **MADE** identifies CRC-validated cache appends.
+The producer duration covers its pre-operation observation, bounded fetch,
+CRC take, cache append or failure capture, and operation overhead. It excludes
+legacy demand delivery and the heartbeat's seed scan/admission work.
+
+**MAX AUX VISIT TICKS** retains the broader elapsed-visit maximum and can
+include demand fallback work. Both tick metrics use 781250 ticks/second and
+include diagnostic overhead. Invalid producer clock endpoints or deltas
+increment its **BAD** value and do not update its maximum. Counters reset at
+the capture gesture while valid cache data remains available.
 
 The ordinary request pages still report whole-read times. A single cold
 read may dominate the maximum even if later requests become faster. These
@@ -134,7 +157,7 @@ of this new candidate require this hardware test.
 
 ## Prior console result (afcf7e1524a9)
 
-Capture 63352.mp4 booted the preceding cache candidate, afcf7e1524a9, and
+Capture 63352.mp4 booted the earlier cache candidate, afcf7e1524a9, and
 confirmed cache delivery. It did not establish a perceptible improvement.
 The new diagnostic build has not yet been verified on the console.
 During that prior capture, read-ahead
@@ -145,19 +168,19 @@ or guard fault. The cache never reached capacity. Whole requests still took
 up to approximately 139 ms. The preceding capture used a different workload,
 so its approximately 143 ms maximum is not a controlled comparison.
 
-The next diagnostic target is the exact abandonment stage and result code,
-with stream/cache ownership snapshots. Increasing cache capacity alone does
-not address the observed lack of production. See
+That result motivated the abandonment-stage and stream/cache ownership
+captures below. Increasing cache capacity alone does not address the observed
+lack of production. See
 `docs/evidence/native-read-ahead-observed-2026-10-24.json` for the transcription,
 counter definitions, arithmetic checks and evidence limits.
 
-## Repair-limit diagnostic update
+## Prior repair-limit diagnostic update
 
 The LOAN word now carries the native VMU loan state in its low16bits and
 the existing SCI `unrepaired` counter in bits16–23. For example, `00020000`
 means no VMU loan and two previous failed repair attempts. The screen label
 and record layout are retained; read the upper bits using this definition.
-No recovery limit is reset or raised by this candidate.
+No recovery limit was reset or raised by that diagnostic.
 
 Capture63358.mp4 of build6675bd6fdcbe recorded eight POLL-stage failures.
 Both retained snapshots returned OVERRUN(6), with active reader DMA and
@@ -167,8 +190,8 @@ repair; the last was1. The lifetime `unrepaired >= 2` gate and the CRC-tail
 repair exclusion are hypotheses pending the next counter capture. The
 pre-operation count is not the final fenced count used by `finish()`.
 
-Use the same25-second targeted capture. This build adds the missing counter
-without changing SCI priority, cache geometry, transport or retry policy.
+That diagnostic used the same 25-second targeted capture. It added the missing
+counter without changing SCI priority, cache geometry, transport or retry policy.
 
 ## Observed repair counter (63369.mp4)
 
@@ -186,5 +209,5 @@ explain the observed interruption of optional cache production; the cause
 of every rendered hitch remains unproved.
 
 See `docs/checkpoint-native-read-ahead-2026-10-25.md` and the full evidence
-JSON for the actual-model reproduction and the next bounded PIO experiment.
+JSON for the actual-model reproduction that motivated this bounded PIO experiment.
 No runtime or recovery policy changed at this evidence checkpoint.

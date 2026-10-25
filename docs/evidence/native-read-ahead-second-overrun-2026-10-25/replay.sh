@@ -10,6 +10,11 @@ mkdir -p -- "$build_dir"
 build_dir=$(CDPATH= cd -- "$build_dir" && pwd)
 host_cc=${HOST_CC:-cc}
 cd -- "$repo_dir"
+if grep -q '__kui_native_readahead_pio_auxiliary' src/loader/native_readahead_aux.c; then
+    printf '%s\n' 'This historical reproducer requires DMA-speculation source 7568957 or c641f7e.' \
+        'Use a separate worktree at c641f7e79f9dd666096867b137f3ff62eaf5f6d0 to replay it.' >&2
+    exit 2
+fi
 "$host_cc" -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
  -ffunction-sections -fdata-sections -fsanitize=address,undefined \
  -fno-omit-frame-pointer -fno-pie -no-pie -O2 \
