@@ -93,7 +93,7 @@ static bool native_resident_transaction(const volatile struct kui_vmu_observe_bo
         UINT32_C(0xa0000000);
 #endif
     return native_resident_terminal(c) && (
-#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
+#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK && !KUI_NATIVE_IRQ_REARM
         !target ||
 #endif
         (target==c->sd_transaction && !(target&1u) &&
@@ -142,7 +142,7 @@ int __attribute__((noipa,section(".vmu_sd_lease"))) kui_vmu_observe_sd_lease(
     uint32_t sr;__asm__ volatile("stc sr,%0":"=r"(sr)::"memory");
     if((sr&UINT32_C(0xf0))!=UINT32_C(0xf0) ||
        !native_resident_transaction(c,(uintptr_t)callback)) return KUI_VMU_SD_LEASE_FAULT;
-#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
+#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK && !KUI_NATIVE_IRQ_REARM
     /* Explicit non-storage command on the existing typed worker gateway.
      * Serialized on the worker's stack after its physical controller proof;
      * no loan, virtual reply, bus acquisition or game interrupt setup occurs. */

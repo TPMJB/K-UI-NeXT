@@ -48,7 +48,7 @@ int main(void) {
     CHECK(pump_visits==0u); /* Initial full proof precedes the fast path. */
     observed_region.engine.active=1u;
     unsigned leases=lease_calls,bytes=sd.bytes;
-#if KUI_NATIVE_PACED_CHECK
+#if KUI_NATIVE_PACED_CHECK || KUI_NATIVE_IRQ_REARM
     diagnostic_pair(false);reader_cooperative_service();
     CHECK(!pump_visits && !restorations && !reader_cooperative.blocks);
     CHECK(lease_calls==leases && sd.bytes==bytes);
@@ -66,7 +66,17 @@ int main(void) {
     for(unsigned mode=2u;mode<=4u;++mode){config.diagnostics=mode;reader_cooperative_service();CHECK(pump_visits==before);}
     config.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE;
 #endif
+#if KUI_NATIVE_IRQ_REARM
+    observed_region.engine.stats.execs=97u;observed_region.engine.stats.exec_int=91u;
+    observed_region.engine.release.rehooks=11u;
+    for(unsigned i=0;i<3u;++i)observed_region.engine.release.released[i]=22u+i;
+#endif
     reader_capture_start();
+#if KUI_NATIVE_IRQ_REARM
+    CHECK(!observed_region.engine.stats.execs && !observed_region.engine.stats.exec_int);
+    CHECK(reader_cooperative.calls==11u && reader_cooperative.blocks==22u &&
+          reader_cooperative.busy==23u && reader_cooperative.faults==24u);
+#endif
     diagnostic.active=1u;
     observed_region.engine.stats.hooks=test_clock.counter+300000u;
     observed_region.engine.stats.releases=250000u;
@@ -79,7 +89,11 @@ int main(void) {
     observed_region.engine.native_max_lba=56789u;observed_region.engine.native_max_count=128u;
     diagnostic_pair(false);
     CHECK(reader_capture.call_max==500000u && reader_cooperative.max_lba==56789u && reader_cooperative.max_count==128u);
-    CHECK(reader_capture.previous.irq_blocks==observed_region.engine.stats.irq_blocks-reader_cooperative.blocks);
+    uint32_t expected_irq_blocks=observed_region.engine.stats.irq_blocks;
+#if !KUI_NATIVE_IRQ_REARM
+    expected_irq_blocks-=reader_cooperative.blocks;
+#endif
+    CHECK(reader_capture.previous.irq_blocks==expected_irq_blocks);
 #if KUI_NATIVE_TIMED_PUMP
     /* A receiver that is still pending on the first two opportunities
      * must deliver in the same bounded window without another game call. */
@@ -112,7 +126,9 @@ int main(void) {
     CHECK(pump_visits==old+1u && reader_cooperative.clock_bad==1u);
     puts("timed reader: pending-then-ready, deadline, invalid/changed/frozen clocks, wrap and two-block window bound passed");
 #endif
-#if KUI_NATIVE_PACED_CHECK
+#if KUI_NATIVE_IRQ_REARM
+    puts("IRQ rearm worker: original save/ownership suite, no controller pump, counter baselines/reset and complete-request timing passed");
+#elif KUI_NATIVE_PACED_CHECK
     puts("paced worker: original save/ownership suite, controller pump disabled, no storage lease and complete-request timing passed");
 #else
     puts("cooperative worker: original save/ownership suite, post-completion pump, busy/storage exclusions and request timing passed");

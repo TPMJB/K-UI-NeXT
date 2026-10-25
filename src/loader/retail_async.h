@@ -55,7 +55,8 @@ struct kui_retail_async_stats {
     /* In the separate stall diagnostic execs/exec_int hold foreground/IRQ
      * delivery-visit raw TMU0 maxima, reset by the serialized worker.
      * REQUEST_TIMING instead uses hooks/releases for request-start ticks
-     * and longest completed-request ticks; legacy hook counts are omitted. */
+     * and longest completed-request ticks; legacy hook counts are omitted.
+     * IRQ_REARM uses execs/exec_int for SCI-level repairs and real IRQ entries. */
     uint32_t irq_blocks, call_blocks, waits, execs, exec_int;
     uint32_t hooks, releases;
 };

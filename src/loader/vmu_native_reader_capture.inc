@@ -29,6 +29,9 @@ static struct kui_reader_capture reader_capture;
 static kui_retail_async_region_type *reader_capture_region(void);
 #if KUI_NATIVE_COOP_PUMP
 __asm__(".global __kui_native_cooperative_reader\n.set __kui_native_cooperative_reader,1\n");
+#if KUI_NATIVE_IRQ_REARM
+__asm__(".global __kui_native_irq_rearm_reader\n.set __kui_native_irq_rearm_reader,1\n");
+#endif
 #if KUI_NATIVE_PACED_CHECK
 __asm__(".global __kui_native_paced_reader\n.set __kui_native_paced_reader,1\n");
 #endif
@@ -57,7 +60,7 @@ static void __attribute__((noipa)) reader_window_clock(struct kui_vmu_native_pro
 }
 #endif
 static void __attribute__((noipa)) reader_cooperative_service(void) {
-#if KUI_NATIVE_PACED_CHECK
+#if KUI_NATIVE_PACED_CHECK || KUI_NATIVE_IRQ_REARM
     /* The measured controller callback supplied little data. This candidate
      * schedules through GD/SCI only, leaving controller completion brief. */
     return;
@@ -153,7 +156,18 @@ static void reader_capture_start(void) {
     kui_retail_async_region_type *r=reader_capture_region();
 #if KUI_NATIVE_REQUEST_TIMING
     if(r)r->engine.stats.releases=0u;
+#if KUI_NATIVE_IRQ_REARM
+    if(r)r->engine.stats.execs=r->engine.stats.exec_int=0u;
+#endif
     memset(&reader_cooperative,0,sizeof(reader_cooperative));
+#if KUI_NATIVE_IRQ_REARM
+    if(r) {
+        reader_cooperative.calls=r->engine.release.rehooks;
+        reader_cooperative.blocks=r->engine.release.released[0];
+        reader_cooperative.busy=r->engine.release.released[1];
+        reader_cooperative.faults=r->engine.release.released[2];
+    }
+#endif
 #else
     if(r)r->engine.stats.execs=r->engine.stats.exec_int=0u;
 #endif
@@ -169,7 +183,11 @@ static void reader_capture_poll(const struct kui_vmu_native_profile_sample *cloc
 #if KUI_NATIVE_REQUEST_TIMING
         .call_max=a->stats.releases,
         .irq_max=g->pending && a->token==g->token?a->stats.hooks-clock->counter:0u,
-        .irq_blocks=a->stats.irq_blocks-reader_cooperative.blocks,
+        .irq_blocks=a->stats.irq_blocks
+#if !KUI_NATIVE_IRQ_REARM
+            -reader_cooperative.blocks
+#endif
+            ,
 #else
         .call_max=a->stats.execs,.irq_max=a->stats.exec_int,.irq_blocks=a->stats.irq_blocks,
 #endif
@@ -225,7 +243,17 @@ static void reader_capture_report(const struct retail_display_state *display) {
         b->foreign-a->foreign,b->repaired-a->repaired,b->overruns-a->overruns,
         b->deferred-a->deferred,diagnostic.clock_invalid},5u);
 #if KUI_NATIVE_REQUEST_TIMING
-#if KUI_NATIVE_PACED_CHECK
+#if KUI_NATIVE_IRQ_REARM
+    const kui_retail_async_region_type *region=reader_capture_region();
+    retail_display_values("SCI LEVEL REARMS IRQ ENTRIES",(uint32_t[2]){
+        region?region->engine.stats.execs:0u,region?region->engine.stats.exec_int:0u},2u);
+    if(region)retail_display_values("REHOOKS RELEASE100 RELEASE400 RELEASE600",(uint32_t[4]){
+        region->engine.release.rehooks-reader_cooperative.calls,
+        region->engine.release.released[0]-reader_cooperative.blocks,
+        region->engine.release.released[1]-reader_cooperative.busy,
+        region->engine.release.released[2]-reader_cooperative.faults},4u);
+    retail_display_line("FULL CHECK AND EXEC CATCHUP - NO PUMP");
+#elif KUI_NATIVE_PACED_CHECK
     retail_display_line("CHECK WAIT BOOST NEEDS 16 TIGHT POLLS");
     retail_display_line("CONTROLLER READER SERVICE DISABLED");
 #else
@@ -241,7 +269,7 @@ static void reader_capture_report(const struct retail_display_state *display) {
     retail_display_values("WINDOWS EXPIRED CLOCK BAD MAX TICKS",(uint32_t[4]){
         reader_cooperative.opportunities,reader_cooperative.expired,
         reader_cooperative.clock_bad,reader_cooperative.max_ticks},4u);
-#else
+#elif !KUI_NATIVE_IRQ_REARM
     retail_display_line("GAP IS BETWEEN MAPLE COMPLETION SAMPLES");
     retail_display_line("BAD CLOCK MEANS DO NOT CONVERT TO TIME");
 #endif

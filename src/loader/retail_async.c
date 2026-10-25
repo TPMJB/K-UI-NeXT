@@ -2,6 +2,12 @@
  * Original K-UI background game reader (see retail_async.h). The stream
  * sequence is the one the SCI async probe proved on the console. */
 #include "retail_async.h"
+#if KUI_NATIVE_IRQ_REARM && (!KUI_NATIVE_REQUEST_TIMING || !KUI_RETAIL_NATIVE_HYBRID || defined(KUI_RETAIL_CE))
+#error "Native IRQ rearm diagnostics require the hybrid request-timing counter profile"
+#endif
+#if KUI_NATIVE_IRQ_REARM && (KUI_NATIVE_PACED_CHECK || KUI_NATIVE_TIMED_PUMP)
+#error "IRQ rearm uses full CHECK supply and owns its two diagnostic words"
+#endif
 #if KUI_NATIVE_PACED_CHECK && (!KUI_NATIVE_REQUEST_TIMING || !KUI_RETAIL_NATIVE_HYBRID || defined(KUI_RETAIL_CE))
 #error "Paced CHECK requires native hybrid request-timing counter ownership"
 #endif
@@ -13,6 +19,9 @@ __asm__(".global __kui_native_reader_stall_resident\n"
         ".set __kui_native_reader_stall_resident,1\n");
 #if KUI_NATIVE_COOP_PUMP
 __asm__(".global __kui_native_cooperative_resident\n.set __kui_native_cooperative_resident,1\n");
+#if KUI_NATIVE_IRQ_REARM
+__asm__(".global __kui_native_irq_rearm_resident\n.set __kui_native_irq_rearm_resident,1\n");
+#endif
 #if KUI_NATIVE_PACED_CHECK
 __asm__(".global __kui_native_paced_resident\n.set __kui_native_paced_resident,1\n");
 #endif
@@ -192,8 +201,23 @@ void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
  * vectors are simply installed again. */
 static void hook(void) {
     uint32_t vbr = vbr_get();
+#if KUI_NATIVE_IRQ_REARM
+    uint16_t b = rd16(IPRB);
+    if(vbr == our_vbr()) {
+        /* CE already rechecks this field while installed. A native SDK may
+         * update IPRB independently of VBR: re-arm our lowest SCI level and
+         * preserve its new owner field for the eventual release. */
+        if((b & SCI_FIELD) != SCI_LEVEL) {
+            e.release.sci = b & SCI_FIELD;
+            ++e.stats.execs;
+            wr16(IPRB, (uint16_t)((b & ~SCI_FIELD) | SCI_LEVEL));
+        }
+        return;
+    }
+#else
     if(vbr == our_vbr()) return;
     uint16_t b = rd16(IPRB);
+#endif
 #if !KUI_NATIVE_REQUEST_TIMING
     if(e.hooked) {
         if(vbr == e.release.vbr) ++e.stats.releases;
@@ -414,7 +438,7 @@ static void deliver_work(uint32_t wait) {
         /* Retain the proved 20/25-block catch-up and full DMA wait. Only
          * stop the formerly unlimited run of already-completed blocks. */
         if(delivered>=(
-#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
+#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK && !KUI_NATIVE_IRQ_REARM
             e.in_irq==2u?KUI_RETAIL_NATIVE_PUMP_BATCH_LIMIT:
 #endif
             e.in_irq?KUI_RETAIL_NATIVE_IRQ_BATCH_LIMIT:e.target)) return;
@@ -920,6 +944,9 @@ void kui_retail_async_after(uint32_t function, int32_t result) {
 #endif
 }
 uint32_t kui_retail_async_irq(void) {
+#if KUI_NATIVE_IRQ_REARM
+    ++e.stats.exec_int;
+#endif
 #if KUI_VMU_NATIVE_BACKGROUND
     if(native_loan_blocked()) return 1u;
 #endif
@@ -932,7 +959,7 @@ uint32_t kui_retail_async_irq(void) {
     /* An SCI event without a reception: not ours, passed on as any other
      * (under CE: its level is dropped). */
     if(!kui_sci_stream_busy()
-#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
+#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK && !KUI_NATIVE_IRQ_REARM
        && e.in_irq!=2u /* A cooperative visit also restarts an idle run. */
 #endif
       ) {
@@ -944,10 +971,10 @@ uint32_t kui_retail_async_irq(void) {
 #ifdef KUI_RETAIL_CE
     kui_sci_stream_token_budget(e.isr != 0);
 #endif
-#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
+#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK && !KUI_NATIVE_IRQ_REARM
     if(e.in_irq==2u) hook();
 #endif
-#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
+#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK && !KUI_NATIVE_IRQ_REARM
     if(!e.in_irq) e.in_irq = 1;
 #else
     e.in_irq = 1;
