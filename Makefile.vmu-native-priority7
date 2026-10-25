@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/native-priority7
+include Makefile.vmu-native-timeline
+FLAGS += -DKUI_NATIVE_SCI_PRIORITY7=1
+NATIVE_FLAGS += -DKUI_NATIVE_SCI_PRIORITY7=1
+override TEST_GUIDE := docs/vmu-native-priority7-test.md
+
+PRIORITY7_READER_FLAGS = $(STALL_READER_FLAGS) -DKUI_NATIVE_REQUEST_TIMING=1 \
+ -DKUI_NATIVE_COOP_PUMP=1 -DKUI_NATIVE_IRQ_REARM=1 \
+ -DKUI_NATIVE_LOADER_TIMELINE=1 -DKUI_VMU_NATIVE_BACKGROUND=1
+.PHONY: priority7-host-tests
+priority7-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -O2 $(PRIORITY7_READER_FLAGS) $(STALL_READER_SRC) tests/test_retail_async_irq_rearm.c -Wl,--gc-sections -o $(BUILD)/test-priority1-reader
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-priority1-reader
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -O2 $(PRIORITY7_READER_FLAGS) -DKUI_NATIVE_SCI_PRIORITY7=1 $(STALL_READER_SRC) tests/test_retail_async_irq_rearm.c -Wl,--gc-sections -o $(BUILD)/test-priority7-reader
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-priority7-reader

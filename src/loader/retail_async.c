@@ -2,6 +2,7 @@
  * Original K-UI background game reader (see retail_async.h). The stream
  * sequence is the one the SCI async probe proved on the console. */
 #include "retail_async.h"
+#include "kui/native_sci_priority.h"
 #if KUI_NATIVE_IRQ_REARM && (!KUI_NATIVE_REQUEST_TIMING || !KUI_RETAIL_NATIVE_HYBRID || defined(KUI_RETAIL_CE))
 #error "Native IRQ rearm diagnostics require the hybrid request-timing counter profile"
 #endif
@@ -24,6 +25,9 @@ __asm__(".global __kui_native_irq_rearm_resident\n.set __kui_native_irq_rearm_re
 #endif
 #if KUI_NATIVE_LOADER_TIMELINE
 __asm__(".global __kui_native_loader_timeline_resident\n.set __kui_native_loader_timeline_resident,1\n");
+#if KUI_NATIVE_SCI_PRIORITY7
+__asm__(".global __kui_native_sci_priority7_resident\n.set __kui_native_sci_priority7_resident,7\n");
+#endif
 #endif
 #if KUI_NATIVE_PACED_CHECK
 __asm__(".global __kui_native_paced_resident\n.set __kui_native_paced_resident,1\n");
@@ -50,9 +54,10 @@ static uintptr_t stream_event(uint32_t event,uintptr_t argument) {
 #endif
 
 #define IPRB UINT32_C(0xffd00008)
-/* IPRB bits 7..4: the SCI's level. The reader's is the lowest. */
+/* IPRB bits 7..4 only. Level one normally; the separate timeline experiment
+ * uses fixed level seven without changing the game's SR or other levels. */
 #define SCI_FIELD 0x00f0u
-#define SCI_LEVEL 0x0010u
+#define SCI_LEVEL KUI_RETAIL_SCI_PRIORITY_FIELD
 /* A fresh CMD18's token can take the card's whole access time. */
 #define TOKEN_LIMIT 65536u
 #if KUI_RETAIL_NATIVE_HYBRID && defined(KUI_RETAIL_CE)
@@ -197,7 +202,7 @@ void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
     copy_words(R.vector600, kui_retail_vector_interrupt, 11);
 }
 
-/* Put our vectors in front of the game's and give the SCI the lowest level.
+/* Put our vectors in front of the game's and select the reader's SCI level.
  * Nothing else changes: the game's DMAC and other levels stay as they are.
  * Games may keep the bootstrap's VBR for good (DOA2 does), so it is hooked
  * like any other. Found released (the game's VBR again while hooked), the
@@ -208,7 +213,7 @@ static void hook(void) {
     uint16_t b = rd16(IPRB);
     if(vbr == our_vbr()) {
         /* CE already rechecks this field while installed. A native SDK may
-         * update IPRB independently of VBR: re-arm our lowest SCI level and
+         * update IPRB independently of VBR: re-arm our selected SCI level and
          * preserve its new owner field for the eventual release. */
         if((b & SCI_FIELD) != SCI_LEVEL) {
             e.release.sci = b & SCI_FIELD;
@@ -905,7 +910,8 @@ void kui_retail_async_call(uint32_t function) {
 /* Installed only after retained-region binding from the typed immutable
  * worker descriptor. Bootstrap workspace and normal mode keep this zero. */
 void __attribute__((noipa)) kui_retail_async_trace(uint32_t exit,uint32_t function) {
-    void (*visit)(uint32_t,uint32_t,uint32_t,void *)=(void *)(uintptr_t)R.vector600[11];
+    void (*visit)(uint32_t,uint32_t,uint32_t,void *)=
+        (void (*)(uint32_t,uint32_t,uint32_t,void *))(uintptr_t)R.vector600[11];
     if(visit)visit(exit,function,kui_retail_hook_sr,&R);
 }
 #endif

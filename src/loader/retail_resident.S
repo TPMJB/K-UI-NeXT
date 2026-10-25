@@ -1,10 +1,15 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/retail_loader_layout.h"
 #include "kui/retail_native_disc.h"
+#include "kui/native_sci_priority.h"
 #define JOIN_INNER(a,b) a##b
 #define JOIN(a,b) JOIN_INNER(a,b)
 #define C_SYMBOL(name) JOIN(__USER_LABEL_PREFIX__,name)
 #include "toy_pilot_frame.inc"
+#if KUI_NATIVE_SCI_PRIORITY7
+    .global __kui_native_sci_priority7_rehook
+    .set __kui_native_sci_priority7_rehook,7
+#endif
 
 /* Called by the high stage before entering the owner's upper IP bootstrap.
  * Do not switch stacks here: state adoption/init use the temporary high stack.
@@ -717,7 +722,7 @@ C_SYMBOL(kui_retail_rehook):
     ldc r1,vbr
     mov.l .Lrehook_iprb,r1
     mov.w @r1,r0
-    xor #0x10,r0
+    xor #KUI_RETAIL_SCI_PRIORITY_FIELD,r0
     and #0xf0,r0
     mov.w @r1,r2
     xor r0,r2

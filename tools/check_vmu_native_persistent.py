@@ -2491,8 +2491,17 @@ def check(directory, *, self_test=False, trace_startup=None):
     require(bool(irq_rearm)==bool(low_rearm),'IRQ rearm worker/resident mismatch')
     if irq_rearm:require(cooperative and not timed and not paced and irq_rearm==low_rearm==(1,0,0,0xfff1),
                          'invalid paired IRQ rearm reader markers')
-    irq_rearm_proof=check_irq_rearm(read_elf(directory/'resident-sci.elf'),self_test=self_test)
+    irq_rearm_proof=check_irq_rearm(read_elf(directory/'resident-sci.elf'),worker=worker,self_test=self_test)
     timeline_proof=check_loader_timeline(directory,self_test=self_test)
+    priority7=worker[4].get('__kui_native_sci_priority7_worker')
+    low_priority7=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_sci_priority7_resident')
+    rehook_priority7=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_sci_priority7_rehook')
+    require(bool(priority7)==bool(low_priority7)==bool(rehook_priority7),
+            'SCI priority7 worker/resident/rehook mismatch')
+    if priority7:
+        require(priority7==low_priority7==rehook_priority7==(7,0,0,0xfff1) and
+                timeline_proof.get('enabled') and irq_rearm_proof.get('reader_sci_level')==7,
+                'SCI priority7 requires the paired timeline and exact linked priority proof')
     prepared_lifetime = check_prepared_lifetime(directory, worker, binary, wire, self_test, build=base["runtime"]["build"])
     relocations=check_worker_pointer_aliases(wire,policy,fault_capture,coherence)
 
@@ -2572,6 +2581,9 @@ def check(directory, *, self_test=False, trace_startup=None):
                   full_check_and_exec_catchup=bool(irq_rearm),controller_reader_service_enabled=False,
                   rearm_and_irq_entry_counters=bool(irq_rearm)),
               "loader_timeline":timeline_proof,
+              "sci_priority7":dict(enabled=bool(priority7),paired_resident_worker_rehook=bool(priority7),
+                  sci_priority=7 if priority7 else 1,caller_sr_changed=False,
+                  check_exec_irq_work_budgets_changed=False,console_performance_verified=False),
               "timed_reader": {"enabled":bool(timed),"window_ticks":586 if timed else 0,
                   "window_max_visits":64 if timed else 0,"blocks_per_window_max":2 if timed else 0,
                   "read_only_clock_admission":bool(timed),"invalid_clock_single_visit":bool(timed),

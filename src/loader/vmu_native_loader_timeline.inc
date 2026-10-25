@@ -6,6 +6,10 @@
 #include <stddef.h>
 __asm__(".global __kui_native_loader_timeline_worker\n"
         ".set __kui_native_loader_timeline_worker,1\n");
+#if KUI_NATIVE_SCI_PRIORITY7
+__asm__(".global __kui_native_sci_priority7_worker\n"
+        ".set __kui_native_sci_priority7_worker,7\n");
+#endif
 static struct kui_native_loader_timeline native_loader_timeline;
 static struct kui_native_loader_event native_loader_event;
 static struct kui_vmu_native_profile_sample native_loader_clock;

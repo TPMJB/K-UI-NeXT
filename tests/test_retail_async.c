@@ -3,6 +3,7 @@
  * sequence and the stream's interrupt, against the card/SCI/DMA model, with
  * every destination byte compared to the ordinary image reader's output. */
 #include "retail_async.h"
+#include "kui/native_sci_priority.h"
 #include "sci_stream_model.h"
 #include "kui/retail_image.h"
 #include "kui/retail_loader_layout.h"
@@ -15,6 +16,15 @@
 #define GAME_VBR 0x8c0f0000u
 #define IPRB 0xffd00008u
 #define R kui_retail_async_region
+#define READER_IPRB (0x5a0fu | KUI_RETAIL_SCI_PRIORITY_FIELD)
+#if KUI_NATIVE_SCI_PRIORITY7
+_Static_assert(KUI_RETAIL_SCI_PRIORITY_FIELD==0x70,"priority7 fixture must use exactly seven");
+#else
+_Static_assert(KUI_RETAIL_SCI_PRIORITY_FIELD==0x10,"original fixture must keep exactly level one");
+#endif
+#if KUI_VMU_NATIVE_BACKGROUND
+static kui_retail_async_region_type test_background_region;
+#endif
 
 static uint8_t ram[END - BEGIN];
 static uint8_t image_card[2048u * 512u];
@@ -27,7 +37,7 @@ static bool cooked_fixture;
 
 /* ---- Resident and CPU hooks ---- */
 static struct {
-    uint32_t vbr;
+    uint32_t vbr,sr;
     uint16_t iprb; /* the only level the reader may change: IPRC is never read */
     unsigned acquires, writes, vbr_sets;
     bool frozen; /* a cancelled read must write nothing more */
@@ -163,7 +173,7 @@ static void foreign_event_with(unsigned vector, void (*handler)(void)) {
     if(returns && f->armed && hw.vbr == f->vbr) {
         ++f->rehooks;
         hw.vbr = our_vbr();
-        hw.iprb = (uint16_t)((hw.iprb & ~0x00f0u) | 0x10u);
+        hw.iprb = (uint16_t)((hw.iprb & ~0x00f0u) | KUI_RETAIL_SCI_PRIORITY_FIELD);
     }
 }
 static void foreign_event(void) { foreign_event_with(++foreign % 3u, NULL); }
@@ -178,7 +188,11 @@ static void elapse(void) { if(m.rx) m.rx_delay = 0; }
 static unsigned spurious;
 static unsigned interrupts(unsigned limit) {
     unsigned n = 0;
-    while(n < limit && hooked() && (hw.iprb & 0x00f0u) && kui_sci_stream_busy()) {
+    /* Host admission model only: real SH delivery is checked separately by
+     * console evidence. Ordinary peripheral IRQs need BL clear and a level
+     * strictly greater than IMASK, including when the caller uses bank one. */
+    while(n < limit && hooked() && !(hw.sr&0x10000000u) &&
+          (hw.iprb&0x00f0u)>(hw.sr&0x00f0u) && kui_sci_stream_busy()) {
         if(++spurious % 3u) elapse();
         CHECK(kui_retail_async_irq() == 0);
         ++n;
@@ -188,6 +202,9 @@ static unsigned interrupts(unsigned limit) {
 
 enum { X, Y }; /* launch X: 20 blocks per EXEC or CHECK; Y: 25 */
 static void setup(uint32_t game_vbr, unsigned how, unsigned take_max, bool scattered) {
+#if KUI_VMU_NATIVE_BACKGROUND
+    kui_retail_async_region_storage=&test_background_region;
+#endif
     fixture(take_max, scattered);
     manifest.reader = how == Y ? KUI_RETAIL_READER_ASYNC_EAGER : KUI_RETAIL_READER_ASYNC;
     memset(&card, 0, sizeof(card));
@@ -344,7 +361,7 @@ static void test_levels_while_streaming(void) {
     setup(GAME_VBR, X, 2000, false);
     hw.iprb = 0x5a3f;
     int32_t token = request(45010, 20, OUTPUT);
-    CHECK(hooked() && hw.iprb == 0x5a1f && m.armed_chcr == 0x4911u);
+    CHECK(hooked() && hw.iprb == READER_IPRB && m.armed_chcr == 0x4911u);
     CHECK(R.engine.release.vbr == GAME_VBR && R.engine.release.sci == 0x30u && R.engine.release.armed);
     CHECK(finish(token, true, 0) == KUI_GD_COMPLETED);
     compare(45010, 20, OUTPUT);
@@ -364,7 +381,7 @@ static void test_release_and_rehook(void) {
     CHECK(interrupts(5) == 0);
     CHECK(gd(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_PROCESSING);
     const struct kui_retail_async_stats *st = &R.engine.stats;
-    CHECK(hooked() && hw.iprb == 0x5a1f && st->releases == 1 && st->hooks == 1 && !R.engine.release.vbr_changes);
+    CHECK(hooked() && hw.iprb == READER_IPRB && st->releases == 1 && st->hooks == 1 && !R.engine.release.vbr_changes);
     CHECK(R.engine.release.sci == 0x20u && R.engine.release.vbr == GAME_VBR);
     CHECK(finish(token, true, 0) == KUI_GD_COMPLETED);
     compare(45000, 40, OUTPUT);
@@ -402,10 +419,10 @@ static void test_rehook_on_return(void) {
     int32_t token = rehook_token = request(45000, 60, OUTPUT);
     const struct kui_retail_async_release *f = &R.engine.release;
     const struct kui_retail_async_stats *st = &R.engine.stats;
-    CHECK(hooked() && f->armed && hw.iprb == 0x5a1f && f->sci == 0x20u);
+    CHECK(hooked() && f->armed && hw.iprb == READER_IPRB && f->sci == 0x20u);
     CHECK(interrupts(3) == 3);
     foreign_event_with(2, NULL);
-    CHECK(hooked() && hw.iprb == 0x5a1f && f->released[2] == 1 && f->rehooks == 1);
+    CHECK(hooked() && hw.iprb == READER_IPRB && f->released[2] == 1 && f->rehooks == 1);
     CHECK(interrupts(3) == 3);
     foreign_event_with(0, NULL); /* an exception: released until a GD call */
     CHECK(!hooked() && hw.iprb == 0x5a2f && f->released[0] == 1 && f->rehooks == 1);

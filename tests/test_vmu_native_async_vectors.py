@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Execute actual native release/rehook SH at fixed and relocated regions."""
+from itertools import product
 from pathlib import Path
 import subprocess
 import sys
@@ -98,51 +99,52 @@ class VectorCPU(SH):
         raise AssertionError("native vector replay did not reach its expected continuation")
 
 
-def replay(image, region):
+def replay(image, region, level=1):
     cases = 0
-    for vector in (0x100, 0x400, 0x600):
-        for armed in (0, 1):
-            for depth in range(4):
-                cpu = VectorCPU(image, region)
-                frame = region + 0x240
-                for index, value in enumerate((GAME_VBR, 0x20, armed, depth)):
-                    cpu.write(frame + 4 * index, value)
-                offset = {0x100: 44, 0x400: 48, 0x600: 52}[vector]
-                cpu.write(frame + offset, 17)
-                entry = cpu.symbols[f"_kui_retail_release_{vector:x}"][0]
-                cpu.run_to(entry, GAME_VBR + vector)
-                assert cpu.r == cpu.original and cpu.control["vbr"] == GAME_VBR
-                assert cpu.iprb == 0x5A2F and cpu.read(frame + offset) == 18
-                expected = vector == 0x600 and armed and depth < 3
-                assert cpu.read(frame + 12) == depth + int(expected)
-                if expected:
-                    assert cpu.control["spc"] == cpu.symbols["_kui_retail_rehook"][0]
-                    assert cpu.read(frame + 16 + 8 * depth) == GAME_PC
-                    assert cpu.read(frame + 20 + 8 * depth) == STACK
-                else:
-                    assert cpu.control["spc"] == GAME_PC
-                cases += 1
-    for depth in (1, 2, 3):
-        for armed in (0, 1):
-            for moved in (False, True):
-                cpu = VectorCPU(image, region)
-                cpu.sr = 0x40000001
-                cpu.control["vbr"] = GAME_VBR + (0x10000 if moved else 0)
-                cpu.iprb = 0x5A2F
-                frame = region + 0x240
-                for index, value in enumerate((GAME_VBR, 0x20, armed, depth)):
-                    cpu.write(frame + 4 * index, value)
-                cpu.write(frame + 16 + 8 * (depth - 1), GAME_PC)
-                cpu.write(frame + 20 + 8 * (depth - 1), STACK)
-                cpu.write(frame + 40, 31)
-                cpu.run_to(cpu.symbols["_kui_retail_rehook"][0], GAME_PC)
-                installed = armed and not moved
-                assert cpu.r == cpu.original and cpu.sr == 0x40000001
-                assert cpu.read(frame + 12) == depth - 1
-                assert cpu.read(frame + 40) == 31 + int(installed)
-                assert cpu.control["vbr"] == (region - 0x100 if installed else GAME_VBR + (0x10000 if moved else 0))
-                assert cpu.iprb == (0x5A1F if installed else 0x5A2F)
-                cases += 1
+    for vector,armed,depth,mask,field in product((0x100,0x400,0x600),(0,1),range(4),
+                                                 range(16),range(0,0x100,0x10)):
+        cpu = VectorCPU(image, region)
+        cpu.sr=(cpu.sr&~0xf0)|(mask<<4)
+        cpu.iprb=0x5A0F|field
+        owner=(field+0x30)&0xf0
+        frame = region + 0x240
+        for index, value in enumerate((GAME_VBR, owner, armed, depth)):
+            cpu.write(frame + 4 * index, value)
+        offset = {0x100: 44, 0x400: 48, 0x600: 52}[vector]
+        cpu.write(frame + offset, 17)
+        entry = cpu.symbols[f"_kui_retail_release_{vector:x}"][0]
+        cpu.run_to(entry, GAME_VBR + vector)
+        assert cpu.r == cpu.original and cpu.control["vbr"] == GAME_VBR
+        assert cpu.iprb == (0x5A0F|owner) and cpu.read(frame + offset) == 18
+        expected = vector == 0x600 and armed and depth < 3
+        assert cpu.read(frame + 12) == depth + int(expected)
+        if expected:
+            assert cpu.control["spc"] == cpu.symbols["_kui_retail_rehook"][0]
+            assert cpu.read(frame + 16 + 8 * depth) == GAME_PC
+            assert cpu.read(frame + 20 + 8 * depth) == STACK
+        else:
+            assert cpu.control["spc"] == GAME_PC
+        cases += 1
+    for depth,armed,moved,mask,field in product((1,2,3),(0,1),(False,True),
+                                                range(16),range(0,0x100,0x10)):
+        cpu = VectorCPU(image, region)
+        cpu.sr = 0x40000001|(mask<<4)
+        cpu.control["vbr"] = GAME_VBR + (0x10000 if moved else 0)
+        cpu.iprb = 0x5A0F|field
+        frame = region + 0x240
+        for index, value in enumerate((GAME_VBR, 0x20, armed, depth)):
+            cpu.write(frame + 4 * index, value)
+        cpu.write(frame + 16 + 8 * (depth - 1), GAME_PC)
+        cpu.write(frame + 20 + 8 * (depth - 1), STACK)
+        cpu.write(frame + 40, 31)
+        cpu.run_to(cpu.symbols["_kui_retail_rehook"][0], GAME_PC)
+        installed = armed and not moved
+        assert cpu.r == cpu.original and cpu.sr == 0x40000001|(mask<<4)
+        assert cpu.read(frame + 12) == depth - 1
+        assert cpu.read(frame + 40) == 31 + int(installed)
+        assert cpu.control["vbr"] == (region - 0x100 if installed else GAME_VBR + (0x10000 if moved else 0))
+        assert cpu.iprb == ((0x5A0F|(level<<4)) if installed else (0x5A0F|field))
+        cases += 1
     # _start must preserve every argument across low BSS clearing, including
     # the gated fifth argument on the caller's unchanged temporary stack.
     cpu = VectorCPU(image, region)
@@ -175,11 +177,14 @@ with tempfile.TemporaryDirectory(prefix="kui-native-async-vectors-") as tmp:
     linker = directory / "vectors.ld"
     linker.write_text("SECTIONS { . = 0x8c004000; .entry : { *(.entry) } .text : { *(.text*) } .rodata : { *(.rodata*) } .data : { *(.data*) } . = ALIGN(32); __retail_resident_bss_begin = .; .bss : { *(.bss*) } __retail_resident_bss_end = .; }")
     total = 0
-    for enabled in (0, 1):
-        source = directory / ("stub-" + str(enabled) + ".S")
+    for enabled,level in ((0,1),(1,1),(1,7)):
+        label=f"{enabled}-{level}"
+        source = directory / ("stub-" + label + ".S")
         symbol = "_kui_retail_async_region_storage" if enabled else "_kui_retail_async_region"
-        obj, stub, elf = (directory / (name + "-" + str(enabled) + suffix) for name, suffix in (("vectors", ".o"), ("stub", ".o"), ("vectors", ".elf")))
-        run([GCC, *FLAGS, "-DKUI_VMU_NATIVE_BACKGROUND=" + str(enabled), "-c", "src/loader/retail_resident.S", "-o", obj])
+        obj, stub, elf = (directory / (name + "-" + label + suffix) for name, suffix in (("vectors", ".o"), ("stub", ".o"), ("vectors", ".elf")))
+        experimental=(["-DKUI_NATIVE_SCI_PRIORITY7=1","-DKUI_NATIVE_LOADER_TIMELINE=1",
+                       "-DKUI_NATIVE_IRQ_REARM=1","-DKUI_RETAIL_NATIVE_HYBRID=1"] if level==7 else [])
+        run([GCC, *FLAGS, *experimental, "-DKUI_VMU_NATIVE_BACKGROUND=" + str(enabled), "-c", "src/loader/retail_resident.S", "-o", obj])
         undefined = run([ROOT / ".deps/sh-elf/bin/sh-elf-nm", "-u", obj], text=True)
         resolved = {symbol, "_kui_retail_resident_init", "_kui_vmu_native_background_init",
                     "__retail_resident_bss_begin", "__retail_resident_bss_end"}
@@ -195,5 +200,5 @@ with tempfile.TemporaryDirectory(prefix="kui-native-async-vectors-") as tmp:
         audit("native-vectors", run([OBJDUMP, "-d", elf], text=True))
         regions = (0x8CE10000, 0x8C420400) if enabled else (image[4][symbol][0],)
         for region in regions:
-            total += replay(image, region)
-print(f"native async vectors: {total} actual SH release/rehook/init cases passed; ordinary assembly unchanged")
+            total += replay(image, region,level)
+print(f"native async vectors: {total} actual SH release/rehook/init cases passed at levels1/7, all16 IMASKs/SCI fields; ordinary assembly unchanged")
