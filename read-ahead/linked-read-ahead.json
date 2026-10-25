@@ -1,0 +1,219 @@
+{
+  "enabled": true,
+  "schema": "kui.native.read-ahead.audit.v1",
+  "paired_markers": true,
+  "artifact_sha256": {
+    "resident": "ae808a7e3966d2ff3c81dc34a59bbbb8fcec595f5270c7b34d3c5d78ac855e7b",
+    "worker": "3bd689365424dfc124549ab6152dc9eb015053af4b70cf4f3e9ac4daedf50152",
+    "stage": "1cf0059ed0a6b47edae698e1b958331a68d1ce52eaf774c0e7c96e8358a1fbee",
+    "auxiliary": "218205f963c771fa8aa5d153b040030303d0452fd17c623e1fe885ffe18a61f2"
+  },
+  "immutable_code_pin": {
+    "address": "0x8c422000",
+    "bytes": 5120,
+    "sha256": "ad53f64817c9b65869bbe21e8d28a09ba98d75567709a6099bf51dd8551e2bd9"
+  },
+  "immutable_low_pins": {
+    "_deliver_work": [
+      456,
+      "73ed6d63b6e67b122d11d0185a009d2c28f81face7e99aeda639660b6eb61aeb"
+    ],
+    "_deliver": [
+      60,
+      "d32fd5a483cdffee78867c2239be72d693e1d1cc46f62e9b0ae2cda2f5e3eb46"
+    ]
+  },
+  "loan_quiesce_pin": {
+    "address": "0x8c007688",
+    "bytes": 744,
+    "sha256": "a06ecbd795204545b4df1ca6f5efc3883a0a81b4e0391b088a12388203ff376c"
+  },
+  "loan_quiesce": {
+    "actual_linked_quiesce_boundary_cases": 120,
+    "outer_non_imask15_refusals": 60,
+    "exact_section_offset_entry": "0x52",
+    "typed_auxiliary_event_arg_region_reserved_checked": true,
+    "real_pending_demand_never_quiesced": true,
+    "refused_quiesce_clears_only_owned_low_lock": true,
+    "preexisting_active_low_lock_preserved": true,
+    "null_binding_is_quiesce_success": true,
+    "success_rejoins_before_stream_busy_check": true,
+    "scope": "Actual post-admission low slice; complete pinned section and real C integration tests cover outer ownership/transport",
+    "auxiliary_target": "Typed gateway ABI substitute; actual auxiliary gateway proved independently"
+  },
+  "geometry": {
+    "binary_sha256": "8feedd654cbf1ea9039f0571a7373ffa9d8ca743675f48e21c0d49767ea02d37",
+    "binary_bytes": 9216,
+    "relocation_sha256": "3d59cdf48784eb8c6f8acbddb0a1bc71cbfec8480023528bb198acfb41659af9",
+    "relocation_records": 62,
+    "link_base": "0x8c421000",
+    "relocation_span": 28672,
+    "context": "0xac421040",
+    "context_bytes": 172,
+    "private_stack_bottom": "0xac427000",
+    "private_stack_top": "0xac428000",
+    "cache_data_bytes": 196608,
+    "lease_bytes": 393216,
+    "worker_map_region_offsets_unchanged": true,
+    "typed_low_ops": {
+      "address": 2348841684,
+      "bytes": 52,
+      "region_cell": 2348841780,
+      "functions": {
+        "_deliver_work": 2348832784,
+        "_hook": 2348832576,
+        "_unhook": 2348832676,
+        "_kui_sci_stream_fetch": 2348830028,
+        "_kui_sci_stream_poll": 2348831680,
+        "_kui_sci_stream_take": 2348831756,
+        "_kui_sci_stream_stop": 2348832348,
+        "_kui_sci_stream_busy": 2348829484,
+        "_kui_retail_cursor_feed": 2348828878
+      }
+    },
+    "physical_loads": [
+      {
+        "offset": 256,
+        "virtual": 2353139712,
+        "physical": 2353139712,
+        "first": 205656064,
+        "bytes": 64,
+        "memory": 64,
+        "flags": 4,
+        "alignment": 128
+      },
+      {
+        "offset": 320,
+        "virtual": 2890010688,
+        "physical": 2353139776,
+        "first": 205656128,
+        "bytes": 172,
+        "memory": 172,
+        "flags": 6,
+        "alignment": 128
+      },
+      {
+        "offset": 512,
+        "virtual": 2353143808,
+        "physical": 2353143808,
+        "first": 205660160,
+        "bytes": 5120,
+        "memory": 24576,
+        "flags": 7,
+        "alignment": 128
+      }
+    ]
+  },
+  "gateway": {
+    "actual_linked_gateway_cases": 8064,
+    "all16_imasks": true,
+    "both_integer_banks": true,
+    "both_bl_states": true,
+    "owner_sr_pr_sp_and_callee_saved_preserved": true,
+    "private_stack_switch_before_c": true,
+    "busy_and_guard_checks_before_stack_writes": true,
+    "parked_owner_stack_bytes": 20,
+    "auxiliary_stack_prefix_bytes": 0,
+    "c_payload_model": "ABI-adversarial substitute; actual producer separately host-tested"
+  },
+  "private_stack": {
+    "available_bytes": 4096,
+    "worst_c_bytes": 336,
+    "library_margin_bytes": 4,
+    "explicit_margin_bytes": 64,
+    "guard_bytes": 16,
+    "top_gap_bytes": 32,
+    "total_bytes": 452,
+    "roots": {
+      "kui_native_readahead_aux_init": {
+        "bytes": 100,
+        "path": [
+          "aux:kui_native_readahead_aux_init(84)",
+          "aux:kui_native_ra_cache_init(16)"
+        ]
+      },
+      "kui_native_readahead_aux_dispatch": {
+        "bytes": 336,
+        "path": [
+          "aux:kui_native_readahead_aux_dispatch(68)",
+          "aux:src/loader/native_readahead_aux.c:producer(40)",
+          "aux:src/loader/native_readahead_aux.c:retire_spec(28)",
+          "aux:src/loader/native_readahead_aux.c:abandon(12)",
+          "low:build/native-readahead-final/resident-sci.elf.ltrans0.o:deliver_work(40)",
+          "low:build/native-readahead-final/resident-sci.elf.ltrans0.o:kui_retail_cursor_feed(56)",
+          "low:build/native-readahead-final/resident-sci.elf.ltrans0.o:write_out(16)",
+          "low:build/native-readahead-final/resident-sci.elf.ltrans0.o:native_background_map(8)",
+          "low:kui_vmu_observe_low_failure(8)",
+          "low:build/native-readahead-final/resident-sci.elf.ltrans0.o:retail_display_restore(8)",
+          "low:build/native-readahead-final/resident-sci.elf.ltrans0.o:retail_display_line(52)"
+        ]
+      }
+    },
+    "typed_low_indirect_sites": 31,
+    "missing_or_recursive_callbacks_rejected": true
+  },
+  "cold_binder": {
+    "actual_linked_cold_binder_executed": true,
+    "positive_cases": 12,
+    "malformed_descriptor_context_aux_and_init_cases": 120,
+    "omitted_activation_ocbp_rejections": 2,
+    "reviewed_body_byte_mutation_rejections": 1300,
+    "exact_instruction_literal_pins": {
+      "_native_readahead_bind": [
+        2363496940,
+        1208,
+        "f96dfa876eef36b3682d881905eb70127147191505d380663b89fd6ac1aa07b9"
+      ],
+      "_kui_vmu_native_background_map_address": [
+        2363490468,
+        92,
+        "cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8"
+      ]
+    },
+    "p1_cache_and_p2_ram_distinct": true,
+    "cold_aux_and_cache_lines_purged": 7040,
+    "cache_data_not_initialized_or_trusted": true,
+    "context_published_before_entry": true,
+    "guards_checked_after_init": true,
+    "memcpy_memcmp_memset": "faithful bounded ABI substitutes",
+    "relocator": "exact separately tested input image/table; explicit pointer-record substitute",
+    "code_publisher": "exact owned span and cache-flush substitute; actual publisher independently audited",
+    "initializer_gateway": "strict private-SP gateway substitute; actual relocated auxiliary C init executed",
+    "actual_auxiliary_c_initializer_executed": true,
+    "actual_initializer_copies_owned_config_values_not_stage_pointer": true,
+    "actual_initializer_starts_with_no_valid_cache_blocks": true,
+    "console_boot_verified": false,
+    "console_performance_verified": false
+  },
+  "worker_binding": {
+    "actual_worker_binding_cases": 98,
+    "immutable_function_pins": {
+      "_reader_readahead_exports": [
+        2349859048,
+        160,
+        "7408f9b61bad644e7a5c20dc0766138fb36f4ee24a8ef3cd751e93d4e316489e"
+      ],
+      "_reader_readahead_visit": [
+        2349859308,
+        56,
+        "2af85f7d6a6a88765d1e8cf645b45683e794c2bf08ebca7a5c1bb6666a78186a"
+      ],
+      "_reader_cooperative_service": [
+        2349859364,
+        32,
+        "d5c8c4caf5c8bf445a7f0d5ab500ee6f1e7ef46cbdfdf2c46070c0058b683ea4"
+      ]
+    },
+    "all_three_payload_aliases": true,
+    "highest_owned_lease_checked": true,
+    "malformed_headers_and_contexts_refused": true,
+    "both_durable_writer_busy_fields_refused": true,
+    "heartbeat_and_capture_start_arguments_checked": true,
+    "c_auxiliary_target": "ABI substitute; complete auxiliary gateway proved separately"
+  },
+  "linked_integer_instructions": 2333,
+  "code_byte_mutation_rejections": 5120,
+  "typed_binding_mutation_rejections": 1564,
+  "console_boot_verified": false,
+  "console_performance_verified": false
+}

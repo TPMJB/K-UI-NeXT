@@ -1,0 +1,11 @@
+{
+  "schema": "kui.native.read-ahead.candidate.v1",
+  "source_commit": "afcf7e1524a9a00cd8f4c2cae6a59541eaf3ddef",
+  "source_tree": "e8fad55a72404a3e991cb8fe1ee428905044ac1d",
+  "build": "afcf7e1524a9",
+  "module_sha256": "fdbf2715c6c7f9353757d1cb0fb610d77a4f4fe2311e251299c4fca453aedb5e",
+  "module_bytes": 246332,
+  "reader": "192KiB cross-request physical read-ahead, exact Evolution2 SDK SCI priority1,384KiB owned lease",
+  "source_bundle_prerequisite": "74958b3878279fc916199a7cd330f7f17b036138",
+  "console_performance_verified": false
+}
