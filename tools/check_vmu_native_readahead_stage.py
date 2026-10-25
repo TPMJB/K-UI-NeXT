@@ -32,6 +32,7 @@ PUBLIC_BYTES=76
 DIAGNOSTIC_PUBLIC_BYTES=656
 DIAGNOSTIC_MARKER='__kui_native_readahead_diagnostic_auxiliary'
 PIO_MARKER='__kui_native_readahead_pio_auxiliary'
+PIO_PAIR_MARKER='__kui_native_readahead_pio_pair_auxiliary'
 # Pins are reviewed against the candidate's complete linked body and literals.
 # The combined read-ahead audit also pins the complete module and low table.
 PINS={
@@ -44,6 +45,10 @@ DIAGNOSTIC_PINS={
 }
 PIO_PINS={
     '_native_readahead_bind':(1208,'fb4565079ccf9662f82b82294f47feee66e1ca944094d6d5aab191845bca4542'),
+    '_kui_vmu_native_background_map_address':(92,'cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8'),
+}
+PIO_PAIR_PINS={
+    '_native_readahead_bind':(1208,'e8fdbae5d43b7851901bfe8a0d313e6921446033cef06018eb0ebe934d92aeb6'),
     '_kui_vmu_native_background_map_address':(92,'cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8'),
 }
 
@@ -64,13 +69,16 @@ def auxiliary_layout(aux):
     require(not pio or (pio_marker==(1,0,0,0xfff1) and diagnostic and
             aux[4].get('__kui_native_readahead_repair_diagnostic_auxiliary')==(1,0,0,0xfff1)),
             'cold read-ahead PIO marker differs or lacks its diagnostic profiles')
+    pair_marker=aux[4].get(PIO_PAIR_MARKER);pair=pair_marker is not None
+    require(not pair or (pair_marker==(1,0,0,0xfff1) and pio),
+            'cold read-ahead PIO pair marker differs or lacks its PIO profile')
     context=aux[4]['_kui_native_readahead_aux_context']
     expected=904 if diagnostic else 172
     require(context[2]==1 and context[1]==expected and not context[0]&31 and
             0xac421040<=context[0]<context[0]+context[1]<=0xac422000 and
             context[3]<len(aux[3]) and aux[3][context[3]][2]&7==3,
             'cold read-ahead full mutable context layout differs')
-    return dict(diagnostic=diagnostic,pio=pio,public_bytes=DIAGNOSTIC_PUBLIC_BYTES if diagnostic else PUBLIC_BYTES,
+    return dict(diagnostic=diagnostic,pio=pio,pair=pair,public_bytes=DIAGNOSTIC_PUBLIC_BYTES if diagnostic else PUBLIC_BYTES,
                 context_bytes=expected,config=656 if diagnostic else 76,
                 cache=688 if diagnostic else 108,initialized=708 if diagnostic else 128)
 
@@ -295,10 +303,11 @@ class ReadAheadBinderCPU(ColdBinderCPU):
         return self
 
 
-def pin_stage(stage,*,diagnostic=False,pio=False):
+def pin_stage(stage,*,diagnostic=False,pio=False,pair=False):
     result={}
     require(not pio or diagnostic,'cold PIO stage pins require the diagnostic layout')
-    selected=PIO_PINS if pio else DIAGNOSTIC_PINS if diagnostic else PINS
+    require(not pair or pio,'cold PIO pair stage pins require the PIO profile')
+    selected=PIO_PAIR_PINS if pair else PIO_PINS if pio else DIAGNOSTIC_PINS if diagnostic else PINS
     for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(stage,name,2)
         require(section[2]&4 and 0x8ce00000<=address<address+count<=0x8cfe0000,
@@ -313,7 +322,7 @@ def pin_stage(stage,*,diagnostic=False,pio=False):
 def check_stage(stage,resident,aux,*,self_test=False):
     require(__debug__,'cold read-ahead proof requires Python assertions')
     layout=auxiliary_layout(aux)
-    pins=pin_stage(stage,diagnostic=layout['diagnostic'],pio=layout['pio'])
+    pins=pin_stage(stage,diagnostic=layout['diagnostic'],pio=layout['pio'],pair=layout['pair'])
     positives=negatives=mutations=pin_mutations=layout_mutations=0
     for cache in (False,True):
         for payload in (0x0c400000,0x8c500000,0xacfa0000):
@@ -420,6 +429,10 @@ def check_stage(stage,resident,aux,*,self_test=False):
             for marker in ((0,0,0,0xfff1),(1,4,0,0xfff1),(1,0,1,0xfff1),(1,0,0,1)):
                 symbol_mutations.append((PIO_MARKER,marker))
             symbol_mutations.append(('__kui_native_readahead_repair_diagnostic_auxiliary',None))
+        if layout['pair']:
+            for marker in ((0,0,0,0xfff1),(1,4,0,0xfff1),(1,0,1,0xfff1),(1,0,0,1)):
+                symbol_mutations.append((PIO_PAIR_MARKER,marker))
+            symbol_mutations.append((PIO_MARKER,None))
         for name,record in symbol_mutations:
             symbols=aux[4].copy()
             if record is None:symbols.pop(name,None)
@@ -432,7 +445,7 @@ def check_stage(stage,resident,aux,*,self_test=False):
             start=section[4]+address-section[3]
             for i in range(count):
                 changed=bytearray(stage[0]);changed[start+i]^=1
-                try:pin_stage((bytes(changed),*stage[1:]),diagnostic=layout['diagnostic'],pio=layout['pio'])
+                try:pin_stage((bytes(changed),*stage[1:]),diagnostic=layout['diagnostic'],pio=layout['pio'],pair=layout['pair'])
                 except ValueError:pin_mutations+=1
                 else:raise ValueError('cold read-ahead audit accepted changed reviewed instructions')
         address,body,section=symbol_bytes(stage,'_native_readahead_bind',2)
@@ -460,6 +473,7 @@ def check_stage(stage,resident,aux,*,self_test=False):
         actual_auxiliary_c_initializer_executed=True,
         diagnostic_auxiliary=layout['diagnostic'],public_prefix_bytes=layout['public_bytes'],
         pio_auxiliary=layout['pio'],
+        pio_pair_auxiliary=layout['pair'],
         complete_owned_context_bytes=layout['context_bytes'],
         actual_initializer_clears_complete_public_prefix=True,
         actual_initializer_copies_owned_config_values_not_stage_pointer=True,

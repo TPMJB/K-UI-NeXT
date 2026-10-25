@@ -1,22 +1,33 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Evolution 2 bounded PIO read-ahead candidate
+# Evolution 2 time-admitted PIO pair candidate
 
-This candidate tests one fresh 512-byte PIO cache fill at each eligible
-controller heartbeat. It replaces optional DMA speculation, which the
-preceding capture repeatedly abandoned after another loss in the same block.
-Demand reads retain their existing DMA path, completion rules and budgets.
-Console performance of this new candidate has not yet been verified.
+This candidate tests up to two fresh 512-byte PIO cache fills at each eligible
+controller heartbeat. The preceding one-block candidate, 04e204a, recorded
+1,156 PIO attempts across 1,200 heartbeats with no reported failure counters
+and a maximum producer operation of 1,129 ticks (1.44512 ms). The user reported
+that the remaining pause was almost imperceptible. Those observations motivate
+this next controlled increase; console behavior of the pair candidate is
+not yet verified. Demand reads retain their existing DMA path, completion
+rules and budgets.
 
-One block per 60 Hz heartbeat has a 30 KiB/s ideal ceiling (25 KiB/s at
-50 Hz). The preceding capture's recent reads alone required about 56.5 KiB/s
-of raw backing data over its 20-second window. This first control is intended
-to measure reliable cache filling and its CPU cost; expect partial warming,
-not proof that every read can already be served entirely from cache.
+The hard work cap is two fresh blocks per heartbeat. A second block is admitted
+only when the existing timer profile is valid and the measured elapsed time
+after the first block is at most 1,144 ticks (1.46432 ms). That threshold leaves
+a 1,200-tick reserve within a soft 2,344-tick window (3.00032 ms). Every transport,
+request, ownership, stream-position and extent guard is checked again before
+the second block. Timing admission is not a worst-case execution-time guarantee:
+a slow second operation can exceed the soft window, and the report counts that
+overrun. A third fresh block is never attempted during the same heartbeat.
+
+The ideal two-block ceiling is 60 KiB/s at 60 Hz or 50 KiB/s at 50 Hz before
+skips, demand contention and timing admission. This experiment measures how
+often the second block is admitted and its CPU cost; it does not establish
+that every read can be served entirely from cache.
 
 The optional producer runs only from the controller heartbeat, with no active
 demand request or VMU loan. It admits only a paused stream whose next physical
 card block exactly matches the cache's next block, inside the validated extent.
-One bounded fetch is followed by the existing CRC validation and cache append.
+Each bounded fetch is followed by the existing CRC validation and cache append.
 It does not open or seek a stream to create a speculative opportunity.
 First/last failure snapshots and skip counters remain enabled.
 
@@ -53,18 +64,17 @@ stops at **PHASE 0B**, photograph the detail code.
 Test the same new-game opening and movement area. Hold both triggers fully
 plus B for about one second, release, and keep moving until the intentional
 diagnostic stop after roughly 20 seconds. Wait for **CRC VALIDATED PHYSICAL
-READ AHEAD**, then record until **LOADER TIMELINE - READ ONLY CAPTURE** appears.
-This captures the cache page, **READ AHEAD EXIT REASONS**, and the first/last
-failure pages. Allow **25 seconds** from the cache heading; the longest
-targeted section is four pages, about 16 seconds at 60 Hz or 19.2 seconds at 50 Hz,
-plus drawing time. A single failure uses a combined **BOTH** page;
-no failure skips the snapshot pages.
+READ AHEAD**, then record one complete report cycle, stopping when that same
+heading returns. This includes the cache and exit counters, the request timings,
+and the VMU timing pages needed for the pair comparison. At 60 Hz, a cycle is
+about 66 seconds with no failures, or about 74 seconds when separate FIRST/LAST
+failure pages are present. At 50 Hz the cycle takes longer; use the repeated
+heading as the stop signal instead of a fixed recording time.
 
-All timeline and request data is still collected on every run with the same
-command. If the full timeline recording is needed, record until the first
-page repeats. The largest ordinary cycle now has 17 pages: 73 seconds at 60 Hz
-or 87.6 seconds at 50 Hz, plus drawing time. Pages repeat the same frozen
-capture; they do not collect more samples. No separate capture switch is needed.
+All counters and timelines are collected on every run with the same command.
+A single failure uses a combined BOTH page; no failure omits the snapshot
+pages. Pages repeat the same frozen capture and do not collect more samples.
+No separate capture switch is needed.
 
 Compare the remaining in-engine hitches and confirm that FMVs stay fluid.
 The first uncached read and an unpredicted seek can still take the normal
@@ -76,19 +86,29 @@ All values are hexadecimal. **CAP** is 384 physical 512-byte blocks, not
 Dreamcast sectors. **HITS** counts cached blocks fed to the original cursor;
 **HIT REQS** counts requests receiving at least one cached block, including
 partial hits. **MADE** counts CRC-checked speculative blocks. **HEARTBEAT**
-and **IRQ** show the existing service opportunities. **PIO WORK MAX TICKS BAD**
-shows three values: attempted fresh PIO fills, the largest clock-valid duration
-of one producer operation, and invalid producer timing samples. A work count
+and **IRQ** show the existing service opportunities. **PIO WORK MAX BAD** shows
+three values: attempted fresh PIO fills, the largest clock-valid duration of
+one whole producer visit containing one or two blocks, and invalid per-block
+timing samples. A work count
 includes failed attempts; **MADE** identifies CRC-validated cache appends.
-The producer duration covers its pre-operation observation, bounded fetch,
-CRC take, cache append or failure capture, and operation overhead. It excludes
+The producer duration covers its pre-operation observations, bounded fetches,
+CRC takes, cache appends or failure capture, and operation overhead. It excludes
 legacy demand delivery and the heartbeat's seed scan/admission work.
 
-**MAX AUX VISIT TICKS** retains the broader elapsed-visit maximum and can
-include demand fallback work. Both tick metrics use 781250 ticks/second and
-include diagnostic overhead. Invalid producer clock endpoints or deltas
-increment its **BAD** value and do not update its maximum. Counters reset at
-the capture gesture while valid cache data remains available.
+**SECOND SKIP ONE MAX OVER** shows four values: second-block attempts,
+second-block timing-admission skips, the largest clock-valid single-block
+operation in ticks, and whole producer visits exceeding the soft window.
+The second-attempt count does not guarantee that both blocks passed CRC.
+Timing skips are distinct from the request and transport skips on the next page.
+
+**AUX MAX TICKS** retains the broader elapsed-visit maximum and can
+include demand fallback work. All tick metrics use 781250 ticks/second and
+include diagnostic overhead. **BAD** counts invalid per-block clock profiles
+or intervals, including zero elapsed time; those blocks do not update the
+single-block maximum. Invalid timing suppresses the second attempt. The whole
+visit maximum and overrun count require valid whole-visit and preceding
+operation timing. Counters reset at the capture gesture while valid cache
+data remains available.
 
 The ordinary request pages still report whole-read times. A single cold
 read may dominate the maximum even if later requests become faster. These

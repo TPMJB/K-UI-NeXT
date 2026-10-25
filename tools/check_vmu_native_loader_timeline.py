@@ -44,6 +44,7 @@ READAHEAD_DIAGNOSTIC_BIN_AT_NO_DIV_PIN=('3d98d0322d6bc12a6d480b2c9fadfd57c58d7d3
 # The PIO-only report moves add32 by12bytes; the arithmetic body stays the
 # same, with its complete new literal binding pinned separately.
 READAHEAD_PIO_BIN_AT_NO_DIV_PIN=('7bd6d3b645810ca2266fc51ba96ed166333b070ff85e10ab9e238c02f85b0426',144)
+READAHEAD_PIO_PAIR_BIN_AT_NO_DIV_PIN=('bdec557eba8a8c3401f9210e2859cc2f8912a8c1fe93258e70635885b8b98705',144)
 
 
 def require(test,message):
@@ -130,7 +131,7 @@ def private_state(worker):
     return report
 
 
-def division_helper(resident,worker,read_ahead=False,diagnostic=False,pio=False):
+def division_helper(resident,worker,read_ahead=False,diagnostic=False,pio=False,pio_pair=False):
     """Reuse the resident stack proof only for identical linked libgcc code.
 
     The prefix contains the alternate internal entry used by the helper.
@@ -142,7 +143,8 @@ def division_helper(resident,worker,read_ahead=False,diagnostic=False,pio=False)
         _,body,_=symbol_bytes(worker,'_bin_at',2)
         require(not diagnostic or read_ahead,'diagnostic timeline arithmetic requires read-ahead')
         require(not pio or diagnostic,'PIO timeline arithmetic requires the diagnostic profile')
-        expected=READAHEAD_PIO_BIN_AT_NO_DIV_PIN if pio else \
+        require(not pio_pair or pio,'PIO pair timeline arithmetic requires the PIO profile')
+        expected=READAHEAD_PIO_PAIR_BIN_AT_NO_DIV_PIN if pio_pair else READAHEAD_PIO_BIN_AT_NO_DIV_PIN if pio else \
             READAHEAD_DIAGNOSTIC_BIN_AT_NO_DIV_PIN if diagnostic else \
             READAHEAD_BIN_AT_NO_DIV_PIN if read_ahead else BIN_AT_NO_DIV_PIN
         require((hashlib.sha256(body).hexdigest(),len(body))==expected,
@@ -223,8 +225,9 @@ def check(directory,*,self_test=False,read_ahead_proof=None):
                 all(read_ahead_proof.get('artifact_sha256',{}).get(name)==hashlib.sha256(image[0]).hexdigest()
                     for name,image in (('resident',resident),('worker',worker),('stage',stage))),
                 'timeline diagnostic arithmetic requires the complete exact auxiliary proof')
-    from check_vmu_native_sdk_sci_route import pio_companion
+    from check_vmu_native_sdk_sci_route import pio_companion,pio_pair_companion
     pio=pio_companion(worker,read_ahead_proof)
+    pio_pair=pio_pair_companion(worker,read_ahead_proof)
     require(not pio or diagnostic,'PIO timeline requires its diagnostic worker')
     markers=(resident[4].get('__kui_native_loader_timeline_resident'),
              worker[4].get('__kui_native_loader_timeline_worker'))
@@ -244,7 +247,7 @@ def check(directory,*,self_test=False,read_ahead_proof=None):
             P1+80<=callback<callback+len(callback_body)<=P1+SPAN and callback_section[2]&7==6,
             'timeline descriptor does not bind its exact private P1 callback')
     private=private_state(worker)
-    division=division_helper(resident,worker,read_ahead,bool(diagnostic),pio)
+    division=division_helper(resident,worker,read_ahead,bool(diagnostic),pio,pio_pair)
     begin,bridge,_=symbol_bytes(resident,'_kui_retail_async_trace',2)
     bridge_pin=READAHEAD_BRIDGE_PIN if read_ahead else SDK_BRIDGE_PIN if sdk else BRIDGE_PIN
     binder_pin=READAHEAD_BINDER_PIN if read_ahead else SDK_BINDER_PIN if sdk else BINDER_PIN
@@ -278,6 +281,7 @@ def check(directory,*,self_test=False,read_ahead_proof=None):
         'read_ahead_variant':read_ahead,
         'read_ahead_diagnostic_companion_required':bool(diagnostic),
         'read_ahead_pio_companion_required':pio,
+        'read_ahead_pio_pair_companion_required':pio_pair,
         'descriptor_bytes':12,'trace_descriptor_bytes_unchanged':40,
         'callback_address':hex(callback),'callback_bytes':len(callback_body),
         'private_state':private,'private_state_bytes':sum(PRIVATE_OBJECTS.values()),

@@ -184,6 +184,10 @@ def package(build,guide='broader',trace_startup=None,sdk_startup=None):
                 for name in ('native-read-ahead-second-overrun-2026-10-25.json',
                              'native-read-ahead-pio-2026-10-25.json'):
                     extra['docs/evidence/'+name]=(root/'docs/evidence'/name).read_bytes()
+            if report['read_ahead'].get('pio_pair_candidate'):
+                for name in ('native-read-ahead-pio-observed-2026-10-25.json',
+                             'native-read-ahead-pio-pair-2026-10-25.json'):
+                    extra['docs/evidence/'+name]=(root/'docs/evidence'/name).read_bytes()
         for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json',
                      'native-performance-acceptance-2026-10-23.json','native-uniform-root-family-2026-10-23.json',
                      'native-recv-ownership-2026-10-23.json','native-older-sdk-2026-10-23.json',
@@ -225,6 +229,8 @@ def package(build,guide='broader',trace_startup=None,sdk_startup=None):
             template_sha256=sha(template)),
         compatibility_claim=('Exact Evolution2 SDK SCI callback route at priority1; bootstrap SCI masked until verified retained binding, no VBR replacement; console boot and performance remain unverified'
             if guide=='sdk-sci-route' else
+            'Up to two CRC-checked fresh PIO blocks per eligible controller heartbeat with repeated ownership checks and soft clock admission before block2; demand DMA and SCI priority1 retained; console performance remains unverified'
+            if guide=='readahead' and report.get('read_ahead',{}).get('pio_pair_candidate') else
             'One CRC-checked fresh PIO block per eligible controller heartbeat; demand DMA and SCI priority1 retained, producer-only timing captured; console performance remains unverified'
             if guide=='readahead' and report.get('read_ahead',{}).get('pio_candidate') else
             'Bounded192KiB physical read-ahead on the admitted SDK SCI1 route;384KiB owned lease; console performance remains unverified'

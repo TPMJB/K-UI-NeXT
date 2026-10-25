@@ -32,6 +32,8 @@ __asm__(".global __kui_native_readahead_diagnostic_worker\n"
         ".set __kui_native_readahead_diagnostic_worker,1\n");
 __asm__(".global __kui_native_readahead_pio_worker\n"
         ".set __kui_native_readahead_pio_worker,1\n");
+__asm__(".global __kui_native_readahead_pio_pair_worker\n"
+        ".set __kui_native_readahead_pio_pair_worker,1\n");
 #endif
 static struct kui_reader_capture reader_capture;
 static kui_retail_async_region_type *reader_capture_region(void);
@@ -123,9 +125,12 @@ static void reader_readahead_report(const struct retail_display_state *display) 
         s->seeks,s->quiesces,s->resumes,s->full,s->extent_ends},5u);
     retail_display_values("CRC TOKEN ABORT GUARD CLOCK",(uint32_t[5]){
         s->crc_errors,s->token_errors,s->abandoned,s->guard_faults,s->clock_bad},5u);
-    retail_display_values("PIO WORK MAX TICKS BAD",
+    retail_display_values("PIO WORK MAX BAD",
         ((const struct kui_native_ra_public *)a->context)->diagnostics.stage_result[KUI_NATIVE_RA_STAGE_NONE],3u);
-    retail_display_hex("MAX AUX VISIT TICKS",s->max_visit_ticks);
+    retail_display_values("SECOND SKIP ONE MAX OVER",
+        ((const struct kui_native_ra_public *)a->context)->diagnostics.stage_result[KUI_NATIVE_RA_STAGE_NONE]+
+            KUI_NATIVE_RA_PIO_SECOND_ATTEMPTS,4u);
+    retail_display_hex("AUX MAX TICKS",s->max_visit_ticks);
     retail_display_line("HEX - 781250 HZ");
     retail_display_pause(240u);
     reader_readahead_diagnostics(display,

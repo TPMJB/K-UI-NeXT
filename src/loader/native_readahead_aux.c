@@ -19,7 +19,9 @@ __asm__(".global __kui_native_readahead_diagnostic_auxiliary\n"
         ".global __kui_native_readahead_repair_diagnostic_auxiliary\n"
         ".set __kui_native_readahead_repair_diagnostic_auxiliary,1\n"
         ".global __kui_native_readahead_pio_auxiliary\n"
-        ".set __kui_native_readahead_pio_auxiliary,1\n");
+        ".set __kui_native_readahead_pio_auxiliary,1\n"
+        ".global __kui_native_readahead_pio_pair_auxiliary\n"
+        ".set __kui_native_readahead_pio_pair_auxiliary,1\n");
 #define C kui_native_readahead_aux_context
 struct kui_native_readahead_aux_context kui_native_readahead_aux_context
     __attribute__((section(".data.native_ra_context"),aligned(32)))={0};
@@ -206,63 +208,96 @@ static void retire_spec(kui_retail_async_region_type *r,bool interrupt) {
     }
     C.spec_owned=0u;++C.stats.producer_blocks;
 }
-static void producer(kui_retail_async_region_type *r,bool interrupt) {
+static bool producer_ready(kui_retail_async_region_type *r,bool interrupt,
+    uint32_t *next,bool first) {
     const struct kui_native_ra_low_ops *o=C.config.ops;
     /* Optional CPU-clocked work belongs only to a later controller
      * heartbeat, never to GD entry or the SCI handler. */
-    if(C.current_event!=KUI_NATIVE_RA_TICK || interrupt || r->engine.in_irq)return;
-    if(C.quiesced) {skipped(KUI_NATIVE_RA_SKIP_QUIESCED);return;}
-    if(C.abandoned) {skipped(KUI_NATIVE_RA_SKIP_ABANDONED);return;}
-    if(!C.have_seed) {skipped(KUI_NATIVE_RA_SKIP_NO_SEED);return;}
+    if(C.current_event!=KUI_NATIVE_RA_TICK || interrupt || r->engine.in_irq)return false;
+    if(C.quiesced) {skipped(KUI_NATIVE_RA_SKIP_QUIESCED);return false;}
+    if(C.abandoned) {skipped(KUI_NATIVE_RA_SKIP_ABANDONED);return false;}
+    if(!C.have_seed) {skipped(KUI_NATIVE_RA_SKIP_NO_SEED);return false;}
     if(r->engine.native_loan_state!=KUI_VMU_NATIVE_ASYNC_LOAN_IDLE) {
-        skipped(KUI_NATIVE_RA_SKIP_LOAN);return;
+        skipped(KUI_NATIVE_RA_SKIP_LOAN);return false;
     }
-    ++C.stats.producer_visits;
-    if(r->engine.active) {skipped(KUI_NATIVE_RA_SKIP_ACTIVE);return;}
+    if(first)++C.stats.producer_visits;
+    if(r->engine.active) {skipped(KUI_NATIVE_RA_SKIP_ACTIVE);return false;}
     if(r->shared.service.pending || r->shared.service.executing) {
-        skipped(KUI_NATIVE_RA_SKIP_PENDING);return;
+        skipped(KUI_NATIVE_RA_SKIP_PENDING);return false;
     }
-    if(r->engine.failed) {skipped(KUI_NATIVE_RA_SKIP_FAILED);return;}
+    if(r->engine.failed) {skipped(KUI_NATIVE_RA_SKIP_FAILED);return false;}
     if(!r->engine.opened || !r->shared.port.acquired) {
-        skipped(KUI_NATIVE_RA_SKIP_NOT_OPENED);return;
+        skipped(KUI_NATIVE_RA_SKIP_NOT_OPENED);return false;
     }
-    if(r->shared.port.fault) {skipped(KUI_NATIVE_RA_SKIP_PORT_FAULT);return;}
-    if(o->busy()) {skipped(KUI_NATIVE_RA_SKIP_BUSY);return;}
+    if(r->shared.port.fault) {skipped(KUI_NATIVE_RA_SKIP_PORT_FAULT);return false;}
+    if(o->busy()) {skipped(KUI_NATIVE_RA_SKIP_BUSY);return false;}
     if(C.deferred) {
         /* fetch(polled=true) still uses DMA in RESUME. Only the ordinary
          * demand path may adopt a stopped partial reception. */
-        skipped(KUI_NATIVE_RA_SKIP_DEFERRED);return;
+        skipped(KUI_NATIVE_RA_SKIP_DEFERRED);return false;
     }
-    if(C.spec_owned) {skipped(KUI_NATIVE_RA_SKIP_SPEC_OWNED);return;}
-    uint32_t next;
-    if(!kui_native_ra_cache_next(&C.cache,&next)) {
+    if(C.spec_owned) {skipped(KUI_NATIVE_RA_SKIP_SPEC_OWNED);return false;}
+    if(!kui_native_ra_cache_next(&C.cache,next)) {
         if(C.cache.count==KUI_NATIVE_RA_CACHE_BLOCKS)++C.stats.full;
         else ++C.stats.extent_ends;
-        o->unhook();return;
+        o->unhook();return false;
     }
     /* Continue a fresh block in the already open stream. Do not enter the
      * RESUME branch, seek, issue a command, or borrow a guest DMA channel. */
-    if(r->shared.stream.state!=RA_PAUSED || r->shared.stream.position!=next) {
-        skipped(KUI_NATIVE_RA_SKIP_STREAM_POSITION);return;
+    if(r->shared.stream.state!=RA_PAUSED || r->shared.stream.position!=*next) {
+        skipped(KUI_NATIVE_RA_SKIP_STREAM_POSITION);return false;
     }
-    if(!dma_idle()) {skipped(KUI_NATIVE_RA_SKIP_GUEST_DMA);return;}
-    struct ra_clock before=clock_read();
+    if(!dma_idle()) {skipped(KUI_NATIVE_RA_SKIP_GUEST_DMA);return false;}
+    return true;
+}
+static void producer(kui_retail_async_region_type *r,bool interrupt) {
+    uint32_t next;
+    if(!producer_ready(r,interrupt,&next,true))return;
+    const struct kui_native_ra_low_ops *o=C.config.ops;
     uint32_t *metrics=C.diagnostics.stage_result[KUI_NATIVE_RA_STAGE_NONE];
-    ++metrics[KUI_NATIVE_RA_PIO_ATTEMPTS];
-    snapshot_pre(KUI_NATIVE_RA_STAGE_FETCH,r,next);
-    enum kui_sci_stream_result result=o->fetch(next,SPEC_TOKEN_LIMIT,true);
-    if(result!=KUI_SCI_STREAM_OK)abandon(r,result);
-    else {
-        C.spec_owned=1u;C.spec_lba=next;
-        /* PIO returns one complete block. Check and publish it during this
-         * same visit; a heartbeat never initiates a second fetch. */
-        retire_spec(r,false);
+    struct ra_clock before=clock_read(),block_before=before;
+    bool valid=true;
+    for(unsigned block=0u;block<KUI_NATIVE_RA_PIO_BLOCK_LIMIT;++block) {
+        if(block) {
+            /* Recheck every ordinary admission guard before deciding
+             * whether another complete block fits the soft window. */
+            if(!producer_ready(r,interrupt,&next,false))break;
+            struct ra_clock admission=clock_read();
+            uint32_t elapsed=before.counter-admission.counter;
+            if(!valid || !before.valid || !admission.valid ||
+               !elapsed || elapsed>=UINT32_C(0x80000000) || elapsed>KUI_NATIVE_RA_PIO_SECOND_LIMIT_TICKS) {
+                ++metrics[KUI_NATIVE_RA_PIO_SECOND_TIME_SKIPS];
+                valid=valid && admission.valid && elapsed && elapsed<UINT32_C(0x80000000);
+                break;
+            }
+            block_before=admission;
+            ++metrics[KUI_NATIVE_RA_PIO_SECOND_ATTEMPTS];
+        }
+        ++metrics[KUI_NATIVE_RA_PIO_ATTEMPTS];
+        snapshot_pre(KUI_NATIVE_RA_STAGE_FETCH,r,next);
+        enum kui_sci_stream_result result=o->fetch(next,SPEC_TOKEN_LIMIT,true);
+        if(result!=KUI_SCI_STREAM_OK)abandon(r,result);
+        else {
+            C.spec_owned=1u;C.spec_lba=next;
+            /* Finish this physical block, including CRC and publication,
+             * before considering another; never stop a partial block. */
+            retire_spec(r,false);
+        }
+        struct ra_clock after=clock_read();
+        uint32_t elapsed=block_before.counter-after.counter;
+        if(!block_before.valid || !after.valid || !elapsed || elapsed>=UINT32_C(0x80000000)) {
+            ++metrics[KUI_NATIVE_RA_PIO_CLOCK_BAD];valid=false;
+        } else if(elapsed>metrics[KUI_NATIVE_RA_PIO_MAX_SINGLE_TICKS])
+            metrics[KUI_NATIVE_RA_PIO_MAX_SINGLE_TICKS]=elapsed;
+        if(C.abandoned)break;
     }
+    /* This is an observed complete-work duration, not a hard deadline:
+     * an admitted block may take longer than its reserved allowance. */
     struct ra_clock after=clock_read();uint32_t elapsed=before.counter-after.counter;
-    if(!before.valid || !after.valid || elapsed>=UINT32_C(0x80000000))
-        ++metrics[KUI_NATIVE_RA_PIO_CLOCK_BAD];
-    else if(elapsed>metrics[KUI_NATIVE_RA_PIO_MAX_TICKS])
-        metrics[KUI_NATIVE_RA_PIO_MAX_TICKS]=elapsed;
+    if(valid && before.valid && after.valid && elapsed && elapsed<UINT32_C(0x80000000)) {
+        if(elapsed>metrics[KUI_NATIVE_RA_PIO_MAX_TICKS])metrics[KUI_NATIVE_RA_PIO_MAX_TICKS]=elapsed;
+        if(elapsed>KUI_NATIVE_RA_PIO_WINDOW_TICKS)++metrics[KUI_NATIVE_RA_PIO_WINDOW_OVERRUNS];
+    }
 }
 static void seed_completed(kui_retail_async_region_type *r) {
     struct kui_retail_async *e=&r->engine;

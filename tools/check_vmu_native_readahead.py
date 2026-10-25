@@ -33,6 +33,8 @@ CODE_PIN=(5120,'ad53f64817c9b65869bbe21e8d28a09ba98d75567709a6099bf51dd8551e2bd9
 DIAGNOSTIC_CODE_PIN=(6016,'d355c1383364a52f8f3d1b82dad6359ea695b0e15287b1c0cd9a4ecba231db92')
 REPAIR_DIAGNOSTIC_CODE_PIN=(6016,'46c8f355865297918df512b6053328fc88579d32fbb19b3576f9b5b9fc85d1e9')
 PIO_CODE_PIN=(5920,'e7973080e08364c228ef9ecade3ab09e9ab3fe5b6c2ce3ade2ef2879e4a218cd')
+PIO_PAIR_CODE_PIN=(6144,'13f3a6ee0841966d919723d68dff8909cc1326e450d63fe9d9a6f8e7f445f246')
+PIO_PAIR_MARK='__kui_native_readahead_pio_pair_'
 PIO_MARK='__kui_native_readahead_pio_'
 REPAIR_DIAGNOSTIC_MARKER='__kui_native_readahead_repair_diagnostic_auxiliary'
 DIAGNOSTIC_MARK='__kui_native_readahead_diagnostic_'
@@ -56,6 +58,12 @@ PIO_WORKER_PINS={
     '_reader_readahead_visit':(56,'2af85f7d6a6a88765d1e8cf645b45683e794c2bf08ebca7a5c1bb6666a78186a'),
     '_reader_cooperative_service':(32,'86b3e40e60ef13acabffe1461b97f7e0e7dda7a38248f486d08ab7c536a53a0f'),
     '_reader_readahead_failure':(172,'cbbb1917d4795bc8eed2ab4568939f6f98c7aa7b11d0bfb5bd4c43e7ed7d1382'),
+}
+PIO_PAIR_WORKER_PINS={
+    '_reader_readahead_exports':(160,'522dbac9b85fe2b51cee66c1223eefe02bf701a6594992abcc49183641f3fc89'),
+    '_reader_readahead_visit':(56,'2af85f7d6a6a88765d1e8cf645b45683e794c2bf08ebca7a5c1bb6666a78186a'),
+    '_reader_cooperative_service':(32,'b6dade21be0807a8ac8e608abe02b70d90f2f47faa086e6396ebdad6e4cc6ca0'),
+    '_reader_readahead_failure':(172,'e704e2fefce22e839fb62a24a10e35c949bb2c8615f84be30367e830df8c27e2'),
 }
 LOAN_PIN=(744,'a06ecbd795204545b4df1ca6f5efc3883a0a81b4e0391b088a12388203ff376c')
 GATEWAY_MEMORY={}
@@ -87,6 +95,13 @@ def pio_profile(aux):
                 'read-ahead PIO marker differs or lacks its diagnostic profile')
     return mark is not None
 
+def pio_pair_profile(aux):
+    mark=aux[4].get(PIO_PAIR_MARK+'auxiliary')
+    if mark is not None:
+        require(mark==(1,0,0,0xfff1) and pio_profile(aux),
+                'read-ahead PIO pair marker differs or lacks its PIO profile')
+    return mark is not None
+
 def code_payload(aux):
     parts=[]
     for sec in aux[3]:
@@ -101,7 +116,7 @@ def code_payload(aux):
 
 def pinned_code(aux):
     address,body=code_payload(aux)
-    selected=PIO_CODE_PIN if pio_profile(aux) else \
+    selected=PIO_PAIR_CODE_PIN if pio_pair_profile(aux) else PIO_CODE_PIN if pio_profile(aux) else \
         REPAIR_DIAGNOSTIC_CODE_PIN if repair_diagnostic_profile(aux) else \
         DIAGNOSTIC_CODE_PIN if diagnostic_profile(aux) else CODE_PIN
     require(selected is not None and (len(body),sha(body))==selected,
@@ -317,9 +332,10 @@ class WorkerCPU(SDKCPU):
         # instruction proof establishes PR preservation around its C body.
         self.r[0]=1;self.sr^=1;self.pc=continuation
 
-def worker_bindings(resident,worker,*,diagnostic=False,pio=False):
+def worker_bindings(resident,worker,*,diagnostic=False,pio=False,pio_pair=False):
     pins={}
-    selected=PIO_WORKER_PINS if pio else DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
+    selected=PIO_PAIR_WORKER_PINS if pio_pair else PIO_WORKER_PINS if pio else \
+        DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
     require(selected,'read-ahead reviewed worker pins are missing')
     public=656 if diagnostic else 76
     for name,(count,digest) in selected.items():
@@ -671,11 +687,38 @@ def snapshot_instruction_truth(resident,aux):
     return cases
 
 
-def private_stack(directory,resident):
+def closed_callgraph(text):
+    if not text.lstrip().startswith('graph: {'):return False
+    depth=0;quoted=escaped=closed=False
+    for char in text:
+        if closed:
+            if not char.isspace():return False
+        elif quoted:
+            if escaped:escaped=False
+            elif char=='\\':escaped=True
+            elif char=='"':quoted=False
+        elif char=='"':quoted=True
+        elif char=='{':depth+=1
+        elif char=='}':
+            depth-=1
+            if depth<0:return False
+            if depth==0:closed=True
+    return closed and not quoted and depth==0
+
+
+def private_stack(directory,resident,*,self_test=False):
     aux_reports=list((directory/'ra').rglob('*.ci'))
     low_reports=list(directory.glob('resident-sci.elf.ltrans*.ci'))
     if not low_reports:low_reports=list((directory/'resident/lto').glob('*.ci'))
     require(aux_reports and low_reports,'read-ahead stack proof requires actual auxiliary and LTO callgraphs')
+    closure_mutations=0
+    for report in aux_reports+low_reports:
+        text=report.read_text()
+        require(closed_callgraph(text),'incomplete emitted read-ahead stack graph: '+str(report))
+        if self_test:
+            for invalid in (text[:text.rfind('}')],text+'node: {}'):
+                require(not closed_callgraph(invalid),'read-ahead stack proof accepts an incomplete graph')
+                closure_mutations+=1
     af,ac=graph.load(aux_reports,qualified=True,scope='aux')
     lf,lc=graph.load(low_reports,qualified=True,scope='low')
     frames={**af,**lf};calls={**ac,**lc};visited=set();sites=set();memo={}
@@ -717,7 +760,8 @@ def private_stack(directory,resident):
     require(total<=4096,'read-ahead private stack exceeds existing4KiB guards/topgap/margin')
     return dict(available_bytes=4096,worst_c_bytes=worst,library_margin_bytes=4,
         explicit_margin_bytes=64,guard_bytes=16,top_gap_bytes=32,total_bytes=total,
-        roots=roots,typed_low_indirect_sites=len(sites),missing_or_recursive_callbacks_rejected=True)
+        roots=roots,typed_low_indirect_sites=len(sites),missing_or_recursive_callbacks_rejected=True,
+        all_emitted_callgraphs_closed=True,callgraph_closure_mutation_rejections=closure_mutations)
 
 def check(directory,*,self_test=False):
     directory=Path(directory)
@@ -734,12 +778,16 @@ def check(directory,*,self_test=False):
     require(aux[4].get(MARK+'auxiliary')==(1,0,0,0xfff1),'read-ahead auxiliary marker mismatch')
     diagnostic=diagnostic_profile(aux)
     pio=pio_profile(aux)
+    pio_pair=pio_pair_profile(aux)
     diagnostic_worker=worker[4].get(DIAGNOSTIC_MARK+'worker')
     require(bool(diagnostic_worker)==diagnostic and (not diagnostic or
             diagnostic_worker==(1,0,0,0xfff1)),'read-ahead diagnostic worker/auxiliary markers differ')
     pio_worker=worker[4].get(PIO_MARK+'worker')
     require(bool(pio_worker)==pio and (not pio or pio_worker==(1,0,0,0xfff1)),
             'read-ahead PIO worker/auxiliary markers differ')
+    pair_worker=worker[4].get(PIO_PAIR_MARK+'worker')
+    require(bool(pair_worker)==pio_pair and (not pio_pair or pair_worker==(1,0,0,0xfff1)),
+            'read-ahead PIO pair worker/auxiliary markers differ')
     geometry=image_contract(directory,aux,resident)
     code_at,code=pinned_code(aux)
     insns=instruction_audit('native-read-ahead',disassemble(directory/'native-ra-aux.elf'))
@@ -752,8 +800,8 @@ def check(directory,*,self_test=False):
     if pio:
         from check_vmu_native_readahead_pio import pio_cases
         producer=pio_cases(resident,aux,self_test=self_test)
-    gateway=gateway_cases(resident,aux);stack=private_stack(directory,resident)
-    bindings=worker_bindings(resident,worker,diagnostic=diagnostic,pio=pio)
+    gateway=gateway_cases(resident,aux);stack=private_stack(directory,resident,self_test=self_test)
+    bindings=worker_bindings(resident,worker,diagnostic=diagnostic,pio=pio,pio_pair=pio_pair)
     display=worker_diagnostic_display(worker) if diagnostic else {'enabled':False}
     from check_vmu_native_readahead_stage import check_stage
     cold=check_stage(stage,resident,aux,self_test=self_test)
@@ -769,7 +817,8 @@ def check(directory,*,self_test=False):
         bindings_mutations+=byte_mutations(resident,[(n,2) for n in LOW_PINS],
             lambda image:pinned_functions(image,LOW_PINS,'read-ahead low binding'))
         bindings_mutations+=byte_mutations(resident,[('_kui_native_ra_reader_ops',1),('_kui_native_ra_reader_ops_entry',1)],typed_ops)
-        worker_pins=PIO_WORKER_PINS if pio else DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
+        worker_pins=PIO_PAIR_WORKER_PINS if pio_pair else PIO_WORKER_PINS if pio else \
+            DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
         bindings_mutations+=byte_mutations(worker,[(n,2) for n in worker_pins],
             lambda image:pinned_functions(image,worker_pins,'read-ahead worker binding'))
         if diagnostic:
@@ -783,7 +832,7 @@ def check(directory,*,self_test=False):
             else:raise ValueError('read-ahead auditor accepted a changed QUIESCE boundary')
     return dict(enabled=True,schema='kui.native.read-ahead.audit.v1',paired_markers=True,
         diagnostic_capture=diagnostic,repair_diagnostic_capture=repair_diagnostic_profile(aux),
-        pio_candidate=pio,pio_producer=producer,
+        pio_candidate=pio,pio_pair_candidate=pio_pair,pio_producer=producer,
         artifact_sha256=dict(resident=sha(resident[0]),worker=sha(worker[0]),
             stage=sha(stage[0]),auxiliary=sha(aux[0])),
         immutable_code_pin={'address':hex(code_at),'bytes':len(code),'sha256':sha(code)},

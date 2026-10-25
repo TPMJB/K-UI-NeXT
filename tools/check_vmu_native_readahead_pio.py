@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Execute the optional one-block PIO producer as linked SH instructions.
+"""Execute the distinct bounded PIO producers as linked SH instructions.
 
 The producer, cache operations, snapshots and clock checks execute unchanged.
 Only the already typed low operations are bounded ABI substitutes. This proves
@@ -14,6 +14,7 @@ import sys
 ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/'tools'),str(ROOT/'tests')]
 PIO_MARKER='__kui_native_readahead_pio_auxiliary'
+PIO_PAIR_MARKER='__kui_native_readahead_pio_pair_auxiliary'
 
 
 def require(ok,message):
@@ -31,8 +32,17 @@ def pio_profile(aux):
     return True
 
 
+def pio_pair_profile(aux):
+    marker=aux[4].get(PIO_PAIR_MARKER)
+    if marker is None:return False
+    require(marker==(1,0,0,0xfff1) and pio_profile(aux),
+            'PIO pair marker differs or lacks the exact PIO profile')
+    return True
+
+
 def pio_cases(resident,aux,*,self_test=False):
     require(__debug__,'PIO producer proof requires Python assertions')
+    pair=pio_pair_profile(aux)
     if not pio_profile(aux):return {'enabled':False}
     # The main audit imports this module only after its own definitions exist.
     # Keeping this dependency lazy also permits a standalone invocation.
@@ -53,7 +63,12 @@ def pio_cases(resident,aux,*,self_test=False):
             self.data=0xac430000;self.block=self.region+0x20;self.next=0x123401
             self.payload=bytes((i*37+seed*19)&255 for i in range(512))
             self.fetch_result=0;self.take_result=0;self.take_null=False
+            self.fetch_results=None;self.take_results=None;self.last_fetch_lba=None
+            self.after_first=None;self.after_first_done=False;self.clock_schedule=None
+            self.clock_samples=0;self.clock_pending=False;self.clock_valid=None
+            self.fetch_payloads=[]
             self.transport_busy=False;self.corrupt_append=False
+            self.append_fail_at=None;self.take_null_at=None
             self.dma_chcr=0;self.dmaor=1
             self.timer=0x12345000;self.timer_step=97;self.timer_reads=0
             self.bad_clock=False;self.bad_after=False
@@ -75,11 +90,26 @@ def pio_cases(resident,aux,*,self_test=False):
                 if address==0xffa0001c:return self.dma_chcr
                 if address==0xffa00040:return self.dmaor
                 if address==0xffc00000:
+                    if pair:
+                        if (self.after_first is not None and not self.after_first_done and
+                                self.read(self.context+16)==1):
+                            self.after_first_done=True;self.in_stub=True
+                            self.after_first(self);self.in_stub=False
+                        self.clock_pending=True
+                        if self.clock_valid is not None:
+                            return 0xe0a if self.clock_valid(self.clock_samples) else 0
                     return 0 if self.bad_clock or (self.bad_after and self.timer_reads) else 0xe0a
                 if address==0xffd80008:return MASK
                 if address==0xffd80010:return 2
                 if address==0xffd80004:return 1
                 if address==0xffd8000c:
+                    if pair and self.clock_pending:
+                        self.clock_pending=False
+                        if self.clock_schedule is not None:
+                            require(self.clock_samples<len(self.clock_schedule),'PIO pair read unexpected extra clock sample')
+                            value=self.clock_schedule[self.clock_samples]&MASK
+                            self.clock_samples+=1;self.timer_reads+=1;return value
+                        self.clock_samples+=1
                     value=self.timer&MASK;self.timer=(self.timer-self.timer_step)&MASK
                     self.timer_reads+=1;return value
                 return ((address^0x13579bdf)+(self.hw_seed+1)*13)&((1<<(8*count))-1)
@@ -103,6 +133,11 @@ def pio_cases(resident,aux,*,self_test=False):
                 return
             if op&0xf0ff==0x4011: # CMP/PZ Rn.
                 self.flag(not self.r[op>>8&15]&0x80000000);return
+            if op&0xf0ff==0x4015: # CMP/PL Rn.
+                value=self.r[op>>8&15];self.flag(0<value<0x80000000);return
+            if op&0xf00f==0x3003: # CMP/GE Rm,Rn, signed comparison.
+                n,m=op>>8&15,op>>4&15
+                self.flag((self.r[n]^0x80000000)>=(self.r[m]^0x80000000));return
             super().plain(op,pc)
 
         def callee(self):
@@ -112,19 +147,27 @@ def pio_cases(resident,aux,*,self_test=False):
             self.operations.append((name,args));self.in_stub=True;result=0
             if name=='_kui_sci_stream_busy':result=int(self.transport_busy)
             elif name=='_kui_sci_stream_fetch':
-                assert args[:3]==[self.next,256,1],('PIO fetch ABI',args)
-                assert self.read(self.region+0x470)==1 and self.read(self.region+0x474)==self.next
+                index=len(self.calls_named(name))-1;expected=self.next+(index if pair else 0)
+                assert args[:3]==[expected,256,1],('PIO fetch ABI',args)
+                assert self.read(self.region+0x470)==1 and self.read(self.region+0x474)==expected
                 assert not self.dma_chcr&7 and self.dmaor&7==1
-                result=self.fetch_result
+                self.last_fetch_lba=expected
+                result=self.fetch_results[index] if self.fetch_results is not None else self.fetch_result
                 if not result:
-                    self.write(self.region+0x474,self.next+1)
-                    self.write(self.region+0x498,self.next+1)
+                    self.write(self.region+0x474,expected+1)
+                    self.write(self.region+0x498,expected+1)
+                    payload=bytes(b^(index*0x5a) for b in self.payload) if pair else self.payload
+                    self.fetch_payloads.append(payload)
+                    if pair:
+                        for i,b in enumerate(payload):self.write(self.block+i,b,1)
             elif name=='_kui_sci_stream_take':
-                assert args[0]==self.next
+                assert args[0]==(self.last_fetch_lba if pair else self.next)
                 assert STACK_BOTTOM+16<=args[1]<=STACK_TOP-36
-                self.write(args[1],self.take_result)
-                result=0 if self.take_null or self.take_result else self.block
-                if self.corrupt_append:self.write(self.context+696,384)
+                index=len(self.calls_named(name))-1
+                take_result=self.take_results[index] if self.take_results is not None else self.take_result
+                self.write(args[1],take_result)
+                result=0 if self.take_null or take_result or index==self.take_null_at else self.block
+                if self.corrupt_append or index==self.append_fail_at:self.write(self.context+696,384)
             elif name=='_unhook':pass
             elif name=='_deliver_work':assert args[0]==0
             else:raise ValueError('optional PIO called forbidden low operation: '+name)
@@ -138,6 +181,7 @@ def pio_cases(resident,aux,*,self_test=False):
             self.r[4:8]=[event,0,self.region,0] if dispatch else [self.region,interrupt,0,0]
             before=self.snapshot();self.actual_writes=[];self.stub_writes=[];self.writes=[];self.hw_reads=[]
             self.operations=[]
+            self.fetch_payloads=[];self.last_fetch_lba=None;self.after_first_done=False
             self.run_symbol('_kui_native_readahead_aux_dispatch' if dispatch else '_producer')
             assert_c_abi(self,before)
             for address,count in self.actual_writes:
@@ -149,12 +193,16 @@ def pio_cases(resident,aux,*,self_test=False):
             for at in (STACK_BOTTOM,STACK_TOP-16):
                 assert all(self.read(at+4*i)==CANARY for i in range(4))
             assert self.read(self.context)==1,'producer changed gateway busy ownership'
-            assert len(self.calls_named('_kui_sci_stream_fetch'))<=1,'heartbeat fetched more than one block'
+            assert len(self.calls_named('_kui_sci_stream_fetch'))<=(2 if pair else 1),'heartbeat exceeded its exact block cap'
             return self
 
         def calls_named(self,name):return [args for called,args in self.operations if called==name]
 
         def metrics(self):return [self.read(self.context+80+4*i) for i in range(3)]
+
+        def pair_metrics(self):return [self.read(self.context+80+4*i) for i in range(8)]
+
+    if pair:return _pair_cases(ProducerCPU,aux,self_test=self_test)
 
     positive=refusals=failures=clocks=0
     for bank in (0,1):
@@ -320,6 +368,220 @@ def pio_cases(resident,aux,*,self_test=False):
         fetch_token_limit=256,fetch_polled_true=True,maximum_blocks_per_visit=1,
         actual_cache_copy_before_validity_publication=True,actual_cache_extent_capacity_checks=True,
         actual_read_only_clock_and_failure_snapshots=True,metrics_offsets=[80,84,88],
+        both_integer_banks_and_bl_states=True,callee_saved_and_private_stack_preserved=True,
+        typed_low_ops='Bounded ABI-adversarial substitutes; no low transport emulation',
+        no_hardware_write_or_rdr_read=True,console_boot_verified=False,console_performance_verified=False)
+
+
+def _pair_cases(CPU,aux,*,self_test=False):
+    """The distinct pair image executes both full admission passes in SH."""
+    mask=0xffffffff;positives=refusals=between=failures=clocks=repeated=0
+
+    def copied_before_publication(c,head,count,blocks):
+        publications=[i for i,(at,size) in enumerate(c.actual_writes)
+                      if at==c.context+700 and size==4]
+        assert len(publications)==blocks
+        for block in range(blocks):
+            slot=(head+count+block)%384
+            assert bytes(c.read(c.data+slot*512+i,1) for i in range(512))==c.fetch_payloads[block]
+            writes=[i for i,(at,size) in enumerate(c.actual_writes)
+                    if c.data+slot*512<=at<c.data+(slot+1)*512 and size==1]
+            assert len(writes)==512 and max(writes)<publications[block]
+
+    for bank in (0,1):
+        for blocked in (False,True):
+            for dispatch in (False,True):
+                for head,count in ((0,1),(383,1),(2,382)):
+                    c=CPU(positives,bank,blocked)
+                    c.write(c.context+696,head);c.write(c.context+700,count)
+                    c.next=c.read(c.context+692)+count;c.write(c.region+0x474,c.next)
+                    c.execute(dispatch=dispatch)
+                    copied_before_publication(c,head,count,2)
+                    assert c.read(c.context+700)==count+2 and c.read(c.context+740)==0
+                    assert c.read(c.context+16)==2 and c.read(c.context+20)==1
+                    assert len(c.calls_named('_kui_sci_stream_fetch'))==len(c.calls_named('_kui_sci_stream_take'))==2
+                    assert not c.calls_named('_kui_sci_stream_poll') and not c.calls_named('_unhook')
+                    assert c.pair_metrics()==[2,10*c.timer_step,0,1,0,4*c.timer_step,0,0]
+                    if dispatch:assert c.read(c.context+68)==12*c.timer_step
+                    positives+=1
+
+    # Every mutable ordinary guard is tested both before any work and again
+    # after the first block's real CRC-checked publication. The injection is
+    # external fixture state, performed at the first post-block clock read.
+    guards=(('event','c',900,1,4),('in_irq','r',0x2cc,1,4),
+        ('quiesced','c',712,1,4),('abandoned','c',716,1,4),
+        ('no_seed','c',720,0,4),('loan','r',0x2f4,1,4),
+        ('active','r',0x2bc,1,4),('pending','r',0x370,1,4),
+        ('executing','r',0x374,1,4),('failed','r',0x2c0,1,4),
+        ('closed','r',0x2c4,0,4),('not_acquired','r',0x4eb,0,1),
+        ('port_fault','r',0x4ec,1,1),('busy','x',0,1,4),
+        ('deferred','c',748,1,4),('spec_owned','c',740,1,4),
+        ('full','c',700,384,4),('extent_end','c',704,None,4),
+        ('resume','r',0x470,4,4),('closed_stream','r',0x470,0,4),
+        ('lost_stream','r',0x470,3,4),('receiving','r',0x470,2,4),
+        ('position','r',0x474,None,4),('guest_dma','x',1,1,4),
+        ('dmaor','x',2,3,4))
+
+    def apply_guard(c,guard):
+        name,space,offset,value,size=guard
+        if name=='busy':c.transport_busy=True
+        elif name=='guest_dma':c.dma_chcr=1
+        elif name=='dmaor':c.dmaor=3
+        else:
+            if name=='extent_end':value=c.read(c.context+692)+c.read(c.context+700)
+            if name=='position':value=c.read(c.region+0x474)+1
+            c.write((c.context if space=='c' else c.region)+offset,value,size)
+
+    for bank in (0,1):
+        for blocked in (False,True):
+            for guard in guards:
+                c=CPU(refusals,bank,blocked);apply_guard(c,guard)
+                count=c.read(c.context+700)
+                c.execute(event=1 if guard[0]=='event' else 2)
+                assert not c.calls_named('_kui_sci_stream_fetch') and c.pair_metrics()==[0]*8,guard[0]
+                assert c.read(c.context+700)==count
+                assert not any(c.data<=at<c.data+0x30000 for at,_ in c.actual_writes)
+                refusals+=1
+                c=CPU(between,bank,blocked)
+                c.after_first=lambda current,g=guard:apply_guard(current,g)
+                c.execute()
+                assert c.after_first_done and len(c.calls_named('_kui_sci_stream_fetch'))==1,guard[0]
+                assert c.pair_metrics()==[1,5*c.timer_step,0,0,0,4*c.timer_step,0,0],guard[0]
+                assert c.read(c.context+16)==1 and c.read(c.context+20)==1
+                copied_before_publication(c,0,1,1)
+                between+=1
+            c=CPU();c.execute(interrupt=1)
+            assert not c.calls_named('_kui_sci_stream_fetch') and c.pair_metrics()==[0]*8
+            refusals+=1
+
+    for failed_block in (0,1):
+        for stage in ('fetch','take','null_take','append'):
+            for result in (range(1,8) if stage in ('fetch','take') else (0,)):
+                c=CPU(failures)
+                if stage=='fetch':c.fetch_results=[0,result] if failed_block else [result]
+                elif stage=='take':c.take_results=[0,result] if failed_block else [result]
+                elif stage=='null_take':c.take_null_at=failed_block
+                else:c.append_fail_at=failed_block
+                c.execute()
+                expected_result=2 if stage=='append' else result
+                expected_stage=4 if stage=='fetch' else 3 if stage=='append' else 2
+                assert len(c.calls_named('_kui_sci_stream_fetch'))==failed_block+1
+                assert c.read(c.context+700)==1+failed_block and c.read(c.context+16)==failed_block
+                assert c.read(c.context+716)==1 and c.read(c.context+740)==c.read(c.context+748)==0
+                assert c.read(c.context+76)==1
+                for offset in (360,508):
+                    assert c.read(c.context+offset)==expected_stage
+                    assert c.read(c.context+offset+4)==expected_result
+                    assert c.read(c.context+offset+44)==c.next+failed_block
+                assert c.read(c.context+80+4*(8*expected_stage+expected_result))==1
+                metrics=c.pair_metrics()
+                assert metrics[0]==failed_block+1 and metrics[2]==0 and metrics[3]==failed_block and metrics[4]==0
+                assert len(c.calls_named('_unhook'))==1
+                copied_before_publication(c,0,1,failed_block)
+                failures+=1
+
+    # Script only actual clock_read samples. Snapshot TMU observations retain
+    # their own reads and cannot consume or hide an admission-clock sample.
+    schedules=(
+        ('under',[10000,9600,9500,9100,9000],None,[2,1000,0,1,0,400,0,0]),
+        ('threshold',[10000,9600,8856,8456,8400],None,[2,1600,0,1,0,400,0,0]),
+        ('over_threshold',[10000,9600,8855,8800],None,[1,1200,0,0,1,400,0,0]),
+        ('zero_first',[10000,10000,9900,9800],None,[1,0,1,0,1,0,0,0]),
+        ('zero_admission',[10000,9600,10000,9500],None,[1,0,0,0,1,400,0,0]),
+        ('backward_first',[10000,10001,9900,9800],None,[1,0,1,0,1,0,0,0]),
+        ('half_first',[0x80001000,0x1000,0x80000f00,0x80000e00],None,[1,0,1,0,1,0,0,0]),
+        ('half_admission',[0x80001000,0x80000e70,0x1000,0x80000e00],None,[1,0,0,0,1,400,0,0]),
+        ('wrap',[0x100,0xffffffa0,0xffffff00,0xfffffd70,0xfffffd00],None,[2,1024,0,1,0,400,0,0]),
+        ('bad_before',[10000,9600,9500,9000],0,[1,0,1,0,1,0,0,0]),
+        ('bad_after_first',[10000,9600,9500,9000],1,[1,0,1,0,1,0,0,0]),
+        ('bad_admission',[10000,9600,9500,9000],2,[1,0,0,0,1,400,0,0]),
+        ('bad_after_second',[10000,9600,9500,9100,9000],3,[2,0,1,1,0,400,0,0]),
+        ('bad_final',[10000,9600,9500,9100,9000],4,[2,0,0,1,0,400,0,0]),
+        ('window_exact',[10000,9600,9500,8000,7656],None,[2,2344,0,1,0,1500,0,0]),
+        ('window_overrun',[10000,9600,9500,8000,7655],None,[2,2345,0,1,0,1500,1,0]),
+        ('zero_second',[10000,9600,9500,9500,9000],None,[2,0,1,1,0,400,0,0]),
+        ('half_second',[0x80001000,0x80000e70,0x80000e0c,0xe0c,0x80000d00],None,[2,0,1,1,0,400,0,0]),
+    )
+    for name,schedule,invalid,expected in schedules:
+        for bank in (0,1):
+            c=CPU(clocks,bank);c.clock_schedule=schedule
+            if invalid is not None:c.clock_valid=lambda index,bad=invalid:index!=bad
+            c.execute()
+            assert c.clock_samples==len(schedule),(name,c.clock_samples,len(schedule))
+            assert c.pair_metrics()==expected,(name,c.pair_metrics(),expected)
+            assert c.read(c.context+700)==1+expected[0]
+            copied_before_publication(c,0,1,expected[0]);clocks+=1
+
+    for mode in ('two_ticks','one_slot','one_extent_block','two_slots','two_extent_blocks','demand_pending'):
+        c=CPU(repeated)
+        if mode in ('one_slot','two_slots'):
+            c.write(c.context+700,383 if mode=='one_slot' else 382)
+            c.next=c.read(c.context+692)+c.read(c.context+700);c.write(c.region+0x474,c.next)
+        if mode in ('one_extent_block','two_extent_blocks'):
+            c.write(c.context+704,c.next+(1 if mode=='one_extent_block' else 2))
+        c.execute(dispatch=True);first_count=c.read(c.context+700);attempts=c.pair_metrics()[0]
+        assert attempts==(1 if mode in ('one_slot','one_extent_block') else 2)
+        c.next=c.read(c.context+692)+first_count
+        if mode=='demand_pending':c.write(c.region+0x370,1)
+        c.execute(dispatch=True)
+        if mode=='two_ticks':
+            assert len(c.calls_named('_kui_sci_stream_fetch'))==2 and c.read(c.context+700)==first_count+2
+            assert c.pair_metrics()[0]==4
+        else:
+            assert not c.calls_named('_kui_sci_stream_fetch') and c.read(c.context+700)==first_count
+            assert c.pair_metrics()[0]==attempts
+        repeated+=1
+
+    for irq in (0,1):
+        c=CPU();c.write(c.region+0x2cc,irq);c.execute(dispatch=True,event=1)
+        assert len(c.calls_named('_deliver_work'))==1 and not c.calls_named('_kui_sci_stream_fetch')
+        assert c.pair_metrics()==[0]*8;refusals+=1
+
+    # A longer prior maximum is retained independently for whole/single work.
+    c=CPU();c.write(c.context+84,2000);c.write(c.context+100,1000);c.execute()
+    assert c.pair_metrics()==[2,2000,0,1,0,1000,0,0];clocks+=1
+    instruction_truth=0;c=CPU()
+    for flag in (0,1):
+        for value in (0,1,0x7fffffff,0x80000000,0xffff8000,mask):
+            c.r[12]=value;c.sr=(c.sr&~1)|flag;before=c.sr
+            c.plain(0x4c15,0)
+            assert c.r[12]==value and c.sr&~1==before&~1 and c.sr&1==int(0<value<0x80000000)
+            instruction_truth+=1
+            for other in (0,1,0x7fffffff,0x80000000,0xffff8000,mask):
+                c.r[12]=value;c.r[13]=other;c.sr=(c.sr&~1)|flag;before=c.sr
+                c.plain(0x3dc3,0)
+                expected=int((other^0x80000000)>=(value^0x80000000))
+                assert c.r[12:14]==[value,other] and c.sr&~1==before&~1 and c.sr&1==expected
+                instruction_truth+=1
+    marker_mutations=0
+    if self_test:
+        for name,value in ((PIO_PAIR_MARKER,(0,0,0,0xfff1)),(PIO_PAIR_MARKER,(1,4,0,0xfff1)),
+                (PIO_PAIR_MARKER,(1,0,1,0xfff1)),(PIO_PAIR_MARKER,(1,0,0,1)),
+                (PIO_MARKER,None),('__kui_native_readahead_diagnostic_auxiliary',None),
+                ('__kui_native_readahead_repair_diagnostic_auxiliary',None)):
+            symbols=aux[4].copy()
+            if value is None:symbols.pop(name)
+            else:symbols[name]=value
+            try:pio_pair_profile((*aux[:4],symbols))
+            except ValueError:marker_mutations+=1
+            else:raise ValueError('PIO pair proof accepted changed profile marker')
+    return dict(enabled=True,pair_profile=True,pair_candidate=True,
+        actual_linked_producer_executed=True,tick_only=True,
+        one_fresh_block_per_tick=False,maximum_blocks_per_visit=2,
+        no_optional_dma_or_new_commands=True,producer_only_timing=True,
+        modelcases=positives+refusals+between+failures+clocks+repeated,
+        actual_linked_producer_positive_cases=positives,actual_linked_admission_refusals=refusals,
+        actual_linked_second_guard_refusals=between,actual_linked_error_paths=failures,
+        actual_linked_clock_cases=clocks,repeated_tick_and_boundary_cases=repeated,
+        additional_instruction_truth_cases=instruction_truth,
+        profile_marker_mutations=marker_mutations,second_elapsed_limit_ticks=1144,
+        second_limit_ticks=1144,second_block_timing_admitted=True,
+        second_limit_inclusive=True,reserve_ticks=1200,soft_window_ticks=2344,
+        positive_valid_intervals_required=True,all_ordinary_guards_rechecked_before_second=True,
+        per_block_positive_elapsed_required=True,all_admission_guards_rechecked_between_blocks=True,
+        actual_cache_copy_before_each_validity_publication=True,
+        first_and_second_errors_do_not_issue_stop=True,fetch_token_limit=256,fetch_polled_true=True,
+        metrics_offsets=[80,84,88,92,96,100,104,108],
         both_integer_banks_and_bl_states=True,callee_saved_and_private_stack_preserved=True,
         typed_low_ops='Bounded ABI-adversarial substitutes; no low transport emulation',
         no_hardware_write_or_rdr_read=True,console_boot_verified=False,console_performance_verified=False)

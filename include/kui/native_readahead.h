@@ -67,11 +67,20 @@ enum kui_native_ra_failure_stage {
 #define KUI_NATIVE_RA_RESULT_COUNT 8u
 /* Under __kui_native_readahead_pio_auxiliary, the otherwise unused NONE
  * histogram row contains producer-only metrics. Failure rows1..6 retain
- * their original meaning; capture-start clears these metrics too. */
+ * their original meaning; capture-start clears these metrics too. The
+ * distinct pair profile rejects zero elapsed time for completed512B work
+ * as an invalid per-attempt interval and never admits a second block then. */
 enum kui_native_ra_pio_metric {
     KUI_NATIVE_RA_PIO_ATTEMPTS=0u,KUI_NATIVE_RA_PIO_MAX_TICKS,
-    KUI_NATIVE_RA_PIO_CLOCK_BAD
+    KUI_NATIVE_RA_PIO_CLOCK_BAD,KUI_NATIVE_RA_PIO_SECOND_ATTEMPTS,
+    KUI_NATIVE_RA_PIO_SECOND_TIME_SKIPS,KUI_NATIVE_RA_PIO_MAX_SINGLE_TICKS,
+    KUI_NATIVE_RA_PIO_WINDOW_OVERRUNS
 };
+#define KUI_NATIVE_RA_PIO_BLOCK_LIMIT 2u
+#define KUI_NATIVE_RA_PIO_WINDOW_TICKS 2344u
+#define KUI_NATIVE_RA_PIO_RESERVE_TICKS 1200u
+#define KUI_NATIVE_RA_PIO_SECOND_LIMIT_TICKS \
+    (KUI_NATIVE_RA_PIO_WINDOW_TICKS-KUI_NATIVE_RA_PIO_RESERVE_TICKS)
 enum kui_native_ra_skip {
     KUI_NATIVE_RA_SKIP_QUIESCED=0u,KUI_NATIVE_RA_SKIP_ABANDONED,
     KUI_NATIVE_RA_SKIP_NO_SEED,KUI_NATIVE_RA_SKIP_LOAN,
