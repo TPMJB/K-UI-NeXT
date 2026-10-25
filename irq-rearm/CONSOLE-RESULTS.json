@@ -1,0 +1,90 @@
+{
+  "source": "Five owner console photos; selected legible counters manually transcribed",
+  "ticks_per_second": 781250,
+  "input_photos": [
+    {
+      "page": 1,
+      "sha256": "036c01551fd812b2edca68cd2ce2e5c3ab26f0242ac317a7825536e91e72927c",
+      "bytes": 301129
+    },
+    {
+      "page": 2,
+      "sha256": "3dced0d33be065caf9a98d3abdb8ced508482490a2d40244e4a5966aa18b3df7",
+      "bytes": 286557
+    },
+    {
+      "page": 3,
+      "sha256": "dffdc5d5c199b90b4eac82c0473c496aec50aa2e7a70caed3f8856911431b23f",
+      "bytes": 279149
+    },
+    {
+      "page": 4,
+      "sha256": "5d8da4cdc78497756c2f4edf4858db96dd88268590e34e5bc8172e843ae48c3c",
+      "bytes": 287556
+    },
+    {
+      "page": 5,
+      "sha256": "22828ed81191759e50c6158702caa9a087a20552431c735cb198194ee0b29ac9",
+      "bytes": 293371
+    }
+  ],
+  "selected_hex": {
+    "samples": "4B0",
+    "bad": "0",
+    "poll_gap_max": "3FC1",
+    "complete_read_max": "33C02",
+    "pending_age_max": "30EE0",
+    "irq_blocks": "0",
+    "call_blocks": "8D8",
+    "pio": "0",
+    "crc_errors": "0",
+    "token_errors": "0",
+    "foreign": "0",
+    "repairs": "64",
+    "overruns": "0",
+    "deferred": "0",
+    "clock_bad": "0",
+    "longest_read_lba": "4E761",
+    "longest_read_sectors": "49",
+    "vmu_submit_max": "29",
+    "vmu_complete_max": "55",
+    "vmu_storage_calls": "0",
+    "vmu_commits": "0",
+    "ccr_first": "105",
+    "ccr_last": "105"
+  },
+  "selected_decimal": {
+    "samples": 1200,
+    "bad": 0,
+    "poll_gap_max": 16321,
+    "complete_read_max": 211970,
+    "pending_age_max": 200416,
+    "irq_blocks": 0,
+    "call_blocks": 2264,
+    "pio": 0,
+    "crc_errors": 0,
+    "token_errors": 0,
+    "foreign": 0,
+    "repairs": 100,
+    "overruns": 0,
+    "deferred": 0,
+    "clock_bad": 0,
+    "longest_read_lba": 321377,
+    "longest_read_sectors": 73,
+    "vmu_submit_max": 41,
+    "vmu_complete_max": 85,
+    "vmu_storage_calls": 0,
+    "vmu_commits": 0,
+    "ccr_first": 261,
+    "ccr_last": 261
+  },
+  "seconds": {
+    "poll_gap_max": 0.02089088,
+    "complete_read_max": 0.2713216,
+    "pending_age_max": 0.25653248,
+    "vmu_submit_max": 5.248e-05,
+    "vmu_complete_max": 0.0001088
+  },
+  "photo_bytes_published": false,
+  "exact_visible_hitch_correlated": false
+}

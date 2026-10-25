@@ -1,0 +1,11 @@
+{
+  "schema": "kui.native.irq-rearm.candidate.v1",
+  "source_commit": "a12f32a632214bcb63359746a9a292ea99ce3037",
+  "source_tree": "a039d7cede5b666e8ee9e77878f0abcb38f2f224",
+  "build": "a12f32a63221",
+  "module_sha256": "c94bfabd3d7432b5770d5d516fa1bab69d47b502bab8d6952d0f884571a5301c",
+  "module_bytes": 227052,
+  "reader": "Background SCI IRQ rearm",
+  "source_bundle_prerequisite": "74958b3878279fc916199a7cd330f7f17b036138",
+  "console_performance_verified": false
+}

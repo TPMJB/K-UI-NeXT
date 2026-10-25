@@ -1,0 +1,843 @@
+diff --git a/Makefile.vmu-native-irq-rearm b/Makefile.vmu-native-irq-rearm
+new file mode 100644
+index 0000000..da14500
+--- /dev/null
++++ b/Makefile.vmu-native-irq-rearm
+@@ -0,0 +1,14 @@
++# SPDX-License-Identifier: GPL-3.0-only
++BUILD ?= build/native-irq-rearm
++include Makefile.vmu-native-cooperative
++FLAGS += -DKUI_NATIVE_IRQ_REARM=1 -DKUI_NATIVE_STAGE_FAST_SCAN=1 -DKUI_NATIVE_CACHED_EXTENT=1
++NATIVE_FLAGS += -DKUI_NATIVE_IRQ_REARM=1
++override TEST_GUIDE := docs/vmu-native-irq-rearm-test.md
++
++.PHONY: irq-rearm-host-tests
++irq-rearm-host-tests:
++	@mkdir -p $(BUILD)
++	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -O2 $(STALL_READER_FLAGS) -DKUI_NATIVE_REQUEST_TIMING=1 -DKUI_NATIVE_COOP_PUMP=1 -DKUI_NATIVE_IRQ_REARM=1 $(STALL_READER_SRC) tests/test_retail_async_irq_rearm.c -o $(BUILD)/test-irq-reader
++	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-irq-reader
++	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 -DKUI_NATIVE_IRQ_REARM=1 tests/test_vmu_native_cooperative_worker.c $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-irq-worker
++	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-irq-worker
+diff --git a/docs/evidence/native-irq-rearm-2026-10-24.json b/docs/evidence/native-irq-rearm-2026-10-24.json
+new file mode 100644
+index 0000000..acebd7d
+--- /dev/null
++++ b/docs/evidence/native-irq-rearm-2026-10-24.json
+@@ -0,0 +1,138 @@
++{
++  "schema": "kui.native.irq-rearm.evidence.v1",
++  "date": "2026-10-24",
++  "rejected_build": "7121b2983749",
++  "owner_report": "Substantially worse. Slower FMVs, longer stutters. New candidates requested; no stable-build restoration.",
++  "capture": {
++    "source": "Five owner console photos; selected legible counters manually transcribed",
++    "ticks_per_second": 781250,
++    "input_photos": [
++      {
++        "page": 1,
++        "sha256": "036c01551fd812b2edca68cd2ce2e5c3ab26f0242ac317a7825536e91e72927c",
++        "bytes": 301129
++      },
++      {
++        "page": 2,
++        "sha256": "3dced0d33be065caf9a98d3abdb8ced508482490a2d40244e4a5966aa18b3df7",
++        "bytes": 286557
++      },
++      {
++        "page": 3,
++        "sha256": "dffdc5d5c199b90b4eac82c0473c496aec50aa2e7a70caed3f8856911431b23f",
++        "bytes": 279149
++      },
++      {
++        "page": 4,
++        "sha256": "5d8da4cdc78497756c2f4edf4858db96dd88268590e34e5bc8172e843ae48c3c",
++        "bytes": 287556
++      },
++      {
++        "page": 5,
++        "sha256": "22828ed81191759e50c6158702caa9a087a20552431c735cb198194ee0b29ac9",
++        "bytes": 293371
++      }
++    ],
++    "selected_hex": {
++      "samples": "4B0",
++      "bad": "0",
++      "poll_gap_max": "3FC1",
++      "complete_read_max": "33C02",
++      "pending_age_max": "30EE0",
++      "irq_blocks": "0",
++      "call_blocks": "8D8",
++      "pio": "0",
++      "crc_errors": "0",
++      "token_errors": "0",
++      "foreign": "0",
++      "repairs": "64",
++      "overruns": "0",
++      "deferred": "0",
++      "clock_bad": "0",
++      "longest_read_lba": "4E761",
++      "longest_read_sectors": "49",
++      "vmu_submit_max": "29",
++      "vmu_complete_max": "55",
++      "vmu_storage_calls": "0",
++      "vmu_commits": "0",
++      "ccr_first": "105",
++      "ccr_last": "105"
++    },
++    "selected_decimal": {
++      "samples": 1200,
++      "bad": 0,
++      "poll_gap_max": 16321,
++      "complete_read_max": 211970,
++      "pending_age_max": 200416,
++      "irq_blocks": 0,
++      "call_blocks": 2264,
++      "pio": 0,
++      "crc_errors": 0,
++      "token_errors": 0,
++      "foreign": 0,
++      "repairs": 100,
++      "overruns": 0,
++      "deferred": 0,
++      "clock_bad": 0,
++      "longest_read_lba": 321377,
++      "longest_read_sectors": 73,
++      "vmu_submit_max": 41,
++      "vmu_complete_max": 85,
++      "vmu_storage_calls": 0,
++      "vmu_commits": 0,
++      "ccr_first": 261,
++      "ccr_last": 261
++    },
++    "seconds": {
++      "poll_gap_max": 0.02089088,
++      "complete_read_max": 0.2713216,
++      "pending_age_max": 0.25653248,
++      "vmu_submit_max": 5.248e-05,
++      "vmu_complete_max": 0.0001088
++    },
++    "photo_bytes_published": false,
++    "exact_visible_hitch_correlated": false
++  },
++  "interpretation": [
++    "The capture has no interrupt-delivered data. Reducing CHECK work under this condition can reduce overall data supply; the owner rejects that pacing candidate.",
++    "The latest complete-read maximum is 271.3216 ms. The previous maximum was 144.8448 ms at a different LBA; this is not a controlled timing ratio.",
++    "The 100 repaired receptions are not 100 unhandled overruns. Current overruns, CRC errors and token errors are zero.",
++    "The maximum measured VMU completion body is 108.8 microseconds; VMU storage calls and commits are zero. Indirect hook/scheduling effects remain possible.",
++    "The new native-hook fault is reproduced in the card/DMA model. These photos do not establish that the console SDK cleared IPRB; the next candidate counts its occurrence."
++  ],
++  "new_candidate": {
++    "change": "Native hook checks IPRB SCI field even when its own VBR remains installed; CE already rechecks its SCI field while hooked",
++    "full_check_and_exec_catchup_blocks": [
++      20,
++      25
++    ],
++    "irq_batch_limit": 8,
++    "pio_blocks_per_entry_max": 1,
++    "sixteen_poll_gate": false,
++    "controller_reader_pump": false,
++    "reader_sci_priority": 1,
++    "other_iprb_fields_preserved": true,
++    "updated_owner_sci_field_retained_for_release": true,
++    "counter_words_reused": [
++      "engine.stats.execs: same-VBR SCI rearms",
++      "engine.stats.exec_int: real SCI handler entries"
++    ],
++    "release_counter_baselines": "Four otherwise-unused controller-service counter words in the existing private 24-byte request-timing object",
++    "new_resident_ram_bytes": 0,
++    "new_worker_ram_bytes": 0,
++    "new_timer": false,
++    "cached_pure_extent_proof_retained": true,
++    "verification_checks_retained": true,
++    "console_cause_confirmed": false,
++    "console_performance_verified": false
++  },
++  "regression": {
++    "before_fix_expected_failure": "hooked() && hw.iprb==(uint16_t)(other|0x10u)",
++    "before_fix_log_sha256": "29b8ef7ff2b52f3a3cabf0156a6576f0859ddc066e02ea57b67ab05ffb6994f8",
++    "actual_source_reader_tests_passed": true,
++    "actual_linked_hook_model_cases": 4096,
++    "linked_hook_mutation_rejections": 8,
++    "linked_hook_bytes": 132,
++    "old_pacing_candidate_and_prior_checkpoints_preserved": true
++  }
++}
+diff --git a/docs/vmu-native-irq-rearm-test.md b/docs/vmu-native-irq-rearm-test.md
+new file mode 100644
+index 0000000..40d9c38
+--- /dev/null
++++ b/docs/vmu-native-irq-rearm-test.md
+@@ -0,0 +1,69 @@
++<!-- SPDX-License-Identifier: GPL-3.0-only -->
++# Native SCI interrupt rearm candidate
++
++7121b2983749 is owner-rejected: slower FMVs and longer gameplay stutters.
++Its capture supplied zero blocks from SCI interrupts, 2,264 blocks from GD
++calls, and a longest completed read of 271.3216 ms. VMU completion bodies
++maxed at 108.8 microseconds; storage calls and commits were zero.
++
++This is a new candidate addressing a reproduced reader bug. The native
++hook returned early whenever its VBR was still installed. It did not check
++whether the SDK had independently changed the SCI priority field in IPRB.
++If that field was cleared, later game calls retained our vectors but left
++SCI interrupts disabled. CE's reader already checks the field while hooked.
++
++The native hook now checks both independently. If our vectors are installed
++and the field has changed, it remembers the SDK's updated owner field,
++sets only SCI to the reader's existing lowest level 1, and leaves every
++other IPRB field alone. Release restores the remembered field. An unchanged
++field causes no register write. No timer is added and the SCI level never
++exceeds the existing reader level 1.
++
++The new actual-card test fails against the previous native hook and passes
++with this fix. It checks a cleared field and a changed nonzero field, actual
++IRQ delivery, exact owner restoration, CRC/fault/contention behavior, and
++byte-correct cooked/raw output. A separate model executes the linked
++132-byte hook in 4,096 cases across every SCI field and both VBR states;
++eight unsafe mutations are rejected. This proves the code path, not that
++the owner's SDK has actually cleared IPRB during the reported hitch.
++
++Every CHECK and EXEC again has its full 20/25-block catch-up allowance.
++There is no sixteen-poll gate or controller-completion reader pump. The
++eight-block true IRQ ceiling and one-block PIO allowance remain. The scoped
++pure extent cache pass and its verification checks remain from 7121.
++
++## Install
++
++Use the existing prepared pair from this folder:
++
++```sh
++python3 personalize.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --game evolution2
++```
++
++Use SCI, Background On, Normal speed, Auto/default encoding, CD music Off,
++and RAM patches Off. Safely eject and cold boot. Compare intro audio/video
++pace and the same movement area. Normal mode has no intentional stop.
++
++## Optional capture
++
++Add `--profile-runtime` to the same installation command. Hold both triggers
++fully plus B for about one second, release, and continue through the issue
++for roughly 20 seconds until the intentional stop. Record 25 seconds of
++the cycling pages. The reader page fits all sixteen available body lines.
++
++SCI LEVEL REARMS counts same-VBR priority repairs during the capture.
++IRQ ENTRIES counts real SCI handler entries, including entries that produce
++no block. REHOOKS and RELEASE100/400/600 show interrupt/exception forwarding
++and return activity since the capture began. IRQ BLOCKS remains actual
++interrupt-delivered data. These counters use existing reserved words.
++
++Nonzero rearms show the newly fixed path occurred; they do not by themselves
++prove every hitch was caused by it. Zero IRQ entries after rearms would call
++for checking interrupt masking and routing next. Zero rearms would weaken
++this specific explanation. READ MAX remains whole-request elapsed time,
++not one GD call or a frame-time measurement. Runs at different LBAs are not
++controlled performance comparisons.
++
++Virtual A2, physical A1, save ownership and the existing memory/stack bounds
++remain. Console performance and universal non-CE/CDDA compatibility are
++unverified. Previous candidates stay separately available.
+diff --git a/src/loader/retail_async.c b/src/loader/retail_async.c
+index 7d74a99..8fd1396 100644
+--- a/src/loader/retail_async.c
++++ b/src/loader/retail_async.c
+@@ -2,6 +2,12 @@
+  * Original K-UI background game reader (see retail_async.h). The stream
+  * sequence is the one the SCI async probe proved on the console. */
+ #include "retail_async.h"
++#if KUI_NATIVE_IRQ_REARM && (!KUI_NATIVE_REQUEST_TIMING || !KUI_RETAIL_NATIVE_HYBRID || defined(KUI_RETAIL_CE))
++#error "Native IRQ rearm diagnostics require the hybrid request-timing counter profile"
++#endif
++#if KUI_NATIVE_IRQ_REARM && (KUI_NATIVE_PACED_CHECK || KUI_NATIVE_TIMED_PUMP)
++#error "IRQ rearm uses full CHECK supply and owns its two diagnostic words"
++#endif
+ #if KUI_NATIVE_PACED_CHECK && (!KUI_NATIVE_REQUEST_TIMING || !KUI_RETAIL_NATIVE_HYBRID || defined(KUI_RETAIL_CE))
+ #error "Paced CHECK requires native hybrid request-timing counter ownership"
+ #endif
+@@ -13,6 +19,9 @@ __asm__(".global __kui_native_reader_stall_resident\n"
+         ".set __kui_native_reader_stall_resident,1\n");
+ #if KUI_NATIVE_COOP_PUMP
+ __asm__(".global __kui_native_cooperative_resident\n.set __kui_native_cooperative_resident,1\n");
++#if KUI_NATIVE_IRQ_REARM
++__asm__(".global __kui_native_irq_rearm_resident\n.set __kui_native_irq_rearm_resident,1\n");
++#endif
+ #if KUI_NATIVE_PACED_CHECK
+ __asm__(".global __kui_native_paced_resident\n.set __kui_native_paced_resident,1\n");
+ #endif
+@@ -192,8 +201,23 @@ void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
+  * vectors are simply installed again. */
+ static void hook(void) {
+     uint32_t vbr = vbr_get();
++#if KUI_NATIVE_IRQ_REARM
++    uint16_t b = rd16(IPRB);
++    if(vbr == our_vbr()) {
++        /* CE already rechecks this field while installed. A native SDK may
++         * update IPRB independently of VBR: re-arm our lowest SCI level and
++         * preserve its new owner field for the eventual release. */
++        if((b & SCI_FIELD) != SCI_LEVEL) {
++            e.release.sci = b & SCI_FIELD;
++            ++e.stats.execs;
++            wr16(IPRB, (uint16_t)((b & ~SCI_FIELD) | SCI_LEVEL));
++        }
++        return;
++    }
++#else
+     if(vbr == our_vbr()) return;
+     uint16_t b = rd16(IPRB);
++#endif
+ #if !KUI_NATIVE_REQUEST_TIMING
+     if(e.hooked) {
+         if(vbr == e.release.vbr) ++e.stats.releases;
+@@ -414,7 +438,7 @@ static void deliver_work(uint32_t wait) {
+         /* Retain the proved 20/25-block catch-up and full DMA wait. Only
+          * stop the formerly unlimited run of already-completed blocks. */
+         if(delivered>=(
+-#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
++#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK && !KUI_NATIVE_IRQ_REARM
+             e.in_irq==2u?KUI_RETAIL_NATIVE_PUMP_BATCH_LIMIT:
+ #endif
+             e.in_irq?KUI_RETAIL_NATIVE_IRQ_BATCH_LIMIT:e.target)) return;
+@@ -920,6 +944,9 @@ void kui_retail_async_after(uint32_t function, int32_t result) {
+ #endif
+ }
+ uint32_t kui_retail_async_irq(void) {
++#if KUI_NATIVE_IRQ_REARM
++    ++e.stats.exec_int;
++#endif
+ #if KUI_VMU_NATIVE_BACKGROUND
+     if(native_loan_blocked()) return 1u;
+ #endif
+@@ -932,7 +959,7 @@ uint32_t kui_retail_async_irq(void) {
+     /* An SCI event without a reception: not ours, passed on as any other
+      * (under CE: its level is dropped). */
+     if(!kui_sci_stream_busy()
+-#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
++#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK && !KUI_NATIVE_IRQ_REARM
+        && e.in_irq!=2u /* A cooperative visit also restarts an idle run. */
+ #endif
+       ) {
+@@ -944,10 +971,10 @@ uint32_t kui_retail_async_irq(void) {
+ #ifdef KUI_RETAIL_CE
+     kui_sci_stream_token_budget(e.isr != 0);
+ #endif
+-#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
++#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK && !KUI_NATIVE_IRQ_REARM
+     if(e.in_irq==2u) hook();
+ #endif
+-#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
++#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK && !KUI_NATIVE_IRQ_REARM
+     if(!e.in_irq) e.in_irq = 1;
+ #else
+     e.in_irq = 1;
+diff --git a/src/loader/retail_async.h b/src/loader/retail_async.h
+index e90d1ae..d659a99 100644
+--- a/src/loader/retail_async.h
++++ b/src/loader/retail_async.h
+@@ -55,7 +55,8 @@ struct kui_retail_async_stats {
+     /* In the separate stall diagnostic execs/exec_int hold foreground/IRQ
+      * delivery-visit raw TMU0 maxima, reset by the serialized worker.
+      * REQUEST_TIMING instead uses hooks/releases for request-start ticks
+-     * and longest completed-request ticks; legacy hook counts are omitted. */
++     * and longest completed-request ticks; legacy hook counts are omitted.
++     * IRQ_REARM uses execs/exec_int for SCI-level repairs and real IRQ entries. */
+     uint32_t irq_blocks, call_blocks, waits, execs, exec_int;
+     uint32_t hooks, releases;
+ };
+diff --git a/src/loader/vmu_native_background_resident.c b/src/loader/vmu_native_background_resident.c
+index 8c9f1be..3a6896f 100644
+--- a/src/loader/vmu_native_background_resident.c
++++ b/src/loader/vmu_native_background_resident.c
+@@ -93,7 +93,7 @@ static bool native_resident_transaction(const volatile struct kui_vmu_observe_bo
+         UINT32_C(0xa0000000);
+ #endif
+     return native_resident_terminal(c) && (
+-#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
++#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK && !KUI_NATIVE_IRQ_REARM
+         !target ||
+ #endif
+         (target==c->sd_transaction && !(target&1u) &&
+@@ -142,7 +142,7 @@ int __attribute__((noipa,section(".vmu_sd_lease"))) kui_vmu_observe_sd_lease(
+     uint32_t sr;__asm__ volatile("stc sr,%0":"=r"(sr)::"memory");
+     if((sr&UINT32_C(0xf0))!=UINT32_C(0xf0) ||
+        !native_resident_transaction(c,(uintptr_t)callback)) return KUI_VMU_SD_LEASE_FAULT;
+-#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
++#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK && !KUI_NATIVE_IRQ_REARM
+     /* Explicit non-storage command on the existing typed worker gateway.
+      * Serialized on the worker's stack after its physical controller proof;
+      * no loan, virtual reply, bus acquisition or game interrupt setup occurs. */
+diff --git a/src/loader/vmu_native_reader_capture.inc b/src/loader/vmu_native_reader_capture.inc
+index 0538974..38a6729 100644
+--- a/src/loader/vmu_native_reader_capture.inc
++++ b/src/loader/vmu_native_reader_capture.inc
+@@ -29,6 +29,9 @@ static struct kui_reader_capture reader_capture;
+ static kui_retail_async_region_type *reader_capture_region(void);
+ #if KUI_NATIVE_COOP_PUMP
+ __asm__(".global __kui_native_cooperative_reader\n.set __kui_native_cooperative_reader,1\n");
++#if KUI_NATIVE_IRQ_REARM
++__asm__(".global __kui_native_irq_rearm_reader\n.set __kui_native_irq_rearm_reader,1\n");
++#endif
+ #if KUI_NATIVE_PACED_CHECK
+ __asm__(".global __kui_native_paced_reader\n.set __kui_native_paced_reader,1\n");
+ #endif
+@@ -57,7 +60,7 @@ static void __attribute__((noipa)) reader_window_clock(struct kui_vmu_native_pro
+ }
+ #endif
+ static void __attribute__((noipa)) reader_cooperative_service(void) {
+-#if KUI_NATIVE_PACED_CHECK
++#if KUI_NATIVE_PACED_CHECK || KUI_NATIVE_IRQ_REARM
+     /* The measured controller callback supplied little data. This candidate
+      * schedules through GD/SCI only, leaving controller completion brief. */
+     return;
+@@ -153,7 +156,18 @@ static void reader_capture_start(void) {
+     kui_retail_async_region_type *r=reader_capture_region();
+ #if KUI_NATIVE_REQUEST_TIMING
+     if(r)r->engine.stats.releases=0u;
++#if KUI_NATIVE_IRQ_REARM
++    if(r)r->engine.stats.execs=r->engine.stats.exec_int=0u;
++#endif
+     memset(&reader_cooperative,0,sizeof(reader_cooperative));
++#if KUI_NATIVE_IRQ_REARM
++    if(r) {
++        reader_cooperative.calls=r->engine.release.rehooks;
++        reader_cooperative.blocks=r->engine.release.released[0];
++        reader_cooperative.busy=r->engine.release.released[1];
++        reader_cooperative.faults=r->engine.release.released[2];
++    }
++#endif
+ #else
+     if(r)r->engine.stats.execs=r->engine.stats.exec_int=0u;
+ #endif
+@@ -169,7 +183,11 @@ static void reader_capture_poll(const struct kui_vmu_native_profile_sample *cloc
+ #if KUI_NATIVE_REQUEST_TIMING
+         .call_max=a->stats.releases,
+         .irq_max=g->pending && a->token==g->token?a->stats.hooks-clock->counter:0u,
+-        .irq_blocks=a->stats.irq_blocks-reader_cooperative.blocks,
++        .irq_blocks=a->stats.irq_blocks
++#if !KUI_NATIVE_IRQ_REARM
++            -reader_cooperative.blocks
++#endif
++            ,
+ #else
+         .call_max=a->stats.execs,.irq_max=a->stats.exec_int,.irq_blocks=a->stats.irq_blocks,
+ #endif
+@@ -225,7 +243,17 @@ static void reader_capture_report(const struct retail_display_state *display) {
+         b->foreign-a->foreign,b->repaired-a->repaired,b->overruns-a->overruns,
+         b->deferred-a->deferred,diagnostic.clock_invalid},5u);
+ #if KUI_NATIVE_REQUEST_TIMING
+-#if KUI_NATIVE_PACED_CHECK
++#if KUI_NATIVE_IRQ_REARM
++    const kui_retail_async_region_type *region=reader_capture_region();
++    retail_display_values("SCI LEVEL REARMS IRQ ENTRIES",(uint32_t[2]){
++        region?region->engine.stats.execs:0u,region?region->engine.stats.exec_int:0u},2u);
++    if(region)retail_display_values("REHOOKS RELEASE100 RELEASE400 RELEASE600",(uint32_t[4]){
++        region->engine.release.rehooks-reader_cooperative.calls,
++        region->engine.release.released[0]-reader_cooperative.blocks,
++        region->engine.release.released[1]-reader_cooperative.busy,
++        region->engine.release.released[2]-reader_cooperative.faults},4u);
++    retail_display_line("FULL CHECK AND EXEC CATCHUP - NO PUMP");
++#elif KUI_NATIVE_PACED_CHECK
+     retail_display_line("CHECK WAIT BOOST NEEDS 16 TIGHT POLLS");
+     retail_display_line("CONTROLLER READER SERVICE DISABLED");
+ #else
+@@ -241,7 +269,7 @@ static void reader_capture_report(const struct retail_display_state *display) {
+     retail_display_values("WINDOWS EXPIRED CLOCK BAD MAX TICKS",(uint32_t[4]){
+         reader_cooperative.opportunities,reader_cooperative.expired,
+         reader_cooperative.clock_bad,reader_cooperative.max_ticks},4u);
+-#else
++#elif !KUI_NATIVE_IRQ_REARM
+     retail_display_line("GAP IS BETWEEN MAPLE COMPLETION SAMPLES");
+     retail_display_line("BAD CLOCK MEANS DO NOT CONVERT TO TIME");
+ #endif
+diff --git a/tests/test_retail_async_irq_rearm.c b/tests/test_retail_async_irq_rearm.c
+new file mode 100644
+index 0000000..68ce32f
+--- /dev/null
++++ b/tests/test_retail_async_irq_rearm.c
+@@ -0,0 +1,42 @@
++/* SPDX-License-Identifier: GPL-3.0-only */
++/* Reproduce an SDK changing IPRB without replacing our still-live VBR.
++ * Execute the actual reader and byte-correct card/DMA model. */
++#include <assert.h>
++#include <stdint.h>
++static uint32_t clock_counter=5u;
++uint32_t kui_retail_async_test_read32(uint32_t address) {
++    assert(address==UINT32_C(0xffd8000c));
++    uint32_t result=clock_counter;clock_counter-=19u;return result;
++}
++#define KUI_NATIVE_HYBRID_MAIN hybrid_suite_main
++#include "test_retail_async_native_hybrid.c"
++
++static void level_changed_without_vbr(unsigned field) {
++    cooked_fixture=true;setup(GAME_VBR,X,48,false);mode(2048);
++    int32_t token=request(45001u,64u,OUTPUT);
++    CHECK(R.engine.active && hooked() && (hw.iprb&0xf0u)==0x10u);
++    unsigned before=R.engine.stats.execs;
++    uint16_t other=(uint16_t)(hw.iprb&~0xf0u);
++    hw.iprb=(uint16_t)(other|field);
++    /* A status query supplies no waiting read allowance. Its usual hook
++     * admission must repair our SCI field while preserving every other one. */
++    (void)gd(KUI_GD_DRIVE,STATUS,0u);
++    CHECK(hooked() && hw.iprb==(uint16_t)(other|0x10u));
++    CHECK(R.engine.release.sci==field && R.engine.stats.execs==before+1u);
++    (void)gd(KUI_GD_DRIVE,STATUS,0u);
++    CHECK(R.engine.stats.execs==before+1u); /* no needless repair/write */
++    m.delay=0u;elapse();before=R.engine.stats.irq_blocks;
++    unsigned entries=R.engine.stats.exec_int;
++    CHECK(!kui_retail_async_irq());
++    CHECK(R.engine.stats.irq_blocks-before==KUI_RETAIL_NATIVE_IRQ_BATCH_LIMIT);
++    CHECK(R.engine.stats.exec_int==entries+1u);
++    CHECK(finish(token,0,1)==KUI_GD_COMPLETED);compare(45001u,64u,OUTPUT);
++    CHECK(!hooked() && hw.iprb==(uint16_t)(other|field));
++}
++int main(void) {
++    level_changed_without_vbr(0u);
++    level_changed_without_vbr(0x90u);
++    hybrid_suite_main();
++    printf("native IRQ rearm: %u checks; same-VBR cleared/changed SCI field, exact owner restoration and full CHECK/EXEC supply passed\n",checks);
++    return 0;
++}
+diff --git a/tests/test_vmu_native_cooperative_worker.c b/tests/test_vmu_native_cooperative_worker.c
+index 33b49d2..9d82c48 100644
+--- a/tests/test_vmu_native_cooperative_worker.c
++++ b/tests/test_vmu_native_cooperative_worker.c
+@@ -48,7 +48,7 @@ int main(void) {
+     CHECK(pump_visits==0u); /* Initial full proof precedes the fast path. */
+     observed_region.engine.active=1u;
+     unsigned leases=lease_calls,bytes=sd.bytes;
+-#if KUI_NATIVE_PACED_CHECK
++#if KUI_NATIVE_PACED_CHECK || KUI_NATIVE_IRQ_REARM
+     diagnostic_pair(false);reader_cooperative_service();
+     CHECK(!pump_visits && !restorations && !reader_cooperative.blocks);
+     CHECK(lease_calls==leases && sd.bytes==bytes);
+@@ -65,8 +65,18 @@ int main(void) {
+     durable_card.handling=1u;reader_cooperative_service();CHECK(pump_visits==before);durable_card.handling=0u;
+     for(unsigned mode=2u;mode<=4u;++mode){config.diagnostics=mode;reader_cooperative_service();CHECK(pump_visits==before);}
+     config.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE;
++#endif
++#if KUI_NATIVE_IRQ_REARM
++    observed_region.engine.stats.execs=97u;observed_region.engine.stats.exec_int=91u;
++    observed_region.engine.release.rehooks=11u;
++    for(unsigned i=0;i<3u;++i)observed_region.engine.release.released[i]=22u+i;
+ #endif
+     reader_capture_start();
++#if KUI_NATIVE_IRQ_REARM
++    CHECK(!observed_region.engine.stats.execs && !observed_region.engine.stats.exec_int);
++    CHECK(reader_cooperative.calls==11u && reader_cooperative.blocks==22u &&
++          reader_cooperative.busy==23u && reader_cooperative.faults==24u);
++#endif
+     diagnostic.active=1u;
+     observed_region.engine.stats.hooks=test_clock.counter+300000u;
+     observed_region.engine.stats.releases=250000u;
+@@ -79,7 +89,11 @@ int main(void) {
+     observed_region.engine.native_max_lba=56789u;observed_region.engine.native_max_count=128u;
+     diagnostic_pair(false);
+     CHECK(reader_capture.call_max==500000u && reader_cooperative.max_lba==56789u && reader_cooperative.max_count==128u);
+-    CHECK(reader_capture.previous.irq_blocks==observed_region.engine.stats.irq_blocks-reader_cooperative.blocks);
++    uint32_t expected_irq_blocks=observed_region.engine.stats.irq_blocks;
++#if !KUI_NATIVE_IRQ_REARM
++    expected_irq_blocks-=reader_cooperative.blocks;
++#endif
++    CHECK(reader_capture.previous.irq_blocks==expected_irq_blocks);
+ #if KUI_NATIVE_TIMED_PUMP
+     /* A receiver that is still pending on the first two opportunities
+      * must deliver in the same bounded window without another game call. */
+@@ -112,7 +126,9 @@ int main(void) {
+     CHECK(pump_visits==old+1u && reader_cooperative.clock_bad==1u);
+     puts("timed reader: pending-then-ready, deadline, invalid/changed/frozen clocks, wrap and two-block window bound passed");
+ #endif
+-#if KUI_NATIVE_PACED_CHECK
++#if KUI_NATIVE_IRQ_REARM
++    puts("IRQ rearm worker: original save/ownership suite, no controller pump, counter baselines/reset and complete-request timing passed");
++#elif KUI_NATIVE_PACED_CHECK
+     puts("paced worker: original save/ownership suite, controller pump disabled, no storage lease and complete-request timing passed");
+ #else
+     puts("cooperative worker: original save/ownership suite, post-completion pump, busy/storage exclusions and request timing passed");
+diff --git a/tools/check_vmu_native_irq_rearm.py b/tools/check_vmu_native_irq_rearm.py
+new file mode 100644
+index 0000000..39ced00
+--- /dev/null
++++ b/tools/check_vmu_native_irq_rearm.py
+@@ -0,0 +1,127 @@
++#!/usr/bin/env python3
++# SPDX-License-Identifier: GPL-3.0-only
++"""Execute the actual native hook: independent VBR/IPRB changes and release.
++
++This proves the linked rearm predicate and owner bookkeeping. It does not
++claim that a particular game has cleared IPRB or that it fixes console lag.
++"""
++import hashlib
++import random
++import struct
++
++from check_vmu_native_cache_gateway import CacheGateway
++from check_vmu_native_worker_gateway import CPU, MASK, symbol_bytes
++
++IPRB=0xffd00008
++REGION=0x8c420400
++FRAME=REGION+0x240
++HOOKED=REGION+0x2d0
++REARMS=REGION+0x2e4
++HOOK_SHA='3617673b84fa38f4341fc072ca4485a1a13d748dbfa0fe3ef9799d4a539884af'
++
++
++def require(test,message):
++    if not test:raise ValueError(message)
++
++
++class Rearm(CacheGateway):
++    def __init__(self,resident,seed,mask,same,hooked,field,body=None):
++        begin,original,_=symbol_bytes(resident,'_hook',2)
++        CPU.__init__(self,seed,begin,1)
++        self.pc,self.blob,self.mem=begin,original if body is None else body,{}
++        self.pr=begin+len(original)+0x100
++        self.r[15]=0x8cff0000;self.sr=(self.sr&~0xf0)|(mask<<4)
++        self.before=self.r.copy(),self.pr,self.sr,self.fpscr,self.fr.copy()
++        self.targets={}
++        self.pointer=resident[4]['_kui_retail_async_region_storage'][0]
++        self.vbr=REGION-0x100 if same else 0x8c00f400
++        self.iprb=(random.Random(seed+992).getrandbits(16)&~0xf0)|field
++        self.mem.update({self.pointer:REGION,FRAME+4:0x70,FRAME:0x8c00e800,
++                         FRAME+8:1,HOOKED:int(hooked),REARMS:(0xfffffffc+seed)&MASK})
++        self.old=self.vbr,self.iprb,self.mem.copy()
++        self.same,self.hooked,self.field=same,hooked,field
++        self.iprb_writes,self.vbr_writes=[],[]
++
++    def read(self,address):
++        if address in self.mem:return self.mem[address]
++        return struct.unpack('<I',self.code(address,4))[0]
++
++    def write(self,address,value):
++        assert address in (FRAME,FRAME+4,FRAME+8,HOOKED,REARMS),'hook store escapes exact reader fields'
++        self.mem[address]=value&MASK
++
++    def plain(self,w,pc):
++        n,m=w>>8&15,w>>4&15
++        if w&0xf0ff==0x0022:self.r[n]=self.vbr;return
++        if w&0xf0ff==0x402e:
++            self.vbr=self.r[n];self.vbr_writes.append(self.vbr);return
++        if w&0xf00f==0x6001:
++            assert self.r[m]==IPRB,'unexpected MMIO read'
++            self.r[n]=(self.iprb-(0x10000 if self.iprb&0x8000 else 0))&MASK;return
++        if w&0xf00f==0x2001:
++            assert self.r[n]==IPRB,'unexpected MMIO write'
++            self.iprb=self.r[m]&0xffff;self.iprb_writes.append(self.iprb);return
++        if w&0xf00f==0x300c:self.r[n]=(self.r[n]+self.r[m])&MASK;return
++        if w>>8==0xcb:self.r[0]|=w&255;return
++        super().plain(w,pc)
++
++    def check(self):
++        r,pr,sr,fpscr,fr=self.before
++        assert self.r[8:]==r[8:] and self.pr==pr and self.sr&~1==sr&~1
++        assert (self.fpscr,self.fr)==(fpscr,fr)
++        vbr,iprb,mem=self.old
++        changed=self.field!=0x10
++        expected=mem.copy()
++        if self.same:
++            assert not self.vbr_writes and self.vbr==vbr
++            if changed:
++                expected[FRAME+4]=self.field
++                expected[REARMS]=(mem[REARMS]+1)&MASK
++        else:
++            assert self.vbr_writes==[REGION-0x100] and self.vbr==REGION-0x100
++            expected[FRAME]=vbr;expected[FRAME+8]=1;expected[HOOKED]=1
++            if not self.hooked or changed:expected[FRAME+4]=self.field
++        assert self.mem==expected,'hook corrupts owner/reader state or loses a rearm'
++        wrote=not self.same or changed
++        assert self.iprb_writes==([(iprb&~0xf0)|0x10] if wrote else [])
++        assert self.iprb==((iprb&~0xf0)|0x10),'SCI field must be exactly lowest level; preserve all other fields'
++
++
++def check(resident,*,self_test=False):
++    marker=resident[4].get('__kui_native_irq_rearm_resident')
++    if marker is None:return {'enabled':False}
++    require(marker==(1,0,0,0xfff1),'invalid native IRQ rearm marker')
++    begin,body,_=symbol_bytes(resident,'_hook',2)
++    require(len(body)==132 and hashlib.sha256(body[:-8]).hexdigest()==HOOK_SHA,
++            'linked native IRQ rearm hook instructions changed')
++    require(body[-8:]==struct.pack('<II',resident[4]['_kui_retail_async_region_storage'][0],IPRB),
++            'linked native rearm region/IPRB binding changed')
++    cases=0
++    for seed in range(16):
++        for mask in (0,1,8,15):
++            for same in (False,True):
++                for hooked in (False,True):
++                    for field in range(0,0x100,0x10):
++                        Rearm(resident,seed,mask,same,hooked,field).run().check();cases+=1
++    rejected=0
++    if self_test:
++        mutations=[]
++        for pattern in (0xcb10,0x2501,0x2101,0x7301,0x1302,0x472e):
++            for at in range(0,114,2):
++                if struct.unpack_from('<H',body,at)[0]==pattern:
++                    altered=bytearray(body);struct.pack_into('<H',altered,at,9)
++                    mutations.append(bytes(altered))
++        altered=bytearray(body);struct.pack_into('<I',altered,128,IPRB+4);mutations.append(bytes(altered))
++        for altered in mutations:
++            refused=False
++            for same in (True,False):
++                try:Rearm(resident,7,15,same,True,0x90,altered).run().check()
++                except (AssertionError,ValueError,struct.error,KeyError):refused=True;break
++            require(refused,'native IRQ rearm model accepted an unsafe mutation');rejected+=1
++    return dict(enabled=True,hook_address=hex(begin),hook_bytes=len(body),
++        complete_linked_hook_pinned=True,actual_instruction_model_cases=cases,
++        mutation_rejections=rejected,all_sci_fields_checked=True,
++        same_vbr_priority_rechecked=True,other_iprb_fields_preserved=True,
++        owner_updated_priority_retained_for_release=True,reader_sci_level=1,
++        unchanged_level_causes_no_mmio_write=True,new_resident_ram_bytes=0,
++        console_cause_confirmed=False,console_performance_verified=False)
+diff --git a/tools/check_vmu_native_persistent.py b/tools/check_vmu_native_persistent.py
+index b86627e..5f4179a 100644
+--- a/tools/check_vmu_native_persistent.py
++++ b/tools/check_vmu_native_persistent.py
+@@ -35,6 +35,7 @@ from vmu_maple_observe_symbols import sd_gateway_span
+ from check_vmu_pio_write import check_pio_entry
+ from check_vmu_native_cache_seed import audit as audit_cache_seed
+ from check_vmu_native_cache_gateway import check as check_cache_gateway
++from check_vmu_native_irq_rearm import check as check_irq_rearm
+ from check_vmu_native_stage_stack import check as check_stage_stack
+ from check_vmu_native_stage_stack import Machine
+ from check_vmu_native_mode import audit as audit_runtime_mode
+@@ -171,6 +172,19 @@ PACED_PREPARED_PINS = {
+  '_reader_cooperative_service': ('501ea5b89ab4d8ff1b044d90f0e7b770df4b0bc60a561f96ec3ca179d28f6c83', 4),
+ }
+ 
++IRQ_REARM_PREPARED_PINS = {
++ '_diagnostic_end': ('f47baec4099deef08b1556d8c453e9e472d9c9b6df765c9e963f437ba0780288', 1372),
++ '_diagnostic_complete': ('bc3ea96b7a3d1e71c8a68a5df444b3ff72d4897372dc622b9859e1af1f16b644', 1680),
++ '_transfer_context_valid': ('30af5fbde597dd166cee33474c913adf8b995f8abc4913ecc66d71062cf26a10', 1236),
++ '_kui_vmu_native_runtime_fault': ('2acc36c6ec2d0f6cfb86c9b1cb030bbda4dae74ecb28a0b24f0e0fa115a00fca', 332),
++ '.rodata': ('c9bbbf8def8e112c7617e7dd0e2452b62104ac6313672e128e7e3ff16fb7279e', 4448),
++ '_kui_vmu_native_trace_report': ('4317d7bb82b66e969a4aaed7a5a687d7f76500e4f2a2eb399c9050f8e4ed88aa', 1120),
++ '_trace_history': ('0519eb281371e21450042625f62da6cffdd9b88075c2b9684e19c9752fb7d19c', 164),
++ '_report': ('2151b6aa708e94cec04567b87885a839042a894c88f3f9bcc78e0aa321a0fcee', 440),
++ '_trace_packets': ('a47219521702e4e08577e3b7a0b7d37c9bee05186695875bb9a841c4f4489a0f', 116),
++ '_reader_cooperative_service': ('501ea5b89ab4d8ff1b044d90f0e7b770df4b0bc60a561f96ec3ca179d28f6c83', 4),
++}
++
+ 
+ def prepared_symbol_records(worker):
+     data, _, _, sections, _ = worker
+@@ -686,9 +700,15 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
+     paced=worker[4].get('__kui_native_paced_reader')
+     if paced is not None:
+         require(cooperative and not timed and paced==(1,0,0,0xfff1),'invalid paced reader marker')
++    irq_rearm=worker[4].get('__kui_native_irq_rearm_reader')
++    if irq_rearm is not None:
++        require(cooperative and not paced and not timed and irq_rearm==(1,0,0,0xfff1),
++                'invalid IRQ rearm reader marker')
++        require(IRQ_REARM_PREPARED_PINS,'missing reviewed IRQ rearm reader pins')
+     pins={**PREPARED_PINS,**(STALL_PREPARED_PINS if stall_marker else {}),
+           **(COOPERATIVE_PREPARED_PINS if cooperative else {}),
+-          **(TIMED_PREPARED_PINS if timed else {}),**(PACED_PREPARED_PINS if paced else {})}
++          **(TIMED_PREPARED_PINS if timed else {}),**(PACED_PREPARED_PINS if paced else {}),
++          **(IRQ_REARM_PREPARED_PINS if irq_rearm else {})}
+     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
+                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
+                        ("_protected_ranges", 512), ("_protected_count", 4),
+@@ -2444,6 +2464,12 @@ def check(directory, *, self_test=False, trace_startup=None):
+     low_paced=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_paced_resident')
+     require(bool(paced)==bool(low_paced),'paced reader worker/resident mismatch')
+     if paced:require(cooperative and not timed and paced==low_paced==(1,0,0,0xfff1),'invalid paired paced reader markers')
++    irq_rearm=worker[4].get('__kui_native_irq_rearm_reader')
++    low_rearm=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_irq_rearm_resident')
++    require(bool(irq_rearm)==bool(low_rearm),'IRQ rearm worker/resident mismatch')
++    if irq_rearm:require(cooperative and not timed and not paced and irq_rearm==low_rearm==(1,0,0,0xfff1),
++                         'invalid paired IRQ rearm reader markers')
++    irq_rearm_proof=check_irq_rearm(read_elf(directory/'resident-sci.elf'),self_test=self_test)
+     prepared_lifetime = check_prepared_lifetime(directory, worker, binary, wire, self_test, build=base["runtime"]["build"])
+     relocations=check_worker_pointer_aliases(wire,policy,fault_capture,coherence)
+ 
+@@ -2462,7 +2488,7 @@ def check(directory, *, self_test=False, trace_startup=None):
+         (directory / "retail-maple-observe.kui").read_bytes(), cached_code=cached,
+         stage_image=stage,resident_image=read_elf(directory / "resident-sci.elf"),self_test=self_test)
+     cache_gateway = check_cache_gateway(stage, self_test=self_test) if seed["enabled"] else {"enabled": False}
+-    require(bool(paced)==bool(cache_gateway.get('pure_extent_cache_scope',{}).get('enabled')),
++    require(bool(paced or irq_rearm)==bool(cache_gateway.get('pure_extent_cache_scope',{}).get('enabled')),
+             'paced profile/pure extent cache scope mismatch')
+     installer_stack = check_stage_stack(stage, read_elf(directory / "resident-sci.elf"),
+                                         worker=worker, self_test=self_test)
+@@ -2508,9 +2534,9 @@ def check(directory, *, self_test=False, trace_startup=None):
+                   "paired_resident_worker": bool(stall),"private_worker_state_bytes": 508 if stall else 0,
+                   "diagnostic_sd_log_writes": False,"console_root_cause_established": False},
+               "cooperative_reader": {"enabled": bool(cooperative),
+-                  "service_enabled":bool(cooperative and not paced),
+-                  "pump_blocks_per_visit": 2 if cooperative and not paced else 0,
+-                  "foreground_catchup_changed": bool(paced),"service_after_physical_controller_proof": bool(cooperative and not paced),
++                  "service_enabled":bool(cooperative and not paced and not irq_rearm),
++                  "pump_blocks_per_visit": 2 if cooperative and not paced and not irq_rearm else 0,
++                  "foreground_catchup_changed": bool(paced),"service_after_physical_controller_proof": bool(cooperative and not paced and not irq_rearm),
+                   "completed_request_timing": bool(cooperative),"console_performance_verified": False},
+               "paced_reader": {"enabled":bool(paced),"paired_resident_worker":bool(paced),
+                   "tight_check_polls":16 if paced else 0,"near_scanline_delta_max":1 if paced else 0,
+@@ -2519,6 +2545,9 @@ def check(directory, *, self_test=False, trace_startup=None):
+                   "pio_blocks_per_entry_max":1 if paced else 0,"new_resident_ram_bytes":0,
+                   "controller_reader_service_enabled":False if paced else None,
+                   "console_performance_verified":False},
++              "irq_rearm_reader":dict(irq_rearm_proof,paired_resident_worker=bool(irq_rearm),
++                  full_check_and_exec_catchup=bool(irq_rearm),controller_reader_service_enabled=False,
++                  rearm_and_irq_entry_counters=bool(irq_rearm)),
+               "timed_reader": {"enabled":bool(timed),"window_ticks":586 if timed else 0,
+                   "window_max_visits":64 if timed else 0,"blocks_per_window_max":2 if timed else 0,
+                   "read_only_clock_admission":bool(timed),"invalid_clock_single_visit":bool(timed),
+diff --git a/tools/package_vmu_native_persistent.py b/tools/package_vmu_native_persistent.py
+index 945973d..c791026 100644
+--- a/tools/package_vmu_native_persistent.py
++++ b/tools/package_vmu_native_persistent.py
+@@ -75,7 +75,7 @@ def package(build,guide='broader',trace_startup=None):
+     commit=git('rev-parse','HEAD');revision=commit[:12]
+     if git('status','--porcelain'):
+         raise ValueError('Commit source changes before packaging')
+-    if guide in ('evolution-trace','a2-background','hybrid','stall','cooperative','timed','paced') and trace_startup is None:
++    if guide in ('evolution-trace','a2-background','hybrid','stall','cooperative','timed','paced','irq-rearm') and trace_startup is None:
+         raise ValueError('This package requires --trace-startup with the exact original executable')
+     graphs=list(build.rglob('*.ci'))
+     if not graphs or any(not closed_callgraph(path.read_text()) for path in graphs):
+@@ -97,6 +97,10 @@ def package(build,guide='broader',trace_startup=None):
+                           stage['symbols'].get('__kui_native_stage_fast_scan')!=1 or
+                           not report.get('resolution_cache_gateway',{}).get('pure_extent_cache_scope',{}).get('enabled')):
+         raise ValueError('Paced package requires paired paced reader, fast scans and audited pure extent cache scope')
++    if guide=='irq-rearm' and (not report.get('irq_rearm_reader',{}).get('enabled') or
++                             not report.get('irq_rearm_reader',{}).get('complete_linked_hook_pinned') or
++                             not report.get('resolution_cache_gateway',{}).get('pure_extent_cache_scope',{}).get('enabled')):
++        raise ValueError('IRQ rearm package requires the paired actual-hook proof and pure extent cache scope')
+     entry=inspect_elf((build/'entry.elf').read_bytes(),ADDRESS,0x8c112000)
+     template=template_profile()
+     address,_=readonly_blob(stage_data,stage,'__vmu_sd_profile_blob_start',
+@@ -132,7 +136,7 @@ def package(build,guide='broader',trace_startup=None):
+                      'vmu-native-evolution-fault-test.md','vmu-native-evolution-isolation-test.md',
+                      'vmu-native-evolution-hooks-test.md','vmu-native-evolution-trace-test.md'):
+             extra['docs/'+name]=(root/'docs'/name).read_bytes()
+-        if guide in ('a2-background','hybrid','stall','cooperative','timed','paced'):
++        if guide in ('a2-background','hybrid','stall','cooperative','timed','paced','irq-rearm'):
+             extra['docs/vmu-native-a2-background-test.md']=(root/'docs/vmu-native-a2-background-test.md').read_bytes()
+             extra['docs/evidence/native-a2-background-2026-10-24.json']=(root/'docs/evidence/native-a2-background-2026-10-24.json').read_bytes()
+             extra['docs/evidence/native-retry-integration-2026-10-24.json']=(root/'docs/evidence/native-retry-integration-2026-10-24.json').read_bytes()
+@@ -150,6 +154,8 @@ def package(build,guide='broader',trace_startup=None):
+             extra['docs/evidence/native-timed-reader-2026-10-24.json']=(root/'docs/evidence/native-timed-reader-2026-10-24.json').read_bytes()
+         if guide=='paced':
+             extra['docs/evidence/native-paced-reader-2026-10-24.json']=(root/'docs/evidence/native-paced-reader-2026-10-24.json').read_bytes()
++        if guide=='irq-rearm':
++            extra['docs/evidence/native-irq-rearm-2026-10-24.json']=(root/'docs/evidence/native-irq-rearm-2026-10-24.json').read_bytes()
+         for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json',
+                      'native-performance-acceptance-2026-10-23.json','native-uniform-root-family-2026-10-23.json',
+                      'native-recv-ownership-2026-10-23.json','native-older-sdk-2026-10-23.json',
+@@ -189,7 +195,9 @@ def package(build,guide='broader',trace_startup=None):
+         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
+         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
+             template_sha256=sha(template)),
+-        compatibility_claim=('Sparse nonblocking CHECK, tight-loop catch-up and scoped pure extent caching; console performance remains unverified'
++        compatibility_claim=('Recheck native SCI level while VBR is still installed, with full CHECK/EXEC supply and IRQ/rearm counters; console performance remains unverified'
++            if guide=='irq-rearm' else
++            'Sparse nonblocking CHECK, tight-loop catch-up and scoped pure extent caching; console performance remains unverified'
+             if guide=='paced' else
+             'Clock-admitted bounded reader service window and faster executable-extent scanning; console performance remains unverified'
+             if guide=='timed' else
+@@ -246,7 +254,7 @@ def package(build,guide='broader',trace_startup=None):
+ 
+ if __name__=='__main__':
+     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('build',type=Path)
+-    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall','cooperative','open','timed','paced'),default='broader')
++    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall','cooperative','open','timed','paced','irq-rearm'),default='broader')
+     parser.add_argument('--trace-startup',type=Path)
+     try:
+         args=parser.parse_args();package(args.build,args.guide,args.trace_startup)
