@@ -1,0 +1,6 @@
+{
+  "build": "8390fed",
+  "owner_report": "Black screen exiting bootstrap2; SD adapter red LED remained on",
+  "confirmed_root_cause": false,
+  "cause_verified_on_console": false
+}

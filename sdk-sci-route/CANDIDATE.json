@@ -1,0 +1,11 @@
+{
+  "schema": "kui.native.sdk-sci-route.candidate.v1",
+  "source_commit": "b656d4934fb9cde51ca4af6eee2f936829d38028",
+  "source_tree": "1f8d33c8ee4dc376a76e07ad34b25a1860dcca13",
+  "build": "b656d4934fb9",
+  "module_sha256": "161c0a678c79d2dfd2d4e84c82575c3ebb9ab5ed8ac7508b15c5a57c83748375",
+  "module_bytes": 233360,
+  "reader": "Exact Evolution2 SDK SCI callbacks at priority1",
+  "source_bundle_prerequisite": "74958b3878279fc916199a7cd330f7f17b036138",
+  "console_performance_verified": false
+}
