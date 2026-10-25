@@ -1,0 +1,750 @@
+
+===== sdk-structural-final-host/sdk-exact-regression-host.log =====
+native SDK SCI route admission Evolution1: 734288 checks; original identity, immutable/live windows, both common modes, scratch, ownership and read faults passed
+native SDK SCI route admission Evolution2: 734288 checks; original identity, immutable/live windows, both common modes, scratch, ownership and read faults passed
+native SDK SCI route total: 1468577 checks passed
+
+===== sdk-structural-final-host/sdk-structural-host.log =====
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/evolution1/1ST_READ.BIN vector=8c1da080 default=8c1d9f50
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/sa2/1ST_READ.BIN vector=8c15ab44 default=8c1351e4
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/evolution2/1ST_READ.BIN vector=8c1ade3c default=8c1add0c
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/evolution1/1ST_READ.BIN vector=8c1da080 default=8c1d9f50
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/ps2/1ST_READ.BIN vector=8c2d8eec default=0c2d8dbc
+structural source family refused: /workspace/scratch/da50cf175784/native-inputs/timestalkers/1ST_READ.BIN result=0
+structural source family refused: /workspace/scratch/da50cf175784/native-inputs/soulreaver/1ST_READ.BIN result=-1
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/skies/1ST_READ.BIN vector=8c2e6818 default=8c2e66e8
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/recvdisc2/1ST_READ.BIN vector=8c1d495c default=8c1d482c
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/grandia2/1ST_READ.BIN vector=8c0c665c default=8c07d380
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/ct2/1ST_READ.BIN vector=8c166218 default=0c1660e8
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/pso/1ST_READ.BIN vector=8c30fdd8 default=8c30f830
+structural source family refused: /workspace/scratch/da50cf175784/native-inputs/hotd2/1ST_READ.BIN result=0
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/sa2/1ST_READ.BIN vector=8c15ab44 default=8c1351e4
+structural source family refused: /workspace/scratch/da50cf175784/native-inputs/silver/1ST_READ.BIN result=0
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/omikron/1ST_READ.BIN vector=8c0da0b0 default=8c0d9f80
+structural source family refused: /workspace/scratch/da50cf175784/native-inputs/egg/1ST_READ.BIN result=0
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/recvdisc1/1ST_READ.BIN vector=8c1d495c default=8c1d482c
+structural source family refused: /workspace/scratch/da50cf175784/native-inputs/bluestinger/1ST_READ.BIN result=0
+structural source family refused: /workspace/scratch/da50cf175784/native-inputs/generator2/1ST_READ.BIN result=0
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/segasmash/1ST_READ.BIN vector=8c040658 default=8c03de84
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/rush2049/1ST_READ.BIN vector=8c1021ec default=8c0eb804
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/lodoss/1NOSDC.BIN vector=8c2f7898 default=8c2f7768
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/rayman2/1ST_READ.BIN vector=8c0e3918 default=8c0d7aa4
+structural source family refused: /workspace/scratch/da50cf175784/native-inputs/mdk2/1ST_READ.BIN result=0
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/jgr/1ST_READ.BIN vector=8c28d1e4 default=8c28cc3c
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/frogger2/1ST_READ.BIN vector=8c0c89b0 default=8c0b206c
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/doa2/1ST_READ.BIN vector=8c134018 default=8c133ee8
+native SDK SCI structural discovery: 633020 checks passed; relocated role graph, dynamic VBR, immutable/live windows, unique initializer, scratch, ownership and read faults
+
+===== sdk-structural-final-host/sdk-compact-host.log =====
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/sa2/1ST_READ.BIN vector=8c15ab44 default=8c1351e4
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/evolution1/1ST_READ.BIN vector=8c1da080 default=8c1d9f50
+native SDK SCI structural discovery: 577980 checks passed; relocated role graph, dynamic VBR, immutable/live windows, unique initializer, scratch, ownership and read faults
+
+===== sdk-structural-prefilter-host.log =====
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/evolution1/1ST_READ.BIN vector=8c1da080 default=8c1d9f50
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/evolution2/1ST_READ.BIN vector=8c1ade3c default=8c1add0c
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/evolution1/1ST_READ.BIN vector=8c1da080 default=8c1d9f50
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/ps2/1ST_READ.BIN vector=8c2d8eec default=0c2d8dbc
+structural source family refused: /workspace/scratch/da50cf175784/native-inputs/timestalkers/1ST_READ.BIN result=0
+structural source family refused: /workspace/scratch/da50cf175784/native-inputs/soulreaver/1ST_READ.BIN result=-1
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/skies/1ST_READ.BIN vector=8c2e6818 default=8c2e66e8
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/recvdisc2/1ST_READ.BIN vector=8c1d495c default=8c1d482c
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/grandia2/1ST_READ.BIN vector=8c0c665c default=8c07d380
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/ct2/1ST_READ.BIN vector=8c166218 default=0c1660e8
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/pso/1ST_READ.BIN vector=8c30fdd8 default=8c30f830
+structural source family refused: /workspace/scratch/da50cf175784/native-inputs/hotd2/1ST_READ.BIN result=0
+structural source family refused: /workspace/scratch/da50cf175784/native-inputs/sa2/1ST_READ.BIN result=-1
+structural source family refused: /workspace/scratch/da50cf175784/native-inputs/silver/1ST_READ.BIN result=0
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/omikron/1ST_READ.BIN vector=8c0da0b0 default=8c0d9f80
+structural source family refused: /workspace/scratch/da50cf175784/native-inputs/egg/1ST_READ.BIN result=0
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/recvdisc1/1ST_READ.BIN vector=8c1d495c default=8c1d482c
+structural source family refused: /workspace/scratch/da50cf175784/native-inputs/bluestinger/1ST_READ.BIN result=0
+structural source family refused: /workspace/scratch/da50cf175784/native-inputs/generator2/1ST_READ.BIN result=0
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/segasmash/1ST_READ.BIN vector=8c040658 default=8c03de84
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/rush2049/1ST_READ.BIN vector=8c1021ec default=8c0eb804
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/lodoss/1NOSDC.BIN vector=8c2f7898 default=8c2f7768
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/rayman2/1ST_READ.BIN vector=8c0e3918 default=8c0d7aa4
+structural source family refused: /workspace/scratch/da50cf175784/native-inputs/mdk2/1ST_READ.BIN result=0
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/jgr/1ST_READ.BIN vector=8c28d1e4 default=8c28cc3c
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/frogger2/1ST_READ.BIN vector=8c0c89b0 default=8c0b206c
+structural source/live-model admission: /workspace/scratch/da50cf175784/native-inputs/doa2/1ST_READ.BIN vector=8c134018 default=8c133ee8
+native SDK SCI structural discovery: 7605 checks passed; relocated role graph, dynamic VBR, immutable/live windows, unique initializer, scratch, ownership and read faults
+
+===== native-dual-host-proof.log =====
+dual readers: 380225 checks; actual selector, Standard/non-SCI refusal, distinct blobs, all3leasealiases, Y/Standard/foreign-map/cookie refusal before protected aux reads, exact public bounds passed
+Native heap family / lease checks: 10827 passed; no allocator calls or lifetime authority
+Selected native lease 384 KiB: 124062 cumulative allocator/guard/placement checks passed
+Native Background map geometry: 509952 aligned leases and all aliases checked
+Native heap family / lease checks: 10827 passed; no allocator calls or lifetime authority
+Selected native lease 384 KiB: 124062 cumulative allocator/guard/placement checks passed
+Native Background map geometry: 509952 aligned leases and all aliases checked
+{"actual_sh_compiler_console_layout": true, "layouts": {"x": {"area0": 32, "area1": 1344, "config_payload": 220, "engine": 576, "engine.active": 700, "engine.cursor.block": 676, "engine.cursor.done": 664, "engine.hooked": 720, "engine.manifest": 636, "engine.native_loan_state": 756, "engine.native_max_count": 764, "engine.native_max_lba": 760, "engine.release.armed": 584, "engine.release.depth": 588, "engine.release.pending": 592, "engine.release.rehooks": 616, "engine.release.released": 620, "engine.release.sci": 580, "engine.release.vbr": 576, "engine.release.vbr_changes": 632, "engine.stats.call_blocks": 732, "engine.stats.exec_int": 744, "engine.stats.execs": 740, "engine.stats.hooks": 748, "engine.stats.irq_blocks": 728, "engine.stats.releases": 752, "engine.stats.waits": 736, "engine.target": 724, "engine.token": 688, "engine_bytes": 192, "lease_bytes": 393216, "manifest_bytes": 1020, "manifest_reader": 48, "manifest_transport": 44, "pointer_bytes": 4, "region_bytes": 1888, "shared": 800, "shared.card": 996, "shared.display": 1068, "shared.port": 1244, "shared.service": 800, "shared.service.command": 848, "shared.service.diag.last_function": 968, "shared.service.pending": 880, "shared.service.token": 844, "shared.stream": 1124, "shared.stream.stats.ahead": 1236, "shared.stream.stats.blocks": 1200, "shared.stream.stats.crc_errors": 1220, "shared.stream.stats.deferred": 1240, "shared.stream.stats.foreign": 1228, "shared.stream.stats.kept": 1212, "shared.stream.stats.overruns": 1216, "shared.stream.stats.polled": 1204, "shared.stream.stats.repaired": 1232, "shared.stream.stats.starts": 1208, "shared.stream.stats.token_errors": 1224, "vector100": 0, "vector400": 768, "vector600": 1280}, "y": {"area0": 32, "area1": 1344, "config_payload": 220, "engine": 576, "engine.active": 700, "engine.cursor.block": 676, "engine.cursor.done": 664, "engine.hooked": 720, "engine.manifest": 636, "engine.native_loan_state": 756, "engine.release.armed": 584, "engine.release.depth": 588, "engine.release.pending": 592, "engine.release.rehooks": 616, "engine.release.released": 620, "engine.release.sci": 580, "engine.release.vbr": 576, "engine.release.vbr_changes": 632, "engine.stats.call_blocks": 732, "engine.stats.exec_int": 744, "engine.stats.execs": 740, "engine.stats.hooks": 748, "engine.stats.irq_blocks": 728, "engine.stats.releases": 752, "engine.stats.waits": 736, "engine.target": 724, "engine.token": 688, "engine_bytes": 184, "lease_bytes": 393216, "manifest_bytes": 1020, "manifest_reader": 48, "manifest_transport": 44, "pointer_bytes": 4, "region_bytes": 1888, "shared": 800, "shared.card": 996, "shared.display": 1068, "shared.port": 1244, "shared.service": 800, "shared.service.command": 848, "shared.service.diag.last_function": 968, "shared.service.pending": 880, "shared.service.token": 844, "shared.stream": 1124, "shared.stream.stats.ahead": 1236, "shared.stream.stats.blocks": 1200, "shared.stream.stats.crc_errors": 1220, "shared.stream.stats.deferred": 1240, "shared.stream.stats.foreign": 1228, "shared.stream.stats.kept": 1212, "shared.stream.stats.overruns": 1216, "shared.stream.stats.polled": 1204, "shared.stream.stats.repaired": 1232, "shared.stream.stats.starts": 1208, "shared.stream.stats.token_errors": 1224, "vector100": 0, "vector400": 768, "vector600": 1280}}, "worker_visible_equal_fields": 57, "x_timing_words_only_in_unused_y_gap": true}
+
+===== games-retail-full-host.log =====
+PASS fat32 MBR retail preparation: valid; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: vmu-present-corrupt; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: boot-tail; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: fragmented; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: fragment-limit; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: missing-track; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: payload-checksum; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: layout-manifest; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: layout-entry; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: layout-size; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: layout-resident; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: layout-flags; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: manifest-not-empty; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: bad-ip; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: other-title; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: alternate-bootfile; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: blank-title; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: cdda-warning; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: bad-cooked-size; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: cooked-2048; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: cooked-boot-tail; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: async-cooked-2048; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: ce-probe-cooked; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: tracks-31; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: tracks-99; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: async-tracks-31; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: async-tracks-40; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: boot-low-density; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: boot-overlap-ip; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: bad-bootfile; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: bad-media; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: windows-ce; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: bad-flags; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: boot-small; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: boot-large; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: sector-beforedata; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: sector-aftercard; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: sector-repeat; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: seek-fail; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: read-fail; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: close-fail; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: unmount-fail; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: cancel-before; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: cancel-map; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: cancel-ip; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: size-change; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: async-on-sci; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: async-on-scif; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: ce-probe; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: ce-probe-native; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: ce-probe-package; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: ce-probe-small; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: ce-probe-scif; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: ce-probe-async; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-gdi-offset-raw; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-gdi-offset-cooked; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-iso-gd; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-iso-cd11700; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-iso-cd0; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-iso-cd11700-bad-size; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-iso-cd11700-bad-extent; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-raw-bin; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-raw-mode2-img; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cue-shared; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cue-2336; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cue-2448; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cue-scrambled; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cue-gd-density; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cue-scrambled-force-plain; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cue-shared-fragmented; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cue-shared-async; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cue-2336-async; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cue-bad-offset; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cue-bad-form2; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cdi-v2; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cdi-v3-native; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cdi-v35; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cdi-v35-pregap150; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cdi-v35-2336; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cdi-v35-2448; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cdi-v35-async; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cdi-v35-force-scramble; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cdi-v35-bad-encoding; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cdi-v35-bad-ce-scramble; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cdi-v35-bad-ce-plain; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cdi-v35-bad-footer; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-cdi-v35-bad-payload; whole-card SHA256 unchanged
+Checksum I/O fat32 format-checksum-cooked: IP=16, boot=33, max=2048 bytes
+PASS fat32 MBR retail preparation: format-checksum-cooked; whole-card SHA256 unchanged
+Checksum I/O fat32 format-checksum-gdi-raw: IP=16, boot=0, max=2352 bytes
+PASS fat32 MBR retail preparation: format-checksum-gdi-raw; whole-card SHA256 unchanged
+Checksum I/O fat32 format-checksum-iso: IP=16, boot=33, max=2048 bytes
+PASS fat32 MBR retail preparation: format-checksum-iso; whole-card SHA256 unchanged
+Checksum I/O fat32 format-checksum-raw-bin: IP=16, boot=33, max=2352 bytes
+PASS fat32 MBR retail preparation: format-checksum-raw-bin; whole-card SHA256 unchanged
+Checksum I/O fat32 format-checksum-cue-shared: IP=16, boot=33, max=2352 bytes
+PASS fat32 MBR retail preparation: format-checksum-cue-shared; whole-card SHA256 unchanged
+Checksum I/O fat32 format-checksum-cue-2336: IP=16, boot=33, max=2336 bytes
+PASS fat32 MBR retail preparation: format-checksum-cue-2336; whole-card SHA256 unchanged
+Checksum I/O fat32 format-checksum-cue-2448: IP=16, boot=33, max=2448 bytes
+PASS fat32 MBR retail preparation: format-checksum-cue-2448; whole-card SHA256 unchanged
+Checksum I/O fat32 format-checksum-cdi: IP=16, boot=33, max=2352 bytes
+PASS fat32 MBR retail preparation: format-checksum-cdi; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-checksum-cooked-read-fail; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-checksum-cooked-short-read; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-checksum-cooked-cancel-read; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-checksum-cue-shared-read-fail; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-checksum-cue-shared-short-read; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-checksum-cue-shared-cancel-read; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-checksum-cue-shared-cancel-between-reads; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-checksum-cue-shared-bad-mode; whole-card SHA256 unchanged
+PASS fat32 MBR retail preparation: format-checksum-cue-shared-bad-ip-header; whole-card SHA256 unchanged
+PASS fat32 MBR launch-check; original files unchanged; independent report/seed checks
+PASS fat32 MBR launch-check-cancel; original files unchanged; independent report/seed checks
+PASS fat32 MBR launch-check-range; original files unchanged; independent report/seed checks
+PASS fat32 MBR launch-report; original files unchanged; independent report/seed checks
+PASS fat32 MBR launch-patches; original files unchanged; independent report/seed checks
+PASS fat32 MBR launch-patch-old-package; original files unchanged; independent report/seed checks
+PASS fat32 MBR launch-patch-duplicate; original files unchanged; independent report/seed checks
+PASS fat32 MBR launch-patch-range; original files unchanged; independent report/seed checks
+PASS fat32 MBR launch-patch-ce; original files unchanged; independent report/seed checks
+PASS fat32 MBR launch-patch-cdda; original files unchanged; independent report/seed checks
+PASS fat32 MBR launch-report-readonly; original files unchanged; independent report/seed checks
+PASS fat32 MBR launch-report-full; original files unchanged; independent report/seed checks
+PASS fat32 MBR launch-report-source-directory; original files unchanged; independent report/seed checks
+PASS fat32 MBR zso-gd-shift0; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-cd11700-shift9; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-cd0-shift0; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-fragments31; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-fragments32; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-index-underflow; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-index-descending; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-index-past-end; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-payload-invalid; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-header-version; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-header-blocksize; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-header-reserved; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-header-shift; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-windows-ce; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-cdda; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-background; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-patches; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-scif; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-source-header-change; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-source-index-change; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-lzo-gd-shift0; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-lzo-cd11700-shift9; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-lzo-cd0-shift0; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-lzo-fragments31; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-lzo-fragments32; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-lzo-wrong-codec; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-lz4-as-lzo; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-lzo-wrong-package; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 MBR zso-lzo-payload-invalid; source/package unchanged; independent ZSO/report/wire checks
+PASS fat32 native-dual-x; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-y; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-x-report; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-y-report; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-cancel; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-absent; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-cap-absent; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-cap-duplicate; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-cap-malformed; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-cap-unrelated; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-cap-truncated; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-scif; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-too-many; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-patches; native X/Y package, descriptor, map and report checks
+PASS fat32 superfloppy retail preparation: valid; whole-card SHA256 unchanged
+PASS fat32 superfloppy retail preparation: boot-tail; whole-card SHA256 unchanged
+PASS fat32 superfloppy retail preparation: fragmented; whole-card SHA256 unchanged
+PASS fat32 superfloppy retail preparation: cooked-2048; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: valid; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: vmu-present-corrupt; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: boot-tail; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: fragmented; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: fragment-limit; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: missing-track; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: payload-checksum; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: layout-manifest; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: layout-entry; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: layout-size; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: layout-resident; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: layout-flags; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: manifest-not-empty; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: bad-ip; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: other-title; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: alternate-bootfile; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: blank-title; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: cdda-warning; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: bad-cooked-size; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: cooked-2048; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: cooked-boot-tail; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: async-cooked-2048; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: ce-probe-cooked; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: tracks-31; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: tracks-99; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: async-tracks-31; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: async-tracks-40; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: boot-low-density; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: boot-overlap-ip; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: bad-bootfile; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: bad-media; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: windows-ce; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: bad-flags; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: boot-small; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: boot-large; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: sector-beforedata; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: sector-aftercard; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: sector-repeat; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: seek-fail; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: read-fail; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: close-fail; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: unmount-fail; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: cancel-before; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: cancel-map; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: cancel-ip; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: size-change; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: async-on-sci; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: async-on-scif; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: ce-probe; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: ce-probe-native; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: ce-probe-package; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: ce-probe-small; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: ce-probe-scif; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: ce-probe-async; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-gdi-offset-raw; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-gdi-offset-cooked; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-iso-gd; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-iso-cd11700; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-iso-cd0; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-iso-cd11700-bad-size; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-iso-cd11700-bad-extent; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-raw-bin; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-raw-mode2-img; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cue-shared; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cue-2336; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cue-2448; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cue-scrambled; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cue-gd-density; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cue-scrambled-force-plain; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cue-shared-fragmented; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cue-shared-async; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cue-2336-async; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cue-bad-offset; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cue-bad-form2; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cdi-v2; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cdi-v3-native; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cdi-v35; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cdi-v35-pregap150; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cdi-v35-2336; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cdi-v35-2448; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cdi-v35-async; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cdi-v35-force-scramble; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cdi-v35-bad-encoding; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cdi-v35-bad-ce-scramble; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cdi-v35-bad-ce-plain; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cdi-v35-bad-footer; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-cdi-v35-bad-payload; whole-card SHA256 unchanged
+Checksum I/O exfat format-checksum-cooked: IP=16, boot=33, max=2048 bytes
+PASS exfat MBR retail preparation: format-checksum-cooked; whole-card SHA256 unchanged
+Checksum I/O exfat format-checksum-gdi-raw: IP=16, boot=0, max=2352 bytes
+PASS exfat MBR retail preparation: format-checksum-gdi-raw; whole-card SHA256 unchanged
+Checksum I/O exfat format-checksum-iso: IP=16, boot=33, max=2048 bytes
+PASS exfat MBR retail preparation: format-checksum-iso; whole-card SHA256 unchanged
+Checksum I/O exfat format-checksum-raw-bin: IP=16, boot=33, max=2352 bytes
+PASS exfat MBR retail preparation: format-checksum-raw-bin; whole-card SHA256 unchanged
+Checksum I/O exfat format-checksum-cue-shared: IP=16, boot=33, max=2352 bytes
+PASS exfat MBR retail preparation: format-checksum-cue-shared; whole-card SHA256 unchanged
+Checksum I/O exfat format-checksum-cue-2336: IP=16, boot=33, max=2336 bytes
+PASS exfat MBR retail preparation: format-checksum-cue-2336; whole-card SHA256 unchanged
+Checksum I/O exfat format-checksum-cue-2448: IP=16, boot=33, max=2448 bytes
+PASS exfat MBR retail preparation: format-checksum-cue-2448; whole-card SHA256 unchanged
+Checksum I/O exfat format-checksum-cdi: IP=16, boot=33, max=2352 bytes
+PASS exfat MBR retail preparation: format-checksum-cdi; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-checksum-cooked-read-fail; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-checksum-cooked-short-read; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-checksum-cooked-cancel-read; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-checksum-cue-shared-read-fail; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-checksum-cue-shared-short-read; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-checksum-cue-shared-cancel-read; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-checksum-cue-shared-cancel-between-reads; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-checksum-cue-shared-bad-mode; whole-card SHA256 unchanged
+PASS exfat MBR retail preparation: format-checksum-cue-shared-bad-ip-header; whole-card SHA256 unchanged
+PASS exfat MBR launch-check; original files unchanged; independent report/seed checks
+PASS exfat MBR launch-check-cancel; original files unchanged; independent report/seed checks
+PASS exfat MBR launch-check-range; original files unchanged; independent report/seed checks
+PASS exfat MBR launch-report; original files unchanged; independent report/seed checks
+PASS exfat MBR launch-patches; original files unchanged; independent report/seed checks
+PASS exfat MBR launch-patch-old-package; original files unchanged; independent report/seed checks
+PASS exfat MBR launch-patch-duplicate; original files unchanged; independent report/seed checks
+PASS exfat MBR launch-patch-range; original files unchanged; independent report/seed checks
+PASS exfat MBR launch-patch-ce; original files unchanged; independent report/seed checks
+PASS exfat MBR launch-patch-cdda; original files unchanged; independent report/seed checks
+PASS exfat MBR launch-report-readonly; original files unchanged; independent report/seed checks
+PASS exfat MBR launch-report-full; original files unchanged; independent report/seed checks
+PASS exfat MBR launch-report-source-directory; original files unchanged; independent report/seed checks
+PASS exfat MBR zso-gd-shift0; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-cd11700-shift9; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-cd0-shift0; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-fragments31; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-fragments32; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-index-underflow; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-index-descending; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-index-past-end; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-payload-invalid; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-header-version; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-header-blocksize; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-header-reserved; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-header-shift; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-windows-ce; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-cdda; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-background; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-patches; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-scif; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-source-header-change; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-source-index-change; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-lzo-gd-shift0; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-lzo-cd11700-shift9; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-lzo-cd0-shift0; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-lzo-fragments31; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-lzo-fragments32; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-lzo-wrong-codec; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-lz4-as-lzo; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-lzo-wrong-package; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat MBR zso-lzo-payload-invalid; source/package unchanged; independent ZSO/report/wire checks
+PASS exfat native-dual-x; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-y; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-x-report; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-y-report; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-cancel; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-absent; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-cap-absent; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-cap-duplicate; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-cap-malformed; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-cap-unrelated; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-cap-truncated; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-scif; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-too-many; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-patches; native X/Y package, descriptor, map and report checks
+PASS exfat superfloppy retail preparation: valid; whole-card SHA256 unchanged
+PASS exfat superfloppy retail preparation: boot-tail; whole-card SHA256 unchanged
+PASS exfat superfloppy retail preparation: fragmented; whole-card SHA256 unchanged
+PASS exfat superfloppy retail preparation: cooked-2048; whole-card SHA256 unchanged
+
+===== native-cache-dual-host.log =====
+Native launcher cache: 219623 checks passed including actual-image rebuild/publication faults
+
+===== native-dual-installer-host.log =====
+...........
+----------------------------------------------------------------------
+Ran 11 tests in 0.411s
+
+OK
+
+===== native-dual-prep-host.log =====
+PASS fat32 native-dual-x; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-y; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-x-report; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-y-report; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-cancel; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-absent; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-cap-absent; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-cap-duplicate; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-cap-malformed; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-cap-unrelated; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-cap-truncated; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-scif; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-too-many; native X/Y package, descriptor, map and report checks
+PASS fat32 native-dual-patches; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-x; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-y; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-x-report; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-y-report; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-cancel; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-absent; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-cap-absent; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-cap-duplicate; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-cap-malformed; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-cap-unrelated; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-cap-truncated; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-scif; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-too-many; native X/Y package, descriptor, map and report checks
+PASS exfat native-dual-patches; native X/Y package, descriptor, map and report checks
+
+===== Final UI/settings regression (ASAN_OPTIONS=detect_leaks=0) =====
+PASS continuous VMU scrolling: every save in both directions, endpoint clamp, final-page bounds, exact raw-name actions, stale results, busy guards and START shortcut
+PASS VMU catalogs scroll continuously with exact page/generation guards and no selectable rows while loading
+PASS VMU list rendering: descriptions, app-id/filename fallback, block counts, selected exact filename, ranges, scrollbar position/length, errors and safe text bounds
+PASS small tools: empty VMU card backup, VMD browse/extract separate from restore, safe file selection, exact size checks, stale guards and Stop ownership
+PASS small tools rendering: card image actions, eight image rows, progress, compare file sizes and outcome details fit safe margins
+PASS VMU bulk controls: empty cards, no selected row, both-slot stale guards, explicit confirmation and partial retry require fresh preview
+PASS VMU import controls: mixed-case VMS/VMI/DCI selection, folders, unsupported names, busy lock, exact path/generation guards, staged-only completion and cancellation
+PASS VMU bulk/import rendering: both slots, total/verified/remaining counts, uncertain destination, external picker, eight metadata lines and staged SD-only result
+PASS virtual VMU copy: selected/all dispatch, unreadable and empty sources, exact async keys, failed previews, cancellation, one-use confirmation and stored-only completion
+PASS managed virtual card browser: no physical source required, exact listing generation/page, invalid paths, read-only image extraction, return context and separate SD restore
+PASS virtual VMU rendering: ninth destination label, selected/all confirmation, pending activation status, eight managed card rows and read-only image return context
+PASS Games selection: cold folder/name restoration after sorting, exact page row, stale guards, parent anchor, refresh and missing-folder fallback
+PASS Armada CE music: saved On selects separate excerpt route, Off preserves CE route, unsupported metadata and stale paths refuse
+PASS WinCE CD music: BAM4/Worms and other CDDA candidates, saved opt-in On route and Off ordinary route
+PASS CD audio status: unknown versions remain experimental, tested audio comes from inspection, stale evidence is hidden
+PASS Games settings: save is not launch, reader/CDDA isolation, nested diagnostic returns, stale identity
+PASS Games saved settings: codec cold-boot hydration, separate variants, capabilities, stale publication and save feedback
+PASS Games RAM patches: two-slot controller editor, guards, exact file bounds, aliases, saved reload and native/CE/CD music isolation
+PASS Games defaults: current-image save only, detected native/CE/scrambled defaults, cleared patches and preserved unrelated presets
+PASS Games ZSO: explicit native SCI capability, inspection-only CE/other sources, Standard-only dispatch and saved-option sanitization
+PASS explicit ZSO codecs: chooser before valid inspection, cancel/no launch, saved hydration and typed LZO dispatch
+PASS Games Check/baseline: read-only preparation dispatch, Stop, unsaved edits/defaults, exact restore, CE and typed ZSO choices
+PASS native reader UI: New X/Legacy Y labels, unchanged buttons/default Off, persisted fields and CE/CDDA/ZSO exclusions
+PASS Games patch rendering: six advanced rows, both patch slots, exact range, controller hints and moving nibble underline
+PASS Games ZSO rendering: inspect-only explanation, Standard reader constraints and accurate format/unknown-audio information
+PASS storage tests controls: Diagnostics entry, presets, labels, confirmation, Stop, repeat, history and baseline guards
+PASS storage tests rendering: progress, rates, safe baseline comparison, metadata, errors and persistence warnings
+PASS shell saved dump picker: exact paths, long children, paging, cancel, guards, separate browser purposes
+PASS shell new dump folder label: sanitized names, UTF-8, Auto, cancel, cap, keyboard purpose, session reset
+PASS shell capture label keyboard isolation: File Manager, card nickname and Wi-Fi retain their own actions
+PASS shell saved dump rendering: nine Advanced rows, selected job, Auto, label, confirmations, picker and keyboard bounds
+PASS File Manager: navigation, paging anchors, open-with, protected items, copy/move/delete/rename/new folder flows
+PASS File Manager rendering: Home entry, rows, notices, progress, actions, confirmations, details, picture, keyboard
+PASS shell FTP controls: start from Network, stop, restart, back
+PASS shell FTP rendering: starting, ready, clients and transfers, stopped, failed
+PASS shell Wi-Fi controls: open, bands, open and secured joins, keyboard symbols and limits, by name, forget
+PASS shell Wi-Fi rendering: looking, no board, networks, online, scrolling, password keyboard, forget, FTP over Wi-Fi
+PASS shell Wi-Fi update: check first, explicit pinned confirmation, cancel priority, commit lock, failed and stale guards
+PASS shell Wi-Fi update rendering: version, image, size, confirmation, transfer progress, finishing state
+PASS shell: Games browsing/inspection, stale result guards, Stop lock, system/ripper preferences, reversible video actions, VMU paging, phase ETA, destination keyboard, reference grades, safe rendering
+
+===== native-universal-callgraph-replay.json =====
+[
+  {
+    "callgraph": "build/native-universal-final/resident-sci.elf.ltrans0.ltrans.ci",
+    "target": "build/native-universal-final/resident-sci.elf",
+    "sha256": "cb5ba07eea2cabfb09b1285046aff7b61fd12c26877d3ec7ea6d09cbdee14349",
+    "attempts": 1,
+    "complete": true,
+    "identical_output": true
+  },
+  {
+    "callgraph": "build/native-universal-final/stage/src/core/native_sdk_sci_route.ci",
+    "target": "build/native-universal-final/stage/src/core/native_sdk_sci_route.o",
+    "sha256": "5f0dd743a2eb0d58bd8380262e0f1b113f89bb3c648110a8d2d488250067bd90",
+    "attempts": 1,
+    "complete": true,
+    "identical_output": true
+  },
+  {
+    "callgraph": "build/native-universal-final/native/src/dreamcast/sci_sd_storage.ci",
+    "target": "build/native-universal-final/native/src/dreamcast/sci_sd_storage.o",
+    "sha256": "236c1ce58d393e3eb9dd0fab1fa08d8c3b9b5be3014d417ccd3930e60ef99619",
+    "attempts": 1,
+    "complete": true,
+    "identical_output": true
+  },
+  {
+    "callgraph": "build/native-universal-final/native/src/loader/vmu_volatile_chain.ci",
+    "target": "build/native-universal-final/native/src/loader/vmu_volatile_chain.o",
+    "sha256": "aac2ecdde5000ddd3b3d877c42084e3ee765bc3e3395987df88273c7f088855e",
+    "attempts": 1,
+    "complete": true,
+    "identical_output": true
+  },
+  {
+    "callgraph": "build/native-universal-final/native/src/loader/vmu_backing.ci",
+    "target": "build/native-universal-final/native/src/loader/vmu_backing.o",
+    "sha256": "5637819d28f8318783a6b86c5878158c30ea58f9b250c3cbf2e7e80825b4775e",
+    "attempts": 1,
+    "complete": true,
+    "identical_output": true
+  }
+]
+
+===== native-dual-companion-negative-proof.json =====
+{
+  "schema": "kui.native.dual-companion.negative-proof.v1",
+  "valid_exact_companion_accepted": true,
+  "refused_substitutions": 34,
+  "cases": [
+    {
+      "case": "wrong_profile",
+      "reason": "dual worker and read-ahead companion profile differ"
+    },
+    {
+      "case": "wrong_nested_schema",
+      "reason": "dual pin selection requires the complete matching linked artifact identities"
+    },
+    {
+      "case": "disabled_dual_execution",
+      "reason": "dual pin selection requires the complete matching linked artifact identities"
+    },
+    {
+      "case": "nested_sha_resident",
+      "reason": "dual pin selection requires the complete matching linked artifact identities"
+    },
+    {
+      "case": "parent_sha_resident",
+      "reason": "dual pin selection requires the complete matching linked artifact identities"
+    },
+    {
+      "case": "nested_sha_worker",
+      "reason": "dual pin selection requires the complete matching linked artifact identities"
+    },
+    {
+      "case": "parent_sha_worker",
+      "reason": "read-ahead PIO pair pins require the exact linked timing and ownership proof"
+    },
+    {
+      "case": "nested_sha_stage",
+      "reason": "dual pin selection requires the complete matching linked artifact identities"
+    },
+    {
+      "case": "parent_sha_stage",
+      "reason": "dual pin selection requires the complete matching linked artifact identities"
+    },
+    {
+      "case": "wrong_worker_pin",
+      "reason": "dual companion lacks the exact executed getter/region/visit pins"
+    },
+    {
+      "case": "selector_not_executed",
+      "reason": "dual pin selection requires the complete actual selector/binder/worker SH proof"
+    },
+    {
+      "case": "partial_capability_mutations",
+      "reason": "dual pin selection requires the complete actual selector/binder/worker SH proof"
+    },
+    {
+      "case": "wrong_blob_selection",
+      "reason": "dual pin selection requires the complete actual selector/binder/worker SH proof"
+    },
+    {
+      "case": "late_gate_not_executed",
+      "reason": "dual pin selection requires the complete actual selector/binder/worker SH proof"
+    },
+    {
+      "case": "y_invokes_binders",
+      "reason": "dual pin selection requires the complete actual selector/binder/worker SH proof"
+    },
+    {
+      "case": "worker_not_executed",
+      "reason": "dual pin selection requires the complete actual selector/binder/worker SH proof"
+    },
+    {
+      "case": "y_reads_raw_vectors",
+      "reason": "dual pin selection requires the complete actual selector/binder/worker SH proof"
+    },
+    {
+      "case": "no_decoder_truth",
+      "reason": "dual pin selection requires the complete actual selector/binder/worker SH proof"
+    },
+    {
+      "case": "no_actual_cold_binder",
+      "reason": "dual tail target lacks its matching actual cold-binder/initializer proof"
+    },
+    {
+      "case": "no_actual_init",
+      "reason": "dual tail target lacks its matching actual cold-binder/initializer proof"
+    },
+    {
+      "case": "legacy_192_fallback",
+      "reason": "dual legacy image requires all three exact compiled384KiB lease guards"
+    },
+    {
+      "case": "legacy_guard_omitted",
+      "reason": "dual legacy image requires all three exact compiled384KiB lease guards"
+    },
+    {
+      "case": "legacy_terminal_unknown",
+      "reason": "dual legacy image requires all three exact compiled384KiB lease guards"
+    },
+    {
+      "case": "legacy_map_changed",
+      "reason": "dual legacy image requires all three exact compiled384KiB lease guards"
+    },
+    {
+      "case": "legacy_failure_unknown",
+      "reason": "dual legacy image requires all three exact compiled384KiB lease guards"
+    },
+    {
+      "case": "legacy_graph_truncated",
+      "reason": "dual pins require both exact embedded engines and the closed guarded legacy stack proof"
+    },
+    {
+      "case": "legacy_guard_widened",
+      "reason": "dual pins require both exact embedded engines and the closed guarded legacy stack proof"
+    },
+    {
+      "case": "legacy_stack_overflow",
+      "reason": "dual pins require both exact embedded engines and the closed guarded legacy stack proof"
+    },
+    {
+      "case": "wrong_y_image",
+      "reason": "dual pins require both exact embedded engines and the closed guarded legacy stack proof"
+    },
+    {
+      "case": "ambiguous_capability",
+      "reason": "dual pins require both exact embedded engines and the closed guarded legacy stack proof"
+    },
+    {
+      "case": "pio_maximum_blocks_per_visit",
+      "reason": "read-ahead PIO pair pins require the exact linked timing and ownership proof"
+    },
+    {
+      "case": "pio_second_limit_ticks",
+      "reason": "read-ahead PIO pair pins require the exact linked timing and ownership proof"
+    },
+    {
+      "case": "pio_reserve_ticks",
+      "reason": "read-ahead PIO pair pins require the exact linked timing and ownership proof"
+    },
+    {
+      "case": "pio_soft_window_ticks",
+      "reason": "read-ahead PIO pair pins require the exact linked timing and ownership proof"
+    }
+  ]
+}
+
+===== native-dual-timeline-old-published-regression.json =====
+{
+  "schema": "kui.native.timeline.old-published-byte-regression.v1",
+  "published_build": "af401496961a",
+  "published_module_sha256": "1f4607b8144805937e3fa8a56f6bae0f45d5b3a54ac469ff2703151867a79397",
+  "published_worker_bytes": 63104,
+  "old_pio_pair_bin_pin_unchanged": true,
+  "old_add32_target": "0x8c10cfa0",
+  "actual_old_add32_body_matches_current": true,
+  "old_cold_binder_pin_unchanged": true,
+  "new_cold_binder_only_three_typed_literals_plus32": [
+    152,
+    160,
+    168
+  ],
+  "old_bridge_pin_unchanged": true,
+  "full_old_elf_artifacts_available": false,
+  "old_bin_at_worker_offset": "0xcfd4",
+  "published_bridge_copies": 4
+}
+
+===== native-universal-final-proofs/final-artifact-binding.json =====
+{
+  "commit": "af9e01c8a2710eb44e24867bbe2f593727fbb844",
+  "build": "/workspace/scratch/da50cf175784/integration-recovered/restored-source/build/native-universal-final",
+  "stage_end": "0x8ce8caa8",
+  "proof_sha256": {
+    "native-structural-corpus.json": "251ca1b910427212710afe84f62af23e7b7f83e34a3745b3c6dc39581535a140",
+    "native-structural-heap.json": "e8a7d3e1c78d85cc1c48901217d7f689abc8f843f3de937723c9a2263df86c75",
+    "native-joint-corpus.json": "49fee8bfd6615b0ba1d8c38cf952fdd2f53906b0a4bdafe23cc255f2f4e08a79",
+    "sdk-source-matrix.json": "7fa7775d2a0f54a40256eca559c515dc378a99c9f97ed8785968f32361a735ca"
+  },
+  "artifacts": {
+    "stage.elf": "7e8a8776b93387396addf241a645e22290ab8b0f6c8497912911ec53f208c03a",
+    "native-worker.elf": "bf21042c4a22f8343f54f283078ae99e3ddc8e83f11d0c0f942d6235347d87c3",
+    "native-worker.bin": "81e3be516af3392e0624e4902e4d3c05e4702c96bb8415a96d8f2f6cb119ed32",
+    "native-ra-aux.bin": "61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974"
+  }
+}
+
+===== Independent source bundle recovery =====
+{
+  "commit": "af9e01c8a2710eb44e24867bbe2f593727fbb844",
+  "tree": "2dc5d35c71028f444757e248072bdef6ed7793be",
+  "commits": 60,
+  "source_clean": true,
+  "minimum_prerequisite": "74958b3878279fc916199a7cd330f7f17b036138",
+  "bundle_sha256": "fc2df6af522669c5c12045fc975303aa1141bdfb442ac85e4ed077cbcd6556b8",
+  "git_fsck": true,
+  "full_source_history_verified": true
+}

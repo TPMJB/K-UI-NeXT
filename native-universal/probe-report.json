@@ -1,0 +1,4296 @@
+{
+  "schema": "kui.native.persistent.probe.artifact.v1",
+  "allocator_bootstrap_audit": {
+    "schema": "kui.native.persistent.bootstrap.v1",
+    "runtime": {
+      "format": 1,
+      "build": "af9e01c8a271",
+      "payload_bytes": 267780,
+      "memory_bytes": 267780,
+      "crc32": "717c55e0"
+    },
+    "module_sha256": "7be0a290ec675438a565f1c3d1aac6fde18520b88056c0513961d96f9bc24f48",
+    "resident_memory_end": "0x8c007ba0",
+    "stage_memory_end": "0x8ce8caa8",
+    "dynamic_bootstrap": {
+      "hook": "0x8c007564",
+      "hook_bytes": 244,
+      "dynamic_original_cell": "0x8c007b80",
+      "dynamic_original_p2": "0xac007b80",
+      "original_call": "0x8c0075bc",
+      "startup_argument_guard": {
+        "entry_r4_offset": 4,
+        "entry_r5_offset": 8,
+        "physical_return_pr_offset": 12,
+        "checked_before_initializer": true,
+        "physical_stack_low": "0x0c00c100",
+        "physical_stack_high": "0x0c00f400"
+      },
+      "inherited_frame_bytes": 52,
+      "mask_before_frame": true
+    },
+    "integer_instruction_counts": {
+      "resident-sci": 6401,
+      "stage": 38345,
+      "entry": 16
+    },
+    "sd_lease_gateway": {
+      "address": "0x8c007690",
+      "bytes": 748,
+      "declared_symbol_bytes": 756,
+      "incoming_resident_edges": 0,
+      "resident_pointer_references": 0,
+      "callgraph_reports": [
+        "resident-sci.elf.ltrans0.ltrans.ci"
+      ]
+    },
+    "gd_map_refusal_terminal": {
+      "schema": "kui.native.gd-map-refusal.v1",
+      "functions": {
+        "_native_background_map": {
+          "normalized_sha256": "4f2ee5b6686ffee94253d4a92a02b2d4769369c906598ea0949d6410567352f2",
+          "bytes": 188,
+          "typed_bindings": [
+            [
+              164,
+              "_kui_vmu_observe_boot_control",
+              0,
+              536870912,
+              4
+            ],
+            [
+              62,
+              "_kui_vmu_observe_low_failure",
+              0,
+              0,
+              2
+            ],
+            [
+              184,
+              "_map_guest",
+              0,
+              0,
+              4
+            ]
+          ]
+        },
+        "_native_resident_terminal": {
+          "normalized_sha256": "3c480406466530bec6748de2f40a8857772a3d159046db48d77c2b1ab3b7da7d",
+          "bytes": 96,
+          "typed_bindings": []
+        },
+        "_kui_vmu_observe_low_failure": {
+          "normalized_sha256": "4733a395aa815e4a3227afe93d42acaf69d9a076a84a4fe138e68874d6c6f22d",
+          "bytes": 60,
+          "typed_bindings": [
+            [
+              44,
+              "_native_resident_terminal",
+              0,
+              0,
+              4
+            ],
+            [
+              48,
+              "_kui_vmu_observe_boot_control",
+              0,
+              536870912,
+              4
+            ],
+            [
+              52,
+              "_kui_retail_async_region_storage",
+              0,
+              0,
+              4
+            ],
+            [
+              56,
+              "_retail_display_restore",
+              0,
+              0,
+              4
+            ]
+          ]
+        }
+      },
+      "cached_worker_terminal": true,
+      "resident_memory_end": "0x8c007ba0",
+      "mutation_rejections": 344,
+      "no_new_callback_or_control_abi": false,
+      "reader_profile": "background",
+      "read_ahead_lease_variant": true,
+      "guarded_lease_bytes": 393216,
+      "diagnostic_detail": "00000100",
+      "report_provenance": "differential only; existing late-heap/exit terminal uses same report"
+    },
+    "old_fixed_worker_linked": false,
+    "console_verified": false,
+    "reader_profile": "background",
+    "background_reader": {
+      "schema": "kui.native.background.audit.v1",
+      "console_execution_verified": false,
+      "resident_sha256": "cb5ba07eea2cabfb09b1285046aff7b61fd12c26877d3ec7ea6d09cbdee14349",
+      "payload_bytes": 15136,
+      "memory_end": "0x8c007ba0",
+      "low_limit": "0x8c007ba0",
+      "selected_guarded_lease_bytes": 393216,
+      "wide_lease_linked_guard_pins": {
+        "_native_background_map": {
+          "sha256": "4f2ee5b6686ffee94253d4a92a02b2d4769369c906598ea0949d6410567352f2",
+          "bytes": 188
+        },
+        "_native_resident_terminal": {
+          "sha256": "3c480406466530bec6748de2f40a8857772a3d159046db48d77c2b1ab3b7da7d",
+          "bytes": 96
+        },
+        "_kui_vmu_observe_low_failure": {
+          "sha256": "4733a395aa815e4a3227afe93d42acaf69d9a076a84a4fe138e68874d6c6f22d",
+          "bytes": 60
+        }
+      },
+      "region_pointer": {
+        "address": "0x8c007b34",
+        "bytes": 4,
+        "fixed_region_absent": true
+      },
+      "worker_stack_gateway": {
+        "address": "0x8c007690",
+        "allocated_bytes": 748,
+        "declared_function_bytes": 756
+      },
+      "profile": {
+        "native_background": true,
+        "sci_resume_fix": true,
+        "logical_drive_state": true,
+        "mounted_disc_check": true
+      },
+      "linked_integer_instructions": 6401,
+      "private_stack": {
+        "available_bytes": 352,
+        "worst_c_and_entry_bytes": 268,
+        "linked_library": {
+          "symbol": "___udivsi3",
+          "stack_bytes": 4,
+          "abstract_states": 84,
+          "balanced_return_paths": 2,
+          "internal_helper_window_bytes": 64,
+          "unknown_instruction_or_cycle_rejected": true
+        },
+        "additional_margin_bytes": 32,
+        "generic64_byte_library_margin_used": false,
+        "guard_bytes": 16,
+        "top_gap_bytes": 32,
+        "conservative_total_bytes": 352,
+        "remaining_bytes": 0,
+        "worst_total_bytes": 352,
+        "paths": {
+          "kui_retail_resident_dispatch": {
+            "c_bytes": 268,
+            "assembly_entry_bytes": 0,
+            "bytes": 268,
+            "path": [
+              "kui_retail_resident_dispatch(44)",
+              "kui_retail_gd_dispatch(148)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:guest(0)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:native_background_map(8)",
+              "kui_vmu_observe_low_failure(8)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:retail_display_restore(8)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:retail_display_line(52)"
+            ]
+          },
+          "kui_retail_async_irq": {
+            "c_bytes": 216,
+            "assembly_entry_bytes": 44,
+            "bytes": 260,
+            "path": [
+              "kui_retail_async_irq(20)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:deliver(8)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:deliver_work(40)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:kui_retail_cursor_feed(56)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:write_out(16)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:native_background_map(8)",
+              "kui_vmu_observe_low_failure(8)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:retail_display_restore(8)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:retail_display_line(52)"
+            ]
+          },
+          "kui_retail_menu_return": {
+            "c_bytes": 152,
+            "assembly_entry_bytes": 0,
+            "bytes": 152,
+            "path": [
+              "kui_retail_menu_return(8)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:native_reader_report(16)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:retail_display_values(76)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:retail_display_line(52)"
+            ]
+          },
+          "kui_retail_sdk_sci_dispatch": {
+            "c_bytes": 228,
+            "assembly_entry_bytes": 0,
+            "bytes": 228,
+            "path": [
+              "kui_retail_sdk_sci_dispatch(12)",
+              "kui_retail_async_irq(20)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:deliver(8)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:deliver_work(40)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:kui_retail_cursor_feed(56)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:write_out(16)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:native_background_map(8)",
+              "kui_vmu_observe_low_failure(8)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:retail_display_restore(8)",
+              "build/native-universal-final/resident-sci.elf.ltrans0.o:retail_display_line(52)"
+            ]
+          }
+        },
+        "callback_sites": 8,
+        "nonreturning_boundaries": [
+          {
+            "function": "kui_retail_menu_return",
+            "source": "retail_resident.c",
+            "contract": "boot-ROM menu; does not return"
+          },
+          {
+            "function": "kui_vmu_observe_low_failure",
+            "source": "vmu_native_background_resident.c",
+            "contract": "validated worker terminal; private stack switch separately audited"
+          }
+        ],
+        "installer_and_worker_roots_excluded": [
+          "kui_retail_native_async_loan_begin",
+          "kui_retail_native_async_loan_end",
+          "kui_vmu_native_background_init",
+          "kui_vmu_native_background_manifest_bind",
+          "kui_vmu_observe_background_base_init",
+          "kui_vmu_observe_sd_lease"
+        ]
+      },
+      "source_contract": {
+        "geometry": {
+          "worker_bytes": 131072,
+          "lease_bytes": 393216,
+          "map_bytes": 1020,
+          "region_offset": 132096,
+          "region_bytes": 1888
+        },
+        "map_and_region_p2_copy_before_vector_publication_before_bind": true,
+        "control_and_lease_only_modes_refused": true,
+        "stage_supplies_fifth_workspace_argument": true,
+        "sha256": {
+          "include/kui/vmu_native_background.h": "5c4055d899f6901e7a34dc5e5242912f0ee34f4eed1c6806defd7e9be98a2ffb",
+          "include/kui/vmu_native_async_loan.h": "aab9fe24b6482b9a60744f12ec6eb04c3a6d27820cc6438de993a50cd0789b62",
+          "src/loader/vmu_native_background_resident.c": "ab6ae312599454e4d1673f41f519e440e2aa6bde3029a9e133658aef6c86472e",
+          "src/loader/retail_resident.c": "eceb483108be67c510a5bed5375513a96aeb472b5d2d43224bb37adb23477fe6",
+          "src/loader/retail_async.c": "de3f85a225674fa59fa4c265be8d78bcdb346de8fe53f86ed55501b719588040",
+          "src/loader/retail_async.h": "8eed2fcdd892e3557a2f063577bfc4f0e013481cc5e840ff625b240bfc44d930",
+          "src/loader/retail_resident.S": "343a4b306abdf57dc87db3e8f87532b3633462ab4e9348c7c18b6955588a2297",
+          "src/loader/sci_sd_bus.c": "6b4da260f43de2bb02398b88176334ef26f3512658eefa8e94f81cf2cac42dc6",
+          "src/loader/vmu_native_passive_stage.inc": "79a23a26a5368a0c4118862f9c0835b03e9016ac223af6aeac1c6c374a820bb3",
+          "src/loader/vmu_native_heap_probe_stage.c": "03de13006af194cb256c1f3252a09893ea9f11e958c9fb26167540c09c644080",
+          "src/loader/retail_stage.c": "694886f362eb8328853a5c3d34e07f0ab1cc00dcb9686e74a2cea64c61a33e3c"
+        }
+      },
+      "stage": {
+        "available": true,
+        "complete_module_audited": false,
+        "stage_sha256": "7e8a8776b93387396addf241a645e22290ab8b0f6c8497912911ec53f208c03a",
+        "workspace": "0x8ce8a580",
+        "workspace_bytes": 1888,
+        "map": "0x8ce8af00",
+        "stage_map_object_bytes": 2172,
+        "retained_map_prefix_bytes": 1020,
+        "installer_stack": "0x8ce3fb00",
+        "installer_stack_bytes": 65536,
+        "generated_binder": "0x8c005c14",
+        "embedded_resident_copies": {
+          "scif": "0x8ce2ce78",
+          "sci": "0x8ce30998",
+          "ide": "0x8ce344b8",
+          "scia": "0x8ce37fd8"
+        },
+        "tail_copy_replay": {
+          "actual_sh_cases": 12,
+          "entry": "0x8ce02284",
+          "lease_bytes": 393216,
+          "witnesses": {
+            "copy_map": "0x8ce022b6",
+            "copy_region": "0x8ce022ec",
+            "publish": "0x8ce022f4",
+            "bind": "0x8ce022fc",
+            "bind_success": "0x8ce02300",
+            "relocate": "0x8ce0233a"
+          },
+          "map_copy_bytes": 1020,
+          "region_copy_bytes": 1888,
+          "map_lines_before_p2_copy": 32,
+          "region_lines_before_p2_copy": 59,
+          "actual_p2_publisher_executed": true,
+          "binder_result_must_equal_one": true,
+          "worker_relocation_preserves_tail": true,
+          "hostile_abi_callees": true,
+          "refused_mutations": [
+            "map_copy_wrong_length",
+            "region_copy_wrong_length",
+            "map_copy_wrong_alias",
+            "region_copy_wrong_offset",
+            "region_copy_wrong_source",
+            "missing_map_purge",
+            "missing_region_publication",
+            "binding_before_publication",
+            "binder_accepts_zero"
+          ]
+        },
+        "memory_end": "0x8ce8caa8",
+        "scope": "stage bounds/profile/workspaces; full envelope and worker audited separately"
+      },
+      "read_ahead_companion": {
+        "enabled": true,
+        "schema": "kui.native.read-ahead.audit.v1",
+        "paired_markers": true,
+        "diagnostic_capture": true,
+        "repair_diagnostic_capture": true,
+        "pio_candidate": true,
+        "pio_pair_candidate": true,
+        "pio_producer": {
+          "enabled": true,
+          "pair_profile": true,
+          "pair_candidate": true,
+          "actual_linked_producer_executed": true,
+          "tick_only": true,
+          "one_fresh_block_per_tick": false,
+          "maximum_blocks_per_visit": 2,
+          "no_optional_dma_or_new_commands": true,
+          "producer_only_timing": true,
+          "modelcases": 305,
+          "actual_linked_producer_positive_cases": 24,
+          "actual_linked_admission_refusals": 106,
+          "actual_linked_second_guard_refusals": 100,
+          "actual_linked_error_paths": 32,
+          "actual_linked_clock_cases": 37,
+          "repeated_tick_and_boundary_cases": 6,
+          "additional_instruction_truth_cases": 84,
+          "profile_marker_mutations": 7,
+          "second_elapsed_limit_ticks": 1144,
+          "second_limit_ticks": 1144,
+          "second_block_timing_admitted": true,
+          "second_limit_inclusive": true,
+          "reserve_ticks": 1200,
+          "soft_window_ticks": 2344,
+          "positive_valid_intervals_required": true,
+          "all_ordinary_guards_rechecked_before_second": true,
+          "per_block_positive_elapsed_required": true,
+          "all_admission_guards_rechecked_between_blocks": true,
+          "actual_cache_copy_before_each_validity_publication": true,
+          "first_and_second_errors_do_not_issue_stop": true,
+          "fetch_token_limit": 256,
+          "fetch_polled_true": true,
+          "metrics_offsets": [
+            80,
+            84,
+            88,
+            92,
+            96,
+            100,
+            104,
+            108
+          ],
+          "both_integer_banks_and_bl_states": true,
+          "callee_saved_and_private_stack_preserved": true,
+          "typed_low_ops": "Bounded ABI-adversarial substitutes; no low transport emulation",
+          "no_hardware_write_or_rdr_read": true,
+          "console_boot_verified": false,
+          "console_performance_verified": false
+        },
+        "structural_sdk_route": true,
+        "dual_reader_candidate": true,
+        "dual_reader": {
+          "schema": "kui.native.dual-readers.audit.v1",
+          "enabled": true,
+          "artifact_sha256": {
+            "resident": "cb5ba07eea2cabfb09b1285046aff7b61fd12c26877d3ec7ea6d09cbdee14349",
+            "legacy": "8d9fbea22bc58e15844839a457f0dfc599cfed18cc6203af20506a0e7c7910d8",
+            "stage": "7e8a8776b93387396addf241a645e22290ab8b0f6c8497912911ec53f208c03a",
+            "worker": "bf21042c4a22f8343f54f283078ae99e3ddc8e83f11d0c0f942d6235347d87c3"
+          },
+          "capability": {
+            "address": "0x8ce2bb70",
+            "bytes": 32,
+            "sha256": "62d72282400dfc0806bab0637679311298bf7baf34c78eb654e821dbaf062be1",
+            "exactly_one_in_stage_and_module": true
+          },
+          "embedded_engines": {
+            "x": {
+              "address": "0x8ce30998",
+              "bytes": 15136,
+              "sha256": "086d095a34cb818247560d627e34ab60a5656d43bfeab509c80bfa6b89eeb4f4",
+              "elf_sha256": "cb5ba07eea2cabfb09b1285046aff7b61fd12c26877d3ec7ea6d09cbdee14349"
+            },
+            "y": {
+              "address": "0x8ce3baf8",
+              "bytes": 15116,
+              "sha256": "ed63fdb8f161207b6ae0436f0f410612797ba65c154f2b85cac61081c34b3000",
+              "elf_sha256": "8d9fbea22bc58e15844839a457f0dfc599cfed18cc6203af20506a0e7c7910d8"
+            }
+          },
+          "immutable_stage_pins": {
+            "_select_resident": [
+              2363494824,
+              272,
+              "c2224460dee18bfaaab0f0cca6864cc939f0546e51e4877cc7e5cd2435ba11df"
+            ],
+            "_native_dual_reader_bind": [
+              2363498676,
+              68,
+              "459969f187c257290af41c200c907794553f806d6e05c12e9835f74af6c76580"
+            ],
+            "_kui_native_dual_u32": [
+              2363490468,
+              30,
+              "c13060e358e2a0e9f53878d9aa8b77d1fbfb03a31b8c4e049dc49bf3e7feec6c"
+            ]
+          },
+          "immutable_worker_pins": {
+            "_reader_readahead_exports": [
+              2349859048,
+              200,
+              "04a1748a2f5f36a1e79fa2a791a5e16a9f90c6ac632f13bd797abf48ce58545c"
+            ],
+            "_reader_capture_region": [
+              2349859248,
+              100,
+              "ac7d64231e97b1bbfa703121a832e4cce8a5ee8f7d1302cb6cdc9b77bd076b71"
+            ],
+            "_reader_readahead_visit": [
+              2349859348,
+              56,
+              "c44759200e43937665b2987281e995b4f39675f1e05180371aad4078cc02dbf3"
+            ]
+          },
+          "console_layout": {
+            "actual_sh_compiler_console_layout": true,
+            "worker_visible_equal_fields": 57,
+            "x_timing_words_only_in_unused_y_gap": true,
+            "layouts": {
+              "x": {
+                "pointer_bytes": 4,
+                "region_bytes": 1888,
+                "engine_bytes": 192,
+                "manifest_bytes": 1020,
+                "manifest_reader": 48,
+                "manifest_transport": 44,
+                "config_payload": 220,
+                "lease_bytes": 393216,
+                "vector100": 0,
+                "area0": 32,
+                "engine": 576,
+                "vector400": 768,
+                "shared": 800,
+                "vector600": 1280,
+                "area1": 1344,
+                "engine.manifest": 636,
+                "engine.token": 688,
+                "engine.active": 700,
+                "engine.hooked": 720,
+                "engine.target": 724,
+                "engine.native_loan_state": 756,
+                "engine.cursor.block": 676,
+                "engine.cursor.done": 664,
+                "engine.release.vbr": 576,
+                "engine.release.sci": 580,
+                "engine.release.armed": 584,
+                "engine.release.depth": 588,
+                "engine.release.pending": 592,
+                "engine.release.rehooks": 616,
+                "engine.release.released": 620,
+                "engine.release.vbr_changes": 632,
+                "engine.stats.irq_blocks": 728,
+                "engine.stats.call_blocks": 732,
+                "engine.stats.waits": 736,
+                "engine.stats.execs": 740,
+                "engine.stats.exec_int": 744,
+                "engine.stats.hooks": 748,
+                "engine.stats.releases": 752,
+                "shared.service": 800,
+                "shared.service.pending": 880,
+                "shared.service.token": 844,
+                "shared.service.command": 848,
+                "shared.service.diag.last_function": 968,
+                "shared.card": 996,
+                "shared.display": 1068,
+                "shared.stream": 1124,
+                "shared.stream.stats.blocks": 1200,
+                "shared.stream.stats.polled": 1204,
+                "shared.stream.stats.starts": 1208,
+                "shared.stream.stats.kept": 1212,
+                "shared.stream.stats.overruns": 1216,
+                "shared.stream.stats.crc_errors": 1220,
+                "shared.stream.stats.token_errors": 1224,
+                "shared.stream.stats.foreign": 1228,
+                "shared.stream.stats.repaired": 1232,
+                "shared.stream.stats.ahead": 1236,
+                "shared.stream.stats.deferred": 1240,
+                "shared.port": 1244,
+                "engine.native_max_lba": 760,
+                "engine.native_max_count": 764
+              },
+              "y": {
+                "pointer_bytes": 4,
+                "region_bytes": 1888,
+                "engine_bytes": 184,
+                "manifest_bytes": 1020,
+                "manifest_reader": 48,
+                "manifest_transport": 44,
+                "config_payload": 220,
+                "lease_bytes": 393216,
+                "vector100": 0,
+                "area0": 32,
+                "engine": 576,
+                "vector400": 768,
+                "shared": 800,
+                "vector600": 1280,
+                "area1": 1344,
+                "engine.manifest": 636,
+                "engine.token": 688,
+                "engine.active": 700,
+                "engine.hooked": 720,
+                "engine.target": 724,
+                "engine.native_loan_state": 756,
+                "engine.cursor.block": 676,
+                "engine.cursor.done": 664,
+                "engine.release.vbr": 576,
+                "engine.release.sci": 580,
+                "engine.release.armed": 584,
+                "engine.release.depth": 588,
+                "engine.release.pending": 592,
+                "engine.release.rehooks": 616,
+                "engine.release.released": 620,
+                "engine.release.vbr_changes": 632,
+                "engine.stats.irq_blocks": 728,
+                "engine.stats.call_blocks": 732,
+                "engine.stats.waits": 736,
+                "engine.stats.execs": 740,
+                "engine.stats.exec_int": 744,
+                "engine.stats.hooks": 748,
+                "engine.stats.releases": 752,
+                "shared.service": 800,
+                "shared.service.pending": 880,
+                "shared.service.token": 844,
+                "shared.service.command": 848,
+                "shared.service.diag.last_function": 968,
+                "shared.card": 996,
+                "shared.display": 1068,
+                "shared.stream": 1124,
+                "shared.stream.stats.blocks": 1200,
+                "shared.stream.stats.polled": 1204,
+                "shared.stream.stats.starts": 1208,
+                "shared.stream.stats.kept": 1212,
+                "shared.stream.stats.overruns": 1216,
+                "shared.stream.stats.crc_errors": 1220,
+                "shared.stream.stats.token_errors": 1224,
+                "shared.stream.stats.foreign": 1228,
+                "shared.stream.stats.repaired": 1232,
+                "shared.stream.stats.ahead": 1236,
+                "shared.stream.stats.deferred": 1240,
+                "shared.port": 1244
+              }
+            }
+          },
+          "selector": {
+            "actual_linked_selector_cases": 1600,
+            "refusal_cases": 1536,
+            "all_imasks_and_integer_banks": true,
+            "actual_capability_bit_mutations_before_mode_reads": 256,
+            "standard_non_sci_unknown_modes_refused": true,
+            "exact_blob_and_guard_selected": true,
+            "only_selected_metadata_and_caller_stack_written": true
+          },
+          "late_binding": {
+            "actual_linked_late_binding_cases": 4032,
+            "x_calls_timeline_sdk_aux_in_order": true,
+            "y_standard_unknown_modes_do_not_call_any_binder": true,
+            "all_argument_values_and_fifth_stack_argument_checked": true,
+            "only_three_exact_typed_binder_targets_substituted": true,
+            "callee_c_abi_adversary": true,
+            "tail_ra_binder_pr_preservation_requires_actual_cold_binder_companion": true,
+            "exact_cold_binder_pins": {
+              "_native_readahead_bind": [
+                2363497468,
+                1208,
+                "7a9d6c8c85dcce44b576a6e776098ac6af02c9a65d26abc14e9fff4e1980b3a0"
+              ],
+              "_kui_vmu_native_background_map_address": [
+                2363490500,
+                92,
+                "cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8"
+              ]
+            },
+            "actual_linked_ra_binder_and_initializer_executed": true,
+            "positive_cases": 32,
+            "tail_target_model": "first two binders are ABI adversaries including PR; final RA tail target retains the exactly pinned actual binder RTS/PR contract"
+          },
+          "worker": {
+            "actual_linked_worker_cases": 266,
+            "all_three_lease_aliases_and_highest_lease": true,
+            "y_standard_unknown_modes_and_forged_cookie_cannot_read_aux_or_vector_entries": true,
+            "foreign_manifest_pointer_refused_before_map_dereference": true,
+            "null_region_and_invalid_config_payloads_refused_before_dependent_reads": true,
+            "malformed_aux_headers_and_public_context_bounds_refused": true,
+            "heartbeat_and_capture_start_checked": true
+          },
+          "additional_scalar_instruction_truth_cases": 5728,
+          "legacy_background": {
+            "schema": "kui.native.background.audit.v1",
+            "console_execution_verified": false,
+            "resident_sha256": "8d9fbea22bc58e15844839a457f0dfc599cfed18cc6203af20506a0e7c7910d8",
+            "payload_bytes": 15116,
+            "memory_end": "0x8c007ba0",
+            "low_limit": "0x8c007ba0",
+            "selected_guarded_lease_bytes": 393216,
+            "wide_lease_linked_guard_pins": {
+              "_native_background_map": {
+                "sha256": "4f2ee5b6686ffee94253d4a92a02b2d4769369c906598ea0949d6410567352f2",
+                "bytes": 188
+              },
+              "_native_resident_terminal": {
+                "sha256": "3c480406466530bec6748de2f40a8857772a3d159046db48d77c2b1ab3b7da7d",
+                "bytes": 96
+              },
+              "_kui_vmu_observe_low_failure": {
+                "sha256": "4733a395aa815e4a3227afe93d42acaf69d9a076a84a4fe138e68874d6c6f22d",
+                "bytes": 60
+              }
+            },
+            "region_pointer": {
+              "address": "0x8c007b34",
+              "bytes": 4,
+              "fixed_region_absent": true
+            },
+            "worker_stack_gateway": {
+              "address": "0x8c0075dc",
+              "allocated_bytes": 840,
+              "declared_function_bytes": 848
+            },
+            "profile": {
+              "native_background": true,
+              "sci_resume_fix": true,
+              "logical_drive_state": true,
+              "mounted_disc_check": true
+            },
+            "linked_integer_instructions": 6352,
+            "private_stack": {
+              "available_bytes": 352,
+              "worst_c_and_entry_bytes": 264,
+              "linked_library": {
+                "symbol": "___udivsi3",
+                "stack_bytes": 4,
+                "abstract_states": 84,
+                "balanced_return_paths": 2,
+                "internal_helper_window_bytes": 64,
+                "unknown_instruction_or_cycle_rejected": true
+              },
+              "additional_margin_bytes": 32,
+              "generic64_byte_library_margin_used": false,
+              "guard_bytes": 16,
+              "top_gap_bytes": 32,
+              "conservative_total_bytes": 348,
+              "remaining_bytes": 4,
+              "worst_total_bytes": 348,
+              "paths": {
+                "kui_retail_resident_dispatch": {
+                  "c_bytes": 264,
+                  "assembly_entry_bytes": 0,
+                  "bytes": 264,
+                  "path": [
+                    "kui_retail_resident_dispatch(40)",
+                    "kui_retail_gd_dispatch(148)",
+                    "guest(0)",
+                    "native_background_map(8)",
+                    "kui_vmu_observe_low_failure(8)",
+                    "retail_display_restore(12)",
+                    "retail_display_line(48)"
+                  ]
+                },
+                "kui_retail_async_irq": {
+                  "c_bytes": 208,
+                  "assembly_entry_bytes": 44,
+                  "bytes": 252,
+                  "path": [
+                    "kui_retail_async_irq(20)",
+                    "deliver(80)",
+                    "kui_sci_stream_fetch.constprop.0(40)",
+                    "stop_card(24)",
+                    "command(20)",
+                    "byte(0)",
+                    "transfer(24)"
+                  ]
+                },
+                "kui_retail_menu_return": {
+                  "c_bytes": 148,
+                  "assembly_entry_bytes": 0,
+                  "bytes": 148,
+                  "path": [
+                    "kui_retail_menu_return(8)",
+                    "native_reader_report(16)",
+                    "retail_display_values(76)",
+                    "retail_display_line(48)"
+                  ]
+                }
+              },
+              "callback_sites": 6,
+              "nonreturning_boundaries": [
+                {
+                  "function": "kui_retail_menu_return",
+                  "source": "retail_resident.c",
+                  "contract": "boot-ROM menu; does not return"
+                },
+                {
+                  "function": "kui_vmu_observe_low_failure",
+                  "source": "vmu_native_background_resident.c",
+                  "contract": "validated worker terminal; private stack switch separately audited"
+                }
+              ],
+              "installer_and_worker_roots_excluded": [
+                "kui_retail_native_async_loan_begin",
+                "kui_retail_native_async_loan_end",
+                "kui_vmu_native_background_init",
+                "kui_vmu_native_background_manifest_bind",
+                "kui_vmu_observe_background_base_init",
+                "kui_vmu_observe_sd_lease"
+              ]
+            },
+            "source_contract": {
+              "geometry": {
+                "worker_bytes": 131072,
+                "lease_bytes": 393216,
+                "map_bytes": 1020,
+                "region_offset": 132096,
+                "region_bytes": 1888
+              },
+              "map_and_region_p2_copy_before_vector_publication_before_bind": true,
+              "control_and_lease_only_modes_refused": true,
+              "stage_supplies_fifth_workspace_argument": true,
+              "sha256": {
+                "include/kui/vmu_native_background.h": "5c4055d899f6901e7a34dc5e5242912f0ee34f4eed1c6806defd7e9be98a2ffb",
+                "include/kui/vmu_native_async_loan.h": "aab9fe24b6482b9a60744f12ec6eb04c3a6d27820cc6438de993a50cd0789b62",
+                "src/loader/vmu_native_background_resident.c": "ab6ae312599454e4d1673f41f519e440e2aa6bde3029a9e133658aef6c86472e",
+                "src/loader/retail_resident.c": "eceb483108be67c510a5bed5375513a96aeb472b5d2d43224bb37adb23477fe6",
+                "src/loader/retail_async.c": "de3f85a225674fa59fa4c265be8d78bcdb346de8fe53f86ed55501b719588040",
+                "src/loader/retail_async.h": "8eed2fcdd892e3557a2f063577bfc4f0e013481cc5e840ff625b240bfc44d930",
+                "src/loader/retail_resident.S": "343a4b306abdf57dc87db3e8f87532b3633462ab4e9348c7c18b6955588a2297",
+                "src/loader/sci_sd_bus.c": "6b4da260f43de2bb02398b88176334ef26f3512658eefa8e94f81cf2cac42dc6",
+                "src/loader/vmu_native_passive_stage.inc": "79a23a26a5368a0c4118862f9c0835b03e9016ac223af6aeac1c6c374a820bb3",
+                "src/loader/vmu_native_heap_probe_stage.c": "03de13006af194cb256c1f3252a09893ea9f11e958c9fb26167540c09c644080",
+                "src/loader/retail_stage.c": "694886f362eb8328853a5c3d34e07f0ab1cc00dcb9686e74a2cea64c61a33e3c"
+              }
+            },
+            "stage": {
+              "available": false,
+              "complete_module_audited": false
+            },
+            "read_ahead_companion": {
+              "enabled": false
+            },
+            "self_test": {
+              "refused_mutations": [
+                "guarded_map_stack_growth",
+                "unknown_irq_callback",
+                "worker_gateway_on_gd_stack",
+                "recursive_irq_path",
+                "hidden_library_stack_alias",
+                "unbalanced_library_pop",
+                "cyclic_library_helper",
+                "library_branch_outside_window"
+              ]
+            },
+            "all_emitted_legacy_callgraphs_closed": true,
+            "closed_legacy_callgraph_files": 2
+          },
+          "instruction_and_marker_mutation_rejections": 736,
+          "embedded_blob_mutation_rejections": 6,
+          "capability_mutation_rejections": 3,
+          "legacy_callgraph_closure_mutation_rejections": 4,
+          "legacy_guard_companion_mutation_rejections": 11,
+          "console_compatibility_verified": false,
+          "console_performance_verified": false
+        },
+        "artifact_sha256": {
+          "resident": "cb5ba07eea2cabfb09b1285046aff7b61fd12c26877d3ec7ea6d09cbdee14349",
+          "worker": "bf21042c4a22f8343f54f283078ae99e3ddc8e83f11d0c0f942d6235347d87c3",
+          "stage": "7e8a8776b93387396addf241a645e22290ab8b0f6c8497912911ec53f208c03a",
+          "auxiliary": "6be904e1254ed2bfc1f3a3919fe0940fbf5090834e90b16381a3ab24b84c9d63"
+        },
+        "immutable_code_pin": {
+          "address": "0x8c422000",
+          "bytes": 6144,
+          "sha256": "13f3a6ee0841966d919723d68dff8909cc1326e450d63fe9d9a6f8e7f445f246"
+        },
+        "immutable_low_pins": {
+          "_deliver_work": [
+            456,
+            "7ffc9bfda8c4328c9e92f4cead9270c8e97916e609dc49b367ccdaa4d1feda4c"
+          ],
+          "_deliver": [
+            60,
+            "d32fd5a483cdffee78867c2239be72d693e1d1cc46f62e9b0ae2cda2f5e3eb46"
+          ]
+        },
+        "loan_quiesce_pin": {
+          "address": "0x8c007690",
+          "bytes": 748,
+          "sha256": "ab219f0dc9ad6dfbe01be09b3c042d63992ead50a68245ddbb9ba6116b0e352b"
+        },
+        "loan_quiesce": {
+          "actual_linked_quiesce_boundary_cases": 120,
+          "outer_non_imask15_refusals": 60,
+          "exact_section_offset_entry": "0x52",
+          "typed_auxiliary_event_arg_region_reserved_checked": true,
+          "real_pending_demand_never_quiesced": true,
+          "refused_quiesce_clears_only_owned_low_lock": true,
+          "preexisting_active_low_lock_preserved": true,
+          "null_binding_is_quiesce_success": true,
+          "success_rejoins_before_stream_busy_check": true,
+          "scope": "Actual post-admission low slice; complete pinned section and real C integration tests cover outer ownership/transport",
+          "auxiliary_target": "Typed gateway ABI substitute; actual auxiliary gateway proved independently"
+        },
+        "diagnostics": {
+          "enabled": true,
+          "schema": "kui.native.read-ahead.diagnostics.audit.v1",
+          "actual_linked_snapshot_cases": 188,
+          "instruction_truth_cases": 301,
+          "repair_counter_packed": true,
+          "actual_linked_repair_packed_word_cases": 32,
+          "public_bytes": 656,
+          "complete_context_bytes": 904,
+          "diagnostics_offset": 76,
+          "observation_offset": 752,
+          "first_offset": 360,
+          "last_offset": 508,
+          "record_bytes": 148,
+          "exact_read_only_hardware_sequence": [
+            {
+              "address": "0xffa00010",
+              "bytes": 4
+            },
+            {
+              "address": "0xffa00014",
+              "bytes": 4
+            },
+            {
+              "address": "0xffa00018",
+              "bytes": 4
+            },
+            {
+              "address": "0xffa0001c",
+              "bytes": 4
+            },
+            {
+              "address": "0xffa00040",
+              "bytes": 4
+            },
+            {
+              "address": "0xffe00000",
+              "bytes": 1
+            },
+            {
+              "address": "0xffe00004",
+              "bytes": 1
+            },
+            {
+              "address": "0xffe00008",
+              "bytes": 1
+            },
+            {
+              "address": "0xffe00010",
+              "bytes": 1
+            },
+            {
+              "address": "0xffe0001c",
+              "bytes": 1
+            },
+            {
+              "address": "0xffc00004",
+              "bytes": 1
+            },
+            {
+              "address": "0xff800030",
+              "bytes": 2
+            },
+            {
+              "address": "0xffd8000c",
+              "bytes": 4
+            }
+          ],
+          "no_rdr_read_or_hardware_write": true,
+          "complete_context_and_private_stack_writes_only": true,
+          "first_record_preserved_last_record_updated": true,
+          "out_of_range_histogram_indices_refused": true,
+          "operation_lba_argument_checked": true,
+          "actual_capture_start_clears_complete_public_prefix_only": true,
+          "actual_diagnostic_c_executed": true
+        },
+        "diagnostic_display": {
+          "all37_snapshot_words_exactly_once": true,
+          "immutable_byte_index_table": true,
+          "row_word_counts": [
+            5,
+            5,
+            5,
+            4,
+            5,
+            5,
+            5,
+            3
+          ],
+          "typed_immutable_label_pointers": 7,
+          "actual_display_execution_modelled": false
+        },
+        "geometry": {
+          "binary_sha256": "61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974",
+          "binary_bytes": 10240,
+          "relocation_sha256": "87ceef2187655c6c0bbe70d6844067785426f10afacabbab568fcf1c83cc9dfa",
+          "relocation_records": 93,
+          "link_base": "0x8c421000",
+          "relocation_span": 28672,
+          "context": "0xac421040",
+          "context_bytes": 904,
+          "public_bytes": 656,
+          "private_stack_bottom": "0xac427000",
+          "private_stack_top": "0xac428000",
+          "cache_data_bytes": 196608,
+          "lease_bytes": 393216,
+          "worker_map_region_offsets_unchanged": true,
+          "typed_low_ops": {
+            "address": 2348841688,
+            "bytes": 52,
+            "region_cell": 2348841780,
+            "functions": {
+              "_deliver_work": 2348832792,
+              "_hook": 2348832584,
+              "_unhook": 2348832684,
+              "_kui_sci_stream_fetch": 2348830028,
+              "_kui_sci_stream_poll": 2348831680,
+              "_kui_sci_stream_take": 2348831756,
+              "_kui_sci_stream_stop": 2348832348,
+              "_kui_sci_stream_busy": 2348829484,
+              "_kui_retail_cursor_feed": 2348828878
+            }
+          },
+          "physical_loads": [
+            {
+              "offset": 256,
+              "virtual": 2353139712,
+              "physical": 2353139712,
+              "first": 205656064,
+              "bytes": 64,
+              "memory": 64,
+              "flags": 4,
+              "alignment": 128
+            },
+            {
+              "offset": 320,
+              "virtual": 2890010688,
+              "physical": 2353139776,
+              "first": 205656128,
+              "bytes": 904,
+              "memory": 904,
+              "flags": 6,
+              "alignment": 128
+            },
+            {
+              "offset": 1280,
+              "virtual": 2353143808,
+              "physical": 2353143808,
+              "first": 205660160,
+              "bytes": 6144,
+              "memory": 24576,
+              "flags": 7,
+              "alignment": 128
+            }
+          ]
+        },
+        "gateway": {
+          "actual_linked_gateway_cases": 8064,
+          "all16_imasks": true,
+          "both_integer_banks": true,
+          "both_bl_states": true,
+          "owner_sr_pr_sp_and_callee_saved_preserved": true,
+          "private_stack_switch_before_c": true,
+          "busy_and_guard_checks_before_stack_writes": true,
+          "parked_owner_stack_bytes": 20,
+          "auxiliary_stack_prefix_bytes": 0,
+          "c_payload_model": "ABI-adversarial substitute; actual producer separately host-tested"
+        },
+        "private_stack": {
+          "available_bytes": 4096,
+          "worst_c_bytes": 356,
+          "library_margin_bytes": 4,
+          "explicit_margin_bytes": 64,
+          "guard_bytes": 16,
+          "top_gap_bytes": 32,
+          "total_bytes": 472,
+          "roots": {
+            "kui_native_readahead_aux_init": {
+              "bytes": 100,
+              "path": [
+                "aux:kui_native_readahead_aux_init(84)",
+                "aux:kui_native_ra_cache_init(16)"
+              ]
+            },
+            "kui_native_readahead_aux_dispatch": {
+              "bytes": 356,
+              "path": [
+                "aux:kui_native_readahead_aux_dispatch(64)",
+                "aux:src/loader/native_readahead_aux.c:producer(60)",
+                "aux:src/loader/native_readahead_aux.c:retire_spec(32)",
+                "aux:src/loader/native_readahead_aux.c:abandon(12)",
+                "low:build/native-universal-final/resident-sci.elf.ltrans0.o:deliver_work(40)",
+                "low:build/native-universal-final/resident-sci.elf.ltrans0.o:kui_retail_cursor_feed(56)",
+                "low:build/native-universal-final/resident-sci.elf.ltrans0.o:write_out(16)",
+                "low:build/native-universal-final/resident-sci.elf.ltrans0.o:native_background_map(8)",
+                "low:kui_vmu_observe_low_failure(8)",
+                "low:build/native-universal-final/resident-sci.elf.ltrans0.o:retail_display_restore(8)",
+                "low:build/native-universal-final/resident-sci.elf.ltrans0.o:retail_display_line(52)"
+              ]
+            }
+          },
+          "typed_low_indirect_sites": 26,
+          "missing_or_recursive_callbacks_rejected": true,
+          "all_emitted_callgraphs_closed": true,
+          "callgraph_closure_mutation_rejections": 8
+        },
+        "cold_binder": {
+          "actual_linked_cold_binder_executed": true,
+          "positive_cases": 32,
+          "admitted_dynamic_sdk_vbr_preservation_cases": 8,
+          "malformed_descriptor_context_aux_and_init_cases": 256,
+          "omitted_activation_ocbp_rejections": 2,
+          "reviewed_body_byte_mutation_rejections": 1300,
+          "context_and_diagnostic_schema_mutation_rejections": 22,
+          "multi_owner_stage_marker_mutation_rejections": 5,
+          "exact_instruction_literal_pins": {
+            "_native_readahead_bind": [
+              2363497468,
+              1208,
+              "7a9d6c8c85dcce44b576a6e776098ac6af02c9a65d26abc14e9fff4e1980b3a0"
+            ],
+            "_kui_vmu_native_background_map_address": [
+              2363490500,
+              92,
+              "cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8"
+            ]
+          },
+          "p1_cache_and_p2_ram_distinct": true,
+          "cold_aux_and_cache_lines_purged": 7040,
+          "cache_data_not_initialized_or_trusted": true,
+          "context_published_before_entry": true,
+          "guards_checked_after_init": true,
+          "memcpy_memcmp_memset": "faithful bounded ABI substitutes",
+          "relocator": "exact separately tested input image/table; explicit pointer-record substitute",
+          "code_publisher": "exact owned span and cache-flush substitute; actual publisher independently audited",
+          "initializer_gateway": "strict private-SP gateway substitute; actual relocated auxiliary C init executed",
+          "actual_auxiliary_c_initializer_executed": true,
+          "diagnostic_auxiliary": true,
+          "public_prefix_bytes": 656,
+          "pio_auxiliary": true,
+          "pio_pair_auxiliary": true,
+          "multi_owner_stage": true,
+          "structural_sdk_stage": true,
+          "dual_reader_stage": true,
+          "exact_sdk_owners_tested": [
+            "Evolution1",
+            "Evolution2"
+          ],
+          "admitted_sdk_callback_default_vbr_cookie_preserved": true,
+          "sdk_owner_scope": "Begins after independently proved SDK admission and callback publication",
+          "complete_owned_context_bytes": 904,
+          "actual_initializer_clears_complete_public_prefix": true,
+          "actual_initializer_copies_owned_config_values_not_stage_pointer": true,
+          "actual_initializer_starts_with_no_valid_cache_blocks": true,
+          "console_boot_verified": false,
+          "console_performance_verified": false
+        },
+        "worker_binding": {
+          "actual_worker_binding_cases": 106,
+          "immutable_function_pins": {
+            "_reader_readahead_exports": [
+              2349859048,
+              200,
+              "04a1748a2f5f36a1e79fa2a791a5e16a9f90c6ac632f13bd797abf48ce58545c"
+            ],
+            "_reader_readahead_visit": [
+              2349859348,
+              56,
+              "c44759200e43937665b2987281e995b4f39675f1e05180371aad4078cc02dbf3"
+            ],
+            "_reader_cooperative_service": [
+              2349859404,
+              32,
+              "68d4a9acf31e3ce844a7ee27cac22620252b3c0ae09afba8c2dc0463f8496227"
+            ],
+            "_reader_readahead_failure": [
+              2349862324,
+              172,
+              "4509901703ae22c1ac0124f3077e06dc3c3466e60bebff2234e066af50d3833f"
+            ]
+          },
+          "all_three_payload_aliases": true,
+          "highest_owned_lease_checked": true,
+          "malformed_headers_and_contexts_refused": true,
+          "both_durable_writer_busy_fields_refused": true,
+          "heartbeat_and_capture_start_arguments_checked": true,
+          "complete_public_context_bytes": 656,
+          "exact_public_boundary_and_one_word_overflow_checked": true,
+          "c_auxiliary_target": "ABI substitute; complete auxiliary gateway proved separately"
+        },
+        "linked_integer_instructions": 2750,
+        "code_byte_mutation_rejections": 6144,
+        "typed_binding_mutation_rejections": 1853,
+        "console_boot_verified": false,
+        "console_performance_verified": false
+      },
+      "self_test": {
+        "refused_mutations": [
+          "guarded_map_stack_growth",
+          "unknown_irq_callback",
+          "worker_gateway_on_gd_stack",
+          "recursive_irq_path",
+          "hidden_library_stack_alias",
+          "unbalanced_library_pop",
+          "cyclic_library_helper",
+          "library_branch_outside_window"
+        ]
+      }
+    },
+    "dynamic_bootstrap_mutation_rejections": 19
+  },
+  "module_sha256": "7be0a290ec675438a565f1c3d1aac6fde18520b88056c0513961d96f9bc24f48",
+  "runtime": {
+    "format": 1,
+    "build": "af9e01c8a271",
+    "payload_bytes": 267780,
+    "memory_bytes": 267780,
+    "crc32": "717c55e0"
+  },
+  "worker_bytes": 63136,
+  "worker_span": 131072,
+  "worker_stack_bytes": 4096,
+  "worker_load_policy": {
+    "cached_code": true,
+    "code_alias": 2349858816,
+    "loads": [
+      {
+        "offset": 256,
+        "virtual": 2886729728,
+        "physical": 2349858816,
+        "first": 202375168,
+        "bytes": 80,
+        "memory": 80,
+        "flags": 4,
+        "alignment": 128
+      },
+      {
+        "offset": 352,
+        "virtual": 2349858912,
+        "physical": 2349858912,
+        "first": 202375264,
+        "bytes": 63008,
+        "memory": 63008,
+        "flags": 5,
+        "alignment": 128
+      },
+      {
+        "offset": 63360,
+        "virtual": 2886792832,
+        "physical": 2349921920,
+        "first": 202438272,
+        "bytes": 32,
+        "memory": 67968,
+        "flags": 6,
+        "alignment": 128
+      }
+    ],
+    "cold_arm_stack_alias": 2886729728,
+    "runtime_stack_alias": 2349858816,
+    "runtime_stack_begin": 2349985792,
+    "runtime_stack_end": 2349989888,
+    "persistent_mutable_alias": 2886729728
+  },
+  "cached_code": true,
+  "prepared_lifetime_admission": {
+    "prepared": true,
+    "exact_linked_kernels": {
+      "_kui_vmu_native_sdk_coherence_prepare": {
+        "normalized_sha256": "52ca590c4ac48e91620888af088aa871c0dfa4476cc386a73a828fc4af94ccbc",
+        "bytes": 436,
+        "typed_pointer_bindings": 2
+      },
+      "_kui_vmu_native_fault_capture_install": {
+        "normalized_sha256": "e364dba55e4fb946d822f78bda01f06126f47ef6ea7a921d638b679d35c6e31a",
+        "bytes": 560,
+        "typed_pointer_bindings": 17
+      },
+      "_read_heap": {
+        "normalized_sha256": "b102f5d502f2a2e45998b1555e7bd6e56d2b7048059ebb9bb37ed6ee415a58cd",
+        "bytes": 104,
+        "typed_pointer_bindings": 0
+      },
+      "_stack_valid": {
+        "normalized_sha256": "f5e81a00f19db27641f67958161041e8a865061f49fd71fbe114b165b2666db6",
+        "bytes": 116,
+        "typed_pointer_bindings": 3
+      },
+      "_native_phase_span": {
+        "normalized_sha256": "eb173e6c2fcbdabc829a622ae3cf7f3430ecae15cc95e2bab92314eb885ee2f2",
+        "bytes": 136,
+        "typed_pointer_bindings": 0
+      },
+      "_diagnostic_phase_read": {
+        "normalized_sha256": "9be746502cbe97b305edc7c282c70dd68d3b6d43dfafea092fecd4d7b975fcfc",
+        "bytes": 136,
+        "typed_pointer_bindings": 0
+      },
+      "_diagnostic_gesture": {
+        "normalized_sha256": "798c8a977a6e0b1e49fca8135d6a944513c0e2c8cf5c9342f0dd0f5f291f828f",
+        "bytes": 34,
+        "typed_pointer_bindings": 0
+      },
+      "_diagnostic_phase_row": {
+        "normalized_sha256": "9d55c81d38773acb609b68c1d6684dfc6be503622f4078799864c49148f5426d",
+        "bytes": 92,
+        "typed_pointer_bindings": 2
+      },
+      "_diagnostic_sample": {
+        "normalized_sha256": "cb7e980cb399fa654e837a6896d3ec033fd9d844c8fd0a2c31c77399471411fe",
+        "bytes": 164,
+        "typed_pointer_bindings": 2
+      },
+      "_diagnostic_begin": {
+        "normalized_sha256": "3be33ddc079ec9db0760339daf470b64f4903769d66dc830e14c2fcd0008ccc1",
+        "bytes": 40,
+        "typed_pointer_bindings": 2
+      },
+      "_native_phase_word.constprop.0": {
+        "normalized_sha256": "1e94b1f6d66b2667c76e878575a2f3b2fa57f04d0d65e0e735be7b88e2b54704",
+        "bytes": 56,
+        "typed_pointer_bindings": 1
+      },
+      "_diagnostic_pair_begin": {
+        "normalized_sha256": "c579977d4365a6b01f990fc9802e6db3a3bf75ad3b9fcb10ee2ac69c10ceecde",
+        "bytes": 584,
+        "typed_pointer_bindings": 11
+      },
+      "_diagnostic_end": {
+        "normalized_sha256": "f37ab3c7f425727ab1eb70efd81a361b395b22179b0af82ebca9e3b9fef88f39",
+        "bytes": 1492,
+        "typed_pointer_bindings": 24
+      },
+      "_diagnostic_complete": {
+        "normalized_sha256": "3884a3e4d35c7508a2ca7ceca24f41ff8156988fe40754e63dbc1394137cf325",
+        "bytes": 3344,
+        "typed_pointer_bindings": 132
+      },
+      "_poll_lease_valid": {
+        "normalized_sha256": "b67c432db445f780a4b2e93871f7907b7f7de1fd8c0795faf112f30fe0673302",
+        "bytes": 64,
+        "typed_pointer_bindings": 1
+      },
+      "_installed_hooks_valid": {
+        "normalized_sha256": "819cc9127506f6790fa189371f453b3474bd2b3f9e39752d43a5d8501dd2e286",
+        "bytes": 76,
+        "typed_pointer_bindings": 3
+      },
+      "_kui_vmu_native_readonly_release_check": {
+        "normalized_sha256": "87433dd479877714f7773607b751f56b629a27792417dbb31ccfa430499e1474",
+        "bytes": 588,
+        "typed_pointer_bindings": 13
+      },
+      "_hook_word": {
+        "normalized_sha256": "69410002bf135878c32df63d2459603428947eadc760aa6309775f82b8801f9c",
+        "bytes": 132,
+        "typed_pointer_bindings": 2
+      },
+      "_prepare_hook_entry": {
+        "normalized_sha256": "e46707ed62da6217391c4aee61d074980abd67826655c1b508159548cabefd74",
+        "bytes": 228,
+        "typed_pointer_bindings": 2
+      },
+      "_kui_vmu_native_lifetime_prepare": {
+        "normalized_sha256": "4691642d40ae532e2f81cfe46c3f81a019412c0da0e43fb4f7913d4a44b87312",
+        "bytes": 640,
+        "typed_pointer_bindings": 4
+      },
+      "_kui_vmu_native_passive_arm": {
+        "normalized_sha256": "8b1ad7a9ecd8a05a9cf8695d8f421c6ec8604fc8334ba29642656666574c716d",
+        "bytes": 2096,
+        "typed_pointer_bindings": 59
+      },
+      "_persistent_storage_guard": {
+        "normalized_sha256": "c51bd14af15bb22af8ad0a384c1c700a5c23a90fcd25e012ad977b7e7b77fa04",
+        "bytes": 396,
+        "typed_pointer_bindings": 21
+      },
+      "_persistent_lease": {
+        "normalized_sha256": "8658f150d0d4811335e46332a9a075f199fa8219edb5ccf1730223a4e34d78e3",
+        "bytes": 148,
+        "typed_pointer_bindings": 6
+      },
+      "_kui_vmu_native_passive_submit": {
+        "normalized_sha256": "6648f29a9c2be60b35c930d062a16d100353cbac12e485cf039f319bd742885d",
+        "bytes": 1384,
+        "typed_pointer_bindings": 44
+      },
+      "_kui_vmu_native_passive_complete": {
+        "normalized_sha256": "95a9e3ed44a3cdf947f2510c04d2382cc9c95423d53350610c2a5cff2579e5e3",
+        "bytes": 2712,
+        "typed_pointer_bindings": 52
+      },
+      "_controller_context_valid": {
+        "normalized_sha256": "e8e1eee80b1bce155a8a68c9c91229c138e017daf5bd2d880d7d51195efde2a0",
+        "bytes": 1032,
+        "typed_pointer_bindings": 6
+      },
+      "_kui_vmu_readonly_overlay_complete_absent": {
+        "normalized_sha256": "569ef7dcb97f1904c68ce440dd9a6bc3c0d143da123c0b8d37dc8c55da4f0a60",
+        "bytes": 284,
+        "typed_pointer_bindings": 3
+      },
+      "_kui_vmu_readonly_overlay_complete": {
+        "normalized_sha256": "d4fc62020bef09ab9056b5b7a16c8a47c616c446142d770d6a9e801ecf677601",
+        "bytes": 1004,
+        "typed_pointer_bindings": 9
+      },
+      "_readonly_overlay_parent_response": {
+        "normalized_sha256": "d396e68edd3158708ba5a8c9ff5235821bb62b71cc9dc40650cadb9098eaeb12",
+        "bytes": 116,
+        "typed_pointer_bindings": 1
+      },
+      "_readonly_overlay_increment": {
+        "normalized_sha256": "e3a6368a10593e4ae7510faf736d644a9d9e383e262070923241741b3f6893b1",
+        "bytes": 14,
+        "typed_pointer_bindings": 0
+      },
+      "_readonly_overlay_le32": {
+        "normalized_sha256": "1daa47eecc292df8356826c0e5a683e3a2c27cec212f901db7b1f01cf3b897df",
+        "bytes": 30,
+        "typed_pointer_bindings": 0
+      },
+      "_transfer_context_valid": {
+        "normalized_sha256": "6b2865405f5a7d1e25b66cf217a261c1e4fdc9245f21acba59604ee750715126",
+        "bytes": 1236,
+        "typed_pointer_bindings": 14
+      },
+      "_persistent_context_guard": {
+        "normalized_sha256": "7d7b44453ed058c85b22f3624a96001a93f68e06bd6dc581757cbff364c96df7",
+        "bytes": 132,
+        "typed_pointer_bindings": 4
+      },
+      "_kui_vmu_native_runtime_fault": {
+        "normalized_sha256": "bc95ecc91bee718338d8eda8150b4550f001d6fb61ab5d60e2a47e95f7cb784f",
+        "bytes": 332,
+        "typed_pointer_bindings": 24
+      },
+      ".rodata": {
+        "normalized_sha256": "b8b6c5904e1e8fdc04e374141332f2ae6a07b184cdef77e4609154ca30286d94",
+        "bytes": 5732,
+        "typed_pointer_bindings": 19
+      },
+      "_kui_vmu_native_trace_enabled": {
+        "normalized_sha256": "0a920c3cf23dad2c3aabfe188567a6d1425af67dd54b46b619555831e9748eac",
+        "bytes": 16,
+        "typed_pointer_bindings": 1
+      },
+      "_kui_vmu_native_trace_image": {
+        "normalized_sha256": "e85462a3e477dee0a0124220436dc355360013e47136f21eb8576af465cdd9a9",
+        "bytes": 60,
+        "typed_pointer_bindings": 2
+      },
+      "_kui_vmu_native_trace_point": {
+        "normalized_sha256": "47f46b3337fb28b3281e2b5d56eacd66476fd830abdf74f3a1f67dc1068fae0b",
+        "bytes": 1132,
+        "typed_pointer_bindings": 8
+      },
+      "_kui_vmu_native_trace_wait_loop": {
+        "normalized_sha256": "14823a20fee8b883e5f8e7ebd6e7e10af9715be40c12e4674d8fa89f2839adcd",
+        "bytes": 176,
+        "typed_pointer_bindings": 2
+      },
+      "_kui_vmu_native_trace_init": {
+        "normalized_sha256": "cb04d77bf380406ced6994e9daf684e88aac772eaf5dbb91c93d6e2063ba07a8",
+        "bytes": 96,
+        "typed_pointer_bindings": 5
+      },
+      "_kui_vmu_native_trace_wait_before": {
+        "normalized_sha256": "e9b3f06c9f25ba26990d028291ee7c37f06e4fae6df7069ac0086d316321b5d9",
+        "bytes": 152,
+        "typed_pointer_bindings": 2
+      },
+      "_kui_vmu_native_trace_frame_entry": {
+        "normalized_sha256": "24be2fc972ae425d21e9fd5a0b8ad551f1f64bc20c8d7cb9118c00818bba1111",
+        "bytes": 164,
+        "typed_pointer_bindings": 2
+      },
+      "_kui_vmu_native_trace_report": {
+        "normalized_sha256": "bdd62967969cabe205d1540766d792a01c05b328f011c9cf43fef60affaa2f6d",
+        "bytes": 1120,
+        "typed_pointer_bindings": 52
+      },
+      "_kui_vmu_native_trace_wait_after": {
+        "normalized_sha256": "36746417db83b1f0060aacf65c6ad9fb76ce55aea985779d0d1244b70c6f30e6",
+        "bytes": 180,
+        "typed_pointer_bindings": 2
+      },
+      "_kui_vmu_native_trace_game": {
+        "normalized_sha256": "367d93d9d799bac69baf843535f58f139cac582df3d494ff5e4e4721ece346e3",
+        "bytes": 112,
+        "typed_pointer_bindings": 3
+      },
+      "_trace_history": {
+        "normalized_sha256": "420d0288d7ce8b8d6ff958e16da363cf12700c3910118b28da786b70dc0ec40e",
+        "bytes": 164,
+        "typed_pointer_bindings": 4
+      },
+      "_report": {
+        "normalized_sha256": "813006d8445393306448e2881948e5c2d64053b922e44360d51031abe090fa3b",
+        "bytes": 440,
+        "typed_pointer_bindings": 27
+      },
+      "_kui_vmu_native_trace_failure": {
+        "normalized_sha256": "bc5de95cdeaf5c8bbb975302655c91ac13a6e8058655665651019a647c655931",
+        "bytes": 120,
+        "typed_pointer_bindings": 6
+      },
+      "_trace_row.constprop.0": {
+        "normalized_sha256": "9d55c81d38773acb609b68c1d6684dfc6be503622f4078799864c49148f5426d",
+        "bytes": 92,
+        "typed_pointer_bindings": 2
+      },
+      "_trace_packets": {
+        "normalized_sha256": "434c4eb229830ff7684872b4f14dcf2b3fff4be6294185f43bfbf923ac7adb05",
+        "bytes": 116,
+        "typed_pointer_bindings": 4
+      },
+      "_kui_vmu_native_trace_irq": {
+        "normalized_sha256": "31b72b692190f12dabe3bee1767a9d43913918730d08b7c7c802bea816c8177e",
+        "bytes": 14,
+        "typed_pointer_bindings": 0
+      },
+      "_reader_capture_region": {
+        "normalized_sha256": "807f414ae76d5870a482e7952706e56e9f652c5168b3feb8db4316a4f827406c",
+        "bytes": 100,
+        "typed_pointer_bindings": 1
+      },
+      "_reader_cooperative_service": {
+        "normalized_sha256": "893c8094dbf3c0c0924711f02b67c739ad8f69c7286c21a93cc60d347be90e68",
+        "bytes": 32,
+        "typed_pointer_bindings": 2
+      },
+      "_kui_native_loader_timeline_visit": {
+        "normalized_sha256": "eb70c2499182c9ba9d638aa8c931cb768c8459630e56f057575d9e923e619f5c",
+        "bytes": 148,
+        "typed_pointer_bindings": 5
+      },
+      "_native_loader_snapshot": {
+        "normalized_sha256": "9592778ad157ebdd8b7f2ad0fd3efe92e05b17fc78c30d61ee6a0eba1c2410a0",
+        "bytes": 368,
+        "typed_pointer_bindings": 4
+      },
+      "_kui_native_loader_timeline_add": {
+        "normalized_sha256": "4d6b8073d0a1fd8de7359127083bbf20843381ed99df20a2d1c3c1f8b80d5b26",
+        "bytes": 856,
+        "typed_pointer_bindings": 8
+      },
+      "_kui_native_loader_timeline_reset": {
+        "normalized_sha256": "3e45ddcf599ecf09701486d6f30bc38a34bd5122e36349922416f6ee6d07ff0c",
+        "bytes": 24,
+        "typed_pointer_bindings": 1
+      }
+    },
+    "build_identity": "af9e01c8a271",
+    "read_ahead_diagnostic_companion_required": true,
+    "read_ahead_pio_companion_required": true,
+    "read_ahead_pio_pair_companion_required": true,
+    "dual_reader_companion_required": true,
+    "constant_build_identity_bound_to_verified_runtime": true,
+    "identity_words": 8,
+    "protected_interval_limit": 64,
+    "hook_word_limit": 32,
+    "free_node_limit": 1024,
+    "full_dynamic_free_list_each_release": true,
+    "full_storage_guards_before_and_after_loan": true,
+    "emitted_callgraph_bound": true,
+    "mutation_rejections": 161,
+    "controller_fastlane": {
+      "source_word_limit": 32,
+      "main_controller_limit": 4,
+      "private_pair_bytes": 188,
+      "original_dma_unchanged": true,
+      "mixed_main_queries": "B-D INFO/ALLINFO; A controller GETCOND required",
+      "profile_uses_same_fast_lane": true,
+      "optional_phase_private_bytes": 976,
+      "phase_ring_records": 16,
+      "publication": "one parent-A presence byte after whole-batch validation",
+      "full_storage_guards_unchanged": true,
+      "synthetic_read_count_is_not_hardware_time": true
+    },
+    "hooks_only": {
+      "helper_instruction_cases": 240,
+      "selector_instruction_cases": 80,
+      "mutation_rejections": 4,
+      "actual_callees_only": true,
+      "no_backend_or_sd_call": true,
+      "no_parent_advertisement": true,
+      "physical_a1_replies_preserved": true,
+      "virtual_address": 2,
+      "only_filtered_a2_four_byte_headers_changed": true
+    },
+    "retry_publication": {
+      "linked_instruction_cases": 44,
+      "retry_then_success_cases": 6,
+      "mutation_rejections": 4,
+      "virtual_address": 2,
+      "physical_a1_unchanged": true,
+      "retry_header_only_publication": true,
+      "exact_endpoint_length_and_command_gates": true,
+      "authored_backend_handler": true,
+      "storage_or_sdk_retry_scheduling_proved": false
+    }
+  },
+  "reader_stall_capture": {
+    "enabled": true,
+    "paired_resident_worker": true,
+    "private_worker_state_bytes": 508,
+    "diagnostic_sd_log_writes": false,
+    "console_root_cause_established": false
+  },
+  "cooperative_reader": {
+    "enabled": true,
+    "service_enabled": false,
+    "pump_blocks_per_visit": 0,
+    "foreground_catchup_changed": false,
+    "service_after_physical_controller_proof": false,
+    "completed_request_timing": true,
+    "console_performance_verified": false
+  },
+  "paced_reader": {
+    "enabled": false,
+    "paired_resident_worker": false,
+    "tight_check_polls": 0,
+    "near_scanline_delta_max": 0,
+    "ordinary_check_waits": null,
+    "exec_catchup_blocks": [],
+    "irq_batch_limit": 0,
+    "pio_blocks_per_entry_max": 0,
+    "new_resident_ram_bytes": 0,
+    "controller_reader_service_enabled": null,
+    "console_performance_verified": false
+  },
+  "irq_rearm_reader": {
+    "enabled": true,
+    "reader_sci_level": 1,
+    "sdk_callback_route": true,
+    "raw_vbr_rearm": false,
+    "console_performance_verified": false,
+    "paired_resident_worker": true,
+    "full_check_and_exec_catchup": true,
+    "controller_reader_service_enabled": false,
+    "rearm_and_irq_entry_counters": true
+  },
+  "loader_timeline": {
+    "enabled": true,
+    "paired_resident_worker": true,
+    "descriptor_address": "0x8c10f658",
+    "sdk_sci_route_variant": true,
+    "sdk_sci_resident_callback_worker_stage_paired": true,
+    "read_ahead_variant": true,
+    "read_ahead_diagnostic_companion_required": true,
+    "read_ahead_pio_companion_required": true,
+    "read_ahead_pio_pair_companion_required": true,
+    "read_ahead_dual_companion_required": true,
+    "descriptor_bytes": 12,
+    "trace_descriptor_bytes_unchanged": 40,
+    "callback_address": "0x8c103414",
+    "callback_bytes": 148,
+    "private_state": {
+      "_native_loader_timeline": {
+        "address": "0xac114014",
+        "bytes": 3420
+      },
+      "_native_loader_event": {
+        "address": "0xac113fd4",
+        "bytes": 64
+      },
+      "_native_loader_clock": {
+        "address": "0xac113fc0",
+        "bytes": 20
+      }
+    },
+    "private_state_bytes": 3504,
+    "division_helper": {
+      "linked": false,
+      "reciprocal_bin_body_pinned": true
+    },
+    "private_p2_nobits_only": true,
+    "bridge_address": "0x8c006f20",
+    "bridge_bytes": 36,
+    "complete_linked_bridge_pinned": true,
+    "actual_bridge_model_cases": 480,
+    "original_bridge_instruction_bytes_unchanged": true,
+    "exact_typed_low_bindings_pinned": true,
+    "bridge_mutation_rejections": 2,
+    "null_callback_no_caller_state_access": true,
+    "original_exit_function_caller_sr_region_forwarded": true,
+    "nullable_tail_call_same_gd_frame": true,
+    "cold_binder_address": "0x8ce005b4",
+    "cold_binder_bytes": 180,
+    "complete_linked_cold_binder_pinned": true,
+    "cold_binder_is_instruction_modelled": false,
+    "reviewed_binder_checks": [
+      "descriptor alignment/span",
+      "magic/version",
+      "private callback code bounds",
+      "retained region admission",
+      "initially empty slot",
+      "PROFILE mode only",
+      "OCBP publication"
+    ],
+    "runtime_sd_logging_audited_by_this_check": false,
+    "console_hitch_attribution_established": false
+  },
+  "sdk_sci_route": {
+    "enabled": true,
+    "structural_profile": true,
+    "multi_owner": true,
+    "paired_sdk_sci_markers": true,
+    "immutable_descriptor_bound": true,
+    "multi_owner_admission_table": {
+      "address": "0x8ce2cb10",
+      "bytes": 488,
+      "sha256": "bd39e596ada269cb53a36c8af64514ecad1d2337264445fbe87a6b2f8910376a",
+      "typed_two_owner_records_checked": true,
+      "original_contract_fingerprints_matched": true,
+      "owner_digests": [
+        "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+        "52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605"
+      ]
+    },
+    "generic_family_table": {
+      "enabled": true,
+      "families": [
+        "full-fpu",
+        "compact-fpu"
+      ],
+      "full_instruction_windows_separately_fingerprinted": true,
+      "only_named_literal_holes_normalized": true,
+      "arbitrary_ram_pointer_wildcards": false,
+      "tables": {
+        "_family_vector_prefix": {
+          "address": "0x8ce2caf0",
+          "bytes": 32,
+          "sha256": "670f09a7e57e80f35783fea64414b3e922fa15ebb01b3a6c63f75810e9ea2d59"
+        },
+        "_family_vector": {
+          "address": "0x8ce2cad0",
+          "bytes": 32,
+          "sha256": "15c96dadeb193b4fcefc4d5328bf2730b02a57a5c3617fd4b906686c9abfff3b"
+        },
+        "_family_init": {
+          "address": "0x8ce2c9f0",
+          "bytes": 32,
+          "sha256": "4ab6dee711a09b3018306a6dce2e8f0d0416e271069169aa4e6b29ebec7c374d"
+        },
+        "_family_normal": {
+          "address": "0x8ce2cab0",
+          "bytes": 32,
+          "sha256": "824e1840eaa357ed3eab3e1d288d079c642cf9f70049ac4a7bf94b4f0e2808ed"
+        },
+        "_family_fpu": {
+          "address": "0x8ce2ca90",
+          "bytes": 32,
+          "sha256": "8ce99a402b0aac19457ce80c2533056a1cd9d11f71a3d77b538fad916caf896e"
+        },
+        "_family_default": {
+          "address": "0x8ce2ca70",
+          "bytes": 32,
+          "sha256": "c2fec9dbf847267fcd17f4866dc1d1a86026478f244fa0546901af8502dde045"
+        },
+        "_compact_normal": {
+          "address": "0x8ce2ca50",
+          "bytes": 32,
+          "sha256": "6cc4ad0f732f9f9bb9f3e5afce9ce11752956b96f8a216ab828803c87cbea65c"
+        },
+        "_compact_fpu": {
+          "address": "0x8ce2ca30",
+          "bytes": 32,
+          "sha256": "bb95f40aff4a89ae3c0e3fc3363e53add15c20df6611fcafb5cb3da9e3eb2fed"
+        },
+        "_compact_default": {
+          "address": "0x8ce2ca10",
+          "bytes": 32,
+          "sha256": "7339f24b8e6448d8eca00b4f7603dfbf8be6469b1746669ddd8343f743e9a680"
+        },
+        "_helper_windows": {
+          "address": "0x8ce2c978",
+          "bytes": 120,
+          "sha256": "6614cd7a7af5fc1871f639df7474c2094a1c409aa892018a6d7c2021c209c3ea"
+        },
+        "_vector_holes.2": {
+          "address": "0x8ce2c972",
+          "bytes": 4,
+          "sha256": "4ec2514a377d83c566d46d5dcae7c318b27b651b3999d009ba7dae9eb76c90ee"
+        },
+        "_default_holes.1": {
+          "address": "0x8ce2c968",
+          "bytes": 10,
+          "sha256": "7b6d8afa8c54d43e6f2cc574fb476ed4828760dbd747c5a813cf563d5cae7ec7"
+        },
+        "_init_holes.3": {
+          "address": "0x8ce2c976",
+          "bytes": 2,
+          "sha256": "17d5f5a33ab5f6aed0395d2bc0a4e5df61d92441ea8d77b0952c01bc8aa8bde0"
+        },
+        "_zero.0": {
+          "address": "0x8ce2c964",
+          "bytes": 4,
+          "sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+        }
+      }
+    },
+    "cold_binder_and_admission_pins": {
+      "_native_sdk_sci_route_bind": [
+        2363496552,
+        916,
+        "414de55141080d1112f413afe44a0e9e07423b1f3db783d991ee617d895cb3ed"
+      ],
+      "_kui_native_sdk_sci_route_admit": [
+        2363573004,
+        796,
+        "bca05e993e391c6eb85a99a6c72529c98a2db02ed94ae606c0b72243174a160c"
+      ],
+      "_kui_native_sdk_sci_route_discover": [
+        2363573800,
+        1856,
+        "ed8a15b5b37c15f439674f13fc042a893391ea3884d780ac19d5716600e2d2ba"
+      ],
+      "_u32": [
+        2363572508,
+        30,
+        "6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334"
+      ],
+      "_fingerprint": [
+        2363572684,
+        88,
+        "e20af76b12f03eacf8db050294266ab776acccdb206b65fef7caf8aacbf50a7a"
+      ],
+      "_live_words": [
+        2363572540,
+        80,
+        "19abfcf3270af6ef4dbbd6bd2cdfaf0cd0b871ab32dddda689dc9a7828511474"
+      ],
+      "_literal_at": [
+        2363572620,
+        62,
+        "1712d6126cb969c7f2f21fb2de718960809b1782d1b39a06f772a21af78e16fe"
+      ],
+      "_normalized": [
+        2363572772,
+        192,
+        "81b53b61f1e4881bf120571908420787023e52cde950546614ff528d8ca6a940"
+      ]
+    },
+    "cold_binder_instruction_modelled": true,
+    "cold_binder_execution": {
+      "schema": "kui.native.sdk-sci.structural-cold.audit.v1",
+      "enabled": true,
+      "actual_linked_cold_binder_executed": true,
+      "structural_profile": true,
+      "artifact_sha256": {
+        "stage": "7e8a8776b93387396addf241a645e22290ab8b0f6c8497912911ec53f208c03a",
+        "resident": "cb5ba07eea2cabfb09b1285046aff7b61fd12c26877d3ec7ea6d09cbdee14349"
+      },
+      "immutable_runtime_descriptor": {
+        "bytes": 20,
+        "entry_offset": 36,
+        "immutable": true,
+        "region_storage": "0x8c007b34",
+        "callback": "0x8c007460"
+      },
+      "shared_plan_bytes": 32,
+      "exact_positive_cases": 24,
+      "exact_positive_cases_by_owner": {
+        "Evolution1": 12,
+        "Evolution2": 12
+      },
+      "structural_fallback_positive_cases": 40,
+      "relocated_vbrs": [
+        "0x8c000000",
+        "0x8c003900",
+        "0x8c007d00",
+        "0x8c02a000",
+        "0x8c3ff900",
+        "0x8c460000",
+        "0x8cdff900",
+        "0x8ce8cb00",
+        "0x8cfff900"
+      ],
+      "raw_u0_default_and_common_preserved": true,
+      "admission_result_routing_cases": 10,
+      "only_exact_zero_attempts_discovery": true,
+      "exact_minus_one_never_falls_back": true,
+      "malformed_descriptor_or_context_refusals": 72,
+      "malformed_vbr_or_overlap_refusals": 38,
+      "malformed_shared_plan_refusals": 36,
+      "omitted_ocbp_mutation_rejections": 8,
+      "dynamic_vbr_canonical_p1_aligned256": true,
+      "dynamic_vbr_bounds": [
+        "0x8c000000",
+        "0x8cfff900"
+      ],
+      "live_vbr_span_bytes": 1632,
+      "lease_bytes_excluded": 393216,
+      "lease_header_bytes_excluded": 32,
+      "low_resident_and_service_stack_excluded": true,
+      "temporary_stage_excluded": true,
+      "stage_end": "0x8ce8caa8",
+      "selected_async_bound_checked": true,
+      "p1_writeback_cache_and_p2_ram_distinct": true,
+      "full_cacheline_writeback_and_sentinels_preserved": true,
+      "original_default_and_vbr_published_first": true,
+      "both_callbacks_read_back_before_cookie": true,
+      "cookie_published_last": true,
+      "callee_saved_integer_bank_and_control_state_preserved": true,
+      "pure_admission_call": "typed ABI substitutes; exact and structural pure helpers separately host-tested",
+      "memcpy_memcmp": "faithful bounded ABI substitutes",
+      "console_performance_verified": false
+    },
+    "dynamic_vbr_execution": {
+      "actual_linked_readiness_cases": 576,
+      "malformed_owner_cases_before_table_read": 4208,
+      "actual_linked_dynamic_hook_restoration_cases": 1536,
+      "actual_live_route_loss_transitions": 1536,
+      "vbrs": [
+        "0x8c000000",
+        "0x8c00f400",
+        "0x8c010000",
+        "0x8c200000",
+        "0x8cc80000",
+        "0x8cfff900"
+      ],
+      "all16_caller_masks": true,
+      "canonical_p1_alignment_and_complete_vector_span_checked": true,
+      "no_callback_read_before_cookie_vbr_bounds_and_equality": true,
+      "fixed_foreign_callback_table_not_used": true,
+      "no_vbr_writes": true
+    },
+    "callback_cases_by_owner": {
+      "Evolution1": 960,
+      "Evolution2": 960,
+      "raw_U0": 960
+    },
+    "ownership_cases_by_owner": {
+      "Evolution1": [
+        3584,
+        3584,
+        8960,
+        6144
+      ],
+      "Evolution2": [
+        3584,
+        3584,
+        8960,
+        6144
+      ]
+    },
+    "callback_instruction_cases": 2880,
+    "hook_ownership_instruction_cases": 7168,
+    "unhook_ownership_instruction_cases": 7168,
+    "dispatcher_instruction_cases": 17920,
+    "live_route_loss_transition_cases": 12288,
+    "immutable_function_pins": {
+      "_sdk_sci_ready": [
+        2348832496,
+        88,
+        "878946332b6fe1651fd161314e795f1f7267d3fe054984affff9a987bf91d3b9"
+      ],
+      "_hook": [
+        2348832584,
+        104,
+        "60c91970448795e525b79b4c00c4314418b95686a820971e727f6ca97b414e80"
+      ],
+      "_unhook": [
+        2348832684,
+        68,
+        "c2dbf8b636eb9c82b63902a0879c108588a0d591e2155df6c0bb7fd607e1cfab"
+      ],
+      "_kui_retail_sdk_sci_dispatch": [
+        2348839644,
+        124,
+        "ed20fd9d1f99d45e58b52379401ff11109c2dad341a168a4ef909f5c1ab297b5"
+      ],
+      "_kui_retail_sdk_sci_entry": [
+        2348840032,
+        152,
+        "a859d76f04b9b0b7ade808afb8feda6071e145c11bacb6cadf52959d066a9b72"
+      ]
+    },
+    "mutation_rejections": 5472,
+    "structural_marker_mutation_rejections": 10,
+    "exact_known_malformed_never_falls_back": true,
+    "unsupported_identity_uses_unique_structural_proof": true,
+    "arbitrary_owner_hash_bypass": false,
+    "callback_private_stack_prefix_bytes": 0,
+    "sdk_owner_stack_save_bytes": 16,
+    "all_16_sdk_caller_imasks_checked": true,
+    "both_gpr_banks_checked": true,
+    "sdk_original_sr_sp_pr_r4_and_callee_saved_preserved": true,
+    "busy_low_stack_never_entered": true,
+    "bad_guard_forwarded_without_c": true,
+    "default_callback_tail_forwarded": true,
+    "bootstrap_priority_zero": true,
+    "retained_priority_one": true,
+    "vbr_and_both_sdk_slots_rechecked": true,
+    "no_vbr_write_or_raw_rte_entry": true,
+    "no_fpu_state_changes": true,
+    "read_ahead_companion_required": true,
+    "read_ahead_diagnostic_companion_required": true,
+    "read_ahead_pio_companion_required": true,
+    "read_ahead_pio_pair_companion_required": true,
+    "cold_binder_source_sha256": "44a61583bda6fc4cad34e0e12868e41ca76606e48ce9a4465d179e7cca4e6d40",
+    "native_deep_reader_c_payload_model": "ABI-adversarial substitute",
+    "sdk_full_fpu_context_model": "owned by original SDK, outside this bounded integer model",
+    "console_cause_confirmed": false,
+    "console_performance_verified": false,
+    "original_sdk_dispatch_by_owner": {
+      "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35": {
+        "owner_digest": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+        "game": "evolution1",
+        "owner_program_bytes": 2143652,
+        "original_sdk_owner_contract": {
+          "family": "full-fpu",
+          "game": "evolution1",
+          "load": 2348875776,
+          "vector": 2350751872,
+          "event": 2350752792,
+          "default": 2350751568,
+          "helper": 2350874076,
+          "commons": [
+            2350752012,
+            2350752372
+          ],
+          "table_init": 2350583382,
+          "table_stop": 2350583412,
+          "frame_pairs": [
+            [
+              2350752014,
+              2350752314
+            ],
+            [
+              2350752410,
+              2350752720
+            ]
+          ],
+          "dispatches": [
+            2350752144,
+            2350752540
+          ],
+          "continuations": [
+            2350752188,
+            2350752584
+          ],
+          "source_bytes": 2143652,
+          "source_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+          "program_bytes": 2143652,
+          "program_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+          "digest": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+          "dispatch": 2350752540,
+          "continuation": 2350752584,
+          "vbr": 2348872704,
+          "eri_slot": 2348873308,
+          "rxi_slot": 2348873312
+        },
+        "original_sdk_owner_execution": {
+          "game": "evolution1",
+          "source_bytes": 2143652,
+          "program_bytes": 2143652,
+          "source_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+          "program_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+          "actual_table_initializer_cases": 16,
+          "actual_control_frame_roundtrip_cases": 32,
+          "callback_argument_register": "r4",
+          "callback_return": "RTS to original JSR continuation",
+          "owner_vbr": "0x8c00f400",
+          "eri_slot": "0x8c00f65c",
+          "rxi_slot": "0x8c00f660",
+          "default": "0x8c1d9f50",
+          "dispatch": "0x8c1da31c",
+          "event": "0x8c1da418",
+          "continuation": "0x8c1da348",
+          "full_fpu_prologue_modelled": false,
+          "console_execution_verified": false
+        },
+        "original_sci_default_helper_execution": {
+          "game": "evolution1",
+          "helper": "0x8c1f7ddc",
+          "actual_sci_return_cases": 32,
+          "events": [
+            "0x4e0",
+            "0x500"
+          ],
+          "masks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "maximum_own_frame_bytes": 44,
+          "external_code_data_mmio_reads": 0,
+          "writes_outside_own_frame": 0,
+          "unrelated_debug_print_paths_executed": false
+        },
+        "structural_family": "full-fpu",
+        "actual_sdk_integer_dispatch_to_linked_callback_cases": 1280,
+        "both_original_common_modes_executed": true,
+        "dynamic_vbrs": [
+          "0x8c00f400",
+          "0x8cc80000"
+        ],
+        "actual_sdk_event_table_lookup_and_jsr_executed": true,
+        "raw_u0_default_and_continuation_preserved": false,
+        "production_extent_and_structural_source_live_models_checked": true,
+        "source_identity_freshly_hashed": true,
+        "full_sdk_fpu_prologue_and_epilogue_executed": false,
+        "console_performance_verified": false
+      },
+      "52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605": {
+        "owner_digest": "52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605",
+        "game": "evolution2",
+        "owner_program_bytes": 4024288,
+        "original_sdk_owner_contract": {
+          "family": "full-fpu",
+          "game": "evolution2",
+          "load": 2348875776,
+          "vector": 2350571068,
+          "event": 2350571988,
+          "default": 2350570764,
+          "helper": 2350746056,
+          "commons": [
+            2350571208,
+            2350571568
+          ],
+          "table_init": 2350376898,
+          "table_stop": 2350376928,
+          "frame_pairs": [
+            [
+              2350571210,
+              2350571510
+            ],
+            [
+              2350571606,
+              2350571916
+            ]
+          ],
+          "dispatches": [
+            2350571340,
+            2350571736
+          ],
+          "continuations": [
+            2350571384,
+            2350571780
+          ],
+          "source_bytes": 4057056,
+          "source_sha256": "16b45fcc84992a60d5a64bf64bf22b699b27306b95f177ba3d9730ca380069ae",
+          "program_bytes": 4024288,
+          "program_sha256": "52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605",
+          "digest": "52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605",
+          "dispatch": 2350571736,
+          "continuation": 2350571780,
+          "vbr": 2348872704,
+          "eri_slot": 2348873308,
+          "rxi_slot": 2348873312
+        },
+        "original_sdk_owner_execution": {
+          "game": "evolution2",
+          "source_bytes": 4057056,
+          "program_bytes": 4024288,
+          "source_sha256": "16b45fcc84992a60d5a64bf64bf22b699b27306b95f177ba3d9730ca380069ae",
+          "program_sha256": "52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605",
+          "actual_table_initializer_cases": 16,
+          "actual_control_frame_roundtrip_cases": 32,
+          "callback_argument_register": "r4",
+          "callback_return": "RTS to original JSR continuation",
+          "owner_vbr": "0x8c00f400",
+          "eri_slot": "0x8c00f65c",
+          "rxi_slot": "0x8c00f660",
+          "default": "0x8c1add0c",
+          "dispatch": "0x8c1ae0d8",
+          "event": "0x8c1ae1d4",
+          "continuation": "0x8c1ae104",
+          "full_fpu_prologue_modelled": false,
+          "console_execution_verified": false
+        },
+        "original_sci_default_helper_execution": {
+          "game": "evolution2",
+          "helper": "0x8c1d89c8",
+          "actual_sci_return_cases": 32,
+          "events": [
+            "0x4e0",
+            "0x500"
+          ],
+          "masks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "maximum_own_frame_bytes": 44,
+          "external_code_data_mmio_reads": 0,
+          "writes_outside_own_frame": 0,
+          "unrelated_debug_print_paths_executed": false
+        },
+        "structural_family": "full-fpu",
+        "actual_sdk_integer_dispatch_to_linked_callback_cases": 1280,
+        "both_original_common_modes_executed": true,
+        "dynamic_vbrs": [
+          "0x8c00f400",
+          "0x8cc80000"
+        ],
+        "actual_sdk_event_table_lookup_and_jsr_executed": true,
+        "raw_u0_default_and_continuation_preserved": false,
+        "production_extent_and_structural_source_live_models_checked": true,
+        "source_identity_freshly_hashed": true,
+        "full_sdk_fpu_prologue_and_epilogue_executed": false,
+        "console_performance_verified": false
+      },
+      "a3dcd09a96045839dbbc35697eb4336e4eba79b52203a46bb2f8ee9a4ba2eed8": {
+        "owner_digest": "a3dcd09a96045839dbbc35697eb4336e4eba79b52203a46bb2f8ee9a4ba2eed8",
+        "game": "ps2",
+        "owner_program_bytes": 3097497,
+        "original_sdk_owner_contract": {
+          "family": "full-fpu",
+          "game": "ps2",
+          "load": 2348875776,
+          "vector": 2351795948,
+          "event": 204313220,
+          "default": 204311996,
+          "helper": 204406252,
+          "commons": [
+            204312440,
+            204312800
+          ],
+          "table_init": 2351675314,
+          "table_stop": 2351675344,
+          "frame_pairs": [
+            [
+              204312442,
+              204312742
+            ],
+            [
+              204312838,
+              204313148
+            ]
+          ],
+          "dispatches": [
+            204312572,
+            204312968
+          ],
+          "continuations": [
+            204312616,
+            204313012
+          ],
+          "source_bytes": 3097497,
+          "source_sha256": "a3dcd09a96045839dbbc35697eb4336e4eba79b52203a46bb2f8ee9a4ba2eed8",
+          "program_bytes": 3097497,
+          "program_sha256": "a3dcd09a96045839dbbc35697eb4336e4eba79b52203a46bb2f8ee9a4ba2eed8",
+          "digest": "a3dcd09a96045839dbbc35697eb4336e4eba79b52203a46bb2f8ee9a4ba2eed8",
+          "dispatch": 204312968,
+          "continuation": 204313012,
+          "vbr": 2348872704,
+          "eri_slot": 2348873308,
+          "rxi_slot": 2348873312
+        },
+        "original_sdk_owner_execution": {
+          "game": "ps2",
+          "source_bytes": 3097497,
+          "program_bytes": 3097497,
+          "source_sha256": "a3dcd09a96045839dbbc35697eb4336e4eba79b52203a46bb2f8ee9a4ba2eed8",
+          "program_sha256": "a3dcd09a96045839dbbc35697eb4336e4eba79b52203a46bb2f8ee9a4ba2eed8",
+          "actual_table_initializer_cases": 16,
+          "actual_control_frame_roundtrip_cases": 32,
+          "callback_argument_register": "r4",
+          "callback_return": "RTS to original JSR continuation",
+          "owner_vbr": "0x8c00f400",
+          "eri_slot": "0x8c00f65c",
+          "rxi_slot": "0x8c00f660",
+          "default": "0xc2d8dbc",
+          "dispatch": "0xc2d9188",
+          "event": "0xc2d9284",
+          "continuation": "0xc2d91b4",
+          "full_fpu_prologue_modelled": false,
+          "console_execution_verified": false
+        },
+        "original_sci_default_helper_execution": {
+          "game": "ps2",
+          "helper": "0xc2efdec",
+          "actual_sci_return_cases": 32,
+          "events": [
+            "0x4e0",
+            "0x500"
+          ],
+          "masks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "maximum_own_frame_bytes": 44,
+          "external_code_data_mmio_reads": 0,
+          "writes_outside_own_frame": 0,
+          "unrelated_debug_print_paths_executed": false
+        },
+        "structural_family": "full-fpu",
+        "actual_sdk_integer_dispatch_to_linked_callback_cases": 1280,
+        "both_original_common_modes_executed": true,
+        "dynamic_vbrs": [
+          "0x8c00f400",
+          "0x8cc80000"
+        ],
+        "actual_sdk_event_table_lookup_and_jsr_executed": true,
+        "raw_u0_default_and_continuation_preserved": true,
+        "production_extent_and_structural_source_live_models_checked": true,
+        "source_identity_freshly_hashed": true,
+        "full_sdk_fpu_prologue_and_epilogue_executed": false,
+        "console_performance_verified": false
+      },
+      "4218c07829d63080be2da86413ec023e6d77001c13a1494648db6e2e5cb73611": {
+        "owner_digest": "4218c07829d63080be2da86413ec023e6d77001c13a1494648db6e2e5cb73611",
+        "game": "skies",
+        "owner_program_bytes": 5460080,
+        "original_sdk_owner_contract": {
+          "family": "full-fpu",
+          "game": "skies",
+          "load": 2348875776,
+          "vector": 2351851544,
+          "event": 2351852464,
+          "default": 2351851240,
+          "helper": 2352118408,
+          "commons": [
+            2351851684,
+            2351852044
+          ],
+          "table_init": 2351551370,
+          "table_stop": 2351551400,
+          "frame_pairs": [
+            [
+              2351851686,
+              2351851986
+            ],
+            [
+              2351852082,
+              2351852392
+            ]
+          ],
+          "dispatches": [
+            2351851816,
+            2351852212
+          ],
+          "continuations": [
+            2351851860,
+            2351852256
+          ],
+          "source_bytes": 5460080,
+          "source_sha256": "4218c07829d63080be2da86413ec023e6d77001c13a1494648db6e2e5cb73611",
+          "program_bytes": 5460080,
+          "program_sha256": "4218c07829d63080be2da86413ec023e6d77001c13a1494648db6e2e5cb73611",
+          "digest": "4218c07829d63080be2da86413ec023e6d77001c13a1494648db6e2e5cb73611",
+          "dispatch": 2351852212,
+          "continuation": 2351852256,
+          "vbr": 2348872704,
+          "eri_slot": 2348873308,
+          "rxi_slot": 2348873312
+        },
+        "original_sdk_owner_execution": {
+          "game": "skies",
+          "source_bytes": 5460080,
+          "program_bytes": 5460080,
+          "source_sha256": "4218c07829d63080be2da86413ec023e6d77001c13a1494648db6e2e5cb73611",
+          "program_sha256": "4218c07829d63080be2da86413ec023e6d77001c13a1494648db6e2e5cb73611",
+          "actual_table_initializer_cases": 16,
+          "actual_control_frame_roundtrip_cases": 32,
+          "callback_argument_register": "r4",
+          "callback_return": "RTS to original JSR continuation",
+          "owner_vbr": "0x8c00f400",
+          "eri_slot": "0x8c00f65c",
+          "rxi_slot": "0x8c00f660",
+          "default": "0x8c2e66e8",
+          "dispatch": "0x8c2e6ab4",
+          "event": "0x8c2e6bb0",
+          "continuation": "0x8c2e6ae0",
+          "full_fpu_prologue_modelled": false,
+          "console_execution_verified": false
+        },
+        "original_sci_default_helper_execution": {
+          "game": "skies",
+          "helper": "0x8c327a88",
+          "actual_sci_return_cases": 32,
+          "events": [
+            "0x4e0",
+            "0x500"
+          ],
+          "masks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "maximum_own_frame_bytes": 44,
+          "external_code_data_mmio_reads": 0,
+          "writes_outside_own_frame": 0,
+          "unrelated_debug_print_paths_executed": false
+        },
+        "structural_family": "full-fpu",
+        "actual_sdk_integer_dispatch_to_linked_callback_cases": 1280,
+        "both_original_common_modes_executed": true,
+        "dynamic_vbrs": [
+          "0x8c00f400",
+          "0x8cc80000"
+        ],
+        "actual_sdk_event_table_lookup_and_jsr_executed": true,
+        "raw_u0_default_and_continuation_preserved": false,
+        "production_extent_and_structural_source_live_models_checked": true,
+        "source_identity_freshly_hashed": true,
+        "full_sdk_fpu_prologue_and_epilogue_executed": false,
+        "console_performance_verified": false
+      },
+      "dd583571969d275b479e33edfd98ed5e2097d16c37ff6aaba59a7abaf057dc45": {
+        "owner_digest": "dd583571969d275b479e33edfd98ed5e2097d16c37ff6aaba59a7abaf057dc45",
+        "game": "grandia2",
+        "owner_program_bytes": 1279172,
+        "original_sdk_owner_contract": {
+          "family": "full-fpu",
+          "game": "grandia2",
+          "load": 2348875776,
+          "vector": 2349622876,
+          "event": 2349623796,
+          "default": 2349323136,
+          "helper": 2349622112,
+          "commons": [
+            2349623016,
+            2349623376
+          ],
+          "table_init": 2349323818,
+          "table_stop": 2349323848,
+          "frame_pairs": [
+            [
+              2349623018,
+              2349623318
+            ],
+            [
+              2349623414,
+              2349623724
+            ]
+          ],
+          "dispatches": [
+            2349623148,
+            2349623544
+          ],
+          "continuations": [
+            2349623192,
+            2349623588
+          ],
+          "source_bytes": 1279172,
+          "source_sha256": "dd583571969d275b479e33edfd98ed5e2097d16c37ff6aaba59a7abaf057dc45",
+          "program_bytes": 1279172,
+          "program_sha256": "dd583571969d275b479e33edfd98ed5e2097d16c37ff6aaba59a7abaf057dc45",
+          "digest": "dd583571969d275b479e33edfd98ed5e2097d16c37ff6aaba59a7abaf057dc45",
+          "dispatch": 2349623544,
+          "continuation": 2349623588,
+          "vbr": 2348872704,
+          "eri_slot": 2348873308,
+          "rxi_slot": 2348873312
+        },
+        "original_sdk_owner_execution": {
+          "game": "grandia2",
+          "source_bytes": 1279172,
+          "program_bytes": 1279172,
+          "source_sha256": "dd583571969d275b479e33edfd98ed5e2097d16c37ff6aaba59a7abaf057dc45",
+          "program_sha256": "dd583571969d275b479e33edfd98ed5e2097d16c37ff6aaba59a7abaf057dc45",
+          "actual_table_initializer_cases": 16,
+          "actual_control_frame_roundtrip_cases": 32,
+          "callback_argument_register": "r4",
+          "callback_return": "RTS to original JSR continuation",
+          "owner_vbr": "0x8c00f400",
+          "eri_slot": "0x8c00f65c",
+          "rxi_slot": "0x8c00f660",
+          "default": "0x8c07d380",
+          "dispatch": "0x8c0c68f8",
+          "event": "0x8c0c69f4",
+          "continuation": "0x8c0c6924",
+          "full_fpu_prologue_modelled": false,
+          "console_execution_verified": false
+        },
+        "original_sci_default_helper_execution": {
+          "game": "grandia2",
+          "helper": "0x8c0c6360",
+          "actual_sci_return_cases": 32,
+          "events": [
+            "0x4e0",
+            "0x500"
+          ],
+          "masks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "maximum_own_frame_bytes": 44,
+          "external_code_data_mmio_reads": 0,
+          "writes_outside_own_frame": 0,
+          "unrelated_debug_print_paths_executed": false
+        },
+        "structural_family": "full-fpu",
+        "actual_sdk_integer_dispatch_to_linked_callback_cases": 1280,
+        "both_original_common_modes_executed": true,
+        "dynamic_vbrs": [
+          "0x8c00f400",
+          "0x8cc80000"
+        ],
+        "actual_sdk_event_table_lookup_and_jsr_executed": true,
+        "raw_u0_default_and_continuation_preserved": false,
+        "production_extent_and_structural_source_live_models_checked": true,
+        "source_identity_freshly_hashed": true,
+        "full_sdk_fpu_prologue_and_epilogue_executed": false,
+        "console_performance_verified": false
+      },
+      "6919ed8bc96782d041be41ba86f90bf86d99632b8b7787391969721bc0991736": {
+        "owner_digest": "6919ed8bc96782d041be41ba86f90bf86d99632b8b7787391969721bc0991736",
+        "game": "sa2",
+        "owner_program_bytes": 1578116,
+        "original_sdk_owner_contract": {
+          "family": "compact-fpu",
+          "game": "sa2",
+          "load": 2348875776,
+          "vector": 2350230340,
+          "event": 2350231164,
+          "default": 2350076388,
+          "helper": 2350229576,
+          "commons": [
+            2350230480,
+            2350230792
+          ],
+          "table_init": 2350077074,
+          "table_stop": 2350077104,
+          "frame_pairs": [
+            [
+              2350230482,
+              2350230734
+            ],
+            [
+              2350230830,
+              2350231092
+            ]
+          ],
+          "dispatches": [
+            2350230594,
+            2350230942
+          ],
+          "continuations": [
+            2350230638,
+            2350230986
+          ],
+          "source_bytes": 1578116,
+          "source_sha256": "6919ed8bc96782d041be41ba86f90bf86d99632b8b7787391969721bc0991736",
+          "program_bytes": 1578116,
+          "program_sha256": "6919ed8bc96782d041be41ba86f90bf86d99632b8b7787391969721bc0991736",
+          "digest": "6919ed8bc96782d041be41ba86f90bf86d99632b8b7787391969721bc0991736",
+          "dispatch": 2350230942,
+          "continuation": 2350230986,
+          "vbr": 2348872704,
+          "eri_slot": 2348873308,
+          "rxi_slot": 2348873312
+        },
+        "original_sdk_owner_execution": {
+          "game": "sa2",
+          "source_bytes": 1578116,
+          "program_bytes": 1578116,
+          "source_sha256": "6919ed8bc96782d041be41ba86f90bf86d99632b8b7787391969721bc0991736",
+          "program_sha256": "6919ed8bc96782d041be41ba86f90bf86d99632b8b7787391969721bc0991736",
+          "actual_table_initializer_cases": 16,
+          "actual_control_frame_roundtrip_cases": 32,
+          "callback_argument_register": "r4",
+          "callback_return": "RTS to original JSR continuation",
+          "owner_vbr": "0x8c00f400",
+          "eri_slot": "0x8c00f65c",
+          "rxi_slot": "0x8c00f660",
+          "default": "0x8c1351e4",
+          "dispatch": "0x8c15ad9e",
+          "event": "0x8c15ae7c",
+          "continuation": "0x8c15adca",
+          "full_fpu_prologue_modelled": false,
+          "console_execution_verified": false
+        },
+        "original_sci_default_helper_execution": {
+          "game": "sa2",
+          "helper": "0x8c15a848",
+          "actual_sci_return_cases": 32,
+          "events": [
+            "0x4e0",
+            "0x500"
+          ],
+          "masks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "maximum_own_frame_bytes": 44,
+          "external_code_data_mmio_reads": 0,
+          "writes_outside_own_frame": 0,
+          "unrelated_debug_print_paths_executed": false
+        },
+        "structural_family": "compact-fpu",
+        "actual_sdk_integer_dispatch_to_linked_callback_cases": 1280,
+        "both_original_common_modes_executed": true,
+        "dynamic_vbrs": [
+          "0x8c00f400",
+          "0x8cc80000"
+        ],
+        "actual_sdk_event_table_lookup_and_jsr_executed": true,
+        "raw_u0_default_and_continuation_preserved": false,
+        "production_extent_and_structural_source_live_models_checked": true,
+        "source_identity_freshly_hashed": true,
+        "full_sdk_fpu_prologue_and_epilogue_executed": false,
+        "console_performance_verified": false
+      },
+      "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099": {
+        "owner_digest": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099",
+        "game": "rayman2",
+        "owner_program_bytes": 935648,
+        "original_sdk_owner_contract": {
+          "family": "full-fpu",
+          "game": "rayman2",
+          "load": 2348875776,
+          "vector": 2349742360,
+          "event": 2349743280,
+          "default": 2349693604,
+          "helper": 2349741596,
+          "commons": [
+            2349742500,
+            2349742860
+          ],
+          "table_init": 2349694286,
+          "table_stop": 2349694316,
+          "frame_pairs": [
+            [
+              2349742502,
+              2349742802
+            ],
+            [
+              2349742898,
+              2349743208
+            ]
+          ],
+          "dispatches": [
+            2349742632,
+            2349743028
+          ],
+          "continuations": [
+            2349742676,
+            2349743072
+          ],
+          "source_bytes": 935648,
+          "source_sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099",
+          "program_bytes": 935648,
+          "program_sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099",
+          "digest": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099",
+          "dispatch": 2349743028,
+          "continuation": 2349743072,
+          "vbr": 2348872704,
+          "eri_slot": 2348873308,
+          "rxi_slot": 2348873312
+        },
+        "original_sdk_owner_execution": {
+          "game": "rayman2",
+          "source_bytes": 935648,
+          "program_bytes": 935648,
+          "source_sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099",
+          "program_sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099",
+          "actual_table_initializer_cases": 16,
+          "actual_control_frame_roundtrip_cases": 32,
+          "callback_argument_register": "r4",
+          "callback_return": "RTS to original JSR continuation",
+          "owner_vbr": "0x8c00f400",
+          "eri_slot": "0x8c00f65c",
+          "rxi_slot": "0x8c00f660",
+          "default": "0x8c0d7aa4",
+          "dispatch": "0x8c0e3bb4",
+          "event": "0x8c0e3cb0",
+          "continuation": "0x8c0e3be0",
+          "full_fpu_prologue_modelled": false,
+          "console_execution_verified": false
+        },
+        "original_sci_default_helper_execution": {
+          "game": "rayman2",
+          "helper": "0x8c0e361c",
+          "actual_sci_return_cases": 32,
+          "events": [
+            "0x4e0",
+            "0x500"
+          ],
+          "masks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "maximum_own_frame_bytes": 44,
+          "external_code_data_mmio_reads": 0,
+          "writes_outside_own_frame": 0,
+          "unrelated_debug_print_paths_executed": false
+        },
+        "structural_family": "full-fpu",
+        "actual_sdk_integer_dispatch_to_linked_callback_cases": 1280,
+        "both_original_common_modes_executed": true,
+        "dynamic_vbrs": [
+          "0x8c00f400",
+          "0x8cc80000"
+        ],
+        "actual_sdk_event_table_lookup_and_jsr_executed": true,
+        "raw_u0_default_and_continuation_preserved": false,
+        "production_extent_and_structural_source_live_models_checked": true,
+        "source_identity_freshly_hashed": true,
+        "full_sdk_fpu_prologue_and_epilogue_executed": false,
+        "console_performance_verified": false
+      },
+      "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5": {
+        "owner_digest": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5",
+        "game": "lodoss",
+        "owner_program_bytes": 3473412,
+        "original_sdk_owner_contract": {
+          "family": "full-fpu",
+          "game": "lodoss",
+          "load": 2348875776,
+          "vector": 2351921304,
+          "event": 2351922224,
+          "default": 2351921000,
+          "helper": 2352177188,
+          "commons": [
+            2351921444,
+            2351921804
+          ],
+          "table_init": 2351727910,
+          "table_stop": 2351727940,
+          "frame_pairs": [
+            [
+              2351921446,
+              2351921746
+            ],
+            [
+              2351921842,
+              2351922152
+            ]
+          ],
+          "dispatches": [
+            2351921576,
+            2351921972
+          ],
+          "continuations": [
+            2351921620,
+            2351922016
+          ],
+          "source_bytes": 3473412,
+          "source_sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5",
+          "program_bytes": 3473412,
+          "program_sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5",
+          "digest": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5",
+          "dispatch": 2351921972,
+          "continuation": 2351922016,
+          "vbr": 2348872704,
+          "eri_slot": 2348873308,
+          "rxi_slot": 2348873312
+        },
+        "original_sdk_owner_execution": {
+          "game": "lodoss",
+          "source_bytes": 3473412,
+          "program_bytes": 3473412,
+          "source_sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5",
+          "program_sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5",
+          "actual_table_initializer_cases": 16,
+          "actual_control_frame_roundtrip_cases": 32,
+          "callback_argument_register": "r4",
+          "callback_return": "RTS to original JSR continuation",
+          "owner_vbr": "0x8c00f400",
+          "eri_slot": "0x8c00f65c",
+          "rxi_slot": "0x8c00f660",
+          "default": "0x8c2f7768",
+          "dispatch": "0x8c2f7b34",
+          "event": "0x8c2f7c30",
+          "continuation": "0x8c2f7b60",
+          "full_fpu_prologue_modelled": false,
+          "console_execution_verified": false
+        },
+        "original_sci_default_helper_execution": {
+          "game": "lodoss",
+          "helper": "0x8c336024",
+          "actual_sci_return_cases": 32,
+          "events": [
+            "0x4e0",
+            "0x500"
+          ],
+          "masks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "maximum_own_frame_bytes": 44,
+          "external_code_data_mmio_reads": 0,
+          "writes_outside_own_frame": 0,
+          "unrelated_debug_print_paths_executed": false
+        },
+        "structural_family": "full-fpu",
+        "actual_sdk_integer_dispatch_to_linked_callback_cases": 1280,
+        "both_original_common_modes_executed": true,
+        "dynamic_vbrs": [
+          "0x8c00f400",
+          "0x8cc80000"
+        ],
+        "actual_sdk_event_table_lookup_and_jsr_executed": true,
+        "raw_u0_default_and_continuation_preserved": false,
+        "production_extent_and_structural_source_live_models_checked": true,
+        "source_identity_freshly_hashed": true,
+        "full_sdk_fpu_prologue_and_epilogue_executed": false,
+        "console_performance_verified": false
+      }
+    },
+    "original_sdk_dispatch": {
+      "owner_digest": "52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605",
+      "game": "evolution2",
+      "owner_program_bytes": 4024288,
+      "original_sdk_owner_contract": {
+        "family": "full-fpu",
+        "game": "evolution2",
+        "load": 2348875776,
+        "vector": 2350571068,
+        "event": 2350571988,
+        "default": 2350570764,
+        "helper": 2350746056,
+        "commons": [
+          2350571208,
+          2350571568
+        ],
+        "table_init": 2350376898,
+        "table_stop": 2350376928,
+        "frame_pairs": [
+          [
+            2350571210,
+            2350571510
+          ],
+          [
+            2350571606,
+            2350571916
+          ]
+        ],
+        "dispatches": [
+          2350571340,
+          2350571736
+        ],
+        "continuations": [
+          2350571384,
+          2350571780
+        ],
+        "source_bytes": 4057056,
+        "source_sha256": "16b45fcc84992a60d5a64bf64bf22b699b27306b95f177ba3d9730ca380069ae",
+        "program_bytes": 4024288,
+        "program_sha256": "52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605",
+        "digest": "52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605",
+        "dispatch": 2350571736,
+        "continuation": 2350571780,
+        "vbr": 2348872704,
+        "eri_slot": 2348873308,
+        "rxi_slot": 2348873312
+      },
+      "original_sdk_owner_execution": {
+        "game": "evolution2",
+        "source_bytes": 4057056,
+        "program_bytes": 4024288,
+        "source_sha256": "16b45fcc84992a60d5a64bf64bf22b699b27306b95f177ba3d9730ca380069ae",
+        "program_sha256": "52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605",
+        "actual_table_initializer_cases": 16,
+        "actual_control_frame_roundtrip_cases": 32,
+        "callback_argument_register": "r4",
+        "callback_return": "RTS to original JSR continuation",
+        "owner_vbr": "0x8c00f400",
+        "eri_slot": "0x8c00f65c",
+        "rxi_slot": "0x8c00f660",
+        "default": "0x8c1add0c",
+        "dispatch": "0x8c1ae0d8",
+        "event": "0x8c1ae1d4",
+        "continuation": "0x8c1ae104",
+        "full_fpu_prologue_modelled": false,
+        "console_execution_verified": false
+      },
+      "original_sci_default_helper_execution": {
+        "game": "evolution2",
+        "helper": "0x8c1d89c8",
+        "actual_sci_return_cases": 32,
+        "events": [
+          "0x4e0",
+          "0x500"
+        ],
+        "masks": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "maximum_own_frame_bytes": 44,
+        "external_code_data_mmio_reads": 0,
+        "writes_outside_own_frame": 0,
+        "unrelated_debug_print_paths_executed": false
+      },
+      "structural_family": "full-fpu",
+      "actual_sdk_integer_dispatch_to_linked_callback_cases": 1280,
+      "both_original_common_modes_executed": true,
+      "dynamic_vbrs": [
+        "0x8c00f400",
+        "0x8cc80000"
+      ],
+      "actual_sdk_event_table_lookup_and_jsr_executed": true,
+      "raw_u0_default_and_continuation_preserved": false,
+      "production_extent_and_structural_source_live_models_checked": true,
+      "source_identity_freshly_hashed": true,
+      "full_sdk_fpu_prologue_and_epilogue_executed": false,
+      "console_performance_verified": false
+    }
+  },
+  "read_ahead": {
+    "enabled": true,
+    "schema": "kui.native.read-ahead.audit.v1",
+    "paired_markers": true,
+    "diagnostic_capture": true,
+    "repair_diagnostic_capture": true,
+    "pio_candidate": true,
+    "pio_pair_candidate": true,
+    "pio_producer": {
+      "enabled": true,
+      "pair_profile": true,
+      "pair_candidate": true,
+      "actual_linked_producer_executed": true,
+      "tick_only": true,
+      "one_fresh_block_per_tick": false,
+      "maximum_blocks_per_visit": 2,
+      "no_optional_dma_or_new_commands": true,
+      "producer_only_timing": true,
+      "modelcases": 305,
+      "actual_linked_producer_positive_cases": 24,
+      "actual_linked_admission_refusals": 106,
+      "actual_linked_second_guard_refusals": 100,
+      "actual_linked_error_paths": 32,
+      "actual_linked_clock_cases": 37,
+      "repeated_tick_and_boundary_cases": 6,
+      "additional_instruction_truth_cases": 84,
+      "profile_marker_mutations": 7,
+      "second_elapsed_limit_ticks": 1144,
+      "second_limit_ticks": 1144,
+      "second_block_timing_admitted": true,
+      "second_limit_inclusive": true,
+      "reserve_ticks": 1200,
+      "soft_window_ticks": 2344,
+      "positive_valid_intervals_required": true,
+      "all_ordinary_guards_rechecked_before_second": true,
+      "per_block_positive_elapsed_required": true,
+      "all_admission_guards_rechecked_between_blocks": true,
+      "actual_cache_copy_before_each_validity_publication": true,
+      "first_and_second_errors_do_not_issue_stop": true,
+      "fetch_token_limit": 256,
+      "fetch_polled_true": true,
+      "metrics_offsets": [
+        80,
+        84,
+        88,
+        92,
+        96,
+        100,
+        104,
+        108
+      ],
+      "both_integer_banks_and_bl_states": true,
+      "callee_saved_and_private_stack_preserved": true,
+      "typed_low_ops": "Bounded ABI-adversarial substitutes; no low transport emulation",
+      "no_hardware_write_or_rdr_read": true,
+      "console_boot_verified": false,
+      "console_performance_verified": false
+    },
+    "structural_sdk_route": true,
+    "dual_reader_candidate": true,
+    "dual_reader": {
+      "schema": "kui.native.dual-readers.audit.v1",
+      "enabled": true,
+      "artifact_sha256": {
+        "resident": "cb5ba07eea2cabfb09b1285046aff7b61fd12c26877d3ec7ea6d09cbdee14349",
+        "legacy": "8d9fbea22bc58e15844839a457f0dfc599cfed18cc6203af20506a0e7c7910d8",
+        "stage": "7e8a8776b93387396addf241a645e22290ab8b0f6c8497912911ec53f208c03a",
+        "worker": "bf21042c4a22f8343f54f283078ae99e3ddc8e83f11d0c0f942d6235347d87c3"
+      },
+      "capability": {
+        "address": "0x8ce2bb70",
+        "bytes": 32,
+        "sha256": "62d72282400dfc0806bab0637679311298bf7baf34c78eb654e821dbaf062be1",
+        "exactly_one_in_stage_and_module": true
+      },
+      "embedded_engines": {
+        "x": {
+          "address": "0x8ce30998",
+          "bytes": 15136,
+          "sha256": "086d095a34cb818247560d627e34ab60a5656d43bfeab509c80bfa6b89eeb4f4",
+          "elf_sha256": "cb5ba07eea2cabfb09b1285046aff7b61fd12c26877d3ec7ea6d09cbdee14349"
+        },
+        "y": {
+          "address": "0x8ce3baf8",
+          "bytes": 15116,
+          "sha256": "ed63fdb8f161207b6ae0436f0f410612797ba65c154f2b85cac61081c34b3000",
+          "elf_sha256": "8d9fbea22bc58e15844839a457f0dfc599cfed18cc6203af20506a0e7c7910d8"
+        }
+      },
+      "immutable_stage_pins": {
+        "_select_resident": [
+          2363494824,
+          272,
+          "c2224460dee18bfaaab0f0cca6864cc939f0546e51e4877cc7e5cd2435ba11df"
+        ],
+        "_native_dual_reader_bind": [
+          2363498676,
+          68,
+          "459969f187c257290af41c200c907794553f806d6e05c12e9835f74af6c76580"
+        ],
+        "_kui_native_dual_u32": [
+          2363490468,
+          30,
+          "c13060e358e2a0e9f53878d9aa8b77d1fbfb03a31b8c4e049dc49bf3e7feec6c"
+        ]
+      },
+      "immutable_worker_pins": {
+        "_reader_readahead_exports": [
+          2349859048,
+          200,
+          "04a1748a2f5f36a1e79fa2a791a5e16a9f90c6ac632f13bd797abf48ce58545c"
+        ],
+        "_reader_capture_region": [
+          2349859248,
+          100,
+          "ac7d64231e97b1bbfa703121a832e4cce8a5ee8f7d1302cb6cdc9b77bd076b71"
+        ],
+        "_reader_readahead_visit": [
+          2349859348,
+          56,
+          "c44759200e43937665b2987281e995b4f39675f1e05180371aad4078cc02dbf3"
+        ]
+      },
+      "console_layout": {
+        "actual_sh_compiler_console_layout": true,
+        "worker_visible_equal_fields": 57,
+        "x_timing_words_only_in_unused_y_gap": true,
+        "layouts": {
+          "x": {
+            "pointer_bytes": 4,
+            "region_bytes": 1888,
+            "engine_bytes": 192,
+            "manifest_bytes": 1020,
+            "manifest_reader": 48,
+            "manifest_transport": 44,
+            "config_payload": 220,
+            "lease_bytes": 393216,
+            "vector100": 0,
+            "area0": 32,
+            "engine": 576,
+            "vector400": 768,
+            "shared": 800,
+            "vector600": 1280,
+            "area1": 1344,
+            "engine.manifest": 636,
+            "engine.token": 688,
+            "engine.active": 700,
+            "engine.hooked": 720,
+            "engine.target": 724,
+            "engine.native_loan_state": 756,
+            "engine.cursor.block": 676,
+            "engine.cursor.done": 664,
+            "engine.release.vbr": 576,
+            "engine.release.sci": 580,
+            "engine.release.armed": 584,
+            "engine.release.depth": 588,
+            "engine.release.pending": 592,
+            "engine.release.rehooks": 616,
+            "engine.release.released": 620,
+            "engine.release.vbr_changes": 632,
+            "engine.stats.irq_blocks": 728,
+            "engine.stats.call_blocks": 732,
+            "engine.stats.waits": 736,
+            "engine.stats.execs": 740,
+            "engine.stats.exec_int": 744,
+            "engine.stats.hooks": 748,
+            "engine.stats.releases": 752,
+            "shared.service": 800,
+            "shared.service.pending": 880,
+            "shared.service.token": 844,
+            "shared.service.command": 848,
+            "shared.service.diag.last_function": 968,
+            "shared.card": 996,
+            "shared.display": 1068,
+            "shared.stream": 1124,
+            "shared.stream.stats.blocks": 1200,
+            "shared.stream.stats.polled": 1204,
+            "shared.stream.stats.starts": 1208,
+            "shared.stream.stats.kept": 1212,
+            "shared.stream.stats.overruns": 1216,
+            "shared.stream.stats.crc_errors": 1220,
+            "shared.stream.stats.token_errors": 1224,
+            "shared.stream.stats.foreign": 1228,
+            "shared.stream.stats.repaired": 1232,
+            "shared.stream.stats.ahead": 1236,
+            "shared.stream.stats.deferred": 1240,
+            "shared.port": 1244,
+            "engine.native_max_lba": 760,
+            "engine.native_max_count": 764
+          },
+          "y": {
+            "pointer_bytes": 4,
+            "region_bytes": 1888,
+            "engine_bytes": 184,
+            "manifest_bytes": 1020,
+            "manifest_reader": 48,
+            "manifest_transport": 44,
+            "config_payload": 220,
+            "lease_bytes": 393216,
+            "vector100": 0,
+            "area0": 32,
+            "engine": 576,
+            "vector400": 768,
+            "shared": 800,
+            "vector600": 1280,
+            "area1": 1344,
+            "engine.manifest": 636,
+            "engine.token": 688,
+            "engine.active": 700,
+            "engine.hooked": 720,
+            "engine.target": 724,
+            "engine.native_loan_state": 756,
+            "engine.cursor.block": 676,
+            "engine.cursor.done": 664,
+            "engine.release.vbr": 576,
+            "engine.release.sci": 580,
+            "engine.release.armed": 584,
+            "engine.release.depth": 588,
+            "engine.release.pending": 592,
+            "engine.release.rehooks": 616,
+            "engine.release.released": 620,
+            "engine.release.vbr_changes": 632,
+            "engine.stats.irq_blocks": 728,
+            "engine.stats.call_blocks": 732,
+            "engine.stats.waits": 736,
+            "engine.stats.execs": 740,
+            "engine.stats.exec_int": 744,
+            "engine.stats.hooks": 748,
+            "engine.stats.releases": 752,
+            "shared.service": 800,
+            "shared.service.pending": 880,
+            "shared.service.token": 844,
+            "shared.service.command": 848,
+            "shared.service.diag.last_function": 968,
+            "shared.card": 996,
+            "shared.display": 1068,
+            "shared.stream": 1124,
+            "shared.stream.stats.blocks": 1200,
+            "shared.stream.stats.polled": 1204,
+            "shared.stream.stats.starts": 1208,
+            "shared.stream.stats.kept": 1212,
+            "shared.stream.stats.overruns": 1216,
+            "shared.stream.stats.crc_errors": 1220,
+            "shared.stream.stats.token_errors": 1224,
+            "shared.stream.stats.foreign": 1228,
+            "shared.stream.stats.repaired": 1232,
+            "shared.stream.stats.ahead": 1236,
+            "shared.stream.stats.deferred": 1240,
+            "shared.port": 1244
+          }
+        }
+      },
+      "selector": {
+        "actual_linked_selector_cases": 1600,
+        "refusal_cases": 1536,
+        "all_imasks_and_integer_banks": true,
+        "actual_capability_bit_mutations_before_mode_reads": 256,
+        "standard_non_sci_unknown_modes_refused": true,
+        "exact_blob_and_guard_selected": true,
+        "only_selected_metadata_and_caller_stack_written": true
+      },
+      "late_binding": {
+        "actual_linked_late_binding_cases": 4032,
+        "x_calls_timeline_sdk_aux_in_order": true,
+        "y_standard_unknown_modes_do_not_call_any_binder": true,
+        "all_argument_values_and_fifth_stack_argument_checked": true,
+        "only_three_exact_typed_binder_targets_substituted": true,
+        "callee_c_abi_adversary": true,
+        "tail_ra_binder_pr_preservation_requires_actual_cold_binder_companion": true,
+        "exact_cold_binder_pins": {
+          "_native_readahead_bind": [
+            2363497468,
+            1208,
+            "7a9d6c8c85dcce44b576a6e776098ac6af02c9a65d26abc14e9fff4e1980b3a0"
+          ],
+          "_kui_vmu_native_background_map_address": [
+            2363490500,
+            92,
+            "cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8"
+          ]
+        },
+        "actual_linked_ra_binder_and_initializer_executed": true,
+        "positive_cases": 32,
+        "tail_target_model": "first two binders are ABI adversaries including PR; final RA tail target retains the exactly pinned actual binder RTS/PR contract"
+      },
+      "worker": {
+        "actual_linked_worker_cases": 266,
+        "all_three_lease_aliases_and_highest_lease": true,
+        "y_standard_unknown_modes_and_forged_cookie_cannot_read_aux_or_vector_entries": true,
+        "foreign_manifest_pointer_refused_before_map_dereference": true,
+        "null_region_and_invalid_config_payloads_refused_before_dependent_reads": true,
+        "malformed_aux_headers_and_public_context_bounds_refused": true,
+        "heartbeat_and_capture_start_checked": true
+      },
+      "additional_scalar_instruction_truth_cases": 5728,
+      "legacy_background": {
+        "schema": "kui.native.background.audit.v1",
+        "console_execution_verified": false,
+        "resident_sha256": "8d9fbea22bc58e15844839a457f0dfc599cfed18cc6203af20506a0e7c7910d8",
+        "payload_bytes": 15116,
+        "memory_end": "0x8c007ba0",
+        "low_limit": "0x8c007ba0",
+        "selected_guarded_lease_bytes": 393216,
+        "wide_lease_linked_guard_pins": {
+          "_native_background_map": {
+            "sha256": "4f2ee5b6686ffee94253d4a92a02b2d4769369c906598ea0949d6410567352f2",
+            "bytes": 188
+          },
+          "_native_resident_terminal": {
+            "sha256": "3c480406466530bec6748de2f40a8857772a3d159046db48d77c2b1ab3b7da7d",
+            "bytes": 96
+          },
+          "_kui_vmu_observe_low_failure": {
+            "sha256": "4733a395aa815e4a3227afe93d42acaf69d9a076a84a4fe138e68874d6c6f22d",
+            "bytes": 60
+          }
+        },
+        "region_pointer": {
+          "address": "0x8c007b34",
+          "bytes": 4,
+          "fixed_region_absent": true
+        },
+        "worker_stack_gateway": {
+          "address": "0x8c0075dc",
+          "allocated_bytes": 840,
+          "declared_function_bytes": 848
+        },
+        "profile": {
+          "native_background": true,
+          "sci_resume_fix": true,
+          "logical_drive_state": true,
+          "mounted_disc_check": true
+        },
+        "linked_integer_instructions": 6352,
+        "private_stack": {
+          "available_bytes": 352,
+          "worst_c_and_entry_bytes": 264,
+          "linked_library": {
+            "symbol": "___udivsi3",
+            "stack_bytes": 4,
+            "abstract_states": 84,
+            "balanced_return_paths": 2,
+            "internal_helper_window_bytes": 64,
+            "unknown_instruction_or_cycle_rejected": true
+          },
+          "additional_margin_bytes": 32,
+          "generic64_byte_library_margin_used": false,
+          "guard_bytes": 16,
+          "top_gap_bytes": 32,
+          "conservative_total_bytes": 348,
+          "remaining_bytes": 4,
+          "worst_total_bytes": 348,
+          "paths": {
+            "kui_retail_resident_dispatch": {
+              "c_bytes": 264,
+              "assembly_entry_bytes": 0,
+              "bytes": 264,
+              "path": [
+                "kui_retail_resident_dispatch(40)",
+                "kui_retail_gd_dispatch(148)",
+                "guest(0)",
+                "native_background_map(8)",
+                "kui_vmu_observe_low_failure(8)",
+                "retail_display_restore(12)",
+                "retail_display_line(48)"
+              ]
+            },
+            "kui_retail_async_irq": {
+              "c_bytes": 208,
+              "assembly_entry_bytes": 44,
+              "bytes": 252,
+              "path": [
+                "kui_retail_async_irq(20)",
+                "deliver(80)",
+                "kui_sci_stream_fetch.constprop.0(40)",
+                "stop_card(24)",
+                "command(20)",
+                "byte(0)",
+                "transfer(24)"
+              ]
+            },
+            "kui_retail_menu_return": {
+              "c_bytes": 148,
+              "assembly_entry_bytes": 0,
+              "bytes": 148,
+              "path": [
+                "kui_retail_menu_return(8)",
+                "native_reader_report(16)",
+                "retail_display_values(76)",
+                "retail_display_line(48)"
+              ]
+            }
+          },
+          "callback_sites": 6,
+          "nonreturning_boundaries": [
+            {
+              "function": "kui_retail_menu_return",
+              "source": "retail_resident.c",
+              "contract": "boot-ROM menu; does not return"
+            },
+            {
+              "function": "kui_vmu_observe_low_failure",
+              "source": "vmu_native_background_resident.c",
+              "contract": "validated worker terminal; private stack switch separately audited"
+            }
+          ],
+          "installer_and_worker_roots_excluded": [
+            "kui_retail_native_async_loan_begin",
+            "kui_retail_native_async_loan_end",
+            "kui_vmu_native_background_init",
+            "kui_vmu_native_background_manifest_bind",
+            "kui_vmu_observe_background_base_init",
+            "kui_vmu_observe_sd_lease"
+          ]
+        },
+        "source_contract": {
+          "geometry": {
+            "worker_bytes": 131072,
+            "lease_bytes": 393216,
+            "map_bytes": 1020,
+            "region_offset": 132096,
+            "region_bytes": 1888
+          },
+          "map_and_region_p2_copy_before_vector_publication_before_bind": true,
+          "control_and_lease_only_modes_refused": true,
+          "stage_supplies_fifth_workspace_argument": true,
+          "sha256": {
+            "include/kui/vmu_native_background.h": "5c4055d899f6901e7a34dc5e5242912f0ee34f4eed1c6806defd7e9be98a2ffb",
+            "include/kui/vmu_native_async_loan.h": "aab9fe24b6482b9a60744f12ec6eb04c3a6d27820cc6438de993a50cd0789b62",
+            "src/loader/vmu_native_background_resident.c": "ab6ae312599454e4d1673f41f519e440e2aa6bde3029a9e133658aef6c86472e",
+            "src/loader/retail_resident.c": "eceb483108be67c510a5bed5375513a96aeb472b5d2d43224bb37adb23477fe6",
+            "src/loader/retail_async.c": "de3f85a225674fa59fa4c265be8d78bcdb346de8fe53f86ed55501b719588040",
+            "src/loader/retail_async.h": "8eed2fcdd892e3557a2f063577bfc4f0e013481cc5e840ff625b240bfc44d930",
+            "src/loader/retail_resident.S": "343a4b306abdf57dc87db3e8f87532b3633462ab4e9348c7c18b6955588a2297",
+            "src/loader/sci_sd_bus.c": "6b4da260f43de2bb02398b88176334ef26f3512658eefa8e94f81cf2cac42dc6",
+            "src/loader/vmu_native_passive_stage.inc": "79a23a26a5368a0c4118862f9c0835b03e9016ac223af6aeac1c6c374a820bb3",
+            "src/loader/vmu_native_heap_probe_stage.c": "03de13006af194cb256c1f3252a09893ea9f11e958c9fb26167540c09c644080",
+            "src/loader/retail_stage.c": "694886f362eb8328853a5c3d34e07f0ab1cc00dcb9686e74a2cea64c61a33e3c"
+          }
+        },
+        "stage": {
+          "available": false,
+          "complete_module_audited": false
+        },
+        "read_ahead_companion": {
+          "enabled": false
+        },
+        "self_test": {
+          "refused_mutations": [
+            "guarded_map_stack_growth",
+            "unknown_irq_callback",
+            "worker_gateway_on_gd_stack",
+            "recursive_irq_path",
+            "hidden_library_stack_alias",
+            "unbalanced_library_pop",
+            "cyclic_library_helper",
+            "library_branch_outside_window"
+          ]
+        },
+        "all_emitted_legacy_callgraphs_closed": true,
+        "closed_legacy_callgraph_files": 2
+      },
+      "instruction_and_marker_mutation_rejections": 736,
+      "embedded_blob_mutation_rejections": 6,
+      "capability_mutation_rejections": 3,
+      "legacy_callgraph_closure_mutation_rejections": 4,
+      "legacy_guard_companion_mutation_rejections": 11,
+      "console_compatibility_verified": false,
+      "console_performance_verified": false
+    },
+    "artifact_sha256": {
+      "resident": "cb5ba07eea2cabfb09b1285046aff7b61fd12c26877d3ec7ea6d09cbdee14349",
+      "worker": "bf21042c4a22f8343f54f283078ae99e3ddc8e83f11d0c0f942d6235347d87c3",
+      "stage": "7e8a8776b93387396addf241a645e22290ab8b0f6c8497912911ec53f208c03a",
+      "auxiliary": "6be904e1254ed2bfc1f3a3919fe0940fbf5090834e90b16381a3ab24b84c9d63"
+    },
+    "immutable_code_pin": {
+      "address": "0x8c422000",
+      "bytes": 6144,
+      "sha256": "13f3a6ee0841966d919723d68dff8909cc1326e450d63fe9d9a6f8e7f445f246"
+    },
+    "immutable_low_pins": {
+      "_deliver_work": [
+        456,
+        "7ffc9bfda8c4328c9e92f4cead9270c8e97916e609dc49b367ccdaa4d1feda4c"
+      ],
+      "_deliver": [
+        60,
+        "d32fd5a483cdffee78867c2239be72d693e1d1cc46f62e9b0ae2cda2f5e3eb46"
+      ]
+    },
+    "loan_quiesce_pin": {
+      "address": "0x8c007690",
+      "bytes": 748,
+      "sha256": "ab219f0dc9ad6dfbe01be09b3c042d63992ead50a68245ddbb9ba6116b0e352b"
+    },
+    "loan_quiesce": {
+      "actual_linked_quiesce_boundary_cases": 120,
+      "outer_non_imask15_refusals": 60,
+      "exact_section_offset_entry": "0x52",
+      "typed_auxiliary_event_arg_region_reserved_checked": true,
+      "real_pending_demand_never_quiesced": true,
+      "refused_quiesce_clears_only_owned_low_lock": true,
+      "preexisting_active_low_lock_preserved": true,
+      "null_binding_is_quiesce_success": true,
+      "success_rejoins_before_stream_busy_check": true,
+      "scope": "Actual post-admission low slice; complete pinned section and real C integration tests cover outer ownership/transport",
+      "auxiliary_target": "Typed gateway ABI substitute; actual auxiliary gateway proved independently"
+    },
+    "diagnostics": {
+      "enabled": true,
+      "schema": "kui.native.read-ahead.diagnostics.audit.v1",
+      "actual_linked_snapshot_cases": 188,
+      "instruction_truth_cases": 301,
+      "repair_counter_packed": true,
+      "actual_linked_repair_packed_word_cases": 32,
+      "public_bytes": 656,
+      "complete_context_bytes": 904,
+      "diagnostics_offset": 76,
+      "observation_offset": 752,
+      "first_offset": 360,
+      "last_offset": 508,
+      "record_bytes": 148,
+      "exact_read_only_hardware_sequence": [
+        {
+          "address": "0xffa00010",
+          "bytes": 4
+        },
+        {
+          "address": "0xffa00014",
+          "bytes": 4
+        },
+        {
+          "address": "0xffa00018",
+          "bytes": 4
+        },
+        {
+          "address": "0xffa0001c",
+          "bytes": 4
+        },
+        {
+          "address": "0xffa00040",
+          "bytes": 4
+        },
+        {
+          "address": "0xffe00000",
+          "bytes": 1
+        },
+        {
+          "address": "0xffe00004",
+          "bytes": 1
+        },
+        {
+          "address": "0xffe00008",
+          "bytes": 1
+        },
+        {
+          "address": "0xffe00010",
+          "bytes": 1
+        },
+        {
+          "address": "0xffe0001c",
+          "bytes": 1
+        },
+        {
+          "address": "0xffc00004",
+          "bytes": 1
+        },
+        {
+          "address": "0xff800030",
+          "bytes": 2
+        },
+        {
+          "address": "0xffd8000c",
+          "bytes": 4
+        }
+      ],
+      "no_rdr_read_or_hardware_write": true,
+      "complete_context_and_private_stack_writes_only": true,
+      "first_record_preserved_last_record_updated": true,
+      "out_of_range_histogram_indices_refused": true,
+      "operation_lba_argument_checked": true,
+      "actual_capture_start_clears_complete_public_prefix_only": true,
+      "actual_diagnostic_c_executed": true
+    },
+    "diagnostic_display": {
+      "all37_snapshot_words_exactly_once": true,
+      "immutable_byte_index_table": true,
+      "row_word_counts": [
+        5,
+        5,
+        5,
+        4,
+        5,
+        5,
+        5,
+        3
+      ],
+      "typed_immutable_label_pointers": 7,
+      "actual_display_execution_modelled": false
+    },
+    "geometry": {
+      "binary_sha256": "61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974",
+      "binary_bytes": 10240,
+      "relocation_sha256": "87ceef2187655c6c0bbe70d6844067785426f10afacabbab568fcf1c83cc9dfa",
+      "relocation_records": 93,
+      "link_base": "0x8c421000",
+      "relocation_span": 28672,
+      "context": "0xac421040",
+      "context_bytes": 904,
+      "public_bytes": 656,
+      "private_stack_bottom": "0xac427000",
+      "private_stack_top": "0xac428000",
+      "cache_data_bytes": 196608,
+      "lease_bytes": 393216,
+      "worker_map_region_offsets_unchanged": true,
+      "typed_low_ops": {
+        "address": 2348841688,
+        "bytes": 52,
+        "region_cell": 2348841780,
+        "functions": {
+          "_deliver_work": 2348832792,
+          "_hook": 2348832584,
+          "_unhook": 2348832684,
+          "_kui_sci_stream_fetch": 2348830028,
+          "_kui_sci_stream_poll": 2348831680,
+          "_kui_sci_stream_take": 2348831756,
+          "_kui_sci_stream_stop": 2348832348,
+          "_kui_sci_stream_busy": 2348829484,
+          "_kui_retail_cursor_feed": 2348828878
+        }
+      },
+      "physical_loads": [
+        {
+          "offset": 256,
+          "virtual": 2353139712,
+          "physical": 2353139712,
+          "first": 205656064,
+          "bytes": 64,
+          "memory": 64,
+          "flags": 4,
+          "alignment": 128
+        },
+        {
+          "offset": 320,
+          "virtual": 2890010688,
+          "physical": 2353139776,
+          "first": 205656128,
+          "bytes": 904,
+          "memory": 904,
+          "flags": 6,
+          "alignment": 128
+        },
+        {
+          "offset": 1280,
+          "virtual": 2353143808,
+          "physical": 2353143808,
+          "first": 205660160,
+          "bytes": 6144,
+          "memory": 24576,
+          "flags": 7,
+          "alignment": 128
+        }
+      ]
+    },
+    "gateway": {
+      "actual_linked_gateway_cases": 8064,
+      "all16_imasks": true,
+      "both_integer_banks": true,
+      "both_bl_states": true,
+      "owner_sr_pr_sp_and_callee_saved_preserved": true,
+      "private_stack_switch_before_c": true,
+      "busy_and_guard_checks_before_stack_writes": true,
+      "parked_owner_stack_bytes": 20,
+      "auxiliary_stack_prefix_bytes": 0,
+      "c_payload_model": "ABI-adversarial substitute; actual producer separately host-tested"
+    },
+    "private_stack": {
+      "available_bytes": 4096,
+      "worst_c_bytes": 356,
+      "library_margin_bytes": 4,
+      "explicit_margin_bytes": 64,
+      "guard_bytes": 16,
+      "top_gap_bytes": 32,
+      "total_bytes": 472,
+      "roots": {
+        "kui_native_readahead_aux_init": {
+          "bytes": 100,
+          "path": [
+            "aux:kui_native_readahead_aux_init(84)",
+            "aux:kui_native_ra_cache_init(16)"
+          ]
+        },
+        "kui_native_readahead_aux_dispatch": {
+          "bytes": 356,
+          "path": [
+            "aux:kui_native_readahead_aux_dispatch(64)",
+            "aux:src/loader/native_readahead_aux.c:producer(60)",
+            "aux:src/loader/native_readahead_aux.c:retire_spec(32)",
+            "aux:src/loader/native_readahead_aux.c:abandon(12)",
+            "low:build/native-universal-final/resident-sci.elf.ltrans0.o:deliver_work(40)",
+            "low:build/native-universal-final/resident-sci.elf.ltrans0.o:kui_retail_cursor_feed(56)",
+            "low:build/native-universal-final/resident-sci.elf.ltrans0.o:write_out(16)",
+            "low:build/native-universal-final/resident-sci.elf.ltrans0.o:native_background_map(8)",
+            "low:kui_vmu_observe_low_failure(8)",
+            "low:build/native-universal-final/resident-sci.elf.ltrans0.o:retail_display_restore(8)",
+            "low:build/native-universal-final/resident-sci.elf.ltrans0.o:retail_display_line(52)"
+          ]
+        }
+      },
+      "typed_low_indirect_sites": 26,
+      "missing_or_recursive_callbacks_rejected": true,
+      "all_emitted_callgraphs_closed": true,
+      "callgraph_closure_mutation_rejections": 8
+    },
+    "cold_binder": {
+      "actual_linked_cold_binder_executed": true,
+      "positive_cases": 32,
+      "admitted_dynamic_sdk_vbr_preservation_cases": 8,
+      "malformed_descriptor_context_aux_and_init_cases": 256,
+      "omitted_activation_ocbp_rejections": 2,
+      "reviewed_body_byte_mutation_rejections": 1300,
+      "context_and_diagnostic_schema_mutation_rejections": 22,
+      "multi_owner_stage_marker_mutation_rejections": 5,
+      "exact_instruction_literal_pins": {
+        "_native_readahead_bind": [
+          2363497468,
+          1208,
+          "7a9d6c8c85dcce44b576a6e776098ac6af02c9a65d26abc14e9fff4e1980b3a0"
+        ],
+        "_kui_vmu_native_background_map_address": [
+          2363490500,
+          92,
+          "cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8"
+        ]
+      },
+      "p1_cache_and_p2_ram_distinct": true,
+      "cold_aux_and_cache_lines_purged": 7040,
+      "cache_data_not_initialized_or_trusted": true,
+      "context_published_before_entry": true,
+      "guards_checked_after_init": true,
+      "memcpy_memcmp_memset": "faithful bounded ABI substitutes",
+      "relocator": "exact separately tested input image/table; explicit pointer-record substitute",
+      "code_publisher": "exact owned span and cache-flush substitute; actual publisher independently audited",
+      "initializer_gateway": "strict private-SP gateway substitute; actual relocated auxiliary C init executed",
+      "actual_auxiliary_c_initializer_executed": true,
+      "diagnostic_auxiliary": true,
+      "public_prefix_bytes": 656,
+      "pio_auxiliary": true,
+      "pio_pair_auxiliary": true,
+      "multi_owner_stage": true,
+      "structural_sdk_stage": true,
+      "dual_reader_stage": true,
+      "exact_sdk_owners_tested": [
+        "Evolution1",
+        "Evolution2"
+      ],
+      "admitted_sdk_callback_default_vbr_cookie_preserved": true,
+      "sdk_owner_scope": "Begins after independently proved SDK admission and callback publication",
+      "complete_owned_context_bytes": 904,
+      "actual_initializer_clears_complete_public_prefix": true,
+      "actual_initializer_copies_owned_config_values_not_stage_pointer": true,
+      "actual_initializer_starts_with_no_valid_cache_blocks": true,
+      "console_boot_verified": false,
+      "console_performance_verified": false
+    },
+    "worker_binding": {
+      "actual_worker_binding_cases": 106,
+      "immutable_function_pins": {
+        "_reader_readahead_exports": [
+          2349859048,
+          200,
+          "04a1748a2f5f36a1e79fa2a791a5e16a9f90c6ac632f13bd797abf48ce58545c"
+        ],
+        "_reader_readahead_visit": [
+          2349859348,
+          56,
+          "c44759200e43937665b2987281e995b4f39675f1e05180371aad4078cc02dbf3"
+        ],
+        "_reader_cooperative_service": [
+          2349859404,
+          32,
+          "68d4a9acf31e3ce844a7ee27cac22620252b3c0ae09afba8c2dc0463f8496227"
+        ],
+        "_reader_readahead_failure": [
+          2349862324,
+          172,
+          "4509901703ae22c1ac0124f3077e06dc3c3466e60bebff2234e066af50d3833f"
+        ]
+      },
+      "all_three_payload_aliases": true,
+      "highest_owned_lease_checked": true,
+      "malformed_headers_and_contexts_refused": true,
+      "both_durable_writer_busy_fields_refused": true,
+      "heartbeat_and_capture_start_arguments_checked": true,
+      "complete_public_context_bytes": 656,
+      "exact_public_boundary_and_one_word_overflow_checked": true,
+      "c_auxiliary_target": "ABI substitute; complete auxiliary gateway proved separately"
+    },
+    "linked_integer_instructions": 2750,
+    "code_byte_mutation_rejections": 6144,
+    "typed_binding_mutation_rejections": 1853,
+    "console_boot_verified": false,
+    "console_performance_verified": false
+  },
+  "sci_priority7": {
+    "enabled": false,
+    "paired_resident_worker_rehook": false,
+    "sci_priority": 1,
+    "caller_sr_changed": false,
+    "check_exec_irq_work_budgets_changed": false,
+    "console_performance_verified": false
+  },
+  "timed_reader": {
+    "enabled": false,
+    "window_ticks": 0,
+    "window_max_visits": 0,
+    "blocks_per_window_max": 0,
+    "read_only_clock_admission": false,
+    "invalid_clock_single_visit": false,
+    "checks_deadline_between_visits": false,
+    "hard_elapsed_deadline": false
+  },
+  "failure_only_gateways": {
+    "modeled_cases": 3840,
+    "mutation_rejections": 22,
+    "owner_data_writes": 0,
+    "allocation_owner_reads": 1,
+    "runtime_report_is_noreturn": true
+  },
+  "private_stack_guard": {
+    "instruction_cases": 800,
+    "mutation_rejections": 1,
+    "cold_arm_alias": "P2",
+    "armed_runtime_alias": "P1",
+    "raw_canary_alias_checked": true,
+    "guard_words": 16,
+    "guard_border_bytes": 256,
+    "owner_writes": 0
+  },
+  "compiled_owner_reader": {
+    "instruction_cases": 264,
+    "mutation_rejections": 2,
+    "width": 4,
+    "source_loaded_only_after_full_predicate": true,
+    "mmio_addresses": [
+      2690608132,
+      2690608144,
+      2690608148,
+      2690608152
+    ]
+  },
+  "optional_fault_capture": {
+    "schema": "kui.native.fault-capture-gateway.v1",
+    "instruction_cases": 432,
+    "mutation_rejections": 57,
+    "redundant_early_stack_restores": [],
+    "publication_cases": 5,
+    "publication_from_p2_after_two_operand_cache_purges": true,
+    "selected_expevt": [
+      "0xe0",
+      "0x100",
+      "0x180",
+      "0x1a0"
+    ],
+    "nonfatal_exact_gpr_and_sr_preservation": true,
+    "changed_sdk_callback_chained": true,
+    "interrupted_stack_accesses": 0,
+    "new_timer_or_irq_handler": false,
+    "vbr_replaced": false,
+    "hardware_freeze_reproduced": false,
+    "available": true,
+    "mode": "PROFILE; exact Evolution revision only",
+    "publisher_p2_reference_offset": 56656,
+    "publisher_p2_reference_value": 2886786388,
+    "verified_zero_stack_assembly": [
+      "kui_vmu_native_fault_capture_gateway",
+      "kui_vmu_native_fault_capture_publish"
+    ],
+    "installer_first": 38708,
+    "installer_bytes": 560,
+    "cached_bss_boundaries": [
+      2349921952,
+      2349985792
+    ],
+    "cached_header_end": 2349858896
+  },
+  "sdk_cold_cache_coherence": {
+    "schema": "kui.native.sdk-cold-coherence.v1",
+    "instruction_cases": 412,
+    "mutation_rejections": 194,
+    "owner_stack_accesses_before_purge": 0,
+    "other_operand_reads_before_purge_are_p2": true,
+    "deliberate_cached_checks": [
+      "P1 flag equals zero",
+      "P1 pointer equals normalized P2 flag"
+    ],
+    "purge_before_first_tas": true,
+    "uniform_replay_stack_bytes": 8,
+    "variable_replay_stack_bytes": 24,
+    "ordered_purge_operands": [
+      "lock_cell",
+      "lock_cell+4"
+    ],
+    "same_and_separate_dirty_lines_checked": true,
+    "no_private_stack_use": true,
+    "forced_lock_writes": 0,
+    "original_prefix_cases": 0,
+    "variable_extended_liveness_cases": 0,
+    "call_target_register_r3_dead": true,
+    "original_startups": [],
+    "hardware_freeze_reproduced": false,
+    "available": true,
+    "descriptor_address": 2349921840,
+    "descriptor_bytes": 40,
+    "state_address": 2886856644,
+    "state_bytes": 48,
+    "p2_references": [
+      [
+        63052,
+        2886786444
+      ],
+      [
+        63056,
+        2886786700
+      ]
+    ],
+    "verified_cold_owner_stack_gateways": [
+      "kui_vmu_native_sdk_coherence_uniform_gate",
+      "kui_vmu_native_sdk_coherence_variable_gate"
+    ]
+  },
+  "evolution_consolidated_trace": {
+    "exact_typed_exports": true,
+    "exact_image_only": true,
+    "arbitrary_stall_pc_capture": false,
+    "startup_equivalence_checked": true,
+    "original_instruction_equivalence_cases": 144,
+    "mutation_rejections": 12,
+    "original_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+    "all_integer_sr_pr_mac_gbr_preserved": true,
+    "common_path_owner_writes": "private gateway frame and original replay stores only",
+    "saved_exception_reader": {
+      "instruction_cases": 96,
+      "mutation_rejections": 7,
+      "cpu_control_register_writes": false,
+      "output_words": 3,
+      "arbitrary_fault_pc_claim": false
+    },
+    "original_video_witness": {
+      "explicit_video_disable_calls": [
+        "8c1cb9ce",
+        "8c1cb9f2"
+      ],
+      "counter_wait": "8c1cba06..8c1cba0c",
+      "counter_address": "8c358d18",
+      "video_handler_counter_increment": "8c1f1200..8c1f1206",
+      "temporary_video_disable_restore": [
+        "8c1f144a",
+        "8c1f1456"
+      ],
+      "counter_can_also_be_reset": true
+    }
+  },
+  "stage_cache_publication": {
+    "instruction_cache_enabled_for_scan": true,
+    "operand_cache_disabled_for_scan": false,
+    "operand_cache_off_except_scoped_pure_extent": true,
+    "scan_ccr": "0x00000908",
+    "owner_ccr_restored": true,
+    "full_ram_purge_bytes": 16777216,
+    "cache_write_nops": [
+      8,
+      8
+    ],
+    "owner_integer_frame_bytes": 84,
+    "gateway_model_cases": 5120,
+    "gateway_mutation_rejections": 8,
+    "complete_linked_assembly_pinned": true
+  },
+  "worker_icache_publication": {
+    "publisher_p2": "0xace0006c",
+    "publisher_bytes": 68,
+    "exact_linked_publisher_pinned": true,
+    "ici_only_preserves_ccr": true,
+    "post_ccr_write_nops": 8,
+    "worker_prearm_publication_required": true,
+    "background_tail_copy_and_prefix": {
+      "whole_function_cfg_domination": true,
+      "ordered_witnesses": [
+        "0x8ce02284",
+        "0x8ce022b6",
+        "0x8ce022ec",
+        "0x8ce022f4",
+        "0x8ce022fc",
+        "0x8ce02300",
+        "0x8ce0233a",
+        "0x8ce0254a",
+        "0x8ce0255c"
+      ],
+      "lease_validation_dominates_copy": true,
+      "normalized_p1_payload_dominates_copy": true,
+      "exact_memcpy_and_lease_size_setup": true,
+      "callee_preserved_registers_stable": true
+    },
+    "worker_relocation_before_publication": true,
+    "worker_bss_zero_before_publication": true,
+    "dynamic_cells_before_publication": true,
+    "publication_dominates_first_arm": true,
+    "first_worker_publish": "0x8ce0254a",
+    "first_worker_arm": "0x8ce0255c",
+    "mode_configuration_compiler_witness": true,
+    "runtime_diagnostics_return_stored_in_exact_config": true,
+    "runtime_diagnostics_store_dominates_arm": true,
+    "linked_installer_cfg_nodes": 625,
+    "initialization_witness_mutation_rejections": 15
+  },
+  "resolution_cache_seed": {
+    "enabled": true,
+    "seed_address": "0x8ce2a5e0",
+    "seed_stage_file_offset": 173664,
+    "seed_module_offset": 181792,
+    "seed_bytes": 1120,
+    "record_bytes": 1024,
+    "independent_digest_offset": 24,
+    "record_offset": 64,
+    "empty_template_sha256": "6ac4a04217563b18fdc6ab3412d5431b55c00b0dbeb23b58fc6bfd367686ceb5",
+    "typed_immutable_object": true,
+    "unique_stage_and_module_template": true,
+    "profile_worker_relocation_trampoline_disjoint": true,
+    "trust_scope": "personalized immutable module or explicit ordinary frontend configuration",
+    "live_ownership_not_cached": true
+  },
+  "runtime_mode": {
+    "enabled": true,
+    "module_offset": 95744,
+    "bytes": 32,
+    "template_sha256": "8167dc5937daa9487fba0ddea24dfc7e300f320a21c498a47a6cf51ab7953e68",
+    "address": "0x8ce155c0",
+    "typed_immutable_unique_object": true,
+    "profile_cache_worker_relocation_trampoline_disjoint": true,
+    "modes": {
+      "normal": 0,
+      "profile": 2,
+      "hooks-only": 4,
+      "raw-chain": 5,
+      "evolution-trace": 6
+    },
+    "mode_helper_instruction_cases": 1536,
+    "storage_instruction_cases": 2880,
+    "worker_policy_instruction_cases": 960,
+    "mutation_rejections": 9,
+    "malformed_mode_stops_before_storage": true,
+    "control_storage_bypasses_profile_acquire_recovery_and_writes": false,
+    "background_refuses_control_and_lease_only_before_storage": true,
+    "lease_only": {
+      "enabled": false,
+      "refused_by_exact_mode_helper": true
+    }
+  },
+  "resolution_cache_gateway": {
+    "enabled": true,
+    "temporary_resolution_address": "0x8ce3f620",
+    "temporary_resolution_bytes": 684,
+    "temporary_high_bss_only": true,
+    "wrapper_entry": "0x8ce01580",
+    "wrapper_bytes": 260,
+    "actual_instruction_model_cases": 12288,
+    "mutation_rejections": 12,
+    "actual_outer_relay_route_cases": 69120,
+    "executable_restored_before_replay": true,
+    "fresh_scan_selected_only_on_cache_miss": true,
+    "launch_eligibility_before_replay": true,
+    "full_source_restored_before_extent_selection": true,
+    "validated_extent_before_cache_or_discovery": true,
+    "normal_and_shortened_extent_routes_checked": true,
+    "extent_failure_keeps_source_length_and_refuses": true,
+    "pure_extent_cache_scope": {
+      "enabled": true,
+      "entry": "0x8ce14eec",
+      "bytes": 140,
+      "actual_instruction_model_cases": 6144,
+      "mutation_rejections": 20,
+      "complete_linked_assembly_pinned": true,
+      "eligible_entry_ccr": "0x100",
+      "proof_ccr": "0x101",
+      "other_ccr_profiles_unchanged": true,
+      "same_pure_extent_proof": true,
+      "full_ram_purge_bytes": 16777216,
+      "cache_write_nops": [
+        8,
+        8
+      ],
+      "callee_preserved_integer_frame_bytes": 12,
+      "operand_cache_restored_off": true,
+      "proof_output_published_before_cache_restore": true,
+      "console_speed_verified": false
+    },
+    "no_metadata_before_exact_image_replay": true,
+    "fresh_allocation_and_release_guards": true,
+    "fresh_sdk_initializer_slot_admission": true,
+    "sdk_slot_admission_is_independent_image_predicate": true,
+    "capture_only_after_all_guards": true
+  },
+  "temporary_installer_stack": {
+    "enabled": true,
+    "object_address": "0x8ce3fb00",
+    "object_bytes": 65536,
+    "installer_sp": "0x8ce4fae0",
+    "stage_bss_end": "0x8ce8caa8",
+    "ordinary_entry_and_relay_stack": "0x8cff0000",
+    "package_stack_unchanged": true,
+    "typed_zero_fill_object": true,
+    "complete_bss_in_live_allocation_guard": true,
+    "actual_allocation_wrapper_cases": 384,
+    "actual_relay_publication_cases": 3840,
+    "actual_low_hook_cases": 576,
+    "mutation_rejections": 6,
+    "cold_sdk_slot_refusal_before_any_arming_cases": 960,
+    "full_source_verified_before_program_extent": true,
+    "normal_and_shortened_extent_arming_routes": true,
+    "runtime_modes": [
+      0,
+      2,
+      4,
+      5,
+      6
+    ],
+    "control_preserves_original_frame_and_allocator": false,
+    "initializer_preserves_original_stack_and_sr": true,
+    "private_stack_before_allocation_or_worker_writes": true,
+    "departed_relay_stack_clobber_preserves_caller": true
+  },
+  "relocation_records": 953,
+  "worker_instructions": 24877,
+  "stage_gateway_model_cases": 1289,
+  "persistent_gateway_model_cases": 7680,
+  "original_release_mask_model_cases": 1920,
+  "stage_embedded_worker_verified": true,
+  "maple_interception_installed": true,
+  "virtual_replies_enabled": true,
+  "storage_writes_enabled": true,
+  "scoped_sci_transactions": true,
+  "source_provenance": {
+    "commit": "af9e01c8a2710eb44e24867bbe2f593727fbb844",
+    "source_dirty": false,
+    "compile_provenance_sha256": "cbdb599566194409dec50017432d6644de4269f255b9537c24a5792fd584cc56",
+    "elf_sha256": "a17078bd4212c3c20e71c23af5698ee0d49612d0b172858aadf273c249e3745f"
+  },
+  "stack_audit": {
+    "worker_c_frame_sum": 7960,
+    "resident_callback_c_frame_sum": 1020,
+    "conservative_worker_bytes": 1916,
+    "available_worker_bytes": 4096,
+    "ordinary_low_stack_bytes": 352,
+    "ordinary_low_available_bytes": 352,
+    "lease_only_frame_bytes": 68,
+    "required_worker_frames": 80,
+    "callgraph": {
+      "paths": {
+        "kui_vmu_native_passive_arm": {
+          "c_frame_bytes": 1024,
+          "assembly_and_guard_margin": 336,
+          "conservative_bytes": 1360,
+          "worst_path": [
+            "worker:kui_vmu_native_passive_arm(68)",
+            "worker:kui_vmu_native_lifetime_prepare(744)",
+            "worker:kui_vmu_native_heap_lease_valid(12)",
+            "worker:kui_vmu_native_heap_lease_valid_with_release(80)",
+            "worker:kui_vmu_native_heap_lease_identity_valid(16)",
+            "worker:src/core/vmu_native_heap.c:identity(36)",
+            "worker:src/core/vmu_native_heap.c:metadata(48)",
+            "worker:src/core/vmu_native_heap.c:index(20)"
+          ]
+        },
+        "kui_vmu_native_passive_submit": {
+          "c_frame_bytes": 1560,
+          "assembly_and_guard_margin": 336,
+          "conservative_bytes": 1896,
+          "worst_path": [
+            "worker:kui_vmu_native_passive_submit(128)",
+            "worker:src/loader/vmu_native_passive.c:live_boundary(80)",
+            "worker:kui_vmu_native_live_prepare(784)",
+            "worker:kui_vmu_native_layout_bind_checked(544)",
+            "worker:src/core/vmu_native_layout.c:ring_image_location(24)"
+          ]
+        },
+        "kui_vmu_native_passive_complete": {
+          "c_frame_bytes": 1580,
+          "assembly_and_guard_margin": 336,
+          "conservative_bytes": 1916,
+          "worst_path": [
+            "worker:kui_vmu_native_passive_complete(148)",
+            "worker:src/loader/vmu_native_passive.c:live_boundary(80)",
+            "worker:kui_vmu_native_live_prepare(784)",
+            "worker:kui_vmu_native_layout_bind_checked(544)",
+            "worker:src/core/vmu_native_layout.c:ring_image_location(24)"
+          ]
+        },
+        "kui_vmu_native_readonly_release_check": {
+          "c_frame_bytes": 792,
+          "assembly_and_guard_margin": 336,
+          "conservative_bytes": 1128,
+          "worst_path": [
+            "worker:kui_vmu_native_readonly_release_check(76)",
+            "worker:src/loader/vmu_native_passive.c:fail(4)",
+            "worker:src/loader/vmu_native_passive.c:report(176)",
+            "worker:kui_vmu_native_trace_report(376)",
+            "worker:src/loader/vmu_native_trace.c:trace_packets(48)",
+            "worker:src/loader/vmu_native_trace.c:trace_row.constprop.0(64)",
+            "worker:retail_display_line(48)"
+          ]
+        },
+        "kui_vmu_native_passive_report": {
+          "c_frame_bytes": 716,
+          "assembly_and_guard_margin": 336,
+          "conservative_bytes": 1052,
+          "worst_path": [
+            "worker:kui_vmu_native_passive_report(4)",
+            "worker:src/loader/vmu_native_passive.c:report(176)",
+            "worker:kui_vmu_native_trace_report(376)",
+            "worker:src/loader/vmu_native_trace.c:trace_packets(48)",
+            "worker:src/loader/vmu_native_trace.c:trace_row.constprop.0(64)",
+            "worker:retail_display_line(48)"
+          ]
+        },
+        "kui_vmu_native_runtime_fault": {
+          "c_frame_bytes": 656,
+          "assembly_and_guard_margin": 336,
+          "conservative_bytes": 992,
+          "worst_path": [
+            "worker:kui_vmu_native_runtime_fault(120)",
+            "worker:kui_vmu_native_trace_report(376)",
+            "worker:src/loader/vmu_native_trace.c:trace_packets(48)",
+            "worker:src/loader/vmu_native_trace.c:trace_row.constprop.0(64)",
+            "worker:retail_display_line(48)"
+          ]
+        },
+        "kui_vmu_native_trace_game": {
+          "c_frame_bytes": 540,
+          "assembly_and_guard_margin": 336,
+          "conservative_bytes": 876,
+          "worst_path": [
+            "worker:kui_vmu_native_trace_game(4)",
+            "worker:kui_vmu_native_trace_report(376)",
+            "worker:src/loader/vmu_native_trace.c:trace_packets(48)",
+            "worker:src/loader/vmu_native_trace.c:trace_row.constprop.0(64)",
+            "worker:retail_display_line(48)"
+          ]
+        }
+      },
+      "indirect_sites": 105,
+      "null_writer_block_sites": [
+        [
+          "worker:kui_sci_sd_write",
+          "sci_sd_storage.c:83:17"
+        ],
+        [
+          "worker:src/loader/sd_reader.c:read_payload",
+          "sd_reader.c:112:13"
+        ]
+      ],
+      "source_qualified_calls": true,
+      "verified_zero_stack_assembly_leaves": [
+        "kui_vmu_native_trace_irq",
+        "kui_vmu_native_fault_capture_gateway",
+        "kui_vmu_native_fault_capture_publish"
+      ],
+      "verified_cold_owner_stack_gateways": [
+        "kui_vmu_native_sdk_coherence_uniform_gate",
+        "kui_vmu_native_sdk_coherence_variable_gate"
+      ],
+      "verified_stack_replacing_terminals": [],
+      "background_loan_descriptor": {
+        "address": "0x8c007abc",
+        "bytes": 28,
+        "ctx_begin_end_null": true,
+        "select": "select_card",
+        "transfer": "transfer",
+        "ticks": "loan_ticks",
+        "transfer_block_null": true
+      }
+    }
+  },
+  "pio_writer_audit": {
+    "worker": {
+      "native_cases": 16,
+      "transfer_block_offset": 24,
+      "callback_null_at_writer_entry": true,
+      "write_blocks": 1,
+      "adapter": "0x8c10a170",
+      "writer": "0x8c10b9b4",
+      "sole_writer_caller": "durable_card_pio_write",
+      "callgraph_reports": 27
+    },
+    "stage": {
+      "native_cases": 16,
+      "transfer_block_offset": 24,
+      "callback_null_at_writer_entry": true,
+      "write_blocks": 1,
+      "adapter": "0x8ce00730",
+      "writer": "0x8ce1202c",
+      "sole_writer_caller": "native_persist_pio_write",
+      "callgraph_reports": 35
+    }
+  },
+  "console_execution_verified": false,
+  "expected_phase": "native persistent session",
+  "gateway_mutation_rejections": 20,
+  "artifact_mutation_rejections": 4,
+  "source_commit": "af9e01c8a2710eb44e24867bbe2f593727fbb844",
+  "source_build_id": "af9e01c8a271",
+  "generic_template_is_owner_profile": false,
+  "personalization_required": true,
+  "pair_limit": 180000,
+  "profile": {
+    "embedded_address": "0x8ce155e0",
+    "module_offset": 95776,
+    "bytes": 4096,
+    "template_sha256": "147eb84a549e91b8121f363980f601bd2d80212c880f24ffeaa4fb180b6e9860"
+  },
+  "compatibility_claim": "Up to two CRC-checked fresh PIO blocks per eligible controller heartbeat with repeated ownership checks and soft clock admission before block2; demand DMA and SCI priority1 retained; console performance remains unverified"
+}

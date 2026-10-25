@@ -1,0 +1,26 @@
+{
+  "schema": "kui.native.universal-readers.candidate.v1",
+  "source_commit": "af9e01c8a2710eb44e24867bbe2f593727fbb844",
+  "source_tree": "2dc5d35c71028f444757e248072bdef6ed7793be",
+  "build": "af9e01c8a271",
+  "module_sha256": "7be0a290ec675438a565f1c3d1aac6fde18520b88056c0513961d96f9bc24f48",
+  "runtime_sha256": "57480b526f61d6838625ee1e32e0f488f4112288e2b1cf65bd90a957e31c98c7",
+  "new_reader": "X",
+  "legacy_reader": "Y",
+  "virtual_slot": "A2",
+  "source_bundle_prerequisite": "74958b3878279fc916199a7cd330f7f17b036138",
+  "source_images_analyzed": 26,
+  "joint_software_candidates": [
+    "evolution2",
+    "evolution1",
+    "ps2",
+    "skies",
+    "grandia2",
+    "sa2",
+    "lodoss",
+    "rayman2"
+  ],
+  "title_allowlist": false,
+  "approved_reader_policy_preserved": true,
+  "console_compatibility_verified": false
+}

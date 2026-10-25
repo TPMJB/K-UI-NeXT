@@ -1,0 +1,120 @@
+{
+  "source_commit": "af9e01c8a2710eb44e24867bbe2f593727fbb844",
+  "generic_installer": {
+    "reader": "Background",
+    "extracted_cli_cases": 17,
+    "checks": [
+      {
+        "game": null,
+        "flag": "normal",
+        "refused": false,
+        "idempotent": false
+      },
+      {
+        "game": null,
+        "flag": "normal",
+        "refused": false,
+        "idempotent": true
+      },
+      {
+        "game": "ps2",
+        "flag": "normal",
+        "refused": false,
+        "idempotent": false
+      },
+      {
+        "game": "skies",
+        "flag": "normal",
+        "refused": false,
+        "idempotent": false
+      },
+      {
+        "game": "sa2",
+        "flag": "normal",
+        "refused": false,
+        "idempotent": false
+      },
+      {
+        "game": "grandia2",
+        "flag": "normal",
+        "refused": false,
+        "idempotent": false
+      },
+      {
+        "game": "evolution1",
+        "flag": "normal",
+        "refused": false,
+        "idempotent": false
+      },
+      {
+        "game": "evolution2",
+        "flag": "normal",
+        "refused": false,
+        "idempotent": false
+      },
+      {
+        "game": "evolution2",
+        "flag": "--control",
+        "refused": true,
+        "idempotent": false
+      },
+      {
+        "game": "evolution2",
+        "flag": "--profile-runtime",
+        "refused": false,
+        "idempotent": false
+      },
+      {
+        "game": "evolution2",
+        "flag": "--lease-only",
+        "refused": true,
+        "idempotent": false
+      },
+      {
+        "game": "evolution2",
+        "flag": "--hooks-only",
+        "refused": false,
+        "idempotent": false
+      },
+      {
+        "game": "evolution2",
+        "flag": "--raw-chain",
+        "refused": false,
+        "idempotent": false
+      },
+      {
+        "game": "evolution2",
+        "flag": "--evolution-trace",
+        "refused": false,
+        "idempotent": false
+      },
+      {
+        "game": "evolution2",
+        "flag": "normal",
+        "refused": false,
+        "idempotent": false
+      },
+      {
+        "game": "evolution2",
+        "flag": "normal",
+        "refused": false,
+        "idempotent": true
+      },
+      {
+        "conflicting_modes_refused": true
+      }
+    ],
+    "prepared_pair_unchanged": true,
+    "module_sha256": "7be0a290ec675438a565f1c3d1aac6fde18520b88056c0513961d96f9bc24f48"
+  },
+  "combined_installer": {
+    "extracted_cli_runs": 2,
+    "prepared_card_and_settings_preserved": true,
+    "ordinary_loader_preserved": true,
+    "idempotent_bytes": true
+  },
+  "same_clean_UI_and_module_source": true,
+  "no_retail_or_save_payloads": true,
+  "final_corpus_artifacts_bound": true,
+  "console_execution_verified": false
+}
