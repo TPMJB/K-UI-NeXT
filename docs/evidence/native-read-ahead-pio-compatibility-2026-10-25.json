@@ -1,0 +1,109 @@
+{
+  "schema": "kui.native.read-ahead.pio-compatibility-candidate.v1",
+  "date": "2026-10-25",
+  "purpose": "Add reviewed Evolution1 compatibility while preserving the successful d0aac Evolution2 reader policy; deliver separate generic Standard/A2 probes and33test rows.",
+  "performance_checkpoint": "d0aac421584cea816999a2cfa0b6390b8cf72d3e",
+  "pair_admitted_images": {
+    "evolution1": {
+      "bytes": 2143652,
+      "sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35"
+    },
+    "evolution2": {
+      "effective_bytes": 4024288,
+      "sha256": "52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605"
+    }
+  },
+  "scope": {
+    "reader_pair": [
+      "Evolution1",
+      "Evolution2"
+    ],
+    "generic_standard_a2": [
+      "Reviewed SDK families and fresh discovery; unsupported families refuse"
+    ],
+    "windows_ce_cdda": "Separate implementations; no new compatibility claim"
+  },
+  "preserved": {
+    "low_resident_source": true,
+    "worker_source": true,
+    "auxiliary_producer_source": true,
+    "auxiliary_binary_and_relocations": true,
+    "sci_priority": 1,
+    "maximum_optional_blocks": 2,
+    "soft_window_ticks": 2344,
+    "reserve_ticks": 1200,
+    "second_limit_ticks": 1144,
+    "cache_bytes": 196608,
+    "lease_bytes": 393216,
+    "low_resident_bytes": 15132,
+    "worker_binary_bytes": 63104,
+    "auxiliary_binary_bytes": 10240,
+    "low_stack_bound_bytes": 352,
+    "private_auxiliary_stack_bound_bytes": 472
+  },
+  "admission": {
+    "stage_only_multi_owner_marker": true,
+    "exact_normalized_identity": true,
+    "original_and_live_vector_common_default_and_initializer_fingerprints": true,
+    "two_common_modes_and_mutable_scratch_handled": true,
+    "both_original_sdk_tables_and_callback_frames_replayed": true,
+    "cross_owner_identity_common_default_mix_refused": true,
+    "shared_vbr_and_slot_plan_rechecked_before_publication": true,
+    "no_new_mutable_low_bss": true,
+    "no_widened_memory_or_stack_guards": true
+  },
+  "software_checks": {
+    "original_admission_asan_ubsan": 1468577,
+    "original_allocator_request_sizes": [
+      196608,
+      393216
+    ],
+    "original_allocators": [
+      "Evolution1",
+      "Evolution2"
+    ],
+    "original_allocator_operations_per_case": 227,
+    "live_free_list_validations_per_case": 459,
+    "live_release_admissions_per_case": 113,
+    "cached_and_uncached_host_transfer_checks": 638772,
+    "actual_linked_callbacks": 1920,
+    "actual_linked_hooks": 7168,
+    "actual_linked_unhooks": 7168,
+    "actual_linked_dispatches": 17920,
+    "actual_linked_route_loss_transitions": 12288,
+    "new_ra_cold_positives": 24,
+    "new_ra_cold_refusals": 256,
+    "linked_pio_pair_cases": 305,
+    "instruction_truth_checks": 84,
+    "prototype_persistent_self_test_and_actual_evolution1_trace": true,
+    "original_evolution2_d0aac_regression": true,
+    "final_clean_build_and_package_audits_required": true,
+    "final_original_allocator_report_must_match_linked_artifact_hashes": true,
+    "final_extracted_installer_smokes_required": true
+  },
+  "delivery": {
+    "variants": [
+      "reader-pair",
+      "native-a2"
+    ],
+    "diagnostic_install_flags_always_include_profile_runtime": true,
+    "long_runs_without_gesture": true,
+    "baseline_full_report_cycle_for_each_admitted_game": true,
+    "worksheet": "docs/native-reader-compatibility-test-sheet.md",
+    "results": "docs/native-reader-compatibility-results.csv",
+    "test_rows": 33,
+    "source_history_preserved": true,
+    "retail_executables_or_user_save_payloads_included": false
+  },
+  "console": {
+    "new_candidate_boot_verified": false,
+    "new_candidate_compatibility_verified": false,
+    "prior_d0aac_evolution2_report": "docs/evidence/native-read-ahead-pio-pair-observed-2026-10-25.json"
+  },
+  "limits": [
+    "Both original SDK lookup/callback contracts are exercised by bounded integer instruction models; full original FPU prologue hardware behavior remains outside that model.",
+    "Original allocator/lease proofs establish admitted geometry and lifetimes, not actual game behavior or save persistence.",
+    "Other games use a separate Standard-reader A2 compatibility probe; they do not receive the PIO-pair route.",
+    "A new exact image revision must pass its own admission; cached metadata cannot override route ownership."
+  ]
+}

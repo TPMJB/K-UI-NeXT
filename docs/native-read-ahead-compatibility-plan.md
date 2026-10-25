@@ -1,6 +1,12 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Native PIO-pair compatibility expansion
 
+The next compatibility candidate now implements the reviewed Evolution 1
+route and proves its enlarged lease. Its console acceptance remains pending.
+Use [the current test sheet](native-reader-compatibility-test-sheet.md) for
+the two delivered variants and all33result rows. The chronology below records
+the successful d0aac performance checkpoint and the gates used for expansion.
+
 The console observation in 63371.mp4 makes **d0aac421584c** the successful
 Evolution 2 performance checkpoint. Preserve the delivered module SHA256
 `f67bd688d0111733f8213bc3082387c6e4bde1c0ad41043219197df6967ac94c`.
@@ -16,7 +22,7 @@ This is a successful diagnostic run, not a measured worst-case bound.
 
 Keep the successful two-block admission, CRC validation, demand transport,
 SCI priority1 and existing repair limits while adding supported layouts.
-The present PIO-pair binary admits the verified Evolution 2 identity only.
+The d0aac performance-checkpoint binary admits the verified Evolution 2 identity only.
 Changing or omitting `--game` does not authorize it for another title.
 
 The generic virtual-A2 Standard-reader route already supports independent

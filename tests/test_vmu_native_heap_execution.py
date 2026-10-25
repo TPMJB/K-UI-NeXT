@@ -41,7 +41,9 @@ RAM_BEGIN, RAM_END = 0x0C000000, 0x0D000000
 WORKER_SPAN, LEASE_BYTES = 0x20000, 0x30000
 OLD_INSTALLER_SP = 0x8CFF0000 - 32
 OPTIONS = argparse.Namespace(build=os.environ.get("KUI_NATIVE_HEAP_BUILD"),
+    lease_bytes=LEASE_BYTES, output=None,
     **{game: os.environ.get(f"KUI_NATIVE_{game.upper()}_STARTUP") for game in ("ps2", "skies", "sa2", "grandia2", "evolution1", "evolution2")})
+RESULTS = []
 
 
 @lru_cache(maxsize=1)
@@ -338,7 +340,8 @@ def stage_layout(build):
 
 
 class HeapExecutionTests(unittest.TestCase):
-    def allocator_evolution(self, model, heap, begin, count, payload, stack):
+    def allocator_evolution(self, model, heap, begin, count, payload, stack, lease_bytes=LEASE_BYTES,
+                            observer=None):
         """Original SH transitions, checked against an independent interval set.
 
         This exercises the ordinary SDK allocation/free contract. It does not
@@ -348,11 +351,11 @@ class HeapExecutionTests(unittest.TestCase):
         allocate, release, sentinel, cursor = heap[9], heap[10], heap[13], heap[14]
         header, alias = payload - 32, begin & 0xE0000000
         arena_begin, arena_end = physical(begin), physical(begin) + count
-        lease_begin, lease_end = physical(header), physical(payload) + LEASE_BYTES
+        lease_begin, lease_end = physical(header), physical(payload) + lease_bytes
         identity = {heap[15]: begin, heap[17]: begin, heap[16]: count,
                     heap[11]: heap[12], heap[12]: allocate, heap[12] + 4: release,
-                    sentinel + 4: 0, header + 4: LEASE_BYTES // 32 + 1}
-        retained = model.block(header, LEASE_BYTES + 32)
+                    sentinel + 4: 0, header + 4: lease_bytes // 32 + 1}
+        retained = model.block(header, lease_bytes + 32)
         live, operations, maximum_nodes, steps = {}, 0, 0, 0
         exact_fits = split_fits = failed_allocations = 0
 
@@ -369,9 +372,11 @@ class HeapExecutionTests(unittest.TestCase):
 
         def check():
             nonlocal maximum_nodes
+            if observer:
+                observer.valid()
             for address, value in identity.items():
                 self.assertEqual(model.read(address), value, hex(address))
-            self.assertEqual(model.block(header, LEASE_BYTES + 32), retained)
+            self.assertEqual(model.block(header, lease_bytes + 32), retained)
             nodes, intervals, node = {sentinel}, [], model.read(sentinel)
             for _ in range(1024):
                 if node == sentinel:
@@ -426,7 +431,7 @@ class HeapExecutionTests(unittest.TestCase):
                 split_fits += 1
             else:
                 exact_fits += 1
-            self.assertTrue(all(not intersects(address, width, header, LEASE_BYTES + 32)
+            self.assertTrue(all(not intersects(address, width, header, lease_bytes + 32)
                                 for _, address, _, width in writes))
             pattern = bytes([0x30 + operations % 160]) * ((units - 1) * 32)
             model.store_block(result, pattern)
@@ -438,11 +443,13 @@ class HeapExecutionTests(unittest.TestCase):
             nonlocal operations, steps
             before = check()
             units, _ = live.pop(address)
+            if observer:
+                observer.release(address)
             _, writes, instructions = model.run(release, [address], stack)
             operations += 1
             steps += instructions
             first = physical(address) - 32
-            self.assertTrue(all(not intersects(at, width, header, LEASE_BYTES + 32)
+            self.assertTrue(all(not intersects(at, width, header, lease_bytes + 32)
                                 for _, at, _, width in writes))
             self.assertEqual(check(), merged(before + [(first, first + units * 32)]))
 
@@ -480,6 +487,8 @@ class HeapExecutionTests(unittest.TestCase):
         return operations, maximum_nodes, steps
 
     def execute(self, slug):
+        lease_bytes = getattr(OPTIONS, "lease_bytes", LEASE_BYTES)
+        self.assertIn(lease_bytes, (0x30000, 0x60000))
         path = getattr(OPTIONS, slug)
         if not path:
             self.skipTest(f"Supply --{slug} or KUI_NATIVE_{slug.upper()}_STARTUP")
@@ -525,12 +534,17 @@ class HeapExecutionTests(unittest.TestCase):
         self.assertEqual(model.read(heap[14]), sentinel)
         self.assertEqual(model.read(begin), sentinel)
         self.assertEqual(model.read(begin + 4), count // 32)
-        result, alloc_writes, alloc_steps = model.run(allocate, [LEASE_BYTES], new_sp)
-        payload, header = begin + count - LEASE_BYTES, begin + count - LEASE_BYTES - 32
+        observer = getattr(OPTIONS, "allocator_observer", None)
+        if observer:
+            observer.fresh(model, heap, begin, count, lease_bytes, len(image), stage_begin, stage_end)
+        result, alloc_writes, alloc_steps = model.run(allocate, [lease_bytes], new_sp)
+        payload, header = begin + count - lease_bytes, begin + count - lease_bytes - 32
         self.assertEqual(result, payload)
-        self.assertEqual(model.read(header + 4), LEASE_BYTES // 32 + 1)
-        self.assertEqual(model.read(begin + 4), count // 32 - LEASE_BYTES // 32 - 1)
-        self.assertFalse(intersects(payload, WORKER_SPAN, stage_begin, stage_end - stage_begin))
+        self.assertEqual(model.read(header + 4), lease_bytes // 32 + 1)
+        self.assertEqual(model.read(begin + 4), count // 32 - lease_bytes // 32 - 1)
+        if observer:
+            observer.allocated(payload)
+        self.assertFalse(intersects(header, lease_bytes + 32, stage_begin, stage_end - stage_begin))
         self.assertTrue(all(not intersects(address, size, stage_begin, stage_end - stage_begin)
                             or stack + 64 <= address < address + size <= new_sp
                             for _, address, _, size in alloc_writes))
@@ -545,21 +559,65 @@ class HeapExecutionTests(unittest.TestCase):
         stack_before_worker = model.block(stack, stack_bytes)
         model.store_block(payload, worker)
         model.store_block(payload + len(worker), bytes(WORKER_SPAN - len(worker)))
+        auxiliary_bytes = 0
+        if lease_bytes == 0x60000:
+            # Exercise the entire enlarged owned interval, including both
+            # the unchanged worker and all auxiliary/cache destinations.
+            # These writes model their maximum legal footprint, not an
+            # execution or timing model of the cache producer.
+            build = Path(OPTIONS.build)
+            stage_image = read_elf(build / "stage.elf")
+            worker_image = read_elf(build / "native-worker.elf")
+            for parsed, marker in ((stage_image, "__kui_native_readahead_stage"),
+                                   (worker_image, "__kui_native_readahead_worker")):
+                self.assertEqual(parsed[4][marker], (1, 0, 0, 0xfff1))
+            auxiliary = (build / "native-ra-aux.bin").read_bytes()
+            self.assertTrue(0x1002 <= len(auxiliary) <= 0x5000)
+            auxiliary_bytes = len(auxiliary)
+            model.store_block(payload + WORKER_SPAN, bytes([0xC3]) * (lease_bytes - WORKER_SPAN))
+            model.store_block(payload + 0x21000, auxiliary)
+            model.store_block(payload + 0x21000 + len(auxiliary), bytes(0x7000 - len(auxiliary)))
+            model.store_block(payload + 0x30000, bytes([0x5A]) * 0x30000)
+            self.assertEqual(physical(payload + 0x60000), physical(begin + count))
+            self.assertFalse(intersects(payload, lease_bytes, 0x8c010000, len(image)))
+            self.assertFalse(intersects(payload, lease_bytes, stack, stack_bytes))
         self.assertEqual(model.block(stage_begin, stage_end - stage_begin), after_allocation)
         self.assertEqual(model.block(stack, stack_bytes), stack_before_worker)
-        self.assertEqual(model.read(header + 4), LEASE_BYTES // 32 + 1)
+        self.assertEqual(model.read(header + 4), lease_bytes // 32 + 1)
         self.assertEqual(model.read(begin), sentinel)
         operations, free_nodes, evolution_steps = self.allocator_evolution(
-            model, heap, begin, count, payload, new_sp)
+            model, heap, begin, count, payload, new_sp, lease_bytes, observer)
         # Reproduce the former overwrite, rather than merely comparing bounds.
         old_frame = OLD_INSTALLER_SP - 128
         model.store_block(old_frame, bytes([0x69]) * 160)
-        model.store_block(payload + len(worker), bytes(WORKER_SPAN - len(worker)))
+        copied_span = lease_bytes if lease_bytes == 0x60000 else WORKER_SPAN
+        model.store_block(payload + len(worker), bytes(copied_span - len(worker)))
         old_corrupted = model.block(old_frame, 160) != bytes([0x69]) * 160
         self.assertEqual(old_corrupted, slug in ("skies", "sa2", "evolution1", "evolution2"))
         if slug in ("skies", "sa2", "evolution1", "evolution2"):
-            self.assertEqual(physical(payload), 0x0CFD0000)
-            self.assertTrue(intersects(old_frame, 160, payload, WORKER_SPAN))
+            self.assertEqual(physical(payload), RAM_END - lease_bytes)
+            self.assertTrue(intersects(old_frame, 160, payload, copied_span))
+        result = dict(slug=slug, source_bytes=len(source), source_sha256=hashlib.sha256(source).hexdigest(),
+            image_bytes=len(image), image_sha256=hashlib.sha256(image).hexdigest(),
+            record_sha256=hashlib.sha256(wire).hexdigest(), lease_bytes=lease_bytes,
+            arena_begin=begin, arena_bytes=count, payload=payload, header=header,
+            lease_end=payload + lease_bytes, header_units=lease_bytes // 32 + 1,
+            remaining_units=model.read(begin + 4), initializer_instructions=init_steps,
+            initializer_writes=len(init_writes), allocation_instructions=alloc_steps,
+            allocation_writes=len(alloc_writes), allocation_free_operations=operations,
+            maximum_free_nodes=free_nodes, subsequent_allocator_instructions=evolution_steps,
+            worker_bytes=len(worker), auxiliary_bytes=auxiliary_bytes,
+            protected_write_span=lease_bytes if auxiliary_bytes else WORKER_SPAN,
+            stage_begin=stage_begin, stage_end=stage_end, installer_stack=stack,
+            installer_stack_bytes=stack_bytes, installer_sp=new_sp,
+            stage_preserved=True, installer_stack_preserved=True,
+            retained_header_and_entire_lease_preserved_during_allocator_operations=True,
+            old_high_stack_overwrite_reproduced=old_corrupted,
+            stage_sha256=hashlib.sha256((Path(OPTIONS.build) / "stage.elf").read_bytes()).hexdigest(),
+            worker_sha256=hashlib.sha256(worker).hexdigest())
+        if observer:
+            result["production_live_allocator_proof"] = observer.report()
+        RESULTS.append(result)
         print(f"Actual {slug} heap: {init_steps} initializer/release + {alloc_steps} allocation instructions; "
               f"payload={payload:08x}, new SP={new_sp:08x}, stage/stack preserved, "
               f"old-stack overwrite={old_corrupted}")
@@ -591,7 +649,15 @@ if __name__ == "__main__":
         raise SystemExit("Run actual heap model with Python assertions enabled")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, default=os.environ.get("KUI_NATIVE_HEAP_BUILD"))
+    parser.add_argument("--lease-bytes", type=lambda value: int(value, 0),
+                        choices=(0x30000, 0x60000), default=LEASE_BYTES,
+                        help="Retain the historical192KiB proof or exercise the separately linked384KiB read-ahead geometry")
+    parser.add_argument("--output", type=Path, help="Write successful original-code proof results as JSON")
     for game in ("ps2", "skies", "sa2", "grandia2", "evolution1", "evolution2"):
         parser.add_argument("--" + game, type=Path, default=os.environ.get(f"KUI_NATIVE_{game.upper()}_STARTUP"))
     OPTIONS, remaining = parser.parse_known_args()
-    unittest.main(argv=[sys.argv[0], *remaining])
+    outcome = unittest.main(argv=[sys.argv[0], *remaining], exit=False)
+    if outcome.result.wasSuccessful() and OPTIONS.output:
+        OPTIONS.output.parent.mkdir(parents=True, exist_ok=True)
+        OPTIONS.output.write_text(json.dumps(dict(schema="kui.native.heap-execution.v2", results=RESULTS), indent=2) + "\n")
+    raise SystemExit(not outcome.result.wasSuccessful())

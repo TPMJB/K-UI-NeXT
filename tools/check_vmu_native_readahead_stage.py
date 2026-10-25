@@ -33,6 +33,7 @@ DIAGNOSTIC_PUBLIC_BYTES=656
 DIAGNOSTIC_MARKER='__kui_native_readahead_diagnostic_auxiliary'
 PIO_MARKER='__kui_native_readahead_pio_auxiliary'
 PIO_PAIR_MARKER='__kui_native_readahead_pio_pair_auxiliary'
+MULTI_OWNER_MARKER='__kui_native_sdk_sci_multi_owner_stage'
 # Pins are reviewed against the candidate's complete linked body and literals.
 # The combined read-ahead audit also pins the complete module and low table.
 PINS={
@@ -51,6 +52,10 @@ PIO_PAIR_PINS={
     '_native_readahead_bind':(1208,'e8fdbae5d43b7851901bfe8a0d313e6921446033cef06018eb0ebe934d92aeb6'),
     '_kui_vmu_native_background_map_address':(92,'cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8'),
 }
+MULTI_OWNER_PINS={
+    '_native_readahead_bind':(1208,'7a663ad2b17d8c3ebd542ce5aa11745fa29eee788046e5941450a9a757dfb431'),
+    '_kui_vmu_native_background_map_address':(92,'cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8'),
+}
 
 
 def require(ok,message):
@@ -58,6 +63,14 @@ def require(ok,message):
 
 
 def physical(address):return address&0x1fffffff
+
+
+def multi_owner_profile(stage,layout):
+    marker=stage[4].get(MULTI_OWNER_MARKER)
+    if marker is None:return False
+    require(marker==(1,0,0,0xfff1) and layout['pair'] and layout['pio'] and layout['diagnostic'],
+            'cold multi-owner stage marker differs or lacks the exact PIO pair profile')
+    return True
 
 
 def auxiliary_layout(aux):
@@ -96,8 +109,8 @@ def flat_aux(aux):
 
 
 class ReadAheadBinderCPU(ColdBinderCPU):
-    def __init__(self,stage,resident,aux,*,cache=True,payload=0x8c400000,stream=0):
-        super().__init__(stage,resident,cache=cache,payload=payload,stream=stream)
+    def __init__(self,stage,resident,aux,*,cache=True,payload=0x8c400000,stream=0,owner_name='Evolution2'):
+        super().__init__(stage,resident,cache=cache,payload=payload,stream=stream,owner_name=owner_name)
         self.layout=auxiliary_layout(aux)
         self.aux=aux;self.aux_binary=flat_aux(aux)
         self.aux_wire=generate(aux[0],self.aux_binary,BASE,SPAN)
@@ -120,6 +133,12 @@ class ReadAheadBinderCPU(ColdBinderCPU):
         self.stack_top=((payload&0x1fffffff)|0xa0000000)+0x28000
         self.put32(self.region+0x500,0);self.put32(self.region+0x504,0)
         self.put32(self.region+0x530,COOKIE)
+        # Read-ahead follows successful SDK publication. Seed that installed
+        # state faithfully, rather than a cookie with original callback slots.
+        self.sdk_vbr=0x8c00f400;self.sdk_previous=self.owner_constants['default']
+        self.put32(self.region+0x534,self.sdk_previous);self.put32(self.region+0x538,self.sdk_vbr)
+        for at in (self.sdk_vbr+0x25c,self.sdk_vbr+0x260):self.put32(at,self.callback)
+        self.expected_sdk=(self.callback,self.callback,self.sdk_previous,self.sdk_vbr,COOKIE)
         self.api={stage[4][name][0]:name for name in ('_memcpy','_memcmp','_memset',
             '_native_report','_retail_display_line','_kui_vmu_native_relocate',
             '_kui_native_passive_publish','_kui_vmu_native_worker_call')}
@@ -294,20 +313,28 @@ class ReadAheadBinderCPU(ColdBinderCPU):
         assert self.pre_reloc_flushes==expected
         assert not any(self.data<=address<self.data+DATA_BYTES for _,address,_,_ in self.writes)
         assert self.read(self.region+0x530)==COOKIE
+        assert self.sdk_state()==self.expected_sdk,'read-ahead changed the admitted SDK owner tuple'
         # Any subsequent eviction must preserve the entry/context publication.
         for at,(line,dirty) in tuple(self.cache.items()):
             if dirty:self.ram.update((at+i,b) for i,b in enumerate(line))
         self.cache.clear()
         assert self.read((self.region+0x500)|0x20000000)==entry
         assert self.read((self.region+0x504)|0x20000000)==context
+        assert self.sdk_state()==self.expected_sdk,'eviction changed the admitted SDK owner tuple'
         return self
 
+    def sdk_state(self):
+        return tuple(self.read(at|0x20000000) for at in
+            (self.sdk_vbr+0x25c,self.sdk_vbr+0x260,self.region+0x534,self.region+0x538,self.region+0x530))
 
-def pin_stage(stage,*,diagnostic=False,pio=False,pair=False):
+
+def pin_stage(stage,*,diagnostic=False,pio=False,pair=False,multi_owner=False):
     result={}
     require(not pio or diagnostic,'cold PIO stage pins require the diagnostic layout')
     require(not pair or pio,'cold PIO pair stage pins require the PIO profile')
-    selected=PIO_PAIR_PINS if pair else PIO_PINS if pio else DIAGNOSTIC_PINS if diagnostic else PINS
+    require(not multi_owner or (pair and stage[4].get(MULTI_OWNER_MARKER)==(1,0,0,0xfff1)),
+            'cold multi-owner pins require the exact stage marker and PIO pair')
+    selected=MULTI_OWNER_PINS if multi_owner else PIO_PAIR_PINS if pair else PIO_PINS if pio else DIAGNOSTIC_PINS if diagnostic else PINS
     for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(stage,name,2)
         require(section[2]&4 and 0x8ce00000<=address<address+count<=0x8cfe0000,
@@ -322,13 +349,18 @@ def pin_stage(stage,*,diagnostic=False,pio=False,pair=False):
 def check_stage(stage,resident,aux,*,self_test=False):
     require(__debug__,'cold read-ahead proof requires Python assertions')
     layout=auxiliary_layout(aux)
-    pins=pin_stage(stage,diagnostic=layout['diagnostic'],pio=layout['pio'],pair=layout['pair'])
-    positives=negatives=mutations=pin_mutations=layout_mutations=0
+    multi_owner=multi_owner_profile(stage,layout)
+    def pin_selected(image):return pin_stage(image,diagnostic=layout['diagnostic'],pio=layout['pio'],
+                                              pair=layout['pair'],multi_owner=multi_owner)
+    pins=pin_selected(stage)
+    owners=('Evolution1','Evolution2') if multi_owner else ('Evolution2',)
+    positives=negatives=mutations=pin_mutations=layout_mutations=stage_marker_mutations=0
     for cache in (False,True):
         for payload in (0x0c400000,0x8c500000,0xacfa0000):
             for stream in (0,1):
-                ReadAheadBinderCPU(stage,resident,aux,cache=cache,payload=payload,stream=stream).execute()
-                positives+=1
+                for owner in owners:
+                    ReadAheadBinderCPU(stage,resident,aux,cache=cache,payload=payload,stream=stream,owner_name=owner).execute()
+                    positives+=1
     cases=[]
     def case(name,detail,change):cases.append((name,detail,change))
     case('source_entry_misaligned',2,lambda c:c.put32(c.blob+40,c.descriptor|1))
@@ -402,14 +434,16 @@ def check_stage(stage,resident,aux,*,self_test=False):
         lambda x,cfg,context:x.write(context,1)))
     case('actual_init_initialized',10,lambda c:setattr(c,'config_mutation',
         lambda x,cfg,context:x.write(context+x.layout['initialized'],1)))
-    for cache in (False,True):
+    for cache,owner in ((cache,owner) for cache in (False,True) for owner in owners):
         for name,detail,change in cases:
-            c=ReadAheadBinderCPU(stage,resident,aux,cache=cache);change(c)
+            c=ReadAheadBinderCPU(stage,resident,aux,cache=cache,owner_name=owner);change(c)
+            sdk_before=c.sdk_state()
             try:c.execute()
             except BinderStop as stop:
                 assert (stop.phase,stop.detail)==(11,detail),(name,stop)
                 assert not c.ready
                 assert not any(address in (c.region+0x500,c.region+0x504) for _,address,_,_ in c.writes)
+                assert c.sdk_state()==sdk_before,'refused read-ahead changed the SDK owner tuple'
                 negatives+=1
             else:raise ValueError('cold read-ahead binder accepted malformed '+name)
     if self_test:
@@ -445,7 +479,7 @@ def check_stage(stage,resident,aux,*,self_test=False):
             start=section[4]+address-section[3]
             for i in range(count):
                 changed=bytearray(stage[0]);changed[start+i]^=1
-                try:pin_stage((bytes(changed),*stage[1:]),diagnostic=layout['diagnostic'],pio=layout['pio'],pair=layout['pair'])
+                try:pin_selected((bytes(changed),*stage[1:]))
                 except ValueError:pin_mutations+=1
                 else:raise ValueError('cold read-ahead audit accepted changed reviewed instructions')
         address,body,section=symbol_bytes(stage,'_native_readahead_bind',2)
@@ -459,10 +493,22 @@ def check_stage(stage,resident,aux,*,self_test=False):
             except BinderStop as stop:
                 assert (stop.phase,stop.detail)==(11,detail),stop;mutations+=1
             else:raise ValueError('cold read-ahead accepted omitted activation publication')
+        if multi_owner:
+            for marker in (None,(0,0,0,0xfff1),(1,4,0,0xfff1),(1,0,1,0xfff1),(1,0,0,1)):
+                symbols=stage[4].copy()
+                if marker is None:symbols.pop(MULTI_OWNER_MARKER)
+                else:symbols[MULTI_OWNER_MARKER]=marker
+                changed=(*stage[:4],symbols)
+                try:
+                    selected=multi_owner_profile(changed,layout)
+                    pin_stage(changed,diagnostic=layout['diagnostic'],pio=layout['pio'],pair=layout['pair'],multi_owner=selected)
+                except ValueError:stage_marker_mutations+=1
+                else:raise ValueError('cold read-ahead accepted changed multi-owner stage marker')
     return dict(actual_linked_cold_binder_executed=True,positive_cases=positives,
         malformed_descriptor_context_aux_and_init_cases=negatives,omitted_activation_ocbp_rejections=mutations,
         reviewed_body_byte_mutation_rejections=pin_mutations,
         context_and_diagnostic_schema_mutation_rejections=layout_mutations,
+        multi_owner_stage_marker_mutation_rejections=stage_marker_mutations,
         exact_instruction_literal_pins=pins,p1_cache_and_p2_ram_distinct=True,
         cold_aux_and_cache_lines_purged=(SPAN+DATA_BYTES)//32,cache_data_not_initialized_or_trusted=True,
         context_published_before_entry=True,guards_checked_after_init=True,
@@ -474,6 +520,9 @@ def check_stage(stage,resident,aux,*,self_test=False):
         diagnostic_auxiliary=layout['diagnostic'],public_prefix_bytes=layout['public_bytes'],
         pio_auxiliary=layout['pio'],
         pio_pair_auxiliary=layout['pair'],
+        multi_owner_stage=multi_owner,exact_sdk_owners_tested=list(owners),
+        admitted_sdk_callback_default_vbr_cookie_preserved=True,
+        sdk_owner_scope='Begins after independently proved SDK admission and callback publication',
         complete_owned_context_bytes=layout['context_bytes'],
         actual_initializer_clears_complete_public_prefix=True,
         actual_initializer_copies_owned_config_values_not_stage_pointer=True,

@@ -20,7 +20,9 @@
 #undef KUI_SCI_ROUTE_STAGE_LAYOUT
 #endif
 __asm__(".global __kui_native_sdk_sci_route_stage\n"
-        ".set __kui_native_sdk_sci_route_stage,1\n");
+        ".set __kui_native_sdk_sci_route_stage,1\n"
+        ".global __kui_native_sdk_sci_multi_owner_stage\n"
+        ".set __kui_native_sdk_sci_multi_owner_stage,1\n");
 
 static void __attribute__((noipa)) native_sdk_sci_route_bind(uint32_t payload) {
     struct kui_native_sdk_sci_runtime_exports exports;
@@ -73,6 +75,15 @@ static void __attribute__((noipa)) native_sdk_sci_route_bind(uint32_t payload) {
         exec_bytes,KUI_RETAIL_EXEC_ADDRESS,native_driver.image_sha256,vbr,sr,exports.callback,
         native_read,NULL,&plan);
     if(admitted!=1)native_report(10u,admitted==0?6u:7u);
+    /* Both independently fingerprinted owners use this exact SDK table
+     * layout. The unchanged low readiness predicate checks these same
+     * addresses; a future owner with another layout must not be published
+     * merely because its cold admission produced a well-formed plan. */
+    if(plan.version!=KUI_NATIVE_SDK_SCI_ROUTE_VERSION || plan.bytes!=sizeof(plan) ||
+       plan.vbr!=KUI_NATIVE_SDK_SCI_OWNER_VBR ||
+       plan.eri_slot!=KUI_NATIVE_SDK_SCI_OWNER_VBR+KUI_NATIVE_SDK_SCI_ERI_SLOT_OFFSET ||
+       plan.rxi_slot!=KUI_NATIVE_SDK_SCI_OWNER_VBR+KUI_NATIVE_SDK_SCI_RXI_SLOT_OFFSET ||
+       plan.callback!=exports.callback)native_report(10u,7u);
     /* Preserve exact old SCI callback and original VBR first. The cookie is
      * still zero, so neither an IRQ nor a later GD entry can treat a partial
      * table publication as a live route. Other callback slots are untouched. */

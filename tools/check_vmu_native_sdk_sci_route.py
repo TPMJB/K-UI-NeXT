@@ -23,6 +23,13 @@ from sh4_delay_slots import validate_delay_slot
 from check_vmu_native_worker_gateway import read_elf,symbol_bytes
 
 MARKER='__kui_native_sdk_sci_route_'
+MULTI_OWNER_MARKER='__kui_native_sdk_sci_multi_owner_stage'
+OWNER_CONSTANTS={
+    'Evolution1':dict(bytes=2143652,digest='ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35',
+        default=0x8c1d9f50,common=0x8c1da274),
+    'Evolution2':dict(bytes=4024288,digest='52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605',
+        default=0x8c1add0c,common=0x8c1ae030),
+}
 IPRB=0xffd00008
 REGION=0x8c420400
 SDK_VBR=0x8c00f400
@@ -82,6 +89,12 @@ RA_PIO_PAIR_STAGE_PINS={
     '_native_sdk_sci_route_bind':(692,'06e1614361b740747ec2137ff2251e20d1dbf094fce4ce9ee85374aca860c5b3'),
     '_kui_native_sdk_sci_route_admit':(800,'4e6ef241b9def59fa9deafd03a6554fdc1e460780d25fbfb086d7deab30ac0fe'),
 }
+# Separate cold-only owner expansion; every preceding profile keeps its pins.
+MULTI_OWNER_STAGE_PINS={
+    '_native_sdk_sci_route_bind':(748,'9cbcdc2e75b7e6ecab19784e5b9f880f9e22bde9399144328d876b7af7488724'),
+    '_kui_native_sdk_sci_route_admit':(908,'ec64806bf0d9f966def872b037d0f9bdb1531f8275423c7f9d0cad1dd0786a09'),
+    '_u32':(30,'6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334'),
+}
 MEMORY_CACHE={}
 MEMORY_REFERENCES={}
 
@@ -139,6 +152,13 @@ def pio_pair_companion(worker,proof):
     return bool(marker)
 
 
+def multi_owner_profile(stage):
+    marker=stage[4].get(MULTI_OWNER_MARKER) if stage is not None else None
+    require(marker is None or marker==(1,0,0,0xfff1),
+            'SDK multi-owner stage marker is not absolute one')
+    return marker is not None
+
+
 def initialized_at(image,address,count):
     for section in image[3]:
         if section[1]==1 and section[2]&2 and section[3]<=address<address+count<=section[3]+section[5]:
@@ -178,15 +198,18 @@ def pin_bodies(resident):
     return found
 
 
-def stage_pins(stage,*,diagnostic=False,pio=False,pio_pair=False):
+def stage_pins(stage,*,diagnostic=False,pio=False,pio_pair=False,multi_owner=False):
     result={}
     read_ahead='__kui_native_readahead_stage' in stage[4]
     require(not diagnostic or read_ahead,'SDK diagnostic stage pins require the read-ahead profile')
     require(not pio or diagnostic,'SDK PIO stage pins require the diagnostic profile')
     require(not pio_pair or pio,'SDK PIO pair stage pins require the PIO profile')
-    selected=RA_PIO_PAIR_STAGE_PINS if pio_pair else RA_PIO_STAGE_PINS if pio else \
+    require(multi_owner==multi_owner_profile(stage),'SDK multi-owner stage profile differs')
+    require(not multi_owner or pio_pair,'SDK multi-owner profile requires the exact PIO pair companion')
+    selected=MULTI_OWNER_STAGE_PINS if multi_owner else RA_PIO_PAIR_STAGE_PINS if pio_pair else RA_PIO_STAGE_PINS if pio else \
         RA_DIAGNOSTIC_STAGE_PINS if diagnostic else \
         RA_STAGE_PINS if read_ahead else STAGE_PINS
+    require(selected,'SDK multi-owner immutable stage pins are missing')
     for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(stage,name,2)
         require(section[2]&4 and 0x8ce00000<=address<address+len(body)<=0x8cfe0000,
@@ -195,6 +218,29 @@ def stage_pins(stage,*,diagnostic=False,pio=False,pio_pair=False):
                 'SDK SCI cold binder/admission instruction/literal pin changed: '+name)
         result[name]=(address,count,digest)
     return result
+
+
+def multi_owner_table(stage):
+    """Bind every exact owner fingerprint to the immutable typed C table."""
+    from test_native_sdk_sci_owner_contract import OWNERS
+    records={record['game']:record for record in OWNERS}
+    expected=bytearray()
+    for name in ('evolution2','evolution1'):
+        record=records[name];constant=OWNER_CONSTANTS[name.replace('evolution','Evolution')]
+        require(record['program_bytes']==constant['bytes'] and record['program_sha256']==constant['digest'],
+                'SDK owner fixture identity differs from its typed cold tuple')
+        expected.extend(struct.pack('<5I',record['program_bytes'],record['vector'],SDK_VBR,ERI_SLOT,RXI_SLOT))
+        expected.extend(bytes.fromhex(record['program_sha256']))
+        expected.extend(bytes.fromhex(record['windows'][0][2]))
+        for address,count,digest in record['windows'][1:]:
+            expected.extend(struct.pack('<2I',address,count)+bytes.fromhex(digest))
+    address,body,section=symbol_bytes(stage,'_owners',1)
+    require(len(body)==488 and not address&3 and section[2]&7==2 and
+            0x8ce00000<=address<address+len(body)<=0x8cfe0000 and body==expected,
+            'SDK immutable exact-owner fingerprint table differs')
+    return dict(address=hex(address),bytes=len(body),sha256=hashlib.sha256(body).hexdigest(),
+        typed_two_owner_records_checked=True,original_contract_fingerprints_matched=True,
+        owner_digests=[records[name]['program_sha256'] for name in ('evolution1','evolution2')])
 
 
 def scalar_control_flow(resident,pins):
@@ -232,7 +278,7 @@ def assert_c_abi(c,before):
 
 class SDKCPU(InterruptCPU):
     """Actual linked scalar SH with physical aliases and both integer banks."""
-    def __init__(self,resident,seed=0,mask=15,bank=0,blocked=False,owner=b''):
+    def __init__(self,resident,seed=0,mask=15,bank=0,blocked=False,owner=b'',*,previous=DEFAULT):
         key=(id(resident[0]),id(owner))
         if key not in MEMORY_CACHE:
             backing=SH(owner)
@@ -259,7 +305,8 @@ class SDKCPU(InterruptCPU):
         self.callback=self.symbols['_kui_retail_sdk_sci_entry'][0]
         self.write(self.pointer,REGION);self.write(self.active,0);self.write(self.fault,0)
         self.write(GUARD,0x4b554947);self.write(COOKIE_AT,COOKIE)
-        self.write(DEFAULT_AT,DEFAULT);self.write(OWNER_AT,SDK_VBR)
+        self.previous=previous
+        self.write(DEFAULT_AT,previous);self.write(OWNER_AT,SDK_VBR)
         self.write(ERI_SLOT,self.callback);self.write(RXI_SLOT,self.callback)
         self.write(LOAN,0);self.write(FRAME+4,0x70);self.write(FRAME+8,0x10)
         self.write(HOOKED,0);self.write(REARMS,0xfffffffe)
@@ -311,7 +358,7 @@ class SDKCPU(InterruptCPU):
         return self
 
 
-def callback_cases(resident):
+def callback_cases(resident,*,previous=DEFAULT):
     cases=0
     dispatcher=resident[4]['_kui_retail_sdk_sci_dispatch'][0]
     for seed in range(3):
@@ -319,14 +366,14 @@ def callback_cases(resident):
             for bank in (0,1):
                 for blocked in (False,True):
                     for mode in ('handled','forward','busy','badguard','postguard'):
-                        c=SDKCPU(resident,seed,mask,bank,blocked)
-                        c.targets={dispatcher};c.callee_return=DEFAULT if mode=='forward' else 0
+                        c=SDKCPU(resident,seed,mask,bank,blocked,previous=previous)
+                        c.targets={dispatcher};c.callee_return=previous if mode=='forward' else 0
                         if mode=='busy':c.write(c.active,1)
                         if mode=='badguard':c.write(GUARD,0)
                         if mode=='postguard':c.corrupt_guard=True
                         before=c.snapshot();c.writes=[]
                         forward=mode in ('forward','busy','badguard')
-                        c.run_symbol('_kui_retail_sdk_sci_entry',DEFAULT if forward else RETURN)
+                        c.run_symbol('_kui_retail_sdk_sci_entry',previous if forward else RETURN)
                         r,other,pr,sr,mach,macl,gbr,fpscr,fpul,fr,controls=before
                         assert c.r[8:]==r[8:] and c.other==other and c.r[4]==r[4]
                         assert c.pr==pr and c.sr==sr
@@ -347,19 +394,19 @@ def ownership(c,variant):
     elif variant=='wrongcookie':c.write(COOKIE_AT,COOKIE^1)
     elif variant=='wrongowner':c.write(OWNER_AT,SDK_VBR+0x400)
     elif variant=='vbrchanged':c.control['vbr']=SDK_VBR+0x400
-    elif variant=='eri_changed':c.write(ERI_SLOT,DEFAULT)
-    elif variant=='rxi_changed':c.write(RXI_SLOT,DEFAULT)
+    elif variant=='eri_changed':c.write(ERI_SLOT,c.previous)
+    elif variant=='rxi_changed':c.write(RXI_SLOT,c.previous)
     else:assert variant=='ready'
 
 
-def ownership_cases(resident):
+def ownership_cases(resident,*,previous=DEFAULT):
     hooks=unhooks=dispatches=0
     variants=('ready','cold','wrongcookie','wrongowner','vbrchanged','eri_changed','rxi_changed')
     for mask in range(16):
         for variant in variants:
             for hooked in (0,1):
                 for field in range(0,256,16):
-                    c=SDKCPU(resident,field,mask);ownership(c,variant)
+                    c=SDKCPU(resident,field,mask,previous=previous);ownership(c,variant)
                     c.write(HOOKED,hooked);c.iprb=(0xa50f&~0xf0)|field
                     old=c.iprb;old_saved=c.read(FRAME+4);old_rearms=c.read(REARMS);last=0x10
                     old_vbr=c.control['vbr'];level=0x10 if variant=='ready' else 0
@@ -374,7 +421,7 @@ def ownership_cases(resident):
                     assert all(address in (HOOKED,FRAME+4,FRAME+8,REARMS,IPRB) or OWNER_SP-128<=address<OWNER_SP
                                for _,address,_,_ in c.writes)
                     hooks+=1
-                    c=SDKCPU(resident,field,mask);ownership(c,variant)
+                    c=SDKCPU(resident,field,mask,previous=previous);ownership(c,variant)
                     c.write(HOOKED,hooked);c.iprb=(0xa50f&~0xf0)|field
                     old=c.iprb;old_vbr=c.control['vbr'];c.writes=[];before=c.snapshot();c.run_symbol('_unhook');assert_c_abi(c,before)
                     desired=(old&~0xf0)|0x70 if hooked and field==last else old
@@ -391,14 +438,14 @@ def ownership_cases(resident):
                 for active in (0,1):
                     for loan in (0,1,2,3):
                         for result in (0,1):
-                            c=SDKCPU(resident,event,mask);ownership(c,variant)
+                            c=SDKCPU(resident,event,mask,previous=previous);ownership(c,variant)
                             c.r[4]=event;c.write(c.active,active);c.write(LOAN,loan)
                             c.targets={irq};c.callee_mode='deep-reader';c.callee_return=result
                             old_vbr=c.control['vbr'];c.writes=[]
                             before=c.snapshot();c.run_symbol('_kui_retail_sdk_sci_dispatch');assert_c_abi(c,before)
                             owns=variant=='ready' and event in (0x4e0,0x500) and not active and not loan
                             assert c.calls==int(owns)
-                            assert c.r[0]==(0 if owns and not result else DEFAULT)
+                            assert c.r[0]==(0 if owns and not result else previous)
                             assert not c.iprb_writes and not c.vbr_writes and c.control['vbr']==old_vbr
                             assert all(OWNER_SP-128<=address<OWNER_SP for _,address,_,_ in c.writes)
                             dispatches+=1
@@ -409,7 +456,7 @@ def ownership_cases(resident):
     for mask in range(16):
         for field in range(0,256,16):
             for variant in variants[1:]:
-                c=SDKCPU(resident,field,mask);c.iprb=0xa50f|field
+                c=SDKCPU(resident,field,mask,previous=previous);c.iprb=0xa50f|field
                 c.run_symbol('_hook');assert c.read(FRAME+4)==field
                 assert c.read(FRAME+8)==0x10 and c.iprb&0xf0==0x10
                 ownership(c,variant)
@@ -418,22 +465,22 @@ def ownership_cases(resident):
                 c.run_symbol('_unhook');assert c.iprb&0xf0==field
                 assert c.read(HOOKED)==c.read(FRAME+8)==0
                 # Ready again, then lose a slot while a real reader is live.
-                c=SDKCPU(resident,field,mask);c.iprb=0xa50f|field;c.run_symbol('_hook')
+                c=SDKCPU(resident,field,mask,previous=previous);c.iprb=0xa50f|field;c.run_symbol('_hook')
                 ownership(c,variant);c.targets={irq};c.callee_mode='deep-reader'
                 c.r[4]=0x4e0;c.run_symbol('_kui_retail_sdk_sci_dispatch')
-                assert c.calls==0 and c.r[0]==DEFAULT
+                assert c.calls==0 and c.r[0]==previous
                 assert c.iprb&0xf0==0 and c.read(FRAME+4)==field and c.read(FRAME+8)==0
                 assert not c.vbr_writes;transitions+=1
                 # Foreign/serialized ownership must take precedence over a
                 # lost-route repair, including when our SCI field is live.
                 for reason in ('active','loan','event'):
-                    c=SDKCPU(resident,field,mask);c.iprb=0xa50f|field;c.run_symbol('_hook')
+                    c=SDKCPU(resident,field,mask,previous=previous);c.iprb=0xa50f|field;c.run_symbol('_hook')
                     ownership(c,variant);c.r[4]=0x300 if reason=='event' else 0x4e0
                     if reason=='active':c.write(c.active,1)
                     if reason=='loan':c.write(LOAN,1)
                     c.targets={irq};c.callee_mode='deep-reader';c.iprb_writes=[];c.writes=[]
                     c.run_symbol('_kui_retail_sdk_sci_dispatch')
-                    assert c.calls==0 and c.r[0]==DEFAULT and not c.iprb_writes
+                    assert c.calls==0 and c.r[0]==previous and not c.iprb_writes
                     assert c.read(FRAME+8)==0x10 and c.read(FRAME+4)==field
                     assert all(OWNER_SP-128<=address<OWNER_SP for _,address,_,_ in c.writes)
                     transitions+=1
@@ -453,8 +500,10 @@ class ColdBinderCPU(SDKCPU):
     host-tested pure admission is a typed-plan substitute. The binder itself,
     selected-reader bounds, every branch/store/readback and OCBP execute.
     """
-    def __init__(self,stage,resident,*,cache=True,payload=0x8c400000,stream=0):
-        super().__init__(resident,seed=7,mask=15,bank=1)
+    def __init__(self,stage,resident,*,cache=True,payload=0x8c400000,stream=0,owner_name='Evolution2'):
+        self.owner_constants=OWNER_CONSTANTS[owner_name]
+        self.owner_name=owner_name
+        super().__init__(resident,seed=7,mask=15,bank=1,previous=self.owner_constants['default'])
         backing=SH(b'')
         for image in (resident,stage):
             for kind,offset,address,_,count,_,_,_ in image[2]:
@@ -476,15 +525,14 @@ class ColdBinderCPU(SDKCPU):
         self.put_bytes(self.blob,self.memory[self.offset(0x8c004000,self.low_end-0x8c004000):
                                              self.offset(self.low_end,0)])
         for name,value in (('_resident_blob',self.blob),('_resident_bytes',self.low_end-0x8c004000),
-                           ('_resident_limit',GUARD),('_exec_bytes',4024288)):
+                           ('_resident_limit',GUARD),('_exec_bytes',self.owner_constants['bytes'])):
             self.put32(stage[4][name][0],value)
-        self.put_bytes(stage[4]['_native_driver'][0]+72,bytes.fromhex(
-            '52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605'))
+        self.put_bytes(stage[4]['_native_driver'][0]+72,bytes.fromhex(self.owner_constants['digest']))
         self.put32(self.cell,self.region)
         control=resident[4]['_kui_vmu_observe_boot_control'][0]
         self.put32(control+8,4);self.put32(control+12,payload&0x1fffffff)
         self.put32(self.region+0x378,1);self.put32(self.region+0x470,stream)
-        self.put32(ERI_SLOT,DEFAULT);self.put32(RXI_SLOT,DEFAULT)
+        self.put32(ERI_SLOT,self.previous);self.put32(RXI_SLOT,self.previous)
         self.put32(self.region+0x53c,0xa5c39e17)
         self.initial=self.snapshot();self.writes=[]
 
@@ -548,14 +596,18 @@ class ColdBinderCPU(SDKCPU):
             left,right,count=self.r[4:7];assert count==20
             result=int(any(self.read(left+i,1)!=self.read(right+i,1) for i in range(count)))
         elif name=='_kui_native_sdk_sci_route_admit':
-            assert self.r[4:7]==[0x8c010000,4024288,0x8c010000]
+            assert self.r[4:7]==[0x8c010000,self.owner_constants['bytes'],0x8c010000]
+            assert bytes(self.read(self.r[7]+i,1) for i in range(32)).hex()==self.owner_constants['digest']
             assert self.r[7]==self.stage[4]['_native_driver'][0]+72
             args=[self.read(self.r[15]+4*i) for i in range(6)]
             assert args[:5]==[SDK_VBR,self.sr,self.callback,self.stage[4]['_native_read'][0],0]
             out=args[5];assert self.r[15]+24<=out<=self.r[15]+80-32
             result=self.admit_result
             if result==1:
-                for i,value in enumerate((1,32,SDK_VBR,0x8c1ae030,ERI_SLOT,RXI_SLOT,self.callback,DEFAULT)):
+                plan=(1,32,SDK_VBR,self.owner_constants['common'],ERI_SLOT,RXI_SLOT,self.callback,self.previous)
+                if hasattr(self,'plan_mutation'):
+                    word,value=self.plan_mutation;plan=list(plan);plan[word]=value
+                for i,value in enumerate(plan):
                     self.write(out+4*i,value)
         else:
             assert name=='_retail_display_line'
@@ -577,7 +629,7 @@ class ColdBinderCPU(SDKCPU):
         assert_c_abi(self,self.initial)
         assert self.read(ERI_SLOT|0x20000000)==self.callback
         assert self.read(RXI_SLOT|0x20000000)==self.callback
-        assert self.read((self.region+0x534)|0x20000000)==DEFAULT
+        assert self.read((self.region+0x534)|0x20000000)==self.previous
         assert self.read((self.region+0x538)|0x20000000)==SDK_VBR
         assert self.read((self.region+0x530)|0x20000000)==COOKIE
         assert self.read((self.region+0x53c)|0x20000000)==0xa5c39e17
@@ -592,12 +644,13 @@ class ColdBinderCPU(SDKCPU):
         return self
 
 
-def check_cold_binder(stage,resident,*,self_test=False,refused_artifact=False):
+def check_cold_binder(stage,resident,*,self_test=False,refused_artifact=False,owner_name='Evolution2'):
+    owner=OWNER_CONSTANTS[owner_name]
     if refused_artifact:
         _,body,_=symbol_bytes(stage,'_native_sdk_sci_route_bind',2)
         require(hashlib.sha256(body).hexdigest()=='e6f04a443bb4411f32628234d739042edb8793e3bd0d8e2bd61f00f4354988fc',
                 'old refusal regression requires the shipped b656 binder')
-        c=ColdBinderCPU(stage,resident)
+        c=ColdBinderCPU(stage,resident,owner_name=owner_name)
         try:c.run_bind()
         except BinderStop as stop:
             require((stop.phase,stop.detail)==(10,3),'old binder refused at an unexpected checkpoint')
@@ -605,13 +658,13 @@ def check_cold_binder(stage,resident,*,self_test=False,refused_artifact=False):
             return dict(shipped_b656_actual_binder_refusal_reproduced=True,phase=10,detail=3,
                         region_cell=hex(c.cell),standard_limit_literal='0x8c0077fc',publication_writes=0)
         raise ValueError('shipped binder unexpectedly accepted its out-of-standard-bound typed cell')
-    positives=negatives=mutations=0
+    positives=negatives=mutations=plan_refusals=0
     for cache in (False,True):
         for payload in (0x0c400000,0x8c400000,0xac400000):
             for stream in (0,1):
-                ColdBinderCPU(stage,resident,cache=cache,payload=payload,stream=stream).run_bind();positives+=1
+                ColdBinderCPU(stage,resident,cache=cache,payload=payload,stream=stream,owner_name=owner_name).run_bind();positives+=1
         for edge in ('code_end','limit_minus4'):
-            c=ColdBinderCPU(stage,resident,cache=cache)
+            c=ColdBinderCPU(stage,resident,cache=cache,owner_name=owner_name)
             c.patch_descriptor(4,c.low_end if edge=='code_end' else GUARD-4)
             c.run_bind();positives+=1
         cases=[('before_code_end',3),('at_limit',3),('misaligned',3),('p2_cell',3),
@@ -619,7 +672,7 @@ def check_cold_binder(stage,resident,*,self_test=False,refused_artifact=False):
                ('live_mismatch',3),('cell_mismatch',4),('pending',5),('preexisting_cookie',5),
                ('foreign_owner',6),('admission_refusal',7)]
         for case,detail in cases:
-            c=ColdBinderCPU(stage,resident,cache=cache)
+            c=ColdBinderCPU(stage,resident,cache=cache,owner_name=owner_name)
             if case=='before_code_end':c.patch_descriptor(4,c.low_end-4)
             elif case=='at_limit':c.patch_descriptor(4,GUARD)
             elif case=='misaligned':c.patch_descriptor(4,c.cell+1)
@@ -642,6 +695,20 @@ def check_cold_binder(stage,resident,*,self_test=False,refused_artifact=False):
                                for _,address,_,_ in c.writes)
                 negatives+=1
             else:raise ValueError('cold binder accepted malformed descriptor/context '+case)
+    if multi_owner_profile(stage):
+        for cache in (False,True):
+            for word,value in ((0,0),(0,2),(1,0),(1,28),(2,SDK_VBR+0x400),
+                               (4,ERI_SLOT+4),(5,RXI_SLOT+4),(6,0),(6,0xac007458)):
+                c=ColdBinderCPU(stage,resident,cache=cache,owner_name=owner_name)
+                c.plan_mutation=(word,value)
+                try:c.run_bind()
+                except BinderStop as stop:
+                    assert (stop.phase,stop.detail)==(10,7)
+                    assert not c.flushes and not c.ready
+                    assert not any(address in (ERI_SLOT,RXI_SLOT,c.region+0x530,c.region+0x534,c.region+0x538)
+                                   for _,address,_,_ in c.writes)
+                    plan_refusals+=1
+                else:raise ValueError('cold binder accepted a changed shared SDK plan field')
     if self_test:
         address,body,section=symbol_bytes(stage,'_native_sdk_sci_route_bind',2)
         ocbp=[i for i in range(0,len(body),2) if struct.unpack_from('<H',body,i)[0]&0xf0ff==0x00a3]
@@ -649,13 +716,14 @@ def check_cold_binder(stage,resident,*,self_test=False,refused_artifact=False):
         for number,at in enumerate(ocbp):
             changed=bytearray(stage[0]);start=section[4]+address-section[3]
             struct.pack_into('<H',changed,start+at,0x0009)
-            c=ColdBinderCPU((bytes(changed),*stage[1:]),resident)
+            c=ColdBinderCPU((bytes(changed),*stage[1:]),resident,owner_name=owner_name)
             try:c.run_bind()
             except BinderStop as stop:
                 assert (stop.phase,stop.detail)==(10,9 if number==3 else 8);mutations+=1
             else:raise ValueError('cold binder accepted an omitted cache publication')
-    return dict(actual_linked_cold_binder_executed=True,positive_cases=positives,
+    return dict(actual_linked_cold_binder_executed=True,game=owner_name,owner_digest=owner['digest'],positive_cases=positives,
         malformed_descriptor_or_context_cases=negatives,omitted_ocbp_mutation_rejections=mutations,
+        malformed_shared_plan_refusals=plan_refusals,plan_shared_runtime_tuple_checked=bool(plan_refusals),
         selected_async_bound_checked=True,code_end_and_limit_minus4_admitted=True,
         code_end_minus4_and_limit_refused=True,p1_writeback_cache_and_p2_ram_distinct=True,
         full_cacheline_writeback_and_sentinel_preserved=True,cookie_published_last=True,
@@ -664,33 +732,52 @@ def check_cold_binder(stage,resident,*,self_test=False,refused_artifact=False):
 
 
 def check_sdk_dispatch(resident,startup):
-    """Optional external-owner test: execute the actual SDK integer dispatch."""
-    owner=owner_image(startup);cases=0
+    """Execute an independently hashed original SDK lookup and linked callback."""
+    from test_native_sdk_sci_owner_contract import owner_contract,contract_cases
+    require(__debug__,'SDK original dispatcher model requires Python assertions')
+    contract=owner_contract(startup)
+    original_execution=contract_cases(contract)
+    owner=contract['image'];cases=0
+    previous=contract['default'];continuation=contract['continuation']
+    require((contract['vbr'],contract['eri_slot'],contract['rxi_slot'])==
+            (SDK_VBR,ERI_SLOT,RXI_SLOT),'original SDK owner runtime tuple differs')
     target=resident[4]['_kui_retail_sdk_sci_dispatch'][0]
-    continuation=0x8c1ae104
     for mask in range(16):
         for bank in (0,1):
             for event in (0x4e0,0x500):
-                for handled in (False,True):
-                    c=SDKCPU(resident,event,mask,bank,False,owner)
-                    c.write(SDK_EVENT,event);c.r[0]=c.sr
-                    c.targets={target};c.callee_return=0 if handled else DEFAULT
-                    # Execute the real event-table lookup and JSR. Its
-                    # surrounding full FPU context setup is not synthesized.
-                    c.run_to(SDK_DISPATCH,c.callback)
+                for mode in ('handled','forward','busy','badguard','postguard'):
+                    c=SDKCPU(resident,event,mask,bank,False,owner,previous=previous)
+                    c.write(contract['event'],event);c.r[0]=c.sr
+                    c.targets={target};c.callee_return=previous if mode=='forward' else 0
+                    if mode=='busy':c.write(c.active,1)
+                    if mode=='badguard':c.write(GUARD,0)
+                    if mode=='postguard':c.corrupt_guard=True
+                    # The original event lookup and JSR execute directly from
+                    # the independently verified image. Full FPU save/restore
+                    # remains outside this bounded integer/callback slice.
+                    c.run_to(contract['dispatch'],c.callback)
                     assert c.r[4]==event and c.pr==continuation
                     assert c.control['vbr']==SDK_VBR
                     before=c.snapshot();c.writes=[]
-                    c.run_symbol('_kui_retail_sdk_sci_entry',continuation if handled else DEFAULT)
+                    forward=mode in ('forward','busy','badguard')
+                    c.run_symbol('_kui_retail_sdk_sci_entry',previous if forward else continuation)
                     r,other,pr,sr,_,_,gbr,fpscr,fpul,fr,control=before
                     assert c.r[8:]==r[8:] and c.other==other and c.r[4]==event
-                    assert c.pr==pr and c.sr==sr and c.calls==1
+                    assert c.pr==pr and c.sr==sr and c.calls==int(mode not in ('busy','badguard'))
+                    assert c.read(c.fault)==int(mode in ('badguard','postguard'))
                     assert (c.gbr,c.fpscr,c.fpul,c.fr,c.control)==(gbr,fpscr,fpul,fr,control)
-                    assert not c.vbr_writes and not c.iprb_writes;cases+=1
+                    assert not c.vbr_writes and not c.iprb_writes
+                    assert all(OWNER_SP-16<=address<OWNER_SP or address in (c.fault,GUARD)
+                               for _,address,_,_ in c.writes)
+                    cases+=1
     return dict(actual_sdk_integer_dispatch_to_linked_callback_cases=cases,
+        owner_digest=contract['digest'],game=contract['game'],owner_program_bytes=len(owner),
+        original_sdk_owner_contract={key:value for key,value in contract.items() if key!='image'},
+        original_sdk_owner_execution=original_execution,
         exact_external_owner_source_and_program_sha_checked=True,
         actual_sdk_event_table_lookup_and_jsr_executed=True,
         return_to_sdk_continuation_and_default_forward_checked=True,
+        busy_and_both_guard_fault_paths_checked=True,
         full_sdk_fpu_prologue_and_epilogue_executed=False,
         native_dispatch_c_payload='ABI-adversarial substitute',
         console_performance_verified=False)
@@ -737,12 +824,34 @@ def check(resident,*,worker=None,stage=None,self_test=False,read_ahead_proof=Non
     require('__kui_native_sci_priority7_resident' not in resident[4],
             'SDK SCI route must retain level1 and exclude priority7')
     pins=pin_bodies(resident)
-    cold=stage_pins(stage,diagnostic=bool(diagnostic),pio=pio,pio_pair=pio_pair)
-    binder=check_cold_binder(stage,resident,self_test=self_test)
-    callbacks=callback_cases(resident)
-    hooks,unhooks,dispatches,transitions=ownership_cases(resident)
+    multi_owner=multi_owner_profile(stage)
+    owner_table=multi_owner_table(stage) if multi_owner else {'enabled':False}
+    cold=stage_pins(stage,diagnostic=bool(diagnostic),pio=pio,pio_pair=pio_pair,multi_owner=multi_owner)
+    owner_names=tuple(OWNER_CONSTANTS) if multi_owner else ('Evolution2',)
+    binders={name:check_cold_binder(stage,resident,self_test=self_test,owner_name=name) for name in owner_names}
+    binder=binders['Evolution2']
+    callback_by_owner={name:callback_cases(resident,previous=OWNER_CONSTANTS[name]['default']) for name in owner_names}
+    ownership_by_owner={name:ownership_cases(resident,previous=OWNER_CONSTANTS[name]['default']) for name in owner_names}
+    callbacks=sum(callback_by_owner.values())
+    hooks,unhooks,dispatches,transitions=tuple(sum(v[i] for v in ownership_by_owner.values()) for i in range(4))
     rejected=0
+    marker_refusals=0
     if self_test:
+        if multi_owner:
+            for replacement in (None,(0,0,0,0xfff1),(2,0,0,0xfff1),(1,4,1,1),(1,0,0,1)):
+                symbols=dict(stage[4])
+                if replacement is None:symbols.pop(MULTI_OWNER_MARKER)
+                else:symbols[MULTI_OWNER_MARKER]=replacement
+                image=(*stage[:4],symbols)
+                try:stage_pins(image,diagnostic=bool(diagnostic),pio=pio,pio_pair=pio_pair,multi_owner=True)
+                except ValueError:marker_refusals+=1
+                else:raise ValueError('SDK multi-owner pin selector accepted a changed profile marker')
+            address,body,section=symbol_bytes(stage,'_owners',1)
+            for at in range(len(body)):
+                altered=bytearray(stage[0]);altered[section[4]+address-section[3]+at]^=1
+                try:multi_owner_table((bytes(altered),*stage[1:]))
+                except ValueError:rejected+=1
+                else:raise ValueError('SDK multi-owner table accepted a changed fingerprint or tuple')
         for name,(address,count,_) in pins.items():
             section=resident[3][resident[4][name][3]];start=section[4]+address-section[3]
             for at in range(count):
@@ -754,7 +863,7 @@ def check(resident,*,worker=None,stage=None,self_test=False,read_ahead_proof=Non
             {name:(record[0],record[1]) for name,record in {
                 name:resident[4][name] for name in ('_kui_native_sdk_sci_route_entry','_kui_native_sdk_sci_route_exports')}.items()},
             pin_bodies),(stage,{name:(record[0],record[1]) for name,record in cold.items()},
-                lambda image:stage_pins(image,diagnostic=bool(diagnostic),pio=pio,pio_pair=pio_pair))):
+                lambda image:stage_pins(image,diagnostic=bool(diagnostic),pio=pio,pio_pair=pio_pair,multi_owner=multi_owner))):
             if image is None:continue
             for name,(address,count) in pinned.items():
                 section=image[3][image[4][name][3]];start=section[4]+address-section[3]
@@ -763,7 +872,10 @@ def check(resident,*,worker=None,stage=None,self_test=False,read_ahead_proof=Non
                     try:probe((bytes(altered),*image[1:]))
                     except ValueError:rejected+=1
                     else:raise ValueError('SDK SCI audit accepted a changed typed binding/cold publisher')
-    return dict(enabled=True,paired_sdk_sci_markers=True,immutable_descriptor_bound=True,
+    return dict(enabled=True,multi_owner=multi_owner,paired_sdk_sci_markers=True,immutable_descriptor_bound=True,
+        multi_owner_admission_table=owner_table,multi_owner_marker_mutation_rejections=marker_refusals,
+        cold_binder_execution_by_owner=binders,callback_cases_by_owner=callback_by_owner,
+        ownership_cases_by_owner=ownership_by_owner,
         callback_private_stack_prefix_bytes=0,sdk_owner_stack_save_bytes=16,
         cold_binder_and_admission_pins=cold,cold_binder_instruction_modelled=True,cold_binder_execution=binder,
         cold_binder_source_reviewed=True,read_ahead_companion_required=bool(ra),
@@ -789,7 +901,7 @@ def main():
     p.add_argument('directory',type=Path)
     p.add_argument('--self-test',action='store_true')
     p.add_argument('--refused-build',type=Path,help='optional preserved b656 build for actual DETAIL03 regression')
-    p.add_argument('--startup',type=Path,help='optional exact external Evolution2 startup for actual SDK dispatcher replay')
+    p.add_argument('--startup',type=Path,action='append',help='repeat for each exact external owner startup')
     a=p.parse_args()
     try:
         r,w,s=(read_elf(a.directory/name) for name in ('resident-sci.elf','native-worker.elf','stage.elf'))
@@ -798,7 +910,14 @@ def main():
             from check_vmu_native_readahead import check as check_read_ahead
             read_ahead=check_read_ahead(a.directory,self_test=a.self_test)
         result=check(r,worker=w,stage=s,self_test=a.self_test,read_ahead_proof=read_ahead)
-        if a.startup:result['external_sdk_dispatch']=check_sdk_dispatch(r,a.startup)
+        if a.startup:
+            owners=[check_sdk_dispatch(r,path) for path in a.startup]
+            result['external_sdk_dispatch_by_owner']={proof['owner_digest']:proof for proof in owners}
+            require(len(result['external_sdk_dispatch_by_owner'])==len(owners),'duplicate original SDK owner proof')
+            result['external_sdk_dispatch']=next((proof for proof in owners if proof['game']=='evolution2'),owners[0])
+            if result.get('multi_owner'):
+                require(set(result['external_sdk_dispatch_by_owner'])=={owner['digest'] for owner in OWNER_CONSTANTS.values()},
+                        'multi-owner SDK replay requires both exact original owners')
         if a.refused_build:
             result['shipped_refusal_regression']=check_cold_binder(read_elf(a.refused_build/'stage.elf'),read_elf(a.refused_build/'resident-sci.elf'),refused_artifact=True)
     except (OSError,ValueError,AssertionError,KeyError,struct.error) as e:

@@ -83,11 +83,25 @@ def package(build,guide='broader',trace_startup=None,sdk_startup=None):
     report=check(build,self_test=True,trace_startup=trace_startup)
     if guide in ('sdk-sci-route','readahead'):
         if sdk_startup is None or not report.get('sdk_sci_route',{}).get('enabled'):
-            raise ValueError('SDK SCI route requires the paired linked route proof and exact Evolution2 startup')
+            raise ValueError('SDK SCI route requires the paired linked route proof and exact original SDK owner startups')
         from check_vmu_native_sdk_sci_route import check_sdk_dispatch
         from check_vmu_native_worker_gateway import read_elf
-        report['sdk_sci_route']['original_sdk_dispatch']=check_sdk_dispatch(
-            read_elf(build/'resident-sci.elf'),sdk_startup)
+        startups=list(sdk_startup) if isinstance(sdk_startup,(list,tuple)) else [sdk_startup]
+        if not startups:
+            raise ValueError('SDK SCI route requires at least one exact original startup')
+        resident=read_elf(build/'resident-sci.elf')
+        proofs=[check_sdk_dispatch(resident,path) for path in startups]
+        owners={proof['owner_digest']:proof for proof in proofs if 'owner_digest' in proof}
+        if len(owners)!=len(proofs):
+            raise ValueError('SDK SCI owner proofs must have unique verified identities')
+        evolution2='52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605'
+        evolution1='ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35'
+        if report['sdk_sci_route'].get('multi_owner') and set(owners)!={evolution1,evolution2}:
+            raise ValueError('Multi-owner SDK route requires both exact Evolution original dispatch proofs')
+        if not report['sdk_sci_route'].get('multi_owner') and set(owners)!={evolution2}:
+            raise ValueError('Legacy SDK route requires its exact Evolution2 original dispatch proof')
+        report['sdk_sci_route']['original_sdk_dispatch_by_owner']=owners
+        report['sdk_sci_route']['original_sdk_dispatch']=owners.get(evolution2,proofs[0])
     cached=report['worker_load_policy']['cached_code']
     seed=report.get('resolution_cache_seed',{})
     compat=seed.get('enabled',False)
@@ -300,7 +314,8 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('build',type=Path)
     parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall','cooperative','open','timed','paced','irq-rearm','timeline','priority7','sdk-sci-route','readahead'),default='broader')
     parser.add_argument('--trace-startup',type=Path)
-    parser.add_argument('--sdk-startup',type=Path)
+    parser.add_argument('--sdk-startup',type=Path,action='append',
+                        help='Exact original SDK owner startup; repeat for every admitted owner')
     try:
         args=parser.parse_args();package(args.build,args.guide,args.trace_startup,args.sdk_startup)
     except (OSError,ValueError,KeyError,AssertionError,subprocess.CalledProcessError) as error:
