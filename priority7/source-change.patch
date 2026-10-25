@@ -1,0 +1,1985 @@
+diff --git a/Makefile.vmu-native-priority7 b/Makefile.vmu-native-priority7
+new file mode 100644
+index 0000000..c169483
+--- /dev/null
++++ b/Makefile.vmu-native-priority7
+@@ -0,0 +1,17 @@
++# SPDX-License-Identifier: GPL-3.0-only
++BUILD ?= build/native-priority7
++include Makefile.vmu-native-timeline
++FLAGS += -DKUI_NATIVE_SCI_PRIORITY7=1
++NATIVE_FLAGS += -DKUI_NATIVE_SCI_PRIORITY7=1
++override TEST_GUIDE := docs/vmu-native-priority7-test.md
++
++PRIORITY7_READER_FLAGS = $(STALL_READER_FLAGS) -DKUI_NATIVE_REQUEST_TIMING=1 \
++ -DKUI_NATIVE_COOP_PUMP=1 -DKUI_NATIVE_IRQ_REARM=1 \
++ -DKUI_NATIVE_LOADER_TIMELINE=1 -DKUI_VMU_NATIVE_BACKGROUND=1
++.PHONY: priority7-host-tests
++priority7-host-tests:
++	@mkdir -p $(BUILD)
++	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -O2 $(PRIORITY7_READER_FLAGS) $(STALL_READER_SRC) tests/test_retail_async_irq_rearm.c -Wl,--gc-sections -o $(BUILD)/test-priority1-reader
++	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-priority1-reader
++	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -O2 $(PRIORITY7_READER_FLAGS) -DKUI_NATIVE_SCI_PRIORITY7=1 $(STALL_READER_SRC) tests/test_retail_async_irq_rearm.c -Wl,--gc-sections -o $(BUILD)/test-priority7-reader
++	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-priority7-reader
+diff --git a/docs/evidence/native-priority7-2026-10-24.json b/docs/evidence/native-priority7-2026-10-24.json
+new file mode 100644
+index 0000000..257de79
+--- /dev/null
++++ b/docs/evidence/native-priority7-2026-10-24.json
+@@ -0,0 +1,1145 @@
++{
++  "schema": "kui.native.priority7.console-evidence.v1",
++  "date": "2026-10-24",
++  "capture": {
++    "build": "302f73152e4b",
++    "source_commit": "302f73152e4b9058183ebb286439108eb3d5ba2f",
++    "reader": "native hybrid loader timeline, original SCI priority1",
++    "console_performance_verified": false,
++    "user_observation": "Prior user report: movement stopped about one second every five seconds while music continued. The new video records diagnostic pages after the intentional stop; its accompanying message does not separately report gameplay performance of build302f73152e4b.",
++    "video": {
++      "filename": "63344.mp4",
++      "sha256": "4713e49a7c785d95ce8e5a4ec5c39c1aa0a54108018f108a5e9ce680f80a27b2",
++      "bytes": 97326541,
++      "duration_seconds": 91.545489,
++      "video_dimensions": [
++        1280,
++        720
++      ],
++      "extraction_command": "ffmpeg -i 63344.mp4 -vf fps=1/3 frames/page-%02d.png",
++      "selected_frames": [
++        {
++          "page": 4,
++          "filename": "page-04.png",
++          "sha256": "1dcd8267f07b49553f7c675b1f2176b8c74bb0e3350fae83ee73d5a7ba91e392",
++          "source_pts": 942682,
++          "source_time_base": "1/90000",
++          "source_seconds": 10.474244444444444,
++          "fps_output_grid_seconds": 9
++        },
++        {
++          "page": 5,
++          "filename": "page-05.png",
++          "sha256": "5b0d44f0585b136db4098ff4562999ffad2d686369459b9e7183f3acb3a3be5d",
++          "source_pts": 1212912,
++          "source_time_base": "1/90000",
++          "source_seconds": 13.4768,
++          "fps_output_grid_seconds": 12
++        },
++        {
++          "page": 7,
++          "filename": "page-07.png",
++          "sha256": "da37f9c3575da4e4dfcdbf8ef55f47b920a139ae5b55054fa7ba464a35663d0d",
++          "source_pts": 1753399,
++          "source_time_base": "1/90000",
++          "source_seconds": 19.482211111111113,
++          "fps_output_grid_seconds": 18
++        },
++        {
++          "page": 8,
++          "filename": "page-08.png",
++          "sha256": "44e272e10de5b2b1b1b472341008c204f5fd27e8c8d77ccc4ee51f7e33a20ed3",
++          "source_pts": 2023638,
++          "source_time_base": "1/90000",
++          "source_seconds": 22.484866666666665,
++          "fps_output_grid_seconds": 21
++        },
++        {
++          "page": 9,
++          "filename": "page-09.png",
++          "sha256": "f48e830700d59a345f8229a168e04f2de8c126fe339bfe99ef6e4e4812f859d2",
++          "source_pts": 2293875,
++          "source_time_base": "1/90000",
++          "source_seconds": 25.4875,
++          "fps_output_grid_seconds": 24
++        },
++        {
++          "page": 11,
++          "filename": "page-11.png",
++          "sha256": "1da2e55650543754e7a407207c67e875365cf9e371520a237c3d0b24f074c17d",
++          "source_pts": 2834356,
++          "source_time_base": "1/90000",
++          "source_seconds": 31.492844444444444,
++          "fps_output_grid_seconds": 30
++        },
++        {
++          "page": 12,
++          "filename": "page-12.png",
++          "sha256": "55666283b05338b25ce213b7b78c937f74e84036a8e9f72f891a77d1369c0b6d",
++          "source_pts": 3104595,
++          "source_time_base": "1/90000",
++          "source_seconds": 34.4955,
++          "fps_output_grid_seconds": 33
++        },
++        {
++          "page": 13,
++          "filename": "page-13.png",
++          "sha256": "460020b092e287d39ee20ddc1046add383d93a7c70a27bafe6c8b430ccba5aa7",
++          "source_pts": 3374818,
++          "source_time_base": "1/90000",
++          "source_seconds": 37.49797777777778,
++          "fps_output_grid_seconds": 36
++        },
++        {
++          "page": 15,
++          "filename": "page-15.png",
++          "sha256": "951857901c0b5ecb95a5faf3933d76a0054bc75fcc896c787de3c3bfc35b42e3",
++          "source_pts": 3912286,
++          "source_time_base": "1/90000",
++          "source_seconds": 43.46984444444445,
++          "fps_output_grid_seconds": 42
++        },
++        {
++          "page": 18,
++          "filename": "page-18.png",
++          "sha256": "dc85a718566ef9b4356be0d80e6e12e54bb9b25cdb09f8b27e26761e38301b53",
++          "source_pts": 4722993,
++          "source_time_base": "1/90000",
++          "source_seconds": 52.4777,
++          "fps_output_grid_seconds": 51
++        }
++      ],
++      "timestamp_validation": "Input PTS recovered from ffmpeg fps debug selections, time_base verified with ffprobe. The first eight selected source frames were decoded again with select=eq(pts,...) and matched the saved PNG RGB pixels exactly. Output fps-grid timestamps differ from selected original source PTS."
++    },
++    "raw_hex": {
++      "summary_page04": {
++        "events_valid_bad_epoch": [
++          "00002076",
++          "00002076",
++          "00000000",
++          "00000001"
++        ],
++        "clockbreak_unmatched_overflow_saturated": [
++          "00000000",
++          "00000000",
++          "00000000",
++          "00000000"
++        ],
++        "max_call_max_gap_max_chain_length": [
++          "000014EF",
++          "000032CF",
++          "00000001"
++        ],
++        "max_chain_ticks_inside_ticks": [
++          "0001BA9A",
++          "00015D15"
++        ],
++        "active_token_lba_sectors_flags": [
++          "00000000",
++          "0004E8A0",
++          "00000032",
++          "00000000"
++        ],
++        "stored_calls_requests_bins": [
++          "00000008",
++          "00000008",
++          "00000020"
++        ]
++      },
++      "bin_fields": [
++        "index",
++        "epoch",
++        "gd_ticks",
++        "calls",
++        "maples"
++      ],
++      "bins_pages05_07_08": [
++        [
++          "00000000",
++          "00000001",
++          "00016183",
++          "0000006B",
++          "00000026"
++        ],
++        [
++          "00000001",
++          "00000001",
++          "0000083B",
++          "00000072",
++          "00000025"
++        ],
++        [
++          "00000002",
++          "00000001",
++          "000007F9",
++          "0000006E",
++          "00000026"
++        ],
++        [
++          "00000003",
++          "00000001",
++          "00000830",
++          "00000072",
++          "00000026"
++        ],
++        [
++          "00000004",
++          "00000001",
++          "00000815",
++          "00000070",
++          "00000025"
++        ],
++        [
++          "00000005",
++          "00000001",
++          "0000F60E",
++          "0000006E",
++          "00000026"
++        ],
++        [
++          "00000006",
++          "00000001",
++          "000007EC",
++          "0000006E",
++          "00000025"
++        ],
++        [
++          "00000007",
++          "00000001",
++          "0000083B",
++          "00000072",
++          "00000026"
++        ],
++        [
++          "00000008",
++          "00000001",
++          "000162AA",
++          "00000068",
++          "00000025"
++        ],
++        [
++          "00000009",
++          "00000001",
++          "00000825",
++          "00000071",
++          "00000026"
++        ],
++        [
++          "0000000A",
++          "00000001",
++          "0000083F",
++          "00000072",
++          "00000025"
++        ],
++        [
++          "0000000B",
++          "00000001",
++          "00000813",
++          "00000070",
++          "00000026"
++        ],
++        [
++          "0000000C",
++          "00000001",
++          "00000838",
++          "00000072",
++          "00000026"
++        ],
++        [
++          "0000000D",
++          "00000001",
++          "0000F617",
++          "0000006A",
++          "00000025"
++        ],
++        [
++          "0000000E",
++          "00000001",
++          "00000841",
++          "00000072",
++          "00000026"
++        ],
++        [
++          "0000000F",
++          "00000001",
++          "0000081A",
++          "00000070",
++          "00000025"
++        ],
++        [
++          "00000010",
++          "00000001",
++          "00016356",
++          "00000069",
++          "00000026"
++        ],
++        [
++          "00000011",
++          "00000001",
++          "00000838",
++          "00000072",
++          "00000025"
++        ],
++        [
++          "00000012",
++          "00000001",
++          "00000818",
++          "00000070",
++          "00000026"
++        ],
++        [
++          "00000013",
++          "00000001",
++          "0000083F",
++          "00000072",
++          "00000025"
++        ],
++        [
++          "00000014",
++          "00000001",
++          "000007F5",
++          "0000006E",
++          "00000026"
++        ],
++        [
++          "00000015",
++          "00000001",
++          "0000F6B6",
++          "0000006E",
++          "00000026"
++        ],
++        [
++          "00000016",
++          "00000001",
++          "0000081C",
++          "00000070",
++          "00000025"
++        ],
++        [
++          "00000017",
++          "00000001",
++          "00000836",
++          "00000072",
++          "00000026"
++        ],
++        [
++          "00000018",
++          "00000001",
++          "00016339",
++          "00000068",
++          "00000025"
++        ],
++        [
++          "00000019",
++          "00000001",
++          "00000833",
++          "00000072",
++          "00000026"
++        ],
++        [
++          "0000001A",
++          "00000001",
++          "00000834",
++          "00000072",
++          "00000025"
++        ],
++        [
++          "0000001B",
++          "00000001",
++          "0000081A",
++          "00000070",
++          "00000026"
++        ],
++        [
++          "0000001C",
++          "00000001",
++          "00000838",
++          "00000072",
++          "00000025"
++        ],
++        [
++          "0000001D",
++          "00000001",
++          "0000F665",
++          "0000006A",
++          "00000026"
++        ],
++        [
++          "0000001E",
++          "00000001",
++          "00000840",
++          "00000072",
++          "00000026"
++        ],
++        [
++          "0000001F",
++          "00000001",
++          "000007A8",
++          "0000006A",
++          "00000023"
++        ]
++      ],
++      "long_call_row_fields": [
++        [
++          "elapsed",
++          "preceding_gap",
++          "epoch",
++          "entry_tick",
++          "entry_flags"
++        ],
++        [
++          "entry_function",
++          "previous_status",
++          "token",
++          "lba",
++          "sectors"
++        ],
++        [
++          "entry_completed_bytes",
++          "original_sr",
++          "entry_vbr",
++          "entry_iprb",
++          "entry_chcr"
++        ],
++        [
++          "entry_dma_tcr",
++          "entry_dmaor",
++          "entry_sci_ssr",
++          "entry_packed_state",
++          "exit_tick"
++        ],
++        [
++          "exit_flags",
++          "exit_function",
++          "actual_gd_result",
++          "exit_token",
++          "exit_lba"
++        ],
++        [
++          "exit_sectors",
++          "exit_completed_bytes",
++          "original_sr",
++          "exit_vbr",
++          "exit_iprb"
++        ],
++        [
++          "exit_chcr",
++          "exit_dma_tcr",
++          "exit_dmaor",
++          "exit_sci_ssr",
++          "exit_packed_state"
++        ]
++      ],
++      "longest_calls_pages09_11": [
++        {
++          "rank": 0,
++          "rows": [
++            [
++              "000014EF",
++              "00000905",
++              "00000001",
++              "FD5C3ED3",
++              "00000D01"
++            ],
++            [
++              "00000002",
++              "00000001",
++              "000006A5",
++              "0004E761",
++              "00000049"
++            ],
++            [
++              "00013800",
++              "60000160",
++              "8C00F400",
++              "00000010",
++              "00004911"
++            ],
++            [
++              "00000129",
++              "00008201",
++              "000000A4",
++              "00110702",
++              "FD5C29E4"
++            ],
++            [
++              "00000D02",
++              "00000002",
++              "00000000",
++              "000006A5",
++              "0004E761"
++            ],
++            [
++              "00000049",
++              "00015800",
++              "60000160",
++              "8CFF0300",
++              "00000010"
++            ],
++            [
++              "00004911",
++              "0000015D",
++              "00008201",
++              "00000086",
++              "00110F02"
++            ]
++          ]
++        },
++        {
++          "rank": 1,
++          "rows": [
++            [
++              "000014ED",
++              "000008D3",
++              "00000001",
++              "FD1FBD22",
++              "00000D01"
++            ],
++            [
++              "00000002",
++              "00000001",
++              "00000738",
++              "0004E7DC",
++              "00000049"
++            ],
++            [
++              "00013800",
++              "60000160",
++              "8C00F400",
++              "00000010",
++              "00004911"
++            ],
++            [
++              "0000012A",
++              "00008201",
++              "000000A4",
++              "00110702",
++              "FD1FA835"
++            ],
++            [
++              "00000D02",
++              "00000002",
++              "00000000",
++              "00000738",
++              "0004E7DC"
++            ],
++            [
++              "00000049",
++              "00015800",
++              "60000160",
++              "8CFF0300",
++              "00000010"
++            ],
++            [
++              "00004911",
++              "0000015F",
++              "00008201",
++              "00000086",
++              "00110F02"
++            ]
++          ]
++        },
++        {
++          "rank": 2,
++          "rows": [
++            [
++              "000014ED",
++              "000008D5",
++              "00000001",
++              "FCE36E1E",
++              "00000D01"
++            ],
++            [
++              "00000002",
++              "00000001",
++              "000007CA",
++              "0004E857",
++              "00000049"
++            ],
++            [
++              "00013800",
++              "60000160",
++              "8C00F400",
++              "00000010",
++              "00004911"
++            ],
++            [
++              "00000129",
++              "00008201",
++              "000000A6",
++              "00110702",
++              "FCE35931"
++            ],
++            [
++              "00000D02",
++              "00000002",
++              "00000000",
++              "000007CA",
++              "0004E857"
++            ],
++            [
++              "00000049",
++              "00015800",
++              "60000160",
++              "8CFF0300",
++              "00000010"
++            ],
++            [
++              "00004911",
++              "0000015D",
++              "00008201",
++              "00000084",
++              "00110F02"
++            ]
++          ]
++        },
++        {
++          "rank": 3,
++          "rows": [
++            [
++              "000014ED",
++              "00000906",
++              "00000001",
++              "FCE2D5A9",
++              "00000D01"
++            ],
++            [
++              "00000002",
++              "00000001",
++              "000007CA",
++              "0004E857",
++              "00000049"
++            ],
++            [
++              "00020800",
++              "60000160",
++              "8C00F400",
++              "00000010",
++              "00004911"
++            ],
++            [
++              "00000126",
++              "00008201",
++              "000000A6",
++              "00110702",
++              "FCE2C0BC"
++            ],
++            [
++              "00000D02",
++              "00000002",
++              "00000000",
++              "000007CA",
++              "0004E857"
++            ],
++            [
++              "00000049",
++              "00022800",
++              "60000160",
++              "8CFF0300",
++              "00000010"
++            ],
++            [
++              "00004911",
++              "0000015D",
++              "00008201",
++              "00000086",
++              "00110F02"
++            ]
++          ]
++        }
++      ],
++      "request_row_fields": [
++        [
++          "token",
++          "lba",
++          "sectors",
++          "total_ticks"
++        ],
++        [
++          "inside_gd_ticks",
++          "outside_gd_ticks",
++          "paired_calls",
++          "completed_bytes"
++        ],
++        [
++          "epoch",
++          "flags",
++          "chain_length",
++          "chain_ticks"
++        ]
++      ],
++      "recent_eight_reads_pages12_13": [
++        [
++          [
++            "00000612",
++            "0004E6E6",
++            "00000049",
++            "0001B9FE"
++          ],
++          [
++            "00015B1F",
++            "00005EDF",
++            "00000012",
++            "00024800"
++          ],
++          [
++            "00000001",
++            "00000000",
++            "00000001",
++            "0001B9FE"
++          ]
++        ],
++        [
++          [
++            "00000669",
++            "0004E72F",
++            "00000032",
++            "000133C2"
++          ],
++          [
++            "0000EF13",
++            "000044AF",
++            "0000000D",
++            "00019000"
++          ],
++          [
++            "00000001",
++            "00000000",
++            "00000001",
++            "000133C2"
++          ]
++        ],
++        [
++          [
++            "000006A5",
++            "0004E761",
++            "00000049",
++            "0001BA94"
++          ],
++          [
++            "00015C74",
++            "00005E20",
++            "00000012",
++            "00024800"
++          ],
++          [
++            "00000001",
++            "00000000",
++            "00000001",
++            "0001BA94"
++          ]
++        ],
++        [
++          [
++            "000006FC",
++            "0004E7AA",
++            "00000032",
++            "000133C3"
++          ],
++          [
++            "0000EF69",
++            "0000445A",
++            "0000000D",
++            "00019000"
++          ],
++          [
++            "00000001",
++            "00000000",
++            "00000001",
++            "000133C3"
++          ]
++        ],
++        [
++          [
++            "00000738",
++            "0004E7DC",
++            "00000049",
++            "0001BA9A"
++          ],
++          [
++            "00015D15",
++            "00005D85",
++            "00000012",
++            "00024800"
++          ],
++          [
++            "00000001",
++            "00000000",
++            "00000001",
++            "0001BA9A"
++          ]
++        ],
++        [
++          [
++            "0000078E",
++            "0004E825",
++            "00000032",
++            "000133C2"
++          ],
++          [
++            "0000EFB8",
++            "0000440A",
++            "0000000D",
++            "00019000"
++          ],
++          [
++            "00000001",
++            "00000000",
++            "00000001",
++            "000133C2"
++          ]
++        ],
++        [
++          [
++            "000007CA",
++            "0004E857",
++            "00000049",
++            "0001BA95"
++          ],
++          [
++            "00015D09",
++            "00005D8C",
++            "00000012",
++            "00024800"
++          ],
++          [
++            "00000001",
++            "00000000",
++            "00000001",
++            "0001BA95"
++          ]
++        ],
++        [
++          [
++            "00000821",
++            "0004E8A0",
++            "00000032",
++            "0001338C"
++          ],
++          [
++            "0000EFB4",
++            "000043D8",
++            "0000000D",
++            "00019000"
++          ],
++          [
++            "00000001",
++            "00000000",
++            "00000001",
++            "0001338C"
++          ]
++        ]
++      ],
++      "vmu_page15": {
++        "submit_calls_valid_bad_total_max": [
++          "000004B0",
++          "000004B0",
++          "00000000",
++          "0000BCA7",
++          "00000048"
++        ],
++        "complete_calls_valid_bad_total_max": [
++          "000004B0",
++          "000004B0",
++          "00000000",
++          "0000C2C0",
++          "00000041"
++        ],
++        "free_calls_valid_bad_total_max": [
++          "00000000",
++          "00000000",
++          "00000000",
++          "00000000",
++          "00000000"
++        ],
++        "storage_calls_valid_bad_total_max": [
++          "00000000",
++          "00000000",
++          "00000000",
++          "00000000",
++          "00000000"
++        ],
++        "wall_ticks_clock_samples_bad_flags": [
++          "00EDE723",
++          "000012C0",
++          "00000000",
++          "00000000"
++        ],
++        "fastsub_fullsub_fastend_fullend": [
++          "000004B0",
++          "00000000",
++          "000004B0",
++          "00000000"
++        ]
++      },
++      "reader_page18": {
++        "samples_bad_gapmax_readmax_agemax": [
++          "000004B0",
++          "00000000",
++          "000047A9",
++          "0001BA77",
++          "0001BE05"
++        ],
++        "irqblocks_callblocks_piocrc_tokenerr": [
++          "00000000",
++          "000008D8",
++          "00000000",
++          "00000000"
++        ],
++        "foreign_repairs_overrun_deferred_clockbad": [
++          "00000000",
++          "00000030",
++          "00000000",
++          "00000000",
++          "00000000"
++        ],
++        "sci_level_rearms_irq_entries": [
++          "00000000",
++          "00000000"
++        ],
++        "rehook_r100_r400_r600_vbrtotal": [
++          "00000000",
++          "00000000",
++          "00000000",
++          "00000000",
++          "00000000"
++        ],
++        "longest_read_lba_sectors": [
++          "0004E7DC",
++          "00000049"
++        ]
++      }
++    },
++    "derived": {
++      "clock_hz": 781250,
++      "bins": 32,
++      "bin_ticks": 488281,
++      "nominal_bin_seconds": 0.62499968,
++      "nominal_32_bin_seconds": 19.99998976,
++      "last_bin_is_partially_occupied": true,
++      "sum_gd_ticks": 665373,
++      "sum_gd_ticks_hex": "000A271D",
++      "sum_gd_seconds": 0.85167744,
++      "sum_paired_calls": 3555,
++      "sum_maples": 1200,
++      "event_identity": {
++        "formula": "2 * paired GD calls + Maple events",
++        "computed": 8310,
++        "reported": 8310,
++        "equal": true
++      },
++      "gd_fraction_of_nominal_32_bins": 0.042583893802953625,
++      "profile_wall_ticks": 15591203,
++      "profile_wall_seconds": 19.95673984,
++      "gd_fraction_of_profile_wall_approximately_same_capture_window": 0.04267618092074101,
++      "max_gd_call_ms": 6.85952,
++      "max_between_gd_calls_ms": 16.64896,
++      "four_longest_call_ms": [
++        6.85952,
++        6.85696,
++        6.85696,
++        6.85696
++      ],
++      "four_longest_preceding_gaps_ms": [
++        2.95552,
++        2.89152,
++        2.89408,
++        2.9568
++      ],
++      "max_chain_length": 1,
++      "max_chain_ms": 145.03168,
++      "inside_gd_for_max_chain_ms": 114.3872,
++      "outside_gd_for_max_chain_ms": 30.64448,
++      "chain_proximity_threshold_ms": 33.33376,
++      "primary_peak_bin_indices": [
++        0,
++        8,
++        16,
++        24
++      ],
++      "primary_peak_bin_gd_ms": [
++        115.83872,
++        116.21632,
++        116.43648,
++        116.39936
++      ],
++      "secondary_peak_bin_indices": [
++        5,
++        13,
++        21,
++        29
++      ],
++      "secondary_peak_bin_gd_ms": [
++        80.6272,
++        80.63872,
++        80.84224,
++        80.73856
++      ],
++      "peak_recurrence_seconds": 4.99999744,
++      "read_summaries": [
++        {
++          "token_hex": "00000612",
++          "lba_hex": "0004E6E6",
++          "sectors": 73,
++          "total_ms": 144.832,
++          "inside_gd_ms": 113.74464,
++          "outside_gd_ms": 31.08736,
++          "paired_calls": 18,
++          "completed_bytes": 149504,
++          "chain_length": 1
++        },
++        {
++          "token_hex": "00000669",
++          "lba_hex": "0004E72F",
++          "sectors": 50,
++          "total_ms": 100.84608,
++          "inside_gd_ms": 78.33984,
++          "outside_gd_ms": 22.50624,
++          "paired_calls": 13,
++          "completed_bytes": 102400,
++          "chain_length": 1
++        },
++        {
++          "token_hex": "000006A5",
++          "lba_hex": "0004E761",
++          "sectors": 73,
++          "total_ms": 145.024,
++          "inside_gd_ms": 114.18112,
++          "outside_gd_ms": 30.84288,
++          "paired_calls": 18,
++          "completed_bytes": 149504,
++          "chain_length": 1
++        },
++        {
++          "token_hex": "000006FC",
++          "lba_hex": "0004E7AA",
++          "sectors": 50,
++          "total_ms": 100.84736,
++          "inside_gd_ms": 78.44992,
++          "outside_gd_ms": 22.39744,
++          "paired_calls": 13,
++          "completed_bytes": 102400,
++          "chain_length": 1
++        },
++        {
++          "token_hex": "00000738",
++          "lba_hex": "0004E7DC",
++          "sectors": 73,
++          "total_ms": 145.03168,
++          "inside_gd_ms": 114.3872,
++          "outside_gd_ms": 30.64448,
++          "paired_calls": 18,
++          "completed_bytes": 149504,
++          "chain_length": 1
++        },
++        {
++          "token_hex": "0000078E",
++          "lba_hex": "0004E825",
++          "sectors": 50,
++          "total_ms": 100.84608,
++          "inside_gd_ms": 78.55104,
++          "outside_gd_ms": 22.29504,
++          "paired_calls": 13,
++          "completed_bytes": 102400,
++          "chain_length": 1
++        },
++        {
++          "token_hex": "000007CA",
++          "lba_hex": "0004E857",
++          "sectors": 73,
++          "total_ms": 145.02528,
++          "inside_gd_ms": 114.37184,
++          "outside_gd_ms": 30.65344,
++          "paired_calls": 18,
++          "completed_bytes": 149504,
++          "chain_length": 1
++        },
++        {
++          "token_hex": "00000821",
++          "lba_hex": "0004E8A0",
++          "sectors": 50,
++          "total_ms": 100.77696,
++          "inside_gd_ms": 78.54592,
++          "outside_gd_ms": 22.23104,
++          "paired_calls": 13,
++          "completed_bytes": 102400,
++          "chain_length": 1
++        }
++      ],
++      "all_eight_reads_contiguous": true,
++      "read_sector_total": 492,
++      "read_byte_total": 1007616,
++      "read_sectors_alternate": [
++        73,
++        50
++      ],
++      "read_request_total_seconds": 0.98322944,
++      "read_request_inside_gd_seconds": 0.77057152,
++      "reader_maple_gap_max_ms": 23.4816,
++      "reader_complete_request_max_ms": 144.98688,
++      "vmu_submit_max_ms": 0.09216,
++      "vmu_complete_max_ms": 0.0832,
++      "hardware": {
++        "original_caller_sr_hex": "60000160",
++        "sampled_imask": 6,
++        "iprb_hex": "00000010",
++        "sampled_sci_priority": 1,
++        "entry_vbr_hex": "8C00F400",
++        "exit_vbr_hex": "8CFF0300",
++        "entry_ssr_hex": [
++          "A4",
++          "A4",
++          "A6",
++          "A6"
++        ],
++        "exit_ssr_hex": [
++          "86",
++          "86",
++          "84",
++          "86"
++        ],
++        "entry_orer_set": true,
++        "exit_orer_set": false,
++        "chcr_hex": "00004911",
++        "chcr_de_set": true,
++        "chcr_te_set": false,
++        "dmaor_hex": "00008201",
++        "dmaor_low_enable_bits_hex": "00000001",
++        "packed_state_entry_hex": "00110702",
++        "packed_state_exit_hex": "00110F02",
++        "repair_count": 48,
++        "irq_entries": 0,
++        "sci_level_rearms": 0
++      }
++    },
++    "collector_accounting_review": {
++      "bin_event_identity_passed": true,
++      "all_read_inside_plus_outside_equal_total": true,
++      "all_read_bytes_equal_sectors_times_2048": true,
++      "all_four_raw_counter_differences_equal_reported_call_ticks": true,
++      "single_clock_epoch": true,
++      "invalid_unmatched_overflow_saturation_all_zero": true,
++      "accounting_error_found": false
++    },
++    "interpretation": [
++      "Measured GD work clusters every approximately five seconds, matching the reported recurrence, but the bins contain about 0.852 seconds of measured GD time across approximately twenty seconds. No measured call exceeded 6.860 milliseconds; this capture does not show a one-second continuous GD call.",
++      "All eight reads are adjacent on disc, alternate 73 and50 sectors, and each completed request remains a chain of one under the33.334ms proximity rule. There is no evidence here that a repeated-LBA cache would remove this sequential workload.",
++      "Original SR at the four longest GD entries has IMASK6 while the sampled SCI priority is1, making SCI non-deliverable at those sampled entry contexts. Priority7 is a concrete discriminator for this mismatch, rather than another CHECK throughput throttle.",
++      "Entry SSR has ORER latched and exit SSR does not; the four sampled DMA transfers have DE set and TE clear. These are observations of incomplete transfer/repair during a GD call, not proof that this causes the full movement freeze."
++    ],
++    "evidence_limits": [
++      "The video shows static report pages after capture. It provides no synchronized frame-submit, movement-update or render-completion witness; Maple count and audio continuity cannot measure game simulation progress.",
++      "Caller SR is sampled only at GD entry. It does not establish the interrupt mask, BL state, execution context or VBR throughout all outside-GD time.",
++      "VBR changes from the SDK value at entry to the retained reader value at exit. The zero VBR-total/rearm/IRQ counters do not by themselves prove the game never restores its SDK vector between calls.",
++      "Outside-GD request duration is observed wall span minus paired GD intervals, not CPU idle time. A chain is a proximity grouping, not a frame-stall witness.",
++      "Timing includes diagnostic work and excludes uninstrumented instructions outside the begin/end callbacks. No invalid profile or counter discontinuity was observed, but endpoint validation cannot exclude unobserved timer stops or resets.",
++      "The32 bins span a nominal20 seconds; the final bin is partial. The independent profile wall duration is19.95673984 seconds and is an approximately matching denominator, not an exact first/last timeline interval.",
++      "Changing SCI to priority7 is a forward experiment. It may restore interrupt opportunities where BL is clear and IMASK is6, but delivery also depends on vector ownership and masking elsewhere. No console performance improvement for that candidate is claimed."
++    ]
++  },
++  "next_experiment": {
++    "change": "Use a single shared SCI priority7 constant in the native timeline IRQ-rearm C and assembly paths. Preserve the default priority1 path for every other build.",
++    "discriminator": "Observe whether SCI IRQ entries become nonzero and completed reads progress outside GD catchup at sampled game IMASK6; compare actual FMV/movement behavior.",
++    "console_result": "not yet tested"
++  }
++}
+diff --git a/docs/vmu-native-priority7-test.md b/docs/vmu-native-priority7-test.md
+new file mode 100644
+index 0000000..5a69283
+--- /dev/null
++++ b/docs/vmu-native-priority7-test.md
+@@ -0,0 +1,63 @@
++<!-- SPDX-License-Identifier: GPL-3.0-only -->
++# Native SCI priority7 experiment
++
++This new candidate follows timeline build `302f73152e4b`. Its video captured
++all thirteen pages. The four longest GD calls entered with `SR=0x60000160`
++(`IMASK=6`, BL clear), while the SCI field in IPRB was `0x0010` (priority 1).
++All reader IRQ entries and IRQ-delivered blocks remained zero. The reader's
++VBR was installed by these calls; the trace does not establish a VBR-hook
++failure or the interrupt mask during every moment outside GD calls.
++
++The experiment changes one scheduling parameter: native SCI priority 1 to 7.
++The same shared constant controls the C hook/rearm/unhook and the assembly
++rehook trampoline. Other IPRB fields, the game's original SCI field on
++release, caller SR, CHECK/EXEC 20/25 and IRQ 8 budgets remain preserved.
++The change is compiled only for this paired native timeline experiment.
++
++At the sampled IMASK 6 contexts, level 1 cannot be accepted and level 7 can
++be accepted when BL is clear. This does not establish that every interval
++outside a call has IMASK 6 or that changing priority fixes the movement
++pause. IRQ entries/blocks and read-wall durations are the discriminators.
++All timings include the unchanged diagnostic instrumentation overhead.
++
++## Install and capture every run
++
++From this extracted folder, using the existing prepared pair:
++
++```sh
++python3 personalize.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --game evolution2 --profile-runtime
++```
++
++Use SCI, Background On, Normal speed, Auto/default encoding, CD music Off
++and RAM patches Off. Safely eject and cold boot. In the same movement area,
++hold both triggers fully plus B for about one second, then release. Keep
++moving through the pauses until the intentional stop after roughly 20 seconds.
++Record 90 seconds of the cycling pages so all thirteen pages are included.
++
++Capture remains part of every diagnostic install. No counter transcription
++is needed. Note whether FMV speed, movement pauses or audio change.
++
++## Reading this experiment
++
++* The reader page's SCI IRQ entries and IRQ blocks should establish whether
++  background delivery gets execution opportunities. Level 7 snapshots have
++  IPRB's SCI field `0x0070`. Other nibbles may reflect the game's own priorities.
++* Compare complete-read wall times and the new timeline's inside/outside-GD
++  request split against `302f73152e4b`. More IRQ activity alone is not success;
++  gameplay, FMVs and audio still need the console comparison.
++* Zero clock breaks, unmatched events, overflow and saturation are required
++  before interpreting the timeline's durations.
++
++The unchanged timeline format is described in
++docs/vmu-native-timeline-test.md in the exact source checkpoint. It retains
++32 time bins, eight longest calls and sixteen recent request summaries,
++printing the four longest calls and eight recent requests.
++
++The complete linked hook and assembly rehook must pass their instruction
++models and fixed code/literal checks, and the original low-stack admission
++must still pass before this package can be produced. No additional game
++allocation or runtime storage logging is introduced.
++
++Primary hardware reference: Renesas SH7750 Group User's Manual, Rev. 7.02,
++sections 2.2.4, 19.3.1 and 19.4.1:
++https://www.renesas.com/en/document/mah/sh7750-sh7750s-sh7750r-group-users-manual-hardware
+diff --git a/include/kui/native_sci_priority.h b/include/kui/native_sci_priority.h
+new file mode 100644
+index 0000000..4657bd0
+--- /dev/null
++++ b/include/kui/native_sci_priority.h
+@@ -0,0 +1,22 @@
++/* SPDX-License-Identifier: GPL-3.0-only */
++#ifndef KUI_NATIVE_SCI_PRIORITY_H
++#define KUI_NATIVE_SCI_PRIORITY_H
++
++/* Shared by C ownership checks and the assembly return trampoline. The
++ * experimental level must not silently fall back to one on an IRQ return.
++ * No suffix: this constant is also an SH immediate operand. */
++#ifndef KUI_NATIVE_SCI_PRIORITY7
++#define KUI_NATIVE_SCI_PRIORITY7 0
++#endif
++#if KUI_NATIVE_SCI_PRIORITY7
++#if !KUI_NATIVE_LOADER_TIMELINE || !KUI_NATIVE_IRQ_REARM || \
++    !KUI_RETAIL_NATIVE_HYBRID || !KUI_VMU_NATIVE_BACKGROUND || \
++    !KUI_RETAIL_ASYNC || defined(KUI_RETAIL_CE)
++#error "SCI priority7 is restricted to the separate native timeline IRQ-rearm experiment"
++#endif
++#define KUI_RETAIL_SCI_PRIORITY_FIELD 0x70
++#else
++#define KUI_RETAIL_SCI_PRIORITY_FIELD 0x10
++#endif
++
++#endif
+diff --git a/src/loader/retail_async.c b/src/loader/retail_async.c
+index 77e7b61..1dbfb02 100644
+--- a/src/loader/retail_async.c
++++ b/src/loader/retail_async.c
+@@ -2,6 +2,7 @@
+  * Original K-UI background game reader (see retail_async.h). The stream
+  * sequence is the one the SCI async probe proved on the console. */
+ #include "retail_async.h"
++#include "kui/native_sci_priority.h"
+ #if KUI_NATIVE_IRQ_REARM && (!KUI_NATIVE_REQUEST_TIMING || !KUI_RETAIL_NATIVE_HYBRID || defined(KUI_RETAIL_CE))
+ #error "Native IRQ rearm diagnostics require the hybrid request-timing counter profile"
+ #endif
+@@ -24,6 +25,9 @@ __asm__(".global __kui_native_irq_rearm_resident\n.set __kui_native_irq_rearm_re
+ #endif
+ #if KUI_NATIVE_LOADER_TIMELINE
+ __asm__(".global __kui_native_loader_timeline_resident\n.set __kui_native_loader_timeline_resident,1\n");
++#if KUI_NATIVE_SCI_PRIORITY7
++__asm__(".global __kui_native_sci_priority7_resident\n.set __kui_native_sci_priority7_resident,7\n");
++#endif
+ #endif
+ #if KUI_NATIVE_PACED_CHECK
+ __asm__(".global __kui_native_paced_resident\n.set __kui_native_paced_resident,1\n");
+@@ -50,9 +54,10 @@ static uintptr_t stream_event(uint32_t event,uintptr_t argument) {
+ #endif
+ 
+ #define IPRB UINT32_C(0xffd00008)
+-/* IPRB bits 7..4: the SCI's level. The reader's is the lowest. */
++/* IPRB bits 7..4 only. Level one normally; the separate timeline experiment
++ * uses fixed level seven without changing the game's SR or other levels. */
+ #define SCI_FIELD 0x00f0u
+-#define SCI_LEVEL 0x0010u
++#define SCI_LEVEL KUI_RETAIL_SCI_PRIORITY_FIELD
+ /* A fresh CMD18's token can take the card's whole access time. */
+ #define TOKEN_LIMIT 65536u
+ #if KUI_RETAIL_NATIVE_HYBRID && defined(KUI_RETAIL_CE)
+@@ -197,7 +202,7 @@ void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
+     copy_words(R.vector600, kui_retail_vector_interrupt, 11);
+ }
+ 
+-/* Put our vectors in front of the game's and give the SCI the lowest level.
++/* Put our vectors in front of the game's and select the reader's SCI level.
+  * Nothing else changes: the game's DMAC and other levels stay as they are.
+  * Games may keep the bootstrap's VBR for good (DOA2 does), so it is hooked
+  * like any other. Found released (the game's VBR again while hooked), the
+@@ -208,7 +213,7 @@ static void hook(void) {
+     uint16_t b = rd16(IPRB);
+     if(vbr == our_vbr()) {
+         /* CE already rechecks this field while installed. A native SDK may
+-         * update IPRB independently of VBR: re-arm our lowest SCI level and
++         * update IPRB independently of VBR: re-arm our selected SCI level and
+          * preserve its new owner field for the eventual release. */
+         if((b & SCI_FIELD) != SCI_LEVEL) {
+             e.release.sci = b & SCI_FIELD;
+@@ -905,7 +910,8 @@ void kui_retail_async_call(uint32_t function) {
+ /* Installed only after retained-region binding from the typed immutable
+  * worker descriptor. Bootstrap workspace and normal mode keep this zero. */
+ void __attribute__((noipa)) kui_retail_async_trace(uint32_t exit,uint32_t function) {
+-    void (*visit)(uint32_t,uint32_t,uint32_t,void *)=(void *)(uintptr_t)R.vector600[11];
++    void (*visit)(uint32_t,uint32_t,uint32_t,void *)=
++        (void (*)(uint32_t,uint32_t,uint32_t,void *))(uintptr_t)R.vector600[11];
+     if(visit)visit(exit,function,kui_retail_hook_sr,&R);
+ }
+ #endif
+diff --git a/src/loader/retail_resident.S b/src/loader/retail_resident.S
+index 3ea1724..4d1c32d 100644
+--- a/src/loader/retail_resident.S
++++ b/src/loader/retail_resident.S
+@@ -1,10 +1,15 @@
+ /* SPDX-License-Identifier: GPL-3.0-only */
+ #include "kui/retail_loader_layout.h"
+ #include "kui/retail_native_disc.h"
++#include "kui/native_sci_priority.h"
+ #define JOIN_INNER(a,b) a##b
+ #define JOIN(a,b) JOIN_INNER(a,b)
+ #define C_SYMBOL(name) JOIN(__USER_LABEL_PREFIX__,name)
+ #include "toy_pilot_frame.inc"
++#if KUI_NATIVE_SCI_PRIORITY7
++    .global __kui_native_sci_priority7_rehook
++    .set __kui_native_sci_priority7_rehook,7
++#endif
+ 
+ /* Called by the high stage before entering the owner's upper IP bootstrap.
+  * Do not switch stacks here: state adoption/init use the temporary high stack.
+@@ -717,7 +722,7 @@ C_SYMBOL(kui_retail_rehook):
+     ldc r1,vbr
+     mov.l .Lrehook_iprb,r1
+     mov.w @r1,r0
+-    xor #0x10,r0
++    xor #KUI_RETAIL_SCI_PRIORITY_FIELD,r0
+     and #0xf0,r0
+     mov.w @r1,r2
+     xor r0,r2
+diff --git a/src/loader/vmu_native_loader_timeline.inc b/src/loader/vmu_native_loader_timeline.inc
+index 67401de..813dcb4 100644
+--- a/src/loader/vmu_native_loader_timeline.inc
++++ b/src/loader/vmu_native_loader_timeline.inc
+@@ -6,6 +6,10 @@
+ #include <stddef.h>
+ __asm__(".global __kui_native_loader_timeline_worker\n"
+         ".set __kui_native_loader_timeline_worker,1\n");
++#if KUI_NATIVE_SCI_PRIORITY7
++__asm__(".global __kui_native_sci_priority7_worker\n"
++        ".set __kui_native_sci_priority7_worker,7\n");
++#endif
+ static struct kui_native_loader_timeline native_loader_timeline;
+ static struct kui_native_loader_event native_loader_event;
+ static struct kui_vmu_native_profile_sample native_loader_clock;
+diff --git a/tests/test_retail_async.c b/tests/test_retail_async.c
+index 7ad5229..cac948d 100644
+--- a/tests/test_retail_async.c
++++ b/tests/test_retail_async.c
+@@ -3,6 +3,7 @@
+  * sequence and the stream's interrupt, against the card/SCI/DMA model, with
+  * every destination byte compared to the ordinary image reader's output. */
+ #include "retail_async.h"
++#include "kui/native_sci_priority.h"
+ #include "sci_stream_model.h"
+ #include "kui/retail_image.h"
+ #include "kui/retail_loader_layout.h"
+@@ -15,6 +16,15 @@
+ #define GAME_VBR 0x8c0f0000u
+ #define IPRB 0xffd00008u
+ #define R kui_retail_async_region
++#define READER_IPRB (0x5a0fu | KUI_RETAIL_SCI_PRIORITY_FIELD)
++#if KUI_NATIVE_SCI_PRIORITY7
++_Static_assert(KUI_RETAIL_SCI_PRIORITY_FIELD==0x70,"priority7 fixture must use exactly seven");
++#else
++_Static_assert(KUI_RETAIL_SCI_PRIORITY_FIELD==0x10,"original fixture must keep exactly level one");
++#endif
++#if KUI_VMU_NATIVE_BACKGROUND
++static kui_retail_async_region_type test_background_region;
++#endif
+ 
+ static uint8_t ram[END - BEGIN];
+ static uint8_t image_card[2048u * 512u];
+@@ -27,7 +37,7 @@ static bool cooked_fixture;
+ 
+ /* ---- Resident and CPU hooks ---- */
+ static struct {
+-    uint32_t vbr;
++    uint32_t vbr,sr;
+     uint16_t iprb; /* the only level the reader may change: IPRC is never read */
+     unsigned acquires, writes, vbr_sets;
+     bool frozen; /* a cancelled read must write nothing more */
+@@ -163,7 +173,7 @@ static void foreign_event_with(unsigned vector, void (*handler)(void)) {
+     if(returns && f->armed && hw.vbr == f->vbr) {
+         ++f->rehooks;
+         hw.vbr = our_vbr();
+-        hw.iprb = (uint16_t)((hw.iprb & ~0x00f0u) | 0x10u);
++        hw.iprb = (uint16_t)((hw.iprb & ~0x00f0u) | KUI_RETAIL_SCI_PRIORITY_FIELD);
+     }
+ }
+ static void foreign_event(void) { foreign_event_with(++foreign % 3u, NULL); }
+@@ -178,7 +188,11 @@ static void elapse(void) { if(m.rx) m.rx_delay = 0; }
+ static unsigned spurious;
+ static unsigned interrupts(unsigned limit) {
+     unsigned n = 0;
+-    while(n < limit && hooked() && (hw.iprb & 0x00f0u) && kui_sci_stream_busy()) {
++    /* Host admission model only: real SH delivery is checked separately by
++     * console evidence. Ordinary peripheral IRQs need BL clear and a level
++     * strictly greater than IMASK, including when the caller uses bank one. */
++    while(n < limit && hooked() && !(hw.sr&0x10000000u) &&
++          (hw.iprb&0x00f0u)>(hw.sr&0x00f0u) && kui_sci_stream_busy()) {
+         if(++spurious % 3u) elapse();
+         CHECK(kui_retail_async_irq() == 0);
+         ++n;
+@@ -188,6 +202,9 @@ static unsigned interrupts(unsigned limit) {
+ 
+ enum { X, Y }; /* launch X: 20 blocks per EXEC or CHECK; Y: 25 */
+ static void setup(uint32_t game_vbr, unsigned how, unsigned take_max, bool scattered) {
++#if KUI_VMU_NATIVE_BACKGROUND
++    kui_retail_async_region_storage=&test_background_region;
++#endif
+     fixture(take_max, scattered);
+     manifest.reader = how == Y ? KUI_RETAIL_READER_ASYNC_EAGER : KUI_RETAIL_READER_ASYNC;
+     memset(&card, 0, sizeof(card));
+@@ -344,7 +361,7 @@ static void test_levels_while_streaming(void) {
+     setup(GAME_VBR, X, 2000, false);
+     hw.iprb = 0x5a3f;
+     int32_t token = request(45010, 20, OUTPUT);
+-    CHECK(hooked() && hw.iprb == 0x5a1f && m.armed_chcr == 0x4911u);
++    CHECK(hooked() && hw.iprb == READER_IPRB && m.armed_chcr == 0x4911u);
+     CHECK(R.engine.release.vbr == GAME_VBR && R.engine.release.sci == 0x30u && R.engine.release.armed);
+     CHECK(finish(token, true, 0) == KUI_GD_COMPLETED);
+     compare(45010, 20, OUTPUT);
+@@ -364,7 +381,7 @@ static void test_release_and_rehook(void) {
+     CHECK(interrupts(5) == 0);
+     CHECK(gd(KUI_GD_CHECK, (uint32_t)token, STATUS) == KUI_GD_PROCESSING);
+     const struct kui_retail_async_stats *st = &R.engine.stats;
+-    CHECK(hooked() && hw.iprb == 0x5a1f && st->releases == 1 && st->hooks == 1 && !R.engine.release.vbr_changes);
++    CHECK(hooked() && hw.iprb == READER_IPRB && st->releases == 1 && st->hooks == 1 && !R.engine.release.vbr_changes);
+     CHECK(R.engine.release.sci == 0x20u && R.engine.release.vbr == GAME_VBR);
+     CHECK(finish(token, true, 0) == KUI_GD_COMPLETED);
+     compare(45000, 40, OUTPUT);
+@@ -402,10 +419,10 @@ static void test_rehook_on_return(void) {
+     int32_t token = rehook_token = request(45000, 60, OUTPUT);
+     const struct kui_retail_async_release *f = &R.engine.release;
+     const struct kui_retail_async_stats *st = &R.engine.stats;
+-    CHECK(hooked() && f->armed && hw.iprb == 0x5a1f && f->sci == 0x20u);
++    CHECK(hooked() && f->armed && hw.iprb == READER_IPRB && f->sci == 0x20u);
+     CHECK(interrupts(3) == 3);
+     foreign_event_with(2, NULL);
+-    CHECK(hooked() && hw.iprb == 0x5a1f && f->released[2] == 1 && f->rehooks == 1);
++    CHECK(hooked() && hw.iprb == READER_IPRB && f->released[2] == 1 && f->rehooks == 1);
+     CHECK(interrupts(3) == 3);
+     foreign_event_with(0, NULL); /* an exception: released until a GD call */
+     CHECK(!hooked() && hw.iprb == 0x5a2f && f->released[0] == 1 && f->rehooks == 1);
+diff --git a/tests/test_retail_async_irq_rearm.c b/tests/test_retail_async_irq_rearm.c
+index 68ce32f..1f5d844 100644
+--- a/tests/test_retail_async_irq_rearm.c
++++ b/tests/test_retail_async_irq_rearm.c
+@@ -14,29 +14,70 @@ uint32_t kui_retail_async_test_read32(uint32_t address) {
+ static void level_changed_without_vbr(unsigned field) {
+     cooked_fixture=true;setup(GAME_VBR,X,48,false);mode(2048);
+     int32_t token=request(45001u,64u,OUTPUT);
+-    CHECK(R.engine.active && hooked() && (hw.iprb&0xf0u)==0x10u);
++    CHECK(R.engine.active && hooked() && (hw.iprb&0xf0u)==KUI_RETAIL_SCI_PRIORITY_FIELD);
+     unsigned before=R.engine.stats.execs;
++    unsigned owner=field==KUI_RETAIL_SCI_PRIORITY_FIELD?R.engine.release.sci:field;
+     uint16_t other=(uint16_t)(hw.iprb&~0xf0u);
+     hw.iprb=(uint16_t)(other|field);
+     /* A status query supplies no waiting read allowance. Its usual hook
+      * admission must repair our SCI field while preserving every other one. */
+     (void)gd(KUI_GD_DRIVE,STATUS,0u);
+-    CHECK(hooked() && hw.iprb==(uint16_t)(other|0x10u));
+-    CHECK(R.engine.release.sci==field && R.engine.stats.execs==before+1u);
++    CHECK(hooked() && hw.iprb==(uint16_t)(other|KUI_RETAIL_SCI_PRIORITY_FIELD));
++    /* A field equal to the reader's has no observable owner change. Keep
++     * the admitted prior owner, rather than pretending a repair happened. */
++    CHECK(R.engine.release.sci==owner &&
++        R.engine.stats.execs==before+(field!=KUI_RETAIL_SCI_PRIORITY_FIELD));
+     (void)gd(KUI_GD_DRIVE,STATUS,0u);
+-    CHECK(R.engine.stats.execs==before+1u); /* no needless repair/write */
++    CHECK(R.engine.stats.execs==before+(field!=KUI_RETAIL_SCI_PRIORITY_FIELD));
+     m.delay=0u;elapse();before=R.engine.stats.irq_blocks;
+     unsigned entries=R.engine.stats.exec_int;
+     CHECK(!kui_retail_async_irq());
+     CHECK(R.engine.stats.irq_blocks-before==KUI_RETAIL_NATIVE_IRQ_BATCH_LIMIT);
+     CHECK(R.engine.stats.exec_int==entries+1u);
+     CHECK(finish(token,0,1)==KUI_GD_COMPLETED);compare(45001u,64u,OUTPUT);
+-    CHECK(!hooked() && hw.iprb==(uint16_t)(other|field));
++    CHECK(!hooked() && hw.iprb==(uint16_t)(other|owner));
++}
++static void initial_owner_field(unsigned field) {
++    cooked_fixture=true;setup(GAME_VBR,X,48,false);mode(2048);
++    uint16_t original=(uint16_t)((hw.iprb&~0xf0u)|field);
++    hw.iprb=original;
++    int32_t token=request(45001u,64u,OUTPUT);
++    CHECK(hooked() && R.engine.release.sci==field && hw.iprb==READER_IPRB);
++    foreign_event_with(0u,NULL);
++    CHECK(!hooked() && hw.iprb==original && hw.vbr==GAME_VBR);
++    (void)gd(KUI_GD_DRIVE,STATUS,0u);
++    CHECK(hooked() && hw.iprb==READER_IPRB && R.engine.release.sci==field);
++    foreign_event_with(2u,NULL);
++    CHECK(hooked() && hw.iprb==READER_IPRB && R.engine.release.sci==field &&
++        R.engine.release.rehooks==1u);
++    CHECK(finish(token,1u,1u)==KUI_GD_COMPLETED);compare(45001u,64u,OUTPUT);
++    CHECK(!hooked() && hw.iprb==original && hw.vbr==GAME_VBR);
++}
++static void interrupt_admission(void) {
++    for(unsigned blocked=0u;blocked<2u;++blocked)
++        for(unsigned mask=0u;mask<16u;++mask) {
++            cooked_fixture=true;setup(GAME_VBR,X,48,false);mode(2048);
++            int32_t token=request(45001u,64u,OUTPUT);
++            m.delay=0u;elapse();
++            hw.sr=0x60000100u|(mask<<4)|(blocked<<28);
++            unsigned before=R.engine.stats.exec_int,blocks=R.engine.stats.irq_blocks;
++            unsigned admitted=!blocked && mask<(KUI_RETAIL_SCI_PRIORITY_FIELD>>4);
++            CHECK(interrupts(1u)==admitted);
++            CHECK(R.engine.stats.exec_int==before+admitted);
++            CHECK(R.engine.stats.irq_blocks-blocks==
++                (admitted?KUI_RETAIL_NATIVE_IRQ_BATCH_LIMIT:0u));
++            hw.sr=0u;
++            CHECK(finish(token,1u,1u)==KUI_GD_COMPLETED);compare(45001u,64u,OUTPUT);
++        }
+ }
+ int main(void) {
+-    level_changed_without_vbr(0u);
+-    level_changed_without_vbr(0x90u);
++    for(unsigned field=0u;field<0x100u;field+=0x10u) {
++        initial_owner_field(field);
++        level_changed_without_vbr(field);
++    }
++    interrupt_admission();
+     hybrid_suite_main();
+-    printf("native IRQ rearm: %u checks; same-VBR cleared/changed SCI field, exact owner restoration and full CHECK/EXEC supply passed\n",checks);
++    printf("native IRQ level %u: %u checks; all16 owner fields, rearm/rehook/restoration, modelled BL/IMASK admission and full CHECK/EXEC supply passed\n",
++        KUI_RETAIL_SCI_PRIORITY_FIELD>>4,checks);
+     return 0;
+ }
+diff --git a/tests/test_vmu_native_async_vectors.py b/tests/test_vmu_native_async_vectors.py
+index 6b55a93..acb0baf 100644
+--- a/tests/test_vmu_native_async_vectors.py
++++ b/tests/test_vmu_native_async_vectors.py
+@@ -1,5 +1,6 @@
+ #!/usr/bin/env python3
+ """Execute actual native release/rehook SH at fixed and relocated regions."""
++from itertools import product
+ from pathlib import Path
+ import subprocess
+ import sys
+@@ -98,51 +99,52 @@ class VectorCPU(SH):
+         raise AssertionError("native vector replay did not reach its expected continuation")
+ 
+ 
+-def replay(image, region):
++def replay(image, region, level=1):
+     cases = 0
+-    for vector in (0x100, 0x400, 0x600):
+-        for armed in (0, 1):
+-            for depth in range(4):
+-                cpu = VectorCPU(image, region)
+-                frame = region + 0x240
+-                for index, value in enumerate((GAME_VBR, 0x20, armed, depth)):
+-                    cpu.write(frame + 4 * index, value)
+-                offset = {0x100: 44, 0x400: 48, 0x600: 52}[vector]
+-                cpu.write(frame + offset, 17)
+-                entry = cpu.symbols[f"_kui_retail_release_{vector:x}"][0]
+-                cpu.run_to(entry, GAME_VBR + vector)
+-                assert cpu.r == cpu.original and cpu.control["vbr"] == GAME_VBR
+-                assert cpu.iprb == 0x5A2F and cpu.read(frame + offset) == 18
+-                expected = vector == 0x600 and armed and depth < 3
+-                assert cpu.read(frame + 12) == depth + int(expected)
+-                if expected:
+-                    assert cpu.control["spc"] == cpu.symbols["_kui_retail_rehook"][0]
+-                    assert cpu.read(frame + 16 + 8 * depth) == GAME_PC
+-                    assert cpu.read(frame + 20 + 8 * depth) == STACK
+-                else:
+-                    assert cpu.control["spc"] == GAME_PC
+-                cases += 1
+-    for depth in (1, 2, 3):
+-        for armed in (0, 1):
+-            for moved in (False, True):
+-                cpu = VectorCPU(image, region)
+-                cpu.sr = 0x40000001
+-                cpu.control["vbr"] = GAME_VBR + (0x10000 if moved else 0)
+-                cpu.iprb = 0x5A2F
+-                frame = region + 0x240
+-                for index, value in enumerate((GAME_VBR, 0x20, armed, depth)):
+-                    cpu.write(frame + 4 * index, value)
+-                cpu.write(frame + 16 + 8 * (depth - 1), GAME_PC)
+-                cpu.write(frame + 20 + 8 * (depth - 1), STACK)
+-                cpu.write(frame + 40, 31)
+-                cpu.run_to(cpu.symbols["_kui_retail_rehook"][0], GAME_PC)
+-                installed = armed and not moved
+-                assert cpu.r == cpu.original and cpu.sr == 0x40000001
+-                assert cpu.read(frame + 12) == depth - 1
+-                assert cpu.read(frame + 40) == 31 + int(installed)
+-                assert cpu.control["vbr"] == (region - 0x100 if installed else GAME_VBR + (0x10000 if moved else 0))
+-                assert cpu.iprb == (0x5A1F if installed else 0x5A2F)
+-                cases += 1
++    for vector,armed,depth,mask,field in product((0x100,0x400,0x600),(0,1),range(4),
++                                                 range(16),range(0,0x100,0x10)):
++        cpu = VectorCPU(image, region)
++        cpu.sr=(cpu.sr&~0xf0)|(mask<<4)
++        cpu.iprb=0x5A0F|field
++        owner=(field+0x30)&0xf0
++        frame = region + 0x240
++        for index, value in enumerate((GAME_VBR, owner, armed, depth)):
++            cpu.write(frame + 4 * index, value)
++        offset = {0x100: 44, 0x400: 48, 0x600: 52}[vector]
++        cpu.write(frame + offset, 17)
++        entry = cpu.symbols[f"_kui_retail_release_{vector:x}"][0]
++        cpu.run_to(entry, GAME_VBR + vector)
++        assert cpu.r == cpu.original and cpu.control["vbr"] == GAME_VBR
++        assert cpu.iprb == (0x5A0F|owner) and cpu.read(frame + offset) == 18
++        expected = vector == 0x600 and armed and depth < 3
++        assert cpu.read(frame + 12) == depth + int(expected)
++        if expected:
++            assert cpu.control["spc"] == cpu.symbols["_kui_retail_rehook"][0]
++            assert cpu.read(frame + 16 + 8 * depth) == GAME_PC
++            assert cpu.read(frame + 20 + 8 * depth) == STACK
++        else:
++            assert cpu.control["spc"] == GAME_PC
++        cases += 1
++    for depth,armed,moved,mask,field in product((1,2,3),(0,1),(False,True),
++                                                range(16),range(0,0x100,0x10)):
++        cpu = VectorCPU(image, region)
++        cpu.sr = 0x40000001|(mask<<4)
++        cpu.control["vbr"] = GAME_VBR + (0x10000 if moved else 0)
++        cpu.iprb = 0x5A0F|field
++        frame = region + 0x240
++        for index, value in enumerate((GAME_VBR, 0x20, armed, depth)):
++            cpu.write(frame + 4 * index, value)
++        cpu.write(frame + 16 + 8 * (depth - 1), GAME_PC)
++        cpu.write(frame + 20 + 8 * (depth - 1), STACK)
++        cpu.write(frame + 40, 31)
++        cpu.run_to(cpu.symbols["_kui_retail_rehook"][0], GAME_PC)
++        installed = armed and not moved
++        assert cpu.r == cpu.original and cpu.sr == 0x40000001|(mask<<4)
++        assert cpu.read(frame + 12) == depth - 1
++        assert cpu.read(frame + 40) == 31 + int(installed)
++        assert cpu.control["vbr"] == (region - 0x100 if installed else GAME_VBR + (0x10000 if moved else 0))
++        assert cpu.iprb == ((0x5A0F|(level<<4)) if installed else (0x5A0F|field))
++        cases += 1
+     # _start must preserve every argument across low BSS clearing, including
+     # the gated fifth argument on the caller's unchanged temporary stack.
+     cpu = VectorCPU(image, region)
+@@ -175,11 +177,14 @@ with tempfile.TemporaryDirectory(prefix="kui-native-async-vectors-") as tmp:
+     linker = directory / "vectors.ld"
+     linker.write_text("SECTIONS { . = 0x8c004000; .entry : { *(.entry) } .text : { *(.text*) } .rodata : { *(.rodata*) } .data : { *(.data*) } . = ALIGN(32); __retail_resident_bss_begin = .; .bss : { *(.bss*) } __retail_resident_bss_end = .; }")
+     total = 0
+-    for enabled in (0, 1):
+-        source = directory / ("stub-" + str(enabled) + ".S")
++    for enabled,level in ((0,1),(1,1),(1,7)):
++        label=f"{enabled}-{level}"
++        source = directory / ("stub-" + label + ".S")
+         symbol = "_kui_retail_async_region_storage" if enabled else "_kui_retail_async_region"
+-        obj, stub, elf = (directory / (name + "-" + str(enabled) + suffix) for name, suffix in (("vectors", ".o"), ("stub", ".o"), ("vectors", ".elf")))
+-        run([GCC, *FLAGS, "-DKUI_VMU_NATIVE_BACKGROUND=" + str(enabled), "-c", "src/loader/retail_resident.S", "-o", obj])
++        obj, stub, elf = (directory / (name + "-" + label + suffix) for name, suffix in (("vectors", ".o"), ("stub", ".o"), ("vectors", ".elf")))
++        experimental=(["-DKUI_NATIVE_SCI_PRIORITY7=1","-DKUI_NATIVE_LOADER_TIMELINE=1",
++                       "-DKUI_NATIVE_IRQ_REARM=1","-DKUI_RETAIL_NATIVE_HYBRID=1"] if level==7 else [])
++        run([GCC, *FLAGS, *experimental, "-DKUI_VMU_NATIVE_BACKGROUND=" + str(enabled), "-c", "src/loader/retail_resident.S", "-o", obj])
+         undefined = run([ROOT / ".deps/sh-elf/bin/sh-elf-nm", "-u", obj], text=True)
+         resolved = {symbol, "_kui_retail_resident_init", "_kui_vmu_native_background_init",
+                     "__retail_resident_bss_begin", "__retail_resident_bss_end"}
+@@ -195,5 +200,5 @@ with tempfile.TemporaryDirectory(prefix="kui-native-async-vectors-") as tmp:
+         audit("native-vectors", run([OBJDUMP, "-d", elf], text=True))
+         regions = (0x8CE10000, 0x8C420400) if enabled else (image[4][symbol][0],)
+         for region in regions:
+-            total += replay(image, region)
+-print(f"native async vectors: {total} actual SH release/rehook/init cases passed; ordinary assembly unchanged")
++            total += replay(image, region,level)
++print(f"native async vectors: {total} actual SH release/rehook/init cases passed at levels1/7, all16 IMASKs/SCI fields; ordinary assembly unchanged")
+diff --git a/tools/check_vmu_native_irq_rearm.py b/tools/check_vmu_native_irq_rearm.py
+index 4e0f349..7c372e9 100644
+--- a/tools/check_vmu_native_irq_rearm.py
++++ b/tools/check_vmu_native_irq_rearm.py
+@@ -20,6 +20,13 @@ REARMS=REGION+0x2e4
+ VBR_CHANGES=REGION+0x278
+ HOOK_SHA='3617673b84fa38f4341fc072ca4485a1a13d748dbfa0fe3ef9799d4a539884af'
+ TIMELINE_HOOK_SHA='a02b6467322a9aa97cfe8c7f57aa713573d0b17ec8558645285a1c3192796e07'
++PRIORITY7_HOOK_SHA='42f77ad89a90755953c14afd1d8ced039b24ee825990d57fa3efd65e16b36e55'
++UNHOOK_SHA={1:'d705da7a67919d14f75d58793e0f095d69150557c43334675da202707f745e0d',
++            7:'3c2f7406fd6ab8a43585efe8ebc2e1c42b4f33d77da7b11c6ee96d9a0582410e'}
++RELEASE_SHA='f3ecff9cf5d93f81046f29f3a0b81741cc031478bd8439ac3a2dfa2f11342715'
++REHOOK_SHA={1:'aed4b2e5f0665337f11867eb58ffd64d971fa3f349da7a4a1960b3f02b36160c',
++            7:'ea24a0abf5d1ca45512731d0e78d1c4536e847edcd58fe747287bb0a51386c50'}
++PRIORITY_MARKER='__kui_native_sci_priority7_'
+ 
+ 
+ def require(test,message):
+@@ -37,6 +44,8 @@ class Rearm(CacheGateway):
+         self.targets={}
+         self.pointer=resident[4]['_kui_retail_async_region_storage'][0]
+         self.timeline='__kui_native_loader_timeline_resident' in resident[4]
++        self.level=7 if PRIORITY_MARKER+'resident' in resident[4] else 1
++        self.selected=self.level<<4
+         self.vbr=REGION-0x100 if same else 0x8c00f400
+         self.iprb=(random.Random(seed+992).getrandbits(16)&~0xf0)|field
+         self.mem.update({self.pointer:REGION,FRAME+4:0x70,FRAME:self.vbr if same_owner else 0x8c00e800,
+@@ -75,7 +84,7 @@ class Rearm(CacheGateway):
+         assert self.r[8:]==r[8:] and self.pr==pr and self.sr&~1==sr&~1
+         assert (self.fpscr,self.fr)==(fpscr,fr)
+         vbr,iprb,mem=self.old
+-        changed=self.field!=0x10
++        changed=self.field!=self.selected
+         expected=mem.copy()
+         if self.same:
+             assert not self.vbr_writes and self.vbr==vbr
+@@ -90,35 +99,108 @@ class Rearm(CacheGateway):
+                 expected[VBR_CHANGES]=(mem[VBR_CHANGES]+1)&MASK
+         assert self.mem==expected,'hook corrupts owner/reader state or loses a rearm'
+         wrote=not self.same or changed
+-        assert self.iprb_writes==([(iprb&~0xf0)|0x10] if wrote else [])
+-        assert self.iprb==((iprb&~0xf0)|0x10),'SCI field must be exactly lowest level; preserve all other fields'
++        assert self.iprb_writes==([(iprb&~0xf0)|self.selected] if wrote else [])
++        assert self.iprb==((iprb&~0xf0)|self.selected),'SCI field must be exactly the selected level; preserve all other fields'
+ 
+ 
+-def check(resident,*,self_test=False):
++class Unhook(Rearm):
++    def __init__(self,resident,seed,mask,same,hooked,field,body=None):
++        super().__init__(resident,seed,mask,same,hooked,field)
++        begin,original,_=symbol_bytes(resident,'_unhook',2)
++        self.base=self.pc=begin;self.blob=original if body is None else body
++        self.pr=begin+len(original)+0x100
++        self.before=self.r.copy(),self.pr,self.sr,self.fpscr,self.fr.copy()
++
++    def check(self):
++        r,pr,sr,fpscr,fr=self.before
++        assert self.r[8:]==r[8:] and self.pr==pr and self.sr&~1==sr&~1
++        assert (self.fpscr,self.fr)==(fpscr,fr)
++        vbr,iprb,mem=self.old;expected=mem.copy();expected[FRAME+8]=0
++        if self.hooked:expected[HOOKED]=0
++        assert self.mem==expected,'unhook changed saved owner or other reader state'
++        restore=self.hooked and self.field==self.selected
++        desired=(iprb&~0xf0)|mem[FRAME+4] if restore else iprb
++        assert self.iprb==desired and self.iprb_writes==([desired] if restore else [])
++        restore_vbr=self.hooked and self.same
++        assert self.vbr==(mem[FRAME] if restore_vbr else vbr)
++        assert self.vbr_writes==([mem[FRAME]] if restore_vbr else [])
++
++
++def linked_bytes(image,name,count):
++    """Assembly entry labels have zero ELF size; admit an exact bounded span."""
++    address,size,kind,owner=image[4][name]
++    require(size==0 and kind==0 and owner<len(image[3]),'invalid assembly vector entry '+name)
++    section=image[3][owner]
++    require(section[1]==1 and section[2]&6==6 and
++            section[3]<=address<address+count<=section[3]+section[5],
++            'unbounded assembly vector entry '+name)
++    at=section[4]+address-section[3]
++    return address,image[0][at:at+count]
++
++
++def vector_pins(resident,level):
++    begin,release=linked_bytes(resident,'_kui_retail_release_100',152)
++    rehook_begin,rehook=linked_bytes(resident,'_kui_retail_rehook',128)
++    pointer=resident[4]['_kui_retail_async_region_storage'][0]
++    require(resident[4]['_kui_retail_release_400'][0]==begin+10 and
++            resident[4]['_kui_retail_release_600'][0]==begin+20 and rehook_begin==begin+152,
++            'native release/rehook entries moved within their exact assembly body')
++    require(hashlib.sha256(release[:-12]).hexdigest()==RELEASE_SHA and
++            release[-12:]==struct.pack('<III',pointer,IPRB,rehook_begin),
++            'native release instructions or saved-owner bindings changed')
++    require(hashlib.sha256(rehook[:-12]).hexdigest()==REHOOK_SHA[level] and
++            rehook[-12:]==struct.pack('<III',pointer,pointer,IPRB),
++            'native rehook instructions or selected SCI level/bindings changed')
++    require(struct.unpack_from('<H',rehook,0x58)[0]==(0xca00|(level<<4)),
++            'native rehook must restore the same SCI level as the C hook')
++    return dict(release_bytes=len(release),rehook_bytes=len(rehook),
++                exact_saved_owner_release_pinned=True,selected_level_rehook_pinned=True)
++
++
++def check(resident,*,worker=None,self_test=False):
+     require(__debug__,'rearm instruction model requires Python assertions; run without -O/PYTHONOPTIMIZE')
+     marker=resident[4].get('__kui_native_irq_rearm_resident')
+-    if marker is None:return {'enabled':False}
++    priority=resident[4].get(PRIORITY_MARKER+'resident')
++    assembly=resident[4].get(PRIORITY_MARKER+'rehook')
++    worker_priority=worker[4].get(PRIORITY_MARKER+'worker') if worker is not None else None
++    require(bool(priority)==bool(assembly),'SCI priority7 C/assembly marker mismatch')
++    if worker is not None:
++        require(bool(priority)==bool(worker_priority),'SCI priority7 worker/resident marker mismatch')
++    if priority:
++        require(worker is not None,'SCI priority7 requires the paired worker artifact')
++        require(priority==assembly==worker_priority==(7,0,0,0xfff1),
++                'invalid paired SCI priority7 experiment markers')
++    if marker is None:
++        require(not priority,'SCI priority7 requires native IRQ rearm')
++        return {'enabled':False}
+     require(marker==(1,0,0,0xfff1),'invalid native IRQ rearm marker')
+     begin,body,_=symbol_bytes(resident,'_hook',2)
+     timeline=resident[4].get('__kui_native_loader_timeline_resident')
+     require(timeline is None or timeline==(1,0,0,0xfff1),'invalid native timeline marker')
+-    expected_size,expected_sha=(148,TIMELINE_HOOK_SHA) if timeline else (132,HOOK_SHA)
++    require(not priority or timeline,'SCI priority7 requires the native timeline profile')
++    level=7 if priority else 1
++    expected_size,expected_sha=(148,PRIORITY7_HOOK_SHA if priority else TIMELINE_HOOK_SHA) if timeline else (132,HOOK_SHA)
+     require(len(body)==expected_size and hashlib.sha256(body[:-8]).hexdigest()==expected_sha,
+             'linked native IRQ rearm hook instructions changed')
+     require(body[-8:]==struct.pack('<II',resident[4]['_kui_retail_async_region_storage'][0],IPRB),
+             'linked native rearm region/IPRB binding changed')
+-    cases=0
++    _,unhook,_=symbol_bytes(resident,'_unhook',2)
++    require(len(unhook)==92 and hashlib.sha256(unhook[:-8]).hexdigest()==UNHOOK_SHA[level] and
++            unhook[-8:]==body[-8:],'linked native unhook instructions/SCI owner binding changed')
++    vectors=vector_pins(resident,level)
++    cases=unhook_cases=0
+     for seed in range(16):
+-        for mask in (0,1,8,15):
++        for mask in range(16):
+             for same in (False,True):
+                 for hooked in (False,True):
+                     for field in range(0,0x100,0x10):
+                         for same_owner in ((False,True) if timeline else (False,)):
+                             Rearm(resident,seed,mask,same,hooked,field,same_owner=same_owner).run().check();cases+=1
+-    rejected=0
++                        Unhook(resident,seed,mask,same,hooked,field).run().check();unhook_cases+=1
++    rejected=vector_rejected=unhook_rejected=0
+     if self_test:
+         mutations=[]
+-        patterns=(0xcb10,0x2501,0x2101,0x7301,0x1302,0x472e)
++        patterns=(0xcb00|(level<<4),0x8800|(level<<4),0x2501,0x2101,0x7301,0x1302,0x472e)
+         if timeline:patterns+=(0x452e,0x7701,0x117f,0x3730)
+         for pattern in patterns:
+             for at in range(0,len(body)-8,2):
+@@ -134,11 +216,38 @@ def check(resident,*,self_test=False):
+                     except (AssertionError,ValueError,struct.error,KeyError):refused=True;break
+                 if refused:break
+             require(refused,'native IRQ rearm model accepted an unsafe mutation');rejected+=1
++        for at in range(0,len(unhook)-8,2):
++            word=struct.unpack_from('<H',unhook,at)[0]
++            if word in (0x8800|(level<<4),0x2101,0x2501):
++                altered=bytearray(unhook);struct.pack_into('<H',altered,at,9)
++                refused=False
++                for same in (False,True):
++                    for field in (level<<4,0x90):
++                        try:Unhook(resident,7,15,same,True,field,altered).run().check()
++                        except (AssertionError,ValueError,struct.error,KeyError):refused=True;break
++                    if refused:break
++                require(refused,'native unhook model accepted an unsafe ownership mutation')
++                unhook_rejected+=1
++        # The entire release/rehook span is pinned, including every pointer
++        # literal and the priority immediate. Single-byte corruption must
++        # never be hidden by choosing the other experiment's instruction pin.
++        for name,count in (('_kui_retail_release_100',152),('_kui_retail_rehook',128)):
++            address=resident[4][name][0];section=resident[3][resident[4][name][3]]
++            offset=section[4]+address-section[3]
++            for at in range(count):
++                altered=bytearray(resident[0]);altered[offset+at]^=1
++                image=(bytes(altered),*resident[1:])
++                try:vector_pins(image,level)
++                except ValueError:vector_rejected+=1
++                else:raise ValueError('native vector pin accepted a changed instruction/literal')
+     return dict(enabled=True,hook_address=hex(begin),hook_bytes=len(body),
+         complete_linked_hook_pinned=True,actual_instruction_model_cases=cases,
++        actual_unhook_instruction_model_cases=unhook_cases,all_16_caller_imasks_checked=True,
+         mutation_rejections=rejected,all_sci_fields_checked=True,
++        unhook_mutation_rejections=unhook_rejected,vector_pin_mutation_rejections=vector_rejected,
+         same_vbr_priority_rechecked=True,other_iprb_fields_preserved=True,
+         vbr_change_counter_modelled=bool(timeline),
+-        owner_updated_priority_retained_for_release=True,reader_sci_level=1,
++        owner_updated_priority_retained_for_release=True,reader_sci_level=level,
++        priority7_paired_markers=bool(priority),**vectors,
+         unchanged_level_causes_no_mmio_write=True,new_resident_ram_bytes=0,
+         console_cause_confirmed=False,console_performance_verified=False)
+diff --git a/tools/check_vmu_native_persistent.py b/tools/check_vmu_native_persistent.py
+index ff0d664..d93de80 100644
+--- a/tools/check_vmu_native_persistent.py
++++ b/tools/check_vmu_native_persistent.py
+@@ -2491,8 +2491,17 @@ def check(directory, *, self_test=False, trace_startup=None):
+     require(bool(irq_rearm)==bool(low_rearm),'IRQ rearm worker/resident mismatch')
+     if irq_rearm:require(cooperative and not timed and not paced and irq_rearm==low_rearm==(1,0,0,0xfff1),
+                          'invalid paired IRQ rearm reader markers')
+-    irq_rearm_proof=check_irq_rearm(read_elf(directory/'resident-sci.elf'),self_test=self_test)
++    irq_rearm_proof=check_irq_rearm(read_elf(directory/'resident-sci.elf'),worker=worker,self_test=self_test)
+     timeline_proof=check_loader_timeline(directory,self_test=self_test)
++    priority7=worker[4].get('__kui_native_sci_priority7_worker')
++    low_priority7=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_sci_priority7_resident')
++    rehook_priority7=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_sci_priority7_rehook')
++    require(bool(priority7)==bool(low_priority7)==bool(rehook_priority7),
++            'SCI priority7 worker/resident/rehook mismatch')
++    if priority7:
++        require(priority7==low_priority7==rehook_priority7==(7,0,0,0xfff1) and
++                timeline_proof.get('enabled') and irq_rearm_proof.get('reader_sci_level')==7,
++                'SCI priority7 requires the paired timeline and exact linked priority proof')
+     prepared_lifetime = check_prepared_lifetime(directory, worker, binary, wire, self_test, build=base["runtime"]["build"])
+     relocations=check_worker_pointer_aliases(wire,policy,fault_capture,coherence)
+ 
+@@ -2572,6 +2581,9 @@ def check(directory, *, self_test=False, trace_startup=None):
+                   full_check_and_exec_catchup=bool(irq_rearm),controller_reader_service_enabled=False,
+                   rearm_and_irq_entry_counters=bool(irq_rearm)),
+               "loader_timeline":timeline_proof,
++              "sci_priority7":dict(enabled=bool(priority7),paired_resident_worker_rehook=bool(priority7),
++                  sci_priority=7 if priority7 else 1,caller_sr_changed=False,
++                  check_exec_irq_work_budgets_changed=False,console_performance_verified=False),
+               "timed_reader": {"enabled":bool(timed),"window_ticks":586 if timed else 0,
+                   "window_max_visits":64 if timed else 0,"blocks_per_window_max":2 if timed else 0,
+                   "read_only_clock_admission":bool(timed),"invalid_clock_single_visit":bool(timed),
+diff --git a/tools/package_vmu_native_persistent.py b/tools/package_vmu_native_persistent.py
+index 263f524..4d6f86e 100644
+--- a/tools/package_vmu_native_persistent.py
++++ b/tools/package_vmu_native_persistent.py
+@@ -75,7 +75,7 @@ def package(build,guide='broader',trace_startup=None):
+     commit=git('rev-parse','HEAD');revision=commit[:12]
+     if git('status','--porcelain'):
+         raise ValueError('Commit source changes before packaging')
+-    if guide in ('evolution-trace','a2-background','hybrid','stall','cooperative','timed','paced','irq-rearm','timeline') and trace_startup is None:
++    if guide in ('evolution-trace','a2-background','hybrid','stall','cooperative','timed','paced','irq-rearm','timeline','priority7') and trace_startup is None:
+         raise ValueError('This package requires --trace-startup with the exact original executable')
+     graphs=list(build.rglob('*.ci'))
+     if not graphs or any(not closed_callgraph(path.read_text()) for path in graphs):
+@@ -103,6 +103,10 @@ def package(build,guide='broader',trace_startup=None):
+         raise ValueError('IRQ rearm package requires the paired actual-hook proof and pure extent cache scope')
+     if guide=='timeline' and not report.get('loader_timeline',{}).get('enabled'):
+         raise ValueError('Timeline package requires paired trace bridge and complete descriptor/BSS/stack admission')
++    if guide=='priority7' and not (report.get('sci_priority7',{}).get('paired_resident_worker_rehook') and
++                                  report.get('loader_timeline',{}).get('enabled') and
++                                  report.get('irq_rearm_reader',{}).get('reader_sci_level')==7):
++        raise ValueError('Priority7 package requires paired worker, C hook and assembly rehook proofs')
+     entry=inspect_elf((build/'entry.elf').read_bytes(),ADDRESS,0x8c112000)
+     template=template_profile()
+     address,_=readonly_blob(stage_data,stage,'__vmu_sd_profile_blob_start',
+@@ -138,7 +142,7 @@ def package(build,guide='broader',trace_startup=None):
+                      'vmu-native-evolution-fault-test.md','vmu-native-evolution-isolation-test.md',
+                      'vmu-native-evolution-hooks-test.md','vmu-native-evolution-trace-test.md'):
+             extra['docs/'+name]=(root/'docs'/name).read_bytes()
+-        if guide in ('a2-background','hybrid','stall','cooperative','timed','paced','irq-rearm','timeline'):
++        if guide in ('a2-background','hybrid','stall','cooperative','timed','paced','irq-rearm','timeline','priority7'):
+             extra['docs/vmu-native-a2-background-test.md']=(root/'docs/vmu-native-a2-background-test.md').read_bytes()
+             extra['docs/evidence/native-a2-background-2026-10-24.json']=(root/'docs/evidence/native-a2-background-2026-10-24.json').read_bytes()
+             extra['docs/evidence/native-retry-integration-2026-10-24.json']=(root/'docs/evidence/native-retry-integration-2026-10-24.json').read_bytes()
+@@ -160,6 +164,8 @@ def package(build,guide='broader',trace_startup=None):
+             extra['docs/evidence/native-irq-rearm-2026-10-24.json']=(root/'docs/evidence/native-irq-rearm-2026-10-24.json').read_bytes()
+         if guide=='timeline':
+             extra['docs/evidence/native-loader-timeline-2026-10-24.json']=(root/'docs/evidence/native-loader-timeline-2026-10-24.json').read_bytes()
++        if guide=='priority7':
++            extra['docs/evidence/native-priority7-2026-10-24.json']=(root/'docs/evidence/native-priority7-2026-10-24.json').read_bytes()
+         for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json',
+                      'native-performance-acceptance-2026-10-23.json','native-uniform-root-family-2026-10-23.json',
+                      'native-recv-ownership-2026-10-23.json','native-older-sdk-2026-10-23.json',
+@@ -199,7 +205,9 @@ def package(build,guide='broader',trace_startup=None):
+         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
+         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
+             template_sha256=sha(template)),
+-        compatibility_claim=('Gesture-window whole-GD-call and read-chain timeline with caller/hardware context; diagnostic overhead included, console root cause remains unverified'
++        compatibility_claim=('Native SCI priority7 shared by C hook and assembly rehook, with the same read budgets and full timeline capture; console performance remains unverified'
++            if guide=='priority7' else
++            'Gesture-window whole-GD-call and read-chain timeline with caller/hardware context; diagnostic overhead included, console root cause remains unverified'
+             if guide=='timeline' else
+             'Recheck native SCI level while VBR is still installed, with full CHECK/EXEC supply and IRQ/rearm counters; console performance remains unverified'
+             if guide=='irq-rearm' else
+@@ -260,7 +268,7 @@ def package(build,guide='broader',trace_startup=None):
+ 
+ if __name__=='__main__':
+     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('build',type=Path)
+-    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall','cooperative','open','timed','paced','irq-rearm','timeline'),default='broader')
++    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall','cooperative','open','timed','paced','irq-rearm','timeline','priority7'),default='broader')
+     parser.add_argument('--trace-startup',type=Path)
+     try:
+         args=parser.parse_args();package(args.build,args.guide,args.trace_startup)
