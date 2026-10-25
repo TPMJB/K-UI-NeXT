@@ -1,0 +1,13 @@
+{
+  "schema": "kui.native.read-ahead.pio-candidate.v1",
+  "source_commit": "04e204a26cfb7d5c777f40764e0b5ea14bd405e8",
+  "source_tree": "3e226cb089a57e1e1ee9c35e368d18224080ffad",
+  "build": "04e204a26cfb",
+  "module_sha256": "c97b2758040bc3efda7efa3afda0673a6d49ec460bcec8d5af15069774810931",
+  "module_bytes": 248444,
+  "source_bundle_prerequisite": "74958b3878279fc916199a7cd330f7f17b036138",
+  "maximum_optional_blocks_per_heartbeat": 1,
+  "demand_dma_unchanged": true,
+  "console_performance_verified": false,
+  "targeted_capture_seconds": 25
+}

@@ -1,0 +1,25 @@
+cc -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic -ffunction-sections -fdata-sections -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie -Iinclude -Isrc/loader -O2 -DKUI_NATIVE_READER_DIAGNOSTIC=1 -DKUI_RETAIL_NATIVE_HYBRID=1 -DKUI_SCI_SD_NO_BLOCK=1 -DKUI_GENERAL_SCI_RESUME_FIX=1 -DKUI_RETAIL_NATIVE_DISC_CHECK=1 -DKUI_RETAIL_NATIVE_DRIVE_STATE=1 -DKUI_RETAIL_ASYNC_TEST=1 -DKUI_SCI_STREAM_TEST=1 -DKUI_RETAIL_ASYNC=1 -DKUI_RETAIL_GD_ASYNC=1 -DKUI_RETAIL_TRANSPORT=1 -Itests \
+ -DKUI_NATIVE_READAHEAD=1 -DKUI_VMU_NATIVE_BACKGROUND=1 -DKUI_NATIVE_REQUEST_TIMING=1 \
+ -DKUI_NATIVE_READAHEAD_AUX_HOST_TEST=1 tests/test_native_readahead_aux.c \
+ src/loader/native_readahead_aux.c src/core/native_readahead_cache.c \
+ src/core/retail_cursor.c src/core/retail_image.c src/loader/sci_stream.c \
+ -Wl,--gc-sections -o /workspace/scratch/da50cf175784/ra-pio-host/test-ra-aux
+ASAN_OPTIONS=detect_leaks=0 /workspace/scratch/da50cf175784/ra-pio-host/test-ra-aux
+native read-ahead auxiliary: 2036900 checks; real cursor bytes, strict visit caps, fresh-PAUSED heartbeat-only PIO, one checked block per visit, exact token/byte budgets, no optional DMA writes, full raw warm cache, demand caps, VMU loan and failure snapshots passed
+
+Display host harness: PASS; three PIO metrics in reserved NONE row, separate legacy maximum; 13 body rows; reserved metrics excluded from failure totals.
+
+Clean final package audit:
+/workspace/scratch/da50cf175784/hybrid-restore-check/restored-source/build/native-ra-pio-final/native-compat-source.bundle is okay
+{"zip": "build/native-ra-pio-final/K-UI-Native-Compatibility-Test.zip", "bytes": 27270229, "commit": "04e204a26cfb7d5c777f40764e0b5ea14bd405e8", "module_sha256": "c97b2758040bc3efda7efa3afda0673a6d49ec460bcec8d5af15069774810931", "profile_module_offset": 92672}
+
+Compiler callgraph regeneration (same command, byte-identical ELF):
+{
+  "schema": "kui.compiler.callgraph.regeneration.v1",
+  "same_original_link_command": true,
+  "elf_sha256_before": "1bb28a2d01c8087dfeaf0186d73fbf7333f4bcbfe7cd9e91342e50353b5b9460",
+  "elf_sha256_after": "1bb28a2d01c8087dfeaf0186d73fbf7333f4bcbfe7cd9e91342e50353b5b9460",
+  "byte_identical_elf": true,
+  "complete_callgraphs": 69,
+  "checker_relaxations": false
+}

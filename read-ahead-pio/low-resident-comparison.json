@@ -1,0 +1,18 @@
+{
+  "preceding_build": "7568957f5e68",
+  "resident_bytes": 15132,
+  "preceding_module_embedded_offsets": [
+    187980,
+    203112,
+    218244,
+    233376
+  ],
+  "build_label_offset": 14710,
+  "only_difference": "12-byte build label",
+  "normalized_resident_sha256": "0b241f5cdc2b67210664a843aae9a5b2ff5c290987b2457770f0e67da09f1244",
+  "preceding_module_sha256": "ea2a2218303e597f2b10ad14a7fceee66936b262d943ddb0c0199c766d98f066",
+  "matches_exact_complete_embedded_resident": true,
+  "candidate_build": "04e204a26cfb",
+  "candidate_resident_sha256": "133f2cf9deeee7c08117d6a9f808045517b425603b12f78029e34723e1d3d4a4",
+  "final_clean_build": true
+}

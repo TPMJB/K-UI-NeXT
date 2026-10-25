@@ -1,0 +1,117 @@
+{
+  "schema": "kui.native.read-ahead.pio-source-recovery.v1",
+  "source_commit": "04e204a26cfb7d5c777f40764e0b5ea14bd405e8",
+  "source_tree": "3e226cb089a57e1e1ee9c35e368d18224080ffad",
+  "separate_repository_and_object_database": true,
+  "initial_main_prerequisite_only_fetched_from_local_checkout": true,
+  "checkpoint_bundles_and_checkout_helper_replayed": true,
+  "tree_identity_and_clean_checkout_verified": true,
+  "git_fsck_passed": true,
+  "steps": [
+    {
+      "command": [
+        "git",
+        "-C",
+        "/workspace/scratch/da50cf175784/pio-source-check/restored-source",
+        "fetch",
+        "--depth=1",
+        "--no-tags",
+        "/workspace/scratch/da50cf175784/hybrid-restore-check/restored-source",
+        "194a94483132c8dd30b0a21d7c20887c0e1eaed3:refs/heads/main-prerequisite"
+      ],
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/workspace/scratch/da50cf175784/pio-source-check/restored-source",
+        "fetch",
+        "--no-tags",
+        "/workspace/scratch/da50cf175784/hybrid-restore-check/source/native-vmu-9fa65fc1cae0.bundle",
+        "refs/heads/checkpoint-transport-native-vmu-9fa65fc1cae0:refs/heads/source-base"
+      ],
+      "stdout": "",
+      "stderr": "From /workspace/scratch/da50cf175784/hybrid-restore-check/source/native-vmu-9fa65fc1cae0.bundle\n * [new branch]      checkpoint-transport-native-vmu-9fa65fc1cae0 -> source-base\n"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/workspace/scratch/da50cf175784/pio-source-check/restored-source",
+        "fetch",
+        "--no-tags",
+        "/workspace/scratch/da50cf175784/hybrid-restore-check/source/native-vmu-74958b387827-update.bundle",
+        "HEAD:refs/heads/source-prerequisite"
+      ],
+      "stdout": "",
+      "stderr": "From /workspace/scratch/da50cf175784/hybrid-restore-check/source/native-vmu-74958b387827-update.bundle\n * [new ref]         HEAD       -> source-prerequisite\n"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/workspace/scratch/da50cf175784/pio-source-check/restored-source",
+        "checkout",
+        "--detach",
+        "74958b3878279fc916199a7cd330f7f17b036138"
+      ],
+      "stdout": "",
+      "stderr": "HEAD is now at 74958b3 Bound native background PIO work before returning to games\n"
+    },
+    {
+      "command": [
+        "python3",
+        "/workspace/scratch/da50cf175784/pio-source-check/read-ahead-pio/checkout-source.py"
+      ],
+      "stdout": "Verified PIO read-ahead source 04e204a26cfb7d5c777f40764e0b5ea14bd405e8 /workspace/scratch/da50cf175784/pio-source-check/restored-source\n",
+      "stderr": "From /workspace/scratch/da50cf175784/pio-source-check/read-ahead-pio/native-source-update.bundle\n * branch            HEAD       -> FETCH_HEAD\nPrevious HEAD position was 74958b3 Bound native background PIO work before returning to games\nHEAD is now at 04e204a Use measured heartbeat PIO prefetch to avoid speculative DMA overruns\n"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/workspace/scratch/da50cf175784/pio-source-check/restored-source",
+        "rev-parse",
+        "HEAD"
+      ],
+      "stdout": "04e204a26cfb7d5c777f40764e0b5ea14bd405e8\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/workspace/scratch/da50cf175784/pio-source-check/restored-source",
+        "rev-parse",
+        "HEAD^{tree}"
+      ],
+      "stdout": "3e226cb089a57e1e1ee9c35e368d18224080ffad\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/workspace/scratch/da50cf175784/pio-source-check/restored-source",
+        "status",
+        "--porcelain"
+      ],
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/workspace/scratch/da50cf175784/pio-source-check/restored-source",
+        "fsck",
+        "--full",
+        "--no-reflogs"
+      ],
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}

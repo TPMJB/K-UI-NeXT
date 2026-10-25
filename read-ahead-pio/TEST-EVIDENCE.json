@@ -1,0 +1,138 @@
+{
+  "schema": "kui.native.read-ahead.pio-candidate.v1",
+  "date": "2026-10-25",
+  "purpose": "Test whether fresh CPU-driven optional reads prevent the repeated receive-DMA overrun that stops cache production, while measuring the resulting serialized CPU cost.",
+  "motivating_capture": {
+    "name": "63369.mp4",
+    "tested_build": "7568957f5e68",
+    "sha256": "a401f0a24dffb0df0e5b230d306c93399c04eb72109022552b662a2651977df7",
+    "all_report_pages_present": true,
+    "retained_exits": "FIRST and LAST are POLL/OVERRUN; unrepaired1 with a previous loss already recorded in current area1.",
+    "poll_stage_failures": 8,
+    "abandoned_producer_skips": 5040,
+    "vmu_loan_skips": 0,
+    "evidence": "docs/evidence/native-read-ahead-second-overrun-2026-10-25.json"
+  },
+  "candidate_policy": {
+    "entry": "Controller-completion heartbeat TICK only, through the existing serialized private-stack auxiliary gateway.",
+    "work_limit": "At most one fresh physical512B block per eligible heartbeat, followed by CRC validation and cache append during the same visit.",
+    "transport": "Existing SCI CPU-driven polled receive path: fetch(next,256,true) only from PAUSED at the exact next cache LBA.",
+    "admission": [
+      "No active, pending, executing or failed demand request",
+      "No VMU loan, closed reader, unacquired or faulted port",
+      "No busy receiver, deferred reception or owned speculative job",
+      "Valid cache capacity and exact mapped-extent bounds",
+      "Already-open card stream PAUSED at the next physical block",
+      "Existing guest DMA1/global-DMA idle predicate passes"
+    ],
+    "not_admitted": [
+      "GD DELIVER or SCI IRQ producer fetch",
+      "TICK with engine.in_irq set",
+      "RESUME, LOST or CLOSED streams",
+      "Speculative seek or CMD18/CMD12 restart"
+    ],
+    "token_byte_limit": 256,
+    "block_and_crc_byte_calls": 514,
+    "max_token_and_block_byte_calls": 770,
+    "wall_time_limit_claimed": false,
+    "timeout_note": "Existing per-byte register-poll timeouts are retained. Bounded byte work is not a strict millisecond guarantee; producer-only elapsed time is captured.",
+    "cache_publication": "Only after the existing complete block CRC check; failures abandon optional work without failing an unrelated guest request."
+  },
+  "preserved": {
+    "demand_reader_dma": true,
+    "foreground_and_irq_delivery_limits": true,
+    "sci_priority": 1,
+    "sdk_vbr_and_callback_route": true,
+    "single_erasure_and_lifetime_repair_guards": true,
+    "ce_cdda_paths": true,
+    "exact_evolution2_admission": true,
+    "physical_a1_and_virtual_a2": true,
+    "cache_bytes": 196608,
+    "owned_lease_bytes": 393216,
+    "public_bytes": 656,
+    "context_bytes": 904,
+    "failure_record_bytes": 148,
+    "guard_counter_offset": 64,
+    "aux_private_stack_bytes": 4096
+  },
+  "producer_timing": {
+    "marker": "__kui_native_readahead_pio_auxiliary=1 paired with __kui_native_readahead_pio_worker=1",
+    "storage": "Previously unused diagnostics.stage_result[NONE][0..2]; failure histogram rows1..6 are unchanged.",
+    "display": "PIO WORK MAX TICKS BAD",
+    "values": [
+      "Attempted admitted fresh PIO blocks",
+      "Largest valid producer-only duration in existing TMU0 ticks",
+      "Invalid producer timing samples"
+    ],
+    "ticks_per_second": 781250,
+    "includes": [
+      "Pre-operation observations",
+      "PIO token and block transfer",
+      "CRC take and cache append",
+      "Failure capture when applicable",
+      "Operation overhead"
+    ],
+    "excludes": [
+      "Legacy demand delivery",
+      "Heartbeat seed scan and admission checks"
+    ],
+    "clock_validation": "Existing FRQCR/TMU profile at both endpoints, with unsigned elapsed delta below0x80000000; invalid samples do not update maximum.",
+    "capture_start": "Gesture resets metrics, normal statistics and exit records while preserving valid cached data."
+  },
+  "software_validation": {
+    "host_asan_ubsan_checks": 2036900,
+    "actual_sci_card_dma_fixture": true,
+    "contention_case": "32 eligible heartbeats append32 CRC-checked blocks with repeated DMA-overrun injections388/458 still armed and channel2 active; no optional DMAC register writes, no DMA starts, no additional CMD18/CMD12, no overrun/CRC/token/abandon errors.",
+    "admission_cases": "GD, IRQ, TICK-in-IRQ, active/pending/executing demand, loan, busy DMA, RESUME/LOST/position mismatch refuse optional byte work.",
+    "failure_cases": "CRC and token rejection, first/middle/last byte bus faults, latched-fault suppression and cache/full/extent boundaries preserve guest-request status and never publish an unchecked block.",
+    "token_bound_cases": "Successful last-token-byte case uses770 byte callbacks; no-token rejection uses256.",
+    "timing_cases": "Attempt/max/invalid metric scope, invalid clocks, elapsed wrap and capture reset covered.",
+    "actual_display_harness_passed": true,
+    "cache_page_body_rows": 13,
+    "producer_fields_do_not_count_as_failures": true,
+    "complete_linked_and_original_startup_checks_required_before_packaging": true,
+    "actual_linked_producer_cases": 154,
+    "actual_linked_producer_truth_cases": 80,
+    "actual_linked_snapshot_cases": 188,
+    "gateway_cases": 8064,
+    "auxiliary_code_bytes": 5920,
+    "auxiliary_code_sha256": "e7973080e08364c228ef9ecade3ab09e9ab3fe5b6c2ce3ade2ef2879e4a218cd",
+    "auxiliary_closed_stack_bytes": 428,
+    "public_stack_capacity_bytes": 4096,
+    "immutable_code_byte_mutations_refused": 5920,
+    "typed_binding_mutations_refused": 1809,
+    "prototype_full_persistent_self_test_and_evolution1_startup_passed": true,
+    "historical_pins_retained_with_paired_pio_proof_gate": true
+  },
+  "prototype_low_resident_comparison": {
+    "preceding_build": "7568957f5e68",
+    "preceding_module_sha256": "ea2a2218303e597f2b10ad14a7fceee66936b262d943ddb0c0199c766d98f066",
+    "resident_bytes": 15132,
+    "only_difference": "12-byte build label at resident offset14710",
+    "normalized_to_preceding_label_sha256": "0b241f5cdc2b67210664a843aae9a5b2ff5c290987b2457770f0e67da09f1244",
+    "complete_matching_copies_in_preceding_module": 4
+  },
+  "hardware_test": {
+    "command_always_includes_profile_runtime": true,
+    "workload": "Same Evolution2 new-game in-engine opening and movement area; also verify FMVs.",
+    "capture": "Both triggers plus B for about1second, release and continue moving until the intentional approximately20second stop. Record25seconds from CRC VALIDATED PHYSICAL READ AHEAD through the next LOADER TIMELINE heading.",
+    "first_discriminator": "Does optional production continue without repeated aborts?",
+    "second_discriminator": "How much serialized producer time buys how many checked blocks and cached-request feeds?",
+    "remaining_limits": [
+      "One512B block per60Hz heartbeat has a30KiB/s ideal ceiling; at50Hz it is25KiB/s.",
+      "A cold or unpredicted request still uses the original demand reader.",
+      "Counters alone do not prove every rendered hitch cause."
+    ],
+    "console_boot_verified": false,
+    "console_performance_verified": false,
+    "throughput_control": {
+      "recent_request_sectors": 492,
+      "recent_request_sector_bytes": 2352,
+      "backing_bytes": 1157184,
+      "capture_window_seconds": 20,
+      "recent_read_backing_kib_per_second": 56.503125,
+      "one_block_pio_60hz_kib_per_second": 30,
+      "meaning": "The recent eight reads alone exceed one-block-per-heartbeat ideal production; this first control tests completion and cost, and should provide partial warming rather than guarantee fully cached bursts. More requests may precede the retained recent eight."
+    }
+  }
+}
