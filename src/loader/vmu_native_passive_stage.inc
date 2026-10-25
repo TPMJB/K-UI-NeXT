@@ -41,6 +41,9 @@ static bool passive_entry(uint32_t entry,uint32_t begin,uint32_t bytes) {
 #if KUI_NATIVE_SDK_SCI_ROUTE
 #include "vmu_native_sdk_sci_route_stage.inc"
 #endif
+#if KUI_NATIVE_READAHEAD
+#include "vmu_native_readahead_stage.inc"
+#endif
 #if KUI_NATIVE_LOADER_TIMELINE
 /* The existing40B trace table remains unchanged. Its new adjacent typed
  * descriptor belongs to this immutable worker image and supplies one entry.
@@ -200,7 +203,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     cfg.tx_base=cfg.layout.tx_base;
     cfg.runtime=(struct kui_vmu_native_runtime_config){.version=1u,.bytes=sizeof(cfg.runtime),
         .lease_address=load,.lease_bytes=lease->lease_bytes,.lease_header_bytes=32u,
-        .required_lease_bytes=0x30000u,.gun_flag=cfg.layout.gun_flag,
+        .required_lease_bytes=KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES,.gun_flag=cfg.layout.gun_flag,
         .timer1_callback=cfg.layout.timer1_callback,.timer2_callback=cfg.layout.timer2_callback,
         .rx_layout=cfg.layout.rx_layout,.rx_base=cfg.layout.rx_base};
     memcpy(cfg.display,display.regs,sizeof(cfg.display));
@@ -214,7 +217,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     cfg.diagnostics=native_runtime_diagnostics();
 #endif
 #if KUI_VMU_NATIVE_BACKGROUND
-    /* The last 64 KiB of this proved 192 KiB allocation is outside the worker's
+    /* The retained map and reader region are outside the worker's
      * copied/zeroed 128 KiB span. Retain the validated 64-slot map there before
      * the temporary stage can retire. Both aliases are checked by the low
      * binder; every P1 line reaches RAM before the P2 copy and comparison. */
@@ -343,6 +346,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #endif
 #if KUI_NATIVE_SDK_SCI_ROUTE
     native_sdk_sci_route_bind(lease->payload);
+#endif
+#if KUI_NATIVE_READAHEAD
+    native_readahead_bind(lease->payload);
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(cfg.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN)

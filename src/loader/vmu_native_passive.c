@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Passive one-pair proof, or a separately enabled bounded read-only bridge. */
 #include "kui/vmu_native_passive.h"
+#include "kui/vmu_native_background.h"
 #include "retail_display.h"
 #include <string.h>
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
@@ -315,6 +316,9 @@ static void diagnostic_report(void) {
     for(;;) {
 #if KUI_NATIVE_READER_DIAGNOSTIC
     reader_capture_report(&display);
+#if KUI_NATIVE_READAHEAD
+    reader_readahead_report(&display);
+#endif
 #if KUI_NATIVE_LOADER_TIMELINE
     native_loader_timeline_report(&display);
 #endif
@@ -700,7 +704,7 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
        (c->layout.version!=KUI_VMU_NATIVE_LAYOUT_VERSION &&
         c->layout.version!=KUI_VMU_NATIVE_LAYOUT_INFILE_VERSION) || c->layout.bytes!=sizeof(c->layout) ||
        c->layout.tx_base!=c->tx_base || c->layout.rx_layout>KUI_VMU_NATIVE_RX_EXPLICIT48 ||
-       c->lease.lease_bytes!=UINT32_C(0x30000) ||
+       c->lease.lease_bytes!=KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES ||
        !ram(c->lease.payload,c->lease.lease_bytes,32u) ||
        SELF_ADDRESS!=(physical(c->lease.payload)|UINT32_C(0xa0000000)) ||
        STACK_LOW!=SELF_ADDRESS+WORKER_SPAN-0x1000u || STACK_HIGH!=SELF_ADDRESS+WORKER_SPAN ||

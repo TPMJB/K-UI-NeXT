@@ -178,9 +178,10 @@ def library_cfg(decoded, address, count):
             "unknown_instruction_or_cycle_rejected": True}
 
 
-def stack_paths(frames, calls, roots=None):
+def stack_paths(frames, calls, roots=None, switched_stacks=None):
     callbacks, escapes, reached = set(), set(), set()
     memo = {}
+    switched_stacks = {} if switched_stacks is None else switched_stacks
 
     def resolve(function):
         if function in frames:
@@ -205,6 +206,14 @@ def stack_paths(frames, calls, roots=None):
                 key = graph.base(function), label.split(":", 1)[0]
                 if key in ESCAPES:
                     escapes.add(key)
+                    continue
+                if key in switched_stacks:
+                    # The paired read-ahead gateway first parks its exact
+                    # owner frame here, then uses the independently proved
+                    # auxiliary stack. This is not a zero-byte callback.
+                    count=switched_stacks[key]
+                    if count>best[0]:best=(count,["guarded auxiliary stack switch("+str(count)+")"])
+                    callbacks.add((function,label,("separately audited auxiliary stack",)))
                     continue
                 require(key in CALLBACKS, "unadmitted private GD callback: " + function + " at " + label)
                 targets = [node for callback in CALLBACKS[key] for node in resolve(callback)]
@@ -241,7 +250,7 @@ def c_body(text, signature):
     return text[start:end]
 
 
-def compiled_tail_copy(stage, resident, *, self_test=False):
+def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000):
     """Replay the linked installer tail through its first worker relocation.
 
     The already audited prefix proves the native allocation and normalizes
@@ -290,8 +299,8 @@ def compiled_tail_copy(stage, resident, *, self_test=False):
             self.raw, self.load, self.outcome = raw, (raw & 0x1FFFFFFF) | 0x80000000, outcome
             self.pc, self.r[15] = start, 0x8CDD0000
             self.lease = 0x8CDF0000
-            self.r[8], self.r[9], self.r[10], self.r[11], self.r[12] = copy, self.load, 0x30000, self.r[15] + 0x904, self.lease
-            self.write(self.lease + 32, 0x30000)
+            self.r[8], self.r[9], self.r[10], self.r[11], self.r[12] = copy, self.load, lease_bytes, self.r[15] + 0x904, self.lease
+            self.write(self.lease + 32, lease_bytes)
             self.write(self.lease + 40, raw)
             self.write(self.r[15] + 32, self.lease - 64)
             self.write(self.r[15] + 28, worker_bytes)
@@ -483,14 +492,15 @@ def compiled_tail_copy(stage, resident, *, self_test=False):
                 rejected.append(name)
             else:
                 raise ValueError("compiled tail-copy replay accepted mutation: " + name)
-    return {"actual_sh_cases": cases, "entry": hex(start), "witnesses": {name: hex(address) for name, address in example.witness.items()},
+    return {"actual_sh_cases": cases, "entry": hex(start), "lease_bytes":lease_bytes,
+            "witnesses": {name: hex(address) for name, address in example.witness.items()},
             "map_copy_bytes": 1020, "region_copy_bytes": 1888, "map_lines_before_p2_copy": 32,
             "region_lines_before_p2_copy": 59, "actual_p2_publisher_executed": True,
             "binder_result_must_equal_one": True, "worker_relocation_preserves_tail": True,
             "hostile_abi_callees": True, "refused_mutations": rejected}
 
 
-def source_contract():
+def source_contract(readahead=False):
     paths = ("include/kui/vmu_native_background.h", "include/kui/vmu_native_async_loan.h",
              "src/loader/vmu_native_background_resident.c", "src/loader/retail_resident.c",
              "src/loader/retail_async.c", "src/loader/retail_async.h", "src/loader/retail_resident.S",
@@ -508,6 +518,15 @@ def source_contract():
                 "KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES": 0x760}
     require(all(constants.get(key) == value for key, value in expected.items()),
             "Background workspace geometry changed")
+    if readahead:
+        # Preserve the old192KiB branch; the selected384KiB variant is a
+        # separately paired profile, also checked by compiled lease tests.
+        require('#if KUI_NATIVE_READAHEAD\n#define KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES KUI_NATIVE_RA_LEASE_BYTES\n#else\n#define KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES UINT32_C(0x30000)\n#endif' in sources[paths[0]],
+                'read-ahead did not isolate the selected owned lease')
+        layout=(ROOT/'include/kui/native_readahead_layout.h').read_text()
+        require('#define KUI_NATIVE_RA_LEASE_BYTES UINT32_C(0x60000)' in layout,
+                'read-ahead selected lease geometry changed')
+        expected['KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES']=0x60000
     wrapper = sources["src/loader/vmu_native_background_resident.c"]
     guard = wrapper[:wrapper.index("#endif")]
     for flag in ("KUI_VMU_NATIVE_BACKGROUND", "KUI_VMU_NATIVE_PERSISTENT_PROBE", "KUI_RETAIL_ASYNC",
@@ -594,7 +613,8 @@ def stage_contract(directory, resident, *, self_test=False):
             "map": hex(manifest), "stage_map_object_bytes": 2172, "retained_map_prefix_bytes": 1020,
             "installer_stack": hex(installer), "installer_stack_bytes": 0x10000,
             "generated_binder": hex(binder), "embedded_resident_copies": embedded,
-            "tail_copy_replay": compiled_tail_copy(image, resident, self_test=self_test),
+            "tail_copy_replay": compiled_tail_copy(image, resident, self_test=self_test,
+                lease_bytes=0x60000 if '__kui_native_readahead_stage' in image[4] else 0x30000),
             "memory_end": hex(inspected["memory_end"]),
             "scope": "stage bounds/profile/workspaces; full envelope and worker audited separately"}
 
@@ -657,14 +677,23 @@ def check(directory, *, self_test=False, require_stage=False):
         # owner frame on the SDK stack, then enters C at private stack top.
         # Walk this actual additional C dispatcher, not just its IRQ callee.
         roots['kui_retail_sdk_sci_dispatch']=0
-    paths, callbacks, escapes = stack_paths(frames, calls, roots)
+    readahead='__kui_native_readahead_resident' in image[4]
+    companion={'enabled':False}
+    if readahead:
+        from check_vmu_native_readahead import check as check_read_ahead
+        companion=check_read_ahead(directory,self_test=self_test)
+        require(companion.get('enabled') and companion.get('paired_markers') and
+                companion.get('gateway',{}).get('parked_owner_stack_bytes')==20,
+                'Background read-ahead stack boundary lacks its complete companion proof')
+    switched={('deliver','retail_async.c'):20} if readahead else None
+    paths, callbacks, escapes = stack_paths(frames, calls, roots,switched)
     worst = max(item["bytes"] for item in paths.values())
     total = worst + library["stack_bytes"] + EXTRA_MARGIN + GUARD + TOP_GAP
     require(total <= TOP - BOTTOM,
             f"Background private stack needs {total} bytes including its guard/top gap; available {TOP-BOTTOM}")
     stage = stage_contract(directory, inspected, self_test=self_test)
     require(not require_stage or stage["available"], "complete-profile audit requires the linked stage")
-    source = source_contract()
+    source = source_contract(readahead)
     result = {"schema": "kui.native.background.audit.v1", "console_execution_verified": False,
               "resident_sha256": digest(data), "payload_bytes": len(inspected["payload"]),
               "memory_end": hex(inspected["memory_end"]), "low_limit": hex(BOTTOM),
@@ -684,7 +713,7 @@ def check(directory, *, self_test=False, require_stage=False):
                                 "nonreturning_boundaries": [{"function": key[0], "source": key[1],
                                                              "contract": ESCAPES[key]} for key in escapes],
                                 "installer_and_worker_roots_excluded": sorted(COLD)},
-              "source_contract": source, "stage": stage}
+              "source_contract": source, "stage": stage,"read_ahead_companion":companion}
     if self_test:
         rejected = []
         def refuse(name, callback):
@@ -698,19 +727,19 @@ def check(directory, *, self_test=False, require_stage=False):
         key=next(name for name in altered if graph.base(name)=="native_background_map")
         altered[key] += 128
         def oversized():
-            checks, _, _ = stack_paths(altered, calls, roots)
+            checks, _, _ = stack_paths(altered, calls, roots,switched)
             need = max(item["bytes"] for item in checks.values()) + 4 + EXTRA_MARGIN + GUARD + TOP_GAP
             require(need <= TOP - BOTTOM, "oversized private stack")
         refuse("guarded_map_stack_growth", oversized)
         unknown = {name: list(edges) for name, edges in calls.items()}
         unknown["kui_retail_async_irq"].append(("__indirect_call", "unknown_callback.c:1:1"))
-        refuse("unknown_irq_callback", lambda: stack_paths(frames, unknown, roots))
+        refuse("unknown_irq_callback", lambda: stack_paths(frames, unknown, roots,switched))
         escaped = {name: list(edges) for name, edges in calls.items()}
         escaped["kui_retail_async_irq"].append(("kui_vmu_observe_sd_lease", "retail_async.c:1:1"))
-        refuse("worker_gateway_on_gd_stack", lambda: stack_paths(frames, escaped, roots))
+        refuse("worker_gateway_on_gd_stack", lambda: stack_paths(frames, escaped, roots,switched))
         recursive = {name: list(edges) for name, edges in calls.items()}
         recursive["kui_retail_async_irq"].append(("kui_retail_async_irq", "retail_async.c:1:1"))
-        refuse("recursive_irq_path", lambda: stack_paths(frames, recursive, roots))
+        refuse("recursive_irq_path", lambda: stack_paths(frames, recursive, roots,switched))
         decoded = rows(disassembly)
         mutated = dict(decoded)
         mutated[helper_address + 2] = (0x60F3, "mov", "r15,r0")

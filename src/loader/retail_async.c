@@ -1,9 +1,16 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Original K-UI background game reader (see retail_async.h). The stream
  * sequence is the one the SCI async probe proved on the console. */
+#include "kui/native_readahead.h"
 #include "retail_async.h"
 #include "kui/native_sci_priority.h"
 #include "kui/native_sdk_sci_runtime.h"
+#if KUI_NATIVE_READAHEAD && (!KUI_NATIVE_SDK_SCI_ROUTE || !KUI_VMU_NATIVE_BACKGROUND || defined(KUI_RETAIL_CE))
+#error "Native read-ahead requires the separate SDK SCI route and retained native lease"
+#endif
+#if KUI_NATIVE_READAHEAD
+__asm__(".global __kui_native_readahead_resident\n.set __kui_native_readahead_resident,1\n");
+#endif
 #if KUI_NATIVE_IRQ_REARM && (!KUI_NATIVE_REQUEST_TIMING || !KUI_RETAIL_NATIVE_HYBRID || defined(KUI_RETAIL_CE))
 #error "Native IRQ rearm diagnostics require the hybrid request-timing counter profile"
 #endif
@@ -478,10 +485,14 @@ static bool tops_up(uint32_t function) {
  * run is started before each block is checked and copied. Returns while a block is in
  * flight, after up to wait blocks have been waited for. Without an active
  * read, only a finished reception is ended (its interrupt cleared). */
-#if !defined(KUI_RETAIL_CE) && (!KUI_NATIVE_READER_DIAGNOSTIC || KUI_NATIVE_REQUEST_TIMING)
+#if !KUI_NATIVE_READAHEAD && !defined(KUI_RETAIL_CE) && (!KUI_NATIVE_READER_DIAGNOSTIC || KUI_NATIVE_REQUEST_TIMING)
 #define deliver_work deliver
 #endif
-static void deliver_work(uint32_t wait) {
+static void
+#if KUI_NATIVE_READAHEAD
+__attribute__((noipa))
+#endif
+deliver_work(uint32_t wait) {
     uint32_t delivered = 0;
 #ifndef KUI_RETAIL_CE
     /* A native GD entry has at most one active delivery visit: REQUEST
@@ -607,7 +618,26 @@ static void deliver_work(uint32_t wait) {
         if(r > KUI_SCI_STREAM_BUSY) failure(r);
     }
 }
-#ifdef KUI_RETAIL_CE
+#if KUI_NATIVE_READAHEAD
+static uint32_t native_readahead_visit(uint32_t event,uint32_t arg) {
+    kui_native_ra_visit visit=(kui_native_ra_visit)(uintptr_t)
+        R.vector600[KUI_NATIVE_RA_ENTRY_INDEX];
+    /* An unbound auxiliary has no speculative receiver to quiesce. */
+    return visit?visit(event,arg,&R,0u):event==KUI_NATIVE_RA_QUIESCE;
+}
+static void deliver(uint32_t wait) {
+    if(!native_readahead_visit(KUI_NATIVE_RA_DELIVER,wait))deliver_work(wait);
+}
+/* The stage proves every complete entry and the retained region pointer
+ * against this immutable, separately gated low-resident descriptor. */
+const struct kui_native_ra_low_ops kui_native_ra_reader_ops
+    __attribute__((section(".rodata.native_readahead")))={
+    KUI_NATIVE_RA_OPS_MAGIC,KUI_NATIVE_RA_VERSION,sizeof(struct kui_native_ra_low_ops),
+    &kui_retail_async_region_storage,deliver_work,hook,unhook,
+    kui_sci_stream_fetch,kui_sci_stream_poll,kui_sci_stream_take,
+    kui_sci_stream_stop,kui_sci_stream_busy,kui_retail_cursor_feed
+};
+#elif defined(KUI_RETAIL_CE)
 static void deliver(uint32_t wait) {
     uint32_t before = R.shared.stream.stats.polled;
     deliver_work(wait);
@@ -733,7 +763,11 @@ enum kui_vmu_native_async_loan_result kui_retail_native_async_loan_begin(
     /* A completed command may still await CHECK. Its terminal result does
      * not own SCI; a pending command, receiver or released handler does. */
     if(!s->initialized || s->pending || s->executing || e.active || e.in_irq ||
-       e.release.depth || kui_sci_stream_busy()) {
+       e.release.depth ||
+#if KUI_NATIVE_READAHEAD
+       !native_readahead_visit(KUI_NATIVE_RA_QUIESCE,0u) ||
+#endif
+       kui_sci_stream_busy()) {
         kui_retail_hook_active=0u;return KUI_VMU_NATIVE_ASYNC_LOAN_BUSY;
     }
     if(R.shared.card.transport!=KUI_STORAGE_SCI || !R.shared.card.device.sd.ready ||
@@ -775,6 +809,8 @@ enum kui_vmu_native_async_loan_result kui_retail_native_async_loan_end(bool heal
      * own cursor and reacquires the bus through open_bus, never here. */
     e.native_loan_state=KUI_VMU_NATIVE_ASYNC_LOAN_IDLE;
     kui_retail_hook_active=0u;
+    /* The later read-ahead TICK observes IDLE on the auxiliary stack.
+     * Do not restart storage from this still-unwinding loan callback. */
     return KUI_VMU_NATIVE_ASYNC_LOAN_OK;
 }
 #endif

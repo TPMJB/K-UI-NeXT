@@ -9,7 +9,8 @@ int main(void) {
         "Background map fits the existing allocation tail");
     const uint32_t aliases[]={0u,UINT32_C(0x80000000),UINT32_C(0xa0000000)};
     uint32_t leases=0;
-    for(uint32_t physical=UINT32_C(0x0c010020);physical<=UINT32_C(0x0cfd0000);physical+=32u) {
+    const uint32_t last_payload=UINT32_C(0x0d000000)-KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES;
+    for(uint32_t physical=UINT32_C(0x0c010020);physical<=last_payload;physical+=32u) {
         uint32_t owned=(physical|UINT32_C(0x80000000))+KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES;
         uint32_t region=(physical|UINT32_C(0x80000000))+KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET;
         for(unsigned a=0;a<3u;a++) {
@@ -37,7 +38,8 @@ int main(void) {
             UINT32_C(0x8c120000)));
     }
     const uint32_t invalid[]={0u,UINT32_C(0x0c000000),UINT32_C(0x0c010000),
-        UINT32_C(0x0cfd0020),UINT32_C(0x0d000000),UINT32_C(0xffffffe0)};
+        UINT32_C(0x0d000000)-KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES+32u,
+        UINT32_C(0x0d000000),UINT32_C(0xffffffe0)};
     for(unsigned i=0;i<sizeof(invalid)/sizeof(*invalid);i++)
         assert(!kui_vmu_native_background_map_address(invalid[i],
             (invalid[i]&UINT32_C(0x1fffffff))+UINT32_C(0x80020000)));

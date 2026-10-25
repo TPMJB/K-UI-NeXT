@@ -199,6 +199,8 @@ class SH:
             self.r[n] |= self.r[m]
         elif op & 0xF00F == 0x2008:
             self.flag(not (self.r[n] & self.r[m]))
+        elif op & 0xFF00 == 0xC800:  # tst #imm,R0: unsigned8-bit immediate
+            self.flag(not (self.r[0] & (op & 255)))
         elif op & 0xFF00 == 0xC900:
             self.r[0] &= op & 255
         elif op & 0xFF00 == 0xCB00:

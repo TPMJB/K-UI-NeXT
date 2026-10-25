@@ -25,8 +25,55 @@ __asm__(".global __kui_native_reader_stall_capture\n"
 #undef KUI_GENERAL_SCI_RESUME_FIX
 #undef KUI_READER_CAPTURE_LAYOUT_VIEW
 #endif
+#if KUI_NATIVE_READAHEAD
+#include "kui/native_readahead.h"
+__asm__(".global __kui_native_readahead_worker\n.set __kui_native_readahead_worker,1\n");
+#endif
 static struct kui_reader_capture reader_capture;
 static kui_retail_async_region_type *reader_capture_region(void);
+#if KUI_NATIVE_READAHEAD
+static const struct kui_native_ra_exports *reader_readahead_exports(
+    const kui_retail_async_region_type *r) {
+    uint32_t lease=(config.lease.payload&UINT32_C(0x1fffffff))|UINT32_C(0x80000000);
+    uint32_t load=lease+KUI_NATIVE_RA_AUX_OFFSET;
+    const struct kui_native_ra_exports *a=(const void *)(uintptr_t)(load|UINT32_C(0x20000000));
+    if(!r || a->magic!=KUI_NATIVE_RA_AUX_MAGIC || a->version!=1u || a->bytes!=sizeof(*a) ||
+       a->image_end<load+UINT32_C(0x1002) || a->image_end>load+UINT32_C(0x5000) ||
+       (uint32_t)(uintptr_t)a->visit<load+UINT32_C(0x1000) ||
+       (uint32_t)(uintptr_t)a->visit>=a->image_end ||
+       r->vector600[KUI_NATIVE_RA_ENTRY_INDEX]!=(uint32_t)(uintptr_t)a->visit ||
+       r->vector600[KUI_NATIVE_RA_CONTEXT_INDEX]!=(uint32_t)(uintptr_t)a->context ||
+       (uint32_t)(uintptr_t)a->context<(load|UINT32_C(0x20000000))+64u ||
+       (uint32_t)(uintptr_t)a->context>(load|UINT32_C(0x20000000))+4096u-sizeof(struct kui_native_ra_public))return NULL;
+    return a;
+}
+static void reader_readahead_visit(uint32_t event) {
+    kui_retail_async_region_type *r=reader_capture_region();
+    const struct kui_native_ra_exports *a=reader_readahead_exports(r);
+    if(a)(void)a->visit(event,0u,r,0u);
+}
+#ifndef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+static void reader_readahead_report(const struct retail_display_state *display) {
+    const struct kui_native_ra_exports *a=reader_readahead_exports(reader_capture_region());
+    if(!a)return;
+    const struct kui_native_ra_stats *s=&((const struct kui_native_ra_public *)a->context)->stats;
+    retail_display_restore(display);
+    retail_display_line("CRC VALIDATED PHYSICAL READ AHEAD");
+    retail_display_values("CAPACITY HITS MISSES HIT REQUESTS",(uint32_t[4]){
+        KUI_NATIVE_RA_BLOCKS,s->hits,s->misses,s->hit_requests},4u);
+    retail_display_values("PRODUCED VISITS HEARTBEAT IRQ",(uint32_t[4]){
+        s->producer_blocks,s->producer_visits,s->heartbeat_visits,s->irq_visits},4u);
+    retail_display_values("SEEKS QUIESCE RESUME FULL EXTENT END",(uint32_t[5]){
+        s->seeks,s->quiesces,s->resumes,s->full,s->extent_ends},5u);
+    retail_display_values("CRC TOKEN ABANDON GUARD CLOCK BAD",(uint32_t[5]){
+        s->crc_errors,s->token_errors,s->abandoned,s->guard_faults,s->clock_bad},5u);
+    retail_display_hex("MAX AUX VISIT TICKS",s->max_visit_ticks);
+    retail_display_line("781250 TICKS PER SECOND - HEX VALUES");
+    retail_display_line("CACHE NEVER RETAINS FUTURE GAME BUFFERS");
+    retail_display_pause(240u);
+}
+#endif
+#endif
 #if KUI_NATIVE_COOP_PUMP
 __asm__(".global __kui_native_cooperative_reader\n.set __kui_native_cooperative_reader,1\n");
 #if KUI_NATIVE_IRQ_REARM
@@ -60,6 +107,10 @@ static void __attribute__((noipa)) reader_window_clock(struct kui_vmu_native_pro
 }
 #endif
 static void __attribute__((noipa)) reader_cooperative_service(void) {
+#if KUI_NATIVE_READAHEAD
+    if(!durable_card.inflight && !durable_card.handling)
+        reader_readahead_visit(KUI_NATIVE_RA_TICK);
+#endif
 #if KUI_NATIVE_PACED_CHECK || KUI_NATIVE_IRQ_REARM
     /* The measured controller callback supplied little data. This candidate
      * schedules through GD/SCI only, leaving controller completion brief. */
@@ -152,6 +203,9 @@ static kui_retail_async_region_type *reader_capture_region(void) {
 #endif
 }
 static void reader_capture_start(void) {
+#if KUI_NATIVE_READAHEAD
+    reader_readahead_visit(KUI_NATIVE_RA_CAPTURE_START);
+#endif
     kui_reader_capture_reset(&reader_capture);
     kui_retail_async_region_type *r=reader_capture_region();
 #if KUI_NATIVE_REQUEST_TIMING

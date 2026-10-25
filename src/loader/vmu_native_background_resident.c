@@ -31,8 +31,8 @@ static bool native_resident_lease(const volatile struct kui_vmu_observe_boot_con
     uint32_t *begin,uint32_t *end) {
     uint32_t lease=c->lease;
     if((lease&31u) || lease<UINT32_C(0x0c010020) ||
-       lease>UINT32_C(0x0cfd0000)) return false;
-    *begin=lease-32u;*end=lease+UINT32_C(0x30000);return true;
+       lease>UINT32_C(0x0d000000)-KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES) return false;
+    *begin=lease-32u;*end=lease+KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES;return true;
 }
 static bool native_resident_destination(const volatile struct kui_vmu_observe_boot_control *c,
     uint32_t address,uint32_t bytes) {

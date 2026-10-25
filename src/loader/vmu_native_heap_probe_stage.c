@@ -4,6 +4,7 @@
 #error Native heap adapter requires its isolated native build
 #endif
 #include "kui/vmu_native_mode.h"
+#include "kui/vmu_native_background.h"
 #if KUI_VMU_NATIVE_CACHE_PROBE
 __asm__(".section .rodata.native_runtime_mode,\"a\"\n.balign 4\n"
     ".global __native_runtime_mode_start\n"
@@ -123,7 +124,8 @@ void kui_vmu_observe_stage_install(void) {
     struct kui_vmu_native_heap_lease lease;
     if(c->heap_begin!=native_call.entry_begin || c->heap_bytes!=native_call.entry_bytes ||
        !allocation_safe(begin,bytes) ||
-       !kui_vmu_native_heap_fresh(&native_heap,native_read,NULL,begin,bytes,1u,0x30000u,&lease))
+       !kui_vmu_native_heap_fresh(&native_heap,native_read,NULL,begin,bytes,1u,
+           KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES,&lease))
         native_report(4u,begin);
     uint32_t pr=c->original_pr&0x1fffffffu,sp=c->entry_sp&0x1fffffffu;
     if((c->original_pr&1u) || pr!=(native_call.return_pr&0x1fffffffu) ||

@@ -72,6 +72,14 @@ C_SYMBOL(kui_retail_ce_vmu_loan_descriptor):
 C_SYMBOL(kui_native_sdk_sci_route_entry):
     .long C_SYMBOL(kui_native_sdk_sci_route_exports)
     .size C_SYMBOL(kui_native_sdk_sci_route_entry),4
+#if KUI_NATIVE_READAHEAD
+/* Additional typed entry word; the SDK SCI descriptor remains at+36. */
+    .global C_SYMBOL(kui_native_ra_reader_ops_entry)
+    .type C_SYMBOL(kui_native_ra_reader_ops_entry),@object
+C_SYMBOL(kui_native_ra_reader_ops_entry):
+    .long C_SYMBOL(kui_native_ra_reader_ops)
+    .size C_SYMBOL(kui_native_ra_reader_ops_entry),4
+#endif
 #elif KUI_RETAIL_RETURN_TRACE == 3
 /* Native-only word at entry offset 36. The high stage verifies this pointer
  * against the selected immutable resident before its exact-owner RAM patch. */

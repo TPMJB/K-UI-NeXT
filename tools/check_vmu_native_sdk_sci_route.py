@@ -54,6 +54,17 @@ STAGE_PINS={
     '_native_sdk_sci_route_bind':(692,'3a324dfb4b14f6d3b996a4a14408951d827836b431b73cc1181f1653e239e9cd'),
     '_kui_native_sdk_sci_route_admit':(800,'6924792714a86593648c5b608797af4e5d367c55b1e7cc55312b97a9df551b82'),
 }
+RA_PINS={
+    '_sdk_sci_ready':(80,'cc136e30a9192db0ee681a5fd1823950d828b6e542eb2024d88afa29cc0dffc6'),
+    '_hook':(104,'404d6102f077b57e7ca7345169940eb3498b4b7d87d34af29e40b03a25dbe779'),
+    '_unhook':(68,'c2dbf8b636eb9c82b63902a0879c108588a0d591e2155df6c0bb7fd607e1cfab'),
+    '_kui_retail_sdk_sci_dispatch':(124,'c3889fffbfc64eacd9699148765783812c3d5841334fed483024bdb2ae7b57e3'),
+    '_kui_retail_sdk_sci_entry':(152,'62b195c002f1a9ad8a06a165a372ae4cafc47e35809af25064de32c6df25f023'),
+}
+RA_STAGE_PINS={
+    '_native_sdk_sci_route_bind':(692,'ff2f3192e0ef834f748618f8974e31bda0d702e15e4466cf3e9361f560f3dd45'),
+    '_kui_native_sdk_sci_route_admit':(800,'86a952cde09954838cfae3dca5d94522356c98cce8d6623e2b9468f66bb44925'),
+}
 MEMORY_CACHE={}
 MEMORY_REFERENCES={}
 
@@ -72,7 +83,8 @@ def initialized_at(image,address,count):
 
 def pin_bodies(resident):
     found={}
-    for name,(count,digest) in PINS.items():
+    selected=RA_PINS if '__kui_native_readahead_resident' in resident[4] else PINS
+    for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(resident,name,2)
         require(section[2]&4 and 0x8c004000<=address<address+len(body)<=0x8c007ba0,
                 'SDK SCI code escapes immutable low resident: '+name)
@@ -102,7 +114,8 @@ def pin_bodies(resident):
 
 def stage_pins(stage):
     result={}
-    for name,(count,digest) in STAGE_PINS.items():
+    selected=RA_STAGE_PINS if '__kui_native_readahead_stage' in stage[4] else STAGE_PINS
+    for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(stage,name,2)
         require(section[2]&4 and 0x8ce00000<=address<address+len(body)<=0x8cfe0000,
                 'SDK SCI cold binder/admission code escapes temporary stage')
@@ -611,7 +624,7 @@ def check_sdk_dispatch(resident,startup):
         console_performance_verified=False)
 
 
-def check(resident,*,worker=None,stage=None,self_test=False):
+def check(resident,*,worker=None,stage=None,self_test=False,read_ahead_proof=None):
     require(__debug__,'SDK SCI instruction model requires Python assertions')
     marker=resident[4].get(MARKER+'resident')
     callback=resident[4].get(MARKER+'callback')
@@ -623,6 +636,18 @@ def check(resident,*,worker=None,stage=None,self_test=False):
         return {'enabled':False}
     require(worker is not None,'SDK SCI route requires paired worker artifact')
     require(stage is not None,'SDK SCI route requires paired cold stage artifact')
+    ra=resident[4].get('__kui_native_readahead_resident')
+    ra_worker=worker[4].get('__kui_native_readahead_worker')
+    ra_stage=stage[4].get('__kui_native_readahead_stage')
+    require(bool(ra)==bool(ra_worker)==bool(ra_stage),'SDK read-ahead companion markers differ')
+    if ra:
+        require(ra==ra_worker==ra_stage==(1,0,0,0xfff1),'SDK read-ahead companion marker value differs')
+        require(read_ahead_proof is not None and read_ahead_proof.get('enabled') and
+                read_ahead_proof.get('paired_markers') and
+                read_ahead_proof.get('schema')=='kui.native.read-ahead.audit.v1' and
+                all(read_ahead_proof.get('artifact_sha256',{}).get(name)==hashlib.sha256(image[0]).hexdigest()
+                    for name,image in (('resident',resident),('worker',worker),('stage',stage))),
+                'SDK read-ahead profile requires the complete exact companion proof')
     require(marker==callback==paired==(1,0,0,0xfff1),'SDK SCI paired marker mismatch')
     if stage is not None:require(staged==(1,0,0,0xfff1),'SDK SCI paired stage marker mismatch')
     require('__kui_native_sci_priority7_resident' not in resident[4],
@@ -656,7 +681,7 @@ def check(resident,*,worker=None,stage=None,self_test=False):
     return dict(enabled=True,paired_sdk_sci_markers=True,immutable_descriptor_bound=True,
         callback_private_stack_prefix_bytes=0,sdk_owner_stack_save_bytes=16,
         cold_binder_and_admission_pins=cold,cold_binder_instruction_modelled=True,cold_binder_execution=binder,
-        cold_binder_source_reviewed=True,
+        cold_binder_source_reviewed=True,read_ahead_companion_required=bool(ra),
         cold_binder_source_sha256=hashlib.sha256((ROOT/'src/loader/vmu_native_sdk_sci_route_stage.inc').read_bytes()).hexdigest(),
         immutable_function_pins=pins,callback_instruction_cases=callbacks,
         hook_ownership_instruction_cases=hooks,unhook_ownership_instruction_cases=unhooks,
@@ -680,7 +705,11 @@ def main():
     a=p.parse_args()
     try:
         r,w,s=(read_elf(a.directory/name) for name in ('resident-sci.elf','native-worker.elf','stage.elf'))
-        result=check(r,worker=w,stage=s,self_test=a.self_test)
+        read_ahead=None
+        if '__kui_native_readahead_resident' in r[4]:
+            from check_vmu_native_readahead import check as check_read_ahead
+            read_ahead=check_read_ahead(a.directory,self_test=a.self_test)
+        result=check(r,worker=w,stage=s,self_test=a.self_test,read_ahead_proof=read_ahead)
         if a.startup:result['external_sdk_dispatch']=check_sdk_dispatch(r,a.startup)
         if a.refused_build:
             result['shipped_refusal_regression']=check_cold_binder(read_elf(a.refused_build/'stage.elf'),read_elf(a.refused_build/'resident-sci.elf'),refused_artifact=True)

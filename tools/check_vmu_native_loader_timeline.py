@@ -24,12 +24,20 @@ BRIDGE_PIN=('62d84fd8b9c6b54566d1334bc207c06f3d8b7d2355da33e562bdde085c50bc7b',3
 BINDER_PIN=('7caa04ff75dfb56f852276ab71517c1466face73d215dc2c66204d9b49347ecd',180)
 SDK_BRIDGE_PIN=('8b006aa6a8fc0f838d068585d20cef48ca2bdbe271a6658cd3f9fd251f758fa6',36)
 SDK_BINDER_PIN=('7caa04ff75dfb56f852276ab71517c1466face73d215dc2c66204d9b49347ecd',180)
+# The isolated read-ahead profile moves low BSS back to the original timeline
+# binding pair. Its bridge instructions remain byte-identical. The cold
+# binder differs from the SDK profile only at its exact retained-map helper
+# literal; the 384 KiB geometry is separately checked by that profile's binder.
+READAHEAD_BRIDGE_PIN=BRIDGE_PIN
+READAHEAD_BINDER_PIN=('d58548c610f400992ca2a922c57a0f70caf334591b2d3ab736d93bf0a5eb97e0',180)
 # The SDK route changes the two low BSS bindings only. The whole body above
 # is still pinned independently; these checks admit no relocation mask.
 BRIDGE_INSTRUCTIONS=bytes.fromhex('06d1126709917c311c511821038904d222662b4109000b000900fc04')
 BRIDGE_BINDINGS=(0x8c007b34,0x8c007b20)
 SDK_BRIDGE_BINDINGS=(0x8c007a34,0x8c007a20)
+READAHEAD_BRIDGE_BINDINGS=(0x8c007b34,0x8c007b20)
 BIN_AT_NO_DIV_PIN=('37915f9519ac69eb63c1819a0b82ea5a759111693f41f9d9f4cb62e27beb56e7',144)
+READAHEAD_BIN_AT_NO_DIV_PIN=('0db32d17b310cf8f96bd164ed8555b1c47810499d2c00ed076948e9410d5c82c',144)
 
 
 def require(test,message):
@@ -116,7 +124,7 @@ def private_state(worker):
     return report
 
 
-def division_helper(resident,worker):
+def division_helper(resident,worker,read_ahead=False):
     """Reuse the resident stack proof only for identical linked libgcc code.
 
     The prefix contains the alternate internal entry used by the helper.
@@ -126,8 +134,16 @@ def division_helper(resident,worker):
     name='___udivsi3'
     if name not in worker[4]:
         _,body,_=symbol_bytes(worker,'_bin_at',2)
-        require((hashlib.sha256(body).hexdigest(),len(body))==BIN_AT_NO_DIV_PIN,
+        expected=READAHEAD_BIN_AT_NO_DIV_PIN if read_ahead else BIN_AT_NO_DIV_PIN
+        require((hashlib.sha256(body).hexdigest(),len(body))==expected,
                 'timeline bin arithmetic changed without a linked division-helper proof')
+        if read_ahead:
+            # This body has exactly the original arithmetic/instructions;
+            # only its final PC-relative add32 target moved with worker code.
+            target,target_body,target_section=symbol_bytes(worker,'_add32',2)
+            require(struct.unpack_from('<I',body,len(body)-4)[0]==target and
+                    target_section[2]&7==6 and P1+80<=target<target+len(target_body)<=P1+SPAN,
+                    'read-ahead timeline reciprocal arithmetic lost its exact owned add32 binding')
         return {'linked':False,'reciprocal_bin_body_pinned':True}
     def window(image):
         address,body,section=symbol_bytes(image,name,2)
@@ -155,10 +171,10 @@ def sdk_route_variant(resident,worker,stage):
     return False
 
 
-def bridge_bindings(resident,bridge,sdk):
+def bridge_bindings(resident,bridge,sdk,read_ahead=False):
     require(len(bridge)==36 and bridge[:28]==BRIDGE_INSTRUCTIONS,
             'timeline bridge instruction/halfword literal bytes differ from the reviewed original')
-    expected=SDK_BRIDGE_BINDINGS if sdk else BRIDGE_BINDINGS
+    expected=READAHEAD_BRIDGE_BINDINGS if read_ahead else SDK_BRIDGE_BINDINGS if sdk else BRIDGE_BINDINGS
     require(struct.unpack_from('<II',bridge,28)==expected,
             'timeline bridge must retain its exact reviewed region/SR literal pair')
     for name,address in zip(('_kui_retail_async_region_storage','_kui_retail_hook_sr'),expected):
@@ -176,6 +192,12 @@ def check(directory,*,self_test=False):
     directory=Path(directory)
     resident,worker,stage=(read_elf(directory/name) for name in ('resident-sci.elf','native-worker.elf','stage.elf'))
     sdk=sdk_route_variant(resident,worker,stage)
+    ra_markers=tuple(image[4].get('__kui_native_readahead_'+part) for image,part in
+                     ((resident,'resident'),(worker,'worker'),(stage,'stage')))
+    read_ahead=any(ra_markers)
+    if read_ahead:
+        require(sdk and ra_markers==(MARKER,)*3,
+                'read-ahead timeline requires the paired native SDK resident/worker/stage variant')
     markers=(resident[4].get('__kui_native_loader_timeline_resident'),
              worker[4].get('__kui_native_loader_timeline_worker'))
     if not any(markers):
@@ -194,13 +216,13 @@ def check(directory,*,self_test=False):
             P1+80<=callback<callback+len(callback_body)<=P1+SPAN and callback_section[2]&7==6,
             'timeline descriptor does not bind its exact private P1 callback')
     private=private_state(worker)
-    division=division_helper(resident,worker)
+    division=division_helper(resident,worker,read_ahead)
     begin,bridge,_=symbol_bytes(resident,'_kui_retail_async_trace',2)
-    bridge_pin=SDK_BRIDGE_PIN if sdk else BRIDGE_PIN
-    binder_pin=SDK_BINDER_PIN if sdk else BINDER_PIN
+    bridge_pin=READAHEAD_BRIDGE_PIN if read_ahead else SDK_BRIDGE_PIN if sdk else BRIDGE_PIN
+    binder_pin=READAHEAD_BINDER_PIN if read_ahead else SDK_BINDER_PIN if sdk else BINDER_PIN
     require((hashlib.sha256(bridge).hexdigest(),len(bridge))==bridge_pin,
             'linked timeline bridge instructions/literals changed')
-    bridge_bindings(resident,bridge,sdk)
+    bridge_bindings(resident,bridge,sdk,read_ahead)
     binder,binder_body,binder_section=symbol_bytes(stage,'_native_loader_timeline_bind',2)
     require((hashlib.sha256(binder_body).hexdigest(),len(binder_body))==binder_pin and
             binder_section[2]&7==6 and 0x8ce00000<=binder<binder+len(binder_body)<=0x8cfe0000,
@@ -225,6 +247,7 @@ def check(directory,*,self_test=False):
             else:raise ValueError('timeline bridge model accepted a changed memory binding')
     return {'enabled':True,'paired_resident_worker':True,'descriptor_address':hex(desc),
         'sdk_sci_route_variant':sdk,'sdk_sci_resident_callback_worker_stage_paired':sdk,
+        'read_ahead_variant':read_ahead,
         'descriptor_bytes':12,'trace_descriptor_bytes_unchanged':40,
         'callback_address':hex(callback),'callback_bytes':len(callback_body),
         'private_state':private,'private_state_bytes':sum(PRIVATE_OBJECTS.values()),

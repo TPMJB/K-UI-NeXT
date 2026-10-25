@@ -696,6 +696,25 @@ def audit_retry_completion(worker,*,self_test=False):
         authored_backend_handler=True,storage_or_sdk_retry_scheduling_proved=False)
 
 
+# The isolated read-ahead profile keeps every existing prepared gate. Its
+# additional pins cover the larger owned lease in inline boundary predicates,
+# the guarded heartbeat/capture-start calls and new post-stop report strings.
+# Reporting-only references keep exact .rodata interior offsets; those shifts
+# have their own pins rather than widening normalization for older profiles.
+READ_AHEAD_PREPARED_PINS={
+ '_diagnostic_complete':('ae4069a48558e8995d80b570f3a7f0e8747a4fbd776afbe784f908a0bb3fd50e',3044),
+ '_kui_vmu_native_passive_arm':('03bca3f62c624f712f345b926605c8ae79d117ab24958689f57a7d79cd061c47',2096),
+ '_transfer_context_valid':('3157605dd3abcd27c7df23dd9af52d678928548522c59a0f2b419bed8e910a59',1236),
+ '_kui_vmu_native_runtime_fault':('97749aebb4133556ea1d7eb392451303664f11999406132c07d33b790bb2c461',332),
+ '.rodata':('5329e541b5b4590b225003323326d1be9257bed891554e41cc2f8af2bd18c096',5388),
+ '_kui_vmu_native_trace_report':('8b2733ebb0d989a6323a1dbf327c9681b960ef9fb37ff8943274aea135e563eb',1120),
+ '_trace_history':('10756711968849a6ddeb810da3940ddd1e3b0829a814519c56b78205041f7a2c',164),
+ '_report':('196717881c1f5eecd933a54d1b2c0b9306d1a5e67015cdbb29116bee4b5bdf26',440),
+ '_trace_packets':('a8c24c3e20dab055719807a4e9f58a65fc1b02db34dd0198122e7be3bed8b326',116),
+ '_reader_capture_region':('807f414ae76d5870a482e7952706e56e9f652c5168b3feb8db4316a4f827406c',100),
+ '_reader_cooperative_service':('893c8094dbf3c0c0924711f02b67c739ad8f69c7286c21a93cc60d347be90e68',32),
+}
+
 def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *, build=None):
     """Keep the legacy proof, or require the complete prepared proof family."""
     if "_lifetime_plan" not in worker[4]:
@@ -727,11 +746,15 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
     if timeline is not None:
         require(irq_rearm and timeline==(1,0,0,0xfff1),'invalid loader timeline marker')
         require(TIMELINE_PREPARED_PINS,'missing reviewed timeline pins')
+    read_ahead=worker[4].get('__kui_native_readahead_worker')
+    if read_ahead is not None:
+        require(timeline and read_ahead==(1,0,0,0xfff1),'invalid prepared read-ahead marker')
     pins={**PREPARED_PINS,**(STALL_PREPARED_PINS if stall_marker else {}),
           **(COOPERATIVE_PREPARED_PINS if cooperative else {}),
           **(TIMED_PREPARED_PINS if timed else {}),**(PACED_PREPARED_PINS if paced else {}),
           **(IRQ_REARM_PREPARED_PINS if irq_rearm else {}),
-          **(TIMELINE_PREPARED_PINS if timeline else {})}
+          **(TIMELINE_PREPARED_PINS if timeline else {}),
+          **(READ_AHEAD_PREPARED_PINS if read_ahead else {})}
     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
                        ("_protected_ranges", 512), ("_protected_count", 4),
@@ -1323,7 +1346,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 'Background installer can bypass/reorder the complete tail-copy/bind/publication sequence')
         # Close the replay's incoming callee-preserved register assumptions
         # against the whole linked prefix. The lease is admitted before its
-        # raw payload is normalized to P1; the exact memcpy target, 192KiB
+        # raw payload is normalized to P1; the exact memcpy target, selected
         # lease constant and config stack base dominate the replay entry.
         normalizers=[j for j in range(13,len(words)-11) if
             words[j]&0xff00==0xd100 and literal(j)==0x1fffffff and
@@ -1341,8 +1364,11 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 'Background prefix does not bind the loaded payload to its admitted native lease')
         memcpy_loads=[j for j in range(normal,(tail_entry-begin)//2) if
             words[j]&0xff00==0xd800 and literal(j)==symbols['_memcpy'][0]]
+        selected_lease=0x60000 if '__kui_native_readahead_stage' in symbols else 0x30000
+        require(background_tail.get('lease_bytes')==selected_lease,
+                'Background tail replay selected a different owned lease size')
         lease_constants=[j for j in range(normal,(tail_entry-begin)//2) if
-            words[j]&0xff00==0xda00 and literal(j)==0x30000]
+            words[j]&0xff00==0xda00 and literal(j)==selected_lease]
         require(len(memcpy_loads)==len(lease_constants)==1,
                 'Background prefix needs exact unique memcpy/lease-size register initializers')
         memcpy_pc=begin+2*memcpy_loads[0];lease_pc=begin+2*lease_constants[0]
@@ -2148,7 +2174,7 @@ def check_worker_pointer_aliases(wire,policy,fault_capture,coherence=None):
 
 
 def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_proof=None,
-                       *, terminal_proof=None,terminal_gateway_cases=0):
+                       *, terminal_proof=None,terminal_gateway_cases=0,read_ahead_proof=None):
     """Walk source-qualified emitted graphs with finite authored callbacks."""
     report_sets = {"worker": sorted((directory / "native").rglob("*.ci")),
                    "low": sorted(directory.glob("resident-sci.elf*.ltrans*.ci"))}
@@ -2189,6 +2215,12 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
             "saved exception reader is not the exact zero-stack read-only leaf")
     frames["worker:kui_vmu_native_trace_irq"] = 0
     calls["worker:kui_vmu_native_trace_irq"] = []
+    if read_ahead_proof and read_ahead_proof.get('enabled'):
+        require(read_ahead_proof.get('paired_markers') and
+                read_ahead_proof.get('gateway',{}).get('parked_owner_stack_bytes')==20,
+                'read-ahead worker call lacks its actual20B guarded stack switch')
+        frames['worker:verified_read_ahead_stack_switch']=20
+        calls['worker:verified_read_ahead_stack_switch']=[]
     if fault_proof is None:fault_proof=fault_capture_admission(worker)
     fault_leaves=fault_proof.get("verified_zero_stack_assembly",[])
     if coherence_proof is None:coherence_proof=sdk_coherence_admission(worker)
@@ -2218,6 +2250,10 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
     def indirect(name, label):
         domain, function = name.split(":", 1)[0], _function_base(name)
         source = Path(label.split(":", 1)[0]).name
+        if read_ahead_proof and read_ahead_proof.get('enabled') and (
+            (domain,function,source)==('worker','reader_readahead_visit','vmu_native_reader_capture.inc') or
+            (domain,function,source)==('low','kui_vmu_observe_sd_lease','retail_async.c')):
+            return ['worker:verified_read_ahead_stack_switch']
         if domain == "low":
             if (function,source)==("kui_vmu_observe_sd_lease",
                     "vmu_native_background_resident.c" if background else "vmu_sd_lease.inc"):
@@ -2335,7 +2371,7 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
 
 
 def check_stacks(directory, worker, fault_proof=None, coherence_proof=None, *, background_audit=None,
-                 terminal_proof=None,terminal_gateway_cases=0):
+                 terminal_proof=None,terminal_gateway_cases=0,read_ahead_proof=None):
     resident = inspect_elf((directory / "resident-sci.elf").read_bytes(), LOW,
                            0x8c007ba0 if background_audit else 0x8C007800)
     low_rows = linked_stack_rows(sorted((directory / "resident/lto").glob("*.ltrans*.su")), resident["symbols"])
@@ -2362,7 +2398,8 @@ def check_stacks(directory, worker, fault_proof=None, coherence_proof=None, *, b
     # from the worker. Summing them overstates any single actual path.
     high_sum, low_sum = sum(frame for _, frame in high_rows), sum(frame for _, frame in low_rows)
     call_paths = worker_stack_paths(directory, worker, resident, fault_proof, coherence_proof,
-        terminal_proof=terminal_proof,terminal_gateway_cases=terminal_gateway_cases)
+        terminal_proof=terminal_proof,terminal_gateway_cases=terminal_gateway_cases,
+        read_ahead_proof=read_ahead_proof)
     total = max(path["conservative_bytes"] for path in call_paths["paths"].values())
     available = (resident_layout.stack_top("sci", False, True) -
                  resident_layout.stack_bottom("sci", False, True) -
@@ -2492,8 +2529,13 @@ def check(directory, *, self_test=False, trace_startup=None):
     require(bool(irq_rearm)==bool(low_rearm),'IRQ rearm worker/resident mismatch')
     if irq_rearm:require(cooperative and not timed and not paced and irq_rearm==low_rearm==(1,0,0,0xfff1),
                          'invalid paired IRQ rearm reader markers')
+    from check_vmu_native_readahead import check as check_read_ahead
+    read_ahead_proof=base.get('background_reader',{}).get('read_ahead_companion')
+    if read_ahead_proof is None:read_ahead_proof=check_read_ahead(directory,self_test=self_test)
     sdk_sci_proof=check_sdk_sci_route(read_elf(directory/'resident-sci.elf'),worker=worker,
-        stage=read_elf(directory/'stage.elf'),self_test=self_test)
+        stage=read_elf(directory/'stage.elf'),self_test=self_test,read_ahead_proof=read_ahead_proof)
+    if read_ahead_proof.get('enabled'):
+        require(sdk_sci_proof.get('enabled'),'read-ahead requires the independently proved SDK SCI route')
     if sdk_sci_proof.get('enabled'):
         # This paired architecture owns the original SDK callback slots and
         # never installs raw VBR vectors. Its strict linked-code proof is
@@ -2565,7 +2607,8 @@ def check(directory, *, self_test=False, trace_startup=None):
     pio = check_pio_writers(directory, worker)
     stacks = check_stacks(directory, worker, fault_capture, coherence,
                           background_audit=base.get("background_reader"),
-                          terminal_proof=base.get('gd_map_refusal_terminal'),terminal_gateway_cases=hook_cases)
+                          terminal_proof=base.get('gd_map_refusal_terminal'),terminal_gateway_cases=hook_cases,
+                          read_ahead_proof=read_ahead_proof)
     source = check_source(directory, base["runtime"])
     report = {"schema": "kui.native.persistent.probe.artifact.v1", "allocator_bootstrap_audit": base,
               "module_sha256": base["module_sha256"], "runtime": base["runtime"],
@@ -2592,6 +2635,7 @@ def check(directory, *, self_test=False, trace_startup=None):
                   rearm_and_irq_entry_counters=bool(irq_rearm)),
               "loader_timeline":timeline_proof,
               "sdk_sci_route":sdk_sci_proof,
+              "read_ahead":read_ahead_proof,
               "sci_priority7":dict(enabled=bool(priority7),paired_resident_worker_rehook=bool(priority7),
                   sci_priority=7 if priority7 else 1,caller_sr_changed=False,
                   check_exec_irq_work_budgets_changed=False,console_performance_verified=False),

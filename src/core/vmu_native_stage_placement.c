@@ -1,10 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/vmu_native_stage_placement.h"
+#include "kui/vmu_native_background.h"
 
 #define RAM_FIRST UINT32_C(0x0c010000)
 #define RAM_END UINT32_C(0x0d000000)
 #define EXEC_MAX UINT32_C(0x00c00000)
-#define LEASE_WITH_HEADER UINT32_C(0x00030020)
+#define LEASE_WITH_HEADER (KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES+UINT32_C(32))
 
 static bool alias(uint32_t address) {
     uint32_t area=address&UINT32_C(0xe0000000);
