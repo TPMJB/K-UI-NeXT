@@ -31,6 +31,8 @@ MARK='__kui_native_readahead_'
 # Populated only after inspection of the new linked profile, never at runtime.
 CODE_PIN=(5120,'ad53f64817c9b65869bbe21e8d28a09ba98d75567709a6099bf51dd8551e2bd9')
 DIAGNOSTIC_CODE_PIN=(6016,'d355c1383364a52f8f3d1b82dad6359ea695b0e15287b1c0cd9a4ecba231db92')
+REPAIR_DIAGNOSTIC_CODE_PIN=(6016,'46c8f355865297918df512b6053328fc88579d32fbb19b3576f9b5b9fc85d1e9')
+REPAIR_DIAGNOSTIC_MARKER='__kui_native_readahead_repair_diagnostic_auxiliary'
 DIAGNOSTIC_MARK='__kui_native_readahead_diagnostic_'
 LOW_PINS={
     '_deliver_work':(456,'73ed6d63b6e67b122d11d0185a009d2c28f81face7e99aeda639660b6eb61aeb'),
@@ -63,6 +65,13 @@ def diagnostic_profile(aux):
 
 def public_bytes(aux):return 656 if diagnostic_profile(aux) else 76
 
+def repair_diagnostic_profile(aux):
+    mark=aux[4].get(REPAIR_DIAGNOSTIC_MARKER)
+    if mark is not None:
+        require(mark==(1,0,0,0xfff1) and diagnostic_profile(aux),
+                'read-ahead repair diagnostic marker differs or lacks its diagnostic profile')
+    return mark is not None
+
 def code_payload(aux):
     parts=[]
     for sec in aux[3]:
@@ -77,7 +86,8 @@ def code_payload(aux):
 
 def pinned_code(aux):
     address,body=code_payload(aux)
-    selected=DIAGNOSTIC_CODE_PIN if diagnostic_profile(aux) else CODE_PIN
+    selected=REPAIR_DIAGNOSTIC_CODE_PIN if repair_diagnostic_profile(aux) else \
+        DIAGNOSTIC_CODE_PIN if diagnostic_profile(aux) else CODE_PIN
     require(selected is not None and (len(body),sha(body))==selected,
             'read-ahead immutable code pin changed')
     return address,body
@@ -588,9 +598,26 @@ def diagnostic_snapshots(resident,aux):
                 assert not any(c.read(c.context+at) for at in range(4,656,4))
                 assert [c.read(c.context+at) for at in range(656,904,4)]==saved
                 cases+=1
+    repair=repair_diagnostic_profile(aux);repair_cases=0
+    if repair:
+        for bank in range(2):
+            for blocked in (False,True):
+                for loan,unrepaired in ((0,0),(1,1),(2,2),(0xabcd1234,255)):
+                    c=SnapshotCPU(resident,aux,3,bank,blocked)
+                    c.write(c.region+0x2f4,loan)
+                    c.write(c.region+0x4ac,unrepaired,1)
+                    packed=(loan&0xffff)|(unrepaired<<16)
+                    c.body('_snapshot_pre',[4,c.region,0x123456])
+                    assert c.read(c.context+752+48)==packed
+                    c.body('_snapshot_failure',[c.region,6])
+                    assert c.read(c.context+360+48)==c.read(c.context+508+48)==packed
+                    assert c.read(c.region+0x2f4)==loan and c.read(c.region+0x4ac,1)==unrepaired
+                    repair_cases+=2
+    cases+=repair_cases
     truth=snapshot_instruction_truth(resident,aux)
     return dict(enabled=True,schema='kui.native.read-ahead.diagnostics.audit.v1',
         actual_linked_snapshot_cases=cases,instruction_truth_cases=truth,
+        repair_counter_packed=repair,actual_linked_repair_packed_word_cases=repair_cases,
         public_bytes=656,complete_context_bytes=904,diagnostics_offset=76,
         observation_offset=752,first_offset=360,last_offset=508,record_bytes=148,
         exact_read_only_hardware_sequence=[dict(address=hex(a),bytes=n) for a,n in HW_READS],
@@ -731,7 +758,7 @@ def check(directory,*,self_test=False):
             except ValueError:bindings_mutations+=1
             else:raise ValueError('read-ahead auditor accepted a changed QUIESCE boundary')
     return dict(enabled=True,schema='kui.native.read-ahead.audit.v1',paired_markers=True,
-        diagnostic_capture=diagnostic,
+        diagnostic_capture=diagnostic,repair_diagnostic_capture=repair_diagnostic_profile(aux),
         artifact_sha256=dict(resident=sha(resident[0]),worker=sha(worker[0]),
             stage=sha(stage[0]),auxiliary=sha(aux[0])),
         immutable_code_pin={'address':hex(code_at),'bytes':len(code),'sha256':sha(code)},

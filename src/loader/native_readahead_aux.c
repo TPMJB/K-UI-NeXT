@@ -15,7 +15,9 @@
 enum { RA_CLOSED=0u,RA_PAUSED=1u,RA_DMA=2u,RA_LOST=3u,RA_RESUME=4u };
 #define SPEC_TOKEN_LIMIT 256u
 __asm__(".global __kui_native_readahead_diagnostic_auxiliary\n"
-        ".set __kui_native_readahead_diagnostic_auxiliary,1\n");
+        ".set __kui_native_readahead_diagnostic_auxiliary,1\n"
+        ".global __kui_native_readahead_repair_diagnostic_auxiliary\n"
+        ".set __kui_native_readahead_repair_diagnostic_auxiliary,1\n");
 #define C kui_native_readahead_aux_context
 struct kui_native_readahead_aux_context kui_native_readahead_aux_context
     __attribute__((section(".data.native_ra_context"),aligned(32)))={0};
@@ -136,7 +138,9 @@ static void snapshot_pre(enum kui_native_ra_failure_stage stage,
     s->token=e->token;s->cursor_block=e->cursor.block;
     s->stream_state=stream->state;s->stream_position=stream->position;
     s->cache_base=C.cache.base;s->cache_count=C.cache.count;s->cache_end=C.cache.end;
-    s->operation_lba=operation_lba;s->loan_state=e->native_loan_state;
+    s->operation_lba=operation_lba;
+    s->loan_state=(e->native_loan_state&UINT32_C(0xffff)) |
+        (uint32_t)stream->unrepaired<<16;
     s->rx_flags=(uint32_t)stream->ready[0] | (uint32_t)stream->ready[1]<<8 |
         (uint32_t)stream->kept<<16 | stream->fill<<24;
     s->ready_lba[0]=stream->ready_lba[0];s->ready_lba[1]=stream->ready_lba[1];

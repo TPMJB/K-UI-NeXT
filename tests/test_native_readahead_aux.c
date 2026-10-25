@@ -597,11 +597,56 @@ static void diagnostic_skip_reasons(void) {
         C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_STREAM_POSITION]==1u);
     CHECK(!C.diagnostics.failures && !C.stats.abandoned && !stops);
 }
+static void diagnostic_unrepaired_snapshots(void) {
+    static const uint8_t counts[]={0u,1u,2u,255u};
+    setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);
+    for(unsigned i=0u;i<sizeof(counts)/sizeof(counts[0]);++i) {
+        if(i) {
+            fetch_result=KUI_SCI_STREAM_OK;
+            begin(DISC_BASE+8u*i,1u);complete(DISC_BASE+8u*i,1u);
+        }
+        region.shared.stream.unrepaired=counts[i];
+        struct kui_native_ra_cache cache=C.cache;
+        uint8_t cached[512];
+        memcpy(cached,arena+C.cache.head*512u,sizeof(cached));
+        unsigned before_fetch=fetches,before_stops=stops;
+        fetch_result=KUI_SCI_STREAM_RESET;
+        CHECK(visit(KUI_NATIVE_RA_TICK)==1u && C.abandoned && !C.spec_owned &&
+            fetches==before_fetch+1u && stops==before_stops && !receiving &&
+            !memcmp(&cache,&C.cache,sizeof(cache)) &&
+            !memcmp(cached,arena+C.cache.head*512u,sizeof(cached)) &&
+            region.shared.stream.unrepaired==counts[i] && !region.engine.failed);
+        CHECK(C.diagnostics.failures==i+1u && C.stats.abandoned==i+1u &&
+            C.diagnostics.stage_result[KUI_NATIVE_RA_STAGE_FETCH][KUI_SCI_STREAM_RESET]==i+1u &&
+            C.diagnostics.first.loan_state==(uint32_t)KUI_VMU_NATIVE_ASYNC_LOAN_IDLE &&
+            (C.diagnostics.last.loan_state&UINT32_C(0xffff))==KUI_VMU_NATIVE_ASYNC_LOAN_IDLE &&
+            C.diagnostics.last.loan_state>>16==counts[i] &&
+            C.diagnostics.last.stage==KUI_NATIVE_RA_STAGE_FETCH &&
+            C.diagnostics.last.result==KUI_SCI_STREAM_RESET);
+    }
+    /* Starting another capture clears observations, not the existing
+     * transport failure count, cached bytes, or abandoned producer latch. */
+    struct kui_native_readahead_aux_context expected=C;
+    memset(&expected.stats,0,sizeof(expected.stats));
+    memset(&expected.diagnostics,0,sizeof(expected.diagnostics));
+    struct kui_sci_stream_state stream=region.shared.stream;
+    uint8_t cached[512];memcpy(cached,arena+C.cache.head*512u,sizeof(cached));
+    unsigned before_fetch=fetches,before_stops=stops;
+    CHECK(visit(KUI_NATIVE_RA_CAPTURE_START)==1u &&
+        !memcmp(&C,&expected,sizeof(C)) &&
+        !memcmp(&stream,&region.shared.stream,sizeof(stream)) &&
+        !memcmp(cached,arena+C.cache.head*512u,sizeof(cached)) &&
+        region.shared.stream.unrepaired==255u);
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && fetches==before_fetch && stops==before_stops &&
+        C.abandoned && !C.diagnostics.failures &&
+        C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_ABANDONED]==1u &&
+        region.shared.stream.unrepaired==255u);
+}
 int main(void) {
     init_guards();sequential();shared_raw_boundary();partial_hit_cap();seek_and_errors();
     repair_and_dma_owner();loan_and_pending();bounded_window();capture_preserves_cache();
     real_stream_integration();real_full_refill();diagnostic_failures();diagnostic_real_handoff();
-    diagnostic_skip_reasons();
+    diagnostic_skip_reasons();diagnostic_unrepaired_snapshots();
     printf("native read-ahead auxiliary: %u checks; real cursor bytes, strict visit caps, "
         "seeks, CRC/token abandonment, real SCI/card/DMA warm cache and deferred repair, "
         "DMA ownership, VMU loan, classified failures and pre/post handoff snapshots passed\n",checks);

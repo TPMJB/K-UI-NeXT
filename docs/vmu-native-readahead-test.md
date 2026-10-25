@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Evolution 2 read-ahead abandonment diagnostics
+# Evolution 2 read-ahead repair-limit diagnostics
 
 This diagnostic extends the read-ahead candidate with the stage and result
 of each failed speculative operation, first/last failure snapshots, and
@@ -96,7 +96,7 @@ Each first/last page has eight label/value pairs. The first label includes
 | --- | --- |
 | ST RES EVT FL TOK | Operation stage, returned result, auxiliary event, software flags, reader token |
 | BLK BASE COUNT END OP | Demand cursor card block, cache base, cached block count, exclusive extent end, card block attempted by this operation |
-| LOAN RX R0 R1 KEPT | VMU loan state, packed receiver flags, two ready card-block numbers, kept card-block number |
+| LOAN RX R0 R1 KEPT | Packed loan/repair word, packed receiver flags, two ready card-block numbers, kept card-block number |
 | ARRIVED LOST PRE STATE POS | Receiver arrival counter, packed loss counters, stream state and next card-block position before the operation |
 | PRE SAR DAR TCR CHCR DMAOR | DMA source, destination, transfer count, channel control, global DMA control before the operation |
 | POST SAR DAR TCR CHCR DMAOR | The same registers after the failed operation returns |
@@ -150,3 +150,22 @@ with stream/cache ownership snapshots. Increasing cache capacity alone does
 not address the observed lack of production. See
 `docs/evidence/native-read-ahead-observed-2026-10-24.json` for the transcription,
 counter definitions, arithmetic checks and evidence limits.
+
+## Repair-limit diagnostic update
+
+The LOAN word now carries the native VMU loan state in its low16bits and
+the existing SCI `unrepaired` counter in bits16–23. For example, `00020000`
+means no VMU loan and two previous failed repair attempts. The screen label
+and record layout are retained; read the upper bits using this definition.
+No recovery limit is reset or raised by this candidate.
+
+Capture63358.mp4 of build6675bd6fdcbe recorded eight POLL-stage failures.
+Both retained snapshots returned OVERRUN(6), with active reader DMA and
+SCI overrun before the operation, restored guest DMA afterwards, and a LOST
+stream. The first pre-operation count was0x7A with no recorded lost-byte
+repair; the last was1. The lifetime `unrepaired >= 2` gate and the CRC-tail
+repair exclusion are hypotheses pending the next counter capture. The
+pre-operation count is not the final fenced count used by `finish()`.
+
+Use the same25-second targeted capture. This build adds the missing counter
+without changing SCI priority, cache geometry, transport or retry policy.

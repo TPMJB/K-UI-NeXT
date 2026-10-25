@@ -97,6 +97,9 @@ struct kui_native_ra_failure_snapshot {
     /* Physical block attempted by the recorded operation. FETCH records
      * its next LBA before that LBA becomes the owned speculative block. */
     uint32_t operation_lba;
+    /* Native loan state in bits0..15; SCI stream.unrepaired in bits16..23.
+     * This is the transport's existing failed single-byte repair count,
+     * not the number of repairs attempted during this capture. */
     uint32_t loan_state;
     /* ready[0] | ready[1]<<8 | kept<<16 | fill<<24. */
     uint32_t rx_flags,ready_lba[2],kept_lba,arrived;
