@@ -1,0 +1,177 @@
+{
+  "schema": "kui.native.paced-reader.evidence.v1",
+  "date": "2026-10-24",
+  "observed_build": "1baa80301a62",
+  "owner_report": {
+    "movement_stutter_remains": true,
+    "slowest_observed_boot_message": "VERIFYING EXECUTABLE LIFETIME EXTENT"
+  },
+  "capture": {
+    "source": "Owner console photos, manually transcribed selected legible counters",
+    "ticks_per_second": 781250,
+    "input_photos": [
+      {
+        "page": 1,
+        "sha256": "704c3da8cf4e70451a1dad195a56031edbb8809cc57840920a00b5d281016e00",
+        "bytes": 290009
+      },
+      {
+        "page": 2,
+        "sha256": "c9d1fbc0bceb53edf62c65ea8f3807cf21204bd0c23bf91efeb10c33b06a5630",
+        "bytes": 281256
+      },
+      {
+        "page": 3,
+        "sha256": "d8d7bdccd7e21f4944b59305b011ff8a65107cc2fe2ea7c14b5bce4093d3eb4e",
+        "bytes": 318129
+      },
+      {
+        "page": 4,
+        "sha256": "67d4f6ad1da9bc9239897fa1423a2d71d5a023901a49a5bf70359132ca9e3434",
+        "bytes": 314545
+      },
+      {
+        "page": 5,
+        "sha256": "40e46e67d923dc113134665e3429af49b631aeef4e0e5ab68d1828c04667ae7f",
+        "bytes": 308646
+      }
+    ],
+    "selected_hex": {
+      "samples": "4B0",
+      "bad_samples": "0",
+      "poll_gap_max": "588B",
+      "complete_read_max": "1BA08",
+      "pending_age_max": "18F6B",
+      "irq_blocks": "DC",
+      "call_blocks": "90B",
+      "pio": "2",
+      "crc_errors": "0",
+      "token_errors": "0",
+      "foreign": "0",
+      "repairs": "0",
+      "overruns": "58",
+      "deferred": "0",
+      "clock_bad": "0",
+      "pump_visits": "38C",
+      "pump_blocks": "B",
+      "pump_busy": "0",
+      "pump_faults": "0",
+      "longest_read_lba": "586C0",
+      "longest_read_sectors": "49",
+      "windows": "3E",
+      "expired_windows": "33",
+      "window_clock_bad": "0",
+      "window_max_ticks": "24D",
+      "vmu_submit_max": "52",
+      "vmu_complete_max": "27B",
+      "vmu_storage_calls": "0",
+      "vmu_commits": "0",
+      "ccr_first": "105",
+      "ccr_last": "105"
+    },
+    "selected_decimal": {
+      "samples": 1200,
+      "bad_samples": 0,
+      "poll_gap_max": 22667,
+      "complete_read_max": 113160,
+      "pending_age_max": 102251,
+      "irq_blocks": 220,
+      "call_blocks": 2315,
+      "pio": 2,
+      "crc_errors": 0,
+      "token_errors": 0,
+      "foreign": 0,
+      "repairs": 0,
+      "overruns": 88,
+      "deferred": 0,
+      "clock_bad": 0,
+      "pump_visits": 908,
+      "pump_blocks": 11,
+      "pump_busy": 0,
+      "pump_faults": 0,
+      "longest_read_lba": 362176,
+      "longest_read_sectors": 73,
+      "windows": 62,
+      "expired_windows": 51,
+      "window_clock_bad": 0,
+      "window_max_ticks": 589,
+      "vmu_submit_max": 82,
+      "vmu_complete_max": 635,
+      "vmu_storage_calls": 0,
+      "vmu_commits": 0,
+      "ccr_first": 261,
+      "ccr_last": 261
+    },
+    "seconds": {
+      "complete_read_max": 0.1448448,
+      "pending_age_max": 0.13088128,
+      "poll_gap_max": 0.02901376,
+      "window_max_ticks": 0.00075392,
+      "vmu_submit_max": 0.00010496,
+      "vmu_complete_max": 0.0008128
+    },
+    "photo_bytes_published": false,
+    "exact_visible_hitch_correlated": false,
+    "note": "Selected counters only; uncertain small glyphs and unneeded token/total fields are not inferred."
+  },
+  "interpretation": [
+    "The maximum complete read is 0x0001BA08 (144.8448 ms), not 0x0011BA08.",
+    "88 receive overruns occurred; the capture does not attribute their cause or prove that all motion pauses came from them.",
+    "The timed controller window supplied only 11 card blocks in 62 opportunities; 51 expired. More controller polling alone did not eliminate the owner-reported stutter.",
+    "No VMU storage calls or commits occurred in this capture. This excludes measured save-write work here, but does not independently exclude indirect hook/scheduling effects.",
+    "The complete-read maximum and controller gap are not synchronized frame traces. Different request ranges prevent a controlled performance claim against prior captures."
+  ],
+  "candidate": {
+    "scheduling": "Sparse CHECK nonblocking; full wait after sixteen close CHECKs; EXEC20/25; IRQ8; PIO1",
+    "controller_reader_pump_enabled": false,
+    "new_low_ram_bytes": 0,
+    "state": "Two otherwise-unused native hybrid diagnostic counter words, only in request-timing profile",
+    "tmu_configuration_writes": false,
+    "irq_priority_escalation": false,
+    "startup": "Scoped operand cache for the unchanged pure extent proof; original verification and SHA256 retained",
+    "startup_scope": {
+      "entry_ccr": "0x100",
+      "enabled_ccr_readback": "0x101",
+      "restored_ccr": "0x100",
+      "wrapper_bytes": 140,
+      "abi_saved_frame_bytes": 12,
+      "p2_ccr_writes": true,
+      "post_write_nops": [
+        8,
+        8
+      ],
+      "ram_purge_bytes": 16777216,
+      "other_ccr_profiles_unchanged": true
+    },
+    "low_stack": {
+      "available_bytes": 352,
+      "conservative_bytes": 344,
+      "remaining_bytes": 8,
+      "original_boundaries_retained": true
+    },
+    "console_performance_verified": false,
+    "universal_non_ce_cdda_compatibility_verified": false
+  },
+  "validation": {
+    "actual_reader_host_checks": 28066,
+    "original_worker_host_checks": 2076459,
+    "program_extent_host_checks": 69880,
+    "original_evolution2_source_bytes": 4057056,
+    "proved_evolution2_program_bytes": 4024288,
+    "original_evolution1_source_bytes": 2143652,
+    "proved_evolution1_program_bytes": 2143652,
+    "extent_scope_linked_instruction_cases": 6144,
+    "extent_scope_unsafe_mutation_rejections": 20,
+    "prototype_full_artifact_audit_passed": true,
+    "host_models_establish_console_performance": false
+  },
+  "primary_hardware_reference": {
+    "url": "https://www.renesas.com/en/document/mah/sh7750-sh7750s-sh7750r-group-users-manual-hardware",
+    "revision": "R01UH0456EJ0702 Rev.7.02, 2013-09-24",
+    "sections": [
+      "4.2 CCR",
+      "4.3 Operand Cache"
+    ],
+    "basis": "CCR modifications in P2; eight instructions before a branch to a cached area; normal-index operand cache publication"
+  }
+}

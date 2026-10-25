@@ -1,0 +1,11 @@
+{
+  "schema": "kui.native.paced-reader.candidate.v1",
+  "source_commit": "7121b29837496b1831f23f5a97f3fe9fff139a19",
+  "source_tree": "aaeccdf7919e0f48dd9142ec3cc9699dfa2631d9",
+  "build": "7121b2983749",
+  "module_sha256": "98fb560beebae546b2a87a1c3c98f4f936a6424e6dea6a2ec26eda70d9b3238a",
+  "module_bytes": 227084,
+  "reader": "Background paced CHECK",
+  "source_bundle_prerequisite": "74958b3878279fc916199a7cd330f7f17b036138",
+  "console_performance_verified": false
+}

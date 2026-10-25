@@ -1,0 +1,1045 @@
+diff --git a/Makefile.vmu-native-paced b/Makefile.vmu-native-paced
+new file mode 100644
+index 0000000..3f2cc92
+--- /dev/null
++++ b/Makefile.vmu-native-paced
+@@ -0,0 +1,15 @@
++# SPDX-License-Identifier: GPL-3.0-only
++BUILD ?= build/native-paced
++include Makefile.vmu-native-cooperative
++FLAGS += -DKUI_NATIVE_PACED_CHECK=1 -DKUI_NATIVE_STAGE_FAST_SCAN=1 -DKUI_NATIVE_CACHED_EXTENT=1
++NATIVE_FLAGS += -DKUI_NATIVE_PACED_CHECK=1
++override TEST_GUIDE := docs/vmu-native-paced-test.md
++
++.PHONY: paced-host-tests
++paced-host-tests:
++	@mkdir -p $(BUILD)
++	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -O2 $(STALL_READER_FLAGS) -DKUI_NATIVE_REQUEST_TIMING=1 -DKUI_NATIVE_COOP_PUMP=1 -DKUI_NATIVE_PACED_CHECK=1 $(STALL_READER_SRC) tests/test_retail_async_paced.c -o $(BUILD)/test-paced-reader
++	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-paced-reader
++	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 -DKUI_NATIVE_PACED_CHECK=1 tests/test_vmu_native_cooperative_worker.c $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-paced-worker
++	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-paced-worker
++	$(MAKE) -f Makefile.vmu-native-paced BUILD=$(BUILD) native-program-host-tests PASSIVE_HOST_FLAGS='$(PASSIVE_HOST_FLAGS) -DKUI_NATIVE_STAGE_FAST_SCAN=1' EVOLUTION2_STARTUP='$(EVOLUTION2_STARTUP)' EVOLUTION1_STARTUP='$(EVOLUTION1_STARTUP)'
+diff --git a/docs/evidence/native-paced-reader-2026-10-24.json b/docs/evidence/native-paced-reader-2026-10-24.json
+new file mode 100644
+index 0000000..258300a
+--- /dev/null
++++ b/docs/evidence/native-paced-reader-2026-10-24.json
+@@ -0,0 +1,177 @@
++{
++  "schema": "kui.native.paced-reader.evidence.v1",
++  "date": "2026-10-24",
++  "observed_build": "1baa80301a62",
++  "owner_report": {
++    "movement_stutter_remains": true,
++    "slowest_observed_boot_message": "VERIFYING EXECUTABLE LIFETIME EXTENT"
++  },
++  "capture": {
++    "source": "Owner console photos, manually transcribed selected legible counters",
++    "ticks_per_second": 781250,
++    "input_photos": [
++      {
++        "page": 1,
++        "sha256": "704c3da8cf4e70451a1dad195a56031edbb8809cc57840920a00b5d281016e00",
++        "bytes": 290009
++      },
++      {
++        "page": 2,
++        "sha256": "c9d1fbc0bceb53edf62c65ea8f3807cf21204bd0c23bf91efeb10c33b06a5630",
++        "bytes": 281256
++      },
++      {
++        "page": 3,
++        "sha256": "d8d7bdccd7e21f4944b59305b011ff8a65107cc2fe2ea7c14b5bce4093d3eb4e",
++        "bytes": 318129
++      },
++      {
++        "page": 4,
++        "sha256": "67d4f6ad1da9bc9239897fa1423a2d71d5a023901a49a5bf70359132ca9e3434",
++        "bytes": 314545
++      },
++      {
++        "page": 5,
++        "sha256": "40e46e67d923dc113134665e3429af49b631aeef4e0e5ab68d1828c04667ae7f",
++        "bytes": 308646
++      }
++    ],
++    "selected_hex": {
++      "samples": "4B0",
++      "bad_samples": "0",
++      "poll_gap_max": "588B",
++      "complete_read_max": "1BA08",
++      "pending_age_max": "18F6B",
++      "irq_blocks": "DC",
++      "call_blocks": "90B",
++      "pio": "2",
++      "crc_errors": "0",
++      "token_errors": "0",
++      "foreign": "0",
++      "repairs": "0",
++      "overruns": "58",
++      "deferred": "0",
++      "clock_bad": "0",
++      "pump_visits": "38C",
++      "pump_blocks": "B",
++      "pump_busy": "0",
++      "pump_faults": "0",
++      "longest_read_lba": "586C0",
++      "longest_read_sectors": "49",
++      "windows": "3E",
++      "expired_windows": "33",
++      "window_clock_bad": "0",
++      "window_max_ticks": "24D",
++      "vmu_submit_max": "52",
++      "vmu_complete_max": "27B",
++      "vmu_storage_calls": "0",
++      "vmu_commits": "0",
++      "ccr_first": "105",
++      "ccr_last": "105"
++    },
++    "selected_decimal": {
++      "samples": 1200,
++      "bad_samples": 0,
++      "poll_gap_max": 22667,
++      "complete_read_max": 113160,
++      "pending_age_max": 102251,
++      "irq_blocks": 220,
++      "call_blocks": 2315,
++      "pio": 2,
++      "crc_errors": 0,
++      "token_errors": 0,
++      "foreign": 0,
++      "repairs": 0,
++      "overruns": 88,
++      "deferred": 0,
++      "clock_bad": 0,
++      "pump_visits": 908,
++      "pump_blocks": 11,
++      "pump_busy": 0,
++      "pump_faults": 0,
++      "longest_read_lba": 362176,
++      "longest_read_sectors": 73,
++      "windows": 62,
++      "expired_windows": 51,
++      "window_clock_bad": 0,
++      "window_max_ticks": 589,
++      "vmu_submit_max": 82,
++      "vmu_complete_max": 635,
++      "vmu_storage_calls": 0,
++      "vmu_commits": 0,
++      "ccr_first": 261,
++      "ccr_last": 261
++    },
++    "seconds": {
++      "complete_read_max": 0.1448448,
++      "pending_age_max": 0.13088128,
++      "poll_gap_max": 0.02901376,
++      "window_max_ticks": 0.00075392,
++      "vmu_submit_max": 0.00010496,
++      "vmu_complete_max": 0.0008128
++    },
++    "photo_bytes_published": false,
++    "exact_visible_hitch_correlated": false,
++    "note": "Selected counters only; uncertain small glyphs and unneeded token/total fields are not inferred."
++  },
++  "interpretation": [
++    "The maximum complete read is 0x0001BA08 (144.8448 ms), not 0x0011BA08.",
++    "88 receive overruns occurred; the capture does not attribute their cause or prove that all motion pauses came from them.",
++    "The timed controller window supplied only 11 card blocks in 62 opportunities; 51 expired. More controller polling alone did not eliminate the owner-reported stutter.",
++    "No VMU storage calls or commits occurred in this capture. This excludes measured save-write work here, but does not independently exclude indirect hook/scheduling effects.",
++    "The complete-read maximum and controller gap are not synchronized frame traces. Different request ranges prevent a controlled performance claim against prior captures."
++  ],
++  "candidate": {
++    "scheduling": "Sparse CHECK nonblocking; full wait after sixteen close CHECKs; EXEC20/25; IRQ8; PIO1",
++    "controller_reader_pump_enabled": false,
++    "new_low_ram_bytes": 0,
++    "state": "Two otherwise-unused native hybrid diagnostic counter words, only in request-timing profile",
++    "tmu_configuration_writes": false,
++    "irq_priority_escalation": false,
++    "startup": "Scoped operand cache for the unchanged pure extent proof; original verification and SHA256 retained",
++    "startup_scope": {
++      "entry_ccr": "0x100",
++      "enabled_ccr_readback": "0x101",
++      "restored_ccr": "0x100",
++      "wrapper_bytes": 140,
++      "abi_saved_frame_bytes": 12,
++      "p2_ccr_writes": true,
++      "post_write_nops": [
++        8,
++        8
++      ],
++      "ram_purge_bytes": 16777216,
++      "other_ccr_profiles_unchanged": true
++    },
++    "low_stack": {
++      "available_bytes": 352,
++      "conservative_bytes": 344,
++      "remaining_bytes": 8,
++      "original_boundaries_retained": true
++    },
++    "console_performance_verified": false,
++    "universal_non_ce_cdda_compatibility_verified": false
++  },
++  "validation": {
++    "actual_reader_host_checks": 28066,
++    "original_worker_host_checks": 2076459,
++    "program_extent_host_checks": 69880,
++    "original_evolution2_source_bytes": 4057056,
++    "proved_evolution2_program_bytes": 4024288,
++    "original_evolution1_source_bytes": 2143652,
++    "proved_evolution1_program_bytes": 2143652,
++    "extent_scope_linked_instruction_cases": 6144,
++    "extent_scope_unsafe_mutation_rejections": 20,
++    "prototype_full_artifact_audit_passed": true,
++    "host_models_establish_console_performance": false
++  },
++  "primary_hardware_reference": {
++    "url": "https://www.renesas.com/en/document/mah/sh7750-sh7750s-sh7750r-group-users-manual-hardware",
++    "revision": "R01UH0456EJ0702 Rev.7.02, 2013-09-24",
++    "sections": [
++      "4.2 CCR",
++      "4.3 Operand Cache"
++    ],
++    "basis": "CCR modifications in P2; eight instructions before a branch to a cached area; normal-index operand cache publication"
++  }
++}
+diff --git a/docs/vmu-native-paced-test.md b/docs/vmu-native-paced-test.md
+new file mode 100644
+index 0000000..fdaa72f
+--- /dev/null
++++ b/docs/vmu-native-paced-test.md
+@@ -0,0 +1,77 @@
++<!-- SPDX-License-Identifier: GPL-3.0-only -->
++# Native paced CHECK candidate
++
++The owner reports the same movement stutter on 1baa80301a62 and identifies
++VERIFYING EXECUTABLE LIFETIME EXTENT as the slowest startup step. The latest
++capture has a 144.8448 ms maximum completed read, a 29.01376 ms controller
++poll gap, and 88 SCI overruns. Of 62 timed controller windows, 51 expired
++without delivery; 908 low-reader visits supplied only 11 card blocks.
++Those numbers do not locate the exact visible pause or establish its cause.
++
++The new candidate changes when the Background reader waits. It borrows the
++Standard reader's close-poll idea while preserving the Background DMA path:
++
++| Entry | Scheduling |
++| --- | --- |
++| Ordinary CHECK | Deliver arrived data; do not wait for unfinished DMA |
++| Sixteenth consecutive close CHECK | Allow the existing full 20/25-block catch-up |
++| EXEC | Keep the existing full 20/25-block catch-up |
++| Real SCI interrupt | Keep the eight-block ceiling |
++| PIO fallback | Keep the one-block allowance per entry |
++| Physical controller completion | No experimental reader pump/window |
++
++Close means the raw PVR scanline differs from the preceding CHECK by zero
++or one. A backwards/wrapped or larger change restarts the count. EXEC and
++new requests reset it. This compact policy uses two already reserved,
++otherwise unused diagnostic words; it adds no resident RAM. Unlike the
++Standard reader's full pacing object, it has no separate frame counter.
++The actual card model verifies sparse checks, tight CHECK-only progress,
++interleaved EXEC supply, scanline wrap, faults, DMA contention and exact
++cooked/raw destination bytes. Console smoothness remains unverified.
++
++## Install and compare
++
++Use the existing prepared pair from this folder:
++
++```sh
++python3 personalize.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --game evolution2
++```
++
++Use SCI, Background On, Normal speed, Auto/default encoding, CD music Off,
++and RAM patches Off. Safely eject and cold boot. Compare intro pace/audio
++and the same movement area. The ordinary mode has no intentional stop.
++
++For a capture, add `--profile-runtime` to the same command. Hold both triggers
++fully plus B for about one second, release, then continue through the problem
++for roughly 20 seconds until the intentional stop. Record at least 25 seconds
++of the cycling pages. The reader page now identifies the sixteen-poll boost
++and disabled controller service. READ MAX still measures a complete accepted
++request, not the duration of one masked GD call. AGE MAX is sampled pending
++age. Neither is a frame-time trace or synchronized to a particular hitch.
++
++## Startup verification
++
++The full source CRC, resident comparison, bootstrap/suffix lifetime proof,
++allocator/caller agreement, reference scans, exit proof and independent cache
++SHA256 checks all remain. Only the pure executable-extent proof temporarily
++enables the operand cache when entered with the exact relay CCR=0x100.
++It calls the same C proof with the same arguments. Before returning, it
++purges normal-index RAM, invalidates the temporary caches and restores
++CCR=0x100. Other CCR profiles run the original call without cache changes.
++The subsequent relay and gameplay cache policies remain as before.
++
++The 140-byte linked P2 wrapper has an exact instruction/literal pin and
++6,144 adversarial ABI model cases, including both proof results and all
++interrupt-mask levels. Twenty unsafe mutations are rejected. Both CCR
++writes have eight following NOPs; the model checks output/stack publication,
++callee-preserved registers, return value, stack, PR and untouched FPU state.
++This is correctness evidence, not a measurement of startup speed.
++
++The low resident retains the exact 352-byte guarded stack. Its conservative
++compiled call-graph requirement is 344 bytes, including the existing margin,
++guard and top gap. No memory boundary or admission check was relaxed.
++
++This remains an experimental native SCI Background build. The virtual A2 /
++physical A1 protocol, persistent-save ownership and SDK-family admissions
++are retained. Universal non-CE/CDDA compatibility is still unproven; the
++separate Standard-reader open-loader investigation remains available.
+diff --git a/src/loader/retail_async.c b/src/loader/retail_async.c
+index c3f06b5..7d74a99 100644
+--- a/src/loader/retail_async.c
++++ b/src/loader/retail_async.c
+@@ -2,6 +2,9 @@
+  * Original K-UI background game reader (see retail_async.h). The stream
+  * sequence is the one the SCI async probe proved on the console. */
+ #include "retail_async.h"
++#if KUI_NATIVE_PACED_CHECK && (!KUI_NATIVE_REQUEST_TIMING || !KUI_RETAIL_NATIVE_HYBRID || defined(KUI_RETAIL_CE))
++#error "Paced CHECK requires native hybrid request-timing counter ownership"
++#endif
+ #if KUI_NATIVE_READER_DIAGNOSTIC
+ #if !KUI_RETAIL_NATIVE_HYBRID
+ #error "Reader timing requires the unused native hybrid scheduler counters"
+@@ -10,6 +13,9 @@ __asm__(".global __kui_native_reader_stall_resident\n"
+         ".set __kui_native_reader_stall_resident,1\n");
+ #if KUI_NATIVE_COOP_PUMP
+ __asm__(".global __kui_native_cooperative_resident\n.set __kui_native_cooperative_resident,1\n");
++#if KUI_NATIVE_PACED_CHECK
++__asm__(".global __kui_native_paced_resident\n.set __kui_native_paced_resident,1\n");
++#endif
+ #if KUI_NATIVE_TIMED_PUMP
+ __asm__(".global __kui_native_timed_resident\n.set __kui_native_timed_resident,1\n");
+ #endif
+@@ -369,7 +375,21 @@ static void write_out(void *unused, uint32_t offset, const uint8_t *bytes, uint3
+     else e.failed = KUI_GD_ERROR_MEMORY;
+ }
+ static bool topping(uint32_t function) { return function == KUI_GD_EXEC || function == KUI_GD_CHECK; }
+-static bool tops_up(uint32_t function) { return topping(function); }
++static bool tops_up(uint32_t function) {
++#if KUI_NATIVE_PACED_CHECK
++    if(function==KUI_GD_EXEC) {e.stats.exec_int=0u;return true;}
++    if(function!=KUI_GD_CHECK)return false;
++    /* The Standard reader distinguishes one status poll from a game that
++     * is spinning on CHECK. Keep the same sixteen-close-poll criterion,
++     * using the two unused diagnostic words for scanline/count state. */
++    uint32_t line=rd32(UINT32_C(0xa05f810c))&0x3ffu;
++    uint32_t count=(line-e.stats.execs<=1u?e.stats.exec_int+1u:1u)&15u;
++    e.stats.execs=line;e.stats.exec_int=count;
++    return count==0u;
++#else
++    return topping(function);
++#endif
++}
+ #endif
+ /* Finish an arrived block, then deliver blocks in order: the next one of the
+  * run is started before each block is checked and copied. Returns while a block is in
+@@ -394,7 +414,7 @@ static void deliver_work(uint32_t wait) {
+         /* Retain the proved 20/25-block catch-up and full DMA wait. Only
+          * stop the formerly unlimited run of already-completed blocks. */
+         if(delivered>=(
+-#if KUI_NATIVE_COOP_PUMP
++#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
+             e.in_irq==2u?KUI_RETAIL_NATIVE_PUMP_BATCH_LIMIT:
+ #endif
+             e.in_irq?KUI_RETAIL_NATIVE_IRQ_BATCH_LIMIT:e.target)) return;
+@@ -568,6 +588,9 @@ static void start(void) {
+     e.stats.hooks=rd32(UINT32_C(0xffd8000c));
+ #endif
+     e.failed = 0; e.retries = 0; e.active = 0;
++#if KUI_NATIVE_PACED_CHECK
++    e.stats.exec_int=0u;
++#endif
+     e.cursor.done = 0; /* a read that fails here delivered nothing */
+ #ifdef KUI_RETAIL_CE
+     e.piece_set = 0; e.piece_begin = e.piece_bytes = e.piece_filled = 0;
+@@ -909,7 +932,7 @@ uint32_t kui_retail_async_irq(void) {
+     /* An SCI event without a reception: not ours, passed on as any other
+      * (under CE: its level is dropped). */
+     if(!kui_sci_stream_busy()
+-#if KUI_NATIVE_COOP_PUMP
++#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
+        && e.in_irq!=2u /* A cooperative visit also restarts an idle run. */
+ #endif
+       ) {
+@@ -921,10 +944,10 @@ uint32_t kui_retail_async_irq(void) {
+ #ifdef KUI_RETAIL_CE
+     kui_sci_stream_token_budget(e.isr != 0);
+ #endif
+-#if KUI_NATIVE_COOP_PUMP
++#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
+     if(e.in_irq==2u) hook();
+ #endif
+-#if KUI_NATIVE_COOP_PUMP
++#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
+     if(!e.in_irq) e.in_irq = 1;
+ #else
+     e.in_irq = 1;
+diff --git a/src/loader/retail_stage.S b/src/loader/retail_stage.S
+index c9322d3..f7f4764 100644
+--- a/src/loader/retail_stage.S
++++ b/src/loader/retail_stage.S
+@@ -341,6 +341,91 @@ C(kui_retail_game_resume):
+  * alias while the original entry performs its own cache setup. */
+ .Lgame: .long KUI_RETAIL_EXEC_ADDRESS+0x20000000
+ 
++#if KUI_NATIVE_CACHED_EXTENT
++#if !KUI_VMU_NATIVE_CACHED_CODE
++#error "The pure extent cache scope requires the native instruction-cached relay"
++#endif
++/* Pure immutable-image proof only, called on the relay's P1 high stack.
++ * The surrounding relay has already published RAM and selected CCR=0x100.
++ * Unknown cache profiles take the original call without changing CCR.
++ * Every CCR change executes through P2 and has eight following NOPs. */
++    .align 2
++    .global __kui_native_cached_extent
++    .set __kui_native_cached_extent,1
++    .global C(kui_vmu_native_cached_extent)
++    .type C(kui_vmu_native_cached_extent),@function
++C(kui_vmu_native_cached_extent):
++    mov.l r8,@-r15
++    mov.l r9,@-r15
++    sts.l pr,@-r15
++    mov.l .Lextent_p2_address,r0
++    jmp @r0
++    nop
++.Lextent_p2:
++    mov.l .Lextent_ccr,r1
++    mov.l @r1,r0
++    mov r0,r8
++    mov.l .Lextent_expected,r2
++    cmp/eq r2,r0
++    bf .Lextent_call
++    mov.l .Lextent_on,r0
++    mov.l r0,@r1
++    nop
++    nop
++    nop
++    nop
++    nop
++    nop
++    nop
++    nop
++.Lextent_call:
++    mov.l .Lextent_proof,r0
++    jsr @r0
++    nop
++    mov r0,r9
++    mov.l .Lextent_expected,r0
++    cmp/eq r0,r8
++    bf .Lextent_done
++/* Publish the proof's P1 stack/output before returning to operand-cache-off
++ * relay code. A full normal-index RAM purge also includes this 12B frame. */
++    mov.l .Lextent_ram,r0
++    mov.l .Lextent_ramend,r1
++.Lextent_purge:
++    ocbp @r0
++    add #32,r0
++    cmp/hs r1,r0
++    bf .Lextent_purge
++    mov.l .Lextent_off,r0
++    or r8,r0
++    mov.l .Lextent_ccr,r1
++    mov.l r0,@r1
++    nop
++    nop
++    nop
++    nop
++    nop
++    nop
++    nop
++    nop
++.Lextent_done:
++    mov r9,r0
++    lds.l @r15+,pr
++    mov.l @r15+,r9
++    mov.l @r15+,r8
++    rts
++    nop
++    .align 2
++.Lextent_p2_address: .long .Lextent_p2+0x20000000
++.Lextent_ccr: .long 0xff00001c
++.Lextent_expected: .long 0x100
++.Lextent_on: .long 0x909
++.Lextent_proof: .long C(kui_vmu_native_program_extent)
++.Lextent_ram: .long 0x8c000000
++.Lextent_ramend: .long KUI_RETAIL_RAM_END
++.Lextent_off: .long 0x808
++    .size C(kui_vmu_native_cached_extent),.-C(kui_vmu_native_cached_extent)
++#endif
++
+ #if defined(KUI_RETAIL_SONIC_STACK_TEST) && KUI_RETAIL_SONIC_STACK_TEST && !defined(KUI_RETAIL_CE)
+ /* All seven original-entry stubs have saved R0 before selecting P2. Save
+  * the rest of the real integer CPU frame BEFORE using high bookkeeping.
+diff --git a/src/loader/vmu_native_background_resident.c b/src/loader/vmu_native_background_resident.c
+index 6701648..8c9f1be 100644
+--- a/src/loader/vmu_native_background_resident.c
++++ b/src/loader/vmu_native_background_resident.c
+@@ -93,7 +93,7 @@ static bool native_resident_transaction(const volatile struct kui_vmu_observe_bo
+         UINT32_C(0xa0000000);
+ #endif
+     return native_resident_terminal(c) && (
+-#if KUI_NATIVE_COOP_PUMP
++#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
+         !target ||
+ #endif
+         (target==c->sd_transaction && !(target&1u) &&
+@@ -142,7 +142,7 @@ int __attribute__((noipa,section(".vmu_sd_lease"))) kui_vmu_observe_sd_lease(
+     uint32_t sr;__asm__ volatile("stc sr,%0":"=r"(sr)::"memory");
+     if((sr&UINT32_C(0xf0))!=UINT32_C(0xf0) ||
+        !native_resident_transaction(c,(uintptr_t)callback)) return KUI_VMU_SD_LEASE_FAULT;
+-#if KUI_NATIVE_COOP_PUMP
++#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK
+     /* Explicit non-storage command on the existing typed worker gateway.
+      * Serialized on the worker's stack after its physical controller proof;
+      * no loan, virtual reply, bus acquisition or game interrupt setup occurs. */
+diff --git a/src/loader/vmu_native_heap_probe_stage.c b/src/loader/vmu_native_heap_probe_stage.c
+index 0a8520d..47c0ce9 100644
+--- a/src/loader/vmu_native_heap_probe_stage.c
++++ b/src/loader/vmu_native_heap_probe_stage.c
+@@ -178,8 +178,17 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
+ #if KUI_NATIVE_STAGE_FAST_SCAN
+     retail_display_line("VERIFYING EXECUTABLE LIFETIME EXTENT");
+ #endif
+-    if(!kui_vmu_native_program_extent((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
++#if KUI_NATIVE_CACHED_EXTENT
++    /* Stage-only wrapper: exact same pure proof, with operand caching only
++     * during that proof. It publishes RAM before restoring the relay CCR. */
++    extern bool kui_vmu_native_cached_extent(const void *,size_t,uint32_t,size_t *);
++#define native_program_extent kui_vmu_native_cached_extent
++#else
++#define native_program_extent kui_vmu_native_program_extent
++#endif
++    if(!native_program_extent((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+        exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&program_bytes)) native_report(2u,13u);
++#undef native_program_extent
+     if(program_bytes!=exec_bytes) retail_display_line("VERIFIED RECLAIMED BOOTSTRAP SUFFIX");
+     exec_bytes=(uint32_t)program_bytes;
+ #if KUI_VMU_NATIVE_CACHE_PROBE
+diff --git a/src/loader/vmu_native_reader_capture.inc b/src/loader/vmu_native_reader_capture.inc
+index 55e606f..0538974 100644
+--- a/src/loader/vmu_native_reader_capture.inc
++++ b/src/loader/vmu_native_reader_capture.inc
+@@ -29,6 +29,9 @@ static struct kui_reader_capture reader_capture;
+ static kui_retail_async_region_type *reader_capture_region(void);
+ #if KUI_NATIVE_COOP_PUMP
+ __asm__(".global __kui_native_cooperative_reader\n.set __kui_native_cooperative_reader,1\n");
++#if KUI_NATIVE_PACED_CHECK
++__asm__(".global __kui_native_paced_reader\n.set __kui_native_paced_reader,1\n");
++#endif
+ static struct {
+     uint32_t calls,blocks,busy,faults;
+     uint32_t max_lba,max_count;
+@@ -54,6 +57,11 @@ static void __attribute__((noipa)) reader_window_clock(struct kui_vmu_native_pro
+ }
+ #endif
+ static void __attribute__((noipa)) reader_cooperative_service(void) {
++#if KUI_NATIVE_PACED_CHECK
++    /* The measured controller callback supplied little data. This candidate
++     * schedules through GD/SCI only, leaving controller completion brief. */
++    return;
++#else
+     /* Called only after successful, fully proved physical controller
+      * completion, after publication. It neither issues VMU packets nor
+      * grants the storage writer. Interrupts remain masked throughout. */
+@@ -126,6 +134,7 @@ static void __attribute__((noipa)) reader_cooperative_service(void) {
+     if(result==KUI_VMU_SD_LEASE_BUSY)++reader_cooperative.busy;
+     else if(result!=KUI_VMU_SD_LEASE_OK)++reader_cooperative.faults;
+     reader_cooperative.blocks+=r->engine.stats.irq_blocks-before;
++#endif
+ }
+ #endif
+ static kui_retail_async_region_type *reader_capture_region(void) {
+@@ -216,8 +225,13 @@ static void reader_capture_report(const struct retail_display_state *display) {
+         b->foreign-a->foreign,b->repaired-a->repaired,b->overruns-a->overruns,
+         b->deferred-a->deferred,diagnostic.clock_invalid},5u);
+ #if KUI_NATIVE_REQUEST_TIMING
++#if KUI_NATIVE_PACED_CHECK
++    retail_display_line("CHECK WAIT BOOST NEEDS 16 TIGHT POLLS");
++    retail_display_line("CONTROLLER READER SERVICE DISABLED");
++#else
+     retail_display_values("PUMPS BLOCKS BUSY FAULTS",(uint32_t[4]){
+         reader_cooperative.calls,reader_cooperative.blocks,reader_cooperative.busy,reader_cooperative.faults},4u);
++#endif
+     retail_display_values("LONGEST COMPLETE READ LBA SECTORS",(uint32_t[2]){
+         reader_cooperative.max_lba,reader_cooperative.max_count},2u);
+ #else
+diff --git a/tests/test_retail_async_paced.c b/tests/test_retail_async_paced.c
+new file mode 100644
+index 0000000..65af0ee
+--- /dev/null
++++ b/tests/test_retail_async_paced.c
+@@ -0,0 +1,90 @@
++/* SPDX-License-Identifier: GPL-3.0-only */
++/* Actual card/DMA reader: sparse CHECK must not wait, tightly repeated CHECK
++ * must make progress, and EXEC must retain its original movie catch-up. */
++#include <assert.h>
++#include <stdint.h>
++static uint32_t test_line,clock_counter=5u;
++uint32_t kui_retail_async_test_read32(uint32_t address) {
++    if(address==UINT32_C(0xa05f810c))return test_line;
++    assert(address==UINT32_C(0xffd8000c));
++    uint32_t result=clock_counter;clock_counter-=19u;return result;
++}
++#define main original_async_main
++#include "test_retail_async.c"
++#undef main
++#define KUI_NATIVE_BOUNDS_EMBED 1
++#include "test_retail_async_native_bounds.c"
++
++static unsigned blocks(void) {return R.engine.stats.call_blocks+R.engine.stats.irq_blocks;}
++static int32_t begin(unsigned how) {
++    setup(GAME_VBR,how,48,false);mode(2048);test_line=100u;
++    int32_t token=request(45001u,64u,OUTPUT);
++    CHECK(R.engine.active && kui_sci_stream_busy() && !blocks());
++    return token;
++}
++static void sparse_and_tight(unsigned how) {
++    int32_t token=begin(how);unsigned target=how==Y?25u:20u;
++    for(unsigned n=0;n<64u;++n) {
++        test_line=(test_line+3u)&0x3ffu;
++        CHECK(gd(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_PROCESSING);
++        CHECK(!blocks() && !R.engine.stats.waits);
++    }
++    /* An arrived block is delivered immediately, even on a sparse CHECK. */
++    elapse();test_line+=3u;
++    CHECK(gd(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_PROCESSING);
++    CHECK(blocks()==1u && !R.engine.stats.waits);
++    /* Fifteen close polls stay brief; the sixteenth earns full catch-up. */
++    test_line+=3u;
++    for(unsigned n=0;n<15u;++n) {
++        CHECK(gd(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_PROCESSING);
++        CHECK(blocks()==1u && !R.engine.stats.waits);
++    }
++    CHECK(gd(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_PROCESSING);
++    CHECK(blocks()==1u+target && R.engine.stats.waits==1u);
++    CHECK(finish(token,0,0)==KUI_GD_COMPLETED);compare(45001u,64u,OUTPUT);
++}
++static void exec_and_irq(unsigned how) {
++    int32_t token=begin(how);unsigned target=how==Y?25u:20u;
++    /* Nonblocking checks between EXECs must not shrink the EXEC allowance. */
++    for(unsigned n=0;R.engine.active;++n) {
++        test_line+=3u;unsigned before=blocks();
++        (void)gd(KUI_GD_CHECK,(uint32_t)token,STATUS);
++        CHECK(blocks()==before);
++        (void)gd(KUI_GD_EXEC,0u,0u);
++        CHECK(blocks()-before<=target && (blocks()-before==target || !R.engine.active));
++        CHECK(!R.engine.stats.exec_int && n<20u);
++    }
++    CHECK(gd(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_COMPLETED);
++    compare(45001u,64u,OUTPUT);
++    token=begin(how);m.delay=0u;elapse();
++    CHECK(!kui_retail_async_irq() && blocks()==KUI_RETAIL_NATIVE_IRQ_BATCH_LIMIT);
++    CHECK(finish(token,0,1)==KUI_GD_COMPLETED);compare(45001u,64u,OUTPUT);
++}
++static void spin_reset(unsigned how) {
++    int32_t token=begin(how);
++    for(unsigned n=0;n<15u;++n)(void)gd(KUI_GD_CHECK,(uint32_t)token,STATUS);
++    CHECK(!blocks() && !R.engine.stats.waits);
++    test_line=0u; /* backwards/wrapped line breaks a tight-poll sequence */
++    (void)gd(KUI_GD_CHECK,(uint32_t)token,STATUS);
++    CHECK(!blocks() && !R.engine.stats.waits && R.engine.stats.exec_int==1u);
++    (void)gd(KUI_GD_EXEC,0u,0u);CHECK(R.engine.stats.exec_int==0u);
++    CHECK(finish(token,0,1)==KUI_GD_COMPLETED);compare(45001u,64u,OUTPUT);
++    token=begin(how);CHECK(R.engine.stats.exec_int==0u);
++    CHECK(finish(token,4,0)==KUI_GD_COMPLETED);compare(45001u,64u,OUTPUT);
++}
++int main(void) {
++    for(unsigned cooked=0;cooked<2u;++cooked) {
++        cooked_fixture=cooked;
++        for(unsigned how=X;how<=Y;++how) {
++            sparse_and_tight(how);exec_and_irq(how);spin_reset(how);
++            test_request_yields_to_foreign_dma(cooked,how);
++        }
++    }
++    test_command_acknowledgment();test_faults_retried();
++    test_cancel_writes_nothing_more();test_read_fails_after_retries();
++    test_irq_yields_to_foreign_dma();test_paused_pio_returns_to_dma();
++    test_crc_retry_and_prefetch_share_allowance();
++    test_request_before_after_keeps_one_allowance();
++    printf("paced reader: %u checks; sparse/tight CHECK, full EXEC20/25, IRQ8, PIO1, faults, exact cooked/raw bytes passed\n",checks);
++    return 0;
++}
+diff --git a/tests/test_vmu_native_cooperative_worker.c b/tests/test_vmu_native_cooperative_worker.c
+index a335fda..33b49d2 100644
+--- a/tests/test_vmu_native_cooperative_worker.c
++++ b/tests/test_vmu_native_cooperative_worker.c
+@@ -48,6 +48,11 @@ int main(void) {
+     CHECK(pump_visits==0u); /* Initial full proof precedes the fast path. */
+     observed_region.engine.active=1u;
+     unsigned leases=lease_calls,bytes=sd.bytes;
++#if KUI_NATIVE_PACED_CHECK
++    diagnostic_pair(false);reader_cooperative_service();
++    CHECK(!pump_visits && !restorations && !reader_cooperative.blocks);
++    CHECK(lease_calls==leases && sd.bytes==bytes);
++#else
+     diagnostic_pair(false);
+     CHECK(pump_visits==1u && reader_cooperative.blocks==2u);
+     CHECK(restorations==1u && test_vbr==UINT32_C(0x8c00f400) && test_iprb==0xa500u);
+@@ -60,6 +65,7 @@ int main(void) {
+     durable_card.handling=1u;reader_cooperative_service();CHECK(pump_visits==before);durable_card.handling=0u;
+     for(unsigned mode=2u;mode<=4u;++mode){config.diagnostics=mode;reader_cooperative_service();CHECK(pump_visits==before);}
+     config.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE;
++#endif
+     reader_capture_start();
+     diagnostic.active=1u;
+     observed_region.engine.stats.hooks=test_clock.counter+300000u;
+@@ -106,6 +112,10 @@ int main(void) {
+     CHECK(pump_visits==old+1u && reader_cooperative.clock_bad==1u);
+     puts("timed reader: pending-then-ready, deadline, invalid/changed/frozen clocks, wrap and two-block window bound passed");
+ #endif
++#if KUI_NATIVE_PACED_CHECK
++    puts("paced worker: original save/ownership suite, controller pump disabled, no storage lease and complete-request timing passed");
++#else
+     puts("cooperative worker: original save/ownership suite, post-completion pump, busy/storage exclusions and request timing passed");
++#endif
+     return 0;
+ }
+diff --git a/tools/check_vmu_native_cache_gateway.py b/tools/check_vmu_native_cache_gateway.py
+index 9197cf1..51da0e9 100644
+--- a/tools/check_vmu_native_cache_gateway.py
++++ b/tools/check_vmu_native_cache_gateway.py
+@@ -233,10 +233,12 @@ class CacheRoute(CacheGateway):
+                          manifest + 48: (0 if invalid==2 else 3 if invalid==7 else 2 if eager else 1)
+                             if background else int(invalid == 2),
+                          manifest + 52: 1 if invalid == 3 else 2 if invalid == 4 else 0})
++        extent_name=("_kui_vmu_native_cached_extent" if "__kui_native_cached_extent" in symbols
++                     else "_kui_vmu_native_program_extent")
+         self.targets = {symbols[name][0]: label for name, label in (
+             ("_retail_display_restore", "display"), ("_retail_display_line", "line"),
+             ("_kui_native_heap_base_relay", "restore"), ("_kui_retail_observe_native_ip", "ip"),
+-            ("_kui_vmu_native_program_extent", "extent"),
++            (extent_name, "extent"),
+             ("_native_resolution_replay", "cache"), ("_code_sha", "cached"),
+             ("_kui_vmu_native_discover_layout", "cold"), ("_native_report", "refused"))}
+         if "_native_runtime_mode" in symbols:
+@@ -302,6 +304,145 @@ class CacheRoute(CacheGateway):
+             assert self.extent_writes==1 and self.mem[self.exec_address]==self.program_bytes
+ 
+ 
++class ExtentGateway(CacheGateway):
++    """Execute the linked pure-proof cache scope, including P1/P2 routing.
++
++    The only fold is the exact four-op normal-index whole-RAM OCBP loop.
++    Cached callee writes are withheld from uncached readers until that purge,
++    a stronger publication requirement than this scope's P1 write-through.
++    """
++    def __init__(self,stage,seed,mask,ccr,result,blob=None):
++        begin,body,_=symbol_bytes(stage,"_kui_vmu_native_cached_extent",2)
++        CPU.__init__(self,seed,begin,1)
++        self.blob=body if blob is None else blob
++        self.pc,self.r[15],self.mem=begin,0x8cff0000,{}
++        self.start_sp=self.r[15]
++        self.r[4:8]=[0x8c010000,0x3de7e0,0x8c010000,self.start_sp+32]
++        self.args=self.r[4:8].copy()
++        self.sr=(self.sr&~0xf0)|(mask<<4)
++        self.pr=begin+len(body)+0x100
++        self.before=(self.r.copy(),self.pr,self.sr,self.fpscr,self.fr.copy())
++        self.owner_ccr,self.ccr,self.result=ccr,ccr,result
++        self.calls,self.ccr_writes,self.wait,self.purged,self.dirty=[],[],0,False,set()
++        self.targets={stage[4]["_kui_vmu_native_program_extent"][0]:"extent"}
++        self.output_before=0xa5b6c7d8
++        self.mem[self.args[3]]=self.output_before
++
++    def code(self,address,size):
++        offset=(address-self.base)&MASK
++        if offset>=0x20000000:offset-=0x20000000
++        assert 0<=offset<offset+size<=len(self.blob)
++        return self.blob[offset:offset+size]
++
++    def read(self,address):
++        if address==0xff00001c:return self.ccr
++        if address in self.mem:
++            assert self.ccr&1 or address not in self.dirty,"unpublished proof output/stack read with operand cache off"
++            return self.mem[address]
++        return struct.unpack("<I",self.code(address,4))[0]
++
++    def write(self,address,value):
++        if address==0xff00001c:
++            assert self.base+0x20000000<=self.pc<self.base+0x20000000+len(self.blob)
++            assert not self.wait and self.owner_ccr==0x100
++            expected=0x909 if not self.ccr_writes else 0x908
++            assert value==expected and len(self.ccr_writes)<2,"unexpected pure-proof cache profile"
++            if self.ccr_writes:assert self.purged and not self.dirty,"cache disabled before proof publication"
++            self.ccr_writes.append(value);self.ccr=value&~0x808;self.wait=8
++            return
++        assert address%4==0 and self.start_sp-12<=address<self.start_sp
++        self.mem[address]=value&MASK
++        if self.ccr&1:self.dirty.add(address)
++
++    def plain(self,word,pc):
++        if self.wait:
++            assert word==9,"pure-proof CCR update lacks eight NOPs"
++            self.wait-=1
++        if word==0x00a3:
++            assert self.code(pc,8)==struct.pack("<4H",0x00a3,0x7020,0x3012,0x8bfb)
++            assert self.r[:2]==[0x8c000000,0x8d000000] and self.calls==["extent"]
++            assert self.ccr_writes==[0x909] and self.ccr==0x101 and not self.purged
++            self.r[0]=0x8d000000-32;self.purged=True;self.dirty.clear()
++            return
++        super().plain(word,pc)
++
++    def api(self,target):
++        assert target in self.targets and not self.wait and not self.calls
++        assert self.r[4:8]==self.args and self.r[15]==self.start_sp-12
++        assert self.sr&0xf0==self.before[2]&0xf0
++        assert self.ccr==(0x101 if self.owner_ccr==0x100 else self.owner_ccr)
++        assert self.ccr_writes==([0x909] if self.owner_ccr==0x100 else [])
++        self.calls.append("extent");return_pc=self.pr
++        # An ABI-compliant proof may use its own P1 frame and set output only
++        # on success. The caller's original output must survive a refusal.
++        for i in range(1,33):
++            a=self.r[15]-4*i;self.mem[a]=(0x13579bdf+7*i)&MASK
++            if self.ccr&1:self.dirty.add(a)
++        if self.result:
++            self.mem[self.args[3]]=self.args[1]-0x8000
++            if self.ccr&1:self.dirty.add(self.args[3])
++        for i in range(8):self.r[i]=(0x913579bd+0x13579bd*i)&MASK
++        self.r[0]=self.result;self.sr^=1;self.pr^=0x2468ace0;self.pc=return_pc
++
++    def check(self):
++        r,pr,sr,fpscr,fr=self.before
++        assert self.r[8:]==r[8:] and self.pr==pr and self.r[0]==self.result
++        assert self.sr&~1==sr&~1 and (self.fpscr,self.fr)==(fpscr,fr)
++        assert self.calls==["extent"] and self.ccr==self.owner_ccr and not self.wait
++        assert self.ccr_writes==([0x909,0x908] if self.owner_ccr==0x100 else [])
++        assert self.purged==(self.owner_ccr==0x100)
++        assert self.mem[self.args[3]]==(self.args[1]-0x8000 if self.result else self.output_before)
++        if self.owner_ccr==0x100:assert not self.dirty
++
++
++def check_extent_scope(stage,self_test=False):
++    marker=stage[4].get("__kui_native_cached_extent")
++    if marker is None:return {"enabled":False}
++    require(marker==(1,0,0,0xfff1),"invalid pure-proof cache marker")
++    begin,body,_=symbol_bytes(stage,"_kui_vmu_native_cached_extent",2)
++    ops=(0x2f86,0x2f96,0x4f22,0xd019,0x402b,9,0xd118,0x6012,0x6803,0xd218,
++         0x3020,0x8b09,0xd017,0x2102,9,9,9,9,9,9,9,9,0xd013,0x400b,9,0x6903,
++         0xd00f,0x3800,0x8b11,0xd011,0xd111,0x00a3,0x7020,0x3012,0x8bfb,
++         0xd010,0x208b,0xd109,0x2102,9,9,9,9,9,9,9,9,0x6093,0x4f26,0x69f6,0x68f6,0xb,9,9)
++    expected=struct.pack('<54H8I',*ops,begin+12+0x20000000,0xff00001c,0x100,0x909,
++                         stage[4]['_kui_vmu_native_program_extent'][0],0x8c000000,0x8d000000,0x808)
++    require(body==expected,'linked pure-proof cache scope instructions/literals changed')
++    cases=0
++    for seed in range(24):
++        for mask in range(16):
++            for ccr in (0,1,4,0x20,0x80,0x100,0x105,0x1a7):
++                for result in (0,1):
++                    ExtentGateway(stage,seed,mask,ccr,result).run().check();cases+=1
++    rejected=0
++    if self_test:
++        # Unsafe mode, publication, target and post-CCR spacing mutations
++        # must be rejected by execution, independently of the exact pin.
++        mutations=[]
++        for needle,replacement in ((struct.pack("<I",0x909),struct.pack("<I",0x908)),
++                                   (struct.pack("<I",0x808),struct.pack("<I",0x809)),
++                                   (struct.pack("<4H",0x00a3,0x7020,0x3012,0x8bfb),
++                                    struct.pack("<4H",9,0x7020,0x3012,0x8bfb))):
++            at=body.find(needle);require(at>=0,"missing cache-scope mutation target")
++            changed=bytearray(body);changed[at:at+len(needle)]=replacement;mutations.append(bytes(changed))
++        proof=struct.pack("<I",stage[4]["_kui_vmu_native_program_extent"][0])
++        at=body.find(proof);require(at>=0,"cache scope lacks exact pure-proof target")
++        changed=bytearray(body);struct.pack_into("<I",changed,at,0x8ce00002);mutations.append(bytes(changed))
++        for at in (*range(28,44,2),*range(78,94,2)):
++            changed=bytearray(body);struct.pack_into('<H',changed,at,0x6003);mutations.append(bytes(changed))
++        for changed in mutations:
++            try:ExtentGateway(stage,7,15,0x100,1,changed).run().check()
++            except (AssertionError,struct.error,KeyError):rejected+=1
++            else:raise ValueError("pure-proof cache scope accepted unsafe mutation")
++    return {"enabled":True,"entry":hex(begin),"bytes":len(body),
++        "actual_instruction_model_cases":cases,"mutation_rejections":rejected,
++        "complete_linked_assembly_pinned":True,
++        "eligible_entry_ccr":"0x100","proof_ccr":"0x101",
++        "other_ccr_profiles_unchanged":True,"same_pure_extent_proof":True,
++        "full_ram_purge_bytes":0x1000000,"cache_write_nops":[8,8],
++        "callee_preserved_integer_frame_bytes":12,"operand_cache_restored_off":True,
++        "proof_output_published_before_cache_restore":True,"console_speed_verified":False}
++
++
+ def check(stage, *, self_test=False):
+     symbols, sections = stage[4], stage[3]
+     address, size, kind, owner = symbols["_native_cached_resolution"]
+@@ -368,6 +509,7 @@ def check(stage, *, self_test=False):
+                     break
+             else:
+                 raise ValueError("cache wrapper accepted a missing result guard")
++    extent_scope=check_extent_scope(stage,self_test)
+     return {"enabled": True, "temporary_resolution_address": hex(address), "temporary_resolution_bytes": size,
+             "temporary_high_bss_only": True, "wrapper_entry": hex(begin), "wrapper_bytes": len(body),
+             "actual_instruction_model_cases": cases, "mutation_rejections": mutations,
+@@ -376,7 +518,7 @@ def check(stage, *, self_test=False):
+             "full_source_restored_before_extent_selection":True,
+             "validated_extent_before_cache_or_discovery":True,
+             "normal_and_shortened_extent_routes_checked":True,
+-            "extent_failure_keeps_source_length_and_refuses":True,
++            "extent_failure_keeps_source_length_and_refuses":True,"pure_extent_cache_scope":extent_scope,
+             "no_metadata_before_exact_image_replay": True, "fresh_allocation_and_release_guards": True,
+             "fresh_sdk_initializer_slot_admission":True,"sdk_slot_admission_is_independent_image_predicate":True,
+             "capture_only_after_all_guards": True}
+diff --git a/tools/check_vmu_native_persistent.py b/tools/check_vmu_native_persistent.py
+index 8899d12..b86627e 100644
+--- a/tools/check_vmu_native_persistent.py
++++ b/tools/check_vmu_native_persistent.py
+@@ -157,6 +157,20 @@ TIMED_PREPARED_PINS = {
+  '_reader_window_clock': ('c416d56570b536794b03df8effe197babf770dd655364793aae27e1072304924', 60),
+ }
+ 
++# Controller service is a pinned RTS/NOP in this experiment. Request timing
++# and its report remain; pointer/string offsets stay independently bound.
++PACED_PREPARED_PINS = {
++ '_diagnostic_complete': ('b82324e75590de63308be5e79b759ed5972736e4064bc80e7bc597c4d0a95944', 1604),
++ '_transfer_context_valid': ('ba4f7070be29872139d6b266cb4b83e2da696678828f1e8f0fa6c9aaccf91905', 1236),
++ '_kui_vmu_native_runtime_fault': ('40b69a31d59ab52d6f64b97b53880e1a4190931a8e72734ab191ec1c8bd80b2e', 332),
++ '.rodata': ('d9c1723c0db628355c2c9436cc6a29636749dade4519b48bdacab2c3b942a4f9', 4488),
++ '_kui_vmu_native_trace_report': ('b1c88399d075a00257be669f190aff9c73687dfc1b4e1a5221e4328be0240797', 1120),
++ '_trace_history': ('0ca4a7a7b2377a95a136ee07eb355767b6acf086f921e6ad21994ddc83fb820b', 164),
++ '_report': ('99fbb78034fb36d000c0865e703e04d6b8564863d1d5713ffe2d5f8bacc97cb6', 440),
++ '_trace_packets': ('cd06c541ee0b07d7bf0f6223d8f1b4ee70229edad46db9d09062850d6f47de1f', 116),
++ '_reader_cooperative_service': ('501ea5b89ab4d8ff1b044d90f0e7b770df4b0bc60a561f96ec3ca179d28f6c83', 4),
++}
++
+ 
+ def prepared_symbol_records(worker):
+     data, _, _, sections, _ = worker
+@@ -669,9 +683,12 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
+     if timed is not None:
+         require(cooperative and timed==(1,0,0,0xfff1),'invalid timed reader marker')
+         require(TIMED_PREPARED_PINS,'missing reviewed timed reader pins')
++    paced=worker[4].get('__kui_native_paced_reader')
++    if paced is not None:
++        require(cooperative and not timed and paced==(1,0,0,0xfff1),'invalid paced reader marker')
+     pins={**PREPARED_PINS,**(STALL_PREPARED_PINS if stall_marker else {}),
+           **(COOPERATIVE_PREPARED_PINS if cooperative else {}),
+-          **(TIMED_PREPARED_PINS if timed else {})}
++          **(TIMED_PREPARED_PINS if timed else {}),**(PACED_PREPARED_PINS if paced else {})}
+     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
+                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
+                        ("_protected_ranges", 512), ("_protected_count", 4),
+@@ -962,7 +979,9 @@ def check_resume_publication(stage, cached, self_test=False):
+                 rejected += 1
+             else:
+                 raise ValueError("resume gateway model accepted mutation at" + str(at))
+-    return {"instruction_cache_enabled_for_scan": cached, "operand_cache_disabled_for_scan": True,
++    pure_cached='__kui_native_cached_extent' in symbols
++    return {"instruction_cache_enabled_for_scan": cached, "operand_cache_disabled_for_scan": not pure_cached,
++            "operand_cache_off_except_scoped_pure_extent":pure_cached,
+             "scan_ccr": "0x00000908" if cached else "0x00000808", "owner_ccr_restored": True,
+             "full_ram_purge_bytes": 0x1000000, "cache_write_nops": [8, 8],
+             "owner_integer_frame_bytes": 84, "gateway_model_cases": cases,
+@@ -2421,6 +2440,10 @@ def check(directory, *, self_test=False, trace_startup=None):
+     low_timed=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_timed_resident')
+     require(bool(timed)==bool(low_timed),'timed reader worker/resident mismatch')
+     if timed:require(cooperative and timed==low_timed==(1,0,0,0xfff1),'invalid paired timed reader markers')
++    paced=worker[4].get('__kui_native_paced_reader')
++    low_paced=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_paced_resident')
++    require(bool(paced)==bool(low_paced),'paced reader worker/resident mismatch')
++    if paced:require(cooperative and not timed and paced==low_paced==(1,0,0,0xfff1),'invalid paired paced reader markers')
+     prepared_lifetime = check_prepared_lifetime(directory, worker, binary, wire, self_test, build=base["runtime"]["build"])
+     relocations=check_worker_pointer_aliases(wire,policy,fault_capture,coherence)
+ 
+@@ -2439,6 +2462,8 @@ def check(directory, *, self_test=False, trace_startup=None):
+         (directory / "retail-maple-observe.kui").read_bytes(), cached_code=cached,
+         stage_image=stage,resident_image=read_elf(directory / "resident-sci.elf"),self_test=self_test)
+     cache_gateway = check_cache_gateway(stage, self_test=self_test) if seed["enabled"] else {"enabled": False}
++    require(bool(paced)==bool(cache_gateway.get('pure_extent_cache_scope',{}).get('enabled')),
++            'paced profile/pure extent cache scope mismatch')
+     installer_stack = check_stage_stack(stage, read_elf(directory / "resident-sci.elf"),
+                                         worker=worker, self_test=self_test)
+     require(not any(name.startswith(("__native_resolution_cache_seed_", "_kui_vmu_native_resolution_cache_",
+@@ -2483,9 +2508,17 @@ def check(directory, *, self_test=False, trace_startup=None):
+                   "paired_resident_worker": bool(stall),"private_worker_state_bytes": 508 if stall else 0,
+                   "diagnostic_sd_log_writes": False,"console_root_cause_established": False},
+               "cooperative_reader": {"enabled": bool(cooperative),
+-                  "pump_blocks_per_visit": 2 if cooperative else 0,
+-                  "foreground_catchup_changed": False,"service_after_physical_controller_proof": bool(cooperative),
++                  "service_enabled":bool(cooperative and not paced),
++                  "pump_blocks_per_visit": 2 if cooperative and not paced else 0,
++                  "foreground_catchup_changed": bool(paced),"service_after_physical_controller_proof": bool(cooperative and not paced),
+                   "completed_request_timing": bool(cooperative),"console_performance_verified": False},
++              "paced_reader": {"enabled":bool(paced),"paired_resident_worker":bool(paced),
++                  "tight_check_polls":16 if paced else 0,"near_scanline_delta_max":1 if paced else 0,
++                  "ordinary_check_waits":False if paced else None,
++                  "exec_catchup_blocks":[20,25] if paced else [],"irq_batch_limit":8 if paced else 0,
++                  "pio_blocks_per_entry_max":1 if paced else 0,"new_resident_ram_bytes":0,
++                  "controller_reader_service_enabled":False if paced else None,
++                  "console_performance_verified":False},
+               "timed_reader": {"enabled":bool(timed),"window_ticks":586 if timed else 0,
+                   "window_max_visits":64 if timed else 0,"blocks_per_window_max":2 if timed else 0,
+                   "read_only_clock_admission":bool(timed),"invalid_clock_single_visit":bool(timed),
+diff --git a/tools/check_vmu_native_stage_stack.py b/tools/check_vmu_native_stage_stack.py
+index bb27c9a..106a353 100644
+--- a/tools/check_vmu_native_stage_stack.py
++++ b/tools/check_vmu_native_stage_stack.py
+@@ -238,9 +238,11 @@ class ArmRoute(Machine):
+         heap, call = self.symbols["_native_heap"][0], self.symbols["_native_call"][0]
+         self.mem.update({heap + 24: self.original, heap + 28: self.slot, heap + 32: self.original,
+                          call + 8: 0x8C0100C6, call + 12: 0x8CC00000, call + 16: 0x00400000})
++        extent_name=("_kui_vmu_native_cached_extent" if "__kui_native_cached_extent" in self.symbols
++                     else "_kui_vmu_native_program_extent")
+         labels = (("_retail_display_restore", "display"), ("_retail_display_line", "line"),
+                   ("_kui_native_heap_base_relay", "restore"), ("_kui_retail_observe_native_ip", "ip"),
+-                  ("_kui_vmu_native_program_extent", "extent"),
++                  (extent_name, "extent"),
+                   ("_native_resolution_replay", "cache"), ("_code_sha", "sha"),
+                   ("_kui_vmu_native_discover_layout", "driver"), ("_kui_vmu_native_heap_discover", "heap"),
+                   ("_kui_vmu_native_heap_call_discover", "call"), ("_allocation_safe", "allocation"),
+diff --git a/tools/package_vmu_native_persistent.py b/tools/package_vmu_native_persistent.py
+index 0b59027..945973d 100644
+--- a/tools/package_vmu_native_persistent.py
++++ b/tools/package_vmu_native_persistent.py
+@@ -75,7 +75,7 @@ def package(build,guide='broader',trace_startup=None):
+     commit=git('rev-parse','HEAD');revision=commit[:12]
+     if git('status','--porcelain'):
+         raise ValueError('Commit source changes before packaging')
+-    if guide in ('evolution-trace','a2-background','hybrid','stall','cooperative','timed') and trace_startup is None:
++    if guide in ('evolution-trace','a2-background','hybrid','stall','cooperative','timed','paced') and trace_startup is None:
+         raise ValueError('This package requires --trace-startup with the exact original executable')
+     graphs=list(build.rglob('*.ci'))
+     if not graphs or any(not closed_callgraph(path.read_text()) for path in graphs):
+@@ -93,6 +93,10 @@ def package(build,guide='broader',trace_startup=None):
+     if guide=='timed' and (not report.get('timed_reader',{}).get('enabled') or
+                           stage['symbols'].get('__kui_native_stage_fast_scan')!=1):
+         raise ValueError('Timed package requires the paired timed reader and stage fast-scan build')
++    if guide=='paced' and (not report.get('paced_reader',{}).get('enabled') or
++                          stage['symbols'].get('__kui_native_stage_fast_scan')!=1 or
++                          not report.get('resolution_cache_gateway',{}).get('pure_extent_cache_scope',{}).get('enabled')):
++        raise ValueError('Paced package requires paired paced reader, fast scans and audited pure extent cache scope')
+     entry=inspect_elf((build/'entry.elf').read_bytes(),ADDRESS,0x8c112000)
+     template=template_profile()
+     address,_=readonly_blob(stage_data,stage,'__vmu_sd_profile_blob_start',
+@@ -128,7 +132,7 @@ def package(build,guide='broader',trace_startup=None):
+                      'vmu-native-evolution-fault-test.md','vmu-native-evolution-isolation-test.md',
+                      'vmu-native-evolution-hooks-test.md','vmu-native-evolution-trace-test.md'):
+             extra['docs/'+name]=(root/'docs'/name).read_bytes()
+-        if guide in ('a2-background','hybrid','stall','cooperative','timed'):
++        if guide in ('a2-background','hybrid','stall','cooperative','timed','paced'):
+             extra['docs/vmu-native-a2-background-test.md']=(root/'docs/vmu-native-a2-background-test.md').read_bytes()
+             extra['docs/evidence/native-a2-background-2026-10-24.json']=(root/'docs/evidence/native-a2-background-2026-10-24.json').read_bytes()
+             extra['docs/evidence/native-retry-integration-2026-10-24.json']=(root/'docs/evidence/native-retry-integration-2026-10-24.json').read_bytes()
+@@ -144,6 +148,8 @@ def package(build,guide='broader',trace_startup=None):
+             extra['collect-native-startup.py']=(root/'tools/kui-native-startup-bundle.py').read_bytes()
+         if guide=='timed':
+             extra['docs/evidence/native-timed-reader-2026-10-24.json']=(root/'docs/evidence/native-timed-reader-2026-10-24.json').read_bytes()
++        if guide=='paced':
++            extra['docs/evidence/native-paced-reader-2026-10-24.json']=(root/'docs/evidence/native-paced-reader-2026-10-24.json').read_bytes()
+         for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json',
+                      'native-performance-acceptance-2026-10-23.json','native-uniform-root-family-2026-10-23.json',
+                      'native-recv-ownership-2026-10-23.json','native-older-sdk-2026-10-23.json',
+@@ -183,7 +189,9 @@ def package(build,guide='broader',trace_startup=None):
+         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
+         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
+             template_sha256=sha(template)),
+-        compatibility_claim=('Clock-admitted bounded reader service window and faster executable-extent scanning; console performance remains unverified'
++        compatibility_claim=('Sparse nonblocking CHECK, tight-loop catch-up and scoped pure extent caching; console performance remains unverified'
++            if guide=='paced' else
++            'Clock-admitted bounded reader service window and faster executable-extent scanning; console performance remains unverified'
+             if guide=='timed' else
+             'Bounded cooperative native reader with complete-request timing; console performance remains unverified'
+             if guide=='cooperative' else
+@@ -238,7 +246,7 @@ def package(build,guide='broader',trace_startup=None):
+ 
+ if __name__=='__main__':
+     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('build',type=Path)
+-    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall','cooperative','open','timed'),default='broader')
++    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall','cooperative','open','timed','paced'),default='broader')
+     parser.add_argument('--trace-startup',type=Path)
+     try:
+         args=parser.parse_args();package(args.build,args.guide,args.trace_startup)
