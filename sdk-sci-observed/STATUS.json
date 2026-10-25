@@ -1,0 +1,16 @@
+{
+  "schema": "kui.native.sdk-sci-observed.checkpoint.v1",
+  "source_commit": "54ed49b5e276a322c947714235cb5d83fb9d909a",
+  "source_tree": "e98c71be6970fcabba74809e8a368582fb274bec",
+  "tested_build": "1eba1784a83e",
+  "tested_source_commit": "1eba1784a83e7eb5d0cf6dc61cee5ccf46d22c68",
+  "evidence_only": true,
+  "new_build_shipped": false,
+  "runtime_implementation_changed": false,
+  "build_folder": "sdk-sci-bound",
+  "console_boot_confirmed": true,
+  "user_reports_flawless_fmvs": true,
+  "user_reports_more_subtle_in_engine_lag": true,
+  "remaining_lag_eliminated": false,
+  "code_tests_repeated": false
+}

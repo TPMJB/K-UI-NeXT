@@ -1,0 +1,767 @@
+From 54ed49b5e276a322c947714235cb5d83fb9d909a Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 24 Oct 2026 22:19:44 -0500
+Subject: [PATCH] Record console SDK SCI progress and remaining read latency
+ from Evolution 2 capture
+
+---
+ .../native-sdk-sci-progress-2026-10-24.json   | 747 ++++++++++++++++++
+ 1 file changed, 747 insertions(+)
+ create mode 100644 docs/evidence/native-sdk-sci-progress-2026-10-24.json
+
+diff --git a/docs/evidence/native-sdk-sci-progress-2026-10-24.json b/docs/evidence/native-sdk-sci-progress-2026-10-24.json
+new file mode 100644
+index 0000000..02bf9fd
+--- /dev/null
++++ b/docs/evidence/native-sdk-sci-progress-2026-10-24.json
+@@ -0,0 +1,747 @@
++{
++  "schema": "kui.native.sdk-sci-route.console-progress.v1",
++  "build": "1eba1784a83e",
++  "video": "63346.mp4",
++  "prior_evidence": "docs/evidence/native-priority7-2026-10-24.json",
++  "frames": {
++    "summary": 5,
++    "bins": [
++      6,
++      8,
++      9
++    ],
++    "longest_calls": [
++      11,
++      12
++    ],
++    "requests": [
++      13,
++      15
++    ],
++    "vmu": 17,
++    "reader": 19
++  },
++  "summary": {
++    "events": "0000209A",
++    "valid": "0000209A",
++    "invalid": "00000000",
++    "epoch": "00000001",
++    "clock_breaks": "00000000",
++    "unmatched": "00000000",
++    "overflow": "00000000",
++    "saturated": "00000000",
++    "max_gd_call": "000014EF",
++    "max_gd_gap": "000032D2",
++    "max_chain_length": "00000001",
++    "max_chain_ticks": "0001B42A",
++    "max_chain_inside": "0001282A",
++    "active_token": "00000000",
++    "last_lba": "0004E687",
++    "last_sectors": "00000044",
++    "longest_count": "00000008",
++    "request_count": "00000007",
++    "bin_count": "00000020"
++  },
++  "bin_fields": [
++    "index",
++    "epoch",
++    "gd_ticks",
++    "calls",
++    "maples"
++  ],
++  "bins": [
++    [
++      "00000000",
++      "00000001",
++      "000007FA",
++      "00000072",
++      "00000026"
++    ],
++    [
++      "00000001",
++      "00000001",
++      "000007FB",
++      "00000072",
++      "00000025"
++    ],
++    [
++      "00000002",
++      "00000001",
++      "000007D5",
++      "00000070",
++      "00000026"
++    ],
++    [
++      "00000003",
++      "00000001",
++      "000007FA",
++      "00000072",
++      "00000026"
++    ],
++    [
++      "00000004",
++      "00000001",
++      "0000E146",
++      "0000006C",
++      "00000025"
++    ],
++    [
++      "00000005",
++      "00000001",
++      "000007F8",
++      "00000072",
++      "00000026"
++    ],
++    [
++      "00000006",
++      "00000001",
++      "000007D5",
++      "00000070",
++      "00000025"
++    ],
++    [
++      "00000007",
++      "00000001",
++      "00013981",
++      "0000006C",
++      "00000025"
++    ],
++    [
++      "00000008",
++      "00000001",
++      "00000EF0",
++      "0000006F",
++      "00000026"
++    ],
++    [
++      "00000009",
++      "00000001",
++      "000007E4",
++      "00000071",
++      "00000026"
++    ],
++    [
++      "0000000A",
++      "00000001",
++      "000007F5",
++      "00000072",
++      "00000025"
++    ],
++    [
++      "0000000B",
++      "00000001",
++      "000007D7",
++      "00000070",
++      "00000026"
++    ],
++    [
++      "0000000C",
++      "00000001",
++      "0000D040",
++      "00000070",
++      "00000026"
++    ],
++    [
++      "0000000D",
++      "00000001",
++      "000007B2",
++      "0000006E",
++      "00000025"
++    ],
++    [
++      "0000000E",
++      "00000001",
++      "000007FC",
++      "00000072",
++      "00000026"
++    ],
++    [
++      "0000000F",
++      "00000001",
++      "00006F87",
++      "00000070",
++      "00000025"
++    ],
++    [
++      "00000010",
++      "00000001",
++      "0000C656",
++      "0000006D",
++      "00000026"
++    ],
++    [
++      "00000011",
++      "00000001",
++      "000007FE",
++      "00000072",
++      "00000025"
++    ],
++    [
++      "00000012",
++      "00000001",
++      "000007D2",
++      "00000070",
++      "00000026"
++    ],
++    [
++      "00000013",
++      "00000001",
++      "00000805",
++      "00000072",
++      "00000025"
++    ],
++    [
++      "00000014",
++      "00000001",
++      "0000D734",
++      "0000006A",
++      "00000026"
++    ],
++    [
++      "00000015",
++      "00000001",
++      "000007F4",
++      "00000072",
++      "00000026"
++    ],
++    [
++      "00000016",
++      "00000001",
++      "000007CC",
++      "00000070",
++      "00000025"
++    ],
++    [
++      "00000017",
++      "00000001",
++      "000017D2",
++      "00000070",
++      "00000025"
++    ],
++    [
++      "00000018",
++      "00000001",
++      "0000DD5D",
++      "0000006C",
++      "00000026"
++    ],
++    [
++      "00000019",
++      "00000001",
++      "000007F3",
++      "00000072",
++      "00000026"
++    ],
++    [
++      "0000001A",
++      "00000001",
++      "000007F0",
++      "00000072",
++      "00000025"
++    ],
++    [
++      "0000001B",
++      "00000001",
++      "00012FBC",
++      "0000006A",
++      "00000026"
++    ],
++    [
++      "0000001C",
++      "00000001",
++      "000007EE",
++      "00000072",
++      "00000025"
++    ],
++    [
++      "0000001D",
++      "00000001",
++      "000007B0",
++      "0000006E",
++      "00000026"
++    ],
++    [
++      "0000001E",
++      "00000001",
++      "000007F9",
++      "00000072",
++      "00000026"
++    ],
++    [
++      "0000001F",
++      "00000001",
++      "00000769",
++      "0000006A",
++      "00000023"
++    ]
++  ],
++  "longest_call_rows": [
++    [
++      [
++        "000014EF",
++        "00000906",
++        "00000001",
++        "FC331EC8",
++        "00000D01"
++      ],
++      [
++        "00000002",
++        "00000001",
++        "0000099E",
++        "0004E9C8",
++        "00000049"
++      ],
++      [
++        "00018800",
++        "60000160",
++        "8C00F400",
++        "00000000",
++        "00005440"
++      ],
++      [
++        "00000000",
++        "00008201",
++        "00000084",
++        "00110104",
++        "FC3309D9"
++      ],
++      [
++        "00000D02",
++        "00000002",
++        "00000000",
++        "0000099E",
++        "0004E9C8"
++      ],
++      [
++        "00000049",
++        "0001A800",
++        "60000160",
++        "8C00F400",
++        "00000010"
++      ],
++      [
++        "00004911",
++        "0000015E",
++        "00008201",
++        "00000084",
++        "00110702"
++      ]
++    ],
++    [
++      [
++        "000014ED",
++        "000008CF",
++        "00000001",
++        "F8DC07BE",
++        "00000D01"
++      ],
++      [
++        "00000002",
++        "00000001",
++        "00000A70",
++        "0004E687",
++        "00000044"
++      ],
++      [
++        "00014000",
++        "60000160",
++        "8C00F400",
++        "00000000",
++        "00005440"
++      ],
++      [
++        "00000000",
++        "00008201",
++        "00000084",
++        "00110104",
++        "F8DBF2D1"
++      ],
++      [
++        "00000D02",
++        "00000002",
++        "00000000",
++        "00000A70",
++        "0004E687"
++      ],
++      [
++        "00000044",
++        "00016000",
++        "60000160",
++        "8C00F400",
++        "00000010"
++      ],
++      [
++        "00004911",
++        "00000160",
++        "00008201",
++        "00000084",
++        "00110702"
++      ]
++    ],
++    [
++      [
++        "000014EC",
++        "000008D0",
++        "00000001",
++        "F8F7683D",
++        "00000D01"
++      ],
++      [
++        "00000002",
++        "00000001",
++        "00000A2F",
++        "0004EA43",
++        "00000037"
++      ],
++      [
++        "0000B800",
++        "60000160",
++        "8C00F400",
++        "00000000",
++        "00005440"
++      ],
++      [
++        "00000000",
++        "00008201",
++        "00000084",
++        "00110104",
++        "F8F75351"
++      ],
++      [
++        "00000D02",
++        "00000002",
++        "00000000",
++        "00000A2F",
++        "0004EA43"
++      ],
++      [
++        "00000037",
++        "0000D800",
++        "60000160",
++        "8C00F400",
++        "00000010"
++      ],
++      [
++        "00004911",
++        "0000015E",
++        "00008201",
++        "00000084",
++        "00110702"
++      ]
++    ],
++    [
++      [
++        "000014EC",
++        "000009D0",
++        "00000001",
++        "F8DC3A6E",
++        "00000D01"
++      ],
++      [
++        "00000002",
++        "00000001",
++        "00000A70",
++        "0004E687",
++        "00000044"
++      ],
++      [
++        "0000F800",
++        "60000160",
++        "8C00F400",
++        "00000000",
++        "00005440"
++      ],
++      [
++        "00000000",
++        "00008201",
++        "00000084",
++        "00110104",
++        "F8DC2582"
++      ],
++      [
++        "00000D02",
++        "00000002",
++        "00000000",
++        "00000A70",
++        "0004E687"
++      ],
++      [
++        "00000044",
++        "00011800",
++        "60000160",
++        "8C00F400",
++        "00000010"
++      ],
++      [
++        "00004911",
++        "00000160",
++        "00008201",
++        "00000086",
++        "00110702"
++      ]
++    ]
++  ],
++  "request_fields": [
++    "token",
++    "lba",
++    "sectors",
++    "total_ticks",
++    "inside_ticks",
++    "outside_ticks",
++    "calls",
++    "completed_bytes"
++  ],
++  "requests": [
++    [
++      "000008D0",
++      "0004E91B",
++      "00000032",
++      "0001399A",
++      "0000DAC9",
++      "00005ED1",
++      "0000000F",
++      "00019000"
++    ],
++    [
++      "0000090B",
++      "0004E94D",
++      "00000049",
++      "0001B30A",
++      "00013ACB",
++      "0000783F",
++      "00000016",
++      "00024800"
++    ],
++    [
++      "00000962",
++      "0004E996",
++      "00000032",
++      "0001390E",
++      "0000C97B",
++      "00006F93",
++      "0000000F",
++      "00019000"
++    ],
++    [
++      "0000099E",
++      "0004E9C8",
++      "00000049",
++      "0001B42A",
++      "0001282A",
++      "00008C00",
++      "00000016",
++      "00024800"
++    ],
++    [
++      "000009F4",
++      "0004EA11",
++      "00000032",
++      "00012F3E",
++      "0000D0FE",
++      "00005E40",
++      "00000011",
++      "00019000"
++    ],
++    [
++      "00000A2F",
++      "0004EA43",
++      "00000037",
++      "00014508",
++      "0000E723",
++      "00005DE5",
++      "00000012",
++      "0001B800"
++    ],
++    [
++      "00000A70",
++      "0004E687",
++      "00000044",
++      "00019E3E",
++      "000129CF",
++      "0000746F",
++      "00000015",
++      "00022000"
++    ]
++  ],
++  "all_request_epoch_flags_chain": [
++    "00000001",
++    "00000000",
++    "00000001"
++  ],
++  "reader": {
++    "samples": "000004B0",
++    "bad": "00000000",
++    "gap_max": "00004836",
++    "read_max": "0001B409",
++    "age_max": "0001BD45",
++    "irq_blocks": "000000E3",
++    "call_blocks": "000006A4",
++    "pio_crc": "00000000",
++    "token_errors": "00000000",
++    "foreign": "00000000",
++    "repairs": "0000002C",
++    "overrun": "00000000",
++    "deferred": "0000002C",
++    "clock_bad": "00000000",
++    "sci_level_rearms": "00000000",
++    "irq_entries": "0000010F",
++    "rehooks": "00000000",
++    "r100": "00000000",
++    "r400": "00000000",
++    "r600": "00000000",
++    "vbr_total": "00000000"
++  },
++  "vmu": {
++    "submit_total": "0000BD2B",
++    "submit_max": "00000035",
++    "complete_total": "0000C3E5",
++    "complete_max": "00000056",
++    "wall_ticks": "00EDE722",
++    "clock_samples": "000012C0",
++    "clock_bad": "00000000",
++    "flags": "00000000",
++    "polls": "000004B0",
++    "free_calls": "00000000",
++    "storage_calls": "00000000"
++  },
++  "evidence_limits": [
++    "Report pages have no synchronized game movement/frame witness.",
++    "Workload and capture phase differ: seven requests/419 sectors versus prior eight/492, final request moves to another LBA range.",
++    "Request outside-GD time is elapsed wall time minus paired GD calls, not CPU idle time.",
++    "Original SR at GD entries does not establish SR throughout game execution.",
++    "Exact hexadecimal transcriptions were checked with enlarged crops; arithmetic identities validated below."
++  ],
++  "derived": {
++    "hz": 781250,
++    "sum_gd_ticks": 514394,
++    "sum_gd_seconds": 0.65842432,
++    "calls": 3573,
++    "maples": 1200,
++    "event_identity_passed": true,
++    "nominal_gd_fraction": 0.03292123285567122,
++    "read_sectors": 419,
++    "read_bytes": 858112,
++    "request_wall_seconds": 0.83243008,
++    "request_inside_seconds": 0.5797184,
++    "request_outside_seconds": 0.25271168,
++    "request_calls": 130,
++    "nonrequest_gd_seconds": 0.07870592,
++    "max_gd_call_ms": 6.85952,
++    "max_gd_gap_ms": 16.6528,
++    "max_chain_ms": 142.92224,
++    "max_chain_inside_ms": 97.04704,
++    "max_chain_outside_ms": 45.8752,
++    "irq_share_of_delivered_blocks": 0.11779968863518422,
++    "profile_wall_seconds": 19.95673856,
++    "reader_gap_ms": 23.66208,
++    "reader_complete_read_ms": 142.88
++  },
++  "comparison": {
++    "prior_build": "302f73152e4b",
++    "prior_gd_seconds": 0.85167744,
++    "gd_seconds_fraction_change": -0.2269088165585319,
++    "prior_read_sectors": 492,
++    "read_sector_fraction_change": -0.14837398373983735,
++    "prior_request_inside_seconds": 0.77057152,
++    "prior_max_gd_call_ms": 6.85952,
++    "prior_max_chain_ms": 145.03168,
++    "prior_max_chain_inside_ms": 114.3872,
++    "foreground_request_seconds_per_sector_fraction_change": -0.11660444217226806,
++    "prior_irq_blocks": 0,
++    "prior_caller_sr": "60000160",
++    "current_caller_sr": "60000160",
++    "prior_entry_exit_vbr": [
++      "8C00F400",
++      "8CFF0300"
++    ],
++    "current_entry_exit_vbr": [
++      "8C00F400",
++      "8C00F400"
++    ],
++    "prior_entry_ssr": "A4/A6",
++    "current_entry_ssr": "84",
++    "prior_entry_chcr": "4911",
++    "current_entry_chcr": "5440",
++    "current_entry_dma_tcr": "00000000"
++  },
++  "video_sha256": "cf7aef5aa4f74cab630c6aae29604d1f8a6322bb5f5930d962ecf978386c350a",
++  "video_bytes": 89822992,
++  "sequence_notes": [
++    "FirstreadLBA0004E91B isconfirmed, with B rather than8.",
++    "Firstsixreads are contiguous:4E91B/32\u21924E94D/49\u21924E996/32\u21924E9C8/49\u21924EA11/32\u21924EA43/37 (allhex).",
++    "LastrequestLBA0004E687 movesbackwardfrom prior0004EA43, so allsevenare not onecontiguousrun."
++  ],
++  "raw_checks": {
++    "bin_sum_ticks": 514394,
++    "bin_sum_hex": "0007D95A",
++    "gd_call_count": 3573,
++    "maple_count": 1200,
++    "event_identity": "2*3573+1200=8346=0x209A",
++    "all_seven_inside_plus_outside_equal_request_total": true,
++    "all_seven_completed_bytes_equal_count_times2048": true,
++    "all_four_raw_downcounter_intervals_equal_reported_call_duration": true,
++    "all_seven_request_flags_zero_chainlength_one": true,
++    "first_six_lba_continuity_passed": true
++  },
++  "findings": [
++    "SCI IRQ delivery is now observed:271entries produced227blocks; foreground GD calls produced1700blocks. IRQ share of deliveredblocks is11.77997percent.",
++    "Longest sampled GD call remains6.85952ms. Longest completedrequest is142.88ms; observedtimelinechainmaximum142.92224ms and chainlength1.",
++    "TopfourGD calls keep originalSDKVBR8C00F400 on bothsides. Atentry SCI priorityfield0,DMA CHCR5440(DEclear),TCR0,SCI_SSR84(noORER); exits priorityfield10,CHCR4911. This is new evidence of completedbackground transfers, not proof of frame pacing.",
++    "GDtotal0.65842432seconds is22.69percentbelowprior0.85167744seconds, while requestedsectors419vs492 are14.84percentlower. RequestinsideGD secondspersector are11.66percentlower, compatiblewith workmovingtoIRQ; capturephaseandworkloaddiffer.",
++    "The existingcapture stilldoesnotrecord game render/simulation milestones, so it cannot attribute the reported remaining movementlag."
++  ],
++  "raw_field_resolutions": [
++    {
++      "field": "summary.max_gd_gap",
++      "candidates_hex": [
++        "00003202",
++        "000032D2"
++      ],
++      "frames": [
++        5,
++        24
++      ],
++      "crop": "gap-tight.png",
++      "resolved_hex": "000032D2",
++      "resolution": "Both independent decoders agree after enlarged crops:0 is diagonallyslashed,D isempty. Arithmetic supports the LBA reading secondarily."
++    },
++    {
++      "field": "requests[1].lba",
++      "candidates_hex": [
++        "0004E940",
++        "0004E94D"
++      ],
++      "frames": [
++        13,
++        14
++      ],
++      "crop": "secondLBA-field.png",
++      "resolved_hex": "0004E94D",
++      "resolution": "Both independent decoders agree after enlarged crops:0 is diagonallyslashed,D isempty. Arithmetic supports the LBA reading secondarily."
++    }
++  ],
++  "transcription_status": "final; enlarged D/0 ambiguities resolved by both decoders",
++  "date": "2026-10-24",
++  "tested_source_commit": "1eba1784a83e7eb5d0cf6dc61cee5ccf46d22c68",
++  "user_observations": [
++    "Lags remain but are much subtler.",
++    "The in-engine Evolution 2 new-game opening formerly had distinct stops; they are now much harder to notice.",
++    "FMVs are flawless in the tested run."
++  ],
++  "console_boot_confirmed": true,
++  "controlled_benchmark": false,
++  "next_work": {
++    "direction": "Bounded cross-request read-ahead at SCI priority1",
++    "reason": "The permanent SDK route supplies real asynchronous work, while completed requests still take approximately143ms. Successive reads are mostly sequential, with a later backward seek.",
++    "constraints": [
++      "Preserve the current SDK route and existing working FMV behavior.",
++      "Do not infer game-frame duration from GD or Maple timestamps.",
++      "Bound cache entries by admitted immutable image extents and validate CRC before publishing data.",
++      "Cache ownership and cancellation must honor VMU storage loans and request token changes."
++    ],
++    "deferred_options": {
++      "priority7": "Guest DMA1 programming sequences protected by IMASK6 remain an unproved preemption window.",
++      "smaller_foreground_batches": "May prolong whole-request waits if producer supply does not compensate; no such change is shipped in this evidence checkpoint."
++    }
++  }
++}
+-- 
+2.51.1
+
