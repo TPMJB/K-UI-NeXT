@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/native-sdk-sci-route
+include Makefile.vmu-native-timeline
+FLAGS += -DKUI_NATIVE_SDK_SCI_ROUTE=1
+NATIVE_FLAGS += -DKUI_NATIVE_SDK_SCI_ROUTE=1
+override STAGE_SRC += src/core/native_sdk_sci_route.c
+$(BUILD)/stage.elf: $(STAGE_OBJ)
+override VMU_READER_EXPORTS := -Wl,-u,_kui_retail_async_irq \
+ -Wl,-u,_kui_retail_sdk_sci_entry -Wl,-u,_kui_vmu_native_background_manifest_bind
+override TEST_GUIDE := docs/vmu-native-sdk-sci-route-test.md
+
+.PHONY: sdk-sci-route-host-tests
+sdk-sci-route-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -O2 $(STALL_READER_FLAGS) \
+	 -DKUI_NATIVE_REQUEST_TIMING=1 -DKUI_NATIVE_COOP_PUMP=1 -DKUI_NATIVE_IRQ_REARM=1 \
+	 -DKUI_NATIVE_LOADER_TIMELINE=1 -DKUI_VMU_NATIVE_BACKGROUND=1 -DKUI_NATIVE_SDK_SCI_ROUTE=1 \
+	 $(STALL_READER_SRC) tests/test_retail_async_sdk_sci_route.c -Wl,--gc-sections -o $(BUILD)/test-sdk-sci-reader
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-sdk-sci-reader
+
+# The privately supplied original executable is never copied into a package.
+.PHONY: sdk-sci-route-admission-tests
+sdk-sci-route-admission-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_native_sdk_sci_route.c \
+	 src/core/native_sdk_sci_route.c src/core/hash.c src/core/data.c -o $(BUILD)/test-sdk-sci-admission
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-sdk-sci-admission '$(SDK_STARTUP)'

@@ -1,0 +1,262 @@
+{
+  "schema": "kui.native.evolution2.irq-route-analysis.v1",
+  "scope": "Read-only original owner program decode; no console route verification",
+  "source": {
+    "raw_bytes": 4057056,
+    "raw_sha256": "16b45fcc84992a60d5a64bf64bf22b699b27306b95f177ba3d9730ca380069ae",
+    "normalized_bytes": 4024288,
+    "normalized_sha256": "52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605",
+    "load_address": "0x8c010000"
+  },
+  "fingerprints": [
+    {
+      "name": "irq_vector_template",
+      "address": "0x8c1ade3c",
+      "bytes": 96,
+      "sha256": "dcda3daf9a295c624f6f18e71c4960962cbf7d79ac8cfab49f1fcad53a046c58"
+    },
+    {
+      "name": "irq_common",
+      "address": "0x8c1ae030",
+      "bytes": 412,
+      "sha256": "a65e4ed8f8fdae94a9afe30b38759b51f3292b0a3bef12a9512a2a3247dfe98a"
+    },
+    {
+      "name": "alternate_common",
+      "address": "0x8c1adec8",
+      "bytes": 360,
+      "sha256": "cc73775f1bf292bd1d710db96250842a6b5a6de68eb068b5aa523c216e67e435"
+    },
+    {
+      "name": "default_handler",
+      "address": "0x8c1add0c",
+      "bytes": 248,
+      "sha256": "219ac536df2bd50903322875180c7b0495d0c8bb39b75f053ebf7d85f54a01ec"
+    },
+    {
+      "name": "callback_initialization",
+      "address": "0x8c17e7c2",
+      "bytes": 46,
+      "sha256": "968d010927af0d49041c5ae7317dc77e6042fa620f28efbc99184f6125ec3f92"
+    },
+    {
+      "name": "dispatch_window",
+      "address": "0x8c1ae0d6",
+      "bytes": 46,
+      "sha256": "a39d2ceb4130e9539c51f8847bc08dcbc79083908abb780cf3d7c3d697fe548a"
+    },
+    {
+      "name": "vbr_restore_window",
+      "address": "0x8c1ae188",
+      "bytes": 54,
+      "sha256": "eb258a14e781746338e9a414d1353176d5983dd6b797f5dd246174684eaf2567"
+    },
+    {
+      "name": "default_event_filter",
+      "address": "0x8c1d89da",
+      "bytes": 34,
+      "sha256": "f6056e2156391312de41ad61b42784ce2a5cbf4dfcdf196b98a3ba611e1cf562"
+    },
+    {
+      "name": "default_unhandled_return",
+      "address": "0x8c1d8bec",
+      "bytes": 20,
+      "sha256": "fe0a08ca04e79c38dc469e8221aa20f3991dbdb49d8f3df7b78b115392c05940"
+    },
+    {
+      "name": "startup_heap_caller",
+      "address": "0x8c011834",
+      "bytes": 272,
+      "sha256": "376ee22c4b98c72eea47d65673810770076f254caddd44e40fde0071ded0e33a"
+    },
+    {
+      "name": "startup_system_init",
+      "address": "0x8c16fcc0",
+      "bytes": 42,
+      "sha256": "af63386781d496a1d7b1626458e2d75f600341eb2eaa96700ca6d91efc3deda1"
+    },
+    {
+      "name": "startup_irq_initializer",
+      "address": "0x8c17e630",
+      "bytes": 472,
+      "sha256": "e192ca4136fc1aac3c43df78285e4f0bc02de4d144034c1e4160dacfb1314925"
+    }
+  ],
+  "sdk_route": {
+    "vbr": "0x8c00f400",
+    "vector": "0x8c00fa00",
+    "source_vector": "0x8c1ade3c",
+    "vector_bytes": 96,
+    "raw_event_cell": "0x8c1ae1d4",
+    "vector_event_literal_offset": "0x4c",
+    "vector_mutable_r0_scratch_offset": "0x50",
+    "vector_common_literal_offset": "0x58",
+    "common_modes": [
+      "0x8c1ae030",
+      "0x8c1adec8"
+    ],
+    "slot_formula": "VBR+0x200+((raw_event-0x200)>>3)",
+    "ERI": {
+      "event": "0x4e0",
+      "slot": "0x8c00f65c"
+    },
+    "RXI": {
+      "event": "0x500",
+      "slot": "0x8c00f660"
+    },
+    "original_default": "0x8c1add0c",
+    "initialized_event_range": [
+      "0x40",
+      "0x800"
+    ],
+    "initialized_event_step": "0x20",
+    "callback_call": "0x8c1ae100",
+    "callback_raw_event_register": "r4",
+    "callback_return": "RTS",
+    "callback_imask": 15,
+    "callback_bl": 0,
+    "saved_vbr_instruction": "0x8c1ae05e",
+    "restored_vbr_instruction": "0x8c1ae18c",
+    "restored_spc_instruction": "0x8c1ae192",
+    "restored_ssr_instruction": "0x8c1ae194",
+    "handler_rte": "0x8c1ae1ba"
+  },
+  "default_behavior": {
+    "called_debug_filter": "0x8c1d89c8",
+    "handled_events": [
+      "0x300",
+      "0x340",
+      "0x380",
+      "0x3c0"
+    ],
+    "unhandled_branch": "0x8c1d89f8",
+    "unhandled_return_block": "0x8c1d8bec",
+    "unhandled_rts": "0x8c1d8bfc",
+    "SCI_acknowledgement_on_unhandled_path": false,
+    "consequence": "Source-derived inference: enabled pending SCI can retrigger after SDK RTE without acknowledgement, starving mainline. An interrupt storm was not measured on the console."
+  },
+  "candidate_constraints": [
+    "Exact normalized owner identity and live copied vector/common admission",
+    "Allow vector self-modified R0 scratch only; validate selected common mode explicitly",
+    "ERI/RXI words must be original default or already-owned callback; do not replace a game SCI owner",
+    "Separate RTS-style callback; existing RTE IRQ entry is incompatible",
+    "Keep SCI IRQ disabled during bootstrap; enable only fixed priority1 after the permanent SDK callback route is admitted",
+    "Preserve SDK VBR/epilogues/owner stack; write only two owned callback words",
+    "Publish both cache lines at0x8c00f640/660 under IMASK15 before raising SCI priority",
+    "Retain native DMA and storage loan ownership guards"
+  ],
+  "date": "2026-10-24",
+  "console_result": {
+    "build": "8390fed",
+    "owner_report": "Black screen exiting bootstrap2; SD adapter red LED remained on",
+    "confirmed_root_cause": false,
+    "cause_verified_on_console": false
+  },
+  "capture_relationship": {
+    "prior_timeline_build": "302f73152e4b",
+    "sampled_original_caller_sr": "0x60000160",
+    "sampled_entry_vbr": "0x8c00f400",
+    "sampled_exit_vbr": "0x8cff0300",
+    "original_sdk_saved_vbr_restore": "Original SDK saves VBR before callback and restores it after callback. A GD hook changing VBR inside that callback cannot retain the route across the SDK epilogue.",
+    "scope_limit": "GD entry snapshots do not establish the complete outside-GD SR/VBR distribution."
+  },
+  "candidate_architecture": {
+    "name": "exact-owner native SDK SCI callback route",
+    "priority": 1,
+    "bootstrap_priority": 0,
+    "priority7_experiment_reused": false,
+    "source_helper": "src/core/native_sdk_sci_route.c",
+    "public_api": "include/kui/native_sdk_sci_route.h",
+    "admission_result": "Read-only32-byte plan; stage publication remains separate",
+    "owner_identity_contract": "Verified normalized digest must come from completed current owner verification before legitimate runtime patches; helper rechecks compact immutable code and live routing windows.",
+    "patches": [
+      "Two default SCI callback table words only, after quiescent IMASK15 admission"
+    ],
+    "unchanged": [
+      "SDK VBR",
+      "SDK ISR epilogues",
+      "SDK saved stacks",
+      "all other SDK callback slots"
+    ],
+    "bootstrap_interrupts": "Disabled until the retained route cookie, original SDK VBR and both bound callback slots are verified"
+  },
+  "software_validation": {
+    "test": "tests/test_native_sdk_sci_route.c",
+    "checks": 733691,
+    "sanitizers": [
+      "ASan",
+      "UBSan"
+    ],
+    "cases": [
+      "Actual externally supplied normalized Evolution2 source identity",
+      "Both exact common ISR modes",
+      "Original source-template selected-common update accepted",
+      "Every bit of immutable code/template fingerprint windows refused when changed",
+      "Every live vector bit refused except original R0 scratch",
+      "Every live selected common/default byte refused when changed",
+      "Every live routing/code read failure",
+      "All32bits of each original default SCI slot independently mutated",
+      "Already-owned/nondefault SCI slots refused for first installation",
+      "All256normalized identity bit mutations unsupported before live reads",
+      "Caller IMASK/MD/VBR/callback/length/load and output/input overlap guards",
+      "No writes through read-only helper"
+    ],
+    "linked_sdk_route_instruction_cases": 23232,
+    "linked_sdk_route_mutation_rejections": 2028,
+    "external_original_sdk_dispatch_cases": 128,
+    "real_card_dma_reader_checks": 33366,
+    "timeline_collector_checks": 70,
+    "timeline_worker_checks": 2091575,
+    "full_persistent_artifact_audit_passed": true,
+    "cold_binder_instruction_modelled": false,
+    "private_stack_total_including_guards_bytes": 352,
+    "console_boot_or_performance_verified": false
+  },
+  "limits": [
+    "The default SCI route can repeat an unacknowledged enabled event; the console failure has not yet been captured at the IRQ entry.",
+    "The new callback route architecture and gameplay performance remain unverified on hardware.",
+    "This helper admits only the fingerprinted Evolution2 normalized program; other titles remain unsupported by this route.",
+    "The read-only plan helper does not prove quiescence, publish callback slots, own storage, or permit a caller-supplied digest to bypass actual owner verification."
+  ],
+  "startup_installation_order": {
+    "scope": "Exact fingerprinted normalized Evolution2 startup only; static original instruction/literal decode, supplemented by live admission at install time",
+    "caller": "0x8c011834",
+    "inherited_irq_mask_interval": {
+      "imask15_write": "0x8c011852",
+      "immediate_or15": "0x8c01184e",
+      "imask_clear_write": "0x8c0118a6"
+    },
+    "sequence": [
+      {
+        "call": "0x8c011856",
+        "target": "0x8c16fcc0",
+        "target_load": "0x8c011854",
+        "target_literal": "0x8c011920",
+        "role": "SDK system initialization completes before the heap call"
+      },
+      {
+        "call": "0x8c16fcce",
+        "target": "0x8c17e630",
+        "target_load": "0x8c16fcc8",
+        "target_literal": "0x8c16fd94",
+        "role": "Copies original SDK vectors and initializes callback slots"
+      },
+      {
+        "call": "0x8c16fcd4",
+        "target": "0x8c17e808",
+        "target_literal": "0x8c16fd98",
+        "role": "Subsequent SDK MMU-related initialization; the route still requires live vectors/default slots"
+      },
+      {
+        "call": "0x8c01187c",
+        "target": "0x8c16f290",
+        "target_load": "0x8c011870",
+        "target_literal": "0x8c011934",
+        "return_pc": "0x8c011880",
+        "role": "First true SDK heap initializer; selected post-return retained worker installation boundary"
+      }
+    ],
+    "conclusion": "The chosen post-first-heap-return boundary follows original SDK IRQ vector/table initialization and precedes the caller clearing IMASK15. Deferred worker installation is unnecessary for this exact startup.",
+    "runtime_publication_requirement": "Retained map binding, worker hooks/control admission and quiescence must complete first. Both SDK SCI callback words must be published and reread before the retained region ready flag is set or any new reception starts. This remains a caller obligation, not a conclusion of the pure helper."
+  }
+}

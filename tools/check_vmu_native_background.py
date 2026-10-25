@@ -178,7 +178,7 @@ def library_cfg(decoded, address, count):
             "unknown_instruction_or_cycle_rejected": True}
 
 
-def stack_paths(frames, calls):
+def stack_paths(frames, calls, roots=None):
     callbacks, escapes, reached = set(), set(), set()
     memo = {}
 
@@ -219,7 +219,7 @@ def stack_paths(frames, calls):
         return memo[function]
 
     result = {}
-    for root, assembly in ROOTS.items():
+    for root, assembly in (ROOTS if roots is None else roots).items():
         candidates = [name for name in frames if graph.base(name) == root]
         require(len(candidates) == 1, "missing or duplicated private GD root: " + root)
         total, path = depth(candidates[0])
@@ -651,7 +651,13 @@ def check(directory, *, self_test=False, require_stage=False):
                     directory/'native/src/loader/minic.ci']
         require(all(p.is_file() for p in reports),'missing timeline callback stack graphs')
     frames, calls = graph.load(reports,qualified='__kui_native_loader_timeline_resident' in image[4])
-    paths, callbacks, escapes = stack_paths(frames, calls)
+    roots=dict(ROOTS)
+    if '__kui_native_sdk_sci_route_resident' in image[4]:
+        # The separately instruction-modelled SDK RTS gateway saves its
+        # owner frame on the SDK stack, then enters C at private stack top.
+        # Walk this actual additional C dispatcher, not just its IRQ callee.
+        roots['kui_retail_sdk_sci_dispatch']=0
+    paths, callbacks, escapes = stack_paths(frames, calls, roots)
     worst = max(item["bytes"] for item in paths.values())
     total = worst + library["stack_bytes"] + EXTRA_MARGIN + GUARD + TOP_GAP
     require(total <= TOP - BOTTOM,
@@ -692,19 +698,19 @@ def check(directory, *, self_test=False, require_stage=False):
         key=next(name for name in altered if graph.base(name)=="native_background_map")
         altered[key] += 128
         def oversized():
-            checks, _, _ = stack_paths(altered, calls)
+            checks, _, _ = stack_paths(altered, calls, roots)
             need = max(item["bytes"] for item in checks.values()) + 4 + EXTRA_MARGIN + GUARD + TOP_GAP
             require(need <= TOP - BOTTOM, "oversized private stack")
         refuse("guarded_map_stack_growth", oversized)
         unknown = {name: list(edges) for name, edges in calls.items()}
         unknown["kui_retail_async_irq"].append(("__indirect_call", "unknown_callback.c:1:1"))
-        refuse("unknown_irq_callback", lambda: stack_paths(frames, unknown))
+        refuse("unknown_irq_callback", lambda: stack_paths(frames, unknown, roots))
         escaped = {name: list(edges) for name, edges in calls.items()}
         escaped["kui_retail_async_irq"].append(("kui_vmu_observe_sd_lease", "retail_async.c:1:1"))
-        refuse("worker_gateway_on_gd_stack", lambda: stack_paths(frames, escaped))
+        refuse("worker_gateway_on_gd_stack", lambda: stack_paths(frames, escaped, roots))
         recursive = {name: list(edges) for name, edges in calls.items()}
         recursive["kui_retail_async_irq"].append(("kui_retail_async_irq", "retail_async.c:1:1"))
-        refuse("recursive_irq_path", lambda: stack_paths(frames, recursive))
+        refuse("recursive_irq_path", lambda: stack_paths(frames, recursive, roots))
         decoded = rows(disassembly)
         mutated = dict(decoded)
         mutated[helper_address + 2] = (0x60F3, "mov", "r15,r0")

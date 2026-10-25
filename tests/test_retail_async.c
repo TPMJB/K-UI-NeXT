@@ -4,6 +4,7 @@
  * every destination byte compared to the ordinary image reader's output. */
 #include "retail_async.h"
 #include "kui/native_sci_priority.h"
+#include "kui/native_sdk_sci_runtime.h"
 #include "sci_stream_model.h"
 #include "kui/retail_image.h"
 #include "kui/retail_loader_layout.h"
@@ -227,9 +228,16 @@ static void setup(uint32_t game_vbr, unsigned how, unsigned take_max, bool scatt
     memset(&hw, 0, sizeof(hw));
     hw.vbr = game_vbr; hw.iprb = 0x5a0f;
     memset(ram, 0xa5, sizeof(ram));
+#if KUI_NATIVE_SDK_SCI_ROUTE
+    CHECK(!R.vector100[0] && !R.vector400[0] && !R.vector600[0]);
+    CHECK(!R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX] &&
+        !R.vector600[KUI_NATIVE_SDK_SCI_DEFAULT_INDEX] &&
+        !R.vector600[KUI_NATIVE_SDK_SCI_VBR_INDEX]);
+#else
     CHECK(R.vector100[2] == (uint32_t)(uintptr_t)kui_retail_release_100 && R.vector100[0] == 0x11111111u);
     CHECK(R.vector400[2] == (uint32_t)(uintptr_t)kui_retail_release_400 && R.vector400[1] == 0x22222222u);
     CHECK(R.vector600[8] == 0xff000028u && R.vector600[10] == 11u);
+#endif
 #if !KUI_RETAIL_NATIVE_HYBRID
     CHECK(R.engine.target == (how == Y ? 25u : 20u));
 #endif

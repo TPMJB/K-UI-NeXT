@@ -3,6 +3,7 @@
  * sequence is the one the SCI async probe proved on the console. */
 #include "retail_async.h"
 #include "kui/native_sci_priority.h"
+#include "kui/native_sdk_sci_runtime.h"
 #if KUI_NATIVE_IRQ_REARM && (!KUI_NATIVE_REQUEST_TIMING || !KUI_RETAIL_NATIVE_HYBRID || defined(KUI_RETAIL_CE))
 #error "Native IRQ rearm diagnostics require the hybrid request-timing counter profile"
 #endif
@@ -25,6 +26,9 @@ __asm__(".global __kui_native_irq_rearm_resident\n.set __kui_native_irq_rearm_re
 #endif
 #if KUI_NATIVE_LOADER_TIMELINE
 __asm__(".global __kui_native_loader_timeline_resident\n.set __kui_native_loader_timeline_resident,1\n");
+#if KUI_NATIVE_SDK_SCI_ROUTE
+__asm__(".global __kui_native_sdk_sci_route_resident\n.set __kui_native_sdk_sci_route_resident,1\n");
+#endif
 #if KUI_NATIVE_SCI_PRIORITY7
 __asm__(".global __kui_native_sci_priority7_resident\n.set __kui_native_sci_priority7_resident,7\n");
 #endif
@@ -112,7 +116,9 @@ static uint32_t vbr_get(void) {
     __asm__ __volatile__("stc vbr,%0" : "=r"(value));
     return value;
 }
+#if !KUI_NATIVE_SDK_SCI_ROUTE
 static void vbr_set(uint32_t value) { __asm__ __volatile__("ldc %0,vbr" : : "r"(value) : "memory"); }
+#endif
 #endif
 #if defined(KUI_RETAIL_CE) || KUI_NATIVE_READER_DIAGNOSTIC
 static uint32_t rd32(uint32_t a) { return *(volatile uint32_t *)(uintptr_t)a; }
@@ -182,26 +188,68 @@ static void install(void) {
 #else
 /* Assembly templates: a forwarding vector whose word 2 names its releasing
  * entry, and the interrupt vector (its targets are fixed). */
+#if !KUI_NATIVE_SDK_SCI_ROUTE
 extern const uint32_t kui_retail_vector_forward[3];
 extern const uint32_t kui_retail_vector_interrupt[11];
+#endif
 
 static uint32_t our_vbr(void) { return (uint32_t)(uintptr_t)&R - 0x100u; }
 
 /* Word by word: a constant-size copy here would pull in libgcc's block
  * moves, which the resident has no room for. */
+#if !KUI_NATIVE_SDK_SCI_ROUTE
 static void copy_words(volatile uint32_t *to, const uint32_t *from, unsigned words) {
     while(words--) *to++ = *from++;
 }
+#endif
 void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
     e.manifest = manifest;
     e.target = manifest->reader == KUI_RETAIL_READER_ASYNC_EAGER ? TARGET_Y : TARGET_X;
+#if !KUI_NATIVE_SDK_SCI_ROUTE
     copy_words(R.vector100, kui_retail_vector_forward, 3);
     R.vector100[2] = (uint32_t)(uintptr_t)kui_retail_release_100;
     copy_words(R.vector400, kui_retail_vector_forward, 3);
     R.vector400[2] = (uint32_t)(uintptr_t)kui_retail_release_400;
     copy_words(R.vector600, kui_retail_vector_interrupt, 11);
+#endif
 }
 
+#if KUI_NATIVE_SDK_SCI_ROUTE
+/* Bootstrap reading remains foreground work until the stage has installed
+ * the admitted RTS callbacks in the SDK's original, persistent vector table.
+ * The callback route never changes VBR or needs an interrupt-return veneer. */
+static bool sdk_sci_ready(void) {
+    if(R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX]!=KUI_NATIVE_SDK_SCI_COOKIE ||
+       R.vector600[KUI_NATIVE_SDK_SCI_VBR_INDEX]!=KUI_NATIVE_SDK_SCI_OWNER_VBR ||
+       vbr_get()!=KUI_NATIVE_SDK_SCI_OWNER_VBR) return false;
+    uint32_t callback=(uint32_t)(uintptr_t)kui_retail_sdk_sci_entry;
+    return rd32(KUI_NATIVE_SDK_SCI_OWNER_VBR+KUI_NATIVE_SDK_SCI_ERI_SLOT_OFFSET)==callback &&
+        rd32(KUI_NATIVE_SDK_SCI_OWNER_VBR+KUI_NATIVE_SDK_SCI_RXI_SLOT_OFFSET)==callback;
+}
+static uint32_t sdk_sci_level(void) {
+    return sdk_sci_ready()?SCI_LEVEL:0u;
+}
+static void hook(void) {
+    uint16_t b=rd16(IPRB);uint32_t level=sdk_sci_level();
+    if(!e.hooked) {e.release.sci=b&SCI_FIELD;e.hooked=1u;}
+    else if((b&SCI_FIELD)!=e.release.armed) {
+        e.release.sci=b&SCI_FIELD;++e.stats.execs;
+    }
+    /* The raw return trampoline is absent. Reuse its armed word for the
+     * exact selected reader field, so losing readiness cannot mistake our
+     * previous SCI1 for a new game-owned level. */
+    e.release.armed=level;
+    if((b&SCI_FIELD)!=level)wr16(IPRB,(uint16_t)((b&~SCI_FIELD)|level));
+}
+static void unhook(void) {
+    if(!e.hooked)return;
+    uint16_t b=rd16(IPRB);
+    if((b&SCI_FIELD)==e.release.armed)
+        wr16(IPRB,(uint16_t)((b&~SCI_FIELD)|e.release.sci));
+    e.release.armed=0u;
+    e.hooked=0u;
+}
+#else
 /* Put our vectors in front of the game's and select the reader's SCI level.
  * Nothing else changes: the game's DMAC and other levels stay as they are.
  * Games may keep the bootstrap's VBR for good (DOA2 does), so it is hooked
@@ -258,6 +306,7 @@ static void unhook(void) {
     if((b & SCI_FIELD) == SCI_LEVEL) wr16(IPRB, (uint16_t)((b & ~SCI_FIELD) | e.release.sci));
     e.hooked = 0;
 }
+#endif
 #endif
 
 /* The bus is claimed at the first read and kept: the card waits mid-stream
@@ -1009,6 +1058,21 @@ uint32_t kui_retail_async_irq(void) {
     if(!kui_sci_stream_busy()) unhook();
     return 0;
 }
+#if KUI_NATIVE_SDK_SCI_ROUTE
+/* Called only by the RTS-style SDK callback on the protected low stack.
+ * Zero means handled; a nonzero value is the independently admitted original
+ * default callback, for the assembly tail-forward path with original R4. */
+uint32_t __attribute__((noipa)) kui_retail_sdk_sci_dispatch(uint32_t event) {
+    uint32_t original=R.vector600[KUI_NATIVE_SDK_SCI_DEFAULT_INDEX];
+    if((event!=0x4e0u && event!=0x500u) || kui_retail_hook_active || native_loan_blocked())
+        return original;
+    if(!sdk_sci_ready()) {
+        if(e.hooked)hook(); /* A lost route must not keep our SCI enabled. */
+        return original;
+    }
+    return kui_retail_async_irq()?original:0u;
+}
+#endif
 #ifdef KUI_RETAIL_CE
 int kui_retail_async_read_part(void *unused, uint32_t lba, uint32_t sector_bytes,
                                uint32_t skip, uint32_t bytes, void *output) {

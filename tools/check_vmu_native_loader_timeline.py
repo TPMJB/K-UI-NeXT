@@ -22,6 +22,13 @@ MARKER=(1,0,0,0xfff1)
 PRIVATE_OBJECTS={'_native_loader_timeline':3420,'_native_loader_event':64,'_native_loader_clock':20}
 BRIDGE_PIN=('62d84fd8b9c6b54566d1334bc207c06f3d8b7d2355da33e562bdde085c50bc7b',36)
 BINDER_PIN=('7caa04ff75dfb56f852276ab71517c1466face73d215dc2c66204d9b49347ecd',180)
+SDK_BRIDGE_PIN=('8b006aa6a8fc0f838d068585d20cef48ca2bdbe271a6658cd3f9fd251f758fa6',36)
+SDK_BINDER_PIN=('7caa04ff75dfb56f852276ab71517c1466face73d215dc2c66204d9b49347ecd',180)
+# The SDK route changes the two low BSS bindings only. The whole body above
+# is still pinned independently; these checks admit no relocation mask.
+BRIDGE_INSTRUCTIONS=bytes.fromhex('06d1126709917c311c511821038904d222662b4109000b000900fc04')
+BRIDGE_BINDINGS=(0x8c007b34,0x8c007b20)
+SDK_BRIDGE_BINDINGS=(0x8c007a34,0x8c007a20)
 BIN_AT_NO_DIV_PIN=('37915f9519ac69eb63c1819a0b82ea5a759111693f41f9d9f4cb62e27beb56e7',144)
 
 
@@ -136,13 +143,43 @@ def division_helper(resident,worker):
             'body_bytes':len(native),'body_sha256':hashlib.sha256(native).hexdigest()}
 
 
+def sdk_route_variant(resident,worker,stage):
+    markers=(resident[4].get('__kui_native_sdk_sci_route_resident'),
+             resident[4].get('__kui_native_sdk_sci_route_callback'),
+             worker[4].get('__kui_native_sdk_sci_route_worker'),
+             stage[4].get('__kui_native_sdk_sci_route_stage'))
+    if any(markers):
+        require(markers==(MARKER,)*4,
+                'SDK timeline variant requires all paired resident/callback/worker/stage markers')
+        return True
+    return False
+
+
+def bridge_bindings(resident,bridge,sdk):
+    require(len(bridge)==36 and bridge[:28]==BRIDGE_INSTRUCTIONS,
+            'timeline bridge instruction/halfword literal bytes differ from the reviewed original')
+    expected=SDK_BRIDGE_BINDINGS if sdk else BRIDGE_BINDINGS
+    require(struct.unpack_from('<II',bridge,28)==expected,
+            'timeline bridge must retain its exact reviewed region/SR literal pair')
+    for name,address in zip(('_kui_retail_async_region_storage','_kui_retail_hook_sr'),expected):
+        actual,size,kind,owner=resident[4][name]
+        require(actual==address and size==4 and kind==1 and owner<len(resident[3]),
+                'timeline bridge low binding lacks its exact typed4B object: '+name)
+        section=resident[3][owner]
+        require(section[1]==8 and section[2]&7==3 and
+                section[3]<=actual<actual+size<=section[3]+section[5],
+                'timeline bridge low binding escapes owned writable NOBITS: '+name)
+
+
 def check(directory,*,self_test=False):
     require(__debug__,'timeline instruction model requires Python assertions; run without -O/PYTHONOPTIMIZE')
     directory=Path(directory)
     resident,worker,stage=(read_elf(directory/name) for name in ('resident-sci.elf','native-worker.elf','stage.elf'))
+    sdk=sdk_route_variant(resident,worker,stage)
     markers=(resident[4].get('__kui_native_loader_timeline_resident'),
              worker[4].get('__kui_native_loader_timeline_worker'))
     if not any(markers):
+        require(not sdk,'SDK SCI route requires the paired loader timeline markers')
         require('_kui_native_loader_timeline_exports' not in worker[4],
                 'timeline descriptor lacks its paired resident/worker markers')
         return {'enabled':False}
@@ -159,12 +196,13 @@ def check(directory,*,self_test=False):
     private=private_state(worker)
     division=division_helper(resident,worker)
     begin,bridge,_=symbol_bytes(resident,'_kui_retail_async_trace',2)
-    require(BRIDGE_PIN is not None,'missing reviewed timeline bridge pin')
-    require((hashlib.sha256(bridge).hexdigest(),len(bridge))==BRIDGE_PIN,
+    bridge_pin=SDK_BRIDGE_PIN if sdk else BRIDGE_PIN
+    binder_pin=SDK_BINDER_PIN if sdk else BINDER_PIN
+    require((hashlib.sha256(bridge).hexdigest(),len(bridge))==bridge_pin,
             'linked timeline bridge instructions/literals changed')
+    bridge_bindings(resident,bridge,sdk)
     binder,binder_body,binder_section=symbol_bytes(stage,'_native_loader_timeline_bind',2)
-    require(BINDER_PIN is not None,'missing reviewed timeline cold binder pin')
-    require((hashlib.sha256(binder_body).hexdigest(),len(binder_body))==BINDER_PIN and
+    require((hashlib.sha256(binder_body).hexdigest(),len(binder_body))==binder_pin and
             binder_section[2]&7==6 and 0x8ce00000<=binder<binder+len(binder_body)<=0x8cfe0000,
             'linked timeline descriptor/region/profile binder changed')
     cases=0
@@ -186,12 +224,14 @@ def check(directory,*,self_test=False):
             except (AssertionError,ValueError,KeyError,struct.error):rejected+=1
             else:raise ValueError('timeline bridge model accepted a changed memory binding')
     return {'enabled':True,'paired_resident_worker':True,'descriptor_address':hex(desc),
+        'sdk_sci_route_variant':sdk,'sdk_sci_resident_callback_worker_stage_paired':sdk,
         'descriptor_bytes':12,'trace_descriptor_bytes_unchanged':40,
         'callback_address':hex(callback),'callback_bytes':len(callback_body),
         'private_state':private,'private_state_bytes':sum(PRIVATE_OBJECTS.values()),
         'division_helper':division,
         'private_p2_nobits_only':True,'bridge_address':hex(begin),'bridge_bytes':len(bridge),
         'complete_linked_bridge_pinned':True,'actual_bridge_model_cases':cases,
+        'original_bridge_instruction_bytes_unchanged':True,'exact_typed_low_bindings_pinned':True,
         'bridge_mutation_rejections':rejected,'null_callback_no_caller_state_access':True,
         'original_exit_function_caller_sr_region_forwarded':True,'nullable_tail_call_same_gd_frame':True,
         'cold_binder_address':hex(binder),'cold_binder_bytes':len(binder_body),

@@ -68,19 +68,26 @@ def cache_catalog(root,commit):
     return wire,files
 
 
-def package(build,guide='broader',trace_startup=None):
+def package(build,guide='broader',trace_startup=None,sdk_startup=None):
     root=Path(__file__).resolve().parents[1];build=Path(build)
     def git(*args):
         return subprocess.check_output(['git',*args],cwd=root,text=True).strip()
     commit=git('rev-parse','HEAD');revision=commit[:12]
     if git('status','--porcelain'):
         raise ValueError('Commit source changes before packaging')
-    if guide in ('evolution-trace','a2-background','hybrid','stall','cooperative','timed','paced','irq-rearm','timeline','priority7') and trace_startup is None:
+    if guide in ('evolution-trace','a2-background','hybrid','stall','cooperative','timed','paced','irq-rearm','timeline','priority7','sdk-sci-route') and trace_startup is None:
         raise ValueError('This package requires --trace-startup with the exact original executable')
     graphs=list(build.rglob('*.ci'))
     if not graphs or any(not closed_callgraph(path.read_text()) for path in graphs):
         raise ValueError('Every emitted callgraph must be complete before packaging')
     report=check(build,self_test=True,trace_startup=trace_startup)
+    if guide=='sdk-sci-route':
+        if sdk_startup is None or not report.get('sdk_sci_route',{}).get('enabled'):
+            raise ValueError('SDK SCI route requires the paired linked route proof and exact Evolution2 startup')
+        from check_vmu_native_sdk_sci_route import check_sdk_dispatch
+        from check_vmu_native_worker_gateway import read_elf
+        report['sdk_sci_route']['original_sdk_dispatch']=check_sdk_dispatch(
+            read_elf(build/'resident-sci.elf'),sdk_startup)
     cached=report['worker_load_policy']['cached_code']
     seed=report.get('resolution_cache_seed',{})
     compat=seed.get('enabled',False)
@@ -142,7 +149,7 @@ def package(build,guide='broader',trace_startup=None):
                      'vmu-native-evolution-fault-test.md','vmu-native-evolution-isolation-test.md',
                      'vmu-native-evolution-hooks-test.md','vmu-native-evolution-trace-test.md'):
             extra['docs/'+name]=(root/'docs'/name).read_bytes()
-        if guide in ('a2-background','hybrid','stall','cooperative','timed','paced','irq-rearm','timeline','priority7'):
+        if guide in ('a2-background','hybrid','stall','cooperative','timed','paced','irq-rearm','timeline','priority7','sdk-sci-route'):
             extra['docs/vmu-native-a2-background-test.md']=(root/'docs/vmu-native-a2-background-test.md').read_bytes()
             extra['docs/evidence/native-a2-background-2026-10-24.json']=(root/'docs/evidence/native-a2-background-2026-10-24.json').read_bytes()
             extra['docs/evidence/native-retry-integration-2026-10-24.json']=(root/'docs/evidence/native-retry-integration-2026-10-24.json').read_bytes()
@@ -166,6 +173,8 @@ def package(build,guide='broader',trace_startup=None):
             extra['docs/evidence/native-loader-timeline-2026-10-24.json']=(root/'docs/evidence/native-loader-timeline-2026-10-24.json').read_bytes()
         if guide=='priority7':
             extra['docs/evidence/native-priority7-2026-10-24.json']=(root/'docs/evidence/native-priority7-2026-10-24.json').read_bytes()
+        if guide=='sdk-sci-route':
+            extra['docs/evidence/native-sdk-sci-route-2026-10-24.json']=(root/'docs/evidence/native-sdk-sci-route-2026-10-24.json').read_bytes()
         for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json',
                      'native-performance-acceptance-2026-10-23.json','native-uniform-root-family-2026-10-23.json',
                      'native-recv-ownership-2026-10-23.json','native-older-sdk-2026-10-23.json',
@@ -205,7 +214,9 @@ def package(build,guide='broader',trace_startup=None):
         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
             template_sha256=sha(template)),
-        compatibility_claim=('Native SCI priority7 shared by C hook and assembly rehook, with the same read budgets and full timeline capture; console performance remains unverified'
+        compatibility_claim=('Exact Evolution2 SDK SCI callback route at priority1; bootstrap SCI masked until verified retained binding, no VBR replacement; console boot and performance remain unverified'
+            if guide=='sdk-sci-route' else
+            'Native SCI priority7 shared by C hook and assembly rehook, with the same read budgets and full timeline capture; console performance remains unverified'
             if guide=='priority7' else
             'Gesture-window whole-GD-call and read-chain timeline with caller/hardware context; diagnostic overhead included, console root cause remains unverified'
             if guide=='timeline' else
@@ -268,9 +279,10 @@ def package(build,guide='broader',trace_startup=None):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('build',type=Path)
-    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall','cooperative','open','timed','paced','irq-rearm','timeline','priority7'),default='broader')
+    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall','cooperative','open','timed','paced','irq-rearm','timeline','priority7','sdk-sci-route'),default='broader')
     parser.add_argument('--trace-startup',type=Path)
+    parser.add_argument('--sdk-startup',type=Path)
     try:
-        args=parser.parse_args();package(args.build,args.guide,args.trace_startup)
+        args=parser.parse_args();package(args.build,args.guide,args.trace_startup,args.sdk_startup)
     except (OSError,ValueError,KeyError,AssertionError,subprocess.CalledProcessError) as error:
         parser.exit(2,f'Native persistent package refused: {error}\n')

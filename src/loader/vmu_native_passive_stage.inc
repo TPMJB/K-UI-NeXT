@@ -38,6 +38,9 @@ static bool passive_entry(uint32_t entry,uint32_t begin,uint32_t bytes) {
 #endif
     return !(entry&1u) && entry>=begin+sizeof(struct kui_vmu_native_passive_exports) && entry<begin+bytes;
 }
+#if KUI_NATIVE_SDK_SCI_ROUTE
+#include "vmu_native_sdk_sci_route_stage.inc"
+#endif
 #if KUI_NATIVE_LOADER_TIMELINE
 /* The existing40B trace table remains unchanged. Its new adjacent typed
  * descriptor belongs to this immutable worker image and supplies one entry.
@@ -337,6 +340,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     c->installer=0;c->stage_stack=0;c->status=KUI_VMU_OBS_BOOT_INSTALLED;
 #if KUI_NATIVE_LOADER_TIMELINE
     native_loader_timeline_bind(e,dest,bytes,lease->payload,cfg.diagnostics);
+#endif
+#if KUI_NATIVE_SDK_SCI_ROUTE
+    native_sdk_sci_route_bind(lease->payload);
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(cfg.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN)

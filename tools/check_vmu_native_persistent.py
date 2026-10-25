@@ -37,6 +37,7 @@ from check_vmu_native_cache_seed import audit as audit_cache_seed
 from check_vmu_native_cache_gateway import check as check_cache_gateway
 from check_vmu_native_irq_rearm import check as check_irq_rearm
 from check_vmu_native_loader_timeline import check as check_loader_timeline
+from check_vmu_native_sdk_sci_route import check as check_sdk_sci_route
 from check_vmu_native_stage_stack import check as check_stage_stack
 from check_vmu_native_stage_stack import Machine
 from check_vmu_native_mode import audit as audit_runtime_mode
@@ -2491,7 +2492,16 @@ def check(directory, *, self_test=False, trace_startup=None):
     require(bool(irq_rearm)==bool(low_rearm),'IRQ rearm worker/resident mismatch')
     if irq_rearm:require(cooperative and not timed and not paced and irq_rearm==low_rearm==(1,0,0,0xfff1),
                          'invalid paired IRQ rearm reader markers')
-    irq_rearm_proof=check_irq_rearm(read_elf(directory/'resident-sci.elf'),worker=worker,self_test=self_test)
+    sdk_sci_proof=check_sdk_sci_route(read_elf(directory/'resident-sci.elf'),worker=worker,
+        stage=read_elf(directory/'stage.elf'),self_test=self_test)
+    if sdk_sci_proof.get('enabled'):
+        # This paired architecture owns the original SDK callback slots and
+        # never installs raw VBR vectors. Its strict linked-code proof is
+        # separate from the unchanged legacy rearm/release proof.
+        irq_rearm_proof=dict(enabled=True,reader_sci_level=1,
+            sdk_callback_route=True,raw_vbr_rearm=False,console_performance_verified=False)
+    else:
+        irq_rearm_proof=check_irq_rearm(read_elf(directory/'resident-sci.elf'),worker=worker,self_test=self_test)
     timeline_proof=check_loader_timeline(directory,self_test=self_test)
     priority7=worker[4].get('__kui_native_sci_priority7_worker')
     low_priority7=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_sci_priority7_resident')
@@ -2581,6 +2591,7 @@ def check(directory, *, self_test=False, trace_startup=None):
                   full_check_and_exec_catchup=bool(irq_rearm),controller_reader_service_enabled=False,
                   rearm_and_irq_entry_counters=bool(irq_rearm)),
               "loader_timeline":timeline_proof,
+              "sdk_sci_route":sdk_sci_proof,
               "sci_priority7":dict(enabled=bool(priority7),paired_resident_worker_rehook=bool(priority7),
                   sci_priority=7 if priority7 else 1,caller_sr_changed=False,
                   check_exec_irq_work_budgets_changed=False,console_performance_verified=False),
