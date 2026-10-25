@@ -714,8 +714,22 @@ READ_AHEAD_PREPARED_PINS={
  '_reader_capture_region':('807f414ae76d5870a482e7952706e56e9f652c5168b3feb8db4316a4f827406c',100),
  '_reader_cooperative_service':('893c8094dbf3c0c0924711f02b67c739ad8f69c7286c21a93cc60d347be90e68',32),
 }
+# Exact diagnostic-only report expansion and shifted immutable string/table
+# bindings. The previous read-ahead profile retains every preceding pin.
+READ_AHEAD_DIAGNOSTIC_PREPARED_PINS={
+ '_diagnostic_complete':('f5f751f8fc3c7ed8aab3864d8a58ac1fedbd6752d2bfd2fd0fe1fc259a920ea1',3284),
+ '_kui_vmu_native_passive_arm':('8b1ad7a9ecd8a05a9cf8695d8f421c6ec8604fc8334ba29642656666574c716d',2096),
+ '_transfer_context_valid':('3d4e8964a9bc123656fc7c5d77fe4c9e02c58889aa791babf6e694535d63d6fc',1236),
+ '_kui_vmu_native_runtime_fault':('28ef621a29fd378b88096fe1ad97a1cef2d267a282f0219dda421d3bfcdb966a',332),
+ '.rodata':('fc5fc124c7cd547100c38fea783b6a2318b057b0fbc5b606a0a11db7a2fc3813',5800),
+ '_kui_vmu_native_trace_report':('3d3285dff3f6de74024330eb8ae906a36943b264289a1fb85638c28b3387894e',1120),
+ '_trace_history':('37927a1eb4b01f1c35bfb46a0fa8071f58a0f606f71b9ed77646c9f874acd84e',164),
+ '_report':('4706198f8c69896b415aefbde23a3b0ddcae7331af212a17263d04288110f032',440),
+ '_trace_packets':('6231888cd04b42e7e0490458c2fb33b9a198b4f2cc775c5dce1f7b607c9855d6',116),
+}
 
-def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *, build=None):
+def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *, build=None,
+                            read_ahead_proof=None):
     """Keep the legacy proof, or require the complete prepared proof family."""
     if "_lifetime_plan" not in worker[4]:
         _, _, section = symbol_bytes(worker, "_kui_vmu_native_lifetime_release_safe_ranges", 2)
@@ -749,12 +763,24 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
     read_ahead=worker[4].get('__kui_native_readahead_worker')
     if read_ahead is not None:
         require(timeline and read_ahead==(1,0,0,0xfff1),'invalid prepared read-ahead marker')
+    read_ahead_diagnostic=worker[4].get('__kui_native_readahead_diagnostic_worker')
+    require(bool(read_ahead_diagnostic)==bool(read_ahead_proof and read_ahead_proof.get('diagnostic_capture')),
+            'prepared read-ahead diagnostic worker/auxiliary proof differs')
+    if read_ahead_diagnostic:
+        require(read_ahead and read_ahead_diagnostic==(1,0,0,0xfff1) and
+                read_ahead_proof.get('enabled') and read_ahead_proof.get('paired_markers') and
+                read_ahead_proof.get('schema')=='kui.native.read-ahead.audit.v1' and
+                read_ahead_proof.get('artifact_sha256',{}).get('worker')==hashlib.sha256(worker[0]).hexdigest() and
+                read_ahead_proof.get('diagnostics',{}).get('enabled') and
+                read_ahead_proof.get('diagnostics',{}).get('schema')=='kui.native.read-ahead.diagnostics.audit.v1',
+                'prepared diagnostic pins require the complete exact auxiliary proof')
     pins={**PREPARED_PINS,**(STALL_PREPARED_PINS if stall_marker else {}),
           **(COOPERATIVE_PREPARED_PINS if cooperative else {}),
           **(TIMED_PREPARED_PINS if timed else {}),**(PACED_PREPARED_PINS if paced else {}),
           **(IRQ_REARM_PREPARED_PINS if irq_rearm else {}),
           **(TIMELINE_PREPARED_PINS if timeline else {}),
-          **(READ_AHEAD_PREPARED_PINS if read_ahead else {})}
+          **(READ_AHEAD_PREPARED_PINS if read_ahead else {}),
+          **(READ_AHEAD_DIAGNOSTIC_PREPARED_PINS if read_ahead_diagnostic else {})}
     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
                        ("_protected_ranges", 512), ("_protected_count", 4),
@@ -850,6 +876,7 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
                 require(different, "prepared signature accepts changed typed pointer: " + name)
                 rejected += 1
     return {"prepared": True, "exact_linked_kernels": functions, "build_identity": build,
+            "read_ahead_diagnostic_companion_required":bool(read_ahead_diagnostic),
             "constant_build_identity_bound_to_verified_runtime": True, "identity_words": 8,
             "protected_interval_limit": 64, "hook_word_limit": 32, "free_node_limit": 1024,
             "full_dynamic_free_list_each_release": True, "full_storage_guards_before_and_after_loan": True,
@@ -2544,7 +2571,7 @@ def check(directory, *, self_test=False, trace_startup=None):
             sdk_callback_route=True,raw_vbr_rearm=False,console_performance_verified=False)
     else:
         irq_rearm_proof=check_irq_rearm(read_elf(directory/'resident-sci.elf'),worker=worker,self_test=self_test)
-    timeline_proof=check_loader_timeline(directory,self_test=self_test)
+    timeline_proof=check_loader_timeline(directory,self_test=self_test,read_ahead_proof=read_ahead_proof)
     priority7=worker[4].get('__kui_native_sci_priority7_worker')
     low_priority7=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_sci_priority7_resident')
     rehook_priority7=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_sci_priority7_rehook')
@@ -2554,7 +2581,8 @@ def check(directory, *, self_test=False, trace_startup=None):
         require(priority7==low_priority7==rehook_priority7==(7,0,0,0xfff1) and
                 timeline_proof.get('enabled') and irq_rearm_proof.get('reader_sci_level')==7,
                 'SCI priority7 requires the paired timeline and exact linked priority proof')
-    prepared_lifetime = check_prepared_lifetime(directory, worker, binary, wire, self_test, build=base["runtime"]["build"])
+    prepared_lifetime = check_prepared_lifetime(directory, worker, binary, wire, self_test,
+        build=base["runtime"]["build"],read_ahead_proof=read_ahead_proof)
     relocations=check_worker_pointer_aliases(wire,policy,fault_capture,coherence)
 
     stage = read_elf(directory / "stage.elf")

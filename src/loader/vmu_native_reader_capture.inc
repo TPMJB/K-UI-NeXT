@@ -28,6 +28,8 @@ __asm__(".global __kui_native_reader_stall_capture\n"
 #if KUI_NATIVE_READAHEAD
 #include "kui/native_readahead.h"
 __asm__(".global __kui_native_readahead_worker\n.set __kui_native_readahead_worker,1\n");
+__asm__(".global __kui_native_readahead_diagnostic_worker\n"
+        ".set __kui_native_readahead_diagnostic_worker,1\n");
 #endif
 static struct kui_reader_capture reader_capture;
 static kui_retail_async_region_type *reader_capture_region(void);
@@ -53,24 +55,77 @@ static void reader_readahead_visit(uint32_t event) {
     if(a)(void)a->visit(event,0u,r,0u);
 }
 #ifndef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+/* Eight label/value pairs fit the sixteen body rows. The immutable field
+ * map keeps every raw word while sharing one formatter and argument buffer. */
+static void reader_readahead_failure(const struct retail_display_state *display,
+    const struct kui_native_ra_failure_snapshot *s,const char *heading) {
+#define RA_FIELD(name) (offsetof(struct kui_native_ra_failure_snapshot,name)/4u)
+    static const uint8_t field[37]={RA_FIELD(stage),RA_FIELD(result),RA_FIELD(event),
+        RA_FIELD(flags),RA_FIELD(token),RA_FIELD(cursor_block),RA_FIELD(cache_base),
+        RA_FIELD(cache_count),RA_FIELD(cache_end),RA_FIELD(operation_lba),RA_FIELD(loan_state),
+        RA_FIELD(rx_flags),RA_FIELD(ready_lba[0]),RA_FIELD(ready_lba[1]),RA_FIELD(kept_lba),
+        RA_FIELD(arrived),RA_FIELD(lost),RA_FIELD(stream_state),RA_FIELD(stream_position),
+        RA_FIELD(pre.sar),RA_FIELD(pre.dar),RA_FIELD(pre.tcr),RA_FIELD(pre.chcr),RA_FIELD(pre.dmaor),
+        RA_FIELD(post.sar),RA_FIELD(post.dar),RA_FIELD(post.tcr),RA_FIELD(post.chcr),RA_FIELD(post.dmaor),
+        RA_FIELD(pre.sci),RA_FIELD(pre.pins),RA_FIELD(pre.tmu),RA_FIELD(post_stream_state),
+        RA_FIELD(post_stream_position),RA_FIELD(post.sci),RA_FIELD(post.pins),RA_FIELD(post.tmu)};
+#undef RA_FIELD
+    static const uint8_t count[8]={5,5,5,4,5,5,5,3};
+    static const char *const label[7]={"BLK BASE COUNT END OP","LOAN RX R0 R1 KEPT",
+        "ARRIVED LOST PRE STATE POS","PRE SAR DAR TCR CHCR DMAOR",
+        "POST SAR DAR TCR CHCR DMAOR","PRE SCI PINS TMU POST STATE POS","POST SCI PINS TMU"};
+    uint32_t values[5];unsigned at=0u;
+    retail_display_restore(display);
+    for(unsigned row=0u;row<8u;row++) {
+        for(unsigned col=0u;col<count[row];col++,at++)
+            memcpy(&values[col],(const uint8_t *)s+4u*field[at],4u);
+        retail_display_values(row?label[row-1u]:heading,values,count[row]);
+    }
+    retail_display_pause(240u);
+}
+static void reader_readahead_diagnostics(const struct retail_display_state *display,
+    const struct kui_native_ra_diagnostics *d) {
+    retail_display_restore(display);
+    retail_display_line("READ AHEAD EXIT REASONS");
+    uint32_t stages[7]={d->failures,0,0,0,0,0,0};
+    for(unsigned stage=1u;stage<KUI_NATIVE_RA_STAGE_COUNT;stage++)
+        for(unsigned result=0u;result<KUI_NATIVE_RA_RESULT_COUNT;result++)
+            stages[stage]+=d->stage_result[stage][result];
+    retail_display_values("FAIL POLL TAKE APPEND FETCH",stages,5u);
+    retail_display_values("RESUME STOP FIRST ST LAST ST",(uint32_t[4]){
+        stages[5],stages[6],d->first.stage,d->last.stage},4u);
+    const uint32_t *n=d->skipped;
+    retail_display_values("SKIP QUIET ABORT SEED LOAN ACTIVE",n,5u);
+    retail_display_values("SKIP PEND FAIL OPEN PORT BUSY",n+5u,5u);
+    retail_display_values("SKIP DMA POS DEFER OWNED",n+10u,4u);
+    retail_display_pause(240u);
+    if(!d->failures)return;
+    bool same=!memcmp(&d->first,&d->last,sizeof(d->first));
+    reader_readahead_failure(display,&d->first,same?
+        "BOTH ST RES EVT FL TOK":
+        "FIRST ST RES EVT FL TOK");
+    if(!same)reader_readahead_failure(display,&d->last,
+        "LAST ST RES EVT FL TOK");
+}
 static void reader_readahead_report(const struct retail_display_state *display) {
     const struct kui_native_ra_exports *a=reader_readahead_exports(reader_capture_region());
     if(!a)return;
     const struct kui_native_ra_stats *s=&((const struct kui_native_ra_public *)a->context)->stats;
     retail_display_restore(display);
     retail_display_line("CRC VALIDATED PHYSICAL READ AHEAD");
-    retail_display_values("CAPACITY HITS MISSES HIT REQUESTS",(uint32_t[4]){
+    retail_display_values("CAP HITS MISS HIT REQS",(uint32_t[4]){
         KUI_NATIVE_RA_BLOCKS,s->hits,s->misses,s->hit_requests},4u);
-    retail_display_values("PRODUCED VISITS HEARTBEAT IRQ",(uint32_t[4]){
+    retail_display_values("MADE VISITS HEARTBEAT IRQ",(uint32_t[4]){
         s->producer_blocks,s->producer_visits,s->heartbeat_visits,s->irq_visits},4u);
-    retail_display_values("SEEKS QUIESCE RESUME FULL EXTENT END",(uint32_t[5]){
+    retail_display_values("SEEK STOP RESUME FULL EXTENT",(uint32_t[5]){
         s->seeks,s->quiesces,s->resumes,s->full,s->extent_ends},5u);
-    retail_display_values("CRC TOKEN ABANDON GUARD CLOCK BAD",(uint32_t[5]){
+    retail_display_values("CRC TOKEN ABORT GUARD CLOCK",(uint32_t[5]){
         s->crc_errors,s->token_errors,s->abandoned,s->guard_faults,s->clock_bad},5u);
     retail_display_hex("MAX AUX VISIT TICKS",s->max_visit_ticks);
-    retail_display_line("781250 TICKS PER SECOND - HEX VALUES");
-    retail_display_line("CACHE NEVER RETAINS FUTURE GAME BUFFERS");
+    retail_display_line("HEX - 781250 HZ");
     retail_display_pause(240u);
+    reader_readahead_diagnostics(display,
+        &((const struct kui_native_ra_public *)a->context)->diagnostics);
 }
 #endif
 #endif

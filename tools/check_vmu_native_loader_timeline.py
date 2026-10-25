@@ -38,6 +38,9 @@ SDK_BRIDGE_BINDINGS=(0x8c007a34,0x8c007a20)
 READAHEAD_BRIDGE_BINDINGS=(0x8c007b34,0x8c007b20)
 BIN_AT_NO_DIV_PIN=('37915f9519ac69eb63c1819a0b82ea5a759111693f41f9d9f4cb62e27beb56e7',144)
 READAHEAD_BIN_AT_NO_DIV_PIN=('0db32d17b310cf8f96bd164ed8555b1c47810499d2c00ed076948e9410d5c82c',144)
+# The diagnostic report moves add32 by0x19c; the first140 arithmetic bytes
+# are unchanged and the final word remains bound to that exact typed entry.
+READAHEAD_DIAGNOSTIC_BIN_AT_NO_DIV_PIN=('3d98d0322d6bc12a6d480b2c9fadfd57c58d7d3ec64137f19346e9dbb713835b',144)
 
 
 def require(test,message):
@@ -124,7 +127,7 @@ def private_state(worker):
     return report
 
 
-def division_helper(resident,worker,read_ahead=False):
+def division_helper(resident,worker,read_ahead=False,diagnostic=False):
     """Reuse the resident stack proof only for identical linked libgcc code.
 
     The prefix contains the alternate internal entry used by the helper.
@@ -134,7 +137,9 @@ def division_helper(resident,worker,read_ahead=False):
     name='___udivsi3'
     if name not in worker[4]:
         _,body,_=symbol_bytes(worker,'_bin_at',2)
-        expected=READAHEAD_BIN_AT_NO_DIV_PIN if read_ahead else BIN_AT_NO_DIV_PIN
+        require(not diagnostic or read_ahead,'diagnostic timeline arithmetic requires read-ahead')
+        expected=READAHEAD_DIAGNOSTIC_BIN_AT_NO_DIV_PIN if diagnostic else \
+            READAHEAD_BIN_AT_NO_DIV_PIN if read_ahead else BIN_AT_NO_DIV_PIN
         require((hashlib.sha256(body).hexdigest(),len(body))==expected,
                 'timeline bin arithmetic changed without a linked division-helper proof')
         if read_ahead:
@@ -187,7 +192,7 @@ def bridge_bindings(resident,bridge,sdk,read_ahead=False):
                 'timeline bridge low binding escapes owned writable NOBITS: '+name)
 
 
-def check(directory,*,self_test=False):
+def check(directory,*,self_test=False,read_ahead_proof=None):
     require(__debug__,'timeline instruction model requires Python assertions; run without -O/PYTHONOPTIMIZE')
     directory=Path(directory)
     resident,worker,stage=(read_elf(directory/name) for name in ('resident-sci.elf','native-worker.elf','stage.elf'))
@@ -198,6 +203,21 @@ def check(directory,*,self_test=False):
     if read_ahead:
         require(sdk and ra_markers==(MARKER,)*3,
                 'read-ahead timeline requires the paired native SDK resident/worker/stage variant')
+    diagnostic=worker[4].get('__kui_native_readahead_diagnostic_worker')
+    if diagnostic and read_ahead_proof is None:
+        from check_vmu_native_readahead import check as check_read_ahead
+        read_ahead_proof=check_read_ahead(directory,self_test=False)
+    require(bool(diagnostic)==bool(read_ahead_proof and read_ahead_proof.get('diagnostic_capture')),
+            'timeline diagnostic worker/auxiliary proof differs')
+    if diagnostic:
+        require(read_ahead and diagnostic==MARKER and
+                read_ahead_proof.get('enabled') and read_ahead_proof.get('paired_markers') and
+                read_ahead_proof.get('schema')=='kui.native.read-ahead.audit.v1' and
+                read_ahead_proof.get('diagnostics',{}).get('enabled') and
+                read_ahead_proof.get('diagnostics',{}).get('schema')=='kui.native.read-ahead.diagnostics.audit.v1' and
+                all(read_ahead_proof.get('artifact_sha256',{}).get(name)==hashlib.sha256(image[0]).hexdigest()
+                    for name,image in (('resident',resident),('worker',worker),('stage',stage))),
+                'timeline diagnostic arithmetic requires the complete exact auxiliary proof')
     markers=(resident[4].get('__kui_native_loader_timeline_resident'),
              worker[4].get('__kui_native_loader_timeline_worker'))
     if not any(markers):
@@ -216,7 +236,7 @@ def check(directory,*,self_test=False):
             P1+80<=callback<callback+len(callback_body)<=P1+SPAN and callback_section[2]&7==6,
             'timeline descriptor does not bind its exact private P1 callback')
     private=private_state(worker)
-    division=division_helper(resident,worker,read_ahead)
+    division=division_helper(resident,worker,read_ahead,bool(diagnostic))
     begin,bridge,_=symbol_bytes(resident,'_kui_retail_async_trace',2)
     bridge_pin=READAHEAD_BRIDGE_PIN if read_ahead else SDK_BRIDGE_PIN if sdk else BRIDGE_PIN
     binder_pin=READAHEAD_BINDER_PIN if read_ahead else SDK_BINDER_PIN if sdk else BINDER_PIN
@@ -248,6 +268,7 @@ def check(directory,*,self_test=False):
     return {'enabled':True,'paired_resident_worker':True,'descriptor_address':hex(desc),
         'sdk_sci_route_variant':sdk,'sdk_sci_resident_callback_worker_stage_paired':sdk,
         'read_ahead_variant':read_ahead,
+        'read_ahead_diagnostic_companion_required':bool(diagnostic),
         'descriptor_bytes':12,'trace_descriptor_bytes_unchanged':40,
         'callback_address':hex(callback),'callback_bytes':len(callback_body),
         'private_state':private,'private_state_bytes':sum(PRIVATE_OBJECTS.values()),

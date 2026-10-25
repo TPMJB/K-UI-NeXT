@@ -14,6 +14,8 @@
  * is inserted in the tightly bounded low reader region. */
 enum { RA_CLOSED=0u,RA_PAUSED=1u,RA_DMA=2u,RA_LOST=3u,RA_RESUME=4u };
 #define SPEC_TOKEN_LIMIT 256u
+__asm__(".global __kui_native_readahead_diagnostic_auxiliary\n"
+        ".set __kui_native_readahead_diagnostic_auxiliary,1\n");
 #define C kui_native_readahead_aux_context
 struct kui_native_readahead_aux_context kui_native_readahead_aux_context
     __attribute__((section(".data.native_ra_context"),aligned(32)))={0};
@@ -95,7 +97,77 @@ int kui_native_readahead_aux_init(const struct kui_native_ra_config *c) {
     C.config=*c;C.cache=cache;C.initialized=1u;
     return 0;
 }
+static void snapshot_hw(struct kui_native_ra_hw_snapshot *s) {
+    /* Sequential, read-only observations: DMA can advance between reads.
+     * Never read RDR, fence/purge memory, or change transport registers. */
+    s->sar=read_hw(UINT32_C(0xffa00010),4u);
+    s->dar=read_hw(UINT32_C(0xffa00014),4u);
+    s->tcr=read_hw(UINT32_C(0xffa00018),4u);
+    s->chcr=read_hw(UINT32_C(0xffa0001c),4u);
+    s->dmaor=read_hw(UINT32_C(0xffa00040),4u);
+    s->sci=read_hw(UINT32_C(0xffe00000),1u) |
+        read_hw(UINT32_C(0xffe00004),1u)<<8 |
+        read_hw(UINT32_C(0xffe00008),1u)<<16 |
+        read_hw(UINT32_C(0xffe00010),1u)<<24;
+    s->pins=read_hw(UINT32_C(0xffe0001c),1u) |
+        read_hw(UINT32_C(0xffc00004),1u)<<8 |
+        read_hw(UINT32_C(0xff800030),2u)<<16;
+    s->tmu=read_hw(UINT32_C(0xffd8000c),4u);
+}
+static void snapshot_pre(enum kui_native_ra_failure_stage stage,
+    const kui_retail_async_region_type *r,uint32_t operation_lba) {
+    struct kui_native_ra_failure_snapshot *s=&C.observation;
+    const struct kui_retail_async *e=&r->engine;
+    const struct kui_sci_stream_state *stream=&r->shared.stream;
+    s->stage=stage;s->event=C.current_event;
+    s->flags=(e->active?KUI_NATIVE_RA_SNAP_ACTIVE:0u) |
+        (r->shared.service.pending?KUI_NATIVE_RA_SNAP_PENDING:0u) |
+        (r->shared.service.executing?KUI_NATIVE_RA_SNAP_EXECUTING:0u) |
+        (e->failed?KUI_NATIVE_RA_SNAP_FAILED:0u) |
+        (C.spec_owned?KUI_NATIVE_RA_SNAP_SPEC_OWNED:0u) |
+        (C.deferred?KUI_NATIVE_RA_SNAP_DEFERRED:0u) |
+        (C.quiesced?KUI_NATIVE_RA_SNAP_QUIESCED:0u) |
+        (C.abandoned?KUI_NATIVE_RA_SNAP_ABANDONED:0u) |
+        (C.have_seed?KUI_NATIVE_RA_SNAP_HAVE_SEED:0u) |
+        (r->shared.port.acquired?KUI_NATIVE_RA_SNAP_ACQUIRED:0u) |
+        (r->shared.port.fault?KUI_NATIVE_RA_SNAP_PORT_FAULT:0u) |
+        (e->opened?KUI_NATIVE_RA_SNAP_OPENED:0u) |
+        (e->in_irq?KUI_NATIVE_RA_SNAP_IRQ:0u);
+    s->token=e->token;s->cursor_block=e->cursor.block;
+    s->stream_state=stream->state;s->stream_position=stream->position;
+    s->cache_base=C.cache.base;s->cache_count=C.cache.count;s->cache_end=C.cache.end;
+    s->operation_lba=operation_lba;s->loan_state=e->native_loan_state;
+    s->rx_flags=(uint32_t)stream->ready[0] | (uint32_t)stream->ready[1]<<8 |
+        (uint32_t)stream->kept<<16 | stream->fill<<24;
+    s->ready_lba[0]=stream->ready_lba[0];s->ready_lba[1]=stream->ready_lba[1];
+    s->kept_lba=stream->kept_lba;s->arrived=stream->arrived;
+    s->lost=(uint32_t)stream->lost[0] | (uint32_t)stream->lost[1]<<16;
+    snapshot_hw(&s->pre);
+}
+static void snapshot_failure(const kui_retail_async_region_type *r,
+    enum kui_sci_stream_result result) {
+    struct kui_native_ra_failure_snapshot *s=&C.observation;
+    s->result=result;
+    s->post_stream_state=r->shared.stream.state;
+    s->post_stream_position=r->shared.stream.position;
+    snapshot_hw(&s->post);
+    if(s->stage<KUI_NATIVE_RA_STAGE_COUNT && (uint32_t)result<KUI_NATIVE_RA_RESULT_COUNT)
+        ++C.diagnostics.stage_result[s->stage][result];
+    /* Word copies avoid an implicit large structure-copy runtime import. */
+    const uint32_t *from=(const uint32_t *)(const void *)s;
+    uint32_t *last=(uint32_t *)(void *)&C.diagnostics.last;
+    uint32_t *first=(uint32_t *)(void *)&C.diagnostics.first;
+    for(unsigned i=0u;i<sizeof(*s)/sizeof(uint32_t);++i) {
+        last[i]=from[i];
+        if(!C.diagnostics.failures)first[i]=from[i];
+    }
+    ++C.diagnostics.failures;
+}
+static bool skipped(enum kui_native_ra_skip reason) {
+    ++C.diagnostics.skipped[reason];return true;
+}
 static void abandon(kui_retail_async_region_type *r,enum kui_sci_stream_result result) {
+    snapshot_failure(r,result);
     if(result==KUI_SCI_STREAM_CRC)++C.stats.crc_errors;
     if(result==KUI_SCI_STREAM_TOKEN)++C.stats.token_errors;
     ++C.stats.abandoned;C.abandoned=1u;C.spec_owned=C.deferred=0u;
@@ -109,7 +181,8 @@ static void abandon(kui_retail_async_region_type *r,enum kui_sci_stream_result r
 static void retire_spec(kui_retail_async_region_type *r,bool interrupt) {
     const struct kui_native_ra_low_ops *o=C.config.ops;
     if(!C.spec_owned || C.deferred)return;
-    enum kui_sci_stream_result result=o->busy()?o->poll(interrupt):KUI_SCI_STREAM_OK;
+    enum kui_sci_stream_result result=KUI_SCI_STREAM_OK;
+    if(o->busy()) {snapshot_pre(KUI_NATIVE_RA_STAGE_POLL,r,C.spec_lba);result=o->poll(interrupt);}
     if(result==KUI_SCI_STREAM_PENDING) {
         if(!o->busy() && r->shared.stream.state==RA_RESUME) {
             C.deferred=1u;o->unhook();
@@ -118,36 +191,51 @@ static void retire_spec(kui_retail_async_region_type *r,bool interrupt) {
     }
     if(result!=KUI_SCI_STREAM_OK) {abandon(r,result);return;}
     if(o->busy())return;
+    snapshot_pre(KUI_NATIVE_RA_STAGE_TAKE,r,C.spec_lba);
     const uint8_t *block=o->take(C.spec_lba,&result);
     if(!block || result!=KUI_SCI_STREAM_OK) {abandon(r,result);return;}
+    snapshot_pre(KUI_NATIVE_RA_STAGE_APPEND,r,C.spec_lba);
     if(!kui_native_ra_cache_append(&C.cache,C.spec_lba,block)) {
         abandon(r,KUI_SCI_STREAM_BUSY);return;
     }
     C.spec_owned=0u;++C.stats.producer_blocks;
 }
-static bool idle_request(const kui_retail_async_region_type *r) {
-    return !r->engine.active && !r->shared.service.pending &&
-        !r->shared.service.executing && !r->engine.failed;
-}
 static void producer(kui_retail_async_region_type *r,bool interrupt) {
     const struct kui_native_ra_low_ops *o=C.config.ops;
-    if(C.quiesced || C.abandoned || !C.have_seed ||
-       r->engine.native_loan_state!=KUI_VMU_NATIVE_ASYNC_LOAN_IDLE)return;
+    if(C.quiesced) {skipped(KUI_NATIVE_RA_SKIP_QUIESCED);return;}
+    if(C.abandoned) {skipped(KUI_NATIVE_RA_SKIP_ABANDONED);return;}
+    if(!C.have_seed) {skipped(KUI_NATIVE_RA_SKIP_NO_SEED);return;}
+    if(r->engine.native_loan_state!=KUI_VMU_NATIVE_ASYNC_LOAN_IDLE) {
+        skipped(KUI_NATIVE_RA_SKIP_LOAN);return;
+    }
     ++C.stats.producer_visits;
     bool deferred_on_entry=C.deferred!=0u;
     retire_spec(r,interrupt);
-    if(C.abandoned || !idle_request(r) || !r->engine.opened ||
-       !r->shared.port.acquired || r->shared.port.fault || o->busy())return;
+    if(C.abandoned) {skipped(KUI_NATIVE_RA_SKIP_ABANDONED);return;}
+    if(r->engine.active) {skipped(KUI_NATIVE_RA_SKIP_ACTIVE);return;}
+    if(r->shared.service.pending || r->shared.service.executing) {
+        skipped(KUI_NATIVE_RA_SKIP_PENDING);return;
+    }
+    if(r->engine.failed) {skipped(KUI_NATIVE_RA_SKIP_FAILED);return;}
+    if(!r->engine.opened || !r->shared.port.acquired) {
+        skipped(KUI_NATIVE_RA_SKIP_NOT_OPENED);return;
+    }
+    if(r->shared.port.fault) {skipped(KUI_NATIVE_RA_SKIP_PORT_FAULT);return;}
+    if(o->busy()) {skipped(KUI_NATIVE_RA_SKIP_BUSY);return;}
     if(C.deferred) {
-        if(interrupt || !deferred_on_entry || !dma_idle() ||
-           r->shared.stream.state!=RA_RESUME || r->shared.stream.position!=C.spec_lba)return;
+        if(interrupt || !deferred_on_entry) {skipped(KUI_NATIVE_RA_SKIP_DEFERRED);return;}
+        if(!dma_idle()) {skipped(KUI_NATIVE_RA_SKIP_GUEST_DMA);return;}
+        if(r->shared.stream.state!=RA_RESUME || r->shared.stream.position!=C.spec_lba) {
+            skipped(KUI_NATIVE_RA_SKIP_STREAM_POSITION);return;
+        }
+        snapshot_pre(KUI_NATIVE_RA_STAGE_RESUME,r,C.spec_lba);
         enum kui_sci_stream_result result=o->fetch(C.spec_lba,SPEC_TOKEN_LIMIT,false);
         if(result!=KUI_SCI_STREAM_OK) {abandon(r,result);return;}
         C.deferred=0u;
         if(o->busy())o->hook();
         return;
     }
-    if(C.spec_owned)return;
+    if(C.spec_owned) {skipped(KUI_NATIVE_RA_SKIP_SPEC_OWNED);return;}
     uint32_t next;
     if(!kui_native_ra_cache_next(&C.cache,&next)) {
         if(C.cache.count==KUI_NATIVE_RA_CACHE_BLOCKS)++C.stats.full;
@@ -156,7 +244,11 @@ static void producer(kui_retail_async_region_type *r,bool interrupt) {
     }
     /* Optional work never opens/restarts a card stream. In particular, a
      * busy guest DMA channel must not turn RESUME into CMD12/CMD18 or PIO. */
-    if(r->shared.stream.state!=RA_PAUSED || r->shared.stream.position!=next || !dma_idle())return;
+    if(r->shared.stream.state!=RA_PAUSED || r->shared.stream.position!=next) {
+        skipped(KUI_NATIVE_RA_SKIP_STREAM_POSITION);return;
+    }
+    if(!dma_idle()) {skipped(KUI_NATIVE_RA_SKIP_GUEST_DMA);return;}
+    snapshot_pre(KUI_NATIVE_RA_STAGE_FETCH,r,next);
     enum kui_sci_stream_result result=o->fetch(next,SPEC_TOKEN_LIMIT,false);
     if(result!=KUI_SCI_STREAM_OK) {abandon(r,result);return;}
     C.spec_owned=1u;C.spec_lba=next;
@@ -239,9 +331,12 @@ static uint32_t quiesce(kui_retail_async_region_type *r) {
        r->shared.service.executing)return 0u;
     C.quiesced=1u;++C.stats.quiesces;
     if(C.spec_owned) {
+        snapshot_pre(KUI_NATIVE_RA_STAGE_QUIESCE,r,C.spec_lba);
         enum kui_sci_stream_result result=C.config.ops->stop();
+        bool failed=result!=KUI_SCI_STREAM_OK || C.config.ops->busy();
+        if(failed)snapshot_failure(r,result);
         C.spec_owned=C.deferred=0u;C.config.ops->unhook();
-        if(result!=KUI_SCI_STREAM_OK || C.config.ops->busy()) {
+        if(failed) {
             C.abandoned=1u;++C.stats.abandoned;return 0u;
         }
     }
@@ -253,12 +348,16 @@ uint32_t kui_native_readahead_aux_dispatch(uint32_t event,uint32_t arg,
        *C.config.ops->region_storage!=r) {
         ++C.stats.guard_faults;return event==KUI_NATIVE_RA_QUIESCE?0u:1u;
     }
-    if(r->engine.native_loan_state!=KUI_VMU_NATIVE_ASYNC_LOAN_IDLE)
+    if(r->engine.native_loan_state!=KUI_VMU_NATIVE_ASYNC_LOAN_IDLE) {
+        skipped(KUI_NATIVE_RA_SKIP_LOAN);
         return event==KUI_NATIVE_RA_QUIESCE?0u:1u;
+    }
     if(event==KUI_NATIVE_RA_CAPTURE_START) {
         /* A gesture opens a statistics window, not a new cache lifetime. */
-        memset(&C.stats,0,sizeof(C.stats));return 1u;
+        memset(&C.stats,0,sizeof(C.stats));
+        memset(&C.diagnostics,0,sizeof(C.diagnostics));return 1u;
     }
+    C.current_event=event;
     struct ra_clock before=clock_read();uint32_t result=1u;
     switch(event) {
     case KUI_NATIVE_RA_DELIVER:deliver(arg,r);break;

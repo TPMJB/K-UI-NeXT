@@ -30,6 +30,8 @@ MARK='__kui_native_readahead_'
 # Reviewed pins are deliberately separate from the existing SCI1 profile.
 # Populated only after inspection of the new linked profile, never at runtime.
 CODE_PIN=(5120,'ad53f64817c9b65869bbe21e8d28a09ba98d75567709a6099bf51dd8551e2bd9')
+DIAGNOSTIC_CODE_PIN=(6016,'d355c1383364a52f8f3d1b82dad6359ea695b0e15287b1c0cd9a4ecba231db92')
+DIAGNOSTIC_MARK='__kui_native_readahead_diagnostic_'
 LOW_PINS={
     '_deliver_work':(456,'73ed6d63b6e67b122d11d0185a009d2c28f81face7e99aeda639660b6eb61aeb'),
     '_deliver':(60,'d32fd5a483cdffee78867c2239be72d693e1d1cc46f62e9b0ae2cda2f5e3eb46'),
@@ -39,6 +41,12 @@ WORKER_PINS={
     '_reader_readahead_visit':(56,'2af85f7d6a6a88765d1e8cf645b45683e794c2bf08ebca7a5c1bb6666a78186a'),
     '_reader_cooperative_service':(32,'d5c8c4caf5c8bf445a7f0d5ab500ee6f1e7ef46cbdfdf2c46070c0058b683ea4'),
 }
+DIAGNOSTIC_WORKER_PINS={
+    '_reader_readahead_exports':(160,'5b5248bfa68cadfd8dad5777f91dd6b4625588954539294f7bb91a0dc02f484a'),
+    '_reader_readahead_visit':(56,'2af85f7d6a6a88765d1e8cf645b45683e794c2bf08ebca7a5c1bb6666a78186a'),
+    '_reader_cooperative_service':(32,'774e6ef572a539374bec18f4954cf99399096f12899db0ea67cc0460c209391b'),
+    '_reader_readahead_failure':(172,'908c6b98fec8dc12551a0c8ab889609b30478435bc26597b909299c5abec6da4'),
+}
 LOAN_PIN=(744,'a06ecbd795204545b4df1ca6f5efc3883a0a81b4e0391b088a12388203ff376c')
 GATEWAY_MEMORY={}
 
@@ -46,6 +54,14 @@ def require(value,message):
     if not value:raise ValueError(message)
 
 def sha(value):return hashlib.sha256(value).hexdigest()
+
+def diagnostic_profile(aux):
+    mark=aux[4].get(DIAGNOSTIC_MARK+'auxiliary')
+    if mark is not None:
+        require(mark==(1,0,0,0xfff1),'read-ahead diagnostic auxiliary marker differs')
+    return mark is not None
+
+def public_bytes(aux):return 656 if diagnostic_profile(aux) else 76
 
 def code_payload(aux):
     parts=[]
@@ -61,7 +77,8 @@ def code_payload(aux):
 
 def pinned_code(aux):
     address,body=code_payload(aux)
-    require(CODE_PIN is not None and (len(body),sha(body))==CODE_PIN,
+    selected=DIAGNOSTIC_CODE_PIN if diagnostic_profile(aux) else CODE_PIN
+    require(selected is not None and (len(body),sha(body))==selected,
             'read-ahead immutable code pin changed')
     return address,body
 
@@ -132,7 +149,8 @@ def image_contract(directory,aux,resident):
     require(context[2]==1 and not context[0]&31 and 0xac421040<=context[0]<
             context[0]+context[1]<=0xac422000 and aux[3][context[3]][2]&7==3,
             'read-ahead complete mutable context escapes its uncached owned page')
-    require(context[1]>=76 and not any(initialized_at(aux,context[0],context[1])),
+    require(context[1]==(904 if diagnostic_profile(aux) else 172) and
+            not any(initialized_at(aux,context[0],context[1])),
             'read-ahead context is not initially zero, including busy and statistics')
     require(AUX+0x1000<=visit<AUX+len(binary) and AUX+0x1000<=init<AUX+len(binary),
             'read-ahead entries escape initialized P1 code')
@@ -143,7 +161,8 @@ def image_contract(directory,aux,resident):
     ops=typed_ops(resident)
     return dict(binary_sha256=sha(binary),binary_bytes=len(binary),relocation_sha256=sha(wire),
         relocation_records=(len(wire)-72)//8,link_base=hex(AUX),relocation_span=SPAN,
-        context=hex(context[0]),context_bytes=context[1],private_stack_bottom=hex(STACK_BOTTOM),
+        context=hex(context[0]),context_bytes=context[1],public_bytes=public_bytes(aux),
+        private_stack_bottom=hex(STACK_BOTTOM),
         private_stack_top=hex(STACK_TOP),cache_data_bytes=0x30000,lease_bytes=0x60000,
         worker_map_region_offsets_unchanged=True,typed_low_ops=ops,physical_loads=loads)
 
@@ -214,7 +233,7 @@ def gateway_cases(resident,aux):
         c_payload_model='ABI-adversarial substitute; actual producer separately host-tested')
 
 class WorkerCPU(SDKCPU):
-    def __init__(self,resident,worker,payload,event,variant):
+    def __init__(self,resident,worker,payload,event,variant,public=76):
         super().__init__(resident,seed=9,mask=15,bank=1)
         self.symbols=dict(resident[4],**worker[4]);self.worker=worker
         key=(id(resident[0]),id(worker[0]))
@@ -246,7 +265,10 @@ class WorkerCPU(SDKCPU):
         if variant=='bound_entry':self.write(self.region+0x500,0)
         if variant=='bound_context':self.write(self.region+0x504,0)
         if variant=='context_low':self.write(self.aux_header+20,self.aux_header+32)
-        if variant=='context_high':self.write(self.aux_header+20,self.aux_header+4096-72)
+        if variant in ('context_at_public_limit','context_high'):
+            self.context=self.aux_header+4096-public+(4 if variant=='context_high' else 0)
+            self.write(self.aux_header+20,self.context)
+            self.write(self.region+0x504,self.context)
         self.targets={self.entry};self.event=event;self.calls=0
         self.r[4]=event;self.r[15]=0xac11ffe0
         self.initial=self.snapshot();self.durable=worker[4]['_durable_card'];self.durable_reads=set()
@@ -269,37 +291,62 @@ class WorkerCPU(SDKCPU):
         # instruction proof establishes PR preservation around its C body.
         self.r[0]=1;self.sr^=1;self.pc=continuation
 
-def worker_bindings(resident,worker):
+def worker_bindings(resident,worker,*,diagnostic=False):
     pins={}
-    for name,(count,digest) in WORKER_PINS.items():
+    selected=DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
+    require(selected,'read-ahead reviewed worker pins are missing')
+    public=656 if diagnostic else 76
+    for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(worker,name,2)
         require((len(body),sha(body))==(count,digest) and section[2]&7==6,
                 'read-ahead worker binding instructions changed: '+name)
         pins[name]=(address,count,digest)
     cases=0
     variants=('valid','magic','version','bytes','image_low','image_high','entry_low','entry_high',
-              'bound_entry','bound_context','context_low','context_high')
+              'bound_entry','bound_context','context_low','context_at_public_limit','context_high')
     for payload in (0x0c400000,0x8c400000,0xac400000,0x0cfa0000):
         for event in (2,6):
             for variant in variants:
-                c=WorkerCPU(resident,worker,payload,event,variant)
+                c=WorkerCPU(resident,worker,payload,event,variant,public)
                 c.run_symbol('_reader_readahead_visit')
-                assert c.calls==int(variant=='valid')
+                assert c.calls==int(variant in ('valid','context_at_public_limit'))
                 before=c.initial
                 assert c.r[8:]==before[0][8:] and c.other==before[1] and c.pr==before[2]
                 assert c.control==before[10] and c.r[15]==before[0][15]
                 cases+=1
-    c=WorkerCPU(resident,worker,0x8c400000,2,'valid')
+    c=WorkerCPU(resident,worker,0x8c400000,2,'valid',public)
     c.run_symbol('_reader_cooperative_service');assert c.calls==1
     require(len(c.durable_reads)==2,'worker heartbeat must check both durable writer busy fields')
     for address in c.durable_reads:
-        c=WorkerCPU(resident,worker,0x8c400000,2,'valid');c.write(address,1)
+        c=WorkerCPU(resident,worker,0x8c400000,2,'valid',public);c.write(address,1)
         c.run_symbol('_reader_cooperative_service');assert c.calls==0;cases+=1
     return dict(actual_worker_binding_cases=cases,immutable_function_pins=pins,
         all_three_payload_aliases=True,highest_owned_lease_checked=True,
         malformed_headers_and_contexts_refused=True,both_durable_writer_busy_fields_refused=True,
-        heartbeat_and_capture_start_arguments_checked=True,
+        heartbeat_and_capture_start_arguments_checked=True,complete_public_context_bytes=public,
+        exact_public_boundary_and_one_word_overflow_checked=True,
         c_auxiliary_target='ABI substitute; complete auxiliary gateway proved separately')
+
+def worker_diagnostic_display(worker):
+    indices=bytes((0,1,2,3,4,5,8,9,10,11,12,13,14,15,16,17,18,6,7,
+                   19,20,21,22,23,27,28,29,30,31,24,25,26,35,36,32,33,34))
+    for name,expected in (('_field.2',indices),('_count.1',bytes((5,5,5,4,5,5,5,3)))):
+        _,body,sec=symbol_bytes(worker,name,1)
+        require(sec[2]&7==2 and body==expected,'diagnostic report field/count table changed')
+    _,body,sec=symbol_bytes(worker,'_label.0',1)
+    require(sec[2]&7==2 and len(body)==28,'diagnostic report row labels are not a typed immutable7-pointer table')
+    labels=('BLK BASE COUNT END OP','LOAN RX R0 R1 KEPT','ARRIVED LOST PRE STATE POS',
+            'PRE SAR DAR TCR CHCR DMAOR','POST SAR DAR TCR CHCR DMAOR',
+            'PRE SCI PINS TMU POST STATE POS','POST SCI PINS TMU')
+    for pointer,label in zip(struct.unpack('<7I',body),labels):
+        owners=[s for s in worker[3] if s[1]==1 and s[2]&7==2 and
+                s[3]<=pointer<=s[3]+s[5]-len(label)-1]
+        require(len(owners)==1,'diagnostic row label escapes immutable worker bytes')
+        require(initialized_at(worker,pointer,len(label)+1)==label.encode()+b'\0',
+                'diagnostic row label text changed')
+    return dict(all37_snapshot_words_exactly_once=True,immutable_byte_index_table=True,
+        row_word_counts=[5,5,5,4,5,5,5,3],typed_immutable_label_pointers=7,
+        actual_display_execution_modelled=False)
 
 class LoanCPU(SDKCPU):
     """Actual low QUIESCE slice after separately checked outer admission.
@@ -377,6 +424,210 @@ def loan_cases(resident):
         auxiliary_target='Typed gateway ABI substitute; actual auxiliary gateway proved independently')
 
 
+HW_READS=((0xffa00010,4),(0xffa00014,4),(0xffa00018,4),(0xffa0001c,4),
+          (0xffa00040,4),(0xffe00000,1),(0xffe00004,1),(0xffe00008,1),
+          (0xffe00010,1),(0xffe0001c,1),(0xffc00004,1),(0xff800030,2),
+          (0xffd8000c,4))
+
+class SnapshotCPU(GatewayCPU):
+    """Run the real diagnostic C helpers with strict read-only MMIO.
+
+    No transport functions are substituted: these helpers must only inspect
+    the listed registers and write their owned context/private stack.
+    """
+    def __init__(self,resident,aux,seed,bank=0,blocked=False):
+        super().__init__(resident,aux,seed,15,bank,blocked,2,0,'ok')
+        self.targets=set();self.hw_reads=[];self.hw_seed=seed
+        self.r[15]=STACK_TOP-32;self.region=0x8c420400
+        for at in range(0,904,4):self.write(self.context+at,0)
+        for at in range(0,0x760,4):self.write(self.region+at,0)
+        self.writes=[]
+
+    def run_to(self,entry,stop):
+        # The shared cold replay has the same exact SH branch/delay-slot
+        # semantics with a bounded120,000-instruction budget. The tiny SDK
+        # callback budget cannot cover two actual byte-wise memset loops.
+        from check_vmu_native_readahead_stage import ReadAheadBinderCPU
+        ReadAheadBinderCPU.run_to(self,entry,stop)
+
+    def hardware_value(self,address,count):
+        return ((address^0xa59c3147)+(self.hw_seed+1)*0x13579b)&((1<<(8*count))-1)
+
+    def plain(self,op,pc):
+        if op>>8==0x80:
+            self.write(self.r[op>>4&15]+(op&15),self.r[0],1)
+            return
+        if op&0xf00f==0x2000:
+            self.write(self.r[op>>8&15],self.r[op>>4&15],1)
+            return
+        if op&0xf0ff==0x4010:
+            n=op>>8&15;self.r[n]=(self.r[n]-1)&MASK;self.flag(self.r[n]==0)
+            return
+        if op>>8 in (0x84,0x85):
+            count=1 if op>>8==0x84 else 2
+            value=self.read(self.r[op>>4&15]+(op&15)*count,count);bits=count*8
+            self.r[0]=(value-(1<<bits) if value&(1<<(bits-1)) else value)&MASK
+            return
+        if op&0xf00f==0x400d:
+            n,m=op>>8&15,op>>4&15;shift=self.r[m];value=self.r[n]
+            self.r[n]=((value<< (shift&31))&MASK) if not shift&0x80000000 else \
+                (value>>(((-shift)&31) or 32))
+            return
+        if op&0xf00f==0x600a:
+            n,m=op>>8&15,op>>4&15;source=self.r[m];borrow=self.sr&1
+            self.r[n]=(-source-borrow)&MASK;self.flag(bool(source or borrow))
+            return
+        if op&0xf0ff in (0x4018,0x4028):
+            n=op>>8&15;self.r[n]=(self.r[n]<<(8 if op&255==0x18 else 16))&MASK
+            return
+        if op&0xf00f==0x6008:
+            n,m=op>>8&15,op>>4&15;value=self.r[m]
+            self.r[n]=(value&0xffff0000)|((value&255)<<8)|((value>>8)&255)
+            return
+        if op&0xf00f in (0x600c,0x600d):
+            n,m=op>>8&15,op>>4&15
+            self.r[n]=self.r[m]&(0xff if op&15==12 else 0xffff)
+            return
+        if op&0xf00f in (0x6000,0x6001):
+            # SH MOV.B/MOV.W @Rm,Rn sign-extend to the full integer word.
+            n,m=op>>8&15,op>>4&15;count=1 if op&15==0 else 2
+            value=self.read(self.r[m],count);bits=8*count
+            self.r[n]=(value-(1<<bits) if value&(1<<(bits-1)) else value)&MASK
+            return
+        super().plain(op,pc)
+
+    def read(self,address,count=4):
+        if address&0xe0000000==0xe0000000:
+            require((address,count) in HW_READS,'diagnostic read unexpected hardware register/width')
+            self.hw_reads.append((address,count))
+            return self.hardware_value(address,count)
+        return super().read(address,count)
+
+    def write(self,address,value,count=4):
+        require(address&0xe0000000!=0xe0000000,'diagnostic attempted a hardware write')
+        super().write(address,value,count)
+
+    def hardware_words(self):
+        values=[self.hardware_value(a,n) for a,n in HW_READS]
+        return values[:5]+[sum(values[5+i]<<(8*i) for i in range(4)),
+            values[9]|values[10]<<8|values[11]<<16,values[12]]
+
+    def body(self,name,args,*,hardware=True):
+        self.r[4:4+len(args)]=args
+        before=self.snapshot();self.writes=[];self.hw_reads=[]
+        self.run_symbol(name)
+        require(self.hw_reads==(list(HW_READS) if hardware else []),
+                'diagnostic hardware reads differ from reviewed sequence')
+        assert self.r[8:]==before[0][8:] and self.other==before[1] and self.pr==before[2]
+        assert self.sr&~1==before[3]&~1 and self.control==before[10]
+        assert (self.gbr,self.fpscr,self.fpul,self.fr)==before[6:10]
+        for _,at,_,size in self.writes:
+            require(self.context<=at<=self.context+904-size or
+                    STACK_BOTTOM+16<=at<=STACK_TOP-32-size,
+                    'diagnostic wrote outside complete owned context/private stack')
+        return self
+
+
+def diagnostic_snapshots(resident,aux):
+    if not diagnostic_profile(aux):return {'enabled':False}
+    cases=0
+    for bank in range(2):
+        for blocked in (False,True):
+            for seed in (0,7,0xffff):
+                c=SnapshotCPU(resident,aux,seed,bank,blocked)
+                observation=c.context+752
+                c.body('_snapshot_hw',[observation+76])
+                assert [c.read(observation+76+4*i) for i in range(8)]==c.hardware_words()
+                cases+=1
+                for i in range(37):c.write(observation+4*i,0xabc00000+i)
+                for at in (712,716,720,740,748):c.write(c.context+at,1)
+                for at,value in ((692,0x123456),(700,17),(704,0x223456),(900,2)):
+                    c.write(c.context+at,value)
+                operation=0x1d0000+seed
+                c.body('_snapshot_pre',[4,c.region,operation])
+                expected=[4,0xabc00001,2,496,0,0,0,0,0x123456,17,0x223456,operation,
+                          0,0,0,0,0,0,0]+c.hardware_words()+[0xabc00000+i for i in range(27,37)]
+                assert [c.read(observation+4*i) for i in range(37)]==expected
+                cases+=1
+                for stage,result in ((1,0),(4,6),(6,7),(7,8),(0xffffffff,0xffffffff)):
+                    c.write(observation,stage);c.write(c.context+76,0)
+                    histogram=[c.read(c.context+80+4*i) for i in range(56)]
+                    c.body('_snapshot_failure',[c.region,result])
+                    expected[0]=stage;expected[1]=result
+                    expected[27:35]=c.hardware_words();expected[35:37]=[0,0]
+                    first=[c.read(c.context+360+4*i) for i in range(37)]
+                    last=[c.read(c.context+508+4*i) for i in range(37)]
+                    assert first==last==expected and c.read(c.context+76)==1
+                    if stage<7 and result<8:
+                        assert c.read(c.context+80+4*(stage*8+result))==1
+                        histogram[stage*8+result]+=1
+                    assert [c.read(c.context+80+4*i) for i in range(56)]==histogram
+                    c.write(observation+44,operation+1)
+                    c.body('_snapshot_failure',[c.region,result])
+                    assert [c.read(c.context+360+4*i) for i in range(37)]==first
+                    expected[11]=operation+1
+                    assert [c.read(c.context+508+4*i) for i in range(37)]==expected
+                    assert c.read(c.context+76)==2
+                    if stage<7 and result<8:
+                        assert c.read(c.context+80+4*(stage*8+result))==2
+                        histogram[stage*8+result]+=1
+                    assert [c.read(c.context+80+4*i) for i in range(56)]==histogram
+                    if stage<7 and result<8:
+                        c.write(c.context+80+4*(stage*8+result),0)
+                    c.write(observation+44,operation);expected[11]=operation
+                    cases+=2
+                # The actual capture-start branch clears the full appended
+                # statistics/diagnostic prefix, retaining cache/policy state.
+                for at in range(0,904,4):c.write(c.context+at,0xa5000000+at)
+                c.write(c.context,1);c.write(c.context+708,1)
+                c.write(c.context+664,c.region)
+                c.write(c.context+668,resident[4]['_kui_native_ra_reader_ops'][0])
+                saved=[c.read(c.context+at) for at in range(656,904,4)]
+                c.body('_kui_native_readahead_aux_dispatch',[6,0,c.region,0],hardware=False)
+                assert c.r[0]==1 and c.read(c.context)==1
+                assert not any(c.read(c.context+at) for at in range(4,656,4))
+                assert [c.read(c.context+at) for at in range(656,904,4)]==saved
+                cases+=1
+    truth=snapshot_instruction_truth(resident,aux)
+    return dict(enabled=True,schema='kui.native.read-ahead.diagnostics.audit.v1',
+        actual_linked_snapshot_cases=cases,instruction_truth_cases=truth,
+        public_bytes=656,complete_context_bytes=904,diagnostics_offset=76,
+        observation_offset=752,first_offset=360,last_offset=508,record_bytes=148,
+        exact_read_only_hardware_sequence=[dict(address=hex(a),bytes=n) for a,n in HW_READS],
+        no_rdr_read_or_hardware_write=True,complete_context_and_private_stack_writes_only=True,
+        first_record_preserved_last_record_updated=True,out_of_range_histogram_indices_refused=True,
+        operation_lba_argument_checked=True,actual_capture_start_clears_complete_public_prefix_only=True,
+        actual_diagnostic_c_executed=True)
+
+
+def snapshot_instruction_truth(resident,aux):
+    c=SnapshotCPU(resident,aux,0);cases=0
+    for source,borrow,result,flag in ((0,0,0,0),(0,1,MASK,1),(1,0,MASK,1),
+            (1,1,MASK-1,1),(0x7fffffff,0,0x80000001,1),
+            (0x7fffffff,1,0x80000000,1),(0x80000000,0,0x80000000,1),
+            (0x80000000,1,0x7fffffff,1),(MASK,0,1,1),(MASK,1,0,1)):
+        c.r[12]=source;c.sr=(c.sr&~1)|borrow;c.plain(0x6dca,0)
+        assert c.r[13]==result and c.sr&1==flag;cases+=1
+    for shift,result in ((0,0x80000001),(1,2),(31,0x80000000),(32,0x80000001),
+            (MASK,0x40000000),(0xffffffe1,1),(0xffffffe0,0),
+            (0xffffffdf,0x40000000),(0x80000000,0),(0x7fffffff,0x80000000)):
+        for flag in (0,1):
+            c.r[12]=shift;c.r[13]=0x80000001;c.sr=(c.sr&~1)|flag;c.plain(0x4dcd,0)
+            assert c.r[13]==result and c.sr&1==flag;cases+=1
+    for count,values in ((1,range(256)),(2,(0,1,0x7fff,0x8000,0xff80,0xffff))):
+        for value in values:
+            c.write(c.context,value,count);c.r[12]=c.context;sr=c.sr
+            c.plain(0x6dc0+(count-1),0)
+            expected=int.from_bytes(value.to_bytes(count,'little'),'little',signed=True)&MASK
+            assert c.r[13]==expected and c.sr==sr;cases+=1
+    for source,byte,word,swap in ((0x1234abcd,0xcd,0xabcd,0x1234cdab),
+            (MASK,255,65535,MASK),(0x80000000,0,0,0x80000000)):
+        c.r[12]=source;sr=c.sr
+        for op,expected in ((0x6dcc,byte),(0x6dcd,word),(0x6dc8,swap)):
+            c.plain(op,0);assert c.r[13]==expected and c.sr==sr;cases+=1
+    return cases
+
+
 def private_stack(directory,resident):
     aux_reports=list((directory/'ra').rglob('*.ci'))
     low_reports=list(directory.glob('resident-sci.elf.ltrans*.ci'))
@@ -438,6 +689,10 @@ def check(directory,*,self_test=False):
     require(mark==companions[0]==companions[1]==(1,0,0,0xfff1),'read-ahead paired marker mismatch')
     aux=read_elf(directory/'native-ra-aux.elf')
     require(aux[4].get(MARK+'auxiliary')==(1,0,0,0xfff1),'read-ahead auxiliary marker mismatch')
+    diagnostic=diagnostic_profile(aux)
+    diagnostic_worker=worker[4].get(DIAGNOSTIC_MARK+'worker')
+    require(bool(diagnostic_worker)==diagnostic and (not diagnostic or
+            diagnostic_worker==(1,0,0,0xfff1)),'read-ahead diagnostic worker/auxiliary markers differ')
     geometry=image_contract(directory,aux,resident)
     code_at,code=pinned_code(aux)
     insns=instruction_audit('native-read-ahead',disassemble(directory/'native-ra-aux.elf'))
@@ -445,8 +700,10 @@ def check(directory,*,self_test=False):
     require(LOW_PINS,'read-ahead low reviewed functions are not pinned')
     loan_pin=pinned_loan_boundary(resident)
     loan=loan_cases(resident)
+    snapshots=diagnostic_snapshots(resident,aux)
     gateway=gateway_cases(resident,aux);stack=private_stack(directory,resident)
-    bindings=worker_bindings(resident,worker)
+    bindings=worker_bindings(resident,worker,diagnostic=diagnostic)
+    display=worker_diagnostic_display(worker) if diagnostic else {'enabled':False}
     from check_vmu_native_readahead_stage import check_stage
     cold=check_stage(stage,resident,aux,self_test=self_test)
     mutations=bindings_mutations=0
@@ -461,8 +718,12 @@ def check(directory,*,self_test=False):
         bindings_mutations+=byte_mutations(resident,[(n,2) for n in LOW_PINS],
             lambda image:pinned_functions(image,LOW_PINS,'read-ahead low binding'))
         bindings_mutations+=byte_mutations(resident,[('_kui_native_ra_reader_ops',1),('_kui_native_ra_reader_ops_entry',1)],typed_ops)
-        bindings_mutations+=byte_mutations(worker,[(n,2) for n in WORKER_PINS],
-            lambda image:pinned_functions(image,WORKER_PINS,'read-ahead worker binding'))
+        worker_pins=DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
+        bindings_mutations+=byte_mutations(worker,[(n,2) for n in worker_pins],
+            lambda image:pinned_functions(image,worker_pins,'read-ahead worker binding'))
+        if diagnostic:
+            bindings_mutations+=byte_mutations(worker,[(n,1) for n in ('_field.2','_count.1','_label.0')],
+                worker_diagnostic_display)
         section=resident[3][resident[4]['_kui_vmu_observe_sd_lease'][3]]
         for i in range(section[5]):
             changed=bytearray(resident[0]);changed[section[4]+i]^=1
@@ -470,10 +731,12 @@ def check(directory,*,self_test=False):
             except ValueError:bindings_mutations+=1
             else:raise ValueError('read-ahead auditor accepted a changed QUIESCE boundary')
     return dict(enabled=True,schema='kui.native.read-ahead.audit.v1',paired_markers=True,
+        diagnostic_capture=diagnostic,
         artifact_sha256=dict(resident=sha(resident[0]),worker=sha(worker[0]),
             stage=sha(stage[0]),auxiliary=sha(aux[0])),
         immutable_code_pin={'address':hex(code_at),'bytes':len(code),'sha256':sha(code)},
         immutable_low_pins=LOW_PINS,loan_quiesce_pin=loan_pin,loan_quiesce=loan,
+        diagnostics=snapshots,diagnostic_display=display,
         geometry=geometry,gateway=gateway,private_stack=stack,
         cold_binder=cold,worker_binding=bindings,linked_integer_instructions=insns,
         code_byte_mutation_rejections=mutations,typed_binding_mutation_rejections=bindings_mutations,

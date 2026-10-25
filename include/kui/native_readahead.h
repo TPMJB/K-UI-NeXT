@@ -56,10 +56,69 @@ struct kui_native_ra_stats {
     uint32_t full,extent_ends,heartbeat_visits,irq_visits,guard_faults;
     uint32_t max_visit_ticks,clock_bad;
 };
+/* Appended diagnostic prefix: the existing statistics and guard word keep
+ * their original offsets. These observations never authorize recovery. */
+enum kui_native_ra_failure_stage {
+    KUI_NATIVE_RA_STAGE_NONE=0u,KUI_NATIVE_RA_STAGE_POLL,
+    KUI_NATIVE_RA_STAGE_TAKE,KUI_NATIVE_RA_STAGE_APPEND,
+    KUI_NATIVE_RA_STAGE_FETCH,KUI_NATIVE_RA_STAGE_RESUME,
+    KUI_NATIVE_RA_STAGE_QUIESCE,KUI_NATIVE_RA_STAGE_COUNT
+};
+#define KUI_NATIVE_RA_RESULT_COUNT 8u
+enum kui_native_ra_skip {
+    KUI_NATIVE_RA_SKIP_QUIESCED=0u,KUI_NATIVE_RA_SKIP_ABANDONED,
+    KUI_NATIVE_RA_SKIP_NO_SEED,KUI_NATIVE_RA_SKIP_LOAN,
+    KUI_NATIVE_RA_SKIP_ACTIVE,KUI_NATIVE_RA_SKIP_PENDING,
+    KUI_NATIVE_RA_SKIP_FAILED,KUI_NATIVE_RA_SKIP_NOT_OPENED,
+    KUI_NATIVE_RA_SKIP_PORT_FAULT,KUI_NATIVE_RA_SKIP_BUSY,
+    KUI_NATIVE_RA_SKIP_GUEST_DMA,KUI_NATIVE_RA_SKIP_STREAM_POSITION,
+    KUI_NATIVE_RA_SKIP_DEFERRED,KUI_NATIVE_RA_SKIP_SPEC_OWNED,
+    KUI_NATIVE_RA_SKIP_COUNT
+};
+enum kui_native_ra_snapshot_flag {
+    KUI_NATIVE_RA_SNAP_ACTIVE=1u,KUI_NATIVE_RA_SNAP_PENDING=2u,
+    KUI_NATIVE_RA_SNAP_EXECUTING=4u,KUI_NATIVE_RA_SNAP_FAILED=8u,
+    KUI_NATIVE_RA_SNAP_SPEC_OWNED=16u,KUI_NATIVE_RA_SNAP_DEFERRED=32u,
+    KUI_NATIVE_RA_SNAP_QUIESCED=64u,KUI_NATIVE_RA_SNAP_ABANDONED=128u,
+    KUI_NATIVE_RA_SNAP_HAVE_SEED=256u,KUI_NATIVE_RA_SNAP_ACQUIRED=512u,
+    KUI_NATIVE_RA_SNAP_PORT_FAULT=1024u,KUI_NATIVE_RA_SNAP_OPENED=2048u,
+    KUI_NATIVE_RA_SNAP_IRQ=4096u
+};
+struct kui_native_ra_hw_snapshot {
+    uint32_t sar,dar,tcr,chcr,dmaor;
+    /* SMR | BRR<<8 | SCR<<16 | SSR<<24. No RDR read occurs. */
+    uint32_t sci;
+    /* SPTR | STBCR<<8 | PDTR<<16. */
+    uint32_t pins,tmu;
+};
+struct kui_native_ra_failure_snapshot {
+    uint32_t stage,result,event,flags,token,cursor_block;
+    uint32_t stream_state,stream_position,cache_base,cache_count,cache_end;
+    /* Physical block attempted by the recorded operation. FETCH records
+     * its next LBA before that LBA becomes the owned speculative block. */
+    uint32_t operation_lba;
+    uint32_t loan_state;
+    /* ready[0] | ready[1]<<8 | kept<<16 | fill<<24. */
+    uint32_t rx_flags,ready_lba[2],kept_lba,arrived;
+    /* lost[0] | lost[1]<<16; indexes remain meaningful if fill is invalid. */
+    uint32_t lost;
+    struct kui_native_ra_hw_snapshot pre,post;
+    uint32_t post_stream_state,post_stream_position;
+};
+struct kui_native_ra_diagnostics {
+    uint32_t failures;
+    uint32_t stage_result[KUI_NATIVE_RA_STAGE_COUNT][KUI_NATIVE_RA_RESULT_COUNT];
+    uint32_t skipped[KUI_NATIVE_RA_SKIP_COUNT];
+    struct kui_native_ra_failure_snapshot first,last;
+};
 struct kui_native_ra_public {
     uint32_t busy;
     struct kui_native_ra_stats stats;
+    struct kui_native_ra_diagnostics diagnostics;
 };
+_Static_assert(sizeof(struct kui_native_ra_hw_snapshot)==32u,"read-ahead hardware snapshot ABI");
+_Static_assert(sizeof(struct kui_native_ra_failure_snapshot)==148u,"read-ahead failure snapshot ABI");
+_Static_assert(sizeof(struct kui_native_ra_public)==656u,"read-ahead diagnostic prefix ABI");
 #if UINTPTR_MAX == UINT32_MAX
 _Static_assert(sizeof(struct kui_native_ra_low_ops)==52u,"read-ahead low operations ABI");
 _Static_assert(sizeof(struct kui_native_ra_exports)==64u,"read-ahead auxiliary exports ABI");

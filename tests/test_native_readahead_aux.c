@@ -18,14 +18,18 @@ static unsigned checks,legacy_calls,fetches,stops,hooks,unhooks,feeds;
 static uint32_t pending_lba,kept_lba,token,clock_counter;
 static bool dma_available,receiving,kept_valid,raw,bad_clock;
 static bool real_model;
-static enum {POLL_GOOD,POLL_EARLY,POLL_REPAIR,POLL_CRC} poll_case;
+static enum {POLL_GOOD,POLL_EARLY,POLL_REPAIR,POLL_CRC,POLL_MISSING} poll_case;
 static enum kui_sci_stream_result fetch_result;
+static enum kui_sci_stream_result stop_result;
 #define CHECK(x) do {++checks;assert(x);}while(0)
 enum {CLOSED,PAUSED,DMA,LOST,RESUME};
 static const uint32_t CARD_BASE=1000u,DISC_BASE=45000u;
 
 uint32_t kui_native_readahead_aux_test_read(uint32_t at,unsigned width) {
-    if(real_model && (at==CHCR || at==DMAOR))return kui_sci_stream_test_read(at,width);
+    CHECK(at!=RDR); /* The observer must not consume a transport byte. */
+    if(real_model && (at==SAR || at==DAR || at==TCR || at==CHCR || at==DMAOR ||
+       at==SMR || at==BRR || at==SCR || at==SSR || at==SPTR || at==STBCR || at==PDTR))
+        return kui_sci_stream_test_read(at,width);
     (void)width;
     switch(at) {
     case UINT32_C(0xffc00000):return bad_clock?0u:0xe0au;
@@ -35,6 +39,15 @@ uint32_t kui_native_readahead_aux_test_read(uint32_t at,unsigned width) {
     case UINT32_C(0xffd8000c):clock_counter-=19u;return clock_counter;
     case UINT32_C(0xffa0001c):return dma_available?0u:1u;
     case UINT32_C(0xffa00040):return 1u;
+    case SAR:return UINT32_C(0x11111111);
+    case DAR:return UINT32_C(0x22222222);
+    case TCR:return UINT32_C(0x33);
+    case SMR:return 0x80u;
+    case BRR:case STBCR:return 0u;
+    case SCR:return 0x30u;
+    case SSR:return 0x84u;
+    case SPTR:return 0x82u;
+    case PDTR:return 0x80u;
     default:assert(false);return 0u;
     }
 }
@@ -77,7 +90,7 @@ static enum kui_sci_stream_result poll(bool interrupt) {
         CHECK(interrupt);poll_case=POLL_GOOD;region.shared.stream.state=RESUME;
         region.shared.stream.position=pending_lba;return KUI_SCI_STREAM_PENDING;
     }
-    kept_valid=true;kept_lba=pending_lba;
+    kept_valid=poll_case!=POLL_MISSING;kept_lba=pending_lba;
     region.shared.stream.state=PAUSED;region.shared.stream.position=pending_lba+1u;
     return KUI_SCI_STREAM_OK;
 }
@@ -90,7 +103,7 @@ static const uint8_t *take(uint32_t lba,enum kui_sci_stream_result *result) {
 }
 static enum kui_sci_stream_result stop(void) {
     ++stops;receiving=false;kept_valid=false;region.shared.stream.state=CLOSED;
-    return KUI_SCI_STREAM_OK;
+    return stop_result;
 }
 static void legacy(uint32_t wait) {
     (void)wait;++legacy_calls;
@@ -119,7 +132,8 @@ static void setup(bool raw_sectors) {
     memset(&manifest,0,sizeof(manifest));memset(output,0xa5,sizeof(output));
     legacy_calls=fetches=stops=hooks=unhooks=feeds=0u;
     token=0u;receiving=kept_valid=false;dma_available=true;raw=raw_sectors;bad_clock=false;
-    poll_case=POLL_GOOD;fetch_result=KUI_SCI_STREAM_OK;clock_counter=UINT32_C(0x70000000);
+    poll_case=POLL_GOOD;fetch_result=stop_result=KUI_SCI_STREAM_OK;
+    clock_counter=UINT32_C(0x70000000);
     real_model=false;
     kui_retail_async_region_storage=&region;
     manifest.card_sectors=10000u;manifest.partition_start=100u;manifest.partition_end=9000u;
@@ -293,6 +307,7 @@ static void capture_preserves_cache(void) {
     setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);warm(8u);
     struct kui_native_readahead_aux_context expected=C;
     memset(&expected.stats,0,sizeof(expected.stats));
+    memset(&expected.diagnostics,0,sizeof(expected.diagnostics));
     uint8_t before[512];memcpy(before,arena,512u);
     CHECK(kui_native_readahead_aux_dispatch(KUI_NATIVE_RA_CAPTURE_START,0u,&region,0u)==1u);
     CHECK(!memcmp(&C,&expected,sizeof(C)) && !memcmp(before,arena,sizeof(before)) &&
@@ -438,12 +453,157 @@ static void real_full_refill(void) {
         card.cmd18==old_cmd18 && card.cmd12==old_cmd12 && !stops &&
         !C.stats.crc_errors && !C.stats.token_errors);
 }
+static void diagnostic_failures(void) {
+    setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);
+    fetch_result=KUI_SCI_STREAM_TOKEN;CHECK(visit(KUI_NATIVE_RA_TICK)==1u);
+    CHECK(C.diagnostics.failures==1u && C.diagnostics.first.stage==KUI_NATIVE_RA_STAGE_FETCH &&
+        C.diagnostics.first.result==KUI_SCI_STREAM_TOKEN &&
+        C.diagnostics.stage_result[KUI_NATIVE_RA_STAGE_FETCH][KUI_SCI_STREAM_TOKEN]==1u &&
+        C.diagnostics.first.stream_state==PAUSED && C.diagnostics.first.post_stream_state==LOST &&
+        C.diagnostics.first.token==token && C.diagnostics.first.event==KUI_NATIVE_RA_TICK &&
+        C.diagnostics.first.operation_lba==C.cache.base+C.cache.count);
+    struct kui_native_ra_failure_snapshot first=C.diagnostics.first;
+    unsigned old_fetch=fetches;uint32_t skipped=C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_ABANDONED];
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && fetches==old_fetch &&
+        C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_ABANDONED]==skipped+1u);
+    fetch_result=KUI_SCI_STREAM_OK;begin(DISC_BASE+8u,1u);complete(DISC_BASE+8u,1u);
+    fetch_result=KUI_SCI_STREAM_RESET;CHECK(visit(KUI_NATIVE_RA_TICK)==1u);
+    CHECK(C.diagnostics.failures==2u && !memcmp(&first,&C.diagnostics.first,sizeof(first)) &&
+        C.diagnostics.last.stage==KUI_NATIVE_RA_STAGE_FETCH &&
+        C.diagnostics.last.result==KUI_SCI_STREAM_RESET && C.stats.abandoned==2u &&
+        C.diagnostics.stage_result[KUI_NATIVE_RA_STAGE_FETCH][KUI_SCI_STREAM_RESET]==1u);
+
+    /* A receiver which reports completion without a matching checked block
+     * must identify TAKE/PENDING, rather than masquerading as token/CRC. */
+    setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && receiving);poll_case=POLL_MISSING;
+    uint32_t valid=C.cache.count;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && C.abandoned && C.cache.count==valid &&
+        C.diagnostics.first.stage==KUI_NATIVE_RA_STAGE_TAKE &&
+        C.diagnostics.first.result==KUI_SCI_STREAM_PENDING &&
+        C.diagnostics.first.stream_state==PAUSED && C.diagnostics.first.operation_lba==pending_lba &&
+        !C.stats.crc_errors && !C.stats.token_errors && !stops);
+
+    /* Inject a stale speculative frontier. APPEND refusal must preserve the
+     * existing ring and record its own stage before LOST overwrites state. */
+    setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && receiving);
+    C.cache.count=KUI_NATIVE_RA_CACHE_BLOCKS;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && C.abandoned &&
+        C.cache.count==KUI_NATIVE_RA_CACHE_BLOCKS && !C.stats.producer_blocks &&
+        C.diagnostics.first.stage==KUI_NATIVE_RA_STAGE_APPEND &&
+        C.diagnostics.first.result==KUI_SCI_STREAM_BUSY &&
+        C.diagnostics.first.cache_count==KUI_NATIVE_RA_CACHE_BLOCKS &&
+        C.diagnostics.first.post_stream_state==PAUSED && region.shared.stream.state==LOST);
+
+    setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && receiving);
+    poll_case=POLL_REPAIR;region.engine.in_irq=1u;
+    CHECK(visit(KUI_NATIVE_RA_DELIVER)==1u && C.deferred);
+    region.engine.in_irq=0u;fetch_result=KUI_SCI_STREAM_RESET;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && C.abandoned &&
+        C.diagnostics.first.stage==KUI_NATIVE_RA_STAGE_RESUME &&
+        C.diagnostics.first.stream_state==RESUME &&
+        (C.diagnostics.first.flags&KUI_NATIVE_RA_SNAP_DEFERRED));
+
+    setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && receiving);
+    stop_result=KUI_SCI_STREAM_RESET;
+    CHECK(visit(KUI_NATIVE_RA_QUIESCE)==0u && C.abandoned &&
+        C.diagnostics.first.stage==KUI_NATIVE_RA_STAGE_QUIESCE &&
+        C.diagnostics.first.result==KUI_SCI_STREAM_RESET &&
+        (C.diagnostics.first.flags&KUI_NATIVE_RA_SNAP_SPEC_OWNED));
+}
+static bool inject_handoff_reset;
+static void diagnostic_bus_select(void *ctx,bool selected) {
+    bus_select(ctx,selected);
+    if(!selected && inject_handoff_reset) {
+        inject_handoff_reset=false;m.sptr=0u;
+    }
+}
+static void diagnostic_real_handoff(void) {
+    setup_real();begin(DISC_BASE,1u);complete(DISC_BASE,1u);
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && kui_sci_stream_busy());
+    uint32_t valid=C.cache.count,old_stops=stops;
+    region.shared.card.device.sd.bus.select=diagnostic_bus_select;
+    inject_handoff_reset=true;m.rx_delay=0u;region.engine.in_irq=1u;
+    CHECK(visit(KUI_NATIVE_RA_DELIVER)==1u);
+    const struct kui_native_ra_failure_snapshot *s=&C.diagnostics.first;
+    CHECK(C.abandoned && C.diagnostics.failures==1u && s->stage==KUI_NATIVE_RA_STAGE_POLL &&
+        s->result==KUI_SCI_STREAM_RESET && s->event==KUI_NATIVE_RA_DELIVER &&
+        (s->flags&KUI_NATIVE_RA_SNAP_IRQ) && s->stream_state==DMA &&
+        s->pre.sar==(RDR&UINT32_C(0x1fffffff)) && (s->pre.chcr&1u) &&
+        s->post.sar==UINT32_C(0x11111111) && s->post.dar==UINT32_C(0x22222222) &&
+        s->post.tcr==UINT32_C(0x33) && !(s->post.chcr&7u) &&
+        (s->pre.pins&255u)==0x83u && !(s->post.pins&255u) &&
+        s->post_stream_state==LOST && C.cache.count==valid && stops==old_stops &&
+        !C.stats.producer_blocks && !C.stats.crc_errors && !C.stats.token_errors &&
+        !region.shared.stream.stats.foreign && !region.shared.stream.stats.overruns &&
+        !kui_sci_stream_busy() && !region.engine.hooked);
+    uint32_t skipped=C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_ABANDONED];
+    unsigned old_fetch=fetches;
+    region.engine.in_irq=0u;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && fetches==old_fetch &&
+        C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_ABANDONED]==skipped+1u);
+}
+static void diagnostic_skip_reasons(void) {
+    setup(false);
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && !fetches &&
+        C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_NO_SEED]==1u);
+    /* Priority reasons identify the first admission gate, rather than
+     * charging every simultaneously true condition for the same visit. */
+    C.quiesced=C.abandoned=1u;region.engine.opened=0u;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && !fetches &&
+        C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_QUIESCED]==1u &&
+        !C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_ABANDONED]);
+    region.engine.native_loan_state=KUI_VMU_NATIVE_ASYNC_LOAN_WRITER;
+    uint32_t heartbeats=C.stats.heartbeat_visits;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && !fetches &&
+        C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_LOAN]==1u &&
+        C.stats.heartbeat_visits==heartbeats);
+
+    setup(false);begin(DISC_BASE,1u);complete(DISC_BASE,1u);
+    CHECK(visit(KUI_NATIVE_RA_CAPTURE_START)==1u);
+    region.engine.active=1u;region.shared.service.pending=1u;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && !fetches &&
+        C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_ACTIVE]==1u &&
+        !C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_PENDING]);
+    region.engine.active=0u;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && !fetches &&
+        C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_PENDING]==1u);
+    region.shared.service.pending=0u;region.shared.service.executing=1u;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && !fetches &&
+        C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_PENDING]==2u);
+    region.shared.service.executing=0u;region.engine.failed=1u;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && !fetches &&
+        C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_FAILED]==1u);
+    region.engine.failed=0u;region.engine.opened=0u;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && !fetches &&
+        C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_NOT_OPENED]==1u);
+    region.engine.opened=1u;region.shared.port.acquired=false;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && !fetches &&
+        C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_NOT_OPENED]==2u);
+    region.shared.port.acquired=true;region.shared.port.fault=true;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && !fetches &&
+        C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_PORT_FAULT]==1u);
+    region.shared.port.fault=false;receiving=true;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && !fetches &&
+        C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_BUSY]==1u);
+    receiving=false;dma_available=false;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && !fetches &&
+        C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_GUEST_DMA]==1u);
+    dma_available=true;region.shared.stream.position++;
+    CHECK(visit(KUI_NATIVE_RA_TICK)==1u && !fetches &&
+        C.diagnostics.skipped[KUI_NATIVE_RA_SKIP_STREAM_POSITION]==1u);
+    CHECK(!C.diagnostics.failures && !C.stats.abandoned && !stops);
+}
 int main(void) {
     init_guards();sequential();shared_raw_boundary();partial_hit_cap();seek_and_errors();
     repair_and_dma_owner();loan_and_pending();bounded_window();capture_preserves_cache();
-    real_stream_integration();real_full_refill();
+    real_stream_integration();real_full_refill();diagnostic_failures();diagnostic_real_handoff();
+    diagnostic_skip_reasons();
     printf("native read-ahead auxiliary: %u checks; real cursor bytes, strict visit caps, "
         "seeks, CRC/token abandonment, real SCI/card/DMA warm cache and deferred repair, "
-        "DMA ownership and VMU loan passed\n",checks);
+        "DMA ownership, VMU loan, classified failures and pre/post handoff snapshots passed\n",checks);
     return 0;
 }

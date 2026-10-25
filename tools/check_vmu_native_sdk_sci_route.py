@@ -65,6 +65,13 @@ RA_STAGE_PINS={
     '_native_sdk_sci_route_bind':(692,'ff2f3192e0ef834f748618f8974e31bda0d702e15e4466cf3e9361f560f3dd45'),
     '_kui_native_sdk_sci_route_admit':(800,'86a952cde09954838cfae3dca5d94522356c98cce8d6623e2b9468f66bb44925'),
 }
+# The diagnostic auxiliary leaves the low resident and SDK route unchanged.
+# Its separately admitted larger blob moves only these cold-stage bindings;
+# keep the preceding read-ahead artifact's exact literal pins intact.
+RA_DIAGNOSTIC_STAGE_PINS={
+    '_native_sdk_sci_route_bind':(692,'ef87deb32dd2d9ccef7954459f244c269c60339c4531bca0e3de94f3b16f3f90'),
+    '_kui_native_sdk_sci_route_admit':(800,'bbdb6f34b5fb0362a142ec4feed63718fbd7159bca475eccb3a2faaad5c3a5c2'),
+}
 MEMORY_CACHE={}
 MEMORY_REFERENCES={}
 
@@ -112,9 +119,11 @@ def pin_bodies(resident):
     return found
 
 
-def stage_pins(stage):
+def stage_pins(stage,*,diagnostic=False):
     result={}
-    selected=RA_STAGE_PINS if '__kui_native_readahead_stage' in stage[4] else STAGE_PINS
+    read_ahead='__kui_native_readahead_stage' in stage[4]
+    require(not diagnostic or read_ahead,'SDK diagnostic stage pins require the read-ahead profile')
+    selected=RA_DIAGNOSTIC_STAGE_PINS if diagnostic else RA_STAGE_PINS if read_ahead else STAGE_PINS
     for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(stage,name,2)
         require(section[2]&4 and 0x8ce00000<=address<address+len(body)<=0x8cfe0000,
@@ -648,12 +657,21 @@ def check(resident,*,worker=None,stage=None,self_test=False,read_ahead_proof=Non
                 all(read_ahead_proof.get('artifact_sha256',{}).get(name)==hashlib.sha256(image[0]).hexdigest()
                     for name,image in (('resident',resident),('worker',worker),('stage',stage))),
                 'SDK read-ahead profile requires the complete exact companion proof')
+    diagnostic=worker[4].get('__kui_native_readahead_diagnostic_worker')
+    require(bool(diagnostic)==bool(read_ahead_proof and read_ahead_proof.get('diagnostic_capture')),
+            'SDK read-ahead diagnostic worker/auxiliary proof differs')
+    if diagnostic:
+        require(ra and diagnostic==(1,0,0,0xfff1) and
+                read_ahead_proof.get('diagnostics',{}).get('enabled') and
+                read_ahead_proof.get('diagnostics',{}).get('schema')==
+                    'kui.native.read-ahead.diagnostics.audit.v1',
+                'SDK diagnostic profile requires the exact linked auxiliary snapshot proof')
     require(marker==callback==paired==(1,0,0,0xfff1),'SDK SCI paired marker mismatch')
     if stage is not None:require(staged==(1,0,0,0xfff1),'SDK SCI paired stage marker mismatch')
     require('__kui_native_sci_priority7_resident' not in resident[4],
             'SDK SCI route must retain level1 and exclude priority7')
     pins=pin_bodies(resident)
-    cold=stage_pins(stage)
+    cold=stage_pins(stage,diagnostic=bool(diagnostic))
     binder=check_cold_binder(stage,resident,self_test=self_test)
     callbacks=callback_cases(resident)
     hooks,unhooks,dispatches,transitions=ownership_cases(resident)
@@ -669,7 +687,8 @@ def check(resident,*,worker=None,stage=None,self_test=False,read_ahead_proof=Non
         for image,pinned,probe in ((resident,
             {name:(record[0],record[1]) for name,record in {
                 name:resident[4][name] for name in ('_kui_native_sdk_sci_route_entry','_kui_native_sdk_sci_route_exports')}.items()},
-            pin_bodies),(stage,{name:(record[0],record[1]) for name,record in cold.items()},stage_pins)):
+            pin_bodies),(stage,{name:(record[0],record[1]) for name,record in cold.items()},
+                lambda image:stage_pins(image,diagnostic=bool(diagnostic)))):
             if image is None:continue
             for name,(address,count) in pinned.items():
                 section=image[3][image[4][name][3]];start=section[4]+address-section[3]
@@ -682,6 +701,7 @@ def check(resident,*,worker=None,stage=None,self_test=False,read_ahead_proof=Non
         callback_private_stack_prefix_bytes=0,sdk_owner_stack_save_bytes=16,
         cold_binder_and_admission_pins=cold,cold_binder_instruction_modelled=True,cold_binder_execution=binder,
         cold_binder_source_reviewed=True,read_ahead_companion_required=bool(ra),
+        read_ahead_diagnostic_companion_required=bool(diagnostic),
         cold_binder_source_sha256=hashlib.sha256((ROOT/'src/loader/vmu_native_sdk_sci_route_stage.inc').read_bytes()).hexdigest(),
         immutable_function_pins=pins,callback_instruction_cases=callbacks,
         hook_ownership_instruction_cases=hooks,unhook_ownership_instruction_cases=unhooks,

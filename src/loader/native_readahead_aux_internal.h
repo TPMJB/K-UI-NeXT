@@ -10,16 +10,23 @@
 struct kui_native_readahead_aux_context {
     uint32_t busy;
     struct kui_native_ra_stats stats;
+    struct kui_native_ra_diagnostics diagnostics;
     struct kui_native_ra_config config;
     struct kui_native_ra_cache cache;
     uint32_t initialized,quiesced,abandoned,have_seed;
     uint32_t completed_token,have_completed,hit_token,have_hit;
     uint32_t spec_owned,spec_lba,deferred;
+    /* Serialized entry owns this staging record. Keeping it here avoids
+     * growing the private stack for every transport operation. */
+    struct kui_native_ra_failure_snapshot observation;
+    uint32_t current_event;
 };
 _Static_assert(offsetof(struct kui_native_readahead_aux_context,busy)==0u,
     "auxiliary assembly busy word");
 _Static_assert(offsetof(struct kui_native_readahead_aux_context,stats)==4u,
     "auxiliary public statistics prefix");
+_Static_assert(offsetof(struct kui_native_readahead_aux_context,diagnostics)==76u,
+    "auxiliary appended diagnostic prefix");
 _Static_assert(offsetof(struct kui_native_readahead_aux_context,stats)+
     offsetof(struct kui_native_ra_stats,guard_faults)==64u,
     "auxiliary assembly guard fault counter");
