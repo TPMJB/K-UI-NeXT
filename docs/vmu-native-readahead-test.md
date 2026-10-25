@@ -169,3 +169,22 @@ pre-operation count is not the final fenced count used by `finish()`.
 
 Use the same25-second targeted capture. This build adds the missing counter
 without changing SCI priority, cache geometry, transport or retry policy.
+
+## Observed repair counter (63369.mp4)
+
+Build 7568957f5e68 booted and displayed all 17 report pages. The capture's
+first overview return is about 73 seconds; matching cache transitions show
+a 74.0–74.5 second cycle. The 25 second targeted section is sufficient.
+
+Both retained POLL/OVERRUN failures show `LOAN=00010000`, so the lifetime
+counter is 1 and its `<2` gate remains open. `RX=01010000` selects fill area 1;
+FIRST `LOST=01860000` and LAST `LOST=018F0054` show a previous loss already
+recorded in that same area. A further incomplete overrun is refused by the
+single-erasure-per-block guard. These are pending reconstructions, not
+CRC-validated repaired blocks. Eight POLL exits and 5040 abandoned skips
+explain the observed interruption of optional cache production; the cause
+of every rendered hitch remains unproved.
+
+See `docs/checkpoint-native-read-ahead-2026-10-25.md` and the full evidence
+JSON for the actual-model reproduction and the next bounded PIO experiment.
+No runtime or recovery policy changed at this evidence checkpoint.
