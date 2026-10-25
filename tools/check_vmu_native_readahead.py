@@ -75,6 +75,14 @@ DUAL_WORKER_PINS={
     '_reader_cooperative_service':(32,'68d4a9acf31e3ce844a7ee27cac22620252b3c0ae09afba8c2dc0463f8496227'),
     '_reader_readahead_failure':(172,'4509901703ae22c1ac0124f3077e06dc3c3466e60bebff2234e066af50d3833f'),
 }
+# Failure-only controller/lifetime diagnostics retain their own complete
+# instruction/literal map. The published dual profile above stays exact.
+DUAL_WITNESS_WORKER_PINS={
+    '_reader_readahead_exports':(200,'6a753b4f52fd9aad30c334241ea8c0de92cefcac3c3a85009af4645b260d67ef'),
+    '_reader_readahead_visit':(56,'c44759200e43937665b2987281e995b4f39675f1e05180371aad4078cc02dbf3'),
+    '_reader_cooperative_service':(32,'9a04c43d4b1fc25d6b832a808b55f5bd28df0e70fd24134aa060af0bcb7c4e68'),
+    '_reader_readahead_failure':(172,'bf4f6464be4b0e92b896a6f3604db5c16dc8c0582638b7454e5181521a9f2532'),
+}
 STRUCTURAL_LOAN_PIN=(748,'ab219f0dc9ad6dfbe01be09b3c042d63992ead50a68245ddbb9ba6116b0e352b')
 LOAN_PIN=(744,'a06ecbd795204545b4df1ca6f5efc3883a0a81b4e0391b088a12388203ff376c')
 GATEWAY_MEMORY={}
@@ -362,9 +370,9 @@ class WorkerCPU(SDKCPU):
         # instruction proof establishes PR preservation around its C body.
         self.r[0]=1;self.sr^=1;self.pc=continuation
 
-def worker_bindings(resident,worker,*,diagnostic=False,pio=False,pio_pair=False,dual=False):
+def worker_bindings(resident,worker,*,diagnostic=False,pio=False,pio_pair=False,dual=False,witness=False):
     pins={}
-    selected=DUAL_WORKER_PINS if dual else PIO_PAIR_WORKER_PINS if pio_pair else PIO_WORKER_PINS if pio else \
+    selected=DUAL_WITNESS_WORKER_PINS if witness else DUAL_WORKER_PINS if dual else PIO_PAIR_WORKER_PINS if pio_pair else PIO_WORKER_PINS if pio else \
         DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
     require(selected,'read-ahead reviewed worker pins are missing')
     public=656 if diagnostic else 76
@@ -826,6 +834,10 @@ def check(directory,*,self_test=False):
         require(dual_worker==dual_stage==(1,0,0,0xfff1) and structural and pio_pair and
                 stage[4].get('__kui_native_sdk_sci_structural_stage')==(1,0,0,0xfff1),
                 'dual-reader stage/worker require paired structural PIO architecture')
+    from check_native_controller_failure_witness import witness_profile,check as check_witness
+    witness=witness_profile(worker)
+    require(not witness or dual,'controller witness profile requires the complete dual architecture')
+    witness_execution=check_witness(directory,self_test=self_test) if witness else {'enabled':False}
     low_pins=STRUCTURAL_LOW_PINS if structural else LOW_PINS
     require(low_pins,'read-ahead low reviewed functions are not pinned')
     geometry=image_contract(directory,aux,resident)
@@ -841,14 +853,15 @@ def check(directory,*,self_test=False):
         from check_vmu_native_readahead_pio import pio_cases
         producer=pio_cases(resident,aux,self_test=self_test)
     gateway=gateway_cases(resident,aux);stack=private_stack(directory,resident,self_test=self_test)
-    bindings=worker_bindings(resident,worker,diagnostic=diagnostic,pio=pio,pio_pair=pio_pair,dual=dual)
+    bindings=worker_bindings(resident,worker,diagnostic=diagnostic,pio=pio,pio_pair=pio_pair,dual=dual,witness=witness)
     display=worker_diagnostic_display(worker) if diagnostic else {'enabled':False}
     from check_vmu_native_readahead_stage import check_stage
-    cold=check_stage(stage,resident,aux,self_test=self_test)
+    cold=check_stage(stage,resident,aux,self_test=self_test,worker=worker)
     dual_execution={'enabled':False}
     if dual:
         from check_native_dual_readers import check as check_dual
-        dual_execution=check_dual(directory,self_test=self_test,cold_binder_proof=cold)
+        dual_execution=check_dual(directory,self_test=self_test,cold_binder_proof=cold,
+                                  witness_proof=witness_execution)
     mutations=bindings_mutations=0
     if self_test:
         for section in aux[3]:
@@ -861,7 +874,7 @@ def check(directory,*,self_test=False):
         bindings_mutations+=byte_mutations(resident,[(n,2) for n in low_pins],
             lambda image:pinned_functions(image,low_pins,'read-ahead low binding'))
         bindings_mutations+=byte_mutations(resident,[('_kui_native_ra_reader_ops',1),('_kui_native_ra_reader_ops_entry',1)],typed_ops)
-        worker_pins=DUAL_WORKER_PINS if dual else PIO_PAIR_WORKER_PINS if pio_pair else PIO_WORKER_PINS if pio else \
+        worker_pins=DUAL_WITNESS_WORKER_PINS if witness else DUAL_WORKER_PINS if dual else PIO_PAIR_WORKER_PINS if pio_pair else PIO_WORKER_PINS if pio else \
             DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
         bindings_mutations+=byte_mutations(worker,[(n,2) for n in worker_pins],
             lambda image:pinned_functions(image,worker_pins,'read-ahead worker binding'))
@@ -878,6 +891,7 @@ def check(directory,*,self_test=False):
         diagnostic_capture=diagnostic,repair_diagnostic_capture=repair_diagnostic_profile(aux),
         pio_candidate=pio,pio_pair_candidate=pio_pair,pio_producer=producer,
         structural_sdk_route=structural,dual_reader_candidate=dual,dual_reader=dual_execution,
+        controller_failure_witness=witness_execution,
         artifact_sha256=dict(resident=sha(resident[0]),worker=sha(worker[0]),
             stage=sha(stage[0]),auxiliary=sha(aux[0])),
         immutable_code_pin={'address':hex(code_at),'bytes':len(code),'sha256':sha(code)},

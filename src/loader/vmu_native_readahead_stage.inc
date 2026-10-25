@@ -28,6 +28,9 @@ static bool native_ra_stack_valid(uint32_t bottom,uint32_t top) {
     return true;
 }
 static void __attribute__((noipa)) native_readahead_bind(uint32_t payload) {
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 42 READ AHEAD BIND BEGIN");
+#endif
     struct kui_native_ra_low_ops ops;uint32_t descriptor,sr;
     if(resident_bytes<KUI_NATIVE_RA_LOW_ENTRY_OFFSET+4u || resident_bytes<sizeof(ops))
         native_report(11u,1u);
@@ -109,12 +112,18 @@ static void __attribute__((noipa)) native_readahead_bind(uint32_t payload) {
         (void *)(uintptr_t)(lease+UINT32_C(0x20000000)+KUI_NATIVE_RA_DATA_OFFSET),
         KUI_NATIVE_RA_DATA_BYTES,lease&UINT32_C(0x1fffffff),KUI_NATIVE_RA_LEASE_BYTES};
     uint32_t unused=0;
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 43 AUXILIARY INITIALIZE BEGIN");
+#endif
     if(kui_vmu_native_worker_call((uint32_t)(uintptr_t)e->init,e->stack_top-32u,
        (const struct kui_vmu_native_worker_config *)(const void *)&cfg,
        (struct kui_vmu_native_worker_result *)(void *)&unused) ||
        !native_ra_stack_valid(e->stack_bottom,e->stack_top) ||
        ((const volatile struct kui_native_ra_public *)(uintptr_t)context)->busy)
         native_report(11u,10u);
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 44 AUXILIARY INITIALIZED");
+#endif
     /* Publish context first. Entry zero is the disabled state throughout
      * relocation and initialization, so no partially bound call is possible. */
     r->vector600[KUI_NATIVE_RA_CONTEXT_INDEX]=context;
@@ -126,4 +135,7 @@ static void __attribute__((noipa)) native_readahead_bind(uint32_t payload) {
     if(native_word((address+0x500u+4u*KUI_NATIVE_RA_ENTRY_INDEX)|UINT32_C(0x20000000))!=
        (uint32_t)(uintptr_t)e->visit)native_report(11u,12u);
     retail_display_line("BOUNDED READ AHEAD READY / 192 KIB CACHE");
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 45 READ AHEAD BOUND");
+#endif
 }

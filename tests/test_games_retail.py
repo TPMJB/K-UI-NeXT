@@ -45,8 +45,9 @@ SUCCESS_CASES = ("valid", "boot-tail", "fragmented", "other-title",
 NATIVE_DUAL_CASES = ("native-dual-x", "native-dual-y", "native-dual-x-report", "native-dual-y-report",
     "native-dual-cancel", "native-dual-absent", "native-dual-cap-absent", "native-dual-cap-duplicate",
     "native-dual-cap-malformed", "native-dual-cap-unrelated", "native-dual-cap-truncated",
-    "native-dual-scif", "native-dual-too-many", "native-dual-patches")
-NATIVE_DUAL_SUCCESS = NATIVE_DUAL_CASES[:4]
+    "native-dual-scif", "native-dual-too-many", "native-dual-patches",
+    "native-dual-fallback-report", "native-dual-retry-report", "native-dual-x-cooked-report", "native-dual-cancel-source")
+NATIVE_DUAL_SUCCESS = NATIVE_DUAL_CASES[:4] + ("native-dual-fallback-report", "native-dual-retry-report", "native-dual-x-cooked-report")
 MANY_TRACKS = {"native-dual-too-many": 99, "tracks-31": 31, "tracks-99": 99, "async-tracks-31": 31, "async-tracks-40": 40}
 AUDIO_UNMAPPED = ("tracks-99", "async-tracks-40")
 FORMAT_CASES = (
@@ -175,6 +176,9 @@ def dual_package(case):
     if case == "native-dual-cap-malformed": cap = cap[:8] + struct.pack("<I", 2) + cap[12:]
     if case == "native-dual-cap-unrelated": cap = b"Unrelated stage data".ljust(32, b"x")
     if case == "native-dual-cap-truncated": cap = cap[:16]
+    if (case in NATIVE_DUAL_SUCCESS and case != "native-dual-fallback-report") or case == "native-dual-cancel-source":
+        from vmu_native_cache_seed import template_seed
+        cap += template_seed()
     return synthetic_package(dual=cap)
 
 
@@ -188,7 +192,7 @@ def make_retail_fixture(folder, case):
             (folder / name).write_bytes(package_bytes)
         (folder / "retail-native-dual.kui").write_bytes(dual_package(case))
         return
-    if case in LAUNCH_CASES and folder.exists():
+    if (case in LAUNCH_CASES or case in NATIVE_DUAL_CASES) and folder.exists():
         shutil.rmtree(folder)
     if case in FORMAT_CASES:
         if case in CHECKSUM_CASES:
@@ -214,7 +218,7 @@ def make_retail_fixture(folder, case):
     if case == "alternate-bootfile":
         data[16 + 96:16 + 112] = b"ALT_BOOT.BIN".ljust(16)
         data[20 * 2352 + 16 + 68 + 33:20 * 2352 + 16 + 68 + 47] = b"ALT_BOOT.BIN;1"
-    boot_bytes = 3001 if case in LAUNCH_CASES else {"boot-tail": 3001, "cooked-boot-tail": 3001,
+    boot_bytes = 3001 if case in LAUNCH_CASES or case in NATIVE_DUAL_CASES and case.endswith("-report") else {"boot-tail": 3001, "cooked-boot-tail": 3001,
                   "boot-small": 127, "ce-probe-small": 2048,
                   "boot-large": 0xC00001}.get(case, 4096)
     # The third root record describes our generated random test bytes.
@@ -234,7 +238,7 @@ def make_retail_fixture(folder, case):
         # Merely changing the descriptor must not make raw bytes a valid
         # cooked file. This track's raw length is not divisible by 2048.
         gdi.write_text(gdi.read_text().replace("4 2352 track01", "4 2048 track01"), encoding="ascii")
-    if case in ("cooked-2048", "cooked-boot-tail", "async-cooked-2048", "ce-probe-cooked"):
+    if case in ("cooked-2048", "cooked-boot-tail", "async-cooked-2048", "ce-probe-cooked", "native-dual-x-cooked-report"):
         names = ("track01.bin", "track03.bin") if case == "async-cooked-2048" else ("track03.bin",)
         for name in names:
             path = folder / name
@@ -425,6 +429,9 @@ def main():
                             assert payload[:0x1000] == original[:0x1000] and payload[0x2000:] == original[0x2000:]
                             assert struct.unpack_from("<I", payload, 0x1000 + 264)[0] == (2 if "-y" in case else 1)
                         if case.endswith("-report"):
+                            count = re.search(r"Native dual exact source: (\d+) raw/cooked reads; max (\d+) bytes", output)
+                            assert count and tuple(map(int, count.groups())) == (4 if case == "native-dual-retry-report" else 2, 2048 if "cooked" in case else 2352)
+                            print(f"Native source I/O {kind} {case}: reads={count[1]}, max={count[2]} bytes", flush=True)
                             for name in ("retail-boot.kui", "ce-probe.kui", "retail-native-dual.kui", "disc.gdi", "track01.bin", "music track02.raw", "track03.bin"):
                                 assert (fixture / ("after-" + name)).read_bytes() == (fixture / name).read_bytes()
                             data = (fixture / "after-last-launch-a.txt").read_bytes()
@@ -433,6 +440,12 @@ def main():
                             fields = dict(line.split(": ", 1) for line in body.decode().splitlines()[1:])
                             assert fields["package"] == "/kui/apps/games/retail-native-dual.kui"
                             assert fields["storage"] == "SCI microSD"
+                            stride, header = (2048, 0) if "cooked" in case else (2352, 16)
+                            source = (fixture / "track03.bin").read_bytes()
+                            logical = b"".join(source[n + header:n + header + 2048] for n in range(0, len(source), stride))
+                            expected_crc = zlib.crc32(logical[21 * 2048:21 * 2048 + 3001])
+                            assert struct.unpack_from("<I", payload, 0x1000 + 256)[0] == expected_crc
+                            assert int(fields["source executable crc32"], 16) == expected_crc
                             assert fields["reader"] == ("Background Legacy (Y)" if "-y" in case else "Background New (X)")
                         else:
                             assert digest(image) == before, "native X/Y prep changed card"
@@ -519,7 +532,7 @@ def main():
                     if case == "bad-cooked-size":
                         assert "Invalid track length" in output
                     if case in ("cooked-2048", "cooked-boot-tail", "async-cooked-2048", "ce-probe-cooked"):
-                        assert "checking exact executable CRC before detached launch" in output
+                        assert "checking exact executable CRC" in output
                         assert "Cooked data RAW requests refused before IO; exact boot CRC" in output
                     if case in MANY_TRACKS:
                         unmapped = "audio tracks listed without their files" in output

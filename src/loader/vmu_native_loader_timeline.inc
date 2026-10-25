@@ -139,27 +139,25 @@ static void native_loader_timeline_call(const struct kui_native_loader_call *cal
 static void native_loader_timeline_report(const struct retail_display_state *display) {
     const struct kui_native_loader_timeline *t=&native_loader_timeline;
     retail_display_restore(display);
-    retail_display_line("LOADER TIMELINE - READ ONLY CAPTURE");
-    retail_display_line("HEX TICKS - 781250 PER SECOND");
+    retail_display_line("GD TIMELINE / READ ONLY");
+    retail_display_line("HEX TICKS / 781250HZ");
     retail_display_values("EVENTS VALID BAD EPOCH",(uint32_t[4]){
         t->events,t->valid,t->invalid,t->epoch},4u);
-    retail_display_values("CLOCKBREAK UNMATCHED OVERFLOW SATURATED",(uint32_t[4]){
+    retail_display_values("CLKBREAK UNMATCHED OVER SAT",(uint32_t[4]){
         t->clock_breaks,t->unmatched,t->overflow,t->saturated},4u);
-    retail_display_values("MAX GD CALL MAX GD GAP MAX CHAIN LENGTH",(uint32_t[3]){
+    retail_display_values("MAX CALL GAP CHAINLEN",(uint32_t[3]){
         t->max_call_ticks,t->max_gap_ticks,t->max_chain_length},3u);
-    retail_display_values("MAX CHAIN TICKS AND INSIDE GD TICKS",(uint32_t[2]){
+    retail_display_values("MAX CHAIN TOTAL/INSIDE TICKS",(uint32_t[2]){
         t->max_chain_ticks,t->max_chain_inside},2u);
-    retail_display_values("ACTIVE TOKEN LBA SECTORS FLAGS",(uint32_t[4]){
+    retail_display_values("ACTIVE TOK LBA N FLAGS",(uint32_t[4]){
         t->have_request?t->active.token:0u,t->active.lba,t->active.count,t->active.flags},4u);
-    retail_display_values("STORED CALLS REQUESTS BINS",(uint32_t[3]){
+    retail_display_values("STORED CALL REQ BINS",(uint32_t[3]){
         t->longest_count,t->request_count,t->bin_count},3u);
-    retail_display_line("GD TIME INCLUDES DIAGNOSTIC OVERHEAD");
-    retail_display_line("OUTSIDE GD IS NOT A CPU IDLE MEASUREMENT");
     retail_display_pause(240u);
     for(unsigned first=0u;first<t->bin_count;first+=14u) {
         retail_display_restore(display);
-        retail_display_line("GD TIME BINS - 0 POINT 625 SECONDS EACH");
-        retail_display_line("INDEX EPOCH GD TICKS CALLS MAPLES");
+        retail_display_line("GD BINS / 0.625S");
+        retail_display_line("I EPOCH GD TICKS CALLS MAPLE");
         for(unsigned i=first;i<first+14u && i<t->bin_count;i++) {
             const struct kui_native_loader_bin *b=&t->bins[i];
             uint32_t values[5]={i,b->epoch,b->gd_ticks,b->calls,b->maples};
@@ -169,17 +167,16 @@ static void native_loader_timeline_report(const struct retail_display_state *dis
     }
     for(unsigned first=0u;first<t->longest_count && first<4u;first+=2u) {
         retail_display_restore(display);
-        retail_display_line("FOUR LONGEST GD CALLS - RAW ENTRY EXIT");
-        retail_display_line("PREFIX IS RANK ROW - FIELD MAP IN GUIDE");
-        for(unsigned i=first;i<first+2u && i<t->longest_count;i++)
+        retail_display_line("LONGEST4 GD CALLS / ENTRY EXIT");
+            for(unsigned i=first;i<first+2u && i<t->longest_count;i++)
             native_loader_timeline_call(&t->longest[i],i);
         retail_display_pause(240u);
     }
     unsigned shown=t->request_count<8u?t->request_count:8u;
     for(unsigned first=0u;first<shown;first+=4u) {
         retail_display_restore(display);
-        retail_display_line("RECENT EIGHT READS - THREE ROWS EACH");
-        retail_display_line("R0 TOKEN LBA SECTORS TOTAL TICKS");
+        retail_display_line("RECENT8 READS / 3 ROWS EACH");
+        retail_display_line("R0 TOK LBA N TICKS");
         for(unsigned i=first;i<first+4u && i<shown;i++) {
             unsigned at=(t->request_next+KUI_NATIVE_TIMELINE_REQUESTS-shown+i)%KUI_NATIVE_TIMELINE_REQUESTS;
             const struct kui_native_loader_request *r=&t->requests[at];
@@ -192,8 +189,8 @@ static void native_loader_timeline_report(const struct retail_display_state *dis
             values[2]=r->chain_length;values[3]=r->chain_ticks;
             native_loader_timeline_row(i-first,2u,values,4u);
         }
-        retail_display_line("R1 INSIDE GD OUTSIDE GD CALLS BYTES");
-        retail_display_line("R2 EPOCH FLAGS CHAIN LENGTH CHAIN TICKS");
+        retail_display_line("R1 GD IN/OUT CALLS BYTES");
+        retail_display_line("R2 EPOCH FLAGS CHAINLEN TICKS");
         retail_display_pause(240u);
     }
 }

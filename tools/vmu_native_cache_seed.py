@@ -11,7 +11,7 @@ import struct
 
 SEED_BYTES=1120
 RECORD_BYTES=1024
-DETECTOR_EPOCH=3
+DETECTOR_EPOCH=4
 
 def require(condition,message):
     if not condition:raise ValueError(message)
@@ -51,7 +51,8 @@ def record_metadata(wire,expected_digest=None):
     family,count=_word(wire,708),_word(wire,720)
     require(tuple(_word(wire,n) for n in (700,704,712,716))==(1,48,load,image_bytes) and
             ((family in (1,2,3) and count==3) or
-             (family==4 and count==2 and not _word(wire,732) and not _word(wire,740))),
+             (family==4 and count==2 and not _word(wire,732) and not _word(wire,740)) or
+             (family==5 and count==3 and _word(wire,732) and _word(wire,740))),
             'Native cache exit schema differs')
     return dict(detector_epoch=DETECTOR_EPOCH,record_bytes=RECORD_BYTES,
         record_digest=digest.hex(),record_sha256=hashlib.sha256(wire).hexdigest(),

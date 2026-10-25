@@ -16,7 +16,7 @@ import sys
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/'tools'),str(ROOT/'tests')]
-from check_vmu_native_sdk_sci_route import ColdBinderCPU,BinderStop,GUARD,RETURN,COOKIE,assert_c_abi
+from check_vmu_native_sdk_sci_route import ColdBinderCPU,BinderStop,GUARD,RETURN,COOKIE,assert_c_abi,initialized_at
 from check_vmu_native_worker_gateway import read_elf,symbol_bytes
 from test_vmu_native_heap_execution import MASK,signed
 from sh4_delay_slots import validate_delay_slot
@@ -36,9 +36,17 @@ PIO_PAIR_MARKER='__kui_native_readahead_pio_pair_auxiliary'
 MULTI_OWNER_MARKER='__kui_native_sdk_sci_multi_owner_stage'
 STRUCTURAL_MARKER='__kui_native_sdk_sci_structural_stage'
 DUAL_MARKER='__kui_native_dual_readers_stage'
+COLD_PROGRESS_MARKER='__kui_native_cold_progress_stage'
+RA_READY=b'BOUNDED READ AHEAD READY / 192 KIB CACHE'
+RA_PROGRESS=(b'COLD 42 READ AHEAD BIND BEGIN',b'COLD 43 AUXILIARY INITIALIZE BEGIN',
+             b'COLD 44 AUXILIARY INITIALIZED',RA_READY,b'COLD 45 READ AHEAD BOUND')
 STRUCTURAL_PINS={}
 DUAL_PINS={
     '_native_readahead_bind':(1208,'7a9d6c8c85dcce44b576a6e776098ac6af02c9a65d26abc14e9fff4e1980b3a0'),
+    '_kui_vmu_native_background_map_address':(92,'cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8'),
+}
+WITNESS_DUAL_PINS={
+    '_native_readahead_bind':(1252,'f62b60124f9241b2853e0826c50cd6739d337b9d3d8c2b6ee9f756f74fb0fb53'),
     '_kui_vmu_native_background_map_address':(92,'cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8'),
 }
 # Pins are reviewed against the candidate's complete linked body and literals.
@@ -70,6 +78,40 @@ def require(ok,message):
 
 
 def physical(address):return address&0x1fffffff
+
+
+def worker_binding(stage,worker):
+    """Bind an explicitly supplied worker to both immutable stage inputs."""
+    base=0x8c100000;span=0x20000
+    loads=[p for p in worker[2] if p[0]==1 and p[4]]
+    require(loads,'cold worker selection has no initialized module')
+    count=max(physical(p[3])+p[4] for p in loads)-physical(base)
+    require(80<=count<=span-0x1000,'cold selected worker leaves its owned initialized range')
+    image=bytearray(count)
+    for _,offset,_,address,length,_,_,_ in loads:
+        at=physical(address)-physical(base)
+        require(0<=at<=count-length,'cold selected worker load escapes its flat image')
+        image[at:at+length]=worker[0][offset:offset+length]
+    image=bytes(image);wire=generate(worker[0],image,base,span)
+    for begin,end,payload in (('__native_worker_blob_begin','__native_worker_blob_end',image),
+                              ('__native_worker_reloc_begin','__native_worker_reloc_end',wire)):
+        a,b=stage[4][begin][0],stage[4][end][0]
+        require(b-a==len(payload) and initialized_at(stage,a,len(payload))==payload,
+                'cold stage embeds a different selected worker image/table')
+        require(any(s[1]==1 and s[2]&7==2 and s[3]<=a<b<=s[3]+s[5] for s in stage[3]),
+                'cold selected worker inputs are not immutable stage data')
+    return dict(worker_sha256=hashlib.sha256(worker[0]).hexdigest(),
+                binary_sha256=hashlib.sha256(image).hexdigest(),
+                relocation_sha256=hashlib.sha256(wire).hexdigest(),binary_bytes=count)
+
+
+def witness_worker_profile(stage,worker):
+    if worker is None:return False
+    from check_native_controller_failure_witness import witness_profile
+    witness=witness_profile(worker)
+    require(not witness or stage[4].get(DUAL_MARKER)==(1,0,0,0xfff1),
+            'cold witness worker requires the exact dual stage')
+    return witness
 
 
 def multi_owner_profile(stage,layout):
@@ -119,6 +161,8 @@ class ReadAheadBinderCPU(ColdBinderCPU):
     def __init__(self,stage,resident,aux,*,cache=True,payload=0x8c400000,stream=0,owner_name='Evolution2',sdk_vbr=0x8c00f400):
         super().__init__(stage,resident,cache=cache,payload=payload,stream=stream,owner_name=owner_name)
         self.layout=auxiliary_layout(aux)
+        self.expected_display_lines=RA_PROGRESS if self.progress else (RA_READY,)
+        self.display_lines=[]
         self.aux=aux;self.aux_binary=flat_aux(aux)
         self.aux_wire=generate(aux[0],self.aux_binary,BASE,SPAN)
         self.descriptor=resident[4]['_kui_native_ra_reader_ops'][0]
@@ -290,9 +334,11 @@ class ReadAheadBinderCPU(ColdBinderCPU):
         elif name=='_kui_vmu_native_worker_call':result=self._initialize()
         else:
             assert name=='_retail_display_line'
-            expected=b'BOUNDED READ AHEAD READY / 192 KIB CACHE\0'
+            require(len(self.display_lines)<len(self.expected_display_lines),'unexpected extra cold read-ahead display call')
+            line=self.expected_display_lines[len(self.display_lines)];expected=line+b'\0'
             assert bytes(self.read(self.r[4]+i,1) for i in range(len(expected)))==expected
-            self.ready=True
+            self.display_lines.append(line)
+            if line==RA_READY:self.ready=True
         for i in range(8):self.r[i]=(0x913579bd+i*0x13579bd+len(self.apis))&MASK
         self.r[0]=result&MASK;self.sr^=1;self.pr^=0x13572468;self.pc=continuation
 
@@ -309,6 +355,7 @@ class ReadAheadBinderCPU(ColdBinderCPU):
     def execute(self):
         self.run_symbol('_native_readahead_bind')
         assert self.ready and self.init_calls==1
+        assert tuple(self.display_lines)==self.expected_display_lines
         assert_c_abi(self,self.initial)
         entry=self.read(self.dest+12);context=self.read(self.dest+20)
         assert self.read((self.region+0x500)|0x20000000)==entry
@@ -336,7 +383,7 @@ class ReadAheadBinderCPU(ColdBinderCPU):
             (self.sdk_vbr+0x25c,self.sdk_vbr+0x260,self.region+0x534,self.region+0x538,self.region+0x530))
 
 
-def pin_stage(stage,*,diagnostic=False,pio=False,pair=False,multi_owner=False,structural=False,dual=False):
+def pin_stage(stage,*,diagnostic=False,pio=False,pair=False,multi_owner=False,structural=False,dual=False,witness=False,progress=False):
     result={}
     require(not pio or diagnostic,'cold PIO stage pins require the diagnostic layout')
     require(not pair or pio,'cold PIO pair stage pins require the PIO profile')
@@ -348,7 +395,12 @@ def pin_stage(stage,*,diagnostic=False,pio=False,pair=False,multi_owner=False,st
     require(dual==(DUAL_MARKER in stage[4]) and
             (not dual or stage[4][DUAL_MARKER]==(1,0,0,0xfff1) and structural),
             'cold dual stage marker differs or lacks its structural X path')
-    selected=DUAL_PINS if dual else STRUCTURAL_PINS if structural else MULTI_OWNER_PINS if multi_owner else PIO_PAIR_PINS if pair else PIO_PINS if pio else DIAGNOSTIC_PINS if diagnostic else PINS
+    require(not witness or dual,'cold witness stage pins require the exact dual profile')
+    require(progress==(COLD_PROGRESS_MARKER in stage[4]) and (not progress or
+            stage[4][COLD_PROGRESS_MARKER]==(1,0,0,0xfff1) and witness and dual),
+            'cold progress stage requires its exact marker and selected witness worker')
+    require(not witness or progress,'cold witness stage pins require the paired cold progress marker')
+    selected=WITNESS_DUAL_PINS if witness else DUAL_PINS if dual else STRUCTURAL_PINS if structural else MULTI_OWNER_PINS if multi_owner else PIO_PAIR_PINS if pair else PIO_PINS if pio else DIAGNOSTIC_PINS if diagnostic else PINS
     for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(stage,name,2)
         require(section[2]&4 and 0x8ce00000<=address<address+count<=0x8cfe0000,
@@ -360,17 +412,21 @@ def pin_stage(stage,*,diagnostic=False,pio=False,pair=False,multi_owner=False,st
     return result
 
 
-def check_stage(stage,resident,aux,*,self_test=False):
+def check_stage(stage,resident,aux,*,self_test=False,worker=None):
     require(__debug__,'cold read-ahead proof requires Python assertions')
     layout=auxiliary_layout(aux)
     multi_owner=multi_owner_profile(stage,layout)
     structural=STRUCTURAL_MARKER in stage[4]
     dual=DUAL_MARKER in stage[4]
+    witness=witness_worker_profile(stage,worker)
+    progress=COLD_PROGRESS_MARKER in stage[4]
+    worker_proof=worker_binding(stage,worker) if worker is not None else None
     def pin_selected(image):return pin_stage(image,diagnostic=layout['diagnostic'],pio=layout['pio'],
-                                              pair=layout['pair'],multi_owner=multi_owner,structural=structural,dual=dual)
+                                              pair=layout['pair'],multi_owner=multi_owner,structural=structural,dual=dual,witness=witness,progress=progress)
     pins=pin_selected(stage)
     owners=('Evolution1','Evolution2') if multi_owner else ('Evolution2',)
     positives=negatives=mutations=pin_mutations=layout_mutations=stage_marker_mutations=0
+    worker_profile_mutations=worker_binding_mutations=progress_marker_mutations=0
     for cache in (False,True):
         for payload in (0x0c400000,0x8c500000,0xacfa0000):
             for stream in (0,1):
@@ -525,15 +581,52 @@ def check_stage(stage,resident,aux,*,self_test=False):
                 changed=(*stage[:4],symbols)
                 try:
                     selected=multi_owner_profile(changed,layout)
-                    pin_stage(changed,diagnostic=layout['diagnostic'],pio=layout['pio'],pair=layout['pair'],multi_owner=selected)
+                    pin_stage(changed,diagnostic=layout['diagnostic'],pio=layout['pio'],pair=layout['pair'],multi_owner=selected,
+                              structural=structural,dual=dual,witness=witness,progress=progress)
                 except ValueError:stage_marker_mutations+=1
                 else:raise ValueError('cold read-ahead accepted changed multi-owner stage marker')
+        if witness:
+            mark='__kui_native_controller_failure_witness_worker'
+            for name,value in ((mark,None),(mark,(0,0,0,0xfff1)),(mark,(1,4,0,0xfff1)),
+                               (mark,(1,0,1,0xfff1)),(mark,(1,0,0,1)),
+                               ('__kui_native_dual_readers_worker',None)):
+                symbols=worker[4].copy()
+                if value is None:symbols.pop(name,None)
+                else:symbols[name]=value
+                changed=(*worker[:4],symbols)
+                try:
+                    selected=witness_worker_profile(stage,changed)
+                    pin_stage(stage,diagnostic=layout['diagnostic'],pio=layout['pio'],pair=layout['pair'],
+                              multi_owner=multi_owner,structural=structural,dual=dual,witness=selected,progress=progress)
+                except ValueError:worker_profile_mutations+=1
+                else:raise ValueError('cold read-ahead accepted changed witness worker marker')
+            for begin in ('__native_worker_blob_begin','__native_worker_reloc_begin'):
+                address=stage[4][begin][0]
+                section=next(s for s in stage[3] if s[1]==1 and s[2]&7==2 and
+                             s[3]<=address<s[3]+s[5])
+                changed=bytearray(stage[0]);changed[section[4]+address-section[3]]^=1
+                try:worker_binding((bytes(changed),*stage[1:]),worker)
+                except ValueError:worker_binding_mutations+=1
+                else:raise ValueError('cold read-ahead accepted changed embedded witness worker input')
+            for marker in (None,(0,0,0,0xfff1),(1,4,0,0xfff1),(1,0,1,0xfff1),(1,0,0,1)):
+                symbols=stage[4].copy()
+                if marker is None:symbols.pop(COLD_PROGRESS_MARKER)
+                else:symbols[COLD_PROGRESS_MARKER]=marker
+                changed=(*stage[:4],symbols)
+                try:pin_stage(changed,diagnostic=layout['diagnostic'],pio=layout['pio'],pair=layout['pair'],
+                              multi_owner=multi_owner,structural=structural,dual=dual,witness=witness,
+                              progress=marker is not None)
+                except ValueError:progress_marker_mutations+=1
+                else:raise ValueError('cold read-ahead accepted changed progress stage marker')
     return dict(actual_linked_cold_binder_executed=True,positive_cases=positives,
         admitted_dynamic_sdk_vbr_preservation_cases=dynamic_vbr_cases,
         malformed_descriptor_context_aux_and_init_cases=negatives,omitted_activation_ocbp_rejections=mutations,
         reviewed_body_byte_mutation_rejections=pin_mutations,
         context_and_diagnostic_schema_mutation_rejections=layout_mutations,
         multi_owner_stage_marker_mutation_rejections=stage_marker_mutations,
+        witness_worker_marker_mutation_rejections=worker_profile_mutations,
+        embedded_worker_binding_mutation_rejections=worker_binding_mutations,
+        cold_progress_marker_mutation_rejections=progress_marker_mutations,
         exact_instruction_literal_pins=pins,p1_cache_and_p2_ram_distinct=True,
         cold_aux_and_cache_lines_purged=(SPAN+DATA_BYTES)//32,cache_data_not_initialized_or_trusted=True,
         context_published_before_entry=True,guards_checked_after_init=True,
@@ -546,6 +639,8 @@ def check_stage(stage,resident,aux,*,self_test=False):
         pio_auxiliary=layout['pio'],
         pio_pair_auxiliary=layout['pair'],
         multi_owner_stage=multi_owner,structural_sdk_stage=structural,dual_reader_stage=dual,exact_sdk_owners_tested=list(owners),
+        controller_failure_witness_worker=witness,selected_worker_binding=worker_proof,
+        cold_progress_stage=progress,actual_ordered_auxiliary_progress_lines=bool(progress),
         admitted_sdk_callback_default_vbr_cookie_preserved=True,
         sdk_owner_scope='Begins after independently proved SDK admission and callback publication',
         complete_owned_context_bytes=layout['context_bytes'],
@@ -560,7 +655,7 @@ def main():
     p.add_argument('--self-test',action='store_true');a=p.parse_args()
     try:
         s,r,x=(read_elf(a.directory/name) for name in ('stage.elf','resident-sci.elf','native-ra-aux.elf'))
-        result=check_stage(s,r,x,self_test=a.self_test)
+        result=check_stage(s,r,x,self_test=a.self_test,worker=read_elf(a.directory/'native-worker.elf'))
     except (OSError,ValueError,AssertionError,KeyError,struct.error) as e:
         p.exit(2,'Read-ahead cold binder audit refused: '+str(e)+'\n')
     print(json.dumps(result,indent=2))

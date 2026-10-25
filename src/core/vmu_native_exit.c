@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/vmu_native_exit.h"
 #include "kui/vmu_native_patch.h"
+#include "kui/vmu_native_terminal_dispatch.h"
 #include <string.h>
 struct witness {uint16_t at,word;};
 #if KUI_NATIVE_STAGE_FAST_SCAN
@@ -56,6 +57,74 @@ static bool short_at(const uint8_t *p,size_t bytes,uint32_t load,size_t at,unsig
 }
 struct exit_shape {uint32_t second,vector,boot,vector_loads[3];};
 struct exec_shape {uint32_t family,thunk,boot;};
+/* The alternate table is useful only after its common fatal entry has itself
+ * become a terminal hook. Prove all four pure argument wrappers, the complete
+ * fatal call path to an already admitted SDK exit, and the actual allocator's
+ * alternate/default selector wrappers. No arbitrary dispatch pointer is made
+ * acceptable by the presence of a generic indirect call. */
+static int terminal_dispatch(const uint8_t *p,size_t bytes,uint32_t load,
+    uint32_t first_exit,uint32_t second_exit,uint32_t *common_out,uint32_t *table_out) {
+    static const struct witness common_words[]={
+        {0,0x4f22},{4,0x3f0c},{8,0x2f56},{10,0x2f46},{14,0x2f36},
+        {16,0x64f3},{18,0x420b},{20,0x740c},{24,0x430b},{26,0x0009},
+        {30,0x3f1c},{32,0x4f26},{34,0x000b},{36,0x0009}
+    };
+    static const struct witness exit_words[]={{0,0x4f22},{4,0x430b},{6,0x0009},
+        {10,0x422b},{12,0x4f26}};
+    unsigned found=0u;uint32_t selected_common=0u,selected_table=0u;
+    struct kui_vmu_native_heap heap={0};bool heap_ready=false;
+    for(size_t at=2u;at+0xf2u<=bytes;at+=4u) {
+        if(u16(p+at)!=0x4f22u || !WORDS(p,at,common_words)) continue;
+        uint32_t slot,value,log,fatal,cleanup,target;
+        if(!literal(p,bytes,load,at+6u,3u,&slot,&value) || !in_image(value,load,bytes,1u) ||
+           !literal(p,bytes,load,at+12u,2u,&slot,&log) || (log&1u) || !in_image(log,load,bytes,2u) ||
+           !literal(p,bytes,load,at+22u,3u,&slot,&fatal) || (fatal&1u) || !in_image(fatal,load,bytes,14u)) continue;
+        uint16_t op=u16(p+at+2u),op2=u16(p+at+28u);
+        if((op&0xff00u)!=0x9000u || (op2&0xff00u)!=0x9100u) continue;
+        size_t small=at+6u+2u*(op&255u),large=at+32u+2u*(op2&255u);
+        if(small>bytes-2u || large>bytes-2u || u16(p+small)!=0xff00u || u16(p+large)!=0x010cu) continue;
+        size_t fat=(size_t)(physical(fatal)-physical(load));
+        if(!WORDS(p,fat,exit_words) ||
+           !literal(p,bytes,load,fat+2u,3u,&slot,&cleanup) || (cleanup&1u) || !in_image(cleanup,load,bytes,2u) ||
+           !literal(p,bytes,load,fat+8u,2u,&slot,&target) ||
+           (target!=first_exit && target!=second_exit)) continue;
+        uint32_t common=load+(uint32_t)at;bool wrappers=true;
+        for(unsigned i=0;i<8u;i++) {
+            const struct kui_vmu_native_terminal_dispatch_word *w=&kui_vmu_native_terminal_dispatch_words[i];
+            if((u32(p+at+w->offset)&w->mask)!=w->value) {wrappers=false;break;}
+        }
+        if(!wrappers) continue;
+        if(!heap_ready) {
+            if(kui_vmu_native_heap_discover(p,bytes,load,&heap)!=KUI_VMU_NATIVE_HEAP_FOUND) return -1;
+            heap_ready=true;
+        }
+        /* Both complete tail wrappers share the immutable selector pointer.
+         * Their R4 arguments are exactly alternate and original tables. */
+        if(u16(p+at+0x94u)!=0x432bu || u16(p+at+0x96u)!=0x0009u ||
+           u16(p+at+0x9cu)!=0x432bu || u16(p+at+0x9eu)!=0x0009u ||
+           !literal(p,bytes,load,at+0x90u,3u,&slot,&value) || value!=heap.initializer+0x46u ||
+           !literal(p,bytes,load,at+0x98u,3u,&slot,&value) || value!=heap.initializer+0x46u ||
+           !literal(p,bytes,load,at+0x92u,4u,&slot,&value) || (value&3u) || !in_image(value,load,bytes,16u)) continue;
+        uint32_t table=value;
+        if(table==heap.dispatch_table ||
+           !literal(p,bytes,load,at+0x9au,4u,&slot,&value) || value!=heap.dispatch_table) continue;
+        size_t tab=(size_t)(physical(table)-physical(load));bool entries=true;
+        for(unsigned i=0;i<4u;i++)
+            if(u32(p+tab+4u*i)!=common+kui_vmu_native_terminal_dispatch_entries[i]) {entries=false;break;}
+        if(!entries) continue;
+        /* A duplicate table cannot silently select a different capability. */
+        unsigned copies=0u;
+        for(size_t pos=0u;pos+16u<=bytes;pos+=4u) {
+            bool same=true;
+            for(unsigned i=0;i<4u;i++) if(u32(p+pos+4u*i)!=common+kui_vmu_native_terminal_dispatch_entries[i]) {same=false;break;}
+            if(same) ++copies;
+        }
+        if(copies!=1u || ++found>1u) return -1;
+        selected_common=common;selected_table=table;
+    }
+    if(!found) return 0;
+    *common_out=selected_common;*table_out=selected_table;return 1;
+}
 static bool exec_prologue(const uint8_t *p,size_t bytes,size_t at) {
     if(bytes-at<24u) return false;
     /* A body whose thunk was removed/corrupted must not silently become a
@@ -275,6 +344,17 @@ bool kui_vmu_native_exit_discover_guarded(const void *image,size_t bytes,uint32_
         exec_shape=(struct exec_shape){KUI_VMU_NATIVE_EXIT_PAIR_ONLY,0u,0u};entries=2u;
     } else if(count!=1u) return false;
     if(!consumers(p,bytes,load,pair,exec,&pair_shape,&exec_shape)) return false;
+    uint32_t terminal_table=0u;
+    if(exec_shape.family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY) {
+        uint32_t common;
+        int capability=terminal_dispatch(p,bytes,load,load+(uint32_t)pair,
+            load+(uint32_t)pair+pair_shape.second,&common,&terminal_table);
+        if(capability<0) return false;
+        if(capability) {
+            exec_shape.family=KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH;
+            exec=(size_t)(physical(common)-physical(load));entries=3u;
+        }
+    }
     struct kui_vmu_native_patch_window windows[8]={
         {load+(uint32_t)pair,12u},{load+(uint32_t)pair+pair_shape.second,12u},{load+(uint32_t)exec,12u}};
     for(size_t i=0;i<extra_count;i++) windows[entries+i]=additional[i];
@@ -283,7 +363,9 @@ bool kui_vmu_native_exit_discover_guarded(const void *image,size_t bytes,uint32_
         .family=exec_shape.family,.load=load,.image_bytes=(uint32_t)bytes,.count=entries,
         .entries={windows[0].begin,windows[1].begin,entries==3u?windows[2].begin:0u},
         .bios_vector_literal=load+(uint32_t)pair+pair_shape.vector,
-        .exec_thunk=entries==3u?load+(uint32_t)exec+exec_shape.thunk:0u,.cleanup=cleanup};
+        .exec_thunk=terminal_table?0u:
+            entries==3u?load+(uint32_t)exec+exec_shape.thunk:0u,.cleanup=cleanup};
+    if(terminal_table) out->terminal_dispatch.table=terminal_table;
     return true;
 }
 bool kui_vmu_native_exit_discover(const void *image,size_t bytes,uint32_t load,

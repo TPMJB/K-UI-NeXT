@@ -23,6 +23,9 @@ from sh4_delay_slots import validate_delay_slot
 from check_vmu_native_worker_gateway import read_elf,symbol_bytes
 
 MARKER='__kui_native_sdk_sci_route_'
+COLD_PROGRESS_MARKER='__kui_native_cold_progress_stage'
+SDK_READY=b'SDK SCI ROUTE READY / LEVEL 1'
+SDK_PROGRESS=(b'COLD 40 SDK ROUTE BIND BEGIN',SDK_READY,b'COLD 41 SDK ROUTE BOUND')
 MULTI_OWNER_MARKER='__kui_native_sdk_sci_multi_owner_stage'
 STRUCTURAL_MARKER='__kui_native_sdk_sci_structural_'
 OWNER_CONSTANTS={
@@ -114,6 +117,16 @@ STRUCTURAL_STAGE_PINS={
     '_live_words':(80,'19abfcf3270af6ef4dbbd6bd2cdfaf0cd0b871ab32dddda689dc9a7828511474'),
     '_literal_at':(62,'1712d6126cb969c7f2f21fb2de718960809b1782d1b39a06f772a21af78e16fe'),
     '_normalized':(192,'81b53b61f1e4881bf120571908420787023e52cde950546614ff528d8ca6a940'),
+}
+WITNESS_STRUCTURAL_STAGE_PINS={
+    '_native_sdk_sci_route_bind':(940,'36e179cecf7006dad0efe246025ba507c6d4d8a64f931ceebd85fe8ad7ca38bc'),
+    '_kui_native_sdk_sci_route_admit':(796,'867487e84e88e5356bcb74b46edabbc0d0547b97f0ec60bce882a547b33e2a50'),
+    '_kui_native_sdk_sci_route_discover':(1856,'1eddf50fcea34cd0d29abe58844be548c5e9ad36ed2d4091775b78e82df2cfb1'),
+    '_u32':(30,'6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334'),
+    '_fingerprint':(88,'50712a7089e4227859732393c4a2043bf88cc719a59359280f5cb523dd186b0b'),
+    '_live_words':(80,'0ac896ed0e8ab0c8cf57936bd854f7853b10b928a2e0b0a99c1c5fdc730025e3'),
+    '_literal_at':(62,'1712d6126cb969c7f2f21fb2de718960809b1782d1b39a06f772a21af78e16fe'),
+    '_normalized':(192,'975fceb4f0112ddd63c12191f4a02efc71c1e31215d1608c84a7215f11153236'),
 }
 MEMORY_CACHE={}
 MEMORY_REFERENCES={}
@@ -221,7 +234,8 @@ def pin_bodies(resident):
     return found
 
 
-def stage_pins(stage,*,diagnostic=False,pio=False,pio_pair=False,multi_owner=False,structural=False):
+def stage_pins(stage,*,diagnostic=False,pio=False,pio_pair=False,multi_owner=False,structural=False,
+               worker=None,read_ahead_proof=None):
     result={}
     read_ahead='__kui_native_readahead_stage' in stage[4]
     require(not diagnostic or read_ahead,'SDK diagnostic stage pins require the read-ahead profile')
@@ -233,7 +247,15 @@ def stage_pins(stage,*,diagnostic=False,pio=False,pio_pair=False,multi_owner=Fal
     require(marker is None or marker==(1,0,0,0xfff1),'structural SDK stage marker differs')
     require(structural==bool(marker),'structural SDK stage pin selection differs')
     require(not structural or multi_owner and pio_pair,'structural SDK pins require exact-owner and PIO companions')
-    selected=STRUCTURAL_STAGE_PINS if structural else MULTI_OWNER_STAGE_PINS if multi_owner else RA_PIO_PAIR_STAGE_PINS if pio_pair else RA_PIO_STAGE_PINS if pio else \
+    witness=False
+    if worker is not None:
+        from check_native_controller_failure_witness import witness_companion
+        witness=witness_companion(worker,read_ahead_proof)
+    progress=stage[4].get(COLD_PROGRESS_MARKER)
+    require(bool(progress)==witness and (not witness or progress==(1,0,0,0xfff1) and structural and
+            stage[4].get('__kui_native_dual_readers_stage')==(1,0,0,0xfff1)),
+            'SDK cold witness pins require the complete exact worker proof and stage progress marker')
+    selected=WITNESS_STRUCTURAL_STAGE_PINS if witness else STRUCTURAL_STAGE_PINS if structural else MULTI_OWNER_STAGE_PINS if multi_owner else RA_PIO_PAIR_STAGE_PINS if pio_pair else RA_PIO_STAGE_PINS if pio else \
         RA_DIAGNOSTIC_STAGE_PINS if diagnostic else \
         RA_STAGE_PINS if read_ahead else STAGE_PINS
     require(selected,'SDK multi-owner immutable stage pins are missing')
@@ -533,6 +555,11 @@ class ColdBinderCPU(SDKCPU):
     def __init__(self,stage,resident,*,cache=True,payload=0x8c400000,stream=0,owner_name='Evolution2'):
         self.owner_constants=OWNER_CONSTANTS[owner_name]
         self.owner_name=owner_name
+        mark=stage[4].get(COLD_PROGRESS_MARKER)
+        require(mark is None or mark==(1,0,0,0xfff1),'cold progress stage marker differs')
+        self.progress=mark is not None
+        self.expected_display_lines=SDK_PROGRESS if self.progress else (SDK_READY,)
+        self.display_lines=[]
         super().__init__(resident,seed=7,mask=15,bank=1,previous=self.owner_constants['default'])
         backing=SH(b'')
         for image in (resident,stage):
@@ -641,8 +668,11 @@ class ColdBinderCPU(SDKCPU):
                     self.write(out+4*i,value)
         else:
             assert name=='_retail_display_line'
-            text=bytes(self.read(self.r[4]+i,1) for i in range(len(b'SDK SCI ROUTE READY / LEVEL 1\0')))
-            assert text==b'SDK SCI ROUTE READY / LEVEL 1\0';self.ready=True
+            require(len(self.display_lines)<len(self.expected_display_lines),'unexpected extra cold SDK display call')
+            line=self.expected_display_lines[len(self.display_lines)];expected=line+b'\0'
+            text=bytes(self.read(self.r[4]+i,1) for i in range(len(expected)))
+            assert text==expected;self.display_lines.append(line)
+            if line==SDK_READY:self.ready=True
         for i in range(8):self.r[i]=(0x913579bd+i*0x13579bd+len(self.apis))&MASK
         self.r[0]=result&MASK;self.sr^=1;self.pr^=0x13572468;self.pc=continuation
 
@@ -655,7 +685,7 @@ class ColdBinderCPU(SDKCPU):
 
     def run_bind(self):
         self.run_symbol('_native_sdk_sci_route_bind')
-        assert self.ready
+        assert self.ready and tuple(self.display_lines)==self.expected_display_lines
         assert_c_abi(self,self.initial)
         assert self.read(ERI_SLOT|0x20000000)==self.callback
         assert self.read(RXI_SLOT|0x20000000)==self.callback

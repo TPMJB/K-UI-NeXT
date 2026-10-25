@@ -13,11 +13,14 @@ import zipfile
 
 from package_vmu_native_a2_delivery import archive_files, checksums, smoke
 from runtime_package import envelope, flatten_elf, verify
+from vmu_native_mode import decode_mode
+from check_vmu_native_worker_gateway import read_elf
+from check_native_controller_failure_witness import witness_companion
 
 ROOT = Path(__file__).resolve().parents[1]
 PREREQUISITE = '74958b3878279fc916199a7cd330f7f17b036138'
-PUBLIC_FOLDER = 'native-universal'
-PUBLIC_BRANCH = 'checkpoint/native-universal-20261025'
+PUBLIC_FOLDER = 'native-startup-followup'
+PUBLIC_BRANCH = 'checkpoint/native-startup-followup-20261025'
 
 
 def require(ok, message):
@@ -76,8 +79,27 @@ def extracted_install_check(files):
         require(verify(after['KUI/runtime.kui'])['build'] ==
                 verify(after['KUI/apps/games/retail-native-dual.kui'])['build'],
                 'Installed UI and reader builds differ')
-        return dict(extracted_cli_runs=2, prepared_card_and_settings_preserved=True,
+        # Exercise the real diagnostic mode at the separate dual destination,
+        # then return to the standard capture setup without changing saves.
+        result = subprocess.run(argv[:-1]+['--evolution-trace'], cwd=root, text=True, capture_output=True)
+        require(result.returncode == 0, result.stderr)
+        traced = {p.relative_to(card).as_posix(): p.read_bytes()
+                  for p in card.rglob('*') if p.is_file()}
+        mode_offset = json.loads(files['base/native-persistent-personalization.json'])['runtime_mode_module_offset']
+        require(decode_mode(traced['KUI/apps/games/retail-native-dual.kui'][mode_offset:mode_offset+32]) == 6,
+                'Evolution trace mode did not reach the dual module')
+        require(set(traced) == set(first) and all(traced[name] == data for name, data in first.items()
+                    if name != 'KUI/apps/games/retail-native-dual.kui'),
+                'Trace installation changed files outside its module')
+        result = subprocess.run(argv, cwd=root, text=True, capture_output=True)
+        require(result.returncode == 0 and
+                {p.relative_to(card).as_posix(): p.read_bytes()
+                 for p in card.rglob('*') if p.is_file()} == first,
+                'Returning from Evolution trace to profile changed installed/prepared bytes')
+        return dict(extracted_cli_runs=4, evolution_trace_and_profile_roundtrip=True,
+                    prepared_card_and_settings_preserved=True,
                     ordinary_loader_preserved=True, idempotent_bytes=True)
+
 
 
 def package(args):
@@ -94,11 +116,33 @@ def package(args):
             sha(module) == manifest['module_sha256'] == report['module_sha256'] and
             module == (args.build/'retail-native-dual.kui').read_bytes(),
             'Stale native module or proof')
+    baseline = args.baseline.read_bytes()
+    baseline_info = verify(baseline)
+    require(sha(baseline) == '7be0a290ec675438a565f1c3d1aac6fde18520b88056c0513961d96f9bc24f48' and
+            baseline_info['build'] == 'af9e01c8a271', 'Wrong approved comparison module')
+    unchanged_components = {}
+    for name in ('resident-sci.bin', 'resident-legacy.bin', 'native-ra-aux.bin', 'native-ra-aux.reloc'):
+        old = (args.baseline.parent/name).read_bytes()
+        new = (args.build/name).read_bytes()
+        copies = baseline[64:].count(old)
+        require(old and copies > 0 and module[64:].count(new) == copies,
+                'Reader component copies differ from their verified baseline module: '+name)
+        require(new.replace(revision.encode(), baseline_info['build'].encode()) == old,
+                'Startup follow-up changed reader component beyond its visible build label: '+name)
+        unchanged_components[name] = dict(baseline_sha256=sha(old), current_sha256=sha(new), embedded_copies=copies)
+    runtime_comparison = dict(baseline_source_commit='af9e01c8a2710eb44e24867bbe2f593727fbb844',
+                              baseline_module_sha256=sha(baseline), unchanged_reader_components=unchanged_components,
+                              low_readers_and_auxiliary_identical_except_visible_build_label=True,
+                              worker_change='Typed Lodoss terminal-dispatch capability, precise VMU guard witnesses and compact diagnostic captions')
     ra, sdk = report['read_ahead'], report['sdk_sci_route']
     require(ra.get('dual_reader_candidate') is True and
             ra.get('dual_reader', {}).get('enabled') is True and
             sdk.get('structural_profile') is True and sdk.get('generic_family_table', {}).get('enabled'),
             'Both structural SDK and actual dual-engine proofs are required')
+    witness = ra.get('controller_failure_witness')
+    require(report.get('prepared_lifetime_admission', {}).get('controller_failure_witness') == witness and
+            witness_companion(read_elf(args.build/'native-worker.elf'), ra),
+            'Matching actual linked controller/identity/terminal capability witness proof is required')
     require(sha((args.build/'native-ra-aux.bin').read_bytes()) ==
             '61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974' and
             (ROOT/'src/loader/native_readahead_aux.c').read_bytes() ==
@@ -149,12 +193,15 @@ def package(args):
                   'base/KUI/runtime.kui': gui, 'base/native-dual-runtime.json': wire(runtime_info),
                   'README-FIRST.md': guide, 'TESTS.md': guide,
                   'RESULTS.csv': (ROOT/'docs/native-dual-reader-results.csv').read_bytes(),
+                  'kui-doa2-filesystem-probe.py': (ROOT/'tools/kui-doa2-filesystem-probe.py').read_bytes(),
+                  'kui-native-startup-bundle.py': (ROOT/'tools/kui-native-startup-bundle.py').read_bytes(),
+                  'DOA2-PROBE.md': (ROOT/'tools/kui-doa2-filesystem-probe-README.md').read_bytes(),
                   'evidence/final-joint-corpus.json': joint_wire,
                   'evidence/final-original-heap.json': heap_wire,
                   'evidence/host-tests.log': args.host_log.read_bytes(),
                   'evidence/package-audit.log': args.package_log.read_bytes()})
     for path in sorted((ROOT/'docs/evidence').glob('native-*2026-10-25.json')):
-        if any(word in path.name for word in ('structural', 'joint', 'pio-pair-observed', 'new-structural')):
+        if any(word in path.name for word in ('structural', 'joint', 'pio-pair-observed', 'new-structural', 'console-followup', 'followup-review', 'terminal-dispatch', 'startup-source-pass')):
             files['evidence/'+path.name] = path.read_bytes()
     candidate = dict(schema='kui.native.universal-readers.candidate.v1', source_commit=commit,
                      source_tree=tree, build=revision, module_sha256=sha(module),
@@ -162,11 +209,13 @@ def package(args):
                      virtual_slot='A2', source_bundle_prerequisite=PREREQUISITE,
                      source_images_analyzed=26, joint_software_candidates=joint['joint_candidate_slugs'],
                      title_allowlist=False, approved_reader_policy_preserved=True,
-                     console_compatibility_verified=False)
+                     console_compatibility_verified=False, reader_runtime_comparison=runtime_comparison,
+                     console_observations=json.loads((ROOT/'docs/evidence/native-universal-console-followup-2026-10-25.json').read_text())['console_observations'])
     delivery = dict(source_commit=commit, generic_installer=host_installer,
                     combined_installer=extracted_install_check(files),
                     same_clean_UI_and_module_source=True, no_retail_or_save_payloads=True,
-                    final_corpus_artifacts_bound=True, console_execution_verified=False)
+                    final_corpus_artifacts_bound=True, reader_runtime_comparison=runtime_comparison,
+                    console_execution_verified=False)
     args.public.mkdir(parents=True, exist_ok=True)
     bundle = args.public/'native-source-update.bundle'
     subprocess.run(['git', 'bundle', 'create', str(bundle.resolve()), 'HEAD', '^'+PREREQUISITE], cwd=ROOT, check=True)
@@ -225,7 +274,7 @@ print('Verified native X/Y source',item['source_commit'],dest)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ('build', 'runtime', 'joint', 'heap', 'output', 'public', 'host-log', 'package-log'):
+    for name in ('build', 'runtime', 'joint', 'heap', 'output', 'public', 'host-log', 'package-log', 'baseline'):
         parser.add_argument('--'+name, type=Path, required=True)
     try:
         print(json.dumps(package(parser.parse_args()), indent=2))

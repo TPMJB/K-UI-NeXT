@@ -682,12 +682,16 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         if(image->tracks[i].sector_bytes==KUI_GAME_DATA_BYTES &&
             image->tracks[i].start_lba<boot_end && image->tracks[i].end_lba>map->boot_lba)
             cooked_boot=true;
-    if(reporting || patched || cdda || cooked_boot || vmu_package || image->format!=KUI_GAME_IMAGE_GDI) {
+    const bool need_boot_crc=reporting || patched || cdda || cooked_boot || vmu_package || image->format!=KUI_GAME_IMAGE_GDI;
+    const bool defer_boot_crc=native_dual && need_boot_crc;
+    if(need_boot_crc) {
         map->flags|=KUI_RETAIL_IMAGE_BOOT_CRC;
-        log("Retail boot: checking exact executable CRC before detached launch");
-        r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32);
-        if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
-        log("Retail boot: executable CRC32=%08x",map->boot_crc32);
+        if(!defer_boot_crc) {
+            log("Retail boot: checking exact executable CRC before detached launch");
+            r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32);
+            if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
+            log("Retail boot: executable CRC32=%08x",map->boot_crc32);
+        }
     }
     if(!close_reader(&files)) {problem="cannot close image reader";goto done;}
     const struct kui_volume volume=*kui_media_volume();
@@ -842,9 +846,19 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         launch_package=vmu_package;
         log("Virtual card: separate persistent A1 module selected; startup will show its card path");
     }
+    struct native_cache_source_proof source_proof;
     if(native_cache_prepare(image,map,!ce && metadata.native_gd,requested_options,patched,
-       package,files.root,log,cancel)==NATIVE_CACHE_CANCELLED) {
+       package,files.root,log,cancel,defer_boot_crc?&source_proof:NULL)==NATIVE_CACHE_CANCELLED) {
         problem="cancelled during native executable mapping";goto done;
+    }
+    if(defer_boot_crc) {
+        if(source_proof.complete)map->boot_crc32=source_proof.crc32;
+        else {
+            log("Retail boot: checking exact executable CRC after native preflight skipped");
+            r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32);
+            if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
+        }
+        log("Retail boot: executable CRC32=%08x",map->boot_crc32);
     }
     if(zso) {
         zso_map=malloc(sizeof(*zso_map));

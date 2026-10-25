@@ -10,6 +10,7 @@
 #define KUI_VMU_NATIVE_EXIT_PVR_CLEAR 2u
 #define KUI_VMU_NATIVE_EXIT_PVR_COMPACT 3u
 #define KUI_VMU_NATIVE_EXIT_PAIR_ONLY 4u
+#define KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH 5u
 #define KUI_VMU_NATIVE_EXIT_ENTRIES 3u
 struct kui_vmu_native_exit {
     uint32_t version,bytes,family,load,image_bytes,count;
@@ -18,12 +19,23 @@ struct kui_vmu_native_exit {
      * halfword-aligned cleanup/exit entry; installers must encode their
      * PC-relative terminal literal for that actual alignment. */
     uint32_t entries[KUI_VMU_NATIVE_EXIT_ENTRIES];
-    uint32_t bios_vector_literal,exec_thunk,cleanup;
+    uint32_t bios_vector_literal;
+    /* The family tag selects the meaning of this wire-compatible word.
+     * TERMINAL_DISPATCH has the two ordinary SDK exits plus a separately
+     * proved fatal allocator handler in entries[2]. It has no exec thunk. */
+    union {
+        uint32_t exec_thunk;
+        struct {uint32_t table;} terminal_dispatch;
+    };
+    uint32_t cleanup;
 };
 /* Fresh immutable-image discovery for three strict SDK exit/exec shapes or
  * an exact legacy pair with no additional encoded firmware consumers and no
  * reviewed loader prologue. PAIR_ONLY returns count=2, entries[2]=0 and
- * exec_thunk=0; all other families return count=3. The complete admitted
+ * exec_thunk=0. TERMINAL_DISPATCH returns count=3 with a separately proved
+ * fatal allocator handler and a tagged alternate dispatch table; it cannot
+ * authorize that table before the fatal handler is terminally intercepted.
+ * Other families return count=3. The complete admitted
  * exit/cleanup/loader shapes and decoded platform literals must agree;
  * additional encoded PC-relative BIOS-vector/bootstrap consumers are refused.
  * Every returned entry window passes the conservative interior-target guard.

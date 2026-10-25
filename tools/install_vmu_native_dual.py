@@ -58,7 +58,7 @@ def sync_directory(path):
         os.close(fd)
 
 
-def install(root, package, profile=None, profile_runtime=False):
+def install(root, package, profile=None, profile_runtime=False, evolution_trace=False):
     root = Path(root).resolve(strict=True)
     package = Path(package).resolve(strict=True)
     p = load_personalizer(package)
@@ -80,9 +80,11 @@ def install(root, package, profile=None, profile_runtime=False):
     p.ordinary_path(module_path.parent, root, directory=True)
     old_gui = p.read_regular(gui_path, root, maximum=MAX_BYTES+64) if gui_path.exists() or gui_path.is_symlink() else None
     old_module = p.read_regular(module_path, root, maximum=MAX_BYTES+64) if module_path.exists() or module_path.is_symlink() else None
-    require(type(profile_runtime) is bool, 'Runtime profiling must be a boolean')
+    require(type(profile_runtime) is bool and type(evolution_trace) is bool and
+            not (profile_runtime and evolution_trace),
+            'Select either runtime profiling or Evolution tracing')
     selected = p.select_profile(root, profile)
-    runtime_mode = 2 if profile_runtime else 0
+    runtime_mode = 6 if evolution_trace else 2 if profile_runtime else 0
     personalized = p.personalize_bytes(module, manifest, info, selected['wire'],
                                       runtime_mode=runtime_mode)
     # Stage both files before publication; the GUI becomes visible last.
@@ -141,15 +143,20 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('sd_root', type=Path)
     parser.add_argument('--profile', type=Path)
-    parser.add_argument('--profile-runtime', action='store_true')
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--profile-runtime', action='store_true')
+    mode.add_argument('--evolution-trace', action='store_true',
+                      help='Use the existing exact Evolution 1 startup trace and capture')
     parser.add_argument('--package', type=Path, default=Path(__file__).resolve().parent,
                         help=argparse.SUPPRESS)
     args = parser.parse_args()
     try:
-        result = install(args.sd_root, args.package, args.profile, args.profile_runtime)
+        result = install(args.sd_root, args.package, args.profile, args.profile_runtime, args.evolution_trace)
         print('Installed native New (X) / Legacy (Y) and virtual A2 candidate '+result['build'])
         print('Prepared card files and existing game-launch settings were unchanged.')
         print(json.dumps(result, indent=2))
+        if args.evolution_trace:
+            print('Evolution 1 trace enabled; record startup and any complete repeating report cycle.')
         print('Safely eject, then use SCI / Background On / New (X) / CD music Off / RAM patches Off.')
     except (OSError, ValueError, KeyError, TypeError, UnicodeError) as error:
         parser.exit(2, 'Native X/Y installation refused: '+str(error)+'\n')

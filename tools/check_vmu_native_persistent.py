@@ -766,6 +766,34 @@ DUAL_READER_PREPARED_PINS={
  '_trace_packets':('434c4eb229830ff7684872b4f14dcf2b3fff4be6294185f43bfbf923ac7adb05',116),
 }
 
+# The failure-witness dual image has a separately reviewed byte/typed-target
+# map. Never select it from a marker without its matching actual SH proof.
+DUAL_WITNESS_PREPARED_PINS={
+ '_kui_vmu_native_fault_capture_install':('db26024d38eaa6e0c440fdadf83df04c43a91a653ab21637e427502550726afb',560),
+ '_read_heap':('b99a77eee8f04769ddb256eccf74192b7530bcd6cd856974d1fc48132299213f',44),
+ '_diagnostic_complete':('b9678042962c1101391f7b3ee3d4379de1903b0e99825957f674d1fd2d2825fa',3240),
+ '_poll_lease_valid':('e129f554365b5074909c9ebe421607bd74a96a0694cba17fbd1b9c2b488c8473',168),
+ '_installed_hooks_valid':('5d07dd26ee0b66c99dc296095a7014c92f6e10d8ba8006ad0116ce4affaf4148',128),
+ '_kui_vmu_native_readonly_release_check':('6454c1083bb5d050bb55f71ecc724696a09e00a061d6bbf6af949622f1a31f60',728),
+ '_kui_vmu_native_passive_arm':('5f2cabde0a3126f7ce1264d0b49c46aa382d8eee84fb4c3adc656aaca085d63f',2136),
+ '_kui_vmu_native_passive_submit':('15ad2558742e2127021d089742464566337e42320652a30ba3510f91692f9a88',1420),
+ '_kui_vmu_native_passive_complete':('9d2853512c817b2ac0016bbf997467c78f38c96ab85ae4d75e6272fb8c4a182c',3144),
+ '_controller_context_valid':('7025717dc32c35ff866dacf2a8f7ca96818f35bf1792bf726fdfb5ddfe23022a',1372),
+ '_transfer_context_valid':('177581eac696f0a9f3ebfb4ae6a907f144d4195e31652a68a5cb8c39f49c3fbe',1180),
+ '_persistent_context_guard':('c64d3f0b1e8a23c587834effc7697d01d17a20b0a2032a0fe4713d6b69bbdf77',128),
+ '_kui_vmu_native_runtime_fault':('1b1f2de71209db7532af6052a23839a804bbaa2e962fd1c0c9ac15c99e208eaa',332),
+ '.rodata':('1507c89f0b84be0299b1a26c087f68b82da36b74b45e518a570bbd90eb366d00',4236),
+ '_kui_vmu_native_trace_report':('3430b5108dfee7bd102b333d46c6a691f8183b34bcda74bd710fc2299be67b92',1040),
+ '_trace_history':('f729e1616510bdbbb486cf517c40ad0ce0d7ce566101df01ba39695783104f7f',164),
+ '_report':('9ecec9d79facf07061c6fbc73c3be45d8650bdd71961709c6a7bff1f6374fed2',440),
+ '_trace_packets':('941b897f52a43ce958ffcbc045e31ad05f83e4febacaef3f9c97c0118f14ff79',116),
+ '_read_heap_raw':('b102f5d502f2a2e45998b1555e7bd6e56d2b7048059ebb9bb37ed6ee415a58cd',104),
+ '_normalize_heap_dispatch':('4b106db6f1dab52944d90c8dab29473ea496292f4e92fbdfc229ae69dcdecc56',276),
+ '_kui_vmu_native_terminal_dispatch_span.constprop.0':('843a0460a5268fd47a94404e6a0df8e6269c0a7049aa71a6d32196e25c47d2ea',128),
+ '_kui_vmu_native_terminal_dispatch_tagged.constprop.0':('1638ca28b7b5249584c59c425f10f78418c2740a45f325471b7eeee043512ca6',100),
+ '_failure_witness.isra.0':('8fab6b82f679e0ba509dd4420916770f8a40bd5708e67a274c399d3dda2a81f7',16),
+}
+
 def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *, build=None,
                             read_ahead_proof=None):
     """Keep the legacy proof, or require the complete prepared proof family."""
@@ -816,6 +844,12 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
     read_ahead_pio_pair=pio_pair_companion(worker,read_ahead_proof)
     from check_native_dual_readers import dual_companion
     dual_reader=dual_companion(worker,read_ahead_proof)
+    from check_native_controller_failure_witness import witness_companion
+    controller_witness=witness_companion(worker,read_ahead_proof)
+    require(not controller_witness or dual_reader,
+            'prepared controller witnesses require the complete dual companion')
+    require(not controller_witness or DUAL_WITNESS_PREPARED_PINS,
+            'missing separately reviewed prepared controller witness pins')
     require(not read_ahead_pio or read_ahead_diagnostic,'prepared PIO profile lacks its diagnostic worker')
     pins={**PREPARED_PINS,**(STALL_PREPARED_PINS if stall_marker else {}),
           **(COOPERATIVE_PREPARED_PINS if cooperative else {}),
@@ -826,7 +860,8 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
           **(READ_AHEAD_DIAGNOSTIC_PREPARED_PINS if read_ahead_diagnostic else {}),
           **(READ_AHEAD_PIO_PREPARED_PINS if read_ahead_pio else {}),
           **(READ_AHEAD_PIO_PAIR_PREPARED_PINS if read_ahead_pio_pair else {}),
-          **(DUAL_READER_PREPARED_PINS if dual_reader else {})}
+          **(DUAL_READER_PREPARED_PINS if dual_reader else {}),
+          **(DUAL_WITNESS_PREPARED_PINS if controller_witness else {})}
     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
                        ("_protected_ranges", 512), ("_protected_count", 4),
@@ -926,6 +961,8 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
             "read_ahead_pio_companion_required":read_ahead_pio,
             "read_ahead_pio_pair_companion_required":read_ahead_pio_pair,
             "dual_reader_companion_required":dual_reader,
+            "controller_failure_witness":(read_ahead_proof['controller_failure_witness']
+                if controller_witness else {"enabled":False}),
             "constant_build_identity_bound_to_verified_runtime": True, "identity_words": 8,
             "protected_interval_limit": 64, "hook_word_limit": 32, "free_node_limit": 1024,
             "full_dynamic_free_list_each_release": True, "full_storage_guards_before_and_after_loan": True,
@@ -1130,7 +1167,8 @@ def check_resume_publication(stage, cached, self_test=False):
             "gateway_mutation_rejections": rejected, "complete_linked_assembly_pinned": True}
 
 
-def check_worker_publication(stage, cached, disassembly, self_test=False, *, background_tail=None):
+def check_worker_publication(stage, cached, disassembly, self_test=False, *, background_tail=None,
+                             worker=None,read_ahead_proof=None):
     """Pin the P2 publisher and witness initialization before its first arm."""
     image = inspect_elf(stage[0], HIGH, LIMIT)
     symbols = stage[4]
@@ -1148,6 +1186,17 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
     if not cached:
         return report
     begin, body, _ = symbol_bytes(stage, "_native_passive_run", 2)
+    progress=symbols.get('__kui_native_cold_progress_stage')
+    witness=False
+    if progress is not None:
+        from check_native_controller_failure_witness import witness_companion
+        require(worker is not None and witness_companion(worker,read_ahead_proof) and
+                progress==symbols.get('__kui_native_dual_readers_stage')==(1,0,0,0xfff1),
+                'worker publication progress requires the complete exact witness worker proof')
+        require(len(body)==1996 and hashlib.sha256(body).hexdigest()==
+                '51da99254ae17780acfbf3c56915f58e3107b64e559767570281545d3e2eaaeb',
+                'witness worker-publication passive-run instructions/literals changed')
+        witness=True
     words = list(struct.unpack("<" + "H" * (len(body) // 2), body))
     mode_config = "_native_runtime_mode" in symbols
     background = '_native_background_boot_region' in symbols
@@ -1161,7 +1210,20 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             return None
         return struct.unpack("<I", region(body, at - begin, 4, "installer literal"))[0]
     candidates = []
-    for i in range(len(words) - 20):
+    if witness:
+        i=0x46c//2
+        require(background and mode_config and words[i]&0xff00==0xdc00 and
+            literal(i)==symbols['_native_driver'][0] and words[i+1]&0xff00==0xdd00 and literal(i+1)==address and
+            words[i+2:i+8]==[0x53c7,0x55f7,0x2232,0x53ce,0x359c,0x528d] and
+            words[i+8]&0xff00==0xd900 and literal(i+8)==symbols['_retail_display_line'][0] and
+            words[i+9:i+11]==[0x4d0b,0x2232] and words[i+11]&0xff00==0xd400 and
+            words[i+12:i+14]==[0x490b,0x1fba] and words[i+14]&0xff00==0xd000 and
+            literal(i+14)==symbols['_kui_vmu_native_worker_call'][0] and
+            words[i+15:i+22]==[0x67f3,0x558a,0x7728,0x5483,0x66f3,0x400b,0x7644] and
+            words[i-4:i]==[0x8d02,0x6493,0xadde,0xe503],
+            'witness worker-publication exact setup/first-arm block differs')
+        candidates.append((i,9,20,5))
+    for i in (() if witness else range(len(words) - 20)):
         # Original configuration layout: the publisher uses callee-saved R14.
         old = (words[i] & 0xff00 == 0xde00 and literal(i) == address and
                words[i + 1:i + 10] ==
@@ -1281,32 +1343,39 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             words[i+6]&0xff00==0xd400 and literal(i+6)==symbols['__native_worker_blob_begin'][0] and
             words[i+7:i+11]==[0x1f92,0x1fa1,0x400b,0x2f82]):
             relocations.append((i,i+9,4,True))
+        if (witness and i==0x272//2 and words[i+1]==0x37b8 and
+            words[i+2]&0xff00==0xdd00 and literal(i+2)==SPAN and words[i+3]==0x55f7 and
+            words[i+4]&0xff00==0xd600 and literal(i+4)==symbols['__native_worker_blob_end'][0] and
+            words[i+5]&0xff00==0xd400 and literal(i+5)==symbols['__native_worker_blob_begin'][0] and
+            words[i+6:i+10]==[0x1f92,0x1fd1,0x400b,0x2f82]):
+            relocations.append((i,i+8,5,True))
     zero_patterns = (
         [0x56f3, 0x6ba3, 0x3b8c, 0x3688, 0x64b3, 0x4c0b, 0xe500],
         [0x56f3, 0x6ba3, 0x3b9c, 0x3698, 0x64b3, 0x4c0b, 0xe500],
         [0x6ba3, 0x3b9c, 0xe500, 0x66d3, 0x64b3, 0x4c0b, 0x3698],
         [0x6e83, 0x3eac, 0xe500, 0x66b3, 0x64e3, 0x4c0b, 0x36a8],
         [0x6e83,0x3e9c,0xe500,0x66b3,0x64e3,0x4c0b,0x3698],
-        [0x5bf7,0xe500,0x51f7,0x66a3,0x3b8c,0x3618,0x4d0b,0x64b3])
-    zero_families = (0, 1, 1, 2, 3, 4)
+        [0x5bf7,0xe500,0x51f7,0x66a3,0x3b8c,0x3618,0x4d0b,0x64b3],
+        [0x5bf7,0xe500,0x52f7,0x66d3,0x3b8c,0x3628,0x4e0b,0x64b3])
+    zero_families = (0, 1, 1, 2, 3, 4, 5)
     zeroes = [(i,zero_families[j],j) for j,pattern in enumerate(zero_patterns)
               for i in range(len(words)-len(pattern)) if words[i:i+len(pattern)]==pattern and
-              (j!=5 or background)]
+              (j!=5 or background) and (j!=6 or witness)]
     releases = [i for i in range(len(words) - 3) if words[i:i + 3] ==
-                ([0x52aa,0x7214,0x2022] if register_family==4 else
+                ([0x52aa,0x7214,0x2022] if register_family in (4,5) else
                  [0x52ba, 0x7214, 0x2022] if register_family in (2,3) else [0x53ca, 0x7314, 0x2032])]
     require(len(relocations) == len(zeroes) == len(releases) == 1,
             "missing linked relocation/BSS/release-cell initialization witnesses")
     require(relocations[0][2] == zeroes[0][1] == register_family,
             "installer relocation/BSS/publication use inconsistent load/length registers")
-    require(relocations[0][3] == mode_config and (zeroes[0][2] in (2, 3, 4, 5)) == mode_config,
+    require(relocations[0][3] == mode_config and (zeroes[0][2] in (2, 3, 4, 5, 6)) == mode_config,
             "installer mode configuration uses an unreviewed relocation/zero-fill ABI")
     relocate_pc = begin + relocations[0][1] * 2
-    zero_pc = begin + (zeroes[0][0] + (6 if register_family==4 else 5)) * 2
+    zero_pc = begin + (zeroes[0][0] + (6 if register_family in (4,5) else 5)) * 2
     release_pc = begin + (releases[0] + 2) * 2
     # The compiler keeps memset in callee-saved R12 until this BSS call.
     # Pin its initializer and reject any intervening write to R12.
-    memset_reg=13 if register_family==4 else 12
+    memset_reg=14 if register_family==5 else 13 if register_family==4 else 12
     memset_loads = [i for i in range(zeroes[0][0]) if words[i] & 0xff00 == 0xd000|(memset_reg<<8) and
                     literal(i) == symbols["_memset"][0]]
     require(len(memset_loads) == 1, "BSS zeroing has no exact linked memset target")
@@ -1357,10 +1426,10 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
     # v3 puts the consumer-cell store in the publisher JSR delay slot.
     # The exact block above pins that store; the JSR node represents both
     # instructions in this CFG, before control reaches the publisher.
-    dynamic_stores = (4,8) if register_family==4 else (5, 8) if register_family in (2, 3) else (4, 7)
+    dynamic_stores = (4,9) if register_family==5 else (4,8) if register_family==4 else (5, 8) if register_family in (2, 3) else (4, 7)
     witnesses = {relocate_pc, zero_pc, release_pc,
                  *(begin + (first + offset) * 2 for offset in dynamic_stores)}
-    if register_family in (2, 3, 4):witnesses.add(begin + (first - 4) * 2)
+    if register_family in (2, 3, 4, 5):witnesses.add(begin + (first - 4) * 2)
     require(witnesses <= dom[publish] and publish in dom[arm],
             "installer can enter P1 arm before initialization/publication")
     require(begin + 2 * memset_loads[0] in dom[zero_pc],
@@ -1386,11 +1455,15 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             choices=[j for j in range(len(words)-7) if
                 words[j]&0xff00==0xd000 and literal(j)==symbols['_native_runtime_diagnostics'][0] and
                 words[j+1:j+7]==[0x400b,0x0009,0x51c8,0x31a0,0x8f09,0x1b0f]]
+        elif register_family==5:
+            choices=[j for j in (0x12e//2,) if
+                words[j]&0xff00==0xd000 and literal(j)==symbols['_native_runtime_diagnostics'][0] and
+                words[j+1:j+7]==[0x400b,0x0009,0x51a8,0x31b0,0x8f08,0x1c0f]]
         require(len(choices) == 1, 'missing exact runtime diagnostics return-to-config store')
         diagnostics_getter = choices[0]
         bases = []
         for j in range(diagnostics_getter - 3):
-            config_register=11 if register_family==4 else 13
+            config_register=12 if register_family==5 else 11 if register_family==4 else 13
             if words[j] & 0xFF00 != 0x9000|(config_register<<8) or words[j + 1] != 0xE630 or words[j + 3] != 0x300c|(config_register<<8)|0xf0:
                 continue
             at = begin + 2 * j + 4 + 2 * (words[j] & 255)
@@ -1398,8 +1471,8 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 bases.append(j)
         require(len(bases) == 1 and config_base + 60 - config_start == 0x8F8,
                 'diagnostics store no longer names exact final config word')
-        getter_pc = begin + 2 * (diagnostics_getter + (1 if register_family==4 else 3))
-        store_call_pc = begin + 2 * (diagnostics_getter + (5 if register_family==4 else 7))
+        getter_pc = begin + 2 * (diagnostics_getter + (1 if register_family in (4,5) else 3))
+        store_call_pc = begin + 2 * (diagnostics_getter + (5 if register_family in (4,5) else 7))
         base_pc = begin + 2 * (bases[0] + 3)
         require(base_pc in dom[getter_pc] and getter_pc in dom[store_call_pc] and store_call_pc in dom[arm],
                 'runtime mode/config store can be bypassed before worker arm')
@@ -1430,13 +1503,20 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             words[j+2]==0x64f3 and words[j+4]==0x2919 and
             words[j+5]&0xff00==0xd100 and literal(j+5)==0x80000000 and
             words[j+6:j+11]==[0x7448,0x6683,0xeb01,0x4d0b,0x291b]]
+        if witness:
+            normalizers=[j for j in (0x50//2,) if
+                words[j]&0xff00==0xd100 and literal(j)==0x1fffffff and
+                words[j+1]&0xff00==0xde00 and literal(j+1)==symbols['_memset'][0] and
+                words[j+2]==0x64f3 and words[j+4]==0x2919 and
+                words[j+5]&0xff00==0xd100 and literal(j+5)==0x80000000 and
+                words[j+6:j+11]==[0x7444,0x6683,0xec01,0x4e0b,0x291b]]
         require(len(normalizers)==1,'Background prefix lacks its exact P1 payload normalization')
         normal=normalizers[0]
-        require(words[normal-12]==0x5cf8 and words[normal-10]&0xff00==0xd000 and
+        require(words[normal-12]==(0x5af8 if witness else 0x5cf8) and words[normal-10]&0xff00==0xd000 and
                 literal(normal-10)==symbols['_kui_vmu_native_heap_lease_valid'][0] and
-                words[normal-9:normal-7]==[0xe600,0x7c40] and
+                words[normal-9:normal-7]==[0xe600,0x7a40 if witness else 0x7c40] and
                 words[normal-7]&0xff00==0xd500 and literal(normal-7)==symbols['_native_read'][0] and
-                words[normal-6:normal]==[0x59ca,0x400b,0x54f8,0x2008,0x8deb,0xe500],
+                words[normal-6:normal]==[0x59aa if witness else 0x59ca,0x400b,0x54f8,0x2008,0x8deb,0xe500],
                 'Background prefix does not bind the loaded payload to its admitted native lease')
         memcpy_loads=[j for j in range(normal,(tail_entry-begin)//2) if
             words[j]&0xff00==0xd800 and literal(j)==symbols['_memcpy'][0]]
@@ -1444,7 +1524,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         require(background_tail.get('lease_bytes')==selected_lease,
                 'Background tail replay selected a different owned lease size')
         lease_constants=[j for j in range(normal,(tail_entry-begin)//2) if
-            words[j]&0xff00==0xda00 and literal(j)==selected_lease]
+            words[j]&0xff00==(0xdb00 if witness else 0xda00) and literal(j)==selected_lease]
         require(len(memcpy_loads)==len(lease_constants)==1,
                 'Background prefix needs exact unique memcpy/lease-size register initializers')
         memcpy_pc=begin+2*memcpy_loads[0];lease_pc=begin+2*lease_constants[0]
@@ -1457,6 +1537,15 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 (8,memcpy_pc+2,tail['copy_region']),
                 (10,lease_pc+2,tail_entry),(11,base_pc+2,tail_entry),
                 (12,begin+2*(normal-8)+2,tail_entry))
+        if witness:
+            require(background_tail.get('controller_failure_witness_profile') is True and
+                    background_tail.get('complete_passive_run_pin')==dict(bytes=1996,sha256=
+                        '51da99254ae17780acfbf3c56915f58e3107b64e559767570281545d3e2eaaeb'),
+                    'witness publication requires its exact compiled Background prefix proof')
+            stable=((9,norm_or+4,tail['relocate']),
+                    (8,memcpy_pc+2,tail['copy_region']),
+                    (11,lease_pc+2,tail_entry),(12,base_pc+2,tail_entry),
+                    (10,begin+2*(normal-8)+2,tail_entry))
         for register,first_pc,last_pc in stable:
             for pc,(_,mnemonic,operands) in decoded.items():
                 if first_pc<=pc<last_pc and mnemonic not in ('cmp/eq','cmp/hi','cmp/hs','tst'):
@@ -1475,16 +1564,160 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                   runtime_diagnostics_return_stored_in_exact_config=diagnostics_getter is not None,
                   runtime_diagnostics_store_dominates_arm=diagnostics_getter is not None,
                   linked_installer_cfg_nodes=len(seen))
+    if witness:
+        # Execute the new display-bearing block, including the real publisher
+        # and every first-arm argument instruction. The worker-call boundary
+        # itself has its separate complete gateway/arm proof in this audit.
+        import sys
+        sys.path.insert(0,str(ROOT/'tests'))
+        from test_vmu_native_heap_execution import SH,signed
+        from sh4_delay_slots import validate_delay_slot
+        require(__debug__,'worker publication instruction model requires Python assertions')
+        _,exports,_=symbol_bytes(worker,'_kui_vmu_native_worker_exports',1)
+        require(len(exports)==80,'publication model requires the exact typed worker export header')
+        worker_bytes=symbols['__native_worker_blob_end'][0]-symbols['__native_worker_blob_begin'][0]
+        class PublicationReplay(SH):
+            def __init__(self,raw,ccr,changes=()):
+                super().__init__(b'')
+                self.active=False
+                for kind,offset,load,_,count,_,_,_ in stage[2]:
+                    if kind==1 and count:self.store_block(load,stage[0][offset:offset+count])
+                self.load=(raw&0x1fffffff)|0x80000000
+                self.header=self.load+0x20000000
+                def moved(value):
+                    at=value&0x1fffffff
+                    if 0x0c100000<=at<0x0c120000:
+                        return (value&0xe0000000)+(self.load&0x1fffffff)+at-0x0c100000
+                    return value
+                wire=struct.pack('<20I',*(moved(value) for value in struct.unpack('<20I',exports)))
+                self.store_block(self.header,wire)
+                self.resume,self.consumer=struct.unpack_from('<2I',wire,48)
+                require(self.resume!=self.consumer and self.resume&0xff000000==self.consumer&0xff000000==0xac000000,
+                        'publication model requires distinct actual P2 dynamic cells')
+                self.write(self.resume,0);self.write(self.consumer,0)
+                self.driver=symbols['_native_driver'][0]
+                self.values=(0x8c123456,0x8c234568)
+                self.write(self.driver+28,self.values[0]);self.write(self.driver+56,self.values[1])
+                self.sp=0x8cdd0000;self.r[15]=self.sp
+                self.write(self.sp+28,worker_bytes)
+                self.r[8],self.r[9],self.r[11],self.r[2]=self.header,self.load,0,self.resume
+                self.pc=begin+2*(first-4);self.flag(True)
+                self.ccr,self.owner_ccr=ccr,ccr
+                self.purges=[];self.ccr_writes=[];self.cells=[]
+                self.inside=False;self.published=False;self.displayed=False;self.called=False
+                self.return_pc=None
+                for pc,word in changes:self.write(pc,word,2)
+                self.active=True
+
+            def read(self,at,count=4):
+                if at==0xff00001c:
+                    require(self.inside and count==4,'publication CCR read escapes the exact P2 publisher')
+                    return self.ccr
+                return super().read(at,count)
+
+            def write(self,at,value,count=4):
+                if self.active:
+                    if at==0xff00001c:
+                        require(self.inside and count==4 and value==self.owner_ccr|0x800,
+                                'publication changed owner CCR or lost its exact ICI command')
+                        self.ccr_writes.append(value);self.ccr=value;return
+                    require(not self.inside and count==4 and at in (self.resume,self.consumer,self.sp+40),
+                            'publication slice writes outside its exact dynamic cells/result word')
+                    self.cells.append((at,value))
+                super().write(at,value,count)
+
+            def plain(self,op,pc):
+                if op&0xf0ff==0x00a3:
+                    require(self.inside and pc&0xe0000000==0xa0000000,
+                            'worker publication purge executes outside P2')
+                    self.purges.append(self.r[op>>8&15]);return
+                super().plain(op,pc)
+
+            def call(self,target,pc):
+                if target==address:
+                    require(not self.inside and not self.published and self.r[4:6]==[self.load,self.load+worker_bytes] and
+                            self.cells==[(self.resume,self.values[0]),(self.consumer,self.values[1])],
+                            'worker publisher arguments/dynamic stores differ')
+                    self.inside=True;self.return_pc=self.pr;self.pc=target
+                elif target==symbols['_retail_display_line'][0]:
+                    text=b'COLD 34 WORKER ARM BEGIN\0'
+                    require(self.published and not self.displayed and self.block(self.r[4],len(text))==text and
+                            self.cells==[(self.resume,self.values[0]),(self.consumer,self.values[1]),(self.sp+40,0)],
+                            'worker arm progress call/order/result word differs')
+                    self.displayed=True
+                    for index in range(8):self.r[index]=(0x71350001+index*0x10203)&MASK
+                    self.flag(False);self.pc=self.pr
+                elif target==symbols['_kui_vmu_native_worker_call'][0]:
+                    require(self.published and self.displayed and self.r[15]==self.sp and
+                            self.r[4:8]==[self.read(self.header+12),self.read(self.header+40),self.sp+68,self.sp+40] and
+                            self.read(self.resume)==self.values[0] and self.read(self.consumer)==self.values[1] and
+                            self.read(self.sp+40)==0,
+                            'first worker-call ABI loses its published entries/stack/config/result')
+                    self.called=True
+                else:raise ValueError('unadmitted call in actual worker publication slice: '+hex(target))
+
+            def run(self):
+                for _ in range(100000):
+                    if self.called:return self
+                    if self.inside and self.pc==self.return_pc:
+                        require(self.purges==list(range(self.load,self.load+worker_bytes,32)) and
+                                self.ccr_writes==[self.owner_ccr|0x800],
+                                'worker publisher omitted/reordered purge lines or ICI')
+                        self.inside=False;self.published=True
+                    pc=self.pc;op=self.read(pc,2)
+                    target=None;delayed=False;call=False
+                    if op>>12 in (0xa,0xb):
+                        target=pc+4+2*signed(op&4095,12);delayed=True;call=op>>12==0xb
+                    elif op&0xf0ff in (0x400b,0x402b):
+                        target=self.r[op>>8&15];delayed=True;call=op&0xf0ff==0x400b
+                    elif op==0x000b:target=self.pr;delayed=True
+                    elif op>>8 in (0x89,0x8b,0x8d,0x8f):
+                        taken=bool(self.sr&1)==(op>>8 in (0x89,0x8d))
+                        delayed=op>>8 in (0x8d,0x8f)
+                        if delayed:
+                            slot=self.read(pc+2,2);validate_delay_slot(slot,pc);self.plain(slot,pc+2)
+                        self.pc=pc+4+2*signed(op&255,8) if taken else pc+(4 if delayed else 2)
+                        continue
+                    if delayed:
+                        if call:self.pr=pc+4
+                        slot=self.read(pc+2,2);validate_delay_slot(slot,pc);self.plain(slot,pc+2)
+                        if call:self.call(target,pc)
+                        else:self.pc=target&MASK
+                    else:self.plain(op,pc);self.pc+=2
+                raise ValueError('unbounded actual worker-publication slice')
+
+        actual_cases=0
+        for raw in (0x0c100000,0x8c300000,0xac900000):
+            for ccr in (0,0x100,0x105,0x1a7):
+                PublicationReplay(raw,ccr).run();actual_cases+=1
+        actual_refusals=0
+        if self_test:
+            changes=(((publish,9),),((begin+2*(first+4),9),),((publish+2,9),),
+                     ((begin+2*(first-3),0x6483),),((begin+2*(first+6),0x358c),),
+                     ((begin+2*(first+12),9),),((arm+2,0x7648),),
+                     ((address+12+8,9),),((address+12+24,9),))
+            for changed in changes:
+                try:PublicationReplay(0x8c300000,0x105,changed).run()
+                except (ValueError,AssertionError):actual_refusals+=1
+                else:raise ValueError('actual publication/first-call slice accepted a mutation')
+        report['witness_publication_execution']=dict(enabled=True,actual_linked_setup_and_publisher_executed=True,
+            actual_first_worker_call_arguments_executed=True,worker_gateway_and_arm_separately_proved=True,
+            hostile_display_volatile_registers=True,model_cases=actual_cases,mutation_rejections=actual_refusals,
+            complete_passive_run_bytes=1996,complete_passive_run_sha256=hashlib.sha256(body).hexdigest())
     if self_test:
         # An individually recognized register-family block must not be mixed
         # with the other family's relocation/zero-fill/publication. Mutate the
         # actual ELF instruction bytes, keeping its typed geometry unchanged.
-        alternate = 0 if register_family in (2, 3, 4) else 1 - register_family
+        alternate = 0 if register_family in (2, 3, 4, 5) else 1 - register_family
         mutations = [((zeroes[0][0] + 2, zero_patterns[alternate][2]),
                       (zeroes[0][0] + 3, zero_patterns[alternate][3])),
                      ((relocations[0][0] + 1, 0x0009),)]
         mutations.extend(background_prefix_mutations)
-        if register_family==4:
+        if register_family==5:
+            mutations.extend([((first+3,0x0009),),((first+6,0x35ac),),
+                              ((first+10,0x0009),),((first-3,0x64a3),),((first-2,0x0009),),
+                              ((first+12,0x0009),),((first+21,0x7648),)])
+        elif register_family==4:
             mutations.extend([((first+3,0x0009),),((first+6,0x35ac),),
                               ((first+9,0x0009),),((first-3,0x64a3),),((first-2,0x0009),)])
         elif register_family == 3:
@@ -1500,9 +1733,9 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             getter_literal = (((begin + 2 * diagnostics_getter + 4) & ~3) +
                               4 * (words[diagnostics_getter] & 255) - begin) // 2
             wrong_getter = symbols['_native_runtime_mode'][0]
-            store_index=diagnostics_getter+(6 if register_family==4 else 8)
+            store_index=diagnostics_getter+(6 if register_family in (4,5) else 8)
             mutations.extend([((store_index, 0x0009),),
-                              ((store_index, 0x1B0E if register_family==4 else 0x1D0E),),
+                              ((store_index, 0x1C0E if register_family==5 else 0x1B0E if register_family==4 else 0x1D0E),),
                               ((diagnostics_getter, 0xE000),),
                               ((getter_literal, wrong_getter & 0xFFFF),
                                (getter_literal + 1, wrong_getter >> 16))])
@@ -1515,7 +1748,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 struct.pack_into("<H", changed, offset + index * 2, value)
             try:
                 check_worker_publication((bytes(changed), *stage[1:]), cached, disassembly,
-                                         background_tail=background_tail)
+                                         background_tail=background_tail,worker=worker,read_ahead_proof=read_ahead_proof)
             except (ValueError, AssertionError, KeyError, struct.error):
                 rejected += 1
             else:
@@ -1617,8 +1850,8 @@ def check_cached_stack_guard(worker, self_test=False):
 
 class CompiledHeapReader(Machine):
     """Execute the actual emitted4B reader, trapping disallowed source loads."""
-    def __init__(self,worker,address,valid,*,body=None):
-        super().__init__(worker,"_read_heap",11,15,0x8c11fff0,body=body)
+    def __init__(self,worker,address,valid,*,body=None,reader="_read_heap"):
+        super().__init__(worker,reader,11,15,0x8c11fff0,body=body)
         self.address,self.valid=address,valid
         self.output=self.start_sp-64
         self.r[4:7]=[0,address,self.output]
@@ -1644,7 +1877,52 @@ class CompiledHeapReader(Machine):
         assert (self.mach,self.macl,self.gbr,self.sr&~1,self.fpscr,self.fr)==(mach,macl,gbr,sr&~1,fpscr,fr)
 
 
-def check_compiled_heap_reader(worker,self_test=False):
+class CompiledHeapAdapter(Machine):
+    """Actual wrapper with separately proved raw/normalizer ABI adversaries."""
+    def __init__(self,worker,mask,valid,normalized,*,body=None):
+        super().__init__(worker,"_read_heap",mask+31,mask,0x8c11ffe0,body=body)
+        self.valid,self.normalized=valid,normalized
+        self.address,self.output=0x8c220000,self.start_sp-64
+        self.r[4:7]=[0,self.address,self.output]
+        self.raw_target=worker[4]['_read_heap_raw'][0]
+        self.normalizer=worker[4]['_normalize_heap_dispatch'][0]
+
+    def call(self,target):
+        if target==self.stop_pc:return False
+        if target==self.raw_target:
+            require(not self.calls and self.r[4:7]==[0,self.address,self.output],
+                    'heap adapter loses its exact raw-reader arguments/order')
+            self.calls.append('raw')
+            if self.valid:self.write(self.output,0x5a73c129)
+            self.abi_return(int(self.valid));return True
+        require(target==self.normalizer and self.valid and self.calls==['raw'] and
+                self.r[4:6]==[self.address,self.output] and self.read(self.output)==0x5a73c129,
+                'heap adapter changes its exact conditional normalizer call')
+        self.calls.append('normalizer')
+        if self.normalized:self.write(self.output,0x8c110000)
+        self.abi_return(0xa37b0000|len(self.calls));return True
+
+    def check(self):
+        self.run()
+        require(self.calls==(['raw','normalizer'] if self.valid else ['raw']) and
+                self.r[0]==int(self.valid),'heap adapter loses the original raw-reader boolean')
+        require((self.mem.get(self.output)==
+                 (0x8c110000 if self.normalized else 0x5a73c129)) if self.valid else
+                self.output not in self.mem,
+                'heap adapter changes output on a refused raw read')
+        regs,pr,mach,macl,gbr,sr,fpscr,fr=self.before
+        require(self.r[8:]==regs[8:] and self.pr==pr and
+                (self.mach,self.macl,self.gbr,self.sr&~1,self.fpscr,self.fr)==
+                (mach,macl,gbr,sr&~1,fpscr,fr),'heap adapter loses its C ABI')
+
+
+def check_compiled_heap_reader(worker,self_test=False,*,read_ahead_proof=None):
+    from check_native_controller_failure_witness import witness_companion
+    witness=witness_companion(worker,read_ahead_proof)
+    # The new wrapper retains this identical raw address/width reader and
+    # adds only the separately executed, exact tagged-dispatch adapter.
+    # Require that complete matching proof before changing the model root.
+    reader="_read_heap_raw" if witness else "_read_heap"
     mmio={0xa05f6c04,0xa05f6c10,0xa05f6c14,0xa05f6c18}
     addresses={area|offset for area in range(0,0x100000000,0x20000000)
                for offset in (0,0xbfffffc,0xc000000,0xc000001,0xc000002,0xc000003,
@@ -1655,19 +1933,40 @@ def check_compiled_heap_reader(worker,self_test=False):
     for address in sorted(addresses):
         valid=(address in mmio or address&0xe0000000 in (0,0x80000000,0xa0000000) and
                not address&3 and 0xc000000<=physical(address)<=0xcfffffc)
-        CompiledHeapReader(worker,address,valid).check()
+        CompiledHeapReader(worker,address,valid,reader=reader).check()
     rejected=0
     if self_test:
-        _,body,_=symbol_bytes(worker,"_read_heap",2)
+        _,body,_=symbol_bytes(worker,reader,2)
         edits=((struct.pack("<H",0xc803),struct.pack("<H",0xc800),0x8c200001),
                (struct.pack("<I",0x60000000),bytes(4),0xec200000))
         for before,after,address in edits:
             require(body.count(before)==1,"compiled reader lacks unique address predicate mutation site")
-            try:CompiledHeapReader(worker,address,False,body=body.replace(before,after)).check()
+            try:CompiledHeapReader(worker,address,False,body=body.replace(before,after),reader=reader).check()
             except (ValueError,AssertionError,KeyError,struct.error):rejected+=1
             else:raise ValueError("compiled reader accepted weakened address predicate")
+    adapter={"enabled":False}
+    if witness:
+        cases=0
+        for mask in range(16):
+            for valid in (False,True):
+                for normalized in (False,True):
+                    CompiledHeapAdapter(worker,mask,valid,normalized).check();cases+=1
+        mutations=0
+        if self_test:
+            _,body,_=symbol_bytes(worker,'_read_heap',2)
+            require(body[14:16]==bytes.fromhex('0589'),'heap adapter lost its exact raw-failure branch')
+            changed=body[:14]+bytes.fromhex('058b')+body[16:]
+            try:CompiledHeapAdapter(worker,15,False,False,body=changed).check()
+            except (ValueError,AssertionError,KeyError,struct.error):mutations+=1
+            else:raise ValueError('heap adapter accepts inverted raw-reader admission')
+        adapter=dict(enabled=True,actual_wrapper_instruction_cases=cases,
+            mutation_rejections=mutations,all_imasks=True,
+            typed_callees='ABI adversaries; raw reader and tagged normalizer independently executed',
+            refused_raw_read_skips_normalization=True,raw_boolean_preserved_across_void_normalizer=True)
     return {"instruction_cases":len(addresses),"mutation_rejections":rejected,
-            "width":4,"source_loaded_only_after_full_predicate":True,"mmio_addresses":sorted(mmio)}
+            "width":4,"source_loaded_only_after_full_predicate":True,"mmio_addresses":sorted(mmio),
+            "reader_symbol":reader,"tagged_adapter_actual_companion_required":witness,
+            "normalization_adapter_gateway":adapter}
 
 
 def model_cached_hooks(binary, wire, symbols):
@@ -2581,7 +2880,8 @@ def check(directory, *, self_test=False, trace_startup=None):
     require(generate(data, binary, P1, SPAN) == wire, "relocation table differs from exact ELF extraction")
     runtime_fault = check_runtime_fault_gateways(worker, binary, wire, self_test)
     stack_guard = check_cached_stack_guard(worker, self_test) if cached else {"cached_runtime":False}
-    compiled_reader = check_compiled_heap_reader(worker,self_test)
+    compiled_reader = check_compiled_heap_reader(worker,self_test,
+        read_ahead_proof=base.get('background_reader',{}).get('read_ahead_companion'))
     stall=worker[4].get('__kui_native_reader_stall_capture')
     low_stall=read_elf(directory/'resident-sci.elf')[4].get('__kui_native_reader_stall_resident')
     require(bool(stall)==bool(low_stall),'reader stall worker/resident diagnostic mismatch')
@@ -2642,7 +2942,8 @@ def check(directory, *, self_test=False, trace_startup=None):
     objdump = shutil.which("sh-elf-objdump") or str(ROOT / ".deps/sh-elf/bin/sh-elf-objdump")
     stage_disassembly = subprocess.check_output([objdump, "-d", str(directory / "stage.elf")], text=True)
     publisher = check_worker_publication(stage, cached, stage_disassembly, self_test,
-        background_tail=base.get('background_reader',{}).get('stage',{}).get('tail_copy_replay'))
+        background_tail=base.get('background_reader',{}).get('stage',{}).get('tail_copy_replay'),
+        worker=worker,read_ahead_proof=read_ahead_proof)
     seed = audit_cache_seed(stage[0], (directory / "entry.elf").read_bytes(),
                             (directory / "retail-maple-observe.kui").read_bytes(), cached_code=cached)
     runtime_mode = audit_runtime_mode(stage[0], (directory / "entry.elf").read_bytes(),

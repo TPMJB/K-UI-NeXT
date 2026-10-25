@@ -26,7 +26,8 @@ static struct {
     unsigned cancel_checks,cancel_at,allocation_at,allocations;
     unsigned fail,cancel_when;bool cancelled;
 } io;
-enum {FAIL_NONE,FAIL_OPEN,FAIL_WRITE,FAIL_SHORT,FAIL_SYNC,FAIL_CLOSE,FAIL_READBACK,FAIL_RENAME,FAIL_MKDIR};
+enum {FAIL_NONE,FAIL_OPEN,FAIL_WRITE,FAIL_SHORT,FAIL_SYNC,FAIL_CLOSE,FAIL_READBACK,FAIL_RENAME,FAIL_MKDIR,
+    FAIL_BOOT_READ,FAIL_BOOT_CANCEL};
 static int node_find(const char *path) {for(unsigned i=0;i<20u;i++) if(disk[i].exists && !strcmp(disk[i].path,path)) return (int)i;return -1;}
 static unsigned node_add(const char *path,bool directory) {
     int existing=node_find(path);if(existing>=0) return (unsigned)existing;
@@ -93,6 +94,8 @@ enum kui_game_result kui_game_image_read(const struct kui_game_image *image,uint
     unsigned count,enum kui_game_sector_format format,void *out,size_t capacity) {
     (void)image;CHECK(lba>=100u && count==1u && format==KUI_GAME_SECTOR_MODE1 && capacity==2048u);
     size_t at=(size_t)(lba-100u)*2048u;CHECK(at<io.bytes);++io.reads;
+    if(io.fail==FAIL_BOOT_READ)return KUI_GAME_IO;
+    if(io.fail==FAIL_BOOT_CANCEL)return KUI_GAME_CANCELLED;
     size_t n=io.bytes-at;if(n>2048u) n=2048u;memset(out,0,capacity);memcpy(out,io.boot+at,n);
     return KUI_GAME_OK;
 }
@@ -120,6 +123,7 @@ static struct kui_game_image game;
 static struct kui_retail_manifest map;
 static uint8_t module[4096],before[4096];
 static struct kui_runtime_image package;
+static struct native_cache_source_proof source_proof;
 static bool cancelled(void) {
     if(io.cancel_at && ++io.cancel_checks==io.cancel_at) io.cancelled=true;
     return io.cancelled;
@@ -147,8 +151,13 @@ static unsigned seed_cache(const uint8_t *boot,size_t bytes,bool actual) {
     disk[n].size=1024u;return n;
 }
 static enum native_cache_result prepare(bool native,uint32_t options,bool patches,const char *source) {
-    enum native_cache_result result=native_cache_prepare(&game,&map,native,options,patches,&package,source,logger,cancelled);
+    source_proof=(struct native_cache_source_proof){true,UINT32_MAX};
+    enum native_cache_result result=native_cache_prepare(&game,&map,native,options,patches,&package,source,logger,cancelled,&source_proof);
     CHECK(io.opens==io.closed);
+    if(source_proof.complete) {
+        CHECK(io.reads==(io.bytes+2047u)/2048u);
+        CHECK(source_proof.crc32==kui_crc32(0u,io.boot,io.bytes));
+    } else CHECK(!source_proof.crc32);
     if(result!=NATIVE_CACHE_READY) CHECK(!memcmp(module,before,sizeof(module)));
     else {
         CHECK(!memcmp(module,before,128u) && !memcmp(module+128u+1120u,before+128u+1120u,sizeof(module)-128u-1120u));
@@ -225,7 +234,19 @@ static void dual_gates_and_hits(void) {
         setup(boot,sizeof(boot));map.reader=reader;memcpy(module+3072u,&cap,sizeof(cap));
         memcpy(before,module,sizeof(module));io.cancel_at=1u;
         CHECK(prepare(true,reader,false,"/Games/PS2")==NATIVE_CACHE_CANCELLED && !io.reads);
+        for(unsigned fault=FAIL_BOOT_READ;fault<=FAIL_BOOT_CANCEL;fault++) {
+            setup(boot,sizeof(boot));map.reader=reader;memcpy(module+3072u,&cap,sizeof(cap));
+            memcpy(before,module,sizeof(module));io.fail=fault;
+            CHECK(prepare(true,reader,false,"/Games/PS2")==
+                (fault==FAIL_BOOT_CANCEL?NATIVE_CACHE_CANCELLED:NATIVE_CACHE_SKIPPED));
+            CHECK(!source_proof.complete && !source_proof.crc32 && io.reads==1u && !io.builds);
+        }
     }
+    uint8_t tail[4097];for(unsigned i=0;i<sizeof(tail);i++)tail[i]=(uint8_t)(i*43u+3u);
+    setup(tail,sizeof(tail));map.reader=KUI_RETAIL_READER_ASYNC;
+    memcpy(module+3072u,&cap,sizeof(cap));memcpy(before,module,sizeof(module));
+    CHECK(prepare(true,KUI_RETAIL_READER_ASYNC,false,"/Games/Unknown")==NATIVE_CACHE_SKIPPED);
+    CHECK(source_proof.complete && io.reads==3u && io.builds==1u && !io.writes);
 }
 static void actual_frontend(const char *path) {
     FILE *f=fopen(path,"rb");CHECK(f && !fseek(f,0,SEEK_END));long length=ftell(f);CHECK(length>128 && length<=0xc00000);rewind(f);

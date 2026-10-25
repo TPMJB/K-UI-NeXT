@@ -43,6 +43,9 @@ static bool native_sdk_sci_route_disjoint(uint32_t vbr,uint32_t payload) {
 #endif
 
 static void __attribute__((noipa)) native_sdk_sci_route_bind(uint32_t payload) {
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 40 SDK ROUTE BIND BEGIN");
+#endif
     struct kui_native_sdk_sci_runtime_exports exports;
     uint32_t descriptor,sr,vbr;
     if(resident_bytes<KUI_NATIVE_SDK_SCI_DESCRIPTOR_ENTRY_OFFSET+4u ||
@@ -138,4 +141,7 @@ static void __attribute__((noipa)) native_sdk_sci_route_bind(uint32_t payload) {
     if(native_word((address+KUI_NATIVE_SDK_SCI_COOKIE_OFFSET)|UINT32_C(0x20000000))!=
        KUI_NATIVE_SDK_SCI_COOKIE)native_report(10u,9u);
     retail_display_line("SDK SCI ROUTE READY / LEVEL 1");
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 41 SDK ROUTE BOUND");
+#endif
 }

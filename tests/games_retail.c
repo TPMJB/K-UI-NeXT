@@ -64,7 +64,7 @@ static uint32_t track_sectors(unsigned i) { return i < 4 ? counts[i] : 4u; }
  * case also cooks track 1, while audio always remains raw. */
 static bool cooked_track(unsigned i) {
     bool cooked = !strcmp(test.fault, "cooked-2048") || !strcmp(test.fault, "cooked-boot-tail") ||
-        !strcmp(test.fault, "async-cooked-2048") || !strcmp(test.fault, "ce-probe-cooked");
+        !strcmp(test.fault, "async-cooked-2048") || !strcmp(test.fault, "ce-probe-cooked") || !strcmp(test.fault,"native-dual-x-cooked-report");
     return cooked && (i == 2 || (i == 0 && !strcmp(test.fault, "async-cooked-2048")));
 }
 static uint32_t track_stride(unsigned i) { return cooked_track(i) ? 2048u : 2352u; }
@@ -117,7 +117,7 @@ static struct format_expect format_expect(const char *directory) {
 }
 static void log_line(const char *format, ...) {
     if(!strcmp(format,"Retail boot: %.100s; product=%s version=%s region=%s")) test.hash_phase=1;
-    if(strstr(format,"checking exact executable")) test.hash_phase=2;
+    if(strstr(format,"checking exact executable") || strstr(format,"Native VMU mapping: reading")) test.hash_phase=2;
     if(strstr(format,"mapping %u tracks")) test.hash_phase=0;
     if(strstr(format,"Launch report unavailable; continuing")) test.report_warning=true;
     if(strstr(format,"Launch report skipped: selected image shares")) test.report_skipped=true;
@@ -203,6 +203,8 @@ FRESULT __wrap_f_read(FIL *file, void *buffer, UINT bytes, UINT *got) {
                     assert(before>=test.hash_begin[phase] && before<=test.hash_end[phase] &&
                         bytes<=test.hash_end[phase]-before);
                 }
+                if(phase==1u && test.hash_reads[phase]==2u && fault("native-dual-retry-report")) {test.injected=true;return FR_DISK_ERR;}
+                if(phase==1u && test.hash_reads[phase]==2u && fault("native-dual-cancel-source"))test.cancelled=test.injected=true;
                 if(checksum_case() && phase==1u && test.hash_reads[phase]==2u) {
                     if(strstr(test.fault,"read-fail")) {test.injected=true;return FR_DISK_ERR;}
                     if(strstr(test.fault,"short-read")) {assert(*got);--*got;test.injected=true;}
@@ -599,7 +601,7 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
     assert(map->track_count == track_count() &&
            map->extent_count >= (audio_unmapped() ? 2u : track_count()));
     assert(map->session_lba == 45000 && map->boot_lba == 45021 &&
-           map->boot_bytes == (launch_case() || !strcmp(test.fault, "boot-tail") || !strcmp(test.fault, "cooked-boot-tail") ? 3001u : 4096u));
+           map->boot_bytes == (launch_case() || native_dual_report() || !strcmp(test.fault, "boot-tail") || !strcmp(test.fault, "cooked-boot-tail") ? 3001u : 4096u));
     assert(!strcmp(map->title, !strcmp(test.fault, "other-title") ? "Independent Native Game" :
         !strcmp(test.fault, "blank-title") ? "Untitled game" : "DEAD OR ALIVE 2"));
     assert(!strcmp(map->bootfile, !strcmp(test.fault, "alternate-bootfile") ? "ALT_BOOT.BIN" : "1ST_READ.BIN"));
@@ -677,7 +679,7 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
     assert(map->boot_crc32 == (cooked_track(2) || launch_case() || native_dual_report() ? boot_crc : 0));
     if(launch_case()) assert(map->flags & KUI_RETAIL_IMAGE_BOOT_CRC);
     if(cooked_track(2))
-        assert(boot_crc == (!strcmp(test.fault, "cooked-boot-tail") ? 0x4a3efbf8u : 0xbaf6ad9cu));
+        assert(boot_crc == (map->boot_bytes==3001u ? 0x4a3efbf8u : 0xbaf6ad9cu));
     assert(kui_retail_image_read(&reader, map->session_lba, 16,
         KUI_GAME_SECTOR_MODE1, actual, 32768) == KUI_GAME_OK);
     uint32_t ip_crc = kui_retail_crc32(0, actual, 32768), expected_ip_crc = 0;
@@ -891,6 +893,8 @@ static void check_launch(const char *directory) {
     puts("Launch preparation PASS: only report writes admitted; original game/package bytes exported for independent comparison");
 }
 static void check_native_dual(const char *directory) {
+    test.hash_begin[0]=0u;test.hash_end[0]=16u*track_stride(2);
+    test.hash_begin[1]=21u*track_stride(2);test.hash_end[1]=23u*track_stride(2);test.hash_bounded=true;
     const bool success=!strcmp(test.fault,"native-dual-x") || !strcmp(test.fault,"native-dual-y") || native_dual_report();
     uint32_t request=strstr(test.fault,"-y")?KUI_RETAIL_READER_ASYNC_EAGER:KUI_RETAIL_READER_ASYNC;
     struct kui_runtime_image image={0};struct kui_game_ram_patches patches={0};
@@ -901,10 +905,15 @@ static void check_native_dual(const char *directory) {
     assert(result==success && !test.ordinary_package_opens);
     if(result) {
         assert(test.dual_package_opens==1u && kui_native_dual_descriptor_find(image.data,image.info.payload_bytes,NULL)==1);
+        if(native_dual_report()) {
+            assert(test.hash_reads[0]==16u && test.hash_reads[1]==(fault("native-dual-retry-report")?4u:2u));
+            printf("Native dual exact source: %u raw/cooked reads; max %u bytes; CRC plus native proof share source when available\n",test.hash_reads[1],test.hash_max[1]);
+        }
         check_mapping(directory,&image);host_write(directory,"dual-payload.bin",image.data,image.info.payload_bytes);
         printf("Native dual prepared: package=retail-native-dual.kui reader=%u\n",request);
     } else assert(!image.data && !image.info.payload_bytes && !test.writes);
     if(fault("native-dual-cancel") || fault("native-dual-patches"))assert(!test.connects && !test.read_calls);
+    if(fault("native-dual-cancel-source"))assert(test.cancelled && test.injected && test.hash_reads[1]==2u);
     kui_runtime_free(&image);
     if(native_dual_report()) {
         export_launch_files(directory);

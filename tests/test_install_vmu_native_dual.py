@@ -101,6 +101,30 @@ class DualInstallTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('New (X) / Legacy (Y)', result.stdout)
 
+    def test_evolution_trace_targets_dual_module_and_preserves_card(self):
+        before = self.snapshot()
+        result = subprocess.run([sys.executable, str(self.package/'install.py'), str(self.card),
+                                 '--profile', str(self.profile.relative_to(self.card)), '--evolution-trace'],
+                                cwd=self.root, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Evolution 1 trace enabled', result.stdout)
+        offset = self.manifest['runtime_mode_module_offset']
+        self.assertEqual(mode.decode_mode(self.dual.read_bytes()[offset:offset+32]), 6)
+        after = self.snapshot()
+        self.assertEqual(set(before), set(after))
+        self.assertTrue(all(after[name] == value for name, value in before.items()
+                            if name not in (str(installer.GUI), str(installer.DESTINATION))))
+
+    def test_conflicting_diagnostics_refuse_without_writes(self):
+        before = self.snapshot()
+        with self.assertRaisesRegex(ValueError, 'Select either'):
+            installer.install(self.card, self.package, self.profile, True, True)
+        self.assertEqual(before, self.snapshot())
+        result = subprocess.run([sys.executable, str(self.package/'install.py'), str(self.card),
+                                 '--profile-runtime', '--evolution-trace'], capture_output=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(before, self.snapshot())
+
     def test_metadata_and_gui_mutations_refuse_before_installed_writes(self):
         before = self.snapshot()
         for key, value in (('schema', 'unknown'), ('build', 'b'*12),

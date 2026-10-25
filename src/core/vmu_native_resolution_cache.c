@@ -101,7 +101,9 @@ static bool schema(const struct kui_vmu_native_resolution *r) {
         (((r->exits.family==KUI_VMU_NATIVE_EXIT_FAMILY || r->exits.family==KUI_VMU_NATIVE_EXIT_PVR_CLEAR ||
            r->exits.family==KUI_VMU_NATIVE_EXIT_PVR_COMPACT) && r->exits.count==KUI_VMU_NATIVE_EXIT_ENTRIES) ||
          (r->exits.family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY && r->exits.count==2u &&
-          !r->exits.entries[2] && !r->exits.exec_thunk));
+          !r->exits.entries[2] && !r->exits.exec_thunk) ||
+         (r->exits.family==KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH && r->exits.count==3u &&
+          r->exits.entries[2] && r->exits.terminal_dispatch.table));
 }
 static bool decode(const void *wire,size_t n,struct kui_vmu_native_resolution *r,uint8_t digest[32]) {
     if(n!=KUI_VMU_NATIVE_RESOLUTION_CACHE_BYTES || !object(wire,n)) return false;

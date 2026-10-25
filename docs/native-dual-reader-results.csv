@@ -1,17 +1,17 @@
 Game,Reader,Build,Image / revision,Boot,FMV,Engine scene,Movement / transitions,A2 load,A2 save,Power-cycle reload,Physical A1,Capture,Notes
-Evolution 2,New (X),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,
+Evolution 2,New (X),af9e01c8a271,,PASS,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,Behaves as expected per owner; individual save/capture checks not separately reported
 Evolution 2,Legacy (Y),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,
-Evolution 1,New (X),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,
+Evolution 1,New (X),af9e01c8a271,,BLACK AFTER MPEG SOFDEC,DID NOT START,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,Owner report; other checks not reached
 Evolution 1,Legacy (Y),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,
-Grandia II,New (X),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,
+Grandia II,New (X),af9e01c8a271,,PASS,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,Flawless per owner with New background reader; individual persistence/capture checks not separately reported
 Grandia II,Legacy (Y),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,
-Skies of Arcadia,New (X),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,
+Skies of Arcadia,New (X),af9e01c8a271,,VMU STOP 0x47,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,Submitted30/completed29; fast-controller completion guard; no in-game SD reads/writes recorded
 Skies of Arcadia,Legacy (Y),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,
-Power Stone 2,New (X),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,
+Power Stone 2,New (X),af9e01c8a271,,PASS,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,Flawless per owner; individual persistence/capture checks not separately reported
 Power Stone 2,Legacy (Y),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,
-Sonic Adventure 2,New (X),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,
+Sonic Adventure 2,New (X),af9e01c8a271,,PASS,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,Flawless per owner; individual persistence/capture checks not separately reported
 Sonic Adventure 2,Legacy (Y),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,
-Rayman 2,New (X),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,
+Rayman 2,New (X),af9e01c8a271,,FROZEN AFTER BOOTSTRAP 2,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,Build header only; no specific error reported
 Rayman 2,Legacy (Y),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,
-Record of Lodoss War,New (X),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,
+Record of Lodoss War,New (X),af9e01c8a271,,VMU STOP 0x03,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,Submitted4/completed4; submit lease-identity/export guard; no in-game SD reads/writes recorded
 Record of Lodoss War,Legacy (Y),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,

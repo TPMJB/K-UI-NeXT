@@ -250,7 +250,7 @@ def c_body(text, signature):
     return text[start:end]
 
 
-def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000):
+def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,witness=False):
     """Replay the linked installer tail through its first worker relocation.
 
     The already audited prefix proves the native allocation and normalizes
@@ -274,12 +274,30 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000)
         if not begin <= address <= begin + len(body) - 4:
             return None
         return struct.unpack_from("<I", body, address - begin)[0]
-    starts = [begin + 2 * index for index in range(len(words) - 5)
-              if words[index:index + 2] == [0x51C8, 0x31A0] and
-              words[index + 2] >> 8 == 0x8F and words[index + 3] == 0x1B0F and
-              literal(index + 4) == 0x20000]
-    require(len(starts) == 1, "missing unique compiled Background lease-size/tail-copy entry")
-    start = starts[0]
+    if witness:
+        # This is a separate, complete immutable function profile. Cold
+        # display calls changed its register allocation; do not make the old
+        # compiler-shape search accept arbitrary new lease-check forms.
+        require(stage[4].get('__kui_native_cold_progress_stage')==
+                stage[4].get('__kui_native_dual_readers_stage')==(1,0,0,0xfff1),
+                'Background witness tail requires exact dual/progress markers')
+        require(len(body)==1996 and digest(body)==
+                '51da99254ae17780acfbf3c56915f58e3107b64e559767570281545d3e2eaaeb',
+                'Background witness passive-run instruction/literal pin changed')
+        index=0x134//2
+        require(words[index:index+4]==[0x51a8,0x31b0,0x8f08,0x1c0f] and
+                literal(index+4)==0x20000,
+                'Background witness exact lease-size entry differs')
+        start=begin+0x134
+    else:
+        require('__kui_native_cold_progress_stage' not in stage[4],
+                'Background progress stage lacks its complete witness worker proof')
+        starts = [begin + 2 * index for index in range(len(words) - 5)
+                  if words[index:index + 2] == [0x51C8, 0x31A0] and
+                  words[index + 2] >> 8 == 0x8F and words[index + 3] == 0x1B0F and
+                  literal(index + 4) == 0x20000]
+        require(len(starts) == 1, "missing unique compiled Background lease-size/tail-copy entry")
+        start = starts[0]
     manifest = symbols["_manifest"][0]
     workspace = symbols["_native_background_boot_region"][0]
     binder = resident["symbols"]["_kui_vmu_native_background_manifest_bind"]
@@ -291,7 +309,7 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000)
     worker_bytes = symbols["__native_worker_blob_end"][0] - symbols["__native_worker_blob_begin"][0]
 
     class Replay(SH):
-        def __init__(self, raw, outcome, changes=()):
+        def __init__(self, raw, outcome, changes=(),*,lease_value=None,admissions=(1,1)):
             super().__init__(b"")
             for kind, offset, address, _, count, _, _, _ in stage[2]:
                 if kind == 1 and count:
@@ -299,8 +317,16 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000)
             self.raw, self.load, self.outcome = raw, (raw & 0x1FFFFFFF) | 0x80000000, outcome
             self.pc, self.r[15] = start, 0x8CDD0000
             self.lease = 0x8CDF0000
-            self.r[8], self.r[9], self.r[10], self.r[11], self.r[12] = copy, self.load, lease_bytes, self.r[15] + 0x904, self.lease
-            self.write(self.lease + 32, lease_bytes)
+            if witness:
+                self.r[8],self.r[9],self.r[10],self.r[11],self.r[12]=\
+                    copy,self.load,self.lease,lease_bytes,self.r[15]+0x900
+            else:
+                self.r[8], self.r[9], self.r[10], self.r[11], self.r[12] = copy, self.load, lease_bytes, self.r[15] + 0x904, self.lease
+            self.lease_value=lease_bytes if lease_value is None else lease_value
+            self.admissions,self.admission_calls=admissions,0
+            self.early_failure=('lease' if self.lease_value!=lease_bytes else
+                                'map' if not admissions[0] else 'region' if not admissions[1] else None)
+            self.write(self.lease + 32, self.lease_value)
             self.write(self.lease + 40, raw)
             self.write(self.r[15] + 32, self.lease - 64)
             self.write(self.r[15] + 28, worker_bytes)
@@ -315,6 +341,7 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000)
             self.in_publisher = False
             self.publisher_return = None
             self.stopped = None
+            self.display_events=[]
 
         def read(self, address, count=4):
             if address == 0xFF00001C:
@@ -364,7 +391,10 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000)
         def call(self, target, pc):
             if target == admission:
                 require(self.r[4:6] == [self.raw, self.load + 0x20000], "tail admission changed its exact native allocation/map")
-                self.abi_return(1)
+                require(self.admission_calls<2,'Background tail acquired an extra address admission')
+                result=self.admissions[self.admission_calls]
+                self.admission_calls+=1
+                self.abi_return(result)
             elif target == copy:
                 index = len([event for event in self.events if event.startswith("copy_")])
                 name, offset, source, count, pattern = (("map", 0x20000, manifest, 1020, self.map_pattern) if index == 0 else
@@ -396,7 +426,27 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000)
                 self.witness["bind_success"] = pc + 4
                 self.abi_return(self.outcome)
             elif target in (symbols["_retail_display_restore"][0], symbols["_retail_display_line"][0]):
-                require(self.outcome == 1 and self.events[-1] == "bind", "installer continued after failed binding")
+                if witness:
+                    expected=(('line',b'COLD 30 READER MAP BIND BEGIN',[]),
+                              ('line',b'COLD 31 READER MAP BOUND',["copy_map","copy_region","publish","bind"]),
+                              ('restore',None,["copy_map","copy_region","publish","bind"]),
+                              ('line',b'RELOCATING PASSIVE MAPLE WORKER',["copy_map","copy_region","publish","bind"]),
+                              ('line',b'COLD 32 WORKER RELOCATION BEGIN',["copy_map","copy_region","publish","bind"]))
+                    require(len(self.display_events)<len(expected),'extra Background cold display boundary')
+                    kind,line,events=expected[len(self.display_events)]
+                    require(self.events==events and (not events or self.outcome==1),
+                            'Background cold progress passed a failed or incomplete binding')
+                    if kind=='restore':
+                        require(target==symbols['_retail_display_restore'][0] and
+                                self.r[4]==symbols['_display'][0],
+                                'Background cold display restore argument differs')
+                    else:
+                        require(target==symbols['_retail_display_line'][0] and
+                                self.block(self.r[4],len(line)+1)==line+b'\0',
+                                'Background cold progress line/order differs')
+                    self.display_events.append(kind)
+                else:
+                    require(self.outcome == 1 and self.events[-1] == "bind", "installer continued after failed binding")
                 self.abi_return()
             elif target == relocate:
                 require(self.outcome == 1 and self.events == ["copy_map", "copy_region", "publish", "bind"],
@@ -408,11 +458,22 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000)
                 require([self.read(self.r[15] + 4 * index) for index in range(3)] ==
                         [self.load + 0x20000000, 0x20000, self.load], "worker relocation overwrites the retained map/region tail")
                 self.purged(self.load, 0x20000)
+                require(not witness or len(self.display_events)==5,
+                        'Background relocation omitted ordered cold progress')
                 self.witness["relocate"] = pc
                 self.stopped = "relocate"
             elif target == report:
-                require(self.outcome != 1 and self.events == ["copy_map", "copy_region", "publish", "bind"],
-                        "valid Background binding failed before relocation")
+                if self.early_failure:
+                    expected_events=['copy_map'] if self.early_failure=='region' else []
+                    expected_admissions={'lease':0,'map':1,'region':2}[self.early_failure]
+                    require(self.events==expected_events and self.admission_calls==expected_admissions and
+                            self.r[4:6]==[8,0x4a if self.early_failure=='region' else 0x48],
+                            'Background guard refusal executed the wrong effects/report')
+                    require(not self.purges if not expected_events else len(self.purges)==32,
+                            'Background guard refusal purged a later retained region')
+                else:
+                    require(self.outcome != 1 and self.events == ["copy_map", "copy_region", "publish", "bind"],
+                            "valid Background binding failed before relocation")
                 self.stopped = "report"
             else:
                 raise ValueError(f"unadmitted call in Background tail replay: {target:08x}")
@@ -420,7 +481,7 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000)
         def run(self):
             for _ in range(100000):
                 if self.stopped:
-                    require(self.stopped == ("relocate" if self.outcome == 1 else "report"), "binder success predicate changed")
+                    require(self.stopped == ("relocate" if self.outcome == 1 and not self.early_failure else "report"), "binder success predicate changed")
                     return self
                 if self.in_publisher and self.pc == self.publisher_return:
                     self.purged(self.load + 0x20400, 1888, publication=True)
@@ -464,8 +525,14 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000)
             if outcome == 1:
                 example = completed
             cases += 1
+        if witness:
+            for invalid in (0,0x30000,0x60004,MASK):
+                Replay(raw,1,lease_value=invalid).run();cases+=1
+            for admissions in ((0,1),(1,0)):
+                Replay(raw,1,admissions=admissions).run();cases+=1
     require(example is not None, "missing successful tail-copy replay")
     rejected = []
+    pin_mutations=0
     if self_test:
         def pool(value):
             found = [begin + offset for offset in range(0, len(body) - 3, 2)
@@ -492,7 +559,18 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000)
                 rejected.append(name)
             else:
                 raise ValueError("compiled tail-copy replay accepted mutation: " + name)
+        if witness:
+            for offset in range(len(body)):
+                changed=bytearray(body);changed[offset]^=1
+                require(digest(changed)!='51da99254ae17780acfbf3c56915f58e3107b64e559767570281545d3e2eaaeb',
+                        'Background witness passive-run pin accepted changed instructions/literals')
+                pin_mutations+=1
     return {"actual_sh_cases": cases, "entry": hex(start), "lease_bytes":lease_bytes,
+            "controller_failure_witness_profile":witness,
+            "complete_passive_run_pin":({'bytes':len(body),'sha256':digest(body)} if witness else None),
+            "actual_ordered_cold_progress_calls":witness,
+            "early_lease_and_both_address_guard_refusal_cases":18 if witness else 0,
+            "complete_passive_run_pin_mutation_rejections":pin_mutations,
             "witnesses": {name: hex(address) for name, address in example.witness.items()},
             "map_copy_bytes": 1020, "region_copy_bytes": 1888, "map_lines_before_p2_copy": 32,
             "region_lines_before_p2_copy": 59, "actual_p2_publisher_executed": True,
@@ -574,13 +652,22 @@ def source_contract(readahead=False,wide_lease=False):
             "sha256": {path: digest(text.encode()) for path, text in sources.items()}}
 
 
-def stage_contract(directory, resident, *, self_test=False):
+def stage_contract(directory, resident, *, self_test=False,read_ahead_proof=None):
     path = directory / "stage.elf"
     if not path.is_file():
         return {"available": False, "complete_module_audited": False}
     data = path.read_bytes()
     inspected = inspect_elf(data, 0x8CE00000, 0x8CFE0000)
     image = read_elf(path)
+    progress=image[4].get('__kui_native_cold_progress_stage')
+    witness=False
+    if progress is not None:
+        from check_native_controller_failure_witness import witness_companion
+        worker=read_elf(directory/'native-worker.elf')
+        witness=witness_companion(worker,read_ahead_proof)
+        require(witness and progress==(1,0,0,0xfff1) and
+                image[4].get('__kui_native_dual_readers_stage')==(1,0,0,0xfff1),
+                'Background cold progress pins require the complete matching dual witness worker proof')
     require(exact_profile_marker(data, "__kui_vmu_native_background_stage"), "missing Background stage marker")
     workspace, _ = typed(image, "_native_background_boot_region", 1, size=0x760, writable=True)
     # Stage wire decoding owns 160 slots. The validated native Background map
@@ -623,7 +710,8 @@ def stage_contract(directory, resident, *, self_test=False):
             "installer_stack": hex(installer), "installer_stack_bytes": 0x10000,
             "generated_binder": hex(binder), "embedded_resident_copies": embedded,
             "tail_copy_replay": compiled_tail_copy(image, resident, self_test=self_test,
-                lease_bytes=0x60000 if '__kui_native_readahead_stage' in image[4] else 0x30000),
+                lease_bytes=0x60000 if '__kui_native_readahead_stage' in image[4] else 0x30000,
+                witness=witness),
             "memory_end": hex(inspected["memory_end"]),
             "scope": "stage bounds/profile/workspaces; full envelope and worker audited separately"}
 
@@ -700,7 +788,7 @@ def check(directory, *, self_test=False, require_stage=False):
     total = worst + library["stack_bytes"] + EXTRA_MARGIN + GUARD + TOP_GAP
     require(total <= TOP - BOTTOM,
             f"Background private stack needs {total} bytes including its guard/top gap; available {TOP-BOTTOM}")
-    stage = stage_contract(directory, inspected, self_test=self_test)
+    stage = stage_contract(directory, inspected, self_test=self_test,read_ahead_proof=companion)
     require(not require_stage or stage["available"], "complete-profile audit requires the linked stage")
     # A legacy engine in the dual module also owns384KiB, while retaining
     # raw vectors. Do not infer192KiB merely from absence of the RA marker:

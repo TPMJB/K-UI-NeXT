@@ -141,7 +141,7 @@ class StructuralColdCPU(ColdBinderCPU):
 
     def run_bind(self):
         self.run_symbol('_native_sdk_sci_route_bind')
-        assert self.ready and self.cookie_store_checked
+        assert self.ready and self.cookie_store_checked and tuple(self.display_lines)==self.expected_display_lines
         assert_c_abi(self,self.initial)
         assert self.helper_calls==([EXACT,DISCOVER] if self.admit_result==0 else [EXACT])
         values=((self.eri_slot,self.callback),(self.rxi_slot,self.callback),
@@ -332,6 +332,7 @@ def check(stage,resident,self_test=False):
                 else:raise ValueError('structural cold binder accepted an omitted cache publication')
     return dict(schema='kui.native.sdk-sci.structural-cold.audit.v1',enabled=True,
         actual_linked_cold_binder_executed=True,structural_profile=True,
+        actual_ordered_sdk_progress_lines='__kui_native_cold_progress_stage' in stage[4],
         artifact_sha256={'stage':hashlib.sha256(stage[0]).hexdigest(),
                          'resident':hashlib.sha256(resident[0]).hexdigest()},
         immutable_runtime_descriptor=descriptor,shared_plan_bytes=32,

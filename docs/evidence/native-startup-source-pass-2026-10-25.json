@@ -1,0 +1,38 @@
+{
+  "schema": "kui.native.startup-source-pass.v1",
+  "date": "2026-10-25",
+  "scope": "Matching native dual X/Y GUI preflight only; low readers and auxiliary are unchanged",
+  "changes": {
+    "fuse_crc_and_sha_source_read": true,
+    "full_exact_source_checks_retained": true,
+    "partial_final_sector_crc_exact": true,
+    "crc_fallback_when_preflight_skipped": true,
+    "cancellation_aborts": true,
+    "progress_stages_logged": true,
+    "one_time_cache_detector_epoch": 4
+  },
+  "logical_source_sector_reads": {
+    "evolution1": {
+      "before": 2094,
+      "after": 1047
+    },
+    "evolution2": {
+      "before": 3962,
+      "after": 1981
+    }
+  },
+  "host_validation": {
+    "fat32_exfat_launch_cases": 336,
+    "actual_native_cache_checks": 220149,
+    "actual_epoch4_cache_checks": 67523,
+    "dual_installer_cases": 13,
+    "catalog_cases": 4,
+    "persistent_personalizer_cases": 64,
+    "doa2_filesystem_probe_cases": 16
+  },
+  "limits": [
+    "I/O counts exclude IP/metadata/mapping reads and fallback paths.",
+    "No console time reduction has yet been measured.",
+    "Does not establish a fix for Evolution 1 or Rayman 2."
+  ]
+}

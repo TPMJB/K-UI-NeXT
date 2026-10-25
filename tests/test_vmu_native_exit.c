@@ -350,12 +350,14 @@ int main(int argc,char **argv) {
         size_t program_bytes;CHECK(kui_vmu_native_program_extent(actual,(size_t)n,load,&program_bytes));
         CHECK(program_bytes<=(size_t)n);n=(long)program_bytes;
         CHECK(discover(actual,(size_t)n,load,&out));
-        CHECK(out.family==KUI_VMU_NATIVE_EXIT_PVR_CLEAR || out.family==KUI_VMU_NATIVE_EXIT_PVR_COMPACT ||
-            out.family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY);
+        CHECK(out.family==KUI_VMU_NATIVE_EXIT_FAMILY || out.family==KUI_VMU_NATIVE_EXIT_PVR_CLEAR || out.family==KUI_VMU_NATIVE_EXIT_PVR_COMPACT ||
+            out.family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY || out.family==KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH);
         struct kui_vmu_native_exit original=out;
         for(unsigned entry=0;entry<original.count;entry++) {
             size_t at=out.entries[entry]-load;unsigned char saved=actual[at];actual[at]^=1u;
-            CHECK(!discover(actual,(size_t)n,load,&out));actual[at]=saved;
+            bool mutated=discover(actual,(size_t)n,load,&out);
+            CHECK(!mutated || (original.family==KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH &&
+                entry==2u && out.family!=KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH));actual[at]=saved;
             CHECK(discover(actual,(size_t)n,load,&out));CHECK(!memcmp(&out,&original,sizeof(out)));
         }
         /* Mutation of an otherwise-unrelated image word into a new consumer

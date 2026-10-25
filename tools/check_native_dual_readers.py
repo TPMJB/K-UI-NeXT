@@ -39,6 +39,25 @@ WORKER_PINS={
     '_reader_capture_region':(100,'ac7d64231e97b1bbfa703121a832e4cce8a5ee8f7d1302cb6cdc9b77bd076b71'),
     '_reader_readahead_visit':(56,'c44759200e43937665b2987281e995b4f39675f1e05180371aad4078cc02dbf3'),
 }
+WITNESS_STAGE_PINS={
+    '_select_resident':(272,'e089cfbbdace75248af472f8083013555a24292aae83b369f99c18bbf5d883b3'),
+    '_native_dual_reader_bind':(68,'22523932dde059f9027053b15ba16e7258190d75af0fca131575b2062c2bf1ba'),
+    '_kui_native_dual_u32':(30,'c13060e358e2a0e9f53878d9aa8b77d1fbfb03a31b8c4e049dc49bf3e7feec6c'),
+}
+WITNESS_WORKER_PINS={
+    '_reader_readahead_exports':(200,'6a753b4f52fd9aad30c334241ea8c0de92cefcac3c3a85009af4645b260d67ef'),
+    '_reader_capture_region':(100,'a2ba9caef7fb729bab16d02c1d16ea468018ab128cc2ba8143802eac16bad827'),
+    '_reader_readahead_visit':(56,'c44759200e43937665b2987281e995b4f39675f1e05180371aad4078cc02dbf3'),
+}
+
+
+def profile_pins(worker):
+    from check_native_controller_failure_witness import witness_profile
+    if witness_profile(worker):
+        require(WITNESS_STAGE_PINS and WITNESS_WORKER_PINS,
+                'dual failure-witness profile lacks separately reviewed pins')
+        return WITNESS_STAGE_PINS,WITNESS_WORKER_PINS
+    return STAGE_PINS,WORKER_PINS
 
 
 def require(test,message):
@@ -127,6 +146,8 @@ def dual_companion(worker,proof):
     require(bool(marker)==bool(proof and proof.get('dual_reader_candidate')),
             'dual worker and read-ahead companion profile differ')
     if not marker:return False
+    from check_native_controller_failure_witness import witness_companion
+    witness_companion(worker,proof)
     from check_vmu_native_sdk_sci_route import pio_companion,pio_pair_companion
     require(marker==(1,0,0,0xfff1) and proof.get('enabled') is True and
             proof.get('paired_markers') is True and proof.get('structural_sdk_route') is True and
@@ -141,7 +162,8 @@ def dual_companion(worker,proof):
                 isinstance(artifacts.get(name),str) and len(artifacts[name])==64
                 for name in ('resident','worker','stage')),
             'dual pin selection requires the complete matching linked artifact identities')
-    worker_pins=pin(worker,WORKER_PINS,'worker');recorded=report.get('immutable_worker_pins',{})
+    _,selected_worker_pins=profile_pins(worker)
+    worker_pins=pin(worker,selected_worker_pins,'worker');recorded=report.get('immutable_worker_pins',{})
     require(set(recorded)==set(worker_pins) and
             all(tuple(recorded[name])==tuple(value) for name,value in worker_pins.items()),
             'dual companion lacks the exact executed getter/region/visit pins')
@@ -208,11 +230,14 @@ def legacy_audit(directory,*,self_test=False):
     return proof
 
 
-def tail_contract(directory,stage,resident,proof=None):
+def tail_contract(directory,stage,resident,worker,proof=None):
     from check_vmu_native_readahead_stage import check_stage,pin_stage
-    pins=pin_stage(stage,diagnostic=True,pio=True,pair=True,multi_owner=True,structural=True,dual=True)
+    from check_native_controller_failure_witness import witness_profile
+    pins=pin_stage(stage,diagnostic=True,pio=True,pair=True,multi_owner=True,structural=True,dual=True,
+                   witness=witness_profile(worker),
+                   progress='__kui_native_cold_progress_stage' in stage[4])
     if proof is None:
-        proof=check_stage(stage,resident,read_elf(directory/'native-ra-aux.elf'),self_test=False)
+        proof=check_stage(stage,resident,read_elf(directory/'native-ra-aux.elf'),self_test=False,worker=worker)
     actual=proof.get('exact_instruction_literal_pins',{})
     require(proof.get('actual_linked_cold_binder_executed') is True and
             proof.get('actual_auxiliary_c_initializer_executed') is True and
@@ -451,16 +476,22 @@ def instruction_truth():
     return cases
 
 
-def check(directory,*,self_test=False,cold_binder_proof=None):
+def check(directory,*,self_test=False,cold_binder_proof=None,witness_proof=None):
     require(__debug__,'dual linked model requires Python assertions')
     directory=Path(directory)
     resident,legacy,stage,worker=(read_elf(directory/name) for name in
         ('resident-sci.elf','resident-legacy.elf','stage.elf','native-worker.elf'))
-    markers(stage,worker);stage_pins=pin(stage,STAGE_PINS,'stage');worker_pins=pin(worker,WORKER_PINS,'worker')
+    markers(stage,worker)
+    selected_stage_pins,selected_worker_pins=profile_pins(worker)
+    stage_pins=pin(stage,selected_stage_pins,'stage');worker_pins=pin(worker,selected_worker_pins,'worker')
+    from check_native_controller_failure_witness import witness_profile,check as check_witness,witness_companion
+    if witness_proof is None:
+        witness_proof=check_witness(directory,self_test=self_test) if witness_profile(worker) else {'enabled':False}
+    witness_companion(worker,{'controller_failure_witness':witness_proof})
     module=(directory/'retail-maple-observe.kui').read_bytes()
     cap=capability(stage,module);blobs=embedded_blobs(stage,resident,legacy,directory)
     layouts=console_layouts();layout=layouts['layouts']['x']
-    tail=tail_contract(directory,stage,resident,cold_binder_proof)
+    tail=tail_contract(directory,stage,resident,worker,cold_binder_proof)
     selection=selector_cases(resident,stage);binding=binding_cases(resident,stage,worker)
     binding.update(tail)
     worker_proof=worker_cases(resident,worker,layout);truth=instruction_truth()
@@ -480,7 +511,7 @@ def check(directory,*,self_test=False,cold_binder_proof=None):
             try:require_wide_legacy(changed)
             except ValueError:guard_refusals+=1
             else:raise ValueError('dual accepted absent/changed compiled384KiB legacy guards')
-        for image,pins,label in ((stage,STAGE_PINS,'stage'),(worker,WORKER_PINS,'worker')):
+        for image,pins,label in ((stage,selected_stage_pins,'stage'),(worker,selected_worker_pins,'worker')):
             for name,(count,_) in pins.items():
                 address,body,section=symbol_bytes(image,name,2);start=section[4]+address-section[3]
                 for at in range(count):
@@ -528,6 +559,7 @@ def check(directory,*,self_test=False,cold_binder_proof=None):
         artifact_sha256={name:sha(image[0]) for name,image in
                          (('resident',resident),('legacy',legacy),('stage',stage),('worker',worker))},
         capability=cap,embedded_engines=blobs,immutable_stage_pins=stage_pins,immutable_worker_pins=worker_pins,
+        controller_failure_witness=witness_proof,
         console_layout=layouts,selector=selection,late_binding=binding,worker=worker_proof,
         additional_scalar_instruction_truth_cases=truth,legacy_background=legacy_proof,
         instruction_and_marker_mutation_rejections=rejected,

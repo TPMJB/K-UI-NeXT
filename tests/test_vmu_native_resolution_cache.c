@@ -66,7 +66,7 @@ static void codec_and_trust_tests(void) {
     CHECK(!memcmp(wire,original,sizeof(wire)));CHECK(!strict(image,sizeof(image),load,wire,sizeof(wire),&out));
     /* A locally resealed old detector record still lacks the new family /
      * uniqueness proof. Neither its old pin nor its recomputed local digest
-     * can turn it into an epoch3 launch authority. No output is published. */
+     * can turn it into a current launch authority. No output is published. */
     for(unsigned epoch=1u;epoch<KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH;epoch++) {
         memcpy(wire,original,sizeof(wire));wire[16]=(uint8_t)epoch;
         wire[17]=wire[18]=wire[19]=0u;seal(wire);memcpy(changed,wire+992u,32u);
@@ -141,7 +141,7 @@ static void codec_and_trust_tests(void) {
     CHECK(!kui_vmu_native_resolution_cache_encode(&source,&source,1024u));
     source.layout.inputs=24u;CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
     CHECK(!memcmp(wire,original,sizeof(wire)));
-    for(unsigned family=KUI_VMU_NATIVE_EXIT_FAMILY;family<=KUI_VMU_NATIVE_EXIT_PAIR_ONLY;family++) {
+    for(unsigned family=KUI_VMU_NATIVE_EXIT_FAMILY;family<=KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH;family++) {
         mock(image,sizeof(image),&source);source.exits.family=family;
         if(family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY) {
             source.exits.count=2u;source.exits.entries[2]=0u;source.exits.exec_thunk=0u;
@@ -152,10 +152,17 @@ static void codec_and_trust_tests(void) {
         CHECK(replay(image,sizeof(image),load,wire,sizeof(wire),pin,&out));CHECK(!memcmp(&source,&out,sizeof(out)));
         CHECK(!strict(image,sizeof(image),load,wire,sizeof(wire),&out));
     }
+    mock(image,sizeof(image),&source);source.exits.family=KUI_VMU_NATIVE_EXIT_PAIR_ONLY;
     source.exits.count=3u;CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
     source.exits.count=2u;source.exits.entries[2]=load;
     CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
     source.exits.entries[2]=0u;source.exits.exec_thunk=load;
+    CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    mock(image,sizeof(image),&source);source.exits.family=KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH;
+    source.exits.count=2u;CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    source.exits.count=3u;source.exits.entries[2]=0u;
+    CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    source.exits.entries[2]=load;source.exits.terminal_dispatch.table=0u;
     CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
 }
 static void actual_tests(const char *path) {
@@ -242,7 +249,7 @@ static void generic_actual_tests(const char *path) {
     }
     CHECK((fresh.layout.rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48 && fresh.layout.inputs==1u) ||
         (fresh.layout.rx_layout==KUI_VMU_NATIVE_RX_EXPLICIT48 && fresh.layout.inputs==12u));
-    CHECK(fresh.exits.family>=KUI_VMU_NATIVE_EXIT_FAMILY && fresh.exits.family<=KUI_VMU_NATIVE_EXIT_PAIR_ONLY);
+    CHECK(fresh.exits.family>=KUI_VMU_NATIVE_EXIT_FAMILY && fresh.exits.family<=KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH);
     CHECK(fresh.exits.count==(fresh.exits.family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY?2u:3u));
     digest(image,n,after_hash);CHECK(!memcmp(source_hash,after_hash,32u));
     image[program_bytes-1u]^=1u;CHECK(!replay(image,program_bytes,load,wire,sizeof(wire),pin,&out));

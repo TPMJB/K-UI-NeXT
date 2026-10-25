@@ -103,7 +103,7 @@ static void reader_readahead_failure(const struct retail_display_state *display,
 static void reader_readahead_diagnostics(const struct retail_display_state *display,
     const struct kui_native_ra_diagnostics *d) {
     retail_display_restore(display);
-    retail_display_line("READ AHEAD EXIT REASONS");
+    retail_display_line("READ AHEAD EXITS");
     uint32_t stages[7]={d->failures,0,0,0,0,0,0};
     for(unsigned stage=1u;stage<KUI_NATIVE_RA_STAGE_COUNT;stage++)
         for(unsigned result=0u;result<KUI_NATIVE_RA_RESULT_COUNT;result++)
@@ -377,17 +377,17 @@ static void reader_capture_report(const struct retail_display_state *display) {
     retail_display_restore(display);
 #if KUI_NATIVE_REQUEST_TIMING
 #if KUI_NATIVE_DUAL_READERS
-    retail_display_line("READ AGE TIMING - SDK X ONLY");
+    retail_display_line("READ/AGE TICKS / SDK X");
 #else
     retail_display_line("HYBRID READER - COMPLETE REQUEST TIMING");
 #endif
 #else
     retail_display_line("B READER STALL CAPTURE - RAM ONLY");
 #endif
-    retail_display_line("HEX VALUES - 781250 TICKS PER SECOND");
+    retail_display_line("HEX / 781250HZ");
     retail_display_values(
 #if KUI_NATIVE_REQUEST_TIMING
-        "SAMPLES BAD GAP MAX READ MAX AGE MAX",
+        "N BAD GAPMAX READMAX AGEMAX",
 #else
         "SAMPLES BAD GAP MAX CALL MAX IRQ MAX",
 #endif
@@ -395,20 +395,20 @@ static void reader_capture_report(const struct retail_display_state *display) {
         reader_capture.samples,reader_capture.bad,reader_capture.gap_max,
         reader_capture.call_max,reader_capture.irq_max},5u);
     const struct kui_reader_capture_sample *a=&reader_capture.first,*b=&reader_capture.previous;
-    retail_display_values("IRQ BLOCKS CALL BLOCKS PIO CRC TOKEN ERR",(uint32_t[5]){
+    retail_display_values("IRQBLK CALLBLK PIO CRC TOK ERR",(uint32_t[5]){
         b->irq_blocks-a->irq_blocks,b->call_blocks-a->call_blocks,b->polled-a->polled,
         b->crc-a->crc,b->token_errors-a->token_errors},5u);
-    retail_display_values("FOREIGN REPAIRS OVERRUN DEFERRED CLOCK BAD",(uint32_t[5]){
+    retail_display_values("FOREIGN FIX OVER DEFER CLK_BAD",(uint32_t[5]){
         b->foreign-a->foreign,b->repaired-a->repaired,b->overruns-a->overruns,
         b->deferred-a->deferred,diagnostic.clock_invalid},5u);
 #if KUI_NATIVE_REQUEST_TIMING
 #if KUI_NATIVE_IRQ_REARM
     const kui_retail_async_region_type *region=reader_capture_region();
-    retail_display_values("SCI LEVEL REARMS IRQ ENTRIES",(uint32_t[2]){
+    retail_display_values("SCI REARM IRQ COUNT",(uint32_t[2]){
         region?region->engine.stats.execs:0u,region?region->engine.stats.exec_int:0u},2u);
     if(region)retail_display_values(
 #if KUI_NATIVE_LOADER_TIMELINE
-        "REHOOK R100 R400 R600 VBR TOTAL",(uint32_t[5]){
+        "HOOK R100 R400 R600 VBR",(uint32_t[5]){
 #else
         "REHOOKS RELEASE100 RELEASE400 RELEASE600",(uint32_t[4]){
 #endif
@@ -431,7 +431,7 @@ static void reader_capture_report(const struct retail_display_state *display) {
     retail_display_values("PUMPS BLOCKS BUSY FAULTS",(uint32_t[4]){
         reader_cooperative.calls,reader_cooperative.blocks,reader_cooperative.busy,reader_cooperative.faults},4u);
 #endif
-    retail_display_values("LONGEST COMPLETE READ LBA SECTORS",(uint32_t[2]){
+    retail_display_values("MAX READ LBA N",(uint32_t[2]){
         reader_cooperative.max_lba,reader_cooperative.max_count},2u);
 #else
     retail_display_line("CALL AND IRQ ARE DELIVERY VISIT TIMES");
@@ -450,9 +450,9 @@ static void reader_capture_report(const struct retail_display_state *display) {
     retail_display_pause(300u);
     for(unsigned first=0u;first<reader_capture.top_count;first+=2u) {
         retail_display_restore(display);
-        retail_display_line("LONGEST CONTROLLER POLL GAPS - DESCENDING");
+        retail_display_line("LONGEST POLL GAPS DESC");
 #if KUI_NATIVE_REQUEST_TIMING
-        retail_display_line("GAP READ AGE TICKS - COUNTERS ARE DELTAS");
+        retail_display_line("GAP/READ/AGE TICKS / DELTAS");
 #else
         retail_display_line("GAP CALL IRQ ARE TICKS - COUNTERS ARE DELTAS");
 #endif
@@ -460,20 +460,20 @@ static void reader_capture_report(const struct retail_display_state *display) {
             const struct kui_reader_capture_event *e=&reader_capture.top[i];
             retail_display_values(
 #if KUI_NATIVE_REQUEST_TIMING
-                "INDEX GAP READ MAX AGE MAX PENDING",
+                "I GAP RMAX AMAX PEND",
 #else
                 "INDEX GAP CALL MAX IRQ MAX PENDING",
 #endif
                 (uint32_t[5]){
                 i,e->gap,e->call_max,e->irq_max,e->pending},5u);
-            retail_display_values("IRQ BLOCKS CALL BLOCKS PIO CRC TOKEN ERR",(uint32_t[5]){
+            retail_display_values("IRQBLK CALLBLK PIO CRC TOK ERR",(uint32_t[5]){
                 e->irq_blocks,e->call_blocks,e->polled,e->crc,e->token_errors},5u);
-            retail_display_values("FN CMD PREV TOKEN TOKEN BLOCK",(uint32_t[5]){
+            retail_display_values("FN CMD PREVTOK TOK BLOCK",(uint32_t[5]){
                 e->function,e->command,e->previous_token,e->token,e->block},5u);
         }
         retail_display_line(
 #if KUI_NATIVE_DUAL_READERS
-            "PAGES CYCLE - PHOTO THEN OFF"
+            "PAGES CYCLE / PHOTO / OFF"
 #else
             "PHOTO ALL THREE READER PAGES THEN POWER OFF"
 #endif

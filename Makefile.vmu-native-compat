@@ -225,3 +225,11 @@ native-infile-buffers-host-tests:
 	 $(if $(EVOLUTION2_STARTUP),'$(EVOLUTION2_STARTUP)' $(if $(EVOLUTION1_STARTUP),'$(EVOLUTION1_STARTUP)',) \
 	 $(if $(STARTUP),'$(STARTUP)',) $(if $(SKIES_STARTUP),'$(SKIES_STARTUP)',) \
 	 $(if $(SA2_STARTUP),'$(SA2_STARTUP)',) $(if $(GRANDIA2_STARTUP),'$(GRANDIA2_STARTUP)',),)
+
+.PHONY: native-terminal-dispatch-worker-host-tests
+native-terminal-dispatch-worker-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 -DKUI_VMU_NATIVE_CACHED_CODE=1 \
+	 tests/test_vmu_native_terminal_dispatch_worker.c $(COMPAT_WORKER_HOST_SRC) \
+	 -Wl,--gc-sections -o $(BUILD)/test-terminal-dispatch-worker
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-terminal-dispatch-worker

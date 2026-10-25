@@ -1,0 +1,103 @@
+{
+  "schema": "kui.native.evolution1.post-sofdec.readonly-review.v1",
+  "date": "2026-10-25",
+  "source_head": "af9e01c8a2710eb44e24867bbe2f593727fbb844",
+  "comparison_source": "af401496961afdcc27f57cb0ba63bd1a8414ce67",
+  "scope": "Read-only review of SDK route, VBR writes, loan failure propagation, and existing phase trace. No runtime edits, priority changes, or pin updates.",
+  "console_reports": {
+    "evolution1_new_x": "Black screen after MPEG Sofdec on af9e01c8a271, reported by user.",
+    "evolution2_new_x": "Behaves as expected, reported by user.",
+    "grandia2_new_x": "Flawless, confirmed by user.",
+    "baseline_limit": "af401 New X Evolution1 was not console-proven; the prior successful Evolution1 VMU observation used Standard. Do not label this a proven regression from af401."
+  },
+  "exact_owner_route": {
+    "path": "src/loader/vmu_native_sdk_sci_route_stage.inc:95",
+    "finding": "Exact supplied Evolution1 retains the unchanged exact-owner admission path; structural discover is called only if exact admit returns zero. Exact Evolution1 does not take fallback.",
+    "runtime": "src/loader/retail_async.c:233",
+    "readiness": "At admitted VBR 0x8c00f400 the dynamic readiness checks preserve original behavior plus canonical/alignment bounds: cookie, actual VBR equals retained owner, and both SCI slots equal callback."
+  },
+  "loan_contract_delta": {
+    "path": "src/loader/retail_async.c:774",
+    "new_predicate": "actual VBR != retained vector600[14] faults begin/end.",
+    "old_predicate": "actual VBR == private raw replacement VBR faults begin/end; SDK route does not install that raw VBR.",
+    "fault_latches": "src/loader/retail_async.c:765: QUARANTINED loan, card.ready false, reader IO failure, hook_fault=1.",
+    "status": "A real source-level behavior change, but no evidence Evolution1 changes VBR around this transition. Do not remove the guard on this hypothesis alone.",
+    "host_comparison": {
+      "fixture": "/workspace/scratch/da50cf175784/evo1-loan-guard-comparison.c",
+      "method": "Real retail_async/sci_stream/card model, completed read, stopped receiver, IMASK15; compile structural flag zero versus one with ASan/UBSan.",
+      "results": [
+        {
+          "actual": "0x8c00f400",
+          "retained": "0x8c00f400",
+          "old": "begin/end OK",
+          "new": "begin/end OK"
+        },
+        {
+          "actual": "0x8c200000",
+          "retained": "0x8c00f400",
+          "old": "begin/end OK",
+          "new": "FAULT; loan3, ready0, hook_fault1"
+        },
+        {
+          "actual": "0x8c00f400",
+          "retained": "0x8c00f500",
+          "old": "begin/end OK",
+          "new": "FAULT; loan3, ready0, hook_fault1"
+        },
+        {
+          "actual": "0",
+          "retained": "0",
+          "old": "begin/end OK",
+          "new": "begin/end OK"
+        }
+      ],
+      "interpretation": "Demonstrates the dependency, not a console cause or legitimacy of a foreign current VBR. Equality by itself is not retained-owner validity (matching zero values also pass this loan-only check)."
+    }
+  },
+  "original_evolution1_vbr_scan": {
+    "input": "/workspace/scratch/da50cf175784/native-inputs/evolution1/1ST_READ.BIN",
+    "sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+    "load": "0x8c010000",
+    "bytes": 2143652,
+    "immediate_ldc_opcode_hits": 405,
+    "data_classification": {
+      "P1_pointer_words": 38,
+      "filename_ASCII_dot_B_or_dot_A": 367
+    },
+    "plausible_direct_VBR_replacement_found": false,
+    "ldc_l_hits": 5,
+    "real_saved_frame_restores": [
+      "0x8c1da016 default",
+      "0x8c1da23a normal common",
+      "0x8c1da3d0 FPU common"
+    ],
+    "other_ldc_l_hits": "0x8c09270e and 0x8c09ba2a occur in floating literal data.",
+    "limits": "Static original-image opcode/data classification; not whole-program reachability proof. BIOS routines, dynamic code and corrupted saved frames are not excluded."
+  },
+  "expected_fault_report": {
+    "paths": [
+      "src/loader/vmu_native_background_resident.c:159",
+      "src/core/vmu_durable.c:197",
+      "src/loader/vmu_native_passive.c:1405",
+      "src/loader/vmu_native_passive.c:574"
+    ],
+    "finding": "Ordinary worker storage loan FAULT marks durable_card.faulted; completion calls fail(24), which restores display and reports. No authored silent continuation follows a normally completed failure. A plain black screen therefore does not establish this guard as the cause.",
+    "low_failure": "src/loader/vmu_native_background_resident.c:179: valid worker terminal reports; invalid terminal still restores the saved display and halts."
+  },
+  "existing_evolution_trace": {
+    "mode": 6,
+    "purpose": "Locate phase/checkpoint progression without changing approved reader policy.",
+    "actual_vbr": "Page5 SAVED EXCEPTION SPC SSR VBR EVENT, sampled at last checkpoint.",
+    "missing_first_fault_fields": [
+      "retained SDK VBR",
+      "native loan state",
+      "card.ready",
+      "hook_fault"
+    ],
+    "freshness_limit": "The last code0x23 checkpoint precedes the overlay/storage loan; an end-loan failure can display an earlier VBR.",
+    "mode_exclusion": "Mode6 phase trace differs from mode2 profiling; profile-only read-ahead failure/timeline pages are not included.",
+    "recommendation": "Expose already compiled mode6 through the dual installer first. Retain current runtime guards and SCI priority1 until actual evidence identifies the failing phase."
+  },
+  "cache_handoff": "src/loader/native_readahead_aux.c is byte-for-byte unchanged af401 to af9e. Approved PIO-pair and prior cache handoff fix remain present.",
+  "remaining_proof_gap": "Cold source/ABI tests do not execute post-Sofdec title flow or establish long-term SDK callback ownership. No hardware cause verified."
+}

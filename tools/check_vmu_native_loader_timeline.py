@@ -49,6 +49,8 @@ READAHEAD_PIO_PAIR_BIN_AT_NO_DIV_PIN=('bdec557eba8a8c3401f9210e2859cc2f8912a8c1f
 DUAL_BIN_AT_NO_DIV_PIN=('47931c1cc2e8e75157843340e657e26556e1b6827a0fc4f37a77b34015895003',144)
 # New capability byte-reader shifts three typed cold callee literals by0x20.
 DUAL_BINDER_PIN=('3eddfec84558fdd3815fae01e3c993d1ea9bd3cc7dd75033cdc80f828dbeb398',180)
+WITNESS_DUAL_BINDER_PIN=('3eddfec84558fdd3815fae01e3c993d1ea9bd3cc7dd75033cdc80f828dbeb398',180)
+WITNESS_DUAL_BIN_AT_NO_DIV_PIN=('74b4eed8cec5360352fba33279507687c8db0cf1ebfed07247f4e4ceef6bc5b3',144)
 
 
 def require(test,message):
@@ -135,7 +137,7 @@ def private_state(worker):
     return report
 
 
-def division_helper(resident,worker,read_ahead=False,diagnostic=False,pio=False,pio_pair=False,dual=False):
+def division_helper(resident,worker,read_ahead=False,diagnostic=False,pio=False,pio_pair=False,dual=False,witness=False):
     """Reuse the resident stack proof only for identical linked libgcc code.
 
     The prefix contains the alternate internal entry used by the helper.
@@ -145,12 +147,13 @@ def division_helper(resident,worker,read_ahead=False,diagnostic=False,pio=False,
     name='___udivsi3'
     require(not dual or pio_pair and name not in worker[4],
             'dual timeline must retain its reviewed PIO-pair reciprocal body')
+    require(not witness or dual,'witness timeline requires its dual profile')
     if name not in worker[4]:
         _,body,_=symbol_bytes(worker,'_bin_at',2)
         require(not diagnostic or read_ahead,'diagnostic timeline arithmetic requires read-ahead')
         require(not pio or diagnostic,'PIO timeline arithmetic requires the diagnostic profile')
         require(not pio_pair or pio,'PIO pair timeline arithmetic requires the PIO profile')
-        expected=DUAL_BIN_AT_NO_DIV_PIN if dual else READAHEAD_PIO_PAIR_BIN_AT_NO_DIV_PIN if pio_pair else READAHEAD_PIO_BIN_AT_NO_DIV_PIN if pio else \
+        expected=WITNESS_DUAL_BIN_AT_NO_DIV_PIN if witness else DUAL_BIN_AT_NO_DIV_PIN if dual else READAHEAD_PIO_PAIR_BIN_AT_NO_DIV_PIN if pio_pair else READAHEAD_PIO_BIN_AT_NO_DIV_PIN if pio else \
             READAHEAD_DIAGNOSTIC_BIN_AT_NO_DIV_PIN if diagnostic else \
             READAHEAD_BIN_AT_NO_DIV_PIN if read_ahead else BIN_AT_NO_DIV_PIN
         require((hashlib.sha256(body).hexdigest(),len(body))==expected,
@@ -240,6 +243,11 @@ def check(directory,*,self_test=False,read_ahead_proof=None):
     dual_stage=stage[4].get('__kui_native_dual_readers_stage')
     require(bool(dual_stage)==dual and (not dual or dual_stage==MARKER),
             'timeline dual worker/stage profile differs')
+    from check_native_controller_failure_witness import witness_companion
+    witness=witness_companion(worker,read_ahead_proof)
+    progress=stage[4].get('__kui_native_cold_progress_stage')
+    require(bool(progress)==witness and (not witness or dual and progress==MARKER),
+            'timeline witness profile requires its exact dual worker proof and cold progress stage')
     markers=(resident[4].get('__kui_native_loader_timeline_resident'),
              worker[4].get('__kui_native_loader_timeline_worker'))
     if not any(markers):
@@ -258,10 +266,10 @@ def check(directory,*,self_test=False,read_ahead_proof=None):
             P1+80<=callback<callback+len(callback_body)<=P1+SPAN and callback_section[2]&7==6,
             'timeline descriptor does not bind its exact private P1 callback')
     private=private_state(worker)
-    division=division_helper(resident,worker,read_ahead,bool(diagnostic),pio,pio_pair,dual)
+    division=division_helper(resident,worker,read_ahead,bool(diagnostic),pio,pio_pair,dual,witness)
     begin,bridge,_=symbol_bytes(resident,'_kui_retail_async_trace',2)
     bridge_pin=READAHEAD_BRIDGE_PIN if read_ahead else SDK_BRIDGE_PIN if sdk else BRIDGE_PIN
-    binder_pin=DUAL_BINDER_PIN if dual else READAHEAD_BINDER_PIN if read_ahead else SDK_BINDER_PIN if sdk else BINDER_PIN
+    binder_pin=WITNESS_DUAL_BINDER_PIN if witness else DUAL_BINDER_PIN if dual else READAHEAD_BINDER_PIN if read_ahead else SDK_BINDER_PIN if sdk else BINDER_PIN
     require((hashlib.sha256(bridge).hexdigest(),len(bridge))==bridge_pin,
             'linked timeline bridge instructions/literals changed')
     bridge_bindings(resident,bridge,sdk,read_ahead)
@@ -294,6 +302,7 @@ def check(directory,*,self_test=False,read_ahead_proof=None):
         'read_ahead_pio_companion_required':pio,
         'read_ahead_pio_pair_companion_required':pio_pair,
         'read_ahead_dual_companion_required':dual,
+        'controller_failure_witness_companion_required':witness,
         'descriptor_bytes':12,'trace_descriptor_bytes_unchanged':40,
         'callback_address':hex(callback),'callback_bytes':len(callback_body),
         'private_state':private,'private_state_bytes':sum(PRIVATE_OBJECTS.values()),

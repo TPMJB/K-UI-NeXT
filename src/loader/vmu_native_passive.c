@@ -14,6 +14,7 @@ extern uint32_t kui_vmu_native_readonly_release_resume;
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #include "kui/vmu_durable.h"
 #include "kui/vmu_native_live.h"
+#include "kui/vmu_native_terminal_dispatch.h"
 #include "kui/vmu_native_patch.h"
 #include "kui/vmu_native_profile.h"
 #include "kui/vmu_volatile_chain.h"
@@ -21,6 +22,10 @@ extern uint32_t kui_vmu_native_readonly_release_resume;
 #include "vmu_native_fault_capture.h"
 #include "vmu_native_sdk_coherence.h"
 #include "sd_reader.h"
+__asm__(".global __kui_native_controller_failure_witness_worker\n"
+        ".set __kui_native_controller_failure_witness_worker,1\n");
+__asm__(".global __kui_native_terminal_dispatch_worker\n"
+        ".set __kui_native_terminal_dispatch_worker,1\n");
 #define WORKER_SPAN UINT32_C(0x20000)
 #define PAIR_LIMIT 180000u
 #else
@@ -187,7 +192,24 @@ static inline __attribute__((always_inline)) bool read_value(void *unused,uint32
     return true;
 #endif
 }
-static bool read_heap(void *unused,uint32_t a,uint32_t *v) {return read_value(unused,a,4u,v);}
+static bool read_heap_raw(void *unused,uint32_t a,uint32_t *v) {return read_value(unused,a,4u,v);}
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+/* Only heap-routing identity reads may recognize the typed terminal table.
+ * Its four wrappers and installed fatal-handler patch are rechecked through
+ * the raw reader, independently of the allocator/free-list proof. */
+static void normalize_heap_dispatch(uint32_t address,uint32_t *value) {
+    (void)kui_vmu_native_terminal_dispatch_normalize(&config.exits,read_heap_raw,NULL,
+        config.low_terminal,address,config.lease.owner.dispatch_cell,
+        config.lease.owner.dispatch_table,value);
+}
+#endif
+static bool read_heap(void *unused,uint32_t a,uint32_t *v) {
+    if(!read_heap_raw(unused,a,v)) return false;
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    normalize_heap_dispatch(a,v);
+#endif
+    return true;
+}
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 /* The prepared lifetime kernel proves every dynamic address before following
  * it; immutable hook addresses are admitted when their plan is constructed.
@@ -196,10 +218,11 @@ static bool read_heap(void *unused,uint32_t a,uint32_t *v) {return read_value(un
 static inline __attribute__((always_inline)) bool read_heap_proved(void *unused,uint32_t a,uint32_t *v) {
     (void)unused;
 #ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
-    return kui_vmu_native_passive_test_read(a,4u,v);
+    if(!kui_vmu_native_passive_test_read(a,4u,v)) return false;
 #else
-    *v=*(volatile const uint32_t *)(uintptr_t)a;return true;
+    *v=*(volatile const uint32_t *)(uintptr_t)a;
 #endif
+    normalize_heap_dispatch(a,v);return true;
 }
 #endif
 static bool stack_valid(void) {
@@ -219,9 +242,32 @@ static bool lease_valid(void) {
  * identity witness. Full ownership is still renewed by every release check
  * and on both sides of every external storage loan. This is not a replacement
  * for a full check when admitting a new lease or an unobserved allocator. */
+/* Shared failure-only row writer; code families 0x200xx, 0x4iirr and
+ * 0x5iirr identify transfer, controller and lease polling respectively. */
+static bool __attribute__((noinline)) failure_witness(uint32_t code,
+    uint32_t address,uint32_t value,uint32_t expected) {
+    state.fault_at=address;state.fault_value=value;state.fault_expect=expected;
+    state.runtime_result=code;return false;
+}
 static bool poll_lease_valid(void) {
     RECORD_WORK(heap);
-    return kui_vmu_native_lifetime_identity_prepared_inline(&lifetime_plan,read_heap_proved,NULL,1u);
+    /* Same admitted static plan, predicate and first-failure read order as
+     * lifetime_identity_prepared_inline; retain the actual failed witness. */
+    const struct kui_vmu_native_lifetime_plan *p=&lifetime_plan;
+    if(p->self!=(uintptr_t)p || p->ready!=KUI_VMU_NATIVE_LIFETIME_READY ||
+       p->count>KUI_VMU_NATIVE_LIFETIME_RANGES) {
+        uint32_t bad=(p->self!=(uintptr_t)p) | ((p->ready!=KUI_VMU_NATIVE_LIFETIME_READY)<<1) |
+            ((p->count>KUI_VMU_NATIVE_LIFETIME_RANGES)<<2);
+        return failure_witness(UINT32_C(0x50001),(uint32_t)(uintptr_t)p,bad,0u);
+    }
+    for(unsigned i=0;i<8u;i++) {
+        uint32_t value,address=p->identity[i].address,expected=p->identity[i].value;
+        if(!read_heap_proved(NULL,address,&value))
+            return failure_witness(UINT32_C(0x50002)|(i<<8),address,UINT32_MAX,expected);
+        if(value!=expected)
+            return failure_witness(UINT32_C(0x50003)|(i<<8),address,value,expected);
+    }
+    return true;
 }
 #else
 #define poll_lease_valid lease_valid
@@ -324,47 +370,41 @@ static void diagnostic_report(void) {
 #endif
 #endif
     retail_display_restore(&display);
-    retail_display_line("NATIVE VMU LATENCY CAPTURE");
-    retail_display_line("C BODY TIMINGS INCLUDE SAMPLING OVERHEAD");
+    retail_display_line("VMU LATENCY");
 #if KUI_NATIVE_COOP_PUMP
-    retail_display_line("COMPLETE INCLUDES READER AND STORAGE");
 #else
     retail_display_line("STORAGE TIME IS ALSO IN COMPLETE TIME");
 #endif
-    const char *const labels[4]={"SUBMIT CALLS VALID BAD TOTAL MAX","COMPLETE CALLS VALID BAD TOTAL MAX",
-        "FREE CALLS VALID BAD TOTAL MAX","STORAGE CALLS VALID BAD TOTAL MAX"};
+    const char *const labels[4]={"SUB N VALID BAD TOTAL MAX","END N VALID BAD TOTAL MAX",
+        "FREE N VALID BAD TOTAL MAX","STORE N VALID BAD TOTAL MAX"};
     for(unsigned i=0;i<4u;i++) {
         const struct kui_vmu_native_profile_metric *m=&diagnostic.timing.metric[i];
         retail_display_values(labels[i],(uint32_t[5]){m->calls,m->valid,m->invalid,m->ticks_total,m->ticks_max},5u);
     }
-    retail_display_values("WALL TICKS CLOCK SAMPLES BAD FLAGS",(uint32_t[4]){
+    retail_display_values("WALL CLOCK SAMPLES BAD FLAGS",(uint32_t[4]){
         diagnostic.clock_started?diagnostic.clock_first-diagnostic.clock_last:0u,
         diagnostic.clock_samples,diagnostic.clock_invalid,diagnostic.timing.flags},4u);
-    retail_display_values("FAST SUB FULL SUB FAST END FULL END",(uint32_t[4]){
+    retail_display_values("FAST/FULL SUB FAST/FULL END",(uint32_t[4]){
         diagnostic.fast_submit,diagnostic.full_submit,diagnostic.fast_complete,diagnostic.full_complete},4u);
-    retail_display_line("INTENTIONAL PROFILE STOP - PHOTO THEN OFF");
+    retail_display_line("PROFILE STOP / PHOTO / OFF");
     retail_display_pause(300u);
     retail_display_restore(&display);
-    retail_display_line("PROFILE CLOCK AND VIDEO PHASE");
-    retail_display_line("READ ONLY TMU0 - 781250 TICKS PER SECOND");
-    retail_display_values("CCR FIRST LAST ICE OFF POLLS COMMITS",(uint32_t[5]){
+    retail_display_line("CLOCK/VIDEO PHASE");
+    retail_display_line("TMU0 READ ONLY 781250HZ");
+    retail_display_values("CCR FIRST LAST ICEOFF POLL COMMIT",(uint32_t[5]){
         diagnostic.ccr_first,diagnostic.ccr_last,diagnostic.ice_off,
         state.completed-diagnostic.capture_poll_start,durable_card.commits},5u);
-    retail_display_values("PHASE ENABLED SAMPLES VALID WAIT WRAP",(uint32_t[5]){
+    retail_display_values("PHASE ON N VALID WAIT WRAP",(uint32_t[5]){
         diagnostic_phase.enabled,diagnostic_phase.sequence,diagnostic_phase.valid,
         diagnostic_phase.waits,diagnostic_phase.wraps},5u);
-    retail_display_hex("OPTIONAL CPU FAULT VECTOR ARMED",kui_vmu_native_fault_capture_state[7]);
-    retail_display_line("PHASE CAPTURE IS EXACT EVOLUTION ONLY");
-    retail_display_line("WAIT IS VALIDATED INTERRUPTED SDK FRAME");
-    retail_display_line("WRAP IS OBSERVED C BODY CROSSING LINE ZERO");
-    retail_display_line("SAMPLING ADDS WORK - NOT A NORMAL RUN PROOF");
-    retail_display_line("PAGES CYCLE - PHOTO THEN POWER OFF");
+    retail_display_hex("CPU FAULT VEC ARMED",kui_vmu_native_fault_capture_state[7]);
+    retail_display_line("PAGES CYCLE / PHOTO / OFF");
     retail_display_pause(300u);
     for(unsigned first=0;first<diagnostic_phase.count;first+=4u) {
         retail_display_restore(&display);
-        retail_display_line("PHASE RECORDS - OLDEST FIRST");
-        retail_display_line("ROWS: KIND+FLAGS IN OUT TICKS INDEX");
-        retail_display_line("PC PR SR EVT FRAME / LOAD VBL CTRL BEGIN END");
+        retail_display_line("PHASE RECORDS OLDEST FIRST");
+        retail_display_line("KIND+FLAGS IN OUT TICKS I");
+        retail_display_line("PC PR SR EVT FRAME / LOAD VBL CTRL BEG END");
         for(unsigned i=first;i<first+4u && i<diagnostic_phase.count;i++) {
             unsigned at=(diagnostic_phase.sequence-diagnostic_phase.count+i)&(NATIVE_PHASE_RECORDS-1u);
             const struct native_phase_record *r=&diagnostic_phase.ring[at];
@@ -373,7 +413,7 @@ static void diagnostic_report(void) {
             diagnostic_phase_row((uint32_t[5]){r->pc,r->pr,r->sr,r->event,r->video_counter});
             diagnostic_phase_row((uint32_t[5]){r->load,r->vblank,r->control,r->tick_begin,r->tick_end});
         }
-        retail_display_line("FLAGS CLOCK1 READ2 VIDEO4 FRAME8 WAIT10 WRAP20");
+        retail_display_line("CLK1 RD2 VID4 FRM8 WAIT10 WRAP20");
         retail_display_pause(300u);
     }
     }
@@ -594,22 +634,22 @@ static void report(void) {
     struct retail_display_state display;memcpy(display.regs,config.display,sizeof(display.regs));
     retail_display_restore(&display);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    retail_display_line("AUTOMATIC NATIVE PERSISTENT VMU TEST");
-    retail_display_line("VIRTUAL A2 / SCI IMAGE AND JOURNAL");
+    retail_display_line("PERSISTENT VMU");
+    retail_display_line("A2 / SCI JOURNAL");
     retail_display_hex("PHASE",state.proof?15u:16u);
     retail_display_hex("DETAIL",state.error);
-    retail_display_values("SUBMITTED COMPLETED READS WRITE PHASES COMMITS",(uint32_t[5]){
+    retail_display_values("SUB DONE READ PHASE COMMIT",(uint32_t[5]){
         state.submitted,state.completed,durable_card.reads,durable_card.write_phases,durable_card.commits},5u);
-    retail_display_values("SD READS BUSY FAULTS LEASE RESULT LAST BLOCK",(uint32_t[5]){
+    retail_display_values("SD BUSY FAULT LOAN BLOCK",(uint32_t[5]){
         durable_card.sd_reads,durable_card.sd_busy,durable_card.sd_faults,
         (uint32_t)durable_card.last_lease_result,durable_card.last_block},5u);
-    retail_display_values("LAST REQUEST REPLY RX OVERLAY FLAGS",(uint32_t[5]){
+    retail_display_values("REQ REPLY RX OVL FLAGS",(uint32_t[5]){
         overlay.stats.last_request,overlay.stats.last_reply,overlay.stats.last_rx,state.overlay_result,overlay.stats.flags},5u);
     retail_display_values("AT VALUE EXPECT CHECK LEASE",(uint32_t[5]){
         state.fault_at,state.fault_value,state.fault_expect,state.runtime_result,config.lease.payload},5u);
-    retail_display_values("FRAME ADDRESS PR SR COPY PR SR",(uint32_t[5]){
+    retail_display_values("FRAME PR SR COPY PR SR",(uint32_t[5]){
         state.frame_address,state.frame_pr,state.frame_sr,completion_frame.pr,completion_frame.sr},5u);
-    retail_display_line("PERSISTENT VMU STOPPED - PHOTO THEN POWER OFF");
+    retail_display_line("VMU STOP / PHOTO / OFF");
 #elif KUI_VMU_NATIVE_READONLY_PROBE
     retail_display_line("AUTOMATIC NATIVE READ-ONLY VMU TEST");
     retail_display_line("VIRTUAL A2 / NO SAVE OR STORAGE WRITES");
@@ -619,7 +659,7 @@ static void report(void) {
         state.submitted,state.completed,state.rx_slots,overlay.stats.advertisements,overlay.stats.replies},5u);
     retail_display_values("INFO ALLINFO MEDIA READS REFUSED",(uint32_t[5]){
         overlay.stats.devinfo,overlay.stats.allinfo,overlay.stats.media,overlay.stats.reads,card.refused},5u);
-    retail_display_values("LAST REQUEST REPLY RX OVERLAY FLAGS",(uint32_t[5]){
+    retail_display_values("REQ REPLY RX OVL FLAGS",(uint32_t[5]){
         overlay.stats.last_request,overlay.stats.last_reply,overlay.stats.last_rx,state.overlay_result,overlay.stats.flags},5u);
     retail_display_values("AT VALUE EXPECT CHECK LEASE",(uint32_t[5]){
         state.fault_at,state.fault_value,state.fault_expect,state.runtime_result,config.lease.payload},5u);
@@ -640,7 +680,7 @@ static void report(void) {
     retail_display_line(state.completed?"PASSIVE PAIR VERIFIED - PHOTO THEN POWER OFF":"PASSIVE PROBE REFUSED - PHOTO THEN POWER OFF");
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    retail_display_line("PERSISTENT WRITES USE ADMITTED IMAGE / JOURNAL ONLY");
+    retail_display_line("ADMITTED IMAGE/JOURNAL ONLY");
 #else
     retail_display_line("STORAGE WAS READ ONLY");
 #endif
@@ -660,22 +700,22 @@ void kui_vmu_native_runtime_fault(uint32_t kind,uint32_t value,uint32_t context1
 #else
     struct retail_display_state display;memcpy(display.regs,config.display,sizeof(display.regs));
     retail_display_restore(&display);
-    retail_display_line("NATIVE VMU RUNTIME FAILURE");
+    retail_display_line("NATIVE VMU FAILURE");
     bool exception=(kind&UINT32_C(0xffff0000))==UINT32_C(0x00010000);
     bool coherence=(kind&UINT32_C(0xffff0000))==UINT32_C(0x00020000);
-    retail_display_line(exception?"CAPTURED CPU EXCEPTION":
-        coherence?"SDK CACHE HANDOFF REFUSED":
-        kind==1u?"GAME ALLOCATION FAILED":"UNKNOWN RUNTIME FAILURE");
+    retail_display_line(exception?"CPU EXCEPTION":
+        coherence?"SDK CACHE REFUSED":
+        kind==1u?"GAME ALLOCATION FAILED":"UNKNOWN FAILURE");
     retail_display_hex("PHASE",18u);retail_display_hex("DETAIL",kind);
     retail_display_values(exception?"EXPEVT SPC SSR TEA":coherence?"CHECK ADDRESS VALUE EXPECT":
         "KIND VALUE CONTEXT1 CONTEXT2",(uint32_t[4]){
         (exception || coherence)?(kind&UINT32_C(0xffff)):kind,value,context1,context2},4u);
-    retail_display_values("LEASE BYTES HEAP BEGIN HEAP BYTES",(uint32_t[4]){
+    retail_display_values("LEASE SIZE HEAP BEGIN SIZE",(uint32_t[4]){
         config.lease.payload,config.lease.lease_bytes,config.lease.begin,config.lease.heap_bytes},4u);
-    retail_display_line(exception?"ACTUAL EXCEPTION STATE / NO SAVE COMMIT":
-        coherence?"COLD SDK INITIALIZER STOP / NO TRANSFER":
-        "VALUE REQUEST / CONTEXT CALLER SP");
-    retail_display_line("LAUNCH STOPPED - PHOTO THEN POWER OFF");
+    retail_display_line(exception?"ACTUAL EXCEPTION / NO COMMIT":
+        coherence?"SDK INIT STOP / NO TRANSFER":
+        "REQUEST / CALLER SP");
+    retail_display_line("STOP / PHOTO / OFF");
     for(;;) __asm__ volatile("nop");
 #endif
 }
@@ -746,8 +786,11 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
         (config.exits.count!=2u || config.exits.entries[2] || config.exits.exec_thunk):
         ((config.exits.family!=KUI_VMU_NATIVE_EXIT_FAMILY &&
           config.exits.family!=KUI_VMU_NATIVE_EXIT_PVR_CLEAR &&
-          config.exits.family!=KUI_VMU_NATIVE_EXIT_PVR_COMPACT) ||
+          config.exits.family!=KUI_VMU_NATIVE_EXIT_PVR_COMPACT &&
+          config.exits.family!=KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH) ||
          config.exits.count!=KUI_VMU_NATIVE_EXIT_ENTRIES)) ||
+       (config.exits.family==KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH &&
+        !kui_vmu_native_terminal_dispatch_tagged(&config.exits)) ||
        config.exits.load!=config.driver.load_address || config.exits.image_bytes!=config.driver.image_bytes ||
        config.exits.image_bytes<12u || !ram(config.exits.load,config.exits.image_bytes,4u) ||
        !protect_sdk() ||
@@ -1004,8 +1047,7 @@ static bool persistent_storage_guard(void) {
 static bool context_reject(unsigned code,uint32_t address,uint32_t value,uint32_t expected) {
     /* Failure-only witnesses: retain the existing refusal and the exact failed
      * comparison instead of leaving a stale successful chain read on screen. */
-    state.fault_at=address;state.fault_value=value;state.fault_expect=expected;
-    state.runtime_result=UINT32_C(0x20000)|code;return false;
+    return failure_witness(UINT32_C(0x20000)|code,address,value,expected);
 }
 static bool transfer_context_valid(const struct kui_vmu_native_passive_frame *f,
     unsigned bank,unsigned phase,uint32_t dma) {
@@ -1083,30 +1125,52 @@ static bool persistent_context_guard(void) {
  * named by this main-unit query batch. Unused slots cannot authorize its
  * single parent-header store. No external call or game code runs between this
  * witness and publication. Full VMU/storage paths retain all48-slot checks. */
+/* Diagnostic-only witnesses reuse the existing terminal row. The low byte is
+ * the reason, the next byte the descriptor/source-word/context-field index.
+ * No success-path store or second read is needed to identify a refusal. */
+#define controller_reject(reason,index,address,value,expected) \
+    failure_witness(UINT32_C(0x40000)|((index)<<8)|(reason),(address),(value),(expected))
+#define CONTROLLER_FAIL(reason,index,address,value,expected) do { \
+    (void)controller_reject((reason),(index),(address),(value),(expected));fail(0x47u); \
+} while(0)
 static bool controller_context_valid(const struct kui_vmu_native_passive_frame *f,unsigned phase) {
     if(live_plan.self!=(uintptr_t)&live_plan || live_plan.ready!=UINT32_C(0x4e4c5031) ||
        live_plan.input_count>24u || controller_pair.bank>1u || !controller_pair.count ||
-       controller_pair.count>CONTROLLER_FRAMES || controller_pair.parent>=controller_pair.count ||
-       !transfer_context_valid(f,controller_pair.bank,phase,controller_pair.source)) return false;
+       controller_pair.count>CONTROLLER_FRAMES || controller_pair.parent>=controller_pair.count) {
+        uint32_t bad=(live_plan.self!=(uintptr_t)&live_plan) |
+            ((live_plan.ready!=UINT32_C(0x4e4c5031))<<1) | ((live_plan.input_count>24u)<<2) |
+            ((controller_pair.bank>1u)<<3) | ((!controller_pair.count)<<4) |
+            ((controller_pair.count>CONTROLLER_FRAMES)<<5) |
+            ((controller_pair.parent>=controller_pair.count)<<6);
+        return controller_reject(0x20u,0u,(uint32_t)(uintptr_t)&live_plan,bad,0u);
+    }
+    /* Preserve the existing, more specific 0x200xx transfer witness. */
+    if(!transfer_context_valid(f,controller_pair.bank,phase,controller_pair.source)) return false;
     uint32_t value,manager;
-    if(!read_value(NULL,config.driver.manager_cell,4u,&manager) ||
-       !ram(manager,0x1100u,4u) || physical(manager)!=physical(config.driver.manager_initial)) return false;
-#define CONTROLLER_EXPECT(address,expected) do { \
-    if(!read_value(NULL,(address),4u,&value) || value!=(expected)) return false; \
+    if(!read_value(NULL,config.driver.manager_cell,4u,&manager))
+        return controller_reject(0x21u,0u,config.driver.manager_cell,UINT32_MAX,config.driver.manager_initial);
+    if(!ram(manager,0x1100u,4u))
+        return controller_reject(0x22u,0u,config.driver.manager_cell,manager,config.driver.manager_initial);
+    if(physical(manager)!=physical(config.driver.manager_initial))
+        return controller_reject(0x23u,0u,config.driver.manager_cell,manager,config.driver.manager_initial);
+#define CONTROLLER_EXPECT(index,address,expected) do { \
+    if(!read_value(NULL,(address),4u,&value)) \
+        return controller_reject(0x24u,(index),(address),UINT32_MAX,(expected)); \
+    if(value!=(expected)) return controller_reject(0x25u,(index),(address),value,(expected)); \
 } while(0)
-    CONTROLLER_EXPECT(manager+0xfc4u,live_plan.tx);
-    CONTROLLER_EXPECT(manager+0xfc8u,live_plan.rx);
-    CONTROLLER_EXPECT(manager+0x10a8u,live_plan.tx);
-    CONTROLLER_EXPECT(manager+0x10acu,live_plan.tx+KUI_VMU_NATIVE_TX_BANK_BYTES);
-    CONTROLLER_EXPECT(live_plan.gun,0u);
-    CONTROLLER_EXPECT(live_plan.timer1,0u);
-    CONTROLLER_EXPECT(live_plan.timer2,0u);
+    CONTROLLER_EXPECT(0u,manager+0xfc4u,live_plan.tx);
+    CONTROLLER_EXPECT(1u,manager+0xfc8u,live_plan.rx);
+    CONTROLLER_EXPECT(2u,manager+0x10a8u,live_plan.tx);
+    CONTROLLER_EXPECT(3u,manager+0x10acu,live_plan.tx+KUI_VMU_NATIVE_TX_BANK_BYTES);
+    CONTROLLER_EXPECT(4u,live_plan.gun,0u);
+    CONTROLLER_EXPECT(5u,live_plan.timer1,0u);
+    CONTROLLER_EXPECT(6u,live_plan.timer2,0u);
     for(unsigned i=0;i<live_plan.input_count;i++)
-        CONTROLLER_EXPECT(live_plan.input_address[i],live_plan.input_value[i]);
+        CONTROLLER_EXPECT(8u+i,live_plan.input_address[i],live_plan.input_value[i]);
     for(unsigned i=0;i<controller_pair.count;i++) {
         unsigned port=(controller_pair.frames[i].header>>14)&3u;
         unsigned slot=controller_pair.bank*24u+port*6u;
-        CONTROLLER_EXPECT(manager+0xfe8u+slot*4u,config.runtime.rx_slots[slot]);
+        CONTROLLER_EXPECT(32u+slot,manager+0xfe8u+slot*4u,config.runtime.rx_slots[slot]);
     }
 #undef CONTROLLER_EXPECT
     return true;
@@ -1167,14 +1231,25 @@ static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
        !controller_pair.count || controller_pair.count>CONTROLLER_FRAMES ||
        controller_pair.parent>=controller_pair.count ||
        controller_pair.words*4u!=state.bytes || controller_pair.count!=state.descriptors ||
-       overlay.pending || !overlay.admitted || !durable_card.ready || durable_card.faulted) fail(0x47u);
+       overlay.pending || !overlay.admitted || !durable_card.ready || durable_card.faulted) {
+        uint32_t bad=(!controller_pair.pending) | ((controller_pair.source!=state.source)<<1) |
+            ((!controller_pair.words)<<2) | ((controller_pair.words>CONTROLLER_WORDS)<<3) |
+            ((!controller_pair.count)<<4) | ((controller_pair.count>CONTROLLER_FRAMES)<<5) |
+            ((controller_pair.parent>=controller_pair.count)<<6) |
+            ((controller_pair.words*4u!=state.bytes)<<7) | ((controller_pair.count!=state.descriptors)<<8) |
+            ((!!overlay.pending)<<9) | ((!overlay.admitted)<<10) | ((!durable_card.ready)<<11) |
+            ((!!durable_card.faulted)<<12);
+        CONTROLLER_FAIL(1u,0u,(uint32_t)(uintptr_t)&controller_pair,bad,0u);
+    }
     /* Validate the entire immutable source and every physical response before
      * touching even the parent header. A failed fast completion is terminal;
      * it cannot enter a partly prepared full-overlay transaction. */
     for(unsigned i=0;i<controller_pair.words;i++) {
-        uint32_t value;
-        if(!read_value(NULL,(state.source+i*4u)|UINT32_C(0xa0000000),4u,&value) ||
-           value!=controller_pair.snapshot[i]) fail(0x47u);
+        uint32_t value,address=(state.source+i*4u)|UINT32_C(0xa0000000);
+        if(!read_value(NULL,address,4u,&value))
+            CONTROLLER_FAIL(2u,i,address,UINT32_MAX,controller_pair.snapshot[i]);
+        if(value!=controller_pair.snapshot[i])
+            CONTROLLER_FAIL(3u,i,address,value,controller_pair.snapshot[i]);
     }
     uint32_t parent_response=0u;
     for(unsigned i=0;i<controller_pair.count;i++) {
@@ -1183,20 +1258,30 @@ static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
         unsigned command=controller_pair.frames[i].header&255u;
         unsigned code=command==1u?5u:command==2u?6u:8u;
         unsigned words=command==1u?28u:command==2u?48u:3u;
-        if(!read_value(NULL,rx|UINT32_C(0xa0000000),4u,&response)) fail(0x47u);
+        uint32_t address=rx|UINT32_C(0xa0000000);
+        if(!read_value(NULL,address,4u,&response))
+            CONTROLLER_FAIL(4u,i,address,UINT32_MAX,0u);
         if(response!=UINT32_MAX) {
             unsigned actual=response&255u;
             if(port && command!=9u && (actual==0xfcu || actual==0xfdu || actual==0xfeu)) {
                 /* The same exact zero-word query errors accepted by the
                  * generic physical accessory validator carry no function.
                  * They remain untouched and cannot authorize A's overlay. */
-                if(response!=(UINT32_C(0x00200000)|(port<<14)|(port<<22)|actual)) fail(0x47u);
-            } else if((response&UINT32_C(0xffe0ffff))!=((words<<24)|UINT32_C(0x00200000)|(port<<14)|(port<<22)|code) ||
-                      !read_value(NULL,(rx+4u)|UINT32_C(0xa0000000),4u,&function) ||
-                      (command==9u?function!=UINT32_C(0x01000000):!function)) fail(0x47u);
-        } else if(!port) fail(0x47u);
+                uint32_t expected=UINT32_C(0x00200000)|(port<<14)|(port<<22)|actual;
+                if(response!=expected) CONTROLLER_FAIL(5u,i,address,response,expected);
+            } else {
+                uint32_t expected=(words<<24)|UINT32_C(0x00200000)|(port<<14)|(port<<22)|code;
+                if((response&UINT32_C(0xffe0ffff))!=expected)
+                    CONTROLLER_FAIL(6u,i,address,response,expected);
+                if(!read_value(NULL,address+4u,4u,&function))
+                    CONTROLLER_FAIL(7u,i,address+4u,UINT32_MAX,command==9u?UINT32_C(0x01000000):1u);
+                if(command==9u?function!=UINT32_C(0x01000000):!function)
+                    CONTROLLER_FAIL(8u,i,address+4u,function,command==9u?UINT32_C(0x01000000):1u);
+            }
+        } else if(!port) CONTROLLER_FAIL(9u,i,address,response,0u);
         if(i==controller_pair.parent) {
-            if(response&UINT32_C(0x00020000)) fail(0x47u);
+            if(response&UINT32_C(0x00020000))
+                CONTROLLER_FAIL(10u,i,address,response,response&~UINT32_C(0x00020000));
             parent_response=response;
         }
         if(!i) state.first_response=response;
@@ -1204,12 +1289,15 @@ static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
     }
     if(!controller_context_valid(f,1u)) fail(0x47u);
     uint8_t *parent=readonly_rx(controller_pair.frames[controller_pair.parent].rx,1024u);
-    if(!parent) fail(0x47u);
+    if(!parent) CONTROLLER_FAIL(11u,controller_pair.parent,
+        controller_pair.frames[controller_pair.parent].rx,0u,1024u);
     ((volatile uint8_t *)parent)[2]=(uint8_t)((parent_response>>16)|2u);
     ++overlay.stats.advertisements;++overlay.stats.completed;
     controller_pair.pending=0u;state.pending=0u;++state.completed;state.error=0u;
     state.proof=durable_card.commits!=0u;
 }
+#undef CONTROLLER_FAIL
+#undef controller_reject
 #endif
 void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f) {
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
@@ -1229,8 +1317,20 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
     if(!installed_hooks_valid()) fail(0x45u);
 #endif
     if(!ram(f->r14,4u,4u) || physical(f->r14)!=physical(config.driver.manager_cell) || f->r12!=1u) fail(2u);
-    if(!poll_lease_valid() || kui_vmu_native_passive_resume!=config.driver.resume ||
+    if(!poll_lease_valid()) fail(3u);
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    if(kui_vmu_native_passive_resume!=config.driver.resume) {
+        (void)failure_witness(UINT32_C(0x50004),(uint32_t)(uintptr_t)&kui_vmu_native_passive_resume,
+            kui_vmu_native_passive_resume,config.driver.resume);fail(3u);
+    }
+    if(kui_vmu_native_passive_consumer!=config.driver.consumer) {
+        (void)failure_witness(UINT32_C(0x50005),(uint32_t)(uintptr_t)&kui_vmu_native_passive_consumer,
+            kui_vmu_native_passive_consumer,config.driver.consumer);fail(3u);
+    }
+#else
+    if(kui_vmu_native_passive_resume!=config.driver.resume ||
        kui_vmu_native_passive_consumer!=config.driver.consumer) fail(3u);
+#endif
 #if !KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!bind_runtime(&config.runtime)) fail(14u);
 #endif

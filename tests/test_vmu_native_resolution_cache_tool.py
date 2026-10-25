@@ -10,8 +10,11 @@ import struct
 import subprocess
 import tempfile
 import unittest
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
+from vmu_native_cache_seed import record_metadata
 SOURCES = (
     "tools/vmu_native_resolution_cache_tool.c",
     "src/core/vmu_native_program.c",
@@ -137,20 +140,47 @@ class CacheToolTests(unittest.TestCase):
         self.assertEqual(cache.read_bytes(), before)
         self.assertEqual(hashlib.sha256(self.actual.read_bytes()).hexdigest(), metadata["source_sha256"])
 
-    def test_actual_epoch2_resealed_record_is_refused_without_deleting_it(self):
+    def test_actual_old_epochs_resealed_record_is_refused_without_deleting_it(self):
         cache, metadata = self.build_actual()
-        self.assertEqual(metadata["detector_epoch"], 3)
-        wire = bytearray(cache.read_bytes())
-        struct.pack_into("<I", wire, 16, 2)
-        wire[992:] = hashlib.sha256(wire[:992]).digest()
-        stale = self.work / "old epoch2.nvr"
-        stale.write_bytes(wire)
-        self.invoke("inspect", stale, code=1)
-        self.invoke("verify", self.actual, stale, code=1)
-        self.invoke("replay", self.actual, stale, metadata["record_digest"], code=1)
-        self.invoke("replay", self.actual, stale, bytes(wire[992:]).hex(), code=1)
-        self.assertEqual(stale.read_bytes(), wire)
+        self.assertEqual(metadata["detector_epoch"], 4)
+        for epoch in (1, 2, 3):
+            wire = bytearray(cache.read_bytes())
+            struct.pack_into("<I", wire, 16, epoch)
+            wire[992:] = hashlib.sha256(wire[:992]).digest()
+            stale = self.work / f"old epoch{epoch}.nvr"
+            stale.write_bytes(wire)
+            self.invoke("inspect", stale, code=1)
+            self.invoke("verify", self.actual, stale, code=1)
+            self.invoke("replay", self.actual, stale, metadata["record_digest"], code=1)
+            self.invoke("replay", self.actual, stale, wire[992:].hex(), code=1)
+            self.assertEqual(stale.read_bytes(), wire)
 
+    def test_terminal_dispatch_schema_is_typed_and_matches_c_codec(self):
+        cache, metadata = self.build_actual()
+        original = cache.read_bytes()
+        for family, count, fatal, table, accepted in (
+                (5, 3, 0x8c010100, 0x8c010200, True),
+                (5, 2, 0x8c010100, 0x8c010200, False),
+                (5, 3, 0, 0x8c010200, False),
+                (5, 3, 0x8c010100, 0, False),
+                (4, 2, 0x8c010100, 0x8c010200, False),
+                (6, 3, 0x8c010100, 0x8c010200, False)):
+            with self.subTest(family=family, count=count, fatal=fatal, table=table):
+                wire = bytearray(original)
+                for offset, value in ((708, family), (720, count), (732, fatal), (740, table)):
+                    struct.pack_into("<I", wire, offset, value)
+                wire[992:] = hashlib.sha256(wire[:992]).digest()
+                changed = self.work / "typed terminal.nvr"
+                changed.write_bytes(wire)
+                self.invoke("inspect", changed, code=0 if accepted else 1)
+                if accepted:
+                    self.assertEqual(record_metadata(wire)["detector_epoch"], 4)
+                    # Schema integrity alone cannot confer a fresh image proof.
+                    self.invoke("verify", self.actual, changed, code=1)
+                    self.invoke("replay", self.actual, changed, metadata["record_digest"], code=1)
+                else:
+                    with self.assertRaisesRegex(ValueError, "exit schema"):
+                        record_metadata(wire)
     def test_evolution2_raw_source_and_program_prefix_share_cache_identity(self):
         source = self.evolution2_source()
         raw_cache = self.work / "source.nvr"

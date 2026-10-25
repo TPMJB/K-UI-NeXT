@@ -17,6 +17,7 @@
 static uint8_t memory[0x1000000u];
 static uint32_t mmio[4];
 static unsigned used,bus_reads,fail_read,checks;
+static bool refuse_rx_map;
 static unsigned measured_submit_reads,measured_complete_reads;
 static struct kui_vmu_native_profile_sample test_clock;
 static uint32_t test_ccr;
@@ -55,7 +56,7 @@ bool kui_vmu_native_passive_test_read(uint32_t a,unsigned width,uint32_t *v) {
     int i=mmio_index(a);if(i<0 || width!=4u) return false;*v=mmio[i];return true;
 }
 uint8_t *kui_vmu_native_passive_test_rx(uint32_t address,unsigned bytes) {
-    if(!ram(address,bytes,32u)) return NULL;
+    if(!ram(address,bytes,32u) || refuse_rx_map) return NULL;
     return memory+physical(address)-0x0c000000u;
 }
 uint32_t kui_vmu_native_passive_test_sr(void) {return live_sr;}
@@ -83,7 +84,7 @@ static void fixture(void) {
     memset(&state,0,sizeof(state));memset(&config,0,sizeof(config));memset(captured,0,sizeof(captured));
     memset(receivers,0,sizeof(receivers));memset(&input,0,sizeof(input));memset(&frame,0,sizeof(frame));
     memset(memory,0,sizeof(memory));memset(mmio,0,sizeof(mmio));
-    used=bus_reads=fail_read=0u;live_sr=0xf0u;live_sp=SELF_ADDRESS+WORKER_SPAN-0x100u;bad_guard=0u;terminal_phase=terminal_error=0u;
+    used=bus_reads=fail_read=0u;refuse_rx_map=false;live_sr=0xf0u;live_sp=SELF_ADDRESS+WORKER_SPAN-0x100u;bad_guard=0u;terminal_phase=terminal_error=0u;
     test_clock=(struct kui_vmu_native_profile_sample){0xe0au,UINT32_MAX,2u,1u,UINT32_MAX};
     test_ccr=0x105u;clock_reads=0u;
     corrupt_on_restore=0u;

@@ -305,6 +305,124 @@ static void fallback(void) {
     warm();controllers(2u,0u);state.source=value_at(0xa05f6c04u);
     CHECK(!controller_prepare(&frame) && !controller_pair.pending && !overlay.pending);
 }
+static unsigned diagnostic_cases;
+static void witness(unsigned family,unsigned reason,unsigned index,uint32_t address,
+    uint32_t value,uint32_t expected) {
+    CHECK(state.runtime_result==(family|(index<<8)|reason));
+    CHECK(state.fault_at==address && state.fault_value==value && state.fault_expect==expected);
+    ++diagnostic_cases;
+}
+static void reject_controller_direct(void) {
+    if(setjmp(terminal)==0) {controller_complete(&frame);CHECK(false);}
+    CHECK(terminal_error==0x47u);
+}
+static void reject_submit_after_warm(void) {
+    if(setjmp(terminal)==0) {kui_vmu_native_passive_submit(&frame);CHECK(false);}
+    CHECK(terminal_error==3u && !state.pending);
+}
+static void failure_witness_cases(void) {
+    /* Aggregate guards retain every independently invalid bit. */
+    const uint32_t masks[13]={1u,2u,0x84u,8u,0x50u,0x20u,0x40u,0x80u,
+        0x100u,0x200u,0x400u,0x800u,0x1000u};
+    for(unsigned i=0u;i<13u;i++) {
+        uint8_t before[5][1024];warm();begin_controllers(15u,1u);controllers_done(15u,0u);
+        switch(i) {
+        case 0u:controller_pair.pending=0u;break;
+        case 1u:controller_pair.source^=32u;break;
+        case 2u:controller_pair.words=0u;break;
+        case 3u:controller_pair.words=33u;state.bytes=132u;break;
+        case 4u:controller_pair.count=state.descriptors=0u;break;
+        case 5u:controller_pair.count=state.descriptors=5u;break;
+        case 6u:controller_pair.parent=controller_pair.count;break;
+        case 7u:state.bytes^=4u;break;
+        case 8u:++state.descriptors;break;
+        case 9u:overlay.pending=1u;break;
+        case 10u:overlay.admitted=0u;break;
+        case 11u:durable_card.ready=0u;break;
+        default:durable_card.faulted=1u;break;
+        }
+        save_rx(before);
+        reject_controller_direct();same_rx(before);no_storage();
+        witness(0x40000u,1u,0u,(uint32_t)(uintptr_t)&controller_pair,masks[i],0u);
+    }
+    /* A physical A1 VMU uses bit0; only physical A2's bit1 conflicts. */
+    for(unsigned a2=0u;a2<2u;a2++) {
+        uint8_t before[5][1024];warm();begin_controllers(1u,0u);controllers_done(1u,0u);
+        uint32_t response=0x03210008u|(a2<<17);put(rx_at(0u),4u,response);save_rx(before);
+        if(a2) {
+            reject_complete();witness(0x40000u,10u,0u,rx_at(0u)|0xa0000000u,response,0x03210008u);
+        } else {complete_return();before[0][2]|=2u;}
+        same_rx(before);no_storage();
+    }
+    /* The fixed caller's exact identity predicate is unchanged; every first
+     * failing read or compare gets fresh fields, including dispatch index3. */
+    for(unsigned i=0u;i<8u;i++) for(unsigned unreadable=0u;unreadable<2u;unreadable++) {
+        warm();uint32_t address=lifetime_plan.identity[i].address;
+        uint32_t expected=lifetime_plan.identity[i].value;
+        state.fault_at=state.fault_value=state.fault_expect=state.runtime_result=0xdeadbeefu;
+        if(unreadable) {bus_reads=0u;fail_read=i+1u;}
+        else put(address,4u,expected^1u);
+        CHECK(!poll_lease_valid());
+        if(unreadable) {CHECK(bus_reads==i+1u);fail_read=0u;}
+        witness(0x50000u,unreadable?2u:3u,i,address,unreadable?UINT32_MAX:expected^1u,expected);
+        no_storage();
+    }
+    for(unsigned i=0u;i<3u;i++) {
+        warm();
+        if(i==0u)lifetime_plan.self^=UINT32_C(0x20000000);
+        else if(i==1u)lifetime_plan.ready^=1u;
+        else lifetime_plan.count=KUI_VMU_NATIVE_LIFETIME_RANGES+1u;
+        unsigned before=bus_reads;CHECK(!poll_lease_valid() && bus_reads==before);
+        witness(0x50000u,1u,0u,(uint32_t)(uintptr_t)&lifetime_plan,1u<<i,0u);no_storage();
+    }
+    for(unsigned i=0u;i<3u;i++) {
+        warm();controllers(1u,0u);
+        if(i!=1u)kui_vmu_native_passive_resume^=2u;
+        if(i)kui_vmu_native_passive_consumer^=2u;
+        reject_submit_after_warm();
+        unsigned reason=i==1u?5u:4u;
+        witness(0x50000u,reason,0u,(uint32_t)(uintptr_t)(i==1u?
+            &kui_vmu_native_passive_consumer:&kui_vmu_native_passive_resume),
+            i==1u?kui_vmu_native_passive_consumer:kui_vmu_native_passive_resume,
+            i==1u?config.driver.consumer:config.driver.resume);no_storage();
+    }
+}
+static void exact_response_and_read_witnesses(void) {
+    for(unsigned i=0u;i<6u;i++) {
+        uint8_t before[5][1024];warm();begin_controllers(1u,0u);controllers_done(1u,0u);
+        uint32_t address=rx_at(0u)|0xa0000000u,actual,expected,reason;
+        if(i==0u) {reason=6u;actual=0x033d0009u;expected=0x03200008u;put(address,4u,actual);}
+        else if(i==1u) {reason=8u;actual=0x02000000u;expected=0x01000000u;address+=4u;put(address,4u,actual);}
+        else if(i==2u) {reason=9u;actual=UINT32_MAX;expected=0u;put(address,4u,actual);}
+        else if(i==3u) {reason=4u;actual=UINT32_MAX;expected=0u;bus_reads=0u;fail_read=controller_pair.words+1u;}
+        else if(i==4u) {reason=7u;actual=UINT32_MAX;expected=0x01000000u;address+=4u;bus_reads=0u;fail_read=controller_pair.words+2u;}
+        else {reason=11u;actual=0u;expected=1024u;address=rx_at(0u);}
+        save_rx(before);if(i==5u)refuse_rx_map=true;
+        reject_controller_direct();fail_read=0u;refuse_rx_map=false;
+        witness(0x40000u,reason,0u,address,actual,expected);same_rx(before);no_storage();
+    }
+    for(unsigned word=0u;word<17u;word++) {
+        uint8_t before[5][1024];warm();begin_controllers(15u,1u);controllers_done(15u,0u);save_rx(before);
+        uint32_t expected=controller_pair.snapshot[word];bus_reads=0u;fail_read=word+1u;
+        reject_controller_direct();CHECK(bus_reads==word+1u);fail_read=0u;
+        witness(0x40000u,2u,word,(state.source+word*4u)|0xa0000000u,UINT32_MAX,expected);
+        same_rx(before);no_storage();
+    }
+    const uint32_t functions[4]={0x01000000u,0x01000000u,0x40000000u,0x04000000u};
+    for(unsigned i=0u;i<2u;i++) {
+        uint8_t before[5][1024];warm();mixed_begin(1u,0u);mixed_done(1u,0u,15u,functions);
+        uint32_t address=rx_at(18u)|0xa0000000u,actual,expected,reason;
+        if(!i) {reason=5u;actual=0x01e0c0fcu;expected=0x00e0c0fcu;put(address,4u,actual);}
+        else {reason=8u;actual=0u;expected=1u;address+=4u;put(address,4u,actual);}
+        save_rx(before);reject_controller_direct();
+        witness(0x40000u,reason,3u,address,actual,expected);same_rx(before);no_storage();
+    }
+    /* The success path does not turn these four fields into live telemetry. */
+    warm();begin_controllers(1u,0u);controllers_done(1u,0u);
+    state.fault_at=1u;state.fault_value=2u;state.fault_expect=3u;state.runtime_result=4u;
+    complete_return();CHECK(state.fault_at==1u && state.fault_value==2u &&
+        state.fault_expect==3u && state.runtime_result==4u);no_storage();
+}
 static void refused_without_publication(void) {
     for(unsigned which=0;which<28u;which++) {
         uint8_t before[5][1024];warm();begin_controllers(15u,1u);controllers_done(15u,0u);
@@ -340,12 +458,32 @@ static void refused_without_publication(void) {
         }
         save_rx(before);reject_complete();same_rx(before);no_storage();
         CHECK(controller_pair.pending && state.submitted==state.completed+1u);
+        if(which<5u) CHECK(state.runtime_result==(0x40003u|(which<<8)));
+        else if(which==5u) CHECK(state.runtime_result==0x4000au);
+        else if(which==6u) CHECK(state.runtime_result==0x40009u);
+        else if(which==7u) CHECK(state.runtime_result==0x40008u);
+        else if(which==8u) CHECK(state.runtime_result==0x40306u);
+        else if(which==9u) CHECK(state.runtime_result==0x40308u);
+        else if(which==10u) CHECK(state.runtime_result==0x20020u);
+        else if(which==11u) CHECK(state.runtime_result==0x20021u);
+        else if(which==12u) CHECK(state.runtime_result==0x20022u);
+        else if(which==13u) CHECK(state.runtime_result==0x20023u);
+        else if(which==14u) CHECK(state.runtime_result==0x20042u);
+        else if(which==15u) CHECK(state.runtime_result==(0x40025u|((32u+packet_bank*24u+18u)<<8)));
+        else if(which==16u) CHECK(state.runtime_result==0x40825u);
+        else if(which==19u) CHECK(state.runtime_result==0x2000cu);
+        else if(which==20u) CHECK(state.runtime_result==0x20008u);
+        else if(which==22u) CHECK(state.runtime_result==0x40525u);
+        else if(which==23u) CHECK(state.runtime_result==0x20031u);
+        else if(which>=24u) CHECK(state.runtime_result==0x40001u);
     }
     /* Every source word, including padding/control/LAST, is immutable. */
     for(unsigned word=0u;word<17u;word++) {
         uint8_t before[5][1024];warm();begin_controllers(15u,1u);controllers_done(15u,0u);
-        put(state.source+word*4u,4u,value_at(state.source+word*4u)^1u);
+        uint32_t expected=value_at(state.source+word*4u);
+        put(state.source+word*4u,4u,expected^1u);
         save_rx(before);reject_complete();same_rx(before);no_storage();
+        witness(0x40000u,3u,word,(state.source+word*4u)|0xa0000000u,expected^1u,expected);
     }
     warm();begin_controllers(15u,1u);controllers_done(15u,0u);complete_return();
     unsigned reads=measured_complete_reads;
@@ -368,7 +506,8 @@ static void lane_switches_and_lease(void) {
 }
 int main(void) {
     success_and_cost();mixed_queries_and_cost();mixed_query_refusals();mixed_query_errors();layouts_and_live_aliases();fallback();
-    refused_without_publication();lane_switches_and_lease();
+    refused_without_publication();lane_switches_and_lease();failure_witness_cases();exact_response_and_read_witnesses();
     printf("Controller/main-unit query fast lane: %u checks; unchanged DMA, exact RX/header publication, full fallback and durable lane switching\n",checks);
+    printf("Failure-only diagnostic witnesses: %u exact field cases; source/response/physical A1-A2/identity/exports, transfer codes preserved, no RX or SD publication on refusal\n",diagnostic_cases);
     return 0;
 }

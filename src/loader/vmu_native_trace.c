@@ -175,7 +175,7 @@ static void trace_row(const uint32_t *values,unsigned count) {
  line[count*9u]=0;retail_display_line(line);
 }
 static void trace_history(unsigned first) {
- retail_display_line("CODE PR MDST TICK WAIT FLAG / OLDEST FIRST");
+ retail_display_line("CODE PR MDST TICK WAIT / OLDEST");
  unsigned count=trace.sequence<16u?trace.sequence:16u;
  for(unsigned i=first;i<first+8u && i<count;i++) {
   unsigned n=(trace.sequence-count+i)&15u;
@@ -185,7 +185,7 @@ static void trace_history(unsigned first) {
  }
 }
 static void trace_packets(unsigned first,unsigned count) {
- retail_display_line("INDEX CONTROL RX HEADER PAYLOAD0");
+ retail_display_line("I CTRL RX HEADER PAYLOAD0");
  for(unsigned i=first;i<first+count && i<trace.failure_count;i++) {
   const struct kui_vmu_volatile_chain_frame *f=&trace.failure_frames[i];
   trace_row((uint32_t[]){i,f->control,f->rx,f->header,f->payload0},5u);
@@ -198,67 +198,60 @@ void kui_vmu_native_trace_report(uint32_t reason,uint32_t value,uint32_t a,uint3
 #else
  for(;;) {
  retail_display_restore(&trace.display);
- retail_display_line("EVOLUTION TRACE PAGE 1 OF 5");
- retail_display_values("REASON VALUE CONTEXT1 CONTEXT2",(uint32_t[]){reason,value,a,b},4);
- retail_display_values("HOOK GAME SEQUENCE WAIT LOOPS",(uint32_t[]){trace.hook,trace.game,trace.sequence,trace.loops},4);
- retail_display_values("LAST CHECKPOINT PR SR SP",(uint32_t[]){trace.pr,trace.sr,trace.sp},3);
- retail_display_values("MAPLE SOURCE START ENABLE SELECT",(uint32_t[]){trace.mdstar,trace.mdst,trace.mden,trace.mdtsel},4);
- retail_display_values("TMU0 START CONTROL COUNT WAIT FLAG",(uint32_t[]){trace.tstr,trace.tcr,trace.tick,trace.latch},4);
- retail_display_values("SUBMIT COMPLETE FREE ELAPSED CCR",(uint32_t[]){trace.submitted,trace.completed,trace.frees,trace.elapsed,trace.ccr},5);
- retail_display_line(reason==0xe004u?"E004 IS CONTINUED BLANK CAPTURE":"CHECKPOINT STATE / NOT FAULT PC");
- retail_display_line("PAGES CYCLE - PHOTO THEN POWER OFF");
+ retail_display_line("EVO1 TRACE1/5");
+ retail_display_values("WHY VALUE CTX1 CTX2",(uint32_t[]){reason,value,a,b},4);
+ retail_display_values("HOOK GAME SEQ WAITLOOPS",(uint32_t[]){trace.hook,trace.game,trace.sequence,trace.loops},4);
+ retail_display_values("POINT PR SR SP",(uint32_t[]){trace.pr,trace.sr,trace.sp},3);
+ retail_display_values("MAPLE SRC START EN SEL",(uint32_t[]){trace.mdstar,trace.mdst,trace.mden,trace.mdtsel},4);
+ retail_display_values("TMU0 START CTRL COUNT WAIT",(uint32_t[]){trace.tstr,trace.tcr,trace.tick,trace.latch},4);
+ retail_display_values("SUB END FREE ELAPSED CCR",(uint32_t[]){trace.submitted,trace.completed,trace.frees,trace.elapsed,trace.ccr},5);
+ retail_display_line("PAGES CYCLE / PHOTO / OFF");
  retail_display_pause(300u);
  retail_display_restore(&trace.display);
- retail_display_line("EVOLUTION TRACE PAGE 2 OF 5");
- retail_display_values("DMAC0 SOURCE TARGET COUNT CONTROL",(uint32_t[]){trace.dma_source,trace.dma_target,trace.dma_count,trace.dma_control},4);
- retail_display_values("WAIT FIRST TICK LAST TICK PVR SCAN",(uint32_t[]){trace.first_tick,trace.last_tick,trace.scan},3);
+ retail_display_line("EVO1 TRACE2/5");
+ retail_display_values("DMA0 SRC DST COUNT CTRL",(uint32_t[]){trace.dma_source,trace.dma_target,trace.dma_count,trace.dma_control},4);
+ retail_display_values("WAIT FIRST/LAST TICK SCAN",(uint32_t[]){trace.first_tick,trace.last_tick,trace.scan},3);
  trace_history(0u);
- retail_display_line("PAGES CYCLE - PHOTO THEN POWER OFF");
+ retail_display_line("PAGES CYCLE / PHOTO / OFF");
  retail_display_pause(300u);
  retail_display_restore(&trace.display);
- retail_display_line("EVOLUTION TRACE PAGE 3 OF 5");
+ retail_display_line("EVO1 TRACE3/5");
  retail_display_values("REASON VALUE SEQUENCE",(uint32_t[]){reason,value,trace.sequence},3);
  trace_history(8u);
- retail_display_line("LAST CHECKPOINT / NOT FAULT PC");
- retail_display_line("PAGES CYCLE - PHOTO THEN POWER OFF");
+ retail_display_line("PAGES CYCLE / PHOTO / OFF");
  retail_display_pause(300u);
  retail_display_restore(&trace.display);
- retail_display_line("EVOLUTION TRACE PAGE 4 OF 5");
- retail_display_values("SURFACE SEEN REASON CTRL SIZE PITCH",(uint32_t[]){trace.surface_seen,trace.surface_reason,trace.video_ctrl,trace.video_size,trace.video_pitch},5);
- retail_display_values("CURRENT FRAME SOF1 SOF2",(uint32_t[]){trace.video_sof1,trace.video_sof2},2);
- retail_display_values("LAST DRAWN CTRL SIZE SOF1 SOF2",(uint32_t[]){trace.last_video_ctrl,trace.last_video_size,trace.last_video_sof1,trace.last_video_sof2},4);
- retail_display_values("HOOK GAME SEQUENCE WAIT LOOPS",(uint32_t[]){trace.hook,trace.game,trace.sequence,trace.loops},4);
- retail_display_line("VIDEO BLANKING MAY BE INTENTIONAL");
- retail_display_line("CHECKPOINT STATE / NOT FAULT PC");
- retail_display_line("PAGES CYCLE - PHOTO THEN POWER OFF");
+ retail_display_line("EVO1 TRACE4/5");
+ retail_display_values("SURFACE SEEN WHY CTRL SIZE PITCH",(uint32_t[]){trace.surface_seen,trace.surface_reason,trace.video_ctrl,trace.video_size,trace.video_pitch},5);
+ retail_display_values("CURRENT SOF1 SOF2",(uint32_t[]){trace.video_sof1,trace.video_sof2},2);
+ retail_display_values("LAST CTRL SIZE SOF1 SOF2",(uint32_t[]){trace.last_video_ctrl,trace.last_video_size,trace.last_video_sof1,trace.last_video_sof2},4);
+ retail_display_values("HOOK GAME SEQ WAITLOOPS",(uint32_t[]){trace.hook,trace.game,trace.sequence,trace.loops},4);
+ retail_display_line("PAGES CYCLE / PHOTO / OFF");
  retail_display_pause(300u);
  retail_display_restore(&trace.display);
- retail_display_line("EXCEPTION AND VIDEO PROGRESS");
- retail_display_values("SAVED EXCEPTION SPC SSR VBR EVENT",(uint32_t[]){trace.exception[0],trace.exception[1],trace.exception[2],trace.event},4u);
- retail_display_values("VIDEO COUNTER CACHED CTRL BLANK FLAG",(uint32_t[]){trace.vblank,trace.cached_ctrl,trace.blank_flag},3u);
- retail_display_values("BLANK ACTIVE START TICK LAST TICK",(uint32_t[]){trace.blank_active,trace.blank_start_tick,trace.blank_last_tick},3u);
- retail_display_values("BLANK FIRST COUNTER LAST CHANGES",(uint32_t[]){trace.blank_first_counter,trace.blank_last_counter,trace.blank_counter_changes},3u);
- retail_display_values("SAMPLES TICKS CLOCK ENDED DRAW OFF",(uint32_t[]){trace.blank_samples,trace.blank_ticks,trace.blank_clock_valid,trace.blank_ended,trace.draw_off},5u);
- retail_display_values("BLANK FIRST SPC SSR EVENT",(uint32_t[]){trace.blank_first_spc,trace.blank_first_ssr,trace.blank_first_event},3u);
- retail_display_line("RAW EXCEPTION STATE / NOT FAULT PC");
- retail_display_line("PAGES CYCLE - PHOTO THEN POWER OFF");
+ retail_display_line("EXCEPTION / VIDEO");
+ retail_display_values("EXCEPT SPC SSR VBR EVENT",(uint32_t[]){trace.exception[0],trace.exception[1],trace.exception[2],trace.event},4u);
+ retail_display_values("VIDEO COUNT CTRL BLANKFLAG",(uint32_t[]){trace.vblank,trace.cached_ctrl,trace.blank_flag},3u);
+ retail_display_values("BLANK ACTIVE FIRST/LAST TICK",(uint32_t[]){trace.blank_active,trace.blank_start_tick,trace.blank_last_tick},3u);
+ retail_display_values("BLANK FIRST/LAST COUNT CHANGES",(uint32_t[]){trace.blank_first_counter,trace.blank_last_counter,trace.blank_counter_changes},3u);
+ retail_display_values("N TICKS CLOCK ENDED DRAW_OFF",(uint32_t[]){trace.blank_samples,trace.blank_ticks,trace.blank_clock_valid,trace.blank_ended,trace.draw_off},5u);
+ retail_display_values("BLANK FIRST SPC SSR EVT",(uint32_t[]){trace.blank_first_spc,trace.blank_first_ssr,trace.blank_first_event},3u);
+ retail_display_line("PAGES CYCLE / PHOTO / OFF");
  retail_display_pause(300u);
  if(trace.failure_present) {
   retail_display_restore(&trace.display);
-  retail_display_line("EVOLUTION GUARD DETAILS");
+  retail_display_line("EVOLUTION GUARDS");
   retail_display_values("CHECK AT VALUE EXPECT",(uint32_t[]){trace.failure.check,
    trace.failure.address,trace.failure.value,trace.failure.expected},4u);
-  retail_display_values("SOURCE BYTES FRAMES NOPS",(uint32_t[]){trace.failure.source,
+  retail_display_values("SRC BYTES FRAMES NOPS",(uint32_t[]){trace.failure.source,
    trace.failure.source_bytes,trace.failure.frame_count,trace.failure.nops},4u);
   retail_display_values("TARGET CAPACITY",(uint32_t[]){trace.failure.target,trace.failure.capacity},2u);
   trace_packets(0u,6u);
-  retail_display_line("GUARD CAPTURE - PHOTO THEN POWER OFF");
   retail_display_pause(300u);
   for(unsigned first=6u;first<trace.failure_count;first+=12u) {
    retail_display_restore(&trace.display);
-   retail_display_hex("EVOLUTION PACKETS FROM INDEX",first);
+   retail_display_hex("EVOLUTION PACKETS FROM I",first);
    trace_packets(first,12u);
-   retail_display_line("PACKET HEADERS ONLY - PHOTO THEN OFF");
    retail_display_pause(300u);
   }
  }

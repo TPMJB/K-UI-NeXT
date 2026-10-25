@@ -1,0 +1,95 @@
+{
+  "schema": "kui.native.universal-console-followup.v1",
+  "date": "2026-10-25",
+  "tested_source_commit": "af9e01c8a2710eb44e24867bbe2f593727fbb844",
+  "console_observations": {
+    "evolution1": {
+      "reader": "New (X)",
+      "result": "Black screen after MPEG Sofdec; opening movie did not begin",
+      "new_reader_console_pass": false
+    },
+    "evolution2": {
+      "reader": "New (X)",
+      "result": "Behaves as expected per owner",
+      "new_reader_console_pass": true
+    },
+    "other_titles": {
+      "result": "Initial eight requested titles tested; DOA2 requested next"
+    },
+    "launch_latency": {
+      "result": "Very long delay after selecting games and before bootstrap 1",
+      "seconds_measured": null
+    },
+    "grandia2": {
+      "reader": "New (X)",
+      "result": "Flawless per owner",
+      "new_reader_console_pass": true
+    },
+    "sa2": {
+      "reader": "New (X)",
+      "result": "Flawless per owner",
+      "new_reader_console_pass": true
+    },
+    "ps2": {
+      "reader": "New (X)",
+      "result": "Flawless per owner",
+      "new_reader_console_pass": true
+    },
+    "skies": {
+      "reader": "New (X)",
+      "result": "Persistent VMU stopped on launch",
+      "phase": 16,
+      "detail": 71,
+      "submitted": 30,
+      "completed": 29,
+      "sd_reads": 0,
+      "write_phases": 0,
+      "commits": 0,
+      "last_overlay_request": "00000201",
+      "last_overlay_reply": "1c020005",
+      "last_overlay_rx": "0c54b880",
+      "note": "These overlay fields describe prior A2 INFO; the failed fast controller comparison was not captured."
+    },
+    "lodoss": {
+      "reader": "New (X)",
+      "result": "Persistent VMU stopped on launch",
+      "phase": 16,
+      "detail": 3,
+      "submitted": 4,
+      "completed": 4,
+      "sd_reads": 0,
+      "write_phases": 0,
+      "commits": 0,
+      "last_overlay_request": "00000201",
+      "last_overlay_reply": "1c020005",
+      "last_overlay_rx": "0c3a0f80",
+      "note": "Submit lease-identity/resume/consumer guard; displayed comparison fields are stale prior chain state."
+    },
+    "rayman2": {
+      "reader": "New (X)",
+      "result": "Freezes after bootstrap 2 with only build header; no specific error",
+      "new_reader_console_pass": false
+    }
+  },
+  "cause_confirmed": false,
+  "evolution1_scope": {
+    "exact_owner_admission_retained": true,
+    "structural_fallback_not_used_for_supplied_identity": true,
+    "prior_software_checks_do_not_establish_console_boot": true
+  },
+  "followup": {
+    "preserve_approved_reader_policy": true,
+    "source_read_crc_and_sha_fusion": true,
+    "existing_exact_evolution1_trace_exposed_at_correct_dual_destination": true,
+    "speculative_reader_runtime_changes": false,
+    "vmu_failure_only_witnesses": [
+      "Skies fast controller completion guard 0x47",
+      "Lodoss submission identity/export guard 0x03"
+    ],
+    "cold_stage_progress_labels": true
+  },
+  "limits": [
+    "The pre-bootstrap duplicate source read is a separate finding from the Evolution 1 post-Sofdec failure.",
+    "No new console fix or startup-time measurement is claimed."
+  ]
+}

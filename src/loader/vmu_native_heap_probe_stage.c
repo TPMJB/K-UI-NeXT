@@ -25,6 +25,13 @@ static enum kui_loader_sd_result native_persist_storage_init(struct kui_retail_s
 #define kui_retail_stage_relay kui_native_heap_base_relay
 #include "retail_stage.c"
 #undef kui_retail_stage_relay
+#if KUI_NATIVE_DUAL_READERS
+#define KUI_NATIVE_COLD_PROGRESS_STAGE 1
+__asm__(".global __kui_native_cold_progress_stage\n"
+        ".set __kui_native_cold_progress_stage,1\n");
+#else
+#define KUI_NATIVE_COLD_PROGRESS_STAGE 0
+#endif
 #if KUI_VMU_NATIVE_CACHE_PROBE
 static uint32_t native_runtime_mode(void) {
     int mode=kui_vmu_native_mode_decode(native_runtime_mode_wire,KUI_VMU_NATIVE_MODE_BYTES);
@@ -118,6 +125,9 @@ void kui_vmu_observe_stage_install(void) {
     uint32_t sr;__asm__ volatile("stc sr,%0":"=r"(sr));
     if(((sr>>4)&15u)!=15u || c->status!=KUI_VMU_OBS_BOOT_INITIALIZING)
         native_report(3u,sr);
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 20 HEAP INITIALIZER RETURNED");
+#endif
     code_sha(digest);
     if(memcmp(digest,native_heap_code_sha,sizeof(digest))) native_report(3u,native_heap.initializer);
     uint32_t begin=(c->heap_begin+31u)&~31u,bytes=c->heap_bytes&~31u;
@@ -133,6 +143,9 @@ void kui_vmu_observe_stage_install(void) {
        !kui_vmu_native_heap_preallocate(&lease,native_read,NULL,1u))
         native_report(5u,c->entry_sp);
     void *(*allocate)(uint32_t)=(void *(*)(uint32_t))(uintptr_t)native_heap.allocate;
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 21 HEAP ALLOCATION BEGIN");
+#endif
     c->lease=(uint32_t)(uintptr_t)allocate(lease.lease_bytes);
     __asm__ volatile("stc sr,%0":"=r"(sr));
     code_sha(digest);
@@ -141,6 +154,9 @@ void kui_vmu_observe_stage_install(void) {
        !kui_vmu_native_heap_lease_valid(&lease,native_read,NULL,1u))
         native_report(6u,c->lease);
     c->status=KUI_VMU_OBS_BOOT_LEASED;
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 22 HEAP ALLOCATION VERIFIED");
+#endif
 #if KUI_VMU_NATIVE_WORKER_PROBE
     native_worker_run(&lease);
 #elif KUI_VMU_NATIVE_PASSIVE_PROBE
@@ -155,7 +171,13 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     retail_display_line("BOOTSTRAP 2 RETURNED");
     retail_display_line("VERIFYING EXECUTABLE AND RESIDENT");
 #endif
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 01 BASE RELAY BEGIN");
+#endif
     kui_native_heap_base_relay(frame,ccr);
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 02 BASE RELAY VERIFIED");
+#endif
     /* The matched control uses the same reader, bootstrap verification and
      * owner CPU/cache restoration, but never arms a native hook or lease.
      * Storage preparation has independently taken its no-VMU branch. */
@@ -188,14 +210,23 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #else
 #define native_program_extent kui_vmu_native_program_extent
 #endif
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 03 EXECUTABLE EXTENT BEGIN");
+#endif
     if(!native_program_extent((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
        exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&program_bytes)) native_report(2u,13u);
 #undef native_program_extent
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 04 EXECUTABLE EXTENT VERIFIED");
+#endif
     if(program_bytes!=exec_bytes) retail_display_line("VERIFIED RECLAIMED BOOTSTRAP SUFFIX");
     exec_bytes=(uint32_t)program_bytes;
 #if KUI_VMU_NATIVE_CACHE_PROBE
 #if KUI_NATIVE_STAGE_FAST_SCAN
     retail_display_line("VERIFYING NATIVE CACHE AND IMAGE SHA256");
+#endif
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 05 NATIVE RESOLUTION BEGIN");
 #endif
     bool mapping_cached=native_resolution_replay();
     if(mapping_cached) retail_display_line("USING VERIFIED NATIVE MAPPING CACHE");
@@ -233,6 +264,9 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     }
 #endif
     code_sha(native_heap_code_sha);
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 06 NATIVE RESOLUTION VERIFIED");
+#endif
 #if KUI_NATIVE_STAGE_FAST_SCAN
     retail_display_line("NATIVE DISCOVERY COMPLETE - ARMING HOOK");
 #endif

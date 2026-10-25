@@ -16,8 +16,36 @@ same reservation, not a historical 192KiB-memory-footprint comparison.
 The new reader is unchanged as a performance policy: at most two checked
 physical blocks per eligible heartbeat, with timing admission for block 2,
 SCI priority 1 and the existing CRC/loan/ownership limits. This candidate's
-benefit is broader admission and integrated selection. Evolution 2 should
-not become faster than the previously approved build.
+reader retains the eight software candidates and integrated selection from
+the previous candidate. The follow-up changes are described below; Evolution 2
+should not become faster than the previously approved build.
+
+## Current console results and follow-up
+
+On `af9e01c8a271`, Evolution 2 behaves as expected and Grandia II is flawless
+according to the owner. Sonic Adventure 2 and Power Stone 2 are also reported
+flawless. Skies stops at VMU guard `0x47`; Lodoss stops at guard `0x03`.
+Evolution 1 reaches MPEG Sofdec and then black-screens before its opening movie. Treat Evolution 1
+as a known failure in that candidate. Its earlier software admission pass
+was not a console boot result. Rayman 2 freezes after bootstrap 2 with only
+the build header. The initial eight-title round is complete; DOA2 admission is being investigated separately.
+
+This follow-up repairs Lodoss's verified terminal-allocator table transition.
+The original default allocator, reserved lease, full free-list guards and
+unknown-table refusals remain required. The new terminal table is accepted
+only while its checked fatal-handler hook is installed. Console confirmation
+of this repair is still needed.
+
+It also combines the UI's executable CRC and native VMU source read
+into one pass where possible. It retains the full-file checks and the
+stage's independent verification. It also exposes the already compiled
+Evolution 1 trace through the matching two-file installer. The new SCI
+reader policy and read-ahead producer are unchanged. The VMU worker's failure
+pages now distinguish the individual comparisons behind guards `0x47` and
+`0x03`, retaining the existing refusal and publication rules. Evolution 1
+and Rayman still need their next captures; this is a Lodoss repair, one-pass
+launch-preparation and diagnostic candidate. Console launch times have not yet
+been measured.
 
 ## Install once
 
@@ -45,12 +73,66 @@ SDK contexts and maps needing more than 64 combined track/extent slots.
 It reports a refusal rather than quietly changing to a different reader.
 Unknown native SDK families remain experimental and can refuse safely.
 
-## Test order and what to record
+## Skies and Lodoss guard captures
 
-Start with Evolution 2 for a short regression, then test the other titles in
-the table. All eight passed the joint source-family, actual SDK callback,
-Maple transport and 384KiB allocator checks. Console boot, live startup
-ordering, playback and save persistence still need your results.
+Retry these two titles with New (X). If either stops, photograph the complete
+screen including DETAIL and AT/VALUE/EXPECT/CHECK/LEASE. The new CHECK value
+identifies which comparison failed; the previous screenshots retained stale
+values from earlier successful operations at these particular guards.
+This instrumentation does not declare either game fixed or relax its checks.
+
+## Rayman 2 cold-start capture
+
+Record launch through the freeze. The follow-up stage prints numbered cold
+checkpoints around verification, heap allocation, worker setup and reader
+binding. Capture the last visible checkpoint, or the complete stop screen.
+These labels add no per-frame reader work.
+
+## Evolution 1 startup capture
+
+After the other title tests, first retry Evolution 1 with **Legacy (Y)** on
+the same build and prepared A2 card. Record whether it passes MPEG Sofdec.
+Then install the existing exact-image trace mode and switch back to New (X):
+
+```sh
+python3 install.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --evolution-trace
+```
+
+Launch Evolution 1 with New (X) and record startup through the failure. The
+trace can show a small hexadecimal checkpoint strip while the game owns a
+supported display surface. If blue trace pages appear, record a complete
+cycle, ending when the first heading repeats. This trace stops automatically
+only if an intercepted guard or its reviewed wait-loop limit fires. It does
+not provide the profile mode's trigger+B capture gesture. If it stays black,
+keep the startup video showing the last visible checkpoint strip and record
+whether sound continues and whether the SD-reader light stays on. A report's
+saved exception state is a checkpoint, not automatically the fault PC.
+
+This exact Evolution 1 trace is for diagnosis, not performance comparison.
+Before continuing the other games, reinstall with the `--profile-runtime`
+command above. No new card preparation or image conversion is needed.
+Your results on the earlier `af9e01c8a271` build remain useful.
+
+## Priority retries for this follow-up
+
+1. Evolution 2: check the familiar movement route and an FMV for a short regression.
+2. Lodoss: retry startup. If it boots, test movement/transitions, A2 load, an
+   unused-slot save and cold-boot reload. Capture any new stop screen in full.
+3. Skies: retry New (X) and capture the full new guard report if it stops.
+4. Rayman 2: record startup and the last numbered cold checkpoint or stop screen.
+5. Evolution 1: compare Legacy (Y), then record New (X) with the exact trace mode
+   above. Return to `--profile-runtime` before performance comparisons or other games.
+6. Run the computer-side DOA2 filesystem probe at the end of this guide.
+
+The earlier four successful titles are the regression baseline. Their results
+remain recorded in RESULTS.csv under `af9e01c8a271`. This follow-up has not yet
+been run on the console. Do not replace a failure entry with a software-only pass.
+
+## Broader checks after startup succeeds
+
+The eight joint source-family, actual SDK callback, Maple transport and
+384 KiB allocator checks remain required. They do not override a console
+failure. Use the following longer checklist once the startup retries pass.
 
 | Order | Title | Main exercise |
 | --- | --- | --- |
@@ -112,3 +194,21 @@ Report approximately how many visible hiccups occurred, the longest pause,
 whether music continued, whether a movie recovered, and the first action that
 reproduced a failure. The single biggest priority is verifying that New (X)
 keeps Evolution 2's approved behavior and extends it to the other seven titles.
+
+## DOA2 filesystem probe
+
+DOA2 is not yet admitted by this virtual-VMU candidate. Its application uses
+fixed sound/graphics/resource partitions rather than the reviewed allocator.
+The provided metadata probe reads the filesystem and exact startup identity
+without modifying the SD card or copying game payloads into its output.
+
+From this extracted folder on your computer, run:
+
+```sh
+python3 kui-doa2-filesystem-probe.py /run/media/apollonius/Dreamcast --output DOA2-filesystem-metadata.zip
+```
+
+Upload the resulting ZIP with the other test results. If more than one exact
+DOA2 image is found, use the `--gdi` form in DOA2-PROBE.md to select the image.
+The metadata helps prove the resource partition bounds; generating it does
+not enable the new reader or virtual VMU for DOA2.

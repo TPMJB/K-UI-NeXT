@@ -7,8 +7,12 @@
 #include "kui/vmu_native_resolution_cache.h"
 #include "kui/vmu_native_program.h"
 #include "kui/hash.h"
+#include "kui/core.h"
 
 enum native_cache_result {NATIVE_CACHE_SKIPPED,NATIVE_CACHE_READY,NATIVE_CACHE_CANCELLED};
+/* This reports only a completed source read, independently of whether an
+ * optional SDK mapping can be built. It never grants cache/live ownership. */
+struct native_cache_source_proof {bool complete;uint32_t crc32;};
 struct native_cache_workspace {
     uint8_t wire[KUI_VMU_NATIVE_RESOLUTION_CACHE_BYTES];
     uint8_t compare[KUI_VMU_NATIVE_RESOLUTION_CACHE_BYTES];
@@ -80,7 +84,9 @@ static bool native_cache_file_publish(const char *path,const uint8_t wire[1024],
 }
 static enum native_cache_result native_cache_prepare(const struct kui_game_image *image,
     const struct kui_retail_manifest *map,bool native,uint32_t options,bool patched,
-    struct kui_runtime_image *package,const char *source_root,kui_log_fn log,kui_cancel_fn cancel) {
+    struct kui_runtime_image *package,const char *source_root,kui_log_fn log,kui_cancel_fn cancel,
+    struct native_cache_source_proof *source_proof) {
+    if(source_proof)*source_proof=(struct native_cache_source_proof){0};
     const bool dual=map && package && package->data &&
         kui_native_dual_reader_valid(map->reader,map->storage_transport) &&
         options==map->reader &&
@@ -101,6 +107,8 @@ static enum native_cache_result native_cache_prepare(const struct kui_game_image
     if(!boot || !work) {free(work);free(boot);return NATIVE_CACHE_SKIPPED;}
     enum native_cache_result result=NATIVE_CACHE_SKIPPED;
     struct kui_sha256 sha;uint8_t image_hash[32],sector[2048];kui_sha256_init(&sha);
+    uint32_t source_crc=0u;
+    if(log)log("Native VMU mapping: reading %u executable bytes",map->boot_bytes);
     for(uint32_t done=0;done<map->boot_bytes;) {
         if(native_cache_cancelled(cancel)) {result=NATIVE_CACHE_CANCELLED;goto finished;}
         enum kui_game_result read=kui_game_image_read(image,map->boot_lba+done/2048u,1u,
@@ -110,13 +118,17 @@ static enum native_cache_result native_cache_prepare(const struct kui_game_image
             goto finished;
         }
         uint32_t take=map->boot_bytes-done;if(take>sizeof(sector)) take=sizeof(sector);
-        memcpy(boot+done,sector,take);kui_sha256_update(&sha,sector,take);done+=take;
+        memcpy(boot+done,sector,take);kui_sha256_update(&sha,sector,take);
+        if(source_proof)source_crc=kui_crc32(source_crc,sector,take);
+        done+=take;
     }
+    if(source_proof)*source_proof=(struct native_cache_source_proof){true,source_crc};
     kui_sha256_digest(&sha,image_hash);
     /* The cache filename binds the complete source read above. Its record
      * describes only the caller-proven live program, matching stage replay.
      * Do not shorten a source based on a cached record or an arbitrary tail. */
     size_t program_bytes;
+    if(log)log("Native VMU mapping: validating executable lifetime extent");
     if(!kui_vmu_native_program_extent(boot,map->boot_bytes,KUI_RETAIL_EXEC_ADDRESS,
        &program_bytes)) goto finished;
     char path[120],hex[65];
@@ -127,12 +139,14 @@ static enum native_cache_result native_cache_prepare(const struct kui_game_image
     bool disk=!native_cache_source_conflict(source_root);
     /* This copied digest is explicitly trusted local configuration. It is
      * kept separate from the record, never passed as an aliased self-hash. */
+    if(log)log("Native VMU mapping: checking saved proof");
     bool hit=disk && native_cache_file_read(path,work->wire) &&
         kui_vmu_native_resolution_cache_record_digest(work->wire,sizeof(work->wire),work->digest) &&
         kui_vmu_native_resolution_cache_replay(boot,program_bytes,KUI_RETAIL_EXEC_ADDRESS,
             work->wire,sizeof(work->wire),work->digest,&work->resolution);
     if(!hit) {
         if(native_cache_cancelled(cancel)) {result=NATIVE_CACHE_CANCELLED;goto finished;}
+        if(log)log("Native VMU mapping: scanning SDK families");
         if(!kui_vmu_native_resolution_cache_build(boot,program_bytes,KUI_RETAIL_EXEC_ADDRESS,
             work->wire,sizeof(work->wire),&work->resolution)) goto finished;
         if(native_cache_cancelled(cancel)) {result=NATIVE_CACHE_CANCELLED;goto finished;}

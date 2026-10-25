@@ -238,6 +238,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     if(lease->lease_bytes!=KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES ||
        !kui_vmu_native_background_map_address(lease->payload,map_address))
         native_report(8u,0x48u);
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 30 READER MAP BIND BEGIN");
+#endif
     for(uint32_t at=map_address;at<map_address+KUI_VMU_NATIVE_BACKGROUND_MAP_BYTES;at+=32u)
         __asm__ volatile("ocbp @%0"::"r"(at):"memory");
     memcpy((void *)(uintptr_t)(map_address+UINT32_C(0x20000000)),&manifest,
@@ -256,13 +259,22 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     int (*bind_map)(const struct kui_retail_manifest *,const struct kui_retail_manifest *)=
         (void *)(uintptr_t)KUI_VMU_NATIVE_BACKGROUND_BIND;
     if(bind_map(&manifest,(const void *)(uintptr_t)map_address)!=1) native_report(8u,0x49u);
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 31 READER MAP BOUND");
+#endif
 #endif
     retail_display_restore(&display);retail_display_line("RELOCATING PASSIVE MAPLE WORKER");
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 32 WORKER RELOCATION BEGIN");
+#endif
     for(uint32_t at=load;at<load+span;at+=32u)
         __asm__ volatile("ocbp @%0"::"r"(at):"memory");
     int relocated=kui_vmu_native_relocate(__native_worker_blob_begin,bytes,
         __native_worker_reloc_begin,reloc_bytes,(void *)(uintptr_t)dest,span,load);
     if(relocated) native_report(8u,(uint32_t)relocated);
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 33 WORKER RELOCATED");
+#endif
     memset((void *)(uintptr_t)(dest+bytes),0,span-bytes);
     const struct kui_vmu_native_passive_exports *e=(const void *)(uintptr_t)dest;
     if(e->magic!=KUI_VMU_NATIVE_PASSIVE_MAGIC || e->version!=KUI_VMU_NATIVE_PASSIVE_VERSION || e->bytes!=sizeof(*e) ||
@@ -301,9 +313,15 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     kui_native_passive_publish(load,load+bytes);
 #endif
     uint32_t unused=0;
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 34 WORKER ARM BEGIN");
+#endif
     if(kui_vmu_native_worker_call(e->arm,e->stack_top,
        (const struct kui_vmu_native_worker_config *)(const void *)&cfg,
        (struct kui_vmu_native_worker_result *)(void *)&unused)) native_report(9u,1u);
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 35 WORKER ARMED");
+#endif
     if(!kui_vmu_native_heap_lease_valid(lease,native_read,NULL,1u) ||
        native_word(native_heap.initializer_slot)!=KUI_VMU_OBSERVE_LOW_HEAP_HOOK ||
        native_word(native_driver.completion_slot)!=native_driver.consumer) native_report(9u,2u);
@@ -317,6 +335,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     if(native_runtime_mode()==KUI_VMU_NATIVE_MODE_LEASE_ONLY) {
         native_passive_lease_only(lease,e);return;
     }
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 36 SDK HOOK PUBLICATION BEGIN");
+#endif
     if(native_sdk_coherence_install(e,dest,bytes)!=1) native_report(9u,0x47u);
 #endif
     /* The first real initializer has returned and our lease is allocated.
@@ -354,6 +375,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     c->sd_transaction=e->sd_transaction;
 #endif
     c->installer=0;c->stage_stack=0;c->status=KUI_VMU_OBS_BOOT_INSTALLED;
+#if KUI_NATIVE_COLD_PROGRESS_STAGE
+    retail_display_line("COLD 37 SDK HOOKS INSTALLED");
+#endif
 #if KUI_NATIVE_DUAL_READERS
     native_dual_reader_bind(e,dest,bytes,lease->payload,cfg.diagnostics);
 #else
@@ -372,9 +396,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
         retail_display_line("ACTIVE HOOKS / ORIGINAL MAPLE DMA LIST");
     else if(cfg.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY)
         retail_display_line("ALL HOOKS ACTIVE / VIRTUAL VMU OFF");
-    else retail_display_line("PERSISTENT VIRTUAL A1 ARMED - STARTING GAME");
+    else retail_display_line("PERSISTENT VIRTUAL A2 ARMED - STARTING GAME");
 #elif KUI_VMU_NATIVE_READONLY_PROBE
-    retail_display_line("READ ONLY VIRTUAL A1 ARMED - STARTING GAME");
+    retail_display_line("READ ONLY VIRTUAL A2 ARMED - STARTING GAME");
 #else
     retail_display_line("PASSIVE WORKER ARMED - STARTING GAME");
 #endif
