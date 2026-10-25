@@ -1,0 +1,11 @@
+{
+  "schema": "kui.native.read-ahead.evidence-checkpoint.v1",
+  "source_commit": "c641f7e79f9dd666096867b137f3ff62eaf5f6d0",
+  "source_tree": "86a78521b21738f5268e61b447896484584f0f11",
+  "prerequisite_source_commit": "7568957f5e686deaeab196249667a4f8f7b5fc69",
+  "runtime_build": "7568957f5e68",
+  "runtime_source_changed": false,
+  "new_binary_built": false,
+  "reproduce": "sh replay.sh /path/to/restored-source /tmp/kui-second-overrun",
+  "restore": "Run the preceding read-ahead-repair-limit/checkout-source.py first, then git -C restored-source fetch read-ahead-second-overrun/native-source-update.bundle HEAD and git -C restored-source checkout --detach c641f7e79f9dd666096867b137f3ff62eaf5f6d0"
+}
