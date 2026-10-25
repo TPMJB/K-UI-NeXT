@@ -1,0 +1,11 @@
+{
+  "schema": "kui.native.loader-timeline.candidate.v1",
+  "source_commit": "302f73152e4b9058183ebb286439108eb3d5ba2f",
+  "source_tree": "c1d953338b6de0bd9b487316465a9097c30b822c",
+  "build": "302f73152e4b",
+  "module_sha256": "4ece27dd93c13f34880fbee7c4eda1ef31189906b83fa92b9e36e524e2308d0d",
+  "module_bytes": 232604,
+  "reader": "Background GD call and request timeline",
+  "source_bundle_prerequisite": "74958b3878279fc916199a7cd330f7f17b036138",
+  "console_performance_verified": false
+}

@@ -1,0 +1,83 @@
+{
+  "selected_hex": {
+    "samples": "4B0",
+    "bad": "0",
+    "poll_gap_max": "4771",
+    "complete_read_max": "1BA8B",
+    "pending_age_max": "18D6F",
+    "irq_blocks": "0",
+    "call_blocks": "8DB",
+    "pio": "0",
+    "crc_errors": "0",
+    "token_errors": "0",
+    "repairs": "30",
+    "overruns": "0",
+    "sci_rearms": "0",
+    "irq_entries": "0",
+    "rehooks": "0",
+    "release100": "0",
+    "release400": "0",
+    "release600": "0",
+    "longest_read_lba": "4E940",
+    "longest_read_sectors": "49",
+    "vmu_complete_max": "59",
+    "vmu_storage_calls": "0",
+    "commits": "0"
+  },
+  "selected_decimal": {
+    "samples": 1200,
+    "bad": 0,
+    "poll_gap_max": 18289,
+    "complete_read_max": 113291,
+    "pending_age_max": 101743,
+    "irq_blocks": 0,
+    "call_blocks": 2267,
+    "pio": 0,
+    "crc_errors": 0,
+    "token_errors": 0,
+    "repairs": 48,
+    "overruns": 0,
+    "sci_rearms": 0,
+    "irq_entries": 0,
+    "rehooks": 0,
+    "release100": 0,
+    "release400": 0,
+    "release600": 0,
+    "longest_read_lba": 321856,
+    "longest_read_sectors": 73,
+    "vmu_complete_max": 89,
+    "vmu_storage_calls": 0,
+    "commits": 0
+  },
+  "ticks_per_second": 781250,
+  "seconds": {
+    "poll_gap_max": 0.02340992,
+    "complete_read_max": 0.14501248,
+    "pending_age_max": 0.13023104,
+    "vmu_complete_max": 0.00011392
+  },
+  "input_photos": [
+    {
+      "page": 1,
+      "sha256": "fdfcaa73e5527c7ed864b4c2370f06cb0f650593cb8ceb39731d481c87e5af7d"
+    },
+    {
+      "page": 2,
+      "sha256": "cbc2a856bbf47a50b27c6bec7eb084984ab80d4bea7a0e451fccc61f1e258abf"
+    },
+    {
+      "page": 3,
+      "sha256": "6e83fa9d7467b75da6bd00a83c5824a8025d28cf4a02db96b483cf1595e6c13b"
+    },
+    {
+      "page": 4,
+      "sha256": "33f346ad3ab19552ac1c6795e074e57c06bd8a7d0848138c23fee49535b436ec"
+    },
+    {
+      "page": 5,
+      "sha256": "b61ae8a7caccca00de8ee61204e160f459b628dce5b94c3560dc336e5ef1de5b"
+    }
+  ],
+  "photo_bytes_published": false,
+  "exact_hitch_correlated": false
+}

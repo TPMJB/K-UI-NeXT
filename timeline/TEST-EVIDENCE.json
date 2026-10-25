@@ -1,0 +1,146 @@
+{
+  "schema": "kui.native.loader-timeline.evidence.v1",
+  "date": "2026-10-24",
+  "observed_build": "a12f32a63221",
+  "owner_report": "Slightly better, but movement stops about one second every five seconds; music continues",
+  "capture": {
+    "selected_hex": {
+      "samples": "4B0",
+      "bad": "0",
+      "poll_gap_max": "4771",
+      "complete_read_max": "1BA8B",
+      "pending_age_max": "18D6F",
+      "irq_blocks": "0",
+      "call_blocks": "8DB",
+      "pio": "0",
+      "crc_errors": "0",
+      "token_errors": "0",
+      "repairs": "30",
+      "overruns": "0",
+      "sci_rearms": "0",
+      "irq_entries": "0",
+      "rehooks": "0",
+      "release100": "0",
+      "release400": "0",
+      "release600": "0",
+      "longest_read_lba": "4E940",
+      "longest_read_sectors": "49",
+      "vmu_complete_max": "59",
+      "vmu_storage_calls": "0",
+      "commits": "0"
+    },
+    "selected_decimal": {
+      "samples": 1200,
+      "bad": 0,
+      "poll_gap_max": 18289,
+      "complete_read_max": 113291,
+      "pending_age_max": 101743,
+      "irq_blocks": 0,
+      "call_blocks": 2267,
+      "pio": 0,
+      "crc_errors": 0,
+      "token_errors": 0,
+      "repairs": 48,
+      "overruns": 0,
+      "sci_rearms": 0,
+      "irq_entries": 0,
+      "rehooks": 0,
+      "release100": 0,
+      "release400": 0,
+      "release600": 0,
+      "longest_read_lba": 321856,
+      "longest_read_sectors": 73,
+      "vmu_complete_max": 89,
+      "vmu_storage_calls": 0,
+      "commits": 0
+    },
+    "ticks_per_second": 781250,
+    "seconds": {
+      "poll_gap_max": 0.02340992,
+      "complete_read_max": 0.14501248,
+      "pending_age_max": 0.13023104,
+      "vmu_complete_max": 0.00011392
+    },
+    "input_photos": [
+      {
+        "page": 1,
+        "sha256": "fdfcaa73e5527c7ed864b4c2370f06cb0f650593cb8ceb39731d481c87e5af7d"
+      },
+      {
+        "page": 2,
+        "sha256": "cbc2a856bbf47a50b27c6bec7eb084984ab80d4bea7a0e451fccc61f1e258abf"
+      },
+      {
+        "page": 3,
+        "sha256": "6e83fa9d7467b75da6bd00a83c5824a8025d28cf4a02db96b483cf1595e6c13b"
+      },
+      {
+        "page": 4,
+        "sha256": "33f346ad3ab19552ac1c6795e074e57c06bd8a7d0848138c23fee49535b436ec"
+      },
+      {
+        "page": 5,
+        "sha256": "b61ae8a7caccca00de8ee61204e160f459b628dce5b94c3560dc336e5ef1de5b"
+      }
+    ],
+    "photo_bytes_published": false,
+    "exact_hitch_correlated": false
+  },
+  "findings": [
+    "No observed SCI entries/rearms/forwarding during the capture. This does not show what happened before it.",
+    "The existing maxima do not measure the owner-reported one-second motion freeze. Consecutive requests and time outside GD remain plausible.",
+    "REQUEST_TIMING previously suppressed independent VBR-replacement observation; the new trace records raw entry/exit VBR and original caller SR."
+  ],
+  "new_capture": {
+    "collector_bytes": 3420,
+    "event_bytes": 64,
+    "clock_bytes": 20,
+    "private_worker_bss_bytes": 3504,
+    "new_game_allocation_bytes": 0,
+    "low_bss_growth_bytes": 0,
+    "owned_lease_bytes": 196608,
+    "time_bins": 32,
+    "bin_ticks": 488281,
+    "longest_calls_kept": 8,
+    "longest_calls_printed": 4,
+    "recent_requests_kept": 16,
+    "recent_requests_printed": 8,
+    "capture_seconds_approx": 20,
+    "record_pages_video_seconds": 90,
+    "default_command_uses_profile_runtime": true,
+    "read_schedule_changed": false,
+    "clock_writes": false,
+    "reads_rdr": false,
+    "runtime_sd_log_writes": false,
+    "whole_gd_call_timing": true,
+    "original_sr": true,
+    "entry_exit_hardware_context": true,
+    "request_chain_timing": true,
+    "frame_time_proof": false,
+    "diagnostic_overhead_included": true
+  },
+  "validation": {
+    "pure_core_checks": 70,
+    "worker_integration_checks": 2091575,
+    "bridge_cases": 480,
+    "bridge_mutation_rejections": 2,
+    "irq_cases": 8192,
+    "irq_mutation_rejections": 10,
+    "low_stack_budget_bytes": 352,
+    "low_stack_conservative_bytes": 352,
+    "guards_and_margins_unchanged": true,
+    "fonts_all_252_rows_equal": true,
+    "prototype_full_artifact_audit_passed": true,
+    "console_cause_established": false
+  },
+  "design_inferences": [
+    "Separate receive/verification production from publication into game destinations; first establish a reliable producer execution opportunity.",
+    "Measure repeated LBAs and adjacent requests before choosing a hot-sector cache or read-ahead queue.",
+    "A buffer cannot fill while its producer is unscheduled; never fake completion before verified output reaches the requested destination."
+  ],
+  "primary_sources": [
+    "https://antime.kapsi.fi/sega/files/ST-136-R2-093094.pdf",
+    "https://antime.kapsi.fi/sega/files/ST-098-031194.pdf",
+    "https://github.com/Lameguy64/PSn00bSDK/releases"
+  ]
+}

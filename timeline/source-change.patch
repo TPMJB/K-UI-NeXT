@@ -1,0 +1,1914 @@
+diff --git a/Makefile.vmu-native-timeline b/Makefile.vmu-native-timeline
+new file mode 100644
+index 0000000..a4a5121
+--- /dev/null
++++ b/Makefile.vmu-native-timeline
+@@ -0,0 +1,17 @@
++# SPDX-License-Identifier: GPL-3.0-only
++BUILD ?= build/native-timeline
++include Makefile.vmu-native-irq-rearm
++FLAGS += -DKUI_NATIVE_LOADER_TIMELINE=1
++NATIVE_FLAGS += -DKUI_NATIVE_LOADER_TIMELINE=1
++NATIVE_SRC += src/core/native_loader_timeline.c
++$(BUILD)/native-worker.elf: $(NATIVE_OBJ)
++override TEST_GUIDE := docs/vmu-native-timeline-test.md
++
++.PHONY: timeline-host-tests
++timeline-host-tests:
++	@mkdir -p $(BUILD)
++	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_native_loader_timeline.c src/core/native_loader_timeline.c -o $(BUILD)/test-timeline
++	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-timeline
++	python3 tests/test_native_compact_font.py
++	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_loader_timeline_worker.c $(COMPAT_WORKER_HOST_SRC) src/core/native_loader_timeline.c -Wl,--gc-sections -o $(BUILD)/test-timeline-worker
++	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-timeline-worker
+diff --git a/docs/evidence/native-loader-timeline-2026-10-24.json b/docs/evidence/native-loader-timeline-2026-10-24.json
+new file mode 100644
+index 0000000..329d22c
+--- /dev/null
++++ b/docs/evidence/native-loader-timeline-2026-10-24.json
+@@ -0,0 +1,146 @@
++{
++  "schema": "kui.native.loader-timeline.evidence.v1",
++  "date": "2026-10-24",
++  "observed_build": "a12f32a63221",
++  "owner_report": "Slightly better, but movement stops about one second every five seconds; music continues",
++  "capture": {
++    "selected_hex": {
++      "samples": "4B0",
++      "bad": "0",
++      "poll_gap_max": "4771",
++      "complete_read_max": "1BA8B",
++      "pending_age_max": "18D6F",
++      "irq_blocks": "0",
++      "call_blocks": "8DB",
++      "pio": "0",
++      "crc_errors": "0",
++      "token_errors": "0",
++      "repairs": "30",
++      "overruns": "0",
++      "sci_rearms": "0",
++      "irq_entries": "0",
++      "rehooks": "0",
++      "release100": "0",
++      "release400": "0",
++      "release600": "0",
++      "longest_read_lba": "4E940",
++      "longest_read_sectors": "49",
++      "vmu_complete_max": "59",
++      "vmu_storage_calls": "0",
++      "commits": "0"
++    },
++    "selected_decimal": {
++      "samples": 1200,
++      "bad": 0,
++      "poll_gap_max": 18289,
++      "complete_read_max": 113291,
++      "pending_age_max": 101743,
++      "irq_blocks": 0,
++      "call_blocks": 2267,
++      "pio": 0,
++      "crc_errors": 0,
++      "token_errors": 0,
++      "repairs": 48,
++      "overruns": 0,
++      "sci_rearms": 0,
++      "irq_entries": 0,
++      "rehooks": 0,
++      "release100": 0,
++      "release400": 0,
++      "release600": 0,
++      "longest_read_lba": 321856,
++      "longest_read_sectors": 73,
++      "vmu_complete_max": 89,
++      "vmu_storage_calls": 0,
++      "commits": 0
++    },
++    "ticks_per_second": 781250,
++    "seconds": {
++      "poll_gap_max": 0.02340992,
++      "complete_read_max": 0.14501248,
++      "pending_age_max": 0.13023104,
++      "vmu_complete_max": 0.00011392
++    },
++    "input_photos": [
++      {
++        "page": 1,
++        "sha256": "fdfcaa73e5527c7ed864b4c2370f06cb0f650593cb8ceb39731d481c87e5af7d"
++      },
++      {
++        "page": 2,
++        "sha256": "cbc2a856bbf47a50b27c6bec7eb084984ab80d4bea7a0e451fccc61f1e258abf"
++      },
++      {
++        "page": 3,
++        "sha256": "6e83fa9d7467b75da6bd00a83c5824a8025d28cf4a02db96b483cf1595e6c13b"
++      },
++      {
++        "page": 4,
++        "sha256": "33f346ad3ab19552ac1c6795e074e57c06bd8a7d0848138c23fee49535b436ec"
++      },
++      {
++        "page": 5,
++        "sha256": "b61ae8a7caccca00de8ee61204e160f459b628dce5b94c3560dc336e5ef1de5b"
++      }
++    ],
++    "photo_bytes_published": false,
++    "exact_hitch_correlated": false
++  },
++  "findings": [
++    "No observed SCI entries/rearms/forwarding during the capture. This does not show what happened before it.",
++    "The existing maxima do not measure the owner-reported one-second motion freeze. Consecutive requests and time outside GD remain plausible.",
++    "REQUEST_TIMING previously suppressed independent VBR-replacement observation; the new trace records raw entry/exit VBR and original caller SR."
++  ],
++  "new_capture": {
++    "collector_bytes": 3420,
++    "event_bytes": 64,
++    "clock_bytes": 20,
++    "private_worker_bss_bytes": 3504,
++    "new_game_allocation_bytes": 0,
++    "low_bss_growth_bytes": 0,
++    "owned_lease_bytes": 196608,
++    "time_bins": 32,
++    "bin_ticks": 488281,
++    "longest_calls_kept": 8,
++    "longest_calls_printed": 4,
++    "recent_requests_kept": 16,
++    "recent_requests_printed": 8,
++    "capture_seconds_approx": 20,
++    "record_pages_video_seconds": 90,
++    "default_command_uses_profile_runtime": true,
++    "read_schedule_changed": false,
++    "clock_writes": false,
++    "reads_rdr": false,
++    "runtime_sd_log_writes": false,
++    "whole_gd_call_timing": true,
++    "original_sr": true,
++    "entry_exit_hardware_context": true,
++    "request_chain_timing": true,
++    "frame_time_proof": false,
++    "diagnostic_overhead_included": true
++  },
++  "validation": {
++    "pure_core_checks": 70,
++    "worker_integration_checks": 2091575,
++    "bridge_cases": 480,
++    "bridge_mutation_rejections": 2,
++    "irq_cases": 8192,
++    "irq_mutation_rejections": 10,
++    "low_stack_budget_bytes": 352,
++    "low_stack_conservative_bytes": 352,
++    "guards_and_margins_unchanged": true,
++    "fonts_all_252_rows_equal": true,
++    "prototype_full_artifact_audit_passed": true,
++    "console_cause_established": false
++  },
++  "design_inferences": [
++    "Separate receive/verification production from publication into game destinations; first establish a reliable producer execution opportunity.",
++    "Measure repeated LBAs and adjacent requests before choosing a hot-sector cache or read-ahead queue.",
++    "A buffer cannot fill while its producer is unscheduled; never fake completion before verified output reaches the requested destination."
++  ],
++  "primary_sources": [
++    "https://antime.kapsi.fi/sega/files/ST-136-R2-093094.pdf",
++    "https://antime.kapsi.fi/sega/files/ST-098-031194.pdf",
++    "https://github.com/Lameguy64/PSn00bSDK/releases"
++  ]
++}
+diff --git a/docs/vmu-native-timeline-test.md b/docs/vmu-native-timeline-test.md
+new file mode 100644
+index 0000000..887abcc
+--- /dev/null
++++ b/docs/vmu-native-timeline-test.md
+@@ -0,0 +1,113 @@
++<!-- SPDX-License-Identifier: GPL-3.0-only -->
++# Native loader timeline capture
++
++a12f32a63221 was slightly better, but the owner still reports about one second
++of stopped movement every five seconds while music continues. Its capture
++has no SCI entries, rearms or forwarded events. The largest controller-poll
++gap is23.40992ms and largest complete read145.01248ms. These are not a
++measurement of the visible one-second stop. Several consecutive reads or
++game work after delivery could produce a longer movement pause.
++
++The new diagnostic retains full CHECK/EXEC20/25, IRQ8 and PIO1 scheduling.
++It records complete GD calls, including entry before reader hook changes
++and exit after service progress. It also exposes the previously suppressed
++VBR-change counter logic. No timer is configured and no runtime SD log is
++written. Collection begins only at the existing capture gesture.
++
++## Install and capture every run
++
++From this folder, using the existing prepared pair:
++
++```sh
++python3 personalize.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --game evolution2 --profile-runtime
++```
++
++Use SCI, Background On, Normal speed, Auto/default encoding, CD music Off
++and RAM patches Off. Safely eject and cold boot. During the affected movement
++area hold both triggers fully plus B for about one second, then release.
++Continue playing through several pauses until the intentional stop after
++roughly20seconds. Record **90seconds of the cycling pages**, enough for all
++thirteen pages. No counters need to be typed manually.
++
++## What is recorded
++
++* Thirty-two0.625-second bins: loader-call time, call count and controller
++  heartbeat count, with clock epoch and invalid/overflow accounting.
++* Eight longest complete GD calls retained in RAM; the four longest printed
++  with full before/after context and the preceding gap between GD calls.
++* Sixteen recent request summaries retained; eight printed with token,
++  LBA/count, wall duration, time inside/outside GD, call count, delivered
++  bytes and flags. Requests within about33.3ms form a proximity chain.
++* Original caller SR, entry/exit VBR and IPRB, CHCR/TCR/DMAOR/SCI status,
++  active/hooked/armed state and GD command. RDR is never read.
++
++The timer is the existing admitted781250Hz down-counter. An invalid clock
++or observed profile break starts a separate epoch; no duration crosses it.
++Unobserved timer stops/resets cannot be excluded solely by matching endpoint
++profiles. All timing includes diagnostic overhead. Time outside GD is not
++CPU idle time. Request proximity is not proof of a frame or rendering stall.
++
++## Reading the added pages
++
++Summary maxima can come from different calls/chains. The bins show whether
++most of a slow interval was spent inside GD calls. A long request with little
++inside-GD time suggests gaps in service opportunities; a chain of many reads
++suggests a larger asset-load burst. Long inside-GD calls identify work to
++budget or optimize without guessing at another CHECK throttle.
++
++Each longest-call page uses a two-digit prefix: rank0–3 and row0–6. Five hex
++words follow, in this order:
++
++| Row | Fields |
++| --- | --- |
++| 0 | elapsed, preceding gap, epoch, entry tick, entry flags |
++| 1 | entry function, previous status, token, LBA, sectors |
++| 2 | entry completed bytes, original SR, VBR, IPRB, CHCR |
++| 3 | entry TCR, DMAOR, SSR, packed state, exit tick |
++| 4 | exit flags, function, actual GD result, token, LBA |
++| 5 | exit sectors, completed bytes, original SR, VBR, IPRB |
++| 6 | exit CHCR, TCR, DMAOR, SSR, packed state |
++
++Packed state: low8bitsSCI state; bits8/9/10active/hooked/armed; bit11VBR
++equals reader VBR; bits16–23GD command. Original SR is supplied by the
++existing entry save, rather than sampling the resident's own masked SR.
++
++Request rows:0token/LBA/count/total;1inside/outside/calls/bytes;
++2epoch/flags/chain length/chain wall. Flags1partial,2failed,4replaced,
++8bad clock. An active unfinished request is identified on the summary page.
++
++## Memory and validation
++
++The collector is3420bytes plus a64-byte static event and20-byte static
++clock sample, all typed private worker BSS inside the existing lease.
++No additional game allocation or low BSS is taken. The callback is published
++only after retained-region binding, from a typed immutable descriptor,
++and only for PROFILE mode. Bootstrap and normal-mode slots remain zero.
++
++The low bridge is a nullable tail call. Its actual instructions and four
++arguments are modelled; the cold binder's complete code is pinned/reviewed.
++The full cross-image call graph retains the original352-byte low stack
++budget, including32-byte margin,16-byte guard and32-byte top gap.
++The contiguous font stores the same252 rows in158bytes; all rows and bounds
++are independently compared. Guards and verification checks are retained.
++
++Host tests cover timer wrap/epochs, split bins, consecutive reads, token reuse,
++partial/replaced/failed requests, exact hardware context, gesture activation
++and storage exclusions. These checks do not establish console performance.
++
++## Design directions after the trace
++
++Sega's Saturn CD library separates immediate-return requests from a recurring
++server, and the Stream System separates disc buffering from host delivery.
++Its resident streams avoid reading the same data repeatedly. PSn00bSDK's
++CD-audio example likewise uses a main-RAM ring buffer. These suggest an owned
++verified-data queue, a reliable producer opportunity and a small immutable
++hot-sector cache when repeated LBAs justify it. A larger queue cannot fill
++itself while its producer is unscheduled, and a transparent loader cannot
++assume the game's asset layout or cooperation.
++
++Primary references:
++
++* https://antime.kapsi.fi/sega/files/ST-136-R2-093094.pdf (5.2 and pre-loading)
++* https://antime.kapsi.fi/sega/files/ST-098-031194.pdf (4.3–4.4)
++* https://github.com/Lameguy64/PSn00bSDK/releases (v0.24 sound/cdstream)
+diff --git a/include/kui/native_loader_timeline.h b/include/kui/native_loader_timeline.h
+new file mode 100644
+index 0000000..4e981e5
+--- /dev/null
++++ b/include/kui/native_loader_timeline.h
+@@ -0,0 +1,67 @@
++/* SPDX-License-Identifier: GPL-3.0-only */
++#ifndef KUI_NATIVE_LOADER_TIMELINE_H
++#define KUI_NATIVE_LOADER_TIMELINE_H
++#include <stdint.h>
++
++#define KUI_NATIVE_TIMELINE_HZ 781250u
++#define KUI_NATIVE_TIMELINE_BIN_TICKS 488281u /* 0.62499968 seconds */
++#define KUI_NATIVE_TIMELINE_BINS 32u
++#define KUI_NATIVE_TIMELINE_LONGEST 8u
++#define KUI_NATIVE_TIMELINE_REQUESTS 16u
++#define KUI_NATIVE_TIMELINE_CHAIN_GAP 26042u /* proximity threshold, NOT a frame witness */
++enum kui_native_loader_event_flags {
++    KUI_NATIVE_TIMELINE_ENTER=1u,
++    KUI_NATIVE_TIMELINE_EXIT=2u,
++    KUI_NATIVE_TIMELINE_MAPLE=3u,
++    KUI_NATIVE_TIMELINE_KIND_MASK=15u,
++    KUI_NATIVE_TIMELINE_CLOCK_VALID=0x100u,
++    KUI_NATIVE_TIMELINE_CLOCK_BREAK=0x200u,
++    KUI_NATIVE_TIMELINE_READ=0x400u,
++    KUI_NATIVE_TIMELINE_PENDING=0x800u,
++    KUI_NATIVE_TIMELINE_COMPLETE=0x1000u,
++    KUI_NATIVE_TIMELINE_FAILED=0x2000u
++};
++enum kui_native_loader_request_flags {
++    KUI_NATIVE_TIMELINE_PARTIAL=1u,
++    KUI_NATIVE_TIMELINE_REQUEST_FAILED=2u,
++    KUI_NATIVE_TIMELINE_REPLACED=4u,
++    KUI_NATIVE_TIMELINE_BAD_CLOCK=8u
++};
++/* Raw observations. result is the actual GD return at EXIT; its bit pattern
++ * represents int32_t. progress is completed bytes. The collector owns no IO.
++ * CLOCK_VALID means the wrapper admitted the exact timer profile at this
++ * sample. CLOCK_BREAK starts another epoch; no duration crosses epochs.
++ * Neither a valid sample nor modulo arithmetic proves an unobserved timer
++ * stop/reset did not occur while game code ran. */
++struct kui_native_loader_event {
++    uint32_t tick,flags,function,result,token,lba,count,progress;
++    uint32_t caller_sr,vbr,iprb,chcr,tcr,dmaor,ssr,state;
++};
++struct kui_native_loader_bin {
++    uint32_t epoch,tick,gd_ticks,calls,read_starts,read_completes,maples,invalid;
++};
++struct kui_native_loader_call {
++    struct kui_native_loader_event begin,end;
++    uint32_t elapsed,gap,epoch;
++};
++struct kui_native_loader_request {
++    uint32_t epoch,token,lba,count,begin_tick,end_tick,total_ticks,inside_ticks;
++    uint32_t outside_ticks,calls,progress,result,flags,chain_length,chain_ticks,chain_inside;
++};
++struct kui_native_loader_timeline {
++    struct kui_native_loader_bin bins[KUI_NATIVE_TIMELINE_BINS];
++    struct kui_native_loader_call longest[KUI_NATIVE_TIMELINE_LONGEST];
++    struct kui_native_loader_request requests[KUI_NATIVE_TIMELINE_REQUESTS];
++    struct kui_native_loader_event entered;
++    struct kui_native_loader_request active;
++    uint32_t events,valid,invalid,epoch,clock_breaks,unmatched,overflow,saturated;
++    uint32_t have_clock,last_tick,origin_tick,epoch_bin,bin_count,have_enter,have_exit,last_exit;
++    uint32_t longest_count,request_count,request_next,have_request,last_token;
++    uint32_t chain_length,chain_begin,chain_end,chain_inside,chain_epoch;
++    uint32_t max_call_ticks,max_gap_ticks,max_chain_length,max_chain_ticks,max_chain_inside;
++};
++_Static_assert(sizeof(struct kui_native_loader_event)==64u,"timeline input remains sixteen words");
++_Static_assert(sizeof(struct kui_native_loader_timeline)<=4096u,"timeline owns at most four KiB");
++void kui_native_loader_timeline_reset(struct kui_native_loader_timeline *);
++void kui_native_loader_timeline_add(struct kui_native_loader_timeline *,const struct kui_native_loader_event *);
++#endif
+diff --git a/src/core/native_loader_timeline.c b/src/core/native_loader_timeline.c
+new file mode 100644
+index 0000000..c1d2eea
+--- /dev/null
++++ b/src/core/native_loader_timeline.c
+@@ -0,0 +1,202 @@
++/* SPDX-License-Identifier: GPL-3.0-only */
++#include "kui/native_loader_timeline.h"
++#include "kui/gd_service.h"
++#include <stddef.h>
++#include <string.h>
++
++#define HALF UINT32_C(0x7fffffff)
++static void add32(struct kui_native_loader_timeline *c,uint32_t *p,uint32_t n) {
++    if(n>UINT32_MAX-*p) {*p=UINT32_MAX;c->saturated=1u;}
++    else *p+=n;
++}
++/* Explicit words avoid a compiler-generated large automatic structure copy. */
++typedef uint32_t timeline_word __attribute__((__may_alias__));
++static void words(void *destination,const void *source,unsigned n) {
++    unsigned char *d=destination;const unsigned char *s=source;
++    while(n--) {
++        *(timeline_word *)(void *)d=*(const timeline_word *)(const void *)s;
++        d+=4u;s+=4u;
++    }
++}
++void kui_native_loader_timeline_reset(struct kui_native_loader_timeline *c) {
++    if(c)memset(c,0,sizeof(*c));
++}
++static unsigned bin_at(struct kui_native_loader_timeline *c,uint32_t tick) {
++    uint32_t elapsed=c->origin_tick-tick;
++    if(elapsed>HALF)return KUI_NATIVE_TIMELINE_BINS;
++    uint32_t offset=elapsed/KUI_NATIVE_TIMELINE_BIN_TICKS;
++    if(offset>=KUI_NATIVE_TIMELINE_BINS || c->epoch_bin>=KUI_NATIVE_TIMELINE_BINS-offset) {
++        add32(c,&c->overflow,1u);return KUI_NATIVE_TIMELINE_BINS;
++    }
++    unsigned index=(unsigned)(c->epoch_bin+offset);
++    while(c->bin_count<=index) {
++        struct kui_native_loader_bin *b=&c->bins[c->bin_count];
++        b->epoch=c->epoch;
++        b->tick=c->origin_tick-(c->bin_count-c->epoch_bin)*KUI_NATIVE_TIMELINE_BIN_TICKS;
++        ++c->bin_count;
++    }
++    return index;
++}
++static void duration_bins(struct kui_native_loader_timeline *c,uint32_t begin,uint32_t end) {
++    uint32_t remaining=begin-end;
++    if(remaining>HALF)return;
++    while(remaining) {
++        unsigned at=bin_at(c,begin);
++        if(at>=KUI_NATIVE_TIMELINE_BINS)return;
++        uint32_t into=c->origin_tick-begin;
++        uint32_t take=KUI_NATIVE_TIMELINE_BIN_TICKS-into%KUI_NATIVE_TIMELINE_BIN_TICKS;
++        if(take>remaining)take=remaining;
++        add32(c,&c->bins[at].gd_ticks,take);
++        remaining-=take;begin-=take;
++    }
++}
++static void save_request(struct kui_native_loader_timeline *c,uint32_t tick,uint32_t flags) {
++    struct kui_native_loader_request *a=&c->active;
++    if(!c->have_request)return;
++    a->flags|=flags;a->end_tick=tick;
++    if(!(a->flags&KUI_NATIVE_TIMELINE_BAD_CLOCK) && a->epoch==c->epoch && a->begin_tick-tick<=HALF) {
++        a->total_ticks=a->begin_tick-tick;
++        if(a->inside_ticks>a->total_ticks) {
++            a->inside_ticks=a->total_ticks;a->flags|=KUI_NATIVE_TIMELINE_PARTIAL;
++        }
++        a->outside_ticks=a->total_ticks-a->inside_ticks;
++        if(!(a->flags&(KUI_NATIVE_TIMELINE_REPLACED|KUI_NATIVE_TIMELINE_REQUEST_FAILED))) {
++            uint32_t gap=c->chain_end-a->begin_tick;
++            if(c->chain_length && c->chain_epoch==a->epoch && gap<=KUI_NATIVE_TIMELINE_CHAIN_GAP) {
++                add32(c,&c->chain_length,1u);
++            } else {c->chain_length=1u;c->chain_begin=a->begin_tick;c->chain_inside=0u;}
++            c->chain_epoch=a->epoch;c->chain_end=tick;
++            add32(c,&c->chain_inside,a->inside_ticks);
++            a->chain_length=c->chain_length;a->chain_ticks=c->chain_begin-tick;
++            a->chain_inside=c->chain_inside;
++            if(a->chain_length>c->max_chain_length)c->max_chain_length=a->chain_length;
++            if(a->chain_ticks>c->max_chain_ticks) {
++                c->max_chain_ticks=a->chain_ticks;c->max_chain_inside=a->chain_inside;
++            }
++        } else c->chain_length=0u;
++    } else {a->flags|=KUI_NATIVE_TIMELINE_BAD_CLOCK;c->chain_length=0u;}
++    words(&c->requests[c->request_next],a,sizeof(*a)/4u);
++    c->request_next=(c->request_next+1u)%KUI_NATIVE_TIMELINE_REQUESTS;
++    if(c->request_count<KUI_NATIVE_TIMELINE_REQUESTS)++c->request_count;
++    c->have_request=0u;
++}
++static void break_clock(struct kui_native_loader_timeline *c) {
++    if(c->have_request)save_request(c,c->last_tick,KUI_NATIVE_TIMELINE_BAD_CLOCK);
++    if(c->have_enter)add32(c,&c->unmatched,1u);
++    c->have_clock=c->have_enter=c->have_exit=0u;
++    c->chain_length=0u;
++    add32(c,&c->clock_breaks,1u);
++}
++static void begin_request(struct kui_native_loader_timeline *c,const struct kui_native_loader_event *e,
++                          uint32_t begin,uint32_t flags) {
++    if(c->have_request)save_request(c,begin,KUI_NATIVE_TIMELINE_REPLACED);
++    memset(&c->active,0,sizeof(c->active));
++    c->active.epoch=c->epoch;c->active.token=e->token;
++    c->active.lba=e->lba;c->active.count=e->count;
++    c->active.begin_tick=begin;c->active.progress=e->progress;c->active.result=e->result;
++    c->active.flags=flags;c->have_request=1u;c->last_token=e->token;
++    unsigned at=bin_at(c,begin);
++    if(at<KUI_NATIVE_TIMELINE_BINS)add32(c,&c->bins[at].read_starts,1u);
++}
++static void request_observation(struct kui_native_loader_timeline *c,const struct kui_native_loader_event *e,
++                                uint32_t kind,uint32_t paired,uint32_t elapsed) {
++    if(kind==KUI_NATIVE_TIMELINE_EXIT && !e->result &&
++       (e->function==KUI_GD_INIT || e->function==KUI_GD_RESET)) {
++        if(c->have_request) {
++            if(paired) {add32(c,&c->active.calls,1u);add32(c,&c->active.inside_ticks,elapsed);}
++            c->active.result=e->result;
++            save_request(c,e->tick,KUI_NATIVE_TIMELINE_REPLACED);
++        }
++        c->last_token=0u;c->chain_length=0u;return;
++    }
++    uint32_t known_start=kind==KUI_NATIVE_TIMELINE_EXIT && paired && e->function==KUI_GD_REQUEST &&
++        (int32_t)e->result>0 && e->result==e->token;
++    uint32_t new_token=(e->flags&KUI_NATIVE_TIMELINE_READ) && e->token && e->count && e->token!=c->last_token;
++    uint32_t started_partial=0u;
++    if(new_token && (known_start || (e->flags&KUI_NATIVE_TIMELINE_PENDING))) {
++        started_partial=!known_start;
++        begin_request(c,e,known_start?c->entered.tick:e->tick,
++                      known_start?0u:KUI_NATIVE_TIMELINE_PARTIAL);
++    }
++    if(!c->have_request)return;
++    if(c->active.token!=e->token) {
++        save_request(c,e->tick,KUI_NATIVE_TIMELINE_REPLACED);
++        if(!e->token)c->last_token=0u;
++        return;
++    }
++    c->active.progress=e->progress;c->active.result=e->result;
++    if(kind==KUI_NATIVE_TIMELINE_EXIT && paired) {
++        add32(c,&c->active.calls,1u);
++        if(!started_partial)add32(c,&c->active.inside_ticks,elapsed);
++    }
++    if(e->flags&(KUI_NATIVE_TIMELINE_COMPLETE|KUI_NATIVE_TIMELINE_FAILED)) {
++        unsigned at=bin_at(c,e->tick);
++        if(at<KUI_NATIVE_TIMELINE_BINS)add32(c,&c->bins[at].read_completes,1u);
++        save_request(c,e->tick,(e->flags&KUI_NATIVE_TIMELINE_FAILED)?KUI_NATIVE_TIMELINE_REQUEST_FAILED:0u);
++    } else if(!(e->flags&(KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_PENDING))) {
++        /* An observed cleared/non-read handle is no longer the pending read,
++         * even if its reset/abort call preceded capture or was unmatched. */
++        save_request(c,e->tick,KUI_NATIVE_TIMELINE_REPLACED);
++        c->last_token=0u;
++    }
++}
++static void longest_call(struct kui_native_loader_timeline *c,const struct kui_native_loader_event *e,
++                         uint32_t elapsed,uint32_t gap) {
++    unsigned at=0u;
++    while(at<c->longest_count && c->longest[at].elapsed>=elapsed)++at;
++    if(at>=KUI_NATIVE_TIMELINE_LONGEST)return;
++    if(c->longest_count<KUI_NATIVE_TIMELINE_LONGEST)++c->longest_count;
++    for(unsigned n=c->longest_count-1u;n>at;--n)
++        words(&c->longest[n],&c->longest[n-1u],sizeof(c->longest[n])/4u);
++    words(&c->longest[at].begin,&c->entered,sizeof(*e)/4u);
++    words(&c->longest[at].end,e,sizeof(*e)/4u);
++    c->longest[at].elapsed=elapsed;c->longest[at].gap=gap;c->longest[at].epoch=c->epoch;
++}
++void kui_native_loader_timeline_add(struct kui_native_loader_timeline *c,const struct kui_native_loader_event *e) {
++    if(!c || !e)return;
++    add32(c,&c->events,1u);
++    uint32_t kind=e->flags&KUI_NATIVE_TIMELINE_KIND_MASK;
++    if(kind<KUI_NATIVE_TIMELINE_ENTER || kind>KUI_NATIVE_TIMELINE_MAPLE) {
++        add32(c,&c->invalid,1u);break_clock(c);return;
++    }
++    if(e->flags&KUI_NATIVE_TIMELINE_CLOCK_BREAK)break_clock(c);
++    if(!(e->flags&KUI_NATIVE_TIMELINE_CLOCK_VALID)) {
++        add32(c,&c->invalid,1u);
++        if(c->bin_count)add32(c,&c->bins[c->bin_count-1u].invalid,1u);
++        if(c->have_clock)break_clock(c);
++        return;
++    }
++    if(c->have_clock && c->last_tick-e->tick>HALF)break_clock(c);
++    if(!c->have_clock) {
++        add32(c,&c->epoch,1u);c->origin_tick=e->tick;c->epoch_bin=c->bin_count;c->have_clock=1u;
++    }
++    c->last_tick=e->tick;add32(c,&c->valid,1u);
++    unsigned at=bin_at(c,e->tick);
++    if(kind==KUI_NATIVE_TIMELINE_MAPLE) {
++        if(at<KUI_NATIVE_TIMELINE_BINS)add32(c,&c->bins[at].maples,1u);
++        request_observation(c,e,kind,0u,0u);return;
++    }
++    if(kind==KUI_NATIVE_TIMELINE_ENTER) {
++        if(c->have_enter) {
++            add32(c,&c->unmatched,1u);
++            if(c->have_request)c->active.flags|=KUI_NATIVE_TIMELINE_PARTIAL;
++        }
++        request_observation(c,e,kind,0u,0u);
++        words(&c->entered,e,sizeof(*e)/4u);c->have_enter=1u;return;
++    }
++    if(!c->have_enter || c->entered.function!=e->function) {
++        add32(c,&c->unmatched,1u);c->have_enter=0u;
++        request_observation(c,e,kind,0u,0u);return;
++    }
++    uint32_t elapsed=c->entered.tick-e->tick;
++    if(elapsed>HALF) {add32(c,&c->invalid,1u);break_clock(c);return;}
++    uint32_t gap=c->have_exit?c->last_exit-c->entered.tick:0u;
++    if(gap>HALF)gap=0u;
++    if(elapsed>c->max_call_ticks)c->max_call_ticks=elapsed;
++    if(gap>c->max_gap_ticks)c->max_gap_ticks=gap;
++    if(at<KUI_NATIVE_TIMELINE_BINS)add32(c,&c->bins[at].calls,1u);
++    duration_bins(c,c->entered.tick,e->tick);
++    longest_call(c,e,elapsed,gap);
++    request_observation(c,e,kind,1u,elapsed);
++    c->last_exit=e->tick;c->have_exit=1u;c->have_enter=0u;
++}
+diff --git a/src/loader/retail_async.c b/src/loader/retail_async.c
+index 8fd1396..77e7b61 100644
+--- a/src/loader/retail_async.c
++++ b/src/loader/retail_async.c
+@@ -22,6 +22,9 @@ __asm__(".global __kui_native_cooperative_resident\n.set __kui_native_cooperativ
+ #if KUI_NATIVE_IRQ_REARM
+ __asm__(".global __kui_native_irq_rearm_resident\n.set __kui_native_irq_rearm_resident,1\n");
+ #endif
++#if KUI_NATIVE_LOADER_TIMELINE
++__asm__(".global __kui_native_loader_timeline_resident\n.set __kui_native_loader_timeline_resident,1\n");
++#endif
+ #if KUI_NATIVE_PACED_CHECK
+ __asm__(".global __kui_native_paced_resident\n.set __kui_native_paced_resident,1\n");
+ #endif
+@@ -218,12 +221,14 @@ static void hook(void) {
+     if(vbr == our_vbr()) return;
+     uint16_t b = rd16(IPRB);
+ #endif
+-#if !KUI_NATIVE_REQUEST_TIMING
+     if(e.hooked) {
+-        if(vbr == e.release.vbr) ++e.stats.releases;
+-        else ++e.release.vbr_changes;
+-    }
++#if !KUI_NATIVE_REQUEST_TIMING || KUI_NATIVE_LOADER_TIMELINE
++        if(vbr != e.release.vbr) ++e.release.vbr_changes;
++#endif
++#if !KUI_NATIVE_REQUEST_TIMING
++        else ++e.stats.releases;
+ #endif
++    }
+     /* The game's own field, unless ours is still there (a game that set its
+      * VBR again itself). */
+     if(!e.hooked || (b & SCI_FIELD) != SCI_LEVEL) e.release.sci = b & SCI_FIELD;
+@@ -896,6 +901,14 @@ void kui_retail_async_call(uint32_t function) {
+     deliver(wait);
+     report();
+ }
++#if KUI_NATIVE_LOADER_TIMELINE
++/* Installed only after retained-region binding from the typed immutable
++ * worker descriptor. Bootstrap workspace and normal mode keep this zero. */
++void __attribute__((noipa)) kui_retail_async_trace(uint32_t exit,uint32_t function) {
++    void (*visit)(uint32_t,uint32_t,uint32_t,void *)=(void *)(uintptr_t)R.vector600[11];
++    if(visit)visit(exit,function,kui_retail_hook_sr,&R);
++}
++#endif
+ void kui_retail_async_after(uint32_t function, int32_t result) {
+ #if KUI_VMU_NATIVE_BACKGROUND
+     if(native_loan_blocked()) return;
+diff --git a/src/loader/retail_async.h b/src/loader/retail_async.h
+index d659a99..71207e5 100644
+--- a/src/loader/retail_async.h
++++ b/src/loader/retail_async.h
+@@ -63,6 +63,9 @@ struct kui_retail_async_stats {
+ /* Returns the trampoline can hold pending: interrupts released while an
+  * earlier released one's handler still runs. */
+ #define KUI_RETAIL_ASYNC_RETURNS 3u
++#if KUI_NATIVE_LOADER_TIMELINE
++void kui_retail_async_trace(uint32_t exit,uint32_t function);
++#endif
+ /* The releasing entries' and trampoline's state, at region + 0x240 with
+  * these offsets (retail_resident.S). */
+ struct kui_retail_async_release {
+diff --git a/src/loader/retail_display.c b/src/loader/retail_display.c
+index c9b0e68..1e237a7 100644
+--- a/src/loader/retail_display.c
++++ b/src/loader/retail_display.c
+@@ -20,6 +20,25 @@ static volatile uint32_t *reg(unsigned i) {
+ #if KUI_NATIVE_COOP_PUMP && defined(KUI_RETAIL_ASYNC)
+ /* Same exact 252 glyph rows, packed at five bits each to make room for
+  * the cooperative reader in the existing guarded low reservation. */
++#if KUI_NATIVE_LOADER_TIMELINE
++/* Same252 rows in a contiguous1260-bit stream; no per-glyph padding. */
++static const uint8_t timeline_glyphs[158]={
++ 46,198,31,99,244,49,250,24,189,139,16,194,232,124,140,49,
++ 70,255,33,244,16,254,15,161,135,16,186,8,111,140,47,198,
++ 248,99,140,142,16,66,136,59,66,8,41,89,148,20,83,25,
++ 33,132,16,194,31,119,173,49,198,152,235,140,49,186,24,99,
++ 140,206,199,232,33,132,46,198,88,101,243,49,122,42,227,131,
++ 208,133,224,63,33,132,16,18,99,140,49,186,24,99,140,138,
++ 196,24,107,221,49,70,69,84,140,49,42,66,8,249,65,16,
++ 4,191,139,179,230,232,8,35,132,16,231,98,16,4,125,31,
++ 130,11,193,11,163,228,23,226,67,232,67,240,14,66,31,163,
++ 251,65,16,132,144,139,209,197,232,92,140,47,4,7,
++};
++static unsigned glyph_row(unsigned glyph,unsigned row_index) {
++    unsigned bit=(glyph*7u+row_index)*5u,at=bit>>3;
++    return ((timeline_glyphs[at]|(unsigned)timeline_glyphs[at+1u]<<8)>>(bit&7u))&31u;
++}
++#else
+ static const uint8_t compact_glyphs[36][5]={
+  {46,198,31,99,4},
+  {62,70,31,163,7},
+@@ -62,6 +81,7 @@ static unsigned glyph_row(unsigned glyph,unsigned row_index) {
+     unsigned bit=row_index*5u,at=bit>>3;
+     return ((compact_glyphs[glyph][at]|(unsigned)compact_glyphs[glyph][at+1u]<<8)>>(bit&7u))&31u;
+ }
++#endif
+ #else
+ static const uint8_t glyphs[36][7] = {
+  {14,17,17,31,17,17,17},{30,17,17,30,17,17,30},
+diff --git a/src/loader/retail_resident.c b/src/loader/retail_resident.c
+index 41676ae..3350856 100644
+--- a/src/loader/retail_resident.c
++++ b/src/loader/retail_resident.c
+@@ -539,10 +539,15 @@ static void report_fault(const char *reason, uint32_t function) {
+ #if KUI_WINCE_CDDA_WWP && KUI_ARMADA_CE_STREAM && KUI_ARMADA_CE_AUDIO_OBSERVE
+     retail_display_line("PHOTO SCREEN");
+     retail_display_line("POWER CYCLE");
++#else
++#if KUI_NATIVE_LOADER_TIMELINE
++    retail_display_line("PHOTO SCREEN");
++    retail_display_line("POWER CYCLE");
+ #else
+     retail_display_line("STOPPED: PHOTO THIS SCREEN");
+     retail_display_line("POWER CYCLE FOR K-UI");
+ #endif
++#endif
+ #endif
+     for(;;) __asm__ volatile("nop");
+ }
+@@ -1147,6 +1152,9 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
+ #endif
+     if(source>3) return -1;
+     if(source!=1 && r6==UINT32_MAX) return 0;
++#if KUI_NATIVE_LOADER_TIMELINE
++    kui_retail_async_trace(0u,r7);
++#endif
+     kui_retail_async_call(r7);
+ #if KUI_WINCE_CDDA_WWP && KUI_ARMADA_CE_STREAM && KUI_ARMADA_CE_AUDIO_OBSERVE
+     uint32_t drive_status=service.drive_status;
+@@ -1163,6 +1171,9 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
+     armada_ce_audio_record(r7, r4, result);
+ #endif
+     kui_retail_async_after(r7, result);
++#if KUI_NATIVE_LOADER_TIMELINE
++    kui_retail_async_trace(1u,r7);
++#endif
+     if(service.error == KUI_GD_ERROR_IO)
+         report_fault("IMAGE READ FAILED", r7, r5);
+     if(r7 == KUI_GD_REQUEST && !service.command && result == 0)
+diff --git a/src/loader/vmu_native_loader_timeline.inc b/src/loader/vmu_native_loader_timeline.inc
+new file mode 100644
+index 0000000..67401de
+--- /dev/null
++++ b/src/loader/vmu_native_loader_timeline.inc
+@@ -0,0 +1,192 @@
++/* SPDX-License-Identifier: GPL-3.0-only */
++/* Gesture-window observations only. This file follows reader_capture.inc so
++ * its typed retained-region view is available. No game clock, DMA register,
++ * controller packet, reply, vector or storage state is modified here. */
++#include "kui/native_loader_timeline.h"
++#include <stddef.h>
++__asm__(".global __kui_native_loader_timeline_worker\n"
++        ".set __kui_native_loader_timeline_worker,1\n");
++static struct kui_native_loader_timeline native_loader_timeline;
++static struct kui_native_loader_event native_loader_event;
++static struct kui_vmu_native_profile_sample native_loader_clock;
++
++#ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
++extern uint32_t kui_native_loader_timeline_test_vbr(void);
++extern uint32_t kui_native_loader_timeline_test_read(uint32_t,unsigned);
++extern void kui_vmu_native_persistent_test_clock(struct kui_vmu_native_profile_sample *,uint32_t *);
++#define native_loader_vbr kui_native_loader_timeline_test_vbr
++#define native_loader_read kui_native_loader_timeline_test_read
++#else
++static uint32_t native_loader_vbr(void) {
++    uint32_t value;__asm__ volatile("stc vbr,%0":"=r"(value));return value;
++}
++static uint32_t native_loader_read(uint32_t address,unsigned width) {
++    if(width==1u)return *(volatile const uint8_t *)(uintptr_t)address;
++    if(width==2u)return *(volatile const uint16_t *)(uintptr_t)address;
++    return *(volatile const uint32_t *)(uintptr_t)address;
++}
++#endif
++
++static void native_loader_clock_read(void) {
++#ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
++    uint32_t unused;
++    kui_vmu_native_persistent_test_clock(&native_loader_clock,&unused);
++#else
++    native_loader_clock.frqcr=native_loader_read(UINT32_C(0xffc00000),2u);
++    native_loader_clock.tcor=native_loader_read(UINT32_C(0xffd80008),4u);
++    native_loader_clock.tcr=native_loader_read(UINT32_C(0xffd80010),2u);
++    native_loader_clock.tstr=native_loader_read(UINT32_C(0xffd80004),1u);
++    native_loader_clock.counter=native_loader_read(UINT32_C(0xffd8000c),4u);
++#endif
++}
++
++static void native_loader_snapshot(const struct kui_vmu_native_profile_sample *clock,
++    uint32_t kind,uint32_t function,uint32_t original_sr,
++    const kui_retail_async_region_type *r) {
++    const struct kui_retail_gd *g=&r->shared.service;
++    native_loader_event.tick=clock->counter;
++    native_loader_event.flags=kind|(kui_vmu_native_profile_sample_valid(clock)?
++        KUI_NATIVE_TIMELINE_CLOCK_VALID:KUI_NATIVE_TIMELINE_CLOCK_BREAK);
++    if(g->command==KUI_GD_PIOREAD || g->command==KUI_GD_DMAREAD)
++        native_loader_event.flags|=KUI_NATIVE_TIMELINE_READ;
++    if(g->pending)native_loader_event.flags|=KUI_NATIVE_TIMELINE_PENDING;
++    if(!g->pending && g->status==KUI_GD_COMPLETED)
++        native_loader_event.flags|=KUI_NATIVE_TIMELINE_COMPLETE;
++    if(g->error || g->status==KUI_GD_FAILED)
++        native_loader_event.flags|=KUI_NATIVE_TIMELINE_FAILED;
++    native_loader_event.function=function;
++    native_loader_event.result=kind==KUI_NATIVE_TIMELINE_EXIT?
++        (uint32_t)g->diag.last_result:(uint32_t)g->status;
++    native_loader_event.token=g->token;
++    native_loader_event.lba=g->lba;
++    native_loader_event.count=g->count;
++    native_loader_event.progress=g->completed_bytes;
++    native_loader_event.caller_sr=original_sr;
++    native_loader_event.vbr=native_loader_vbr();
++    native_loader_event.iprb=native_loader_read(UINT32_C(0xffd00008),2u);
++    native_loader_event.chcr=native_loader_read(UINT32_C(0xffa0001c),4u);
++    native_loader_event.tcr=native_loader_read(UINT32_C(0xffa00018),4u);
++    native_loader_event.dmaor=native_loader_read(UINT32_C(0xffa00040),4u);
++    native_loader_event.ssr=native_loader_read(UINT32_C(0xffe00010),1u);
++    native_loader_event.state=(r->shared.stream.state&255u)|
++        ((r->engine.active!=0u)<<8)|((r->engine.hooked!=0u)<<9)|
++        ((r->engine.release.armed!=0u)<<10)|
++        ((native_loader_event.vbr==(uint32_t)(uintptr_t)r-UINT32_C(0x100))<<11)|
++        ((g->command&255u)<<16);
++    kui_native_loader_timeline_add(&native_loader_timeline,&native_loader_event);
++}
++
++/* The low GD entry already owns the serialization lock and IMASK15. Keep
++ * staging in private worker BSS: a 64-byte automatic event must never consume
++ * the guarded 352-byte resident stack. Profile descriptor installation is
++ * independently admitted by the stage; the retained-region identity is
++ * checked again before observing any of its fields. */
++void __attribute__((noipa)) kui_native_loader_timeline_visit(
++    uint32_t exit,uint32_t function,uint32_t original_sr,void *region) {
++    if(!diagnostic.active || config.diagnostics!=KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE ||
++       !region || region!=reader_capture_region())return;
++    native_loader_clock_read();
++    native_loader_snapshot(&native_loader_clock,exit?KUI_NATIVE_TIMELINE_EXIT:
++        KUI_NATIVE_TIMELINE_ENTER,function,original_sr,region);
++}
++
++static void native_loader_timeline_start(void) {
++    kui_native_loader_timeline_reset(&native_loader_timeline);
++}
++static void native_loader_timeline_heartbeat(const struct kui_vmu_native_profile_sample *clock) {
++    if(!diagnostic.active || config.diagnostics!=KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE)return;
++    const kui_retail_async_region_type *r=reader_capture_region();
++    if(r)native_loader_snapshot(clock,KUI_NATIVE_TIMELINE_MAPLE,UINT32_MAX,state.complete_sr,r);
++}
++
++#ifndef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
++/* Reports run only after the intentional stop, on the worker's private
++ * stack. Every page uses at most sixteen body rows. All numbers are hex. */
++static void native_loader_timeline_row(unsigned prefix,unsigned row,
++    const uint32_t *values,unsigned count) {
++    char line[49];unsigned n=0u;
++    if(prefix!=UINT32_MAX) {
++        line[n++]=(char)('0'+prefix);line[n++]=(char)('0'+row);line[n++]=' ';
++    }
++    for(unsigned i=0u;i<count;i++) {
++        for(unsigned digit=0u;digit<8u;digit++)
++            line[n++]="0123456789ABCDEF"[(values[i]>>(28u-4u*digit))&15u];
++        line[n++]=' ';
++    }
++    line[n]=0;retail_display_line(line);
++}
++static void native_loader_timeline_call(const struct kui_native_loader_call *call,unsigned rank) {
++    uint32_t values[5];
++    for(unsigned row=0u;row<7u;row++) {
++        for(unsigned col=0u;col<5u;col++) {
++            unsigned word=row*5u+col;
++            if(word<3u)memcpy(&values[col],(const uint8_t *)call+
++                offsetof(struct kui_native_loader_call,elapsed)+word*4u,4u);
++            else if(word<19u)memcpy(&values[col],(const uint8_t *)&call->begin+(word-3u)*4u,4u);
++            else memcpy(&values[col],(const uint8_t *)&call->end+(word-19u)*4u,4u);
++        }
++        native_loader_timeline_row(rank,row,values,5u);
++    }
++}
++static void native_loader_timeline_report(const struct retail_display_state *display) {
++    const struct kui_native_loader_timeline *t=&native_loader_timeline;
++    retail_display_restore(display);
++    retail_display_line("LOADER TIMELINE - READ ONLY CAPTURE");
++    retail_display_line("HEX TICKS - 781250 PER SECOND");
++    retail_display_values("EVENTS VALID BAD EPOCH",(uint32_t[4]){
++        t->events,t->valid,t->invalid,t->epoch},4u);
++    retail_display_values("CLOCKBREAK UNMATCHED OVERFLOW SATURATED",(uint32_t[4]){
++        t->clock_breaks,t->unmatched,t->overflow,t->saturated},4u);
++    retail_display_values("MAX GD CALL MAX GD GAP MAX CHAIN LENGTH",(uint32_t[3]){
++        t->max_call_ticks,t->max_gap_ticks,t->max_chain_length},3u);
++    retail_display_values("MAX CHAIN TICKS AND INSIDE GD TICKS",(uint32_t[2]){
++        t->max_chain_ticks,t->max_chain_inside},2u);
++    retail_display_values("ACTIVE TOKEN LBA SECTORS FLAGS",(uint32_t[4]){
++        t->have_request?t->active.token:0u,t->active.lba,t->active.count,t->active.flags},4u);
++    retail_display_values("STORED CALLS REQUESTS BINS",(uint32_t[3]){
++        t->longest_count,t->request_count,t->bin_count},3u);
++    retail_display_line("GD TIME INCLUDES DIAGNOSTIC OVERHEAD");
++    retail_display_line("OUTSIDE GD IS NOT A CPU IDLE MEASUREMENT");
++    retail_display_pause(240u);
++    for(unsigned first=0u;first<t->bin_count;first+=14u) {
++        retail_display_restore(display);
++        retail_display_line("GD TIME BINS - 0 POINT 625 SECONDS EACH");
++        retail_display_line("INDEX EPOCH GD TICKS CALLS MAPLES");
++        for(unsigned i=first;i<first+14u && i<t->bin_count;i++) {
++            const struct kui_native_loader_bin *b=&t->bins[i];
++            uint32_t values[5]={i,b->epoch,b->gd_ticks,b->calls,b->maples};
++            native_loader_timeline_row(UINT32_MAX,0u,values,5u);
++        }
++        retail_display_pause(240u);
++    }
++    for(unsigned first=0u;first<t->longest_count && first<4u;first+=2u) {
++        retail_display_restore(display);
++        retail_display_line("FOUR LONGEST GD CALLS - RAW ENTRY EXIT");
++        retail_display_line("PREFIX IS RANK ROW - FIELD MAP IN GUIDE");
++        for(unsigned i=first;i<first+2u && i<t->longest_count;i++)
++            native_loader_timeline_call(&t->longest[i],i);
++        retail_display_pause(240u);
++    }
++    unsigned shown=t->request_count<8u?t->request_count:8u;
++    for(unsigned first=0u;first<shown;first+=4u) {
++        retail_display_restore(display);
++        retail_display_line("RECENT EIGHT READS - THREE ROWS EACH");
++        retail_display_line("R0 TOKEN LBA SECTORS TOTAL TICKS");
++        for(unsigned i=first;i<first+4u && i<shown;i++) {
++            unsigned at=(t->request_next+KUI_NATIVE_TIMELINE_REQUESTS-shown+i)%KUI_NATIVE_TIMELINE_REQUESTS;
++            const struct kui_native_loader_request *r=&t->requests[at];
++            uint32_t values[4]={r->token,r->lba,r->count,r->total_ticks};
++            native_loader_timeline_row(i-first,0u,values,4u);
++            values[0]=r->inside_ticks;values[1]=r->outside_ticks;
++            values[2]=r->calls;values[3]=r->progress;
++            native_loader_timeline_row(i-first,1u,values,4u);
++            values[0]=r->epoch;values[1]=r->flags;
++            values[2]=r->chain_length;values[3]=r->chain_ticks;
++            native_loader_timeline_row(i-first,2u,values,4u);
++        }
++        retail_display_line("R1 INSIDE GD OUTSIDE GD CALLS BYTES");
++        retail_display_line("R2 EPOCH FLAGS CHAIN LENGTH CHAIN TICKS");
++        retail_display_pause(240u);
++    }
++}
++#endif
+diff --git a/src/loader/vmu_native_passive.c b/src/loader/vmu_native_passive.c
+index 5f8ba9a..2d9ca02 100644
+--- a/src/loader/vmu_native_passive.c
++++ b/src/loader/vmu_native_passive.c
+@@ -83,6 +83,9 @@ static struct native_phase_state diagnostic_phase;
+ #if KUI_NATIVE_READER_DIAGNOSTIC
+ #include "vmu_native_reader_capture.inc"
+ #endif
++#if KUI_NATIVE_LOADER_TIMELINE
++#include "vmu_native_loader_timeline.inc"
++#endif
+ static bool persistent_storage_guard(void);
+ static bool persistent_context_guard(void);
+ static bool installed_hooks_valid(void);
+@@ -282,8 +285,12 @@ static void diagnostic_end(enum kui_vmu_native_profile_kind kind,
+     /* Completion reaches this only after the existing context/lease and
+      * response/publication guards passed. Only that proved scope may reset
+      * the two reader diagnostic counters in the owned lease tail. */
+-    if(diagnostic.active && kind==KUI_VMU_NATIVE_PROFILE_COMPLETE)
++    if(diagnostic.active && kind==KUI_VMU_NATIVE_PROFILE_COMPLETE) {
+         reader_capture_poll(&sample);
++#if KUI_NATIVE_LOADER_TIMELINE
++        native_loader_timeline_heartbeat(&sample);
++#endif
++    }
+ #endif
+     if(kind==KUI_VMU_NATIVE_PROFILE_SUBMIT || kind==KUI_VMU_NATIVE_PROFILE_COMPLETE)
+         native_phase_end(&diagnostic_phase,&sample,diagnostic_phase_read,NULL);
+@@ -308,6 +315,9 @@ static void diagnostic_report(void) {
+     for(;;) {
+ #if KUI_NATIVE_READER_DIAGNOSTIC
+     reader_capture_report(&display);
++#if KUI_NATIVE_LOADER_TIMELINE
++    native_loader_timeline_report(&display);
++#endif
+ #endif
+     retail_display_restore(&display);
+     retail_display_line("NATIVE VMU LATENCY CAPTURE");
+@@ -389,6 +399,9 @@ static void diagnostic_complete(const struct kui_vmu_native_profile_span *span,b
+             native_phase_reset(&diagnostic_phase,phase_enabled);
+ #if KUI_NATIVE_READER_DIAGNOSTIC
+             reader_capture_start();
++#if KUI_NATIVE_LOADER_TIMELINE
++            native_loader_timeline_start();
++#endif
+ #endif
+         }
+     } else if((diagnostic.clock_started && !diagnostic.clock_invalid &&
+diff --git a/src/loader/vmu_native_passive_stage.inc b/src/loader/vmu_native_passive_stage.inc
+index 8cbabcb..a270662 100644
+--- a/src/loader/vmu_native_passive_stage.inc
++++ b/src/loader/vmu_native_passive_stage.inc
+@@ -38,6 +38,30 @@ static bool passive_entry(uint32_t entry,uint32_t begin,uint32_t bytes) {
+ #endif
+     return !(entry&1u) && entry>=begin+sizeof(struct kui_vmu_native_passive_exports) && entry<begin+bytes;
+ }
++#if KUI_NATIVE_LOADER_TIMELINE
++/* The existing40B trace table remains unchanged. Its new adjacent typed
++ * descriptor belongs to this immutable worker image and supplies one entry.
++ * Publish only after the region has moved into the protected live lease. */
++static void __attribute__((noipa)) native_loader_timeline_bind(const struct kui_vmu_native_passive_exports *e,
++    uint32_t dest,uint32_t bytes,uint32_t payload,uint32_t mode) {
++    uint32_t table=e->trace_exports;
++    uint32_t physical=table&UINT32_C(0x1fffffff),begin=dest&UINT32_C(0x1fffffff);
++    if((table&3u) || physical<begin+80u || bytes<52u || physical-begin>bytes-52u)
++        native_report(8u,0x54u);
++    const uint32_t *descriptor=(const void *)(uintptr_t)(table+40u);
++    if(descriptor[0]!=UINT32_C(0x4b4c5431) || descriptor[1]!=1u ||
++       !passive_entry(descriptor[2],dest,bytes)) native_report(8u,0x55u);
++    uint32_t region=(payload&UINT32_C(0x1fffffff))|UINT32_C(0x80000000);
++    region+=KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET;
++    if(!kui_vmu_native_background_region_address(payload,region))native_report(8u,0x56u);
++    volatile uint32_t *slot=(void *)(uintptr_t)(region+0x500u+11u*4u);
++    if(*slot)native_report(8u,0x57u);
++    if(mode==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) {
++        *slot=descriptor[2];
++        __asm__ volatile("ocbp @%0"::"r"(slot):"memory");
++    }
++}
++#endif
+ #if KUI_VMU_NATIVE_PERSISTENT_PROBE
+ #include "vmu_native_evolution_trace_stage.inc"
+ #endif
+@@ -311,6 +335,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
+     c->sd_transaction=e->sd_transaction;
+ #endif
+     c->installer=0;c->stage_stack=0;c->status=KUI_VMU_OBS_BOOT_INSTALLED;
++#if KUI_NATIVE_LOADER_TIMELINE
++    native_loader_timeline_bind(e,dest,bytes,lease->payload,cfg.diagnostics);
++#endif
+ #if KUI_VMU_NATIVE_PERSISTENT_PROBE
+     if(cfg.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN)
+         retail_display_line("ACTIVE HOOKS / ORIGINAL MAPLE DMA LIST");
+diff --git a/src/loader/vmu_native_reader_capture.inc b/src/loader/vmu_native_reader_capture.inc
+index 38a6729..4490769 100644
+--- a/src/loader/vmu_native_reader_capture.inc
++++ b/src/loader/vmu_native_reader_capture.inc
+@@ -247,11 +247,21 @@ static void reader_capture_report(const struct retail_display_state *display) {
+     const kui_retail_async_region_type *region=reader_capture_region();
+     retail_display_values("SCI LEVEL REARMS IRQ ENTRIES",(uint32_t[2]){
+         region?region->engine.stats.execs:0u,region?region->engine.stats.exec_int:0u},2u);
+-    if(region)retail_display_values("REHOOKS RELEASE100 RELEASE400 RELEASE600",(uint32_t[4]){
++    if(region)retail_display_values(
++#if KUI_NATIVE_LOADER_TIMELINE
++        "REHOOK R100 R400 R600 VBR TOTAL",(uint32_t[5]){
++#else
++        "REHOOKS RELEASE100 RELEASE400 RELEASE600",(uint32_t[4]){
++#endif
+         region->engine.release.rehooks-reader_cooperative.calls,
+         region->engine.release.released[0]-reader_cooperative.blocks,
+         region->engine.release.released[1]-reader_cooperative.busy,
+-        region->engine.release.released[2]-reader_cooperative.faults},4u);
++        region->engine.release.released[2]-reader_cooperative.faults
++#if KUI_NATIVE_LOADER_TIMELINE
++        ,region->engine.release.vbr_changes},5u);
++#else
++        },4u);
++#endif
+     retail_display_line("FULL CHECK AND EXEC CATCHUP - NO PUMP");
+ #elif KUI_NATIVE_PACED_CHECK
+     retail_display_line("CHECK WAIT BOOST NEEDS 16 TIGHT POLLS");
+diff --git a/src/loader/vmu_native_trace_hooks.S b/src/loader/vmu_native_trace_hooks.S
+index 51ebab1..80e7abc 100644
+--- a/src/loader/vmu_native_trace_hooks.S
++++ b/src/loader/vmu_native_trace_hooks.S
+@@ -183,3 +183,10 @@ C(kui_vmu_native_trace_exports):
+ #endif
+     .long C(kui_vmu_native_sdk_coherence_state)
+     .size C(kui_vmu_native_trace_exports),.-C(kui_vmu_native_trace_exports)
++#if KUI_NATIVE_LOADER_TIMELINE
++    .global C(kui_native_loader_timeline_exports)
++    .type C(kui_native_loader_timeline_exports),@object
++C(kui_native_loader_timeline_exports):
++    .long 0x4b4c5431,1,C(kui_native_loader_timeline_visit)
++    .size C(kui_native_loader_timeline_exports),.-C(kui_native_loader_timeline_exports)
++#endif
+diff --git a/tests/test_native_compact_font.py b/tests/test_native_compact_font.py
+index b9bf2cd..f857e59 100644
+--- a/tests/test_native_compact_font.py
++++ b/tests/test_native_compact_font.py
+@@ -8,10 +8,23 @@ s=(root/'src/loader/retail_display.c').read_text()
+ a=s.index('static const uint8_t glyphs[36][7]');b=s.index('\n};',a)
+ expected=bytes(int(x) for row in re.findall(r'\{([^{}]+)\}',s[a:b]) for x in row.split(','))
+ assert len(expected)==252
++a=s.index('static const uint8_t timeline_glyphs[158]');b=s.index('\n};',a)
++packed=bytes(int(x) for x in s[s.index('{',a)+1:b].replace('\n','').split(',') if x.strip())
++assert len(packed)==158
++decoded=[]
++for row in range(252):
++ bit=row*5;at=bit>>3
++ assert at+1<len(packed)
++ decoded.append(((packed[at]|packed[at+1]<<8)>>(bit&7))&31)
++assert bytes(decoded)==expected
++# Four unused bits in the final byte are padding, not another hidden row.
++assert not packed[-1]&0xf0
+ with tempfile.TemporaryDirectory(prefix='kui-compact-font-') as t:
+  p=Path(t);source=p/'font.c';exe=p/'font'
+  source.write_text('#include <stdio.h>\n#include "'+str(root/'src/loader/retail_display.c')+'"\nint main(void){for(unsigned g=0;g<36u;++g)for(unsigned r=0;r<7u;++r)putchar((int)glyph_row(g,r));return 0;}\n')
+- subprocess.run([os.environ.get('HOST_CC','cc'),'-std=c11','-Os','-Wall','-Wextra','-Werror','-ffunction-sections','-fdata-sections',
+-  '-DKUI_NATIVE_COOP_PUMP=1','-DKUI_RETAIL_ASYNC=1','-Iinclude','-Isrc/loader',str(source),'-Wl,--gc-sections','-o',str(exe)],cwd=root,check=True)
+- assert subprocess.check_output([str(exe)])==expected
+-print('compact resident font: all 252 original glyph rows remain exact')
++ for timeline in (0,1):
++  subprocess.run([os.environ.get('HOST_CC','cc'),'-std=c11','-Os','-Wall','-Wextra','-Werror','-ffunction-sections','-fdata-sections',
++   '-DKUI_NATIVE_COOP_PUMP=1','-DKUI_RETAIL_ASYNC=1','-DKUI_NATIVE_LOADER_TIMELINE='+str(timeline),
++   '-Iinclude','-Isrc/loader',str(source),'-Wl,--gc-sections','-o',str(exe)],cwd=root,check=True)
++  assert subprocess.check_output([str(exe)])==expected
++print('compact resident fonts: original 180B and contiguous 158B forms decode all 252 glyph rows exactly')
+diff --git a/tests/test_native_loader_timeline.c b/tests/test_native_loader_timeline.c
+new file mode 100644
+index 0000000..53b10b4
+--- /dev/null
++++ b/tests/test_native_loader_timeline.c
+@@ -0,0 +1,187 @@
++/* SPDX-License-Identifier: GPL-3.0-only */
++#include "kui/native_loader_timeline.h"
++#include <assert.h>
++#include <stdio.h>
++#include <string.h>
++
++static unsigned checks;
++#define CHECK(c) do {++checks;assert(c);} while(0)
++static struct kui_native_loader_timeline trace;
++static struct kui_native_loader_event event;
++
++static void sample(uint32_t kind,uint32_t tick,uint32_t fn,uint32_t token,uint32_t flags) {
++    memset(&event,0,sizeof(event));
++    event.flags=kind|KUI_NATIVE_TIMELINE_CLOCK_VALID|flags;
++    event.tick=tick;event.function=fn;event.token=token;
++    event.lba=45000u+token;event.count=73u;event.progress=token*512u;
++    event.caller_sr=0x700000f1u;event.vbr=0x8c00f400u;event.iprb=0xa50fu;
++    event.chcr=0x4911u;event.tcr=513u;event.dmaor=0x8201u;event.ssr=0x84u;
++    event.state=0xb03u;
++    if(fn==0u && kind==KUI_NATIVE_TIMELINE_EXIT)event.result=token;
++    kui_native_loader_timeline_add(&trace,&event);
++}
++static void call(uint32_t before,uint32_t after,uint32_t fn,uint32_t token,uint32_t flags) {
++    if(fn==0u)sample(KUI_NATIVE_TIMELINE_ENTER,before,fn,
++        trace.have_request?trace.active.token:trace.last_token,
++        trace.have_request?KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_PENDING:0u);
++    else sample(KUI_NATIVE_TIMELINE_ENTER,before,fn,token,flags&~KUI_NATIVE_TIMELINE_COMPLETE);
++    sample(KUI_NATIVE_TIMELINE_EXIT,after,fn,token,flags);
++}
++static uint32_t loader_ticks(void) {
++    uint32_t total=0u;
++    for(unsigned i=0;i<trace.bin_count;++i)total+=trace.bins[i].gd_ticks;
++    return total;
++}
++static void test_calls_and_request_chain(void) {
++    kui_native_loader_timeline_reset(&trace);
++    /* An accepted REQUEST, a later EXEC and CHECK: real observed request
++     * time1000ticks, of which400were in the three loader calls. */
++    call(100000u,99900u,0u,1u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_PENDING);
++    call(99500u,99300u,2u,1u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_PENDING);
++    call(99100u,99000u,1u,1u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_COMPLETE);
++    CHECK(trace.request_count==1u && !trace.have_request);
++    const struct kui_native_loader_request *r=&trace.requests[0];
++    CHECK(r->begin_tick==100000u && r->end_tick==99000u && r->total_ticks==1000u);
++    CHECK(r->inside_ticks==400u && r->outside_ticks==600u && r->calls==3u);
++    CHECK(r->lba==45001u && r->count==73u && !r->flags);
++    CHECK(trace.max_call_ticks==200u && trace.max_gap_ticks==400u && loader_ticks()==400u);
++    CHECK(trace.longest_count==3u && trace.longest[0].elapsed==200u);
++    CHECK(trace.longest[0].begin.caller_sr==0x700000f1u);
++    CHECK(trace.longest[0].end.vbr==0x8c00f400u && trace.longest[0].end.chcr==0x4911u);
++    CHECK(trace.longest[0].end.dmaor==0x8201u && trace.longest[0].end.state==0xb03u);
++    /* A distinct read begins after a small outside gap and ends200ticks
++     * later. Its chain includes the50tick proximity gap, not just IO time. */
++    call(98950u,98900u,0u,2u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_PENDING);
++    call(98800u,98750u,1u,2u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_COMPLETE);
++    r=&trace.requests[1];
++    CHECK(r->chain_length==2u && r->chain_ticks==1250u && r->chain_inside==500u);
++    CHECK(trace.max_chain_length==2u && trace.max_chain_ticks==1250u && trace.max_chain_inside==500u);
++    CHECK(trace.bins[0].calls==5u && trace.bins[0].read_starts==2u && trace.bins[0].read_completes==2u);
++    sample(KUI_NATIVE_TIMELINE_MAPLE,98700u,0u,0u,0u);
++    CHECK(trace.bins[0].maples==1u && trace.valid==11u && !trace.invalid);
++    /* A long gap starts a different proximity chain. */
++    call(50000u,49900u,0u,3u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_COMPLETE);
++    CHECK(trace.requests[2].chain_length==1u && trace.requests[2].total_ticks==100u);
++}
++static void test_bin_splitting_and_wrap(void) {
++    kui_native_loader_timeline_reset(&trace);
++    uint32_t origin=100u;
++    sample(KUI_NATIVE_TIMELINE_MAPLE,origin,0u,0u,0u);
++    uint32_t before=origin-KUI_NATIVE_TIMELINE_BIN_TICKS+10u;
++    call(before,before-30u,2u,0u,0u);
++    CHECK(trace.bin_count==2u && trace.bins[0].gd_ticks==10u && trace.bins[1].gd_ticks==20u);
++    CHECK(trace.bins[0].maples==1u && trace.bins[1].calls==1u);
++    CHECK(trace.epoch==1u && !trace.clock_breaks && trace.max_call_ticks==30u);
++    CHECK(trace.bins[1].tick==origin-KUI_NATIVE_TIMELINE_BIN_TICKS);
++    /* The raw downcounter wraps from5 through0 toUINT32_MAX. */
++    kui_native_loader_timeline_reset(&trace);
++    call(5u,UINT32_MAX-4u,2u,0u,0u);
++    CHECK(trace.max_call_ticks==10u && loader_ticks()==10u && trace.epoch==1u);
++}
++static void test_epochs_and_invalid_clocks(void) {
++    kui_native_loader_timeline_reset(&trace);
++    call(1000u,900u,0u,1u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_PENDING);
++    sample(KUI_NATIVE_TIMELINE_ENTER,850u,2u,1u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_PENDING);
++    event.flags=KUI_NATIVE_TIMELINE_EXIT;event.tick=800u;
++    kui_native_loader_timeline_add(&trace,&event);
++    CHECK(trace.invalid==1u && trace.clock_breaks==1u && !trace.have_request);
++    CHECK(trace.request_count==1u && (trace.requests[0].flags&KUI_NATIVE_TIMELINE_BAD_CLOCK));
++    CHECK(!trace.requests[0].total_ticks && trace.requests[0].inside_ticks==100u);
++    CHECK(trace.unmatched==1u && loader_ticks()==100u);
++    sample(KUI_NATIVE_TIMELINE_EXIT,700u,2u,1u,0u);
++    CHECK(trace.epoch==2u && trace.unmatched==2u && loader_ticks()==100u);
++    call(600u,500u,0u,2u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_COMPLETE);
++    CHECK(trace.requests[1].epoch==2u && trace.requests[1].chain_length==1u);
++    /* A counter that jumps backwards/up without wrapping within half the
++     * range starts another epoch and cannot form a huge call duration. */
++    sample(KUI_NATIVE_TIMELINE_ENTER,400u,2u,0u,0u);
++    sample(KUI_NATIVE_TIMELINE_EXIT,450u,2u,0u,0u);
++    CHECK(trace.epoch==3u && trace.clock_breaks==2u && trace.max_call_ticks==100u);
++    /* The wrapper may explicitly report profile changes even when the new
++     * current sample is itself an admitted profile. */
++    event.flags=KUI_NATIVE_TIMELINE_MAPLE|KUI_NATIVE_TIMELINE_CLOCK_VALID|KUI_NATIVE_TIMELINE_CLOCK_BREAK;
++    event.tick=300u;kui_native_loader_timeline_add(&trace,&event);
++    CHECK(trace.epoch==4u && trace.clock_breaks==3u && !trace.have_enter);
++}
++static void test_partial_replaced_and_failed(void) {
++    kui_native_loader_timeline_reset(&trace);
++    sample(KUI_NATIVE_TIMELINE_MAPLE,10000u,1u,11u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_PENDING);
++    call(9900u,9800u,1u,11u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_COMPLETE);
++    CHECK(trace.requests[0].flags==KUI_NATIVE_TIMELINE_PARTIAL);
++    CHECK(trace.requests[0].total_ticks==200u && trace.requests[0].inside_ticks==100u);
++    /* An already completed handle on subsequent CHECK must not fabricate a
++     * second request from the same token. */
++    call(9700u,9600u,1u,11u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_COMPLETE);
++    CHECK(trace.request_count==1u);
++    call(9500u,9400u,0u,12u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_PENDING);
++    /* A new accepted read replacing a still-open handle marks the old
++     * summary instead of attributing new-token progress to it. */
++    call(9300u,9200u,0u,13u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_PENDING);
++    CHECK(trace.request_count==2u && (trace.requests[1].flags&KUI_NATIVE_TIMELINE_REPLACED));
++    sample(KUI_NATIVE_TIMELINE_ENTER,9100u,1u,13u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_PENDING);
++    event.flags=KUI_NATIVE_TIMELINE_EXIT|KUI_NATIVE_TIMELINE_CLOCK_VALID|KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_FAILED;
++    event.tick=9000u;event.result=UINT32_MAX;kui_native_loader_timeline_add(&trace,&event);
++    CHECK(trace.request_count==3u && (trace.requests[2].flags&KUI_NATIVE_TIMELINE_REQUEST_FAILED));
++    CHECK(trace.requests[2].result==UINT32_MAX && !trace.requests[2].chain_length);
++    /* A read that becomes complete before the next call begins is closed
++     * at that first observation; the CHECK's body is not added to it. */
++    call(8900u,8800u,0u,14u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_PENDING);
++    sample(KUI_NATIVE_TIMELINE_ENTER,8700u,1u,14u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_COMPLETE);
++    CHECK(trace.request_count==4u && trace.requests[3].inside_ticks==100u);
++    CHECK(trace.requests[3].outside_ticks==100u);
++}
++static void test_limits_and_stable_longest(void) {
++    kui_native_loader_timeline_reset(&trace);
++    uint32_t tick=100000u;
++    for(uint32_t i=1u;i<=24u;++i) {
++        call(tick,tick-i,0u,i,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_COMPLETE);
++        tick-=100u;
++    }
++    CHECK(trace.request_count==16u && trace.request_next==8u && trace.requests[7].token==24u);
++    CHECK(trace.requests[8].token==9u && trace.longest_count==8u);
++    for(unsigned i=0;i<8u;++i) {
++        CHECK(trace.longest[i].elapsed==24u-i);
++        CHECK(trace.longest[i].end.token==24u-i && trace.longest[i].begin.function==0u);
++    }
++    CHECK(trace.max_chain_length==24u && trace.max_chain_ticks>trace.max_call_ticks);
++    /* Reset is complete, including all retained contexts and epoch state. */
++    kui_native_loader_timeline_reset(&trace);
++    CHECK(!trace.request_count && !trace.events && !trace.longest_count && !trace.bin_count);
++    sample(KUI_NATIVE_TIMELINE_MAPLE,100u,0u,0u,0u);
++    sample(KUI_NATIVE_TIMELINE_MAPLE,100u-KUI_NATIVE_TIMELINE_BINS*KUI_NATIVE_TIMELINE_BIN_TICKS,0u,0u,0u);
++    CHECK(trace.overflow==1u && trace.bin_count==1u); /* no out-of-bounds33rd bin */
++    trace.events=UINT32_MAX;sample(KUI_NATIVE_TIMELINE_MAPLE,99u-KUI_NATIVE_TIMELINE_BINS*KUI_NATIVE_TIMELINE_BIN_TICKS,0u,0u,0u);
++    CHECK(trace.events==UINT32_MAX && trace.saturated);
++    kui_native_loader_timeline_add(NULL,&event);kui_native_loader_timeline_add(&trace,NULL);
++    kui_native_loader_timeline_reset(NULL);
++}
++static void test_lifecycle_and_token_reuse(void) {
++    for(unsigned function=3u;function<=9u;function+=6u) {
++        kui_native_loader_timeline_reset(&trace);
++        call(10000u,9900u,0u,1u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_PENDING);
++        sample(KUI_NATIVE_TIMELINE_ENTER,9800u,function,1u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_PENDING);
++        sample(KUI_NATIVE_TIMELINE_EXIT,9700u,function,0u,0u);
++        CHECK(!trace.have_request && !trace.last_token && trace.request_count==1u);
++        CHECK(trace.requests[0].flags&KUI_NATIVE_TIMELINE_REPLACED);
++        CHECK(trace.requests[0].total_ticks==300u && trace.requests[0].inside_ticks==200u);
++        call(9600u,9500u,0u,1u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_COMPLETE);
++        CHECK(trace.request_count==2u && trace.requests[1].token==1u && !trace.requests[1].flags);
++        CHECK(trace.requests[1].chain_length==1u && trace.requests[1].total_ticks==100u);
++    }
++    /* ABORT's failure flag closes the read. An unrelated non-read token
++     * replacement cannot leave an old read open across later game work. */
++    kui_native_loader_timeline_reset(&trace);
++    call(10000u,9900u,0u,1u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_PENDING);
++    call(9800u,9700u,8u,1u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_FAILED);
++    CHECK(trace.requests[0].flags&KUI_NATIVE_TIMELINE_REQUEST_FAILED);
++    call(9600u,9500u,0u,2u,KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_PENDING);
++    sample(KUI_NATIVE_TIMELINE_MAPLE,9400u,0u,0u,0u);
++    CHECK(trace.request_count==2u && !trace.have_request && !trace.last_token);
++    CHECK(trace.requests[1].flags&KUI_NATIVE_TIMELINE_REPLACED);
++}
++int main(void) {
++    test_calls_and_request_chain();test_bin_splitting_and_wrap();test_epochs_and_invalid_clocks();
++    test_partial_replaced_and_failed();test_limits_and_stable_longest();test_lifecycle_and_token_reuse();
++    printf("Native loader timeline: %u checks; %zu-byte state, call/idle split, request chains, clocks/wrap/epochs, rings and exact hardware contexts passed\n",checks,sizeof(trace));
++    return 0;
++}
+diff --git a/tests/test_vmu_native_loader_timeline_worker.c b/tests/test_vmu_native_loader_timeline_worker.c
+new file mode 100644
+index 0000000..e823918
+--- /dev/null
++++ b/tests/test_vmu_native_loader_timeline_worker.c
+@@ -0,0 +1,134 @@
++/* SPDX-License-Identifier: GPL-3.0-only */
++/* The actual worker wrapper, clocks and typed region wiring, alongside the
++ * original save/lease/protocol suite. Hardware observations are read-only. */
++#define KUI_VMU_NATIVE_BACKGROUND 1
++#define KUI_RETAIL_ASYNC_TEST 1
++#define KUI_NATIVE_READER_DIAGNOSTIC 1
++#define KUI_NATIVE_COOP_PUMP 1
++#define KUI_NATIVE_REQUEST_TIMING 1
++#define KUI_NATIVE_IRQ_REARM 1
++#define KUI_NATIVE_LOADER_TIMELINE 1
++#define main persistent_suite_main
++#include "test_vmu_native_persistent.c"
++#undef main
++
++static kui_retail_async_region_type observed_region;
++static struct {
++    uint32_t vbr,iprb,chcr,tcr,dmaor,ssr;
++} timeline_hw={0x8c00f400u,0xa510u,0x4911u,0x1ffu,0x8201u,0x84u};
++static unsigned timeline_mmio_reads,timeline_vbr_reads;
++
++void *kui_vmu_native_reader_test_region(uint32_t address) {
++    CHECK(kui_vmu_native_background_region_address(config.lease.payload,address));
++    return &observed_region;
++}
++uint32_t kui_native_loader_timeline_test_vbr(void) {
++    ++timeline_vbr_reads;return timeline_hw.vbr;
++}
++uint32_t kui_native_loader_timeline_test_read(uint32_t address,unsigned width) {
++    CHECK(address!=UINT32_C(0xffe00014)); /* RDR would consume a data byte. */
++    ++timeline_mmio_reads;
++    switch(address) {
++    case UINT32_C(0xffd00008):CHECK(width==2u);return timeline_hw.iprb;
++    case UINT32_C(0xffa0001c):CHECK(width==4u);return timeline_hw.chcr;
++    case UINT32_C(0xffa00018):CHECK(width==4u);return timeline_hw.tcr;
++    case UINT32_C(0xffa00040):CHECK(width==4u);return timeline_hw.dmaor;
++    case UINT32_C(0xffe00010):CHECK(width==1u);return timeline_hw.ssr;
++    default:CHECK(false);return 0u;
++    }
++}
++static void visit(uint32_t exit,uint32_t function,uint32_t original_sr) {
++    uint32_t before[6];memcpy(before,&timeline_hw,sizeof(before));
++    uint32_t inherited_sr=live_sr;
++    kui_native_loader_timeline_visit(exit,function,original_sr,&observed_region);
++    CHECK(!memcmp(before,&timeline_hw,sizeof(before)) && live_sr==inherited_sr);
++}
++static void check_inactive_and_region_guards(void) {
++    diagnostic_setup();native_loader_timeline_start();
++    unsigned clocks=clock_reads,reads=timeline_mmio_reads;
++    visit(0u,KUI_GD_CHECK,0x40000060u);
++    CHECK(!native_loader_timeline.events && timeline_mmio_reads==reads && clock_reads==clocks);
++    diagnostic.active=1u;config.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL;
++    visit(0u,KUI_GD_CHECK,0x40000060u);
++    CHECK(!native_loader_timeline.events && timeline_mmio_reads==reads && clock_reads==clocks);
++    config.diagnostics=KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE;
++    kui_native_loader_timeline_visit(0u,KUI_GD_CHECK,0u,NULL);
++    kui_native_loader_timeline_visit(0u,KUI_GD_CHECK,0u,(uint8_t *)&observed_region+4u);
++    CHECK(!native_loader_timeline.events && timeline_mmio_reads==reads && clock_reads==clocks);
++}
++static void check_gesture_and_actual_wrapper(void) {
++    diagnostic_setup();memset(&observed_region,0,sizeof(observed_region));
++    for(unsigned i=0u;i<30u;i++)diagnostic_pair(true);
++    CHECK(diagnostic.active && !native_loader_timeline.events);
++    unsigned leases=lease_calls,bytes=sd.bytes,clocks=clock_reads,reads=timeline_mmio_reads;
++    struct kui_retail_gd *g=&observed_region.shared.service;
++    test_clock.counter=2000000u;
++    visit(0u,KUI_GD_REQUEST,0x40000060u);
++    const struct kui_native_loader_event *e=&native_loader_timeline.entered;
++    CHECK(native_loader_timeline.have_enter && e->tick==2000000u);
++    CHECK(e->flags==(KUI_NATIVE_TIMELINE_ENTER|KUI_NATIVE_TIMELINE_CLOCK_VALID));
++    CHECK(e->function==KUI_GD_REQUEST && e->caller_sr==0x40000060u);
++    CHECK(e->vbr==timeline_hw.vbr && e->iprb==timeline_hw.iprb && e->chcr==timeline_hw.chcr);
++    CHECK(e->tcr==timeline_hw.tcr && e->dmaor==timeline_hw.dmaor && e->ssr==timeline_hw.ssr);
++
++    g->command=KUI_GD_DMAREAD;g->token=7u;g->lba=45000u;g->count=73u;
++    g->pending=1u;g->status=KUI_GD_PROCESSING;g->diag.last_result=7;
++    observed_region.engine.active=1u;observed_region.engine.hooked=1u;
++    observed_region.engine.release.armed=1u;observed_region.shared.stream.state=2u;
++    timeline_hw.vbr=(uint32_t)(uintptr_t)&observed_region-UINT32_C(0x100);
++    test_clock.counter=1999000u;
++    visit(1u,KUI_GD_REQUEST,0x40000060u);
++    CHECK(native_loader_timeline.events==2u && native_loader_timeline.longest_count==1u);
++    CHECK(native_loader_timeline.have_request && native_loader_timeline.active.token==7u);
++    CHECK(native_loader_timeline.active.lba==45000u && native_loader_timeline.active.count==73u);
++    CHECK(native_loader_timeline.active.inside_ticks==1000u && native_loader_timeline.active.calls==1u);
++    const struct kui_native_loader_call *c=&native_loader_timeline.longest[0];
++    CHECK(c->elapsed==1000u && c->end.result==7u && c->end.caller_sr==0x40000060u);
++    CHECK(c->end.state==(2u|0xf00u|(KUI_GD_DMAREAD<<16)));
++    CHECK(c->end.flags==(KUI_NATIVE_TIMELINE_EXIT|KUI_NATIVE_TIMELINE_CLOCK_VALID|
++        KUI_NATIVE_TIMELINE_READ|KUI_NATIVE_TIMELINE_PENDING));
++    CHECK(timeline_mmio_reads-reads==10u && clock_reads-clocks==2u);
++
++    test_clock.counter=1990000u;
++    visit(0u,KUI_GD_EXEC,0x40000060u);
++    test_clock.counter=1985000u;
++    g->pending=0u;g->status=KUI_GD_COMPLETED;g->diag.last_result=0;
++    g->completed_bytes=73u*2048u;observed_region.engine.active=0u;
++    observed_region.shared.stream.state=1u;
++    visit(1u,KUI_GD_EXEC,0x40000060u);
++    CHECK(!native_loader_timeline.have_request && native_loader_timeline.request_count==1u);
++    const struct kui_native_loader_request *request=&native_loader_timeline.requests[0];
++    CHECK(request->token==7u && request->progress==73u*2048u && request->result==0u);
++    CHECK(request->total_ticks==15000u && request->inside_ticks==6000u && request->outside_ticks==9000u);
++    CHECK(request->calls==2u && !request->flags && request->chain_length==1u);
++    CHECK(native_loader_timeline.max_call_ticks==5000u && native_loader_timeline.max_gap_ticks==9000u);
++    CHECK(native_loader_timeline.longest[0].end.result==0u &&
++          (native_loader_timeline.longest[0].end.flags&KUI_NATIVE_TIMELINE_COMPLETE));
++
++    state.complete_sr=0x400000f0u;test_clock.counter=1984000u;
++    native_loader_timeline_heartbeat(&test_clock);
++    CHECK(native_loader_timeline.events==5u && native_loader_timeline.bins[0].maples==1u);
++    CHECK(native_loader_event.function==UINT32_MAX && native_loader_event.caller_sr==state.complete_sr);
++    CHECK((native_loader_event.flags&KUI_NATIVE_TIMELINE_KIND_MASK)==KUI_NATIVE_TIMELINE_MAPLE);
++    CHECK(native_loader_timeline.request_count==1u);
++    CHECK(lease_calls==leases && sd.bytes==bytes && !durable_card.inflight && !durable_card.handling);
++
++    test_clock.frqcr=0u;test_clock.counter=1980000u;
++    visit(0u,KUI_GD_CHECK,0x40000060u);
++    CHECK(native_loader_timeline.invalid==1u && native_loader_timeline.clock_breaks==1u);
++    CHECK((native_loader_event.flags&KUI_NATIVE_TIMELINE_CLOCK_BREAK) &&
++          !(native_loader_event.flags&KUI_NATIVE_TIMELINE_CLOCK_VALID));
++    CHECK(!native_loader_timeline.have_enter);
++    test_clock.frqcr=0xe0au;test_clock.counter=1970000u;
++    visit(0u,KUI_GD_CHECK,0x40000060u);
++    test_clock.counter=1969000u;visit(1u,KUI_GD_CHECK,0x40000060u);
++    CHECK(native_loader_timeline.epoch==2u && native_loader_timeline.invalid==1u);
++    CHECK(lease_calls==leases && sd.bytes==bytes && test_clock.frqcr==0xe0au &&
++          test_clock.tcor==UINT32_MAX && test_clock.tcr==2u && test_clock.tstr==1u);
++}
++int main(void) {
++    persistent_suite_main();
++    check_inactive_and_region_guards();check_gesture_and_actual_wrapper();
++    printf("Timeline worker: %u checks; gesture window, exact MMIO widths, original SR, actual GD result, request split, heartbeat and clock epochs passed\n",checks);
++    return 0;
++}
+diff --git a/tools/check_vmu_native_background.py b/tools/check_vmu_native_background.py
+index 2a6b655..808e559 100644
+--- a/tools/check_vmu_native_background.py
++++ b/tools/check_vmu_native_background.py
+@@ -35,6 +35,7 @@ COLD = frozenset({"kui_vmu_native_background_init", "kui_vmu_observe_background_
+                   "kui_vmu_native_background_manifest_bind", "kui_vmu_observe_sd_lease",
+                   "kui_retail_native_async_loan_begin", "kui_retail_native_async_loan_end"})
+ CALLBACKS = {
++    ("kui_retail_async_trace", "retail_async.c"): ("kui_native_loader_timeline_visit",),
+     ("guest", "retail_gd.c"): ("native_background_map",),
+     ("kui_retail_gd_dispatch", "retail_gd.c"): ("check_sectors",),
+     ("byte", "sci_stream.c"): ("transfer",),
+@@ -640,7 +641,16 @@ def check(directory, *, self_test=False, require_stage=False):
+     if not reports:
+         reports = sorted((directory / "resident/lto").glob("*.ci"))
+     require(reports, "missing actual LTO call-graph reports")
+-    frames, calls = graph.load(reports)
++    if '__kui_native_loader_timeline_resident' in image[4]:
++        # The only new low-stack callback is pinned to the retained trace
++        # entry. Load its actual emitted frames and all pure callees; the
++        # same352B guard and margins continue to bound the combined path.
++        reports += [directory/'native/src/loader/vmu_native_passive.ci',
++                    directory/'native/src/core/native_loader_timeline.ci',
++                    directory/'native/src/core/vmu_native_profile.ci',
++                    directory/'native/src/loader/minic.ci']
++        require(all(p.is_file() for p in reports),'missing timeline callback stack graphs')
++    frames, calls = graph.load(reports,qualified='__kui_native_loader_timeline_resident' in image[4])
+     paths, callbacks, escapes = stack_paths(frames, calls)
+     worst = max(item["bytes"] for item in paths.values())
+     total = worst + library["stack_bytes"] + EXTRA_MARGIN + GUARD + TOP_GAP
+@@ -679,7 +689,8 @@ def check(directory, *, self_test=False, require_stage=False):
+             else:
+                 raise ValueError("Background audit accepted negative mutation: " + name)
+         altered = dict(frames)
+-        altered["native_background_map"] += 128
++        key=next(name for name in altered if graph.base(name)=="native_background_map")
++        altered[key] += 128
+         def oversized():
+             checks, _, _ = stack_paths(altered, calls)
+             need = max(item["bytes"] for item in checks.values()) + 4 + EXTRA_MARGIN + GUARD + TOP_GAP
+diff --git a/tools/check_vmu_native_irq_rearm.py b/tools/check_vmu_native_irq_rearm.py
+index 39ced00..4e0f349 100644
+--- a/tools/check_vmu_native_irq_rearm.py
++++ b/tools/check_vmu_native_irq_rearm.py
+@@ -17,7 +17,9 @@ REGION=0x8c420400
+ FRAME=REGION+0x240
+ HOOKED=REGION+0x2d0
+ REARMS=REGION+0x2e4
++VBR_CHANGES=REGION+0x278
+ HOOK_SHA='3617673b84fa38f4341fc072ca4485a1a13d748dbfa0fe3ef9799d4a539884af'
++TIMELINE_HOOK_SHA='a02b6467322a9aa97cfe8c7f57aa713573d0b17ec8558645285a1c3192796e07'
+ 
+ 
+ def require(test,message):
+@@ -25,7 +27,7 @@ def require(test,message):
+ 
+ 
+ class Rearm(CacheGateway):
+-    def __init__(self,resident,seed,mask,same,hooked,field,body=None):
++    def __init__(self,resident,seed,mask,same,hooked,field,body=None,*,same_owner=False):
+         begin,original,_=symbol_bytes(resident,'_hook',2)
+         CPU.__init__(self,seed,begin,1)
+         self.pc,self.blob,self.mem=begin,original if body is None else body,{}
+@@ -34,10 +36,12 @@ class Rearm(CacheGateway):
+         self.before=self.r.copy(),self.pr,self.sr,self.fpscr,self.fr.copy()
+         self.targets={}
+         self.pointer=resident[4]['_kui_retail_async_region_storage'][0]
++        self.timeline='__kui_native_loader_timeline_resident' in resident[4]
+         self.vbr=REGION-0x100 if same else 0x8c00f400
+         self.iprb=(random.Random(seed+992).getrandbits(16)&~0xf0)|field
+-        self.mem.update({self.pointer:REGION,FRAME+4:0x70,FRAME:0x8c00e800,
++        self.mem.update({self.pointer:REGION,FRAME+4:0x70,FRAME:self.vbr if same_owner else 0x8c00e800,
+                          FRAME+8:1,HOOKED:int(hooked),REARMS:(0xfffffffc+seed)&MASK})
++        if self.timeline:self.mem[VBR_CHANGES]=(0xfffffffe+seed)&MASK
+         self.old=self.vbr,self.iprb,self.mem.copy()
+         self.same,self.hooked,self.field=same,hooked,field
+         self.iprb_writes,self.vbr_writes=[],[]
+@@ -47,7 +51,8 @@ class Rearm(CacheGateway):
+         return struct.unpack('<I',self.code(address,4))[0]
+ 
+     def write(self,address,value):
+-        assert address in (FRAME,FRAME+4,FRAME+8,HOOKED,REARMS),'hook store escapes exact reader fields'
++        allowed=(FRAME,FRAME+4,FRAME+8,HOOKED,REARMS)+((VBR_CHANGES,) if self.timeline else ())
++        assert address in allowed,'hook store escapes exact reader fields'
+         self.mem[address]=value&MASK
+ 
+     def plain(self,w,pc):
+@@ -81,6 +86,8 @@ class Rearm(CacheGateway):
+             assert self.vbr_writes==[REGION-0x100] and self.vbr==REGION-0x100
+             expected[FRAME]=vbr;expected[FRAME+8]=1;expected[HOOKED]=1
+             if not self.hooked or changed:expected[FRAME+4]=self.field
++            if self.timeline and self.hooked and mem[FRAME]!=vbr:
++                expected[VBR_CHANGES]=(mem[VBR_CHANGES]+1)&MASK
+         assert self.mem==expected,'hook corrupts owner/reader state or loses a rearm'
+         wrote=not self.same or changed
+         assert self.iprb_writes==([(iprb&~0xf0)|0x10] if wrote else [])
+@@ -88,11 +95,15 @@ class Rearm(CacheGateway):
+ 
+ 
+ def check(resident,*,self_test=False):
++    require(__debug__,'rearm instruction model requires Python assertions; run without -O/PYTHONOPTIMIZE')
+     marker=resident[4].get('__kui_native_irq_rearm_resident')
+     if marker is None:return {'enabled':False}
+     require(marker==(1,0,0,0xfff1),'invalid native IRQ rearm marker')
+     begin,body,_=symbol_bytes(resident,'_hook',2)
+-    require(len(body)==132 and hashlib.sha256(body[:-8]).hexdigest()==HOOK_SHA,
++    timeline=resident[4].get('__kui_native_loader_timeline_resident')
++    require(timeline is None or timeline==(1,0,0,0xfff1),'invalid native timeline marker')
++    expected_size,expected_sha=(148,TIMELINE_HOOK_SHA) if timeline else (132,HOOK_SHA)
++    require(len(body)==expected_size and hashlib.sha256(body[:-8]).hexdigest()==expected_sha,
+             'linked native IRQ rearm hook instructions changed')
+     require(body[-8:]==struct.pack('<II',resident[4]['_kui_retail_async_region_storage'][0],IPRB),
+             'linked native rearm region/IPRB binding changed')
+@@ -102,26 +113,32 @@ def check(resident,*,self_test=False):
+             for same in (False,True):
+                 for hooked in (False,True):
+                     for field in range(0,0x100,0x10):
+-                        Rearm(resident,seed,mask,same,hooked,field).run().check();cases+=1
++                        for same_owner in ((False,True) if timeline else (False,)):
++                            Rearm(resident,seed,mask,same,hooked,field,same_owner=same_owner).run().check();cases+=1
+     rejected=0
+     if self_test:
+         mutations=[]
+-        for pattern in (0xcb10,0x2501,0x2101,0x7301,0x1302,0x472e):
+-            for at in range(0,114,2):
++        patterns=(0xcb10,0x2501,0x2101,0x7301,0x1302,0x472e)
++        if timeline:patterns+=(0x452e,0x7701,0x117f,0x3730)
++        for pattern in patterns:
++            for at in range(0,len(body)-8,2):
+                 if struct.unpack_from('<H',body,at)[0]==pattern:
+                     altered=bytearray(body);struct.pack_into('<H',altered,at,9)
+                     mutations.append(bytes(altered))
+-        altered=bytearray(body);struct.pack_into('<I',altered,128,IPRB+4);mutations.append(bytes(altered))
++        altered=bytearray(body);struct.pack_into('<I',altered,len(body)-4,IPRB+4);mutations.append(bytes(altered))
+         for altered in mutations:
+             refused=False
+             for same in (True,False):
+-                try:Rearm(resident,7,15,same,True,0x90,altered).run().check()
+-                except (AssertionError,ValueError,struct.error,KeyError):refused=True;break
++                for same_owner in ((False,True) if timeline else (False,)):
++                    try:Rearm(resident,7,15,same,True,0x90,altered,same_owner=same_owner).run().check()
++                    except (AssertionError,ValueError,struct.error,KeyError):refused=True;break
++                if refused:break
+             require(refused,'native IRQ rearm model accepted an unsafe mutation');rejected+=1
+     return dict(enabled=True,hook_address=hex(begin),hook_bytes=len(body),
+         complete_linked_hook_pinned=True,actual_instruction_model_cases=cases,
+         mutation_rejections=rejected,all_sci_fields_checked=True,
+         same_vbr_priority_rechecked=True,other_iprb_fields_preserved=True,
++        vbr_change_counter_modelled=bool(timeline),
+         owner_updated_priority_retained_for_release=True,reader_sci_level=1,
+         unchanged_level_causes_no_mmio_write=True,new_resident_ram_bytes=0,
+         console_cause_confirmed=False,console_performance_verified=False)
+diff --git a/tools/check_vmu_native_loader_timeline.py b/tools/check_vmu_native_loader_timeline.py
+new file mode 100644
+index 0000000..0f023d9
+--- /dev/null
++++ b/tools/check_vmu_native_loader_timeline.py
+@@ -0,0 +1,214 @@
++#!/usr/bin/env python3
++# SPDX-License-Identifier: GPL-3.0-only
++"""Audit the typed timeline descriptor, owned state and actual low SH bridge.
++
++The bridge model substitutes an ABI-compliant adversary for the worker
++callback. The collector has separate host tests; no model establishes game
++frame progression or console performance. The cold binder is byte-pinned.
++"""
++import argparse
++import hashlib
++import json
++from pathlib import Path
++import struct
++
++from check_vmu_native_cache_gateway import CacheGateway
++from check_vmu_native_worker_gateway import CPU, MASK, read_elf, symbol_bytes
++
++P1,P2,SPAN=0x8c100000,0xac100000,0x20000
++REGION=0x8c420400
++SLOT=REGION+0x500+11*4
++MARKER=(1,0,0,0xfff1)
++PRIVATE_OBJECTS={'_native_loader_timeline':3420,'_native_loader_event':64,'_native_loader_clock':20}
++BRIDGE_PIN=('62d84fd8b9c6b54566d1334bc207c06f3d8b7d2355da33e562bdde085c50bc7b',36)
++BINDER_PIN=('7caa04ff75dfb56f852276ab71517c1466face73d215dc2c66204d9b49347ecd',180)
++BIN_AT_NO_DIV_PIN=('37915f9519ac69eb63c1819a0b82ea5a759111693f41f9d9f4cb62e27beb56e7',144)
++
++
++def require(test,message):
++    if not test:raise ValueError(message)
++
++
++class Bridge(CacheGateway):
++    """Execute the linked nullable tail-call with exact reader/caller inputs."""
++    def __init__(self,resident,callback,seed,enabled,exit,function,body=None):
++        begin,original,_=symbol_bytes(resident,'_kui_retail_async_trace',2)
++        CPU.__init__(self,seed,begin,1)
++        self.base,self.blob,self.pc=begin,original if body is None else body,begin
++        self.r[4:6]=[exit,function]
++        self.r[15]=0x8c007cf0;self.start_sp=self.r[15]
++        self.pr=begin+len(original)+0x100
++        self.before=self.r.copy(),self.pr,self.sr,self.fpscr,self.fr.copy()
++        self.pointer=resident[4]['_kui_retail_async_region_storage'][0]
++        self.caller=resident[4]['_kui_retail_hook_sr'][0]
++        self.original_sr=(0x40000000^(seed*0x1234567))&MASK
++        self.callback=callback;self.enabled=enabled
++        self.mem={self.pointer:REGION,SLOT:callback if enabled else 0,self.caller:self.original_sr}
++        self.reads,self.calls,self.writes=[],[],[]
++        self.targets={callback:'timeline'}
++
++    def read(self,address):
++        if address in self.mem:
++            self.reads.append(address);return self.mem[address]
++        return struct.unpack('<I',self.code(address,4))[0]
++
++    def write(self,address,value):
++        assert address%4==0 and self.start_sp-64<=address<self.start_sp,'timeline bridge store escapes its own frame'
++        self.mem[address]=value&MASK;self.writes.append(address)
++
++    def plain(self,w,pc):
++        n,m=w>>8&15,w>>4&15
++        if w&0xf00f==0x300c:self.r[n]=(self.r[n]+self.r[m])&MASK;return
++        if w&0xf00f==0x000e:
++            address=(self.r[0]+self.r[m])&MASK;self.r[n]=self.read(address);return
++        super().plain(w,pc)
++
++    def api(self,target):
++        assert self.enabled and target==self.callback and not self.calls
++        assert self.r[4:8]==[self.before[0][4],self.before[0][5],self.original_sr,REGION],\
++            'timeline callback arguments differ from original exit/function/caller-SR/region'
++        assert self.r[8:]==self.before[0][8:] and self.r[15]==self.start_sp,\
++            'timeline bridge is not an ABI tail-call on the same GD frame'
++        return_pc=self.pr;self.calls.append(target)
++        # A tail-called ABI callee may use every volatile GPR and the T bit.
++        # It returns directly to the original PR with its own frame consumed.
++        for i in range(8):self.r[i]=(0x913579bd+0x13579bd*i+len(self.calls))&MASK
++        self.sr^=1;self.pc=return_pc
++
++    def check(self):
++        r,pr,sr,fpscr,fr=self.before
++        assert self.r[8:]==r[8:] and self.pr==pr and self.sr&~1==sr&~1
++        assert (self.fpscr,self.fr)==(fpscr,fr)
++        assert self.calls==([self.callback] if self.enabled else [])
++        assert self.reads==[self.pointer,SLOT]+([self.caller] if self.enabled else []),\
++            'null callback touched caller state or bridge used an unexpected memory view'
++        assert not self.writes,'timeline tail-call bridge must not allocate a second GD frame'
++
++
++def private_state(worker):
++    bottom=worker[4]['__vmu_native_worker_stack_bottom'][0]
++    bss_begin=worker[4]['__vmu_native_worker_bss_begin'][0]
++    bss_end=worker[4]['__vmu_native_worker_bss_end'][0]
++    require(P2+80<=bss_begin<=bss_end<=bottom==P2+SPAN-4096,
++            'timeline lacks complete private worker BSS/stack bounds')
++    ranges=[];report={}
++    for name,size in PRIVATE_OBJECTS.items():
++        record=worker[4].get(name)
++        require(record is not None,'missing typed timeline state: '+name)
++        address,count,kind,owner=record
++        require(kind==1 and count==size and address%4==0 and owner<len(worker[3]),
++                'timeline state size/type/alignment changed: '+name)
++        section=worker[3][owner]
++        require(section[1]==8 and section[2]&7==3 and
++                section[3]<=address<address+size<=section[3]+section[5] and
++                bss_begin<=address<address+size<=bss_end,
++                'timeline state escapes exact private P2 NOBITS ownership: '+name)
++        ranges.append((address,address+size));report[name]={'address':hex(address),'bytes':size}
++    require(all(a[1]<=b[0] or b[1]<=a[0] for i,a in enumerate(ranges) for b in ranges[i+1:]),
++            'timeline collector/event/profile objects overlap')
++    return report
++
++
++def division_helper(resident,worker):
++    """Reuse the resident stack proof only for identical linked libgcc code.
++
++    The prefix contains the alternate internal entry used by the helper.
++    One reviewed optimized bin_at variant uses reciprocal multiplication
++    and has no worker division helper at all; that body is pinned instead.
++    """
++    name='___udivsi3'
++    if name not in worker[4]:
++        _,body,_=symbol_bytes(worker,'_bin_at',2)
++        require((hashlib.sha256(body).hexdigest(),len(body))==BIN_AT_NO_DIV_PIN,
++                'timeline bin arithmetic changed without a linked division-helper proof')
++        return {'linked':False,'reciprocal_bin_body_pinned':True}
++    def window(image):
++        address,body,section=symbol_bytes(image,name,2)
++        require(section[2]&7==6 and address-64>=section[3],
++                'division helper internal prefix escapes executable ownership')
++        offset=section[4]+address-64-section[3]
++        return body,image[0][offset:offset+64+len(body)]
++    native,native_window=window(worker)
++    low,low_window=window(resident)
++    require(native==low and native_window==low_window,
++            'worker division helper/internal prefix differs from the resident stack proof')
++    return {'linked':True,'identical_resident_body':True,'identical_internal_prefix_bytes':64,
++            'body_bytes':len(native),'body_sha256':hashlib.sha256(native).hexdigest()}
++
++
++def check(directory,*,self_test=False):
++    require(__debug__,'timeline instruction model requires Python assertions; run without -O/PYTHONOPTIMIZE')
++    directory=Path(directory)
++    resident,worker,stage=(read_elf(directory/name) for name in ('resident-sci.elf','native-worker.elf','stage.elf'))
++    markers=(resident[4].get('__kui_native_loader_timeline_resident'),
++             worker[4].get('__kui_native_loader_timeline_worker'))
++    if not any(markers):
++        require('_kui_native_loader_timeline_exports' not in worker[4],
++                'timeline descriptor lacks its paired resident/worker markers')
++        return {'enabled':False}
++    require(markers==(MARKER,MARKER),'timeline resident/worker marker mismatch')
++    trace,trace_body,trace_section=symbol_bytes(worker,'_kui_vmu_native_trace_exports',1)
++    desc,body,section=symbol_bytes(worker,'_kui_native_loader_timeline_exports',1)
++    callback,callback_body,callback_section=symbol_bytes(worker,'_kui_native_loader_timeline_visit',2)
++    require(len(trace_body)==40 and desc==trace+40 and len(body)==12 and
++            section[2]&7==2 and trace_section[2]&7==2,
++            'timeline descriptor must be the adjacent exact12B immutable object after the unchanged40B trace table')
++    require(struct.unpack('<3I',body)==(0x4b4c5431,1,callback) and callback%2==0 and
++            P1+80<=callback<callback+len(callback_body)<=P1+SPAN and callback_section[2]&7==6,
++            'timeline descriptor does not bind its exact private P1 callback')
++    private=private_state(worker)
++    division=division_helper(resident,worker)
++    begin,bridge,_=symbol_bytes(resident,'_kui_retail_async_trace',2)
++    require(BRIDGE_PIN is not None,'missing reviewed timeline bridge pin')
++    require((hashlib.sha256(bridge).hexdigest(),len(bridge))==BRIDGE_PIN,
++            'linked timeline bridge instructions/literals changed')
++    binder,binder_body,binder_section=symbol_bytes(stage,'_native_loader_timeline_bind',2)
++    require(BINDER_PIN is not None,'missing reviewed timeline cold binder pin')
++    require((hashlib.sha256(binder_body).hexdigest(),len(binder_body))==BINDER_PIN and
++            binder_section[2]&7==6 and 0x8ce00000<=binder<binder+len(binder_body)<=0x8cfe0000,
++            'linked timeline descriptor/region/profile binder changed')
++    cases=0
++    for seed in range(16):
++        for enabled in (False,True):
++            for exit in (0,1,0xffffffff):
++                for function in (0,1,2,13,0xffffffff):
++                    Bridge(resident,callback,seed,enabled,exit,function).run().check();cases+=1
++    rejected=0
++    if self_test:
++        mutations=[]
++        # Read each linked PC-relative literal as code executes it. Mutating
++        # the exact region/SR binding must not gain an untyped memory view.
++        for target in (resident[4]['_kui_retail_async_region_storage'][0],resident[4]['_kui_retail_hook_sr'][0]):
++            at=bridge.find(struct.pack('<I',target));require(at>=0,'timeline bridge lacks exact data literal')
++            changed=bytearray(bridge);struct.pack_into('<I',changed,at,target+4);mutations.append(bytes(changed))
++        for changed in mutations:
++            try:Bridge(resident,callback,7,True,1,2,changed).run().check()
++            except (AssertionError,ValueError,KeyError,struct.error):rejected+=1
++            else:raise ValueError('timeline bridge model accepted a changed memory binding')
++    return {'enabled':True,'paired_resident_worker':True,'descriptor_address':hex(desc),
++        'descriptor_bytes':12,'trace_descriptor_bytes_unchanged':40,
++        'callback_address':hex(callback),'callback_bytes':len(callback_body),
++        'private_state':private,'private_state_bytes':sum(PRIVATE_OBJECTS.values()),
++        'division_helper':division,
++        'private_p2_nobits_only':True,'bridge_address':hex(begin),'bridge_bytes':len(bridge),
++        'complete_linked_bridge_pinned':True,'actual_bridge_model_cases':cases,
++        'bridge_mutation_rejections':rejected,'null_callback_no_caller_state_access':True,
++        'original_exit_function_caller_sr_region_forwarded':True,'nullable_tail_call_same_gd_frame':True,
++        'cold_binder_address':hex(binder),'cold_binder_bytes':len(binder_body),
++        'complete_linked_cold_binder_pinned':True,'cold_binder_is_instruction_modelled':False,
++        'reviewed_binder_checks':['descriptor alignment/span','magic/version','private callback code bounds',
++            'retained region admission','initially empty slot','PROFILE mode only','OCBP publication'],
++        'runtime_sd_logging_audited_by_this_check':False,'console_hitch_attribution_established':False}
++
++
++def main():
++    parser=argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('directory',type=Path);parser.add_argument('--self-test',action='store_true')
++    args=parser.parse_args()
++    try:result=check(args.directory,self_test=args.self_test)
++    except (OSError,ValueError,AssertionError,KeyError,struct.error) as e:
++        parser.exit(2,'Native loader timeline audit refused: '+str(e)+'\n')
++    print(json.dumps(result,indent=2))
++
++
++if __name__=='__main__':main()
+diff --git a/tools/check_vmu_native_persistent.py b/tools/check_vmu_native_persistent.py
+index 5f4179a..ff0d664 100644
+--- a/tools/check_vmu_native_persistent.py
++++ b/tools/check_vmu_native_persistent.py
+@@ -36,6 +36,7 @@ from check_vmu_pio_write import check_pio_entry
+ from check_vmu_native_cache_seed import audit as audit_cache_seed
+ from check_vmu_native_cache_gateway import check as check_cache_gateway
+ from check_vmu_native_irq_rearm import check as check_irq_rearm
++from check_vmu_native_loader_timeline import check as check_loader_timeline
+ from check_vmu_native_stage_stack import check as check_stage_stack
+ from check_vmu_native_stage_stack import Machine
+ from check_vmu_native_mode import audit as audit_runtime_mode
+@@ -172,6 +173,22 @@ PACED_PREPARED_PINS = {
+  '_reader_cooperative_service': ('501ea5b89ab4d8ff1b044d90f0e7b770df4b0bc60a561f96ec3ca179d28f6c83', 4),
+ }
+ 
++TIMELINE_PREPARED_PINS = {
++ '_diagnostic_end': ('e42bc56b72fbbbf375b29b50d3ccd9a12a884248e2743dfc20ceae875f00f3b7', 1432),
++ '_diagnostic_complete': ('c9917fa2da939d407c8655b9b2b58c968fbcb7db1899d1dabdf447cca448e765', 2820),
++ '_transfer_context_valid': ('e8dfc67165fff7d12a1df60ac8e5785bf83ea16b0aa2574dd6450244698112a0', 1236),
++ '_kui_vmu_native_runtime_fault': ('4bdc586daa750bebacdcf191fe21a7c30125c2a3ed34453e565280f6a1468a35', 332),
++ '.rodata': ('6a88a132d4eab4019c9d02539abc1ece85cd3de726af74a300784689ea2aa31d', 5108),
++ '_kui_vmu_native_trace_report': ('f62e00328dff4479fa2705d7ec1126cf8077d3d706c9baa1809e28b8ea434306', 1120),
++ '_trace_history': ('2634123aeadfeec9b8d97b75568f50c0854067dbe5535244354ca62977c67a55', 164),
++ '_report': ('495b4faeea4abb6ae6aa2b447e47a53d83cbf80e5c55970f4051008d2e31b813', 440),
++ '_trace_packets': ('c3fa31e8b526e3936a387bbfc3d3debcecc696fab33613f3a6b8eee1f269cdfd', 116),
++ '_kui_native_loader_timeline_visit': ('eb70c2499182c9ba9d638aa8c931cb768c8459630e56f057575d9e923e619f5c', 148),
++ '_native_loader_snapshot': ('9592778ad157ebdd8b7f2ad0fd3efe92e05b17fc78c30d61ee6a0eba1c2410a0', 368),
++ '_kui_native_loader_timeline_add': ('4d6b8073d0a1fd8de7359127083bbf20843381ed99df20a2d1c3c1f8b80d5b26', 856),
++ '_kui_native_loader_timeline_reset': ('3e45ddcf599ecf09701486d6f30bc38a34bd5122e36349922416f6ee6d07ff0c', 24),
++}
++
+ IRQ_REARM_PREPARED_PINS = {
+  '_diagnostic_end': ('f47baec4099deef08b1556d8c453e9e472d9c9b6df765c9e963f437ba0780288', 1372),
+  '_diagnostic_complete': ('bc3ea96b7a3d1e71c8a68a5df444b3ff72d4897372dc622b9859e1af1f16b644', 1680),
+@@ -705,10 +722,15 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
+         require(cooperative and not paced and not timed and irq_rearm==(1,0,0,0xfff1),
+                 'invalid IRQ rearm reader marker')
+         require(IRQ_REARM_PREPARED_PINS,'missing reviewed IRQ rearm reader pins')
++    timeline=worker[4].get('__kui_native_loader_timeline_worker')
++    if timeline is not None:
++        require(irq_rearm and timeline==(1,0,0,0xfff1),'invalid loader timeline marker')
++        require(TIMELINE_PREPARED_PINS,'missing reviewed timeline pins')
+     pins={**PREPARED_PINS,**(STALL_PREPARED_PINS if stall_marker else {}),
+           **(COOPERATIVE_PREPARED_PINS if cooperative else {}),
+           **(TIMED_PREPARED_PINS if timed else {}),**(PACED_PREPARED_PINS if paced else {}),
+-          **(IRQ_REARM_PREPARED_PINS if irq_rearm else {})}
++          **(IRQ_REARM_PREPARED_PINS if irq_rearm else {}),
++          **(TIMELINE_PREPARED_PINS if timeline else {})}
+     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
+                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
+                        ("_protected_ranges", 512), ("_protected_count", 4),
+@@ -2470,6 +2492,7 @@ def check(directory, *, self_test=False, trace_startup=None):
+     if irq_rearm:require(cooperative and not timed and not paced and irq_rearm==low_rearm==(1,0,0,0xfff1),
+                          'invalid paired IRQ rearm reader markers')
+     irq_rearm_proof=check_irq_rearm(read_elf(directory/'resident-sci.elf'),self_test=self_test)
++    timeline_proof=check_loader_timeline(directory,self_test=self_test)
+     prepared_lifetime = check_prepared_lifetime(directory, worker, binary, wire, self_test, build=base["runtime"]["build"])
+     relocations=check_worker_pointer_aliases(wire,policy,fault_capture,coherence)
+ 
+@@ -2548,6 +2571,7 @@ def check(directory, *, self_test=False, trace_startup=None):
+               "irq_rearm_reader":dict(irq_rearm_proof,paired_resident_worker=bool(irq_rearm),
+                   full_check_and_exec_catchup=bool(irq_rearm),controller_reader_service_enabled=False,
+                   rearm_and_irq_entry_counters=bool(irq_rearm)),
++              "loader_timeline":timeline_proof,
+               "timed_reader": {"enabled":bool(timed),"window_ticks":586 if timed else 0,
+                   "window_max_visits":64 if timed else 0,"blocks_per_window_max":2 if timed else 0,
+                   "read_only_clock_admission":bool(timed),"invalid_clock_single_visit":bool(timed),
+diff --git a/tools/package_vmu_native_persistent.py b/tools/package_vmu_native_persistent.py
+index c791026..263f524 100644
+--- a/tools/package_vmu_native_persistent.py
++++ b/tools/package_vmu_native_persistent.py
+@@ -75,7 +75,7 @@ def package(build,guide='broader',trace_startup=None):
+     commit=git('rev-parse','HEAD');revision=commit[:12]
+     if git('status','--porcelain'):
+         raise ValueError('Commit source changes before packaging')
+-    if guide in ('evolution-trace','a2-background','hybrid','stall','cooperative','timed','paced','irq-rearm') and trace_startup is None:
++    if guide in ('evolution-trace','a2-background','hybrid','stall','cooperative','timed','paced','irq-rearm','timeline') and trace_startup is None:
+         raise ValueError('This package requires --trace-startup with the exact original executable')
+     graphs=list(build.rglob('*.ci'))
+     if not graphs or any(not closed_callgraph(path.read_text()) for path in graphs):
+@@ -101,6 +101,8 @@ def package(build,guide='broader',trace_startup=None):
+                              not report.get('irq_rearm_reader',{}).get('complete_linked_hook_pinned') or
+                              not report.get('resolution_cache_gateway',{}).get('pure_extent_cache_scope',{}).get('enabled')):
+         raise ValueError('IRQ rearm package requires the paired actual-hook proof and pure extent cache scope')
++    if guide=='timeline' and not report.get('loader_timeline',{}).get('enabled'):
++        raise ValueError('Timeline package requires paired trace bridge and complete descriptor/BSS/stack admission')
+     entry=inspect_elf((build/'entry.elf').read_bytes(),ADDRESS,0x8c112000)
+     template=template_profile()
+     address,_=readonly_blob(stage_data,stage,'__vmu_sd_profile_blob_start',
+@@ -136,7 +138,7 @@ def package(build,guide='broader',trace_startup=None):
+                      'vmu-native-evolution-fault-test.md','vmu-native-evolution-isolation-test.md',
+                      'vmu-native-evolution-hooks-test.md','vmu-native-evolution-trace-test.md'):
+             extra['docs/'+name]=(root/'docs'/name).read_bytes()
+-        if guide in ('a2-background','hybrid','stall','cooperative','timed','paced','irq-rearm'):
++        if guide in ('a2-background','hybrid','stall','cooperative','timed','paced','irq-rearm','timeline'):
+             extra['docs/vmu-native-a2-background-test.md']=(root/'docs/vmu-native-a2-background-test.md').read_bytes()
+             extra['docs/evidence/native-a2-background-2026-10-24.json']=(root/'docs/evidence/native-a2-background-2026-10-24.json').read_bytes()
+             extra['docs/evidence/native-retry-integration-2026-10-24.json']=(root/'docs/evidence/native-retry-integration-2026-10-24.json').read_bytes()
+@@ -156,6 +158,8 @@ def package(build,guide='broader',trace_startup=None):
+             extra['docs/evidence/native-paced-reader-2026-10-24.json']=(root/'docs/evidence/native-paced-reader-2026-10-24.json').read_bytes()
+         if guide=='irq-rearm':
+             extra['docs/evidence/native-irq-rearm-2026-10-24.json']=(root/'docs/evidence/native-irq-rearm-2026-10-24.json').read_bytes()
++        if guide=='timeline':
++            extra['docs/evidence/native-loader-timeline-2026-10-24.json']=(root/'docs/evidence/native-loader-timeline-2026-10-24.json').read_bytes()
+         for name in ('native-sa2-latency-2026-10-22.json','native-optimization-sh-2026-10-22.json',
+                      'native-performance-acceptance-2026-10-23.json','native-uniform-root-family-2026-10-23.json',
+                      'native-recv-ownership-2026-10-23.json','native-older-sdk-2026-10-23.json',
+@@ -195,7 +199,9 @@ def package(build,guide='broader',trace_startup=None):
+         generic_template_is_owner_profile=False,personalization_required=True,pair_limit=180000,
+         profile=dict(embedded_address=f'0x{address:08x}',module_offset=offset,bytes=4096,
+             template_sha256=sha(template)),
+-        compatibility_claim=('Recheck native SCI level while VBR is still installed, with full CHECK/EXEC supply and IRQ/rearm counters; console performance remains unverified'
++        compatibility_claim=('Gesture-window whole-GD-call and read-chain timeline with caller/hardware context; diagnostic overhead included, console root cause remains unverified'
++            if guide=='timeline' else
++            'Recheck native SCI level while VBR is still installed, with full CHECK/EXEC supply and IRQ/rearm counters; console performance remains unverified'
+             if guide=='irq-rearm' else
+             'Sparse nonblocking CHECK, tight-loop catch-up and scoped pure extent caching; console performance remains unverified'
+             if guide=='paced' else
+@@ -254,7 +260,7 @@ def package(build,guide='broader',trace_startup=None):
+ 
+ if __name__=='__main__':
+     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('build',type=Path)
+-    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall','cooperative','open','timed','paced','irq-rearm'),default='broader')
++    parser.add_argument('--guide',choices=('broader','evolution-context','evolution-fault','evolution-isolation','evolution-hooks','evolution-trace','a2-background','hybrid','stall','cooperative','open','timed','paced','irq-rearm','timeline'),default='broader')
+     parser.add_argument('--trace-startup',type=Path)
+     try:
+         args=parser.parse_args();package(args.build,args.guide,args.trace_startup)
