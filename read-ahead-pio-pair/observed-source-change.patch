@@ -1,0 +1,352 @@
+diff --git a/docs/evidence/native-read-ahead-pio-pair-observed-2026-10-25.json b/docs/evidence/native-read-ahead-pio-pair-observed-2026-10-25.json
+new file mode 100644
+index 0000000..16e5c5d
+--- /dev/null
++++ b/docs/evidence/native-read-ahead-pio-pair-observed-2026-10-25.json
+@@ -0,0 +1,267 @@
++{
++  "schema": "kui.native.read-ahead.pio-pair-observed.v1",
++  "date": "2026-10-25",
++  "tested_source_commit": "d0aac421584cea816999a2cfa0b6390b8cf72d3e",
++  "tested_module_sha256": "f67bd688d0111733f8213bc3082387c6e4bde1c0ad41043219197df6967ac94c",
++  "tested_zip_sha256": "281f998bda92e1bf2ee7e04bb9b84d021a4f74f692876b67704089a814e9b0ff",
++  "game": "Evolution 2",
++  "status": "Successful console observation; preserve this exact performance candidate for compatibility expansion.",
++  "user_report": "I think we fixed it! I noticed a single hiccup. If there's anything else it's imperceptible. I think this could be the standard if we tested it on other games.",
++  "video": {
++    "name": "63371.mp4",
++    "bytes": 102327281,
++    "sha256": "6fa21868aa7780b3bcdbad76bc288454411533d83d3d3caeb2bb89bc9acdfa83",
++    "seconds": 105.324211,
++    "width": 1280,
++    "height": 720,
++    "all_applicable_report_pages_present": true,
++    "applicable_report_pages": 15,
++    "cycle_seconds_approx": 66,
++    "no_first_last_failure_pages_because_failures_zero": true,
++    "independent_repeated_page_transcription": true
++  },
++  "cache": {
++    "capacity_512_byte_blocks": 384,
++    "cached_feed_visits": 2264,
++    "miss_feed_visits": 0,
++    "requests_with_cached_feed": 8,
++    "producer_checked_blocks": 2230,
++    "producer_bytes": 1141760,
++    "producer_visits": 1200,
++    "heartbeat_visits": 1200,
++    "irq_visits": 0,
++    "seeks": 0,
++    "quiesces": 0,
++    "loan_resumes": 0,
++    "full": 55,
++    "extent_ends": 0,
++    "crc_errors": 0,
++    "token_errors": 0,
++    "abandoned": 0,
++    "guard_faults": 0,
++    "clock_bad": 0,
++    "pio_attempts": 2230,
++    "whole_producer_max_ticks": 2246,
++    "pio_clock_bad": 0,
++    "second_attempts": 1113,
++    "second_timing_skips": 0,
++    "single_block_max_ticks": 1128,
++    "soft_window_overruns": 0,
++    "max_aux_visit_ticks": 2258
++  },
++  "skips": {
++    "active_demand": 32,
++    "every_other_skip": 0
++  },
++  "failure_stages": {
++    "total": 0,
++    "poll": 0,
++    "take": 0,
++    "append": 0,
++    "fetch": 0,
++    "resume": 0,
++    "quiesce": 0
++  },
++  "reader": {
++    "samples": 1200,
++    "bad": 0,
++    "gap_max_ticks_hex": "3BAC",
++    "read_max_ticks_hex": "102E8",
++    "age_max_ticks_hex": "300",
++    "irq_blocks": 0,
++    "call_blocks": 2264,
++    "pio_blocks": 2228,
++    "foreign": 0,
++    "repairs": 0,
++    "overruns": 0,
++    "deferred": 0,
++    "crc_errors": 0,
++    "token_errors": 0,
++    "clock_bad": 0,
++    "irq_entries": 0,
++    "longest_lba_hex": "4E8D2",
++    "longest_sectors_hex": "49",
++    "all_rehooks_and_vbr_changes": 0
++  },
++  "timeline": {
++    "events_hex": "20EA",
++    "valid_hex": "20EA",
++    "bad": 0,
++    "epoch": 1,
++    "clock_breaks": 0,
++    "unmatched": 0,
++    "overflow": 0,
++    "saturated": 0,
++    "max_gd_call_ticks_hex": "1101",
++    "max_gd_gap_ticks_hex": "326F",
++    "max_chain_length": 1,
++    "max_chain_ticks_hex": "1036E",
++    "max_chain_inside_ticks_hex": "1CF4",
++    "stored_requests": 8,
++    "stored_calls": 8,
++    "stored_bins": 32,
++    "request_row_fields": "hex token,LBA,sectors,total_ticks,inside_GD_ticks,outside_GD_ticks,calls,guest_bytes",
++    "recent_eight_requests": [
++      [
++        "730",
++        "4E7DC",
++        "49",
++        "FDC2",
++        "1CF9",
++        "E0C9",
++        "11",
++        "24800"
++      ],
++      [
++        "789",
++        "4E825",
++        "32",
++        "9F60",
++        "13FA",
++        "8B66",
++        "C",
++        "19000"
++      ],
++      [
++        "7C5",
++        "4E857",
++        "49",
++        "FE19",
++        "1CEB",
++        "E12E",
++        "11",
++        "24800"
++      ],
++      [
++        "81E",
++        "4E8A0",
++        "32",
++        "9EF3",
++        "13FC",
++        "8AF7",
++        "C",
++        "19000"
++      ],
++      [
++        "85B",
++        "4E8D2",
++        "49",
++        "1036E",
++        "1CF4",
++        "E67A",
++        "11",
++        "24800"
++      ],
++      [
++        "8B3",
++        "4E91B",
++        "32",
++        "9F07",
++        "1401",
++        "8B06",
++        "C",
++        "19000"
++      ],
++      [
++        "8F0",
++        "4E94D",
++        "49",
++        "10361",
++        "1CED",
++        "E674",
++        "11",
++        "24800"
++      ],
++      [
++        "948",
++        "4E996",
++        "32",
++        "9A3E",
++        "13F8",
++        "8646",
++        "C",
++        "19000"
++      ]
++    ],
++    "each_request_epoch": 1,
++    "each_request_flags": 0,
++    "each_request_chain_length": 1
++  },
++  "arithmetic": {
++    "ticks_per_second": 781250,
++    "whole_producer_max_milliseconds": 2.87488,
++    "single_block_max_milliseconds": 1.44384,
++    "aux_max_milliseconds": 2.89024,
++    "controller_gap_max_milliseconds": 19.55328,
++    "reader_request_max_milliseconds": 84.8384,
++    "pending_age_max_milliseconds": 0.98304,
++    "recent_eight_total_ticks": 424514,
++    "recent_eight_inside_gd_ticks": 50100,
++    "recent_eight_outside_gd_ticks": 374414,
++    "recent_eight_calls": 116
++  },
++  "comparison": {
++    "control_source_commit": "04e204a26cfb7d5c777f40764e0b5ea14bd405e8",
++    "control_video": "63370.mp4",
++    "checked_blocks": [
++      1156,
++      2230
++    ],
++    "miss_feed_visits": [
++      251,
++      0
++    ],
++    "reader_request_max_ticks": [
++      99774,
++      66280
++    ],
++    "pending_age_max_ticks": [
++      88896,
++      768
++    ],
++    "repairs": [
++      24,
++      0
++    ],
++    "overruns": [
++      0,
++      0
++    ],
++    "abandonments": [
++      0,
++      0
++    ]
++  },
++  "interpretation": [
++    "The second-block path ran 1113 times with no measured soft-window overrun; whole producer maximum was below the 2344-tick soft window.",
++    "All eight cached requests were fed with zero cache-miss delivery visits in this capture. The cache reached capacity 55 times; one-block production previously never filled it.",
++    "The production/miss/age changes and user report support the refill-throughput hypothesis for the previously remaining hitches. They do not identify the one reported hiccup.",
++    "The 2230 producer blocks and 2228 reader PIO delta use different accounting windows; these are not evidence of lost blocks.",
++    "Request wall time includes intervals outside GD calls and is not a direct movement-stall duration.",
++    "These are sampled maxima and one diagnostic run, not a worst-case execution bound or universal game compatibility proof."
++  ],
++  "next_step": {
++    "runtime_tuning": "Preserve exact d0aac421584c producer policy and delivered module while expanding compatibility independently.",
++    "first_game": "Evolution 1",
++    "prerequisites": [
++      "Prove original SDK vector/common interrupt handler, ERI/RXI default slots, live ownership and RTS callback/frame restoration contract.",
++      "Prove enlarged 384KiB lease using original allocator and stage placement; earlier Evolution1 fixtures cover 192KiB.",
++      "Add reviewed layout support without bypassing identity, ownership, destination or lifetime guards."
++    ],
++    "following_games": [
++      "Grandia II",
++      "Sonic Adventure 2",
++      "Power Stone 2",
++      "Skies of Arcadia"
++    ],
++    "per_game_checks": [
++      "Boot and capture verified identity/route/lease",
++      "FMVs and in-engine scenes",
++      "Movement and scene/area changes",
++      "Physical A1 coexistence with virtual A2",
++      "Existing-save load, new save, full power-off and reload",
++      "Full diagnostic report cycle"
++    ],
++    "current_binary_other_game_support": false
++  }
++}
+diff --git a/docs/native-read-ahead-compatibility-plan.md b/docs/native-read-ahead-compatibility-plan.md
+new file mode 100644
+index 0000000..06a7696
+--- /dev/null
++++ b/docs/native-read-ahead-compatibility-plan.md
+@@ -0,0 +1,73 @@
++<!-- SPDX-License-Identifier: GPL-3.0-only -->
++# Native PIO-pair compatibility expansion
++
++The console observation in 63371.mp4 makes **d0aac421584c** the successful
++Evolution 2 performance checkpoint. Preserve the delivered module SHA256
++`f67bd688d0111733f8213bc3082387c6e4bde1c0ad41043219197df6967ac94c`.
++The observation and the user's single reported hiccup are recorded in
++[evidence/native-read-ahead-pio-pair-observed-2026-10-25.json](evidence/native-read-ahead-pio-pair-observed-2026-10-25.json).
++
++The measured second-block path ran 1,113 times. There were 2,230 checked
++fills, zero cache-miss delivery visits, zero abandonments and zero measured
++soft-window overruns. The largest whole producer visit was 2.87488ms.
++This is a successful diagnostic run, not a measured worst-case bound.
++
++## Separate performance policy from compatibility
++
++Keep the successful two-block admission, CRC validation, demand transport,
++SCI priority1 and existing repair limits while adding supported layouts.
++The present PIO-pair binary admits the verified Evolution 2 identity only.
++Changing or omitting `--game` does not authorize it for another title.
++
++The generic virtual-A2 Standard-reader route already supports independent
++cold SDK-family discovery. It is separate from SCI Background read-ahead.
++A successful generic A2 boot or old title-specific save test does not prove
++the new interrupt route or enlarged read-ahead lease.
++
++| Step | Games | Required evidence |
++| --- | --- | --- |
++| 1 | Evolution 2 | Retain exact successful binary; longer ordinary play and save/power-cycle checks |
++| 2 | Evolution 1 | Prove its interrupt route and 384KiB allocation/placement before building a candidate |
++| 3 | Grandia II, Sonic Adventure 2, Power Stone 2, Skies of Arcadia | Review each original SDK layout and lease, then repeat the same console checks |
++| 4 | Other native families | Extend structural discovery from reviewed families; record unsupported-family refusals |
++| Separate | Windows CE and CDDA | Preserve existing implementations and validate separately |
++
++## Minimum Evolution 1 implementation gate
++
++The original Evolution 1 executable is already available locally for analysis.
++Its earlier allocator/transfer fixtures cover a 192KiB lease. They do not
++establish the 384KiB read-ahead lease.
++
++Before enabling a new title, establish:
++
++- The original vector, common interrupt handler, default ERI/RXI callback
++  slots and the live copied vector's ownership.
++- The RTS callback ABI, preserved registers and restoration of the original
++  SDK interrupt frame on both receive and error routes.
++- The enlarged lease through the original allocator and actual stage
++  placement, with existing overlap, destination and lifetime checks.
++- Negative cases for altered code, mutable callback slots, unknown layout,
++  lost ownership, allocation failure and insufficient lifetime.
++- Host and linked-instruction checks, clean build and installer checks.
++
++Both the static admission in `src/core/native_sdk_sci_route.c` and the live
++binding/readiness in the resident must consume a reviewed layout plan.
++Adding a game hash alone is insufficient. Use the second reviewed family
++to separate the proven structural rules from Evolution 2's addresses.
++
++## Console checks for each admitted image
++
++Record exact title/revision, image format, build, reader, speed and encoding.
++Check FMVs, in-engine scenes, sustained movement, scene/area changes and
++loading transitions. Check a physical A1 with virtual A2, load an existing
++save, make a new save, power off fully, and reload it.
++
++Each timing comparison uses `--profile-runtime` and one complete report cycle
++from **CRC VALIDATED PHYSICAL READ AHEAD** until that heading returns.
++Keep the diagnostic run separate from longer ordinary save/persistence play;
++the timing run intentionally stops after approximately20seconds.
++
++Promotion to a standard native reader requires repeated console success
++across SDK families and access patterns, including saves and power cycles.
++A single successful Evolution 2 capture does not establish other games,
++other media transports or all SD-card timing behavior.

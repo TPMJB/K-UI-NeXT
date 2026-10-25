@@ -1,0 +1,15 @@
+{
+  "schema": "kui.native.read-ahead.pio-pair.console-checkpoint.v1",
+  "tested_build": "d0aac421584c",
+  "tested_source_commit": "d0aac421584cea816999a2cfa0b6390b8cf72d3e",
+  "tested_module_sha256": "f67bd688d0111733f8213bc3082387c6e4bde1c0ad41043219197df6967ac94c",
+  "observation_source_commit": "7cb93f0f4fb9bc432e430c93eeecdc700e3b628f",
+  "observation_source_tree": "220a7a9735b2c88828bb036312c3cb7e766e663c",
+  "runtime_changes": false,
+  "console_performance_verified": true,
+  "console_performance_scope": "One exact Evolution 2 image and this diagnostic window; user reports one perceptible hiccup. Other titles and long save/persistence play remain unverified for this PIO pair.",
+  "observation": "CONSOLE-PAIR-RESULTS.json",
+  "plan": "COMPATIBILITY-PLAN.md",
+  "source_bundle_prerequisite": "d0aac421584cea816999a2cfa0b6390b8cf72d3e",
+  "source_recovery": "Recover the d0aac source using the existing checkout-source.py, then git fetch /path/to/observed-source-update.bundle HEAD and git checkout --detach 7cb93f0f4fb9bc432e430c93eeecdc700e3b628f"
+}
