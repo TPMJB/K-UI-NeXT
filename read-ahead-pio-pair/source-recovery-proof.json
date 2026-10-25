@@ -1,0 +1,12 @@
+{
+  "schema": "kui.native.read-ahead.pio-pair-source-recovery.v1",
+  "source_commit": "d0aac421584cea816999a2cfa0b6390b8cf72d3e",
+  "source_tree": "e2ab8e2ad8f8e97e16cddd9aa90bb15e9a7191dc",
+  "separate_repository_and_object_database": true,
+  "starting_checkpoint": "04e204a26cfb7d5c777f40764e0b5ea14bd405e8",
+  "current_bundle_and_checkout_helper_replayed": true,
+  "tree_and_clean_checkout_verified": true,
+  "git_fsck_passed": true,
+  "helper_stdout": "Verified PIO read-ahead source d0aac421584cea816999a2cfa0b6390b8cf72d3e /workspace/scratch/da50cf175784/pio-source-check/restored-source\n",
+  "helper_stderr": "From /workspace/scratch/da50cf175784/pio-source-check/read-ahead-pio-pair/native-source-update.bundle\n * branch            HEAD       -> FETCH_HEAD\nPrevious HEAD position was 04e204a Use measured heartbeat PIO prefetch to avoid speculative DMA overruns\nHEAD is now at d0aac42 Admit a second PIO prefetch block within a measured heartbeat window\n"
+}

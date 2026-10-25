@@ -1,0 +1,15 @@
+{
+  "schema": "kui.native.read-ahead.pio-pair-candidate.v1",
+  "source_commit": "d0aac421584cea816999a2cfa0b6390b8cf72d3e",
+  "source_tree": "e2ab8e2ad8f8e97e16cddd9aa90bb15e9a7191dc",
+  "build": "d0aac421584c",
+  "module_sha256": "f67bd688d0111733f8213bc3082387c6e4bde1c0ad41043219197df6967ac94c",
+  "module_bytes": 248764,
+  "source_bundle_prerequisite": "74958b3878279fc916199a7cd330f7f17b036138",
+  "maximum_optional_blocks_per_heartbeat": 2,
+  "soft_timing_admission": true,
+  "demand_dma_unchanged": true,
+  "console_performance_verified": false,
+  "full_cycle_capture_required": true,
+  "capture_start_and_stop_heading": "CRC VALIDATED PHYSICAL READ AHEAD"
+}

@@ -1,0 +1,2217 @@
+{
+  "schema": "kui.native.persistent.probe.artifact.v1",
+  "allocator_bootstrap_audit": {
+    "schema": "kui.native.persistent.bootstrap.v1",
+    "runtime": {
+      "format": 1,
+      "build": "d0aac421584c",
+      "payload_bytes": 248700,
+      "memory_bytes": 248700,
+      "crc32": "59929a3f"
+    },
+    "module_sha256": "f67bd688d0111733f8213bc3082387c6e4bde1c0ad41043219197df6967ac94c",
+    "resident_memory_end": "0x8c007ba0",
+    "stage_memory_end": "0x8ce88008",
+    "dynamic_bootstrap": {
+      "hook": "0x8c00755c",
+      "hook_bytes": 244,
+      "dynamic_original_cell": "0x8c007b80",
+      "dynamic_original_p2": "0xac007b80",
+      "original_call": "0x8c0075b4",
+      "startup_argument_guard": {
+        "entry_r4_offset": 4,
+        "entry_r5_offset": 8,
+        "physical_return_pr_offset": 12,
+        "checked_before_initializer": true,
+        "physical_stack_low": "0x0c00c100",
+        "physical_stack_high": "0x0c00f400"
+      },
+      "inherited_frame_bytes": 52,
+      "mask_before_frame": true
+    },
+    "integer_instruction_counts": {
+      "resident-sci": 6394,
+      "stage": 36998,
+      "entry": 16
+    },
+    "sd_lease_gateway": {
+      "address": "0x8c007688",
+      "bytes": 744,
+      "declared_symbol_bytes": 752,
+      "incoming_resident_edges": 0,
+      "resident_pointer_references": 0,
+      "callgraph_reports": [
+        "resident-sci.elf.ltrans0.ltrans.ci"
+      ]
+    },
+    "gd_map_refusal_terminal": {
+      "schema": "kui.native.gd-map-refusal.v1",
+      "functions": {
+        "_native_background_map": {
+          "normalized_sha256": "4f2ee5b6686ffee94253d4a92a02b2d4769369c906598ea0949d6410567352f2",
+          "bytes": 188,
+          "typed_bindings": [
+            [
+              164,
+              "_kui_vmu_observe_boot_control",
+              0,
+              536870912,
+              4
+            ],
+            [
+              62,
+              "_kui_vmu_observe_low_failure",
+              0,
+              0,
+              2
+            ],
+            [
+              184,
+              "_map_guest",
+              0,
+              0,
+              4
+            ]
+          ]
+        },
+        "_native_resident_terminal": {
+          "normalized_sha256": "3c480406466530bec6748de2f40a8857772a3d159046db48d77c2b1ab3b7da7d",
+          "bytes": 96,
+          "typed_bindings": []
+        },
+        "_kui_vmu_observe_low_failure": {
+          "normalized_sha256": "4733a395aa815e4a3227afe93d42acaf69d9a076a84a4fe138e68874d6c6f22d",
+          "bytes": 60,
+          "typed_bindings": [
+            [
+              44,
+              "_native_resident_terminal",
+              0,
+              0,
+              4
+            ],
+            [
+              48,
+              "_kui_vmu_observe_boot_control",
+              0,
+              536870912,
+              4
+            ],
+            [
+              52,
+              "_kui_retail_async_region_storage",
+              0,
+              0,
+              4
+            ],
+            [
+              56,
+              "_retail_display_restore",
+              0,
+              0,
+              4
+            ]
+          ]
+        }
+      },
+      "cached_worker_terminal": true,
+      "resident_memory_end": "0x8c007ba0",
+      "mutation_rejections": 344,
+      "no_new_callback_or_control_abi": false,
+      "reader_profile": "background",
+      "read_ahead_lease_variant": true,
+      "guarded_lease_bytes": 393216,
+      "diagnostic_detail": "00000100",
+      "report_provenance": "differential only; existing late-heap/exit terminal uses same report"
+    },
+    "old_fixed_worker_linked": false,
+    "console_verified": false,
+    "reader_profile": "background",
+    "background_reader": {
+      "schema": "kui.native.background.audit.v1",
+      "console_execution_verified": false,
+      "resident_sha256": "563b49f290ca6b395709f29f230dca57bd6b9e843dcd29a6693f176afc249111",
+      "payload_bytes": 15132,
+      "memory_end": "0x8c007ba0",
+      "low_limit": "0x8c007ba0",
+      "region_pointer": {
+        "address": "0x8c007b34",
+        "bytes": 4,
+        "fixed_region_absent": true
+      },
+      "worker_stack_gateway": {
+        "address": "0x8c007688",
+        "allocated_bytes": 744,
+        "declared_function_bytes": 752
+      },
+      "profile": {
+        "native_background": true,
+        "sci_resume_fix": true,
+        "logical_drive_state": true,
+        "mounted_disc_check": true
+      },
+      "linked_integer_instructions": 6394,
+      "private_stack": {
+        "available_bytes": 352,
+        "worst_c_and_entry_bytes": 268,
+        "linked_library": {
+          "symbol": "___udivsi3",
+          "stack_bytes": 4,
+          "abstract_states": 84,
+          "balanced_return_paths": 2,
+          "internal_helper_window_bytes": 64,
+          "unknown_instruction_or_cycle_rejected": true
+        },
+        "additional_margin_bytes": 32,
+        "generic64_byte_library_margin_used": false,
+        "guard_bytes": 16,
+        "top_gap_bytes": 32,
+        "conservative_total_bytes": 352,
+        "remaining_bytes": 0,
+        "worst_total_bytes": 352,
+        "paths": {
+          "kui_retail_resident_dispatch": {
+            "c_bytes": 268,
+            "assembly_entry_bytes": 0,
+            "bytes": 268,
+            "path": [
+              "kui_retail_resident_dispatch(44)",
+              "kui_retail_gd_dispatch(148)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:guest(0)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:native_background_map(8)",
+              "kui_vmu_observe_low_failure(8)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:retail_display_restore(8)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:retail_display_line(52)"
+            ]
+          },
+          "kui_retail_async_irq": {
+            "c_bytes": 216,
+            "assembly_entry_bytes": 44,
+            "bytes": 260,
+            "path": [
+              "kui_retail_async_irq(20)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:deliver(8)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:deliver_work(40)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:kui_retail_cursor_feed(56)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:write_out(16)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:native_background_map(8)",
+              "kui_vmu_observe_low_failure(8)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:retail_display_restore(8)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:retail_display_line(52)"
+            ]
+          },
+          "kui_retail_menu_return": {
+            "c_bytes": 152,
+            "assembly_entry_bytes": 0,
+            "bytes": 152,
+            "path": [
+              "kui_retail_menu_return(8)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:native_reader_report(16)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:retail_display_values(76)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:retail_display_line(52)"
+            ]
+          },
+          "kui_retail_sdk_sci_dispatch": {
+            "c_bytes": 228,
+            "assembly_entry_bytes": 0,
+            "bytes": 228,
+            "path": [
+              "kui_retail_sdk_sci_dispatch(12)",
+              "kui_retail_async_irq(20)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:deliver(8)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:deliver_work(40)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:kui_retail_cursor_feed(56)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:write_out(16)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:native_background_map(8)",
+              "kui_vmu_observe_low_failure(8)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:retail_display_restore(8)",
+              "build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:retail_display_line(52)"
+            ]
+          }
+        },
+        "callback_sites": 8,
+        "nonreturning_boundaries": [
+          {
+            "function": "kui_retail_menu_return",
+            "source": "retail_resident.c",
+            "contract": "boot-ROM menu; does not return"
+          },
+          {
+            "function": "kui_vmu_observe_low_failure",
+            "source": "vmu_native_background_resident.c",
+            "contract": "validated worker terminal; private stack switch separately audited"
+          }
+        ],
+        "installer_and_worker_roots_excluded": [
+          "kui_retail_native_async_loan_begin",
+          "kui_retail_native_async_loan_end",
+          "kui_vmu_native_background_init",
+          "kui_vmu_native_background_manifest_bind",
+          "kui_vmu_observe_background_base_init",
+          "kui_vmu_observe_sd_lease"
+        ]
+      },
+      "source_contract": {
+        "geometry": {
+          "worker_bytes": 131072,
+          "lease_bytes": 393216,
+          "map_bytes": 1020,
+          "region_offset": 132096,
+          "region_bytes": 1888
+        },
+        "map_and_region_p2_copy_before_vector_publication_before_bind": true,
+        "control_and_lease_only_modes_refused": true,
+        "stage_supplies_fifth_workspace_argument": true,
+        "sha256": {
+          "include/kui/vmu_native_background.h": "c381961c108320bccbe9429da665a84d2df8691afca6633c9e24ef00fe7c7bc7",
+          "include/kui/vmu_native_async_loan.h": "aab9fe24b6482b9a60744f12ec6eb04c3a6d27820cc6438de993a50cd0789b62",
+          "src/loader/vmu_native_background_resident.c": "ab6ae312599454e4d1673f41f519e440e2aa6bde3029a9e133658aef6c86472e",
+          "src/loader/retail_resident.c": "a4ff31e714658ccd96e66465b22420c7eb5b507f3508594bf60cdc755bedbcbc",
+          "src/loader/retail_async.c": "d33fc8717d20b87735070cae2635fdf979632c48f962187f21def760a87b9645",
+          "src/loader/retail_async.h": "8eed2fcdd892e3557a2f063577bfc4f0e013481cc5e840ff625b240bfc44d930",
+          "src/loader/retail_resident.S": "343a4b306abdf57dc87db3e8f87532b3633462ab4e9348c7c18b6955588a2297",
+          "src/loader/sci_sd_bus.c": "6b4da260f43de2bb02398b88176334ef26f3512658eefa8e94f81cf2cac42dc6",
+          "src/loader/vmu_native_passive_stage.inc": "740ff098855d3541ab178009bcde5e83e28f5665c2e0c66a04a43cfd3d4446ad",
+          "src/loader/vmu_native_heap_probe_stage.c": "03de13006af194cb256c1f3252a09893ea9f11e958c9fb26167540c09c644080",
+          "src/loader/retail_stage.c": "a1d7e28f7e1d1f03302ba9ca913418ca91402287c33633cac11019416ea343f2"
+        }
+      },
+      "stage": {
+        "available": true,
+        "complete_module_audited": false,
+        "stage_sha256": "576b214a056dc0238a3e67e06f81cd2d48c995d951dbde181ebcfaa2501f7db4",
+        "workspace": "0x8ce85ae0",
+        "workspace_bytes": 1888,
+        "map": "0x8ce86460",
+        "stage_map_object_bytes": 2172,
+        "retained_map_prefix_bytes": 1020,
+        "installer_stack": "0x8ce3b060",
+        "installer_stack_bytes": 65536,
+        "generated_binder": "0x8c005c0c",
+        "embedded_resident_copies": {
+          "scif": "0x8ce2bf0c",
+          "sci": "0x8ce2fa28",
+          "ide": "0x8ce33544",
+          "scia": "0x8ce37060"
+        },
+        "tail_copy_replay": {
+          "actual_sh_cases": 12,
+          "entry": "0x8ce02030",
+          "lease_bytes": 393216,
+          "witnesses": {
+            "copy_map": "0x8ce02062",
+            "copy_region": "0x8ce02098",
+            "publish": "0x8ce020a0",
+            "bind": "0x8ce020a8",
+            "bind_success": "0x8ce020ac",
+            "relocate": "0x8ce020e6"
+          },
+          "map_copy_bytes": 1020,
+          "region_copy_bytes": 1888,
+          "map_lines_before_p2_copy": 32,
+          "region_lines_before_p2_copy": 59,
+          "actual_p2_publisher_executed": true,
+          "binder_result_must_equal_one": true,
+          "worker_relocation_preserves_tail": true,
+          "hostile_abi_callees": true,
+          "refused_mutations": [
+            "map_copy_wrong_length",
+            "region_copy_wrong_length",
+            "map_copy_wrong_alias",
+            "region_copy_wrong_offset",
+            "region_copy_wrong_source",
+            "missing_map_purge",
+            "missing_region_publication",
+            "binding_before_publication",
+            "binder_accepts_zero"
+          ]
+        },
+        "memory_end": "0x8ce88008",
+        "scope": "stage bounds/profile/workspaces; full envelope and worker audited separately"
+      },
+      "read_ahead_companion": {
+        "enabled": true,
+        "schema": "kui.native.read-ahead.audit.v1",
+        "paired_markers": true,
+        "diagnostic_capture": true,
+        "repair_diagnostic_capture": true,
+        "pio_candidate": true,
+        "pio_pair_candidate": true,
+        "pio_producer": {
+          "enabled": true,
+          "pair_profile": true,
+          "pair_candidate": true,
+          "actual_linked_producer_executed": true,
+          "tick_only": true,
+          "one_fresh_block_per_tick": false,
+          "maximum_blocks_per_visit": 2,
+          "no_optional_dma_or_new_commands": true,
+          "producer_only_timing": true,
+          "modelcases": 305,
+          "actual_linked_producer_positive_cases": 24,
+          "actual_linked_admission_refusals": 106,
+          "actual_linked_second_guard_refusals": 100,
+          "actual_linked_error_paths": 32,
+          "actual_linked_clock_cases": 37,
+          "repeated_tick_and_boundary_cases": 6,
+          "additional_instruction_truth_cases": 84,
+          "profile_marker_mutations": 7,
+          "second_elapsed_limit_ticks": 1144,
+          "second_limit_ticks": 1144,
+          "second_block_timing_admitted": true,
+          "second_limit_inclusive": true,
+          "reserve_ticks": 1200,
+          "soft_window_ticks": 2344,
+          "positive_valid_intervals_required": true,
+          "all_ordinary_guards_rechecked_before_second": true,
+          "per_block_positive_elapsed_required": true,
+          "all_admission_guards_rechecked_between_blocks": true,
+          "actual_cache_copy_before_each_validity_publication": true,
+          "first_and_second_errors_do_not_issue_stop": true,
+          "fetch_token_limit": 256,
+          "fetch_polled_true": true,
+          "metrics_offsets": [
+            80,
+            84,
+            88,
+            92,
+            96,
+            100,
+            104,
+            108
+          ],
+          "both_integer_banks_and_bl_states": true,
+          "callee_saved_and_private_stack_preserved": true,
+          "typed_low_ops": "Bounded ABI-adversarial substitutes; no low transport emulation",
+          "no_hardware_write_or_rdr_read": true,
+          "console_boot_verified": false,
+          "console_performance_verified": false
+        },
+        "artifact_sha256": {
+          "resident": "563b49f290ca6b395709f29f230dca57bd6b9e843dcd29a6693f176afc249111",
+          "worker": "c446e7ffb9435d53d622192d6f1053f4d098cc7a2921271786add926e67dc404",
+          "stage": "576b214a056dc0238a3e67e06f81cd2d48c995d951dbde181ebcfaa2501f7db4",
+          "auxiliary": "38173a58855dcb47b889a949f1f28d12748503edfe6b778fd0a9106e521c45ea"
+        },
+        "immutable_code_pin": {
+          "address": "0x8c422000",
+          "bytes": 6144,
+          "sha256": "13f3a6ee0841966d919723d68dff8909cc1326e450d63fe9d9a6f8e7f445f246"
+        },
+        "immutable_low_pins": {
+          "_deliver_work": [
+            456,
+            "73ed6d63b6e67b122d11d0185a009d2c28f81face7e99aeda639660b6eb61aeb"
+          ],
+          "_deliver": [
+            60,
+            "d32fd5a483cdffee78867c2239be72d693e1d1cc46f62e9b0ae2cda2f5e3eb46"
+          ]
+        },
+        "loan_quiesce_pin": {
+          "address": "0x8c007688",
+          "bytes": 744,
+          "sha256": "a06ecbd795204545b4df1ca6f5efc3883a0a81b4e0391b088a12388203ff376c"
+        },
+        "loan_quiesce": {
+          "actual_linked_quiesce_boundary_cases": 120,
+          "outer_non_imask15_refusals": 60,
+          "exact_section_offset_entry": "0x52",
+          "typed_auxiliary_event_arg_region_reserved_checked": true,
+          "real_pending_demand_never_quiesced": true,
+          "refused_quiesce_clears_only_owned_low_lock": true,
+          "preexisting_active_low_lock_preserved": true,
+          "null_binding_is_quiesce_success": true,
+          "success_rejoins_before_stream_busy_check": true,
+          "scope": "Actual post-admission low slice; complete pinned section and real C integration tests cover outer ownership/transport",
+          "auxiliary_target": "Typed gateway ABI substitute; actual auxiliary gateway proved independently"
+        },
+        "diagnostics": {
+          "enabled": true,
+          "schema": "kui.native.read-ahead.diagnostics.audit.v1",
+          "actual_linked_snapshot_cases": 188,
+          "instruction_truth_cases": 301,
+          "repair_counter_packed": true,
+          "actual_linked_repair_packed_word_cases": 32,
+          "public_bytes": 656,
+          "complete_context_bytes": 904,
+          "diagnostics_offset": 76,
+          "observation_offset": 752,
+          "first_offset": 360,
+          "last_offset": 508,
+          "record_bytes": 148,
+          "exact_read_only_hardware_sequence": [
+            {
+              "address": "0xffa00010",
+              "bytes": 4
+            },
+            {
+              "address": "0xffa00014",
+              "bytes": 4
+            },
+            {
+              "address": "0xffa00018",
+              "bytes": 4
+            },
+            {
+              "address": "0xffa0001c",
+              "bytes": 4
+            },
+            {
+              "address": "0xffa00040",
+              "bytes": 4
+            },
+            {
+              "address": "0xffe00000",
+              "bytes": 1
+            },
+            {
+              "address": "0xffe00004",
+              "bytes": 1
+            },
+            {
+              "address": "0xffe00008",
+              "bytes": 1
+            },
+            {
+              "address": "0xffe00010",
+              "bytes": 1
+            },
+            {
+              "address": "0xffe0001c",
+              "bytes": 1
+            },
+            {
+              "address": "0xffc00004",
+              "bytes": 1
+            },
+            {
+              "address": "0xff800030",
+              "bytes": 2
+            },
+            {
+              "address": "0xffd8000c",
+              "bytes": 4
+            }
+          ],
+          "no_rdr_read_or_hardware_write": true,
+          "complete_context_and_private_stack_writes_only": true,
+          "first_record_preserved_last_record_updated": true,
+          "out_of_range_histogram_indices_refused": true,
+          "operation_lba_argument_checked": true,
+          "actual_capture_start_clears_complete_public_prefix_only": true,
+          "actual_diagnostic_c_executed": true
+        },
+        "diagnostic_display": {
+          "all37_snapshot_words_exactly_once": true,
+          "immutable_byte_index_table": true,
+          "row_word_counts": [
+            5,
+            5,
+            5,
+            4,
+            5,
+            5,
+            5,
+            3
+          ],
+          "typed_immutable_label_pointers": 7,
+          "actual_display_execution_modelled": false
+        },
+        "geometry": {
+          "binary_sha256": "61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974",
+          "binary_bytes": 10240,
+          "relocation_sha256": "87ceef2187655c6c0bbe70d6844067785426f10afacabbab568fcf1c83cc9dfa",
+          "relocation_records": 93,
+          "link_base": "0x8c421000",
+          "relocation_span": 28672,
+          "context": "0xac421040",
+          "context_bytes": 904,
+          "public_bytes": 656,
+          "private_stack_bottom": "0xac427000",
+          "private_stack_top": "0xac428000",
+          "cache_data_bytes": 196608,
+          "lease_bytes": 393216,
+          "worker_map_region_offsets_unchanged": true,
+          "typed_low_ops": {
+            "address": 2348841684,
+            "bytes": 52,
+            "region_cell": 2348841780,
+            "functions": {
+              "_deliver_work": 2348832784,
+              "_hook": 2348832576,
+              "_unhook": 2348832676,
+              "_kui_sci_stream_fetch": 2348830028,
+              "_kui_sci_stream_poll": 2348831680,
+              "_kui_sci_stream_take": 2348831756,
+              "_kui_sci_stream_stop": 2348832348,
+              "_kui_sci_stream_busy": 2348829484,
+              "_kui_retail_cursor_feed": 2348828878
+            }
+          },
+          "physical_loads": [
+            {
+              "offset": 256,
+              "virtual": 2353139712,
+              "physical": 2353139712,
+              "first": 205656064,
+              "bytes": 64,
+              "memory": 64,
+              "flags": 4,
+              "alignment": 128
+            },
+            {
+              "offset": 320,
+              "virtual": 2890010688,
+              "physical": 2353139776,
+              "first": 205656128,
+              "bytes": 904,
+              "memory": 904,
+              "flags": 6,
+              "alignment": 128
+            },
+            {
+              "offset": 1280,
+              "virtual": 2353143808,
+              "physical": 2353143808,
+              "first": 205660160,
+              "bytes": 6144,
+              "memory": 24576,
+              "flags": 7,
+              "alignment": 128
+            }
+          ]
+        },
+        "gateway": {
+          "actual_linked_gateway_cases": 8064,
+          "all16_imasks": true,
+          "both_integer_banks": true,
+          "both_bl_states": true,
+          "owner_sr_pr_sp_and_callee_saved_preserved": true,
+          "private_stack_switch_before_c": true,
+          "busy_and_guard_checks_before_stack_writes": true,
+          "parked_owner_stack_bytes": 20,
+          "auxiliary_stack_prefix_bytes": 0,
+          "c_payload_model": "ABI-adversarial substitute; actual producer separately host-tested"
+        },
+        "private_stack": {
+          "available_bytes": 4096,
+          "worst_c_bytes": 356,
+          "library_margin_bytes": 4,
+          "explicit_margin_bytes": 64,
+          "guard_bytes": 16,
+          "top_gap_bytes": 32,
+          "total_bytes": 472,
+          "roots": {
+            "kui_native_readahead_aux_init": {
+              "bytes": 100,
+              "path": [
+                "aux:kui_native_readahead_aux_init(84)",
+                "aux:kui_native_ra_cache_init(16)"
+              ]
+            },
+            "kui_native_readahead_aux_dispatch": {
+              "bytes": 356,
+              "path": [
+                "aux:kui_native_readahead_aux_dispatch(64)",
+                "aux:src/loader/native_readahead_aux.c:producer(60)",
+                "aux:src/loader/native_readahead_aux.c:retire_spec(32)",
+                "aux:src/loader/native_readahead_aux.c:abandon(12)",
+                "low:build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:deliver_work(40)",
+                "low:build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:kui_retail_cursor_feed(56)",
+                "low:build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:write_out(16)",
+                "low:build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:native_background_map(8)",
+                "low:kui_vmu_observe_low_failure(8)",
+                "low:build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:retail_display_restore(8)",
+                "low:build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:retail_display_line(52)"
+              ]
+            }
+          },
+          "typed_low_indirect_sites": 26,
+          "missing_or_recursive_callbacks_rejected": true,
+          "all_emitted_callgraphs_closed": true,
+          "callgraph_closure_mutation_rejections": 8
+        },
+        "cold_binder": {
+          "actual_linked_cold_binder_executed": true,
+          "positive_cases": 12,
+          "malformed_descriptor_context_aux_and_init_cases": 128,
+          "omitted_activation_ocbp_rejections": 2,
+          "reviewed_body_byte_mutation_rejections": 1300,
+          "context_and_diagnostic_schema_mutation_rejections": 22,
+          "exact_instruction_literal_pins": {
+            "_native_readahead_bind": [
+              2363496940,
+              1208,
+              "e8fdbae5d43b7851901bfe8a0d313e6921446033cef06018eb0ebe934d92aeb6"
+            ],
+            "_kui_vmu_native_background_map_address": [
+              2363490468,
+              92,
+              "cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8"
+            ]
+          },
+          "p1_cache_and_p2_ram_distinct": true,
+          "cold_aux_and_cache_lines_purged": 7040,
+          "cache_data_not_initialized_or_trusted": true,
+          "context_published_before_entry": true,
+          "guards_checked_after_init": true,
+          "memcpy_memcmp_memset": "faithful bounded ABI substitutes",
+          "relocator": "exact separately tested input image/table; explicit pointer-record substitute",
+          "code_publisher": "exact owned span and cache-flush substitute; actual publisher independently audited",
+          "initializer_gateway": "strict private-SP gateway substitute; actual relocated auxiliary C init executed",
+          "actual_auxiliary_c_initializer_executed": true,
+          "diagnostic_auxiliary": true,
+          "public_prefix_bytes": 656,
+          "pio_auxiliary": true,
+          "pio_pair_auxiliary": true,
+          "complete_owned_context_bytes": 904,
+          "actual_initializer_clears_complete_public_prefix": true,
+          "actual_initializer_copies_owned_config_values_not_stage_pointer": true,
+          "actual_initializer_starts_with_no_valid_cache_blocks": true,
+          "console_boot_verified": false,
+          "console_performance_verified": false
+        },
+        "worker_binding": {
+          "actual_worker_binding_cases": 106,
+          "immutable_function_pins": {
+            "_reader_readahead_exports": [
+              2349859048,
+              160,
+              "522dbac9b85fe2b51cee66c1223eefe02bf701a6594992abcc49183641f3fc89"
+            ],
+            "_reader_readahead_visit": [
+              2349859308,
+              56,
+              "2af85f7d6a6a88765d1e8cf645b45683e794c2bf08ebca7a5c1bb6666a78186a"
+            ],
+            "_reader_cooperative_service": [
+              2349859364,
+              32,
+              "b6dade21be0807a8ac8e608abe02b70d90f2f47faa086e6396ebdad6e4cc6ca0"
+            ],
+            "_reader_readahead_failure": [
+              2349862284,
+              172,
+              "e704e2fefce22e839fb62a24a10e35c949bb2c8615f84be30367e830df8c27e2"
+            ]
+          },
+          "all_three_payload_aliases": true,
+          "highest_owned_lease_checked": true,
+          "malformed_headers_and_contexts_refused": true,
+          "both_durable_writer_busy_fields_refused": true,
+          "heartbeat_and_capture_start_arguments_checked": true,
+          "complete_public_context_bytes": 656,
+          "exact_public_boundary_and_one_word_overflow_checked": true,
+          "c_auxiliary_target": "ABI substitute; complete auxiliary gateway proved separately"
+        },
+        "linked_integer_instructions": 2750,
+        "code_byte_mutation_rejections": 6144,
+        "typed_binding_mutation_rejections": 1809,
+        "console_boot_verified": false,
+        "console_performance_verified": false
+      },
+      "self_test": {
+        "refused_mutations": [
+          "guarded_map_stack_growth",
+          "unknown_irq_callback",
+          "worker_gateway_on_gd_stack",
+          "recursive_irq_path",
+          "hidden_library_stack_alias",
+          "unbalanced_library_pop",
+          "cyclic_library_helper",
+          "library_branch_outside_window"
+        ]
+      }
+    },
+    "dynamic_bootstrap_mutation_rejections": 19
+  },
+  "module_sha256": "f67bd688d0111733f8213bc3082387c6e4bde1c0ad41043219197df6967ac94c",
+  "runtime": {
+    "format": 1,
+    "build": "d0aac421584c",
+    "payload_bytes": 248700,
+    "memory_bytes": 248700,
+    "crc32": "59929a3f"
+  },
+  "worker_bytes": 63104,
+  "worker_span": 131072,
+  "worker_stack_bytes": 4096,
+  "worker_load_policy": {
+    "cached_code": true,
+    "code_alias": 2349858816,
+    "loads": [
+      {
+        "offset": 256,
+        "virtual": 2886729728,
+        "physical": 2349858816,
+        "first": 202375168,
+        "bytes": 80,
+        "memory": 80,
+        "flags": 4,
+        "alignment": 128
+      },
+      {
+        "offset": 352,
+        "virtual": 2349858912,
+        "physical": 2349858912,
+        "first": 202375264,
+        "bytes": 62976,
+        "memory": 62976,
+        "flags": 5,
+        "alignment": 128
+      },
+      {
+        "offset": 63328,
+        "virtual": 2886792800,
+        "physical": 2349921888,
+        "first": 202438240,
+        "bytes": 32,
+        "memory": 68000,
+        "flags": 6,
+        "alignment": 128
+      }
+    ],
+    "cold_arm_stack_alias": 2886729728,
+    "runtime_stack_alias": 2349858816,
+    "runtime_stack_begin": 2349985792,
+    "runtime_stack_end": 2349989888,
+    "persistent_mutable_alias": 2886729728
+  },
+  "cached_code": true,
+  "prepared_lifetime_admission": {
+    "prepared": true,
+    "exact_linked_kernels": {
+      "_kui_vmu_native_sdk_coherence_prepare": {
+        "normalized_sha256": "52ca590c4ac48e91620888af088aa871c0dfa4476cc386a73a828fc4af94ccbc",
+        "bytes": 436,
+        "typed_pointer_bindings": 2
+      },
+      "_kui_vmu_native_fault_capture_install": {
+        "normalized_sha256": "db26024d38eaa6e0c440fdadf83df04c43a91a653ab21637e427502550726afb",
+        "bytes": 560,
+        "typed_pointer_bindings": 17
+      },
+      "_read_heap": {
+        "normalized_sha256": "b102f5d502f2a2e45998b1555e7bd6e56d2b7048059ebb9bb37ed6ee415a58cd",
+        "bytes": 104,
+        "typed_pointer_bindings": 0
+      },
+      "_stack_valid": {
+        "normalized_sha256": "f5e81a00f19db27641f67958161041e8a865061f49fd71fbe114b165b2666db6",
+        "bytes": 116,
+        "typed_pointer_bindings": 3
+      },
+      "_native_phase_span": {
+        "normalized_sha256": "eb173e6c2fcbdabc829a622ae3cf7f3430ecae15cc95e2bab92314eb885ee2f2",
+        "bytes": 136,
+        "typed_pointer_bindings": 0
+      },
+      "_diagnostic_phase_read": {
+        "normalized_sha256": "9be746502cbe97b305edc7c282c70dd68d3b6d43dfafea092fecd4d7b975fcfc",
+        "bytes": 136,
+        "typed_pointer_bindings": 0
+      },
+      "_diagnostic_gesture": {
+        "normalized_sha256": "798c8a977a6e0b1e49fca8135d6a944513c0e2c8cf5c9342f0dd0f5f291f828f",
+        "bytes": 34,
+        "typed_pointer_bindings": 0
+      },
+      "_diagnostic_phase_row": {
+        "normalized_sha256": "9d55c81d38773acb609b68c1d6684dfc6be503622f4078799864c49148f5426d",
+        "bytes": 92,
+        "typed_pointer_bindings": 2
+      },
+      "_diagnostic_sample": {
+        "normalized_sha256": "cb7e980cb399fa654e837a6896d3ec033fd9d844c8fd0a2c31c77399471411fe",
+        "bytes": 164,
+        "typed_pointer_bindings": 2
+      },
+      "_diagnostic_begin": {
+        "normalized_sha256": "3be33ddc079ec9db0760339daf470b64f4903769d66dc830e14c2fcd0008ccc1",
+        "bytes": 40,
+        "typed_pointer_bindings": 2
+      },
+      "_native_phase_word.constprop.0": {
+        "normalized_sha256": "1e94b1f6d66b2667c76e878575a2f3b2fa57f04d0d65e0e735be7b88e2b54704",
+        "bytes": 56,
+        "typed_pointer_bindings": 1
+      },
+      "_diagnostic_pair_begin": {
+        "normalized_sha256": "c579977d4365a6b01f990fc9802e6db3a3bf75ad3b9fcb10ee2ac69c10ceecde",
+        "bytes": 584,
+        "typed_pointer_bindings": 11
+      },
+      "_diagnostic_end": {
+        "normalized_sha256": "e42bc56b72fbbbf375b29b50d3ccd9a12a884248e2743dfc20ceae875f00f3b7",
+        "bytes": 1432,
+        "typed_pointer_bindings": 21
+      },
+      "_diagnostic_complete": {
+        "normalized_sha256": "fbe80a816bbf48bbef120f04eb806d331de87a1ce5bf3d5121993cb38cbd040e",
+        "bytes": 3312,
+        "typed_pointer_bindings": 134
+      },
+      "_poll_lease_valid": {
+        "normalized_sha256": "b67c432db445f780a4b2e93871f7907b7f7de1fd8c0795faf112f30fe0673302",
+        "bytes": 64,
+        "typed_pointer_bindings": 1
+      },
+      "_installed_hooks_valid": {
+        "normalized_sha256": "819cc9127506f6790fa189371f453b3474bd2b3f9e39752d43a5d8501dd2e286",
+        "bytes": 76,
+        "typed_pointer_bindings": 3
+      },
+      "_kui_vmu_native_readonly_release_check": {
+        "normalized_sha256": "87433dd479877714f7773607b751f56b629a27792417dbb31ccfa430499e1474",
+        "bytes": 588,
+        "typed_pointer_bindings": 13
+      },
+      "_hook_word": {
+        "normalized_sha256": "69410002bf135878c32df63d2459603428947eadc760aa6309775f82b8801f9c",
+        "bytes": 132,
+        "typed_pointer_bindings": 2
+      },
+      "_prepare_hook_entry": {
+        "normalized_sha256": "e46707ed62da6217391c4aee61d074980abd67826655c1b508159548cabefd74",
+        "bytes": 228,
+        "typed_pointer_bindings": 2
+      },
+      "_kui_vmu_native_lifetime_prepare": {
+        "normalized_sha256": "4691642d40ae532e2f81cfe46c3f81a019412c0da0e43fb4f7913d4a44b87312",
+        "bytes": 640,
+        "typed_pointer_bindings": 4
+      },
+      "_kui_vmu_native_passive_arm": {
+        "normalized_sha256": "8b1ad7a9ecd8a05a9cf8695d8f421c6ec8604fc8334ba29642656666574c716d",
+        "bytes": 2096,
+        "typed_pointer_bindings": 59
+      },
+      "_persistent_storage_guard": {
+        "normalized_sha256": "c51bd14af15bb22af8ad0a384c1c700a5c23a90fcd25e012ad977b7e7b77fa04",
+        "bytes": 396,
+        "typed_pointer_bindings": 21
+      },
+      "_persistent_lease": {
+        "normalized_sha256": "8658f150d0d4811335e46332a9a075f199fa8219edb5ccf1730223a4e34d78e3",
+        "bytes": 148,
+        "typed_pointer_bindings": 6
+      },
+      "_kui_vmu_native_passive_submit": {
+        "normalized_sha256": "6648f29a9c2be60b35c930d062a16d100353cbac12e485cf039f319bd742885d",
+        "bytes": 1384,
+        "typed_pointer_bindings": 44
+      },
+      "_kui_vmu_native_passive_complete": {
+        "normalized_sha256": "95a9e3ed44a3cdf947f2510c04d2382cc9c95423d53350610c2a5cff2579e5e3",
+        "bytes": 2712,
+        "typed_pointer_bindings": 52
+      },
+      "_controller_context_valid": {
+        "normalized_sha256": "e8e1eee80b1bce155a8a68c9c91229c138e017daf5bd2d880d7d51195efde2a0",
+        "bytes": 1032,
+        "typed_pointer_bindings": 6
+      },
+      "_kui_vmu_readonly_overlay_complete_absent": {
+        "normalized_sha256": "569ef7dcb97f1904c68ce440dd9a6bc3c0d143da123c0b8d37dc8c55da4f0a60",
+        "bytes": 284,
+        "typed_pointer_bindings": 3
+      },
+      "_kui_vmu_readonly_overlay_complete": {
+        "normalized_sha256": "d4fc62020bef09ab9056b5b7a16c8a47c616c446142d770d6a9e801ecf677601",
+        "bytes": 1004,
+        "typed_pointer_bindings": 9
+      },
+      "_readonly_overlay_parent_response": {
+        "normalized_sha256": "d396e68edd3158708ba5a8c9ff5235821bb62b71cc9dc40650cadb9098eaeb12",
+        "bytes": 116,
+        "typed_pointer_bindings": 1
+      },
+      "_readonly_overlay_increment": {
+        "normalized_sha256": "e3a6368a10593e4ae7510faf736d644a9d9e383e262070923241741b3f6893b1",
+        "bytes": 14,
+        "typed_pointer_bindings": 0
+      },
+      "_readonly_overlay_le32": {
+        "normalized_sha256": "1daa47eecc292df8356826c0e5a683e3a2c27cec212f901db7b1f01cf3b897df",
+        "bytes": 30,
+        "typed_pointer_bindings": 0
+      },
+      "_transfer_context_valid": {
+        "normalized_sha256": "f7723db064e47a871812211754deb4eadd35f43b3c103d376741c6abfe80f3e0",
+        "bytes": 1236,
+        "typed_pointer_bindings": 14
+      },
+      "_persistent_context_guard": {
+        "normalized_sha256": "7d7b44453ed058c85b22f3624a96001a93f68e06bd6dc581757cbff364c96df7",
+        "bytes": 132,
+        "typed_pointer_bindings": 4
+      },
+      "_kui_vmu_native_runtime_fault": {
+        "normalized_sha256": "19d5b8dd56b7f2850ab065cded240db783ed9b7a63e87b9fe11d28397b6eb40c",
+        "bytes": 332,
+        "typed_pointer_bindings": 24
+      },
+      ".rodata": {
+        "normalized_sha256": "4a9fe349145125e9ded984d76538c83b9025a447d2b188f2ec97f18f59afd42d",
+        "bytes": 5844,
+        "typed_pointer_bindings": 19
+      },
+      "_kui_vmu_native_trace_enabled": {
+        "normalized_sha256": "0a920c3cf23dad2c3aabfe188567a6d1425af67dd54b46b619555831e9748eac",
+        "bytes": 16,
+        "typed_pointer_bindings": 1
+      },
+      "_kui_vmu_native_trace_image": {
+        "normalized_sha256": "e85462a3e477dee0a0124220436dc355360013e47136f21eb8576af465cdd9a9",
+        "bytes": 60,
+        "typed_pointer_bindings": 2
+      },
+      "_kui_vmu_native_trace_point": {
+        "normalized_sha256": "47f46b3337fb28b3281e2b5d56eacd66476fd830abdf74f3a1f67dc1068fae0b",
+        "bytes": 1132,
+        "typed_pointer_bindings": 8
+      },
+      "_kui_vmu_native_trace_wait_loop": {
+        "normalized_sha256": "14823a20fee8b883e5f8e7ebd6e7e10af9715be40c12e4674d8fa89f2839adcd",
+        "bytes": 176,
+        "typed_pointer_bindings": 2
+      },
+      "_kui_vmu_native_trace_init": {
+        "normalized_sha256": "cb04d77bf380406ced6994e9daf684e88aac772eaf5dbb91c93d6e2063ba07a8",
+        "bytes": 96,
+        "typed_pointer_bindings": 5
+      },
+      "_kui_vmu_native_trace_wait_before": {
+        "normalized_sha256": "e9b3f06c9f25ba26990d028291ee7c37f06e4fae6df7069ac0086d316321b5d9",
+        "bytes": 152,
+        "typed_pointer_bindings": 2
+      },
+      "_kui_vmu_native_trace_frame_entry": {
+        "normalized_sha256": "24be2fc972ae425d21e9fd5a0b8ad551f1f64bc20c8d7cb9118c00818bba1111",
+        "bytes": 164,
+        "typed_pointer_bindings": 2
+      },
+      "_kui_vmu_native_trace_report": {
+        "normalized_sha256": "157922428e1b3091cdf82322a1abb5a8d6191de5204eea6d7554f9cbde7ac9fa",
+        "bytes": 1120,
+        "typed_pointer_bindings": 52
+      },
+      "_kui_vmu_native_trace_wait_after": {
+        "normalized_sha256": "36746417db83b1f0060aacf65c6ad9fb76ce55aea985779d0d1244b70c6f30e6",
+        "bytes": 180,
+        "typed_pointer_bindings": 2
+      },
+      "_kui_vmu_native_trace_game": {
+        "normalized_sha256": "367d93d9d799bac69baf843535f58f139cac582df3d494ff5e4e4721ece346e3",
+        "bytes": 112,
+        "typed_pointer_bindings": 3
+      },
+      "_trace_history": {
+        "normalized_sha256": "f64fc4c7572f10c9fb3feb18031c0864148c89b1093a80eb63e232265a23fa27",
+        "bytes": 164,
+        "typed_pointer_bindings": 4
+      },
+      "_report": {
+        "normalized_sha256": "46c412fb6ae18186ad63ed87985e26d74e5567f8d22a930146a96d9168f67c37",
+        "bytes": 440,
+        "typed_pointer_bindings": 27
+      },
+      "_kui_vmu_native_trace_failure": {
+        "normalized_sha256": "bc5de95cdeaf5c8bbb975302655c91ac13a6e8058655665651019a647c655931",
+        "bytes": 120,
+        "typed_pointer_bindings": 6
+      },
+      "_trace_row.constprop.0": {
+        "normalized_sha256": "9d55c81d38773acb609b68c1d6684dfc6be503622f4078799864c49148f5426d",
+        "bytes": 92,
+        "typed_pointer_bindings": 2
+      },
+      "_trace_packets": {
+        "normalized_sha256": "75312cc024c9d433b226c53b54eb92dbd1363579102b5dc1a9d83c3be19dda9b",
+        "bytes": 116,
+        "typed_pointer_bindings": 4
+      },
+      "_kui_vmu_native_trace_irq": {
+        "normalized_sha256": "31b72b692190f12dabe3bee1767a9d43913918730d08b7c7c802bea816c8177e",
+        "bytes": 14,
+        "typed_pointer_bindings": 0
+      },
+      "_reader_capture_region": {
+        "normalized_sha256": "807f414ae76d5870a482e7952706e56e9f652c5168b3feb8db4316a4f827406c",
+        "bytes": 100,
+        "typed_pointer_bindings": 1
+      },
+      "_reader_cooperative_service": {
+        "normalized_sha256": "893c8094dbf3c0c0924711f02b67c739ad8f69c7286c21a93cc60d347be90e68",
+        "bytes": 32,
+        "typed_pointer_bindings": 2
+      },
+      "_kui_native_loader_timeline_visit": {
+        "normalized_sha256": "eb70c2499182c9ba9d638aa8c931cb768c8459630e56f057575d9e923e619f5c",
+        "bytes": 148,
+        "typed_pointer_bindings": 5
+      },
+      "_native_loader_snapshot": {
+        "normalized_sha256": "9592778ad157ebdd8b7f2ad0fd3efe92e05b17fc78c30d61ee6a0eba1c2410a0",
+        "bytes": 368,
+        "typed_pointer_bindings": 4
+      },
+      "_kui_native_loader_timeline_add": {
+        "normalized_sha256": "4d6b8073d0a1fd8de7359127083bbf20843381ed99df20a2d1c3c1f8b80d5b26",
+        "bytes": 856,
+        "typed_pointer_bindings": 8
+      },
+      "_kui_native_loader_timeline_reset": {
+        "normalized_sha256": "3e45ddcf599ecf09701486d6f30bc38a34bd5122e36349922416f6ee6d07ff0c",
+        "bytes": 24,
+        "typed_pointer_bindings": 1
+      }
+    },
+    "build_identity": "d0aac421584c",
+    "read_ahead_diagnostic_companion_required": true,
+    "read_ahead_pio_companion_required": true,
+    "read_ahead_pio_pair_companion_required": true,
+    "constant_build_identity_bound_to_verified_runtime": true,
+    "identity_words": 8,
+    "protected_interval_limit": 64,
+    "hook_word_limit": 32,
+    "free_node_limit": 1024,
+    "full_dynamic_free_list_each_release": true,
+    "full_storage_guards_before_and_after_loan": true,
+    "emitted_callgraph_bound": true,
+    "mutation_rejections": 161,
+    "controller_fastlane": {
+      "source_word_limit": 32,
+      "main_controller_limit": 4,
+      "private_pair_bytes": 188,
+      "original_dma_unchanged": true,
+      "mixed_main_queries": "B-D INFO/ALLINFO; A controller GETCOND required",
+      "profile_uses_same_fast_lane": true,
+      "optional_phase_private_bytes": 976,
+      "phase_ring_records": 16,
+      "publication": "one parent-A presence byte after whole-batch validation",
+      "full_storage_guards_unchanged": true,
+      "synthetic_read_count_is_not_hardware_time": true
+    },
+    "hooks_only": {
+      "helper_instruction_cases": 240,
+      "selector_instruction_cases": 80,
+      "mutation_rejections": 4,
+      "actual_callees_only": true,
+      "no_backend_or_sd_call": true,
+      "no_parent_advertisement": true,
+      "physical_a1_replies_preserved": true,
+      "virtual_address": 2,
+      "only_filtered_a2_four_byte_headers_changed": true
+    },
+    "retry_publication": {
+      "linked_instruction_cases": 44,
+      "retry_then_success_cases": 6,
+      "mutation_rejections": 4,
+      "virtual_address": 2,
+      "physical_a1_unchanged": true,
+      "retry_header_only_publication": true,
+      "exact_endpoint_length_and_command_gates": true,
+      "authored_backend_handler": true,
+      "storage_or_sdk_retry_scheduling_proved": false
+    }
+  },
+  "reader_stall_capture": {
+    "enabled": true,
+    "paired_resident_worker": true,
+    "private_worker_state_bytes": 508,
+    "diagnostic_sd_log_writes": false,
+    "console_root_cause_established": false
+  },
+  "cooperative_reader": {
+    "enabled": true,
+    "service_enabled": false,
+    "pump_blocks_per_visit": 0,
+    "foreground_catchup_changed": false,
+    "service_after_physical_controller_proof": false,
+    "completed_request_timing": true,
+    "console_performance_verified": false
+  },
+  "paced_reader": {
+    "enabled": false,
+    "paired_resident_worker": false,
+    "tight_check_polls": 0,
+    "near_scanline_delta_max": 0,
+    "ordinary_check_waits": null,
+    "exec_catchup_blocks": [],
+    "irq_batch_limit": 0,
+    "pio_blocks_per_entry_max": 0,
+    "new_resident_ram_bytes": 0,
+    "controller_reader_service_enabled": null,
+    "console_performance_verified": false
+  },
+  "irq_rearm_reader": {
+    "enabled": true,
+    "reader_sci_level": 1,
+    "sdk_callback_route": true,
+    "raw_vbr_rearm": false,
+    "console_performance_verified": false,
+    "paired_resident_worker": true,
+    "full_check_and_exec_catchup": true,
+    "controller_reader_service_enabled": false,
+    "rearm_and_irq_entry_counters": true
+  },
+  "loader_timeline": {
+    "enabled": true,
+    "paired_resident_worker": true,
+    "descriptor_address": "0x8c10f648",
+    "sdk_sci_route_variant": true,
+    "sdk_sci_resident_callback_worker_stage_paired": true,
+    "read_ahead_variant": true,
+    "read_ahead_diagnostic_companion_required": true,
+    "read_ahead_pio_companion_required": true,
+    "read_ahead_pio_pair_companion_required": true,
+    "descriptor_bytes": 12,
+    "trace_descriptor_bytes_unchanged": 40,
+    "callback_address": "0x8c103390",
+    "callback_bytes": 148,
+    "private_state": {
+      "_native_loader_timeline": {
+        "address": "0xac113ff4",
+        "bytes": 3420
+      },
+      "_native_loader_event": {
+        "address": "0xac113fb4",
+        "bytes": 64
+      },
+      "_native_loader_clock": {
+        "address": "0xac113fa0",
+        "bytes": 20
+      }
+    },
+    "private_state_bytes": 3504,
+    "division_helper": {
+      "linked": false,
+      "reciprocal_bin_body_pinned": true
+    },
+    "private_p2_nobits_only": true,
+    "bridge_address": "0x8c006f18",
+    "bridge_bytes": 36,
+    "complete_linked_bridge_pinned": true,
+    "actual_bridge_model_cases": 480,
+    "original_bridge_instruction_bytes_unchanged": true,
+    "exact_typed_low_bindings_pinned": true,
+    "bridge_mutation_rejections": 2,
+    "null_callback_no_caller_state_access": true,
+    "original_exit_function_caller_sr_region_forwarded": true,
+    "nullable_tail_call_same_gd_frame": true,
+    "cold_binder_address": "0x8ce00594",
+    "cold_binder_bytes": 180,
+    "complete_linked_cold_binder_pinned": true,
+    "cold_binder_is_instruction_modelled": false,
+    "reviewed_binder_checks": [
+      "descriptor alignment/span",
+      "magic/version",
+      "private callback code bounds",
+      "retained region admission",
+      "initially empty slot",
+      "PROFILE mode only",
+      "OCBP publication"
+    ],
+    "runtime_sd_logging_audited_by_this_check": false,
+    "console_hitch_attribution_established": false
+  },
+  "sdk_sci_route": {
+    "enabled": true,
+    "paired_sdk_sci_markers": true,
+    "immutable_descriptor_bound": true,
+    "callback_private_stack_prefix_bytes": 0,
+    "sdk_owner_stack_save_bytes": 16,
+    "cold_binder_and_admission_pins": {
+      "_native_sdk_sci_route_bind": [
+        2363496248,
+        692,
+        "06e1614361b740747ec2137ff2251e20d1dbf094fce4ce9ee85374aca860c5b3"
+      ],
+      "_kui_native_sdk_sci_route_admit": [
+        2363571736,
+        800,
+        "4e6ef241b9def59fa9deafd03a6554fdc1e460780d25fbfb086d7deab30ac0fe"
+      ]
+    },
+    "cold_binder_instruction_modelled": true,
+    "cold_binder_execution": {
+      "actual_linked_cold_binder_executed": true,
+      "positive_cases": 16,
+      "malformed_descriptor_or_context_cases": 28,
+      "omitted_ocbp_mutation_rejections": 4,
+      "selected_async_bound_checked": true,
+      "code_end_and_limit_minus4_admitted": true,
+      "code_end_minus4_and_limit_refused": true,
+      "p1_writeback_cache_and_p2_ram_distinct": true,
+      "full_cacheline_writeback_and_sentinel_preserved": true,
+      "cookie_published_last": true,
+      "pure_admission_call": "typed ABI substitute; actual pure helper separately host-tested",
+      "memcpy_memcmp": "faithful bounded ABI substitutes",
+      "console_performance_verified": false
+    },
+    "cold_binder_source_reviewed": true,
+    "read_ahead_companion_required": true,
+    "read_ahead_diagnostic_companion_required": true,
+    "read_ahead_pio_companion_required": true,
+    "read_ahead_pio_pair_companion_required": true,
+    "cold_binder_source_sha256": "defe033fe3b9723983c7682b52671abddb869768934380d93085ec445423976a",
+    "immutable_function_pins": {
+      "_sdk_sci_ready": [
+        2348832496,
+        80,
+        "cc136e30a9192db0ee681a5fd1823950d828b6e542eb2024d88afa29cc0dffc6"
+      ],
+      "_hook": [
+        2348832576,
+        104,
+        "404d6102f077b57e7ca7345169940eb3498b4b7d87d34af29e40b03a25dbe779"
+      ],
+      "_unhook": [
+        2348832676,
+        68,
+        "c2dbf8b636eb9c82b63902a0879c108588a0d591e2155df6c0bb7fd607e1cfab"
+      ],
+      "_kui_retail_sdk_sci_dispatch": [
+        2348839636,
+        124,
+        "c3889fffbfc64eacd9699148765783812c3d5841334fed483024bdb2ae7b57e3"
+      ],
+      "_kui_retail_sdk_sci_entry": [
+        2348840024,
+        152,
+        "62b195c002f1a9ad8a06a165a372ae4cafc47e35809af25064de32c6df25f023"
+      ]
+    },
+    "callback_instruction_cases": 960,
+    "hook_ownership_instruction_cases": 3584,
+    "unhook_ownership_instruction_cases": 3584,
+    "dispatcher_instruction_cases": 8960,
+    "live_route_loss_transition_cases": 6144,
+    "mutation_rejections": 2044,
+    "all_16_sdk_caller_imasks_checked": true,
+    "both_gpr_banks_checked": true,
+    "sdk_original_sr_sp_pr_r4_and_callee_saved_preserved": true,
+    "busy_low_stack_never_entered": true,
+    "bad_guard_forwarded_without_c": true,
+    "default_callback_tail_forwarded": true,
+    "bootstrap_priority_zero": true,
+    "retained_priority_one": true,
+    "vbr_and_both_sdk_slots_rechecked": true,
+    "no_vbr_write_or_raw_rte_entry": true,
+    "no_fpu_state_changes": true,
+    "native_deep_reader_c_payload_model": "ABI-adversarial substitute",
+    "sdk_full_fpu_context_model": "owned by SDK, outside this bounded model",
+    "console_cause_confirmed": false,
+    "console_performance_verified": false,
+    "original_sdk_dispatch": {
+      "actual_sdk_integer_dispatch_to_linked_callback_cases": 128,
+      "exact_external_owner_source_and_program_sha_checked": true,
+      "actual_sdk_event_table_lookup_and_jsr_executed": true,
+      "return_to_sdk_continuation_and_default_forward_checked": true,
+      "full_sdk_fpu_prologue_and_epilogue_executed": false,
+      "native_dispatch_c_payload": "ABI-adversarial substitute",
+      "console_performance_verified": false
+    }
+  },
+  "read_ahead": {
+    "enabled": true,
+    "schema": "kui.native.read-ahead.audit.v1",
+    "paired_markers": true,
+    "diagnostic_capture": true,
+    "repair_diagnostic_capture": true,
+    "pio_candidate": true,
+    "pio_pair_candidate": true,
+    "pio_producer": {
+      "enabled": true,
+      "pair_profile": true,
+      "pair_candidate": true,
+      "actual_linked_producer_executed": true,
+      "tick_only": true,
+      "one_fresh_block_per_tick": false,
+      "maximum_blocks_per_visit": 2,
+      "no_optional_dma_or_new_commands": true,
+      "producer_only_timing": true,
+      "modelcases": 305,
+      "actual_linked_producer_positive_cases": 24,
+      "actual_linked_admission_refusals": 106,
+      "actual_linked_second_guard_refusals": 100,
+      "actual_linked_error_paths": 32,
+      "actual_linked_clock_cases": 37,
+      "repeated_tick_and_boundary_cases": 6,
+      "additional_instruction_truth_cases": 84,
+      "profile_marker_mutations": 7,
+      "second_elapsed_limit_ticks": 1144,
+      "second_limit_ticks": 1144,
+      "second_block_timing_admitted": true,
+      "second_limit_inclusive": true,
+      "reserve_ticks": 1200,
+      "soft_window_ticks": 2344,
+      "positive_valid_intervals_required": true,
+      "all_ordinary_guards_rechecked_before_second": true,
+      "per_block_positive_elapsed_required": true,
+      "all_admission_guards_rechecked_between_blocks": true,
+      "actual_cache_copy_before_each_validity_publication": true,
+      "first_and_second_errors_do_not_issue_stop": true,
+      "fetch_token_limit": 256,
+      "fetch_polled_true": true,
+      "metrics_offsets": [
+        80,
+        84,
+        88,
+        92,
+        96,
+        100,
+        104,
+        108
+      ],
+      "both_integer_banks_and_bl_states": true,
+      "callee_saved_and_private_stack_preserved": true,
+      "typed_low_ops": "Bounded ABI-adversarial substitutes; no low transport emulation",
+      "no_hardware_write_or_rdr_read": true,
+      "console_boot_verified": false,
+      "console_performance_verified": false
+    },
+    "artifact_sha256": {
+      "resident": "563b49f290ca6b395709f29f230dca57bd6b9e843dcd29a6693f176afc249111",
+      "worker": "c446e7ffb9435d53d622192d6f1053f4d098cc7a2921271786add926e67dc404",
+      "stage": "576b214a056dc0238a3e67e06f81cd2d48c995d951dbde181ebcfaa2501f7db4",
+      "auxiliary": "38173a58855dcb47b889a949f1f28d12748503edfe6b778fd0a9106e521c45ea"
+    },
+    "immutable_code_pin": {
+      "address": "0x8c422000",
+      "bytes": 6144,
+      "sha256": "13f3a6ee0841966d919723d68dff8909cc1326e450d63fe9d9a6f8e7f445f246"
+    },
+    "immutable_low_pins": {
+      "_deliver_work": [
+        456,
+        "73ed6d63b6e67b122d11d0185a009d2c28f81face7e99aeda639660b6eb61aeb"
+      ],
+      "_deliver": [
+        60,
+        "d32fd5a483cdffee78867c2239be72d693e1d1cc46f62e9b0ae2cda2f5e3eb46"
+      ]
+    },
+    "loan_quiesce_pin": {
+      "address": "0x8c007688",
+      "bytes": 744,
+      "sha256": "a06ecbd795204545b4df1ca6f5efc3883a0a81b4e0391b088a12388203ff376c"
+    },
+    "loan_quiesce": {
+      "actual_linked_quiesce_boundary_cases": 120,
+      "outer_non_imask15_refusals": 60,
+      "exact_section_offset_entry": "0x52",
+      "typed_auxiliary_event_arg_region_reserved_checked": true,
+      "real_pending_demand_never_quiesced": true,
+      "refused_quiesce_clears_only_owned_low_lock": true,
+      "preexisting_active_low_lock_preserved": true,
+      "null_binding_is_quiesce_success": true,
+      "success_rejoins_before_stream_busy_check": true,
+      "scope": "Actual post-admission low slice; complete pinned section and real C integration tests cover outer ownership/transport",
+      "auxiliary_target": "Typed gateway ABI substitute; actual auxiliary gateway proved independently"
+    },
+    "diagnostics": {
+      "enabled": true,
+      "schema": "kui.native.read-ahead.diagnostics.audit.v1",
+      "actual_linked_snapshot_cases": 188,
+      "instruction_truth_cases": 301,
+      "repair_counter_packed": true,
+      "actual_linked_repair_packed_word_cases": 32,
+      "public_bytes": 656,
+      "complete_context_bytes": 904,
+      "diagnostics_offset": 76,
+      "observation_offset": 752,
+      "first_offset": 360,
+      "last_offset": 508,
+      "record_bytes": 148,
+      "exact_read_only_hardware_sequence": [
+        {
+          "address": "0xffa00010",
+          "bytes": 4
+        },
+        {
+          "address": "0xffa00014",
+          "bytes": 4
+        },
+        {
+          "address": "0xffa00018",
+          "bytes": 4
+        },
+        {
+          "address": "0xffa0001c",
+          "bytes": 4
+        },
+        {
+          "address": "0xffa00040",
+          "bytes": 4
+        },
+        {
+          "address": "0xffe00000",
+          "bytes": 1
+        },
+        {
+          "address": "0xffe00004",
+          "bytes": 1
+        },
+        {
+          "address": "0xffe00008",
+          "bytes": 1
+        },
+        {
+          "address": "0xffe00010",
+          "bytes": 1
+        },
+        {
+          "address": "0xffe0001c",
+          "bytes": 1
+        },
+        {
+          "address": "0xffc00004",
+          "bytes": 1
+        },
+        {
+          "address": "0xff800030",
+          "bytes": 2
+        },
+        {
+          "address": "0xffd8000c",
+          "bytes": 4
+        }
+      ],
+      "no_rdr_read_or_hardware_write": true,
+      "complete_context_and_private_stack_writes_only": true,
+      "first_record_preserved_last_record_updated": true,
+      "out_of_range_histogram_indices_refused": true,
+      "operation_lba_argument_checked": true,
+      "actual_capture_start_clears_complete_public_prefix_only": true,
+      "actual_diagnostic_c_executed": true
+    },
+    "diagnostic_display": {
+      "all37_snapshot_words_exactly_once": true,
+      "immutable_byte_index_table": true,
+      "row_word_counts": [
+        5,
+        5,
+        5,
+        4,
+        5,
+        5,
+        5,
+        3
+      ],
+      "typed_immutable_label_pointers": 7,
+      "actual_display_execution_modelled": false
+    },
+    "geometry": {
+      "binary_sha256": "61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974",
+      "binary_bytes": 10240,
+      "relocation_sha256": "87ceef2187655c6c0bbe70d6844067785426f10afacabbab568fcf1c83cc9dfa",
+      "relocation_records": 93,
+      "link_base": "0x8c421000",
+      "relocation_span": 28672,
+      "context": "0xac421040",
+      "context_bytes": 904,
+      "public_bytes": 656,
+      "private_stack_bottom": "0xac427000",
+      "private_stack_top": "0xac428000",
+      "cache_data_bytes": 196608,
+      "lease_bytes": 393216,
+      "worker_map_region_offsets_unchanged": true,
+      "typed_low_ops": {
+        "address": 2348841684,
+        "bytes": 52,
+        "region_cell": 2348841780,
+        "functions": {
+          "_deliver_work": 2348832784,
+          "_hook": 2348832576,
+          "_unhook": 2348832676,
+          "_kui_sci_stream_fetch": 2348830028,
+          "_kui_sci_stream_poll": 2348831680,
+          "_kui_sci_stream_take": 2348831756,
+          "_kui_sci_stream_stop": 2348832348,
+          "_kui_sci_stream_busy": 2348829484,
+          "_kui_retail_cursor_feed": 2348828878
+        }
+      },
+      "physical_loads": [
+        {
+          "offset": 256,
+          "virtual": 2353139712,
+          "physical": 2353139712,
+          "first": 205656064,
+          "bytes": 64,
+          "memory": 64,
+          "flags": 4,
+          "alignment": 128
+        },
+        {
+          "offset": 320,
+          "virtual": 2890010688,
+          "physical": 2353139776,
+          "first": 205656128,
+          "bytes": 904,
+          "memory": 904,
+          "flags": 6,
+          "alignment": 128
+        },
+        {
+          "offset": 1280,
+          "virtual": 2353143808,
+          "physical": 2353143808,
+          "first": 205660160,
+          "bytes": 6144,
+          "memory": 24576,
+          "flags": 7,
+          "alignment": 128
+        }
+      ]
+    },
+    "gateway": {
+      "actual_linked_gateway_cases": 8064,
+      "all16_imasks": true,
+      "both_integer_banks": true,
+      "both_bl_states": true,
+      "owner_sr_pr_sp_and_callee_saved_preserved": true,
+      "private_stack_switch_before_c": true,
+      "busy_and_guard_checks_before_stack_writes": true,
+      "parked_owner_stack_bytes": 20,
+      "auxiliary_stack_prefix_bytes": 0,
+      "c_payload_model": "ABI-adversarial substitute; actual producer separately host-tested"
+    },
+    "private_stack": {
+      "available_bytes": 4096,
+      "worst_c_bytes": 356,
+      "library_margin_bytes": 4,
+      "explicit_margin_bytes": 64,
+      "guard_bytes": 16,
+      "top_gap_bytes": 32,
+      "total_bytes": 472,
+      "roots": {
+        "kui_native_readahead_aux_init": {
+          "bytes": 100,
+          "path": [
+            "aux:kui_native_readahead_aux_init(84)",
+            "aux:kui_native_ra_cache_init(16)"
+          ]
+        },
+        "kui_native_readahead_aux_dispatch": {
+          "bytes": 356,
+          "path": [
+            "aux:kui_native_readahead_aux_dispatch(64)",
+            "aux:src/loader/native_readahead_aux.c:producer(60)",
+            "aux:src/loader/native_readahead_aux.c:retire_spec(32)",
+            "aux:src/loader/native_readahead_aux.c:abandon(12)",
+            "low:build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:deliver_work(40)",
+            "low:build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:kui_retail_cursor_feed(56)",
+            "low:build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:write_out(16)",
+            "low:build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:native_background_map(8)",
+            "low:kui_vmu_observe_low_failure(8)",
+            "low:build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:retail_display_restore(8)",
+            "low:build/native-ra-pio-pair-final/resident-sci.elf.ltrans0.o:retail_display_line(52)"
+          ]
+        }
+      },
+      "typed_low_indirect_sites": 26,
+      "missing_or_recursive_callbacks_rejected": true,
+      "all_emitted_callgraphs_closed": true,
+      "callgraph_closure_mutation_rejections": 8
+    },
+    "cold_binder": {
+      "actual_linked_cold_binder_executed": true,
+      "positive_cases": 12,
+      "malformed_descriptor_context_aux_and_init_cases": 128,
+      "omitted_activation_ocbp_rejections": 2,
+      "reviewed_body_byte_mutation_rejections": 1300,
+      "context_and_diagnostic_schema_mutation_rejections": 22,
+      "exact_instruction_literal_pins": {
+        "_native_readahead_bind": [
+          2363496940,
+          1208,
+          "e8fdbae5d43b7851901bfe8a0d313e6921446033cef06018eb0ebe934d92aeb6"
+        ],
+        "_kui_vmu_native_background_map_address": [
+          2363490468,
+          92,
+          "cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8"
+        ]
+      },
+      "p1_cache_and_p2_ram_distinct": true,
+      "cold_aux_and_cache_lines_purged": 7040,
+      "cache_data_not_initialized_or_trusted": true,
+      "context_published_before_entry": true,
+      "guards_checked_after_init": true,
+      "memcpy_memcmp_memset": "faithful bounded ABI substitutes",
+      "relocator": "exact separately tested input image/table; explicit pointer-record substitute",
+      "code_publisher": "exact owned span and cache-flush substitute; actual publisher independently audited",
+      "initializer_gateway": "strict private-SP gateway substitute; actual relocated auxiliary C init executed",
+      "actual_auxiliary_c_initializer_executed": true,
+      "diagnostic_auxiliary": true,
+      "public_prefix_bytes": 656,
+      "pio_auxiliary": true,
+      "pio_pair_auxiliary": true,
+      "complete_owned_context_bytes": 904,
+      "actual_initializer_clears_complete_public_prefix": true,
+      "actual_initializer_copies_owned_config_values_not_stage_pointer": true,
+      "actual_initializer_starts_with_no_valid_cache_blocks": true,
+      "console_boot_verified": false,
+      "console_performance_verified": false
+    },
+    "worker_binding": {
+      "actual_worker_binding_cases": 106,
+      "immutable_function_pins": {
+        "_reader_readahead_exports": [
+          2349859048,
+          160,
+          "522dbac9b85fe2b51cee66c1223eefe02bf701a6594992abcc49183641f3fc89"
+        ],
+        "_reader_readahead_visit": [
+          2349859308,
+          56,
+          "2af85f7d6a6a88765d1e8cf645b45683e794c2bf08ebca7a5c1bb6666a78186a"
+        ],
+        "_reader_cooperative_service": [
+          2349859364,
+          32,
+          "b6dade21be0807a8ac8e608abe02b70d90f2f47faa086e6396ebdad6e4cc6ca0"
+        ],
+        "_reader_readahead_failure": [
+          2349862284,
+          172,
+          "e704e2fefce22e839fb62a24a10e35c949bb2c8615f84be30367e830df8c27e2"
+        ]
+      },
+      "all_three_payload_aliases": true,
+      "highest_owned_lease_checked": true,
+      "malformed_headers_and_contexts_refused": true,
+      "both_durable_writer_busy_fields_refused": true,
+      "heartbeat_and_capture_start_arguments_checked": true,
+      "complete_public_context_bytes": 656,
+      "exact_public_boundary_and_one_word_overflow_checked": true,
+      "c_auxiliary_target": "ABI substitute; complete auxiliary gateway proved separately"
+    },
+    "linked_integer_instructions": 2750,
+    "code_byte_mutation_rejections": 6144,
+    "typed_binding_mutation_rejections": 1809,
+    "console_boot_verified": false,
+    "console_performance_verified": false
+  },
+  "sci_priority7": {
+    "enabled": false,
+    "paired_resident_worker_rehook": false,
+    "sci_priority": 1,
+    "caller_sr_changed": false,
+    "check_exec_irq_work_budgets_changed": false,
+    "console_performance_verified": false
+  },
+  "timed_reader": {
+    "enabled": false,
+    "window_ticks": 0,
+    "window_max_visits": 0,
+    "blocks_per_window_max": 0,
+    "read_only_clock_admission": false,
+    "invalid_clock_single_visit": false,
+    "checks_deadline_between_visits": false,
+    "hard_elapsed_deadline": false
+  },
+  "failure_only_gateways": {
+    "modeled_cases": 3840,
+    "mutation_rejections": 22,
+    "owner_data_writes": 0,
+    "allocation_owner_reads": 1,
+    "runtime_report_is_noreturn": true
+  },
+  "private_stack_guard": {
+    "instruction_cases": 800,
+    "mutation_rejections": 1,
+    "cold_arm_alias": "P2",
+    "armed_runtime_alias": "P1",
+    "raw_canary_alias_checked": true,
+    "guard_words": 16,
+    "guard_border_bytes": 256,
+    "owner_writes": 0
+  },
+  "compiled_owner_reader": {
+    "instruction_cases": 264,
+    "mutation_rejections": 2,
+    "width": 4,
+    "source_loaded_only_after_full_predicate": true,
+    "mmio_addresses": [
+      2690608132,
+      2690608144,
+      2690608148,
+      2690608152
+    ]
+  },
+  "optional_fault_capture": {
+    "schema": "kui.native.fault-capture-gateway.v1",
+    "instruction_cases": 432,
+    "mutation_rejections": 57,
+    "redundant_early_stack_restores": [],
+    "publication_cases": 5,
+    "publication_from_p2_after_two_operand_cache_purges": true,
+    "selected_expevt": [
+      "0xe0",
+      "0x100",
+      "0x180",
+      "0x1a0"
+    ],
+    "nonfatal_exact_gpr_and_sr_preservation": true,
+    "changed_sdk_callback_chained": true,
+    "interrupted_stack_accesses": 0,
+    "new_timer_or_irq_handler": false,
+    "vbr_replaced": false,
+    "hardware_freeze_reproduced": false,
+    "available": true,
+    "mode": "PROFILE; exact Evolution revision only",
+    "publisher_p2_reference_offset": 56524,
+    "publisher_p2_reference_value": 2886786256,
+    "verified_zero_stack_assembly": [
+      "kui_vmu_native_fault_capture_gateway",
+      "kui_vmu_native_fault_capture_publish"
+    ],
+    "installer_first": 38576,
+    "installer_bytes": 560,
+    "cached_bss_boundaries": [
+      2349921920,
+      2349985760
+    ],
+    "cached_header_end": 2349858896
+  },
+  "sdk_cold_cache_coherence": {
+    "schema": "kui.native.sdk-cold-coherence.v1",
+    "instruction_cases": 412,
+    "mutation_rejections": 194,
+    "owner_stack_accesses_before_purge": 0,
+    "other_operand_reads_before_purge_are_p2": true,
+    "deliberate_cached_checks": [
+      "P1 flag equals zero",
+      "P1 pointer equals normalized P2 flag"
+    ],
+    "purge_before_first_tas": true,
+    "uniform_replay_stack_bytes": 8,
+    "variable_replay_stack_bytes": 24,
+    "ordered_purge_operands": [
+      "lock_cell",
+      "lock_cell+4"
+    ],
+    "same_and_separate_dirty_lines_checked": true,
+    "no_private_stack_use": true,
+    "forced_lock_writes": 0,
+    "original_prefix_cases": 0,
+    "variable_extended_liveness_cases": 0,
+    "call_target_register_r3_dead": true,
+    "original_startups": [],
+    "hardware_freeze_reproduced": false,
+    "available": true,
+    "descriptor_address": 2349921824,
+    "descriptor_bytes": 40,
+    "state_address": 2886856612,
+    "state_bytes": 48,
+    "p2_references": [
+      [
+        63036,
+        2886786312
+      ],
+      [
+        63040,
+        2886786568
+      ]
+    ],
+    "verified_cold_owner_stack_gateways": [
+      "kui_vmu_native_sdk_coherence_uniform_gate",
+      "kui_vmu_native_sdk_coherence_variable_gate"
+    ]
+  },
+  "evolution_consolidated_trace": {
+    "exact_typed_exports": true,
+    "exact_image_only": true,
+    "arbitrary_stall_pc_capture": false,
+    "startup_equivalence_checked": true,
+    "original_instruction_equivalence_cases": 144,
+    "mutation_rejections": 12,
+    "original_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+    "all_integer_sr_pr_mac_gbr_preserved": true,
+    "common_path_owner_writes": "private gateway frame and original replay stores only",
+    "saved_exception_reader": {
+      "instruction_cases": 96,
+      "mutation_rejections": 7,
+      "cpu_control_register_writes": false,
+      "output_words": 3,
+      "arbitrary_fault_pc_claim": false
+    },
+    "original_video_witness": {
+      "explicit_video_disable_calls": [
+        "8c1cb9ce",
+        "8c1cb9f2"
+      ],
+      "counter_wait": "8c1cba06..8c1cba0c",
+      "counter_address": "8c358d18",
+      "video_handler_counter_increment": "8c1f1200..8c1f1206",
+      "temporary_video_disable_restore": [
+        "8c1f144a",
+        "8c1f1456"
+      ],
+      "counter_can_also_be_reset": true
+    }
+  },
+  "stage_cache_publication": {
+    "instruction_cache_enabled_for_scan": true,
+    "operand_cache_disabled_for_scan": false,
+    "operand_cache_off_except_scoped_pure_extent": true,
+    "scan_ccr": "0x00000908",
+    "owner_ccr_restored": true,
+    "full_ram_purge_bytes": 16777216,
+    "cache_write_nops": [
+      8,
+      8
+    ],
+    "owner_integer_frame_bytes": 84,
+    "gateway_model_cases": 5120,
+    "gateway_mutation_rejections": 8,
+    "complete_linked_assembly_pinned": true
+  },
+  "worker_icache_publication": {
+    "publisher_p2": "0xace0006c",
+    "publisher_bytes": 68,
+    "exact_linked_publisher_pinned": true,
+    "ici_only_preserves_ccr": true,
+    "post_ccr_write_nops": 8,
+    "worker_prearm_publication_required": true,
+    "background_tail_copy_and_prefix": {
+      "whole_function_cfg_domination": true,
+      "ordered_witnesses": [
+        "0x8ce02030",
+        "0x8ce02062",
+        "0x8ce02098",
+        "0x8ce020a0",
+        "0x8ce020a8",
+        "0x8ce020ac",
+        "0x8ce020e6",
+        "0x8ce022f6",
+        "0x8ce02308"
+      ],
+      "lease_validation_dominates_copy": true,
+      "normalized_p1_payload_dominates_copy": true,
+      "exact_memcpy_and_lease_size_setup": true,
+      "callee_preserved_registers_stable": true
+    },
+    "worker_relocation_before_publication": true,
+    "worker_bss_zero_before_publication": true,
+    "dynamic_cells_before_publication": true,
+    "publication_dominates_first_arm": true,
+    "first_worker_publish": "0x8ce022f6",
+    "first_worker_arm": "0x8ce02308",
+    "mode_configuration_compiler_witness": true,
+    "runtime_diagnostics_return_stored_in_exact_config": true,
+    "runtime_diagnostics_store_dominates_arm": true,
+    "linked_installer_cfg_nodes": 629,
+    "initialization_witness_mutation_rejections": 15
+  },
+  "resolution_cache_seed": {
+    "enabled": true,
+    "seed_address": "0x8ce299a0",
+    "seed_stage_file_offset": 170528,
+    "seed_module_offset": 178656,
+    "seed_bytes": 1120,
+    "record_bytes": 1024,
+    "independent_digest_offset": 24,
+    "record_offset": 64,
+    "empty_template_sha256": "6ac4a04217563b18fdc6ab3412d5431b55c00b0dbeb23b58fc6bfd367686ceb5",
+    "typed_immutable_object": true,
+    "unique_stage_and_module_template": true,
+    "profile_worker_relocation_trampoline_disjoint": true,
+    "trust_scope": "personalized immutable module or explicit ordinary frontend configuration",
+    "live_ownership_not_cached": true
+  },
+  "runtime_mode": {
+    "enabled": true,
+    "module_offset": 92640,
+    "bytes": 32,
+    "template_sha256": "8167dc5937daa9487fba0ddea24dfc7e300f320a21c498a47a6cf51ab7953e68",
+    "address": "0x8ce149a0",
+    "typed_immutable_unique_object": true,
+    "profile_cache_worker_relocation_trampoline_disjoint": true,
+    "modes": {
+      "normal": 0,
+      "profile": 2,
+      "hooks-only": 4,
+      "raw-chain": 5,
+      "evolution-trace": 6
+    },
+    "mode_helper_instruction_cases": 1536,
+    "storage_instruction_cases": 2880,
+    "worker_policy_instruction_cases": 960,
+    "mutation_rejections": 9,
+    "malformed_mode_stops_before_storage": true,
+    "control_storage_bypasses_profile_acquire_recovery_and_writes": false,
+    "background_refuses_control_and_lease_only_before_storage": true,
+    "lease_only": {
+      "enabled": false,
+      "refused_by_exact_mode_helper": true
+    }
+  },
+  "resolution_cache_gateway": {
+    "enabled": true,
+    "temporary_resolution_address": "0x8ce3ab80",
+    "temporary_resolution_bytes": 684,
+    "temporary_high_bss_only": true,
+    "wrapper_entry": "0x8ce01450",
+    "wrapper_bytes": 260,
+    "actual_instruction_model_cases": 12288,
+    "mutation_rejections": 12,
+    "actual_outer_relay_route_cases": 69120,
+    "executable_restored_before_replay": true,
+    "fresh_scan_selected_only_on_cache_miss": true,
+    "launch_eligibility_before_replay": true,
+    "full_source_restored_before_extent_selection": true,
+    "validated_extent_before_cache_or_discovery": true,
+    "normal_and_shortened_extent_routes_checked": true,
+    "extent_failure_keeps_source_length_and_refuses": true,
+    "pure_extent_cache_scope": {
+      "enabled": true,
+      "entry": "0x8ce142bc",
+      "bytes": 140,
+      "actual_instruction_model_cases": 6144,
+      "mutation_rejections": 20,
+      "complete_linked_assembly_pinned": true,
+      "eligible_entry_ccr": "0x100",
+      "proof_ccr": "0x101",
+      "other_ccr_profiles_unchanged": true,
+      "same_pure_extent_proof": true,
+      "full_ram_purge_bytes": 16777216,
+      "cache_write_nops": [
+        8,
+        8
+      ],
+      "callee_preserved_integer_frame_bytes": 12,
+      "operand_cache_restored_off": true,
+      "proof_output_published_before_cache_restore": true,
+      "console_speed_verified": false
+    },
+    "no_metadata_before_exact_image_replay": true,
+    "fresh_allocation_and_release_guards": true,
+    "fresh_sdk_initializer_slot_admission": true,
+    "sdk_slot_admission_is_independent_image_predicate": true,
+    "capture_only_after_all_guards": true
+  },
+  "temporary_installer_stack": {
+    "enabled": true,
+    "object_address": "0x8ce3b060",
+    "object_bytes": 65536,
+    "installer_sp": "0x8ce4b040",
+    "stage_bss_end": "0x8ce88008",
+    "ordinary_entry_and_relay_stack": "0x8cff0000",
+    "package_stack_unchanged": true,
+    "typed_zero_fill_object": true,
+    "complete_bss_in_live_allocation_guard": true,
+    "actual_allocation_wrapper_cases": 384,
+    "actual_relay_publication_cases": 3840,
+    "actual_low_hook_cases": 576,
+    "mutation_rejections": 6,
+    "cold_sdk_slot_refusal_before_any_arming_cases": 960,
+    "full_source_verified_before_program_extent": true,
+    "normal_and_shortened_extent_arming_routes": true,
+    "runtime_modes": [
+      0,
+      2,
+      4,
+      5,
+      6
+    ],
+    "control_preserves_original_frame_and_allocator": false,
+    "initializer_preserves_original_stack_and_sr": true,
+    "private_stack_before_allocation_or_worker_writes": true,
+    "departed_relay_stack_clobber_preserves_caller": true
+  },
+  "relocation_records": 952,
+  "worker_instructions": 24820,
+  "stage_gateway_model_cases": 1289,
+  "persistent_gateway_model_cases": 7680,
+  "original_release_mask_model_cases": 1920,
+  "stage_embedded_worker_verified": true,
+  "maple_interception_installed": true,
+  "virtual_replies_enabled": true,
+  "storage_writes_enabled": true,
+  "scoped_sci_transactions": true,
+  "source_provenance": {
+    "commit": "d0aac421584cea816999a2cfa0b6390b8cf72d3e",
+    "source_dirty": false,
+    "compile_provenance_sha256": "5b9be7b8d8b9bd0a9444adace2a06a3974cd25edc1a5c1cab2eed2bd93685a53",
+    "elf_sha256": "aadfa73f62463903d5412f4d1fc59e10da196a851688fbe4d772b4ea01c36176"
+  },
+  "stack_audit": {
+    "worker_c_frame_sum": 7960,
+    "resident_callback_c_frame_sum": 1020,
+    "conservative_worker_bytes": 1916,
+    "available_worker_bytes": 4096,
+    "ordinary_low_stack_bytes": 352,
+    "ordinary_low_available_bytes": 352,
+    "lease_only_frame_bytes": 68,
+    "required_worker_frames": 80,
+    "callgraph": {
+      "paths": {
+        "kui_vmu_native_passive_arm": {
+          "c_frame_bytes": 1024,
+          "assembly_and_guard_margin": 336,
+          "conservative_bytes": 1360,
+          "worst_path": [
+            "worker:kui_vmu_native_passive_arm(68)",
+            "worker:kui_vmu_native_lifetime_prepare(744)",
+            "worker:kui_vmu_native_heap_lease_valid(12)",
+            "worker:kui_vmu_native_heap_lease_valid_with_release(80)",
+            "worker:kui_vmu_native_heap_lease_identity_valid(16)",
+            "worker:src/core/vmu_native_heap.c:identity(36)",
+            "worker:src/core/vmu_native_heap.c:metadata(48)",
+            "worker:src/core/vmu_native_heap.c:index(20)"
+          ]
+        },
+        "kui_vmu_native_passive_submit": {
+          "c_frame_bytes": 1560,
+          "assembly_and_guard_margin": 336,
+          "conservative_bytes": 1896,
+          "worst_path": [
+            "worker:kui_vmu_native_passive_submit(128)",
+            "worker:src/loader/vmu_native_passive.c:live_boundary(80)",
+            "worker:kui_vmu_native_live_prepare(784)",
+            "worker:kui_vmu_native_layout_bind_checked(544)",
+            "worker:src/core/vmu_native_layout.c:ring_image_location(24)"
+          ]
+        },
+        "kui_vmu_native_passive_complete": {
+          "c_frame_bytes": 1580,
+          "assembly_and_guard_margin": 336,
+          "conservative_bytes": 1916,
+          "worst_path": [
+            "worker:kui_vmu_native_passive_complete(148)",
+            "worker:src/loader/vmu_native_passive.c:live_boundary(80)",
+            "worker:kui_vmu_native_live_prepare(784)",
+            "worker:kui_vmu_native_layout_bind_checked(544)",
+            "worker:src/core/vmu_native_layout.c:ring_image_location(24)"
+          ]
+        },
+        "kui_vmu_native_readonly_release_check": {
+          "c_frame_bytes": 792,
+          "assembly_and_guard_margin": 336,
+          "conservative_bytes": 1128,
+          "worst_path": [
+            "worker:kui_vmu_native_readonly_release_check(76)",
+            "worker:src/loader/vmu_native_passive.c:fail(4)",
+            "worker:src/loader/vmu_native_passive.c:report(176)",
+            "worker:kui_vmu_native_trace_report(376)",
+            "worker:src/loader/vmu_native_trace.c:trace_packets(48)",
+            "worker:src/loader/vmu_native_trace.c:trace_row.constprop.0(64)",
+            "worker:retail_display_line(48)"
+          ]
+        },
+        "kui_vmu_native_passive_report": {
+          "c_frame_bytes": 716,
+          "assembly_and_guard_margin": 336,
+          "conservative_bytes": 1052,
+          "worst_path": [
+            "worker:kui_vmu_native_passive_report(4)",
+            "worker:src/loader/vmu_native_passive.c:report(176)",
+            "worker:kui_vmu_native_trace_report(376)",
+            "worker:src/loader/vmu_native_trace.c:trace_packets(48)",
+            "worker:src/loader/vmu_native_trace.c:trace_row.constprop.0(64)",
+            "worker:retail_display_line(48)"
+          ]
+        },
+        "kui_vmu_native_runtime_fault": {
+          "c_frame_bytes": 656,
+          "assembly_and_guard_margin": 336,
+          "conservative_bytes": 992,
+          "worst_path": [
+            "worker:kui_vmu_native_runtime_fault(120)",
+            "worker:kui_vmu_native_trace_report(376)",
+            "worker:src/loader/vmu_native_trace.c:trace_packets(48)",
+            "worker:src/loader/vmu_native_trace.c:trace_row.constprop.0(64)",
+            "worker:retail_display_line(48)"
+          ]
+        },
+        "kui_vmu_native_trace_game": {
+          "c_frame_bytes": 540,
+          "assembly_and_guard_margin": 336,
+          "conservative_bytes": 876,
+          "worst_path": [
+            "worker:kui_vmu_native_trace_game(4)",
+            "worker:kui_vmu_native_trace_report(376)",
+            "worker:src/loader/vmu_native_trace.c:trace_packets(48)",
+            "worker:src/loader/vmu_native_trace.c:trace_row.constprop.0(64)",
+            "worker:retail_display_line(48)"
+          ]
+        }
+      },
+      "indirect_sites": 105,
+      "null_writer_block_sites": [
+        [
+          "worker:kui_sci_sd_write",
+          "sci_sd_storage.c:83:17"
+        ],
+        [
+          "worker:src/loader/sd_reader.c:read_payload",
+          "sd_reader.c:112:13"
+        ]
+      ],
+      "source_qualified_calls": true,
+      "verified_zero_stack_assembly_leaves": [
+        "kui_vmu_native_trace_irq",
+        "kui_vmu_native_fault_capture_gateway",
+        "kui_vmu_native_fault_capture_publish"
+      ],
+      "verified_cold_owner_stack_gateways": [
+        "kui_vmu_native_sdk_coherence_uniform_gate",
+        "kui_vmu_native_sdk_coherence_variable_gate"
+      ],
+      "verified_stack_replacing_terminals": [],
+      "background_loan_descriptor": {
+        "address": "0x8c007ab8",
+        "bytes": 28,
+        "ctx_begin_end_null": true,
+        "select": "select_card",
+        "transfer": "transfer",
+        "ticks": "loan_ticks",
+        "transfer_block_null": true
+      }
+    }
+  },
+  "pio_writer_audit": {
+    "worker": {
+      "native_cases": 16,
+      "transfer_block_offset": 24,
+      "callback_null_at_writer_entry": true,
+      "write_blocks": 1,
+      "adapter": "0x8c10a0ec",
+      "writer": "0x8c10b930",
+      "sole_writer_caller": "durable_card_pio_write",
+      "callgraph_reports": 27
+    },
+    "stage": {
+      "native_cases": 16,
+      "transfer_block_offset": 24,
+      "callback_null_at_writer_entry": true,
+      "write_blocks": 1,
+      "adapter": "0x8ce00710",
+      "writer": "0x8ce11d08",
+      "sole_writer_caller": "native_persist_pio_write",
+      "callgraph_reports": 35
+    }
+  },
+  "console_execution_verified": false,
+  "expected_phase": "native persistent session",
+  "gateway_mutation_rejections": 20,
+  "artifact_mutation_rejections": 4,
+  "source_commit": "d0aac421584cea816999a2cfa0b6390b8cf72d3e",
+  "source_build_id": "d0aac421584c",
+  "generic_template_is_owner_profile": false,
+  "personalization_required": true,
+  "pair_limit": 180000,
+  "profile": {
+    "embedded_address": "0x8ce149c0",
+    "module_offset": 92672,
+    "bytes": 4096,
+    "template_sha256": "147eb84a549e91b8121f363980f601bd2d80212c880f24ffeaa4fb180b6e9860"
+  },
+  "compatibility_claim": "Up to two CRC-checked fresh PIO blocks per eligible controller heartbeat with repeated ownership checks and soft clock admission before block2; demand DMA and SCI priority1 retained; console performance remains unverified"
+}
