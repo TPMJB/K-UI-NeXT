@@ -1,0 +1,13 @@
+{
+  "schema": "kui.native.read-ahead.diagnostic-candidate.v1",
+  "source_commit": "7568957f5e686deaeab196249667a4f8f7b5fc69",
+  "source_tree": "74b7878b91a0f5218f79ca42b4eee5a06a734da9",
+  "build": "7568957f5e68",
+  "module_sha256": "ea2a2218303e597f2b10ad14a7fceee66936b262d943ddb0c0199c766d98f066",
+  "module_bytes": 248508,
+  "reader": "192KiB read-ahead with repair-limit counter snapshots; exact Evolution2 SDK SCI priority1,384KiB owned lease",
+  "source_bundle_prerequisite": "74958b3878279fc916199a7cd330f7f17b036138",
+  "console_performance_verified": false,
+  "diagnostic_only": true,
+  "targeted_capture_seconds": 25
+}

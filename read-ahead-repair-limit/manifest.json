@@ -1,0 +1,28 @@
+{
+  "schema": "kui.native.persistent.personalization.v1",
+  "source_commit": "7568957f5e686deaeab196249667a4f8f7b5fc69",
+  "build": "7568957f5e68",
+  "module_sha256": "ea2a2218303e597f2b10ad14a7fceee66936b262d943ddb0c0199c766d98f066",
+  "module_bytes": 248508,
+  "profile_module_offset": 92672,
+  "profile_bytes": 4096,
+  "profile_sha256": "147eb84a549e91b8121f363980f601bd2d80212c880f24ffeaa4fb180b6e9860",
+  "storage_writes_enabled": true,
+  "cache_seed_module_offset": 178400,
+  "cache_seed_bytes": 1120,
+  "cache_seed_sha256": "6ac4a04217563b18fdc6ab3412d5431b55c00b0dbeb23b58fc6bfd367686ceb5",
+  "cache_record_bytes": 1024,
+  "cache_detector_epoch": 2,
+  "cache_catalog_path": "native-cache/catalog.json",
+  "cache_catalog_sha256": "cce5199cc3d92eea6b4e900ab32d588be7cc2996a0a79664b33128094ec460fa",
+  "runtime_mode_module_offset": 92640,
+  "runtime_mode_bytes": 32,
+  "runtime_mode_sha256": "8167dc5937daa9487fba0ddea24dfc7e300f320a21c498a47a6cf51ab7953e68",
+  "runtime_mode_choices": {
+    "normal": 0,
+    "profile": 2,
+    "hooks-only": 4,
+    "raw-chain": 5,
+    "evolution-trace": 6
+  }
+}

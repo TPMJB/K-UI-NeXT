@@ -1,0 +1,4 @@
+unrepaired=0: poll=PENDING state=RESUME repairs=1 overrun=0 aux_abandon=0 CRC=0 TOKEN=0
+unrepaired=1: poll=PENDING state=RESUME repairs=1 overrun=0 aux_abandon=0 CRC=0 TOKEN=0
+unrepaired=2: poll=OVERRUN state=LOST repairs=0 overrun=1 aux_abandon=1 snapshot=POLL/OVERRUN unrepaired=2 CRC=0 TOKEN=0
+PASS: identical injected mid-block ORER at byte180; existing unrepaired<2 gate changes optional repair into abandonment. Software fixture only; hardware counter unknown.
