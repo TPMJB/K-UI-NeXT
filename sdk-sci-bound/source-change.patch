@@ -1,0 +1,474 @@
+From 1eba1784a83e7eb5d0cf6dc61cee5ccf46d22c68 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 24 Oct 2026 21:46:01 -0500
+Subject: [PATCH] Validate native SDK SCI descriptor against the selected
+ background resident
+
+---
+ .../native-sdk-sci-bound-2026-10-24.json      | 133 ++++++++++
+ docs/vmu-native-sdk-sci-route-test.md         |   9 +
+ src/loader/vmu_native_sdk_sci_route_stage.inc |   7 +-
+ tools/check_vmu_native_sdk_sci_route.py       | 235 +++++++++++++++++-
+ 4 files changed, 379 insertions(+), 5 deletions(-)
+ create mode 100644 docs/evidence/native-sdk-sci-bound-2026-10-24.json
+
+diff --git a/docs/evidence/native-sdk-sci-bound-2026-10-24.json b/docs/evidence/native-sdk-sci-bound-2026-10-24.json
+new file mode 100644
+index 0000000..7299857
+--- /dev/null
++++ b/docs/evidence/native-sdk-sci-bound-2026-10-24.json
+@@ -0,0 +1,133 @@
++{
++  "schema": "kui.native.sdk-sci-route.console-refusal.v1",
++  "date": "2026-10-24",
++  "scope": "Installer descriptor-bound refusal before SDK SCI callback publication; not a gameplay or background-reader performance result",
++  "console_observation": {
++    "build": "b656d4934fb9",
++    "source_commit": "b656d4934fb9cde51ca4af6eee2f936829d38028",
++    "phase_hex": "0x0000000a",
++    "detail_hex": "0x00000003",
++    "detail_reading": "The enlarged console photograph reads 03, not the initially transcribed 09.",
++    "inspected_crop": {
++      "filename": "refusal-detail.png",
++      "bytes": 279846,
++      "sha256": "78a089d0e0353052f8ffe277f82638a56dad54823db08a0d8930af6b3a765288"
++    }
++  },
++  "failed_artifact": {
++    "stage_elf_sha256": "da3da7c70c818c2c52e55bf946e8eb2ae031f6fb9ff99e196d6ed1c19f9cb751",
++    "resident_elf_sha256": "405363822556e7fa425970c74e243396acca2f55e32afa6a0a983b07069a7f1a",
++    "resident_binary_bytes": 14876,
++    "resident_binary_sha256": "27b9d3cc3741dc8f27c11e2fbce4c85b2246d5c0a5c5ef4eb16f18c171921eda",
++    "binder": {
++      "symbol": "_native_sdk_sci_route_bind",
++      "address": "0x8ce01738",
++      "bytes": 676,
++      "sha256": "e6f04a443bb4411f32628234d739042edb8793e3bd0d8e2bd61f00f4354988fc",
++      "bound_load_instruction": "0x8ce017cc",
++      "bound_literal_address": "0x8ce01988",
++      "bound_literal_value": "0x8c0077fc",
++      "comparison_instruction": "0x8ce017ce",
++      "comparison": "cmp/hi r1,r0, where r1=0x8c0077fc and r0=exports.region_storage=0x8c007a34",
++      "taken_branch_instruction": "0x8ce017d0",
++      "refusal_detail_assignment": "0x8ce0179c"
++    },
++    "resident_symbols": {
++      "descriptor_entry_pointer": "0x8c004024",
++      "descriptor": "0x8c007a08",
++      "descriptor_bytes": 20,
++      "binary_end": "0x8c007a1c",
++      "bss_begin": "0x8c007a20",
++      "region_storage_pointer_cell": "0x8c007a34",
++      "region_storage_pointer_bytes": 4,
++      "bss_end": "0x8c007aa0",
++      "actual_async_guard_begin": "0x8c007ba0"
++    }
++  },
++  "source_cause": {
++    "file": "src/loader/vmu_native_sdk_sci_route_stage.inc",
++    "rejected_expression": "exports.region_storage>KUI_RETAIL_RESIDENT_LIMIT-4u",
++    "stage_header_context": "The temporary stage includes retail_loader_layout.h without KUI_RETAIL_ASYNC. Its guarded KUI_RETAIL_RESIDENT_LIMIT therefore selects KUI_RETAIL_LOW_STANDARD_LIMIT, 0x8c007800.",
++    "late_layout_context": "The route include temporarily defines KUI_RETAIL_ASYNC to import the console struct layout. The loader-layout include guard has already fixed its standard limit, and the temporary ASYNC define is removed before the binder function.",
++    "actual_resident_context": "The separately compiled native background resident defines KUI_RETAIL_ASYNC and owns the existing low asynchronous reservation ending at 0x8c007ba0. Its typed four-byte region pointer at 0x8c007a34 lies inside that reservation.",
++    "conclusion": "The linked installer deterministically rejects its own valid asynchronous-resident BSS pointer using the temporary stage's smaller standard-resident limit. The compiled comparison explains the observed phase0A/detail03 without requiring descriptor corruption or cache-publication failure."
++  },
++  "execution_boundary": {
++    "live_descriptor_memcmp_reached_on_this_path": false,
++    "SDK_route_admission_reached_on_this_path": false,
++    "SDK_SCI_callback_table_stores_reached_on_this_path": false,
++    "SDK_route_metadata_or_cookie_stores_reached_on_this_path": false,
++    "meaning": "The photograph and linked comparison identify a setup refusal. They do not measure the proposed permanent SDK callback route in operation."
++  },
++  "next_candidate_contract": {
++    "selected_resident_limit": "Require the runtime-selected resident_limit to equal the existing explicit KUI_RETAIL_LOW_ASYNC_LIMIT, then bound the descriptor's typed storage cell by resident_limit-4.",
++    "guard_begin": "0x8c007ba0",
++    "guard_moved": false,
++    "descriptor_layout_changed": false,
++    "reader_priority_changed": false,
++    "SCI_reader_priority": 1,
++    "bootstrap_SCI_reader_priority": 0,
++    "hardware_boot_or_performance_proven_by_this_fix": false
++  },
++  "independent_followup_review": {
++    "scope": "SDK route setup/runtime source and final linked artifacts; read-only except this evidence file",
++    "other_macro_context_error_found": false,
++    "raw_metadata_offsets": "Console vector600 begins at region+0x500. Indices12,13,14 match cookie/default/VBR offsets0x530,0x534,0x538. The live linked callback uses default offset0x534.",
++    "metadata_cache_publication": "Default and VBR are in one32-byte line at region+0x520. The stage writes both and OCBP-publishes that line before patching and publishing the two SDK table lines. It rereads all four words through P2, then writes/publishes/rereads the cookie. The observed DETAIL03 occurs before this publication sequence.",
++    "cookie_lifetime": "The cookie occupies the existing retained reader region, not stage memory. Runtime readiness also requires canonical SDK VBR and both bound callback slots; the cookie alone does not enable SCI.",
++    "active_and_loan_masks": "The callback raises BL and IMASK15 before the active-lock/guard checks and uses the protected private stack only after those checks. C dispatch rejects non-SCI events, active GD lock, or non-idle storage loan. Route setup requires the existing quiescent retained state and admitted IMASK15 context.",
++    "remaining_limits": [
++      "A persistent route at priority1 still needs real outside-GD interrupt opportunities; captured GD caller IMASK6 alone does not establish the game's complete mask distribution.",
++      "Existing deep reader delivery/retry/token-poll budgets remain in place; fixing setup or routing does not itself bound every hardware IRQ visit or establish frame pacing.",
++      "The exact Evolution2 admission and software instruction/ownership checks are not console boot or performance verification."
++    ]
++  },
++  "validation": {
++    "prototype_build": "native-sdk-sci-bound-prototype",
++    "host_reader_checks": 33366,
++    "host_admission_checks": 733691,
++    "sanitizers": "ASan and UBSan",
++    "prototype_runtime_identical_to_refused_build": {
++      "resident_sci_bin_sha256": "27b9d3cc3741dc8f27c11e2fbce4c85b2246d5c0a5c5ef4eb16f18c171921eda",
++      "worker_bin_sha256": "5a69e157d3769cec88a4803145cebdc40863f8bc9cbb484287a50aa8c3938017",
++      "worker_reloc_sha256": "7a2ee96d431b4526e9759ed5162e722bf71f243ae0df678b8d6f60c0186228d2",
++      "meaning": "Before changing the build label, all runtime resident, worker, and relocation bytes are identical; only cold installer code changes."
++    },
++    "console_boot_verified": false,
++    "console_performance_verified": false,
++    "linked_runtime_cases": 23232,
++    "linked_callback_table_dispatch_cases": {
++      "actual_sdk_integer_dispatch_to_linked_callback_cases": 128,
++      "exact_external_owner_source_and_program_sha_checked": true,
++      "actual_sdk_event_table_lookup_and_jsr_executed": true,
++      "return_to_sdk_continuation_and_default_forward_checked": true,
++      "full_sdk_fpu_prologue_and_epilogue_executed": false,
++      "native_dispatch_c_payload": "ABI-adversarial substitute",
++      "console_performance_verified": false
++    },
++    "strict_byte_mutation_rejections": 2044,
++    "cold_binder_execution": {
++      "actual_linked_cold_binder_executed": true,
++      "positive_cases": 16,
++      "malformed_descriptor_or_context_cases": 28,
++      "omitted_ocbp_mutation_rejections": 4,
++      "selected_async_bound_checked": true,
++      "code_end_and_limit_minus4_admitted": true,
++      "code_end_minus4_and_limit_refused": true,
++      "p1_writeback_cache_and_p2_ram_distinct": true,
++      "full_cacheline_writeback_and_sentinel_preserved": true,
++      "cookie_published_last": true,
++      "pure_admission_call": "typed ABI substitute; actual pure helper separately host-tested",
++      "memcpy_memcmp": "faithful bounded ABI substitutes",
++      "console_performance_verified": false
++    },
++    "shipped_refusal_regression": {
++      "shipped_b656_actual_binder_refusal_reproduced": true,
++      "phase": 10,
++      "detail": 3,
++      "region_cell": "0x8c007a34",
++      "standard_limit_literal": "0x8c0077fc",
++      "publication_writes": 0
++    }
++  }
++}
+diff --git a/docs/vmu-native-sdk-sci-route-test.md b/docs/vmu-native-sdk-sci-route-test.md
+index 2102628..9b2cdf6 100644
+--- a/docs/vmu-native-sdk-sci-route-test.md
++++ b/docs/vmu-native-sdk-sci-route-test.md
+@@ -1,6 +1,15 @@
+ <!-- SPDX-License-Identifier: GPL-3.0-only -->
+ # Evolution 2 SDK SCI callback route
+ 
++This candidate corrects the setup refusal in build b656d4934fb9. Its installer
++used the standard resident limit `0x8c007800` to validate the background
++reader's BSS pointer `0x8c007a34`, producing **PHASE 0A / DETAIL 03** before
++installing either SCI callback. The stage now requires the selected background
++reader's existing `0x8c007ba0` limit and validates the pointer against that
++bound. The memory reservation and priority-1 runtime are unchanged. A linked
++instruction regression executes the old refusal and the corrected setup.
++The rejected run provided no gameplay or stutter measurement for SDK routing.
++
+ This is a new loader architecture following the failed priority-7 experiment
+ 8390fed1414d. That build black-screened after bootstrap 2; the SD adapter LED
+ remained on. The LED is not a transfer-progress measurement.
+diff --git a/src/loader/vmu_native_sdk_sci_route_stage.inc b/src/loader/vmu_native_sdk_sci_route_stage.inc
+index 0690115..fec8503 100644
+--- a/src/loader/vmu_native_sdk_sci_route_stage.inc
++++ b/src/loader/vmu_native_sdk_sci_route_stage.inc
+@@ -39,7 +39,12 @@ static void __attribute__((noipa)) native_sdk_sci_route_bind(uint32_t payload) {
+        exports.callback-KUI_RETAIL_RESIDENT_ADDRESS>=resident_bytes ||
+        (exports.region_storage&3u) ||
+        exports.region_storage<KUI_RETAIL_RESIDENT_ADDRESS+resident_bytes ||
+-       exports.region_storage>KUI_RETAIL_RESIDENT_LIMIT-4u ||
++       /* The temporary stage is built without KUI_RETAIL_ASYNC. Its generic
++        * RESIDENT_LIMIT therefore names the standard reader, not this linked
++        * background resident. Use the already selected reader's bound and
++        * require the exact existing low asynchronous reservation. */
++       resident_limit!=KUI_RETAIL_LOW_ASYNC_LIMIT ||
++       exports.region_storage>resident_limit-4u ||
+        memcmp((const void *)(uintptr_t)descriptor,&exports,sizeof(exports)))
+         native_report(10u,3u);
+     uint32_t address=((payload&UINT32_C(0x1fffffff))|UINT32_C(0x80000000))+
+diff --git a/tools/check_vmu_native_sdk_sci_route.py b/tools/check_vmu_native_sdk_sci_route.py
+index b997506..6397e0d 100644
+--- a/tools/check_vmu_native_sdk_sci_route.py
++++ b/tools/check_vmu_native_sdk_sci_route.py
+@@ -51,8 +51,8 @@ PINS={
+     '_kui_retail_sdk_sci_entry':(152,'eb38f74342dafb9934a5f62b8b3cbc5bc55feb14d66fbc7af571b6a19f408116'),
+ }
+ STAGE_PINS={
+-    '_native_sdk_sci_route_bind':(676,'e6f04a443bb4411f32628234d739042edb8793e3bd0d8e2bd61f00f4354988fc'),
+-    '_kui_native_sdk_sci_route_admit':(800,'78bfef551d56da15abdeed774a368e2418d7ab3e5996b4e9bd522d88dbb67e04'),
++    '_native_sdk_sci_route_bind':(692,'3a324dfb4b14f6d3b996a4a14408951d827836b431b73cc1181f1653e239e9cd'),
++    '_kui_native_sdk_sci_route_admit':(800,'6924792714a86593648c5b608797af4e5d367c55b1e7cc55312b97a9df551b82'),
+ }
+ MEMORY_CACHE={}
+ MEMORY_REFERENCES={}
+@@ -355,6 +355,229 @@ def ownership_cases(resident):
+     return hooks,unhooks,dispatches,transitions
+ 
+ 
++class BinderStop(Exception):
++    def __init__(self,phase,detail):
++        self.phase,self.detail=phase,detail
++        super().__init__(f'phase{phase:02X}/detail{detail:02X}')
++
++
++class ColdBinderCPU(SDKCPU):
++    """Execute the actual cold binder with distinct P1 cache and P2 RAM.
++
++    memcpy/memcmp are faithful bounded ABI substitutes; the independently
++    host-tested pure admission is a typed-plan substitute. The binder itself,
++    selected-reader bounds, every branch/store/readback and OCBP execute.
++    """
++    def __init__(self,stage,resident,*,cache=True,payload=0x8c400000,stream=0):
++        super().__init__(resident,seed=7,mask=15,bank=1)
++        backing=SH(b'')
++        for image in (resident,stage):
++            for kind,offset,address,_,count,_,_,_ in image[2]:
++                if kind==1 and count:backing.store_block(address,image[0][offset:offset+count])
++        self.memory=bytes(backing.memory);self.ram={};self.cache={};self.cache_on=cache
++        self.stage=stage;self.resident=resident;self.symbols=stage[4]
++        self.api={stage[4][name][0]:name for name in
++                  ('_memcpy','_memcmp','_native_report','_retail_display_line','_kui_native_sdk_sci_route_admit')}
++        self.targets=set(self.api);self.apis=[];self.flushes=[];self.readbacks=[]
++        self.admit_result=1;self.ready=False;self.writes=[]
++        self.r[15]=0x8cfeffe0;self.pr=RETURN;self.r[4]=payload
++        self.payload=payload;self.region=((payload&0x1fffffff)|0x80000000)+0x20400
++        self.control['vbr']=SDK_VBR
++        self.descriptor=resident[4]['_kui_native_sdk_sci_route_exports'][0]
++        self.cell=resident[4]['_kui_retail_async_region_storage'][0]
++        self.callback=resident[4]['_kui_retail_sdk_sci_entry'][0]
++        self.low_end=resident[4]['__retail_resident_binary_end'][0]
++        self.blob=0x8cea0000
++        self.put_bytes(self.blob,self.memory[self.offset(0x8c004000,self.low_end-0x8c004000):
++                                             self.offset(self.low_end,0)])
++        for name,value in (('_resident_blob',self.blob),('_resident_bytes',self.low_end-0x8c004000),
++                           ('_resident_limit',GUARD),('_exec_bytes',4024288)):
++            self.put32(stage[4][name][0],value)
++        self.put_bytes(stage[4]['_native_driver'][0]+72,bytes.fromhex(
++            '52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605'))
++        self.put32(self.cell,self.region)
++        control=resident[4]['_kui_vmu_observe_boot_control'][0]
++        self.put32(control+8,4);self.put32(control+12,payload&0x1fffffff)
++        self.put32(self.region+0x378,1);self.put32(self.region+0x470,stream)
++        self.put32(ERI_SLOT,DEFAULT);self.put32(RXI_SLOT,DEFAULT)
++        self.put32(self.region+0x53c,0xa5c39e17)
++        self.initial=self.snapshot();self.writes=[]
++
++    def put_bytes(self,address,data):
++        at=self.offset(address,len(data))
++        self.ram.update((at+i,b) for i,b in enumerate(data))
++
++    def put32(self,address,value):self.put_bytes(address,struct.pack('<I',value&MASK))
++
++    def ram_bytes(self,at,count):return bytes(self.ram.get(at+i,self.memory[at+i]) for i in range(count))
++
++    def cached_line(self,at):
++        line=at&~31
++        if line not in self.cache:self.cache[line]=[bytearray(self.ram_bytes(line,32)),False]
++        return line,self.cache[line]
++
++    def read(self,address,count=4):
++        if not hasattr(self,'ram'):return super().read(address,count)
++        at=self.offset(address,count)
++        if address&0xe0000000==0x80000000 and self.cache_on:
++            value=bytes(self.cached_line(at+i)[1][0][(at+i)&31] for i in range(count))
++        else:
++            value=self.ram_bytes(at,count)
++            if address&0xe0000000==0xa0000000 and self.region<=((address&0x1fffffff)|0x80000000)<self.region+0x760:
++                self.readbacks.append((self.executing,address,int.from_bytes(value,'little')))
++        return int.from_bytes(value,'little')
++
++    def write(self,address,value,count=4):
++        if not hasattr(self,'ram'):return super().write(address,value,count)
++        at=self.offset(address,count);data=(value&((1<<(8*count))-1)).to_bytes(count,'little')
++        self.writes.append((self.executing,address,value,count))
++        if address&0xe0000000==0x80000000 and self.cache_on:
++            for i,b in enumerate(data):
++                _,entry=self.cached_line(at+i);entry[0][(at+i)&31]=b;entry[1]=True
++        else:self.put_bytes(address,data)
++
++    def plain(self,op,pc):
++        self.executing=pc;n,m=op>>8&15,op>>4&15
++        if op>>8==0xc8:self.flag(not(self.r[0]&(op&255)));return
++        if op&0xf0ff==0x00a3: # OCBP writes a complete dirty32B line, then invalidates.
++            at=self.offset(self.r[n],1)&~31;entry=self.cache.pop(at,None)
++            if entry and entry[1]:self.ram.update((at+i,b) for i,b in enumerate(entry[0]))
++            self.flushes.append(at);return
++        if op>>8==0x84:self.r[0]=signed(self.read(self.r[op>>4&15]+(op&15),1),8)&MASK;return
++        if op&0xf00f==0x600c:self.r[n]=self.r[m]&255;return
++        if op&0xf0ff==0x4019:self.r[n]>>=8;return
++        if op&0xf0ff==0x4029:self.r[n]>>=16;return
++        if op&0xf00f==0x600a:
++            value=self.r[m]+(self.sr&1);self.r[n]=(-value)&MASK;self.flag(value!=0);return
++        super().plain(op,pc)
++
++    def callee(self):
++        name=self.api[self.pc];self.apis.append(name);continuation=self.pr;result=0
++        if name=='_native_report':raise BinderStop(self.r[4],self.r[5])
++        if name=='_memcpy':
++            dest,source,count=self.r[4:7];assert count in (4,20)
++            value=bytes(self.read(source+i,1) for i in range(count))
++            for i,b in enumerate(value):self.write(dest+i,b,1)
++            result=dest
++        elif name=='_memcmp':
++            left,right,count=self.r[4:7];assert count==20
++            result=int(any(self.read(left+i,1)!=self.read(right+i,1) for i in range(count)))
++        elif name=='_kui_native_sdk_sci_route_admit':
++            assert self.r[4:7]==[0x8c010000,4024288,0x8c010000]
++            assert self.r[7]==self.stage[4]['_native_driver'][0]+72
++            args=[self.read(self.r[15]+4*i) for i in range(6)]
++            assert args[:5]==[SDK_VBR,self.sr,self.callback,self.stage[4]['_native_read'][0],0]
++            out=args[5];assert self.r[15]+24<=out<=self.r[15]+80-32
++            result=self.admit_result
++            if result==1:
++                for i,value in enumerate((1,32,SDK_VBR,0x8c1ae030,ERI_SLOT,RXI_SLOT,self.callback,DEFAULT)):
++                    self.write(out+4*i,value)
++        else:
++            assert name=='_retail_display_line'
++            text=bytes(self.read(self.r[4]+i,1) for i in range(len(b'SDK SCI ROUTE READY / LEVEL 1\0')))
++            assert text==b'SDK SCI ROUTE READY / LEVEL 1\0';self.ready=True
++        for i in range(8):self.r[i]=(0x913579bd+i*0x13579bd+len(self.apis))&MASK
++        self.r[0]=result&MASK;self.sr^=1;self.pr^=0x13572468;self.pc=continuation
++
++    def patch_descriptor(self,word,value,*,live=True,immutable=True):
++        if live:self.put32(self.descriptor+4*word,value)
++        if immutable:self.put32(self.blob+self.descriptor-0x8c004000+4*word,value)
++        if word==4 and live and immutable:
++            self.cell=value
++            if not value&3 and 0x8c004000<=value<GUARD:self.put32(value,self.region)
++
++    def run_bind(self):
++        self.run_symbol('_native_sdk_sci_route_bind')
++        assert self.ready
++        assert_c_abi(self,self.initial)
++        assert self.read(ERI_SLOT|0x20000000)==self.callback
++        assert self.read(RXI_SLOT|0x20000000)==self.callback
++        assert self.read((self.region+0x534)|0x20000000)==DEFAULT
++        assert self.read((self.region+0x538)|0x20000000)==SDK_VBR
++        assert self.read((self.region+0x530)|0x20000000)==COOKIE
++        assert self.read((self.region+0x53c)|0x20000000)==0xa5c39e17
++        # Evicting all remaining dirty lines may not resurrect stale readiness.
++        for at,(line,dirty) in tuple(self.cache.items()):
++            if dirty:self.ram.update((at+i,b) for i,b in enumerate(line))
++        self.cache.clear()
++        assert self.read((self.region+0x530)|0x20000000)==COOKIE
++        published=[address for _,address,_,_ in self.writes if address in
++                   (ERI_SLOT,RXI_SLOT,self.region+0x534,self.region+0x538,self.region+0x530)]
++        assert published==[self.region+0x534,self.region+0x538,ERI_SLOT,RXI_SLOT,self.region+0x530]
++        return self
++
++
++def check_cold_binder(stage,resident,*,self_test=False,refused_artifact=False):
++    if refused_artifact:
++        _,body,_=symbol_bytes(stage,'_native_sdk_sci_route_bind',2)
++        require(hashlib.sha256(body).hexdigest()=='e6f04a443bb4411f32628234d739042edb8793e3bd0d8e2bd61f00f4354988fc',
++                'old refusal regression requires the shipped b656 binder')
++        c=ColdBinderCPU(stage,resident)
++        try:c.run_bind()
++        except BinderStop as stop:
++            require((stop.phase,stop.detail)==(10,3),'old binder refused at an unexpected checkpoint')
++            assert '_kui_native_sdk_sci_route_admit' not in c.apis and not c.flushes and not c.ready
++            return dict(shipped_b656_actual_binder_refusal_reproduced=True,phase=10,detail=3,
++                        region_cell=hex(c.cell),standard_limit_literal='0x8c0077fc',publication_writes=0)
++        raise ValueError('shipped binder unexpectedly accepted its out-of-standard-bound typed cell')
++    positives=negatives=mutations=0
++    for cache in (False,True):
++        for payload in (0x0c400000,0x8c400000,0xac400000):
++            for stream in (0,1):
++                ColdBinderCPU(stage,resident,cache=cache,payload=payload,stream=stream).run_bind();positives+=1
++        for edge in ('code_end','limit_minus4'):
++            c=ColdBinderCPU(stage,resident,cache=cache)
++            c.patch_descriptor(4,c.low_end if edge=='code_end' else GUARD-4)
++            c.run_bind();positives+=1
++        cases=[('before_code_end',3),('at_limit',3),('misaligned',3),('p2_cell',3),
++               ('standard_limit',3),('limit_minus4_bound',3),('bad_magic',3),('bad_callback',3),
++               ('live_mismatch',3),('cell_mismatch',4),('pending',5),('preexisting_cookie',5),
++               ('foreign_owner',6),('admission_refusal',7)]
++        for case,detail in cases:
++            c=ColdBinderCPU(stage,resident,cache=cache)
++            if case=='before_code_end':c.patch_descriptor(4,c.low_end-4)
++            elif case=='at_limit':c.patch_descriptor(4,GUARD)
++            elif case=='misaligned':c.patch_descriptor(4,c.cell+1)
++            elif case=='p2_cell':c.patch_descriptor(4,c.cell|0x20000000)
++            elif case=='standard_limit':c.put32(stage[4]['_resident_limit'][0],0x8c007800)
++            elif case=='limit_minus4_bound':c.put32(stage[4]['_resident_limit'][0],0x8c0077fc)
++            elif case=='bad_magic':c.patch_descriptor(0,0)
++            elif case=='bad_callback':c.patch_descriptor(3,c.callback|1)
++            elif case=='live_mismatch':c.patch_descriptor(1,2,immutable=False)
++            elif case=='cell_mismatch':c.put32(c.cell,c.region+32)
++            elif case=='pending':c.put32(c.region+0x370,1)
++            elif case=='preexisting_cookie':c.put32(c.region+0x530,COOKIE)
++            elif case=='foreign_owner':c.admit_result=0
++            elif case=='admission_refusal':c.admit_result=-1
++            try:c.run_bind()
++            except BinderStop as stop:
++                assert (stop.phase,stop.detail)==(10,detail),(case,stop)
++                assert not c.flushes and not c.ready
++                assert not any(address in (ERI_SLOT,RXI_SLOT,c.region+0x530,c.region+0x534,c.region+0x538)
++                               for _,address,_,_ in c.writes)
++                negatives+=1
++            else:raise ValueError('cold binder accepted malformed descriptor/context '+case)
++    if self_test:
++        address,body,section=symbol_bytes(stage,'_native_sdk_sci_route_bind',2)
++        ocbp=[i for i in range(0,len(body),2) if struct.unpack_from('<H',body,i)[0]&0xf0ff==0x00a3]
++        require(len(ocbp)==4,'cold binder publication instruction count changed')
++        for number,at in enumerate(ocbp):
++            changed=bytearray(stage[0]);start=section[4]+address-section[3]
++            struct.pack_into('<H',changed,start+at,0x0009)
++            c=ColdBinderCPU((bytes(changed),*stage[1:]),resident)
++            try:c.run_bind()
++            except BinderStop as stop:
++                assert (stop.phase,stop.detail)==(10,9 if number==3 else 8);mutations+=1
++            else:raise ValueError('cold binder accepted an omitted cache publication')
++    return dict(actual_linked_cold_binder_executed=True,positive_cases=positives,
++        malformed_descriptor_or_context_cases=negatives,omitted_ocbp_mutation_rejections=mutations,
++        selected_async_bound_checked=True,code_end_and_limit_minus4_admitted=True,
++        code_end_minus4_and_limit_refused=True,p1_writeback_cache_and_p2_ram_distinct=True,
++        full_cacheline_writeback_and_sentinel_preserved=True,cookie_published_last=True,
++        pure_admission_call='typed ABI substitute; actual pure helper separately host-tested',
++        memcpy_memcmp='faithful bounded ABI substitutes',console_performance_verified=False)
++
++
+ def check_sdk_dispatch(resident,startup):
+     """Optional external-owner test: execute the actual SDK integer dispatch."""
+     owner=owner_image(startup);cases=0
+@@ -405,7 +628,8 @@ def check(resident,*,worker=None,stage=None,self_test=False):
+     require('__kui_native_sci_priority7_resident' not in resident[4],
+             'SDK SCI route must retain level1 and exclude priority7')
+     pins=pin_bodies(resident)
+-    cold=stage_pins(stage) if stage is not None else {}
++    cold=stage_pins(stage)
++    binder=check_cold_binder(stage,resident,self_test=self_test)
+     callbacks=callback_cases(resident)
+     hooks,unhooks,dispatches,transitions=ownership_cases(resident)
+     rejected=0
+@@ -431,7 +655,7 @@ def check(resident,*,worker=None,stage=None,self_test=False):
+                     else:raise ValueError('SDK SCI audit accepted a changed typed binding/cold publisher')
+     return dict(enabled=True,paired_sdk_sci_markers=True,immutable_descriptor_bound=True,
+         callback_private_stack_prefix_bytes=0,sdk_owner_stack_save_bytes=16,
+-        cold_binder_and_admission_pins=cold,cold_binder_instruction_modelled=False,
++        cold_binder_and_admission_pins=cold,cold_binder_instruction_modelled=True,cold_binder_execution=binder,
+         cold_binder_source_reviewed=True,
+         cold_binder_source_sha256=hashlib.sha256((ROOT/'src/loader/vmu_native_sdk_sci_route_stage.inc').read_bytes()).hexdigest(),
+         immutable_function_pins=pins,callback_instruction_cases=callbacks,
+@@ -451,12 +675,15 @@ def main():
+     p=argparse.ArgumentParser(description=__doc__)
+     p.add_argument('directory',type=Path)
+     p.add_argument('--self-test',action='store_true')
++    p.add_argument('--refused-build',type=Path,help='optional preserved b656 build for actual DETAIL03 regression')
+     p.add_argument('--startup',type=Path,help='optional exact external Evolution2 startup for actual SDK dispatcher replay')
+     a=p.parse_args()
+     try:
+         r,w,s=(read_elf(a.directory/name) for name in ('resident-sci.elf','native-worker.elf','stage.elf'))
+         result=check(r,worker=w,stage=s,self_test=a.self_test)
+         if a.startup:result['external_sdk_dispatch']=check_sdk_dispatch(r,a.startup)
++        if a.refused_build:
++            result['shipped_refusal_regression']=check_cold_binder(read_elf(a.refused_build/'stage.elf'),read_elf(a.refused_build/'resident-sci.elf'),refused_artifact=True)
+     except (OSError,ValueError,AssertionError,KeyError,struct.error) as e:
+         p.exit(2,'SDK SCI-route audit refused: '+str(e)+'\n')
+     print(json.dumps(result,indent=2))
+-- 
+2.51.1
+

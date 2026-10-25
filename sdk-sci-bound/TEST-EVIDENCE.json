@@ -1,0 +1,133 @@
+{
+  "schema": "kui.native.sdk-sci-route.console-refusal.v1",
+  "date": "2026-10-24",
+  "scope": "Installer descriptor-bound refusal before SDK SCI callback publication; not a gameplay or background-reader performance result",
+  "console_observation": {
+    "build": "b656d4934fb9",
+    "source_commit": "b656d4934fb9cde51ca4af6eee2f936829d38028",
+    "phase_hex": "0x0000000a",
+    "detail_hex": "0x00000003",
+    "detail_reading": "The enlarged console photograph reads 03, not the initially transcribed 09.",
+    "inspected_crop": {
+      "filename": "refusal-detail.png",
+      "bytes": 279846,
+      "sha256": "78a089d0e0353052f8ffe277f82638a56dad54823db08a0d8930af6b3a765288"
+    }
+  },
+  "failed_artifact": {
+    "stage_elf_sha256": "da3da7c70c818c2c52e55bf946e8eb2ae031f6fb9ff99e196d6ed1c19f9cb751",
+    "resident_elf_sha256": "405363822556e7fa425970c74e243396acca2f55e32afa6a0a983b07069a7f1a",
+    "resident_binary_bytes": 14876,
+    "resident_binary_sha256": "27b9d3cc3741dc8f27c11e2fbce4c85b2246d5c0a5c5ef4eb16f18c171921eda",
+    "binder": {
+      "symbol": "_native_sdk_sci_route_bind",
+      "address": "0x8ce01738",
+      "bytes": 676,
+      "sha256": "e6f04a443bb4411f32628234d739042edb8793e3bd0d8e2bd61f00f4354988fc",
+      "bound_load_instruction": "0x8ce017cc",
+      "bound_literal_address": "0x8ce01988",
+      "bound_literal_value": "0x8c0077fc",
+      "comparison_instruction": "0x8ce017ce",
+      "comparison": "cmp/hi r1,r0, where r1=0x8c0077fc and r0=exports.region_storage=0x8c007a34",
+      "taken_branch_instruction": "0x8ce017d0",
+      "refusal_detail_assignment": "0x8ce0179c"
+    },
+    "resident_symbols": {
+      "descriptor_entry_pointer": "0x8c004024",
+      "descriptor": "0x8c007a08",
+      "descriptor_bytes": 20,
+      "binary_end": "0x8c007a1c",
+      "bss_begin": "0x8c007a20",
+      "region_storage_pointer_cell": "0x8c007a34",
+      "region_storage_pointer_bytes": 4,
+      "bss_end": "0x8c007aa0",
+      "actual_async_guard_begin": "0x8c007ba0"
+    }
+  },
+  "source_cause": {
+    "file": "src/loader/vmu_native_sdk_sci_route_stage.inc",
+    "rejected_expression": "exports.region_storage>KUI_RETAIL_RESIDENT_LIMIT-4u",
+    "stage_header_context": "The temporary stage includes retail_loader_layout.h without KUI_RETAIL_ASYNC. Its guarded KUI_RETAIL_RESIDENT_LIMIT therefore selects KUI_RETAIL_LOW_STANDARD_LIMIT, 0x8c007800.",
+    "late_layout_context": "The route include temporarily defines KUI_RETAIL_ASYNC to import the console struct layout. The loader-layout include guard has already fixed its standard limit, and the temporary ASYNC define is removed before the binder function.",
+    "actual_resident_context": "The separately compiled native background resident defines KUI_RETAIL_ASYNC and owns the existing low asynchronous reservation ending at 0x8c007ba0. Its typed four-byte region pointer at 0x8c007a34 lies inside that reservation.",
+    "conclusion": "The linked installer deterministically rejects its own valid asynchronous-resident BSS pointer using the temporary stage's smaller standard-resident limit. The compiled comparison explains the observed phase0A/detail03 without requiring descriptor corruption or cache-publication failure."
+  },
+  "execution_boundary": {
+    "live_descriptor_memcmp_reached_on_this_path": false,
+    "SDK_route_admission_reached_on_this_path": false,
+    "SDK_SCI_callback_table_stores_reached_on_this_path": false,
+    "SDK_route_metadata_or_cookie_stores_reached_on_this_path": false,
+    "meaning": "The photograph and linked comparison identify a setup refusal. They do not measure the proposed permanent SDK callback route in operation."
+  },
+  "next_candidate_contract": {
+    "selected_resident_limit": "Require the runtime-selected resident_limit to equal the existing explicit KUI_RETAIL_LOW_ASYNC_LIMIT, then bound the descriptor's typed storage cell by resident_limit-4.",
+    "guard_begin": "0x8c007ba0",
+    "guard_moved": false,
+    "descriptor_layout_changed": false,
+    "reader_priority_changed": false,
+    "SCI_reader_priority": 1,
+    "bootstrap_SCI_reader_priority": 0,
+    "hardware_boot_or_performance_proven_by_this_fix": false
+  },
+  "independent_followup_review": {
+    "scope": "SDK route setup/runtime source and final linked artifacts; read-only except this evidence file",
+    "other_macro_context_error_found": false,
+    "raw_metadata_offsets": "Console vector600 begins at region+0x500. Indices12,13,14 match cookie/default/VBR offsets0x530,0x534,0x538. The live linked callback uses default offset0x534.",
+    "metadata_cache_publication": "Default and VBR are in one32-byte line at region+0x520. The stage writes both and OCBP-publishes that line before patching and publishing the two SDK table lines. It rereads all four words through P2, then writes/publishes/rereads the cookie. The observed DETAIL03 occurs before this publication sequence.",
+    "cookie_lifetime": "The cookie occupies the existing retained reader region, not stage memory. Runtime readiness also requires canonical SDK VBR and both bound callback slots; the cookie alone does not enable SCI.",
+    "active_and_loan_masks": "The callback raises BL and IMASK15 before the active-lock/guard checks and uses the protected private stack only after those checks. C dispatch rejects non-SCI events, active GD lock, or non-idle storage loan. Route setup requires the existing quiescent retained state and admitted IMASK15 context.",
+    "remaining_limits": [
+      "A persistent route at priority1 still needs real outside-GD interrupt opportunities; captured GD caller IMASK6 alone does not establish the game's complete mask distribution.",
+      "Existing deep reader delivery/retry/token-poll budgets remain in place; fixing setup or routing does not itself bound every hardware IRQ visit or establish frame pacing.",
+      "The exact Evolution2 admission and software instruction/ownership checks are not console boot or performance verification."
+    ]
+  },
+  "validation": {
+    "prototype_build": "native-sdk-sci-bound-prototype",
+    "host_reader_checks": 33366,
+    "host_admission_checks": 733691,
+    "sanitizers": "ASan and UBSan",
+    "prototype_runtime_identical_to_refused_build": {
+      "resident_sci_bin_sha256": "27b9d3cc3741dc8f27c11e2fbce4c85b2246d5c0a5c5ef4eb16f18c171921eda",
+      "worker_bin_sha256": "5a69e157d3769cec88a4803145cebdc40863f8bc9cbb484287a50aa8c3938017",
+      "worker_reloc_sha256": "7a2ee96d431b4526e9759ed5162e722bf71f243ae0df678b8d6f60c0186228d2",
+      "meaning": "Before changing the build label, all runtime resident, worker, and relocation bytes are identical; only cold installer code changes."
+    },
+    "console_boot_verified": false,
+    "console_performance_verified": false,
+    "linked_runtime_cases": 23232,
+    "linked_callback_table_dispatch_cases": {
+      "actual_sdk_integer_dispatch_to_linked_callback_cases": 128,
+      "exact_external_owner_source_and_program_sha_checked": true,
+      "actual_sdk_event_table_lookup_and_jsr_executed": true,
+      "return_to_sdk_continuation_and_default_forward_checked": true,
+      "full_sdk_fpu_prologue_and_epilogue_executed": false,
+      "native_dispatch_c_payload": "ABI-adversarial substitute",
+      "console_performance_verified": false
+    },
+    "strict_byte_mutation_rejections": 2044,
+    "cold_binder_execution": {
+      "actual_linked_cold_binder_executed": true,
+      "positive_cases": 16,
+      "malformed_descriptor_or_context_cases": 28,
+      "omitted_ocbp_mutation_rejections": 4,
+      "selected_async_bound_checked": true,
+      "code_end_and_limit_minus4_admitted": true,
+      "code_end_minus4_and_limit_refused": true,
+      "p1_writeback_cache_and_p2_ram_distinct": true,
+      "full_cacheline_writeback_and_sentinel_preserved": true,
+      "cookie_published_last": true,
+      "pure_admission_call": "typed ABI substitute; actual pure helper separately host-tested",
+      "memcpy_memcmp": "faithful bounded ABI substitutes",
+      "console_performance_verified": false
+    },
+    "shipped_refusal_regression": {
+      "shipped_b656_actual_binder_refusal_reproduced": true,
+      "phase": 10,
+      "detail": 3,
+      "region_cell": "0x8c007a34",
+      "standard_limit_literal": "0x8c0077fc",
+      "publication_writes": 0
+    }
+  }
+}

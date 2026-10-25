@@ -1,0 +1,12 @@
+{
+  "build": "b656d4934fb9",
+  "source_commit": "b656d4934fb9cde51ca4af6eee2f936829d38028",
+  "phase_hex": "0x0000000a",
+  "detail_hex": "0x00000003",
+  "detail_reading": "The enlarged console photograph reads 03, not the initially transcribed 09.",
+  "inspected_crop": {
+    "filename": "refusal-detail.png",
+    "bytes": 279846,
+    "sha256": "78a089d0e0353052f8ffe277f82638a56dad54823db08a0d8930af6b3a765288"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "schema": "kui.native.sdk-sci-bound.candidate.v1",
+  "source_commit": "1eba1784a83e7eb5d0cf6dc61cee5ccf46d22c68",
+  "source_tree": "ef2378a69a20d7b10011902b15c0cc52c5cf9fe2",
+  "build": "1eba1784a83e",
+  "module_sha256": "e66e6ebb1f51e16f8ccded2acbfd73da0caca7a74dca87d6e27206335bff64fb",
+  "module_bytes": 233392,
+  "reader": "Corrected background resident admission; exact Evolution2 SDK SCI callbacks at priority1",
+  "source_bundle_prerequisite": "74958b3878279fc916199a7cd330f7f17b036138",
+  "console_performance_verified": false
+}
