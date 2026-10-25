@@ -1512,7 +1512,10 @@ static void games_variant_line(struct paint *p,const struct kui_shell *s,unsigne
 static const char *game_background(const struct kui_shell *s) {
     if(s->games_detail.format==KUI_GAME_IMAGE_ZSO) return "Off";
     if(kui_shell_games_ce_probe_ready(s)) return "On (required)";
-    return s->games_launch_reader==KUI_GAME_READER_STANDARD?"Off":"On";
+    if(s->games_launch_reader==KUI_GAME_READER_STANDARD) return "Off";
+    if(kui_shell_games_retail_ready(s) && !s->games_launch_cdda)
+        return s->games_launch_reader==KUI_GAME_READER_EAGER?"On - Legacy (Y)":"On - New (X)";
+    return "On";
 }
 static void game_detail(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     const struct kui_games_detail *d=&s->games_detail;
@@ -1712,13 +1715,16 @@ static void games_extra_options(struct paint *p,const struct kui_shell *s) {
     title(p,40,108,"Games / Advanced");
     words(p,40,140,608,CYAN,s->games_detail.title[0]?s->games_detail.title:s->games_selected_path,false);
     games_variant_line(p,s,158);
-    const char *names[]={"Boot encoding","Background speed","Image information","Developer tests","RAM patches","Restore defaults","Check executable","Temporary baseline"};
+    bool native_reader=kui_shell_games_retail_ready(s) && !s->games_launch_cdda &&
+        s->games_detail.format!=KUI_GAME_IMAGE_ZSO;
+    const char *names[]={"Boot encoding",native_reader?"Background reader":"Background speed","Image information","Developer tests","RAM patches","Restore defaults","Check executable","Temporary baseline"};
     const char *encodings[]={"Automatic","Plain","Scrambled"};
     bool encoding=kui_shell_games_encoding_ready(s);
     bool speed=kui_shell_games_background_ready(s) && !s->games_launch_cdda &&
         s->games_launch_reader!=KUI_GAME_READER_STANDARD;
     const char *values[]={encoding?encodings[s->games_launch_encoding<KUI_GAME_ENCODING_COUNT?s->games_launch_encoding:0]:"Automatic",
-        speed?(s->games_launch_reader==KUI_GAME_READER_EAGER?"Aggressive":"Normal"):"Unavailable","Open","Open",
+        speed?(native_reader?kui_shell_games_reader_label(s):
+            s->games_launch_reader==KUI_GAME_READER_EAGER?"Aggressive":"Normal"):"Unavailable","Open","Open",
         kui_shell_games_patches_ready(s)?(kui_game_ram_patches_enabled(&s->games_launch_patches)?"On":"Off"):"Unavailable","Apply",kui_shell_games_launch_ready(s)?"Run":"Unavailable",s->games_baseline?"On (unsaved)":"Off"};
     for(unsigned i=0;i<KUI_SHELL_GAME_TOOL_COUNT;i++) {
         unsigned y=174+i*24;bool ready=i==KUI_SHELL_GAME_TOOL_ENCODING?encoding:i==KUI_SHELL_GAME_TOOL_SPEED?speed:
@@ -1729,7 +1735,8 @@ static void games_extra_options(struct paint *p,const struct kui_shell *s) {
         words(p,350,y+4,592,ready?CYAN:MUTED,values[i],false);
     }
     const char *hints[]={"Automatic uses the inspected CD boot encoding.",
-        "Aggressive gives the background reader more work per step.",
+        native_reader?"Choose New (X) or Legacy (Y) with A or left/right.":
+            "Aggressive gives the background reader more work per step.",
         "Disc tracks, image format and boot file details.","Read tests run separately from normal game launches.",
         "Two one-time boot patches. Native games with CD music Off only.",
         "Save detected defaults for this image, including turning RAM patches Off.",

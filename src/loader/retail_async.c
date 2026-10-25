@@ -35,6 +35,9 @@ __asm__(".global __kui_native_irq_rearm_resident\n.set __kui_native_irq_rearm_re
 __asm__(".global __kui_native_loader_timeline_resident\n.set __kui_native_loader_timeline_resident,1\n");
 #if KUI_NATIVE_SDK_SCI_ROUTE
 __asm__(".global __kui_native_sdk_sci_route_resident\n.set __kui_native_sdk_sci_route_resident,1\n");
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+__asm__(".global __kui_native_sdk_sci_structural_resident\n.set __kui_native_sdk_sci_structural_resident,1\n");
+#endif
 #endif
 #if KUI_NATIVE_SCI_PRIORITY7
 __asm__(".global __kui_native_sci_priority7_resident\n.set __kui_native_sci_priority7_resident,7\n");
@@ -200,7 +203,9 @@ extern const uint32_t kui_retail_vector_forward[3];
 extern const uint32_t kui_retail_vector_interrupt[11];
 #endif
 
+#if !KUI_NATIVE_SDK_SCI_STRUCTURAL
 static uint32_t our_vbr(void) { return (uint32_t)(uintptr_t)&R - 0x100u; }
+#endif
 
 /* Word by word: a constant-size copy here would pull in libgcc's block
  * moves, which the resident has no room for. */
@@ -226,12 +231,25 @@ void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
  * the admitted RTS callbacks in the SDK's original, persistent vector table.
  * The callback route never changes VBR or needs an interrupt-return veneer. */
 static bool sdk_sci_ready(void) {
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+    uint32_t owner=R.vector600[KUI_NATIVE_SDK_SCI_VBR_INDEX];
+    if(R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX]!=KUI_NATIVE_SDK_SCI_COOKIE ||
+       vbr_get()!=owner)return false;
+    if(!kui_native_sdk_sci_vbr_address(owner))return false;
+    uint32_t callback=(uint32_t)(uintptr_t)kui_retail_sdk_sci_entry;
+    uint32_t slots=owner+KUI_NATIVE_SDK_SCI_ERI_SLOT_OFFSET;
+    /* Keep the admitted adjacent pair on one address register. This emits
+     * no instruction and avoids two large offsets in the bounded resident. */
+    __asm__("":"+r"(slots));
+    return rd32(slots)==callback && rd32(slots+4u)==callback;
+#else
     if(R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX]!=KUI_NATIVE_SDK_SCI_COOKIE ||
        R.vector600[KUI_NATIVE_SDK_SCI_VBR_INDEX]!=KUI_NATIVE_SDK_SCI_OWNER_VBR ||
        vbr_get()!=KUI_NATIVE_SDK_SCI_OWNER_VBR) return false;
     uint32_t callback=(uint32_t)(uintptr_t)kui_retail_sdk_sci_entry;
     return rd32(KUI_NATIVE_SDK_SCI_OWNER_VBR+KUI_NATIVE_SDK_SCI_ERI_SLOT_OFFSET)==callback &&
         rd32(KUI_NATIVE_SDK_SCI_OWNER_VBR+KUI_NATIVE_SDK_SCI_RXI_SLOT_OFFSET)==callback;
+#endif
 }
 static uint32_t sdk_sci_level(void) {
     return sdk_sci_ready()?SCI_LEVEL:0u;
@@ -750,6 +768,13 @@ static void native_loan_fault(void) {
     e.failed=KUI_GD_ERROR_IO;
     kui_retail_hook_fault=1u;
 }
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+/* This profile never installs the raw-vector VBR. Its writer may borrow SCI
+ * only while the original admitted SDK still owns the interrupt context. */
+static bool native_loan_vector_lost(void) {
+    return vbr_get()!=R.vector600[KUI_NATIVE_SDK_SCI_VBR_INDEX];
+}
+#endif
 enum kui_vmu_native_async_loan_result kui_retail_native_async_loan_begin(
     struct kui_loader_sd *copied_card) {
     if((native_loan_sr()&UINT32_C(0xf0))!=UINT32_C(0xf0))
@@ -779,7 +804,13 @@ enum kui_vmu_native_async_loan_result kui_retail_native_async_loan_begin(
     if((e.opened && kui_sci_stream_stop()!=KUI_SCI_STREAM_OK) ||
        kui_sci_stream_busy() || R.shared.stream.state || R.shared.port.fault ||
        e.opened!=(uint32_t)R.shared.port.acquired || e.release.armed ||
-       e.release.depth || e.hooked || vbr_get()==our_vbr()) goto fault;
+       e.release.depth || e.hooked ||
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+       native_loan_vector_lost()
+#else
+       vbr_get()==our_vbr()
+#endif
+       ) goto fault;
     kui_sci_stream_discard();
     if(e.opened) kui_sci_sd_release();
     if(R.shared.port.acquired || R.shared.port.fault) goto fault;
@@ -799,7 +830,12 @@ enum kui_vmu_native_async_loan_result kui_retail_native_async_loan_end(bool heal
        kui_retail_hook_active!=1u || !healthy || R.shared.port.acquired ||
        R.shared.port.fault || e.opened || kui_sci_stream_busy() || R.shared.stream.state ||
        !R.shared.card.device.sd.ready || e.active || e.in_irq || e.release.depth ||
-       e.release.armed || e.hooked || vbr_get()==our_vbr() ||
+       e.release.armed || e.hooked ||
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+       native_loan_vector_lost() ||
+#else
+       vbr_get()==our_vbr() ||
+#endif
        !s->initialized || s->pending || s->executing) {
         native_loan_fault();
         if(kui_retail_hook_active==1u) kui_retail_hook_active=0u;

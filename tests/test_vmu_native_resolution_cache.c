@@ -64,6 +64,20 @@ static void codec_and_trust_tests(void) {
     CHECK(kui_vmu_native_resolution_cache_record_digest(wire,sizeof(wire),pin));CHECK(!memcmp(pin,wire+992u,32u));
     CHECK(replay(image,sizeof(image),load,wire,sizeof(wire),pin,&out));CHECK(!memcmp(&source,&out,sizeof(out)));
     CHECK(!memcmp(wire,original,sizeof(wire)));CHECK(!strict(image,sizeof(image),load,wire,sizeof(wire),&out));
+    /* A locally resealed old detector record still lacks the new family /
+     * uniqueness proof. Neither its old pin nor its recomputed local digest
+     * can turn it into an epoch3 launch authority. No output is published. */
+    for(unsigned epoch=1u;epoch<KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH;epoch++) {
+        memcpy(wire,original,sizeof(wire));wire[16]=(uint8_t)epoch;
+        wire[17]=wire[18]=wire[19]=0u;seal(wire);memcpy(changed,wire+992u,32u);
+        uint8_t untouched[32];memset(untouched,0xa5,sizeof(untouched));
+        CHECK(!kui_vmu_native_resolution_cache_record_digest(wire,sizeof(wire),untouched));
+        for(unsigned i=0;i<sizeof(untouched);i++)CHECK(untouched[i]==0xa5u);
+        CHECK(!replay(image,sizeof(image),load,wire,sizeof(wire),pin,&out));
+        CHECK(!replay(image,sizeof(image),load,wire,sizeof(wire),changed,&out));
+        CHECK(!strict(image,sizeof(image),load,wire,sizeof(wire),&out));
+    }
+    memcpy(wire,original,sizeof(wire));
     /* Every single-byte corruption must miss before exposing any output. */
     for(unsigned i=0;i<sizeof(wire);i++) {
         wire[i]^=1u;memset(changed,0xa5,sizeof(changed));

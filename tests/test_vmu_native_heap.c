@@ -85,6 +85,24 @@ static void call_expression_tests(void) {
     CHECK(kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
     CHECK(call.load==0x8c010412u && call.call==0x8c010414u && call.return_pr==0x8c010418u);
     CHECK(call.entry_begin==0x8c500020u && call.entry_bytes==0xafffe0u);
+    struct kui_vmu_native_heap_call expected=call;
+    /* The two full-word zero-displacement stack-store encodings are
+     * equivalent only with a known source and unchanged SP. Sweep every
+     * source register; neither form may invent inherited register knowledge. */
+    for(unsigned reg=0u;reg<16u;reg++) {
+        bool known=reg==0u || reg==1u || reg==2u || reg==4u || reg==5u;
+        put16(0x410u,(uint16_t)(0x2f02u|(reg<<4)));
+        CHECK(kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call)==known);
+        if(known)CHECK(!memcmp(&call,&expected,sizeof(call)));
+        put16(0x410u,(uint16_t)(0x1f00u|(reg<<4)));
+        CHECK(kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call)==known);
+        if(known)CHECK(!memcmp(&call,&expected,sizeof(call)));
+    }
+    const uint16_t invalid_sp[]={0x2f00u,0x2f01u,0x2f06u,0x6ff2u,0xef00u,0x4f22u};
+    for(unsigned i=0u;i<sizeof(invalid_sp)/sizeof(invalid_sp[0]);i++) {
+        put16(0x410u,invalid_sp[i]);CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
+    }
+    put16(0x410u,0x1f03u);
     const size_t mutations[]={0x400u,0x402u,0x404u,0x406u,0x408u,0x40au,0x40cu,0x40eu,0x410u,0x412u,0x414u,0x416u};
     for(unsigned i=0;i<sizeof(mutations)/sizeof(mutations[0]);i++) {
         uint16_t saved=h16(image+mutations[i]);put16(mutations[i],0x0000u);
@@ -102,6 +120,12 @@ static void call_expression_tests(void) {
     load_literal(0x500u,4u,0x608u,0x8c500020u);load_literal(0x502u,5u,0x60cu,0xafffe0u);
     load_literal(0x504u,2u,0x700u,h.initializer_target);put16(0x506u,0x420bu);put16(0x508u,0x0009u);
     CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
+    h=call_fixture();
+    load_literal(0x400u,4u,0x600u,0x8c500020u);load_literal(0x402u,5u,0x604u,0xafffe0u);
+    load_literal(0x404u,3u,0x700u,h.initializer_target);put16(0x406u,0x2f32u);
+    put16(0x408u,0x430bu);put16(0x40au,0x0009u);
+    CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
+    put16(0x406u,0x1f30u);CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
     h=call_fixture();
     /* Different allocation-register scheduling and a fixed four-MiB arena
      * use the same bounded decoder, with no title or address allowlist. */

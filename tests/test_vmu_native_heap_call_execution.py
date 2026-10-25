@@ -20,11 +20,16 @@ from test_vmu_native_heap_execution import SH, MASK, physical, signed, verified_
 from sh4_delay_slots import validate_delay_slot
 
 ROOT = Path(__file__).resolve().parents[1]
-GAMES = ("ps2", "skies", "sa2", "grandia2", "evolution1", "evolution2", "jgr")
-OPTIONS = argparse.Namespace(output=None, **{game: os.environ.get(
+GAMES = ("ps2", "skies", "sa2", "grandia2", "evolution1", "evolution2", "jgr", "rayman2", "lodoss")
+OPTIONS = argparse.Namespace(output=None, record_directory=None, **{game: os.environ.get(
     f"KUI_NATIVE_{game.upper()}_STARTUP") for game in GAMES})
 RESULTS = []
 STACK, HOOK = 0x8C00EF00, 0x8C004200
+
+
+def record_file(game):
+    directory = getattr(OPTIONS, "record_directory", None) or ROOT / "tests/fixtures/native-cache"
+    return Path(directory) / f"{game}.nvr"
 
 
 class CallerSH(SH):
@@ -95,7 +100,7 @@ def metadata(game, image):
         assert len(image) == partial["bytes"]
         call = {key: int(value, 16) for key, value in partial["proved_call"].items()}
         return 0x8C010000, int(partial["initializer_slot"], 16), int(partial["initializer"], 16), call
-    wire = (ROOT / "tests/fixtures/native-cache" / f"{game}.nvr").read_bytes()
+    wire = record_file(game).read_bytes()
     assert len(wire) == 1024 and wire[:8] == b"KUINVR01"
     assert hashlib.sha256(wire[:992]).digest() == wire[992:]
     assert hashlib.sha256(image).digest() == wire[32:64]
@@ -117,7 +122,7 @@ class CallerExecution(unittest.TestCase):
             image = source
         else:
             source, image, extent = verified_program_image(
-                path, ROOT / "tests/fixtures/native-cache" / f"{game}.nvr")
+                path, record_file(game))
         load, slot, target, call = metadata(game, image)
         self.assertEqual(struct.unpack_from("<I", image, physical(slot) - physical(load))[0], target)
         # The production decoder grants no caller state. Execute every bounded
@@ -174,6 +179,8 @@ if __name__ == "__main__":
     for game in GAMES:
         parser.add_argument("--" + game, type=Path, default=getattr(OPTIONS, game))
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--record-directory", type=Path,
+                        help="Fresh production-generated records for a separately audited corpus")
     OPTIONS, remaining = parser.parse_known_args()
     suite = unittest.main(argv=[sys.argv[0], *remaining], exit=False)
     if suite.result.wasSuccessful() and OPTIONS.output:

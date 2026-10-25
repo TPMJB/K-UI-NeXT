@@ -175,7 +175,8 @@ static bool call_expression(const uint8_t *p,size_t n,const struct kui_vmu_nativ
         if(op==0x0009u) continue;
         /* Argument evaluation cannot authorize changing the inherited stack.
          * Only the explicit displacement store below may name R15. */
-        if(r==15u && (op&0xff00u)!=0x1f00u) return false;
+        bool stack_store=(op&0xff00u)==0x1f00u || (op&0xff0fu)==0x2f02u;
+        if(r==15u && !stack_store) return false;
         /* The installer replaces this literal with its low hook. Preserve
          * the transport itself, not just the original computed target: a
          * later mask/add could otherwise transform the replacement pointer. */
@@ -208,8 +209,11 @@ static bool call_expression(const uint8_t *p,size_t n,const struct kui_vmu_nativ
             if(target_loaded && m==target) return false;
             if(!(known&other)) return false;
             value[r]=value[m];known|=bit;
-        } else if((op&0xff00u)==0x1f00u) {
+        } else if(stack_store) {
             /* Reviewed startup spills a computed boundary to its own stack.
+             * MOV.L Rm,@R15 is exactly the zero-displacement encoding of
+             * MOV.L Rm,@(0,R15); neither encoding changes R15. The same
+             * known-source and no-replacement-target rules apply to both.
              * No stack loads are accepted, so this cannot supply knowledge
              * to the argument expression or follow an unproved pointer. */
             if((target_loaded && m==target) || !(known&other)) return false;

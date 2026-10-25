@@ -500,7 +500,7 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000)
             "hostile_abi_callees": True, "refused_mutations": rejected}
 
 
-def source_contract(readahead=False):
+def source_contract(readahead=False,wide_lease=False):
     paths = ("include/kui/vmu_native_background.h", "include/kui/vmu_native_async_loan.h",
              "src/loader/vmu_native_background_resident.c", "src/loader/retail_resident.c",
              "src/loader/retail_async.c", "src/loader/retail_async.h", "src/loader/retail_resident.S",
@@ -518,11 +518,20 @@ def source_contract(readahead=False):
                 "KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES": 0x760}
     require(all(constants.get(key) == value for key, value in expected.items()),
             "Background workspace geometry changed")
-    if readahead:
-        # Preserve the old192KiB branch; the selected384KiB variant is a
-        # separately paired profile, also checked by compiled lease tests.
-        require('#if KUI_NATIVE_READAHEAD\n#define KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES KUI_NATIVE_RA_LEASE_BYTES\n#else\n#define KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES UINT32_C(0x30000)\n#endif' in sources[paths[0]],
+    if readahead or wide_lease:
+        # Preserve the old192KiB default. The dual module admits its legacy
+        # engine to the exact same384KiB geometry only when the linked
+        # terminal/map guard instructions independently prove that span.
+        tail='\n#define KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES KUI_NATIVE_RA_LEASE_BYTES\n#else\n#define KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES UINT32_C(0x30000)\n#endif'
+        old='#if KUI_NATIVE_READAHEAD'+tail
+        dual='#if KUI_NATIVE_READAHEAD || KUI_NATIVE_DUAL_READERS'+tail
+        require(old in sources[paths[0]] or dual in sources[paths[0]],
                 'read-ahead did not isolate the selected owned lease')
+        if dual in sources[paths[0]]:
+            header=(ROOT/'include/kui/native_dual_reader.h').read_text()
+            require('#ifndef KUI_NATIVE_DUAL_READERS\n#define KUI_NATIVE_DUAL_READERS 0\n#endif' in header and
+                    '#if KUI_NATIVE_DUAL_READERS != 0 && KUI_NATIVE_DUAL_READERS != 1' in header,
+                    'dual lease must remain an explicit boolean opt-in')
         layout=(ROOT/'include/kui/native_readahead_layout.h').read_text()
         require('#define KUI_NATIVE_RA_LEASE_BYTES UINT32_C(0x60000)' in layout,
                 'read-ahead selected lease geometry changed')
@@ -693,10 +702,24 @@ def check(directory, *, self_test=False, require_stage=False):
             f"Background private stack needs {total} bytes including its guard/top gap; available {TOP-BOTTOM}")
     stage = stage_contract(directory, inspected, self_test=self_test)
     require(not require_stage or stage["available"], "complete-profile audit requires the linked stage")
-    source = source_contract(readahead)
+    # A legacy engine in the dual module also owns384KiB, while retaining
+    # raw vectors. Do not infer192KiB merely from absence of the RA marker:
+    # pin every linked refusal/terminal guard before selecting the wide span.
+    from check_vmu_native_map_refusal import signature as guard_signature,READAHEAD_PINS
+    wide_lease=guard_signature(image,disassembly,'_native_resident_terminal')[:2]==READAHEAD_PINS['_native_resident_terminal']
+    lease_guards={}
+    if wide_lease:
+        for name,expected in READAHEAD_PINS.items():
+            actual=guard_signature(image,disassembly,name)
+            require(actual[:2]==expected,'wide Background lease guard instructions changed: '+name)
+            lease_guards[name]={'sha256':actual[0],'bytes':actual[1]}
+    require(not readahead or wide_lease,'read-ahead lost its exact384KiB low guards')
+    source = source_contract(readahead,wide_lease)
     result = {"schema": "kui.native.background.audit.v1", "console_execution_verified": False,
               "resident_sha256": digest(data), "payload_bytes": len(inspected["payload"]),
               "memory_end": hex(inspected["memory_end"]), "low_limit": hex(BOTTOM),
+              "selected_guarded_lease_bytes":0x60000 if wide_lease else 0x30000,
+              "wide_lease_linked_guard_pins":lease_guards,
               "region_pointer": {"address": hex(pointer), "bytes": 4, "fixed_region_absent": True},
               "worker_stack_gateway": {"address": hex(lease), "allocated_bytes": lease_bytes,
                                        "declared_function_bytes": declared_lease_bytes},

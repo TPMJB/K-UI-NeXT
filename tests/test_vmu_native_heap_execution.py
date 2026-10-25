@@ -41,7 +41,7 @@ RAM_BEGIN, RAM_END = 0x0C000000, 0x0D000000
 WORKER_SPAN, LEASE_BYTES = 0x20000, 0x30000
 OLD_INSTALLER_SP = 0x8CFF0000 - 32
 OPTIONS = argparse.Namespace(build=os.environ.get("KUI_NATIVE_HEAP_BUILD"),
-    lease_bytes=LEASE_BYTES, output=None,
+    lease_bytes=LEASE_BYTES, output=None, record_directory=None,
     **{game: os.environ.get(f"KUI_NATIVE_{game.upper()}_STARTUP") for game in ("ps2", "skies", "sa2", "grandia2", "evolution1", "evolution2")})
 RESULTS = []
 
@@ -494,12 +494,14 @@ class HeapExecutionTests(unittest.TestCase):
             self.skipTest(f"Supply --{slug} or KUI_NATIVE_{slug.upper()}_STARTUP")
         if not OPTIONS.build:
             self.skipTest("Supply --build or KUI_NATIVE_HEAP_BUILD for the actual stage")
-        wire = (ROOT / "tests/fixtures/native-cache" / f"{slug}.nvr").read_bytes()
+        record_directory = getattr(OPTIONS, "record_directory", None) or ROOT / "tests/fixtures/native-cache"
+        record_path = Path(record_directory) / f"{slug}.nvr"
+        wire = record_path.read_bytes()
         self.assertEqual(len(wire), 1024)
         self.assertEqual(wire[:8], b"KUINVR01")
         self.assertEqual(hashlib.sha256(wire[:992]).digest(), wire[992:])
         source, image, extent = verified_program_image(
-            path, ROOT / "tests/fixtures/native-cache" / f"{slug}.nvr")
+            path, record_path)
         self.assertEqual(hashlib.sha256(image).digest(), wire[32:64])
         self.assertEqual(len(image), struct.unpack_from("<I", wire, 24)[0])
         heap = struct.unpack_from("<18I", wire, 608)
@@ -593,7 +595,10 @@ class HeapExecutionTests(unittest.TestCase):
         copied_span = lease_bytes if lease_bytes == 0x60000 else WORKER_SPAN
         model.store_block(payload + len(worker), bytes(copied_span - len(worker)))
         old_corrupted = model.block(old_frame, 160) != bytes([0x69]) * 160
-        self.assertEqual(old_corrupted, slug in ("skies", "sa2", "evolution1", "evolution2"))
+        expected_corruption = intersects(old_frame, 160, payload + len(worker), copied_span - len(worker))
+        self.assertEqual(old_corrupted, expected_corruption)
+        if lease_bytes == LEASE_BYTES and slug in ("ps2", "skies", "sa2", "grandia2", "evolution1", "evolution2"):
+            self.assertEqual(old_corrupted, slug in ("skies", "sa2", "evolution1", "evolution2"))
         if slug in ("skies", "sa2", "evolution1", "evolution2"):
             self.assertEqual(physical(payload), RAM_END - lease_bytes)
             self.assertTrue(intersects(old_frame, 160, payload, copied_span))
@@ -653,6 +658,8 @@ if __name__ == "__main__":
                         choices=(0x30000, 0x60000), default=LEASE_BYTES,
                         help="Retain the historical192KiB proof or exercise the separately linked384KiB read-ahead geometry")
     parser.add_argument("--output", type=Path, help="Write successful original-code proof results as JSON")
+    parser.add_argument("--record-directory", type=Path,
+                        help="Fresh production-generated records for a separately audited corpus")
     for game in ("ps2", "skies", "sa2", "grandia2", "evolution1", "evolution2"):
         parser.add_argument("--" + game, type=Path, default=os.environ.get(f"KUI_NATIVE_{game.upper()}_STARTUP"))
     OPTIONS, remaining = parser.parse_known_args()

@@ -27,6 +27,10 @@ __asm__(".global __kui_native_reader_stall_capture\n"
 #endif
 #if KUI_NATIVE_READAHEAD
 #include "kui/native_readahead.h"
+#if KUI_NATIVE_DUAL_READERS
+#include "kui/native_sdk_sci_runtime.h"
+__asm__(".global __kui_native_dual_readers_worker\n.set __kui_native_dual_readers_worker,1\n");
+#endif
 __asm__(".global __kui_native_readahead_worker\n.set __kui_native_readahead_worker,1\n");
 __asm__(".global __kui_native_readahead_diagnostic_worker\n"
         ".set __kui_native_readahead_diagnostic_worker,1\n");
@@ -41,6 +45,15 @@ static kui_retail_async_region_type *reader_capture_region(void);
 static const struct kui_native_ra_exports *reader_readahead_exports(
     const kui_retail_async_region_type *r) {
     uint32_t lease=(config.lease.payload&UINT32_C(0x1fffffff))|UINT32_C(0x80000000);
+#if KUI_NATIVE_DUAL_READERS
+    /* Legacy vector600 contains instructions. Prove the selected immutable
+     * owned X map and SDK publication before interpreting any auxiliary
+     * header or vector word as a function/context pointer. */
+    const struct kui_retail_manifest *owned=(const void *)(uintptr_t)
+        (lease+KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES);
+    if(!r || r->engine.manifest!=owned || !kui_native_reader_uses_sdk(owned->reader) ||
+       r->vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX]!=KUI_NATIVE_SDK_SCI_COOKIE)return NULL;
+#endif
     uint32_t load=lease+KUI_NATIVE_RA_AUX_OFFSET;
     const struct kui_native_ra_exports *a=(const void *)(uintptr_t)(load|UINT32_C(0x20000000));
     if(!r || a->magic!=KUI_NATIVE_RA_AUX_MAGIC || a->version!=1u || a->bytes!=sizeof(*a) ||
@@ -96,7 +109,13 @@ static void reader_readahead_diagnostics(const struct retail_display_state *disp
         for(unsigned result=0u;result<KUI_NATIVE_RA_RESULT_COUNT;result++)
             stages[stage]+=d->stage_result[stage][result];
     retail_display_values("FAIL POLL TAKE APPEND FETCH",stages,5u);
-    retail_display_values("RESUME STOP FIRST ST LAST ST",(uint32_t[4]){
+    retail_display_values(
+#if KUI_NATIVE_DUAL_READERS
+        "RESUME STOP FIRST LAST",
+#else
+        "RESUME STOP FIRST ST LAST ST",
+#endif
+        (uint32_t[4]){
         stages[5],stages[6],d->first.stage,d->last.stage},4u);
     const uint32_t *n=d->skipped;
     retail_display_values("SKIP QUIET ABORT SEED LOAN ACTIVE",n,5u);
@@ -296,11 +315,29 @@ static void reader_capture_poll(const struct kui_vmu_native_profile_sample *cloc
     const struct kui_retail_async *a=&r->engine;
     const struct kui_sci_stream_stats *s=&r->shared.stream.stats;
     const struct kui_retail_gd *g=&r->shared.service;
+#if KUI_NATIVE_DUAL_READERS
+    const struct kui_retail_manifest *owned=(const void *)(uintptr_t)
+        (((config.lease.payload&UINT32_C(0x1fffffff))|UINT32_C(0x80000000))+
+         KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES);
+    bool timing=a->manifest==owned && kui_native_reader_uses_sdk(owned->reader);
+#endif
     struct kui_reader_capture_sample sample={
         .tick=clock->counter,.valid=kui_vmu_native_profile_sample_valid(clock)?1u:0u,
 #if KUI_NATIVE_REQUEST_TIMING
-        .call_max=a->stats.releases,
-        .irq_max=g->pending && a->token==g->token?a->stats.hooks-clock->counter:0u,
+        .call_max=
+#if KUI_NATIVE_DUAL_READERS
+            timing?
+#endif
+            a->stats.releases
+#if KUI_NATIVE_DUAL_READERS
+            :0u
+#endif
+            ,
+        .irq_max=
+#if KUI_NATIVE_DUAL_READERS
+            timing &&
+#endif
+            g->pending && a->token==g->token?a->stats.hooks-clock->counter:0u,
         .irq_blocks=a->stats.irq_blocks
 #if !KUI_NATIVE_IRQ_REARM
             -reader_cooperative.blocks
@@ -339,7 +376,11 @@ static void reader_capture_poll(const struct kui_vmu_native_profile_sample *cloc
 static void reader_capture_report(const struct retail_display_state *display) {
     retail_display_restore(display);
 #if KUI_NATIVE_REQUEST_TIMING
+#if KUI_NATIVE_DUAL_READERS
+    retail_display_line("READ AGE TIMING - SDK X ONLY");
+#else
     retail_display_line("HYBRID READER - COMPLETE REQUEST TIMING");
+#endif
 #else
     retail_display_line("B READER STALL CAPTURE - RAM ONLY");
 #endif
@@ -380,7 +421,9 @@ static void reader_capture_report(const struct retail_display_state *display) {
 #else
         },4u);
 #endif
+#if !KUI_NATIVE_DUAL_READERS
     retail_display_line("FULL CHECK AND EXEC CATCHUP - NO PUMP");
+#endif
 #elif KUI_NATIVE_PACED_CHECK
     retail_display_line("CHECK WAIT BOOST NEEDS 16 TIGHT POLLS");
     retail_display_line("CONTROLLER READER SERVICE DISABLED");
@@ -401,7 +444,9 @@ static void reader_capture_report(const struct retail_display_state *display) {
     retail_display_line("GAP IS BETWEEN MAPLE COMPLETION SAMPLES");
     retail_display_line("BAD CLOCK MEANS DO NOT CONVERT TO TIME");
 #endif
+#if !KUI_NATIVE_DUAL_READERS
     retail_display_line("NEXT TWO PAGES KEEP THE FOUR LONGEST GAPS");
+#endif
     retail_display_pause(300u);
     for(unsigned first=0u;first<reader_capture.top_count;first+=2u) {
         retail_display_restore(display);
@@ -426,7 +471,13 @@ static void reader_capture_report(const struct retail_display_state *display) {
             retail_display_values("FN CMD PREV TOKEN TOKEN BLOCK",(uint32_t[5]){
                 e->function,e->command,e->previous_token,e->token,e->block},5u);
         }
-        retail_display_line("PHOTO ALL THREE READER PAGES THEN POWER OFF");
+        retail_display_line(
+#if KUI_NATIVE_DUAL_READERS
+            "PAGES CYCLE - PHOTO THEN OFF"
+#else
+            "PHOTO ALL THREE READER PAGES THEN POWER OFF"
+#endif
+            );
         retail_display_pause(300u);
     }
 }

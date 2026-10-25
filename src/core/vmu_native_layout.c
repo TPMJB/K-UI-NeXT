@@ -288,6 +288,25 @@ static bool uniform_root(const uint8_t *p,size_t n,uint32_t base,size_t call,
      * indirect target. RX/TX/mode remain R5/R6/R4; no inherited register or
      * value inferred after the call may authorize its sampled target. */
     if(target_reg!=0u && target_reg!=2u && target_reg!=3u) return false;
+    /* Two complete caller continuations supply the sampled target and both
+     * buffer arguments in three literal loads, then mode zero in the JSR
+     * delay. The first follows an actual prior JSR/R4-stack-reload pair;
+     * the second follows the complete R14..R8/PR entry prologue. Their stack
+     * value cannot supply a buffer or mode. An unknown preceding branch is
+     * deliberately not skipped: it is outside both reviewed continuations.
+     * In particular this cannot manufacture a second root after a loop. */
+    static const struct witness entry[]={{0,0x2fe6},{2,0x2fd6},{4,0x2fc6},
+        {6,0x2fb6},{8,0x2fa6},{10,0x2f96},{12,0x2f86},{14,0x4f22}};
+    bool after_call=call>=10u && (u16(p+call-10u)&0xf0ffu)==0x400bu &&
+        (u16(p+call-8u)&0xfff0u)==0x54f0u;
+    bool after_entry=call>=22u && WORDS(p,n,call-22u,entry);
+    if((after_call || after_entry) && u16(p+call+2u)==0xe400u &&
+       target(p,n,base,call-6u,target_reg,upper) &&
+       literal(p,n,base,call-4u,5u,rx) && literal(p,n,base,call-2u,6u,tx)) {
+        *rx_slot=((base+(uint32_t)call)&~3u)+4u*(u16(p+call-4u)&255u);
+        *tx_slot=((base+(uint32_t)call+2u)&~3u)+4u*(u16(p+call-2u)&255u);
+        return true;
+    }
     unsigned known=0;
     for(size_t s=call-8u;s<=call+2u;s+=2u) {
         /* SH samples the indirect target before executing its delay slot.

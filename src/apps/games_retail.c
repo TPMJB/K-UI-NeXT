@@ -15,6 +15,7 @@
 #include "kui/retail_zso.h"
 #include "kui/retail_loader_layout.h"
 #include "kui/vmu_launch_package.h"
+#include "kui/native_dual_reader.h"
 #include "kui/media.h"
 #include "../core/games_cdda_profile.h"
 #include "platform.h"
@@ -497,6 +498,11 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     if((ce && (descramble || plain)) || (descramble && plain)) {
         log("Retail boot: invalid boot encoding choice");return false;
     }
+    const bool native_dual=!ce && !cdda && !ce_excerpt && !zso &&
+        (reader==KUI_RETAIL_READER_ASYNC || reader==KUI_RETAIL_READER_ASYNC_EAGER);
+    if(native_dual && patched) {
+        log("Native virtual-A2 background testing requires RAM patches Off");return false;
+    }
     struct files files={.cancel=cancel};char name[KUI_GAME_NAME_CAP];
     if(!split(path,&files,name) || stopped(&files)) {log("Retail boot: invalid path or cancelled");return false;}
     if(!kui_sd_connect()) {log("Retail boot: storage unavailable");return false;}
@@ -508,11 +514,17 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     if(!kui_mount(&fs,log)) goto done;
     enum kui_wince_cdda_profile music_profile=KUI_WINCE_CDDA_NONE;
     const char *launch_package=zso?(codec==KUI_ZSO_LZO1X?KUI_GAMES_RETAIL_LZO_PACKAGE:KUI_GAMES_RETAIL_ZSO_PACKAGE):ce?KUI_GAMES_RETAIL_CE_PACKAGE:KUI_GAMES_RETAIL_PACKAGE;
+    if(native_dual)launch_package=KUI_GAMES_RETAIL_NATIVE_DUAL_PACKAGE;
     enum kui_runtime_result rr=KUI_RUNTIME_OK;
     if(!cdda && !ce_excerpt) {
         rr=kui_runtime_read(launch_package,package,log,cancel);
-        if(rr!=KUI_RUNTIME_OK) {problem=kui_runtime_result_name(rr);goto done;}
+        if(rr!=KUI_RUNTIME_OK) {
+            problem=native_dual?"native X/Y virtual-A2 module missing or unreadable; install the matching candidate":kui_runtime_result_name(rr);goto done;
+        }
         if(!layout_codec(package,ce,zso,codec)) {problem="unsupported game-launch package layout";goto done;}
+        if(native_dual && kui_native_dual_descriptor_find(package->data,package->info.payload_bytes,NULL)!=1) {
+            problem="native X/Y module capability missing or ambiguous; install the matching candidate";goto done;
+        }
     }
     uint64_t size=0;
     if(stat_file(&files,name,&size)!=KUI_GAME_OK || !size) {
@@ -535,6 +547,9 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         problem="ZSO direct launch needs SCI microSD";goto done;
     }
     if(map->storage_transport>KUI_STORAGE_IDE) {problem="storage transport not selected";goto done;}
+    if(native_dual && map->storage_transport!=KUI_STORAGE_SCI) {
+        problem="native X/Y virtual-A2 readers require SCI microSD";goto done;
+    }
     log("Retail boot storage: %s",map->storage_transport==KUI_STORAGE_SCIF?"SCIF microSD":
         map->storage_transport==KUI_STORAGE_SCI?"SCI microSD":"IDE / CF");
     map->track_count=image->count;map->gdi_crc32=kui_retail_crc32(0,gdi,fingerprint_bytes);
@@ -545,6 +560,10 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     struct kui_game_metadata metadata;struct kui_game_metadata_ops metadata_ops={image,metadata_read,metadata_range};
     enum kui_game_metadata_status ms=kui_game_metadata_read(&metadata_ops,map->session_lba,&metadata);
     if(ms!=KUI_GAME_METADATA_OK) {problem=kui_game_metadata_status_text(ms);goto done;}
+    if(native_dual && (metadata.windows_ce || !metadata.native_gd ||
+        image->format!=KUI_GAME_IMAGE_GDI || image->compressed || image->scrambled || image->cd_image)) {
+        problem="native X/Y virtual-A2 testing requires a native GDI with original boot encoding";goto done;
+    }
     if(cdda && (metadata.windows_ce || !metadata.native_gd ||
         image->format!=KUI_GAME_IMAGE_GDI || image->cd_image || image->scrambled ||
         map->storage_transport!=KUI_STORAGE_SCI)) {
@@ -621,7 +640,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     snprintf(map->product,sizeof(map->product),"%s",metadata.product);
     snprintf(map->region,sizeof(map->region),"%s",metadata.region);
     snprintf(map->bootfile,sizeof(map->bootfile),"%s",metadata.bootfile);
-    if(kui_vmu_launch_silver_candidate(map) || kui_vmu_launch_toy_candidate(map)) {
+    if(!native_dual && (kui_vmu_launch_silver_candidate(map) || kui_vmu_launch_toy_candidate(map))) {
         bool silver=kui_vmu_launch_silver_candidate(map);
         const char *optional_path=silver?KUI_GAMES_RETAIL_VMU_SILVER_PACKAGE:KUI_GAMES_RETAIL_VMU_TOY_PACKAGE;
         FILINFO optional;
@@ -712,6 +731,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         mapped=map_tracks(&files,&fs,&volume,image,map,KUI_RETAIL_ASYNC_SLOTS,&audio);
         if(mapped==MAP_FULL) {
             if(ce) {problem="Windows CE background map exceeds 64 slots; defragment or use cooked tracks";goto done;}
+            if(native_dual) {problem="native X/Y virtual-A2 map exceeds 64 slots; defragment or use supported cooked tracks";goto done;}
             log("Retail boot: the map needs more than the background reader's %u slots; using the standard reader",
                 KUI_RETAIL_ASYNC_SLOTS);
             background=false;
@@ -742,6 +762,8 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     if(background) {
         map->reader=reader;
         if(ce) log("Retail boot reader: background SCI stream (test, Windows CE interrupts)");
+        else if(native_dual)log("Retail boot reader: %s with virtual A2; SDK families are checked at startup",
+            reader==KUI_RETAIL_READER_ASYNC?"New background (X)":"Legacy background (Y)");
         else log("Retail boot reader: background SCI stream (test, %s)",
             reader==KUI_RETAIL_READER_ASYNC_EAGER?"25 blocks per call":"20 blocks per call");
     }
@@ -846,7 +868,8 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     if(reporting && report_safe && !stopped(&files)) {
         struct kui_game_launch_report report={
             .version=KUI_VERSION,.build_id=KUI_BUILD_ID,.image_path=path,
-            .reader=map->reader==KUI_RETAIL_READER_ASYNC?"Background":
+            .reader=native_dual?(map->reader==KUI_RETAIL_READER_ASYNC?"Background New (X)":"Background Legacy (Y)"):
+                map->reader==KUI_RETAIL_READER_ASYNC?"Background":
                 map->reader==KUI_RETAIL_READER_ASYNC_EAGER?"Background (more work)":"Standard",
             .storage=map->storage_transport==KUI_STORAGE_SCIF?"SCIF microSD":
                 map->storage_transport==KUI_STORAGE_SCI?"SCI microSD":"IDE / CF",

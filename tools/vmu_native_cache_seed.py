@@ -11,7 +11,7 @@ import struct
 
 SEED_BYTES=1120
 RECORD_BYTES=1024
-DETECTOR_EPOCH=2
+DETECTOR_EPOCH=3
 
 def require(condition,message):
     if not condition:raise ValueError(message)

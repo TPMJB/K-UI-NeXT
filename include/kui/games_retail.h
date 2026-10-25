@@ -4,6 +4,9 @@
 #include "kui/runtime.h"
 #include "kui/game_ram_patches.h"
 #define KUI_GAMES_RETAIL_PACKAGE "0:/KUI/apps/games/retail-boot.kui"
+/* Native SCI Background X/Y with generic virtual A2. Standard and the
+ * separate CE/CDDA/compressed routes retain their existing packages. */
+#define KUI_GAMES_RETAIL_NATIVE_DUAL_PACKAGE "0:/KUI/apps/games/retail-native-dual.kui"
 /* Installing an optional exact-title module opts its supported original GDI
  * into persistent virtual A1. Other games keep the ordinary package. */
 #define KUI_GAMES_RETAIL_VMU_SILVER_PACKAGE "0:/KUI/apps/games/vmu-silver.kui"
@@ -45,7 +48,8 @@ bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *image,
     kui_log_fn log,kui_cancel_fn cancelled);
 /* As above, asking for a reader (enum kui_retail_reader). The background
  * reader needs SCI microSD and a map in at most KUI_RETAIL_ASYNC_SLOTS slots;
- * otherwise the launch uses the standard reader and says why in the log. */
+ * the native virtual-A2 X/Y module refuses unsupported transport/map geometry
+ * explicitly. Other existing profiles retain their documented fallback. */
 bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     struct kui_runtime_image *image,kui_log_fn log,kui_cancel_fn cancelled);
 /* Shell launch: additionally validates the two optional one-time native boot

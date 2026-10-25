@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #define KUI_NATIVE_SDK_SCI_ROUTE_VERSION 1u
+#define KUI_NATIVE_SDK_SCI_ROUTE_MAX_IMAGE_BYTES UINT32_C(0x00c00000)
 #define KUI_NATIVE_SDK_SCI_ROUTE_LOAD UINT32_C(0x8c010000)
 #define KUI_NATIVE_SDK_SCI_ROUTE_IMAGE_BYTES UINT32_C(4024288)
 #define KUI_NATIVE_SDK_SCI_ROUTE_VBR UINT32_C(0x8c00f400)
@@ -49,5 +50,33 @@ struct kui_native_sdk_sci_route_plan {
 int kui_native_sdk_sci_route_admit(const void *image,size_t image_bytes,uint32_t load,
     const uint8_t verified_sha256[32],uint32_t current_vbr,uint32_t current_sr,
     uint32_t callback,kui_native_sdk_sci_route_read read,void *context,
+    struct kui_native_sdk_sci_route_plan *out);
+/* Structural fallback for reviewed full/compact-FPU SDK interrupt families, independent of
+ * title identity. The caller already owns the normalized-program identity
+ * proof; legitimate unrelated runtime patches need not match that digest.
+ * Exactly one complete source-vector/common/default/table-initializer family
+ * is required, with decoded literal relationships and exact normalized code
+ * fingerprints. Live copied vector and still-default SCI callback slots must
+ * agree before the same first-install plan can be returned. Unknown SDK
+ * families refuse; this helper grants neither VMU-family nor title support.
+ * The unique initializer supplies the default independently of link order.
+ * All owner pointer roles must consistently use either canonical P1 or U0
+ * main RAM within the verified image. P2 and mixed aliases refuse. The plan
+ * preserves the original raw common/default pointers; live code reads use
+ * their canonical P1 view. Original SDK forwarding keeps its exact pointer.
+ * Full and compact FPU frames have distinct complete fingerprints and
+ * decoded event-cell geometry; their common/default windows cannot mix.
+ *
+ * Returns 1 for admission, 0 for unsupported family, -1 for malformed,
+ * ambiguous or unready context. Load remains the canonical native executable
+ * base; input is bounded by the existing 12MiB executable limit. Current VBR
+ * must be canonical P1 RAM, aligned256 and wholly bounded through +0x660.
+ * The caller excludes its resident/stage/lease from that owner span, then
+ * publishes only the two callback words under the same quiescent contract.
+ * Out clearing/overlap and no-write guarantees match the exact helper above.
+ */
+int kui_native_sdk_sci_route_discover(const void *image,size_t image_bytes,uint32_t load,
+    uint32_t current_vbr,uint32_t current_sr,uint32_t callback,
+    kui_native_sdk_sci_route_read read,void *context,
     struct kui_native_sdk_sci_route_plan *out);
 #endif

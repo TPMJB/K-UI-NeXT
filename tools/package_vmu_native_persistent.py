@@ -96,9 +96,18 @@ def package(build,guide='broader',trace_startup=None,sdk_startup=None):
             raise ValueError('SDK SCI owner proofs must have unique verified identities')
         evolution2='52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605'
         evolution1='ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35'
-        if report['sdk_sci_route'].get('multi_owner') and set(owners)!={evolution1,evolution2}:
+        structural=report['sdk_sci_route'].get('structural_profile',False)
+        if structural:
+            require_families={'full-fpu','compact-fpu'}
+            if not ({evolution1,evolution2}<=set(owners) and
+                    report['sdk_sci_route'].get('generic_family_table',{}).get('enabled') and
+                    require_families<={proof.get('structural_family') for proof in proofs} and
+                    all(proof.get('production_extent_and_structural_source_live_models_checked')
+                        for proof in proofs)):
+                raise ValueError('Structural SDK route requires retained owners and both actual original family proofs')
+        elif report['sdk_sci_route'].get('multi_owner') and set(owners)!={evolution1,evolution2}:
             raise ValueError('Multi-owner SDK route requires both exact Evolution original dispatch proofs')
-        if not report['sdk_sci_route'].get('multi_owner') and set(owners)!={evolution2}:
+        elif not report['sdk_sci_route'].get('multi_owner') and set(owners)!={evolution2}:
             raise ValueError('Legacy SDK route requires its exact Evolution2 original dispatch proof')
         report['sdk_sci_route']['original_sdk_dispatch_by_owner']=owners
         report['sdk_sci_route']['original_sdk_dispatch']=owners.get(evolution2,proofs[0])

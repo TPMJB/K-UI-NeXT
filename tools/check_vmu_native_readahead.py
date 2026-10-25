@@ -65,6 +65,17 @@ PIO_PAIR_WORKER_PINS={
     '_reader_cooperative_service':(32,'b6dade21be0807a8ac8e608abe02b70d90f2f47faa086e6396ebdad6e4cc6ca0'),
     '_reader_readahead_failure':(172,'e704e2fefce22e839fb62a24a10e35c949bb2c8615f84be30367e830df8c27e2'),
 }
+STRUCTURAL_LOW_PINS={
+    '_deliver_work':(456,'7ffc9bfda8c4328c9e92f4cead9270c8e97916e609dc49b367ccdaa4d1feda4c'),
+    '_deliver':(60,'d32fd5a483cdffee78867c2239be72d693e1d1cc46f62e9b0ae2cda2f5e3eb46'),
+}
+DUAL_WORKER_PINS={
+    '_reader_readahead_exports':(200,'04a1748a2f5f36a1e79fa2a791a5e16a9f90c6ac632f13bd797abf48ce58545c'),
+    '_reader_readahead_visit':(56,'c44759200e43937665b2987281e995b4f39675f1e05180371aad4078cc02dbf3'),
+    '_reader_cooperative_service':(32,'68d4a9acf31e3ce844a7ee27cac22620252b3c0ae09afba8c2dc0463f8496227'),
+    '_reader_readahead_failure':(172,'4509901703ae22c1ac0124f3077e06dc3c3466e60bebff2234e066af50d3833f'),
+}
+STRUCTURAL_LOAN_PIN=(748,'ab219f0dc9ad6dfbe01be09b3c042d63992ead50a68245ddbb9ba6116b0e352b')
 LOAN_PIN=(744,'a06ecbd795204545b4df1ca6f5efc3883a0a81b4e0391b088a12388203ff376c')
 GATEWAY_MEMORY={}
 
@@ -72,6 +83,15 @@ def require(value,message):
     if not value:raise ValueError(message)
 
 def sha(value):return hashlib.sha256(value).hexdigest()
+
+def structural_profile(resident):
+    marker=resident[4].get('__kui_native_sdk_sci_structural_resident')
+    if marker is not None:
+        require(marker==(1,0,0,0xfff1) and
+                resident[4].get('__kui_native_sdk_sci_route_resident')==(1,0,0,0xfff1),
+                'read-ahead structural low profile marker differs')
+    return marker is not None
+
 
 def diagnostic_profile(aux):
     mark=aux[4].get(DIAGNOSTIC_MARK+'auxiliary')
@@ -132,16 +152,18 @@ def pinned_loan_boundary(resident):
     # LTO's function size includes eight bytes after its dedicated section.
     # Pin the exact executable section and its complete symbol shape instead
     # of relaxing symbol_bytes for this or any earlier profile.
+    selected=STRUCTURAL_LOAN_PIN if structural_profile(resident) else LOAN_PIN
+    require(selected is not None,'structural QUIESCE boundary has no reviewed pin')
     at,count,kind,owner=resident[4]['_kui_vmu_observe_sd_lease']
     sec=resident[3][owner]
     require(kind==2 and sec[1]==1 and sec[2]&7==6 and at==sec[3] and
-            count==752 and sec[5]==LOAN_PIN[0] and LOW<=at<at+sec[5]<=GUARD,
+            count==selected[0]+8 and sec[5]==selected[0] and LOW<=at<at+sec[5]<=GUARD,
             'read-ahead QUIESCE loan boundary shape changed')
     require(resident[4]['__vmu_sd_lease_begin'][0]==at and
             resident[4]['__vmu_sd_lease_end'][0]==at+sec[5],
             'read-ahead QUIESCE loan section bounds changed')
     body=resident[0][sec[4]:sec[4]+sec[5]]
-    require(sha(body)==LOAN_PIN[1],'read-ahead QUIESCE loan instructions changed')
+    require(sha(body)==selected[1],'read-ahead QUIESCE loan instructions changed')
     return dict(address=hex(at),bytes=len(body),sha256=sha(body))
 
 def byte_mutations(image,names,probe):
@@ -291,6 +313,14 @@ class WorkerCPU(SDKCPU):
         # The reviewed32-bit worker configuration places lease.payload at
         # offset220. The pinned getter binds this exact field and address.
         self.write(worker[4]['_config'][0]+220,payload)
+        if '__kui_native_dual_readers_worker' in worker[4]:
+            # Actual SH console layout is independently compared for both
+            # engines by test_native_dual_readers.py. The X getter requires
+            # this exact retained map and completed SDK publication first.
+            self.write(self.region+0x27c,lease+0x20000)
+            self.write(lease+0x20000+48,1)
+            self.write(lease+0x20000+44,1)
+            self.write(self.region+0x530,0x53434931)
         values=(0x4b524131,1,64,self.entry,self.entry+2,self.context,
                 lease+0x24000,(lease+0x27000)|0x20000000,(lease+0x28000)|0x20000000,
                 (lease+0x28000)|0x20000000,0,0,0,0,0,0)
@@ -332,9 +362,9 @@ class WorkerCPU(SDKCPU):
         # instruction proof establishes PR preservation around its C body.
         self.r[0]=1;self.sr^=1;self.pc=continuation
 
-def worker_bindings(resident,worker,*,diagnostic=False,pio=False,pio_pair=False):
+def worker_bindings(resident,worker,*,diagnostic=False,pio=False,pio_pair=False,dual=False):
     pins={}
-    selected=PIO_PAIR_WORKER_PINS if pio_pair else PIO_WORKER_PINS if pio else \
+    selected=DUAL_WORKER_PINS if dual else PIO_PAIR_WORKER_PINS if pio_pair else PIO_WORKER_PINS if pio else \
         DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
     require(selected,'read-ahead reviewed worker pins are missing')
     public=656 if diagnostic else 76
@@ -788,11 +818,21 @@ def check(directory,*,self_test=False):
     pair_worker=worker[4].get(PIO_PAIR_MARK+'worker')
     require(bool(pair_worker)==pio_pair and (not pio_pair or pair_worker==(1,0,0,0xfff1)),
             'read-ahead PIO pair worker/auxiliary markers differ')
+    structural=structural_profile(resident)
+    dual_worker=worker[4].get('__kui_native_dual_readers_worker')
+    dual_stage=stage[4].get('__kui_native_dual_readers_stage')
+    dual=dual_worker is not None or dual_stage is not None
+    if dual:
+        require(dual_worker==dual_stage==(1,0,0,0xfff1) and structural and pio_pair and
+                stage[4].get('__kui_native_sdk_sci_structural_stage')==(1,0,0,0xfff1),
+                'dual-reader stage/worker require paired structural PIO architecture')
+    low_pins=STRUCTURAL_LOW_PINS if structural else LOW_PINS
+    require(low_pins,'read-ahead low reviewed functions are not pinned')
     geometry=image_contract(directory,aux,resident)
     code_at,code=pinned_code(aux)
     insns=instruction_audit('native-read-ahead',disassemble(directory/'native-ra-aux.elf'))
-    pinned_functions(resident,LOW_PINS,'read-ahead low binding')
-    require(LOW_PINS,'read-ahead low reviewed functions are not pinned')
+    pinned_functions(resident,low_pins,'read-ahead low binding')
+    require(low_pins,'read-ahead low reviewed functions are not pinned')
     loan_pin=pinned_loan_boundary(resident)
     loan=loan_cases(resident)
     snapshots=diagnostic_snapshots(resident,aux)
@@ -801,10 +841,14 @@ def check(directory,*,self_test=False):
         from check_vmu_native_readahead_pio import pio_cases
         producer=pio_cases(resident,aux,self_test=self_test)
     gateway=gateway_cases(resident,aux);stack=private_stack(directory,resident,self_test=self_test)
-    bindings=worker_bindings(resident,worker,diagnostic=diagnostic,pio=pio,pio_pair=pio_pair)
+    bindings=worker_bindings(resident,worker,diagnostic=diagnostic,pio=pio,pio_pair=pio_pair,dual=dual)
     display=worker_diagnostic_display(worker) if diagnostic else {'enabled':False}
     from check_vmu_native_readahead_stage import check_stage
     cold=check_stage(stage,resident,aux,self_test=self_test)
+    dual_execution={'enabled':False}
+    if dual:
+        from check_native_dual_readers import check as check_dual
+        dual_execution=check_dual(directory,self_test=self_test,cold_binder_proof=cold)
     mutations=bindings_mutations=0
     if self_test:
         for section in aux[3]:
@@ -814,10 +858,10 @@ def check(directory,*,self_test=False):
                 try:pinned_code((bytes(changed),*aux[1:]))
                 except ValueError:mutations+=1
                 else:raise ValueError('read-ahead auditor accepted changed immutable code/data')
-        bindings_mutations+=byte_mutations(resident,[(n,2) for n in LOW_PINS],
-            lambda image:pinned_functions(image,LOW_PINS,'read-ahead low binding'))
+        bindings_mutations+=byte_mutations(resident,[(n,2) for n in low_pins],
+            lambda image:pinned_functions(image,low_pins,'read-ahead low binding'))
         bindings_mutations+=byte_mutations(resident,[('_kui_native_ra_reader_ops',1),('_kui_native_ra_reader_ops_entry',1)],typed_ops)
-        worker_pins=PIO_PAIR_WORKER_PINS if pio_pair else PIO_WORKER_PINS if pio else \
+        worker_pins=DUAL_WORKER_PINS if dual else PIO_PAIR_WORKER_PINS if pio_pair else PIO_WORKER_PINS if pio else \
             DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
         bindings_mutations+=byte_mutations(worker,[(n,2) for n in worker_pins],
             lambda image:pinned_functions(image,worker_pins,'read-ahead worker binding'))
@@ -833,10 +877,11 @@ def check(directory,*,self_test=False):
     return dict(enabled=True,schema='kui.native.read-ahead.audit.v1',paired_markers=True,
         diagnostic_capture=diagnostic,repair_diagnostic_capture=repair_diagnostic_profile(aux),
         pio_candidate=pio,pio_pair_candidate=pio_pair,pio_producer=producer,
+        structural_sdk_route=structural,dual_reader_candidate=dual,dual_reader=dual_execution,
         artifact_sha256=dict(resident=sha(resident[0]),worker=sha(worker[0]),
             stage=sha(stage[0]),auxiliary=sha(aux[0])),
         immutable_code_pin={'address':hex(code_at),'bytes':len(code),'sha256':sha(code)},
-        immutable_low_pins=LOW_PINS,loan_quiesce_pin=loan_pin,loan_quiesce=loan,
+        immutable_low_pins=low_pins,loan_quiesce_pin=loan_pin,loan_quiesce=loan,
         diagnostics=snapshots,diagnostic_display=display,
         geometry=geometry,gateway=gateway,private_stack=stack,
         cold_binder=cold,worker_binding=bindings,linked_integer_instructions=insns,

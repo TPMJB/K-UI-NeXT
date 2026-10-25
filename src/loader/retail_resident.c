@@ -467,7 +467,13 @@ static void __attribute__((noinline)) native_reader_report(const char *label) {
 }
 static void report_fault(uint32_t function) {
     (void)function;
-    native_reader_report("READER STOP");
+    native_reader_report(
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+        "GD STOP"
+#else
+        "READER STOP"
+#endif
+    );
     for(;;) __asm__ volatile("nop");
 }
 #elif KUI_RETAIL_OBSERVE
@@ -654,7 +660,9 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack
 #endif
 #if KUI_VMU_NATIVE_BACKGROUND
     native_reader_report(
-#if KUI_NATIVE_COOP_PUMP
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+        "RET"
+#elif KUI_NATIVE_COOP_PUMP
         "RETURN"
 #else
         "GAME RETURN"

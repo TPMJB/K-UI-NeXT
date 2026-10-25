@@ -137,6 +137,20 @@ class CacheToolTests(unittest.TestCase):
         self.assertEqual(cache.read_bytes(), before)
         self.assertEqual(hashlib.sha256(self.actual.read_bytes()).hexdigest(), metadata["source_sha256"])
 
+    def test_actual_epoch2_resealed_record_is_refused_without_deleting_it(self):
+        cache, metadata = self.build_actual()
+        self.assertEqual(metadata["detector_epoch"], 3)
+        wire = bytearray(cache.read_bytes())
+        struct.pack_into("<I", wire, 16, 2)
+        wire[992:] = hashlib.sha256(wire[:992]).digest()
+        stale = self.work / "old epoch2.nvr"
+        stale.write_bytes(wire)
+        self.invoke("inspect", stale, code=1)
+        self.invoke("verify", self.actual, stale, code=1)
+        self.invoke("replay", self.actual, stale, metadata["record_digest"], code=1)
+        self.invoke("replay", self.actual, stale, bytes(wire[992:]).hex(), code=1)
+        self.assertEqual(stale.read_bytes(), wire)
+
     def test_evolution2_raw_source_and_program_prefix_share_cache_identity(self):
         source = self.evolution2_source()
         raw_cache = self.work / "source.nvr"

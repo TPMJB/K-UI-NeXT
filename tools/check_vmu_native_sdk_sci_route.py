@@ -24,6 +24,7 @@ from check_vmu_native_worker_gateway import read_elf,symbol_bytes
 
 MARKER='__kui_native_sdk_sci_route_'
 MULTI_OWNER_MARKER='__kui_native_sdk_sci_multi_owner_stage'
+STRUCTURAL_MARKER='__kui_native_sdk_sci_structural_'
 OWNER_CONSTANTS={
     'Evolution1':dict(bytes=2143652,digest='ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35',
         default=0x8c1d9f50,common=0x8c1da274),
@@ -94,6 +95,25 @@ MULTI_OWNER_STAGE_PINS={
     '_native_sdk_sci_route_bind':(748,'9cbcdc2e75b7e6ecab19784e5b9f880f9e22bde9399144328d876b7af7488724'),
     '_kui_native_sdk_sci_route_admit':(908,'ec64806bf0d9f966def872b037d0f9bdb1531f8275423c7f9d0cad1dd0786a09'),
     '_u32':(30,'6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334'),
+}
+# The structural family has a bounded dynamic VBR and separate exact code
+# pins. Earlier exact-owner artifacts retain every map above unchanged.
+STRUCTURAL_PINS={
+    '_sdk_sci_ready':(88,'878946332b6fe1651fd161314e795f1f7267d3fe054984affff9a987bf91d3b9'),
+    '_hook':(104,'60c91970448795e525b79b4c00c4314418b95686a820971e727f6ca97b414e80'),
+    '_unhook':(68,'c2dbf8b636eb9c82b63902a0879c108588a0d591e2155df6c0bb7fd607e1cfab'),
+    '_kui_retail_sdk_sci_dispatch':(124,'ed20fd9d1f99d45e58b52379401ff11109c2dad341a168a4ef909f5c1ab297b5'),
+    '_kui_retail_sdk_sci_entry':(152,'a859d76f04b9b0b7ade808afb8feda6071e145c11bacb6cadf52959d066a9b72'),
+}
+STRUCTURAL_STAGE_PINS={
+    '_native_sdk_sci_route_bind':(916,'414de55141080d1112f413afe44a0e9e07423b1f3db783d991ee617d895cb3ed'),
+    '_kui_native_sdk_sci_route_admit':(796,'bca05e993e391c6eb85a99a6c72529c98a2db02ed94ae606c0b72243174a160c'),
+    '_kui_native_sdk_sci_route_discover':(1856,'ed8a15b5b37c15f439674f13fc042a893391ea3884d780ac19d5716600e2d2ba'),
+    '_u32':(30,'6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334'),
+    '_fingerprint':(88,'e20af76b12f03eacf8db050294266ab776acccdb206b65fef7caf8aacbf50a7a'),
+    '_live_words':(80,'19abfcf3270af6ef4dbbd6bd2cdfaf0cd0b871ab32dddda689dc9a7828511474'),
+    '_literal_at':(62,'1712d6126cb969c7f2f21fb2de718960809b1782d1b39a06f772a21af78e16fe'),
+    '_normalized':(192,'81b53b61f1e4881bf120571908420787023e52cde950546614ff528d8ca6a940'),
 }
 MEMORY_CACHE={}
 MEMORY_REFERENCES={}
@@ -169,7 +189,10 @@ def initialized_at(image,address,count):
 
 def pin_bodies(resident):
     found={}
-    selected=RA_PINS if '__kui_native_readahead_resident' in resident[4] else PINS
+    structural=resident[4].get(STRUCTURAL_MARKER+'resident')
+    require(structural is None or structural==(1,0,0,0xfff1),'structural SDK resident marker differs')
+    selected=STRUCTURAL_PINS if structural else RA_PINS if '__kui_native_readahead_resident' in resident[4] else PINS
+    require(selected,'structural SDK resident pins have not been reviewed')
     for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(resident,name,2)
         require(section[2]&4 and 0x8c004000<=address<address+len(body)<=0x8c007ba0,
@@ -198,7 +221,7 @@ def pin_bodies(resident):
     return found
 
 
-def stage_pins(stage,*,diagnostic=False,pio=False,pio_pair=False,multi_owner=False):
+def stage_pins(stage,*,diagnostic=False,pio=False,pio_pair=False,multi_owner=False,structural=False):
     result={}
     read_ahead='__kui_native_readahead_stage' in stage[4]
     require(not diagnostic or read_ahead,'SDK diagnostic stage pins require the read-ahead profile')
@@ -206,7 +229,11 @@ def stage_pins(stage,*,diagnostic=False,pio=False,pio_pair=False,multi_owner=Fal
     require(not pio_pair or pio,'SDK PIO pair stage pins require the PIO profile')
     require(multi_owner==multi_owner_profile(stage),'SDK multi-owner stage profile differs')
     require(not multi_owner or pio_pair,'SDK multi-owner profile requires the exact PIO pair companion')
-    selected=MULTI_OWNER_STAGE_PINS if multi_owner else RA_PIO_PAIR_STAGE_PINS if pio_pair else RA_PIO_STAGE_PINS if pio else \
+    marker=stage[4].get(STRUCTURAL_MARKER+'stage')
+    require(marker is None or marker==(1,0,0,0xfff1),'structural SDK stage marker differs')
+    require(structural==bool(marker),'structural SDK stage pin selection differs')
+    require(not structural or multi_owner and pio_pair,'structural SDK pins require exact-owner and PIO companions')
+    selected=STRUCTURAL_STAGE_PINS if structural else MULTI_OWNER_STAGE_PINS if multi_owner else RA_PIO_PAIR_STAGE_PINS if pio_pair else RA_PIO_STAGE_PINS if pio else \
         RA_DIAGNOSTIC_STAGE_PINS if diagnostic else \
         RA_STAGE_PINS if read_ahead else STAGE_PINS
     require(selected,'SDK multi-owner immutable stage pins are missing')
@@ -278,7 +305,7 @@ def assert_c_abi(c,before):
 
 class SDKCPU(InterruptCPU):
     """Actual linked scalar SH with physical aliases and both integer banks."""
-    def __init__(self,resident,seed=0,mask=15,bank=0,blocked=False,owner=b'',*,previous=DEFAULT):
+    def __init__(self,resident,seed=0,mask=15,bank=0,blocked=False,owner=b'',*,previous=DEFAULT,vbr=SDK_VBR):
         key=(id(resident[0]),id(owner))
         if key not in MEMORY_CACHE:
             backing=SH(owner)
@@ -295,7 +322,9 @@ class SDKCPU(InterruptCPU):
         self.pr=RETURN;self.mach=rng.getrandbits(32);self.macl=rng.getrandbits(32)
         self.gbr=rng.getrandbits(32);self.fpscr=rng.getrandbits(32);self.fpul=rng.getrandbits(32)
         self.fr=[rng.getrandbits(32) for _ in range(32)]
-        self.control=dict(vbr=SDK_VBR,ssr=rng.getrandbits(32),spc=rng.getrandbits(32)&~1,
+        self.sdk_vbr=vbr;self.eri_slot=vbr+0x25c;self.rxi_slot=vbr+0x260
+        self.watched_slots={self.eri_slot,self.rxi_slot};self.table_reads=[]
+        self.control=dict(vbr=vbr,ssr=rng.getrandbits(32),spc=rng.getrandbits(32)&~1,
                           sgr=rng.getrandbits(32)&~3,dbr=rng.getrandbits(32))
         self.symbols=resident[4];self.iprb=0x5a1f;self.event=0x4e0
         self.calls=0;self.accepted=[];self.callee_return=0;self.targets=set()
@@ -306,8 +335,8 @@ class SDKCPU(InterruptCPU):
         self.write(self.pointer,REGION);self.write(self.active,0);self.write(self.fault,0)
         self.write(GUARD,0x4b554947);self.write(COOKIE_AT,COOKIE)
         self.previous=previous
-        self.write(DEFAULT_AT,previous);self.write(OWNER_AT,SDK_VBR)
-        self.write(ERI_SLOT,self.callback);self.write(RXI_SLOT,self.callback)
+        self.write(DEFAULT_AT,previous);self.write(OWNER_AT,vbr)
+        self.write(self.eri_slot,self.callback);self.write(self.rxi_slot,self.callback)
         self.write(LOAN,0);self.write(FRAME+4,0x70);self.write(FRAME+8,0x10)
         self.write(HOOKED,0);self.write(REARMS,0xfffffffe)
         self.r[4]=self.event
@@ -330,6 +359,7 @@ class SDKCPU(InterruptCPU):
     def read(self,address,count=4):
         if address==IPRB:
             require(count==2,'SCI priority must be a halfword read');return self.iprb
+        if address in self.watched_slots:self.table_reads.append((address,count))
         at=self.offset(address,count)
         return int.from_bytes(bytes(self.overlay.get(at+i,self.memory[at+i]) for i in range(count)),'little')
 
@@ -733,6 +763,11 @@ def check_cold_binder(stage,resident,*,self_test=False,refused_artifact=False,ow
 
 def check_sdk_dispatch(resident,startup):
     """Execute an independently hashed original SDK lookup and linked callback."""
+    if resident[4].get(STRUCTURAL_MARKER+'resident') is not None:
+        require(resident[4].get(STRUCTURAL_MARKER+'resident')==(1,0,0,0xfff1),
+                'structural original SDK replay marker differs')
+        from prove_native_sdk_sci_structural_runtime import original_dispatch
+        return original_dispatch(resident,startup)
     from test_native_sdk_sci_owner_contract import owner_contract,contract_cases
     require(__debug__,'SDK original dispatcher model requires Python assertions')
     contract=owner_contract(startup)
@@ -823,6 +858,14 @@ def check(resident,*,worker=None,stage=None,self_test=False,read_ahead_proof=Non
     if stage is not None:require(staged==(1,0,0,0xfff1),'SDK SCI paired stage marker mismatch')
     require('__kui_native_sci_priority7_resident' not in resident[4],
             'SDK SCI route must retain level1 and exclude priority7')
+    structural_resident=resident[4].get(STRUCTURAL_MARKER+'resident')
+    structural_stage=stage[4].get(STRUCTURAL_MARKER+'stage')
+    require(bool(structural_resident)==bool(structural_stage),'structural SDK stage/resident markers differ')
+    if structural_resident:
+        require(structural_resident==structural_stage==(1,0,0,0xfff1) and pio_pair,
+                'structural SDK requires paired absolute markers and the exact PIO pair')
+        from prove_native_sdk_sci_structural_runtime import check as structural_check
+        return structural_check(resident,worker,stage,self_test=self_test,read_ahead_proof=read_ahead_proof)
     pins=pin_bodies(resident)
     multi_owner=multi_owner_profile(stage)
     owner_table=multi_owner_table(stage) if multi_owner else {'enabled':False}
@@ -915,7 +958,11 @@ def main():
             result['external_sdk_dispatch_by_owner']={proof['owner_digest']:proof for proof in owners}
             require(len(result['external_sdk_dispatch_by_owner'])==len(owners),'duplicate original SDK owner proof')
             result['external_sdk_dispatch']=next((proof for proof in owners if proof['game']=='evolution2'),owners[0])
-            if result.get('multi_owner'):
+            if result.get('structural_profile'):
+                require({owner['digest'] for owner in OWNER_CONSTANTS.values()}<=set(result['external_sdk_dispatch_by_owner']) and
+                        {proof.get('structural_family') for proof in owners}>={'full-fpu','compact-fpu'},
+                        'structural SDK replay requires retained exact owners and both reviewed family ABIs')
+            elif result.get('multi_owner'):
                 require(set(result['external_sdk_dispatch_by_owner'])=={owner['digest'] for owner in OWNER_CONSTANTS.values()},
                         'multi-owner SDK replay requires both exact original owners')
         if a.refused_build:

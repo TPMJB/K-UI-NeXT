@@ -68,6 +68,19 @@ static void __attribute__((noipa)) native_loader_timeline_bind(const struct kui_
     }
 }
 #endif
+#if KUI_NATIVE_DUAL_READERS
+#if !KUI_NATIVE_LOADER_TIMELINE || !KUI_NATIVE_SDK_SCI_ROUTE || !KUI_NATIVE_READAHEAD
+#error Dual native stage requires its complete X binding pipeline
+#endif
+static void __attribute__((noipa)) native_dual_reader_bind(
+    const struct kui_vmu_native_passive_exports *e,uint32_t dest,uint32_t bytes,
+    uint32_t payload,uint32_t mode) {
+    if(!kui_native_reader_uses_sdk(manifest.reader))return;
+    native_loader_timeline_bind(e,dest,bytes,payload,mode);
+    native_sdk_sci_route_bind(payload);
+    native_readahead_bind(payload);
+}
+#endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #include "vmu_native_evolution_trace_stage.inc"
 #endif
@@ -341,6 +354,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     c->sd_transaction=e->sd_transaction;
 #endif
     c->installer=0;c->stage_stack=0;c->status=KUI_VMU_OBS_BOOT_INSTALLED;
+#if KUI_NATIVE_DUAL_READERS
+    native_dual_reader_bind(e,dest,bytes,lease->payload,cfg.diagnostics);
+#else
 #if KUI_NATIVE_LOADER_TIMELINE
     native_loader_timeline_bind(e,dest,bytes,lease->payload,cfg.diagnostics);
 #endif
@@ -349,6 +365,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #endif
 #if KUI_NATIVE_READAHEAD
     native_readahead_bind(lease->payload);
+#endif
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(cfg.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN)

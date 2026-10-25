@@ -23,6 +23,24 @@ __asm__(".global __kui_native_sdk_sci_route_stage\n"
         ".set __kui_native_sdk_sci_route_stage,1\n"
         ".global __kui_native_sdk_sci_multi_owner_stage\n"
         ".set __kui_native_sdk_sci_multi_owner_stage,1\n");
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+__asm__(".global __kui_native_sdk_sci_structural_stage\n"
+        ".set __kui_native_sdk_sci_structural_stage,1\n");
+/* Admission may discover a relocated SDK table, but no part of that live
+ * routing region may occupy loader code, its low stack, or the new lease. */
+static bool native_sdk_sci_route_disjoint(uint32_t vbr,uint32_t payload) {
+    if(!kui_native_sdk_sci_vbr_address(vbr))return false;
+    uint32_t begin=vbr&UINT32_C(0x1fffffff),end=begin+KUI_NATIVE_SDK_SCI_VBR_SPAN;
+    uint32_t lease=payload&UINT32_C(0x1fffffff);
+    uint32_t low=KUI_RETAIL_RESIDENT_ADDRESS&UINT32_C(0x1fffffff);
+    uint32_t low_end=KUI_RETAIL_HOOK_STACK&UINT32_C(0x1fffffff);
+    uint32_t stage=KUI_RETAIL_STAGE_ADDRESS&UINT32_C(0x1fffffff);
+    uint32_t stage_end=(uint32_t)(uintptr_t)__retail_stage_bss_end&UINT32_C(0x1fffffff);
+    return !(begin<lease+KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES && lease-32u<end) &&
+        !(begin<low_end && low<end) && stage_end>=stage &&
+        !(begin<stage_end && stage<end);
+}
+#endif
 
 static void __attribute__((noipa)) native_sdk_sci_route_bind(uint32_t payload) {
     struct kui_native_sdk_sci_runtime_exports exports;
@@ -70,19 +88,36 @@ static void __attribute__((noipa)) native_sdk_sci_route_bind(uint32_t payload) {
        r->vector600[KUI_NATIVE_SDK_SCI_VBR_INDEX])native_report(10u,5u);
     __asm__ volatile("stc sr,%0":"=r"(sr)::"memory");
     __asm__ volatile("stc vbr,%0":"=r"(vbr)::"memory");
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+    if(!native_sdk_sci_route_disjoint(vbr,payload))native_report(10u,7u);
+#endif
     struct kui_native_sdk_sci_route_plan plan;
     int admitted=kui_native_sdk_sci_route_admit((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
         exec_bytes,KUI_RETAIL_EXEC_ADDRESS,native_driver.image_sha256,vbr,sr,exports.callback,
         native_read,NULL,&plan);
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+    /* A known original with changed context must retain its exact refusal.
+     * Only an unsupported identity may attempt the separately proved family. */
+    if(admitted==0)admitted=kui_native_sdk_sci_route_discover(
+        (const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,exec_bytes,KUI_RETAIL_EXEC_ADDRESS,
+        vbr,sr,exports.callback,native_read,NULL,&plan);
+#endif
     if(admitted!=1)native_report(10u,admitted==0?6u:7u);
     /* Both independently fingerprinted owners use this exact SDK table
      * layout. The unchanged low readiness predicate checks these same
      * addresses; a future owner with another layout must not be published
      * merely because its cold admission produced a well-formed plan. */
     if(plan.version!=KUI_NATIVE_SDK_SCI_ROUTE_VERSION || plan.bytes!=sizeof(plan) ||
-       plan.vbr!=KUI_NATIVE_SDK_SCI_OWNER_VBR ||
+       plan.vbr!=
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+           vbr ||
+       plan.eri_slot!=vbr+KUI_NATIVE_SDK_SCI_ERI_SLOT_OFFSET ||
+       plan.rxi_slot!=vbr+KUI_NATIVE_SDK_SCI_RXI_SLOT_OFFSET ||
+#else
+           KUI_NATIVE_SDK_SCI_OWNER_VBR ||
        plan.eri_slot!=KUI_NATIVE_SDK_SCI_OWNER_VBR+KUI_NATIVE_SDK_SCI_ERI_SLOT_OFFSET ||
        plan.rxi_slot!=KUI_NATIVE_SDK_SCI_OWNER_VBR+KUI_NATIVE_SDK_SCI_RXI_SLOT_OFFSET ||
+#endif
        plan.callback!=exports.callback)native_report(10u,7u);
     /* Preserve exact old SCI callback and original VBR first. The cookie is
      * still zero, so neither an IRQ nor a later GD entry can treat a partial

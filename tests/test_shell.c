@@ -26,7 +26,7 @@ static void open_developer_tests(void) {
     open_extra_options();s.game_tools_selected=3;
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_TESTS);
 }
-/* Background loading is a saved toggle; its aggressive setting is deeper
+/* Background loading is a saved toggle; its reader choice is deeper
  * in Advanced. Neither gesture itself dispatches a game launch. */
 static enum kui_shell_action launch_reader(unsigned button) {
     assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
@@ -1858,7 +1858,7 @@ static void games_launch_options_controls(void) {
     assert(!s.games_retail_reader); /* Saving a toggle never starts a game. */
     assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_SAVE_GAME_LAUNCH && !s.games_launch_reader);
     assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==KUI_RETAIL_READER_ASYNC);
-    /* The basic toggle has only two states. Aggressive belongs to Advanced. */
+    /* The basic toggle has only two states. Legacy (Y) belongs to Advanced. */
     open_extra_options();s.game_tools_selected=1;
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==KUI_RETAIL_READER_ASYNC_EAGER);
     assert(!s.games_retail_reader);
@@ -2670,7 +2670,9 @@ static void games_rendering(void) {
     assert(strstr(drawn,"CD music: On") && strstr(drawn,"Background loading: Off"));
     s.page=KUI_SHELL_GAMES_EXTRA_OPTIONS;s.games_launch_cdda=false;
     s.games_launch_reader=KUI_RETAIL_READER_ASYNC_EAGER;s.game_tools_selected=KUI_SHELL_GAME_TOOL_SPEED;render(&view);
-    assert(strstr(drawn,"Aggressive") && strstr(drawn,"Boot encoding") && strstr(drawn,"Image information") && strstr(drawn,"Developer tests"));
+    assert(strstr(drawn,"Legacy (Y)") && strstr(drawn,"Background reader") &&
+        !strstr(drawn,"Aggressive") && strstr(drawn,"Boot encoding") &&
+        strstr(drawn,"Image information") && strstr(drawn,"Developer tests"));
     s.games_detail.native_gd=false;s.games_detail.windows_ce=true;s.games_detail.boot_bytes=1253376;
     s.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;s.games_launch_selected=KUI_SHELL_GAME_OPTION_READER;render(&view);
     assert(strstr(drawn,"On") && strstr(drawn,"required") && strstr(drawn,"CD music") && strstr(drawn,"Off"));
@@ -2685,11 +2687,74 @@ static void games_rendering(void) {
     assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE);
 }
 
+static void games_native_reader_choices(void) {
+    struct kui_shell_view view={0};
+    struct kui_games_detail detail=launch_detail(false,false);
+    install_launch_detail(&detail);
+    assert(s.games_launch_reader==KUI_GAME_READER_STANDARD);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+    s.games_launch_selected=KUI_SHELL_GAME_OPTION_READER;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH);
+    assert(s.games_launch_reader==KUI_GAME_READER_BACKGROUND && !s.games_retail_reader);
+    assert(!strcmp(kui_shell_games_reader_label(&s),"New (X)"));
+    for(unsigned reader=KUI_GAME_READER_BACKGROUND;reader<=KUI_GAME_READER_EAGER;reader++) {
+        install_launch_detail(&detail);s.games_launch_reader=reader;
+        const char *choice=reader==KUI_GAME_READER_BACKGROUND?"New (X)":"Legacy (Y)";
+        const char *summary=reader==KUI_GAME_READER_BACKGROUND?
+            "Background loading: On - New (X)":"Background loading: On - Legacy (Y)";
+        const enum kui_shell_page pages[]={KUI_SHELL_GAMES_DETAIL,KUI_SHELL_GAMES_RETAIL_CONFIRM,
+            KUI_SHELL_GAMES_LAUNCH_OPTIONS};
+        for(unsigned i=0;i<3u;i++) {
+            s.page=pages[i];render(&view);assert(strstr(drawn,choice));
+            if(i<2u)assert(strstr(drawn,summary));
+            assert(!strstr(drawn,"X Launch") && !strstr(drawn,"Y Launch"));
+        }
+        s.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;
+        assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && s.games_launch_reader==reader);
+        assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+        open_extra_options();s.game_tools_selected=KUI_SHELL_GAME_TOOL_SPEED;
+        render(&view);
+        assert(strstr(drawn,"Background reader") && strstr(drawn,choice));
+        assert(!strstr(drawn,"Background speed") && !strstr(drawn,"Aggressive"));
+        /* Changing the native reader keeps every other saved field. */
+        s.games_launch_codec=KUI_ZSO_LZO1X;
+        s.games_launch_patches.entries[0]=(struct kui_game_ram_patch){UINT32_C(0x8c010004),17u,true};
+        struct kui_game_launch_settings before,after;
+        assert(kui_shell_game_launch_settings(&s,&before));
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && !s.games_retail_reader);
+        assert(kui_shell_game_launch_settings(&s,&after));
+        before.reader=reader==KUI_GAME_READER_BACKGROUND?KUI_GAME_READER_EAGER:KUI_GAME_READER_BACKGROUND;
+        same_launch_settings(&before,&after);
+        assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==reader);
+        assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+        assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==reader);
+    }
+    /* CE, CDDA and ZSO retain their existing labels and forced choices. */
+    detail=launch_detail(true,false);install_launch_detail(&detail);
+    s.page=KUI_SHELL_GAMES_EXTRA_OPTIONS;s.game_tools_selected=KUI_SHELL_GAME_TOOL_SPEED;
+    render(&view);assert(strstr(drawn,"Background speed") && !strstr(drawn,"Background reader"));
+    assert(!strstr(drawn,"New (X)") && !strstr(drawn,"Legacy (Y)"));
+    assert(!strcmp(kui_shell_games_reader_label(&s),"Background"));
+    detail=launch_detail(false,false);install_launch_detail(&detail);
+    s.games_launch_cdda=true;s.page=KUI_SHELL_GAMES_EXTRA_OPTIONS;
+    render(&view);assert(strstr(drawn,"Background speed") && !strstr(drawn,"Background reader"));
+    assert(!strstr(drawn,"New (X)") && !strstr(drawn,"Legacy (Y)"));
+    s.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL &&
+        s.games_retail_reader==(KUI_RETAIL_READER_STANDARD|KUI_GAMES_RETAIL_CDDA));
+    detail.format=KUI_GAME_IMAGE_ZSO;detail.zso_launch=true;detail.zso_codec=KUI_ZSO_LZ4;
+    install_launch_detail(&detail);s.page=KUI_SHELL_GAMES_EXTRA_OPTIONS;
+    render(&view);assert(strstr(drawn,"Background speed") && !strstr(drawn,"Background reader"));
+    assert(!strstr(drawn,"New (X)") && !strstr(drawn,"Legacy (Y)"));
+    assert(!strcmp(kui_shell_games_reader_label(&s),"Standard"));
+    puts("PASS native reader UI: New X/Legacy Y labels, unchanged buttons/default Off, persisted fields and CE/CDDA/ZSO exclusions");
+}
+
 static void games_patch_rendering(void) {
     struct kui_shell_view view={0};
     struct kui_games_detail detail=launch_detail(false,false);detail.boot_bytes=131;
     install_launch_detail(&detail);press(KUI_SHELL_Y,false);open_extra_options();render(&view);
-    const char *tools[]={"Boot encoding","Background speed","Image information","Developer tests","RAM patches","Restore defaults"};
+    const char *tools[]={"Boot encoding","Background reader","Image information","Developer tests","RAM patches","Restore defaults"};
     const char *at=drawn;
     for(unsigned i=0;i<sizeof(tools)/sizeof(*tools);i++) {at=strstr(at,tools[i]);assert(at);at+=strlen(tools[i]);}
     s.game_tools_selected=KUI_SHELL_GAME_TOOL_DEFAULTS;render(&view);
@@ -4133,7 +4198,7 @@ int main(int argc,char **argv) {
     vmu_collection_copy_controls();vmu_collection_controls();vmu_collection_rendering();
     games_remembered_selection(); games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_cdda_compatibility_status(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_zso_controls(); games_codec_controls(); games_check_baseline_controls(); games_variant_controls();
     if(argc==2 && !strcmp(argv[1],"--games-controls")) { puts("PASS Games navigation and launch controls"); return 0; }
-    games_rendering(); games_patch_rendering(); games_zso_rendering(); games_selected_art_rendering(); games_variant_rendering();
+    games_rendering(); games_native_reader_choices(); games_patch_rendering(); games_zso_rendering(); games_selected_art_rendering(); games_variant_rendering();
     if(argc==2 && !strcmp(argv[1],"--games")) { puts("PASS Games navigation, launch eligibility and rendering"); return 0; }
     storage_test_controls();storage_test_rendering();
     launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction(); ripper_export_rendering();

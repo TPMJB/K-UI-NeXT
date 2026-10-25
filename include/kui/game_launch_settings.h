@@ -5,6 +5,10 @@
 #include "kui/zso.h"
 #include "kui/game_ram_patches.h"
 
+/* Persistent/wire values stay 0/1/2. In the integrated native, non-CDDA
+ * route BACKGROUND selects New (X), EAGER selects Legacy (Y); the historical
+ * EAGER name remains for binary/JSON compatibility. CE/CDDA retain their
+ * separate forced-reader rules. No saved entry is reset or renumbered. */
 enum kui_game_reader {
     KUI_GAME_READER_STANDARD, KUI_GAME_READER_BACKGROUND, KUI_GAME_READER_EAGER,
     KUI_GAME_READER_COUNT
@@ -67,7 +71,8 @@ bool kui_game_launch_settings_encode(void *record,size_t capacity,size_t *size,
 bool kui_game_launch_settings_decode(struct kui_game_launch_table *table,uint64_t *sequence,
                                      const void *record,size_t size);
 /* Strict independent K-UI JSON v1 import. Scratch table is unspecified on
- * failure and must never be used. Normalized duplicate keys/capacity overflow
+ * failure and must never be used. Reader strings standard/x/y retain their
+ * existing numeric bindings 0/1/2. Normalized duplicate keys/capacity overflow
  * fail; release_loader=true entries are counted and skipped, since the old
  * comparison binary has no supported equivalent. Sources remain read-only. */
 bool kui_game_launch_settings_legacy_decode(struct kui_game_launch_table *table,unsigned *skipped,

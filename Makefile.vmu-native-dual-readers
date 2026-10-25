@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# One native SCI module, two genuinely separate low engines. X retains the
+# SDK-owned SCI/PIO pair; Y retains the legacy raw-VBR 25-block reader.
+BUILD ?= build/native-dual-readers
+include Makefile.vmu-native-sdk-sci-structural
+FLAGS += -DKUI_NATIVE_DUAL_READERS=1 \
+ -DKUI_NATIVE_LEGACY_RESIDENT_BIN='"$(BUILD)/resident-legacy.bin"'
+NATIVE_FLAGS += -DKUI_NATIVE_DUAL_READERS=1 -DKUI_RETAIL_NATIVE_HYBRID=1
+
+# Do not inherit a new-engine scheduling/SDK/auxiliary flag into Y. The
+# ordinary shared disc/drive/resume repairs and VMU storage loan remain.
+LEGACY_FLAGS = $(filter-out -DKUI_NATIVE_% -DKUI_RETAIL_NATIVE_HYBRID=%,$(RESIDENT_FLAGS)) \
+ -DKUI_NATIVE_DUAL_READERS=1 -DKUI_RETAIL_NATIVE_HYBRID=0
+LEGACY_OBJ = $(patsubst %.c,$(BUILD)/legacy/%.o,$(RESIDENT_SRC)) \
+ $(BUILD)/legacy/resident_asm.o $(BUILD)/legacy/observe_boot_asm.o
+$(BUILD)/legacy/%.o: %.c $(BUILD)/readonly-config
+	@mkdir -p $(@D)
+	$(CC) $(LEGACY_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/legacy/resident_asm.o: src/loader/retail_resident.S $(BUILD)/readonly-config
+	@mkdir -p $(@D)
+	$(CC) $(LEGACY_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/legacy/observe_boot_asm.o: src/loader/vmu_maple_observe_boot.S $(BUILD)/readonly-config
+	@mkdir -p $(@D)
+	$(CC) $(LEGACY_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/resident-legacy.elf: $(LEGACY_OBJ) $(RESIDENT_LAYOUT)
+	@mkdir -p $(BUILD)/legacy/lto
+	$(CC) $(LINK) -flto -mrelax -Os -fno-tree-scev-cprop -fstack-usage \
+	 $(VMU_CALLGRAPH_FLAGS) -save-temps=obj -Wl,--relax \
+	 -Wl,-u,_memcpy -Wl,-u,_memset $(VMU_INIT_EXPORT) \
+	 -Wl,-u,_kui_retail_resident_dispatch -Wl,-u,_kui_retail_gd_dispatch \
+	 -Wl,-u,_kui_retail_async_irq -Wl,-u,_kui_retail_irq_entry \
+	 -Wl,-u,_kui_vmu_native_background_manifest_bind \
+	 -Wl,-u,_kui_sci_sd_acquire -Wl,-u,_kui_sci_sd_release \
+	 -Wl,-u,_kui_vmu_observe_heap_hook -Wl,-u,_kui_vmu_observe_return_hook \
+	 -Wl,-u,_kui_vmu_observe_boot_control $(VMU_SD_RESIDENT_EXPORTS) $(VMU_EXIT_EXPORT) \
+	 -T$(RESIDENT_LAYOUT) -Wl,-Map,$(BUILD)/resident-legacy.map \
+	 -o $@ $(LEGACY_OBJ) -lgcc
+	cp $(BUILD)/resident-legacy.elf.ltrans*.su $(BUILD)/resident-legacy.elf*.ci $(BUILD)/legacy/lto/
+$(BUILD)/resident-legacy.bin: $(BUILD)/resident-legacy.elf
+	$(OBJCOPY) -O binary $< $@
+$(BUILD)/stage_asm.o: $(BUILD)/resident-legacy.bin
+$(BUILD)/retail-native-dual.kui: $(BUILD)/retail-maple-observe.kui
+	cp $< $@
+all: $(BUILD)/retail-native-dual.kui
+-include $(LEGACY_OBJ:.o=.d)
+
+.PHONY: dual-reader-host-tests
+dual-reader-host-tests:
+	python3 tests/test_native_dual_readers.py

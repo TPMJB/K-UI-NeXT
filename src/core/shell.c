@@ -676,8 +676,8 @@ const char *kui_shell_games_reader_label(const struct kui_shell *s) {
     if(!kui_shell_games_retail_ready(s)) return "Unavailable";
     switch(s->games_launch_reader) {
     case KUI_RETAIL_READER_STANDARD: return "Standard";
-    case KUI_RETAIL_READER_ASYNC: return "Background";
-    case KUI_RETAIL_READER_ASYNC_EAGER: return "Background (more work)";
+    case KUI_RETAIL_READER_ASYNC: return s->games_launch_cdda?"Background":"New (X)";
+    case KUI_RETAIL_READER_ASYNC_EAGER: return s->games_launch_cdda?"Background (more work)":"Legacy (Y)";
     default: return "Standard";
     }
 }

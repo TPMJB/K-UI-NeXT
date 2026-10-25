@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "kui/native_readahead_layout.h"
+#include "kui/native_dual_reader.h"
 
 /* The ordinary native allocation owns 192 KiB. Its relocated worker and
  * stack occupy the first 128 KiB; the immutable 64-slot map and native
@@ -12,7 +13,7 @@
  * geometry. Auxiliary code, stack and cache have disjoint owned spans.
  * Keep the region cache-line aligned. */
 #define KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES UINT32_C(0x20000)
-#if KUI_NATIVE_READAHEAD
+#if KUI_NATIVE_READAHEAD || KUI_NATIVE_DUAL_READERS
 #define KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES KUI_NATIVE_RA_LEASE_BYTES
 #else
 #define KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES UINT32_C(0x30000)
@@ -20,6 +21,10 @@
 #define KUI_VMU_NATIVE_BACKGROUND_MAP_BYTES UINT32_C(1020)
 #define KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET UINT32_C(0x20400)
 #define KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES UINT32_C(0x760)
+#if KUI_NATIVE_DUAL_READERS
+_Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==KUI_NATIVE_DUAL_LEASE_BYTES,
+    "Both dual low engines own the advertised complete lease");
+#endif
 _Static_assert(KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES+KUI_VMU_NATIVE_BACKGROUND_MAP_BYTES<=
     KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET,"Background map excludes its vector region");
 _Static_assert(KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET+KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES<=

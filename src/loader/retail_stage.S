@@ -969,6 +969,16 @@ __retail_resident_scia_blob_start:
 __retail_resident_scia_blob_end:
 #endif
 
+#if KUI_NATIVE_DUAL_READERS
+    .section .resident_blob,"a"
+    .balign 4
+    .global __retail_resident_legacy_blob_start,__retail_resident_legacy_blob_end
+__retail_resident_legacy_blob_start:
+    .incbin KUI_NATIVE_LEGACY_RESIDENT_BIN
+    .balign 4
+__retail_resident_legacy_blob_end:
+#endif
+
 #if KUI_ARMADA_CE_RAM_BIND_STAGE
     .section .armada_bind_blob,"a"
     .align 2

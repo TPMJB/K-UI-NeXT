@@ -11,6 +11,7 @@ typedef bool (*kui_cancel_fn)(void);
 #include "kui/retail_image.h"
 #include "kui/retail_loader_layout.h"
 #include "kui/vmu_native_cache_seed.h"
+#include "kui/native_dual_reader.h"
 
 typedef unsigned UINT;
 typedef unsigned FRESULT;
@@ -195,6 +196,37 @@ static void gates_and_hits(void) {
     CHECK(prepare(true,0u,false,"/Games/PS2")==NATIVE_CACHE_CANCELLED && !io.writes);
     setup(boot,sizeof(boot));CHECK(prepare(true,0u,false,"/Games/PS2")==NATIVE_CACHE_SKIPPED && io.builds==1u && !io.writes);
 }
+static void dual_gates_and_hits(void) {
+    uint8_t boot[1024];for(unsigned i=0;i<sizeof(boot);i++)boot[i]=(uint8_t)(i*17u+1u);
+    const struct kui_native_dual_capability cap={KUI_NATIVE_DUAL_MAGIC0,KUI_NATIVE_DUAL_MAGIC1,
+        1u,KUI_NATIVE_DUAL_CAPABILITY_BYTES,KUI_RETAIL_READER_ASYNC,
+        KUI_RETAIL_READER_ASYNC_EAGER,KUI_NATIVE_DUAL_LEASE_BYTES,0u};
+    for(unsigned reader=KUI_RETAIL_READER_ASYNC;reader<=KUI_RETAIL_READER_ASYNC_EAGER;reader++) {
+        setup(boot,sizeof(boot));map.reader=reader;memcpy(module+3072u,&cap,sizeof(cap));
+        memcpy(before,module,sizeof(module));seed_cache(boot,sizeof(boot),false);
+        CHECK(prepare(true,reader,false,"/Games/PS2")==NATIVE_CACHE_READY);
+        CHECK(io.reads==1u && io.replays==1u && !io.builds && !io.writes);
+        for(unsigned fault=0u;fault<16u;fault++) {
+            setup(boot,sizeof(boot));map.reader=reader;memcpy(module+3072u,&cap,sizeof(cap));
+            uint32_t options=reader;bool native=true,patched=false;
+            if(fault==0u)memset(module+3072u,0,sizeof(cap));
+            if(fault==1u)memcpy(module+3501u,&cap,sizeof(cap)); /* unaligned duplicate */
+            if(fault>=2u && fault<10u)module[3072u+4u*(fault-2u)]^=1u;
+            if(fault==10u)options=reader==1u?2u:1u;
+            if(fault==11u)options|=0x20u;
+            if(fault==12u)map.storage_transport=KUI_STORAGE_SCIF;
+            if(fault==13u)native=false;
+            if(fault==14u)patched=true;
+            if(fault==15u)map.flags|=KUI_RETAIL_IMAGE_CD;
+            memcpy(before,module,sizeof(module));
+            CHECK(prepare(native,options,patched,"/Games/PS2")==NATIVE_CACHE_SKIPPED);
+            CHECK(!io.reads && !io.opens && !io.writes && !io.builds && !io.replays);
+        }
+        setup(boot,sizeof(boot));map.reader=reader;memcpy(module+3072u,&cap,sizeof(cap));
+        memcpy(before,module,sizeof(module));io.cancel_at=1u;
+        CHECK(prepare(true,reader,false,"/Games/PS2")==NATIVE_CACHE_CANCELLED && !io.reads);
+    }
+}
 static void actual_frontend(const char *path) {
     FILE *f=fopen(path,"rb");CHECK(f && !fseek(f,0,SEEK_END));long length=ftell(f);CHECK(length>128 && length<=0xc00000);rewind(f);
     size_t bytes=(size_t)length;uint8_t *boot=malloc(bytes);CHECK(boot && fread(boot,1,bytes,f)==bytes && !fclose(f));
@@ -244,10 +276,25 @@ static void actual_frontend(const char *path) {
         CHECK(prepare(true,0u,false,"/Games/PS2")==NATIVE_CACHE_CANCELLED);
         CHECK(io.renames==(boundary==8u?1u:0u)); /* only a complete cache file may have been renamed */
     }
+    /* Both native background choices share the actual detector/cache path,
+     * while their distinct wire reader values remain bound to the request. */
+    const struct kui_native_dual_capability cap={KUI_NATIVE_DUAL_MAGIC0,KUI_NATIVE_DUAL_MAGIC1,
+        1u,KUI_NATIVE_DUAL_CAPABILITY_BYTES,KUI_RETAIL_READER_ASYNC,
+        KUI_RETAIL_READER_ASYNC_EAGER,KUI_NATIVE_DUAL_LEASE_BYTES,0u};
+    for(unsigned reader=KUI_RETAIL_READER_ASYNC;reader<=KUI_RETAIL_READER_ASYNC_EAGER;reader++) {
+        setup(boot,bytes);map.reader=reader;memcpy(module+3072u,&cap,sizeof(cap));
+        memcpy(before,module,sizeof(module));
+        CHECK(prepare(true,reader,false,"/Games/PS2")==NATIVE_CACHE_READY);
+        CHECK(io.builds==1u && io.writes==1u && io.syncs==1u && io.renames==1u);
+        setup(boot,bytes);seed_cache(boot,bytes,true);map.reader=reader;
+        memcpy(module+3072u,&cap,sizeof(cap));memcpy(before,module,sizeof(module));
+        CHECK(prepare(true,reader,false,"/Games/PS2")==NATIVE_CACHE_READY);
+        CHECK(io.replays==1u && !io.builds && !io.writes && !io.renames);
+    }
     free(boot);
 }
 int main(int argc,char **argv) {
-    CHECK(argc>=1 && argc<=3);codec_and_trust_tests();gates_and_hits();
+    CHECK(argc>=1 && argc<=3);codec_and_trust_tests();gates_and_hits();dual_gates_and_hits();
     for(int i=1;i<argc;i++) actual_frontend(argv[i]);
     printf("Native launcher cache: %u checks passed%s\n",checks,argc>1?" including actual-image rebuild/publication faults":"");return 0;
 }

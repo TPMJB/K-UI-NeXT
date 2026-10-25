@@ -271,8 +271,11 @@ def personalize_bytes(module,manifest,info,wire,*,cache_record=None,cache_digest
             'Changed bytes escape the exact profile/cache seed/runtime mode and runtime checksum spans')
     return result
 
-def install(root,*,package,profile=None,game=None,control=False,profile_runtime=False,lease_only=False,hooks_only=False,raw_chain=False,evolution_trace=False):
+def install(root,*,package,profile=None,game=None,control=False,profile_runtime=False,lease_only=False,hooks_only=False,raw_chain=False,evolution_trace=False,destination_path=INSTALL):
     root=Path(root).resolve(strict=True)
+    destination_path=Path(destination_path)
+    require(destination_path in (INSTALL,Path('KUI/apps/games/retail-native-dual.kui')),
+            'Unsupported native module installation destination')
     module,manifest,info=generic_module(package)
     require(all(type(value) is bool for value in (control,profile_runtime,lease_only,hooks_only,raw_chain,evolution_trace)) and
             sum((control,profile_runtime,lease_only,hooks_only,raw_chain,evolution_trace))<=1,
@@ -299,13 +302,13 @@ def install(root,*,package,profile=None,game=None,control=False,profile_runtime=
     personalized=personalize_bytes(module,manifest,info,selected['wire'],
         cache_record=chosen['wire'] if chosen else None,cache_digest=chosen['record_digest'] if chosen else None,
         runtime_mode=runtime_mode)
-    destination=root/INSTALL
+    destination=root/destination_path
     ordinary_path(destination.parent,root,directory=True)
     existed=destination.exists() or destination.is_symlink()
     previous=read_regular(destination,root,maximum=MAX_BYTES+64) if existed else None
     result={'build':info['build'],'pair_path':selected['summary']['pair_path'],
         'profile':str(selected['path'].relative_to(root)),'module_sha256':sha(personalized),
-        'installed_file':str(INSTALL),'already_installed':previous==personalized}
+        'installed_file':str(destination_path),'already_installed':previous==personalized}
     if MODE_FIELDS<=set(manifest):result['runtime_mode']=mode_codec().MODE_NAMES[runtime_mode]
     if chosen:result.update(game=chosen['slug'],game_title=chosen['title'],image_sha256=chosen['image_sha256'])
     if previous==personalized:return result

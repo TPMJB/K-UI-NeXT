@@ -81,9 +81,13 @@ static bool native_cache_file_publish(const char *path,const uint8_t wire[1024],
 static enum native_cache_result native_cache_prepare(const struct kui_game_image *image,
     const struct kui_retail_manifest *map,bool native,uint32_t options,bool patched,
     struct kui_runtime_image *package,const char *source_root,kui_log_fn log,kui_cancel_fn cancel) {
-    if(!native || options || patched || !image || !map || !package || !package->data ||
+    const bool dual=map && package && package->data &&
+        kui_native_dual_reader_valid(map->reader,map->storage_transport) &&
+        options==map->reader &&
+        kui_native_dual_descriptor_find(package->data,package->info.payload_bytes,NULL)==1;
+    if(!native || (options && !dual) || patched || !image || !map || !package || !package->data ||
        image->format!=KUI_GAME_IMAGE_GDI || image->compressed || image->scrambled || image->cd_image ||
-       map->storage_transport!=KUI_STORAGE_SCI || map->reader!=KUI_RETAIL_READER_STANDARD ||
+       map->storage_transport!=KUI_STORAGE_SCI || (map->reader!=KUI_RETAIL_READER_STANDARD && !dual) ||
        (map->flags&(KUI_RETAIL_IMAGE_CD|KUI_RETAIL_IMAGE_SCRAMBLED)) ||
        map->boot_bytes<128u || map->boot_bytes>KUI_RETAIL_IMAGE_BOOT_MAX ||
        map->boot_lba>=KUI_GAME_LBA_LIMIT ||

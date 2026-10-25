@@ -38,7 +38,8 @@ RUNTIME_OBJECTS += build/dc/src/core/games_selection.o build/dc/src/core/game_la
 RUNTIME_OBJECTS += build/dc/src/core/vmu_launch_package.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_native_cache_seed.o build/dc/src/core/vmu_native_resolution_cache.o \
     build/dc/src/core/vmu_native_discovery.o build/dc/src/core/vmu_native_layout.o \
-    build/dc/src/core/vmu_native_heap.o build/dc/src/core/vmu_native_exit.o build/dc/src/core/vmu_native_patch.o
+    build/dc/src/core/vmu_native_heap.o build/dc/src/core/vmu_native_exit.o build/dc/src/core/vmu_native_patch.o \
+    build/dc/src/core/vmu_native_program.o
 RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadata.o
 RUNTIME_OBJECTS += build/dc/src/core/zso.o build/dc/src/core/lzo1x.o build/dc/src/core/retail_zso.o
 RUNTIME_OBJECTS += build/dc/src/core/game_cover.o build/dc/src/core/pvr_texture.o

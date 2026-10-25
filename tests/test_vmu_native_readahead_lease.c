@@ -13,7 +13,8 @@ int main(void) {
     CHECK(kui_heap_baseline_tests(1,NULL)==0);
     const uint32_t areas[]={0u,UINT32_C(0x80000000),UINT32_C(0xa0000000)};
     const uint32_t lease_bytes=KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES;
-    CHECK(lease_bytes==(KUI_NATIVE_READAHEAD?UINT32_C(0x60000):UINT32_C(0x30000)));
+    const bool expanded=KUI_NATIVE_READAHEAD || KUI_NATIVE_DUAL_READERS;
+    CHECK(lease_bytes==(expanded?UINT32_C(0x60000):UINT32_C(0x30000)));
     CHECK(KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES==UINT32_C(0x20000));
     CHECK(KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET==UINT32_C(0x20400));
     CHECK(KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES==UINT32_C(0x760));
@@ -31,7 +32,7 @@ int main(void) {
         CHECK(kui_vmu_native_heap_postallocate(&lease,read_word,NULL,1u,lease.payload));
         CHECK(kui_vmu_native_heap_lease_valid(&lease,read_word,NULL,1u));
         CHECK(kui_vmu_native_heap_lease_identity_valid(&lease,read_word,NULL,1u));
-        lease.lease_bytes=KUI_NATIVE_READAHEAD?0x30000u:0x60000u;
+        lease.lease_bytes=expanded?0x30000u:0x60000u;
         CHECK(!kui_vmu_native_heap_lease_valid(&lease,read_word,NULL,1u));
     }
     /* Exercise the actual low destination/entry guards, including the full

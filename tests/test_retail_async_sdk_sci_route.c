@@ -109,7 +109,10 @@ static void unowned_and_busy(void) {
     R.engine.native_loan_state=KUI_VMU_NATIVE_ASYNC_LOAN_IDLE;
     complete(token);
 }
-int main(void) {
+#ifndef KUI_NATIVE_SDK_SCI_MAIN
+#define KUI_NATIVE_SDK_SCI_MAIN main
+#endif
+int KUI_NATIVE_SDK_SCI_MAIN(void) {
     bootstrap_foreground(X);bootstrap_foreground(Y);owned_interrupts(X);owned_interrupts(Y);
     original_owner_fields();owner_field_changes();
     for(unsigned cause=0u;cause<5u;cause++)lost_route(cause);

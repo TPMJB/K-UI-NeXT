@@ -167,6 +167,16 @@ extern const uint8_t __retail_resident_ide_blob_start[] __asm__("__retail_reside
 extern const uint8_t __retail_resident_ide_blob_end[] __asm__("__retail_resident_ide_blob_end");
 extern const uint8_t __retail_resident_scia_blob_start[] __asm__("__retail_resident_scia_blob_start");
 extern const uint8_t __retail_resident_scia_blob_end[] __asm__("__retail_resident_scia_blob_end");
+#include "kui/native_dual_reader.h"
+#if KUI_NATIVE_DUAL_READERS
+extern const uint8_t __retail_resident_legacy_blob_start[] __asm__("__retail_resident_legacy_blob_start");
+extern const uint8_t __retail_resident_legacy_blob_end[] __asm__("__retail_resident_legacy_blob_end");
+__asm__(".global __kui_native_dual_readers_stage\n.set __kui_native_dual_readers_stage,1\n");
+const struct kui_native_dual_capability kui_native_dual_reader_capability
+    __attribute__((used,section(".rodata.native_dual_capability")))={
+    KUI_NATIVE_DUAL_MAGIC0,KUI_NATIVE_DUAL_MAGIC1,1u,KUI_NATIVE_DUAL_CAPABILITY_BYTES,
+    KUI_RETAIL_READER_ASYNC,KUI_RETAIL_READER_ASYNC_EAGER,KUI_NATIVE_DUAL_LEASE_BYTES,0u};
+#endif
 extern const uint8_t __retail_trampoline_start[] __asm__("__retail_trampoline_start");
 extern const uint8_t __retail_trampoline_end[] __asm__("__retail_trampoline_end");
 extern void kui_retail_bootstrap_enter(void) __attribute__((noreturn));
@@ -410,9 +420,31 @@ static void startup_gd_install(void);
 #endif
 #endif
 
-static void select_resident(void) {
+static void stopped(const char *message,uint32_t detail) __attribute__((noreturn));
+static void
+#if KUI_NATIVE_DUAL_READERS
+__attribute__((noipa))
+#endif
+select_resident(void) {
     resident_limit=KUI_RETAIL_STANDARD_LIMIT;
-#if KUI_RETAIL_ZSO
+#if KUI_NATIVE_DUAL_READERS
+    /* The ordinary module remains the Standard/CE/CDDA path. This module
+     * owns two separately linked native SCI engines and never substitutes
+     * a Standard reader for an unsupported Background map. */
+    if(!kui_native_dual_descriptor_valid(&kui_native_dual_reader_capability,
+           sizeof(kui_native_dual_reader_capability)))
+        stopped("DUAL READER CAPABILITY INVALID",0u);
+    if(!kui_native_dual_reader_valid(manifest.reader,manifest.storage_transport))
+        stopped("DUAL NATIVE READER NEEDS SCI X OR Y",manifest.reader);
+    if(kui_native_reader_uses_sdk(manifest.reader)) {
+        resident_blob=__retail_resident_sci_blob_start;
+        resident_bytes=(size_t)(__retail_resident_sci_blob_end-resident_blob);
+    } else {
+        resident_blob=__retail_resident_legacy_blob_start;
+        resident_bytes=(size_t)(__retail_resident_legacy_blob_end-resident_blob);
+    }
+    resident_limit=KUI_RETAIL_LOW_ASYNC_LIMIT;
+#elif KUI_RETAIL_ZSO
     resident_blob=__retail_resident_sci_blob_start;
     resident_bytes=(size_t)(__retail_resident_sci_blob_end-resident_blob);
 #else
@@ -463,7 +495,6 @@ static void retire_launcher_serial(void) {
     *(volatile uint16_t *)(uintptr_t)0xffe80018u=0;
 }
 
-static void stopped(const char *message,uint32_t detail) __attribute__((noreturn));
 static void stopped(const char *message,uint32_t detail) {
     retail_display_line(message);
     retail_display_hex("DETAIL",detail);
@@ -1190,7 +1221,11 @@ void kui_retail_stage_main(const uint8_t *wire) {
 #else
     if(manifest.reader!=KUI_RETAIL_READER_STANDARD)
         retail_display_line(manifest.reader==KUI_RETAIL_READER_ASYNC_EAGER?
+#if KUI_NATIVE_DUAL_READERS
+            "BACKGROUND Y - LEGACY / 25":"BACKGROUND X - SDK SCI / PIO CACHE");
+#else
             "BACKGROUND READER Y - 25 PER CALL":"BACKGROUND READER X - 20 PER CALL");
+#endif
 #endif
     last_card_result=kui_retail_storage_init(&card,manifest.storage_transport);
     if(last_card_result!=KUI_LOADER_SD_OK) {

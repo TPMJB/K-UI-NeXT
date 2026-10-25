@@ -9,7 +9,7 @@
 #define KUI_VMU_NATIVE_RESOLUTION_CACHE_VERSION 1u
 /* Bump whenever discovery/witness/uniqueness or patch-admission semantics
  * change. A compatible struct alone does not make an old proof current. */
-#define KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH 2u
+#define KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH 3u
 struct kui_vmu_native_resolution {
     struct kui_vmu_native_discovery driver;
     struct kui_vmu_native_layout layout;

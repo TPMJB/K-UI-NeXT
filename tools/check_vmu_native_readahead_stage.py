@@ -34,6 +34,13 @@ DIAGNOSTIC_MARKER='__kui_native_readahead_diagnostic_auxiliary'
 PIO_MARKER='__kui_native_readahead_pio_auxiliary'
 PIO_PAIR_MARKER='__kui_native_readahead_pio_pair_auxiliary'
 MULTI_OWNER_MARKER='__kui_native_sdk_sci_multi_owner_stage'
+STRUCTURAL_MARKER='__kui_native_sdk_sci_structural_stage'
+DUAL_MARKER='__kui_native_dual_readers_stage'
+STRUCTURAL_PINS={}
+DUAL_PINS={
+    '_native_readahead_bind':(1208,'7a9d6c8c85dcce44b576a6e776098ac6af02c9a65d26abc14e9fff4e1980b3a0'),
+    '_kui_vmu_native_background_map_address':(92,'cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8'),
+}
 # Pins are reviewed against the candidate's complete linked body and literals.
 # The combined read-ahead audit also pins the complete module and low table.
 PINS={
@@ -109,7 +116,7 @@ def flat_aux(aux):
 
 
 class ReadAheadBinderCPU(ColdBinderCPU):
-    def __init__(self,stage,resident,aux,*,cache=True,payload=0x8c400000,stream=0,owner_name='Evolution2'):
+    def __init__(self,stage,resident,aux,*,cache=True,payload=0x8c400000,stream=0,owner_name='Evolution2',sdk_vbr=0x8c00f400):
         super().__init__(stage,resident,cache=cache,payload=payload,stream=stream,owner_name=owner_name)
         self.layout=auxiliary_layout(aux)
         self.aux=aux;self.aux_binary=flat_aux(aux)
@@ -135,7 +142,8 @@ class ReadAheadBinderCPU(ColdBinderCPU):
         self.put32(self.region+0x530,COOKIE)
         # Read-ahead follows successful SDK publication. Seed that installed
         # state faithfully, rather than a cookie with original callback slots.
-        self.sdk_vbr=0x8c00f400;self.sdk_previous=self.owner_constants['default']
+        self.sdk_vbr=sdk_vbr;self.control['vbr']=sdk_vbr
+        self.sdk_previous=self.owner_constants['default']
         self.put32(self.region+0x534,self.sdk_previous);self.put32(self.region+0x538,self.sdk_vbr)
         for at in (self.sdk_vbr+0x25c,self.sdk_vbr+0x260):self.put32(at,self.callback)
         self.expected_sdk=(self.callback,self.callback,self.sdk_previous,self.sdk_vbr,COOKIE)
@@ -328,13 +336,19 @@ class ReadAheadBinderCPU(ColdBinderCPU):
             (self.sdk_vbr+0x25c,self.sdk_vbr+0x260,self.region+0x534,self.region+0x538,self.region+0x530))
 
 
-def pin_stage(stage,*,diagnostic=False,pio=False,pair=False,multi_owner=False):
+def pin_stage(stage,*,diagnostic=False,pio=False,pair=False,multi_owner=False,structural=False,dual=False):
     result={}
     require(not pio or diagnostic,'cold PIO stage pins require the diagnostic layout')
     require(not pair or pio,'cold PIO pair stage pins require the PIO profile')
     require(not multi_owner or (pair and stage[4].get(MULTI_OWNER_MARKER)==(1,0,0,0xfff1)),
             'cold multi-owner pins require the exact stage marker and PIO pair')
-    selected=MULTI_OWNER_PINS if multi_owner else PIO_PAIR_PINS if pair else PIO_PINS if pio else DIAGNOSTIC_PINS if diagnostic else PINS
+    require(structural==(STRUCTURAL_MARKER in stage[4]) and
+            (not structural or stage[4][STRUCTURAL_MARKER]==(1,0,0,0xfff1) and multi_owner),
+            'cold structural stage marker differs or lacks its exact-owner path')
+    require(dual==(DUAL_MARKER in stage[4]) and
+            (not dual or stage[4][DUAL_MARKER]==(1,0,0,0xfff1) and structural),
+            'cold dual stage marker differs or lacks its structural X path')
+    selected=DUAL_PINS if dual else STRUCTURAL_PINS if structural else MULTI_OWNER_PINS if multi_owner else PIO_PAIR_PINS if pair else PIO_PINS if pio else DIAGNOSTIC_PINS if diagnostic else PINS
     for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(stage,name,2)
         require(section[2]&4 and 0x8ce00000<=address<address+count<=0x8cfe0000,
@@ -350,8 +364,10 @@ def check_stage(stage,resident,aux,*,self_test=False):
     require(__debug__,'cold read-ahead proof requires Python assertions')
     layout=auxiliary_layout(aux)
     multi_owner=multi_owner_profile(stage,layout)
+    structural=STRUCTURAL_MARKER in stage[4]
+    dual=DUAL_MARKER in stage[4]
     def pin_selected(image):return pin_stage(image,diagnostic=layout['diagnostic'],pio=layout['pio'],
-                                              pair=layout['pair'],multi_owner=multi_owner)
+                                              pair=layout['pair'],multi_owner=multi_owner,structural=structural,dual=dual)
     pins=pin_selected(stage)
     owners=('Evolution1','Evolution2') if multi_owner else ('Evolution2',)
     positives=negatives=mutations=pin_mutations=layout_mutations=stage_marker_mutations=0
@@ -361,6 +377,14 @@ def check_stage(stage,resident,aux,*,self_test=False):
                 for owner in owners:
                     ReadAheadBinderCPU(stage,resident,aux,cache=cache,payload=payload,stream=stream,owner_name=owner).execute()
                     positives+=1
+    dynamic_vbr_cases=0
+    if structural:
+        for cache in (False,True):
+            for owner in owners:
+                for vbr in (0x8c020000,0x8c200000):
+                    ReadAheadBinderCPU(stage,resident,aux,cache=cache,payload=0x8c500000,
+                        owner_name=owner,sdk_vbr=vbr).execute()
+                    positives+=1;dynamic_vbr_cases+=1
     cases=[]
     def case(name,detail,change):cases.append((name,detail,change))
     case('source_entry_misaligned',2,lambda c:c.put32(c.blob+40,c.descriptor|1))
@@ -505,6 +529,7 @@ def check_stage(stage,resident,aux,*,self_test=False):
                 except ValueError:stage_marker_mutations+=1
                 else:raise ValueError('cold read-ahead accepted changed multi-owner stage marker')
     return dict(actual_linked_cold_binder_executed=True,positive_cases=positives,
+        admitted_dynamic_sdk_vbr_preservation_cases=dynamic_vbr_cases,
         malformed_descriptor_context_aux_and_init_cases=negatives,omitted_activation_ocbp_rejections=mutations,
         reviewed_body_byte_mutation_rejections=pin_mutations,
         context_and_diagnostic_schema_mutation_rejections=layout_mutations,
@@ -520,7 +545,7 @@ def check_stage(stage,resident,aux,*,self_test=False):
         diagnostic_auxiliary=layout['diagnostic'],public_prefix_bytes=layout['public_bytes'],
         pio_auxiliary=layout['pio'],
         pio_pair_auxiliary=layout['pair'],
-        multi_owner_stage=multi_owner,exact_sdk_owners_tested=list(owners),
+        multi_owner_stage=multi_owner,structural_sdk_stage=structural,dual_reader_stage=dual,exact_sdk_owners_tested=list(owners),
         admitted_sdk_callback_default_vbr_cookie_preserved=True,
         sdk_owner_scope='Begins after independently proved SDK admission and callback publication',
         complete_owned_context_bytes=layout['context_bytes'],

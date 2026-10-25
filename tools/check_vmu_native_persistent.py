@@ -750,6 +750,22 @@ READ_AHEAD_PIO_PAIR_PREPARED_PINS={
  '_trace_packets':('75312cc024c9d433b226c53b54eb92dbd1363579102b5dc1a9d83c3be19dda9b',116),
 }
 
+# The dual module changes only diagnostic mode isolation/reporting and exact
+# immutable interior offsets. The new getter/gate are separately executed;
+# every prior prepared profile retains its original map above.
+DUAL_READER_PREPARED_PINS={
+ '_kui_vmu_native_fault_capture_install':('e364dba55e4fb946d822f78bda01f06126f47ef6ea7a921d638b679d35c6e31a',560),
+ '_diagnostic_end':('f37ab3c7f425727ab1eb70efd81a361b395b22179b0af82ebca9e3b9fef88f39',1492),
+ '_diagnostic_complete':('3884a3e4d35c7508a2ca7ceca24f41ff8156988fe40754e63dbc1394137cf325',3344),
+ '_transfer_context_valid':('6b2865405f5a7d1e25b66cf217a261c1e4fdc9245f21acba59604ee750715126',1236),
+ '_kui_vmu_native_runtime_fault':('bc95ecc91bee718338d8eda8150b4550f001d6fb61ab5d60e2a47e95f7cb784f',332),
+ '.rodata':('b8b6c5904e1e8fdc04e374141332f2ae6a07b184cdef77e4609154ca30286d94',5732),
+ '_kui_vmu_native_trace_report':('bdd62967969cabe205d1540766d792a01c05b328f011c9cf43fef60affaa2f6d',1120),
+ '_trace_history':('420d0288d7ce8b8d6ff958e16da363cf12700c3910118b28da786b70dc0ec40e',164),
+ '_report':('813006d8445393306448e2881948e5c2d64053b922e44360d51031abe090fa3b',440),
+ '_trace_packets':('434c4eb229830ff7684872b4f14dcf2b3fff4be6294185f43bfbf923ac7adb05',116),
+}
+
 def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *, build=None,
                             read_ahead_proof=None):
     """Keep the legacy proof, or require the complete prepared proof family."""
@@ -798,6 +814,8 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
                 'prepared diagnostic pins require the complete exact auxiliary proof')
     read_ahead_pio=pio_companion(worker,read_ahead_proof)
     read_ahead_pio_pair=pio_pair_companion(worker,read_ahead_proof)
+    from check_native_dual_readers import dual_companion
+    dual_reader=dual_companion(worker,read_ahead_proof)
     require(not read_ahead_pio or read_ahead_diagnostic,'prepared PIO profile lacks its diagnostic worker')
     pins={**PREPARED_PINS,**(STALL_PREPARED_PINS if stall_marker else {}),
           **(COOPERATIVE_PREPARED_PINS if cooperative else {}),
@@ -807,7 +825,8 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
           **(READ_AHEAD_PREPARED_PINS if read_ahead else {}),
           **(READ_AHEAD_DIAGNOSTIC_PREPARED_PINS if read_ahead_diagnostic else {}),
           **(READ_AHEAD_PIO_PREPARED_PINS if read_ahead_pio else {}),
-          **(READ_AHEAD_PIO_PAIR_PREPARED_PINS if read_ahead_pio_pair else {})}
+          **(READ_AHEAD_PIO_PAIR_PREPARED_PINS if read_ahead_pio_pair else {}),
+          **(DUAL_READER_PREPARED_PINS if dual_reader else {})}
     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
                        ("_protected_ranges", 512), ("_protected_count", 4),
@@ -906,6 +925,7 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
             "read_ahead_diagnostic_companion_required":bool(read_ahead_diagnostic),
             "read_ahead_pio_companion_required":read_ahead_pio,
             "read_ahead_pio_pair_companion_required":read_ahead_pio_pair,
+            "dual_reader_companion_required":dual_reader,
             "constant_build_identity_bound_to_verified_runtime": True, "identity_words": 8,
             "protected_interval_limit": 64, "hook_word_limit": 32, "free_node_limit": 1024,
             "full_dynamic_free_list_each_release": True, "full_storage_guards_before_and_after_loan": True,
