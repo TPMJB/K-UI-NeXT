@@ -1,15 +1,15 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Native heap placement test @BUILD@
+# Native graphics budget and VMU identity test @BUILD@
 
-This candidate changes where the native New/Legacy VMU module reserves its
-memory. It keeps the original game heap's upper end and normal top-down
-allocation addresses. The complete **384 KiB reservation**, including the
+This candidate corrects a graphics allocation failure and a VMU product-class
+rejection. It retains the bottom reservation from the previous candidate.
+The complete **384 KiB reservation**, including the
 **128 KiB worker and 192 KiB read-ahead cache**, remains available.
 
-The original allocator obtains an upper placeholder, allocates the exact
+The original SDK allocator obtains an upper placeholder, allocates the exact
 remaining bottom chunk, then frees the placeholder. Every transition is
-checked before the worker is installed. The placeholder's payload is never
-read or initialized. The original allocator/free bodies and their pointer
+checked before the worker is installed. The placeholder is not used as an
+allocation buffer. The original allocator/free bodies and their pointer
 literals must match the reviewed structural family. Full heap ownership,
 release-overlap, reinitialization, DMA and storage guards remain required.
 
@@ -17,24 +17,39 @@ The New reader's SCI priority, checked PIO pair scheduling, read-ahead
 producer and cache size are unchanged. This ZIP installs a matching Games UI
 and native New/Legacy module. CE, CD music and compressed-image routes retain
 their existing behavior. The standard virtual card streams from SD and
-continues using virtual **A2**, leaving physical **A1** available.
+continues using virtual **A2**, leaving physical **A1** available. Card contents,
+geometry, storage-only function bits and ownership identity are unchanged.
 
 ## Why this candidate
 
-On C29, Rayman 2 stops at Ubisoft with both New and Legacy. Its captured
-original interrupt frame identifies a resource-table store using an invalid,
-unaligned destination while processing FIX.DAT, before the logo's timed
-wait. Lodoss shows black movie video with sound on both readers. Its New
-capture shows continuing reads and entry into MPEG parsing, with SCI retry
-activity but no VMU storage writes during the measured window.
+The owner confirmed that the previous bottom-placement candidate lets Rayman 2
+pass Ubisoft with New, but the game reports no VMU. Its original device
+classifier requires the padded product name **Visual Memory**. The old
+**K-UI Virtual Memory** name decodes as another storage device and fails the
+game's VMU selection gate. The common emulated reply now uses the standard
+product class, while the producer/version still identify K-UI. Original
+instruction replay accepts the corrected A2 reply and rejects the old name.
+The replay also accepts A2 with physical A1 absent.
 
-The old reservation shifts ordinary top-down game allocations by 393,248
-bytes, including the allocation header. Executing Lodoss's original startup
-shows its application pool moving from `8c67eca0` to `8c61ec80`. The new
-reservation restores `8c67eca0` and its original initialized contents in the
-instruction replay. Allocator, ownership and compiled installer checks are
-software evidence; **Rayman and Lodoss are not yet confirmed fixed on console**.
-Evolution 1's black screen after Sofdec remains unresolved too.
+Lodoss still shows black video with both readers. Its startup allocates a
+private game pool and then requests **920,752 bytes** for graphics setup.
+The original SDK heap has **921,472 bytes** left for that request. Our retained
+allocation left only **528,224 bytes**, so the original allocator returned
+NULL. The original caller then published `0x20000000` as the work pointer.
+
+For the structurally verified remaining-RAM pool-split caller, this candidate
+accounts for the reservation's **393,248-byte physical cost** in that existing
+split calculation. The private pool becomes smaller by that amount, and SDK
+graphics capacity returns to its original value. The allocation and child-pool
+initializer receive the same adjusted size. The original graphics allocation
+then succeeds in instruction replay. The correction changes one guarded live
+reserve word; it does not modify the disc image or use a title-name whitelist.
+Unrelated callers retain the existing bottom placement.
+
+These are software results. **Rayman's card detection/save/load and Lodoss's
+video, audio and later game memory demand still require console testing.**
+Evolution 2 loading worked on the previous candidate. Evolution 1's black
+screen after Sofdec remains unresolved.
 
 ## Install
 
@@ -63,8 +78,8 @@ choice is preserved. Off uses the existing Standard route.
 
 ## Test New first
 
-1. **Rayman 2:** check whether it passes the Ubisoft logo and reaches normal
-   startup/play. If it does, try movement and a level transition.
+1. **Rayman 2:** check that it detects virtual A2, then load an existing save
+   or create one in an unused slot. Power off fully and check that it reloads.
 2. **Record of Lodoss War:** let the opening movie start without skipping it.
    Report whether video appears and whether audio plays normally or stutters.
 3. **Evolution 2 or Grandia II:** briefly repeat a familiar movie/gameplay
@@ -77,8 +92,8 @@ slot for any new save, wait for completion, then power off fully and reload.
 For Skies, also check physical A1 coexistence. Its earlier normal boot result
 alone did not establish these save/persistence checks for this candidate.
 
-Legacy is available afterward as a comparison using the same bottom
-reservation. The main acceptance target is New. Both readers use the same
+Legacy is available afterward as a comparison using the same reservation and
+guarded pool-budget correction. The main acceptance target is New. Both use the same
 384 KiB reservation; Legacy leaves the extra read-ahead space unused.
 
 ## If a stall remains
@@ -96,7 +111,7 @@ matched to the original source frames. The exact Evolution 1 phase history
 is retained. PVR samples measure timing and do not establish framebuffer
 read-enable or decoded-frame publication.
 
-The previous C29 videos and Legacy results are already recorded. A new
+The previous C29 and bottom-placement videos and Legacy results are recorded. A new
 capture is useful only for a failure on this new build. If Rayman remains
 broken and its resource metadata is requested, the optional read-only
 collector is included; follow **RAYMAN-PROBE.md**. It exports only a 256-byte
@@ -119,8 +134,8 @@ reservation. The DOA2 resource reports and Crazy Taxi startups are already
 available and do not need to be uploaded again. Included collectors remain
 available for reproducibility and future requested evidence.
 
-RESULTS.csv retains the earlier console results. New placement is a test
-candidate until hardware results are recorded. The full offline source
+RESULTS.csv retains the earlier console results. These compatibility corrections
+are test candidates until hardware results are recorded. The full offline source
 history, checksums and software evidence are included. See
 **source/SOURCE-RECOVERY.md** to restore the exact source without a network or
 an earlier checkout. No GitHub publication is part of this test delivery.

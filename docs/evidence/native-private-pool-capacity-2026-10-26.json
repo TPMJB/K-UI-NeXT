@@ -1,0 +1,235 @@
+{
+  "schema": "kui.native.private-pool-capacity-original.v1",
+  "status": "PASS",
+  "input_bytes": 3473412,
+  "input_sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5",
+  "lease_payload_bytes": 393216,
+  "lease_physical_cost": 393248,
+  "plan": {
+    "reserve_address": 2348877628,
+    "reserve_before": 920452,
+    "reserve_after": 1313700,
+    "child_bytes_before": 9966432,
+    "child_bytes_after": 9573184
+  },
+  "source_files": {
+    "tools/prove_native_private_pool_budget.py": "6623fddc0bed759ef8b3f3ab1368566c78ee165318fa325c96657f2d69d17f3b",
+    "tests/test_vmu_native_heap_execution.py": "0c7b084337116b2a4d349aa555eb9fea55e7b5c0ee0a8f27c6034a0df525c750",
+    "src/core/vmu_native_heap.c": "77ea7f2d3a81853a81d8e00e6bdd22417bd4caa699207c8f44146a53a8dcffec",
+    "src/core/vmu_native_heap_bottom_code.inc": "d6ebb0bb1b9209ecb33c608d2911b957805cd2e21c2cf41b029d93f1e3131916",
+    "src/core/vmu_native_heap_budget.c": "76745d48ca9f3e0e1cb60bc6055b51fa3de1b3d378a22cc3e3e8dc19db1f2239",
+    "include/kui/vmu_native_heap.h": "b0393ca3af8a7a5bf848add7aa2bdd5da5e628a3ca295565f5bc01f287b0ad77",
+    "include/kui/vmu_native_heap_budget.h": "574b0938fbdb3c10ad9238474a52536a2ec62159128c740c6eefc8e7695de8d9"
+  },
+  "original_entries": {
+    "startup": 2348877440,
+    "initializer_return": 2348877484,
+    "scene": 2351616258,
+    "scene_caller": 2348880044,
+    "stop": 2351616554
+  },
+  "scene_arguments": [
+    4294967295,
+    0,
+    230000,
+    0
+  ],
+  "scene_fifth_argument": 0,
+  "cases": [
+    {
+      "mode": "baseline",
+      "application_pool": 2355621024,
+      "application_pool_bytes": 9966432,
+      "application_pool_end": 2365587456,
+      "application_head": [
+        1852637192,
+        0,
+        9966400,
+        0,
+        2365587424,
+        2365587424,
+        0,
+        2365587424
+      ],
+      "application_sentinel": 2365587424,
+      "sentinel_words": [
+        1852637184,
+        0,
+        32,
+        2355621024,
+        0,
+        0,
+        2355621024,
+        2365587424
+      ],
+      "reserve_literal": 920452,
+      "lease": null,
+      "free_sdk_bytes_before_scene": 921472,
+      "scene_request_bytes": 920752,
+      "scene_allocator_return": 2354700224,
+      "scene_published_pointer": 2891571136,
+      "worker_payload_preserved": null,
+      "worker_header_preserved": null,
+      "canary_bytes": 0,
+      "scene_allocator_calls": [
+        {
+          "phase": "scene",
+          "request": 920752,
+          "return_pr": 2351616502
+        }
+      ],
+      "original_instructions": 378
+    },
+    {
+      "mode": "tail",
+      "application_pool": 2355227776,
+      "application_pool_bytes": 9966432,
+      "application_pool_end": 2365194208,
+      "application_head": [
+        1852637192,
+        0,
+        9966400,
+        0,
+        2365194176,
+        2365194176,
+        0,
+        2365194176
+      ],
+      "application_sentinel": 2365194176,
+      "sentinel_words": [
+        1852637184,
+        0,
+        32,
+        2355227776,
+        0,
+        0,
+        2355227776,
+        2365194176
+      ],
+      "reserve_literal": 920452,
+      "lease": 2365194240,
+      "free_sdk_bytes_before_scene": 528224,
+      "scene_request_bytes": 920752,
+      "scene_allocator_return": 0,
+      "scene_published_pointer": 536870912,
+      "worker_payload_preserved": true,
+      "worker_header_preserved": true,
+      "canary_bytes": 393216,
+      "scene_allocator_calls": [
+        {
+          "phase": "scene",
+          "request": 920752,
+          "return_pr": 2351616502
+        }
+      ],
+      "original_instructions": 428
+    },
+    {
+      "mode": "bottom",
+      "application_pool": 2355621024,
+      "application_pool_bytes": 9966432,
+      "application_pool_end": 2365587456,
+      "application_head": [
+        1852637192,
+        0,
+        9966400,
+        0,
+        2365587424,
+        2365587424,
+        0,
+        2365587424
+      ],
+      "application_sentinel": 2365587424,
+      "sentinel_words": [
+        1852637184,
+        0,
+        32,
+        2355621024,
+        0,
+        0,
+        2355621024,
+        2365587424
+      ],
+      "reserve_literal": 920452,
+      "lease": 2354699552,
+      "free_sdk_bytes_before_scene": 528224,
+      "scene_request_bytes": 920752,
+      "scene_allocator_return": 0,
+      "scene_published_pointer": 536870912,
+      "worker_payload_preserved": true,
+      "worker_header_preserved": true,
+      "canary_bytes": 393216,
+      "scene_allocator_calls": [
+        {
+          "phase": "scene",
+          "request": 920752,
+          "return_pr": 2351616502
+        }
+      ],
+      "original_instructions": 534
+    },
+    {
+      "mode": "bottom-budget",
+      "application_pool": 2356014272,
+      "application_pool_bytes": 9573184,
+      "application_pool_end": 2365587456,
+      "application_head": [
+        1852637192,
+        0,
+        9573152,
+        0,
+        2365587424,
+        2365587424,
+        0,
+        2365587424
+      ],
+      "application_sentinel": 2365587424,
+      "sentinel_words": [
+        1852637184,
+        0,
+        32,
+        2356014272,
+        0,
+        0,
+        2356014272,
+        2365587424
+      ],
+      "reserve_literal": 1313700,
+      "lease": 2354699552,
+      "free_sdk_bytes_before_scene": 921472,
+      "scene_request_bytes": 920752,
+      "scene_allocator_return": 2355093472,
+      "scene_published_pointer": 2891964384,
+      "worker_payload_preserved": true,
+      "worker_header_preserved": true,
+      "canary_bytes": 393216,
+      "scene_allocator_calls": [
+        {
+          "phase": "scene",
+          "request": 920752,
+          "return_pr": 2351616502
+        }
+      ],
+      "original_instructions": 537
+    }
+  ],
+  "refusal_cases": [
+    "parent-code",
+    "child-code",
+    "second-consumer",
+    "address-of-reserve",
+    "live-break",
+    "published-child",
+    "dispatch-target",
+    "unaligned-cost",
+    "oversize-cost",
+    "denied-live-read"
+  ],
+  "fpu_model_scope": "Only original scalar FLDI0/FLOAT/FCMP-GT/FMOV and FR15 stack-save operations before allocation. Positive integer230100 is exactly representable. No movie FPU or hardware emulation.",
+  "limits": [
+    "The full original startup/private-pool initializer and reviewed scene entry execute; intervening game entry calls and all assets are not executed.",
+    "Scene arguments come from the exact original caller. A separate static startup/gateway review establishes that the default SDK allocation branch is reached without an earlier user-buffer setter.",
+    "This counterfactual proves an allocation defect and its budget correction, not the live console rendering pointer or successful playback.",
+    "The corrected child pool is smaller by the physical lease cost. Future peak child-pool demand remains a hardware/gameplay test."
+  ]
+}

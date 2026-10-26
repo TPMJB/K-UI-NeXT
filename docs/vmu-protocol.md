@@ -38,7 +38,7 @@ invalid packet length, rather than silently ignored data.
 
 | Command | Response and behavior |
 | --- | --- |
-| 1 / 2, device / extended information | Storage only; 28 / 48 payload words. Honest K-UI identity, no LCD/clock/processor functions. |
+| 1 / 2, device / extended information | Storage only; 28 / 48 payload words. Standard `Visual Memory` product class with K-UI producer/version identity; no LCD/clock/processor functions. |
 | 3, reset | Discard unfinished RAM transaction and acknowledge. Committed storage remains unchanged. |
 | 4, kill | Acknowledge, then remain silent until hardware/API reset. Silence is represented by the exact four-byte DMA timeout marker `ff ff ff ff`. |
 | 10, media information | Standard 128 KiB, 256 physical blocks, 200 user blocks, root255, FAT254x1, directory253 descending x13. Standard VMU compatibility parameters200/31; no executable engine. |

@@ -377,7 +377,7 @@ static void reader_capture_report(const struct retail_display_state *display) {
     retail_display_restore(display);
 #if KUI_NATIVE_REQUEST_TIMING
 #if KUI_NATIVE_DUAL_READERS
-    retail_display_line("READ/AGE TICKS / SDK X");
+    retail_display_line("READ/AGE TICKS / X OR Y");
 #else
     retail_display_line("HYBRID READER - COMPLETE REQUEST TIMING");
 #endif

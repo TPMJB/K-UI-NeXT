@@ -57,6 +57,9 @@ static uint32_t native_runtime_mode(void) {
 #endif
 #include "kui/vmu_native_discovery.h"
 #include "kui/vmu_native_heap.h"
+#if KUI_NATIVE_DUAL_READERS
+#include "kui/vmu_native_heap_budget.h"
+#endif
 #include "kui/vmu_native_program.h"
 #include "kui/vmu_native_stage_placement.h"
 #include "kui/vmu_maple_observe_boot.h"
@@ -175,6 +178,28 @@ static void native_report(uint32_t phase,uint32_t detail) {
 #if KUI_NATIVE_DUAL_READERS
 __asm__(".global __kui_native_bottom_heap_stage\n"
         ".set __kui_native_bottom_heap_stage,1\n");
+__asm__(".global __kui_native_private_pool_budget_stage\n"
+        ".set __kui_native_private_pool_budget_stage,1\n");
+static void __attribute__((noipa)) native_budget_prepare(
+    const struct kui_vmu_native_heap_lease *lease,struct kui_vmu_native_heap_budget *budget) {
+    if(lease->lease_bytes>UINT32_MAX-32u ||
+       kui_vmu_native_heap_budget_prepare((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+           exec_bytes,&native_heap,&native_call,native_read,NULL,
+           lease->lease_bytes+32u,budget)<0)
+        native_report(6u,0x64u);
+}
+static void __attribute__((noipa)) native_budget_publish(
+    const struct kui_vmu_native_heap_lease *lease,const struct kui_vmu_native_heap_budget *budget) {
+    if(!budget->reserve_address)return;
+    if(native_word(native_heap.initializer_slot)!=NATIVE_LOW_HEAP_HOOK ||
+       !kui_vmu_native_heap_lease_valid(lease,native_read,NULL,1u) ||
+       native_word(budget->reserve_address)!=budget->reserve_before)
+        native_report(6u,0x65u);
+    *(volatile uint32_t *)(uintptr_t)budget->reserve_address=budget->reserve_after;
+    native_publish(budget->reserve_address);
+    if(native_word(budget->reserve_address|UINT32_C(0x20000000))!=budget->reserve_after)
+        native_report(6u,0x66u);
+}
 static bool __attribute__((noipa)) native_allocator_unchanged(void) {
     uint32_t sr;uint8_t digest[32];
     __asm__ volatile("stc sr,%0":"=r"(sr)::"memory");
@@ -239,7 +264,10 @@ void kui_vmu_observe_stage_install(void) {
     retail_display_line("COLD 21 HEAP ALLOCATION BEGIN");
 #endif
 #if KUI_NATIVE_DUAL_READERS
+    struct kui_vmu_native_heap_budget budget;
+    native_budget_prepare(&lease,&budget);
     native_allocate_bottom(&lease);
+    native_budget_publish(&lease,&budget);
 #else
     void *(*allocate)(uint32_t)=(void *(*)(uint32_t))(uintptr_t)native_heap.allocate;
     c->lease=(uint32_t)(uintptr_t)allocate(lease.lease_bytes);

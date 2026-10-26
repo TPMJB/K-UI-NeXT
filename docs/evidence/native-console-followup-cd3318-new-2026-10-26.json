@@ -1,0 +1,1085 @@
+{
+  "schema": "kui.native-console-followup-cd3318-new.v1",
+  "runtime_commit": "cd3318f0f457169514643eb1775d5dc8019e695d",
+  "production_changed_in_capture": false,
+  "user_confirmation": {
+    "Rayman2": "Previous cd3318 report was with New explicitly selected: gets past Ubisoft; no VMU detected.",
+    "Lodoss": "63418 used Legacy by mistake. 63419 explicitly uses New; same black video.",
+    "Evolution2": "Working including loading on cd3318."
+  },
+  "capture": {
+    "schema": "kui.console-lodoss-cd3318-new-raw-owner-analysis.v1",
+    "build": "cd3318f0f457",
+    "title": "RECORD OF LODOSS WAR",
+    "selected_reader": "New",
+    "video": {
+      "path": "63419.mp4",
+      "sha256": "e1bb24eb7734c1c33f0f701cad35f513c4a0a00070a220565174585d8acf799e",
+      "bytes": 73451111,
+      "duration_seconds": 97.073578,
+      "complete_report_cycle": true,
+      "starts_on_report": true
+    },
+    "source": {
+      "path": "lodoss/1NOSDC.BIN",
+      "bytes": 3473412,
+      "sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5"
+    },
+    "frames": {
+      "reader": 1,
+      "readahead": 9,
+      "readahead_exits": 11,
+      "timeline": 13,
+      "latency": 28,
+      "clock": 31,
+      "raw_header": 33,
+      "raw_words": [
+        36,
+        39,
+        41,
+        44
+      ],
+      "extraction": "ffmpeg -vf fps=1/2; frameNapproximately2*N-1seconds"
+    },
+    "raw_header": {
+      "frame": 2354299156,
+      "words": 192,
+      "flags": 7,
+      "tick": 4266233049,
+      "pr": 2351731310,
+      "sr": 1610613233,
+      "load": 34341721,
+      "vblank": 1376516,
+      "control": 336,
+      "scan": 15519,
+      "event": 864
+    },
+    "raw_words": [
+      0,
+      9408,
+      9,
+      2351731310,
+      2354239468,
+      0,
+      1,
+      128,
+      2354241728,
+      2354440548,
+      1,
+      0,
+      2354315892,
+      100,
+      2354382952,
+      2354744492,
+      0,
+      1610613233,
+      4294967055,
+      0,
+      2351854344,
+      15,
+      2351729732,
+      0,
+      0,
+      2560,
+      128,
+      1,
+      0,
+      2354239468,
+      2351726790,
+      128,
+      1,
+      0,
+      2354239468,
+      2351727010,
+      1,
+      2351922016,
+      0,
+      2354299600,
+      28720803,
+      2351605902,
+      2351726914,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1168703500,
+      232881719,
+      2902557135,
+      450871096,
+      2101425,
+      4128832,
+      771753342,
+      2521171480,
+      16777216,
+      50332160,
+      83887104,
+      117442048,
+      0,
+      0,
+      0,
+      0,
+      262156,
+      513,
+      1879048449,
+      100,
+      26624,
+      4294967196,
+      2349707692,
+      52,
+      100,
+      2354315892,
+      0,
+      0,
+      0,
+      0,
+      2354299600,
+      28720803,
+      2351605902,
+      28720751,
+      9408,
+      9,
+      2348872704,
+      0,
+      2351605946,
+      2349707710,
+      1610612992,
+      2348872352,
+      0,
+      2354315500,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2354299564,
+      2354299556,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "interrupted_registers": {
+      "fpscr": 262156,
+      "fpul": 513,
+      "sr": 1879048449,
+      "r0": 100,
+      "r1": 26624,
+      "r2": 4294967196,
+      "r3": 2349707692,
+      "r4": 52,
+      "r5": 100,
+      "r6": 2354315892,
+      "r7": 0,
+      "r8": 0,
+      "r9": 0,
+      "r10": 0,
+      "r11": 2354299600,
+      "r12": 28720803,
+      "r13": 2351605902,
+      "r14": 28720751,
+      "macl": 9408,
+      "mach": 9,
+      "vbr": 2348872704,
+      "gbr": 0,
+      "pr": 2351605946,
+      "spc": 2349707710,
+      "ssr": 1610612992
+    },
+    "reader": {
+      "samples": 1200,
+      "bad": 0,
+      "gap_max": 21924,
+      "read_max": 247737,
+      "age_max": 240949,
+      "irq_blocks": 1864,
+      "call_blocks": 4136,
+      "pio": 992,
+      "crc": 0,
+      "token_errors": 0,
+      "foreign": 0,
+      "fix": 0,
+      "overruns": 242,
+      "defer": 0,
+      "clock_bad": 0,
+      "sci_rearm": 0,
+      "irq_count": 2099,
+      "hook": 0,
+      "release100": 0,
+      "release400": 0,
+      "release600": 0,
+      "vbr_changes": 0,
+      "max_read_lba": 266245,
+      "max_read_count": 167
+    },
+    "readahead": {
+      "pages_visible": true,
+      "capacity": 384,
+      "hits": 768,
+      "misses": 2543,
+      "hit_requests": 49,
+      "blocks": 968,
+      "visits": 1200,
+      "heartbeat_visits": 1200,
+      "irq_visits": 2099,
+      "seeks": 0,
+      "stops": 0,
+      "resumes": 0,
+      "full": 0,
+      "extent_ends": 0,
+      "crc": 0,
+      "token": 0,
+      "abort": 0,
+      "guard": 0,
+      "clock": 0,
+      "pio_attempts": 968,
+      "max_pio_ticks": 1490,
+      "pio_clock_bad": 0,
+      "second_attempts": 0,
+      "second_time_skips": 968,
+      "max_single_ticks": 1277,
+      "second_over_budget": 0,
+      "max_visit_ticks": 5783,
+      "failures": 0,
+      "failure_stage_totals": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "first": 0,
+      "last": 0,
+      "skipped": [
+        0,
+        0,
+        0,
+        0,
+        232,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "gd": {
+      "events": 4468,
+      "valid": 4468,
+      "bad": 0,
+      "epoch": 1,
+      "clock_breaks": 0,
+      "unmatched": 0,
+      "overflow": 0,
+      "saturation": 0,
+      "max_call_ticks": 5764,
+      "max_gap_ticks": 13000,
+      "max_chain_length": 1,
+      "max_chain_ticks": 247861,
+      "max_chain_inside": 144326,
+      "active_token": 0,
+      "last_active_lba": 267117,
+      "last_active_count": 24,
+      "active_flags": 0,
+      "stored_calls": 8,
+      "stored_requests": 16,
+      "bins": 32
+    },
+    "vmu": {
+      "submit": [
+        1200,
+        1200,
+        0,
+        79540,
+        82
+      ],
+      "complete": [
+        1200,
+        1200,
+        0,
+        1336288,
+        1360
+      ],
+      "free": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "store": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "wall": [
+        15592487,
+        4800,
+        0,
+        0
+      ],
+      "fast_full_sub_end": [
+        1200,
+        0,
+        1200,
+        0
+      ]
+    },
+    "clock": {
+      "ccr_first": 389,
+      "ccr_last": 389,
+      "ice_off": 0,
+      "polls": 1200,
+      "commits": 0,
+      "phase_mode": 2,
+      "phase_sequence": 0,
+      "phase_valid": 0,
+      "phase_waits": 0,
+      "phase_wraps": 0,
+      "fault_vector_armed": 0
+    },
+    "production_changed": false,
+    "poll_gap_rows": [
+      [
+        [
+          0,
+          21924,
+          0,
+          23924,
+          1
+        ],
+        [
+          0,
+          40,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          17,
+          71,
+          71,
+          36418943
+        ]
+      ],
+      [
+        [
+          1,
+          21819,
+          0,
+          24054,
+          1
+        ],
+        [
+          0,
+          40,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          17,
+          86,
+          86,
+          36423848
+        ]
+      ],
+      [
+        [
+          2,
+          21912,
+          0,
+          23960,
+          1
+        ],
+        [
+          0,
+          40,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          17,
+          44,
+          44,
+          36415221
+        ]
+      ],
+      [
+        [
+          3,
+          21901,
+          0,
+          24008,
+          1
+        ],
+        [
+          0,
+          40,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          17,
+          48,
+          48,
+          36415837
+        ]
+      ]
+    ],
+    "gd_bin_rows": [
+      [
+        0,
+        1,
+        49423,
+        52,
+        38
+      ],
+      [
+        1,
+        1,
+        56262,
+        49,
+        37
+      ],
+      [
+        2,
+        1,
+        85028,
+        54,
+        38
+      ],
+      [
+        3,
+        1,
+        22744,
+        47,
+        37
+      ],
+      [
+        4,
+        1,
+        85862,
+        55,
+        38
+      ],
+      [
+        5,
+        1,
+        14134,
+        48,
+        38
+      ],
+      [
+        6,
+        1,
+        48376,
+        47,
+        37
+      ],
+      [
+        7,
+        1,
+        44928,
+        50,
+        38
+      ],
+      [
+        8,
+        1,
+        13168,
+        45,
+        37
+      ],
+      [
+        9,
+        1,
+        9058,
+        46,
+        38
+      ],
+      [
+        10,
+        1,
+        41562,
+        48,
+        37
+      ],
+      [
+        11,
+        1,
+        63503,
+        52,
+        38
+      ],
+      [
+        12,
+        1,
+        50511,
+        49,
+        37
+      ],
+      [
+        13,
+        1,
+        59636,
+        53,
+        38
+      ],
+      [
+        14,
+        1,
+        26958,
+        47,
+        38
+      ],
+      [
+        15,
+        1,
+        19288,
+        46,
+        37
+      ],
+      [
+        16,
+        1,
+        115989,
+        54,
+        38
+      ],
+      [
+        17,
+        1,
+        81261,
+        54,
+        37
+      ],
+      [
+        18,
+        1,
+        135002,
+        64,
+        38
+      ],
+      [
+        19,
+        1,
+        39050,
+        48,
+        37
+      ],
+      [
+        20,
+        1,
+        98147,
+        56,
+        38
+      ],
+      [
+        21,
+        1,
+        112729,
+        59,
+        37
+      ],
+      [
+        22,
+        1,
+        86412,
+        55,
+        38
+      ],
+      [
+        23,
+        1,
+        35473,
+        48,
+        38
+      ],
+      [
+        24,
+        1,
+        122426,
+        59,
+        37
+      ],
+      [
+        25,
+        1,
+        132739,
+        61,
+        38
+      ],
+      [
+        26,
+        1,
+        22949,
+        46,
+        37
+      ],
+      [
+        27,
+        1,
+        52052,
+        50,
+        38
+      ],
+      [
+        28,
+        1,
+        42607,
+        51,
+        37
+      ],
+      [
+        29,
+        1,
+        58473,
+        49,
+        38
+      ],
+      [
+        30,
+        1,
+        29096,
+        49,
+        37
+      ],
+      [
+        31,
+        1,
+        23397,
+        43,
+        36
+      ]
+    ],
+    "stored_request_rows": [
+      [
+        [
+          85,
+          266923,
+          14,
+          25654
+        ],
+        [
+          11699,
+          13955,
+          5,
+          28672
+        ],
+        [
+          1,
+          0,
+          1,
+          25654
+        ]
+      ],
+      [
+        [
+          86,
+          266937,
+          39,
+          59615
+        ],
+        [
+          39233,
+          20382,
+          10,
+          79872
+        ],
+        [
+          1,
+          0,
+          1,
+          59615
+        ]
+      ],
+      [
+        [
+          87,
+          266976,
+          43,
+          91061
+        ],
+        [
+          65323,
+          25738,
+          11,
+          88064
+        ],
+        [
+          1,
+          0,
+          1,
+          91061
+        ]
+      ],
+      [
+        [
+          88,
+          267019,
+          46,
+          69630
+        ],
+        [
+          40711,
+          28919,
+          12,
+          94208
+        ],
+        [
+          1,
+          0,
+          1,
+          69630
+        ]
+      ],
+      [
+        [
+          89,
+          267065,
+          20,
+          32298
+        ],
+        [
+          17346,
+          14952,
+          6,
+          40960
+        ],
+        [
+          1,
+          0,
+          1,
+          32298
+        ]
+      ],
+      [
+        [
+          90,
+          267085,
+          26,
+          41975
+        ],
+        [
+          25325,
+          16650,
+          7,
+          53248
+        ],
+        [
+          1,
+          0,
+          1,
+          41975
+        ]
+      ],
+      [
+        [
+          91,
+          267111,
+          6,
+          14299
+        ],
+        [
+          2533,
+          11766,
+          3,
+          12288
+        ],
+        [
+          1,
+          0,
+          1,
+          14299
+        ]
+      ],
+      [
+        [
+          92,
+          267117,
+          24,
+          39186
+        ],
+        [
+          22373,
+          16813,
+          7,
+          49152
+        ],
+        [
+          1,
+          0,
+          1,
+          39186
+        ]
+      ]
+    ],
+    "gd_call_source_images": [
+      "/workspace/scratch/04d42b036255/lodoss-cd3318-new-review/frames/020.jpg",
+      "/workspace/scratch/04d42b036255/lodoss-cd3318-new-review/frames/022.jpg"
+    ],
+    "computed": {
+      "wall_seconds": 19.95838336,
+      "submit_seconds": 0.1018112,
+      "complete_seconds": 1.71044864,
+      "max_poll_gap_seconds": 0.02806272,
+      "max_reader_seconds": 0.31710336,
+      "max_single_pio_seconds": 0.00163456
+    },
+    "limits": [
+      "Manualhextranscription; criticalframeandcontextsourceverified. Some inactive/FPUwordsnotindependentlyreviewed.",
+      "Thisisoneintentionalinterruptsnapshot,notfaultPCorprovenstuckloop;INTEVTislastlatch.",
+      "SDKmayselectdedicatedIRQstack;actualgameSPglobalnotcaptured.",
+      "Noliveinputbytes/parserstate/framebufferenablecaptured.",
+      "OldC29andcurrentNewbothblackbutsinglecapturesnotcontrolledthroughputcomparison."
+    ],
+    "conclusions": [
+      "NewreaderpositivelyactivefromREADAHEADexports/report;full384blockcachepresent,zeroRAfailures.",
+      "1200validfastcontrollerpairs,zeroVMUstorage/commits,242SCIoverrunresults,zeroCRC/token/repair/defer.",
+      "Every968PIOproducerattemptskippedsecondblockbyelapsedtimebudget;C29Newhad962secondattempts/zeroskips. Singleblockmax1277ticksnowexceeds1144secondadmissionthreshold. Thismaycontributestutterbutdoesnotproveblackvideocause.",
+      "InterruptedPC8c0db1beisfiniteunrolledunsigneddivisionhelperwithnonzerodivisor100andcoherentelapsed52;notfaultorprovenstall."
+    ]
+  },
+  "comparison": {
+    "schema": "kui.lodoss.cd3318-new-vs-prior.v1",
+    "video_sha256": "e1bb24eb7734c1c33f0f701cad35f513c4a0a00070a220565174585d8acf799e",
+    "selected_reader_proof": "PresenceofREADAHEADpagesrequiresfullownedXmanifest+SDKcookie+exportbounds/pointeragreementcheckedbyreader_readahead_exports; currentreporthasnonzeroSDK-onlytimingand0Legacytrampolinecounterdeltas.",
+    "rows": {
+      "c29_new": {
+        "samples": 1200,
+        "wall_seconds": 19.9597056,
+        "SCI_overrun_results": 194,
+        "irq_blocks": 2336,
+        "call_blocks": 7834,
+        "pio": 1924,
+        "VMUstore_calls": 0,
+        "RAproducer_blocks": 1924,
+        "RAsecond_attempts": 962,
+        "RAsecond_time_skips": 0,
+        "RAmax_single_ticks": 1130
+      },
+      "cd3318_legacy": {
+        "samples": 1119,
+        "wall_seconds": 20.00648832,
+        "SCI_overrun_results": 235,
+        "irq_blocks": 103,
+        "call_blocks": 9591,
+        "pio": 44,
+        "VMUstore_calls": 0,
+        "RAproducer_blocks": null,
+        "RAsecond_attempts": null,
+        "RAsecond_time_skips": null,
+        "RAmax_single_ticks": null
+      },
+      "cd3318_new": {
+        "samples": 1200,
+        "wall_seconds": 19.95838336,
+        "SCI_overrun_results": 242,
+        "irq_blocks": 1864,
+        "call_blocks": 4136,
+        "pio": 992,
+        "VMUstore_calls": 0,
+        "RAproducer_blocks": 968,
+        "RAsecond_attempts": 0,
+        "RAsecond_time_skips": 968,
+        "RAmax_single_ticks": 1277
+      }
+    },
+    "caution": "Capturesnotcontrolledcomparisons;gamepipelinepositionmaydiffer. NewPCI/bufferstatusdoesnotshowMPEGinput/framebuffer/decoderprogress. Noevidencejustifieschangingworkingreaderpolicyfromtheseobservationsalone."
+  },
+  "raw_context": {
+    "schema": "kui.lodoss.cd3318-new.original-pc-context.v1",
+    "source": {
+      "path": "/workspace/scratch/04d42b036255/native-inputs-recovered/lodoss/1NOSDC.BIN",
+      "bytes": 3473412,
+      "sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5"
+    },
+    "sample": {
+      "spc": "0x8c0db1be",
+      "pr": "0x8c2aa8ba",
+      "ssr": "0x60000100",
+      "instruction": "rotcl r1",
+      "instruction_bytes": "2441"
+    },
+    "original_function": {
+      "entry": "0x8c0db1ac",
+      "behavior": "Unsigned integer quotient R1/R0 returned inR0; nonzero-divisor path has32unrolledDIV1operations and33ROTCLoperations, no backwardbranch.",
+      "current_divisor": "0x00000064",
+      "zero_divisor_branch_taken": false,
+      "completed_division_steps_before_spc": 2
+    },
+    "proven_direct_caller": {
+      "entry": "0x8c2aa89e",
+      "call": "0x8c2aa8b6",
+      "return": "0x8c2aa8ba",
+      "target_literal": "0x8c2aa9a4",
+      "behavior": "Converts inputR4 by floor(R4*128/100) using remainder and quotient decomposition, with32bitintermediate wrap for verylarge inputs.",
+      "input_r4": "0x00000034",
+      "expected_current_numerator_before_rotation": "0x00001a00",
+      "expected_r1_at_spc": "0x00006800",
+      "visually_verified_r1_at_spc": "0x00006800",
+      "mathematical_result_for_sample": 66
+    },
+    "timer_source": {
+      "function_r13": "0x8c2aa88e",
+      "behavior": "Reads32bitmemorymappedcounter at0xffd8000c and returns0xffffffff-counter.",
+      "register_r12": "0x01b63ea3",
+      "register_r14": "0x01b63e6f",
+      "difference": "0x00000034"
+    },
+    "compatible_outer_context": {
+      "entry": "0x8c2c5898",
+      "conversion_call": "0x8c2c58d4",
+      "timerfn_preserved_in": "r13",
+      "first_timer_preserved_in": "r14",
+      "second_timer_preserved_in": "r12",
+      "status": "Source/register compatibility only; gameSPglobal not captured, so not claimed as proved outer continuation."
+    },
+    "supported": [
+      "The observed SPC/PR pair matches a real direct original call to a finite arithmetic helper.",
+      "Divisor100 is nonzero, so this sample is not a divide-by-zero path.",
+      "R4=52 matches the difference of the two sampled timer-like register values, and the direct caller has a valid finiteconversion path.",
+      "The current sample is separate from prior parser-entry and indexed-cursor samples."
+    ],
+    "limits": [
+      "An interrupt sample in an unrolledarithmetic helper does not prove the game was stuck there.",
+      "The original activegameSP is not captured because theSDKmay switch to an IRQstack. Do not scan arbitraryrawstackwords to invent a highercallchain.",
+      "This bounded source review does not establish decodeprogress, movieframepublication, PVRframebufferstate, or audioqueueprogress.",
+      "R1=6800 was independently visuallyrechecked after the arithmetic source made the prior6880 glyphtranscription suspect; the corrected value now agrees with exactsource."
+    ],
+    "source_spans": [
+      {
+        "begin": "0x8c0db1ac",
+        "end": "0x8c0db254",
+        "sha256": "f46fb92c1cf170511c9f91eb7d67e1cb00cf5dc77e9d1711abed555596186b1b",
+        "disassembly": "/workspace/scratch/04d42b036255/lodoss-cd3318-new-review/sampled-unsigned-division.dis"
+      },
+      {
+        "begin": "0x8c2aa868",
+        "end": "0x8c2aa8ec",
+        "sha256": "433ba5ce432722b3f66348e92d1d23c80410d82e6da8e968103d042dc7dd62dc",
+        "disassembly": "/workspace/scratch/04d42b036255/lodoss-cd3318-new-review/sampled-timer-conversion.dis"
+      },
+      {
+        "begin": "0x8c2c5898",
+        "end": "0x8c2c59b0",
+        "sha256": "ead43cd5c1e7ddf406e01713ecb06bfbffe5b8e27e82f3d7d6d277c8c5ee93ab",
+        "disassembly": "/workspace/scratch/04d42b036255/lodoss-cd3318-new-review/compatible-original-timer-measurement.dis"
+      }
+    ]
+  },
+  "limits": [
+    "Snapshot PC is not a fault or proven loop.",
+    "Overrun and second-PIO timing differences do not by themselves establish the black-video cause.",
+    "Graphics allocation capacity and Rayman product-class defects are established by separate original-code replays; corrected console behavior is pending."
+  ],
+  "related_evidence": [
+    "native-private-pool-capacity-2026-10-26.json",
+    "native-vmu-product-class-2026-10-26.json"
+  ],
+  "no_github_writes": true
+}

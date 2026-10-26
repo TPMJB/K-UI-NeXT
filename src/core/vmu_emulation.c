@@ -69,7 +69,10 @@ void kui_vmu_emulation_reset(kui_vmu_emulation_t *s) {
 }
 
 static void device_info(uint8_t *payload, int extended) {
-    static const char name[] = "K-UI Virtual Memory";
+    /* Retail device classifiers use this standard product-class name before
+     * considering the storage function. Keep the actual emulation identity
+     * in producer/version; do not advertise unsupported LCD/clock functions. */
+    static const char name[] = "Visual Memory";
     static const char producer[] = "Independent K-UI memory card emulation";
     static const char version[] = "K-UI experimental storage only; 128 KiB; durable commit";
     memset(payload, 0, extended ? 192u : 112u);

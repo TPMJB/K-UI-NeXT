@@ -85,12 +85,21 @@ static void identity_and_media(void) {
         5,0,1,28, 0,0,0,2, 0,15,65,0, 0,0,0,0, 0,0,0,0, 255,0
     };
     assert(received == 116 && !memcmp(response, identity_prefix, sizeof(identity_prefix)));
-    assert(!memcmp(response + 22, "K-UI Virtual Memory", 19));
-    assert(response[41] == ' ' && response[111] == ' ');
+    /* Some original retail classifiers require the complete padded product
+     * class before treating a storage endpoint as an eligible VMU. */
+    static const char product_class[] = "Visual Memory                 ";
+    static const char producer[] = "Independent K-UI memory card emulation";
+    assert(sizeof(product_class) == 31u);
+    assert(!memcmp(response + 22, product_class, 30));
+    assert(!memcmp(response + 52, producer, sizeof(producer) - 1u));
+    assert(response[111] == ' ');
     assert(response[112] == 0 && response[115] == 0);
     const uint8_t extended[] = {2,1,0,0};
     command(extended, sizeof(extended));
     assert(received == 196 && response[0] == 6 && response[3] == 48);
+    assert(!memcmp(response + 4, identity_prefix + 4, sizeof(identity_prefix) - 4u));
+    assert(!memcmp(response + 22, product_class, 30));
+    assert(!memcmp(response + 52, producer, sizeof(producer) - 1u));
     assert(!memcmp(response + 116, "K-UI experimental", 17));
 
     /* Last physical block 255; root255; FAT254x1; directory253x13;
