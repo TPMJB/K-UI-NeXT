@@ -61,6 +61,18 @@ seconds, and capture the complete report cycle including CLOCK/VIDEO and all
 PHASE HISTORY pages. The exact Evolution 1 image retains phase history instead
 of the generic RAW OWNER STACK pages. No new build is needed for this capture.
 
+The subsequent **63420.mp4** capture includes a complete report cycle. Its
+validated interrupted contexts repeatedly land in the original exact
+scanline-zero video-mode wait, while the SDK video counter advances. See the
+[capture analysis](evidence/native-evolution1-f158-capture-2026-10-26.json).
+PROFILE performs extra PVR/stack observations on every Evolution controller
+hook even before the capture gesture. The next comparison uses the same ZIP,
+profile and New reader with those observations disabled: run the installation
+command below **without `--profile-runtime`**. This selects NORMAL mode and
+preserves the reader/cache/reservation and virtual card. Report whether the
+game passes the present logo/video-mode transition; another recording is not
+needed for that comparison.
+
 ## Install
 
 From the extracted ZIP's root:

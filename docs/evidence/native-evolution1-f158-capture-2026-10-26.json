@@ -1,0 +1,269 @@
+{
+  "schema": "kui.evolution1-f158-console-capture.v1",
+  "runtime_commit": "f158ba5e24f93ab5622f95185601b3d5a3dbca6b",
+  "production_changed": false,
+  "video": {
+    "filename": "63420.mp4",
+    "sha256": "5fa4a9777e0bafce1a14621ddc309edaeb90494553a01ad0d23ee5f4a813ce1d",
+    "bytes": 63797908,
+    "duration_seconds": 82.173333,
+    "complete_report_cycle": true
+  },
+  "selection": {
+    "reader": "New (X)",
+    "basis": "Owner explicitly identifies X; READ AHEAD exports and producer counters visible",
+    "runtime_mode": "PROFILE"
+  },
+  "frames": {
+    "reader": 1,
+    "read_ahead": 8,
+    "timeline": 12,
+    "latency": 26,
+    "clock_video": 28,
+    "phase_history": [
+      31,
+      33,
+      36,
+      39
+    ],
+    "extraction": "ffmpeg fps=1/2; N approximately 2*N-1 seconds"
+  },
+  "clock": {
+    "ccr_first": 261,
+    "ccr_last": 261,
+    "ice_off": 0,
+    "polls": 1200,
+    "commits": 0,
+    "phase_mode": 1,
+    "phase_sequence": 2400,
+    "phase_valid": 2400,
+    "phase_waits": 1634,
+    "phase_wraps": 4,
+    "fault_vector_armed": 0
+  },
+  "read_ahead": {
+    "capacity_blocks": 384,
+    "hits": 1,
+    "misses": 538,
+    "hit_requests": 1,
+    "producer_blocks": 383,
+    "heartbeat_visits": 1200,
+    "irq_visits": 392,
+    "crc_errors": 0,
+    "token_errors": 0,
+    "abort_errors": 0,
+    "guard_errors": 0,
+    "clock_errors": 0,
+    "failures": 0
+  },
+  "phase_contexts": [
+    {
+      "index": 0,
+      "kind": 0,
+      "flags": 31,
+      "pc": 2350855724,
+      "pr": 2350855724,
+      "sr": 1610612736,
+      "event": 800,
+      "sdk_video_counter": 810
+    },
+    {
+      "index": 1,
+      "kind": 1,
+      "flags": 31,
+      "pc": 2350855724,
+      "pr": 2350855724,
+      "sr": 1610612736,
+      "event": 864,
+      "sdk_video_counter": 810
+    },
+    {
+      "index": 2,
+      "kind": 0,
+      "flags": 31,
+      "pc": 2350855724,
+      "pr": 2350855724,
+      "sr": 1610612736,
+      "event": 800,
+      "sdk_video_counter": 811
+    },
+    {
+      "index": 3,
+      "kind": 1,
+      "flags": 31,
+      "pc": 2350855724,
+      "pr": 2350855724,
+      "sr": 1610612736,
+      "event": 864,
+      "sdk_video_counter": 811
+    },
+    {
+      "index": 4,
+      "kind": 0,
+      "flags": 31,
+      "pc": 2350855724,
+      "pr": 2350855724,
+      "sr": 1610612736,
+      "event": 800,
+      "sdk_video_counter": 812
+    },
+    {
+      "index": 5,
+      "kind": 1,
+      "flags": 31,
+      "pc": 2350855724,
+      "pr": 2350855724,
+      "sr": 1610612736,
+      "event": 864,
+      "sdk_video_counter": 812
+    },
+    {
+      "index": 6,
+      "kind": 0,
+      "flags": 31,
+      "pc": 2350855724,
+      "pr": 2350855724,
+      "sr": 1610612736,
+      "event": 800,
+      "sdk_video_counter": 813
+    },
+    {
+      "index": 7,
+      "kind": 1,
+      "flags": 31,
+      "pc": 2350855724,
+      "pr": 2350855724,
+      "sr": 1610612736,
+      "event": 864,
+      "sdk_video_counter": 813
+    },
+    {
+      "index": 8,
+      "kind": 0,
+      "flags": 31,
+      "pc": 2350855724,
+      "pr": 2350855724,
+      "sr": 1610612736,
+      "event": 800,
+      "sdk_video_counter": 814
+    },
+    {
+      "index": 9,
+      "kind": 1,
+      "flags": 31,
+      "pc": 2350855724,
+      "pr": 2350855724,
+      "sr": 1610612736,
+      "event": 864,
+      "sdk_video_counter": 814
+    },
+    {
+      "index": 10,
+      "kind": 0,
+      "flags": 31,
+      "pc": 2350855726,
+      "pr": 2350855724,
+      "sr": 1610612736,
+      "event": 800,
+      "sdk_video_counter": 815
+    },
+    {
+      "index": 11,
+      "kind": 1,
+      "flags": 31,
+      "pc": 2350855724,
+      "pr": 2350855724,
+      "sr": 1610612736,
+      "event": 864,
+      "sdk_video_counter": 815
+    },
+    {
+      "index": 12,
+      "kind": 0,
+      "flags": 31,
+      "pc": 2350855724,
+      "pr": 2350855724,
+      "sr": 1610612736,
+      "event": 800,
+      "sdk_video_counter": 816
+    },
+    {
+      "index": 13,
+      "kind": 1,
+      "flags": 31,
+      "pc": 2350855724,
+      "pr": 2350855724,
+      "sr": 1610612736,
+      "event": 864,
+      "sdk_video_counter": 816
+    },
+    {
+      "index": 14,
+      "kind": 0,
+      "flags": 31,
+      "pc": 2350855724,
+      "pr": 2350855724,
+      "sr": 1610612736,
+      "event": 800,
+      "sdk_video_counter": 817
+    },
+    {
+      "index": 15,
+      "kind": 1,
+      "flags": 31,
+      "pc": 2350855724,
+      "pr": 2350855724,
+      "sr": 1610612736,
+      "event": 864,
+      "sdk_video_counter": 817
+    }
+  ],
+  "phase_pvr": {
+    "spg_load": 34341721,
+    "vblank_int": 1376516,
+    "spg_control": 336,
+    "first_submit_status_begin": 15882,
+    "first_submit_status_end": 15884,
+    "first_submit_ticks": 59,
+    "last_complete_status_begin": 15462,
+    "last_complete_status_end": 15466,
+    "last_complete_ticks": 76
+  },
+  "source_interpretation": {
+    "exact_owner_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+    "enclosing_function": "0x8c1f3440 original video-mode register application",
+    "first_wait": "0x8c1f3620..0x8c1f3626 waits for nonzero SPG_STATUS & 0x3ff",
+    "captured_wait": "0x8c1f3628..0x8c1f362e waits to observe SPG_STATUS & 0x3ff == 0",
+    "getter": "0x8c1f1f36 reads A05F8000+R4; R4=0x10c",
+    "pending_work": "Video-mode hardware publication begins at 0x8c1f3630 after the wait",
+    "video_counter_advances": true,
+    "not_established": [
+      "Allocator failure",
+      "Stopped video interrupts",
+      "Specific production correction"
+    ]
+  },
+  "diagnostic_timing_hypothesis": {
+    "basis": "PROFILE invokes diagnostic_pair_begin/end and exact E1 stack/PVR observations on every submit/completion, including before the capture gesture. NORMAL omits these observations.",
+    "status": "Source-supported hypothesis; current normal-mode console comparison pending"
+  },
+  "next_comparison": {
+    "same_build": true,
+    "new_zip_required": false,
+    "command": "python3 install.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin",
+    "mode": "NORMAL (omit --profile-runtime)",
+    "reader": "New (X)",
+    "retained": [
+      "Virtual A2 and existing saves",
+      "Full reader cache",
+      "384KiB reservation",
+      "Reader scheduling policy"
+    ],
+    "question": "Does Evolution1 pass its present logo/video-mode transition?"
+  },
+  "transcription_limits": [
+    "Manual transcription of relevant fields from the complete recording; repeated pages checked.",
+    "Latched event codes are observations, not proof of the currently running interrupt source.",
+    "This validates a recurring mode-transition wait; PROFILE overhead versus normal hook timing remains unresolved."
+  ]
+}
