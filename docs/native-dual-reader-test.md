@@ -48,13 +48,18 @@ Unrelated callers retain the existing bottom placement.
 
 The owner has now tested delivered build **f158ba5e24f9**: Lodoss FMVs and
 gameplay are reported flawless, and the game shows the virtual VMU. Rayman 2
-also has flawless FMVs/gameplay and successfully creates a save. Lodoss save
-creation/loading and Rayman reload after a full power-off remain untested.
+also has flawless FMVs/gameplay. A follow-up confirms saving and loading work
+in both Rayman 2 and Lodoss. Power-cycle timing was not separately described.
 Continue ordinary gameplay to check later memory demand; a full-game pass is
 not claimed. See the [console result](evidence/native-console-followup-f158-2026-10-26.json).
 
-Evolution 2 loading worked on the previous candidate. Evolution 1's black
-screen after Sofdec remains unresolved.
+Evolution 2 loading worked on the previous candidate. Evolution 1 still loads
+briefly after the Diff'rent logo disappears, then shows a black screen on this
+candidate. Its next check uses the existing PROFILE diagnostics: keep New (X),
+hold both triggers+B for one second at the failure, release, wait about 20
+seconds, and capture the complete report cycle including CLOCK/VIDEO and all
+PHASE HISTORY pages. The exact Evolution 1 image retains phase history instead
+of the generic RAW OWNER STACK pages. No new build is needed for this capture.
 
 ## Install
 
