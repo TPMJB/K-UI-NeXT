@@ -6,6 +6,8 @@ reading. They retain the current SDK startup corrections, virtual A2 address,
 384 KiB bottom reservation and existing card profile. Neither is a claimed fix.
 The current combined New-reader result is a black screen; Legacy passes that
 point but immediately reports that a memory card is required.
+Keep the controller and physical VMU setup identical between runs, with
+physical A2 empty.
 
 | Variant | Disc reader | Virtual VMU | What to check |
 | --- | --- | --- | --- |

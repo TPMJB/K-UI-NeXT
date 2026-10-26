@@ -686,7 +686,7 @@ class Refused(Exception):
 class Cold(ReleaseSH):
     """Actual stage and original SDK code share one physically aliased RAM."""
     def __init__(self, directory, row, *, reader=1, alias=None, seed=0,
-                 mutation=None):
+                 mutation=None, standard_low=None):
         self.watch = False
         self.budget_slot = None
         self.budget_dirty = False
@@ -733,13 +733,24 @@ class Cold(ReleaseSH):
         manifest = self.symbols['_manifest'][0]
         self.write(manifest + 44, 1)
         self.write(manifest + 48, reader)
-        table = self.symbols['_native_low_bindings_table'][0] + (reader - 1) * 24
-        self.control_at = self.read(table + 8) | 0x20000000
+        if standard_low is None:
+            table = self.symbols['_native_low_bindings_table'][0] + (reader - 1) * 24
+            low = tuple(self.read(table + 4 * i) for i in range(6))
+        else:
+            require(reader == 0 and '_native_low_bindings_table' not in self.symbols and
+                    self.symbols.get('__kui_native_standard_vmu_isolation_stage') == ABSOLUTE_ONE,
+                    'Explicit Standard tuple requires reader zero and isolated Standard stage')
+            require(isinstance(standard_low, tuple) and len(standard_low) == 6 and
+                    all(isinstance(v, int) and 0 <= v <= MASK for v in standard_low) and
+                    standard_low[-1] == 0,
+                    'Invalid explicit Standard low tuple')
+            low = standard_low
+        self.control_at = low[2] | 0x20000000
         if self.has_budget:
             # The real first-initializer hook remains installed while its
             # returned callback runs. Reproduce that live literal rather than
             # leaving the immutable source's original initializer target.
-            self.initializer_hook = self.read(table)
+            self.initializer_hook = low[0]
             self.write(self.owner[7], self.initializer_hook)
         self.store_block(self.control_at, bytes(56))
         self.write(self.control_at + 8, 2)

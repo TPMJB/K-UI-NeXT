@@ -10,7 +10,7 @@
   "test_context": {
     "reader": "Legacy (Y)",
     "installation_basis": "Continuation of the requested same8adf NORMAL / Background On / existing virtual A2 comparison; no new capture or installed-file readback.",
-    "reported_pass": "Gets past the previous New-reader failure; precise FMV/gameplay coverage not separately described.",
+    "reported_pass": "Owner confirms Legacy opening FMV plays, described as fine...ish; New background-reader quality is better in their observation.",
     "reported_failure": "Evolution immediately reports that a memory card is required.",
     "interpretation": "In-game VMU detection or initialization failure. This wording does not establish loss of SD filesystem access."
   },
@@ -58,7 +58,8 @@
     "Initial card-content read refused while disc activity owns SD",
     "Other original game acceptance or initialization behavior"
   ],
-  "next_observation": "Dismiss the startup warning, allow the title screen to idle, and try Load/card selection if available. Check virtualA2; if Load is disabled or a fresh card check still reports no card, report that. This distinguishes a possibly transient startup failure from continued absence without assuming a card-format problem.",
+  "next_observation": "User requests two isolated component builds. Runtime9956562f91d6 adds New with virtual-card publication/backend disabled and current A2 with Standard only; both retain384KiB bottom placement. Console acceptance remains pending.",
   "new_build_required_for_recorded_result": false,
-  "github_actions_authorized": false
+  "github_actions_authorized": false,
+  "owner_followup": "No card appears on start. Legacy is just not doing anything with the VMU, but the background loader is working as the FMV plays fine...ish. Our newer background loader works better, of course."
 }
