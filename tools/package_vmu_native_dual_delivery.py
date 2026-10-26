@@ -63,8 +63,29 @@ def offline_source_recovery_check(candidate, script, bundle):
         refused=subprocess.run(argv,cwd=root,text=True,capture_output=True)
         require(refused.returncode!=0 and 'checksum mismatch' in refused.stderr.lower(),
                 'Offline source recovery accepted a changed full bundle')
-    return dict(extracted_cli_runs=4,fresh_offline_clone=True,existing_clean_checkout=True,
-                dirty_checkout_preserved=True,changed_bundle_refused=True,exact_source_tree_verified=True)
+        path.write_bytes(bundle)
+        saved=root/'saved-source';restored.rename(saved);restored.mkdir()
+        subprocess.run(['git','init',str(root)],check=True,capture_output=True)
+        (root/'.git/info/exclude').write_text('*\n')
+        subprocess.run(['git','-C',str(root),'-c','user.name=Recovery check',
+                        '-c','user.email=recovery@example.invalid','commit','--allow-empty',
+                        '-m','Parent repository sentinel'],check=True,capture_output=True)
+        parent_head=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()
+        for symlink in (False,True):
+            if symlink:
+                restored.rmdir();restored.symlink_to(saved,target_is_directory=True)
+            refused=subprocess.run(argv,cwd=root,text=True,capture_output=True)
+            require(refused.returncode!=0 and
+                    ('repository root' in refused.stderr.lower() if not symlink else
+                     'symlink' in refused.stderr.lower()) and
+                    subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()==parent_head and
+                    not (root/'.git/FETCH_HEAD').exists() and
+                    not subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True),
+                    'Offline recovery did not refuse an unrelated destination before parent repository mutation')
+    return dict(extracted_cli_runs=6,fresh_offline_clone=True,existing_clean_checkout=True,
+                dirty_checkout_preserved=True,changed_bundle_refused=True,exact_source_tree_verified=True,
+                non_repository_destination_refused=True,symlink_destination_refused=True,
+                clean_parent_repository_preserved=True)
 
 
 def git(*args):
@@ -323,7 +344,7 @@ def package(args):
                   'evidence/host-tests.log': args.host_log.read_bytes(),
                   'evidence/package-audit.log': args.package_log.read_bytes()})
     for path in sorted((ROOT/'docs/evidence').glob('native-*2026-10-2[56].json')):
-        if any(word in path.name for word in ('structural', 'joint', 'pio-pair-observed', 'new-structural', 'console-followup', 'followup-review', 'terminal-dispatch', 'startup-source-pass', 'card-preflight', 'new-default', 'raw-owner', 'selected-low')):
+        if any(word in path.name for word in ('structural', 'joint', 'pio-pair-observed', 'new-structural', 'console-followup', 'followup-review', 'terminal-dispatch', 'startup-source-pass', 'card-preflight', 'new-default', 'raw-owner', 'selected-low', 'dual-low-callback', 'doa2-smaller', 'doa2-fixed', 'crazy-taxi-source-admission')):
             files['evidence/'+path.name] = path.read_bytes()
     candidate = dict(schema='kui.native.universal-readers.candidate.v1', source_commit=commit,
                      source_tree=tree, build=revision, module_sha256=sha(module),
@@ -334,7 +355,14 @@ def package(args):
                      console_compatibility_verified=False, reader_runtime_comparison=runtime_comparison,
                      shared_card_preflight=json.loads((ROOT/'docs/evidence/native-shared-card-preflight-2026-10-25.json').read_text()),
                      game_startup_followup=json.loads((ROOT/'docs/evidence/native-game-startup-followup-review-2026-10-25.json').read_text()),
-                     console_observations=json.loads((ROOT/'docs/evidence/native-universal-console-followup-2026-10-25.json').read_text())['console_observations'])
+                     console_observations=json.loads((ROOT/'docs/evidence/native-universal-console-followup-2026-10-25.json').read_text())['console_observations'],
+                     console_followup_f241=json.loads((ROOT/'docs/evidence/native-console-followup-f241-2026-10-25.json').read_text()),
+                     new_default_followup=json.loads((ROOT/'docs/evidence/native-new-default-followup-review-2026-10-26.json').read_text()),
+                     raw_owner_terminal_followup=json.loads((ROOT/'docs/evidence/native-raw-owner-terminal-review-2026-10-26.json').read_text()),
+                     additional_source_input_reviews=dict(
+                         scope='Additional original-input analysis only; the 26-input corpus and eight software candidates are unchanged. No additional game admission or console compatibility is claimed.',
+                         crazy_taxi=json.loads((ROOT/'docs/evidence/native-crazy-taxi-source-admission-review-2026-10-26.json').read_text()),
+                         doa2_fixed_arena=json.loads((ROOT/'docs/evidence/native-doa2-fixed-arena-counterexamples-2026-10-26.json').read_text())))
     delivery = dict(source_commit=commit, generic_installer=host_installer,
                     combined_installer=extracted_install_check(files),
                     same_clean_UI_and_module_source=True, no_retail_or_save_payloads=True,
@@ -401,7 +429,11 @@ if full.stat().st_size!=info['bytes'] or hashlib.sha256(full.read_bytes()).hexdi
     raise SystemExit('Full source bundle checksum mismatch')
 dest=root/'restored-source'
 def git(*a):return subprocess.check_output(['git','-C',str(dest),*a],text=True).strip()
+if dest.is_symlink():raise SystemExit('Refusing a symlink source destination')
 if dest.exists():
+    top=subprocess.run(['git','-C',str(dest),'rev-parse','--show-toplevel'],text=True,capture_output=True)
+    if top.returncode or pathlib.Path(top.stdout.strip()).resolve()!=dest:
+        raise SystemExit('Destination is not a source repository root')
     if git('status','--porcelain'):raise SystemExit('Refusing a dirty source checkout')
     subprocess.run(['git','-C',str(dest),'fetch',str(full),'HEAD'],check=True)
 else:

@@ -85,6 +85,10 @@ is claimed for either title. The standard virtual card streams from SD; it
 does not keep a 128KiB card mirror in RAM. Reducing advertised card capacity
 therefore does not remove the main workspace requirement. A smaller actual
 read-ahead reservation remains an investigation, not an enabled profile.
+The new resource-layout upload covered all 86 CHR files. Replaying original
+effects and sprite-loading paths rejects the proposed fixed 256KiB and
+192KiB gaps: EFC1.BIN and TEAM_SPR.BIN overwrite those intervals. A safe
+owned reservation still has to be established before enabling DOA2.
 
 The `f721551450e3` follow-up stopped before game startup for Evolution 2,
 Lodoss and Rayman 2. The readable report shows stage `2`, session `-6`,
@@ -170,7 +174,8 @@ stop screen appears instead, photograph it in full.
 Use New (X) with `--profile-runtime`. If it still stalls at Ubisoft, hold
 both triggers plus B for about one second, release, and wait for the profile
 report. Record a complete repeating cycle, including every **RAW OWNER STACK**
-page. The previous `63393.mp4` remains recorded; this retry supplies game state
+page. Allow about two minutes after the report appears, ending when the first
+heading repeats. The previous `63393.mp4` remains recorded; this retry supplies game state
 that the earlier report did not collect. For a stop before the logo, record
 the last cold checkpoint or the complete refusal screen instead.
 
@@ -209,21 +214,13 @@ Your results on the earlier `af9e01c8a271` build remain useful.
    pass alone did not establish this persistence/coexistence result.
 4. Evolution 1: record New with the exact trace mode above. Return to
    `--profile-runtime` before other games or performance comparisons.
-5. Crazy Taxi 1: provide its original startup bundle using the included
-   `kui-native-startup-bundle.py`, giving the actual `.gdi` file as the
-   positional argument. Crazy Taxi 2, DOA2's startup and DOA2's filesystem
-   metadata are already available and do not need to be uploaded again.
-6. DOA2: collect the new resource-layout fields with the updated probe. These
-   fields were absent from the supplied filesystem report:
 
-   ```sh
-   python3 kui-doa2-filesystem-probe.py /run/media/apollonius/Dreamcast --resource-layouts
-   ```
-
-   Upload `DOA2-resource-layout-metadata.zip`. It contains bounded CHR header
-   and integer table observations, not complete game assets. Multiple-disc
-   selection prints complete commands retaining this flag. The computer-side
-   collector does not modify the source tracks or enable DOA2 compatibility.
+The source inputs are already available: Crazy Taxi 1 and 2 startups, DOA2's
+startup, filesystem report, and new resource-layout report. They do not need
+to be uploaded again. The collectors remain included for reproducibility and
+future explicitly requested captures. Source-family or memory-admission
+refusals for these games are still under analysis; this package does not
+claim working New/A2 compatibility for them.
 
 The Legacy repair can be checked afterward by changing only the saved reader
 choice. A Legacy result helps isolate the transport while keeping A2 and the

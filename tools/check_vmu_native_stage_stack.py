@@ -210,9 +210,39 @@ class AllocationWrapper(Machine):
 
 class ArmRoute(Machine):
     """Execute the complete relay through publication of the low boot control."""
-    def __init__(self, stage, resident, stack, seed, mask, *, body=None, cache_hit=True, mode=0, sdk_admitted=True, normalized=False):
+    def __init__(self, stage, resident, stack, seed, mask, *, body=None, helper_bodies=None,
+                 cache_hit=True, mode=0, sdk_admitted=True, normalized=False):
         super().__init__(stage, "_kui_retail_stage_relay", seed, mask, OLD_STACK, body=body)
         self.symbols, self.stack = stage[4], stack
+        self.callback_helpers, self.callback_helper_calls = {}, []
+        self.callback_table = None
+        self.selected_reader = None
+        marker=self.symbols.get('__kui_native_dual_low_callbacks_stage')
+        require(marker is None or marker==(1,0,0,0xfff1),
+                'Native stack selected-callback marker differs')
+        self.selected_callbacks=marker is not None
+        if self.selected_callbacks:
+            from check_native_dual_callbacks import (SELECTOR,ARM,TABLE,PINS,
+                                                      canonical_helper,expected_entries)
+            require(helper_bodies is None or set(helper_bodies)<={ARM,SELECTOR},
+                    'Native stack helper override escapes the actual callback helpers')
+            for name in (ARM,SELECTOR):
+                original,normalized=canonical_helper(stage,name)
+                require((len(original),hashlib.sha256(normalized).hexdigest())==PINS[name],
+                        'Native stack actual callback helper changed: '+name)
+                override=(helper_bodies or {}).get(name,original)
+                require(len(override)==len(original),'Native stack helper override changes its extent')
+                self.callback_helpers[self.symbols[name][0]]=(name,override)
+            address,table,section=symbol_bytes(stage,TABLE,1)
+            require(len(table)==48 and not address&3 and section[2]&7==2,
+                    'Native stack callback table is not immutable two-row six-word data')
+            self.selected_reader=1 if '__kui_native_sdk_sci_route_resident' in resident[4] else 2
+            offset=24*(self.selected_reader-1)
+            require(struct.unpack_from('<6I',table,offset)==expected_entries(resident),
+                    'Native stack selected table row differs from its actual low reader')
+            self.callback_table=(address,table)
+        else:
+            require(not helper_bodies,'Historical relay cannot override selected callback helpers')
         self.cache_hit, self.mode = cache_hit, mode
         self.sdk_admitted,self.refused=sdk_admitted,False
         self.control = resident[4]["_kui_vmu_observe_boot_control"][0]
@@ -232,7 +262,8 @@ class ArmRoute(Machine):
         self.mem[self.exec_address] = self.source_bytes
         manifest = self.symbols["_manifest"][0]
         self.mem.update({manifest + 44: 1,
-                         manifest + 48: 1 if '_native_background_boot_region' in self.symbols else 0,
+                         manifest + 48: (self.selected_reader if self.selected_callbacks else
+                                         1 if '_native_background_boot_region' in self.symbols else 0),
                          manifest + 52: 0})
         for name, count in (("_native_heap", 18), ("_native_call", 5), ("_native_driver", 26)):
             self.mem.update({self.symbols[name][0] + 4 * i: 0 for i in range(count)})
@@ -256,8 +287,32 @@ class ArmRoute(Machine):
         self.armed = False
         self.nonstack_writes = []
 
+    def code(self,address,size):
+        for base,(_,body) in self.callback_helpers.items():
+            if base<=address<address+size<=base+len(body):
+                return body[address-base:address-base+size]
+        return super().code(address,size)
+
+    def read(self,address):
+        if self.callback_table is not None:
+            base,body=self.callback_table
+            if base<=address<address+4<=base+len(body):
+                require(not address&3,'Native stack callback row read is unaligned')
+                return struct.unpack_from('<I',body,address-base)[0]
+        return super().read(address)
+
+    def plain(self,word,pc):
+        if word&0xf00f==0x000e:  # MOV.L @(R0,Rm),Rn; capture both sources before Rn.
+            n,m=word>>8&15,word>>4&15
+            self.r[n]=self.read((self.r[0]+self.r[m])&MASK)
+            return
+        super().plain(word,pc)
+
     def write(self, address, value):
         key = canonical(address)
+        if self.callback_table is not None:
+            base,body=self.callback_table
+            assert key+4<=base or base+len(body)<=key, 'relay writes its immutable callback table'
         allowed = (self.start_sp - 256 <= key < self.start_sp or
                    STAGE <= key < self.symbols["__retail_stage_bss_end"][0] or
                    self.control <= key < self.control + 64 or self.cell <= key < self.cell + 32 or
@@ -275,6 +330,11 @@ class ArmRoute(Machine):
 
     def call(self, target):
         if target == self.stop_pc:
+            return False
+        if target in self.callback_helpers:
+            self.callback_helper_calls.append(self.callback_helpers[target][0])
+            return False
+        if any(base<=target<base+len(body) for base,(_,body) in self.callback_helpers.items()):
             return False
         if self.base <= target < self.base + len(self.blob):
             return False
@@ -324,6 +384,7 @@ class ArmRoute(Machine):
             assert self.mem[self.slot]==self.original and self.mem[self.frame+20]==0x8C010000
             assert all(self.mem[self.control+4*i]==0 for i in range(16))
             assert all(self.mem[self.cell+4*i]==0 for i in range(8))
+            assert not self.callback_helper_calls
             return
         if self.mode == 1:
             assert not self.armed and not self.nonstack_writes
@@ -333,12 +394,16 @@ class ArmRoute(Machine):
             assert all(self.mem[self.control + 4 * i] == 0 for i in range(16))
             assert all(self.mem[self.cell + 4 * i] == 0 for i in range(8))
             assert self.mem[self.slot] == self.original and self.mem[self.frame + 20] == 0x8C010000
+            assert not self.callback_helper_calls
         else:
             assert self.armed and self.mem[self.control + 4] == self.stack[2]
             assert self.mem[self.slot] == self.heap_hook and self.mem[self.frame + 20] == self.return_hook
             assert self.mem[self.control + 8] == 1 and self.calls.count("sha") == 1
             if not self.cache_hit and "_native_sdk_coherence_cached_admit" in self.symbols:
                 assert self.calls.count("sdk-slot")==1 and self.calls.index("sdk-slot")<self.calls.index("capture")
+            if self.selected_callbacks:
+                assert self.callback_helper_calls==['_native_arm_heap_hook','_native_low_bindings'], \
+                    'relay did not execute both actual selected callback helpers'
         assert self.r[8:] == registers[8:] and (self.mode == 1 or self.pr == pr) and self.sr & ~1 == sr & ~1
         assert self.fpscr == fpscr and self.fr == fr
 
@@ -423,6 +488,26 @@ class HeapHook(Machine):
         assert self.mem[OLD_STACK - 4] == 0xDEADC0DE
 
 
+def indexed_load_truth_cases():
+    """Exercise every encoded register pair, source aliases and wraparound."""
+    count=0
+    for n in range(16):
+        for m in range(16):
+            for r0,rm in ((0,0x8c004000),(4,0xac004000),(0xfffffffc,0x0c004004),
+                          (0x80000000,0x80000000)):
+                cpu=ArmRoute.__new__(ArmRoute)
+                cpu.r=[0x12345678]*16;cpu.r[0]=r0;cpu.r[m]=rm
+                before=cpu.r.copy();cpu.sr=0x600000f1
+                address=(before[0]+before[m])&MASK
+                cpu.mem={canonical(address):0xa5937c21};cpu.callback_table=None
+                cpu.plain((n<<8)|(m<<4)|0x000e,0)
+                expected=before.copy();expected[n]=0xa5937c21
+                assert cpu.r==expected and cpu.sr==0x600000f1
+                assert cpu.mem=={canonical(address):0xa5937c21}
+                count+=1
+    return count
+
+
 def check(stage, resident, *, worker=None, self_test=False):
     stack = typed_stack(stage)
     if stack is None:
@@ -483,14 +568,25 @@ def check(stage, resident, *, worker=None, self_test=False):
                      expect_refusal=True).run().check()
             rayman_old_bound_refusals+=1
     mutations = 0
+    selected_callbacks=stage[4].get('__kui_native_dual_low_callbacks_stage')==(1,0,0,0xfff1)
+    scalar_cases=indexed_load_truth_cases() if selected_callbacks else 0
     if self_test:
-        relay_base, relay_body, _ = symbol_bytes(stage, "_kui_retail_stage_relay", 2)
+        mutation_symbol=('_native_arm_heap_hook' if selected_callbacks else '_kui_retail_stage_relay')
+        relay_base, relay_body, _ = symbol_bytes(stage, mutation_symbol, 2)
         expected = struct.pack("<I", stack[2]); at = relay_body.find(expected)
-        require(at >= 0, "relay lacks typed installer stack-top literal")
+        require(at >= 0 and relay_body.count(expected)==1,
+                "actual relay/arming helper lacks unique typed installer stack-top literal")
         changed = bytearray(relay_body); struct.pack_into("<I", changed, at, OLD_STACK - 32)
+        arguments=({'helper_bodies':{mutation_symbol:bytes(changed)}} if selected_callbacks
+                   else {'body':bytes(changed)})
+        mutated_route=ArmRoute(stage,resident,stack,7,15,**arguments)
         try:
-            ArmRoute(stage, resident, stack, 7, 15, body=bytes(changed)).run().check()
+            mutated_route.run().check()
         except (AssertionError, ValueError, struct.error, KeyError):
+            if selected_callbacks:
+                require(mutated_route.callback_helper_calls==['_native_arm_heap_hook','_native_low_bindings'] and
+                        mutated_route.mem.get(mutated_route.control+4)==OLD_STACK-32,
+                        'Stack-top mutant did not reach publication through both actual helpers')
             mutations += 1
         else:
             raise ValueError("relay accepted old high-stack publication")
@@ -515,12 +611,26 @@ def check(stage, resident, *, worker=None, self_test=False):
                 mutations += 1
             else:
                 raise ValueError("allocation wrapper accepted stale stage boundary/helper")
+    callback_metadata={}
+    if selected_callbacks:
+        for name,kind in (('_native_arm_heap_hook',2),('_native_low_bindings',2),
+                          ('_native_low_bindings_table',1)):
+            address,body,_=symbol_bytes(stage,name,kind)
+            callback_metadata[name]=dict(address=hex(address),bytes=len(body),sha256=hashlib.sha256(body).hexdigest())
     return {"enabled": True, "object_address": hex(stack[0]), "object_bytes": stack[1],
             "installer_sp": hex(stack[2]), "stage_bss_end": hex(stack[4]),
             "ordinary_entry_and_relay_stack": hex(OLD_STACK), "package_stack_unchanged": True,
             "typed_zero_fill_object": True, "complete_bss_in_live_allocation_guard": True,
             "actual_allocation_wrapper_cases": wrappers, "actual_relay_publication_cases": routes,
             "actual_low_hook_cases": hooks, "mutation_rejections": mutations,
+            "selected_low_callback_helpers_executed": selected_callbacks,
+            "selected_callback_reader": (1 if '__kui_native_sdk_sci_route_resident' in resident[4] else 2)
+                if selected_callbacks else None,
+            "selected_callback_table_bytes": 48 if selected_callbacks else 0,
+            "selected_callback_code_and_immutable_table": callback_metadata,
+            "selected_indexed_load_scalar_truth_cases": scalar_cases,
+            "selected_row_matches_actual_resident_roles": selected_callbacks,
+            "selected_stack_top_mutant_executes_actual_relay_and_helpers": selected_callbacks and self_test,
             "owner_stack_physical_bounds":{"low":f"0x{owner_low:08x}","high":"0x0c00f400"},
             "owner_stack_boundary_execution_cases":boundary_cases,
             "owner_stack_hook_sha256":hashlib.sha256(owner_hook_body).hexdigest(),

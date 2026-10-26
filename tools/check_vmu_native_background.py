@@ -753,8 +753,20 @@ def stage_contract(directory, resident, *, self_test=False,read_ahead_proof=None
     require(len(bindings) == 1 and int(bindings[0], 16) == binder,
             "stage generated binder address differs from the actual low binder")
     _, installer_code, _ = symbol_bytes(image, "_native_passive_run", 2)
-    require(struct.pack("<I", binder) in installer_code,
-            "actual installer lacks the admitted low binder constant")
+    from check_native_followup_profile import callback_profile
+    selected_callbacks=callback_profile(image)
+    if selected_callbacks:
+        from check_native_dual_readers import low_callback_companion
+        callback_proof=(read_ahead_proof or {}).get('dual_reader',{}).get('selected_low_callbacks')
+        low_callback_companion({'stage':digest(data),
+            'resident':digest((directory/'resident-sci.elf').read_bytes()),
+            'legacy':digest((directory/'resident-legacy.elf').read_bytes())},callback_proof)
+        selected_binder,_=typed(image,'_native_low_bind_map',2)
+        require(installer_code.count(struct.pack('<I',selected_binder))==1,
+                'actual installer lacks its exact typed selected-reader binder helper')
+    else:
+        require(struct.pack("<I", binder) in installer_code,
+                "actual installer lacks the admitted low binder constant")
     embedded = {}
     for transport in ("scif", "sci", "ide", "scia"):
         begin = image[4].get("__retail_resident_" + transport + "_blob_start")
@@ -770,6 +782,7 @@ def stage_contract(directory, resident, *, self_test=False,read_ahead_proof=None
             "map": hex(manifest), "stage_map_object_bytes": 2172, "retained_map_prefix_bytes": 1020,
             "installer_stack": hex(installer), "installer_stack_bytes": 0x10000,
             "generated_binder": hex(binder), "embedded_resident_copies": embedded,
+            "selected_low_callback_companion_required":selected_callbacks,
             "tail_copy_replay": compiled_tail_copy(image, resident, self_test=self_test,
                 lease_bytes=0x60000 if '__kui_native_readahead_stage' in image[4] else 0x30000,
                 witness=witness,owned_timers=owned_timers),
