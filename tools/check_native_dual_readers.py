@@ -262,9 +262,11 @@ def legacy_audit(directory,*,self_test=False):
 def tail_contract(directory,stage,resident,worker,proof=None):
     from check_vmu_native_readahead_stage import check_stage,pin_stage
     from check_native_controller_failure_witness import witness_profile
+    from check_native_game_startup_profile import game_startup_profile
     pins=pin_stage(stage,diagnostic=True,pio=True,pair=True,multi_owner=True,structural=True,dual=True,
                    witness=witness_profile(worker),
-                   progress='__kui_native_cold_progress_stage' in stage[4])
+                   progress='__kui_native_cold_progress_stage' in stage[4],
+                   owned_timers=game_startup_profile(worker,resident))
     if proof is None:
         proof=check_stage(stage,resident,read_elf(directory/'native-ra-aux.elf'),self_test=False,worker=worker)
     actual=proof.get('exact_instruction_literal_pins',{})
