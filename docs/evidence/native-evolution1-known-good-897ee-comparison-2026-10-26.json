@@ -72,7 +72,8 @@
       "Same384KiB bottom reservation"
     ],
     "changed": "Selected low reader engine and its typed callback bindings",
-    "result": "Not yet reported for Evolution1 on current8adf."
+    "result": "Owner reports Legacy boots past the prior failure but immediately says \"A memory card is required\". Virtual-card detection/readiness fails, so this is not a working-VMU control.",
+    "followup_evidence": "docs/evidence/native-evolution1-legacy-memory-card-2026-10-26.json"
   },
   "invalid_same_card_control": {
     "selector": "Background Off",

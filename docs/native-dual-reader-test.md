@@ -54,6 +54,17 @@ the current worker, virtual A2 and 384KiB bottom reservation. Background Off
 selects a separate ordinary module that this installer does not update, so it
 must not be presented as an equivalent current-A2 control.
 
+The owner has now tried Legacy on the current candidate: it gets past the
+previous failure, but immediately displays **A memory card is required**.
+This is an in-game VMU detection/readiness failure, not evidence that the SD
+filesystem disappeared. The original startup checks both subunits and requires
+a ready filesystem record. Legacy therefore is not yet a working-VMU control.
+Try a later Load/card-selection check after the title screen becomes idle, if
+the game offers one; record a disabled Load option too. No format or profile
+reset is indicated. Existing timing/PVR reports lack the cumulative card-query
+and SD BUSY counters needed here, so another full recording is not requested.
+See the [Legacy card follow-up](evidence/native-evolution1-legacy-memory-card-2026-10-26.json).
+
 The owner confirmed that the previous bottom-placement candidate lets Rayman 2
 pass Ubisoft with New, but the game reports no VMU. Its original device
 classifier requires the padded product name **Visual Memory**. The old
