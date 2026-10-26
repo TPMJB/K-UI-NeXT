@@ -74,11 +74,10 @@ class IsolationInstallTests(unittest.TestCase):
             if name not in map(str, installer.MODULES.values()):
                 self.assertEqual(after[name], data, name)
 
-    def upgrade_package(self):
+    def upgrade_package(self, new_commit='b'*40):
         """A later pair explicitly pins only the known earlier pair's code."""
         old_build = self.metadata['build']
         previous = dict(gui_sha256=self.metadata['gui']['sha256'], variants={})
-        new_commit = 'b'*40
         for name in installer.MODULES:
             directory = self.package/'variants'/name
             module = (directory/personalizer.BASE_MODULE).read_bytes()
@@ -91,8 +90,26 @@ class IsolationInstallTests(unittest.TestCase):
             (directory/personalizer.MANIFEST).write_text(json.dumps(manifest))
             self.metadata['variants'][name]['module_sha256'] = personalizer.sha(updated)
         self.metadata.update(build=new_commit[:12], source_commit=new_commit,
-                             compatible_packages={old_build: previous})
+                             compatible_packages={**self.metadata.get('compatible_packages', {}), old_build: previous})
         self.write_metadata()
+
+    def migrate_second_session(self, variant):
+        self.run_variant('reader-only')
+        baseline = {p.name: p.read_bytes() for p in (self.card/installer.BACKUP).iterdir()}
+        self.upgrade_package()
+        self.run_variant('reader-only' if variant in ('restore', 'pending') else variant)
+        if variant == 'restore':
+            self.run_variant('restore')
+        elif variant == 'pending':
+            path = self.card/installer.STATE;state = json.loads(path.read_text());state['pending'] = True
+            state['allowed']['reader-only'].append(personalizer.sha(self.original[str(installer.MODULES['reader-only'])]))
+            path.write_text(json.dumps(state))
+        self.upgrade_package('d'*40)
+        self.run_variant('reader-only');self.run_variant('vmu-only');self.run_variant('restore')
+        self.assertEqual({p.name: p.read_bytes() for p in (self.card/installer.BACKUP).iterdir()}, baseline)
+        for path in installer.MODULES.values():
+            self.assertEqual((self.card/path).read_bytes(), self.original[str(path)])
+        self.assert_protected()
 
     def test_switches_restore_inactive_module_and_exact_originals(self):
         self.run_variant('reader-only')
@@ -288,6 +305,33 @@ class IsolationInstallTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'different prepared card'):
             self.run_variant('restore')
         self.assertEqual(self.snapshot(), before)
+
+    def test_second_known_reader_session_preserves_original_backup(self):
+        self.migrate_second_session('reader-only')
+
+    def test_second_known_standard_session_preserves_original_backup(self):
+        self.migrate_second_session('vmu-only')
+
+    def test_second_known_restored_session_preserves_original_backup(self):
+        self.migrate_second_session('restore')
+
+    def test_second_known_pending_session_preserves_original_backup(self):
+        self.migrate_second_session('pending')
+
+    def test_cli_capture_instructions_keep_normal_mode_and_two_pages(self):
+        self.metadata['variants']['reader-only'].update(e1_wait_capture=True, prefetch_enabled=False)
+        self.write_metadata()
+        result = subprocess.run([sys.executable, str(self.package/'install.py'), str(self.card),
+            '--profile', str(self.profile.relative_to(self.card)), '--variant', 'reader-only'],
+            cwd=self.root, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('30 controller polls', result.stdout)
+        self.assertIn('both short CPU/reader-state pages', result.stdout)
+        self.assertIn('NORMAL mode remains selected', result.stdout)
+        manifest = json.loads((self.package/'variants/reader-only'/personalizer.MANIFEST).read_text())
+        offset = manifest['runtime_mode_module_offset']
+        installed = (self.card/installer.MODULES['reader-only']).read_bytes()
+        self.assertEqual(mode.decode_mode(installed[offset:offset+32]), 0)
 
 
 if __name__ == '__main__':

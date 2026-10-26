@@ -219,7 +219,8 @@ def install(root, package, variant, profile=None):
         require(protected_snapshot(p, root, selected) == before_protected, 'Read-only files changed during inspection')
         return dict(variant=variant, build=metadata['build'], already_installed=True, gui_unchanged=True,
                     prepared_card_unchanged=True, changed_modules=[],
-                    prefetch_enabled=metadata['variants'].get(variant, {}).get('prefetch_enabled'))
+                    prefetch_enabled=metadata['variants'].get(variant, {}).get('prefetch_enabled'),
+                    e1_wait_capture=metadata['variants'].get(variant, {}).get('e1_wait_capture', False))
     pending = dict(receipt, pending=True, allowed={name: list(dict.fromkeys(
         [fingerprint(current[name]), fingerprint(desired[name])])) for name in MODULES})
     published = []
@@ -246,6 +247,7 @@ def install(root, package, variant, profile=None):
         raise
     return dict(variant=variant, build=metadata['build'], gui_unchanged=True,
                 prefetch_enabled=metadata['variants'].get(variant, {}).get('prefetch_enabled'),
+                e1_wait_capture=metadata['variants'].get(variant, {}).get('e1_wait_capture', False),
                 prepared_card_unchanged=True, changed_modules=[str(MODULES[name]) for name, _, _ in changes],
                 backup=str(BACKUP), restored_exact_original_modules=variant == 'restore')
 
@@ -264,6 +266,9 @@ def main():
             print('Use SCI / Background New (X). Virtual A2 is OFF; support hooks remain.')
             if result.get('prefetch_enabled') is False:
                 print('Controller read-ahead is OFF; New demand reads and SDK SCI remain enabled.')
+            if result.get('e1_wait_capture'):
+                print('At the black-screen wait, hold both triggers + B for 30 controller polls, then release.')
+                print('Photograph both short CPU/reader-state pages. NORMAL mode remains selected.')
         elif args.variant == 'vmu-only':
             print('Use SCI / Background Off (Standard). Virtual A2 is ON.')
             print('The ordinary Standard module is replaced until --variant restore is run.')

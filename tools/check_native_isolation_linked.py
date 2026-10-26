@@ -36,6 +36,7 @@ SOURCE_FILES = ('tools/check_native_isolation_linked.py',
     'tools/profile_vmu_native_sdk_worker_sh.py',
     'tests/test_vmu_native_sdk_poll_execution.py',
     'src/loader/vmu_native_passive.c', 'src/loader/vmu_native_reader_capture.inc',
+    'src/loader/vmu_native_phase.inc', 'src/loader/vmu_native_wait_capture.inc',
     'src/loader/vmu_readonly_overlay.c', 'include/kui/native_isolation.h')
 
 
@@ -49,9 +50,10 @@ class LoanBoundary(Exception): pass
 
 
 class IsolationWorker(RecordWorker):
-    def __init__(self, startup, build, handoff, record, variant, tick_off=False):
+    def __init__(self, startup, build, handoff, record, variant, tick_off=False, wait_capture=False):
         self.variant = variant
         self.tick_off = tick_off
+        self.wait_capture = wait_capture
         self.low = read_elf(build/'resident-sci.elf')
         self.sd_entry = self.low[4]['_kui_vmu_observe_sd_lease'][0]
         self.calls, self.tick_calls = Counter(), 0
@@ -72,6 +74,12 @@ class IsolationWorker(RecordWorker):
             require(tick_marker == ONE if tick_off else tick_marker is None,
                     'Controller TICK isolation marker differs: '+role)
         require(not tick_off or variant == 'reader_only', 'TICK isolation belongs only to reader-only')
+        for image, role in ((stage,'stage'),(worker,'worker')):
+            capture_marker=image[4].get('__kui_native_e1_wait_capture_'+role)
+            require(capture_marker == ONE if wait_capture else capture_marker is None,
+                    'Evolution wait-capture marker differs: '+role)
+        require(not wait_capture or (tick_off and variant=='reader_only'),
+                'Evolution wait capture requires the reader-only TICK-off control')
         self.lease_bytes = LEASE
         self.worker_physical_high = self.worker_physical_low+LEASE
         self.lease_geometry_source = 'Paired actual absolute isolation lease and bottom markers'
@@ -176,15 +184,25 @@ def poll(cpu, consume=True):
                     if (int(frame['header'],16)>>8)&255 == 32])
 
 
-def run_variant(startup, record_path, build, variant, tick_off=False):
+def run_variant(startup, record_path, build, variant, tick_off=False, wait_capture=False):
     source,image,extent=fresh_verify(startup,record_path)
     record=Record(record_path.read_bytes(),image,source)
-    cpu=IsolationWorker(startup,build,make_handoff(),record,variant,tick_off)
+    cpu=IsolationWorker(startup,build,make_handoff(),record,variant,tick_off,wait_capture)
     cpu.prepare();initializer=cpu.initialize_sdk()
     cpu.calls.clear()
     pristine=copy.deepcopy(cpu)
     if variant=='reader_only':cpu.seed_tick_boundary()
     rounds=[poll(cpu) for _ in range(8)]
+    pre_gesture=None
+    if wait_capture:
+        capture=cpu.symbols['_diagnostic_phase'][0]+24
+        attempts,valid=struct.unpack('<2I',cpu.block(capture,8))
+        ready=cpu.read(capture+52)
+        normal=cpu.read(cpu.symbols['_config'][0]+2296)
+        require(attempts==valid==ready==cpu.tick_calls==normal==0,
+                'Normal pre-gesture polling captured contexts, dispatched TICK, or changed diagnostics')
+        pre_gesture=dict(polls=8,capture_attempts=attempts,captured_contexts=valid,
+                         capture_ready=ready,controller_tick_calls=cpu.tick_calls,normal_diagnostics=normal)
     stats=cpu.overlay_stats()
     if variant=='reader_only':
         require(not any(stats[key] for key in ('advertisements','replies','backend_calls','devinfo','allinfo','media','reads')),
@@ -226,7 +244,8 @@ def run_variant(startup, record_path, build, variant, tick_off=False):
         forced.append(dict(command=command,reply=hex(reply),overlay=s,calls=dict(trial.calls),
                            storage_boundary_reached=False,tick_calls=trial.tick_calls))
     cpu.check_build_unchanged()
-    return dict(variant=variant,controller_tick_off=tick_off,artifact_sha256={name:sha((build/name).read_bytes()) for name in
+    return dict(variant=variant,controller_tick_off=tick_off,e1_wait_capture=wait_capture,
+                normal_pre_gesture=pre_gesture,artifact_sha256={name:sha((build/name).read_bytes()) for name in
                     ('entry.elf','stage.elf','native-worker.elf','native-worker.bin','native-worker.reloc','resident-sci.elf','resident-sci.bin')},
                 original_source_sha256=sha(source),record_sha256=sha(record.wire),program_extent=extent,
                 lease_bytes=cpu.lease_bytes,worker_bytes=0x20000,placement='bottom',heap_calls=cpu.heap_calls,
@@ -249,14 +268,22 @@ def main():
     parser.add_argument('--source-commit',required=True)
     parser.add_argument('--reader-tick-off',action='store_true',
                         help='Require the explicit paired reader-only controller TICK-off markers')
+    parser.add_argument('--wait-capture',action='store_true',
+                        help='Require the paired exact Evolution1 operand-capture control')
+    parser.add_argument('--collector-output',type=Path,
+                        help='Write the artifact-bound collector host and NORMAL pre-gesture receipt')
     args=parser.parse_args()
     require(__debug__, 'Assertions must remain enabled')
+    require(not args.wait_capture or (args.reader_tick_off and args.collector_output),
+            'Wait capture requires TICK-off and a collector receipt output')
+    require(not args.collector_output or args.wait_capture,
+            'Collector receipt belongs only to the explicit wait-capture control')
     require(len(args.source_commit)==40 and all(c in '0123456789abcdef' for c in args.source_commit),
             'Expected exact runtime freeze commit')
     for build in (args.reader_build,args.standard_build):
         require(args.source_commit[:12].encode() in (build/'entry.elf').read_bytes(),
                 'Actual linked entry does not contain runtime freeze build identifier')
-    reports=[run_variant(args.startup,args.record,args.reader_build,'reader_only',args.reader_tick_off),
+    reports=[run_variant(args.startup,args.record,args.reader_build,'reader_only',args.reader_tick_off,args.wait_capture),
              run_variant(args.startup,args.record,args.standard_build,'standard_vmu')]
     report=dict(schema='kui.native.isolation-linked-sdk.v1',status='PASS',
                 source_commit=args.source_commit,build=args.source_commit[:12],variants=reports,
@@ -270,6 +297,28 @@ def main():
                     'Original allocator performs the current384KiB bottom sequence; the cold stage C installer requires its separate audit.'])
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(report,indent=2)+'\n')
+    if args.wait_capture:
+        import re
+        import subprocess
+        result=subprocess.run([sys.executable,str(ROOT/'tests/test_native_wait_capture.py')],
+                              cwd=ROOT,check=True,text=True,capture_output=True)
+        match=re.search(r'native wait capture: (\d+) checks PASS; record=(\d+) capture=(\d+) phase=(\d+)',result.stdout)
+        require(match is not None,'Exact collector host test did not produce its layout/check result')
+        checks,record_bytes,capture_bytes,phase_bytes=map(int,match.groups())
+        receipt=dict(schema='kui.native.e1-wait-capture-collector.v1',status='PASS',
+            source_commit=args.source_commit,paired_markers=True,
+            artifact_sha256={name:reports[0]['artifact_sha256'][name] for name in
+                             ('stage.elf','native-worker.elf','native-worker.bin','native-worker.reloc')},
+            normal_pre_gesture=reports[0]['normal_pre_gesture'],
+            collector_layout=dict(record_bytes=record_bytes,capture_bytes=capture_bytes,phase_bytes=phase_bytes),
+            host_tests=dict(status='PASS',checks=checks,undefined_behavior_sanitizer=True),
+            source_sha256={name:sha((ROOT/name).read_bytes()) for name in
+                ('src/loader/vmu_native_wait_capture.inc','src/loader/vmu_native_phase.inc',
+                 'tests/test_vmu_native_wait_capture.c','tests/test_native_wait_capture.py')},
+            limits=['No game mainloop, physical IRQ scheduling, or console timing is modeled.',
+                    'Host refusal/operand tests and actual linked NORMAL pre-gesture callbacks are separate evidence.'])
+        args.collector_output.parent.mkdir(parents=True,exist_ok=True)
+        args.collector_output.write_text(json.dumps(receipt,indent=2)+'\n')
     print(json.dumps(dict(status='PASS',output=str(args.output),variants=len(reports))))
 
 

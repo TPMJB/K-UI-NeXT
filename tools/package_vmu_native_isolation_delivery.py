@@ -35,6 +35,12 @@ EXTRA_PROOFS = ('instruction-audit.json', 'sdk-reader.json', 'sdk-standard.json'
 PREVIOUS_BUILD = '9956562f91d6'
 PREVIOUS_METADATA_SHA = 'adf9dd97917140cc07e5027ae15fa1d85caa06cd83cb8e5d8db4551241e9f0cd'
 PREVIOUS_ARCHIVE_SHA = 'cd6d51767788f4222fffd3c6299024bb8700f8407fe623d6664ef922876d5f29'
+DEMAND_BUILD = '3f51ded6973f'
+KNOWN_PREVIOUS = {
+    PREVIOUS_BUILD: (PREVIOUS_ARCHIVE_SHA, PREVIOUS_METADATA_SHA),
+    DEMAND_BUILD: ('2ff9b0c356b535bdf3fa1083b9c65d1fd8b8bf346170b8f2eae6ecd42e2b673f',
+                   '7e79d4e257443211b5f028796a74b14846d5c6aea46a4a5b21643b5357a79443'),
+}
 
 
 def require(value, message):
@@ -61,7 +67,8 @@ def embedded(image, begin, end, data, base, binary):
     return first
 
 
-def bind_variant(name, build, proof, runtime_commit, demand_only=False):
+def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_capture=False):
+    require(not wait_capture or demand_only, 'Wait capture requires the demand-only control')
     artifacts = {key: sha((build/key).read_bytes()) for key in REQUIRED_ARTIFACTS}
     require(all(proof['artifact_sha256'].get(key) == value for key, value in artifacts.items()),
             'Linked execution report differs from final artifacts: '+name)
@@ -99,8 +106,13 @@ def bind_variant(name, build, proof, runtime_commit, demand_only=False):
         marker = '__kui_native_ra_tick_off_isolation_'+side
         require(image[4].get(marker) == ABSOLUTE_ONE if demand_only and name == 'reader-only' else
                 marker not in image[4], 'Variant controller-prefetch marker differs: '+name)
+        capture_marker = '__kui_native_e1_wait_capture_'+side
+        require(image[4].get(capture_marker) == ABSOLUTE_ONE if wait_capture and name == 'reader-only' else
+                capture_marker not in image[4], 'Variant focused-wait-capture marker differs: '+name)
     require(proof.get('controller_tick_off', False) is (demand_only and name == 'reader-only'),
             'Linked execution report controller-prefetch setting differs: '+name)
+    require(proof.get('e1_wait_capture', False) is (wait_capture and name == 'reader-only'),
+            'Linked execution report focused-wait-capture setting differs: '+name)
     if name == 'reader-only':
         require(worker[4].get('__kui_native_readahead_worker') == ABSOLUTE_ONE and
                 worker[4].get('__kui_native_dual_readers_worker') == ABSOLUTE_ONE,
@@ -147,34 +159,36 @@ def bind_variant(name, build, proof, runtime_commit, demand_only=False):
                   physical_loads=len(loads), bss_stack_margin=stack_low-bss_end,
                   controller_tick_off=demand_only and name == 'reader-only',
                   prefetch_enabled=name == 'reader-only' and not demand_only,
+                  e1_wait_capture=wait_capture and name == 'reader-only',
                   canonical_disjoint_personalization=manifest)
     files['variant-layout.json'] = wire(layout)
     return files, manifest, layout
 
 
-def previous_package(path):
-    """Pin the one earlier console test whose immutable on-card backups we reuse."""
-    require(sha(path.read_bytes()) == PREVIOUS_ARCHIVE_SHA, 'Previous archive differs from the delivered995 pair')
+def previous_package(path, expected_build=PREVIOUS_BUILD):
+    """Pin an earlier console test and its already pinned backup-origin chain."""
+    archive_sha, metadata_sha = KNOWN_PREVIOUS[expected_build]
+    require(sha(path.read_bytes()) == archive_sha, 'Previous archive differs from the delivered isolation pair')
     with zipfile.ZipFile(path) as archive:
         raw = archive.read('isolation.json')
-        require(sha(raw) == PREVIOUS_METADATA_SHA, 'Previous package is not the delivered995 isolation pair')
+        require(sha(raw) == metadata_sha, 'Previous package is not the pinned isolation pair')
         old = json.loads(raw)
-        require(old['build'] == PREVIOUS_BUILD and old['gui'] == dict(build=GUI_BUILD, sha256=GUI_SHA),
+        require(old['build'] == expected_build and old['gui'] == dict(build=GUI_BUILD, sha256=GUI_SHA),
                 'Previous isolation pair has a different GUI/build')
         descriptors = {}
         for name in MODULES:
             module = archive.read('variants/'+name+'/base/KUI/apps/games/retail-boot.kui')
             template = template_profile()
             require(sha(module) == old['variants'][name]['module_sha256'] and
-                    verify(module)['build'] == PREVIOUS_BUILD and module.count(template) == 1,
+                    verify(module)['build'] == expected_build and module.count(template) == 1,
                     'Previous isolation module differs from its pinned delivery: '+name)
             descriptors[name] = dict(module_bytes=len(module), module_sha256=sha(module),
                                      profile_module_offset=module.index(template))
-    return dict(gui_sha256=GUI_SHA, isolation_metadata_sha256=PREVIOUS_METADATA_SHA,
+    return dict(gui_sha256=GUI_SHA, isolation_metadata_sha256=metadata_sha,
                 variants=descriptors), raw
 
 
-def extracted_install_check(files, previous_archive=None):
+def extracted_install_check(files, previous_archive=None, origin_archive=None):
     sys.path.insert(0, str(ROOT/'tests'))
     from test_personalize_vmu_native_persistent import pair
     with tempfile.TemporaryDirectory(prefix='kui-native-isolation-cli-') as directory:
@@ -218,17 +232,34 @@ def extracted_install_check(files, previous_archive=None):
                 for name in archive.namelist():
                     if name in ('install.py', 'personalize.py', 'isolation.json') or name.startswith(('tools/', 'variants/')):
                         path = previous/name;path.parent.mkdir(parents=True, exist_ok=True);path.write_bytes(archive.read(name))
-            for earlier_variant in MODULES:
+            origin = root/'origin-package'
+            if origin_archive is not None:
+                with zipfile.ZipFile(origin_archive) as archive:
+                    for name in archive.namelist():
+                        if name in ('install.py', 'personalize.py', 'isolation.json') or name.startswith(('tools/', 'variants/')):
+                            path = origin/name;path.parent.mkdir(parents=True, exist_ok=True);path.write_bytes(archive.read(name))
+            scenarios = [(False, name) for name in MODULES]
+            if origin_archive is not None:
+                scenarios += [(True, name) for name in MODULES]
+            for inherited_backup, earlier_variant in scenarios:
                 # Each temporary card scenario starts with the true pre-test baseline.
                 shutil.rmtree(card/BACKUP_PARENT)
+                if inherited_backup:
+                    result = subprocess.run([sys.executable, str(origin/'install.py'), str(card),
+                        '--profile', str(profile.relative_to(card)), '--variant', earlier_variant],
+                        cwd=root, text=True, capture_output=True)
+                    require(result.returncode == 0, 'Original995 installer fixture failed: '+result.stderr)
+                    origin_baseline = {p.name: p.read_bytes() for p in (card/BACKUP_PARENT/'backup').iterdir()}
                 previous_argv = [sys.executable, str(previous/'install.py'), str(card),
                                  '--profile', str(profile.relative_to(card)), '--variant', earlier_variant]
                 result = subprocess.run(previous_argv, cwd=root, text=True, capture_output=True)
-                require(result.returncode == 0, 'Earlier995 installer fixture failed: '+result.stderr)
+                require(result.returncode == 0, 'Earlier pinned installer fixture failed: '+result.stderr)
                 baseline = {p.name: p.read_bytes() for p in (card/BACKUP_PARENT/'backup').iterdir()}
+                require(not inherited_backup or baseline == origin_baseline,
+                        'Intermediate3f migration rewrote the original995 backups')
                 for variant in ('reader-only', 'vmu-only', 'restore'):
                     result = subprocess.run([*argv, '--variant', variant], cwd=root, text=True, capture_output=True)
-                    require(result.returncode == 0, 'Extracted995-to-demand migration failed: '+result.stderr)
+                    require(result.returncode == 0, 'Extracted pinned-package migration failed: '+result.stderr)
                     require({p.name: p.read_bytes() for p in (card/BACKUP_PARENT/'backup').iterdir()} == baseline,
                             'Migration rewrote the original995 immutable backups')
                 after = {str(p.relative_to(card)): p.read_bytes() for p in card.rglob('*') if p.is_file()}
@@ -236,6 +267,7 @@ def extracted_install_check(files, previous_archive=None):
                         'Migration/restore changed original modules, GUI, prepared saves or settings')
     return dict(extracted_cli_runs=6, both_variants_switch_and_restore=True,
                 previous_package_migration_cli_runs=8 if previous_archive is not None else 0,
+                inherited995_to3f_migration_cli_runs=10 if origin_archive is not None else 0,
                 previous_original_backup_unchanged=previous_archive is not None,
                 inactive_module_restored=True, original_modules_restored=True,
                 gui_profile_card_journal_and_launch_settings_unchanged=True, normal_mode_only=True)
@@ -271,6 +303,10 @@ print('Runtime build commit:',item['runtime_source_commit'])
 
 
 def package(args):
+    require(not args.wait_capture or args.demand_only, '--wait-capture requires --demand-only')
+    if args.previous_package is None:
+        filename = 'K-UI-Evolution-New-Demand-3f51ded6973f.zip' if args.wait_capture else 'K-UI-Evolution-Isolation-9956562f91d6.zip'
+        args.previous_package = ROOT.parent/filename
     require(not git('status', '--porcelain'), 'Commit delivery tools/tests/docs before packaging')
     delivery_commit, delivery_tree = git('rev-parse', 'HEAD'), git('rev-parse', 'HEAD^{tree}')
     linked_raw = args.linked_report.read_bytes();linked = json.loads(linked_raw)
@@ -301,15 +337,71 @@ def package(args):
              'evidence/host-tests.log': args.host_log.read_bytes(),
              'LICENSE': (ROOT/'LICENSE').read_bytes(), 'THIRD_PARTY.md': (ROOT/'THIRD_PARTY.md').read_bytes()}
     if args.demand_only:
-        compatible, previous_raw = previous_package(args.previous_package)
-        metadata['compatible_packages'] = {PREVIOUS_BUILD: compatible}
+        prior_build = DEMAND_BUILD if args.wait_capture else PREVIOUS_BUILD
+        compatible, previous_raw = previous_package(args.previous_package, prior_build)
+        metadata['compatible_packages'] = {**json.loads(previous_raw).get('compatible_packages', {}),
+                                           prior_build: compatible}
         files['evidence/previous-isolation.json'] = previous_raw
-    extra_proofs = EXTRA_PROOFS + (('standard-control-comparison.json',
-        'tick-off-stack-mapping-negatives.json') if args.demand_only else ())
+        if args.wait_capture:
+            origin, origin_raw = previous_package(args.backup_origin_package)
+            require(metadata['compatible_packages'].get(PREVIOUS_BUILD) == origin,
+                    'Intermediate3f package backup origin differs from the pinned995 pair')
+            files['evidence/backup-origin-isolation.json'] = origin_raw
+    extra_proofs = EXTRA_PROOFS + (('standard-control-comparison.json',)
+        if args.demand_only else ()) + (('tick-off-stack-mapping-negatives.json',)
+        if args.demand_only and not args.wait_capture else ()) + (
+        ('e1-wait-capture-collector.json', 'e1-wait-capture-image-guard.json',
+         'original-frame-proof.json') if args.wait_capture else ())
     for filename in extra_proofs:
         data = (args.linked_report.parent/filename).read_bytes()
         json.loads(data)
         files['evidence/'+filename] = data
+    if args.wait_capture:
+        collector = json.loads(files['evidence/e1-wait-capture-collector.json'])
+        require(collector.get('schema') == 'kui.native.e1-wait-capture-collector.v1' and
+                collector.get('status') == 'PASS' and collector.get('source_commit') == runtime_commit and
+                collector.get('paired_markers') is True and
+                collector.get('collector_layout') == dict(record_bytes=68, capture_bytes=728, phase_bytes=908) and
+                collector.get('host_tests') == dict(checks=9442, status='PASS', undefined_behavior_sanitizer=True) and
+                collector.get('normal_pre_gesture') == dict(polls=8, capture_attempts=0,
+                    captured_contexts=0, capture_ready=0, controller_tick_calls=0, normal_diagnostics=0) and
+                all(collector.get('artifact_sha256', {}).get(name) == sha((args.reader_build/name).read_bytes())
+                    for name in ('native-worker.elf', 'native-worker.bin', 'native-worker.reloc', 'stage.elf')),
+                'Focused capture collector/normal-path proof differs from final artifacts')
+        frame = json.loads(files['evidence/original-frame-proof.json'])
+        require(frame.get('schema') == 'kui.native.evolution1.original-wait-frame.v1' and
+                frame.get('input', {}).get('bytes') == 2143652 and
+                frame.get('input', {}).get('sha256') ==
+                    'ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35' and
+                frame.get('generic_frame_bytes') == 228 and
+                frame.get('complete_offsets') == dict(R0=312, R4=328, R12=360, R13=364, R14=368,
+                    ISR_SR=308, VBR=380, PR=388, SPC=392, SSR=396) and
+                frame.get('case_counts') == dict(prologues=12, shared_prefix=18, polling=12, refusals=10) and
+                all(row.get('refused') is True for row in frame.get('mutation_refusals', [])),
+                'Original Evolution frame/poll proof differs from the focused collector contract')
+        guard = json.loads(files['evidence/e1-wait-capture-image-guard.json'])
+        positive = guard.get('positive_case', {})
+        refusals = guard.get('refusal_cases', [])
+        expected_refusals = {'digest-byte-'+str(i) for i in range(32)} | {'image-bytes', 'load-address'} | {
+            'non-normal-mode-'+str(i) for i in range(1, 7)}
+        require(guard.get('schema') == 'kui.native.evolution1.wait-capture-stage-guard.v1' and
+                guard.get('status') == 'PASS' and guard.get('source_commit') == runtime_commit and
+                guard.get('enabledmarker') is True and positive.get('mode') == 0 and
+                positive.get('admitted_before_copy') is True and positive.get('first_copy') is not None and
+                positive.get('actual_memcmp_calls') == 1 and positive.get('digest_byte_offsets_read') == list(range(32)) and
+                guard.get('refusal_count') == len(refusals) == 40 and
+                {row.get('name') for row in refusals} == expected_refusals and
+                all(row.get('refused_before_copy') is True and row.get('first_copy') is None for row in refusals) and
+                guard.get('inputs', {}).get('startup', {}).get('sha256') == frame['input']['sha256'] and
+                all(guard.get('artifact_sha256', {}).get(name) == sha((args.reader_build/name).read_bytes())
+                    for name in ('stage.elf', 'stage.bin', 'entry.elf', 'native-worker.elf',
+                                 'native-worker.bin', 'resident-sci.elf')),
+                'Exact Evolution/NORMAL stage guard proof differs from final artifacts')
+        for report in (collector, frame, guard):
+            for path, digest in report['source_sha256'].items():
+                relative = Path(path)
+                require(not relative.is_absolute() and '..' not in relative.parts and
+                        sha((ROOT/relative).read_bytes()) == digest, 'Focused wait proof source changed: '+path)
     if args.demand_only:
         standard = json.loads(files['evidence/standard-control-comparison.json'])
         require(standard.get('old_build') == PREVIOUS_BUILD and
@@ -333,20 +425,24 @@ def package(args):
         proof = proofs[proof_name]
         require(proof['lease_bytes'] == 393216 and proof['worker_bytes'] == 131072 and proof['placement'] == 'bottom',
                 'Isolation controls do not retain the matching memory reservation')
-        variant_files, manifest, layout = bind_variant(name, build.resolve(), proof, runtime_commit, args.demand_only)
+        variant_files, manifest, layout = bind_variant(name, build.resolve(), proof, runtime_commit,
+                                                       args.demand_only, args.wait_capture)
         files.update({'variants/'+name+'/'+path: data for path, data in variant_files.items()})
         metadata['variants'][name] = dict(directory='variants/'+name, destination=str(MODULES[name]),
             module_sha256=manifest['module_sha256'], virtual_a2=name == 'vmu-only',
             reader='New (X)' if name == 'reader-only' else 'Standard', lease_bytes=393216,
             support_hooks_retained=True, prefetch_enabled=name == 'reader-only' and not args.demand_only,
             controller_tick_off=args.demand_only and name == 'reader-only',
+            e1_wait_capture=args.wait_capture and name == 'reader-only',
             linked_layout_sha256=sha(wire(layout)))
     files['isolation.json'] = wire(metadata)
-    guide_path = 'docs/native-isolation-demand-test.md' if args.demand_only else 'docs/native-isolation-test.md'
+    guide_path = ('docs/native-isolation-wait-test.md' if args.wait_capture else
+                  'docs/native-isolation-demand-test.md' if args.demand_only else 'docs/native-isolation-test.md')
     guide = (ROOT/guide_path).read_text().replace('@BUILD@', runtime_commit[:12]).replace(
         '@RUNTIME_COMMIT@', runtime_commit).replace('@DELIVERY_COMMIT@', delivery_commit).encode()
     files['README-FIRST.md'] = guide
-    delivery_checks = extracted_install_check(files, args.previous_package if args.demand_only else None)
+    delivery_checks = extracted_install_check(files, args.previous_package if args.demand_only else None,
+                                               args.backup_origin_package if args.wait_capture else None)
     with tempfile.TemporaryDirectory(prefix='kui-isolation-source-') as directory:
         bundle = Path(directory)/'native-source-full.bundle'
         subprocess.run(['git', 'bundle', 'create', str(bundle), 'HEAD'], cwd=ROOT, check=True, capture_output=True)
@@ -358,6 +454,7 @@ def package(args):
                      runtime_build=runtime_commit[:12], source_full_bundle=full_info,
                      runtime_files_unchanged_after_freeze=True, console_compatibility_verified=False,
                      demand_only=args.demand_only,
+                     e1_wait_capture=args.wait_capture,
                      preserved_gui_build=GUI_BUILD, preserved_gui_sha256=GUI_SHA,
                      evidence_sha256={name: sha(data) for name, data in files.items()
                                       if name.startswith('evidence/') or name.endswith('/variant-layout.json')})
@@ -392,9 +489,13 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--demand-only', action='store_true',
                         help='Require the New-demand/controller-prefetch-off control and its guide')
+    parser.add_argument('--wait-capture', action='store_true',
+                        help='Require the Evolution1 manual30-poll wait capture; needs --demand-only')
     parser.add_argument('--previous-package', type=Path,
+                        help='Pinned earlier archive; defaults to995, or3f51 for --wait-capture')
+    parser.add_argument('--backup-origin-package', type=Path,
                         default=ROOT.parent/'K-UI-Evolution-Isolation-9956562f91d6.zip',
-                        help='Pinned earlier995 archive for original-backup compatibility')
+                        help='Pinned995 archive for inherited backup-chain extraction checks')
     args = parser.parse_args()
     try:
         print(json.dumps(package(args), indent=2))
