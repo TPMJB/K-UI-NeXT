@@ -11,6 +11,7 @@ Execution stops at the validated native_passive_run handoff; separate mandatory
 publication and worker proofs cover arming after that boundary.
 """
 import argparse
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -28,6 +29,7 @@ from sh4_delay_slots import validate_delay_slot
 SCHEMA = 'kui.native.bottom-heap.compiled-cold.v1'
 STAGE_MARKER = '__kui_native_bottom_heap_stage'
 WORKER_MARKER = '__kui_native_bottom_heap_worker'
+BUDGET_MARKER = '__kui_native_private_pool_budget_stage'
 ABSOLUTE_ONE = (1, 0, 0, 0xfff1)
 RETURN = 0xdeadbeee
 LEASE_BYTES = 0x60000
@@ -39,6 +41,12 @@ REFUSALS = ('status', 'entry-begin', 'entry-bytes', 'return-pr', 'owner-sp',
             'release-candidate', 'release-free-overlap', 'release-size-mismatch',
             'final-free-intrusion', 'mask-1', 'digest-1', 'mask-2', 'digest-2',
             'mask-3', 'digest-3')
+BUDGET_PREPARE_REFUSALS = ('budget-parent-code', 'budget-child-code',
+                           'budget-allocation-dispatch')
+BUDGET_PUBLISH_REFUSALS = ('budget-old-reserve', 'budget-lease-header',
+                           'budget-initializer-hook', 'budget-lost-publish')
+BUDGET_FIELDS = ('reserve_address', 'reserve_before', 'reserve_after',
+                 'child_bytes_before', 'child_bytes_after')
 PIN_FUNCTIONS = {'_alias@vmu_native_stage_placement.c': (32,
                                          '5d5b341944aa4da08467cfca39b78f276224218bd3ed9fd094c99456668b974d'),
  '_allocation_safe@vmu_native_heap_probe_stage.c': (52,
@@ -108,6 +116,100 @@ PIN_OBJECTS = {'_heap_bottom_allocate_words@vmu_native_heap.c': (206,
                                                    '528ea52471bc42b01f1f4c4a40e7510f5346db70a539a35a40b8c97fbe8ba174'),
  '_heap_bottom_release_words@vmu_native_heap.c': (154,
                                                   '441e8180758616454557f02badc0b5b6a2b23b752ab88f5f6fb8e442ce84cb9e')}
+# The private-pool stage retains the historical closure above. These variant
+# maps are populated only after reviewing the actual linked new instructions,
+# decoded literal roles and execution closure; development mode cannot ship.
+BUDGET_PIN_FUNCTIONS = {'_alias@vmu_native_stage_placement.c': (32,
+                                         '5d5b341944aa4da08467cfca39b78f276224218bd3ed9fd094c99456668b974d'),
+ '_allocation_safe@vmu_native_heap_probe_stage.c': (52,
+                                                    '64d59257bca4d5d3613ed0d409432db08d129df238c6274fa90c989547934b60'),
+ '_at@vmu_native_heap_budget.c': (92,
+                                  'db475248a7aa8675d1722602bc06b3a984d54f508a45a8842ba8116437063423'),
+ '_bottom_geometry@vmu_native_heap.c': (24,
+                                        'fe83cd5cec158b6d373003e684f8d52b59b7f5200e588cfe204826026a080668'),
+ '_code_sha@vmu_native_heap_probe_stage.c': (64,
+                                             '692d561cd5ccbb73e46c006115f5b1945036b7e8dbd0f24296240547945d5729'),
+ '_control@vmu_native_heap_probe_stage.c': (28,
+                                            '4e5efaa5fdceffa3a31fbffb123c1333bf951e2e1fe70390a272c5c58fa661a7'),
+ '_excludes_stage@vmu_native_stage_placement.c': (64,
+                                                  'b3d30aacc305e63a418917c5eb59777a318ec5c226a751d80e6306afa2b24079'),
+ '_fresh@vmu_native_heap.c': (116,
+                              '7b861e8ef810a55fb848113bb3d40facdfdfa81a8ef200715877798ac0534b56'),
+ '_heap_bottom_code_span@vmu_native_heap.c': (88,
+                                              '70e1fdb2e5150dd22242b823edf4a8eaa3f5259e85a94a9546e995140e184cc0'),
+ '_heap_bottom_halfword@vmu_native_heap.c': (58,
+                                             'd66affe12d8e87985e0bbe094cc393649bad89f9e4494f55004afda5f193ab39'),
+ '_identity@vmu_native_heap.c': (412,
+                                 'be8fb07f35f46c478795e779e293b92d4a9a56577a06c792ee2baac0c84b4839'),
+ '_index@vmu_native_heap.c': (100,
+                              'dd81846d1188b779bc975573eaad379a609bbf18baa58093e765179a26886cfa'),
+ '_kui_vmu_native_heap_bottom_allocated': (172,
+                                           '2297b7718313cffaf3b8df94a3de63568faa6f016d7e66b94c5f0653c8dc1e68'),
+ '_kui_vmu_native_heap_bottom_code_valid': (360,
+                                            '1269d10460510a822683d13eb427620d58ec84efe2c12e4bf8a6f828d5e46539'),
+ '_kui_vmu_native_heap_bottom_fresh': (148,
+                                       '1dc99545b6605fa627e9d591fd1a35e18f4f61f8252cafbb96ac9f13a79f2671'),
+ '_kui_vmu_native_heap_bottom_placeholder': (196,
+                                             '3ac04611d78a2b69e0350cfcd268dd37564689ff21c44b749482841733d71106'),
+ '_kui_vmu_native_heap_bottom_ready': (144,
+                                       '5b2ccd1a4902bcc412b159ff8e51ba02fccddad7ae2a50d02fd082883bab9062'),
+ '_kui_vmu_native_heap_budget_prepare': (2370,
+                                         '7161f93ecffcd2b8538171a65f9cadf46163c80bbb1f098d608d5291d1f965fe'),
+ '_kui_vmu_native_heap_fresh': (268,
+                                'ba307e7566bea76831b4c4f5c3facb061303899168ce24f91a722ebbcd16a3fd'),
+ '_kui_vmu_native_heap_lease_identity_valid': (76,
+                                               '340aa33e69839a4517f6910634479f0823da7db9d1830020d313110c94975abe'),
+ '_kui_vmu_native_heap_lease_valid': (28,
+                                      'eb0496c97a22899cbe69b8bfa96aa76a68ade5b276aca5de0fc42ededd494196'),
+ '_kui_vmu_native_heap_lease_valid_with_release': (512,
+                                                   '1b0478c51b4ff2f80e9d0326f7a00539e9b94c83deb8219aa951b50fb0f1eb39'),
+ '_kui_vmu_native_heap_preallocate': (36,
+                                      '6f4a5ec7719e81ea06df5f4a47f9be6262795f2df2d6c39257af9669b4451c5f'),
+ '_kui_vmu_native_stage_bottom_allocation_safe': (308,
+                                                  'd48e52d0f62f6eb20bb8c37f1af8550c5c68be1569ef0ba1d31e0c6830f5d70a'),
+ '_kui_vmu_observe_stage_install': (400,
+                                    '0137746630ac8d63422deb23687fac3afbd4bcbad8d1c54799c7ed9b223916d1'),
+ '_le32@vmu_native_heap_budget.c': (30,
+                                    '6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334'),
+ '_long_literal@vmu_native_heap_budget.c': (128,
+                                            '1f31121f0b67d6ea79e2b0c2a63c181d46d2ce97583c67bc47712d0727ccb289'),
+ '_memcmp': (34, '3d7da64606fe412df2341ca8e1c2c56d14d3f4798465f1ec02f6d2994c6aefd9'),
+ '_memcpy': (72, 'cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634'),
+ '_memset': (26, '84a19f7aa0536a77835dd9917cd47ea65e6d6edf6013064ab39a36c0a05e118a'),
+ '_metadata@vmu_native_heap.c': (416,
+                                 '9d1ea1f6d55d9d022afef79dddc1fa35d66a1a69f1ed556fd564fd65e8e2a221'),
+ '_native_allocate_bottom@vmu_native_heap_probe_stage.c': (304,
+                                                           '2f380c8842199662eb559ad26b38f017020e9926e6cc72cc5c053f6a25bf96a6'),
+ '_native_allocator_unchanged@vmu_native_heap_probe_stage.c': (68,
+                                                               'bc400df642a3086dff9cce9af883c5d44f229731c0294274dd49a91f70baf905'),
+ '_native_budget_prepare@vmu_native_heap_probe_stage.c': (92,
+                                                          '417490a35629276eae963c889b63292535f3d736bfcd34803c898fd913a9934a'),
+ '_native_budget_publish@vmu_native_heap_probe_stage.c': (132,
+                                                          '5e5da214e0c3d6f27e78d3a001ab439eb90d35e07756158faf12dd0b269fb111'),
+ '_native_low_bindings@vmu_native_heap_probe_stage.c': (64,
+                                                        '914e49950b3eec800b5954bdf1c8070bc057eb42e08b316bd11449c0ebc87db2'),
+ '_native_read@vmu_native_heap_probe_stage.c': (84,
+                                                'b6bc33c6d4c36f9e6625ccf6afdc55b98e2e8f684d95194687fa946071a4804d'),
+ '_overlaps.constprop.0@vmu_native_heap_budget.c': (124,
+                                                    'ab5b5d50a0e6b0d6bfdfe3d66da18c739b6a4569e20e8adf2c7f04a323795bdb'),
+ '_ram@vmu_native_heap_budget.c': (76,
+                                   '64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305'),
+ '_read_is@vmu_native_heap.c': (80,
+                                'a30c6231f114acaa0bb2274914e14a5ce1225ada50dde102a9f4c4e2880862e8'),
+ '_span@vmu_native_heap.c': (76,
+                             '64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305'),
+ '_span@vmu_native_stage_placement.c': (80,
+                                        '4e5ac885af47f3deec9bf74747cecdfcdaac70abbe7c981eaea812f41c3c041d'),
+ '_word@vmu_native_heap_budget.c': (52,
+                                    '9a68103cac2b1b00551a238a475297f0c36253820af2e2443c243db5d27713e6')}
+BUDGET_PIN_OBJECTS = {'_child_code@vmu_native_heap_budget.c': (100,
+                                          '8b9249ed63eb68bec146752d114c643074f861aced0b0f03b07cb20cd90faa01'),
+ '_heap_bottom_allocate_words@vmu_native_heap.c': (206,
+                                                   '528ea52471bc42b01f1f4c4a40e7510f5346db70a539a35a40b8c97fbe8ba174'),
+ '_heap_bottom_release_words@vmu_native_heap.c': (154,
+                                                  '441e8180758616454557f02badc0b5b6a2b23b752ab88f5f6fb8e442ce84cb9e'),
+ '_parent_code@vmu_native_heap_budget.c': (152,
+                                           '07ce6930bce857d18e95a47261e637ebf8fbfc2f8ffb9624fd6baa36270eb1e1')}
 
 
 def require(ok, message):
@@ -117,6 +219,22 @@ def require(ok, message):
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def budget_stage(stage):
+    value = stage[4].get(BUDGET_MARKER)
+    if value is None:
+        return False
+    require(value == ABSOLUTE_ONE, 'Private-pool budget marker is not exact absolute one')
+    return True
+
+
+def pin_sets(stage):
+    if budget_stage(stage):
+        require(BUDGET_PIN_FUNCTIONS and BUDGET_PIN_OBJECTS,
+                'Private-pool reviewed complete closure is missing')
+        return BUDGET_PIN_FUNCTIONS, BUDGET_PIN_OBJECTS
+    return PIN_FUNCTIONS, PIN_OBJECTS
 
 
 def records(image):
@@ -146,7 +264,8 @@ def records(image):
 def pinned_records(stage):
     available = records(stage)
     result = {}
-    for pins, kind, flags in ((PIN_FUNCTIONS, 2, 6), (PIN_OBJECTS, 1, 2)):
+    functions, objects = pin_sets(stage)
+    for pins, kind, flags in ((functions, 2, 6), (objects, 1, 2)):
         require(pins, 'Bottom cold reviewed whole-body map is missing')
         for name, expected in pins.items():
             require(name in available, 'Bottom cold symbol missing: ' + name)
@@ -260,6 +379,8 @@ def require_companion(stage, worker, proof, corpus=None):
             'Bottom cold companion lacks actual worker geometry/free-list execution')
     require(proof.get('source_sha256') == {name: sha((ROOT / name).read_bytes()) for name in SOURCES},
             'Bottom cold proof source identities differ')
+    if budget_stage(stage):
+        require_private_pool_companion(stage, proof)
     tests = proof.get('self_tests', {})
     require(tests.get('whole_closure_mutations', 0) >= 35 and tests.get('marker_refusals', 0) >= 6 and
             tests.get('companion_refusals', 0) >= 8,
@@ -271,7 +392,58 @@ SOURCES = ('tools/check_native_bottom_heap.py', 'tools/check_native_bottom_heap_
            'tools/profile_vmu_native_release_sh.py', 'tests/test_vmu_native_heap_execution.py',
            'src/loader/vmu_native_heap_probe_stage.c', 'src/core/vmu_native_heap.c',
            'src/core/vmu_native_heap_bottom_code.inc', 'src/core/vmu_native_stage_placement.c',
-           'include/kui/vmu_native_heap.h', 'include/kui/vmu_native_stage_placement.h')
+           'include/kui/vmu_native_heap.h', 'include/kui/vmu_native_stage_placement.h',
+           'src/core/vmu_native_heap_budget.c', 'include/kui/vmu_native_heap_budget.h',
+           'tools/prove_native_private_pool_budget.py')
+
+
+def require_private_pool_companion(stage, proof):
+    require(budget_stage(stage), 'Private-pool proof requires its exact stage marker')
+    plans = proof.get('private_pool_budget_plans', [])
+    require(len(plans) == 2 and {row.get('reader') for row in plans} == {1, 2} and
+            len({row.get('source_sha256') for row in plans}) == 1 and
+            all(set(row.get('plan', {})) == set(BUDGET_FIELDS) and
+                all(type(v) is int for v in row['plan'].values()) for row in plans) and
+            plans[0]['plan'] == plans[1]['plan'],
+            'Private-pool proof lacks both actual selected-reader plans')
+    coverage = proof.get('private_pool_budget_execution', {})
+    require(coverage.get('actual_helper_calls') == 16 and
+            coverage.get('actual_prepare_calls') == coverage.get('actual_publish_calls') == 16 and
+            coverage.get('unchanged_unrelated_callers') == 14 and
+            coverage.get('single_word_publications') == coverage.get('full_source_scans') == 2 and
+            coverage.get('dirty_p1_ocbp_p2_readback_executed') is True and
+            coverage.get('publication_refusals_reuse_actual_executed_prefix') is True,
+            'Private-pool actual helper/publication coverage differs')
+    refusals = proof.get('private_pool_budget_refusals', [])
+    require(len(refusals) == len(BUDGET_PREPARE_REFUSALS + BUDGET_PUBLISH_REFUSALS) and
+            {row.get('mutation') for row in refusals} ==
+            set(BUDGET_PREPARE_REFUSALS + BUDGET_PUBLISH_REFUSALS),
+            'Private-pool proof omits a prepare/publication refusal')
+    original = proof.get('private_pool_capacity_original', {})
+    from prove_native_private_pool_budget import SCHEMA as capacity_schema, SOURCE_FILES
+    require(original.get('schema') == capacity_schema and original.get('status') == 'PASS' and
+            original.get('input_sha256') == plans[0]['source_sha256'] and
+            original.get('plan') == plans[0]['plan'] and
+            original.get('lease_payload_bytes') == LEASE_BYTES and
+            original.get('lease_physical_cost') == LEASE_BYTES + 32 and
+            original.get('source_files') ==
+                {name: sha((ROOT / name).read_bytes()) for name in SOURCE_FILES},
+            'Private-pool original capacity proof is stale or detached from the compiled plan')
+    cases = {row.get('mode'): row for row in original.get('cases', [])}
+    require(len(cases) == len(original.get('cases', [])) == 4 and
+            set(cases) == {'baseline', 'tail', 'bottom', 'bottom-budget'} and
+            all(cases[name].get('scene_allocator_return') == 0 and
+                cases[name].get('scene_published_pointer') == 0x20000000 for name in ('tail', 'bottom')) and
+            all(cases[name].get('scene_allocator_return', 0) != 0 for name in ('baseline', 'bottom-budget')) and
+            cases['baseline'].get('free_sdk_bytes_before_scene') ==
+                cases['bottom-budget'].get('free_sdk_bytes_before_scene') and
+            cases['baseline'].get('application_pool_bytes') == plans[0]['plan']['child_bytes_before'] and
+            cases['bottom-budget'].get('application_pool_bytes') == plans[0]['plan']['child_bytes_after'] and
+            cases['baseline'].get('application_pool_end') == cases['bottom-budget'].get('application_pool_end') and
+            all(row.get('worker_payload_preserved') is True and row.get('worker_header_preserved') is True
+                for name, row in cases.items() if name != 'baseline'),
+            'Private-pool proof does not demonstrate original failure, corrected capacity and retained worker')
+    return True
 
 
 class Refused(Exception):
@@ -283,7 +455,22 @@ class Cold(ReleaseSH):
     def __init__(self, directory, row, *, reader=1, alias=None, seed=0,
                  mutation=None):
         self.watch = False
+        self.budget_slot = None
+        self.budget_dirty = False
+        self.budget_ram = None
+        self.budget_writes = []
+        self.budget_purges = []
+        self.budget_at = None
+        self.budget_plan = None
+        self.budget_checkpoint = None
+        self.from_budget_checkpoint = False
+        self.suppress_budget_purge = False
+        self.budget_prepare_calls = self.budget_publish_calls = 0
+        self.budget_core_calls = 0
+        self.budget_lease_at = None
+        self.budget_scans = 0
         super().__init__(directory / 'stage.elf')
+        self.has_budget = budget_stage(self.elf)
         self.directory, self.row = directory, row
         self.source, self.image, self.extent = verified_program_image(
             row['startup'], row['record'])
@@ -313,6 +500,12 @@ class Cold(ReleaseSH):
         self.write(manifest + 48, reader)
         table = self.symbols['_native_low_bindings_table'][0] + (reader - 1) * 24
         self.control_at = self.read(table + 8) | 0x20000000
+        if self.has_budget:
+            # The real first-initializer hook remains installed while its
+            # returned callback runs. Reproduce that live literal rather than
+            # leaving the immutable source's original initializer target.
+            self.initializer_hook = self.read(table)
+            self.write(self.owner[7], self.initializer_hook)
         self.store_block(self.control_at, bytes(56))
         self.write(self.control_at + 8, 2)
         self.write(self.control_at + 20, self.begin)
@@ -353,6 +546,10 @@ class Cold(ReleaseSH):
             '_kui_vmu_native_heap_bottom_allocated',
             '_kui_vmu_native_heap_bottom_ready',
             '_kui_vmu_native_heap_lease_valid_with_release')}
+        if self.has_budget:
+            for name in ('_native_budget_prepare', '_native_budget_publish',
+                         '_kui_vmu_native_heap_budget_prepare'):
+                self.event_entries[self.symbols[name][0]] = name
         if mutation:
             self.change('start')
         self.watch = True
@@ -384,6 +581,18 @@ class Cold(ReleaseSH):
             elif name == 'cold-release-code':
                 at = self.owner[10] + 0x96
                 self.write(at & ~3, self.read(at & ~3) ^ (1 << ((at & 2) * 8)))
+            elif name in BUDGET_PREPARE_REFUSALS:
+                parent = self.owner_call[2] - 0x2c
+                def literal(pc):
+                    address = ((pc + 4) & ~3) + 4 * (self.read(pc, 2) & 255)
+                    return self.read(address)
+                if name == 'budget-parent-code':
+                    at = parent + 4
+                elif name == 'budget-child-code':
+                    at = literal(parent + 0x5e) + 2
+                else:
+                    at = literal(parent + 0x4a) + 4
+                self.write(at, self.read(at, 2) ^ 1, 2)
         if event.startswith('unchanged:'):
             at = int(event.split(':')[1])
             if name == f'mask-{at}': self.sr &= ~0xf0
@@ -418,6 +627,25 @@ class Cold(ReleaseSH):
         if event == 'final-proof' and name == 'final-free-intrusion':
             self.write(self.begin + LEASE_BYTES + 32, self.begin)
 
+        if event == 'budget-publish':
+            if name == 'budget-old-reserve':
+                self.write(self.budget_slot, self.budget_plan['reserve_before'] + 32)
+            elif name == 'budget-lease-header':
+                self.write(self.begin + 4, self.read(self.begin + 4) ^ 1)
+            elif name == 'budget-initializer-hook':
+                self.write(self.owner[7], self.initializer_hook ^ 2)
+            elif name == 'budget-lost-publish':
+                self.suppress_budget_purge = True
+
+    def read(self, address, count=4):
+        # Model only the newly published constant's P1 dirty/P2 RAM boundary.
+        # Ordinary allocator observations retain the original physical model.
+        if (self.budget_dirty and count == 4 and
+            (address & 0xe0000000) == 0xa0000000 and
+            (address & 0x1fffffff) == (self.budget_slot & 0x1fffffff)):
+            return self.budget_ram
+        return super().read(address, count)
+
     def write(self, address, value, count=4):
         if self.watch:
             p = address & 0x1fffffff
@@ -437,7 +665,18 @@ class Cold(ReleaseSH):
                     count in (2, 4) and stack - 16 <= p < p + count <= stack,
                     f'Original cold allocator store outside its exact metadata: {address:#x}')
             else:
-                require(stage <= p < p + count <= stage_end or
+                reserve = (self.has_budget and self.budget_slot is not None and
+                           count == 4 and p == (self.budget_slot & 0x1fffffff))
+                if reserve:
+                    require(self.budget_publish_calls == 1 and self.passive_calls == 0 and
+                            self.budget_prepare_calls == 1 and len(self.owner_calls) == 3 and
+                            value == self.budget_plan['reserve_after'] and
+                            address == self.budget_slot and not self.budget_writes,
+                            'Compiled budget publication escaped its single proved P1 word')
+                    self.budget_ram = self.read(address)
+                    self.budget_dirty = True
+                    self.budget_writes.append(dict(pc=self.pc, address=address, value=value))
+                require(reserve or stage <= p < p + count <= stage_end or
                         p == (self.control_at & 0x1fffffff) + 12 or
                         p == (self.control_at & 0x1fffffff) + 8,
                         f'Compiled cold stage wrote outside owned stage/control: {address:#x}')
@@ -448,7 +687,25 @@ class Cold(ReleaseSH):
 
     def plain(self, op, pc):
         n, m = op >> 8 & 15, op >> 4 & 15
-        if op in (0x0008, 0x0018):
+        if op & 0xf0ff == 0x00a3:  # ocbp @Rn, exact newly published line only
+            address = self.r[n]
+            require(self.has_budget and self.budget_slot is not None and self.budget_dirty and
+                    (address & ~31) == (self.budget_slot & ~31),
+                    'Cold cache publication escaped the proved reserve line')
+            self.budget_purges.append(dict(pc=pc, address=address))
+            if not self.suppress_budget_purge:
+                self.budget_dirty = False
+                self.budget_ram = super().read(self.budget_slot)
+        elif op & 0xf00f == 0x6008:  # SWAP.B Rm,Rn; upper half preserved
+            value = self.r[m]
+            self.r[n] = (value & 0xffff0000) | ((value & 255) << 8) | ((value >> 8) & 255)
+        elif op & 0xf0ff in (0x4018, 0x4028):  # SHLL8 / SHLL16
+            self.r[n] = (self.r[n] << (8 if op & 0xff == 0x18 else 16)) & MASK
+        elif op & 0xf0ff in (0x4019, 0x4029):  # SHLR8 / SHLR16
+            self.r[n] >>= (8 if op & 0xff == 0x19 else 16)
+        elif op & 0xf00f in (0x600e, 0x600f):  # EXTS.B / EXTS.W
+            self.r[n] = signed(self.r[m], 8 if op & 15 == 14 else 16) & MASK
+        elif op in (0x0008, 0x0018):
             self.flag(op == 0x0018)
         elif op & 0xf00f in (0x300a, 0x300e):
             a, b, carry = self.r[n], self.r[m], self.sr & 1
@@ -509,7 +766,10 @@ class Cold(ReleaseSH):
 
     def run_cold(self):
         try:
-            for _ in range(1000000):
+            steps = 0
+            instruction_bound = 1000000
+            while steps < instruction_bound:
+                steps += 1
                 pc = self.pc
                 if pc == RETURN:
                     require(self.r[15] == self.before[0][15] and self.r[8:15] == self.before[0][8:15],
@@ -517,10 +777,55 @@ class Cold(ReleaseSH):
                     require(self.sr & ~1 == self.before[2] & ~1, 'Compiled cold installer changed inherited SR')
                     return True
                 if pc in self.entries: self.entered.add(self.entries[pc])
+                if self.has_budget and pc == self.symbols['_kui_vmu_native_heap_budget_prepare'][0] + 0x5f0:
+                    # The one reviewed full-image scan has an explicit source
+                    # bound. Every instruction still executes; no predicate or
+                    # scan is replaced by a host result.
+                    self.budget_scans += 1
+                    require(self.budget_scans == 1, 'Compiled budget repeated its source scan')
+                    instruction_bound += (len(self.image) // 2 + 1) * 96
                 if pc in self.event_entries:
                     event = self.event_entries[pc]
                     self.events.append(event)
-                    if event == '_native_allocate_bottom': self.lease_at = self.r[4]
+                    if event == '_native_budget_prepare':
+                        self.budget_prepare_calls += 1
+                        self.budget_lease_at, self.budget_at = self.r[4:6]
+                        require(self.budget_prepare_calls == 1 and not self.owner_calls and
+                                self.published is None,
+                                'Budget preparation did not precede every allocation/publication')
+                    elif event == '_kui_vmu_native_heap_budget_prepare':
+                        self.budget_core_calls += 1
+                        require(self.r[4:8] == [0x8c010000, len(self.image), self.heap_at, self.call_at] and
+                                [self.read(self.r[15] + 4 * i) for i in range(4)] ==
+                                [self.symbols['_native_read'][0], 0, LEASE_BYTES + 32, self.budget_at],
+                                'Compiled budget helper lost source/live-reader/physical-cost provenance')
+                    elif event == '_native_budget_publish':
+                        require(self.r[4:6] == [self.budget_lease_at, self.budget_at],
+                                'Budget publication changed its original local lease/plan objects')
+                        self.budget_plan = dict(zip(BUDGET_FIELDS,
+                            struct.unpack('<5I', self.block(self.budget_at, 20))))
+                        self.budget_slot = self.budget_plan['reserve_address'] or None
+                        if self.budget_slot is not None:
+                            require(self.budget_slot & 3 == 0 and
+                                    0x8c010000 <= self.budget_slot <= 0x8c010000 + len(self.image) - 4 and
+                                    self.budget_plan['reserve_after'] - self.budget_plan['reserve_before'] ==
+                                    self.budget_plan['child_bytes_before'] - self.budget_plan['child_bytes_after'] ==
+                                    LEASE_BYTES + 32,
+                                    'Budget helper returned an invalid source slot or physical-capacity delta')
+                            if not self.from_budget_checkpoint:
+                                checkpoint = copy.deepcopy(self)
+                                checkpoint.from_budget_checkpoint = True
+                                checkpoint.budget_checkpoint = None
+                                self.budget_checkpoint = checkpoint
+                        else:
+                            require(not any(self.budget_plan.values()),
+                                    'Unrelated caller received a partial budget plan')
+                        self.budget_publish_calls += 1
+                        self.change('budget-publish')
+                    elif event == '_native_allocate_bottom':
+                        self.lease_at = self.r[4]
+                        require(not self.has_budget or self.lease_at == self.budget_lease_at,
+                                'Allocator changed the lease prepared for its capacity budget')
                     elif event == '_native_allocator_unchanged':
                         self.unchanged_calls += 1
                         self.change(f'unchanged:{self.unchanged_calls}')
@@ -592,6 +897,12 @@ def check(directory, *, self_test=False, corpus=None, development=False):
     kernels = pinned_records(stage) if not development else {}
     positive, refusals, entered, executed = [], [], set(), set()
     placement_cases = []
+    budget_plans, budget_refusals, budget_checkpoints = [], [], []
+    budget_counts = dict(actual_helper_calls=0, actual_prepare_calls=0,
+                         actual_publish_calls=0, unchanged_unrelated_callers=0,
+                         single_word_publications=0, full_source_scans=0,
+                         dirty_p1_ocbp_p2_readback_executed=False,
+                         publication_refusals_reuse_actual_executed_prefix=True)
     for row in rows:
         for reader in (1, 2):
             cpu = Cold(directory, row, reader=reader, seed=reader)
@@ -602,12 +913,35 @@ def check(directory, *, self_test=False, corpus=None, development=False):
                     'Compiled bottom installer changed original call order/arguments')
             require(cpu.unchanged_calls == 3 and cpu.code_calls == 2 and cpu.passive_calls == 1,
                     'Compiled bottom installer omitted a mandatory complete guard')
+            if cpu.has_budget:
+                require(cpu.budget_prepare_calls == cpu.budget_core_calls ==
+                        cpu.budget_publish_calls == 1,
+                        'Actual budget helper omitted or repeated prepare/publish')
+                budget_counts['actual_helper_calls'] += cpu.budget_core_calls
+                budget_counts['actual_prepare_calls'] += cpu.budget_prepare_calls
+                budget_counts['actual_publish_calls'] += cpu.budget_publish_calls
+                budget_counts['full_source_scans'] += cpu.budget_scans
+                if cpu.budget_slot is not None:
+                    require(cpu.budget_scans == 1 and len(cpu.budget_writes) ==
+                            len(cpu.budget_purges) == 1 and not cpu.budget_dirty and
+                            cpu.read(cpu.budget_slot | 0x20000000) == cpu.budget_plan['reserve_after'],
+                            'Budget change omitted its unique write/cache publication/readback')
+                    budget_plans.append(dict(slug=row['slug'], reader=reader,
+                        source_sha256=sha(cpu.source), plan=cpu.budget_plan))
+                    budget_checkpoints.append(cpu.budget_checkpoint)
+                    budget_counts['single_word_publications'] += 1
+                    budget_counts['dirty_p1_ocbp_p2_readback_executed'] = True
+                else:
+                    require(not cpu.budget_writes and not cpu.budget_purges and not cpu.budget_scans,
+                            'Unrelated caller received reserve publication or full scan')
+                    budget_counts['unchanged_unrelated_callers'] += 1
             entered |= cpu.entered
             executed |= cpu.executed
             positive.append(dict(slug=row['slug'], reader=reader, instructions=cpu.instructions))
     if self_test:
+        generic_row = next((row for row in rows if row['slug'] != 'lodoss'), rows[0])
         for name in REFUSALS:
-            cpu = Cold(directory, rows[0], mutation=name)
+            cpu = Cold(directory, generic_row, mutation=name)
             require(not cpu.run_cold() and cpu.refusal is not None,
                     'Actual bottom installer accepted mutation: ' + name)
             require(cpu.published is None and cpu.passive_calls == 0,
@@ -627,6 +961,31 @@ def check(directory, *, self_test=False, corpus=None, development=False):
             executed |= cpu.executed
             refusals.append(dict(mutation=name, phase=cpu.refusal[0], detail=cpu.refusal[1],
                                  original_calls=cpu.owner_calls))
+        if budget_stage(stage):
+            source_row = next(row for row in rows if
+                sha(Path(row['startup']).read_bytes()) == budget_plans[0]['source_sha256'])
+            for name in BUDGET_PREPARE_REFUSALS:
+                cpu = Cold(directory, source_row, mutation=name)
+                require(not cpu.run_cold() and cpu.refusal == (6, 0x64) and
+                        not cpu.owner_calls and not cpu.budget_writes and cpu.passive_calls == 0,
+                        'Invalid budget prepare reached allocator/publication: ' + name)
+                entered |= cpu.entered
+                executed |= cpu.executed
+                budget_refusals.append(dict(mutation=name, phase=cpu.refusal[0],
+                    detail=cpu.refusal[1], original_calls=cpu.owner_calls))
+            for name in BUDGET_PUBLISH_REFUSALS:
+                cpu = copy.deepcopy(budget_checkpoints[0])
+                cpu.mutation = name
+                require(not cpu.run_cold() and cpu.refusal ==
+                        (6, 0x66 if name == 'budget-lost-publish' else 0x65) and
+                        len(cpu.owner_calls) == 3 and cpu.passive_calls == 0,
+                        'Invalid budget publish armed worker: ' + name)
+                require(len(cpu.budget_writes) == (1 if name == 'budget-lost-publish' else 0),
+                        'Invalid budget publish wrote reserve unexpectedly: ' + name)
+                entered |= cpu.entered
+                executed |= cpu.executed
+                budget_refusals.append(dict(mutation=name, phase=cpu.refusal[0],
+                    detail=cpu.refusal[1], original_calls=cpu.owner_calls))
         first = 0x0ce00000
         end = stage[4]['__retail_stage_bss_end'][0] & 0x1fffffff
         geometry = [(first - LEASE_BYTES - 64, LEASE_BYTES + 96, True),
@@ -647,7 +1006,7 @@ def check(directory, *, self_test=False, corpus=None, development=False):
                 placement_cases.append(dict(arena=at | alias, bytes=count, admitted=expected))
     if not development:
         spans = [(item['address'], item['address'] + item['bytes'])
-                 for name, item in kernels.items() if name in PIN_FUNCTIONS]
+                 for name, item in kernels.items() if name in pin_sets(stage)[0]]
         require(all(any(begin <= pc < end for begin, end in spans) for pc in executed),
                 'Actual bottom cold control flow escaped its complete pinned closure')
     from check_native_bottom_heap_worker import check as check_worker
@@ -668,10 +1027,18 @@ def check(directory, *, self_test=False, corpus=None, development=False):
                     artifacts=corpus.get('artifacts')),
                 worker_heap_predicates=check_worker(directory, self_test=self_test),
                 source_sha256={name: sha((ROOT / name).read_bytes()) for name in SOURCES})
+    if budget_stage(stage):
+        from prove_native_private_pool_budget import prove
+        source_row = next(row for row in rows if
+            sha(Path(row['startup']).read_bytes()) == budget_plans[0]['source_sha256'])
+        report.update(private_pool_budget_plans=budget_plans,
+                      private_pool_budget_execution=budget_counts,
+                      private_pool_budget_refusals=budget_refusals,
+                      private_pool_capacity_original=prove(Path(source_row['startup'])))
     if self_test and not development:
         whole_mutants = 0
         available = records(stage)
-        for name in (*PIN_FUNCTIONS, *PIN_OBJECTS):
+        for name in (*pin_sets(stage)[0], *pin_sets(stage)[1]):
             address, body, _, section = available[name]
             at = section[4] + address - section[3]
             # Every complete body/table contributes beginning, interior and
