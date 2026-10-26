@@ -30,6 +30,16 @@ def main():
     parser.add_argument("--records",type=Path,required=True)
     parser.add_argument("--output",type=Path,required=True)
     args=parser.parse_args()
+    stage=heap.read_elf(args.build.resolve()/"stage.elf")
+    bottom=stage[4].get("__kui_native_bottom_heap_stage")
+    if bottom is not None:
+        assert bottom==(1,0,0,0xfff1),"Bottom heap capability must be exact absolute one"
+        from prove_vmu_native_bottom_corpus_heap import prove,write_report
+        report=prove(args.build,args.manifest,args.matrix,args.records)
+        write_report(report,args.build,args.output)
+        print(json.dumps(dict(placement="bottom",cases=report["case_count"],
+            minimum_cases=report["minimum_case_count"],titles=len(report["results"]))))
+        return
     manifest=json.loads(args.manifest.read_text());matrix=json.loads(args.matrix.read_text())
     assert manifest["schema"]=="kui.private.native-startup-inputs.v1"
     assert matrix["schema"]=="kui.native.structural-corpus.v1" and matrix["lease_bytes"]==0x60000

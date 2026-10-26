@@ -20,6 +20,7 @@ from sh4_delay_slots import validate_delay_slot
 STAGE, LIMIT, OLD_STACK = 0x8CE00000, 0x8CFE0000, 0x8CFF0000
 STACK_SYMBOL, STACK_BYTES = "_native_installer_stack", 65536
 HELPER = "_kui_vmu_native_stage_allocation_safe"
+BOTTOM_HELPER = "_kui_vmu_native_stage_bottom_allocation_safe"
 
 
 def require(condition, message):
@@ -34,11 +35,19 @@ def canonical(address):
     return address
 
 
+def allocation_helper(stage):
+    from check_native_followup_profile import bottom_stage_profile
+    return BOTTOM_HELPER if bottom_stage_profile(stage) else HELPER
+
+
 def typed_stack(stage):
     """Return the complete zero-filled object; no inferred unused RAM is owned."""
     symbols, sections, segments = stage[4], stage[3], stage[2]
+    helper = allocation_helper(stage)
     if STACK_SYMBOL not in symbols:
-        require(HELPER not in symbols, "native stage allocation helper lacks its typed installer stack")
+        require(HELPER not in symbols and BOTTOM_HELPER not in symbols,
+                "native stage allocation helper lacks its typed installer stack")
+        require(helper != BOTTOM_HELPER, "bottom-heap stage lacks its typed installer stack")
         return None
     address, size, kind, owner = symbols[STACK_SYMBOL]
     require(size == STACK_BYTES and kind == 1 and owner < len(sections) and not address & 31,
@@ -60,7 +69,7 @@ def typed_stack(stage):
             continue
         require(address + size <= canonical(other) or canonical(other) + count <= address,
                 "native installer stack overlaps another typed object: " + name)
-    require(HELPER in symbols and symbols[HELPER][2] == 2,
+    require(helper in symbols and symbols[helper][2] == 2,
             "native installer stack lacks its exact live allocation helper")
     return address, size, address + size - 32, begin, end
 
@@ -188,13 +197,14 @@ class AllocationWrapper(Machine):
         super().__init__(stage, "_allocation_safe", seed, mask, OLD_STACK, body=body)
         self.r[4:6] = [0x8CC00000, 0x00400000]
         self.symbols, self.outcome = stage[4], outcome
+        self.helper = allocation_helper(stage)
         self.mem[self.symbols["_exec_bytes"][0]] = 0x200000
         self.before = self.r.copy(), self.pr, self.mach, self.macl, self.gbr, self.sr, self.fpscr, self.fr.copy()
 
     def call(self, target):
         if target == self.stop_pc:
             return False
-        assert target == self.symbols[HELPER][0], "allocation wrapper changed its exact helper"
+        assert target == self.symbols[self.helper][0], "allocation wrapper changed its exact helper"
         self.calls.append("allocation")
         assert self.r[4:8] == [self.symbols["_native_heap"][0], 0x200000, STAGE,
                                self.symbols["__retail_stage_bss_end"][0]]
@@ -513,7 +523,7 @@ def check(stage, resident, *, worker=None, self_test=False):
     if stack is None:
         return {"enabled": False}
     if worker is not None:
-        require(STACK_SYMBOL not in worker[4] and HELPER not in worker[4],
+        require(STACK_SYMBOL not in worker[4] and HELPER not in worker[4] and BOTTOM_HELPER not in worker[4],
                 "temporary installer stack/helper retained in gameplay worker")
     wrappers = routes = hooks = refusals = 0
     background='_kui_vmu_native_background_manifest_bind' in resident[4]
@@ -602,7 +612,7 @@ def check(stage, resident, *, worker=None, self_test=False):
             else:
                 raise ValueError("low heap hook accepted missing stack/frame instruction")
         _, body, _ = symbol_bytes(stage, "_allocation_safe", 2)
-        for target in (stage[4][HELPER][0], stack[4]):
+        for target in (stage[4][allocation_helper(stage)][0], stack[4]):
             at = body.find(struct.pack("<I", target)); require(at >= 0, "allocation wrapper lacks exact helper/end literal")
             changed = bytearray(body); struct.pack_into("<I", changed, at, target + 4)
             try:

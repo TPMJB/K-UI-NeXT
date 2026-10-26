@@ -1,319 +1,126 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Native SCI New (X) / Legacy (Y) and virtual A2 candidate
+# Native heap placement test @BUILD@
 
-Candidate **@BUILD@** combines the approved PIO read-ahead policy with
-structural SDK discovery and the generic virtual-A2 loader. It installs a
-matching Games UI and a separate native X/Y module. It does not replace the
-ordinary, CE, CDDA or compressed-image loader files.
+This candidate changes where the native New/Legacy VMU module reserves its
+memory. It keeps the original game heap's upper end and normal top-down
+allocation addresses. The complete **384 KiB reservation**, including the
+**128 KiB worker and 192 KiB read-ahead cache**, remains available.
 
-For an original native GDI on SCI with no saved launch choice, the Games UI
-now defaults to **New (X)**. **Advanced → Background reader** offers New,
-Legacy and Off and saves the selection for that image. Existing explicit
-choices, including Off, are preserved. Restore defaults selects New for an
-eligible image. WinCE, CD music, compressed images and other storage retain
-their existing launch routes. A default choice does not waive native
-discovery, memory ownership or image-format admission.
+The original allocator obtains an upper placeholder, allocates the exact
+remaining bottom chunk, then frees the placeholder. Every transition is
+checked before the worker is installed. The placeholder's payload is never
+read or initialized. The original allocator/free bodies and their pointer
+literals must match the reviewed structural family. Full heap ownership,
+release-overlap, reinitialization, DMA and storage guards remain required.
 
-X selects the new reader; Y selects the legacy background transport. These
-are the reader names under Advanced options, not new controller hotkeys:
-the physical Y button still opens Options and X still inspects a game.
-Both X and Y reserve 384KiB for this candidate's VMU/reader state. Y leaves
-the extra read-ahead space unused; it is a transport comparison with the
-same reservation, not a historical 192KiB-memory-footprint comparison.
+The New reader's SCI priority, checked PIO pair scheduling, read-ahead
+producer and cache size are unchanged. This ZIP installs a matching Games UI
+and native New/Legacy module. CE, CD music and compressed-image routes retain
+their existing behavior. The standard virtual card streams from SD and
+continues using virtual **A2**, leaving physical **A1** available.
 
-The new reader retains its performance policy: at most two checked
-physical blocks per eligible heartbeat, with timing admission for block 2,
-SCI priority 1 and the existing CRC/loan/ownership limits. Each New and Legacy
-low reader has one reviewed bootstrap-hook literal changed for the inherited
-owner stack, described below. The PIO producer and scheduling policy are
-preserved. The candidate retains eight software candidates from the 26 supplied
-programs; a software pass still requires console testing.
+## Why this candidate
 
-## Current console results and follow-up
+On C29, Rayman 2 stops at Ubisoft with both New and Legacy. Its captured
+original interrupt frame identifies a resource-table store using an invalid,
+unaligned destination while processing FIX.DAT, before the logo's timed
+wait. Lodoss shows black movie video with sound on both readers. Its New
+capture shows continuing reads and entry into MPEG parsing, with SCI retry
+activity but no VMU storage writes during the measured window.
 
-After the shared card-status stop was cleared, Skies on `f721551450e3` reached
-VMU guard `0x47` with CHECK `00040625`: callback cell `0x8c598804` contained
-`0x8c087498`, while the guard expected zero. Original game code registers and
-re-arms this ordinary TMU2 callback. The new generic guard accepts null or a
-canonical callback whose complete aligned two-byte span lies inside the
-verified executable. IMASK15 and all DMA, manager, RX, heap and lease checks
-remain required. The VMU worker never invokes or rewrites the callback or its
-argument.
+The old reservation shifts ordinary top-down game allocations by 393,248
+bytes, including the allocation header. Executing Lodoss's original startup
+shows its application pool moving from `8c67eca0` to `8c61ec80`. The new
+reservation restores `8c67eca0` and its original initialized contents in the
+instruction replay. Allocator, ownership and compiled installer checks are
+software evidence; **Rayman and Lodoss are not yet confirmed fixed on console**.
+Evolution 1's black screen after Sofdec remains unresolved too.
 
-Rayman 2 reserves a larger original startup stack frame. Its heap hook arrives
-at physical SP `0x0c00b3a4`, below the old fixed lower bound `0x0c00c100`.
-The new lower bound `0x0c008100` derives from the protected reader/IP boundary
-plus `0x100`. The complete 52-byte inherited frame remains above the retained
-low reader and its stack; the upper bound stays `0x0c00f400`. Packaging permits
-exactly this one decoded lower-bound literal change in each low reader.
-Neither startup correction uses a title whitelist. On `f2410c316f25`, the
-owner reports that Skies boots normally. Rayman now reaches the Ubisoft
-logo, where it stalls. This confirms progress past the old bootstrap stop;
-it does not establish working Rayman startup or Skies A2 persistence.
+## Install
 
-Lodoss still has slow audio without opening video on `f2410c316f25`. The
-owner supplied complete profile cycles for Rayman (`63393.mp4`) and Lodoss
-(`63394.mp4`). Both show 1,200 valid controller submit/completion pairs and
-zero VMU storage calls during the capture. Rayman has no new read activity;
-Lodoss continues reading data, with no reported read-ahead failure or CRC
-error. These observations do not identify the stalled game instruction or
-prove that the reader supplies the movie fast enough. Evolution 1 remains
-a known black screen after MPEG Sofdec.
-
-The Legacy comparison exposed a separate cold handoff bug in `f2410c316f25`:
-the shared stage used New's hook addresses for the independently linked
-Legacy engine. The reported final line was `NATIVE DISCOVERY COMPLETE -
-ARMING HOOK`. This candidate generates both address tuples from the actual
-low ELFs and selects the matching heap hook, return hook, SD gateway and map
-binder. Both selected control cells are checked too. It does not change the
-New reader's low code or scheduling policy. Legacy remains a comparison
-tool; the main priority is resolving New's remaining game stalls.
-
-For New, the intentional profile stop now records a bounded raw owner-stack
-and video-register snapshot before restoring the report display. It reuses
-existing diagnostic storage and does no new per-frame game-memory scan.
-The new pages are labeled **RAW OWNER STACK**. These are raw words and saved
-callback state, not an automatically identified fault PC. The exact Evolution
-1 phase history remains available. Rayman and Lodoss still need these new
-pages before their game wait states can be identified.
-
-DOA2 and Crazy Taxi 2 are not yet admitted by this combined New/A2 candidate.
-DOA2 has fixed resource partitions rather than the supported allocator;
-Crazy Taxi 2 lacks the verified initializer hook shape. Their SDK SCI family
-checks alone do not establish a safe reservation. No New performance result
-is claimed for either title. The standard virtual card streams from SD; it
-does not keep a 128KiB card mirror in RAM. Reducing advertised card capacity
-therefore does not remove the main workspace requirement. A smaller actual
-read-ahead reservation remains an investigation, not an enabled profile.
-The new resource-layout upload covered all 86 CHR files. Replaying original
-effects and sprite-loading paths rejects the proposed fixed 256KiB and
-192KiB gaps: EFC1.BIN and TEAM_SPR.BIN overwrite those intervals. A safe
-owned reservation still has to be established before enabling DOA2.
-
-The `f721551450e3` follow-up stopped before game startup for Evolution 2,
-Lodoss and Rayman 2. The readable report shows stage `2`, session `-6`,
-filesystem `-4` and filesystem detail `0x0f`: the shared exFAT boot-header
-gate. That screen did not expose which header field failed. These are
-console failures; the earlier software passes do not override them.
-
-This candidate allows the exFAT VolumeDirty status bit to proceed through
-the complete ownership scan. It preserves that bit and does not repair or
-rewrite the boot header. Both boot checksums, volume geometry, current
-prepared-file maps, allocation bitmap, namespace and cross-link checks are
-still required before journal recovery can write. Media-failure and active-FAT
-flags remain refused. A remaining preflight refusal now shows the exact boot
-reject mask, flags and actual/expected geometry on one complete screen.
-The owner subsequently confirmed the dirty-status bit caused this shared stop:
-fsck reported the filesystem clean, and the old build passed preflight after
-the status was cleared. Console confirmation of the new binary is still required.
-
-On `af9e01c8a271`, Evolution 2 behaves as expected and Grandia II is flawless
-according to the owner. Sonic Adventure 2 and Power Stone 2 are also reported
-flawless. Skies stops at VMU guard `0x47`; Lodoss stops at guard `0x03`.
-Evolution 1 reaches MPEG Sofdec and then black-screens before its opening movie. Treat Evolution 1
-as a known failure in that candidate. Its earlier software admission pass
-was not a console boot result. Rayman 2 freezes after bootstrap 2 with only
-the build header. The initial eight-title round is complete; DOA2 admission is being investigated separately.
-
-The previous follow-up added a repair for Lodoss's verified terminal-allocator table transition.
-The original default allocator, reserved lease, full free-list guards and
-unknown-table refusals remain required. The new terminal table is accepted
-only while its checked fatal-handler hook is installed. The later slow-audio
-report does not establish working video, gameplay or VMU persistence.
-
-It also combines the UI's executable CRC and native VMU source read
-into one pass where possible. It retains the full-file checks and the
-stage's independent verification. It also exposes the already compiled
-Evolution 1 trace through the matching two-file installer. The new SCI
-reader policy and read-ahead producer are unchanged. The VMU worker's failure
-pages now distinguish the individual comparisons behind guards `0x47` and
-`0x03`, retaining the existing refusal and publication rules. Evolution 1
-still needs its next capture. Console launch times have not yet been measured.
-
-## Install once
-
-Run at the extracted ZIP's root:
+From the extracted ZIP's root:
 
 ```sh
 python3 install.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --profile-runtime
 ```
 
-Use your existing prepared profile; substitute its path only if different.
-No `--game` selection is needed. The prepared card, journal, identity,
-launch presets and game images are preserved. This profile selects the
-same virtual 200-block A2 card for every tested game; it does not create a
-separate card for each title. Leave physical A2 empty. Physical A1 remains
-available. Use an unused save slot for new-save checks.
+Use your existing prepared profile; change that path only if your profile is
+different. No new card preparation, game conversion or save reset is needed.
+The prepared card and journal, game images, and saved launch choices remain
+in place. The current profile uses the same virtual 200-block A2 card across
+the tested games. Leave physical A2 empty; physical A1 can stay attached.
 
-Safely eject, cold boot, and select **SCI / Background On / New (X) /
-Auto encoding / CD music Off / RAM patches Off** for each game. In Advanced
-options the old speed row is now **Background reader**, with a saved Off
-choice as well as New and Legacy. Saved X settings select New; saved Y settings
-select Legacy. Off selects the existing Standard path.
+Safely eject and cold boot. Check the boot screen shows **@BUILD@**. Explicitly
+select **SCI / Background On / New (X) / Auto encoding / CD music Off / RAM
+patches Off** for these tests. Your last Legacy selection may still be saved.
 
-The candidate refuses non-SCI, unsupported boot encoding/CD images, altered
-SDK contexts and maps needing more than 64 combined track/extent slots.
-It reports a refusal rather than quietly changing to a different reader.
-Unknown native SDK families remain experimental and can refuse safely.
+New (X) and Legacy (Y) are reader labels in Advanced options, not new
+controller hotkeys. The physical Y button opens Options and X inspects a
+game. **Advanced → Background reader** offers New, Legacy and Off and saves
+the selection for that image. An eligible original native GDI on SCI defaults
+to New only when there is no explicit saved choice; an existing Off or Legacy
+choice is preserved. Off uses the existing Standard route.
 
-## Skies startup retry and Lodoss capture
+## Test New first
 
-Retry Skies with New (X), including startup and several minutes of controller
-input. If it stops, photograph the complete screen including DETAIL and
-AT/VALUE/EXPECT/CHECK/LEASE. Record A2 load/save and physical A1 behavior once
-startup succeeds.
+1. **Rayman 2:** check whether it passes the Ubisoft logo and reaches normal
+   startup/play. If it does, try movement and a level transition.
+2. **Record of Lodoss War:** let the opening movie start without skipping it.
+   Report whether video appears and whether audio plays normally or stutters.
+3. **Evolution 2 or Grandia II:** briefly repeat a familiar movie/gameplay
+   route as a control for the previously working New reader.
+4. **Evolution 1:** recheck the point after Sofdec once the first tests are
+   complete. Its previous failure remains recorded; do not assume it fixed.
 
-For Lodoss, keep `--profile-runtime` installed. Once the slow opening audio
-starts, hold both triggers plus B for about one second, release, and record
-the complete report cycle described under Captures below. Reaching gameplay
-or completing a save is not required for this startup capture. If a new VMU
-stop screen appears instead, photograph it in full.
+For a game that starts normally, check an existing A2 load. Use an unused
+slot for any new save, wait for completion, then power off fully and reload.
+For Skies, also check physical A1 coexistence. Its earlier normal boot result
+alone did not establish these save/persistence checks for this candidate.
 
-## Rayman 2 New capture
+Legacy is available afterward as a comparison using the same bottom
+reservation. The main acceptance target is New. Both readers use the same
+384 KiB reservation; Legacy leaves the extra read-ahead space unused.
 
-Use New (X) with `--profile-runtime`. If it still stalls at Ubisoft, hold
-both triggers plus B for about one second, release, and wait for the profile
-report. Record a complete repeating cycle, including every **RAW OWNER STACK**
-page. Allow about two minutes after the report appears, ending when the first
-heading repeats. The previous `63393.mp4` remains recorded; this retry supplies game state
-that the earlier report did not collect. For a stop before the logo, record
-the last cold checkpoint or the complete refusal screen instead.
+## If a stall remains
 
-## Evolution 1 startup capture
+Keep `--profile-runtime` installed. At the failure point, hold **both triggers
+plus B** for about one second, release, and wait roughly 20 seconds for the
+intentional profile stop. Record the complete repeating report cycle,
+including every **RAW OWNER STACK** page. About two minutes after the report
+appears is sufficient; stop when the starting heading repeats. If startup
+stops before that gesture can work, photograph the complete refusal screen
+or record its last cold checkpoint. Power off after the report.
 
-After Rayman and Lodoss, install the existing exact-image trace mode and use
-New (X):
+Raw stack pages are observations, not automatically fault PCs. They must be
+matched to the original source frames. The exact Evolution 1 phase history
+is retained. PVR samples measure timing and do not establish framebuffer
+read-enable or decoded-frame publication.
 
-```sh
-python3 install.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --evolution-trace
-```
+The previous C29 videos and Legacy results are already recorded. A new
+capture is useful only for a failure on this new build. If Rayman remains
+broken and its resource metadata is requested, the optional read-only
+collector is included; follow **RAYMAN-PROBE.md**. It exports only a 256-byte
+FIX.DAT header as integers after verifying the exact IP/startup. It does not
+follow pointers or export the full asset.
 
-Launch Evolution 1 with New (X) and record startup through the failure. The
-trace can show a small hexadecimal checkpoint strip while the game owns a
-supported display surface. If blue trace pages appear, record a complete
-cycle, ending when the first heading repeats. This trace stops automatically
-only if an intercepted guard or its reviewed wait-loop limit fires. It does
-not provide the profile mode's trigger+B capture gesture. If it stays black,
-keep the startup video showing the last visible checkpoint strip and record
-whether sound continues and whether the SD-reader light stays on. A report's
-saved exception state is a checkpoint, not automatically the fault PC.
+## Scope and source
 
-This exact Evolution 1 trace is for diagnosis, not performance comparison.
-Before continuing the other games, reinstall with the `--profile-runtime`
-command above. No new card preparation or image conversion is needed.
-Your results on the earlier `af9e01c8a271` build remain useful.
+The same eight of 26 supplied programs remain joint software candidates:
+Evolution 1/2, Grandia II, Skies, Power Stone 2, Sonic Adventure 2, Rayman 2 and
+Lodoss. Admission uses structural code and ownership checks, not title names.
+A software pass does not override a console failure. Other revisions can be
+tried, but an unsupported family can refuse at startup.
 
-## Priority retries for this follow-up
+**DOA2 and Crazy Taxi 1/2 are not newly enabled.** Their allocator, source
+provenance or SDK routing blockers remain separate. DOA2's proposed fixed
+smaller arenas were rejected by original resource-load counterexamples.
+Shrinking the advertised VMU capacity does not remove the reader/worker RAM
+reservation. The DOA2 resource reports and Crazy Taxi startups are already
+available and do not need to be uploaded again. Included collectors remain
+available for reproducibility and future requested evidence.
 
-1. Rayman 2 and Lodoss: capture the New profile at each existing failure point,
-   including all RAW OWNER STACK pages and the first repeated heading.
-2. Evolution 2: check the familiar movement route and an FMV as a short New
-   regression check. The approved reader performance policy is retained.
-3. Skies: check an A2 load, a disposable unused-slot save and a complete
-   power-off/reload with physical A1 attached and physical A2 empty. Its boot
-   pass alone did not establish this persistence/coexistence result.
-4. Evolution 1: record New with the exact trace mode above. Return to
-   `--profile-runtime` before other games or performance comparisons.
-
-The source inputs are already available: Crazy Taxi 1 and 2 startups, DOA2's
-startup, filesystem report, and new resource-layout report. They do not need
-to be uploaded again. The collectors remain included for reproducibility and
-future explicitly requested captures. Source-family or memory-admission
-refusals for these games are still under analysis; this package does not
-claim working New/A2 compatibility for them.
-
-The Legacy repair can be checked afterward by changing only the saved reader
-choice. A Legacy result helps isolate the transport while keeping A2 and the
-384KiB reservation the same; it is not the primary New-reader acceptance test.
-
-The earlier four successful titles are the regression baseline. Their results
-remain recorded in RESULTS.csv under `af9e01c8a271`. The later Skies boot and
-remaining Rayman/Lodoss failures are recorded under `f2410c316f25`. Do not
-replace a failure entry with a software-only pass.
-
-## Broader checks after startup succeeds
-
-The eight joint source-family, actual SDK callback, Maple transport and
-384 KiB allocator checks remain required. They do not override a console
-failure. Use the following longer checklist once the startup retries pass.
-
-| Order | Title | Main exercise |
-| --- | --- | --- |
-| 1 | Evolution 2 | Familiar movement area and opening engine sequence |
-| 2 | Evolution 1 | Opening, movement, area/battle transitions |
-| 3 | Grandia II | Movie, engine dialogue, field/battle transitions |
-| 4 | Skies of Arcadia | Opening, town/field/ship transitions, physical A1 |
-| 5 | Power Stone 2 | Repeated matches, menus, character/arena loads |
-| 6 | Sonic Adventure 2 | Opening, stage/camera movement, repeated stage loads |
-| 7 | Rayman 2 | Opening, sustained movement, level transitions |
-| 8 | Record of Lodoss War | Opening, movement/combat, repeated area loads |
-
-For each title on New (X):
-
-1. Record title/revision, raw 2352 or cooked 2048 format, build and settings.
-2. Cold boot; record any refusal screen in full, including PHASE/DETAIL.
-3. Watch an available FMV without skipping it; note sound sync or repeats.
-4. Watch an in-engine scene/dialogue separately from the FMV.
-5. Play continuously for 5–10 minutes, moving, turning and using menus.
-6. Make at least 10 room/area/battle transitions, returning to old areas.
-7. Repeat a short forward/backward route three times to exercise seeks.
-8. Load an existing A2 save and verify recognizable progress.
-9. Make a clearly named disposable save in an unused slot; wait for completion
-   and continue playing for two minutes. Skip writing if no unused slot exists.
-10. Power off completely, wait 10 seconds, then cold boot and reload that save.
-11. Repeat with physical A1 attached and A2 physically empty; check both slots.
-12. Repeat the cold boot/A2 load twice more to check consistency.
-13. Make the required separate diagnostic capture described below.
-14. Repeat an already supported alternate image format if available; do not
-    alter sector declarations or force an unsupported image to launch.
-
-Then switch **Advanced → Background reader → Legacy (Y)** and repeat the
-same movement/scene route, A2 load/save/power-cycle check and diagnostic
-capture. Record X and Y separately in RESULTS.csv. A slower Y result is
-useful comparison evidence; do not discard an X failure after a successful Y run.
-
-The 26-program analysis and first refusal gates are included in the evidence
-folder. The other 18 supplied programs currently fail at least one reader
-or VMU family gate. Do not spend a long playback test on a title that refuses
-at startup; photograph the full screen. Other titles/revisions can be tried
-with the same installer and settings: admission is structural, not a title list.
-
-## Captures are a separate run
-
-Keep `--profile-runtime` installed. Long play needs no capture gesture.
-For Lodoss's startup failure, use the early capture described above. For a
-game that reaches normal play, complete save/persistence checks first, then
-enter the test area, hold both
-triggers plus B for about 1 second, release, and continue the same activity.
-The capture intentionally stops gameplay after roughly 20 seconds.
-
-For New (X), record **CRC VALIDATED PHYSICAL READ AHEAD** through the next
-appearance of that same heading. Include every intervening page. Use the
-repeated heading as the end signal, not a fixed 90-second duration.
-For Legacy (Y), record from the first repeating report heading through its
-next appearance; it has no active read-ahead cache page and its legacy
-read/age counters are deliberately not interpreted as request durations.
-Power off after recording before starting another run.
-
-Report approximately how many visible hiccups occurred, the longest pause,
-whether music continued, whether a movie recovered, and the first action that
-reproduced a failure. The single biggest priority is verifying that New (X)
-keeps Evolution 2's approved behavior and extends it to the other seven titles.
-
-## DOA2 filesystem probe
-
-DOA2 is not yet admitted by this virtual-VMU candidate. Its application uses
-fixed sound/graphics/resource partitions rather than the reviewed allocator.
-The provided metadata probe reads the filesystem and exact startup identity
-without modifying the SD card or copying game payloads into its output.
-
-From this extracted folder on your computer, run:
-
-```sh
-python3 kui-doa2-filesystem-probe.py /run/media/apollonius/Dreamcast --output DOA2-filesystem-metadata.zip
-```
-
-Upload the resulting ZIP with the other test results. If more than one exact
-DOA2 image is found, use the `--gdi` form in DOA2-PROBE.md to select the image.
-The metadata helps prove the resource partition bounds; generating it does
-not enable the new reader or virtual VMU for DOA2.
+RESULTS.csv retains the earlier console results. New placement is a test
+candidate until hardware results are recorded. The full offline source
+history, checksums and software evidence are included. See
+**source/SOURCE-RECOVERY.md** to restore the exact source without a network or
+an earlier checkout. No GitHub publication is part of this test delivery.

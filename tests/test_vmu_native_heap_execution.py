@@ -17,7 +17,9 @@ dispatch helper, bootstrap release and first tail allocation. It then models
 the worker's complete copy/zero write span, checking stage and installer-stack
 canaries, and executes subsequent original allocation/free operations while
 retaining the worker lease. Unsupported instructions fail rather than being
-approximated.
+approximated. A stage marked for bottom placement routes this CLI to the
+separate bottom transaction proof using the same supplied original inputs;
+the historical tail model remains unchanged for unmarked stages.
 """
 import argparse
 import hashlib
@@ -649,6 +651,72 @@ class HeapExecutionTests(unittest.TestCase):
         self.execute("evolution2")
 
 
+def bottom_cli(options, remaining):
+    """Execute the marked placement once for exactly the supplied owners.
+
+    The artifact-bound full corpus proof supplies input provenance; it is
+    not substituted for execution. The selected original SH and production C
+    transition/lifetime tests run again here, without rewriting that full
+    proof with a smaller host-test selection.
+    """
+    from prove_vmu_native_bottom_corpus_heap import prove, SCHEMA, ARTIFACTS
+    allowed = {"-v", "--verbose", "-q", "--quiet"}
+    if any(argument not in allowed for argument in remaining):
+        raise ValueError("Bottom placement selects owners by startup paths; unittest filters are unsupported")
+    build = Path(options.build).resolve()
+    proof_path = build / "native-bottom-heap-corpus.json"
+    if not proof_path.is_file():
+        raise ValueError("Missing bottom corpus input proof: run tools/prove_vmu_native_corpus_heap.py for this build first")
+    proof = json.loads(proof_path.read_text())
+    if (proof.get("schema") != "kui.native.corpus-original-heap.v1" or
+            proof.get("bottom_heap_schema") != SCHEMA or proof.get("placement") != "bottom" or
+            proof.get("enabled") is not True or proof.get("full_structural_selection") is not True):
+        raise ValueError("Bottom host execution requires a complete marked corpus input proof")
+    for name in ARTIFACTS:
+        if hashlib.sha256((build / name).read_bytes()).hexdigest() != proof.get("artifacts", {}).get(name):
+            raise ValueError("Bottom corpus proof does not bind this artifact: " + name)
+    manifest = Path(proof["input_manifest_path"])
+    matrix = Path(proof["structural_matrix_path"])
+    for path, expected in ((manifest, proof["input_manifest_sha256"]),
+                           (matrix, proof["structural_matrix_sha256"])):
+        if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+            raise ValueError("Bottom corpus input provenance changed: " + str(path))
+    rows = {row["slug"]: row for row in proof["inputs"]}
+    if len(rows) != len(proof["inputs"]):
+        raise ValueError("Duplicate bottom corpus input owner")
+    provided = {slug: Path(getattr(options, slug)).resolve()
+                for slug in ("ps2", "skies", "sa2", "grandia2", "evolution1", "evolution2")
+                if getattr(options, slug) is not None}
+    if not provided:
+        raise ValueError("Provide at least one original startup path for bottom placement execution")
+    if any(argument == "--lease-bytes" or argument.startswith("--lease-bytes=")
+           for argument in sys.argv[1:]) and options.lease_bytes != 0x60000:
+        raise ValueError("The marked bottom candidate retains a 384 KiB lease")
+    records = (Path(options.record_directory).resolve() if options.record_directory else
+               Path(proof["records_directory"]).resolve())
+    for slug, path in provided.items():
+        row = rows.get(slug)
+        if row is None or path != Path(row["startup"]).resolve():
+            raise ValueError("Supplied startup path differs from this build's bottom input proof: " + slug)
+        if hashlib.sha256(path.read_bytes()).hexdigest() != row["source_sha256"]:
+            raise ValueError("Supplied original startup changed: " + slug)
+        if hashlib.sha256((records / (slug + ".nvr")).read_bytes()).hexdigest() != row["record_sha256"]:
+            raise ValueError("Supplied owner record differs from this build's bottom input proof: " + slug)
+    report = prove(build, manifest, matrix, records, selected_slugs=tuple(provided))
+    for row in report["results"]:
+        print(f"Actual {row['slug']} bottom heap: payload={row['payload']:08x}, "
+              f"{row['allocation_free_operations']} original allocation/free operations, "
+              f"{row['maximum_free_nodes']} maximum free nodes; original upper addresses and full384KiB lease preserved")
+    print(f"Bottom placement execution: {len(report['results'])} supplied owners, "
+          f"{report['case_count']} alias/SR cases, {report['minimum_case_count']} minimum-arena cases passed")
+    if options.output:
+        options.output.parent.mkdir(parents=True, exist_ok=True)
+        options.output.write_text(json.dumps(dict(schema="kui.native.heap-execution.v2", placement="bottom",
+            lease_bytes=0x60000, case_count=report["case_count"], minimum_case_count=report["minimum_case_count"],
+            source_proof_sha256=hashlib.sha256(proof_path.read_bytes()).hexdigest(), results=report["results"]),
+            indent=2) + "\n")
+
+
 if __name__ == "__main__":
     if not __debug__:
         raise SystemExit("Run actual heap model with Python assertions enabled")
@@ -663,6 +731,16 @@ if __name__ == "__main__":
     for game in ("ps2", "skies", "sa2", "grandia2", "evolution1", "evolution2"):
         parser.add_argument("--" + game, type=Path, default=os.environ.get(f"KUI_NATIVE_{game.upper()}_STARTUP"))
     OPTIONS, remaining = parser.parse_known_args()
+    if OPTIONS.build and (Path(OPTIONS.build) / "stage.elf").is_file():
+        marker = read_elf(Path(OPTIONS.build) / "stage.elf")[4].get("__kui_native_bottom_heap_stage")
+        if marker is not None:
+            if marker != (1, 0, 0, 0xfff1):
+                parser.exit(2, "Bottom heap execution refused: invalid stage capability marker\n")
+            try:
+                bottom_cli(OPTIONS, remaining)
+            except (OSError, ValueError, KeyError, AssertionError, struct.error) as error:
+                parser.exit(2, "Bottom heap execution refused: " + str(error or type(error).__name__) + "\n")
+            raise SystemExit(0)
     outcome = unittest.main(argv=[sys.argv[0], *remaining], exit=False)
     if outcome.result.wasSuccessful() and OPTIONS.output:
         OPTIONS.output.parent.mkdir(parents=True, exist_ok=True)

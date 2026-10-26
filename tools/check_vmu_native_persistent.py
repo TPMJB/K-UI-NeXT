@@ -2393,11 +2393,19 @@ def inspect_base(directory, *, self_test=False, objdump="sh-elf-objdump"):
     require(not any(symbol.startswith(("_kui_vmu_durable_", "_kui_vmu_persist_", "_kui_sci_sd_write",
                                        "_kui_sci_sd_sync")) for symbol in resident["symbols"]),
             "low reader contains a high-only persistent writer")
+    from check_native_followup_profile import bottom_stage_profile
+    bottom_stage = bottom_stage_profile(read_elf(directory / 'stage.elf'))
+    cold_heap_functions = (("_kui_vmu_native_heap_bottom_fresh",
+        "_kui_vmu_native_heap_bottom_placeholder", "_kui_vmu_native_heap_bottom_allocated",
+        "_kui_vmu_native_heap_bottom_ready", "_kui_vmu_native_heap_bottom_code_valid",
+        "_kui_vmu_native_heap_lease_valid_with_release", "_native_allocate_bottom",
+        "_native_allocator_unchanged") if bottom_stage else
+        ("_kui_vmu_native_heap_postallocate",))
     for name in ("_kui_vmu_native_heap_discover", "_kui_vmu_native_heap_call_discover", "_kui_vmu_native_heap_fresh",
-                 "_kui_vmu_native_heap_preallocate", "_kui_vmu_native_heap_postallocate",
+                 "_kui_vmu_native_heap_preallocate",
                  "_kui_vmu_native_heap_lease_valid", "_kui_vmu_observe_stage_install",
                  "_kui_vmu_persist_stage_admit", "_kui_vmu_persist_stage_prepare",
-                 "_kui_vmu_persist_stage_handoff_matches"):
+                 "_kui_vmu_persist_stage_handoff_matches") + cold_heap_functions:
         typed_function(elfs["stage"], stage, name, HIGH)
     for transport in ("scif", "sci", "ide", "scia"):
         prefix = "__retail_resident_" + transport + "_blob_"
@@ -3014,6 +3022,11 @@ def check(directory, *, self_test=False, trace_startup=None):
     relocations=check_worker_pointer_aliases(wire,policy,fault_capture,coherence)
 
     stage = read_elf(directory / "stage.elf")
+    from check_native_bottom_heap import check as check_bottom_heap, require_companion as bottom_heap_companion
+    bottom_heap = check_bottom_heap(directory, self_test=True)
+    if bottom_heap.get('enabled'):
+        require(bottom_heap_companion(stage, worker, bottom_heap),
+                'Bottom reservation lacks actual compiled cold/worker/source proofs')
     prepared = inspect_elf(stage[0], 0x8CE00000, 0x8CFE0000)
     stage_binary = (directory / "stage.bin").read_bytes()
     require(prepared["payload"] == stage_binary, "stage binary differs from ELF")
@@ -3072,6 +3085,7 @@ def check(directory, *, self_test=False, trace_startup=None):
               "worker_bytes": len(binary), "worker_span": SPAN, "worker_stack_bytes": 4096,
               "worker_load_policy": policy, "cached_code": cached,
               "prepared_lifetime_admission": prepared_lifetime,
+              "bottom_heap_reservation": bottom_heap,
               "reader_stall_capture": {"enabled": bool(stall),
                   "paired_resident_worker": bool(stall),"private_worker_state_bytes": 508 if stall else 0,
                   "diagnostic_sd_log_writes": False,"console_root_cause_established": False},

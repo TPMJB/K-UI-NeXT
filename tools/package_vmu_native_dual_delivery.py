@@ -92,6 +92,23 @@ def git(*args):
     return subprocess.check_output(['git', *args], cwd=ROOT, text=True).strip()
 
 
+def extracted_resource_probe_check(files):
+    names=('kui-rayman-resource-probe.py','kui-doa2-filesystem-probe.py',
+           'kui-native-startup-bundle.py')
+    with tempfile.TemporaryDirectory(prefix='kui-rayman-probe-cli-') as temporary:
+        root=Path(temporary)
+        for name in names:(root/name).write_bytes(files[name])
+        argv=[sys.executable,str(root/names[0])]
+        help_run=subprocess.run([*argv,'--help'],cwd=root,text=True,capture_output=True)
+        require(help_run.returncode==0 and '--gdi' in help_run.stdout and 'FIX.DAT' in help_run.stdout,
+                'Extracted optional Rayman probe help/imports failed')
+        refused=subprocess.run([*argv,'--gdi'],cwd=root,text=True,capture_output=True)
+        require(refused.returncode==2 and '--gdi needs the full path to a .gdi file' in refused.stderr,
+                'Extracted optional Rayman probe accepted a valueless GDI selector')
+    return dict(extracted_cli_cases=2,all_three_required_scripts_together=True,
+                source_payloads_read=False,script_sha256={name:sha(files[name]) for name in names})
+
+
 def owner_stack_literal(body, address, expected):
     """Decode the unique physical entry-SP lower/upper bound comparison."""
     matches = []
@@ -263,8 +280,8 @@ def package(args):
                               baseline_module_sha256=sha(baseline), unchanged_reader_components=unchanged_components,
                               low_readers_and_auxiliary_identical_except_reviewed_owner_stack_bound_and_build_label=True,
                               low_reader_delta='One decoded owner-stack lower-bound literal in each low hook; scheduling and producer policy unchanged',
-                              worker_change='Generic guarded timer callback acceptance and existing VMU ownership/controller checks; terminal-only PROFILE stack/video observer and compact exact-Evolution diagnostic records',
-                              cold_stage_change='Six typed callbacks selected from the actual New or Legacy reader ELF',
+                              worker_change='Exact original-tail or arena-bottom lease identity with existing lifetime/free-overlap checks; guarded timer callbacks and terminal-only PROFILE stack/video observer',
+                              cold_stage_change='Six typed callbacks selected from the actual reader; original allocator reserves the bottom chunk and restores the original upper allocation boundary',
                               games_ui_change='New reader selected by default; explicit reader choices retained')
     ra, sdk = report['read_ahead'], report['sdk_sci_route']
     require(ra.get('dual_reader_candidate') is True and
@@ -293,6 +310,13 @@ def package(args):
             'Approved PIO-pair auxiliary policy changed')
     joint_wire, heap_wire = args.joint.read_bytes(), args.heap.read_bytes()
     joint, heap = json.loads(joint_wire), json.loads(heap_wire)
+    from check_native_bottom_heap import require_companion as bottom_heap_companion
+    from check_native_followup_profile import bottom_stage_profile, bottom_worker_profile
+    bottom_stage=read_elf(args.build/'stage.elf')
+    bottom_worker=read_elf(args.build/'native-worker.elf')
+    require(bottom_stage_profile(bottom_stage) and bottom_worker_profile(bottom_worker) and
+            bottom_heap_companion(bottom_stage,bottom_worker,report.get('bottom_heap_reservation'),heap),
+            'Delivery requires the exact bottom cold/worker/original-corpus companion')
     require(joint['joint_host_candidates'] == 8 and len(joint['joint_candidate_slugs']) == 8 and
             len(heap['results']) == 8 and heap['lease_bytes'] == 393216,
             'Complete joint original-code and enlarged-lease proof is required')
@@ -338,13 +362,15 @@ def package(args):
                   'RESULTS.csv': (ROOT/'docs/native-dual-reader-results.csv').read_bytes(),
                   'kui-doa2-filesystem-probe.py': (ROOT/'tools/kui-doa2-filesystem-probe.py').read_bytes(),
                   'kui-native-startup-bundle.py': (ROOT/'tools/kui-native-startup-bundle.py').read_bytes(),
+                  'kui-rayman-resource-probe.py': (ROOT/'tools/kui-rayman-resource-probe.py').read_bytes(),
+                  'RAYMAN-PROBE.md': (ROOT/'tools/kui-rayman-resource-probe-README.md').read_bytes(),
                   'DOA2-PROBE.md': (ROOT/'tools/kui-doa2-filesystem-probe-README.md').read_bytes(),
                   'evidence/final-joint-corpus.json': joint_wire,
                   'evidence/final-original-heap.json': heap_wire,
                   'evidence/host-tests.log': args.host_log.read_bytes(),
                   'evidence/package-audit.log': args.package_log.read_bytes()})
     for path in sorted((ROOT/'docs/evidence').glob('native-*2026-10-2[56].json')):
-        if any(word in path.name for word in ('structural', 'joint', 'pio-pair-observed', 'new-structural', 'console-followup', 'followup-review', 'terminal-dispatch', 'startup-source-pass', 'card-preflight', 'new-default', 'raw-owner', 'selected-low', 'dual-low-callback', 'doa2-smaller', 'doa2-fixed', 'crazy-taxi-source-admission')):
+        if any(word in path.name for word in ('structural', 'joint', 'pio-pair-observed', 'new-structural', 'console-followup', 'followup-review', 'terminal-dispatch', 'startup-source-pass', 'card-preflight', 'new-default', 'raw-owner', 'selected-low', 'dual-low-callback', 'doa2-smaller', 'doa2-fixed', 'crazy-taxi-source-admission', 'bottom-heap')):
             files['evidence/'+path.name] = path.read_bytes()
     candidate = dict(schema='kui.native.universal-readers.candidate.v1', source_commit=commit,
                      source_tree=tree, build=revision, module_sha256=sha(module),
@@ -357,6 +383,8 @@ def package(args):
                      game_startup_followup=json.loads((ROOT/'docs/evidence/native-game-startup-followup-review-2026-10-25.json').read_text()),
                      console_observations=json.loads((ROOT/'docs/evidence/native-universal-console-followup-2026-10-25.json').read_text())['console_observations'],
                      console_followup_f241=json.loads((ROOT/'docs/evidence/native-console-followup-f241-2026-10-25.json').read_text()),
+                     console_followup_c29=json.loads((ROOT/'docs/evidence/native-console-followup-c29-2026-10-26.json').read_text()),
+                     bottom_heap_followup=json.loads((ROOT/'docs/evidence/native-bottom-heap-reservation-2026-10-26.json').read_text()),
                      new_default_followup=json.loads((ROOT/'docs/evidence/native-new-default-followup-review-2026-10-26.json').read_text()),
                      raw_owner_terminal_followup=json.loads((ROOT/'docs/evidence/native-raw-owner-terminal-review-2026-10-26.json').read_text()),
                      additional_source_input_reviews=dict(
@@ -365,6 +393,7 @@ def package(args):
                          doa2_fixed_arena=json.loads((ROOT/'docs/evidence/native-doa2-fixed-arena-counterexamples-2026-10-26.json').read_text())))
     delivery = dict(source_commit=commit, generic_installer=host_installer,
                     combined_installer=extracted_install_check(files),
+                    optional_rayman_probe=extracted_resource_probe_check(files),
                     same_clean_UI_and_module_source=True, no_retail_or_save_payloads=True,
                     final_corpus_artifacts_bound=True, reader_runtime_comparison=runtime_comparison,
                     console_execution_verified=False)

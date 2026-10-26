@@ -9,6 +9,8 @@ learned from the artifact being checked.
 
 CALLBACK_MARKER = '__kui_native_dual_low_callbacks_stage'
 RAW_OWNER_MARKER = '__kui_native_raw_owner_terminal_worker'
+BOTTOM_STAGE_MARKER = '__kui_native_bottom_heap_stage'
+BOTTOM_WORKER_MARKER = '__kui_native_bottom_heap_worker'
 ABSOLUTE_ONE = (1, 0, 0, 0xfff1)
 
 # Filled only from the independently reviewed complete linked candidate.
@@ -198,6 +200,99 @@ WORKER_PINS = {'dual': {'_reader_readahead_exports': (200,
               '_transfer_context_valid': ('ee36620e038fadc8a93fe17c27727ff2ad7fd0a8c8a2f3d387f9e309072f5924',
                                           1180)}}
 
+# The bottom-lease installer and worker keep the preceding observer/callback
+# contracts. Its separately reviewed link moves typed literals in otherwise
+# identical bodies. These maps are filled only after that complete comparison;
+# the actual allocator transaction is a separately required instruction proof.
+BOTTOM_STAGE_PINS = {'dual': {'_select_resident': (272, '0df8756e0bec92324e6a458fd7720f3efab02d041055dea229fd268421c8c556'),
+          '_native_dual_reader_bind': (68,
+                                       '87c92a968a770c752abe31c2ac117343ece8dd6f1a6c74076f0f9867e0feb1c3'),
+          '_kui_native_dual_u32': (30, 'c13060e358e2a0e9f53878d9aa8b77d1fbfb03a31b8c4e049dc49bf3e7feec6c')},
+ 'sdk': {'_native_sdk_sci_route_bind': (952,
+                                        '6a52b235bb8e1ae94802be41b82eff0ba164e22f5ad81029214d3ca9c53dbe79'),
+         '_kui_native_sdk_sci_route_admit': (796,
+                                             '7e7fa1dac5d65412b970666d6e955380361d525724e0dd97851ad8fca827ad31'),
+         '_kui_native_sdk_sci_route_discover': (1856,
+                                                'b46be79f7dca6c9a52613004a506170f25ea4ab047757141fe751f422e1e4f46'),
+         '_u32': (30, '6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334'),
+         '_fingerprint': (88, 'a8e1402ebf7e7fc47744df3dfe246d1a073cd23de99489d30007543e5a563cae'),
+         '_live_words': (80, 'b89da2e18b1204a0f6ad339e89144e637a7de98581f3a6c39b546b30ce8b9854'),
+         '_literal_at': (62, '1712d6126cb969c7f2f21fb2de718960809b1782d1b39a06f772a21af78e16fe'),
+         '_normalized': (192, '08227c256886f38951f54edd0bdc950ae8619e6023207bb8ae0ea4ac7a95ec70')},
+ 'read_ahead': {'_native_readahead_bind': (1260,
+                                           'd55ab4f4cb5c4b3ed63e8f2710be1f76a119a47a3db548dcf73539967961a54d'),
+                '_kui_vmu_native_background_map_address': (92,
+                                                           'cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8')},
+ 'timeline_binder': ('743a44087cc4ba782cc765f32d463120bd7e3034dd65bc13ae1a92a1a97afd49', 180),
+ 'installer': frozenset({(2004, 'e9822e4b3f7f8c72380bef76814d638ed6bf0a8727fc506f00d7f15076dc352e')})}
+BOTTOM_WORKER_PINS = {'dual': {'_reader_readahead_exports': (200,
+                                        '8aff7e76749ea5df0c6ebde6e29824e7122433a5ee3dbc1caad2b1e1cea8dea6'),
+          '_reader_capture_region': (100, 'dbfae616a3357a5e1ab3c907567dbf5b2735e29943bb42c2b7c1884b9aff4b7e'),
+          '_reader_readahead_visit': (56,
+                                      '277ea46f6d7d509e57e0be251e5f2e7f12e3193f8d9549d961cae44fc1b8bbb1')},
+ 'read_ahead': {'_reader_readahead_exports': (200,
+                                              '8aff7e76749ea5df0c6ebde6e29824e7122433a5ee3dbc1caad2b1e1cea8dea6'),
+                '_reader_readahead_visit': (56,
+                                            '277ea46f6d7d509e57e0be251e5f2e7f12e3193f8d9549d961cae44fc1b8bbb1'),
+                '_reader_cooperative_service': (32,
+                                                '93761d0e088c601b9fd30521f9c90d264c2806084b55d4bc55151264c62bfde5'),
+                '_reader_readahead_failure': (172,
+                                              '95955f85153b1e6836dedc2e156b876c5e9edfbca3f3b940c4d0098eda2f7925')},
+ 'witness': {'_failure_witness.isra.0': (16,
+                                         'c767a1c8cebf3cd2b7881bf86e65b0e13f7dc3ca0098455f9303ec2dcbc7e319'),
+             '_poll_lease_valid': (168, '374a4a822a443d28492d5b3214883dc6f499bdf652b8c8be339270e03817ad53'),
+             '_controller_context_valid': (1336,
+                                           '4c7944282ca23b0482686f1c08ea701b01dd54bcf2e6b7e42bcd6e7858e2f971'),
+             '_kui_vmu_native_passive_complete': (3144,
+                                                  'acde71e900ac6c3b250ef499071fc071ed02e07529a88a316e43700dcee60a58'),
+             '_kui_vmu_native_passive_submit': (1428,
+                                                'fe8fd3c96932569f8453eb71fe726d1059d3450af94fa9c17b6134f9a1381c7e'),
+             '_read_value': (180, '2bf8aacc78250e0aabc16c8037ae642b34e52ecf935cddc2b8915ad36b024a4c'),
+             '_readonly_rx.constprop.0': (76,
+                                          '8ae835afcc6563c32e1756bbe4979d5caf8c18cb54be8755beb897429d5300a9'),
+             '_stack_valid': (116, 'b9212c5a929502d27eb5f982a9c1b826b15c5e043551de480281602257880a54'),
+             '_installed_hooks_valid': (128,
+                                        '8d2fbe746c594eebb395c7d1b04b761c72045b7427182ac042c8f2798212b384'),
+             '_normalize_heap_dispatch': (276,
+                                          'f50c53f8bf89a37291d0d6ce28d9550c6af29cf89d854033824169ed5436e9b5'),
+             '_kui_vmu_native_terminal_dispatch_span.constprop.0': (128,
+                                                                    'a32dafc3eeb54ac8eb1dca03f537f641665a9074f4d32349b8fc5f49b79dfe56'),
+             '_kui_vmu_native_terminal_dispatch_tagged.constprop.0': (100,
+                                                                      'e0b5f67393a6bc294be25a8cfa1adfe82b0dda2394e5792c158b827aa79a0ec4'),
+             '_kui_vmu_native_patch_encode': (168,
+                                              '8961ec44233e80115ceb32b6227b994e17b435a9abaeab41e113556ccf576ebc'),
+             '_read_heap_raw': (104, 'ba6f179b61b78a8bf700d46bac6237e4287d61bbe9cde913a8768ce99e732035'),
+             '_memcpy': (72, 'cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634'),
+             '_kui_vmu_native_trace_point': (1132,
+                                             '29e79a86f246b51949525389a6478c5054bea8eb89e4aaf8ccfa58a4ed064aec'),
+             '_reader_capture_region': (100,
+                                        'dbfae616a3357a5e1ab3c907567dbf5b2735e29943bb42c2b7c1884b9aff4b7e'),
+             '_reader_cooperative_service': (32,
+                                             '93761d0e088c601b9fd30521f9c90d264c2806084b55d4bc55151264c62bfde5'),
+             '_reader_readahead_exports': (200,
+                                           '8aff7e76749ea5df0c6ebde6e29824e7122433a5ee3dbc1caad2b1e1cea8dea6'),
+             '_reader_readahead_visit': (56,
+                                         '277ea46f6d7d509e57e0be251e5f2e7f12e3193f8d9549d961cae44fc1b8bbb1'),
+             '_kui_vmu_native_timer_callback_owned': (92,
+                                                      '07aadc00aba1b1f9a650eb58e9b39e0c200a2c6e85e83e9922a0eb00f1841edb'),
+             '_timer_runtime_ram': (104, '4fb7919a6f74ec1c9aa3f434e446b352f7961eb7c565580f0c4e2e52a3eff415'),
+             '_timer_runtime_in': (26, 'a0ff5d4d27ccbf7b073b8bc6f0e6b26659e6b729763f7b02d49aa124ea023824')},
+ 'live_boundary': (216, '284c39b1b5f46b7d8142430bead1e366fd22728a10c1712a7d795d15adb59c65'),
+ 'timeline_division': ('668a6349b8897440ebe888b256fe5ff614c5a628eb34d6290740b4925c48cbd8', 144),
+ 'prepared': WORKER_PINS['prepared'],
+ 'raw_owner': {'_diagnostic_complete': (3610,
+                                        '43531bed887c2f00647fb237d84a3e78c5f69011f1721f30812bc0bd92abc823'),
+               '_native_phase_span_from': (128,
+                                           '2f2d811580469162b3f1b715592e0cf3c96f78a0ee86ac80b6bd7b9a1be09d1f'),
+               '_diagnostic_phase_read': (136,
+                                          '300072e2b8bad5d5aa1ac8e52af5bfe1c52c1b256541ff3281f449642641533a'),
+               '_diagnostic_end': (1492, 'dfffc722f754253706263997d24e6a0d4e4d75ecbbe946942881f13287a8baec'),
+               '_diagnostic_sample': (164,
+                                      '7093de94c3a6735413dc04fdf9af5bc80aca8097fd91632bb13468210ab7bf3e'),
+               '_memset': (26, '84a19f7aa0536a77835dd9917cd47ea65e6d6edf6013064ab39a36c0a05e118a'),
+               '_memcpy': (72, 'cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634')}}
+
+
 def marked(image, name):
     marker = image[4].get(name)
     if marker is not None and marker != ABSOLUTE_ONE:
@@ -218,7 +313,26 @@ def raw_owner_profile(worker):
     return present
 
 
+def bottom_stage_profile(stage):
+    present = marked(stage, BOTTOM_STAGE_MARKER)
+    if present and not callback_profile(stage):
+        raise ValueError('Bottom-heap stage requires selected low-reader callbacks')
+    return present
+
+
+def bottom_worker_profile(worker):
+    present = marked(worker, BOTTOM_WORKER_MARKER)
+    if present and not raw_owner_profile(worker):
+        raise ValueError('Bottom-heap worker requires its terminal owner observer')
+    return present
+
+
 def stage_pins(stage, role, historical):
+    if bottom_stage_profile(stage):
+        selected = BOTTOM_STAGE_PINS.get(role)
+        if not selected:
+            raise ValueError('Bottom-heap stage lacks independently reviewed pins: ' + role)
+        return selected
     if not callback_profile(stage):
         return historical
     selected = STAGE_PINS.get(role)
@@ -228,6 +342,11 @@ def stage_pins(stage, role, historical):
 
 
 def worker_pins(worker, role, historical):
+    if bottom_worker_profile(worker):
+        selected = BOTTOM_WORKER_PINS.get(role)
+        if not selected:
+            raise ValueError('Bottom-heap worker lacks independently reviewed pins: ' + role)
+        return selected
     if not raw_owner_profile(worker):
         return historical
     selected = WORKER_PINS.get(role)

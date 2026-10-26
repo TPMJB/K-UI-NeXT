@@ -39,6 +39,13 @@ PINS = {
     '_memset': (26, '84a19f7aa0536a77835dd9917cd47ea65e6d6edf6013064ab39a36c0a05e118a'),
     '_memcpy': (72, 'cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634'),
 }
+
+
+def code_pins(worker):
+    from check_native_followup_profile import bottom_worker_profile, worker_pins
+    return worker_pins(worker, 'raw_owner', PINS) if bottom_worker_profile(worker) else PINS
+
+
 DISPLAY_PINS = {
     'src/loader/vmu_native_passive.c': (32, '0a86992205c28bd335dd6f39422e9037bae6d5094494570ed1c4e07c7121afa3'),
     'src/loader/vmu_native_reader_capture.inc': (24, '658c1d666a07cd72d56f0a6fd7659e863e3bd6309f52b07c94866d827ef3b2c3'),
@@ -446,8 +453,9 @@ def require_companion(worker, proof):
             name: dict(calls=count, sha256=digest) for name, (count, digest) in DISPLAY_PINS.items()},
             'raw terminal companion omits the original numeric report rows')
     pins = proof.get('exact_code_pins', {})
-    require(isinstance(pins, dict) and set(pins) == set(PINS), 'raw terminal companion code scope differs')
-    for name, expected in PINS.items():
+    selected = code_pins(worker)
+    require(isinstance(pins, dict) and set(pins) == set(selected), 'raw terminal companion code scope differs')
+    for name, expected in selected.items():
         address, body, _ = symbol_bytes(worker, name, 2)
         require((len(body), sha(body)) == expected and pins[name] == dict(
                 address=hex(address), bytes=len(body), sha256=sha(body)),
@@ -464,7 +472,7 @@ def check(directory, self_test=False):
         return dict(schema=SCHEMA, enabled=False)
     require(present == (1, 0, 0, 0xfff1), 'raw terminal marker must be exact absolute one')
     pins = {}
-    for name, expected in PINS.items():
+    for name, expected in code_pins(worker).items():
         address, body, section = symbol_bytes(worker, name, 2)
         require(section[2] & 7 == 6 and (len(body), sha(body)) == expected,
                 'raw terminal complete code/literal pin differs: ' + name)
@@ -523,7 +531,7 @@ def check(directory, self_test=False):
             else:
                 raise ValueError('raw terminal accepted a missing companion obligation: ' + name)
         byte_pins = 0
-        for name, expected in PINS.items():
+        for name, expected in code_pins(worker).items():
             _, body, _ = symbol_bytes(worker, name, 2)
             for index in range(len(body)):
                 changed = bytearray(body);changed[index] ^= 1
