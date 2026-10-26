@@ -212,6 +212,80 @@ BUDGET_PIN_OBJECTS = {'_child_code@vmu_native_heap_budget.c': (100,
                                            '07ce6930bce857d18e95a47261e637ebf8fbfc2f8ffb9624fd6baa36270eb1e1')}
 
 
+# Gate-stage variant: complete old budget closure retained above; these exact
+# pins differ only in decoded references to the same immutable/private roles.
+DISPATCH_GATE_PIN_FUNCTIONS = {'_alias@vmu_native_stage_placement.c': (32,
+                                         '5d5b341944aa4da08467cfca39b78f276224218bd3ed9fd094c99456668b974d'),
+ '_allocation_safe@vmu_native_heap_probe_stage.c': (52,
+                                                    '7006115de77f93c00d4dfd9a9c2c1777d88dc763205b1238c154ad44b848f51e'),
+ '_at@vmu_native_heap_budget.c': (92, 'db475248a7aa8675d1722602bc06b3a984d54f508a45a8842ba8116437063423'),
+ '_bottom_geometry@vmu_native_heap.c': (24,
+                                        'fe83cd5cec158b6d373003e684f8d52b59b7f5200e588cfe204826026a080668'),
+ '_code_sha@vmu_native_heap_probe_stage.c': (64,
+                                             '551156df932c38fb9a78d6d61fedb6f38fefcbb663aa58ce78a3a477f52b8310'),
+ '_control@vmu_native_heap_probe_stage.c': (28,
+                                            '4e5efaa5fdceffa3a31fbffb123c1333bf951e2e1fe70390a272c5c58fa661a7'),
+ '_excludes_stage@vmu_native_stage_placement.c': (64,
+                                                  'b3d30aacc305e63a418917c5eb59777a318ec5c226a751d80e6306afa2b24079'),
+ '_fresh@vmu_native_heap.c': (116, '7b861e8ef810a55fb848113bb3d40facdfdfa81a8ef200715877798ac0534b56'),
+ '_heap_bottom_code_span@vmu_native_heap.c': (88,
+                                              '70e1fdb2e5150dd22242b823edf4a8eaa3f5259e85a94a9546e995140e184cc0'),
+ '_heap_bottom_halfword@vmu_native_heap.c': (58,
+                                             'd66affe12d8e87985e0bbe094cc393649bad89f9e4494f55004afda5f193ab39'),
+ '_identity@vmu_native_heap.c': (412, 'be8fb07f35f46c478795e779e293b92d4a9a56577a06c792ee2baac0c84b4839'),
+ '_index@vmu_native_heap.c': (100, 'dd81846d1188b779bc975573eaad379a609bbf18baa58093e765179a26886cfa'),
+ '_kui_vmu_native_heap_bottom_allocated': (172,
+                                           '2297b7718313cffaf3b8df94a3de63568faa6f016d7e66b94c5f0653c8dc1e68'),
+ '_kui_vmu_native_heap_bottom_code_valid': (360,
+                                            '24b47127706f414ff1bbc83fd2a3ea556854e707f08c5a607825b47f1c0e1c8c'),
+ '_kui_vmu_native_heap_bottom_fresh': (148,
+                                       '1dc99545b6605fa627e9d591fd1a35e18f4f61f8252cafbb96ac9f13a79f2671'),
+ '_kui_vmu_native_heap_bottom_placeholder': (196,
+                                             '3ac04611d78a2b69e0350cfcd268dd37564689ff21c44b749482841733d71106'),
+ '_kui_vmu_native_heap_bottom_ready': (144,
+                                       '5b2ccd1a4902bcc412b159ff8e51ba02fccddad7ae2a50d02fd082883bab9062'),
+ '_kui_vmu_native_heap_budget_prepare': (2370,
+                                         '18f0f2787f96eccdf781c0993cfd12238bea7ffd9a4ab90461631fc996c76345'),
+ '_kui_vmu_native_heap_fresh': (268, 'ba307e7566bea76831b4c4f5c3facb061303899168ce24f91a722ebbcd16a3fd'),
+ '_kui_vmu_native_heap_lease_identity_valid': (76,
+                                               '340aa33e69839a4517f6910634479f0823da7db9d1830020d313110c94975abe'),
+ '_kui_vmu_native_heap_lease_valid': (28, 'eb0496c97a22899cbe69b8bfa96aa76a68ade5b276aca5de0fc42ededd494196'),
+ '_kui_vmu_native_heap_lease_valid_with_release': (512,
+                                                   '1b0478c51b4ff2f80e9d0326f7a00539e9b94c83deb8219aa951b50fb0f1eb39'),
+ '_kui_vmu_native_heap_preallocate': (36, '6f4a5ec7719e81ea06df5f4a47f9be6262795f2df2d6c39257af9669b4451c5f'),
+ '_kui_vmu_native_stage_bottom_allocation_safe': (308,
+                                                  'd48e52d0f62f6eb20bb8c37f1af8550c5c68be1569ef0ba1d31e0c6830f5d70a'),
+ '_kui_vmu_observe_stage_install': (400, '49b668afa7d1e1d11eb6eac187ba444dd2f5f33dcbfefb71a4525b195fe0ba4c'),
+ '_le32@vmu_native_heap_budget.c': (30, '6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334'),
+ '_long_literal@vmu_native_heap_budget.c': (128,
+                                            '1f31121f0b67d6ea79e2b0c2a63c181d46d2ce97583c67bc47712d0727ccb289'),
+ '_memcmp': (34, '3d7da64606fe412df2341ca8e1c2c56d14d3f4798465f1ec02f6d2994c6aefd9'),
+ '_memcpy': (72, 'cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634'),
+ '_memset': (26, '84a19f7aa0536a77835dd9917cd47ea65e6d6edf6013064ab39a36c0a05e118a'),
+ '_metadata@vmu_native_heap.c': (416, '9d1ea1f6d55d9d022afef79dddc1fa35d66a1a69f1ed556fd564fd65e8e2a221'),
+ '_native_allocate_bottom@vmu_native_heap_probe_stage.c': (304,
+                                                           '7cd90018b2b72f71943dc2c44c7c7d67a40c343ace4262d9e959ea2a667c477f'),
+ '_native_allocator_unchanged@vmu_native_heap_probe_stage.c': (68,
+                                                               '803a0664bd5fcbd27a722c75fc0a9f542f9a100d6b7ea5a40ee2695bb08c116a'),
+ '_native_budget_prepare@vmu_native_heap_probe_stage.c': (92,
+                                                          'd3121409c7277618543b5fab42a1f3f99f8d5ef6cbf56c796027b59a6400adb8'),
+ '_native_budget_publish@vmu_native_heap_probe_stage.c': (132,
+                                                          '564323c53d039b9b4ec754a4e193a5801ca6c85344dc8c0219fa8e4e36188570'),
+ '_native_low_bindings@vmu_native_heap_probe_stage.c': (64,
+                                                        '6a09daae562956ba3ef8767d27b7f6596215baba8d761b024fe13f17c2bc4de8'),
+ '_native_read@vmu_native_heap_probe_stage.c': (84,
+                                                'b6bc33c6d4c36f9e6625ccf6afdc55b98e2e8f684d95194687fa946071a4804d'),
+ '_overlaps.constprop.0@vmu_native_heap_budget.c': (124,
+                                                    'ab5b5d50a0e6b0d6bfdfe3d66da18c739b6a4569e20e8adf2c7f04a323795bdb'),
+ '_ram@vmu_native_heap_budget.c': (76, '64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305'),
+ '_read_is@vmu_native_heap.c': (80, 'a30c6231f114acaa0bb2274914e14a5ce1225ada50dde102a9f4c4e2880862e8'),
+ '_span@vmu_native_heap.c': (76, '64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305'),
+ '_span@vmu_native_stage_placement.c': (80,
+                                        '4e5ac885af47f3deec9bf74747cecdfcdaac70abbe7c981eaea812f41c3c041d'),
+ '_word@vmu_native_heap_budget.c': (52, '9a68103cac2b1b00551a238a475297f0c36253820af2e2443c243db5d27713e6')}
+DISPATCH_GATE_PIN_OBJECTS = BUDGET_PIN_OBJECTS
+
+
 def require(ok, message):
     if not ok:
         raise ValueError(message)
@@ -230,6 +304,10 @@ def budget_stage(stage):
 
 
 def pin_sets(stage):
+    gate=stage[4].get('__kui_native_dispatch_read_gate_stage')
+    if gate is not None:
+        require(gate==ABSOLUTE_ONE and budget_stage(stage), 'Dispatch gate stage lacks its exact budget capability')
+        return DISPATCH_GATE_PIN_FUNCTIONS, DISPATCH_GATE_PIN_OBJECTS
     if budget_stage(stage):
         require(BUDGET_PIN_FUNCTIONS and BUDGET_PIN_OBJECTS,
                 'Private-pool reviewed complete closure is missing')
@@ -334,6 +412,10 @@ def paired(stage, worker):
     from check_native_followup_profile import bottom_stage_profile, bottom_worker_profile
     a, b = bottom_stage_profile(stage), bottom_worker_profile(worker)
     require(a == b, 'Bottom heap stage/worker capabilities are not paired')
+    gate_a=stage[4].get('__kui_native_dispatch_read_gate_stage')
+    gate_b=worker[4].get('__kui_native_dispatch_read_gate_worker')
+    require(gate_a==gate_b and gate_a in (None,ABSOLUTE_ONE),
+            'Dispatch read-gate stage/worker capabilities are not paired')
     return a
 
 

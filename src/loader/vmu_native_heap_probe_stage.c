@@ -176,6 +176,8 @@ static void native_report(uint32_t phase,uint32_t detail) {
 #include "vmu_native_passive_stage.inc"
 #endif
 #if KUI_NATIVE_DUAL_READERS
+__asm__(".global __kui_native_dispatch_read_gate_stage\n"
+        ".set __kui_native_dispatch_read_gate_stage,1\n");
 __asm__(".global __kui_native_bottom_heap_stage\n"
         ".set __kui_native_bottom_heap_stage,1\n");
 __asm__(".global __kui_native_private_pool_budget_stage\n"

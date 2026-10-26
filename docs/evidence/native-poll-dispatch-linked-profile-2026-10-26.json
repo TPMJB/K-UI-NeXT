@@ -4328,5 +4328,849 @@
     "controller_cases": 410,
     "identity_cases": 72,
     "mutation_checks_passed": true
+  },
+  "unchanged_heap_kernel_exact_typed_literal_review": [
+    {
+      "name": "_span@vmu_native_heap.c",
+      "old_bytes": 76,
+      "new_bytes": 76,
+      "old_sha256": "64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305",
+      "new_sha256": "64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_index@vmu_native_heap.c",
+      "old_bytes": 100,
+      "new_bytes": 100,
+      "old_sha256": "b6d11408b1855b59adb23eb88af064de182c1b5ceb784eedf901f4ff7c6db6fc",
+      "new_sha256": "a9aa696f5722b6ba5f00b4779f89ba37e21624b46c6ac440c171afe5b6b04334",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 45,
+      "changed_literal_slots": [
+        {
+          "offset": 92,
+          "before": "0x8c105720",
+          "after": "0x8c105738",
+          "roles": [
+            "_span+0",
+            "_span@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_metadata@vmu_native_heap.c",
+      "old_bytes": 416,
+      "new_bytes": 416,
+      "old_sha256": "ae4af783f24f41eae20da598b6910f054e571b512c1b1f08c3dc4e5c68bf2483",
+      "new_sha256": "fb6a9ee3425f555fe873833b7161f9ea3c287aa3525033f0900321bb394d8a38",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 195,
+      "changed_literal_slots": [
+        {
+          "offset": 404,
+          "before": "0x8c105720",
+          "after": "0x8c105738",
+          "roles": [
+            "_span+0",
+            "_span@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 408,
+          "before": "0x8c10576c",
+          "after": "0x8c105784",
+          "roles": [
+            "_index+0",
+            "_index@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_read_is@vmu_native_heap.c",
+      "old_bytes": 80,
+      "new_bytes": 80,
+      "old_sha256": "0d9eb79846bed68111e888d7d83da465c1dbfff4019f018049ed44d33068e5e7",
+      "new_sha256": "34414e24b9c009d0b915e202e1f09e6248a2b868a7f423f1eab4c1132c85037a",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 37,
+      "changed_literal_slots": [
+        {
+          "offset": 76,
+          "before": "0x8c105720",
+          "after": "0x8c105738",
+          "roles": [
+            "_span+0",
+            "_span@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_bottom_geometry@vmu_native_heap.c",
+      "old_bytes": 24,
+      "new_bytes": 24,
+      "old_sha256": "fe83cd5cec158b6d373003e684f8d52b59b7f5200e588cfe204826026a080668",
+      "new_sha256": "fe83cd5cec158b6d373003e684f8d52b59b7f5200e588cfe204826026a080668",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_identity@vmu_native_heap.c",
+      "old_bytes": 412,
+      "new_bytes": 412,
+      "old_sha256": "7bc3dcf8abc60e627d27a8aa1914df151637074b32f6ae211f320a984af8d302",
+      "new_sha256": "ebe054d88dead365d0eaf102bc8b2991d50c01be8114b3d9a064874a52ff9893",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 196,
+      "changed_literal_slots": [
+        {
+          "offset": 392,
+          "before": "0x8c1057d0",
+          "after": "0x8c1057e8",
+          "roles": [
+            "_metadata+0",
+            "_metadata@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 396,
+          "before": "0x8c105720",
+          "after": "0x8c105738",
+          "roles": [
+            "_span+0",
+            "_span@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 400,
+          "before": "0x8c1059c0",
+          "after": "0x8c1059d8",
+          "roles": [
+            "_bottom_geometry+0",
+            "_bottom_geometry@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 408,
+          "before": "0x8c105970",
+          "after": "0x8c105988",
+          "roles": [
+            "_read_is+0",
+            "_read_is@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_heap_lease_valid_with_release",
+      "old_bytes": 512,
+      "new_bytes": 512,
+      "old_sha256": "16a2a46cd54b7bf82b732e28b5297ec4fe2a3803fa38f2b1246157f973525b6b",
+      "new_sha256": "85559f7e6bb73d9b5ed3e5bad8f2366980539a98477c4b4e681f13dbaf7b8aae",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 246,
+      "changed_literal_slots": [
+        {
+          "offset": 496,
+          "before": "0x8c105b74",
+          "after": "0x8c105b8c",
+          "roles": [
+            "_kui_vmu_native_heap_lease_identity_valid+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 508,
+          "before": "0x8c105720",
+          "after": "0x8c105738",
+          "roles": [
+            "_span+0",
+            "_span@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_heap_lease_identity_valid",
+      "old_bytes": 76,
+      "new_bytes": 76,
+      "old_sha256": "3f730f877ba979f408d6c596f8643448183a9cbb9f88761731580f34be8e133f",
+      "new_sha256": "79a1ea16da8da8eeee75d90cbfc5159823a23ba3aa871de989554a606c6313cc",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 33,
+      "changed_literal_slots": [
+        {
+          "offset": 68,
+          "before": "0x8c1059d8",
+          "after": "0x8c1059f0",
+          "roles": [
+            "_identity+0",
+            "_identity@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 72,
+          "before": "0x8c105970",
+          "after": "0x8c105988",
+          "roles": [
+            "_read_is+0",
+            "_read_is@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_heap_lease_valid",
+      "old_bytes": 28,
+      "new_bytes": 28,
+      "old_sha256": "d15c3ca657bca47aea6bb764676750e1a474eb5ea90062e315e7e55ca20fd5f2",
+      "new_sha256": "ec3c8bce81483e723c16ff9f4ba19b982ff81e3dde4701f2706817b52e3462b3",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 11,
+      "changed_literal_slots": [
+        {
+          "offset": 24,
+          "before": "0x8c105bc0",
+          "after": "0x8c105bd8",
+          "roles": [
+            "_kui_vmu_native_heap_lease_valid_with_release+0"
+          ],
+          "same_text": null
+        }
+      ]
+    }
+  ],
+  "unchanged_cold_kernel_exact_typed_literal_review": [
+    {
+      "name": "_alias@vmu_native_stage_placement.c",
+      "old_bytes": 32,
+      "new_bytes": 32,
+      "old_sha256": "5d5b341944aa4da08467cfca39b78f276224218bd3ed9fd094c99456668b974d",
+      "new_sha256": "5d5b341944aa4da08467cfca39b78f276224218bd3ed9fd094c99456668b974d",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_allocation_safe@vmu_native_heap_probe_stage.c",
+      "old_bytes": 52,
+      "new_bytes": 52,
+      "old_sha256": "64d59257bca4d5d3613ed0d409432db08d129df238c6274fa90c989547934b60",
+      "new_sha256": "7006115de77f93c00d4dfd9a9c2c1777d88dc763205b1238c154ad44b848f51e",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 15,
+      "changed_literal_slots": [
+        {
+          "offset": 36,
+          "before": "0x8ce612e8",
+          "after": "0x8ce61328",
+          "roles": [
+            "_exec_bytes+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 40,
+          "before": "0x8ce8eba8",
+          "after": "0x8ce8ebe8",
+          "roles": [
+            "__retail_stage_bss_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 48,
+          "before": "0x8ce51c34",
+          "after": "0x8ce51c74",
+          "roles": [
+            "_native_heap+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_at@vmu_native_heap_budget.c",
+      "old_bytes": 92,
+      "new_bytes": 92,
+      "old_sha256": "db475248a7aa8675d1722602bc06b3a984d54f508a45a8842ba8116437063423",
+      "new_sha256": "db475248a7aa8675d1722602bc06b3a984d54f508a45a8842ba8116437063423",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_bottom_geometry@vmu_native_heap.c",
+      "old_bytes": 24,
+      "new_bytes": 24,
+      "old_sha256": "fe83cd5cec158b6d373003e684f8d52b59b7f5200e588cfe204826026a080668",
+      "new_sha256": "fe83cd5cec158b6d373003e684f8d52b59b7f5200e588cfe204826026a080668",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_code_sha@vmu_native_heap_probe_stage.c",
+      "old_bytes": 64,
+      "new_bytes": 64,
+      "old_sha256": "692d561cd5ccbb73e46c006115f5b1945036b7e8dbd0f24296240547945d5729",
+      "new_sha256": "551156df932c38fb9a78d6d61fedb6f38fefcbb663aa58ce78a3a477f52b8310",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 23,
+      "changed_literal_slots": [
+        {
+          "offset": 52,
+          "before": "0x8ce51c34",
+          "after": "0x8ce51c74",
+          "roles": [
+            "_native_heap+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_control@vmu_native_heap_probe_stage.c",
+      "old_bytes": 28,
+      "new_bytes": 28,
+      "old_sha256": "4e5efaa5fdceffa3a31fbffb123c1333bf951e2e1fe70390a272c5c58fa661a7",
+      "new_sha256": "4e5efaa5fdceffa3a31fbffb123c1333bf951e2e1fe70390a272c5c58fa661a7",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_excludes_stage@vmu_native_stage_placement.c",
+      "old_bytes": 64,
+      "new_bytes": 64,
+      "old_sha256": "b3d30aacc305e63a418917c5eb59777a318ec5c226a751d80e6306afa2b24079",
+      "new_sha256": "b3d30aacc305e63a418917c5eb59777a318ec5c226a751d80e6306afa2b24079",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_fresh@vmu_native_heap.c",
+      "old_bytes": 116,
+      "new_bytes": 116,
+      "old_sha256": "7b861e8ef810a55fb848113bb3d40facdfdfa81a8ef200715877798ac0534b56",
+      "new_sha256": "7b861e8ef810a55fb848113bb3d40facdfdfa81a8ef200715877798ac0534b56",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_heap_bottom_code_span@vmu_native_heap.c",
+      "old_bytes": 88,
+      "new_bytes": 88,
+      "old_sha256": "70e1fdb2e5150dd22242b823edf4a8eaa3f5259e85a94a9546e995140e184cc0",
+      "new_sha256": "70e1fdb2e5150dd22242b823edf4a8eaa3f5259e85a94a9546e995140e184cc0",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_heap_bottom_halfword@vmu_native_heap.c",
+      "old_bytes": 58,
+      "new_bytes": 58,
+      "old_sha256": "d66affe12d8e87985e0bbe094cc393649bad89f9e4494f55004afda5f193ab39",
+      "new_sha256": "d66affe12d8e87985e0bbe094cc393649bad89f9e4494f55004afda5f193ab39",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_identity@vmu_native_heap.c",
+      "old_bytes": 412,
+      "new_bytes": 412,
+      "old_sha256": "be8fb07f35f46c478795e779e293b92d4a9a56577a06c792ee2baac0c84b4839",
+      "new_sha256": "be8fb07f35f46c478795e779e293b92d4a9a56577a06c792ee2baac0c84b4839",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_index@vmu_native_heap.c",
+      "old_bytes": 100,
+      "new_bytes": 100,
+      "old_sha256": "dd81846d1188b779bc975573eaad379a609bbf18baa58093e765179a26886cfa",
+      "new_sha256": "dd81846d1188b779bc975573eaad379a609bbf18baa58093e765179a26886cfa",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_bottom_allocated",
+      "old_bytes": 172,
+      "new_bytes": 172,
+      "old_sha256": "2297b7718313cffaf3b8df94a3de63568faa6f016d7e66b94c5f0653c8dc1e68",
+      "new_sha256": "2297b7718313cffaf3b8df94a3de63568faa6f016d7e66b94c5f0653c8dc1e68",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_bottom_code_valid",
+      "old_bytes": 360,
+      "new_bytes": 360,
+      "old_sha256": "1269d10460510a822683d13eb427620d58ec84efe2c12e4bf8a6f828d5e46539",
+      "new_sha256": "24b47127706f414ff1bbc83fd2a3ea556854e707f08c5a607825b47f1c0e1c8c",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 159,
+      "changed_literal_slots": [
+        {
+          "offset": 344,
+          "before": "0x8ce2ddbc",
+          "after": "0x8ce2ddfc",
+          "roles": [
+            "_heap_bottom_allocate_words+0",
+            "_heap_bottom_allocate_words@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 352,
+          "before": "0x8ce2dd22",
+          "after": "0x8ce2dd62",
+          "roles": [
+            "_heap_bottom_release_words+0",
+            "_heap_bottom_release_words@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_heap_bottom_fresh",
+      "old_bytes": 148,
+      "new_bytes": 148,
+      "old_sha256": "1dc99545b6605fa627e9d591fd1a35e18f4f61f8252cafbb96ac9f13a79f2671",
+      "new_sha256": "1dc99545b6605fa627e9d591fd1a35e18f4f61f8252cafbb96ac9f13a79f2671",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_bottom_placeholder",
+      "old_bytes": 196,
+      "new_bytes": 196,
+      "old_sha256": "3ac04611d78a2b69e0350cfcd268dd37564689ff21c44b749482841733d71106",
+      "new_sha256": "3ac04611d78a2b69e0350cfcd268dd37564689ff21c44b749482841733d71106",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_bottom_ready",
+      "old_bytes": 144,
+      "new_bytes": 144,
+      "old_sha256": "5b2ccd1a4902bcc412b159ff8e51ba02fccddad7ae2a50d02fd082883bab9062",
+      "new_sha256": "5b2ccd1a4902bcc412b159ff8e51ba02fccddad7ae2a50d02fd082883bab9062",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_budget_prepare",
+      "old_bytes": 2370,
+      "new_bytes": 2370,
+      "old_sha256": "7161f93ecffcd2b8538171a65f9cadf46163c80bbb1f098d608d5291d1f965fe",
+      "new_sha256": "18f0f2787f96eccdf781c0993cfd12238bea7ffd9a4ab90461631fc996c76345",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 1079,
+      "changed_literal_slots": [
+        {
+          "offset": 832,
+          "before": "0x8ce2dfae",
+          "after": "0x8ce2dfee",
+          "roles": [
+            "_child_code+one_past_end",
+            "_child_code@vmu_native_heap_budget.c+one_past_end",
+            "_parent_code+0",
+            "_parent_code@vmu_native_heap_budget.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 836,
+          "before": "0x8ce2e046",
+          "after": "0x8ce2e086",
+          "roles": [
+            "_parent_code+one_past_end",
+            "_parent_code@vmu_native_heap_budget.c+one_past_end"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1632,
+          "before": "0x8ce2df4a",
+          "after": "0x8ce2df8a",
+          "roles": [
+            "_child_code+0",
+            "_child_code@vmu_native_heap_budget.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_heap_fresh",
+      "old_bytes": 268,
+      "new_bytes": 268,
+      "old_sha256": "ba307e7566bea76831b4c4f5c3facb061303899168ce24f91a722ebbcd16a3fd",
+      "new_sha256": "ba307e7566bea76831b4c4f5c3facb061303899168ce24f91a722ebbcd16a3fd",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_lease_identity_valid",
+      "old_bytes": 76,
+      "new_bytes": 76,
+      "old_sha256": "340aa33e69839a4517f6910634479f0823da7db9d1830020d313110c94975abe",
+      "new_sha256": "340aa33e69839a4517f6910634479f0823da7db9d1830020d313110c94975abe",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_lease_valid",
+      "old_bytes": 28,
+      "new_bytes": 28,
+      "old_sha256": "eb0496c97a22899cbe69b8bfa96aa76a68ade5b276aca5de0fc42ededd494196",
+      "new_sha256": "eb0496c97a22899cbe69b8bfa96aa76a68ade5b276aca5de0fc42ededd494196",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_lease_valid_with_release",
+      "old_bytes": 512,
+      "new_bytes": 512,
+      "old_sha256": "1b0478c51b4ff2f80e9d0326f7a00539e9b94c83deb8219aa951b50fb0f1eb39",
+      "new_sha256": "1b0478c51b4ff2f80e9d0326f7a00539e9b94c83deb8219aa951b50fb0f1eb39",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_preallocate",
+      "old_bytes": 36,
+      "new_bytes": 36,
+      "old_sha256": "6f4a5ec7719e81ea06df5f4a47f9be6262795f2df2d6c39257af9669b4451c5f",
+      "new_sha256": "6f4a5ec7719e81ea06df5f4a47f9be6262795f2df2d6c39257af9669b4451c5f",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_stage_bottom_allocation_safe",
+      "old_bytes": 308,
+      "new_bytes": 308,
+      "old_sha256": "d48e52d0f62f6eb20bb8c37f1af8550c5c68be1569ef0ba1d31e0c6830f5d70a",
+      "new_sha256": "d48e52d0f62f6eb20bb8c37f1af8550c5c68be1569ef0ba1d31e0c6830f5d70a",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_observe_stage_install",
+      "old_bytes": 400,
+      "new_bytes": 400,
+      "old_sha256": "0137746630ac8d63422deb23687fac3afbd4bcbad8d1c54799c7ed9b223916d1",
+      "new_sha256": "49b668afa7d1e1d11eb6eac187ba444dd2f5f33dcbfefb71a4525b195fe0ba4c",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 153,
+      "changed_literal_slots": [
+        {
+          "offset": 324,
+          "before": "0x8ce2cb80",
+          "after": "0x8ce2cbc0",
+          "roles": [],
+          "same_text": "COLD 20 HEAP INITIALIZER RETURNED"
+        },
+        {
+          "offset": 336,
+          "before": "0x8ce51c00",
+          "after": "0x8ce51c40",
+          "roles": [
+            "_native_heap_code_sha+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 340,
+          "before": "0x8ce51c34",
+          "after": "0x8ce51c74",
+          "roles": [
+            "_native_heap+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 344,
+          "before": "0x8ce51c20",
+          "after": "0x8ce51c60",
+          "roles": [
+            "_native_call+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 376,
+          "before": "0x8ce2cba4",
+          "after": "0x8ce2cbe4",
+          "roles": [],
+          "same_text": "COLD 21 HEAP ALLOCATION BEGIN"
+        },
+        {
+          "offset": 392,
+          "before": "0x8ce2cbc4",
+          "after": "0x8ce2cc04",
+          "roles": [],
+          "same_text": "COLD 22 HEAP ALLOCATION VERIFIED"
+        }
+      ]
+    },
+    {
+      "name": "_le32@vmu_native_heap_budget.c",
+      "old_bytes": 30,
+      "new_bytes": 30,
+      "old_sha256": "6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334",
+      "new_sha256": "6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_long_literal@vmu_native_heap_budget.c",
+      "old_bytes": 128,
+      "new_bytes": 128,
+      "old_sha256": "1f31121f0b67d6ea79e2b0c2a63c181d46d2ce97583c67bc47712d0727ccb289",
+      "new_sha256": "1f31121f0b67d6ea79e2b0c2a63c181d46d2ce97583c67bc47712d0727ccb289",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_memcmp",
+      "old_bytes": 34,
+      "new_bytes": 34,
+      "old_sha256": "3d7da64606fe412df2341ca8e1c2c56d14d3f4798465f1ec02f6d2994c6aefd9",
+      "new_sha256": "3d7da64606fe412df2341ca8e1c2c56d14d3f4798465f1ec02f6d2994c6aefd9",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_memcpy",
+      "old_bytes": 72,
+      "new_bytes": 72,
+      "old_sha256": "cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634",
+      "new_sha256": "cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_memset",
+      "old_bytes": 26,
+      "new_bytes": 26,
+      "old_sha256": "84a19f7aa0536a77835dd9917cd47ea65e6d6edf6013064ab39a36c0a05e118a",
+      "new_sha256": "84a19f7aa0536a77835dd9917cd47ea65e6d6edf6013064ab39a36c0a05e118a",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_metadata@vmu_native_heap.c",
+      "old_bytes": 416,
+      "new_bytes": 416,
+      "old_sha256": "9d1ea1f6d55d9d022afef79dddc1fa35d66a1a69f1ed556fd564fd65e8e2a221",
+      "new_sha256": "9d1ea1f6d55d9d022afef79dddc1fa35d66a1a69f1ed556fd564fd65e8e2a221",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_native_allocate_bottom@vmu_native_heap_probe_stage.c",
+      "old_bytes": 304,
+      "new_bytes": 304,
+      "old_sha256": "2f380c8842199662eb559ad26b38f017020e9926e6cc72cc5c053f6a25bf96a6",
+      "new_sha256": "7cd90018b2b72f71943dc2c44c7c7d67a40c343ace4262d9e959ea2a667c477f",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 130,
+      "changed_literal_slots": [
+        {
+          "offset": 264,
+          "before": "0x8ce51c34",
+          "after": "0x8ce51c74",
+          "roles": [
+            "_native_heap+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_native_allocator_unchanged@vmu_native_heap_probe_stage.c",
+      "old_bytes": 68,
+      "new_bytes": 68,
+      "old_sha256": "bc400df642a3086dff9cce9af883c5d44f229731c0294274dd49a91f70baf905",
+      "new_sha256": "803a0664bd5fcbd27a722c75fc0a9f542f9a100d6b7ea5a40ee2695bb08c116a",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 26,
+      "changed_literal_slots": [
+        {
+          "offset": 64,
+          "before": "0x8ce51c00",
+          "after": "0x8ce51c40",
+          "roles": [
+            "_native_heap_code_sha+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_native_budget_prepare@vmu_native_heap_probe_stage.c",
+      "old_bytes": 92,
+      "new_bytes": 92,
+      "old_sha256": "417490a35629276eae963c889b63292535f3d736bfcd34803c898fd913a9934a",
+      "new_sha256": "d3121409c7277618543b5fab42a1f3f99f8d5ef6cbf56c796027b59a6400adb8",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 31,
+      "changed_literal_slots": [
+        {
+          "offset": 76,
+          "before": "0x8ce612e8",
+          "after": "0x8ce61328",
+          "roles": [
+            "_exec_bytes+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 80,
+          "before": "0x8ce51c20",
+          "after": "0x8ce51c60",
+          "roles": [
+            "_native_call+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 84,
+          "before": "0x8ce51c34",
+          "after": "0x8ce51c74",
+          "roles": [
+            "_native_heap+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_native_budget_publish@vmu_native_heap_probe_stage.c",
+      "old_bytes": 132,
+      "new_bytes": 132,
+      "old_sha256": "5e5da214e0c3d6f27e78d3a001ab439eb90d35e07756158faf12dd0b269fb111",
+      "new_sha256": "564323c53d039b9b4ec754a4e193a5801ca6c85344dc8c0219fa8e4e36188570",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 54,
+      "changed_literal_slots": [
+        {
+          "offset": 108,
+          "before": "0x8ce51c34",
+          "after": "0x8ce51c74",
+          "roles": [
+            "_native_heap+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_native_low_bindings@vmu_native_heap_probe_stage.c",
+      "old_bytes": 64,
+      "new_bytes": 64,
+      "old_sha256": "914e49950b3eec800b5954bdf1c8070bc057eb42e08b316bd11449c0ebc87db2",
+      "new_sha256": "6a09daae562956ba3ef8767d27b7f6596215baba8d761b024fe13f17c2bc4de8",
+      "classification": "literal-only",
+      "error": "0x8ce010d0",
+      "changed_literal_slots": [],
+      "manual_noreturn_closure_boundary": true,
+      "exact_instruction_prefix_bytes": 48,
+      "typed_literal_slots": [
+        {
+          "offset": 48,
+          "same_roles": [
+            "_manifest+0"
+          ]
+        },
+        {
+          "offset": 52,
+          "same_roles": [
+            "_native_low_bindings_table+0",
+            "_native_low_bindings_table@vmu_native_heap_probe_stage.c+0"
+          ]
+        },
+        {
+          "offset": 56,
+          "same_roles": [
+            "_stopped+0",
+            "_stopped@vmu_native_heap_probe_stage.c+0"
+          ]
+        },
+        {
+          "offset": 60,
+          "same_roles": [
+            "_native_low_bindings_refused+0",
+            "_native_low_bindings_refused@vmu_native_heap_probe_stage.c+0"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "_native_read@vmu_native_heap_probe_stage.c",
+      "old_bytes": 84,
+      "new_bytes": 84,
+      "old_sha256": "b6bc33c6d4c36f9e6625ccf6afdc55b98e2e8f684d95194687fa946071a4804d",
+      "new_sha256": "b6bc33c6d4c36f9e6625ccf6afdc55b98e2e8f684d95194687fa946071a4804d",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_overlaps.constprop.0@vmu_native_heap_budget.c",
+      "old_bytes": 124,
+      "new_bytes": 124,
+      "old_sha256": "ab5b5d50a0e6b0d6bfdfe3d66da18c739b6a4569e20e8adf2c7f04a323795bdb",
+      "new_sha256": "ab5b5d50a0e6b0d6bfdfe3d66da18c739b6a4569e20e8adf2c7f04a323795bdb",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_ram@vmu_native_heap_budget.c",
+      "old_bytes": 76,
+      "new_bytes": 76,
+      "old_sha256": "64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305",
+      "new_sha256": "64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_read_is@vmu_native_heap.c",
+      "old_bytes": 80,
+      "new_bytes": 80,
+      "old_sha256": "a30c6231f114acaa0bb2274914e14a5ce1225ada50dde102a9f4c4e2880862e8",
+      "new_sha256": "a30c6231f114acaa0bb2274914e14a5ce1225ada50dde102a9f4c4e2880862e8",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_span@vmu_native_heap.c",
+      "old_bytes": 76,
+      "new_bytes": 76,
+      "old_sha256": "64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305",
+      "new_sha256": "64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_span@vmu_native_stage_placement.c",
+      "old_bytes": 80,
+      "new_bytes": 80,
+      "old_sha256": "4e5ac885af47f3deec9bf74747cecdfcdaac70abbe7c981eaea812f41c3c041d",
+      "new_sha256": "4e5ac885af47f3deec9bf74747cecdfcdaac70abbe7c981eaea812f41c3c041d",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_word@vmu_native_heap_budget.c",
+      "old_bytes": 52,
+      "new_bytes": 52,
+      "old_sha256": "9a68103cac2b1b00551a238a475297f0c36253820af2e2443c243db5d27713e6",
+      "new_sha256": "9a68103cac2b1b00551a238a475297f0c36253820af2e2443c243db5d27713e6",
+      "classification": "byte-identical"
+    }
+  ],
+  "cold_object_arrays_all_byte_identical": true,
+  "old_cold_and_worker_maps_retained_with_explicit_paired_gate_marker": true,
+  "fast_closure_preflight": {
+    "heap_kernel": {
+      "passed": true,
+      "report_sha256": "4ce45cee2dd921ec7bac399ff6cac2de6fac076532e30f03012702dc8f919b78",
+      "prototype_elf_bound": true
+    },
+    "raw_owner": {
+      "passed": true,
+      "report_sha256": "995524c40cfce2427ba2f4f13ebf02fd0b4294a11eb222371422c773db0c84d0",
+      "prototype_elf_bound": true
+    },
+    "dual_readers": {
+      "passed": true,
+      "report_sha256": "3f78af2b3df70fc7b219e281f9bbd817d717544fefcb2864606b8c9995646d59",
+      "prototype_elf_bound": true
+    },
+    "live_boundary_abi": {
+      "passed": true,
+      "cases": 336,
+      "semantic_mutants_rejected": 9,
+      "body_byte_mutants_rejected": 216
+    }
   }
 }

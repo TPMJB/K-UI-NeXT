@@ -30,17 +30,30 @@ from sh4_delay_slots import validate_delay_slot
 SCHEMA='kui.native.bottom-heap.compiled-worker.v1'
 RETURN=0xdeadbeee
 OUTPUT=FRAME
-PINS={
- '_span@vmu_native_heap.c':(76,'64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305'),
- '_index@vmu_native_heap.c':(100,'b6d11408b1855b59adb23eb88af064de182c1b5ceb784eedf901f4ff7c6db6fc'),
- '_metadata@vmu_native_heap.c':(416,'ae4af783f24f41eae20da598b6910f054e571b512c1b1f08c3dc4e5c68bf2483'),
- '_read_is@vmu_native_heap.c':(80,'0d9eb79846bed68111e888d7d83da465c1dbfff4019f018049ed44d33068e5e7'),
- '_bottom_geometry@vmu_native_heap.c':(24,'fe83cd5cec158b6d373003e684f8d52b59b7f5200e588cfe204826026a080668'),
- '_identity@vmu_native_heap.c':(412,'7bc3dcf8abc60e627d27a8aa1914df151637074b32f6ae211f320a984af8d302'),
- '_kui_vmu_native_heap_lease_valid_with_release':(512,'16a2a46cd54b7bf82b732e28b5297ec4fe2a3803fa38f2b1246157f973525b6b'),
- '_kui_vmu_native_heap_lease_identity_valid':(76,'3f730f877ba979f408d6c596f8643448183a9cbb9f88761731580f34be8e133f'),
- '_kui_vmu_native_heap_lease_valid':(28,'d15c3ca657bca47aea6bb764676750e1a474eb5ea90062e315e7e55ca20fd5f2'),
-}
+PINS = {'_span@vmu_native_heap.c': (76, '64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305'),
+ '_index@vmu_native_heap.c': (100, 'b6d11408b1855b59adb23eb88af064de182c1b5ceb784eedf901f4ff7c6db6fc'),
+ '_metadata@vmu_native_heap.c': (416, 'ae4af783f24f41eae20da598b6910f054e571b512c1b1f08c3dc4e5c68bf2483'),
+ '_read_is@vmu_native_heap.c': (80, '0d9eb79846bed68111e888d7d83da465c1dbfff4019f018049ed44d33068e5e7'),
+ '_bottom_geometry@vmu_native_heap.c': (24,
+                                        'fe83cd5cec158b6d373003e684f8d52b59b7f5200e588cfe204826026a080668'),
+ '_identity@vmu_native_heap.c': (412, '7bc3dcf8abc60e627d27a8aa1914df151637074b32f6ae211f320a984af8d302'),
+ '_kui_vmu_native_heap_lease_valid_with_release': (512,
+                                                   '16a2a46cd54b7bf82b732e28b5297ec4fe2a3803fa38f2b1246157f973525b6b'),
+ '_kui_vmu_native_heap_lease_identity_valid': (76,
+                                               '3f730f877ba979f408d6c596f8643448183a9cbb9f88761731580f34be8e133f'),
+ '_kui_vmu_native_heap_lease_valid': (28, 'd15c3ca657bca47aea6bb764676750e1a474eb5ea90062e315e7e55ca20fd5f2')}
+DISPATCH_GATE_PINS = {'_span@vmu_native_heap.c': (76, '64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305'),
+ '_index@vmu_native_heap.c': (100, 'a9aa696f5722b6ba5f00b4779f89ba37e21624b46c6ac440c171afe5b6b04334'),
+ '_metadata@vmu_native_heap.c': (416, 'fb6a9ee3425f555fe873833b7161f9ea3c287aa3525033f0900321bb394d8a38'),
+ '_read_is@vmu_native_heap.c': (80, '34414e24b9c009d0b915e202e1f09e6248a2b868a7f423f1eab4c1132c85037a'),
+ '_bottom_geometry@vmu_native_heap.c': (24,
+                                        'fe83cd5cec158b6d373003e684f8d52b59b7f5200e588cfe204826026a080668'),
+ '_identity@vmu_native_heap.c': (412, 'ebe054d88dead365d0eaf102bc8b2991d50c01be8114b3d9a064874a52ff9893'),
+ '_kui_vmu_native_heap_lease_valid_with_release': (512,
+                                                   '85559f7e6bb73d9b5ed3e5bad8f2366980539a98477c4b4e681f13dbaf7b8aae'),
+ '_kui_vmu_native_heap_lease_identity_valid': (76,
+                                               '79a1ea16da8da8eeee75d90cbfc5159823a23ba3aa871de989554a606c6313cc'),
+ '_kui_vmu_native_heap_lease_valid': (28, 'ec3c8bce81483e723c16ff9f4ba19b982ff81e3dde4701f2706817b52e3462b3')}
 SOURCES=('tools/check_native_bottom_heap_worker.py','tools/profile_vmu_native_release_sh.py',
          'tests/test_vmu_native_heap_execution.py','src/core/vmu_native_heap.c',
          'include/kui/vmu_native_heap.h')
@@ -68,9 +81,13 @@ def records(worker):
 
 
 def pinned(worker):
+    gate=worker[4].get('__kui_native_dispatch_read_gate_worker')
+    require(gate is None or gate==(1,0,0,0xfff1) and bottom_worker_profile(worker),
+            'Dispatch-gated worker lacks exact bottom capability')
+    pins=DISPATCH_GATE_PINS if gate is not None else PINS
     result={}
     for name,(address,body,_) in records(worker).items():
-        require((len(body),sha(body))==PINS[name],'Worker heap guard instruction/literal pin differs: '+name)
+        require((len(body),sha(body))==pins[name],'Worker heap guard instruction/literal pin differs: '+name)
         result[name]=dict(address=hex(address),bytes=len(body),sha256=sha(body))
     return result
 
