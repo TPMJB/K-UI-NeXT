@@ -128,6 +128,17 @@ WITNESS_STRUCTURAL_STAGE_PINS={
     '_literal_at':(62,'1712d6126cb969c7f2f21fb2de718960809b1782d1b39a06f772a21af78e16fe'),
     '_normalized':(192,'975fceb4f0112ddd63c12191f4a02efc71c1e31215d1608c84a7215f11153236'),
 }
+# The dedicated preflight failure page only relocates these binders' literal
+# targets. Every changed word was matched to the same symbol/interior offset
+# or unchanged progress string. Retain exact complete hashes for both layouts.
+PREFLIGHT_WITNESS_STRUCTURAL_STAGE_PINS={
+    '_native_sdk_sci_route_bind':(940,'11c8770f7a94476b7f34eed68692341053dad807c1f00206dfcd9bf2fd9ff8c3'),
+    '_kui_native_sdk_sci_route_admit':(796,'7a236298eeba9526bcaed78e5a51577234d876cfa2cafe3a4a764409a7f59125'),
+    '_kui_native_sdk_sci_route_discover':(1856,'d985601faed1cc11722a0e312b4e3b55d2daa8eca2150c760190f6f60910f708'),
+    '_fingerprint':(88,'b6c1b8909b253ecdbedd73b8d9fd37cfbc87931183716a20f255cf3cd0fe0935'),
+    '_live_words':(80,'58f2d2d6c72424c4c3046166a6291b1ee91516905c8ebd29c986efb22b95f0c9'),
+    '_normalized':(192,'86855064c7be2d98fc94ce4b9fabb54051724bfcc2eddd46a2ca4fd5c1900941'),
+}
 MEMORY_CACHE={}
 MEMORY_REFERENCES={}
 
@@ -263,9 +274,13 @@ def stage_pins(stage,*,diagnostic=False,pio=False,pio_pair=False,multi_owner=Fal
         address,body,section=symbol_bytes(stage,name,2)
         require(section[2]&4 and 0x8ce00000<=address<address+len(body)<=0x8cfe0000,
                 'SDK SCI cold binder/admission code escapes temporary stage')
-        require(len(body)==count and hashlib.sha256(body).hexdigest()==digest,
+        actual=hashlib.sha256(body).hexdigest()
+        accepted=((count,digest),)
+        if witness and name in PREFLIGHT_WITNESS_STRUCTURAL_STAGE_PINS:
+            accepted+=(PREFLIGHT_WITNESS_STRUCTURAL_STAGE_PINS[name],)
+        require((len(body),actual) in accepted,
                 'SDK SCI cold binder/admission instruction/literal pin changed: '+name)
-        result[name]=(address,count,digest)
+        result[name]=(address,len(body),actual)
     return result
 
 

@@ -49,6 +49,13 @@ WITNESS_DUAL_PINS={
     '_native_readahead_bind':(1252,'f62b60124f9241b2853e0826c50cd6739d337b9d3d8c2b6ee9f756f74fb0fb53'),
     '_kui_vmu_native_background_map_address':(92,'cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8'),
 }
+# The dedicated card-preflight failure page moves the stage's text/data.
+# This second complete binder body differs only in21 exact pointer literals:
+# the same16 typed targets and five unchanged progress strings. Keep both
+# reviewed whole-body hashes; no literal or instruction is masked out.
+PREFLIGHT_WITNESS_DUAL_PINS={
+    '_native_readahead_bind':(1252,'21e95aee5766e7b10e419b4590f191a3f2e6c6f38e110812322ddd5fc748a0d1'),
+}
 # Pins are reviewed against the candidate's complete linked body and literals.
 # The combined read-ahead audit also pins the complete module and low table.
 PINS={
@@ -405,9 +412,13 @@ def pin_stage(stage,*,diagnostic=False,pio=False,pair=False,multi_owner=False,st
         address,body,section=symbol_bytes(stage,name,2)
         require(section[2]&4 and 0x8ce00000<=address<address+count<=0x8cfe0000,
                 'cold read-ahead code leaves the temporary stage')
-        require(len(body)==count and hashlib.sha256(body).hexdigest()==digest,
+        actual=hashlib.sha256(body).hexdigest()
+        accepted=((count,digest),)
+        if witness and name in PREFLIGHT_WITNESS_DUAL_PINS:
+            accepted+=(PREFLIGHT_WITNESS_DUAL_PINS[name],)
+        require((len(body),actual) in accepted,
                 'cold read-ahead instruction/literal pin changed: '+name)
-        result[name]=(address,count,digest)
+        result[name]=(address,len(body),actual)
     require(bool(result),'cold read-ahead reviewed pins are missing')
     return result
 

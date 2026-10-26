@@ -45,6 +45,7 @@ from check_vmu_native_trace import check as audit_trace_gates, GATES as TRACE_GA
 from check_vmu_native_map_refusal import check as audit_map_refusal
 from check_vmu_native_fault_capture import audit as audit_fault_capture
 from check_vmu_native_fault_capture import GATEWAY as FAULT_GATEWAY, PUBLISH as FAULT_PUBLISH, STATE as FAULT_STATE
+from check_vmu_native_background import WITNESS_PASSIVE_RUN_PINS
 from vmu_native_relocations import generate, validate_loads
 from test_armada_ce_maple_hook import CPU
 
@@ -1193,8 +1194,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         require(worker is not None and witness_companion(worker,read_ahead_proof) and
                 progress==symbols.get('__kui_native_dual_readers_stage')==(1,0,0,0xfff1),
                 'worker publication progress requires the complete exact witness worker proof')
-        require(len(body)==1996 and hashlib.sha256(body).hexdigest()==
-                '51da99254ae17780acfbf3c56915f58e3107b64e559767570281545d3e2eaaeb',
+        require((len(body),hashlib.sha256(body).hexdigest()) in WITNESS_PASSIVE_RUN_PINS,
                 'witness worker-publication passive-run instructions/literals changed')
         witness=True
     words = list(struct.unpack("<" + "H" * (len(body) // 2), body))
@@ -1539,8 +1539,8 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 (12,begin+2*(normal-8)+2,tail_entry))
         if witness:
             require(background_tail.get('controller_failure_witness_profile') is True and
-                    background_tail.get('complete_passive_run_pin')==dict(bytes=1996,sha256=
-                        '51da99254ae17780acfbf3c56915f58e3107b64e559767570281545d3e2eaaeb'),
+                    background_tail.get('complete_passive_run_pin')==dict(bytes=len(body),sha256=
+                        hashlib.sha256(body).hexdigest()),
                     'witness publication requires its exact compiled Background prefix proof')
             stable=((9,norm_or+4,tail['relocate']),
                     (8,memcpy_pc+2,tail['copy_region']),

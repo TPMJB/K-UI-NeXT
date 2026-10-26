@@ -27,6 +27,13 @@ import check_retail_stack as graph
 from sh4_delay_slots import validate_delay_slot
 
 ROOT = Path(__file__).resolve().parents[1]
+# The card-preflight failure page relocates59 pointer literals in the same
+# 1996-byte installer. Both complete reviewed bodies retain exact bytes;
+# their target symbols/offsets and progress strings were compared directly.
+WITNESS_PASSIVE_RUN_PINS=frozenset({
+    (1996,'51da99254ae17780acfbf3c56915f58e3107b64e559767570281545d3e2eaaeb'),
+    (1996,'9c58801c08b0c82f9985a11ea0b3d94bf0d4442ad11a80ca29642c1138572183'),
+})
 LOW, BOTTOM, TOP = 0x8C004000, 0x8C007BA0, 0x8C007D00
 GUARD, TOP_GAP, EXTRA_MARGIN = 16, 32, 32
 ROOTS = {"kui_retail_resident_dispatch": 0, "kui_retail_async_irq": 44,
@@ -281,8 +288,7 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
         require(stage[4].get('__kui_native_cold_progress_stage')==
                 stage[4].get('__kui_native_dual_readers_stage')==(1,0,0,0xfff1),
                 'Background witness tail requires exact dual/progress markers')
-        require(len(body)==1996 and digest(body)==
-                '51da99254ae17780acfbf3c56915f58e3107b64e559767570281545d3e2eaaeb',
+        require((len(body),digest(body)) in WITNESS_PASSIVE_RUN_PINS,
                 'Background witness passive-run instruction/literal pin changed')
         index=0x134//2
         require(words[index:index+4]==[0x51a8,0x31b0,0x8f08,0x1c0f] and
@@ -562,7 +568,7 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
         if witness:
             for offset in range(len(body)):
                 changed=bytearray(body);changed[offset]^=1
-                require(digest(changed)!='51da99254ae17780acfbf3c56915f58e3107b64e559767570281545d3e2eaaeb',
+                require((len(changed),digest(changed)) not in WITNESS_PASSIVE_RUN_PINS,
                         'Background witness passive-run pin accepted changed instructions/literals')
                 pin_mutations+=1
     return {"actual_sh_cases": cases, "entry": hex(start), "lease_bytes":lease_bytes,
