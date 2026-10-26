@@ -45,7 +45,11 @@ C(kui_vmu_native_passive_submit_hook):
     mov.l .Lsubmit_stack,r15
     mov.l r4,@-r15
     mov.l .Lsubmit_visit,r0
+#if KUI_NATIVE_MAPLE_BYPASS_ISOLATION
+    nop
+#else
     jsr @r0
+#endif
     nop
     mov.l @r15,r15
     ldc.l @r15+,gbr
@@ -128,7 +132,11 @@ C(kui_vmu_native_passive_complete_hook):
     mov.l r4,@-r15
 #endif
     mov.l .Lcomplete_visit,r0
+#if KUI_NATIVE_MAPLE_BYPASS_ISOLATION
+    nop
+#else
     jsr @r0
+#endif
     nop
 #if KUI_VMU_NATIVE_READONLY_PROBE
     mov.l @r15,r15

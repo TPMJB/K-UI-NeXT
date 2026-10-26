@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# New demand/VMU-off/TICK-off control, retaining original Maple execution
+# while omitting only the passive submit/completion C calls. The existing
+# gateway frame, mask, stack switch, restoration and forwarding stay intact.
+BUILD ?= build/native-isolation-maple-bypass
+include Makefile.vmu-native-isolation-demand
+FLAGS += -DKUI_NATIVE_MAPLE_BYPASS_ISOLATION=1
+NATIVE_FLAGS += -DKUI_NATIVE_MAPLE_BYPASS_ISOLATION=1
+
+.PHONY: isolation-maple-bypass-tests
+isolation-maple-bypass-tests:
+	python3 tools/check_native_maple_bypass.py --build $(BUILD) \
+	 --startup "$(KUI_NATIVE_EVOLUTION1_STARTUP)" \
+	 --record tests/fixtures/native-cache/evolution1.nvr \
+	 --output $(BUILD)/maple-bypass-gateways.json

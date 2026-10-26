@@ -436,7 +436,12 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #else
     retail_display_line("NEW READER / VIRTUAL VMU OFF");
 #endif
+#if KUI_NATIVE_MAPLE_BYPASS_ISOLATION
+    retail_display_line("MAPLE C CALLBACKS OFF");
+    retail_display_line("LIFETIME GUARDS RETAINED");
+#else
     retail_display_line("READER SUPPORT HOOKS RETAINED");
+#endif
 #elif KUI_NATIVE_STANDARD_VMU_ISOLATION
     retail_display_line("STANDARD READER / VIRTUAL A2 ON");
     retail_display_line("384 KIB / BACKGROUND OFF");
