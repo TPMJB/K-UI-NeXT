@@ -1,0 +1,67 @@
+{
+  "schema": "kui.native.original-caller-execution.v1",
+  "retail_code_embedded": false,
+  "results": [
+    {
+      "game": "rayman2",
+      "image_sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099",
+      "image_bytes": 935648,
+      "source_sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099",
+      "source_bytes": 935648,
+      "discarded_suffix_bytes": 0,
+      "program_extent_production_verified": true,
+      "start": "0x8c010ea6",
+      "call": "0x8c010eca",
+      "selected": "0x8c010ebe",
+      "slot": "0x8c010f58",
+      "original_target": "0x8c0d05d4",
+      "hook_target": "0x8c004200",
+      "begin": "0x8c2ff220",
+      "bytes": "0x00d00de0",
+      "pr": "0x8c010ece",
+      "successful_caller_starts": 2,
+      "independent_trials": 6,
+      "instructions": [
+        20,
+        20,
+        20,
+        20,
+        20,
+        20
+      ],
+      "selected_literal_executed_once": true,
+      "immutable_image_reads": true,
+      "only_bounded_stack_spills": true,
+      "jgr_partial_only": false
+    }
+  ],
+  "original_startup_stack_frames": [
+    {
+      "game": "rayman2",
+      "source_sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099",
+      "original_call_edges_verified": true,
+      "original_prologues_executed": 4,
+      "intervening_helpers": "ABI returns preserve SP; helper bodies not executed",
+      "game_boot_verified": false,
+      "old_lower_bound_refuses": true,
+      "retained_low_reader_and_52byte_frame_disjoint": true,
+      "cases": [
+        {
+          "boot_sp": "0xc00f400",
+          "heap_hook_sp": "0xc00b3a4",
+          "original_stack_instruction_count": 14
+        },
+        {
+          "boot_sp": "0x8c00f400",
+          "heap_hook_sp": "0x8c00b3a4",
+          "original_stack_instruction_count": 14
+        },
+        {
+          "boot_sp": "0xac00f400",
+          "heap_hook_sp": "0xac00b3a4",
+          "original_stack_instruction_count": 14
+        }
+      ]
+    }
+  ]
+}

@@ -80,6 +80,12 @@ MULTI_OWNER_PINS={
 }
 
 
+# Exact whole bodies reviewed for the paired owned-timer/owner-stack profile.
+GAME_STARTUP_STAGE_PINS={
+    '_native_readahead_bind':(1252, 'db84956f19c7700e826ef3fde6eefee9219d682cab03cd134d65df5ec0ede84c'),
+    '_kui_vmu_native_background_map_address':(92, 'cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8'),
+}
+
 def require(ok,message):
     if not ok:raise ValueError(message)
 
@@ -390,7 +396,7 @@ class ReadAheadBinderCPU(ColdBinderCPU):
             (self.sdk_vbr+0x25c,self.sdk_vbr+0x260,self.region+0x534,self.region+0x538,self.region+0x530))
 
 
-def pin_stage(stage,*,diagnostic=False,pio=False,pair=False,multi_owner=False,structural=False,dual=False,witness=False,progress=False):
+def pin_stage(stage,*,diagnostic=False,pio=False,pair=False,multi_owner=False,structural=False,dual=False,witness=False,progress=False,owned_timers=False):
     result={}
     require(not pio or diagnostic,'cold PIO stage pins require the diagnostic layout')
     require(not pair or pio,'cold PIO pair stage pins require the PIO profile')
@@ -407,14 +413,15 @@ def pin_stage(stage,*,diagnostic=False,pio=False,pair=False,multi_owner=False,st
             stage[4][COLD_PROGRESS_MARKER]==(1,0,0,0xfff1) and witness and dual),
             'cold progress stage requires its exact marker and selected witness worker')
     require(not witness or progress,'cold witness stage pins require the paired cold progress marker')
-    selected=WITNESS_DUAL_PINS if witness else DUAL_PINS if dual else STRUCTURAL_PINS if structural else MULTI_OWNER_PINS if multi_owner else PIO_PAIR_PINS if pair else PIO_PINS if pio else DIAGNOSTIC_PINS if diagnostic else PINS
+    require(not owned_timers or witness and dual and progress, 'Owned-timer cold pins require the full dual witness profile')
+    selected=GAME_STARTUP_STAGE_PINS if owned_timers else WITNESS_DUAL_PINS if witness else DUAL_PINS if dual else STRUCTURAL_PINS if structural else MULTI_OWNER_PINS if multi_owner else PIO_PAIR_PINS if pair else PIO_PINS if pio else DIAGNOSTIC_PINS if diagnostic else PINS
     for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(stage,name,2)
         require(section[2]&4 and 0x8ce00000<=address<address+count<=0x8cfe0000,
                 'cold read-ahead code leaves the temporary stage')
         actual=hashlib.sha256(body).hexdigest()
         accepted=((count,digest),)
-        if witness and name in PREFLIGHT_WITNESS_DUAL_PINS:
+        if witness and not owned_timers and name in PREFLIGHT_WITNESS_DUAL_PINS:
             accepted+=(PREFLIGHT_WITNESS_DUAL_PINS[name],)
         require((len(body),actual) in accepted,
                 'cold read-ahead instruction/literal pin changed: '+name)
@@ -431,9 +438,12 @@ def check_stage(stage,resident,aux,*,self_test=False,worker=None):
     dual=DUAL_MARKER in stage[4]
     witness=witness_worker_profile(stage,worker)
     progress=COLD_PROGRESS_MARKER in stage[4]
+    from check_native_game_startup_profile import game_startup_profile
+    owned_timers=game_startup_profile(worker,resident) if worker is not None else False
+    require(worker is not None or '__kui_native_owner_stack_ip_hook' not in resident[4], 'New owner-stack stage needs its paired worker')
     worker_proof=worker_binding(stage,worker) if worker is not None else None
     def pin_selected(image):return pin_stage(image,diagnostic=layout['diagnostic'],pio=layout['pio'],
-                                              pair=layout['pair'],multi_owner=multi_owner,structural=structural,dual=dual,witness=witness,progress=progress)
+                                              pair=layout['pair'],multi_owner=multi_owner,structural=structural,dual=dual,witness=witness,progress=progress,owned_timers=owned_timers)
     pins=pin_selected(stage)
     owners=('Evolution1','Evolution2') if multi_owner else ('Evolution2',)
     positives=negatives=mutations=pin_mutations=layout_mutations=stage_marker_mutations=0
@@ -593,7 +603,7 @@ def check_stage(stage,resident,aux,*,self_test=False,worker=None):
                 try:
                     selected=multi_owner_profile(changed,layout)
                     pin_stage(changed,diagnostic=layout['diagnostic'],pio=layout['pio'],pair=layout['pair'],multi_owner=selected,
-                              structural=structural,dual=dual,witness=witness,progress=progress)
+                              structural=structural,dual=dual,witness=witness,progress=progress,owned_timers=owned_timers)
                 except ValueError:stage_marker_mutations+=1
                 else:raise ValueError('cold read-ahead accepted changed multi-owner stage marker')
         if witness:
@@ -608,7 +618,7 @@ def check_stage(stage,resident,aux,*,self_test=False,worker=None):
                 try:
                     selected=witness_worker_profile(stage,changed)
                     pin_stage(stage,diagnostic=layout['diagnostic'],pio=layout['pio'],pair=layout['pair'],
-                              multi_owner=multi_owner,structural=structural,dual=dual,witness=selected,progress=progress)
+                              multi_owner=multi_owner,structural=structural,dual=dual,witness=selected,progress=progress,owned_timers=owned_timers)
                 except ValueError:worker_profile_mutations+=1
                 else:raise ValueError('cold read-ahead accepted changed witness worker marker')
             for begin in ('__native_worker_blob_begin','__native_worker_reloc_begin'):
@@ -625,7 +635,7 @@ def check_stage(stage,resident,aux,*,self_test=False,worker=None):
                 else:symbols[COLD_PROGRESS_MARKER]=marker
                 changed=(*stage[:4],symbols)
                 try:pin_stage(changed,diagnostic=layout['diagnostic'],pio=layout['pio'],pair=layout['pair'],
-                              multi_owner=multi_owner,structural=structural,dual=dual,witness=witness,
+                              multi_owner=multi_owner,structural=structural,dual=dual,witness=witness,owned_timers=owned_timers,
                               progress=marker is not None)
                 except ValueError:progress_marker_mutations+=1
                 else:raise ValueError('cold read-ahead accepted changed progress stage marker')

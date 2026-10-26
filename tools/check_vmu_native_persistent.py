@@ -45,7 +45,7 @@ from check_vmu_native_trace import check as audit_trace_gates, GATES as TRACE_GA
 from check_vmu_native_map_refusal import check as audit_map_refusal
 from check_vmu_native_fault_capture import audit as audit_fault_capture
 from check_vmu_native_fault_capture import GATEWAY as FAULT_GATEWAY, PUBLISH as FAULT_PUBLISH, STATE as FAULT_STATE
-from check_vmu_native_background import WITNESS_PASSIVE_RUN_PINS
+from check_vmu_native_background import WITNESS_PASSIVE_RUN_PINS,passive_run_pins
 from vmu_native_relocations import generate, validate_loads
 from test_armada_ce_maple_hook import CPU
 
@@ -795,6 +795,21 @@ DUAL_WITNESS_PREPARED_PINS={
  '_failure_witness.isra.0':('8fab6b82f679e0ba509dd4420916770f8a40bd5708e67a274c399d3dda2a81f7',16),
 }
 
+# Exact timer policy, typed pointer targets and compact caption interiors.
+OWNED_TIMER_PREPARED_PINS={
+    '_diagnostic_complete':('31f2ca55ecae9dcc949b10a0579cddbe76941f2a9d028a3da3bf44dc3e911b40', 3240),
+    '_kui_vmu_native_passive_submit':('a04e49d3bf03cf65f9e1009ed6bc4e902d709eb6f99fbec063a3505ecbdfa2c6', 1428),
+    '_kui_vmu_native_passive_complete':('3cb4e5dc0c8b9956124e38225f99aa7201eec730c48d623ee2fc6f3e7f92c629', 3144),
+    '_controller_context_valid':('43d5b6f1aee195f92cd33672814eff6b8fff1bca07c86b921846b90c29204c2b', 1336),
+    '_transfer_context_valid':('6eb06daa4727e44d6fb40511e66cfdb56dd0b1f5165e5c0d1b433aca8d5d0bb9', 1180),
+    '_kui_vmu_native_runtime_fault':('cbd8540aa6835ca945b1a7f51174720160ef4ea0b4185ee1d8ffccb5b87cc35c', 332),
+    '.rodata':('96e1c69e5df590370933e5b557698c65f143640d22e756f228119c49fd997d7e', 4108),
+    '_kui_vmu_native_trace_report':('e8b3bec0c0f5b62a3c2709126d84e8badfe80b7eea7a8213058ee22de05ce75d', 1040),
+    '_trace_history':('f9179c2769f6c3c2719a40fda63b9a99844d6af01ddd69c06fb68f01412225cf', 164),
+    '_report':('be597ef186062768059ab59c0d1e41247c1a6c6b91a7aec1cf9e911a112f3b3a', 440),
+    '_trace_packets':('e3e6dc04111ec2dceb78c4be4d100964a9cc3f5b81c99f1c8e266412a1b1ff33', 116),
+}
+
 def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *, build=None,
                             read_ahead_proof=None):
     """Keep the legacy proof, or require the complete prepared proof family."""
@@ -847,6 +862,9 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
     dual_reader=dual_companion(worker,read_ahead_proof)
     from check_native_controller_failure_witness import witness_companion
     controller_witness=witness_companion(worker,read_ahead_proof)
+    from check_native_game_startup_profile import game_startup_profile
+    owned_timers=game_startup_profile(worker)
+    require(not owned_timers or controller_witness, 'Owned-timer prepared maps require matching actual witness proof')
     require(not controller_witness or dual_reader,
             'prepared controller witnesses require the complete dual companion')
     require(not controller_witness or DUAL_WITNESS_PREPARED_PINS,
@@ -862,7 +880,8 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
           **(READ_AHEAD_PIO_PREPARED_PINS if read_ahead_pio else {}),
           **(READ_AHEAD_PIO_PAIR_PREPARED_PINS if read_ahead_pio_pair else {}),
           **(DUAL_READER_PREPARED_PINS if dual_reader else {}),
-          **(DUAL_WITNESS_PREPARED_PINS if controller_witness else {})}
+          **(DUAL_WITNESS_PREPARED_PINS if controller_witness else {}),
+          **(OWNED_TIMER_PREPARED_PINS if owned_timers else {})}
     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
                        ("_protected_ranges", 512), ("_protected_count", 4),
@@ -957,7 +976,12 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
                     different = True
                 require(different, "prepared signature accepts changed typed pointer: " + name)
                 rejected += 1
+    live_boundary_abi={"enabled":False}
+    if owned_timers:
+        from check_native_live_boundary_abi import check as check_live_boundary_abi
+        live_boundary_abi=check_live_boundary_abi(worker,self_test=self_test)
     return {"prepared": True, "exact_linked_kernels": functions, "build_identity": build,
+            "live_boundary_call_abi":live_boundary_abi,
             "read_ahead_diagnostic_companion_required":bool(read_ahead_diagnostic),
             "read_ahead_pio_companion_required":read_ahead_pio,
             "read_ahead_pio_pair_companion_required":read_ahead_pio_pair,
@@ -1194,7 +1218,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         require(worker is not None and witness_companion(worker,read_ahead_proof) and
                 progress==symbols.get('__kui_native_dual_readers_stage')==(1,0,0,0xfff1),
                 'worker publication progress requires the complete exact witness worker proof')
-        require((len(body),hashlib.sha256(body).hexdigest()) in WITNESS_PASSIVE_RUN_PINS,
+        require((len(body),hashlib.sha256(body).hexdigest()) in passive_run_pins(worker),
                 'witness worker-publication passive-run instructions/literals changed')
         witness=True
     words = list(struct.unpack("<" + "H" * (len(body) // 2), body))

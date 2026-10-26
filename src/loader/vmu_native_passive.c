@@ -26,6 +26,8 @@ __asm__(".global __kui_native_controller_failure_witness_worker\n"
         ".set __kui_native_controller_failure_witness_worker,1\n");
 __asm__(".global __kui_native_terminal_dispatch_worker\n"
         ".set __kui_native_terminal_dispatch_worker,1\n");
+__asm__(".global __kui_native_owned_timer_callbacks_worker\n"
+        ".set __kui_native_owned_timer_callbacks_worker,1\n");
 #define WORKER_SPAN UINT32_C(0x20000)
 #define PAIR_LIMIT 180000u
 #else
@@ -373,38 +375,38 @@ static void diagnostic_report(void) {
     retail_display_line("VMU LATENCY");
 #if KUI_NATIVE_COOP_PUMP
 #else
-    retail_display_line("STORAGE TIME IS ALSO IN COMPLETE TIME");
+    retail_display_line("STORE TIME IN COMPLETE");
 #endif
-    const char *const labels[4]={"SUB N VALID BAD TOTAL MAX","END N VALID BAD TOTAL MAX",
-        "FREE N VALID BAD TOTAL MAX","STORE N VALID BAD TOTAL MAX"};
+    const char *const labels[4]={"SUB N OK BAD SUM MAX","END N OK BAD SUM MAX",
+        "FREE N OK BAD SUM MAX","STORE N OK BAD SUM MAX"};
     for(unsigned i=0;i<4u;i++) {
         const struct kui_vmu_native_profile_metric *m=&diagnostic.timing.metric[i];
         retail_display_values(labels[i],(uint32_t[5]){m->calls,m->valid,m->invalid,m->ticks_total,m->ticks_max},5u);
     }
-    retail_display_values("WALL CLOCK SAMPLES BAD FLAGS",(uint32_t[4]){
+    retail_display_values("WALL CLK N BAD FLAGS",(uint32_t[4]){
         diagnostic.clock_started?diagnostic.clock_first-diagnostic.clock_last:0u,
         diagnostic.clock_samples,diagnostic.clock_invalid,diagnostic.timing.flags},4u);
-    retail_display_values("FAST/FULL SUB FAST/FULL END",(uint32_t[4]){
+    retail_display_values("FAST/FULL SUB/END",(uint32_t[4]){
         diagnostic.fast_submit,diagnostic.full_submit,diagnostic.fast_complete,diagnostic.full_complete},4u);
-    retail_display_line("PROFILE STOP / PHOTO / OFF");
+    retail_display_line("PROFILE / PHOTO / OFF");
     retail_display_pause(300u);
     retail_display_restore(&display);
-    retail_display_line("CLOCK/VIDEO PHASE");
-    retail_display_line("TMU0 READ ONLY 781250HZ");
+    retail_display_line("CLOCK/VIDEO");
+    retail_display_line("TMU0 R/O 781250HZ");
     retail_display_values("CCR FIRST LAST ICEOFF POLL COMMIT",(uint32_t[5]){
         diagnostic.ccr_first,diagnostic.ccr_last,diagnostic.ice_off,
         state.completed-diagnostic.capture_poll_start,durable_card.commits},5u);
     retail_display_values("PHASE ON N VALID WAIT WRAP",(uint32_t[5]){
         diagnostic_phase.enabled,diagnostic_phase.sequence,diagnostic_phase.valid,
         diagnostic_phase.waits,diagnostic_phase.wraps},5u);
-    retail_display_hex("CPU FAULT VEC ARMED",kui_vmu_native_fault_capture_state[7]);
+    retail_display_hex("FAULT VEC ARMED",kui_vmu_native_fault_capture_state[7]);
     retail_display_line("PAGES CYCLE / PHOTO / OFF");
     retail_display_pause(300u);
     for(unsigned first=0;first<diagnostic_phase.count;first+=4u) {
         retail_display_restore(&display);
-        retail_display_line("PHASE RECORDS OLDEST FIRST");
+        retail_display_line("PHASE OLDEST FIRST");
         retail_display_line("KIND+FLAGS IN OUT TICKS I");
-        retail_display_line("PC PR SR EVT FRAME / LOAD VBL CTRL BEG END");
+        retail_display_line("PC PR SR EVT FR / LD VBL CTRL BEG END");
         for(unsigned i=first;i<first+4u && i<diagnostic_phase.count;i++) {
             unsigned at=(diagnostic_phase.sequence-diagnostic_phase.count+i)&(NATIVE_PHASE_RECORDS-1u);
             const struct native_phase_record *r=&diagnostic_phase.ring[at];
@@ -638,9 +640,9 @@ static void report(void) {
     retail_display_line("A2 / SCI JOURNAL");
     retail_display_hex("PHASE",state.proof?15u:16u);
     retail_display_hex("DETAIL",state.error);
-    retail_display_values("SUB DONE READ PHASE COMMIT",(uint32_t[5]){
+    retail_display_values("SUB END RD PHASE SAVE",(uint32_t[5]){
         state.submitted,state.completed,durable_card.reads,durable_card.write_phases,durable_card.commits},5u);
-    retail_display_values("SD BUSY FAULT LOAN BLOCK",(uint32_t[5]){
+    retail_display_values("SD BUSY ERR LOAN BLOCK",(uint32_t[5]){
         durable_card.sd_reads,durable_card.sd_busy,durable_card.sd_faults,
         (uint32_t)durable_card.last_lease_result,durable_card.last_block},5u);
     retail_display_values("REQ REPLY RX OVL FLAGS",(uint32_t[5]){
@@ -680,7 +682,7 @@ static void report(void) {
     retail_display_line(state.completed?"PASSIVE PAIR VERIFIED - PHOTO THEN POWER OFF":"PASSIVE PROBE REFUSED - PHOTO THEN POWER OFF");
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    retail_display_line("ADMITTED IMAGE/JOURNAL ONLY");
+    retail_display_line("IMAGE/JOURNAL ONLY");
 #else
     retail_display_line("STORAGE WAS READ ONLY");
 #endif
@@ -707,13 +709,13 @@ void kui_vmu_native_runtime_fault(uint32_t kind,uint32_t value,uint32_t context1
         coherence?"SDK CACHE REFUSED":
         kind==1u?"GAME ALLOCATION FAILED":"UNKNOWN FAILURE");
     retail_display_hex("PHASE",18u);retail_display_hex("DETAIL",kind);
-    retail_display_values(exception?"EXPEVT SPC SSR TEA":coherence?"CHECK ADDRESS VALUE EXPECT":
-        "KIND VALUE CONTEXT1 CONTEXT2",(uint32_t[4]){
+    retail_display_values(exception?"EXPEVT SPC SSR TEA":coherence?"CHECK AT VALUE EXPECT":
+        "KIND VALUE CTX1 CTX2",(uint32_t[4]){
         (exception || coherence)?(kind&UINT32_C(0xffff)):kind,value,context1,context2},4u);
-    retail_display_values("LEASE SIZE HEAP BEGIN SIZE",(uint32_t[4]){
+    retail_display_values("LEASE N HEAP BEGIN N",(uint32_t[4]){
         config.lease.payload,config.lease.lease_bytes,config.lease.begin,config.lease.heap_bytes},4u);
-    retail_display_line(exception?"ACTUAL EXCEPTION / NO COMMIT":
-        coherence?"SDK INIT STOP / NO TRANSFER":
+    retail_display_line(exception?"EXCEPTION / NO SAVE":
+        coherence?"SDK INIT / NO TRANSFER":
         "REQUEST / CALLER SP");
     retail_display_line("STOP / PHOTO / OFF");
     for(;;) __asm__ volatile("nop");
@@ -974,7 +976,7 @@ static bool live_boundary(const struct kui_vmu_native_passive_frame *f,unsigned 
             state.fault_expect=diagnostic.expected;state.runtime_result=0x10000u|diagnostic.code;
             return false;
         }
-    } else r=kui_vmu_native_live_check(&live_plan,&b,boundary_read,NULL,snapshot);
+    } else r=kui_vmu_native_live_check(&live_plan,&config.driver,&b,boundary_read,NULL,snapshot);
     state.runtime_result=(uint32_t)r;
     return r==KUI_VMU_NATIVE_RUNTIME_VALID && snapshot->tx_base==config.tx_base;
 }
@@ -1163,8 +1165,13 @@ static bool controller_context_valid(const struct kui_vmu_native_passive_frame *
     CONTROLLER_EXPECT(2u,manager+0x10a8u,live_plan.tx);
     CONTROLLER_EXPECT(3u,manager+0x10acu,live_plan.tx+KUI_VMU_NATIVE_TX_BANK_BYTES);
     CONTROLLER_EXPECT(4u,live_plan.gun,0u);
-    CONTROLLER_EXPECT(5u,live_plan.timer1,0u);
-    CONTROLLER_EXPECT(6u,live_plan.timer2,0u);
+    for(unsigned i=0;i<2u;i++) {
+        uint32_t address=i?live_plan.timer2:live_plan.timer1;
+        if(!read_value(NULL,address,4u,&value))
+            return controller_reject(0x24u,5u+i,address,UINT32_MAX,config.driver.load_address);
+        if(!kui_vmu_native_timer_callback_owned(&config.driver,value))
+            return controller_reject(0x26u,5u+i,address,value,config.driver.load_address);
+    }
     for(unsigned i=0;i<live_plan.input_count;i++)
         CONTROLLER_EXPECT(8u+i,live_plan.input_address[i],live_plan.input_value[i]);
     for(unsigned i=0;i<controller_pair.count;i++) {

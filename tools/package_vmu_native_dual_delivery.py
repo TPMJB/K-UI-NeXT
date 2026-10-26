@@ -6,6 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -14,13 +15,12 @@ import zipfile
 from package_vmu_native_a2_delivery import archive_files, checksums, smoke
 from runtime_package import envelope, flatten_elf, verify
 from vmu_native_mode import decode_mode
-from check_vmu_native_worker_gateway import read_elf
+from check_vmu_native_worker_gateway import read_elf, symbol_bytes
 from check_native_controller_failure_witness import witness_companion
 
 ROOT = Path(__file__).resolve().parents[1]
 PREREQUISITE = '74958b3878279fc916199a7cd330f7f17b036138'
-PUBLIC_FOLDER = 'native-startup-followup'
-PUBLIC_BRANCH = 'checkpoint/native-startup-followup-20261025'
+PUBLIC_FOLDER = 'native-game-startup'
 
 
 def require(ok, message):
@@ -38,6 +38,75 @@ def wire(value):
 
 def git(*args):
     return subprocess.check_output(['git', *args], cwd=ROOT, text=True).strip()
+
+
+def owner_stack_literal(body, address, expected):
+    """Decode the unique physical entry-SP lower/upper bound comparison."""
+    matches = []
+    for compare_at in range(4, len(body) - 8, 2):
+        first, second, lower, fail, upper_load, upper, fail_high = struct.unpack_from('<7H', body, compare_at - 4)
+        # SH scheduling can exchange the independent literal load and AND.
+        if first == 0x2139 and second & 0xff00 == 0xd000:
+            load, at = second, compare_at - 2
+        elif second == 0x2139 and first & 0xff00 == 0xd000:
+            load, at = first, compare_at - 4
+        else:
+            continue
+        if (lower != 0x3102 or fail & 0xff00 != 0x8b00 or upper_load & 0xff00 != 0xd000 or
+                upper != 0x3106 or fail_high & 0xff00 != 0x8900):
+            continue
+        literal = ((address + at + 4) & ~3) + (load & 255) * 4 - address
+        high = ((address + compare_at + 8) & ~3) + (upper_load & 255) * 4 - address
+        if not (0 <= literal <= len(body) - 4 and 0 <= high <= len(body) - 4):
+            continue
+        if struct.unpack_from('<I', body, literal)[0] == expected and struct.unpack_from('<I', body, high)[0] == 0x0c00f400:
+            matches.append(literal)
+    require(len(matches) == 1 and body.count(struct.pack('<I', expected)) == 1,
+            'Owner-stack lower bound is not one uniquely decoded hook literal')
+    return matches[0]
+
+
+def normalize_owner_stack_delta(old, new, hook_offset, hook_address, hook_bytes):
+    """Allow one reviewed literal at its decoded hook offset, never a global replacement."""
+    require(hook_offset >= 0 and hook_bytes >= 28 and hook_offset <= len(old) - hook_bytes and
+            len(old) == len(new), 'Owner-stack hook leaves its fixed reader image')
+    old_body, new_body = old[hook_offset:hook_offset + hook_bytes], new[hook_offset:hook_offset + hook_bytes]
+    old_at = owner_stack_literal(old_body, hook_address, 0x0c00c100)
+    new_at = owner_stack_literal(new_body, hook_address, 0x0c008100)
+    require(old_at == new_at and not (hook_address + old_at) & 3,
+            'Owner-stack lower-bound literal moved or is unaligned')
+    at = hook_offset + old_at
+    normalized = new[:at] + struct.pack('<I', 0x0c00c100) + new[at + 4:]
+    require(normalized == old, 'Reader changed beyond its single decoded owner-stack lower bound')
+    return normalized, dict(binary_offset=at, hook_offset=old_at, old_physical_low='0x0c00c100',
+                            new_physical_low='0x0c008100', physical_high='0x0c00f400', changed_literals=1)
+
+
+def verify_reader_component(name, old, new, baseline_build, revision, baseline_dir, build):
+    normalized = new.replace(revision.encode(), baseline_build.encode())
+    require(new.count(revision.encode()) == old.count(baseline_build.encode()),
+            'Reader build-label count differs: ' + name)
+    if name not in ('resident-sci.bin', 'resident-legacy.bin'):
+        require(normalized == old, 'Approved auxiliary component changed: ' + name)
+        return None
+    old_elf, new_elf = read_elf(baseline_dir / name.replace('.bin', '.elf')), read_elf(build / name.replace('.bin', '.elf'))
+    base = 0x8c004000
+    for image, payload in ((old_elf, old), (new_elf, new)):
+        loads = [p for p in image[2] if p[0] == 1]
+        require(len(loads) == 1 and loads[0][2] == loads[0][3] == base and
+                loads[0][4] == len(payload) and
+                image[0][loads[0][1]:loads[0][1] + len(payload)] == payload,
+                'Low-reader binary differs from its complete linked ELF load: ' + name)
+    require(new_elf[4].get('__kui_native_owner_stack_ip_hook') == (1, 0, 0, 0xfff1),
+            'Missing exact reviewed owner-stack hook marker: ' + name)
+    old_address, old_body, old_section = symbol_bytes(old_elf, '_kui_vmu_observe_heap_hook', 2)
+    new_address, new_body, new_section = symbol_bytes(new_elf, '_kui_vmu_observe_heap_hook', 2)
+    require(old_address == new_address and len(old_body) == len(new_body) and
+            old_section[2] & 7 == new_section[2] & 7 == 6,
+            'Owner-stack hook address, extent or executable ownership changed: ' + name)
+    _, delta = normalize_owner_stack_delta(old, normalized, old_address - base, old_address, len(old_body))
+    return dict(hook_address=hex(old_address), hook_bytes=len(old_body),
+                old_hook_sha256=sha(old_body), current_hook_sha256=sha(new_body), **delta)
 
 
 def extracted_install_check(files):
@@ -121,19 +190,28 @@ def package(args):
     require(sha(baseline) == '7be0a290ec675438a565f1c3d1aac6fde18520b88056c0513961d96f9bc24f48' and
             baseline_info['build'] == 'af9e01c8a271', 'Wrong approved comparison module')
     unchanged_components = {}
+    stack_guard = report.get('temporary_installer_stack', {})
+    require(stack_guard.get('owner_stack_boundary_execution_cases', 0) > 0 and
+            stack_guard.get('owner_stack_physical_bounds') == dict(low='0x0c008100', high='0x0c00f400') and
+            stack_guard.get('inherited_52byte_frame_above_retained_low_stack') is True and
+            stack_guard.get('rayman_original_startup_sp_rejected_by_old_bound_cases', 0) > 0,
+            'Actual SH owner-stack boundary and inherited-frame execution proof is required')
     for name in ('resident-sci.bin', 'resident-legacy.bin', 'native-ra-aux.bin', 'native-ra-aux.reloc'):
         old = (args.baseline.parent/name).read_bytes()
         new = (args.build/name).read_bytes()
         copies = baseline[64:].count(old)
         require(old and copies > 0 and module[64:].count(new) == copies,
                 'Reader component copies differ from their verified baseline module: '+name)
-        require(new.replace(revision.encode(), baseline_info['build'].encode()) == old,
-                'Startup follow-up changed reader component beyond its visible build label: '+name)
+        delta = verify_reader_component(name, old, new, baseline_info['build'], revision,
+                                        args.baseline.parent, args.build)
         unchanged_components[name] = dict(baseline_sha256=sha(old), current_sha256=sha(new), embedded_copies=copies)
+        if delta is not None:
+            unchanged_components[name]['reviewed_owner_stack_hook_delta'] = delta
     runtime_comparison = dict(baseline_source_commit='af9e01c8a2710eb44e24867bbe2f593727fbb844',
                               baseline_module_sha256=sha(baseline), unchanged_reader_components=unchanged_components,
-                              low_readers_and_auxiliary_identical_except_visible_build_label=True,
-                              worker_change='Typed Lodoss terminal-dispatch capability, precise VMU guard witnesses and compact diagnostic captions')
+                              low_readers_and_auxiliary_identical_except_reviewed_owner_stack_bound_and_build_label=True,
+                              low_reader_delta='One decoded owner-stack lower-bound literal in each low hook; scheduling and producer policy unchanged',
+                              worker_change='Generic guarded timer callback acceptance with existing VMU ownership and controller checks')
     ra, sdk = report['read_ahead'], report['sdk_sci_route']
     require(ra.get('dual_reader_candidate') is True and
             ra.get('dual_reader', {}).get('enabled') is True and
@@ -143,6 +221,9 @@ def package(args):
     require(report.get('prepared_lifetime_admission', {}).get('controller_failure_witness') == witness and
             witness_companion(read_elf(args.build/'native-worker.elf'), ra),
             'Matching actual linked controller/identity/terminal capability witness proof is required')
+    require(witness.get('owned_timer_callbacks', {}).get('enabled') is True and
+            report.get('prepared_lifetime_admission', {}).get('live_boundary_call_abi', {}).get('enabled') is True,
+            'Actual owned-timer callback and live-boundary driver ABI proofs are required')
     require(sha((args.build/'native-ra-aux.bin').read_bytes()) ==
             '61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974' and
             (ROOT/'src/loader/native_readahead_aux.c').read_bytes() ==
@@ -211,6 +292,7 @@ def package(args):
                      title_allowlist=False, approved_reader_policy_preserved=True,
                      console_compatibility_verified=False, reader_runtime_comparison=runtime_comparison,
                      shared_card_preflight=json.loads((ROOT/'docs/evidence/native-shared-card-preflight-2026-10-25.json').read_text()),
+                     game_startup_followup=json.loads((ROOT/'docs/evidence/native-game-startup-followup-review-2026-10-25.json').read_text()),
                      console_observations=json.loads((ROOT/'docs/evidence/native-universal-console-followup-2026-10-25.json').read_text())['console_observations'])
     delivery = dict(source_commit=commit, generic_installer=host_installer,
                     combined_installer=extracted_install_check(files),

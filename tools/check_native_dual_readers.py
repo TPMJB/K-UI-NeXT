@@ -58,7 +58,23 @@ WITNESS_WORKER_PINS={
 }
 
 
+# Exact whole bodies reviewed for the paired owned-timer/owner-stack profile.
+GAME_STARTUP_STAGE_PINS={
+    '_select_resident':(272, '454d8e82f79c75f015f79554bea11500cd7950558a72426807f48e1c33f6be86'),
+    '_native_dual_reader_bind':(68, 'ab24aceac26e9a5b3d9b37645421a0d9df83cf05fb0c34d53f293813d4e68f42'),
+    '_kui_native_dual_u32':(30, 'c13060e358e2a0e9f53878d9aa8b77d1fbfb03a31b8c4e049dc49bf3e7feec6c'),
+}
+
+# Exact whole bodies reviewed for the paired owned-timer/owner-stack profile.
+GAME_STARTUP_WORKER_PINS={
+    '_reader_readahead_exports':(200, '13ca433d369112a4b3184b17ec96e025a76e142e537d65c8d3bba2c6e9ce4d5e'),
+    '_reader_capture_region':(100, 'f46dc671c3f853a40f735778e6e4d841b869e7a84d2ba92be85aca4e1e3870ed'),
+    '_reader_readahead_visit':(56, 'c44759200e43937665b2987281e995b4f39675f1e05180371aad4078cc02dbf3'),
+}
+
 def profile_pins(worker):
+    from check_native_game_startup_profile import game_startup_profile
+    if game_startup_profile(worker):return GAME_STARTUP_STAGE_PINS,GAME_STARTUP_WORKER_PINS
     from check_native_controller_failure_witness import witness_profile
     if witness_profile(worker):
         require(WITNESS_STAGE_PINS and WITNESS_WORKER_PINS,
@@ -495,6 +511,8 @@ def check(directory,*,self_test=False,cold_binder_proof=None,witness_proof=None)
     resident,legacy,stage,worker=(read_elf(directory/name) for name in
         ('resident-sci.elf','resident-legacy.elf','stage.elf','native-worker.elf'))
     markers(stage,worker)
+    from check_native_game_startup_profile import game_startup_profile
+    require(game_startup_profile(worker,resident)==game_startup_profile(worker,legacy), 'Dual low hooks use different owner-stack profiles')
     selected_stage_pins,selected_worker_pins=profile_pins(worker)
     stage_pins=pin(stage,selected_stage_pins,'stage');worker_pins=pin(worker,selected_worker_pins,'worker')
     from check_native_controller_failure_witness import witness_profile,check as check_witness,witness_companion

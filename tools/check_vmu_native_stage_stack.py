@@ -8,6 +8,7 @@ adversarial ABI callees, not a replacement implementation of the SDK allocator.
 The exact SDK write set and allocation exclusions have separate C/SH tests.
 """
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import struct
@@ -344,8 +345,10 @@ class ArmRoute(Machine):
 
 class HeapHook(Machine):
     """Real low gateway; allocation oracle overwrites the departed relay stack."""
-    def __init__(self, resident, stage, stack, seed, mask, *, alias=0x80000000, body=None):
-        super().__init__(resident, "_kui_vmu_observe_heap_hook", seed, mask, alias | 0x0C00ED00, body=body)
+    def __init__(self, resident, stage, stack, seed, mask, *, alias=0x80000000, body=None,
+                 owner_sp=0x0C00ED00, expect_refusal=False):
+        super().__init__(resident, "_kui_vmu_observe_heap_hook", seed, mask, alias | owner_sp, body=body)
+        self.expect_refusal=expect_refusal
         self.symbols, self.stage, self.stack = resident[4], stage, stack
         self.control = self.symbols["_kui_vmu_observe_boot_control"][0]
         self.cell = self.symbols["_kui_vmu_native_heap_original"][0]
@@ -374,6 +377,11 @@ class HeapHook(Machine):
     def call(self, target):
         if target == self.stop_pc:
             return False
+        if target == self.symbols["_kui_vmu_observe_return_hook"][0]:
+            assert self.expect_refusal and not self.calls, "unexpected owner-stack refusal"
+            assert self.mem[self.control+8]==5 and self.mem[self.control+16]==11
+            self.pc=self.stop_pc
+            return True
         if target == self.initializer:
             assert not self.calls
             assert self.r[4:6] == self.before[0][4:6] and self.r[15] == self.start_sp
@@ -400,6 +408,11 @@ class HeapHook(Machine):
         return False
 
     def check(self):
+        if self.expect_refusal:
+            assert not self.calls and self.post is None
+            assert self.mem[self.control+8]==5 and self.mem[self.control+16]==11
+            assert self.mem[self.control+12]==0
+            return
         registers, mach, macl, gbr, sr, fpscr, fr = self.post
         assert self.calls == ["initializer", "installer"]
         assert self.r == registers and self.r[15] == self.start_sp
@@ -420,6 +433,15 @@ def check(stage, resident, *, worker=None, self_test=False):
     wrappers = routes = hooks = refusals = 0
     background='_kui_vmu_native_background_manifest_bind' in resident[4]
     require(background==('_native_background_boot_region' in stage[4]),'Installer stage/reader profile mismatch')
+    ip_stack='__kui_native_owner_stack_ip_hook' in resident[4]
+    require(ip_stack==('__kui_native_owner_stack_ip_stage' in stage[4]),
+            'Native owner-stack stage/hook profiles differ')
+    if ip_stack:
+        require(resident[4]['__kui_native_owner_stack_ip_hook']==(1,0,0,0xfff1) and
+                stage[4]['__kui_native_owner_stack_ip_stage']==(1,0,0,0xfff1),
+                'Invalid native IP owner-stack capability markers')
+    owner_low=0x0c008100 if ip_stack else 0x0c00c100
+    require(owner_low-52>0x0c007d00+32,'Inherited owner save frame overlaps retained low stack')
     # The separate actual mode-helper proof covers Background's refused1/3
     # before this relay can be entered. Exercise all reachable live modes.
     modes = ((0,2,4,5,6) if background else (0,1,2,3,4,5,6)) if "_native_runtime_mode" in stage[4] else (0,)
@@ -436,6 +458,30 @@ def check(stage, resident, *, worker=None, self_test=False):
                     refusals+=1
             for alias in (0, 0x80000000, 0xA0000000):
                 HeapHook(resident, stage, stack, seed, mask, alias=alias).run().check(); hooks += 1
+    boundary_cases=0
+    for seed in range(4):
+        for mask in range(16):
+            for alias in (0,0x80000000,0xa0000000):
+                for sp in (owner_low,owner_low+4,0x0c00ed00,0x0c00f400):
+                    HeapHook(resident,stage,stack,seed,mask,alias=alias,owner_sp=sp).run().check()
+                    boundary_cases+=1
+                for sp in (owner_low-4,0x0c007d00,0x0c00f404):
+                    HeapHook(resident,stage,stack,seed,mask,alias=alias,owner_sp=sp,
+                             expect_refusal=True).run().check()
+                    boundary_cases+=1
+                if ip_stack:
+                    HeapHook(resident,stage,stack,seed,mask,alias=alias,owner_sp=0x0c00b3a4).run().check()
+                    boundary_cases+=1
+    rayman_old_bound_refusals=0
+    _,owner_hook_body,_=symbol_bytes(resident,'_kui_vmu_observe_heap_hook',2)
+    if ip_stack:
+        _,body,_=symbol_bytes(resident,'_kui_vmu_observe_heap_hook',2)
+        require(body.count(struct.pack('<I',owner_low))==1,'Missing unique linked owner-stack lower bound')
+        old_body=body.replace(struct.pack('<I',owner_low),struct.pack('<I',0x0c00c100))
+        for alias in (0,0x80000000,0xa0000000):
+            HeapHook(resident,stage,stack,7,15,alias=alias,owner_sp=0x0c00b3a4,body=old_body,
+                     expect_refusal=True).run().check()
+            rayman_old_bound_refusals+=1
     mutations = 0
     if self_test:
         relay_base, relay_body, _ = symbol_bytes(stage, "_kui_retail_stage_relay", 2)
@@ -475,6 +521,13 @@ def check(stage, resident, *, worker=None, self_test=False):
             "typed_zero_fill_object": True, "complete_bss_in_live_allocation_guard": True,
             "actual_allocation_wrapper_cases": wrappers, "actual_relay_publication_cases": routes,
             "actual_low_hook_cases": hooks, "mutation_rejections": mutations,
+            "owner_stack_physical_bounds":{"low":f"0x{owner_low:08x}","high":"0x0c00f400"},
+            "owner_stack_boundary_execution_cases":boundary_cases,
+            "owner_stack_hook_sha256":hashlib.sha256(owner_hook_body).hexdigest(),
+            "owner_stack_hook_address":f"0x{resident[4]['_kui_vmu_observe_heap_hook'][0]:08x}",
+            "owner_stack_hook_bytes":len(owner_hook_body),
+            "rayman_original_startup_sp_rejected_by_old_bound_cases":rayman_old_bound_refusals,
+            "inherited_52byte_frame_above_retained_low_stack":True,
             "cold_sdk_slot_refusal_before_any_arming_cases":refusals,
             "full_source_verified_before_program_extent":True,
             "normal_and_shortened_extent_arming_routes":True,

@@ -53,6 +53,9 @@ WITNESS_DUAL_BINDER_PIN=('3eddfec84558fdd3815fae01e3c993d1ea9bd3cc7dd75033cdc80f
 WITNESS_DUAL_BIN_AT_NO_DIV_PIN=('74b4eed8cec5360352fba33279507687c8db0cf1ebfed07247f4e4ceef6bc5b3',144)
 
 
+# Original144B reciprocal arithmetic, only final owned add32 pointer relocated.
+GAME_STARTUP_BIN_AT_NO_DIV_PIN=('e9ad031554e274d1be0253c885e354caa91cfad5366e0cd5dbe056e164f7383c',144)
+
 def require(test,message):
     if not test:raise ValueError(message)
 
@@ -153,7 +156,10 @@ def division_helper(resident,worker,read_ahead=False,diagnostic=False,pio=False,
         require(not diagnostic or read_ahead,'diagnostic timeline arithmetic requires read-ahead')
         require(not pio or diagnostic,'PIO timeline arithmetic requires the diagnostic profile')
         require(not pio_pair or pio,'PIO pair timeline arithmetic requires the PIO profile')
-        expected=WITNESS_DUAL_BIN_AT_NO_DIV_PIN if witness else DUAL_BIN_AT_NO_DIV_PIN if dual else READAHEAD_PIO_PAIR_BIN_AT_NO_DIV_PIN if pio_pair else READAHEAD_PIO_BIN_AT_NO_DIV_PIN if pio else \
+        from check_native_game_startup_profile import game_startup_profile
+        owned_timers=game_startup_profile(worker,resident)
+        require(not owned_timers or witness, 'Owned-timer timeline requires complete witness proof')
+        expected=GAME_STARTUP_BIN_AT_NO_DIV_PIN if owned_timers else WITNESS_DUAL_BIN_AT_NO_DIV_PIN if witness else DUAL_BIN_AT_NO_DIV_PIN if dual else READAHEAD_PIO_PAIR_BIN_AT_NO_DIV_PIN if pio_pair else READAHEAD_PIO_BIN_AT_NO_DIV_PIN if pio else \
             READAHEAD_DIAGNOSTIC_BIN_AT_NO_DIV_PIN if diagnostic else \
             READAHEAD_BIN_AT_NO_DIV_PIN if read_ahead else BIN_AT_NO_DIV_PIN
         require((hashlib.sha256(body).hexdigest(),len(body))==expected,

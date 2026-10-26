@@ -52,10 +52,11 @@ enum kui_vmu_native_runtime_result kui_vmu_native_live_prepare(
     *out=p;*c=bound;*snapshot=sample;return KUI_VMU_NATIVE_RUNTIME_VALID;
 }
 enum kui_vmu_native_runtime_result kui_vmu_native_live_check(
-    const struct kui_vmu_native_live *p,const struct kui_vmu_native_runtime_boundary *b,
+    const struct kui_vmu_native_live *p,const struct kui_vmu_native_discovery *d,
+    const struct kui_vmu_native_runtime_boundary *b,
     kui_vmu_native_runtime_read read,void *context,struct kui_vmu_native_runtime_snapshot *snapshot) {
     if(!p || p->self!=(uintptr_t)p || p->ready!=READY || p->input_count>24u ||
-       !b || !read || !snapshot || b->phase>KUI_VMU_NATIVE_BEFORE_CONSUMER)
+       !d || !b || !read || !snapshot || b->phase>KUI_VMU_NATIVE_BEFORE_CONSUMER)
         return KUI_VMU_NATIVE_RUNTIME_INVALID;
     unsigned mask=(b->inherited_sr>>4)&15u;
     if(((b->worker_sr>>4)&15u)!=15u || (mask!=6u && mask!=15u) ||
@@ -90,7 +91,11 @@ enum kui_vmu_native_runtime_result kui_vmu_native_live_check(
     EXPECT(manager+0x10c4u,0u);EXPECT(manager+0xfc0u,b->phase?0u:1u);
     EXPECT(manager+0x10f4u,UINT32_C(0xa05f6c00));
     READ(p->lock,1u,value);if(value!=0x80u) return KUI_VMU_NATIVE_RUNTIME_STATE;
-    EXPECT(p->gun,0u);EXPECT(p->timer1,0u);EXPECT(p->timer2,0u);
+    EXPECT(p->gun,0u);
+    READ(p->timer1,4u,value);
+    if(!kui_vmu_native_timer_callback_owned(d,value)) return KUI_VMU_NATIVE_RUNTIME_STATE;
+    READ(p->timer2,4u,value);
+    if(!kui_vmu_native_timer_callback_owned(d,value)) return KUI_VMU_NATIVE_RUNTIME_STATE;
     for(unsigned i=0;i<KUI_VMU_NATIVE_RX_SLOTS;i++) EXPECT(manager+0xfe8u+i*4u,p->rx_slots[i]);
     for(unsigned i=0;i<p->input_count;i++) EXPECT(p->input_address[i],p->input_value[i]);
     EXPECT(p->manager_cell,manager);EXPECT(p->lock_cell,p->lock);

@@ -143,6 +143,18 @@ MEMORY_CACHE={}
 MEMORY_REFERENCES={}
 
 
+# Exact whole bodies reviewed for the paired owned-timer/owner-stack profile.
+GAME_STARTUP_STAGE_PINS={
+    '_native_sdk_sci_route_bind':(940, '322a94b8aac17debfe7030e569085c348102ca4d61d2b7542532c4311a85f584'),
+    '_kui_native_sdk_sci_route_admit':(796, 'e9811c7da4ac147c224f67f3855af8c87c3f4d8e9f692454d8f586dce6a9c05c'),
+    '_kui_native_sdk_sci_route_discover':(1856, '233ed32ecf6c2282fd518b75a43e66f22d4e2944b3b08e9bb0cd26cb06a8bb8f'),
+    '_u32':(30, '6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334'),
+    '_fingerprint':(88, 'b6c1b8909b253ecdbedd73b8d9fd37cfbc87931183716a20f255cf3cd0fe0935'),
+    '_live_words':(80, '58f2d2d6c72424c4c3046166a6291b1ee91516905c8ebd29c986efb22b95f0c9'),
+    '_literal_at':(62, '1712d6126cb969c7f2f21fb2de718960809b1782d1b39a06f772a21af78e16fe'),
+    '_normalized':(192, '4342bf401110e7042bd4096b624fe0688c8cb9fb181741be7806b4eee2aaaa9a'),
+}
+
 def require(test,message):
     if not test:raise ValueError(message)
 
@@ -246,7 +258,7 @@ def pin_bodies(resident):
 
 
 def stage_pins(stage,*,diagnostic=False,pio=False,pio_pair=False,multi_owner=False,structural=False,
-               worker=None,read_ahead_proof=None):
+               worker=None,read_ahead_proof=None,resident=None):
     result={}
     read_ahead='__kui_native_readahead_stage' in stage[4]
     require(not diagnostic or read_ahead,'SDK diagnostic stage pins require the read-ahead profile')
@@ -266,7 +278,10 @@ def stage_pins(stage,*,diagnostic=False,pio=False,pio_pair=False,multi_owner=Fal
     require(bool(progress)==witness and (not witness or progress==(1,0,0,0xfff1) and structural and
             stage[4].get('__kui_native_dual_readers_stage')==(1,0,0,0xfff1)),
             'SDK cold witness pins require the complete exact worker proof and stage progress marker')
-    selected=WITNESS_STRUCTURAL_STAGE_PINS if witness else STRUCTURAL_STAGE_PINS if structural else MULTI_OWNER_STAGE_PINS if multi_owner else RA_PIO_PAIR_STAGE_PINS if pio_pair else RA_PIO_STAGE_PINS if pio else \
+    from check_native_game_startup_profile import game_startup_profile
+    owned_timers=game_startup_profile(worker,resident) if worker is not None else False
+    require(not owned_timers or resident is not None and witness, 'Owned-timer SDK pins require paired low owner-stack proof')
+    selected=GAME_STARTUP_STAGE_PINS if owned_timers else WITNESS_STRUCTURAL_STAGE_PINS if witness else STRUCTURAL_STAGE_PINS if structural else MULTI_OWNER_STAGE_PINS if multi_owner else RA_PIO_PAIR_STAGE_PINS if pio_pair else RA_PIO_STAGE_PINS if pio else \
         RA_DIAGNOSTIC_STAGE_PINS if diagnostic else \
         RA_STAGE_PINS if read_ahead else STAGE_PINS
     require(selected,'SDK multi-owner immutable stage pins are missing')
@@ -276,7 +291,7 @@ def stage_pins(stage,*,diagnostic=False,pio=False,pio_pair=False,multi_owner=Fal
                 'SDK SCI cold binder/admission code escapes temporary stage')
         actual=hashlib.sha256(body).hexdigest()
         accepted=((count,digest),)
-        if witness and name in PREFLIGHT_WITNESS_STRUCTURAL_STAGE_PINS:
+        if witness and not owned_timers and name in PREFLIGHT_WITNESS_STRUCTURAL_STAGE_PINS:
             accepted+=(PREFLIGHT_WITNESS_STRUCTURAL_STAGE_PINS[name],)
         require((len(body),actual) in accepted,
                 'SDK SCI cold binder/admission instruction/literal pin changed: '+name)

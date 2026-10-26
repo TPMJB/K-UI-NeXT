@@ -473,7 +473,7 @@ static void refused_without_publication(void) {
         else if(which==16u) CHECK(state.runtime_result==0x40825u);
         else if(which==19u) CHECK(state.runtime_result==0x2000cu);
         else if(which==20u) CHECK(state.runtime_result==0x20008u);
-        else if(which==22u) CHECK(state.runtime_result==0x40525u);
+        else if(which==22u) CHECK(state.runtime_result==0x40526u);
         else if(which==23u) CHECK(state.runtime_result==0x20031u);
         else if(which>=24u) CHECK(state.runtime_result==0x40001u);
     }
@@ -504,9 +504,35 @@ static void lane_switches_and_lease(void) {
     if(setjmp(terminal)==0) {kui_vmu_native_readonly_release_check(&frame);CHECK(false);}
     CHECK(terminal_error==0x30u && controller_pair.pending);
 }
+static void registered_timer_callbacks(void) {
+    const uint32_t aliases[]={0u,0x80000000u,0xa0000000u};
+    for(unsigned timer=0u;timer<2u;timer++) for(unsigned a=0u;a<3u;a++) {
+        warm();begin_controllers(1u,0u);
+        /* Reproduce the measured Skies lifecycle: registration occurs after
+         * the original null-callback bind and before a controller completion. */
+        put(timer?input.layout.timer2_callback:input.layout.timer1_callback,4u,aliases[a]|0x0c087498u);
+        controllers_done(1u,0u);complete_return();no_storage();
+        /* The following full virtual-card/storage path must use the same
+         * policy; merely patching the controller fast lane is insufficient. */
+        transfer_batch(1u,0u,0u,NULL);read_compare(42u,sd.media[image_lba(42u)]);
+        put(timer?input.layout.timer2_callback:input.layout.timer1_callback,4u,0u);
+        begin_controllers(1u,0u);controllers_done(1u,0u);complete_return();idle();
+    }
+    const uint32_t invalid[]={1u,0x8c00fffeu,0x8c210000u,0x8c20ffffu,
+        0xec087498u,0x6c087498u,0xa05f6c00u,0xac700000u,0x8ce00000u};
+    for(unsigned timer=0u;timer<2u;timer++) for(unsigned i=0u;i<sizeof(invalid)/sizeof(invalid[0]);i++) {
+        uint8_t before[5][1024];warm();begin_controllers(1u,0u);controllers_done(1u,0u);
+        uint32_t address=timer?input.layout.timer2_callback:input.layout.timer1_callback;
+        put(address,4u,invalid[i]);save_rx(before);reject_complete();same_rx(before);no_storage();
+        CHECK(state.runtime_result==(0x40026u|((5u+timer)<<8)));
+        CHECK(state.fault_at==address && state.fault_value==invalid[i] &&
+            state.fault_expect==input.driver.load_address);
+    }
+}
 int main(void) {
     success_and_cost();mixed_queries_and_cost();mixed_query_refusals();mixed_query_errors();layouts_and_live_aliases();fallback();
     refused_without_publication();lane_switches_and_lease();failure_witness_cases();exact_response_and_read_witnesses();
+    registered_timer_callbacks();
     printf("Controller/main-unit query fast lane: %u checks; unchanged DMA, exact RX/header publication, full fallback and durable lane switching\n",checks);
     printf("Failure-only diagnostic witnesses: %u exact field cases; source/response/physical A1-A2/identity/exports, transfer codes preserved, no RX or SD publication on refusal\n",diagnostic_cases);
     return 0;

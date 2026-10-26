@@ -58,6 +58,13 @@ struct kui_vmu_native_runtime_snapshot {
 typedef bool (*kui_vmu_native_runtime_read)(void *context,uint32_t address,
     unsigned width,uint32_t *value);
 
+/* Timer setters may install an application callback after initial binding.
+ * Permit null or a complete aligned instruction in the already verified
+ * executable, never arbitrary RAM, loader/lease memory or an MMIO address.
+ * This does not call the callback or authorize its opaque argument. Callers
+ * still establish timer-cell provenance and run every check under IMASK15. */
+bool kui_vmu_native_timer_callback_owned(const struct kui_vmu_native_discovery *,uint32_t);
+
 /* A read-only boundary check, not permission to patch, submit DMA or write
  * saves. Discovery must first be bound to its immutable executable. The
  * caller must establish lease ownership, timer-cell provenance and hook

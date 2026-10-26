@@ -18,6 +18,13 @@ static bool in(struct span outer,uint32_t address,uint32_t bytes) {
         bytes<=outer.bytes-(address-outer.begin);
 }
 static bool p2(uint32_t a) {return (a&UINT32_C(0xe0000000))==UINT32_C(0xa0000000);}
+bool kui_vmu_native_timer_callback_owned(const struct kui_vmu_native_discovery *d,uint32_t callback) {
+    if(!d) return false;
+    if(!callback) return true;
+    struct span code,target;
+    return ram(d->load_address,d->image_bytes,2u,&code) &&
+        ram(callback,2u,2u,&target) && in(code,target.begin,2u);
+}
 
 enum kui_vmu_native_runtime_result kui_vmu_native_runtime_check(
     const struct kui_vmu_native_discovery *d,const struct kui_vmu_native_runtime_config *c,
@@ -104,7 +111,11 @@ enum kui_vmu_native_runtime_result kui_vmu_native_runtime_check(
     EXPECT(manager+0x10c4u,0u);EXPECT(manager+0xfc0u,b->phase?0u:1u);
     EXPECT(manager+0x10f4u,UINT32_C(0xa05f6c00));
     READ(lock,1u,value);if(value!=0x80u) return KUI_VMU_NATIVE_RUNTIME_STATE;
-    EXPECT(c->gun_flag,0u);EXPECT(c->timer1_callback,0u);EXPECT(c->timer2_callback,0u);
+    EXPECT(c->gun_flag,0u);
+    READ(c->timer1_callback,4u,value);
+    if(!kui_vmu_native_timer_callback_owned(d,value)) return KUI_VMU_NATIVE_RUNTIME_STATE;
+    READ(c->timer2_callback,4u,value);
+    if(!kui_vmu_native_timer_callback_owned(d,value)) return KUI_VMU_NATIVE_RUNTIME_STATE;
     unsigned nonzero=0u;
     for(unsigned i=0;i<KUI_VMU_NATIVE_RX_SLOTS;i++) {
         uint32_t expected=c->rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48?
@@ -127,7 +138,9 @@ enum kui_vmu_native_runtime_result kui_vmu_native_runtime_check(
     }
     if(!nonzero) return KUI_VMU_NATIVE_RUNTIME_STATE;
     /* Catch a changed pointer/control word as well as the initial sample.
-     * The caller's IMASK15 and absence of timer callbacks remain essential. */
+     * The caller's IMASK15 masks even a priority15 application timer while
+     * these pointer/MMIO witnesses are inspected. Callbacks are never run by
+     * this validator; the original SDK retains timer delivery between hooks. */
     EXPECT(d->manager_cell,manager);EXPECT(d->lock_cell,lock);
     EXPECT(UINT32_C(0xa05f6c04),dma.begin);EXPECT(UINT32_C(0xa05f6c10),0u);
     EXPECT(UINT32_C(0xa05f6c14),1u);EXPECT(UINT32_C(0xa05f6c18),0u);

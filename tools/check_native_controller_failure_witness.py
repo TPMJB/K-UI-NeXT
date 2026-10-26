@@ -27,6 +27,7 @@ from test_native_dual_readers import object_section
 from profile_vmu_native_release_sh import ReleaseSH
 
 WITNESS_MARK='__kui_native_controller_failure_witness_worker'
+TIMER_MARK='__kui_native_owned_timer_callbacks_worker'
 SCHEMA='kui.native.controller-failure-witness.audit.v1'
 PINS={
     '_failure_witness.isra.0':(16,'77c6eb9f5b1c088a76dce8a70932b385dbeeed53466bb8dfd4400408b6ddf30e'),
@@ -54,10 +55,33 @@ DATA_PINS={
     '_kui_vmu_native_terminal_dispatch_words':(96,'5304ca217467bd183ac4ec020dd7793ad95b46229c4caea4ed3ea8d3e947c82b'),
     '_kui_vmu_native_terminal_dispatch_entries':(16,'8477f830f8adb39068e9fe7d4f16e7729d6939c9d7cdaa5da013e519325a68ac'),
 }
+# Separate complete pins for the bounded application-timer policy. The new
+# callback helper and its FILE-owned RAM/range callees execute in the model;
+# older workers retain every preceding pin and the original zero-only guard.
+OWNED_TIMER_PINS={**PINS,
+    '_failure_witness.isra.0':(16,'9752e82987994a19f8731a90d3b4535ad753e1b665a1a545be8978d4ee8e2280'),
+    '_poll_lease_valid':(168,'cd8437d849d88e5898f3400170a7b41dbb56184c9698f1d2e39ec001a184e078'),
+    '_controller_context_valid':(1336,'021568cc10a09ba02fb597727ef6ac4e45731fd38cd48b5b43f307b1e38b05ae'),
+    '_kui_vmu_native_passive_complete':(3144,'183a6bc48d8bfb47294ca817b483c0581c9e0d79f8a49d7ca67246855df7f760'),
+    '_kui_vmu_native_passive_submit':(1428,'ba425d588b269391806da90277783d073b7c8f20352dbd01b8689959c081698d'),
+    '_stack_valid':(116,'a3bffefb714c3fd498142d7497a5604494489efe5ff57b29bd0df0c14763fc7f'),
+    '_installed_hooks_valid':(128,'cdc12c06950385246a00cbf644b4ae91dc248fc63de3b35786acb0fdd53f9511'),
+    '_normalize_heap_dispatch':(276,'b10f6faa7720058741d0704568998085e9f11a3f33d0a8222a07746f32f18092'),
+    '_kui_vmu_native_terminal_dispatch_span.constprop.0':(128,'697c229576a1d5b73015e2f734462614c2d843c139ca64c0dae338a324f20cf2'),
+    '_kui_vmu_native_terminal_dispatch_tagged.constprop.0':(100,'7934714b0642d723206a950440cc8322f96fd50f4f363ac1cfec3439e5d7c04d'),
+    '_kui_vmu_native_patch_encode':(168,'f6c5c4c520a4c04d874fcfba785b5ff344bd37905055ee2523b96819babe6a0a'),
+    '_kui_vmu_native_trace_point':(1132,'789805da528225a5aed8c814e94e3f7c70ec5de6d1dce0e19b50de5a6e9a9c5c'),
+    '_reader_capture_region':(100,'f46dc671c3f853a40f735778e6e4d841b869e7a84d2ba92be85aca4e1e3870ed'),
+    '_reader_cooperative_service':(32,'932a8c6f2a8ffa5ffb5ead01a2a1fbfb8093d39f4c1836deabc9403ef027f505'),
+    '_reader_readahead_exports':(200,'13ca433d369112a4b3184b17ec96e025a76e142e537d65c8d3bba2c6e9ce4d5e'),
+    '_kui_vmu_native_timer_callback_owned':(92,'98fb3d043e7ef477bc88e178136cb90e366de05a5f3d95a8c80f2090bd8c7602'),
+    '_timer_runtime_ram':(104,'4fb7919a6f74ec1c9aa3f434e446b352f7961eb7c565580f0c4e2e52a3eff415'),
+    '_timer_runtime_in':(26,'a0ff5d4d27ccbf7b073b8bc6f0e6b26659e6b729763f7b02d49aa124ea023824'),
+}
 LAYOUT_FIELDS={
     'exit_bytes':'sizeof(struct kui_vmu_native_exit)',
     **{'config.'+name:'offsetof(struct kui_vmu_native_passive_config,'+name+')' for name in
-       ('driver.manager_cell','driver.manager_initial','driver.resume','driver.consumer','runtime.rx_slots',
+       ('driver','driver.load_address','driver.image_bytes','driver.manager_cell','driver.manager_initial','driver.resume','driver.consumer','runtime.rx_slots',
         'lease.owner.dispatch_cell','lease.owner.dispatch_table','low_terminal','exits.version','exits.bytes',
         'exits.family','exits.load','exits.image_bytes','exits.count','exits.entries','exits.terminal_dispatch.table')},
     **{'live.'+name:'offsetof(struct kui_vmu_native_live,'+name+')' for name in
@@ -83,7 +107,9 @@ def witness_profile(worker):
     marker=worker[4].get(WITNESS_MARK)
     terminal=worker[4].get('__kui_native_terminal_dispatch_worker')
     require((marker is None)==(terminal is None),'witness and terminal-dispatch markers must be paired')
-    if marker is None:return False
+    if marker is None:
+        require(TIMER_MARK not in worker[4],'owned timer marker lacks its witnessed worker')
+        return False
     require(marker==(1,0,0,0xfff1) and
             terminal==(1,0,0,0xfff1) and
             worker[4].get('__kui_native_dual_readers_worker')==(1,0,0,0xfff1),
@@ -91,10 +117,54 @@ def witness_profile(worker):
     return True
 
 
+def owned_timer_profile(worker):
+    marker=worker[4].get(TIMER_MARK)
+    if marker is None:return False
+    require(marker==(1,0,0,0xfff1) and witness_profile(worker),
+            'owned timer callbacks require exact absolute one and the witnessed dual worker')
+    return True
+
+
+def code_pins(worker):
+    selected=OWNED_TIMER_PINS if owned_timer_profile(worker) else PINS
+    require(selected,'controller witness timer profile lacks independently reviewed pins')
+    return selected
+
+
+def timer_symbol_aliases(worker):
+    """Bind duplicate local helper names by their actual ELF FILE owner."""
+    if not owned_timer_profile(worker):return worker
+    found={};symbol=struct.Struct('<IIIBBH')
+    for section in worker[3]:
+        if section[1]!=2:continue
+        require(section[9]==symbol.size and section[5]%symbol.size==0,
+                'timer helper symbol table shape differs')
+        strings=worker[3][section[6]]
+        names=worker[0][strings[4]:strings[4]+strings[5]];owner_file=None
+        for at in range(section[4],section[4]+section[5],symbol.size):
+            name,address,count,info,_,owner=symbol.unpack_from(worker[0],at)
+            name=names[name:].split(b'\0',1)[0].decode('ascii')
+            if info&15==4:owner_file=name
+            if owner_file=='vmu_native_runtime.c' and name in ('_ram','_in') and info&15==2:
+                require(info>>4==0 and name not in found,
+                        'timer helper local source binding is not unique')
+                found[name]=(address,count,2,owner)
+    require(set(found)=={'_ram','_in'},'timer helper lacks both source-owned actual callees')
+    symbols=dict(worker[4])
+    for name,record in found.items():symbols['_timer_runtime'+name]=record
+    image=(*worker[:4],symbols)
+    _,body,_=symbol_bytes(image,'_kui_vmu_native_timer_callback_owned',2)
+    for name in found:
+        require(body.count(struct.pack('<I',found[name][0]))==1,
+                'timer callback helper does not bind its exact source-owned callee')
+    return image
+
+
 def pinned(worker):
-    require(PINS,'controller witness instructions lack independently reviewed pins')
+    worker=timer_symbol_aliases(worker)
+    selected=code_pins(worker)
     result={}
-    for kind,pins in ((2,PINS),(1,DATA_PINS)):
+    for kind,pins in ((2,selected),(1,DATA_PINS)):
         for name,(count,digest) in pins.items():
             address,body,section=symbol_bytes(worker,name,kind)
             require(section[2]&7==(6 if kind==2 else 2) and (len(body),sha(body))==(count,digest),
@@ -123,18 +193,32 @@ def witness_companion(worker,read_ahead_proof):
             proof.get('scalar_truth_cases')==1584,
             'controller witness companion lacks actual owned-state and instruction-model proofs')
     coverage=proof.get('predicate_coverage',{})
+    timers=owned_timer_profile(worker)
     require(coverage.get('all_controller_reasons')==list(range(1,12)) and
-            coverage.get('all_controller_context_reasons')==list(range(0x20,0x26)) and
+            coverage.get('all_controller_context_reasons')==list(range(0x20,0x27 if timers else 0x26)) and
             coverage.get('identity_first_failure_read_order') is True and
             coverage.get('identity_shape_bitmap') is True and
             coverage.get('resume_then_consumer_first_failure') is True and
             coverage.get('old_transfer_witness_preserved') is True and
             coverage.get('success_only_parent_presence_byte') is True and
             coverage.get('failure_no_owner_writes') is True and
-            proof.get('helper_model_cases')==64 and proof.get('controller_model_cases')==326 and
+            proof.get('helper_model_cases')==64 and proof.get('controller_model_cases')==(410 if timers else 326) and
             proof.get('identity_model_cases')==72 and proof.get('success_model_cases')==72 and
             proof.get('failure_model_cases')==116,
             'controller witness companion lacks complete actual predicate/store coverage')
+    timer_proof=proof.get('owned_timer_callbacks',{})
+    require(timer_proof.get('enabled',False)==timers,
+            'owned timer marker and actual callback ownership proof differ')
+    if timers:
+        require(timer_proof.get('cases')==81 and timer_proof.get('accepted_cases')==36 and
+                timer_proof.get('rejected_cases')==45 and timer_proof.get('worker_imask')==15 and
+                timer_proof.get('exact_owner_executable_halfword_bounds') is True and
+                timer_proof.get('u0_p1_p2_callback_and_owner_aliases') is True and
+                timer_proof.get('odd_foreign_alias_and_mmio_refused') is True and
+                timer_proof.get('loader_heap_and_worker_targets_refused') is True and
+                timer_proof.get('callback_target_never_read_or_called') is True and
+                timer_proof.get('callback_validation_changes_no_owner_memory_or_sr_control_bits') is True,
+                'owned timer companion lacks complete read-only executable-range proof')
     identity=proof.get('identity',{});terminal=proof.get('terminal_identity',{})
     require(identity.get('ordinary_capability_absent_owner_reads')==8 and
             identity.get('ordinary_capability_absent_performs_no_terminal_table_reads') is True and
@@ -193,8 +277,12 @@ class PrefixComplete(Exception):pass
 class WitnessCPU(SDKCPU):
     """Actual immutable worker text with only one typed transfer boundary."""
     def __init__(self,resident,worker,layout,seed=0,bank=0):
+        worker=timer_symbol_aliases(worker)
         super().__init__(resident,seed=seed,mask=15,bank=bank)
-        key=(id(resident[0]),id(worker[0]))
+        # Mutant byte objects are short lived; object IDs can be reused while
+        # this cache persists. Bind the cached RAM image to exact bytes so a
+        # later mutant never executes a previous worker's instruction image.
+        key=(sha(resident[0]),sha(worker[0]))
         if key not in MEMORY:
             memory=bytearray(self.memory)
             for kind,offset,address,_,count,_,_,_ in worker[2]:
@@ -217,6 +305,9 @@ class WitnessCPU(SDKCPU):
         self.write(self.state+20,self.source)
         for i in range(16):self.write(0x8c11f000+4*i,0x4b535431)
         self.write(self.frame+68,self.sr)
+        self.owner_code=0x8c010000;self.owner_bytes=0x20000
+        self.write(self.config+layout['config.driver.load_address'],self.owner_code)
+        self.write(self.config+layout['config.driver.image_bytes'],self.owner_bytes)
         self.write(self.config+layout['config.driver.manager_cell'],self.manager_cell)
         self.write(self.config+layout['config.driver.manager_initial'],self.manager)
         self.write(self.manager_cell,self.manager)
@@ -419,8 +510,47 @@ def observed_case(cpu,entry,expected=None,terminal=None,args=None):
     cpu.assert_no_owner_writes()
 
 
+TIMER_BAD_CALLBACKS=(0x8c00fffe,0x8c030000,0x8c02ffff,0x8c010001,
+    0x4c010002,0xec010002,0xa05f6c00,0x8c004000,0x8c100000,
+    0x8c400000,0x8ce00000,MASK)
+TIMER_VALID_CALLBACKS=(0,*(alias|offset for alias in (0,0x80000000,0xa0000000)
+    for offset in (0x0c010000,0x0c010002,0x0c02fffe)))
+
+
+def callback_ownership_cases(resident,worker,layout):
+    if not owned_timer_profile(worker):return dict(enabled=False)
+    cases=accepted=rejected=0
+    def run(load,bytes_,callback,expected,*,null_driver=False):
+        nonlocal cases,accepted,rejected
+        c=WitnessCPU(resident,worker,layout,cases,cases&1)
+        c.write(c.config+layout['config.driver.load_address'],load)
+        c.write(c.config+layout['config.driver.image_bytes'],bytes_)
+        if callback:c.forbidden_reads.add(callback)
+        c.writes=[];before=c.snapshot()
+        c.execute('_kui_vmu_native_timer_callback_owned',
+            [0 if null_driver else c.config+layout['config.driver'],callback])
+        assert c.r[0]==int(expected),(hex(load),hex(bytes_),hex(callback),c.r[0],expected)
+        assert_c_abi(c,before);c.assert_no_owner_writes()
+        assert c.sr&~1==before[3]&~1,'read-only callback ownership helper changed SR control bits'
+        cases+=1;accepted+=bool(expected);rejected+=not expected
+    for alias in (0,0x80000000,0xa0000000):
+        load=alias|0x0c010000
+        for callback in TIMER_VALID_CALLBACKS:run(load,0x20000,callback,True)
+        for callback in TIMER_BAD_CALLBACKS:run(load,0x20000,callback,False)
+    for load,bytes_ in ((0,0),(0x4c010000,0x20000),(0x8c010001,0x20000),
+                        (0x8c010000,0),(0x8cfff000,0x2000),(0x8c010000,MASK)):
+        for callback in (0,0x8c010000):run(load,bytes_,callback,callback==0)
+    for callback in (0,0x8c010000,MASK):run(0x8c010000,0x20000,callback,False,null_driver=True)
+    return dict(enabled=True,cases=cases,accepted_cases=accepted,rejected_cases=rejected,
+        worker_imask=15,exact_owner_executable_halfword_bounds=True,
+        u0_p1_p2_callback_and_owner_aliases=True,odd_foreign_alias_and_mmio_refused=True,
+        loader_heap_and_worker_targets_refused=True,callback_target_never_read_or_called=True,
+        callback_validation_changes_no_owner_memory_or_sr_control_bits=True)
+
+
 def context_cases(resident,worker,layout):
     cases=0;coverage=set()
+    timers=owned_timer_profile(worker)
     def fixture(bank=0,inputs=24):
         c=WitnessCPU(resident,worker,layout);c.packet((0,1,2,3),[9,1,2,9],bank)
         c.write(c.live+layout['live.input_count'],inputs)
@@ -455,7 +585,7 @@ def context_cases(resident,worker,layout):
         assert c.transfer_calls==[[c.frame,bank,1,c.source]];c.assert_no_owner_writes();cases+=1
         fields=[(0,c.manager+0xfc4,0xac800000),(1,c.manager+0xfc8,0xac820000),
                 (2,c.manager+0x10a8,0xac800000),(3,c.manager+0x10ac,0xac803000)]
-        fields.extend((4+i,0x8c970000+4*i,0) for i in range(3))
+        fields.extend((4+i,0x8c970000+4*i,0) for i in range(1 if timers else 3))
         fields.extend((8+i,0x8c970100+4*i,0x24681350+i) for i in range(24))
         fields.extend((32+bank*24+6*port,c.manager+0xfe8+4*(bank*24+6*port),
                        (c.rx_base+0x400*port)|0xa0000000) for port in range(4))
@@ -465,8 +595,22 @@ def context_cases(resident,worker,layout):
             assert c.r[0]==0;compared.append(index);coverage.add(0x25);cases+=1
         for index,name in ((4,'gun'),(5,'timer1'),(6,'timer2')):
             c=fixture(bank);c.write(c.live+layout['live.'+name],0)
-            observed_case(c,'_controller_context_valid',(0x40024|(index<<8),0,MASK,0))
+            expected=c.owner_code if timers and index in (5,6) else 0
+            observed_case(c,'_controller_context_valid',(0x40024|(index<<8),0,MASK,expected))
             assert c.r[0]==0;failed_reads.append(index);coverage.add(0x24);cases+=1
+        if timers:
+            for index in (5,6):
+                address=0x8c970000+4*(index-4)
+                for value in TIMER_VALID_CALLBACKS:
+                    c=fixture(bank);c.write(address,value);before=c.snapshot();c.writes=[]
+                    if value:c.forbidden_reads.add(value)
+                    c.execute('_controller_context_valid',[c.frame,1]);assert c.r[0]==1
+                    assert_c_abi(c,before);c.assert_no_owner_writes();cases+=1
+                for value in TIMER_BAD_CALLBACKS:
+                    c=fixture(bank);c.write(address,value)
+                    observed_case(c,'_controller_context_valid',
+                        (0x40026|(index<<8),address,value,c.owner_code))
+                    assert c.r[0]==0;coverage.add(0x26);cases+=1
         for i in range(24):
             c=fixture(bank);c.write(c.live+layout['live.input_address']+4*i,0)
             observed_case(c,'_controller_context_valid',(0x40024|((8+i)<<8),0,MASK,0x24681350+i))
@@ -475,7 +619,7 @@ def context_cases(resident,worker,layout):
         sentinel=(0x20032,0x8c123400,0x7f,0x80)
         for offset,value in zip((76,64,68,72),sentinel):c.write(c.state+offset,value)
         observed_case(c,'_controller_context_valid',sentinel);assert c.r[0]==0;cases+=1
-    assert coverage==set(range(0x20,0x26))
+    assert coverage==set(range(0x20,0x27 if timers else 0x26))
     return dict(cases=cases,reasons=sorted(coverage),compared_field_indices=sorted(set(compared)),
                 read_failure_field_indices=sorted(set(failed_reads)),old_transfer_witness_preserved=True)
 
@@ -699,7 +843,8 @@ def objects(worker):
 
 
 def mutations(resident,worker,layout):
-    functional=bytes_rejected=schemas=0
+    worker=timer_symbol_aliases(worker)
+    functional=bytes_rejected=schemas=timer_branches=0
     address,body,section=symbol_bytes(worker,'_failure_witness.isra.0',2)
     offset=section[4]+address-section[3]
     for at,opcode in ((2,0x2152),(4,0x1161),(6,0x1172),(10,0x1143)):
@@ -717,7 +862,26 @@ def mutations(resident,worker,layout):
     try:complete_cases(resident,trial,layout)
     except (AssertionError,Failure):functional+=1
     else:raise ValueError('actual completion model accepted loss of allowed A1 attachment bits')
-    for kind,pins in ((2,PINS),(1,DATA_PINS)):
+    if owned_timer_profile(worker):
+        typed=timer_symbol_aliases(worker)
+        # Invert each actual policy branch while retaining its delay-slot
+        # shape: null driver/callback, both RAM admissions, owner/callback
+        # aliases, alignment, complete RAM span and lower/upper code bounds.
+        branches={
+            '_kui_vmu_native_timer_callback_owned':((12,0x8d0e),(18,0x8d0b),(36,0x8f07),(66,0x8df1)),
+            '_timer_runtime_ram':((20,0x8f18),(46,0x8b0a),(54,0x8f07),(60,0x8b04)),
+            '_timer_runtime_in':((2,0x8f08),(12,0x8d03)),
+        }
+        for name,sites in branches.items():
+            address,body,section=symbol_bytes(typed,name,2);offset=section[4]+address-section[3]
+            for at,opcode in sites:
+                require(struct.unpack_from('<H',body,at)[0]==opcode,
+                        'owned timer policy branch mutation site changed')
+                changed=bytearray(worker[0]);struct.pack_into('<H',changed,offset+at,opcode^0x0200)
+                try:callback_ownership_cases(resident,(bytes(changed),*worker[1:]),layout)
+                except (AssertionError,ValueError,Failure):functional+=1;timer_branches+=1
+                else:raise ValueError('actual callback model accepted inverted ownership branch: '+name+'+'+str(at))
+    for kind,pins in ((2,code_pins(worker)),(1,DATA_PINS)):
         for name in pins:
             address,body,section=symbol_bytes(worker,name,kind);offset=section[4]+address-section[3]
             for i in range(len(body)):
@@ -738,6 +902,7 @@ def mutations(resident,worker,layout):
             except ValueError:schemas+=1
             else:raise ValueError('controller witness accepted an untyped/mutable constant table')
     return dict(actual_instruction_mutation_rejections=functional,
+                owned_timer_policy_branch_mutation_rejections=timer_branches,
                 instruction_and_literal_byte_mutation_rejections=bytes_rejected,
                 typed_constant_schema_mutation_rejections=schemas)
 
@@ -761,6 +926,12 @@ def companion_mutations(worker,report):
                             ('terminal_identity','invalid_capability_preserves_raw_first_failure',False),
                             ('identity','ordinary_capability_absent_owner_reads',9)):
         candidate=copy.deepcopy(report);candidate[key][field]=value;variants.append(candidate)
+    if owned_timer_profile(worker):
+        for field,value in (('enabled',False),('cases',80),('accepted_cases',37),
+                ('worker_imask',14),('exact_owner_executable_halfword_bounds',False),
+                ('callback_target_never_read_or_called',False),
+                ('callback_validation_changes_no_owner_memory_or_sr_control_bits',False)):
+            candidate=copy.deepcopy(report);candidate['owned_timer_callbacks'][field]=value;variants.append(candidate)
     refused=0
     for candidate in variants:
         try:witness_companion(worker,{'controller_failure_witness':candidate})
@@ -776,6 +947,14 @@ def companion_mutations(worker,report):
         try:witness_companion((*worker[:4],symbols),None)
         except ValueError:refused+=1
         else:raise ValueError('controller witness accepted an unpaired terminal/witness marker')
+    if owned_timer_profile(worker):
+        for value in (None,(0,0,0,0xfff1),(1,4,0,0xfff1),(1,0,1,0xfff1),(1,0,0,1)):
+            symbols=dict(worker[4])
+            if value is None:symbols.pop(TIMER_MARK)
+            else:symbols[TIMER_MARK]=value
+            try:witness_companion((*worker[:4],symbols),{'controller_failure_witness':report})
+            except ValueError:refused+=1
+            else:raise ValueError('controller witness accepted an inexact owned timer marker')
     return refused
 
 
@@ -787,17 +966,19 @@ def check(directory,self_test=False):
     truth=scalar_truth_cases()
     MODELED_FUNCTIONS.clear()
     helpers=helper_cases(resident,worker,layout)
+    timers=callback_ownership_cases(resident,worker,layout)
     context=context_cases(resident,worker,layout)
     identity=identity_cases(resident,worker,layout)
     terminal=terminal_identity_cases(resident,worker,layout)
     complete=complete_cases(resident,worker,layout)
-    require(MODELED_FUNCTIONS<=set(PINS),'actual witness execution entered an unpinned function')
+    require(MODELED_FUNCTIONS<=set(code_pins(worker)),'actual witness execution entered an unpinned function')
     report=dict(schema=SCHEMA,enabled=True,artifact_sha256=sha(worker[0]),immutable_pins=pins,
         uncached_owned_objects=owned,scalar_truth_cases=truth,executed_owned_functions=sorted(MODELED_FUNCTIONS),
         actual_sh_console_layout=layout,helper_model_cases=helpers,
         controller_model_cases=context['cases']+complete['cases'],identity_model_cases=identity['cases']+terminal['cases'],
         success_model_cases=complete['successes'],failure_model_cases=complete['failures'],
         controller_context=context,controller_completion=complete,identity=identity,terminal_identity=terminal,
+        owned_timer_callbacks=timers,
         predicate_coverage=dict(all_controller_reasons=complete['reasons'],
             all_controller_context_reasons=context['reasons'],identity_first_failure_read_order=True,
             identity_shape_bitmap=True,resume_then_consumer_first_failure=True,

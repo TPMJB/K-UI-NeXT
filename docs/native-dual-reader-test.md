@@ -13,14 +13,38 @@ Both X and Y reserve 384KiB for this candidate's VMU/reader state. Y leaves
 the extra read-ahead space unused; it is a transport comparison with the
 same reservation, not a historical 192KiB-memory-footprint comparison.
 
-The new reader is unchanged as a performance policy: at most two checked
+The new reader retains its performance policy: at most two checked
 physical blocks per eligible heartbeat, with timing admission for block 2,
-SCI priority 1 and the existing CRC/loan/ownership limits. This candidate's
-reader retains the eight software candidates and integrated selection from
-the previous candidate. The follow-up changes are described below; Evolution 2
-should not become faster than the previously approved build.
+SCI priority 1 and the existing CRC/loan/ownership limits. Each New and Legacy
+low reader has one reviewed bootstrap-hook literal changed for the inherited
+owner stack, described below. The PIO producer and scheduling policy are
+preserved. The candidate retains eight software candidates from the 26 supplied
+programs; a software pass still requires console testing.
 
 ## Current console results and follow-up
+
+After the shared card-status stop was cleared, Skies on `f721551450e3` reached
+VMU guard `0x47` with CHECK `00040625`: callback cell `0x8c598804` contained
+`0x8c087498`, while the guard expected zero. Original game code registers and
+re-arms this ordinary TMU2 callback. The new generic guard accepts null or a
+canonical callback whose complete aligned two-byte span lies inside the
+verified executable. IMASK15 and all DMA, manager, RX, heap and lease checks
+remain required. The VMU worker never invokes or rewrites the callback or its
+argument.
+
+Rayman 2 reserves a larger original startup stack frame. Its heap hook arrives
+at physical SP `0x0c00b3a4`, below the old fixed lower bound `0x0c00c100`.
+The new lower bound `0x0c008100` derives from the protected reader/IP boundary
+plus `0x100`. The complete 52-byte inherited frame remains above the retained
+low reader and its stack; the upper bound stays `0x0c00f400`. Packaging permits
+exactly this one decoded lower-bound literal change in each low reader.
+Neither startup correction uses a title whitelist. The new binary needs
+console confirmation before either game is called fixed.
+
+Lodoss now reports slow audio without opening video on `f721551450e3`, with no
+new VMU stop screen reported. Its live reader capture is still needed; this
+package does not claim that symptom fixed. Evolution 1 remains a known black
+screen after MPEG Sofdec.
 
 The `f721551450e3` follow-up stopped before game startup for Evolution 2,
 Lodoss and Rayman 2. The readable report shows stage `2`, session `-6`,
@@ -50,8 +74,8 @@ the build header. The initial eight-title round is complete; DOA2 admission is b
 The previous follow-up added a repair for Lodoss's verified terminal-allocator table transition.
 The original default allocator, reserved lease, full free-list guards and
 unknown-table refusals remain required. The new terminal table is accepted
-only while its checked fatal-handler hook is installed. Console confirmation
-of this repair is still needed.
+only while its checked fatal-handler hook is installed. The later slow-audio
+report does not establish working video, gameplay or VMU persistence.
 
 It also combines the UI's executable CRC and native VMU source read
 into one pass where possible. It retains the full-file checks and the
@@ -60,9 +84,7 @@ Evolution 1 trace through the matching two-file installer. The new SCI
 reader policy and read-ahead producer are unchanged. The VMU worker's failure
 pages now distinguish the individual comparisons behind guards `0x47` and
 `0x03`, retaining the existing refusal and publication rules. Evolution 1
-and Rayman still need their next captures; this is a Lodoss repair, one-pass
-launch-preparation and diagnostic candidate. Console launch times have not yet
-been measured.
+still needs its next capture. Console launch times have not yet been measured.
 
 ## Install once
 
@@ -90,17 +112,23 @@ SDK contexts and maps needing more than 64 combined track/extent slots.
 It reports a refusal rather than quietly changing to a different reader.
 Unknown native SDK families remain experimental and can refuse safely.
 
-## Skies and Lodoss guard captures
+## Skies startup retry and Lodoss capture
 
-Retry these two titles with New (X). If either stops, photograph the complete
-screen including DETAIL and AT/VALUE/EXPECT/CHECK/LEASE. The new CHECK value
-identifies which comparison failed; the previous screenshots retained stale
-values from earlier successful operations at these particular guards.
-This instrumentation does not declare either game fixed or relax its checks.
+Retry Skies with New (X), including startup and several minutes of controller
+input. If it stops, photograph the complete screen including DETAIL and
+AT/VALUE/EXPECT/CHECK/LEASE. Record A2 load/save and physical A1 behavior once
+startup succeeds.
+
+For Lodoss, keep `--profile-runtime` installed. Once the slow opening audio
+starts, hold both triggers plus B for about one second, release, and record
+the complete report cycle described under Captures below. Reaching gameplay
+or completing a save is not required for this startup capture. If a new VMU
+stop screen appears instead, photograph it in full.
 
 ## Rayman 2 cold-start capture
 
-Record launch through the freeze. The follow-up stage prints numbered cold
+Retry Rayman 2 with New (X) and record whether it passes the previous build-only
+freeze and reaches its title screen. The stage prints numbered cold
 checkpoints around verification, heap allocation, worker setup and reader
 binding. Capture the last visible checkpoint, or the complete stop screen.
 These labels add no per-frame reader work.
@@ -134,10 +162,13 @@ Your results on the earlier `af9e01c8a271` build remain useful.
 
 1. Evolution 2: first confirm it passes the shared virtual-card preflight;
    then check the familiar movement route and an FMV for a short regression.
-2. Lodoss: retry startup. If it boots, test movement/transitions, A2 load, an
-   unused-slot save and cold-boot reload. Capture any new stop screen in full.
-3. Skies: retry New (X) and capture the full new guard report if it stops.
-4. Rayman 2: record startup and the last numbered cold checkpoint or stop screen.
+2. Skies: retry New (X), including startup and several minutes of controller
+   input. Capture any complete VMU stop screen.
+3. Rayman 2: record whether it passes the former build-only freeze and reaches
+   the title screen; capture any new stop screen or cold checkpoint.
+4. Lodoss: make the separate profile-runtime capture during the slow opening
+   audio. If normal startup succeeds, then test movement/transitions, A2 load,
+   an unused-slot save and cold-boot reload.
 5. Evolution 1: compare Legacy (Y), then record New (X) with the exact trace mode
    above. Return to `--profile-runtime` before performance comparisons or other games.
 6. Run the computer-side DOA2 filesystem probe at the end of this guide.
@@ -196,7 +227,9 @@ with the same installer and settings: admission is structural, not a title list.
 ## Captures are a separate run
 
 Keep `--profile-runtime` installed. Long play needs no capture gesture.
-After completing save/persistence checks, enter the test area, hold both
+For Lodoss's startup failure, use the early capture described above. For a
+game that reaches normal play, complete save/persistence checks first, then
+enter the test area, hold both
 triggers plus B for about 1 second, release, and continue the same activity.
 The capture intentionally stops gameplay after roughly 20 seconds.
 

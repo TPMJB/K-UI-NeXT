@@ -1,0 +1,70 @@
+{
+  "schema": "kui.native.game-startup-followup.v1",
+  "date": "2026-10-25",
+  "tested_build": "f721551450e3",
+  "shared_card_status": "Owner reports fsck found filesystem clean and clearing exFAT dirty status removed the shared preflight refusal.",
+  "skies": {
+    "source_image": "image(20261026-010745).png",
+    "phase": 16,
+    "detail": 71,
+    "submitted": 30,
+    "completed": 29,
+    "sd_reads": 0,
+    "write_phases": 0,
+    "commits": 0,
+    "address": "0x8c598804",
+    "actual": "0x8c087498",
+    "expected": "0x00000000",
+    "check": "0x00040625",
+    "lease": "0x8cfa0000",
+    "frame": "0x8c00f224",
+    "pr": "0x8c29e166",
+    "sr": "0x600000f1",
+    "localization": "controller_context_valid timer2 callback must be zero",
+    "source_finding": "Original game registers and re-arms this TMU2 callback; rejecting every nonzero callback is overstrict.",
+    "planned_correction": "Permit null or a canonical aligned callback entirely within verified executable under existing IMASK15 and all ownership checks; preserve callbacks and arguments.",
+    "original_timer_replay": {
+      "cases": 72,
+      "callback": "0x8c087498",
+      "priority": 15,
+      "worker_mask": 15,
+      "writes_maple_sci_dmac": false
+    }
+  },
+  "rayman2": {
+    "console": "After Bootstrap 2 the hook setup screen prints only the build number and remains frozen.",
+    "source_finding": "Original startup reserves 0x4008 stack bytes before heap initialization, leading to physical SP0x0c00b3a4, below the old arbitrary0x0c00c100 guard.",
+    "planned_correction": "Derive inherited owner-stack lower bound from retained-low/IP boundary and preserve complete52-byte frame clearance, same upper bound and exact hook caller identity.",
+    "original_stack_replay": {
+      "original_prologues": 4,
+      "original_call_edges_verified": true,
+      "owner_aliases": [
+        "P0",
+        "P1",
+        "P2"
+      ],
+      "heap_hook_sp": "0x0c00b3a4",
+      "intervening_helpers": "Assume ABI-preserved SP; helper bodies not executed",
+      "console_game_boot_verified": false
+    }
+  },
+  "lodoss": {
+    "console": "Opening video never appears; slow audio only; no new VMU stop screen reported.",
+    "cause_confirmed": false,
+    "next_evidence": "Existing profile-runtime both-triggers+B live reader capture requested; no speculative SCI policy change."
+  },
+  "new_binary_console_verified": false,
+  "title_allowlist": false,
+  "software_validation": {
+    "runtime_host_checks": 845,
+    "prepared_live_checks": 8155,
+    "controller_host_checks": 153416,
+    "controller_witness_cases": 78,
+    "worker_stack_gap_bytes": 64,
+    "retained_structure_growth_bytes": 0,
+    "numeric_diagnostic_calls_preserved": 86,
+    "compiled_timer_helper_cases": 81,
+    "compiled_controller_cases": 410,
+    "ownership_branch_inversion_mutants_rejected": 10
+  }
+}

@@ -314,7 +314,7 @@ def check(resident,worker,stage,*,self_test=False,read_ahead_proof=None):
             'structural SDK requires the independently proved PIO pair companion')
     pins=pin_bodies(resident)
     cold_pins=stage_pins(stage,diagnostic=True,pio=True,pio_pair=True,multi_owner=True,structural=True,
-                         worker=worker,read_ahead_proof=read_ahead_proof)
+                         worker=worker,read_ahead_proof=read_ahead_proof,resident=resident)
     exact_table=multi_owner_table(stage);generic_table=family_tables(stage)
     cold=cold_check(stage,resident,self_test=self_test);dynamic=dynamic_runtime_cases(resident)
     callbacks={name:callback_cases(resident,previous=record['default']) for name,record in OWNER_CONSTANTS.items()}
@@ -325,7 +325,7 @@ def check(resident,worker,stage,*,self_test=False,read_ahead_proof=None):
         for label,image,probe,names in (
             ('resident',resident,pin_bodies,tuple(pins)),
             ('stage',stage,lambda value:stage_pins(value,diagnostic=True,pio=True,pio_pair=True,
-                multi_owner=True,structural=True,worker=worker,read_ahead_proof=read_ahead_proof),tuple(cold_pins))):
+                multi_owner=True,structural=True,worker=worker,read_ahead_proof=read_ahead_proof,resident=resident),tuple(cold_pins))):
             for name in names:
                 address,body,section=symbol_bytes(image,name,2);start=section[4]+address-section[3]
                 for at in range(len(body)):
@@ -350,7 +350,7 @@ def check(resident,worker,stage,*,self_test=False,read_ahead_proof=None):
                 try:
                     if suffix=='resident':pin_bodies((*image[:4],symbols))
                     else:stage_pins((*image[:4],symbols),diagnostic=True,pio=True,pio_pair=True,
-                        multi_owner=True,structural=True,worker=worker,read_ahead_proof=read_ahead_proof)
+                        multi_owner=True,structural=True,worker=worker,read_ahead_proof=read_ahead_proof,resident=resident)
                 except ValueError:marker_refusals+=1
                 else:raise ValueError('structural SDK accepted a changed profile selector')
     totals=tuple(sum(value[i] for value in ownership.values()) for i in range(4))

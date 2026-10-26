@@ -93,6 +93,22 @@ static void reject(struct fixture *f,int expected) {
 int main(void) {
     struct fixture f;struct kui_vmu_native_runtime_snapshot out;
     const uint32_t aliases[3]={0u,0x80000000u,0xa0000000u};
+    /* Real games register/re-arm SDK timer callbacks after initial binding.
+     * Their presence grants no executable or memory authority to the worker. */
+    for(unsigned a=0;a<3u;a++) for(unsigned phase=0;phase<2u;phase++) {
+        fixture(&f,0u,0u,phase);
+        put(&f,f.config.timer1_callback,4u,aliases[a]|0x0c010000u);
+        put(&f,f.config.timer2_callback,4u,aliases[a]|0x0c20fffeu);
+        CHECK(run(&f,&out)==KUI_VMU_NATIVE_RUNTIME_VALID);
+    }
+    const uint32_t bad_timer[]={1u,0x8c00fffeu,0x8c210000u,0x8c20ffffu,
+        0xec087498u,0x6c087498u,0xa05f6c00u,0xac700000u,0x8ce00000u};
+    for(unsigned timer=0;timer<2u;timer++) for(unsigned i=0;i<sizeof(bad_timer)/sizeof(bad_timer[0]);i++) {
+        fixture(&f,0u,0u,1u);
+        put(&f,timer?f.config.timer2_callback:f.config.timer1_callback,4u,bad_timer[i]);
+        reject(&f,KUI_VMU_NATIVE_RUNTIME_STATE);
+    }
+    CHECK(!kui_vmu_native_timer_callback_owned(NULL,0u));
     for(unsigned a=0;a<3u;a++) for(unsigned bank=0;bank<2u;bank++) for(unsigned phase=0;phase<2u;phase++) {
         fixture(&f,aliases[a],bank,phase);CHECK(run(&f,&out)==KUI_VMU_NATIVE_RUNTIME_VALID);
         CHECK(out.manager==(aliases[a]|0x0c300000u) && out.bank==bank);

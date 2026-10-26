@@ -5,6 +5,12 @@
 #endif
 #include "kui/vmu_native_mode.h"
 #include "kui/vmu_native_background.h"
+#include "kui/vmu_native_startup_stack.h"
+__asm__(".global __kui_native_owner_stack_ip_stage\n"
+        ".set __kui_native_owner_stack_ip_stage,1\n");
+_Static_assert(KUI_VMU_NATIVE_OWNER_STACK_LOW-52u>
+    (KUI_RETAIL_LOW_HOOK_STACK&UINT32_C(0x1fffffff))+32u,
+    "Native inherited owner frame must clear retained reader/private stack");
 #if KUI_VMU_NATIVE_CACHE_PROBE
 __asm__(".section .rodata.native_runtime_mode,\"a\"\n.balign 4\n"
     ".global __native_runtime_mode_start\n"
@@ -139,7 +145,7 @@ void kui_vmu_observe_stage_install(void) {
         native_report(4u,begin);
     uint32_t pr=c->original_pr&0x1fffffffu,sp=c->entry_sp&0x1fffffffu;
     if((c->original_pr&1u) || pr!=(native_call.return_pr&0x1fffffffu) ||
-       (sp&3u) || sp<0x0c00c100u || sp>0x0c00f400u ||
+       (sp&3u) || sp<KUI_VMU_NATIVE_OWNER_STACK_LOW || sp>KUI_VMU_NATIVE_OWNER_STACK_HIGH ||
        !kui_vmu_native_heap_preallocate(&lease,native_read,NULL,1u))
         native_report(5u,c->entry_sp);
     void *(*allocate)(uint32_t)=(void *(*)(uint32_t))(uintptr_t)native_heap.allocate;

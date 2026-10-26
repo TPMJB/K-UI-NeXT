@@ -26,6 +26,7 @@ enum kui_vmu_native_runtime_result kui_vmu_native_live_prepare(
     void *,struct kui_vmu_native_runtime_snapshot *,
     struct kui_vmu_native_layout_diagnostic *);
 enum kui_vmu_native_runtime_result kui_vmu_native_live_check(
-    const struct kui_vmu_native_live *,const struct kui_vmu_native_runtime_boundary *,
+    const struct kui_vmu_native_live *,const struct kui_vmu_native_discovery *,
+    const struct kui_vmu_native_runtime_boundary *,
     kui_vmu_native_runtime_read,void *,struct kui_vmu_native_runtime_snapshot *);
 #endif

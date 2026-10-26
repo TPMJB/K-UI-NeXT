@@ -56,6 +56,14 @@ ESCAPES = {("kui_retail_menu_return", "retail_resident.c"): "boot-ROM menu; does
                "validated worker terminal; private stack switch separately audited"}
 
 
+# Whole installer body: unchanged instructions, reviewed same-role literal targets.
+GAME_STARTUP_PASSIVE_RUN_PINS=frozenset({(1996,'3d40528009ae4e11f6950d13a2193175dc3452f11c138f7c687dcc1e626a6070')})
+
+def passive_run_pins(worker):
+    from check_native_game_startup_profile import game_startup_profile
+    return GAME_STARTUP_PASSIVE_RUN_PINS if game_startup_profile(worker) else WITNESS_PASSIVE_RUN_PINS
+
+
 def require(condition, message):
     if not condition:
         raise ValueError(message)
@@ -257,7 +265,7 @@ def c_body(text, signature):
     return text[start:end]
 
 
-def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,witness=False):
+def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,witness=False,owned_timers=False):
     """Replay the linked installer tail through its first worker relocation.
 
     The already audited prefix proves the native allocation and normalizes
@@ -281,6 +289,8 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
         if not begin <= address <= begin + len(body) - 4:
             return None
         return struct.unpack_from("<I", body, address - begin)[0]
+    selected_passive_pins=GAME_STARTUP_PASSIVE_RUN_PINS if owned_timers else WITNESS_PASSIVE_RUN_PINS
+    require(not owned_timers or witness, 'Owned-timer installer requires complete witness profile')
     if witness:
         # This is a separate, complete immutable function profile. Cold
         # display calls changed its register allocation; do not make the old
@@ -288,7 +298,7 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
         require(stage[4].get('__kui_native_cold_progress_stage')==
                 stage[4].get('__kui_native_dual_readers_stage')==(1,0,0,0xfff1),
                 'Background witness tail requires exact dual/progress markers')
-        require((len(body),digest(body)) in WITNESS_PASSIVE_RUN_PINS,
+        require((len(body),digest(body)) in selected_passive_pins,
                 'Background witness passive-run instruction/literal pin changed')
         index=0x134//2
         require(words[index:index+4]==[0x51a8,0x31b0,0x8f08,0x1c0f] and
@@ -568,7 +578,7 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
         if witness:
             for offset in range(len(body)):
                 changed=bytearray(body);changed[offset]^=1
-                require((len(changed),digest(changed)) not in WITNESS_PASSIVE_RUN_PINS,
+                require((len(changed),digest(changed)) not in selected_passive_pins,
                         'Background witness passive-run pin accepted changed instructions/literals')
                 pin_mutations+=1
     return {"actual_sh_cases": cases, "entry": hex(start), "lease_bytes":lease_bytes,
@@ -667,9 +677,12 @@ def stage_contract(directory, resident, *, self_test=False,read_ahead_proof=None
     image = read_elf(path)
     progress=image[4].get('__kui_native_cold_progress_stage')
     witness=False
+    owned_timers=False
     if progress is not None:
         from check_native_controller_failure_witness import witness_companion
         worker=read_elf(directory/'native-worker.elf')
+        from check_native_game_startup_profile import game_startup_profile
+        owned_timers=game_startup_profile(worker,read_elf(directory/'resident-sci.elf'))
         witness=witness_companion(worker,read_ahead_proof)
         require(witness and progress==(1,0,0,0xfff1) and
                 image[4].get('__kui_native_dual_readers_stage')==(1,0,0,0xfff1),
@@ -717,7 +730,7 @@ def stage_contract(directory, resident, *, self_test=False,read_ahead_proof=None
             "generated_binder": hex(binder), "embedded_resident_copies": embedded,
             "tail_copy_replay": compiled_tail_copy(image, resident, self_test=self_test,
                 lease_bytes=0x60000 if '__kui_native_readahead_stage' in image[4] else 0x30000,
-                witness=witness),
+                witness=witness,owned_timers=owned_timers),
             "memory_end": hex(inspected["memory_end"]),
             "scope": "stage bounds/profile/workspaces; full envelope and worker audited separately"}
 

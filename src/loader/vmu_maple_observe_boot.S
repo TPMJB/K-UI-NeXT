@@ -4,6 +4,7 @@
 #include "kui/retail_loader_layout.h"
 #include "kui/vmu_maple_observe_boot.h"
 #include "kui/vmu_maple_observe_profile.h"
+#include "kui/vmu_native_startup_stack.h"
 #if !KUI_VMU_MAPLE_OBSERVE || !KUI_RETAIL_LOW_RESIDENT || defined(KUI_RETAIL_CE) || (defined(KUI_RETAIL_ASYNC) && !KUI_VMU_NATIVE_BACKGROUND)
 #error VMU observation bootstrap requires its separate native build
 #endif
@@ -145,10 +146,12 @@ C(kui_vmu_observe_heap_hook):
 .Lcontrol: .long C(kui_vmu_observe_boot_control)+0x20000000
 .Lmask: .long 0x100000f0
 #if KUI_VMU_NATIVE_HEAP_PROBE
+    .global __kui_native_owner_stack_ip_hook
+    .set __kui_native_owner_stack_ip_hook,1
 .Loriginal_init: .long C(kui_vmu_native_heap_original)+0x20000000
 .Lphysical_mask: .long 0x1fffffff
-.Lentry_stack_low: .long 0x0c00c100
-.Lentry_stack_high: .long 0x0c00f400
+.Lentry_stack_low: .long KUI_VMU_NATIVE_OWNER_STACK_LOW
+.Lentry_stack_high: .long KUI_VMU_NATIVE_OWNER_STACK_HIGH
 #else
 .Loriginal_init: .long KUI_VMU_OBS_HEAP_INIT
 #endif

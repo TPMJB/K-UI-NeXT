@@ -51,7 +51,7 @@ static void prepare_plan(const struct kui_vmu_native_runtime_boundary *b) {
 }
 static void no_snapshot_on_failure(const struct kui_vmu_native_runtime_boundary *b) {
     struct kui_vmu_native_runtime_snapshot out,before;memset(&before,0xa5,sizeof(before));out=before;
-    CHECK(kui_vmu_native_live_check(&plan,b,traced_read,NULL,&out)!=KUI_VMU_NATIVE_RUNTIME_VALID);
+    CHECK(kui_vmu_native_live_check(&plan,&input.driver,b,traced_read,NULL,&out)!=KUI_VMU_NATIVE_RUNTIME_VALID);
     CHECK(!memcmp(&out,&before,sizeof(out)));
 }
 int main(void) {
@@ -64,16 +64,16 @@ int main(void) {
         put(input.driver.manager_cell,4u,physical(input.driver.manager_initial)|aliases[a]);
         struct kui_vmu_native_runtime_boundary b=live_boundary_input(bank,phase,false);prepare_plan(&b);
         CHECK(reference(&b,&expected)==0);trace_count=live_reads=alter_read=0u;
-        CHECK(kui_vmu_native_live_check(&plan,&b,traced_read,NULL,&out)==0);
+        CHECK(kui_vmu_native_live_check(&plan,&input.driver,&b,traced_read,NULL,&out)==0);
         CHECK(!memcmp(&out,&expected,sizeof(out)) && out.bank==bank);
         if(phase) {b=live_boundary_input(bank,phase,true);CHECK(reference(&b,&expected)==0);
-            CHECK(kui_vmu_native_live_check(&plan,&b,read_value,NULL,&out)==0);
+            CHECK(kui_vmu_native_live_check(&plan,&input.driver,&b,read_value,NULL,&out)==0);
             CHECK(!memcmp(&out,&expected,sizeof(out)));}
     }
     fixture();struct kui_vmu_native_runtime_boundary b=live_boundary_input(0u,0u,false);prepare_plan(&b);
     bus_reads=0u;CHECK(reference(&b,&out)==0);full_reads=bus_reads;
     trace_count=live_reads=alter_read=0u;bus_reads=0u;
-    CHECK(kui_vmu_native_live_check(&plan,&b,traced_read,NULL,&out)==0);hot_reads=bus_reads;
+    CHECK(kui_vmu_native_live_check(&plan,&input.driver,&b,traced_read,NULL,&out)==0);hot_reads=bus_reads;
     CHECK(hot_reads+51u==full_reads && hot_reads==98u);
     struct live_word successful[128];unsigned total=trace_count;memcpy(successful,trace,sizeof(successful));
     /* Every live pointer/control/input/slot sampled by the optimized path is
@@ -90,7 +90,7 @@ int main(void) {
         no_snapshot_on_failure(&b);CHECK(bus_reads==i);fail_read=0u;
     }
     fixture();uniform_layout();b=live_boundary_input(0u,0u,false);prepare_plan(&b);
-    trace_count=live_reads=alter_read=0u;CHECK(kui_vmu_native_live_check(&plan,&b,traced_read,NULL,&out)==0);
+    trace_count=live_reads=alter_read=0u;CHECK(kui_vmu_native_live_check(&plan,&input.driver,&b,traced_read,NULL,&out)==0);
     total=trace_count;memcpy(successful,trace,sizeof(successful));CHECK(total==78u);
     for(unsigned i=0;i<total;i++) {
         put(successful[i].address,successful[i].width,successful[i].value^1u);
@@ -111,11 +111,31 @@ int main(void) {
         b.dma_source_physical=invalid_dma[i];put(0xa05f6c04u,4u,invalid_dma[i]);
         CHECK(reference(&b,&expected)!=0);no_snapshot_on_failure(&b);
     }
+    /* A private proof must allow normal post-binding registration and
+     * deregistration, but its full reference and optimized path must agree
+     * on every invalid code target. No callback is invoked by either path. */
+    for(unsigned a=0;a<3u;a++) for(unsigned phase=0;phase<2u;phase++) {
+        fixture();b=live_boundary_input(0u,phase,false);prepare_plan(&b);
+        put(input.layout.timer1_callback,4u,aliases[a]|0x0c010000u);
+        put(input.layout.timer2_callback,4u,aliases[a]|0x0c20fffeu);
+        CHECK(reference(&b,&expected)==0);
+        CHECK(kui_vmu_native_live_check(&plan,&input.driver,&b,read_value,NULL,&out)==0);
+        CHECK(!memcmp(&out,&expected,sizeof(out)));
+        put(input.layout.timer2_callback,4u,0u);
+        CHECK(kui_vmu_native_live_check(&plan,&input.driver,&b,read_value,NULL,&out)==0);
+    }
+    const uint32_t bad_timer[]={1u,0x8c00fffeu,0x8c210000u,0x8c20ffffu,
+        0xec087498u,0x6c087498u,0xa05f6c00u,0xac700000u,0x8ce00000u};
+    for(unsigned timer=0;timer<2u;timer++) for(unsigned i=0;i<sizeof(bad_timer)/sizeof(bad_timer[0]);i++) {
+        fixture();b=live_boundary_input(0u,0u,false);prepare_plan(&b);
+        put(timer?input.layout.timer2_callback:input.layout.timer1_callback,4u,bad_timer[i]);
+        CHECK(reference(&b,&expected)!=0);trace_count=live_reads=alter_read=0u;no_snapshot_on_failure(&b);
+    }
     b=live_boundary_input(0u,1u,true);b.inherited_pr=0xec012226u;
     CHECK(reference(&b,&expected)!=0);no_snapshot_on_failure(&b);
     /* Private proof objects cannot be moved or admitted from serialized data. */
     struct kui_vmu_native_live copied=plan;
-    CHECK(kui_vmu_native_live_check(&copied,&b,read_value,NULL,&out)==KUI_VMU_NATIVE_RUNTIME_INVALID);
+    CHECK(kui_vmu_native_live_check(&copied,&input.driver,&b,read_value,NULL,&out)==KUI_VMU_NATIVE_RUNTIME_INVALID);
     fixture();b=live_boundary_input(0u,0u,false);prepare_plan(&b);
     struct kui_vmu_native_live before=plan;struct kui_vmu_native_runtime_config c=input.runtime;
     struct kui_vmu_native_runtime_config old=c;memset(&expected,0xa5,sizeof(expected));out=expected;

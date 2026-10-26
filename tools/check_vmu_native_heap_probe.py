@@ -143,8 +143,13 @@ def inspect_dynamic_hook(elf, image, *, low_limit=0x8C007800):
     entry_sp = sequence(ops, [0x5127], start=guard + 13, end=call)
     require(len(entry_sp) == 1, "Captured startup stack must be checked before initializer")
     stack_start = entry_sp[0]
+    marker=_linked_symbols(elf,{"__kui_native_owner_stack_ip_hook"}).get("__kui_native_owner_stack_ip_hook")
+    stack_low=0x0C008100 if marker is not None else 0x0C00C100
+    require(marker is None or marker[:3]==(1,0,0),"Invalid IP owner-stack capability marker")
+    require(stack_low-52>(low_limit&0x1FFFFFFF)+32,
+            "Inherited owner frame overlaps retained native reservation")
     low_loads = [i for i in range(stack_start, call) if ops[i] & 0xFF00 == 0xD000 and
-                 literal(body, address, i, 0) == 0x0C00C100]
+                 literal(body, address, i, 0) == stack_low]
     high_loads = [i for i in range(stack_start, call) if ops[i] & 0xFF00 == 0xD000 and
                   literal(body, address, i, 0) == 0x0C00F400]
     lower, upper = (sequence(ops, [value], start=stack_start, end=call)
@@ -201,8 +206,10 @@ def inspect_dynamic_hook(elf, image, *, low_limit=0x8C007800):
             "startup_argument_guard": {"entry_r4_offset": 4, "entry_r5_offset": 8,
                                        "physical_return_pr_offset": 12,
                                        "checked_before_initializer": True,
-                                       "physical_stack_low": "0x0c00c100",
+                                       "physical_stack_low": f"0x{stack_low:08x}",
                                        "physical_stack_high": "0x0c00f400"},
+            "ip_owner_stack_capability": marker is not None,
+            "inherited_frame_above_retained_reservation": True,
             "inherited_frame_bytes": 52,
             "mask_before_frame": True}
 

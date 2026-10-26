@@ -24,6 +24,7 @@ GAMES = ("ps2", "skies", "sa2", "grandia2", "evolution1", "evolution2", "jgr", "
 OPTIONS = argparse.Namespace(output=None, record_directory=None, **{game: os.environ.get(
     f"KUI_NATIVE_{game.upper()}_STARTUP") for game in GAMES})
 RESULTS = []
+STARTUP_STACK_RESULTS = []
 STACK, HOOK = 0x8C00EF00, 0x8C004200
 
 
@@ -112,6 +113,44 @@ def metadata(game, image):
 
 
 class CallerExecution(unittest.TestCase):
+    def test_rayman_startup_owner_stack_frames(self):
+        path=OPTIONS.rayman2
+        if not path:self.skipTest('Exact external Rayman startup not supplied')
+        source,image,_=verified_program_image(path,record_file('rayman2'))
+        _,_,_,call=metadata('rayman2',image)
+        def op(at):return struct.unpack_from('<H',image,at-0x8c010000)[0]
+        def literal(at):
+            word=op(at);self.assertEqual(word>>12,0xd)
+            return struct.unpack_from('<I',image,((at+4)&~3)+(word&255)*4-0x8c010000)[0]
+        # Bind the nested original calls around the stack prologues. Helpers
+        # between them are ABI-returning calls; their bodies and game boot are
+        # deliberately outside this stack-frame proof.
+        self.assertEqual(literal(0x8c01001a),0x8c0cc540)
+        self.assertEqual(literal(0x8c0cc55e),0x8c010d92)
+        branch=op(0x8c010d96);self.assertEqual(branch>>12,0xb)
+        self.assertEqual(0x8c010d96+4+2*signed(branch&4095,12),0x8c010b66)
+        self.assertEqual(literal(0x8c010b74),0x8c010e86)
+        self.assertEqual(call['call'],0x8c010eca)
+        spans=((0x8c0cc542,0x8c0cc544),(0x8c010d92,0x8c010d96),
+               (0x8c010b66,0x8c010b70),(0x8c010e86,0x8c010e92))
+        cases=[]
+        for alias in (0,0x80000000,0xa0000000):
+            model=SH(image);model.r[15]=alias|0x0c00f400
+            for begin,end in spans:
+                for pc in range(begin,end,2):model.plain(op(pc),pc)
+            self.assertEqual(model.r[15],alias|0x0c00b3a4)
+            self.assertLess(physical(model.r[15]),0x0c00c100)
+            self.assertGreaterEqual(physical(model.r[15])-52,0x0c008000+0x100-52)
+            self.assertGreater(physical(model.r[15])-52,0x0c007d00+32)
+            cases.append(dict(boot_sp=hex(alias|0x0c00f400),heap_hook_sp=hex(model.r[15]),
+                              original_stack_instruction_count=model.instructions))
+        STARTUP_STACK_RESULTS.append(dict(game='rayman2',source_sha256=hashlib.sha256(source).hexdigest(),
+            original_call_edges_verified=True,original_prologues_executed=4,
+            intervening_helpers='ABI returns preserve SP; helper bodies not executed',
+            game_boot_verified=False,old_lower_bound_refuses=True,
+            retained_low_reader_and_52byte_frame_disjoint=True,cases=cases))
+        print('Original Rayman startup stack: 16 KiB caller frame reaches heap hook at 0c00b3a4')
+
     def execute(self, game):
         path = getattr(OPTIONS, game)
         if not path:
@@ -185,5 +224,6 @@ if __name__ == "__main__":
     suite = unittest.main(argv=[sys.argv[0], *remaining], exit=False)
     if suite.result.wasSuccessful() and OPTIONS.output:
         OPTIONS.output.write_text(json.dumps(dict(schema="kui.native.original-caller-execution.v1",
-            retail_code_embedded=False, results=RESULTS), indent=2) + "\n")
+            retail_code_embedded=False, results=RESULTS,
+            original_startup_stack_frames=STARTUP_STACK_RESULTS), indent=2) + "\n")
     raise SystemExit(not suite.result.wasSuccessful())

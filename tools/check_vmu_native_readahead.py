@@ -87,6 +87,14 @@ STRUCTURAL_LOAN_PIN=(748,'ab219f0dc9ad6dfbe01be09b3c042d63992ead50a68245ddbb9ba6
 LOAN_PIN=(744,'a06ecbd795204545b4df1ca6f5efc3883a0a81b4e0391b088a12388203ff376c')
 GATEWAY_MEMORY={}
 
+# Exact whole bodies reviewed for the paired owned-timer/owner-stack profile.
+GAME_STARTUP_WORKER_PINS={
+    '_reader_readahead_exports':(200, '13ca433d369112a4b3184b17ec96e025a76e142e537d65c8d3bba2c6e9ce4d5e'),
+    '_reader_readahead_visit':(56, 'c44759200e43937665b2987281e995b4f39675f1e05180371aad4078cc02dbf3'),
+    '_reader_cooperative_service':(32, '932a8c6f2a8ffa5ffb5ead01a2a1fbfb8093d39f4c1836deabc9403ef027f505'),
+    '_reader_readahead_failure':(172, 'c24b42e15c0664a0c86315fb7928f5e4113dc2cfa3d6da1a8e106822328e9acb'),
+}
+
 def require(value,message):
     if not value:raise ValueError(message)
 
@@ -372,7 +380,10 @@ class WorkerCPU(SDKCPU):
 
 def worker_bindings(resident,worker,*,diagnostic=False,pio=False,pio_pair=False,dual=False,witness=False):
     pins={}
-    selected=DUAL_WITNESS_WORKER_PINS if witness else DUAL_WORKER_PINS if dual else PIO_PAIR_WORKER_PINS if pio_pair else PIO_WORKER_PINS if pio else \
+    from check_native_game_startup_profile import game_startup_profile
+    owned_timers=game_startup_profile(worker,resident)
+    require(not owned_timers or witness and dual, 'Owned timer read-ahead pins require dual witness profile')
+    selected=GAME_STARTUP_WORKER_PINS if owned_timers else DUAL_WITNESS_WORKER_PINS if witness else DUAL_WORKER_PINS if dual else PIO_PAIR_WORKER_PINS if pio_pair else PIO_WORKER_PINS if pio else \
         DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
     require(selected,'read-ahead reviewed worker pins are missing')
     public=656 if diagnostic else 76
@@ -874,7 +885,8 @@ def check(directory,*,self_test=False):
         bindings_mutations+=byte_mutations(resident,[(n,2) for n in low_pins],
             lambda image:pinned_functions(image,low_pins,'read-ahead low binding'))
         bindings_mutations+=byte_mutations(resident,[('_kui_native_ra_reader_ops',1),('_kui_native_ra_reader_ops_entry',1)],typed_ops)
-        worker_pins=DUAL_WITNESS_WORKER_PINS if witness else DUAL_WORKER_PINS if dual else PIO_PAIR_WORKER_PINS if pio_pair else PIO_WORKER_PINS if pio else \
+        from check_native_game_startup_profile import game_startup_profile
+        worker_pins=GAME_STARTUP_WORKER_PINS if game_startup_profile(worker,resident) else DUAL_WITNESS_WORKER_PINS if witness else DUAL_WORKER_PINS if dual else PIO_PAIR_WORKER_PINS if pio_pair else PIO_WORKER_PINS if pio else \
             DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
         bindings_mutations+=byte_mutations(worker,[(n,2) for n in worker_pins],
             lambda image:pinned_functions(image,worker_pins,'read-ahead worker binding'))
