@@ -203,16 +203,29 @@ static bool read_heap_raw(void *unused,uint32_t a,uint32_t *v) {return read_valu
 /* Only heap-routing identity reads may recognize the typed terminal table.
  * Its four wrappers and installed fatal-handler patch are rechecked through
  * the raw reader, independently of the allocator/free-list proof. */
-static void normalize_heap_dispatch(uint32_t address,uint32_t *value) {
+static void __attribute__((noipa)) normalize_heap_dispatch(uint32_t address,uint32_t *value) {
     (void)kui_vmu_native_terminal_dispatch_normalize(&config.exits,read_heap_raw,NULL,
         config.low_terminal,address,config.lease.owner.dispatch_cell,
         config.lease.owner.dispatch_table,value);
+}
+/* Only this exact routing word can change in the normalizer. Keep its full
+ * live-table/terminal-hook proof on that path, but do not enter the outlined
+ * proof for ordinary heap identities or installed-instruction witnesses.
+ * One leaf gate keeps the rejection path free of a callee-save frame without
+ * duplicating the gate at every inlined proved-reader callsite. */
+__asm__(".global __kui_native_dispatch_read_gate_worker\n"
+        ".set __kui_native_dispatch_read_gate_worker,1\n");
+static void __attribute__((noipa)) normalize_heap_dispatch_if_routing(
+    uint32_t address,uint32_t *value) {
+    if(address==config.lease.owner.dispatch_cell &&
+       config.exits.family==KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH)
+        normalize_heap_dispatch(address,value);
 }
 #endif
 static bool read_heap(void *unused,uint32_t a,uint32_t *v) {
     if(!read_heap_raw(unused,a,v)) return false;
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    normalize_heap_dispatch(a,v);
+    normalize_heap_dispatch_if_routing(a,v);
 #endif
     return true;
 }
@@ -228,7 +241,7 @@ static inline __attribute__((always_inline)) bool read_heap_proved(void *unused,
 #else
     *v=*(volatile const uint32_t *)(uintptr_t)a;
 #endif
-    normalize_heap_dispatch(a,v);return true;
+    normalize_heap_dispatch_if_routing(a,v);return true;
 }
 #endif
 static bool stack_valid(void) {

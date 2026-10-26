@@ -8,6 +8,7 @@
 #define TERMINAL_COMMON UINT32_C(0x8c013602)
 #define TERMINAL_TABLE UINT32_C(0x8c013800)
 static unsigned terminal_cases;
+static unsigned gate_cases;
 static void terminal_setup(void) {
     model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
     lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
@@ -91,9 +92,91 @@ static void cold_shape_refusals(void) {
         CHECK(kui_vmu_native_passive_arm(&bad,NULL)==-3);++terminal_cases;
     }
 }
+/* Compare the old unconditional call with the actual new leaf gate. The
+ * full normalizer remains the reference; neither path gets a substitute
+ * capability decision. Compare callback order/count at each failed read too. */
+static void gate_compare(uint32_t address,uint32_t raw) {
+    uint32_t expected=raw,actual=raw;
+    bus_reads=0u;fail_read=0u;normalize_heap_dispatch(address,&expected);
+    unsigned total=bus_reads;
+    bus_reads=0u;normalize_heap_dispatch_if_routing(address,&actual);
+    CHECK(actual==expected && bus_reads==total);++gate_cases;
+    for(unsigned failure=1u;failure<=total;failure++) {
+        expected=actual=raw;
+        bus_reads=0u;fail_read=failure;normalize_heap_dispatch(address,&expected);
+        unsigned attempted=bus_reads;
+        bus_reads=0u;normalize_heap_dispatch_if_routing(address,&actual);
+        CHECK(actual==expected && bus_reads==attempted);++gate_cases;
+    }
+    fail_read=0u;bus_reads=0u;
+    normalize_heap_dispatch(address,NULL);
+    CHECK(!bus_reads);normalize_heap_dispatch_if_routing(address,NULL);CHECK(!bus_reads);
+}
+static void gated_normalizer_differential(void) {
+    terminal_setup();select_terminal();
+    const struct kui_vmu_native_exit saved=config.exits;
+    uint32_t cell=config.lease.owner.dispatch_cell;
+    const uint32_t families[]={0u,1u,2u,3u,4u,5u,6u,UINT32_MAX};
+    const uint32_t addresses[]={cell,cell-4u,cell-1u,cell+1u,cell+2u,cell+4u,
+        cell^UINT32_C(0x20000000),physical(cell),0u,1u,UINT32_MAX-3u,UINT32_MAX};
+    const uint32_t values[]={0u,config.lease.owner.dispatch_table,TERMINAL_TABLE,
+        TERMINAL_TABLE+4u,TERMINAL_TABLE^UINT32_C(0x20000000),UINT32_MAX};
+    for(unsigned f=0u;f<sizeof(families)/sizeof(families[0]);f++) {
+        config.exits.family=families[f];
+        for(unsigned a=0u;a<sizeof(addresses)/sizeof(addresses[0]);a++)
+            for(unsigned v=0u;v<sizeof(values)/sizeof(values[0]);v++)
+                gate_compare(addresses[a],values[v]);
+    }
+    config.exits=saved;
+    /* An eligible routing word still invokes every original live guard.
+     * Bad table alignment, wrapped extents and broken installed wrappers
+     * must retain the same raw result and first failed callback. */
+    for(unsigned mutation=0u;mutation<7u;mutation++) {
+        config.exits=saved;
+        if(mutation==0u)config.exits.count=2u;
+        else if(mutation==1u)config.exits.terminal_dispatch.table=0u;
+        else if(mutation==2u)config.exits.terminal_dispatch.table|=2u;
+        else if(mutation==3u)config.exits.image_bytes=UINT32_MAX;
+        else if(mutation==4u)config.exits.load=UINT32_C(0xfffffff0);
+        else if(mutation==5u)config.exits.entries[2]+=2u;
+        else config.exits.terminal_dispatch.table=UINT32_MAX-3u;
+        gate_compare(cell,config.exits.terminal_dispatch.table);
+    }
+    config.exits=saved;
+    for(unsigned i=0u;i<4u;i++) {
+        uint32_t at=TERMINAL_TABLE+4u*i,original=value_at(at);
+        put(at,4u,original^1u);gate_compare(cell,TERMINAL_TABLE);put(at,4u,original);
+    }
+    for(unsigned i=0u;i<6u;i++) {
+        uint32_t at=TERMINAL_COMMON+2u*i;
+        uint8_t original=memory[physical(at)-0x0c000000u];
+        put(at,1u,original^1u);gate_compare(cell,TERMINAL_TABLE);put(at,1u,original);
+    }
+    /* The two production readers share the same gate. Preserve initial-read
+     * failure and successful normalization in the proved-RAM contract. */
+    for(unsigned reader=0u;reader<2u;reader++) {
+        bool (*read)(void *,uint32_t,uint32_t *)=reader?read_heap_proved:read_heap;
+        uint32_t expected=0u;bus_reads=fail_read=0u;
+        CHECK(read(NULL,cell,&expected) && expected==config.lease.owner.dispatch_table);
+        unsigned total=bus_reads;
+        for(unsigned failure=1u;failure<=total;failure++) {
+            uint32_t actual=UINT32_C(0x13579bdf),reference=actual;
+            bus_reads=0u;fail_read=failure;
+            bool old_ok=read_heap_raw(NULL,cell,&reference);
+            if(old_ok)normalize_heap_dispatch(cell,&reference);
+            unsigned attempted=bus_reads;
+            bus_reads=0u;bool new_ok=read(NULL,cell,&actual);
+            CHECK(new_ok==old_ok && actual==reference && bus_reads==attempted);++gate_cases;
+        }
+    }
+    fail_read=bus_reads=0u;
+    CHECK(!sd.bytes && !sd.writes && !lease_calls && !block_callbacks && !durable_card.commits);
+}
 int main(void) {
     allowed_routes_and_scoped_storage();live_capability_mutations();
     other_identity_and_unknown_routes();cold_shape_refusals();
+    gated_normalizer_differential();
     printf("Terminal dispatch worker: %u checks, %u route/mutation cases; raw unknown failures, exact live fatal hook, full free-list and scoped storage preserved\n",checks,terminal_cases);
+    printf("Leaf routing gate: %u differential family/address/value/read-failure cases\n",gate_cases);
     return 0;
 }

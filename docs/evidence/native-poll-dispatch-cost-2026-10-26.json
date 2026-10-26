@@ -1,0 +1,372 @@
+{
+  "schema": "kui.native.poll-normalizer-cost-comparison.v1",
+  "baseline_worker_sha256": "180020d1f3315d331aa2eaddbddf800449e85388a5cfd7fa07a6b3a17f5ee0ba",
+  "prototype_worker_sha256": "94a6a36e047705c44504ab1f907c424fd4b4858a3868cdcfce19c9f044df8777",
+  "lease": {
+    "actual_heap_payload": "0x8c35e220",
+    "p2_base": "0xac35e220",
+    "lease_bytes": 393216,
+    "placement": "bottom",
+    "geometry_source": "actual linked dual-reader stage capability and paired worker/stage bottom markers",
+    "heap_calls": [
+      {
+        "operation": "upper_placeholder_allocate",
+        "request": 12852672,
+        "result": 2352734784,
+        "instructions": 53
+      },
+      {
+        "operation": "retained_allocate",
+        "request": 393216,
+        "result": 2352341536,
+        "instructions": 48
+      },
+      {
+        "operation": "upper_placeholder_release",
+        "request": 2352734784,
+        "instructions": 58
+      }
+    ],
+    "stage_elf_sha256": "4e0bb6e368b93095941a8521fef278a7ff493002db3e41e2084fd80618916a45"
+  },
+  "compared_steady_rounds": [
+    2,
+    3,
+    4,
+    5
+  ],
+  "per_bank": {
+    "0": {
+      "callbacks": {
+        "submit": {
+          "instructions": {
+            "baseline": 3526,
+            "prototype": 3007,
+            "delta": -519
+          },
+          "private_p2_reads": {
+            "baseline": 212,
+            "prototype": 212,
+            "delta": 0
+          },
+          "private_p2_data_reads": {
+            "baseline": 212,
+            "prototype": 212,
+            "delta": 0
+          },
+          "private_p2_writes": {
+            "baseline": 44,
+            "prototype": 44,
+            "delta": 0
+          },
+          "guest_reads": {
+            "baseline": 73,
+            "prototype": 73,
+            "delta": 0
+          },
+          "data_reads": {
+            "baseline": 1005,
+            "prototype": 797,
+            "delta": -208
+          },
+          "data_writes": {
+            "baseline": 381,
+            "prototype": 173,
+            "delta": -208
+          },
+          "private_p1_stack_reads": {
+            "baseline": 384,
+            "prototype": 176,
+            "delta": -208
+          },
+          "private_p1_stack_writes": {
+            "baseline": 337,
+            "prototype": 129,
+            "delta": -208
+          },
+          "normalizer_instructions": {
+            "baseline": 680,
+            "prototype": 0
+          },
+          "gate_instructions": 161
+        },
+        "complete": {
+          "instructions": {
+            "baseline": 3556,
+            "prototype": 3037,
+            "delta": -519
+          },
+          "private_p2_reads": {
+            "baseline": 217,
+            "prototype": 217,
+            "delta": 0
+          },
+          "private_p2_data_reads": {
+            "baseline": 217,
+            "prototype": 217,
+            "delta": 0
+          },
+          "private_p2_writes": {
+            "baseline": 13,
+            "prototype": 13,
+            "delta": 0
+          },
+          "guest_reads": {
+            "baseline": 75,
+            "prototype": 75,
+            "delta": 0
+          },
+          "data_reads": {
+            "baseline": 1056,
+            "prototype": 848,
+            "delta": -208
+          },
+          "data_writes": {
+            "baseline": 373,
+            "prototype": 165,
+            "delta": -208
+          },
+          "private_p1_stack_reads": {
+            "baseline": 398,
+            "prototype": 190,
+            "delta": -208
+          },
+          "private_p1_stack_writes": {
+            "baseline": 359,
+            "prototype": 151,
+            "delta": -208
+          },
+          "normalizer_instructions": {
+            "baseline": 680,
+            "prototype": 0
+          },
+          "gate_instructions": 161
+        }
+      },
+      "pair": {
+        "instructions": {
+          "baseline": 7082,
+          "prototype": 6044,
+          "delta": -1038,
+          "reduction_percent": 14.6569
+        },
+        "private_p2_reads": {
+          "baseline": 429,
+          "prototype": 429,
+          "delta": 0,
+          "reduction_percent": 0.0
+        },
+        "private_p2_data_reads": {
+          "baseline": 429,
+          "prototype": 429,
+          "delta": 0,
+          "reduction_percent": 0.0
+        },
+        "private_p2_writes": {
+          "baseline": 57,
+          "prototype": 57,
+          "delta": 0,
+          "reduction_percent": 0.0
+        },
+        "guest_reads": {
+          "baseline": 148,
+          "prototype": 148,
+          "delta": 0,
+          "reduction_percent": 0.0
+        },
+        "data_reads": {
+          "baseline": 2061,
+          "prototype": 1645,
+          "delta": -416,
+          "reduction_percent": 20.1844
+        },
+        "data_writes": {
+          "baseline": 754,
+          "prototype": 338,
+          "delta": -416,
+          "reduction_percent": 55.1724
+        },
+        "private_p1_stack_reads": {
+          "baseline": 782,
+          "prototype": 366,
+          "delta": -416,
+          "reduction_percent": 53.1969
+        },
+        "private_p1_stack_writes": {
+          "baseline": 696,
+          "prototype": 280,
+          "delta": -416,
+          "reduction_percent": 59.7701
+        }
+      }
+    },
+    "1": {
+      "callbacks": {
+        "submit": {
+          "instructions": {
+            "baseline": 3532,
+            "prototype": 3013,
+            "delta": -519
+          },
+          "private_p2_reads": {
+            "baseline": 212,
+            "prototype": 212,
+            "delta": 0
+          },
+          "private_p2_data_reads": {
+            "baseline": 212,
+            "prototype": 212,
+            "delta": 0
+          },
+          "private_p2_writes": {
+            "baseline": 44,
+            "prototype": 44,
+            "delta": 0
+          },
+          "guest_reads": {
+            "baseline": 73,
+            "prototype": 73,
+            "delta": 0
+          },
+          "data_reads": {
+            "baseline": 1006,
+            "prototype": 798,
+            "delta": -208
+          },
+          "data_writes": {
+            "baseline": 381,
+            "prototype": 173,
+            "delta": -208
+          },
+          "private_p1_stack_reads": {
+            "baseline": 384,
+            "prototype": 176,
+            "delta": -208
+          },
+          "private_p1_stack_writes": {
+            "baseline": 337,
+            "prototype": 129,
+            "delta": -208
+          },
+          "normalizer_instructions": {
+            "baseline": 680,
+            "prototype": 0
+          },
+          "gate_instructions": 161
+        },
+        "complete": {
+          "instructions": {
+            "baseline": 3556,
+            "prototype": 3037,
+            "delta": -519
+          },
+          "private_p2_reads": {
+            "baseline": 217,
+            "prototype": 217,
+            "delta": 0
+          },
+          "private_p2_data_reads": {
+            "baseline": 217,
+            "prototype": 217,
+            "delta": 0
+          },
+          "private_p2_writes": {
+            "baseline": 13,
+            "prototype": 13,
+            "delta": 0
+          },
+          "guest_reads": {
+            "baseline": 75,
+            "prototype": 75,
+            "delta": 0
+          },
+          "data_reads": {
+            "baseline": 1056,
+            "prototype": 848,
+            "delta": -208
+          },
+          "data_writes": {
+            "baseline": 373,
+            "prototype": 165,
+            "delta": -208
+          },
+          "private_p1_stack_reads": {
+            "baseline": 398,
+            "prototype": 190,
+            "delta": -208
+          },
+          "private_p1_stack_writes": {
+            "baseline": 359,
+            "prototype": 151,
+            "delta": -208
+          },
+          "normalizer_instructions": {
+            "baseline": 680,
+            "prototype": 0
+          },
+          "gate_instructions": 161
+        }
+      },
+      "pair": {
+        "instructions": {
+          "baseline": 7088,
+          "prototype": 6050,
+          "delta": -1038,
+          "reduction_percent": 14.6445
+        },
+        "private_p2_reads": {
+          "baseline": 429,
+          "prototype": 429,
+          "delta": 0,
+          "reduction_percent": 0.0
+        },
+        "private_p2_data_reads": {
+          "baseline": 429,
+          "prototype": 429,
+          "delta": 0,
+          "reduction_percent": 0.0
+        },
+        "private_p2_writes": {
+          "baseline": 57,
+          "prototype": 57,
+          "delta": 0,
+          "reduction_percent": 0.0
+        },
+        "guest_reads": {
+          "baseline": 148,
+          "prototype": 148,
+          "delta": 0,
+          "reduction_percent": 0.0
+        },
+        "data_reads": {
+          "baseline": 2062,
+          "prototype": 1646,
+          "delta": -416,
+          "reduction_percent": 20.1746
+        },
+        "data_writes": {
+          "baseline": 754,
+          "prototype": 338,
+          "delta": -416,
+          "reduction_percent": 55.1724
+        },
+        "private_p1_stack_reads": {
+          "baseline": 782,
+          "prototype": 366,
+          "delta": -416,
+          "reduction_percent": 53.1969
+        },
+        "private_p1_stack_writes": {
+          "baseline": 696,
+          "prototype": 280,
+          "delta": -416,
+          "reduction_percent": 59.7701
+        }
+      }
+    }
+  },
+  "negative_cases_passed": 13,
+  "cold_negative_cases_passed": 2,
+  "scope": "Actual linked normal-mode C callbacks and original SDK code. Flat coherent memory: instruction and memory-access counts only; no cycle/cache/IRQ/hardware speed or compatibility claim.",
+  "all_physical_packet_frames_and_reply_differences_equal": true
+}

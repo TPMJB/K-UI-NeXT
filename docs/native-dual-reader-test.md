@@ -1,8 +1,15 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-# Native graphics budget and VMU identity test @BUILD@
+# Native controller poll timing test @BUILD@
 
-This candidate corrects a graphics allocation failure and a VMU product-class
-rejection. It retains the bottom reservation from the previous candidate.
+This candidate reduces work in the shared controller/VMU polling path. Ordinary
+heap and installed-hook checks take a small leaf gate before the existing
+terminal-dispatch normalizer. Only the exact dispatch word in the matching
+allocator family enters the full proof. All live identity, hook, context,
+packet, response and storage predicates remain required. The game video wait
+and the reader scheduling policy are unchanged.
+
+The graphics-budget and standard VMU product-class corrections that passed in
+Rayman 2 and Lodoss remain included. The bottom reservation is retained.
 The complete **384 KiB reservation**, including the
 **128 KiB worker and 192 KiB read-ahead cache**, remains available.
 
@@ -21,6 +28,18 @@ continues using virtual **A2**, leaving physical **A1** available. Card contents
 geometry, storage-only function bits and ownership identity are unchanged.
 
 ## Why this candidate
+
+Evolution 1 still failed with diagnostics disabled on f158. Its complete
+recording locates the repeated wait in original video-mode code that polls for
+exact scanline zero; the SDK video counter continues to advance. Earlier
+reservation-only/active-hook results and the NORMAL-mode failure make shared
+runtime timing the current focus. They do not establish a hardware fix.
+
+The full normalizer previously ran on every heap/hook identity read, including
+unrelated addresses and families. Its outlined frame work was paid before
+those calls could return unchanged. The new leaf makes the same applicability
+decision before entering the full routine. This is a shared-path optimization.
+Console confirmation remains required.
 
 The owner confirmed that the previous bottom-placement candidate lets Rayman 2
 pass Ubisoft with New, but the game reports no VMU. Its original device
@@ -80,7 +99,7 @@ before the SDK consumer; save durability and ownership checks remain required.
 From the extracted ZIP's root:
 
 ```sh
-python3 install.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin --profile-runtime
+python3 install.py /run/media/apollonius/Dreamcast --profile KUI/vmu-test/p0005/retail-persistent-profile-0005.bin
 ```
 
 Use your existing prepared profile; change that path only if your profile is
@@ -102,14 +121,15 @@ choice is preserved. Off uses the existing Standard route.
 
 ## Test New first
 
-1. **Rayman 2:** check that it detects virtual A2, then load an existing save
-   or create one in an unused slot. Power off fully and check that it reloads.
-2. **Record of Lodoss War:** let the opening movie start without skipping it.
-   Report whether video appears and whether audio plays normally or stutters.
-3. **Evolution 2 or Grandia II:** briefly repeat a familiar movie/gameplay
-   route as a control for the previously working New reader.
-4. **Evolution 1:** recheck the point after Sofdec once the first tests are
-   complete. Its previous failure remains recorded; do not assume it fixed.
+1. **Evolution 1:** use NORMAL mode as installed above. Check whether the game
+   passes the logo/video-mode transition and starts the opening movie. If it
+   does, continue into gameplay and check virtual A2 when the game permits it.
+2. **Rayman 2 or Record of Lodoss War:** briefly repeat a familiar movie and
+   load an existing A2 save as a control for the already working path.
+
+The recorded f158 Rayman/Lodoss playback, gameplay and save/load passes are
+preserved as baseline evidence. This candidate is a measured shared runtime
+optimization, not a console-confirmed Evolution correction.
 
 For a game that starts normally, check an existing A2 load. Use an unused
 slot for any new save, wait for completion, then power off fully and reload.
@@ -122,13 +142,16 @@ guarded pool-budget correction. The main acceptance target is New. Both use the 
 
 ## If a stall remains
 
-Keep `--profile-runtime` installed. At the failure point, hold **both triggers
-plus B** for about one second, release, and wait roughly 20 seconds for the
-intentional profile stop. Record the complete repeating report cycle,
-including every **RAW OWNER STACK** page. About two minutes after the report
-appears is sufficient; stop when the starting heading repeats. If startup
-stops before that gesture can work, photograph the complete refusal screen
-or record its last cold checkpoint. Power off after the report.
+Report whether Evolution still stops at the same point. The first comparison
+uses NORMAL mode; its capture gesture is disabled. A new recording is not
+requested for this initial comparison.
+
+If a PROFILE capture is subsequently requested, rerun the same installation
+command with `--profile-runtime`, then hold both triggers+B for about one
+second at the failure, release, and wait about 20 seconds. Record a complete
+report cycle. Evolution uses PHASE HISTORY pages; other games use RAW OWNER
+STACK pages. Stop when the starting heading repeats, then power off. PROFILE
+adds measurement overhead and its timing is not assumed identical to NORMAL.
 
 Raw stack pages are observations, not automatically fault PCs. They must be
 matched to the original source frames. The exact Evolution 1 phase history

@@ -22,6 +22,7 @@ from profile_vmu_native_sdk_worker_sh import WorkerSH, CFG, GUARD, make_handoff,
 from test_vmu_native_heap_execution import SH, MASK, signed, verified_program_image
 from test_vmu_native_sdk_poll_execution import PollSH
 from sh4_delay_slots import validate_delay_slot
+from check_vmu_native_worker_gateway import read_elf, symbol_bytes
 
 OWNER_STACK = 0x8c00e000
 RETURN = 0xdeadbeee
@@ -130,9 +131,29 @@ class RecordWorker(WorkerSH):
         self.build = build
         self.build_inputs = {name:(build/name).read_bytes() for name in
                              ('native-worker.elf','native-worker.bin','native-worker.reloc')}
+        worker = read_elf(build/'native-worker.elf')
+        self.bottom_lease = worker[4].get('__kui_native_bottom_heap_worker') == (1,0,0,0xfff1)
+        self.lease_bytes = 0x30000
+        self.lease_geometry_source = 'historical non-dual 192 KiB tail fixture'
+        if '__kui_native_dual_readers_worker' in worker[4]:
+            assert worker[4]['__kui_native_dual_readers_worker'] == (1,0,0,0xfff1)
+            stage = read_elf(build/'stage.elf')
+            _, capability, _ = symbol_bytes(stage,'_kui_native_dual_reader_capability',1)
+            assert len(capability) == 32
+            descriptor = struct.unpack('<8I',capability)
+            assert descriptor[:6] == (0x3152444b,0x4c415544,1,32,1,2) and descriptor[7] == 0
+            self.lease_bytes = descriptor[6]
+            assert self.lease_bytes >= 0x30000 and not self.lease_bytes & 31
+            assert self.bottom_lease == (stage[4].get('__kui_native_bottom_heap_stage') == (1,0,0,0xfff1))
+            self.build_inputs['stage.elf'] = (build/'stage.elf').read_bytes()
+            self.lease_geometry_source = 'actual linked dual-reader stage capability and paired worker/stage bottom markers'
         begin,count = record.heap_call[3:5]
-        worker_base = (begin+count-0x30000)&0x1fffffff|0xa0000000
+        assert self.lease_bytes <= count-64
+        payload = begin+32 if self.bottom_lease else begin+count-self.lease_bytes
+        worker_base = payload&0x1fffffff|0xa0000000
         super().__init__(startup, build, handoff, cached_stack=True,worker_base=worker_base)
+        self.worker_physical_high = self.worker_physical_low+self.lease_bytes
+        assert (self.symbols['__vmu_native_worker_end'][0]&0x1fffffff) <= self.worker_physical_high
         self.check_build_unchanged()
         assert self.block(record.load,len(record.source_image)) == record.source_image, 'Executed image must match verified bytes'
         self.original_image = record.image
@@ -221,12 +242,24 @@ class RecordWorker(WorkerSH):
         self.instructions += 1
 
     def read(self, address, count=4):
+        if getattr(self,'active',False):
+            if count == 2 and address in (self.pc,self.pc+2):
+                self.instruction_fetch_reads += 1
+            else:
+                self.data_reads += 1
+                if address&0xe0000000 == 0xa0000000 and self.worker_physical_low <= address&0x1fffffff < self.worker_physical_high:
+                    self.private_p2_data_reads += 1
         if count == 2 and not getattr(self, 'inside_worker', False) and any(
                 lo & 0x1fffffff <= address & 0x1fffffff and
                 (address & 0x1fffffff)+count <= (hi & 0x1fffffff)
                 for lo, hi in self.original_ranges):
             return int.from_bytes(self.record.bytes(address, count), 'little')
         return super().read(address, count)
+
+    def write(self, address, value, count=4):
+        if getattr(self,'active',False):
+            self.data_writes += 1
+        return super().write(address,value,count)
 
     def execute_worker(self, name, args):
         self.pc, self.pr = self.symbols[name][0], RETURN
@@ -239,13 +272,16 @@ class RecordWorker(WorkerSH):
             assert i < 4
             self.r[4+i] = value
         self.instructions = self.private_reads = self.private_writes = self.guest_reads = 0
+        self.data_reads = self.data_writes = self.instruction_fetch_reads = self.private_p2_data_reads = 0
         self.active = True
         self.until(RETURN)
         assert self.r[15] == stack and self.r[8:15] == saved
         self.active = False
         return dict(result=self.r[0], instructions=self.instructions,
                     private_p2_reads=self.private_reads, private_p2_writes=self.private_writes,
-                    guest_reads=self.guest_reads)
+                    guest_reads=self.guest_reads,data_reads=self.data_reads,data_writes=self.data_writes,
+                    instruction_fetch_reads=self.instruction_fetch_reads,
+                    private_p2_data_reads=self.private_p2_data_reads)
 
     def worker(self, name, args):
         from collections import Counter
@@ -259,6 +295,8 @@ class RecordWorker(WorkerSH):
             result = self.execute_worker(name, args)
             result.update(read_objects=dict(self.access_reads), write_objects=dict(self.access_writes),
                           private_p1_stack_reads=self.p1_stack_reads, private_p1_stack_writes=self.p1_stack_writes)
+            result.update(instructions_by_function=dict(self.function_instructions),
+                          private_p2_reads_by_function=dict(self.function_p2_reads))
             assert not self.stubs, 'No worker helper stubs allowed'
             return result
         finally:
@@ -270,12 +308,29 @@ class RecordWorker(WorkerSH):
         hw = r.heap
         begin, count = r.heap_call[3:5]
         _, _, self.heap_initializer_instructions = SH.run(self, hw[6], [begin, count], OWNER_STACK)
-        payload, _, self.heap_allocate_instructions = SH.run(self, hw[9], [0x30000], OWNER_STACK)
-        assert payload & 0x1fffffff == self.worker_physical_low, 'Original allocator tail allocation'
+        self.heap_calls = []
+        if self.bottom_lease:
+            request = count-self.lease_bytes-64
+            placeholder,_,steps = SH.run(self,hw[9],[request],OWNER_STACK)
+            assert placeholder == begin+self.lease_bytes+64
+            self.heap_calls.append(dict(operation='upper_placeholder_allocate',request=request,result=placeholder,instructions=steps))
+        payload,_,steps = SH.run(self,hw[9],[self.lease_bytes],OWNER_STACK)
+        self.heap_calls.append(dict(operation='retained_allocate',request=self.lease_bytes,result=payload,instructions=steps))
+        self.heap_allocate_instructions = sum(row['instructions'] for row in self.heap_calls)
+        self.heap_release_instructions = 0
+        if self.bottom_lease:
+            _,_,steps = SH.run(self,hw[10],[placeholder],OWNER_STACK)
+            self.heap_release_instructions = steps
+            self.heap_calls.append(dict(operation='upper_placeholder_release',request=placeholder,instructions=steps))
+            assert payload == begin+32
+            assert self.read(hw[13]) == begin+self.lease_bytes+32
+            assert self.read(begin+self.lease_bytes+36) == (count-self.lease_bytes-32)//32
+        assert payload & 0x1fffffff == self.worker_physical_low, 'Original allocator selected placement'
         self.actual_heap_payload = payload
-        lease = [1, 116, 2, 1, *hw, begin, count, 0x30000, payload-32, payload,
-                 0x1801, count//32-0x1801]
-        runtime = [1,236,payload,0x30000,32,0x20000,0,0,0,0,0] + [0]*48
+        units = self.lease_bytes//32+1
+        lease = [1, 116, 2, 1, *hw, begin, count, self.lease_bytes, payload-32, payload,
+                 units, count//32-units]
+        runtime = [1,236,payload,self.lease_bytes,32,0x20000,0,0,0,0,0] + [0]*48
         wire = r.wire
         blob = (struct.pack('<3I',1,2300,r.layout[5]) + wire[64:168] +
                 struct.pack('<29I',*lease) + wire[168:608] + struct.pack('<59I',*runtime) +
@@ -613,7 +668,10 @@ def main():
                   nvr_sha256=hashlib.sha256(record.wire).hexdigest(),
                   worker_elf_sha256=hashlib.sha256(cpu.build_inputs['native-worker.elf']).hexdigest(),
                   worker_binary_sha256=hashlib.sha256(cpu.build_inputs['native-worker.bin']).hexdigest(),
-                  worker_relocation=dict(actual_heap_payload=hex(cpu.actual_heap_payload),p2_base=hex(cpu.worker_base)),
+                  worker_relocation=dict(actual_heap_payload=hex(cpu.actual_heap_payload),p2_base=hex(cpu.worker_base),
+                    lease_bytes=cpu.lease_bytes,placement='bottom' if cpu.bottom_lease else 'tail',
+                    geometry_source=cpu.lease_geometry_source,heap_calls=cpu.heap_calls,
+                    stage_elf_sha256=hashlib.sha256(cpu.build_inputs['stage.elf']).hexdigest() if 'stage.elf' in cpu.build_inputs else None),
                   rx_snapshot_encoding='48 SDK slots in bank order; each slot 1024 bytes; absent slots zero-filled',
                   sdk_rx_slots=[hex(address) if address else None for address in record.rx_slots],
                   handoff_sha256=hashlib.sha256(handoff).hexdigest(),
@@ -624,7 +682,7 @@ def main():
                   hardware_inputs=dict(asic_revision=2,physical_controller_mask=1,
                     physical_accessories=['A1 memory/LCD/clock VMU fixture'] if args.physical_a1 else [],maple_dma='synchronous'),
                   sh4_slot_legality_enforced=True,heap_initializer_instructions=cpu.heap_initializer_instructions,
-                  heap_allocate_instructions=cpu.heap_allocate_instructions,arm=cpu.arm_counts,
+                  heap_allocate_instructions=cpu.heap_allocate_instructions,heap_release_instructions=cpu.heap_release_instructions,arm=cpu.arm_counts,
                   sdk_initializer=initializer,cold_coherence=cpu.coherence_installation,flat_ocbp=cpu.flat_ocbp,
                   original_entrypoints={k:hex(v) for k,v in dict(initializer=record.initializer,
                     submit_entry=record.submit_entry,submit_hook=record.submit_hook,submit_caller=record.submit_caller,

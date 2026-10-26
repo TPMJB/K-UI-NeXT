@@ -1957,14 +1957,47 @@ class CompiledHeapReader(Machine):
 
 
 class CompiledHeapAdapter(Machine):
-    """Actual wrapper with separately proved raw/normalizer ABI adversaries."""
-    def __init__(self,worker,mask,valid,normalized,*,body=None):
+    """Actual raw wrapper and optional leaf, with the full proof as ABI adversary."""
+    def __init__(self,worker,mask,valid,normalized,*,body=None,layout=None,
+                 address_kind="routing",family=5,gate_body=None):
         super().__init__(worker,"_read_heap",mask+31,mask,0x8c11ffe0,body=body)
         self.valid,self.normalized=valid,normalized
-        self.address,self.output=0x8c220000,self.start_sp-64
+        self.dispatch=0x8c220000
+        self.address={"routing":self.dispatch,"ordinary":self.dispatch+4,
+                      "other_alias":self.dispatch+0x20000000}[address_kind]
+        self.output=self.start_sp-64
         self.r[4:7]=[0,self.address,self.output]
         self.raw_target=worker[4]['_read_heap_raw'][0]
         self.normalizer=worker[4]['_normalize_heap_dispatch'][0]
+        marker=worker[4].get('__kui_native_dispatch_read_gate_worker')
+        require(marker is None or marker==(1,0,0,0xfff1), 'Invalid dispatch-read gate marker')
+        self.gated=marker is not None
+        self.gate_reads=[];self.gate_writes=[];self.gate_config={};self.normalizer_active=False
+        self.eligible=not self.gated or address_kind=="routing" and family==5
+        self.gate=None;self.gate_return=None
+        if self.gated:
+            require(layout is not None,'Dispatch gate needs independently compiled config offsets')
+            self.gate,self.gate_blob,_=symbol_bytes(worker,'_normalize_heap_dispatch_if_routing',2)
+            if gate_body is not None:self.gate_blob=gate_body
+            config=worker[4]['_config'][0]
+            self.dispatch_at=config+layout['config.lease.owner.dispatch_cell']
+            self.family_at=config+layout['config.exits.family']
+            self.gate_config={self.dispatch_at:self.dispatch,self.family_at:family}
+
+    def code(self,address,size):
+        if self.gate is not None and self.gate<=address<address+size<=self.gate+len(self.gate_blob):
+            return self.gate_blob[address-self.gate:address-self.gate+size]
+        return super().code(address,size)
+
+    def read(self,address):
+        if address in self.gate_config:
+            self.gate_reads.append(address);return self.gate_config[address]
+        return super().read(address)
+
+    def write(self,address,value):
+        if not self.normalizer_active and self.gate is not None and self.gate<=self.pc<self.gate+len(self.gate_blob):
+            self.gate_writes.append((address,value))
+        return super().write(address,value)
 
     def call(self,target):
         if target==self.stop_pc:return False
@@ -1974,21 +2007,37 @@ class CompiledHeapAdapter(Machine):
             self.calls.append('raw')
             if self.valid:self.write(self.output,0x5a73c129)
             self.abi_return(int(self.valid));return True
-        require(target==self.normalizer and self.valid and self.calls==['raw'] and
+        if self.gated and target==self.gate:
+            require(self.valid and self.calls==['raw'] and self.r[4:6]==[self.address,self.output],
+                    'heap adapter loses the exact leaf-gate boundary')
+            self.calls.append('gate');self.gate_return=self.pr;return False
+        if self.gated and target==self.gate_return and self.gate<=self.pc<self.gate+len(self.gate_blob):
+            return False
+        require(target==self.normalizer and self.valid and self.eligible and
+                self.calls==(['raw','gate'] if self.gated else ['raw']) and
                 self.r[4:6]==[self.address,self.output] and self.read(self.output)==0x5a73c129,
                 'heap adapter changes its exact conditional normalizer call')
         self.calls.append('normalizer')
+        self.normalizer_active=True
         if self.normalized:self.write(self.output,0x8c110000)
+        self.normalizer_active=False
         self.abi_return(0xa37b0000|len(self.calls));return True
 
     def check(self):
         self.run()
-        require(self.calls==(['raw','normalizer'] if self.valid else ['raw']) and
-                self.r[0]==int(self.valid),'heap adapter loses the original raw-reader boolean')
-        require((self.mem.get(self.output)==
-                 (0x8c110000 if self.normalized else 0x5a73c129)) if self.valid else
-                self.output not in self.mem,
-                'heap adapter changes output on a refused raw read')
+        expected=['raw']
+        if self.valid:
+            if self.gated:expected.append('gate')
+            if self.eligible:expected.append('normalizer')
+        require(self.calls==expected and self.r[0]==int(self.valid),
+                'heap adapter loses the original raw-reader boolean or gate selection')
+        value=0x8c110000 if self.normalized and self.eligible else 0x5a73c129
+        require((self.mem.get(self.output)==value) if self.valid else self.output not in self.mem,
+                'heap adapter changes output on a refused raw read or skipped proof')
+        if self.gated:
+            reads=([self.dispatch_at]+([self.family_at] if self.address==self.dispatch else [])) if self.valid else []
+            require(self.gate_reads==reads and not self.gate_writes,
+                    'leaf gate changed memory, added reads or lost short-circuit order')
         regs,pr,mach,macl,gbr,sr,fpscr,fr=self.before
         require(self.r[8:]==regs[8:] and self.pr==pr and
                 (self.mach,self.macl,self.gbr,self.sr&~1,self.fpscr,self.fr)==
@@ -2025,22 +2074,43 @@ def check_compiled_heap_reader(worker,self_test=False,*,read_ahead_proof=None):
             else:raise ValueError("compiled reader accepted weakened address predicate")
     adapter={"enabled":False}
     if witness:
+        gated=worker[4].get('__kui_native_dispatch_read_gate_worker') is not None
+        if gated:
+            from check_native_controller_failure_witness import console_layout
+            gate_layout=console_layout()
+        else:gate_layout=None
         cases=0
+        families=(0,1,2,3,4,5,6,0xffffffff) if gated else (5,)
+        address_kinds=("routing","ordinary","other_alias") if gated else ("routing",)
         for mask in range(16):
             for valid in (False,True):
                 for normalized in (False,True):
-                    CompiledHeapAdapter(worker,mask,valid,normalized).check();cases+=1
+                    for family in families:
+                        for address_kind in address_kinds:
+                            CompiledHeapAdapter(worker,mask,valid,normalized,layout=gate_layout,
+                                family=family,address_kind=address_kind).check();cases+=1
         mutations=0
         if self_test:
             _,body,_=symbol_bytes(worker,'_read_heap',2)
             require(body[14:16]==bytes.fromhex('0589'),'heap adapter lost its exact raw-failure branch')
             changed=body[:14]+bytes.fromhex('058b')+body[16:]
-            try:CompiledHeapAdapter(worker,15,False,False,body=changed).check()
+            try:CompiledHeapAdapter(worker,15,False,False,body=changed,layout=gate_layout).check()
             except (ValueError,AssertionError,KeyError,struct.error):mutations+=1
             else:raise ValueError('heap adapter accepts inverted raw-reader admission')
+            if gated:
+                _,gate,_=symbol_bytes(worker,'_normalize_heap_dispatch_if_routing',2)
+                require(gate[6:8]==bytes.fromhex('078b') and gate[12:14]==bytes.fromhex('0588'),
+                        'leaf gate lost its reviewed address/family branch sites')
+                for changed in (gate[:6]+bytes.fromhex('0789')+gate[8:],
+                                gate[:12]+bytes.fromhex('0488')+gate[14:]):
+                    try:CompiledHeapAdapter(worker,15,True,True,layout=gate_layout,gate_body=changed).check()
+                    except (ValueError,AssertionError,KeyError,struct.error):mutations+=1
+                    else:raise ValueError('leaf gate accepts weakened routing/family selection')
         adapter=dict(enabled=True,actual_wrapper_instruction_cases=cases,
             mutation_rejections=mutations,all_imasks=True,
-            typed_callees='ABI adversaries; raw reader and tagged normalizer independently executed',
+            typed_callees='Raw reader and full tagged proof ABI adversaries; actual optional leaf instructions executed',
+            actual_leaf_gate_executed=gated,ordinary_and_other_alias_skip_full_proof=gated,
+            all_exit_families_checked=gated,leaf_performs_no_writes=gated,
             refused_raw_read_skips_normalization=True,raw_boolean_preserved_across_void_normalizer=True)
     return {"instruction_cases":len(addresses),"mutation_rejections":rejected,
             "width":4,"source_loaded_only_after_full_predicate":True,"mmio_addresses":sorted(mmio),
