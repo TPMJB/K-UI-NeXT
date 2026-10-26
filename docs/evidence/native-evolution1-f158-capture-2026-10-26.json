@@ -245,7 +245,7 @@
   },
   "diagnostic_timing_hypothesis": {
     "basis": "PROFILE invokes diagnostic_pair_begin/end and exact E1 stack/PVR observations on every submit/completion, including before the capture gesture. NORMAL omits these observations.",
-    "status": "Source-supported hypothesis; current normal-mode console comparison pending"
+    "status": "PROFILE-only explanation ruled out by NORMAL-mode failure; added normal runtime/hook latency remains a source-supported hypothesis, not an established cause."
   },
   "next_comparison": {
     "same_build": true,
@@ -259,11 +259,27 @@
       "384KiB reservation",
       "Reader scheduling policy"
     ],
-    "question": "Does Evolution1 pass its present logo/video-mode transition?"
+    "question": "Does Evolution1 pass its present logo/video-mode transition?",
+    "status": "Completed by owner: failed to pass the present transition"
   },
   "transcription_limits": [
     "Manual transcription of relevant fields from the complete recording; repeated pages checked.",
     "Latched event codes are observations, not proof of the currently running interrupt source.",
     "This validates a recurring mode-transition wait; PROFILE overhead versus normal hook timing remains unresolved."
-  ]
+  ],
+  "normal_mode_followup": {
+    "date": "2026-10-26",
+    "owner_report": "Disabling the diagnostics did not allow it to get past that screen.",
+    "same_candidate": "f158ba5e24f9",
+    "result": "Still fails at the reported logo transition",
+    "scope": "Owner-followed NORMAL-mode comparison; no new diagnostic snapshot supplied."
+  },
+  "next_engineering_step": {
+    "target": "Shared main-controller submit/completion critical path under IMASK15",
+    "direction": "Prepare immutable witness metadata once and reduce repeated metadata/span work while retaining all live-value comparisons, packet/response checks, lifetime hooks and save durability guards.",
+    "constraint": "Virtual A2 filtering must finish before MDST; virtual presence/replies must be published before the original SDK consumer. Arbitrary callback deferral is not a safe substitute.",
+    "candidate_requires_proof": "A cached read-only alias for immutable prepared metadata needs explicit cache publication/invalidation, full cache-line isolation from writable P2 state, and preserved self/ownership identity. It is a proposal, not a runtime change.",
+    "fallback_diagnostic_if_needed": "Capture interrupted R13/R4/R12 and outer return if shared latency work does not explain the wait; current phase history proves code location but does not include those operands.",
+    "additional_user_capture_requested_now": false
+  }
 }

@@ -66,12 +66,14 @@ validated interrupted contexts repeatedly land in the original exact
 scanline-zero video-mode wait, while the SDK video counter advances. See the
 [capture analysis](evidence/native-evolution1-f158-capture-2026-10-26.json).
 PROFILE performs extra PVR/stack observations on every Evolution controller
-hook even before the capture gesture. The next comparison uses the same ZIP,
-profile and New reader with those observations disabled: run the installation
-command below **without `--profile-runtime`**. This selects NORMAL mode and
-preserves the reader/cache/reservation and virtual card. Report whether the
-game passes the present logo/video-mode transition; another recording is not
-needed for that comparison.
+hook even before the capture gesture. The owner subsequently tested the same
+ZIP/profile/New reader in NORMAL mode, omitting `--profile-runtime`, and the
+failure remained. PROFILE overhead alone is therefore ruled out. The next
+engineering focus is the shared controller/VMU hook critical path inside the
+original IRQ handler; added normal runtime latency remains a hypothesis.
+No repeat of the PROFILE/NORMAL comparison is needed. Actual virtual requests
+must still be filtered before DMA submission and their replies published
+before the SDK consumer; save durability and ownership checks remain required.
 
 ## Install
 
