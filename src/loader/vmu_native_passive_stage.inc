@@ -419,7 +419,12 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #if KUI_NATIVE_READER_ONLY_ISOLATION
+#if KUI_NATIVE_RA_TICK_OFF_ISOLATION
+    retail_display_line("NEW DEMAND / PREFETCH OFF");
+    retail_display_line("VIRTUAL VMU OFF");
+#else
     retail_display_line("NEW READER / VIRTUAL VMU OFF");
+#endif
     retail_display_line("READER SUPPORT HOOKS RETAINED");
 #elif KUI_NATIVE_STANDARD_VMU_ISOLATION
     retail_display_line("STANDARD READER / VIRTUAL A2 ON");

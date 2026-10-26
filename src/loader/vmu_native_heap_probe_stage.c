@@ -45,6 +45,10 @@ __asm__(".global __kui_native_standard_vmu_isolation_stage\n"
 __asm__(".global __kui_native_reader_only_isolation_stage\n"
         ".set __kui_native_reader_only_isolation_stage,1\n");
 #endif
+#if KUI_NATIVE_RA_TICK_OFF_ISOLATION
+__asm__(".global __kui_native_ra_tick_off_isolation_stage\n"
+        ".set __kui_native_ra_tick_off_isolation_stage,1\n");
+#endif
 #if KUI_NATIVE_CURRENT_BOTTOM_HEAP
 #define KUI_NATIVE_COLD_PROGRESS_STAGE 1
 __asm__(".global __kui_native_cold_progress_stage\n"

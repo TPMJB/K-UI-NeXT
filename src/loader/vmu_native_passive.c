@@ -46,6 +46,10 @@ __asm__(".global __kui_native_isolation_lease_bytes\n"
 __asm__(".global __kui_native_reader_only_isolation_worker\n"
         ".set __kui_native_reader_only_isolation_worker,1\n");
 #endif
+#if KUI_NATIVE_RA_TICK_OFF_ISOLATION
+__asm__(".global __kui_native_ra_tick_off_isolation_worker\n"
+        ".set __kui_native_ra_tick_off_isolation_worker,1\n");
+#endif
 #define WORKER_SPAN UINT32_C(0x20000)
 #define PAIR_LIMIT 180000u
 #else

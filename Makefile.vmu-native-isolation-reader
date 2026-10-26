@@ -15,6 +15,7 @@ isolation-reader-host-tests:
 	@mkdir -p $(BUILD)
 	python3 tests/test_native_dual_readers.py --reader-only
 	$(HOST_CC) $(ISOLATION_READER_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 \
+	 $(ISOLATION_READER_TEST_FLAGS) \
 	 tests/test_vmu_native_reader_only.c $(COMPAT_WORKER_HOST_SRC) \
 	 -Wl,--gc-sections -Wl,--section-start=.isolation_tick=0x8c722000 \
 	 -o $(BUILD)/test-reader-only

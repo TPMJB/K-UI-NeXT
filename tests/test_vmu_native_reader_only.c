@@ -100,7 +100,7 @@ static void absent_batch(unsigned command,unsigned phase) {
         CHECK(!memcmp(target+4u,rx_bytes(2u)+4u,sizeof(target)-4u));
     } else CHECK(!memcmp(target,rx_bytes(2u),sizeof(target)));
     CHECK(!memcmp(&before_card,&durable_card,sizeof(before_card)));
-    CHECK(tick_visits==before_ticks+(fast?1u:0u));
+    CHECK(tick_visits==before_ticks+((fast && !KUI_NATIVE_RA_TICK_OFF_ISOLATION)?1u:0u));
     CHECK(value_at(0xa05f6c04u)==state.source);no_virtual_or_storage();
 }
 int main(void) {
@@ -129,7 +129,8 @@ int main(void) {
         CHECK(!memcmp(before[0],rx_bytes(0u),1024u) && !memcmp(before[1],rx_bytes(2u),1024u));
         CHECK(!memcmp(before[2],rx_bytes(6u),1024u));no_virtual_or_storage();
     }
-    CHECK(tick_visits==8u);
-    printf("Reader-only isolation: %u checks; no A2 advertisement, protocol backend or SD IO; %u retained NORMAL/PROFILE TICK visits; physical/conflict guards preserved\n",checks,tick_visits);
+    CHECK(tick_visits==(KUI_NATIVE_RA_TICK_OFF_ISOLATION?0u:8u));
+    printf("Reader-only isolation%s: %u checks; no A2 advertisement, protocol backend or SD IO; %u NORMAL/PROFILE TICK visits; physical/conflict guards preserved\n",
+        KUI_NATIVE_RA_TICK_OFF_ISOLATION?" / prefetch off":"",checks,tick_visits);
     return 0;
 }

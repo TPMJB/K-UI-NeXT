@@ -10,12 +10,20 @@
 #ifndef KUI_NATIVE_STANDARD_VMU_ISOLATION
 #define KUI_NATIVE_STANDARD_VMU_ISOLATION 0
 #endif
+#ifndef KUI_NATIVE_RA_TICK_OFF_ISOLATION
+#define KUI_NATIVE_RA_TICK_OFF_ISOLATION 0
+#endif
 #if (KUI_NATIVE_READER_ONLY_ISOLATION != 0 && KUI_NATIVE_READER_ONLY_ISOLATION != 1) || \
-    (KUI_NATIVE_STANDARD_VMU_ISOLATION != 0 && KUI_NATIVE_STANDARD_VMU_ISOLATION != 1)
+    (KUI_NATIVE_STANDARD_VMU_ISOLATION != 0 && KUI_NATIVE_STANDARD_VMU_ISOLATION != 1) || \
+    (KUI_NATIVE_RA_TICK_OFF_ISOLATION != 0 && KUI_NATIVE_RA_TICK_OFF_ISOLATION != 1)
 #error "Native isolation selectors must be exactly zero or one"
 #endif
 #if KUI_NATIVE_READER_ONLY_ISOLATION && KUI_NATIVE_STANDARD_VMU_ISOLATION
 #error "Select one native isolation variant"
+#endif
+#if KUI_NATIVE_RA_TICK_OFF_ISOLATION && \
+    (!KUI_NATIVE_READER_ONLY_ISOLATION || !KUI_NATIVE_DUAL_READERS)
+#error "TICK-off isolation requires the reader-only dual variant"
 #endif
 #if KUI_NATIVE_READER_ONLY_ISOLATION && !KUI_NATIVE_DUAL_READERS
 #error "Reader-only isolation requires the current dual-reader build"

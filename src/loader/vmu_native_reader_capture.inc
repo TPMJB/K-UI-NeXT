@@ -190,7 +190,7 @@ static void __attribute__((noipa)) reader_window_clock(struct kui_vmu_native_pro
 }
 #endif
 static void __attribute__((noipa)) reader_cooperative_service(void) {
-#if KUI_NATIVE_READAHEAD
+#if KUI_NATIVE_READAHEAD && !KUI_NATIVE_RA_TICK_OFF_ISOLATION
     if(!durable_card.inflight && !durable_card.handling)
         reader_readahead_visit(KUI_NATIVE_RA_TICK);
 #endif
