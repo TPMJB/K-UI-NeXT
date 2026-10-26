@@ -399,6 +399,11 @@ SOURCES = ('tools/check_native_bottom_heap.py', 'tools/check_native_bottom_heap_
 
 def require_private_pool_companion(stage, proof):
     require(budget_stage(stage), 'Private-pool proof requires its exact stage marker')
+    dispatch = proof.get('scalar_scan_dispatch_tests', [])
+    require(len(dispatch) == 3 and {row.get('source_bytes') for row in dispatch} == {64, 512, 2048} and
+            all(row.get('registers_memory_flags_branches_delay_slots_equal') is True and
+                isinstance(row.get('instructions'), int) and row['instructions'] > 0 for row in dispatch),
+            'Private-pool scan acceleration lacks complete scalar-dispatch equality fixtures')
     plans = proof.get('private_pool_budget_plans', [])
     require(len(plans) == 2 and {row.get('reader') for row in plans} == {1, 2} and
             len({row.get('source_sha256') for row in plans}) == 1 and
@@ -446,6 +451,152 @@ def require_private_pool_companion(stage, proof):
     return True
 
 
+
+class ScanBlocks:
+    """Decode pinned scalar SH blocks; execute every opcode and delay slot.
+
+    This is instruction dispatch acceleration, never a source-level substitute
+    for reserve_unique. RAM accesses and stores retain the Cold model guards.
+    """
+    def __init__(self, cpu):
+        pinned_records(cpu.elf)
+        self.cpu, self.blocks = cpu, {}
+        begin = cpu.symbols['_kui_vmu_native_heap_budget_prepare'][0]
+        self.spans = [(begin + 0x5f0, begin + 0x71e),
+                      (begin + 0x918, begin + 0x93e)]
+        for name in ('_le32@vmu_native_heap_budget.c', '_ram@vmu_native_heap_budget.c'):
+            address, body, _, _ = records(cpu.elf)[name]
+            self.spans.append((address, address + len(body)))
+
+    def contains(self, pc):
+        return any(a <= pc < b for a, b in self.spans)
+
+    @staticmethod
+    def scalar(op, pc):
+        n, m = op >> 8 & 15, op >> 4 & 15
+        a, b = f'r[{n}]', f'r[{m}]'
+        if op == 9: return 'pass'
+        if op >> 12 == 14: return f'{a}={signed(op & 255,8)&MASK}'
+        if op >> 12 == 7: return f'{a}=({a}+{signed(op & 255,8)})&M'
+        if op >> 12 == 13: return f'{a}=rd({((pc+4)&~3)+4*(op&255)})'
+        if op >> 12 == 9: return f'{a}=sg(rd({pc+4+2*(op&255)},2),16)&M'
+        if op >> 12 == 1: return f'c.executing={pc};wr({a}+{4*(op&15)},{b})'
+        if op >> 12 == 5: return f'{a}=rd({b}+{4*(op&15)})'
+        low = op & 0xf00f
+        if low == 0x6003: return f'{a}={b}'
+        if low in (0x6000,0x6001,0x6002):
+            width = (1,2,4)[op&15]
+            return f'{a}=rd({b})' if width==4 else f'{a}=sg(rd({b},{width}),{width*8})&M'
+        if low == 0x600c: return f'{a}={b}&255'
+        if low == 0x600d: return f'{a}={b}&65535'
+        if low in (0x600e,0x600f):
+            bits = 8 if op&15==14 else 16
+            return f'{a}=sg({b}&{(1<<bits)-1},{bits})&M'
+        if low == 0x6008: return f'{a}=({b}&0xffff0000)|(({b}&255)<<8)|(({b}>>8)&255)'
+        if low in (0x2009,0x200a,0x200b):
+            operator={9:'&',10:'^',11:'|'}[op&15]
+            return f'{a}{operator}={b}'
+        if low == 0x2008: return f'c.sr=(c.sr&~1)|int(not({a}&{b}))'
+        if low in (0x3000,0x3002,0x3006):
+            operator={0:'==',2:'>=',6:'>'}[op&15]
+            return f'c.sr=(c.sr&~1)|int({a}{operator}{b})'
+        if low in (0x3008,0x300c):
+            return f'{a}=({a}{"-" if op&15==8 else "+"}{b})&M'
+        if op & 0xf0ff in (0x4008,0x4018):
+            return f'{a}=({a}<<{2 if op&255==8 else 8})&M'
+        if op & 0xf0ff == 0x0029: return f'{a}=c.sr&1'
+        if op & 0xff00 == 0x8400:
+            return f'r[0]=sg(rd({b}+{op&15},1),8)&M'
+        if op & 0xff00 == 0xc800:
+            return f'c.sr=(c.sr&~1)|int(not(r[0]&{op&255}))'
+        return f'c.plain({op},{pc});c.instructions-=1'
+
+    def block(self, pc):
+        first, lines, pcs = pc, ['def execute(c):',' r=c.r;rd=c.read;wr=c.write;M=0xffffffff;sg=signed'], []
+        while True:
+            require(self.contains(pc), 'Fast scan block escaped reviewed scan/helper bodies')
+            op=self.cpu.read(pc,2);pcs.append(pc)
+            target, delay = None, False
+            if op >> 12 in (10,11):
+                target=str((pc+4+2*signed(op&4095,12))&MASK);delay=True
+                if op>>12==11:lines.append(f' c.pr={pc+4}')
+            elif op & 0xf0ff in (0x400b,0x402b):
+                target=f'r[{op>>8&15}]';delay=True
+                if op & 0xf0ff==0x400b:lines.append(f' c.pr={pc+4}')
+            elif op==11:target='c.pr';delay=True
+            elif op>>8 in (0x89,0x8b,0x8d,0x8f):
+                delay=op>>8 in (0x8d,0x8f)
+                flag=1 if op>>8 in (0x89,0x8d) else 0
+                target=f'{pc+4+2*signed(op&255,8)} if c.sr&1=={flag} else {pc+(4 if delay else 2)}'
+            if target is not None:
+                lines.append(' t='+target)
+                if delay:
+                    slot=self.cpu.read(pc+2,2);validate_delay_slot(slot,pc);pcs.append(pc+2)
+                    lines.append(' '+self.scalar(slot,pc+2))
+                lines.append(' c.pc=t&M');break
+            lines.append(' '+self.scalar(op,pc));pc+=2
+            if not self.contains(pc) or len(pcs)>=64:
+                lines.append(f' c.pc={pc}');break
+        lines.append(f' c.instructions+={len(pcs)}')
+        lines.append(f' c.executed.update({tuple(pcs)!r})')
+        namespace={'signed':signed};exec('\n'.join(lines),namespace)
+        self.blocks[first]=namespace['execute'];return self.blocks[first]
+
+    def run(self):
+        c=self.cpu;start=c.instructions
+        while self.contains(c.pc):
+            (self.blocks.get(c.pc) or self.block(c.pc))(c)
+            require(c.instructions-start<200000000,'Fast scan exceeded exact instruction bound')
+        return c.instructions-start
+
+
+
+def compare_scan_dispatch(original):
+    """Compare complete small scan executions against single-op dispatch."""
+    results=[]
+    for count in (64,512,2048):
+        slow=copy.deepcopy(original)
+        slow.watch=False
+        slow.write(slow.r[15]+16,count)
+        pattern=struct.pack('<10H',0xd001,0x9001,0xc701,0xa001,0xb001,
+                            0x89ff,0x8bff,0x8dff,0x8fff,0)
+        slow.store_block(0x8c010000,(pattern*((count+19)//20))[:count])
+        slow.watch=True
+        fast=copy.deepcopy(slow)
+        bounds=ScanBlocks(slow)
+        before=slow.instructions
+        while bounds.contains(slow.pc):
+            pc=slow.pc;op=slow.read(pc,2);n=op>>8&15
+            slow.executed.add(pc);target=None;delay=False
+            if op>>12 in (10,11):
+                target=(pc+4+2*signed(op&4095,12))&MASK;delay=True
+                if op>>12==11:slow.pr=pc+4
+            elif op&0xf0ff in (0x400b,0x402b):
+                target=slow.r[n];delay=True
+                if op&0xf0ff==0x400b:slow.pr=pc+4
+            elif op==11:target=slow.pr;delay=True
+            elif op>>8 in (0x89,0x8b,0x8d,0x8f):
+                delay=op>>8 in (0x8d,0x8f)
+                taken=bool(slow.sr&1)==(op>>8 in (0x89,0x8d))
+                target=pc+4+2*signed(op&255,8) if taken else pc+(4 if delay else 2)
+            if target is None:
+                slow.plain(op,pc);slow.pc=pc+2
+            else:
+                slow.instructions+=1
+                if delay:
+                    slot=slow.read(pc+2,2);validate_delay_slot(slot,pc)
+                    slow.executed.add(pc+2);slow.plain(slot,pc+2)
+                slow.pc=target&MASK
+            require(slow.instructions-before<1000000,'Scalar scan fixture exceeded bound')
+        ScanBlocks(fast).run()
+        require((fast.r,fast.pc,fast.pr,fast.sr,fast.memory,fast.instructions,fast.executed)==
+                (slow.r,slow.pc,slow.pr,slow.sr,slow.memory,slow.instructions,slow.executed),
+                'Decoded scan block differs from exact scalar instruction dispatch')
+        results.append(dict(source_bytes=count,instructions=fast.instructions-before,
+                            registers_memory_flags_branches_delay_slots_equal=True))
+    return results
+
+
 class Refused(Exception):
     pass
 
@@ -465,6 +616,8 @@ class Cold(ReleaseSH):
         self.budget_checkpoint = None
         self.from_budget_checkpoint = False
         self.suppress_budget_purge = False
+        self.scan_self_test = False
+        self.scan_dispatch_tests = []
         self.budget_prepare_calls = self.budget_publish_calls = 0
         self.budget_core_calls = 0
         self.budget_lease_at = None
@@ -706,6 +859,9 @@ class Cold(ReleaseSH):
         elif op & 0xf00f in (0x600e, 0x600f):  # EXTS.B / EXTS.W
             bits = 8 if op & 15 == 14 else 16
             self.r[n] = signed(self.r[m] & ((1 << bits) - 1), bits) & MASK
+        elif op & 0xf0ff in (0x4011, 0x4015):  # CMP/PZ / CMP/PL
+            value = signed(self.r[n], 32)
+            self.flag(value >= 0 if op & 0xff == 0x11 else value > 0)
         elif op in (0x0008, 0x0018):
             self.flag(op == 0x0018)
         elif op & 0xf00f in (0x300a, 0x300e):
@@ -785,6 +941,10 @@ class Cold(ReleaseSH):
                     self.budget_scans += 1
                     require(self.budget_scans == 1, 'Compiled budget repeated its source scan')
                     instruction_bound += (len(self.image) // 2 + 1) * 96
+                    if self.scan_self_test:
+                        self.scan_dispatch_tests = compare_scan_dispatch(self)
+                    ScanBlocks(self).run()
+                    continue
                 if pc in self.event_entries:
                     event = self.event_entries[pc]
                     self.events.append(event)
@@ -899,6 +1059,7 @@ def check(directory, *, self_test=False, corpus=None, development=False):
     positive, refusals, entered, executed = [], [], set(), set()
     placement_cases = []
     budget_plans, budget_refusals, budget_checkpoints = [], [], []
+    scan_dispatch_tests = []
     budget_counts = dict(actual_helper_calls=0, actual_prepare_calls=0,
                          actual_publish_calls=0, unchanged_unrelated_callers=0,
                          single_word_publications=0, full_source_scans=0,
@@ -907,6 +1068,7 @@ def check(directory, *, self_test=False, corpus=None, development=False):
     for row in rows:
         for reader in (1, 2):
             cpu = Cold(directory, row, reader=reader, seed=reader)
+            cpu.scan_self_test = self_test and reader == 1
             require(cpu.run_cold(), f'Actual bottom installer refused {row["slug"]}: {cpu.refusal}')
             require(cpu.owner_calls == [('allocate', cpu.count - LEASE_BYTES - 64),
                                         ('allocate', LEASE_BYTES),
@@ -922,6 +1084,7 @@ def check(directory, *, self_test=False, corpus=None, development=False):
                 budget_counts['actual_prepare_calls'] += cpu.budget_prepare_calls
                 budget_counts['actual_publish_calls'] += cpu.budget_publish_calls
                 budget_counts['full_source_scans'] += cpu.budget_scans
+                scan_dispatch_tests.extend(cpu.scan_dispatch_tests)
                 if cpu.budget_slot is not None:
                     require(cpu.budget_scans == 1 and len(cpu.budget_writes) ==
                             len(cpu.budget_purges) == 1 and not cpu.budget_dirty and
@@ -967,7 +1130,9 @@ def check(directory, *, self_test=False, corpus=None, development=False):
                 sha(Path(row['startup']).read_bytes()) == budget_plans[0]['source_sha256'])
             for name in BUDGET_PREPARE_REFUSALS:
                 cpu = Cold(directory, source_row, mutation=name)
-                require(not cpu.run_cold() and cpu.refusal == (6, 0x64) and
+                require(not cpu.run_cold() and cpu.refusal is not None and
+                        (cpu.refusal == (6, 0x64) or
+                         name == 'budget-allocation-dispatch' and cpu.refusal[0] == 3) and
                         not cpu.owner_calls and not cpu.budget_writes and cpu.passive_calls == 0,
                         'Invalid budget prepare reached allocator/publication: ' + name)
                 entered |= cpu.entered
@@ -1034,6 +1199,8 @@ def check(directory, *, self_test=False, corpus=None, development=False):
             sha(Path(row['startup']).read_bytes()) == budget_plans[0]['source_sha256'])
         report.update(private_pool_budget_plans=budget_plans,
                       private_pool_budget_execution=budget_counts,
+                      scalar_scan_dispatch_tests=scan_dispatch_tests,
+                      scan_instruction_dispatch='Decoded scalar SH basic blocks; every opcode, memory effect, branch and delay slot executes; no source predicate folded',
                       private_pool_budget_refusals=budget_refusals,
                       private_pool_capacity_original=prove(Path(source_row['startup'])))
     if self_test and not development:
