@@ -31,7 +31,7 @@ product class, while the producer/version still identify K-UI. Original
 instruction replay accepts the corrected A2 reply and rejects the old name.
 The replay also accepts A2 with physical A1 absent.
 
-Lodoss still shows black video with both readers. Its startup allocates a
+On the previous candidate, Lodoss showed black video with both readers. Its startup allocates a
 private game pool and then requests **920,752 bytes** for graphics setup.
 The original SDK heap has **921,472 bytes** left for that request. Our retained
 allocation left only **528,224 bytes**, so the original allocator returned
@@ -46,8 +46,13 @@ then succeeds in instruction replay. The correction changes one guarded live
 reserve word; it does not modify the disc image or use a title-name whitelist.
 Unrelated callers retain the existing bottom placement.
 
-These are software results. **Rayman's card detection/save/load and Lodoss's
-video, audio and later game memory demand still require console testing.**
+The owner has now tested delivered build **f158ba5e24f9**: Lodoss FMVs and
+gameplay are reported flawless, and the game shows the virtual VMU. Rayman 2
+also has flawless FMVs/gameplay and successfully creates a save. Lodoss save
+creation/loading and Rayman reload after a full power-off remain untested.
+Continue ordinary gameplay to check later memory demand; a full-game pass is
+not claimed. See the [console result](evidence/native-console-followup-f158-2026-10-26.json).
+
 Evolution 2 loading worked on the previous candidate. Evolution 1's black
 screen after Sofdec remains unresolved.
 

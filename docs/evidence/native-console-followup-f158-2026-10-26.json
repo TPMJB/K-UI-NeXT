@@ -1,0 +1,44 @@
+{
+  "schema": "kui.native-console-followup-f158.v1",
+  "runtime_commit": "f158ba5e24f93ab5622f95185601b3d5a3dbca6b",
+  "production_changed": false,
+  "evidence_kind": "owner console test report",
+  "test_context": {
+    "candidate": "K-UI-Native-Graphics-VMU-f158ba5e24f9.zip",
+    "requested_route": "SCI / Background On / New (X), existing virtual A2 profile",
+    "settings_basis": "Continuation of the requested candidate test; no new diagnostic capture supplied."
+  },
+  "owner_report": "Lodoss works! Flawless on FMVs and gameplay. It shows the VMU but I haven't tested it because I don't know how long it will be in the game till I can save. Rayman works and creates a save - also flawless FMVs and gameplay",
+  "results": {
+    "lodoss": {
+      "confirmed_by_owner": [
+        "FMVs play flawlessly",
+        "Gameplay runs flawlessly during the reported test",
+        "The game shows the virtual VMU"
+      ],
+      "not_reported": [
+        "Save creation",
+        "Save loading",
+        "Save loading after a full power-off"
+      ]
+    },
+    "rayman2": {
+      "confirmed_by_owner": [
+        "FMVs play flawlessly",
+        "Gameplay runs flawlessly during the reported test",
+        "The game successfully creates a save"
+      ],
+      "not_reported": [
+        "Save loading",
+        "Save loading after a full power-off"
+      ]
+    }
+  },
+  "interpretation": "The owner confirms the targeted Lodoss playback/gameplay and Rayman card-detection/save-creation corrections on the delivered candidate. This does not establish power-cycle persistence for either title, Lodoss save compatibility, or compatibility of additional titles.",
+  "next_checks": [
+    "Rayman 2: power off fully, relaunch, and load the newly created save.",
+    "Lodoss: save when the game first permits it, then power off fully, relaunch, and load it."
+  ],
+  "new_build_required": false,
+  "github_actions_authorized": false
+}
