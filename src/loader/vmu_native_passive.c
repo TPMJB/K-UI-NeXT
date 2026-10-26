@@ -28,6 +28,10 @@ __asm__(".global __kui_native_terminal_dispatch_worker\n"
         ".set __kui_native_terminal_dispatch_worker,1\n");
 __asm__(".global __kui_native_owned_timer_callbacks_worker\n"
         ".set __kui_native_owned_timer_callbacks_worker,1\n");
+#if KUI_NATIVE_DUAL_READERS
+__asm__(".global __kui_native_bottom_heap_worker\n"
+        ".set __kui_native_bottom_heap_worker,1\n");
+#endif
 #define WORKER_SPAN UINT32_C(0x20000)
 #define PAIR_LIMIT 180000u
 #else

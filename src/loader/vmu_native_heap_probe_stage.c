@@ -75,8 +75,13 @@ static uint8_t native_heap_code_sha[32];
 static uint8_t native_installer_stack[UINT32_C(0x10000)] __attribute__((aligned(32)));
 extern const uint8_t __retail_stage_bss_end[] __asm__("__retail_stage_bss_end");
 static bool __attribute__((noipa)) allocation_safe(uint32_t begin,uint32_t bytes) {
+#if KUI_NATIVE_DUAL_READERS
+    return kui_vmu_native_stage_bottom_allocation_safe(&native_heap,exec_bytes,
+        KUI_RETAIL_STAGE_ADDRESS,(uint32_t)(uintptr_t)__retail_stage_bss_end,begin,bytes);
+#else
     return kui_vmu_native_stage_allocation_safe(&native_heap,exec_bytes,
         KUI_RETAIL_STAGE_ADDRESS,(uint32_t)(uintptr_t)__retail_stage_bss_end,begin,bytes);
+#endif
 }
 static void native_report(uint32_t phase,uint32_t detail) __attribute__((noreturn));
 #if KUI_NATIVE_DUAL_READERS
@@ -167,6 +172,43 @@ static void native_report(uint32_t phase,uint32_t detail) {
 #elif KUI_VMU_NATIVE_PASSIVE_PROBE
 #include "vmu_native_passive_stage.inc"
 #endif
+#if KUI_NATIVE_DUAL_READERS
+__asm__(".global __kui_native_bottom_heap_stage\n"
+        ".set __kui_native_bottom_heap_stage,1\n");
+static bool __attribute__((noipa)) native_allocator_unchanged(void) {
+    uint32_t sr;uint8_t digest[32];
+    __asm__ volatile("stc sr,%0":"=r"(sr)::"memory");
+    code_sha(digest);
+    return ((sr>>4)&15u)==15u && !memcmp(digest,native_heap_code_sha,sizeof(digest));
+}
+/* This transaction uses only the owner's original allocation/free entries.
+ * The temporary upper allocation is never initialized. Its sole purpose is
+ * to select the lower chunk while preserving the original upper free end. */
+static void __attribute__((noipa)) native_allocate_bottom(
+    struct kui_vmu_native_heap_lease *lease) {
+    if(!kui_vmu_native_heap_bottom_code_valid(&native_heap,native_read,NULL))
+        native_report(6u,0x63u);
+    void *(*allocate)(uint32_t)=(void *(*)(uint32_t))(uintptr_t)native_heap.allocate;
+    void (*release)(void *)=(void (*)(void *))(uintptr_t)native_heap.release;
+    uint32_t temporary=(uint32_t)(uintptr_t)allocate(lease->heap_bytes-lease->lease_bytes-64u);
+    if(!native_allocator_unchanged() ||
+       !kui_vmu_native_heap_bottom_placeholder(lease,native_read,NULL,1u,temporary))
+        native_report(6u,0x60u);
+    uint32_t payload=(uint32_t)(uintptr_t)allocate(lease->lease_bytes),release_bytes=0u;
+    if(!native_allocator_unchanged() ||
+       !kui_vmu_native_heap_bottom_allocated(lease,native_read,NULL,1u,payload) ||
+       !kui_vmu_native_heap_lease_valid_with_release(lease,native_read,NULL,1u,
+           temporary,&release_bytes) || release_bytes!=lease->remaining*32u ||
+       !kui_vmu_native_heap_bottom_code_valid(&native_heap,native_read,NULL))
+        native_report(6u,0x61u);
+    release((void *)(uintptr_t)temporary);
+    if(!native_allocator_unchanged() ||
+       !kui_vmu_native_heap_bottom_ready(lease,native_read,NULL,1u) ||
+       !kui_vmu_native_heap_lease_valid(lease,native_read,NULL,1u))
+        native_report(6u,0x62u);
+    control()->lease=payload;
+}
+#endif
 void kui_vmu_observe_stage_install(void) {
     volatile struct kui_vmu_observe_boot_control *c=control();uint8_t digest[32];
     uint32_t sr;__asm__ volatile("stc sr,%0":"=r"(sr));
@@ -181,7 +223,11 @@ void kui_vmu_observe_stage_install(void) {
     struct kui_vmu_native_heap_lease lease;
     if(c->heap_begin!=native_call.entry_begin || c->heap_bytes!=native_call.entry_bytes ||
        !allocation_safe(begin,bytes) ||
+#if KUI_NATIVE_DUAL_READERS
+       !kui_vmu_native_heap_bottom_fresh(&native_heap,native_read,NULL,begin,bytes,1u,
+#else
        !kui_vmu_native_heap_fresh(&native_heap,native_read,NULL,begin,bytes,1u,
+#endif
            KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES,&lease))
         native_report(4u,begin);
     uint32_t pr=c->original_pr&0x1fffffffu,sp=c->entry_sp&0x1fffffffu;
@@ -189,10 +235,13 @@ void kui_vmu_observe_stage_install(void) {
        (sp&3u) || sp<KUI_VMU_NATIVE_OWNER_STACK_LOW || sp>KUI_VMU_NATIVE_OWNER_STACK_HIGH ||
        !kui_vmu_native_heap_preallocate(&lease,native_read,NULL,1u))
         native_report(5u,c->entry_sp);
-    void *(*allocate)(uint32_t)=(void *(*)(uint32_t))(uintptr_t)native_heap.allocate;
 #if KUI_NATIVE_COLD_PROGRESS_STAGE
     retail_display_line("COLD 21 HEAP ALLOCATION BEGIN");
 #endif
+#if KUI_NATIVE_DUAL_READERS
+    native_allocate_bottom(&lease);
+#else
+    void *(*allocate)(uint32_t)=(void *(*)(uint32_t))(uintptr_t)native_heap.allocate;
     c->lease=(uint32_t)(uintptr_t)allocate(lease.lease_bytes);
     __asm__ volatile("stc sr,%0":"=r"(sr));
     code_sha(digest);
@@ -200,6 +249,7 @@ void kui_vmu_observe_stage_install(void) {
        !kui_vmu_native_heap_postallocate(&lease,native_read,NULL,1u,c->lease) ||
        !kui_vmu_native_heap_lease_valid(&lease,native_read,NULL,1u))
         native_report(6u,c->lease);
+#endif
     c->status=KUI_VMU_OBS_BOOT_LEASED;
 #if KUI_NATIVE_COLD_PROGRESS_STAGE
     retail_display_line("COLD 22 HEAP ALLOCATION VERIFIED");

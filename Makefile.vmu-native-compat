@@ -137,6 +137,12 @@ native-placement-host-tests: $(BUILD)/stage.elf $(BUILD)/native-worker.bin
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-stage-placement tests/fixtures/native-cache/ps2.nvr \
 	 tests/fixtures/native-cache/skies.nvr tests/fixtures/native-cache/sa2.nvr tests/fixtures/native-cache/grandia2.nvr tests/fixtures/native-cache/evolution1.nvr \
 	 $(if $(EVOLUTION2_STARTUP),tests/fixtures/native-cache/evolution2.nvr,)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_NATIVE_DUAL_READERS=1 tests/test_vmu_native_stage_bottom.c \
+	 src/core/vmu_native_stage_placement.c -o $(BUILD)/test-stage-bottom
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-stage-bottom
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_heap_bottom.c \
+	 src/core/vmu_native_heap.c src/core/vmu_native_lifetime.c -o $(BUILD)/test-heap-bottom
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-heap-bottom
 	python3 tests/test_vmu_native_heap_execution.py --build $(BUILD) \
 	 $(if $(STARTUP),--ps2 '$(STARTUP)',) $(if $(SKIES_STARTUP),--skies '$(SKIES_STARTUP)',) \
 	 $(if $(SA2_STARTUP),--sa2 '$(SA2_STARTUP)',) $(if $(GRANDIA2_STARTUP),--grandia2 '$(GRANDIA2_STARTUP)',) \

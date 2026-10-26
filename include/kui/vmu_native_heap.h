@@ -59,6 +59,38 @@ bool kui_vmu_native_heap_preallocate(const struct kui_vmu_native_heap_lease *,
     kui_vmu_native_heap_read,void *,uint32_t initializations);
 bool kui_vmu_native_heap_postallocate(struct kui_vmu_native_heap_lease *,
     kui_vmu_native_heap_read,void *,uint32_t initializations,uint32_t actual_payload);
+/* Reserve the same owned allocation at the arena's bottom without changing
+ * its initializer arguments, control identity, or upper allocation boundary.
+ * The caller holds IMASK15 throughout all checks and original SDK calls:
+ *
+ * bottom_fresh -> original allocate(heap_bytes - lease_bytes - 64)
+ * -> bottom_placeholder -> original allocate(lease_bytes)
+ * -> bottom_allocated -> full lease_valid_with_release(placeholder)
+ * -> original release(placeholder) -> bottom_ready.
+ *
+ * The placeholder payload is begin + lease_bytes + 64. The retained payload
+ * is begin + 32, with its original 32-byte allocation header at begin. These
+ * functions only read coherent owner state; they never call or modify it.
+ * A failed mutating transition invalidates the local lease. No operation may
+ * be skipped or retried after refusal. The intermediate phase3 is not an
+ * armed/runtime lease; bottom_allocated publishes the ordinary phase2 only
+ * after both original allocations and the empty free list are verified.
+ * bottom_ready then requires precisely the restored upper free block. */
+bool kui_vmu_native_heap_bottom_fresh(const struct kui_vmu_native_heap *,
+    kui_vmu_native_heap_read,void *,uint32_t begin,uint32_t heap_bytes,
+    uint32_t initializations,uint32_t lease_bytes,struct kui_vmu_native_heap_lease *);
+bool kui_vmu_native_heap_bottom_placeholder(struct kui_vmu_native_heap_lease *,
+    kui_vmu_native_heap_read,void *,uint32_t initializations,uint32_t actual_placeholder);
+bool kui_vmu_native_heap_bottom_allocated(struct kui_vmu_native_heap_lease *,
+    kui_vmu_native_heap_read,void *,uint32_t initializations,uint32_t actual_payload);
+bool kui_vmu_native_heap_bottom_ready(const struct kui_vmu_native_heap_lease *,
+    kui_vmu_native_heap_read,void *,uint32_t initializations);
+/* Admit the complete reviewed original allocation/free bodies and decoded
+ * literal roles before the bottom transaction calls them. This is an
+ * additional cold-code contract; heap discovery/identity alone does not
+ * establish the placeholder's bounded metadata-only write footprint. */
+bool kui_vmu_native_heap_bottom_code_valid(const struct kui_vmu_native_heap *,
+    kui_vmu_native_heap_read,void *);
 /* Constant-size identity witness, NOT a free-list ownership proof. This checks
  * the original arena/dispatch identity and allocated lease header without
  * traversing mutable free blocks. A runtime may use it between full proofs
@@ -67,7 +99,7 @@ bool kui_vmu_native_heap_postallocate(struct kui_vmu_native_heap_lease *,
  * reinitializer is intercepted, and every release is admitted against a full
  * coherent free-list walk before its original code runs. Normal allocation
  * only removes/splits existing free blocks; admitted releases cannot extend
- * them into the tail lease. Initial arm and external storage boundaries still
+ * them into the protected lease. Initial arm and external storage boundaries still
  * require kui_vmu_native_heap_lease_valid. The caller excludes mutation and
  * supplies coherent reads throughout either check. */
 bool kui_vmu_native_heap_lease_identity_valid(const struct kui_vmu_native_heap_lease *,

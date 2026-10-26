@@ -296,6 +296,12 @@ bool kui_vmu_native_heap_call_discover(const void *image,size_t n,
 static bool read_is(kui_vmu_native_heap_read read,void *ctx,uint32_t at,uint32_t expected) {
     uint32_t value;return read && !(at&3u) && span(at,4u) && read(ctx,at,&value) && value==expected;
 }
+static bool tail_geometry(const struct kui_vmu_native_heap_lease *l) {
+    return l->payload==l->begin+l->heap_bytes-l->lease_bytes && l->header==l->payload-32u;
+}
+static bool bottom_geometry(const struct kui_vmu_native_heap_lease *l) {
+    return l->header==l->begin && l->payload==l->begin+32u;
+}
 static bool identity(const struct kui_vmu_native_heap_lease *l,
     kui_vmu_native_heap_read read,void *ctx,uint32_t initializations) {
     const struct kui_vmu_native_heap *h=&l->owner;
@@ -305,7 +311,7 @@ static bool identity(const struct kui_vmu_native_heap_lease *l,
         l->lease_bytes && !(l->lease_bytes&31u) && l->heap_bytes>=64u &&
         l->lease_bytes<=l->heap_bytes-64u && l->units==l->lease_bytes/32u+1u &&
         l->remaining==l->heap_bytes/32u-l->units &&
-        l->payload==l->begin+l->heap_bytes-l->lease_bytes && l->header==l->payload-32u &&
+        (tail_geometry(l) || bottom_geometry(l)) &&
         /* Allocator control must not live inside its own managed arena. */
         !(phys(h->sentinel)<phys(l->begin)+l->heap_bytes &&
           phys(l->begin)<phys(h->sentinel)+0x30u) &&
@@ -351,7 +357,7 @@ bool kui_vmu_native_heap_preallocate(const struct kui_vmu_native_heap_lease *l,
 }
 bool kui_vmu_native_heap_postallocate(struct kui_vmu_native_heap_lease *l,
     kui_vmu_native_heap_read read,void *ctx,uint32_t initializations,uint32_t actual) {
-    if(!l || l->phase!=1u || !identity(l,read,ctx,initializations) || actual!=l->payload ||
+    if(!l || l->phase!=1u || !identity(l,read,ctx,initializations) || !tail_geometry(l) || actual!=l->payload ||
        !read_is(read,ctx,l->owner.sentinel,l->begin) ||
        !read_is(read,ctx,l->owner.cursor_cell,l->owner.sentinel) ||
        !read_is(read,ctx,l->begin,l->owner.sentinel) ||
@@ -360,6 +366,55 @@ bool kui_vmu_native_heap_postallocate(struct kui_vmu_native_heap_lease *l,
         return false;
     }
     l->phase=2u;return true;
+}
+bool kui_vmu_native_heap_bottom_fresh(const struct kui_vmu_native_heap *h,
+    kui_vmu_native_heap_read read,void *ctx,uint32_t begin,uint32_t bytes,
+    uint32_t initializations,uint32_t lease_bytes,struct kui_vmu_native_heap_lease *out) {
+    if(!out) return false;
+    struct kui_vmu_native_heap_lease l;
+    if(!kui_vmu_native_heap_fresh(h,read,ctx,begin,bytes,initializations,lease_bytes,&l)) {
+        memset(out,0,sizeof(*out));return false;
+    }
+    l.header=begin;l.payload=begin+32u;
+    if(!fresh(&l,read,ctx,initializations)) {memset(out,0,sizeof(*out));return false;}
+    *out=l;return true;
+}
+bool kui_vmu_native_heap_bottom_placeholder(struct kui_vmu_native_heap_lease *l,
+    kui_vmu_native_heap_read read,void *ctx,uint32_t initializations,uint32_t actual) {
+    if(!l || l->phase!=1u || !identity(l,read,ctx,initializations) || !bottom_geometry(l) ||
+       actual!=l->payload+l->lease_bytes+32u ||
+       !read_is(read,ctx,l->owner.sentinel,l->begin) ||
+       !read_is(read,ctx,l->owner.cursor_cell,l->owner.sentinel) ||
+       !read_is(read,ctx,l->begin,l->owner.sentinel) ||
+       !read_is(read,ctx,l->begin+4u,l->units) ||
+       !read_is(read,ctx,actual-28u,l->remaining)) {
+        if(l) l->phase=0u;
+        return false;
+    }
+    l->phase=3u;return true;
+}
+bool kui_vmu_native_heap_bottom_allocated(struct kui_vmu_native_heap_lease *l,
+    kui_vmu_native_heap_read read,void *ctx,uint32_t initializations,uint32_t actual) {
+    if(!l || l->phase!=3u || !identity(l,read,ctx,initializations) || !bottom_geometry(l) ||
+       actual!=l->payload ||
+       !read_is(read,ctx,l->owner.sentinel,l->owner.sentinel) ||
+       !read_is(read,ctx,l->owner.cursor_cell,l->owner.sentinel) ||
+       !read_is(read,ctx,l->header+4u,l->units) ||
+       !read_is(read,ctx,l->payload+l->lease_bytes+4u,l->remaining)) {
+        if(l) l->phase=0u;
+        return false;
+    }
+    l->phase=2u;return true;
+}
+bool kui_vmu_native_heap_bottom_ready(const struct kui_vmu_native_heap_lease *l,
+    kui_vmu_native_heap_read read,void *ctx,uint32_t initializations) {
+    if(!l || !kui_vmu_native_heap_lease_identity_valid(l,read,ctx,initializations) ||
+       !bottom_geometry(l)) return false;
+    uint32_t upper=l->payload+l->lease_bytes;
+    return read_is(read,ctx,l->owner.sentinel,upper) &&
+        read_is(read,ctx,l->owner.cursor_cell,l->owner.sentinel) &&
+        read_is(read,ctx,upper,l->owner.sentinel) &&
+        read_is(read,ctx,upper+4u,l->remaining);
 }
 bool kui_vmu_native_heap_lease_identity_valid(const struct kui_vmu_native_heap_lease *l,
     kui_vmu_native_heap_read read,void *ctx,uint32_t initializations) {
@@ -408,3 +463,4 @@ bool kui_vmu_native_heap_lease_valid(const struct kui_vmu_native_heap_lease *l,
     kui_vmu_native_heap_read read,void *ctx,uint32_t initializations) {
     return kui_vmu_native_heap_lease_valid_with_release(l,read,ctx,initializations,0u,NULL);
 }
+#include "vmu_native_heap_bottom_code.inc"

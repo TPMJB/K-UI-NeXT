@@ -39,3 +39,23 @@ bool kui_vmu_native_stage_allocation_safe(const struct kui_vmu_native_heap *heap
     return !overlap(header,end,stage,limit) &&
         !overlap(begin,end,RAM_FIRST,RAM_FIRST+exec_bytes);
 }
+
+bool kui_vmu_native_stage_bottom_allocation_safe(const struct kui_vmu_native_heap *heap,
+    uint32_t exec_bytes,uint32_t stage_begin,uint32_t stage_end,
+    uint32_t arena_begin,uint32_t arena_bytes) {
+    uint32_t stage=physical(stage_begin),limit=physical(stage_end),begin=physical(arena_begin);
+    /* A nonempty upper placeholder needs its own header and at least32 bytes
+     * of payload. The original arena identity and exclusive upper end stay
+     * unchanged throughout this transaction. */
+    if(!heap || !exec_bytes || exec_bytes>EXEC_MAX ||
+       !alias(stage_begin) || !alias(stage_end) ||
+       ((stage_begin^stage_end)&UINT32_C(0xe0000000)) ||
+       stage<RAM_FIRST || stage>=RAM_END || limit<=stage || limit>RAM_END ||
+       overlap(stage,limit,RAM_FIRST,RAM_FIRST+exec_bytes) ||
+       arena_bytes<LEASE_WITH_HEADER+64u || !span(arena_begin,arena_bytes) ||
+       (arena_begin&31u) || (arena_bytes&31u) || heap->sentinel<4u ||
+       !excludes_stage(arena_begin,LEASE_WITH_HEADER+32u,stage,limit) ||
+       !excludes_stage(heap->sentinel-4u,0x34u,stage,limit) ||
+       !excludes_stage(heap->dispatch_table,8u,stage,limit)) return false;
+    return !overlap(begin,begin+arena_bytes,RAM_FIRST,RAM_FIRST+exec_bytes);
+}

@@ -13,4 +13,13 @@
 bool kui_vmu_native_stage_allocation_safe(const struct kui_vmu_native_heap *heap,
     uint32_t exec_bytes,uint32_t stage_begin,uint32_t stage_end,
     uint32_t arena_begin,uint32_t arena_bytes);
+/* The bottom transaction allocates an upper placeholder, allocates the exact
+ * remaining lower chunk, then releases the placeholder. Only the reviewed
+ * allocator metadata is touched in the placeholder; its payload is never
+ * copied or cleared. Exclude the complete retained chunk AND the adjacent
+ * placeholder header from the live stage. Ordinary allocations resume only
+ * after the placeholder is released and the installer returns. */
+bool kui_vmu_native_stage_bottom_allocation_safe(const struct kui_vmu_native_heap *heap,
+    uint32_t exec_bytes,uint32_t stage_begin,uint32_t stage_end,
+    uint32_t arena_begin,uint32_t arena_bytes);
 #endif
