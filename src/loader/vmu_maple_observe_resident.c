@@ -33,6 +33,7 @@ static void observe_display_restore(const struct retail_display_state *);
 #undef kui_retail_storage_acquire
 #include "kui/vmu_maple_observe_boot.h"
 #include "kui/vmu_maple_observe_profile.h"
+#include "kui/vmu_native_background.h"
 
 #if !KUI_RETAIL_GD_REJECTION_DETAILS
 #error Observer I/O telemetry requires the standard native diagnostic fields
@@ -83,12 +84,17 @@ static void observe_display_restore(const struct retail_display_state *state) {
 #define NATIVE_RESIDENT_WORKER_BYTES UINT32_C(0x10000)
 #define NATIVE_RESIDENT_HEADER_BYTES 64u
 #endif
+#if KUI_NATIVE_STANDARD_VMU_ISOLATION
+#define NATIVE_RESIDENT_LEASE_BYTES KUI_NATIVE_RA_LEASE_BYTES
+#else
+#define NATIVE_RESIDENT_LEASE_BYTES UINT32_C(0x30000)
+#endif
 static bool native_resident_lease(const volatile struct kui_vmu_observe_boot_control *c,
     uint32_t *begin,uint32_t *end) {
     uint32_t lease=c->lease;
     if((lease&31u) || lease<UINT32_C(0x0c010020) ||
-       lease>UINT32_C(0x0cfd0000)) return false;
-    *begin=lease-32u;*end=lease+UINT32_C(0x30000);return true;
+       lease>UINT32_C(0x0d000000)-NATIVE_RESIDENT_LEASE_BYTES) return false;
+    *begin=lease-32u;*end=lease+NATIVE_RESIDENT_LEASE_BYTES;return true;
 }
 static bool native_resident_destination(const volatile struct kui_vmu_observe_boot_control *c,
     uint32_t address,uint32_t bytes) {

@@ -31,7 +31,21 @@ static enum kui_loader_sd_result native_persist_storage_init(struct kui_retail_s
 #define kui_retail_stage_relay kui_native_heap_base_relay
 #include "retail_stage.c"
 #undef kui_retail_stage_relay
-#if KUI_NATIVE_DUAL_READERS
+#if KUI_NATIVE_STANDARD_VMU_ISOLATION || KUI_NATIVE_READER_ONLY_ISOLATION
+_Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x60000),
+    "Native isolation variants retain the complete current lease");
+__asm__(".global __kui_native_isolation_lease_bytes\n"
+        ".set __kui_native_isolation_lease_bytes,0x60000\n");
+#endif
+#if KUI_NATIVE_STANDARD_VMU_ISOLATION
+__asm__(".global __kui_native_standard_vmu_isolation_stage\n"
+        ".set __kui_native_standard_vmu_isolation_stage,1\n");
+#endif
+#if KUI_NATIVE_READER_ONLY_ISOLATION
+__asm__(".global __kui_native_reader_only_isolation_stage\n"
+        ".set __kui_native_reader_only_isolation_stage,1\n");
+#endif
+#if KUI_NATIVE_CURRENT_BOTTOM_HEAP
 #define KUI_NATIVE_COLD_PROGRESS_STAGE 1
 __asm__(".global __kui_native_cold_progress_stage\n"
         ".set __kui_native_cold_progress_stage,1\n");
@@ -57,7 +71,7 @@ static uint32_t native_runtime_mode(void) {
 #endif
 #include "kui/vmu_native_discovery.h"
 #include "kui/vmu_native_heap.h"
-#if KUI_NATIVE_DUAL_READERS
+#if KUI_NATIVE_CURRENT_BOTTOM_HEAP
 #include "kui/vmu_native_heap_budget.h"
 #endif
 #include "kui/vmu_native_program.h"
@@ -78,7 +92,7 @@ static uint8_t native_heap_code_sha[32];
 static uint8_t native_installer_stack[UINT32_C(0x10000)] __attribute__((aligned(32)));
 extern const uint8_t __retail_stage_bss_end[] __asm__("__retail_stage_bss_end");
 static bool __attribute__((noipa)) allocation_safe(uint32_t begin,uint32_t bytes) {
-#if KUI_NATIVE_DUAL_READERS
+#if KUI_NATIVE_CURRENT_BOTTOM_HEAP
     return kui_vmu_native_stage_bottom_allocation_safe(&native_heap,exec_bytes,
         KUI_RETAIL_STAGE_ADDRESS,(uint32_t)(uintptr_t)__retail_stage_bss_end,begin,bytes);
 #else
@@ -175,7 +189,7 @@ static void native_report(uint32_t phase,uint32_t detail) {
 #elif KUI_VMU_NATIVE_PASSIVE_PROBE
 #include "vmu_native_passive_stage.inc"
 #endif
-#if KUI_NATIVE_DUAL_READERS
+#if KUI_NATIVE_CURRENT_BOTTOM_HEAP
 __asm__(".global __kui_native_dispatch_read_gate_stage\n"
         ".set __kui_native_dispatch_read_gate_stage,1\n");
 __asm__(".global __kui_native_bottom_heap_stage\n"
@@ -250,7 +264,7 @@ void kui_vmu_observe_stage_install(void) {
     struct kui_vmu_native_heap_lease lease;
     if(c->heap_begin!=native_call.entry_begin || c->heap_bytes!=native_call.entry_bytes ||
        !allocation_safe(begin,bytes) ||
-#if KUI_NATIVE_DUAL_READERS
+#if KUI_NATIVE_CURRENT_BOTTOM_HEAP
        !kui_vmu_native_heap_bottom_fresh(&native_heap,native_read,NULL,begin,bytes,1u,
 #else
        !kui_vmu_native_heap_fresh(&native_heap,native_read,NULL,begin,bytes,1u,
@@ -265,7 +279,7 @@ void kui_vmu_observe_stage_install(void) {
 #if KUI_NATIVE_COLD_PROGRESS_STAGE
     retail_display_line("COLD 21 HEAP ALLOCATION BEGIN");
 #endif
-#if KUI_NATIVE_DUAL_READERS
+#if KUI_NATIVE_CURRENT_BOTTOM_HEAP
     struct kui_vmu_native_heap_budget budget;
     native_budget_prepare(&lease,&budget);
     native_allocate_bottom(&lease);

@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Active current virtual A2 with the synchronous Standard reader only.
+# Preserve the same 384 KiB bottom reservation as the combined candidate.
+BUILD ?= build/native-isolation-standard
+override VMU_READER_PROFILE := standard
+include Makefile.vmu-native-compat
+FLAGS += -DKUI_NATIVE_STANDARD_VMU_ISOLATION=1
+NATIVE_FLAGS += -DKUI_NATIVE_STANDARD_VMU_ISOLATION=1
+override TEST_ZIP := K-UI-Native-Standard-VMU-Isolation-Test.zip
+$(BUILD)/retail-native-isolation-standard.kui: $(BUILD)/retail-maple-observe.kui
+	cp $< $@
+all: $(BUILD)/retail-native-isolation-standard.kui

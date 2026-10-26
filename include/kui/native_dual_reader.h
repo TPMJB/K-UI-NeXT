@@ -4,6 +4,7 @@
 #ifndef KUI_NATIVE_DUAL_READERS
 #define KUI_NATIVE_DUAL_READERS 0
 #endif
+#include "kui/native_isolation.h"
 #if KUI_NATIVE_DUAL_READERS != 0 && KUI_NATIVE_DUAL_READERS != 1
 #error "KUI_NATIVE_DUAL_READERS must be exactly zero or one"
 #endif

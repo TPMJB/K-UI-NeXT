@@ -7,6 +7,7 @@ host pointer width. Console field offsets and the linked SH instruction path
 are checked separately. No production branch is translated into Python.
 """
 from pathlib import Path
+import argparse
 import os
 import json
 import shlex
@@ -167,8 +168,9 @@ static void selection(void) {
         for(unsigned b=0;b<256u+sizeof(edge)/sizeof(edge[0]);b++) {
             uint32_t transport=b<256u?b:edge[b-256u];
             manifest.reader=reader;manifest.storage_transport=transport;expected_stop_detail=reader;
-            bool valid=transport==KUI_STORAGE_SCI && (reader==1u || reader==2u);
-            CHECK(kui_native_dual_reader_valid(reader,transport)==valid);
+            bool dual_valid=transport==KUI_STORAGE_SCI && (reader==1u || reader==2u);
+            bool valid=dual_valid && (!KUI_NATIVE_READER_ONLY_ISOLATION || reader==1u);
+            CHECK(kui_native_dual_reader_valid(reader,transport)==dual_valid);
             CHECK(kui_native_reader_uses_sdk(reader)==(reader==1u));
             resident_blob=NULL;resident_bytes=0u;resident_limit=0u;stopped_calls=0u;
             if(!setjmp(stopped_jump)) {
@@ -366,7 +368,7 @@ def dual_lease_guards():
                 subprocess.run([str(binary)],check=True,env={**os.environ,'ASAN_OPTIONS':'detect_leaks=0'})
 
 
-def main():
+def main(reader_only=False):
     stage=(ROOT/'src/loader/retail_stage.c').read_text()
     worker=(ROOT/'src/loader/vmu_native_reader_capture.inc').read_text()
     passive=(ROOT/'src/loader/vmu_native_passive_stage.inc').read_text()
@@ -379,6 +381,7 @@ def main():
                           'native_dual_reader_bind((void *)(uintptr_t)0x1357u,0x2468u,0x369cu,0x48adu,0x5bdeu);'+
                           '}\n'+SUFFIX)
         flags=['-DKUI_NATIVE_DUAL_READERS=1','-DKUI_RETAIL_LOW_RESIDENT=1',
+               f'-DKUI_NATIVE_READER_ONLY_ISOLATION={int(reader_only)}',
                '-DKUI_NATIVE_READAHEAD=1','-DKUI_RETAIL_MANIFEST_SLOTS=64',
                '-DKUI_RETAIL_ASYNC_TEST=1','-DKUI_RETAIL_ASYNC=1',
                '-DKUI_RETAIL_GD_ASYNC=1','-DKUI_RETAIL_TRANSPORT=1','-DKUI_SCI_SD_NO_BLOCK=1',
@@ -396,4 +399,8 @@ def main():
     dual_lease_guards()
 
 
-if __name__=='__main__':main()
+if __name__=='__main__':
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--reader-only',action='store_true',
+                        help='also enforce the isolation module\'s New-only admission')
+    main(reader_only=parser.parse_args().reader_only)

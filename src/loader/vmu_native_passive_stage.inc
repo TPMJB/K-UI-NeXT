@@ -418,11 +418,19 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #endif
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
+#if KUI_NATIVE_READER_ONLY_ISOLATION
+    retail_display_line("NEW READER / VIRTUAL VMU OFF");
+    retail_display_line("READER SUPPORT HOOKS RETAINED");
+#elif KUI_NATIVE_STANDARD_VMU_ISOLATION
+    retail_display_line("STANDARD READER / VIRTUAL A2 ON");
+    retail_display_line("384 KIB / BACKGROUND OFF");
+#else
     if(cfg.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN)
         retail_display_line("ACTIVE HOOKS / ORIGINAL MAPLE DMA LIST");
     else if(cfg.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY)
         retail_display_line("ALL HOOKS ACTIVE / VIRTUAL VMU OFF");
     else retail_display_line("PERSISTENT VIRTUAL A2 ARMED - STARTING GAME");
+#endif
 #elif KUI_VMU_NATIVE_READONLY_PROBE
     retail_display_line("READ ONLY VIRTUAL A2 ARMED - STARTING GAME");
 #else

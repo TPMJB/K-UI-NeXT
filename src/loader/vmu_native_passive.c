@@ -28,9 +28,23 @@ __asm__(".global __kui_native_terminal_dispatch_worker\n"
         ".set __kui_native_terminal_dispatch_worker,1\n");
 __asm__(".global __kui_native_owned_timer_callbacks_worker\n"
         ".set __kui_native_owned_timer_callbacks_worker,1\n");
-#if KUI_NATIVE_DUAL_READERS
+#if KUI_NATIVE_CURRENT_BOTTOM_HEAP
 __asm__(".global __kui_native_bottom_heap_worker\n"
         ".set __kui_native_bottom_heap_worker,1\n");
+#endif
+#if KUI_NATIVE_STANDARD_VMU_ISOLATION
+__asm__(".global __kui_native_standard_vmu_isolation_worker\n"
+        ".set __kui_native_standard_vmu_isolation_worker,1\n");
+#endif
+#if KUI_NATIVE_STANDARD_VMU_ISOLATION || KUI_NATIVE_READER_ONLY_ISOLATION
+_Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x60000),
+    "Native isolation variants retain the complete current lease");
+__asm__(".global __kui_native_isolation_lease_bytes\n"
+        ".set __kui_native_isolation_lease_bytes,0x60000\n");
+#endif
+#if KUI_NATIVE_READER_ONLY_ISOLATION
+__asm__(".global __kui_native_reader_only_isolation_worker\n"
+        ".set __kui_native_reader_only_isolation_worker,1\n");
 #endif
 #define WORKER_SPAN UINT32_C(0x20000)
 #define PAIR_LIMIT 180000u
@@ -1358,8 +1372,15 @@ static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
     uint8_t *parent=readonly_rx(controller_pair.frames[controller_pair.parent].rx,1024u);
     if(!parent) CONTROLLER_FAIL(11u,controller_pair.parent,
         controller_pair.frames[controller_pair.parent].rx,0u,1024u);
+#if !KUI_NATIVE_READER_ONLY_ISOLATION
     ((volatile uint8_t *)parent)[2]=(uint8_t)((parent_response>>16)|2u);
-    ++overlay.stats.advertisements;++overlay.stats.completed;
+    ++overlay.stats.advertisements;
+#else
+    /* Keep the proved controller completion and its reader TICK, while the
+     * physical response retains its original attachment byte. */
+    (void)parent_response;
+#endif
+    ++overlay.stats.completed;
     controller_pair.pending=0u;state.pending=0u;++state.completed;state.error=0u;
     state.proof=durable_card.commits!=0u;
 }
@@ -1563,7 +1584,8 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     kui_vmu_native_trace_point(0x23u,f,state.submitted,state.completed);
-    int published=(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY ||
+    int published=(KUI_NATIVE_READER_ONLY_ISOLATION ||
+                  config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY ||
                   config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN)?
         kui_vmu_readonly_overlay_complete_absent(&overlay):kui_vmu_readonly_overlay_complete(&overlay);
 #else

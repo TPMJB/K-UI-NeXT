@@ -436,6 +436,10 @@ select_resident(void) {
         stopped("DUAL READER CAPABILITY INVALID",0u);
     if(!kui_native_dual_reader_valid(manifest.reader,manifest.storage_transport))
         stopped("DUAL NATIVE READER NEEDS SCI X OR Y",manifest.reader);
+#if KUI_NATIVE_READER_ONLY_ISOLATION
+    if(!kui_native_reader_uses_sdk(manifest.reader))
+        stopped("READER ISOLATION NEEDS NEW (X)",manifest.reader);
+#endif
     if(kui_native_reader_uses_sdk(manifest.reader)) {
         resident_blob=__retail_resident_sci_blob_start;
         resident_bytes=(size_t)(__retail_resident_sci_blob_end-resident_blob);
