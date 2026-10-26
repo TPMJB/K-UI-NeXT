@@ -1888,11 +1888,11 @@
       "classification": "byte-identical"
     },
     {
-      "name": "_kui_native_loader_timeline_add",
-      "old_bytes": 856,
-      "new_bytes": 856,
-      "old_sha256": "8c3e2998c106f957b83f1641a2335f1f0697b15e20b9ab65bedff2996cb0efb0",
-      "new_sha256": "8c3e2998c106f957b83f1641a2335f1f0697b15e20b9ab65bedff2996cb0efb0",
+      "name": "_bin_at",
+      "old_bytes": 144,
+      "new_bytes": 144,
+      "old_sha256": "668a6349b8897440ebe888b256fe5ff614c5a628eb34d6290740b4925c48cbd8",
+      "new_sha256": "668a6349b8897440ebe888b256fe5ff614c5a628eb34d6290740b4925c48cbd8",
       "classification": "byte-identical"
     },
     {
