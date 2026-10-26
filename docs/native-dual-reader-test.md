@@ -35,8 +35,9 @@ prepared-file maps, allocation bitmap, namespace and cross-link checks are
 still required before journal recovery can write. Media-failure and active-FAT
 flags remain refused. A remaining preflight refusal now shows the exact boot
 reject mask, flags and actual/expected geometry on one complete screen.
-The current photo establishes the header refusal, not the actual flag value;
-console confirmation of this correction is still required.
+The owner subsequently confirmed the dirty-status bit caused this shared stop:
+fsck reported the filesystem clean, and the old build passed preflight after
+the status was cleared. Console confirmation of the new binary is still required.
 
 On `af9e01c8a271`, Evolution 2 behaves as expected and Grandia II is flawless
 according to the owner. Sonic Adventure 2 and Power Stone 2 are also reported

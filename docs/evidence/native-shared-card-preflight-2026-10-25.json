@@ -28,5 +28,11 @@
     "precise_failure_only_boot_diagnostics": true,
     "console_verified": false
   },
-  "reference": "https://learn.microsoft.com/en-us/windows/win32/fileio/exfat-specification#31132-volumedirty-field"
+  "reference": "https://learn.microsoft.com/en-us/windows/win32/fileio/exfat-specification#31132-volumedirty-field",
+  "owner_followup": {
+    "dirty_status_confirmed_as_shared_stop_cause": true,
+    "fsck_reported_filesystem_clean": true,
+    "old_build_preflight_resumed_after_status_cleared": true,
+    "new_binary_dirty_status_path_console_verified": false
+  }
 }

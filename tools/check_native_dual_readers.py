@@ -44,6 +44,13 @@ WITNESS_STAGE_PINS={
     '_native_dual_reader_bind':(68,'22523932dde059f9027053b15ba16e7258190d75af0fca131575b2062c2bf1ba'),
     '_kui_native_dual_u32':(30,'c13060e358e2a0e9f53878d9aa8b77d1fbfb03a31b8c4e049dc49bf3e7feec6c'),
 }
+# The card-preflight failure page relocates18 selector pointer literals and
+# three binder literals to the same exact symbols/offsets and string. These
+# remain complete whole-body pins, selected only for the witnessed stage.
+PREFLIGHT_WITNESS_STAGE_PINS={
+    '_select_resident':(272,'fe08e4dac2eb616e186ff9b2a1d593e431f14a01bcd887c124c700d7b1e0cc6c'),
+    '_native_dual_reader_bind':(68,'8591d839def3c7507326e6226c18c126384ae874e375bbaa68505fd8dee1603f'),
+}
 WITNESS_WORKER_PINS={
     '_reader_readahead_exports':(200,'6a753b4f52fd9aad30c334241ea8c0de92cefcac3c3a85009af4645b260d67ef'),
     '_reader_capture_region':(100,'a2ba9caef7fb729bab16d02c1d16ea468018ab128cc2ba8143802eac16bad827'),
@@ -69,11 +76,17 @@ def sha(data):return hashlib.sha256(data).hexdigest()
 
 def pin(image,pins,label):
     require(pins,'dual '+label+' reviewed instruction pins are missing')
+    result={}
     for name,(count,digest) in pins.items():
         address,body,section=symbol_bytes(image,name,2)
-        require(section[2]&7==6 and (len(body),sha(body))==(count,digest),
+        actual=sha(body)
+        accepted=((count,digest),)
+        if pins is WITNESS_STAGE_PINS and label=='stage' and name in PREFLIGHT_WITNESS_STAGE_PINS:
+            accepted+=(PREFLIGHT_WITNESS_STAGE_PINS[name],)
+        require(section[2]&7==6 and (len(body),actual) in accepted,
                 'dual '+label+' immutable instructions/targets changed: '+name)
-    return {name:(image[4][name][0],count,digest) for name,(count,digest) in pins.items()}
+        result[name]=(address,len(body),actual)
+    return result
 
 
 def markers(stage,worker):
