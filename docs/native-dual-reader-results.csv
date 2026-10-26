@@ -15,3 +15,6 @@ Rayman 2,New (X),af9e01c8a271,,FROZEN AFTER BOOTSTRAP 2,NOT RUN,NOT RUN,NOT RUN,
 Rayman 2,Legacy (Y),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,
 Record of Lodoss War,New (X),af9e01c8a271,,VMU STOP 0x03,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,Submitted4/completed4; submit lease-identity/export guard; no in-game SD reads/writes recorded
 Record of Lodoss War,Legacy (Y),,,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,
+Evolution 2,New (X),f721551450e3,,PREFLIGHT STOP 0x0F,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,Shared exFAT header refusal before game startup; readable report stage2/session-6/filesystem-4/detail15; header reject mask not displayed
+Record of Lodoss War,New (X),f721551450e3,,PREFLIGHT STOP 0x0F,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,Shared exFAT header refusal before game startup; readable report stage2/session-6/filesystem-4/detail15; header reject mask not displayed
+Rayman 2,New (X),f721551450e3,,PREFLIGHT STOP 0x0F,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,NOT RUN,,Shared exFAT header refusal before game startup; readable report stage2/session-6/filesystem-4/detail15; header reject mask not displayed

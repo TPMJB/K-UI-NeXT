@@ -74,13 +74,35 @@ static enum kui_loader_sd_result __attribute__((noipa)) native_persist_storage_i
     bool healthy=native_persist_healthy(storage);kui_retail_storage_release(storage);
     healthy=healthy && storage->device.sd.ready && !storage->stream.active && !kui_sci_sd_faulted();
     if(prepared || stopped_stream!=KUI_LOADER_SD_OK || !healthy) {
+        /* Capture the original failure before poisoning a previously healthy
+         * session. Start a fresh bounded page: the preceding launch messages
+         * must not wrap over the ownership and boot-sector evidence. */
+        const struct kui_vmu_fs_stats *stats=&native_persist_work.filesystem.stats;
+        const struct kui_vmu_fs_boot_diagnostics *boot=&stats->boot;
+        uint32_t values[5]={(uint32_t)prepared,(uint32_t)native_persist_work.session.last_result,
+            (uint32_t)stats->result,stats->detail,native_persist_work.phase};
         memset(&native_persist_handoff,0,sizeof(native_persist_handoff));
         kui_vmu_persist_session_poison(&native_persist_work.session);
-        retail_display_hex("DURABLE STAGE PHASE",native_persist_work.phase);
-        retail_display_hex("SESSION RESULT",(uint32_t)native_persist_work.session.last_result);
-        retail_display_hex("OWNERSHIP RESULT",(uint32_t)native_persist_work.filesystem.stats.result);
-        retail_display_hex("OWNERSHIP DETAIL",native_persist_work.filesystem.stats.detail);
-        stopped("NATIVE VMU OWNERSHIP / RECOVERY / RELEASE FAILED",(uint32_t)prepared);
+        retail_display_restore(&display);
+        retail_display_line("NATIVE VMU PREPARATION FAILED");
+        retail_display_values("PREPARE  SESSION  FS       DETAIL   PHASE",values,5u);
+        values[0]=(uint32_t)stopped_stream;values[1]=(uint32_t)healthy;
+        values[2]=boot->reject_mask;values[3]=boot->flags;values[4]=boot->valid;
+        retail_display_values("STOP     HEALTH   REJECT   FLAGS    VALID",values,5u);
+        values[0]=boot->zero_or;values[1]=boot->revision;values[2]=boot->sector_shift;
+        values[3]=boot->cluster_shift;values[4]=boot->fat_count;
+        retail_display_values("ZERO     REV      SECTOR   CLUSTER  FATS",values,5u);
+        values[0]=(uint32_t)boot->partition_offset;values[1]=(uint32_t)(boot->partition_offset>>32);
+        values[2]=(uint32_t)native_persist_profile.partition_first;
+        values[3]=(uint32_t)(native_persist_profile.partition_first>>32);
+        retail_display_values("PARTLO   PARTHI   EXPLO    EXPHI",values,4u);
+        uint64_t expected_sectors=native_persist_profile.partition_end-native_persist_profile.partition_first;
+        values[0]=(uint32_t)boot->volume_sectors;values[1]=(uint32_t)(boot->volume_sectors>>32);
+        values[2]=(uint32_t)expected_sectors;values[3]=(uint32_t)(expected_sectors>>32);
+        retail_display_values("VOLUMELO VOLUMEHI EXPLO    EXPHI",values,4u);
+        retail_display_line("PHOTO THIS SCREEN THEN POWER OFF");
+        retail_display_line("PREPARED VMU MAY REQUIRE JOURNAL RECOVERY");
+        for(;;) __asm__ volatile("nop");
     }
     native_persist_ready=true;return KUI_LOADER_SD_OK;
 }

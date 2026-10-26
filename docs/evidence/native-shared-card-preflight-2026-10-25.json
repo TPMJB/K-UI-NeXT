@@ -1,0 +1,32 @@
+{
+  "schema": "kui.native.shared-card-preflight-followup.v1",
+  "date": "2026-10-25",
+  "failed_build": "f721551450e3",
+  "console_titles": [
+    "Record of Lodoss War",
+    "Rayman 2",
+    "Evolution 2"
+  ],
+  "readable_photo": "image-1792975531567.jpg",
+  "observed": {
+    "durable_stage_phase": 2,
+    "session_result": -6,
+    "filesystem_result": -4,
+    "filesystem_detail": 15,
+    "stage_result": -3
+  },
+  "localized_to": "Shared main exFAT boot-header gate, before executable loading or native VMU hooks",
+  "limits": [
+    "The photographed screen does not expose the individual boot reject mask or VolumeFlags.",
+    "The current flag value is not established by an older same-card VolumeDirty observation.",
+    "No assertion that the new reader policy changed is supported by this early failure."
+  ],
+  "correction": {
+    "volume_dirty_status_preserved": true,
+    "full_semantic_ownership_scan_still_required": true,
+    "media_failure_active_fat_geometry_checksum_and_crosslink_refusals_retained": true,
+    "precise_failure_only_boot_diagnostics": true,
+    "console_verified": false
+  },
+  "reference": "https://learn.microsoft.com/en-us/windows/win32/fileio/exfat-specification#31132-volumedirty-field"
+}

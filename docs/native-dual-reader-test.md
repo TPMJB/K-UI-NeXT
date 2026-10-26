@@ -22,6 +22,22 @@ should not become faster than the previously approved build.
 
 ## Current console results and follow-up
 
+The `f721551450e3` follow-up stopped before game startup for Evolution 2,
+Lodoss and Rayman 2. The readable report shows stage `2`, session `-6`,
+filesystem `-4` and filesystem detail `0x0f`: the shared exFAT boot-header
+gate. That screen did not expose which header field failed. These are
+console failures; the earlier software passes do not override them.
+
+This candidate allows the exFAT VolumeDirty status bit to proceed through
+the complete ownership scan. It preserves that bit and does not repair or
+rewrite the boot header. Both boot checksums, volume geometry, current
+prepared-file maps, allocation bitmap, namespace and cross-link checks are
+still required before journal recovery can write. Media-failure and active-FAT
+flags remain refused. A remaining preflight refusal now shows the exact boot
+reject mask, flags and actual/expected geometry on one complete screen.
+The current photo establishes the header refusal, not the actual flag value;
+console confirmation of this correction is still required.
+
 On `af9e01c8a271`, Evolution 2 behaves as expected and Grandia II is flawless
 according to the owner. Sonic Adventure 2 and Power Stone 2 are also reported
 flawless. Skies stops at VMU guard `0x47`; Lodoss stops at guard `0x03`.
@@ -30,7 +46,7 @@ as a known failure in that candidate. Its earlier software admission pass
 was not a console boot result. Rayman 2 freezes after bootstrap 2 with only
 the build header. The initial eight-title round is complete; DOA2 admission is being investigated separately.
 
-This follow-up repairs Lodoss's verified terminal-allocator table transition.
+The previous follow-up added a repair for Lodoss's verified terminal-allocator table transition.
 The original default allocator, reserved lease, full free-list guards and
 unknown-table refusals remain required. The new terminal table is accepted
 only while its checked fatal-handler hook is installed. Console confirmation
@@ -115,7 +131,8 @@ Your results on the earlier `af9e01c8a271` build remain useful.
 
 ## Priority retries for this follow-up
 
-1. Evolution 2: check the familiar movement route and an FMV for a short regression.
+1. Evolution 2: first confirm it passes the shared virtual-card preflight;
+   then check the familiar movement route and an FMV for a short regression.
 2. Lodoss: retry startup. If it boots, test movement/transitions, A2 load, an
    unused-slot save and cold-boot reload. Capture any new stop screen in full.
 3. Skies: retry New (X) and capture the full new guard report if it stops.

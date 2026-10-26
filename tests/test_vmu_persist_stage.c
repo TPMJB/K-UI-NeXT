@@ -242,6 +242,40 @@ static void stage_recovery_and_fresh_admission_first(void) {
     assert(stage_prepare()==KUI_VMU_PERSIST_STAGE_SESSION && !card.writes && !card.syncs);
     assert(card.work.session.store_result==KUI_VMU_STORE_IDENTITY);stage_handoff_zero();
 }
+static void stage_dirty_status_and_fail_closed_ownership(void) {
+    const unsigned flags[]={0u,2u,10u};
+    for(unsigned i=0;i<sizeof(flags)/sizeof(flags[0]);i++) {
+        stage_fresh();p16(disk.boot[0]+106u,flags[i]);
+        uint8_t before[sizeof(disk.boot)];memcpy(before,disk.boot,sizeof(before));
+        assert(!stage_prepare() && card.work.phase==KUI_VMU_PERSIST_STAGE_SEAL);
+        assert(card.writes==1u && card.syncs==2u);
+        assert(card.work.filesystem.stats.boot.flags==flags[i]);
+        assert(!kui_vmu_persist_stage_handoff_matches(&card.expected,&card.handoff));
+        assert(!memcmp(before,disk.boot,sizeof(before)));
+    }
+    for(unsigned damage=0;damage<8u;damage++) {
+        stage_fresh();stage_seed_real_marker();p16(disk.boot[0]+106u,2u);
+        if(damage==0u) allocated(60u,0);
+        if(damage==1u) {file_entry(disk.dirs[0]+160u,"alias",32u,59u,8192u,3u);allocated(59u,1);}
+        if(damage==2u) disk.dirs[0][160u]=0xc1u; /* Orphan live secondary. */
+        if(damage==3u) disk.boot[11u][3u]^=1u;
+        if(damage==4u) {file_entry(disk.dirs[3]+96u,"card.journal",32u,62u,1024u,3u);allocated(62u,1);}
+        if(damage==5u) p16(disk.boot[0]+106u,6u); /* MediaFailure + dirty. */
+        if(damage==6u) p16(disk.boot[0]+106u,3u); /* ActiveFat + dirty. */
+        if(damage==7u) {p32(disk.boot[0]+100u,0x87654321u);boot_checksum();}
+        uint8_t before[sizeof(disk.boot)];memcpy(before,disk.boot,sizeof(before));
+        assert(stage_prepare()==KUI_VMU_PERSIST_STAGE_SESSION);
+        assert(card.work.phase==KUI_VMU_PERSIST_STAGE_RECOVER && !card.writes && !card.syncs);
+        assert(card.work.session.last_result==KUI_VMU_PERSIST_SESSION_ALLOCATION);
+        if(damage==4u || damage==7u) assert(card.work.session.fs_result==KUI_VMU_FS_CHANGED);
+        if(damage==5u || damage==6u) {
+            assert(card.work.session.fs_result==KUI_VMU_FS_UNSUPPORTED);
+            assert(card.work.filesystem.stats.detail==15u);
+            assert(card.work.filesystem.stats.boot.reject_mask==KUI_VMU_FS_BOOT_FLAGS);
+        }
+        stage_handoff_zero();assert(!memcmp(before,disk.boot,sizeof(before)));
+    }
+}
 static void stage_checkpoint_snapshot_and_final_faults(void) {
     for(unsigned which=0;which<8u;which++) {
         stage_fresh();memset(&card.handoff,0xa5,sizeof(card.handoff));
@@ -274,6 +308,7 @@ static void stage_arguments_and_no_workspace_reuse(void) {
 int KUI_VMU_PERSIST_STAGE_MAIN(void) {
     stage_clean_handoff_and_current_content();stage_all_whole_allocations_and_audio_protected();
     stage_recovery_and_fresh_admission_first();stage_checkpoint_snapshot_and_final_faults();
+    stage_dirty_status_and_fail_closed_ownership();
     stage_imported_root_and_sibling_preservation();
     stage_arguments_and_no_workspace_reuse();
     puts("VMU durable stage: imported opaque root/13 saves/196 used/4 free, sibling preservation, whole allocation/audio exclusions, fresh recovery and sealed handoff failure guards passed");

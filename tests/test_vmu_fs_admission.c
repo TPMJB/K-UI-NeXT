@@ -185,7 +185,7 @@ static void malformed_sets_boot_and_io(void) {
     fresh();disk.dirs[0][160u]=0xa0u;refusal();
     fresh();disk.dirs[3][32u]=0xc2u;entry_checksum(disk.dirs[3]);refusal();
     fresh();file_entry(disk.dirs[0]+160u,"cycle",16u,4u,4096u,3u);refusal();
-    fresh();disk.boot[0][106u]=2u;boot_checksum();refusal();
+    fresh();disk.boot[0][106u]=4u;boot_checksum();refusal();
     fresh();disk.boot[12u][100u]^=1u;refusal();
     fresh();disk.boot[11u][23u]^=1u;refusal();
     fresh();p32(disk.boot[0]+92u,KUI_VMU_FS_MAX_FAT_ENTRIES);boot_checksum();refusal();
@@ -212,7 +212,7 @@ static void exfat_partition_offset_and_stale_backup_flags(void) {
      * when their dirty/media/active/reserved bits differ from the clean main. */
     fresh();disk.boot[12u][106u]=7u;disk.boot[12u][107u]=0x80u;
     assert(collect()==0 && !disk.work.stats.boot.flags && !disk.work.stats.boot.reject_mask);
-    const unsigned flags[]={1u,2u,4u,0x10u,0x8000u};
+    const unsigned flags[]={1u,3u,4u,6u,0x10u,0x8000u};
     for(unsigned i=0;i<sizeof(flags)/sizeof(flags[0]);i++) {
         fresh();p16(disk.boot[0]+106u,flags[i]);refusal();
         assert(disk.work.stats.boot.reject_mask==KUI_VMU_FS_BOOT_FLAGS);
@@ -224,6 +224,29 @@ static void exfat_partition_offset_and_stale_backup_flags(void) {
     fresh();disk.boot[11u][3u]^=1u;refusal();assert(disk.work.stats.detail==18u);
     fresh();disk.boot[0][11u]=0x40u;refusal();
     assert(disk.work.stats.boot.reject_mask==KUI_VMU_FS_BOOT_ZERO && disk.work.stats.boot.zero_or==0x40u);
+}
+static void exfat_dirty_status_preserved_with_full_ownership(void) {
+    const unsigned flags[]={0u,2u,8u,10u};
+    for(unsigned i=0;i<sizeof(flags)/sizeof(flags[0]);i++) {
+        fresh();assert(!collect());struct kui_vmu_persist_profile expected=disk.profile;
+        p16(disk.boot[0]+106u,flags[i]);uint8_t before[sizeof(disk.boot)];
+        memcpy(before,disk.boot,sizeof(before));
+        assert(!kui_vmu_fs_admit(&disk.input,&expected,&disk.work));
+        assert(disk.work.stats.boot.flags==flags[i] && !disk.work.stats.boot.reject_mask);
+        assert(!memcmp(before,disk.boot,sizeof(before)));
+    }
+    /* A dirty status cannot hide malformed live metadata, missing bitmap
+     * ownership, a live crosslink or a failed boot-region checksum. */
+    for(unsigned damage=0;damage<4u;damage++) {
+        fresh();p16(disk.boot[0]+106u,2u);
+        if(damage==0u) disk.dirs[0][160u]=0xc1u;
+        if(damage==1u) allocated(60u,0);
+        if(damage==2u) {file_entry(disk.dirs[0]+160u,"alias",32u,59u,8192u,3u);allocated(59u,1);}
+        if(damage==3u) disk.boot[11u][3u]^=1u;
+        uint8_t before[sizeof(disk.boot)];memcpy(before,disk.boot,sizeof(before));
+        refusal();assert(disk.work.stats.boot.flags==2u && !disk.work.stats.boot.reject_mask);
+        assert(!memcmp(before,disk.boot,sizeof(before)));
+    }
 }
 static void positive_live_fat_stream_ownership(void) {
     fresh();disk.fat[100u]=60u;assert(collect()==0 && !disk.work.stats.link.valid);
@@ -300,6 +323,7 @@ int main(void) {
     valid_contiguous_and_fresh_comparison();fragmented_map_and_exact_tail();
     crosslinks_bitmap_metadata_and_attributes();malformed_sets_boot_and_io();
     exfat_partition_offset_and_stale_backup_flags();
+    exfat_dirty_status_preserved_with_full_ownership();
     positive_live_fat_stream_ownership();positive_live_chain_budgets();
     puts("VMU filesystem admission: exFAT live maps, full allocation, bitmap/directory ownership, crosslinks, metadata and I/O refusals passed");
     return 0;

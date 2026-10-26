@@ -201,7 +201,7 @@ def package(args):
                   'evidence/host-tests.log': args.host_log.read_bytes(),
                   'evidence/package-audit.log': args.package_log.read_bytes()})
     for path in sorted((ROOT/'docs/evidence').glob('native-*2026-10-25.json')):
-        if any(word in path.name for word in ('structural', 'joint', 'pio-pair-observed', 'new-structural', 'console-followup', 'followup-review', 'terminal-dispatch', 'startup-source-pass')):
+        if any(word in path.name for word in ('structural', 'joint', 'pio-pair-observed', 'new-structural', 'console-followup', 'followup-review', 'terminal-dispatch', 'startup-source-pass', 'card-preflight')):
             files['evidence/'+path.name] = path.read_bytes()
     candidate = dict(schema='kui.native.universal-readers.candidate.v1', source_commit=commit,
                      source_tree=tree, build=revision, module_sha256=sha(module),
@@ -210,6 +210,7 @@ def package(args):
                      source_images_analyzed=26, joint_software_candidates=joint['joint_candidate_slugs'],
                      title_allowlist=False, approved_reader_policy_preserved=True,
                      console_compatibility_verified=False, reader_runtime_comparison=runtime_comparison,
+                     shared_card_preflight=json.loads((ROOT/'docs/evidence/native-shared-card-preflight-2026-10-25.json').read_text()),
                      console_observations=json.loads((ROOT/'docs/evidence/native-universal-console-followup-2026-10-25.json').read_text())['console_observations'])
     delivery = dict(source_commit=commit, generic_installer=host_installer,
                     combined_installer=extracted_install_check(files),
@@ -223,9 +224,18 @@ def package(args):
     patch = subprocess.check_output(['git', 'diff', '--binary', PREREQUISITE, 'HEAD'], cwd=ROOT)
     recovery = f'''# Source recovery
 
-Source {commit}, tree {tree}. Clone checkpoint branch {PUBLIC_BRANCH} from
-https://github.com/TPMJB/K-UI-NeXT and run python3 {PUBLIC_FOLDER}/checkout-source.py.
-The bundle retains original history after prerequisite {PREREQUISITE}.
+Source {commit}, tree {tree}. The bundle retains original history after
+prerequisite {PREREQUISITE}. This package does not require a new published branch.
+
+For an existing source checkout containing the prerequisite, fetch the bundled
+native-source-update.bundle, then check out {commit}. Refuse a dirty checkout
+before changing revisions.
+
+To recover from the existing public checkpoint, clone branch
+checkpoint/native-universal-20261025 from https://github.com/TPMJB/K-UI-NeXT,
+run python3 restore.py, then fetch this package's source/native-source-update.bundle
+into restored-source and check out the source commit above. Verify its tree
+with git rev-parse HEAD^{{tree}} against {tree}.
 '''.encode()
     checkout = f'''#!/usr/bin/env python3
 import json,pathlib,subprocess,sys

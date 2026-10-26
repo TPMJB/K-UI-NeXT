@@ -143,7 +143,13 @@ static int vmu_fs_volume(struct vmu_fs_state *s) {
         if(boot->sector_shift!=9u) boot->reject_mask|=KUI_VMU_FS_BOOT_SECTOR_SHIFT;
         if(boot->cluster_shift>16u) boot->reject_mask|=KUI_VMU_FS_BOOT_CLUSTER_SHIFT;
         if(boot->fat_count!=1u) boot->reject_mask|=KUI_VMU_FS_BOOT_FAT_COUNT;
-        if(boot->flags&~UINT32_C(0x0008)) boot->reject_mask|=KUI_VMU_FS_BOOT_FLAGS;
+        /* VolumeDirty is retained status, not proof that the fixed prepared
+         * files have lost ownership. Never clear it or write boot metadata.
+         * All boot checksums, geometry, live namespace/bitmap/FAT ownership
+         * and exact prepared-map comparisons below remain mandatory before
+         * the caller can recover/write its data-only extents. ActiveFat,
+         * MediaFailure and unknown bits still refuse. */
+        if(boot->flags&~UINT32_C(0x000a)) boot->reject_mask|=KUI_VMU_FS_BOOT_FLAGS;
         /* exFAT specification 3.1.4: zero means ignore PartitionOffset.
          * MBR selection remains independent and every map uses that start. */
         if(boot->partition_offset && boot->partition_offset!=in->partition_first)
@@ -172,7 +178,7 @@ static int vmu_fs_volume(struct vmu_fs_state *s) {
                  * and both complete boot-region checksums remain mandatory. */
                 if(!sector && (memcmp(b,geometry,106u) || memcmp(b+108u,geometry+108u,4u) ||
                    b[510]!=0x55u || b[511]!=0xaau ||
-                   (!copy && (vmu_fs_u16(b+106u)&~UINT16_C(0x0008)))))
+                   (!copy && (vmu_fs_u16(b+106u)&~UINT16_C(0x000a)))))
                     return vmu_fs_fail(s,KUI_VMU_FS_CORRUPT,17u);
                 for(unsigned i=0;i<512u;i++) if(sector || (i!=106u && i!=107u && i!=112u))
                     sum=((sum&1u)?UINT32_C(0x80000000):0u)+(sum>>1)+b[i];
