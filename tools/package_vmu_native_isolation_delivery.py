@@ -37,12 +37,15 @@ PREVIOUS_METADATA_SHA = 'adf9dd97917140cc07e5027ae15fa1d85caa06cd83cb8e5d8db4551
 PREVIOUS_ARCHIVE_SHA = 'cd6d51767788f4222fffd3c6299024bb8700f8407fe623d6664ef922876d5f29'
 DEMAND_BUILD = '3f51ded6973f'
 WAIT_BUILD = '5fa97d6729c8'
+BYPASS_BUILD = 'cec542aefa8a'
 KNOWN_PREVIOUS = {
     PREVIOUS_BUILD: (PREVIOUS_ARCHIVE_SHA, PREVIOUS_METADATA_SHA),
     DEMAND_BUILD: ('2ff9b0c356b535bdf3fa1083b9c65d1fd8b8bf346170b8f2eae6ecd42e2b673f',
                    '7e79d4e257443211b5f028796a74b14846d5c6aea46a4a5b21643b5357a79443'),
     WAIT_BUILD: ('40fd60c6a7631f4373fb428472754a8cfce73bbc00b1c2789d188eadd1d14c4d',
                  '64b9b858409599c2a6380c0aa0d93647a0455c136c83ab2dace2085a0860a21c'),
+    BYPASS_BUILD: ('c0515ebb1ab6a30d0d76c533b3d7f8e9799d7036d5f2e8a56fdaeccc8c658f5d',
+                   'abc31c8ee2a5cc810ce70dc2bfebed2b712fd63d4b0e213255c464b8bf57964e'),
 }
 
 
@@ -70,10 +73,12 @@ def embedded(image, begin, end, data, base, binary):
     return first
 
 
-def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_capture=False,maple_bypass=False):
+def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_capture=False,
+                 maple_bypass=False, maple_delay=False):
     require(not wait_capture or demand_only, 'Wait capture requires the demand-only control')
     require(not maple_bypass or (demand_only and not wait_capture),
             'Maple bypass requires demand-only and excludes wait capture')
+    require(not maple_delay or maple_bypass, 'Maple delay requires Maple C bypass')
     artifacts = {key: sha((build/key).read_bytes()) for key in REQUIRED_ARTIFACTS}
     require(all(proof['artifact_sha256'].get(key) == value for key, value in artifacts.items()),
             'Linked execution report differs from final artifacts: '+name)
@@ -117,12 +122,17 @@ def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_cap
         bypass_marker = '__kui_native_maple_bypass_isolation_'+side
         require(image[4].get(bypass_marker) == ABSOLUTE_ONE if maple_bypass and name == 'reader-only' else
                 bypass_marker not in image[4], 'Variant Maple C-gateway bypass marker differs: '+name)
+        delay_marker = '__kui_native_maple_delay_isolation_'+side
+        require(image[4].get(delay_marker) == ABSOLUTE_ONE if maple_delay and name == 'reader-only' else
+                delay_marker not in image[4], 'Variant Maple delay marker differs: '+name)
     require(proof.get('controller_tick_off', False) is (demand_only and name == 'reader-only'),
             'Linked execution report controller-prefetch setting differs: '+name)
     require(proof.get('e1_wait_capture', False) is (wait_capture and name == 'reader-only'),
             'Linked execution report focused-wait-capture setting differs: '+name)
     require(proof.get('maple_bypass',False) is (maple_bypass and name=='reader-only'),
             'Linked execution report Maple C-gateway bypass setting differs: '+name)
+    require(proof.get('maple_delay',False) is (maple_delay and name=='reader-only'),
+            'Linked execution report Maple delay setting differs: '+name)
     if name == 'reader-only':
         require(worker[4].get('__kui_native_readahead_worker') == ABSOLUTE_ONE and
                 worker[4].get('__kui_native_dual_readers_worker') == ABSOLUTE_ONE,
@@ -171,6 +181,8 @@ def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_cap
                   prefetch_enabled=name == 'reader-only' and not demand_only,
                   e1_wait_capture=wait_capture and name == 'reader-only',
                   maple_bypass=maple_bypass and name=='reader-only',
+                  maple_delay=maple_delay and name=='reader-only',
+                  maple_delay_ticks=dict(submit=59,complete=76) if maple_delay and name=='reader-only' else None,
                   maple_c_callbacks_enabled=not(maple_bypass and name=='reader-only'),
                   heap_reclaim_coherence_guards_retained=True,
                   canonical_disjoint_personalization=manifest)
@@ -199,6 +211,43 @@ def previous_package(path, expected_build=PREVIOUS_BUILD):
                                      profile_module_offset=module.index(template))
     return dict(gui_sha256=GUI_SHA, isolation_metadata_sha256=metadata_sha,
                 variants=descriptors), raw
+
+
+def passed_bypass_bridge(path, metadata, files):
+    """Retain the exact passed modules with a metadata-only return bridge."""
+    _, raw = previous_package(path, BYPASS_BUILD)
+    old = json.loads(raw)
+    descriptor = dict(gui_sha256=GUI_SHA, isolation_metadata_sha256=sha(wire(metadata)), variants={})
+    for name in MODULES:
+        prefix = 'variants/'+name+'/'
+        manifest = json.loads(files[prefix+'base/native-persistent-personalization.json'])
+        module = files[prefix+'base/KUI/apps/games/retail-boot.kui']
+        offset = manifest['profile_module_offset']
+        require(verify(module)['build'] == metadata['build'] and
+                sha(module) == metadata['variants'][name]['module_sha256'] and
+                module[offset:offset+4096] == template_profile(),
+                'Passed-build bridge lacks canonical current-module/profile binding: '+name)
+        descriptor['variants'][name] = dict(module_bytes=len(module), module_sha256=sha(module),
+                                             profile_module_offset=offset)
+    old['compatible_packages'] = {**old.get('compatible_packages', {}), metadata['build']: descriptor}
+    bridge = {}
+    with zipfile.ZipFile(path) as archive:
+        for name in archive.namelist():
+            if name in ('install.py', 'personalize.py') or name.startswith(('tools/', 'variants/', 'native-cache/')):
+                bridge['passed-bypass/'+name] = archive.read(name)
+    bridge['passed-bypass/isolation.json'] = wire(old)
+    require({key:value for key,value in old.items() if key!='compatible_packages'} ==
+            {key:value for key,value in json.loads(raw).items() if key!='compatible_packages'} and
+            {key:value for key,value in old['compatible_packages'].items() if key!=metadata['build']} ==
+            json.loads(raw).get('compatible_packages', {}),
+            'Passed-build bridge changed more than the current-build compatibility descriptor')
+    info = dict(passed_build=BYPASS_BUILD, passed_archive_sha256=KNOWN_PREVIOUS[BYPASS_BUILD][0],
+                original_metadata_sha256=sha(raw), bridge_metadata_sha256=sha(wire(old)),
+                current_metadata_sha256=sha(wire(metadata)), current_descriptor=descriptor,
+                original_installer_personalizer_tools_and_variants_unchanged=True,
+                source_bundle_duplicated=False,
+                files_sha256={name:sha(data) for name,data in bridge.items()})
+    return bridge, info
 
 
 def extracted_install_check(files, previous_archive=None, origin_archive=None):
@@ -278,7 +327,46 @@ def extracted_install_check(files, previous_archive=None, origin_archive=None):
                 after = {str(p.relative_to(card)): p.read_bytes() for p in card.rglob('*') if p.is_file()}
                 require(all(after[key] == value for key, value in before.items()),
                         'Migration/restore changed original modules, GUI, prepared saves or settings')
+        bridge_runs = 0
+        if 'passed-bypass/install.py' in files:
+            backup_before = {p.name:p.read_bytes() for p in (card/BACKUP_PARENT/'backup').iterdir()}
+            new_metadata = json.loads(files['isolation.json'])
+            sequence = ((False,'reader-only'),(True,'reader-only'),(False,'reader-only'),
+                        (True,'reader-only'),(True,'restore'),(False,'reader-only'),(False,'restore'))
+            for passed, variant in sequence:
+                script = package/'passed-bypass/install.py' if passed else package/'install.py'
+                result = subprocess.run([sys.executable,str(script),str(card),'--profile',
+                    str(profile.relative_to(card)),'--variant',variant],cwd=root,text=True,capture_output=True)
+                require(result.returncode==0,'Passed-build return bridge failed: '+result.stderr)
+                bridge_runs += 1
+                require({p.name:p.read_bytes() for p in (card/BACKUP_PARENT/'backup').iterdir()}==backup_before,
+                        'Return bridge changed immutable original backups')
+                after = {str(p.relative_to(card)):p.read_bytes() for p in card.rglob('*') if p.is_file()}
+                require(all(after[key]==value for key,value in before.items()
+                            if key not in map(str,MODULES.values())),
+                        'Return bridge changed GUI, prepared profile/card/journal or launch settings')
+                for name,destination in MODULES.items():
+                    if variant != name:
+                        require(after[str(destination)]==before[str(destination)],
+                                'Return bridge did not restore exact inactive/original module')
+                        continue
+                    prefix = ('passed-bypass/' if passed else '')+'variants/'+name+'/'
+                    manifest = json.loads(files[prefix+'base/native-persistent-personalization.json'])
+                    data = after[str(destination)];offset = manifest['profile_module_offset']
+                    expected_build = BYPASS_BUILD if passed else new_metadata['build']
+                    require(verify(data)['build']==expected_build and
+                            data[offset:offset+4096]==profile.read_bytes() and
+                            decode_mode(data[manifest['runtime_mode_module_offset']:
+                                             manifest['runtime_mode_module_offset']+MODE_BYTES])==0,
+                            'Return bridge selected the wrong build/profile/mode')
+                    payload = bytearray(data[64:]);payload[offset-64:offset-64+4096] = template_profile()
+                    canonical = envelope(bytes(payload),verify(data)['memory_bytes'],expected_build)
+                    require(sha(canonical)==manifest['module_sha256'],
+                            'Return bridge changed the pinned module beyond profile personalization')
     return dict(extracted_cli_runs=6, both_variants_switch_and_restore=True,
+                passed_bypass_bridge_cli_runs=bridge_runs,
+                bidirectional_delay_bypass_switch_and_restore=bridge_runs==7,
+                passed_bypass_bridge_keeps_exact_cec_modules=bridge_runs==7,
                 previous_package_migration_cli_runs=8 if previous_archive is not None else 0,
                 inherited995_origin_migration_cli_runs=10 if origin_archive is not None else 0,
                 previous_original_backup_unchanged=previous_archive is not None,
@@ -315,12 +403,91 @@ print('Runtime build commit:',item['runtime_source_commit'])
 '''
 
 
+def validate_maple_bypass_receipt(gateways,runtime_commit,reader_build):
+    require(gateways.get('schema')=='kui.native.maple-bypass.linked-gateways.v1' and
+            gateways.get('status')=='PASS' and gateways.get('source_commit')==runtime_commit and
+            gateways.get('instruction_cases')==1152 and gateways.get('C_calls')==0 and
+            gateways.get('exact_original_submit_replay') is True and
+            gateways.get('inherited_registers_PR_SR_SP_preserved') is True and
+            gateways.get('gateway_frames_and_stack_traffic_retained') is True and
+            gateways.get('all_imasks_and_T') is True and
+            gateways.get('mdst_store_counts')==dict(submit_mdst=576,complete_mdst=0) and
+            gateways.get('assembler_comparison',{}).get('only_two_C_call_instructions_replaced') is True and
+            len(gateways.get('mutation_refusals',[]))==2 and
+            {item.get('mutation') for item in gateways['mutation_refusals']}==
+                {'submit-C-call-restored','complete-C-call-restored'} and
+            all(item.get('reason') for item in gateways['mutation_refusals']) and
+            all(gateways.get('artifact_sha256',{}).get(name)==sha((reader_build/name).read_bytes())
+                for name in ('stage.elf','native-worker.elf','native-worker.bin','native-worker.reloc')),
+            'Compiled Maple bypass gateway receipt differs from final artifacts')
+
+
+def validate_maple_delay_receipt(gateways,execution,runtime_commit,reader_build):
+    require(execution.get('actual_delay_helper_executed') is True and
+            execution.get('delay_calls')==dict(submit=8,complete=8) and
+            execution.get('delay_ticks')==dict(submit=59,complete=76) and
+            execution.get('timer_writes')==0 and len(execution.get('delay_visits',[]))==16 and
+            all(v.get('counter_reads',0)==v.get('target_ticks',0)+2 and v.get('target_ticks',0)>0
+                for v in execution['delay_visits']),
+            'Original SDK replay did not execute the actual read-only delay helpers')
+    require(gateways.get('schema')=='kui.native.maple-delay.linked-gateways.v1' and
+            gateways.get('status')=='PASS' and gateways.get('source_commit')==runtime_commit and
+            gateways.get('instruction_cases',0)>=1152 and gateways.get('C_calls')==0 and
+            gateways.get('delay_ticks')==dict(submit=59,complete=76) and
+            gateways.get('actual_delay_helper_executed') is True and
+            gateways.get('timer_writes')==0 and
+            gateways.get('exact_original_submit_replay') is True and
+            gateways.get('inherited_registers_PR_SR_SP_preserved') is True and
+            gateways.get('gateway_frames_and_stack_traffic_retained') is True and
+            gateways.get('all_imasks_and_T') is True and
+            gateways.get('mdst_store_counts')==dict(submit_mdst=576,complete_mdst=0) and
+            gateways.get('gateway_callee_model')=='adversarial ABI-compatible delay callee' and
+            gateways.get('actual_helper_case_count')==len(gateways.get('delay_helper_cases',[]))==206 and
+            sum(row.get('refused') is False for row in gateways['delay_helper_cases'])==6 and
+            sum(row.get('refused') is True for row in gateways['delay_helper_cases'])==200 and
+            gateways.get('flag_zero_assembly',{}).get('normal_equal') is True and
+            gateways.get('flag_zero_assembly',{}).get('bypass_equal') is True and
+            len(gateways.get('mutation_refusals',[]))==4 and
+            {row.get('name') for row in gateways['mutation_refusals']}==
+                {role+'-'+kind for role in ('submit','complete') for kind in
+                 ('call-omitted','original-C-restored')} and
+            all(row.get('reason') for row in gateways['mutation_refusals']) and
+            all(gateways.get('artifact_sha256',{}).get(name)==sha((reader_build/name).read_bytes())
+                for name in ('stage.elf','native-worker.elf','native-worker.bin','native-worker.reloc')),
+            'Compiled Maple delay receipt differs from final artifacts')
+
+
+def validate_maple_delay_guard(guard,runtime_commit,reader_build):
+    positive=guard.get('positive_case',{});refusals=guard.get('refusal_cases',[])
+    expected={'digest-byte-'+str(i) for i in range(32)} | {'image-bytes','load-address'} | {
+        'non-normal-mode-'+str(i) for i in range(1,7)}
+    require(guard.get('schema')=='kui.native.evolution1.maple-delay-stage-guard.v1' and
+            guard.get('status')=='PASS' and guard.get('source_commit')==runtime_commit and
+            guard.get('enabledmarker') is True and positive.get('mode')==0 and
+            positive.get('admitted_before_copy') is True and positive.get('first_copy') is not None and
+            positive.get('actual_memcmp_calls')==1 and positive.get('digest_byte_offsets_read')==list(range(32)) and
+            guard.get('refusal_count')==len(refusals)==40 and {r.get('name') for r in refusals}==expected and
+            all(r.get('refused_before_copy') is True and r.get('first_copy') is None for r in refusals) and
+            guard.get('inputs',{}).get('startup',{}).get('sha256')==
+                'ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35' and
+            all(guard.get('artifact_sha256',{}).get(name)==sha((reader_build/name).read_bytes())
+                for name in ('stage.elf','stage.bin','entry.elf','native-worker.elf',
+                             'native-worker.bin','resident-sci.elf')),
+            'Exact Evolution/NORMAL Maple-delay stage guard differs from final artifacts')
+    for path,digest in guard['source_sha256'].items():
+        relative=Path(path)
+        require(not relative.is_absolute() and '..' not in relative.parts and
+                sha((ROOT/relative).read_bytes())==digest,'Maple delay stage proof source changed: '+path)
+
+
 def package(args):
     require(not args.wait_capture or args.demand_only, '--wait-capture requires --demand-only')
     require(not args.maple_bypass or (args.demand_only and not args.wait_capture),
             '--maple-bypass requires --demand-only and excludes --wait-capture')
+    require(not args.maple_delay or args.maple_bypass, '--maple-delay requires --maple-bypass')
     if args.previous_package is None:
-        filename = ('K-UI-Evolution-Wait-Capture-5fa97d6729c8.zip' if args.maple_bypass else
+        filename = ('K-UI-Evolution-Maple-Bypass-cec542aefa8a.zip' if args.maple_delay else
+                    'K-UI-Evolution-Wait-Capture-5fa97d6729c8.zip' if args.maple_bypass else
                     'K-UI-Evolution-New-Demand-3f51ded6973f.zip' if args.wait_capture else
                     'K-UI-Evolution-Isolation-9956562f91d6.zip')
         args.previous_package = ROOT.parent/filename
@@ -354,7 +521,8 @@ def package(args):
              'evidence/host-tests.log': args.host_log.read_bytes(),
              'LICENSE': (ROOT/'LICENSE').read_bytes(), 'THIRD_PARTY.md': (ROOT/'THIRD_PARTY.md').read_bytes()}
     if args.demand_only:
-        prior_build = WAIT_BUILD if args.maple_bypass else DEMAND_BUILD if args.wait_capture else PREVIOUS_BUILD
+        prior_build = (BYPASS_BUILD if args.maple_delay else WAIT_BUILD if args.maple_bypass else
+                       DEMAND_BUILD if args.wait_capture else PREVIOUS_BUILD)
         compatible, previous_raw = previous_package(args.previous_package, prior_build)
         metadata['compatible_packages'] = {**json.loads(previous_raw).get('compatible_packages', {}),
                                            prior_build: compatible}
@@ -369,6 +537,7 @@ def package(args):
         if args.demand_only and not args.wait_capture and not args.maple_bypass else ()) + (
         ('e1-wait-capture-collector.json', 'e1-wait-capture-image-guard.json',
          'original-frame-proof.json') if args.wait_capture else ()) + (
+        ('maple-delay-gateways.json','maple-delay-stage-guard.json') if args.maple_delay else
         ('maple-bypass-gateways.json',) if args.maple_bypass else ())
     for filename in extra_proofs:
         data = (args.linked_report.parent/filename).read_bytes()
@@ -431,29 +600,23 @@ def package(args):
                 set(execution.get('gateway_instructions',{}))=={'submit','complete'} and
                 all(value>0 for value in execution['gateway_instructions'].values()),
                 'Bypass report did not execute the actual SDK through both compiled assembly gateways')
-        gateways=json.loads(files['evidence/maple-bypass-gateways.json'])
-        require(gateways.get('schema')=='kui.native.maple-bypass.linked-gateways.v1' and
-                gateways.get('status')=='PASS' and gateways.get('source_commit')==runtime_commit and
-                gateways.get('instruction_cases')==1152 and gateways.get('C_calls')==0 and
-                gateways.get('exact_original_submit_replay') is True and
-                gateways.get('inherited_registers_PR_SR_SP_preserved') is True and
-                gateways.get('gateway_frames_and_stack_traffic_retained') is True and
-                gateways.get('all_imasks_and_T') is True and
-                gateways.get('mdst_store_counts')==dict(submit_mdst=576,complete_mdst=0) and
-                gateways.get('assembler_comparison',{}).get('only_two_C_call_instructions_replaced') is True and
-                len(gateways.get('mutation_refusals',[]))==2 and
-                {item.get('mutation') for item in gateways['mutation_refusals']}==
-                    {'submit-C-call-restored','complete-C-call-restored'} and
-                all(item.get('reason') for item in gateways['mutation_refusals']) and
-                all(gateways.get('artifact_sha256',{}).get(name)==sha((args.reader_build/name).read_bytes())
-                    for name in ('stage.elf','native-worker.elf','native-worker.bin','native-worker.reloc')),
-                'Compiled Maple bypass gateway receipt differs from final artifacts')
+        gateways=json.loads(files['evidence/'+('maple-delay-gateways.json' if args.maple_delay else
+                                              'maple-bypass-gateways.json')])
+        if args.maple_delay:
+            validate_maple_delay_receipt(gateways,execution,runtime_commit,args.reader_build)
+            validate_maple_delay_guard(json.loads(files['evidence/maple-delay-stage-guard.json']),
+                                       runtime_commit,args.reader_build)
+        else:
+            validate_maple_bypass_receipt(gateways,runtime_commit,args.reader_build)
         for path,digest in gateways['source_sha256'].items():
             relative=Path(path)
             require(not relative.is_absolute() and '..' not in relative.parts and
-                    sha((ROOT/relative).read_bytes())==digest,'Maple bypass gateway proof source changed: '+path)
+                    sha((ROOT/relative).read_bytes())==digest,'Maple gateway proof source changed: '+path)
         files['evidence/native-evolution1-5fa97-wait-capture-2026-10-26.json']=(
             ROOT/'docs/evidence/native-evolution1-5fa97-wait-capture-2026-10-26.json').read_bytes()
+        if args.maple_delay:
+            files['evidence/native-evolution1-cec542-console-pass-2026-10-26.json']=(
+                ROOT/'docs/evidence/native-evolution1-cec542-console-pass-2026-10-26.json').read_bytes()
     if args.demand_only:
         standard = json.loads(files['evidence/standard-control-comparison.json'])
         require(standard.get('old_build') == PREVIOUS_BUILD and
@@ -478,7 +641,7 @@ def package(args):
         require(proof['lease_bytes'] == 393216 and proof['worker_bytes'] == 131072 and proof['placement'] == 'bottom',
                 'Isolation controls do not retain the matching memory reservation')
         variant_files, manifest, layout = bind_variant(name, build.resolve(), proof, runtime_commit,
-                                                       args.demand_only, args.wait_capture,args.maple_bypass)
+                                                       args.demand_only, args.wait_capture,args.maple_bypass,args.maple_delay)
         files.update({'variants/'+name+'/'+path: data for path, data in variant_files.items()})
         metadata['variants'][name] = dict(directory='variants/'+name, destination=str(MODULES[name]),
             module_sha256=manifest['module_sha256'], virtual_a2=name == 'vmu-only',
@@ -488,11 +651,19 @@ def package(args):
             controller_tick_off=args.demand_only and name == 'reader-only',
             e1_wait_capture=args.wait_capture and name == 'reader-only',
             maple_bypass=args.maple_bypass and name=='reader-only',
+            maple_delay=args.maple_delay and name=='reader-only',
+            maple_delay_ticks=dict(submit=59,complete=76) if args.maple_delay and name=='reader-only' else None,
             maple_c_callbacks_enabled=not(args.maple_bypass and name=='reader-only'),
             heap_reclaim_coherence_guards_retained=True,
             linked_layout_sha256=sha(wire(layout)))
     files['isolation.json'] = wire(metadata)
-    guide_path = ('docs/native-isolation-maple-bypass-test.md' if args.maple_bypass else
+    passed_recovery = None
+    if args.maple_delay:
+        bridge,passed_recovery = passed_bypass_bridge(args.previous_package,metadata,files)
+        files.update(bridge)
+        files['evidence/passed-bypass-recovery.json'] = wire(passed_recovery)
+    guide_path = ('docs/native-isolation-maple-delay-test.md' if args.maple_delay else
+                  'docs/native-isolation-maple-bypass-test.md' if args.maple_bypass else
                   'docs/native-isolation-wait-test.md' if args.wait_capture else
                   'docs/native-isolation-demand-test.md' if args.demand_only else 'docs/native-isolation-test.md')
     guide = (ROOT/guide_path).read_text().replace('@BUILD@', runtime_commit[:12]).replace(
@@ -513,6 +684,8 @@ def package(args):
                      demand_only=args.demand_only,
                      e1_wait_capture=args.wait_capture,
                      maple_bypass=args.maple_bypass,
+                     maple_delay=args.maple_delay,
+                     passed_bypass_recovery=passed_recovery,
                      preserved_gui_build=GUI_BUILD, preserved_gui_sha256=GUI_SHA,
                      evidence_sha256={name: sha(data) for name, data in files.items()
                                       if name.startswith('evidence/') or name.endswith('/variant-layout.json')})
@@ -551,8 +724,10 @@ def main():
                         help='Require the Evolution1 manual30-poll wait capture; needs --demand-only')
     parser.add_argument('--maple-bypass',action='store_true',
                         help='Require the diagnostic Maple C-call bypass; needs --demand-only and excludes wait capture')
+    parser.add_argument('--maple-delay',action='store_true',
+                        help='Require read-only 59/76 tick delay addback; needs --maple-bypass')
     parser.add_argument('--previous-package', type=Path,
-                        help='Pinned earlier archive; defaults to995,3f51 for wait capture,5fa97 for Maple bypass')
+                        help='Pinned earlier archive; defaults to995,3f51 for wait capture,5fa97 for bypass,cec542 for delay')
     parser.add_argument('--backup-origin-package', type=Path,
                         default=ROOT.parent/'K-UI-Evolution-Isolation-9956562f91d6.zip',
                         help='Pinned995 archive for inherited backup-chain extraction checks')

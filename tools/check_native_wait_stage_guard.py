@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Execute the linked Evolution wait-capture guard before ordinary stage copy.
+"""Execute the linked Evolution diagnostic guard before ordinary stage copy.
 
 The real cold installer/original allocator prepares its real lease. Execution
 then resumes at native_passive_run with verified external E1 metadata. The
@@ -18,6 +18,7 @@ from check_native_bottom_heap import ABSOLUTE_ONE, Cold, ROOT, Refused, require
 from check_vmu_native_worker_gateway import read_elf
 
 SCHEMA = 'kui.native.evolution1.wait-capture-stage-guard.v1'
+DELAY_SCHEMA = 'kui.native.evolution1.maple-delay-stage-guard.v1'
 SOURCES = ('tools/check_native_wait_stage_guard.py', 'tools/check_native_bottom_heap.py',
     'tools/profile_vmu_native_release_sh.py', 'tests/test_vmu_native_heap_execution.py',
     'tools/check_vmu_native_worker_gateway.py', 'tools/sh4_delay_slots.py',
@@ -98,7 +99,7 @@ class Guard(Cold):
         self.guard_running = True
 
 
-def run_case(baseline, wire, name, mutation=None, mode=0, accept=False):
+def run_case(baseline, wire, name, mutation=None, mode=0, accept=False, expected_message=None):
     cpu = copy.deepcopy(baseline)
     cpu.prepare(wire, mutation, mode)
     try:
@@ -115,6 +116,9 @@ def run_case(baseline, wire, name, mutation=None, mode=0, accept=False):
     else:
         require(cpu.first_copy is None and cpu.stop is not None,
                 'Refusal reached ordinary copy or missed terminal stop')
+        if expected_message is not None:
+            require(cpu.stop['message'] == expected_message,
+                    'Wrong diagnostic guard refusal: ' + name)
         # Only stage-local C stacks may be written before the terminal guard.
         require(all(cpu.stack_low <= (address & 0x1fffffff) + 0x80000000 <
                     cpu.stack_low + 0x10000 for _,address,_,_ in cpu.writes),
@@ -125,13 +129,18 @@ def run_case(baseline, wire, name, mutation=None, mode=0, accept=False):
         first_copy=cpu.first_copy, stop=cpu.stop, writes=len(cpu.writes))
 
 
-def check(build, startup, record):
+def check(build, startup, record, maple_delay=False):
     build = build.resolve()
     artifacts = {p.name: sha(p) for p in sorted(build.iterdir())
                  if p.suffix in ('.elf', '.bin', '.reloc') and p.is_file()}
     for file, role in (('stage.elf', 'stage'), ('native-worker.elf', 'worker')):
-        require(read_elf(build/file)[4].get('__kui_native_e1_wait_capture_' + role) == ABSOLUTE_ONE,
-                'Frozen artifact lacks exact wait-capture marker: ' + file)
+        symbols = read_elf(build/file)[4]
+        marker = '__kui_native_maple_delay_isolation_' if maple_delay else '__kui_native_e1_wait_capture_'
+        require(symbols.get(marker + role) == ABSOLUTE_ONE,
+                'Frozen artifact lacks the selected diagnostic marker: ' + file)
+        if maple_delay:
+            require('__kui_native_e1_wait_capture_' + role not in symbols,
+                    'Maple delay artifact includes incompatible wait capture')
     provenance = json.loads((build/'entry.compile.json').read_text())
     require(provenance.get('source_dirty') is False and
             provenance.get('elf_sha256') == artifacts['entry.elf'],
@@ -149,12 +158,17 @@ def check(build, startup, record):
     mutations = [('digest-byte-' + str(i), (72+i, 1, wire[136+i] ^ 1)) for i in range(32)]
     mutations += [('image-bytes', (12, 4, len(baseline.image)-4)),
                   ('load-address', (16, 4, 0x8c010004))]
-    negatives = [run_case(baseline, wire, name, mutation) for name,mutation in mutations]
-    negatives += [run_case(baseline, wire, 'non-normal-mode-' + str(mode), mode=mode)
+    identity_message = 'MAPLE DELAY NEEDS EVOLUTION 1' if maple_delay else None
+    negatives = [run_case(baseline, wire, name, mutation, expected_message=identity_message)
+                 for name,mutation in mutations]
+    negatives += [run_case(baseline, wire, 'non-normal-mode-' + str(mode), mode=mode,
+                  expected_message=('BACKGROUND VMU REQUIRES LIVE WORKER RESERVATION'
+                    if mode in (1, 3) else 'MAPLE DELAY NEEDS NORMAL MODE') if maple_delay else None)
                   for mode in range(1, 7)]
     require(all(sha(build/name) == digest for name,digest in artifacts.items()),
             'Frozen runtime artifact changed during guard proof')
-    return dict(schema=SCHEMA, status='PASS', source_commit=provenance['commit'],
+    return dict(schema=DELAY_SCHEMA if maple_delay else SCHEMA,
+        status='PASS', source_commit=provenance['commit'],
         scope=__doc__.strip(), build=str(build), enabledmarker=True,
         artifact_sha256=artifacts, source_sha256={name:sha(ROOT/name) for name in SOURCES},
         inputs={name:dict(path=row[name], sha256=sha(row[name])) for name in ('startup','record')},
@@ -168,11 +182,13 @@ def main():
     parser.add_argument('--startup', type=Path, required=True)
     parser.add_argument('--record', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--maple-delay', action='store_true',
+                        help='Check the timed Maple-delay marker and its exact guard refusals')
     args = parser.parse_args()
-    report = check(args.build, args.startup, args.record)
+    report = check(args.build, args.startup, args.record, args.maple_delay)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n')
-    print(json.dumps(dict(schema=SCHEMA, status=report['status'],
+    print(json.dumps(dict(schema=report['schema'], status=report['status'],
         output=str(args.output), refusals=report['refusal_count'])))
 
 

@@ -167,6 +167,11 @@ def validate_variant_metadata(metadata):
         require(isinstance(entry, dict), 'Invalid isolation variant metadata')
         bypass = entry.get('maple_bypass', False)
         require(type(bypass) is bool, 'Maple-bypass metadata must be a boolean')
+        delay = entry.get('maple_delay', False)
+        require(type(delay) is bool, 'Maple-delay metadata must be a boolean')
+        if delay:
+            require(bypass is True and entry.get('maple_delay_ticks') == dict(submit=59, complete=76),
+                    'Maple delay requires the bypass control and exact 59/76 tick budgets')
         if bypass:
             require(name == 'reader-only' and entry.get('prefetch_enabled') is False and
                     entry.get('controller_tick_off') is True and
@@ -183,6 +188,7 @@ def install(root, package, variant, profile=None):
             'Invalid isolation package metadata')
     validate_variant_metadata(metadata)
     maple_bypass = metadata['variants'].get(variant, {}).get('maple_bypass', False)
+    maple_delay = metadata['variants'].get(variant, {}).get('maple_delay', False)
     gui = p.read_regular(root/GUI, root, maximum=LIMIT)
     require(sha(gui) == metadata['gui']['sha256'] and verify(gui)['build'] == metadata['gui']['build'],
             'This test requires the existing 8adf Games UI; it was not replaced. Restore/install that candidate first.')
@@ -216,7 +222,8 @@ def install(root, package, variant, profile=None):
         require(state.get('schema') == 'kui.native.isolation.state.v1' and
                 state.get('build') in {metadata['build'], *metadata.get('compatible_packages', {})} and
                 set(state.get('allowed', {})) == set(MODULES) and
-                type(state.get('maple_bypass', False)) is bool,
+                type(state.get('maple_bypass', False)) is bool and
+                type(state.get('maple_delay', False)) is bool,
                 'Invalid isolation recovery receipt')
     for name, data in current.items():
         allowed = state['allowed'][name] if state is not None else [fingerprint(original[name])]
@@ -230,11 +237,12 @@ def install(root, package, variant, profile=None):
         desired[variant] = target_module
     changes = [(name, current[name], desired[name]) for name in MODULES if current[name] != desired[name]]
     receipt = dict(schema='kui.native.isolation.state.v1', build=metadata['build'], variant=variant,
-                   pending=False, maple_bypass=maple_bypass,
+                   pending=False, maple_bypass=maple_bypass, maple_delay=maple_delay,
                    allowed={name: [fingerprint(desired[name])] for name in MODULES})
     if not changes and state == receipt:
         require(protected_snapshot(p, root, selected) == before_protected, 'Read-only files changed during inspection')
-        return dict(variant=variant, build=metadata['build'], already_installed=True, gui_unchanged=True, maple_bypass=maple_bypass,
+        return dict(variant=variant, build=metadata['build'], already_installed=True, gui_unchanged=True,
+                    maple_bypass=maple_bypass, maple_delay=maple_delay,
                     prepared_card_unchanged=True, changed_modules=[],
                     prefetch_enabled=metadata['variants'].get(variant, {}).get('prefetch_enabled'),
                     e1_wait_capture=metadata['variants'].get(variant, {}).get('e1_wait_capture', False))
@@ -262,7 +270,8 @@ def install(root, package, variant, profile=None):
         # The pending receipt accepts the exact before/after states after an
         # interrupted publication; immutable baseline copies remain untouched.
         raise
-    return dict(variant=variant, build=metadata['build'], gui_unchanged=True, maple_bypass=maple_bypass,
+    return dict(variant=variant, build=metadata['build'], gui_unchanged=True,
+                maple_bypass=maple_bypass, maple_delay=maple_delay,
                 prefetch_enabled=metadata['variants'].get(variant, {}).get('prefetch_enabled'),
                 e1_wait_capture=metadata['variants'].get(variant, {}).get('e1_wait_capture', False),
                 prepared_card_unchanged=True, changed_modules=[str(MODULES[name]) for name, _, _ in changes],
@@ -287,6 +296,9 @@ def main():
                 print('Reader support hooks remain active.')
             if result.get('prefetch_enabled') is False:
                 print('Controller read-ahead is OFF; New demand reads and SDK SCI remain enabled.')
+            if result.get('maple_delay'):
+                print('Timing control: real Maple C callbacks remain OFF; read-only delays are 59/76 TMU0 ticks.')
+                print('Check only the same Evolution transition. No capture gesture or new diagnostic photos are required.')
             if result.get('e1_wait_capture'):
                 print('At the black-screen wait, hold both triggers + B for 30 controller polls, then release.')
                 print('Photograph both short CPU/reader-state pages. NORMAL mode remains selected.')

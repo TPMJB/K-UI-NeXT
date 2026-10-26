@@ -39,6 +39,7 @@ SOURCE_FILES = ('tools/check_native_isolation_linked.py',
     'tests/test_vmu_native_sdk_poll_execution.py',
     'src/loader/vmu_native_passive.c', 'src/loader/vmu_native_reader_capture.inc',
     'src/loader/vmu_native_phase.inc', 'src/loader/vmu_native_wait_capture.inc',
+    'src/loader/vmu_native_maple_delay.inc',
     'src/loader/vmu_native_passive_hooks.S',
     'src/loader/vmu_readonly_overlay.c', 'include/kui/native_isolation.h')
 
@@ -54,11 +55,12 @@ class LoanBoundary(Exception): pass
 
 class IsolationWorker(RecordWorker):
     def __init__(self, startup, build, handoff, record, variant, tick_off=False, wait_capture=False,
-                 maple_bypass=False):
+                 maple_bypass=False, maple_delay=False):
         self.variant = variant
         self.tick_off = tick_off
         self.wait_capture = wait_capture
         self.maple_bypass = maple_bypass
+        self.maple_delay = maple_delay
         self.low = read_elf(build/'resident-sci.elf')
         self.sd_entry = self.low[4]['_kui_vmu_observe_sd_lease'][0]
         self.calls, self.tick_calls = Counter(), 0
@@ -91,6 +93,11 @@ class IsolationWorker(RecordWorker):
                     'Maple C-gateway bypass marker differs: '+role)
         require(not maple_bypass or (tick_off and variant=='reader_only' and not wait_capture),
                 'Maple C-gateway bypass requires reader-only TICK-off without wait capture')
+        for image, role in ((stage,'stage'),(worker,'worker')):
+            marker=image[4].get('__kui_native_maple_delay_isolation_'+role)
+            require(marker == ONE if maple_delay else marker is None,
+                    'Maple delay marker differs: '+role)
+        require(not maple_delay or maple_bypass, 'Maple delay requires actual C bypass')
         self.lease_bytes = LEASE
         self.worker_physical_high = self.worker_physical_low+LEASE
         self.lease_geometry_source = 'Paired actual absolute isolation lease and bottom markers'
@@ -200,11 +207,37 @@ class BypassWorker(IsolationWorker):
         names=(*BACKENDS,'_kui_vmu_native_passive_submit','_kui_vmu_native_passive_complete',
                '_reader_cooperative_service','_reader_readahead_visit','_native_wait_capture_observe')
         self.forbidden_maple_entries={self.symbols[name][0]:name for name in names if name in self.symbols}
+        self.delay_entries={}
+        self.delay_calls=Counter();self.delay_visits=[];self.delay_active=None
+        self.delay_counter=0xffff0000;self.delay_counter_reads=0;self.delay_timer_writes=0
+        if self.maple_delay:
+            self.delay_entries={self.symbols['_kui_vmu_native_maple_delay_'+name][0]:name
+                                for name in ('submit','complete')}
 
     def read(self,address,count=4):
+        if getattr(self,'bypass_running',False) and self.maple_delay:
+            # Author only the existing read-only clock profile. Each TCNT read
+            # advances the downcounter one tick; this is no CPU-cycle model.
+            clock={0xffc00000:(2,0xe0a),0xffd80008:(4,0xffffffff),
+                   0xffd80010:(2,2),0xffd80004:(1,1)}
+            if address in clock:
+                width,value=clock[address]
+                require(count==width,'Delay clock read width differs')
+                return value
+            if address==0xffd8000c:
+                require(count==4,'Delay TCNT read width differs')
+                value=self.delay_counter;self.delay_counter=(value-1)&MASK
+                self.delay_counter_reads+=1
+                return value
         if getattr(self,'bypass_running',False) and count==2:
             return PollSH.read(self,address,count)
         return super().read(address,count)
+
+    def write(self,address,value,count=4):
+        if getattr(self,'bypass_running',False) and self.maple_delay:
+            require(address not in (0xffc00000,0xffd80008,0xffd80010,0xffd80004,0xffd8000c),
+                    'Delay helper wrote a clock register')
+        return super().write(address,value,count)
 
     def plain(self,op,pc):
         if getattr(self,'bypass_running',False):
@@ -223,6 +256,17 @@ class BypassWorker(IsolationWorker):
 
     def step(self):
         if not getattr(self,'bypass_running',False):return super().step()
+        if self.delay_active is not None and self.pc==self.delay_active['return_pc']:
+            visit=self.delay_active
+            visit['counter_reads']=self.delay_counter_reads-visit.pop('first_counter_read')
+            require(visit['counter_reads']==visit['target_ticks']+2,
+                    'Actual delay helper counter interval differs from its target and endpoint checks')
+            self.delay_visits.append(visit);self.delay_active=None
+        if self.pc in self.delay_entries:
+            require(self.delay_active is None,'Delay helpers unexpectedly nested')
+            name=self.delay_entries[self.pc];self.delay_calls[name]+=1
+            self.delay_active=dict(kind=name,target_ticks=59 if name=='submit' else 76,
+                return_pc=self.pr,first_counter_read=self.delay_counter_reads)
         require(self.pc not in self.forbidden_maple_entries,
                 'Bypass gateway reached C payload: '+self.forbidden_maple_entries.get(self.pc,''))
         require(self.pc!=self.sd_entry and self.pc!=self.tick_entry,
@@ -283,11 +327,12 @@ def poll(cpu, consume=True):
                     if (int(frame['header'],16)>>8)&255 == 32])
 
 
-def run_variant(startup, record_path, build, variant, tick_off=False, wait_capture=False,maple_bypass=False):
+def run_variant(startup, record_path, build, variant, tick_off=False, wait_capture=False,
+                maple_bypass=False,maple_delay=False):
     source,image,extent=fresh_verify(startup,record_path)
     record=Record(record_path.read_bytes(),image,source)
     cls=BypassWorker if maple_bypass else IsolationWorker
-    cpu=cls(startup,build,make_handoff(),record,variant,tick_off,wait_capture,maple_bypass)
+    cpu=cls(startup,build,make_handoff(),record,variant,tick_off,wait_capture,maple_bypass,maple_delay)
     cpu.prepare();initializer=cpu.initialize_sdk()
     cpu.calls.clear()
     pristine=copy.deepcopy(cpu)
@@ -356,8 +401,15 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
             maple_c_callbacks_executed=0,submitted=submitted,completed=completed,pending=pending,
             gateway_instructions=dict(cpu.gateway_counts),assembly_frames_and_masking_retained=True,
             forced_virtual_packet_injection=False)
+        if maple_delay:
+            require(cpu.delay_calls==dict(submit=8,complete=8) and len(cpu.delay_visits)==16 and
+                    cpu.delay_active is None, 'Delay control did not execute both actual helpers each poll')
+            bypass.update(actual_delay_helper_executed=True,delay_calls=dict(cpu.delay_calls),
+                          delay_ticks=dict(submit=59,complete=76),delay_visits=cpu.delay_visits,
+                          timer_writes=cpu.delay_timer_writes,
+                          timer_model='Valid read-only TMU0; counter advances one tick per TCNT read, no CPU timing')
     return dict(variant=variant,controller_tick_off=tick_off,e1_wait_capture=wait_capture,
-                maple_bypass=maple_bypass,maple_bypass_execution=bypass,
+                maple_bypass=maple_bypass,maple_delay=maple_delay,maple_bypass_execution=bypass,
                 normal_pre_gesture=pre_gesture,artifact_sha256={name:sha((build/name).read_bytes()) for name in
                     ('entry.elf','stage.elf','native-worker.elf','native-worker.bin','native-worker.reloc','resident-sci.elf','resident-sci.bin')},
                 original_source_sha256=sha(source),record_sha256=sha(record.wire),program_extent=extent,
@@ -387,6 +439,8 @@ def main():
                         help='Write the artifact-bound collector host and NORMAL pre-gesture receipt')
     parser.add_argument('--maple-bypass',action='store_true',
                         help='Execute the paired diagnostic Maple gateways with their C calls omitted')
+    parser.add_argument('--maple-delay',action='store_true',
+                        help='Execute the read-only 59/76 tick delays while real Maple C calls stay off')
     args=parser.parse_args()
     require(__debug__, 'Assertions must remain enabled')
     require(not args.wait_capture or (args.reader_tick_off and args.collector_output),
@@ -395,12 +449,14 @@ def main():
             'Collector receipt belongs only to the explicit wait-capture control')
     require(not args.maple_bypass or (args.reader_tick_off and not args.wait_capture),
             'Maple bypass requires TICK-off and is mutually exclusive with wait capture')
+    require(not args.maple_delay or args.maple_bypass, 'Maple delay requires Maple C bypass')
     require(len(args.source_commit)==40 and all(c in '0123456789abcdef' for c in args.source_commit),
             'Expected exact runtime freeze commit')
     for build in (args.reader_build,args.standard_build):
         require(args.source_commit[:12].encode() in (build/'entry.elf').read_bytes(),
                 'Actual linked entry does not contain runtime freeze build identifier')
-    reports=[run_variant(args.startup,args.record,args.reader_build,'reader_only',args.reader_tick_off,args.wait_capture,args.maple_bypass),
+    reports=[run_variant(args.startup,args.record,args.reader_build,'reader_only',args.reader_tick_off,
+                         args.wait_capture,args.maple_bypass,args.maple_delay),
              run_variant(args.startup,args.record,args.standard_build,'standard_vmu')]
     report=dict(schema='kui.native.isolation-linked-sdk.v1',status='PASS',
                 source_commit=args.source_commit,build=args.source_commit[:12],variants=reports,

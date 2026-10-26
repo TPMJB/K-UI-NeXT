@@ -385,6 +385,72 @@ class IsolationInstallTests(unittest.TestCase):
         self.assertNotIn('30 controller polls', result.stdout)
         self.assert_protected()
 
+    def enable_maple_delay(self):
+        self.enable_maple_bypass()
+        self.metadata['variants']['reader-only'].update(maple_delay=True,
+            maple_delay_ticks=dict(submit=59, complete=76))
+        self.write_metadata()
+
+    def test_maple_delay_receipt_upgrade_and_exact_restore(self):
+        self.enable_maple_bypass()
+        self.run_variant('reader-only')
+        baseline = {p.name: p.read_bytes() for p in (self.card/installer.BACKUP).iterdir()}
+        self.upgrade_package()
+        self.enable_maple_delay()
+        self.assertIs(self.run_variant('reader-only')['maple_delay'], True)
+        state = json.loads((self.card/installer.STATE).read_text())
+        self.assertIs(state['maple_bypass'], True)
+        self.assertIs(state['maple_delay'], True)
+        with patch.object(installer, 'publish', side_effect=AssertionError('Unexpected write')):
+            self.assertTrue(self.run_variant('reader-only')['already_installed'])
+        self.assertIs(self.run_variant('vmu-only')['maple_delay'], False)
+        self.assertIs(self.run_variant('restore')['maple_delay'], False)
+        self.assertEqual({p.name: p.read_bytes() for p in (self.card/installer.BACKUP).iterdir()}, baseline)
+        for path in installer.MODULES.values():
+            self.assertEqual((self.card/path).read_bytes(), self.original[str(path)])
+        self.assert_protected()
+
+    def test_maple_delay_metadata_refuses_before_writes(self):
+        valid = dict(maple_delay=True, maple_bypass=True, prefetch_enabled=False,
+                     controller_tick_off=True, e1_wait_capture=False,
+                     maple_delay_ticks=dict(submit=59, complete=76))
+        cases = [dict(valid, maple_delay=value) for value in (None, 0, 1, 'true')]
+        cases += [dict(valid, maple_bypass=False), dict(valid, maple_delay_ticks=None),
+                  dict(valid, maple_delay_ticks=dict(submit=76, complete=59)),
+                  dict(valid, maple_delay_ticks=dict(submit=59, complete=0))]
+        for entry in cases:
+            with self.subTest(entry=entry):
+                self.metadata['variants']['reader-only'] = dict(entry)
+                self.write_metadata()
+                before = self.snapshot()
+                with self.assertRaisesRegex(ValueError, 'Maple.delay|Maple delay'):
+                    self.run_variant('reader-only')
+                self.assertEqual(self.snapshot(), before)
+
+    def test_old_maple_bypass_receipt_without_delay_field_is_supported(self):
+        self.enable_maple_bypass()
+        self.assertIs(self.run_variant('reader-only')['maple_delay'], False)
+        path = self.card/installer.STATE
+        state = json.loads(path.read_text());del state['maple_delay']
+        path.write_text(json.dumps(state))
+        self.run_variant('restore')
+        self.assert_protected()
+
+    def test_cli_maple_delay_keeps_normal_mode_and_no_capture(self):
+        self.enable_maple_delay()
+        result = subprocess.run([sys.executable, str(self.package/'install.py'), str(self.card),
+            '--profile', str(self.profile.relative_to(self.card)), '--variant', 'reader-only'],
+            cwd=self.root, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('real Maple C callbacks remain OFF', result.stdout)
+        self.assertIn('delays are 59/76 TMU0 ticks', result.stdout)
+        self.assertNotIn('30 controller polls', result.stdout)
+        manifest = json.loads((self.package/'variants/reader-only'/personalizer.MANIFEST).read_text())
+        data = (self.card/installer.MODULES['reader-only']).read_bytes()
+        offset = manifest['runtime_mode_module_offset']
+        self.assertEqual(mode.decode_mode(data[offset:offset+32]), mode.NORMAL)
+        self.assert_protected()
+
     def test_cli_capture_instructions_keep_normal_mode_and_two_pages(self):
         self.metadata['variants']['reader-only'].update(e1_wait_capture=True, prefetch_enabled=False)
         self.write_metadata()

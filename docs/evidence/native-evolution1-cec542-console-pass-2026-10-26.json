@@ -5,7 +5,7 @@
   "archive_sha256": "c0515ebb1ab6a30d0d76c533b3d7f8e9799d7036d5f2e8a56fdaeccc8c658f5d",
   "owner_report": "It passed!",
   "requested_console_test": "Same Evolution 1 image, SCI/New(X), reader-only installation. Pass the prior black-screen transition and play the opening FMV.",
-  "reported_result": "PASS",
+  "reported_result": "CONFIRMED PASS ON TWO RUNS",
   "selection_basis": "Owner follow-up to the delivered test instructions; no new instrumented reader-selection capture.",
   "control": {
     "new_demand_reader": true,
@@ -22,7 +22,6 @@
   },
   "conclusion": "The New demand reader can pass the transition with both passive Maple C callbacks bypassed. The removed C path is implicated; timing is not yet distinguished from earlier packet-chain or cache/bus side effects.",
   "not_established": [
-    "A second cold-boot repetition has been requested but not yet reported.",
     "Virtual VMU detection, saving and loading in this bypass build are not tested; virtual VMU is deliberately disabled.",
     "The pass does not prove universal New-reader compatibility or identify a defective instruction."
   ],
@@ -33,5 +32,10 @@
     "clock_hz_under_validated_profile": 781250,
     "reference_source": "native-evolution1-f158-capture-2026-10-26.json phase_pvr",
     "timing_limit": "The reference spans include PROFILE instrumentation; they are not exact NORMAL callback budgets. The roughly 3.374 ms submit-to-completion separation is not a C-callback duration."
-  }
+  },
+  "owner_reports": [
+    "It passed!",
+    "Tested it again, it works again. This is a passing build. Not sure why you wanted a second test"
+  ],
+  "repeat_test": "Owner confirms the same build passed again after a requested cold boot."
 }
