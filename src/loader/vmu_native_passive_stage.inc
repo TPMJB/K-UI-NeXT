@@ -220,6 +220,14 @@ static void __attribute__((noipa)) native_passive_lease_only(
 }
 #endif
 static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
+#if KUI_NATIVE_E1_WAIT_CAPTURE
+    /* This observation has an exact original-frame contract. Check its full
+     * independently verified identity before publishing any worker hooks. */
+    if(!kui_vmu_native_trace_image(&native_driver))
+        stopped("WAIT CAPTURE NEEDS EVOLUTION 1",native_driver.image_bytes);
+    if(native_runtime_mode()!=KUI_VMU_NATIVE_MODE_NORMAL)
+        stopped("WAIT CAPTURE NEEDS NORMAL MODE",native_runtime_mode());
+#endif
     const uint32_t span=KUI_VMU_NATIVE_PASSIVE_SPAN;
     uint32_t load=(lease->payload&UINT32_C(0x1fffffff))|UINT32_C(0x80000000),dest=load+UINT32_C(0x20000000);
     uint32_t bytes=(uint32_t)(__native_worker_blob_end-__native_worker_blob_begin);
@@ -420,6 +428,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #if KUI_NATIVE_READER_ONLY_ISOLATION
 #if KUI_NATIVE_RA_TICK_OFF_ISOLATION
+#if KUI_NATIVE_E1_WAIT_CAPTURE
+    retail_display_line("EVO1 WAIT CAPTURE / NORMAL");
+#endif
     retail_display_line("NEW DEMAND / PREFETCH OFF");
     retail_display_line("VIRTUAL VMU OFF");
 #else

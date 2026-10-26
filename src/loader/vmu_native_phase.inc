@@ -41,11 +41,13 @@ struct native_raw_owner {
     };
     uint32_t data[NATIVE_RAW_OWNER_WORDS];
 };
+#include "vmu_native_wait_capture.inc"
 struct native_phase_state {
     uint32_t enabled,sequence,count,valid,waits,wraps;
     union {
         struct {struct native_phase_record pending,ring[NATIVE_PHASE_RECORDS];};
         struct native_raw_owner raw;
+        struct native_wait_capture wait;
     };
 };
 _Static_assert(KUI_VMU_NATIVE_PROFILE_SUBMIT==0u && KUI_VMU_NATIVE_PROFILE_COMPLETE==1u,

@@ -69,6 +69,13 @@ static void reader_only_setup(unsigned mode) {
     put(l->begin,4u,l->owner.sentinel);put(l->begin+4u,4u,l->remaining);
     put(l->header+4u,4u,l->units);
     input.runtime.lease_bytes=input.runtime.required_lease_bytes=l->lease_bytes;
+#if KUI_NATIVE_E1_WAIT_CAPTURE
+    static const uint8_t e1_sha[32]={
+        0xff,0xb5,0xa8,0xe5,0xff,0x55,0x47,0x02,0x6d,0x93,0x64,0x9e,0x1f,0x90,0x58,0xb7,
+        0xee,0x5e,0x29,0xd8,0xd0,0xff,0x8a,0x89,0x33,0x57,0x01,0xf7,0xe9,0x64,0x7f,0x35};
+    input.driver.image_bytes=input.exits.image_bytes=l->owner.image_bytes=2143652u;
+    memcpy(input.driver.image_sha256,e1_sha,sizeof(e1_sha));
+#endif
     input.diagnostics=mode;prepare_handoff();model_card.bus.transfer_block=block_transfer;
     lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
     release_saw_unpublished=false;arm();install_hooks();reader_bind();
@@ -103,7 +110,10 @@ static void absent_batch(unsigned command,unsigned phase) {
     CHECK(tick_visits==before_ticks+((fast && !KUI_NATIVE_RA_TICK_OFF_ISOLATION)?1u:0u));
     CHECK(value_at(0xa05f6c04u)==state.source);no_virtual_or_storage();
 }
-int main(void) {
+#ifndef KUI_READER_ONLY_TEST_MAIN
+#define KUI_READER_ONLY_TEST_MAIN main
+#endif
+int KUI_READER_ONLY_TEST_MAIN(void) {
     map_exact(UINT32_C(0x8c720000),4096u);
     map_exact(UINT32_C(0xac721000),4096u);
     for(unsigned mode=KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL;

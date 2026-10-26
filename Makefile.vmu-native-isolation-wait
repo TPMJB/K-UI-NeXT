@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Exact Evolution1, gesture-triggered wait operands on the unchanged failing
+# New demand/VMU-off/TICK-off control. NORMAL only; phase storage is reused.
+BUILD ?= build/native-isolation-wait
+include Makefile.vmu-native-isolation-demand
+FLAGS += -DKUI_NATIVE_E1_WAIT_CAPTURE=1
+NATIVE_FLAGS += -DKUI_NATIVE_E1_WAIT_CAPTURE=1
+
+.PHONY: isolation-wait-host-tests
+isolation-wait-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(ISOLATION_READER_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 \
+	 tests/test_vmu_native_wait_observer.c $(COMPAT_WORKER_HOST_SRC) \
+	 -Wl,--gc-sections -Wl,--section-start=.isolation_tick=0x8c722000 \
+	 -o $(BUILD)/test-wait-observer
+	$(BUILD)/test-wait-observer
