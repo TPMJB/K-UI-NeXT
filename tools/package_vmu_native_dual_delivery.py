@@ -280,8 +280,8 @@ def package(args):
                               baseline_module_sha256=sha(baseline), unchanged_reader_components=unchanged_components,
                               low_readers_and_auxiliary_identical_except_reviewed_owner_stack_bound_and_build_label=True,
                               low_reader_delta='One decoded owner-stack lower-bound literal in each low hook; scheduling and producer policy unchanged',
-                              worker_change='Exact original-tail or arena-bottom lease identity with existing lifetime/free-overlap checks; guarded timer callbacks and terminal-only PROFILE stack/video observer',
-                              cold_stage_change='Six typed callbacks selected from the actual reader; original allocator reserves the bottom chunk and restores the original upper allocation boundary',
+                              worker_change='Exact original-tail or arena-bottom lease identity with existing lifetime/free-overlap checks; guarded timer callbacks and terminal-only PROFILE stack/video observer; standard Visual Memory product-class reply retains storage-only capabilities',
+                              cold_stage_change='Six typed callbacks selected from the actual reader; original allocator reserves the bottom chunk and restores the original upper allocation boundary; verified private-pool split budgets the exact physical lease cost',
                               games_ui_change='New reader selected by default; explicit reader choices retained')
     ra, sdk = report['read_ahead'], report['sdk_sci_route']
     require(ra.get('dual_reader_candidate') is True and
@@ -370,7 +370,7 @@ def package(args):
                   'evidence/host-tests.log': args.host_log.read_bytes(),
                   'evidence/package-audit.log': args.package_log.read_bytes()})
     for path in sorted((ROOT/'docs/evidence').glob('native-*2026-10-2[56].json')):
-        if any(word in path.name for word in ('structural', 'joint', 'pio-pair-observed', 'new-structural', 'console-followup', 'followup-review', 'terminal-dispatch', 'startup-source-pass', 'card-preflight', 'new-default', 'raw-owner', 'selected-low', 'dual-low-callback', 'doa2-smaller', 'doa2-fixed', 'crazy-taxi-source-admission', 'bottom-heap')):
+        if any(word in path.name for word in ('structural', 'joint', 'pio-pair-observed', 'new-structural', 'console-followup', 'followup-review', 'terminal-dispatch', 'startup-source-pass', 'card-preflight', 'new-default', 'raw-owner', 'selected-low', 'dual-low-callback', 'doa2-smaller', 'doa2-fixed', 'crazy-taxi-source-admission', 'bottom-heap', 'private-pool', 'vmu-product-class')):
             files['evidence/'+path.name] = path.read_bytes()
     candidate = dict(schema='kui.native.universal-readers.candidate.v1', source_commit=commit,
                      source_tree=tree, build=revision, module_sha256=sha(module),
@@ -385,6 +385,9 @@ def package(args):
                      console_followup_f241=json.loads((ROOT/'docs/evidence/native-console-followup-f241-2026-10-25.json').read_text()),
                      console_followup_c29=json.loads((ROOT/'docs/evidence/native-console-followup-c29-2026-10-26.json').read_text()),
                      bottom_heap_followup=json.loads((ROOT/'docs/evidence/native-bottom-heap-reservation-2026-10-26.json').read_text()),
+                     private_pool_capacity=json.loads((ROOT/'docs/evidence/native-private-pool-capacity-2026-10-26.json').read_text()),
+                     vmu_product_class=json.loads((ROOT/'docs/evidence/native-vmu-product-class-2026-10-26.json').read_text()),
+                     console_followup_cd3318=json.loads((ROOT/'docs/evidence/native-console-followup-cd3318-new-2026-10-26.json').read_text()),
                      new_default_followup=json.loads((ROOT/'docs/evidence/native-new-default-followup-review-2026-10-26.json').read_text()),
                      raw_owner_terminal_followup=json.loads((ROOT/'docs/evidence/native-raw-owner-terminal-review-2026-10-26.json').read_text()),
                      additional_source_input_reviews=dict(

@@ -1,0 +1,1969 @@
+{
+  "schema": "kui.native.private-pool-linked-profile-review.v1",
+  "old_build": "cd3318f0f457",
+  "new_prototype_build": "d8d4ea09b542",
+  "rows": [
+    {
+      "name": "_select_resident",
+      "old_bytes": 272,
+      "new_bytes": 272,
+      "old_sha256": "0df8756e0bec92324e6a458fd7720f3efab02d041055dea229fd268421c8c556",
+      "new_sha256": "d0f4cda1fab6707c306935f8f39d9a6fb13eaf2b4b530b7ec6d71a8e9aa504b0",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 86,
+      "changed_literal_slots": [
+        {
+          "offset": 180,
+          "before": "0x8ce6059c",
+          "after": "0x8ce612dc",
+          "roles": [
+            "_resident_limit+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 184,
+          "before": "0x8ce2cd24",
+          "after": "0x8ce2d964",
+          "roles": [
+            "_kui_native_dual_reader_capability+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 192,
+          "before": "0x8ce2cd28",
+          "after": "0x8ce2d968",
+          "roles": [
+            "_kui_native_dual_reader_capability+4"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 200,
+          "before": "0x8ce2cd2c",
+          "after": "0x8ce2d96c",
+          "roles": [
+            "_kui_native_dual_reader_capability+8"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 204,
+          "before": "0x8ce2cd30",
+          "after": "0x8ce2d970",
+          "roles": [
+            "_kui_native_dual_reader_capability+12"
+          ],
+          "same_text": " "
+        },
+        {
+          "offset": 208,
+          "before": "0x8ce2cd34",
+          "after": "0x8ce2d974",
+          "roles": [
+            "_kui_native_dual_reader_capability+16"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 212,
+          "before": "0x8ce2cd38",
+          "after": "0x8ce2d978",
+          "roles": [
+            "_kui_native_dual_reader_capability+20"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 216,
+          "before": "0x8ce2cd3c",
+          "after": "0x8ce2d97c",
+          "roles": [
+            "_kui_native_dual_reader_capability+24"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 224,
+          "before": "0x8ce2cd40",
+          "after": "0x8ce2d980",
+          "roles": [
+            "_kui_native_dual_reader_capability+28"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 228,
+          "before": "0x8ce8c2c0",
+          "after": "0x8ce8d000",
+          "roles": [
+            "_manifest+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 232,
+          "before": "0x8ce31d70",
+          "after": "0x8ce32aac",
+          "roles": [
+            "__retail_resident_sci_blob_start+0",
+            "__retail_resident_scif_blob_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 236,
+          "before": "0x8ce35890",
+          "after": "0x8ce365cc",
+          "roles": [
+            "__retail_resident_ide_blob_start+0",
+            "__retail_resident_sci_blob_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 240,
+          "before": "0x8ce605a4",
+          "after": "0x8ce612e4",
+          "roles": [
+            "_resident_blob+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 244,
+          "before": "0x8ce605a0",
+          "after": "0x8ce612e0",
+          "roles": [
+            "_resident_bytes+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 264,
+          "before": "0x8ce3ced0",
+          "after": "0x8ce3dc0c",
+          "roles": [
+            "__retail_resident_legacy_blob_start+0",
+            "__retail_resident_scia_blob_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 268,
+          "before": "0x8ce409dc",
+          "after": "0x8ce41718",
+          "roles": [
+            "__retail_resident_legacy_blob_end+0",
+            "__retail_stage_binary_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 260,
+          "before": "0x8ce2bb28",
+          "after": "0x8ce2c768",
+          "roles": [],
+          "same_text": "DUAL NATIVE READER NEEDS SCI X OR Y"
+        },
+        {
+          "offset": 252,
+          "before": "0x8ce2bb08",
+          "after": "0x8ce2c748",
+          "roles": [],
+          "same_text": "DUAL READER CAPABILITY INVALID"
+        }
+      ]
+    },
+    {
+      "name": "_native_dual_reader_bind",
+      "old_bytes": 68,
+      "new_bytes": 68,
+      "old_sha256": "87c92a968a770c752abe31c2ac117343ece8dd6f1a6c74076f0f9867e0feb1c3",
+      "new_sha256": "5fff937241cfe9180348ea8935d3bc157858bc8558f737283f3788937325e412",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 26,
+      "changed_literal_slots": [
+        {
+          "offset": 52,
+          "before": "0x8ce8c2c0",
+          "after": "0x8ce8d000",
+          "roles": [
+            "_manifest+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 60,
+          "before": "0x8ce01c10",
+          "after": "0x8ce01cf0",
+          "roles": [
+            "_native_sdk_sci_route_bind+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 64,
+          "before": "0x8ce01fc8",
+          "after": "0x8ce020a8",
+          "roles": [
+            "_native_readahead_bind+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_native_dual_u32",
+      "old_bytes": 30,
+      "new_bytes": 30,
+      "old_sha256": "c13060e358e2a0e9f53878d9aa8b77d1fbfb03a31b8c4e049dc49bf3e7feec6c",
+      "new_sha256": "c13060e358e2a0e9f53878d9aa8b77d1fbfb03a31b8c4e049dc49bf3e7feec6c",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_native_sdk_sci_route_bind",
+      "old_bytes": 952,
+      "new_bytes": 952,
+      "old_sha256": "6a52b235bb8e1ae94802be41b82eff0ba164e22f5ad81029214d3ca9c53dbe79",
+      "new_sha256": "a366c11867c6fbe03b9895692ac38406a66722e7ae526934935ca56a47625338",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 380,
+      "changed_literal_slots": [
+        {
+          "offset": 616,
+          "before": "0x8ce07068",
+          "after": "0x8ce07164",
+          "roles": [
+            "_retail_display_line+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 620,
+          "before": "0x8ce2bcb8",
+          "after": "0x8ce2c8f8",
+          "roles": [],
+          "same_text": "COLD 40 SDK ROUTE BIND BEGIN"
+        },
+        {
+          "offset": 624,
+          "before": "0x8ce605a0",
+          "after": "0x8ce612e0",
+          "roles": [
+            "_resident_bytes+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 628,
+          "before": "0x8ce605a4",
+          "after": "0x8ce612e4",
+          "roles": [
+            "_resident_blob+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 632,
+          "before": "0x8ce061d6",
+          "after": "0x8ce062d2",
+          "roles": [
+            "_memcpy+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 656,
+          "before": "0x8ce6059c",
+          "after": "0x8ce612dc",
+          "roles": [
+            "_resident_limit+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 664,
+          "before": "0x8ce0621e",
+          "after": "0x8ce0631a",
+          "roles": [
+            "_memcmp+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 724,
+          "before": "0x8ce8de68",
+          "after": "0x8ce8eba8",
+          "roles": [
+            "__retail_stage_bss_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 744,
+          "before": "0x8ce15034",
+          "after": "0x8ce15c6c",
+          "roles": [
+            "_kui_native_sdk_sci_route_admit+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 752,
+          "before": "0x8ce605a8",
+          "after": "0x8ce612e8",
+          "roles": [
+            "_exec_bytes+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 756,
+          "before": "0x8ce50f84",
+          "after": "0x8ce51cc4",
+          "roles": [
+            "_native_driver+72"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 776,
+          "before": "0x8ce2bcd8",
+          "after": "0x8ce2c918",
+          "roles": [],
+          "same_text": "SDK SCI ROUTE READY / LEVEL 1"
+        },
+        {
+          "offset": 780,
+          "before": "0x8ce2bcf8",
+          "after": "0x8ce2c938",
+          "roles": [],
+          "same_text": "COLD 41 SDK ROUTE BOUND"
+        },
+        {
+          "offset": 760,
+          "before": "0x8ce15350",
+          "after": "0x8ce15f88",
+          "roles": [
+            "_kui_native_sdk_sci_route_discover+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_native_sdk_sci_route_admit",
+      "old_bytes": 796,
+      "new_bytes": 796,
+      "old_sha256": "7e7fa1dac5d65412b970666d6e955380361d525724e0dd97851ad8fca827ad31",
+      "new_sha256": "e66998694841afade7ef17f63b79926539f83851591d5bfb842500c0560da8ed",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 345,
+      "changed_literal_slots": [
+        {
+          "offset": 424,
+          "before": "0x8ce1500c",
+          "after": "0x8ce15c44",
+          "roles": [
+            "_overlap.constprop.0+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 428,
+          "before": "0x8ce061bc",
+          "after": "0x8ce062b8",
+          "roles": [
+            "_memset+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 432,
+          "before": "0x8ce0621e",
+          "after": "0x8ce0631a",
+          "roles": [
+            "_memcmp+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 436,
+          "before": "0x8ce2defc",
+          "after": "0x8ce2ec38",
+          "roles": [
+            "_owners+20"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 444,
+          "before": "0x8ce2dee8",
+          "after": "0x8ce2ec24",
+          "roles": [
+            "_owners+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 464,
+          "before": "0x8ce14e44",
+          "after": "0x8ce15a7c",
+          "roles": [
+            "_u32+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 468,
+          "before": "0x8ce073f8",
+          "after": "0x8ce074f4",
+          "roles": [
+            "_kui_sha256_init+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 472,
+          "before": "0x8ce0744c",
+          "after": "0x8ce07548",
+          "roles": [
+            "_kui_sha256_update+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 476,
+          "before": "0x8ce07650",
+          "after": "0x8ce0774c",
+          "roles": [
+            "_kui_sha256_digest+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 480,
+          "before": "0x8ce14ef4",
+          "after": "0x8ce15b2c",
+          "roles": [
+            "_fingerprint+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 780,
+          "before": "0x8ce14e64",
+          "after": "0x8ce15a9c",
+          "roles": [
+            "_live_words+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 784,
+          "before": "0x8ce2dee8",
+          "after": "0x8ce2ec24",
+          "roles": [
+            "_owners+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 788,
+          "before": "0x8ce14e44",
+          "after": "0x8ce15a7c",
+          "roles": [
+            "_u32+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 440,
+          "before": "0x8ce2dff0",
+          "after": "0x8ce2ed2c",
+          "roles": [
+            "_owners+264"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_native_sdk_sci_route_discover",
+      "old_bytes": 1856,
+      "new_bytes": 1856,
+      "old_sha256": "b46be79f7dca6c9a52613004a506170f25ea4ab047757141fe751f422e1e4f46",
+      "new_sha256": "7580beaf4df91dfed711c09e11b1ea5c9aef2cd63bc9a35c5c9037b2a1998b41",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 785,
+      "changed_literal_slots": [
+        {
+          "offset": 324,
+          "before": "0x8ce1500c",
+          "after": "0x8ce15c44",
+          "roles": [
+            "_overlap.constprop.0+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 328,
+          "before": "0x8ce061bc",
+          "after": "0x8ce062b8",
+          "roles": [
+            "_memset+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 360,
+          "before": "0x8ce14e44",
+          "after": "0x8ce15a7c",
+          "roles": [
+            "_u32+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 368,
+          "before": "0x8ce14ef4",
+          "after": "0x8ce15b2c",
+          "roles": [
+            "_fingerprint+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 372,
+          "before": "0x8ce2dec8",
+          "after": "0x8ce2ec04",
+          "roles": [
+            "_family_vector_prefix+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 792,
+          "before": "0x8ce14f4c",
+          "after": "0x8ce15b84",
+          "roles": [
+            "_normalized+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 796,
+          "before": "0x8ce2ddc8",
+          "after": "0x8ce2eb04",
+          "roles": [
+            "_family_init+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 800,
+          "before": "0x8ce2dd4e",
+          "after": "0x8ce2ea8a",
+          "roles": [
+            "_init_holes.3+0"
+          ],
+          "same_text": "*"
+        },
+        {
+          "offset": 804,
+          "before": "0x8ce14eb4",
+          "after": "0x8ce15aec",
+          "roles": [
+            "_literal_at+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 812,
+          "before": "0x8ce14e44",
+          "after": "0x8ce15a7c",
+          "roles": [
+            "_u32+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1232,
+          "before": "0x8ce14e44",
+          "after": "0x8ce15a7c",
+          "roles": [
+            "_u32+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1256,
+          "before": "0x8ce14eb4",
+          "after": "0x8ce15aec",
+          "roles": [
+            "_literal_at+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1260,
+          "before": "0x8ce14f4c",
+          "after": "0x8ce15b84",
+          "roles": [
+            "_normalized+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1264,
+          "before": "0x8ce2dea8",
+          "after": "0x8ce2ebe4",
+          "roles": [
+            "_family_vector+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1268,
+          "before": "0x8ce2dd4a",
+          "after": "0x8ce2ea86",
+          "roles": [
+            "_vector_holes.2+0"
+          ],
+          "same_text": "L"
+        },
+        {
+          "offset": 1272,
+          "before": "0x8ce2de88",
+          "after": "0x8ce2ebc4",
+          "roles": [
+            "_family_normal+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1276,
+          "before": "0x8ce2de28",
+          "after": "0x8ce2eb64",
+          "roles": [
+            "_compact_normal+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1536,
+          "before": "0x8ce2de68",
+          "after": "0x8ce2eba4",
+          "roles": [
+            "_family_fpu+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1540,
+          "before": "0x8ce2de08",
+          "after": "0x8ce2eb44",
+          "roles": [
+            "_compact_fpu+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1544,
+          "before": "0x8ce14f4c",
+          "after": "0x8ce15b84",
+          "roles": [
+            "_normalized+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1548,
+          "before": "0x8ce2dde8",
+          "after": "0x8ce2eb24",
+          "roles": [
+            "_compact_default+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1552,
+          "before": "0x8ce2dd40",
+          "after": "0x8ce2ea7c",
+          "roles": [
+            "_default_holes.1+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1556,
+          "before": "0x8ce2dd50",
+          "after": "0x8ce2ea8c",
+          "roles": [
+            "_helper_windows+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1560,
+          "before": "0x8ce14ef4",
+          "after": "0x8ce15b2c",
+          "roles": [
+            "_fingerprint+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1564,
+          "before": "0x8ce14e44",
+          "after": "0x8ce15a7c",
+          "roles": [
+            "_u32+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1852,
+          "before": "0x8ce14e64",
+          "after": "0x8ce15a9c",
+          "roles": [
+            "_live_words+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1568,
+          "before": "0x8ce2de48",
+          "after": "0x8ce2eb84",
+          "roles": [
+            "_family_default+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_u32",
+      "old_bytes": 30,
+      "new_bytes": 30,
+      "old_sha256": "6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334",
+      "new_sha256": "6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_fingerprint",
+      "old_bytes": 88,
+      "new_bytes": 88,
+      "old_sha256": "a8e1402ebf7e7fc47744df3dfe246d1a073cd23de99489d30007543e5a563cae",
+      "new_sha256": "6b308b9169903ffb9ba47a4ebdbfb017602db6571613133b82fb823ba5a73921",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 35,
+      "changed_literal_slots": [
+        {
+          "offset": 72,
+          "before": "0x8ce073f8",
+          "after": "0x8ce074f4",
+          "roles": [
+            "_kui_sha256_init+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 76,
+          "before": "0x8ce0744c",
+          "after": "0x8ce07548",
+          "roles": [
+            "_kui_sha256_update+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 80,
+          "before": "0x8ce07650",
+          "after": "0x8ce0774c",
+          "roles": [
+            "_kui_sha256_digest+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 84,
+          "before": "0x8ce0621e",
+          "after": "0x8ce0631a",
+          "roles": [
+            "_memcmp+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_live_words",
+      "old_bytes": 80,
+      "new_bytes": 80,
+      "old_sha256": "b89da2e18b1204a0f6ad339e89144e637a7de98581f3a6c39b546b30ce8b9854",
+      "new_sha256": "086aa5c615fa7ceda4b39fc16df0ec561bdf56bbb4d739940b8325f84bc64a19",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 38,
+      "changed_literal_slots": [
+        {
+          "offset": 76,
+          "before": "0x8ce14e44",
+          "after": "0x8ce15a7c",
+          "roles": [
+            "_u32+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_literal_at",
+      "old_bytes": 62,
+      "new_bytes": 62,
+      "old_sha256": "1712d6126cb969c7f2f21fb2de718960809b1782d1b39a06f772a21af78e16fe",
+      "new_sha256": "1712d6126cb969c7f2f21fb2de718960809b1782d1b39a06f772a21af78e16fe",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_normalized",
+      "old_bytes": 192,
+      "new_bytes": 192,
+      "old_sha256": "08227c256886f38951f54edd0bdc950ae8619e6023207bb8ae0ea4ac7a95ec70",
+      "new_sha256": "f56cfd282780b2f5d672f5b374fa7fca959623006178d2a7949915d2ddc3bfd1",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 84,
+      "changed_literal_slots": [
+        {
+          "offset": 172,
+          "before": "0x8ce073f8",
+          "after": "0x8ce074f4",
+          "roles": [
+            "_kui_sha256_init+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 176,
+          "before": "0x8ce0744c",
+          "after": "0x8ce07548",
+          "roles": [
+            "_kui_sha256_update+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 180,
+          "before": "0x8ce2dd3c",
+          "after": "0x8ce2ea78",
+          "roles": [
+            "_zero.0+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 184,
+          "before": "0x8ce07650",
+          "after": "0x8ce0774c",
+          "roles": [
+            "_kui_sha256_digest+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 188,
+          "before": "0x8ce0621e",
+          "after": "0x8ce0631a",
+          "roles": [
+            "_memcmp+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_native_readahead_bind",
+      "old_bytes": 1260,
+      "new_bytes": 1260,
+      "old_sha256": "d55ab4f4cb5c4b3ed63e8f2710be1f76a119a47a3db548dcf73539967961a54d",
+      "new_sha256": "15884ca7b30f8e684e7f4c744f9812c1e56ebbb80e0ec9dc0eef0169de95b822",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 498,
+      "changed_literal_slots": [
+        {
+          "offset": 564,
+          "before": "0x8ce07068",
+          "after": "0x8ce07164",
+          "roles": [
+            "_retail_display_line+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 568,
+          "before": "0x8ce2bd10",
+          "after": "0x8ce2c950",
+          "roles": [],
+          "same_text": "COLD 42 READ AHEAD BIND BEGIN"
+        },
+        {
+          "offset": 572,
+          "before": "0x8ce605a0",
+          "after": "0x8ce612e0",
+          "roles": [
+            "_resident_bytes+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 576,
+          "before": "0x8ce605a4",
+          "after": "0x8ce612e4",
+          "roles": [
+            "_resident_blob+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 580,
+          "before": "0x8ce061d6",
+          "after": "0x8ce062d2",
+          "roles": [
+            "_memcpy+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 604,
+          "before": "0x8ce6059c",
+          "after": "0x8ce612dc",
+          "roles": [
+            "_resident_limit+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 616,
+          "before": "0x8ce0621e",
+          "after": "0x8ce0631a",
+          "roles": [
+            "_memcmp+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 656,
+          "before": "0x8ce28880",
+          "after": "0x8ce294c0",
+          "roles": [
+            "__native_worker_reloc_end+0",
+            "_native_ra_aux_blob_start+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 660,
+          "before": "0x8ce2b080",
+          "after": "0x8ce2bcc0",
+          "roles": [
+            "_native_ra_aux_blob_end+0",
+            "_native_ra_aux_reloc_start+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 664,
+          "before": "0x8ce2b080",
+          "after": "0x8ce2bcc0",
+          "roles": [
+            "_native_ra_aux_blob_end+0",
+            "_native_ra_aux_reloc_start+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 668,
+          "before": "0x8ce2b3b0",
+          "after": "0x8ce2bff0",
+          "roles": [
+            "_native_ra_aux_reloc_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 916,
+          "before": "0x8ce0a1e8",
+          "after": "0x8ce0ae20",
+          "roles": [
+            "_kui_vmu_native_relocate+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 920,
+          "before": "0x8ce2b080",
+          "after": "0x8ce2bcc0",
+          "roles": [
+            "_native_ra_aux_blob_end+0",
+            "_native_ra_aux_reloc_start+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 924,
+          "before": "0x8ce28880",
+          "after": "0x8ce294c0",
+          "roles": [
+            "__native_worker_reloc_end+0",
+            "_native_ra_aux_blob_start+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 928,
+          "before": "0x8ce061bc",
+          "after": "0x8ce062b8",
+          "roles": [
+            "_memset+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1212,
+          "before": "0x8ce07068",
+          "after": "0x8ce07164",
+          "roles": [
+            "_retail_display_line+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1220,
+          "before": "0x8ce2bd30",
+          "after": "0x8ce2c970",
+          "roles": [],
+          "same_text": "COLD 43 AUXILIARY INITIALIZE BEGIN"
+        },
+        {
+          "offset": 1232,
+          "before": "0x8ce15ca0",
+          "after": "0x8ce168d8",
+          "roles": [
+            "_kui_vmu_native_worker_call+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1236,
+          "before": "0x8ce2bd54",
+          "after": "0x8ce2c994",
+          "roles": [],
+          "same_text": "COLD 44 AUXILIARY INITIALIZED"
+        },
+        {
+          "offset": 1252,
+          "before": "0x8ce2bd74",
+          "after": "0x8ce2c9b4",
+          "roles": [],
+          "same_text": "BOUNDED READ AHEAD READY / 192 KIB CACHE"
+        },
+        {
+          "offset": 1256,
+          "before": "0x8ce2bda0",
+          "after": "0x8ce2c9e0",
+          "roles": [],
+          "same_text": "COLD 45 READ AHEAD BOUND"
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_background_map_address",
+      "old_bytes": 92,
+      "new_bytes": 92,
+      "old_sha256": "cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8",
+      "new_sha256": "cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_native_loader_timeline_bind",
+      "old_bytes": 180,
+      "new_bytes": 180,
+      "old_sha256": "743a44087cc4ba782cc765f32d463120bd7e3034dd65bc13ae1a92a1a97afd49",
+      "new_sha256": "743a44087cc4ba782cc765f32d463120bd7e3034dd65bc13ae1a92a1a97afd49",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_native_passive_run",
+      "old_bytes": 2004,
+      "new_bytes": 2004,
+      "old_sha256": "e9822e4b3f7f8c72380bef76814d638ed6bf0a8727fc506f00d7f15076dc352e",
+      "new_sha256": "7431c08b14b678e0fd4c5b11b448f99c2df345b5e077cd633fbd0c389e58a44f",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 783,
+      "changed_literal_slots": [
+        {
+          "offset": 372,
+          "before": "0x8ce26980",
+          "after": "0x8ce275c0",
+          "roles": [
+            "__native_worker_blob_end+0",
+            "__native_worker_reloc_begin+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 376,
+          "before": "0x8ce17300",
+          "after": "0x8ce17f40",
+          "roles": [
+            "__native_worker_blob_begin+0",
+            "__vmu_sd_profile_blob_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 388,
+          "before": "0x8ce50f3c",
+          "after": "0x8ce51c7c",
+          "roles": [
+            "_native_driver+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 392,
+          "before": "0x8ce09d50",
+          "after": "0x8ce09e4c",
+          "roles": [
+            "_kui_vmu_native_heap_lease_valid+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 404,
+          "before": "0x8ce061bc",
+          "after": "0x8ce062b8",
+          "roles": [
+            "_memset+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 412,
+          "before": "0x8ce061d6",
+          "after": "0x8ce062d2",
+          "roles": [
+            "_memcpy+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 416,
+          "before": "0x8ce40d00",
+          "after": "0x8ce41a40",
+          "roles": [
+            "_passive_layout+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 424,
+          "before": "0x8ce8b8bc",
+          "after": "0x8ce8c5fc",
+          "roles": [
+            "_display+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 428,
+          "before": "0x8ce50fa4",
+          "after": "0x8ce51ce4",
+          "roles": [
+            "_native_persist_ready+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 432,
+          "before": "0x8ce0c9f4",
+          "after": "0x8ce0d62c",
+          "roles": [
+            "_kui_vmu_persist_stage_handoff_matches+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 436,
+          "before": "0x8ce50fa8",
+          "after": "0x8ce51ce8",
+          "roles": [
+            "_native_persist_handoff+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 440,
+          "before": "0x8ce5faf4",
+          "after": "0x8ce60834",
+          "roles": [
+            "_native_persist_profile+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 444,
+          "before": "0x8ce01558",
+          "after": "0x8ce015b4",
+          "roles": [
+            "_native_low_configure+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 448,
+          "before": "0x8ce40cd0",
+          "after": "0x8ce41a10",
+          "roles": [
+            "_native_exits+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 840,
+          "before": "0x8ce07068",
+          "after": "0x8ce07164",
+          "roles": [
+            "_retail_display_line+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 844,
+          "before": "0x8ce2bdbc",
+          "after": "0x8ce2c9fc",
+          "roles": [],
+          "same_text": "COLD 30 READER MAP BIND BEGIN"
+        },
+        {
+          "offset": 856,
+          "before": "0x8ce8c2c0",
+          "after": "0x8ce8d000",
+          "roles": [
+            "_manifest+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 872,
+          "before": "0x8ce8b940",
+          "after": "0x8ce8c680",
+          "roles": [
+            "_native_background_boot_region+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 880,
+          "before": "0x8ce01584",
+          "after": "0x8ce015e0",
+          "roles": [
+            "_native_low_bind_map+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 884,
+          "before": "0x8ce28880",
+          "after": "0x8ce294c0",
+          "roles": [
+            "__native_worker_reloc_end+0",
+            "_native_ra_aux_blob_start+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 888,
+          "before": "0x8ce2bddc",
+          "after": "0x8ce2ca1c",
+          "roles": [],
+          "same_text": "COLD 31 READER MAP BOUND"
+        },
+        {
+          "offset": 892,
+          "before": "0x8ce071f8",
+          "after": "0x8ce072f4",
+          "roles": [
+            "_retail_display_restore+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 896,
+          "before": "0x8ce8b8bc",
+          "after": "0x8ce8c5fc",
+          "roles": [
+            "_display+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 904,
+          "before": "0x8ce2bdf8",
+          "after": "0x8ce2ca38",
+          "roles": [],
+          "same_text": "RELOCATING PASSIVE MAPLE WORKER"
+        },
+        {
+          "offset": 908,
+          "before": "0x8ce2be18",
+          "after": "0x8ce2ca58",
+          "roles": [],
+          "same_text": "COLD 32 WORKER RELOCATION BEGIN"
+        },
+        {
+          "offset": 912,
+          "before": "0x8ce26980",
+          "after": "0x8ce275c0",
+          "roles": [
+            "__native_worker_blob_end+0",
+            "__native_worker_reloc_begin+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 916,
+          "before": "0x8ce0a1e8",
+          "after": "0x8ce0ae20",
+          "roles": [
+            "_kui_vmu_native_relocate+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 924,
+          "before": "0x8ce17300",
+          "after": "0x8ce17f40",
+          "roles": [
+            "__native_worker_blob_begin+0",
+            "__vmu_sd_profile_blob_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 928,
+          "before": "0x8ce2be38",
+          "after": "0x8ce2ca78",
+          "roles": [],
+          "same_text": "COLD 33 WORKER RELOCATED"
+        },
+        {
+          "offset": 1552,
+          "before": "0x8ce50ef4",
+          "after": "0x8ce51c34",
+          "roles": [
+            "_native_heap+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1560,
+          "before": "0x8ce50f3c",
+          "after": "0x8ce51c7c",
+          "roles": [
+            "_native_driver+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1568,
+          "before": "0x8ce07068",
+          "after": "0x8ce07164",
+          "roles": [
+            "_retail_display_line+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1572,
+          "before": "0x8ce2be54",
+          "after": "0x8ce2ca94",
+          "roles": [],
+          "same_text": "COLD 34 WORKER ARM BEGIN"
+        },
+        {
+          "offset": 1576,
+          "before": "0x8ce15ca0",
+          "after": "0x8ce168d8",
+          "roles": [
+            "_kui_vmu_native_worker_call+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1580,
+          "before": "0x8ce2be70",
+          "after": "0x8ce2cab0",
+          "roles": [],
+          "same_text": "COLD 35 WORKER ARMED"
+        },
+        {
+          "offset": 1584,
+          "before": "0x8ce09d50",
+          "after": "0x8ce09e4c",
+          "roles": [
+            "_kui_vmu_native_heap_lease_valid+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1596,
+          "before": "0x8ce0621e",
+          "after": "0x8ce0631a",
+          "roles": [
+            "_memcmp+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1600,
+          "before": "0x8ce2c8b4",
+          "after": "0x8ce2d4f4",
+          "roles": [
+            "_original.7+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1604,
+          "before": "0x8ce40ca0",
+          "after": "0x8ce419e0",
+          "roles": [
+            "_readonly_init_window+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1608,
+          "before": "0x8ce40c8c",
+          "after": "0x8ce419cc",
+          "roles": [
+            "_readonly_release_window+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1620,
+          "before": "0x8ce0144c",
+          "after": "0x8ce014a8",
+          "roles": [
+            "_native_passive_lease_only+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1624,
+          "before": "0x8ce2be88",
+          "after": "0x8ce2cac8",
+          "roles": [],
+          "same_text": "COLD 36 SDK HOOK PUBLICATION BEGIN"
+        },
+        {
+          "offset": 1628,
+          "before": "0x8ce01a2c",
+          "after": "0x8ce01b0c",
+          "roles": [
+            "_native_sdk_coherence_install+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1632,
+          "before": "0x8ce012a4",
+          "after": "0x8ce01300",
+          "roles": [
+            "_readonly_patch_entry+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1636,
+          "before": "0x8ce40cac",
+          "after": "0x8ce419ec",
+          "roles": [
+            "_persistent_exit_windows+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1640,
+          "before": "0x8ce40ce8",
+          "after": "0x8ce41a28",
+          "roles": [
+            "_native_exits+24"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1644,
+          "before": "0x8ce40cd0",
+          "after": "0x8ce41a10",
+          "roles": [
+            "_native_exits+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1648,
+          "before": "0x8ce061d6",
+          "after": "0x8ce062d2",
+          "roles": [
+            "_memcpy+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1656,
+          "before": "0x8ce605a8",
+          "after": "0x8ce612e8",
+          "roles": [
+            "_exec_bytes+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1660,
+          "before": "0x8ce2c810",
+          "after": "0x8ce2d450",
+          "roles": [
+            "_digest.2+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1664,
+          "before": "0x8ce50f84",
+          "after": "0x8ce51cc4",
+          "roles": [
+            "_native_driver+72"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1980,
+          "before": "0x8ce07068",
+          "after": "0x8ce07164",
+          "roles": [
+            "_retail_display_line+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1984,
+          "before": "0x8ce2beac",
+          "after": "0x8ce2caec",
+          "roles": [],
+          "same_text": "COLD 37 SDK HOOKS INSTALLED"
+        },
+        {
+          "offset": 1988,
+          "before": "0x8ce024b4",
+          "after": "0x8ce02594",
+          "roles": [
+            "_native_dual_reader_bind+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1992,
+          "before": "0x8ce2bec8",
+          "after": "0x8ce2cb08",
+          "roles": [],
+          "same_text": "ACTIVE HOOKS / ORIGINAL MAPLE DMA LIST"
+        },
+        {
+          "offset": 1996,
+          "before": "0x8ce2bef0",
+          "after": "0x8ce2cb30",
+          "roles": [],
+          "same_text": "ALL HOOKS ACTIVE / VIRTUAL VMU OFF"
+        },
+        {
+          "offset": 2000,
+          "before": "0x8ce2bf14",
+          "after": "0x8ce2cb54",
+          "roles": [],
+          "same_text": "PERSISTENT VIRTUAL A2 ARMED - STARTING GAME"
+        },
+        {
+          "offset": 1940,
+          "before": "0x8ce2c804",
+          "after": "0x8ce2d444",
+          "roles": [
+            "_witness.1+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1948,
+          "before": "0x8ce0c7d4",
+          "after": "0x8ce0d40c",
+          "roles": [
+            "_kui_vmu_native_patch_no_interior+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1956,
+          "before": "0x8ce0c4dc",
+          "after": "0x8ce0d114",
+          "roles": [
+            "_kui_vmu_native_patch_encode+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_reader_readahead_exports",
+      "old_bytes": 200,
+      "new_bytes": 200,
+      "old_sha256": "8aff7e76749ea5df0c6ebde6e29824e7122433a5ee3dbc1caad2b1e1cea8dea6",
+      "new_sha256": "8aff7e76749ea5df0c6ebde6e29824e7122433a5ee3dbc1caad2b1e1cea8dea6",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_reader_capture_region",
+      "old_bytes": 100,
+      "new_bytes": 100,
+      "old_sha256": "dbfae616a3357a5e1ab3c907567dbf5b2735e29943bb42c2b7c1884b9aff4b7e",
+      "new_sha256": "dbfae616a3357a5e1ab3c907567dbf5b2735e29943bb42c2b7c1884b9aff4b7e",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_reader_readahead_visit",
+      "old_bytes": 56,
+      "new_bytes": 56,
+      "old_sha256": "277ea46f6d7d509e57e0be251e5f2e7f12e3193f8d9549d961cae44fc1b8bbb1",
+      "new_sha256": "277ea46f6d7d509e57e0be251e5f2e7f12e3193f8d9549d961cae44fc1b8bbb1",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_reader_readahead_exports",
+      "old_bytes": 200,
+      "new_bytes": 200,
+      "old_sha256": "8aff7e76749ea5df0c6ebde6e29824e7122433a5ee3dbc1caad2b1e1cea8dea6",
+      "new_sha256": "8aff7e76749ea5df0c6ebde6e29824e7122433a5ee3dbc1caad2b1e1cea8dea6",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_reader_readahead_visit",
+      "old_bytes": 56,
+      "new_bytes": 56,
+      "old_sha256": "277ea46f6d7d509e57e0be251e5f2e7f12e3193f8d9549d961cae44fc1b8bbb1",
+      "new_sha256": "277ea46f6d7d509e57e0be251e5f2e7f12e3193f8d9549d961cae44fc1b8bbb1",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_reader_cooperative_service",
+      "old_bytes": 32,
+      "new_bytes": 32,
+      "old_sha256": "93761d0e088c601b9fd30521f9c90d264c2806084b55d4bc55151264c62bfde5",
+      "new_sha256": "93761d0e088c601b9fd30521f9c90d264c2806084b55d4bc55151264c62bfde5",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_reader_readahead_failure",
+      "old_bytes": 172,
+      "new_bytes": 172,
+      "old_sha256": "95955f85153b1e6836dedc2e156b876c5e9edfbca3f3b940c4d0098eda2f7925",
+      "new_sha256": "95955f85153b1e6836dedc2e156b876c5e9edfbca3f3b940c4d0098eda2f7925",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_failure_witness.isra.0",
+      "old_bytes": 16,
+      "new_bytes": 16,
+      "old_sha256": "c767a1c8cebf3cd2b7881bf86e65b0e13f7dc3ca0098455f9303ec2dcbc7e319",
+      "new_sha256": "c767a1c8cebf3cd2b7881bf86e65b0e13f7dc3ca0098455f9303ec2dcbc7e319",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_poll_lease_valid",
+      "old_bytes": 168,
+      "new_bytes": 168,
+      "old_sha256": "374a4a822a443d28492d5b3214883dc6f499bdf652b8c8be339270e03817ad53",
+      "new_sha256": "374a4a822a443d28492d5b3214883dc6f499bdf652b8c8be339270e03817ad53",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_controller_context_valid",
+      "old_bytes": 1336,
+      "new_bytes": 1336,
+      "old_sha256": "4c7944282ca23b0482686f1c08ea701b01dd54bcf2e6b7e42bcd6e7858e2f971",
+      "new_sha256": "4c7944282ca23b0482686f1c08ea701b01dd54bcf2e6b7e42bcd6e7858e2f971",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_passive_complete",
+      "old_bytes": 3144,
+      "new_bytes": 3144,
+      "old_sha256": "acde71e900ac6c3b250ef499071fc071ed02e07529a88a316e43700dcee60a58",
+      "new_sha256": "acde71e900ac6c3b250ef499071fc071ed02e07529a88a316e43700dcee60a58",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_passive_submit",
+      "old_bytes": 1428,
+      "new_bytes": 1428,
+      "old_sha256": "fe8fd3c96932569f8453eb71fe726d1059d3450af94fa9c17b6134f9a1381c7e",
+      "new_sha256": "fe8fd3c96932569f8453eb71fe726d1059d3450af94fa9c17b6134f9a1381c7e",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_read_value",
+      "old_bytes": 180,
+      "new_bytes": 180,
+      "old_sha256": "2bf8aacc78250e0aabc16c8037ae642b34e52ecf935cddc2b8915ad36b024a4c",
+      "new_sha256": "2bf8aacc78250e0aabc16c8037ae642b34e52ecf935cddc2b8915ad36b024a4c",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_readonly_rx.constprop.0",
+      "old_bytes": 76,
+      "new_bytes": 76,
+      "old_sha256": "8ae835afcc6563c32e1756bbe4979d5caf8c18cb54be8755beb897429d5300a9",
+      "new_sha256": "8ae835afcc6563c32e1756bbe4979d5caf8c18cb54be8755beb897429d5300a9",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_stack_valid",
+      "old_bytes": 116,
+      "new_bytes": 116,
+      "old_sha256": "b9212c5a929502d27eb5f982a9c1b826b15c5e043551de480281602257880a54",
+      "new_sha256": "b9212c5a929502d27eb5f982a9c1b826b15c5e043551de480281602257880a54",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_installed_hooks_valid",
+      "old_bytes": 128,
+      "new_bytes": 128,
+      "old_sha256": "8d2fbe746c594eebb395c7d1b04b761c72045b7427182ac042c8f2798212b384",
+      "new_sha256": "8d2fbe746c594eebb395c7d1b04b761c72045b7427182ac042c8f2798212b384",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_normalize_heap_dispatch",
+      "old_bytes": 276,
+      "new_bytes": 276,
+      "old_sha256": "f50c53f8bf89a37291d0d6ce28d9550c6af29cf89d854033824169ed5436e9b5",
+      "new_sha256": "f50c53f8bf89a37291d0d6ce28d9550c6af29cf89d854033824169ed5436e9b5",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_terminal_dispatch_span.constprop.0",
+      "old_bytes": 128,
+      "new_bytes": 128,
+      "old_sha256": "a32dafc3eeb54ac8eb1dca03f537f641665a9074f4d32349b8fc5f49b79dfe56",
+      "new_sha256": "a32dafc3eeb54ac8eb1dca03f537f641665a9074f4d32349b8fc5f49b79dfe56",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_terminal_dispatch_tagged.constprop.0",
+      "old_bytes": 100,
+      "new_bytes": 100,
+      "old_sha256": "e0b5f67393a6bc294be25a8cfa1adfe82b0dda2394e5792c158b827aa79a0ec4",
+      "new_sha256": "e0b5f67393a6bc294be25a8cfa1adfe82b0dda2394e5792c158b827aa79a0ec4",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_patch_encode",
+      "old_bytes": 168,
+      "new_bytes": 168,
+      "old_sha256": "8961ec44233e80115ceb32b6227b994e17b435a9abaeab41e113556ccf576ebc",
+      "new_sha256": "8961ec44233e80115ceb32b6227b994e17b435a9abaeab41e113556ccf576ebc",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_read_heap_raw",
+      "old_bytes": 104,
+      "new_bytes": 104,
+      "old_sha256": "ba6f179b61b78a8bf700d46bac6237e4287d61bbe9cde913a8768ce99e732035",
+      "new_sha256": "ba6f179b61b78a8bf700d46bac6237e4287d61bbe9cde913a8768ce99e732035",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_memcpy",
+      "old_bytes": 72,
+      "new_bytes": 72,
+      "old_sha256": "cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634",
+      "new_sha256": "cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_trace_point",
+      "old_bytes": 1132,
+      "new_bytes": 1132,
+      "old_sha256": "29e79a86f246b51949525389a6478c5054bea8eb89e4aaf8ccfa58a4ed064aec",
+      "new_sha256": "e5a3843ad4c34048b3eedfac27865193088807015c74c4a7f460efc556c7f67c",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 480,
+      "changed_literal_slots": [
+        {
+          "offset": 1124,
+          "before": "0x8c10f4e8",
+          "after": "0x8c10f4e2",
+          "roles": [
+            "_hex_font+0",
+            "_hex_font@vmu_native_trace.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_reader_capture_region",
+      "old_bytes": 100,
+      "new_bytes": 100,
+      "old_sha256": "dbfae616a3357a5e1ab3c907567dbf5b2735e29943bb42c2b7c1884b9aff4b7e",
+      "new_sha256": "dbfae616a3357a5e1ab3c907567dbf5b2735e29943bb42c2b7c1884b9aff4b7e",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_reader_cooperative_service",
+      "old_bytes": 32,
+      "new_bytes": 32,
+      "old_sha256": "93761d0e088c601b9fd30521f9c90d264c2806084b55d4bc55151264c62bfde5",
+      "new_sha256": "93761d0e088c601b9fd30521f9c90d264c2806084b55d4bc55151264c62bfde5",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_reader_readahead_exports",
+      "old_bytes": 200,
+      "new_bytes": 200,
+      "old_sha256": "8aff7e76749ea5df0c6ebde6e29824e7122433a5ee3dbc1caad2b1e1cea8dea6",
+      "new_sha256": "8aff7e76749ea5df0c6ebde6e29824e7122433a5ee3dbc1caad2b1e1cea8dea6",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_reader_readahead_visit",
+      "old_bytes": 56,
+      "new_bytes": 56,
+      "old_sha256": "277ea46f6d7d509e57e0be251e5f2e7f12e3193f8d9549d961cae44fc1b8bbb1",
+      "new_sha256": "277ea46f6d7d509e57e0be251e5f2e7f12e3193f8d9549d961cae44fc1b8bbb1",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_timer_callback_owned",
+      "old_bytes": 92,
+      "new_bytes": 92,
+      "old_sha256": "07aadc00aba1b1f9a650eb58e9b39e0c200a2c6e85e83e9922a0eb00f1841edb",
+      "new_sha256": "07aadc00aba1b1f9a650eb58e9b39e0c200a2c6e85e83e9922a0eb00f1841edb",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_timer_runtime_ram",
+      "old_bytes": 104,
+      "new_bytes": 104,
+      "old_sha256": "4fb7919a6f74ec1c9aa3f434e446b352f7961eb7c565580f0c4e2e52a3eff415",
+      "new_sha256": "4fb7919a6f74ec1c9aa3f434e446b352f7961eb7c565580f0c4e2e52a3eff415",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_timer_runtime_in",
+      "old_bytes": 26,
+      "new_bytes": 26,
+      "old_sha256": "a0ff5d4d27ccbf7b073b8bc6f0e6b26659e6b729763f7b02d49aa124ea023824",
+      "new_sha256": "a0ff5d4d27ccbf7b073b8bc6f0e6b26659e6b729763f7b02d49aa124ea023824",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_live_boundary",
+      "old_bytes": 216,
+      "new_bytes": 216,
+      "old_sha256": "284c39b1b5f46b7d8142430bead1e366fd22728a10c1712a7d795d15adb59c65",
+      "new_sha256": "284c39b1b5f46b7d8142430bead1e366fd22728a10c1712a7d795d15adb59c65",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_native_loader_timeline_add",
+      "old_bytes": 856,
+      "new_bytes": 856,
+      "old_sha256": "8c3e2998c106f957b83f1641a2335f1f0697b15e20b9ab65bedff2996cb0efb0",
+      "new_sha256": "8c3e2998c106f957b83f1641a2335f1f0697b15e20b9ab65bedff2996cb0efb0",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_diagnostic_complete",
+      "old_bytes": 3610,
+      "new_bytes": 3610,
+      "old_sha256": "43531bed887c2f00647fb237d84a3e78c5f69011f1721f30812bc0bd92abc823",
+      "new_sha256": "43531bed887c2f00647fb237d84a3e78c5f69011f1721f30812bc0bd92abc823",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_native_phase_span_from",
+      "old_bytes": 128,
+      "new_bytes": 128,
+      "old_sha256": "2f2d811580469162b3f1b715592e0cf3c96f78a0ee86ac80b6bd7b9a1be09d1f",
+      "new_sha256": "2f2d811580469162b3f1b715592e0cf3c96f78a0ee86ac80b6bd7b9a1be09d1f",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_diagnostic_phase_read",
+      "old_bytes": 136,
+      "new_bytes": 136,
+      "old_sha256": "300072e2b8bad5d5aa1ac8e52af5bfe1c52c1b256541ff3281f449642641533a",
+      "new_sha256": "300072e2b8bad5d5aa1ac8e52af5bfe1c52c1b256541ff3281f449642641533a",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_diagnostic_end",
+      "old_bytes": 1492,
+      "new_bytes": 1492,
+      "old_sha256": "dfffc722f754253706263997d24e6a0d4e4d75ecbbe946942881f13287a8baec",
+      "new_sha256": "dfffc722f754253706263997d24e6a0d4e4d75ecbbe946942881f13287a8baec",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_diagnostic_sample",
+      "old_bytes": 164,
+      "new_bytes": 164,
+      "old_sha256": "7093de94c3a6735413dc04fdf9af5bc80aca8097fd91632bb13468210ab7bf3e",
+      "new_sha256": "7093de94c3a6735413dc04fdf9af5bc80aca8097fd91632bb13468210ab7bf3e",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_memset",
+      "old_bytes": 26,
+      "new_bytes": 26,
+      "old_sha256": "84a19f7aa0536a77835dd9917cd47ea65e6d6edf6013064ab39a36c0a05e118a",
+      "new_sha256": "84a19f7aa0536a77835dd9917cd47ea65e6d6edf6013064ab39a36c0a05e118a",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_memcpy",
+      "old_bytes": 72,
+      "new_bytes": 72,
+      "old_sha256": "cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634",
+      "new_sha256": "cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634",
+      "classification": "byte-identical"
+    }
+  ],
+  "all_complete_bodies_unchanged_or_same_typed_literal_roles": true,
+  "prepared_functions_all_unchanged_typed_signatures": true,
+  "rodata_exact_delta": {
+    "old_sha256": "cf519811c0dc209cd4678071ca593e5919ee3b04d56404609472d213cf401123",
+    "new_sha256": "321b4ecff55edbb84141a5dbd70eadcfccd99e4408586d3082340a604efcc14d",
+    "standard_product_class_only": true,
+    "diagnostic_heading_only": true,
+    "additional_alignment_zero_bytes": 2,
+    "alignment_new_offset": "0xe72"
+  },
+  "new_prepared_rodata_signature": [
+    "13b89fe6170b659c1165b2f6f9c44d1ad45b7ac572baf1cb1cafb64893bfc4b1",
+    3956
+  ]
+}
