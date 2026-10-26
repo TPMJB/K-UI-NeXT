@@ -704,7 +704,8 @@ class Cold(ReleaseSH):
         elif op & 0xf0ff in (0x4019, 0x4029):  # SHLR8 / SHLR16
             self.r[n] >>= (8 if op & 0xff == 0x19 else 16)
         elif op & 0xf00f in (0x600e, 0x600f):  # EXTS.B / EXTS.W
-            self.r[n] = signed(self.r[m], 8 if op & 15 == 14 else 16) & MASK
+            bits = 8 if op & 15 == 14 else 16
+            self.r[n] = signed(self.r[m] & ((1 << bits) - 1), bits) & MASK
         elif op in (0x0008, 0x0018):
             self.flag(op == 0x0018)
         elif op & 0xf00f in (0x300a, 0x300e):
