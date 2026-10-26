@@ -58,6 +58,10 @@ __asm__(".global __kui_native_e1_wait_capture_worker\n"
 __asm__(".global __kui_native_maple_bypass_isolation_worker\n"
         ".set __kui_native_maple_bypass_isolation_worker,1\n");
 #endif
+#if KUI_NATIVE_MAPLE_DELAY_ISOLATION
+__asm__(".global __kui_native_maple_delay_isolation_worker\n"
+        ".set __kui_native_maple_delay_isolation_worker,1\n");
+#endif
 #define WORKER_SPAN UINT32_C(0x20000)
 #define PAIR_LIMIT 180000u
 #else
@@ -734,6 +738,9 @@ static void report(void) {
     struct retail_display_state display;memcpy(display.regs,config.display,sizeof(display.regs));
     retail_display_restore(&display);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
+#if KUI_NATIVE_MAPLE_DELAY_ISOLATION
+    if(state.error==0x4du) retail_display_line("MAPLE DELAY CLOCK REFUSED");
+#endif
     retail_display_line("VMU / A2");
     retail_display_line("SCI JOURNAL");
     retail_display_hex("PHASE",state.proof?15u:16u);
@@ -788,6 +795,9 @@ static void report(void) {
 #endif
 }
 static void fail(uint32_t code) __attribute__((noreturn));
+#if KUI_NATIVE_MAPLE_DELAY_ISOLATION
+#include "vmu_native_maple_delay.inc"
+#endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 /* These are terminal failure witnesses, never an alternate admission path.
  * The assembly gateway has already excluded IRQs and retired the owner SP.

@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Exact Evolution1 NORMAL control: retain the passing Maple C bypass and
+# add bounded read-only clock delays at its two already masked call sites.
+BUILD ?= build/native-isolation-maple-delay
+include Makefile.vmu-native-isolation-maple-bypass
+FLAGS += -DKUI_NATIVE_MAPLE_DELAY_ISOLATION=1
+NATIVE_FLAGS += -DKUI_NATIVE_MAPLE_DELAY_ISOLATION=1
+
+.PHONY: isolation-maple-delay-host-tests
+isolation-maple-delay-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) -std=c11 -O2 -Wall -Wextra -Werror -Iinclude -Isrc/loader \
+	 -fsanitize=undefined -fno-sanitize-recover=all tests/test_vmu_native_maple_delay.c \
+	 src/core/vmu_native_profile.c -o $(BUILD)/test-maple-delay
+	$(BUILD)/test-maple-delay

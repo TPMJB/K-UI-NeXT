@@ -57,6 +57,10 @@ __asm__(".global __kui_native_e1_wait_capture_stage\n"
 __asm__(".global __kui_native_maple_bypass_isolation_stage\n"
         ".set __kui_native_maple_bypass_isolation_stage,1\n");
 #endif
+#if KUI_NATIVE_MAPLE_DELAY_ISOLATION
+__asm__(".global __kui_native_maple_delay_isolation_stage\n"
+        ".set __kui_native_maple_delay_isolation_stage,1\n");
+#endif
 #if KUI_NATIVE_CURRENT_BOTTOM_HEAP
 #define KUI_NATIVE_COLD_PROGRESS_STAGE 1
 __asm__(".global __kui_native_cold_progress_stage\n"

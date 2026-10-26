@@ -220,13 +220,21 @@ static void __attribute__((noipa)) native_passive_lease_only(
 }
 #endif
 static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
-#if KUI_NATIVE_E1_WAIT_CAPTURE
-    /* This observation has an exact original-frame contract. Check its full
+#if KUI_NATIVE_E1_WAIT_CAPTURE || KUI_NATIVE_MAPLE_DELAY_ISOLATION
+    /* These controls have exact Evolution contracts. Check the complete
      * independently verified identity before publishing any worker hooks. */
     if(!kui_vmu_native_trace_image(&native_driver))
+#if KUI_NATIVE_MAPLE_DELAY_ISOLATION
+        stopped("MAPLE DELAY NEEDS EVOLUTION 1",native_driver.image_bytes);
+#else
         stopped("WAIT CAPTURE NEEDS EVOLUTION 1",native_driver.image_bytes);
+#endif
     if(native_runtime_mode()!=KUI_VMU_NATIVE_MODE_NORMAL)
+#if KUI_NATIVE_MAPLE_DELAY_ISOLATION
+        stopped("MAPLE DELAY NEEDS NORMAL MODE",native_runtime_mode());
+#else
         stopped("WAIT CAPTURE NEEDS NORMAL MODE",native_runtime_mode());
+#endif
 #endif
     const uint32_t span=KUI_VMU_NATIVE_PASSIVE_SPAN;
     uint32_t load=(lease->payload&UINT32_C(0x1fffffff))|UINT32_C(0x80000000),dest=load+UINT32_C(0x20000000);
@@ -438,6 +446,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #endif
 #if KUI_NATIVE_MAPLE_BYPASS_ISOLATION
     retail_display_line("MAPLE C CALLBACKS OFF");
+#if KUI_NATIVE_MAPLE_DELAY_ISOLATION
+    retail_display_line("TIMED DELAY / 59 AND 76 TICKS");
+#endif
     retail_display_line("LIFETIME GUARDS RETAINED");
 #else
     retail_display_line("READER SUPPORT HOOKS RETAINED");
