@@ -281,5 +281,13 @@
     "candidate_requires_proof": "A cached read-only alias for immutable prepared metadata needs explicit cache publication/invalidation, full cache-line isolation from writable P2 state, and preserved self/ownership identity. It is a proposal, not a runtime change.",
     "fallback_diagnostic_if_needed": "Capture interrupted R13/R4/R12 and outer return if shared latency work does not explain the wait; current phase history proves code location but does not include those operands.",
     "additional_user_capture_requested_now": false
-  }
+  },
+  "poll_timing_candidate_followup": {
+    "commit": "8adf1a039035abcbcaa95f8bfa8f417fe6e714b8",
+    "reader": "New (X)",
+    "diagnostics": "NORMAL/off",
+    "owner_report": "It gets to the failure point faster but still fails.",
+    "status": "Evolution compatibility failure remains; generic polling optimization did not establish a fix."
+  },
+  "historical_success_comparison": "docs/evidence/native-evolution1-known-good-897ee-comparison-2026-10-26.json"
 }

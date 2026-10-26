@@ -41,6 +41,19 @@ those calls could return unchanged. The new leaf makes the same applicability
 decision before entering the full routine. This is a shared-path optimization.
 Console confirmation remains required.
 
+The owner subsequently reported that the poll-timing candidate reaches the
+Evolution failure point faster but still fails in NORMAL/New mode. The
+optimization therefore does not establish an Evolution fix. Historical review
+recovered a confirmed launch/save/reboot-load pass on **897ee7223b35**, using
+Standard/A1/192KiB. Its SDK lock-cache publication and legal SH-4 delay-slot
+corrections remain present; the complete handoff assembly files are unchanged.
+See the [known-good comparison](evidence/native-evolution1-known-good-897ee-comparison-2026-10-26.json).
+
+The existing-build reader control is **Background On / Legacy (Y)**, keeping
+the current worker, virtual A2 and 384KiB bottom reservation. Background Off
+selects a separate ordinary module that this installer does not update, so it
+must not be presented as an equivalent current-A2 control.
+
 The owner confirmed that the previous bottom-placement candidate lets Rayman 2
 pass Ubisoft with New, but the game reports no VMU. Its original device
 classifier requires the padded product name **Visual Memory**. The old
