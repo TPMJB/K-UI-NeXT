@@ -96,7 +96,7 @@ def read_backup(p, root, metadata):
     record = json.loads(raw)
     require(isinstance(record, dict) and record.get('schema') == 'kui.native.isolation.backup.v1' and
             record.get('gui_sha256') == metadata['gui']['sha256'] and
-            record.get('package_build') == metadata['build'] and
+            record.get('package_build') in {metadata['build'], *metadata.get('compatible_packages', {})} and
             set(record.get('files', {})) == set(MODULES), 'Backup provenance differs from this isolation package')
     original = {}
     for name in MODULES:
@@ -115,6 +115,28 @@ def read_backup(p, root, metadata):
                     not (root/BACKUP/(name+'.kui')).is_symlink(), 'Absent-module backup is inconsistent')
             original[name] = None
     return record, original
+
+
+def verify_previous_module(p, data, name, build, metadata, backup):
+    """Authorize earlier test code by its pinned generic bytes, not a receipt hash."""
+    previous = metadata.get('compatible_packages', {}).get(build)
+    require(isinstance(previous, dict) and previous.get('gui_sha256') == metadata['gui']['sha256'] and
+            set(previous.get('variants', {})) == set(MODULES), 'Unknown earlier isolation package')
+    item = previous['variants'][name]
+    require(isinstance(item, dict) and set(item) == {'module_bytes', 'module_sha256', 'profile_module_offset'} and
+            type(item['module_bytes']) is int and len(data) == item['module_bytes'] and
+            type(item['profile_module_offset']) is int, 'Invalid earlier isolation module bounds')
+    info = verify(data)
+    offset, template = item['profile_module_offset'], p.template_profile()
+    require(info['build'] == build and offset >= 64 and not offset & 3 and
+            offset+len(template) <= len(data), 'Earlier isolation module build/profile span differs')
+    profile = data[offset:offset+len(template)]
+    require(profile != template and p.decode_profile(profile)['image_id'] == backup['profile_identity'],
+            'Earlier isolation module belongs to a different prepared card')
+    payload = bytearray(data[64:]);payload[offset-64:offset-64+len(template)] = template
+    canonical = p.envelope(bytes(payload), info['memory_bytes'], info['build'])
+    require(sha(canonical) == item['module_sha256'],
+            'Earlier installed module differs from the pinned isolation code: '+name)
 
 
 def create_backup(p, root, metadata, original, identity):
@@ -177,12 +199,16 @@ def install(root, package, variant, profile=None):
     state = json.loads(state_raw) if state_raw is not None else None
     if state is not None:
         require(state.get('schema') == 'kui.native.isolation.state.v1' and
-                state.get('build') == metadata['build'] and set(state.get('allowed', {})) == set(MODULES),
+                state.get('build') in {metadata['build'], *metadata.get('compatible_packages', {})} and
+                set(state.get('allowed', {})) == set(MODULES),
                 'Invalid isolation recovery receipt')
     for name, data in current.items():
         allowed = state['allowed'][name] if state is not None else [fingerprint(original[name])]
         require(isinstance(allowed, list) and fingerprint(data) in allowed,
                 'Installed module changed outside this test; preserving it: '+str(MODULES[name]))
+        if state is not None and state['build'] != metadata['build'] and data != original[name]:
+            require(data is not None, 'Earlier isolation module is missing')
+            verify_previous_module(p, data, name, state['build'], metadata, backup)
     desired = dict(original)
     if variant != 'restore':
         desired[variant] = target_module
@@ -192,7 +218,8 @@ def install(root, package, variant, profile=None):
     if not changes and state == receipt:
         require(protected_snapshot(p, root, selected) == before_protected, 'Read-only files changed during inspection')
         return dict(variant=variant, build=metadata['build'], already_installed=True, gui_unchanged=True,
-                    prepared_card_unchanged=True, changed_modules=[])
+                    prepared_card_unchanged=True, changed_modules=[],
+                    prefetch_enabled=metadata['variants'].get(variant, {}).get('prefetch_enabled'))
     pending = dict(receipt, pending=True, allowed={name: list(dict.fromkeys(
         [fingerprint(current[name]), fingerprint(desired[name])])) for name in MODULES})
     published = []
@@ -218,6 +245,7 @@ def install(root, package, variant, profile=None):
         # interrupted publication; immutable baseline copies remain untouched.
         raise
     return dict(variant=variant, build=metadata['build'], gui_unchanged=True,
+                prefetch_enabled=metadata['variants'].get(variant, {}).get('prefetch_enabled'),
                 prepared_card_unchanged=True, changed_modules=[str(MODULES[name]) for name, _, _ in changes],
                 backup=str(BACKUP), restored_exact_original_modules=variant == 'restore')
 
@@ -234,6 +262,8 @@ def main():
         print(json.dumps(result, indent=2))
         if args.variant == 'reader-only':
             print('Use SCI / Background New (X). Virtual A2 is OFF; support hooks remain.')
+            if result.get('prefetch_enabled') is False:
+                print('Controller read-ahead is OFF; New demand reads and SDK SCI remain enabled.')
         elif args.variant == 'vmu-only':
             print('Use SCI / Background Off (Standard). Virtual A2 is ON.')
             print('The ordinary Standard module is replaced until --variant restore is run.')

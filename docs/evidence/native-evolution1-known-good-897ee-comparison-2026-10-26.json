@@ -79,5 +79,15 @@
     "selector": "Background Off",
     "reason": "Frontend selects KUI/apps/games/retail-boot.kui; current dual installer does not update that file. It could be ordinary no-VMU or a separately personalized older module, so it does not establish same current A2 behavior."
   },
-  "review_correction": "The earlier investigation cited failed lease-only/active-hook comparisons but missed the subsequent confirmed working897ee baseline. Future comparisons must preserve that success as the regression anchor."
+  "review_correction": "The earlier investigation cited failed lease-only/active-hook comparisons but missed the subsequent confirmed working897ee baseline. Future comparisons must preserve that success as the regression anchor.",
+  "matched_current_standard_control": {
+    "runtime_commit": "9956562f91d6be4721e25676d2edf6ed3f421c15",
+    "reader": "Standard / Background Off",
+    "virtual_address": "A2",
+    "reservation_bytes": 393216,
+    "placement": "bottom",
+    "owner_report": "VMU-only passed; reader-only failed",
+    "result_scope": "Pass reported for the requested test; individual save/load coverage not separately stated",
+    "followup_evidence": "docs/evidence/native-evolution1-isolation-console-followup-2026-10-26.json"
+  }
 }

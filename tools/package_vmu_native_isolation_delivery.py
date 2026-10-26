@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -31,6 +32,9 @@ REQUIRED_ARTIFACTS = ('entry.elf', 'stage.elf', 'native-worker.elf', 'native-wor
 EXTRA_PROOFS = ('instruction-audit.json', 'sdk-reader.json', 'sdk-standard.json',
                 'stack-reader.json', 'stack-standard.json',
                 'reader-component-comparison.json', 'isolation-cold.json')
+PREVIOUS_BUILD = '9956562f91d6'
+PREVIOUS_METADATA_SHA = 'adf9dd97917140cc07e5027ae15fa1d85caa06cd83cb8e5d8db4551241e9f0cd'
+PREVIOUS_ARCHIVE_SHA = 'cd6d51767788f4222fffd3c6299024bb8700f8407fe623d6664ef922876d5f29'
 
 
 def require(value, message):
@@ -57,7 +61,7 @@ def embedded(image, begin, end, data, base, binary):
     return first
 
 
-def bind_variant(name, build, proof, runtime_commit):
+def bind_variant(name, build, proof, runtime_commit, demand_only=False):
     artifacts = {key: sha((build/key).read_bytes()) for key in REQUIRED_ARTIFACTS}
     require(all(proof['artifact_sha256'].get(key) == value for key, value in artifacts.items()),
             'Linked execution report differs from final artifacts: '+name)
@@ -92,6 +96,11 @@ def bind_variant(name, build, proof, runtime_commit):
                 image[4].get('__kui_native_isolation_lease_bytes') == (393216, 0, 0, 0xfff1) and
                 image[4].get('__kui_native_bottom_heap_'+side) == ABSOLUTE_ONE,
                 'Variant lacks its exact isolated bottom-reservation capabilities: '+name)
+        marker = '__kui_native_ra_tick_off_isolation_'+side
+        require(image[4].get(marker) == ABSOLUTE_ONE if demand_only and name == 'reader-only' else
+                marker not in image[4], 'Variant controller-prefetch marker differs: '+name)
+    require(proof.get('controller_tick_off', False) is (demand_only and name == 'reader-only'),
+            'Linked execution report controller-prefetch setting differs: '+name)
     if name == 'reader-only':
         require(worker[4].get('__kui_native_readahead_worker') == ABSOLUTE_ONE and
                 worker[4].get('__kui_native_dual_readers_worker') == ABSOLUTE_ONE,
@@ -136,12 +145,36 @@ def bind_variant(name, build, proof, runtime_commit):
                   module_sha256=sha(module), lease_bytes=393216, worker_bytes=131072,
                   bottom_reservation=True, relocation_table_matches_linked_elf=True,
                   physical_loads=len(loads), bss_stack_margin=stack_low-bss_end,
+                  controller_tick_off=demand_only and name == 'reader-only',
+                  prefetch_enabled=name == 'reader-only' and not demand_only,
                   canonical_disjoint_personalization=manifest)
     files['variant-layout.json'] = wire(layout)
     return files, manifest, layout
 
 
-def extracted_install_check(files):
+def previous_package(path):
+    """Pin the one earlier console test whose immutable on-card backups we reuse."""
+    require(sha(path.read_bytes()) == PREVIOUS_ARCHIVE_SHA, 'Previous archive differs from the delivered995 pair')
+    with zipfile.ZipFile(path) as archive:
+        raw = archive.read('isolation.json')
+        require(sha(raw) == PREVIOUS_METADATA_SHA, 'Previous package is not the delivered995 isolation pair')
+        old = json.loads(raw)
+        require(old['build'] == PREVIOUS_BUILD and old['gui'] == dict(build=GUI_BUILD, sha256=GUI_SHA),
+                'Previous isolation pair has a different GUI/build')
+        descriptors = {}
+        for name in MODULES:
+            module = archive.read('variants/'+name+'/base/KUI/apps/games/retail-boot.kui')
+            template = template_profile()
+            require(sha(module) == old['variants'][name]['module_sha256'] and
+                    verify(module)['build'] == PREVIOUS_BUILD and module.count(template) == 1,
+                    'Previous isolation module differs from its pinned delivery: '+name)
+            descriptors[name] = dict(module_bytes=len(module), module_sha256=sha(module),
+                                     profile_module_offset=module.index(template))
+    return dict(gui_sha256=GUI_SHA, isolation_metadata_sha256=PREVIOUS_METADATA_SHA,
+                variants=descriptors), raw
+
+
+def extracted_install_check(files, previous_archive=None):
     sys.path.insert(0, str(ROOT/'tests'))
     from test_personalize_vmu_native_persistent import pair
     with tempfile.TemporaryDirectory(prefix='kui-native-isolation-cli-') as directory:
@@ -179,7 +212,31 @@ def extracted_install_check(files):
                     require(after[str(path)] == before[str(path)], 'Inactive module was not restored to its exact baseline')
             require(all(key in before or key.startswith(str(BACKUP_PARENT)+'/') for key in after),
                     'Unexpected isolation installer output path')
+        if previous_archive is not None:
+            previous = root/'previous-package'
+            with zipfile.ZipFile(previous_archive) as archive:
+                for name in archive.namelist():
+                    if name in ('install.py', 'personalize.py', 'isolation.json') or name.startswith(('tools/', 'variants/')):
+                        path = previous/name;path.parent.mkdir(parents=True, exist_ok=True);path.write_bytes(archive.read(name))
+            for earlier_variant in MODULES:
+                # Each temporary card scenario starts with the true pre-test baseline.
+                shutil.rmtree(card/BACKUP_PARENT)
+                previous_argv = [sys.executable, str(previous/'install.py'), str(card),
+                                 '--profile', str(profile.relative_to(card)), '--variant', earlier_variant]
+                result = subprocess.run(previous_argv, cwd=root, text=True, capture_output=True)
+                require(result.returncode == 0, 'Earlier995 installer fixture failed: '+result.stderr)
+                baseline = {p.name: p.read_bytes() for p in (card/BACKUP_PARENT/'backup').iterdir()}
+                for variant in ('reader-only', 'vmu-only', 'restore'):
+                    result = subprocess.run([*argv, '--variant', variant], cwd=root, text=True, capture_output=True)
+                    require(result.returncode == 0, 'Extracted995-to-demand migration failed: '+result.stderr)
+                    require({p.name: p.read_bytes() for p in (card/BACKUP_PARENT/'backup').iterdir()} == baseline,
+                            'Migration rewrote the original995 immutable backups')
+                after = {str(p.relative_to(card)): p.read_bytes() for p in card.rglob('*') if p.is_file()}
+                require(all(after[key] == value for key, value in before.items()),
+                        'Migration/restore changed original modules, GUI, prepared saves or settings')
     return dict(extracted_cli_runs=6, both_variants_switch_and_restore=True,
+                previous_package_migration_cli_runs=8 if previous_archive is not None else 0,
+                previous_original_backup_unchanged=previous_archive is not None,
                 inactive_module_restored=True, original_modules_restored=True,
                 gui_profile_card_journal_and_launch_settings_unchanged=True, normal_mode_only=True)
 
@@ -243,10 +300,26 @@ def package(args):
              'baseline/runtime.kui': gui, 'evidence/isolation-linked-sdk.json': linked_raw,
              'evidence/host-tests.log': args.host_log.read_bytes(),
              'LICENSE': (ROOT/'LICENSE').read_bytes(), 'THIRD_PARTY.md': (ROOT/'THIRD_PARTY.md').read_bytes()}
-    for filename in EXTRA_PROOFS:
+    if args.demand_only:
+        compatible, previous_raw = previous_package(args.previous_package)
+        metadata['compatible_packages'] = {PREVIOUS_BUILD: compatible}
+        files['evidence/previous-isolation.json'] = previous_raw
+    extra_proofs = EXTRA_PROOFS + (('standard-control-comparison.json',
+        'tick-off-stack-mapping-negatives.json') if args.demand_only else ())
+    for filename in extra_proofs:
         data = (args.linked_report.parent/filename).read_bytes()
         json.loads(data)
         files['evidence/'+filename] = data
+    if args.demand_only:
+        standard = json.loads(files['evidence/standard-control-comparison.json'])
+        require(standard.get('old_build') == PREVIOUS_BUILD and
+                standard.get('new_build') == runtime_commit[:12] and
+                standard.get('relocation_records_equal') is True and
+                len(standard.get('components', [])) == 8 and
+                all(row.get('normalized_equal') is True and
+                    row.get('new_sha256') == sha((args.vmu_build/row['name']).read_bytes())
+                    for row in standard['components']),
+                'Passing Standard control comparison differs from final components')
     comparison = json.loads(files['evidence/reader-component-comparison.json'])
     require(set(comparison) == {'resident-sci.bin', 'resident-legacy.bin', 'native-ra-aux.bin', 'native-ra-aux.reloc'} and
             all(item['identical_after_build_label_normalization'] is True and
@@ -260,17 +333,20 @@ def package(args):
         proof = proofs[proof_name]
         require(proof['lease_bytes'] == 393216 and proof['worker_bytes'] == 131072 and proof['placement'] == 'bottom',
                 'Isolation controls do not retain the matching memory reservation')
-        variant_files, manifest, layout = bind_variant(name, build.resolve(), proof, runtime_commit)
+        variant_files, manifest, layout = bind_variant(name, build.resolve(), proof, runtime_commit, args.demand_only)
         files.update({'variants/'+name+'/'+path: data for path, data in variant_files.items()})
         metadata['variants'][name] = dict(directory='variants/'+name, destination=str(MODULES[name]),
             module_sha256=manifest['module_sha256'], virtual_a2=name == 'vmu-only',
             reader='New (X)' if name == 'reader-only' else 'Standard', lease_bytes=393216,
-            support_hooks_retained=True, linked_layout_sha256=sha(wire(layout)))
+            support_hooks_retained=True, prefetch_enabled=name == 'reader-only' and not args.demand_only,
+            controller_tick_off=args.demand_only and name == 'reader-only',
+            linked_layout_sha256=sha(wire(layout)))
     files['isolation.json'] = wire(metadata)
-    guide = (ROOT/'docs/native-isolation-test.md').read_text().replace('@BUILD@', runtime_commit[:12]).replace(
+    guide_path = 'docs/native-isolation-demand-test.md' if args.demand_only else 'docs/native-isolation-test.md'
+    guide = (ROOT/guide_path).read_text().replace('@BUILD@', runtime_commit[:12]).replace(
         '@RUNTIME_COMMIT@', runtime_commit).replace('@DELIVERY_COMMIT@', delivery_commit).encode()
     files['README-FIRST.md'] = guide
-    delivery_checks = extracted_install_check(files)
+    delivery_checks = extracted_install_check(files, args.previous_package if args.demand_only else None)
     with tempfile.TemporaryDirectory(prefix='kui-isolation-source-') as directory:
         bundle = Path(directory)/'native-source-full.bundle'
         subprocess.run(['git', 'bundle', 'create', str(bundle), 'HEAD'], cwd=ROOT, check=True, capture_output=True)
@@ -281,6 +357,7 @@ def package(args):
                      source_tree=delivery_tree, runtime_source_commit=runtime_commit,
                      runtime_build=runtime_commit[:12], source_full_bundle=full_info,
                      runtime_files_unchanged_after_freeze=True, console_compatibility_verified=False,
+                     demand_only=args.demand_only,
                      preserved_gui_build=GUI_BUILD, preserved_gui_sha256=GUI_SHA,
                      evidence_sha256={name: sha(data) for name, data in files.items()
                                       if name.startswith('evidence/') or name.endswith('/variant-layout.json')})
@@ -313,6 +390,11 @@ def main():
     parser.add_argument('--gui', type=Path, required=True)
     parser.add_argument('--host-log', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--demand-only', action='store_true',
+                        help='Require the New-demand/controller-prefetch-off control and its guide')
+    parser.add_argument('--previous-package', type=Path,
+                        default=ROOT.parent/'K-UI-Evolution-Isolation-9956562f91d6.zip',
+                        help='Pinned earlier995 archive for original-backup compatibility')
     args = parser.parse_args()
     try:
         print(json.dumps(package(args), indent=2))

@@ -74,6 +74,26 @@ class IsolationInstallTests(unittest.TestCase):
             if name not in map(str, installer.MODULES.values()):
                 self.assertEqual(after[name], data, name)
 
+    def upgrade_package(self):
+        """A later pair explicitly pins only the known earlier pair's code."""
+        old_build = self.metadata['build']
+        previous = dict(gui_sha256=self.metadata['gui']['sha256'], variants={})
+        new_commit = 'b'*40
+        for name in installer.MODULES:
+            directory = self.package/'variants'/name
+            module = (directory/personalizer.BASE_MODULE).read_bytes()
+            manifest = json.loads((directory/personalizer.MANIFEST).read_text())
+            previous['variants'][name] = {key: manifest[key] for key in
+                ('module_bytes', 'module_sha256', 'profile_module_offset')}
+            updated = envelope(module[64:], personalizer.verify(module)['memory_bytes'], new_commit[:12])
+            manifest.update(source_commit=new_commit, build=new_commit[:12], module_sha256=personalizer.sha(updated))
+            (directory/personalizer.BASE_MODULE).write_bytes(updated)
+            (directory/personalizer.MANIFEST).write_text(json.dumps(manifest))
+            self.metadata['variants'][name]['module_sha256'] = personalizer.sha(updated)
+        self.metadata.update(build=new_commit[:12], source_commit=new_commit,
+                             compatible_packages={old_build: previous})
+        self.write_metadata()
+
     def test_switches_restore_inactive_module_and_exact_originals(self):
         self.run_variant('reader-only')
         reader = (self.card/installer.MODULES['reader-only']).read_bytes()
@@ -193,6 +213,81 @@ class IsolationInstallTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('Virtual A2 is OFF', result.stdout)
         self.assert_protected()
+
+    def test_known_previous_active_variants_reuse_immutable_original_backup(self):
+        for previous_variant in installer.MODULES:
+            with self.subTest(previous_variant=previous_variant):
+                # Return to the original pair for each independent migration.
+                if (self.card/installer.BACKUP).exists():
+                    self.run_variant('restore')
+                    shutil.rmtree(self.card/installer.BACKUP_PARENT)
+                if previous_variant == 'vmu-only':
+                    # Fresh fixture with the same original files and profile.
+                    self.package = self.root/'previous-again'
+                    shutil.copytree(self.root/'initial-package', self.package)
+                    self.metadata = json.loads((self.package/'isolation.json').read_text())
+                else:
+                    shutil.copytree(self.package, self.root/'initial-package')
+                self.run_variant(previous_variant)
+                backup_before = {p.name: p.read_bytes() for p in (self.card/installer.BACKUP).iterdir()}
+                self.upgrade_package()
+                self.run_variant('reader-only');self.run_variant('vmu-only');self.run_variant('restore')
+                self.assertEqual({p.name: p.read_bytes() for p in (self.card/installer.BACKUP).iterdir()}, backup_before)
+                for path in installer.MODULES.values():
+                    self.assertEqual((self.card/path).read_bytes(), self.original[str(path)])
+                self.assert_protected()
+
+    def test_known_previous_restored_session_can_install_new_pair(self):
+        self.run_variant('vmu-only');self.run_variant('restore')
+        backup = (self.card/installer.BACKUP/'manifest.json').read_bytes()
+        self.upgrade_package();self.run_variant('reader-only');self.run_variant('restore')
+        self.assertEqual((self.card/installer.BACKUP/'manifest.json').read_bytes(), backup)
+
+    def test_previous_pending_receipt_can_restore_without_profile_file(self):
+        self.run_variant('reader-only')
+        state = json.loads((self.card/installer.STATE).read_text());state['pending'] = True
+        (self.card/installer.STATE).write_text(json.dumps(state))
+        self.upgrade_package();self.profile.write_bytes(b'unavailable')
+        self.run_variant('restore')
+        self.assertEqual(self.profile.read_bytes(), b'unavailable')
+        for path in installer.MODULES.values():
+            self.assertEqual((self.card/path).read_bytes(), self.original[str(path)])
+
+    def test_unknown_previous_backup_build_refuses_without_writes(self):
+        self.run_variant('reader-only');self.upgrade_package()
+        path = self.card/installer.BACKUP/'manifest.json'
+        record = json.loads(path.read_text());record['package_build'] = 'c'*12
+        path.write_text(json.dumps(record));before = self.snapshot()
+        with self.assertRaisesRegex(ValueError, 'Backup provenance'):
+            self.run_variant('reader-only')
+        self.assertEqual(self.snapshot(), before)
+
+    def test_previous_receipt_cannot_authorize_changed_code(self):
+        self.run_variant('reader-only');self.upgrade_package()
+        path = self.card/installer.MODULES['reader-only']
+        data = bytearray(path.read_bytes()[64:]);data[-1] ^= 1
+        data = envelope(bytes(data), len(data), COMMIT[:12]);path.write_bytes(data)
+        state_path = self.card/installer.STATE
+        state = json.loads(state_path.read_text());state['allowed']['reader-only'] = [personalizer.sha(data)]
+        state_path.write_text(json.dumps(state));before = self.snapshot()
+        with self.assertRaisesRegex(ValueError, 'pinned isolation code'):
+            self.run_variant('restore')
+        self.assertEqual(self.snapshot(), before)
+
+    def test_previous_receipt_cannot_authorize_another_profile_identity(self):
+        self.run_variant('reader-only');self.upgrade_package()
+        other_profile = pair(self.card, 'p0006', number='0006')
+        path = self.card/installer.MODULES['reader-only']
+        data = bytearray(path.read_bytes());offset = self.metadata['compatible_packages'][COMMIT[:12]][
+            'variants']['reader-only']['profile_module_offset']
+        data[offset:offset+4096] = other_profile.read_bytes()
+        data = envelope(bytes(data[64:]), len(data)-64, COMMIT[:12]);path.write_bytes(data)
+        state_path = self.card/installer.STATE
+        state = json.loads(state_path.read_text());state['allowed']['reader-only'] = [personalizer.sha(data)]
+        state_path.write_text(json.dumps(state));before = self.snapshot()
+        with self.assertRaisesRegex(ValueError, 'different prepared card'):
+            self.run_variant('restore')
+        self.assertEqual(self.snapshot(), before)
 
 
 if __name__ == '__main__':

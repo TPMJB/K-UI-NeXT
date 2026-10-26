@@ -2705,6 +2705,56 @@ def check_worker_pointer_aliases(wire,policy,fault_capture,coherence=None):
     return relocations
 
 
+# The explicit controller-TICK-off isolation lets GCC inline the still-live
+# CAPTURE_START visit into diagnostic_complete. Only this exact emitted source
+# site can cross the separately proved20-byte auxiliary stack switch.
+TICK_OFF_CAPTURE_STACK_PINS = {
+    '_diagnostic_complete': ('da4e61a4287e237684851a406e82eb4f7f41c22b2037f0da22a44a1c96e8036c',3638),
+    '_reader_capture_region': ('807f414ae76d5870a482e7952706e56e9f652c5168b3feb8db4316a4f827406c',100),
+    '_reader_readahead_exports': ('ed950f9e1dd3cb4b44f426fbb654963df854c75fea9678fd3dedf43e493276db',200),
+}
+TICK_OFF_CAPTURE_AUX_PINS = {
+    'native-ra-aux.bin':'61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974',
+    'native-ra-aux.reloc':'87ceef2187655c6c0bbe70d6844067785426f10afacabbab568fcf1c83cc9dfa',
+}
+
+
+def tick_off_capture_stack_site(worker,name,label):
+    return (worker[4].get('__kui_native_ra_tick_off_isolation_worker')==(1,0,0,0xfff1) and
+            name=='worker:src/loader/vmu_native_passive.c:diagnostic_complete' and
+            label=='vmu_native_reader_capture.inc:72:16')
+
+
+def tick_off_capture_stack_profile(directory,worker,read_ahead_proof):
+    directory=Path(directory);stage=read_elf(directory/'stage.elf')
+    for image,role in ((stage,'stage'),(worker,'worker')):
+        for marker in ('__kui_native_ra_tick_off_isolation_', '__kui_native_reader_only_isolation_'):
+            require(image[4].get(marker+role)==(1,0,0,0xfff1),
+                    'Inlined capture-start stack call lacks exact paired isolation markers')
+    require(read_ahead_proof and read_ahead_proof.get('enabled') and
+            read_ahead_proof.get('paired_markers') and
+            read_ahead_proof.get('gateway',{}).get('parked_owner_stack_bytes')==20,
+            'Inlined capture-start lacks the independently proved20B auxiliary switch')
+    binary=(directory/'native-worker.bin').read_bytes();wire=(directory/'native-worker.reloc').read_bytes()
+    signatures={}
+    for name,expected in TICK_OFF_CAPTURE_STACK_PINS.items():
+        actual=prepared_signature(worker,binary,wire,name)[:2]
+        require(actual==expected,'Inlined capture-start complete typed closure changed: '+name)
+        signatures[name]=dict(signature=actual[0],bytes=actual[1])
+    for name,expected in TICK_OFF_CAPTURE_AUX_PINS.items():
+        require(hashlib.sha256((directory/name).read_bytes()).hexdigest()==expected,
+                'Inlined capture-start auxiliary image/relocation differs: '+name)
+    # Exact decoded slice: getter result must be non-NULL before loading
+    # exports.visit; R4=CAPTURE_START(6) is supplied in the JSR delay slot.
+    _,body,_=symbol_bytes(worker,'_diagnostic_complete',2)
+    require(body[0x9c:0xac]==bytes.fromhex('0b4009000820058d00e7035000e59366') and
+            body[0xac:0xb0]==bytes.fromhex('0b4006e4'),
+            'Inlined capture-start guard/event argument changed')
+    return dict(enabled=True,event=6,parked_owner_stack_bytes=20,
+                source_site='vmu_native_reader_capture.inc:72:16',
+                complete_typed_closures=signatures,auxiliary_binary_and_relocation_pins=True)
+
+
 def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_proof=None,
                        *, terminal_proof=None,terminal_gateway_cases=0,read_ahead_proof=None):
     """Walk source-qualified emitted graphs with finite authored callbacks."""
@@ -2779,9 +2829,15 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
                 "sci_sd_bus.c")]
     memo, paths, visiting, indirect_sites, null_sites = {}, {}, set(), set(), set()
     terminal_escapes=set()
+    inline_capture_profile=None
     def indirect(name, label):
+        nonlocal inline_capture_profile
         domain, function = name.split(":", 1)[0], _function_base(name)
         source = Path(label.split(":", 1)[0]).name
+        if tick_off_capture_stack_site(worker,name,label):
+            if inline_capture_profile is None:
+                inline_capture_profile=tick_off_capture_stack_profile(directory,worker,read_ahead_proof)
+            return ['worker:verified_read_ahead_stack_switch']
         if read_ahead_proof and read_ahead_proof.get('enabled') and (
             (domain,function,source)==('worker','reader_readahead_visit','vmu_native_reader_capture.inc') or
             (domain,function,source)==('low','kui_vmu_observe_sd_lease','retail_async.c')):
@@ -2899,7 +2955,8 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
             "verified_zero_stack_assembly_leaves": ["kui_vmu_native_trace_irq",*fault_leaves],
             "verified_cold_owner_stack_gateways":cold_gates,
             "verified_stack_replacing_terminals": [list(site) for site in sorted(terminal_escapes)],
-            "background_loan_descriptor":descriptor}
+            "background_loan_descriptor":descriptor,
+            "verified_tick_off_inlined_capture_start":inline_capture_profile or {"enabled":False}}
 
 
 def check_stacks(directory, worker, fault_proof=None, coherence_proof=None, *, background_audit=None,

@@ -49,8 +49,9 @@ class LoanBoundary(Exception): pass
 
 
 class IsolationWorker(RecordWorker):
-    def __init__(self, startup, build, handoff, record, variant):
+    def __init__(self, startup, build, handoff, record, variant, tick_off=False):
         self.variant = variant
+        self.tick_off = tick_off
         self.low = read_elf(build/'resident-sci.elf')
         self.sd_entry = self.low[4]['_kui_vmu_observe_sd_lease'][0]
         self.calls, self.tick_calls = Counter(), 0
@@ -66,6 +67,11 @@ class IsolationWorker(RecordWorker):
                     (LEASE,0,0,0xfff1), 'Isolation lease is not exact compiled384KiB')
             require(image[4].get('__kui_native_bottom_heap_'+role) == ONE,
                     'Isolation lacks current bottom placement: '+role)
+        for image, role in ((stage,'stage'),(worker,'worker')):
+            tick_marker = image[4].get('__kui_native_ra_tick_off_isolation_'+role)
+            require(tick_marker == ONE if tick_off else tick_marker is None,
+                    'Controller TICK isolation marker differs: '+role)
+        require(not tick_off or variant == 'reader_only', 'TICK isolation belongs only to reader-only')
         self.lease_bytes = LEASE
         self.worker_physical_high = self.worker_physical_low+LEASE
         self.lease_geometry_source = 'Paired actual absolute isolation lease and bottom markers'
@@ -170,10 +176,10 @@ def poll(cpu, consume=True):
                     if (int(frame['header'],16)>>8)&255 == 32])
 
 
-def run_variant(startup, record_path, build, variant):
+def run_variant(startup, record_path, build, variant, tick_off=False):
     source,image,extent=fresh_verify(startup,record_path)
     record=Record(record_path.read_bytes(),image,source)
-    cpu=IsolationWorker(startup,build,make_handoff(),record,variant)
+    cpu=IsolationWorker(startup,build,make_handoff(),record,variant,tick_off)
     cpu.prepare();initializer=cpu.initialize_sdk()
     cpu.calls.clear()
     pristine=copy.deepcopy(cpu)
@@ -183,7 +189,8 @@ def run_variant(startup, record_path, build, variant):
     if variant=='reader_only':
         require(not any(stats[key] for key in ('advertisements','replies','backend_calls','devinfo','allinfo','media','reads')),
                 'Reader-only SDK enumeration exposed virtual storage')
-        require(not cpu.calls and cpu.tick_calls>0, 'Reader-only lost TICK or reached backend')
+        require(not cpu.calls and (cpu.tick_calls==0 if tick_off else cpu.tick_calls>0),
+                'Reader-only controller TICK selection or backend isolation differs')
         require(all((int(header,16)>>16)&2 == 0
                     for row in rounds for header in row['actual_parent_response_headers']),
                 'Reader-only hardware model unexpectedly contained virtual attachment')
@@ -219,7 +226,7 @@ def run_variant(startup, record_path, build, variant):
         forced.append(dict(command=command,reply=hex(reply),overlay=s,calls=dict(trial.calls),
                            storage_boundary_reached=False,tick_calls=trial.tick_calls))
     cpu.check_build_unchanged()
-    return dict(variant=variant,artifact_sha256={name:sha((build/name).read_bytes()) for name in
+    return dict(variant=variant,controller_tick_off=tick_off,artifact_sha256={name:sha((build/name).read_bytes()) for name in
                     ('entry.elf','stage.elf','native-worker.elf','native-worker.bin','native-worker.reloc','resident-sci.elf','resident-sci.bin')},
                 original_source_sha256=sha(source),record_sha256=sha(record.wire),program_extent=extent,
                 lease_bytes=cpu.lease_bytes,worker_bytes=0x20000,placement='bottom',heap_calls=cpu.heap_calls,
@@ -240,6 +247,8 @@ def main():
     parser.add_argument('--standard-build',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--source-commit',required=True)
+    parser.add_argument('--reader-tick-off',action='store_true',
+                        help='Require the explicit paired reader-only controller TICK-off markers')
     args=parser.parse_args()
     require(__debug__, 'Assertions must remain enabled')
     require(len(args.source_commit)==40 and all(c in '0123456789abcdef' for c in args.source_commit),
@@ -247,7 +256,7 @@ def main():
     for build in (args.reader_build,args.standard_build):
         require(args.source_commit[:12].encode() in (build/'entry.elf').read_bytes(),
                 'Actual linked entry does not contain runtime freeze build identifier')
-    reports=[run_variant(args.startup,args.record,args.reader_build,'reader_only'),
+    reports=[run_variant(args.startup,args.record,args.reader_build,'reader_only',args.reader_tick_off),
              run_variant(args.startup,args.record,args.standard_build,'standard_vmu')]
     report=dict(schema='kui.native.isolation-linked-sdk.v1',status='PASS',
                 source_commit=args.source_commit,build=args.source_commit[:12],variants=reports,
