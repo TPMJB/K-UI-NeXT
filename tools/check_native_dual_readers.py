@@ -72,19 +72,64 @@ GAME_STARTUP_WORKER_PINS={
     '_reader_readahead_visit':(56, 'c44759200e43937665b2987281e995b4f39675f1e05180371aad4078cc02dbf3'),
 }
 
-def profile_pins(worker):
+def profile_pins(worker,stage=None):
     from check_native_game_startup_profile import game_startup_profile
-    if game_startup_profile(worker):return GAME_STARTUP_STAGE_PINS,GAME_STARTUP_WORKER_PINS
-    from check_native_controller_failure_witness import witness_profile
-    if witness_profile(worker):
-        require(WITNESS_STAGE_PINS and WITNESS_WORKER_PINS,
-                'dual failure-witness profile lacks separately reviewed pins')
-        return WITNESS_STAGE_PINS,WITNESS_WORKER_PINS
-    return STAGE_PINS,WORKER_PINS
+    from check_native_followup_profile import stage_pins,worker_pins
+    if game_startup_profile(worker):
+        historical_stage,historical_worker=GAME_STARTUP_STAGE_PINS,GAME_STARTUP_WORKER_PINS
+    else:
+        from check_native_controller_failure_witness import witness_profile
+        if witness_profile(worker):
+            require(WITNESS_STAGE_PINS and WITNESS_WORKER_PINS,
+                    'dual failure-witness profile lacks separately reviewed pins')
+            historical_stage,historical_worker=WITNESS_STAGE_PINS,WITNESS_WORKER_PINS
+        else:
+            historical_stage,historical_worker=STAGE_PINS,WORKER_PINS
+    return (stage_pins(stage,'dual',historical_stage) if stage is not None else historical_stage,
+            worker_pins(worker,'dual',historical_worker))
 
 
 def require(test,message):
     if not test:raise ValueError(message)
+
+
+def low_callback_companion(artifacts, proof):
+    """A blob selector alone cannot prove its cold callback entry points."""
+    from check_native_dual_callbacks import SCHEMA, FIELDS
+    require(isinstance(proof,dict) and proof.get('schema')==SCHEMA and
+            proof.get('enabled') is True and proof.get('actual_linked_stage_executed') is True,
+            'dual reader requires the executed selected low-callback proof')
+    recorded=proof.get('artifact_sha256',{})
+    require(set(recorded)=={'stage','resident','legacy'} and
+            all(isinstance(artifacts.get(name),str) and len(artifacts[name])==64 and
+                recorded[name]==artifacts[name] for name in recorded),
+            'dual low-callback proof does not bind these exact stage/readers')
+    roles=proof.get('expected_callback_roles',{})
+    require(set(roles)=={'new','legacy'} and
+            all(set(row)==set(FIELDS) and all(type(value) is int and 0x8c004000<=value<0x8c007ba0
+                for value in row.values()) for row in roles.values()),
+            'dual low-callback proof omits a typed selected-reader role')
+    selector=proof.get('selector',{});consumer=proof.get('consumers',{})
+    require(selector.get('actual_linked_selector_cases')==210 and
+            selector.get('unsupported_mode_refusals')==198 and
+            all(selector.get(key) is True for key in ('all_six_roles_from_selected_actual_elf',
+                'exact_immutable_row_pointer','c_abi_preserved','no_interrupt_register_or_nonstack_writes')) and
+            consumer.get('actual_linked_arming_cases')==24 and
+            consumer.get('actual_linked_configuration_cases')==24 and
+            consumer.get('actual_linked_manifest_binding_cases')==96 and
+            consumer.get('arming_ownership_refusals')==48 and
+            consumer.get('invalid_consumer_mode_refusals')==24 and
+            all(consumer.get(key) is True for key in (
+                'initializer_slot_and_owner_return_use_selected_reader',
+                'three_worker_callbacks_use_selected_reader','indirect_manifest_binding_uses_selected_reader',
+                'source_and_owned_manifest_arguments_and_return_preserved',
+                'original_control_and_frame_neighbours_preserved',
+                'exact_initializer_cache_line_published_before_readback',
+                'typed_manifest_binder_clobbers_caller_saved_registers',
+                'tail_binder_retains_actual_rts_pr_contract','no_interrupt_register_writes',
+                'unsupported_modes_stop_before_control_or_callback_writes')),
+            'dual low-callback proof lacks actual selection, arming, publication or binding execution')
+    return True
 
 
 def sha(data):return hashlib.sha256(data).hexdigest()
@@ -224,6 +269,7 @@ def dual_companion(worker,proof):
             all(tuple(cold_pins[name])==tuple(tail_pins[name]) for name in cold_pins),
             'dual tail target lacks its matching actual cold-binder/initializer proof')
     legacy=report.get('legacy_background',{});require_wide_legacy(legacy)
+    low_callback_companion(artifacts,report.get('selected_low_callbacks'))
     stack=legacy.get('private_stack',{});engines=report.get('embedded_engines',{})
     require(legacy.get('schema')=='kui.native.background.audit.v1' and
             legacy.get('resident_sha256')==artifacts.get('legacy') and
@@ -513,9 +559,31 @@ def check(directory,*,self_test=False,cold_binder_proof=None,witness_proof=None)
     resident,legacy,stage,worker=(read_elf(directory/name) for name in
         ('resident-sci.elf','resident-legacy.elf','stage.elf','native-worker.elf'))
     markers(stage,worker)
+    from check_native_dual_callbacks import check as check_low_callbacks
+    low_callbacks=check_low_callbacks(directory,self_test=self_test)
+    low_artifacts={name:sha(image[0]) for name,image in
+                   (('stage',stage),('resident',resident),('legacy',legacy))}
+    low_callback_companion(low_artifacts,low_callbacks)
+    callback_refusals=0
+    if self_test:
+        malformed=[None,{},dict(enabled=False)]
+        for name in low_artifacts:
+            changed=copy.deepcopy(low_callbacks);changed['artifact_sha256'][name]='0'*64;malformed.append(changed)
+        for role,row in low_callbacks['expected_callback_roles'].items():
+            for name in row:
+                changed=copy.deepcopy(low_callbacks);del changed['expected_callback_roles'][role][name];malformed.append(changed)
+        for category in ('selector','consumers'):
+            for key,value in low_callbacks[category].items():
+                changed=copy.deepcopy(low_callbacks)
+                changed[category][key]=False if type(value) is bool else 0
+                malformed.append(changed)
+        for changed in malformed:
+            try:low_callback_companion(low_artifacts,changed)
+            except (ValueError,KeyError,TypeError):callback_refusals+=1
+            else:raise ValueError('dual accepted an incomplete or stale low-callback companion')
     from check_native_game_startup_profile import game_startup_profile
     require(game_startup_profile(worker,resident)==game_startup_profile(worker,legacy), 'Dual low hooks use different owner-stack profiles')
-    selected_stage_pins,selected_worker_pins=profile_pins(worker)
+    selected_stage_pins,selected_worker_pins=profile_pins(worker,stage)
     stage_pins=pin(stage,selected_stage_pins,'stage');worker_pins=pin(worker,selected_worker_pins,'worker')
     from check_native_controller_failure_witness import witness_profile,check as check_witness,witness_companion
     if witness_proof is None:
@@ -593,6 +661,8 @@ def check(directory,*,self_test=False,cold_binder_proof=None,witness_proof=None)
                          (('resident',resident),('legacy',legacy),('stage',stage),('worker',worker))},
         capability=cap,embedded_engines=blobs,immutable_stage_pins=stage_pins,immutable_worker_pins=worker_pins,
         controller_failure_witness=witness_proof,
+        selected_low_callbacks=low_callbacks,
+        selected_low_callback_companion_mutation_rejections=callback_refusals,
         console_layout=layouts,selector=selection,late_binding=binding,worker=worker_proof,
         additional_scalar_instruction_truth_cases=truth,legacy_background=legacy_proof,
         instruction_and_marker_mutation_rejections=rejected,

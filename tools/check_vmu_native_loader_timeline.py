@@ -162,6 +162,8 @@ def division_helper(resident,worker,read_ahead=False,diagnostic=False,pio=False,
         expected=GAME_STARTUP_BIN_AT_NO_DIV_PIN if owned_timers else WITNESS_DUAL_BIN_AT_NO_DIV_PIN if witness else DUAL_BIN_AT_NO_DIV_PIN if dual else READAHEAD_PIO_PAIR_BIN_AT_NO_DIV_PIN if pio_pair else READAHEAD_PIO_BIN_AT_NO_DIV_PIN if pio else \
             READAHEAD_DIAGNOSTIC_BIN_AT_NO_DIV_PIN if diagnostic else \
             READAHEAD_BIN_AT_NO_DIV_PIN if read_ahead else BIN_AT_NO_DIV_PIN
+        from check_native_followup_profile import worker_pins
+        expected=worker_pins(worker,'timeline_division',expected)
         require((hashlib.sha256(body).hexdigest(),len(body))==expected,
                 'timeline bin arithmetic changed without a linked division-helper proof')
         if read_ahead:
@@ -276,6 +278,8 @@ def check(directory,*,self_test=False,read_ahead_proof=None):
     begin,bridge,_=symbol_bytes(resident,'_kui_retail_async_trace',2)
     bridge_pin=READAHEAD_BRIDGE_PIN if read_ahead else SDK_BRIDGE_PIN if sdk else BRIDGE_PIN
     binder_pin=WITNESS_DUAL_BINDER_PIN if witness else DUAL_BINDER_PIN if dual else READAHEAD_BINDER_PIN if read_ahead else SDK_BINDER_PIN if sdk else BINDER_PIN
+    from check_native_followup_profile import stage_pins
+    binder_pin=stage_pins(stage,'timeline_binder',binder_pin)
     require((hashlib.sha256(bridge).hexdigest(),len(bridge))==bridge_pin,
             'linked timeline bridge instructions/literals changed')
     bridge_bindings(resident,bridge,sdk,read_ahead)

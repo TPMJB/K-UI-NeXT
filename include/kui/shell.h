@@ -345,6 +345,8 @@ bool kui_shell_games_launch_ready(const struct kui_shell *shell);
 bool kui_shell_games_patches_ready(const struct kui_shell *shell);
 bool kui_shell_game_launch_settings(const struct kui_shell *shell,
                                     struct kui_game_launch_settings *out);
+/* loaded=true with settings=NULL means no exact-image preset exists. Keep
+ * the inspected default; a saved Standard/Off entry is always non-NULL. */
 void kui_shell_set_game_launch_settings(struct kui_shell *shell,const char *path,
                                        const struct kui_game_launch_settings *settings,bool loaded);
 void kui_shell_game_launch_saved(struct kui_shell *shell,const char *path,bool ok);

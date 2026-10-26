@@ -99,15 +99,20 @@ static bool load_table(struct workspace *w,struct slot slots[2],int *current,kui
     }
     return true;
 }
-bool kui_game_launch_settings_load(const char *image_path,struct kui_game_launch_settings *out,kui_log_fn log) {
-    if(!out) return false;
+bool kui_game_launch_settings_lookup(const char *image_path,struct kui_game_launch_settings *out,bool *found,kui_log_fn log) {
+    if(!out || !found) return false;
+    *found=false;
     kui_game_launch_settings_default(out);char key[KUI_GAME_LAUNCH_SETTINGS_PATH_CAP];
     if(!kui_game_launch_settings_normalize(key,image_path)) return false;
     struct workspace w;if(!workspace_open(&w,log)) return false;
     struct slot slots[2];int current;bool ok=load_table(&w,slots,&current,log);
-    if(ok) (void)kui_game_launch_table_find(w.table,key,out);
+    if(ok) *found=kui_game_launch_table_find(w.table,key,out);
     else if(log) log("Game launch settings unavailable; defaults remain in memory");
     workspace_close(&w);return ok;
+}
+bool kui_game_launch_settings_load(const char *image_path,struct kui_game_launch_settings *out,kui_log_fn log) {
+    bool found;
+    return kui_game_launch_settings_lookup(image_path,out,&found,log);
 }
 static bool make_parents(kui_log_fn log) {
     static const char *const parents[]={"0:/KUI","0:/KUI/apps","0:/KUI/apps/games"};

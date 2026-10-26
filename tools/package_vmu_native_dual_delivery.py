@@ -36,6 +36,37 @@ def wire(value):
     return (json.dumps(value, indent=2) + '\n').encode()
 
 
+def offline_source_recovery_check(candidate, script, bundle):
+    """Run the shipped offline recovery, including refusal before mutation."""
+    with tempfile.TemporaryDirectory(prefix='kui-native-recovery-cli-') as temporary:
+        root=Path(temporary);source=root/'source';source.mkdir()
+        (root/'CANDIDATE.json').write_bytes(wire(candidate))
+        path=source/'native-source-full.bundle';path.write_bytes(bundle)
+        entry=source/'checkout-source.py';entry.write_bytes(script)
+        argv=[sys.executable,str(entry)]
+        for _ in range(2):
+            run=subprocess.run(argv,cwd=root,text=True,capture_output=True)
+            require(run.returncode==0,'Shipped offline source recovery failed: '+run.stderr)
+            restored=root/'restored-source'
+            actual=subprocess.check_output(['git','-C',str(restored),'rev-parse','HEAD^{tree}'],text=True).strip()
+            require(actual==candidate['source_tree'] and not subprocess.check_output(
+                ['git','-C',str(restored),'status','--porcelain'],text=True),
+                'Shipped offline recovery did not produce the exact clean tree')
+        sentinel=restored/'README.md';before=sentinel.read_bytes();sentinel.write_bytes(before+b'\nlocal edit\n')
+        refused=subprocess.run(argv,cwd=root,text=True,capture_output=True)
+        require(refused.returncode!=0 and 'dirty' in refused.stderr.lower() and
+                sentinel.read_bytes()==before+b'\nlocal edit\n',
+                'Offline source recovery did not preserve a dirty checkout')
+        sentinel.write_bytes(before)
+        with path.open('r+b') as damaged:
+            damaged.seek(-1,2);last=damaged.read(1);damaged.seek(-1,2);damaged.write(bytes([last[0]^1]))
+        refused=subprocess.run(argv,cwd=root,text=True,capture_output=True)
+        require(refused.returncode!=0 and 'checksum mismatch' in refused.stderr.lower(),
+                'Offline source recovery accepted a changed full bundle')
+    return dict(extracted_cli_runs=4,fresh_offline_clone=True,existing_clean_checkout=True,
+                dirty_checkout_preserved=True,changed_bundle_refused=True,exact_source_tree_verified=True)
+
+
 def git(*args):
     return subprocess.check_output(['git', *args], cwd=ROOT, text=True).strip()
 
@@ -211,12 +242,18 @@ def package(args):
                               baseline_module_sha256=sha(baseline), unchanged_reader_components=unchanged_components,
                               low_readers_and_auxiliary_identical_except_reviewed_owner_stack_bound_and_build_label=True,
                               low_reader_delta='One decoded owner-stack lower-bound literal in each low hook; scheduling and producer policy unchanged',
-                              worker_change='Generic guarded timer callback acceptance with existing VMU ownership and controller checks')
+                              worker_change='Generic guarded timer callback acceptance and existing VMU ownership/controller checks; terminal-only PROFILE stack/video observer and compact exact-Evolution diagnostic records',
+                              cold_stage_change='Six typed callbacks selected from the actual New or Legacy reader ELF',
+                              games_ui_change='New reader selected by default; explicit reader choices retained')
     ra, sdk = report['read_ahead'], report['sdk_sci_route']
     require(ra.get('dual_reader_candidate') is True and
             ra.get('dual_reader', {}).get('enabled') is True and
             sdk.get('structural_profile') is True and sdk.get('generic_family_table', {}).get('enabled'),
             'Both structural SDK and actual dual-engine proofs are required')
+    from check_native_dual_readers import low_callback_companion
+    dual=ra['dual_reader']
+    require(low_callback_companion(dual.get('artifact_sha256',{}),dual.get('selected_low_callbacks')),
+            'Actual selected-reader cold callback execution is required')
     witness = ra.get('controller_failure_witness')
     require(report.get('prepared_lifetime_admission', {}).get('controller_failure_witness') == witness and
             witness_companion(read_elf(args.build/'native-worker.elf'), ra),
@@ -224,6 +261,10 @@ def package(args):
     require(witness.get('owned_timer_callbacks', {}).get('enabled') is True and
             report.get('prepared_lifetime_admission', {}).get('live_boundary_call_abi', {}).get('enabled') is True,
             'Actual owned-timer callback and live-boundary driver ABI proofs are required')
+    from check_native_raw_owner_capture import require_companion as raw_owner_companion
+    require(raw_owner_companion(read_elf(args.build/'native-worker.elf'),
+                report.get('prepared_lifetime_admission',{}).get('raw_owner_terminal')),
+            'Matching actual terminal-only owner observer proof is required')
     require(sha((args.build/'native-ra-aux.bin').read_bytes()) ==
             '61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974' and
             (ROOT/'src/loader/native_readahead_aux.c').read_bytes() ==
@@ -281,8 +322,8 @@ def package(args):
                   'evidence/final-original-heap.json': heap_wire,
                   'evidence/host-tests.log': args.host_log.read_bytes(),
                   'evidence/package-audit.log': args.package_log.read_bytes()})
-    for path in sorted((ROOT/'docs/evidence').glob('native-*2026-10-25.json')):
-        if any(word in path.name for word in ('structural', 'joint', 'pio-pair-observed', 'new-structural', 'console-followup', 'followup-review', 'terminal-dispatch', 'startup-source-pass', 'card-preflight')):
+    for path in sorted((ROOT/'docs/evidence').glob('native-*2026-10-2[56].json')):
+        if any(word in path.name for word in ('structural', 'joint', 'pio-pair-observed', 'new-structural', 'console-followup', 'followup-review', 'terminal-dispatch', 'startup-source-pass', 'card-preflight', 'new-default', 'raw-owner', 'selected-low')):
             files['evidence/'+path.name] = path.read_bytes()
     candidate = dict(schema='kui.native.universal-readers.candidate.v1', source_commit=commit,
                      source_tree=tree, build=revision, module_sha256=sha(module),
@@ -303,38 +344,81 @@ def package(args):
     bundle = args.public/'native-source-update.bundle'
     subprocess.run(['git', 'bundle', 'create', str(bundle.resolve()), 'HEAD', '^'+PREREQUISITE], cwd=ROOT, check=True)
     subprocess.run(['git', 'bundle', 'verify', str(bundle.resolve())], cwd=ROOT, check=True, capture_output=True)
+    full_bundle = args.public/'native-source-full.bundle'
+    subprocess.run(['git','bundle','create',str(full_bundle.resolve()),'HEAD'],cwd=ROOT,check=True)
+    subprocess.run(['git','bundle','verify',str(full_bundle.resolve())],cwd=ROOT,check=True,capture_output=True)
+    full_wire=full_bundle.read_bytes()
+    # An independent empty clone proves this bundle has no prerequisite on
+    # another workspace, public branch, network connection or local object.
+    with tempfile.TemporaryDirectory(prefix='kui-native-offline-source-') as temporary:
+        restored=Path(temporary)/'restored-source'
+        subprocess.run(['git','clone','--no-checkout',str(full_bundle.resolve()),str(restored)],
+                       check=True,capture_output=True)
+        subprocess.run(['git','-C',str(restored),'checkout','--detach',commit],check=True,capture_output=True)
+        restored_tree=subprocess.check_output(['git','-C',str(restored),'rev-parse','HEAD^{tree}'],text=True).strip()
+        require(restored_tree==tree and not subprocess.check_output(
+            ['git','-C',str(restored),'status','--porcelain'],text=True),
+            'Full source bundle did not restore the exact clean source tree offline')
+    full_info=dict(path='source/native-source-full.bundle',bytes=len(full_wire),sha256=sha(full_wire),
+                   prerequisites=[],clean_offline_clone_and_tree_verified=True)
+    candidate['source_full_bundle']=full_info
+    candidate['source_recovery_default']='self-contained offline full-history bundle'
+    delivery['source_full_bundle']=full_info
     patch = subprocess.check_output(['git', 'diff', '--binary', PREREQUISITE, 'HEAD'], cwd=ROOT)
     recovery = f'''# Source recovery
 
-Source {commit}, tree {tree}. The bundle retains original history after
-prerequisite {PREREQUISITE}. This package does not require a new published branch.
+Source {commit}, tree {tree}.
 
-For an existing source checkout containing the prerequisite, fetch the bundled
-native-source-update.bundle, then check out {commit}. Refuse a dirty checkout
-before changing revisions.
+The preferred recovery is self-contained and needs no network or earlier
+checkout. From the extracted ZIP root:
 
-To recover from the existing public checkpoint, clone branch
-checkpoint/native-universal-20261025 from https://github.com/TPMJB/K-UI-NeXT,
-run python3 restore.py, then fetch this package's source/native-source-update.bundle
-into restored-source and check out the source commit above. Verify its tree
-with git rev-parse HEAD^{{tree}} against {tree}.
+```sh
+git clone source/native-source-full.bundle restored-source
+git -C restored-source checkout --detach {commit}
+git -C restored-source rev-parse 'HEAD^{{tree}}'
+```
+
+The printed tree must equal `{tree}`. Alternatively run
+`python3 source/checkout-source.py`; it verifies the bundle SHA256 and tree
+and refuses a dirty existing checkout. The full bundle was independently
+cloned and its clean tree verified during packaging.
+
+Full bundle: {len(full_wire)} bytes, SHA256 {sha(full_wire)}.
+
+The smaller source/native-source-update.bundle is also retained for an
+existing checkout containing prerequisite {PREREQUISITE}. Fetch that local
+bundle and check out {commit}, refusing a dirty checkout first. It is an
+optional incremental path, not a prerequisite for the full bundle.
 '''.encode()
     checkout = f'''#!/usr/bin/env python3
-import json,pathlib,subprocess,sys
-root=pathlib.Path(__file__).resolve().parents[1]
-item=json.loads((root/'{PUBLIC_FOLDER}/CANDIDATE.json').read_text())
+import hashlib,json,pathlib,subprocess
+here=pathlib.Path(__file__).resolve().parent
+root=here.parent if here.name=='source' else here
+item=json.loads((root/'CANDIDATE.json').read_text())
+full=here/'native-source-full.bundle'
+info=item['source_full_bundle']
+if full.stat().st_size!=info['bytes'] or hashlib.sha256(full.read_bytes()).hexdigest()!=info['sha256']:
+    raise SystemExit('Full source bundle checksum mismatch')
 dest=root/'restored-source'
-if not dest.exists():subprocess.run([sys.executable,str(root/'restore.py')],cwd=root,check=True)
 def git(*a):return subprocess.check_output(['git','-C',str(dest),*a],text=True).strip()
-if git('status','--porcelain'):raise SystemExit('Refusing a dirty source checkout')
-subprocess.run(['git','-C',str(dest),'fetch',str(root/'{PUBLIC_FOLDER}/native-source-update.bundle'),'HEAD'],check=True)
-if git('rev-parse',item['source_commit']+'^{{tree}}')!=item['source_tree']:raise SystemExit('Source tree mismatch')
+if dest.exists():
+    if git('status','--porcelain'):raise SystemExit('Refusing a dirty source checkout')
+    subprocess.run(['git','-C',str(dest),'fetch',str(full),'HEAD'],check=True)
+else:
+    subprocess.run(['git','clone','--no-checkout',str(full),str(dest)],check=True)
+if git('rev-parse',item['source_commit']+'^{{tree}}')!=item['source_tree']:
+    raise SystemExit('Source tree mismatch')
 subprocess.run(['git','-C',str(dest),'checkout','--detach',item['source_commit']],check=True)
-print('Verified native X/Y source',item['source_commit'],dest)
+if git('status','--porcelain'):raise SystemExit('Restored source is not clean')
+print('Verified offline native X/Y source',item['source_commit'],dest)
 '''.encode()
     files.update({'CANDIDATE.json': wire(candidate), 'delivery-checks.json': wire(delivery),
                   'source/native-source-update.bundle': bundle.read_bytes(),
+                  'source/native-source-full.bundle': full_wire,
+                  'source/checkout-source.py': checkout,
                   'source/source-change.patch': patch, 'source/SOURCE-RECOVERY.md': recovery})
+    delivery['offline_source_recovery']=offline_source_recovery_check(candidate,checkout,full_wire)
+    files['delivery-checks.json']=wire(delivery)
     files['SHA256SUMS.txt'] = checksums(files)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(args.output, 'w', zipfile.ZIP_DEFLATED) as archive:
@@ -353,6 +437,7 @@ print('Verified native X/Y source',item['source_commit'],dest)
     for name, data in public.items():
         (args.public/name).write_bytes(data)
     public['native-source-update.bundle'] = bundle.read_bytes()
+    public['native-source-full.bundle'] = full_wire
     require({p.name for p in args.public.iterdir() if p.is_file()} <= set(public)|{'SHA256SUMS.txt'},
             'Unexpected publication-directory file')
     (args.public/'SHA256SUMS.txt').write_bytes(checksums(public))

@@ -2723,7 +2723,7 @@ static void games_native_reader_choices(void) {
         assert(kui_shell_game_launch_settings(&s,&before));
         assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && !s.games_retail_reader);
         assert(kui_shell_game_launch_settings(&s,&after));
-        before.reader=reader==KUI_GAME_READER_BACKGROUND?KUI_GAME_READER_EAGER:KUI_GAME_READER_BACKGROUND;
+        before.reader=(reader+1u)%KUI_GAME_READER_COUNT;
         same_launch_settings(&before,&after);
         assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==reader);
         assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
@@ -2747,7 +2747,64 @@ static void games_native_reader_choices(void) {
     render(&view);assert(strstr(drawn,"Background speed") && !strstr(drawn,"Background reader"));
     assert(!strstr(drawn,"New (X)") && !strstr(drawn,"Legacy (Y)"));
     assert(!strcmp(kui_shell_games_reader_label(&s),"Standard"));
-    puts("PASS native reader UI: New X/Legacy Y labels, unchanged buttons/default Off, persisted fields and CE/CDDA/ZSO exclusions");
+    puts("PASS native reader UI: New X/Legacy Y/Off choices, persisted fields and CE/CDDA/ZSO exclusions");
+}
+static void games_new_reader_defaults(void) {
+    struct kui_shell_view view={0};
+    struct kui_games_detail detail=launch_detail(false,false);
+    detail.background_default=true;
+    strcpy(detail.title,"UNCONFIGURED NATIVE GAME");
+    install_launch_detail(&detail);
+    assert(s.games_launch_reader==KUI_GAME_READER_BACKGROUND);
+    /* A successful empty lookup must not turn the new default into Off.
+     * Reading defaults does not request a preset write or launch. */
+    kui_shell_set_game_launch_settings(&s,detail.path,NULL,true);
+    assert(s.games_launch_reader==KUI_GAME_READER_BACKGROUND && !s.games_retail_reader);
+    assert(strstr(s.games_launch_notice,"save automatically") && !strstr(s.games_launch_notice,"could not"));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_ASYNC);
+    s.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;
+    open_extra_options();s.game_tools_selected=KUI_SHELL_GAME_TOOL_SPEED;
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==KUI_GAME_READER_STANDARD);
+    render(&view);assert(strstr(drawn,"Background reader") && strstr(drawn,"Off"));
+    struct kui_game_launch_settings off;
+    assert(kui_shell_game_launch_settings(&s,&off) && off.reader==KUI_GAME_READER_STANDARD);
+    static struct kui_game_launch_table table,decoded;
+    static uint8_t record[KUI_GAME_LAUNCH_SETTINGS_RECORD_MAX];
+    kui_game_launch_table_clear(&table);assert(kui_game_launch_table_upsert(&table,detail.path,&off));
+    size_t bytes=0;uint64_t sequence=0;
+    assert(kui_game_launch_settings_encode(record,sizeof(record),&bytes,&table,17u));
+    assert(kui_game_launch_settings_decode(&decoded,&sequence,record,bytes) && sequence==17u);
+    install_launch_detail(&detail);assert(s.games_launch_reader==KUI_GAME_READER_BACKGROUND);
+    assert(kui_game_launch_table_find(&decoded,detail.path,&off));
+    kui_shell_set_game_launch_settings(&s,detail.path,&off,true);
+    assert(s.games_launch_reader==KUI_GAME_READER_STANDARD);
+    press(KUI_SHELL_Y,false);open_extra_options();s.game_tools_selected=KUI_SHELL_GAME_TOOL_SPEED;
+    /* Off remains an enabled Advanced control and can be reenabled/saved. */
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==KUI_GAME_READER_BACKGROUND);
+    s.game_tools_selected=KUI_SHELL_GAME_TOOL_DEFAULTS;
+    s.games_launch_reader=KUI_GAME_READER_STANDARD;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==KUI_GAME_READER_BACKGROUND);
+    /* Explicit persisted Legacy is retained as well. */
+    off.reader=KUI_GAME_READER_EAGER;
+    kui_shell_set_game_launch_settings(&s,detail.path,&off,true);
+    assert(s.games_launch_reader==KUI_GAME_READER_EAGER);
+    /* Read failure retains the image default but gives accurate feedback. */
+    install_launch_detail(&detail);kui_shell_set_game_launch_settings(&s,detail.path,NULL,false);
+    assert(s.games_launch_reader==KUI_GAME_READER_BACKGROUND && strstr(s.games_launch_notice,"could not"));
+    for(unsigned kind=0;kind<6u;kind++) {
+        struct kui_games_detail other=detail;
+        if(kind==0u) other.background_default=false; /* non-SCI inspection */
+        if(kind==1u) {other.native_gd=false;other.native_cd=true;other.cd_image=true;other.format=KUI_GAME_IMAGE_CUE;}
+        if(kind==2u) other.scrambled=true;
+        if(kind==3u) other.format=KUI_GAME_IMAGE_ZSO;
+        if(kind==4u) {other.windows_ce=true;other.native_gd=false;}
+        if(kind==5u) other.native_gd=false;
+        install_launch_detail(&other);kui_shell_set_game_launch_settings(&s,other.path,NULL,true);
+        assert(s.games_launch_reader==(kind==4u?KUI_GAME_READER_BACKGROUND:KUI_GAME_READER_STANDARD));
+        assert(!s.games_launch_cdda);
+    }
+    puts("PASS New reader defaults: unsaved SCI/native GDI selects New, Advanced Off persists, explicit presets survive, other routes retain defaults");
 }
 
 static void games_patch_rendering(void) {
@@ -4198,7 +4255,7 @@ int main(int argc,char **argv) {
     vmu_collection_copy_controls();vmu_collection_controls();vmu_collection_rendering();
     games_remembered_selection(); games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_cdda_compatibility_status(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_zso_controls(); games_codec_controls(); games_check_baseline_controls(); games_variant_controls();
     if(argc==2 && !strcmp(argv[1],"--games-controls")) { puts("PASS Games navigation and launch controls"); return 0; }
-    games_rendering(); games_native_reader_choices(); games_patch_rendering(); games_zso_rendering(); games_selected_art_rendering(); games_variant_rendering();
+    games_rendering(); games_native_reader_choices(); games_new_reader_defaults(); games_patch_rendering(); games_zso_rendering(); games_selected_art_rendering(); games_variant_rendering();
     if(argc==2 && !strcmp(argv[1],"--games")) { puts("PASS Games navigation, launch eligibility and rendering"); return 0; }
     storage_test_controls();storage_test_rendering();
     launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction(); ripper_export_rendering();

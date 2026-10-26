@@ -127,6 +127,8 @@ def owned_timer_profile(worker):
 
 def code_pins(worker):
     selected=OWNED_TIMER_PINS if owned_timer_profile(worker) else PINS
+    from check_native_followup_profile import worker_pins
+    selected=worker_pins(worker,'witness',selected)
     require(selected,'controller witness timer profile lacks independently reviewed pins')
     return selected
 

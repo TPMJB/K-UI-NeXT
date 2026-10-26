@@ -385,6 +385,8 @@ def worker_bindings(resident,worker,*,diagnostic=False,pio=False,pio_pair=False,
     require(not owned_timers or witness and dual, 'Owned timer read-ahead pins require dual witness profile')
     selected=GAME_STARTUP_WORKER_PINS if owned_timers else DUAL_WITNESS_WORKER_PINS if witness else DUAL_WORKER_PINS if dual else PIO_PAIR_WORKER_PINS if pio_pair else PIO_WORKER_PINS if pio else \
         DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
+    from check_native_followup_profile import worker_pins as followup_worker_pins
+    selected=followup_worker_pins(worker,'read_ahead',selected)
     require(selected,'read-ahead reviewed worker pins are missing')
     public=656 if diagnostic else 76
     for name,(count,digest) in selected.items():
@@ -429,6 +431,9 @@ def worker_diagnostic_display(worker):
     labels=('BLK BASE COUNT END OP','LOAN RX R0 R1 KEPT','ARRIVED LOST PRE STATE POS',
             'PRE SAR DAR TCR CHCR DMAOR','POST SAR DAR TCR CHCR DMAOR',
             'PRE SCI PINS TMU POST STATE POS','POST SCI PINS TMU')
+    from check_native_followup_profile import raw_owner_profile
+    if raw_owner_profile(worker):
+        labels=(*labels[:2],'ARRIVED LOST STATE POS',*labels[3:])
     for pointer,label in zip(struct.unpack('<7I',body),labels):
         owners=[s for s in worker[3] if s[1]==1 and s[2]&7==2 and
                 s[3]<=pointer<=s[3]+s[5]-len(label)-1]
@@ -888,6 +893,8 @@ def check(directory,*,self_test=False):
         from check_native_game_startup_profile import game_startup_profile
         worker_pins=GAME_STARTUP_WORKER_PINS if game_startup_profile(worker,resident) else DUAL_WITNESS_WORKER_PINS if witness else DUAL_WORKER_PINS if dual else PIO_PAIR_WORKER_PINS if pio_pair else PIO_WORKER_PINS if pio else \
             DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
+        from check_native_followup_profile import worker_pins as followup_worker_pins
+        worker_pins=followup_worker_pins(worker,'read_ahead',worker_pins)
         bindings_mutations+=byte_mutations(worker,[(n,2) for n in worker_pins],
             lambda image:pinned_functions(image,worker_pins,'read-ahead worker binding'))
         if diagnostic:

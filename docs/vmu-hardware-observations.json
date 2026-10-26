@@ -1594,6 +1594,23 @@
         "Only one of the two error screens was supplied.",
         "No hardware result for the retry correction yet."
       ]
+    },
+    {
+      "date": "2026-10-25",
+      "build": "f2410c316f25",
+      "outcome": "skies_boot_confirmed_rayman_lodoss_remain_failed",
+      "source": "Owner report and attached 63393.mp4 / 63394.mp4; docs/evidence/native-console-followup-f241-2026-10-25.json",
+      "results": {
+        "Skies of Arcadia": "Boots normally per owner; save/load not separately reported",
+        "Rayman 2": "Passes previous bootstrap stop; stalls at Ubisoft logo",
+        "Record of Lodoss War": "Opening video absent; very slow audio remains"
+      },
+      "capture_summary": "Both captures contain1200 valid fast controller pairs and zero VMU storage calls. Rayman performs no new read work; Lodoss continues reading data without reported read-ahead failure or CRC fault. One underlying Lodoss SD token error is not tied to the symptom.",
+      "limits": [
+        "Console results do not establish universal VMU compatibility or new A2 persistence.",
+        "No interrupted game PC was captured for either title."
+      ],
+      "next_test": "Same build with Background On / Legacy (Y), preserving prepared A2 and384KiB reservation."
     }
   ]
 }

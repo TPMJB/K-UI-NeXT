@@ -367,6 +367,8 @@ class ReadAheadBinderCPU(ColdBinderCPU):
 
     def execute(self):
         self.run_symbol('_native_readahead_bind')
+        assert not self.selected_low_callbacks or self.selected_low_visits, \
+            'cold read-ahead binder did not execute its selected low callback accessor'
         assert self.ready and self.init_calls==1
         assert tuple(self.display_lines)==self.expected_display_lines
         assert_c_abi(self,self.initial)
@@ -415,6 +417,9 @@ def pin_stage(stage,*,diagnostic=False,pio=False,pair=False,multi_owner=False,st
     require(not witness or progress,'cold witness stage pins require the paired cold progress marker')
     require(not owned_timers or witness and dual and progress, 'Owned-timer cold pins require the full dual witness profile')
     selected=GAME_STARTUP_STAGE_PINS if owned_timers else WITNESS_DUAL_PINS if witness else DUAL_PINS if dual else STRUCTURAL_PINS if structural else MULTI_OWNER_PINS if multi_owner else PIO_PAIR_PINS if pair else PIO_PINS if pio else DIAGNOSTIC_PINS if diagnostic else PINS
+    from check_native_followup_profile import stage_pins as followup_stage_pins,callback_profile
+    require(not callback_profile(stage) or owned_timers, 'Selected low callbacks require the owned-timer cold binder')
+    selected=followup_stage_pins(stage,'read_ahead',selected)
     for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(stage,name,2)
         require(section[2]&4 and 0x8ce00000<=address<address+count<=0x8cfe0000,
@@ -640,6 +645,7 @@ def check_stage(stage,resident,aux,*,self_test=False,worker=None):
                 except ValueError:progress_marker_mutations+=1
                 else:raise ValueError('cold read-ahead accepted changed progress stage marker')
     return dict(actual_linked_cold_binder_executed=True,positive_cases=positives,
+        selected_low_callback_accessor_executed='__kui_native_dual_low_callbacks_stage' in stage[4],
         admitted_dynamic_sdk_vbr_preservation_cases=dynamic_vbr_cases,
         malformed_descriptor_context_aux_and_init_cases=negatives,omitted_activation_ocbp_rejections=mutations,
         reviewed_body_byte_mutation_rejections=pin_mutations,

@@ -78,9 +78,51 @@ static bool __attribute__((noipa)) allocation_safe(uint32_t begin,uint32_t bytes
     return kui_vmu_native_stage_allocation_safe(&native_heap,exec_bytes,
         KUI_RETAIL_STAGE_ADDRESS,(uint32_t)(uintptr_t)__retail_stage_bss_end,begin,bytes);
 }
+static void native_report(uint32_t phase,uint32_t detail) __attribute__((noreturn));
+#if KUI_NATIVE_DUAL_READERS
+#include "vmu_maple_observe_legacy_symbols.h"
+/* Each low reader is linked separately. Its entry addresses travel together
+ * from that reader's typed ELF symbols; a valid X address is not a Y entry.
+ * The tuple remains immutable temporary-stage data and never grants runtime
+ * ownership or enlarges the retained worker reservation. */
+struct native_low_bindings {
+    uint32_t heap_hook,return_hook,control,heap_original,sd_lease,background_bind;
+};
+static const struct native_low_bindings native_low_bindings_table[2]={
+    {KUI_VMU_OBSERVE_LOW_HEAP_HOOK,KUI_VMU_OBSERVE_LOW_RETURN_HOOK,
+     KUI_VMU_OBSERVE_LOW_CONTROL,KUI_VMU_NATIVE_HEAP_ORIGINAL,
+     KUI_VMU_OBSERVE_LOW_SD_LEASE,KUI_VMU_NATIVE_BACKGROUND_BIND},
+    {LEGACY_KUI_VMU_OBSERVE_LOW_HEAP_HOOK,LEGACY_KUI_VMU_OBSERVE_LOW_RETURN_HOOK,
+     LEGACY_KUI_VMU_OBSERVE_LOW_CONTROL,LEGACY_KUI_VMU_NATIVE_HEAP_ORIGINAL,
+     LEGACY_KUI_VMU_OBSERVE_LOW_SD_LEASE,LEGACY_KUI_VMU_NATIVE_BACKGROUND_BIND}
+};
+static const char native_low_bindings_refused[]="DUAL LOW CALLBACK READER REFUSED";
+__asm__(".global __kui_native_dual_low_callbacks_stage\n"
+        ".set __kui_native_dual_low_callbacks_stage,1\n");
+static const struct native_low_bindings * __attribute__((noipa)) native_low_bindings(void) {
+    if(!kui_native_dual_reader_valid(manifest.reader,manifest.storage_transport))
+        /* No selected control cell exists on this path. The detailed native
+         * reporter reads that cell and must not be used recursively here. */
+        stopped(native_low_bindings_refused,manifest.reader);
+    return &native_low_bindings_table[kui_native_reader_uses_sdk(manifest.reader)?0u:1u];
+}
+#define NATIVE_LOW_HEAP_HOOK (native_low_bindings()->heap_hook)
+#define NATIVE_LOW_RETURN_HOOK (native_low_bindings()->return_hook)
+#define NATIVE_LOW_CONTROL (native_low_bindings()->control)
+#define NATIVE_LOW_HEAP_ORIGINAL (native_low_bindings()->heap_original)
+#define NATIVE_LOW_SD_LEASE (native_low_bindings()->sd_lease)
+#define NATIVE_LOW_BACKGROUND_BIND (native_low_bindings()->background_bind)
+#else
+#define NATIVE_LOW_HEAP_HOOK KUI_VMU_OBSERVE_LOW_HEAP_HOOK
+#define NATIVE_LOW_RETURN_HOOK KUI_VMU_OBSERVE_LOW_RETURN_HOOK
+#define NATIVE_LOW_CONTROL KUI_VMU_OBSERVE_LOW_CONTROL
+#define NATIVE_LOW_HEAP_ORIGINAL KUI_VMU_NATIVE_HEAP_ORIGINAL
+#define NATIVE_LOW_SD_LEASE KUI_VMU_OBSERVE_LOW_SD_LEASE
+#define NATIVE_LOW_BACKGROUND_BIND KUI_VMU_NATIVE_BACKGROUND_BIND
+#endif
 static volatile struct kui_vmu_observe_boot_control *control(void) {
     return (volatile struct kui_vmu_observe_boot_control *)(uintptr_t)
-        (KUI_VMU_OBSERVE_LOW_CONTROL+UINT32_C(0x20000000));
+        (NATIVE_LOW_CONTROL+UINT32_C(0x20000000));
 }
 static uint32_t native_word(uint32_t address) {return *(volatile const uint32_t *)(uintptr_t)address;}
 static void native_publish(uint32_t address) {
@@ -97,7 +139,6 @@ static bool native_read(void *context,uint32_t address,uint32_t *out) {
        (address&3u) || p<0x0c000000u || p>0x0cfffffcu) return false;
     *out=native_word(address);return true;
 }
-static void native_report(uint32_t phase,uint32_t detail) __attribute__((noreturn));
 static void native_report(uint32_t phase,uint32_t detail) {
     volatile struct kui_vmu_observe_boot_control *c=control();
     c->error=detail;
@@ -171,6 +212,30 @@ void kui_vmu_observe_stage_install(void) {
     native_report(7u,lease.lease_bytes);
 #endif
 }
+#if KUI_NATIVE_DUAL_READERS
+static void __attribute__((noipa)) native_arm_heap_hook(const uint32_t *frame) {
+    const struct native_low_bindings *low=native_low_bindings();
+    volatile struct kui_vmu_observe_boot_control *c=(void *)(uintptr_t)
+        (low->control+UINT32_C(0x20000000));
+    for(unsigned i=0;i<sizeof(*c)/4u;i++)
+        if(((volatile uint32_t *)c)[i]) native_report(2u,low->control+4u*i);
+    volatile uint32_t *original=(volatile uint32_t *)(uintptr_t)
+        (low->heap_original+UINT32_C(0x20000000));
+    for(unsigned i=0;i<8u;i++) if(original[i]) native_report(2u,low->heap_original+4u*i);
+    if(native_word(native_heap.initializer_slot)!=native_heap.initializer_target) native_report(2u,native_heap.initializer_slot);
+    *original=native_heap.initializer_target;
+    original[1]=native_call.entry_begin;original[2]=native_call.entry_bytes;
+    original[3]=native_call.return_pr&0x1fffffffu;
+    c->installer=(uint32_t)(uintptr_t)kui_vmu_observe_stage_install;
+    c->stage_stack=(uint32_t)(uintptr_t)(native_installer_stack+sizeof(native_installer_stack)-32u);
+    c->status=KUI_VMU_OBS_BOOT_ARMED;
+    *(volatile uint32_t *)(uintptr_t)native_heap.initializer_slot=low->heap_hook;
+    native_publish(native_heap.initializer_slot);
+    if(native_word(native_heap.initializer_slot|UINT32_C(0x20000000))!=low->heap_hook)
+        native_report(2u,native_heap.initializer_slot);
+    ((uint32_t *)(uintptr_t)frame)[5]=low->return_hook;
+}
+#endif
 void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #if KUI_VMU_NATIVE_WORKER_PROBE || KUI_VMU_NATIVE_PASSIVE_PROBE
     retail_display_restore(&display);
@@ -276,6 +341,9 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #if KUI_NATIVE_STAGE_FAST_SCAN
     retail_display_line("NATIVE DISCOVERY COMPLETE - ARMING HOOK");
 #endif
+#if KUI_NATIVE_DUAL_READERS
+    native_arm_heap_hook(frame);
+#else
     volatile struct kui_vmu_observe_boot_control *c=control();
     for(unsigned i=0;i<sizeof(*c)/4u;i++)
         if(((volatile uint32_t *)c)[i]) native_report(2u,KUI_VMU_OBSERVE_LOW_CONTROL+4u*i);
@@ -294,4 +362,5 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     if(native_word(native_heap.initializer_slot|UINT32_C(0x20000000))!=KUI_VMU_OBSERVE_LOW_HEAP_HOOK)
         native_report(2u,native_heap.initializer_slot);
     ((uint32_t *)(uintptr_t)frame)[5]=KUI_VMU_OBSERVE_LOW_RETURN_HOOK;
+#endif
 }

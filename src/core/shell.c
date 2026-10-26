@@ -504,14 +504,19 @@ bool kui_shell_set_games_art(struct kui_shell *s,const struct kui_shell_games_ar
     s->games_art_loading=false;
     return true;
 }
+static unsigned game_default_reader(const struct kui_games_detail *detail) {
+    return detail->format!=KUI_GAME_IMAGE_ZSO && (detail->windows_ce ||
+        (detail->background_default && detail->format==KUI_GAME_IMAGE_GDI && detail->native_gd &&
+         !detail->native_cd && !detail->cd_image && !detail->scrambled))?
+        KUI_RETAIL_READER_ASYNC:KUI_RETAIL_READER_STANDARD;
+}
 void kui_shell_set_games_detail(struct kui_shell *s,const struct kui_games_detail *detail) {
     if(!s || !detail || s->page!=KUI_SHELL_GAMES_DETAIL ||
        !memchr(detail->path,0,sizeof(detail->path)) || strcmp(detail->path,s->games_selected_path)) return;
     s->games_detail=*detail;
     s->games_launch_codec=kui_shell_games_zso_selected(s) && detail->zso_codec<=KUI_ZSO_LZO1X?detail->zso_codec:KUI_ZSO_LZ4;
     s->games_codec_override=false;s->games_baseline=false;
-    s->games_launch_reader=detail->windows_ce && detail->format!=KUI_GAME_IMAGE_ZSO?
-        KUI_RETAIL_READER_ASYNC:KUI_RETAIL_READER_STANDARD;
+    s->games_launch_reader=game_default_reader(detail);
     s->games_launch_selected=0;s->games_launch_cdda=false;s->games_probe_from_options=false;
     s->games_retail_scrambled=detail->cd_image && !detail->windows_ce && detail->scrambled;
     s->games_launch_encoding=KUI_GAME_ENCODING_AUTO;
@@ -634,7 +639,8 @@ void kui_shell_set_game_launch_settings(struct kui_shell *s,const char *path,
              (s->games_launch_encoding==KUI_GAME_ENCODING_AUTO && s->games_detail.scrambled));
         snprintf(s->games_launch_notice,sizeof(s->games_launch_notice),"%s",patches_unavailable?
             "Saved RAM patches are unavailable for this launch; they are Off.":"Options save automatically for this image.");
-    } else snprintf(s->games_launch_notice,sizeof(s->games_launch_notice),
+    } else snprintf(s->games_launch_notice,sizeof(s->games_launch_notice),"%s",
+        loaded && !value?"Options save automatically for this image.":
         "Saved options could not be read; using defaults.");
 }
 void kui_shell_game_launch_saved(struct kui_shell *s,const char *path,bool ok) {
@@ -651,8 +657,7 @@ static enum kui_shell_action save_game_launch(struct kui_shell *s) {
     return KUI_SHELL_SAVE_GAME_LAUNCH;
 }
 static enum kui_shell_action game_launch_defaults(struct kui_shell *s) {
-    s->games_launch_reader=s->games_detail.windows_ce && s->games_detail.format!=KUI_GAME_IMAGE_ZSO?
-        KUI_RETAIL_READER_ASYNC:KUI_RETAIL_READER_STANDARD;
+    s->games_launch_reader=game_default_reader(&s->games_detail);
     s->games_launch_cdda=false;s->games_launch_encoding=KUI_GAME_ENCODING_AUTO;
     s->games_retail_scrambled=kui_shell_games_encoding_ready(s) && s->games_detail.scrambled;
     memset(&s->games_launch_patches,0,sizeof(s->games_launch_patches));
@@ -2046,10 +2051,11 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             }
             break;
         case KUI_SHELL_GAME_TOOL_SPEED:
-            if(kui_shell_games_background_ready(s) && !s->games_launch_cdda &&
-               s->games_launch_reader!=KUI_RETAIL_READER_STANDARD) {
-                s->games_launch_reader=s->games_launch_reader==KUI_RETAIL_READER_ASYNC?
-                    KUI_RETAIL_READER_ASYNC_EAGER:KUI_RETAIL_READER_ASYNC;
+            if(kui_shell_games_background_ready(s) && !s->games_launch_cdda) {
+                /* Persistent wire order is Off/New/Legacy. Left/right and A
+                 * select all three, including a saved explicit Off. */
+                s->games_launch_reader=(s->games_launch_reader+
+                    (buttons==KUI_SHELL_LEFT?2u:1u))%KUI_GAME_READER_COUNT;
                 return save_game_launch(s);
             }
             break;

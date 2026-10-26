@@ -1,0 +1,652 @@
+{
+  "schema": "kui.native-console-followup.v1",
+  "date": "2026-10-25",
+  "tested_build": "f2410c316f25",
+  "source_scope": "Console evidence only; no production change or compatibility completion inferred.",
+  "skies": {
+    "source": "Owner report in conversation",
+    "reported_result": "Boots as normal",
+    "a2_save_load_confirmed": false,
+    "power_cycle_reload_confirmed": false
+  },
+  "rayman2": {
+    "video": "63393.mp4",
+    "sha256": "ec72ce766829bcbab52a2d93ba92eeae11c4800acaa755836e3090cd840df5a1",
+    "reported_result": "Reaches Ubisoft logo, then stalls",
+    "video_scope": "Attached video begins with diagnostic report; logo stall is owner report.",
+    "raw_vmu_latency": {
+      "submit": [
+        "000004B0",
+        "000004B0",
+        "00000000",
+        "0000F529",
+        "00000035"
+      ],
+      "complete": [
+        "000004B0",
+        "000004B0",
+        "00000000",
+        "00012CAB",
+        "00000041"
+      ],
+      "free": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "store": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "wall_clock_samples_bad_flags": [
+        "00EDE710",
+        "000012C0",
+        "00000000",
+        "00000000"
+      ],
+      "fast_full_submit_complete": [
+        "000004B0",
+        "00000000",
+        "000004B0",
+        "00000000"
+      ]
+    },
+    "raw_clock_video": {
+      "ccr_first_last_iceoff_poll_commit": [
+        "00000105",
+        "00000105",
+        "00000000",
+        "000004B0",
+        "00000000"
+      ],
+      "phase_on_n_valid_wait_wrap": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "fault_vector_armed": "00000000"
+    },
+    "raw_reader": {
+      "samples_bad_gapmax_readmax_agemax": [
+        "000004B0",
+        "00000000",
+        "000032E4",
+        "00000000",
+        "00000000"
+      ],
+      "irqblk_callblk_pio_crc_tokerr": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "foreign_fix_over_defer_clockbad": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "sci_rearm_irq_count": [
+        "00000000",
+        "00000000"
+      ],
+      "hook_r100_r400_r600_vbr": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "max_read_lba_count": [
+        "00000000",
+        "00000000"
+      ],
+      "longest_gaps": {
+        "gap": "000032E4",
+        "readmax": "00000000",
+        "agemax": "00000000",
+        "pending": "00000000",
+        "function_command_prevtok_token_block": [
+          "00000002",
+          "00000000",
+          "0000005C",
+          "0000005C",
+          "032545CC"
+        ]
+      }
+    },
+    "raw_gd_timeline": {
+      "events_valid_bad_epoch": [
+        "00000E10",
+        "00000E10",
+        "00000000",
+        "00000001"
+      ],
+      "clockbreak_unmatched_over_sat": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "max_call_gap_chainlen": [
+        "00000020",
+        "000032C5",
+        "00000000"
+      ],
+      "max_chain_total_inside": [
+        "00000000",
+        "00000000"
+      ],
+      "active_token_lba_count_flags": [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      "stored_calls_requests_bins": [
+        "00000008",
+        "00000000",
+        "00000020"
+      ],
+      "longest_call_rank0": {
+        "elapsed_gap_epoch": [
+          "00000020",
+          "00000000",
+          "00000001"
+        ],
+        "begin": [
+          "FEA15502",
+          "00001101",
+          "00000002",
+          "00000002",
+          "0000005C",
+          "0004122F",
+          "00000179",
+          "000BC800",
+          "60000160",
+          "8C00F400",
+          "00000000",
+          "00005440",
+          "00000000",
+          "00008201",
+          "00000000",
+          "00000000"
+        ],
+        "end": [
+          "FEA154E2",
+          "00001102",
+          "00000002",
+          "00000000",
+          "0000005C",
+          "0004122F",
+          "00000179",
+          "000BC800",
+          "60000160",
+          "8C00F400",
+          "00000000",
+          "00005440",
+          "00000000",
+          "00008201",
+          "00000000",
+          "00000000"
+        ]
+      }
+    },
+    "computed": {
+      "wall_seconds": 19.95671552,
+      "vmu_calls_each": 1200,
+      "submit_total_seconds": 0.08033408,
+      "complete_total_seconds": 0.09852288,
+      "submit_max_microseconds": 67.84,
+      "complete_max_microseconds": 83.2,
+      "poll_gap_max_milliseconds": 16.67584,
+      "gd_call_max_microseconds": 40.96,
+      "vmu_instrumented_total_fraction": 0.00896224430421705
+    },
+    "conclusion": "Controller polling continues; no new read or VMU storage work during the capture. Interrupted game PC and wait condition unknown."
+  },
+  "lodoss": {
+    "video": "63394.mp4",
+    "sha256": "9f2ad935dd9ee8ba0f9a9d4ccf5ae66cedc9d45f64c22957f6b3e8b19f1ecc69",
+    "reported_result": "Black screen and slow opening audio",
+    "raw_vmu_latency": {
+      "submit": [
+        1200,
+        1200,
+        0,
+        76163,
+        65
+      ],
+      "complete": [
+        1200,
+        1200,
+        0,
+        2313251,
+        2343
+      ],
+      "free": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "store": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "wall": [
+        15593467,
+        4800,
+        0,
+        0
+      ],
+      "fast_full_sub_end": [
+        1200,
+        0,
+        1200,
+        0
+      ]
+    },
+    "raw_clock_video": {
+      "ccr_first": 389,
+      "ccr_last": 389,
+      "ice_off": 0,
+      "polls": 1200,
+      "commits": 0,
+      "phase": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "fault_vector_armed": 0
+    },
+    "raw_reader": {
+      "samples": 1200,
+      "bad": 0,
+      "gap_max": 21928,
+      "request_max": 249474,
+      "pending_age_max": 244768,
+      "irq_blocks": 1,
+      "call_blocks": 9198,
+      "pio": 1966,
+      "crc": 0,
+      "token_errors": 1,
+      "foreign": 0,
+      "fix": 168,
+      "overrun": 0,
+      "defer": 168,
+      "clock_bad": 0,
+      "sci_rearm": 0,
+      "irq_count": 169,
+      "hook_releases": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_read_lba": 266697,
+      "max_read_count": 167
+    },
+    "gd_summary": {
+      "events": 4442,
+      "valid": 4442,
+      "bad": 0,
+      "epoch": 1,
+      "clock_breaks": 0,
+      "unmatched": 0,
+      "overflow": 0,
+      "saturation": 0,
+      "max_call_ticks": 6506,
+      "max_gap_ticks": 13000,
+      "max_chain_length": 1,
+      "max_chain_ticks": 249606,
+      "max_chain_inside": 197997,
+      "active_token": 0,
+      "last_active_lba": 267149,
+      "last_active_count": 15,
+      "active_flags": 0,
+      "stored_calls": 8,
+      "stored_requests": 16,
+      "bin_count": 32
+    },
+    "gd_bins": [
+      {
+        "index": 0,
+        "gd_ticks": 75440,
+        "calls": 53,
+        "maples": 38
+      },
+      {
+        "index": 1,
+        "gd_ticks": 83086,
+        "calls": 51,
+        "maples": 37
+      },
+      {
+        "index": 2,
+        "gd_ticks": 78176,
+        "calls": 53,
+        "maples": 38
+      },
+      {
+        "index": 3,
+        "gd_ticks": 35413,
+        "calls": 49,
+        "maples": 37
+      },
+      {
+        "index": 4,
+        "gd_ticks": 16360,
+        "calls": 46,
+        "maples": 38
+      },
+      {
+        "index": 5,
+        "gd_ticks": 45948,
+        "calls": 50,
+        "maples": 37
+      },
+      {
+        "index": 6,
+        "gd_ticks": 19211,
+        "calls": 45,
+        "maples": 38
+      },
+      {
+        "index": 7,
+        "gd_ticks": 10181,
+        "calls": 48,
+        "maples": 38
+      },
+      {
+        "index": 8,
+        "gd_ticks": 1956,
+        "calls": 44,
+        "maples": 37
+      },
+      {
+        "index": 9,
+        "gd_ticks": 55428,
+        "calls": 51,
+        "maples": 38
+      },
+      {
+        "index": 10,
+        "gd_ticks": 43290,
+        "calls": 51,
+        "maples": 37
+      },
+      {
+        "index": 11,
+        "gd_ticks": 127378,
+        "calls": 55,
+        "maples": 38
+      },
+      {
+        "index": 12,
+        "gd_ticks": 7001,
+        "calls": 47,
+        "maples": 37
+      },
+      {
+        "index": 13,
+        "gd_ticks": 1852,
+        "calls": 43,
+        "maples": 38
+      },
+      {
+        "index": 14,
+        "gd_ticks": 74661,
+        "calls": 53,
+        "maples": 37
+      },
+      {
+        "index": 15,
+        "gd_ticks": 23730,
+        "calls": 46,
+        "maples": 38
+      },
+      {
+        "index": 16,
+        "gd_ticks": 80967,
+        "calls": 64,
+        "maples": 37
+      },
+      {
+        "index": 17,
+        "gd_ticks": 109272,
+        "calls": 55,
+        "maples": 38
+      },
+      {
+        "index": 18,
+        "gd_ticks": 50773,
+        "calls": 50,
+        "maples": 38
+      },
+      {
+        "index": 19,
+        "gd_ticks": 122100,
+        "calls": 56,
+        "maples": 37
+      },
+      {
+        "index": 20,
+        "gd_ticks": 135648,
+        "calls": 56,
+        "maples": 38
+      },
+      {
+        "index": 21,
+        "gd_ticks": 137560,
+        "calls": 57,
+        "maples": 37
+      },
+      {
+        "index": 22,
+        "gd_ticks": 50965,
+        "calls": 49,
+        "maples": 38
+      },
+      {
+        "index": 23,
+        "gd_ticks": 142044,
+        "calls": 57,
+        "maples": 37
+      },
+      {
+        "index": 24,
+        "gd_ticks": 146718,
+        "calls": 58,
+        "maples": 38
+      },
+      {
+        "index": 25,
+        "gd_ticks": 27296,
+        "calls": 46,
+        "maples": 38
+      },
+      {
+        "index": 26,
+        "gd_ticks": 73584,
+        "calls": 54,
+        "maples": 37
+      },
+      {
+        "index": 27,
+        "gd_ticks": 43427,
+        "calls": 48,
+        "maples": 37
+      },
+      {
+        "index": 28,
+        "gd_ticks": 37544,
+        "calls": 48,
+        "maples": 38
+      },
+      {
+        "index": 29,
+        "gd_ticks": 50228,
+        "calls": 50,
+        "maples": 38
+      },
+      {
+        "index": 30,
+        "gd_ticks": 2918,
+        "calls": 44,
+        "maples": 37
+      },
+      {
+        "index": 31,
+        "gd_ticks": 3038,
+        "calls": 44,
+        "maples": 36
+      }
+    ],
+    "raw_read_ahead": {
+      "capacity": 384,
+      "hits": 1806,
+      "misses": 547,
+      "hit_requests": 50,
+      "producer_blocks": 1968,
+      "producer_visits": 1200,
+      "heartbeat_visits": 1200,
+      "irq_visits": 169,
+      "seeks": 0,
+      "stops": 0,
+      "resumes": 0,
+      "full": 0,
+      "extent_ends": 0,
+      "crc": 0,
+      "token_errors": 0,
+      "abandoned": 0,
+      "guard_faults": 0,
+      "clock_bad": 0,
+      "pio_work": 1968,
+      "pio_work_max": 2254,
+      "pio_work_bad": 0,
+      "second_attempts": 776,
+      "second_skips": 0,
+      "second_max": 1132,
+      "second_over_budget": 0,
+      "max_visit_ticks": 6476,
+      "failures": 0,
+      "all_exit_stage_results_zero": true,
+      "skipped": [
+        0,
+        0,
+        0,
+        0,
+        216,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "computed": {
+      "wall": {
+        "ticks": 15593467,
+        "seconds": 19.95963776,
+        "wall_fraction": 1.0
+      },
+      "gd_scopes_total": {
+        "ticks": 1913193,
+        "seconds": 2.44888704,
+        "wall_fraction": 0.12269195811297129
+      },
+      "vmu_submit_scopes_total": {
+        "ticks": 76163,
+        "seconds": 0.09748864,
+        "wall_fraction": 0.004884289042327791
+      },
+      "vmu_complete_scopes_total": {
+        "ticks": 2313251,
+        "seconds": 2.96096128,
+        "wall_fraction": 0.14834744576045852
+      },
+      "max_gd_call": {
+        "ticks": 6506,
+        "seconds": 0.00832768,
+        "wall_fraction": 0.00041722600881510184
+      },
+      "max_gd_gap": {
+        "ticks": 13000,
+        "seconds": 0.01664,
+        "wall_fraction": 0.0008336824645859705
+      },
+      "max_request": {
+        "ticks": 249474,
+        "seconds": 0.31932672,
+        "wall_fraction": 0.015998623013086185
+      },
+      "max_pending_age": {
+        "ticks": 244768,
+        "seconds": 0.31330304,
+        "wall_fraction": 0.015696829960906065
+      },
+      "max_poll_gap": {
+        "ticks": 21928,
+        "seconds": 0.02806784,
+        "wall_fraction": 0.001406229929495474
+      },
+      "max_vmu_submit": {
+        "ticks": 65,
+        "seconds": 8.32e-05,
+        "wall_fraction": 4.168412322929853e-06
+      },
+      "max_vmu_complete": {
+        "ticks": 2343,
+        "seconds": 0.00299904,
+        "wall_fraction": 0.000150255231886533
+      },
+      "max_ra_visit": {
+        "ticks": 6476,
+        "seconds": 0.00828928,
+        "wall_fraction": 0.00041530212620451883
+      }
+    },
+    "conclusion": "Controller polling and data reads continue. No read-ahead failures or CRC faults reported. One underlying SD token-error delta is present; no snapshot ties it to missing video. Decoder progress and returned-data correctness remain unknown."
+  },
+  "limits": [
+    "All displayed numeric words are hexadecimal; timing conversion uses the admitted 781250 Hz clock.",
+    "Phase collection is enabled only for the existing exact Evolution 1 image. Zero phase counters here mean no game PC or video-register samples were collected.",
+    "VMU completion scopes include the reader heartbeat. These durations do not isolate VMU response processing alone.",
+    "Read-ahead statistics are cumulative runtime values; reader and GD timeline counters are gesture-window values.",
+    "No new save/load or durable-commit result is established by idle storage counters."
+  ],
+  "next_test": {
+    "build": "f2410c316f25",
+    "games": [
+      "Rayman 2",
+      "Record of Lodoss War"
+    ],
+    "options": "SCI / Background On / Legacy (Y); retain other options and prepared A2",
+    "purpose": "Compare transport with the same 384KiB reservation and virtual A2. A Y failure alone does not establish a VMU defect.",
+    "new_install_required": false,
+    "card_preparation_required": false
+  },
+  "production_changed": false,
+  "github_uploaded": false
+}

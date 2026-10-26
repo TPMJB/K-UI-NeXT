@@ -15,6 +15,7 @@ import importlib.util
 import os
 from pathlib import Path
 import shlex
+import struct
 import zipfile
 
 HELPER_PATH = Path(__file__).resolve().with_name('kui-native-startup-bundle.py')
@@ -27,6 +28,12 @@ EXPECTED_BYTES = 1815864
 EXPECTED_SHA256 = '105056d9ffef86bf5e470fa28dc5907443156f9ab1c6bc009f73661d9c047a85'
 MAX_GDIS, MAX_HOST_DIRECTORIES = 4096, 16384
 MAX_ISO_PATH, MAX_ISO_DEPTH = 1024, 32
+MAX_RESOURCE_FILES = 128
+MAX_RESOURCE_POINTERS, MAX_RESOURCE_RECORDS = 4096, 4096
+MAX_RESOURCE_TABLE_BYTES = 65536
+MAX_RESOURCE_METADATA_BYTES = 2 * 1024 * 1024
+MAX_RESOURCE_SOURCE_BYTES = 4 * 1024 * 1024
+RESOURCE_LAYOUT_SCHEMA = 'kui.doa2.chr-layout-observation.v1'
 
 
 class OtherDisc(ValueError):
@@ -103,15 +110,28 @@ class Disc:
         return parts
 
     def read(self, lba, size, purpose='metadata'):
-        if not 0 < size <= iso.FILE_LIMIT or purpose not in ('metadata', 'boot'):
+        resource = purpose in ('resource_header', 'resource_table')
+        if not 0 < size <= iso.FILE_LIMIT or purpose not in ('metadata', 'boot', 'resource_header', 'resource_table'):
             raise ValueError('Read exceeds the bounded metadata/startup limit')
+        parts = self.extent(lba, size)
+        if resource:
+            requested = self.reads.get('resource_header_bytes', 0) + self.reads.get('resource_table_bytes', 0)
+            source_bytes = sum(count * track['sector_bytes'] for track, _, count in parts)
+            if (size > MAX_RESOURCE_TABLE_BYTES + DATA or requested + size > MAX_RESOURCE_METADATA_BYTES or
+                    self.reads.get('resource_source_bytes', 0) + source_bytes > MAX_RESOURCE_SOURCE_BYTES):
+                raise ValueError('Resource metadata global read limit exceeded')
+            # Charge attempted logical ranges before opening tracks, including
+            # a partial-sector prefix. Physical bytes are counted as read.
+            self.reads[purpose + '_bytes'] = self.reads.get(purpose + '_bytes', 0) + size
         result = bytearray()
-        for track, first, count in self.extent(lba, size):
+        for track, first, count in parts:
             stride = track['sector_bytes']
             with track['path'].open('rb') as source:
                 source.seek((first - track['start_lba']) * stride)
                 for _ in range(count):
                     sector = source.read(stride)
+                    if resource:
+                        self.reads['resource_source_bytes'] = self.reads.get('resource_source_bytes', 0) + len(sector)
                     if len(sector) != stride:
                         raise ValueError('Truncated data sector')
                     if stride == RAW:
@@ -119,8 +139,18 @@ class Disc:
                             raise ValueError('Non-Mode1 raw data sector')
                         sector = sector[16:16 + DATA]
                     result.extend(sector)
-        self.reads[purpose + '_bytes'] += size
+        if not resource:
+            self.reads[purpose + '_bytes'] += size
         return bytes(result[:size])
+
+    def resource_range(self, entry, offset, size, purpose):
+        """Read only a proved in-file metadata range, preserving sector framing."""
+        if (purpose not in ('resource_header', 'resource_table') or entry['directory'] or
+                offset < 0 or size <= 0 or offset > entry['bytes'] or size > entry['bytes'] - offset):
+            raise ValueError('Resource metadata range leaves its ISO file')
+        prefix = offset % DATA
+        data = self.read(entry['lba'] + offset // DATA, prefix + size, purpose)
+        return data[prefix:prefix + size]
 
     def identity(self):
         ip = self.read(self.session, 32768)
@@ -140,7 +170,69 @@ class Disc:
                     ip_sha256=hashlib.sha256(ip).hexdigest())
 
 
-def collect(gdi):
+def resource_layouts(disc, files):
+    """Observe the five-word view used by original CHR consumers.
+
+    This exports integer metadata, never models/vertices/textures or a runtime
+    format admission. A header is retained even when its table view is unsafe
+    or unsupported. No range follows an unchecked offset or count.
+    """
+    candidates = sorted((entry for entry in files if not entry['directory'] and
+                         entry['path'].startswith('DOA2/') and entry['path'].endswith('.CHR')),
+                        key=lambda entry: entry['path'])
+    result = dict(schema=RESOURCE_LAYOUT_SCHEMA, files=len(candidates), available=0,
+                  unavailable=0, selected_field_bytes=0, entries=[])
+    if len(candidates) > MAX_RESOURCE_FILES:
+        result.update(status='unavailable', unavailable=len(candidates),
+                      reason='Resource file count exceeds the bounded limit')
+        return result
+    for entry in candidates:
+        row = dict(path=entry['path'], lba=entry['lba'], file_bytes=entry['bytes'], status='unavailable')
+        result['entries'].append(row)
+        try:
+            if entry['bytes'] < 20:
+                raise ValueError('CHR file is shorter than the 20-byte header view')
+            header = disc.resource_range(entry, 0, 20, 'resource_header')
+            result['selected_field_bytes'] += len(header)
+            data_offset, pointer_offset, record_offset, pointers, records = struct.unpack('<5I', header)
+            row.update(header_words=[f'{word:08x}' for word in struct.unpack('<5I', header)],
+                       header_sha256=hashlib.sha256(header).hexdigest(),
+                       data_offset=data_offset, pointer_table_offset=pointer_offset,
+                       record_table_offset=record_offset, pointer_count=pointers, record_count=records)
+            if (data_offset < 20 or data_offset & 3 or data_offset > entry['bytes'] or
+                    pointers > MAX_RESOURCE_POINTERS or records > MAX_RESOURCE_RECORDS):
+                raise ValueError('Unsupported CHR header view or count exceeds the bounded limit')
+            ranges = [('pointer_table', pointer_offset, pointers, 4), ('record_table', record_offset, records, 12)]
+            if sum(count * stride for _, _, count, stride in ranges) > MAX_RESOURCE_TABLE_BYTES:
+                raise ValueError('CHR table metadata exceeds the per-file byte limit')
+            occupied = []
+            for name, offset, count, stride in ranges:
+                length = count * stride
+                if count and (offset < 20 or offset & 3 or offset > entry['bytes'] or length > entry['bytes'] - offset):
+                    raise ValueError(f'{name} is unaligned or leaves its CHR file')
+                if count:
+                    if any(offset < end and start < offset + length for start, end in occupied):
+                        raise ValueError('CHR metadata tables overlap')
+                    occupied.append((offset, offset + length))
+            # Validate BOTH table ranges before reading EITHER one.
+            for name, offset, count, stride in ranges:
+                length = count * stride
+                raw = disc.resource_range(entry, offset, length, 'resource_table') if length else b''
+                result['selected_field_bytes'] += len(raw)
+                words = struct.unpack('<' + 'I' * (len(raw) // 4), raw)
+                row[name] = dict(offset=offset, entries=count, stride=stride,
+                                 bytes=length, sha256=hashlib.sha256(raw).hexdigest(),
+                                 words=[f'{word:08x}' for word in words])
+            row['status'] = 'observed'
+            result['available'] += 1
+        except (OSError, ValueError, UnicodeError) as error:
+            row['reason'] = str(error)
+            result['unavailable'] += 1
+    result['status'] = 'observed' if not result['unavailable'] else 'partial'
+    return result
+
+
+def collect(gdi, *, include_resource_layouts=False):
     disc = Disc(gdi)
     identity = disc.identity()
     primary = None
@@ -211,7 +303,7 @@ def collect(gdi):
     digest = hashlib.sha256(disc.read(lba, count, 'boot')).hexdigest()
     if digest != EXPECTED_SHA256:
         raise ValueError('DOA2 startup SHA256 differs from the reviewed input')
-    return dict(schema='kui.doa2.filesystem-metadata.v1', extractor_version=1,
+    report = dict(schema='kui.doa2.filesystem-metadata.v1', extractor_version=1,
                 purpose='Read-only DOA2 memory-partition analysis; no compatibility admission',
                 **identity, boot_path=path, boot_bytes=count, boot_sha256=digest,
                 gdi_sha256=hashlib.sha256(disc.gdi_bytes).hexdigest(), session_lba=disc.session,
@@ -228,9 +320,25 @@ def collect(gdi):
                         'Only IP/ISO metadata and the exact boot file are read; no asset or audio payload is read.',
                         'Mode1 framing is checked when metadata/startup sectors are read; no full EDC/ECC or disc integrity proof.',
                         'This report does not reserve RAM, patch a game, or enable the reader/VMU.'])
+    if include_resource_layouts:
+        layouts = resource_layouts(disc, files)
+        report.update(schema='kui.doa2.filesystem-resource-layouts.v2', extractor_version=2,
+                      resource_layouts=layouts,
+                      resource_header_fields=['data_offset', 'pointer_table_offset', 'record_table_offset',
+                                              'pointer_count', 'record_count'],
+                      asset_metadata_requested=True,
+                      asset_metadata_collected=bool(layouts['selected_field_bytes']),
+                      reads_scope='Selected-disc metadata/startup and bounded CHR layout fields; automatic-selection IP probes excluded',
+                      limits=['ISO paths and file lengths remain metadata, not a complete disc integrity proof.',
+                              'Opt-in CHR observation reads 20-byte headers and bounded in-file integer tables only.',
+                              'Header words are preserved when an unknown or unsafe table layout is unavailable.',
+                              'Resource read byte counters include attempted logical sector prefixes; resource_source_bytes counts actual track bytes read.',
+                              'No model, vertex, texture, audio or executable payload is exported; output consists of integer metadata and hashes.',
+                              'Observed layout is not a runtime format admission, decoded-access proof, RAM reservation or compatibility result.'])
+    return report
 
 
-def select(sdroot, output=Path('DOA2-filesystem-metadata.zip')):
+def select(sdroot, output=Path('DOA2-filesystem-metadata.zip'), *, include_resource_layouts=False):
     root = Path(sdroot)
     if root.is_symlink() or not root.is_dir():
         raise ValueError('SD root must be a directory, not a symlink')
@@ -258,7 +366,7 @@ def select(sdroot, output=Path('DOA2-filesystem-metadata.zip')):
                 faults.append(type(error).__name__)
                 continue
             try:
-                report = collect(path)
+                report = collect(path, include_resource_layouts=include_resource_layouts)
             except (OSError, ValueError, UnicodeError) as error:
                 faults.append(type(error).__name__)
                 continue
@@ -266,7 +374,9 @@ def select(sdroot, output=Path('DOA2-filesystem-metadata.zip')):
     if len(matches) > 1:
         commands = []
         for path, _ in matches:
-            arguments = ('python3', str(Path(__file__).resolve()), '--gdi', str(path), '--output', str(output))
+            arguments = ['python3', str(Path(__file__).resolve()), '--gdi', str(path), '--output', str(output)]
+            if include_resource_layouts:
+                arguments.append('--resource-layouts')
             commands.append('  ' + ' '.join(shlex.quote(argument) for argument in arguments))
         raise ValueError('Multiple exact DOA2 discs found. Choose one .gdi file and run its command:\n' +
                          '\n'.join(commands))
@@ -279,8 +389,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('sdroot', type=Path, nargs='?', help='SD root to search read only')
     parser.add_argument('--gdi', type=Path, help='Explicit original or cooked GDI instead of scanning')
-    parser.add_argument('--output', type=Path, default=Path('DOA2-filesystem-metadata.zip'))
+    parser.add_argument('--output', type=Path, help='Computer-side ZIP; default depends on --resource-layouts')
+    parser.add_argument('--resource-layouts', action='store_true',
+                        help='Also observe bounded CHR header/table fields needed for retained-memory analysis')
     args = parser.parse_args()
+    if args.output is None:
+        args.output = Path('DOA2-resource-layout-metadata.zip' if args.resource_layouts else 'DOA2-filesystem-metadata.zip')
     if bool(args.sdroot) == bool(args.gdi):
         parser.error('Supply exactly one SDROOT or --gdi')
     try:
@@ -298,13 +412,17 @@ def main():
             inside = False
         if inside:
             raise ValueError('Output must be outside the source SD/game folder')
-        print('Reading DOA2 filesystem metadata; source tracks will not be modified.', flush=True)
-        gdi, report = (args.gdi, collect(args.gdi)) if args.gdi else select(args.sdroot, args.output)
+        print('Reading DOA2 filesystem' + (' and bounded CHR layout' if args.resource_layouts else '') +
+              ' metadata; source tracks will not be modified.', flush=True)
+        gdi, report = ((args.gdi, collect(args.gdi, include_resource_layouts=args.resource_layouts))
+                       if args.gdi else select(args.sdroot, args.output, include_resource_layouts=args.resource_layouts))
         # Reuse the existing closed/CRC-checked, atomic non-overwrite ZIP writer.
         # An empty payload mapping ensures the ZIP contains JSON metadata only.
         iso.write_bundle(args.output, {}, report)
         print(f'Created {args.output.resolve()} ({len(report["entries"])} ISO entries; exact boot verified).')
-        print('Upload this metadata ZIP for analysis. No game payloads were copied; VMU compatibility is unchanged.')
+        print('Upload this metadata ZIP for analysis. ' +
+              ('Only bounded CHR layout integers and hashes were exported; ' if args.resource_layouts else 'No game payloads were copied; ') +
+              'VMU compatibility is unchanged.')
     except (OSError, ValueError, UnicodeError, zipfile.BadZipFile) as error:
         parser.exit(1, f'Metadata collection stopped: {error}\n')
 

@@ -346,6 +346,11 @@ static void diagnostic_end(enum kui_vmu_native_profile_kind kind,
 }
 static void diagnostic_report(void) __attribute__((noreturn));
 #ifndef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+#if KUI_NATIVE_LOADER_TIMELINE
+static void diagnostic_phase_row(const uint32_t values[5]) {
+    native_loader_timeline_row(UINT32_MAX,0u,values,5u);
+}
+#else
 static void diagnostic_phase_row(const uint32_t values[5]) {
     char line[46];
     for(unsigned i=0;i<5u;i++) {
@@ -356,7 +361,18 @@ static void diagnostic_phase_row(const uint32_t values[5]) {
     line[45]=0;retail_display_line(line);
 }
 #endif
+#endif
 static void diagnostic_report(void) {
+    /* This is the intentional PROFILE terminal, before restoring any display
+     * register. The current completion has passed its ordinary ownership and
+     * response guards, and its inherited saved frame is still live. The exact
+     * Evolution phase collector retains its existing history instead. */
+    native_raw_owner_capture(&diagnostic_phase,
+        config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE,
+        state.frame_address,state.frame_pr,state.frame_sr,diagnostic.clock_last,
+        physical(config.lease.payload)-32u,
+        config.lease.lease_bytes<=UINT32_MAX-32u?config.lease.lease_bytes+32u:0u,
+        diagnostic_phase_read,NULL);
 #ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
     kui_vmu_native_passive_test_terminal(17u,0u);
 #else
@@ -377,43 +393,70 @@ static void diagnostic_report(void) {
 #else
     retail_display_line("STORE TIME IN COMPLETE");
 #endif
-    const char *const labels[4]={"SUB N OK BAD SUM MAX","END N OK BAD SUM MAX",
-        "FREE N OK BAD SUM MAX","STORE N OK BAD SUM MAX"};
+    retail_display_line("N OK BAD SUM MAX");
+    const char *const labels[4]={"SUB","END","FREE","STORE"};
     for(unsigned i=0;i<4u;i++) {
         const struct kui_vmu_native_profile_metric *m=&diagnostic.timing.metric[i];
         retail_display_values(labels[i],(uint32_t[5]){m->calls,m->valid,m->invalid,m->ticks_total,m->ticks_max},5u);
     }
-    retail_display_values("WALL CLK N BAD FLAGS",(uint32_t[4]){
+    retail_display_values("WALL SAMPLES BAD FLAGS",(uint32_t[4]){
         diagnostic.clock_started?diagnostic.clock_first-diagnostic.clock_last:0u,
         diagnostic.clock_samples,diagnostic.clock_invalid,diagnostic.timing.flags},4u);
     retail_display_values("FAST/FULL SUB/END",(uint32_t[4]){
         diagnostic.fast_submit,diagnostic.full_submit,diagnostic.fast_complete,diagnostic.full_complete},4u);
-    retail_display_line("PROFILE / PHOTO / OFF");
+    retail_display_line("PHOTO / POWER OFF");
     retail_display_pause(300u);
     retail_display_restore(&display);
     retail_display_line("CLOCK/VIDEO");
-    retail_display_line("TMU0 R/O 781250HZ");
-    retail_display_values("CCR FIRST LAST ICEOFF POLL COMMIT",(uint32_t[5]){
+    retail_display_line("HEX / 781250HZ");
+    retail_display_values("CCR0 CCR1 ICEOFF POLL COMMIT",(uint32_t[5]){
         diagnostic.ccr_first,diagnostic.ccr_last,diagnostic.ice_off,
         state.completed-diagnostic.capture_poll_start,durable_card.commits},5u);
-    retail_display_values("PHASE ON N VALID WAIT WRAP",(uint32_t[5]){
+    retail_display_values("MODE N VALID WAIT WRAP",(uint32_t[5]){
         diagnostic_phase.enabled,diagnostic_phase.sequence,diagnostic_phase.valid,
         diagnostic_phase.waits,diagnostic_phase.wraps},5u);
     retail_display_hex("FAULT VEC ARMED",kui_vmu_native_fault_capture_state[7]);
-    retail_display_line("PAGES CYCLE / PHOTO / OFF");
+    retail_display_line("PHOTO / POWER OFF");
     retail_display_pause(300u);
+    if(diagnostic_phase.enabled==NATIVE_RAW_OWNER_MODE) {
+        const struct native_raw_owner *r=&diagnostic_phase.raw;
+        retail_display_restore(&display);
+        retail_display_line("RAW OWNER STACK");
+        retail_display_line("FRAME N FLAGS TICK PR");
+        diagnostic_phase_row(r->header);
+        retail_display_line("SR LOAD VBL CTRL SCAN");
+        diagnostic_phase_row(r->header+5u);
+        retail_display_hex("INTEVT",r->event);
+        retail_display_line("FLAGS: SPAN1 WORDS2 VIDEO4");
+        retail_display_line("RAW / NOT FAULT PC");
+        retail_display_pause(300u);
+        for(unsigned first=0u;first<r->words;first+=48u) {
+            retail_display_restore(&display);
+            retail_display_line("RAW OWNER STACK");
+            retail_display_line("ADDRESS / RAW WORDS");
+            for(unsigned i=first;i<first+48u && i<r->words;i+=4u) {
+                /* Four-word groups stay inside the192-word zeroed array;
+                 * the recorded count distinguishes a partial final group. */
+                uint32_t row[5];row[0]=r->frame+4u*i;
+                memcpy(row+1u,r->data+i,4u*sizeof(uint32_t));
+                diagnostic_phase_row(row);
+            }
+            retail_display_line("RAW / NOT FAULT PC");
+            retail_display_pause(300u);
+        }
+    }
     for(unsigned first=0;first<diagnostic_phase.count;first+=4u) {
         retail_display_restore(&display);
-        retail_display_line("PHASE OLDEST FIRST");
+        retail_display_line("PHASE HISTORY");
         retail_display_line("KIND+FLAGS IN OUT TICKS I");
-        retail_display_line("PC PR SR EVT FR / LD VBL CTRL BEG END");
+        retail_display_line("PC PR SR EVT FR / LOAD VBL CTRL T0 T1");
         for(unsigned i=first;i<first+4u && i<diagnostic_phase.count;i++) {
             unsigned at=(diagnostic_phase.sequence-diagnostic_phase.count+i)&(NATIVE_PHASE_RECORDS-1u);
             const struct native_phase_record *r=&diagnostic_phase.ring[at];
             diagnostic_phase_row((uint32_t[5]){r->kind|(r->flags<<8),r->scan_begin,r->scan_end,
                 r->tick_begin-r->tick_end,i});
-            diagnostic_phase_row((uint32_t[5]){r->pc,r->pr,r->sr,r->event,r->video_counter});
-            diagnostic_phase_row((uint32_t[5]){r->load,r->vblank,r->control,r->tick_begin,r->tick_end});
+            diagnostic_phase_row(r->words+8u);
+            diagnostic_phase_row(r->words+3u);
         }
         retail_display_line("CLK1 RD2 VID4 FRM8 WAIT10 WRAP20");
         retail_display_pause(300u);
@@ -636,8 +679,8 @@ static void report(void) {
     struct retail_display_state display;memcpy(display.regs,config.display,sizeof(display.regs));
     retail_display_restore(&display);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    retail_display_line("PERSISTENT VMU");
-    retail_display_line("A2 / SCI JOURNAL");
+    retail_display_line("VMU / A2");
+    retail_display_line("SCI JOURNAL");
     retail_display_hex("PHASE",state.proof?15u:16u);
     retail_display_hex("DETAIL",state.error);
     retail_display_values("SUB END RD PHASE SAVE",(uint32_t[5]){
@@ -651,7 +694,7 @@ static void report(void) {
         state.fault_at,state.fault_value,state.fault_expect,state.runtime_result,config.lease.payload},5u);
     retail_display_values("FRAME PR SR COPY PR SR",(uint32_t[5]){
         state.frame_address,state.frame_pr,state.frame_sr,completion_frame.pr,completion_frame.sr},5u);
-    retail_display_line("VMU STOP / PHOTO / OFF");
+    retail_display_line("PHOTO / POWER OFF");
 #elif KUI_VMU_NATIVE_READONLY_PROBE
     retail_display_line("AUTOMATIC NATIVE READ-ONLY VMU TEST");
     retail_display_line("VIRTUAL A2 / NO SAVE OR STORAGE WRITES");
@@ -702,22 +745,22 @@ void kui_vmu_native_runtime_fault(uint32_t kind,uint32_t value,uint32_t context1
 #else
     struct retail_display_state display;memcpy(display.regs,config.display,sizeof(display.regs));
     retail_display_restore(&display);
-    retail_display_line("NATIVE VMU FAILURE");
+    retail_display_line("VMU FAILURE");
     bool exception=(kind&UINT32_C(0xffff0000))==UINT32_C(0x00010000);
     bool coherence=(kind&UINT32_C(0xffff0000))==UINT32_C(0x00020000);
-    retail_display_line(exception?"CPU EXCEPTION":
-        coherence?"SDK CACHE REFUSED":
-        kind==1u?"GAME ALLOCATION FAILED":"UNKNOWN FAILURE");
+    retail_display_line(exception?"EXCEPTION":
+        coherence?"CACHE REFUSED":
+        kind==1u?"ALLOCATION FAILED":"UNKNOWN");
     retail_display_hex("PHASE",18u);retail_display_hex("DETAIL",kind);
     retail_display_values(exception?"EXPEVT SPC SSR TEA":coherence?"CHECK AT VALUE EXPECT":
         "KIND VALUE CTX1 CTX2",(uint32_t[4]){
         (exception || coherence)?(kind&UINT32_C(0xffff)):kind,value,context1,context2},4u);
-    retail_display_values("LEASE N HEAP BEGIN N",(uint32_t[4]){
+    retail_display_values("LEASE N HEAP N",(uint32_t[4]){
         config.lease.payload,config.lease.lease_bytes,config.lease.begin,config.lease.heap_bytes},4u);
-    retail_display_line(exception?"EXCEPTION / NO SAVE":
-        coherence?"SDK INIT / NO TRANSFER":
-        "REQUEST / CALLER SP");
-    retail_display_line("STOP / PHOTO / OFF");
+    retail_display_line(exception?"NO SAVE":
+        coherence?"NO TRANSFER":
+        "REQUEST / SP");
+    retail_display_line("PHOTO / POWER OFF");
     for(;;) __asm__ volatile("nop");
 #endif
 }

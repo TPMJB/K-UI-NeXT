@@ -37,9 +37,9 @@ static void image_identity(void) {
 
 struct word {uint32_t address,value;};
 struct bus {
-    struct word words[32];
+    struct word words[256];
     unsigned count,reads,stack_reads;
-    uint32_t addresses[64],frame;
+    uint32_t addresses[512],frame;
     unsigned fail_read;
 };
 static void put(struct bus *b,uint32_t address,uint32_t value) {
@@ -122,6 +122,16 @@ static void successful_unwinds(void) {
             CHECK(state.sequence==1u && state.count==1u && state.valid==1u &&
                 state.waits==1u && state.wraps==1u);
             CHECK(b.stack_reads==(kind?7u:8u)+1u); /* Include the SDK video counter. */
+            const unsigned submit_order[]={76u,96u,120u,128u,200u,448u,452u,456u};
+            const unsigned complete_order[]={88u,120u,140u,148u,388u,392u,396u};
+            const unsigned *ordered=kind?complete_order:submit_order;
+            unsigned ordered_count=kind?7u:8u;
+            for(unsigned i=0u;i<ordered_count;i++) CHECK(b.addresses[6u+i]==b.frame+ordered[i]);
+            CHECK(r->words[8]==r->pc && r->words[9]==r->pr && r->words[10]==r->sr &&
+                r->words[11]==r->event && r->words[12]==r->video_counter);
+            CHECK(r->words[3]==r->load && r->words[4]==r->vblank && r->words[5]==r->control &&
+                r->words[6]==r->tick_begin && r->words[7]==r->tick_end);
+            CHECK(r->kind<=1u && !(r->flags&~0x3fu) && !r->reserved);
             for(unsigned i=0;i<b.reads;i++) if((b.addresses[i]&UINT32_C(0x1fffffff))>=
                 UINT32_C(0x0c2ff800) && (b.addresses[i]&UINT32_C(0x1fffffff))<
                 UINT32_C(0x0c2ff800)+464u)
@@ -322,7 +332,17 @@ static void disabled_and_ring(void) {
         CHECK(guarded.before==0x12345678u && guarded.after==0xabcdef01u);
     }
     CHECK(guarded.phase.valid==65u && guarded.phase.waits==65u && guarded.phase.wraps==65u);
-    for(unsigned i=49u;i<65u;i++) CHECK(guarded.phase.ring[i&15u].video_counter==100u+i);
+    for(unsigned i=49u;i<65u;i++) {
+        const struct native_phase_record *r=&guarded.phase.ring[i&15u];
+        const uint32_t logical[14]={r->kind,r->flags,r->scan_begin,r->scan_end,
+            r->tick_begin,r->tick_end,r->load,r->vblank,r->control,r->pc,r->pr,
+            r->sr,r->event,r->video_counter};
+        const uint32_t original[14]={i&1u,0x3fu,260u,7u,10000u,9700u,
+            0x01060359u,0x00150104u,0x100u,0x8c1f362cu,0x8c1f362cu,
+            0x60000000u,0x320u,100u+i};
+        for(unsigned word=0u;word<14u;word++) CHECK(logical[word]==original[word]);
+        CHECK(!r->reserved);
+    }
     /* Sequence arithmetic and diagnostic counters cannot escape the ring or
      * wrap cumulative counts back to misleadingly small values. */
     guarded.phase.sequence=UINT32_MAX;
@@ -336,9 +356,115 @@ static void disabled_and_ring(void) {
     CHECK(guarded.before==0x12345678u && guarded.after==0xabcdef01u);
 }
 
+static void raw_fixture(struct bus *b,uint32_t frame) {
+    memset(b,0,sizeof(*b));b->frame=frame;video(b,260u,17u);
+    for(unsigned i=0u;i<NATIVE_RAW_OWNER_WORDS;i++)
+        put(b,frame+4u*i,UINT32_C(0x12345678)^(i*UINT32_C(0x01010101)));
+    /* Real SH gateway fields, plus a possible older SDK exception word. The
+     * collector must preserve all of them without classifying any as a PC. */
+    put(b,frame+12u,UINT32_C(0x8c0d8a22));
+    put(b,frame+68u,UINT32_C(0x60000160));
+    put(b,frame+400u,UINT32_C(0x8c010e86));
+}
+static void raw_capture(struct native_phase_state *s,struct bus *b,bool profile,
+    uint32_t lease,unsigned bytes) {
+    native_raw_owner_capture(s,profile,b->frame,UINT32_C(0x8c0d8a22),
+        UINT32_C(0x60000160),123456u,lease,bytes,read_word,b);
+}
+static void raw_owner_snapshot(void) {
+    struct {uint32_t before;struct native_phase_state phase;uint32_t after;} guarded;
+    struct bus b;
+    const uint32_t aliases[]={0u,UINT32_C(0x80000000),UINT32_C(0xa0000000)};
+    const uint32_t frames[]={0x0c008100u,0x0c00f224u,0x0c2ff800u,0x0d000000u-768u};
+    for(unsigned a=0u;a<COUNT(aliases);a++) for(unsigned f=0u;f<COUNT(frames);f++) {
+        guarded.before=0x12345678u;guarded.after=0xabcdef01u;
+        native_phase_reset(&guarded.phase,false);raw_fixture(&b,frames[f]|aliases[a]);
+        raw_capture(&guarded.phase,&b,true,0xac700000u,0x60020u);
+        const struct native_raw_owner *r=&guarded.phase.raw;
+        CHECK(guarded.phase.enabled==NATIVE_RAW_OWNER_MODE);
+        CHECK(!guarded.phase.count && !guarded.phase.sequence);
+        CHECK(r->frame==b.frame && r->words==NATIVE_RAW_OWNER_WORDS);
+        CHECK(r->flags==(NATIVE_RAW_SPAN|NATIVE_RAW_WORDS|NATIVE_RAW_VIDEO));
+        CHECK(r->tick==123456u && r->pr==0x8c0d8a22u && r->sr==0x60000160u);
+        CHECK(r->data[3]==0x8c0d8a22u && r->data[17]==0x60000160u &&
+            r->data[100]==0x8c010e86u);
+        CHECK(r->data[191]==(0x12345678u^(191u*0x01010101u)));
+        CHECK(r->load==0x01060359u && r->vblank==0x00150104u &&
+            r->control==0x100u && r->scan==260u && r->event==0x320u);
+        CHECK(b.reads==5u+NATIVE_RAW_OWNER_WORDS);
+        for(unsigned i=5u;i<b.reads;i++) CHECK(b.addresses[i]==b.frame+4u*(i-5u));
+        CHECK(guarded.before==0x12345678u && guarded.after==0xabcdef01u);
+        /* Once frozen, subsequent phase operations cannot reinterpret or
+         * overwrite the raw snapshot while reporting loops through pages. */
+        struct native_phase_state copy=guarded.phase;
+        struct kui_vmu_native_profile_sample clock=clock_at(10000u);
+        unsigned reads=b.reads;
+        native_phase_begin(&guarded.phase,0u,b.frame,0xac700000u,0x60020u,&clock,read_word,&b);
+        native_phase_end(&guarded.phase,&clock,read_word,&b);
+        raw_capture(&guarded.phase,&b,true,0xac700000u,0x60020u);
+        CHECK(!memcmp(&copy,&guarded.phase,sizeof(copy)) && b.reads==reads);
+    }
+    const uint32_t bad_frames[]={0u,1u,0x4c00f224u,0x8c007d00u,0x8c0080fcu,
+        0x8c00f225u,0x8d000000u-768u+4u,0x8d000000u,UINT32_MAX};
+    for(unsigned i=0u;i<COUNT(bad_frames);i++) {
+        native_phase_reset(&guarded.phase,false);raw_fixture(&b,bad_frames[i]);
+        raw_capture(&guarded.phase,&b,true,0xac700000u,0x60020u);
+        CHECK(!b.reads && !guarded.phase.raw.flags && !guarded.phase.raw.words);
+    }
+    const struct {uint32_t lease,bytes;} bad_leases[]={
+        {0u,0x60020u},{0x0d000000u,1u},{0xac700000u,0u},{0x0cffffffu,2u}};
+    for(unsigned i=0u;i<COUNT(bad_leases);i++) {
+        native_phase_reset(&guarded.phase,false);raw_fixture(&b,0x8c00f224u);
+        raw_capture(&guarded.phase,&b,true,bad_leases[i].lease,bad_leases[i].bytes);
+        CHECK(!b.reads && !guarded.phase.raw.flags && !guarded.phase.raw.words);
+    }
+    for(unsigned a=0u;a<COUNT(aliases);a++) for(unsigned edge=0u;edge<2u;edge++) {
+        native_phase_reset(&guarded.phase,false);raw_fixture(&b,0x8c2ff800u);
+        raw_capture(&guarded.phase,&b,true,(0x0c2ff800u+(edge?767u:0u))|aliases[a],1u);
+        CHECK(!b.reads && !guarded.phase.raw.flags);
+        /* Exactly adjacent ownership remains disjoint; include the full
+         * caller-supplied guard prefix rather than just the lease payload. */
+        native_phase_reset(&guarded.phase,false);raw_fixture(&b,0x8c2ff800u);
+        raw_capture(&guarded.phase,&b,true,(edge?0x0c2ffb00u:0x0c2ff7ffu)|aliases[a],1u);
+        CHECK(guarded.phase.raw.words==NATIVE_RAW_OWNER_WORDS);
+    }
+    for(unsigned fail=1u;fail<=5u+NATIVE_RAW_OWNER_WORDS;fail++) {
+        native_phase_reset(&guarded.phase,false);raw_fixture(&b,0x8c00f224u);b.fail_read=fail;
+        raw_capture(&guarded.phase,&b,true,0xac700000u,0x60020u);
+        const struct native_raw_owner *r=&guarded.phase.raw;
+        CHECK(r->flags&NATIVE_RAW_SPAN);
+        if(fail<=5u) {
+            CHECK(!(r->flags&NATIVE_RAW_VIDEO) && (r->flags&NATIVE_RAW_WORDS));
+            CHECK(r->words==NATIVE_RAW_OWNER_WORDS && b.reads==197u);
+        } else {
+            CHECK((r->flags&NATIVE_RAW_VIDEO) && !(r->flags&NATIVE_RAW_WORDS));
+            CHECK(r->words==fail-6u && b.reads==fail);
+            CHECK(r->data[r->words]==0u);
+        }
+    }
+    /* NORMAL/other modes do no sampling or mutation, and existing exact-E1
+     * PROFILE history is preserved byte for byte by the generic terminal. */
+    for(unsigned mode=0u;mode<2u;mode++) {
+        native_phase_reset(&guarded.phase,mode!=0u);raw_fixture(&b,0x8c00f224u);
+        struct native_phase_state copy=guarded.phase;
+        raw_capture(&guarded.phase,&b,mode!=0u,0xac700000u,0x60020u);
+        CHECK(!b.reads && !memcmp(&copy,&guarded.phase,sizeof(copy)));
+    }
+    const unsigned bad_kinds[]={2u,255u,256u,257u,UINT32_MAX};
+    for(unsigned i=0u;i<COUNT(bad_kinds);i++) {
+        native_phase_reset(&guarded.phase,true);fixture(&b,0u,0x8c2ff800u,false);
+        struct kui_vmu_native_profile_sample clock=clock_at(10000u);
+        begin(&guarded.phase,&b,bad_kinds[i],0xac700000u,0x60020u,&clock);
+        CHECK(guarded.phase.pending.kind==UINT8_MAX);
+        CHECK(!(guarded.phase.pending.flags&(NATIVE_PHASE_UNWIND|NATIVE_PHASE_WAIT)));
+        CHECK(!(guarded.phase.pending.flags&~0x3fu) && !guarded.phase.pending.reserved);
+    }
+    CHECK(sizeof(guarded.phase)==908u);
+}
+
 int main(void) {
     image_identity();successful_unwinds();span_admission();marker_and_read_faults();wait_classification();
-    clocks_and_video();disabled_and_ring();
+    clocks_and_video();disabled_and_ring();raw_owner_snapshot();
     printf("Native optional phase capture: %u checks; original-alias unwind, bounds/refusals, clock/video identity and bounded history passed\n",checks);
     return 0;
 }

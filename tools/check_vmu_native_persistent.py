@@ -882,10 +882,15 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
           **(DUAL_READER_PREPARED_PINS if dual_reader else {}),
           **(DUAL_WITNESS_PREPARED_PINS if controller_witness else {}),
           **(OWNED_TIMER_PREPARED_PINS if owned_timers else {})}
+    from check_native_followup_profile import worker_pins as followup_worker_pins
+    pins=followup_worker_pins(worker,'prepared',pins)
     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
                        ("_protected_ranges", 512), ("_protected_count", 4),
                        ("_controller_pair", 188), ("_diagnostic_phase", 976), ("_diagnostic", 144)]
+    from check_native_followup_profile import raw_owner_profile
+    if raw_owner_profile(worker):
+        objects=[(name,908 if name=='_diagnostic_phase' else size) for name,size in objects]
     if FAULT_STATE in worker[4]:objects.append((FAULT_STATE,32))
     if stall_marker:objects.append(('_reader_capture',508))
     if cooperative:objects.append(('_reader_cooperative',40 if timed else 24))
@@ -980,8 +985,14 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
     if owned_timers:
         from check_native_live_boundary_abi import check as check_live_boundary_abi
         live_boundary_abi=check_live_boundary_abi(worker,self_test=self_test)
+    raw_owner_terminal={"enabled":False}
+    if raw_owner_profile(worker):
+        from check_native_raw_owner_capture import check as check_raw_owner_terminal,require_companion as raw_owner_companion
+        raw_owner_terminal=check_raw_owner_terminal(directory,self_test=self_test)
+        require(raw_owner_companion(worker,raw_owner_terminal),'Raw owner terminal proof does not bind this worker')
     return {"prepared": True, "exact_linked_kernels": functions, "build_identity": build,
             "live_boundary_call_abi":live_boundary_abi,
+            "raw_owner_terminal":raw_owner_terminal,
             "read_ahead_diagnostic_companion_required":bool(read_ahead_diagnostic),
             "read_ahead_pio_companion_required":read_ahead_pio,
             "read_ahead_pio_pair_companion_required":read_ahead_pio_pair,
@@ -996,7 +1007,7 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
                 "private_pair_bytes": 188, "original_dma_unchanged": True,
                 "mixed_main_queries": "B-D INFO/ALLINFO; A controller GETCOND required",
                 "profile_uses_same_fast_lane": True,
-                "optional_phase_private_bytes": 976, "phase_ring_records": 16,
+                "optional_phase_private_bytes": 908 if raw_owner_profile(worker) else 976, "phase_ring_records": 16,
                 "publication": "one parent-A presence byte after whole-batch validation",
                 "full_storage_guards_unchanged": True,
                 "synthetic_read_count_is_not_hardware_time": True},
@@ -1218,7 +1229,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         require(worker is not None and witness_companion(worker,read_ahead_proof) and
                 progress==symbols.get('__kui_native_dual_readers_stage')==(1,0,0,0xfff1),
                 'worker publication progress requires the complete exact witness worker proof')
-        require((len(body),hashlib.sha256(body).hexdigest()) in passive_run_pins(worker),
+        require((len(body),hashlib.sha256(body).hexdigest()) in passive_run_pins(worker,stage),
                 'witness worker-publication passive-run instructions/literals changed')
         witness=True
     words = list(struct.unpack("<" + "H" * (len(body) // 2), body))
@@ -1234,8 +1245,29 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             return None
         return struct.unpack("<I", region(body, at - begin, 4, "installer literal"))[0]
     candidates = []
+    selected_callbacks=False
     if witness:
-        i=0x46c//2
+        callbacks=symbols.get('__kui_native_dual_low_callbacks_stage')
+        require(callbacks is None or callbacks==(1,0,0,0xfff1),
+                'worker publication selected-callback marker differs')
+        selected_callbacks=callbacks is not None
+        i=(0x464 if callbacks is not None else 0x46c)//2
+        prior=words[i-4:i]
+        # The selected low-reader accessors move this complete block by8B.
+        # Keep its actual refusal branch tied to the original phase/detail
+        # argument setup, rather than treating a changed BRA as a wildcard.
+        branch=prior[2]
+        displacement=branch&0xfff
+        if displacement&0x800:displacement-=0x1000
+        selected_prior=(prior[:2]==[0x8d02,0x6493] and prior[3]==0xe503 and
+                        branch&0xf000==0xa000 and
+                        begin+2*(i-2)+4+2*displacement==begin+0x28)
+        if callbacks is not None:
+            configure=0x114//2
+            require(words[configure]&0xff00==0xd100 and
+                    literal(configure)==symbols['_native_low_configure'][0] and
+                    words[configure+1:configure+4]==[0x64f3,0x410b,0x7444],
+                    'selected low callbacks were not configured into the actual SP+68 worker config')
         require(background and mode_config and words[i]&0xff00==0xdc00 and
             literal(i)==symbols['_native_driver'][0] and words[i+1]&0xff00==0xdd00 and literal(i+1)==address and
             words[i+2:i+8]==[0x53c7,0x55f7,0x2232,0x53ce,0x359c,0x528d] and
@@ -1244,8 +1276,13 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             words[i+12:i+14]==[0x490b,0x1fba] and words[i+14]&0xff00==0xd000 and
             literal(i+14)==symbols['_kui_vmu_native_worker_call'][0] and
             words[i+15:i+22]==[0x67f3,0x558a,0x7728,0x5483,0x66f3,0x400b,0x7644] and
-            words[i-4:i]==[0x8d02,0x6493,0xadde,0xe503],
+            (selected_prior if callbacks is not None else
+             prior==[0x8d02,0x6493,0xadde,0xe503]),
             'witness worker-publication exact setup/first-arm block differs')
+        report.update(selected_low_callback_profile=callbacks is not None,
+                      first_arm_setup_offset=hex(2*i),
+                      selected_callback_refusal_branch_target_checked=callbacks is not None,
+                      selected_low_configure_receives_actual_arm_config=callbacks is not None)
         candidates.append((i,9,20,5))
     for i in (() if witness else range(len(words) - 20)):
         # Original configuration layout: the publisher uses callee-saved R14.
@@ -1367,11 +1404,11 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             words[i+6]&0xff00==0xd400 and literal(i+6)==symbols['__native_worker_blob_begin'][0] and
             words[i+7:i+11]==[0x1f92,0x1fa1,0x400b,0x2f82]):
             relocations.append((i,i+9,4,True))
-        if (witness and i==0x272//2 and words[i+1]==0x37b8 and
-            words[i+2]&0xff00==0xdd00 and literal(i+2)==SPAN and words[i+3]==0x55f7 and
+        if (witness and i==(0x26e if selected_callbacks else 0x272)//2 and words[i+1]==0x37b8 and
+            words[i+2]&0xff00==(0xde00 if selected_callbacks else 0xdd00) and literal(i+2)==SPAN and words[i+3]==0x55f7 and
             words[i+4]&0xff00==0xd600 and literal(i+4)==symbols['__native_worker_blob_end'][0] and
             words[i+5]&0xff00==0xd400 and literal(i+5)==symbols['__native_worker_blob_begin'][0] and
-            words[i+6:i+10]==[0x1f92,0x1fd1,0x400b,0x2f82]):
+            words[i+6:i+10]==[0x1f92,0x1fe1 if selected_callbacks else 0x1fd1,0x400b,0x2f82]):
             relocations.append((i,i+8,5,True))
     zero_patterns = (
         [0x56f3, 0x6ba3, 0x3b8c, 0x3688, 0x64b3, 0x4c0b, 0xe500],
@@ -1380,11 +1417,13 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         [0x6e83, 0x3eac, 0xe500, 0x66b3, 0x64e3, 0x4c0b, 0x36a8],
         [0x6e83,0x3e9c,0xe500,0x66b3,0x64e3,0x4c0b,0x3698],
         [0x5bf7,0xe500,0x51f7,0x66a3,0x3b8c,0x3618,0x4d0b,0x64b3],
-        [0x5bf7,0xe500,0x52f7,0x66d3,0x3b8c,0x3628,0x4e0b,0x64b3])
-    zero_families = (0, 1, 1, 2, 3, 4, 5)
+        [0x5bf7,0xe500,0x52f7,0x66d3,0x3b8c,0x3628,0x4e0b,0x64b3],
+        [0x5bf7,0xe500,0x51f7,0x66e3,0x3b8c,0x3618,0x4d0b,0x64b3])
+    zero_families = (0, 1, 1, 2, 3, 4, 5, 5)
     zeroes = [(i,zero_families[j],j) for j,pattern in enumerate(zero_patterns)
               for i in range(len(words)-len(pattern)) if words[i:i+len(pattern)]==pattern and
-              (j!=5 or background) and (j!=6 or witness)]
+              (j!=5 or background) and (j!=6 or witness and not selected_callbacks) and
+              (j!=7 or selected_callbacks)]
     releases = [i for i in range(len(words) - 3) if words[i:i + 3] ==
                 ([0x52aa,0x7214,0x2022] if register_family in (4,5) else
                  [0x52ba, 0x7214, 0x2022] if register_family in (2,3) else [0x53ca, 0x7314, 0x2032])]
@@ -1392,14 +1431,14 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             "missing linked relocation/BSS/release-cell initialization witnesses")
     require(relocations[0][2] == zeroes[0][1] == register_family,
             "installer relocation/BSS/publication use inconsistent load/length registers")
-    require(relocations[0][3] == mode_config and (zeroes[0][2] in (2, 3, 4, 5, 6)) == mode_config,
+    require(relocations[0][3] == mode_config and (zeroes[0][2] in (2, 3, 4, 5, 6, 7)) == mode_config,
             "installer mode configuration uses an unreviewed relocation/zero-fill ABI")
     relocate_pc = begin + relocations[0][1] * 2
     zero_pc = begin + (zeroes[0][0] + (6 if register_family in (4,5) else 5)) * 2
     release_pc = begin + (releases[0] + 2) * 2
     # The compiler keeps memset in callee-saved R12 until this BSS call.
     # Pin its initializer and reject any intervening write to R12.
-    memset_reg=14 if register_family==5 else 13 if register_family==4 else 12
+    memset_reg=13 if selected_callbacks else 14 if register_family==5 else 13 if register_family==4 else 12
     memset_loads = [i for i in range(zeroes[0][0]) if words[i] & 0xff00 == 0xd000|(memset_reg<<8) and
                     literal(i) == symbols["_memset"][0]]
     require(len(memset_loads) == 1, "BSS zeroing has no exact linked memset target")
@@ -1480,16 +1519,22 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 words[j]&0xff00==0xd000 and literal(j)==symbols['_native_runtime_diagnostics'][0] and
                 words[j+1:j+7]==[0x400b,0x0009,0x51c8,0x31a0,0x8f09,0x1b0f]]
         elif register_family==5:
-            choices=[j for j in (0x12e//2,) if
-                words[j]&0xff00==0xd000 and literal(j)==symbols['_native_runtime_diagnostics'][0] and
-                words[j+1:j+7]==[0x400b,0x0009,0x51a8,0x31b0,0x8f08,0x1c0f]]
+            if selected_callbacks:
+                choices=[j for j in (0x126//2,) if
+                    words[j]&0xff00==0xd000 and literal(j)==symbols['_native_runtime_diagnostics'][0] and
+                    words[j+1:j+3]==[0x400b,0x0009] and words[j+3]&0xff00==0x9100 and
+                    words[j+4:j+6]==[0x31fc,0x110f]]
+            else:
+                choices=[j for j in (0x12e//2,) if
+                    words[j]&0xff00==0xd000 and literal(j)==symbols['_native_runtime_diagnostics'][0] and
+                    words[j+1:j+7]==[0x400b,0x0009,0x51a8,0x31b0,0x8f08,0x1c0f]]
         require(len(choices) == 1, 'missing exact runtime diagnostics return-to-config store')
         diagnostics_getter = choices[0]
         bases = []
-        for j in range(diagnostics_getter - 3):
-            config_register=12 if register_family==5 else 11 if register_family==4 else 13
-            if words[j] & 0xFF00 != 0x9000|(config_register<<8) or words[j + 1] != 0xE630 or words[j + 3] != 0x300c|(config_register<<8)|0xf0:
-                continue
+        config_register=1 if selected_callbacks else 12 if register_family==5 else 11 if register_family==4 else 13
+        for j in ((diagnostics_getter+3,) if selected_callbacks else range(diagnostics_getter - 3)):
+            if not selected_callbacks and (words[j] & 0xFF00 != 0x9000|(config_register<<8) or
+                    words[j + 1] != 0xE630 or words[j + 3] != 0x300c|(config_register<<8)|0xf0):continue
             at = begin + 2 * j + 4 + 2 * (words[j] & 255)
             if struct.unpack('<h', region(body, at - begin, 2, 'diagnostics config stack offset'))[0] == config_base:
                 bases.append(j)
@@ -1497,8 +1542,10 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 'diagnostics store no longer names exact final config word')
         getter_pc = begin + 2 * (diagnostics_getter + (1 if register_family in (4,5) else 3))
         store_call_pc = begin + 2 * (diagnostics_getter + (5 if register_family in (4,5) else 7))
-        base_pc = begin + 2 * (bases[0] + 3)
-        require(base_pc in dom[getter_pc] and getter_pc in dom[store_call_pc] and store_call_pc in dom[arm],
+        base_pc = begin + 2 * (bases[0] + (1 if selected_callbacks else 3))
+        base_dominates=(getter_pc in dom[base_pc] if selected_callbacks else base_pc in dom[getter_pc])
+        require(base_dominates and base_pc in dom[store_call_pc] and
+                getter_pc in dom[store_call_pc] and store_call_pc in dom[arm],
                 'runtime mode/config store can be bypassed before worker arm')
         for pc, (_, mnemonic, operands) in decoded.items():
             if base_pc < pc < store_call_pc and mnemonic not in ('cmp/eq', 'cmp/hi', 'cmp/hs', 'tst'):
@@ -1530,10 +1577,11 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         if witness:
             normalizers=[j for j in (0x50//2,) if
                 words[j]&0xff00==0xd100 and literal(j)==0x1fffffff and
-                words[j+1]&0xff00==0xde00 and literal(j+1)==symbols['_memset'][0] and
+                words[j+1]&0xff00==(0xdd00 if selected_callbacks else 0xde00) and literal(j+1)==symbols['_memset'][0] and
                 words[j+2]==0x64f3 and words[j+4]==0x2919 and
                 words[j+5]&0xff00==0xd100 and literal(j+5)==0x80000000 and
-                words[j+6:j+11]==[0x7444,0x6683,0xec01,0x4e0b,0x291b]]
+                words[j+6:j+11]==([0x7444,0x6683,0xeb01,0x4d0b,0x291b] if selected_callbacks else
+                                  [0x7444,0x6683,0xec01,0x4e0b,0x291b])]
         require(len(normalizers)==1,'Background prefix lacks its exact P1 payload normalization')
         normal=normalizers[0]
         require(words[normal-12]==(0x5af8 if witness else 0x5cf8) and words[normal-10]&0xff00==0xd000 and
@@ -1570,6 +1618,11 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                     (8,memcpy_pc+2,tail['copy_region']),
                     (11,lease_pc+2,tail_entry),(12,base_pc+2,tail_entry),
                     (10,begin+2*(normal-8)+2,tail_entry))
+            if selected_callbacks:
+                # R1 is formed after the mode getter and immediately stores
+                # the final configuration word. The linked tail starts after
+                # that store and no longer assumes a callee-saved R12 base.
+                stable=tuple(row for row in stable if row[0]!=12)
         for register,first_pc,last_pc in stable:
             for pc,(_,mnemonic,operands) in decoded.items():
                 if first_pc<=pc<last_pc and mnemonic not in ('cmp/eq','cmp/hi','cmp/hs','tst'):
@@ -1727,7 +1780,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         report['witness_publication_execution']=dict(enabled=True,actual_linked_setup_and_publisher_executed=True,
             actual_first_worker_call_arguments_executed=True,worker_gateway_and_arm_separately_proved=True,
             hostile_display_volatile_registers=True,model_cases=actual_cases,mutation_rejections=actual_refusals,
-            complete_passive_run_bytes=1996,complete_passive_run_sha256=hashlib.sha256(body).hexdigest())
+            complete_passive_run_bytes=len(body),complete_passive_run_sha256=hashlib.sha256(body).hexdigest())
     if self_test:
         # An individually recognized register-family block must not be mixed
         # with the other family's relocation/zero-fill/publication. Mutate the
@@ -1737,6 +1790,8 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                       (zeroes[0][0] + 3, zero_patterns[alternate][3])),
                      ((relocations[0][0] + 1, 0x0009),)]
         mutations.extend(background_prefix_mutations)
+        if selected_callbacks:
+            mutations.extend([((0x118//2,0x0009),),((0x11a//2,0x7448),)])
         if register_family==5:
             mutations.extend([((first+3,0x0009),),((first+6,0x35ac),),
                               ((first+10,0x0009),),((first-3,0x64a3),),((first-2,0x0009),),
@@ -1757,9 +1812,9 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             getter_literal = (((begin + 2 * diagnostics_getter + 4) & ~3) +
                               4 * (words[diagnostics_getter] & 255) - begin) // 2
             wrong_getter = symbols['_native_runtime_mode'][0]
-            store_index=diagnostics_getter+(6 if register_family in (4,5) else 8)
+            store_index=diagnostics_getter+(5 if selected_callbacks else 6 if register_family in (4,5) else 8)
             mutations.extend([((store_index, 0x0009),),
-                              ((store_index, 0x1C0E if register_family==5 else 0x1B0E if register_family==4 else 0x1D0E),),
+                              ((store_index, 0x110e if selected_callbacks else 0x1C0E if register_family==5 else 0x1B0E if register_family==4 else 0x1D0E),),
                               ((diagnostics_getter, 0xE000),),
                               ((getter_literal, wrong_getter & 0xFFFF),
                                (getter_literal + 1, wrong_getter >> 16))])

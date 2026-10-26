@@ -89,7 +89,7 @@ static void reader_readahead_failure(const struct retail_display_state *display,
 #undef RA_FIELD
     static const uint8_t count[8]={5,5,5,4,5,5,5,3};
     static const char *const label[7]={"BLK BASE COUNT END OP","LOAN RX R0 R1 KEPT",
-        "ARRIVED LOST PRE STATE POS","PRE SAR DAR TCR CHCR DMAOR",
+        "ARRIVED LOST STATE POS","PRE SAR DAR TCR CHCR DMAOR",
         "POST SAR DAR TCR CHCR DMAOR","PRE SCI PINS TMU POST STATE POS","POST SCI PINS TMU"};
     uint32_t values[5];unsigned at=0u;
     retail_display_restore(display);
@@ -103,7 +103,7 @@ static void reader_readahead_failure(const struct retail_display_state *display,
 static void reader_readahead_diagnostics(const struct retail_display_state *display,
     const struct kui_native_ra_diagnostics *d) {
     retail_display_restore(display);
-    retail_display_line("READ AHEAD EXITS");
+    retail_display_line("READ AHEAD");
     uint32_t stages[7]={d->failures,0,0,0,0,0,0};
     for(unsigned stage=1u;stage<KUI_NATIVE_RA_STAGE_COUNT;stage++)
         for(unsigned result=0u;result<KUI_NATIVE_RA_RESULT_COUNT;result++)
@@ -118,9 +118,9 @@ static void reader_readahead_diagnostics(const struct retail_display_state *disp
         (uint32_t[4]){
         stages[5],stages[6],d->first.stage,d->last.stage},4u);
     const uint32_t *n=d->skipped;
-    retail_display_values("SKIP QUIET ABORT SEED LOAN ACTIVE",n,5u);
-    retail_display_values("SKIP PEND FAIL OPEN PORT BUSY",n+5u,5u);
-    retail_display_values("SKIP DMA POS DEFER OWNED",n+10u,4u);
+    retail_display_values("QUIET ABORT SEED LOAN ACTIVE",n,5u);
+    retail_display_values("PEND FAIL OPEN PORT BUSY",n+5u,5u);
+    retail_display_values("DMA POS DEFER OWNED",n+10u,4u);
     retail_display_pause(240u);
     if(!d->failures)return;
     bool same=!memcmp(&d->first,&d->last,sizeof(d->first));
@@ -135,7 +135,7 @@ static void reader_readahead_report(const struct retail_display_state *display) 
     if(!a)return;
     const struct kui_native_ra_stats *s=&((const struct kui_native_ra_public *)a->context)->stats;
     retail_display_restore(display);
-    retail_display_line("CRC VALIDATED PHYSICAL READ AHEAD");
+    retail_display_line("READ AHEAD");
     retail_display_values("CAP HITS MISS HIT REQS",(uint32_t[4]){
         KUI_NATIVE_RA_BLOCKS,s->hits,s->misses,s->hit_requests},4u);
     retail_display_values("MADE VISITS HEARTBEAT IRQ",(uint32_t[4]){
@@ -144,13 +144,13 @@ static void reader_readahead_report(const struct retail_display_state *display) 
         s->seeks,s->quiesces,s->resumes,s->full,s->extent_ends},5u);
     retail_display_values("CRC TOKEN ABORT GUARD CLOCK",(uint32_t[5]){
         s->crc_errors,s->token_errors,s->abandoned,s->guard_faults,s->clock_bad},5u);
-    retail_display_values("PIO WORK MAX BAD",
+    retail_display_values("PIO N MAX BAD",
         ((const struct kui_native_ra_public *)a->context)->diagnostics.stage_result[KUI_NATIVE_RA_STAGE_NONE],3u);
     retail_display_values("SECOND SKIP ONE MAX OVER",
         ((const struct kui_native_ra_public *)a->context)->diagnostics.stage_result[KUI_NATIVE_RA_STAGE_NONE]+
             KUI_NATIVE_RA_PIO_SECOND_ATTEMPTS,4u);
     retail_display_hex("AUX MAX TICKS",s->max_visit_ticks);
-    retail_display_line("HEX - 781250 HZ");
+    retail_display_line("HEX / 781250HZ");
     retail_display_pause(240u);
     reader_readahead_diagnostics(display,
         &((const struct kui_native_ra_public *)a->context)->diagnostics);
@@ -395,7 +395,7 @@ static void reader_capture_report(const struct retail_display_state *display) {
         reader_capture.samples,reader_capture.bad,reader_capture.gap_max,
         reader_capture.call_max,reader_capture.irq_max},5u);
     const struct kui_reader_capture_sample *a=&reader_capture.first,*b=&reader_capture.previous;
-    retail_display_values("IRQBLK CALLBLK PIO CRC TOK ERR",(uint32_t[5]){
+    retail_display_values("IRQBLK CALLBLK PIO CRC TOKERR",(uint32_t[5]){
         b->irq_blocks-a->irq_blocks,b->call_blocks-a->call_blocks,b->polled-a->polled,
         b->crc-a->crc,b->token_errors-a->token_errors},5u);
     retail_display_values("FOREIGN FIX OVER DEFER CLK_BAD",(uint32_t[5]){
@@ -404,7 +404,7 @@ static void reader_capture_report(const struct retail_display_state *display) {
 #if KUI_NATIVE_REQUEST_TIMING
 #if KUI_NATIVE_IRQ_REARM
     const kui_retail_async_region_type *region=reader_capture_region();
-    retail_display_values("SCI REARM IRQ COUNT",(uint32_t[2]){
+    retail_display_values("SCI REARM IRQS",(uint32_t[2]){
         region?region->engine.stats.execs:0u,region?region->engine.stats.exec_int:0u},2u);
     if(region)retail_display_values(
 #if KUI_NATIVE_LOADER_TIMELINE
@@ -450,9 +450,9 @@ static void reader_capture_report(const struct retail_display_state *display) {
     retail_display_pause(300u);
     for(unsigned first=0u;first<reader_capture.top_count;first+=2u) {
         retail_display_restore(display);
-        retail_display_line("LONGEST POLL GAPS DESC");
+        retail_display_line("POLL GAPS");
 #if KUI_NATIVE_REQUEST_TIMING
-        retail_display_line("GAP/READ/AGE TICKS / DELTAS");
+        retail_display_line("GAP READ AGE / DELTAS");
 #else
         retail_display_line("GAP CALL IRQ ARE TICKS - COUNTERS ARE DELTAS");
 #endif
@@ -466,14 +466,14 @@ static void reader_capture_report(const struct retail_display_state *display) {
 #endif
                 (uint32_t[5]){
                 i,e->gap,e->call_max,e->irq_max,e->pending},5u);
-            retail_display_values("IRQBLK CALLBLK PIO CRC TOK ERR",(uint32_t[5]){
+            retail_display_values("IRQBLK CALLBLK PIO CRC TOKERR",(uint32_t[5]){
                 e->irq_blocks,e->call_blocks,e->polled,e->crc,e->token_errors},5u);
-            retail_display_values("FN CMD PREVTOK TOK BLOCK",(uint32_t[5]){
+            retail_display_values("FN CMD TOK0 TOK1 BLOCK",(uint32_t[5]){
                 e->function,e->command,e->previous_token,e->token,e->block},5u);
         }
         retail_display_line(
 #if KUI_NATIVE_DUAL_READERS
-            "PAGES CYCLE / PHOTO / OFF"
+            "PHOTO / POWER OFF"
 #else
             "PHOTO ALL THREE READER PAGES THEN POWER OFF"
 #endif

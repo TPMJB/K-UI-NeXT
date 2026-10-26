@@ -1720,10 +1720,9 @@ static void games_extra_options(struct paint *p,const struct kui_shell *s) {
     const char *names[]={"Boot encoding",native_reader?"Background reader":"Background speed","Image information","Developer tests","RAM patches","Restore defaults","Check executable","Temporary baseline"};
     const char *encodings[]={"Automatic","Plain","Scrambled"};
     bool encoding=kui_shell_games_encoding_ready(s);
-    bool speed=kui_shell_games_background_ready(s) && !s->games_launch_cdda &&
-        s->games_launch_reader!=KUI_GAME_READER_STANDARD;
+    bool speed=kui_shell_games_background_ready(s) && !s->games_launch_cdda;
     const char *values[]={encoding?encodings[s->games_launch_encoding<KUI_GAME_ENCODING_COUNT?s->games_launch_encoding:0]:"Automatic",
-        speed?(native_reader?kui_shell_games_reader_label(s):
+        speed?(native_reader?(s->games_launch_reader==KUI_GAME_READER_STANDARD?"Off":kui_shell_games_reader_label(s)):
             s->games_launch_reader==KUI_GAME_READER_EAGER?"Aggressive":"Normal"):"Unavailable","Open","Open",
         kui_shell_games_patches_ready(s)?(kui_game_ram_patches_enabled(&s->games_launch_patches)?"On":"Off"):"Unavailable","Apply",kui_shell_games_launch_ready(s)?"Run":"Unavailable",s->games_baseline?"On (unsaved)":"Off"};
     for(unsigned i=0;i<KUI_SHELL_GAME_TOOL_COUNT;i++) {
@@ -1735,7 +1734,7 @@ static void games_extra_options(struct paint *p,const struct kui_shell *s) {
         words(p,350,y+4,592,ready?CYAN:MUTED,values[i],false);
     }
     const char *hints[]={"Automatic uses the inspected CD boot encoding.",
-        native_reader?"Choose New (X) or Legacy (Y) with A or left/right.":
+        native_reader?"Choose New (X), Legacy (Y), or Off with A or left/right.":
             "Aggressive gives the background reader more work per step.",
         "Disc tracks, image format and boot file details.","Read tests run separately from normal game launches.",
         "Two one-time boot patches. Native games with CD music Off only.",

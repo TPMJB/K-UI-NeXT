@@ -160,7 +160,7 @@ static struct kui_games_detail games_detail;
 static unsigned games_listing_generation,games_detail_generation;
 static struct kui_game_launch_settings games_detail_launch_settings,games_launch_settings_pending;
 static struct kui_game_ram_patches games_patches_pending;
-static bool games_detail_launch_loaded,games_launch_saved;
+static bool games_detail_launch_loaded,games_detail_launch_found,games_launch_saved;
 static char games_launch_path_pending[KUI_GAMES_FILE_CAP],games_launch_result_path[KUI_GAMES_FILE_CAP];
 static unsigned games_launch_result_generation;
 static unsigned games_offset_pending,games_result_offset;
@@ -396,7 +396,8 @@ static void settings_operation(bool save) {
 /* The codec is loaded before metadata inspection on the same storage worker.
  * Menu callbacks only publish or copy these values. */
 static bool game_launch_settings_load(const char *path,
-                                      struct kui_game_launch_settings *value) {
+                                      struct kui_game_launch_settings *value,bool *found) {
+    *found=false;
     kui_game_launch_settings_default(value);
     if(kui_cancelled()) return false;
     bool ok=false;
@@ -404,12 +405,12 @@ static bool game_launch_settings_load(const char *path,
     if(kui_sd_connect()) {
         FATFS fs;
         if(kui_mount(&fs,kui_log)) {
-            if(!kui_cancelled()) ok=kui_game_launch_settings_load(path,value,kui_log);
+            if(!kui_cancelled()) ok=kui_game_launch_settings_lookup(path,value,found,kui_log);
             if(f_mount(NULL,"0:",0)!=FR_OK) ok=false;
         }
         kui_sd_disconnect();
     }
-    if(!ok) kui_game_launch_settings_default(value);
+    if(!ok) {kui_game_launch_settings_default(value);*found=false;}
     return ok;
 }
 static bool game_launch_settings_write(const char *path,const struct kui_game_launch_settings *value) {
@@ -1923,7 +1924,8 @@ static void *worker(void *unused) {
                 memset(&games_detail,0,sizeof(games_detail));games_detail.stopped=true;
                 strcpy(games_detail.path,games_path_pending);
                 snprintf(games_detail.message,sizeof(games_detail.message),"Games inspection stopped before starting");
-                kui_game_launch_settings_default(&games_detail_launch_settings);games_detail_launch_loaded=false;
+                kui_game_launch_settings_default(&games_detail_launch_settings);
+                games_detail_launch_loaded=games_detail_launch_found=false;
                 ++games_detail_generation;
             }
             if(action==79) {
@@ -2220,19 +2222,21 @@ static void *worker(void *unused) {
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_games_detail detail;
                 struct kui_game_launch_settings value;
-                bool loaded=game_launch_settings_load(games_path_pending,&value);
+                bool found=false;
+                bool loaded=game_launch_settings_load(games_path_pending,&value,&found);
                 if(games_codec_override_pending) {
                     value.codec=games_codec_pending;
                     /* Preserve every other saved setting. A failed read cannot
                      * safely overwrite the collection; this choice remains temporary. */
                     bool saved=loaded && game_launch_settings_write(games_path_pending,&value);
                     game_launch_settings_publish_save(games_path_pending,saved);
-                    loaded=true;
+                    loaded=true;found=true;
                 }
                 kui_games_inspect_cover_codec(games_path_pending,(enum kui_zso_codec)value.codec,
                     &detail,games_detail_cover,kui_log,kui_cancelled);
                 mutex_lock(&lock);
-                games_detail=detail;games_detail_launch_settings=value;games_detail_launch_loaded=loaded;
+                games_detail=detail;games_detail_launch_settings=value;
+                games_detail_launch_loaded=loaded;games_detail_launch_found=found;
                 ++games_detail_generation;
                 mutex_unlock(&lock);
             }
@@ -3106,7 +3110,7 @@ int main(void) {
         if(seen_games_detail!=games_detail_generation) {
             kui_shell_set_games_detail(&shell,&games_detail);
             kui_shell_set_game_launch_settings(&shell,games_detail.path,
-                &games_detail_launch_settings,games_detail_launch_loaded);
+                games_detail_launch_found?&games_detail_launch_settings:NULL,games_detail_launch_loaded);
             seen_games_detail=games_detail_generation;
             games_ui_changed=true;
         }

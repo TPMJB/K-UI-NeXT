@@ -67,7 +67,9 @@ def layout():
 
 def pinned(worker):
     _, body, section = symbol_bytes(worker, '_live_boundary', 2)
-    require(section[2] & 7 == 6 and (len(body), hashlib.sha256(body).hexdigest()) == PIN,
+    from check_native_followup_profile import worker_pins
+    expected=worker_pins(worker,'live_boundary',PIN)
+    require(section[2] & 7 == 6 and (len(body), hashlib.sha256(body).hexdigest()) == expected,
             'live-boundary caller complete instruction/literal pin changed')
     return body
 

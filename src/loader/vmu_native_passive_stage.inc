@@ -8,6 +8,22 @@
 #if KUI_VMU_NATIVE_BACKGROUND
 #include "kui/vmu_native_background.h"
 #endif
+#if KUI_NATIVE_DUAL_READERS
+/* Cold consumers use one selected, immutable low-reader tuple. Keep these
+ * writes/call together so the linked audit can execute the actual handoff. */
+static void __attribute__((noipa)) native_low_configure(struct kui_vmu_native_passive_config *cfg) {
+    const struct native_low_bindings *low=native_low_bindings();
+    cfg->sd_lease=low->sd_lease;
+    cfg->low_terminal=low->return_hook;
+    cfg->low_heap_hook=low->heap_hook;
+}
+static int __attribute__((noipa)) native_low_bind_map(
+    const struct kui_retail_manifest *source,const struct kui_retail_manifest *owned) {
+    int (*bind_map)(const struct kui_retail_manifest *,const struct kui_retail_manifest *)=
+        (void *)(uintptr_t)native_low_bindings()->background_bind;
+    return bind_map(source,owned);
+}
+#endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #include "vmu_native_evolution_fault_stage.inc"
 #endif
@@ -224,8 +240,13 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     if(!native_persist_ready ||
        kui_vmu_persist_stage_handoff_matches(&native_persist_profile,&native_persist_handoff))
         native_report(8u,5u);
-    cfg.durable=native_persist_handoff;cfg.sd_lease=KUI_VMU_OBSERVE_LOW_SD_LEASE;
+    cfg.durable=native_persist_handoff;
+#if KUI_NATIVE_DUAL_READERS
+    native_low_configure(&cfg);
+#else
+    cfg.sd_lease=KUI_VMU_OBSERVE_LOW_SD_LEASE;
     cfg.low_terminal=KUI_VMU_OBSERVE_LOW_RETURN_HOOK;cfg.low_heap_hook=KUI_VMU_OBSERVE_LOW_HEAP_HOOK;
+#endif
     cfg.exits=native_exits;
     cfg.diagnostics=native_runtime_diagnostics();
 #endif
@@ -256,9 +277,14 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
      * low region pointer can change. The binder subsequently changes only
      * the listed data pointers in the gaps between these vector entries. */
     kui_native_passive_publish(region_address,region_address+KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES);
+#if KUI_NATIVE_DUAL_READERS
+    if(native_low_bind_map(&manifest,(const void *)(uintptr_t)map_address)!=1)
+        native_report(8u,0x49u);
+#else
     int (*bind_map)(const struct kui_retail_manifest *,const struct kui_retail_manifest *)=
         (void *)(uintptr_t)KUI_VMU_NATIVE_BACKGROUND_BIND;
     if(bind_map(&manifest,(const void *)(uintptr_t)map_address)!=1) native_report(8u,0x49u);
+#endif
 #if KUI_NATIVE_COLD_PROGRESS_STAGE
     retail_display_line("COLD 31 READER MAP BOUND");
 #endif
@@ -323,7 +349,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     retail_display_line("COLD 35 WORKER ARMED");
 #endif
     if(!kui_vmu_native_heap_lease_valid(lease,native_read,NULL,1u) ||
-       native_word(native_heap.initializer_slot)!=KUI_VMU_OBSERVE_LOW_HEAP_HOOK ||
+       native_word(native_heap.initializer_slot)!=NATIVE_LOW_HEAP_HOOK ||
        native_word(native_driver.completion_slot)!=native_driver.consumer) native_report(9u,2u);
     static const uint16_t original[6]={0x9028u,0x63e2u,0x023eu,0x12c6u,0x9029u,0x63e2u};
     if(memcmp((const void *)(uintptr_t)native_driver.submit,original,sizeof(original))) native_report(9u,3u);
@@ -342,13 +368,13 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #endif
     /* The first real initializer has returned and our lease is allocated.
      * Every later direct/indirect entry now stops before reclaiming it. */
-    readonly_patch_entry(native_heap.initializer,KUI_VMU_OBSERVE_LOW_RETURN_HOOK);
+    readonly_patch_entry(native_heap.initializer,NATIVE_LOW_RETURN_HOOK);
     readonly_patch_entry(native_heap.release,e->release_hook);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     for(unsigned i=0;i<native_exits.count;i++) {
         if(memcmp((const void *)(uintptr_t)native_exits.entries[i],persistent_exit_windows[i],12u))
             native_report(9u,7u);
-        readonly_patch_entry(native_exits.entries[i],KUI_VMU_OBSERVE_LOW_RETURN_HOOK);
+        readonly_patch_entry(native_exits.entries[i],NATIVE_LOW_RETURN_HOOK);
     }
 #endif
 #endif

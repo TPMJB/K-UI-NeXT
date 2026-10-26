@@ -284,6 +284,9 @@ def stage_pins(stage,*,diagnostic=False,pio=False,pio_pair=False,multi_owner=Fal
     selected=GAME_STARTUP_STAGE_PINS if owned_timers else WITNESS_STRUCTURAL_STAGE_PINS if witness else STRUCTURAL_STAGE_PINS if structural else MULTI_OWNER_STAGE_PINS if multi_owner else RA_PIO_PAIR_STAGE_PINS if pio_pair else RA_PIO_STAGE_PINS if pio else \
         RA_DIAGNOSTIC_STAGE_PINS if diagnostic else \
         RA_STAGE_PINS if read_ahead else STAGE_PINS
+    from check_native_followup_profile import stage_pins as followup_stage_pins,callback_profile
+    require(not callback_profile(stage) or owned_timers, 'Selected low callbacks require the owned-timer SDK stage')
+    selected=followup_stage_pins(stage,'sdk',selected)
     require(selected,'SDK multi-owner immutable stage pins are missing')
     for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(stage,name,2)
@@ -597,6 +600,12 @@ class ColdBinderCPU(SDKCPU):
                 if kind==1 and count:backing.store_block(address,image[0][offset:offset+count])
         self.memory=bytes(backing.memory);self.ram={};self.cache={};self.cache_on=cache
         self.stage=stage;self.resident=resident;self.symbols=stage[4]
+        callbacks=stage[4].get('__kui_native_dual_low_callbacks_stage')
+        require(callbacks is None or callbacks==(1,0,0,0xfff1),
+                'cold callback stage marker differs')
+        self.selected_low_callbacks=callbacks is not None
+        self.sr_reads=[];self.selected_low_visits=0
+        self.admission_sr_t_differs=False
         self.api={stage[4][name][0]:name for name in
                   ('_memcpy','_memcmp','_native_report','_retail_display_line','_kui_native_sdk_sci_route_admit')}
         self.targets=set(self.api);self.apis=[];self.flushes=[];self.readbacks=[]
@@ -614,6 +623,12 @@ class ColdBinderCPU(SDKCPU):
         for name,value in (('_resident_blob',self.blob),('_resident_bytes',self.low_end-0x8c004000),
                            ('_resident_limit',GUARD),('_exec_bytes',self.owner_constants['bytes'])):
             self.put32(stage[4][name][0],value)
+        if self.selected_low_callbacks:
+            # The new cold tuple selector executes its real instructions.
+            # Its caller is the X-only binder; supply that actual manifest,
+            # rather than intercepting the selector with a Python return.
+            self.put32(stage[4]['_manifest'][0]+44,1)
+            self.put32(stage[4]['_manifest'][0]+48,1)
         self.put_bytes(stage[4]['_native_driver'][0]+72,bytes.fromhex(self.owner_constants['digest']))
         self.put32(self.cell,self.region)
         control=resident[4]['_kui_vmu_observe_boot_control'][0]
@@ -658,6 +673,10 @@ class ColdBinderCPU(SDKCPU):
 
     def plain(self,op,pc):
         self.executing=pc;n,m=op>>8&15,op>>4&15
+        if op&0xf0ff==0x0002:  # STC SR,Rn observes SR at this instruction.
+            self.sr_reads.append((pc,self.sr))
+        if self.selected_low_callbacks and pc==self.symbols['_native_low_bindings'][0]:
+            self.selected_low_visits+=1
         if op>>8==0xc8:self.flag(not(self.r[0]&(op&255)));return
         if op&0xf0ff==0x00a3: # OCBP writes a complete dirty32B line, then invalidates.
             at=self.offset(self.r[n],1)&~31;entry=self.cache.pop(at,None)
@@ -687,7 +706,10 @@ class ColdBinderCPU(SDKCPU):
             assert bytes(self.read(self.r[7]+i,1) for i in range(32)).hex()==self.owner_constants['digest']
             assert self.r[7]==self.stage[4]['_native_driver'][0]+72
             args=[self.read(self.r[15]+4*i) for i in range(6)]
-            assert args[:5]==[SDK_VBR,self.sr,self.callback,self.stage[4]['_native_read'][0],0]
+            assert self.sr_reads, 'pure admission did not receive an executed STC SR observation'
+            captured_sr=self.sr_reads[-1][1]
+            assert args[:5]==[SDK_VBR,captured_sr,self.callback,self.stage[4]['_native_read'][0],0]
+            self.admission_sr_t_differs=bool((captured_sr^self.sr)&1)
             out=args[5];assert self.r[15]+24<=out<=self.r[15]+80-32
             result=self.admit_result
             if result==1:
@@ -715,6 +737,8 @@ class ColdBinderCPU(SDKCPU):
 
     def run_bind(self):
         self.run_symbol('_native_sdk_sci_route_bind')
+        assert not self.selected_low_callbacks or self.selected_low_visits, \
+            'cold SDK binder did not execute its selected low callback accessor'
         assert self.ready and tuple(self.display_lines)==self.expected_display_lines
         assert_c_abi(self,self.initial)
         assert self.read(ERI_SLOT|0x20000000)==self.callback
@@ -748,7 +772,7 @@ def check_cold_binder(stage,resident,*,self_test=False,refused_artifact=False,ow
             return dict(shipped_b656_actual_binder_refusal_reproduced=True,phase=10,detail=3,
                         region_cell=hex(c.cell),standard_limit_literal='0x8c0077fc',publication_writes=0)
         raise ValueError('shipped binder unexpectedly accepted its out-of-standard-bound typed cell')
-    positives=negatives=mutations=plan_refusals=0
+    positives=negatives=mutations=plan_refusals=sr_read_mutations=0
     for cache in (False,True):
         for payload in (0x0c400000,0x8c400000,0xac400000):
             for stream in (0,1):
@@ -800,6 +824,21 @@ def check_cold_binder(stage,resident,*,self_test=False,refused_artifact=False,ow
                     plan_refusals+=1
                 else:raise ValueError('cold binder accepted a changed shared SDK plan field')
     if self_test:
+        observed=ColdBinderCPU(stage,resident,owner_name=owner_name).run_bind()
+        if observed.selected_low_callbacks:
+            assert observed.admission_sr_t_differs, \
+                'selected-callback case no longer exercises captured SR.T versus call-time SR.T'
+            for pc,_ in observed.sr_reads:
+                address,body,section=symbol_bytes(stage,'_native_sdk_sci_route_bind',2)
+                assert address<=pc<address+len(body)
+                changed=bytearray(stage[0]);start=section[4]+pc-section[3]
+                struct.pack_into('<H',changed,start,0x0009)
+                c=ColdBinderCPU((bytes(changed),*stage[1:]),resident,owner_name=owner_name)
+                try:c.run_bind()
+                except (AssertionError,BinderStop):
+                    assert not c.flushes and not c.ready
+                    sr_read_mutations+=1
+                else:raise ValueError('cold SDK audit accepted an omitted executed SR observation')
         address,body,section=symbol_bytes(stage,'_native_sdk_sci_route_bind',2)
         ocbp=[i for i in range(0,len(body),2) if struct.unpack_from('<H',body,i)[0]&0xf0ff==0x00a3]
         require(len(ocbp)==4,'cold binder publication instruction count changed')
@@ -817,6 +856,9 @@ def check_cold_binder(stage,resident,*,self_test=False,refused_artifact=False,ow
         selected_async_bound_checked=True,code_end_and_limit_minus4_admitted=True,
         code_end_minus4_and_limit_refused=True,p1_writeback_cache_and_p2_ram_distinct=True,
         full_cacheline_writeback_and_sentinel_preserved=True,cookie_published_last=True,
+        selected_low_callback_accessor_executed='__kui_native_dual_low_callbacks_stage' in stage[4],
+        pure_admission_sr_bound_to_actual_stc_observation=True,
+        omitted_executed_sr_observation_mutation_rejections=sr_read_mutations,
         pure_admission_call='typed ABI substitute; actual pure helper separately host-tested',
         memcpy_memcmp='faithful bounded ABI substitutes',console_performance_verified=False)
 

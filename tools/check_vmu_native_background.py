@@ -59,9 +59,12 @@ ESCAPES = {("kui_retail_menu_return", "retail_resident.c"): "boot-ROM menu; does
 # Whole installer body: unchanged instructions, reviewed same-role literal targets.
 GAME_STARTUP_PASSIVE_RUN_PINS=frozenset({(1996,'3d40528009ae4e11f6950d13a2193175dc3452f11c138f7c687dcc1e626a6070')})
 
-def passive_run_pins(worker):
+def passive_run_pins(worker,stage=None):
     from check_native_game_startup_profile import game_startup_profile
-    return GAME_STARTUP_PASSIVE_RUN_PINS if game_startup_profile(worker) else WITNESS_PASSIVE_RUN_PINS
+    historical=GAME_STARTUP_PASSIVE_RUN_PINS if game_startup_profile(worker) else WITNESS_PASSIVE_RUN_PINS
+    if stage is None:return historical
+    from check_native_followup_profile import stage_pins
+    return stage_pins(stage,'installer',historical)
 
 
 def require(condition, message):
@@ -290,6 +293,9 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
             return None
         return struct.unpack_from("<I", body, address - begin)[0]
     selected_passive_pins=GAME_STARTUP_PASSIVE_RUN_PINS if owned_timers else WITNESS_PASSIVE_RUN_PINS
+    from check_native_followup_profile import stage_pins,callback_profile
+    require(not callback_profile(stage) or owned_timers, 'Selected low callbacks require the owned-timer installer')
+    selected_passive_pins=stage_pins(stage,'installer',selected_passive_pins)
     require(not owned_timers or witness, 'Owned-timer installer requires complete witness profile')
     if witness:
         # This is a separate, complete immutable function profile. Cold
@@ -300,11 +306,14 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
                 'Background witness tail requires exact dual/progress markers')
         require((len(body),digest(body)) in selected_passive_pins,
                 'Background witness passive-run instruction/literal pin changed')
-        index=0x134//2
-        require(words[index:index+4]==[0x51a8,0x31b0,0x8f08,0x1c0f] and
+        selected_callbacks=callback_profile(stage)
+        index=(0x132 if selected_callbacks else 0x134)//2
+        expected_entry=([0x51a8,0x31b0,0x8f09,0xe548] if selected_callbacks else
+                        [0x51a8,0x31b0,0x8f08,0x1c0f])
+        require(words[index:index+4]==expected_entry and
                 literal(index+4)==0x20000,
                 'Background witness exact lease-size entry differs')
-        start=begin+0x134
+        start=begin+2*index
     else:
         require('__kui_native_cold_progress_stage' not in stage[4],
                 'Background progress stage lacks its complete witness worker proof')
@@ -317,6 +326,11 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
     manifest = symbols["_manifest"][0]
     workspace = symbols["_native_background_boot_region"][0]
     binder = resident["symbols"]["_kui_vmu_native_background_manifest_bind"]
+    selected_callbacks=callback_profile(stage)
+    selected_reader=(1 if '__kui_native_sdk_sci_route_resident' in resident['symbols'] else 2)
+    internal_helpers=({symbols[name][0]:name for name in
+                      ('_native_low_bind_map','_native_low_bindings')}
+                     if selected_callbacks else {})
     publisher = symbols["_kui_native_passive_publish"][0]
     copy = symbols["_memcpy"][0]
     relocate = symbols["_kui_vmu_native_relocate"][0]
@@ -346,7 +360,13 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
             self.write(self.lease + 40, raw)
             self.write(self.r[15] + 32, self.lease - 64)
             self.write(self.r[15] + 28, worker_bytes)
-            self.map_pattern = bytes((i * 17 + 3) & 255 for i in range(1020))
+            pattern=bytearray((i * 17 + 3) & 255 for i in range(1020))
+            if selected_callbacks:
+                # The fixture still uses distinctive bytes everywhere else.
+                # Execute the real cold selector against the selected low
+                # reader's SCI manifest instead of substituting its result.
+                struct.pack_into('<II',pattern,44,1,selected_reader)
+            self.map_pattern = bytes(pattern)
             self.region_pattern = bytes((i * 23 + 7) & 255 for i in range(1888))
             self.store_block(manifest, self.map_pattern)
             self.store_block(workspace, self.region_pattern)
@@ -358,6 +378,9 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
             self.publisher_return = None
             self.stopped = None
             self.display_events=[]
+            self.actual_internal_helpers=[]
+            self.selected_binder_edge=None
+            self.outer_binding_call=None
 
         def read(self, address, count=4):
             if address == 0xFF00001C:
@@ -405,7 +428,12 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
             require(actual == expected, "Background copy/publication lacks its exact ordered cache-line purge")
 
         def call(self, target, pc):
-            if target == admission:
+            if target in internal_helpers:
+                self.actual_internal_helpers.append(internal_helpers[target])
+                if internal_helpers[target]=='_native_low_bind_map':
+                    self.outer_binding_call=pc
+                self.pc=target
+            elif target == admission:
                 require(self.r[4:6] == [self.raw, self.load + 0x20000], "tail admission changed its exact native allocation/map")
                 require(self.admission_calls<2,'Background tail acquired an extra address admission')
                 result=self.admissions[self.admission_calls]
@@ -438,8 +466,13 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
                 require(self.block(self.load + 0x20000, 1020) == self.map_pattern and
                         self.block(self.load + 0x20400, 1888) == self.region_pattern, "binder sees changed snapshots")
                 self.events.append("bind")
-                self.witness["bind"] = pc
-                self.witness["bind_success"] = pc + 4
+                self.selected_binder_edge=pc
+                self.witness["bind"] = self.outer_binding_call if selected_callbacks else pc
+                # The new C wrapper tail-jumps into the real low binder.
+                # Its original caller continuation is the actual PR after
+                # that wrapper restored its frame; the next instruction in
+                # the wrapper itself is not a binding-result predicate.
+                self.witness["bind_success"] = self.pr
                 self.abi_return(self.outcome)
             elif target in (symbols["_retail_display_restore"][0], symbols["_retail_display_line"][0]):
                 if witness:
@@ -477,6 +510,9 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
                 require(not witness or len(self.display_events)==5,
                         'Background relocation omitted ordered cold progress')
                 self.witness["relocate"] = pc
+                require(not selected_callbacks or self.actual_internal_helpers==
+                        ['_native_low_bind_map','_native_low_bindings'],
+                        'Background tail did not execute both selected low callback helpers')
                 self.stopped = "relocate"
             elif target == report:
                 if self.early_failure:
@@ -525,7 +561,7 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
                     if call:
                         self.pr = pc + 4
                     slot = self.read(pc + 2, 2); validate_delay_slot(slot, pc); self.plain(slot, pc + 2)
-                    if call:
+                    if call or selected_callbacks and target==binder:
                         self.call(target, pc)
                     else:
                         self.pc = target & MASK
@@ -585,6 +621,12 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
             "controller_failure_witness_profile":witness,
             "complete_passive_run_pin":({'bytes':len(body),'sha256':digest(body)} if witness else None),
             "actual_ordered_cold_progress_calls":witness,
+            "selected_low_callback_profile":selected_callbacks,
+            "selected_reader":selected_reader if selected_callbacks else None,
+            "actual_selected_low_helper_calls":example.actual_internal_helpers,
+            "actual_selected_binder_edge":hex(example.selected_binder_edge) if selected_callbacks else None,
+            "actual_selected_low_helpers_executed":selected_callbacks,
+            "selected_manifest_transport_and_reader_seeded_only":selected_callbacks,
             "early_lease_and_both_address_guard_refusal_cases":18 if witness else 0,
             "complete_passive_run_pin_mutation_rejections":pin_mutations,
             "witnesses": {name: hex(address) for name, address in example.witness.items()},

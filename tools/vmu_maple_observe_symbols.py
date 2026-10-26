@@ -3,6 +3,7 @@
 """Bind the observation stage to typed symbols in its actual low reader."""
 import argparse
 from pathlib import Path
+import re
 import struct
 from check_loader_layout import EH, SH, SYM, inspect_elf, region
 from toy_pilot_symbols import _linked_symbols
@@ -67,7 +68,9 @@ def sd_gateway_span(data, image):
     return address, size, declared
 
 
-def generate(path):
+def generate(path, prefix=""):
+    if prefix and not re.fullmatch(r"[A-Z_][A-Z0-9_]*", prefix):
+        raise ValueError("Observer symbol prefix must be a C macro prefix")
     data = Path(path).read_bytes()
     background_name="_kui_vmu_native_background_manifest_bind"
     background=background_name in _linked_symbols(data,{background_name})
@@ -115,9 +118,10 @@ def generate(path):
               not 0x8C004000 <= address < address + size <= 0x8C004000 + len(image["payload"])):
             raise ValueError("Observer hook must be a bounded low cached-code function")
         values[macro] = address
+    guard=prefix+"KUI_VMU_MAPLE_OBSERVE_SYMBOLS_H"
     return ("/* Generated from the admitted observation reader ELF. */\n"
-            "#ifndef KUI_VMU_MAPLE_OBSERVE_SYMBOLS_H\n#define KUI_VMU_MAPLE_OBSERVE_SYMBOLS_H\n"
-            + "".join(f"#define {macro} 0x{value:08x}u\n" for macro, value in values.items())
+            + f"#ifndef {guard}\n#define {guard}\n"
+            + "".join(f"#define {prefix}{macro} 0x{value:08x}u\n" for macro, value in values.items())
             + "#endif\n")
 
 
@@ -125,9 +129,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("elf", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--prefix", default="", help="Prefix the generated macros and include guard")
     args = parser.parse_args()
     try:
-        result = generate(args.elf)
+        result = generate(args.elf, args.prefix)
     except (OSError, ValueError, KeyError) as error:
         parser.exit(2, f"Observer symbol admission refused: {error}\n")
     args.output.parent.mkdir(parents=True, exist_ok=True)

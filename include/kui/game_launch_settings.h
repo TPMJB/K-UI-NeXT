@@ -89,5 +89,9 @@ bool kui_game_launch_settings_legacy_decode(struct kui_game_launch_table *table,
  * opened for writing. Transient bounded heap workspace avoids worker-stack
  * growth. Filesystem/card power-loss guarantees remain platform dependent. */
 bool kui_game_launch_settings_load(const char *image_path,struct kui_game_launch_settings *out,kui_log_fn log);
+/* Like load, with a separate exact-key presence result. A missing preset is
+ * successful and leaves found=false, so callers can choose image-specific
+ * defaults without confusing an explicitly saved Standard reader with absence. */
+bool kui_game_launch_settings_lookup(const char *image_path,struct kui_game_launch_settings *out,bool *found,kui_log_fn log);
 bool kui_game_launch_settings_save(const char *image_path,const struct kui_game_launch_settings *settings,kui_log_fn log);
 #endif

@@ -38,6 +38,9 @@ $(BUILD)/resident-legacy.elf: $(LEGACY_OBJ) $(RESIDENT_LAYOUT)
 	cp $(BUILD)/resident-legacy.elf.ltrans*.su $(BUILD)/resident-legacy.elf*.ci $(BUILD)/legacy/lto/
 $(BUILD)/resident-legacy.bin: $(BUILD)/resident-legacy.elf
 	$(OBJCOPY) -O binary $< $@
+$(BUILD)/vmu_maple_observe_legacy_symbols.h: $(BUILD)/resident-legacy.elf tools/vmu_maple_observe_symbols.py
+	python3 tools/vmu_maple_observe_symbols.py $< $@ --prefix LEGACY_
+$(BUILD)/stage/src/loader/vmu_native_heap_probe_stage.o: $(BUILD)/vmu_maple_observe_legacy_symbols.h
 $(BUILD)/stage_asm.o: $(BUILD)/resident-legacy.bin
 $(BUILD)/retail-native-dual.kui: $(BUILD)/retail-maple-observe.kui
 	cp $< $@
