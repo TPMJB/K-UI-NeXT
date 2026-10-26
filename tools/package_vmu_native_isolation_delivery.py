@@ -36,10 +36,13 @@ PREVIOUS_BUILD = '9956562f91d6'
 PREVIOUS_METADATA_SHA = 'adf9dd97917140cc07e5027ae15fa1d85caa06cd83cb8e5d8db4551241e9f0cd'
 PREVIOUS_ARCHIVE_SHA = 'cd6d51767788f4222fffd3c6299024bb8700f8407fe623d6664ef922876d5f29'
 DEMAND_BUILD = '3f51ded6973f'
+WAIT_BUILD = '5fa97d6729c8'
 KNOWN_PREVIOUS = {
     PREVIOUS_BUILD: (PREVIOUS_ARCHIVE_SHA, PREVIOUS_METADATA_SHA),
     DEMAND_BUILD: ('2ff9b0c356b535bdf3fa1083b9c65d1fd8b8bf346170b8f2eae6ecd42e2b673f',
                    '7e79d4e257443211b5f028796a74b14846d5c6aea46a4a5b21643b5357a79443'),
+    WAIT_BUILD: ('40fd60c6a7631f4373fb428472754a8cfce73bbc00b1c2789d188eadd1d14c4d',
+                 '64b9b858409599c2a6380c0aa0d93647a0455c136c83ab2dace2085a0860a21c'),
 }
 
 
@@ -67,8 +70,10 @@ def embedded(image, begin, end, data, base, binary):
     return first
 
 
-def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_capture=False):
+def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_capture=False,maple_bypass=False):
     require(not wait_capture or demand_only, 'Wait capture requires the demand-only control')
+    require(not maple_bypass or (demand_only and not wait_capture),
+            'Maple bypass requires demand-only and excludes wait capture')
     artifacts = {key: sha((build/key).read_bytes()) for key in REQUIRED_ARTIFACTS}
     require(all(proof['artifact_sha256'].get(key) == value for key, value in artifacts.items()),
             'Linked execution report differs from final artifacts: '+name)
@@ -109,10 +114,15 @@ def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_cap
         capture_marker = '__kui_native_e1_wait_capture_'+side
         require(image[4].get(capture_marker) == ABSOLUTE_ONE if wait_capture and name == 'reader-only' else
                 capture_marker not in image[4], 'Variant focused-wait-capture marker differs: '+name)
+        bypass_marker = '__kui_native_maple_bypass_isolation_'+side
+        require(image[4].get(bypass_marker) == ABSOLUTE_ONE if maple_bypass and name == 'reader-only' else
+                bypass_marker not in image[4], 'Variant Maple C-gateway bypass marker differs: '+name)
     require(proof.get('controller_tick_off', False) is (demand_only and name == 'reader-only'),
             'Linked execution report controller-prefetch setting differs: '+name)
     require(proof.get('e1_wait_capture', False) is (wait_capture and name == 'reader-only'),
             'Linked execution report focused-wait-capture setting differs: '+name)
+    require(proof.get('maple_bypass',False) is (maple_bypass and name=='reader-only'),
+            'Linked execution report Maple C-gateway bypass setting differs: '+name)
     if name == 'reader-only':
         require(worker[4].get('__kui_native_readahead_worker') == ABSOLUTE_ONE and
                 worker[4].get('__kui_native_dual_readers_worker') == ABSOLUTE_ONE,
@@ -160,6 +170,9 @@ def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_cap
                   controller_tick_off=demand_only and name == 'reader-only',
                   prefetch_enabled=name == 'reader-only' and not demand_only,
                   e1_wait_capture=wait_capture and name == 'reader-only',
+                  maple_bypass=maple_bypass and name=='reader-only',
+                  maple_c_callbacks_enabled=not(maple_bypass and name=='reader-only'),
+                  heap_reclaim_coherence_guards_retained=True,
                   canonical_disjoint_personalization=manifest)
     files['variant-layout.json'] = wire(layout)
     return files, manifest, layout
@@ -256,7 +269,7 @@ def extracted_install_check(files, previous_archive=None, origin_archive=None):
                 require(result.returncode == 0, 'Earlier pinned installer fixture failed: '+result.stderr)
                 baseline = {p.name: p.read_bytes() for p in (card/BACKUP_PARENT/'backup').iterdir()}
                 require(not inherited_backup or baseline == origin_baseline,
-                        'Intermediate3f migration rewrote the original995 backups')
+                        'Intermediate isolation migration rewrote the original995 backups')
                 for variant in ('reader-only', 'vmu-only', 'restore'):
                     result = subprocess.run([*argv, '--variant', variant], cwd=root, text=True, capture_output=True)
                     require(result.returncode == 0, 'Extracted pinned-package migration failed: '+result.stderr)
@@ -267,7 +280,7 @@ def extracted_install_check(files, previous_archive=None, origin_archive=None):
                         'Migration/restore changed original modules, GUI, prepared saves or settings')
     return dict(extracted_cli_runs=6, both_variants_switch_and_restore=True,
                 previous_package_migration_cli_runs=8 if previous_archive is not None else 0,
-                inherited995_to3f_migration_cli_runs=10 if origin_archive is not None else 0,
+                inherited995_origin_migration_cli_runs=10 if origin_archive is not None else 0,
                 previous_original_backup_unchanged=previous_archive is not None,
                 inactive_module_restored=True, original_modules_restored=True,
                 gui_profile_card_journal_and_launch_settings_unchanged=True, normal_mode_only=True)
@@ -304,8 +317,12 @@ print('Runtime build commit:',item['runtime_source_commit'])
 
 def package(args):
     require(not args.wait_capture or args.demand_only, '--wait-capture requires --demand-only')
+    require(not args.maple_bypass or (args.demand_only and not args.wait_capture),
+            '--maple-bypass requires --demand-only and excludes --wait-capture')
     if args.previous_package is None:
-        filename = 'K-UI-Evolution-New-Demand-3f51ded6973f.zip' if args.wait_capture else 'K-UI-Evolution-Isolation-9956562f91d6.zip'
+        filename = ('K-UI-Evolution-Wait-Capture-5fa97d6729c8.zip' if args.maple_bypass else
+                    'K-UI-Evolution-New-Demand-3f51ded6973f.zip' if args.wait_capture else
+                    'K-UI-Evolution-Isolation-9956562f91d6.zip')
         args.previous_package = ROOT.parent/filename
     require(not git('status', '--porcelain'), 'Commit delivery tools/tests/docs before packaging')
     delivery_commit, delivery_tree = git('rev-parse', 'HEAD'), git('rev-parse', 'HEAD^{tree}')
@@ -337,21 +354,22 @@ def package(args):
              'evidence/host-tests.log': args.host_log.read_bytes(),
              'LICENSE': (ROOT/'LICENSE').read_bytes(), 'THIRD_PARTY.md': (ROOT/'THIRD_PARTY.md').read_bytes()}
     if args.demand_only:
-        prior_build = DEMAND_BUILD if args.wait_capture else PREVIOUS_BUILD
+        prior_build = WAIT_BUILD if args.maple_bypass else DEMAND_BUILD if args.wait_capture else PREVIOUS_BUILD
         compatible, previous_raw = previous_package(args.previous_package, prior_build)
         metadata['compatible_packages'] = {**json.loads(previous_raw).get('compatible_packages', {}),
                                            prior_build: compatible}
         files['evidence/previous-isolation.json'] = previous_raw
-        if args.wait_capture:
+        if args.wait_capture or args.maple_bypass:
             origin, origin_raw = previous_package(args.backup_origin_package)
             require(metadata['compatible_packages'].get(PREVIOUS_BUILD) == origin,
-                    'Intermediate3f package backup origin differs from the pinned995 pair')
+                    'Intermediate package backup origin differs from the pinned995 pair')
             files['evidence/backup-origin-isolation.json'] = origin_raw
     extra_proofs = EXTRA_PROOFS + (('standard-control-comparison.json',)
         if args.demand_only else ()) + (('tick-off-stack-mapping-negatives.json',)
-        if args.demand_only and not args.wait_capture else ()) + (
+        if args.demand_only and not args.wait_capture and not args.maple_bypass else ()) + (
         ('e1-wait-capture-collector.json', 'e1-wait-capture-image-guard.json',
-         'original-frame-proof.json') if args.wait_capture else ())
+         'original-frame-proof.json') if args.wait_capture else ()) + (
+        ('maple-bypass-gateways.json',) if args.maple_bypass else ())
     for filename in extra_proofs:
         data = (args.linked_report.parent/filename).read_bytes()
         json.loads(data)
@@ -402,6 +420,40 @@ def package(args):
                 relative = Path(path)
                 require(not relative.is_absolute() and '..' not in relative.parts and
                         sha((ROOT/relative).read_bytes()) == digest, 'Focused wait proof source changed: '+path)
+    if args.maple_bypass:
+        execution=proofs['reader_only'].get('maple_bypass_execution',{})
+        require(execution.get('polls')==8 and execution.get('actual_patched_submit_executed') is True and
+                execution.get('actual_completion_gateway_and_original_consumer_executed') is True and
+                execution.get('maple_c_callbacks_executed')==execution.get('submitted')==
+                execution.get('completed')==execution.get('pending')==0 and
+                execution.get('assembly_frames_and_masking_retained') is True and
+                execution.get('forced_virtual_packet_injection') is False and
+                set(execution.get('gateway_instructions',{}))=={'submit','complete'} and
+                all(value>0 for value in execution['gateway_instructions'].values()),
+                'Bypass report did not execute the actual SDK through both compiled assembly gateways')
+        gateways=json.loads(files['evidence/maple-bypass-gateways.json'])
+        require(gateways.get('schema')=='kui.native.maple-bypass.linked-gateways.v1' and
+                gateways.get('status')=='PASS' and gateways.get('source_commit')==runtime_commit and
+                gateways.get('instruction_cases')==1152 and gateways.get('C_calls')==0 and
+                gateways.get('exact_original_submit_replay') is True and
+                gateways.get('inherited_registers_PR_SR_SP_preserved') is True and
+                gateways.get('gateway_frames_and_stack_traffic_retained') is True and
+                gateways.get('all_imasks_and_T') is True and
+                gateways.get('mdst_store_counts')==dict(submit_mdst=576,complete_mdst=0) and
+                gateways.get('assembler_comparison',{}).get('only_two_C_call_instructions_replaced') is True and
+                len(gateways.get('mutation_refusals',[]))==2 and
+                {item.get('mutation') for item in gateways['mutation_refusals']}==
+                    {'submit-C-call-restored','complete-C-call-restored'} and
+                all(item.get('reason') for item in gateways['mutation_refusals']) and
+                all(gateways.get('artifact_sha256',{}).get(name)==sha((args.reader_build/name).read_bytes())
+                    for name in ('stage.elf','native-worker.elf','native-worker.bin','native-worker.reloc')),
+                'Compiled Maple bypass gateway receipt differs from final artifacts')
+        for path,digest in gateways['source_sha256'].items():
+            relative=Path(path)
+            require(not relative.is_absolute() and '..' not in relative.parts and
+                    sha((ROOT/relative).read_bytes())==digest,'Maple bypass gateway proof source changed: '+path)
+        files['evidence/native-evolution1-5fa97-wait-capture-2026-10-26.json']=(
+            ROOT/'docs/evidence/native-evolution1-5fa97-wait-capture-2026-10-26.json').read_bytes()
     if args.demand_only:
         standard = json.loads(files['evidence/standard-control-comparison.json'])
         require(standard.get('old_build') == PREVIOUS_BUILD and
@@ -426,23 +478,28 @@ def package(args):
         require(proof['lease_bytes'] == 393216 and proof['worker_bytes'] == 131072 and proof['placement'] == 'bottom',
                 'Isolation controls do not retain the matching memory reservation')
         variant_files, manifest, layout = bind_variant(name, build.resolve(), proof, runtime_commit,
-                                                       args.demand_only, args.wait_capture)
+                                                       args.demand_only, args.wait_capture,args.maple_bypass)
         files.update({'variants/'+name+'/'+path: data for path, data in variant_files.items()})
         metadata['variants'][name] = dict(directory='variants/'+name, destination=str(MODULES[name]),
             module_sha256=manifest['module_sha256'], virtual_a2=name == 'vmu-only',
             reader='New (X)' if name == 'reader-only' else 'Standard', lease_bytes=393216,
-            support_hooks_retained=True, prefetch_enabled=name == 'reader-only' and not args.demand_only,
+            support_hooks_retained=not(args.maple_bypass and name=='reader-only'),
+            prefetch_enabled=name == 'reader-only' and not args.demand_only,
             controller_tick_off=args.demand_only and name == 'reader-only',
             e1_wait_capture=args.wait_capture and name == 'reader-only',
+            maple_bypass=args.maple_bypass and name=='reader-only',
+            maple_c_callbacks_enabled=not(args.maple_bypass and name=='reader-only'),
+            heap_reclaim_coherence_guards_retained=True,
             linked_layout_sha256=sha(wire(layout)))
     files['isolation.json'] = wire(metadata)
-    guide_path = ('docs/native-isolation-wait-test.md' if args.wait_capture else
+    guide_path = ('docs/native-isolation-maple-bypass-test.md' if args.maple_bypass else
+                  'docs/native-isolation-wait-test.md' if args.wait_capture else
                   'docs/native-isolation-demand-test.md' if args.demand_only else 'docs/native-isolation-test.md')
     guide = (ROOT/guide_path).read_text().replace('@BUILD@', runtime_commit[:12]).replace(
         '@RUNTIME_COMMIT@', runtime_commit).replace('@DELIVERY_COMMIT@', delivery_commit).encode()
     files['README-FIRST.md'] = guide
     delivery_checks = extracted_install_check(files, args.previous_package if args.demand_only else None,
-                                               args.backup_origin_package if args.wait_capture else None)
+                                               args.backup_origin_package if args.wait_capture or args.maple_bypass else None)
     with tempfile.TemporaryDirectory(prefix='kui-isolation-source-') as directory:
         bundle = Path(directory)/'native-source-full.bundle'
         subprocess.run(['git', 'bundle', 'create', str(bundle), 'HEAD'], cwd=ROOT, check=True, capture_output=True)
@@ -455,6 +512,7 @@ def package(args):
                      runtime_files_unchanged_after_freeze=True, console_compatibility_verified=False,
                      demand_only=args.demand_only,
                      e1_wait_capture=args.wait_capture,
+                     maple_bypass=args.maple_bypass,
                      preserved_gui_build=GUI_BUILD, preserved_gui_sha256=GUI_SHA,
                      evidence_sha256={name: sha(data) for name, data in files.items()
                                       if name.startswith('evidence/') or name.endswith('/variant-layout.json')})
@@ -491,8 +549,10 @@ def main():
                         help='Require the New-demand/controller-prefetch-off control and its guide')
     parser.add_argument('--wait-capture', action='store_true',
                         help='Require the Evolution1 manual30-poll wait capture; needs --demand-only')
+    parser.add_argument('--maple-bypass',action='store_true',
+                        help='Require the diagnostic Maple C-call bypass; needs --demand-only and excludes wait capture')
     parser.add_argument('--previous-package', type=Path,
-                        help='Pinned earlier archive; defaults to995, or3f51 for --wait-capture')
+                        help='Pinned earlier archive; defaults to995,3f51 for wait capture,5fa97 for Maple bypass')
     parser.add_argument('--backup-origin-package', type=Path,
                         default=ROOT.parent/'K-UI-Evolution-Isolation-9956562f91d6.zip',
                         help='Pinned995 archive for inherited backup-chain extraction checks')

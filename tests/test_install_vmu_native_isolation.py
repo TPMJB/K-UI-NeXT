@@ -318,6 +318,73 @@ class IsolationInstallTests(unittest.TestCase):
     def test_second_known_pending_session_preserves_original_backup(self):
         self.migrate_second_session('pending')
 
+    def enable_maple_bypass(self):
+        self.metadata['variants']['reader-only'].update(maple_bypass=True,
+            prefetch_enabled=False, controller_tick_off=True, e1_wait_capture=False)
+        self.write_metadata()
+
+    def test_maple_bypass_metadata_receipt_switch_and_restore(self):
+        self.enable_maple_bypass()
+        result = self.run_variant('reader-only')
+        self.assertIs(result['maple_bypass'], True)
+        state = json.loads((self.card/installer.STATE).read_text())
+        self.assertIs(state['maple_bypass'], True)
+        manifest = json.loads((self.package/'variants/reader-only'/personalizer.MANIFEST).read_text())
+        data = (self.card/installer.MODULES['reader-only']).read_bytes()
+        offset = manifest['runtime_mode_module_offset']
+        self.assertEqual(mode.decode_mode(data[offset:offset+32]), mode.NORMAL)
+        with patch.object(installer, 'publish', side_effect=AssertionError('Unexpected write')):
+            self.assertTrue(self.run_variant('reader-only')['already_installed'])
+        self.assertIs(self.run_variant('vmu-only')['maple_bypass'], False)
+        self.assertIs(self.run_variant('restore')['maple_bypass'], False)
+        self.assert_protected()
+
+    def test_old_metadata_without_maple_bypass_defaults_false(self):
+        result = self.run_variant('reader-only')
+        self.assertIs(result['maple_bypass'], False)
+        self.assertIs(json.loads((self.card/installer.STATE).read_text())['maple_bypass'], False)
+        state = json.loads((self.card/installer.STATE).read_text())
+        del state['maple_bypass']
+        (self.card/installer.STATE).write_text(json.dumps(state))
+        self.run_variant('restore')
+        self.assert_protected()
+
+    def test_inconsistent_maple_bypass_metadata_refuses_before_writes(self):
+        valid = dict(maple_bypass=True, prefetch_enabled=False,
+                     controller_tick_off=True, e1_wait_capture=False)
+        cases = [('reader-only', dict(valid, maple_bypass=value))
+                 for value in (None, 0, 1, 'true')]
+        cases += [('reader-only', dict(valid, **{key: value})) for key, value in
+                  (('prefetch_enabled', True), ('prefetch_enabled', None),
+                   ('controller_tick_off', False), ('controller_tick_off', None),
+                   ('e1_wait_capture', True), ('e1_wait_capture', None))]
+        cases += [('reader-only', {key: value for key, value in valid.items() if key != missing})
+                  for missing in ('prefetch_enabled', 'controller_tick_off', 'e1_wait_capture')]
+        cases.append(('vmu-only', valid))
+        for name, entry in cases:
+            with self.subTest(name=name, entry=entry):
+                self.metadata['variants'][name].update(entry)
+                self.write_metadata()
+                before = self.snapshot()
+                with self.assertRaisesRegex(ValueError, 'Maple.bypass|Maple bypass'):
+                    self.run_variant('reader-only')
+                self.assertEqual(self.snapshot(), before)
+                for key in valid:
+                    self.metadata['variants'][name].pop(key, None)
+        self.write_metadata()
+
+    def test_cli_maple_bypass_banner_keeps_normal_mode(self):
+        self.enable_maple_bypass()
+        result = subprocess.run([sys.executable, str(self.package/'install.py'), str(self.card),
+            '--profile', str(self.profile.relative_to(self.card)), '--variant', 'reader-only'],
+            cwd=self.root, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Original SDK Maple submit/completion stays in place', result.stdout)
+        self.assertIn('controller TICK is OFF', result.stdout)
+        self.assertIn('New demand reads and SDK SCI remain enabled', result.stdout)
+        self.assertNotIn('30 controller polls', result.stdout)
+        self.assert_protected()
+
     def test_cli_capture_instructions_keep_normal_mode_and_two_pages(self):
         self.metadata['variants']['reader-only'].update(e1_wait_capture=True, prefetch_enabled=False)
         self.write_metadata()

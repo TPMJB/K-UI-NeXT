@@ -22,6 +22,8 @@ sys.path[:0] = [str(ROOT/'tools'), str(ROOT/'tests')]
 from profile_vmu_native_record_worker_sh import (
     RecordWorker, Record, fresh_verify, make_handoff, CFG, MDSTAR, MASK)
 from check_vmu_native_worker_gateway import read_elf
+from test_vmu_native_sdk_poll_execution import PollSH
+from profile_vmu_native_record_worker_sh import OWNER_STACK, RETURN
 
 ONE = (1, 0, 0, 0xfff1)
 LEASE = 0x60000
@@ -37,6 +39,7 @@ SOURCE_FILES = ('tools/check_native_isolation_linked.py',
     'tests/test_vmu_native_sdk_poll_execution.py',
     'src/loader/vmu_native_passive.c', 'src/loader/vmu_native_reader_capture.inc',
     'src/loader/vmu_native_phase.inc', 'src/loader/vmu_native_wait_capture.inc',
+    'src/loader/vmu_native_passive_hooks.S',
     'src/loader/vmu_readonly_overlay.c', 'include/kui/native_isolation.h')
 
 
@@ -50,10 +53,12 @@ class LoanBoundary(Exception): pass
 
 
 class IsolationWorker(RecordWorker):
-    def __init__(self, startup, build, handoff, record, variant, tick_off=False, wait_capture=False):
+    def __init__(self, startup, build, handoff, record, variant, tick_off=False, wait_capture=False,
+                 maple_bypass=False):
         self.variant = variant
         self.tick_off = tick_off
         self.wait_capture = wait_capture
+        self.maple_bypass = maple_bypass
         self.low = read_elf(build/'resident-sci.elf')
         self.sd_entry = self.low[4]['_kui_vmu_observe_sd_lease'][0]
         self.calls, self.tick_calls = Counter(), 0
@@ -80,6 +85,12 @@ class IsolationWorker(RecordWorker):
                     'Evolution wait-capture marker differs: '+role)
         require(not wait_capture or (tick_off and variant=='reader_only'),
                 'Evolution wait capture requires the reader-only TICK-off control')
+        for image, role in ((stage,'stage'),(worker,'worker')):
+            bypass_marker=image[4].get('__kui_native_maple_bypass_isolation_'+role)
+            require(bypass_marker == ONE if maple_bypass else bypass_marker is None,
+                    'Maple C-gateway bypass marker differs: '+role)
+        require(not maple_bypass or (tick_off and variant=='reader_only' and not wait_capture),
+                'Maple C-gateway bypass requires reader-only TICK-off without wait capture')
         self.lease_bytes = LEASE
         self.worker_physical_high = self.worker_physical_low+LEASE
         self.lease_geometry_source = 'Paired actual absolute isolation lease and bottom markers'
@@ -171,10 +182,98 @@ class IsolationWorker(RecordWorker):
         return dict(zip(STATS,struct.unpack('<14I',self.block(address,56))))
 
 
+class BypassWorker(IsolationWorker):
+    """Execute the actual patched SDK and complete assembly gateways.
+
+    Only this explicit diagnostic disables the legacy assembly-to-C bridges.
+    The linked save/mask/private-stack/restore/replay/tail instructions execute.
+    """
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        require(self.maple_bypass,'Actual bypass runner requires paired explicit markers')
+        self.bypass_running=False
+        self.mach,self.gbr=0x12345678,0x8c556678
+        self.gateway_counts=Counter()
+        self.gateway_ranges={name:(self.symbols['_kui_vmu_native_passive_'+name+'_hook'][0],
+            self.symbols['_kui_vmu_native_passive_'+name+'_hook'][0]+
+            self.symbols['_kui_vmu_native_passive_'+name+'_hook'][1]) for name in ('submit','complete')}
+        names=(*BACKENDS,'_kui_vmu_native_passive_submit','_kui_vmu_native_passive_complete',
+               '_reader_cooperative_service','_reader_readahead_visit','_native_wait_capture_observe')
+        self.forbidden_maple_entries={self.symbols[name][0]:name for name in names if name in self.symbols}
+
+    def read(self,address,count=4):
+        if getattr(self,'bypass_running',False) and count==2:
+            return PollSH.read(self,address,count)
+        return super().read(address,count)
+
+    def plain(self,op,pc):
+        if getattr(self,'bypass_running',False):
+            n=op>>8&15;kind=op&0xf0ff
+            stores={0x4002:'mach',0x4012:'macl',0x4013:'gbr'}
+            loads={0x4006:'mach',0x4016:'macl',0x4017:'gbr'}
+            if kind in stores:
+                self.r[n]=(self.r[n]-4)&MASK;self.write(self.r[n],getattr(self,stores[kind]))
+                self.instructions+=1;return
+            if kind in loads:
+                setattr(self,loads[kind],self.read(self.r[n]));self.r[n]=(self.r[n]+4)&MASK
+                self.instructions+=1;return
+            if pc==self.record.submit_hook:
+                return PollSH.plain(self,op,pc)
+        return super().plain(op,pc)
+
+    def step(self):
+        if not getattr(self,'bypass_running',False):return super().step()
+        require(self.pc not in self.forbidden_maple_entries,
+                'Bypass gateway reached C payload: '+self.forbidden_maple_entries.get(self.pc,''))
+        require(self.pc!=self.sd_entry and self.pc!=self.tick_entry,
+                'Bypass gateway reached storage or auxiliary work')
+        name=next((name for name,(lo,hi) in self.gateway_ranges.items() if lo<=self.pc<hi),None)
+        before=self.instructions
+        super().step()
+        if name:self.gateway_counts[name]+=self.instructions-before
+
+    def bridge_submit(self):
+        raise ValueError('Bypass runner must execute the actual patched submit gateway')
+
+    def submit(self):
+        r=self.record;before=self.gateway_counts['submit']
+        self.pc,self.pr,self.r[15],self.sr=r.submit_caller,RETURN,OWNER_STACK,self.owner_sr
+        self.bypass_running=True
+        try:
+            self.until(r.submit_entry)
+            steps=self.until(r.submit_caller+6)
+        finally:self.bypass_running=False
+        count=self.gateway_counts['submit']-before
+        require(count>0 and self.r[0]==0,'Original submit did not execute and return through the compiled gateway')
+        self.submit_counts=dict(instructions=count,original_sdk_instructions=steps)
+        self.submit_callbacks+=1
+        return steps
+
+    def complete(self):
+        r=self.record;before=self.gateway_counts['complete']
+        self.pc,self.pr,self.r[15],self.sr=r.completion_wrapper,RETURN,OWNER_STACK,self.owner_sr
+        self.bypass_running=True
+        try:
+            prefix=self.until(self.read(r.driver[12]))
+            owner_sp=self.r[15]
+            # The exact consumer returns to this actual wrapper continuation.
+            # Later SDK IRQ work (including PVR access) is outside this packet
+            # replay, just as it is outside the ordinary C-bridge audit.
+            steps=self.until(r.driver[13]+4)
+        finally:self.bypass_running=False
+        count=self.gateway_counts['complete']-before
+        require(count>0 and self.r[15]==owner_sp,
+                'Original completion did not execute its compiled gateway/consumer tail and return')
+        self.complete_callbacks+=1
+        return prefix,dict(instructions=count,original_sdk_instructions=prefix+steps,
+                           original_consumer_tail_executed=True)
+
+
 def poll(cpu, consume=True):
     cpu.submit();wrapper,complete=cpu.complete()
     if consume:
-        cpu.original_call(cpu.record.consumer);cpu.original_call(cpu.record.ready)
+        if not cpu.maple_bypass:cpu.original_call(cpu.record.consumer)
+        cpu.original_call(cpu.record.ready)
     return dict(submit_instructions=cpu.submit_counts['instructions'],
                 completion_wrapper_instructions=wrapper,
                 complete_instructions=complete['instructions'],overlay=cpu.overlay_stats(),
@@ -184,10 +283,11 @@ def poll(cpu, consume=True):
                     if (int(frame['header'],16)>>8)&255 == 32])
 
 
-def run_variant(startup, record_path, build, variant, tick_off=False, wait_capture=False):
+def run_variant(startup, record_path, build, variant, tick_off=False, wait_capture=False,maple_bypass=False):
     source,image,extent=fresh_verify(startup,record_path)
     record=Record(record_path.read_bytes(),image,source)
-    cpu=IsolationWorker(startup,build,make_handoff(),record,variant,tick_off,wait_capture)
+    cls=BypassWorker if maple_bypass else IsolationWorker
+    cpu=cls(startup,build,make_handoff(),record,variant,tick_off,wait_capture,maple_bypass)
     cpu.prepare();initializer=cpu.initialize_sdk()
     cpu.calls.clear()
     pristine=copy.deepcopy(cpu)
@@ -218,7 +318,7 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
         require(cpu.tick_calls==0 and cpu.calls['_persistent_handler']>0,
                 'Standard VMU backend/TICK separation differs')
     forced=[]
-    for command in (1,2,10,11):
+    for command in (() if maple_bypass else (1,2,10,11)):
         trial=copy.deepcopy(pristine)
         if variant=='reader_only':trial.seed_tick_boundary()
         trial.inject_command=command
@@ -244,7 +344,20 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
         forced.append(dict(command=command,reply=hex(reply),overlay=s,calls=dict(trial.calls),
                            storage_boundary_reached=False,tick_calls=trial.tick_calls))
     cpu.check_build_unchanged()
+    bypass=None
+    if maple_bypass:
+        state=cpu.symbols['_state'][0]
+        pending,submitted,completed=struct.unpack('<3I',cpu.block(state+4,12))
+        require(pending==submitted==completed==0,'Bypass unexpectedly entered the Maple C state machine')
+        require(cpu.submit_callbacks==cpu.complete_callbacks==8 and not cpu.calls and not cpu.tick_calls,
+                'Bypass did not execute both actual assembly gateway paths for every original SDK poll')
+        bypass=dict(polls=8,actual_patched_submit_executed=True,
+            actual_completion_gateway_and_original_consumer_executed=True,
+            maple_c_callbacks_executed=0,submitted=submitted,completed=completed,pending=pending,
+            gateway_instructions=dict(cpu.gateway_counts),assembly_frames_and_masking_retained=True,
+            forced_virtual_packet_injection=False)
     return dict(variant=variant,controller_tick_off=tick_off,e1_wait_capture=wait_capture,
+                maple_bypass=maple_bypass,maple_bypass_execution=bypass,
                 normal_pre_gesture=pre_gesture,artifact_sha256={name:sha((build/name).read_bytes()) for name in
                     ('entry.elf','stage.elf','native-worker.elf','native-worker.bin','native-worker.reloc','resident-sci.elf','resident-sci.bin')},
                 original_source_sha256=sha(source),record_sha256=sha(record.wire),program_extent=extent,
@@ -252,7 +365,7 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
                 sdk_initializer=initializer,natural_rounds=rounds,final_overlay=stats,
                 natural_backend_calls=dict(cpu.calls),tick_calls=cpu.tick_calls,
                 forced_packets=forced,worker_helpers_substituted=False,
-                auxiliary_boundary_substituted=variant=='reader_only',
+                auxiliary_boundary_substituted=variant=='reader_only' and not maple_bypass,
                 original_game_or_sdk_functions_substituted=False,
                 actual_cold_stage_installer_executed=False,
                 sh4_delay_slot_legality_enforced=True)
@@ -272,27 +385,32 @@ def main():
                         help='Require the paired exact Evolution1 operand-capture control')
     parser.add_argument('--collector-output',type=Path,
                         help='Write the artifact-bound collector host and NORMAL pre-gesture receipt')
+    parser.add_argument('--maple-bypass',action='store_true',
+                        help='Execute the paired diagnostic Maple gateways with their C calls omitted')
     args=parser.parse_args()
     require(__debug__, 'Assertions must remain enabled')
     require(not args.wait_capture or (args.reader_tick_off and args.collector_output),
             'Wait capture requires TICK-off and a collector receipt output')
     require(not args.collector_output or args.wait_capture,
             'Collector receipt belongs only to the explicit wait-capture control')
+    require(not args.maple_bypass or (args.reader_tick_off and not args.wait_capture),
+            'Maple bypass requires TICK-off and is mutually exclusive with wait capture')
     require(len(args.source_commit)==40 and all(c in '0123456789abcdef' for c in args.source_commit),
             'Expected exact runtime freeze commit')
     for build in (args.reader_build,args.standard_build):
         require(args.source_commit[:12].encode() in (build/'entry.elf').read_bytes(),
                 'Actual linked entry does not contain runtime freeze build identifier')
-    reports=[run_variant(args.startup,args.record,args.reader_build,'reader_only',args.reader_tick_off,args.wait_capture),
+    reports=[run_variant(args.startup,args.record,args.reader_build,'reader_only',args.reader_tick_off,args.wait_capture,args.maple_bypass),
              run_variant(args.startup,args.record,args.standard_build,'standard_vmu')]
     report=dict(schema='kui.native.isolation-linked-sdk.v1',status='PASS',
                 source_commit=args.source_commit,build=args.source_commit[:12],variants=reports,
                 source_sha256={name:sha((ROOT/name).read_bytes()) for name in SOURCE_FILES},
                 limitations=[
-                    'Flat coherent RAM and synchronous authored Maple hardware; no bus latency, IRQ schedule, cache, full game, FMV or timing model.',
-                    'Assembly save/restore bridges use executed original SDK register contexts; all linked worker C guards and packet/protocol helpers execute.',
+                    'Flat coherent RAM and synchronous authored Maple hardware; no bus latency, IRQ schedule, cache, full game, FMV or timing model. Completion stops at the original consumer return, before the remaining SDK IRQ tail.',
+                    ('Reader bypass executes the actual patched SDK, complete assembly gateways, original resume and consumer tail; the two Maple C callbacks are forbidden. Standard executes its existing linked C path.' if args.maple_bypass else
+                     'Assembly save/restore bridges use executed original SDK register contexts; all linked worker C guards and packet/protocol helpers execute.'),
                     'Reader TICK dispatch executes to an authored auxiliary ABI boundary; auxiliary producer instructions are covered by the separate reader audit.',
-                    'Injected A2 requests are authored in original SDK-owned TX/RX memory before actual worker submission; not assertions of game-generated requests.',
+                    'Injected A2 requests on C-enabled variants are authored in original SDK-owned TX/RX memory; the bypass reader is tested with unmodified original SDK packets and physical A2 absent.',
                     'Standard block read stops at the actual configured low ELF SD-loan entry. No SD hardware or success response is modeled.',
                     'Original allocator performs the current384KiB bottom sequence; the cold stage C installer requires its separate audit.'])
     args.output.parent.mkdir(parents=True,exist_ok=True)

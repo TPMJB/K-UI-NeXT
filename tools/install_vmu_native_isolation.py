@@ -161,6 +161,19 @@ def create_backup(p, root, metadata, original, identity):
     return read_backup(p, root, metadata)
 
 
+def validate_variant_metadata(metadata):
+    """Build-only bypass metadata cannot silently select another diagnostic."""
+    for name, entry in metadata['variants'].items():
+        require(isinstance(entry, dict), 'Invalid isolation variant metadata')
+        bypass = entry.get('maple_bypass', False)
+        require(type(bypass) is bool, 'Maple-bypass metadata must be a boolean')
+        if bypass:
+            require(name == 'reader-only' and entry.get('prefetch_enabled') is False and
+                    entry.get('controller_tick_off') is True and
+                    entry.get('e1_wait_capture') is False,
+                    'Maple bypass requires reader-only demand reads, controller TICK off, and no wait capture')
+
+
 def install(root, package, variant, profile=None):
     require(variant in (*MODULES, 'restore'), 'Select reader-only, vmu-only or restore')
     root, package = Path(root).resolve(strict=True), Path(package).resolve(strict=True)
@@ -168,6 +181,8 @@ def install(root, package, variant, profile=None):
     metadata = json.loads(p.read_regular(package/'isolation.json', package, maximum=16384))
     require(metadata.get('schema') == SCHEMA and set(metadata.get('variants', {})) == set(MODULES),
             'Invalid isolation package metadata')
+    validate_variant_metadata(metadata)
+    maple_bypass = metadata['variants'].get(variant, {}).get('maple_bypass', False)
     gui = p.read_regular(root/GUI, root, maximum=LIMIT)
     require(sha(gui) == metadata['gui']['sha256'] and verify(gui)['build'] == metadata['gui']['build'],
             'This test requires the existing 8adf Games UI; it was not replaced. Restore/install that candidate first.')
@@ -200,7 +215,8 @@ def install(root, package, variant, profile=None):
     if state is not None:
         require(state.get('schema') == 'kui.native.isolation.state.v1' and
                 state.get('build') in {metadata['build'], *metadata.get('compatible_packages', {})} and
-                set(state.get('allowed', {})) == set(MODULES),
+                set(state.get('allowed', {})) == set(MODULES) and
+                type(state.get('maple_bypass', False)) is bool,
                 'Invalid isolation recovery receipt')
     for name, data in current.items():
         allowed = state['allowed'][name] if state is not None else [fingerprint(original[name])]
@@ -214,10 +230,11 @@ def install(root, package, variant, profile=None):
         desired[variant] = target_module
     changes = [(name, current[name], desired[name]) for name in MODULES if current[name] != desired[name]]
     receipt = dict(schema='kui.native.isolation.state.v1', build=metadata['build'], variant=variant,
-                   pending=False, allowed={name: [fingerprint(desired[name])] for name in MODULES})
+                   pending=False, maple_bypass=maple_bypass,
+                   allowed={name: [fingerprint(desired[name])] for name in MODULES})
     if not changes and state == receipt:
         require(protected_snapshot(p, root, selected) == before_protected, 'Read-only files changed during inspection')
-        return dict(variant=variant, build=metadata['build'], already_installed=True, gui_unchanged=True,
+        return dict(variant=variant, build=metadata['build'], already_installed=True, gui_unchanged=True, maple_bypass=maple_bypass,
                     prepared_card_unchanged=True, changed_modules=[],
                     prefetch_enabled=metadata['variants'].get(variant, {}).get('prefetch_enabled'),
                     e1_wait_capture=metadata['variants'].get(variant, {}).get('e1_wait_capture', False))
@@ -245,7 +262,7 @@ def install(root, package, variant, profile=None):
         # The pending receipt accepts the exact before/after states after an
         # interrupted publication; immutable baseline copies remain untouched.
         raise
-    return dict(variant=variant, build=metadata['build'], gui_unchanged=True,
+    return dict(variant=variant, build=metadata['build'], gui_unchanged=True, maple_bypass=maple_bypass,
                 prefetch_enabled=metadata['variants'].get(variant, {}).get('prefetch_enabled'),
                 e1_wait_capture=metadata['variants'].get(variant, {}).get('e1_wait_capture', False),
                 prepared_card_unchanged=True, changed_modules=[str(MODULES[name]) for name, _, _ in changes],
@@ -263,7 +280,11 @@ def main():
         result = install(args.sd_root, args.package, args.variant, args.profile)
         print(json.dumps(result, indent=2))
         if args.variant == 'reader-only':
-            print('Use SCI / Background New (X). Virtual A2 is OFF; support hooks remain.')
+            print('Use SCI / Background New (X). Virtual A2 is OFF.')
+            if result.get('maple_bypass'):
+                print('Original SDK Maple submit/completion stays in place; controller TICK is OFF.')
+            else:
+                print('Reader support hooks remain active.')
             if result.get('prefetch_enabled') is False:
                 print('Controller read-ahead is OFF; New demand reads and SDK SCI remain enabled.')
             if result.get('e1_wait_capture'):
