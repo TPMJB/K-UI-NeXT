@@ -70,7 +70,7 @@ The recovered corpus already identifies useful next targets:
 | Evolution 1 | `5b653775af85` normal failed before first FMV; the same reservation with `--lease-only` worked | Compare `--hooks-only`: retain active lifetime/Maple hooks and filtered DMA chain, hide virtual A1 and perform no in-game VMU storage calls |
 | Crazy Taxi 2 | Allocator found; initializer pointer/root-call provenance incomplete | Extend dataflow and call-root evidence, then execute the discovered allocator contract in the host SH model |
 | Phantasy Star Online | Layout root now resolves; allocator-call and fourth terminal-consumer proofs remain | Review the additional consumer and dispatch lifetime together |
-| Jet Grind Radio | Allocator arguments now resolve; Maple root transport does not | Prove the actual root transport before using its otherwise matching initializer |
+| Jet Grind Radio | Resolves: its variable root is a separate leaf called once from system initialisation with interrupts masked, admitted where no reviewed family resolves (`docs/evidence/native-jgr-leaf-root-admission-2026-10-27.json`) | Console test of virtual A2 saves |
 | Evolution 2 / Soul Reaver | Different callback, timer or terminal-entry layouts | Model the layout explicitly; close terminal entries cannot accept overlapping veneers |
 
 There is a second compatibility axis after signature discovery. The present

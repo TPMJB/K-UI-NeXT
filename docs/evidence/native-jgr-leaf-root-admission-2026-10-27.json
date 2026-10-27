@@ -1,0 +1,98 @@
+{
+  "schema": "kui.native.jgr-leaf-root-admission.v1",
+  "date": "2026-10-27",
+  "production_changed": true,
+  "retail_byte_payloads_embedded": false,
+  "inputs": {
+    "crazy-taxi-2": {
+      "sha256": "8057a8e37636ad78b1fc70ee590bd314686546b13ffe100623d86b572aec53c1",
+      "bytes": 1452148
+    },
+    "jet-grind-radio": {
+      "sha256": "8b294765225fc32020dd59010464a730b710d0bd79f69c79f16218cc4feac6a6",
+      "bytes": 3075648
+    }
+  },
+  "owner_inputs": {
+    "jet-grind-radio": "US MK-51058 V1.005",
+    "crazy-taxi-2": "US MK-51136 V1.004"
+  },
+  "finding": {
+    "refusal": "layout: no reviewed root call reaches the SDK Maple initializer chain",
+    "chain": "variable initializer 8c2871a8 <- wrapper 8c285d26 <- upper wrapper 8c2890f8 <- leaf root 8c0b27fc <- system initializer 8c013f80 (all interrupts masked, called once)",
+    "uniform_chain": "uniform initializer 8c28708c <- wrapper 8c285ccc <- upper 8c289020, which nothing in the image references",
+    "leaf": "sts.l pr; mov #12,r0; push r0; mov.l TX,r7; mov.l RX pointer array,r6; mov.l index array,r5; mov.l upper,r0; jsr @r0; mov #0,r4; add #4,r15; lds.l pr; rts; nop",
+    "transport": "the upper wrapper receives exactly the registers the reviewed inline root supplies: R5 index array, R6 raw RX pointer array, R7 TX storage, count 12 on the stack; R4 mode is not passed to the SDK initializer"
+  },
+  "change": "variable_leaf_root admits this leaf only where no reviewed family resolves, only when one aligned image word names it, one PC-relative load reads that word and the next instruction calls through that register with a no-op delay slot. Every image with an earlier proof keeps exactly that proof; the detector epoch is unchanged.",
+  "before": {
+    "crazy-taxi-2": {
+      "driver": 1,
+      "layout": true,
+      "heap": 1,
+      "initializer_slot": false,
+      "initializer_call": false,
+      "exits": true,
+      "guarded_exits": true,
+      "combined_resolution": false,
+      "placement_384k": false,
+      "layout_version": 1,
+      "rx_layout": 0,
+      "first_refusal": "initializer_slot",
+      "structural_384k_models_passed": false
+    },
+    "jet-grind-radio": {
+      "driver": 1,
+      "layout": false,
+      "heap": 1,
+      "initializer_slot": true,
+      "initializer_call": true,
+      "exits": true,
+      "guarded_exits": true,
+      "combined_resolution": false,
+      "placement_384k": true,
+      "layout_version": 0,
+      "rx_layout": 0,
+      "first_refusal": "layout",
+      "structural_384k_models_passed": false
+    }
+  },
+  "after": {
+    "crazy-taxi-2": {
+      "driver": 1,
+      "layout": true,
+      "heap": 1,
+      "initializer_slot": false,
+      "initializer_call": false,
+      "exits": true,
+      "guarded_exits": true,
+      "combined_resolution": false,
+      "placement_384k": false,
+      "layout_version": 1,
+      "rx_layout": 0,
+      "first_refusal": "initializer_slot",
+      "structural_384k_models_passed": false
+    },
+    "jet-grind-radio": {
+      "driver": 1,
+      "layout": true,
+      "heap": 1,
+      "initializer_slot": true,
+      "initializer_call": true,
+      "exits": true,
+      "guarded_exits": true,
+      "combined_resolution": true,
+      "placement_384k": true,
+      "layout_version": 2,
+      "rx_layout": 1,
+      "first_refusal": null,
+      "structural_384k_models_passed": true
+    }
+  },
+  "host": {
+    "leaf_decoder": "Native leaf variable root: 1698 checks, 644 semantically verified admissions; 851968 instruction mutations",
+    "compat_aggregate": "identical results to the unchanged tree apart from the new leaf test; native-lease-alias-host-tests fails identically on both (pre-existing epoch-2 fixtures)",
+    "launcher": "Native launcher cache 38961 checks; 346 Games launcher cases"
+  },
+  "console_compatibility_verified": false
+}

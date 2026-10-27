@@ -170,10 +170,39 @@ static bool gun(const uint8_t *p,size_t n,uint32_t base,const struct kui_vmu_nat
     *out=chosen;return true;
 }
 
+/* The leaf is reached exactly once: one aligned image word holds its
+ * address, one PC-relative load reads it, and the very next instruction
+ * calls through that register with a no-op delay slot. */
+static bool called_once(const uint8_t *p,size_t n,uint32_t base,uint32_t function) {
+    unsigned words=0,loads=0;bool called=false;
+    for(size_t i=0;i<n && n-i>=4u;i+=4u) if(phys(u32(p+i))==phys(function)) ++words;
+    for(size_t s=0;s<n && n-s>=6u;s+=2u) {
+        uint16_t code=u16(p+s);unsigned reg=(code>>8)&15u;uint32_t value;
+        if((code&0xf000u)!=0xd000u || !literal(p,n,base,s,reg,&value) || phys(value)!=phys(function)) continue;
+        ++loads;called=u16(p+s+2u)==(0x400bu|reg<<8) && u16(p+s+4u)==0x0009u;
+    }
+    return words==1u && loads==1u && called;
+}
+/* Second reviewed variable root: a leaf the system initializer calls once,
+ * with every interrupt masked. It pushes the immediate count, loads the TX
+ * storage (R7), raw RX pointer array (R6) and index array (R5), and calls
+ * the upper wrapper through R0 with mode zero in the delay slot; the upper
+ * wrapper receives exactly the registers the inline root supplies. */
+static bool variable_leaf_root(const uint8_t *p,size_t n,uint32_t base,size_t s,uint32_t upper,
+    uint32_t *input,uint32_t *index,uint32_t *tx,uint32_t *count) {
+    static const struct witness w[]={{0,0x4f22},{4,0x2f06},{14,0x400b},{16,0xe400},
+        {18,0x7f04},{20,0x4f26},{22,0x000b},{24,0x0009}};
+    uint32_t a,b,c;
+    if(s>n || n-s<26u || u16(p+s)!=0x4f22u || !WORDS(p,n,s,w) || (u16(p+s+2u)&0xff00u)!=0xe000u ||
+       !literal(p,n,base,s+6u,7u,&c) || !literal(p,n,base,s+8u,6u,&a) || !literal(p,n,base,s+10u,5u,&b) ||
+       !target(p,n,base,s+12u,0u,upper) || !called_once(p,n,base,base+(uint32_t)s)) return false;
+    *input=a;*index=b;*tx=c;*count=(uint32_t)(int32_t)(int8_t)(u16(p+s+2u)&255u);return true;
+}
 /* Called only after an exact image-bound driver resolution, either produced
- * immediately by the combined API or replayed by the strict cached API. */
+ * immediately by the combined API or replayed by the strict cached API.
+ * `leaf` also admits the leaf root; see layout_from_bound. */
 static bool variable_from_bound(const void *image,size_t n,
-    const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out) {
+    const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out,bool leaf) {
     uint32_t base=d->load_address;
     const uint8_t *p=image;size_t init;
     if(!at(d->initializer+0x11cu,base,n,0x148u,&init) || !variable(p,n,base,init,d)) return false;
@@ -219,6 +248,11 @@ static bool variable_from_bound(const void *image,size_t n,
          * saved caller R7. The SDK stores R5 to fc8 (raw RX pointer array)
          * and R6 to fc4 (TX storage). Keep that transport explicit. */
         input=a;index=b;tx=c;count=u16(p+s-10u)&255u;r.initializer_call=base+(uint32_t)s;++found;
+    }
+    for(size_t s=0;leaf && !found && s<n && n-s>=26u;s+=2u) {
+        uint32_t a,b,c,k;
+        if(!variable_leaf_root(p,n,base,s,base+(uint32_t)upper_site,&a,&b,&c,&k)) continue;
+        input=a;index=b;tx=c;count=k;r.initializer_call=base+(uint32_t)s+14u;++found;
     }
     /* This runtime family uses two 0x3000 TX banks; the variable initializer
      * computes the bank distance as input count * 1024. */
@@ -430,8 +464,13 @@ static bool source_buffers(const uint8_t *p,size_t n,const struct kui_vmu_native
 static bool layout_from_bound(const void *image,size_t n,
     const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out) {
     struct kui_vmu_native_layout variable_layout,uniform_layout;
-    bool variable_found=variable_from_bound(image,n,d,&variable_layout);
+    bool variable_found=variable_from_bound(image,n,d,&variable_layout,false);
     bool uniform_found=uniform_from_bound(image,n,d,&uniform_layout);
+    /* The leaf root is tried only where no reviewed family resolves. Every
+     * image with an earlier proof keeps exactly that proof, so cached
+     * records stay current without a detector-epoch change. */
+    if(!variable_found && !uniform_found)
+        variable_found=variable_from_bound(image,n,d,&variable_layout,true);
     if(variable_found==uniform_found) return false;
     struct kui_vmu_native_layout chosen=variable_found?variable_layout:uniform_layout;bool infile;
     if(!source_buffers(image,n,d,&chosen,&infile)) return false;
