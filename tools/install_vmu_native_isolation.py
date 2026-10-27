@@ -171,10 +171,14 @@ def validate_variant_metadata(metadata):
         require(type(delay) is bool, 'Maple-delay metadata must be a boolean')
         completion = entry.get('completion_delay', False)
         require(type(completion) is bool, 'Completion-delay metadata must be a boolean')
+        submission = entry.get('submission_delay', False)
+        require(type(submission) is bool, 'Submission-delay metadata must be a boolean')
+        require(not(completion and submission),'Select one delayed gateway')
         require(not completion or delay, 'Completion-only delay requires Maple delay')
+        require(not submission or delay, 'Submission-only delay requires Maple delay')
         if delay:
             require(bypass is True and entry.get('maple_delay_ticks') ==
-                    dict(submit=0 if completion else 59, complete=76),
+                    dict(submit=0 if completion else 59, complete=0 if submission else 76),
                     'Maple delay requires the bypass control and exact selected tick budgets')
         if bypass:
             require(name == 'reader-only' and entry.get('prefetch_enabled') is False and
@@ -194,7 +198,9 @@ def install(root, package, variant, profile=None):
     maple_bypass = metadata['variants'].get(variant, {}).get('maple_bypass', False)
     maple_delay = metadata['variants'].get(variant, {}).get('maple_delay', False)
     completion_delay = metadata['variants'].get(variant, {}).get('completion_delay', False)
-    completion_receipt = dict(completion_delay=True) if completion_delay else {}
+    submission_delay = metadata['variants'].get(variant, {}).get('submission_delay', False)
+    completion_receipt = (dict(submission_delay=True) if submission_delay else
+                          dict(completion_delay=True) if completion_delay else {})
     gui = p.read_regular(root/GUI, root, maximum=LIMIT)
     require(sha(gui) == metadata['gui']['sha256'] and verify(gui)['build'] == metadata['gui']['build'],
             'This test requires the existing 8adf Games UI; it was not replaced. Restore/install that candidate first.')
@@ -230,7 +236,9 @@ def install(root, package, variant, profile=None):
                 set(state.get('allowed', {})) == set(MODULES) and
                 type(state.get('maple_bypass', False)) is bool and
                 type(state.get('maple_delay', False)) is bool and
-                type(state.get('completion_delay', False)) is bool,
+                type(state.get('completion_delay', False)) is bool and
+                type(state.get('submission_delay', False)) is bool and
+                not(state.get('completion_delay',False) and state.get('submission_delay',False)),
                 'Invalid isolation recovery receipt')
     for name, data in current.items():
         allowed = state['allowed'][name] if state is not None else [fingerprint(original[name])]
@@ -305,7 +313,10 @@ def main():
             if result.get('prefetch_enabled') is False:
                 print('Controller read-ahead is OFF; New demand reads and SDK SCI remain enabled.')
             if result.get('maple_delay'):
-                if result.get('completion_delay'):
+                if result.get('submission_delay'):
+                    print('Timing control: real Maple C callbacks remain OFF; only submit waits59 TMU0 ticks.')
+                    print('Completion retains the passing CEC no-call path; no completion delay helper runs.')
+                elif result.get('completion_delay'):
                     print('Timing control: real Maple C callbacks remain OFF; only completion waits76 TMU0 ticks.')
                     print('Submit retains the passing CEC no-call path; no submit delay helper runs.')
                 else:

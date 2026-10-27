@@ -55,13 +55,16 @@ class LoanBoundary(Exception): pass
 
 class IsolationWorker(RecordWorker):
     def __init__(self, startup, build, handoff, record, variant, tick_off=False, wait_capture=False,
-                 maple_bypass=False, maple_delay=False, cached_metadata=False, completion_delay=False):
+                 maple_bypass=False, maple_delay=False, cached_metadata=False, completion_delay=False,
+                 submission_delay=False):
         self.variant = variant
         self.tick_off = tick_off
         self.wait_capture = wait_capture
         self.maple_bypass = maple_bypass
         self.maple_delay = maple_delay
         self.completion_delay = completion_delay
+        self.submission_delay = submission_delay
+        require(not(completion_delay and submission_delay), 'Select only one Maple delay side')
         self.cached_metadata = cached_metadata
         self.flat_ocbi = []
         self.low = read_elf(build/'resident-sci.elf')
@@ -119,10 +122,14 @@ class IsolationWorker(RecordWorker):
                     'Maple delay marker differs: '+role)
         require(not maple_delay or maple_bypass, 'Maple delay requires actual C bypass')
         require(not completion_delay or maple_delay, 'Completion delay requires Maple delay')
+        require(not submission_delay or maple_delay, 'Submission delay requires Maple delay')
         for image, role in ((stage,'stage'),(worker,'worker')):
             marker=image[4].get('__kui_native_maple_delay_complete_only_isolation_'+role)
             require(marker == ONE if completion_delay else marker is None,
                     'Maple completion-only delay marker differs: '+role)
+            marker=image[4].get('__kui_native_maple_delay_submit_only_isolation_'+role)
+            require(marker == ONE if submission_delay else marker is None,
+                    'Maple submission-only delay marker differs: '+role)
         self.lease_bytes = LEASE
         self.worker_physical_high = self.worker_physical_low+LEASE
         self.lease_geometry_source = 'Paired actual absolute isolation lease and bottom markers'
@@ -257,10 +264,14 @@ class BypassWorker(IsolationWorker):
         self.delay_calls=Counter();self.delay_visits=[];self.delay_active=None
         self.delay_counter=0xffff0000;self.delay_counter_reads=0;self.delay_timer_writes=0
         if self.maple_delay:
+            roles=(('complete',) if self.completion_delay else
+                   ('submit',) if self.submission_delay else ('submit','complete'))
             self.delay_entries={self.symbols['_kui_vmu_native_maple_delay_'+name][0]:name
-                                for name in (('complete',) if self.completion_delay else ('submit','complete'))}
-            if self.completion_delay and '_kui_vmu_native_maple_delay_submit' in self.symbols:
-                self.forbidden_maple_entries[self.symbols['_kui_vmu_native_maple_delay_submit'][0]]='submit delay helper'
+                                for name in roles}
+            for name in {'submit','complete'}-set(roles):
+                symbol='_kui_vmu_native_maple_delay_'+name
+                if symbol in self.symbols:
+                    self.forbidden_maple_entries[self.symbols[symbol][0]]=name+' delay helper'
 
     def read(self,address,count=4):
         if getattr(self,'bypass_running',False) and self.maple_delay:
@@ -320,10 +331,12 @@ class BypassWorker(IsolationWorker):
         require(self.pc!=self.sd_entry and self.pc!=self.tick_entry,
                 'Bypass gateway reached storage or auxiliary work')
         name=next((name for name,(lo,hi) in self.gateway_ranges.items() if lo<=self.pc<hi),None)
-        if self.completion_delay and name=='submit':
+        no_call_role=('submit' if self.completion_delay else 'complete' if self.submission_delay else None)
+        if no_call_role is not None and name==no_call_role:
             op=self.read(self.pc,2)
             require(op&0xf0ff not in (0x400b,0x0003) and op>>12!=0xb,
-                    'Completion-only submit gateway executed a helper call')
+                    ('Completion-only' if self.completion_delay else 'Submission-only')+
+                    ' '+name+' gateway executed a helper call')
         before=self.instructions
         super().step()
         if name:self.gateway_counts[name]+=self.instructions-before
@@ -380,13 +393,16 @@ def poll(cpu, consume=True):
 
 
 def run_variant(startup, record_path, build, variant, tick_off=False, wait_capture=False,
-                maple_bypass=False,maple_delay=False,cached_metadata=False,completion_delay=False):
+                maple_bypass=False,maple_delay=False,cached_metadata=False,completion_delay=False,
+                submission_delay=False):
+    require(not(completion_delay and submission_delay), 'Select only one Maple delay side')
     require(not completion_delay or maple_delay, 'Completion delay requires Maple delay')
+    require(not submission_delay or maple_delay, 'Submission delay requires Maple delay')
     source,image,extent=fresh_verify(startup,record_path)
     record=Record(record_path.read_bytes(),image,source)
     cls=BypassWorker if maple_bypass else IsolationWorker
     cpu=cls(startup,build,make_handoff(),record,variant,tick_off,wait_capture,maple_bypass,maple_delay,
-            cached_metadata,completion_delay)
+            cached_metadata,completion_delay,submission_delay)
     cpu.prepare();initializer=cpu.initialize_sdk()
     cpu.calls.clear()
     pristine=copy.deepcopy(cpu)
@@ -464,15 +480,17 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
             gateway_instructions=dict(cpu.gateway_counts),assembly_frames_and_masking_retained=True,
             forced_virtual_packet_injection=False)
         if maple_delay:
-            calls=dict(submit=0 if completion_delay else 8,complete=8)
+            calls=dict(submit=0 if completion_delay else 8,complete=0 if submission_delay else 8)
             actual_calls={name:cpu.delay_calls[name] for name in ('submit','complete')}
             require(actual_calls==calls and len(cpu.delay_visits)==sum(calls.values()) and
                     cpu.delay_active is None, 'Delay control did not execute the selected actual helpers each poll')
             bypass.update(actual_delay_helper_executed=True,delay_calls=actual_calls,
-                          delay_ticks=dict(submit=0 if completion_delay else 59,complete=76),delay_visits=cpu.delay_visits,
+                          delay_ticks=dict(submit=0 if completion_delay else 59,complete=0 if submission_delay else 76),
+                          delay_visits=cpu.delay_visits,
                           timer_writes=cpu.delay_timer_writes,
                           timer_model='Valid read-only TMU0; counter advances one tick per TCNT read, no CPU timing')
             if completion_delay:bypass.update(completion_delay=True,submit_gateway_no_calls=True)
+            if submission_delay:bypass.update(submission_delay=True,complete_gateway_no_calls=True)
     report=dict(variant=variant,controller_tick_off=tick_off,e1_wait_capture=wait_capture,
                 cached_metadata=cached_metadata,virtual_a2=variant!='reader_only',
                 maple_c_callbacks_enabled=not maple_bypass,
@@ -494,6 +512,7 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
                 actual_cold_stage_installer_executed=False,
                 sh4_delay_slot_legality_enforced=True)
     if completion_delay:report['completion_delay']=True
+    if submission_delay:report['submission_delay']=True
     return report
 
 
@@ -515,8 +534,11 @@ def main():
                         help='Execute the paired diagnostic Maple gateways with their C calls omitted')
     parser.add_argument('--maple-delay',action='store_true',
                         help='Execute the read-only 59/76 tick delays while real Maple C calls stay off')
-    parser.add_argument('--completion-delay',action='store_true',
+    delay_side=parser.add_mutually_exclusive_group()
+    delay_side.add_argument('--completion-delay',action='store_true',
                         help='Select only the 76-tick completion helper; requires --maple-delay')
+    delay_side.add_argument('--submission-delay',action='store_true',
+                        help='Select only the 59-tick submit helper; requires --maple-delay')
     parser.add_argument('--cached-metadata',action='store_true',
                         help='Execute the real-callback combined VMU/New metadata-cache variant; requires TICK off')
     args=parser.parse_args()
@@ -529,6 +551,7 @@ def main():
             'Maple bypass requires TICK-off and is mutually exclusive with wait capture')
     require(not args.maple_delay or args.maple_bypass, 'Maple delay requires Maple C bypass')
     require(not args.completion_delay or args.maple_delay, 'Completion delay requires Maple delay')
+    require(not args.submission_delay or args.maple_delay, 'Submission delay requires Maple delay')
     require(not args.cached_metadata or (args.reader_tick_off and not args.wait_capture and
                 not args.maple_bypass and not args.maple_delay),
             'Cached metadata requires TICK-off and excludes wait capture, bypass, and delay')
@@ -539,7 +562,8 @@ def main():
                 'Actual linked entry does not contain runtime freeze build identifier')
     reports=[run_variant(args.startup,args.record,args.reader_build,
                          'metadata_cache' if args.cached_metadata else 'reader_only',args.reader_tick_off,
-                         args.wait_capture,args.maple_bypass,args.maple_delay,args.cached_metadata,args.completion_delay),
+                         args.wait_capture,args.maple_bypass,args.maple_delay,args.cached_metadata,args.completion_delay,
+                         args.submission_delay),
              run_variant(args.startup,args.record,args.standard_build,'standard_vmu')]
     report=dict(schema='kui.native.isolation-linked-sdk.v1',status='PASS',
                 source_commit=args.source_commit,build=args.source_commit[:12],variants=reports,

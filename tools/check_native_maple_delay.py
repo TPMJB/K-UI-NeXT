@@ -28,6 +28,7 @@ import profile_vmu_native_release_sh as release
 ROOT=Path(__file__).resolve().parents[1]
 SCHEMA='kui.native.maple-delay.linked-gateways.v1'
 COMPLETION_SCHEMA='kui.native.maple-completion-delay.linked-gateways.v1'
+SUBMISSION_SCHEMA='kui.native.maple-submission-delay.linked-gateways.v1'
 TARGETS={'submit':59,'complete':76}
 SOURCES=('tools/check_native_maple_delay.py','tools/check_native_maple_bypass.py',
     'tools/check_vmu_native_persistent.py','tools/check_vmu_native_readonly.py',
@@ -45,7 +46,7 @@ class DelayGateway(BypassGateway):
         super().__init__(*args)
         self.original_c={self.visit,self.complete}
         self.visit=self.symbols.get('_kui_vmu_native_maple_delay_submit',self.visit)
-        self.complete=self.symbols['_kui_vmu_native_maple_delay_complete']
+        self.complete=self.symbols.get('_kui_vmu_native_maple_delay_complete',self.complete)
 
     def code(self,address,size):
         require(address not in getattr(self,'original_c',()),'Gateway reached an original Maple C callback')
@@ -176,10 +177,10 @@ class DelayBody(release.ReleaseSH):
                     elapsed_ticks=TARGETS[self.role]+1,timer_writes=0)
 
 
-def helper_cases(build,completion_delay=False):
+def helper_cases(build,completion_delay=False,submission_delay=False):
     rows=[]
     path=build/'native-worker.elf'
-    for role in (('complete',) if completion_delay else TARGETS):
+    for role in (('submit',) if submission_delay else ('complete',) if completion_delay else TARGETS):
         for start in (10000,0,1):
             row=DelayBody(path,role,start=start).execute()
             require(not row['refused'],'Advancing/wrapping timer was refused')
@@ -239,22 +240,24 @@ def flag_zero_comparison():
     return dict(prior_runtime='cec542aefa8ad907ed063a6b8b471d7151eef38c',normal_equal=True,bypass_equal=True)
 
 
-def completion_submit_comparison(worker):
-    """Bind the final submit body to the exact compiled passing CEC body."""
+def completion_submit_comparison(worker,submission_delay=False):
+    """Bind the non-delayed gateway to its exact compiled passing CEC body."""
     cc=ROOT/'.deps/sh-elf/bin/sh-elf-gcc'
     prior='cec542aefa8ad907ed063a6b8b471d7151eef38c'
     original=subprocess.check_output(['git','show',prior+':src/loader/vmu_native_passive_hooks.S'],cwd=ROOT)
     flags=['-x','assembler-with-cpp','-c','-DKUI_VMU_NATIVE_CACHED_CODE=1',
            '-DKUI_VMU_NATIVE_READONLY_PROBE=1','-DKUI_VMU_NATIVE_PERSISTENT_PROBE=1',
            '-DKUI_NATIVE_MAPLE_BYPASS_ISOLATION=1']
-    name='_kui_vmu_native_passive_submit_hook'
+    role='complete' if submission_delay else 'submit'
+    name='_kui_vmu_native_passive_'+role+'_hook'
     with tempfile.TemporaryDirectory(prefix='kui-completion-submit-') as directory:
         path=Path(directory);old=path/'cec.S';old.write_bytes(original)
         rows=[]
         for index,source in enumerate((old,ROOT/'src/loader/vmu_native_passive_hooks.S')):
             obj=path/(str(index)+'.o')
             mode=['-DKUI_NATIVE_MAPLE_DELAY_ISOLATION=1',
-                  '-DKUI_NATIVE_MAPLE_DELAY_COMPLETE_ONLY_ISOLATION=1'] if index else []
+                  '-DKUI_NATIVE_MAPLE_DELAY_'+('SUBMIT' if submission_delay else 'COMPLETE')+
+                  '_ONLY_ISOLATION=1'] if index else []
             subprocess.run([str(cc),*flags,*mode,str(source),'-o',str(obj)],check=True,capture_output=True)
             # gcc -c produces ET_REL with no program headers. Keep the strict
             # ET_EXEC reader for the final linked worker; extract this one
@@ -297,10 +300,11 @@ def completion_submit_comparison(worker):
     return dict(prior_runtime=prior,prior_source_sha256=sha(original),
         object_body_and_relocations_equal=True,linked_body_equal_after_exact_relocations=True,
         bytes=len(body),canonical_body_sha256=sha(body),relocation_bindings=bindings,
-        no_submit_helper_call=True)
+        **{'no_'+role+'_helper_call':True})
 
 
-def check(build,startup,record,completion_delay=False):
+def check(build,startup,record,completion_delay=False,submission_delay=False):
+    require(not(completion_delay and submission_delay),'Select only one delayed gateway')
     build,startup,record=map(lambda p:Path(p).resolve(),(build,startup,record))
     source,image,extent=verified_program_image(startup,record)
     driver=struct.unpack_from('<18I',record.read_bytes(),64)
@@ -312,14 +316,18 @@ def check(build,startup,record,completion_delay=False):
         marker=elf[4].get('__kui_native_maple_delay_complete_only_isolation_'+role)
         require(marker==ABSOLUTE_ONE if completion_delay else marker is None,
                 'Completion-only paired marker differs: '+role)
+        marker=elf[4].get('__kui_native_maple_delay_submit_only_isolation_'+role)
+        require(marker==ABSOLUTE_ONE if submission_delay else marker is None,
+                'Submission-only paired marker differs: '+role)
         require('__kui_native_metadata_cache_isolation_'+role not in elf[4],
                 'Delay includes incompatible cached metadata')
     symbols={name:value[0] for name,value in worker[4].items()}
     binary,wire=(build/'native-worker.bin').read_bytes(),(build/'native-worker.reloc').read_bytes()
-    roles=('complete',) if completion_delay else TARGETS
+    roles=('submit',) if submission_delay else ('complete',) if completion_delay else TARGETS
     sites={role:call_site(binary,symbols,role) for role in roles}
-    submit_site=bypass_call_site(binary,symbols,'submit') if completion_delay else None
-    submit_comparison=completion_submit_comparison(worker) if completion_delay else None
+    bypass_role='complete' if submission_delay else 'submit' if completion_delay else None
+    bypass_site=bypass_call_site(binary,symbols,bypass_role) if bypass_role else None
+    cec_comparison=completion_submit_comparison(worker,submission_delay) if bypass_role else None
     cases=0;writes=dict(submit_mdst=0,complete_mdst=0)
     for destination in (P2,0xac35e220,0xac700000):
         blob=relocated(binary,wire,destination)
@@ -329,7 +337,7 @@ def check(build,startup,record,completion_delay=False):
                 for mask in range(16):
                     for t in (0,1):
                         for role in TARGETS:
-                            cls=BypassGateway if completion_delay and role=='submit' else DelayGateway
+                            cls=BypassGateway if role==bypass_role else DelayGateway
                             cpu=cls(seed,mask,destination,blob,mapped,role,alias,t,driver).verify(image,driver)
                             cases+=1;writes[role+'_mdst']+=cpu.writes.count(0xa05f6c18)
     mutations=[]
@@ -341,21 +349,24 @@ def check(build,startup,record,completion_delay=False):
             try:DelayGateway(0,0,P2,bytes(changed),symbols,role,0x80000000,0,driver).verify(image,driver)
             except (AssertionError,ValueError) as error:mutations.append(dict(name=role+'-'+kind,reason=str(error)))
             else:raise ValueError('Delay call mutation was accepted')
-    if completion_delay:
-        changed=bytearray(binary);struct.pack_into('<H',changed,submit_site,0x400b)
-        try:BypassGateway(0,0,P2,bytes(changed),symbols,'submit',0x80000000,0,driver).verify(image,driver)
+    if bypass_role:
+        changed=bytearray(binary);struct.pack_into('<H',changed,bypass_site,0x400b)
+        try:BypassGateway(0,0,P2,bytes(changed),symbols,bypass_role,0x80000000,0,driver).verify(image,driver)
         except (AssertionError,ValueError) as error:
-            mutations.append(dict(name='submit-original-C-restored',reason=str(error)))
+            mutations.append(dict(name=bypass_role+'-original-C-restored',reason=str(error)))
         else:raise ValueError('Completion-only restored submit C call was accepted')
-    helpers=helper_cases(build,completion_delay)
+    helpers=helper_cases(build,completion_delay,submission_delay)
     artifacts={p.name:sha(p.read_bytes()) for p in build.iterdir() if p.suffix in ('.elf','.bin','.reloc') and p.is_file()}
     provenance=json.loads((build/'entry.compile.json').read_text())
     require(provenance['source_dirty'] is False and provenance['elf_sha256']==artifacts['entry.elf'],'Unbound runtime provenance')
-    return dict(schema=COMPLETION_SCHEMA if completion_delay else SCHEMA,status='PASS',source_commit=provenance['commit'],
+    return dict(schema=SUBMISSION_SCHEMA if submission_delay else COMPLETION_SCHEMA if completion_delay else SCHEMA,
+        status='PASS',source_commit=provenance['commit'],
         artifact_sha256=artifacts,source_sha256={name:sha((ROOT/name).read_bytes()) for name in SOURCES},
         inputs=dict(startup_sha256=sha(source),record_sha256=sha(record.read_bytes()),extent=extent),
-        C_calls=0,delay_ticks=dict(submit=0,complete=76) if completion_delay else TARGETS,
-        completion_delay=completion_delay,submit_cec_equivalence=submit_comparison,
+        C_calls=0,delay_ticks=dict(submit=59,complete=0) if submission_delay else
+            dict(submit=0,complete=76) if completion_delay else TARGETS,
+        completion_delay=completion_delay,submit_cec_equivalence=cec_comparison if completion_delay else None,
+        **(dict(submission_delay=True,complete_cec_equivalence=cec_comparison) if submission_delay else {}),
         actual_delay_helper_executed=True,timer_writes=0,
         instruction_cases=cases,gateway_callee_model='adversarial ABI-compatible delay callee',
         delay_helper_cases=helpers,actual_helper_case_count=len(helpers),
@@ -368,9 +379,12 @@ def check(build,startup,record,completion_delay=False):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     for name in ('build','startup','record','output'):parser.add_argument('--'+name,type=Path,required=True)
-    parser.add_argument('--completion-delay',action='store_true',
+    selection=parser.add_mutually_exclusive_group()
+    selection.add_argument('--completion-delay',action='store_true',
                         help='Require exact CEC submit and only the existing76-tick completion helper')
-    args=parser.parse_args();report=check(args.build,args.startup,args.record,args.completion_delay)
+    selection.add_argument('--submission-delay',action='store_true',
+                        help='Require exact CEC completion and only the existing59-tick submit helper')
+    args=parser.parse_args();report=check(args.build,args.startup,args.record,args.completion_delay,args.submission_delay)
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(dict(schema=report['schema'],status='PASS',gateway_cases=report['instruction_cases'],
