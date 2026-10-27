@@ -1,0 +1,208 @@
+{
+  "kind": "owner-console-photo-transcription",
+  "source_attachments": [
+    "image-1792538486174.jpg",
+    "image-1792538490744.jpg",
+    "image-1792538496141.jpg"
+  ],
+  "build": "e98e4a5e61e3",
+  "guard": "0x00000000",
+  "reader_steps": "0x00007ae3",
+  "reader_sectors": "0x00002187",
+  "headers": {
+    "counts": [
+      "0x00000001",
+      "0x00000020",
+      "0x00000004",
+      "0x00000034",
+      "0x00000003"
+    ],
+    "rows": [
+      [
+        "0x00000000",
+        "0x00000001",
+        "0x0cfd1400",
+        "0x01002009",
+        "0x03200008"
+      ],
+      [
+        "0x00000010",
+        "0x00010000",
+        "0x0cfd1100",
+        "0x00406001",
+        "0xffffffff"
+      ],
+      [
+        "0x0000001c",
+        "0x00020000",
+        "0x0cfd1200",
+        "0x0080a001",
+        "0xffffffff"
+      ],
+      [
+        "0x00000028",
+        "0x80030000",
+        "0x0cfd1300",
+        "0x00c0e001",
+        "0xffffffff"
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    ],
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "decoded_rows": [
+      {
+        "index": 0,
+        "offset": "0x00000000",
+        "port": "A",
+        "last": false,
+        "payload_words": 1,
+        "descriptor_bytes": 16,
+        "request_command": 9,
+        "request_destination": "0x20",
+        "request_source": "0x00",
+        "request_payload_words": 1,
+        "response_present": true,
+        "response_command": 8,
+        "response_destination": "0x00",
+        "response_source": "0x20",
+        "response_attached_unit_mask": "0x00",
+        "response_payload_words": 3
+      },
+      {
+        "index": 1,
+        "offset": "0x00000010",
+        "port": "B",
+        "last": false,
+        "payload_words": 0,
+        "descriptor_bytes": 12,
+        "request_command": 1,
+        "request_destination": "0x60",
+        "request_source": "0x40",
+        "request_payload_words": 0,
+        "response_present": false
+      },
+      {
+        "index": 2,
+        "offset": "0x0000001c",
+        "port": "C",
+        "last": false,
+        "payload_words": 0,
+        "descriptor_bytes": 12,
+        "request_command": 1,
+        "request_destination": "0xa0",
+        "request_source": "0x80",
+        "request_payload_words": 0,
+        "response_present": false
+      },
+      {
+        "index": 3,
+        "offset": "0x00000028",
+        "port": "D",
+        "last": true,
+        "payload_words": 0,
+        "descriptor_bytes": 12,
+        "request_command": 1,
+        "request_destination": "0xe0",
+        "request_source": "0xc0",
+        "request_payload_words": 0,
+        "response_present": false
+      }
+    ]
+  },
+  "driver": {
+    "counts": [
+      "0x00000001",
+      "0x00000425",
+      "0x0000001f",
+      "0x00030a60",
+      "0x08030a60"
+    ],
+    "extension": [
+      "0x8cf94a60",
+      "0x0cf9417d",
+      "0x00000000",
+      "0x00120c00",
+      "0x00000198"
+    ],
+    "tx": [
+      "0x0cfd3000",
+      "0x00130000",
+      "0x00130028",
+      "0x00130034",
+      "0x8cfd3000"
+    ],
+    "rx": [
+      "0x0cfd1000",
+      "0x00000000",
+      "0x00100000",
+      "0x0ced1000",
+      "0x8cfd1000"
+    ],
+    "maps": [
+      "0x0cfd3175",
+      "0x0cfd1175",
+      "0x0cfd2175",
+      "0x8cf93000",
+      "0x8cf93000"
+    ],
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "interpretation": [
+    "The header capture completed both matching passes (mask 3) across four ordinary descriptors in 32 direct P2 header reads; the retained list spans 52 bytes (0x34). Header fault values are all zero.",
+    "The last DRIVER observation completed every mapping/metadata witness (mask 0x1f) in 1061 reads (1029 existing state reads plus 32 header reads), with all driver fault values zero.",
+    "Descriptor offsets 0x00, 0x10, 0x1c and 0x28 have lengths 16, 12, 12 and 12 bytes respectively. The last descriptor control bit and TX last/end cursors agree exactly.",
+    "Port A main-unit request 0x01002009 is GETCOND command 9 with one payload word. Its response 0x03200008 is DATATRF command 8 with three payload words. This is consistent with normal controller polling; the payload function identifier and condition data were not inspected.",
+    "Ports B, C and D carry zero-payload main-unit DEVINFO command 1 queries. Their retained response word0 values are 0xffffffff, the driver no-response sentinel.",
+    "The sampled port A response source byte is 0x20, with attached-unit mask zero. That is only the mask observed in this response; it does not prove that no physical VMU exists or was connected at other times.",
+    "No A1/A2 request, VMU block read/write command, save payload or emulated-card response was captured. These are header observations at an accepted GD PLAY/PLAY2 callback, not evidence of save-time interception.",
+    "The second header page contains unused zero rows for descriptors five through eight; this is expected for a four-descriptor capture.",
+    "All receive destinations are inside the admitted RX allocation. TX and RX page words retain uncached mappings, and TTB slot0 equals the owner entry at 0x8cf93000.",
+    "Two matching header passes and repeated final metadata/mapping witnesses establish observed consistency only. They do not pin an allocation, establish DMA idleness or IRQ ownership, or grant a CE hook lease."
+  ],
+  "driver_metadata_validated": true,
+  "ordinary_headers_validated": true,
+  "transfer_buffer_addresses_dereferenced": true,
+  "dma_payload_read": false,
+  "virtual_vmu_enabled": false,
+  "save_read_write_tested": false,
+  "allocation_identity_or_lifetime_proven": false
+}

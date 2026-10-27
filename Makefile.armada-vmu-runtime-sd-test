@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/armada-vmu-runtime-sd-test
+HOST_CC ?= cc
+HOST_FLAGS ?= -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic
+HOST_SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie
+.DEFAULT_GOAL := host-tests
+.PHONY: host-tests
+SOURCES := tests/test_armada_ce_vmu_runtime_sd.c src/loader/armada_ce_vmu_runtime.c src/core/armada_ce_vmu_runtime_contract.c src/core/armada_ce_vmu_write.c src/core/vmu_deferred_io.c src/core/vmu_emulation.c src/loader/armada_ce_vmu_sd.c src/core/vmu_durable.c src/core/vmu_store.c src/core/retail_image.c src/loader/sd_reader.c src/dreamcast/sci_sd_storage.c
+$(BUILD)/test-runtime-sd: $(SOURCES) tests/armada_ce_vmu_sd_fixture.h tests/vmu_sd_model.h include/kui/armada_ce_vmu_runtime.h include/kui/armada_ce_vmu_sd.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -ffunction-sections -fdata-sections -Iinclude -Isrc/loader -DKUI_ARMADA_CE_VMU_RUNTIME_TEST=1 -DKUI_ARMADA_CE_VMU_WRITE_RUNTIME=1 -DKUI_ARMADA_CE_MAPLE_WRITE_STAGING=1 -DKUI_ARMADA_CE_MAPLE_WRITE_LAYOUT=1 $(SOURCES) -Wl,--gc-sections -o $@
+host-tests: $(BUILD)/test-runtime-sd
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-runtime-sd

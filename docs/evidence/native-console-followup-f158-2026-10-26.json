@@ -1,0 +1,56 @@
+{
+  "schema": "kui.native-console-followup-f158.v1",
+  "runtime_commit": "f158ba5e24f93ab5622f95185601b3d5a3dbca6b",
+  "production_changed": false,
+  "evidence_kind": "owner console test report",
+  "test_context": {
+    "candidate": "K-UI-Native-Graphics-VMU-f158ba5e24f9.zip",
+    "requested_route": "SCI / Background On / New (X), existing virtual A2 profile",
+    "settings_basis": "Continuation of the requested candidate test; no new diagnostic capture supplied."
+  },
+  "owner_report": "Lodoss works! Flawless on FMVs and gameplay. It shows the VMU but I haven't tested it because I don't know how long it will be in the game till I can save. Rayman works and creates a save - also flawless FMVs and gameplay",
+  "results": {
+    "lodoss": {
+      "confirmed_by_owner": [
+        "FMVs play flawlessly",
+        "Gameplay runs flawlessly during the reported test",
+        "The game shows the virtual VMU",
+        "Saving and loading work"
+      ],
+      "not_reported": [
+        "Power-cycle timing was not separately described in the follow-up report"
+      ]
+    },
+    "rayman2": {
+      "confirmed_by_owner": [
+        "FMVs play flawlessly",
+        "Gameplay runs flawlessly during the reported test",
+        "The game successfully creates a save",
+        "Saving and loading work"
+      ],
+      "not_reported": [
+        "Power-cycle timing was not separately described in the follow-up report"
+      ]
+    },
+    "evolution1": {
+      "confirmed_by_owner": [
+        "Brief loading after the Diff\u2019rent logo disappears, followed by a black screen"
+      ],
+      "status": "unresolved console failure"
+    }
+  },
+  "interpretation": "Rayman2 and Lodoss have owner-confirmed flawless FMVs/gameplay plus working virtual-VMU saving and loading. Evolution1 still fails after its logo transition. Similar black output does not establish the same cause as Lodoss.",
+  "next_checks": [
+    "Keep f158 and New(X); capture Evolution1 black screen with both triggers+B, wait about20seconds, and record one complete repeating diagnostic cycle including CLOCK/VIDEO and PHASE HISTORY pages.",
+    "After Evolution1 is resolved, continue separate DOA2 and Crazy Taxi SDK/allocator admission work using the already recovered inputs."
+  ],
+  "new_build_required": false,
+  "github_actions_authorized": false,
+  "followup_reports": [
+    {
+      "date": "2026-10-26",
+      "owner_report": "Saving and loading works for both rayman and record of lodoss war. Now where do we go from here? Evolution is still broken. It will load for about a split second after the difference logo disappears and then black screen. I imagine it is related to our black screen of before",
+      "scope": "Same installed f158 candidate; save/load explicitly confirmed. Power-cycle timing was not separately described."
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+#ifndef KUI_VMU_MAPLE_OBSERVE_PROFILE_H
+#define KUI_VMU_MAPLE_OBSERVE_PROFILE_H
+
+/* Exact owner profiles, never a runtime signature search or generic SDK ABI. */
+#define KUI_VMU_MAPLE_PROFILE_TOY 1
+#define KUI_VMU_MAPLE_PROFILE_SILVER 2
+#ifndef KUI_VMU_MAPLE_PROFILE
+#define KUI_VMU_MAPLE_PROFILE KUI_VMU_MAPLE_PROFILE_TOY
+#endif
+#ifndef KUI_VMU_READONLY_PROOF
+#define KUI_VMU_READONLY_PROOF 0
+#endif
+
+#if KUI_VMU_MAPLE_PROFILE == KUI_VMU_MAPLE_PROFILE_SILVER
+#if KUI_VMU_READONLY_PROOF != 0 && KUI_VMU_READONLY_PROOF != 1 && KUI_VMU_READONLY_PROOF != 2 && KUI_VMU_READONLY_PROOF != 4
+#error Silver admits passive mode 0, read-only modes 1 and 2, or persistent mode 4 only
+#endif
+#define KUI_VMU_OBS_TITLE "SILVER"
+#define KUI_VMU_MAPLE_OBSERVE_SITE 0x8c1546d0
+#define KUI_VMU_MAPLE_OBSERVE_RESUME 0x8c1546dc
+#define KUI_VMU_MAPLE_OBSERVE_CONSUMER 0x8c1547e6
+#define KUI_VMU_MAPLE_OBSERVE_COMPLETION_SLOT 0x8c12b850
+#define KUI_VMU_MAPLE_OBSERVE_COMPLETION_PR 0x8c12b7a6
+#define KUI_VMU_OBS_MANAGER_POINTER 0x8c29143c
+#define KUI_VMU_OBS_MANAGER 0x8c290340
+#define KUI_VMU_OBS_LOCK_POINTER 0x8c11cd24
+#define KUI_VMU_OBS_LOCK 0xac11cd28
+#define KUI_VMU_OBS_GUN_FLAG 0x8c25972c
+#define KUI_VMU_OBS_TIMER1_CALLBACK 0x8c238aac
+#define KUI_VMU_OBS_TIMER2_CALLBACK 0x8c238ab4
+#define KUI_VMU_OBS_RX_BASE 0xac1bd920
+#define KUI_VMU_OBS_TX_BASE 0xac1c9940
+#define KUI_VMU_OBS_HEAP_INIT 0x8c11e1e8
+#elif KUI_VMU_MAPLE_PROFILE == KUI_VMU_MAPLE_PROFILE_TOY
+#define KUI_VMU_OBS_TITLE "TOY"
+#define KUI_VMU_MAPLE_OBSERVE_SITE 0x8c0bf264
+#define KUI_VMU_MAPLE_OBSERVE_RESUME 0x8c0bf270
+#define KUI_VMU_MAPLE_OBSERVE_CONSUMER 0x8c0bf37a
+#define KUI_VMU_MAPLE_OBSERVE_COMPLETION_SLOT 0x8c0b540c
+#define KUI_VMU_MAPLE_OBSERVE_COMPLETION_PR 0x8c0b5362
+#define KUI_VMU_OBS_MANAGER_POINTER 0x8c1223a4
+#define KUI_VMU_OBS_MANAGER 0x8c1212a8
+#define KUI_VMU_OBS_LOCK_POINTER 0x8c0c0964
+#define KUI_VMU_OBS_LOCK 0xac0c0968
+#define KUI_VMU_OBS_GUN_FLAG 0x8c118398
+#define KUI_VMU_OBS_RX_BASE 0xac0e0080
+#define KUI_VMU_OBS_TX_BASE 0xac0ec0a0
+#define KUI_VMU_OBS_HEAP_INIT 0x8c0b3e10
+#else
+#error Unsupported exact-owner Maple observer profile
+#endif
+
+/* Read-only modes retain their original packet contract. Persistent mode4
+ * additionally requires the physical-only private DMA chain and durable
+ * backend; every active Silver proof keeps its exact owner/timer guards. */
+#define KUI_VMU_SILVER_READONLY_PROOF \
+    (KUI_VMU_MAPLE_PROFILE == KUI_VMU_MAPLE_PROFILE_SILVER && \
+     (KUI_VMU_READONLY_PROOF == 1 || KUI_VMU_READONLY_PROOF == 2))
+#define KUI_VMU_SILVER_PROOF \
+    (KUI_VMU_SILVER_READONLY_PROOF || \
+     (KUI_VMU_MAPLE_PROFILE == KUI_VMU_MAPLE_PROFILE_SILVER && KUI_VMU_READONLY_PROOF == 4))
+
+#ifndef __ASSEMBLER__
+#if KUI_VMU_MAPLE_PROFILE == KUI_VMU_MAPLE_PROFILE_SILVER
+#include "kui/vmu_silver_observe_admission.h"
+#define kui_vmu_observe_manifest kui_vmu_silver_observe_manifest
+#define kui_vmu_observe_destination kui_vmu_silver_observe_destination
+#define KUI_VMU_OBS_EXEC_BYTES KUI_VMU_SILVER_EXEC_BYTES
+#define KUI_VMU_OBS_EXEC_CRC KUI_VMU_SILVER_EXEC_CRC
+#define KUI_VMU_OBS_IP_CRC UINT32_C(0x770d2fed)
+#define KUI_VMU_OBS_HEAP_SLOT KUI_VMU_SILVER_HEAP_SLOT
+#define KUI_VMU_OBS_HEAP_BEGIN KUI_VMU_SILVER_HEAP_BEGIN
+#define KUI_VMU_OBS_HEAP_BYTES KUI_VMU_SILVER_HEAP_BYTES
+#define KUI_VMU_OBS_HEAP_ALLOCATE KUI_VMU_SILVER_HEAP_ALLOCATE
+#else
+#include "kui/vmu_toy_observe_admission.h"
+#define kui_vmu_observe_manifest kui_vmu_toy_observe_manifest
+#define kui_vmu_observe_destination kui_vmu_toy_observe_destination
+#define KUI_VMU_OBS_EXEC_BYTES KUI_VMU_TOY_EXEC_BYTES
+#define KUI_VMU_OBS_EXEC_CRC KUI_VMU_TOY_EXEC_CRC
+#define KUI_VMU_OBS_IP_CRC UINT32_C(0x38ba2868)
+#define KUI_VMU_OBS_HEAP_SLOT KUI_VMU_TOY_HEAP_SLOT
+#define KUI_VMU_OBS_HEAP_BEGIN KUI_VMU_TOY_HEAP_BEGIN
+#define KUI_VMU_OBS_HEAP_BYTES KUI_VMU_TOY_HEAP_BYTES
+#define KUI_VMU_OBS_HEAP_ALLOCATE KUI_VMU_TOY_HEAP_ALLOCATE
+#endif
+#define KUI_VMU_OBS_LEASE_BEGIN UINT32_C(0x8cfd0000)
+#define KUI_VMU_OBS_LEASE_BYTES UINT32_C(0x30000)
+#define KUI_VMU_OBS_WORKER_END UINT32_C(0x8cfe0000)
+#define KUI_VMU_OBS_HOOK_BEGIN KUI_VMU_MAPLE_OBSERVE_SITE
+#define KUI_VMU_OBS_HOOK_END KUI_VMU_MAPLE_OBSERVE_RESUME
+#endif
+#endif

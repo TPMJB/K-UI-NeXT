@@ -1,0 +1,46 @@
+{
+  "build": "433cee31d6e8",
+  "variant": "01-gate-only",
+  "auto": {
+    "reason": 6,
+    "phase": 2,
+    "mode": 1,
+    "proof_initial": 0,
+    "proof_final": 0
+  },
+  "traffic": {
+    "visits": 1200,
+    "accepted": 1200,
+    "refused": 0,
+    "reads_last_visit": 291,
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "fence": {
+    "pre": 1200,
+    "post": 1200,
+    "leases": 1200,
+    "restores": 1200,
+    "active": 0,
+    "flags": 0,
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "user_observation": "It played better than last time but there was still substantial audio echo and stuttering video. There was always some anyway, but this is worse than baseline.",
+  "interpretation": {
+    "common_sampler_fence_path_still_causes_noticeable_regression": true,
+    "additional_a2_work_not_only_cause": true,
+    "masked_duration_measured": false,
+    "fence_fault_not_observed": true
+  }
+}

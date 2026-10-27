@@ -1,0 +1,52 @@
+{
+  "schema": "kui.native-vmu-product-class-review.v1",
+  "owner_observation": "The bottom-heap candidate with New selected gets Rayman2 past Ubisoft, but the game reports no VMU. Evolution2 still loads. Save persistence in Rayman2 has not been verified.",
+  "exact_original_input": {
+    "title": "RAYMAN2THEGREATESCAPE / 17707N / V1.003 / U",
+    "startup_bytes": 935648,
+    "startup_sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099"
+  },
+  "defect": {
+    "old_product_field": "K-UI Virtual Memory           ",
+    "original_classifier": "0x8c088280",
+    "original_standard_name": "0x8c0bcdc0:Visual Memory                 ",
+    "old_identity_result": "Original classifier returns32; complete original game device-kind update0x8c05c4ba recordskind4. Original card-selection gate0x8c05cddc requireskind6 and rejectsA2.",
+    "fixed_identity_result": "Changing only the30-byte product-name field to the standardVisualMemory class returns64; game device-kind update recordskind6; original selection gate acceptsA2(logicalcard1).",
+    "selection_cell": "0x8c2d20cc",
+    "counterfactual_controls": "Both oldKUI name and an unrelatedstorage-card name are refused; the currentstandardclass is accepted. Everyresponsebyte outside the30-byte name field is identical within eachcounterfactual group."
+  },
+  "production_change": {
+    "file": "src/core/vmu_emulation.c",
+    "scope": "Use standardVisualMemory product-class name in the common DEVINFO/ALLINFO builder. All games receive the sameclass; no title-specific runtimepatch.",
+    "producer": "Independent K-UI memory card emulation",
+    "version": "K-UI experimental storage only;128KiB;durablecommit",
+    "retained": [
+      "Storage-only DMAfunction0x02000000; originalSDKdecodes2",
+      "Functiondefinition bytes00 0f41 00:onepartition,512byteblocks,4writephases,1readphase,extraCRC0",
+      "No LCD/clock/processor function advertised",
+      "Standard256physical/200userblockgeometry",
+      "A2presentation with physicalA1 retained",
+      "Existing reader and durability paths"
+    ]
+  },
+  "verification": {
+    "host_test": "tests/test_vmu_emulation.c checks fullpadded30byteclass,truthfulproducer andunchangedfunctiondefinition forDEVINFO+ALLINFO; protocoltransaction,retry,bounds,addressing suitepassesASan/UBsan.",
+    "original_machine_replay": "tools/prove_rayman_vmu_identity.py --startup OWNER_1ST_READ.BIN --output report.json",
+    "original_functions": [
+      "0x8c0e5216:parentattachmentparser",
+      "0x8c0e5524:subunitdiscovery/INFOparser",
+      "0x8c0e5656:DEVINFOdecoder",
+      "0x8c0d8f54:storagefunctiondefinitiondecoder",
+      "0x8c0cf2d6:non-controllerinputobjectreset",
+      "0x8c088280:higherdeviceclassifier",
+      "0x8c09d214:originalstrncmp",
+      "0x8c09c524:originalstrcmp",
+      "0x8c088fa0:deviceclasseligibility",
+      "0x8c05c4ba:completegamedevice-kindupdate",
+      "0x8c05cddc:actualgameselectiongate"
+    ],
+    "cases": "Sixproductclassificationcases:actualnewDEVINFOandALLINFO,eachwithcurrentclass/oldname/unrelatedname. OriginalSDKalsoacceptsfastparentbyte2|=2withphysicalA1absent,schedulesA2INFO,anddecodesactualcommonCresponsewithstandardstoragegeometry.",
+    "model_scope": "Exact owner-supplied originalinstructions run in a boundedSHinteger model with initializedBSS/inputfixtures. No retailbinarypayload is bundled. This does not claim fullconsoleenumeration,mounting,gameplayorsavepersistence."
+  },
+  "hardware_status": "Await next candidate console check for RaymanA2detection,saveandreload. Lodossblackvideo is separate and remains unresolved bythisidentitychange."
+}

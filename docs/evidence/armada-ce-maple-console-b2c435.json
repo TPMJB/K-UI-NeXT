@@ -1,0 +1,109 @@
+{
+  "kind": "owner-console-photo-transcription",
+  "source_attachments": [
+    "image-1792535471410.jpg",
+    "image-1792535475930.jpg"
+  ],
+  "build": "b2c4355c2561",
+  "guard": "0x00000000",
+  "reader_steps": "0x00008203",
+  "reader_sectors": "0x000028a7",
+  "discovery": {
+    "counts": [
+      3,
+      3,
+      0,
+      339,
+      2
+    ],
+    "cpu": [
+      "0x8c1458a0",
+      "0xfffffc03",
+      "0x00000105",
+      "0x8c14e8b4",
+      "0x8cc8e000"
+    ],
+    "maple": [
+      "0x8cfca408",
+      "0x03dd0000",
+      "0x0000a000",
+      "0x00000003",
+      "0x00000008"
+    ],
+    "mapledev": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "registers": [
+      "0x0cfd3000",
+      "0x00000001",
+      "0x00000001",
+      "0x00000000",
+      "0x00000000"
+    ],
+    "fault": [
+      "0x00000002",
+      "0x8c145b24",
+      "0x8cfca408",
+      "0x00000000",
+      "0x00000010"
+    ]
+  },
+  "mapping": {
+    "counts": [
+      "0x00000001",
+      "0x00000296",
+      "0x7bd7ff55",
+      "0x7bd7ff55",
+      "0x0000001f"
+    ],
+    "code": [
+      "0x03dd5b0c",
+      "0x8c14cb60",
+      "0x8cfca370",
+      "0x0c0b3359",
+      "0x8c0b3b0c"
+    ],
+    "owner": [
+      "0x8c14e8b4",
+      "0x08000000",
+      "0x8cfcbf0e",
+      "0x00000008",
+      "0x09dd72b8"
+    ],
+    "root": [
+      "0x8cf772b8",
+      "0x0cf7717d",
+      "0x00030a60",
+      "0x8cf762b8",
+      "0x00000000"
+    ],
+    "context": [
+      "0x00000000",
+      "0x00000000",
+      "0x00000000",
+      "0x2f962f86",
+      "0x03dd72b8"
+    ],
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "interpretation": [
+    "The last mapping proof completed all steps and repeated witnesses, with matching 32-byte source CRC and no proof fault.",
+    "The independently resolved current-owner root has raw value 0x00030a60; the canonical PROCESS0 root is zero.",
+    "The raw owner value is a low virtual value, not a proven P1 pointer or driver extension. Resolve its exact process-slot semantics before following it.",
+    "The missing ROM-backed MAPLEDEV entry remains a stable discovery result, not a crash or evidence that no external instance exists.",
+    "MDST and ISTNRM were zero in this sample; this does not establish a DMA ownership window."
+  ],
+  "virtual_vmu_enabled": false,
+  "driver_extension_proven": false,
+  "save_read_write_tested": false
+}

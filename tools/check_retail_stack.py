@@ -131,7 +131,10 @@ STREAM_BUS_INDIRECT = {
 
 
 def worst(frames, calls, ce=False, armada_bind=False, armada_excerpt=False,
-          armada_stream=False, roots_override=None):
+          armada_stream=False, roots_override=None, armada_maple=False,
+          armada_maple_proof=False):
+    if armada_maple_proof and not (ce and armada_bind and armada_maple):
+        raise ValueError("CE Maple mapping proof requires its isolated metadata controller")
     roots, indirect = (CE_ROOTS, CE_INDIRECT) if ce else (ROOTS, INDIRECT)
     if roots_override is not None:
         roots = roots_override
@@ -140,9 +143,27 @@ def worst(frames, calls, ce=False, armada_bind=False, armada_excerpt=False,
     if armada_bind:
         if not ce:
             raise ValueError("Armada binding controller requires CE")
-        indirect = dict(indirect, **{"armada_ce_ram_bind.h": ("read_ram",)})
-        indirect["armada_ce_live_sound.h" if armada_excerpt else
-                 "armada_ce_table_trace.h"] = ("read_ram",)
+        if armada_maple:
+            if armada_excerpt or armada_stream:
+                raise ValueError("CE Maple discovery cannot share an audio controller")
+            # Metadata accepts bounded P1 addresses and fixed registers.
+            indirect = dict(indirect, **{"armada_ce_maple_observe.h": ("read_word",)})
+            if armada_maple_proof:
+                # Separate signatures and address domains: never admit a
+                # broad header-wide callback union that invents recursion.
+                by_function = {
+                    ("kui_armada_ce_maple_proof_read", "armada_ce_maple_proof.h"): ("read_word",),
+                    ("kui_armada_ce_maple_proof_cache_read", "armada_ce_maple_proof.h"): ("read_cache",),
+                    ("read_cache", "armada_ce_maple_probe.c"): ("kui_armada_ce_excerpt_array_read",),
+                    ("kui_armada_ce_maple_headers_read", "armada_ce_maple_headers.h"): ("kui_armada_ce_maple_proof_cache_read",),
+                }
+                narrow_files = {"armada_ce_maple_proof.h", "armada_ce_maple_probe.c",
+                                "armada_ce_maple_mapping.h", "armada_ce_cache_word.h",
+                                "armada_ce_maple_headers.h"}
+        else:
+            indirect = dict(indirect, **{"armada_ce_ram_bind.h": ("read_ram",)})
+            indirect["armada_ce_live_sound.h" if armada_excerpt else
+                     "armada_ce_table_trace.h"] = ("read_ram",)
         if armada_excerpt:
             # The physical and mapped readers have different signatures and
             # different callees. A file-wide union here would invent a cycle
@@ -283,7 +304,19 @@ def check(directory, available, ce=False):
                 frames[key] = size
     elif armada_excerpt:
         raise ValueError("Excerpt graph has no admitted resident controller call")
-    result = worst(frames, calls, ce, armada_bind, armada_excerpt, armada_stream)
+    armada_maple = any(base(f)=="kui_armada_ce_maple_read_address" for f in frames)
+    if armada_maple and not armada_bind:
+        raise ValueError("CE Maple discovery has no admitted controller entry")
+    armada_maple_proof = any(base(f)=="kui_armada_ce_maple_proof_read" for f in frames)
+    if armada_maple_proof:
+        if not armada_maple:
+            raise ValueError("CE Maple mapping proof has no metadata controller")
+        for symbol, size in EXCERPT_ASM_FRAMES.items():
+            if symbol in frames:
+                raise ValueError("Authored Maple assembly leaf has a compiler frame")
+            frames[symbol] = size  # complete bytes are pinned by the Maple audit
+    result = worst(frames, calls, ce, armada_bind, armada_excerpt, armada_stream,
+                   armada_maple=armada_maple, armada_maple_proof=armada_maple_proof)
     deepest = max(entry["bytes"] for entry in result.values())
     if deepest + MARGIN > available:
         raise ValueError(f"Resident worst-case stack {deepest} + {MARGIN} exceeds {available}")

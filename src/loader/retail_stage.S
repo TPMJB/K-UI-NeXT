@@ -261,7 +261,14 @@ C(kui_retail_game_resume):
     cmp/hs r1,r0
     bf .Lpurge
     mov.l .Lccr,r0
+#if KUI_VMU_NATIVE_CACHED_CODE
+    /* RAM is published above. The high-stage relay is called through P1:
+     * cache its instructions while keeping every mutable RAM access uncached.
+     * The return below still restores the owner's exact enable/mode bits. */
+    mov.l .Lscan_ccr,r1
+#else
     mov.l .Loff,r1
+#endif
     mov.l r1,@r0
     nop
     nop
@@ -326,10 +333,98 @@ C(kui_retail_game_resume):
 .Lram: .long 0x8c000000
 .Lramend: .long KUI_RETAIL_RAM_END
 .Loff: .long 0x00000808
+#if KUI_VMU_NATIVE_CACHED_CODE
+.Lscan_ccr: .long 0x00000908
+#endif
 .Lrelaymain: .long C(kui_retail_stage_relay)
 /* Owner bootstrap2 calls the uncached executable alias. Resume that same
  * alias while the original entry performs its own cache setup. */
 .Lgame: .long KUI_RETAIL_EXEC_ADDRESS+0x20000000
+
+#if KUI_NATIVE_CACHED_EXTENT
+#if !KUI_VMU_NATIVE_CACHED_CODE
+#error "The pure extent cache scope requires the native instruction-cached relay"
+#endif
+/* Pure immutable-image proof only, called on the relay's P1 high stack.
+ * The surrounding relay has already published RAM and selected CCR=0x100.
+ * Unknown cache profiles take the original call without changing CCR.
+ * Every CCR change executes through P2 and has eight following NOPs. */
+    .align 2
+    .global __kui_native_cached_extent
+    .set __kui_native_cached_extent,1
+    .global C(kui_vmu_native_cached_extent)
+    .type C(kui_vmu_native_cached_extent),@function
+C(kui_vmu_native_cached_extent):
+    mov.l r8,@-r15
+    mov.l r9,@-r15
+    sts.l pr,@-r15
+    mov.l .Lextent_p2_address,r0
+    jmp @r0
+    nop
+.Lextent_p2:
+    mov.l .Lextent_ccr,r1
+    mov.l @r1,r0
+    mov r0,r8
+    mov.l .Lextent_expected,r2
+    cmp/eq r2,r0
+    bf .Lextent_call
+    mov.l .Lextent_on,r0
+    mov.l r0,@r1
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+.Lextent_call:
+    mov.l .Lextent_proof,r0
+    jsr @r0
+    nop
+    mov r0,r9
+    mov.l .Lextent_expected,r0
+    cmp/eq r0,r8
+    bf .Lextent_done
+/* Publish the proof's P1 stack/output before returning to operand-cache-off
+ * relay code. A full normal-index RAM purge also includes this 12B frame. */
+    mov.l .Lextent_ram,r0
+    mov.l .Lextent_ramend,r1
+.Lextent_purge:
+    ocbp @r0
+    add #32,r0
+    cmp/hs r1,r0
+    bf .Lextent_purge
+    mov.l .Lextent_off,r0
+    or r8,r0
+    mov.l .Lextent_ccr,r1
+    mov.l r0,@r1
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+.Lextent_done:
+    mov r9,r0
+    lds.l @r15+,pr
+    mov.l @r15+,r9
+    mov.l @r15+,r8
+    rts
+    nop
+    .align 2
+.Lextent_p2_address: .long .Lextent_p2+0x20000000
+.Lextent_ccr: .long 0xff00001c
+.Lextent_expected: .long 0x100
+.Lextent_on: .long 0x909
+.Lextent_proof: .long C(kui_vmu_native_program_extent)
+.Lextent_ram: .long 0x8c000000
+.Lextent_ramend: .long KUI_RETAIL_RAM_END
+.Lextent_off: .long 0x808
+    .size C(kui_vmu_native_cached_extent),.-C(kui_vmu_native_cached_extent)
+#endif
 
 #if defined(KUI_RETAIL_SONIC_STACK_TEST) && KUI_RETAIL_SONIC_STACK_TEST && !defined(KUI_RETAIL_CE)
 /* All seven original-entry stubs have saved R0 before selecting P2. Save
@@ -798,7 +893,7 @@ C(kui_retail_startup_gd_return):
 .Lstartup_gd_after: .long C(kui_retail_startup_gd_after)+0x20000000
 #endif
 #endif
-#if KUI_RETAIL_TOY_PILOT || KUI_RETAIL_ZSO
+#if KUI_RETAIL_TOY_PILOT || KUI_RETAIL_ZSO || KUI_NATIVE_STANDALONE_READER
     /* The Toy pilot and separate ZSO build have one synchronous SCI resident. Keep the ordinary
      * selector's symbols as aliases, without embedding four identical copies.
      * Its stage rejects unsupported launch options before selecting a blob. */
@@ -812,7 +907,9 @@ __retail_resident_scif_blob_start:
 __retail_resident_sci_blob_start:
 __retail_resident_ide_blob_start:
 __retail_resident_scia_blob_start:
-#if KUI_RETAIL_ZSO
+#if KUI_NATIVE_STANDALONE_READER
+    .incbin KUI_NATIVE_STANDALONE_RESIDENT_BIN
+#elif KUI_RETAIL_ZSO
 #ifndef KUI_RETAIL_ZSO_RESIDENT_BIN
 #define KUI_RETAIL_ZSO_RESIDENT_BIN "build/retail-zso/resident-sci.bin"
 #endif
@@ -874,6 +971,16 @@ __retail_resident_scia_blob_start:
 __retail_resident_scia_blob_end:
 #endif
 
+#if KUI_NATIVE_DUAL_READERS
+    .section .resident_blob,"a"
+    .balign 4
+    .global __retail_resident_legacy_blob_start,__retail_resident_legacy_blob_end
+__retail_resident_legacy_blob_start:
+    .incbin KUI_NATIVE_LEGACY_RESIDENT_BIN
+    .balign 4
+__retail_resident_legacy_blob_end:
+#endif
+
 #if KUI_ARMADA_CE_RAM_BIND_STAGE
     .section .armada_bind_blob,"a"
     .align 2
@@ -882,6 +989,21 @@ __armada_bind_blob_start:
     .incbin KUI_ARMADA_CE_RAM_BIND_BIN
     .align 2
 __armada_bind_blob_end:
+#endif
+
+#if KUI_ARMADA_CE_MAPLE_HOOK_STAGE
+    .section .maple_hook_blob,"a"
+    .align 2
+    .global __maple_hook_blob_start,__maple_hook_blob_end
+__maple_hook_blob_start:
+    .incbin KUI_ARMADA_CE_MAPLE_HOOK_BIN
+__maple_hook_blob_end:
+    .section .maple_bridge_blob,"a"
+    .align 2
+    .global __maple_bridge_blob_start,__maple_bridge_blob_end
+__maple_bridge_blob_start:
+    .incbin KUI_ARMADA_CE_MAPLE_BRIDGE_BIN
+__maple_bridge_blob_end:
 #endif
 
 #ifdef KUI_RETAIL_CE

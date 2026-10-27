@@ -11,7 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = str(ROOT / "build/test-vmu-app")
 READ_ONLY = ("missing", "empty", "list", "slot-d2", "invalid-slot", "cycle", "range", "root-layout", "duplicate-chain",
              "short-chain", "bad-header", "vmu-read-fail", "short-block", "oversize-block",
-             "device-change", "cancel-start", "cancel-read", "stale-list", "unlisted", "invalid-row", "invalid-page", "connect-fail")
+             "device-change", "cancel-start", "cancel-read", "stale-list", "unlisted", "invalid-row", "invalid-page", "connect-fail",
+             "copy-game-source-nonzero", "copy-game-source-fragmented", "copy-game-source-multiple")
 BACKUPS = ("backup-selected", "selected-page", "backup-all", "unsafe-name", "game-save", "contents-change", "write-fail",
            "sync-fail", "readback-fail", "readback-corrupt", "cancel-write")
 
@@ -21,7 +22,8 @@ RESTORES = ("restore-ok", "restore-game", "restore-page", "restore-existing", "r
             "restore-data-corrupt", "restore-fat-fail", "restore-fat-corrupt", "restore-dir-fail",
             "restore-dir-corrupt", "restore-final-corrupt", "restore-cancel", "restore-stop-commit", "restore-remove",
             "restore-sd-write-fail", "restore-sd-sync-fail", "restore-orphan", "restore-orphan-link",
-            "restore-duplicate", "restore-existing-tail", "restore-truncated", "restore-dir-existing-corrupt")
+            "restore-duplicate", "restore-existing-tail", "restore-truncated", "restore-dir-existing-corrupt",
+            "restore-game-blocked-zero", "restore-game-fragmented-prefix", "restore-game-existing")
 
 
 MANAGED = ("delete-ok", "delete-preview-only", "delete-restore", "delete-unlisted", "delete-invalid-row", "delete-unpreviewed",
@@ -31,7 +33,8 @@ MANAGED = ("delete-ok", "delete-preview-only", "delete-restore", "delete-unliste
            "copy-ok", "copy-preview-only", "copy-unpreviewed", "copy-existing", "copy-orphan", "copy-same-slot",
            "copy-changed-source", "copy-changed-payload", "copy-changed-destination", "copy-removed-destination",
            "copy-sd-write-fail", "copy-sd-sync-fail", "copy-readback-fail", "copy-readback-corrupt", "copy-cancel",
-           "copy-write-fail", "copy-data-corrupt", "copy-dir-fail", "copy-dir-corrupt", "copy-fat-fail", "copy-fat-corrupt", "copy-final-corrupt")
+           "copy-write-fail", "copy-data-corrupt", "copy-dir-fail", "copy-dir-corrupt", "copy-fat-fail", "copy-fat-corrupt", "copy-final-corrupt",
+           "copy-game", "copy-game-blocked-zero", "copy-game-fragmented-prefix", "copy-game-existing")
 
 
 IMAGES = ("card-image", "card-image-empty", "card-image-read-fail", "card-image-removed", "card-image-changed",
@@ -54,9 +57,11 @@ BULK = ("bulk-ok", "bulk-preview-only", "bulk-unpreviewed", "bulk-same-slot", "b
         "bulk-sd-write-fail", "bulk-sd-sync-fail", "bulk-readback-fail", "bulk-readback-corrupt", "bulk-write-fail", "bulk-data-corrupt",
         "bulk-fat-fail", "bulk-fat-corrupt", "bulk-dir-fail", "bulk-dir-corrupt", "bulk-final-corrupt", "bulk-final-read-fail", "bulk-game", "bulk-empty-source", "bulk-cancel-data",
         "bulk-source-payload-change-during-stage", "bulk-destination-change-during-stage",
-        "bulk-source-removed-during-stage", "bulk-destination-removed-during-stage")
+        "bulk-source-removed-during-stage", "bulk-destination-removed-during-stage",
+        "bulk-game-blocked-zero", "bulk-game-fragmented-prefix", "bulk-game-existing")
 BULK_READ_ONLY = BULK[1:20] + ("bulk-changed-source", "bulk-changed-payload-last", "bulk-changed-destination", "bulk-source-device-change",
-                            "bulk-destination-device-change", "bulk-source-removed-before-commit", "bulk-destination-removed-before-commit", "bulk-cancel-start", "bulk-empty-source")
+                            "bulk-destination-device-change", "bulk-source-removed-before-commit", "bulk-destination-removed-before-commit", "bulk-cancel-start", "bulk-empty-source",
+                            "bulk-game-blocked-zero", "bulk-game-fragmented-prefix", "bulk-game-existing")
 
 
 PUBLISH = ("publish-ok", "publish-type", "publish-protection", "publish-first-block", "publish-nameless", "publish-header",
@@ -64,6 +69,23 @@ PUBLISH = ("publish-ok", "publish-type", "publish-protection", "publish-first-bl
            "publish-null-entry", "publish-null-data", "publish-write-fail", "publish-sync-fail", "publish-readback-fail",
            "publish-readback-corrupt", "publish-cancel-start", "publish-cancel-write")
 PUBLISH_READ_ONLY = tuple(case for case in PUBLISH[1:14] if case != "publish-first-block") + ("publish-cancel-start",)
+
+
+COLLECTION = ("collection-all", "collection-selected-page", "collection-game", "collection-preview-only",
+              "collection-unlisted", "collection-unpreviewed", "collection-invalid-slot", "collection-invalid-page",
+              "collection-invalid-row", "collection-short-block", "collection-oversize-block", "collection-read-fail",
+              "collection-cancel-read", "collection-orphan", "collection-system-fat", "collection-changed-payload",
+              "collection-changed-metadata", "collection-device-changed", "collection-source-removed",
+              "collection-cancel-publish", "collection-write-fail", "collection-sync-fail", "collection-readback-corrupt",
+              "collection-commit-twice", "collection-root-geometry", "collection-sort-flag",
+              "collection-user-240", "collection-relocated-metadata", "collection-inactive-padding",
+              "collection-active-reserved", "collection-control-name", "collection-over-capacity",
+              "collection-capture-read-fail")
+COLLECTION_READ_ONLY = tuple(case for case in COLLECTION[3:19] if case!="collection-system-fat") + (
+    "collection-active-reserved", "collection-control-name", "collection-over-capacity", "collection-capture-read-fail")
+DESCRIPTIONS = ("description-physical", "description-fragmented", "description-malformed",
+                "description-read-fail", "description-image", "description-image-fragmented")
+DESCRIPTION_READ_ONLY = DESCRIPTIONS[:3]
 
 
 def digest(path):
@@ -82,13 +104,13 @@ def main():
             run(BINARY, str(seed), "seed")
             original = digest(seed)
             checker = "fsck.fat" if kind == "fat32" else "fsck.exfat"
-            for case in READ_ONLY + BACKUPS + RESTORES + MANAGED + IMAGES + BULK + PUBLISH:
+            for case in READ_ONLY + BACKUPS + RESTORES + MANAGED + IMAGES + BULK + PUBLISH + COLLECTION + DESCRIPTIONS:
                 image = base / f"{kind}-{case}.img"
                 shutil.copyfile(seed, image)
                 assert f"PASS VMU {case}" in run(BINARY, str(image), case)
-                if case in READ_ONLY + BULK_READ_ONLY + PUBLISH_READ_ONLY:
+                if case in READ_ONLY + BULK_READ_ONLY + PUBLISH_READ_ONLY + COLLECTION_READ_ONLY + DESCRIPTION_READ_ONLY:
                     assert digest(image) == original, f"{case} unexpectedly wrote to the SD card"
-                if case not in ("write-fail", "sync-fail", "card-image-write-fail", "card-image-sync-fail", "image-write-fail", "image-sync-fail", "publish-write-fail", "publish-sync-fail") and not case.endswith(("sd-write-fail", "sd-sync-fail")):
+                if case not in ("write-fail", "sync-fail", "card-image-write-fail", "card-image-sync-fail", "image-write-fail", "image-sync-fail", "publish-write-fail", "publish-sync-fail", "collection-write-fail", "collection-sync-fail") and not case.endswith(("sd-write-fail", "sd-sync-fail")):
                     run(checker, "-n", str(image))
                 image.unlink()
                 print(f"PASS {kind} VMU: {case}", flush=True)

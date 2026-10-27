@@ -1,0 +1,34 @@
+[
+  {
+    "configuration": "native",
+    "baseline": "433cee31d6e8a9dc8773ee95c4b6568ef4aff40a",
+    "baseline_headers_from_git_archive": true,
+    "identical": true,
+    "bytes": 40025,
+    "sha256": "d1e3b6debad3f973c630afb89fe3970e49f6f13b20b3c1adcb491413d4a2e4f8"
+  },
+  {
+    "configuration": "ce-async",
+    "baseline": "433cee31d6e8a9dc8773ee95c4b6568ef4aff40a",
+    "baseline_headers_from_git_archive": true,
+    "identical": true,
+    "bytes": 52215,
+    "sha256": "3eaa192ef614274c5db5ad0f6326a35c5ebdae46d05a2f0e360f734e7fbf2c64"
+  },
+  {
+    "configuration": "ce-audio-observer",
+    "baseline": "433cee31d6e8a9dc8773ee95c4b6568ef4aff40a",
+    "baseline_headers_from_git_archive": true,
+    "identical": true,
+    "bytes": 54678,
+    "sha256": "7489db1fa1ab85adc3c2ca9a9943b2a63d1a5999295458a3d9374100edc63a93"
+  },
+  {
+    "configuration": "ce-stage",
+    "baseline": "433cee31d6e8a9dc8773ee95c4b6568ef4aff40a",
+    "baseline_headers_from_git_archive": true,
+    "identical": true,
+    "bytes": 56365,
+    "sha256": "d6117db6a03178e68022b82541e392af6f8b1a9550d3c772bffa0e4262e24da5"
+  }
+]

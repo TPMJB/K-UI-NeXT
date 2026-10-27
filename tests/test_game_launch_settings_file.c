@@ -298,4 +298,34 @@ static void json_migration(void) {
     }
     puts("PASS legacy JSON files: primary/backup import, skipped unsupported loader, immutable originals, binary authority and migration read/write/sync/verify fault refusal");
 }
-int main(void) {codec_updates();recovery_and_merging();faults_preserve_authority();mixed_version_migration();patch_tuple_updates();full_collection();json_migration();return 0;}
+static void explicit_reader_presence(void) {
+    struct kui_game_launch_settings value;
+    bool found=true;
+    reset();
+    assert(kui_game_launch_settings_lookup("/games/new.gdi",&value,&found,NULL) && !found);
+    assert(!write_opens); /* Merely inspecting an unconfigured image saves nothing. */
+    const struct kui_game_launch_settings off={.reader=KUI_GAME_READER_STANDARD};
+    assert(kui_game_launch_settings_save("/games/new.gdi",&off,NULL));
+    clear_faults();found=false;
+    assert(kui_game_launch_settings_lookup("0:/GAMES/NEW.GDI",&value,&found,NULL) && found);
+    same(value,off);assert(!write_opens);
+    found=true;
+    assert(kui_game_launch_settings_lookup("/games/other.gdi",&value,&found,NULL) && !found);
+    /* An older wire-format Standard setting is explicit, too. */
+    reset();seed_legacy(0,7u);disk[0].data[34]=KUI_GAME_READER_STANDARD;
+    uint32_t crc=kui_crc32(0,disk[0].data,disk[0].size-4u);
+    for(unsigned i=0;i<4u;i++) disk[0].data[disk[0].size-4u+i]=(uint8_t)(crc>>(i*8u));
+    found=false;
+    assert(kui_game_launch_settings_lookup("/games/a.gdi",&value,&found,NULL) && found);
+    assert(value.reader==KUI_GAME_READER_STANDARD && !write_opens);
+    reset();seed_json(2,"{\"version\":1,\"profiles\":{\"/Games/Old.gdi\":{\"reader\":\"standard\",\"cdda\":false}}}");
+    found=false;
+    assert(kui_game_launch_settings_lookup("/games/old.gdi",&value,&found,NULL) && found);
+    same(value,off);json_unchanged();
+    clear_faults();failure=READ_OPEN;found=true;
+    assert(!kui_game_launch_settings_lookup("/games/old.gdi",&value,&found,NULL) && !found);
+    assert(!write_opens);
+    assert(!kui_game_launch_settings_lookup("/games/old.gdi",&value,NULL,NULL));
+    puts("PASS reader presence: absent presets cause no write; explicit Off survives current/old binary and JSON import; read failures remain distinct");
+}
+int main(void) {codec_updates();recovery_and_merging();faults_preserve_authority();mixed_version_migration();patch_tuple_updates();full_collection();json_migration();explicit_reader_presence();return 0;}

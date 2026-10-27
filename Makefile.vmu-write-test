@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Isolated prototype only: never included by a production or console target.
+BUILD ?= build/vmu-write-test
+HOST_CC ?= cc
+HOST_SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie
+HEADERS := $(wildcard tests/vmu_write_bounded_stubs/dc/*.h tests/vmu_write_bounded_stubs/kos/*.h)
+SOURCE := src/dreamcast/vmu_write_bounded.c
+.DEFAULT_GOAL := host-test
+.PHONY: host-test native-abi
+$(BUILD)/test-vmu-write-bounded: tests/test_vmu_write_bounded.c $(SOURCE) include/kui/vmu_write_bounded.h $(HEADERS)
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic $(HOST_SANITIZERS) \
+	    -DKUI_VMU_WRITE_BOUNDED_PROTOTYPE=1 -Itests/vmu_write_bounded_stubs -Iinclude tests/test_vmu_write_bounded.c $(SOURCE) -o $@
+host-test: $(BUILD)/test-vmu-write-bounded
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-vmu-write-bounded
+native-abi: $(BUILD)/vmu-write-bounded.o
+$(BUILD)/vmu-write-bounded.o: $(SOURCE) include/kui/vmu_write_bounded.h
+	@mkdir -p $(@D)
+	kos-cc -std=c11 -Os -Wall -Wextra -Werror -DKUI_VMU_WRITE_BOUNDED_PROTOTYPE=1 -Iinclude -fstack-usage -c $(SOURCE) -o $@

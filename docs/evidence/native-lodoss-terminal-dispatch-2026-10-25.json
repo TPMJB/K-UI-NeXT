@@ -1,0 +1,293 @@
+{
+  "schema": "kui.native.terminal-dispatch-capability.v1",
+  "date": "2026-10-25",
+  "console_trigger": {
+    "build": "af9e01c8a271",
+    "title": "RECORD OF LODOSS WAR",
+    "startup": "1NOSDC.BIN",
+    "phase": "0x10",
+    "detail": "0x03",
+    "submitted": 4,
+    "completed": 4,
+    "limit": "The old fault row came from an earlier chain read; it does not identify the failing identity word.",
+    "vmu_storage_reads": 0,
+    "vmu_storage_write_phases": 0,
+    "vmu_storage_commits": 0
+  },
+  "original_source": {
+    "bytes": 3473412,
+    "sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5"
+  },
+  "diagnosis": {
+    "dispatch_cell": "0x8c4fea24",
+    "expected_table": "0x8c34c794",
+    "application_table": "0x8c0f0288",
+    "source_selector": "0x8c2a9d66",
+    "application_select_wrapper": "0x8c010776",
+    "default_select_wrapper": "0x8c01077e",
+    "prepared_identity_index": 3,
+    "modelled_change": "Each actual selector wrapper makes one routing-cell write and leaves the other seven identity words and complete retained lease/header unchanged. The observed console pointer remains unmeasured until its new failure witness is captured."
+  },
+  "new_contract": {
+    "exit_family": 5,
+    "name": "TERMINAL_DISPATCH",
+    "exit_struct_bytes": 48,
+    "nvr_bytes": 1024,
+    "nvr_wire_schema": 1,
+    "detector_epoch": 4,
+    "retained_state_growth_bytes": 0,
+    "terminal_handler": "0x8c0106e6",
+    "callback_table": "0x8c0f0288",
+    "typed_representation": "family5,count3,entries[2] fatal handler, terminal_dispatch.table tagged union word; existing exec families retain exec_thunk.",
+    "source_proof": [
+      "Complete four pure argument-only wrappers and exact callback table with unique table identity.",
+      "Complete shared fatal-handler path through an application exit wrapper to an already admitted SDK terminal.",
+      "Alternate/default selector tail wrappers both target the same uniquely discovered allocator selector and supply their exact table arguments.",
+      "Combined 12-byte interior-target and disjoint-window proof includes the additional fatal-handler terminal patch."
+    ],
+    "live_admission": [
+      "Only an exact alternate pointer in the original heap routing cell can be normalized to its original default table.",
+      "Every alternate table word and all four wrapper instruction words must still match the proved family.",
+      "The actual fatal-handler bytes must equal the exact installed low-terminal patch before normalization.",
+      "All seven remaining identity words, full free-list traversal, original release interception, source/lease bounds and storage-loan proofs are retained.",
+      "Unknown pointer/alias, changed table/wrapper/hook, missing terminal patch and unrelated identity corruption are refused."
+    ]
+  },
+  "tests": {
+    "terminal_capability_asan_ubsan_checks": 4511,
+    "original_exit_suite_asan_ubsan_checks": 6690,
+    "actual_sources_tested": 8,
+    "table_bit_mutants": 128,
+    "wrapper_bit_mutants": 240,
+    "patch_bit_mutants": 96,
+    "original_execution": {
+      "schema": "kui.native.original-terminal-dispatch-execution.v1",
+      "source_bytes": 3473412,
+      "source_sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5",
+      "source_family": 5,
+      "common_handler": "0x8c0106e6",
+      "alternate_table": "0x8c0f0288",
+      "dispatch_cell": "0x8c4fea24",
+      "lease_payload": "0x8cfa0000",
+      "lease_bytes": 393216,
+      "original_initializer_instructions": 107,
+      "original_allocation_instructions": 53,
+      "original_switch_instructions": 11,
+      "original_restore_instructions": 11,
+      "original_subsequent_allocator_operations": 32,
+      "original_subsequent_allocator_instructions": 2199,
+      "original_callback_executions_to_patched_terminal_boundary": 32,
+      "production_identity_full_list_prepared_and_release_checks": 142,
+      "raw_alternate_refused": true,
+      "alternate_without_terminal_hook_refused": true,
+      "exact_installed_capability_admitted": true,
+      "lease_header_and_entire_384k_preserved": true,
+      "unknown_changed_and_unrelated_identity_mutants_refused": true,
+      "limits": [
+        "Integer SH and production C ownership model, not observed console execution.",
+        "The low terminal gateway and actual cache publication require separate linked/hardware proofs."
+      ]
+    }
+  },
+  "accepted_owner_selector_scan": [
+    {
+      "slug": "evolution1",
+      "selector": "0x8c1633ee",
+      "dispatch_cell": "0x8c304148",
+      "default_table": "0x8c200844",
+      "selector_literal_call_sites": [],
+      "dispatch_address_literals": [
+        "0x8c1634e4",
+        "0x8c163608",
+        "0x8c163734",
+        "0x8c1637d8"
+      ],
+      "all_alias_pc_loads": [],
+      "direct_relative_branches": [
+        "0x8c1633d2"
+      ]
+    },
+    {
+      "slug": "evolution2",
+      "selector": "0x8c16f2d6",
+      "dispatch_cell": "0x8c36c0c4",
+      "default_table": "0x8c20f928",
+      "selector_literal_call_sites": [],
+      "dispatch_address_literals": [
+        "0x8c16f3cc",
+        "0x8c16f4f0",
+        "0x8c16f61c",
+        "0x8c16f6c0"
+      ],
+      "all_alias_pc_loads": [],
+      "direct_relative_branches": [
+        "0x8c16f2ba"
+      ]
+    },
+    {
+      "slug": "ps2",
+      "selector": "0x8c2b160e",
+      "dispatch_cell": "0xc8b9da4",
+      "default_table": "0xc2fe8b4",
+      "selector_literal_call_sites": [],
+      "dispatch_address_literals": [
+        "0x8c2b1704",
+        "0x8c2b1828",
+        "0x8c2b1954",
+        "0x8c2b19f8"
+      ],
+      "all_alias_pc_loads": [],
+      "direct_relative_branches": [
+        "0x8c2b15f2"
+      ]
+    },
+    {
+      "slug": "skies",
+      "selector": "0x8c256af6",
+      "dispatch_cell": "0x8c5987b0",
+      "default_table": "0x8c36a690",
+      "selector_literal_call_sites": [],
+      "dispatch_address_literals": [
+        "0x8c256bec",
+        "0x8c256d10",
+        "0x8c256ee0"
+      ],
+      "all_alias_pc_loads": [],
+      "direct_relative_branches": [
+        "0x8c256ada"
+      ]
+    },
+    {
+      "slug": "grandia2",
+      "selector": "0x8c03755e",
+      "dispatch_cell": "0x8c225560",
+      "default_table": "0x8c110724",
+      "selector_literal_call_sites": [],
+      "dispatch_address_literals": [
+        "0x8c037654",
+        "0x8c037778",
+        "0x8c0378a4",
+        "0x8c037948"
+      ],
+      "all_alias_pc_loads": [],
+      "direct_relative_branches": [
+        "0x8c037542"
+      ]
+    },
+    {
+      "slug": "sa2",
+      "selector": "0x8c11015a",
+      "dispatch_cell": "0x8c28d83c",
+      "default_table": "0x8c17aa90",
+      "selector_literal_call_sites": [],
+      "dispatch_address_literals": [
+        "0x8c110250",
+        "0x8c110374",
+        "0x8c110520"
+      ],
+      "all_alias_pc_loads": [],
+      "direct_relative_branches": [
+        "0x8c11013e"
+      ]
+    },
+    {
+      "slug": "rayman2",
+      "selector": "0x8c0d061a",
+      "dispatch_cell": "0x8c2ec8ac",
+      "default_table": "0x8c0f30c8",
+      "selector_literal_call_sites": [],
+      "dispatch_address_literals": [
+        "0x8c0d0710",
+        "0x8c0d0834",
+        "0x8c0d0960",
+        "0x8c0d0a04"
+      ],
+      "all_alias_pc_loads": [],
+      "direct_relative_branches": [
+        "0x8c0d05fe"
+      ]
+    },
+    {
+      "slug": "lodoss",
+      "selector": "0x8c2a9d66",
+      "dispatch_cell": "0x8c4fea24",
+      "default_table": "0x8c34c794",
+      "selector_literal_call_sites": [
+        {
+          "load": "0x8c010776",
+          "slot": "0x8c0107d0",
+          "call": "0x8c01077a",
+          "window": [
+            {
+              "pc": "0x8c010776",
+              "op": "d316"
+            },
+            {
+              "pc": "0x8c010778",
+              "op": "d414",
+              "literal_r4": "0x8c0f0288"
+            },
+            {
+              "pc": "0x8c01077a",
+              "op": "432b"
+            }
+          ]
+        },
+        {
+          "load": "0x8c01077e",
+          "slot": "0x8c0107d0",
+          "call": "0x8c010782",
+          "window": [
+            {
+              "pc": "0x8c01077e",
+              "op": "d314"
+            },
+            {
+              "pc": "0x8c010780",
+              "op": "d414",
+              "literal_r4": "0x8c34c794"
+            },
+            {
+              "pc": "0x8c010782",
+              "op": "432b"
+            }
+          ]
+        }
+      ],
+      "dispatch_address_literals": [
+        "0x8c2a9e5c",
+        "0x8c2a9f80",
+        "0x8c2aa0ac",
+        "0x8c2aa150"
+      ],
+      "all_alias_pc_loads": [
+        {
+          "pc": "0x8c010776",
+          "target": "0x8c2a9d66"
+        },
+        {
+          "pc": "0x8c01077e",
+          "target": "0x8c2a9d66"
+        }
+      ],
+      "direct_relative_branches": [
+        "0x8c2a9d4a"
+      ]
+    }
+  ],
+  "source_sha256": {
+    "include/kui/vmu_native_exit.h": "1a199c2308a18c39fc2be688206c25141122b281ac0e5ca11636ff93c7f255a1",
+    "include/kui/vmu_native_terminal_dispatch.h": "7db03066801638faa900b99aebbc33e758799201d962db657a4a32edabce4439",
+    "src/core/vmu_native_exit.c": "0d792ac5aa34aaa0f38fc8d57b361d7c8c060acf9841fe7fb6f07293fecf0fed",
+    "tests/test_vmu_native_exit.c": "a29d515f5877e1b5f231763c601847403b550a19f0f90b51fe258338e8cd6484",
+    "tests/test_vmu_native_terminal_dispatch.c": "d93612aff61390827025607d70ccfafb8cae6b5432e75251a04ad52f68e228ac",
+    "tests/test_vmu_native_terminal_dispatch_execution.py": "cc20bf58f3d42030d9e4b186d75d70a5af0a879e3f0de134db929adc371c3ed1"
+  },
+  "limits": [
+    "This is source/host/integer-SH evidence for a new candidate, not console acceptance of the fix.",
+    "Only Lodoss in the supplied eight has the proved selector transition; Evolution1 black-screen behavior remains independently unexplained.",
+    "The selector scan covers encoded PC-relative loads and direct relative branches including raw-alias matches, not arbitrary synthesized indirect control flow.",
+    "Full linked worker/gateway, relocation, exact embedded source and hardware cache-publication proofs are separate build audits.",
+    "The retained heap and lifetime validators themselves were not weakened; only an explicitly installed, structurally proved terminal dispatch capability can normalize its one routing-cell read."
+  ]
+}

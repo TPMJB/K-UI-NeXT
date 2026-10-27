@@ -17,6 +17,7 @@ EXPORT_CODECS = third_party/miniz/miniz.c third_party/minilzo/minilzo.c
 CAPTURE_EXPORT = src/core/capture_export.c src/core/capture_export_file.c src/core/capture_cooked.c src/core/capture_chd.c $(EXPORT_CODECS)
 CAPTURE = $(DESTINATION) src/core/hash.c src/core/capture_plan.c src/core/capture.c src/core/recovery_sector.c src/core/known_dumps.c src/core/timing.c $(CAPTURE_EXPORT)
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
+VMU_MANAGEMENT = src/core/vmu_collection.c src/core/vmu_image.c src/core/vmu_image_subset.c src/core/vmu_save_snapshot.c src/core/vmu_image_pack.c src/core/vmu_description.c
 
 include config/lwext4.mk
 LWEXT4_HOST_OBJECTS := $(patsubst %.c,build/host/%.o,$(LWEXT4_SOURCES))
@@ -122,8 +123,22 @@ build/test-armada-ce-excerpt-pool: tests/test_armada_ce_excerpt_pool.c include/k
 build/test-armada-ce-live-sound: tests/test_armada_ce_live_sound.c include/kui/armada_ce_live_sound.h include/kui/armada_ce_ram_bind.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
-ARMADA_PREPARE_TEST_SOURCES := src/core/retail_zso.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/hash.c src/core/data.c src/core/destination.c src/core/retail_image.c
+ARMADA_PREPARE_TEST_SOURCES := src/core/vmu_launch_package.c src/core/retail_zso.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/hash.c src/core/data.c src/core/destination.c src/core/retail_image.c
+NATIVE_CACHE_SOURCES := src/core/vmu_native_program.c src/core/vmu_native_cache_seed.c src/core/vmu_native_resolution_cache.c \
+    src/core/vmu_native_discovery.c src/core/vmu_native_layout.c src/core/vmu_native_heap.c \
+    src/core/vmu_native_exit.c src/core/vmu_native_patch.c
+ARMADA_PREPARE_TEST_SOURCES += $(NATIVE_CACHE_SOURCES)
+build/test-games-native-cache: tests/test_games_native_cache.c tests/test_vmu_native_resolution_cache.c src/apps/games_native_cache.inc $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -Iinclude tests/test_games_native_cache.c $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c -o $@
+.PHONY: test-games-native-cache
+test-games-native-cache: build/test-games-native-cache
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-native-cache $(if $(STARTUP),'$(STARTUP)',) $(if $(EVOLUTION2_STARTUP),'$(EVOLUTION2_STARTUP)',)
+build/test-vmu-launch-package: tests/test_vmu_launch_package.c src/core/vmu_launch_package.c src/core/retail_image.c src/core/hash.c include/kui/vmu_launch_package.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -ffunction-sections -fdata-sections tests/test_vmu_launch_package.c src/core/vmu_launch_package.c src/core/retail_image.c src/core/hash.c -Wl,--gc-sections -o $@
 build/test-armada-ce-excerpt-prepare: tests/test_armada_ce_excerpt_prepare.c src/apps/games_retail.c $(ARMADA_PREPARE_TEST_SOURCES) include/kui/armada_ce_excerpt_pool.h include/kui/game_ram_patches.h include/kui/retail_zso.h include/kui/zso.h include/kui/wince_cdda_profiles.h include/kui/armada_ce_stream_seed.h include/kui/games_retail.h include/kui/wince_cdda_wwp_kernel.h
+build/test-armada-ce-excerpt-prepare: src/apps/games_native_cache.inc
 
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -ffunction-sections -fdata-sections tests/test_armada_ce_excerpt_prepare.c $(ARMADA_PREPARE_TEST_SOURCES) -Wl,--gc-sections -o $@
@@ -145,6 +160,7 @@ test: build/test-resident-image build/test-gd-service build/test-image-client
 test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd build/test-ce-load-plan build/test-retail-boot
 test: build/test-retail-relay build/test-retail-relay-ce build/test-retail-startup-trace build/test-retail-gd-trace build/test-retail-mount-trace build/test-sonic-stack
 test: build/test-retail-cursor build/test-sci-stream build/test-sci-stream-ce build/test-retail-gd-async build/test-retail-gd-ce build/test-retail-async build/test-retail-async-native-resume build/test-retail-async-ce
+test: build/test-retail-async-native-bounds build/test-retail-async-native-hybrid
 test: build/test-boot-volume build/ext4-boot build/boot-recovery build/test-boot-ui
 test: build/test-ata build/test-storage-policy build/test-sci-sd-bus build/test-retail-storage build/test-sci-sd-storage build/test-sci-async-probe build/test-sci-async-heartbeat build/test-sci-async-runtime build/test-sci-video-quiet
 test: build/test-storage-errors build/test-cd-audio build/test-network-probe build/test-network-connect build/test-menu-sound build/test-music-ogg build/test-capture-display build/test-viewport build/test-clock build/test-clock-platform build/test-music-thread build/test-recovery-checks build/test-wav-stream build/test-music-player build/test-startup-sound build/test-splash build/test-gd-play build/test-network-app build/test-system-settings build/test-disc-identity build/test-wav build/test-music build/test-memory-app build/test-core build/test-capture-core build/test-timing build/test-disc build/test-options build/test-ui-rate build/test-known-dumps build/test-crc16 build/test-settings build/test-shell build/test-shell-font build/test-capture-adapter build/test-destination
@@ -169,6 +185,8 @@ test: build/test-storage-errors build/test-cd-audio build/test-network-probe bui
 	./build/test-sci-stream-ce
 	./build/test-retail-async
 	./build/test-retail-async-native-resume
+	./build/test-retail-async-native-bounds
+	./build/test-retail-async-native-hybrid
 	./build/test-retail-async-ce
 	./build/test-retail-gd
 	./build/test-retail-gd-async
@@ -468,6 +486,14 @@ build/test-retail-async-native-resume: tests/test_retail_async.c tests/sci_strea
 	@mkdir -p $(@D)
 	$(CC) $(filter-out -O1,$(HOST_FLAGS)) -O2 $(SANITIZERS) -DKUI_SCI_SD_NO_BLOCK=1 -DKUI_GENERAL_SCI_RESUME_FIX=1 -DKUI_RETAIL_NATIVE_DISC_CHECK=1 -DKUI_RETAIL_NATIVE_DRIVE_STATE=1 -DKUI_RETAIL_ASYNC_TEST=1 -DKUI_SCI_STREAM_TEST=1 -DKUI_RETAIL_ASYNC=1 -DKUI_RETAIL_GD_ASYNC=1 -DKUI_RETAIL_TRANSPORT=1 -Iinclude -Isrc/loader src/loader/retail_async.c src/loader/sci_stream.c src/core/retail_cursor.c src/core/retail_image.c src/core/retail_gd.c tests/test_retail_async.c -o $@
 
+build/test-retail-async-native-bounds: tests/test_retail_async_native_bounds.c tests/test_retail_async.c tests/sci_stream_model.h src/loader/retail_async.c src/loader/retail_async.h src/loader/sci_stream.c src/loader/sci_stream.h src/core/retail_cursor.c src/core/retail_image.c src/core/retail_gd.c include/kui/retail_gd.h include/kui/retail_cursor.h include/kui/retail_image.h include/kui/ata.h
+	@mkdir -p $(@D)
+	$(CC) $(filter-out -O1,$(HOST_FLAGS)) -O2 $(SANITIZERS) -DKUI_SCI_SD_NO_BLOCK=1 -DKUI_GENERAL_SCI_RESUME_FIX=1 -DKUI_RETAIL_NATIVE_DISC_CHECK=1 -DKUI_RETAIL_NATIVE_DRIVE_STATE=1 -DKUI_RETAIL_ASYNC_TEST=1 -DKUI_SCI_STREAM_TEST=1 -DKUI_RETAIL_ASYNC=1 -DKUI_RETAIL_GD_ASYNC=1 -DKUI_RETAIL_TRANSPORT=1 -Iinclude -Isrc/loader src/loader/retail_async.c src/loader/sci_stream.c src/core/retail_cursor.c src/core/retail_image.c src/core/retail_gd.c tests/test_retail_async_native_bounds.c -o $@
+
+build/test-retail-async-native-hybrid: tests/test_retail_async_native_hybrid.c tests/test_retail_async.c tests/sci_stream_model.h src/loader/retail_async.c src/loader/retail_async.h src/loader/sci_stream.c src/loader/sci_stream.h src/core/retail_cursor.c src/core/retail_image.c src/core/retail_gd.c include/kui/retail_gd.h include/kui/retail_cursor.h include/kui/retail_image.h include/kui/ata.h
+	@mkdir -p $(@D)
+	$(CC) $(filter-out -O1,$(HOST_FLAGS)) -O2 $(SANITIZERS) -DKUI_RETAIL_NATIVE_HYBRID=1 -DKUI_SCI_SD_NO_BLOCK=1 -DKUI_GENERAL_SCI_RESUME_FIX=1 -DKUI_RETAIL_NATIVE_DISC_CHECK=1 -DKUI_RETAIL_NATIVE_DRIVE_STATE=1 -DKUI_RETAIL_ASYNC_TEST=1 -DKUI_SCI_STREAM_TEST=1 -DKUI_RETAIL_ASYNC=1 -DKUI_RETAIL_GD_ASYNC=1 -DKUI_RETAIL_TRANSPORT=1 -Iinclude -Isrc/loader src/loader/retail_async.c src/loader/sci_stream.c src/core/retail_cursor.c src/core/retail_image.c src/core/retail_gd.c tests/test_retail_async_native_hybrid.c -o $@
+
 build/test-retail-async-ce: tests/test_retail_async_ce.c tests/sci_stream_model.h src/loader/retail_async.c src/loader/retail_async.h src/loader/sci_stream.c src/loader/sci_stream.h src/core/retail_cursor.c src/core/retail_image.c src/core/retail_gd.c include/kui/retail_gd.h include/kui/retail_cursor.h include/kui/retail_image.h include/kui/retail_loader_layout.h include/kui/ata.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_RETAIL_ASYNC_TEST=1 -DKUI_SCI_STREAM_TEST=1 -DKUI_RETAIL_ASYNC=1 -DKUI_RETAIL_GD_ASYNC=1 -DKUI_RETAIL_CE=1 -DKUI_RETAIL_TRANSPORT=1 -Iinclude -Isrc/loader src/loader/retail_async.c src/loader/sci_stream.c src/core/retail_cursor.c src/core/retail_image.c src/core/retail_gd.c tests/test_retail_async_ce.c -o $@
@@ -527,8 +553,10 @@ build/games-image-probe: tests/games_image_probe.c $(GAMES_IMAGE_PROBE) $(CORE) 
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast tests/games_image_probe.c $(GAMES_IMAGE_PROBE) $(CORE) $(FATFS) $(GAMES_IMAGE_PROBE_WRAP) -o $@
 
-GAMES_RETAIL = src/core/retail_zso.c src/apps/game_launch_report.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/apps/games_retail.c src/core/hash.c src/core/retail_image.c src/core/retail_cursor.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c
+GAMES_RETAIL = src/core/vmu_launch_package.c src/core/retail_zso.c src/apps/game_launch_report.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/apps/games_retail.c src/core/hash.c src/core/retail_image.c src/core/retail_cursor.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c
+GAMES_RETAIL += $(NATIVE_CACHE_SOURCES)
 build/games-retail: tests/games_retail.c $(GAMES_RETAIL) $(CORE) $(FATFS) include/kui/games_retail.h include/kui/ce_load_plan.h include/kui/retail_image.h include/kui/retail_loader_layout.h include/kui/game_image.h include/kui/game_metadata.h include/kui/runtime.h include/kui/destination.h include/kui/media.h src/dreamcast/platform.h config/ffconf.h .deps/fatfs/source/ff.h include/kui/game_ram_patches.h include/kui/game_launch_settings.h include/kui/game_launch_report.h include/kui/retail_zso.h include/kui/zso.h
+build/games-retail: src/apps/games_native_cache.inc
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast tests/games_retail.c $(GAMES_RETAIL) $(CORE) $(FATFS) $(GAMES_IMAGE_PROBE_WRAP) -o $@
 
@@ -734,17 +762,21 @@ build/test-network-app: tests/test_network_app.c src/apps/network_test.c src/app
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/apps_stubs src/apps/network_test.c src/apps/network_status.c tests/test_network_app.c -o $@
 
-build/test-vmu-app: tests/test_vmu_app.c $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) src/apps/vmu.c include/kui/apps.h $(wildcard tests/vmu_stubs/dc/*.h tests/vmu_stubs/dc/maple/*.h)
+build/test-vmu-app: tests/test_vmu_app.c $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/core/hash.c src/apps/vmu.c src/apps/vmu_collection.inc include/kui/apps.h include/kui/vmu_read_bounded.h $(wildcard tests/vmu_stubs/dc/*.h tests/vmu_stubs/dc/maple/*.h)
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) src/apps/vmu.c tests/test_vmu_app.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/core/hash.c src/apps/vmu.c tests/test_vmu_app.c -o $@
 
 build/test-vmu-save-format: tests/test_vmu_save_format.c src/core/vmu_save_format.c src/core/crc16.c include/kui/vmu_import.h include/kui/crc16.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_vmu_save_format.c src/core/vmu_save_format.c src/core/crc16.c -o $@
 
-build/vmu-import-image: tests/vmu_import_image.c $(CORE) $(DESTINATION) src/core/storage_probe.c src/core/files_path.c src/core/hash.c src/core/crc16.c $(FATFS) src/core/vmu_save_format.c src/apps/vmu_import.c src/apps/vmu.c include/kui/vmu_import.h include/kui/apps.h $(wildcard tests/vmu_stubs/dc/*.h tests/vmu_stubs/dc/maple/*.h)
+build/test-vmu-description: tests/test_vmu_description.c src/core/vmu_description.c include/kui/vmu_description.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c src/core/files_path.c src/core/hash.c src/core/crc16.c $(FATFS) src/core/vmu_save_format.c src/apps/vmu_import.c src/apps/vmu.c tests/vmu_import_image.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_vmu_description.c src/core/vmu_description.c -o $@
+
+build/vmu-import-image: tests/vmu_import_image.c $(CORE) $(DESTINATION) src/core/storage_probe.c src/core/files_path.c src/core/hash.c src/core/crc16.c $(FATFS) $(VMU_MANAGEMENT) src/core/vmu_save_format.c src/apps/vmu_import.c src/apps/vmu.c src/apps/vmu_collection.inc include/kui/vmu_import.h include/kui/apps.h include/kui/vmu_read_bounded.h $(wildcard tests/vmu_stubs/dc/*.h tests/vmu_stubs/dc/maple/*.h)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c src/core/files_path.c src/core/hash.c src/core/crc16.c $(FATFS) $(VMU_MANAGEMENT) src/core/vmu_save_format.c src/apps/vmu_import.c src/apps/vmu.c tests/vmu_import_image.c -o $@
 
 # Original startup assets are encoded on the host, never decoded during ripping.
 build/splash_pixels.inc build/boot_splash_pixels.inc build/startup_ogg.inc &: tools/build_splash.py resources/branding/startup.png resources/branding/boot-red.png resources/branding/startup-chime.ogg
@@ -1062,6 +1094,7 @@ build/test-games-cdda-status: tests/test_games_cdda_status.c include/kui/games_c
 
 .PHONY: test-retail-map-diagnostic
 build/test-wince-packaged-prepare: tests/test_wince_packaged_prepare.c tests/test_armada_ce_excerpt_prepare.c src/apps/games_retail.c $(ARMADA_PREPARE_TEST_SOURCES) include/kui/wince_cdda_profiles.h include/kui/armada_ce_stream_seed.h include/kui/games_retail.h include/kui/wince_cdda_wwp_kernel.h
+build/test-wince-packaged-prepare: src/apps/games_native_cache.inc
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -ffunction-sections -fdata-sections tests/test_wince_packaged_prepare.c $(ARMADA_PREPARE_TEST_SOURCES) -Wl,--gc-sections -o $@
 
@@ -1090,3 +1123,55 @@ test-vmu-lcd: build/test-vmu-lcd
 build/test-vmu-lcd: tests/test_vmu_lcd.c src/core/vmu_lcd.c src/dreamcast/vmu_lcd.c include/kui/vmu_lcd.h include/kui/version.h tests/vmu_stubs/dc/maple.h tests/vmu_stubs/dc/maple/vmu.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/vmu_stubs src/core/vmu_lcd.c src/dreamcast/vmu_lcd.c tests/test_vmu_lcd.c -o $@
+
+# Experimental VMU components are kept outside the ordinary retail resident.
+.PHONY: test-vmu-prototype
+test-vmu-prototype: build/test-vmu-emulation build/test-vmu-image build/test-vmu-store build/test-vmu-maple-dma build/test-vmu-backing build/test-vmu-backing-read-only build/test-vmu-integration build/test-vmu-service build/test-vmu-sci-bus build/test-sci-sd-storage
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-emulation
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-image
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-store
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-maple-dma
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-backing
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-backing-read-only
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-integration
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-service
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-sci-bus
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-sci-sd-storage
+	python3 tests/test_vmu_retail_probe.py
+build/test-vmu-emulation: tests/test_vmu_emulation.c src/core/vmu_emulation.c include/kui/vmu_emulation.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_vmu_emulation.c src/core/vmu_emulation.c -o $@
+build/test-vmu-store: tests/test_vmu_store.c src/core/vmu_store.c src/core/retail_image.c include/kui/vmu_store.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_vmu_store.c src/core/vmu_store.c src/core/retail_image.c -o $@
+build/test-vmu-image: tests/test_vmu_image.c src/core/vmu_image.c include/kui/vmu_image.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_vmu_image.c src/core/vmu_image.c -o $@
+VMU_IMAGE_COMPAT_SOURCES = $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/apps/vmu.c src/core/vmu_save_format.c src/core/crc16.c src/core/files_path.c src/core/hash.c src/apps/vmu_import.c
+build/test-vmu-image-compat: tests/test_vmu_image_compat.c tests/test_vmu_app.c $(VMU_IMAGE_COMPAT_SOURCES) src/apps/vmu_collection.inc include/kui/vmu_image.h include/kui/vmu_read_bounded.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(VMU_IMAGE_COMPAT_SOURCES) tests/test_vmu_image_compat.c -o $@
+build/test-vmu-maple-dma: tests/test_vmu_maple_dma.c src/loader/vmu_maple_dma.c include/kui/vmu_maple_dma.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_vmu_maple_dma.c src/loader/vmu_maple_dma.c -o $@
+build/test-vmu-backing-read-only: VMU_BACKING_FLAGS :=
+build/test-vmu-backing: VMU_BACKING_FLAGS := -DKUI_VMU_EXPERIMENTAL=1
+build/test-vmu-backing build/test-vmu-backing-read-only: tests/test_vmu_backing.c src/loader/vmu_backing.c include/kui/vmu_backing.h include/kui/vmu_store.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) $(VMU_BACKING_FLAGS) tests/test_vmu_backing.c src/loader/vmu_backing.c -o $@
+build/test-vmu-integration: tests/test_vmu_integration.c tests/vmu_sd_model.h src/core/vmu_emulation.c src/core/vmu_store.c src/core/retail_image.c src/loader/vmu_backing.c src/loader/sd_reader.c src/dreamcast/sci_sd_storage.c
+	@mkdir -p $(@D)
+	$(CC) $(filter-out -O1,$(HOST_FLAGS)) -O2 $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Isrc/loader -Isrc/dreamcast -DKUI_VMU_EXPERIMENTAL=1 $(filter %.c,$^) -o $@
+build/test-vmu-service: tests/test_vmu_service.c tests/vmu_sd_model.h include/kui/vmu_service.h include/kui/vmu_backing.h include/kui/vmu_store.h include/kui/vmu_emulation.h src/loader/vmu_service.c src/core/vmu_emulation.c src/core/vmu_store.c src/core/retail_image.c src/loader/vmu_backing.c src/loader/sd_reader.c src/dreamcast/sci_sd_storage.c
+	@mkdir -p $(@D)
+	$(CC) $(filter-out -O1,$(HOST_FLAGS)) -O2 $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Isrc/loader -Isrc/dreamcast -DKUI_VMU_EXPERIMENTAL=1 $(filter %.c,$^) -o $@
+build/test-vmu-sci-bus: tests/test_vmu_sci_bus.c tests/test_sci_sd_bus.c src/loader/sci_sd_bus.c src/loader/sci_sd_bus.h src/loader/sd_reader.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -ffunction-sections -fdata-sections -DKUI_SCI_SD_TEST=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_VMU_EXPERIMENTAL=1 -Iinclude -Isrc/loader tests/test_vmu_sci_bus.c src/loader/sci_sd_bus.c -Wl,--gc-sections -o $@
+
+.PHONY: test-vmu-native-phase
+test-vmu-native-phase: build/test-vmu-native-phase
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-native-phase
+build/test-vmu-native-phase: tests/test_vmu_native_phase.c src/loader/vmu_native_phase.inc src/core/vmu_native_profile.c include/kui/vmu_native_profile.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude tests/test_vmu_native_phase.c src/core/vmu_native_profile.c -o $@

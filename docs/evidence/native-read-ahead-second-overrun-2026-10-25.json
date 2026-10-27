@@ -1,0 +1,262 @@
+{
+  "schema": "kui.native.read-ahead.second-overrun-observed.v1",
+  "date": "2026-10-25",
+  "tested_source_commit": "7568957f5e686deaeab196249667a4f8f7b5fc69",
+  "video": {
+    "name": "63369.mp4",
+    "sha256": "a401f0a24dffb0df0e5b230d306c93399c04eb72109022552b662a2651977df7",
+    "bytes": 114712589,
+    "seconds": 126.642811,
+    "width": 1280,
+    "height": 720,
+    "frame_rate": "30000/1001",
+    "all_17_report_pages_present": true,
+    "first_overview_return_seconds_interval": [
+      72.75,
+      73.0
+    ],
+    "first_cache_onset_seconds_interval": [
+      13.75,
+      14.0
+    ],
+    "repeated_cache_onset_seconds_interval": [
+      88.0,
+      88.25
+    ],
+    "full_cycle_seconds_interval": [
+      74.0,
+      74.5
+    ],
+    "targeted_cache_through_timeline_seconds_approx": [
+      14,
+      31
+    ],
+    "repeat_is_same_frozen_capture": true
+  },
+  "cache": {
+    "capacity_blocks": 384,
+    "cached_feed_visits": 277,
+    "miss_feed_visits": 431,
+    "requests_with_any_cached_feed": 8,
+    "produced_crc_checked_512_byte_blocks": 184,
+    "produced_bytes": 94208,
+    "producer_visits": 284,
+    "heartbeat_visits": 1200,
+    "irq_visits": 550,
+    "seeks": 0,
+    "quiesces": 0,
+    "loan_resumes": 0,
+    "full": 0,
+    "extent_ends": 0,
+    "crc_errors": 0,
+    "token_errors": 0,
+    "abandoned": 8,
+    "guard_faults": 0,
+    "clock_bad": 0,
+    "max_aux_visit_ticks_hex": "17C4",
+    "ticks_per_second": 781250
+  },
+  "failure_stages": {
+    "total": 8,
+    "poll": 8,
+    "take": 0,
+    "append": 0,
+    "fetch": 0,
+    "resume_fetch": 0,
+    "quiesce_stop": 0
+  },
+  "producer_skips": {
+    "quiesced": 0,
+    "abandoned": 5040,
+    "no_seed": 0,
+    "vmu_loan": 0,
+    "active_demand": 0,
+    "pending_or_executing": 11,
+    "failed_reader": 0,
+    "not_opened_or_acquired": 0,
+    "port_fault": 0,
+    "busy": 17,
+    "guest_dma_admission": 0,
+    "stream_position": 0,
+    "deferred": 16,
+    "spec_owned": 0
+  },
+  "snapshot_encoding": "All raw snapshot words below are hexadecimal strings. Fields follow docs/vmu-native-readahead-test.md; LOST packs loss indexes plus one, not completed CRC repairs.",
+  "first": {
+    "stage_result_event_flags_token": [
+      "1",
+      "6",
+      "1",
+      "1B10",
+      "6B2"
+    ],
+    "cursor_cachebase_count_end_operation": [
+      "186AB5",
+      "186AB5",
+      "13",
+      "210C00",
+      "186AC8"
+    ],
+    "loan_rx_ready0_ready1_kept": [
+      "00010000",
+      "01010000",
+      "186AC7",
+      "186AC6",
+      "186AC7"
+    ],
+    "arrived_lost_prestate_position": [
+      "0",
+      "01860000",
+      "2",
+      "186AC8"
+    ],
+    "pre_sar_dar_tcr_chcr_dmaor": [
+      "1FE00014",
+      "0CFC0B12",
+      "2F",
+      "4911",
+      "8201"
+    ],
+    "post_sar_dar_tcr_chcr_dmaor": [
+      "0",
+      "0",
+      "0",
+      "5440",
+      "8201"
+    ],
+    "pre_sci_pins_tmu_poststate_position": [
+      "A4500080",
+      "E7630286",
+      "F0636B8F",
+      "3",
+      "186AC8"
+    ],
+    "post_sci_pins_tmu": [
+      "84300080",
+      "6BE30204",
+      "F0636B82"
+    ]
+  },
+  "last": {
+    "stage_result_event_flags_token": [
+      "1",
+      "6",
+      "1",
+      "1B10",
+      "8C1"
+    ],
+    "cursor_cachebase_count_end_operation": [
+      "18723A",
+      "18723A",
+      "2",
+      "210C00",
+      "18723C"
+    ],
+    "loan_rx_ready0_ready1_kept": [
+      "00010000",
+      "01010000",
+      "18723B",
+      "18723A",
+      "18723B"
+    ],
+    "arrived_lost_prestate_position": [
+      "0",
+      "018F0054",
+      "2",
+      "18723C"
+    ],
+    "pre_sar_dar_tcr_chcr_dmaor": [
+      "1FE00014",
+      "0CFC0B1B",
+      "26",
+      "4911",
+      "8201"
+    ],
+    "post_sar_dar_tcr_chcr_dmaor": [
+      "0",
+      "0",
+      "0",
+      "5440",
+      "8201"
+    ],
+    "pre_sci_pins_tmu_poststate_position": [
+      "A6500080",
+      "E7630287",
+      "FC8AFBB2",
+      "3",
+      "18723C"
+    ],
+    "post_sci_pins_tmu": [
+      "84300080",
+      "73E30205",
+      "FC8AFBA5"
+    ]
+  },
+  "source_interpretation": {
+    "loan_state_both": 0,
+    "unrepaired_both": 1,
+    "current_fill_area_both": 1,
+    "current_area_lost_plus_one_first": 390,
+    "current_area_lost_plus_one_last": 399,
+    "global_unrepaired_less_than_two_gate_open": true,
+    "per_block_no_previous_loss_gate_open": false,
+    "retained_failure_class": "Incomplete overrun in a previously resumed block whose current receive area already has one loss recorded; finish refuses a second erasure and auxiliary abandonment follows.",
+    "unrepaired_cutoff_explains_these_retained_exits": false,
+    "vmu_loan_explains_these_retained_exits": false,
+    "relevant_source": [
+      "src/loader/sci_stream.c:finish",
+      "src/loader/native_readahead_aux.c:snapshot_pre",
+      "src/loader/native_readahead_aux.c:retire_spec",
+      "src/loader/native_readahead_aux.c:producer"
+    ]
+  },
+  "software_experiments": {
+    "sanitizers": [
+      "address",
+      "undefined"
+    ],
+    "double_overrun": "Actual SCI/card/DMA and auxiliary fixture: injection at byte388 records loss390 with unrepaired1 and defers; second injection at458 returns POLL/OVERRUN and abandons with the lifetime count still1 and CRC/token counters0.",
+    "fresh_paused_pio": "Scratch driver only: 12 modeled heartbeat visits append 12 CRC-checked blocks using fetch(next,256,true) from matching PAUSED; no DMA starts or guest DMA1 tuple changes, no extra CMD18/CMD12, no overrun/abandon/CRC/token errors, with channel2 active and the same DMA-overrun injection left armed.",
+    "proposed_pio_candidate_implemented": false,
+    "console_pio_timing_measured": false
+  },
+  "next_experiment": {
+    "scope": "Optional read-ahead only; existing demand DMA reader remains unchanged.",
+    "transport": "One fresh matching-PAUSED block through existing CPU-driven PIO per eligible controller heartbeat, then CRC check and cache append.",
+    "admission": [
+      "TICK event only, never GD delivery or SCI IRQ",
+      "No active/pending/executing/failed demand",
+      "No VMU loan, port fault or unopened port",
+      "Valid cache space and same proven extent",
+      "Already-open CMD18 in PAUSED at the exact next physical block",
+      "Retain the existing guest DMA admission guard",
+      "Never use fetch(polled=true) as a RESUME fallback: that branch still starts DMA"
+    ],
+    "preserve": [
+      "SCI priority1",
+      "Single-erasure and lifetime repair guards",
+      "CRC before cache publication",
+      "Cache geometry and lease",
+      "CE/CDDA and compatibility admission"
+    ],
+    "measure": [
+      "Maximum producer-only heartbeat cost",
+      "Produced blocks and hit requests",
+      "Whole-read latency",
+      "In-engine movement and FMV behavior"
+    ],
+    "risk": "A complete PIO block consumes synchronous masked CPU time; modeled correctness does not establish acceptable frame timing or sufficient production bandwidth."
+  },
+  "limits": [
+    "Only first and last per-failure result records are displayed; intermediate POLL result codes are unknown.",
+    "Pre-operation hardware snapshots are sequential, not the final fenced counts used by finish.",
+    "Other DMAC channel activity was not captured at the actual hardware overrun; bus contention is a mechanism hypothesis, not an identified competing owner.",
+    "A recorded single loss denotes pending reconstruction, not a completed or CRC-validated repair.",
+    "Abandonment occurs before take/CRC, so zero cache CRC errors does not imply uninterrupted reception.",
+    "Cache hit and miss counts are feed visits, not unique physical blocks or byte hit rates.",
+    "No synchronized rendered-frame witness establishes that every visible hitch is caused by these exits.",
+    "Workloads differ from earlier videos; these counters do not establish a controlled performance improvement."
+  ],
+  "runtime_source_changed": false,
+  "new_binary_built": false
+}

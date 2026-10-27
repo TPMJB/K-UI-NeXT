@@ -31,7 +31,7 @@
 
 static struct {
     uint8_t smr,brr,scr,tdr,ssr,rdr,ptr,sptr,stb,missing_flags;
-    uint32_t pctr;
+    uint32_t pctr,ignored_write;
     uint16_t pdtr;
     unsigned writes, reads, polls, bytes, delays, received, tdr_writes;
     unsigned byte_polls, remaining, fault_byte;
@@ -204,6 +204,7 @@ uint32_t kui_sci_sd_test_read(uint32_t address, unsigned width) {
 }
 void kui_sci_sd_test_write(uint32_t address,uint32_t value,unsigned width) {
     ++hw.writes;
+    if(address==hw.ignored_write) return;
     switch(address) {
         case SAR1: case DAR1: case TCR1: case CHCR1:
             assert(width==4 && hw.dma_available && hw.irq_disabled);
@@ -804,6 +805,37 @@ static void test_borrower_baud_cache(const struct kui_loader_sd_bus *bus) {
     kui_sci_sd_release();restored();
 }
 
+#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF || KUI_VMU_PERSIST_IMPORT
+static void test_persistent_release_fault(void) {
+    reset();assert(kui_sci_sd_acquire()==KUI_LOADER_SD_OK);
+    assert(!kui_sci_sd_faulted());
+    kui_sci_sd_release();restored();
+    assert(!kui_sci_sd_healthy() && !kui_sci_sd_faulted());
+    assert(kui_sci_sd_acquire()==KUI_LOADER_SD_OK);
+    hw.missing_flags=TEND;
+    kui_sci_sd_release();
+    assert(!kui_sci_sd_healthy() && kui_sci_sd_faulted());
+    unsigned reads=hw.reads,writes=hw.writes;
+    assert(kui_sci_sd_faulted() && hw.reads==reads && hw.writes==writes);
+    hw.missing_flags=0;hw.ssr=TDRE|TEND;
+    assert(kui_sci_sd_acquire()==KUI_LOADER_SD_OK && !kui_sci_sd_faulted());
+    kui_sci_sd_release();restored();
+
+    const uint32_t controls[]={SMR,BRR,PTR,SCR,PCTR,PDTR,STB};
+    for(unsigned i=0;i<sizeof(controls)/sizeof(controls[0]);i++) {
+        reset();assert(kui_sci_sd_acquire()==KUI_LOADER_SD_OK);
+        hw.ignored_write=controls[i];
+        kui_sci_sd_release();
+        assert(!kui_sci_sd_healthy() && kui_sci_sd_faulted());
+        reads=hw.reads;writes=hw.writes;
+        assert(kui_sci_sd_faulted() && reads==hw.reads && writes==hw.writes);
+        hw.ignored_write=0;
+    }
+    reset();assert(kui_sci_sd_acquire()==KUI_LOADER_SD_OK);
+    kui_sci_sd_release();restored();assert(!kui_sci_sd_faulted());
+}
+#endif
+
 int main(void) {
     const struct kui_loader_sd_bus *bus=kui_sci_sd_bus(); assert(bus);
     assert(crc16_reference((const uint8_t *)"123456789",9)==0x31c3);
@@ -823,5 +855,8 @@ int main(void) {
     test_dma_failures(bus);
     test_dma_profile(bus);
     test_borrower_baud_cache(bus);
+#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF || KUI_VMU_PERSIST_IMPORT
+    test_persistent_release_fault();
+#endif
     puts("SCI SD bus: polled/DMA data, CRC, profiling, bounded faults and ownership restoration passed");
 }

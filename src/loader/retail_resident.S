@@ -1,14 +1,21 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/retail_loader_layout.h"
 #include "kui/retail_native_disc.h"
+#include "kui/native_sci_priority.h"
+#include "kui/native_sdk_sci_runtime.h"
 #define JOIN_INNER(a,b) a##b
 #define JOIN(a,b) JOIN_INNER(a,b)
 #define C_SYMBOL(name) JOIN(__USER_LABEL_PREFIX__,name)
 #include "toy_pilot_frame.inc"
+#if KUI_NATIVE_SCI_PRIORITY7
+    .global __kui_native_sci_priority7_rehook
+    .set __kui_native_sci_priority7_rehook,7
+#endif
 
 /* Called by the high stage before entering the owner's upper IP bootstrap.
  * Do not switch stacks here: state adoption/init use the temporary high stack.
- * R4..R7 hold all four C arguments and remain intact across BSS clearing. */
+ * R4..R7 hold the first four C arguments and remain intact across BSS clearing.
+ * The gated native VMU workspace argument stays on this unchanged stack. */
     .section .entry,"ax"
     .align 2
     .global _start
@@ -30,7 +37,11 @@ _start:
     .align 2
 .Lbss_begin: .long __retail_resident_bss_begin
 .Lbss_end: .long __retail_resident_bss_end
+#if KUI_VMU_NATIVE_BACKGROUND
+.Linit: .long C_SYMBOL(kui_vmu_native_background_init)
+#else
 .Linit: .long C_SYMBOL(kui_retail_resident_init)
+#endif
 #ifdef KUI_RETAIL_CE
 /* KUI_RETAIL_CE_KERNEL: where Windows CE's kernel keeps its interrupt
  * bookkeeping (pending mask, ring head, reschedule flag) and its interrupt
@@ -43,6 +54,31 @@ C_SYMBOL(kui_retail_ce_kernel): .long 0,0,0,0
  * High stream state remains dormant throughout owner bootstrap 2. */
     .global C_SYMBOL(kui_retail_ce_stream_bus_entry)
 C_SYMBOL(kui_retail_ce_stream_bus_entry): .long C_SYMBOL(kui_retail_ce_stream_bus)
+#endif
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME && defined(KUI_RETAIL_ASYNC)
+    .global __kui_maple_write_runtime_resident
+    .set __kui_maple_write_runtime_resident,1
+/* Stage admits this complete descriptor from the immutable SCIA resident.
+ * These calls run on the VMU worker's private stack with actual IMASK0. */
+    .global C_SYMBOL(kui_retail_ce_vmu_loan_descriptor)
+C_SYMBOL(kui_retail_ce_vmu_loan_descriptor):
+    .long 0x564c4f31,1,20
+    .long C_SYMBOL(kui_retail_async_vmu_loan_begin)
+    .long C_SYMBOL(kui_retail_async_vmu_loan_end)
+#endif
+#elif KUI_NATIVE_SDK_SCI_ROUTE
+    .global C_SYMBOL(kui_native_sdk_sci_route_entry)
+    .type C_SYMBOL(kui_native_sdk_sci_route_entry),@object
+C_SYMBOL(kui_native_sdk_sci_route_entry):
+    .long C_SYMBOL(kui_native_sdk_sci_route_exports)
+    .size C_SYMBOL(kui_native_sdk_sci_route_entry),4
+#if KUI_NATIVE_READAHEAD
+/* Additional typed entry word; the SDK SCI descriptor remains at+36. */
+    .global C_SYMBOL(kui_native_ra_reader_ops_entry)
+    .type C_SYMBOL(kui_native_ra_reader_ops_entry),@object
+C_SYMBOL(kui_native_ra_reader_ops_entry):
+    .long C_SYMBOL(kui_native_ra_reader_ops)
+    .size C_SYMBOL(kui_native_ra_reader_ops_entry),4
 #endif
 #elif KUI_RETAIL_RETURN_TRACE == 3
 /* Native-only word at entry offset 36. The high stage verifies this pointer
@@ -435,6 +471,100 @@ C_SYMBOL(kui_retail_ce_isr):
     .section .bss.retail_ce_isr,"aw",@nobits
     .align 2
 C_SYMBOL(kui_retail_ce_isr_sp): .space 4
+#elif defined(KUI_RETAIL_ASYNC) && KUI_NATIVE_SDK_SCI_ROUTE
+/* The SDK common ISR already owns the complete interrupted frame and calls
+ * this entry with JSR, IMASK15, BLclear. Keep its SP and original SR, never
+ * use RTE/SGR, and exclude the low GD stack before touching it. */
+    .section .text.retail_sdk_sci,"ax"
+    .align 2
+    .global __kui_native_sdk_sci_route_callback
+    .set __kui_native_sdk_sci_route_callback,1
+    .global C_SYMBOL(kui_retail_sdk_sci_entry)
+    .type C_SYMBOL(kui_retail_sdk_sci_entry),@function
+C_SYMBOL(kui_retail_sdk_sci_entry):
+    stc sr,r0
+    mov.l .Lsdk_sci_mask,r1
+    or r0,r1
+    ldc r1,sr
+    mov.l .Lsdk_sci_active,r1
+    mov.l @r1,r1
+    tst r1,r1
+    bf .Lsdk_sci_forward_idle
+    mov.l .Lsdk_sci_guard,r1
+    mov.l @r1,r2
+    mov.l .Lsdk_sci_guard_value,r3
+    cmp/eq r2,r3
+    bf .Lsdk_sci_guard_fault
+    mov.l r8,@-r15
+    mov.l r9,@-r15
+    mov.l r10,@-r15
+    sts.l pr,@-r15
+    mov r15,r8
+    mov r0,r9
+    mov r4,r10
+    mov.l .Lsdk_sci_stack,r15
+    mov.l .Lsdk_sci_handler,r0
+    jsr @r0
+    nop
+    mov.l .Lsdk_sci_guard,r1
+    mov.l @r1,r2
+    mov.l .Lsdk_sci_guard_value,r3
+    cmp/eq r2,r3
+    bt .Lsdk_sci_restore
+    mov.l .Lsdk_sci_fault,r1
+    mov #1,r2
+    mov.l r2,@r1
+.Lsdk_sci_restore:
+    mov r8,r15
+    mov r9,r1
+    mov r10,r4
+    lds.l @r15+,pr
+    mov.l @r15+,r10
+    mov.l @r15+,r9
+    mov.l @r15+,r8
+    tst r0,r0
+    bf .Lsdk_sci_forward
+    ldc r1,sr
+    rts
+    nop
+.Lsdk_sci_forward:
+    ldc r1,sr
+    jmp @r0
+    nop
+.Lsdk_sci_guard_fault:
+    mov.l .Lsdk_sci_fault,r1
+    mov #1,r2
+    mov.l r2,@r1
+.Lsdk_sci_forward_idle:
+    mov r0,r3
+    mov.l .Lsdk_sci_region,r1
+    mov.l @r1,r1
+    mov.w .Lsdk_sci_default_offset,r2
+    add r2,r1
+    mov.l @r1,r1
+    ldc r3,sr
+    jmp @r1
+    nop
+.Lsdk_sci_default_offset: .word KUI_NATIVE_SDK_SCI_DEFAULT_OFFSET
+    .align 2
+.Lsdk_sci_mask: .long 0x100000f0
+.Lsdk_sci_active: .long C_SYMBOL(kui_retail_hook_active)
+.Lsdk_sci_guard: .long KUI_RETAIL_HOOK_STACK_BOTTOM
+.Lsdk_sci_guard_value: .long 0x4b554947
+.Lsdk_sci_stack: .long KUI_RETAIL_HOOK_STACK-16
+.Lsdk_sci_handler: .long C_SYMBOL(kui_retail_sdk_sci_dispatch)
+.Lsdk_sci_fault: .long C_SYMBOL(kui_retail_hook_fault)
+.Lsdk_sci_region: .long C_SYMBOL(kui_retail_async_region_storage)
+    .size C_SYMBOL(kui_retail_sdk_sci_entry),.-C_SYMBOL(kui_retail_sdk_sci_entry)
+    .section .rodata.native_sdk_sci,"a"
+    .align 2
+    .global C_SYMBOL(kui_native_sdk_sci_route_exports)
+    .type C_SYMBOL(kui_native_sdk_sci_route_exports),@object
+C_SYMBOL(kui_native_sdk_sci_route_exports):
+    .long KUI_NATIVE_SDK_SCI_DESCRIPTOR_MAGIC,KUI_NATIVE_SDK_SCI_DESCRIPTOR_VERSION
+    .long KUI_NATIVE_SDK_SCI_DESCRIPTOR_BYTES,C_SYMBOL(kui_retail_sdk_sci_entry)
+    .long C_SYMBOL(kui_retail_async_region_storage)
+    .size C_SYMBOL(kui_native_sdk_sci_route_exports),KUI_NATIVE_SDK_SCI_DESCRIPTOR_BYTES
 #elif defined(KUI_RETAIL_ASYNC)
 /* Vector templates for the background reader, copied by
  * kui_retail_async_init into its region (VBR = region - 0x100). They run in
@@ -573,6 +703,11 @@ C_SYMBOL(kui_retail_release_600):
 .Lrelease:
     mov.l r3,@-r15
     mov.l .Lrelease_frame,r0
+#if KUI_VMU_NATIVE_BACKGROUND
+    mov.l @r0,r0
+    mov.w .Lrelease_frame_offset,r3
+    add r3,r0
+#endif
     mov.l @(r0,r1),r3
     add #1,r3
     mov.l r3,@(r0,r1)
@@ -623,8 +758,15 @@ C_SYMBOL(kui_retail_release_600):
 .Lrelease_100: .word 0x100
 .Lrelease_400: .word 0x400
 .Lrelease_600: .word 0x600
+#if KUI_VMU_NATIVE_BACKGROUND
+.Lrelease_frame_offset: .word 0x240
+#endif
     .align 2
+#if KUI_VMU_NATIVE_BACKGROUND
+.Lrelease_frame: .long C_SYMBOL(kui_retail_async_region_storage)
+#else
 .Lrelease_frame: .long C_SYMBOL(kui_retail_async_region)+0x240
+#endif
 .Lrelease_iprb: .long 0xffd00008
 .Lrelease_return: .long C_SYMBOL(kui_retail_rehook)
 
@@ -651,6 +793,11 @@ C_SYMBOL(kui_retail_rehook):
     ldc r0,sr
     ldc r3,ssr
     mov.l .Lrehook_frame,r0
+#if KUI_VMU_NATIVE_BACKGROUND
+    mov.l @r0,r0
+    mov.w .Lrehook_frame_offset,r3
+    add r3,r0
+#endif
     mov.l @(12,r0),r1
     mov r1,r2
     shll2 r2
@@ -676,10 +823,15 @@ C_SYMBOL(kui_retail_rehook):
     add #1,r1
     mov.l r1,@(40,r0)
     mov.l .Lrehook_vbr,r1
+#if KUI_VMU_NATIVE_BACKGROUND
+    mov.l @r1,r1
+    add #-128,r1
+    add #-128,r1
+#endif
     ldc r1,vbr
     mov.l .Lrehook_iprb,r1
     mov.w @r1,r0
-    xor #0x10,r0
+    xor #KUI_RETAIL_SCI_PRIORITY_FIELD,r0
     and #0xf0,r0
     mov.w @r1,r2
     xor r0,r2
@@ -690,9 +842,17 @@ C_SYMBOL(kui_retail_rehook):
     mov.l @r15+,r1
     rte
     mov.l @r15+,r0
+#if KUI_VMU_NATIVE_BACKGROUND
+.Lrehook_frame_offset: .word 0x240
+#endif
     .align 2
 .Lrehook_block: .long 0x100000f0
+#if KUI_VMU_NATIVE_BACKGROUND
+.Lrehook_frame: .long C_SYMBOL(kui_retail_async_region_storage)
+.Lrehook_vbr: .long C_SYMBOL(kui_retail_async_region_storage)
+#else
 .Lrehook_frame: .long C_SYMBOL(kui_retail_async_region)+0x240
 .Lrehook_vbr: .long C_SYMBOL(kui_retail_async_region)-0x100
+#endif
 .Lrehook_iprb: .long 0xffd00008
 #endif

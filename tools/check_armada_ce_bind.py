@@ -8,7 +8,7 @@ import subprocess
 import struct
 from check_retail_stack import load as load_graph, base as base_name
 from check_loader_layout import inspect_elf, region
-from check_retail_loader_layout import check_bss, check_directory, FORBIDDEN_PREFIXES, FORBIDDEN_SYMBOLS
+from check_retail_loader_layout import check_bss, check_directory, FORBIDDEN_PREFIXES, FORBIDDEN_SYMBOLS,CE_VMU_RUNTIME_STACK_BOTTOM
 from check_retail_instructions import audit
 
 BASE = 0x8c004000
@@ -37,7 +37,7 @@ def check(directory):
     if region(stage["payload"],marker-STAGE,4,"binding stage contract") != struct.pack("<I",0x43454231):
         raise ValueError("Binding C stage admission/installer contract is missing")
     resident = inspect_elf((directory / "resident-scia.elf").read_bytes(),
-                           0x8c008300, 0x8c00d800)
+                           0x8c008300,CE_VMU_RUNTIME_STACK_BOTTOM if ordinary.get('write_runtime_profile') else 0x8c00d800)
     if resident["symbols"].get("_kui_armada_ce_bind_probe") != BASE:
         raise ValueError("Resident controller call target moved")
     _, calls=load_graph(sorted((directory / "scia/lto").glob("*.ci")))

@@ -1,0 +1,39 @@
+{
+  "schema": "kui.evolution1-isolation-console-followup.v1",
+  "date": "2026-10-26",
+  "runtime_commit": "9956562f91d6be4721e25676d2edf6ed3f421c15",
+  "owner_report": "So reader-only failed. Vmu-only with background reader off passed",
+  "console_results": {
+    "reader_only_new_card_off": "FAIL reported; detailed failure point not repeated in this report",
+    "standard_vmu_only_background_off": "PASS reported; individual card/save/load stages not separately enumerated"
+  },
+  "matched_geometry": {
+    "lease_bytes": 393216,
+    "placement": "bottom",
+    "virtual_address": 2,
+    "new_cache_reserved_bytes": 196608
+  },
+  "interpretation": "Virtual-card responses/storage and optional controller-driven speculative prefetch are not necessary to reproduce the failure. Standard VMU with the matched384KiB bottom lease passes. Remaining New demand/SCI integration and support path have no demonstrated code fault; next observation captures exact original wait operands plus reader state.",
+  "review_findings": [
+    "New optional producer is admitted only on controller RA_TICK.",
+    "The old capture includes hundreds of cache-full production skips, so continual speculative PIO at the sampled wait is not established.",
+    "Actual ABI models found no concrete New callback/auxiliary register-restoration violation. The hardware capture did not include all loop operands."
+  ],
+  "next_control": {
+    "runtime_commit": "3f51ded6973f57679756c6ea63096ca0eb2f4dd9",
+    "change": "Omit only controller RA_TICK from cold startup in the failed reader-only configuration. Virtual card remains off.",
+    "retained": [
+      "New demand reads",
+      "SDK SCI1 callback route",
+      "Auxiliary/cache geometry",
+      "384KiB bottom lease",
+      "Memory and storage ownership guards",
+      "Required support hooks"
+    ],
+    "expected_banner": "NEW DEMAND / PREFETCH OFF",
+    "status": "Owner confirms same black-screen transition remains; expected missing-VMU warning appeared."
+  },
+  "github_actions_authorized": false,
+  "demand_owner_report": "Nein, doesn't pass the black screen transition. I did get the missing VMU warning.",
+  "next_observation": "Gesture-triggered eight original IRQ contexts and two short CPU/reader pages, without changing demand/TICK/card control settings or patching the video wait."
+}

@@ -1,0 +1,5176 @@
+{
+  "schema": "kui.native.poll-dispatch-linked-profile-review.v1",
+  "old_build": "f158ba5e24f9",
+  "prototype_build": "d955de18d36a",
+  "rows": [
+    {
+      "name": "_select_resident",
+      "old_bytes": 272,
+      "new_bytes": 272,
+      "old_sha256": "d0f4cda1fab6707c306935f8f39d9a6fb13eaf2b4b530b7ec6d71a8e9aa504b0",
+      "new_sha256": "ff04cf036eba683ae9ffb331d76738639de7a046f532e635f86b9c2932acafe3",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 86,
+      "changed_literal_slots": [
+        {
+          "offset": 180,
+          "before": "0x8ce612dc",
+          "after": "0x8ce6131c",
+          "roles": [
+            "_resident_limit+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 184,
+          "before": "0x8ce2d964",
+          "after": "0x8ce2d9a4",
+          "roles": [
+            "_kui_native_dual_reader_capability+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 192,
+          "before": "0x8ce2d968",
+          "after": "0x8ce2d9a8",
+          "roles": [
+            "_kui_native_dual_reader_capability+4"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 200,
+          "before": "0x8ce2d96c",
+          "after": "0x8ce2d9ac",
+          "roles": [
+            "_kui_native_dual_reader_capability+8"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 204,
+          "before": "0x8ce2d970",
+          "after": "0x8ce2d9b0",
+          "roles": [
+            "_kui_native_dual_reader_capability+12"
+          ],
+          "same_text": " "
+        },
+        {
+          "offset": 208,
+          "before": "0x8ce2d974",
+          "after": "0x8ce2d9b4",
+          "roles": [
+            "_kui_native_dual_reader_capability+16"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 212,
+          "before": "0x8ce2d978",
+          "after": "0x8ce2d9b8",
+          "roles": [
+            "_kui_native_dual_reader_capability+20"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 216,
+          "before": "0x8ce2d97c",
+          "after": "0x8ce2d9bc",
+          "roles": [
+            "_kui_native_dual_reader_capability+24"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 224,
+          "before": "0x8ce2d980",
+          "after": "0x8ce2d9c0",
+          "roles": [
+            "_kui_native_dual_reader_capability+28"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 228,
+          "before": "0x8ce8d000",
+          "after": "0x8ce8d040",
+          "roles": [
+            "_manifest+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 232,
+          "before": "0x8ce32aac",
+          "after": "0x8ce32aec",
+          "roles": [
+            "__retail_resident_sci_blob_start+0",
+            "__retail_resident_scif_blob_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 236,
+          "before": "0x8ce365cc",
+          "after": "0x8ce3660c",
+          "roles": [
+            "__retail_resident_ide_blob_start+0",
+            "__retail_resident_sci_blob_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 240,
+          "before": "0x8ce612e4",
+          "after": "0x8ce61324",
+          "roles": [
+            "_resident_blob+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 244,
+          "before": "0x8ce612e0",
+          "after": "0x8ce61320",
+          "roles": [
+            "_resident_bytes+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 264,
+          "before": "0x8ce3dc0c",
+          "after": "0x8ce3dc4c",
+          "roles": [
+            "__retail_resident_legacy_blob_start+0",
+            "__retail_resident_scia_blob_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 268,
+          "before": "0x8ce41718",
+          "after": "0x8ce41758",
+          "roles": [
+            "__retail_resident_legacy_blob_end+0",
+            "__retail_stage_binary_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 260,
+          "before": "0x8ce2c768",
+          "after": "0x8ce2c7a8",
+          "roles": [],
+          "same_text": "DUAL NATIVE READER NEEDS SCI X OR Y"
+        },
+        {
+          "offset": 252,
+          "before": "0x8ce2c748",
+          "after": "0x8ce2c788",
+          "roles": [],
+          "same_text": "DUAL READER CAPABILITY INVALID"
+        }
+      ]
+    },
+    {
+      "name": "_native_dual_reader_bind",
+      "old_bytes": 68,
+      "new_bytes": 68,
+      "old_sha256": "5fff937241cfe9180348ea8935d3bc157858bc8558f737283f3788937325e412",
+      "new_sha256": "04ef3b1fdcdb4a7d0f9951209af9465ae516ca672125b37d8041a0395c33e23f",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 26,
+      "changed_literal_slots": [
+        {
+          "offset": 52,
+          "before": "0x8ce8d000",
+          "after": "0x8ce8d040",
+          "roles": [
+            "_manifest+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_native_dual_u32",
+      "old_bytes": 30,
+      "new_bytes": 30,
+      "old_sha256": "c13060e358e2a0e9f53878d9aa8b77d1fbfb03a31b8c4e049dc49bf3e7feec6c",
+      "new_sha256": "c13060e358e2a0e9f53878d9aa8b77d1fbfb03a31b8c4e049dc49bf3e7feec6c",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_native_sdk_sci_route_bind",
+      "old_bytes": 952,
+      "new_bytes": 952,
+      "old_sha256": "a366c11867c6fbe03b9895692ac38406a66722e7ae526934935ca56a47625338",
+      "new_sha256": "aa4e5ba8c381a558face4224b74f57fe95336edf5555fd183d39522522a53df5",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 380,
+      "changed_literal_slots": [
+        {
+          "offset": 620,
+          "before": "0x8ce2c8f8",
+          "after": "0x8ce2c938",
+          "roles": [],
+          "same_text": "COLD 40 SDK ROUTE BIND BEGIN"
+        },
+        {
+          "offset": 624,
+          "before": "0x8ce612e0",
+          "after": "0x8ce61320",
+          "roles": [
+            "_resident_bytes+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 628,
+          "before": "0x8ce612e4",
+          "after": "0x8ce61324",
+          "roles": [
+            "_resident_blob+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 656,
+          "before": "0x8ce612dc",
+          "after": "0x8ce6131c",
+          "roles": [
+            "_resident_limit+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 724,
+          "before": "0x8ce8eba8",
+          "after": "0x8ce8ebe8",
+          "roles": [
+            "__retail_stage_bss_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 752,
+          "before": "0x8ce612e8",
+          "after": "0x8ce61328",
+          "roles": [
+            "_exec_bytes+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 756,
+          "before": "0x8ce51cc4",
+          "after": "0x8ce51d04",
+          "roles": [
+            "_native_driver+72"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 776,
+          "before": "0x8ce2c918",
+          "after": "0x8ce2c958",
+          "roles": [],
+          "same_text": "SDK SCI ROUTE READY / LEVEL 1"
+        },
+        {
+          "offset": 780,
+          "before": "0x8ce2c938",
+          "after": "0x8ce2c978",
+          "roles": [],
+          "same_text": "COLD 41 SDK ROUTE BOUND"
+        }
+      ]
+    },
+    {
+      "name": "_kui_native_sdk_sci_route_admit",
+      "old_bytes": 796,
+      "new_bytes": 796,
+      "old_sha256": "e66998694841afade7ef17f63b79926539f83851591d5bfb842500c0560da8ed",
+      "new_sha256": "f99d69b4a8977d5dcf2cbc0fbc8bdfe4736ab14688f6ec338b66b2c3f24a9173",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 345,
+      "changed_literal_slots": [
+        {
+          "offset": 436,
+          "before": "0x8ce2ec38",
+          "after": "0x8ce2ec78",
+          "roles": [
+            "_owners+20"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 444,
+          "before": "0x8ce2ec24",
+          "after": "0x8ce2ec64",
+          "roles": [
+            "_owners+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 784,
+          "before": "0x8ce2ec24",
+          "after": "0x8ce2ec64",
+          "roles": [
+            "_owners+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 440,
+          "before": "0x8ce2ed2c",
+          "after": "0x8ce2ed6c",
+          "roles": [
+            "_owners+264"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_native_sdk_sci_route_discover",
+      "old_bytes": 1856,
+      "new_bytes": 1856,
+      "old_sha256": "7580beaf4df91dfed711c09e11b1ea5c9aef2cd63bc9a35c5c9037b2a1998b41",
+      "new_sha256": "d4d3025c655ff64d62be3cb99127236c52987e327c499d133cf8141a2b6bdc70",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 785,
+      "changed_literal_slots": [
+        {
+          "offset": 372,
+          "before": "0x8ce2ec04",
+          "after": "0x8ce2ec44",
+          "roles": [
+            "_family_vector_prefix+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 796,
+          "before": "0x8ce2eb04",
+          "after": "0x8ce2eb44",
+          "roles": [
+            "_family_init+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 800,
+          "before": "0x8ce2ea8a",
+          "after": "0x8ce2eaca",
+          "roles": [
+            "_init_holes.3+0"
+          ],
+          "same_text": "*"
+        },
+        {
+          "offset": 1264,
+          "before": "0x8ce2ebe4",
+          "after": "0x8ce2ec24",
+          "roles": [
+            "_family_vector+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1268,
+          "before": "0x8ce2ea86",
+          "after": "0x8ce2eac6",
+          "roles": [
+            "_vector_holes.2+0"
+          ],
+          "same_text": "L"
+        },
+        {
+          "offset": 1272,
+          "before": "0x8ce2ebc4",
+          "after": "0x8ce2ec04",
+          "roles": [
+            "_family_normal+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1276,
+          "before": "0x8ce2eb64",
+          "after": "0x8ce2eba4",
+          "roles": [
+            "_compact_normal+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1536,
+          "before": "0x8ce2eba4",
+          "after": "0x8ce2ebe4",
+          "roles": [
+            "_family_fpu+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1540,
+          "before": "0x8ce2eb44",
+          "after": "0x8ce2eb84",
+          "roles": [
+            "_compact_fpu+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1548,
+          "before": "0x8ce2eb24",
+          "after": "0x8ce2eb64",
+          "roles": [
+            "_compact_default+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1552,
+          "before": "0x8ce2ea7c",
+          "after": "0x8ce2eabc",
+          "roles": [
+            "_default_holes.1+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1556,
+          "before": "0x8ce2ea8c",
+          "after": "0x8ce2eacc",
+          "roles": [
+            "_helper_windows+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1568,
+          "before": "0x8ce2eb84",
+          "after": "0x8ce2ebc4",
+          "roles": [
+            "_family_default+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_u32",
+      "old_bytes": 30,
+      "new_bytes": 30,
+      "old_sha256": "6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334",
+      "new_sha256": "6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_fingerprint",
+      "old_bytes": 88,
+      "new_bytes": 88,
+      "old_sha256": "6b308b9169903ffb9ba47a4ebdbfb017602db6571613133b82fb823ba5a73921",
+      "new_sha256": "6b308b9169903ffb9ba47a4ebdbfb017602db6571613133b82fb823ba5a73921",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_live_words",
+      "old_bytes": 80,
+      "new_bytes": 80,
+      "old_sha256": "086aa5c615fa7ceda4b39fc16df0ec561bdf56bbb4d739940b8325f84bc64a19",
+      "new_sha256": "086aa5c615fa7ceda4b39fc16df0ec561bdf56bbb4d739940b8325f84bc64a19",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_literal_at",
+      "old_bytes": 62,
+      "new_bytes": 62,
+      "old_sha256": "1712d6126cb969c7f2f21fb2de718960809b1782d1b39a06f772a21af78e16fe",
+      "new_sha256": "1712d6126cb969c7f2f21fb2de718960809b1782d1b39a06f772a21af78e16fe",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_normalized",
+      "old_bytes": 192,
+      "new_bytes": 192,
+      "old_sha256": "f56cfd282780b2f5d672f5b374fa7fca959623006178d2a7949915d2ddc3bfd1",
+      "new_sha256": "859b984ecb6d62297c62b64a22f6fa88c11c04783e30d9fe9f91d26903ec370a",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 84,
+      "changed_literal_slots": [
+        {
+          "offset": 180,
+          "before": "0x8ce2ea78",
+          "after": "0x8ce2eab8",
+          "roles": [
+            "_zero.0+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_native_readahead_bind",
+      "old_bytes": 1260,
+      "new_bytes": 1260,
+      "old_sha256": "15884ca7b30f8e684e7f4c744f9812c1e56ebbb80e0ec9dc0eef0169de95b822",
+      "new_sha256": "dd404775cb1b3c05aa842327ce2457807b10cb70c1daad0ac0fb3ff242eb8792",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 498,
+      "changed_literal_slots": [
+        {
+          "offset": 568,
+          "before": "0x8ce2c950",
+          "after": "0x8ce2c990",
+          "roles": [],
+          "same_text": "COLD 42 READ AHEAD BIND BEGIN"
+        },
+        {
+          "offset": 572,
+          "before": "0x8ce612e0",
+          "after": "0x8ce61320",
+          "roles": [
+            "_resident_bytes+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 576,
+          "before": "0x8ce612e4",
+          "after": "0x8ce61324",
+          "roles": [
+            "_resident_blob+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 604,
+          "before": "0x8ce612dc",
+          "after": "0x8ce6131c",
+          "roles": [
+            "_resident_limit+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 656,
+          "before": "0x8ce294c0",
+          "after": "0x8ce29500",
+          "roles": [
+            "_native_ra_aux_blob_start+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 660,
+          "before": "0x8ce2bcc0",
+          "after": "0x8ce2bd00",
+          "roles": [
+            "_native_ra_aux_blob_end+0",
+            "_native_ra_aux_reloc_start+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 664,
+          "before": "0x8ce2bcc0",
+          "after": "0x8ce2bd00",
+          "roles": [
+            "_native_ra_aux_blob_end+0",
+            "_native_ra_aux_reloc_start+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 668,
+          "before": "0x8ce2bff0",
+          "after": "0x8ce2c030",
+          "roles": [
+            "_native_ra_aux_reloc_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 920,
+          "before": "0x8ce2bcc0",
+          "after": "0x8ce2bd00",
+          "roles": [
+            "_native_ra_aux_blob_end+0",
+            "_native_ra_aux_reloc_start+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 924,
+          "before": "0x8ce294c0",
+          "after": "0x8ce29500",
+          "roles": [
+            "_native_ra_aux_blob_start+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1220,
+          "before": "0x8ce2c970",
+          "after": "0x8ce2c9b0",
+          "roles": [],
+          "same_text": "COLD 43 AUXILIARY INITIALIZE BEGIN"
+        },
+        {
+          "offset": 1236,
+          "before": "0x8ce2c994",
+          "after": "0x8ce2c9d4",
+          "roles": [],
+          "same_text": "COLD 44 AUXILIARY INITIALIZED"
+        },
+        {
+          "offset": 1252,
+          "before": "0x8ce2c9b4",
+          "after": "0x8ce2c9f4",
+          "roles": [],
+          "same_text": "BOUNDED READ AHEAD READY / 192 KIB CACHE"
+        },
+        {
+          "offset": 1256,
+          "before": "0x8ce2c9e0",
+          "after": "0x8ce2ca20",
+          "roles": [],
+          "same_text": "COLD 45 READ AHEAD BOUND"
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_background_map_address",
+      "old_bytes": 92,
+      "new_bytes": 92,
+      "old_sha256": "cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8",
+      "new_sha256": "cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_native_loader_timeline_bind",
+      "old_bytes": 180,
+      "new_bytes": 180,
+      "old_sha256": "743a44087cc4ba782cc765f32d463120bd7e3034dd65bc13ae1a92a1a97afd49",
+      "new_sha256": "743a44087cc4ba782cc765f32d463120bd7e3034dd65bc13ae1a92a1a97afd49",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_native_passive_run",
+      "old_bytes": 2004,
+      "new_bytes": 2004,
+      "old_sha256": "7431c08b14b678e0fd4c5b11b448f99c2df345b5e077cd633fbd0c389e58a44f",
+      "new_sha256": "45faee7a309e84b762aa3afed516f0683da1cc6370148d6018f09cccdf19bfaf",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 783,
+      "changed_literal_slots": [
+        {
+          "offset": 372,
+          "before": "0x8ce275c0",
+          "after": "0x8ce275e0",
+          "roles": [
+            "__native_worker_blob_end+0",
+            "__native_worker_reloc_begin+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 388,
+          "before": "0x8ce51c7c",
+          "after": "0x8ce51cbc",
+          "roles": [
+            "_native_driver+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 416,
+          "before": "0x8ce41a40",
+          "after": "0x8ce41a80",
+          "roles": [
+            "_passive_layout+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 424,
+          "before": "0x8ce8c5fc",
+          "after": "0x8ce8c63c",
+          "roles": [
+            "_display+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 428,
+          "before": "0x8ce51ce4",
+          "after": "0x8ce51d24",
+          "roles": [
+            "_native_persist_ready+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 436,
+          "before": "0x8ce51ce8",
+          "after": "0x8ce51d28",
+          "roles": [
+            "_native_persist_handoff+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 440,
+          "before": "0x8ce60834",
+          "after": "0x8ce60874",
+          "roles": [
+            "_native_persist_profile+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 448,
+          "before": "0x8ce41a10",
+          "after": "0x8ce41a50",
+          "roles": [
+            "_native_exits+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 844,
+          "before": "0x8ce2c9fc",
+          "after": "0x8ce2ca3c",
+          "roles": [],
+          "same_text": "COLD 30 READER MAP BIND BEGIN"
+        },
+        {
+          "offset": 856,
+          "before": "0x8ce8d000",
+          "after": "0x8ce8d040",
+          "roles": [
+            "_manifest+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 872,
+          "before": "0x8ce8c680",
+          "after": "0x8ce8c6c0",
+          "roles": [
+            "_native_background_boot_region+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 884,
+          "before": "0x8ce294c0",
+          "after": "0x8ce294f8",
+          "roles": [
+            "__native_worker_reloc_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 888,
+          "before": "0x8ce2ca1c",
+          "after": "0x8ce2ca5c",
+          "roles": [],
+          "same_text": "COLD 31 READER MAP BOUND"
+        },
+        {
+          "offset": 896,
+          "before": "0x8ce8c5fc",
+          "after": "0x8ce8c63c",
+          "roles": [
+            "_display+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 904,
+          "before": "0x8ce2ca38",
+          "after": "0x8ce2ca78",
+          "roles": [],
+          "same_text": "RELOCATING PASSIVE MAPLE WORKER"
+        },
+        {
+          "offset": 908,
+          "before": "0x8ce2ca58",
+          "after": "0x8ce2ca98",
+          "roles": [],
+          "same_text": "COLD 32 WORKER RELOCATION BEGIN"
+        },
+        {
+          "offset": 912,
+          "before": "0x8ce275c0",
+          "after": "0x8ce275e0",
+          "roles": [
+            "__native_worker_blob_end+0",
+            "__native_worker_reloc_begin+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 928,
+          "before": "0x8ce2ca78",
+          "after": "0x8ce2cab8",
+          "roles": [],
+          "same_text": "COLD 33 WORKER RELOCATED"
+        },
+        {
+          "offset": 1552,
+          "before": "0x8ce51c34",
+          "after": "0x8ce51c74",
+          "roles": [
+            "_native_heap+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1560,
+          "before": "0x8ce51c7c",
+          "after": "0x8ce51cbc",
+          "roles": [
+            "_native_driver+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1572,
+          "before": "0x8ce2ca94",
+          "after": "0x8ce2cad4",
+          "roles": [],
+          "same_text": "COLD 34 WORKER ARM BEGIN"
+        },
+        {
+          "offset": 1580,
+          "before": "0x8ce2cab0",
+          "after": "0x8ce2caf0",
+          "roles": [],
+          "same_text": "COLD 35 WORKER ARMED"
+        },
+        {
+          "offset": 1600,
+          "before": "0x8ce2d4f4",
+          "after": "0x8ce2d534",
+          "roles": [
+            "_original.7+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1604,
+          "before": "0x8ce419e0",
+          "after": "0x8ce41a20",
+          "roles": [
+            "_readonly_init_window+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1608,
+          "before": "0x8ce419cc",
+          "after": "0x8ce41a0c",
+          "roles": [
+            "_readonly_release_window+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1624,
+          "before": "0x8ce2cac8",
+          "after": "0x8ce2cb08",
+          "roles": [],
+          "same_text": "COLD 36 SDK HOOK PUBLICATION BEGIN"
+        },
+        {
+          "offset": 1636,
+          "before": "0x8ce419ec",
+          "after": "0x8ce41a2c",
+          "roles": [
+            "_persistent_exit_windows+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1640,
+          "before": "0x8ce41a28",
+          "after": "0x8ce41a68",
+          "roles": [
+            "_native_exits+24"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1644,
+          "before": "0x8ce41a10",
+          "after": "0x8ce41a50",
+          "roles": [
+            "_native_exits+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1656,
+          "before": "0x8ce612e8",
+          "after": "0x8ce61328",
+          "roles": [
+            "_exec_bytes+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1660,
+          "before": "0x8ce2d450",
+          "after": "0x8ce2d490",
+          "roles": [
+            "_digest.2+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1664,
+          "before": "0x8ce51cc4",
+          "after": "0x8ce51d04",
+          "roles": [
+            "_native_driver+72"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1984,
+          "before": "0x8ce2caec",
+          "after": "0x8ce2cb2c",
+          "roles": [],
+          "same_text": "COLD 37 SDK HOOKS INSTALLED"
+        },
+        {
+          "offset": 1992,
+          "before": "0x8ce2cb08",
+          "after": "0x8ce2cb48",
+          "roles": [],
+          "same_text": "ACTIVE HOOKS / ORIGINAL MAPLE DMA LIST"
+        },
+        {
+          "offset": 1996,
+          "before": "0x8ce2cb30",
+          "after": "0x8ce2cb70",
+          "roles": [],
+          "same_text": "ALL HOOKS ACTIVE / VIRTUAL VMU OFF"
+        },
+        {
+          "offset": 2000,
+          "before": "0x8ce2cb54",
+          "after": "0x8ce2cb94",
+          "roles": [],
+          "same_text": "PERSISTENT VIRTUAL A2 ARMED - STARTING GAME"
+        },
+        {
+          "offset": 1940,
+          "before": "0x8ce2d444",
+          "after": "0x8ce2d484",
+          "roles": [
+            "_witness.1+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_reader_readahead_exports",
+      "old_bytes": 200,
+      "new_bytes": 200,
+      "old_sha256": "8aff7e76749ea5df0c6ebde6e29824e7122433a5ee3dbc1caad2b1e1cea8dea6",
+      "new_sha256": "13ca433d369112a4b3184b17ec96e025a76e142e537d65c8d3bba2c6e9ce4d5e",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 75,
+      "changed_literal_slots": [
+        {
+          "offset": 156,
+          "before": "0xac11e120",
+          "after": "0xac11e140",
+          "roles": [
+            "_config+188",
+            "_config@vmu_native_passive.c+188"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_reader_capture_region",
+      "old_bytes": 100,
+      "new_bytes": 100,
+      "old_sha256": "dbfae616a3357a5e1ab3c907567dbf5b2735e29943bb42c2b7c1884b9aff4b7e",
+      "new_sha256": "f46dc671c3f853a40f735778e6e4d841b869e7a84d2ba92be85aca4e1e3870ed",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 32,
+      "changed_literal_slots": [
+        {
+          "offset": 64,
+          "before": "0xac11e120",
+          "after": "0xac11e140",
+          "roles": [
+            "_config+188",
+            "_config@vmu_native_passive.c+188"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_reader_readahead_visit",
+      "old_bytes": 56,
+      "new_bytes": 56,
+      "old_sha256": "277ea46f6d7d509e57e0be251e5f2e7f12e3193f8d9549d961cae44fc1b8bbb1",
+      "new_sha256": "277ea46f6d7d509e57e0be251e5f2e7f12e3193f8d9549d961cae44fc1b8bbb1",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_reader_readahead_exports",
+      "old_bytes": 200,
+      "new_bytes": 200,
+      "old_sha256": "8aff7e76749ea5df0c6ebde6e29824e7122433a5ee3dbc1caad2b1e1cea8dea6",
+      "new_sha256": "13ca433d369112a4b3184b17ec96e025a76e142e537d65c8d3bba2c6e9ce4d5e",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 75,
+      "changed_literal_slots": [
+        {
+          "offset": 156,
+          "before": "0xac11e120",
+          "after": "0xac11e140",
+          "roles": [
+            "_config+188",
+            "_config@vmu_native_passive.c+188"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_reader_readahead_visit",
+      "old_bytes": 56,
+      "new_bytes": 56,
+      "old_sha256": "277ea46f6d7d509e57e0be251e5f2e7f12e3193f8d9549d961cae44fc1b8bbb1",
+      "new_sha256": "277ea46f6d7d509e57e0be251e5f2e7f12e3193f8d9549d961cae44fc1b8bbb1",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_reader_cooperative_service",
+      "old_bytes": 32,
+      "new_bytes": 32,
+      "old_sha256": "93761d0e088c601b9fd30521f9c90d264c2806084b55d4bc55151264c62bfde5",
+      "new_sha256": "ddc28cc212c9261a5c5261056a3bfca676663a46e347c0ea8e116acfa642148e",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 11,
+      "changed_literal_slots": [
+        {
+          "offset": 24,
+          "before": "0xac11aebc",
+          "after": "0xac11aedc",
+          "roles": [
+            "_durable_card+4028",
+            "_durable_card@vmu_native_passive.c+4028"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_reader_readahead_failure",
+      "old_bytes": 172,
+      "new_bytes": 172,
+      "old_sha256": "95955f85153b1e6836dedc2e156b876c5e9edfbca3f3b940c4d0098eda2f7925",
+      "new_sha256": "5c6e08b53ee6155a6ddc698eb19bc2f84198265b1a13a44535e7711612b5781e",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 70,
+      "changed_literal_slots": [
+        {
+          "offset": 144,
+          "before": "0x8c107af4",
+          "after": "0x8c107b0c",
+          "roles": [
+            "_retail_display_restore+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 148,
+          "before": "0x8c10f20c",
+          "after": "0x8c10f22c",
+          "roles": [
+            "_CSWTCH.348+28",
+            "_CSWTCH.348@vmu_native_passive.c+28"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 152,
+          "before": "0x8c107cae",
+          "after": "0x8c107cc6",
+          "roles": [
+            "_memcpy+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 156,
+          "before": "0x8c10f22c",
+          "after": "0x8c10f24c",
+          "roles": [
+            "_count.1+0",
+            "_count.1@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 160,
+          "before": "0x8c10f234",
+          "after": "0x8c10f254",
+          "roles": [
+            "_field.2+0",
+            "_field.2@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 164,
+          "before": "0x8c107be0",
+          "after": "0x8c107bf8",
+          "roles": [
+            "_retail_display_values+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 168,
+          "before": "0x8c107c5c",
+          "after": "0x8c107c74",
+          "roles": [
+            "_retail_display_pause+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_failure_witness.isra.0",
+      "old_bytes": 16,
+      "new_bytes": 16,
+      "old_sha256": "c767a1c8cebf3cd2b7881bf86e65b0e13f7dc3ca0098455f9303ec2dcbc7e319",
+      "new_sha256": "9752e82987994a19f8731a90d3b4535ad753e1b665a1a545be8978d4ee8e2280",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 6,
+      "changed_literal_slots": [
+        {
+          "offset": 12,
+          "before": "0xac11e040",
+          "after": "0xac11e060",
+          "roles": [
+            "_state+64",
+            "_state@vmu_native_passive.c+64"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_poll_lease_valid",
+      "old_bytes": 168,
+      "new_bytes": 168,
+      "old_sha256": "374a4a822a443d28492d5b3214883dc6f499bdf652b8c8be339270e03817ad53",
+      "new_sha256": "0f7e1c830251aa4def6d855319893a96289a625f98b3fe1faa2c9ed873138311",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 72,
+      "changed_literal_slots": [
+        {
+          "offset": 144,
+          "before": "0xac115508",
+          "after": "0xac115528",
+          "roles": [
+            "_lifetime_plan+0",
+            "_lifetime_plan@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 152,
+          "before": "0x8c101268",
+          "after": "0x8c10137c",
+          "roles": [
+            "_normalize_heap_dispatch+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 160,
+          "before": "0x8c101428",
+          "after": "0x8c101450",
+          "roles": [
+            "_failure_witness.isra.0+0",
+            "_failure_witness.isra.0@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_controller_context_valid",
+      "old_bytes": 1336,
+      "new_bytes": 1336,
+      "old_sha256": "4c7944282ca23b0482686f1c08ea701b01dd54bcf2e6b7e42bcd6e7858e2f971",
+      "new_sha256": "f16c718a47e91f5088b46953cffb8bd7aa50cce54d9ef3b23682369dda25c48a",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 558,
+      "changed_literal_slots": [
+        {
+          "offset": 648,
+          "before": "0xac115a30",
+          "after": "0xac115a50",
+          "roles": [
+            "_live_plan+0",
+            "_live_plan@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 652,
+          "before": "0xac115974",
+          "after": "0xac115994",
+          "roles": [
+            "_controller_pair+0",
+            "_controller_pair@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 664,
+          "before": "0x8c101428",
+          "after": "0x8c101450",
+          "roles": [
+            "_failure_witness.isra.0+0",
+            "_failure_witness.isra.0@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 668,
+          "before": "0x8c101d20",
+          "after": "0x8c101d48",
+          "roles": [
+            "_transfer_context_valid+0",
+            "_transfer_context_valid@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 672,
+          "before": "0xac11e064",
+          "after": "0xac11e084",
+          "roles": [
+            "_config+0",
+            "_config@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1296,
+          "before": "0x8c105e70",
+          "after": "0x8c105e88",
+          "roles": [
+            "_kui_vmu_native_timer_callback_owned+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1300,
+          "before": "0xac11e070",
+          "after": "0xac11e090",
+          "roles": [
+            "_config+12",
+            "_config@vmu_native_passive.c+12"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1312,
+          "before": "0xac115a74",
+          "after": "0xac115a94",
+          "roles": [
+            "_live_plan+68",
+            "_live_plan@vmu_native_passive.c+68"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1320,
+          "before": "0xac115974",
+          "after": "0xac115994",
+          "roles": [
+            "_controller_pair+0",
+            "_controller_pair@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1324,
+          "before": "0xac115a14",
+          "after": "0xac115a34",
+          "roles": [
+            "_controller_pair+160",
+            "_controller_pair@vmu_native_passive.c+160"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1332,
+          "before": "0xac115a30",
+          "after": "0xac115a50",
+          "roles": [
+            "_live_plan+0",
+            "_live_plan@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_passive_complete",
+      "old_bytes": 3144,
+      "new_bytes": 3144,
+      "old_sha256": "acde71e900ac6c3b250ef499071fc071ed02e07529a88a316e43700dcee60a58",
+      "new_sha256": "42e4aedebd7c2d69e97a9219256f12827d57fb5c2185e7640124040a35385176",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 1318,
+      "changed_literal_slots": [
+        {
+          "offset": 696,
+          "before": "0x8c109514",
+          "after": "0x8c10952c",
+          "roles": [
+            "_kui_vmu_native_trace_point+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 700,
+          "before": "0xac11e000",
+          "after": "0xac11e020",
+          "roles": [
+            "_state+0",
+            "_state@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 704,
+          "before": "0xac11e920",
+          "after": "0xac11e940",
+          "roles": [
+            "_config+2236",
+            "_config@vmu_native_passive.c+2236"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 708,
+          "before": "0x8c101ab4",
+          "after": "0x8c101adc",
+          "roles": [
+            "_diagnostic_pair_begin+0",
+            "_diagnostic_pair_begin@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 716,
+          "before": "0x8c101cac",
+          "after": "0x8c101cd4",
+          "roles": [
+            "_stack_valid+0",
+            "_stack_valid@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 720,
+          "before": "0x8c10137c",
+          "after": "0x8c1013a4",
+          "roles": [
+            "_installed_hooks_valid+0",
+            "_installed_hooks_valid@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 724,
+          "before": "0xac11e040",
+          "after": "0xac11e060",
+          "roles": [
+            "_state+64",
+            "_state@vmu_native_passive.c+64"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 728,
+          "before": "0x8c101438",
+          "after": "0x8c101460",
+          "roles": [
+            "_poll_lease_valid+0",
+            "_poll_lease_valid@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 732,
+          "before": "0xac115974",
+          "after": "0xac115994",
+          "roles": [
+            "_controller_pair+0",
+            "_controller_pair@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1600,
+          "before": "0xac115c44",
+          "after": "0xac115c64",
+          "roles": [
+            "_issued_plan+0",
+            "_issued_plan@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1904,
+          "before": "0x8c10cbf4",
+          "after": "0x8c10cc0c",
+          "roles": [
+            "_kui_vmu_volatile_chain_verify+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1908,
+          "before": "0xac116f00",
+          "after": "0xac116f20",
+          "roles": [
+            "_issued_chain+0",
+            "_issued_chain@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1912,
+          "before": "0xac115c44",
+          "after": "0xac115c64",
+          "roles": [
+            "_issued_plan+0",
+            "_issued_plan@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1924,
+          "before": "0x8c101cac",
+          "after": "0x8c101cd4",
+          "roles": [
+            "_stack_valid+0",
+            "_stack_valid@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1928,
+          "before": "0xac11e0a4",
+          "after": "0xac11e0c4",
+          "roles": [
+            "_config+64",
+            "_config@vmu_native_passive.c+64"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1932,
+          "before": "0xac10f664",
+          "after": "0xac10f684",
+          "roles": [
+            "_kui_vmu_native_passive_consumer+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1936,
+          "before": "0x8c109514",
+          "after": "0x8c10952c",
+          "roles": [
+            "_kui_vmu_native_trace_point+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1944,
+          "before": "0x8c107cae",
+          "after": "0x8c107cc6",
+          "roles": [
+            "_memcpy+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1948,
+          "before": "0xac115bf8",
+          "after": "0xac115c18",
+          "roles": [
+            "_completion_frame+0",
+            "_completion_frame@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1952,
+          "before": "0x8c1021bc",
+          "after": "0x8c1021e4",
+          "roles": [
+            "_persistent_context_guard+0",
+            "_persistent_context_guard@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1956,
+          "before": "0xac10f680",
+          "after": "0xac10f6a0",
+          "roles": [
+            "__vmu_native_worker_bss_begin+0",
+            "_overlay_frames+0",
+            "_overlay_frames@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1960,
+          "before": "0xac11af40",
+          "after": "0xac11af60",
+          "roles": [
+            "_receivers+0",
+            "_receivers@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1964,
+          "before": "0xac116c70",
+          "after": "0xac116c90",
+          "roles": [
+            "_chain_frames+0",
+            "_chain_frames@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1968,
+          "before": "0xac11e000",
+          "after": "0xac11e020",
+          "roles": [
+            "_state+0",
+            "_state@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1972,
+          "before": "0xac11e920",
+          "after": "0xac11e940",
+          "roles": [
+            "_config+2236",
+            "_config@vmu_native_passive.c+2236"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1976,
+          "before": "0xac10fa00",
+          "after": "0xac10fa20",
+          "roles": [
+            "_overlay+0",
+            "_overlay@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1980,
+          "before": "0x8c108e3c",
+          "after": "0x8c108e54",
+          "roles": [
+            "_kui_vmu_readonly_overlay_complete_absent+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1984,
+          "before": "0x8c108a50",
+          "after": "0x8c108a68",
+          "roles": [
+            "_kui_vmu_readonly_overlay_complete+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1988,
+          "before": "0xac11e040",
+          "after": "0xac11e060",
+          "roles": [
+            "_state+64",
+            "_state@vmu_native_passive.c+64"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1992,
+          "before": "0xac11aebc",
+          "after": "0xac11aedc",
+          "roles": [
+            "_durable_card+4028",
+            "_durable_card@vmu_native_passive.c+4028"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 3140,
+          "before": "0x8c1029f0",
+          "after": "0x8c102a18",
+          "roles": [
+            "_diagnostic_complete+0",
+            "_diagnostic_complete@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 2336,
+          "before": "0xac11e000",
+          "after": "0xac11e020",
+          "roles": [
+            "_state+0",
+            "_state@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 736,
+          "before": "0xac10fa40",
+          "after": "0xac10fa60",
+          "roles": [
+            "_overlay+64",
+            "_overlay@vmu_native_passive.c+64"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 740,
+          "before": "0xac11aebc",
+          "after": "0xac11aedc",
+          "roles": [
+            "_durable_card+4028",
+            "_durable_card@vmu_native_passive.c+4028"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 748,
+          "before": "0x8c101428",
+          "after": "0x8c101450",
+          "roles": [
+            "_failure_witness.isra.0+0",
+            "_failure_witness.isra.0@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 752,
+          "before": "0xac115990",
+          "after": "0xac1159b0",
+          "roles": [
+            "_controller_pair+28",
+            "_controller_pair@vmu_native_passive.c+28"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 792,
+          "before": "0xac115a10",
+          "after": "0xac115a30",
+          "roles": [
+            "_controller_pair+156",
+            "_controller_pair@vmu_native_passive.c+156"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1520,
+          "before": "0xac11e000",
+          "after": "0xac11e020",
+          "roles": [
+            "_state+0",
+            "_state@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1524,
+          "before": "0x8c102298",
+          "after": "0x8c1022c0",
+          "roles": [
+            "_controller_context_valid+0",
+            "_controller_context_valid@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1528,
+          "before": "0xac115974",
+          "after": "0xac115994",
+          "roles": [
+            "_controller_pair+0",
+            "_controller_pair@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1540,
+          "before": "0xac10fa00",
+          "after": "0xac10fa20",
+          "roles": [
+            "_overlay+0",
+            "_overlay@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1544,
+          "before": "0xac11aebc",
+          "after": "0xac11aedc",
+          "roles": [
+            "_durable_card+4028",
+            "_durable_card@vmu_native_passive.c+4028"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1548,
+          "before": "0xac11e040",
+          "after": "0xac11e060",
+          "roles": [
+            "_state+64",
+            "_state@vmu_native_passive.c+64"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1556,
+          "before": "0xac11e920",
+          "after": "0xac11e940",
+          "roles": [
+            "_config+2236",
+            "_config@vmu_native_passive.c+2236"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1592,
+          "before": "0x8c1029f0",
+          "after": "0x8c102a18",
+          "roles": [
+            "_diagnostic_complete+0",
+            "_diagnostic_complete@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1596,
+          "before": "0x8c109514",
+          "after": "0x8c10952c",
+          "roles": [
+            "_kui_vmu_native_trace_point+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1136,
+          "before": "0xac11e000",
+          "after": "0xac11e020",
+          "roles": [
+            "_state+0",
+            "_state@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_passive_submit",
+      "old_bytes": 1428,
+      "new_bytes": 1428,
+      "old_sha256": "fe8fd3c96932569f8453eb71fe726d1059d3450af94fa9c17b6134f9a1381c7e",
+      "new_sha256": "7acadc803779a90ba75f9578672284473f83e09dac6a2654c95c0848ac8064b4",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 567,
+      "changed_literal_slots": [
+        {
+          "offset": 472,
+          "before": "0x8c109514",
+          "after": "0x8c10952c",
+          "roles": [
+            "_kui_vmu_native_trace_point+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 476,
+          "before": "0xac11e000",
+          "after": "0xac11e020",
+          "roles": [
+            "_state+0",
+            "_state@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 480,
+          "before": "0xac11e920",
+          "after": "0xac11e940",
+          "roles": [
+            "_config+2236",
+            "_config@vmu_native_passive.c+2236"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 484,
+          "before": "0x8c101ab4",
+          "after": "0x8c101adc",
+          "roles": [
+            "_diagnostic_pair_begin+0",
+            "_diagnostic_pair_begin@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 492,
+          "before": "0x8c101cac",
+          "after": "0x8c101cd4",
+          "roles": [
+            "_stack_valid+0",
+            "_stack_valid@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 500,
+          "before": "0x8c10137c",
+          "after": "0x8c1013a4",
+          "roles": [
+            "_installed_hooks_valid+0",
+            "_installed_hooks_valid@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 528,
+          "before": "0xac11e064",
+          "after": "0xac11e084",
+          "roles": [
+            "_config+0",
+            "_config@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 532,
+          "before": "0x8c101438",
+          "after": "0x8c101460",
+          "roles": [
+            "_poll_lease_valid+0",
+            "_poll_lease_valid@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 536,
+          "before": "0xac10f660",
+          "after": "0xac10f680",
+          "roles": [
+            "_kui_vmu_native_passive_resume+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 544,
+          "before": "0x8c101428",
+          "after": "0x8c101450",
+          "roles": [
+            "_failure_witness.isra.0+0",
+            "_failure_witness.isra.0@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 548,
+          "before": "0xac10f664",
+          "after": "0xac10f684",
+          "roles": [
+            "_kui_vmu_native_passive_consumer+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 564,
+          "before": "0xac115a30",
+          "after": "0xac115a50",
+          "roles": [
+            "_live_plan+0",
+            "_live_plan@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 568,
+          "before": "0xac10fa40",
+          "after": "0xac10fa60",
+          "roles": [
+            "_overlay+64",
+            "_overlay@vmu_native_passive.c+64"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 572,
+          "before": "0xac115974",
+          "after": "0xac115994",
+          "roles": [
+            "_controller_pair+0",
+            "_controller_pair@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1168,
+          "before": "0xac115974",
+          "after": "0xac115994",
+          "roles": [
+            "_controller_pair+0",
+            "_controller_pair@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1148,
+          "before": "0xac115994",
+          "after": "0xac1159b4",
+          "roles": [
+            "_controller_pair+32",
+            "_controller_pair@vmu_native_passive.c+32"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1172,
+          "before": "0xac11e064",
+          "after": "0xac11e084",
+          "roles": [
+            "_config+0",
+            "_config@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 584,
+          "before": "0xac11e120",
+          "after": "0xac11e140",
+          "roles": [
+            "_config+188",
+            "_config@vmu_native_passive.c+188"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 588,
+          "before": "0x8c1085e0",
+          "after": "0x8c1085f8",
+          "roles": [
+            "_kui_vmu_readonly_overlay_prepare+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 592,
+          "before": "0xac10fa00",
+          "after": "0xac10fa20",
+          "roles": [
+            "_overlay+0",
+            "_overlay@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 596,
+          "before": "0xac10f680",
+          "after": "0xac10f6a0",
+          "roles": [
+            "__vmu_native_worker_bss_begin+0",
+            "_overlay_frames+0",
+            "_overlay_frames@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 600,
+          "before": "0xac11e040",
+          "after": "0xac11e060",
+          "roles": [
+            "_state+64",
+            "_state@vmu_native_passive.c+64"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1224,
+          "before": "0xac116f00",
+          "after": "0xac116f20",
+          "roles": [
+            "_issued_chain+0",
+            "_issued_chain@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1228,
+          "before": "0x8c10c818",
+          "after": "0x8c10c830",
+          "roles": [
+            "_kui_vmu_volatile_chain_build_address+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1232,
+          "before": "0xac116c70",
+          "after": "0xac116c90",
+          "roles": [
+            "_chain_frames+0",
+            "_chain_frames@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1236,
+          "before": "0xac115c44",
+          "after": "0xac115c64",
+          "roles": [
+            "_issued_plan+0",
+            "_issued_plan@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1392,
+          "before": "0x8c10cbf4",
+          "after": "0x8c10cc0c",
+          "roles": [
+            "_kui_vmu_volatile_chain_verify+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1396,
+          "before": "0xac115c44",
+          "after": "0xac115c64",
+          "roles": [
+            "_issued_plan+0",
+            "_issued_plan@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1404,
+          "before": "0x8c101d20",
+          "after": "0x8c101d48",
+          "roles": [
+            "_transfer_context_valid+0",
+            "_transfer_context_valid@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1408,
+          "before": "0x8c109514",
+          "after": "0x8c10952c",
+          "roles": [
+            "_kui_vmu_native_trace_point+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1412,
+          "before": "0xac11e920",
+          "after": "0xac11e940",
+          "roles": [
+            "_config+2236",
+            "_config@vmu_native_passive.c+2236"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1420,
+          "before": "0xac11536c",
+          "after": "0xac11538c",
+          "roles": [
+            "_diagnostic+124",
+            "_diagnostic@vmu_native_passive.c+124"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1424,
+          "before": "0x8c1014e0",
+          "after": "0x8c101508",
+          "roles": [
+            "_diagnostic_end+0",
+            "_diagnostic_end@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 612,
+          "before": "0xac116f00",
+          "after": "0xac116f20",
+          "roles": [
+            "_issued_chain+0",
+            "_issued_chain@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1188,
+          "before": "0x8c102298",
+          "after": "0x8c1022c0",
+          "roles": [
+            "_controller_context_valid+0",
+            "_controller_context_valid@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1192,
+          "before": "0xac11e000",
+          "after": "0xac11e020",
+          "roles": [
+            "_state+0",
+            "_state@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1196,
+          "before": "0xac10fa00",
+          "after": "0xac10fa20",
+          "roles": [
+            "_overlay+0",
+            "_overlay@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1200,
+          "before": "0xac1159f0",
+          "after": "0xac115a10",
+          "roles": [
+            "_controller_pair+124",
+            "_controller_pair@vmu_native_passive.c+124"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1204,
+          "before": "0xac115bec",
+          "after": "0xac115c0c",
+          "roles": [
+            "_live_plan+444",
+            "_live_plan@vmu_native_passive.c+444"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1208,
+          "before": "0xac11e920",
+          "after": "0xac11e940",
+          "roles": [
+            "_config+2236",
+            "_config@vmu_native_passive.c+2236"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1212,
+          "before": "0xac11536c",
+          "after": "0xac11538c",
+          "roles": [
+            "_diagnostic+124",
+            "_diagnostic@vmu_native_passive.c+124"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1216,
+          "before": "0x8c1014e0",
+          "after": "0x8c101508",
+          "roles": [
+            "_diagnostic_end+0",
+            "_diagnostic_end@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1220,
+          "before": "0x8c109514",
+          "after": "0x8c10952c",
+          "roles": [
+            "_kui_vmu_native_trace_point+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_read_value",
+      "old_bytes": 180,
+      "new_bytes": 180,
+      "old_sha256": "2bf8aacc78250e0aabc16c8037ae642b34e52ecf935cddc2b8915ad36b024a4c",
+      "new_sha256": "2bf8aacc78250e0aabc16c8037ae642b34e52ecf935cddc2b8915ad36b024a4c",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_readonly_rx.constprop.0",
+      "old_bytes": 76,
+      "new_bytes": 76,
+      "old_sha256": "8ae835afcc6563c32e1756bbe4979d5caf8c18cb54be8755beb897429d5300a9",
+      "new_sha256": "8ae835afcc6563c32e1756bbe4979d5caf8c18cb54be8755beb897429d5300a9",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_stack_valid",
+      "old_bytes": 116,
+      "new_bytes": 116,
+      "old_sha256": "b9212c5a929502d27eb5f982a9c1b826b15c5e043551de480281602257880a54",
+      "new_sha256": "a3bffefb714c3fd498142d7497a5604494489efe5ff57b29bd0df0c14763fc7f",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 42,
+      "changed_literal_slots": [
+        {
+          "offset": 92,
+          "before": "0xac11e000",
+          "after": "0xac11e020",
+          "roles": [
+            "_state+0",
+            "_state@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_installed_hooks_valid",
+      "old_bytes": 128,
+      "new_bytes": 128,
+      "old_sha256": "8d2fbe746c594eebb395c7d1b04b761c72045b7427182ac042c8f2798212b384",
+      "new_sha256": "45d892df98fb230832b9ebfd61c585fa96712168a09eca763a6b73ec168cfd5f",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 53,
+      "changed_literal_slots": [
+        {
+          "offset": 108,
+          "before": "0xac115380",
+          "after": "0xac1153a0",
+          "roles": [
+            "_hook_witness_ready+0",
+            "_hook_witness_ready@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 116,
+          "before": "0xac115384",
+          "after": "0xac1153a4",
+          "roles": [
+            "_hook_witness_count+0",
+            "_hook_witness_count@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 120,
+          "before": "0xac115388",
+          "after": "0xac1153a8",
+          "roles": [
+            "_hook_witness+0",
+            "_hook_witness@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 124,
+          "before": "0x8c101268",
+          "after": "0x8c10137c",
+          "roles": [
+            "_normalize_heap_dispatch+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_normalize_heap_dispatch",
+      "old_bytes": 276,
+      "new_bytes": 276,
+      "old_sha256": "f50c53f8bf89a37291d0d6ce28d9550c6af29cf89d854033824169ed5436e9b5",
+      "new_sha256": "d44506592fed307c3ea37afb1019bd77045bb00993a088e30a699396300cc946",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 123,
+      "changed_literal_slots": [
+        {
+          "offset": 248,
+          "before": "0xac11e0e0",
+          "after": "0xac11e100",
+          "roles": [
+            "_config+124",
+            "_config@vmu_native_passive.c+124"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 252,
+          "before": "0xac11e920",
+          "after": "0xac11e940",
+          "roles": [
+            "_config+2236",
+            "_config@vmu_native_passive.c+2236"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 260,
+          "before": "0x8c10f338",
+          "after": "0x8c10f358",
+          "roles": [
+            "_kui_vmu_native_terminal_dispatch_entries+0",
+            "_kui_vmu_native_terminal_dispatch_entries@vmu_native_passive.c+0"
+          ],
+          "same_text": "&"
+        },
+        {
+          "offset": 268,
+          "before": "0x8c10f2d8",
+          "after": "0x8c10f2f8",
+          "roles": [
+            "_kui_vmu_native_terminal_dispatch_words+0",
+            "_kui_vmu_native_terminal_dispatch_words@vmu_native_passive.c+0"
+          ],
+          "same_text": "&"
+        },
+        {
+          "offset": 272,
+          "before": "0x8c1078bc",
+          "after": "0x8c1078d4",
+          "roles": [
+            "_kui_vmu_native_patch_encode+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_terminal_dispatch_span.constprop.0",
+      "old_bytes": 128,
+      "new_bytes": 128,
+      "old_sha256": "a32dafc3eeb54ac8eb1dca03f537f641665a9074f4d32349b8fc5f49b79dfe56",
+      "new_sha256": "697c229576a1d5b73015e2f734462614c2d843c139ca64c0dae338a324f20cf2",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 47,
+      "changed_literal_slots": [
+        {
+          "offset": 108,
+          "before": "0xac11e920",
+          "after": "0xac11e940",
+          "roles": [
+            "_config+2236",
+            "_config@vmu_native_passive.c+2236"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_terminal_dispatch_tagged.constprop.0",
+      "old_bytes": 100,
+      "new_bytes": 100,
+      "old_sha256": "e0b5f67393a6bc294be25a8cfa1adfe82b0dda2394e5792c158b827aa79a0ec4",
+      "new_sha256": "3b9061514a00b238b9ff8f275c8e411017b50592834bbdb73f180dd18963116c",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 45,
+      "changed_literal_slots": [
+        {
+          "offset": 92,
+          "before": "0xac11e920",
+          "after": "0xac11e940",
+          "roles": [
+            "_config+2236",
+            "_config@vmu_native_passive.c+2236"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_patch_encode",
+      "old_bytes": 168,
+      "new_bytes": 168,
+      "old_sha256": "8961ec44233e80115ceb32b6227b994e17b435a9abaeab41e113556ccf576ebc",
+      "new_sha256": "9ab6c8f3a9c74bb0250b8ca3f931ea5a453f4215570a40ee5810153628c87e01",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 68,
+      "changed_literal_slots": [
+        {
+          "offset": 136,
+          "before": "0x8c10786c",
+          "after": "0x8c107884",
+          "roles": [
+            "_ram@vmu_native_patch.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 160,
+          "before": "0x8c107cae",
+          "after": "0x8c107cc6",
+          "roles": [
+            "_memcpy+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 164,
+          "before": "0x8c10f348",
+          "after": "0x8c10f368",
+          "roles": [
+            "authored_patch_encode_six_halfword_template"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_read_heap_raw",
+      "old_bytes": 104,
+      "new_bytes": 104,
+      "old_sha256": "ba6f179b61b78a8bf700d46bac6237e4287d61bbe9cde913a8768ce99e732035",
+      "new_sha256": "ba6f179b61b78a8bf700d46bac6237e4287d61bbe9cde913a8768ce99e732035",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_memcpy",
+      "old_bytes": 72,
+      "new_bytes": 72,
+      "old_sha256": "cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634",
+      "new_sha256": "cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_trace_point",
+      "old_bytes": 1132,
+      "new_bytes": 1132,
+      "old_sha256": "e5a3843ad4c34048b3eedfac27865193088807015c74c4a7f460efc556c7f67c",
+      "new_sha256": "a1efbe4acef96bfe9d7c31679e9c8fa36fdb5500f4987a3b5f2c490969614af0",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 480,
+      "changed_literal_slots": [
+        {
+          "offset": 628,
+          "before": "0xac11e964",
+          "after": "0xac11e984",
+          "roles": [
+            "_trace+0",
+            "_trace@vmu_native_trace.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 636,
+          "before": "0xac11e9a4",
+          "after": "0xac11e9c4",
+          "roles": [
+            "_trace+64",
+            "_trace@vmu_native_trace.c+64"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 640,
+          "before": "0xac11eeec",
+          "after": "0xac11ef0c",
+          "roles": [
+            "_trace+1416",
+            "_trace@vmu_native_trace.c+1416"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 696,
+          "before": "0x8c10e0fc",
+          "after": "0x8c10e114",
+          "roles": [
+            "_kui_vmu_native_trace_irq+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 708,
+          "before": "0xac11eee0",
+          "after": "0xac11ef00",
+          "roles": [
+            "_trace+1404",
+            "_trace@vmu_native_trace.c+1404"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1108,
+          "before": "0xac11e964",
+          "after": "0xac11e984",
+          "roles": [
+            "_trace+0",
+            "_trace@vmu_native_trace.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1112,
+          "before": "0xac11eee0",
+          "after": "0xac11ef00",
+          "roles": [
+            "_trace+1404",
+            "_trace@vmu_native_trace.c+1404"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1124,
+          "before": "0x8c10f4e2",
+          "after": "0x8c10f502",
+          "roles": [
+            "_hex_font+0",
+            "_hex_font@vmu_native_trace.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_reader_capture_region",
+      "old_bytes": 100,
+      "new_bytes": 100,
+      "old_sha256": "dbfae616a3357a5e1ab3c907567dbf5b2735e29943bb42c2b7c1884b9aff4b7e",
+      "new_sha256": "f46dc671c3f853a40f735778e6e4d841b869e7a84d2ba92be85aca4e1e3870ed",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 32,
+      "changed_literal_slots": [
+        {
+          "offset": 64,
+          "before": "0xac11e120",
+          "after": "0xac11e140",
+          "roles": [
+            "_config+188",
+            "_config@vmu_native_passive.c+188"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_reader_cooperative_service",
+      "old_bytes": 32,
+      "new_bytes": 32,
+      "old_sha256": "93761d0e088c601b9fd30521f9c90d264c2806084b55d4bc55151264c62bfde5",
+      "new_sha256": "ddc28cc212c9261a5c5261056a3bfca676663a46e347c0ea8e116acfa642148e",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 11,
+      "changed_literal_slots": [
+        {
+          "offset": 24,
+          "before": "0xac11aebc",
+          "after": "0xac11aedc",
+          "roles": [
+            "_durable_card+4028",
+            "_durable_card@vmu_native_passive.c+4028"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_reader_readahead_exports",
+      "old_bytes": 200,
+      "new_bytes": 200,
+      "old_sha256": "8aff7e76749ea5df0c6ebde6e29824e7122433a5ee3dbc1caad2b1e1cea8dea6",
+      "new_sha256": "13ca433d369112a4b3184b17ec96e025a76e142e537d65c8d3bba2c6e9ce4d5e",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 75,
+      "changed_literal_slots": [
+        {
+          "offset": 156,
+          "before": "0xac11e120",
+          "after": "0xac11e140",
+          "roles": [
+            "_config+188",
+            "_config@vmu_native_passive.c+188"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_reader_readahead_visit",
+      "old_bytes": 56,
+      "new_bytes": 56,
+      "old_sha256": "277ea46f6d7d509e57e0be251e5f2e7f12e3193f8d9549d961cae44fc1b8bbb1",
+      "new_sha256": "277ea46f6d7d509e57e0be251e5f2e7f12e3193f8d9549d961cae44fc1b8bbb1",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_timer_callback_owned",
+      "old_bytes": 92,
+      "new_bytes": 92,
+      "old_sha256": "07aadc00aba1b1f9a650eb58e9b39e0c200a2c6e85e83e9922a0eb00f1841edb",
+      "new_sha256": "b6498e6100e639a321f46b4ebfe7e0df56af92051f0b2917b8a55df00ae2d33d",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 42,
+      "changed_literal_slots": [
+        {
+          "offset": 84,
+          "before": "0x8c105ddc",
+          "after": "0x8c105df4",
+          "roles": [
+            "_ram@vmu_native_runtime.c+0",
+            "_timer_runtime_ram+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 88,
+          "before": "0x8c105e56",
+          "after": "0x8c105e6e",
+          "roles": [
+            "_in+0",
+            "_in@vmu_native_runtime.c+0",
+            "_timer_runtime_in+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_timer_runtime_ram",
+      "old_bytes": 104,
+      "new_bytes": 104,
+      "old_sha256": "4fb7919a6f74ec1c9aa3f434e446b352f7961eb7c565580f0c4e2e52a3eff415",
+      "new_sha256": "4fb7919a6f74ec1c9aa3f434e446b352f7961eb7c565580f0c4e2e52a3eff415",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_timer_runtime_in",
+      "old_bytes": 26,
+      "new_bytes": 26,
+      "old_sha256": "a0ff5d4d27ccbf7b073b8bc6f0e6b26659e6b729763f7b02d49aa124ea023824",
+      "new_sha256": "a0ff5d4d27ccbf7b073b8bc6f0e6b26659e6b729763f7b02d49aa124ea023824",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_live_boundary",
+      "old_bytes": 216,
+      "new_bytes": 216,
+      "old_sha256": "284c39b1b5f46b7d8142430bead1e366fd22728a10c1712a7d795d15adb59c65",
+      "new_sha256": "3038bff49df0d0bfc5d03f50fb294929b70cf4c6831cefb5646556909d87b7b4",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 87,
+      "changed_literal_slots": [
+        {
+          "offset": 176,
+          "before": "0xac11e000",
+          "after": "0xac11e020",
+          "roles": [
+            "_state+0",
+            "_state@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 180,
+          "before": "0xac115a30",
+          "after": "0xac115a50",
+          "roles": [
+            "_live_plan+0",
+            "_live_plan@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 184,
+          "before": "0x8c10cde4",
+          "after": "0x8c10cdfc",
+          "roles": [
+            "_kui_vmu_native_live_prepare+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 192,
+          "before": "0xac11e070",
+          "after": "0xac11e090",
+          "roles": [
+            "_config+12",
+            "_config@vmu_native_passive.c+12"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 196,
+          "before": "0xac11e304",
+          "after": "0xac11e324",
+          "roles": [
+            "_config+672",
+            "_config@vmu_native_passive.c+672"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 200,
+          "before": "0xac11e14c",
+          "after": "0xac11e16c",
+          "roles": [
+            "_config+232",
+            "_config@vmu_native_passive.c+232"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 212,
+          "before": "0xac11e064",
+          "after": "0xac11e084",
+          "roles": [
+            "_config+0",
+            "_config@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 208,
+          "before": "0x8c10d02c",
+          "after": "0x8c10d044",
+          "roles": [
+            "_kui_vmu_native_live_check+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_bin_at",
+      "old_bytes": 144,
+      "new_bytes": 144,
+      "old_sha256": "668a6349b8897440ebe888b256fe5ff614c5a628eb34d6290740b4925c48cbd8",
+      "new_sha256": "7d62c701f21e400b67d3f1f3bda97d8cf24f02d9349d4ab2a94311fc09e1d4b1",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 60,
+      "changed_literal_slots": [
+        {
+          "offset": 140,
+          "before": "0x8c10d70c",
+          "after": "0x8c10d724",
+          "roles": [
+            "_add32+0",
+            "_add32@native_loader_timeline.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_diagnostic_complete",
+      "old_bytes": 3610,
+      "new_bytes": 3610,
+      "old_sha256": "43531bed887c2f00647fb237d84a3e78c5f69011f1721f30812bc0bd92abc823",
+      "new_sha256": "6e089704293ac65b92d1e5fd8c17404abd3fa0112152302d777b56f45c306def",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 1452,
+      "changed_literal_slots": [
+        {
+          "offset": 452,
+          "before": "0x8c1014e0",
+          "after": "0x8c101508",
+          "roles": [
+            "_diagnostic_end+0",
+            "_diagnostic_end@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 456,
+          "before": "0xac11536c",
+          "after": "0xac11538c",
+          "roles": [
+            "_diagnostic+124",
+            "_diagnostic@vmu_native_passive.c+124"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 460,
+          "before": "0xac115330",
+          "after": "0xac115350",
+          "roles": [
+            "_diagnostic+64",
+            "_diagnostic@vmu_native_passive.c+64"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 464,
+          "before": "0x8c107c94",
+          "after": "0x8c107cac",
+          "roles": [
+            "_memset+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 468,
+          "before": "0xac114f64",
+          "after": "0xac114f84",
+          "roles": [
+            "_diagnostic_phase+0",
+            "_diagnostic_phase@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 472,
+          "before": "0xac11e000",
+          "after": "0xac11e020",
+          "roles": [
+            "_state+0",
+            "_state@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 480,
+          "before": "0xac114d68",
+          "after": "0xac114d88",
+          "roles": [
+            "_reader_capture+0",
+            "_reader_capture@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 488,
+          "before": "0xac114d50",
+          "after": "0xac114d70",
+          "roles": [
+            "_reader_cooperative+0",
+            "_reader_cooperative@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 492,
+          "before": "0xac113ff4",
+          "after": "0xac114014",
+          "roles": [
+            "_native_loader_timeline+0",
+            "_native_loader_timeline@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 496,
+          "before": "0x8c10db84",
+          "after": "0x8c10db9c",
+          "roles": [
+            "_kui_native_loader_timeline_reset+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 504,
+          "before": "0xac11e920",
+          "after": "0xac11e940",
+          "roles": [
+            "_config+2236",
+            "_config@vmu_native_passive.c+2236"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1076,
+          "before": "0x8c107cae",
+          "after": "0x8c107cc6",
+          "roles": [
+            "_memcpy+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1080,
+          "before": "0xac11e3f0",
+          "after": "0xac11e410",
+          "roles": [
+            "_config+908",
+            "_config@vmu_native_passive.c+908"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1084,
+          "before": "0x8c107af4",
+          "after": "0x8c107b0c",
+          "roles": [
+            "_retail_display_restore+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1088,
+          "before": "0x8c107964",
+          "after": "0x8c10797c",
+          "roles": [
+            "_retail_display_line+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1092,
+          "before": "0x8c107be0",
+          "after": "0x8c107bf8",
+          "roles": [
+            "_retail_display_values+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1096,
+          "before": "0x8c10e7f0",
+          "after": "0x8c10e810",
+          "roles": [],
+          "same_text": "READ/AGE TICKS / X OR Y"
+        },
+        {
+          "offset": 1100,
+          "before": "0x8c10e808",
+          "after": "0x8c10e828",
+          "roles": [],
+          "same_text": "HEX / 781250HZ"
+        },
+        {
+          "offset": 1104,
+          "before": "0xac114d68",
+          "after": "0xac114d88",
+          "roles": [
+            "_reader_capture+0",
+            "_reader_capture@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1108,
+          "before": "0x8c10e818",
+          "after": "0x8c10e838",
+          "roles": [],
+          "same_text": "N BAD GAPMAX READMAX AGEMAX"
+        },
+        {
+          "offset": 1112,
+          "before": "0xac114da8",
+          "after": "0xac114dc8",
+          "roles": [
+            "_reader_capture+64",
+            "_reader_capture@vmu_native_passive.c+64"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1116,
+          "before": "0x8c10e834",
+          "after": "0x8c10e854",
+          "roles": [],
+          "same_text": "IRQBLK CALLBLK PIO CRC TOKERR"
+        },
+        {
+          "offset": 1120,
+          "before": "0x8c10e854",
+          "after": "0x8c10e874",
+          "roles": [],
+          "same_text": "FOREIGN FIX OVER DEFER CLK_BAD"
+        },
+        {
+          "offset": 1128,
+          "before": "0x8c10e874",
+          "after": "0x8c10e894",
+          "roles": [],
+          "same_text": "SCI REARM IRQS"
+        },
+        {
+          "offset": 1132,
+          "before": "0xac114d50",
+          "after": "0xac114d70",
+          "roles": [
+            "_reader_cooperative+0",
+            "_reader_cooperative@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1136,
+          "before": "0x8c10e884",
+          "after": "0x8c10e8a4",
+          "roles": [],
+          "same_text": "HOOK R100 R400 R600 VBR"
+        },
+        {
+          "offset": 1140,
+          "before": "0x8c10e89c",
+          "after": "0x8c10e8bc",
+          "roles": [],
+          "same_text": "MAX READ LBA N"
+        },
+        {
+          "offset": 1144,
+          "before": "0x8c107c5c",
+          "after": "0x8c107c74",
+          "roles": [
+            "_retail_display_pause+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1148,
+          "before": "0xac114e24",
+          "after": "0xac114e44",
+          "roles": [
+            "_reader_capture+188",
+            "_reader_capture@vmu_native_passive.c+188"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 2052,
+          "before": "0x8c107be0",
+          "after": "0x8c107bf8",
+          "roles": [
+            "_retail_display_values+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 2056,
+          "before": "0x8c10e8ac",
+          "after": "0x8c10e8cc",
+          "roles": [],
+          "same_text": "POLL GAPS"
+        },
+        {
+          "offset": 2060,
+          "before": "0x8c10e8b8",
+          "after": "0x8c10e8d8",
+          "roles": [],
+          "same_text": "GAP READ AGE / DELTAS"
+        },
+        {
+          "offset": 2064,
+          "before": "0xac114d68",
+          "after": "0xac114d88",
+          "roles": [
+            "_reader_capture+0",
+            "_reader_capture@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 2068,
+          "before": "0x8c10e798",
+          "after": "0x8c10e7b8",
+          "roles": [],
+          "same_text": "PHOTO / POWER OFF"
+        },
+        {
+          "offset": 2072,
+          "before": "0x8c107c5c",
+          "after": "0x8c107c74",
+          "roles": [
+            "_retail_display_pause+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 2076,
+          "before": "0x8c10e8d0",
+          "after": "0x8c10e8f0",
+          "roles": [],
+          "same_text": "I GAP RMAX AMAX PEND"
+        },
+        {
+          "offset": 2080,
+          "before": "0x8c10e834",
+          "after": "0x8c10e854",
+          "roles": [],
+          "same_text": "IRQBLK CALLBLK PIO CRC TOKERR"
+        },
+        {
+          "offset": 2084,
+          "before": "0x8c10e8e8",
+          "after": "0x8c10e908",
+          "roles": [],
+          "same_text": "FN CMD TOK0 TOK1 BLOCK"
+        },
+        {
+          "offset": 2532,
+          "before": "0x8c10e970",
+          "after": "0x8c10e990",
+          "roles": [],
+          "same_text": "READ AHEAD"
+        },
+        {
+          "offset": 2536,
+          "before": "0x8c107be0",
+          "after": "0x8c107bf8",
+          "roles": [
+            "_retail_display_values+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 2540,
+          "before": "0x8c10e97c",
+          "after": "0x8c10e99c",
+          "roles": [],
+          "same_text": "CAP HITS MISS HIT REQS"
+        },
+        {
+          "offset": 2544,
+          "before": "0x8c10e994",
+          "after": "0x8c10e9b4",
+          "roles": [],
+          "same_text": "MADE VISITS HEARTBEAT IRQ"
+        },
+        {
+          "offset": 2548,
+          "before": "0x8c10e9b0",
+          "after": "0x8c10e9d0",
+          "roles": [],
+          "same_text": "SEEK STOP RESUME FULL EXTENT"
+        },
+        {
+          "offset": 2552,
+          "before": "0x8c10e9d0",
+          "after": "0x8c10e9f0",
+          "roles": [],
+          "same_text": "CRC TOKEN ABORT GUARD CLOCK"
+        },
+        {
+          "offset": 2556,
+          "before": "0x8c10e9ec",
+          "after": "0x8c10ea0c",
+          "roles": [],
+          "same_text": "PIO N MAX BAD"
+        },
+        {
+          "offset": 2560,
+          "before": "0x8c10e9fc",
+          "after": "0x8c10ea1c",
+          "roles": [],
+          "same_text": "SECOND SKIP ONE MAX OVER"
+        },
+        {
+          "offset": 2564,
+          "before": "0x8c107b7c",
+          "after": "0x8c107b94",
+          "roles": [
+            "_retail_display_hex+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 2568,
+          "before": "0x8c10ea18",
+          "after": "0x8c10ea38",
+          "roles": [],
+          "same_text": "AUX MAX TICKS"
+        },
+        {
+          "offset": 2572,
+          "before": "0x8c10e808",
+          "after": "0x8c10e828",
+          "roles": [],
+          "same_text": "HEX / 781250HZ"
+        },
+        {
+          "offset": 2576,
+          "before": "0x8c107c5c",
+          "after": "0x8c107c74",
+          "roles": [
+            "_retail_display_pause+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 2580,
+          "before": "0x8c10ea28",
+          "after": "0x8c10ea48",
+          "roles": [],
+          "same_text": "FAIL POLL TAKE APPEND FETCH"
+        },
+        {
+          "offset": 2584,
+          "before": "0x8c10ea44",
+          "after": "0x8c10ea64",
+          "roles": [],
+          "same_text": "RESUME STOP FIRST LAST"
+        },
+        {
+          "offset": 2588,
+          "before": "0x8c10ea5c",
+          "after": "0x8c10ea7c",
+          "roles": [],
+          "same_text": "QUIET ABORT SEED LOAN ACTIVE"
+        },
+        {
+          "offset": 2592,
+          "before": "0x8c10ea7c",
+          "after": "0x8c10ea9c",
+          "roles": [],
+          "same_text": "PEND FAIL OPEN PORT BUSY"
+        },
+        {
+          "offset": 2596,
+          "before": "0x8c10ea98",
+          "after": "0x8c10eab8",
+          "roles": [],
+          "same_text": "DMA POS DEFER OWNED"
+        },
+        {
+          "offset": 2600,
+          "before": "0x8c107cf6",
+          "after": "0x8c107d0e",
+          "roles": [
+            "_memcmp+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 2604,
+          "before": "0x8c10e7d8",
+          "after": "0x8c10e7f8",
+          "roles": [],
+          "same_text": "FIRST ST RES EVT FL TOK"
+        },
+        {
+          "offset": 2608,
+          "before": "0x8c10e7c0",
+          "after": "0x8c10e7e0",
+          "roles": [],
+          "same_text": "BOTH ST RES EVT FL TOK"
+        },
+        {
+          "offset": 2616,
+          "before": "0x8c10eaac",
+          "after": "0x8c10eacc",
+          "roles": [],
+          "same_text": "LAST ST RES EVT FL TOK"
+        },
+        {
+          "offset": 1156,
+          "before": "0xac114cb0",
+          "after": "0xac114cd0",
+          "roles": [
+            "_native_loader_timeline+3260",
+            "_native_loader_timeline@vmu_native_passive.c+3260"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1160,
+          "before": "0x8c10e900",
+          "after": "0x8c10e920",
+          "roles": [],
+          "same_text": "GD TIMELINE"
+        },
+        {
+          "offset": 1164,
+          "before": "0x8c10e90c",
+          "after": "0x8c10e92c",
+          "roles": [],
+          "same_text": "EVENTS VALID BAD EPOCH"
+        },
+        {
+          "offset": 1168,
+          "before": "0xac114d30",
+          "after": "0xac114d50",
+          "roles": [
+            "_native_loader_timeline+3388",
+            "_native_loader_timeline@vmu_native_passive.c+3388"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1172,
+          "before": "0x8c10e924",
+          "after": "0x8c10e944",
+          "roles": [],
+          "same_text": "CLKBREAK UNMATCHED OVER SAT"
+        },
+        {
+          "offset": 1176,
+          "before": "0x8c10e940",
+          "after": "0x8c10e960",
+          "roles": [],
+          "same_text": "MAX CALL GAP CHAINLEN"
+        },
+        {
+          "offset": 1180,
+          "before": "0x8c10e958",
+          "after": "0x8c10e978",
+          "roles": [],
+          "same_text": "MAX CHAIN TOTAL INSIDE"
+        },
+        {
+          "offset": 1692,
+          "before": "0x8c107be0",
+          "after": "0x8c107bf8",
+          "roles": [
+            "_retail_display_values+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1696,
+          "before": "0x8c10eac4",
+          "after": "0x8c10eae4",
+          "roles": [],
+          "same_text": "TOK LBA N FLAGS"
+        },
+        {
+          "offset": 1700,
+          "before": "0x8c10ead4",
+          "after": "0x8c10eaf4",
+          "roles": [],
+          "same_text": "STORED CALL REQ BINS"
+        },
+        {
+          "offset": 1704,
+          "before": "0xac114cf0",
+          "after": "0xac114d10",
+          "roles": [
+            "_native_loader_timeline+3324",
+            "_native_loader_timeline@vmu_native_passive.c+3324"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1708,
+          "before": "0x8c107c5c",
+          "after": "0x8c107c74",
+          "roles": [
+            "_retail_display_pause+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1712,
+          "before": "0xac113ff4",
+          "after": "0xac114014",
+          "roles": [
+            "_native_loader_timeline+0",
+            "_native_loader_timeline@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 3024,
+          "before": "0x8c10eaec",
+          "after": "0x8c10eb0c",
+          "roles": [],
+          "same_text": "GD BINS / 0.625S"
+        },
+        {
+          "offset": 3028,
+          "before": "0x8c10eb00",
+          "after": "0x8c10eb20",
+          "roles": [],
+          "same_text": "I EPOCH TICKS CALLS MAPLE"
+        },
+        {
+          "offset": 3036,
+          "before": "0x8c107c5c",
+          "after": "0x8c107c74",
+          "roles": [
+            "_retail_display_pause+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1716,
+          "before": "0xac114434",
+          "after": "0xac114454",
+          "roles": [
+            "_native_loader_timeline+1088",
+            "_native_loader_timeline@vmu_native_passive.c+1088"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 3040,
+          "before": "0x8c107964",
+          "after": "0x8c10797c",
+          "roles": [
+            "_retail_display_line+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 3044,
+          "before": "0x8c10eb1c",
+          "after": "0x8c10eb3c",
+          "roles": [],
+          "same_text": "GD CALLS / IN OUT"
+        },
+        {
+          "offset": 3048,
+          "before": "0x8c107cae",
+          "after": "0x8c107cc6",
+          "roles": [
+            "_memcpy+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1720,
+          "before": "0x8c107964",
+          "after": "0x8c10797c",
+          "roles": [
+            "_retail_display_line+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1724,
+          "before": "0x8c107af4",
+          "after": "0x8c107b0c",
+          "roles": [
+            "_retail_display_restore+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 3052,
+          "before": "0x8c10eb30",
+          "after": "0x8c10eb50",
+          "roles": [],
+          "same_text": "READS / 3 ROWS EACH"
+        },
+        {
+          "offset": 3056,
+          "before": "0x8c10eb44",
+          "after": "0x8c10eb64",
+          "roles": [],
+          "same_text": "R0 TOK LBA N TICKS"
+        },
+        {
+          "offset": 3060,
+          "before": "0x8c10eb58",
+          "after": "0x8c10eb78",
+          "roles": [],
+          "same_text": "R1 IN OUT CALLS BYTES"
+        },
+        {
+          "offset": 3064,
+          "before": "0x8c10eb70",
+          "after": "0x8c10eb90",
+          "roles": [],
+          "same_text": "R2 EPOCH FLAGS CHAIN TICKS"
+        },
+        {
+          "offset": 3460,
+          "before": "0xac114cf0",
+          "after": "0xac114d10",
+          "roles": [
+            "_native_loader_timeline+3324",
+            "_native_loader_timeline@vmu_native_passive.c+3324"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 3464,
+          "before": "0xac113ff4",
+          "after": "0xac114014",
+          "roles": [
+            "_native_loader_timeline+0",
+            "_native_loader_timeline@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1728,
+          "before": "0x8c10eb8c",
+          "after": "0x8c10ebac",
+          "roles": [],
+          "same_text": "VMU LATENCY"
+        },
+        {
+          "offset": 1732,
+          "before": "0x8c10eb98",
+          "after": "0x8c10ebb8",
+          "roles": [],
+          "same_text": "N OK BAD SUM MAX"
+        },
+        {
+          "offset": 1736,
+          "before": "0x8c107cae",
+          "after": "0x8c107cc6",
+          "roles": [
+            "_memcpy+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1740,
+          "before": "0x8c10f1e0",
+          "after": "0x8c10f200",
+          "roles": [
+            "authored_four_ordered_vmu_latency_caption_pointers"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1744,
+          "before": "0xac1152f0",
+          "after": "0xac115310",
+          "roles": [
+            "_diagnostic+0",
+            "_diagnostic@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1748,
+          "before": "0x8c10ebac",
+          "after": "0x8c10ebcc",
+          "roles": [],
+          "same_text": "WALL SAMPLES BAD FLAGS"
+        },
+        {
+          "offset": 1752,
+          "before": "0xac11536c",
+          "after": "0xac11538c",
+          "roles": [
+            "_diagnostic+124",
+            "_diagnostic@vmu_native_passive.c+124"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1756,
+          "before": "0x8c10ebc4",
+          "after": "0x8c10ebe4",
+          "roles": [],
+          "same_text": "FAST/FULL SUB/END"
+        },
+        {
+          "offset": 1760,
+          "before": "0xac114f64",
+          "after": "0xac114f84",
+          "roles": [
+            "_diagnostic_phase+0",
+            "_diagnostic_phase@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1764,
+          "before": "0x8c107b7c",
+          "after": "0x8c107b94",
+          "roles": [
+            "_retail_display_hex+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1768,
+          "before": "0x8c10e798",
+          "after": "0x8c10e7b8",
+          "roles": [],
+          "same_text": "PHOTO / POWER OFF"
+        },
+        {
+          "offset": 1772,
+          "before": "0x8c10ebd8",
+          "after": "0x8c10ebf8",
+          "roles": [],
+          "same_text": "CLOCK/VIDEO"
+        },
+        {
+          "offset": 1776,
+          "before": "0x8c10e808",
+          "after": "0x8c10e828",
+          "roles": [],
+          "same_text": "HEX / 781250HZ"
+        },
+        {
+          "offset": 1780,
+          "before": "0x8c10ebe4",
+          "after": "0x8c10ec04",
+          "roles": [],
+          "same_text": "CCR0 CCR1 ICEOFF POLL COMMIT"
+        },
+        {
+          "offset": 1784,
+          "before": "0xac11e000",
+          "after": "0xac11e020",
+          "roles": [
+            "_state+0",
+            "_state@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1788,
+          "before": "0xac11aebc",
+          "after": "0xac11aedc",
+          "roles": [
+            "_durable_card+4028",
+            "_durable_card@vmu_native_passive.c+4028"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1792,
+          "before": "0x8c10ec04",
+          "after": "0x8c10ec24",
+          "roles": [],
+          "same_text": "MODE N VALID WAIT WRAP"
+        },
+        {
+          "offset": 1796,
+          "before": "0xac11ef44",
+          "after": "0xac11ef64",
+          "roles": [
+            "_kui_vmu_native_fault_capture_state+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1800,
+          "before": "0x8c10ec1c",
+          "after": "0x8c10ec3c",
+          "roles": [],
+          "same_text": "FAULT VEC ARMED"
+        },
+        {
+          "offset": 1804,
+          "before": "0x8c10ec2c",
+          "after": "0x8c10ec4c",
+          "roles": [],
+          "same_text": "RAW OWNER STACK"
+        },
+        {
+          "offset": 1808,
+          "before": "0x8c10ec3c",
+          "after": "0x8c10ec5c",
+          "roles": [],
+          "same_text": "FRAME N FLAGS TICK PR"
+        },
+        {
+          "offset": 1816,
+          "before": "0x8c10ec54",
+          "after": "0x8c10ec74",
+          "roles": [],
+          "same_text": "SR LOAD VBL CTRL SCAN"
+        },
+        {
+          "offset": 1820,
+          "before": "0x8c10ec6c",
+          "after": "0x8c10ec8c",
+          "roles": [],
+          "same_text": "INTEVT"
+        },
+        {
+          "offset": 1824,
+          "before": "0x8c10ec74",
+          "after": "0x8c10ec94",
+          "roles": [],
+          "same_text": "FLAGS: SPAN1 WORDS2 VIDEO4"
+        },
+        {
+          "offset": 1828,
+          "before": "0x8c10ec90",
+          "after": "0x8c10ecb0",
+          "roles": [],
+          "same_text": "RAW / NOT FAULT PC"
+        },
+        {
+          "offset": 3472,
+          "before": "0x8c107af4",
+          "after": "0x8c107b0c",
+          "roles": [
+            "_retail_display_restore+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 3476,
+          "before": "0x8c10ec2c",
+          "after": "0x8c10ec4c",
+          "roles": [],
+          "same_text": "RAW OWNER STACK"
+        },
+        {
+          "offset": 3480,
+          "before": "0x8c10eca4",
+          "after": "0x8c10ecc4",
+          "roles": [],
+          "same_text": "ADDRESS / RAW WORDS"
+        },
+        {
+          "offset": 3484,
+          "before": "0x8c107cae",
+          "after": "0x8c107cc6",
+          "roles": [
+            "_memcpy+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 3488,
+          "before": "0x8c10ec90",
+          "after": "0x8c10ecb0",
+          "roles": [],
+          "same_text": "RAW / NOT FAULT PC"
+        },
+        {
+          "offset": 3492,
+          "before": "0xac114fa8",
+          "after": "0xac114fc8",
+          "roles": [
+            "_diagnostic_phase+68",
+            "_diagnostic_phase@vmu_native_passive.c+68"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 3500,
+          "before": "0x8c10ecb8",
+          "after": "0x8c10ecd8",
+          "roles": [],
+          "same_text": "PHASE HISTORY"
+        },
+        {
+          "offset": 3504,
+          "before": "0x8c10ecc8",
+          "after": "0x8c10ece8",
+          "roles": [],
+          "same_text": "KIND+FLAGS IN OUT TICKS I"
+        },
+        {
+          "offset": 3508,
+          "before": "0x8c10ece4",
+          "after": "0x8c10ed04",
+          "roles": [],
+          "same_text": "PC PR SR EVT FR / LOAD VBL CTRL T0 T1"
+        },
+        {
+          "offset": 3512,
+          "before": "0x8c10ed0c",
+          "after": "0x8c10ed2c",
+          "roles": [],
+          "same_text": "CLK1 RD2 VID4 FRM8 WAIT10 WRAP20"
+        },
+        {
+          "offset": 3516,
+          "before": "0x8c107c5c",
+          "after": "0x8c107c74",
+          "roles": [
+            "_retail_display_pause+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 508,
+          "before": "0xac11e040",
+          "after": "0xac11e060",
+          "roles": [
+            "_state+64",
+            "_state@vmu_native_passive.c+64"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 516,
+          "before": "0xac11e120",
+          "after": "0xac11e140",
+          "roles": [
+            "_config+188",
+            "_config@vmu_native_passive.c+188"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 520,
+          "before": "0xac114f7c",
+          "after": "0xac114f9c",
+          "roles": [
+            "_diagnostic_phase+24",
+            "_diagnostic_phase@vmu_native_passive.c+24"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 532,
+          "before": "0x8c10f25c",
+          "after": "0x8c10f27c",
+          "roles": [
+            "_registers.3+0",
+            "_registers.3@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 536,
+          "before": "0xac114f94",
+          "after": "0xac114fb4",
+          "roles": [
+            "_diagnostic_phase+48",
+            "_diagnostic_phase@vmu_native_passive.c+48"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_native_phase_span_from",
+      "old_bytes": 128,
+      "new_bytes": 128,
+      "old_sha256": "2f2d811580469162b3f1b715592e0cf3c96f78a0ee86ac80b6bd7b9a1be09d1f",
+      "new_sha256": "2f2d811580469162b3f1b715592e0cf3c96f78a0ee86ac80b6bd7b9a1be09d1f",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_diagnostic_phase_read",
+      "old_bytes": 136,
+      "new_bytes": 136,
+      "old_sha256": "300072e2b8bad5d5aa1ac8e52af5bfe1c52c1b256541ff3281f449642641533a",
+      "new_sha256": "300072e2b8bad5d5aa1ac8e52af5bfe1c52c1b256541ff3281f449642641533a",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_diagnostic_end",
+      "old_bytes": 1492,
+      "new_bytes": 1492,
+      "old_sha256": "dfffc722f754253706263997d24e6a0d4e4d75ecbbe946942881f13287a8baec",
+      "new_sha256": "74077b72ea7e69fe893dd02484b1a15b343d6001e5e3b10b82e0e595dd7140fa",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 661,
+      "changed_literal_slots": [
+        {
+          "offset": 528,
+          "before": "0x8c10d60c",
+          "after": "0x8c10d624",
+          "roles": [
+            "_kui_vmu_native_profile_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 532,
+          "before": "0xac1152f0",
+          "after": "0xac115310",
+          "roles": [
+            "_diagnostic+0",
+            "_diagnostic@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 536,
+          "before": "0xac115330",
+          "after": "0xac115350",
+          "roles": [
+            "_diagnostic+64",
+            "_diagnostic@vmu_native_passive.c+64"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 592,
+          "before": "0xac114f64",
+          "after": "0xac114f84",
+          "roles": [
+            "_diagnostic_phase+0",
+            "_diagnostic_phase@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 932,
+          "before": "0x8c10d598",
+          "after": "0x8c10d5b0",
+          "roles": [
+            "_kui_vmu_native_profile_sample_valid+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 944,
+          "before": "0xac114f7c",
+          "after": "0xac114f9c",
+          "roles": [
+            "_diagnostic_phase+24",
+            "_diagnostic_phase@vmu_native_passive.c+24"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 948,
+          "before": "0x8c107cae",
+          "after": "0x8c107cc6",
+          "roles": [
+            "_memcpy+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 580,
+          "before": "0xac11e920",
+          "after": "0xac11e940",
+          "roles": [
+            "_config+2236",
+            "_config@vmu_native_passive.c+2236"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 584,
+          "before": "0xac11e000",
+          "after": "0xac11e020",
+          "roles": [
+            "_state+0",
+            "_state@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 544,
+          "before": "0xac11e120",
+          "after": "0xac11e140",
+          "roles": [
+            "_config+188",
+            "_config@vmu_native_passive.c+188"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 560,
+          "before": "0x8c107c94",
+          "after": "0x8c107cac",
+          "roles": [
+            "_memset+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 564,
+          "before": "0x8c10d598",
+          "after": "0x8c10d5b0",
+          "roles": [
+            "_kui_vmu_native_profile_sample_valid+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 568,
+          "before": "0xac114d68",
+          "after": "0xac114d88",
+          "roles": [
+            "_reader_capture+0",
+            "_reader_capture@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 572,
+          "before": "0xac114d50",
+          "after": "0xac114d70",
+          "roles": [
+            "_reader_cooperative+0",
+            "_reader_cooperative@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 952,
+          "before": "0xac114d68",
+          "after": "0xac114d88",
+          "roles": [
+            "_reader_capture+0",
+            "_reader_capture@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1472,
+          "before": "0xac114d68",
+          "after": "0xac114d88",
+          "roles": [
+            "_reader_capture+0",
+            "_reader_capture@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1476,
+          "before": "0xac114e24",
+          "after": "0xac114e44",
+          "roles": [
+            "_reader_capture+188",
+            "_reader_capture@vmu_native_passive.c+188"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1488,
+          "before": "0xac114dd4",
+          "after": "0xac114df4",
+          "roles": [
+            "_reader_capture+108",
+            "_reader_capture@vmu_native_passive.c+108"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1480,
+          "before": "0xac114d84",
+          "after": "0xac114da4",
+          "roles": [
+            "_reader_capture+28",
+            "_reader_capture@vmu_native_passive.c+28"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1484,
+          "before": "0x8c107cae",
+          "after": "0x8c107cc6",
+          "roles": [
+            "_memcpy+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 576,
+          "before": "0x8c107cae",
+          "after": "0x8c107cc6",
+          "roles": [
+            "_memcpy+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_diagnostic_sample",
+      "old_bytes": 164,
+      "new_bytes": 164,
+      "old_sha256": "7093de94c3a6735413dc04fdf9af5bc80aca8097fd91632bb13468210ab7bf3e",
+      "new_sha256": "d16961b66de244b6a2330a5f13018841d570addc52e2d5cca7f50bde1599e6f7",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 66,
+      "changed_literal_slots": [
+        {
+          "offset": 136,
+          "before": "0xac115330",
+          "after": "0xac115350",
+          "roles": [
+            "_diagnostic+64",
+            "_diagnostic@vmu_native_passive.c+64"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 160,
+          "before": "0x8c10d598",
+          "after": "0x8c10d5b0",
+          "roles": [
+            "_kui_vmu_native_profile_sample_valid+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_memset",
+      "old_bytes": 26,
+      "new_bytes": 26,
+      "old_sha256": "84a19f7aa0536a77835dd9917cd47ea65e6d6edf6013064ab39a36c0a05e118a",
+      "new_sha256": "84a19f7aa0536a77835dd9917cd47ea65e6d6edf6013064ab39a36c0a05e118a",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_memcpy",
+      "old_bytes": 72,
+      "new_bytes": 72,
+      "old_sha256": "cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634",
+      "new_sha256": "cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_installed_hooks_valid",
+      "old_bytes": 128,
+      "new_bytes": 128,
+      "old_sha256": "8d2fbe746c594eebb395c7d1b04b761c72045b7427182ac042c8f2798212b384",
+      "new_sha256": "45d892df98fb230832b9ebfd61c585fa96712168a09eca763a6b73ec168cfd5f",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 53,
+      "changed_literal_slots": [
+        {
+          "offset": 108,
+          "before": "0xac115380",
+          "after": "0xac1153a0",
+          "roles": [
+            "_hook_witness_ready+0",
+            "_hook_witness_ready@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 116,
+          "before": "0xac115384",
+          "after": "0xac1153a4",
+          "roles": [
+            "_hook_witness_count+0",
+            "_hook_witness_count@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 120,
+          "before": "0xac115388",
+          "after": "0xac1153a8",
+          "roles": [
+            "_hook_witness+0",
+            "_hook_witness@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 124,
+          "before": "0x8c101268",
+          "after": "0x8c10137c",
+          "roles": [
+            "_normalize_heap_dispatch+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_readonly_release_check",
+      "old_bytes": 728,
+      "new_bytes": 712,
+      "old_sha256": "4726da4ff7b2f141cada864c2b7476c82950af5bac413e6c9849cfbdb0781aa9",
+      "new_sha256": "7bdfde6b51f0200d989f51ea2f383ce7bb0e6a582390eaf52e9d6590a85fc673",
+      "classification": "reviewed compiler register/stack rescheduling",
+      "error": "function extent changed",
+      "changed_literal_slots": [],
+      "source_function_unchanged": true,
+      "actual_complete_wrapper_execution": "native-poll-dispatch-release-wrapper.log: nodes1,8,64 +60ranges +3exit hooks; all passed",
+      "old_stack_frame_bytes": 80,
+      "new_stack_frame_bytes": 72,
+      "full_core_heap_predicates_unchanged": true,
+      "only_new_callee_role": "normalizer entry to proved leaf gate"
+    },
+    {
+      "name": "_poll_lease_valid",
+      "old_bytes": 168,
+      "new_bytes": 168,
+      "old_sha256": "374a4a822a443d28492d5b3214883dc6f499bdf652b8c8be339270e03817ad53",
+      "new_sha256": "0f7e1c830251aa4def6d855319893a96289a625f98b3fe1faa2c9ed873138311",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 72,
+      "changed_literal_slots": [
+        {
+          "offset": 144,
+          "before": "0xac115508",
+          "after": "0xac115528",
+          "roles": [
+            "_lifetime_plan+0",
+            "_lifetime_plan@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 152,
+          "before": "0x8c101268",
+          "after": "0x8c10137c",
+          "roles": [
+            "_normalize_heap_dispatch+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 160,
+          "before": "0x8c101428",
+          "after": "0x8c101450",
+          "roles": [
+            "_failure_witness.isra.0+0",
+            "_failure_witness.isra.0@vmu_native_passive.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_read_heap",
+      "old_bytes": 44,
+      "new_bytes": 44,
+      "old_sha256": "61174b34407c9a2e31706d6777491660701a8491c6aadcef3babe250cddfdb24",
+      "new_sha256": "be3a97c5af10ad49001b3d1aecf74664748812d0163a2a3d3f9b34e466bd13c4",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 18,
+      "changed_literal_slots": [
+        {
+          "offset": 40,
+          "before": "0x8c101268",
+          "after": "0x8c10137c",
+          "roles": [
+            "_normalize_heap_dispatch+0"
+          ],
+          "same_text": null
+        }
+      ]
+    }
+  ],
+  "gate": {
+    "bytes": 40,
+    "sha256": "0cdc607ae34c612106a56685cd43cd903ea190c2e290eafce2ace2dab2825369",
+    "all28instruction_bytes_reviewed": true,
+    "exact_config_fields_and_full_proof_entry_verified": true,
+    "no_frame_or_store_or_call_in_leaf": true,
+    "only_eligible_path_tail_jumps_to_full_normalizer": true,
+    "compiled_wrapper_leaf_cases": 1536
+  },
+  "prepared_signature_changes": [
+    "_installed_hooks_valid",
+    "_kui_vmu_native_readonly_release_check",
+    "_poll_lease_valid",
+    "_read_heap"
+  ],
+  "all_other_prepared_signatures_unchanged": true,
+  "new_leaf_only_additional_pinned_closure": true,
+  "release_wrapper_actual_cases": 3,
+  "scope": "Software instruction checks; Evolution scanline-wait cause and console correction unconfirmed",
+  "actual_adapter": {
+    "instruction_cases": 264,
+    "mutation_rejections": 2,
+    "width": 4,
+    "source_loaded_only_after_full_predicate": true,
+    "mmio_addresses": [
+      2690608132,
+      2690608144,
+      2690608148,
+      2690608152
+    ],
+    "reader_symbol": "_read_heap_raw",
+    "tagged_adapter_actual_companion_required": true,
+    "normalization_adapter_gateway": {
+      "enabled": true,
+      "actual_wrapper_instruction_cases": 1536,
+      "mutation_rejections": 3,
+      "all_imasks": true,
+      "typed_callees": "Raw reader and full tagged proof ABI adversaries; actual optional leaf instructions executed",
+      "actual_leaf_gate_executed": true,
+      "ordinary_and_other_alias_skip_full_proof": true,
+      "all_exit_families_checked": true,
+      "leaf_performs_no_writes": true,
+      "refused_raw_read_skips_normalization": true,
+      "raw_boolean_preserved_across_void_normalizer": true
+    }
+  },
+  "controller_witness_models": {
+    "passed": true,
+    "helper_cases": 64,
+    "controller_cases": 410,
+    "identity_cases": 72,
+    "mutation_checks_passed": true
+  },
+  "unchanged_heap_kernel_exact_typed_literal_review": [
+    {
+      "name": "_span@vmu_native_heap.c",
+      "old_bytes": 76,
+      "new_bytes": 76,
+      "old_sha256": "64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305",
+      "new_sha256": "64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_index@vmu_native_heap.c",
+      "old_bytes": 100,
+      "new_bytes": 100,
+      "old_sha256": "b6d11408b1855b59adb23eb88af064de182c1b5ceb784eedf901f4ff7c6db6fc",
+      "new_sha256": "a9aa696f5722b6ba5f00b4779f89ba37e21624b46c6ac440c171afe5b6b04334",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 45,
+      "changed_literal_slots": [
+        {
+          "offset": 92,
+          "before": "0x8c105720",
+          "after": "0x8c105738",
+          "roles": [
+            "_span+0",
+            "_span@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_metadata@vmu_native_heap.c",
+      "old_bytes": 416,
+      "new_bytes": 416,
+      "old_sha256": "ae4af783f24f41eae20da598b6910f054e571b512c1b1f08c3dc4e5c68bf2483",
+      "new_sha256": "fb6a9ee3425f555fe873833b7161f9ea3c287aa3525033f0900321bb394d8a38",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 195,
+      "changed_literal_slots": [
+        {
+          "offset": 404,
+          "before": "0x8c105720",
+          "after": "0x8c105738",
+          "roles": [
+            "_span+0",
+            "_span@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 408,
+          "before": "0x8c10576c",
+          "after": "0x8c105784",
+          "roles": [
+            "_index+0",
+            "_index@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_read_is@vmu_native_heap.c",
+      "old_bytes": 80,
+      "new_bytes": 80,
+      "old_sha256": "0d9eb79846bed68111e888d7d83da465c1dbfff4019f018049ed44d33068e5e7",
+      "new_sha256": "34414e24b9c009d0b915e202e1f09e6248a2b868a7f423f1eab4c1132c85037a",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 37,
+      "changed_literal_slots": [
+        {
+          "offset": 76,
+          "before": "0x8c105720",
+          "after": "0x8c105738",
+          "roles": [
+            "_span+0",
+            "_span@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_bottom_geometry@vmu_native_heap.c",
+      "old_bytes": 24,
+      "new_bytes": 24,
+      "old_sha256": "fe83cd5cec158b6d373003e684f8d52b59b7f5200e588cfe204826026a080668",
+      "new_sha256": "fe83cd5cec158b6d373003e684f8d52b59b7f5200e588cfe204826026a080668",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_identity@vmu_native_heap.c",
+      "old_bytes": 412,
+      "new_bytes": 412,
+      "old_sha256": "7bc3dcf8abc60e627d27a8aa1914df151637074b32f6ae211f320a984af8d302",
+      "new_sha256": "ebe054d88dead365d0eaf102bc8b2991d50c01be8114b3d9a064874a52ff9893",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 196,
+      "changed_literal_slots": [
+        {
+          "offset": 392,
+          "before": "0x8c1057d0",
+          "after": "0x8c1057e8",
+          "roles": [
+            "_metadata+0",
+            "_metadata@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 396,
+          "before": "0x8c105720",
+          "after": "0x8c105738",
+          "roles": [
+            "_span+0",
+            "_span@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 400,
+          "before": "0x8c1059c0",
+          "after": "0x8c1059d8",
+          "roles": [
+            "_bottom_geometry+0",
+            "_bottom_geometry@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 408,
+          "before": "0x8c105970",
+          "after": "0x8c105988",
+          "roles": [
+            "_read_is+0",
+            "_read_is@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_heap_lease_valid_with_release",
+      "old_bytes": 512,
+      "new_bytes": 512,
+      "old_sha256": "16a2a46cd54b7bf82b732e28b5297ec4fe2a3803fa38f2b1246157f973525b6b",
+      "new_sha256": "85559f7e6bb73d9b5ed3e5bad8f2366980539a98477c4b4e681f13dbaf7b8aae",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 246,
+      "changed_literal_slots": [
+        {
+          "offset": 496,
+          "before": "0x8c105b74",
+          "after": "0x8c105b8c",
+          "roles": [
+            "_kui_vmu_native_heap_lease_identity_valid+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 508,
+          "before": "0x8c105720",
+          "after": "0x8c105738",
+          "roles": [
+            "_span+0",
+            "_span@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_heap_lease_identity_valid",
+      "old_bytes": 76,
+      "new_bytes": 76,
+      "old_sha256": "3f730f877ba979f408d6c596f8643448183a9cbb9f88761731580f34be8e133f",
+      "new_sha256": "79a1ea16da8da8eeee75d90cbfc5159823a23ba3aa871de989554a606c6313cc",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 33,
+      "changed_literal_slots": [
+        {
+          "offset": 68,
+          "before": "0x8c1059d8",
+          "after": "0x8c1059f0",
+          "roles": [
+            "_identity+0",
+            "_identity@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 72,
+          "before": "0x8c105970",
+          "after": "0x8c105988",
+          "roles": [
+            "_read_is+0",
+            "_read_is@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_heap_lease_valid",
+      "old_bytes": 28,
+      "new_bytes": 28,
+      "old_sha256": "d15c3ca657bca47aea6bb764676750e1a474eb5ea90062e315e7e55ca20fd5f2",
+      "new_sha256": "ec3c8bce81483e723c16ff9f4ba19b982ff81e3dde4701f2706817b52e3462b3",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 11,
+      "changed_literal_slots": [
+        {
+          "offset": 24,
+          "before": "0x8c105bc0",
+          "after": "0x8c105bd8",
+          "roles": [
+            "_kui_vmu_native_heap_lease_valid_with_release+0"
+          ],
+          "same_text": null
+        }
+      ]
+    }
+  ],
+  "unchanged_cold_kernel_exact_typed_literal_review": [
+    {
+      "name": "_alias@vmu_native_stage_placement.c",
+      "old_bytes": 32,
+      "new_bytes": 32,
+      "old_sha256": "5d5b341944aa4da08467cfca39b78f276224218bd3ed9fd094c99456668b974d",
+      "new_sha256": "5d5b341944aa4da08467cfca39b78f276224218bd3ed9fd094c99456668b974d",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_allocation_safe@vmu_native_heap_probe_stage.c",
+      "old_bytes": 52,
+      "new_bytes": 52,
+      "old_sha256": "64d59257bca4d5d3613ed0d409432db08d129df238c6274fa90c989547934b60",
+      "new_sha256": "7006115de77f93c00d4dfd9a9c2c1777d88dc763205b1238c154ad44b848f51e",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 15,
+      "changed_literal_slots": [
+        {
+          "offset": 36,
+          "before": "0x8ce612e8",
+          "after": "0x8ce61328",
+          "roles": [
+            "_exec_bytes+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 40,
+          "before": "0x8ce8eba8",
+          "after": "0x8ce8ebe8",
+          "roles": [
+            "__retail_stage_bss_end+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 48,
+          "before": "0x8ce51c34",
+          "after": "0x8ce51c74",
+          "roles": [
+            "_native_heap+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_at@vmu_native_heap_budget.c",
+      "old_bytes": 92,
+      "new_bytes": 92,
+      "old_sha256": "db475248a7aa8675d1722602bc06b3a984d54f508a45a8842ba8116437063423",
+      "new_sha256": "db475248a7aa8675d1722602bc06b3a984d54f508a45a8842ba8116437063423",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_bottom_geometry@vmu_native_heap.c",
+      "old_bytes": 24,
+      "new_bytes": 24,
+      "old_sha256": "fe83cd5cec158b6d373003e684f8d52b59b7f5200e588cfe204826026a080668",
+      "new_sha256": "fe83cd5cec158b6d373003e684f8d52b59b7f5200e588cfe204826026a080668",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_code_sha@vmu_native_heap_probe_stage.c",
+      "old_bytes": 64,
+      "new_bytes": 64,
+      "old_sha256": "692d561cd5ccbb73e46c006115f5b1945036b7e8dbd0f24296240547945d5729",
+      "new_sha256": "551156df932c38fb9a78d6d61fedb6f38fefcbb663aa58ce78a3a477f52b8310",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 23,
+      "changed_literal_slots": [
+        {
+          "offset": 52,
+          "before": "0x8ce51c34",
+          "after": "0x8ce51c74",
+          "roles": [
+            "_native_heap+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_control@vmu_native_heap_probe_stage.c",
+      "old_bytes": 28,
+      "new_bytes": 28,
+      "old_sha256": "4e5efaa5fdceffa3a31fbffb123c1333bf951e2e1fe70390a272c5c58fa661a7",
+      "new_sha256": "4e5efaa5fdceffa3a31fbffb123c1333bf951e2e1fe70390a272c5c58fa661a7",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_excludes_stage@vmu_native_stage_placement.c",
+      "old_bytes": 64,
+      "new_bytes": 64,
+      "old_sha256": "b3d30aacc305e63a418917c5eb59777a318ec5c226a751d80e6306afa2b24079",
+      "new_sha256": "b3d30aacc305e63a418917c5eb59777a318ec5c226a751d80e6306afa2b24079",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_fresh@vmu_native_heap.c",
+      "old_bytes": 116,
+      "new_bytes": 116,
+      "old_sha256": "7b861e8ef810a55fb848113bb3d40facdfdfa81a8ef200715877798ac0534b56",
+      "new_sha256": "7b861e8ef810a55fb848113bb3d40facdfdfa81a8ef200715877798ac0534b56",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_heap_bottom_code_span@vmu_native_heap.c",
+      "old_bytes": 88,
+      "new_bytes": 88,
+      "old_sha256": "70e1fdb2e5150dd22242b823edf4a8eaa3f5259e85a94a9546e995140e184cc0",
+      "new_sha256": "70e1fdb2e5150dd22242b823edf4a8eaa3f5259e85a94a9546e995140e184cc0",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_heap_bottom_halfword@vmu_native_heap.c",
+      "old_bytes": 58,
+      "new_bytes": 58,
+      "old_sha256": "d66affe12d8e87985e0bbe094cc393649bad89f9e4494f55004afda5f193ab39",
+      "new_sha256": "d66affe12d8e87985e0bbe094cc393649bad89f9e4494f55004afda5f193ab39",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_identity@vmu_native_heap.c",
+      "old_bytes": 412,
+      "new_bytes": 412,
+      "old_sha256": "be8fb07f35f46c478795e779e293b92d4a9a56577a06c792ee2baac0c84b4839",
+      "new_sha256": "be8fb07f35f46c478795e779e293b92d4a9a56577a06c792ee2baac0c84b4839",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_index@vmu_native_heap.c",
+      "old_bytes": 100,
+      "new_bytes": 100,
+      "old_sha256": "dd81846d1188b779bc975573eaad379a609bbf18baa58093e765179a26886cfa",
+      "new_sha256": "dd81846d1188b779bc975573eaad379a609bbf18baa58093e765179a26886cfa",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_bottom_allocated",
+      "old_bytes": 172,
+      "new_bytes": 172,
+      "old_sha256": "2297b7718313cffaf3b8df94a3de63568faa6f016d7e66b94c5f0653c8dc1e68",
+      "new_sha256": "2297b7718313cffaf3b8df94a3de63568faa6f016d7e66b94c5f0653c8dc1e68",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_bottom_code_valid",
+      "old_bytes": 360,
+      "new_bytes": 360,
+      "old_sha256": "1269d10460510a822683d13eb427620d58ec84efe2c12e4bf8a6f828d5e46539",
+      "new_sha256": "24b47127706f414ff1bbc83fd2a3ea556854e707f08c5a607825b47f1c0e1c8c",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 159,
+      "changed_literal_slots": [
+        {
+          "offset": 344,
+          "before": "0x8ce2ddbc",
+          "after": "0x8ce2ddfc",
+          "roles": [
+            "_heap_bottom_allocate_words+0",
+            "_heap_bottom_allocate_words@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 352,
+          "before": "0x8ce2dd22",
+          "after": "0x8ce2dd62",
+          "roles": [
+            "_heap_bottom_release_words+0",
+            "_heap_bottom_release_words@vmu_native_heap.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_heap_bottom_fresh",
+      "old_bytes": 148,
+      "new_bytes": 148,
+      "old_sha256": "1dc99545b6605fa627e9d591fd1a35e18f4f61f8252cafbb96ac9f13a79f2671",
+      "new_sha256": "1dc99545b6605fa627e9d591fd1a35e18f4f61f8252cafbb96ac9f13a79f2671",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_bottom_placeholder",
+      "old_bytes": 196,
+      "new_bytes": 196,
+      "old_sha256": "3ac04611d78a2b69e0350cfcd268dd37564689ff21c44b749482841733d71106",
+      "new_sha256": "3ac04611d78a2b69e0350cfcd268dd37564689ff21c44b749482841733d71106",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_bottom_ready",
+      "old_bytes": 144,
+      "new_bytes": 144,
+      "old_sha256": "5b2ccd1a4902bcc412b159ff8e51ba02fccddad7ae2a50d02fd082883bab9062",
+      "new_sha256": "5b2ccd1a4902bcc412b159ff8e51ba02fccddad7ae2a50d02fd082883bab9062",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_budget_prepare",
+      "old_bytes": 2370,
+      "new_bytes": 2370,
+      "old_sha256": "7161f93ecffcd2b8538171a65f9cadf46163c80bbb1f098d608d5291d1f965fe",
+      "new_sha256": "18f0f2787f96eccdf781c0993cfd12238bea7ffd9a4ab90461631fc996c76345",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 1079,
+      "changed_literal_slots": [
+        {
+          "offset": 832,
+          "before": "0x8ce2dfae",
+          "after": "0x8ce2dfee",
+          "roles": [
+            "_child_code+one_past_end",
+            "_child_code@vmu_native_heap_budget.c+one_past_end",
+            "_parent_code+0",
+            "_parent_code@vmu_native_heap_budget.c+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 836,
+          "before": "0x8ce2e046",
+          "after": "0x8ce2e086",
+          "roles": [
+            "_parent_code+one_past_end",
+            "_parent_code@vmu_native_heap_budget.c+one_past_end"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 1632,
+          "before": "0x8ce2df4a",
+          "after": "0x8ce2df8a",
+          "roles": [
+            "_child_code+0",
+            "_child_code@vmu_native_heap_budget.c+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_kui_vmu_native_heap_fresh",
+      "old_bytes": 268,
+      "new_bytes": 268,
+      "old_sha256": "ba307e7566bea76831b4c4f5c3facb061303899168ce24f91a722ebbcd16a3fd",
+      "new_sha256": "ba307e7566bea76831b4c4f5c3facb061303899168ce24f91a722ebbcd16a3fd",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_lease_identity_valid",
+      "old_bytes": 76,
+      "new_bytes": 76,
+      "old_sha256": "340aa33e69839a4517f6910634479f0823da7db9d1830020d313110c94975abe",
+      "new_sha256": "340aa33e69839a4517f6910634479f0823da7db9d1830020d313110c94975abe",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_lease_valid",
+      "old_bytes": 28,
+      "new_bytes": 28,
+      "old_sha256": "eb0496c97a22899cbe69b8bfa96aa76a68ade5b276aca5de0fc42ededd494196",
+      "new_sha256": "eb0496c97a22899cbe69b8bfa96aa76a68ade5b276aca5de0fc42ededd494196",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_lease_valid_with_release",
+      "old_bytes": 512,
+      "new_bytes": 512,
+      "old_sha256": "1b0478c51b4ff2f80e9d0326f7a00539e9b94c83deb8219aa951b50fb0f1eb39",
+      "new_sha256": "1b0478c51b4ff2f80e9d0326f7a00539e9b94c83deb8219aa951b50fb0f1eb39",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_heap_preallocate",
+      "old_bytes": 36,
+      "new_bytes": 36,
+      "old_sha256": "6f4a5ec7719e81ea06df5f4a47f9be6262795f2df2d6c39257af9669b4451c5f",
+      "new_sha256": "6f4a5ec7719e81ea06df5f4a47f9be6262795f2df2d6c39257af9669b4451c5f",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_native_stage_bottom_allocation_safe",
+      "old_bytes": 308,
+      "new_bytes": 308,
+      "old_sha256": "d48e52d0f62f6eb20bb8c37f1af8550c5c68be1569ef0ba1d31e0c6830f5d70a",
+      "new_sha256": "d48e52d0f62f6eb20bb8c37f1af8550c5c68be1569ef0ba1d31e0c6830f5d70a",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_kui_vmu_observe_stage_install",
+      "old_bytes": 400,
+      "new_bytes": 400,
+      "old_sha256": "0137746630ac8d63422deb23687fac3afbd4bcbad8d1c54799c7ed9b223916d1",
+      "new_sha256": "49b668afa7d1e1d11eb6eac187ba444dd2f5f33dcbfefb71a4525b195fe0ba4c",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 153,
+      "changed_literal_slots": [
+        {
+          "offset": 324,
+          "before": "0x8ce2cb80",
+          "after": "0x8ce2cbc0",
+          "roles": [],
+          "same_text": "COLD 20 HEAP INITIALIZER RETURNED"
+        },
+        {
+          "offset": 336,
+          "before": "0x8ce51c00",
+          "after": "0x8ce51c40",
+          "roles": [
+            "_native_heap_code_sha+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 340,
+          "before": "0x8ce51c34",
+          "after": "0x8ce51c74",
+          "roles": [
+            "_native_heap+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 344,
+          "before": "0x8ce51c20",
+          "after": "0x8ce51c60",
+          "roles": [
+            "_native_call+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 376,
+          "before": "0x8ce2cba4",
+          "after": "0x8ce2cbe4",
+          "roles": [],
+          "same_text": "COLD 21 HEAP ALLOCATION BEGIN"
+        },
+        {
+          "offset": 392,
+          "before": "0x8ce2cbc4",
+          "after": "0x8ce2cc04",
+          "roles": [],
+          "same_text": "COLD 22 HEAP ALLOCATION VERIFIED"
+        }
+      ]
+    },
+    {
+      "name": "_le32@vmu_native_heap_budget.c",
+      "old_bytes": 30,
+      "new_bytes": 30,
+      "old_sha256": "6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334",
+      "new_sha256": "6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_long_literal@vmu_native_heap_budget.c",
+      "old_bytes": 128,
+      "new_bytes": 128,
+      "old_sha256": "1f31121f0b67d6ea79e2b0c2a63c181d46d2ce97583c67bc47712d0727ccb289",
+      "new_sha256": "1f31121f0b67d6ea79e2b0c2a63c181d46d2ce97583c67bc47712d0727ccb289",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_memcmp",
+      "old_bytes": 34,
+      "new_bytes": 34,
+      "old_sha256": "3d7da64606fe412df2341ca8e1c2c56d14d3f4798465f1ec02f6d2994c6aefd9",
+      "new_sha256": "3d7da64606fe412df2341ca8e1c2c56d14d3f4798465f1ec02f6d2994c6aefd9",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_memcpy",
+      "old_bytes": 72,
+      "new_bytes": 72,
+      "old_sha256": "cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634",
+      "new_sha256": "cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_memset",
+      "old_bytes": 26,
+      "new_bytes": 26,
+      "old_sha256": "84a19f7aa0536a77835dd9917cd47ea65e6d6edf6013064ab39a36c0a05e118a",
+      "new_sha256": "84a19f7aa0536a77835dd9917cd47ea65e6d6edf6013064ab39a36c0a05e118a",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_metadata@vmu_native_heap.c",
+      "old_bytes": 416,
+      "new_bytes": 416,
+      "old_sha256": "9d1ea1f6d55d9d022afef79dddc1fa35d66a1a69f1ed556fd564fd65e8e2a221",
+      "new_sha256": "9d1ea1f6d55d9d022afef79dddc1fa35d66a1a69f1ed556fd564fd65e8e2a221",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_native_allocate_bottom@vmu_native_heap_probe_stage.c",
+      "old_bytes": 304,
+      "new_bytes": 304,
+      "old_sha256": "2f380c8842199662eb559ad26b38f017020e9926e6cc72cc5c053f6a25bf96a6",
+      "new_sha256": "7cd90018b2b72f71943dc2c44c7c7d67a40c343ace4262d9e959ea2a667c477f",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 130,
+      "changed_literal_slots": [
+        {
+          "offset": 264,
+          "before": "0x8ce51c34",
+          "after": "0x8ce51c74",
+          "roles": [
+            "_native_heap+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_native_allocator_unchanged@vmu_native_heap_probe_stage.c",
+      "old_bytes": 68,
+      "new_bytes": 68,
+      "old_sha256": "bc400df642a3086dff9cce9af883c5d44f229731c0294274dd49a91f70baf905",
+      "new_sha256": "803a0664bd5fcbd27a722c75fc0a9f542f9a100d6b7ea5a40ee2695bb08c116a",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 26,
+      "changed_literal_slots": [
+        {
+          "offset": 64,
+          "before": "0x8ce51c00",
+          "after": "0x8ce51c40",
+          "roles": [
+            "_native_heap_code_sha+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_native_budget_prepare@vmu_native_heap_probe_stage.c",
+      "old_bytes": 92,
+      "new_bytes": 92,
+      "old_sha256": "417490a35629276eae963c889b63292535f3d736bfcd34803c898fd913a9934a",
+      "new_sha256": "d3121409c7277618543b5fab42a1f3f99f8d5ef6cbf56c796027b59a6400adb8",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 31,
+      "changed_literal_slots": [
+        {
+          "offset": 76,
+          "before": "0x8ce612e8",
+          "after": "0x8ce61328",
+          "roles": [
+            "_exec_bytes+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 80,
+          "before": "0x8ce51c20",
+          "after": "0x8ce51c60",
+          "roles": [
+            "_native_call+0"
+          ],
+          "same_text": null
+        },
+        {
+          "offset": 84,
+          "before": "0x8ce51c34",
+          "after": "0x8ce51c74",
+          "roles": [
+            "_native_heap+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_native_budget_publish@vmu_native_heap_probe_stage.c",
+      "old_bytes": 132,
+      "new_bytes": 132,
+      "old_sha256": "5e5da214e0c3d6f27e78d3a001ab439eb90d35e07756158faf12dd0b269fb111",
+      "new_sha256": "564323c53d039b9b4ec754a4e193a5801ca6c85344dc8c0219fa8e4e36188570",
+      "classification": "literal-only",
+      "reachable_instruction_halfwords": 54,
+      "changed_literal_slots": [
+        {
+          "offset": 108,
+          "before": "0x8ce51c34",
+          "after": "0x8ce51c74",
+          "roles": [
+            "_native_heap+0"
+          ],
+          "same_text": null
+        }
+      ]
+    },
+    {
+      "name": "_native_low_bindings@vmu_native_heap_probe_stage.c",
+      "old_bytes": 64,
+      "new_bytes": 64,
+      "old_sha256": "914e49950b3eec800b5954bdf1c8070bc057eb42e08b316bd11449c0ebc87db2",
+      "new_sha256": "6a09daae562956ba3ef8767d27b7f6596215baba8d761b024fe13f17c2bc4de8",
+      "classification": "literal-only",
+      "error": "0x8ce010d0",
+      "changed_literal_slots": [],
+      "manual_noreturn_closure_boundary": true,
+      "exact_instruction_prefix_bytes": 48,
+      "typed_literal_slots": [
+        {
+          "offset": 48,
+          "same_roles": [
+            "_manifest+0"
+          ]
+        },
+        {
+          "offset": 52,
+          "same_roles": [
+            "_native_low_bindings_table+0",
+            "_native_low_bindings_table@vmu_native_heap_probe_stage.c+0"
+          ]
+        },
+        {
+          "offset": 56,
+          "same_roles": [
+            "_stopped+0",
+            "_stopped@vmu_native_heap_probe_stage.c+0"
+          ]
+        },
+        {
+          "offset": 60,
+          "same_roles": [
+            "_native_low_bindings_refused+0",
+            "_native_low_bindings_refused@vmu_native_heap_probe_stage.c+0"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "_native_read@vmu_native_heap_probe_stage.c",
+      "old_bytes": 84,
+      "new_bytes": 84,
+      "old_sha256": "b6bc33c6d4c36f9e6625ccf6afdc55b98e2e8f684d95194687fa946071a4804d",
+      "new_sha256": "b6bc33c6d4c36f9e6625ccf6afdc55b98e2e8f684d95194687fa946071a4804d",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_overlaps.constprop.0@vmu_native_heap_budget.c",
+      "old_bytes": 124,
+      "new_bytes": 124,
+      "old_sha256": "ab5b5d50a0e6b0d6bfdfe3d66da18c739b6a4569e20e8adf2c7f04a323795bdb",
+      "new_sha256": "ab5b5d50a0e6b0d6bfdfe3d66da18c739b6a4569e20e8adf2c7f04a323795bdb",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_ram@vmu_native_heap_budget.c",
+      "old_bytes": 76,
+      "new_bytes": 76,
+      "old_sha256": "64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305",
+      "new_sha256": "64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_read_is@vmu_native_heap.c",
+      "old_bytes": 80,
+      "new_bytes": 80,
+      "old_sha256": "a30c6231f114acaa0bb2274914e14a5ce1225ada50dde102a9f4c4e2880862e8",
+      "new_sha256": "a30c6231f114acaa0bb2274914e14a5ce1225ada50dde102a9f4c4e2880862e8",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_span@vmu_native_heap.c",
+      "old_bytes": 76,
+      "new_bytes": 76,
+      "old_sha256": "64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305",
+      "new_sha256": "64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_span@vmu_native_stage_placement.c",
+      "old_bytes": 80,
+      "new_bytes": 80,
+      "old_sha256": "4e5ac885af47f3deec9bf74747cecdfcdaac70abbe7c981eaea812f41c3c041d",
+      "new_sha256": "4e5ac885af47f3deec9bf74747cecdfcdaac70abbe7c981eaea812f41c3c041d",
+      "classification": "byte-identical"
+    },
+    {
+      "name": "_word@vmu_native_heap_budget.c",
+      "old_bytes": 52,
+      "new_bytes": 52,
+      "old_sha256": "9a68103cac2b1b00551a238a475297f0c36253820af2e2443c243db5d27713e6",
+      "new_sha256": "9a68103cac2b1b00551a238a475297f0c36253820af2e2443c243db5d27713e6",
+      "classification": "byte-identical"
+    }
+  ],
+  "cold_object_arrays_all_byte_identical": true,
+  "old_cold_and_worker_maps_retained_with_explicit_paired_gate_marker": true,
+  "fast_closure_preflight": {
+    "heap_kernel": {
+      "passed": true,
+      "report_sha256": "4ce45cee2dd921ec7bac399ff6cac2de6fac076532e30f03012702dc8f919b78",
+      "prototype_elf_bound": true
+    },
+    "raw_owner": {
+      "passed": true,
+      "report_sha256": "995524c40cfce2427ba2f4f13ebf02fd0b4294a11eb222371422c773db0c84d0",
+      "prototype_elf_bound": true
+    },
+    "dual_readers": {
+      "passed": true,
+      "report_sha256": "3f78af2b3df70fc7b219e281f9bbd817d717544fefcb2864606b8c9995646d59",
+      "prototype_elf_bound": true
+    },
+    "live_boundary_abi": {
+      "passed": true,
+      "cases": 336,
+      "semantic_mutants_rejected": 9,
+      "body_byte_mutants_rejected": 216
+    }
+  }
+}

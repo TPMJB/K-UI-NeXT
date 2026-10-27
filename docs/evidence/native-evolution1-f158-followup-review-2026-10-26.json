@@ -1,0 +1,29 @@
+{
+  "schema": "kui.native-evolution1-f158-followup-review.v1",
+  "runtime_commit": "f158ba5e24f93ab5622f95185601b3d5a3dbca6b",
+  "production_changed": false,
+  "current_owner_report": "Brief loading after the Diff'rent logo disappears, then black screen.",
+  "source_findings": [
+    "The Evolution1 heap initializer caller at 0x8c04ed28..0x8c04ed68 initializes the remaining SDK heap beginning at 0x8c35e200, then enters video setup at 0x8c165a4e.",
+    "Evolution1 does not match the Lodoss remaining-RAM private-pool split. The selective f158 budget correction therefore leaves it unchanged.",
+    "The original game deliberately blanks video during mode setup and waits on SDK video counter 0x8c358d18. Earlier blanking observations did not establish a CPU crash or failed allocation.",
+    "Previous original-instruction replay found the Sofdec cache transition and setter equivalent to working Evolution2.",
+    "Historical console testing with a 192KiB Standard reservation passed lease-only and failed with active runtime hooks. This makes runtime/video lifecycle a stronger lead than reservation alone, without excluding a later allocation failure under the current 384KiB reservation."
+  ],
+  "prior_evidence": [
+    "docs/evidence/native-evolution-isolation-2026-10-23.json",
+    "docs/evidence/native-evolution-hooks-2026-10-23.json",
+    "docs/evidence/native-evolution1-glue-followup-review-2026-10-25.json",
+    "docs/evidence/native-evolution1-sdk-followup-review-2026-10-25.json"
+  ],
+  "next_hardware_capture": {
+    "build": "f158ba5e24f9",
+    "reader": "New (X)",
+    "installation": "Existing --profile-runtime installation; no new ZIP required",
+    "trigger": "At black screen, both triggers+B for about one second, release, wait about 20 seconds",
+    "recording": "One complete repeating report cycle, about two minutes after reports appear",
+    "required_pages": ["CLOCK/VIDEO", "Every PHASE HISTORY page"],
+    "note": "Exact Evolution1 retains phase history; generic RAW OWNER STACK pages are intentionally not used for this image."
+  },
+  "conclusion": "No specific production change is justified from the symptom alone. Capture the current interrupted game/video state before changing allocator, IRQ, cache, or VMU hook policy."
+}

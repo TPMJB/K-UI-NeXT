@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/vmu-native-worker
+override TEST_ZIP := K-UI-Native-Worker-Test.zip
+override TEST_GUIDE := docs/vmu-native-worker-test.md
+VMU_PACKAGE_TOOL := tools/package_vmu_native_worker.py
+VMU_PACKAGE_ARGS :=
+VMU_INSTALL_ROUTE_TEST := python3 tests/test_install_vmu_native_heap_probe.py
+include Makefile.vmu-native-heap-probe
+override STAGE_SRC += src/core/vmu_native_relocate.c src/core/data.c
+STAGE_OBJ += $(BUILD)/native_worker_call.o
+$(BUILD)/stage.elf: $(STAGE_OBJ)
+$(STAGE_OBJ): $(BUILD)/readonly-config
+FLAGS += -DKUI_VMU_NATIVE_WORKER_PROBE=1 \
+ -DKUI_NATIVE_WORKER_BIN='"$(BUILD)/native-worker.bin"' \
+ -DKUI_NATIVE_WORKER_RELOC='"$(BUILD)/native-worker.reloc"'
+NATIVE_FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
+ -ffreestanding -fno-builtin -fno-stack-protector -fno-pic \
+ -ffunction-sections -fdata-sections -fno-jump-tables -fstack-usage \
+ -DKUI_RETAIL_FAST_IO=1 -Iinclude
+NATIVE_SRC = src/loader/vmu_native_worker.c src/core/vmu_native_heap.c \
+ src/core/vmu_native_worker_protocol.c \
+ src/core/vmu_readonly.c src/core/vmu_emulation.c src/core/vmu_image.c \
+ src/core/data.c src/loader/minic.c
+NATIVE_OBJ = $(patsubst %.c,$(BUILD)/native/%.o,$(NATIVE_SRC)) $(BUILD)/native_worker_exports.o
+$(BUILD)/native/%.o: %.c
+	@mkdir -p $(@D)
+	$(CC) $(NATIVE_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/native_worker_exports.o: src/loader/vmu_native_worker_exports.S
+	@mkdir -p $(@D)
+	$(CC) $(NATIVE_FLAGS) -c $< -o $@
+$(BUILD)/native_worker_call.o: src/loader/vmu_native_worker_call.S
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -c $< -o $@
+$(BUILD)/native-worker.elf: $(NATIVE_OBJ) src/loader/vmu_native_worker.ld
+	$(CC) $(LINK) -Wl,--emit-relocs -Tsrc/loader/vmu_native_worker.ld \
+	 -Wl,-Map,$(BUILD)/native-worker.map -o $@ $(NATIVE_OBJ) -lgcc
+$(BUILD)/native-worker.bin: $(BUILD)/native-worker.elf
+	$(OBJCOPY) -O binary $< $@
+$(BUILD)/native-worker.reloc: $(BUILD)/native-worker.elf $(BUILD)/native-worker.bin tools/vmu_native_relocations.py
+	python3 tools/vmu_native_relocations.py $< $(BUILD)/native-worker.bin $@ --link-base 0x8c100000 --span-bytes 0x10000
+$(BUILD)/stage/src/loader/vmu_native_heap_probe_stage.o: $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc
+-include $(NATIVE_OBJ:.o=.d)
+
+.PHONY: worker-host-tests
+worker-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+	 -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie -Iinclude \
+	 tests/test_vmu_native_worker_protocol.c src/core/vmu_native_worker_protocol.c \
+	 src/core/vmu_readonly.c src/core/vmu_emulation.c src/core/vmu_image.c src/core/data.c -o $(BUILD)/test-protocol
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-protocol
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+	 -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie -Iinclude \
+	 tests/test_vmu_native_worker_relocate.c src/core/vmu_native_relocate.c src/core/hash.c src/core/data.c -o $(BUILD)/test-real-relocation
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-real-relocation $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc

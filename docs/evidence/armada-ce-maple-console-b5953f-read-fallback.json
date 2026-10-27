@@ -1,0 +1,46 @@
+{
+  "build": "b5953f7b6d67",
+  "test": "04-read-after",
+  "auto_reason": 6,
+  "phase": 2,
+  "result": "completion-count fallback; first block-read checkpoint not reached",
+  "visits": 1200,
+  "traffic_accepted": 1200,
+  "traffic_refused": 0,
+  "dma_pre": 1200,
+  "dma_post": 1200,
+  "dma_leases": 1200,
+  "dma_restores": 1200,
+  "dma_active_at_capture": false,
+  "traffic_fault": [
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "fence_fault": [
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "virtual_devinfo_reply_observed": true,
+  "virtual_media_or_block_read_observed": false,
+  "owner_observation": "opening FMV did not freeze this time, approximately 4fps, repeating audio; owner skipped it",
+  "full_A2_report": "final photo is blurred; exact larger advertisement counters not transcribed",
+  "source_attachments": [
+    "image-1792557243026.jpg",
+    "image-1792557246611.jpg",
+    "image-1792557251446.jpg",
+    "image-1792557256835.jpg",
+    "image-1792557261981.jpg"
+  ],
+  "interpretation": [
+    "This is not a block-read pass. Reason6 is the bounded completion-count fallback.",
+    "Paired counters with no active fence or recorded fault establish continued normal wrapper returns through1200 observations; they do not measure interrupt latency.",
+    "No MEDIA/READ descriptor was observed before capture. Owner-specific DEVINFO handler does not issue those requests automatically.",
+    "High masked-hook overhead is a working theory for low FMV frame rate/audio repetition; a hardware timing or controlled performance result is still needed."
+  ]
+}

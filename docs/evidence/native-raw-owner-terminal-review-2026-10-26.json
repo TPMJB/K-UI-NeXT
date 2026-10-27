@@ -1,0 +1,74 @@
+{
+  "schema": "kui.native.raw-owner-terminal.review.v1",
+  "date": "2026-10-26",
+  "problem": "Rayman and Lodoss PROFILE videos contain reader/controller timings but no interrupted program state; the earlier phase walker admits exact Evolution1 only.",
+  "scope": "Add one observation-only raw owner-frame and video-timing snapshot at the existing deliberate PROFILE terminal. This is diagnostic evidence, not a game compatibility fix.",
+  "marker": "__kui_native_raw_owner_terminal_worker=1",
+  "capture": {
+    "trigger": "Existing PROFILE both-triggers+B gesture, followed by the existing20second/1200completion terminal.",
+    "timing": "After a successful controller completion and all existing ownership/response guards, while its original saved frame remains live and IMASK15 is held. Before the first display_restore.",
+    "non_profile": "Generic raw capture returns before any read or mutation. Normal worker response/transport behavior is unchanged.",
+    "evolution1": "Exact existing phase-walk history is retained; generic raw capture skips an enabled exact-E1 phase state.",
+    "words": 192,
+    "bytes": 768,
+    "ram_span": "Canonical P0/P1/P2,4byte aligned; physical0c008100..0d000000, complete768byte span. Reads preserve the original alias.",
+    "exclusion": "The entire stack-word span must avoid the complete protected lease including its32byte guard prefix. Invalid geometry, arithmetic overflow or failed reads produce unavailable/partial observations, never VMU rejection or new I/O authority.",
+    "metadata": [
+      "original saved-frame address",
+      "saved gateway PR",
+      "saved gateway SR",
+      "last sampled clock tick",
+      "SPG_LOAD",
+      "SPG_VBLANK",
+      "SPG_CONTROL",
+      "SPG_STATUS",
+      "INTEVT"
+    ],
+    "output": "RAW OWNER STACK metadata page plus four address-and-four-word pages. Values are observations, not a decoded fault PC. Capture the whole cycle until its first heading repeats.",
+    "flags": {
+      "1": "complete source span admitted",
+      "2": "all192 words read",
+      "4": "all five video/event register observations read"
+    },
+    "limits": [
+      "No framebuffer-enable FB_R_CTRL sample. Video fields describe scan/timing registers.",
+      "Raw words can include saved SDK exception state, but offline original-code unwind is required before identifying an interrupted game PC.",
+      "Coherent integer replay establishes neither cache behavior, actual console timing nor correct movie decoding."
+    ]
+  },
+  "private_storage": {
+    "phase_state_before": 976,
+    "phase_state_after": 908,
+    "raw_snapshot_bytes": 812,
+    "change": "Retain all16 E1 records and separate pending state. Pack bounded kind and flags into private bytes with a zero reserved halfword; unsupported kinds cannot narrow into submit/complete. All14 logical fields and numerical rows are preserved.",
+    "prototype_bss_end": "ac11ef80",
+    "prototype_stack_bottom": "ac11f000",
+    "prototype_stack_gap_bytes": 128,
+    "worker_or_lease_reservation_increased": false
+  },
+  "software_checks": {
+    "host_phase_raw_sanitizer_checks": 99169,
+    "host_persistent_cached_bridge_checks": 2075254,
+    "actual_linked_terminal_cases": 40,
+    "extra_scalar_instruction_truth_cases": 329,
+    "mutations": {
+      "companion_refusals": 13,
+      "complete_body_byte_pin_mutants": 5628,
+      "span_guard_branch_inversions": 10
+    },
+    "existing_numeric_report_calls_preserved": 62,
+    "actual_predicate_and_read_code_executed": true,
+    "capture_before_first_display_restore": true
+  },
+  "prototype_worker_sha256": "05f0b5116a4971139e02581e7f3ccf430ac9bd52a2f23fa7e846f6c0e8b04704",
+  "prototype_build_label": "f2410c316f25; development prototype only, not a console-tested replacement for the earlier f241 delivery",
+  "source_sha256": {
+    "src/loader/vmu_native_phase.inc": "37af75646eafc54262855913d634960775e353b047e1e619197a45e21fe20b50",
+    "src/loader/vmu_native_passive.c": "ed798742dd162a3ec63e90e9fda743f2ee3024334f1277a0fb946a017e302193",
+    "src/loader/vmu_native_reader_capture.inc": "002ec89cf765d6c769cfb609f42a2c4977e3719f43fc18017c2abc5f212de8be",
+    "src/loader/vmu_native_loader_timeline.inc": "1d04e5d3b10541885fc1f2c664299f2a72dcf3cfc25b8f76d723c2e162bb54ea",
+    "tests/test_vmu_native_phase.c": "a5b1191572c0e929497b7c659c554fa7c93942e610c920fc766b1348d238ec1d",
+    "tools/check_native_raw_owner_capture.py": "8d6ba0e3cfa5df5fa7578d9b8607ab72aa7a822c953a567be8990baff1c6f4c9"
+  },
+  "console_verified": false
+}

@@ -1,0 +1,64 @@
+{
+  "schema": "kui.native.mixed-main-poll.v1",
+  "date": "2026-10-23",
+  "previous_console_build": "3a143db9cf2e",
+  "previous_console_result": {
+    "normal": "black screen before opening FMV",
+    "raw_chain": "freeze"
+  },
+  "defect": "The strict all-GETCOND optimization misses recurring main-controller plus empty-port INFO batches.",
+  "original_execution": {
+    "evidence": "native-evolution-sdk-poll-2026-10-23.json",
+    "cases": 10,
+    "batches": 1200,
+    "virtual_a1_enumerated_rounds": [
+      1
+    ],
+    "mixed_eligible_per_virtual_case": "118/120; rounds2..119",
+    "old_all_getcond_eligible_with_physical_A_only": "0/238 steady pairs across ASIC0/2"
+  },
+  "change": {
+    "generic": true,
+    "parent": "A controller GETCOND only",
+    "other_main_ports": "controller GETCOND or zero-payload INFO/ALLINFO",
+    "queries": "exact replies with nonzero functions or routed zero-word FC/FD/FE errors; absent FFFFFFFF",
+    "dma": "original SDK list",
+    "publication": "one A presence byte after complete source/response/context validation",
+    "vmus": "full filtered storage path",
+    "free_and_storage_guards": "unchanged",
+    "profile": "same fast/full routing, shared gesture/timing completion; optional exact-image read-only phase collector"
+  },
+  "host_cost": {
+    "unit": "guest reads per identical admitted52-byte pair",
+    "previous_3a143db": 314,
+    "current_full": 309,
+    "current_mixed": 142,
+    "previous_reduction_percent": 54.77707006369427,
+    "console_time_measured": false
+  },
+  "audits": {
+    "exact_gateway_replay": "No defect found in submitted/completion/free instruction and ABI review; not a cache/timing proof",
+    "cache_and_fpu": "No concrete cache-publication, transition or FPU-register defect found; flat models remain limited",
+    "resident": "Active terminal/SD callback publication does not by itself alter accepted normal GD mappings; lease exclusion applies in both modes",
+    "malloc_failure_patch": "Original successful allocation branches around the patched failure arm",
+    "video_comparison": "native-original-video-wait-comparison-2026-10-23.md"
+  },
+  "validation": {
+    "controller_sanitizer_checks": 127618,
+    "persistent_sanitizer_checks": 1288445,
+    "trace_integration_checks": 1403519,
+    "phase_sanitizer_checks": 24710,
+    "evolution_context_checks": 76361,
+    "broader_compatibility_target": "passed with exact owner-supplied PS2, Skies, SA2, Grandia2 and Evolution startups",
+    "root_independent_sdk_replay": "1200 original DMA batches passed, including actual emulator INFO replies",
+    "compiled_worker_audit": "passed; private phase ring and linked diagnostic code pinned; ordinary storage/free guards unchanged",
+    "compiled_prepared_mutation_rejections": 133
+  },
+  "hardware_status": {
+    "candidate_executed": true,
+    "candidate_build": "1b5d9eb6e924",
+    "console_result": "User reports a freeze as the MPEG Sofdec screen disappears; SD activity stops. The mixed-port correction did not resolve it.",
+    "freeze_fix_established": false,
+    "remaining_question": "The failure is not yet localized by a current CPU exception or phase capture. Linked C replay and private-memory cost measurements are required before another candidate."
+  }
+}

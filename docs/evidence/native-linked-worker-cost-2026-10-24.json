@@ -1,0 +1,241 @@
+{
+  "schema": "kui.native.linked-worker-cost.v1",
+  "date": "2026-10-24",
+  "status": "Historical flat-memory overhead measurements; build f04a7045a384 subsequently failed before its first transfer on hardware. A separate cache-aware replay reproduces that immediate regression; the older Sofdec freeze remains unresolved.",
+  "previous_console_build": "1b5d9eb6e924",
+  "previous_console_result": "Freeze immediately after MPEG Sofdec logo, no SD activity; mixed-port correction did not resolve it.",
+  "executable_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+  "original_executable_not_included": true,
+  "measurements_are_development_artifacts": true,
+  "released_hot_functions_bound_by_packaged_compiled_proof": true,
+  "replay": "Actual linked C callbacks, original Evolution heap initializer/allocator and SDK initializer/submit/ready/consumer; actual C VMU INFO response; assembly callback boundaries bridged.",
+  "variants": [
+    {
+      "variant": "failed_mixed_poll",
+      "worker_elf_sha256": "cdc79762d0dd0236d43608b1f627fdeb15dd4f94a1c19bb5c53267b09708839d",
+      "worker_binary_sha256": "4212c5cf1ca72a130a467d545309065e316b48427a1bc92f962de058a3229484",
+      "rounds": 1000,
+      "steady_pairs": 998,
+      "steady_instruction_histogram": {
+        "9452": 499,
+        "9455": 499
+      },
+      "last_pair": {
+        "instructions": 9455,
+        "private_p2_reads": 1097,
+        "private_p2_writes": 764,
+        "guest_reads": 146
+      },
+      "cached_callback_stack": false,
+      "poison_dead_stack_between_callbacks": false,
+      "all_submit_lists_retained": true,
+      "all_original_consumer_rx_unchanged": true,
+      "steady_rx_publication": "exactly one A parent-presence byte, 0x20 to 0x21; original SDK consumer accepts it",
+      "round0_instructions": 76881,
+      "arm_instructions": 297500
+    },
+    {
+      "variant": "cached_stack_only",
+      "worker_elf_sha256": "b13ae173c29fe26f104198fe106f07255cdb8573a9dc1bb3ed7e2c368801c8e3",
+      "worker_binary_sha256": "b9d65f6ed6b1ec47aa6c147316b504081adf3fdb6a9f638856564fcbbbf7b9b7",
+      "rounds": 1000,
+      "steady_pairs": 998,
+      "steady_instruction_histogram": {
+        "9498": 499,
+        "9501": 499
+      },
+      "last_pair": {
+        "instructions": 9501,
+        "private_p2_reads": 322,
+        "private_p2_writes": 60,
+        "guest_reads": 146
+      },
+      "cached_callback_stack": true,
+      "poison_dead_stack_between_callbacks": true,
+      "all_submit_lists_retained": true,
+      "all_original_consumer_rx_unchanged": true,
+      "steady_rx_publication": "exactly one A parent-presence byte, 0x20 to 0x21; original SDK consumer accepts it",
+      "round0_instructions": 76939,
+      "arm_instructions": 297511
+    },
+    {
+      "variant": "cached_stack_and_checked_reader_inlining",
+      "worker_elf_sha256": "7462bc722725810317f0edbf072f069259cd0d032bc7e7fb664e2c47f3fb2637",
+      "worker_binary_sha256": "c684bb0cab2a13c1e93820c38f3fecf64202e9cb5bbd0228113deadd72abbdf3",
+      "rounds": 1000,
+      "steady_pairs": 998,
+      "steady_instruction_histogram": {
+        "4785": 499,
+        "4791": 499
+      },
+      "last_pair": {
+        "instructions": 4791,
+        "private_p2_reads": 318,
+        "private_p2_writes": 57,
+        "guest_reads": 146
+      },
+      "cached_callback_stack": true,
+      "poison_dead_stack_between_callbacks": true,
+      "all_submit_lists_retained": true,
+      "all_original_consumer_rx_unchanged": true,
+      "steady_rx_publication": "exactly one A parent-presence byte, 0x20 to 0x21; original SDK consumer accepts it",
+      "round0_instructions": 64361,
+      "arm_instructions": 295149
+    }
+  ],
+  "baseline_functions_over_100_instructions": {
+    "_read_value.part.0": 2546,
+    "_ram@0x8cfd00e8": 2415,
+    "_kui_vmu_native_passive_submit": 976,
+    "_transfer_context_valid": 824,
+    "_kui_vmu_native_passive_complete": 698,
+    "_controller_context_valid": 672,
+    "_stack_valid": 468,
+    "_installed_hooks_valid": 372,
+    "_memcpy": 220,
+    "_poll_lease_valid": 160,
+    "_kui_vmu_native_trace_point": 104
+  },
+  "negative_completion_cases": [
+    {
+      "case": "manager_unsupported_area",
+      "refusal": "Actual worker refused with code 0x47",
+      "parent_or_reply_writes": 0,
+      "tx_writes": 0
+    },
+    {
+      "case": "manager_unaligned",
+      "refusal": "Actual worker refused with code 0x47",
+      "parent_or_reply_writes": 0,
+      "tx_writes": 0
+    },
+    {
+      "case": "manager_wrong_identity",
+      "refusal": "Actual worker refused with code 0x47",
+      "parent_or_reply_writes": 0,
+      "tx_writes": 0
+    },
+    {
+      "case": "source_rx_unaligned",
+      "refusal": "Actual worker refused with code 0x47",
+      "parent_or_reply_writes": 0,
+      "tx_writes": 0
+    },
+    {
+      "case": "source_rx_outside_ram",
+      "refusal": "Actual worker refused with code 0x47",
+      "parent_or_reply_writes": 0,
+      "tx_writes": 0
+    },
+    {
+      "case": "private_rx_unaligned",
+      "refusal": "Actual worker refused with code 0x47",
+      "parent_or_reply_writes": 0,
+      "tx_writes": 0
+    },
+    {
+      "case": "private_rx_outside_ram",
+      "refusal": "Actual worker refused with code 0x47",
+      "parent_or_reply_writes": 0,
+      "tx_writes": 0
+    },
+    {
+      "case": "private_rx_unsupported_area",
+      "refusal": "Actual worker refused with code 0x47",
+      "parent_or_reply_writes": 0,
+      "tx_writes": 0
+    },
+    {
+      "case": "private_rx_function_past_ram",
+      "refusal": "Actual worker refused with code 0x47",
+      "parent_or_reply_writes": 0,
+      "tx_writes": 0
+    },
+    {
+      "case": "physical_response_header",
+      "refusal": "Actual worker refused with code 0x47",
+      "parent_or_reply_writes": 0,
+      "tx_writes": 0
+    },
+    {
+      "case": "live_bank_selector",
+      "refusal": "Actual worker refused with code 0x47",
+      "parent_or_reply_writes": 0,
+      "tx_writes": 0
+    },
+    {
+      "case": "stack_guard",
+      "refusal": "Actual worker refused with code 0x8",
+      "parent_or_reply_writes": 0,
+      "tx_writes": 0
+    }
+  ],
+  "refusal_write_rule": "All malformed contexts terminate at actual worker failure before any TX or RX write event.",
+  "changes": [
+    "All runtime private-stack users use one cached P1 alias, with exact lifecycle SP checks and active-alias canary loads. Cold arm and persistent mutable/DMA state remain P2.",
+    "Always-inline checked reader and RAM predicate; all owner reads, address/width/alias/alignment/bounds tests retained.",
+    "Optional PROFILE-only exact Evolution general exception gateway; four selected actual CPU exceptions report EXPEVT/SPC/SSR/TEA. Normal mode installs no vector redirect."
+  ],
+  "diagnostic_assembly_proof": {
+    "instruction_cases": 432,
+    "mutation_rejections": 57,
+    "publication_cases": 5,
+    "nonfatal_exact_gpr_and_sr_preservation": true,
+    "changed_sdk_callback_chained": true,
+    "interrupted_stack_accesses": 0,
+    "new_timer_or_irq_handler": false,
+    "vbr_replaced": false
+  },
+  "private_stack_depth_bytes_including_256_byte_guard_and_80_byte_assembly_margin": 1848,
+  "limitations": [
+    "Flat coherent memory; no cache, bus latency, interrupts, scheduled callbacks, FMV, game mainloop, SD transport, or cycle timing.",
+    "Actual SH C callbacks execute without worker helper stubs; original SDK submit hooks are bridged at the exact overwritten instruction boundary. Assembly save/restore gateways are not interpreted.",
+    "Actual original SDK upper initializer lock-normalization block executes; IRQ-registration scaffolding does not.",
+    "Completion caller PR and inherited SR are provided from original wrapper contract, then original consumer and ready functions execute.",
+    "Valid blank-card handoff comes from existing host model; no storage request occurs during automatic INFO-only VMU enumeration.",
+    "Reference mode changes diagnostics selector after NORMAL arm to require full C path while leaving trace disabled.",
+    "Instruction/access counts do not estimate SH4 bus cycles or measured console latency.",
+    "A selected-exception report would establish a real CPU exception; an absent report cannot exclude blocked/nested exceptions, bus hangs, replaced vectors or software deadlocks."
+  ],
+  "reproduce": [
+    "python3 tools/profile_vmu_native_sdk_worker_sh.py --startup /path/to/original/Evolution/1ST_READ.BIN --build BUILD --cached-stack --rounds 1000 --negative-cases --discard-dead-stack --output replay.json",
+    "python3 tools/check_vmu_native_persistent.py BUILD --self-test --trace-startup /path/to/original/Evolution/1ST_READ.BIN",
+    "make -f Makefile.vmu-native-compat BUILD=BUILD native-cached-stack-host-tests native-exception-capture-host-tests EVOLUTION1_STARTUP=/path/to/original/Evolution/1ST_READ.BIN"
+  ],
+  "validation": {
+    "complete_compatibility_host_target": "passed with PS2, Skies, SA2, Grandia2 and Evolution exact original startups",
+    "cached_stack_persistent_sanitizer_checks": 1288444,
+    "cached_stack_controller_sanitizer_checks": 127618,
+    "prepared_artifact_mutation_tests": 13,
+    "linked_prepared_mutation_rejections": 140,
+    "compiled_stack_guard_cases": 800,
+    "compiled_checked_reader_boundary_cases": 264,
+    "exception_gateway_cases": 432,
+    "exception_opcode_or_literal_mutation_rejections": 57,
+    "exception_publication_cases": 5,
+    "exception_installer_corrupted_original_byte_refusals": 72,
+    "exception_installer_mutable_saved_r0_cases": 32,
+    "compiled_artifact_self_test": "passed",
+    "console_success": false
+  },
+  "subsequent_console_build": "f04a7045a384",
+  "subsequent_console_result": {
+    "phase": "0x10",
+    "detail": "0x5",
+    "submitted": 0,
+    "completed": 0,
+    "fault_at": "0xac1dc53c",
+    "fault_value": "0x0",
+    "fault_expect": "0xffffffff",
+    "runtime_result": "0xfffffffc",
+    "interpretation": "SDK transfer-lock witness saw zero before first submission, independently reproduced with dirty P1 writeback over the P2-held flag."
+  },
+  "cache_regression_evidence": "native-sdk-lock-cache-2026-10-24.json",
+  "flat_replay_does_not_prove_cache_correctness": true,
+  "later_startup_regression": {
+    "build": "f7f4ac7027e9",
+    "observation": "Black screen before first logo",
+    "defect": "Uniform gateway PC-relative MOV.W in JMP delay slot causes SH-4 exception 1a0",
+    "evidence": "native-sh4-delay-slot-2026-10-23.json"
+  }
+}

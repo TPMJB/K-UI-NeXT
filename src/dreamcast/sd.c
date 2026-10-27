@@ -5,6 +5,9 @@
 #include "kui/storage_error.h"
 #include "kui/ata.h"
 #include "sci_sd_storage.h"
+#if KUI_VMU_PROFILE_PREP
+#include "kui/vmu_backing.h"
+#endif
 #include "../loader/sci_sd_bus.h"
 #include <dc/sd.h>
 #include <kos/irq.h>
@@ -79,6 +82,23 @@ static int sci_failed(enum kui_storage_error_operation operation,
     return failed(operation,reason,KUI_STORAGE_SCI,block,count,
                   result!=KUI_LOADER_SD_OK && sci.last_command!=0xff);
 }
+#if KUI_VMU_PROFILE_PREP
+bool kui_sd_vmu_profile_identity(struct kui_vmu_sd_identity *out) {
+    if(!out) return false;
+    *out=(struct kui_vmu_sd_identity){0};
+    if(!connected || active!=KUI_STORAGE_SCI || !sci.ready || sci.slow ||
+       kui_disc_read_pending(NULL) || !kui_sci_sd_healthy()) return false;
+    struct kui_vmu_sd_identity captured;
+    int result=kui_vmu_sd_identity_read(&sci,&captured);
+    if(result || !kui_sci_sd_healthy()) {
+        sci.ready=false;
+        (void)sci_failed(KUI_STORAGE_ERROR_READ,KUI_LOADER_SD_COMMAND,0,0);
+        return false;
+    }
+    *out=captured;
+    return true;
+}
+#endif
 static int ata_failed(enum kui_storage_error_operation operation,uint32_t block,uint32_t count) {
     if(ata.error==KUI_ATA_INVALID || ata.error==KUI_ATA_RANGE ||
        ata.error==KUI_ATA_BUSY) return -1;
@@ -228,6 +248,36 @@ bool kui_sd_raw_read_ops(struct kui_media_ops *out) {
     *out=(struct kui_media_ops){.blocks=blocks,.read=read_blocks};
     return true;
 }
+#if KUI_VMU_PERSIST_PROOF
+bool kui_sd_vmu_proof_healthy(void) {
+    return connected && active==KUI_STORAGE_SCI && sci.ready && !sci.slow &&
+        !kui_disc_read_pending(NULL) && kui_sci_sd_healthy();
+}
+bool kui_sd_vmu_proof_raw_ops(struct kui_media_ops *out) {
+    if(!out) return false;
+    *out=(struct kui_media_ops){0};
+    const struct kui_volume *view=kui_media_volume();
+    /* A fresh connection has no initialized filesystem view. Refuse a caller
+     * that merely asks for raw writes while an old mounted view still exists. */
+    if(!kui_sd_vmu_proof_healthy() || !view || view->count) return false;
+    *out=(struct kui_media_ops){.blocks=blocks,.read=read_blocks,
+        .write=write_blocks,.sync=sync_card};
+    return true;
+}
+bool kui_sd_vmu_proof_disconnect(void) {
+    bool ok=!connected || kui_sd_vmu_proof_healthy();
+    kui_sd_disconnect();
+    return ok && !kui_sci_sd_faulted();
+}
+#endif
+#if KUI_VMU_PERSIST_IMPORT
+bool kui_sd_vmu_import_disconnect(void) {
+    bool ok=!connected || (active==KUI_STORAGE_SCI && sci.ready && !sci.slow &&
+        !kui_disc_read_pending(NULL) && kui_sci_sd_healthy());
+    kui_sd_disconnect();
+    return ok && !kui_sci_sd_faulted();
+}
+#endif
 static bool open_device(unsigned transport) {
     bool ok=false;
     if(transport==KUI_STORAGE_SCIF) {

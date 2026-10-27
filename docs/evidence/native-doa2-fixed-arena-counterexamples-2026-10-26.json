@@ -1,0 +1,370 @@
+{
+  "schema": "kui.doa2.fixed-arena-source-counterexamples.v1",
+  "startup_sha256": "105056d9ffef86bf5e470fa28dc5907443156f9ab1c6bc009f73661d9c047a85",
+  "metadata_zip_sha256": "7afe4f940428d2ede1f297aefdd019cdbff55768479ebf92f301bc71cad3b3f8",
+  "validated_headers": 86,
+  "observed_resource_metadata": {
+    "schema": "kui.doa2.chr-layout-observation.v1",
+    "available": 86,
+    "unavailable": 0,
+    "selected_field_bytes": 70568,
+    "reads": {
+      "metadata_bytes": 61440,
+      "boot_bytes": 1815864,
+      "asset_payload_bytes": 0,
+      "resource_header_bytes": 1720,
+      "resource_source_bytes": 689136,
+      "resource_table_bytes": 272112
+    }
+  },
+  "original_transition": {
+    "entry": "8c0302e4",
+    "completed_and_returned": true,
+    "selected_mode": 10,
+    "phase": 0,
+    "instructions": 11783,
+    "critical_writes": [
+      {
+        "pc": "8c01bc8e",
+        "address": "8c21a624",
+        "value": "8cd5d000",
+        "bytes": 4
+      },
+      {
+        "pc": "8c03040c",
+        "address": "8c21a22c",
+        "value": "0000000a",
+        "bytes": 1
+      },
+      {
+        "pc": "8c030410",
+        "address": "8c21d1c0",
+        "value": "0000000a",
+        "bytes": 1
+      }
+    ],
+    "common_file_calls": [
+      {
+        "caller": "8c01c482",
+        "path": "DOA2/COMON.MOT",
+        "destination": "ac320000",
+        "file_bytes": 945028,
+        "transfer_bytes": 946176,
+        "end": "8c407000",
+        "candidate_overlap_bytes": 0
+      },
+      {
+        "caller": "8c01c48a",
+        "path": "DOA2/ANIME_CM.BIN",
+        "destination": "ac407000",
+        "file_bytes": 31254,
+        "transfer_bytes": 32768,
+        "end": "8c40f000",
+        "candidate_overlap_bytes": 0
+      },
+      {
+        "caller": "8c01c4b0",
+        "path": "DOA2/SPR_GAME.BIN",
+        "destination": "acd5d000",
+        "file_bytes": 324608,
+        "transfer_bytes": 325632,
+        "end": "8cdac800",
+        "candidate_overlap_bytes": 0
+      },
+      {
+        "caller": "8c01c4ec",
+        "path": "DOA2/SPR_BASE.BIN",
+        "destination": "acd5d000",
+        "file_bytes": 20672,
+        "transfer_bytes": 22528,
+        "end": "8cd62800",
+        "candidate_overlap_bytes": 0
+      },
+      {
+        "caller": "8c01c088",
+        "path": "DOA2/EFC1.CHR",
+        "destination": "ac40f000",
+        "file_bytes": 207600,
+        "transfer_bytes": 208896,
+        "end": "8c442000",
+        "candidate_overlap_bytes": 0
+      },
+      {
+        "caller": "8c01c096",
+        "path": "DOA2/EFC1.BIN",
+        "destination": "acd5d000",
+        "file_bytes": 446112,
+        "transfer_bytes": 446464,
+        "end": "8cdca000",
+        "candidate_overlap_bytes": 40960
+      },
+      {
+        "caller": "8c01c16c",
+        "path": "DOA2/FIX.CHR",
+        "destination": "ac442000",
+        "file_bytes": 24380,
+        "transfer_bytes": 24576,
+        "end": "8c448000",
+        "candidate_overlap_bytes": 0
+      },
+      {
+        "caller": "8c01c176",
+        "path": "DOA2/FIX.BIN",
+        "destination": "acd5d000",
+        "file_bytes": 16512,
+        "transfer_bytes": 18432,
+        "end": "8cd61800",
+        "candidate_overlap_bytes": 0
+      }
+    ]
+  },
+  "rejected_256k": {
+    "payload_begin": "8cdc0000",
+    "end": "8ce00000",
+    "bytes": 262144,
+    "original_file_call": {
+      "caller": "8c01c096",
+      "path": "DOA2/EFC1.BIN",
+      "destination": "acd5d000",
+      "file_bytes": 446112,
+      "transfer_bytes": 446464,
+      "end": "8cdca000",
+      "candidate_overlap_bytes": 40960
+    },
+    "conflicting_payload_bytes": 40960
+  },
+  "rejected_192k": {
+    "payload_begin": "8cdd0000",
+    "guarded_begin": "8cdcffe0",
+    "end": "8ce00000",
+    "bytes": 196608,
+    "controller_entry": "8c039e20",
+    "controller_instructions": 112,
+    "queue_after_controller": {
+      "active": 1,
+      "flag": 1,
+      "row": 1,
+      "scratch": "8cd5d000"
+    },
+    "dispatcher_entry": "8c01d448",
+    "dispatcher_instructions": 1083,
+    "descriptor": "8c15245c",
+    "descriptor_words": [
+      "0000001e",
+      "00000140",
+      "8c19c724"
+    ],
+    "original_async_call": {
+      "entry": "8c0159bc",
+      "caller": "8c01e5e4",
+      "filename": "DOA2/TEAM_SPR.BIN",
+      "destination": "acd5d000",
+      "file_bytes": 530432,
+      "transfer_bytes": 530432,
+      "end": "8cdde800",
+      "candidate_192k_overlap": 59392,
+      "guarded_interval_overlap": 59424
+    },
+    "conflicting_payload_bytes": 59392,
+    "conflicting_guarded_bytes": 59424
+  },
+  "explicit_leaf_calls": [
+    {
+      "entry": "8c0145f6",
+      "caller": "8c01c088",
+      "purpose": "filesystem load",
+      "calls": 1
+    },
+    {
+      "entry": "8c0145f6",
+      "caller": "8c01c096",
+      "purpose": "filesystem load",
+      "calls": 1
+    },
+    {
+      "entry": "8c0145f6",
+      "caller": "8c01c16c",
+      "purpose": "filesystem load",
+      "calls": 1
+    },
+    {
+      "entry": "8c0145f6",
+      "caller": "8c01c176",
+      "purpose": "filesystem load",
+      "calls": 1
+    },
+    {
+      "entry": "8c0145f6",
+      "caller": "8c01c482",
+      "purpose": "filesystem load",
+      "calls": 1
+    },
+    {
+      "entry": "8c0145f6",
+      "caller": "8c01c48a",
+      "purpose": "filesystem load",
+      "calls": 1
+    },
+    {
+      "entry": "8c0145f6",
+      "caller": "8c01c4b0",
+      "purpose": "filesystem load",
+      "calls": 1
+    },
+    {
+      "entry": "8c0145f6",
+      "caller": "8c01c4ec",
+      "purpose": "filesystem load",
+      "calls": 1
+    },
+    {
+      "entry": "8c015b7a",
+      "caller": "8c030364",
+      "purpose": "transition rendering/sound/event leaf",
+      "calls": 1
+    },
+    {
+      "entry": "8c015fd8",
+      "caller": "8c01c490",
+      "purpose": "transition rendering/sound/event leaf",
+      "calls": 1
+    },
+    {
+      "entry": "8c01660e",
+      "caller": "8c03035e",
+      "purpose": "transition rendering/sound/event leaf",
+      "calls": 1
+    },
+    {
+      "entry": "8c01f0f6",
+      "caller": "8c01d462",
+      "purpose": "resource timer sample",
+      "calls": 1
+    },
+    {
+      "entry": "8c01f0f6",
+      "caller": "8c01d48c",
+      "purpose": "resource timer sample",
+      "calls": 6
+    },
+    {
+      "entry": "8c038a20",
+      "caller": "8c03a1c0",
+      "purpose": "controller state action",
+      "calls": 1
+    },
+    {
+      "entry": "8c038a20",
+      "caller": "8c03a1cc",
+      "purpose": "controller state action",
+      "calls": 1
+    },
+    {
+      "entry": "8c08a708",
+      "caller": "8c01c134",
+      "purpose": "common model setup",
+      "calls": 1
+    },
+    {
+      "entry": "8c0d8418",
+      "caller": "8c01c4c6",
+      "purpose": "transition rendering/sound/event leaf",
+      "calls": 1
+    },
+    {
+      "entry": "8c0d8794",
+      "caller": "8c01c502",
+      "purpose": "transition rendering/sound/event leaf",
+      "calls": 1
+    },
+    {
+      "entry": "8c0d87ba",
+      "caller": "8c03036e",
+      "purpose": "common state cleanup",
+      "calls": 1
+    },
+    {
+      "entry": "8c0f7dd8",
+      "caller": "8c01d184",
+      "purpose": "task registration",
+      "calls": 1
+    },
+    {
+      "entry": "8c0f81a0",
+      "caller": "8c01c13c",
+      "purpose": "GPU binding",
+      "calls": 1
+    },
+    {
+      "entry": "8c0f81a0",
+      "caller": "8c01c26e",
+      "purpose": "GPU binding",
+      "calls": 1
+    },
+    {
+      "entry": "8c0f81a0",
+      "caller": "8c01c296",
+      "purpose": "GPU binding",
+      "calls": 1
+    },
+    {
+      "entry": "8c0f81a0",
+      "caller": "8c01c496",
+      "purpose": "GPU binding",
+      "calls": 1
+    },
+    {
+      "entry": "8c0f81a0",
+      "caller": "8c01c4ce",
+      "purpose": "GPU binding",
+      "calls": 1
+    },
+    {
+      "entry": "8c100020",
+      "caller": "8c01c4b8",
+      "purpose": "transition rendering/sound/event leaf",
+      "calls": 1
+    },
+    {
+      "entry": "8c100020",
+      "caller": "8c01c4f4",
+      "purpose": "transition rendering/sound/event leaf",
+      "calls": 1
+    },
+    {
+      "entry": "8c101030",
+      "caller": "8c01c158",
+      "purpose": "model compilation",
+      "calls": 122
+    },
+    {
+      "entry": "8c101030",
+      "caller": "8c01c286",
+      "purpose": "model compilation",
+      "calls": 93
+    }
+  ],
+  "model_metadata_gap": {
+    "binding_entry": "8c100d60",
+    "initial_model_prefix_bytes": 28,
+    "first_record_offset": 24,
+    "mesh_header_bytes": 80,
+    "next_record": "current+80+u32(current+76)",
+    "terminator": "u32(record)==0",
+    "file_offset": "CHR data_offset + encoded_pointer - encoded_base",
+    "encoded_bases": {
+      "character": "0c300000",
+      "stage_common": "0c400000"
+    },
+    "observed": false
+  },
+  "production_changed": false,
+  "permanent_interval_proved": false,
+  "limits": [
+    "The original mode transition completes and returns with its ABI restored. Its controller and dispatcher are then composed through retained RAM; retail task scheduling, gameplay and console hardware are not executed.",
+    "Both partition3 and current-mode10 are assigned by the actual transition; the controller/dispatcher model does not seed an arbitrary mode/partition pair.",
+    "The source common CHR header/table mutations execute. Named file, rendering, model, event, scheduler and sound leaves are explicit ABI-return stubs.",
+    "File-load arguments are original; transfer byte bounds come from the owner filesystem metadata and original2048-byte sector-rounding rule. File-copy payload/GPU operations do not execute.",
+    "No safety or admission follows for any alternative arena. Current CHR observations lack model prefixes and chained mesh headers consumed by8c100d60."
+  ]
+}

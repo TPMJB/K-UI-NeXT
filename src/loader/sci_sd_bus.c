@@ -7,6 +7,10 @@
  */
 #include "sci_sd_bus.h"
 
+#if KUI_VMU_EXPERIMENTAL && (KUI_RETAIL_ASYNC || KUI_RETAIL_CE || KUI_RETAIL_TOY_PILOT)
+#error "Experimental VMU SCI writes support only the synchronous native reader"
+#endif
+
 #if KUI_SCI_DMA_REUSE_TDRE && (!KUI_SCI_DMA_PACED || !KUI_RETAIL_SCI_DIAGNOSTIC || \
     (!KUI_RETAIL_TOY_PILOT && !defined(KUI_SCI_SD_TEST)))
 #error "TDRE sample reuse is restricted to the separate paced Toy pilot"
@@ -180,7 +184,19 @@ void kui_sci_sd_release(void) {
     wr32(PCTR, (rd32(PCTR) & ~CS_MODE) | port.mode);
     wr16(PDTR, (rd16(PDTR) & (uint16_t)~CS) | port.data);
     wr8(SCR, port.scr);
+#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF || KUI_VMU_PERSIST_IMPORT || KUI_ARMADA_CE_VMU_WRITE_RUNTIME || KUI_VMU_NATIVE_PERSISTENT_PROBE
+    /* The shared VMU lease acknowledges only after ownership restoration.
+     * Check SCI while its module is still running: a saved standby setting
+     * can make subsequent SCI-register reads invalid. GPIO comparisons cover
+     * only our PA7 bits, so unrelated owners retain their current pins. */
+    if(rd8(SMR)!=port.smr || rd8(BRR)!=port.brr || rd8(PTR)!=port.ptr ||
+       rd8(SCR)!=port.scr || (rd32(PCTR)&CS_MODE)!=port.mode ||
+       (rd16(PDTR)&CS)!=port.data) port.fault=true;
+#endif
     wr8(STB, (rd8(STB) & ~1u) | port.standby);
+#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF || KUI_VMU_PERSIST_IMPORT || KUI_ARMADA_CE_VMU_WRITE_RUNTIME || KUI_VMU_NATIVE_PERSISTENT_PROBE
+    if((rd8(STB)&1u)!=port.standby) port.fault=true;
+#endif
     port.acquired = false;
 }
 
@@ -540,7 +556,7 @@ static int dma_block(const uint8_t *tx, uint8_t *rx, uint16_t *crc_out) {
 static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
                            size_t count, bool slow, uint16_t *crc_out) {
     (void)ctx;
-#ifdef KUI_RETAIL_TRANSPORT
+#if defined(KUI_RETAIL_TRANSPORT) && !KUI_VMU_EXPERIMENTAL
     /* Resident block users are read-only. Keep runtime write support out of
      * the fixed low-memory image, including the programmed fallback. */
     if(tx) return false;
@@ -585,10 +601,19 @@ static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
 #ifdef KUI_SCI_SD_NO_BLOCK
 /* The background game reader streams by its own DMA (sci_stream.c) and uses
  * this bus only to select the card and move command bytes: no block
- * transfer, work clock or end-of-use release is linked. */
+ * transfer or end-of-use release is linked. The separately gated native
+ * VMU borrower also needs the existing byte-work clock for bounded identity,
+ * PIO read/write and sync waits; this adds no timer or new port state. */
+#if KUI_VMU_NATIVE_BACKGROUND
+static uint32_t loan_ticks(void *ctx) { (void)ctx; return port.work; }
+#define SCI_LOAN_TICKS loan_ticks
+#else
+#define SCI_LOAN_TICKS NULL
+#endif
 static const struct kui_loader_sd_bus bus = {
-    NULL, NULL, NULL, select_card, transfer, NULL, NULL
+    NULL, NULL, NULL, select_card, transfer, SCI_LOAN_TICKS, NULL
 };
+#undef SCI_LOAN_TICKS
 #else
 static uint32_t ticks(void *ctx) { (void)ctx; return port.work; }
 static const struct kui_loader_sd_bus bus = {
@@ -597,6 +622,9 @@ static const struct kui_loader_sd_bus bus = {
 #endif
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void) { return &bus; }
 bool kui_sci_sd_healthy(void) { return port.acquired && !port.fault; }
+#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF || KUI_VMU_PERSIST_IMPORT || KUI_ARMADA_CE_VMU_WRITE_RUNTIME || KUI_VMU_NATIVE_PERSISTENT_PROBE
+bool kui_sci_sd_faulted(void) { return port.fault; }
+#endif
 #if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
 /* Startup-only typed export. Do not take the original helper's address or
  * change LTO's inlining decisions in the frozen synchronous audio reader. */
@@ -609,6 +637,9 @@ enum kui_loader_sd_result kui_sci_sd_acquire(void) { return KUI_LOADER_SD_UNSUPP
 void kui_sci_sd_release(void) {}
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void) { return NULL; }
 bool kui_sci_sd_healthy(void) { return false; }
+#if KUI_VMU_READONLY_PROOF >= 2 || KUI_VMU_PERSIST_PROOF || KUI_VMU_PERSIST_IMPORT || KUI_ARMADA_CE_VMU_WRITE_RUNTIME || KUI_VMU_NATIVE_PERSISTENT_PROBE
+bool kui_sci_sd_faulted(void) { return true; }
+#endif
 #ifndef KUI_RETAIL_TRANSPORT
 bool kui_sci_sd_resync_speed(void) { return false; }
 void kui_sci_sd_fault_get(struct kui_sci_sd_fault *out) {

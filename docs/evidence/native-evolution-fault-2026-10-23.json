@@ -1,0 +1,76 @@
+{
+  "schema": "kui.native.evolution-fault-diagnostic.v1",
+  "date": "2026-10-23",
+  "console_evidence": {
+    "vmu_build": "2bf215f0fb72",
+    "vmu_result": "Passed ESP/company logos, black at MPEG Sofdec before opening FMV",
+    "control_build": "2bf215f0fb72",
+    "control_mode": "--control; VMU preparation, reservation and hooks skipped",
+    "control_result": "Owner confirmed opening FMV plays fine",
+    "inference": "VMU path implicated; memory reservation, hooks and runtime interactions are not yet distinguished",
+    "fix_established": false
+  },
+  "external_executable": {
+    "bytes": 2143652,
+    "sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+    "load": "8c010000",
+    "packaged": false
+  },
+  "allocation_failure": {
+    "wrapper": "8c0430fc",
+    "failure_window": "8c0431e8..8c0431f3",
+    "failure_window_original_hex": "c363dc33335131d22b211313",
+    "existing_fatal_self_loop": "8c0431f4",
+    "success_branch": "8c0431f8",
+    "workspace_bytes": "0019ab20",
+    "rounded_request": "0019b000",
+    "expected_opening_movie_caller": "8c0f6aaa",
+    "diagnostic_arguments": ["R14 requested bytes", "word at original SP+4 (caller)", "original SP"],
+    "unchanged": ["Successful allocation path", "Normal SDK owner allocator", "192 KiB VMU lease"],
+    "console_failure_confirmed": false
+  },
+  "gd_destination_refusal": {
+    "source": "vmu_maple_observe_resident.c observe_map/native_resident_destination",
+    "prior_behavior": "Returned NULL before reader I/O; native observation build did not capture an ordinary native fatal screen",
+    "release_behavior": "Unchanged from 2bf215f0fb72; attempted failure-report routing exceeded low resident memory budget by 96 bytes and was reverted",
+    "admission_predicates": "Resident source unchanged; reserved worker overlap remains refused",
+    "console_failure_confirmed": false
+  },
+  "excluded_or_unproved_hypotheses": {
+    "cache_setter": "Original 8c162ac8 and 8c163278 execute across P1/P2 entry/stack and four old CCR modes; only expected cache controls and own stack written; no FPU/MMU changes in those routines",
+    "cache_model_limit": "Host instruction execution does not model physical cache coherence or prove all cache interactions safe",
+    "main_stack": "Actual IP.BIN resets SP to 8c00f400 before executable entry; successful installer separately bounds entry SP below 8c010000",
+    "maple_teardown": "8c1daff0 assigns MDSTAR0cff0000 only after disabling DMA; no transfer into that address proved",
+    "secondary_allocator": "8c162d92 is cache purge, not a second allocator"
+  },
+  "validation": {
+    "exact_revision_fault_host_checks": 1147,
+    "persistent_bridge_checks": 1287343,
+    "instrumentation_bit_mutations": 96,
+    "different_digest_bit_skips": 256,
+    "cache_setter_execution_cases": 8,
+    "actual_evolution_first_transfer_checks": 76361,
+    "actual_evolution_alias_bank_mask_cases": 108,
+    "context_read_refusals_without_rx_or_sd_publication": 26,
+    "independent_linked_gateway_execution_cases": 24,
+    "release_audit_gateway_execution_cases": 3840,
+    "gateway_code_or_literal_mutation_rejections": 22,
+    "prepared_instruction_pointer_mutation_rejections": 42,
+    "publication_initialization_mutation_rejections": 5,
+    "compiled_worker_relocation_records": 544,
+    "compiled_worker_initialized_bytes": 37696,
+    "compiled_worker_worst_stack_bytes": 1752,
+    "compiled_worker_stack_capacity": 4096,
+    "legacy_builds": "Passive and read-only targets and typed self-test audits passed with unchanged v1/64-byte exports",
+    "independent_gateway_result": "P1/P2 owner stacks and inherited IMASK 0/6/15; arguments captured exactly, private P2 stack selected before C, IRQ mask 15, zero owner RAM writes; normal gateway prefix unchanged",
+    "sanitizers": ["AddressSanitizer", "UndefinedBehaviorSanitizer"],
+    "release_target_and_package_checks": "Each release is built from its clean source checkpoint and audited again by the packager; results are included in probe-report.json",
+    "independent_failure_path_review": "Original wrapper instruction execution confirms null-failure argument ABI; patched and original successful paths have identical registers and RAM writes; no interior static edge or byte-offset RAM pointer found",
+    "static_control_flow_limit": "Generic decoder does not prove arbitrary computed branch targets; diagnostic is restricted to the manually reviewed exact executable identity"
+  },
+  "limits": [
+    "Diagnostic retry required; neither suspected failure has been observed on console",
+    "No new generic SDK admission, lease reduction, cache-mode change or FPU workaround",
+    "A2, SCIF VMU backing, CDDA/VMU coexistence and physical-disc service unchanged"
+  ]
+}

@@ -1,0 +1,296 @@
+[
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "WALL CLK N BAD FLAGS",
+    "after": "WALL SAMPLES BAD FLAGS",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "PROFILE / PHOTO / OFF",
+    "after": "PHOTO / POWER OFF",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "PAGES CYCLE / PHOTO / OFF",
+    "after": "PHOTO / POWER OFF",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "VMU STOP / PHOTO / OFF",
+    "after": "PHOTO / POWER OFF",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "STOP / PHOTO / OFF",
+    "after": "PHOTO / POWER OFF",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "TMU0 R/O 781250HZ",
+    "after": "HEX / 781250HZ",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "CCR FIRST LAST ICEOFF POLL COMMIT",
+    "after": "CCR0 CCR1 ICEOFF POLL COMMIT",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "PHASE ON N VALID WAIT WRAP",
+    "after": "MODE N VALID WAIT WRAP",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "SR PVR LOAD VBL CTRL SCAN",
+    "after": "SR LOAD VBL CTRL SCAN",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "SPAN1 WORDS2 VIDEO4 / ZERO UNAVAILABLE",
+    "after": "FLAGS: SPAN1 WORDS2 VIDEO4",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "RAW WORDS / NOT A FAULT PC",
+    "after": "RAW / NOT FAULT PC",
+    "occurrences": 2
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "ADDRESS WORD0 WORD1 WORD2 WORD3",
+    "after": "ADDRESS / RAW WORDS",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "PC PR SR EVT FR / LD VBL CTRL BEG END",
+    "after": "PC PR SR EVT FR / LOAD VBL CTRL T0 T1",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_loader_timeline.inc",
+    "before": "GD TIMELINE / READ ONLY",
+    "after": "GD TIMELINE",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_loader_timeline.inc",
+    "before": "HEX TICKS / 781250HZ",
+    "after": "HEX / 781250HZ",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_loader_timeline.inc",
+    "before": "MAX CHAIN TOTAL/INSIDE TICKS",
+    "after": "MAX CHAIN TOTAL INSIDE",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_loader_timeline.inc",
+    "before": "ACTIVE TOK LBA N FLAGS",
+    "after": "TOK LBA N FLAGS",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_loader_timeline.inc",
+    "before": "I EPOCH GD TICKS CALLS MAPLE",
+    "after": "I EPOCH TICKS CALLS MAPLE",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_loader_timeline.inc",
+    "before": "LONGEST4 GD CALLS / ENTRY EXIT",
+    "after": "GD CALLS / IN OUT",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_loader_timeline.inc",
+    "before": "RECENT8 READS / 3 ROWS EACH",
+    "after": "READS / 3 ROWS EACH",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_loader_timeline.inc",
+    "before": "R1 GD IN/OUT CALLS BYTES",
+    "after": "R1 IN OUT CALLS BYTES",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_loader_timeline.inc",
+    "before": "R2 EPOCH FLAGS CHAINLEN TICKS",
+    "after": "R2 EPOCH FLAGS CHAIN TICKS",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_reader_capture.inc",
+    "before": "ARRIVED LOST PRE STATE POS",
+    "after": "ARRIVED LOST STATE POS",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_reader_capture.inc",
+    "before": "SKIP QUIET ABORT SEED LOAN ACTIVE",
+    "after": "QUIET ABORT SEED LOAN ACTIVE",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_reader_capture.inc",
+    "before": "SKIP PEND FAIL OPEN PORT BUSY",
+    "after": "PEND FAIL OPEN PORT BUSY",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_reader_capture.inc",
+    "before": "SKIP DMA POS DEFER OWNED",
+    "after": "DMA POS DEFER OWNED",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_reader_capture.inc",
+    "before": "CRC VALIDATED PHYSICAL READ AHEAD",
+    "after": "READ AHEAD",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_reader_capture.inc",
+    "before": "PIO WORK MAX BAD",
+    "after": "PIO N MAX BAD",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_reader_capture.inc",
+    "before": "HEX - 781250 HZ",
+    "after": "HEX / 781250HZ",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_reader_capture.inc",
+    "before": "SCI REARM IRQ COUNT",
+    "after": "SCI REARM IRQS",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_reader_capture.inc",
+    "before": "LONGEST POLL GAPS DESC",
+    "after": "POLL GAPS",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_reader_capture.inc",
+    "before": "GAP/READ/AGE TICKS / DELTAS",
+    "after": "GAP READ AGE / DELTAS",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_reader_capture.inc",
+    "before": "FN CMD PREVTOK TOK BLOCK",
+    "after": "FN CMD TOK0 TOK1 BLOCK",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_reader_capture.inc",
+    "before": "PAGES CYCLE / PHOTO / OFF",
+    "after": "PHOTO / POWER OFF",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "NATIVE VMU FAILURE",
+    "after": "VMU FAILURE",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "CPU EXCEPTION",
+    "after": "EXCEPTION",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "SDK CACHE REFUSED",
+    "after": "CACHE REFUSED",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "GAME ALLOCATION FAILED",
+    "after": "ALLOCATION FAILED",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "UNKNOWN FAILURE",
+    "after": "UNKNOWN",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "LEASE N HEAP BEGIN N",
+    "after": "LEASE N HEAP N",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "EXCEPTION / NO SAVE",
+    "after": "NO SAVE",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "SDK INIT / NO TRANSFER",
+    "after": "NO TRANSFER",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "REQUEST / CALLER SP",
+    "after": "REQUEST / SP",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "FRAME WORDS FLAGS TICK PR",
+    "after": "FRAME N FLAGS TICK PR",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "PHASE OLDEST FIRST",
+    "after": "PHASE HISTORY",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "PERSISTENT VMU",
+    "after": "VMU / A2",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_passive.c",
+    "before": "A2 / SCI JOURNAL",
+    "after": "SCI JOURNAL",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_reader_capture.inc",
+    "before": "READ AHEAD EXITS",
+    "after": "READ AHEAD",
+    "occurrences": 1
+  },
+  {
+    "file": "src/loader/vmu_native_reader_capture.inc",
+    "before": "IRQBLK CALLBLK PIO CRC TOK ERR",
+    "after": "IRQBLK CALLBLK PIO CRC TOKERR",
+    "occurrences": 2
+  }
+]

@@ -1,0 +1,57 @@
+{
+  "schema": "kui.native.b-stall.diagnostic.v1",
+  "date": "2026-10-24",
+  "baseline_candidate": "2204b6c31786c9226fddfbcfce0b69250765de36",
+  "console_feedback": {
+    "candidate_a": "Owner reported essentially unchanged performance",
+    "candidate_b": "Owner reported some improvement, with approximately one-second movement freezes while audio continues",
+    "source": "Owner feedback and 63304.mp4",
+    "video_sha256": "579e5b3e4c6da2837e61aac71359db65e0c606be4db2ad5d3d89e6676cb7967b",
+    "video_duration_seconds": 11.510056,
+    "video_included_in_public_package": false,
+    "root_cause_established": false
+  },
+  "scheduling": {
+    "foreground_normal": 20,
+    "foreground_aggressive": 25,
+    "irq_blocks": 8,
+    "pio_blocks": 1,
+    "dma_poll_slice": false,
+    "changed_from_b": false
+  },
+  "capture": {
+    "storage": "508 bytes of private worker BSS; existing reservation",
+    "low_resident_extra_bss": 0,
+    "measurements": [
+      "raw foreground delivery-visit maximum",
+      "raw SCI IRQ delivery-visit maximum",
+      "four longest gaps between successful Maple completion samples",
+      "reader block/PIO/CRC/token/foreign-DMA/recovery counter deltas",
+      "existing VMU submit/complete/free/storage timing"
+    ],
+    "clocks": "Read-only TMU0, exact 781250Hz profile admitted at sampled endpoints; no timer/cache writes",
+    "limitations": [
+      "Hook sampling adds overhead; delivery timing excludes assembly entry/exit and GD dispatch outside delivery",
+      "Poll gaps do not directly measure movement or displayed-frame freezes",
+      "A gap may span multiple GD requests; endpoint command/token is not a complete request trace",
+      "Invalid clock intervals are explicit; no console timing is inferred from host service-round models"
+    ]
+  },
+  "startup": {
+    "full_executable_crc_retained": true,
+    "full_resident_byte_comparison_retained": true,
+    "crc": "Stage-only 256-entry IEEE CRC32 table, four bytes per loop; compact resident unchanged",
+    "console_speedup_measured": false
+  },
+  "host_tests": {
+    "reader_bounds_checks": 23130,
+    "persistent_bridge_checks": 2076459,
+    "capture": "counter wrap, deltas, top retention, invalid clocks and reset",
+    "worker": "gesture arming, sample integration, maxima reset, one-second gap retention",
+    "crc": "32776 sizes/alignment combinations plus incremental splits and 8197 individual one-bit mutations",
+    "finite_service_schedules": 50,
+    "delayed_schedules_matching_baseline": 32,
+    "all_outputs_exact": true,
+    "host_timing_is_console_timing": false
+  }
+}

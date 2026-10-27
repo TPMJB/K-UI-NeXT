@@ -5,6 +5,12 @@
 #include "kui/retail_cursor.h"
 #include "retail_async.h"
 #include <string.h>
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+#include "kui/retail_loader_layout.h"
+#define VMU_LOW_DATA_END KUI_RETAIL_CE_ASYNC_LIMIT
+#else
+#define VMU_LOW_DATA_END 0x8c00d800u
+#endif
 
 #define DATA_QUANTUM 16u
 #define AUDIO_QUANTUM 8u
@@ -27,6 +33,9 @@ static struct {
     struct kui_armada_ce_stream_transport_snapshot stats;
     struct held_block held[2];
     uint32_t initialized,generation,data_token,data_credit,audio_credit,cancelled,early_polled,urgent;
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    uint32_t vmu_loan;
+#endif
 } t;
 #ifdef KUI_ARMADA_CE_STREAM_TRANSPORT_TEST
 void kui_armada_ce_stream_transport_test_reset(void) { memset(&t,0,sizeof(t)); }
@@ -38,6 +47,9 @@ void kui_armada_ce_stream_transport_priority(uint32_t fresh_bytes,bool active) {
 }
 bool kui_armada_ce_stream_transport_urgent(void) { return t.urgent!=0u; }
 bool kui_armada_ce_stream_transport_worker_can_pump(void) {
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    if(t.vmu_loan) return false;
+#endif
     return t.stats.attached && t.stats.status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING &&
         t.stats.owner==OWNER_AUDIO && !t.cancelled && !t.bus.busy();
 }
@@ -60,7 +72,7 @@ static bool __attribute__((noinline)) bus_valid(const struct kui_armada_ce_strea
        !b->poll || !b->wait || !b->fetch || !b->take || !b->discard || !b->token_budget) return false;
 #ifndef KUI_ARMADA_CE_STREAM_TRANSPORT_TEST
     if(((uintptr_t)b->region&3u) ||
-       !span((uintptr_t)b->region,0x8c008300u,0x8c00d800u,sizeof(*b->region))) return false;
+       !span((uintptr_t)b->region,0x8c008300u,VMU_LOW_DATA_END,sizeof(*b->region))) return false;
     if(!low_code((uintptr_t)b->open) || !low_code((uintptr_t)b->hook) ||
        !low_code((uintptr_t)b->unhook) || !low_code((uintptr_t)b->wake) || !low_code((uintptr_t)b->busy) ||
        !low_code((uintptr_t)b->ready) || !low_code((uintptr_t)b->poll) ||
@@ -113,6 +125,9 @@ enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_submit
        sectors>UINT32_MAX/2352u || (destination&3u) || capacity<sectors*2352u ||
        !span(destination,t.first,t.end,sectors*2352u)) return KUI_ARMADA_CE_STREAM_TRANSPORT_ARGUMENT;
     if(epoch<=t.generation) return KUI_ARMADA_CE_STREAM_TRANSPORT_STALE;
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    if(t.vmu_loan) return KUI_ARMADA_CE_STREAM_TRANSPORT_BUSY;
+#endif
     if(t.stats.status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING || t.stats.owner==OWNER_AUDIO)
         return KUI_ARMADA_CE_STREAM_TRANSPORT_BUSY;
     if(kui_retail_image_check_validated(t.map,lba,sectors,KUI_GAME_SECTOR_RAW)!=KUI_GAME_OK)
@@ -183,6 +198,11 @@ static void release_audio(void) {
     if(data_active()) t.bus.wake();
 }
 static enum kui_armada_ce_stream_transport_status pump(bool worker) {
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    /* A source worker bypasses the low GD entry guard. Its independent
+     * storage gate must therefore precede every bus callback, not just DMA. */
+    if(t.vmu_loan) return KUI_ARMADA_CE_STREAM_TRANSPORT_BUSY;
+#endif
     if(!t.stats.attached) return KUI_ARMADA_CE_STREAM_TRANSPORT_ARGUMENT;
     t.bus.token_budget(true);
     if(t.stats.owner==OWNER_AUDIO && (t.cancelled || t.stats.status!=KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING)) {
@@ -245,6 +265,28 @@ enum kui_armada_ce_stream_transport_status kui_armada_ce_stream_transport_cancel
 }
 bool kui_armada_ce_stream_transport_attached(void) { return t.stats.attached==1u; }
 uint32_t kui_armada_ce_stream_transport_event(uint32_t event,uintptr_t argument) {
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    if(event==KUI_ARMADA_CE_STREAM_BUS_STORAGE_CLAIM) {
+        if(argument || t.vmu_loan || t.stats.owner==OWNER_AUDIO ||
+           t.stats.status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING) return 0;
+        if(t.stats.attached) {
+            if(data_active() || t.bus.busy()) return 0;
+            discard_holds();
+        }
+        t.vmu_loan=1u;return 1u;
+    }
+    if(event==KUI_ARMADA_CE_STREAM_BUS_STORAGE_RELEASE) {
+        if(argument || !t.vmu_loan || t.stats.owner==OWNER_AUDIO ||
+           t.stats.status==KUI_ARMADA_CE_STREAM_TRANSPORT_PENDING) return 0;
+        t.vmu_loan=0u;return 1u;
+    }
+    if(t.vmu_loan) {
+        /* Return no DATA grant. IRQ/IDLE report exclusive ownership without
+         * polling, finishing or reopening the card. ATTACH also waits. */
+        return event==KUI_ARMADA_CE_STREAM_BUS_IRQ ||
+               event==KUI_ARMADA_CE_STREAM_BUS_IDLE;
+    }
+#endif
     if(event==KUI_ARMADA_CE_STREAM_BUS_ATTACH) {
         const struct kui_armada_ce_stream_bus *b=(const struct kui_armada_ce_stream_bus *)argument;
         if(!bus_valid(b)) return 0;

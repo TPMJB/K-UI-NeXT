@@ -1,0 +1,147 @@
+{
+  "schema": "kui.new-reader-doa2-ct2-source-progress.v1",
+  "date": "2026-10-26",
+  "production_changed": false,
+  "retail_byte_payloads_embedded": false,
+  "inputs": {
+    "doa2": {
+      "bytes": 1815864,
+      "sha256": "105056d9ffef86bf5e470fa28dc5907443156f9ab1c6bc009f73661d9c047a85"
+    },
+    "ct2": {
+      "bytes": 1452148,
+      "sha256": "8057a8e37636ad78b1fc70ee590bd314686546b13ffe100623d86b572aec53c1"
+    }
+  },
+  "existing_software_admission": {
+    "doa2": {
+      "sdk_sci_family": true,
+      "joint_new_reader_a2": false,
+      "first_refusal": "heap; fixed resource partition game does not match retained heap contract"
+    },
+    "ct2": {
+      "sdk_sci_family": true,
+      "joint_new_reader_a2": false,
+      "first_refusal": "initializer_slot; a matching heap library body exists but a verified original initializer call/slot is absent"
+    },
+    "crazy_taxi_1": {
+      "startup_in_current_26_image_corpus": false,
+      "library_filename_search": "CRAZY returned only two copies of Crazy Taxi 2; no compatibility inference"
+    }
+  },
+  "actual_ram_requirement": {
+    "current_new_reader_lease_bytes": 393216,
+    "worker_and_stack": 131072,
+    "physical_read_ahead_data": 196608,
+    "remaining_geometry_bytes": 65536,
+    "logical_vmu_bytes": 131072,
+    "logical_vmu_full_mirror_in_worker": false,
+    "conclusion": "Shrinking logical card capacity does not create a retained arena. A 256KiB actual lease would require a separately parameterized 64KiB read-ahead arena and all bounds/audits updated; it is not achieved by changing card block count."
+  },
+  "doa2_crt": {
+    "entry": "8c1132d0",
+    "init_memory": "8c113308",
+    "clear_loop": "8c113312..8c11331a",
+    "constant_cells": {
+      "8c148828": "8c150320",
+      "8c148830": "8c312a00",
+      "8c14883c": "8c312a00",
+      "8c148844": "8c1cb538",
+      "8c148850": "8c312a00",
+      "8c14d4bc": "8c1caa64",
+      "8c14d4c4": "8c312a00",
+      "8c14d4d0": "8c312a00",
+      "8c14d4d4": "8c2f5e80",
+      "8c14d4e0": "8c312a00"
+    },
+    "bss_begin": "8c1cb538",
+    "bss_end": "8c312a00",
+    "first_fixed_resource_begin": "8c320000",
+    "intervening_bytes": 54784,
+    "scope": "These original initializer descriptors reserve/clear this interval. Unreferenced BSS bytes cannot be presumed free."
+  },
+  "resource_argument_execution": {
+    "entry": "8c01ea0a",
+    "original_sh_cases": 1728,
+    "original_file_argument_calls": 8640,
+    "missing_metadata_file_calls": 976,
+    "descriptor_begin": "8c151c6c",
+    "adjacent_stage_table": "8c15217c",
+    "descriptor_expression": "8c151c6c +216*costume_row +12*character_column",
+    "cartesian_inputs": {
+      "partition_modes": 4,
+      "players": 4,
+      "character_columns": 18,
+      "costume_rows": 6
+    },
+    "corrected_prior_analysis": "Old candidate JSON reversed character/costume labels and scanned beyond this descriptor table into unrelated tables. Do not treat its outer values6..16 as valid costume selectors.",
+    "models": "Actual original argument arithmetic/call edges, with explicit external ABI-return leaf stubs; no resource payload, decoder, lifecycle or selector reachability execution.",
+    "conservative_known_character_raw_load_union": [
+      [
+        "8c4c1000",
+        "8c514000"
+      ],
+      [
+        "8c517000",
+        "8c594800"
+      ],
+      [
+        "8c595000",
+        "8c5ae000"
+      ],
+      [
+        "8c5b0000",
+        "8c603000"
+      ],
+      [
+        "8c606000",
+        "8c683800"
+      ],
+      [
+        "8c684000",
+        "8cd51000"
+      ],
+      [
+        "8cd5d000",
+        "8cdbe800"
+      ]
+    ],
+    "reproducible_tool": "tools/probe_doa2_resource_memory.py",
+    "replay_report_sha256": "17cd86240f69c9b277d2040a02354ce1c2aa144ad676f5a674b18cf364933c80"
+  },
+  "smaller_candidate": {
+    "begin": "8cdc0000",
+    "end": "8ce00000",
+    "bytes": 262144,
+    "clears_cartesian_known_character_raw_transfers": true,
+    "safe_permanent_interval_proved": false,
+    "remaining_obligations": [
+      "Prove reachable character/costume selector ranges and missing-file exclusions.",
+      "Map every generic queued menu/stage/sprite request to its destination and partition mode. Large assets include SEL_SPR.BIN880640 sector-rounded bytes and TEST_SPR.BIN1189888; dynamic scratch destinations may overlap this candidate.",
+      "Prove derived relocation/consumer access spans and lifetimes, not merely disk-transfer lengths.",
+      "Bind candidate lifetime across original partition resets, game exits and remaining source RAM owners.",
+      "Only then implement a typed fixed-arena owner contract and reduced actual reader geometry."
+    ]
+  },
+  "console_performance_tested": false,
+  "new_admission_enabled": false,
+  "targeted_next_metadata": {
+    "tool": "tools/kui-doa2-filesystem-probe.py",
+    "option": "--resource-layouts",
+    "output": "DOA2-resource-layout-metadata.zip",
+    "selected_iso_paths": "The 86 existing DOA2/*.CHR files in the verified filesystem; no whole assets are exported.",
+    "header_byte_range": "[0,20)",
+    "conditional_ranges": [
+      "[header_word1, header_word1 +4*header_word3)",
+      "[header_word2, header_word2 +12*header_word4)"
+    ],
+    "conditions": "All offsets/counts are little-endian observations; ranges must be aligned, disjoint from header/each other, in-file, and within explicit count/byte/global caps before table reads.",
+    "exports": "Header words and bounded integer pointer/record fields with offsets/counts and SHA256 hashes. Unknown layouts retain header metadata and an unavailable reason.",
+    "why_needed": "Original character/stage CHR consumers derive pointer-table and record destinations from these five words. File byte lengths alone do not establish those accesses.",
+    "source_consumers": [
+      "8c01c728",
+      "8c01c810"
+    ],
+    "safe_lease_after_collection": "Not automatic; source mode/lifetime and remaining owner proof must still be completed."
+  }
+}

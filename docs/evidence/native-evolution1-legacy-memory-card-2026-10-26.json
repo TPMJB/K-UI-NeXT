@@ -1,0 +1,65 @@
+{
+  "schema": "kui.evolution1-legacy-memory-card-followup.v1",
+  "date": "2026-10-26",
+  "runtime_commit": "8adf1a039035abcbcaa95f8bfa8f417fe6e714b8",
+  "production_changed": false,
+  "owner_reports": [
+    "Legacy works but it no longer sees my SD card",
+    "You get a message as soon as the game boots saying \"A memory card is required\""
+  ],
+  "test_context": {
+    "reader": "Legacy (Y)",
+    "installation_basis": "Continuation of the requested same8adf NORMAL / Background On / existing virtual A2 comparison; no new capture or installed-file readback.",
+    "reported_pass": "Owner confirms Legacy opening FMV plays, described as fine...ish; New background-reader quality is better in their observation.",
+    "reported_failure": "Evolution immediately reports that a memory card is required.",
+    "interpretation": "In-game VMU detection or initialization failure. This wording does not establish loss of SD filesystem access."
+  },
+  "control_limit": "Both selections configure the same worker, A2 and384KiB reservation, but Legacy card operation has not passed. Its successful boot is not an equivalent working-VMU control and does not establish that New alone causes the black screen.",
+  "source_findings": [
+    {
+      "path": "src/loader/vmu_native_passive.c",
+      "finding": "Both modes initialize the durable card and overlay at virtual address2. Legacy does not intentionally disable VMU emulation."
+    },
+    {
+      "path": "src/loader/vmu_native_passive_stage.inc",
+      "finding": "Legacy skips the New-only SDK SCI route, timeline and read-ahead binding; selected low callbacks remain reader-specific."
+    },
+    {
+      "original_functions": [
+        "0x8c055bc0",
+        "0x8c0f5f74",
+        "0x8c1b377e"
+      ],
+      "finding": "Boot checking scans both subunits of the selected controller port. Table0x8c202768 maps bothA1/A2 thenB1/B2 andremainingports. Connection acceptance requires the SDK memory-function connection check plus the filesystem readiness byte in its per-unit record; absence of a ready/mounted card can produce the warning without proving no Maple discovery."
+    },
+    {
+      "path": "src/loader/retail_resident.S",
+      "finding": "A raw-reader forwarded interrupt can retain a pending return depth until the SDK handler returns through rehook. The trampoline preserves interrupted SPC/SGR and consumes the pending return before testing whether to reinstall the reader."
+    },
+    {
+      "path": "src/loader/retail_async.c",
+      "finding": "VMU SD loan refuses BUSY before I/O if GD work, reader IRQ work, pending raw return depth or receiver activity prevents borrowing. Quiet idle ordinarily unhooks, so pending return depth is not an established permanent Legacy failure."
+    },
+    {
+      "paths": [
+        "src/core/vmu_durable.c",
+        "src/core/vmu_emulation.c"
+      ],
+      "finding": "An unacquired BUSY storage loan is mapped to a retry response. Card INFO and MEDIA replies themselves do not need an SD loan."
+    }
+  ],
+  "diagnostic_limit": {
+    "profile_mode_2": "Existing delivered timing/video pages lack cumulative VMU advertisement, INFO, MEDIA, block-read and BUSY counts needed to locate this startup failure.",
+    "evolution_trace_mode_6": "No manual capture gesture or discovery-type counters; a normal in-game card warning need not trigger the automatic report.",
+    "decision": "Do not request a repeat complete PVR/phase recording for this memory-card symptom."
+  },
+  "unproven_hypotheses": [
+    "Delayed startup discovery",
+    "Initial card-content read refused while disc activity owns SD",
+    "Other original game acceptance or initialization behavior"
+  ],
+  "next_observation": "User requests two isolated component builds. Runtime9956562f91d6 adds New with virtual-card publication/backend disabled and current A2 with Standard only; both retain384KiB bottom placement. Console acceptance remains pending.",
+  "new_build_required_for_recorded_result": false,
+  "github_actions_authorized": false,
+  "owner_followup": "No card appears on start. Legacy is just not doing anything with the VMU, but the background loader is working as the FMV plays fine...ish. Our newer background loader works better, of course."
+}

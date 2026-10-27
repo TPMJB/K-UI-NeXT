@@ -1,0 +1,83 @@
+{
+  "schema": "kui.native.evolution-video-progress.v1",
+  "date": "2026-10-23",
+  "console_evidence": {
+    "build": "4995b8016518",
+    "reason": "E003",
+    "surface_reason": 1,
+    "hook": "20",
+    "game_checkpoint": "44",
+    "sequence": "5d2a",
+    "submitted": 2021,
+    "completed": 2020,
+    "free_checks": 21,
+    "pr": "8c1b1b2a",
+    "sr": "600000f1",
+    "sp": "8c2ff9c8",
+    "video_ctrl": 4,
+    "last_drawn_ctrl": 5,
+    "video_size": "1413b53f",
+    "pitch": "a00",
+    "sof1": "200000",
+    "sof2": "200500",
+    "conclusion": "Intentional diagnostic halt at game-authored video blanking; not evidence of an original crash"
+  },
+  "source_witness": {
+    "explicit_video_disable_calls": [
+      "8c1cb9ce",
+      "8c1cb9f2"
+    ],
+    "counter_wait": "8c1cba06..8c1cba0c",
+    "counter_address": "8c358d18",
+    "video_handler_counter_increment": "8c1f1200..8c1f1206",
+    "temporary_video_disable_restore": [
+      "8c1f144a",
+      "8c1f1456"
+    ],
+    "counter_can_also_be_reset": true
+  },
+  "changes": {
+    "ordinary_video_blanking_resumes": true,
+    "live_vram_writes_retire_permanently_after_surface_loss": true,
+    "continued_blank_reason": "E004",
+    "continued_blank_ticks": 1562500,
+    "continued_blank_requires_callbacks": true,
+    "independent_timer_or_vector_installed": false,
+    "raw_exception_state_read_only": true,
+    "game_gateway_changes": false,
+    "vmu_admission_checks_relaxed": false,
+    "save_storage_policy_changed": false
+  },
+  "validation": {
+    "normal_raw_sampler_bridge_sanitizers": "ASan + UBSan",
+    "bridge_checks": 1413435,
+    "actual_renderer_checks": 9933,
+    "all_32_packet_headers_once": true,
+    "stable_timer_wrap_reset_configuration_tests": true,
+    "brief_blanking_with_save_read_test": true,
+    "original_gateway_instruction_cases": 144,
+    "original_gateway_mutations_rejected": 8,
+    "exception_reader_instruction_cases": 96,
+    "exception_reader_mutations_rejected": 7,
+    "compiled_artifact_self_test_passed": true,
+    "worker_initialized_bytes": 43616,
+    "relocation_records": 665,
+    "private_stack_bytes": 1756,
+    "private_stack_capacity": 4096,
+    "exception_reader": {
+      "instruction_cases": 96,
+      "mutation_rejections": 7,
+      "cpu_control_register_writes": false,
+      "output_words": 3,
+      "arbitrary_fault_pc_claim": false
+    }
+  },
+  "limits": {
+    "arbitrary_fault_pc_capture": false,
+    "all_hooks_stopped_rescue": false,
+    "long_legal_blank_can_trigger_capture": true,
+    "counter_changes_not_asserted_monotonic_frames": true,
+    "console_execution_verified": false,
+    "evolution_fix_claimed": false
+  }
+}

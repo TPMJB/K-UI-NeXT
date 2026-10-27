@@ -1,0 +1,331 @@
+{
+  "schema": "kui.native.read-ahead.implementation-evidence.v1",
+  "date": "2026-10-24",
+  "scope": "Isolated Evolution 2 native SDK SCI priority-1 read-ahead candidate; software and prototype evidence only",
+  "baseline": {
+    "evidence_source_commit": "54ed49b5e276a322c947714235cb5d83fb9d909a",
+    "hardware_tested_source_commit": "1eba1784a83e7eb5d0cf6dc61cee5ccf46d22c68",
+    "hardware_tested_build": "1eba1784a83e",
+    "evidence_file": "docs/evidence/native-sdk-sci-progress-2026-10-24.json",
+    "video": {
+      "filename": "63346.mp4",
+      "bytes": 89822992,
+      "sha256": "cf7aef5aa4f74cab630c6aae29604d1f8a6322bb5f5930d962ecf978386c350a"
+    },
+    "observations": {
+      "irq_entries": 271,
+      "irq_delivered_physical_blocks": 227,
+      "foreground_delivered_physical_blocks": 1700,
+      "largest_timeline_request_milliseconds": 142.92224,
+      "longest_gd_call_milliseconds": 6.85952,
+      "user_report": "FMVs were flawless; stops in the in-engine new-game opening and movement remained but were much more subtle.",
+      "interpretation_limit": "The recorded report pages do not contain synchronized render or simulation milestones. Workload and phase differ from earlier captures, so total GD-time differences are not a controlled performance comparison."
+    },
+    "next_question": "Can the interval between requests fill a CRC-validated physical-block cache before the next mostly sequential demand arrives?"
+  },
+  "profile": {
+    "makefile": "Makefile.vmu-native-readahead",
+    "flag": "KUI_NATIVE_READAHEAD=1",
+    "default_flag_value": 0,
+    "SCI_priority": 1,
+    "SDK_vector_ownership": "The original SDK VBR and callback dispatch remain the route established by the preceding candidate.",
+    "game_admission": "The first candidate retains exact Evolution 2 executable admission; it does not establish broad native-game VMU compatibility.",
+    "other_profiles": "The flag is absent from existing ordinary, CE and CDDA build paths. The existing 192 KiB geometry remains selected when the flag is zero.",
+    "new_game_timer": false,
+    "runtime_SD_log": false,
+    "future_guest_destination_retained": false
+  },
+  "owned_memory": {
+    "prior_lease_bytes": 196608,
+    "selected_lease_bytes": 393216,
+    "allocation_method": "The same independently verified game allocator and lease lifetime, with an isolated larger requested payload.",
+    "worker_map_and_reader_offsets_changed": false,
+    "regions": [
+      {
+        "name": "Existing relocated VMU worker, BSS and worker stack",
+        "begin_offset_hex": "0x00000",
+        "end_offset_hex": "0x20000"
+      },
+      {
+        "name": "Existing immutable retained 64-slot map",
+        "begin_offset_hex": "0x20000",
+        "bytes": 1020
+      },
+      {
+        "name": "Existing SCI reader region",
+        "begin_offset_hex": "0x20400",
+        "end_offset_hex": "0x20b60"
+      },
+      {
+        "name": "Auxiliary immutable exports and uncached mutable context",
+        "begin_offset_hex": "0x21000",
+        "end_offset_hex": "0x22000"
+      },
+      {
+        "name": "Auxiliary P1 code budget",
+        "begin_offset_hex": "0x22000",
+        "end_offset_hex": "0x26000"
+      },
+      {
+        "name": "Dedicated uncached auxiliary stack",
+        "begin_offset_hex": "0x27000",
+        "end_offset_hex": "0x28000",
+        "bytes": 4096
+      },
+      {
+        "name": "CRC-validated physical-block cache data",
+        "begin_offset_hex": "0x30000",
+        "end_offset_hex": "0x60000",
+        "bytes": 196608,
+        "blocks": 384,
+        "block_bytes": 512
+      }
+    ],
+    "relocation_domain": {
+      "link_base_hex": "0x8c421000",
+      "begin_offset_hex": "0x21000",
+      "span_bytes": 28672,
+      "end_offset_hex": "0x28000",
+      "contract": "Exports, context, code and private stack are in the one admitted 0x7000 auxiliary domain. The separate cache arena is passed through a checked by-value configuration after lease admission, not represented by an out-of-domain relocation literal."
+    },
+    "cache_alias_and_initialization": "Mutable auxiliary context, private stack and cache data use P2. The cold installer purges stale P1 lines before P2 initialization, publishes code before entry binding, and leaves cache entries invalid until a complete checked block is copied. It does not require zeroing or hashing all 192 KiB of cache data.",
+    "whole_lease_protection": "Selected allocation, padded-header stage-placement exclusion, runtime required size, worker-arm admission, canonical payload bounds and low guest-destination guards cover the complete 0x60000 payload plus its allocation header.",
+    "cold_installation_order": "The auxiliary is initialized only after the real SDK allocator hook has reserved and admitted the lease, the existing VMU worker and retained reader region are bound, and the priority-1 SDK SCI route is ready. Context is published first; the callable entry is published last. No temporary-stage pointer survives.",
+    "prototype_link_observation": {
+      "directory": "build/native-readahead-prototype",
+      "status": "Prototype snapshot, not a final artifact pin",
+      "auxiliary_initialized_bytes": 9216,
+      "auxiliary_context_bytes": 172,
+      "auxiliary_context_address_hex": "0xac421040",
+      "auxiliary_gateway_address_hex": "0x8c423338",
+      "auxiliary_gateway_bytes": 184,
+      "auxiliary_image_end_hex": "0x8c423400",
+      "auxiliary_stack_bottom_hex": "0xac427000",
+      "auxiliary_stack_top_hex": "0xac428000",
+      "low_binary_end_hex": "0x8c007b1c",
+      "low_BSS_end_hex": "0x8c007ba0",
+      "low_guard_begin_hex": "0x8c007ba0",
+      "limit": "These symbols describe the inspected prototype only; the final linked audit must establish the delivered artifact's complete code, stack and binding bounds."
+    }
+  },
+  "cache_contract": {
+    "key": "Physical 512-byte card LBA within the immutable validated game manifest.",
+    "window": "One contiguous interval in a 384-slot ring. A hit discards only earlier blocks and retains the requested block, preserving partial physical-block overlap between adjacent raw-sector requests.",
+    "publication": "Only successful SCI stream_take output is appended. The normalized CRC-checked 512 bytes are copied before cache count/validity is published. No receive-area pointer is retained.",
+    "extent_authority": "The cache core rechecks bounded 64-slot track/extent geometry, file-block coverage, partition/card bounds, arithmetic and ownership. Speculation ends at the admitted physical extent boundary; current-request cursor.run does not authorize later blocks. Legal shared-container boundary blocks use the smaller owner bound.",
+    "invalid_geometry": "Invalid or ambiguous geometry disables speculative authorization. A physical extent whose exclusive end cannot be represented as uint32_t is conservatively not prefetched.",
+    "demand_output": "Cache hits feed the original retail cursor and write callback, preserving raw/cooked decoding, headers, packed file offsets and exact requested output bytes. Completion occurs only after requested data has been copied.",
+    "visit_caps": {
+      "foreground_normal_blocks": 20,
+      "foreground_eager_blocks": 25,
+      "IRQ_blocks": 8,
+      "rule": "A partially cached prefix does not receive a fresh legacy 20/25-block allowance in the same visit. The remainder waits for the next ordinary visit."
+    },
+    "misses_and_seeks": "A miss retains the legacy demand reader. A matching speculative receiver may be adopted as demand; a nonmatching seek quiesces optional work on the foreground path. Speculative state does not grant writes to any future game buffer.",
+    "lifetime": "The cache belongs to the admitted game lease. Capture-start resets statistics while preserving valid cached data; explicit cache reset clears validity and prevents the old completed token from immediately reseeding it."
+  },
+  "producer_and_storage_handoffs": {
+    "seed": "After demand completion, retain the final checked physical block and seed the next sequential physical interval. This preserves the shared partial block of common 2352-byte request boundaries.",
+    "service": "Real SCI priority-1 interrupts and later serialized worker/Maple heartbeats retire optional blocks and continue filling the cache when no game demand is pending.",
+    "bounded_optional_work": "A producer visit retires at most one speculative block and issues at most one fetch. It uses a 256-byte token-search limit and only continues an already open CMD18 stream; it does not open or restart an optional stream.",
+    "DMA_ownership": "Optional fetching requires the current DMA channel to be idle. It does not convert a busy guest channel into optional PIO work or overwrite a guest DMA setup.",
+    "deferred_RESUME": "An interrupt that encounters a mid-block repair leaves it stopped. Only a later authorized foreground/heartbeat visit resumes it; the same interrupt does not immediately restart the failed repair. A heartbeat is required because RESUME can leave no DMA or SCI interrupt pending.",
+    "cache_full": "Production pauses at the capacity or extent end. Subsequent demand consumption and later visits provide new service opportunities; no spontaneous interrupt is assumed while idle.",
+    "optional_errors": "Speculative CRC/token/transport failures abandon optional production without completing or failing an unrelated game request. Optional error handling does not perform CMD12's long busy wait from an interrupt; the ordinary demand or loan path retains transport ownership and recovery.",
+    "VMU_quiescence": "A real pending or executing demand remains BUSY. When only speculative reception owns the channel, the serialized loan path calls QUIESCE before its busy check, stops optional DMA and preserves existing bus-release checks before granting the VMU writer.",
+    "VMU_return": "Healthy loan completion returns ownership to IDLE. Storage is not restarted from the still-unwinding loan callback; a later demand/heartbeat observes the state on the auxiliary stack. Checked cache bytes survive the loan under the existing immutable game-image contract."
+  },
+  "software_validation_at_evidence_creation": {
+    "sanitizers": [
+      "AddressSanitizer",
+      "UndefinedBehaviorSanitizer"
+    ],
+    "logs": [
+      "ra-host-tests.log",
+      "ra-aux-final-host.log"
+    ],
+    "cache_core": {
+      "status": "passed",
+      "checks": 3743408,
+      "coverage": "All 384 ring slots and wraps; repeated overlapping-block hits; seeks and misses; complete copies before publication; aliasing input; corrupt cache geometry; 2048/2336/2352/2448-byte tracks, packed offsets, fragmented extents and shared-container boundaries; invalid partition, track and overflow geometry."
+    },
+    "auxiliary_policy_and_real_transport": {
+      "status": "passed",
+      "checks": 1717920,
+      "coverage": "Original cursor output, strict visit caps, seeks, CRC/token abandonment, real SCI/card/DMA warm-cache flow, deferred repair, DMA ownership, capture preservation and VMU loan handoff.",
+      "full_73_sector_raw_backed_fixture": {
+        "status": "passed",
+        "cold_first_request_sectors": 50,
+        "warm_following_request_sectors": 73,
+        "warm_output_bytes_compared": 149504,
+        "warm_cache_hits_physical_blocks": 336,
+        "additional_legacy_deliver_calls": 0,
+        "additional_CMD18_calls": 0,
+        "additional_CMD12_calls": 0,
+        "additional_stops": 0,
+        "foreground_visit_block_cap": 20,
+        "scope": "Actual SCI/card/DMA model with raw2352-byte backing and the original cooked-output cursor; this is a software fixture, not a console performance result."
+      }
+    },
+    "low_bridge": {
+      "status": "passed",
+      "checks": 6464,
+      "coverage": "Absent-entry fallback, handled delivery, inactive speculative IRQ, quiescence and demand/loan exclusion."
+    },
+    "dual_lease_contract": {
+      "status": "passed",
+      "default_192_KiB_allocator_guard_placement_checks": 68766,
+      "isolated_384_KiB_allocator_guard_placement_checks": 124062,
+      "default_192_KiB_aligned_map_alias_checks": 516096,
+      "isolated_384_KiB_aligned_map_alias_checks": 509952,
+      "allocator_family_base_checks_per_mode": 10827,
+      "count_note": "Allocator/guard/placement counts are the cumulative totals printed by each independently compiled selected-mode test. They are not a claim of distinct hardware trials.",
+      "regression": "The expanded allocation's leading half and padded header must not overlap the still-live high installer merely because the old 192 KiB tail was clear. Actual selected-mode stage-placement and destination guards are exercised."
+    },
+    "linked_instruction_audits": {
+      "status": "passed on integrated prototype; final clean source package separately audited",
+      "cold_binder_case_counts": {
+        "actual_linked_cold_binder_executed": true,
+        "positive_cases": 12,
+        "malformed_descriptor_context_aux_and_init_cases": 120,
+        "omitted_activation_ocbp_rejections": 2,
+        "reviewed_body_byte_mutation_rejections": 1300,
+        "exact_instruction_literal_pins": {
+          "_native_readahead_bind": [
+            2363496940,
+            1208,
+            "f96dfa876eef36b3682d881905eb70127147191505d380663b89fd6ac1aa07b9"
+          ],
+          "_kui_vmu_native_background_map_address": [
+            2363490468,
+            92,
+            "cd9d8aba83db8374543f4850bf079245710ba3854dbf128c98f20c890a9753c8"
+          ]
+        },
+        "p1_cache_and_p2_ram_distinct": true,
+        "cold_aux_and_cache_lines_purged": 7040,
+        "cache_data_not_initialized_or_trusted": true,
+        "context_published_before_entry": true,
+        "guards_checked_after_init": true,
+        "memcpy_memcmp_memset": "faithful bounded ABI substitutes",
+        "relocator": "exact separately tested input image/table; explicit pointer-record substitute",
+        "code_publisher": "exact owned span and cache-flush substitute; actual publisher independently audited",
+        "initializer_gateway": "strict private-SP gateway substitute; actual relocated auxiliary C init executed",
+        "actual_auxiliary_c_initializer_executed": true,
+        "actual_initializer_copies_owned_config_values_not_stage_pointer": true,
+        "actual_initializer_starts_with_no_valid_cache_blocks": true,
+        "console_boot_verified": false,
+        "console_performance_verified": false
+      },
+      "auxiliary_gateway_case_counts": {
+        "actual_linked_gateway_cases": 8064,
+        "all16_imasks": true,
+        "both_integer_banks": true,
+        "both_bl_states": true,
+        "owner_sr_pr_sp_and_callee_saved_preserved": true,
+        "private_stack_switch_before_c": true,
+        "busy_and_guard_checks_before_stack_writes": true,
+        "parked_owner_stack_bytes": 20,
+        "auxiliary_stack_prefix_bytes": 0,
+        "c_payload_model": "ABI-adversarial substitute; actual producer separately host-tested"
+      },
+      "mutation_rejections": null,
+      "requirement": "The delivered candidate must pass paired resident/worker/stage/auxiliary markers, exact immutable low operations, relocation identity and span, actual cold binder branches and publication, actual gateway register/stack ownership, and combined private-stack bounds.",
+      "worker_binding": {
+        "actual_worker_binding_cases": 98,
+        "immutable_function_pins": {
+          "_reader_readahead_exports": [
+            2349859048,
+            160,
+            "7408f9b61bad644e7a5c20dc0766138fb36f4ee24a8ef3cd751e93d4e316489e"
+          ],
+          "_reader_readahead_visit": [
+            2349859308,
+            56,
+            "2af85f7d6a6a88765d1e8cf645b45683e794c2bf08ebca7a5c1bb6666a78186a"
+          ],
+          "_reader_cooperative_service": [
+            2349859364,
+            32,
+            "d5c8c4caf5c8bf445a7f0d5ab500ee6f1e7ef46cbdfdf2c46070c0058b683ea4"
+          ]
+        },
+        "all_three_payload_aliases": true,
+        "highest_owned_lease_checked": true,
+        "malformed_headers_and_contexts_refused": true,
+        "both_durable_writer_busy_fields_refused": true,
+        "heartbeat_and_capture_start_arguments_checked": true,
+        "c_auxiliary_target": "ABI substitute; complete auxiliary gateway proved separately"
+      },
+      "private_stack": {
+        "available_bytes": 4096,
+        "worst_c_bytes": 336,
+        "library_margin_bytes": 4,
+        "explicit_margin_bytes": 64,
+        "guard_bytes": 16,
+        "top_gap_bytes": 32,
+        "total_bytes": 452,
+        "roots": {
+          "kui_native_readahead_aux_init": {
+            "bytes": 100,
+            "path": [
+              "aux:kui_native_readahead_aux_init(84)",
+              "aux:kui_native_ra_cache_init(16)"
+            ]
+          },
+          "kui_native_readahead_aux_dispatch": {
+            "bytes": 336,
+            "path": [
+              "aux:kui_native_readahead_aux_dispatch(68)",
+              "aux:src/loader/native_readahead_aux.c:producer(40)",
+              "aux:src/loader/native_readahead_aux.c:retire_spec(28)",
+              "aux:src/loader/native_readahead_aux.c:abandon(12)",
+              "low:build/native-readahead-prototype/resident-sci.elf.ltrans0.o:deliver_work(40)",
+              "low:build/native-readahead-prototype/resident-sci.elf.ltrans0.o:kui_retail_cursor_feed(56)",
+              "low:build/native-readahead-prototype/resident-sci.elf.ltrans0.o:write_out(16)",
+              "low:build/native-readahead-prototype/resident-sci.elf.ltrans0.o:native_background_map(8)",
+              "low:kui_vmu_observe_low_failure(8)",
+              "low:build/native-readahead-prototype/resident-sci.elf.ltrans0.o:retail_display_restore(8)",
+              "low:build/native-readahead-prototype/resident-sci.elf.ltrans0.o:retail_display_line(52)"
+            ]
+          }
+        },
+        "typed_low_indirect_sites": 31,
+        "missing_or_recursive_callbacks_rejected": true
+      },
+      "code_byte_mutation_rejections": 5120,
+      "typed_binding_mutation_rejections": 1564,
+      "whole_persistent_pipeline_passed": true,
+      "low_resident_stack_bytes": 352,
+      "low_resident_stack_available": 352,
+      "loan_quiesce": {
+        "actual_linked_quiesce_boundary_cases": 120,
+        "outer_non_imask15_refusals": 60,
+        "exact_section_offset_entry": "0x52",
+        "typed_auxiliary_event_arg_region_reserved_checked": true,
+        "real_pending_demand_never_quiesced": true,
+        "refused_quiesce_clears_only_owned_low_lock": true,
+        "preexisting_active_low_lock_preserved": true,
+        "null_binding_is_quiesce_success": true,
+        "success_rejoins_before_stream_busy_check": true,
+        "scope": "Actual post-admission low slice; complete pinned section and real C integration tests cover outer ownership/transport",
+        "auxiliary_target": "Typed gateway ABI substitute; actual auxiliary gateway proved independently"
+      }
+    },
+    "SH_TST_immediate_truth_and_register_cases": 8704,
+    "disabled_profile_regression": "With KUI_NATIVE_READAHEAD absent and the published build label, low SCI resident bytes match the preceding published SDK candidate exactly. Existing map-refusal and timeline bridge proofs passed unchanged for original timeline and SDK SCI1 profiles."
+  },
+  "hardware_status": {
+    "new_candidate_console_boot_verified": false,
+    "new_candidate_console_performance_verified": false,
+    "remaining_lag_eliminated": false,
+    "meaning": "The prior priority-1 SDK route is hardware-tested. This new cache candidate requires its own console launch and gameplay/FMVs capture; host models and linked instruction checks do not establish those results."
+  },
+  "artifact_policy": {
+    "this_file": "Authored technical metadata and test evidence only.",
+    "retail_executable_bytes_included": false,
+    "disc_track_bytes_included": false,
+    "owner_VMUs_or_saves_included": false,
+    "personal_photos_or_video_included": false
+  }
+}

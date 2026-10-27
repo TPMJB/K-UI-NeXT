@@ -1,0 +1,67 @@
+{
+  "schema": "kui.native.read-ahead.repair-limit-diagnostics.v1",
+  "date": "2026-10-25",
+  "purpose": "Observe the existing SCI unrepaired counter before changing recovery policy.",
+  "prior_build": "6675bd6fdcbe3c5237ff7ae913ee94e3ea3f9b85",
+  "video": {
+    "name": "63358.mp4",
+    "sha256": "cd4e51195738ce9ede77960579866e74364ba7be35ad3eddb9b86ca0953444a2",
+    "bytes": 81586762,
+    "seconds": 79.301344
+  },
+  "observed": {
+    "poll_failures": 8,
+    "other_stage_failures": 0,
+    "first_result": 6,
+    "last_result": 6,
+    "first_pre_tcr_hex": "7A",
+    "last_pre_tcr_hex": "1",
+    "both_pre_sci_hex": "A4500080",
+    "both_pre_chcr_hex": "4911",
+    "both_post_sci_hex": "84300080",
+    "both_post_chcr_hex": "5440",
+    "both_post_stream_state": 3,
+    "both_lost_metadata": 0,
+    "cache_blocks_produced": 38,
+    "cache_feeds": 50,
+    "abandoned_skips": 5826
+  },
+  "not_proven": [
+    "Intermediate POLL results are not displayed.",
+    "First and last TCR values precede the final fenced transfer count.",
+    "The previous capture did not include unrepaired; lifetime-cutoff suppression is a hypothesis, not an observed counter value.",
+    "No synchronized rendered-frame witness establishes every hitch cause."
+  ],
+  "new_snapshot_encoding": {
+    "field": "loan_state",
+    "bits_0_15": "native VMU loan state",
+    "bits_16_23": "SCI unrepaired counter",
+    "other_bits": "zero for the valid current state"
+  },
+  "preserved": {
+    "public_bytes": 656,
+    "context_bytes": 904,
+    "record_bytes": 148,
+    "sci_priority": 1,
+    "cache_bytes": 196608,
+    "lease_bytes": 393216,
+    "low_resident_unchanged": true,
+    "recovery_policy_unchanged": true
+  },
+  "next_if_counter_at_least_two": "Reproduce suppression with the real SCI/card model and design a bounded recovery scope; do not blindly raise/reset the lifetime guard.",
+  "console_boot_verified": false,
+  "console_performance_verified": false,
+  "software_validation": {
+    "asan_ubsan_checks": 1826496,
+    "actual_linked_diagnostic_c_cases": 188,
+    "new_packed_counter_cases": 32,
+    "old_6675_diagnostic_regression_passed": true,
+    "full_persistent_self_test_and_exact_startup_audit_passed": true,
+    "same_label_low_resident_and_worker_byte_identical": true,
+    "auxiliary_bytes": 10112,
+    "auxiliary_code_bytes": 6016,
+    "auxiliary_closed_stack_bytes": 448,
+    "auxiliary_stack_capacity": 4096,
+    "abi_and_guard_limits_unchanged": true
+  }
+}

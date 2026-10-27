@@ -1,0 +1,160 @@
+{
+  "schema": "kui.native-console-followup.v2",
+  "date": "2026-10-26",
+  "tested_build": "c29d9895c922",
+  "production_changed": false,
+  "github_uploaded": false,
+  "scope": "Console observations and original-executable-backed interrupt-frame interpretation; no new compatibility claim or runtime fix.",
+  "common": {
+    "complete_report_cycles": true,
+    "raw_owner_words_each": 192,
+    "raw_owner_flags_each": 7,
+    "original_frame_layout": {
+      "compiled_complete_hook_bytes": 80,
+      "ordered_original_caller_frames_bytes": [
+        40,
+        20,
+        8,
+        24
+      ],
+      "sdk_fpu_frame_bytes": 228,
+      "sdk_fpu_base_from_raw_frame": 172,
+      "saved_pr_from_raw_frame": 388,
+      "saved_spc_from_raw_frame": 392,
+      "saved_ssr_from_raw_frame": 396,
+      "method": "Actual original caller prologues and saved continuations plus original SDK FPU push instructions; independent executable-backed replays passed. FPSCR is explicitly set to 0x00040000 before all 32 four-byte FPU saves."
+    },
+    "vmu": "Each approximately 20-second measurement contains 1,200 valid fast controller pairs, with no VMU storage operations or commits.",
+    "video_observation_limit": "The terminal snapshot samples PVR timing registers and INTEVT. It does not sample framebuffer read-enable or establish decoded-frame publication.",
+    "fault_observation_limit": "This is an intentional PROFILE stop. The interpreted SPC is an interrupted instruction, not automatically an exception fault PC; INTEVT is a last-event latch and EXPEVT was not captured."
+  },
+  "rayman2": {
+    "video": "63417.mp4",
+    "video_sha256": "d52e63ce7cb1b89c99fc6e9476f5529f263dbbd0d8a5190eedbf3ad11a010522",
+    "video_duration_seconds": 106.241589,
+    "source_sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099",
+    "source_bytes": 935648,
+    "observed": "Ubisoft logo visible at the beginning; controller and terminal diagnostic report remain responsive.",
+    "raw_header": {
+      "frame": "8c00c530",
+      "pr": "8c0d8a22",
+      "sr": "600001f1",
+      "load": "020c0359",
+      "vblank": "00150104",
+      "control": "00000150",
+      "scan": "0000386b",
+      "intevt": "00000360"
+    },
+    "interrupted_context": {
+      "spc": "8c03b23a",
+      "pr": "8c03b23a",
+      "ssr": "60000101",
+      "sp": "8c00c6c0",
+      "r0": "00000000",
+      "r8": "3f4c3719",
+      "r10": "8c061b70",
+      "r11": "00000000",
+      "r12": "8cce3b00",
+      "r13": "00000000",
+      "r14": "8c0c55ec",
+      "instruction": "MOV.L R0,@R8",
+      "glyph_verification": "Ambiguous B/8 characters in SPC and R10 were enlarged and compared with known same-row font glyphs; the source call literal independently matches R10."
+    },
+    "finding": "The sampled original instruction would store through an invalid, unaligned destination. This is the first iteration of the resource descriptor pass before the logo timed-delay loop.",
+    "resource": {
+      "name": "DCDATA/FIX.DAT",
+      "root_cell": "8c0c55ec",
+      "descriptor_count_field": "a0",
+      "descriptor_table_field": "a4",
+      "loader": "8c03af20",
+      "allocator_gateway": "8c0d06a2",
+      "allocator": "8c0d06b6",
+      "allocation_policy": "Original allocator takes allocations from the high end of a free span.",
+      "source_review": "The file is read directly into its rounded allocation and immediately supplies pointer fields at offsets 0x18 and 0x1c; the descriptor pass follows field 0xa4. No relocation was observed on the reviewed path.",
+      "asset_payload_available": false,
+      "separate_logo_asset": "DCDATA/VIGNET/ubisoft.img is distinct from the invalid resource descriptor table."
+    },
+    "window": {
+      "seconds": 19.9567744,
+      "controller_pairs": 1200,
+      "new_gd_read_requests": 0,
+      "pending_reader_work": false,
+      "vmu_storage_operations": 0,
+      "vmu_commits": 0
+    },
+    "hypothesis": "The 384 KiB upper-heap reservation may shift original top-down allocation addresses while prelinked resource pointers retain their original addresses. FIX.DAT bytes and its live root were not captured, so this is not established.",
+    "not_established": [
+      "An observed address-error exception event",
+      "The origin of the invalid destination",
+      "Actual FIX.DAT pointer encoding and allocation base",
+      "New-reader data corruption or a demonstrated cache-coherence defect",
+      "A stopped game timer"
+    ],
+    "legacy_control_owner_result": "Current C29 Legacy (Y) also stops at the Ubisoft logo."
+  },
+  "lodoss": {
+    "video": "63416.mp4",
+    "video_duration_seconds": 109.752956,
+    "source_sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5",
+    "source_bytes": 3473412,
+    "owner_observation": "No game video output; audible audio stutters and the game appears to continue doing work.",
+    "raw_header": {
+      "frame": "8c53c114",
+      "pr": "8c2c926e",
+      "sr": "600001f1",
+      "load": "020c0359",
+      "vblank": "00150104",
+      "control": "00000150",
+      "scan": "000038c8",
+      "intevt": "00000360"
+    },
+    "interrupted_context": {
+      "spc": "8c3306c2",
+      "pr": "8c2efba4",
+      "ssr": "60000101",
+      "r4_parser_object": "8c546a28",
+      "r5_input_buffer": "8c6b3ac0",
+      "r6_input_bytes": 51200,
+      "r7_consumed_count_output": "8c540214",
+      "instruction": "STS.L PR,@-R15",
+      "sdk_preframe_sp": "8c53c2a4",
+      "actual_interrupted_sp": null,
+      "stack_limit": "The original SDK may switch to a dedicated IRQ stack; memory above its saved frame is not automatically the active game caller stack."
+    },
+    "finding": "At the single sampled instant, game code was entering a MPEG program-stream parser. Downstream code explicitly classifies MPEG pack, system, end and packet start codes. This is not evidence that the parser itself is stuck or its input is valid.",
+    "window": {
+      "seconds": 19.9597056,
+      "controller_pairs": 1200,
+      "gd_read_activity_continues": true,
+      "vmu_storage_operations": 0,
+      "vmu_commits": 0,
+      "sci_overrun_results": 194,
+      "sci_repaired": 0,
+      "sci_deferred": 0,
+      "reader_crc_errors": 0,
+      "reader_token_errors": 0
+    },
+    "stream_error_limit": "These are low SCI overrun results, not read-ahead guard failures. Existing retry/fallback handling may recover them. Zero CRC/read-ahead failures does not mean zero stream retry events, and the relationship to absent video remains unproved.",
+    "next_observation_if_needed": "Repeated original-PC observations and a bounded input prefix plus parser cursor/object state would test data and parser progress.",
+    "video_sha256": "27a173b99d5ade639cebdeb30fc2d6d6b2daccd98d03363baf3af71894d70bc5",
+    "recovery_source_review": {
+      "early_completion_or_wrong_cursor_advance_found": false,
+      "checks": [
+        "An unrecoverable overrun returns before ready/arrived/position publication.",
+        "Failure leaves the request cursor unchanged; refetch uses the same block. Two consecutive failures select PIO; excessive failures terminate the request.",
+        "New data must pass CRC before delivery. Completion uses fully consumed sectors and requires the requested count without an error."
+      ],
+      "source_locations": [
+        "src/loader/sci_stream.c:482",
+        "src/loader/retail_async.c:365",
+        "src/loader/retail_async.c:567",
+        "src/loader/sci_stream.c:583",
+        "src/loader/retail_gd.c:635"
+      ],
+      "unobserved_state": "The separate unrepaired latch can disable further CRC reconstruction after two earlier failures until stream reopen. Capture-window deltas do not reveal pre-window latch state;194 is stats.overruns, not that latch.",
+      "limits": "Source review does not prove returned data correctness in the observed hardware run or establish the black-video cause."
+    },
+    "legacy_control_owner_result": "Current C29 Legacy (Y) also produces black video with sound playing."
+  },
+  "next_control": "Both reader controls now failed at the same points. Build a bottom-reservation candidate that preserves original top-down allocation addresses; keep the complete New reader/cache and A2 profile."
+}

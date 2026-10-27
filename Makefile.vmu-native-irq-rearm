@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/native-irq-rearm
+include Makefile.vmu-native-cooperative
+FLAGS += -DKUI_NATIVE_IRQ_REARM=1 -DKUI_NATIVE_STAGE_FAST_SCAN=1 -DKUI_NATIVE_CACHED_EXTENT=1
+NATIVE_FLAGS += -DKUI_NATIVE_IRQ_REARM=1
+override TEST_GUIDE := docs/vmu-native-irq-rearm-test.md
+
+.PHONY: irq-rearm-host-tests
+irq-rearm-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -O2 $(STALL_READER_FLAGS) -DKUI_NATIVE_REQUEST_TIMING=1 -DKUI_NATIVE_COOP_PUMP=1 -DKUI_NATIVE_IRQ_REARM=1 $(STALL_READER_SRC) tests/test_retail_async_irq_rearm.c -o $(BUILD)/test-irq-reader
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-irq-reader
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 -DKUI_NATIVE_IRQ_REARM=1 tests/test_vmu_native_cooperative_worker.c $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-irq-worker
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-irq-worker

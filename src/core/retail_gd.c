@@ -560,7 +560,11 @@ static int32_t pio_check(struct kui_retail_gd *s, uint32_t token, uint32_t addre
     uint8_t *out = guest(s, address, 4, 4, 1);
     if(!out) return -1;
     uint32_t n = 0;
-    if(s->pending && s->command == KUI_RETAIL_GD_PIOREAD_STREAM && token == s->token) {
+    if(s->pending && s->command == KUI_RETAIL_GD_PIOREAD_STREAM && token == s->token
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+       && !s->storage_deferred
+#endif
+       ) {
         n = KUI_RETAIL_GD_STEP_SECTORS * s->sector_bytes;
         if(n > s->request_bytes - s->completed_bytes) n = s->request_bytes - s->completed_bytes;
     }
@@ -573,6 +577,11 @@ static int32_t pio_check(struct kui_retail_gd *s, uint32_t token, uint32_t addre
  * BIOS would when the transfer ends) with the drive's interrupt to bring
  * that EXEC about. The last bytes complete the command. */
 static int32_t pio_transfer(struct kui_retail_gd *s, uint32_t token, uint32_t address) {
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    /* No valid offer can precede an idle-only loan. Reject a transfer which
+     * ignores its zero-byte PIO_CHECK offer without touching storage. */
+    if(s->storage_deferred) return -1;
+#endif
     if(!s->pending || s->command != KUI_RETAIL_GD_PIOREAD_STREAM || token != s->token)
         return -1;
     const uint8_t *p = guest(s, address, 8, 4, 0);

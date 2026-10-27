@@ -5,6 +5,7 @@
 #include "kui/hash.h"
 #include "kui/media.h"
 #include "kui/storage.h"
+#include "kui/vmu_read_bounded.h"
 #include <dc/maple.h>
 #include <dc/vmufs.h>
 #include <assert.h>
@@ -31,7 +32,7 @@ void kui_sd_disconnect(void){assert(connects);--connects;}
 maple_device_t *maple_enum_dev(int port,int unit){++vmucalls;assert(restore_phase&&port==0&&unit==1);return &device;}
 int vmufs_mutex_lock(void){assert(restore_phase);return 0;}
 int vmufs_mutex_unlock(void){assert(restore_phase);return 0;}
-int vmu_block_read(maple_device_t *dev,uint16_t block,uint8_t *data){assert(restore_phase&&dev==&device&&block<256);++vmucalls;memcpy(data,card[block],512);return 0;}
+int kui_vmu_read_bounded(maple_device_t *dev,uint16_t block,uint8_t data[512]){assert(restore_phase&&dev==&device&&block<256);++vmucalls;memcpy(data,card[block],512);return 0;}
 int vmu_block_write(maple_device_t *dev,uint16_t block,const uint8_t *data){(void)dev;(void)block;(void)data;assert(!"Import and restore preview must never write VMUs");return -1;}
 int vmufs_dir_write(maple_device_t *dev,vmu_root_t *root,vmu_dir_t *dir){(void)dev;(void)root;(void)dir;assert(!"Unexpected VMU directory write");return -1;}
 int vmufs_fat_write(maple_device_t *dev,vmu_root_t *root,uint16_t *fat){(void)dev;(void)root;(void)fat;assert(!"Unexpected VMU FAT write");return -1;}

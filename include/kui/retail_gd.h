@@ -106,6 +106,12 @@ struct kui_retail_gd {
     uint32_t interrupts; /* KUI_RETAIL_GD_IRQ_* raised; the adapter clears. */
     uint32_t xfer_destination, xfer_left; /* The stream's current DMA transfer. */
     uint32_t pio_callback, pio_argument, callback_due; /* A PIO stream's callback. */
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    /* Storage loan is independent of INIT/RESET/ABORT and the GD entry lock.
+     * REQUEST/CHECK/DMA transfers retain their real token metadata. A PIO
+     * stream advertises no bytes until storage is available again. */
+    uint32_t storage_deferred;
+#endif
 #endif
     struct kui_retail_gd_diagnostics diag;
 };

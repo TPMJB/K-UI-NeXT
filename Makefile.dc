@@ -35,10 +35,19 @@ RUNTIME_OBJECTS += build/dc/src/dreamcast/memory.o
 RUNTIME_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recovery_scan.o build/dc/src/core/repair_copy.o
 RUNTIME_OBJECTS += build/dc/src/core/network_rip.o
 RUNTIME_OBJECTS += build/dc/src/core/games_selection.o build/dc/src/core/game_launch_settings.o build/dc/src/core/game_ram_patches.o
+RUNTIME_OBJECTS += build/dc/src/core/vmu_launch_package.o
+RUNTIME_OBJECTS += build/dc/src/core/vmu_native_cache_seed.o build/dc/src/core/vmu_native_resolution_cache.o \
+    build/dc/src/core/vmu_native_discovery.o build/dc/src/core/vmu_native_layout.o \
+    build/dc/src/core/vmu_native_heap.o build/dc/src/core/vmu_native_exit.o build/dc/src/core/vmu_native_patch.o \
+    build/dc/src/core/vmu_native_program.o
 RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadata.o
 RUNTIME_OBJECTS += build/dc/src/core/zso.o build/dc/src/core/lzo1x.o build/dc/src/core/retail_zso.o
 RUNTIME_OBJECTS += build/dc/src/core/game_cover.o build/dc/src/core/pvr_texture.o
 RUNTIME_OBJECTS += build/dc/src/core/files_path.o build/dc/src/core/vmu_save_format.o
+RUNTIME_OBJECTS += build/dc/src/dreamcast/vmu_read_bounded.o
+RUNTIME_OBJECTS += build/dc/src/core/vmu_collection.o build/dc/src/core/vmu_image.o \
+    build/dc/src/core/vmu_image_subset.o build/dc/src/core/vmu_save_snapshot.o build/dc/src/core/vmu_image_pack.o \
+    build/dc/src/core/vmu_description.o
 RUNTIME_OBJECTS += build/dc/src/core/w5500.o build/dc/src/dreamcast/w5500_sci.o build/dc/src/core/ftp_protocol.o
 # The SCI port's network adapters: its chip selects, and the Wi-Fi board's
 # link, whose library is shared with the board's firmware (MIT).
@@ -56,6 +65,7 @@ BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 .PHONY: all force-build-id wince-cdda native-cdda
 all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf build/retail/entry.elf build/retail-bench/entry.elf build/retail-ce/entry.elf wince-cdda
 all: native-zso native-lzo native-cdda
+build/dc/src/apps/games_retail.o: src/apps/games_native_cache.inc include/kui/vmu_native_cache_seed.h include/kui/vmu_native_resolution_cache.h
 # These separately linked, opt-in music modules retain their tested CE layout
 # even when the ordinary native loader uses its lower firmware reservation.
 # Explicit arguments also isolate them from a requested native diagnostic.
@@ -94,6 +104,7 @@ force-build-id:
 build/dc/%.o: %.c
 	@mkdir -p $(@D)
 	kos-cc -std=c11 -Wall -Wextra -Werror -MMD -MP $(CPPFLAGS) -c $< -o $@
+build/dc/src/apps/vmu.o: src/apps/vmu_collection.inc
 build/dc/src/core/ext4_boot.o: CPPFLAGS += $(LWEXT4_CPPFLAGS)
 build/dc/third_party/lwext4/src/%.o: third_party/lwext4/src/%.c $(LWEXT4_HEADERS)
 	@mkdir -p $(@D)

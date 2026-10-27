@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/native-timed
+include Makefile.vmu-native-cooperative
+FLAGS += -DKUI_NATIVE_TIMED_PUMP=1 -DKUI_NATIVE_STAGE_FAST_SCAN=1
+NATIVE_FLAGS += -DKUI_NATIVE_TIMED_PUMP=1
+
+.PHONY: timed-host-tests
+timed-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 -DKUI_NATIVE_TIMED_PUMP=1 tests/test_vmu_native_cooperative_worker.c $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-timed-worker
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-timed-worker
+	$(MAKE) -f Makefile.vmu-native-timed BUILD=$(BUILD) native-program-host-tests PASSIVE_HOST_FLAGS='$(PASSIVE_HOST_FLAGS) -DKUI_NATIVE_STAGE_FAST_SCAN=1' EVOLUTION2_STARTUP='$(EVOLUTION2_STARTUP)' EVOLUTION1_STARTUP='$(EVOLUTION1_STARTUP)'

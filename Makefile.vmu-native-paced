@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/native-paced
+include Makefile.vmu-native-cooperative
+FLAGS += -DKUI_NATIVE_PACED_CHECK=1 -DKUI_NATIVE_STAGE_FAST_SCAN=1 -DKUI_NATIVE_CACHED_EXTENT=1
+NATIVE_FLAGS += -DKUI_NATIVE_PACED_CHECK=1
+override TEST_GUIDE := docs/vmu-native-paced-test.md
+
+.PHONY: paced-host-tests
+paced-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -O2 $(STALL_READER_FLAGS) -DKUI_NATIVE_REQUEST_TIMING=1 -DKUI_NATIVE_COOP_PUMP=1 -DKUI_NATIVE_PACED_CHECK=1 $(STALL_READER_SRC) tests/test_retail_async_paced.c -o $(BUILD)/test-paced-reader
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-paced-reader
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 -DKUI_NATIVE_PACED_CHECK=1 tests/test_vmu_native_cooperative_worker.c $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-paced-worker
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-paced-worker
+	$(MAKE) -f Makefile.vmu-native-paced BUILD=$(BUILD) native-program-host-tests PASSIVE_HOST_FLAGS='$(PASSIVE_HOST_FLAGS) -DKUI_NATIVE_STAGE_FAST_SCAN=1' EVOLUTION2_STARTUP='$(EVOLUTION2_STARTUP)' EVOLUTION1_STARTUP='$(EVOLUTION1_STARTUP)'

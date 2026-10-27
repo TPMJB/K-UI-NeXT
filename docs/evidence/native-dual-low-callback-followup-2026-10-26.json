@@ -1,0 +1,52 @@
+{
+  "schema": "kui.native.dual-low-callback-followup.v1",
+  "date": "2026-10-26",
+  "failed_build": "f2410c316f25",
+  "owner_report": "When I do legacy with Locked, the last thing that shows up on the screen is Native discovery complete - arming hook. It is the second boot screen under bootstrap 2.",
+  "title": "Unconfirmed; Locked may be autocorrect for Lodoss, not a setting in this build.",
+  "actual_linked_low_symbols": {
+    "New": {
+      "heap_hook": "0x8c007564",
+      "return_hook": "0x8c007674",
+      "control": "0x8c007b40",
+      "heap_original": "0x8c007b80",
+      "sd_lease": "0x8c007690",
+      "background_bind": "0x8c005c14"
+    },
+    "Legacy": {
+      "heap_hook": "0x8c0074b0",
+      "return_hook": "0x8c0075c0",
+      "control": "0x8c007b40",
+      "heap_original": "0x8c007b80",
+      "sd_lease": "0x8c0075dc",
+      "background_bind": "0x8c005a74"
+    }
+  },
+  "previous_stage_binding": "Only SCI-derived generated header; code callback targets reused for both independently linked low engines.",
+  "old_sci_hook_at_actual_legacy_target": {
+    "address": "0x8c007564",
+    "bytes": "f662f661f660164f064f074f0b000900",
+    "instructions": [
+      "mov.l @r15+,r2",
+      "mov.l @r15+,r1",
+      "mov.l @r15+,r0",
+      "lds.l @r15+,macl",
+      "lds.l @r15+,mach",
+      "ldc.l @r15+,sr",
+      "rts",
+      "nop"
+    ],
+    "effect": "Targets the tail of the Legacy heap hook, skipping its prologue and original heap initializer, then popping an unprepared owner stack."
+  },
+  "correction": "Generate and validate both symbol tuples from actual low ELFs; select exact tuple for the chosen reader before arming, worker configuration, map binding and exit handling. No title list or reader-policy change.",
+  "proof_requirements": [
+    "Actual compiled selector and consumers execute against both actual ELFs.",
+    "Arming slot and owner return frame use selected hook entries.",
+    "SD gateway and terminal/heap callback config fields use selected entries.",
+    "Map bind callback receives correct ABI and selected entry.",
+    "Mixed tuples and old SCI-only Legacy code targets are rejected.",
+    "Unsupported reader/transport directly stops without recursively asking the selector for a reporting control pointer."
+  ],
+  "console_verified": false,
+  "new_reader_runtime_policy_changed": false
+}

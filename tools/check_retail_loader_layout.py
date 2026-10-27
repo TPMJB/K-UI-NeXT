@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import struct
 
-from check_loader_layout import inspect_elf, padded, region
+from check_loader_layout import EH,SH,SYM,inspect_elf, padded, region
 import check_retail_stack
 import retail_package as layout
 
@@ -39,9 +39,34 @@ TRANSPORTS = ("scif", "sci", "ide")
 # The background SCI reader's resident (manifest reader 1).
 ASYNC = "scia"
 RESIDENTS = TRANSPORTS + (ASYNC,)
+CE_VMU_RUNTIME_STACK_BOTTOM=0x8c00dc00
 
 
-def resident_limit(transport, ce=False, low=False):
+def exact_profile_marker(data,name):
+    """Read an optional exact ABS-one source profile without widening bounds."""
+    h=EH.unpack(region(data,0,EH.size,'profile ELF header'))
+    if h[11]!=SH.size or not h[12]:raise ValueError('Invalid profile ELF section table')
+    sections=[SH.unpack(region(data,h[6]+i*SH.size,SH.size,'profile ELF section')) for i in range(h[12])]
+    tables=[s for s in sections if s[1]==2]
+    if len(tables)!=1:raise ValueError('Profile requires one static symbol table')
+    table=tables[0]
+    if table[9]!=SYM.size or table[5]%SYM.size or not 0<=table[6]<len(sections):
+        raise ValueError('Invalid profile symbol table')
+    strings=sections[table[6]]
+    if strings[1]!=3:raise ValueError('Invalid profile symbol strings')
+    names=region(data,strings[4],strings[5],'profile symbol strings');found=[]
+    for at in range(table[4],table[4]+table[5],SYM.size):
+        start,value,size,info,_,index=SYM.unpack(region(data,at,SYM.size,'profile symbol'))
+        if not start:continue
+        end=names.find(b'\0',start)
+        if not 0<=start<len(names) or end<0:raise ValueError('Invalid profile symbol name')
+        if names[start:end].decode('ascii')==name:found.append((value,size,info&15,index))
+    if found and found!=[(1,0,0,0xfff1)]:raise ValueError('Runtime source profile marker must be one untyped ABS-one: '+name)
+    return bool(found)
+
+
+def resident_limit(transport, ce=False, low=False, runtime=False):
+    if runtime and ce and transport==ASYNC:return CE_VMU_RUNTIME_STACK_BOTTOM
     if ce and transport == "sci":
         return layout.CE_RESIDENT_LIMIT
     if ce and transport == ASYNC:
@@ -51,8 +76,8 @@ def resident_limit(transport, ce=False, low=False):
     return layout.ASYNC_RESIDENT_LIMIT if transport == ASYNC else layout.RESIDENT_LIMIT
 
 
-def stack_bottom(transport, ce=False, low=False):
-    return resident_limit(transport, ce, low)
+def stack_bottom(transport, ce=False, low=False, runtime=False):
+    return resident_limit(transport, ce, low, runtime)
 
 
 def stack_top(transport, ce=False, low=False):
@@ -64,8 +89,8 @@ def stack_top(transport, ce=False, low=False):
     return layout.LOW_HOOK_STACK if low else layout.HOOK_STACK
 
 
-def check_async_stack(directory, ce=False, low=False):
-    available = (stack_top(ASYNC, ce, low) - stack_bottom(ASYNC, ce, low) -
+def check_async_stack(directory, ce=False, low=False, runtime=False):
+    available = (stack_top(ASYNC, ce, low) - stack_bottom(ASYNC, ce, low, runtime) -
                  STACK_GUARD_BYTES - STACK_ALIGNMENT_GAP)
     result = check_retail_stack.check(Path(directory), available, ce)
     return {"worst_bytes": result["worst_bytes"], "available_bytes": available,
@@ -153,15 +178,22 @@ def check_directory(directory, ce=False):
     entry = inspect_entry(directory)
     placement = entry_placement(entry, ce)
     low, resident_address = placement["low"], placement["address"]
+    stage_data=(directory/'stage.elf').read_bytes()
+    runtime=exact_profile_marker(stage_data,'__kui_maple_write_runtime_stage')
+    if runtime and (not ce or low):raise ValueError('Writable VMU runtime requires the exact CE placement')
     images = {
-        "stage": inspect_elf((directory / "stage.elf").read_bytes(),
+        "stage": inspect_elf(stage_data,
                              stage_address, layout.STAGE_MEMORY_END),
         "entry": entry,
     }
     for transport in RESIDENTS:
         name = "resident-" + transport
-        images[name] = inspect_elf((directory / (name + ".elf")).read_bytes(),
-                                  resident_address, resident_limit(transport, ce, low))
+        data=(directory / (name + ".elf")).read_bytes()
+        marker=exact_profile_marker(data,'__kui_maple_write_runtime_resident')
+        if marker!=(runtime and transport==ASYNC):raise ValueError('Mixed writable runtime stage/resident profiles')
+        images[name] = inspect_elf(data,resident_address,resident_limit(transport,ce,low,runtime))
+        if marker and images[name]['symbols'].get('__retail_resident_binary_end',0)>layout.CE_ASYNC_RESIDENT_LIMIT:
+            raise ValueError('Runtime resident executable bytes leave the original service code range')
     for name, image in images.items():
         forbidden = [s for s in image["symbols"] if
                      s.startswith(FORBIDDEN_PREFIXES) or s in FORBIDDEN_SYMBOLS]
@@ -208,7 +240,7 @@ def check_directory(directory, ce=False):
             code_symbol(resident, symbol, resident_address)
         rs = resident["symbols"]
         if (rs.get("__retail_hook_stack") != stack_top(transport, ce, low) or
-                rs.get("__retail_hook_stack_bottom") != stack_bottom(transport, ce, low)):
+                rs.get("__retail_hook_stack_bottom") != stack_bottom(transport, ce, low, runtime)):
             raise ValueError(f"{name} hook stack is outside its resident reservation")
         for symbol in ("_kui_retail_hook_active", "_kui_retail_hook_fault"):
             if not resident_address <= rs.get(symbol, 0) < resident["memory_end"]:
@@ -225,7 +257,7 @@ def check_directory(directory, ce=False):
             if region_symbol % 32 or not (resident_address <= region_symbol and
                                           region_symbol + 0x440 <= resident["memory_end"]):
                 raise ValueError("Background reader's region is misplaced")
-            stacks[transport] = check_async_stack(directory / transport, ce, low)
+            stacks[transport] = check_async_stack(directory / transport, ce, low, runtime)
         elif transport == ASYNC:
             region_symbol = rs.get("_kui_retail_async_region", 0)
             if region_symbol % 32 or not (resident_address + 0x100 <= region_symbol and
@@ -267,6 +299,7 @@ def check_directory(directory, ce=False):
                      "memory_end": f"0x{image['memory_end']:08x}",
                      "unresolved_symbols": 0} for name, image in images.items()}
     result["resident_stacks"] = stacks
+    if runtime:result['write_runtime_profile']=True
     return result
 
 

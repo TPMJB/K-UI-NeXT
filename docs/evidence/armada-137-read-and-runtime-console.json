@@ -1,0 +1,288 @@
+{
+  "kind": "owner-console-photo-transcription-and-source-correlation",
+  "build": "137ca964caad",
+  "scope": "Armada CE synthetic blank readonly virtual A2",
+  "source_reconstruction_note": "The retained binary build ID identifies the tested modules. The current reconstructed source baseline is documented separately in armada-137-source-recovery.json; exact original Git-tree identity is not asserted.",
+  "first_read_checkpoint": {
+    "source_attachments": [
+      {
+        "filename": "01-image-1792582876474.jpg",
+        "sha256": "eca0c66a6a2e0defd4f1785bb832e1ffc15491664d445f02e2b1e5d9fbd80f38"
+      }
+    ],
+    "automatic_reason": "0x00000003",
+    "automatic_phase": "0x00000002",
+    "pre_calls": "0x0000055c",
+    "post_calls": "0x0000055c",
+    "held_windows": "0x0000055c",
+    "confirmed_restores": "0x0000055c",
+    "active": false,
+    "historical_fence_flags": "0x00000000",
+    "fence_fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "interpretation": "The first emulated READ checkpoint was reached after the original CE completion handler returned; the snapshot ends with every reported DMA gate restored. This is not a save or timing pass."
+  },
+  "first_read_finalization_checkpoint": {
+    "source_attachments": [
+      {
+        "filename": "image(20261021-115318).png",
+        "sha256": "bfdf00e6cbf33a504e178a4311603f688b0796e87c280ed5f1c4f44e14d6f3e6"
+      },
+      {
+        "filename": "image(20261021-115332).png",
+        "sha256": "dba5cd012359be10170daec7d3bc59f32de3622d6311feefa0575410aca5b638"
+      },
+      {
+        "filename": "image(20261021-115338).png",
+        "sha256": "e8e3973e8ba5a9cd7886c48c07a0838baeb12679c0ed2d66f154787990dc71ce"
+      }
+    ],
+    "automatic_reason": "0x00000004",
+    "automatic_phase": "0x00000002",
+    "pre_calls": "0x000005a1",
+    "post_calls": "0x000005a1",
+    "held_windows": "0x000005a1",
+    "confirmed_restores": "0x000005a1",
+    "active": false,
+    "historical_fence_flags": "0x00000000",
+    "fence_fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "a2": {
+      "publisher_visits": "0x000005a0",
+      "completed_publications": "0x000005a0",
+      "advertisements": "0x000005a0",
+      "target_replies": 4,
+      "device_info": 1,
+      "all_info": 0,
+      "media_info": 1,
+      "block_reads": 1,
+      "read_finalizations": 1,
+      "target_request": "0x0200020d",
+      "target_response": "0x00020007",
+      "target_rx_bus": "0x0cfd1620",
+      "target_capacity": 8,
+      "target_reply_bytes": 4,
+      "refused": 0,
+      "backend_calls": 4,
+      "confirmed_guest_stores": "0x00000649",
+      "flags": "0x00000000",
+      "latest_store_attempts": 2,
+      "fault": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "interpretation": "One metadata exchange, one generated block read and its CE read-completion exchange reached POST with no A2/fence fault. This does not exercise write phases or persistence."
+  },
+  "runtime": {
+    "source_attachments": [
+      {
+        "filename": "image(20261021-120121).png",
+        "sha256": "184339971de7405c2986a8609dedb575f9cc58a7fc06e7b703d08dfaae91ac33"
+      },
+      {
+        "filename": "image(20261021-120127).png",
+        "sha256": "10b8e83dd22bc2451bd83f38b31563a1dcc3735195ea11831de1da876ee3bf45"
+      },
+      {
+        "filename": "image(20261021-120132).png",
+        "sha256": "5701ad6611117d8b4a9319a69abab194266f85aaf7f291cc5735a628dfc68980"
+      },
+      {
+        "filename": "image(20261021-120138).png",
+        "sha256": "472f64bc1d97b98b4cc11529baa5f384e438a9e6a89864c5284a3a7590d550b4"
+      },
+      {
+        "filename": "image(20261021-120208).png",
+        "sha256": "ac3efccf439224ae9d500cd0900b9e2657d0e6b7cb857f6f32aa18f2e1585c19"
+      }
+    ],
+    "screen": "GAME RETURN",
+    "guard": "0x00000000",
+    "reader_steps": "0x00006f0d",
+    "reader_sectors": "0x00002329",
+    "traffic": {
+      "magic": "0x3152544d",
+      "visits": "0x00000c39",
+      "accepted": "0x00000c39",
+      "refused": 0,
+      "latest_budgeted_reads": "0x00000123",
+      "commands": {
+        "device_info": 2,
+        "media_info": 3,
+        "block_read": "0x0000004c",
+        "block_write": 2,
+        "other": "0x0000004c"
+      },
+      "first": {
+        "tx_offset": "0x00000010",
+        "control": "0x00000000",
+        "rx_bus": "0x0cfd1420",
+        "request": "0x00000101",
+        "response": "0x1c010005"
+      },
+      "last": {
+        "tx_offset": "0x00000010",
+        "control": "0x00000022",
+        "rx_bus": "0x0cfd1620",
+        "request": "0x2200020c",
+        "response": "0xffffffff"
+      },
+      "metadata": {
+        "raw_extension": "0x00030a60",
+        "tx_bus": "0x0cfd3000",
+        "rx_bus": "0x0cfd1000",
+        "last_offset": "0x00000028",
+        "end_offset": "0x00000034"
+      },
+      "fault": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "scope_note": "These are descriptor observations across non-parent endpoints. They are not counts of unique blocks, successful physical-card writes, or exclusively virtual-A2 commands. Response headers are sampled before synthetic publication."
+    },
+    "fence": {
+      "magic": "0x31464c4d",
+      "pre_calls": "0x00000c39",
+      "post_calls": "0x00000c39",
+      "held_windows": "0x00000c39",
+      "confirmed_restores": "0x00000c39",
+      "busy_skips": 0,
+      "refused_phases": 0,
+      "peak_idle_polls": 1,
+      "active": false,
+      "historical_flags": "0x00000000",
+      "before": {
+        "enable": 1,
+        "trigger": 1,
+        "state": 0,
+        "source": "0x0cfd3000",
+        "expected_source": "0x0cfd3000"
+      },
+      "held": {
+        "enable": 0,
+        "state": 0,
+        "post_enable": 0,
+        "post_state": 0,
+        "post_source": "0x0cfd3000"
+      },
+      "after": {
+        "restored_enable": 1,
+        "state": 0,
+        "pre_previous_mode": 0,
+        "post_previous_mode": 0,
+        "extension": "0x00030a60"
+      },
+      "fault": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "a2": {
+      "magic": "0x31523241",
+      "publisher_visits": "0x000009a7",
+      "completed_publications": "0x000009a7",
+      "advertisements": "0x000009a7",
+      "target_replies": "0x0000006e",
+      "device_info": 1,
+      "all_info": 0,
+      "media_info": 1,
+      "block_reads": "0x00000036",
+      "read_finalizations": "0x00000036",
+      "target_row": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "refused": 1,
+      "backend_calls": "0x0000006e",
+      "confirmed_guest_stores": "0x000025a4",
+      "flags": "0x80000000",
+      "latest_store_attempts": 1,
+      "first_fault": {
+        "reason": "0x00000060",
+        "at": "0x0cfd3010",
+        "value": "0x2200020c",
+        "expected": "0x00000002",
+        "detail": "0x00000022"
+      },
+      "target_row_note": "The guard faults before the publisher updates its target row. That row is zero in this capture and must not be interpreted as absence of the rejected request; the retained traffic/fault rows identify it.",
+      "store_note": "STORES counts confirmed writes to admitted guest RX response buffers, not writes to an SD-backed VMU image.",
+      "latest_store_attempts_note": "This remains the last publisher call's store-attempt count. The rejected WRITE faults before a new publisher call, so this value does not describe a save-write attempt."
+    },
+    "mapping_report_rows_all_zero": true,
+    "driver_report_rows_all_zero": true,
+    "report_zero_note": "The separate MAPPING/DRIVER snapshots contain no positive sample in this run. This does not negate the traffic sampler's own fresh mapping checks, but these zero rows are not independent proof of live mapping or driver state.",
+    "owner_observation": {
+      "opening_fmv": "severely slow",
+      "audio": "repeating/looping",
+      "quantitative_timing_measurement_available": false
+    },
+    "counter_correlations": {
+      "reply_sum": {
+        "equation": "1 DEVINFO + 1 MEDIA + 54 READ + 54 FINALIZE = 110 = 0x6e",
+        "matches": true
+      },
+      "guest_store_sum": {
+        "equation": "2471 advertisements + 29 DEVINFO words + 8 MEDIA words + 54*131 READ words + 54 FINALIZE words = 9636 = 0x25a4",
+        "matches": true
+      },
+      "fence_pairs": {
+        "pre": 3129,
+        "post": 3129,
+        "held": 3129,
+        "restored": 3129,
+        "matches": true
+      },
+      "unpublished_completion_gap": 658,
+      "gap_note": "3129 completions minus 2471 A2 publications is 658. Initial skipped discovery, the refused call, later latched-fault returns, and any other nonpublishing completion contribute; an exact fault visit/time is not inferred."
+    },
+    "rejected_request_decode": {
+      "command": 12,
+      "command_name": "WRITE",
+      "destination": 2,
+      "endpoint": "A2",
+      "source": 0,
+      "payload_words": 34,
+      "payload_bytes": 136,
+      "complete_request_bytes": 140,
+      "shape": "4-byte function + 4-byte location + 128-byte write-phase data, after the 4-byte request header",
+      "source_branch": "src/loader/armada_ce_maple_traffic.c:a2_run: if(words>2u) a2_fault(96u, ..., h, 2u, words)",
+      "conclusion": "The request exceeds the readonly adapter's two-word payload/12-byte staging contract. The guard rejects it before that WRITE reaches backend handling or guest response publication. This is not evidence that the ordinary 34-word WRITE shape is malformed."
+    }
+  },
+  "confirmed": [
+    "The generated virtual A2 discovery, media metadata, block-read and CE read-finalization paths reached the original handler and returned in this admitted Armada build.",
+    "The runtime reports 54 generated READ replies and 54 read-finalization replies, with no traffic/fence fault and all 3129 reported gates restored.",
+    "The read-only request-size guard latched fault 96 on a normal-shaped A2 WRITE request. Persistent emulated writes are not implemented by this experiment.",
+    "No SD-backed VMU save write or durable save acknowledgment is established by these counters."
+  ],
+  "inferred_or_unresolved": [
+    "Excessive work while interrupts are masked remains the leading performance theory; paired gates do not measure masked duration or prove timely CE scheduling.",
+    "A latched A2 fault stops subsequent synthetic publication and may cause device disappearance or application I/O failure; the photos alone do not establish its precise user-visible consequence.",
+    "The event that caused the game to issue WRITE is not identified from a request header alone.",
+    "The number of unique blocks read and validity of any application-level loaded save are not established.",
+    "The original FMV freeze mechanism and all-game/GD-ROM compatibility remain unproven."
+  ]
+}

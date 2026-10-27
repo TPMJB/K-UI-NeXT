@@ -12,6 +12,15 @@
 #ifndef KUI_ARMADA_CE_RAM_BIND
 #define KUI_ARMADA_CE_RAM_BIND 0
 #endif
+#ifndef KUI_ARMADA_CE_MAPLE_OBSERVE
+#define KUI_ARMADA_CE_MAPLE_OBSERVE 0
+#endif
+#if KUI_ARMADA_CE_MAPLE_OBSERVE != 0 && KUI_ARMADA_CE_MAPLE_OBSERVE != 1
+#error "KUI_ARMADA_CE_MAPLE_OBSERVE must be 0 or 1"
+#endif
+#if KUI_ARMADA_CE_MAPLE_OBSERVE && !KUI_ARMADA_CE_RAM_BIND
+#error "CE Maple discovery requires its isolated admitted binding observer"
+#endif
 #if KUI_ARMADA_CE_RAM_BIND != 0 && KUI_ARMADA_CE_RAM_BIND != 1
 #error "KUI_ARMADA_CE_RAM_BIND must be 0 or 1"
 #endif

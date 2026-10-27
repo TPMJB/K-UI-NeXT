@@ -16,6 +16,18 @@
 #include "retail_display.h"
 #include "kui/toy_loader_schedule.h"
 #include "kui/armada_ce_audio_observe.h"
+#if KUI_ARMADA_CE_MAPLE_HOOK
+#include "kui/armada_ce_maple_reservation.h"
+#if KUI_ARMADA_CE_MAPLE_WRITE_LAYOUT
+/* No runtime data: the native audit requires the guarded reader TU to use
+ * the same experimental private range as the stage and Maple helper. */
+__asm__(".global __kui_maple_write_layout_resident\n"
+        ".set __kui_maple_write_layout_resident,1\n");
+#endif
+#endif
+#if KUI_ARMADA_CE_MAPLE_A2
+#include "kui/armada_ce_maple_auto.h"
+#endif
 #if KUI_ARMADA_CE_EXCERPT
 #include "kui/armada_ce_excerpt_pool.h"
 #endif
@@ -45,7 +57,17 @@ static int toy_gd_clock_valid(void) {
 }
 #endif
 
-#if KUI_RETAIL_MDK2_CDDA
+#if KUI_VMU_NATIVE_BACKGROUND
+#if !defined(KUI_RETAIL_ASYNC) || defined(KUI_RETAIL_CE) || !KUI_RETAIL_LOW_RESIDENT || !KUI_VMU_NATIVE_PERSISTENT_PROBE || KUI_RETAIL_MDK2_CDDA || KUI_RETAIL_ZSO
+#error Native Background VMU map binding requires the separate native async resident
+#endif
+#include "kui/vmu_native_background.h"
+#include "kui/vmu_maple_observe_boot.h"
+_Static_assert(sizeof(struct kui_retail_manifest)==KUI_VMU_NATIVE_BACKGROUND_MAP_BYTES,
+    "Native Background VMU map must hold exactly64slots");
+static const struct kui_retail_manifest *native_background_manifest;
+#define RETAIL_MANIFEST native_background_manifest
+#elif KUI_RETAIL_MDK2_CDDA
 #include "kui/mdk2_cdda_map.h"
 static const struct kui_retail_manifest *mdk2_manifest;
 #define RETAIL_MANIFEST mdk2_manifest
@@ -60,6 +82,10 @@ static struct kui_retail_manifest manifest;
 #ifdef KUI_RETAIL_ASYNC
 /* The background reader keeps these between its interrupt vectors. */
 #include "retail_async.h"
+#if KUI_VMU_NATIVE_BACKGROUND
+_Static_assert(sizeof(kui_retail_async_region_type)==KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES,
+    "Native Background vector/state region geometry changed");
+#endif
 #define service (kui_retail_async_region.shared.service)
 #define card (kui_retail_async_region.shared.card)
 #define display (kui_retail_async_region.shared.display)
@@ -108,7 +134,9 @@ volatile uint32_t kui_retail_native_caller[2];
 /* Windows CE boot test: the caller's PR and stack (set by the entry), and
  * the last four calls' R7, R4, R5 and R6, shown if a call fails. */
 volatile uint32_t kui_retail_hook_caller[2];
+#if !KUI_ARMADA_CE_VMU_WRITE_RUNTIME || !defined(KUI_RETAIL_ASYNC)
 static uint32_t ce_calls[4][4], ce_count;
+#endif
 extern volatile uint32_t kui_retail_ce_kernel[KUI_RETAIL_CE_KERNEL_WORDS];
 /* A callback the hook's exit makes once the lock is released: function and
  * argument (retail_resident.S, .Ldeferred_call); zero when none. */
@@ -179,6 +207,9 @@ static uint8_t *map_guest(void *unused, uint32_t address, uint32_t bytes,
     /* CE's allocator never backs a virtual buffer with this pre-boot
      * reservation. Reject explicit RAM aliases before purge/copy too. */
     if(!kui_armada_ce_excerpt_pool_destination_safe(address,bytes)) return NULL;
+#endif
+#if KUI_ARMADA_CE_MAPLE_HOOK
+    if(!kui_maple_reservation_destination_safe(address,bytes)) return NULL;
 #endif
     if(address < KUI_RETAIL_HOOK_STACK && end > KUI_RETAIL_RESIDENT_ADDRESS)
         return NULL;
@@ -323,9 +354,16 @@ static void install_hook(void) {
     redirect_entry(0x8c0010f0u,kui_retail_gd_10f0_hook);
     purge(0x8c0000e0u, sizeof(uint32_t));
     *(volatile uint32_t *)(uintptr_t)0xac0000e0u=(uint32_t)(uintptr_t)kui_retail_menu_hook;
+#if KUI_ARMADA_CE_MAPLE_A2
+    /* The separate P2 helper must compare the live vector with this exact
+     * installed entry before its terminal transfer. It never guesses a
+     * resident function from a range or calls a subsequently changed vector. */
+    *(volatile uint32_t *)(uintptr_t)KUI_ARMADA_CE_MAPLE_AUTO_MENU_ADDRESS=
+        (uint32_t)(uintptr_t)kui_retail_menu_hook;
+#endif
     __asm__ __volatile__("" : : : "memory");
 }
-#ifdef KUI_RETAIL_ASYNC
+#if defined(KUI_RETAIL_ASYNC) && !KUI_VMU_NATIVE_BACKGROUND && !KUI_NATIVE_STANDALONE_READER
 /* Counter rows for both screens; every counter is a uint32_t in order. */
 #ifdef KUI_RETAIL_CE
 _Static_assert(sizeof(struct kui_sci_stream_stats) == 21u * 4u, "CE stream counters");
@@ -417,7 +455,28 @@ static void capture_native_fault(uint32_t function, uint32_t current_param) {
 }
 #endif
 #endif
-#if KUI_RETAIL_OBSERVE
+#if KUI_VMU_NATIVE_BACKGROUND || KUI_NATIVE_STANDALONE_READER
+/* The separate VMU reader keeps compact terminal fields in its unchanged
+ * low reservation; the worker owns the detailed VMU report. No counters or
+ * labels on this terminal-only path participate in game read scheduling. */
+static void __attribute__((noinline)) native_reader_report(const char *label) {
+    retail_display_restore(&display);
+    retail_display_line(label);
+    retail_display_values("FN CMD",&service.diag.last_function,2u);
+    retail_display_values("LBA COUNT DEST",&service.diag.last_lba,3u);
+}
+static void report_fault(uint32_t function) {
+    (void)function;
+    native_reader_report(
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+        "GD STOP"
+#else
+        "READER STOP"
+#endif
+    );
+    for(;;) __asm__ volatile("nop");
+}
+#elif KUI_RETAIL_OBSERVE
 static void report_fault(const char *reason,uint32_t function,uint32_t param) {
     observe_fault_report(reason,function,param);
     for(;;) __asm__ volatile("nop");
@@ -487,14 +546,21 @@ static void report_fault(const char *reason, uint32_t function) {
     retail_display_line("PHOTO SCREEN");
     retail_display_line("POWER CYCLE");
 #else
+#if KUI_NATIVE_LOADER_TIMELINE
+    retail_display_line("PHOTO SCREEN");
+    retail_display_line("POWER CYCLE");
+#else
     retail_display_line("STOPPED: PHOTO THIS SCREEN");
     retail_display_line("POWER CYCLE FOR K-UI");
+#endif
 #endif
 #endif
     for(;;) __asm__ volatile("nop");
 }
 #endif
-#if defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_ASYNC)
+#if KUI_VMU_NATIVE_BACKGROUND || KUI_NATIVE_STANDALONE_READER
+#define report_fault(reason, function, current_param) report_fault((function))
+#elif defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_ASYNC)
 /* Current R5 is a standard-native terminal field. Keep the other readers'
  * original two-argument function and call ABI, including their stack budget. */
 #define report_fault(reason, function, current_param) report_fault((reason), (function))
@@ -592,7 +658,20 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack
     (void)command; /* Assembly reaches this only for menu return command 1. */
     (void)caller; (void)stack;
 #endif
-#if KUI_RETAIL_OBSERVE
+#if KUI_VMU_NATIVE_BACKGROUND || KUI_NATIVE_STANDALONE_READER
+    native_reader_report(
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+        "RET"
+#elif KUI_NATIVE_COOP_PUMP
+        "RETURN"
+#else
+        "GAME RETURN"
+#endif
+    );
+    retail_display_pause(900u);
+    ((void (*)(void))(uintptr_t)0xa0000000u)();
+    for(;;) __asm__ volatile("nop");
+#elif KUI_RETAIL_OBSERVE
     retail_display_restore(&display);
     observe_report();
     retail_display_pause(1200u);
@@ -641,17 +720,42 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack
 #endif
     __asm__ __volatile__("" : : : "memory");
 #endif
-#if KUI_ARMADA_CE_STREAM && KUI_ARMADA_CE_AUDIO_OBSERVE
+#if (KUI_ARMADA_CE_STREAM && KUI_ARMADA_CE_AUDIO_OBSERVE) || \
+    (KUI_ARMADA_CE_MAPLE_OBSERVE && KUI_ARMADA_CE_MAPLE_PROOF)
 armada_return_pages:
 #endif
     retail_display_restore(&display);
+#if KUI_ARMADA_CE_MAPLE_A2
+    const uint32_t auto_reason=*(volatile const uint32_t *)(uintptr_t)
+        KUI_ARMADA_CE_MAPLE_AUTO_REASON_ADDRESS;
+    retail_display_line(auto_reason?"AUTO A2 STOP":"GAME RETURN");
+#else
     retail_display_line("GAME RETURN");
+#endif
 #ifdef KUI_RETAIL_CE
     /* One value row: this build has no single-value printer (stack budget). */
+#if KUI_ARMADA_CE_MAPLE_A2
+    static uint32_t counts[5]; /* Static: preserve the existing stack budget. */
+#else
     static uint32_t counts[3]; /* Static: the stack budget is full. */
+#endif
+#if KUI_ARMADA_CE_MAPLE_A2
+    if(auto_reason) {
+        counts[0]=auto_reason;
+        counts[1]=*(volatile const uint32_t *)(uintptr_t)
+            KUI_ARMADA_CE_MAPLE_AUTO_PHASE_ADDRESS;
+        counts[2]=KUI_ARMADA_CE_MAPLE_DIAGNOSTIC_MODE;
+        counts[3]=*(volatile const uint32_t *)(uintptr_t)KUI_ARMADA_CE_MAPLE_PROOF_INITIAL_ADDRESS;
+        counts[4]=*(volatile const uint32_t *)(uintptr_t)KUI_ARMADA_CE_MAPLE_PROOF_FINAL_ADDRESS;
+        retail_display_values("AUTO REASON PHASE MODE FIRST LAST",counts,5);
+    } else {
+#endif
     counts[0]=kui_retail_hook_fault; counts[1]=service.diag.read_steps;
     counts[2]=service.diag.sectors_read;
     retail_display_values("GUARD    STEPS    SECTORS",counts,3);
+#if KUI_ARMADA_CE_MAPLE_A2
+    }
+#endif
     /* Where CE was when it was reset: its last calls (the background
      * reader shows its counters in those rows: 16 lines fit) and disc
      * command. */
@@ -715,7 +819,32 @@ armada_return_pages:
     terminal_row("PERIOD VBI COST16 STILL", image.block + 20, 4);
 #endif
 #endif
-#if KUI_RETAIL_RETURN_TRACE
+#if KUI_ARMADA_CE_MAPLE_OBSERVE && KUI_ARMADA_CE_MAPLE_PROOF
+    /* Only authored snapshots are displayed. No fresh CE/cache/card reads
+     * or game/storage execution occur between these terminal pages. */
+    retail_display_line(
+#if KUI_ARMADA_CE_MAPLE_A2
+        "PHOTO ALL FIVE PAGES THEN POWER OFF"
+#elif KUI_ARMADA_CE_MAPLE_FENCE
+        "PHOTO ALL FOUR PAGES THEN POWER OFF"
+#elif KUI_ARMADA_CE_MAPLE_STATE
+        "PHOTO ALL THREE PAGES THEN POWER OFF"
+#else
+        "PHOTO BOTH PAGES THEN POWER OFF"
+#endif
+    );
+    retail_display_pause(300u);
+#if KUI_ARMADA_CE_MAPLE_A2
+    if(++armada_ce_maple_page==5u) armada_ce_maple_page=0u;
+#elif KUI_ARMADA_CE_MAPLE_FENCE
+    if(++armada_ce_maple_page==4u) armada_ce_maple_page=0u;
+#elif KUI_ARMADA_CE_MAPLE_STATE
+    if(++armada_ce_maple_page==3u) armada_ce_maple_page=0u;
+#else
+    armada_ce_maple_page^=1u;
+#endif
+    goto armada_return_pages;
+#elif KUI_RETAIL_RETURN_TRACE || KUI_ARMADA_CE_MAPLE_OBSERVE
 #if KUI_RETAIL_RETURN_TRACE == 3
     retail_display_line("PHOTO POWER CYCLE");
 #else
@@ -767,7 +896,11 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     /* The high stage already decoded/validated this map and CRC-checked the
      * owner IP/executable. Copy it and rebind initialized card state to local
      * callbacks. No second SD reset or manifest parser remains in low RAM. */
-#if KUI_RETAIL_MDK2_CDDA
+#if KUI_VMU_NATIVE_BACKGROUND
+    if(!kui_vmu_native_background_stage_map_address((uint32_t)(uintptr_t)prepared))
+        return KUI_RETAIL_RESIDENT_ARGUMENT;
+    native_background_manifest=prepared;
+#elif KUI_RETAIL_MDK2_CDDA
     if(!kui_mdk2_cdda_stage_map_address((uint32_t)(uintptr_t)prepared))
         return KUI_RETAIL_RESIDENT_ARGUMENT;
     mdk2_manifest=prepared;
@@ -828,6 +961,70 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     install_hook();
     return KUI_RETAIL_RESIDENT_OK;
 }
+#if KUI_VMU_NATIVE_BACKGROUND
+#undef service
+#undef card
+#undef display
+#undef reader
+/* NATIVE_BACKGROUND_BIND_BEGIN
+ * The source map and vector workspace remain in the high stage until this
+ * single cold handoff. No receiver or deferred native return may still refer
+ * to either retiring workspace. The installer copied and published both
+ * snapshots, including the unchanged vector instructions, before entry. */
+int kui_vmu_native_background_manifest_bind(const struct kui_retail_manifest *temporary,
+                                          const struct kui_retail_manifest *owned) {
+    uint32_t sr,vbr;
+    __asm__ volatile("stc sr,%0":"=r"(sr)::"memory");
+    __asm__ volatile("stc vbr,%0":"=r"(vbr)::"memory");
+    const volatile struct kui_vmu_observe_boot_control *c=
+        (const volatile struct kui_vmu_observe_boot_control *)
+        ((uintptr_t)&kui_vmu_observe_boot_control+UINT32_C(0x20000000));
+    kui_retail_async_region_type *previous=kui_retail_async_region_storage;
+    uint32_t address=(c->lease&UINT32_C(0x1fffffff))|UINT32_C(0x80000000);
+    address+=KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET;
+    kui_retail_async_region_type *retained=(void *)(uintptr_t)address;
+    if((sr&UINT32_C(0x400000f0))!=UINT32_C(0x400000f0) ||
+       c->status!=KUI_VMU_OBS_BOOT_LEASED || kui_retail_hook_active ||
+       !kui_vmu_native_background_stage_region_address((uint32_t)(uintptr_t)previous) ||
+       !kui_vmu_native_background_stage_map_address((uint32_t)(uintptr_t)temporary) ||
+       !kui_vmu_native_background_map_address(c->lease,(uint32_t)(uintptr_t)owned) ||
+       vbr==(uint32_t)(uintptr_t)previous-UINT32_C(0x100) ||
+       !previous->shared.service.initialized || previous->shared.service.pending || previous->shared.service.executing ||
+       previous->engine.active || previous->engine.in_irq || previous->engine.hooked ||
+       previous->engine.release.armed || previous->engine.release.depth || kui_sci_stream_busy() ||
+       native_background_manifest!=temporary || previous->engine.manifest!=temporary ||
+       previous->shared.service.tracks!=temporary->slots ||
+       previous->shared.service.ops.context || previous->engine.cursor.context || previous->shared.card.device.sd.bus.ctx ||
+       (previous->engine.cursor.manifest && previous->engine.cursor.manifest!=temporary) ||
+       (previous->shared.stream.card && previous->shared.stream.card!=&previous->shared.card.device.sd) ||
+       (previous->shared.stream.area[0] && previous->shared.stream.area[0]!=previous->area0) ||
+       (previous->shared.stream.area[1] && previous->shared.stream.area[1]!=previous->area1) ||
+       memcmp(temporary,owned,KUI_VMU_NATIVE_BACKGROUND_MAP_BYTES) ||
+       memcmp(previous,retained,KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES)) return 0;
+    kui_retail_hook_active=1u;
+    retained->shared.service.tracks=owned->slots;
+    retained->engine.manifest=owned;
+    if(retained->engine.cursor.manifest) retained->engine.cursor.manifest=owned;
+    if(retained->shared.stream.card) retained->shared.stream.card=&retained->shared.card.device.sd;
+    if(retained->shared.stream.area[0]) retained->shared.stream.area[0]=retained->area0;
+    if(retained->shared.stream.area[1]) retained->shared.stream.area[1]=retained->area1;
+    /* The entire new region is published before either low pointer switches.
+     * An idle acquired bus and paused CMD18 retain their exact state. */
+    purge(address,KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES);
+    native_background_manifest=owned;
+    kui_retail_async_region_storage=retained;
+    purge((uint32_t)(uintptr_t)__retail_resident_bss_begin,
+        (uint32_t)(__retail_resident_bss_end-__retail_resident_bss_begin));
+    kui_retail_hook_active=0u;
+    purge((uint32_t)(uintptr_t)&kui_retail_hook_active,sizeof(kui_retail_hook_active));
+    return 1;
+}
+/* NATIVE_BACKGROUND_BIND_END */
+#define service (kui_retail_async_region.shared.service)
+#define card (kui_retail_async_region.shared.card)
+#define display (kui_retail_async_region.shared.display)
+#define reader (kui_retail_async_region.engine)
+#endif
 #if KUI_RETAIL_MDK2_CDDA
 int kui_mdk2_cdda_manifest_bind(const struct kui_retail_manifest *temporary,
                               const struct kui_retail_manifest *owned) {
@@ -861,7 +1058,7 @@ int kui_mdk2_cdda_manifest_bind(const struct kui_retail_manifest *temporary,
 #define TCOR0 0xffd80008u
 #define TCNT0 0xffd8000cu
 #define TCR0 0xffd80010u
-#if !KUI_ARMADA_CE_STREAM
+#if !KUI_ARMADA_CE_STREAM && !KUI_ARMADA_CE_VMU_WRITE_RUNTIME
 static struct { uint32_t since, sectors, busy, shown[5]; } meter;
 /* n's decimal digits as hexadecimal ones, for the hexadecimal printer. */
 static uint32_t decimal(uint32_t n) {
@@ -917,6 +1114,11 @@ static void ce_events(uint32_t r7) {
         service.callback_due = 0;
     }
 }
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME && defined(KUI_RETAIL_ASYNC)
+/* Storage-worker wake only: CE's admitted interrupt entry sees the same
+ * metadata as ordinary GD calls. PIO callbacks stay in GD_EXEC context. */
+void kui_retail_ce_vmu_loan_wake(void) { ce_events(KUI_GD_REQUEST); }
+#endif
 #if KUI_ARMADA_CE_STREAM
 /* The audio worker can release SCI without another SCI interrupt. Flush the
  * DATA wake it has queued through CE's already admitted InterruptPending
@@ -934,8 +1136,15 @@ void kui_retail_ce_stream_wake(void) {
  * as E0). Returns whether that is all the call asks: the image is in the
  * virtual drive, unchanged. */
 static int ce_record(uint32_t source, uint32_t r4, uint32_t r5, uint32_t r6, uint32_t r7) {
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME && defined(KUI_RETAIL_ASYNC)
+    /* Writable runtime retains fault and terminal reports. Its private VMU
+     * diagnostics replace this unused async call-history ring and periodic
+     * framebuffer meter; no GD command or interrupt behavior changes. */
+    (void)r4;(void)r5;(void)r6;(void)r7;
+#else
     uint32_t *call=ce_calls[ce_count++&3u];
     call[0]=source==4u?0xe0u:r7; call[1]=r4; call[2]=r5; call[3]=r6;
+#endif
     return source==4u;
 }
 #endif
@@ -951,6 +1160,9 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
 #endif
     if(source>3) return -1;
     if(source!=1 && r6==UINT32_MAX) return 0;
+#if KUI_NATIVE_LOADER_TIMELINE && !KUI_NATIVE_STANDALONE_READER
+    kui_retail_async_trace(0u,r7);
+#endif
     kui_retail_async_call(r7);
 #if KUI_WINCE_CDDA_WWP && KUI_ARMADA_CE_STREAM && KUI_ARMADA_CE_AUDIO_OBSERVE
     uint32_t drive_status=service.drive_status;
@@ -967,6 +1179,9 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
     armada_ce_audio_record(r7, r4, result);
 #endif
     kui_retail_async_after(r7, result);
+#if KUI_NATIVE_LOADER_TIMELINE && !KUI_NATIVE_STANDALONE_READER
+    kui_retail_async_trace(1u,r7);
+#endif
     if(service.error == KUI_GD_ERROR_IO)
         report_fault("IMAGE READ FAILED", r7, r5);
     if(r7 == KUI_GD_REQUEST && !service.command && result == 0)

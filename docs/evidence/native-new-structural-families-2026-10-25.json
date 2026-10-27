@@ -1,0 +1,277 @@
+{
+  "schema": "kui.native.structural-family-expansion.v1",
+  "date": "2026-10-25",
+  "detector_epoch": 3,
+  "wire_schema_unchanged": 1,
+  "production_changes": [
+    {
+      "file": "src/core/vmu_native_layout.c",
+      "contract": "Preserve the four-instruction root family; additionally admit exactly three immutable literal loads followed by JSR with MOV #0,R4 delay, only after a complete R14..R8/PR prologue or preceding JSR with its R4 stack-reload delay. Target is latched before the delay. All unique-root, target-register, receive/transmit lifetime, alias, overlap and live-binding guards remain required.",
+      "actual_originals": [
+        "rayman2",
+        "lodoss"
+      ],
+      "unknown_backward_branch_context_refused": true
+    },
+    {
+      "file": "src/core/vmu_native_heap.c",
+      "contract": "Allow exact known-source MOV.L Rm,@R15 as the zero-displacement encoding equivalent to already admitted MOV.L Rm,@(0,R15), with the same source-value and target-spill rules. No SP write, stack load, byte/word/predecrement store, unknown source or JMP-tail transfer is added.",
+      "actual_originals": [
+        "lodoss"
+      ],
+      "omikron_jmp_still_refused": true
+    }
+  ],
+  "tests": [
+    {
+      "source": "tests/test_vmu_native_three_load_root.c",
+      "sanitizers": [
+        "address",
+        "undefined"
+      ],
+      "checks": 4651,
+      "result": "pass",
+      "scope": [
+        "Actual two original images",
+        "Malformed instruction/register/context and nonzero delay-mode mutants",
+        "All nine lease/manager live aliases",
+        "Buffer overlap and lifetime bounds",
+        "Equivalent duplicate-root ambiguity",
+        "Fresh validation and pinned warm replay",
+        "Resealed stale epoch refusal"
+      ]
+    },
+    {
+      "source": "tests/test_vmu_native_heap.c",
+      "sanitizers": [
+        "address",
+        "undefined"
+      ],
+      "checks": 10891,
+      "result": "pass",
+      "scope": [
+        "All sixteen stack-store source-register encodings",
+        "Known-source equivalence to existing displacement-zero store",
+        "Unknown sources, selected-target spills, alternate store modes and SP mutation refusal"
+      ]
+    },
+    {
+      "source": "tests/test_vmu_native_resolution_cache.c",
+      "sanitizers": [
+        "address",
+        "undefined"
+      ],
+      "checks": 38467,
+      "result": "pass",
+      "scope": [
+        "Resealed stale epochs1 and2 cannot enter strict verification or pinned replay",
+        "Output and failed input records remain unchanged"
+      ]
+    },
+    {
+      "source": "tests/test_vmu_native_resolution_cache_tool.py",
+      "tests": 10,
+      "result": "pass",
+      "scope": [
+        "Production record build/verify/trusted replay",
+        "Resealed epoch2 inspection/verification/replay refusal"
+      ]
+    },
+    {
+      "source": "tests/test_vmu_native_heap_call_execution.py",
+      "result": "pass",
+      "actual_original_callers": [
+        {
+          "game": "rayman2",
+          "image_sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099",
+          "image_bytes": 935648,
+          "source_sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099",
+          "source_bytes": 935648,
+          "discarded_suffix_bytes": 0,
+          "program_extent_production_verified": true,
+          "start": "0x8c010ea6",
+          "call": "0x8c010eca",
+          "selected": "0x8c010ebe",
+          "slot": "0x8c010f58",
+          "original_target": "0x8c0d05d4",
+          "hook_target": "0x8c004200",
+          "begin": "0x8c2ff220",
+          "bytes": "0x00d00de0",
+          "pr": "0x8c010ece",
+          "successful_caller_starts": 2,
+          "independent_trials": 6,
+          "instructions": [
+            20,
+            20,
+            20,
+            20,
+            20,
+            20
+          ],
+          "selected_literal_executed_once": true,
+          "immutable_image_reads": true,
+          "only_bounded_stack_spills": true,
+          "jgr_partial_only": false
+        },
+        {
+          "game": "lodoss",
+          "image_sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5",
+          "image_bytes": 3473412,
+          "source_sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5",
+          "source_bytes": 3473412,
+          "discarded_suffix_bytes": 0,
+          "program_extent_production_verified": true,
+          "start": "0x8c010688",
+          "call": "0x8c0106a8",
+          "selected": "0x8c0106a0",
+          "slot": "0x8c010738",
+          "original_target": "0x8c2a9d20",
+          "hook_target": "0x8c004200",
+          "begin": "0x8c59dd00",
+          "bytes": "0x00a62300",
+          "pr": "0x8c0106ac",
+          "successful_caller_starts": 1,
+          "independent_trials": 6,
+          "instructions": [
+            18,
+            18,
+            18,
+            18,
+            18,
+            18
+          ],
+          "selected_literal_executed_once": true,
+          "immutable_image_reads": true,
+          "only_bounded_stack_spills": true,
+          "jgr_partial_only": false
+        }
+      ]
+    }
+  ],
+  "existing_fixture_epoch_regeneration": {
+    "records": [
+      {
+        "slug": "ps2",
+        "fixture": "tests/fixtures/native-cache/ps2.nvr",
+        "old_record_sha256": "d721826cfd7cb250e7b75dde674a063f6425c5a0a0d57373fe3ec1380c446559",
+        "record_sha256": "2f81ae772ab0953792b118edeb26e08700cdc95de59b79e85a4540587a7d287d",
+        "canonical_payload_unchanged_except_epoch_and_integrity": true
+      },
+      {
+        "slug": "skies",
+        "fixture": "tests/fixtures/native-cache/skies.nvr",
+        "old_record_sha256": "5cb2e7611b9600500f9e9a2919fc79a5a00e7cb402db2bf4cd293639b533c1a6",
+        "record_sha256": "22b89fb485f4776d37a87c3ebdb1a1445d53f800b8975aa1e8f65e98e144198b",
+        "canonical_payload_unchanged_except_epoch_and_integrity": true
+      },
+      {
+        "slug": "sa2",
+        "fixture": "tests/fixtures/native-cache/sa2.nvr",
+        "old_record_sha256": "2066dd8904c1519ec06f6dae3ce25d4b6ad7846de278287599a299ceab89d002",
+        "record_sha256": "3b130053808d48b4999c891c9829dc269fb6afabde2d5bca92d73cc549748ffe",
+        "canonical_payload_unchanged_except_epoch_and_integrity": true
+      },
+      {
+        "slug": "grandia2",
+        "fixture": "tests/fixtures/native-cache/grandia2.nvr",
+        "old_record_sha256": "56badc17361a1ca664997555035b47f0172ad11424af9b2b553e1413e3e39594",
+        "record_sha256": "441398146f700d5c6f8227ae0de22d5c80353b9553ad3497a1858d281f870bf7",
+        "canonical_payload_unchanged_except_epoch_and_integrity": true
+      },
+      {
+        "slug": "evolution1",
+        "fixture": "tests/fixtures/native-cache/evolution1.nvr",
+        "old_record_sha256": "aa12bb0fa3dfd9c199bd6be01bb3a08aedbba7a6dc5a11a1019f93f31650ee1f",
+        "record_sha256": "03775904aaa1413befab1fccc697171b862cbf3637f27e92024c66bb8356c2f1",
+        "canonical_payload_unchanged_except_epoch_and_integrity": true
+      },
+      {
+        "slug": "evolution2",
+        "fixture": "tests/fixtures/native-cache/evolution2.nvr",
+        "old_record_sha256": "f4d9db3b4c807f2b937c8c05cf177d2c5f73e202f1f0724e25317970ea901b1d",
+        "record_sha256": "58215d0b28b6feb8aab816a9dd87021a42baf503a656e7d512d2c16d5e232e30",
+        "canonical_payload_unchanged_except_epoch_and_integrity": true
+      }
+    ],
+    "permitted_changed_byte_intervals": [
+      [
+        16,
+        20
+      ],
+      [
+        992,
+        1024
+      ]
+    ],
+    "all_fresh_builds_complete_verifies_and_trusted_replays_passed": true,
+    "old_on_card_cache_namespace_preserved": true,
+    "new_on_card_namespace": "v3"
+  },
+  "new_record_fixtures": [
+    {
+      "slug": "rayman2",
+      "title": "RAYMAN 2 THE GREAT ESCAPE",
+      "boot_filename": "1ST_READ.BIN",
+      "record_fixture": "tests/fixtures/native-cache/rayman2.nvr",
+      "detector_epoch": 3,
+      "record_bytes": 1024,
+      "record_digest": "683cbbc2e354ed8326f574df2b0d4932b977a285fe8e7b0e588bf8576eb68331",
+      "record_sha256": "05d3dde494e9b017f7ef7e6408ff107d3734c3a8aade60b5430781175e14e969",
+      "image_sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099",
+      "image_bytes": 935648,
+      "load_address": "8c010000",
+      "source_bytes": 935648,
+      "source_sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099",
+      "complete_fresh_verify": true,
+      "trusted_replay": true
+    },
+    {
+      "slug": "lodoss",
+      "title": "RECORD OF LODOSS WAR",
+      "boot_filename": "1NOSDC.BIN",
+      "record_fixture": "tests/fixtures/native-cache/lodoss.nvr",
+      "detector_epoch": 3,
+      "record_bytes": 1024,
+      "record_digest": "266fcfa382663b5926ee2312968870f1531d50191e65a1d8276c3a50b75906df",
+      "record_sha256": "67a2b56f4e4fe93a36bee6c5acf4ed6041d40645330bc50a589d644c02cae26c",
+      "image_sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5",
+      "image_bytes": 3473412,
+      "load_address": "8c010000",
+      "source_bytes": 3473412,
+      "source_sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5",
+      "complete_fresh_verify": true,
+      "trusted_replay": true
+    }
+  ],
+  "final_proofs": [
+    {
+      "path": "docs/evidence/native-structural-corpus-2026-10-25.json",
+      "sha256": "251ca1b910427212710afe84f62af23e7b7f83e34a3745b3c6dc39581535a140"
+    },
+    {
+      "path": "docs/evidence/native-structural-heap-2026-10-25.json",
+      "sha256": "ff3a21b64e3c043305323b21ad4c98bdc43585b05378aac125ec14c2f9aa457d"
+    },
+    {
+      "path": "docs/evidence/native-joint-corpus-2026-10-25.json",
+      "sha256": "7055b588441a0c3e095929427e55f91d63c103599417357bc8a3c9b62d2934e1"
+    }
+  ],
+  "final_joint_host_candidates": [
+    "evolution2",
+    "evolution1",
+    "ps2",
+    "skies",
+    "grandia2",
+    "sa2",
+    "lodoss",
+    "rayman2"
+  ],
+  "limitations": [
+    "The corpus contains26 supplied native startup inputs and25 distinct source hashes; this is a bounded revision corpus, not all native games.",
+    "Joined admission combines structural discovery, modeled original Maple transport and allocator execution, production live-state guards, final linked placement and independent SCI source-family admission. Full linked SCI execution proof is a separate build audit.",
+    "The new two record fixtures contain metadata only and embed no retail startup instructions.",
+    "No new candidate console boot, physical VMU interaction, save persistence, playback quality or frame latency is claimed here.",
+    "The18 refused rows remain explicit first-gate refusals; no uniqueness, overlap, executable lifetime or unsupported tail-call guard was relaxed."
+  ]
+}

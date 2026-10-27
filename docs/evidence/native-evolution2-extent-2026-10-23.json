@@ -1,0 +1,113 @@
+{
+  "schema": "kui.native.evolution2-source-extent.v1",
+  "date": "2026-10-23",
+  "baseline_build": "897ee7223b35",
+  "console_status": {
+    "evolution1": "Owner confirms launch, save and reboot/load on baseline; slot1 is current A1.",
+    "evolution2": "Baseline stopped at preparation phase2/detail0a; candidate awaits hardware launch/save/reboot/load."
+  },
+  "source": {
+    "source_bytes": 4057056,
+    "source_sha256": "16b45fcc84992a60d5a64bf64bf22b699b27306b95f177ba3d9730ca380069ae",
+    "program_bytes": 4024288,
+    "image_sha256": "52e00d2b3e9db00016b1f6d782cf8a2141617f3d00bd628200de757fd2e11605",
+    "discarded_suffix_bytes": 32768,
+    "layout_version": 2,
+    "record_digest": "3440495928a6451c2720f7a4bd28567286a38ae6ca020c9bd87266efcb8a09ac",
+    "record_sha256": "f4d9db3b4c807f2b937c8c05cf177d2c5f73e202f1f0724e25317970ea901b1d",
+    "product": "T1711N",
+    "version": "V1.000",
+    "region": "U"
+  },
+  "diagnosis": [
+    {
+      "issue": "Two timer patterns counted despite one belonging to appended bootstrap",
+      "correction": "Bind each handler to exact VBR setter, decoded callback/argument cells and244/248 vector role; unregistered copies have no authority, active duplicates refuse."
+    },
+    {
+      "issue": "Raw file suffix treated as permanent executable although SDK reclaims it",
+      "correction": "After complete raw source verification, certify trailing32KiB native boot domain plus unique same raw/prefix allocator/caller and exact boundary+32 toRAMtop reclaim; reject interior pointers, direct branches/literal transports, unknown footer contents and conflicting main exits."
+    },
+    {
+      "issue": "Legitimate original Maple rings fall inside loaded image",
+      "correction": "Layoutv2 derives exact SDK ring bounds from original initialization, admits wholly-contained source-zero rings with object/ring separation, rejects partial/nonzero/conflicting geometry. Layoutv1 retains outside-only rules; entire liveimage+buffers remain protected from free."
+    },
+    {
+      "issue": "Unexecuted exit linker padding differs",
+      "correction": "Accept only0000orffff in halfword after unconditionalJMP+legal delayslot; all executed instructions and firmware consumers remain mandatory."
+    }
+  ],
+  "sdk": {
+    "submit": "8c1aeae0",
+    "initializer": "8c1ae5a4",
+    "manager": "8c3a9a1c",
+    "heap_initializer": "8c16f290",
+    "heap_call_begin": "8c3e6800",
+    "heap_call_bytes": "00c19800",
+    "program_end": "8c3e67e0",
+    "tx": "ac2459c0",
+    "tx_bytes": 24576,
+    "rx": "ac2399a0",
+    "rx_bytes": 49152
+  },
+  "cache": {
+    "detector_epoch": 2,
+    "all_six_originals_freshly_verified": true,
+    "raw_and_program_identity_separate": true,
+    "wire_struct_sizes_unchanged": true,
+    "old_epoch_misses": true,
+    "frontend_source_key": "Persistent filename hashes the complete source; record and stage replay use the same production-verified live program extent."
+  },
+  "software_checks": {
+    "program_extent_sanitizer_checks": 69882,
+    "timer_registration_checks": 505,
+    "infile_ring_checks": 753,
+    "exit_checks": 6643,
+    "resolution_cache_checks": 67349,
+    "sdk_coherence_prepare_checks": 295,
+    "sdk_installer_mutation_refusals": 831,
+    "sdk_installer_originals": 6,
+    "cold_instruction_cases": 412,
+    "cold_mutation_refusals": 194,
+    "original_prefix_cases": 48,
+    "variable_extended_cases": 8,
+    "original_and_patched_caller_trials": 36,
+    "heap_originals": 6,
+    "heap_allocation_free_operations_per_original": 227,
+    "development_evolution2_complete_callback_pairs": 128,
+    "development_evolution1_complete_callback_pairs": 64,
+    "negative_linked_c_cases_per_image": 12,
+    "layout_six_original_sanitizer_checks": 6835,
+    "frontend_originals": 2,
+    "frontend_paths": "Power Stone 2 and Evolution 2 cold discovery/publication, warm replay without rebuilding, stale/corrupt records, cancellation and publication failures; malformed Evolution 2 footer leaves module unchanged and performs no cache I/O."
+  },
+  "compiled_review": {
+    "prepared_pin_changes_only": [
+      "_kui_vmu_native_sdk_coherence_prepare",
+      "_kui_vmu_native_passive_arm"
+    ],
+    "reason": "Exact unsigned layout-version1or2 admission replaces equality1; source diff and linked integer guards reviewed; separate unknown0/3 schema refusals retained.",
+    "other_prepared_normalized_signatures_unchanged": true
+  },
+  "slot": {
+    "virtual": "A1",
+    "maple_address": "01",
+    "label": "slot1 is accurate",
+    "a2_status": "Separate coordinated filter/response/attachment and physicalA1 storage/LCD passthrough change; existing card image needs no conversion."
+  },
+  "limits": [
+    "Software checks do not execute game mainloops, FMVs, real bus scheduling or hardware save/load.",
+    "A zero run alone cannot authorize a DMA buffer or discarded footer. Original SDK derivation and full independent provenance are mandatory.",
+    "No original executable, IP, tracks or save bytes are included.",
+    "Final package artifact report and release replay identify the actual release module; development counts above are explicitly not hardware results."
+  ],
+  "console_status_update": {
+    "date": "2026-10-24",
+    "build": "df035a8cae47",
+    "evolution2": "Owner reports the corrected virtual card/save-load path working; remaining slowdown is still reported.",
+    "virtual_slot": "A1",
+    "power_cycle_explicitly_confirmed": false,
+    "new_a2_background_package_console_verified": false,
+    "evidence": "docs/vmu-hardware-observations.json: evolution2_native_virtual_card_save_load_reported"
+  }
+}

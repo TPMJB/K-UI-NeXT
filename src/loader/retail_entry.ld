@@ -10,6 +10,9 @@ SECTIONS {
  . = 0x8c010100;
  .package_header : { KEEP(*(.package_header)) } :image
  ASSERT(SIZEOF(.package_header)==64,"retail header must be 64 bytes")
+ . = 0x8c010180;
+ .vmu_launch_header : { KEEP(*(.vmu_launch_header)) } :image
+ ASSERT(SIZEOF(.vmu_launch_header)==0 || SIZEOF(.vmu_launch_header)==64,"VMU launch capability must be 64 bytes")
  . = 0x8c011000;
  .retail_map : { KEEP(*(.retail_map)) } :image
  ASSERT(SIZEOF(.retail_map)==4096,"retail map must be 4096 bytes")

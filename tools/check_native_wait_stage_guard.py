@@ -1,0 +1,267 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
+"""Execute the linked Evolution diagnostic guard before ordinary stage copy.
+
+The real cold installer/original allocator prepares its real lease. Execution
+then resumes at native_passive_run with verified external E1 metadata. The
+actual identity predicate, memcmp and mode decoder execute; only the terminal
+stop and first ordinary memcpy are observation boundaries. No worker arming,
+publication, game IRQ scheduling or hardware compatibility is claimed.
+"""
+import argparse
+import copy
+import hashlib
+import json
+from pathlib import Path
+
+from check_native_bottom_heap import ABSOLUTE_ONE, Cold, ROOT, Refused, require
+from check_vmu_native_worker_gateway import read_elf
+
+SCHEMA = 'kui.native.evolution1.wait-capture-stage-guard.v1'
+DELAY_SCHEMA = 'kui.native.evolution1.maple-delay-stage-guard.v1'
+COMPLETION_DELAY_SCHEMA = 'kui.native.evolution1.maple-completion-delay-stage-guard.v1'
+SUBMISSION_DELAY_SCHEMA = 'kui.native.evolution1.maple-submission-delay-stage-guard.v1'
+POST_START_DELAY_SCHEMA = 'kui.native.evolution1.maple-post-start-delay-stage-guard.v1'
+METADATA_SCHEMA = 'kui.native.evolution1.metadata-cache-stage-guard.v1'
+SPLIT_CONTROLLER_SCHEMA = 'kui.native.evolution1.split-controller-stage-guard.v1'
+SOURCES = ('tools/check_native_wait_stage_guard.py', 'tools/check_native_bottom_heap.py',
+    'tools/profile_vmu_native_release_sh.py', 'tests/test_vmu_native_heap_execution.py',
+    'tools/check_vmu_native_worker_gateway.py', 'tools/sh4_delay_slots.py',
+    'src/loader/vmu_native_passive_stage.inc', 'src/loader/vmu_native_trace.c',
+    'src/loader/minic.c', 'src/core/vmu_native_mode.c')
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+class Handoff(Exception):
+    pass
+
+
+class FirstCopy(Exception):
+    pass
+
+
+class Guard(Cold):
+    def __init__(self, build, row):
+        self.guard_running = False
+        super().__init__(build, row)
+
+    def leaf(self, name):
+        if name == '_native_passive_run' and not self.guard_running:
+            require(self.lease_at == self.r[4] and self.published == self.begin + 32 and
+                    self.read(self.control_at + 8) == 3,
+                    'Guard entry lacks the original validated cold lease')
+            raise Handoff
+        if name == '_stopped':
+            message = self.block(self.r[4], 80).split(b'\0', 1)[0].decode('ascii')
+            self.stop = dict(message=message, detail=self.r[5])
+            self.refusal = (0, self.r[5])
+            raise Refused
+        if name == '_memcpy':
+            target, source, count = self.r[4:7]
+            require(self.stage_begin <= target < target + count <= self.stage_end and count,
+                    'First ordinary memcpy escaped private stage storage')
+            self.first_copy = dict(target=hex(target), source=hex(source), bytes=count)
+            raise FirstCopy
+        return super().leaf(name)
+
+    def read(self, address, count=4):
+        if self.guard_running:
+            if address == self.memcmp_at and count == 2:
+                require(self.r[4] == self.driver_at + 72 and self.r[6] == 32,
+                        'Actual memcmp does not compare the complete driver SHA256')
+                self.memcmp_calls += 1
+                self.digest_peer = self.r[5]
+            if count == 1 and self.driver_at + 72 <= address < self.driver_at + 104:
+                self.digest_reads.add(address - self.driver_at - 72)
+        return super().read(address, count)
+
+    def prepare(self, wire, mutation=None, mode=0):
+        self.guard_running = False
+        self.watch = False
+        self.driver_at = self.symbols['_native_driver'][0]
+        require(self.symbols['_native_driver'][1:3] == (104, 1),
+                'Driver object lacks the exact typed104-byte ELF layout')
+        self.store_block(self.driver_at, wire[64:168])
+        self.write(self.symbols['__native_runtime_mode_start'][0] + 16, mode)
+        if mutation:
+            at, width, value = mutation
+            self.write(self.driver_at + at, value, width)
+        self.leaves.pop(self.symbols['_native_passive_run'][0])
+        for name in ('_stopped', '_memcpy'):
+            self.leaves[self.symbols[name][0]] = name
+        self.memcmp_at = self.symbols['_memcmp'][0]
+        self.stop = self.first_copy = None
+        self.memcmp_calls = 0
+        self.digest_peer = None
+        self.digest_reads = set()
+        self.entered.clear()
+        self.instructions = 0
+        self.writes.clear()
+        self.watch = True
+        self.guard_running = True
+
+
+def run_case(baseline, wire, name, mutation=None, mode=0, accept=False, expected_message=None):
+    cpu = copy.deepcopy(baseline)
+    cpu.prepare(wire, mutation, mode)
+    try:
+        result = cpu.run_cold()
+    except FirstCopy:
+        result = True
+    require(result == accept, 'Unexpected guard result: ' + name)
+    require('_kui_vmu_native_trace_image' in cpu.entered,
+            'Actual linked image predicate was not entered')
+    if accept:
+        require(cpu.first_copy is not None and cpu.stop is None and
+                cpu.memcmp_calls == 1 and cpu.digest_reads == set(range(32)),
+                'Exact E1 NORMAL did not execute full memcmp before ordinary copy')
+    else:
+        require(cpu.first_copy is None and cpu.stop is not None,
+                'Refusal reached ordinary copy or missed terminal stop')
+        if expected_message is not None:
+            require(cpu.stop['message'] == expected_message,
+                    'Wrong diagnostic guard refusal: ' + name)
+        # Only stage-local C stacks may be written before the terminal guard.
+        require(all(cpu.stack_low <= (address & 0x1fffffff) + 0x80000000 <
+                    cpu.stack_low + 0x10000 for _,address,_,_ in cpu.writes),
+                'Refused guard wrote beyond its private installer stack')
+    return dict(name=name, mode=mode, admitted_before_copy=accept,
+        refused_before_copy=not accept, instructions=cpu.instructions,
+        actual_memcmp_calls=cpu.memcmp_calls, digest_byte_offsets_read=sorted(cpu.digest_reads),
+        first_copy=cpu.first_copy, stop=cpu.stop, writes=len(cpu.writes))
+
+
+def check(build, startup, record, maple_delay=False, cached_metadata=False, completion_delay=False,
+          submission_delay=False,post_start_delay=False,split_controller=False):
+    require(not split_controller or not any((maple_delay,cached_metadata,completion_delay,
+                submission_delay,post_start_delay)),
+            'Split controller stage guard excludes other diagnostic modes')
+    require(not(maple_delay and cached_metadata), 'Select one stage-guard diagnostic')
+    require(not(completion_delay and submission_delay), 'Select only one Maple delay side')
+    require(not completion_delay or maple_delay, 'Completion delay requires Maple delay')
+    require(not submission_delay or maple_delay, 'Submission delay requires Maple delay')
+    require(not post_start_delay or submission_delay, 'Post-start delay requires submission delay')
+    build = build.resolve()
+    artifacts = {p.name: sha(p) for p in sorted(build.iterdir())
+                 if p.suffix in ('.elf', '.bin', '.reloc') and p.is_file()}
+    for file, role in (('stage.elf', 'stage'), ('native-worker.elf', 'worker')):
+        symbols = read_elf(build/file)[4]
+        split_marker=symbols.get('__kui_native_split_controller_isolation_'+role)
+        require(split_marker==ABSOLUTE_ONE if split_controller else split_marker is None,
+                'Frozen artifact split-controller marker differs: '+file)
+        marker = ('__kui_native_split_controller_isolation_' if split_controller else
+                  '__kui_native_metadata_cache_isolation_' if cached_metadata else
+                  '__kui_native_maple_delay_isolation_' if maple_delay else '__kui_native_e1_wait_capture_')
+        require(symbols.get(marker + role) == ABSOLUTE_ONE,
+                'Frozen artifact lacks the selected diagnostic marker: ' + file)
+        completion_marker=symbols.get('__kui_native_maple_delay_complete_only_isolation_'+role)
+        require(completion_marker==ABSOLUTE_ONE if completion_delay else completion_marker is None,
+                'Frozen artifact completion-only delay marker differs: '+file)
+        submission_marker=symbols.get('__kui_native_maple_delay_submit_only_isolation_'+role)
+        require(submission_marker==ABSOLUTE_ONE if submission_delay else submission_marker is None,
+                'Frozen artifact submission-only delay marker differs: '+file)
+        post_start_marker=symbols.get('__kui_native_maple_delay_post_start_isolation_'+role)
+        require(post_start_marker==ABSOLUTE_ONE if post_start_delay else post_start_marker is None,
+                'Frozen artifact post-start delay marker differs: '+file)
+        if maple_delay:
+            require('__kui_native_e1_wait_capture_' + role not in symbols,
+                    'Maple delay artifact includes incompatible wait capture')
+        if completion_delay or submission_delay:
+            require(all(symbols.get('__kui_native_'+other+'_isolation_'+role)==ABSOLUTE_ONE
+                        for other in ('reader_only','maple_bypass','ra_tick_off')) and
+                    '__kui_native_metadata_cache_isolation_'+role not in symbols,
+                    'Single-side delay requires reader-only bypass with TICK off')
+        if cached_metadata:
+            require(symbols.get('__kui_native_ra_tick_off_isolation_'+role) == ABSOLUTE_ONE and
+                    all('__kui_native_'+other+role not in symbols for other in
+                        ('reader_only_isolation_', 'standard_vmu_isolation_',
+                         'maple_bypass_isolation_', 'maple_delay_isolation_', 'e1_wait_capture_')),
+                    'Cached metadata requires real callbacks, TICK off, and no other isolation mode')
+        if split_controller:
+            require(symbols.get('__kui_native_ra_tick_off_isolation_'+role)==ABSOLUTE_ONE and
+                    all('__kui_native_'+other+role not in symbols for other in
+                        ('reader_only_isolation_','standard_vmu_isolation_','metadata_cache_isolation_',
+                         'maple_bypass_isolation_','maple_delay_isolation_','e1_wait_capture_')),
+                    'Split controller requires real VMU callbacks, TICK off, and no other isolation mode')
+    provenance = json.loads((build/'entry.compile.json').read_text())
+    require(provenance.get('source_dirty') is False and
+            provenance.get('elf_sha256') == artifacts['entry.elf'],
+            'Runtime compile provenance does not bind this clean frozen entry')
+    row = dict(slug='evolution1', startup=str(startup.resolve()), record=str(record.resolve()))
+    baseline = Guard(build, row)
+    try:
+        baseline.run_cold()
+    except Handoff:
+        pass
+    else:
+        raise ValueError('Original cold installer did not reach real guard entry')
+    wire = record.read_bytes()
+    positive = run_case(baseline, wire, 'exact-evolution1-normal', accept=True)
+    mutations = [('digest-byte-' + str(i), (72+i, 1, wire[136+i] ^ 1)) for i in range(32)]
+    mutations += [('image-bytes', (12, 4, len(baseline.image)-4)),
+                  ('load-address', (16, 4, 0x8c010004))]
+    identity_message = ('SPLIT CONTROLLER NEEDS EVOLUTION 1' if split_controller else
+                        'METADATA CACHE NEEDS EVOLUTION 1' if cached_metadata else
+                        'MAPLE DELAY NEEDS EVOLUTION 1' if maple_delay else None)
+    negatives = [run_case(baseline, wire, name, mutation, expected_message=identity_message)
+                 for name,mutation in mutations]
+    negatives += [run_case(baseline, wire, 'non-normal-mode-' + str(mode), mode=mode,
+                  expected_message=('BACKGROUND VMU REQUIRES LIVE WORKER RESERVATION'
+                    if mode in (1, 3) else
+                    'SPLIT CONTROLLER NEEDS NORMAL MODE' if split_controller else
+                    'METADATA CACHE NEEDS NORMAL MODE' if cached_metadata else
+                    'MAPLE DELAY NEEDS NORMAL MODE') if maple_delay or cached_metadata or split_controller else None)
+                  for mode in range(1, 7)]
+    require(all(sha(build/name) == digest for name,digest in artifacts.items()),
+            'Frozen runtime artifact changed during guard proof')
+    report=dict(schema=SPLIT_CONTROLLER_SCHEMA if split_controller else
+        POST_START_DELAY_SCHEMA if post_start_delay else
+        COMPLETION_DELAY_SCHEMA if completion_delay else
+        SUBMISSION_DELAY_SCHEMA if submission_delay else
+        METADATA_SCHEMA if cached_metadata else DELAY_SCHEMA if maple_delay else SCHEMA,
+        status='PASS', source_commit=provenance['commit'],
+        scope=__doc__.strip(), build=str(build), enabledmarker=True,
+        artifact_sha256=artifacts, source_sha256={name:sha(ROOT/name) for name in SOURCES},
+        inputs={name:dict(path=row[name], sha256=sha(row[name])) for name in ('startup','record')},
+        baseline_cold=dict(original_calls=baseline.owner_calls, payload=hex(baseline.published)),
+        positive_case=positive, refusal_cases=negatives, refusal_count=len(negatives))
+    if completion_delay:report['completion_delay']=True
+    if submission_delay:report['submission_delay']=True
+    if post_start_delay:report['post_start_delay']=True
+    if split_controller:report['split_controller']=True
+    return report
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--build', type=Path, required=True)
+    parser.add_argument('--startup', type=Path, required=True)
+    parser.add_argument('--record', type=Path, required=True)
+    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--maple-delay', action='store_true',
+                        help='Check the timed Maple-delay marker and its exact guard refusals')
+    delay_side=parser.add_mutually_exclusive_group()
+    delay_side.add_argument('--completion-delay',action='store_true',
+                        help='Require the completion-only paired marker; needs --maple-delay')
+    delay_side.add_argument('--submission-delay',action='store_true',
+                        help='Require the submission-only paired marker; needs --maple-delay')
+    parser.add_argument('--post-start-delay',action='store_true',
+                        help='Require the post-MDST submit delay marker; needs --submission-delay')
+    parser.add_argument('--cached-metadata',action='store_true',
+                        help='Check the combined metadata-cache marker and exact E1/NORMAL guard')
+    parser.add_argument('--split-controller',action='store_true',
+                        help='Check paired split-controller/TICK-off markers and exact E1/NORMAL guard')
+    args = parser.parse_args()
+    report = check(args.build, args.startup, args.record, args.maple_delay,args.cached_metadata,
+                   args.completion_delay,args.submission_delay,args.post_start_delay,args.split_controller)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(report, indent=2) + '\n')
+    print(json.dumps(dict(schema=report['schema'], status=report['status'],
+        output=str(args.output), refusals=report['refusal_count'])))
+
+
+if __name__ == '__main__':
+    main()

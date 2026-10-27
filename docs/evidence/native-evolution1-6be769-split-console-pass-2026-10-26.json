@@ -1,0 +1,43 @@
+{
+  "schema": "kui.native.owner-console-result.v1",
+  "date": "2026-10-26",
+  "game": "Evolution: The World of Sacred Device",
+  "runtime_source_commit": "6be76940ccc94166b2f14708702d6d08bcbde4d1",
+  "delivery_source_commit": "be3cd5f32f08f81100c0e69f1de34542c1763c0a",
+  "package": "K-UI-Evolution-VMU-New-Split-6be76940ccc9.zip",
+  "package_sha256": "c277be813459b5aae3fd90aec8896c4e168a3ba25c3a84b19f85e20736d86f2d",
+  "result": "PASS",
+  "owner_runs": 1,
+  "accepted_without_repeat": true,
+  "scope": "Game boot and loading an existing save with the combined New reader and virtual A2 candidate",
+  "owner_observation": "Ah that actually worked and loaded my old save. Finally, we've gotten somewhere. Any chance we could at least start with the new background loader and Dead or Alive 2? Or open this up to more games?",
+  "reported_checks": {
+    "boot": "PASS",
+    "existing_save_load": "PASS",
+    "new_save": "NOT SEPARATELY REPORTED",
+    "power_cycle_reload": "NOT SEPARATELY REPORTED",
+    "fmv": "NOT SEPARATELY REPORTED",
+    "gameplay_transitions": "NOT SEPARATELY REPORTED"
+  },
+  "runtime_mode": {
+    "split_controller": true,
+    "cached_metadata": false,
+    "virtual_a2": true,
+    "real_maple_c_callbacks": true,
+    "new_demand_reader": true,
+    "controller_tick": false,
+    "prefetch": false,
+    "submit_delay_ticks": 0,
+    "complete_delay_ticks": 0
+  },
+  "interpretation": [
+    "The owner reports a successful Evolution 1 boot and existing-save load with the tested combined split-controller build.",
+    "This result supports retaining the shorter controller submit path while evaluating broader title admission."
+  ],
+  "not_established": [
+    "Writing a new save or reloading it after a power cycle",
+    "Separate FMV or gameplay-transition coverage",
+    "Compatibility with Dead or Alive 2 or other untested games",
+    "A hardware timing threshold or a unique cause of earlier failures"
+  ]
+}

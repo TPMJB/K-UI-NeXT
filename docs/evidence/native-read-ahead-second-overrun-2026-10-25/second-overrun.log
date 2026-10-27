@@ -1,0 +1,4 @@
+first ORER: injected_at=388 fill=1 lost=390 unrepaired=1 state=RESUME repaired=1 overrun=0 abandon=0
+second ORER: injected_at=458 fill=1 current_lost=390 unrepaired=1 preTCR=54 preCHCR=4911 preSSR=A4 result=POLL/OVERRUN state=LOST abandon=1 CRC=0 TOKEN=0
+proposed fresh-PAUSED optional PIO: 12 heartbeat visits, 12 checked512B blocks appended; CRC/TOKEN/overrun/abandon=0; DMA starts/SAR/DAR/TCR/CHCR/DMAOR unchanged; no extra CMD18/CMD12; CH2 active and identical DMA-overrun injection remains armed.
+PASS: software/card/register fixture only. PIO is a scratch transport proposal, not a built auxiliary candidate or a measured console performance result. RESUME is excluded because fetch(polled=true) would still restart DMA there.

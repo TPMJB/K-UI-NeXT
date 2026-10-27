@@ -1,0 +1,160 @@
+# SPDX-License-Identifier: GPL-3.0-only
+ARMADA_A2_DIR ?= build/armada-ce-vmu-a2
+ARMADA_A2_AUTO_STOP ?= 0
+ARMADA_A2_AUTO_PHASE ?= 1
+ARMADA_A2_AUTO_LIMIT ?= 1200
+ARMADA_A2_DIAGNOSTIC_MODE ?= 0
+ARMADA_A2_WRITE_LAYOUT ?= 0
+ARMADA_A2_WRITE_STAGING ?= 0
+ARMADA_A2_WRITE_RUNTIME ?= 0
+SD_PROFILE ?=
+ifneq ($(words $(ARMADA_A2_WRITE_LAYOUT)),1)
+$(error ARMADA_A2_WRITE_LAYOUT must be0 or1)
+endif
+# Durable runtime is a separate capability from packet staging and its larger
+# reservation. It always uses an existing explicitly selected P2 card profile.
+ifneq ($(words $(ARMADA_A2_WRITE_RUNTIME)),1)
+$(error ARMADA_A2_WRITE_RUNTIME must be0 or1)
+endif
+ifneq ($(filter $(ARMADA_A2_WRITE_RUNTIME),0 1),$(ARMADA_A2_WRITE_RUNTIME))
+$(error ARMADA_A2_WRITE_RUNTIME must be0 or1)
+endif
+ifeq ($(ARMADA_A2_WRITE_RUNTIME),1)
+ifneq ($(ARMADA_A2_WRITE_LAYOUT)$(ARMADA_A2_WRITE_STAGING),11)
+$(error Durable CE runtime requires ARMADA_A2_WRITE_LAYOUT=1 and ARMADA_A2_WRITE_STAGING=1)
+endif
+ifeq ($(strip $(SD_PROFILE)),)
+$(error Durable CE runtime requires an explicit SD_PROFILE file)
+endif
+endif
+ifneq ($(filter $(ARMADA_A2_WRITE_LAYOUT),0 1),$(ARMADA_A2_WRITE_LAYOUT))
+$(error ARMADA_A2_WRITE_LAYOUT must be0 or1)
+endif
+ifneq ($(words $(ARMADA_A2_WRITE_STAGING)),1)
+$(error ARMADA_A2_WRITE_STAGING must be0 or1)
+endif
+ifneq ($(filter $(ARMADA_A2_WRITE_STAGING),0 1),$(ARMADA_A2_WRITE_STAGING))
+$(error ARMADA_A2_WRITE_STAGING must be0 or1)
+endif
+ifeq ($(ARMADA_A2_WRITE_STAGING),1)
+ifneq ($(ARMADA_A2_WRITE_LAYOUT),1)
+$(error Native WRITE staging requires ARMADA_A2_WRITE_LAYOUT=1)
+endif
+endif
+# A larger reservation grants no backend/SD capability. Keep the accepted
+# readonly linker script and absent experiment flags unchanged by default.
+ARMADA_A2_EXPERIMENT_FLAGS := $(if $(filter 1,$(ARMADA_A2_WRITE_LAYOUT)),-DKUI_ARMADA_CE_MAPLE_WRITE_LAYOUT=1) $(if $(filter 1,$(ARMADA_A2_WRITE_STAGING)),-DKUI_ARMADA_CE_MAPLE_WRITE_STAGING=1) $(if $(filter 1,$(ARMADA_A2_WRITE_RUNTIME)),-DKUI_ARMADA_CE_VMU_WRITE_RUNTIME=1)
+ARMADA_A2_LAYOUT_SCRIPT := $(if $(filter 1,$(ARMADA_A2_WRITE_LAYOUT)),$(ARMADA_A2_DIR)/a2-write.ld,src/loader/armada_ce_vmu_a2.ld)
+ARMADA_A2_AUTO_FLAGS := -DKUI_ARMADA_CE_MAPLE_AUTO_STOP=$(ARMADA_A2_AUTO_STOP) -DKUI_ARMADA_CE_MAPLE_AUTO_PHASE=$(ARMADA_A2_AUTO_PHASE) -DKUI_ARMADA_CE_MAPLE_AUTO_LIMIT=$(ARMADA_A2_AUTO_LIMIT) -DKUI_ARMADA_CE_MAPLE_DIAGNOSTIC_MODE=$(ARMADA_A2_DIAGNOSTIC_MODE)
+ARMADA_A2_CORE_NAMES := armada_ce_vmu_readonly vmu_readonly vmu_emulation vmu_image
+ARMADA_A2_CORE_OBJECTS := $(addprefix $(ARMADA_A2_DIR)/,$(addsuffix .o,$(ARMADA_A2_CORE_NAMES))) $(ARMADA_A2_DIR)/a2-minic.o $(ARMADA_A2_DIR)/a2-publish.o $(ARMADA_A2_DIR)/cache-snapshot.o
+ifeq ($(ARMADA_A2_WRITE_RUNTIME),1)
+ARMADA_A2_RUNTIME_SRC := src/loader/armada_ce_vmu_runtime.c src/loader/armada_ce_vmu_sd.c \
+ src/loader/armada_ce_vmu_sd_pio.c src/core/armada_ce_vmu_write.c src/core/vmu_deferred_io.c \
+ src/core/armada_ce_vmu_runtime_contract.c src/core/vmu_durable.c src/core/vmu_store.c \
+ src/core/retail_image.c src/loader/sd_reader.c \
+ src/dreamcast/sci_sd_storage.c
+ARMADA_A2_RUNTIME_OBJECTS := $(patsubst %.c,$(ARMADA_A2_DIR)/runtime/%.o,$(ARMADA_A2_RUNTIME_SRC))
+ARMADA_A2_CORE_OBJECTS += $(ARMADA_A2_RUNTIME_OBJECTS)
+ARMADA_A2_PERSIST_STAGE_SRC := src/loader/armada_ce_vmu_persist_stage.c \
+ src/loader/vmu_persist_stage.c src/core/vmu_fs_admission.c src/core/vmu_persist_profile.c \
+ src/core/vmu_persist_session.c src/core/vmu_store.c src/core/vmu_image.c src/core/vmu_durable.c \
+ src/dreamcast/sci_sd_storage.c src/loader/vmu_backing.c src/core/armada_ce_vmu_runtime_contract.c
+ARMADA_A2_PERSIST_STAGE_OBJECTS := $(patsubst %.c,$(ARMADA_A2_DIR)/persist/%.o,$(ARMADA_A2_PERSIST_STAGE_SRC))
+endif
+# Isolated pre-NK Maple read-only virtual A2 blank-card test. No save writes.
+override ARMADA_AUDIO_DIR := $(ARMADA_A2_DIR)
+override ARMADA_AUDIO_EXTRA_FLAGS := -DKUI_ARMADA_CE_RAM_BIND=1 -DKUI_ARMADA_CE_MAPLE_OBSERVE=1 -DKUI_ARMADA_CE_MAPLE_PROOF=1 -DKUI_ARMADA_CE_MAPLE_STATE=1 -DKUI_ARMADA_CE_MAPLE_HOOK=1 -DKUI_ARMADA_CE_MAPLE_TRAFFIC=1 -DKUI_ARMADA_CE_MAPLE_FENCE=1 -DKUI_ARMADA_CE_MAPLE_A2=1 -DKUI_ARMADA_CE_MAPLE_DIAGNOSTIC_MODE=$(ARMADA_A2_DIAGNOSTIC_MODE)
+override ARMADA_AUDIO_EXTRA_STAGE_FLAGS := -DKUI_ARMADA_CE_RAM_BIND_STAGE=1 -DKUI_ARMADA_CE_MAPLE_OBSERVE=1 -DKUI_ARMADA_CE_MAPLE_HOOK_STAGE=1 -DKUI_ARMADA_CE_MAPLE_TRAFFIC_STAGE=1 -DKUI_ARMADA_CE_MAPLE_FENCE_STAGE=1 -DKUI_ARMADA_CE_MAPLE_A2_STAGE=1
+override ARMADA_AUDIO_EXTRA_STAGE_DEPS := $(ARMADA_AUDIO_DIR)/bind-probe.bin $(ARMADA_AUDIO_DIR)/hook.bin $(ARMADA_AUDIO_DIR)/bridge.bin
+override ARMADA_AUDIO_EXTRA_ASM_FLAGS := -DKUI_ARMADA_CE_MAPLE_HOOK_STAGE=1 -DKUI_ARMADA_CE_MAPLE_TRAFFIC_STAGE=1 -DKUI_ARMADA_CE_MAPLE_FENCE_STAGE=1 -DKUI_ARMADA_CE_MAPLE_A2_STAGE=1 -DKUI_ARMADA_CE_MAPLE_HOOK_BIN='"$(ARMADA_AUDIO_DIR)/hook.bin"' -DKUI_ARMADA_CE_MAPLE_BRIDGE_BIN='"$(ARMADA_AUDIO_DIR)/bridge.bin"' -DKUI_ARMADA_CE_RAM_BIND_STAGE=1 -DKUI_ARMADA_CE_RAM_BIND_BIN='"$(ARMADA_AUDIO_DIR)/bind-probe.bin"'
+override ARMADA_AUDIO_EXTRA_LINK_FLAGS := -Wl,--defsym,_kui_armada_ce_bind_probe=0x8c004000
+override ARMADA_AUDIO_EXTRA_CHECK := python3 tools/check_armada_ce_vmu_a2_package.py $(ARMADA_AUDIO_DIR)
+override ARMADA_AUDIO_EXTRA_FLAGS += $(ARMADA_A2_EXPERIMENT_FLAGS)
+override ARMADA_AUDIO_EXTRA_STAGE_FLAGS += $(ARMADA_A2_EXPERIMENT_FLAGS)
+override ARMADA_AUDIO_EXTRA_ASM_FLAGS += $(ARMADA_A2_EXPERIMENT_FLAGS)
+ifeq ($(ARMADA_A2_WRITE_RUNTIME),1)
+override ARMADA_AUDIO_EXTRA_STAGE_FLAGS += -DKUI_VMU_SD_PROFILE_BIN='"$(ARMADA_A2_DIR)/vmu-sd-profile.bin"'
+override ARMADA_AUDIO_SCIA_LINKER := src/loader/retail_resident_ce_async_vmu_write.ld
+override ARMADA_AUDIO_EXTRA_COMMON_FLAGS := $(ARMADA_A2_EXPERIMENT_FLAGS)
+endif
+include Makefile.armada-audio
+ifeq ($(ARMADA_A2_WRITE_RUNTIME),1)
+ARMADA_AUDIO_STAGE += $(ARMADA_A2_PERSIST_STAGE_OBJECTS)
+$(ARMADA_A2_DIR)/stage.elf: $(ARMADA_A2_PERSIST_STAGE_OBJECTS)
+$(ARMADA_A2_DIR)/retail_stage.o: $(ARMADA_A2_DIR)/vmu-sd-profile.bin src/loader/armada_ce_vmu_persist_stage.inc
+$(ARMADA_A2_DIR)/vmu-sd-profile.bin: $(SD_PROFILE) tools/vmu_persist_profile.py $(ARMADA_A2_DIR)/layout-config
+	python3 tools/vmu_persist_profile.py '$(SD_PROFILE)' > /dev/null
+	cp '$(SD_PROFILE)' $@
+$(ARMADA_A2_RUNTIME_OBJECTS): $(ARMADA_A2_DIR)/runtime/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(ARMADA_A2_EXPERIMENT_FLAGS) -DKUI_VMU_EXPERIMENTAL=0 -fcallgraph-info=su -MMD -MP -c $< -o $@
+$(ARMADA_A2_PERSIST_STAGE_OBJECTS): $(ARMADA_A2_DIR)/persist/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(ARMADA_A2_EXPERIMENT_FLAGS) -DKUI_VMU_EXPERIMENTAL=0 -fcallgraph-info=su -MMD -MP -c $< -o $@
+-include $(ARMADA_A2_PERSIST_STAGE_OBJECTS:.o=.d)
+endif
+
+.PHONY: force-armada-a2-layout
+force-armada-a2-layout:
+$(ARMADA_A2_DIR)/layout-config: force-armada-a2-layout
+	@mkdir -p $(@D)
+	@printf '%s\n' 'WRITE_LAYOUT=$(ARMADA_A2_WRITE_LAYOUT)' 'WRITE_STAGING=$(ARMADA_A2_WRITE_STAGING)' 'WRITE_RUNTIME=$(ARMADA_A2_WRITE_RUNTIME)' 'BUILD_ID=$(BUILD_ID)' 'AUTO_STOP=$(ARMADA_A2_AUTO_STOP)' 'AUTO_PHASE=$(ARMADA_A2_AUTO_PHASE)' 'AUTO_LIMIT=$(ARMADA_A2_AUTO_LIMIT)' 'DIAGNOSTIC_MODE=$(ARMADA_A2_DIAGNOSTIC_MODE)' > $@.tmp
+ifeq ($(ARMADA_A2_WRITE_RUNTIME),1)
+	@printf '%s\n' 'SD_PROFILE=$(SD_PROFILE)' >> $@.tmp
+	@sha256sum '$(SD_PROFILE)' >> $@.tmp
+endif
+	@cmp -s $@.tmp $@ || cp $@.tmp $@
+	@rm -f $@.tmp
+$(ARMADA_AUDIO_STAGE) $(ARMADA_AUDIO_SCIF) $(ARMADA_AUDIO_IDE) $(ARMADA_AUDIO_SCI) $(ARMADA_AUDIO_SCIA) $(ARMADA_A2_CORE_OBJECTS) $(ARMADA_A2_DIR)/hook.o $(ARMADA_A2_DIR)/traffic-entry.o $(ARMADA_A2_DIR)/traffic.o $(ARMADA_A2_DIR)/bind-probe.o: $(ARMADA_A2_DIR)/layout-config
+$(ARMADA_A2_DIR)/a2-write.ld: src/loader/armada_ce_vmu_a2_write.ld.S include/kui/armada_ce_vmu_layout.h $(ARMADA_A2_DIR)/layout-config
+	sh-elf-gcc -E -P -x c -Iinclude $(ARMADA_A2_EXPERIMENT_FLAGS) $< -o $@
+
+$(ARMADA_AUDIO_DIR)/bind-probe.o: src/loader/armada_ce_maple_probe.c include/kui/armada_ce_maple_probe.h include/kui/armada_ce_maple_observe.h include/kui/armada_ce_maple_proof.h include/kui/armada_ce_maple_mapping.h include/kui/armada_ce_cache_word.h include/kui/armada_ce_maple_state.h include/kui/armada_ce_maple_owner_pointer.h include/kui/armada_ce_maple_headers.h include/kui/armada_ce_maple_headers_types.h
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(ARMADA_A2_EXPERIMENT_FLAGS) -DKUI_RETAIL_CE=1 -DKUI_ARMADA_CE_MAPLE_PROOF=1 -DKUI_ARMADA_CE_MAPLE_STATE=1 -DKUI_ARMADA_CE_MAPLE_HOOK=1 -DKUI_ARMADA_CE_MAPLE_TRAFFIC=1 -DKUI_ARMADA_CE_MAPLE_FENCE=1 -DKUI_ARMADA_CE_MAPLE_A2=1 -fcallgraph-info=su -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/maple-array.o: src/loader/armada_ce_maple_array.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -c $< -o $@
+$(ARMADA_AUDIO_DIR)/bind-probe.elf: $(ARMADA_AUDIO_DIR)/bind-probe.o $(ARMADA_AUDIO_DIR)/maple-array.o src/loader/armada_ce_maple_probe.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/armada_ce_maple_probe.ld -Wl,-Map,$(@:.elf=.map) -o $@ $(filter %.o,$^) -lgcc
+$(ARMADA_AUDIO_DIR)/bind-probe.bin: $(ARMADA_AUDIO_DIR)/bind-probe.elf
+	sh-elf-objcopy -O binary $< $@
+$(ARMADA_AUDIO_DIR)/entry.elf: tools/check_armada_ce_vmu_a2_package.py tools/check_armada_ce_bind.py tools/check_retail_stack.py tools/check_armada_ce_excerpt.py
+
+-include $(ARMADA_AUDIO_DIR)/bind-probe.d
+
+$(ARMADA_AUDIO_DIR)/hook.o: src/loader/armada_ce_maple_fence_bridge.S include/kui/armada_ce_maple_hook.h include/kui/armada_ce_vmu_layout.h
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(ARMADA_A2_EXPERIMENT_FLAGS) -DKUI_ARMADA_CE_MAPLE_TRAFFIC=1 -DKUI_ARMADA_CE_MAPLE_FENCE=1 -DKUI_ARMADA_CE_MAPLE_A2=1 $(ARMADA_A2_AUTO_FLAGS) -c $< -o $@
+$(ARMADA_AUDIO_DIR)/hook.elf: $(ARMADA_AUDIO_DIR)/hook.o $(ARMADA_AUDIO_DIR)/traffic-entry.o $(ARMADA_AUDIO_DIR)/traffic.o $(ARMADA_AUDIO_DIR)/maple-array.o $(ARMADA_A2_CORE_OBJECTS) $(ARMADA_A2_LAYOUT_SCRIPT)
+	sh-elf-gcc $(RETAIL_LINK) -T$(ARMADA_A2_LAYOUT_SCRIPT) -Wl,-Map,$(@:.elf=.map) -o $@ $(filter %.o,$^) -lgcc
+$(ARMADA_AUDIO_DIR)/hook.bin: $(ARMADA_AUDIO_DIR)/hook.elf
+	sh-elf-objcopy -O binary --only-section=.uncached --only-section=.hook $< $@
+$(ARMADA_AUDIO_DIR)/bridge.bin: $(ARMADA_AUDIO_DIR)/hook.elf
+	sh-elf-objcopy -O binary --only-section=.bridge $< $@
+$(ARMADA_AUDIO_DIR)/retail_stage.o: include/kui/armada_ce_maple_reservation.h include/kui/armada_ce_maple_hook.h
+$(ARMADA_AUDIO_DIR)/entry.elf: tools/check_armada_ce_vmu_a2.py tools/armada_ce_cache_snapshot_contract.py tools/check_armada_ce_cached_publication.py
+
+$(ARMADA_AUDIO_DIR)/traffic-entry.o: src/loader/armada_ce_maple_traffic_entry.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(ARMADA_A2_EXPERIMENT_FLAGS) $(ARMADA_A2_AUTO_FLAGS) -c $< -o $@
+$(ARMADA_AUDIO_DIR)/traffic.o: src/loader/armada_ce_maple_traffic.c include/kui/armada_ce_maple_traffic.h include/kui/armada_ce_maple_traffic_types.h
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(ARMADA_A2_EXPERIMENT_FLAGS) -DKUI_ARMADA_CE_MAPLE_FENCE=1 -DKUI_ARMADA_CE_MAPLE_A2=1 -DKUI_VMU_READONLY_ADDRESS=2 -DKUI_ARMADA_CE_CACHE_SNAPSHOT_NATIVE=1 $(ARMADA_A2_AUTO_FLAGS) -fcallgraph-info=su -MMD -MP -c $< -o $@
+-include $(ARMADA_AUDIO_DIR)/traffic.d
+
+$(addprefix $(ARMADA_AUDIO_DIR)/,$(addsuffix .o,$(ARMADA_A2_CORE_NAMES))): $(ARMADA_AUDIO_DIR)/%.o: src/core/%.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(ARMADA_A2_EXPERIMENT_FLAGS) -DKUI_VMU_READONLY_ADDRESS=2 -fcallgraph-info=su -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/a2-minic.o: src/loader/minic.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -fcallgraph-info=su -MMD -MP -c $< -o $@
+$(ARMADA_AUDIO_DIR)/a2-publish.o: src/loader/armada_ce_vmu_a2_publish.c include/kui/armada_ce_vmu_a2_publish.h
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(ARMADA_A2_EXPERIMENT_FLAGS) -fcallgraph-info=su -MMD -MP -c $< -o $@
+-include $(ARMADA_A2_CORE_OBJECTS:.o=.d)
+
+$(ARMADA_AUDIO_DIR)/cache-snapshot.o: src/loader/armada_ce_cache_snapshot.S include/kui/armada_ce_vmu_layout.h
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(ARMADA_A2_EXPERIMENT_FLAGS) -c $< -o $@

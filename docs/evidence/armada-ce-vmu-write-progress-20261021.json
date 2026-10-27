@@ -1,0 +1,67 @@
+{
+  "format": "armada-ce-vmu-write-progress-v1",
+  "date": "2026-10-21",
+  "baseline_source_commit": "45fd6e915753f7a79422d831d0fe75e38731230c",
+  "hardware_accepted_readonly_build": "af18576dba18",
+  "scope": "Source checkpoint; native storage writer and pending continuation not connected",
+  "source_evidence": {
+    "file": "armada-ce-maple-write-owner.json",
+    "source_windows": 19,
+    "decoded_scalars": 79,
+    "exact_uploaded_files_match": true,
+    "owner_bytes_exported": false,
+    "write_phases": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "final_write_phase": 4,
+    "write_rx_capacity_bytes": 4,
+    "finalizer_rx_capacity_bytes": 8,
+    "finalizer_again_is_transparent": false,
+    "wait_timeout_cancels_original_irp": false,
+    "zero_gd_request_token_error": "0xc0000185"
+  },
+  "implemented": [
+    "Opt-in canonical FILEERR header clipping for exact CMD12/140B/capacity4",
+    "Private zero-output DEFERRED/PENDING publication policy for READ and phase4 SYNC",
+    "Opt-in 48KiB layout, matching reservation guards, native profile admission"
+  ],
+  "validation": {
+    "write_endpoint_asan_ubsan_checks": 497969,
+    "gated_publisher_asan_ubsan_checks": 322137,
+    "default_publisher_asan_ubsan_checks": 268580,
+    "production_capture_recheck_asan_ubsan_checks": 17014,
+    "private_owner_tests_passed": 8,
+    "deferred_io_checks": 307315,
+    "real_redo_session_failure_positions": 8,
+    "persisted_but_release_failed_no_ack": true,
+    "full_readonly_host_suite_passed": true,
+    "expanded_reservation_checks": 40930,
+    "native_default_package_audit_passed": true,
+    "native_expanded_package_audit_passed": true,
+    "native_profile_mutations_rejected": 1255,
+    "default_payloads_byte_identical_to_accepted_readonly": 8,
+    "expanded_layout_free_bytes_before_maple_stack": 25004,
+    "gated_native_object_compile_passed": true,
+    "gated_native_stack_bytes_including_shim_and_margin": 1080,
+    "gated_native_maple_stack_capacity_bytes": 1536,
+    "gated_native_compile_scope": "Object-only; current readonly callback graph, no native consumer hold or provider"
+  },
+  "remaining": [
+    "Native original-consumer hold, unmasked worker, bounded fresh fence/proof reacquisition",
+    "Loan-aware GD request wait/defer plus audio transport exclusion",
+    "CE PIO SD writer with stop/release and fault-latched restoration",
+    "Pre-NK prepared storage identity/recovery/handoff and real runtime allocation",
+    "Physical save, load and power-cycle recovery acceptance",
+    "Universal family matching and retained physical GD-ROM bootstrap"
+  ],
+  "not_claimed": [
+    "Native writable CE VMU",
+    "Hardware write acceptance",
+    "Universal game coverage",
+    "Physical GD-ROM VMU support",
+    "Playback parity with physical disc"
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "schema": "kui.native.evolution1.layout-proof.v1",
+  "date": "2026-10-23",
+  "scope": "Existing uniform initializer family; independently executed original SH transport and reconstructed live binding. No hardware gameplay or persistence claim.",
+  "executable_bytes": 2143652,
+  "executable_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+  "record_sha256": "be2f1877d184ac06d38106af29656644bf5d04efc8538893af826c5aa81cfa5c",
+  "layout_family": "uniform contiguous48",
+  "rx_layout": 0,
+  "inputs": 1,
+  "rx_base": "0xac23c400",
+  "tx_base": "0xac248420",
+  "test": {
+    "source": "tests/test_vmu_native_layout.c",
+    "asan": true,
+    "ubsan": true,
+    "checks": 2696,
+    "inputs": [
+      "PS2 existing baseline",
+      "Evolution1 uniform_image_tests"
+    ],
+    "command": "ASAN_OPTIONS=detect_leaks=0 test-layout-compat <PS2 startup> <Evolution1 startup>",
+    "original_SH_execution": [
+      "root argument transport",
+      "upper wrapper including adversarial caller-saved clobbers",
+      "IRQ-masked lock wrapper",
+      "SDK initializer",
+      "48 receive slots from original constructor loop"
+    ],
+    "live_binding": [
+      "exact immutable RX/TX literal values",
+      "live manager and TX/RX banks",
+      "all48 receive slots",
+      "blocked image/manager/lock/timer/private-lease overlap checks",
+      "wrong pointer and changed owner state refused"
+    ],
+    "mutations": [
+      "initializer and constructor instructions",
+      "wrapper transport instructions",
+      "root indirect call",
+      "upper-prefix arbitrary writes",
+      "moving target load to delay slot",
+      "RX/TX literal changes rejected against unchanged live state"
+    ]
+  },
+  "limits": "The layout model supplies a well-formed disjoint test lease; it is not an independent proof of original allocator reservation. Original heap execution, lease alias, placement, hook/lifetime and storage tests remain separate admission requirements.",
+  "production_changes_for_this_title": false
+}

@@ -18,7 +18,12 @@ struct kui_app_status {
     bool complete,passed,stopped;
 };
 typedef void (*kui_app_progress_fn)(const struct kui_app_status *status);
-struct kui_vmu_entry {char name[16];uint32_t bytes;};
+struct kui_vmu_entry {
+    char name[16];
+    uint32_t bytes;
+    /* Optional, sanitized embedded VMS text. Empty when unavailable. */
+    char description[33],app_id[17];
+};
 struct kui_vmu_view {
     struct kui_app_status status;
     struct kui_vmu_entry entries[KUI_VMU_ROWS];
@@ -74,6 +79,15 @@ void kui_vmu_copy_run(unsigned source_slot,unsigned page,unsigned selected,
  * A failed metadata commit stops the batch without retry or rollback. */
 void kui_vmu_copy_all_run(unsigned source_slot,unsigned destination_slot,bool commit,
     struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+/* Creates a new managed 200-block virtual card on SD. Selected copy preserves
+ * only the exact selected file; all preserves every source save. Preview pins
+ * the source and commit rechecks it. Existing cards and physical VMUs are never
+ * written. Stored cards can be browsed/extracted; game activation is pending. */
+void kui_vmu_collection_copy_run(unsigned source_slot,unsigned page,unsigned selected,
+    bool all,bool commit,struct kui_vmu_view *out,
+    kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+void kui_vmu_collection_run(unsigned page,struct kui_vmu_backup_view *out,
+    kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
 /* Caller owns an already connected/mounted SD filesystem. Creates one new
  * organizational A1-NNNN verified backup bundle, never accesses a physical VMU,
  * and never mounts/unmounts storage. Inputs remain caller-owned. out is reset;

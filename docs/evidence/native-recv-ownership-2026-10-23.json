@@ -1,0 +1,189 @@
+{
+  "schema": "kui.native.recv.image-ownership-investigation.v1",
+  "date": "2026-10-23",
+  "status": "investigation_only_existing_refusals_retained",
+  "source_head": "920c86efc512f651f5146b76912159968a9b2203",
+  "retail_code_embedded": false,
+  "input": {
+    "title": "Resident Evil Code: Veronica",
+    "image_bytes": 3915142,
+    "image_sha256": "199b72af9bcd7fb80d401d4645c731e595970a0dcbcfd98e1bec187f4382fbbb",
+    "load": "0x8c010000",
+    "stored_end": "0x8c3cbd86"
+  },
+  "static_resolution": {
+    "driver": true,
+    "layout": true,
+    "heap": true,
+    "heap_call": true,
+    "terminal_exits": true,
+    "combined_patch_interiors": true
+  },
+  "objects": [
+    {
+      "name": "rx",
+      "begin": "0x8c308e00",
+      "end": "0x8c314e00",
+      "bytes": 49152,
+      "stored_nonzero_bytes": 0
+    },
+    {
+      "name": "tx",
+      "begin": "0x8c314e20",
+      "end": "0x8c31ae20",
+      "bytes": 24576,
+      "stored_nonzero_bytes": 0
+    },
+    {
+      "name": "manager",
+      "begin": "0x8c39a21c",
+      "end": "0x8c39b31c",
+      "bytes": 4352,
+      "stored_nonzero_bytes": 0
+    }
+  ],
+  "zero_gap": {
+    "begin": "0x8c2119e4",
+    "end": "0x8c3cbd60",
+    "scope": "Maximal all-zero stored-file span enclosing all three objects; zero bytes alone do not prove ownership."
+  },
+  "crt_provenance": {
+    "entry_pointer_slot": "0x8c01002c",
+    "entry": "0x8c1700e0",
+    "clear_call": "0x8c1700f6",
+    "clear_routine": "0x8c170118",
+    "loops": [
+      {
+        "control_pc": "0x8c17011e",
+        "begin_cell": "0x8c136960",
+        "end_cell": "0x8c13696c",
+        "begin": "0x8c211a00",
+        "end": "0x8c330200",
+        "stride": 4
+      },
+      {
+        "control_pc": "0x8c170148",
+        "begin_cell": "0x8c1f5ebc",
+        "end_cell": "0x8c1f5ec8",
+        "begin": "0x8c330200",
+        "end": "0x8c3cbd60",
+        "stride": 1
+      }
+    ],
+    "conclusion": "The original CRT explicitly zero-initializes both adjoining regions before main startup. RX/TX and manager lie wholly within these regions. This supports a future typed BSS ownership resolver, not a current overlap exception."
+  },
+  "heap": {
+    "initializer": "0x8c177c54",
+    "initializer_pointer_slot": "0x8c010518",
+    "call": "0x8c010474",
+    "begin": "0x8c3cbd80",
+    "bytes": "0x00c34280",
+    "end": "0x8d000000",
+    "stored_image_overlap_bytes": 6,
+    "initial_header_begin": "0x8c3cbd80",
+    "initial_header_end": "0x8c3cbd88",
+    "original_code_model": {
+      "model": "tests/test_vmu_native_heap_execution.py:SH",
+      "initializer_instructions": 107,
+      "initializer_writes": [
+        {
+          "pc": "0x8c177c6a",
+          "address": "0x8c35fe10",
+          "value": "0x8c3cbd80",
+          "bytes": 4
+        },
+        {
+          "pc": "0x8c177c6c",
+          "address": "0x8c35fe18",
+          "value": "0x8c3cbd80",
+          "bytes": 4
+        },
+        {
+          "pc": "0x8c177c72",
+          "address": "0x8c35fe14",
+          "value": "0x00c34280",
+          "bytes": 4
+        },
+        {
+          "pc": "0x8c177c78",
+          "address": "0x8c35fe0c",
+          "value": "0x8c35fdec",
+          "bytes": 4
+        },
+        {
+          "pc": "0x8c177c7a",
+          "address": "0x8c35fdec",
+          "value": "0x8c35fdec",
+          "bytes": 4
+        },
+        {
+          "pc": "0x8c177c7c",
+          "address": "0x8c35fdf0",
+          "value": "0x00000000",
+          "bytes": 4
+        },
+        {
+          "pc": "0x8c177ca6",
+          "address": "0x8c35fde8",
+          "value": "0x8c1f6db0",
+          "bytes": 4
+        },
+        {
+          "pc": "0x8c177c8e",
+          "address": "0x8c3cbd84",
+          "value": "0x00061a14",
+          "bytes": 4
+        },
+        {
+          "pc": "0x8c177e64",
+          "address": "0x8c3cbd80",
+          "value": "0x8c35fdec",
+          "bytes": 4
+        },
+        {
+          "pc": "0x8c177e82",
+          "address": "0x8c35fdec",
+          "value": "0x8c3cbd80",
+          "bytes": 4
+        },
+        {
+          "pc": "0x8c177e86",
+          "address": "0x8c35fe0c",
+          "value": "0x8c35fdec",
+          "bytes": 4
+        }
+      ],
+      "allocation_bytes": 196608,
+      "allocation_instructions": 53,
+      "allocated_payload": "0x8cfd0000",
+      "scope": "Original supplied initializer/allocator code executed directly, outside production admission. SR IMASK15, SP and callee-saved registers enforced by model."
+    },
+    "conclusion": "The original initializer itself overwrites all six stored tail bytes with its initial free-block header before VMU allocation. Current full-image/arena disjointness still intentionally refuses this layout."
+  },
+  "hazards": [
+    "The file has nonzero SH stubs at 0x8c3cbd60..0x8c3cbd86 after the BSS gap. One immutable pointer to 0x8c3cbd78 occurs at 0x8c134668. It is unsafe to trim the entire image at the BSS start or end based only on a zero scan.",
+    "The stored image has no trusted segment table exposed to the current native adapter; all cache hashes and image sizes bind the complete file.",
+    "Correcting only Maple buffer/image overlap leaves a separate heap/image-overlap refusal and full-image protected free ranges.",
+    "No hardware passive launch or save/load is claimed by this investigation."
+  ],
+  "proposed_generic_proof": [
+    "Discover exact CRT clear-loop families and root-call provenance from the entrypoint. Decode immutable begin/end cells; prove aligned bounded destinations and initialization order.",
+    "Represent stored image identity separately from live immutable segments and explicit initialized mutable regions. Keep the complete file hash; never reinterpret BSS as generally free RAM.",
+    "Bind RX/TX to the already-proven SDK initializer arguments and manager fields. Allow only their exact owned spans inside independently certified mutable regions; keep all other conflicts active.",
+    "If an allocator begins before the stored end, require the entire image intersection to lie in the exact original initializer write set already performed before VMU allocation. Prove no VMU code, initializer, exit or other protected window intersects it; keep every other stored byte protected.",
+    "Independently replay original CRT and heap code in a bounded SH model; include malformed clear bounds, changed branch/stride, wrong entrypoint/call, relocated aliases, zero-data decoys, poisoned tail stubs, constructor-order drift and live buffer drift as negative tests.",
+    "Use a read-only hardware passive capture first for this ownership family; then read-only virtual card before persistent save/reboot/reload acceptance."
+  ],
+  "grandia_layout_comparison": {
+    "image_bytes": 1279172,
+    "stored_end": "0x8c1484c4",
+    "rx_begin": "0x8c14c600",
+    "rx_end": "0x8c158600",
+    "tx_begin": "0x8c158620",
+    "tx_end": "0x8c15e620",
+    "manager": "0x8c26bdb8",
+    "buffer_image_overlap": false,
+    "heap": "Allocator discovery is ambiguous; heap-family agent owns provenance resolution and actual arena verification."
+  },
+  "production_changes": false
+}

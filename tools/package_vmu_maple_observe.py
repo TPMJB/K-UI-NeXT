@@ -1,0 +1,732 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
+"""Inspect isolated passive/blank/SD/volatile proof workers and package their module."""
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import re
+import struct
+import subprocess
+import zipfile
+
+from check_loader_layout import EH, PH, SH, SYM, inspect_elf, padded, region
+from check_retail_instructions import audit
+from check_retail_loader_layout import check_bss, check_stack_usage
+import check_retail_loader_layout as resident_layout
+from check_retail_stack import EDGE, NODE
+from runtime_package import verify
+from toy_pilot_symbols import _linked_symbols
+from vmu_maple_observe_symbols import sd_gateway_span, exit_target_cell
+from check_vmu_maple_observe_hook import check_hook, check_completion_hook, MAPLE_PROFILES
+from check_vmu_pio_write import check_pio_entry
+import retail_package as layout
+
+
+def write_test_archive(directory, module, report_bytes, *, readonly_proof=False,
+                       sd_readonly_proof=False, volatile_proof=False, persistent_proof=False,
+                       maple_profile=1):
+    """Install through the ordinary native-game route in the released shell."""
+    if any(type(value) is not bool for value in
+           (readonly_proof, sd_readonly_proof, volatile_proof, persistent_proof)):
+        raise ValueError("Read-only proof selection must be boolean")
+    if sum((readonly_proof, sd_readonly_proof, volatile_proof, persistent_proof)) > 1:
+        raise ValueError("Select exactly one read-only proof mode")
+    if type(maple_profile) is not int or maple_profile not in MAPLE_PROFILES:
+        raise ValueError("Test archive requires an exact linked Maple profile")
+    if maple_profile == 2 and volatile_proof:
+        raise ValueError("Silver does not admit volatile proof mode 3")
+    guide = ("vmu-silver-persistent-card-test.md" if maple_profile == 2 and persistent_proof else
+             "vmu-silver-sd-readonly-card-test.md" if maple_profile == 2 and sd_readonly_proof else
+             "vmu-silver-readonly-card-test.md" if maple_profile == 2 and readonly_proof else
+             "vmu-silver-observer-test.md" if maple_profile == 2 else
+             "vmu-persistent-card-test.md" if persistent_proof else
+             "vmu-volatile-card-test.md" if volatile_proof else
+             "vmu-sd-readonly-card-test.md" if sd_readonly_proof else
+             "vmu-readonly-card-test.md" if readonly_proof else "vmu-maple-observer-test.md")
+    guide_bytes = (Path("docs") / guide).read_bytes()
+    if persistent_proof:
+        from vmu_persist_profile import decode_profile
+        binding = decode_profile((directory / "vmu-sd-profile.bin").read_bytes())
+        guide_bytes = guide_bytes.replace(b"{{PAIR_PATH}}", binding["pair_path"].encode("ascii"))
+    files = {"KUI/apps/games/retail-boot.kui": module,
+             "README-FIRST.md": guide_bytes,
+             "observer-artifact-audit.json": report_bytes}
+    if (sd_readonly_proof or volatile_proof or persistent_proof) and (directory / "personalization-audit.json").exists():
+        if persistent_proof:
+            from personalize_vmu_persist_proof import validate_personalized
+        else:
+            from personalize_vmu_sd_proof import validate_personalized
+        derivation = validate_personalized(directory)
+        if derivation.get("proof_mode", 2) != (4 if persistent_proof else 3 if volatile_proof else 2):
+            raise ValueError("Personalization mode differs from the selected test archive")
+        if hashlib.sha256(module).hexdigest() != derivation["artifacts"]["retail-maple-observe.kui"]["personalized_sha256"]:
+            raise ValueError("Archive module differs from the personalized runtime")
+        files["personalization-audit.json"] = (directory / "personalization-audit.json").read_bytes()
+        original_record = derivation["base_compile_provenance"]["name"]
+        files[original_record] = (directory / original_record).read_bytes()
+        if persistent_proof:
+            original_audit = derivation["base_package_audit"]["name"]
+            files[original_audit] = (directory / original_audit).read_bytes()
+    files["SHA256SUMS.txt"] = "".join(
+        hashlib.sha256(data).hexdigest() + "  " + name + "\n"
+        for name, data in sorted(files.items())).encode()
+    target = directory / ("vmu-silver-persistent-card-test.zip" if maple_profile == 2 and persistent_proof else
+                          "vmu-silver-sd-readonly-card-test.zip" if maple_profile == 2 and sd_readonly_proof else
+                          "vmu-silver-readonly-card-test.zip" if maple_profile == 2 and readonly_proof else
+                          "vmu-silver-observer-test.zip" if maple_profile == 2 else
+                          "vmu-persistent-card-test.zip" if persistent_proof else
+                          "vmu-volatile-card-test.zip" if volatile_proof else
+                          "vmu-sd-readonly-card-test.zip" if sd_readonly_proof else
+                          "vmu-readonly-card-test.zip" if readonly_proof else "vmu-maple-observer-test.zip")
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, data in sorted(files.items()):
+            entry = zipfile.ZipInfo(name, (2026, 10, 16, 0, 0, 0))
+            entry.compress_type = zipfile.ZIP_DEFLATED
+            entry.external_attr = 0o100644 << 16
+            archive.writestr(entry, data)
+    return target
+
+
+def inspect_linked_maple_profile(elf, image, base):
+    """Read profile identity from its exact immutable linked scalar, never CLI.
+
+    Historical Toy workers have no profile object. Their original Toy-only
+    trampoline witnesses remain mandatory; an unlabelled Silver trampoline
+    cannot pass those witnesses.
+    """
+    name = "_kui_vmu_maple_profile"
+    typed = _linked_symbols(elf, {name})
+    if name not in typed:
+        return {"id": 1, "name": "toy", "binding": "legacy Toy trampoline witnesses"}
+    address, size, kind, section = typed[name]
+    if (size != 4 or kind != 1 or address & 3 or section is None or
+            section[1] != 1 or section[2] & 7 != 2 or
+            image["symbols"].get(name) != address or
+            not section[3] <= address < address + 4 <= section[3] + section[5] or
+            not base <= address < address + 4 <= base + len(image["payload"]) or
+            region(elf, section[4] + address - section[3], 4, "Maple profile scalar") !=
+            region(image["payload"], address - base, 4, "linked Maple profile scalar")):
+        raise ValueError("Maple profile must be its exact typed read-only four-byte object")
+    value, = struct.unpack_from("<I", image["payload"], address - base)
+    if value not in MAPLE_PROFILES:
+        raise ValueError("Unsupported linked Maple profile")
+    return {"id": value, "name": MAPLE_PROFILES[value]["name"],
+            "binding": "typed read-only linked scalar", "address": f"0x{address:08x}"}
+
+
+def check_profile_selection(profile, expected):
+    """A build-system selection can constrain linked identity, not supply it."""
+    if expected is not None and profile["name"] != expected:
+        raise ValueError("Selected Maple profile differs from actual linked profile")
+
+
+def inspect_boot_heap_hook(elf, image, maple_profile):
+    """Bind the bootstrap's actual PC-relative original-initializer call."""
+    name = "_kui_vmu_observe_heap_hook"
+    address, size, kind, section = _linked_symbols(elf, {name}).get(name, (0, 0, 0, None))
+    base = 0x8C004000
+    if (type(maple_profile) is not int or maple_profile not in MAPLE_PROFILES or
+            kind != 2 or not size or size & 1 or address & 1 or section is None or
+            section[1] != 1 or section[2] & 7 != 6 or image["symbols"].get(name) != address or
+            not section[3] <= address < address + size <= section[3] + section[5] or
+            not base <= address < address + size <= base + len(image["payload"])):
+        raise ValueError("Observer bootstrap requires its bounded typed heap hook")
+    targets = []
+    payload = image["payload"]
+    for pc in range(address, address + size - 5, 2):
+        load, call, delay = struct.unpack_from("<3H", payload, pc - base)
+        if load & 0xFF00 != 0xD300 or call != 0x430B or delay != 0x0009:
+            continue
+        literal = ((pc + 4) & ~3) + (load & 255) * 4
+        if not address <= literal < literal + 4 <= address + size:
+            raise ValueError("Original heap initializer literal leaves its typed hook")
+        targets.append(struct.unpack_from("<I", payload, literal - base)[0])
+    expected = MAPLE_PROFILES[maple_profile]["heap_init"]
+    if targets != [expected]:
+        raise ValueError("Bootstrap original heap initializer differs from linked Maple profile")
+    result = {"original_heap_init": f"0x{expected:08x}", "exact_pc_relative_calls": 1}
+    if maple_profile == 2:
+        cell, destination = exit_target_cell(elf, image)
+        result["native_exit_target"] = {"readonly_cell": f"0x{cell:08x}",
+                                        "patched_literal_value": f"0x{cell + 0x20000000:08x}",
+                                        "return_hook": f"0x{destination:08x}"}
+    elif "_kui_vmu_observe_exit_target" in image["symbols"]:
+        raise ValueError("Toy bootstrap must retain its original exit path")
+    return result
+
+
+def inspect_worker(directory, *, maple_profile=None):
+    elf = (directory / "worker.elf").read_bytes()
+    image = inspect_elf(elf,
+                        0x8CFD0000, 0x8CFE0000, private_p2=True,
+                        entry_symbol="_kui_vmu_maple_observer_init", entry_at_base=False)
+    header = EH.unpack_from(elf)
+    segments = [PH.unpack_from(elf, header[5] + index * header[9])
+                for index in range(header[10])]
+    loads = [segment for segment in segments if segment[0] == 1]
+    if (len(loads) != 2 or loads[0][6] != 5 or loads[1][6] != 6 or
+            loads[0][2] != 0x8CFD0000 or not 0xACFD0000 <= loads[1][2] < 0xACFE0000):
+        raise ValueError("Worker requires distinct read-only code and private writable load segments")
+    payload = image["payload"]
+    if (directory / "worker.bin").read_bytes() != payload:
+        raise ValueError("Worker objcopy bytes differ from admitted ELF")
+    words = struct.unpack_from("<16I", payload)
+    names = ("magic", "version", "bytes", "initialize", "hook", "bss_begin", "bss_end",
+             "stack_bottom", "stack_top", "worker_end", "lease_bytes", "snapshot", "terminal", "complete_hook",
+             "readonly_mode", "sd_transaction")
+    exports = dict(zip(names, words))
+    symbols = image["symbols"]
+    profile = inspect_linked_maple_profile(elf, image, 0x8CFD0000)
+    check_profile_selection(profile, maple_profile)
+    typed = _linked_symbols(elf, {"_kui_vmu_maple_observer_init",
+        "_kui_vmu_maple_observer_hook", "_kui_vmu_maple_observer_terminal",
+        "_kui_vmu_maple_observer_snapshot", "_kui_vmu_maple_observer_complete_hook",
+        "_kui_vmu_maple_observer_sd_transaction"})
+    if (words[0] != 0x564D4F31 or words[1] not in (5, 6) or words[2] != 64 or
+            exports["lease_bytes"] != 0x30000 or
+            exports["readonly_mode"] not in (0, 1, 2, 3, 4) or
+            (exports["readonly_mode"] >= 3 and words[1] != 6) or
+            (exports["readonly_mode"] < 2 and exports["sd_transaction"])):
+        raise ValueError("Observer exports identity differs from profile")
+    if profile["id"] == 2 and exports["readonly_mode"] not in (0, 1, 2, 4):
+        raise ValueError("Silver does not admit volatile proof mode 3")
+    snapshot_bytes = 708 if words[1] == 6 else 644
+    entries = [("initialize", "_kui_vmu_maple_observer_init"),
+                        ("hook", "_kui_vmu_maple_observer_hook"),
+                        ("terminal", "_kui_vmu_maple_observer_terminal"),
+                        ("complete_hook", "_kui_vmu_maple_observer_complete_hook"),
+                        ("snapshot", "_kui_vmu_maple_observer_snapshot")]
+    if exports["readonly_mode"] >= 2:
+        entries.append(("sd_transaction", "_kui_vmu_maple_observer_sd_transaction"))
+    for key, symbol in entries:
+        if exports[key] != symbols.get(symbol):
+            raise ValueError("Worker export does not match linked symbol: " + key)
+        address, size, kind, section = typed.get(symbol, (0, 0, 0, None))
+        if (section is None or not size or
+                not section[3] <= address < address + size <= section[3] + section[5]):
+            raise ValueError("Worker export has no bounded typed symbol: " + key)
+        if key == "snapshot":
+            if size != snapshot_bytes or kind != 1 or section[1] != 8 or section[2] & 7 != 3:
+                raise ValueError(f"Worker snapshot must be its {snapshot_bytes}-byte private BSS object")
+        elif kind != 2 or size & 1 or section[2] & 7 != 6:
+            raise ValueError("Worker entry must be a bounded cached-code function: " + key)
+    if (not 0xACFD0000 <= exports["bss_begin"] <= exports["snapshot"] < exports["bss_end"]
+            <= exports["stack_bottom"] < exports["stack_top"] <= 0xACFE0000
+            or exports["stack_top"] - exports["stack_bottom"] != 4096
+            or exports["worker_end"] != exports["stack_top"] - 0x20000000
+            or exports["worker_end"] != image["memory_end"]
+            or any(exports[key] & 31 for key in ("bss_begin", "bss_end", "stack_bottom", "stack_top"))
+            or exports["snapshot"] & 3
+            or exports["snapshot"] + snapshot_bytes > exports["bss_end"]
+            or exports["bss_begin"] - 0x20000000 < 0x8CFD0000 + len(payload)):
+        raise ValueError("Observer private BSS/stack is outside owned lease")
+    for key, _ in entries:
+        if key == "snapshot":
+            continue
+        if not 0x8CFD0040 <= exports[key] < 0x8CFD0000 + len(payload) or exports[key] & 1:
+            raise ValueError("Worker entry is outside cached executable image: " + key)
+    mode = exports["readonly_mode"]
+    report = {"exports": exports, "binary_bytes": len(payload), "maple_profile": profile,
+            "mode": ("PERSISTENT SD-save virtual A1 proof; owned image/journal writes" if mode == 4 else
+                     "VOLATILE RAM-save virtual A1 proof; SD read-only" if mode == 3 else
+                     "READ-ONLY Silver SD-backed virtual A1 proof" if mode == 2 and profile["id"] == 2 else
+                     "READ-ONLY SD-backed virtual A1 proof" if mode == 2 else
+                     "READ-ONLY Silver virtual blank A1 proof" if mode == 1 and profile["id"] == 2 else
+                     "READ-ONLY virtual blank A1 proof" if mode == 1 else
+                     "read-only Silver Maple observation" if profile["id"] == 2 else "read-only Toy Maple observation"),
+            "virtual_vmu_enabled": bool(mode), "storage_writes_enabled": mode == 4,
+            "virtual_writes_enabled": mode in (3, 4),
+            "volatile_writes_enabled": mode == 3,
+            "persistence": mode == 4,
+            "worker_sha256": hashlib.sha256(payload).hexdigest(),
+            "hook_integer_state": check_hook(image, exports, maple_profile=profile["id"]),
+            "completion_integer_state": check_completion_hook(image, exports, maple_profile=profile["id"])}
+    private_dma = inspect_private_dma(elf, image, exports)
+    if private_dma is not None:
+        report["private_dma"] = private_dma
+    return report
+
+
+def inspect_private_dma(elf, image, exports):
+    """Mutating virtual cards own exact uncached objects before MDSTAR."""
+    required = (("issued_chain", "_issued_chain", 512, 32),
+                ("captured_chain", "_captured_chain", 512, 4),
+                ("write_payloads", "_write_payloads", 4096, 4))
+    typed = _linked_symbols(elf, {symbol for _, symbol, _, _ in required})
+    if exports["readonly_mode"] not in (3, 4):
+        if typed:
+            raise ValueError("Non-volatile proof contains private mutating DMA buffers")
+        return None
+    result = {}
+    ranges = [(exports["snapshot"], exports["snapshot"] + 708)]
+    for key, symbol, expected, alignment in required:
+        address, size, kind, section = typed.get(symbol, (0, 0, 0, None))
+        if (size != expected or kind != 1 or address % alignment or
+                section is None or section[1] != 8 or section[2] & 7 != 3 or
+                image["symbols"].get(symbol) != address or
+                not 0xACFD0000 <= address < address + size <= 0xACFE0000 or
+                not exports["bss_begin"] <= address < address + size <= exports["bss_end"] or
+                not section[3] <= address < address + size <= section[3] + section[5] or
+                any(address < end and begin < address + size for begin, end in ranges)):
+            raise ValueError("Volatile proof requires its exact private P2 DMA object: " + symbol)
+        ranges.append((address, address + size))
+        result[key] = dict(address=f"0x{address:08x}", bytes=size, alignment=alignment)
+    result["issued_chain"]["physical_address"] = (
+        f"0x{int(result['issued_chain']['address'], 16) & 0x1fffffff:08x}")
+    return result
+
+
+def inspect_sd_profile(directory, stage, mode):
+    """Bind the strict decoded profile to the bytes actually embedded in stage."""
+    start = stage["symbols"].get("__vmu_sd_profile_blob_start")
+    end = stage["symbols"].get("__vmu_sd_profile_blob_end")
+    if mode < 2:
+        if start is not None or end is not None:
+            raise ValueError("Non-SD proof stage must not embed an SD profile")
+        return None
+    count = 4096 if mode == 4 else 1536
+    if start is None or end is None or start & 3 or end - start != count:
+        raise ValueError(f"SD profile requires one bounded {count}-byte stage blob")
+    wire = (directory / "vmu-sd-profile.bin").read_bytes()
+    if len(wire) != count or region(stage["payload"], start - 0x8CE00000,
+                                  end - start, "embedded SD profile") != wire:
+        raise ValueError("Stage contains a different SD profile")
+    if mode == 4:
+        from vmu_persist_profile import decode_profile
+    else:
+        from vmu_sd_profile import decode_profile
+    summary = decode_profile(wire)
+    if mode == 4:
+        from personalize_vmu_sd_proof import readonly_blob
+        elf = (directory / "stage.elf").read_bytes()
+        actual_address, _ = readonly_blob(elf, stage,
+            "__vmu_sd_profile_blob_start", "__vmu_sd_profile_blob_end", 4096)
+        if actual_address != start:
+            raise ValueError("Persistent profile differs from its typed read-only stage span")
+    return dict(summary, embedded_address=f"0x{start:08x}", embedded_bytes=len(wire))
+
+
+def check_pio_callgraph(directory, adapter, linked_functions):
+    reports = sorted(directory.rglob("*.ci"))
+    nodes, incoming = set(), []
+    live = {name.rsplit(":", 1)[-1].lstrip("_") for name in linked_functions}
+    for report in reports:
+        data = report.read_text()
+        nodes.update(_function_base(title) for title, _ in NODE.findall(data))
+        incoming.extend(_function_base(source) for source, target, _ in EDGE.findall(data)
+                        if (_function_base(target) == "kui_sci_sd_write" and
+                            source.rsplit(":", 1)[-1].lstrip("_") in live))
+    if (not reports or adapter not in live or adapter not in nodes or not incoming or
+            set(incoming) != {adapter}):
+        raise ValueError("High SD writer must have only its explicit PIO adapter as caller")
+    return {"sole_writer_caller": adapter, "callgraph_reports": len(reports)}
+
+
+def linked_function_names(elf, image):
+    """Enumerate live typed code without imposing uniqueness on other locals.
+
+    The exact writer/adapter symbols are checked independently with
+    _linked_symbols. Unrelated C units may retain identically named locals.
+    """
+    del image  # inspect_elf has already admitted this ELF and its tables.
+    header = EH.unpack_from(elf)
+    sections = [SH.unpack_from(elf, header[6] + index * header[11])
+                for index in range(header[12])]
+    result = set()
+    for table in sections:
+        if table[1] != 2:
+            continue
+        strings = sections[table[6]]
+        names = region(elf, strings[4], strings[5], "linked function names")
+        for at in range(table[4], table[4] + table[5], table[9]):
+            name, address, size, info, _, owner = SYM.unpack_from(elf, at)
+            if info & 15 != 2 or not size or owner >= len(sections):
+                continue
+            section = sections[owner]
+            if (section[1] == 1 and section[2] & 7 == 6 and
+                    section[3] <= address < address + size <= section[3] + section[5]):
+                result.add(names[name:names.find(b"\0", name)].decode("ascii"))
+    return result
+
+
+def inspect_persistent_io(directory, worker_elf, worker, exports, resident):
+    """Mode4 writes run only in bounded high code with private high state."""
+    functions = ("_kui_vmu_durable_handoff_validate", "_kui_vmu_durable_init",
+                 "_kui_vmu_durable_transaction", "_kui_vmu_durable_admit",
+                 "_kui_vmu_durable_handle", "_kui_sci_sd_write", "_kui_sci_sd_sync",
+                 "_durable_card_pio_write")
+    forbidden = {"kui_sci_sd_write", "kui_sci_sd_sync", "kui_vmu_durable_transaction"}
+    if any(_function_base(name) in forbidden for name in resident["symbols"]):
+        raise ValueError("Persistent writes must not add SD writer code to the low resident")
+    typed = _linked_symbols(worker_elf, set(functions) | {"_durable_card"})
+    result = {}
+    for name in functions:
+        address, size, kind, section = typed.get(name, (0, 0, 0, None))
+        if (kind != 2 or not size or size & 1 or address & 1 or
+                section is None or section[1] != 1 or section[2] & 7 != 6 or
+                not 0x8CFD0040 <= address < address + size <= 0x8CFD0000 + len(worker["payload"]) or
+                not section[3] <= address < address + size <= section[3] + section[5]):
+            raise ValueError("Persistent writer lacks its typed high-worker function: " + name)
+        result[name] = dict(address=f"0x{address:08x}", bytes=size)
+    address, size, kind, section = typed.get("_durable_card", (0, 0, 0, None))
+    if (kind != 1 or not 0 < size <= 4608 or size % 32 or address % 32 or
+            section is None or section[1] != 8 or section[2] & 7 != 3 or
+            not exports["bss_begin"] <= address < address + size <= exports["bss_end"] or
+            not section[3] <= address < address + size <= section[3] + section[5]):
+        raise ValueError("Persistent card must own its bounded aligned private high BSS object")
+    state_ranges = [(exports["snapshot"], exports["snapshot"] + 708)]
+    for row in inspect_private_dma(worker_elf, worker, exports).values():
+        state_ranges.append((int(row["address"], 16), int(row["address"], 16) + row["bytes"]))
+    if any(address < end and begin < address + size for begin, end in state_ranges):
+        raise ValueError("Persistent card overlaps snapshot or private DMA state")
+    result["private_card"] = dict(address=f"0x{address:08x}", bytes=size,
+                                  maximum_bytes=4608, alignment=32)
+    adapter = typed["_durable_card_pio_write"]
+    pio = check_pio_entry(worker, adapter[0], adapter[1], typed["_kui_sci_sd_write"][0],
+                          base=0x8CFD0000)
+    pio.update(check_pio_callgraph(directory / "worker", "durable_card_pio_write",
+                                  linked_function_names(worker_elf, worker)))
+    return {"high_worker_functions": result, "resident_sd_writer_functions": 0,
+            "pio_payload": pio,
+            "handoff_bytes": 1272, "worker_reservation_bytes": 65536,
+            "sdk_lease_bytes": exports["lease_bytes"]}
+
+
+def inspect_persistent_stage(directory, stage_elf, stage):
+    functions = {"_observe_persist_pio_write", "_kui_sci_sd_write", "_kui_sci_sd_sync",
+                 "_kui_vmu_persist_stage_prepare", "_kui_vmu_persist_stage_admit"}
+    typed = _linked_symbols(stage_elf, functions | {"_observe_sd_handoff"})
+    for name in functions:
+        address, size, kind, section = typed.get(name, (0, 0, 0, None))
+        if (kind != 2 or not size or size & 1 or address & 1 or section is None or
+                section[1] != 1 or section[2] & 7 != 6 or
+                not 0x8CE00000 <= address < address + size <= 0x8CE00000 + len(stage["payload"]) or
+                not section[3] <= address < address + size <= section[3] + section[5]):
+            raise ValueError("Persistent preflight lacks its typed high-stage function: " + name)
+    address, size, kind, section = typed.get("_observe_sd_handoff", (0, 0, 0, None))
+    if (kind != 1 or size != 1272 or address & 3 or section is None or
+            section[1] != 8 or section[2] & 7 != 3 or
+            not section[3] <= address < address + size <= section[3] + section[5]):
+        raise ValueError("Persistent preflight requires its exact1272-byte high handoff")
+    adapter = typed["_observe_persist_pio_write"]
+    pio = check_pio_entry(stage, adapter[0], adapter[1], typed["_kui_sci_sd_write"][0],
+                          base=0x8CE00000)
+    pio.update(check_pio_callgraph(directory / "stage", "observe_persist_pio_write",
+                                  linked_function_names(stage_elf, stage)))
+    return {"handoff_address": f"0x{address:08x}", "handoff_bytes": size,
+            "pio_payload": pio}
+
+
+def _function_base(name):
+    return name.rsplit(":", 1)[-1].lstrip("_").split(".", 1)[0]
+
+
+def linked_stack_rows(reports, symbols):
+    """Discard only functions absent from the linked ELF, retaining all clones."""
+    linked = {_function_base(name) for name in symbols}
+    rows = []
+    for report in reports:
+        for line in report.read_text().splitlines():
+            fields = line.split("\t")
+            if len(fields) != 3:
+                raise ValueError("Malformed compiler stack report: " + str(report))
+            name = fields[0].rsplit(":", 1)[-1]
+            if _function_base(name) not in linked:
+                continue
+            if fields[2] != "static" or not fields[1].isdigit():
+                raise ValueError("Unbounded linked stack report: " + name)
+            rows.append((name, int(fields[1])))
+    if not rows:
+        raise ValueError("Missing linked compiler stack reports")
+    return rows
+
+
+def require_worker_stack_coverage(directory, worker, rows):
+    """Every linked VMU C entry and ownership helper needs its own C frame.
+
+    A missing .su file must not silently shrink the conservative sum. Assembly
+    trampolines have a separate fixed allowance; their three exact names are
+    the only excluded VMU entries. Inlined functions have no linked symbol.
+    """
+    assembly = {"kui_vmu_maple_observer_hook", "kui_vmu_maple_observer_complete_hook",
+                "kui_vmu_maple_observer_terminal"}
+    guards = {"original_fingerprint", "physical_response_valid", "source_span",
+              "silver_layout", "silver_chain_matches",
+              "response_span", "proof_response", "proof_layout", "proof_stats",
+              "proof_stop", "sd_read_block", "read_word", "read_byte", "write_word",
+              "unit_index", "record_subunit", "read_block", "commit_ram", "shape", "slot",
+              "full", "geometry", "classify", "receive_geometry", "pointer_physical_overlap"}
+    candidates = {name for name, address in worker["symbols"].items()
+                  if 0x8CFD0040 <= address < 0x8CFE0000 and
+                  (_function_base(name).startswith(("kui_", "ram_", "chain_",
+                                                    "volatile_chain_", "volatile_card_",
+                                                    "readonly_overlay_", "durable_", "sci_storage_")) or
+                   _function_base(name) in guards)}
+    elf_path = directory / "worker.elf"
+    if elf_path.exists():
+        typed = _linked_symbols(elf_path.read_bytes(), candidates)
+        candidates = {name for name in candidates if typed.get(name, (0, 0, 0, None))[2] == 2}
+    required = {name.lstrip("_") for name in candidates if _function_base(name) not in assembly}
+    reported = {name.lstrip("_") for name, _ in rows}
+    missing = sorted(required - reported)
+    if missing:
+        raise ValueError("Missing linked worker stack-usage frame: " + ", ".join(missing))
+    return len(required)
+
+
+def check_sd_gateway(directory, resident, elf):
+    """No resident GD path may enter the lease-only worker-stack gateway."""
+    address, size, declared = sd_gateway_span(elf, resident)
+    reports = sorted((directory / "resident/lto").glob("*.ltrans*.ci"))
+    nodes = set()
+    if not reports:
+        raise ValueError("Missing final-LTO SD gateway callgraph proof")
+    for report in reports:
+        data = report.read_text()
+        nodes.update(_function_base(title) for title, _ in NODE.findall(data))
+        for source, target, _ in EDGE.findall(data):
+            if _function_base(target) == "kui_vmu_observe_sd_lease":
+                raise ValueError("Resident call enters worker-stack SD lease gateway: " + source)
+    if "kui_vmu_observe_sd_lease" not in nodes:
+        raise ValueError("Final-LTO graph omits SD lease gateway")
+    # Its sole function pointer is passed by the high stage, never registered
+    # as a low reader callback. Reject a resident literal pointing into it.
+    payload = resident["payload"]
+    for offset in range(0, len(payload) - 3, 4):
+        at = 0x8C004000 + offset
+        if address <= at < address + size:
+            continue
+        value = struct.unpack_from("<I", payload, offset)[0]
+        if (value & 0xFF000000) in (0x0C000000, 0x8C000000, 0xAC000000):
+            canonical = value & 0x1FFFFFFF | 0x80000000
+            if address <= canonical < address + size:
+                raise ValueError("Resident literal references worker-stack SD lease gateway")
+    return {"address": f"0x{address:08x}", "bytes": size,
+            "declared_symbol_bytes": declared, "bounds": "exclusive allocated linker section",
+            "incoming_resident_edges": 0, "resident_pointer_references": 0,
+            "callgraph_reports": [path.name for path in reports]}
+
+
+def check_sd_stacks(directory, resident, worker, gateway):
+    resident_rows = linked_stack_rows(sorted((directory / "resident/lto").glob("*.ltrans*.su")),
+                                      resident["symbols"])
+    worker_rows = linked_stack_rows(sorted((directory / "worker").rglob("*.su")), worker["symbols"])
+    covered_worker_frames = require_worker_stack_coverage(directory, worker, worker_rows)
+    for required in ("kui_retail_resident_dispatch", "kui_retail_gd_dispatch",
+                     "kui_retail_image_read", "kui_loader_sd_stream_next"):
+        if not any(_function_base(name) == required for name, _ in resident_rows):
+            raise ValueError("Missing runtime stack-usage frame: " + required)
+    lease_rows = [(name, frame) for name, frame in resident_rows
+                  if _function_base(name) == "kui_vmu_observe_sd_lease"]
+    if len(lease_rows) != 1 or lease_rows[0][0] != "kui_vmu_observe_sd_lease":
+        raise ValueError("SD lease gateway requires one exact noipa stack frame")
+    low_rows = [(name, frame) for name, frame in resident_rows if name != lease_rows[0][0]]
+    available = (resident_layout.stack_top("sci", False, True) -
+                 resident_layout.stack_bottom("sci", False, True) -
+                 resident_layout.STACK_GUARD_BYTES - resident_layout.STACK_ALIGNMENT_GAP)
+    low_total = sum(frame for _, frame in low_rows) + resident_layout.ASSEMBLY_STACK_BYTES
+    if low_total > available:
+        raise ValueError(f"Resident conservative stack sum {low_total} exceeds {available}")
+    resident_sum = sum(frame for _, frame in resident_rows)
+    worker_sum = sum(frame for _, frame in worker_rows)
+    if worker_sum + resident_sum + 84 + 32 > 4096:
+        raise ValueError("SD worker/gateway/bus stack sum exceeds private stack")
+    return ({"conservative_bytes": low_total, "available_bytes": available,
+             "assembly_allowance": resident_layout.ASSEMBLY_STACK_BYTES,
+             "retained_c_frames": len(low_rows), "worker_only_gateway_frame": lease_rows[0][1],
+             "gateway_exclusion_proof": gateway},
+            {"c_frame_sum": worker_sum, "resident_callback_c_frame_sum": resident_sum,
+             "assembly_bytes": 84, "guard_bytes": 32, "available_bytes": 4096,
+             "conservative_bytes": worker_sum + resident_sum + 84 + 32,
+             "linked_worker_frames": len(worker_rows), "linked_resident_frames": len(resident_rows),
+             "required_worker_frame_coverage": covered_worker_frames})
+
+
+def check_embedded_images(directory, worker, resident, stage, entry, module):
+    """The reported proof objects must be the actual bytes booted by this ZIP."""
+    for name, image in (("resident-sci", resident), ("stage", stage)):
+        if (directory / (name + ".bin")).read_bytes() != image["payload"]:
+            raise ValueError(name + ".bin differs from linked ELF bytes")
+    for transport in ("scif", "sci", "ide", "scia"):
+        prefix = "__retail_resident_" + transport + "_blob_"
+        begin = stage["symbols"].get(prefix + "start", 0)
+        end = stage["symbols"].get(prefix + "end", 0)
+        actual = region(stage["payload"], begin - 0x8CE00000,
+                        end - begin, "embedded observer resident")
+        if actual != padded(resident["payload"]):
+            raise ValueError("Stage contains a different resident: " + transport)
+    start = stage["symbols"].get("__vmu_observe_worker_blob_start", 0)
+    end = stage["symbols"].get("__vmu_observe_worker_blob_end", 0)
+    if region(stage["payload"], start - 0x8CE00000,
+              end - start, "embedded observer worker") != worker:
+        raise ValueError("Stage contains a different observer worker")
+    high_blob = padded(stage["payload"])
+    es = entry["symbols"]
+    if (es.get("__retail_map") != 0x8C011000 or
+            es.get("__retail_stage_blob_start") != 0x8C012000 or
+            es.get("__retail_stage_blob_end") != 0x8C010000 + len(entry["payload"]) or
+            entry["memory_end"] != 0x8C010000 + len(entry["payload"]) or
+            entry["payload"][0x2000:] != high_blob):
+        raise ValueError("Entry contains a different stage or invalid relocation bounds")
+    if any(region(entry["payload"], layout.MAP_OFFSET, layout.MAP_BYTES, "blank manifest")):
+        raise ValueError("Packaged observer manifest must be blank")
+    if region(entry["payload"], layout.HEADER_OFFSET, layout.HEADER_BYTES, "header") != layout.relocation_header(len(high_blob), False, True):
+        raise ValueError("Observer relocation header must select the low native reader")
+    runtime = verify(module)
+    if (module[64:] != entry["payload"] or runtime["memory_bytes"] !=
+            entry["memory_end"] - 0x8C010000):
+        raise ValueError("Runtime package differs from the admitted entry ELF")
+    return runtime
+
+
+def inspect_mode4_source(directory, entry, module):
+    """Keep native compilation provenance distinct from local personalization."""
+    if (directory / "personalization-audit.json").exists():
+        from personalize_vmu_persist_proof import validate_personalized
+        derivation = validate_personalized(directory)
+        commit = derivation["source_commit"]
+        provenance_sha = derivation["base_compile_provenance"]["sha256"]
+        kind = "clean generic compilation plus independently verified fixed-span personalization"
+    else:
+        record_bytes = (directory / "entry.compile.json").read_bytes()
+        record = json.loads(record_bytes)
+        if (not isinstance(record, dict) or record.get("source_dirty") is not False or
+                not isinstance(record.get("commit"), str) or
+                not re.fullmatch(r"[0-9a-f]{40}", record["commit"]) or
+                record.get("elf_sha256") != hashlib.sha256((directory / "entry.elf").read_bytes()).hexdigest()):
+            raise ValueError("Mode4 requires matching clean source compile provenance")
+        commit = record["commit"]
+        provenance_sha = hashlib.sha256(record_bytes).hexdigest()
+        kind = "clean generic native compilation"
+    if (not re.fullmatch(r"[0-9a-f]{40}", commit) or
+            verify(module)["build"] != commit[:12] or module[64:] != entry["payload"]):
+        raise ValueError("Mode4 source commit differs from its exact compiled runtime identity")
+    return {"source_commit": commit, "source_dirty": False,
+            "source_provenance": kind, "compile_provenance_sha256": provenance_sha}
+
+
+def inspect_launch_capability(elf, entry, profile, mode):
+    """Bind the optional normal-launch route to an exact immutable object."""
+    name = "__vmu_launch_capability"
+    typed = _linked_symbols(elf, {name})
+    if mode != 4:
+        if name in typed:
+            raise ValueError("Only persistent mode may advertise a virtual card launch")
+        return None
+    address, size, kind, section = typed.get(name, (0, 0, 0, None))
+    if (address != 0x8C010180 or size != 64 or kind != 1 or section is None or
+            section[1] != 1 or section[2] & 7 != 2 or
+            not section[3] <= address < address + size <= section[3] + section[5]):
+        raise ValueError("VMU launch capability must be its typed read-only entry object")
+    actual = region(entry["payload"], 0x180, 64, "VMU launch capability")
+    expected_disc = ((0x5e1b611a, 0x770d2fed, 0x7d83cf24, 2956128, 45000, 547556)
+                     if profile == 2 else
+                     (0xe25531d1, 0x38ba2868, 0xcdc493b3, 748444, 45000, 548634))
+    expected = b"KUIVMU04" + struct.pack("<14I", 1, 64, profile, 4, 1, *expected_disc, 0, 0, 0)
+    if (actual != expected or
+            region(elf, section[4] + address - section[3], 64, "linked VMU capability") != actual):
+        raise ValueError("VMU launch capability differs from actual linked worker profile/mode")
+    return {"offset": 0x180, "bytes": 64, "profile": profile, "mode": mode,
+            "sha256": hashlib.sha256(actual).hexdigest()}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("directory", type=Path)
+    parser.add_argument("--maple-profile", choices=("toy", "silver"),
+                        help="Require this actual linked profile; never relabel an artifact")
+    args = parser.parse_args()
+    directory = args.directory
+    # A refused audit must never leave a prior mode4 or Silver deliverable ZIP.
+    (directory / "vmu-persistent-card-test.zip").unlink(missing_ok=True)
+    (directory / "vmu-silver-persistent-card-test.zip").unlink(missing_ok=True)
+    (directory / "vmu-silver-observer-test.zip").unlink(missing_ok=True)
+    (directory / "vmu-silver-readonly-card-test.zip").unlink(missing_ok=True)
+    (directory / "vmu-silver-sd-readonly-card-test.zip").unlink(missing_ok=True)
+    report = inspect_worker(directory, maple_profile=args.maple_profile)
+    mode = report["exports"]["readonly_mode"]
+    resident_elf = (directory / "resident-sci.elf").read_bytes()
+    resident = inspect_elf(resident_elf, 0x8C004000, 0x8C007800)
+    stage_elf = (directory / "stage.elf").read_bytes()
+    stage = inspect_elf(stage_elf, 0x8CE00000, 0x8CFE0000)
+    entry = inspect_elf((directory / "entry.elf").read_bytes(),
+                       0x8C010000, 0x8C112000)
+    report["launch_capability"] = inspect_launch_capability(
+        (directory / "entry.elf").read_bytes(), entry, report["maple_profile"]["id"], mode)
+    check_bss(resident, 0x8C004000, "__retail_resident")
+    check_bss(stage, 0x8CE00000, "__retail_stage")
+    stage_profile = inspect_linked_maple_profile(stage_elf, stage, 0x8CE00000)
+    if stage_profile["id"] != report["maple_profile"]["id"]:
+        raise ValueError("Stage and worker contain different linked Maple profiles")
+    report["stage_maple_profile"] = stage_profile
+    report["boot_heap_hook"] = inspect_boot_heap_hook(
+        resident_elf, resident, report["maple_profile"]["id"])
+    profile = inspect_sd_profile(directory, stage, mode)
+    if profile is not None:
+        report["sd_profile"] = profile
+        report["sd_profile_sha256"] = profile["wire_sha256"]
+        if (directory / "personalization-audit.json").exists():
+            if mode == 4:
+                from personalize_vmu_persist_proof import validate_personalized
+            else:
+                from personalize_vmu_sd_proof import validate_personalized
+            derivation = validate_personalized(directory)
+            if (derivation.get("proof_mode", 2) != mode or
+                    derivation["profile_sha256"] != profile["wire_sha256"] or
+                    derivation["profile_address"] != profile["embedded_address"]):
+                raise ValueError("Personalization audit differs from embedded SD profile")
+            report["personalization"] = derivation
+    if mode < 2:
+        if "_kui_vmu_observe_sd_lease" in resident["symbols"]:
+            raise ValueError("Non-SD proof resident contains the SD lease gateway")
+        report["resident_stack"] = check_stack_usage(directory / "resident",
+            resident["symbols"], transport="sci", low=True)
+    report["instructions"] = {}
+    for name in ("resident-sci", "worker", "stage", "entry"):
+        disassembly = subprocess.check_output(
+            ["sh-elf-objdump", "-d", str(directory / (name + ".elf"))], text=True)
+        (directory / (name + ".dis")).write_text(disassembly)
+        report["instructions"][name] = audit(name, disassembly)
+    if mode >= 2:
+        worker = inspect_elf((directory / "worker.elf").read_bytes(), 0x8CFD0000,
+                             0x8CFE0000, private_p2=True,
+                             entry_symbol="_kui_vmu_maple_observer_init", entry_at_base=False)
+        gateway = check_sd_gateway(directory, resident, resident_elf)
+        report["resident_stack"], report["worker_stack"] = check_sd_stacks(
+            directory, resident, worker, gateway)
+        if mode == 4:
+            report["persistent_io"] = inspect_persistent_io(
+                directory, (directory / "worker.elf").read_bytes(), worker, report["exports"], resident)
+            report["persistent_preflight"] = inspect_persistent_stage(
+                directory, (directory / "stage.elf").read_bytes(), stage)
+    else:
+        worker_frames = []
+        for path in (directory / "worker").rglob("*.su"):
+            for line in path.read_text().splitlines():
+                fields = line.split("\t")
+                if len(fields) != 3 or fields[2] != "static":
+                    raise ValueError("Unbounded worker stack report: " + str(path))
+                worker_frames.append(int(fields[1]))
+        if not worker_frames or sum(worker_frames) + 84 + 32 > 4096:
+            raise ValueError("Worker conservative C/ASM stack sum exceeds private stack")
+        report["worker_stack"] = {"c_frame_sum": sum(worker_frames),
+                                   "assembly_bytes": 84, "guard_bytes": 32,
+                                   "available_bytes": 4096}
+    module = (directory / "retail-maple-observe.kui").read_bytes()
+    report["runtime"] = check_embedded_images(directory,
+        (directory / "worker.bin").read_bytes(), resident, stage, entry, module)
+    report.update({"module_sha256": hashlib.sha256(module).hexdigest(),
+                   "module_bytes": len(module)})
+    if mode == 4:
+        report.update(inspect_mode4_source(directory, entry, module))
+    report_bytes = (json.dumps(report, indent=2, sort_keys=True) + "\n").encode()
+    (directory / "observer-artifact-audit.json").write_bytes(report_bytes)
+    print(write_test_archive(directory, module, report_bytes,
+                             readonly_proof=mode == 1, sd_readonly_proof=mode == 2,
+                             volatile_proof=mode == 3, persistent_proof=mode == 4,
+                             maple_profile=report["maple_profile"]["id"]))
+
+
+if __name__ == "__main__":
+    main()

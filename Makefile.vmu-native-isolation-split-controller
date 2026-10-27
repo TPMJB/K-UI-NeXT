@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Keep the original physical polling DMA and defer our publication proof to
+# completion; virtual/accessory/storage batches retain the full submit path.
+BUILD ?= build/native-isolation-split-controller
+include Makefile.vmu-native-dual-readers
+FLAGS += -DKUI_NATIVE_SPLIT_CONTROLLER_ISOLATION=1 -DKUI_NATIVE_RA_TICK_OFF_ISOLATION=1
+NATIVE_FLAGS += -DKUI_NATIVE_SPLIT_CONTROLLER_ISOLATION=1 -DKUI_NATIVE_RA_TICK_OFF_ISOLATION=1
+
+.PHONY: split-controller-host-tests
+split-controller-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 \
+	 -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -DKUI_VMU_NATIVE_CACHED_CODE=1 \
+	 -DKUI_NATIVE_DUAL_READERS=1 -DKUI_NATIVE_RA_TICK_OFF_ISOLATION=1 \
+	 -DKUI_NATIVE_SPLIT_CONTROLLER_ISOLATION=1 tests/test_vmu_native_split_controller.c \
+	 $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-split-controller
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-split-controller

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Diagnostic control for the failed reader-only isolation. Keep New demand
+# delivery, SCI callbacks and cache geometry; omit only controller RA_TICK.
+BUILD ?= build/native-isolation-demand
+include Makefile.vmu-native-isolation-reader
+FLAGS += -DKUI_NATIVE_RA_TICK_OFF_ISOLATION=1
+NATIVE_FLAGS += -DKUI_NATIVE_RA_TICK_OFF_ISOLATION=1
+ISOLATION_READER_TEST_FLAGS += -DKUI_NATIVE_RA_TICK_OFF_ISOLATION=1
+
+.PHONY: isolation-demand-host-tests
+isolation-demand-host-tests: isolation-reader-host-tests

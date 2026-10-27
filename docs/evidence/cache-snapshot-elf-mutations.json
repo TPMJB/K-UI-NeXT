@@ -1,0 +1,22 @@
+[
+  {
+    "mutation": "job object64 instead of60 bytes",
+    "rejected": "Native P2 snapshot job is not a typed bounded object"
+  },
+  {
+    "mutation": "job extends beyond private BSS",
+    "rejected": "Native P2 snapshot job leaves the private workspace"
+  },
+  {
+    "mutation": "untyped job symbol",
+    "rejected": "Native P2 snapshot job is not a typed bounded object"
+  },
+  {
+    "mutation": "native job pointer literal changed",
+    "rejected": "Complete P2 snapshot leaf differs from its authored byte contract"
+  },
+  {
+    "mutation": "native leaf size truncated",
+    "rejected": "Complete P2 snapshot leaf differs from its authored byte contract"
+  }
+]

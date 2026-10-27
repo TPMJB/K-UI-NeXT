@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/vmu-deferred-persist-test
+HOST_CC ?= cc
+HOST_SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie
+SOURCES := tests/test_vmu_deferred_persist.c src/core/vmu_deferred_io.c \
+    src/core/armada_ce_vmu_write.c src/core/vmu_emulation.c \
+    src/core/vmu_persist_session.c src/core/vmu_persist_profile.c src/core/vmu_fs_admission.c \
+    src/core/vmu_store.c src/core/vmu_image.c src/core/hash.c src/core/retail_image.c
+.DEFAULT_GOAL := host-test
+.PHONY: host-test
+$(BUILD)/test-vmu-deferred-persist: $(SOURCES) tests/test_vmu_persist_session.c tests/test_vmu_fs_admission.c $(wildcard include/kui/vmu*.h) include/kui/armada_ce_vmu_write.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror $(HOST_SANITIZERS) \
+	    -ffunction-sections -fdata-sections -Wl,--gc-sections -Iinclude $(SOURCES) -o $@
+host-test: $(BUILD)/test-vmu-deferred-persist
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-vmu-deferred-persist

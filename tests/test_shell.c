@@ -26,7 +26,7 @@ static void open_developer_tests(void) {
     open_extra_options();s.game_tools_selected=3;
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_TESTS);
 }
-/* Background loading is a saved toggle; its aggressive setting is deeper
+/* Background loading is a saved toggle; its reader choice is deeper
  * in Advanced. Neither gesture itself dispatches a game launch. */
 static enum kui_shell_action launch_reader(unsigned button) {
     assert(s.page==KUI_SHELL_GAMES_RETAIL_CONFIRM);
@@ -240,7 +240,9 @@ static void app_navigation_and_vmu(void) {
     struct kui_vmu_view view={.slot=0,.page=0,.count=8,.total=10,.present=true};
     strcpy(view.entries[0].name,"SONIC2__S01");
     kui_shell_set_vmu(&s,&view);assert(s.vmu.count==8);
-    press(KUI_SHELL_UP,false);assert(s.vmu_selected==7);
+    press(KUI_SHELL_UP,false);assert(s.vmu_selected==0);
+    for(unsigned i=0;i<7;i++) press(KUI_SHELL_DOWN,false);
+    assert(s.vmu_selected==7);
     assert(press(KUI_SHELL_X,false)==KUI_SHELL_VMU_BACKUP);
     assert(press(KUI_SHELL_Y,false)==KUI_SHELL_VMU_BACKUP_ALL);
     assert(press(KUI_SHELL_START,false)==KUI_SHELL_VMU_LIST && s.vmu_page==1 && !s.vmu.count);
@@ -255,6 +257,134 @@ static void app_navigation_and_vmu(void) {
     assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_VMU_LIST && s.vmu_slot==1);
     kui_shell_set_vmu(&s,&view);assert(!s.vmu.count); /* Stale previous VMU. */
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_LIST);
+}
+static struct kui_vmu_view scroll_vmu_page(unsigned page,unsigned total) {
+    struct kui_vmu_view view={.page=page,.count=KUI_VMU_ROWS,.total=total,.present=true};
+    for(unsigned i=0;i<KUI_VMU_ROWS;i++) {
+        unsigned index=page*KUI_VMU_ROWS+i;
+        snprintf(view.entries[i].name,sizeof(view.entries[i].name),"RAW_%02u",index);
+        snprintf(view.entries[i].description,sizeof(view.entries[i].description),"Game %02u save",index);
+        strcpy(view.entries[i].app_id,"EXAMPLE_GAME");view.entries[i].bytes=(index+1)*512u;
+    }
+    return view;
+}
+static void vmu_continuous_scrolling(void) {
+    /* Visit every save in both directions, including an incomplete final
+     * page. Every dispatched row retains the on-card filename. */
+    for(unsigned image=0;image<2;image++) {
+        reset(image?KUI_SHELL_VMU_IMAGE:KUI_SHELL_VMU);
+        strcpy(s.vmu_image_path,"0:/KUI/vmu/cards/v0001/card.vmd");
+        struct kui_vmu_view view=scroll_vmu_page(0,19);
+        if(image) kui_shell_set_vmu_image(&s,s.vmu_image_path,0,&view);
+        else kui_shell_set_vmu(&s,&view);
+        unsigned *page=image?&s.vmu_image_page:&s.vmu_page;
+        unsigned *selected=image?&s.vmu_image_selected:&s.vmu_selected;
+        struct kui_vmu_view *listing=image?&s.vmu_image:&s.vmu;
+        bool *last=image?&s.vmu_image_select_last:&s.vmu_select_last;
+        enum kui_shell_action action=image?KUI_SHELL_VMU_IMAGE_LIST:KUI_SHELL_VMU_LIST;
+        assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && !*page && !*selected);
+        for(unsigned index=0;index<19;index++) {
+            char name[16];snprintf(name,sizeof(name),"RAW_%02u",index);
+            assert(*page*KUI_VMU_ROWS+*selected==index);
+            assert(!strcmp(listing->entries[*selected].name,name));
+            assert(press(KUI_SHELL_X,false)==(image?KUI_SHELL_VMU_IMAGE_EXTRACT:KUI_SHELL_VMU_BACKUP));
+            if(index==18) {
+                assert(listing->count==3);
+                assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && *selected==2);break;
+            }
+            bool boundary=index%KUI_VMU_ROWS==KUI_VMU_ROWS-1;
+            assert(press(KUI_SHELL_DOWN|KUI_SHELL_X,false)==(boundary?action:
+                image?KUI_SHELL_VMU_IMAGE_EXTRACT:KUI_SHELL_VMU_BACKUP));
+            if(boundary) {
+                assert(!listing->count && listing->total==19 && !*selected);
+                assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE);
+                assert(press(KUI_SHELL_UP,true)==KUI_SHELL_NONE);
+                if(image) kui_shell_set_vmu_image(&s,s.vmu_image_path,view.page,&view);
+                else kui_shell_set_vmu(&s,&view);
+                assert(!listing->count); /* An old page cannot republish old rows. */
+                view=scroll_vmu_page(*page,19);
+                if(image) kui_shell_set_vmu_image(&s,s.vmu_image_path,*page,&view);
+                else kui_shell_set_vmu(&s,&view);
+            }
+        }
+        for(unsigned index=18;index;index--) {
+            bool boundary=index%KUI_VMU_ROWS==0;
+            assert(press(KUI_SHELL_UP,false)==(boundary?action:KUI_SHELL_NONE));
+            if(boundary) {
+                assert(*last && !listing->count && !*selected);
+                if(image) kui_shell_set_vmu_image(&s,s.vmu_image_path,view.page,&view);
+                else kui_shell_set_vmu(&s,&view);
+                assert(*last && !listing->count);
+                view=scroll_vmu_page(*page,19);
+                if(image) kui_shell_set_vmu_image(&s,s.vmu_image_path,*page,&view);
+                else kui_shell_set_vmu(&s,&view);
+                assert(!*last && *selected==7);
+            }
+            assert(*page*KUI_VMU_ROWS+*selected==index-1);
+        }
+        assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && !*selected);
+        /* START still cycles a page at a time and always lands on row one. */
+        for(unsigned i=0;i<3;i++) {
+            assert(press(KUI_SHELL_START,false)==action && *page==(i+1)%3 && !*selected && !*last);
+            view=scroll_vmu_page(*page,19);
+            if(image) kui_shell_set_vmu_image(&s,s.vmu_image_path,*page,&view);
+            else kui_shell_set_vmu(&s,&view);
+        }
+        if(!image) {
+            s.vmu_selected=7;
+            assert(press(KUI_SHELL_DOWN,false)==action);
+            view=scroll_vmu_page(1,19);kui_shell_set_vmu(&s,&view);
+            assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE);
+            assert(!strcmp(s.vmu.entries[s.vmu_selected].name,"RAW_08"));
+            assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_DELETE_PREVIEW);
+            s.vmu_action_selected=1;
+            assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_COPY_PREVIEW);
+        }
+    }
+    puts("PASS continuous VMU scrolling: every save in both directions, endpoint clamp, final-page bounds, exact raw-name actions, stale results, busy guards and START shortcut");
+}
+static void vmu_catalog_scrolling(void) {
+    for(unsigned collection=0;collection<2;collection++) {
+        reset(collection?KUI_SHELL_VMU_COLLECTION:KUI_SHELL_VMU_RESTORE);
+        s.vmu_collection_generation=1;
+        struct kui_vmu_backup_view catalog={.page=0,.count=KUI_VMU_ROWS,.total=10};
+        for(unsigned i=0;i<KUI_VMU_ROWS;i++) {
+            snprintf(catalog.entries[i].name,sizeof(catalog.entries[i].name),"Card %u",i);
+            snprintf(catalog.entries[i].path,sizeof(catalog.entries[i].path),
+                "0:/KUI/vmu/cards/v%04u/card.vmd",i+1);
+        }
+        if(collection) kui_shell_set_vmu_collection(&s,1,&catalog);
+        else kui_shell_set_vmu_backups(&s,&catalog);
+        unsigned *page=collection?&s.vmu_collection_page:&s.backup_page;
+        unsigned *selected=collection?&s.vmu_collection_selected:&s.backup_selected;
+        bool *last=collection?&s.vmu_collection_select_last:&s.backup_select_last;
+        struct kui_vmu_backup_view *listing=collection?&s.vmu_collection:&s.backups;
+        enum kui_shell_action action=collection?KUI_SHELL_VMU_COLLECTION_LIST:KUI_SHELL_VMU_BACKUPS_LIST;
+        assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && !*selected);
+        *selected=7;
+        assert(press(KUI_SHELL_DOWN,false)==action && *page==1 && !listing->count);
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+        if(collection) kui_shell_set_vmu_collection(&s,1,&catalog);
+        else kui_shell_set_vmu_backups(&s,&catalog);
+        assert(!listing->count);
+        catalog.page=1;
+        if(collection) kui_shell_set_vmu_collection(&s,s.vmu_collection_generation,&catalog);
+        else kui_shell_set_vmu_backups(&s,&catalog);
+        assert(listing->count==2 && !*selected);
+        assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && *selected==1);
+        assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && *selected==1);
+        assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && !*selected);
+        assert(press(KUI_SHELL_UP,false)==action && !*page && *last && !listing->count);
+        if(collection) kui_shell_set_vmu_collection(&s,s.vmu_collection_generation,&catalog);
+        else kui_shell_set_vmu_backups(&s,&catalog);
+        assert(*last && !listing->count);
+        catalog.page=0;
+        if(collection) kui_shell_set_vmu_collection(&s,s.vmu_collection_generation,&catalog);
+        else kui_shell_set_vmu_backups(&s,&catalog);
+        assert(listing->count==8 && *selected==7 && !*last);
+        assert(press(KUI_SHELL_X,false)==action && !*selected && !*last && !listing->count);
+    }
+    puts("PASS VMU catalogs scroll continuously with exact page/generation guards and no selectable rows while loading");
 }
 static void clock_and_defaults(void) {
     reset(KUI_SHELL_SETTINGS);s.system_selected=4;
@@ -1052,6 +1182,47 @@ static void render(struct kui_shell_view *v) {
     assert(memcmp(pixels,prepared,sizeof(pixels))==0);
 
 }
+static void vmu_scroll_rendering(void) {
+    struct kui_shell_view view={0};
+    reset(KUI_SHELL_VMU);
+    struct kui_vmu_view listing=scroll_vmu_page(0,19);
+    listing.free_blocks=81;
+    listing.entries[1].description[0]=0;
+    listing.entries[2].description[0]=listing.entries[2].app_id[0]=0;
+    strcpy(listing.entries[3].description,"12345678901234567890123456789012");
+    kui_shell_set_vmu(&s,&listing);render(&view);
+    assert(strstr(drawn,"Saves 1-8 of 19") && strstr(drawn,"81 free blocks"));
+    assert(strstr(drawn,"Game 00 save") && strstr(drawn,"Game 07 save"));
+    assert(strstr(drawn,"EXAMPLE_GAME") && strstr(drawn,"RAW_02"));
+    assert(strstr(drawn,"12345678901234567890123456789012"));
+    assert(strstr(drawn,"File: RAW_00") && strstr(drawn,"512 bytes") && strstr(drawn,"8 blocks"));
+    assert(!strstr(drawn,"RAW_01") && !strstr(drawn,"RAW_07"));
+    assert(strstr(drawn,"UP/DOWN Scroll") && strstr(drawn,"START Page") && strstr(drawn,"B Home"));
+    assert(pixels[1+196*640+593]==0x675e && pixels[1+363*640+593]==0x318a);
+    s.vmu_selected=7;render(&view);
+    assert(pixels[1+196*640+593]==0x318a && pixels[1+234*640+593]==0x675e);
+    listing=scroll_vmu_page(2,19);s.vmu_page=2;s.vmu_selected=2;
+    kui_shell_set_vmu(&s,&listing);render(&view);
+    assert(strstr(drawn,"Saves 17-19 of 19") && strstr(drawn,"File: RAW_18"));
+    assert(!strstr(drawn,"Game 19 save"));
+    assert(pixels[1+196*640+593]==0x318a && pixels[1+363*640+593]==0x675e);
+    s.page=KUI_SHELL_VMU_IMAGE;strcpy(s.vmu_image_path,"0:/KUI/vmu/cards/v0001/card.vmd");
+    s.vmu_image_page=2;s.vmu_image_selected=2;
+    kui_shell_set_vmu_image(&s,s.vmu_image_path,2,&listing);render(&view);
+    assert(strstr(drawn,"Saves 17-19 of 19") && strstr(drawn,"Game 18 save"));
+    assert(strstr(drawn,"File: RAW_18") && strstr(drawn,"verified SD backups only"));
+    assert(pixels[1+363*640+593]==0x675e);
+    strcpy(s.vmu_image.status.message,"Source read failed.");s.vmu_image.status.complete=true;
+    render(&view);assert(strstr(drawn,"Source read failed.") && strstr(drawn,"File: RAW_18"));
+    listing=scroll_vmu_page(0,1);s.page=KUI_SHELL_VMU;s.vmu_page=0;
+    memset(listing.entries[0].description,'d',sizeof(listing.entries[0].description));
+    memset(listing.entries[0].app_id,'a',sizeof(listing.entries[0].app_id));
+    kui_shell_set_vmu(&s,&listing);
+    assert(!s.vmu.entries[0].description[32] && !s.vmu.entries[0].app_id[16]);
+    render(&view);
+    assert(pixels[1+196*640+593]==0x675e && pixels[1+363*640+593]==0x675e);
+    puts("PASS VMU list rendering: descriptions, app-id/filename fallback, block counts, selected exact filename, ranges, scrollbar position/length, errors and safe text bounds");
+}
 static void rendering_semantics(void) {
     const char *logs[]={"A very long diagnostic line deliberately exceeding safe frame margins 0123456789012345678901234567890"};
     struct kui_shell_view v={.build="0123456789abcdef",.log_lines=logs,.log_count=1,
@@ -1212,7 +1383,7 @@ static void new_pages_rendering(void) {
     }
     s.vmu_slot=7;s.vmu_selected=7;render(&v);
     assert(strstr(drawn,"VMU D2") && strstr(drawn,"SAVE_07") && strstr(drawn,"32768 bytes"));
-    assert(strstr(drawn,"LEFT/RIGHT VMU") && strstr(drawn,"L Save / card actions"));
+    assert(strstr(drawn,"LEFT/RIGHT VMU") && strstr(drawn,"L Actions"));
     reset(KUI_SHELL_HOME);v.app_status=NULL;
     render(&v);
     assert(strstr(drawn,"SD game library") && !strstr(drawn,"Inserted:"));
@@ -1316,7 +1487,9 @@ static void round_five_controls(void) {
     kui_shell_set_vmu_delete_preview(&s,&preview);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_DELETE_COMMIT && !s.confirm_vmu_delete);
     assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.vmu_action_selected==1);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.vmu_copy_slot==8);
     assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.vmu_copy_slot==7);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.vmu_copy_slot==8);
     assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.vmu_copy_slot==1);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_COPY_PREVIEW);
     preview.copy_ready=true;preview.slot=0;kui_shell_set_vmu_copy_preview(&s,&preview);assert(!s.confirm_vmu_copy);
@@ -1685,7 +1858,7 @@ static void games_launch_options_controls(void) {
     assert(!s.games_retail_reader); /* Saving a toggle never starts a game. */
     assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_SAVE_GAME_LAUNCH && !s.games_launch_reader);
     assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==KUI_RETAIL_READER_ASYNC);
-    /* The basic toggle has only two states. Aggressive belongs to Advanced. */
+    /* The basic toggle has only two states. Legacy (Y) belongs to Advanced. */
     open_extra_options();s.game_tools_selected=1;
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==KUI_RETAIL_READER_ASYNC_EAGER);
     assert(!s.games_retail_reader);
@@ -2497,7 +2670,9 @@ static void games_rendering(void) {
     assert(strstr(drawn,"CD music: On") && strstr(drawn,"Background loading: Off"));
     s.page=KUI_SHELL_GAMES_EXTRA_OPTIONS;s.games_launch_cdda=false;
     s.games_launch_reader=KUI_RETAIL_READER_ASYNC_EAGER;s.game_tools_selected=KUI_SHELL_GAME_TOOL_SPEED;render(&view);
-    assert(strstr(drawn,"Aggressive") && strstr(drawn,"Boot encoding") && strstr(drawn,"Image information") && strstr(drawn,"Developer tests"));
+    assert(strstr(drawn,"Legacy (Y)") && strstr(drawn,"Background reader") &&
+        !strstr(drawn,"Aggressive") && strstr(drawn,"Boot encoding") &&
+        strstr(drawn,"Image information") && strstr(drawn,"Developer tests"));
     s.games_detail.native_gd=false;s.games_detail.windows_ce=true;s.games_detail.boot_bytes=1253376;
     s.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;s.games_launch_selected=KUI_SHELL_GAME_OPTION_READER;render(&view);
     assert(strstr(drawn,"On") && strstr(drawn,"required") && strstr(drawn,"CD music") && strstr(drawn,"Off"));
@@ -2512,11 +2687,131 @@ static void games_rendering(void) {
     assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE);
 }
 
+static void games_native_reader_choices(void) {
+    struct kui_shell_view view={0};
+    struct kui_games_detail detail=launch_detail(false,false);
+    install_launch_detail(&detail);
+    assert(s.games_launch_reader==KUI_GAME_READER_STANDARD);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+    s.games_launch_selected=KUI_SHELL_GAME_OPTION_READER;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH);
+    assert(s.games_launch_reader==KUI_GAME_READER_BACKGROUND && !s.games_retail_reader);
+    assert(!strcmp(kui_shell_games_reader_label(&s),"New (X)"));
+    for(unsigned reader=KUI_GAME_READER_BACKGROUND;reader<=KUI_GAME_READER_EAGER;reader++) {
+        install_launch_detail(&detail);s.games_launch_reader=reader;
+        const char *choice=reader==KUI_GAME_READER_BACKGROUND?"New (X)":"Legacy (Y)";
+        const char *summary=reader==KUI_GAME_READER_BACKGROUND?
+            "Background loading: On - New (X)":"Background loading: On - Legacy (Y)";
+        const enum kui_shell_page pages[]={KUI_SHELL_GAMES_DETAIL,KUI_SHELL_GAMES_RETAIL_CONFIRM,
+            KUI_SHELL_GAMES_LAUNCH_OPTIONS};
+        for(unsigned i=0;i<3u;i++) {
+            s.page=pages[i];render(&view);assert(strstr(drawn,choice));
+            if(i<2u)assert(strstr(drawn,summary));
+            assert(!strstr(drawn,"X Launch") && !strstr(drawn,"Y Launch"));
+        }
+        s.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;
+        assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && s.games_launch_reader==reader);
+        assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+        open_extra_options();s.game_tools_selected=KUI_SHELL_GAME_TOOL_SPEED;
+        render(&view);
+        assert(strstr(drawn,"Background reader") && strstr(drawn,choice));
+        assert(!strstr(drawn,"Background speed") && !strstr(drawn,"Aggressive"));
+        /* Changing the native reader keeps every other saved field. */
+        s.games_launch_codec=KUI_ZSO_LZO1X;
+        s.games_launch_patches.entries[0]=(struct kui_game_ram_patch){UINT32_C(0x8c010004),17u,true};
+        struct kui_game_launch_settings before,after;
+        assert(kui_shell_game_launch_settings(&s,&before));
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && !s.games_retail_reader);
+        assert(kui_shell_game_launch_settings(&s,&after));
+        before.reader=(reader+1u)%KUI_GAME_READER_COUNT;
+        same_launch_settings(&before,&after);
+        assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==reader);
+        assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS);
+        assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==reader);
+    }
+    /* CE, CDDA and ZSO retain their existing labels and forced choices. */
+    detail=launch_detail(true,false);install_launch_detail(&detail);
+    s.page=KUI_SHELL_GAMES_EXTRA_OPTIONS;s.game_tools_selected=KUI_SHELL_GAME_TOOL_SPEED;
+    render(&view);assert(strstr(drawn,"Background speed") && !strstr(drawn,"Background reader"));
+    assert(!strstr(drawn,"New (X)") && !strstr(drawn,"Legacy (Y)"));
+    assert(!strcmp(kui_shell_games_reader_label(&s),"Background"));
+    detail=launch_detail(false,false);install_launch_detail(&detail);
+    s.games_launch_cdda=true;s.page=KUI_SHELL_GAMES_EXTRA_OPTIONS;
+    render(&view);assert(strstr(drawn,"Background speed") && !strstr(drawn,"Background reader"));
+    assert(!strstr(drawn,"New (X)") && !strstr(drawn,"Legacy (Y)"));
+    s.page=KUI_SHELL_GAMES_RETAIL_CONFIRM;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL &&
+        s.games_retail_reader==(KUI_RETAIL_READER_STANDARD|KUI_GAMES_RETAIL_CDDA));
+    detail.format=KUI_GAME_IMAGE_ZSO;detail.zso_launch=true;detail.zso_codec=KUI_ZSO_LZ4;
+    install_launch_detail(&detail);s.page=KUI_SHELL_GAMES_EXTRA_OPTIONS;
+    render(&view);assert(strstr(drawn,"Background speed") && !strstr(drawn,"Background reader"));
+    assert(!strstr(drawn,"New (X)") && !strstr(drawn,"Legacy (Y)"));
+    assert(!strcmp(kui_shell_games_reader_label(&s),"Standard"));
+    puts("PASS native reader UI: New X/Legacy Y/Off choices, persisted fields and CE/CDDA/ZSO exclusions");
+}
+static void games_new_reader_defaults(void) {
+    struct kui_shell_view view={0};
+    struct kui_games_detail detail=launch_detail(false,false);
+    detail.background_default=true;
+    strcpy(detail.title,"UNCONFIGURED NATIVE GAME");
+    install_launch_detail(&detail);
+    assert(s.games_launch_reader==KUI_GAME_READER_BACKGROUND);
+    /* A successful empty lookup must not turn the new default into Off.
+     * Reading defaults does not request a preset write or launch. */
+    kui_shell_set_game_launch_settings(&s,detail.path,NULL,true);
+    assert(s.games_launch_reader==KUI_GAME_READER_BACKGROUND && !s.games_retail_reader);
+    assert(strstr(s.games_launch_notice,"save automatically") && !strstr(s.games_launch_notice,"could not"));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_ASYNC);
+    s.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;
+    open_extra_options();s.game_tools_selected=KUI_SHELL_GAME_TOOL_SPEED;
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==KUI_GAME_READER_STANDARD);
+    render(&view);assert(strstr(drawn,"Background reader") && strstr(drawn,"Off"));
+    struct kui_game_launch_settings off;
+    assert(kui_shell_game_launch_settings(&s,&off) && off.reader==KUI_GAME_READER_STANDARD);
+    static struct kui_game_launch_table table,decoded;
+    static uint8_t record[KUI_GAME_LAUNCH_SETTINGS_RECORD_MAX];
+    kui_game_launch_table_clear(&table);assert(kui_game_launch_table_upsert(&table,detail.path,&off));
+    size_t bytes=0;uint64_t sequence=0;
+    assert(kui_game_launch_settings_encode(record,sizeof(record),&bytes,&table,17u));
+    assert(kui_game_launch_settings_decode(&decoded,&sequence,record,bytes) && sequence==17u);
+    install_launch_detail(&detail);assert(s.games_launch_reader==KUI_GAME_READER_BACKGROUND);
+    assert(kui_game_launch_table_find(&decoded,detail.path,&off));
+    kui_shell_set_game_launch_settings(&s,detail.path,&off,true);
+    assert(s.games_launch_reader==KUI_GAME_READER_STANDARD);
+    press(KUI_SHELL_Y,false);open_extra_options();s.game_tools_selected=KUI_SHELL_GAME_TOOL_SPEED;
+    /* Off remains an enabled Advanced control and can be reenabled/saved. */
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==KUI_GAME_READER_BACKGROUND);
+    s.game_tools_selected=KUI_SHELL_GAME_TOOL_DEFAULTS;
+    s.games_launch_reader=KUI_GAME_READER_STANDARD;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==KUI_GAME_READER_BACKGROUND);
+    /* Explicit persisted Legacy is retained as well. */
+    off.reader=KUI_GAME_READER_EAGER;
+    kui_shell_set_game_launch_settings(&s,detail.path,&off,true);
+    assert(s.games_launch_reader==KUI_GAME_READER_EAGER);
+    /* Read failure retains the image default but gives accurate feedback. */
+    install_launch_detail(&detail);kui_shell_set_game_launch_settings(&s,detail.path,NULL,false);
+    assert(s.games_launch_reader==KUI_GAME_READER_BACKGROUND && strstr(s.games_launch_notice,"could not"));
+    for(unsigned kind=0;kind<6u;kind++) {
+        struct kui_games_detail other=detail;
+        if(kind==0u) other.background_default=false; /* non-SCI inspection */
+        if(kind==1u) {other.native_gd=false;other.native_cd=true;other.cd_image=true;other.format=KUI_GAME_IMAGE_CUE;}
+        if(kind==2u) other.scrambled=true;
+        if(kind==3u) other.format=KUI_GAME_IMAGE_ZSO;
+        if(kind==4u) {other.windows_ce=true;other.native_gd=false;}
+        if(kind==5u) other.native_gd=false;
+        install_launch_detail(&other);kui_shell_set_game_launch_settings(&s,other.path,NULL,true);
+        assert(s.games_launch_reader==(kind==4u?KUI_GAME_READER_BACKGROUND:KUI_GAME_READER_STANDARD));
+        assert(!s.games_launch_cdda);
+    }
+    puts("PASS New reader defaults: unsaved SCI/native GDI selects New, Advanced Off persists, explicit presets survive, other routes retain defaults");
+}
+
 static void games_patch_rendering(void) {
     struct kui_shell_view view={0};
     struct kui_games_detail detail=launch_detail(false,false);detail.boot_bytes=131;
     install_launch_detail(&detail);press(KUI_SHELL_Y,false);open_extra_options();render(&view);
-    const char *tools[]={"Boot encoding","Background speed","Image information","Developer tests","RAM patches","Restore defaults"};
+    const char *tools[]={"Boot encoding","Background reader","Image information","Developer tests","RAM patches","Restore defaults"};
     const char *at=drawn;
     for(unsigned i=0;i<sizeof(tools)/sizeof(*tools);i++) {at=strstr(at,tools[i]);assert(at);at+=strlen(tools[i]);}
     s.game_tools_selected=KUI_SHELL_GAME_TOOL_DEFAULTS;render(&view);
@@ -3567,14 +3862,16 @@ static void vmu_copy_all_controls(void) {
     assert(press(KUI_SHELL_L,true)==KUI_SHELL_MSTATS && s.page==KUI_SHELL_VMU);
     assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_ACTIONS);
     assert(s.vmu_copy_slot==0);
-    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.vmu_action_selected==3);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.vmu_action_selected==4);
     assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.vmu_action_selected==0);
-    press(KUI_SHELL_UP,false);
+    press(KUI_SHELL_UP,false);press(KUI_SHELL_UP,false);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE); /* No readable source. */
     s.vmu.present=true;
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE); /* Empty source. */
     s.vmu.total=12;s.vmu.count=0;
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.vmu_copy_slot==8);
     assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.vmu_copy_slot==6);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.vmu_copy_slot==8);
     assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.vmu_copy_slot==0);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && !s.confirm_vmu_copy_all);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_COPY_ALL_PREVIEW);
@@ -3755,7 +4052,193 @@ static void vmu_bulk_import_rendering(void) {
     puts("PASS VMU bulk/import rendering: both slots, total/verified/remaining counts, uncertain destination, external picker, eight metadata lines and staged SD-only result");
 }
 
+/* A virtual destination creates a new managed card. Preview publications must
+ * belong to the same source selection and request before they can grant A. */
+static const char *const invalid_vmu_collection_paths[]={
+    "/KUI/vmu/cards/v0001/card.vmd",
+    "0:/KUI/vmu/backups/v0001/card.vmd",
+    "0:/KUI/vmu/cards/v0000/card.vmd",
+    "0:/KUI/vmu/cards/v0001/../card.vmd",
+    "0:/KUI/vmu/cards/v0001/card.VMD",
+    "0:/KUI/vmu/cards/V0001/card.vmd",
+    "1:/KUI/vmu/cards/v0001/card.vmd"
+};
+static void vmu_collection_copy_controls(void) {
+    for(unsigned all=0;all<2;all++) {
+        reset(KUI_SHELL_VMU_ACTIONS);s.vmu_slot=3;s.vmu_page=1;
+        s.vmu_selected=1;s.vmu_action_selected=all?3:1;s.vmu_copy_slot=8;
+        assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE); /* No source card. */
+        s.vmu.present=true;
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE); /* No source saves. */
+        s.vmu.count=2;s.vmu.total=3;
+        strcpy(s.vmu.entries[0].name,"COMPANION");s.vmu.entries[0].bytes=512;
+        strcpy(s.vmu.entries[1].name,"SELECTED");s.vmu.entries[1].bytes=4096;
+        if(all) s.vmu.count=0; /* All saves does not require a selected row. */
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_COLLECTION_COPY_PREVIEW);
+        unsigned generation=s.vmu_collection_copy_generation;
+        assert(generation && s.vmu_collection_copy_all==(bool)all);
+        assert(!s.confirm_vmu_copy && !s.confirm_vmu_copy_all && !s.vmu_collection_copy_stored);
+        struct kui_vmu_view ready={.slot=3,.page=1,.count=1,.total=all?3:1,
+            .copy_ready=true,.bulk_total=all?3:1,.bulk_remaining=all?3:1};
+        ready.status.complete=ready.status.passed=true;
+        strcpy(ready.entries[0].name,"SELECTED");ready.entries[0].bytes=4096;
+        struct kui_vmu_view physical=ready;physical.slot=8;
+        kui_shell_set_vmu_copy_preview(&s,&physical);
+        kui_shell_set_vmu_copy_all(&s,3,8,false,&ready);
+        assert(!s.confirm_vmu_copy && !s.confirm_vmu_copy_all); /* No physical E1 destination. */
+        kui_shell_set_vmu_collection_copy(&s,2,1,1,all,generation,false,&ready);
+        kui_shell_set_vmu_collection_copy(&s,3,0,1,all,generation,false,&ready);
+        kui_shell_set_vmu_collection_copy(&s,3,1,0,all,generation,false,&ready);
+        kui_shell_set_vmu_collection_copy(&s,3,1,1,!all,generation,false,&ready);
+        kui_shell_set_vmu_collection_copy(&s,3,1,1,all,generation+1,false,&ready);
+        assert(!s.confirm_vmu_copy && !s.confirm_vmu_copy_all);
+        s.vmu_copy_slot=0;
+        kui_shell_set_vmu_collection_copy(&s,3,1,1,all,generation,false,&ready);
+        assert(!s.confirm_vmu_copy && !s.confirm_vmu_copy_all);s.vmu_copy_slot=8;
+        struct kui_vmu_view refused=ready;refused.status.stopped=true;
+        kui_shell_set_vmu_collection_copy(&s,3,1,1,all,generation,false,&refused);
+        assert(!s.confirm_vmu_copy && !s.confirm_vmu_copy_all);
+        refused=ready;refused.status.passed=false;
+        kui_shell_set_vmu_collection_copy(&s,3,1,1,all,generation,false,&refused);
+        refused=ready;refused.status.complete=false;
+        kui_shell_set_vmu_collection_copy(&s,3,1,1,all,generation,false,&refused);
+        refused=ready;refused.status.errors=1;
+        kui_shell_set_vmu_collection_copy(&s,3,1,1,all,generation,false,&refused);
+        refused=ready;refused.bulk_remaining=0;
+        kui_shell_set_vmu_collection_copy(&s,3,1,1,all,generation,false,&refused);
+        refused=ready;refused.bulk_completed=1;
+        kui_shell_set_vmu_collection_copy(&s,3,1,1,all,generation,false,&refused);
+        refused=ready;refused.bulk_unverified=true;
+        kui_shell_set_vmu_collection_copy(&s,3,1,1,all,generation,false,&refused);
+        assert(!s.confirm_vmu_copy && !s.confirm_vmu_copy_all);
+        if(!all) {
+            refused=ready;memset(refused.entries[0].name,'x',sizeof(refused.entries[0].name));
+            kui_shell_set_vmu_collection_copy(&s,3,1,1,false,generation,false,&refused);
+            refused=ready;refused.entries[0].bytes=0;
+            kui_shell_set_vmu_collection_copy(&s,3,1,1,false,generation,false,&refused);
+            assert(!s.confirm_vmu_copy);
+        }
+        kui_shell_set_vmu_collection_copy(&s,3,1,1,all,generation,false,&ready);
+        assert(s.confirm_vmu_copy==!all && s.confirm_vmu_copy_all==(bool)all);
+        assert(press(KUI_SHELL_LEFT|KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.vmu_copy_slot==8);
+        assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
+        assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE);
+        assert(!s.confirm_vmu_copy && !s.confirm_vmu_copy_all);
+        kui_shell_set_vmu_collection_copy(&s,3,1,1,all,generation,false,&ready);
+        assert(!s.confirm_vmu_copy && !s.confirm_vmu_copy_all); /* Cancelled publication. */
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_COLLECTION_COPY_PREVIEW);
+        unsigned current=s.vmu_collection_copy_generation;assert(current!=generation);
+        kui_shell_set_vmu_collection_copy(&s,3,1,1,all,current,false,&ready);
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_COLLECTION_COPY_COMMIT);
+        assert(!s.confirm_vmu_copy && !s.confirm_vmu_copy_all);
+        unsigned committing=s.vmu_collection_copy_generation;
+        kui_shell_set_vmu_collection_copy(&s,3,1,1,all,current,false,&ready);
+        assert(!s.confirm_vmu_copy && !s.confirm_vmu_copy_all); /* Consumed preview. */
+        struct kui_vmu_view stored=ready;stored.copy_ready=false;
+        for(unsigned i=0;i<sizeof(invalid_vmu_collection_paths)/sizeof(invalid_vmu_collection_paths[0]);i++) {
+            strcpy(stored.backup_path,invalid_vmu_collection_paths[i]);
+            kui_shell_set_vmu_collection_copy(&s,3,1,1,all,committing,true,&stored);
+            assert(!s.vmu_collection_copy_stored && !s.confirm_vmu_copy && !s.confirm_vmu_copy_all);
+        }
+        strcpy(stored.backup_path,"0:/KUI/vmu/cards/v0001/card.vmd");
+        kui_shell_set_vmu_collection_copy(&s,3,1,1,all,committing,true,&stored);
+        assert(s.vmu_collection_copy_stored && !s.confirm_vmu_copy && !s.confirm_vmu_copy_all);
+        assert(s.vmu_slot==3 && s.vmu_page==1 && s.vmu_selected==1 && s.vmu.total==3);
+        assert(press(KUI_SHELL_B,false)==KUI_SHELL_VMU_LIST && s.page==KUI_SHELL_VMU);
+        kui_shell_set_vmu_collection_copy(&s,3,1,1,all,committing,false,&ready);
+        assert(!s.confirm_vmu_copy && !s.confirm_vmu_copy_all);
+    }
+    puts("PASS virtual VMU copy: selected/all dispatch, unreadable and empty sources, exact async keys, failed previews, cancellation, one-use confirmation and stored-only completion");
+}
+
+static void vmu_collection_controls(void) {
+    reset(KUI_SHELL_VMU);s.vmu_slot=5;s.backups.count=1;
+    strcpy(s.backups.entries[0].path,"/KUI/backups/vmu/A1-0001/ORIGINAL.vms");
+    assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.vmu_action_selected==4);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_COLLECTION_LIST && s.page==KUI_SHELL_VMU_COLLECTION);
+    unsigned generation=s.vmu_collection_generation;
+    struct kui_vmu_backup_view cards={.page=0,.count=3,.total=10};
+    strcpy(cards.entries[0].name,"Selected save");strcpy(cards.entries[0].folder,"v0001");
+    strcpy(cards.entries[0].path,"0:/KUI/vmu/cards/v0001/card.vmd");
+    strcpy(cards.entries[1].path,"0:/KUI/vmu/cards/v0002/save.vms");
+    memset(cards.entries[2].path,'x',sizeof(cards.entries[2].path));
+    kui_shell_set_vmu_collection(&s,generation+1,&cards);assert(!s.vmu_collection.count);
+    cards.page=1;kui_shell_set_vmu_collection(&s,generation,&cards);assert(!s.vmu_collection.count);
+    struct kui_vmu_backup_view invalid={.page=0,.count=1,.total=1};
+    for(unsigned i=0;i<sizeof(invalid_vmu_collection_paths)/sizeof(invalid_vmu_collection_paths[0]);i++) {
+        strcpy(invalid.entries[0].path,invalid_vmu_collection_paths[i]);
+        kui_shell_set_vmu_collection(&s,generation,&invalid);
+        assert(s.vmu_collection.count==1 && !s.vmu_collection.entries[0].path[0]);
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_COLLECTION);
+    }
+    cards.page=0;kui_shell_set_vmu_collection(&s,generation,&cards);
+    assert(s.vmu_collection.count==3 && !s.vmu_collection.entries[1].path[0] && !s.vmu_collection.entries[2].path[0]);
+    assert(s.backups.count==1 && strstr(s.backups.entries[0].path,"ORIGINAL.vms"));
+    s.vmu_collection_selected=1;assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    s.vmu_collection_selected=0;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_IMAGE_LIST && s.page==KUI_SHELL_VMU_IMAGE);
+    assert(s.vmu_image_collection && !strcmp(s.vmu_image_path,cards.entries[0].path));
+    assert(s.vmu_slot==5 && !s.confirm_vmu_restore);
+    struct kui_vmu_view image={.count=1,.total=1,.present=true};
+    strcpy(image.entries[0].name,"SELECTED");image.entries[0].bytes=4096;
+    kui_shell_set_vmu_image(&s,s.vmu_image_path,0,&image);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_VMU_IMAGE_EXTRACT);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_VMU_IMAGE_EXTRACT_ALL);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_COLLECTION);
+    assert(s.vmu_collection.count==3 && s.vmu_collection_selected==0);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_VMU_COLLECTION_LIST && s.vmu_collection_page==1);
+    assert(!s.vmu_collection.count && s.vmu_collection_generation!=generation);
+    kui_shell_set_vmu_collection(&s,generation,&cards);assert(!s.vmu_collection.count);
+    cards.page=1;kui_shell_set_vmu_collection(&s,s.vmu_collection_generation,&cards);
+    assert(s.vmu_collection.count==2); /* The final page has only two cards. */
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_VMU_COLLECTION_LIST && s.vmu_collection_page==1);
+    assert(!s.vmu_collection.count);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_ACTIONS && s.vmu_action_selected==4);
+    kui_shell_set_vmu_collection(&s,s.vmu_collection_generation,&cards);assert(!s.vmu_collection.count);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_VMU_LIST && s.page==KUI_SHELL_VMU);
+    assert(s.vmu_slot==5 && s.backups.count==1 && !s.confirm_vmu_restore);
+    assert(press(KUI_SHELL_R,false)==KUI_SHELL_VMU_BACKUPS_LIST); /* Original restore path stays distinct. */
+    puts("PASS managed virtual card browser: no physical source required, exact listing generation/page, invalid paths, read-only image extraction, return context and separate SD restore");
+}
+
+static void vmu_collection_rendering(void) {
+    struct kui_shell_view view={0};
+    reset(KUI_SHELL_VMU_ACTIONS);s.vmu_slot=3;s.vmu_copy_slot=8;s.vmu_action_selected=1;
+    s.vmu.present=true;s.vmu.count=s.vmu.total=1;
+    strcpy(s.vmu.entries[0].name,"SELECTED");s.vmu.entries[0].bytes=4096;
+    render(&view);assert(strstr(drawn,"Virtual VMU (new card)") && strstr(drawn,"Browse virtual cards"));
+    assert(!strstr(drawn,"E1"));
+    s.confirm_vmu_copy=true;render(&view);
+    assert(strstr(drawn,"COPY THIS SAVE") && strstr(drawn,"Virtual VMU") && !strstr(drawn,"E1"));
+    s.confirm_vmu_copy=false;s.vmu_action_selected=3;s.confirm_vmu_copy_all=true;
+    s.vmu_collection_copy.bulk_total=3;render(&view);
+    assert(strstr(drawn,"COPY ALL SAVES") && strstr(drawn,"Virtual VMU") && !strstr(drawn,"E1"));
+    s.confirm_vmu_copy_all=false;s.vmu_collection_copy_stored=true;
+    strcpy(s.vmu_collection_copy.status.message,"Stored; game activation pending");render(&view);
+    assert(strstr(drawn,"Stored; game activation pending"));
+    reset(KUI_SHELL_VMU_COLLECTION);s.vmu_collection.count=KUI_VMU_ROWS;s.vmu_collection.total=13;
+    for(unsigned i=0;i<KUI_VMU_ROWS;i++) {
+        snprintf(s.vmu_collection.entries[i].name,16,"Card %02u",i);
+        snprintf(s.vmu_collection.entries[i].folder,16,"v%04u",i+1);
+    }
+    s.vmu_collection_selected=7;render(&view);
+    assert(strstr(drawn,"virtual cards") && strstr(drawn,"Card 07"));
+    assert(!strstr(drawn,"Target VMU") && !strstr(drawn,"WRITE THIS SAVE"));
+    s.vmu_collection.count=0;view.busy=true;render(&view);
+    view.busy=false;s.page=KUI_SHELL_VMU_IMAGE;s.vmu_image_collection=true;
+    strcpy(s.vmu_image_path,"0:/KUI/vmu/cards/v0001/card.vmd");render(&view);
+    assert(strstr(drawn,"B Virtual cards") && strstr(drawn,"verified SD backups only"));
+    puts("PASS virtual VMU rendering: ninth destination label, selected/all confirmation, pending activation status, eight managed card rows and read-only image return context");
+}
+
 int main(int argc,char **argv) {
+    if(argc==2 && !strcmp(argv[1],"--virtual-vmu")) {
+        vmu_continuous_scrolling();vmu_catalog_scrolling();vmu_scroll_rendering();
+        vmu_collection_copy_controls();vmu_collection_controls();vmu_collection_rendering();return 0;
+    }
     if(argc==2 && !strcmp(argv[1],"--wifi")) {
         wifi_controls();wifi_rendering();wifi_update_controls();wifi_update_rendering();return 0;
     }
@@ -3767,11 +4250,12 @@ int main(int argc,char **argv) {
         destination_transaction();keyboard_transaction();advanced_navigation();restore_and_scan_controls();
         ripper_saved_job_rendering();reference_and_destination_rendering();music_and_boot_rendering();return 0;
     }
-    small_tools_controls();small_tools_rendering();
+    vmu_continuous_scrolling();vmu_catalog_scrolling();vmu_scroll_rendering();small_tools_controls();small_tools_rendering();
     vmu_copy_all_controls();vmu_import_controls();vmu_bulk_import_rendering();
+    vmu_collection_copy_controls();vmu_collection_controls();vmu_collection_rendering();
     games_remembered_selection(); games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_cdda_compatibility_status(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_zso_controls(); games_codec_controls(); games_check_baseline_controls(); games_variant_controls();
     if(argc==2 && !strcmp(argv[1],"--games-controls")) { puts("PASS Games navigation and launch controls"); return 0; }
-    games_rendering(); games_patch_rendering(); games_zso_rendering(); games_selected_art_rendering(); games_variant_rendering();
+    games_rendering(); games_native_reader_choices(); games_new_reader_defaults(); games_patch_rendering(); games_zso_rendering(); games_selected_art_rendering(); games_variant_rendering();
     if(argc==2 && !strcmp(argv[1],"--games")) { puts("PASS Games navigation, launch eligibility and rendering"); return 0; }
     storage_test_controls();storage_test_rendering();
     launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction(); ripper_export_rendering();

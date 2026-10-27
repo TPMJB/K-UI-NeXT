@@ -1,0 +1,71 @@
+{
+  "instruction_model_checks": 5705,
+  "leaf_bytes": 488,
+  "maximum_stack_bytes": 40,
+  "shared_job_bytes": 60,
+  "unknown_instructions_rejected": true,
+  "private_write_bounds_checked": true,
+  "callback_free": true,
+  "native_byte_contract": {
+    "leaf_bytes": 488,
+    "leaf_sha256": "9b80c8e08640dc194c7d953538bb825e2d919ffb322d5e228f1791621a102841",
+    "job_bytes": 60,
+    "job_p2": "0xacfcf000",
+    "job_literal_offset": 416,
+    "private_stack_bytes": 40,
+    "complete_bytes_pinned": true,
+    "callbacks": false,
+    "callee_saved_registers": [
+      "r8",
+      "r9",
+      "r10",
+      "r11",
+      "r12",
+      "r13",
+      "sp"
+    ],
+    "sr_mode_and_mask_preserved": true,
+    "condition_flag_unspecified": true,
+    "array_to_cached_return_nops": 8,
+    "selected_data_reads_per_success": 2,
+    "tag_scans_per_success": 2,
+    "tag_colors_per_scan": 4,
+    "native_hardware_validation_pending": true
+  },
+  "mutations": {
+    "complete_byte_mutations_rejected": 488,
+    "semantic_guard_mutations_detected": [
+      {
+        "guard": "dirty alternate alias",
+        "expected": 1,
+        "mutated_result": 0,
+        "instruction_offset": 250
+      },
+      {
+        "guard": "second tag scan",
+        "expected": 2,
+        "mutated_result": 0,
+        "instruction_offset": 314
+      },
+      {
+        "guard": "repeated selected data",
+        "expected": 2,
+        "mutated_result": 0,
+        "instruction_offset": 344
+      },
+      {
+        "guard": "live CCR profile",
+        "expected": 1,
+        "mutated_result": 0,
+        "instruction_offset": 134
+      },
+      {
+        "guard": "IMASK15 admission",
+        "expected": 3,
+        "mutated_result": 0,
+        "instruction_offset": 124
+      }
+    ]
+  },
+  "scope": "SH instruction/ABI/coherence model; no hardware cycle or performance proof"
+}

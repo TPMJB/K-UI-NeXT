@@ -1,0 +1,2678 @@
+{
+  "schema": "kui.native-console-followup-cd3318.v1",
+  "runtime_commit": "cd3318f0f457169514643eb1775d5dc8019e695d",
+  "production_changed": false,
+  "user_observations": {
+    "Rayman2": "Gets past Ubisoft and loads; reports no VMU detected. Exact screen wording, slot selection, and actual reader for this run not supplied.",
+    "Lodoss": "Black video remains. User hears normal startup including ESP sound with audio repeats. Uploaded video begins on terminal report.",
+    "Evolution2": "Works including loading. Actual selected reader not independently captured."
+  },
+  "lodoss_capture": {
+    "schema": "kui.console-lodoss-cd3318-raw-owner-analysis.v1",
+    "build": "cd3318f0f457",
+    "title": "RECORD OF LODOSS WAR",
+    "video": {
+      "path": "63418.mp4",
+      "sha256": "31926b71a647b9d62918072d0ca3a74b1fee1f9f440e9562dd1f68c6964a72f5",
+      "bytes": 68053204,
+      "duration_seconds": 94.738978,
+      "complete_report_cycle": true,
+      "starts_on_report": true
+    },
+    "source": {
+      "path": "lodoss/1NOSDC.BIN",
+      "bytes": 3473412,
+      "sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5"
+    },
+    "frames": {
+      "reader": 1,
+      "poll_gap_pages": [
+        3,
+        5
+      ],
+      "timeline": 8,
+      "bins": [
+        10,
+        12,
+        14
+      ],
+      "requests": [
+        16,
+        18
+      ],
+      "latency": 20,
+      "clock": 24,
+      "raw_header": 25,
+      "raw_words": [
+        28,
+        31,
+        33,
+        35
+      ],
+      "extraction": "ffmpeg -vf fps=1/2; frameN approximately2*N-1sec"
+    },
+    "raw_header": {
+      "frame": 2354299156,
+      "words": 192,
+      "flags": 7,
+      "tick": 4263269190,
+      "pr": 2351731310,
+      "sr": 1610612977,
+      "load": 34341721,
+      "vblank": 1376516,
+      "control": 336,
+      "scan": 14445,
+      "event": 864
+    },
+    "raw_words": [
+      0,
+      1744,
+      10,
+      2351731310,
+      2354239468,
+      0,
+      1,
+      128,
+      2354241728,
+      2354440548,
+      1,
+      0,
+      0,
+      1744,
+      2354382952,
+      2354744492,
+      0,
+      1610612977,
+      4294967055,
+      0,
+      2351854344,
+      15,
+      2351729732,
+      0,
+      8,
+      2560,
+      128,
+      1,
+      0,
+      2354239468,
+      2351726790,
+      128,
+      1,
+      0,
+      2354239468,
+      2351727010,
+      1,
+      2351922016,
+      2352277776,
+      0,
+      2354150392,
+      0,
+      2351726914,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1132017601,
+      1131924145,
+      1131860948,
+      1131848558,
+      0,
+      0,
+      0,
+      0,
+      262156,
+      8388736,
+      1879048193,
+      1328,
+      0,
+      2352168708,
+      872,
+      2354155260,
+      1744,
+      0,
+      0,
+      0,
+      8,
+      2352277776,
+      0,
+      2354150392,
+      0,
+      2354150392,
+      1744,
+      10,
+      2348872704,
+      0,
+      2351885382,
+      2352168740,
+      1610612736,
+      2348872352,
+      0,
+      2354315712,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2354299564,
+      2354299556,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "interrupted_registers": {
+      "fpscr": 262156,
+      "fpul": 8388736,
+      "sr": 1879048193,
+      "r0": 1328,
+      "r1": 0,
+      "r2": 2352168708,
+      "r3": 872,
+      "r4": 2354155260,
+      "r5": 1744,
+      "r6": 0,
+      "r7": 0,
+      "r8": 0,
+      "r9": 8,
+      "r10": 2352277776,
+      "r11": 0,
+      "r12": 2354150392,
+      "r13": 0,
+      "r14": 2354150392,
+      "macl": 1744,
+      "mach": 10,
+      "vbr": 2348872704,
+      "gbr": 0,
+      "pr": 2351885382,
+      "spc": 2352168740,
+      "ssr": 1610612736
+    },
+    "reader": {
+      "samples": 1119,
+      "bad": 0,
+      "gap_max": 29573,
+      "read_max": 0,
+      "age_max": 0,
+      "irq_blocks": 103,
+      "call_blocks": 9591,
+      "pio": 44,
+      "crc": 0,
+      "token_errors": 0,
+      "foreign": 0,
+      "fix": 0,
+      "overruns": 235,
+      "defer": 0,
+      "clock_bad": 0,
+      "sci_rearm": 241,
+      "irq_count": 241,
+      "hook": 137,
+      "release100": 0,
+      "release400": 0,
+      "release600": 137,
+      "vbr_changes": 0,
+      "max_read_lba": 0,
+      "max_read_count": 0
+    },
+    "readahead": {
+      "pages_visible": false,
+      "selected_reader": "Legacy",
+      "identification_proof": "reader_identification in this document",
+      "heading_warning": "READ/AGE SDK X is hardcoded even for dual-worker Legacy selection. Nonzero rawrehook/release600 counters identifyLegacy; those writes and symbols are absent from New resident."
+    },
+    "gd": {
+      "events": 1119,
+      "valid": 1119,
+      "bad": 0,
+      "epoch": 1,
+      "clock_breaks": 0,
+      "unmatched": 0,
+      "overflow": 0,
+      "saturation": 0,
+      "max_call_ticks": 0,
+      "max_gap_ticks": 0,
+      "max_chain_length": 1,
+      "max_chain_ticks": 234152,
+      "max_chain_inside": 0,
+      "active_token": 0,
+      "last_active_lba": 267601,
+      "last_active_count": 22,
+      "active_flags": 1,
+      "stored_calls": 0,
+      "stored_requests": 16,
+      "bins": 32
+    },
+    "vmu": {
+      "submit": [
+        1119,
+        1119,
+        0,
+        72140,
+        66
+      ],
+      "complete": [
+        1119,
+        1119,
+        0,
+        1126618,
+        87
+      ],
+      "free": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "store": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "wall": [
+        15630069,
+        4476,
+        0,
+        0
+      ],
+      "fast_full_sub_end": [
+        1119,
+        0,
+        1119,
+        0
+      ]
+    },
+    "clock": {
+      "ccr_first": 389,
+      "ccr_last": 389,
+      "ice_off": 0,
+      "polls": 1119,
+      "commits": 0,
+      "phase_mode": 2,
+      "phase_sequence": 0,
+      "phase_valid": 0,
+      "phase_waits": 0,
+      "phase_wraps": 0,
+      "fault_vector_armed": 0
+    },
+    "limits": [
+      "Manualhextranscription. Keyframe+SPC/PR/registers source-replayed. Fullrawpages captured, all words transcribed but unneeded inactive/FPUwords have not all independently reviewed.",
+      "Video begins on diagnostics, boot/ESP sound and blackscreen are user observations.",
+      "SDK X heading is misleading. SelectedLegacy is identified from nonzero rawreturntrampoline counters in exactcompiledresident, not the heading.",
+      "This is an intentional interrupt snapshot, not a faultPC; INTEVT is last eventlatch.",
+      "Same originalSDK fullFPUframe may switch toIRQstack; SDKpreframeSP8c53c2a4 is not proved gameSP.",
+      "NoFB_R_CTRL/decoderoutputs captured. No proofno video frames published."
+    ],
+    "production_changed": false,
+    "poll_gap_rows": [
+      [
+        [
+          0,
+          29573,
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          100,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          17,
+          73,
+          73,
+          36419287
+        ]
+      ],
+      [
+        [
+          1,
+          29174,
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          100,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          17,
+          85,
+          85,
+          36422752
+        ]
+      ],
+      [
+        [
+          2,
+          29173,
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          100,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          17,
+          103,
+          103,
+          36425399
+        ]
+      ],
+      [
+        [
+          3,
+          29169,
+          0,
+          0,
+          1
+        ],
+        [
+          0,
+          100,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          17,
+          73,
+          73,
+          36419087
+        ]
+      ]
+    ],
+    "gd_bin_rows": [
+      [
+        0,
+        1,
+        0,
+        0,
+        38
+      ],
+      [
+        1,
+        1,
+        0,
+        0,
+        38
+      ],
+      [
+        2,
+        1,
+        0,
+        0,
+        38
+      ],
+      [
+        3,
+        1,
+        0,
+        0,
+        36
+      ],
+      [
+        4,
+        1,
+        0,
+        0,
+        38
+      ],
+      [
+        5,
+        1,
+        0,
+        0,
+        30
+      ],
+      [
+        6,
+        1,
+        0,
+        0,
+        38
+      ],
+      [
+        7,
+        1,
+        0,
+        0,
+        37
+      ],
+      [
+        8,
+        1,
+        0,
+        0,
+        35
+      ],
+      [
+        9,
+        1,
+        0,
+        0,
+        36
+      ],
+      [
+        10,
+        1,
+        0,
+        0,
+        29
+      ],
+      [
+        11,
+        1,
+        0,
+        0,
+        34
+      ],
+      [
+        12,
+        1,
+        0,
+        0,
+        35
+      ],
+      [
+        13,
+        1,
+        0,
+        0,
+        31
+      ],
+      [
+        14,
+        1,
+        0,
+        0,
+        35
+      ],
+      [
+        15,
+        1,
+        0,
+        0,
+        35
+      ],
+      [
+        16,
+        1,
+        0,
+        0,
+        36
+      ],
+      [
+        17,
+        1,
+        0,
+        0,
+        33
+      ],
+      [
+        18,
+        1,
+        0,
+        0,
+        28
+      ],
+      [
+        19,
+        1,
+        0,
+        0,
+        38
+      ],
+      [
+        20,
+        1,
+        0,
+        0,
+        35
+      ],
+      [
+        21,
+        1,
+        0,
+        0,
+        35
+      ],
+      [
+        22,
+        1,
+        0,
+        0,
+        37
+      ],
+      [
+        23,
+        1,
+        0,
+        0,
+        35
+      ],
+      [
+        24,
+        1,
+        0,
+        0,
+        37
+      ],
+      [
+        25,
+        1,
+        0,
+        0,
+        37
+      ],
+      [
+        26,
+        1,
+        0,
+        0,
+        38
+      ],
+      [
+        27,
+        1,
+        0,
+        0,
+        38
+      ],
+      [
+        28,
+        1,
+        0,
+        0,
+        35
+      ],
+      [
+        29,
+        1,
+        0,
+        0,
+        31
+      ],
+      [
+        30,
+        1,
+        0,
+        0,
+        33
+      ],
+      [
+        31,
+        1,
+        0,
+        0,
+        30
+      ]
+    ],
+    "stored_request_rows": [
+      [
+        [
+          97,
+          267149,
+          14,
+          15518
+        ],
+        [
+          0,
+          15518,
+          0,
+          28672
+        ],
+        [
+          1,
+          1,
+          1,
+          15518
+        ]
+      ],
+      [
+        [
+          100,
+          267168,
+          13,
+          14985
+        ],
+        [
+          0,
+          14985,
+          0,
+          26624
+        ],
+        [
+          1,
+          1,
+          1,
+          14985
+        ]
+      ],
+      [
+        [
+          101,
+          267181,
+          49,
+          61685
+        ],
+        [
+          0,
+          61685,
+          0,
+          100352
+        ],
+        [
+          1,
+          1,
+          1,
+          61685
+        ]
+      ],
+      [
+        [
+          102,
+          267230,
+          20,
+          24237
+        ],
+        [
+          0,
+          24237,
+          0,
+          40960
+        ],
+        [
+          1,
+          1,
+          1,
+          24237
+        ]
+      ],
+      [
+        [
+          103,
+          267250,
+          112,
+          162601
+        ],
+        [
+          0,
+          162601,
+          0,
+          256000
+        ],
+        [
+          1,
+          1,
+          1,
+          162601
+        ]
+      ],
+      [
+        [
+          104,
+          267375,
+          51,
+          73453
+        ],
+        [
+          0,
+          73453,
+          0,
+          104448
+        ],
+        [
+          1,
+          1,
+          1,
+          73453
+        ]
+      ],
+      [
+        [
+          105,
+          267426,
+          175,
+          234152
+        ],
+        [
+          0,
+          234152,
+          0,
+          358400
+        ],
+        [
+          1,
+          1,
+          1,
+          234152
+        ]
+      ],
+      [
+        [
+          106,
+          267601,
+          22,
+          34273
+        ],
+        [
+          0,
+          34273,
+          0,
+          45056
+        ],
+        [
+          1,
+          1,
+          1,
+          34273
+        ]
+      ]
+    ],
+    "conclusions": [
+      "This capture is Legacy, established by0x89 rawreturntrampoline release600+rehook events written only in Legacy. The SDK X heading is shared and misleading.",
+      "During20.00648832sec,1119validfastcontrollerpairsandzeroVMUstorage/commit operations were observed. SCIstream counters advanced235overrunresults,0repair/defer,103IRQblocks,9591callblocks,44PIOblocks.",
+      "The rawstackunwinds through exact original caller+fullFPUframe; interrupted8c333f24 is a coherent indexedcursorupdate with recordaddress8c518efc. This doesnotprove a stuckinstruction, decoding, video publication, or validstream bytes.",
+      "The previous C29New capture and this cd3318Legacy capture have different reader routes; rate/timing differences are not isolated evidence for the heapchange.",
+      "No New-reader Lodoss run is established by this recording; confirm Advanced Background reader New and captureifstillblack."
+    ],
+    "computed": {
+      "wall_seconds": 20.00648832,
+      "submit_seconds": 0.0923392,
+      "complete_seconds": 1.44207104,
+      "max_poll_gap_seconds": 0.03785344
+    }
+  },
+  "reader_identification": {
+    "schema": "kui.lodoss.cd3318f.reader-identification.v1",
+    "production_changed": false,
+    "video": "/workspace/scratch/04d42b036255/upload/63418.mp4",
+    "build_visible": "CD3318F0F457",
+    "observed": {
+      "rehooks_delta": 137,
+      "release600_delta": 137,
+      "release100_delta": 0,
+      "release400_delta": 0,
+      "readmax_ticks": 0,
+      "agemax_ticks": 0,
+      "read_ahead_pages": "absent complete repeated cycle"
+    },
+    "source": {
+      "raw_counter_writes": "retail_resident.S Legacy-only branch after elif defined(KUI_RETAIL_ASYNC), lines681-877; release counter write at704 and rehook at837",
+      "new_excludes_that_block": "SDK route branch begins retail_resident.S:475, ends with elif at570",
+      "report_mislabel": "vmu_native_reader_capture.inc:380 prints READ/AGE TICKS / SDK X for both selected engines",
+      "timing_gate": "vmu_native_reader_capture.inc:322, timing only ownedmanifest and readerusesSDK",
+      "ra_report_gate": "vmu_native_reader_capture.inc:49..55 excludes Legacy"
+    },
+    "compiled": {
+      "new": {
+        "elf": "/workspace/scratch/04d42b036255/native-game-startup/build/native-bottom-lease-final/resident-sci.elf",
+        "sha256": "31082f13430db2bb174ed932fa314f2774f850a0a6cc330721f094868f9f3ed6",
+        "symbols": {
+          "_kui_retail_sdk_sci_entry": "8c007460 T _kui_retail_sdk_sci_entry",
+          "_kui_retail_release_100": null,
+          "_kui_retail_release_400": null,
+          "_kui_retail_release_600": null,
+          "_kui_retail_rehook": null,
+          "__kui_native_sdk_sci_route_callback": "00000001 A __kui_native_sdk_sci_route_callback"
+        }
+      },
+      "legacy": {
+        "elf": "/workspace/scratch/04d42b036255/native-game-startup/build/native-bottom-lease-final/resident-legacy.elf",
+        "sha256": "90e4ba780ce28c2c3a810c5e0c6da67e4354b94af0280bb202d72b4264da3c75",
+        "symbols": {
+          "_kui_retail_sdk_sci_entry": null,
+          "_kui_retail_release_100": "8c00732c T _kui_retail_release_100",
+          "_kui_retail_release_400": "8c007336 T _kui_retail_release_400",
+          "_kui_retail_release_600": "8c007340 T _kui_retail_release_600",
+          "_kui_retail_rehook": "8c0073c4 T _kui_retail_rehook",
+          "__kui_native_sdk_sci_route_callback": null
+        }
+      }
+    },
+    "conclusion": "This recording contains the Legacy raw-VBR reader running. Its coherent nonzero raw return-trampoline counters cannot arise in the New resident. The SDK X report heading is not a selected-reader witness. No evidence in this recording supports missing New read-ahead activation."
+  },
+  "unwind": {
+    "status": "PASS",
+    "source_sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5",
+    "worker_sha256": "ae34f700f43636b4b53ac7d2ed019aec5cc259fd2ad803562f1f1b2e8eda60bc",
+    "frames_bytes": [
+      80,
+      40,
+      20,
+      8,
+      24
+    ],
+    "raw_begin": "0x8c53c114",
+    "common_frame_begin": "0x8c53c1c0",
+    "original_pr": "0x8c2eec46",
+    "original_spc": "0x8c333f24",
+    "original_ssr": "0x60000000",
+    "instruction": "mov.l@(4,r4),r2",
+    "read_address": "0x8c518f00",
+    "sdk_preframe_sp": "0x8c53c2a4",
+    "actual_game_sp": null,
+    "warning": "Oneinterruptsample, notfaultPC or provenloop. SDKmay switchIRQstack; originalgameSPnotcaptured."
+  },
+  "sampled_pc_context": {
+    "schema": "kui.lodoss.cd3318.bounded-original-pc-context.v1",
+    "source": {
+      "path": "/workspace/scratch/04d42b036255/native-inputs-recovered/lodoss/1NOSDC.BIN",
+      "bytes": 3473412,
+      "sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5"
+    },
+    "sample": {
+      "spc": "0x8c333f24",
+      "pr": "0x8c2eec46",
+      "instruction": "mov.l @(4,r4),r2",
+      "instruction_bytes": "4152"
+    },
+    "context": {
+      "function": "0x8c333f04",
+      "caller": "0x8c2eec2a",
+      "call": "0x8c2eec42",
+      "continuation": "0x8c2eec46",
+      "target_literal": "0x8c2eecbc",
+      "object_from_r12": "0x8c517bf8",
+      "r4_record": "0x8c518efc",
+      "r5_scaled_index": "0x000006d0",
+      "inferred_index_low29_bits": 2,
+      "original_index_high3_bits_captured": false,
+      "r6_increment": "0x00000000",
+      "index_field_address": "0x8c51b85c",
+      "index_field_live_value_captured": false,
+      "record_formula": "object + 0xc34 + index * 0x368",
+      "load_address": "0x8c518f00"
+    },
+    "semantics": [
+      "The original function computes a fixed-stride record inside the object and checks record+4 for nonzero before updating a ring-like cursor/count substructure at record+16.",
+      "For the nonzero branch, it adds R6 to substructure+20 (position), wraps against substructure+8 by subtracting substructure+4, clears associated fields at wrap/thresholds, subtracts R6 from substructure+48 (remaining), and adds R6 to substructure+44 (total).",
+      "The caller selects the record index from original_object+0x3c64 and forwards its own R5 input as this routine R6. The sampled increment is zero.",
+      "The same update routine is also used by an adjacent MPEG demux wrapper (call0x8c2efb4e), with its index sourced from object+0x2fe4; that adjacency/shared routine alone does not identify the sampled record as audio or video."
+    ],
+    "supported": [
+      "PC and PR are coherent with a valid original call and valid in-RAM indexed record address.",
+      "The postmultiply R5 is reproduced by index2 (uniquely modulo2^29), and the original fixed-stride calculation reproduces sampled R4 exactly. The original index high3bits are not captured.",
+      "This differs from the earlier C29 interrupt sample at MPEG parser entry0x8c3306c2."
+    ],
+    "limits": [
+      "This is a single interrupt-time sample at intentional diagnostic stop, not a fault address or proof of a stalled instruction.",
+      "The live record+4 and all ring state are not captured. No read success, decode success, rendering success, frame publication or specific audio/video ownership follows.",
+      "A zero update increment at this instant is legal for this bounded code and does not by itself prove a repeating zero-progress loop.",
+      "No symbols or external library version labels are available, so ring-like cursor/count is a behavioral description, not an authoritative function name."
+    ],
+    "source_spans": [
+      {
+        "begin": "0x8c333f04",
+        "end": "0x8c333fb4",
+        "sha256": "6280aeba634f6ecc938a079d687f10a9012cd29fcac2e4df17386e42aad0352c",
+        "disassembly": "/workspace/scratch/04d42b036255/lodoss-cd3318-review/sampled-buffer-update.dis"
+      },
+      {
+        "begin": "0x8c2eec2a",
+        "end": "0x8c2eecc8",
+        "sha256": "57b65dc46be446cdc628a07779029ad6928fad358db14524eee655352f72eea9",
+        "disassembly": "/workspace/scratch/04d42b036255/lodoss-cd3318-review/sampled-buffer-caller.dis"
+      },
+      {
+        "begin": "0x8c2efb36",
+        "end": "0x8c2efc50",
+        "sha256": "759895b71638207a3db84d8c03aade39f49e7c8e656a3d82ba5a877cf3ce4ba3",
+        "disassembly": "/workspace/scratch/04d42b036255/lodoss-cd3318-review/adjacent-mpeg-update-wrapper.dis"
+      }
+    ]
+  },
+  "rayman_original_presence_replay": {
+    "schema": "kui.rayman.original-card-presence-replay.v1",
+    "source_sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099",
+    "entry": "0x8c0d9b70",
+    "original_path": [
+      "0x8c0e69fe",
+      "0x8c0f1398",
+      "0x8c0d8bf4",
+      "0x8c0d8c06",
+      "0x8c0e4870",
+      "0x8c0d8ece",
+      "0x8c0e48de",
+      "0x8c0e4860"
+    ],
+    "cases": 160,
+    "pass": true,
+    "conclusion": "Original presence path accepts storage-only function2 at A2 and every standard A1/A2..D1/D2 logical slot, provided SDK attached/busy/mounted state is valid. No LCD/clock requirement in this tested predicate. Does not establish actual console enumeration/mount state.",
+    "results": [
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 0,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 0,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 0,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 0,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 2,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 1,
+        "instructions": 100
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 2,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 2,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 2,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 101
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 4,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 4,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 4,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 4,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 8,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 8,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 8,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 8,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 14,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 1,
+        "instructions": 100
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 14,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 14,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 0,
+        "maple_endpoint_index": 1,
+        "function": 14,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 101
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 0,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 0,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 0,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 0,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 2,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 1,
+        "instructions": 100
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 2,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 2,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 2,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 101
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 4,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 4,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 4,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 4,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 8,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 8,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 8,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 8,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 14,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 1,
+        "instructions": 100
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 14,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 14,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 1,
+        "maple_endpoint_index": 2,
+        "function": 14,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 101
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 0,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 0,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 0,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 0,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 2,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 1,
+        "instructions": 100
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 2,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 2,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 2,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 101
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 4,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 4,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 4,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 4,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 8,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 8,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 8,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 8,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 14,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 1,
+        "instructions": 100
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 14,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 14,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 2,
+        "maple_endpoint_index": 7,
+        "function": 14,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 101
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 0,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 0,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 0,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 0,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 2,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 1,
+        "instructions": 100
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 2,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 2,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 2,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 101
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 4,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 4,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 4,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 4,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 8,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 8,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 8,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 8,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 14,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 1,
+        "instructions": 100
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 14,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 14,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 3,
+        "maple_endpoint_index": 8,
+        "function": 14,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 101
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 0,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 0,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 0,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 0,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 2,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 1,
+        "instructions": 100
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 2,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 2,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 2,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 101
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 4,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 4,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 4,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 4,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 8,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 8,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 8,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 8,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 14,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 1,
+        "instructions": 100
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 14,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 14,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 4,
+        "maple_endpoint_index": 13,
+        "function": 14,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 101
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 0,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 0,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 0,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 0,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 2,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 1,
+        "instructions": 100
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 2,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 2,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 2,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 101
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 4,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 4,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 4,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 4,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 8,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 8,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 8,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 8,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 14,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 1,
+        "instructions": 100
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 14,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 14,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 5,
+        "maple_endpoint_index": 14,
+        "function": 14,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 101
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 0,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 0,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 0,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 0,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 2,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 1,
+        "instructions": 100
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 2,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 2,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 2,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 101
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 4,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 4,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 4,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 4,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 8,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 8,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 8,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 8,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 14,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 1,
+        "instructions": 100
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 14,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 14,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 6,
+        "maple_endpoint_index": 19,
+        "function": 14,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 101
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 0,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 0,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 0,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 0,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 2,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 1,
+        "instructions": 100
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 2,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 2,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 2,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 101
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 4,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 4,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 4,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 4,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 8,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 8,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 8,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 8,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 97
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 14,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 1,
+        "result": 1,
+        "instructions": 100
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 14,
+        "attached": 0,
+        "busy": 0,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 69
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 14,
+        "attached": 1,
+        "busy": 1,
+        "mounted": 1,
+        "result": 0,
+        "instructions": 93
+      },
+      {
+        "logical_slot": 7,
+        "maple_endpoint_index": 20,
+        "function": 14,
+        "attached": 1,
+        "busy": 0,
+        "mounted": 0,
+        "result": 0,
+        "instructions": 101
+      }
+    ]
+  },
+  "rayman_presence_limits": [
+    "Actual original presence instructions accept storage-only A2 when SDK attachment/busy/mounted state is valid. 160 modeled cases passed.",
+    "Original save library initially selects A1; all eight slot polling and a setter exist. Live warning/UI slot-selection behavior is not established.",
+    "No basis for changing virtual slot or adding LCD/clock functions from current evidence."
+  ],
+  "next_hardware_evidence": [
+    "Explicitly select Advanced Background reader New (X) in the delivered candidate, then relaunch Lodoss.",
+    "If black persists, capture the same terminal report; approximately95 seconds captured a full repeated cycle here.",
+    "Obtain exact Rayman VMU warning and, if it persists, existing terminal report while warning is displayed."
+  ],
+  "report_label_bug": {
+    "file": "src/loader/vmu_native_reader_capture.inc",
+    "line": 380,
+    "text": "READ/AGE TICKS / SDK X",
+    "behavior": "Unconditionally printed by the shared dual worker for Legacy too. Must not use as selected-reader proof. No production patch yet."
+  },
+  "no_github_writes": true
+}

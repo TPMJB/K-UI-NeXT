@@ -58,7 +58,13 @@ void kui_retail_async_test_write32(uint32_t address, uint32_t value) {
     hw.table[(address - TABLE - 0x9cu) / 4u] = value;
 }
 volatile uint32_t kui_retail_hook_sr;
-enum kui_loader_sd_result kui_sci_sd_acquire(void) { ++hw.acquires; return KUI_LOADER_SD_OK; }
+enum kui_loader_sd_result kui_sci_sd_acquire(void) {
+    ++hw.acquires;
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    R.shared.port.acquired=true;R.shared.port.fault=false;
+#endif
+    return KUI_LOADER_SD_OK;
+}
 
 /* ---- Image: the cursor test's track bytes, mapped onto the model card ---- */
 static uint8_t source(uint32_t track, uint32_t file_byte) {

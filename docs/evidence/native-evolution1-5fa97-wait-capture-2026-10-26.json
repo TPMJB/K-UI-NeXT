@@ -1,0 +1,52 @@
+{
+  "schema": "kui.native.evolution1.wait-console-capture.v1",
+  "runtime_source_commit": "5fa97d6729c8b069da7c50601d5c846de26e866b",
+  "reader": "New (X), demand only, virtual card off, controller TICK off",
+  "runtime_mode": "NORMAL",
+  "photos": [
+    {"page": "EVO1 WAIT CPU 1/2", "name": "01-image-1793051473573.jpg", "bytes": 314740, "sha256": "e37871130bbb0a07999fe692b893b89a4cd704afbd83d228c695bf6e1436d7ea"},
+    {"page": "EVO1 READER STATE 2/2", "name": "02-image-1793051478147.jpg", "bytes": 316174, "sha256": "fe63dfa07c73816c39c5902a833c7ba54487ca7bdce8022cdb01e59d5595fefc"}
+  ],
+  "cpu_rows_hex": {
+    "TRY OK UNWIND READ READY": ["00000008", "00000008", "00000000", "00000000", "00000001"],
+    "WAIT GOOD BAD BANK T-BAD": ["00000008", "00000008", "00000000", "00000000", "00000000"],
+    "SEL FLAGS PC R0 R4 R12": ["0000001f", "8c1f362c", "00003464", "0000010c", "8c1f1f36"],
+    "SEL R13 R14 SSR VBR ISR": ["000003ff", "0000010c", "60000000", "8c00f400", "70000001"],
+    "LAST FLAGS PC R0 R4 R12": ["0000001f", "8c1f362c", "00002066", "0000010c", "8c1f1f36"],
+    "LAST R13 R14 SSR VBR ISR": ["000003ff", "0000010c", "60000000", "8c00f400", "70000001"],
+    "VID0 VID1 SCAN0 SCAN1 SEL PR": ["000000ba", "000000c1", "00003467", "00003868", "8c1f362c"]
+  },
+  "reader_rows_hex": {
+    "GD CMD TOKEN PENDING EXEC ACTIVE": ["00000000", "00000013", "00000000", "00000000", "00000000"],
+    "IRQ HOOK OPEN STREAM POS": ["00000000", "00000000", "00000001", "00000001", "018c4e80"],
+    "CHCR1 DMAOR SCI VBR IPRB": ["00005440", "00008201", "84300080", "8c00f400", "00000000"],
+    "CCR EVENT W28 W2C GETTER01": ["00000105", "00000360", "64e34c0b", "8bfb20d8", "000bd012"],
+    "GETTER2 BASE RLIT MASK STAT": ["0000004e", "a05f8000", "8c1f1f36", "010c03ff", "00003868"],
+    "LOAD VBL CTRL MDSTAR MDST": ["020c0359", "00150104", "00000150", "0c248420", "00000000"],
+    "MDEN MDTSEL": ["00000001", "00000000"]
+  },
+  "interpretation": {
+    "checked_contexts": 8,
+    "all_contexts_in_original_wait_with_expected_operands": true,
+    "live_wait_getter_and_literals_match_original": true,
+    "selected_line": 100,
+    "latest_line": 102,
+    "first_callback_line": 103,
+    "last_callback_line": 104,
+    "video_counter_advance": 7,
+    "saved_game_interrupt_mask": 0,
+    "saved_r0_is_value_before_next_tst": true,
+    "t_comparisons_checked": 0,
+    "reader_pending_executing_active_in_irq_hooked": [0, 0, 0, 0, 0],
+    "stream_state": "opened and PAUSED",
+    "sci_irq_enable_bits_clear_and_priority_zero": true,
+    "dma_channel_1_enable_clear": true
+  },
+  "limits": [
+    "The eight observations occur at Maple completion, not continuously through scanline zero.",
+    "Repeated correct polling and advancing video do not prove IRQ-tail starvation or absence of hardware line zero.",
+    "The idle reader excludes an active read wait at the snapshot; it does not exclude earlier demand-reader side effects.",
+    "The shared IRQ entry executes DT before saving ISR SR, explaining ISR.T=1 alongside saved game SSR.T=0."
+  ],
+  "next_control": "Keep New demand, SCI routing, cache arena and lifetime guards; bypass only passive Maple C gateway visits on the already VMU-off/TICK-off control. A pass implicates the removed callback path, not a proved instruction-level cause."
+}

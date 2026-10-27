@@ -1,0 +1,672 @@
+{
+  "schema": "kui-native-vmu-sh-core-cost-v1",
+  "scope": "Executed actual linked SH integer code in a bounded deterministic interpreter; no cycle or console-time estimates.",
+  "artifacts": {
+    "old": {
+      "path": "build/native-latency-release/native-worker.elf",
+      "sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e"
+    },
+    "new": {
+      "path": "build/native-free-cost-dev/native-worker.elf",
+      "sha256": "901bb643c438065cb7a99ea034e6b14ae1d90b5de87c9bb3ae31372244ba02fd"
+    }
+  },
+  "tool": {
+    "path": "tools/profile_vmu_native_release_sh.py",
+    "sha256": "52516744b08f67df4e47086313430e85c39d488c1c3f35d8a9af0f3e686ba45b"
+  },
+  "commands": [
+    {
+      "argv": [
+        "python3",
+        "tools/profile_vmu_native_release_sh.py",
+        "build/native-latency-release",
+        "--kind",
+        "worker"
+      ],
+      "cwd": "/workspace/scratch/45de2288a575/K-UI-recovery"
+    },
+    {
+      "argv": [
+        "python3",
+        "tools/profile_vmu_native_release_sh.py",
+        "build/native-latency-release",
+        "--kind",
+        "worker-with-hooks"
+      ],
+      "cwd": "/workspace/scratch/45de2288a575/K-UI-recovery"
+    },
+    {
+      "argv": [
+        "python3",
+        "tools/profile_vmu_native_release_sh.py",
+        "build/native-latency-release",
+        "--kind",
+        "hooks",
+        "--exits",
+        "2",
+        "--check-hook-corruption"
+      ],
+      "cwd": "/workspace/scratch/45de2288a575/K-UI-recovery"
+    },
+    {
+      "argv": [
+        "python3",
+        "tools/profile_vmu_native_release_sh.py",
+        "build/native-latency-release",
+        "--kind",
+        "hooks",
+        "--exits",
+        "3",
+        "--check-hook-corruption"
+      ],
+      "cwd": "/workspace/scratch/45de2288a575/K-UI-recovery"
+    },
+    {
+      "argv": [
+        "python3",
+        "tools/profile_vmu_native_release_sh.py",
+        "build/native-free-cost-dev",
+        "--kind",
+        "worker"
+      ],
+      "cwd": "/workspace/scratch/45de2288a575/K-UI-recovery"
+    },
+    {
+      "argv": [
+        "python3",
+        "tools/profile_vmu_native_release_sh.py",
+        "build/native-free-cost-dev",
+        "--kind",
+        "worker-with-hooks"
+      ],
+      "cwd": "/workspace/scratch/45de2288a575/K-UI-recovery"
+    },
+    {
+      "argv": [
+        "python3",
+        "tools/profile_vmu_native_release_sh.py",
+        "build/native-free-cost-dev",
+        "--kind",
+        "hooks",
+        "--exits",
+        "2",
+        "--check-hook-corruption"
+      ],
+      "cwd": "/workspace/scratch/45de2288a575/K-UI-recovery"
+    },
+    {
+      "argv": [
+        "python3",
+        "tools/profile_vmu_native_release_sh.py",
+        "build/native-free-cost-dev",
+        "--kind",
+        "hooks",
+        "--exits",
+        "3",
+        "--check-hook-corruption"
+      ],
+      "cwd": "/workspace/scratch/45de2288a575/K-UI-recovery"
+    },
+    {
+      "argv": [
+        "python3",
+        "tools/profile_vmu_native_release_sh.py",
+        "build/native-latency-release",
+        "--kind",
+        "full"
+      ],
+      "cwd": "/workspace/scratch/45de2288a575/K-UI-recovery"
+    }
+  ],
+  "method": {
+    "fixture": "Synthetic reviewed allocator: 1 MiB arena, 192 KiB tail lease, valid candidate outside every free block, 60 valid protected ranges entirely outside arena. No game executable bytes.",
+    "nodes": [
+      1,
+      8,
+      64,
+      256,
+      1023
+    ],
+    "preparation": "Actual linked SH lifetime constructor and patch encoder run before counting. Lifetime plan fields are not fabricated. New hook fixtures execute actual linked prepare_hook_entry and hook_word, then set the identical ready marker used by arm; the arm initializer is inlined and has no separate link symbol.",
+    "worker_lifetime": "Actual release_check; stack_valid and installed_hooks_valid folded to successful returns; generic coherent read_heap folded to equivalent successful RAM read plus output store.",
+    "worker_with_hooks": "Actual release_check and entire installed_hooks_valid; only stack_valid and generic read_heap folded.",
+    "hooks": "Entire actual installed_hooks_valid, including old patch_matches, patch_encode and checked read_value; no folded helper bodies.",
+    "diagnostics": "Disabled, matching normal installation. No simulated timer sampling.",
+    "counting": "Executed integer instructions including branches and delay slots; P2 data-access operations to private metadata/stack/frame; guest data-access operations counted separately by synthetic address set. Reader stub output stores count as private writes, but stub instructions are excluded.",
+    "unaligned_hook": "One exit starts at halfword alignment. Old checker uses six halfword reads there; prepared checker uses four masked word reads. Exact same 12 patch bytes covered; neighboring bytes excluded.",
+    "mutation": "Flip bit 7 separately in every patch and slot byte, require rejection, then restore. Flip bit 7 separately in each of four unaligned neighboring bytes, require admission.",
+    "bounds": "Two-million-step per-call bound. Unsupported SH instruction fails. Callee-saved R8..R14 and SP must be restored.",
+    "limitations": "Not hardware benchmark, cycle model, cache simulation, interrupt-latency prediction, full-game execution, or proof of performance parity. Legacy callback stub omits its runtime checks/instructions, conservatively excluding that additional old overhead."
+  },
+  "legacy_standalone_lifetime_core": [
+    {
+      "kind": "full",
+      "elf_sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e",
+      "result": 1,
+      "instructions": 3588,
+      "private_p2_reads": 440,
+      "private_p2_writes": 119,
+      "guest_reads": 13,
+      "nodes": 1,
+      "ranges": 60
+    },
+    {
+      "kind": "full",
+      "elf_sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e",
+      "result": 1,
+      "instructions": 4519,
+      "private_p2_reads": 615,
+      "private_p2_writes": 168,
+      "guest_reads": 27,
+      "nodes": 8,
+      "ranges": 60
+    },
+    {
+      "kind": "full",
+      "elf_sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e",
+      "result": 1,
+      "instructions": 11967,
+      "private_p2_reads": 2015,
+      "private_p2_writes": 560,
+      "guest_reads": 139,
+      "nodes": 64,
+      "ranges": 60
+    },
+    {
+      "kind": "full",
+      "elf_sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e",
+      "result": 1,
+      "instructions": 37503,
+      "private_p2_reads": 6815,
+      "private_p2_writes": 1904,
+      "guest_reads": 523,
+      "nodes": 256,
+      "ranges": 60
+    },
+    {
+      "kind": "full",
+      "elf_sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e",
+      "result": 1,
+      "instructions": 139514,
+      "private_p2_reads": 25990,
+      "private_p2_writes": 7273,
+      "guest_reads": 2057,
+      "nodes": 1023,
+      "ranges": 60
+    }
+  ],
+  "cases": {
+    "old": {
+      "worker_lifetime": [
+        {
+          "kind": "worker",
+          "elf_sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e",
+          "result": 1,
+          "instructions": 3659,
+          "private_p2_reads": 453,
+          "private_p2_writes": 129,
+          "guest_reads": 13,
+          "nodes": 1,
+          "ranges": 60
+        },
+        {
+          "kind": "worker",
+          "elf_sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e",
+          "result": 1,
+          "instructions": 4590,
+          "private_p2_reads": 628,
+          "private_p2_writes": 178,
+          "guest_reads": 27,
+          "nodes": 8,
+          "ranges": 60
+        },
+        {
+          "kind": "worker",
+          "elf_sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e",
+          "result": 1,
+          "instructions": 12038,
+          "private_p2_reads": 2028,
+          "private_p2_writes": 570,
+          "guest_reads": 139,
+          "nodes": 64,
+          "ranges": 60
+        },
+        {
+          "kind": "worker",
+          "elf_sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e",
+          "result": 1,
+          "instructions": 37574,
+          "private_p2_reads": 6828,
+          "private_p2_writes": 1914,
+          "guest_reads": 523,
+          "nodes": 256,
+          "ranges": 60
+        },
+        {
+          "kind": "worker",
+          "elf_sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e",
+          "result": 1,
+          "instructions": 139585,
+          "private_p2_reads": 26003,
+          "private_p2_writes": 7283,
+          "guest_reads": 2057,
+          "nodes": 1023,
+          "ranges": 60
+        }
+      ],
+      "worker_with_hooks": [
+        {
+          "kind": "worker-with-hooks",
+          "elf_sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e",
+          "result": 1,
+          "instructions": 7233,
+          "private_p2_reads": 776,
+          "private_p2_writes": 424,
+          "guest_reads": 36,
+          "nodes": 1,
+          "ranges": 60,
+          "exits": 3
+        },
+        {
+          "kind": "worker-with-hooks",
+          "elf_sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e",
+          "result": 1,
+          "instructions": 8164,
+          "private_p2_reads": 951,
+          "private_p2_writes": 473,
+          "guest_reads": 50,
+          "nodes": 8,
+          "ranges": 60,
+          "exits": 3
+        },
+        {
+          "kind": "worker-with-hooks",
+          "elf_sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e",
+          "result": 1,
+          "instructions": 15612,
+          "private_p2_reads": 2351,
+          "private_p2_writes": 865,
+          "guest_reads": 162,
+          "nodes": 64,
+          "ranges": 60,
+          "exits": 3
+        },
+        {
+          "kind": "worker-with-hooks",
+          "elf_sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e",
+          "result": 1,
+          "instructions": 41148,
+          "private_p2_reads": 7151,
+          "private_p2_writes": 2209,
+          "guest_reads": 546,
+          "nodes": 256,
+          "ranges": 60,
+          "exits": 3
+        },
+        {
+          "kind": "worker-with-hooks",
+          "elf_sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e",
+          "result": 1,
+          "instructions": 143159,
+          "private_p2_reads": 26326,
+          "private_p2_writes": 7578,
+          "guest_reads": 2080,
+          "nodes": 1023,
+          "ranges": 60,
+          "exits": 3
+        }
+      ],
+      "hooks_two_exits": [
+        {
+          "kind": "hooks",
+          "elf_sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e",
+          "result": 1,
+          "instructions": 3046,
+          "private_p2_reads": 276,
+          "private_p2_writes": 252,
+          "guest_reads": 20,
+          "exits": 2,
+          "covered_bytes": 68,
+          "corruption": {
+            "bit_flipped": 128,
+            "protected_bytes_rejected": 68,
+            "adjacent_bytes_admitted": 4
+          }
+        }
+      ],
+      "hooks_three_exits": [
+        {
+          "kind": "hooks",
+          "elf_sha256": "995e8ad531a10420661fc6be48157eb9108d4fd98bf0c84fa5690d5f7a1c477e",
+          "result": 1,
+          "instructions": 3574,
+          "private_p2_reads": 323,
+          "private_p2_writes": 295,
+          "guest_reads": 23,
+          "exits": 3,
+          "covered_bytes": 80,
+          "corruption": {
+            "bit_flipped": 128,
+            "protected_bytes_rejected": 80,
+            "adjacent_bytes_admitted": 4
+          }
+        }
+      ]
+    },
+    "new": {
+      "worker_lifetime": [
+        {
+          "kind": "worker",
+          "elf_sha256": "901bb643c438065cb7a99ea034e6b14ae1d90b5de87c9bb3ae31372244ba02fd",
+          "result": 1,
+          "instructions": 268,
+          "private_p2_reads": 50,
+          "private_p2_writes": 17,
+          "guest_reads": 13,
+          "nodes": 1,
+          "ranges": 60
+        },
+        {
+          "kind": "worker",
+          "elf_sha256": "901bb643c438065cb7a99ea034e6b14ae1d90b5de87c9bb3ae31372244ba02fd",
+          "result": 1,
+          "instructions": 681,
+          "private_p2_reads": 99,
+          "private_p2_writes": 31,
+          "guest_reads": 27,
+          "nodes": 8,
+          "ranges": 60
+        },
+        {
+          "kind": "worker",
+          "elf_sha256": "901bb643c438065cb7a99ea034e6b14ae1d90b5de87c9bb3ae31372244ba02fd",
+          "result": 1,
+          "instructions": 3985,
+          "private_p2_reads": 491,
+          "private_p2_writes": 143,
+          "guest_reads": 139,
+          "nodes": 64,
+          "ranges": 60
+        },
+        {
+          "kind": "worker",
+          "elf_sha256": "901bb643c438065cb7a99ea034e6b14ae1d90b5de87c9bb3ae31372244ba02fd",
+          "result": 1,
+          "instructions": 15313,
+          "private_p2_reads": 1835,
+          "private_p2_writes": 527,
+          "guest_reads": 523,
+          "nodes": 256,
+          "ranges": 60
+        },
+        {
+          "kind": "worker",
+          "elf_sha256": "901bb643c438065cb7a99ea034e6b14ae1d90b5de87c9bb3ae31372244ba02fd",
+          "result": 1,
+          "instructions": 60566,
+          "private_p2_reads": 7204,
+          "private_p2_writes": 2061,
+          "guest_reads": 2057,
+          "nodes": 1023,
+          "ranges": 60
+        }
+      ],
+      "worker_with_hooks": [
+        {
+          "kind": "worker-with-hooks",
+          "elf_sha256": "901bb643c438065cb7a99ea034e6b14ae1d90b5de87c9bb3ae31372244ba02fd",
+          "result": 1,
+          "instructions": 494,
+          "private_p2_reads": 115,
+          "private_p2_writes": 17,
+          "guest_reads": 34,
+          "nodes": 1,
+          "ranges": 60,
+          "exits": 3
+        },
+        {
+          "kind": "worker-with-hooks",
+          "elf_sha256": "901bb643c438065cb7a99ea034e6b14ae1d90b5de87c9bb3ae31372244ba02fd",
+          "result": 1,
+          "instructions": 907,
+          "private_p2_reads": 164,
+          "private_p2_writes": 31,
+          "guest_reads": 48,
+          "nodes": 8,
+          "ranges": 60,
+          "exits": 3
+        },
+        {
+          "kind": "worker-with-hooks",
+          "elf_sha256": "901bb643c438065cb7a99ea034e6b14ae1d90b5de87c9bb3ae31372244ba02fd",
+          "result": 1,
+          "instructions": 4211,
+          "private_p2_reads": 556,
+          "private_p2_writes": 143,
+          "guest_reads": 160,
+          "nodes": 64,
+          "ranges": 60,
+          "exits": 3
+        },
+        {
+          "kind": "worker-with-hooks",
+          "elf_sha256": "901bb643c438065cb7a99ea034e6b14ae1d90b5de87c9bb3ae31372244ba02fd",
+          "result": 1,
+          "instructions": 15539,
+          "private_p2_reads": 1900,
+          "private_p2_writes": 527,
+          "guest_reads": 544,
+          "nodes": 256,
+          "ranges": 60,
+          "exits": 3
+        },
+        {
+          "kind": "worker-with-hooks",
+          "elf_sha256": "901bb643c438065cb7a99ea034e6b14ae1d90b5de87c9bb3ae31372244ba02fd",
+          "result": 1,
+          "instructions": 60792,
+          "private_p2_reads": 7269,
+          "private_p2_writes": 2061,
+          "guest_reads": 2078,
+          "nodes": 1023,
+          "ranges": 60,
+          "exits": 3
+        }
+      ],
+      "hooks_two_exits": [
+        {
+          "kind": "hooks",
+          "elf_sha256": "901bb643c438065cb7a99ea034e6b14ae1d90b5de87c9bb3ae31372244ba02fd",
+          "result": 1,
+          "instructions": 196,
+          "private_p2_reads": 56,
+          "private_p2_writes": 0,
+          "guest_reads": 18,
+          "exits": 2,
+          "covered_bytes": 68,
+          "corruption": {
+            "bit_flipped": 128,
+            "protected_bytes_rejected": 68,
+            "adjacent_bytes_admitted": 4
+          }
+        }
+      ],
+      "hooks_three_exits": [
+        {
+          "kind": "hooks",
+          "elf_sha256": "901bb643c438065cb7a99ea034e6b14ae1d90b5de87c9bb3ae31372244ba02fd",
+          "result": 1,
+          "instructions": 226,
+          "private_p2_reads": 65,
+          "private_p2_writes": 0,
+          "guest_reads": 21,
+          "exits": 3,
+          "covered_bytes": 80,
+          "corruption": {
+            "bit_flipped": 128,
+            "protected_bytes_rejected": 80,
+            "adjacent_bytes_admitted": 4
+          }
+        }
+      ]
+    }
+  },
+  "comparison": {
+    "worker_lifetime": [
+      {
+        "nodes": 1,
+        "exits": null,
+        "reduction_percent": {
+          "instructions": 92.6756,
+          "private_p2_reads": 88.9625,
+          "private_p2_writes": 86.8217
+        },
+        "old_guest_reads": 13,
+        "new_guest_reads": 13
+      },
+      {
+        "nodes": 8,
+        "exits": null,
+        "reduction_percent": {
+          "instructions": 85.1634,
+          "private_p2_reads": 84.2357,
+          "private_p2_writes": 82.5843
+        },
+        "old_guest_reads": 27,
+        "new_guest_reads": 27
+      },
+      {
+        "nodes": 64,
+        "exits": null,
+        "reduction_percent": {
+          "instructions": 66.8965,
+          "private_p2_reads": 75.789,
+          "private_p2_writes": 74.9123
+        },
+        "old_guest_reads": 139,
+        "new_guest_reads": 139
+      },
+      {
+        "nodes": 256,
+        "exits": null,
+        "reduction_percent": {
+          "instructions": 59.2458,
+          "private_p2_reads": 73.1254,
+          "private_p2_writes": 72.466
+        },
+        "old_guest_reads": 523,
+        "new_guest_reads": 523
+      },
+      {
+        "nodes": 1023,
+        "exits": null,
+        "reduction_percent": {
+          "instructions": 56.61,
+          "private_p2_reads": 72.2955,
+          "private_p2_writes": 71.7012
+        },
+        "old_guest_reads": 2057,
+        "new_guest_reads": 2057
+      }
+    ],
+    "worker_with_hooks": [
+      {
+        "nodes": 1,
+        "exits": 3,
+        "reduction_percent": {
+          "instructions": 93.1702,
+          "private_p2_reads": 85.1804,
+          "private_p2_writes": 95.9906
+        },
+        "old_guest_reads": 36,
+        "new_guest_reads": 34
+      },
+      {
+        "nodes": 8,
+        "exits": 3,
+        "reduction_percent": {
+          "instructions": 88.8902,
+          "private_p2_reads": 82.755,
+          "private_p2_writes": 93.4461
+        },
+        "old_guest_reads": 50,
+        "new_guest_reads": 48
+      },
+      {
+        "nodes": 64,
+        "exits": 3,
+        "reduction_percent": {
+          "instructions": 73.0272,
+          "private_p2_reads": 76.3505,
+          "private_p2_writes": 83.4682
+        },
+        "old_guest_reads": 162,
+        "new_guest_reads": 160
+      },
+      {
+        "nodes": 256,
+        "exits": 3,
+        "reduction_percent": {
+          "instructions": 62.2363,
+          "private_p2_reads": 73.4303,
+          "private_p2_writes": 76.1431
+        },
+        "old_guest_reads": 546,
+        "new_guest_reads": 544
+      },
+      {
+        "nodes": 1023,
+        "exits": 3,
+        "reduction_percent": {
+          "instructions": 57.5353,
+          "private_p2_reads": 72.3885,
+          "private_p2_writes": 72.8029
+        },
+        "old_guest_reads": 2080,
+        "new_guest_reads": 2078
+      }
+    ],
+    "hooks_two_exits": [
+      {
+        "nodes": null,
+        "exits": 2,
+        "reduction_percent": {
+          "instructions": 93.5653,
+          "private_p2_reads": 79.7101,
+          "private_p2_writes": 100.0
+        },
+        "old_guest_reads": 20,
+        "new_guest_reads": 18
+      }
+    ],
+    "hooks_three_exits": [
+      {
+        "nodes": null,
+        "exits": 3,
+        "reduction_percent": {
+          "instructions": 93.6766,
+          "private_p2_reads": 79.8762,
+          "private_p2_writes": 100.0
+        },
+        "old_guest_reads": 23,
+        "new_guest_reads": 21
+      }
+    ]
+  },
+  "per_extra_free_node": {
+    "old": {
+      "instructions": 133,
+      "private_p2_reads": 25,
+      "private_p2_writes": 7,
+      "guest_reads": 2
+    },
+    "new": {
+      "instructions": 59,
+      "private_p2_reads": 7,
+      "private_p2_writes": 2,
+      "guest_reads": 2
+    }
+  },
+  "review": "Independent prepared-validator review found retained eight live identity witnesses, raw alias rules, candidate exclusion, full 1024-bounded free-list walk, cursor witness, complete protected interval union and overlap checks. Generic full validators retained at arm and storage boundaries."
+}

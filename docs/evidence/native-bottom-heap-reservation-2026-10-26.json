@@ -1,0 +1,151 @@
+{
+  "schema": "kui.native.bottom-reservation-review.v1",
+  "date": "2026-10-26",
+  "problem": "Current C29 New and Legacy both stall Rayman at Ubisoft; both produce black Lodoss movie video with sound. The shared tail allocation changes the original allocation addresses.",
+  "console_evidence": "native-console-followup-c29-2026-10-26.json",
+  "production_checkpoint": "73099305f1687686e9ee041232fa75e231ff4a42",
+  "mechanism": {
+    "original_initializer_arguments_changed": false,
+    "steps": [
+      "Verify complete original allocator/free code and literal roles.",
+      "Original allocate(B-L-64) obtains the upper placeholder; verify exact lower free chunk and both sizes.",
+      "Original allocate(L) consumes the exact lower chunk; verify the empty free list and retained allocation header.",
+      "Admit only the exact placeholder through the full coherent release-ownership walk; recheck complete allocator/free code.",
+      "Original release(placeholder), then verify precisely one upper free block and the complete retained lease before publishing it."
+    ],
+    "lease_payload_bytes": 393216,
+    "allocation_header_bytes": 32,
+    "worker_bytes": 131072,
+    "read_ahead_cache_bytes": 196608,
+    "final_lease_header": "original arena begin",
+    "final_lease_payload": "original arena begin +32",
+    "final_free_upper_end": "original arena begin +original arena bytes",
+    "stage_minimum_arena_bytes": 393312,
+    "temporary_payload_accesses": false,
+    "stage_exclusions": "Complete retained header/payload plus the adjacent32-byte placeholder header, original allocator control/table, full linked stage BSS/private installer stack, original executable.",
+    "runtime_geometries": "Only the exact existing tail endpoint and exact bottom endpoint are admitted; arbitrary interior placements remain refused.",
+    "scope": "The dual native New/Legacy module uses bottom placement; historical separate modules retain their old cold allocation path."
+  },
+  "preservation": {
+    "original_arena_identity_and_upper_end": true,
+    "initializer_and_release_interception": true,
+    "full_free_list_and_release_overlap_guards": true,
+    "lease_abi_bytes": 116,
+    "nvr_schema": 1,
+    "new_sci_pio_pair_policy_changed": false,
+    "new_read_ahead_auxiliary_changed": false,
+    "reader_default": "New for eligible native GDI on SCI; existing saved New/Legacy/Off choices remain authoritative.",
+    "card_profile_image_and_saves_reinitialized": false
+  },
+  "original_instruction_model": {
+    "cases": 72,
+    "titles": [
+      "evolution1",
+      "evolution2",
+      "grandia2",
+      "lodoss",
+      "ps2",
+      "rayman2",
+      "sa2",
+      "skies"
+    ],
+    "subsequent_allocate_release_operations": 8640,
+    "all_addresses_match_baseline_while_capacity_permits": true,
+    "all_payload_headers_and_stage_preserved": true,
+    "counterexamples": [
+      {
+        "case": "placeholder_header_at_stage_begin",
+        "description": "A final lease ending exactly at stage_begin is itself disjoint, but placeholder header starts there and writes stage bytes. Must reject extra8-byte header overlap."
+      },
+      {
+        "case": "reservation_outside_arena",
+        "description": "Bottom payload must equal original arena begin+32, and whole header+payload must fit original unchanged arena. Generic runtime interval guards alone do not prove allocator ownership."
+      },
+      {
+        "case": "request_exceeds_reduced_capacity",
+        "description": "Original upper addresses are preserved only for allocations still satisfiable after384KiB+32B reservation; a capacity failure must remain a failure."
+      }
+    ],
+    "scope": "Original SDK instructions and allocator mechanics, not hardware scheduling or complete game lifetime."
+  },
+  "lodoss_original_startup_replay": {
+    "source_sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5",
+    "original_entry": "8c010680",
+    "rows": [
+      {
+        "mode": "baseline",
+        "main_pool_payload": "0x8c67eca0",
+        "original_plus_injected_instructions": 243
+      },
+      {
+        "mode": "tail",
+        "main_pool_payload": "0x8c61ec80",
+        "original_plus_injected_instructions": 296
+      },
+      {
+        "mode": "bottom",
+        "main_pool_payload": "0x8c67eca0",
+        "original_plus_injected_instructions": 402
+      }
+    ],
+    "bottom_preserves_full_original_app_pool_bytes": true,
+    "scope": "An actual original startup caller demonstrates the shared placement change. Its movie allocation uses dynamic pointers; restored pool placement does not prove the black-video symptom fixed."
+  },
+  "host_checks": {
+    "existing_heap": 10891,
+    "bottom_transaction": 26281,
+    "cold_code_authored": 5043427,
+    "cold_code_with_all10_external_records": 5048837,
+    "cold_code_bit_mutants_refused": 17664,
+    "existing_release": 60828,
+    "existing_prepared_lifetime": 200243692,
+    "existing_release_differential": 1013
+  },
+  "stage_interval_oracle": {
+    "checks_each": 11353,
+    "payload_sizes_tested": [
+      196608,
+      393216
+    ],
+    "sanitizers": [
+      "address",
+      "undefined"
+    ]
+  },
+  "compiled_artifact_verification": "Mandatory marker-selected source-corpus and actual compiled installer/worker companions bind the packaged build; packaging is refused without them.",
+  "optional_fallback": "kui-rayman-resource-probe.py observes only a256-byte FIX.DAT header as integers after exact IP/startup verification. Use only if Rayman remains broken and metadata is requested.",
+  "hardware_verified": false,
+  "github_uploaded": false,
+  "unchanged_admission_limits": [
+    "DOA2 custom allocation/workspace placement is not admitted by this change.",
+    "Crazy Taxi1/2 source/SDK/allocator blockers are not broadened here."
+  ],
+  "next_hardware_tests": [
+    "Same prepared p0005 profile; install with --profile-runtime and explicitly choose New(X).",
+    "Rayman2 passes Ubisoft logo; Lodoss produces opening movie video and normal audio.",
+    "Recheck a previously working New-reader game; Evolution1 after Sofdec remains a separate useful follow-up.",
+    "If a stall remains, capture the complete repeating report as before."
+  ],
+  "compiled_prototype_verification": {
+    "actual_cold_paths": 16,
+    "native_report_refusals": 27,
+    "actual_placement_boundaries": 18,
+    "function_pins": 34,
+    "constant_table_pins": 2,
+    "whole_closure_mutations_refused": 108,
+    "marker_refusals": 6,
+    "companion_refusals": 11,
+    "worker_actual_sh_cases": 312,
+    "worker_guard_byte_mutations_refused": 1724,
+    "worker_semantic_counterfactuals_refused": 2,
+    "full_persistent_audit": "PASS",
+    "independent_checker_review": "No blocking findings; no ownership predicates folded. Native passive-run is a validated handoff endpoint, with worker arming/publication proved separately.",
+    "model_leaves": [
+      "Display output",
+      "SHA-256 compression over exact modeled source bytes"
+    ],
+    "prototype_worker_bss_to_stack_bytes": 96,
+    "scope": "Prototype proof counts. Final packaging requires freshly artifact-bound proofs and matching clean source provenance."
+  },
+  "software_only": true
+}

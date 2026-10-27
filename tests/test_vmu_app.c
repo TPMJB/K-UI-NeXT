@@ -4,6 +4,8 @@
 #include "kui/destination.h"
 #include "kui/media.h"
 #include "kui/storage.h"
+#include "kui/vmu_read_bounded.h"
+#include "kui/vmu_collection.h"
 #include <dc/maple.h>
 #include <dc/vmufs.h>
 #include <assert.h>
@@ -25,7 +27,9 @@ static bool bulk_staging_checked;
 static void verify_save(unsigned index);
 static unsigned active,reads,locks,connects,disconnects,writes,source_slot,enumerations,raw_zero_reads,media_reads;
 static bool missing,payload_seen,injected;
-static unsigned vmu_writes;
+static unsigned vmu_writes,free_user_reads,rejection_read_count;
+static bool collection_read_guard;
+static unsigned collection_unowned_reads;
 static uint8_t original_card[256][512];
 static FILE *image;
 static uint64_t image_blocks;
@@ -53,6 +57,14 @@ static void setup(unsigned count) {
         }
     }
 }
+/* Keep one existing save while leaving a chosen game-prefix gap in fixtures. */
+static void move_first_save(unsigned first) {
+    assert(first && first+1<200);
+    memmove(card[first],card[0],2*512);
+    put16(card[254],0xfffc);put16(card[254]+2,0xfffc);
+    put16(card[254]+first*2,first+1);put16(card[254]+(first+1)*2,0xfffa);
+    put16(card[253]+2,first);
+}
 static uint8_t (*device_card(maple_device_t *device))[512] {
     assert(device==&devices[active] || (two_cards && device==&devices[destination_active]));
     return device==&devices[destination_active]?destination_card:card;
@@ -64,9 +76,21 @@ maple_device_t *maple_enum_dev(int port,int unit) {
 }
 int vmufs_mutex_lock(void) {assert(!locks);++locks;return 0;}
 int vmufs_mutex_unlock(void) {assert(locks==1);--locks;return 0;}
-int vmu_block_read(maple_device_t *device,uint16_t block,uint8_t *out) {
+int kui_vmu_read_bounded(maple_device_t *device,uint16_t block,uint8_t out[512]) {
     assert(locks==1 && block<256);++reads;uint8_t (*storage)[512]=device_card(device);
-    if(is("bulk-vmu-read-fail") || (is("bulk-final-read-fail") && bulk_dir_commits && block==199 && device==&devices[destination_active]) || is("vmu-read-fail")) {injected=true;return -1;}
+    if(collection_read_guard) {
+        unsigned fat=storage[255][70]|(unsigned)storage[255][71]<<8;
+        unsigned dir=storage[255][74]|(unsigned)storage[255][75]<<8;
+        unsigned dirs=storage[255][76]|(unsigned)storage[255][77]<<8;
+        unsigned users=storage[255][80]|(unsigned)storage[255][81]<<8;
+        bool metadata=block==255u || block==fat || (block<=dir && block+dirs>dir);
+        bool allocated=fat<256u && block<users && (storage[fat][block*2u]!=0xfcu || storage[fat][block*2u+1u]!=0xffu);
+        if(!metadata && !allocated) ++collection_unowned_reads;
+    }
+    if(block<200 && storage[254][block*2]==0xfc && storage[254][block*2+1]==0xff) ++free_user_reads;
+    if(is("description-read-fail") && block<200) {injected=true;return -1;}
+    if(is("bulk-vmu-read-fail") || (is("bulk-final-read-fail") && bulk_dir_commits && block==199 && device==&devices[destination_active]) || is("vmu-read-fail") ||
+       (is("collection-capture-read-fail") && block==254 && reads>30u)) {injected=true;rejection_read_count=reads;return -1;}
     if(is("short-block")) {memcpy(out,storage[block],508);injected=true;return 0;}
     if(block==0 && is("card-image-changed") && ++raw_zero_reads==3) {storage[0][11]^=1;injected=true;}
     if(block==10 && is("card-image-removed")) {missing=true;injected=true;}
@@ -223,7 +247,8 @@ static void test_restore(const char *mode) {
     const char *path="0:/KUI/backups/vmu/A1-0002/001_SAVE00.vms";
     FATFS fs;struct kui_vmu_view out;struct kui_vmu_backup_view list;
     uint8_t source_data[1024],source_entry[32];
-    if(!strcmp(mode,"restore-game")) {card[253][0]=0xcc;put16(card[253]+26,1);}
+    bool game=!strncmp(mode,"restore-game",12);
+    if(game) {card[253][0]=0xcc;put16(card[253]+26,1);}
     memcpy(source_data,card[0],sizeof(source_data));memcpy(source_entry,card[253],32);
     kui_vmu_app_run(0,0,0,0,&out,log_line,cancelled,progress);assert(out.status.passed);
     kui_vmu_app_run(1,0,0,0,&out,log_line,cancelled,progress);assert(out.status.passed && !vmu_writes);
@@ -234,6 +259,9 @@ static void test_restore(const char *mode) {
         assert(list.status.passed && !list.count && list.total==1);return;
     }
     setup(1);memset(card[253]+4,0,12);memcpy(card[253]+4,"OTHER_SAVE",10);card[0][10]^=0xa7;card[1][11]^=0x8b;
+    if(!strcmp(mode,"restore-game")) move_first_save(2);
+    if(!strcmp(mode,"restore-game-fragmented-prefix")) move_first_save(1);
+    if(!strcmp(mode,"restore-game-existing")) {card[253][0]=0xcc;put16(card[253]+26,1);}
     if(!strcmp(mode,"restore-orphan")) put16(card[254]+20,0xfffa);
     if(!strcmp(mode,"restore-orphan-link")) put16(card[254]+20,199);
     if(!strcmp(mode,"restore-duplicate")) {setup(2);memcpy(card[253]+4,"OTHER_SAVE",10);memcpy(card[253]+36,card[253]+4,12);}
@@ -260,6 +288,7 @@ static void test_restore(const char *mode) {
     bool preview_fail=!strcmp(mode,"restore-orphan") || !strcmp(mode,"restore-orphan-link") ||
         !strcmp(mode,"restore-duplicate") || !strcmp(mode,"restore-existing-tail") || !strcmp(mode,"restore-truncated") ||
         !strcmp(mode,"restore-existing") || !strcmp(mode,"restore-capacity") ||
+        !strcmp(mode,"restore-game-blocked-zero") || !strcmp(mode,"restore-game-fragmented-prefix") || !strcmp(mode,"restore-game-existing") ||
         !strcmp(mode,"restore-corrupt") || !strcmp(mode,"restore-bad-proof") || !strcmp(mode,"restore-bad-dir") ||
         !strcmp(mode,"restore-legacy") || !strcmp(mode,"restore-invalid-path");
     if(preview_fail) {
@@ -278,8 +307,9 @@ static void test_restore(const char *mode) {
     if(success) {
         assert(out.status.passed && out.status.complete && !out.restore_ready && !out.status.errors);
         assert(out.status.done==1024 && out.free_blocks==196);
-        unsigned first=!strcmp(mode,"restore-game")?2:199,second=!strcmp(mode,"restore-game")?3:198;
+        unsigned first=game?0:199,second=game?1:198;
         assert(!memcmp(card[first],source_data,512) && !memcmp(card[second],source_data+512,512));
+        if(game) assert(card[253][34]==0 && card[253][35]==0 && card[254][0]==1 && card[254][1]==0 && card[254][2]==0xfa && card[254][3]==0xff);
         assert(!memcmp(card[253]+32,source_entry,2) && !memcmp(card[253]+32+4,source_entry+4,28));
     } else {
         assert(!out.status.passed && !out.restore_ready && (out.status.errors || out.status.stopped));
@@ -293,7 +323,8 @@ static void test_restore(const char *mode) {
     }
     /* Existing save bytes and its directory entry remain identical through
      * every modeled failure. Metadata tearing is reported, never rolled back. */
-    assert(!memcmp(card[0],original_card[0],1024));
+    unsigned keep_first=!strcmp(mode,"restore-game")?2:0;
+    assert(!memcmp(card[keep_first],original_card[keep_first],1024));
     if(strcmp(mode,"restore-dir-existing-corrupt")) assert(!memcmp(card[253],original_card[253],32));
     if(!strcmp(mode,"restore-remove")) assert(vmu_writes==1);
     fault=NULL;missing=false;mount_image(&fs);verify_preserved();assert(f_mount(NULL,"0:",0)==FR_OK);
@@ -301,10 +332,15 @@ static void test_restore(const char *mode) {
 static void test_managed(const char *mode) {
     bool copy=!strncmp(mode,"copy-",5);FATFS fs;struct kui_vmu_view out;
     uint8_t source_data[1024],source_entry[32];
+    bool game=!strncmp(mode,"copy-game",9);
+    if(game) {card[253][0]=0xcc;put16(card[253]+26,1);}
     memcpy(source_data,card[0],sizeof(source_data));memcpy(source_entry,card[253],32);
     if(copy) {
         memcpy(original_card,card,sizeof(card));setup(1);
         memset(card[253]+4,0,12);memcpy(card[253]+4,"OTHER_SAVE",10);card[0][10]^=0xa7;
+        if(!strcmp(mode,"copy-game")) move_first_save(2);
+        if(!strcmp(mode,"copy-game-fragmented-prefix")) move_first_save(1);
+        if(!strcmp(mode,"copy-game-existing")) {card[253][0]=0xcc;put16(card[253]+26,1);}
         memcpy(destination_card,card,sizeof(card));memcpy(card,original_card,sizeof(card));two_cards=true;
         if(!strcmp(mode,"copy-existing")) memcpy(destination_card[253]+4,source_entry+4,12);
         if(!strcmp(mode,"copy-orphan")) put16(destination_card[254]+20,0xfffa);
@@ -327,10 +363,13 @@ static void test_managed(const char *mode) {
     bool preview_fail=no_preview || !strcmp(mode,"delete-unlisted") || !strcmp(mode,"delete-invalid-row") ||
         !strcmp(mode,"delete-orphan") || !strcmp(mode,"delete-duplicate") || !strcmp(mode,"delete-nameless") ||
         !strcmp(mode,"delete-invalid-protection") || !strcmp(mode,"delete-nul-first") || !strcmp(mode,"copy-existing") ||
-        !strcmp(mode,"copy-orphan") || !strcmp(mode,"copy-same-slot");
+        !strcmp(mode,"copy-orphan") || !strcmp(mode,"copy-same-slot") ||
+        !strcmp(mode,"copy-game-blocked-zero") || !strcmp(mode,"copy-game-fragmented-prefix") || !strcmp(mode,"copy-game-existing");
     if(preview_fail) {
         assert(!out.status.passed && !out.delete_ready && !out.copy_ready && out.status.errors && !vmu_writes && !connects);
-        assert(!memcmp(card,original_card,sizeof(card)));return;
+        assert(!memcmp(card,original_card,sizeof(card)));
+        if(copy) assert(!memcmp(destination_card,original_destination,sizeof(destination_card)));
+        return;
     }
     assert(out.status.passed && !vmu_writes && !connects && (copy?out.copy_ready:out.delete_ready));
     if(!strcmp(mode,"delete-preview-only") || !strcmp(mode,"copy-preview-only")) return;
@@ -343,12 +382,14 @@ static void test_managed(const char *mode) {
     if(copy) kui_vmu_copy_run(0,0,selected,target,true,&out,log_line,cancelled,progress);
     else kui_vmu_delete_run(0,0,selected,true,&out,log_line,cancelled,progress);
     assert(!out.delete_ready && !out.copy_ready);
-    bool success=!strcmp(mode,"delete-ok") || !strcmp(mode,"delete-stop-commit") || !strcmp(mode,"delete-restore") || !strcmp(mode,"copy-ok");
+    bool success=!strcmp(mode,"delete-ok") || !strcmp(mode,"delete-stop-commit") || !strcmp(mode,"delete-restore") || !strcmp(mode,"copy-ok") || !strcmp(mode,"copy-game");
     if(success) {
         assert(out.status.passed && out.status.complete && !out.status.errors && !out.status.stopped);
         assert(out.status.done==1024 && out.free_blocks==(copy?196:182));
         if(copy) {
-            assert(!memcmp(destination_card[199],source_data,512) && !memcmp(destination_card[198],source_data+512,512));
+            unsigned first=game?0:199,second=game?1:198;
+            assert(!memcmp(destination_card[first],source_data,512) && !memcmp(destination_card[second],source_data+512,512));
+            if(game) assert(destination_card[253][34]==0 && destination_card[253][35]==0 && destination_card[254][0]==1 && destination_card[254][1]==0 && destination_card[254][2]==0xfa && destination_card[254][3]==0xff);
             assert(!memcmp(destination_card[253]+36,source_entry+4,28));
         } else {
             uint8_t empty[32]={0};assert(!memcmp(card[253],empty,32));
@@ -365,7 +406,7 @@ static void test_managed(const char *mode) {
     if(strcmp(mode,"delete-changed-payload") && strcmp(mode,"copy-changed-payload")) assert(!memcmp(card[0],source_data,sizeof(source_data)));
     assert(!memcmp(card[2],original_card[2],198*512));
     if(copy && strcmp(mode,"copy-changed-source") && strcmp(mode,"copy-changed-payload")) assert(!memcmp(card,original_card,sizeof(card)));
-    if(copy) assert(!memcmp(destination_card[0],original_destination[0],2*512));
+    if(copy) {unsigned keep_first=!strcmp(mode,"copy-game")?2:0;assert(!memcmp(destination_card[keep_first],original_destination[keep_first],2*512));}
     if(!vmu_writes && strcmp(mode,"delete-changed-card") && strcmp(mode,"delete-changed-payload"))
         assert(!memcmp(card,original_card,sizeof(card)) || copy);
     bool backed=out.backup_path[0]!=0;char backup[KUI_VMU_BACKUP_PATH_CAP];strcpy(backup,out.backup_path);
@@ -395,7 +436,8 @@ static void verify_bulk_copy(unsigned index) {
 static void test_bulk_copy(const char *mode) {
     FATFS fs;struct kui_vmu_view out;
     setup(!strcmp(mode,"bulk-empty-source")?0:3);
-    if(!strcmp(mode,"bulk-game")) {card[253][0]=0xcc;put16(card[253]+26,1);}
+    bool game=!strncmp(mode,"bulk-game",9);
+    if(game) {card[253][0]=0xcc;put16(card[253]+26,1);}
     memcpy(original_card,card,sizeof(card));
     unsigned destination_count=!strcmp(mode,"bulk-capacity")?98:!strcmp(mode,"bulk-directory-full")?16:1;
     setup(destination_count);
@@ -404,6 +446,9 @@ static void test_bulk_copy(const char *mode) {
         memset(entry+4,0,12);snprintf(name,sizeof(name),"KEEP%02u",i);memcpy(entry+4,name,strlen(name));
     }
     card[0][10]^=0xa7;
+    if(!strcmp(mode,"bulk-game")) move_first_save(2);
+    if(!strcmp(mode,"bulk-game-fragmented-prefix")) move_first_save(1);
+    if(!strcmp(mode,"bulk-game-existing")) {card[253][0]=0xcc;put16(card[253]+26,1);}
     if(!strcmp(mode,"bulk-directory-full")) put16(card[255]+76,1);
     memcpy(destination_card,card,sizeof(card));memcpy(card,original_card,sizeof(card));two_cards=true;
     if(!strcmp(mode,"bulk-conflict-last")) memcpy(destination_card[253]+4,card[253]+68,12);
@@ -432,7 +477,8 @@ static void test_bulk_copy(const char *mode) {
         !strcmp(mode,"bulk-directory-full") || !strcmp(mode,"bulk-source-cycle") || !strcmp(mode,"bulk-source-shared") ||
         !strcmp(mode,"bulk-source-orphan") || !strcmp(mode,"bulk-destination-orphan") || !strcmp(mode,"bulk-source-duplicate") ||
         !strcmp(mode,"bulk-destination-duplicate") || !strcmp(mode,"bulk-source-nameless") || !strcmp(mode,"bulk-source-protection") ||
-        !strcmp(mode,"bulk-source-removed") || !strcmp(mode,"bulk-destination-removed") || !strcmp(mode,"bulk-vmu-read-fail") || !strcmp(mode,"bulk-empty-source");
+        !strcmp(mode,"bulk-source-removed") || !strcmp(mode,"bulk-destination-removed") || !strcmp(mode,"bulk-vmu-read-fail") || !strcmp(mode,"bulk-empty-source") ||
+        !strcmp(mode,"bulk-game-blocked-zero") || !strcmp(mode,"bulk-game-fragmented-prefix") || !strcmp(mode,"bulk-game-existing");
     assert(!vmu_writes && writes==writes_before && connects==connects_before && !source_vmu_writes);
     assert(!memcmp(card,original_card,sizeof(card)) && !memcmp(destination_card,original_destination,sizeof(destination_card)));
     if(preview_fail) {
@@ -463,8 +509,10 @@ static void test_bulk_copy(const char *mode) {
     if(!success) assert(out.status.errors || out.status.stopped);
     if(!strcmp(mode,"bulk-cancel-start") || !strcmp(mode,"bulk-cancel-data") || !strcmp(mode,"bulk-cancel-after-one")) assert(out.status.stopped);
     assert(!source_vmu_writes && !memcmp(card,original_card,sizeof(card)));
-    assert(!memcmp(destination_card[0],original_destination[0],1024) && !memcmp(destination_card[253],original_destination[253],32));
+    unsigned keep_first=!strcmp(mode,"bulk-game")?2:0;
+    assert(!memcmp(destination_card[keep_first],original_destination[keep_first],1024) && !memcmp(destination_card[253],original_destination[253],32));
     for(unsigned i=0;i<expected_completed;i++) verify_bulk_copy(i);
+    if(success && game) assert(destination_card[253][34]==0 && destination_card[253][35]==0 && destination_card[254][0]==1 && destination_card[254][1]==0 && destination_card[254][2]==0xfa && destination_card[254][3]==0xff);
     if(success) assert(out.free_blocks==192);
     if(strstr(mode,"changed-") || strstr(mode,"device-change") || strstr(mode,"removed-before-commit") ||
        strstr(mode,"during-stage") || !strcmp(mode,"bulk-cancel-start") || strstr(mode,"sd-write") || strstr(mode,"sd-sync") || strstr(mode,"readback-")) {
@@ -547,6 +595,54 @@ static void test_import_publish(const char *mode) {
     }
 }
 static const char *fixture="0:/KUI/backups/vmu/A1-0001/fixture.vmd";
+static void description_header(uint8_t *bytes,const char *description) {
+    memset(bytes,0,512);memset(bytes,' ',48);
+    memcpy(bytes,"Short title",11);memcpy(bytes+16,description,strlen(description));
+    memcpy(bytes+48,"TEST_APP",8);put16(bytes+72,64);
+}
+static void test_description_rows(const char *mode) {
+    FATFS fs;struct kui_vmu_view out;setup(2);
+    description_header(card[0],"  Long save title  ");
+    description_header(card[2],""); /* Long field blank: use the short field. */
+    bool fragmented=strstr(mode,"fragmented")!=NULL;
+    if(fragmented) {
+        /* Header block 1 follows FAT 0 -> 190; physical block 1 is unrelated. */
+        description_header(card[1],"Wrong physical block");
+        description_header(card[190],"Fragmented title");
+        put16(card[253]+26,1);put16(card[254],190);put16(card[254]+2,0xfffc);put16(card[254]+380,0xfffa);
+    }
+    bool malformed=!strcmp(mode,"description-malformed");
+    if(malformed) {put16(card[0]+64,4);put16(card[2]+72,2048);}
+    memcpy(original_card,card,sizeof(card));
+    bool image_mode=strstr(mode,"image")!=NULL;
+    if(image_mode) {
+        mount_image(&fs);write_file(fixture,card,sizeof(card));assert(f_mount(NULL,"0:",0)==FR_OK);
+        reads=enumerations=0;unsigned before=writes;
+        kui_vmu_image_run(fixture,0,0,0,&out,log_line,cancelled,progress);
+        assert(!reads && !enumerations && writes==before);
+    } else {
+        if(!strcmp(mode,"description-read-fail")) fault=mode;
+        kui_vmu_app_run(0,0,0,0,&out,log_line,cancelled,progress);
+        assert(!connects && !writes);
+    }
+    assert(out.status.passed && out.status.complete && !out.status.errors && !out.status.stopped);
+    assert(out.count==2 && out.total==2 && out.free_blocks==196 && !locks && !vmu_writes && !free_user_reads);
+    assert(!strcmp(out.entries[0].name,"SAVE00") && out.entries[0].bytes==1024);
+    if(malformed || is("description-read-fail")) {
+        for(unsigned i=0;i<out.count;i++) assert(!out.entries[i].description[0] && !out.entries[i].app_id[0]);
+    } else {
+        assert(!strcmp(out.entries[0].description,fragmented?"Fragmented title":"Long save title"));
+        assert(!strcmp(out.entries[0].app_id,"TEST_APP"));
+        assert(!strcmp(out.entries[1].description,"Short title"));
+    }
+    assert(!memcmp(card,original_card,sizeof(card)));
+    if(is("description-read-fail")) {
+        /* The optional read failure must retain the checked listing identity. */
+        assert(injected);fault=NULL;kui_vmu_app_run(1,0,0,0,&out,log_line,cancelled,progress);
+        assert(out.status.passed && !out.status.errors && !vmu_writes && !locks);
+        mount_image(&fs);verify_save(0);verify_preserved();assert(f_mount(NULL,"0:",0)==FR_OK);
+    }
+}
 static void test_card_image(const char *mode) {
     FATFS fs;struct kui_vmu_view out;
     if(!strcmp(mode,"card-image-empty")) setup(0);
@@ -699,6 +795,154 @@ static void test_image_tools(const char *mode) {
         /* Roundtrip uses existing restore; image tools above proved zero physical calls. */
     }
 }
+
+/* Production collection admission uses a complete standard card, whereas the
+ * older physical-only fixture intentionally leaves system FAT bytes opaque. */
+static void collection_setup(unsigned count) {
+    setup(count);
+    for(unsigned b=200;b<256;b++)
+        put16(card[254]+b*2,b<241?0xfffc:b>241 && b<=253?b-1:0xfffa);
+    for(unsigned b=count*2;b<200;b++) memset(card[b],0x9c,512);
+}
+static void test_collection_adapter(const char *mode) {
+    struct kui_vmu_view source,out;struct kui_vmu_backup_view catalog;FATFS fs;
+    bool all=strcmp(mode,"collection-selected-page")!=0;
+    unsigned page=all?0u:1u,selected=all?0u:1u;
+    collection_setup(10);
+    if(!strcmp(mode,"collection-game")) {card[253][0]=0xcc;put16(card[253]+26,1);}
+    if(!strcmp(mode,"collection-orphan")) put16(card[254]+100*2,0xfffa);
+    if(!strcmp(mode,"collection-system-fat")) put16(card[254]+250*2,0xfffc);
+    if(!strcmp(mode,"collection-root-geometry")) card[255][16]=2;
+    if(!strcmp(mode,"collection-sort-flag")) card[255][0x4f]=1;
+    if(!strcmp(mode,"collection-user-240")) put16(card[255]+80,240);
+    if(!strcmp(mode,"collection-relocated-metadata")) {
+        memcpy(card[240],card[254],512);put16(card[255]+70,240);
+        memcpy(card[230],card[253],512);memset(card[253],0,512);put16(card[255]+74,230);
+    }
+    if(!strcmp(mode,"collection-inactive-padding")) memset(card[253]+11u*32u+29u,0x9c,3u);
+    if(!strcmp(mode,"collection-active-reserved")) card[253][31]=0x9c;
+    if(!strcmp(mode,"collection-control-name")) card[253][4]=1;
+    if(!strcmp(mode,"collection-over-capacity")) {
+        collection_setup(0);put16(card[255]+80,240);
+        card[253][0]=0x33;memcpy(card[253]+4,"LARGE",5);put16(card[253]+24,201);
+        for(unsigned b=0;b<201;b++) put16(card[254]+b*2,b==200?0xfffa:b+1u);
+    }
+    collection_read_guard=true;
+    memcpy(original_card,card,sizeof(card));
+    if(strcmp(mode,"collection-unlisted") && strcmp(mode,"collection-unpreviewed") && strcmp(mode,"collection-invalid-slot")) {
+        kui_vmu_app_run(0,0,page,0,&source,log_line,cancelled,progress);assert(source.status.passed);
+    }
+    reads=free_user_reads=0;
+    if(!strcmp(mode,"collection-unpreviewed")) {
+        kui_vmu_collection_copy_run(0,page,selected,all,true,&out,log_line,cancelled,progress);
+        assert(!out.status.passed && out.status.errors && !reads && !connects && !writes && !locks);return;
+    }
+    if(!strcmp(mode,"collection-short-block")) fault="short-block";
+    if(!strcmp(mode,"collection-oversize-block")) fault="oversize-block";
+    if(!strcmp(mode,"collection-read-fail")) fault="vmu-read-fail";
+    if(!strcmp(mode,"collection-capture-read-fail")) fault=mode;
+    if(!strcmp(mode,"collection-cancel-read")) fault="cancel-read";
+    if(!strcmp(mode,"collection-invalid-page")) {page=UINT32_MAX;all=false;}
+    if(!strcmp(mode,"collection-invalid-row")) {selected=8u;all=false;}
+    kui_vmu_collection_copy_run(!strcmp(mode,"collection-invalid-slot")?8u:0u,page,selected,all,false,&out,log_line,cancelled,progress);
+    bool preview_bad=!strcmp(mode,"collection-unlisted") || !strcmp(mode,"collection-invalid-slot") ||
+        !strcmp(mode,"collection-short-block") || !strcmp(mode,"collection-oversize-block") ||
+        !strcmp(mode,"collection-read-fail") || !strcmp(mode,"collection-cancel-read") ||
+        !strcmp(mode,"collection-invalid-page") || !strcmp(mode,"collection-invalid-row") ||
+        !strcmp(mode,"collection-orphan") || !strcmp(mode,"collection-active-reserved") ||
+        !strcmp(mode,"collection-control-name") || !strcmp(mode,"collection-over-capacity") ||
+        !strcmp(mode,"collection-capture-read-fail");
+    assert(!connects && !writes && !vmu_writes && !locks && !free_user_reads && !collection_unowned_reads);
+    if(preview_bad) {
+        assert(!out.status.passed && !out.copy_ready && (out.status.errors || out.status.stopped));
+        if(!strcmp(mode,"collection-orphan"))
+            assert(strstr(out.status.message,"unowned allocated blocks"));
+        if(!strcmp(mode,"collection-active-reserved"))
+            assert(strstr(out.status.message,"Source entry 0 rejected:") && strstr(out.status.message,"0000009c"));
+        if(!strcmp(mode,"collection-control-name"))
+            assert(strstr(out.status.message,"Source entry 0 rejected: invalid or duplicate filename"));
+        if(!strcmp(mode,"collection-over-capacity"))
+            assert(strstr(out.status.message,"need 201 blocks"));
+        if(!strcmp(mode,"collection-capture-read-fail")) {
+            assert(injected && reads==rejection_read_count && out.status.errors==1u);
+            assert(!strcmp(out.status.message,"VMU block read failed"));
+        }
+        assert(!memcmp(card,original_card,sizeof(card)));return;
+    }
+    assert(out.status.passed && out.status.complete && out.copy_ready && !out.status.errors && !out.status.stopped);
+    assert(out.slot==0 && out.page==page && out.bulk_total==(all?10u:1u) && out.bulk_remaining==out.bulk_total && !out.bulk_completed);
+    assert(out.free_blocks==(all?180u:198u) && out.status.total==(all?10240u:1024u));
+    if(!all) assert(out.count==1 && !strcmp(out.entries[0].name,"SAVE09"));
+    if(!strcmp(mode,"collection-preview-only")) return;
+    if(!strcmp(mode,"collection-changed-payload")) {card[0][13]^=1;memcpy(original_card,card,sizeof(card));}
+    if(!strcmp(mode,"collection-changed-metadata")) {card[255][48]^=1;memcpy(original_card,card,sizeof(card));}
+    if(!strcmp(mode,"collection-device-changed")) active=1;
+    if(!strcmp(mode,"collection-source-removed")) missing=true;
+    if(!strcmp(mode,"collection-cancel-publish")) fault="cancel-write";
+    if(!strcmp(mode,"collection-write-fail")) fault="write-fail";
+    if(!strcmp(mode,"collection-sync-fail")) fault="sync-fail";
+    if(!strcmp(mode,"collection-readback-corrupt")) fault="readback-corrupt";
+    kui_vmu_collection_copy_run(0,page,selected,all,true,&out,log_line,cancelled,progress);
+    bool success=!strcmp(mode,"collection-all") || !strcmp(mode,"collection-selected-page") || !strcmp(mode,"collection-game") ||
+        !strcmp(mode,"collection-commit-twice") || !strcmp(mode,"collection-system-fat") ||
+        !strcmp(mode,"collection-root-geometry") || !strcmp(mode,"collection-user-240") ||
+        !strcmp(mode,"collection-relocated-metadata") || !strcmp(mode,"collection-inactive-padding") ||
+        !strcmp(mode,"collection-sort-flag");
+    assert(out.status.passed==success && !out.copy_ready && !vmu_writes && !source_vmu_writes && !locks && !free_user_reads && !collection_unowned_reads);
+    assert(!memcmp(card,original_card,sizeof(card)));
+    if(!success) {
+        assert(out.status.errors || out.status.stopped);
+        if(!strcmp(mode,"collection-changed-payload") || !strcmp(mode,"collection-changed-metadata") ||
+           !strcmp(mode,"collection-device-changed") || !strcmp(mode,"collection-source-removed")) assert(!connects && !writes);
+        else assert(injected);
+        return;
+    }
+    assert(out.bulk_completed==(all?10u:1u) && !out.bulk_remaining && out.status.done==out.status.total);
+    assert(!strcmp(out.backup_path,"0:/KUI/vmu/cards/v0001/card.vmd"));
+    assert(strstr(out.status.message,"activation pending"));
+    unsigned before_writes=writes,before_reads=reads,before_enumerations=enumerations;
+    if(!strcmp(mode,"collection-commit-twice")) {
+        kui_vmu_collection_copy_run(0,page,selected,all,true,&out,log_line,cancelled,progress);
+        assert(!out.status.passed && out.status.errors && reads==before_reads && writes==before_writes);
+    }
+    kui_vmu_collection_run(0,&catalog,log_line,cancelled,progress);
+    assert(catalog.status.passed && catalog.count==1u && catalog.total==1u);
+    assert(!strcmp(catalog.entries[0].path,"0:/KUI/vmu/cards/v0001/card.vmd"));
+    assert(catalog.entries[0].bytes==(all?10240u:1024u));
+    assert(reads==before_reads && enumerations==before_enumerations && writes==before_writes && !vmu_writes);
+    mount_image(&fs);
+    struct kui_vmu_collection_card verified;
+    assert(!kui_vmu_collection_verify(catalog.entries[0].path,&verified,log_line,cancelled));
+    assert(verified.summary.files==(all?10u:1u) && verified.summary.free_blocks==(all?180u:198u));
+    uint8_t *captured=malloc(131072u);assert(captured);FIL file;UINT got;
+    assert(f_open(&file,catalog.entries[0].path,FA_READ)==FR_OK && f_size(&file)==131072u);
+    assert(f_read(&file,captured,131072u,&got)==FR_OK && got==131072u && f_close(&file)==FR_OK);
+    bool used[200]={false};unsigned dir=card[255][74]|(unsigned)card[255][75]<<8;
+    unsigned fat=card[255][70]|(unsigned)card[255][71]<<8;
+    for(unsigned i=0;i<(all?10u:1u);i++) {
+        const uint8_t *entry=captured+(253u-i/16u)*512u+(i%16u)*32u;
+        unsigned original=all?i:9u;const uint8_t *source_entry=card[dir-original/16u]+(original%16u)*32u;
+        assert(!memcmp(entry,source_entry,2u) && !memcmp(entry+4,source_entry+4,28u));
+        unsigned target=entry[2]|(unsigned)entry[3]<<8,physical=source_entry[2]|(unsigned)source_entry[3]<<8;
+        for(unsigned n=0;n<2u;n++) {
+            assert(target<200u && !used[target]);used[target]=true;
+            assert(!memcmp(captured+target*512u,card[physical],512u));
+            target=captured[254u*512u+target*2u]|(unsigned)captured[254u*512u+target*2u+1u]<<8;
+            physical=card[fat][physical*2u]|(unsigned)card[fat][physical*2u+1u]<<8;
+        }
+        assert(target==0xfffau && physical==0xfffau);
+    }
+    for(unsigned b=0;b<200;b++) if(!used[b]) for(unsigned j=0;j<512;j++) assert(!captured[b*512u+j]);
+    for(unsigned i=all?10u:1u;i<208u;i++) {
+        const uint8_t *entry=captured+(253u-i/16u)*512u+(i%16u)*32u;
+        for(unsigned j=0;j<32u;j++) assert(!entry[j]);
+    }
+    free(captured);verify_preserved();assert(f_mount(NULL,"0:",0)==FR_OK);
+    kui_vmu_image_run(catalog.entries[0].path,0,0,0,&out,log_line,cancelled,progress);
+    assert(out.status.passed && out.present && out.total==(all?10u:1u));
+    assert(reads==before_reads && enumerations==before_enumerations && writes==before_writes && !vmu_writes && !locks);
+}
+
 int main(int argc,char **argv) {
     assert(argc==3);image=fopen(argv[1],"r+b");assert(image);
     struct stat st;assert(!fstat(fileno(image),&st));image_blocks=(uint64_t)st.st_size/512;
@@ -709,6 +953,12 @@ int main(int argc,char **argv) {
         write_file(sentinel_path,sentinel,sizeof(sentinel));write_file("0:/KUI/dumps/keep.bin",sentinel,sizeof(sentinel));
         assert(f_mount(NULL,"0:",0)==FR_OK);fclose(image);puts("PASS VMU seed");return 0;
     }
+    if(!strncmp(mode,"description-",12)) {
+        test_description_rows(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;
+    }
+    if(!strncmp(mode,"collection-",11)) {
+        test_collection_adapter(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;
+    }
     if(!strncmp(mode,"card-image",10) || !strncmp(mode,"image-",6)) {
         if(!strncmp(mode,"card-image",10)) test_card_image(mode);else test_image_tools(mode);
         assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;
@@ -718,6 +968,19 @@ int main(int argc,char **argv) {
     }
     if(!strncmp(mode,"bulk-",5)) {
         test_bulk_copy(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;
+    }
+    if(!strncmp(mode,"copy-game-source-",17)) {
+        struct kui_vmu_view source;card[253][0]=0xcc;put16(card[253]+26,1);
+        if(!strcmp(mode,"copy-game-source-nonzero")) move_first_save(20);
+        if(!strcmp(mode,"copy-game-source-fragmented")) {
+            memcpy(card[20],card[1],512);put16(card[254],20);put16(card[254]+2,0xfffc);put16(card[254]+40,0xfffa);
+        }
+        if(!strcmp(mode,"copy-game-source-multiple")) {card[253][32]=0xcc;put16(card[253]+58,1);}
+        memcpy(original_card,card,sizeof(card));
+        kui_vmu_app_run(0,0,0,0,&source,log_line,cancelled,progress);
+        assert(!source.status.passed && source.status.errors && !connects && !writes && !vmu_writes && !locks);
+        assert(!memcmp(card,original_card,sizeof(card)));
+        fclose(image);printf("PASS VMU %s\n",mode);return 0;
     }
     if(!strncmp(mode,"delete-",7) || !strncmp(mode,"copy-",5)) {
         test_managed(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;

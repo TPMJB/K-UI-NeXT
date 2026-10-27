@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Offline host utility only; never included by a console/runtime target.
+BUILD ?= build/vmu-subset-tool
+HOST_CC ?= cc
+HOST_FLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror -Wpedantic
+HOST_SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie
+SOURCES := tools/vmu_image_subset_host.c src/core/vmu_image_subset.c src/core/vmu_image.c
+HEADERS := include/kui/vmu_image_subset.h include/kui/vmu_image.h
+.DEFAULT_GOAL := all
+.PHONY: all host-test
+all: $(BUILD)/vmu-image-subset
+$(BUILD)/vmu-image-subset: $(SOURCES) $(HEADERS)
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) -Iinclude $(SOURCES) -o $@
+$(BUILD)/vmu-image-subset-sanitized: $(SOURCES) $(HEADERS)
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) -g $(HOST_SANITIZERS) -Iinclude $(SOURCES) -o $@
+host-test: $(BUILD)/vmu-image-subset-sanitized
+	KUI_VMU_SUBSET_HOST=$(abspath $(BUILD)/vmu-image-subset-sanitized) ASAN_OPTIONS=detect_leaks=0 \
+	    python3 tests/test_vmu_image_subset_tool.py

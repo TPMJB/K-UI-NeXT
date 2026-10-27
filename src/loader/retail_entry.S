@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/retail_loader_layout.h"
+#if KUI_VMU_MAPLE_OBSERVE && KUI_VMU_READONLY_PROOF == 4
+#include "kui/vmu_maple_observe_profile.h"
+#endif
 #ifndef KUI_RETAIL_STAGE_BIN
 #define KUI_RETAIL_STAGE_BIN "build/retail/stage.bin"
 #endif
@@ -62,6 +65,22 @@ _start:
     .long KUI_RETAIL_RESIDENT_ADDRESS
     .long KUI_RETAIL_STANDARD_LIMIT
     .long 0
+#if KUI_VMU_MAPLE_OBSERVE && KUI_VMU_READONLY_PROOF == 4
+    .section .vmu_launch_header,"a"
+    .balign 4
+    .global __vmu_launch_capability
+    .type __vmu_launch_capability,@object
+__vmu_launch_capability:
+    .ascii "KUIVMU04"
+    .long 1,64,KUI_VMU_MAPLE_PROFILE,4,1
+#if KUI_VMU_MAPLE_PROFILE == KUI_VMU_MAPLE_PROFILE_SILVER
+    .long 0x5e1b611a,0x770d2fed,0x7d83cf24,2956128,45000,547556
+#else
+    .long 0xe25531d1,0x38ba2868,0xcdc493b3,748444,45000,548634
+#endif
+    .long 0,0,0
+    .size __vmu_launch_capability,.-__vmu_launch_capability
+#endif
     .section .retail_map,"a"
     .global __retail_map
 __retail_map:

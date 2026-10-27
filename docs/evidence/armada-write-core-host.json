@@ -1,0 +1,51 @@
+{
+  "status": "PASS",
+  "accepted_base": "af18576dba18",
+  "host_only_write_integration": true,
+  "sanitizers": [
+    "address",
+    "undefined"
+  ],
+  "checks": {
+    "ce_write_protocol": 497969,
+    "gated_publisher": 271564,
+    "actual_capture_recheck": 17014,
+    "deferred_io": 307315,
+    "readonly_publisher": 268580
+  },
+  "persistence_integration": {
+    "real_session_and_redo_store": true,
+    "simulated_device": true,
+    "commit_reopen": true,
+    "write_failure_positions": 4,
+    "sync_failure_positions": 4,
+    "persisted_but_release_failed_no_ack": true
+  },
+  "sh": {
+    "write_adapter_state_bytes": 600,
+    "deferred_io_state_bytes": 580,
+    "deferred_io_object_text_bytes": 1008,
+    "default_helper_sha256": "cbcd0beeabf83dec06214fe5dca03ae1f3f96da623e683bb93094d4322164bb4",
+    "default_helper_identical": true,
+    "flagged_objects_compiled": true,
+    "flagged_transport_stack_c_bytes": 1000,
+    "writable_production_linked": false
+  },
+  "source_sha256": {
+    "include/kui/armada_ce_vmu_write.h": "7fdf4a5b1d554ca914c179de919df0c86111323c5292dfd4968540a0917d8393",
+    "src/core/armada_ce_vmu_write.c": "9357406c64fcd69090c73ff890f6b314910650735f9f7a0136d94a98920599ac",
+    "include/kui/vmu_deferred_io.h": "28043766032106396fc9cfe2f86fd505e8c3ddfe34fa6827f9ee476274bc146d",
+    "src/core/vmu_deferred_io.c": "bd967d81dd374305b5dc2f1441951d453bde3db6198d796fafee391d895beef8",
+    "include/kui/armada_ce_vmu_a2_publish.h": "39bd7589e8714a5311960b67402d19cb9c540868ec0a9a59574ebaa5573da061",
+    "src/loader/armada_ce_vmu_a2_publish.c": "65da287a03b47c8db4a75627a146886d970aba2bc59cdf745de830e386365c8c",
+    "src/loader/armada_ce_maple_traffic.c": "bab61f74e95d58ed26ce81e50e0cfdb3f9b63d8b9679a772798c50f07f4ea07e"
+  },
+  "not_established": [
+    "CE write finalization phase/retry semantics",
+    "physical CE SD worker/provider integration",
+    "expanded retained memory layout",
+    "hardware save/reload/power-cycle",
+    "universal driver detection",
+    "retained physical GD-ROM boot"
+  ]
+}

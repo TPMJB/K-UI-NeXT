@@ -1,0 +1,214 @@
+{
+  "schema": "kui.native.evolution1.dual-readonly-comparison.v1",
+  "scope": "Read-only exclusion audit; no production or checker source changes. Host/static results do not prove console lifecycle.",
+  "final_source_commit": "af9e01c8a271",
+  "comparison_source_commit": "af401496961afdcc27f57cb0ba63bd1a8414ce67",
+  "baseline_limitation": "af401 New X Evolution1 was not console confirmed. User earlier confirmed Standard virtual-VMU success, using ordinary192KiB lease.",
+  "published": {
+    "af401": {
+      "path": "/workspace/scratch/da50cf175784/native-reader-compatibility-publication/reader-pair-retail-boot.kui",
+      "bytes": 249184,
+      "sha256": "1f4607b8144805937e3fa8a56f6bae0f45d5b3a54ac469ff2703151867a79397",
+      "probe_report_path": "/workspace/scratch/da50cf175784/native-reader-compatibility-publication/reader-pair-probe-report.json",
+      "probe_report_sha256": "f5ada8812678580ec7056390e9475e3b354ee17e58597ed2d6e4c983ea39c9c8",
+      "components": {
+        "low_x": {
+          "bytes": 15132,
+          "sha256": "4017d921eb153fca5f075fe7830f878d98021681f3e309c230c3654c39121791",
+          "published_module_first_offset": 188656,
+          "exact_published_copies": 4,
+          "exact_flag0_regression_bin_matches_published": true
+        },
+        "worker": {
+          "bytes": 63104,
+          "sha256": "fa25c91499378ed033f4c2696aace1743b3665a6bb115135be428cdae4d3d061",
+          "published_module_offset": 96928
+        },
+        "auxiliary": {
+          "bytes": 10240,
+          "sha256": "61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974",
+          "published_module_offset": 167744
+        },
+        "auxiliary_relocations": {
+          "bytes": 816,
+          "sha256": "87ceef2187655c6c0bbe70d6844067785426f10afacabbab568fcf1c83cc9dfa",
+          "published_module_offset": 177984
+        }
+      }
+    },
+    "af9": {
+      "path": "/workspace/scratch/da50cf175784/native-universal-publication/retail-native-dual.kui",
+      "bytes": 267844,
+      "sha256": "7be0a290ec675438a565f1c3d1aac6fde18520b88056c0513961d96f9bc24f48",
+      "probe_report_path": "/workspace/scratch/da50cf175784/native-universal-publication/probe-report.json",
+      "probe_report_sha256": "ad63227839088e01335f10b724a0209c8dc8be40b414442df956e300c75a581d",
+      "components": {
+        "low_x": {
+          "final_path": "/workspace/scratch/da50cf175784/integration-recovered/restored-source/build/native-universal-final/resident-sci.bin",
+          "bytes": 15136,
+          "sha256": "086d095a34cb818247560d627e34ab60a5656d43bfeab509c80bfa6b89eeb4f4",
+          "published_module_first_offset": 192184,
+          "exact_published_copies": 4
+        },
+        "worker": {
+          "final_path": "/workspace/scratch/da50cf175784/integration-recovered/restored-source/build/native-universal-final/native-worker.bin",
+          "bytes": 63136,
+          "sha256": "81e3be516af3392e0624e4902e4d3c05e4702c96bb8415a96d8f2f6cb119ed32",
+          "published_module_first_offset": 99872,
+          "exact_published_copies": 1
+        },
+        "auxiliary": {
+          "final_path": "/workspace/scratch/da50cf175784/integration-recovered/restored-source/build/native-universal-final/native-ra-aux.bin",
+          "bytes": 10240,
+          "sha256": "61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974",
+          "published_module_first_offset": 170720,
+          "exact_published_copies": 1
+        },
+        "auxiliary_relocations": {
+          "final_path": "/workspace/scratch/da50cf175784/integration-recovered/restored-source/build/native-universal-final/native-ra-aux.reloc",
+          "bytes": 816,
+          "sha256": "87ceef2187655c6c0bbe70d6844067785426f10afacabbab568fcf1c83cc9dfa",
+          "published_module_first_offset": 180960,
+          "exact_published_copies": 1
+        }
+      }
+    }
+  },
+  "geometry": {
+    "lease_bytes_both_new_and_legacy": 393216,
+    "low_symbols": {
+      "__retail_resident_binary_end": {
+        "af401": "0x8c007b1c",
+        "af9": "0x8c007b20"
+      },
+      "__retail_resident_bss_begin": {
+        "af401": "0x8c007b20",
+        "af9": "0x8c007b20"
+      },
+      "__retail_resident_bss_end": {
+        "af401": "0x8c007ba0",
+        "af9": "0x8c007ba0"
+      },
+      "_kui_retail_async_region_storage": {
+        "af401": "0x8c007b34",
+        "af9": "0x8c007b34"
+      },
+      "_native_background_manifest": {
+        "af401": "0x8c007b3c",
+        "af9": "0x8c007b3c"
+      },
+      "__retail_hook_stack_bottom": {
+        "af401": "0x8c007ba0",
+        "af9": "0x8c007ba0"
+      },
+      "__retail_hook_stack": {
+        "af401": "0x8c007d00",
+        "af9": "0x8c007d00"
+      }
+    },
+    "worker_exports": {
+      "bss_begin": {
+        "af401": "0xac10f680",
+        "af9": "0xac10f6a0"
+      },
+      "bss_end": {
+        "af401": "0xac11efe0",
+        "af9": "0xac11f000"
+      },
+      "stack_bottom": {
+        "af401": "0xac11f000",
+        "af9": "0xac11f000"
+      },
+      "stack_top": {
+        "af401": "0xac120000",
+        "af9": "0xac120000"
+      },
+      "memory_end": {
+        "af401": "0xac120000",
+        "af9": "0xac120000"
+      }
+    },
+    "worker_last_object_end": "0xac11eff4",
+    "worker_bss_exclusive_end_and_stack_bottom": "0xac11f000",
+    "worker_tail_padding_bytes": 12,
+    "worker_stack_proved_bytes": 1916,
+    "worker_stack_available_bytes": 4096,
+    "auxiliary_binary_and_relocations_byte_identical_to_af401": true,
+    "auxiliary_stack_proved_bytes": 472,
+    "auxiliary_stack_available_bytes": 4096
+  },
+  "resolution": {
+    "af401_record_sha256": "aa12bb0fa3dfd9c199bd6be01bb3a08aedbba7a6dc5a11a1019f93f31650ee1f",
+    "af9_record_sha256": "03775904aaa1413befab1fccc697171b862cbf3637f27e92024c66bb8356c2f1",
+    "same_canonical_fields_except_detector_epoch": true,
+    "different_offsets_before_digest": [
+      16
+    ],
+    "epoch_old": 2,
+    "epoch_new": 3,
+    "fresh_full_discovery_command": [
+      "/workspace/scratch/da50cf175784/native-e1-readonly-cache-tool",
+      "verify",
+      "/workspace/scratch/da50cf175784/native-inputs/evolution1/1ST_READ.BIN",
+      "tests/fixtures/native-cache/evolution1.nvr"
+    ],
+    "fresh_full_discovery": {
+      "schema": "kui.native.resolution-cache.v1",
+      "detector_epoch": 3,
+      "record_bytes": 1024,
+      "record_digest": "4ed7baa771c0e86ab0f3681a8996b5a281dbf4dcf8c52aed37c5218b0603a2db",
+      "image_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+      "image_bytes": 2143652,
+      "load_address": "8c010000",
+      "submit": "8c1dae38",
+      "heap_initializer": "8c1633a8",
+      "exit_family": 4,
+      "source_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+      "source_bytes": 2143652,
+      "program_bytes": 2143652,
+      "discarded_suffix_bytes": 0
+    },
+    "frontend_behavior_difference": "af9 enables dual X/Y ordinary-config cache preflight; af401 ASYNC skips preflight. Warm and cold canonical plans are equivalent for this exact original."
+  },
+  "live_pointer_findings": [
+    "Owned manifest is copied by value at lease+0x20000; engine.manifest rebased to that owned map and entire region OCBP-published before low pointer activation.",
+    "GD INIT and GD RESET do not rerun kui_retail_async_init or overwrite engine.manifest.",
+    "New worker getter checks owned map/reader/cookie before reading aux vector entries; a gate refusal only suppresses optional read-ahead TICK.",
+    "No retained callback or map pointer into the temporary stage found.",
+    "All allocator/low/worker/aux geometry guards remain exact; no overlap or new shared BSS/stack cacheline found."
+  ],
+  "runtime_changes_to_investigate_elsewhere": [
+    "Dynamic SDK readiness and new admitted-VBR equality for VMU loans, reviewed by IRQ agent.",
+    "Original game may rewrite live SCI slots or alter VBR after launch; static admission alone cannot establish lifecycle ownership."
+  ],
+  "additional_coverage_gap": {
+    "evolution1_sofdec_cache_init": {
+      "callsite": "0x8c15ec7a",
+      "requested_ccr": "0x185",
+      "alias": "P2"
+    },
+    "evolution1_sofdec_cache_teardown": {
+      "callsite": "0x8c15ee10",
+      "requested_ccr": "0x105",
+      "alias": "P2"
+    },
+    "actual_scalar_replay_cases": 256,
+    "scalar_replay_scope": "Both targets/aliases, four priorCCR values, all16 inherited masks; both modes retain cache-enable bits0x101; no live worker private-stack reentry window found.",
+    "existing_test_limit": "Existing cache setter instruction test executes requested0x185 only, logs tag/MMIO writes, and does not model dirty-cache writeback or live paused/acquired SCI state across185->105. This is a coverage gap, not an established runtime bug.",
+    "comparison_to_evolution2": {
+      "same_transition": true,
+      "same_setter_86_bytes": true,
+      "same_tag_clear_helper_176_bytes": true,
+      "same_12_byte_call_preparation": true,
+      "init_callsite": "0x8c17c1ae",
+      "teardown_callsite": "0x8c17c344",
+      "p2_setter": "0xac17d86c",
+      "scalar_replay_cases_both_originals": 512,
+      "normalized_results_identical": true,
+      "evidence_path": "/workspace/scratch/da50cf175784/native-sofdec-cache-readonly/replay-result.json",
+      "evidence_sha256": "5c0a75c7925e2b1a3a41d601b44cdd0678cb020c2e28dbd713c92ac14f88d2e1",
+      "inference": "The transition itself is common to working Evolution2, so it is not an Evolution1-specific cause. A warm cross-component lifecycle remains unmodeled."
+    }
+  },
+  "conclusion": "No concrete dual-module selection, lease, low live-pointer, worker stack or resolution-plan regression established. Preserve E2 approved PIO pair and SCI priority1; collect lifecycle trace before runtime changes."
+}

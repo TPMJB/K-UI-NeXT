@@ -1,0 +1,395 @@
+{
+  "format": "armada-ce-maple-hook-owner-contracts-v1",
+  "license": "GPL-3.0-only",
+  "scope": "Metadata-only exact-owner source evidence. No owner code bytes or disassembly are emitted. Source findings are not proof of runtime installation, allocation lifetime, IRQ ownership, universal compatibility or successful save emulation.",
+  "source_identities": [
+    {
+      "file": "0WINCEOS.BIN",
+      "bytes": 1253376,
+      "sha256": "a7628c78090fce2c93012d5e4db6142096e138dceb7ebbf555142e902ca03c1f"
+    },
+    {
+      "file": "WINCE/MAPLE.DLL",
+      "bytes": 26191,
+      "sha256": "b8eb7afc2b13fcec8551af4fa75288fca1881f671181b88ea042aa9d77524e6e"
+    }
+  ],
+  "external_text_equivalence": {
+    "module": "maple.dll",
+    "external_image_base": 268435456,
+    "rom_nominal_base": 31260672,
+    "relocation_kind": "HIGHLOW",
+    "fixups": 443,
+    "text_fixups": 368,
+    "compared_bytes": 22528,
+    "virtual_text_bytes": 22434,
+    "text_sha256": "adad8872616d92a7553a7b1d5c1a58a54f955d15b647a2cfed8766633e5ccbb8",
+    "complete_stored_text_equal": true
+  },
+  "source_contracts": [
+    {
+      "id": "regular_thread_creation",
+      "module": "maple.dll",
+      "rva": "0x00001b80",
+      "end_rva_exclusive": "0x00001bb4",
+      "bytes": 52,
+      "rom_storage_address": "0x8c0afb80",
+      "kernel_file_offset": "0x000a0380",
+      "sha256": "4dd72f332e63d66fc5cd49039555752a7492ab6e3233549db9a2e320a7c61c41",
+      "crc32_ieee": "c2c8eea1",
+      "finding": "Calls stub0x6344 twice with security0, stack0, start0x183c or0x1854, extension argument, flags0 and threadId0. This is COREDLL CreateThread, not a proven kernel/system thread."
+    },
+    {
+      "id": "main_thread_wrapper",
+      "module": "maple.dll",
+      "rva": "0x0000183c",
+      "end_rva_exclusive": "0x00001854",
+      "bytes": 24,
+      "rom_storage_address": "0x8c0af83c",
+      "kernel_file_offset": "0x000a003c",
+      "sha256": "56d1a04ddc0c0f932ef5e262f0ec5a82fb48b56399acba01f9981b7e935bb426",
+      "crc32_ieee": "79ff18e2",
+      "finding": "The regular thread start wrapper calls worker0x5d4c. It contains no SetKMode call."
+    },
+    {
+      "id": "create_thread_import_stub",
+      "module": "maple.dll",
+      "rva": "0x00006344",
+      "end_rva_exclusive": "0x00006350",
+      "bytes": 12,
+      "rom_storage_address": "0x8c0b4344",
+      "kernel_file_offset": "0x000a4b44",
+      "sha256": "ae8ce98072439c143ffc0f4c7f5564244e7cf4f1f6a4bedc2a6fc9aa0abfeab8",
+      "crc32_ieee": "1888e5f1",
+      "finding": "Tail-jump import stub loads IAT RVA0x7034, COREDLL ordinal492 CreateThread."
+    },
+    {
+      "id": "set_kernel_mode_import_stub",
+      "module": "maple.dll",
+      "rva": "0x00006374",
+      "end_rva_exclusive": "0x00006380",
+      "bytes": 12,
+      "rom_storage_address": "0x8c0b4374",
+      "kernel_file_offset": "0x000a4b74",
+      "sha256": "361bf0802c8cfd0cb2d90ed157024e12b2ec549bf44b7743c234056ca7fa9b52",
+      "crc32_ieee": "73b7456d",
+      "finding": "Tail-jump import stub loads IAT RVA0x7044, COREDLL ordinal630 SetKMode."
+    },
+    {
+      "id": "worker_completion_call",
+      "module": "maple.dll",
+      "rva": "0x00005d4c",
+      "end_rva_exclusive": "0x00005dd6",
+      "bytes": 138,
+      "rom_storage_address": "0x8c0b3d4c",
+      "kernel_file_offset": "0x000a454c",
+      "sha256": "76760eb4a395bfcc932f57eea999b66b5d20320f79437201903a5b8f7036ebdc",
+      "crc32_ieee": "a6df4757",
+      "finding": "Ordinary worker calls completion0x5b0c with the extension pointer after status bit0x1000. It does not call SetKMode before that completion. Existing initialization SetKMode calls are not evidence of persistent worker mode."
+    },
+    {
+      "id": "completion_entry_t_dead",
+      "module": "maple.dll",
+      "rva": "0x00005b0c",
+      "end_rva_exclusive": "0x00005b28",
+      "bytes": 28,
+      "rom_storage_address": "0x8c0b3b0c",
+      "kernel_file_offset": "0x000a430c",
+      "sha256": "54cfd27b5cc0e36ed25f3d4cbe69e6321629c19a9eeda8c9d88bd5e67e90e004",
+      "crc32_ieee": "1bea5e68",
+      "finding": "Entry pushes r8..r13 and PR, moves/adds/loads metadata, then first condition consumer follows TST r2,r2 at0x5b24. Incoming T is dead at this entry; a bridge may replay the displaced pushes and resume the unchanged body without preserving incoming T."
+    },
+    {
+      "id": "temporary_initialization_kernel_mode",
+      "module": "maple.dll",
+      "rva": "0x00001ef4",
+      "end_rva_exclusive": "0x00001f08",
+      "bytes": 20,
+      "rom_storage_address": "0x8c0afef4",
+      "kernel_file_offset": "0x000a06f4",
+      "sha256": "d6cf895dfe75ccd21b6b91a128283f39f46fade7934a3974714a1ecb83450291",
+      "crc32_ieee": "9ad165bb",
+      "finding": "An initialization path calls SetKMode(1), retaining the returned previous mode in r4 for its later restore path. This is outside the regular thread wrapper."
+    },
+    {
+      "id": "initialization_mode_restore",
+      "module": "maple.dll",
+      "rva": "0x0000214a",
+      "end_rva_exclusive": "0x00002158",
+      "bytes": 14,
+      "rom_storage_address": "0x8c0b014a",
+      "kernel_file_offset": "0x000a094a",
+      "sha256": "ef8689e4039db210f47d784cafa9551574044e9502c0674b5e8adc0da5e4758d",
+      "crc32_ieee": "e7f72761",
+      "finding": "Calls SetKMode with the retained old mode before returning from initialization."
+    },
+    {
+      "id": "CreateThread_syscall",
+      "module": "coredll.dll",
+      "rva": "0x00008d20",
+      "end_rva_exclusive": "0x00008d28",
+      "bytes": 8,
+      "rom_storage_address": "0x8c038d20",
+      "kernel_file_offset": "0x00029520",
+      "sha256": "1ec3cf03811dcbc16e1d11b625fe9e12cb7d567a2841307f46136e5bf25b3402",
+      "crc32_ieee": "c1eabb03",
+      "finding": "CreateThread export492 jumps to syscall0xfffffd95, Win32 method54."
+    },
+    {
+      "id": "SetKMode_syscall",
+      "module": "coredll.dll",
+      "rva": "0x00008c44",
+      "end_rva_exclusive": "0x00008c58",
+      "bytes": 20,
+      "rom_storage_address": "0x8c038c44",
+      "kernel_file_offset": "0x00029444",
+      "sha256": "d2ec911a29b836618a4fb8ac5702dc93082d35d5bee314bd09ca75abeacea20c",
+      "crc32_ieee": "7ae32575",
+      "finding": "SetKMode export630 saves PR and reserves a16-byte argument area, calls syscall0xfffffd29 (Win32 method108), then restores PR and returns the old mode Boolean."
+    },
+    {
+      "id": "ThreadBaseFunc",
+      "module": "coredll.dll",
+      "rva": "0x000093e4",
+      "end_rva_exclusive": "0x00009434",
+      "bytes": 80,
+      "rom_storage_address": "0x8c0393e4",
+      "kernel_file_offset": "0x00029be4",
+      "sha256": "d47129dd00979d0f8442f552503560f99018c8d6843f288fdaceb77c94954479",
+      "crc32_ieee": "c7952a4a",
+      "finding": "ThreadBaseFunc export13 performs DLL/debug notifications and calls the provided start function. No SetKMode is performed by this wrapper."
+    },
+    {
+      "id": "CreateThread_method54",
+      "module": "nk.exe",
+      "rva": "0x00007a40",
+      "end_rva_exclusive": "0x00007af0",
+      "bytes": 176,
+      "rom_storage_address": "0x8c017a40",
+      "kernel_file_offset": "0x00008240",
+      "sha256": "3074f04b3f724959c59ceb50614b4927d76541b63e18167a0cc76dab3b71693e",
+      "crc32_ieee": "794f05e3",
+      "finding": "Regular CreateThread calls thread creation helper0x7850. Its argument at caller stack+24 is explicitly zero, unlike separate internal kernel-thread paths."
+    },
+    {
+      "id": "regular_thread_context_call",
+      "module": "nk.exe",
+      "rva": "0x00007850",
+      "end_rva_exclusive": "0x00007970",
+      "bytes": 288,
+      "rom_storage_address": "0x8c017850",
+      "kernel_file_offset": "0x00008050",
+      "sha256": "fed920beecc4089f79e648b1e3385162f967fcd2580855724fdbb940037189de",
+      "crc32_ieee": "a510a376",
+      "finding": "The regular path uses the global ThreadBaseFunc and forwards mode argument0 into context initializer0x3e40. A separate creation flag0x40000000 selects a different start path; MAPLE passes flags0."
+    },
+    {
+      "id": "initial_thread_SR_mode",
+      "module": "nk.exe",
+      "rva": "0x00003e40",
+      "end_rva_exclusive": "0x00003ef0",
+      "bytes": 176,
+      "rom_storage_address": "0x8c013e40",
+      "kernel_file_offset": "0x00004640",
+      "sha256": "88f05b72b89f022841a61f88f95020cb4be9bd6b313d1d4948f871d7d9e6191b",
+      "crc32_ieee": "ed8c7031",
+      "finding": "Initial context SR at thread+0xb4 starts0x8000. Instructions0x3e9c and0x3eca..0x3eda clear its top two bits, then OR0x40000000 only when the forwarded mode argument is nonzero. The regular MAPLE CreateThread path therefore initializes MD0."
+    },
+    {
+      "id": "resolve_ThreadBaseFunc_global",
+      "module": "nk.exe",
+      "rva": "0x000089b2",
+      "end_rva_exclusive": "0x000089be",
+      "bytes": 12,
+      "rom_storage_address": "0x8c0189b2",
+      "kernel_file_offset": "0x000091b2",
+      "sha256": "2ee5e8ec0e2f1395a7ee197824f3045588f9ea50f4db779cc8db16d37777d564",
+      "crc32_ieee": "cc04cac5",
+      "finding": "Resolves the UTF16 ThreadBaseFunc export name and publishes it at global0x8c14d4e0, the global used by the ordinary thread creation path."
+    },
+    {
+      "id": "SetKMode_method108",
+      "module": "nk.exe",
+      "rva": "0x0000dcd0",
+      "end_rva_exclusive": "0x0000dcf4",
+      "bytes": 36,
+      "rom_storage_address": "0x8c01dcd0",
+      "kernel_file_offset": "0x0000e4d0",
+      "sha256": "f7c80fe6633031df5931ecca46764977a033a22df5ab0f91d3b499f34c1f0467",
+      "crc32_ieee": "15bf2c4d",
+      "finding": "Finds current thread via KData+0x94, then its callstack pointer at+24. Returns whether callstack+8 was64, writes64 for true input or0 for false input. This modifies the mode used by the ordinary API return path."
+    },
+    {
+      "id": "API_entry_saved_mode",
+      "module": "nk.exe",
+      "rva": "0x00002210",
+      "end_rva_exclusive": "0x00002242",
+      "bytes": 50,
+      "rom_storage_address": "0x8c012210",
+      "kernel_file_offset": "0x00002a10",
+      "sha256": "b9b02487c9bea83be017754e61dd972a676d191228349f224ea201321fbe7d08",
+      "crc32_ieee": "4a0638ef",
+      "finding": "Captures previous SSR.MD as byte value0 or64 and passes the saved entry frame to the API dispatcher."
+    },
+    {
+      "id": "API_frame_mode_publication",
+      "module": "nk.exe",
+      "rva": "0x00005574",
+      "end_rva_exclusive": "0x00005590",
+      "bytes": 28,
+      "rom_storage_address": "0x8c015574",
+      "kernel_file_offset": "0x00005d74",
+      "sha256": "b9b8ebd9c3f6348ebc1053201e839e18f3c453a58e99fe3635d85fa33130d247",
+      "crc32_ieee": "96660129",
+      "finding": "Copies the saved entry mode to new callstack+8 and publishes that callstack pointer at current thread+24, matching the fields changed by SetKMode."
+    },
+    {
+      "id": "API_return_mode_capture",
+      "module": "nk.exe",
+      "rva": "0x00005950",
+      "end_rva_exclusive": "0x0000597c",
+      "bytes": 44,
+      "rom_storage_address": "0x8c015950",
+      "kernel_file_offset": "0x00006150",
+      "sha256": "7986cb7aa74f367c71e1620a463dd5916da1d52e55f14beeaf7fcb20eb1da0a6",
+      "crc32_ieee": "be1f52eb",
+      "finding": "Loads current thread callstack+8 into the saved return-mode value and captures its return address."
+    },
+    {
+      "id": "API_return_mode_publication",
+      "module": "nk.exe",
+      "rva": "0x00005a08",
+      "end_rva_exclusive": "0x00005a28",
+      "bytes": 32,
+      "rom_storage_address": "0x8c015a08",
+      "kernel_file_offset": "0x00006208",
+      "sha256": "bf3ad98626b7f3dfeb7f2d8283775795c3f6bd1f9305e7c9aa1e98591fb45872",
+      "crc32_ieee": "594dc7ab",
+      "finding": "For ordinary small mode values0/64, writes the return-mode value into the entry return frame and returns the captured CE return address."
+    },
+    {
+      "id": "API_return_mode_branch",
+      "module": "nk.exe",
+      "rva": "0x00002286",
+      "end_rva_exclusive": "0x00002294",
+      "bytes": 14,
+      "rom_storage_address": "0x8c012286",
+      "kernel_file_offset": "0x00002a86",
+      "sha256": "8f2bfecd499b775184549c877c40e791ef39c30ea81702231263adb337adfbdc",
+      "crc32_ieee": "56f0f3a1",
+      "finding": "Nonzero saved mode returns directly by JMP while execution remains in kernel mode. Zero mode branches to the SSR/RTE user-return path."
+    },
+    {
+      "id": "API_user_RTE_return",
+      "module": "nk.exe",
+      "rva": "0x00002256",
+      "end_rva_exclusive": "0x00002272",
+      "bytes": 28,
+      "rom_storage_address": "0x8c012256",
+      "kernel_file_offset": "0x00002a56",
+      "sha256": "e9d047b2829a71915576c84b572120ad4e15ca29800e20aacc293c483bc3502c",
+      "crc32_ieee": "87dcebda",
+      "finding": "Loads the saved zero mode into SSR (with conditional FPU-disable0x8000), then RTE restores user mode at the CE return address. Thus restoring old mode0 must finish in a CE-mapped bridge, not P2."
+    }
+  ],
+  "mode_contract": {
+    "regular_MAPLE_worker_initial_MD": 0,
+    "regular_thread_creation": "MAPLE1b80 -> stub6344/IAT7034 -> COREDLL492/8d20 -> fffffd95 -> NK54/7a40 ->7850 ->3e40",
+    "worker_start": "COREDLL ThreadBaseFunc93e4 -> MAPLE183c ->5d4c ->5b0c",
+    "mode_bridge": "MAPLE6374/IAT7044 -> COREDLL630/8c44 -> fffffd29 -> NK108/dcd0 -> ordinary API return",
+    "SetKMode_true_returns_MD": 1,
+    "SetKMode_returns_old_mode_Boolean": true,
+    "restore_old_zero_returns_MD": 0,
+    "restore_zero_requires_CE_mapped_return_code": true,
+    "existing_initialization_calls_prove_worker_MD1": false,
+    "incoming_completion_T_live": false,
+    "incoming_T_reason": "First T consumer follows TST r2,r2 atMAPLE5b24; replayed entry pushes do not consume incoming T."
+  },
+  "source_text_tail": {
+    "text_o32_record_address": "0x8c099bd4",
+    "virtual_size_word_address": "0x8c099bd4",
+    "original_virtual_bytes": "0x000057a2",
+    "rva": "0x00001000",
+    "stored_bytes": "0x00005800",
+    "storage_address": "0x8c0af000",
+    "real_address_field": "0x03dd1000",
+    "flags": "0x60000020",
+    "module_virtual_bytes": "0x0000a000",
+    "aligned_padding_start_rva": "0x000067a4",
+    "aligned_padding_end_rva_exclusive": "0x00006800",
+    "aligned_padding_bytes": 92,
+    "all_padding_bytes_zero": true,
+    "external_PE_padding_equal": true,
+    "HIGHLOW_overlap_rvas": [],
+    "reviewed_padding_reference_span": {
+      "start_rva": "0x000067a2",
+      "end_rva_exclusive": "0x00006800"
+    },
+    "stored_section_unaligned_absolute_pointer_references": [],
+    "absolute_scan_excluded_sections": [
+      ".reloc"
+    ],
+    "text_halfword_direct_branch_references": [],
+    "original_padding_HIGHLOW_overlap_rvas": [],
+    "negative_reference_scan_limitation": "Conservative raw scans of stored sections and direct branch encodings, not a complete indirect runtime reachability proof.",
+    "reservation_rule": "A bridge placed in this padding must be bounded by the stored text end and its end included in the O32 virtual size before CE copies/maps it. A zero source tail is not an executable reservation until the stage validates the exact original metadata and commits its own bounded reservation."
+  },
+  "stage_guard_regions": [
+    {
+      "id": "ROMHDR",
+      "address": "0x8c141420",
+      "kernel_file_offset": "0x00131c20",
+      "bytes": 84,
+      "sha256": "013e737f57376d0a3b82ce81d6c797e3805fa0984cefe10fcfd744f8f6f179c9",
+      "crc32_ieee": "7ddd77a1"
+    },
+    {
+      "id": "MAPLE_TOC",
+      "address": "0x8c141614",
+      "kernel_file_offset": "0x00131e14",
+      "bytes": 32,
+      "sha256": "9fb5b61a06d5a0c0020c913ff4fbf465b98dffcf15385f5e8202812f845a14b9",
+      "crc32_ieee": "3dd790b3"
+    },
+    {
+      "id": "MAPLE_E32",
+      "address": "0x8c099b70",
+      "kernel_file_offset": "0x0008a370",
+      "bytes": 100,
+      "sha256": "21bb242c1817bc5caefaff3b0d94e7f638de4cca07c72c03a4c6fa0d5357bd82",
+      "crc32_ieee": "908a5539"
+    },
+    {
+      "id": "MAPLE_text_O32",
+      "address": "0x8c099bd4",
+      "kernel_file_offset": "0x0008a3d4",
+      "bytes": 24,
+      "sha256": "4c958649c233fd405bc5483f4ca55bbf34755d6a1963c92ee1bb097ec196be68",
+      "crc32_ieee": "94183a25"
+    },
+    {
+      "id": "completion_entry32",
+      "address": "0x8c0b3b0c",
+      "kernel_file_offset": "0x000a430c",
+      "bytes": 32,
+      "sha256": "394934ea008c9f96b8655aa9d23bfa1e45850c550485cfb02c8ff7fde819180c",
+      "crc32_ieee": "7bd7ff55"
+    },
+    {
+      "id": "aligned_text_tail",
+      "address": "0x8c0b47a4",
+      "kernel_file_offset": "0x000a4fa4",
+      "bytes": 92,
+      "sha256": "62b14867e4e79d50673d2f7474335229f54c478f56d2a910235e1953c6d29206",
+      "crc32_ieee": "c2b526e7"
+    }
+  ],
+  "limitations": [
+    "Observed GD callback MD1 cannot be transferred to the separately created MAPLE worker thread.",
+    "The mode findings describe this exact source. A bridge must validate the runtime module instance, import target and original bytes before using them.",
+    "A SetKMode bridge must preserve the required ABI registers, PR and stack argument area and restore old mode while still executing CE-mapped code.",
+    "Two matching headers and repeated mappings do not establish DMA idleness or a lifetime lease.",
+    "Text-tail source geometry alone does not exclude every possible indirect runtime reference; exact reviewed source, relocation/reference review and stage admission remain required.",
+    "These contracts do not connect the native virtual-A2 backend or authorize changing any save, response or physical card."
+  ]
+}

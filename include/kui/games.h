@@ -57,6 +57,9 @@ struct kui_games_detail {
      * Valid metadata alone never grants compressed-image launch support. */
     bool zso_launch;
     unsigned zso_codec; /* Explicit decoder used by inspection, including errors. */
+    /* The inspected original native GDI is on SCI. This chooses an unsaved
+     * launch default only; executable/reader admission still runs at launch. */
+    bool background_default;
     enum kui_game_image_format format;
     bool cover; /* Large box art was loaded for this image. */
 };

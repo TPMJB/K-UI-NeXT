@@ -1,0 +1,303 @@
+{
+  "schema": "kui.native.allocator-family-evidence.v1",
+  "date": "2026-10-23",
+  "scope": "Owner input bytes remain external. Static discovery, sanitizer host state models and original SH integer execution only; no new-title hardware compatibility or gameplay claim.",
+  "inputs": {
+    "grandia2": {
+      "bytes": 1279172,
+      "sha256": "dd583571969d275b479e33edfd98ed5e2097d16c37ff6aaba59a7abaf057dc45",
+      "record_path": "tests/fixtures/native-cache/grandia2.nvr",
+      "record_sha256": "c865d6d7fa23969818a9f3b5ed10e37121bcfaa6af6d0f5b620b75861f1861a7",
+      "initializer": "0x8c037518",
+      "initializer_slot": "0x8c0106cc",
+      "call": {
+        "load": "0x8c010602",
+        "call": "0x8c010608",
+        "return_pr": "0x8c01060c",
+        "begin": "0x8c400020",
+        "bytes": "0xbeffe0"
+      },
+      "payload": "0x8cfc0000",
+      "previous_refusal": "Two raw initializer pointers were ambiguous.",
+      "raw_initializer_slots": [
+        "0x8c0106cc",
+        "0x8c01b254"
+      ],
+      "admission": "Exactly one complete immutable argument/call proof selects the first slot; a data/export pointer alone cannot select a slot.",
+      "original_sh": {
+        "initializer_release_instructions": 107,
+        "first_allocate_instructions": 53,
+        "subsequent_allocation_free_operations": 227,
+        "maximum_free_nodes": 32,
+        "evolution_instructions": 20120,
+        "stage_stack_and_worker_preserved": true,
+        "old_owner_stack_overwrite_reproduced": false
+      }
+    },
+    "evolution1": {
+      "bytes": 2143652,
+      "sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+      "record_path": "tests/fixtures/native-cache/evolution1.nvr",
+      "record_sha256": "be2f1877d184ac06d38106af29656644bf5d04efc8538893af826c5aa81cfa5c",
+      "initializer": "0x8c1633a8",
+      "initializer_slot": "0x8c04edf0",
+      "call": {
+        "load": "0x8c04ed5a",
+        "call": "0x8c04ed64",
+        "return_pr": "0x8c04ed68",
+        "begin": "0x8c35e200",
+        "bytes": "0xca1e00"
+      },
+      "payload": "0x8cfd0000",
+      "admission": "Existing reviewed allocator and UNIFORM48 contiguous RX layout families; no new allocator metadata or lifetime family.",
+      "original_sh": {
+        "initializer_release_instructions": 107,
+        "first_allocate_instructions": 53,
+        "subsequent_allocation_free_operations": 227,
+        "maximum_free_nodes": 32,
+        "evolution_instructions": 20120,
+        "stage_stack_and_worker_preserved": true,
+        "old_owner_stack_overwrite_reproduced": true
+      }
+    },
+    "jgr": {
+      "bytes": 3075648,
+      "sha256": "8b294765225fc32020dd59010464a730b710d0bd79f69c79f16218cc4feac6a6",
+      "partial_only": true,
+      "initializer_slot": "0x8c013fec",
+      "proved_call": {
+        "load": "0x8c013f6a",
+        "call": "0x8c013f6c",
+        "return_pr": "0x8c013f70",
+        "begin": "0x8c35baa0",
+        "bytes": "0x004a4560"
+      },
+      "scope": "R0 target plus immutable known-TST forward guard; layout root provenance remains unadmitted. No cached launch record or console-support claim.",
+      "initializer": "0x8c28d588"
+    },
+    "ct2": {
+      "bytes": 1452148,
+      "sha256": "8057a8e37636ad78b1fc70ee590bd314686546b13ffe100623d86b572aec53c1",
+      "partial_only": true,
+      "reviewed_initializer": "0x8c14a674",
+      "raw_initializer_pointer_references": 0,
+      "exact_direct_bsr_references": 0,
+      "exact_mova_and_simple_literal_bsrf_references": 0,
+      "scope": "No proved first initializer hook. Absence in these bounded scans is not a complete reachability proof; retain refusal."
+    }
+  },
+  "rules": {
+    "raw_reference_limit": 8,
+    "multiple_raw_references_require_one_complete_proved_call": true,
+    "any_ambiguous_slot_refuses": true,
+    "unknown_conditional_or_taken_backward_branch_refuses": true,
+    "taken_branch_destination_cannot_exceed_selected_target_load": true,
+    "conditional_must_precede_target_load": true,
+    "actual_selected_target_load_execution_required": true,
+    "post_load_pre_call_target_transform_refuses": true,
+    "caller_dependent_or_out_of_image_reads_refuse": true,
+    "runtime_metadata_and_eight_identity_witness_contract_unchanged": true,
+    "selected_initializer_slot_has_exactly_one_encoded_pc_relative_consumer": true,
+    "no_immutable_aligned_word_may_point_to_selected_slot_in_any_main_ram_alias": true,
+    "nonselected_reads_of_patched_word_refuse": true,
+    "post_selected_load_target_register_data_operands_refuse": true,
+    "alternate_unpatched_export_word_may_supply_independent_guard": true
+  },
+  "tests": {
+    "heap_asan_ubsan_assertions": 10826,
+    "heap_command": "cc -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie -Iinclude tests/test_vmu_native_heap.c -o build/test-heap-exports; ASAN_OPTIONS=detect_leaks=0 build/test-heap-exports",
+    "original_sh_model_stage_build": "920c86efc512",
+    "grandia_command": "python3 tests/test_vmu_native_heap_execution.py --build build/native-optimized-final --grandia2 /path/to/Grandia2/1ST_READ.BIN HeapExecutionTests.test_grandia2",
+    "evolution_command": "python3 tests/test_vmu_native_heap_execution.py --build build/native-optimized-final --evolution1 /path/to/Evolution1/1ST_READ.BIN HeapExecutionTests.test_evolution1",
+    "placement_asan_ubsan_assertions_five_records": 790720,
+    "lease_alias_save_read_reopen_asan_ubsan_assertions": {
+      "grandia2": 18365,
+      "evolution1": 18365,
+      "ps2": 18365,
+      "sa2_and_skies": 36729
+    },
+    "host_alias_fixture": "Synthetic SDK/DMA spans moved below 4 MiB so they do not invent a TX/RX overlap inside Grandia allocator free space; actual per-title heap geometry and aliases retained.",
+    "placement_oracle": "Old blanket 0x0cfe0000 high reservation also rejects an arena ending at 0x0cff0000. The negative oracle now covers that case rather than assuming only end-of-RAM arenas were refused.",
+    "original_sh_caller_transport": {
+      "method": "Independent original-input SH execution, not the C argument evaluator. Every bounded candidate start is tried; the recorded start succeeds with three unrelated initial register/SR states in both original-target and patched-target mode. Data reads are restricted to immutable input bytes; writes are restricted to 32 bytes of inherited argument-spill stack. Exact selected literal instruction executes once; target, final R4/R5 and call PR match metadata.",
+      "games": 6,
+      "trials": 36,
+      "results": [
+        {
+          "game": "evolution1",
+          "image_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+          "start": "0x8c04ed40",
+          "call": "0x8c04ed64",
+          "selected": "0x8c04ed5a",
+          "slot": "0x8c04edf0",
+          "original_target": "0x8c1633a8",
+          "hook_target": "0x8c004200",
+          "begin": "0x8c35e200",
+          "bytes": "0x00ca1e00",
+          "pr": "0x8c04ed68",
+          "successful_caller_starts": 2,
+          "independent_trials": 6,
+          "instructions": [
+            20,
+            20,
+            20,
+            20,
+            20,
+            20
+          ],
+          "selected_literal_executed_once": true,
+          "immutable_image_reads": true,
+          "only_bounded_stack_spills": true,
+          "jgr_partial_only": false
+        },
+        {
+          "game": "grandia2",
+          "image_sha256": "dd583571969d275b479e33edfd98ed5e2097d16c37ff6aaba59a7abaf057dc45",
+          "start": "0x8c0105f4",
+          "call": "0x8c010608",
+          "selected": "0x8c010602",
+          "slot": "0x8c0106cc",
+          "original_target": "0x8c037518",
+          "hook_target": "0x8c004200",
+          "begin": "0x8c400020",
+          "bytes": "0x00beffe0",
+          "pr": "0x8c01060c",
+          "successful_caller_starts": 2,
+          "independent_trials": 6,
+          "instructions": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "selected_literal_executed_once": true,
+          "immutable_image_reads": true,
+          "only_bounded_stack_spills": true,
+          "jgr_partial_only": false
+        },
+        {
+          "game": "jgr",
+          "image_sha256": "8b294765225fc32020dd59010464a730b710d0bd79f69c79f16218cc4feac6a6",
+          "start": "0x8c013f4a",
+          "call": "0x8c013f6c",
+          "selected": "0x8c013f6a",
+          "slot": "0x8c013fec",
+          "original_target": "0x8c28d588",
+          "hook_target": "0x8c004200",
+          "begin": "0x8c35baa0",
+          "bytes": "0x004a4560",
+          "pr": "0x8c013f70",
+          "successful_caller_starts": 2,
+          "independent_trials": 6,
+          "instructions": [
+            17,
+            17,
+            17,
+            17,
+            17,
+            17
+          ],
+          "selected_literal_executed_once": true,
+          "immutable_image_reads": true,
+          "only_bounded_stack_spills": true,
+          "jgr_partial_only": true
+        },
+        {
+          "game": "ps2",
+          "image_sha256": "a3dcd09a96045839dbbc35697eb4336e4eba79b52203a46bb2f8ee9a4ba2eed8",
+          "start": "0x8c02d304",
+          "call": "0x8c02d30e",
+          "selected": "0x8c02d30a",
+          "slot": "0x8c02d3c4",
+          "original_target": "0x0c2b15c8",
+          "hook_target": "0x8c004200",
+          "begin": "0x0c33a880",
+          "bytes": "0x00080000",
+          "pr": "0x8c02d312",
+          "successful_caller_starts": 1,
+          "independent_trials": 6,
+          "instructions": [
+            7,
+            7,
+            7,
+            7,
+            7,
+            7
+          ],
+          "selected_literal_executed_once": true,
+          "immutable_image_reads": true,
+          "only_bounded_stack_spills": true,
+          "jgr_partial_only": false
+        },
+        {
+          "game": "sa2",
+          "image_sha256": "6919ed8bc96782d041be41ba86f90bf86d99632b8b7787391969721bc0991736",
+          "start": "0x8c0100ae",
+          "call": "0x8c0100c2",
+          "selected": "0x8c0100bc",
+          "slot": "0x8c0101bc",
+          "original_target": "0x8c110114",
+          "hook_target": "0x8c004200",
+          "begin": "0x8cc00000",
+          "bytes": "0x00400000",
+          "pr": "0x8c0100c6",
+          "successful_caller_starts": 2,
+          "independent_trials": 6,
+          "instructions": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "selected_literal_executed_once": true,
+          "immutable_image_reads": true,
+          "only_bounded_stack_spills": true,
+          "jgr_partial_only": false
+        },
+        {
+          "game": "skies",
+          "image_sha256": "4218c07829d63080be2da86413ec023e6d77001c13a1494648db6e2e5cb73611",
+          "start": "0x8c015e00",
+          "call": "0x8c015e2a",
+          "selected": "0x8c015e28",
+          "slot": "0x8c015ebc",
+          "original_target": "0x8c256ab0",
+          "hook_target": "0x8c004200",
+          "begin": "0x8c5e9ba0",
+          "bytes": "0x00a16460",
+          "pr": "0x8c015e2e",
+          "successful_caller_starts": 2,
+          "independent_trials": 6,
+          "instructions": [
+            23,
+            23,
+            23,
+            23,
+            23,
+            23
+          ],
+          "selected_literal_executed_once": true,
+          "immutable_image_reads": true,
+          "only_bounded_stack_spills": true,
+          "jgr_partial_only": false
+        }
+      ],
+      "command": "python3 tests/test_vmu_native_heap_call_execution.py --ps2 /path/to/PS2/1ST_READ.BIN --skies /path/to/Skies/1ST_READ.BIN --sa2 /path/to/SA2/1ST_READ.BIN --grandia2 /path/to/Grandia2/1ST_READ.BIN --evolution1 /path/to/Evolution1/1ST_READ.BIN --jgr /path/to/JGR/1ST_READ.BIN",
+      "limit": "Actual instruction semantics and target transport within the bounded caller expression only; no complete boot, game execution, cache-coherence or hardware performance claim. JGR remains partial and unadmitted by the layout gate."
+    },
+    "patch_dependency_hardening": {
+      "guard_variants": 24,
+      "axes": "direct/known-pointer read; arguments before/after guard; selected/alternate unpatched word; three main-RAM aliases",
+      "extra_global_cases": 4,
+      "target_data_operand_cases": 14,
+      "target_data_operand_scope": "pre-call and call-delay copies, pointer reads, arithmetic, TST and stack spill",
+      "independent_review": "External authored direct/indirect shared-word guards inside and before the accepted argument window, and target-to-R4 copies before JSR / in its delay slot all refuse after the fix. Original six inputs each have one encoded consumer and zero immutable address-of-slot references.",
+      "limit": "Encoded consumer and immutable address-of-slot census is deliberately conservative, not a whole-program proof of synthesized indirect pointers or arbitrary self-modifying control flow."
+    }
+  },
+  "retail_code_embedded": false
+}

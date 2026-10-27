@@ -1,0 +1,442 @@
+{
+  "schema": "kui.native.broader-compatibility.v1",
+  "date": "2026-10-23",
+  "scope": "Original external startup files, complete static resolution and independent host models; new candidates still require console acceptance.",
+  "input_count": 24,
+  "distinct_executable_hashes": 23,
+  "results": [
+    {
+      "slug": "ps2",
+      "input_relative": "next-native-input/ps2/1ST_READ.BIN",
+      "bytes": 3097497,
+      "sha256": "a3dcd09a96045839dbbc35697eb4336e4eba79b52203a46bb2f8ee9a4ba2eed8",
+      "checks": {
+        "layout": 1,
+        "heap": 1,
+        "enum": 1,
+        "initializer_call": 1,
+        "exits": 1,
+        "combined_patch": 1
+      },
+      "complete_static_resolution": true,
+      "console_test_catalog": true
+    },
+    {
+      "slug": "ct2",
+      "input_relative": "native-stress-inputs/ct2/1ST_READ.BIN",
+      "bytes": 1452148,
+      "sha256": "8057a8e37636ad78b1fc70ee590bd314686546b13ffe100623d86b572aec53c1",
+      "checks": {
+        "layout": 1,
+        "heap": 1,
+        "enum": 1,
+        "initializer_call": 0,
+        "exits": 1,
+        "combined_patch": 0
+      },
+      "complete_static_resolution": false,
+      "console_test_catalog": false
+    },
+    {
+      "slug": "evolution2",
+      "input_relative": "native-stress-inputs/evolution2/1ST_READ.BIN",
+      "bytes": 4057056,
+      "sha256": "16b45fcc84992a60d5a64bf64bf22b699b27306b95f177ba3d9730ca380069ae",
+      "checks": {
+        "layout": 0,
+        "heap": 1,
+        "enum": 1,
+        "initializer_call": 1,
+        "exits": 0,
+        "combined_patch": 0
+      },
+      "complete_static_resolution": false,
+      "console_test_catalog": false
+    },
+    {
+      "slug": "grandia2",
+      "input_relative": "native-stress-inputs/grandia2/1ST_READ.BIN",
+      "bytes": 1279172,
+      "sha256": "dd583571969d275b479e33edfd98ed5e2097d16c37ff6aaba59a7abaf057dc45",
+      "checks": {
+        "layout": 1,
+        "heap": 1,
+        "enum": 1,
+        "initializer_call": 1,
+        "exits": 1,
+        "combined_patch": 1
+      },
+      "complete_static_resolution": true,
+      "console_test_catalog": true
+    },
+    {
+      "slug": "pso",
+      "input_relative": "native-stress-inputs/pso/1ST_READ.BIN",
+      "bytes": 3783264,
+      "sha256": "11dc59ee0278675decf5e0bf1fa30646f889a0e5a7f10251f3c3a697e42a28e5",
+      "checks": {
+        "layout": 1,
+        "heap": 1,
+        "enum": 1,
+        "initializer_call": 1,
+        "exits": 0,
+        "combined_patch": 0
+      },
+      "complete_static_resolution": false,
+      "console_test_catalog": false
+    },
+    {
+      "slug": "recv",
+      "input_relative": "native-stress-inputs/recv/1ST_READ.BIN",
+      "bytes": 3915142,
+      "sha256": "199b72af9bcd7fb80d401d4645c731e595970a0dcbcfd98e1bec187f4382fbbb",
+      "checks": {
+        "layout": 1,
+        "heap": 1,
+        "enum": 1,
+        "initializer_call": 1,
+        "exits": 1,
+        "combined_patch": 1
+      },
+      "complete_static_resolution": true,
+      "console_test_catalog": false
+    },
+    {
+      "slug": "sa2",
+      "input_relative": "native-stress-inputs/sa2/1ST_READ.BIN",
+      "bytes": 1578116,
+      "sha256": "6919ed8bc96782d041be41ba86f90bf86d99632b8b7787391969721bc0991736",
+      "checks": {
+        "layout": 1,
+        "heap": 1,
+        "enum": 1,
+        "initializer_call": 1,
+        "exits": 1,
+        "combined_patch": 1
+      },
+      "complete_static_resolution": true,
+      "console_test_catalog": true
+    },
+    {
+      "slug": "skies",
+      "input_relative": "native-stress-inputs/skies/1ST_READ.BIN",
+      "bytes": 5460080,
+      "sha256": "4218c07829d63080be2da86413ec023e6d77001c13a1494648db6e2e5cb73611",
+      "checks": {
+        "layout": 1,
+        "heap": 1,
+        "enum": 1,
+        "initializer_call": 1,
+        "exits": 1,
+        "combined_patch": 1
+      },
+      "complete_static_resolution": true,
+      "console_test_catalog": true
+    },
+    {
+      "slug": "soulreaver",
+      "input_relative": "native-stress-inputs/soulreaver/1ST_READ.BIN",
+      "bytes": 3455844,
+      "sha256": "775dc1d401c907f44ce1754017150e9b333dcccf32f563ed69cb4d7be8cb25d9",
+      "checks": {
+        "layout": 0,
+        "heap": 0,
+        "enum": 0,
+        "initializer_call": 0,
+        "exits": 0,
+        "combined_patch": 0
+      },
+      "complete_static_resolution": false,
+      "console_test_catalog": false
+    },
+    {
+      "slug": "hotd2",
+      "input_relative": "native-new-library-inputs/hotd2/1ST_READ.BIN",
+      "bytes": 812268,
+      "sha256": "37817967c2949de6ca4c83522f7eff36fb18ea17a5f06d995f6e93319511ee6f",
+      "checks": {
+        "layout": 0,
+        "heap": 0,
+        "enum": 0,
+        "initializer_call": 0,
+        "exits": 0,
+        "combined_patch": 0
+      },
+      "complete_static_resolution": false,
+      "console_test_catalog": false
+    },
+    {
+      "slug": "silver",
+      "input_relative": "native-new-library-inputs/silver/1ST_READ.BIN",
+      "bytes": 2956128,
+      "sha256": "4460c60597d6c1f587c125c2dd4b2b491d0a568f31b52c91bce7d8c74f9d550d",
+      "checks": {
+        "layout": 0,
+        "heap": 0,
+        "enum": 0,
+        "initializer_call": 0,
+        "exits": 0,
+        "combined_patch": 0
+      },
+      "complete_static_resolution": false,
+      "console_test_catalog": false
+    },
+    {
+      "slug": "timestalkers",
+      "input_relative": "native-new-library-inputs/timestalkers/1ST_READ.BIN",
+      "bytes": 661056,
+      "sha256": "a9fa66b6bcc482dfaa47683d552e42f24a8200c8efa5ed905d8184eedeba3ac0",
+      "checks": {
+        "layout": 0,
+        "heap": 0,
+        "enum": 0,
+        "initializer_call": 0,
+        "exits": 0,
+        "combined_patch": 0
+      },
+      "complete_static_resolution": false,
+      "console_test_catalog": false
+    },
+    {
+      "slug": "bluestinger",
+      "input_relative": "native-extra-corpus/bluestinger/1ST_READ.BIN",
+      "bytes": 1975556,
+      "sha256": "491fd69cd64100786372169e95e50ca2733bbfb88a54ef15da6a1f66297f5593",
+      "checks": {
+        "layout": 0,
+        "heap": 0,
+        "enum": 0,
+        "initializer_call": 0,
+        "exits": 0,
+        "combined_patch": 0
+      },
+      "complete_static_resolution": false,
+      "console_test_catalog": false
+    },
+    {
+      "slug": "doa2",
+      "input_relative": "native-extra-corpus/doa2/1ST_READ.BIN",
+      "bytes": 1815864,
+      "sha256": "105056d9ffef86bf5e470fa28dc5907443156f9ab1c6bc009f73661d9c047a85",
+      "checks": {
+        "layout": 1,
+        "heap": 0,
+        "enum": 0,
+        "initializer_call": 0,
+        "exits": 1,
+        "combined_patch": 0
+      },
+      "complete_static_resolution": false,
+      "console_test_catalog": false
+    },
+    {
+      "slug": "egg",
+      "input_relative": "native-extra-corpus/egg/1ST_READ.BIN",
+      "bytes": 686692,
+      "sha256": "2589fa5b63072473d190767903e08c9cde8e7acfc1e2b524fd4943332cbd0630",
+      "checks": {
+        "layout": 0,
+        "heap": 0,
+        "enum": 0,
+        "initializer_call": 0,
+        "exits": 0,
+        "combined_patch": 0
+      },
+      "complete_static_resolution": false,
+      "console_test_catalog": false
+    },
+    {
+      "slug": "evolution1",
+      "input_relative": "native-extra-corpus/evolution1/1ST_READ.BIN",
+      "bytes": 2143652,
+      "sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+      "checks": {
+        "layout": 1,
+        "heap": 1,
+        "enum": 1,
+        "initializer_call": 1,
+        "exits": 1,
+        "combined_patch": 1
+      },
+      "complete_static_resolution": true,
+      "console_test_catalog": true
+    },
+    {
+      "slug": "generator2",
+      "input_relative": "native-extra-corpus/generator2/1ST_READ.BIN",
+      "bytes": 163008,
+      "sha256": "90dfaa341e5908d4fd40af438fd4e244d2ee066554b95b30e0b4fca144e48722",
+      "checks": {
+        "layout": 0,
+        "heap": 0,
+        "enum": 0,
+        "initializer_call": 0,
+        "exits": 0,
+        "combined_patch": 0
+      },
+      "complete_static_resolution": false,
+      "console_test_catalog": false
+    },
+    {
+      "slug": "jgr",
+      "input_relative": "native-extra-corpus/jgr/1ST_READ.BIN",
+      "bytes": 3075648,
+      "sha256": "8b294765225fc32020dd59010464a730b710d0bd79f69c79f16218cc4feac6a6",
+      "checks": {
+        "layout": 0,
+        "heap": 1,
+        "enum": 1,
+        "initializer_call": 1,
+        "exits": 1,
+        "combined_patch": 0
+      },
+      "complete_static_resolution": false,
+      "console_test_catalog": false
+    },
+    {
+      "slug": "lodoss",
+      "input_relative": "native-extra-corpus/lodoss/1ST_READ.BIN",
+      "bytes": 3473412,
+      "sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5",
+      "checks": {
+        "layout": 0,
+        "heap": 1,
+        "enum": 1,
+        "initializer_call": 0,
+        "exits": 1,
+        "combined_patch": 0
+      },
+      "complete_static_resolution": false,
+      "console_test_catalog": false
+    },
+    {
+      "slug": "mdk2",
+      "input_relative": "native-extra-corpus/mdk2/1ST_READ.BIN",
+      "bytes": 750804,
+      "sha256": "ac5826c9a371de04207748e60e49e0a3c13a39468902f89d8c1c82e1f544bb48",
+      "checks": {
+        "layout": 0,
+        "heap": 0,
+        "enum": 0,
+        "initializer_call": 0,
+        "exits": 0,
+        "combined_patch": 0
+      },
+      "complete_static_resolution": false,
+      "console_test_catalog": false
+    },
+    {
+      "slug": "rayman2",
+      "input_relative": "native-extra-corpus/rayman2/1ST_READ.BIN",
+      "bytes": 935648,
+      "sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099",
+      "checks": {
+        "layout": 0,
+        "heap": 1,
+        "enum": 1,
+        "initializer_call": 1,
+        "exits": 1,
+        "combined_patch": 0
+      },
+      "complete_static_resolution": false,
+      "console_test_catalog": false
+    },
+    {
+      "slug": "rush2049",
+      "input_relative": "native-extra-corpus/rush2049/1ST_READ.BIN",
+      "bytes": 1123492,
+      "sha256": "336c97aa409e4b38582c43077381b1c99d6a64bbec630e3be7a9829adda8e688",
+      "checks": {
+        "layout": 1,
+        "heap": 0,
+        "enum": 0,
+        "initializer_call": 0,
+        "exits": 0,
+        "combined_patch": 0
+      },
+      "complete_static_resolution": false,
+      "console_test_catalog": false
+    },
+    {
+      "slug": "skies2",
+      "input_relative": "native-extra-corpus/skies2/1ST_READ.BIN",
+      "bytes": 5460080,
+      "sha256": "4218c07829d63080be2da86413ec023e6d77001c13a1494648db6e2e5cb73611",
+      "checks": {
+        "layout": 1,
+        "heap": 1,
+        "enum": 1,
+        "initializer_call": 1,
+        "exits": 1,
+        "combined_patch": 1
+      },
+      "complete_static_resolution": true,
+      "console_test_catalog": true
+    },
+    {
+      "slug": "smashpack",
+      "input_relative": "native-extra-corpus/smashpack/1ST_READ.BIN",
+      "bytes": 212324,
+      "sha256": "3a311b189a4870ccbefc4fcd306e2d38e5ae810ae5edd225af6b9aa6d5df5f10",
+      "checks": {
+        "layout": 1,
+        "heap": 1,
+        "enum": 1,
+        "initializer_call": 1,
+        "exits": 0,
+        "combined_patch": 0
+      },
+      "complete_static_resolution": false,
+      "console_test_catalog": false
+    }
+  ],
+  "runtime": {
+    "reference_build": "920c86efc512",
+    "comparison": "Both builds use the reference build ID for this byte comparison; final release receives its own ID.",
+    "optimized_worker_byte_identical": true,
+    "worker_bytes": 36512,
+    "worker_sha256": "5132ce55ee4f949f947d94ccaca22e3bd1838deca21b95aa7d9ced9c27f7f75a",
+    "runtime_abi_unchanged": true
+  },
+  "new_candidates": [
+    "grandia2",
+    "evolution1"
+  ],
+  "partial_family_gains": {
+    "layout": [
+      "ct2",
+      "pso"
+    ],
+    "allocator_call": [
+      "jgr"
+    ]
+  },
+  "limits": [
+    "Static resolution is not live ownership or console compatibility",
+    "A code-address cache grants no memory or storage authority",
+    "Older direct allocators and compact terminal entries need a separate adapter",
+    "RECV and other image/heap overlaps retain their current refusal",
+    "No game bytes are versioned or shipped"
+  ],
+  "validation": {
+    "persistent_bridge_assertions": 1284495,
+    "layout_root_instruction_mutations": 1179648,
+    "layout_root_authored_permutations": 360,
+    "stage_placement_assertions": 790720,
+    "original_allocator_operations_per_full_record": 227,
+    "full_records": 5,
+    "alias_save_reopen_assertions": {
+      "high_tail": 55093,
+      "ps2": 18365,
+      "grandia2": 18365
+    },
+    "complete_cache_assertions": 67296,
+    "cache_seed_codec_assertions": 95362,
+    "personalizer_tests": 56,
+    "full_linked_artifact_audit": "passed on development build; clean release audited again during packaging",
+    "all_five_records_freshly_verified_after_transport_hardening": true,
+    "shared_pointer_word_refused_for_additional_encoded_or_address_consumers": true,
+    "heap_sanitizer_assertions": 10826,
+    "actual_original_and_patched_caller_trials": 36
+  }
+}

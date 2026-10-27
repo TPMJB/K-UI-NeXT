@@ -1,0 +1,86 @@
+{
+  "schema": "kui.native.skies.original-timer2-callback-review.v1",
+  "source_sha256": "4218c07829d63080be2da86413ec023e6d77001c13a1494648db6e2e5cb73611",
+  "source_bytes": 5460080,
+  "addresses": {
+    "initializer": "0x8c087438",
+    "callback": "0x8c087498",
+    "setter": "0x8c2577b6",
+    "dispatcher": "0x8c257778",
+    "start": "0x8c25779c",
+    "reload": "0x8c2578a6",
+    "callback_cell": "0x8c598804",
+    "argument_cell": "0x8c598808",
+    "counter_a": "0x8c5705d4",
+    "counter_b": "0x8c5705d8",
+    "mode_cell": "0x8c55f114",
+    "pause_cell": "0x8c581608"
+  },
+  "callback_argument": 0,
+  "callback_sha256": "2e77069d743606bf773d5ed5fecd522383c657b2c73831366c1d8c017cd8d858",
+  "callback_code_bytes": 76,
+  "cases": 72,
+  "callback_instruction_min": 88,
+  "callback_instruction_max": 96,
+  "external_callback_callees": [
+    "0x8c2577b6",
+    "0x8c2578a6",
+    "0x8c25779c"
+  ],
+  "nonstack_write_addresses": [
+    {
+      "address": "0x8c00f648",
+      "bytes": 4
+    },
+    {
+      "address": "0x8c5705d4",
+      "bytes": 4
+    },
+    {
+      "address": "0x8c5705d8",
+      "bytes": 4
+    },
+    {
+      "address": "0x8c598804",
+      "bytes": 4
+    },
+    {
+      "address": "0x8c598808",
+      "bytes": 4
+    },
+    {
+      "address": "0xffd00004",
+      "bytes": 2
+    },
+    {
+      "address": "0xffd80000",
+      "bytes": 1
+    },
+    {
+      "address": "0xffd80004",
+      "bytes": 1
+    },
+    {
+      "address": "0xffd80020",
+      "bytes": 4
+    },
+    {
+      "address": "0xffd80024",
+      "bytes": 4
+    },
+    {
+      "address": "0xffd80028",
+      "bytes": 2
+    }
+  ],
+  "original_vbr_registration_offset": "0x248",
+  "registered_timer_priority": 15,
+  "worker_imask15_suppresses_priority15": true,
+  "priority_reason": "SH interrupt acceptance requires interrupt level strictly greater than SR.IMASK; 15 is not greater than 15.",
+  "no_Maple_SCI_DMAC_writes_in_executed_paths": true,
+  "limits": [
+    "Integer original-code replay with explicit flat RAM and MMIO register bytes; no cycle timing, asynchronous events or interrupt scheduler is emulated.",
+    "Priority acceptance statement is architectural reasoning; this replay does not emulate interrupt delivery.",
+    "Only this observed callback has its full executed write set proved; arbitrary application callbacks require separate provenance and concurrency guards."
+  ]
+}

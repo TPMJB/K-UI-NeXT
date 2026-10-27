@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Exact Evolution1 NORMAL phase control: apply the original bounded 59-tick
+# submit delay and retain the passing completion bypass.
+BUILD ?= build/native-isolation-maple-submit-delay
+include Makefile.vmu-native-isolation-maple-delay
+FLAGS += -DKUI_NATIVE_MAPLE_DELAY_SUBMIT_ONLY_ISOLATION=1
+NATIVE_FLAGS += -DKUI_NATIVE_MAPLE_DELAY_SUBMIT_ONLY_ISOLATION=1

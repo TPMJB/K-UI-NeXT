@@ -82,7 +82,14 @@
  * Once booted, CE uses nothing below its kernel image at 0x8c010000 (its RAM
  * lies above that), so this reader may fill everything below D800 and keep a
  * 2 KiB guarded stack above it, ending where bootstrap 2 begins. */
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+/* The isolated writable CE profile omits its periodic framebuffer meter.
+ * Retain a separately audited 1 KiB guarded stack below bootstrap2. Its
+ * top never moves into the owner's bootstrap or retained boot VBR. */
+#define KUI_RETAIL_CE_ASYNC_LIMIT 0x8c00dc00
+#else
 #define KUI_RETAIL_CE_ASYNC_LIMIT 0x8c00d800
+#endif
 #define KUI_RETAIL_CE_ASYNC_HOOK_STACK 0x8c00e000
 /* Four words in the CE readers' entry section the stage fills in: the
  * addresses of CE's pending-interrupt mask, interrupt ring head, reschedule

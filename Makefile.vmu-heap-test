@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/vmu-heap-test
+HOST_CC ?= cc
+# Optional triples: external original executable, matching NVR, expected result.
+# No proprietary executable is stored in the repository.
+BUDGET_INPUTS ?=
+HOST_FLAGS := -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+ -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie
+.DEFAULT_GOAL := test
+.PHONY: test native-object
+$(BUILD)/heap: tests/test_vmu_native_heap.c src/core/vmu_native_heap.c src/core/vmu_native_heap_bottom_code.inc include/kui/vmu_native_heap.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) -Iinclude tests/test_vmu_native_heap.c -o $@
+$(BUILD)/heap-bottom: tests/test_vmu_native_heap_bottom.c src/core/vmu_native_heap.c src/core/vmu_native_heap_bottom_code.inc src/core/vmu_native_lifetime.c include/kui/vmu_native_heap.h include/kui/vmu_native_lifetime.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) -Iinclude tests/test_vmu_native_heap_bottom.c src/core/vmu_native_heap.c src/core/vmu_native_lifetime.c -o $@
+$(BUILD)/heap-bottom-code: tests/test_vmu_native_heap_bottom_code.c src/core/vmu_native_heap.c src/core/vmu_native_heap_bottom_code.inc include/kui/vmu_native_heap.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) -Iinclude tests/test_vmu_native_heap_bottom_code.c -o $@
+$(BUILD)/heap-budget: tests/test_vmu_native_heap_budget.c src/core/vmu_native_heap_budget.c include/kui/vmu_native_heap_budget.h include/kui/vmu_native_heap.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) -Iinclude tests/test_vmu_native_heap_budget.c src/core/vmu_native_heap_budget.c -o $@
+test: $(BUILD)/heap $(BUILD)/heap-bottom $(BUILD)/heap-bottom-code $(BUILD)/heap-budget
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/heap
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/heap-bottom
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/heap-bottom-code
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/heap-budget $(BUDGET_INPUTS)
+	python3 tests/test_native_private_pool_budget_cli.py
+native-object:
+	@mkdir -p $(BUILD)
+	sh-elf-gcc -std=c11 -Os -Wall -Wextra -Werror -m4-single -ml -ffreestanding \
+	 -fno-builtin -fstack-usage -Iinclude -c src/core/vmu_native_heap.c -o $(BUILD)/native-heap.o

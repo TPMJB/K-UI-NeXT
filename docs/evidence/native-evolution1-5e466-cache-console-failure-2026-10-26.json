@@ -1,0 +1,33 @@
+{
+  "schema": "kui.native.owner-console-result.v1",
+  "date": "2026-10-26",
+  "game": "Evolution: The World of Sacred Device",
+  "runtime_source_commit": "5e4663cdaeeb700a8e5b8b71cf63e4d5b8d02fd0",
+  "delivery_source_commit": "3566fa9d1291f60a7d1a450cc5e4b8040e360822",
+  "package": "K-UI-Evolution-VMU-New-5e4663cdaeeb.zip",
+  "package_sha256": "36c633cf930f3df7332c0ec5844987628942a053b82e38e8cc327629fd8ff2e9",
+  "result": "FAIL",
+  "reported_transition": "Sofdec logo disappears, followed by the black screen rather than opening FMV progress",
+  "owner_observation": "Passing runs have continuous SD activity as the logo ends. This failed run had the SD activity light off already before the logo disappeared.",
+  "runtime_mode": {
+    "virtual_a2": true,
+    "real_maple_c_callbacks": true,
+    "new_demand_reader": true,
+    "controller_tick": false,
+    "prefetch": false,
+    "read_only_cached_metadata": true
+  },
+  "interpretation": [
+    "Software proof of reduced metadata traffic did not establish hardware compatibility.",
+    "LED inactivity does not by itself distinguish absent requests, rejected requests, normal bus release, or an active reader fault.",
+    "The prior 5fa capture showed an original video scanline wait and an idle reader. That is not a current 5e runtime snapshot.",
+    "The New resident and auxiliary reader code matches the passing cec542 control after build-label normalization.",
+    "The 1b2d two-site delay control also failed with real C callbacks and virtual VMU disabled. The next control isolates completion delay while preserving CEC submission timing."
+  ],
+  "not_established": [
+    "Every scanline-zero opportunity is covered by interrupt residency",
+    "A current VMU loan or GD lock remains held",
+    "The New reader lost an accepted request",
+    "The cached metadata optimization fixed Evolution"
+  ]
+}

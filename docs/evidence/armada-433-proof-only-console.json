@@ -1,0 +1,59 @@
+{
+  "build": "433cee31d6e8",
+  "variant": "02-proof-only",
+  "auto": {
+    "reason": 6,
+    "phase": 2,
+    "mode": 2,
+    "proof_initial": 1199,
+    "proof_final": 1199
+  },
+  "traffic": {
+    "visits": 1200,
+    "accepted": 1200,
+    "refused": 0,
+    "reads_last_visit": 291,
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "fence": {
+    "pre": 1200,
+    "post": 1200,
+    "leases": 1200,
+    "restores": 1200,
+    "active": 0,
+    "flags": 0,
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "a2": {
+    "advertisements": 0,
+    "replies": 0,
+    "backend_calls": 0,
+    "guest_rx_stores": 0,
+    "fault": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "user_observation": "Video and audio got choppier and choppier until it stopped. Audio was echoing bad and continued until we got to these screens.",
+  "interpretation": {
+    "planned_limit_stop": true,
+    "proofs_succeeded_without_publication": true,
+    "checking_work_alone_correlates_with_severe_slowdown": true,
+    "masked_duration_measured": false
+  }
+}

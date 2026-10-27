@@ -51,7 +51,8 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_FTP, KUI_SHELL_STORAGE_TESTS, KUI_SHELL_STORAGE_TEST_HISTORY,
     KUI_SHELL_SCI_ASYNC_PROBE, KUI_SHELL_GAMES_VARIANTS, KUI_SHELL_WIFI,
     KUI_SHELL_GAMES_LAUNCH_OPTIONS, KUI_SHELL_GAMES_EXTRA_OPTIONS,
-    KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK, KUI_SHELL_VMU_IMAGE, KUI_SHELL_VMU_IMPORT };
+    KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK, KUI_SHELL_VMU_IMAGE, KUI_SHELL_VMU_IMPORT,
+    KUI_SHELL_VMU_COLLECTION };
 enum kui_shell_game_option {
     KUI_SHELL_GAME_OPTION_READER, KUI_SHELL_GAME_OPTION_CDDA,
     KUI_SHELL_GAME_OPTION_ADVANCED, KUI_SHELL_GAME_OPTION_CODEC, KUI_SHELL_GAME_OPTION_COUNT
@@ -105,7 +106,9 @@ enum kui_shell_action {
     KUI_SHELL_VMU_IMAGE_EXTRACT, KUI_SHELL_VMU_IMAGE_EXTRACT_ALL,
     KUI_SHELL_FLASH_COMPARE, KUI_SHELL_BIOS_COMPARE,
     KUI_SHELL_VMU_COPY_ALL_PREVIEW, KUI_SHELL_VMU_COPY_ALL_COMMIT,
-    KUI_SHELL_VMU_IMPORT_PREVIEW, KUI_SHELL_VMU_IMPORT_COMMIT
+    KUI_SHELL_VMU_IMPORT_PREVIEW, KUI_SHELL_VMU_IMPORT_COMMIT,
+    KUI_SHELL_VMU_COLLECTION_LIST, KUI_SHELL_VMU_COLLECTION_COPY_PREVIEW,
+    KUI_SHELL_VMU_COLLECTION_COPY_COMMIT
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -131,13 +134,22 @@ struct kui_shell {
     struct kui_datetime clock_draft;
     char clock_notice[128];
     unsigned vmu_slot, vmu_page, vmu_selected;
+    /* A previous-page scroll selects its final row only after that exact
+     * listing arrives; cleared rows cannot dispatch a stale save action. */
+    bool vmu_select_last, backup_select_last, vmu_collection_select_last, vmu_image_select_last;
     struct kui_vmu_view vmu;
     struct kui_vmu_backup_view backups;
     unsigned backup_page, backup_selected;
+    struct kui_vmu_backup_view vmu_collection;
+    unsigned vmu_collection_page,vmu_collection_selected,vmu_collection_generation;
+    struct kui_vmu_view vmu_collection_copy;
+    unsigned vmu_collection_copy_generation;
+    bool vmu_collection_copy_all,vmu_collection_copy_stored;
     /* Image browsing never borrows a physical VMU selection or restore target. */
     char vmu_image_path[KUI_VMU_BACKUP_PATH_CAP];
     unsigned vmu_image_page, vmu_image_selected;
     struct kui_vmu_view vmu_image;
+    bool vmu_image_collection;
     char restore_path[KUI_VMU_BACKUP_PATH_CAP], restore_name[16];
     uint32_t restore_bytes;
     char music_path[KUI_DEST_ROOT_CAP], music_selected_path[KUI_DEST_ROOT_CAP];
@@ -272,6 +284,12 @@ void kui_shell_set_vmu(struct kui_shell *shell, const struct kui_vmu_view *view)
  * can fall back to zero if the image has fewer saves after refresh. */
 void kui_shell_set_vmu_image(struct kui_shell *,const char *path,unsigned requested_page,const struct kui_vmu_view *);
 void kui_shell_set_vmu_backups(struct kui_shell *shell, const struct kui_vmu_backup_view *view);
+/* Managed collection results echo the exact request generation. Copy results
+ * additionally echo every source selection and cannot authorize a fresh commit
+ * after a completed or cancelled attempt. */
+void kui_shell_set_vmu_collection(struct kui_shell *,unsigned generation,const struct kui_vmu_backup_view *);
+void kui_shell_set_vmu_collection_copy(struct kui_shell *,unsigned source,unsigned page,unsigned selected,
+    bool all,unsigned generation,bool committed,const struct kui_vmu_view *);
 void kui_shell_set_vmu_restore_preview(struct kui_shell *shell, const struct kui_vmu_view *view);
 /* A successful clock read or write replaces the editable snapshot. Failure
  * preserves a valid draft or seeds an editable 1980-01-01 with an error notice. */
@@ -327,6 +345,8 @@ bool kui_shell_games_launch_ready(const struct kui_shell *shell);
 bool kui_shell_games_patches_ready(const struct kui_shell *shell);
 bool kui_shell_game_launch_settings(const struct kui_shell *shell,
                                     struct kui_game_launch_settings *out);
+/* loaded=true with settings=NULL means no exact-image preset exists. Keep
+ * the inspected default; a saved Standard/Off entry is always non-NULL. */
 void kui_shell_set_game_launch_settings(struct kui_shell *shell,const char *path,
                                        const struct kui_game_launch_settings *settings,bool loaded);
 void kui_shell_game_launch_saved(struct kui_shell *shell,const char *path,bool ok);

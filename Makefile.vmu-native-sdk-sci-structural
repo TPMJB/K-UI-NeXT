@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The proved PIO pair with structural discovery of the reviewed SDK SCI
+# callback family. Unknown and ambiguous families remain explicit refusals.
+BUILD ?= build/native-sdk-sci-structural
+include Makefile.vmu-native-readahead
+FLAGS += -DKUI_NATIVE_SDK_SCI_STRUCTURAL=1
+NATIVE_FLAGS += -DKUI_NATIVE_SDK_SCI_STRUCTURAL=1
+
+.PHONY: structural-reader-host-tests
+structural-reader-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -O2 $(STALL_READER_FLAGS) \
+	 -DKUI_NATIVE_REQUEST_TIMING=1 -DKUI_NATIVE_COOP_PUMP=1 -DKUI_NATIVE_IRQ_REARM=1 \
+	 -DKUI_NATIVE_LOADER_TIMELINE=1 -DKUI_VMU_NATIVE_BACKGROUND=1 -DKUI_NATIVE_SDK_SCI_ROUTE=1 \
+	 -DKUI_NATIVE_SDK_SCI_STRUCTURAL=1 $(STALL_READER_SRC) \
+	 tests/test_retail_async_sdk_sci_structural.c -Wl,--gc-sections -o $(BUILD)/test-structural-reader
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-structural-reader

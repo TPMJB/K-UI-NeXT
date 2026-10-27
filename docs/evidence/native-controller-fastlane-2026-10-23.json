@@ -1,0 +1,100 @@
+{
+  "schema": "kui.native.controller-fastlane.v1",
+  "date": "2026-10-23",
+  "original_failure_predates_live_trace": true,
+  "hardware_capture": {
+    "build": "5aff8a276681",
+    "intentional_stop": "E004",
+    "is_fault_pc": false,
+    "submit_count": 2119,
+    "complete_count": 2119,
+    "video_counter_changes": 120,
+    "observed_blank_ticks": 1568896,
+    "saved_spc": "8c1f362c",
+    "saved_ssr": "60000000",
+    "saved_event": "00000320",
+    "saved_vbr": "8c00f400",
+    "original_code": "video-mode setter waits for nonzero scanline then exactly zero before timing-register writes",
+    "register": "a05f810c",
+    "mask": "000003ff",
+    "remaining_uncertainty": "One saved SPC does not establish persistent scanline starvation or the original freeze cause."
+  },
+  "hypothesis": "Pre-existing VMU callback work can interfere with the short scanline-zero synchronization window; unconfirmed on hardware.",
+  "changes": {
+    "generic_controller_only_lane": true,
+    "eligibility": "NORMAL only; warm full layout; one to four distinct main-unit controller GETCOND descriptors including A; at most32 words",
+    "dma": "original SDK source unchanged",
+    "authority": "one parent-A advertisement byte after complete source, response and used-context validation; no backend or storage",
+    "fallback": "all virtual requests, enumeration, mixed/unsupported/cold batches retain full VMU path",
+    "completion_state_bounds_checked_before_array_access": true,
+    "trace": "opt-in mode6/worker diagnostics4 only; ordinary modes have no exact-game trace patches or sampler MMIO/VRAM I/O",
+    "automatic_video_blank_stop_removed": true,
+    "game_video_sync_unchanged": true,
+    "storage_and_free_hook_guards": "retained"
+  },
+  "host_measurement": {
+    "fixture": "same four-controller GETCOND batch with one SDK padding word; both paths publish identical parent advertisement",
+    "fast_submit_guest_reads": 83,
+    "fast_complete_guest_reads": 87,
+    "fast_pair_guest_reads": 170,
+    "full_pair_guest_reads": 360,
+    "reduction_percent": 52.77777777777778,
+    "hardware_duration_measured": false,
+    "evolution_fast_lane_hit_rate_measured": false
+  },
+  "validation": {
+    "sanitizers": [
+      "ASan",
+      "UBSan"
+    ],
+    "controller_checks": 56026,
+    "trace_persistent_integration_checks": 1414389,
+    "controller_cases": [
+      "both banks",
+      "both RX layouts",
+      "all A-containing controller port subsets",
+      "SDK padding bound and fallback",
+      "absent B-D",
+      "physical A1 conflict",
+      "every captured source word mutated",
+      "every completion read failure",
+      "private count/parent/source-word bounds",
+      "live manager aliases",
+      "used RX corruption",
+      "unused RX accepted only in narrow authority then refused by full fallback",
+      "durable save/read lane switching",
+      "worker free refused"
+    ],
+    "trace_cases": [
+      "all ordinary modes zero sampler I/O",
+      "no trace installer writes in ordinary modes even NULL exports",
+      "long legal video blanking continues",
+      "exact image and installer refusal cases",
+      "original gateway equivalence",
+      "raw saved exception reader read-only"
+    ],
+    "compiled_pins": "new controller context helper plus caller branches and188B private state; unchanged full storage authority",
+    "negative_artifact_tests": "source instructions/typed pointers/private geometry/dual storage loan guards/launch policy bounds remain mandatory",
+    "mixed_traffic_stress_checks": 41138,
+    "peripheral_checks": 12117,
+    "compiled_prepared_mutation_rejections": 105,
+    "broader_compatibility_and_cache_tests_passed": true
+  },
+  "console_execution_verified": true,
+  "evolution_fix_established": false,
+  "profile_runtime_limit": "PROFILE remains full path; does not measure optimized NORMAL controller polls",
+  "primary_console_test": "Normal Evolution launch without diagnostic flags, openingFMV/menu/save/poweroff/reload",
+  "not_added": [
+    "new SDK family",
+    "CDDA coexistence",
+    "SCIF",
+    "physical-disc support"
+  ],
+  "console_outcome": {
+    "build": "3a143db9cf2e",
+    "normal": "User reports black screen before first FMV",
+    "raw_chain": "User reports freeze again",
+    "important_limit": "RAW still executed the full C capture/validation and allocator/exit hooks. It was not an empty gateway control."
+  },
+  "superseded_measurement_limit": "The synthetic four-controller cost comparison did not establish eligibility for the real one-controller polling mix; original SDK replay now proves the strict lane missed every sampled steady pair for physical A only."
+}

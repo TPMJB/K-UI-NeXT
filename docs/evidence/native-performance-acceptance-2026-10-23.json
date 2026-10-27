@@ -1,0 +1,16 @@
+{
+  "schema": "kui.native.console-performance-acceptance.v1",
+  "date": "2026-10-23",
+  "build": "920c86efc512",
+  "source_commit": "920c86efc512f651f5146b76912159968a9b2203",
+  "game": "Sonic Adventure 2",
+  "source": "Owner report in this conversation",
+  "report": "I would say if Sonic Adventure 2 is different from non-VMU, it's now imperceptibly so. It runs really well now.",
+  "accepted_scope": "Gameplay responsiveness on the supplied native SA2 executable with the optimized virtual VMU",
+  "limits": [
+    "Subjective paired observation, not measured FPS or latency",
+    "Earlier save/reboot/load success remains separate evidence",
+    "Skies performance has not yet been retested on this build",
+    "Does not establish every game, peripheral, CDDA, WinCE or SCIF combination"
+  ]
+}

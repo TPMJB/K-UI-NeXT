@@ -1,0 +1,76 @@
+{
+  "schema": "kui.native.evolution-video.v1",
+  "date": "2026-10-23",
+  "input": {
+    "filename": "63254.mp4",
+    "sha256": "0bf37720f8d847681aa6106742b52798b25919106fddd3b89498a9755a515d39",
+    "build": "62b24dc35d60",
+    "reported_mode": "raw-chain",
+    "duration_seconds": 52.182211
+  },
+  "observations": {
+    "last_legible_hook": "1F",
+    "last_legible_game": "44",
+    "sequence_digits": "Changing; exact final four digits not confidently readable",
+    "marker_last_visible_seconds_approx": 48.63,
+    "marker_first_absent_seconds_approx": 48.67,
+    "both_readers_agree_on_hook_and_game": true,
+    "fmv_not_reached_per_owner": true,
+    "blue_watchdog_page_visible": false
+  },
+  "interpretation": {
+    "actual_fault_pc_captured": false,
+    "dma_failure_proved": false,
+    "copy_redirection_or_virtual_replies_required_for_failure": false,
+    "instrumented_external_wait_has_returned": true,
+    "after_submit_c_marker_before_mdst_replay": true,
+    "remaining_uncertainty": [
+      "CPU stall after the last checkpoint",
+      "CPU continues but video is disabled or unsupported for drawing",
+      "Framebuffer cleared with a still-supported format",
+      "Original consumer/IRQ/game work after callback"
+    ]
+  },
+  "change": {
+    "reason": "Previous trace silently discarded unsupported/disabled surfaces after a successful draw",
+    "capture_code": "E003",
+    "intentional_diagnostic_stop": true,
+    "first_valid_surface_required": true,
+    "unsafe_reasons": {
+      "1": "video disabled",
+      "2": "24-bit depth",
+      "3": "pitch outside256..4096bytes",
+      "4": "height below16lines",
+      "5": "both framebuffer spans out of VRAM"
+    },
+    "no_vram_write_on_failure": true,
+    "current_and_last_accepted_surface_retained": true,
+    "terminal_pages": 4,
+    "arbitrary_stall_watchdog": false,
+    "existing_game_hooks_and_dma_behavior_changed": false,
+    "console_fix_established": false
+  },
+  "validation": {
+    "sampler": "ASan/UBSan; all five lost-surface captures, invalid initial surface remains nonterminal, one safe framebuffer continues, 16/32-bit drawing, ring and E002 watchdog",
+    "installer_refusals_before_mutation": 49,
+    "unchanged_original_instruction_equivalence_cases": 144,
+    "unchanged_gateway_mutation_rejections": 8,
+    "nontrace_complete_and_context_instructions": "Byte-identical after zeroing independently typed relocated literal words; only constant-section pointer offsets moved",
+    "compiled_stack_bytes": 1756,
+    "private_stack_capacity": 4096,
+    "compiled_trace": {
+      "exact_typed_exports": true,
+      "exact_image_only": true,
+      "arbitrary_stall_pc_capture": false,
+      "startup_equivalence_checked": true,
+      "original_instruction_equivalence_cases": 144,
+      "mutation_rejections": 8,
+      "original_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+      "all_integer_sr_pr_mac_gbr_preserved": true,
+      "common_path_owner_writes": "private gateway frame and original replay stores only"
+    },
+    "release_artifact_audit": "Full typed exports, hook models, source, relocation, cache publication, mode/selector and mutation checks repeated by packager"
+  },
+  "release_probe_report_is_authoritative": true,
+  "console_execution_verified": false
+}

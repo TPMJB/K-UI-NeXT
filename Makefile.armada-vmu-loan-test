@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/armada-vmu-loan-test
+HOST_CC ?= cc
+HOST_FLAGS := -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic
+HOST_SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie
+LOAN_FLAGS := -DKUI_RETAIL_ASYNC_TEST=1 -DKUI_SCI_STREAM_TEST=1 -DKUI_RETAIL_ASYNC=1 -DKUI_RETAIL_GD_ASYNC=1 -DKUI_RETAIL_CE=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_ARMADA_CE_VMU_WRITE_RUNTIME=1
+LOAN_SOURCES := src/loader/retail_async.c src/loader/sci_stream.c src/core/retail_cursor.c src/core/retail_image.c src/core/retail_gd.c
+.DEFAULT_GOAL := host-tests
+.PHONY: host-tests
+host-tests: $(BUILD)/test-ce-vmu-reader-loan $(BUILD)/test-ce-vmu-audio-loan
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-ce-vmu-reader-loan
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-ce-vmu-audio-loan
+$(BUILD)/test-ce-vmu-reader-loan: tests/test_armada_ce_vmu_reader_loan.c tests/test_retail_async_ce.c tests/sci_stream_model.h $(LOAN_SOURCES) include/kui/armada_ce_vmu_sd_loan.h src/loader/retail_async.h include/kui/retail_gd.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) $(LOAN_FLAGS) -Iinclude -Isrc/loader $(LOAN_SOURCES) $< -o $@
+$(BUILD)/test-ce-vmu-audio-loan: tests/test_armada_ce_vmu_audio_loan.c tests/test_armada_ce_stream_transport.c src/loader/armada_ce_stream_transport.c include/kui/armada_ce_stream_transport.h src/core/retail_cursor.c src/core/retail_image.c
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude -Isrc/loader -DKUI_RETAIL_CE=1 -DKUI_RETAIL_ASYNC=1 -DKUI_ARMADA_CE_STREAM=1 -DKUI_ARMADA_CE_STREAM_TRANSPORT_TEST=1 -DKUI_ARMADA_CE_VMU_WRITE_RUNTIME=1 $< src/loader/armada_ce_stream_transport.c src/core/retail_cursor.c src/core/retail_image.c -o $@

@@ -1,7 +1,60 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Original K-UI background game reader (see retail_async.h). The stream
  * sequence is the one the SCI async probe proved on the console. */
+#include "kui/native_readahead.h"
 #include "retail_async.h"
+#include "kui/native_sci_priority.h"
+#include "kui/native_sdk_sci_runtime.h"
+#if KUI_NATIVE_STANDALONE_READER
+__asm__(".global __kui_native_standalone_reader_resident\n"
+        ".set __kui_native_standalone_reader_resident,1\n");
+#endif
+#if KUI_NATIVE_READAHEAD && (!KUI_NATIVE_SDK_SCI_ROUTE || !KUI_VMU_NATIVE_BACKGROUND || defined(KUI_RETAIL_CE))
+#error "Native read-ahead requires the separate SDK SCI route and retained native lease"
+#endif
+#if KUI_NATIVE_READAHEAD
+__asm__(".global __kui_native_readahead_resident\n.set __kui_native_readahead_resident,1\n");
+#endif
+#if KUI_NATIVE_IRQ_REARM && (!KUI_NATIVE_REQUEST_TIMING || !KUI_RETAIL_NATIVE_HYBRID || defined(KUI_RETAIL_CE))
+#error "Native IRQ rearm diagnostics require the hybrid request-timing counter profile"
+#endif
+#if KUI_NATIVE_IRQ_REARM && (KUI_NATIVE_PACED_CHECK || KUI_NATIVE_TIMED_PUMP)
+#error "IRQ rearm uses full CHECK supply and owns its two diagnostic words"
+#endif
+#if KUI_NATIVE_PACED_CHECK && (!KUI_NATIVE_REQUEST_TIMING || !KUI_RETAIL_NATIVE_HYBRID || defined(KUI_RETAIL_CE))
+#error "Paced CHECK requires native hybrid request-timing counter ownership"
+#endif
+#if KUI_NATIVE_READER_DIAGNOSTIC
+#if !KUI_RETAIL_NATIVE_HYBRID
+#error "Reader timing requires the unused native hybrid scheduler counters"
+#endif
+__asm__(".global __kui_native_reader_stall_resident\n"
+        ".set __kui_native_reader_stall_resident,1\n");
+#if KUI_NATIVE_COOP_PUMP
+__asm__(".global __kui_native_cooperative_resident\n.set __kui_native_cooperative_resident,1\n");
+#if KUI_NATIVE_IRQ_REARM
+__asm__(".global __kui_native_irq_rearm_resident\n.set __kui_native_irq_rearm_resident,1\n");
+#endif
+#if KUI_NATIVE_LOADER_TIMELINE
+__asm__(".global __kui_native_loader_timeline_resident\n.set __kui_native_loader_timeline_resident,1\n");
+#if KUI_NATIVE_SDK_SCI_ROUTE
+__asm__(".global __kui_native_sdk_sci_route_resident\n.set __kui_native_sdk_sci_route_resident,1\n");
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+__asm__(".global __kui_native_sdk_sci_structural_resident\n.set __kui_native_sdk_sci_structural_resident,1\n");
+#endif
+#endif
+#if KUI_NATIVE_SCI_PRIORITY7
+__asm__(".global __kui_native_sci_priority7_resident\n.set __kui_native_sci_priority7_resident,7\n");
+#endif
+#endif
+#if KUI_NATIVE_PACED_CHECK
+__asm__(".global __kui_native_paced_resident\n.set __kui_native_paced_resident,1\n");
+#endif
+#if KUI_NATIVE_TIMED_PUMP
+__asm__(".global __kui_native_timed_resident\n.set __kui_native_timed_resident,1\n");
+#endif
+#endif
+#endif
 #include "sci_sd_bus.h"
 #include "kui/retail_loader_layout.h"
 #include <string.h>
@@ -19,11 +72,15 @@ static uintptr_t stream_event(uint32_t event,uintptr_t argument) {
 #endif
 
 #define IPRB UINT32_C(0xffd00008)
-/* IPRB bits 7..4: the SCI's level. The reader's is the lowest. */
+/* IPRB bits 7..4 only. Level one normally; the separate timeline experiment
+ * uses fixed level seven without changing the game's SR or other levels. */
 #define SCI_FIELD 0x00f0u
-#define SCI_LEVEL 0x0010u
+#define SCI_LEVEL KUI_RETAIL_SCI_PRIORITY_FIELD
 /* A fresh CMD18's token can take the card's whole access time. */
 #define TOKEN_LIMIT 65536u
+#if KUI_RETAIL_NATIVE_HYBRID && defined(KUI_RETAIL_CE)
+#error Native DMA batch ceiling must not change the CE reader
+#endif
 /* Consecutive failures at one block before the read is reported failed;
  * from the POLLED-th on, the block is read by programmed transfers, which
  * cannot overrun however long the game holds the bus. */
@@ -56,11 +113,15 @@ extern void kui_retail_async_test_write16(uint32_t, uint16_t);
 #define vbr_set kui_retail_async_test_set_vbr
 #define rd16 kui_retail_async_test_read16
 #define wr16 kui_retail_async_test_write16
-#ifdef KUI_RETAIL_CE
+#if defined(KUI_RETAIL_CE) || KUI_NATIVE_READER_DIAGNOSTIC
 extern uint32_t kui_retail_async_test_read32(uint32_t);
+#ifdef KUI_RETAIL_CE
 extern void kui_retail_async_test_write32(uint32_t, uint32_t);
+#endif
 #define rd32 kui_retail_async_test_read32
+#ifdef KUI_RETAIL_CE
 #define wr32 kui_retail_async_test_write32
+#endif
 #endif
 #else
 #ifndef KUI_RETAIL_CE
@@ -69,18 +130,38 @@ static uint32_t vbr_get(void) {
     __asm__ __volatile__("stc vbr,%0" : "=r"(value));
     return value;
 }
+#if !KUI_NATIVE_SDK_SCI_ROUTE
 static void vbr_set(uint32_t value) { __asm__ __volatile__("ldc %0,vbr" : : "r"(value) : "memory"); }
-#else
+#endif
+#endif
+#if defined(KUI_RETAIL_CE) || KUI_NATIVE_READER_DIAGNOSTIC
 static uint32_t rd32(uint32_t a) { return *(volatile uint32_t *)(uintptr_t)a; }
+#endif
+#ifdef KUI_RETAIL_CE
 static void wr32(uint32_t a, uint32_t v) { *(volatile uint32_t *)(uintptr_t)a = v; }
 #endif
 static uint16_t rd16(uint32_t a) { return *(volatile uint16_t *)(uintptr_t)a; }
 static void wr16(uint32_t a, uint16_t v) { *(volatile uint16_t *)(uintptr_t)a = v; }
 #endif
 
+#if KUI_VMU_NATIVE_BACKGROUND
+kui_retail_async_region_type *kui_retail_async_region_storage;
+#elif KUI_NATIVE_STANDALONE_READER
+static kui_retail_async_region_type standalone_reader_region __attribute__((aligned(32)));
+kui_retail_async_region_type *kui_retail_async_region_storage=&standalone_reader_region;
+#else
 struct kui_retail_async_region kui_retail_async_region __attribute__((aligned(32)));
+#endif
 #define R kui_retail_async_region
 #define e kui_retail_async_region.engine
+#if KUI_VMU_NATIVE_BACKGROUND
+static bool native_loan_blocked(void) {
+    return e.native_loan_state!=KUI_VMU_NATIVE_ASYNC_LOAN_IDLE;
+}
+#elif KUI_NATIVE_STANDALONE_READER
+extern volatile uint32_t kui_retail_hook_active;
+static bool native_loan_blocked(void) {return false;}
+#endif
 #ifdef KUI_RETAIL_CE
 void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
     e.manifest = manifest;
@@ -127,38 +208,117 @@ static void install(void) {
 #else
 /* Assembly templates: a forwarding vector whose word 2 names its releasing
  * entry, and the interrupt vector (its targets are fixed). */
+#if !KUI_NATIVE_SDK_SCI_ROUTE
 extern const uint32_t kui_retail_vector_forward[3];
 extern const uint32_t kui_retail_vector_interrupt[11];
+#endif
 
+#if !KUI_NATIVE_SDK_SCI_STRUCTURAL
 static uint32_t our_vbr(void) { return (uint32_t)(uintptr_t)&R - 0x100u; }
+#endif
 
 /* Word by word: a constant-size copy here would pull in libgcc's block
  * moves, which the resident has no room for. */
+#if !KUI_NATIVE_SDK_SCI_ROUTE
 static void copy_words(volatile uint32_t *to, const uint32_t *from, unsigned words) {
     while(words--) *to++ = *from++;
 }
+#endif
 void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
     e.manifest = manifest;
     e.target = manifest->reader == KUI_RETAIL_READER_ASYNC_EAGER ? TARGET_Y : TARGET_X;
+#if !KUI_NATIVE_SDK_SCI_ROUTE
     copy_words(R.vector100, kui_retail_vector_forward, 3);
     R.vector100[2] = (uint32_t)(uintptr_t)kui_retail_release_100;
     copy_words(R.vector400, kui_retail_vector_forward, 3);
     R.vector400[2] = (uint32_t)(uintptr_t)kui_retail_release_400;
     copy_words(R.vector600, kui_retail_vector_interrupt, 11);
+#endif
 }
 
-/* Put our vectors in front of the game's and give the SCI the lowest level.
+#if KUI_NATIVE_SDK_SCI_ROUTE
+/* Bootstrap reading remains foreground work until the stage has installed
+ * the admitted RTS callbacks in the SDK's original, persistent vector table.
+ * The callback route never changes VBR or needs an interrupt-return veneer. */
+static bool sdk_sci_ready(void) {
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+    uint32_t owner=R.vector600[KUI_NATIVE_SDK_SCI_VBR_INDEX];
+    if(R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX]!=KUI_NATIVE_SDK_SCI_COOKIE ||
+       vbr_get()!=owner)return false;
+    if(!kui_native_sdk_sci_vbr_address(owner))return false;
+    uint32_t callback=(uint32_t)(uintptr_t)kui_retail_sdk_sci_entry;
+    uint32_t slots=owner+KUI_NATIVE_SDK_SCI_ERI_SLOT_OFFSET;
+    /* Keep the admitted adjacent pair on one address register. This emits
+     * no instruction and avoids two large offsets in the bounded resident. */
+    __asm__("":"+r"(slots));
+    return rd32(slots)==callback && rd32(slots+4u)==callback;
+#else
+    if(R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX]!=KUI_NATIVE_SDK_SCI_COOKIE ||
+       R.vector600[KUI_NATIVE_SDK_SCI_VBR_INDEX]!=KUI_NATIVE_SDK_SCI_OWNER_VBR ||
+       vbr_get()!=KUI_NATIVE_SDK_SCI_OWNER_VBR) return false;
+    uint32_t callback=(uint32_t)(uintptr_t)kui_retail_sdk_sci_entry;
+    return rd32(KUI_NATIVE_SDK_SCI_OWNER_VBR+KUI_NATIVE_SDK_SCI_ERI_SLOT_OFFSET)==callback &&
+        rd32(KUI_NATIVE_SDK_SCI_OWNER_VBR+KUI_NATIVE_SDK_SCI_RXI_SLOT_OFFSET)==callback;
+#endif
+}
+static uint32_t sdk_sci_level(void) {
+    return sdk_sci_ready()?SCI_LEVEL:0u;
+}
+#if KUI_NATIVE_STANDALONE_READER
+#include "native_standalone_reader.inc"
+#endif
+static void hook(void) {
+    uint16_t b=rd16(IPRB);uint32_t level=sdk_sci_level();
+    if(!e.hooked) {e.release.sci=b&SCI_FIELD;e.hooked=1u;}
+    else if((b&SCI_FIELD)!=e.release.armed) {
+        e.release.sci=b&SCI_FIELD;++e.stats.execs;
+    }
+    /* The raw return trampoline is absent. Reuse its armed word for the
+     * exact selected reader field, so losing readiness cannot mistake our
+     * previous SCI1 for a new game-owned level. */
+    e.release.armed=level;
+    if((b&SCI_FIELD)!=level)wr16(IPRB,(uint16_t)((b&~SCI_FIELD)|level));
+}
+static void unhook(void) {
+    if(!e.hooked)return;
+    uint16_t b=rd16(IPRB);
+    if((b&SCI_FIELD)==e.release.armed)
+        wr16(IPRB,(uint16_t)((b&~SCI_FIELD)|e.release.sci));
+    e.release.armed=0u;
+    e.hooked=0u;
+}
+#else
+/* Put our vectors in front of the game's and select the reader's SCI level.
  * Nothing else changes: the game's DMAC and other levels stay as they are.
  * Games may keep the bootstrap's VBR for good (DOA2 does), so it is hooked
  * like any other. Found released (the game's VBR again while hooked), the
  * vectors are simply installed again. */
 static void hook(void) {
     uint32_t vbr = vbr_get();
+#if KUI_NATIVE_IRQ_REARM
+    uint16_t b = rd16(IPRB);
+    if(vbr == our_vbr()) {
+        /* CE already rechecks this field while installed. A native SDK may
+         * update IPRB independently of VBR: re-arm our selected SCI level and
+         * preserve its new owner field for the eventual release. */
+        if((b & SCI_FIELD) != SCI_LEVEL) {
+            e.release.sci = b & SCI_FIELD;
+            ++e.stats.execs;
+            wr16(IPRB, (uint16_t)((b & ~SCI_FIELD) | SCI_LEVEL));
+        }
+        return;
+    }
+#else
     if(vbr == our_vbr()) return;
     uint16_t b = rd16(IPRB);
+#endif
     if(e.hooked) {
-        if(vbr == e.release.vbr) ++e.stats.releases;
-        else ++e.release.vbr_changes;
+#if !KUI_NATIVE_REQUEST_TIMING || KUI_NATIVE_LOADER_TIMELINE
+        if(vbr != e.release.vbr) ++e.release.vbr_changes;
+#endif
+#if !KUI_NATIVE_REQUEST_TIMING
+        else ++e.stats.releases;
+#endif
     }
     /* The game's own field, unless ours is still there (a game that set its
      * VBR again itself). */
@@ -167,7 +327,11 @@ static void hook(void) {
     vbr_set(our_vbr());
     wr16(IPRB, (uint16_t)((b & ~SCI_FIELD) | SCI_LEVEL));
     e.release.armed = 1;
-    if(!e.hooked) {e.hooked = 1; ++e.stats.hooks;}
+    if(!e.hooked) {e.hooked = 1;
+#if !KUI_NATIVE_REQUEST_TIMING
+        ++e.stats.hooks;
+#endif
+    }
 }
 /* The game's vectors and SCI level again, unless it changed them meanwhile
  * (or a releasing entry already gave them back). Returns still pending
@@ -181,10 +345,17 @@ static void unhook(void) {
     e.hooked = 0;
 }
 #endif
+#endif
 
 /* The bus is claimed at the first read and kept: the card waits mid-stream
  * between requests, deselected. */
 static bool open_bus(void) {
+#if KUI_VMU_NATIVE_BACKGROUND
+    if(native_loan_blocked()) return false;
+#endif
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    if(e.vmu_loan_state!=KUI_ARMADA_CE_VMU_LOAN_IDLE) return false;
+#endif
     e.opened = kui_sci_sd_acquire() == KUI_LOADER_SD_OK &&
         kui_sci_stream_open(&R.shared.card.device.sd, R.area0, R.area1, false) == KUI_SCI_STREAM_OK;
     return e.opened;
@@ -325,21 +496,60 @@ static void write_out(void *unused, uint32_t offset, const uint8_t *bytes, uint3
     else e.failed = KUI_GD_ERROR_MEMORY;
 }
 static bool topping(uint32_t function) { return function == KUI_GD_EXEC || function == KUI_GD_CHECK; }
-static bool tops_up(uint32_t function) { return topping(function); }
+static bool tops_up(uint32_t function) {
+#if KUI_NATIVE_PACED_CHECK
+    if(function==KUI_GD_EXEC) {e.stats.exec_int=0u;return true;}
+    if(function!=KUI_GD_CHECK)return false;
+    /* The Standard reader distinguishes one status poll from a game that
+     * is spinning on CHECK. Keep the same sixteen-close-poll criterion,
+     * using the two unused diagnostic words for scanline/count state. */
+    uint32_t line=rd32(UINT32_C(0xa05f810c))&0x3ffu;
+    uint32_t count=(line-e.stats.execs<=1u?e.stats.exec_int+1u:1u)&15u;
+    e.stats.execs=line;e.stats.exec_int=count;
+    return count==0u;
+#else
+    return topping(function);
+#endif
+}
 #endif
 /* Finish an arrived block, then deliver blocks in order: the next one of the
  * run is started before each block is checked and copied. Returns while a block is in
  * flight, after up to wait blocks have been waited for. Without an active
  * read, only a finished reception is ended (its interrupt cleared). */
-#ifndef KUI_RETAIL_CE
+#if !KUI_NATIVE_READAHEAD && !defined(KUI_RETAIL_CE) && (!KUI_NATIVE_READER_DIAGNOSTIC || KUI_NATIVE_REQUEST_TIMING)
 #define deliver_work deliver
 #endif
-static void deliver_work(uint32_t wait) {
+static void
+#if KUI_NATIVE_READAHEAD
+__attribute__((noipa))
+#endif
+deliver_work(uint32_t wait) {
     uint32_t delivered = 0;
+#ifndef KUI_RETAIL_CE
+    /* A native GD entry has at most one active delivery visit: REQUEST
+     * rejects an owned command even if before-work just completed it;
+     * after-work delivers only a newly accepted REQUEST. */
+    uint32_t polled_entry=R.shared.stream.stats.polled;
+#endif
 #ifdef KUI_RETAIL_CE
     uint32_t irq_steps = 0;
 #endif
     for(;;) {
+#if KUI_RETAIL_NATIVE_HYBRID
+        /* Retain the proved 20/25-block catch-up and full DMA wait. Only
+         * stop the formerly unlimited run of already-completed blocks. */
+        if(delivered>=(
+#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK && !KUI_NATIVE_IRQ_REARM
+            e.in_irq==2u?KUI_RETAIL_NATIVE_PUMP_BATCH_LIMIT:
+#endif
+            e.in_irq?KUI_RETAIL_NATIVE_IRQ_BATCH_LIMIT:e.target)) return;
+#endif
+#ifndef KUI_RETAIL_CE
+        /* PIO fallback must not drain a whole request with interrupts
+         * masked. Its ready block stays buffered for the next GD entry;
+         * DMA-only work keeps the existing target and receive-ahead path. */
+        if(R.shared.stream.stats.polled!=polled_entry) return;
+#endif
 #if KUI_ARMADA_CE_STREAM
         if(!stream_event(KUI_ARMADA_CE_STREAM_BUS_DATA_ENTER,delivered<wait)) return;
 #endif
@@ -407,7 +617,17 @@ static void deliver_work(uint32_t wait) {
             ++e.since;
             if(e.in_irq) ++e.stats.irq_blocks;
             else ++e.stats.call_blocks;
-            if(e.cursor.done == e.cursor.count) e.active = 0;
+            if(e.cursor.done == e.cursor.count) {
+                e.active = 0;
+#if KUI_NATIVE_REQUEST_TIMING && !KUI_NATIVE_STANDALONE_READER
+                uint32_t elapsed=e.stats.hooks-rd32(UINT32_C(0xffd8000c));
+                if(elapsed>e.stats.releases) {
+                    e.stats.releases=elapsed;
+                    e.native_max_lba=R.shared.service.lba;
+                    e.native_max_count=R.shared.service.count;
+                }
+#endif
+            }
 #if KUI_ARMADA_CE_STREAM
             if(stream_event(KUI_ARMADA_CE_STREAM_BUS_DATA_BLOCK,0)) return;
 #endif
@@ -415,7 +635,13 @@ static void deliver_work(uint32_t wait) {
         }
         if(r == KUI_SCI_STREAM_CRC) {
             failure(r);
+#ifdef KUI_RETAIL_CE
             if(e.failed) return;
+#else
+            /* Prefetch may already have spent this visit's PIO allowance.
+             * Check it at the loop head before attempting the reread. */
+            continue;
+#endif
         }
         /* BUSY: the next block, started early, still arrives; this one is
          * fetched again after it (not a failure of its own). */
@@ -423,13 +649,43 @@ static void deliver_work(uint32_t wait) {
         if(r > KUI_SCI_STREAM_BUSY) failure(r);
     }
 }
-#ifdef KUI_RETAIL_CE
+#if KUI_NATIVE_READAHEAD
+static uint32_t native_readahead_visit(uint32_t event,uint32_t arg) {
+    kui_native_ra_visit visit=(kui_native_ra_visit)(uintptr_t)
+        R.vector600[KUI_NATIVE_RA_ENTRY_INDEX];
+    /* An unbound auxiliary has no speculative receiver to quiesce. */
+    return visit?visit(event,arg,&R,0u):event==KUI_NATIVE_RA_QUIESCE;
+}
+static void deliver(uint32_t wait) {
+    if(!native_readahead_visit(KUI_NATIVE_RA_DELIVER,wait))deliver_work(wait);
+}
+/* The stage proves every complete entry and the retained region pointer
+ * against this immutable, separately gated low-resident descriptor. */
+const struct kui_native_ra_low_ops kui_native_ra_reader_ops
+    __attribute__((section(".rodata.native_readahead")))={
+    KUI_NATIVE_RA_OPS_MAGIC,KUI_NATIVE_RA_VERSION,sizeof(struct kui_native_ra_low_ops),
+    &kui_retail_async_region_storage,deliver_work,hook,unhook,
+    kui_sci_stream_fetch,kui_sci_stream_poll,kui_sci_stream_take,
+    kui_sci_stream_stop,kui_sci_stream_busy,kui_retail_cursor_feed
+};
+#elif defined(KUI_RETAIL_CE)
 static void deliver(uint32_t wait) {
     uint32_t before = R.shared.stream.stats.polled;
     deliver_work(wait);
     uint32_t blocks = R.shared.stream.stats.polled - before;
     uint32_t *maximum = e.in_irq ? &e.polled_irq_max : &e.polled_call_max;
     if(blocks > *maximum) *maximum = blocks;
+}
+#elif KUI_NATIVE_READER_DIAGNOSTIC && !KUI_NATIVE_REQUEST_TIMING
+/* Diagnostic build only. These two counters are unused by the hybrid
+ * scheduler. The worker samples/reset them under IMASK15; clock admission
+ * happens at both capture endpoints. Never configure a game timer here. */
+static void deliver(uint32_t wait) {
+    uint32_t before=rd32(UINT32_C(0xffd8000c));
+    deliver_work(wait);
+    uint32_t elapsed=before-rd32(UINT32_C(0xffd8000c));
+    uint32_t *maximum=e.in_irq?&e.stats.exec_int:&e.stats.execs;
+    if(elapsed>*maximum) *maximum=elapsed;
 }
 #endif
 static void report(void) {
@@ -472,7 +728,13 @@ static bool reads(uint32_t command) {
 static void start(void) {
     struct kui_retail_gd *s = &R.shared.service;
     e.token = s->token;
+#if KUI_NATIVE_REQUEST_TIMING && !KUI_NATIVE_STANDALONE_READER
+    e.stats.hooks=rd32(UINT32_C(0xffd8000c));
+#endif
     e.failed = 0; e.retries = 0; e.active = 0;
+#if KUI_NATIVE_PACED_CHECK
+    e.stats.exec_int=0u;
+#endif
     e.cursor.done = 0; /* a read that fails here delivered nothing */
 #ifdef KUI_RETAIL_CE
     e.piece_set = 0; e.piece_begin = e.piece_bytes = e.piece_filled = 0;
@@ -501,18 +763,275 @@ static void start(void) {
     }
 #endif
 }
+#if KUI_VMU_NATIVE_BACKGROUND
+extern volatile uint32_t kui_retail_hook_active,kui_retail_hook_fault;
+#ifdef KUI_RETAIL_ASYNC_TEST
+extern uint32_t kui_retail_async_vmu_test_sr(void);
+#define native_loan_sr kui_retail_async_vmu_test_sr
+#else
+static uint32_t native_loan_sr(void) {
+    uint32_t sr;
+    __asm__ __volatile__("stc sr,%0":"=r"(sr)::"memory");
+    return sr;
+}
+#endif
+static void native_loan_fault(void) {
+    e.native_loan_state=KUI_VMU_NATIVE_ASYNC_LOAN_QUARANTINED;
+    R.shared.card.device.sd.ready=false;
+    e.failed=KUI_GD_ERROR_IO;
+    kui_retail_hook_fault=1u;
+}
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+/* This profile never installs the raw-vector VBR. Its writer may borrow SCI
+ * only while the original admitted SDK still owns the interrupt context. */
+static bool native_loan_vector_lost(void) {
+    return vbr_get()!=R.vector600[KUI_NATIVE_SDK_SCI_VBR_INDEX];
+}
+#endif
+enum kui_vmu_native_async_loan_result kui_retail_native_async_loan_begin(
+    struct kui_loader_sd *copied_card) {
+    if((native_loan_sr()&UINT32_C(0xf0))!=UINT32_C(0xf0))
+        return KUI_VMU_NATIVE_ASYNC_LOAN_CONTEXT;
+    if(!copied_card || e.native_loan_state==KUI_VMU_NATIVE_ASYNC_LOAN_QUARANTINED)
+        return KUI_VMU_NATIVE_ASYNC_LOAN_FAULT;
+    if(native_loan_blocked() || kui_retail_hook_active)
+        return KUI_VMU_NATIVE_ASYNC_LOAN_BUSY;
+    kui_retail_hook_active=1u;
+    const struct kui_retail_gd *s=&R.shared.service;
+    /* A completed command may still await CHECK. Its terminal result does
+     * not own SCI; a pending command, receiver or released handler does. */
+    if(!s->initialized || s->pending || s->executing || e.active || e.in_irq ||
+       e.release.depth ||
+#if KUI_NATIVE_READAHEAD
+       !native_readahead_visit(KUI_NATIVE_RA_QUIESCE,0u) ||
+#endif
+       kui_sci_stream_busy()) {
+        kui_retail_hook_active=0u;return KUI_VMU_NATIVE_ASYNC_LOAN_BUSY;
+    }
+    if(R.shared.card.transport!=KUI_STORAGE_SCI || !R.shared.card.device.sd.ready ||
+       R.shared.card.device.sd.slow || !R.shared.card.device.sd.blocks ||
+       R.shared.card.stream.active || R.shared.port.fault ||
+       e.opened!=(uint32_t)R.shared.port.acquired) goto fault;
+    e.native_loan_state=KUI_VMU_NATIVE_ASYNC_LOAN_STOPPING;
+    unhook();
+    if((e.opened && kui_sci_stream_stop()!=KUI_SCI_STREAM_OK) ||
+       kui_sci_stream_busy() || R.shared.stream.state || R.shared.port.fault ||
+       e.opened!=(uint32_t)R.shared.port.acquired || e.release.armed ||
+       e.release.depth || e.hooked ||
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+       native_loan_vector_lost()
+#else
+       vbr_get()==our_vbr()
+#endif
+       ) goto fault;
+    kui_sci_stream_discard();
+    if(e.opened) kui_sci_sd_release();
+    if(R.shared.port.acquired || R.shared.port.fault) goto fault;
+    e.opened=0u;
+    *copied_card=R.shared.card.device.sd;
+    e.native_loan_state=KUI_VMU_NATIVE_ASYNC_LOAN_WRITER;
+    return KUI_VMU_NATIVE_ASYNC_LOAN_OK;
+fault:
+    native_loan_fault();kui_retail_hook_active=0u;
+    return KUI_VMU_NATIVE_ASYNC_LOAN_FAULT;
+}
+enum kui_vmu_native_async_loan_result kui_retail_native_async_loan_end(bool healthy) {
+    if((native_loan_sr()&UINT32_C(0xf0))!=UINT32_C(0xf0))
+        return KUI_VMU_NATIVE_ASYNC_LOAN_CONTEXT;
+    const struct kui_retail_gd *s=&R.shared.service;
+    if(e.native_loan_state!=KUI_VMU_NATIVE_ASYNC_LOAN_WRITER ||
+       kui_retail_hook_active!=1u || !healthy || R.shared.port.acquired ||
+       R.shared.port.fault || e.opened || kui_sci_stream_busy() || R.shared.stream.state ||
+       !R.shared.card.device.sd.ready || e.active || e.in_irq || e.release.depth ||
+       e.release.armed || e.hooked ||
+#if KUI_NATIVE_SDK_SCI_STRUCTURAL
+       native_loan_vector_lost() ||
+#else
+       vbr_get()==our_vbr() ||
+#endif
+       !s->initialized || s->pending || s->executing) {
+        native_loan_fault();
+        if(kui_retail_hook_active==1u) kui_retail_hook_active=0u;
+        return KUI_VMU_NATIVE_ASYNC_LOAN_FAULT;
+    }
+    /* Preserve the completed handle and cursor; a future read starts its
+     * own cursor and reacquires the bus through open_bus, never here. */
+    e.native_loan_state=KUI_VMU_NATIVE_ASYNC_LOAN_IDLE;
+    kui_retail_hook_active=0u;
+    /* The later read-ahead TICK observes IDLE on the auxiliary stack.
+     * Do not restart storage from this still-unwinding loan callback. */
+    return KUI_VMU_NATIVE_ASYNC_LOAN_OK;
+}
+#endif
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+#if !defined(KUI_RETAIL_CE) || !defined(KUI_RETAIL_ASYNC)
+#error "CE VMU storage loans require the CE asynchronous reader"
+#endif
+extern volatile uint32_t kui_retail_hook_active,kui_retail_hook_fault;
+extern volatile uint32_t kui_retail_ce_deferred[2];
+extern void kui_retail_ce_vmu_loan_wake(void);
+#ifdef KUI_RETAIL_ASYNC_TEST
+extern uint32_t kui_retail_async_vmu_test_sr(void);
+extern void kui_retail_async_vmu_test_set_sr(uint32_t);
+#define loan_sr kui_retail_async_vmu_test_sr
+#define loan_set_sr kui_retail_async_vmu_test_set_sr
+#else
+static uint32_t loan_sr(void) {
+    uint32_t sr;
+    __asm__ __volatile__("stc sr,%0":"=r"(sr)::"memory");
+    return sr;
+}
+static void loan_set_sr(uint32_t sr) {
+    __asm__ __volatile__("ldc %0,sr"::"r"(sr):"memory");
+}
+#endif
+static bool loan_blocked(void) {
+    return e.vmu_loan_state!=KUI_ARMADA_CE_VMU_LOAN_IDLE;
+}
+static void loan_fault(void) {
+    struct kui_retail_gd *s=&R.shared.service;
+    e.vmu_loan_state=KUI_ARMADA_CE_VMU_LOAN_QUARANTINED;
+    s->storage_deferred=1u;
+    R.shared.card.device.sd.ready=false;
+    e.failed=KUI_GD_ERROR_IO;kui_retail_hook_fault=1u;
+    if(s->pending && reads(s->command)) {
+        s->error=KUI_GD_ERROR_IO;s->diag.last_error=s->error;
+        s->status=KUI_GD_FAILED;s->pending=0u;s->xfer_left=0u;
+        s->interrupts|=KUI_RETAIL_GD_IRQ_DRIVE|KUI_RETAIL_GD_IRQ_DMA_END;
+    }
+}
+enum kui_armada_ce_vmu_loan_result kui_retail_async_vmu_loan_begin(
+    struct kui_loader_sd *copied_card) {
+    uint32_t sr=loan_sr();
+    if(sr&UINT32_C(0x100000f0)) return KUI_ARMADA_CE_VMU_LOAN_CONTEXT;
+    if(!copied_card) return KUI_ARMADA_CE_VMU_LOAN_FAULT;
+    loan_set_sr(sr|0xf0u);
+    struct kui_retail_gd *s=&R.shared.service;
+    if(e.vmu_loan_state==KUI_ARMADA_CE_VMU_LOAN_QUARANTINED) {
+        loan_set_sr(sr);return KUI_ARMADA_CE_VMU_LOAN_FAULT;
+    }
+    if(loan_blocked() || kui_retail_hook_active) {
+        loan_set_sr(sr);return KUI_ARMADA_CE_VMU_LOAN_BUSY;
+    }
+    kui_retail_hook_active=1u;
+    /* A terminal GD handle remains owned until CHECK consumes it. Its token,
+     * result and completed output do not require SCI ownership. In particular
+     * the CE caller may be waiting for this VMU reply before that CHECK.
+     * Keep every pending command and any live/unfilled output excluded. */
+    if(!s->initialized || s->pending || s->executing ||
+       s->callback_due || kui_retail_ce_deferred[0] || e.active || e.spill_bytes ||
+       (e.piece_set && (!e.piece_bytes || e.piece_filled!=e.piece_bytes)) ||
+       e.piece_direct || e.in_irq || kui_sci_stream_busy()) {
+        kui_retail_hook_active=0u;loan_set_sr(sr);return KUI_ARMADA_CE_VMU_LOAN_BUSY;
+    }
+    if(R.shared.card.transport!=KUI_STORAGE_SCI || !R.shared.card.device.sd.ready ||
+       R.shared.port.fault || e.opened!=(uint32_t)R.shared.port.acquired ||
+       e.vmu_loan_generation==UINT32_MAX) {
+        loan_fault();kui_retail_hook_active=0u;loan_set_sr(sr);
+        return KUI_ARMADA_CE_VMU_LOAN_FAULT;
+    }
+#if KUI_ARMADA_CE_STREAM
+    if(!stream_event(KUI_ARMADA_CE_STREAM_BUS_STORAGE_CLAIM,0)) {
+        kui_retail_hook_active=0u;loan_set_sr(sr);return KUI_ARMADA_CE_VMU_LOAN_BUSY;
+    }
+#endif
+    ++e.vmu_loan_generation;
+    e.vmu_loan_state=KUI_ARMADA_CE_VMU_LOAN_STOPPING;s->storage_deferred=1u;
+    unhook();
+    uint32_t opened=e.opened;
+    kui_retail_hook_active=0u;
+    loan_set_sr(sr);
+    /* No receiver was in flight at claim. CMD12's bounded card busy wait
+     * runs with interrupts restored. GD calls/SCI IRQ/audio workers observe
+     * the loan independently of the now-free GD entry lock. */
+    enum kui_sci_stream_result stopped=opened?kui_sci_stream_stop():KUI_SCI_STREAM_OK;
+    loan_set_sr(sr|0xf0u);
+    if(kui_retail_hook_active) {
+        loan_fault();loan_set_sr(sr);return KUI_ARMADA_CE_VMU_LOAN_FAULT;
+    }
+    kui_retail_hook_active=1u;
+    if(e.vmu_loan_state!=KUI_ARMADA_CE_VMU_LOAN_STOPPING ||
+       stopped!=KUI_SCI_STREAM_OK || kui_sci_stream_busy() || R.shared.stream.state ||
+       R.shared.port.fault || e.opened!=opened ||
+       (opened && !R.shared.port.acquired)) {
+        loan_fault();kui_retail_hook_active=0u;loan_set_sr(sr);
+        return KUI_ARMADA_CE_VMU_LOAN_FAULT;
+    }
+    kui_sci_stream_discard();
+    if(opened) kui_sci_sd_release();
+    if(R.shared.port.acquired || R.shared.port.fault) {
+        loan_fault();kui_retail_hook_active=0u;loan_set_sr(sr);
+        return KUI_ARMADA_CE_VMU_LOAN_FAULT;
+    }
+    e.opened=0u;
+    *copied_card=R.shared.card.device.sd;
+    e.vmu_loan_state=KUI_ARMADA_CE_VMU_LOAN_WRITER;
+    kui_retail_hook_active=0u;loan_set_sr(sr);
+    return KUI_ARMADA_CE_VMU_LOAN_OK;
+}
+enum kui_armada_ce_vmu_loan_result kui_retail_async_vmu_loan_end(bool healthy) {
+    uint32_t sr=loan_sr();
+    if(sr&UINT32_C(0x100000f0)) return KUI_ARMADA_CE_VMU_LOAN_CONTEXT;
+    loan_set_sr(sr|0xf0u);
+    if(e.vmu_loan_state!=KUI_ARMADA_CE_VMU_LOAN_WRITER ||
+       kui_retail_hook_active || !healthy || R.shared.port.acquired ||
+       R.shared.port.fault || e.opened || kui_sci_stream_busy() || R.shared.stream.state ||
+       !R.shared.service.storage_deferred || !e.vmu_loan_generation) {
+        loan_fault();kui_retail_ce_vmu_loan_wake();loan_set_sr(sr);
+        return KUI_ARMADA_CE_VMU_LOAN_FAULT;
+    }
+    kui_retail_hook_active=1u;
+#if KUI_ARMADA_CE_STREAM
+    if(!stream_event(KUI_ARMADA_CE_STREAM_BUS_STORAGE_RELEASE,0)) {
+        loan_fault();kui_retail_hook_active=0u;kui_retail_ce_vmu_loan_wake();loan_set_sr(sr);
+        return KUI_ARMADA_CE_VMU_LOAN_FAULT;
+    }
+#endif
+    e.vmu_loan_state=KUI_ARMADA_CE_VMU_LOAN_IDLE;
+    struct kui_retail_gd *s=&R.shared.service;
+    s->storage_deferred=0u;
+    /* A request accepted during the loan already owns its real token and
+     * copied parameters. Wake its driver; the next GD call starts its cursor
+     * in CE's own address space, never on this storage worker's stack. */
+    if(s->pending && reads(s->command)) {
+        s->interrupts|=KUI_RETAIL_GD_IRQ_DRIVE;
+        if(s->command==KUI_RETAIL_GD_DMAREAD_STREAM && s->xfer_left)
+            s->interrupts|=KUI_RETAIL_GD_IRQ_DMA_END;
+    }
+    kui_retail_hook_active=0u;kui_retail_ce_vmu_loan_wake();loan_set_sr(sr);
+    return KUI_ARMADA_CE_VMU_LOAN_OK;
+}
+#endif
 void kui_retail_async_call(uint32_t function) {
+#if KUI_NATIVE_STANDALONE_READER
+    kui_native_standalone_bind();
+#endif
+#if KUI_VMU_NATIVE_BACKGROUND
+    if(native_loan_blocked()) return;
+#endif
     uint32_t wait = 0;
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    if(loan_blocked()) return;
+    struct kui_retail_gd *s=&R.shared.service;
+    if(s->pending && reads(s->command) && e.token!=s->token) {
+        start();
+        if(s->command==KUI_RETAIL_GD_DMAREAD_STREAM && s->xfer_left)
+            piece(s->completed_bytes,s->xfer_left,
+                (s->xfer_destination&0x1fffffffu)|0x80000000u,NULL,true);
+    }
+#endif
 #ifdef KUI_RETAIL_CE
     install();
     kui_sci_stream_token_budget(e.isr && function != KUI_GD_PIO_TRANSFER);
 #endif
     if(e.active) {
         hook();
+#if !KUI_RETAIL_NATIVE_HYBRID
         if(function == KUI_GD_EXEC) {
             ++e.stats.execs;
             if(kui_retail_hook_sr & 0xf0u) ++e.stats.exec_int; /* IMASK: a handler */
         }
+#endif
         /* An EXEC or CHECK waits for the blocks nothing delivered since the
          * previous one, up to the target: the data a game waits for keeps
          * coming while the interrupt is held off. */
@@ -524,7 +1043,25 @@ void kui_retail_async_call(uint32_t function) {
     deliver(wait);
     report();
 }
+#if KUI_NATIVE_LOADER_TIMELINE && !KUI_NATIVE_STANDALONE_READER
+/* Installed only after retained-region binding from the typed immutable
+ * worker descriptor. Bootstrap workspace and normal mode keep this zero. */
+void __attribute__((noipa)) kui_retail_async_trace(uint32_t exit,uint32_t function) {
+    void (*visit)(uint32_t,uint32_t,uint32_t,void *)=
+        (void (*)(uint32_t,uint32_t,uint32_t,void *))(uintptr_t)R.vector600[11];
+    if(visit)visit(exit,function,kui_retail_hook_sr,&R);
+}
+#endif
 void kui_retail_async_after(uint32_t function, int32_t result) {
+#if KUI_VMU_NATIVE_BACKGROUND
+    if(native_loan_blocked()) return;
+#endif
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    if(loan_blocked()) {
+        if(e.vmu_loan_state==KUI_ARMADA_CE_VMU_LOAN_QUARANTINED) loan_fault();
+        return;
+    }
+#endif
     struct kui_retail_gd *s = &R.shared.service;
     if(function == KUI_GD_REQUEST && result > 0 && s->pending && reads(s->command)) {
         start();
@@ -563,12 +1100,25 @@ void kui_retail_async_after(uint32_t function, int32_t result) {
 #endif
 }
 uint32_t kui_retail_async_irq(void) {
+#if KUI_NATIVE_IRQ_REARM
+    ++e.stats.exec_int;
+#endif
+#if KUI_VMU_NATIVE_BACKGROUND
+    if(native_loan_blocked()) return 1u;
+#endif
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    if(loan_blocked()) return 1u;
+#endif
 #if KUI_ARMADA_CE_STREAM
     if(stream_event(KUI_ARMADA_CE_STREAM_BUS_IRQ,0)) return 0;
 #endif
     /* An SCI event without a reception: not ours, passed on as any other
      * (under CE: its level is dropped). */
-    if(!kui_sci_stream_busy()) {
+    if(!kui_sci_stream_busy()
+#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK && !KUI_NATIVE_IRQ_REARM
+       && e.in_irq!=2u /* A cooperative visit also restarts an idle run. */
+#endif
+      ) {
 #ifdef KUI_RETAIL_CE
         unhook();
 #endif
@@ -577,7 +1127,14 @@ uint32_t kui_retail_async_irq(void) {
 #ifdef KUI_RETAIL_CE
     kui_sci_stream_token_budget(e.isr != 0);
 #endif
+#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK && !KUI_NATIVE_IRQ_REARM
+    if(e.in_irq==2u) hook();
+#endif
+#if KUI_NATIVE_COOP_PUMP && !KUI_NATIVE_PACED_CHECK && !KUI_NATIVE_IRQ_REARM
+    if(!e.in_irq) e.in_irq = 1;
+#else
     e.in_irq = 1;
+#endif
     deliver(0);
     e.in_irq = 0;
 #ifdef KUI_RETAIL_CE
@@ -589,9 +1146,27 @@ uint32_t kui_retail_async_irq(void) {
     if(!kui_sci_stream_busy()) unhook();
     return 0;
 }
+#if KUI_NATIVE_SDK_SCI_ROUTE
+/* Called only by the RTS-style SDK callback on the protected low stack.
+ * Zero means handled; a nonzero value is the independently admitted original
+ * default callback, for the assembly tail-forward path with original R4. */
+uint32_t __attribute__((noipa)) kui_retail_sdk_sci_dispatch(uint32_t event) {
+    uint32_t original=R.vector600[KUI_NATIVE_SDK_SCI_DEFAULT_INDEX];
+    if((event!=0x4e0u && event!=0x500u) || kui_retail_hook_active || native_loan_blocked())
+        return original;
+    if(!sdk_sci_ready()) {
+        if(e.hooked)hook(); /* A lost route must not keep our SCI enabled. */
+        return original;
+    }
+    return kui_retail_async_irq()?original:0u;
+}
+#endif
 #ifdef KUI_RETAIL_CE
 int kui_retail_async_read_part(void *unused, uint32_t lba, uint32_t sector_bytes,
                                uint32_t skip, uint32_t bytes, void *output) {
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    if(loan_blocked()) return -1;
+#endif
     (void)unused; (void)lba; (void)sector_bytes;
     struct kui_retail_gd *s = &R.shared.service;
     if(e.token != s->token) return -1;

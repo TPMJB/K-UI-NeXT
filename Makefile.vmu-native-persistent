@@ -1,0 +1,83 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Native SDK-family virtual A2 with the existing prepared durable backing.
+BUILD ?= build/vmu-native-persistent
+NATIVE_LAYOUT ?= src/loader/vmu_native_persistent.ld
+NATIVE_SPAN := 0x20000
+include Makefile.vmu-native-readonly
+override TEST_ZIP := K-UI-Native-Persistent-Test.zip
+override TEST_GUIDE := docs/vmu-native-persistent-test.md
+VMU_PACKAGE_TOOL := tools/package_vmu_native_persistent.py
+VMU_PACKAGE_ARGS :=
+FLAGS += -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 \
+ -DKUI_VMU_SD_PROFILE_BIN='"$(BUILD)/vmu-sd-profile.bin"'
+NATIVE_FLAGS += -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -fcallgraph-info=su
+NATIVE_SRC += src/loader/vmu_native_trace.c src/loader/vmu_native_fault_capture.c src/loader/vmu_native_sdk_coherence.c
+NATIVE_OBJ += $(BUILD)/native_trace_hooks.o $(BUILD)/native_fault_capture_hooks.o $(BUILD)/native_sdk_coherence_hooks.o
+$(BUILD)/native_trace_hooks.o: src/loader/vmu_native_trace_hooks.S
+	@mkdir -p $(@D)
+	$(CC) $(NATIVE_FLAGS) -c $< -o $@
+$(BUILD)/native_fault_capture_hooks.o: src/loader/vmu_native_fault_capture.S
+	@mkdir -p $(@D)
+	$(CC) $(NATIVE_FLAGS) -c $< -o $@
+$(BUILD)/native_sdk_coherence_hooks.o: src/loader/vmu_native_sdk_coherence.S
+	@mkdir -p $(@D)
+	$(CC) $(NATIVE_FLAGS) -c $< -o $@
+FLAGS += -fcallgraph-info=su
+VMU_CALLGRAPH_FLAGS := -fcallgraph-info=su
+RESIDENT_LAYOUT := src/loader/vmu_sd_readonly_resident.ld
+VMU_SD_RESIDENT_EXPORTS := -Wl,-u,_kui_vmu_observe_sd_lease
+NATIVE_SRC += src/core/vmu_durable.c src/core/vmu_store.c src/core/retail_image.c \
+ src/loader/sd_reader.c src/loader/vmu_backing.c src/dreamcast/sci_sd_storage.c \
+ src/loader/vmu_volatile_chain.c src/core/vmu_native_live.c src/core/vmu_native_profile.c
+override STAGE_SRC += src/loader/vmu_persist_stage.c src/core/vmu_fs_admission.c \
+ src/core/vmu_persist_profile.c src/core/vmu_persist_session.c src/core/vmu_store.c \
+ src/core/vmu_image.c src/core/vmu_durable.c src/dreamcast/sci_sd_storage.c \
+ src/loader/vmu_backing.c src/core/vmu_native_exit.c src/loader/vmu_native_trace.c
+$(BUILD)/stage.elf: $(STAGE_OBJ)
+$(BUILD)/native-worker.elf: $(NATIVE_OBJ)
+$(BUILD)/resident-sci.elf: $(RESIDENT_LAYOUT)
+$(BUILD)/vmu-sd-profile.bin: tools/vmu_persist_profile.py
+	@mkdir -p $(@D)
+	python3 tools/vmu_persist_profile.py --template $@
+$(BUILD)/stage/src/loader/vmu_native_heap_probe_stage.o: $(BUILD)/vmu-sd-profile.bin
+-include $(NATIVE_OBJ:.o=.d) $(STAGE_OBJ:.o=.d)
+
+.PHONY: persistent-host-tests native-sdk-coherence-host-tests
+native-sdk-coherence-host-tests: $(BUILD)/native-worker.elf
+	python3 tests/test_sh4_delay_slots.py
+	python3 tests/test_vmu_native_record_worker_sh.py
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -DKUI_VMU_NATIVE_READONLY_PROBE=1 \
+	 tests/test_vmu_native_sdk_coherence.c src/loader/vmu_native_sdk_coherence.c -o $(BUILD)/test-sdk-coherence
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-sdk-coherence tests/fixtures/native-cache/evolution1.nvr \
+	 tests/fixtures/native-cache/ps2.nvr tests/fixtures/native-cache/skies.nvr \
+	 tests/fixtures/native-cache/sa2.nvr tests/fixtures/native-cache/grandia2.nvr \
+	 $(if $(EVOLUTION2_STARTUP),tests/fixtures/native-cache/evolution2.nvr,)
+	python3 tools/check_vmu_native_sdk_coherence.py $(BUILD)/native-worker.elf --self-test \
+	 $(if $(EVOLUTION1_STARTUP),--evolution1 '$(EVOLUTION1_STARTUP)',) $(if $(STARTUP),--ps2 '$(STARTUP)',) \
+	 $(if $(SKIES_STARTUP),--skies '$(SKIES_STARTUP)',) $(if $(SA2_STARTUP),--sa2 '$(SA2_STARTUP)',) \
+	 $(if $(GRANDIA2_STARTUP),--grandia2 '$(GRANDIA2_STARTUP)',) $(if $(EVOLUTION2_STARTUP),--evolution2 '$(EVOLUTION2_STARTUP)',)
+persistent-host-tests: $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc native-sdk-coherence-host-tests
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_profile.c src/core/vmu_native_profile.c -o $(BUILD)/test-profile
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-profile
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 tests/test_vmu_native_persistent.c \
+ src/core/vmu_native_heap.c src/core/vmu_native_runtime.c src/core/vmu_native_layout.c src/core/vmu_native_live.c \
+ src/core/vmu_native_lifetime.c src/core/vmu_native_profile.c src/core/vmu_native_discovery.c src/core/vmu_native_patch.c src/core/hash.c src/core/data.c \
+	 src/core/vmu_durable.c src/core/vmu_store.c src/core/vmu_emulation.c src/core/retail_image.c \
+	 src/loader/vmu_readonly_overlay.c src/loader/vmu_volatile_chain.c src/loader/sd_reader.c \
+	 src/loader/vmu_backing.c src/dreamcast/sci_sd_storage.c -Wl,--gc-sections -o $(BUILD)/test-native-persistent
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-native-persistent
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_lifetime.c \
+	 src/core/vmu_native_heap.c src/core/vmu_native_lifetime.c -o $(BUILD)/test-lifetime
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-lifetime
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_exit.c \
+	 src/core/vmu_native_program.c src/core/vmu_native_heap.c src/core/vmu_native_exit.c src/core/vmu_native_patch.c src/core/data.c -o $(BUILD)/test-exit
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-exit $(if $(STARTUP),'$(STARTUP)',)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_worker_relocate.c \
+	 src/core/vmu_native_relocate.c src/core/hash.c src/core/data.c -o $(BUILD)/test-real-relocation
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-real-relocation $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_SCI_SD_TEST=1 \
+	 -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -DKUI_VMU_READONLY_PROOF=0 \
+	 src/loader/sci_sd_bus.c tests/test_sci_sd_bus.c -o $(BUILD)/test-native-sd-restore
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-native-sd-restore
+	python3 tests/test_vmu_native_lease.py
+	python3 tests/test_personalize_vmu_native_persistent.py

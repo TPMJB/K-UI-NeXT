@@ -1,0 +1,143 @@
+{
+  "schema": "kui.native.evolution-trace.v1",
+  "date": "2026-10-23",
+  "console_evidence": {
+    "last_build": "99cfec5c62fd",
+    "last_mode": "hooks-only",
+    "owner_report": "Still froze. Can you try to do a little more than random guesses?",
+    "prior_comparison": "5b653775af85 normal failed before first FMV; lease-only worked",
+    "inference": "Failure remains in the shared active-hook/runtime or copied-DMA path; no specific root cause established",
+    "fix_established": false,
+    "new_build_console_execution_verified": false
+  },
+  "consolidated": {
+    "live_strip": "HHGGSSSS: last hook / last game checkpoint / event sequence low16",
+    "event_ring": 16,
+    "terminal_pages": 3,
+    "watchdog_iterations": 1048576,
+    "watchdog_reason": "E002",
+    "watchdog_scope": "Exact instrumented timer-wait loop only; excessive iterations, not proof of stopped timer",
+    "snapshot_registers": [
+      "saved PR/SR/SP",
+      "MDSTAR/MDST/MDEN/MDTSEL",
+      "TMU0 TSTR/TCR/TCNT",
+      "8c3049a8 game wait flag",
+      "CCR",
+      "DMAC0 SAR/DAR/TCR/CHCR",
+      "PVR scan status"
+    ],
+    "patch_sites": [
+      "8c1663f8 / 12 bytes",
+      "8c166422 / 16 bytes",
+      "8c166454 / 12 bytes",
+      "8c166544 / original external-wait pointer"
+    ],
+    "arbitrary_stall_pc_capture": false,
+    "marker_can_be_overwritten_by_game": true,
+    "timing_perturbed": true,
+    "timer_programming": false,
+    "cache_mode_changes": false,
+    "trace_sd_logging": false
+  },
+  "raw_chain": {
+    "mode": 5,
+    "worker_selector": 3,
+    "flag": "--raw-chain",
+    "active_hooks": true,
+    "original_mdstar_unchanged": true,
+    "original_command_bytes_unchanged": true,
+    "virtual_card": false,
+    "in_game_vmu_storage_calls": false,
+    "all_existing_ownership_guards_retained": true,
+    "startup_card_recovery_unchanged": true,
+    "physical_a1_must_be_absent": true
+  },
+  "host_validation": {
+    "persistent_bridge_checks": 1290815,
+    "personalizer_tests": 61,
+    "trace_sampler": "ASan + UBSan; exact digest, bounded VRAM, ring, logarithmic sampling, loop watchdog",
+    "exact_installer": "UBSan; original accepted, 49 refusals before mutation; fixed P1/P2 mappings preclude ASan shadow",
+    "persistent_host_trace_sampler": "Disabled stubs; separate trace test exercises actual sampler",
+    "mode_c_checks": 1991,
+    "mode_python_tests": 3,
+    "raw_chain_batches": 32,
+    "prepared_pair_files_preserved": true
+  },
+  "linked_instruction_validation": {
+    "evolution_consolidated_trace": {
+      "exact_typed_exports": true,
+      "exact_image_only": true,
+      "arbitrary_stall_pc_capture": false,
+      "startup_equivalence_checked": true,
+      "original_instruction_equivalence_cases": 144,
+      "mutation_rejections": 8,
+      "original_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35",
+      "all_integer_sr_pr_mac_gbr_preserved": true,
+      "common_path_owner_writes": "private gateway frame and original replay stores only"
+    },
+    "runtime_mode": {
+      "enabled": true,
+      "module_offset": 84352,
+      "bytes": 32,
+      "template_sha256": "8167dc5937daa9487fba0ddea24dfc7e300f320a21c498a47a6cf51ab7953e68",
+      "address": "0x8ce12940",
+      "typed_immutable_unique_object": true,
+      "profile_cache_worker_relocation_trampoline_disjoint": true,
+      "modes": {
+        "normal": 0,
+        "control": 1,
+        "profile": 2,
+        "lease-only": 3,
+        "hooks-only": 4,
+        "raw-chain": 5
+      },
+      "mode_helper_instruction_cases": 1344,
+      "storage_instruction_cases": 3456,
+      "worker_policy_instruction_cases": 1152,
+      "mutation_rejections": 10,
+      "malformed_mode_stops_before_storage": true,
+      "control_storage_bypasses_profile_acquire_recovery_and_writes": true,
+      "lease_only": {
+        "instruction_cases": 540,
+        "selector_instruction_cases": 72,
+        "mutation_rejections": 17,
+        "exact_raw_initializer_target_restored_through_p1_and_verified_p2": true,
+        "reservation_reproved_before_installed": true,
+        "terminal_and_sd_callbacks_null": true,
+        "initializer_slot_and_seven_low_control_words_only": true,
+        "no_retail_code_or_save_writes": true,
+        "installed_status_written_last": true,
+        "mode_three_returns_before_first_retail_veneer": true,
+        "owner_callee_saved_registers_sr_fpscr_unchanged": true
+      }
+    },
+    "worker_icache_publication": {
+      "publisher_p2": "0xace0006c",
+      "publisher_bytes": 68,
+      "exact_linked_publisher_pinned": true,
+      "ici_only_preserves_ccr": true,
+      "post_ccr_write_nops": 8,
+      "worker_prearm_publication_required": true,
+      "worker_relocation_before_publication": true,
+      "worker_bss_zero_before_publication": true,
+      "dynamic_cells_before_publication": true,
+      "publication_dominates_first_arm": true,
+      "first_worker_publish": "0x8ce011e4",
+      "first_worker_arm": "0x8ce011f6",
+      "mode_configuration_compiler_witness": true,
+      "runtime_diagnostics_return_stored_in_exact_config": true,
+      "runtime_diagnostics_store_dominates_arm": true,
+      "linked_installer_cfg_nodes": 552,
+      "initialization_witness_mutation_rejections": 10
+    }
+  },
+  "artifact": {
+    "worker_bytes": 41472,
+    "relocation_records": 613,
+    "conservative_private_stack_bytes": 1756,
+    "stack_capacity": 4096,
+    "low_stack_bytes": 1232,
+    "low_stack_capacity": 1232
+  },
+  "scope": "Evolution diagnostics only; existing normal save/load behavior retained, no claimed hardware fix or broader transport support"
+}

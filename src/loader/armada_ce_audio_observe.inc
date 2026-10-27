@@ -86,6 +86,71 @@ static void armada_ce_audio_history(unsigned page) {
     retail_display_line((const char *)(uintptr_t)s->report_labels[10]);
 }
 #endif
+#elif KUI_ARMADA_CE_MAPLE_OBSERVE
+#include "kui/armada_ce_maple_probe.h"
+#if KUI_ARMADA_CE_MAPLE_PROOF
+static unsigned armada_ce_maple_page;
+#endif
+static void armada_ce_audio_record(uint32_t function,uint32_t command,
+                                    int32_t result) {
+    if(function==KUI_GD_REQUEST && result>0 &&
+       (command==KUI_RETAIL_GD_PLAY || command==KUI_RETAIL_GD_PLAY2))
+        (void)kui_armada_ce_bind_probe(function,command,result,1u);
+}
+static void armada_ce_audio_report(void) {
+    const struct kui_armada_ce_maple_snapshot *s=kui_armada_ce_bind_probe(0u,0u,0,0u);
+#if KUI_ARMADA_CE_MAPLE_PROOF
+    const struct kui_armada_ce_maple_probe_report *r=(const void *)s;
+    const unsigned char *words=armada_ce_maple_page?
+        (const void *)&r->proof:(const void *)s;
+    unsigned labels=armada_ce_maple_page?6u:0u;
+#if KUI_ARMADA_CE_MAPLE_HOOK
+    if(!armada_ce_maple_page) {
+#if KUI_ARMADA_CE_MAPLE_TRAFFIC
+        /* Terminal return freezes only our private sampler, not Maple DMA. */
+        *(volatile uint32_t *)(uintptr_t)(KUI_ARMADA_CE_MAPLE_HOOK_LOG+120u)=1u;
+#endif
+        words=(const void *)(uintptr_t)KUI_ARMADA_CE_MAPLE_HOOK_LOG;labels=18u;
+#if KUI_ARMADA_CE_MAPLE_FENCE
+    } else if(armada_ce_maple_page==1u) {
+        words=(const void *)(uintptr_t)UINT32_C(0xacfcfe80);labels=24u;
+#if KUI_ARMADA_CE_MAPLE_A2
+    } else if(armada_ce_maple_page==2u) {
+        words=(const void *)(uintptr_t)UINT32_C(0xacfcff00);labels=30u;
+    } else if(armada_ce_maple_page==3u) {words=(const void *)&r->proof;labels=6u;
+#else
+    } else if(armada_ce_maple_page==2u) {words=(const void *)&r->proof;labels=6u;
+#endif
+    } else {words=(const void *)&r->state;labels=12u;}
+#else
+    } else if(armada_ce_maple_page==2u) {words=(const void *)&r->state;labels=12u;}
+#endif
+#elif KUI_ARMADA_CE_MAPLE_HEADERS
+    if(armada_ce_maple_page) {
+        const struct kui_armada_ce_maple_headers_snapshot *h=r->headers;
+        retail_display_values(r->labels[18],h->counts,5);
+        for(unsigned i=0;i<4u;i++) retail_display_values(r->labels[19],
+            h->rows[(armada_ce_maple_page-1u)*4u+i],5);
+        retail_display_values(r->labels[20],h->fault,5);
+        return;
+    }
+    words=(const void *)&r->state;labels=12u;
+#else
+#if KUI_ARMADA_CE_MAPLE_STATE
+    if(armada_ce_maple_page==2u) {words=(const void *)&r->state;labels=12u;}
+#endif
+#endif
+    for(unsigned i=0;i<6u;i++) retail_display_values(r->labels[labels+i],
+        (const uint32_t *)(const void *)(words+20u*i),5);
+#else
+    retail_display_values("SAMPLE OK REFUSED READS STATUS",s->counts,5);
+    retail_display_values("TTB PTEH CCR PROCESS HEAD",s->cpu,5);
+    retail_display_values("MAPLE NODE BASE SPAN SECTIONS ATTACH",s->maple,5);
+    retail_display_values("MAPLEDEV NODE BASE SPAN SECTIONS ATTACH",s->mapledev,5);
+    retail_display_values("MDSTAR MDTSEL MDEN MDST ISTNRM",s->registers,5);
+    retail_display_values("FAULT WHY AT VALUE EXPECT DETAIL",s->fault,5);
+#endif
+}
 #elif KUI_ARMADA_CE_RAM_BIND
 #include "kui/armada_ce_bind_probe.h"
 static void armada_ce_audio_record(uint32_t function, uint32_t command,

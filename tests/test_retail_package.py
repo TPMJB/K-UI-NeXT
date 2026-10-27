@@ -2,6 +2,7 @@
 from pathlib import Path
 import re
 import struct
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -115,11 +116,18 @@ class RetailPackage(unittest.TestCase):
         self.assertIn(f"__retail_resident_bss_end <= 0x{layout.CE_RESIDENT_LIMIT:08x},", script)
         # Its background reader: a larger image, its 2 KiB stack ending where
         # bootstrap 2 begins.
+        # Resolve conditional contracts as the compiler does; the first text
+        # definition may belong to the explicit writable-only profile.
+        default_defines=subprocess.check_output(['cc','-E','-dM','-x','c','-'],input=source,text=True)
         for suffix, value in (("CE_ASYNC_LIMIT", layout.CE_ASYNC_RESIDENT_LIMIT),
                               ("CE_ASYNC_HOOK_STACK", layout.CE_ASYNC_HOOK_STACK)):
             with self.subTest(suffix=suffix):
-                found = re.search(r"^#define KUI_RETAIL_" + suffix + r"\s+(\w+)\s*$", source, re.M)
+                found = re.search(r"^#define KUI_RETAIL_" + suffix + r"\s+(\w+)\s*$", default_defines, re.M)
                 self.assertEqual(int(found.group(1), 0), value)
+        runtime_defines=subprocess.check_output(['cc','-E','-dM','-x','c',
+            '-DKUI_ARMADA_CE_VMU_WRITE_RUNTIME=1','-'],input=source,text=True)
+        found=re.search(r'^#define KUI_RETAIL_CE_ASYNC_LIMIT\s+(\w+)\s*$',runtime_defines,re.M)
+        self.assertEqual(int(found.group(1),0),0x8c00dc00)
         self.assertEqual(layout.CE_ASYNC_HOOK_STACK, 0x8C00E000)
         self.assertEqual(layout.CE_ASYNC_HOOK_STACK - layout.CE_ASYNC_RESIDENT_LIMIT, 0x800)
         script = (ROOT / "src/loader/retail_resident_ce_async.ld").read_text()

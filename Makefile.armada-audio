@@ -5,6 +5,7 @@ KUI_RETAIL_LOW_RESIDENT := 0
 include Makefile.dc
 
 ARMADA_AUDIO_DIR ?= build/armada-ce-audio
+ARMADA_AUDIO_SCIA_LINKER ?= src/loader/retail_resident_ce_async.ld
 ARMADA_AUDIO_COMMON_SRC := src/loader/sd_reader.c src/loader/retail_sd.c \
     src/loader/retail_storage.c src/loader/sci_sd_bus.c src/core/ata.c \
     src/dreamcast/ata_bus.c src/loader/minic.c src/core/retail_image.c
@@ -45,16 +46,16 @@ $(ARMADA_AUDIO_DIR)/resident-sci.elf: $(ARMADA_AUDIO_SCI) src/loader/retail_resi
 	@mkdir -p $(ARMADA_AUDIO_DIR)/sci/lto
 	sh-elf-gcc $(RETAIL_LINK) $(RETAIL_SCI_LINK) -Tsrc/loader/retail_resident_ce.ld -Wl,-Map,$(@:.elf=.map) -o $@ $(ARMADA_AUDIO_SCI) -lgcc
 	cp $@.ltrans*.su $(ARMADA_AUDIO_DIR)/sci/lto/
-$(ARMADA_AUDIO_DIR)/resident-scia.elf: $(ARMADA_AUDIO_SCIA) src/loader/retail_resident_ce_async.ld
+$(ARMADA_AUDIO_DIR)/resident-scia.elf: $(ARMADA_AUDIO_SCIA) $(ARMADA_AUDIO_SCIA_LINKER)
 	@mkdir -p $(ARMADA_AUDIO_DIR)/scia/lto
-	sh-elf-gcc $(RETAIL_LINK) $(RETAIL_SCIA_LINK) $(ARMADA_AUDIO_EXTRA_LINK_FLAGS) -Wl,-u,_kui_retail_ce_irq -Tsrc/loader/retail_resident_ce_async.ld -Wl,-Map,$(@:.elf=.map) -o $@ $(ARMADA_AUDIO_SCIA) -lgcc
+	sh-elf-gcc $(RETAIL_LINK) $(RETAIL_SCIA_LINK) $(ARMADA_AUDIO_EXTRA_LINK_FLAGS) -Wl,-u,_kui_retail_ce_irq -T$(ARMADA_AUDIO_SCIA_LINKER) -Wl,-Map,$(@:.elf=.map) -o $@ $(ARMADA_AUDIO_SCIA) -lgcc
 	cp $@.ltrans*.su $@.ltrans*.ci $(ARMADA_AUDIO_DIR)/scia/lto/
 $(ARMADA_AUDIO_DIR)/resident-%.bin: $(ARMADA_AUDIO_DIR)/resident-%.elf
 	sh-elf-objcopy -O binary $< $@
 
 $(ARMADA_AUDIO_DIR)/common/%.o: %.c
 	@mkdir -p $(@D)
-	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@
+	sh-elf-gcc $(RETAIL_FLAGS) $(ARMADA_AUDIO_EXTRA_COMMON_FLAGS) -MMD -MP -c $< -o $@
 $(ARMADA_AUDIO_DIR)/retail_stage.o: src/loader/retail_stage.c
 	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -DKUI_ARMADA_CE_AUDIO_STAGE=1 $(ARMADA_AUDIO_EXTRA_STAGE_FLAGS) -MMD -MP -c $< -o $@
 $(ARMADA_AUDIO_DIR)/retail_stage_asm.o: src/loader/retail_stage.S $(ARMADA_AUDIO_BINS) $(ARMADA_AUDIO_EXTRA_STAGE_DEPS)

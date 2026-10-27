@@ -6,6 +6,12 @@
  * 32-byte directory entry, NOT a VMI file. These are not whole-card images. */
 #include "kui/apps.h"
 #include "kui/destination.h"
+#include "kui/vmu_read_bounded.h"
+#include "kui/hash.h"
+#include "kui/vmu_collection.h"
+#include "kui/vmu_image_subset.h"
+#include "kui/vmu_save_snapshot.h"
+#include "kui/vmu_description.h"
 #include "platform.h"
 #include <dc/maple.h>
 #include <dc/maple/vmu.h>
@@ -86,19 +92,18 @@ static bool same_device(struct session *s) {
         return fail(s,"VMU removed or changed; refresh the list");
     return true;
 }
-/* Upstream's block API has no actual-length output. Differently initialized
- * copies detect short replies, and oversized scratch buffers detect an
- * overlong reply before accepting its first 512 bytes. The protocol response
- * is bounded by one Maple frame (less than 1024 bytes). */
+/* The bounded adapter validates exact Maple framing before copying. Keep
+ * independent initialized reads and scratch canaries as an additional check
+ * for short, changed or oversized results before accepting any source bytes. */
 static bool read_block(struct session *s,unsigned block,uint8_t out[BLOCK_BYTES]) {
     _Alignas(32) uint8_t first[1024],second[1024];
     if(block>=256) return fail(s,"Invalid VMU block address");
     if(cancelled(s) || !same_device(s)) return false;
     memset(first,0xa5,sizeof(first));memset(second,0x5a,sizeof(second));
-    int result=vmu_block_read(s->device,(uint16_t)block,first);
+    int result=kui_vmu_read_bounded(s->device,(uint16_t)block,first);
     if(result!=0) return fail(s,"VMU block read failed");
     if(cancelled(s) || !same_device(s)) return false;
-    result=vmu_block_read(s->device,(uint16_t)block,second);
+    result=kui_vmu_read_bounded(s->device,(uint16_t)block,second);
     if(result!=0) return fail(s,"VMU block reread failed");
     if(!same_device(s)) return false;
     for(unsigned i=BLOCK_BYTES;i<sizeof(first);i++)
@@ -121,6 +126,7 @@ static bool snapshot_layout(struct session *s,struct snapshot *snap) {
 }
 static bool validate_snapshot(struct session *s,struct snapshot *snap) {
     bool used[256]={false};
+    bool game_seen=false;
     for(unsigned i=0;i<snap->user_blocks;i++) if(le16(snap->fat+i*2)==0xfffc) ++snap->free_blocks;
     for(unsigned i=0;i<snap->directory_blocks*16;i++) {
         const uint8_t *entry=snap->directory+i*32;
@@ -129,8 +135,13 @@ static bool validate_snapshot(struct session *s,struct snapshot *snap) {
         unsigned blocks=le16(entry+24),at=le16(entry+2);
         if((entry[0]!=0x33 && entry[0]!=0xcc) || !blocks || blocks>snap->user_blocks || le16(entry+26)>=blocks)
             return fail(s,"Unsupported or damaged VMU directory entry");
+        if(entry[0]==0xcc) {
+            if(game_seen || at) return fail(s,"VMU mini-game must be the only game and start at block 0");
+            game_seen=true;
+        }
         for(unsigned n=0;n<blocks;n++) {
             if(at>=snap->user_blocks || used[at]) return fail(s,"VMU file chain is out of range, cyclic, or shared");
+            if(entry[0]==0xcc && at!=n) return fail(s,"VMU mini-game allocation is not contiguous from block 0");
             used[at]=true;unsigned next=le16(snap->fat+at*2);
             if(n+1==blocks) {
                 if(next!=0xfffa) return fail(s,"VMU file length disagrees with its allocation chain");
@@ -181,6 +192,53 @@ static void fill_view(struct session *s,const struct snapshot *snap,unsigned pag
         const uint8_t *entry=snap->directory+snap->entries[i]*32;
         struct kui_vmu_entry *row=&out->entries[out->count++];
         display_name(row->name,entry);row->bytes=(uint32_t)le16(entry+24)*BLOCK_BYTES;
+    }
+}
+/* The header offset is a logical file-block offset, including for fragmented
+ * allocations and VMU mini-games. Never mistake it for a physical address. */
+static bool description_location(const struct snapshot *snap,const uint8_t *entry,
+                                 unsigned *block,size_t *package_bytes) {
+    unsigned count=le16(entry+24),offset=le16(entry+26),at=le16(entry+2);
+    bool visited[256]={false};
+    if(!count || count>snap->user_blocks || offset>=count) return false;
+    for(unsigned n=0;n<=offset;n++) {
+        if(at>=snap->user_blocks || visited[at]) return false;
+        visited[at]=true;
+        if(n<offset) at=le16(snap->fat+at*2);
+    }
+    *block=at;*package_bytes=(size_t)(count-offset)*BLOCK_BYTES;return true;
+}
+static void describe_row(struct kui_vmu_entry *row,const uint8_t header[BLOCK_BYTES],
+                         size_t package_bytes) {
+    struct kui_vmu_description description;
+    if(kui_vmu_description_parse(header,BLOCK_BYTES,package_bytes,&description)) {
+        memcpy(row->description,description.description,sizeof(row->description));
+        memcpy(row->app_id,description.app_id,sizeof(row->app_id));
+    }
+}
+/* Optional display metadata has an isolated status: failure to read one header
+ * leaves its filename usable and cannot invalidate the checked directory list
+ * or change its action result/fingerprint. read_block still applies bounded,
+ * repeated reads and device-identity checks under the normal VMU mutex. */
+static void physical_descriptions(struct session *s,const struct snapshot *snap) {
+    struct kui_vmu_view optional_out={0};struct session optional=*s;
+    optional.out=&optional_out;optional.progress=NULL;optional.cancel=NULL;optional.log=quiet_log;
+    if(vmufs_mutex_lock()!=0) {s->log("VMU: optional save descriptions unavailable");return;}
+    for(unsigned i=0;i<s->out->count;i++) {
+        const uint8_t *entry=snap->directory+snap->entries[s->out->page*KUI_VMU_ROWS+i]*32;
+        unsigned block;size_t package_bytes;uint8_t header[BLOCK_BYTES];
+        if(description_location(snap,entry,&block,&package_bytes) && read_block(&optional,block,header))
+            describe_row(&s->out->entries[i],header,package_bytes);
+        else s->log("VMU: optional save description unavailable for %s",s->out->entries[i].name);
+    }
+    if(vmufs_mutex_unlock()!=0) s->log("VMU: optional description reader unlock failed");
+}
+static void image_descriptions(struct session *s,const struct snapshot *snap,const uint8_t *data) {
+    for(unsigned i=0;i<s->out->count;i++) {
+        const uint8_t *entry=snap->directory+snap->entries[s->out->page*KUI_VMU_ROWS+i]*32;
+        unsigned block;size_t package_bytes;
+        if(description_location(snap,entry,&block,&package_bytes))
+            describe_row(&s->out->entries[i],data+block*BLOCK_BYTES,package_bytes);
     }
 }
 static bool check_snapshot(struct session *s,const struct snapshot *original,struct snapshot *check) {
@@ -289,6 +347,7 @@ void kui_vmu_app_run(unsigned action,unsigned slot,unsigned page,unsigned select
     if(!locked_snapshot(&s,snap)) goto done;
     fill_view(&s,snap,page);
     if(!action) {
+        physical_descriptions(&s,snap);
         listed[slot].device=s.device;listed[slot].fingerprint=snap->fingerprint;listed[slot].valid=true;
         status(&s,"VMU %c%u: %u saves, %u free blocks",'A'+s.port,s.unit,snap->count,snap->free_blocks);
         if(!snap->count) status(&s,"VMU %c%u is empty; %u free blocks",'A'+s.port,s.unit,snap->free_blocks);
@@ -401,8 +460,12 @@ static bool backup_path(const char *path,char peer[KUI_VMU_BACKUP_PATH_CAP],cons
 static bool source_path(const char *path,char peer[KUI_VMU_BACKUP_PATH_CAP],const char *ext) {
     return backup_path(path,peer,"vms",ext);
 }
+static bool collection_image_path(const char *path) {
+    return kui_vmu_collection_path_id(path)!=0u;
+}
 static bool image_path(const char *path) {
-    char peer[KUI_VMU_BACKUP_PATH_CAP];return backup_path(path,peer,"vmd","vmd");
+    char peer[KUI_VMU_BACKUP_PATH_CAP];
+    return collection_image_path(path) || backup_path(path,peer,"vmd","vmd");
 }
 static bool load_exact(struct session *s,const char *path,void *data,size_t size) {
     FIL file;FRESULT r=f_open(&file,path,FA_READ);
@@ -511,6 +574,8 @@ static bool fits_destination(struct session *s,const struct snapshot *snap,const
     for(unsigned i=0;i<snap->count;i++) {
         const uint8_t *old=snap->directory+snap->entries[i]*32;
         owned+=le16(old+24);
+        if(entry[0]==0xcc && old[0]==0xcc)
+            return fail(s,"Destination already has a VMU mini-game; no overwrite is allowed");
         if(!strncmp((const char *)old+4,(const char *)entry+4,12))
             return fail(s,"That save already exists; choose another VMU (no overwrite)");
         for(unsigned j=0;j<i;j++)
@@ -518,6 +583,10 @@ static bool fits_destination(struct session *s,const struct snapshot *snap,const
                 return fail(s,"Destination has duplicate VMU names; restore refused");
     }
     if(owned!=allocated) return fail(s,"Destination has unowned allocated blocks; restore refused");
+    if(entry[0]==0xcc)
+        for(unsigned block=0;block<le16(entry+24);block++)
+            if(le16(snap->fat+block*2)!=0xfffc)
+                return fail(s,"VMU mini-game needs contiguous free blocks starting at block 0");
     return true;
 }
 /* Uses upstream metadata commit primitives and data-down/game-up free-block
@@ -542,6 +611,7 @@ static bool restore_write(struct session *s,const struct snapshot *original,stru
         if(!s->out->status.errors && !s->out->status.stopped) fail(s,"VMU changed before restore; preview again");
         goto done;
     }
+    if(!fits_destination(s,check,entry)) goto done;
     if(cancelled(s) || !same_device(s)) goto done;
     status(s,"Writing new save to free VMU blocks...");
     unsigned free_entry=0;
@@ -550,6 +620,9 @@ static bool restore_write(struct session *s,const struct snapshot *original,stru
     uint16_t selected[256];unsigned found=0;
     for(unsigned i=0;i<root.blk_cnt && found<added.filesize;i++) {
         unsigned block=added.filetype==0xcc?i:root.blk_cnt-1-i;
+        /* A mini-game executes directly from the prefix starting at block 0.
+         * The destination checks above require every prefix block to be free. */
+        if(added.filetype==0xcc && fat[block]!=0xfffc) break;
         if(fat[block]==0xfffc) selected[found++]=(uint16_t)block;
     }
     if(!found || found!=added.filesize) {fail(s,"VMU free-block count changed");goto done;}
@@ -788,8 +861,10 @@ void kui_vmu_image_run(const char *path,unsigned page,unsigned selected,unsigned
     if(action && (!image_listed.valid || strcmp(path,image_listed.path))) {
         fail(&s,"Browse this VMD image before extracting saves");goto done;
     }
-    const char *origin=path+sizeof("0:" BACKUP_ROOT "/")-1;
-    s.port=(unsigned)(origin[0]-'A');s.unit=(unsigned)(origin[1]-'0');
+    if(!collection_image_path(path)) {
+        const char *origin=path+sizeof("0:" BACKUP_ROOT "/")-1;
+        s.port=(unsigned)(origin[0]-'A');s.unit=(unsigned)(origin[1]-'0');
+    }
     if(cancelled(&s)) goto done;
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
     if(!kui_sd_connect()) {fail(&s,"Cannot connect SD card for VMD image");goto done;}
@@ -798,12 +873,19 @@ void kui_vmu_image_run(const char *path,unsigned page,unsigned selected,unsigned
     mounted=true;data=malloc(IMAGE_BYTES);snap=malloc(sizeof(*snap));
     if(!data || !snap) {fail(&s,"Not enough RAM for VMD image");goto done;}
     status(&s,"Reading and checking read-only VMD image...");
+    if(collection_image_path(path)) {
+        struct kui_vmu_collection_card card;
+        if(kui_vmu_collection_verify(path,&card,s.log,cancel)) {
+            if(!cancelled(&s)) fail(&s,"Virtual-card admission failed; refresh the collection");
+            goto done;
+        }
+    }
     if(!image_read(&s,path,data,false) || !image_read(&s,path,data,true) || !image_proof(&s,path,data) || !image_snapshot(&s,data,snap)) goto done;
     uint32_t crc=kui_crc32(0,data,IMAGE_BYTES);
     if(action && crc!=image_listed.crc) {
         image_listed.valid=false;fail(&s,"VMD changed since browsing; refresh before extraction");goto done;
     }
-    fill_view(&s,snap,page);out->present=true;
+    fill_view(&s,snap,page);image_descriptions(&s,snap,data);out->present=true;
     if(!action) {
         strcpy(image_listed.path,path);image_listed.crc=crc;image_listed.valid=true;
         status(&s,"VMD image: %u saves, %u free blocks (read only)",snap->count,snap->free_blocks);ok=true;goto done;
@@ -840,6 +922,8 @@ done:
     out->status.complete=ok;out->status.passed=ok;
     if(progress) progress(&out->status);
 }
+
+#include "vmu_collection.inc"
 
 static bool delete_write(struct session *s,const struct snapshot *original,
                          struct snapshot *check,unsigned entry_index) {
@@ -1045,6 +1129,7 @@ static bool bulk_preflight(struct session *source,struct session *target,
     unsigned blocks=0,conflicts=0;
     for(unsigned i=0;i<snap->count;i++) {
         const uint8_t *entry=snap->directory+snap->entries[i]*32;blocks+=le16(entry+24);
+        if(entry[0]==0xcc && !fits_destination(target,destination,entry)) return false;
         for(unsigned j=0;j<destination->count;j++)
             if(!strncmp((const char *)entry+4,(const char *)destination->directory+destination->entries[j]*32+4,12)) ++conflicts;
     }

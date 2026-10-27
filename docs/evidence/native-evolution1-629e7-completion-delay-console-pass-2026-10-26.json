@@ -1,0 +1,35 @@
+{
+  "schema": "kui.native.owner-console-result.v1",
+  "date": "2026-10-26",
+  "game": "Evolution: The World of Sacred Device",
+  "runtime_source_commit": "629e7fe96c0806601650431d0377f47a31afa60d",
+  "delivery_source_commit": "df1cd953f53c88423a08693112f855dfffd23bf3",
+  "package": "K-UI-Evolution-Completion-Delay-629e7fe96c08.zip",
+  "package_sha256": "578185b88272dc469beb5e0b7625fd023e00db95ddfaf9386fe91f66780ff52c",
+  "result": "PASS",
+  "owner_runs": 1,
+  "accepted_without_repeat": true,
+  "scope": "Requested Sofdec transition and opening FMV control",
+  "owner_observation": "Worked this time. Led will flash once before sofdec image comes up, and as it is going away it will be rapidly flashing",
+  "runtime_mode": {
+    "virtual_a2": false,
+    "real_maple_c_callbacks": false,
+    "new_demand_reader": true,
+    "controller_tick": false,
+    "prefetch": false,
+    "submit_delay_ticks": 0,
+    "complete_delay_ticks": 76
+  },
+  "interpretation": [
+    "The tested completion-only delay is insufficient to reproduce the failure with the passing CEC submit software path.",
+    "The earlier 59-submit/76-complete control failed. The next matched control isolates the 59-tick submit delay with the CEC completion path.",
+    "A submit-only failure would implicate pre-MDST occupation or its effect on later DMA/completion phase; a pass would leave a combined-delay interaction.",
+    "The SD activity progression agrees with the owner's successful runs. It is not an IRQ-duration measurement."
+  ],
+  "not_established": [
+    "Real virtual-VMU completion behavior is compatible",
+    "Every scanline-zero opportunity is covered by interrupt residency",
+    "The physical DMA or interrupt phase matches another separately linked build",
+    "Virtual VMU saving or loading works in this control"
+  ]
+}

@@ -1,0 +1,163 @@
+{
+  "schema": "kui.native.a2-background.candidate.v1",
+  "date": "2026-10-24",
+  "scope": "Candidate implementation and software evidence; historical console reports retain their exact build and reader scope. No new A2/Background console acceptance.",
+  "hardware_acceptance": {
+    "evolution1": {
+      "build": "897ee7223b35",
+      "virtual_slot": "A1",
+      "status": "Owner confirmed launch/save/reboot-load; recorded in the earlier Evolution 2 extent evidence."
+    },
+    "evolution2": {
+      "build": "df035a8cae47",
+      "virtual_slot": "A1",
+      "status": "Owner reports the corrected virtual-card/save-load path working; still reports slowdown and requests A2 to leave real A1 free.",
+      "full_power_cycle_separately_confirmed": false
+    },
+    "ledger": "docs/vmu-hardware-observations.json",
+    "new_a2_background_console_verified": false,
+    "prior_sa2_responsiveness": "Owner described optimized VMU gameplay on 920c86efc512 as imperceptibly different from VMU-off; this is a subjective scoped earlier result."
+  },
+  "a2_transport": {
+    "virtual_maple_address": "02",
+    "request_address_mask": "00000200",
+    "reply_source_byte": "02",
+    "parent_attachment_bit": "02",
+    "physical_a1": "Real address01 traffic and parent attachment bit01 are retained; virtual filtering removes only address02.",
+    "physical_a2": "Must be empty; physical attachment bit02 rejects virtual publication before the backend.",
+    "full_payload_passthrough": [
+      "A1 MEMCARD MEDIA/READ/WRITE/SYNC",
+      "A1 LCD BWRITE50 words and SETCOND49 words",
+      "A1 clock SETCOND2 words",
+      "A1 RESET and existing information/condition queries"
+    ],
+    "durability": "Existing journal/write/readback/restoration checks complete before virtual durable ACK; presentation slot does not change profile/handoff or save-file bytes.",
+    "legacy_apis": "Explicit address-aware native APIs select A2; existing shared A1 defaults and WinCE A2 read-only paths retain their prior behavior."
+  },
+  "historical_fmv_baseline": {
+    "source_commit": "edf20f0f11a3ed6bb562929139cdad839d82655b",
+    "archive": "K-UI-SCI-Resume-Test.zip",
+    "archive_sha256": "4976e02a2e9a06cd16703bd15da7024c5508968a24d7e6612db17a64d2f1787b",
+    "module_member": "KUI/apps/games/retail-boot.kui",
+    "module_bytes": 72180,
+    "module_sha256": "c35054e7c53543ca0332d7d631b37f3452861233b0281ed592e6a7e237580248",
+    "resident_member": "evidence/native/resident-scia.elf",
+    "resident_elf_sha256": "4f12f78f81edb102f55f8d20a07c8a08b63ab360de37405786b213ac2f5dae62",
+    "enabled_scope": "Native Background X/Y SCI reader, 20/25 blocks per call; Standard SCI/SCIF/IDE behavior unchanged and CE separate.",
+    "repair": "On RESUME, validate DMA1 ownership; snapshot SAR/DAR/TCR/CHCR at acquisition; foreign DMA forces stop/restart plus same-block PIO; cancellation fences DMA before CMD12.",
+    "console_source": "Owner corrected the route on 2026-10-24: the reported smooth Evolution 2 FMVs after edf20f0f11a3 used regular loading. The repair scope in the recovered README does not establish the selected route.",
+    "current_route_gap": "The later df035a8 native VMU module linked a Standard-only resident and refused Background, so that historical Background repair was unreachable.",
+    "candidate_response": "Background is an additional optional VMU reader, not an established explanation or correction for the ordinary-loading FMV report.",
+    "limits": [
+      "Attributing the earlier smooth-FMV report to Background mode was unsupported and is withdrawn.",
+      "This route difference does not prove that it is the only source of the reported slowdown.",
+      "The new combined Background/A2 route still needs its own playback and power-off/save-load console result.",
+      "No broad 2.0 binary or timing parity is claimed."
+    ]
+  },
+  "software_reference": {
+    "kind": "Development Standard A2 reference; final release identities must come from the final package manifest.",
+    "source_base": "df035a8cae47",
+    "source_dirty": true,
+    "worker_binary_sha256": "c5c3577abed3db8e09f4ddd135cd81d6c8e2e34faaa4acbb6b62a2d9c0d7c9f7",
+    "standard_module_sha256": "3d87b670eb4245c87a031866f7703ecc4f77bb3902c2353f72417bc65b054422",
+    "standard_audit_sha256": "ebca7641f6928f77af5f14cdd464a9faf628c39c10a73a2a87a0e1e3cab25d56",
+    "standard_artifact_self_test": "passed",
+    "reviewed_prepared_pin_changes": 13,
+    "prepared_mutation_refusals": 143,
+    "gateway_mutation_refusals": 20,
+    "artifact_mutation_refusals": 4,
+    "private_stack_worst_bytes": 1916,
+    "private_stack_capacity_bytes": 4096,
+    "physical_a1_transport_sanitizer_checks": 48753,
+    "controller_fast_lane_sanitizer_checks": 127618,
+    "persistent_sanitizer_checks": 1288444,
+    "native_readonly_checks": 1966,
+    "workload_stress_checks": 41137,
+    "steady_mixed_poll_guest_reads": 142,
+    "same_full_path_guest_reads": 309,
+    "six_original_sdk_replays": [
+      {
+        "slug": "ps2",
+        "rounds": 12,
+        "completion_fault_refusals": 13,
+        "cold_initializer_target_refusals": 2,
+        "physical_a1_replies_preserved": true,
+        "report_sha256": "d995dcf7af27c4373a2078f13260e66ba9627bc68a6b45edb870fe0fcf7eb07a"
+      },
+      {
+        "slug": "skies",
+        "rounds": 12,
+        "completion_fault_refusals": 13,
+        "cold_initializer_target_refusals": 2,
+        "physical_a1_replies_preserved": true,
+        "report_sha256": "b0f09f52cea48dc30a3824039bf2ca22d8f9c51bfb9353b0159a867dcf3a85b4"
+      },
+      {
+        "slug": "sa2",
+        "rounds": 12,
+        "completion_fault_refusals": 13,
+        "cold_initializer_target_refusals": 2,
+        "physical_a1_replies_preserved": true,
+        "report_sha256": "ecc05b9bdbe686c43116635fa3a3ef3fe4e7b81eb9390be65d2a2bfe16a54509"
+      },
+      {
+        "slug": "grandia2",
+        "rounds": 12,
+        "completion_fault_refusals": 13,
+        "cold_initializer_target_refusals": 2,
+        "physical_a1_replies_preserved": true,
+        "report_sha256": "bc7f4a67247d1ff1b2c459e15bd7c79704193a3893ef8f38182d204d3f8e1db6"
+      },
+      {
+        "slug": "evolution1",
+        "rounds": 12,
+        "completion_fault_refusals": 13,
+        "cold_initializer_target_refusals": 2,
+        "physical_a1_replies_preserved": true,
+        "report_sha256": "56df608dfabecf76f357d7269295eab977bbdfefec7432ee797f7c5b1100f106"
+      },
+      {
+        "slug": "evolution2",
+        "rounds": 12,
+        "completion_fault_refusals": 13,
+        "cold_initializer_target_refusals": 2,
+        "physical_a1_replies_preserved": true,
+        "report_sha256": "fc5f39962bfb27c78350b077370184f0ddb9c48d6884719713cb0753d8a493c9"
+      }
+    ],
+    "replay_scope": "Original initializer, allocator and SDK submit/completion/consumer paths with actual linked worker C; physical A1 enumeration replies remain byte-identical and parent21 becomes23.",
+    "limits": [
+      "Flat coherent RAM and synchronous Maple model; no hardware cache/bus timing or game-mainloop/FMVs.",
+      "Physical A1 memory/LCD request and response preservation is separately tested in production-C sanitizer fixtures; actual flash/LCD behavior remains a console test.",
+      "Current responsiveness mechanisms are retained; host work counts do not certify combined Background/A2 console latency.",
+      "Background package composition and asynchronous ownership proofs are recorded by its separate final artifact audit."
+    ]
+  },
+  "delivery": {
+    "guide": "docs/vmu-native-a2-background-test.md",
+    "folders": [
+      "Standard",
+      "Background"
+    ],
+    "same_prepared_pair": true,
+    "background_opt_in": true,
+    "fallback": "Reinstall Standard/personalize.py with the same pair and set frontend Background Off.",
+    "background_limit": "Native SCI only; 64 combined track/extent slots; no combined CDDA/VMU or SCIF/IDE VMU backing in this test."
+  },
+  "source_checkpoint_policy": {
+    "required_contents": [
+      "Exact commit and parent identity",
+      "Tracked edits and new source files",
+      "Build configuration, module hashes and verification reports"
+    ],
+    "recovery_check": "Unpack the complete source checkpoint into a fresh directory and verify its contents before further behavior changes.",
+    "retention": "Keep the prior accepted binary and corresponding source separately until the new candidate has its own console acceptance.",
+    "exclusions": [
+      "Retail executables",
+      "Retail tracks",
+      "User saves"
+    ],
+    "limit": "A build ID or audit JSON alone is not a recoverable source checkpoint."
+  }
+}

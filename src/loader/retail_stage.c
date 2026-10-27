@@ -29,6 +29,10 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#if KUI_NATIVE_STAGE_FAST_CRC
+#include "stage_fast_crc32.h"
+#define kui_retail_crc32 kui_stage_crc32
+#endif
 #include "kui/skies_read_diagnostic.h"
 #ifndef KUI_GAME_RAM_PATCHES_STAGE
 #define KUI_GAME_RAM_PATCHES_STAGE 0
@@ -81,6 +85,39 @@ const uint32_t kui_armada_ce_bind_stage_contract
 #define ARMADA_BIND_INSTALL_LIMIT KUI_ARMADA_CE_BIND_LIMIT
 #endif
 #endif
+#if KUI_ARMADA_CE_MAPLE_HOOK_STAGE
+#if KUI_ARMADA_CE_MAPLE_HOOK_STAGE != 1 || !KUI_ARMADA_CE_RAM_BIND_STAGE || !KUI_ARMADA_CE_MAPLE_OBSERVE || KUI_ARMADA_CE_EXCERPT_STAGE
+#error "Maple completion observer requires its separate exact Armada stage"
+#endif
+#include "kui/armada_ce_maple_reservation.h"
+#if KUI_ARMADA_CE_MAPLE_WRITE_LAYOUT
+/* ELF-only source-profile witness; the default image has no new bytes or
+ * symbol. Package admission pairs this exact TU with the expanded helper. */
+__asm__(".global __kui_maple_write_layout_stage\n"
+        ".set __kui_maple_write_layout_stage,1\n");
+#endif
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+#define KUI_VMU_LAYOUT_STRING_INNER(value) #value
+#define KUI_VMU_LAYOUT_STRING(value) KUI_VMU_LAYOUT_STRING_INNER(value)
+__asm__(".global __kui_maple_write_runtime_stage\n"
+        ".set __kui_maple_write_runtime_stage,1\n"
+        ".global __kui_maple_write_runtime_handoff_stage\n"
+        ".set __kui_maple_write_runtime_handoff_stage," KUI_VMU_LAYOUT_STRING(KUI_ARMADA_CE_VMU_HANDOFF_P2) "\n"
+        ".global __kui_maple_write_runtime_services_stage\n"
+        ".set __kui_maple_write_runtime_services_stage," KUI_VMU_LAYOUT_STRING(KUI_ARMADA_CE_VMU_SERVICES_ADDRESS) "\n");
+#undef KUI_VMU_LAYOUT_STRING
+#undef KUI_VMU_LAYOUT_STRING_INNER
+#endif
+#include "kui/armada_ce_maple_hook.h"
+extern const uint8_t __maple_hook_blob_start[] __asm__("__maple_hook_blob_start");
+extern const uint8_t __maple_hook_blob_end[] __asm__("__maple_hook_blob_end");
+extern const uint8_t __maple_bridge_blob_start[] __asm__("__maple_bridge_blob_start");
+extern const uint8_t __maple_bridge_blob_end[] __asm__("__maple_bridge_blob_end");
+extern const uint8_t __retail_stage_binary_end[] __asm__("__retail_stage_binary_end");
+extern const uint8_t __retail_stage_bss_end[] __asm__("__retail_stage_bss_end");
+const uint32_t kui_armada_ce_maple_hook_stage_contract
+    __attribute__((used,section(".armada_maple_hook_stage_contract")))=0x31484d43u;
+#endif
 #if KUI_ARMADA_CE_EXCERPT_STAGE
 #if KUI_ARMADA_CE_EXCERPT_STAGE != 1 || !KUI_ARMADA_CE_RAM_BIND_STAGE
 #error Armada excerpt reservation requires the isolated admitted binding stage
@@ -130,6 +167,16 @@ extern const uint8_t __retail_resident_ide_blob_start[] __asm__("__retail_reside
 extern const uint8_t __retail_resident_ide_blob_end[] __asm__("__retail_resident_ide_blob_end");
 extern const uint8_t __retail_resident_scia_blob_start[] __asm__("__retail_resident_scia_blob_start");
 extern const uint8_t __retail_resident_scia_blob_end[] __asm__("__retail_resident_scia_blob_end");
+#include "kui/native_dual_reader.h"
+#if KUI_NATIVE_DUAL_READERS
+extern const uint8_t __retail_resident_legacy_blob_start[] __asm__("__retail_resident_legacy_blob_start");
+extern const uint8_t __retail_resident_legacy_blob_end[] __asm__("__retail_resident_legacy_blob_end");
+__asm__(".global __kui_native_dual_readers_stage\n.set __kui_native_dual_readers_stage,1\n");
+const struct kui_native_dual_capability kui_native_dual_reader_capability
+    __attribute__((used,section(".rodata.native_dual_capability")))={
+    KUI_NATIVE_DUAL_MAGIC0,KUI_NATIVE_DUAL_MAGIC1,1u,KUI_NATIVE_DUAL_CAPABILITY_BYTES,
+    KUI_RETAIL_READER_ASYNC,KUI_RETAIL_READER_ASYNC_EAGER,KUI_NATIVE_DUAL_LEASE_BYTES,0u};
+#endif
 extern const uint8_t __retail_trampoline_start[] __asm__("__retail_trampoline_start");
 extern const uint8_t __retail_trampoline_end[] __asm__("__retail_trampoline_end");
 extern void kui_retail_bootstrap_enter(void) __attribute__((noreturn));
@@ -166,6 +213,16 @@ static struct kui_retail_zso_image image;
 #else
 static struct kui_retail_manifest manifest;
 static struct kui_retail_image image;
+#endif
+#if KUI_VMU_NATIVE_BACKGROUND
+#include "kui/vmu_native_background.h"
+__asm__(".global __kui_vmu_native_background_stage\n"
+        ".set __kui_vmu_native_background_stage,1\n");
+/* Temporary workspace is covered by the native installer's full high-stage
+ * allocation exclusion. The first proved heap allocation retires it into
+ * that allocation's unused tail before the game can reclaim stage memory. */
+static uint8_t native_background_boot_region[KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES]
+    __attribute__((aligned(32)));
 #endif
 static struct kui_retail_storage card;
 static struct retail_display_state display;
@@ -363,9 +420,42 @@ static void startup_gd_install(void);
 #endif
 #endif
 
-static void select_resident(void) {
+static void stopped(const char *message,uint32_t detail) __attribute__((noreturn));
+#if KUI_NATIVE_STANDALONE_READER
+#include "native_standalone_reader_stage.inc"
+#endif
+static void
+#if KUI_NATIVE_DUAL_READERS
+__attribute__((noipa))
+#endif
+select_resident(void) {
     resident_limit=KUI_RETAIL_STANDARD_LIMIT;
-#if KUI_RETAIL_ZSO
+#if KUI_NATIVE_STANDALONE_READER
+    resident_blob=__retail_resident_sci_blob_start;
+    resident_bytes=(size_t)(__retail_resident_sci_blob_end-resident_blob);
+    resident_limit=KUI_RETAIL_LOW_ASYNC_LIMIT;
+#elif KUI_NATIVE_DUAL_READERS
+    /* The ordinary module remains the Standard/CE/CDDA path. This module
+     * owns two separately linked native SCI engines and never substitutes
+     * a Standard reader for an unsupported Background map. */
+    if(!kui_native_dual_descriptor_valid(&kui_native_dual_reader_capability,
+           sizeof(kui_native_dual_reader_capability)))
+        stopped("DUAL READER CAPABILITY INVALID",0u);
+    if(!kui_native_dual_reader_valid(manifest.reader,manifest.storage_transport))
+        stopped("DUAL NATIVE READER NEEDS SCI X OR Y",manifest.reader);
+#if KUI_NATIVE_READER_ONLY_ISOLATION
+    if(!kui_native_reader_uses_sdk(manifest.reader))
+        stopped("READER ISOLATION NEEDS NEW (X)",manifest.reader);
+#endif
+    if(kui_native_reader_uses_sdk(manifest.reader)) {
+        resident_blob=__retail_resident_sci_blob_start;
+        resident_bytes=(size_t)(__retail_resident_sci_blob_end-resident_blob);
+    } else {
+        resident_blob=__retail_resident_legacy_blob_start;
+        resident_bytes=(size_t)(__retail_resident_legacy_blob_end-resident_blob);
+    }
+    resident_limit=KUI_RETAIL_LOW_ASYNC_LIMIT;
+#elif KUI_RETAIL_ZSO
     resident_blob=__retail_resident_sci_blob_start;
     resident_bytes=(size_t)(__retail_resident_sci_blob_end-resident_blob);
 #else
@@ -416,13 +506,16 @@ static void retire_launcher_serial(void) {
     *(volatile uint16_t *)(uintptr_t)0xffe80018u=0;
 }
 
-static void stopped(const char *message,uint32_t detail) __attribute__((noreturn));
 static void stopped(const char *message,uint32_t detail) {
     retail_display_line(message);
     retail_display_hex("DETAIL",detail);
     retail_display_line("LAUNCH STOPPED - PHOTOGRAPH THIS SCREEN");
     retail_display_line("POWER OFF AND ON TO RETURN");
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    retail_display_line("PREPARED VMU MAY REQUIRE JOURNAL RECOVERY");
+#else
     retail_display_line("STORAGE WAS READ ONLY");
+#endif
     for(;;) __asm__ volatile("nop");
 }
 static int physical_read(void *context,uint32_t lba,uint8_t out[512]) {
@@ -548,6 +641,142 @@ static const uint16_t ce_entry_code[15][2]={
     {0x8900,0xff00},{0x8802,0xffff},{0x8900,0xff00},
 };
 static uint32_t ce_kernel[KUI_RETAIL_CE_KERNEL_WORDS];
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+#include "armada_ce_vmu_persist_stage.inc"
+#endif
+#if KUI_ARMADA_CE_MAPLE_HOOK_STAGE
+static uint8_t armada_maple_original_header[84],armada_maple_original_text[24],armada_maple_original_code[32];
+#if KUI_ARMADA_CE_MAPLE_FENCE_STAGE
+static uint8_t armada_maple_original_worker[32];
+#endif
+static void relay_stopped(const char *,uint32_t) __attribute__((noreturn));
+static void armada_maple_hook_reserve(void) {
+    const uint8_t *header=(const void *)(uintptr_t)KUI_ARMADA_CE_EXCERPT_ROMHDR;
+    const uint8_t *record=(const void *)(uintptr_t)KUI_MAPLE_TEXT_RECORD;
+    const uint8_t *entry=(const void *)(uintptr_t)KUI_MAPLE_ORIGINAL_ENTRY;
+    struct kui_maple_reservation_inputs in={header,record,entry,
+        (const void *)(uintptr_t)KUI_MAPLE_BRIDGE_DEST,84u,24u,32u,KUI_MAPLE_BRIDGE_BYTES,
+        (uint32_t)(uintptr_t)__retail_stage_binary_end,
+        (uint32_t)(uintptr_t)__retail_stage_bss_end,true,true};
+    struct kui_maple_reservation_plan plan;
+    size_t bytes=(size_t)(__maple_hook_blob_end-__maple_hook_blob_start);
+    if(!kui_maple_reservation_prepare(&in,&plan) || !bytes || bytes>KUI_MAPLE_RESERVE_CODE_MAX ||
+       __maple_bridge_blob_end-__maple_bridge_blob_start!=KUI_MAPLE_BRIDGE_BYTES)
+        stopped("MAPLE OBSERVER RESERVATION REFUSED",(uint32_t)bytes);
+    memcpy(armada_maple_original_header,header,84u);memcpy(armada_maple_original_text,record,24u);
+    memcpy(armada_maple_original_code,entry,32u);
+#if KUI_ARMADA_CE_MAPLE_FENCE_STAGE
+    const void *worker=(const void *)(uintptr_t)KUI_MAPLE_WORKER_PATCH_ADDRESS;
+    if(kui_armada_ce_excerpt_crc32(worker,32u)!=KUI_MAPLE_WORKER_ORIGINAL_CRC)
+        stopped("MAPLE WORKER SOURCE CHANGED",0);
+    memcpy(armada_maple_original_worker,worker,32u);
+#endif
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    /* Exact kernel/IP admission already succeeded. All current storage is
+     * idle and this is still before NK: no background reader can contend. */
+    armada_persist_prepare();
+#endif
+    memset((void *)(uintptr_t)KUI_MAPLE_RESERVE_BEGIN,0,KUI_MAPLE_RESERVE_BYTES);
+    memcpy((void *)(uintptr_t)KUI_MAPLE_RESERVE_BEGIN,__maple_hook_blob_start,bytes);
+    if(memcmp((const void *)(uintptr_t)KUI_MAPLE_RESERVE_BEGIN,__maple_hook_blob_start,bytes))
+        stopped("MAPLE OBSERVER COPY CHANGED",0);
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    /* Use the same pre-NK P1 publication domain as zero/copy above. The
+     * existing full-RAM purge publishes these dirty lines before the relay;
+     * mixing P2 stores with a dirty P1 zero-fill here would lose the handoff. */
+    struct kui_vmu_durable_handoff *retained=(void *)(uintptr_t)(KUI_ARMADA_CE_VMU_HANDOFF_P2-0x20000000u);
+    memcpy(retained,&armada_persist_handoff,sizeof(*retained));
+    if(memcmp(retained,&armada_persist_handoff,sizeof(*retained)) ||
+       kui_vmu_persist_stage_handoff_matches(&armada_persist_profile,retained))
+        stopped("CE VMU HANDOFF COPY REFUSED",0);
+    struct kui_armada_ce_vmu_runtime_services *services=(void *)(uintptr_t)(KUI_ARMADA_CE_VMU_SERVICES_P2-0x20000000u);
+    memcpy(services,&armada_persist_services,sizeof(*services));
+    if(memcmp(services,&armada_persist_services,sizeof(*services)) ||
+       kui_armada_ce_vmu_runtime_services_validate(services))
+        stopped("CE VMU RESIDENT SERVICES COPY REFUSED",0);
+#endif
+    *(volatile uint32_t *)(uintptr_t)plan.ram_end_word=plan.ram_end;
+    for(unsigned i=0;i<84u;i++) {
+        uint8_t expected=i>=28u && i<32u ? (uint8_t)(plan.ram_end>>((i-28u)*8u)):
+            armada_maple_original_header[i];
+        if(header[i]!=expected) stopped("MAPLE RAM HEADER PATCH CHANGED",i);
+    }
+}
+static void armada_maple_hook_relay_install(void) {
+    /* Bootstrap 2 has finished; the relay already verified the complete
+     * admitted owner executable and retained reader. Caches are disabled.
+     * Reject every changed source/destination before the first code write. */
+    const volatile uint8_t *header=(const void *)(uintptr_t)(KUI_ARMADA_CE_EXCERPT_ROMHDR|0x20000000u);
+    const uint8_t *record=(const void *)(uintptr_t)(KUI_MAPLE_TEXT_RECORD|0x20000000u);
+    const uint8_t *entry=(const void *)(uintptr_t)(KUI_MAPLE_ORIGINAL_ENTRY|0x20000000u);
+    uint8_t *bridge=(void *)(uintptr_t)(KUI_MAPLE_BRIDGE_DEST|0x20000000u);
+    const uint8_t *page=(const void *)(uintptr_t)(KUI_MAPLE_RESERVE_BEGIN|0x20000000u);
+    size_t bytes=(size_t)(__maple_hook_blob_end-__maple_hook_blob_start);
+    for(unsigned i=0;i<84u;i++) {
+        uint8_t expected=i>=28u && i<32u ? (uint8_t)(KUI_MAPLE_RESERVE_BEGIN>>((i-28u)*8u)):
+            armada_maple_original_header[i];
+        if(header[i]!=expected) relay_stopped("BOOTSTRAP ALTERED MAPLE RESERVATION",i);
+    }
+    if(memcmp(record,armada_maple_original_text,24u) || memcmp(entry,armada_maple_original_code,32u) ||
+       memcmp(page,__maple_hook_blob_start,bytes)) relay_stopped("BOOTSTRAP ALTERED MAPLE SOURCE",0);
+#if KUI_ARMADA_CE_MAPLE_A2_STAGE
+    /* The retained resident initializes one explicit terminal destination
+     * before this relay. It is the only permitted nonzero BSS word; every
+     * protocol state/counter, reason, phase and stack byte is still zero. */
+    uint32_t auto_menu=*(volatile const uint32_t *)(uintptr_t)0xacfcff80u;
+    if((auto_menu&1u) || auto_menu<0x8c008300u || auto_menu>=0x8c00d800u ||
+       auto_menu!=*(volatile const uint32_t *)(uintptr_t)0xac0000e0u)
+        relay_stopped("MAPLE AUTO REPORT VECTOR CHANGED",auto_menu);
+    for(size_t i=bytes;i<KUI_MAPLE_RESERVE_BYTES;i++) {
+        size_t menu_offset=0x0cfcff80u-(KUI_MAPLE_RESERVE_BEGIN&0x1fffffffu);
+        uint8_t expected=i>=menu_offset && i<menu_offset+4u?
+            (uint8_t)(auto_menu>>((i-menu_offset)*8u)):0u;
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+        size_t handoff_offset=(KUI_ARMADA_CE_VMU_HANDOFF_P2&0x1fffffffu)-(KUI_MAPLE_RESERVE_BEGIN&0x1fffffffu);
+        if(i>=handoff_offset && i-handoff_offset<sizeof(armada_persist_handoff))
+            expected=((const uint8_t *)(const void *)&armada_persist_handoff)[i-handoff_offset];
+        size_t services_offset=(KUI_ARMADA_CE_VMU_SERVICES_P2&0x1fffffffu)-(KUI_MAPLE_RESERVE_BEGIN&0x1fffffffu);
+        if(i>=services_offset && i-services_offset<sizeof(armada_persist_services))
+            expected=((const uint8_t *)(const void *)&armada_persist_services)[i-services_offset];
+#endif
+        if(page[i]!=expected) relay_stopped("BOOTSTRAP ALTERED MAPLE PAGE",(uint32_t)i);
+    }
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    if(!armada_persist_ready || kui_vmu_persist_stage_handoff_matches(&armada_persist_profile,
+        (const void *)(uintptr_t)KUI_ARMADA_CE_VMU_HANDOFF_P2))
+        relay_stopped("BOOTSTRAP ALTERED DURABLE VMU HANDOFF",0);
+    if(kui_armada_ce_vmu_runtime_services_validate(
+        (const void *)(uintptr_t)KUI_ARMADA_CE_VMU_SERVICES_P2))
+        relay_stopped("BOOTSTRAP ALTERED DURABLE VMU SERVICES",0);
+#endif
+#else
+    for(size_t i=bytes;i<KUI_MAPLE_RESERVE_BYTES;i++) if(page[i]) relay_stopped("BOOTSTRAP ALTERED MAPLE PAGE",(uint32_t)i);
+#endif
+#if KUI_ARMADA_CE_MAPLE_FENCE_STAGE
+    uint8_t *worker=(void *)(uintptr_t)(KUI_MAPLE_WORKER_PATCH_ADDRESS|0x20000000u);
+    if(memcmp(worker,armada_maple_original_worker,32u)) relay_stopped("BOOTSTRAP ALTERED MAPLE WORKER",0);
+#endif
+    for(unsigned i=0;i<KUI_MAPLE_BRIDGE_BYTES;i++) if(bridge[i]) relay_stopped("BOOTSTRAP ALTERED MAPLE TAIL",i);
+    *(volatile uint32_t *)(uintptr_t)(KUI_MAPLE_TEXT_RECORD|0x20000000u)=KUI_MAPLE_TEXT_RESERVED_BYTES;
+    memcpy(bridge,__maple_bridge_blob_start,KUI_MAPLE_BRIDGE_BYTES);
+    for(unsigned i=0;i<24u;i++) {
+        uint8_t expected=i<4u?(uint8_t)(KUI_MAPLE_TEXT_RESERVED_BYTES>>(i*8u)):armada_maple_original_text[i];
+        if(record[i]!=expected) relay_stopped("MAPLE TEXT BOUNDS PATCH CHANGED",i);
+    }
+    if(memcmp(bridge,__maple_bridge_blob_start,KUI_MAPLE_BRIDGE_BYTES)) relay_stopped("MAPLE BRIDGE COPY CHANGED",0);
+    /* Entry publication is last. No CE instruction has run yet. Existing
+     * relay assembly invalidates caches before restoring the boot state. */
+    *(volatile uint32_t *)(uintptr_t)(KUI_MAPLE_INSTALL_ADDRESS|0x20000000u)=KUI_MAPLE_INSTALL_WORD;
+#if KUI_ARMADA_CE_MAPLE_FENCE_STAGE
+    if(kui_armada_ce_excerpt_crc32(worker,32u)!=KUI_MAPLE_WORKER_PATCHED_CRC ||
+       memcmp(worker+4u,armada_maple_original_worker+4u,28u) ||
+       memcmp(entry,armada_maple_original_code,32u)) relay_stopped("MAPLE WORKER PATCH CHANGED",0);
+#else
+    if(kui_armada_ce_excerpt_crc32(entry,32u)!=KUI_MAPLE_PATCHED_ENTRY_CRC ||
+       memcmp(entry+4u,armada_maple_original_code+4u,28u)) relay_stopped("MAPLE ENTRY PATCH CHANGED",0);
+#endif
+}
+#endif
 #if KUI_ARMADA_CE_STREAM
 /* Last initialized bytes of the independently linked high controller.
  * The package envelope authenticates the source bytes before launch; these
@@ -761,7 +990,21 @@ static uint32_t ce_load(const uint8_t *ip) {
 #endif
 #else
 #if KUI_ARMADA_CE_RAM_BIND_STAGE
+#if KUI_ARMADA_CE_MAPLE_OBSERVE
+#if KUI_ARMADA_CE_MAPLE_HOOK_STAGE
+#if KUI_ARMADA_CE_MAPLE_FENCE_STAGE
+    retail_display_line("ARMADA CE MAPLE DMA FENCE / NO VIRTUAL VMU");
+#elif KUI_ARMADA_CE_MAPLE_TRAFFIC_STAGE
+    retail_display_line("ARMADA CE MAPLE TRAFFIC / NO VIRTUAL VMU");
+#else
+    retail_display_line("ARMADA CE MAPLE COMPLETION / NO VIRTUAL VMU");
+#endif
+#else
+    retail_display_line("ARMADA CE MAPLE DISCOVERY / NO VIRTUAL VMU");
+#endif
+#else
     retail_display_line("ARMADA SOUND RAM BINDING OBSERVER");
+#endif
 #else
     retail_display_line("ARMADA AUDIO REQUEST OBSERVER");
 #endif
@@ -812,6 +1055,11 @@ static uint32_t ce_load(const uint8_t *ip) {
     if(manifest.reader==KUI_RETAIL_READER_STANDARD)
         stopped("ARMADA EXCERPT NEEDS BACKGROUND READER",manifest.reader);
     armada_excerpt_reserve();
+#endif
+#if KUI_ARMADA_CE_MAPLE_HOOK_STAGE
+    if(manifest.reader==KUI_RETAIL_READER_STANDARD)
+        stopped("MAPLE OBSERVER NEEDS BACKGROUND READER",manifest.reader);
+    armada_maple_hook_reserve();
 #endif
     return plan.body.bytes;
 }
@@ -892,8 +1140,15 @@ static void install_resident(void) {
     memcpy((void *)(uintptr_t)KUI_RETAIL_CE_KERNEL,ce_kernel,sizeof(ce_kernel));
 #endif
     kui_retail_stage_sync();
+#if KUI_VMU_NATIVE_BACKGROUND
+    typedef int (*native_background_entry)(const struct kui_retail_manifest *,
+        const struct kui_retail_storage *,uint32_t,const struct retail_display_state *,void *);
+    native_background_entry init=(native_background_entry)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
+    int initialized=init(&manifest,&card,firmware,&display,native_background_boot_region);
+#else
     kui_retail_resident_entry init=(kui_retail_resident_entry)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
     int initialized=init(&manifest,&card,firmware,&display);
+#endif
     if(initialized) stopped("RETAIL RESIDENT INIT FAILED",(uint32_t)initialized);
 }
 #if !KUI_RETAIL_ZSO
@@ -964,6 +1219,12 @@ void kui_retail_stage_main(const uint8_t *wire) {
     if(!kui_retail_observe_admit(&manifest)) stopped("14 TOY SCI MAP REFUSED",manifest.gdi_crc32);
     retail_display_line("14 TOY RESOURCE OBSERVATION / NO CDDA");
 #endif
+#if KUI_NATIVE_STANDALONE_READER
+    if(!kui_native_standalone_launch_prepare(&manifest))
+        stopped("DOA2 PILOT NEEDS SCI AND BACKGROUND OFF",manifest.reader);
+    retail_display_line("DOA2 NEW STANDALONE DEMAND READER");
+    retail_display_line("NO VIRTUAL VMU / NO GAME RAM RESERVATION");
+#endif
     select_resident();
     if(manifest.boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES ||
        manifest.boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES ||
@@ -977,7 +1238,13 @@ void kui_retail_stage_main(const uint8_t *wire) {
 #else
     if(manifest.reader!=KUI_RETAIL_READER_STANDARD)
         retail_display_line(manifest.reader==KUI_RETAIL_READER_ASYNC_EAGER?
+#if KUI_NATIVE_STANDALONE_READER
+            "UNSUPPORTED STANDALONE VARIANT":"NEW SDK SCI DEMAND DELIVERY");
+#elif KUI_NATIVE_DUAL_READERS
+            "BACKGROUND Y - LEGACY / 25":"BACKGROUND X - SDK SCI / PIO CACHE");
+#else
             "BACKGROUND READER Y - 25 PER CALL":"BACKGROUND READER X - 20 PER CALL");
+#endif
 #endif
     last_card_result=kui_retail_storage_init(&card,manifest.storage_transport);
     if(last_card_result!=KUI_LOADER_SD_OK) {
@@ -1060,6 +1327,9 @@ void kui_retail_stage_main(const uint8_t *wire) {
         stopped("SCRAMBLED WINDOWS CE BOOT IS UNSUPPORTED",0);
 #endif
     boot_crc=kui_retail_crc32(0,boot,exec_bytes);
+#if KUI_NATIVE_STANDALONE_READER
+    standalone_source_check();
+#endif
     if((size_t)(__retail_trampoline_end-__retail_trampoline_start)!=sizeof(original_entry))
         stopped("INVALID ENTRY TRAMPOLINE",0);
     memcpy(original_entry,boot,ENTRY_PATCH_BYTES);
@@ -1900,6 +2170,9 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     memcpy(boot,original_entry,ENTRY_PATCH_BYTES);
     uint32_t crc=kui_retail_crc32(0,boot,exec_bytes);
     if(crc!=boot_crc) relay_stopped("BOOTSTRAP ALTERED EXECUTABLE",crc);
+#if KUI_NATIVE_STAGE_FAST_CRC
+    retail_display_line("ENTIRE EXECUTABLE VERIFIED");
+#endif
     const uint8_t *resident=(const uint8_t *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS;
     size_t bytes=resident_bytes;
 #ifdef KUI_RETAIL_CE
@@ -1915,6 +2188,13 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
         /* Detail: the offset of the first changed byte. */
         if(resident[i]!=resident_blob[i]) relay_stopped("BOOTSTRAP ALTERED RESIDENT",(uint32_t)i);
     }
+#if KUI_NATIVE_STAGE_FAST_CRC
+    retail_display_line("ENTIRE RESIDENT VERIFIED");
+#endif
+#if KUI_NATIVE_STANDALONE_READER
+    standalone_source_check();
+    standalone_source_publish();
+#endif
 #if KUI_ARMADA_CE_RAM_BIND_STAGE
     /* Bootstrap 2 has completed; caches are clean and disabled here. Prove
      * both the extra code and cleared state survived before the first CE
@@ -1934,6 +2214,9 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #endif
 #if KUI_ARMADA_CE_EXCERPT_STAGE
     armada_excerpt_relay_check();
+#endif
+#if KUI_ARMADA_CE_MAPLE_HOOK_STAGE
+    armada_maple_hook_relay_install();
 #endif
 #if KUI_ARMADA_CE_STREAM
     /* Every bootstrap, immutable controller, zero state and source-pool

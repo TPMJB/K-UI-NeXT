@@ -1,0 +1,224 @@
+{
+  "schema": "kui-native-sdk-family-corpus-v1",
+  "date": "2026-10-22",
+  "scope": "Immutable executable checks and independent host SH/live-state models only. No new console compatibility or save-persistence claim.",
+  "guard_policy": "Cached static metadata never grants live memory, lease, lifetime, hook or storage authority. Existing live image-overlap refusals remain active.",
+  "verification": {
+    "layout_asan_ubsan_checks": 4745,
+    "heap_asan_ubsan_checks": 10033,
+    "exit_asan_ubsan_checks": 6493,
+    "retail_code_embedded": false
+  },
+  "inputs": [
+    {
+      "input": "ps2",
+      "title": "PS2 owner startup (existing hardware-tested input)",
+      "executable_bytes": 3097497,
+      "sha256": "a3dcd09a96045839dbbc35697eb4336e4eba79b52203a46bb2f8ee9a4ba2eed8",
+      "immutable_checks": {
+        "driver": true,
+        "layout": true,
+        "allocator": true,
+        "allocator_result": 1,
+        "allocator_call": true,
+        "terminal_exits": true,
+        "combined_patch_interiors": true
+      },
+      "complete_immutable_resolution": true,
+      "independent_transport_model": "passed",
+      "live_layout_binding_model": "passed",
+      "persistent_console_test_candidate": true,
+      "reasons": [
+        "Existing pointer-array SDK initializer: 12 immutable input pointers/indices, 24 nonzero RX slots.",
+        "Independent SH argument transport and live layout binding pass; preserve existing hardware baseline."
+      ]
+    },
+    {
+      "input": "skies",
+      "title": "Skies of Arcadia",
+      "executable_bytes": 5460080,
+      "sha256": "4218c07829d63080be2da86413ec023e6d77001c13a1494648db6e2e5cb73611",
+      "immutable_checks": {
+        "driver": true,
+        "layout": true,
+        "allocator": true,
+        "allocator_result": 1,
+        "allocator_call": true,
+        "terminal_exits": true,
+        "combined_patch_interiors": true
+      },
+      "complete_immutable_resolution": true,
+      "independent_transport_model": "passed",
+      "live_layout_binding_model": "passed",
+      "persistent_console_test_candidate": true,
+      "reasons": [
+        "Contiguous SDK initializer and original IRQ register allocation; all 48 RX slots reconstructed.",
+        "BSS-tail allocator argument expression and PVR compact terminal family pass.",
+        "Independent SH argument transport and live layout binding pass; new hardware test required."
+      ]
+    },
+    {
+      "input": "sa2",
+      "title": "Sonic Adventure 2",
+      "executable_bytes": 1578116,
+      "sha256": "6919ed8bc96782d041be41ba86f90bf86d99632b8b7787391969721bc0991736",
+      "immutable_checks": {
+        "driver": true,
+        "layout": true,
+        "allocator": true,
+        "allocator_result": 1,
+        "allocator_call": true,
+        "terminal_exits": true,
+        "combined_patch_interiors": true
+      },
+      "complete_immutable_resolution": true,
+      "independent_transport_model": "passed",
+      "live_layout_binding_model": "passed",
+      "persistent_console_test_candidate": true,
+      "reasons": [
+        "Contiguous SDK initializer and alternate IRQ register allocation; all 48 RX slots reconstructed.",
+        "Fixed four-MiB allocator expression and PVR-clear terminal family pass.",
+        "Independent SH argument transport and live layout binding pass; new hardware test required."
+      ]
+    },
+    {
+      "input": "recv",
+      "title": "Resident Evil Code: Veronica",
+      "executable_bytes": 3915142,
+      "sha256": "199b72af9bcd7fb80d401d4645c731e595970a0dcbcfd98e1bec187f4382fbbb",
+      "immutable_checks": {
+        "driver": true,
+        "layout": true,
+        "allocator": true,
+        "allocator_result": 1,
+        "allocator_call": true,
+        "terminal_exits": true,
+        "combined_patch_interiors": true
+      },
+      "complete_immutable_resolution": true,
+      "independent_transport_model": "passed",
+      "live_layout_binding_model": "refused_image_overlap",
+      "persistent_console_test_candidate": false,
+      "reasons": [
+        "Immutable SDK resolution passes, including known stack spill in allocator argument expression and pair-only terminal family.",
+        "Independent SH transport reconstructs the expected 48 RX slots, but live binding rejects buffers overlapping the loaded executable.",
+        "RX 0xac308e00 and TX 0xac314e20 lie inside loaded image 0x8c010000 + 0x003bbd86; preserve this refusal."
+      ]
+    },
+    {
+      "input": "grandia2",
+      "title": "Grandia II",
+      "executable_bytes": 1279172,
+      "sha256": "dd583571969d275b479e33edfd98ed5e2097d16c37ff6aaba59a7abaf057dc45",
+      "immutable_checks": {
+        "driver": true,
+        "layout": true,
+        "allocator": false,
+        "allocator_result": -2,
+        "allocator_call": false,
+        "terminal_exits": true,
+        "combined_patch_interiors": false
+      },
+      "complete_immutable_resolution": false,
+      "independent_transport_model": "not_run_after_static_refusal",
+      "live_layout_binding_model": "not_run_after_static_refusal",
+      "persistent_console_test_candidate": false,
+      "reasons": [
+        "Layout and pair-only terminal family resolve.",
+        "Allocator discovery is ambiguous; no initializer hook or persistent admission."
+      ]
+    },
+    {
+      "input": "pso",
+      "title": "Phantasy Star Online",
+      "executable_bytes": 3783264,
+      "sha256": "11dc59ee0278675decf5e0bf1fa30646f889a0e5a7f10251f3c3a697e42a28e5",
+      "immutable_checks": {
+        "driver": true,
+        "layout": false,
+        "allocator": true,
+        "allocator_result": 1,
+        "allocator_call": false,
+        "terminal_exits": false,
+        "combined_patch_interiors": false
+      },
+      "complete_immutable_resolution": false,
+      "independent_transport_model": "not_run_after_static_refusal",
+      "live_layout_binding_model": "not_run_after_static_refusal",
+      "persistent_console_test_candidate": false,
+      "reasons": [
+        "Contiguous initializer exists, but reviewed root-call provenance does not resolve.",
+        "An additional real startup bootstrap consumer requires a fourth terminal interception; current adapter refuses it."
+      ]
+    },
+    {
+      "input": "ct2",
+      "title": "Crazy Taxi 2",
+      "executable_bytes": 1452148,
+      "sha256": "8057a8e37636ad78b1fc70ee590bd314686546b13ffe100623d86b572aec53c1",
+      "immutable_checks": {
+        "driver": true,
+        "layout": false,
+        "allocator": true,
+        "allocator_result": 1,
+        "allocator_call": false,
+        "terminal_exits": true,
+        "combined_patch_interiors": false
+      },
+      "complete_immutable_resolution": false,
+      "independent_transport_model": "not_run_after_static_refusal",
+      "live_layout_binding_model": "not_run_after_static_refusal",
+      "persistent_console_test_candidate": false,
+      "reasons": [
+        "Allocator family exists without a unique immutable initializer pointer slot.",
+        "Reviewed root-call layout provenance does not resolve; terminal family alone is insufficient."
+      ]
+    },
+    {
+      "input": "evolution2",
+      "title": "Evolution 2",
+      "executable_bytes": 4057056,
+      "sha256": "16b45fcc84992a60d5a64bf64bf22b699b27306b95f177ba3d9730ca380069ae",
+      "immutable_checks": {
+        "driver": true,
+        "layout": false,
+        "allocator": true,
+        "allocator_result": 1,
+        "allocator_call": true,
+        "terminal_exits": false,
+        "combined_patch_interiors": false
+      },
+      "complete_immutable_resolution": false,
+      "independent_transport_model": "not_run_after_static_refusal",
+      "live_layout_binding_model": "not_run_after_static_refusal",
+      "persistent_console_test_candidate": false,
+      "reasons": [
+        "Allocator expression resolves.",
+        "TMU callback family does not resolve; additional real BIOS-vector consumers exceed current terminal adapter."
+      ]
+    },
+    {
+      "input": "soulreaver",
+      "title": "Soul Reaver",
+      "executable_bytes": 3455844,
+      "sha256": "775dc1d401c907f44ce1754017150e9b333dcccf32f563ed69cb4d7be8cb25d9",
+      "immutable_checks": {
+        "driver": true,
+        "layout": false,
+        "allocator": false,
+        "allocator_result": 0,
+        "allocator_call": false,
+        "terminal_exits": false,
+        "combined_patch_interiors": false
+      },
+      "complete_immutable_resolution": false,
+      "independent_transport_model": "not_run_after_static_refusal",
+      "live_layout_binding_model": "not_run_after_static_refusal",
+      "persistent_console_test_candidate": false,
+      "reasons": [
+        "Reviewed allocator and fixed initializer variants do not resolve.",
+        "Its two short terminal entries are eight bytes apart, so independent 12-byte patch windows would overlap."
+      ]
+    }
+  ]
+}

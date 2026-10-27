@@ -1,0 +1,29 @@
+{
+  "schema": "kui.native.evolution1.maple-delay-console-followup.v1",
+  "runtime_source_commit": "1b2d79400abda31e43368feab245dd83c1385dfb",
+  "delivery_source_commit": "d9984fc1a5a8c8f9921288c84b3207ab4eebcf6d",
+  "archive_sha256": "ccceb1172ee21107b00a619e28bbc28245417c3074103821bb5492ffdc7414f8",
+  "owner_report": "It does not work now",
+  "clarifying_answer": "Same black screen",
+  "reported_result": "FAIL at the original black-screen transition, not CLOCK REFUSED",
+  "control": {
+    "new_demand_reader": true,
+    "virtual_vmu": false,
+    "controller_prefetch_tick": false,
+    "real_maple_submit_and_completion_c_calls": false,
+    "bounded_read_only_tmu0_delay_ticks": [59, 76],
+    "admitted_clock_hz": 781250,
+    "gateway_frame_mask_stack_restore_and_forwarding": "retained"
+  },
+  "comparison": {
+    "cec542_callback_bypass_without_delays": "Owner confirmed two passes",
+    "1b2d_same_bypass_with_delays": "Owner confirmed the same black-screen failure"
+  },
+  "conclusion": "Adding bounded callback-site work reproduces the original transition failure without the real Maple packet/VMU callback logic. This strongly supports sensitivity to occupation of the masked interrupt path.",
+  "limits": [
+    "The delay helpers also have a small C stack, code and read-only timer access footprint; no exact hardware deadline or single defective instruction is proved.",
+    "59/76 ticks are PROFILE reference waits, not exact NORMAL callback durations; profile validation and gateway overhead add time.",
+    "The result does not establish that earlier packet-chain side effects are impossible or that New plus virtual VMU has passed hardware."
+  ],
+  "next_candidate": "Restore real Maple callbacks and virtual A2 with prefetch still off. Reduce uncached reads of immutable expected metadata through whole-cache-line-isolated read-only P1 views, retaining canonical P2 ownership/control checks and every live SDK/heap/packet/MMIO witness. Publish only after lazy runtime/plan preparation finishes."
+}

@@ -1,0 +1,1145 @@
+{
+  "schema": "kui.native.priority7.console-evidence.v1",
+  "date": "2026-10-24",
+  "capture": {
+    "build": "302f73152e4b",
+    "source_commit": "302f73152e4b9058183ebb286439108eb3d5ba2f",
+    "reader": "native hybrid loader timeline, original SCI priority1",
+    "console_performance_verified": false,
+    "user_observation": "Prior user report: movement stopped about one second every five seconds while music continued. The new video records diagnostic pages after the intentional stop; its accompanying message does not separately report gameplay performance of build302f73152e4b.",
+    "video": {
+      "filename": "63344.mp4",
+      "sha256": "4713e49a7c785d95ce8e5a4ec5c39c1aa0a54108018f108a5e9ce680f80a27b2",
+      "bytes": 97326541,
+      "duration_seconds": 91.545489,
+      "video_dimensions": [
+        1280,
+        720
+      ],
+      "extraction_command": "ffmpeg -i 63344.mp4 -vf fps=1/3 frames/page-%02d.png",
+      "selected_frames": [
+        {
+          "page": 4,
+          "filename": "page-04.png",
+          "sha256": "1dcd8267f07b49553f7c675b1f2176b8c74bb0e3350fae83ee73d5a7ba91e392",
+          "source_pts": 942682,
+          "source_time_base": "1/90000",
+          "source_seconds": 10.474244444444444,
+          "fps_output_grid_seconds": 9
+        },
+        {
+          "page": 5,
+          "filename": "page-05.png",
+          "sha256": "5b0d44f0585b136db4098ff4562999ffad2d686369459b9e7183f3acb3a3be5d",
+          "source_pts": 1212912,
+          "source_time_base": "1/90000",
+          "source_seconds": 13.4768,
+          "fps_output_grid_seconds": 12
+        },
+        {
+          "page": 7,
+          "filename": "page-07.png",
+          "sha256": "da37f9c3575da4e4dfcdbf8ef55f47b920a139ae5b55054fa7ba464a35663d0d",
+          "source_pts": 1753399,
+          "source_time_base": "1/90000",
+          "source_seconds": 19.482211111111113,
+          "fps_output_grid_seconds": 18
+        },
+        {
+          "page": 8,
+          "filename": "page-08.png",
+          "sha256": "44e272e10de5b2b1b1b472341008c204f5fd27e8c8d77ccc4ee51f7e33a20ed3",
+          "source_pts": 2023638,
+          "source_time_base": "1/90000",
+          "source_seconds": 22.484866666666665,
+          "fps_output_grid_seconds": 21
+        },
+        {
+          "page": 9,
+          "filename": "page-09.png",
+          "sha256": "f48e830700d59a345f8229a168e04f2de8c126fe339bfe99ef6e4e4812f859d2",
+          "source_pts": 2293875,
+          "source_time_base": "1/90000",
+          "source_seconds": 25.4875,
+          "fps_output_grid_seconds": 24
+        },
+        {
+          "page": 11,
+          "filename": "page-11.png",
+          "sha256": "1da2e55650543754e7a407207c67e875365cf9e371520a237c3d0b24f074c17d",
+          "source_pts": 2834356,
+          "source_time_base": "1/90000",
+          "source_seconds": 31.492844444444444,
+          "fps_output_grid_seconds": 30
+        },
+        {
+          "page": 12,
+          "filename": "page-12.png",
+          "sha256": "55666283b05338b25ce213b7b78c937f74e84036a8e9f72f891a77d1369c0b6d",
+          "source_pts": 3104595,
+          "source_time_base": "1/90000",
+          "source_seconds": 34.4955,
+          "fps_output_grid_seconds": 33
+        },
+        {
+          "page": 13,
+          "filename": "page-13.png",
+          "sha256": "460020b092e287d39ee20ddc1046add383d93a7c70a27bafe6c8b430ccba5aa7",
+          "source_pts": 3374818,
+          "source_time_base": "1/90000",
+          "source_seconds": 37.49797777777778,
+          "fps_output_grid_seconds": 36
+        },
+        {
+          "page": 15,
+          "filename": "page-15.png",
+          "sha256": "951857901c0b5ecb95a5faf3933d76a0054bc75fcc896c787de3c3bfc35b42e3",
+          "source_pts": 3912286,
+          "source_time_base": "1/90000",
+          "source_seconds": 43.46984444444445,
+          "fps_output_grid_seconds": 42
+        },
+        {
+          "page": 18,
+          "filename": "page-18.png",
+          "sha256": "dc85a718566ef9b4356be0d80e6e12e54bb9b25cdb09f8b27e26761e38301b53",
+          "source_pts": 4722993,
+          "source_time_base": "1/90000",
+          "source_seconds": 52.4777,
+          "fps_output_grid_seconds": 51
+        }
+      ],
+      "timestamp_validation": "Input PTS recovered from ffmpeg fps debug selections, time_base verified with ffprobe. The first eight selected source frames were decoded again with select=eq(pts,...) and matched the saved PNG RGB pixels exactly. Output fps-grid timestamps differ from selected original source PTS."
+    },
+    "raw_hex": {
+      "summary_page04": {
+        "events_valid_bad_epoch": [
+          "00002076",
+          "00002076",
+          "00000000",
+          "00000001"
+        ],
+        "clockbreak_unmatched_overflow_saturated": [
+          "00000000",
+          "00000000",
+          "00000000",
+          "00000000"
+        ],
+        "max_call_max_gap_max_chain_length": [
+          "000014EF",
+          "000032CF",
+          "00000001"
+        ],
+        "max_chain_ticks_inside_ticks": [
+          "0001BA9A",
+          "00015D15"
+        ],
+        "active_token_lba_sectors_flags": [
+          "00000000",
+          "0004E8A0",
+          "00000032",
+          "00000000"
+        ],
+        "stored_calls_requests_bins": [
+          "00000008",
+          "00000008",
+          "00000020"
+        ]
+      },
+      "bin_fields": [
+        "index",
+        "epoch",
+        "gd_ticks",
+        "calls",
+        "maples"
+      ],
+      "bins_pages05_07_08": [
+        [
+          "00000000",
+          "00000001",
+          "00016183",
+          "0000006B",
+          "00000026"
+        ],
+        [
+          "00000001",
+          "00000001",
+          "0000083B",
+          "00000072",
+          "00000025"
+        ],
+        [
+          "00000002",
+          "00000001",
+          "000007F9",
+          "0000006E",
+          "00000026"
+        ],
+        [
+          "00000003",
+          "00000001",
+          "00000830",
+          "00000072",
+          "00000026"
+        ],
+        [
+          "00000004",
+          "00000001",
+          "00000815",
+          "00000070",
+          "00000025"
+        ],
+        [
+          "00000005",
+          "00000001",
+          "0000F60E",
+          "0000006E",
+          "00000026"
+        ],
+        [
+          "00000006",
+          "00000001",
+          "000007EC",
+          "0000006E",
+          "00000025"
+        ],
+        [
+          "00000007",
+          "00000001",
+          "0000083B",
+          "00000072",
+          "00000026"
+        ],
+        [
+          "00000008",
+          "00000001",
+          "000162AA",
+          "00000068",
+          "00000025"
+        ],
+        [
+          "00000009",
+          "00000001",
+          "00000825",
+          "00000071",
+          "00000026"
+        ],
+        [
+          "0000000A",
+          "00000001",
+          "0000083F",
+          "00000072",
+          "00000025"
+        ],
+        [
+          "0000000B",
+          "00000001",
+          "00000813",
+          "00000070",
+          "00000026"
+        ],
+        [
+          "0000000C",
+          "00000001",
+          "00000838",
+          "00000072",
+          "00000026"
+        ],
+        [
+          "0000000D",
+          "00000001",
+          "0000F617",
+          "0000006A",
+          "00000025"
+        ],
+        [
+          "0000000E",
+          "00000001",
+          "00000841",
+          "00000072",
+          "00000026"
+        ],
+        [
+          "0000000F",
+          "00000001",
+          "0000081A",
+          "00000070",
+          "00000025"
+        ],
+        [
+          "00000010",
+          "00000001",
+          "00016356",
+          "00000069",
+          "00000026"
+        ],
+        [
+          "00000011",
+          "00000001",
+          "00000838",
+          "00000072",
+          "00000025"
+        ],
+        [
+          "00000012",
+          "00000001",
+          "00000818",
+          "00000070",
+          "00000026"
+        ],
+        [
+          "00000013",
+          "00000001",
+          "0000083F",
+          "00000072",
+          "00000025"
+        ],
+        [
+          "00000014",
+          "00000001",
+          "000007F5",
+          "0000006E",
+          "00000026"
+        ],
+        [
+          "00000015",
+          "00000001",
+          "0000F6B6",
+          "0000006E",
+          "00000026"
+        ],
+        [
+          "00000016",
+          "00000001",
+          "0000081C",
+          "00000070",
+          "00000025"
+        ],
+        [
+          "00000017",
+          "00000001",
+          "00000836",
+          "00000072",
+          "00000026"
+        ],
+        [
+          "00000018",
+          "00000001",
+          "00016339",
+          "00000068",
+          "00000025"
+        ],
+        [
+          "00000019",
+          "00000001",
+          "00000833",
+          "00000072",
+          "00000026"
+        ],
+        [
+          "0000001A",
+          "00000001",
+          "00000834",
+          "00000072",
+          "00000025"
+        ],
+        [
+          "0000001B",
+          "00000001",
+          "0000081A",
+          "00000070",
+          "00000026"
+        ],
+        [
+          "0000001C",
+          "00000001",
+          "00000838",
+          "00000072",
+          "00000025"
+        ],
+        [
+          "0000001D",
+          "00000001",
+          "0000F665",
+          "0000006A",
+          "00000026"
+        ],
+        [
+          "0000001E",
+          "00000001",
+          "00000840",
+          "00000072",
+          "00000026"
+        ],
+        [
+          "0000001F",
+          "00000001",
+          "000007A8",
+          "0000006A",
+          "00000023"
+        ]
+      ],
+      "long_call_row_fields": [
+        [
+          "elapsed",
+          "preceding_gap",
+          "epoch",
+          "entry_tick",
+          "entry_flags"
+        ],
+        [
+          "entry_function",
+          "previous_status",
+          "token",
+          "lba",
+          "sectors"
+        ],
+        [
+          "entry_completed_bytes",
+          "original_sr",
+          "entry_vbr",
+          "entry_iprb",
+          "entry_chcr"
+        ],
+        [
+          "entry_dma_tcr",
+          "entry_dmaor",
+          "entry_sci_ssr",
+          "entry_packed_state",
+          "exit_tick"
+        ],
+        [
+          "exit_flags",
+          "exit_function",
+          "actual_gd_result",
+          "exit_token",
+          "exit_lba"
+        ],
+        [
+          "exit_sectors",
+          "exit_completed_bytes",
+          "original_sr",
+          "exit_vbr",
+          "exit_iprb"
+        ],
+        [
+          "exit_chcr",
+          "exit_dma_tcr",
+          "exit_dmaor",
+          "exit_sci_ssr",
+          "exit_packed_state"
+        ]
+      ],
+      "longest_calls_pages09_11": [
+        {
+          "rank": 0,
+          "rows": [
+            [
+              "000014EF",
+              "00000905",
+              "00000001",
+              "FD5C3ED3",
+              "00000D01"
+            ],
+            [
+              "00000002",
+              "00000001",
+              "000006A5",
+              "0004E761",
+              "00000049"
+            ],
+            [
+              "00013800",
+              "60000160",
+              "8C00F400",
+              "00000010",
+              "00004911"
+            ],
+            [
+              "00000129",
+              "00008201",
+              "000000A4",
+              "00110702",
+              "FD5C29E4"
+            ],
+            [
+              "00000D02",
+              "00000002",
+              "00000000",
+              "000006A5",
+              "0004E761"
+            ],
+            [
+              "00000049",
+              "00015800",
+              "60000160",
+              "8CFF0300",
+              "00000010"
+            ],
+            [
+              "00004911",
+              "0000015D",
+              "00008201",
+              "00000086",
+              "00110F02"
+            ]
+          ]
+        },
+        {
+          "rank": 1,
+          "rows": [
+            [
+              "000014ED",
+              "000008D3",
+              "00000001",
+              "FD1FBD22",
+              "00000D01"
+            ],
+            [
+              "00000002",
+              "00000001",
+              "00000738",
+              "0004E7DC",
+              "00000049"
+            ],
+            [
+              "00013800",
+              "60000160",
+              "8C00F400",
+              "00000010",
+              "00004911"
+            ],
+            [
+              "0000012A",
+              "00008201",
+              "000000A4",
+              "00110702",
+              "FD1FA835"
+            ],
+            [
+              "00000D02",
+              "00000002",
+              "00000000",
+              "00000738",
+              "0004E7DC"
+            ],
+            [
+              "00000049",
+              "00015800",
+              "60000160",
+              "8CFF0300",
+              "00000010"
+            ],
+            [
+              "00004911",
+              "0000015F",
+              "00008201",
+              "00000086",
+              "00110F02"
+            ]
+          ]
+        },
+        {
+          "rank": 2,
+          "rows": [
+            [
+              "000014ED",
+              "000008D5",
+              "00000001",
+              "FCE36E1E",
+              "00000D01"
+            ],
+            [
+              "00000002",
+              "00000001",
+              "000007CA",
+              "0004E857",
+              "00000049"
+            ],
+            [
+              "00013800",
+              "60000160",
+              "8C00F400",
+              "00000010",
+              "00004911"
+            ],
+            [
+              "00000129",
+              "00008201",
+              "000000A6",
+              "00110702",
+              "FCE35931"
+            ],
+            [
+              "00000D02",
+              "00000002",
+              "00000000",
+              "000007CA",
+              "0004E857"
+            ],
+            [
+              "00000049",
+              "00015800",
+              "60000160",
+              "8CFF0300",
+              "00000010"
+            ],
+            [
+              "00004911",
+              "0000015D",
+              "00008201",
+              "00000084",
+              "00110F02"
+            ]
+          ]
+        },
+        {
+          "rank": 3,
+          "rows": [
+            [
+              "000014ED",
+              "00000906",
+              "00000001",
+              "FCE2D5A9",
+              "00000D01"
+            ],
+            [
+              "00000002",
+              "00000001",
+              "000007CA",
+              "0004E857",
+              "00000049"
+            ],
+            [
+              "00020800",
+              "60000160",
+              "8C00F400",
+              "00000010",
+              "00004911"
+            ],
+            [
+              "00000126",
+              "00008201",
+              "000000A6",
+              "00110702",
+              "FCE2C0BC"
+            ],
+            [
+              "00000D02",
+              "00000002",
+              "00000000",
+              "000007CA",
+              "0004E857"
+            ],
+            [
+              "00000049",
+              "00022800",
+              "60000160",
+              "8CFF0300",
+              "00000010"
+            ],
+            [
+              "00004911",
+              "0000015D",
+              "00008201",
+              "00000086",
+              "00110F02"
+            ]
+          ]
+        }
+      ],
+      "request_row_fields": [
+        [
+          "token",
+          "lba",
+          "sectors",
+          "total_ticks"
+        ],
+        [
+          "inside_gd_ticks",
+          "outside_gd_ticks",
+          "paired_calls",
+          "completed_bytes"
+        ],
+        [
+          "epoch",
+          "flags",
+          "chain_length",
+          "chain_ticks"
+        ]
+      ],
+      "recent_eight_reads_pages12_13": [
+        [
+          [
+            "00000612",
+            "0004E6E6",
+            "00000049",
+            "0001B9FE"
+          ],
+          [
+            "00015B1F",
+            "00005EDF",
+            "00000012",
+            "00024800"
+          ],
+          [
+            "00000001",
+            "00000000",
+            "00000001",
+            "0001B9FE"
+          ]
+        ],
+        [
+          [
+            "00000669",
+            "0004E72F",
+            "00000032",
+            "000133C2"
+          ],
+          [
+            "0000EF13",
+            "000044AF",
+            "0000000D",
+            "00019000"
+          ],
+          [
+            "00000001",
+            "00000000",
+            "00000001",
+            "000133C2"
+          ]
+        ],
+        [
+          [
+            "000006A5",
+            "0004E761",
+            "00000049",
+            "0001BA94"
+          ],
+          [
+            "00015C74",
+            "00005E20",
+            "00000012",
+            "00024800"
+          ],
+          [
+            "00000001",
+            "00000000",
+            "00000001",
+            "0001BA94"
+          ]
+        ],
+        [
+          [
+            "000006FC",
+            "0004E7AA",
+            "00000032",
+            "000133C3"
+          ],
+          [
+            "0000EF69",
+            "0000445A",
+            "0000000D",
+            "00019000"
+          ],
+          [
+            "00000001",
+            "00000000",
+            "00000001",
+            "000133C3"
+          ]
+        ],
+        [
+          [
+            "00000738",
+            "0004E7DC",
+            "00000049",
+            "0001BA9A"
+          ],
+          [
+            "00015D15",
+            "00005D85",
+            "00000012",
+            "00024800"
+          ],
+          [
+            "00000001",
+            "00000000",
+            "00000001",
+            "0001BA9A"
+          ]
+        ],
+        [
+          [
+            "0000078E",
+            "0004E825",
+            "00000032",
+            "000133C2"
+          ],
+          [
+            "0000EFB8",
+            "0000440A",
+            "0000000D",
+            "00019000"
+          ],
+          [
+            "00000001",
+            "00000000",
+            "00000001",
+            "000133C2"
+          ]
+        ],
+        [
+          [
+            "000007CA",
+            "0004E857",
+            "00000049",
+            "0001BA95"
+          ],
+          [
+            "00015D09",
+            "00005D8C",
+            "00000012",
+            "00024800"
+          ],
+          [
+            "00000001",
+            "00000000",
+            "00000001",
+            "0001BA95"
+          ]
+        ],
+        [
+          [
+            "00000821",
+            "0004E8A0",
+            "00000032",
+            "0001338C"
+          ],
+          [
+            "0000EFB4",
+            "000043D8",
+            "0000000D",
+            "00019000"
+          ],
+          [
+            "00000001",
+            "00000000",
+            "00000001",
+            "0001338C"
+          ]
+        ]
+      ],
+      "vmu_page15": {
+        "submit_calls_valid_bad_total_max": [
+          "000004B0",
+          "000004B0",
+          "00000000",
+          "0000BCA7",
+          "00000048"
+        ],
+        "complete_calls_valid_bad_total_max": [
+          "000004B0",
+          "000004B0",
+          "00000000",
+          "0000C2C0",
+          "00000041"
+        ],
+        "free_calls_valid_bad_total_max": [
+          "00000000",
+          "00000000",
+          "00000000",
+          "00000000",
+          "00000000"
+        ],
+        "storage_calls_valid_bad_total_max": [
+          "00000000",
+          "00000000",
+          "00000000",
+          "00000000",
+          "00000000"
+        ],
+        "wall_ticks_clock_samples_bad_flags": [
+          "00EDE723",
+          "000012C0",
+          "00000000",
+          "00000000"
+        ],
+        "fastsub_fullsub_fastend_fullend": [
+          "000004B0",
+          "00000000",
+          "000004B0",
+          "00000000"
+        ]
+      },
+      "reader_page18": {
+        "samples_bad_gapmax_readmax_agemax": [
+          "000004B0",
+          "00000000",
+          "000047A9",
+          "0001BA77",
+          "0001BE05"
+        ],
+        "irqblocks_callblocks_piocrc_tokenerr": [
+          "00000000",
+          "000008D8",
+          "00000000",
+          "00000000"
+        ],
+        "foreign_repairs_overrun_deferred_clockbad": [
+          "00000000",
+          "00000030",
+          "00000000",
+          "00000000",
+          "00000000"
+        ],
+        "sci_level_rearms_irq_entries": [
+          "00000000",
+          "00000000"
+        ],
+        "rehook_r100_r400_r600_vbrtotal": [
+          "00000000",
+          "00000000",
+          "00000000",
+          "00000000",
+          "00000000"
+        ],
+        "longest_read_lba_sectors": [
+          "0004E7DC",
+          "00000049"
+        ]
+      }
+    },
+    "derived": {
+      "clock_hz": 781250,
+      "bins": 32,
+      "bin_ticks": 488281,
+      "nominal_bin_seconds": 0.62499968,
+      "nominal_32_bin_seconds": 19.99998976,
+      "last_bin_is_partially_occupied": true,
+      "sum_gd_ticks": 665373,
+      "sum_gd_ticks_hex": "000A271D",
+      "sum_gd_seconds": 0.85167744,
+      "sum_paired_calls": 3555,
+      "sum_maples": 1200,
+      "event_identity": {
+        "formula": "2 * paired GD calls + Maple events",
+        "computed": 8310,
+        "reported": 8310,
+        "equal": true
+      },
+      "gd_fraction_of_nominal_32_bins": 0.042583893802953625,
+      "profile_wall_ticks": 15591203,
+      "profile_wall_seconds": 19.95673984,
+      "gd_fraction_of_profile_wall_approximately_same_capture_window": 0.04267618092074101,
+      "max_gd_call_ms": 6.85952,
+      "max_between_gd_calls_ms": 16.64896,
+      "four_longest_call_ms": [
+        6.85952,
+        6.85696,
+        6.85696,
+        6.85696
+      ],
+      "four_longest_preceding_gaps_ms": [
+        2.95552,
+        2.89152,
+        2.89408,
+        2.9568
+      ],
+      "max_chain_length": 1,
+      "max_chain_ms": 145.03168,
+      "inside_gd_for_max_chain_ms": 114.3872,
+      "outside_gd_for_max_chain_ms": 30.64448,
+      "chain_proximity_threshold_ms": 33.33376,
+      "primary_peak_bin_indices": [
+        0,
+        8,
+        16,
+        24
+      ],
+      "primary_peak_bin_gd_ms": [
+        115.83872,
+        116.21632,
+        116.43648,
+        116.39936
+      ],
+      "secondary_peak_bin_indices": [
+        5,
+        13,
+        21,
+        29
+      ],
+      "secondary_peak_bin_gd_ms": [
+        80.6272,
+        80.63872,
+        80.84224,
+        80.73856
+      ],
+      "peak_recurrence_seconds": 4.99999744,
+      "read_summaries": [
+        {
+          "token_hex": "00000612",
+          "lba_hex": "0004E6E6",
+          "sectors": 73,
+          "total_ms": 144.832,
+          "inside_gd_ms": 113.74464,
+          "outside_gd_ms": 31.08736,
+          "paired_calls": 18,
+          "completed_bytes": 149504,
+          "chain_length": 1
+        },
+        {
+          "token_hex": "00000669",
+          "lba_hex": "0004E72F",
+          "sectors": 50,
+          "total_ms": 100.84608,
+          "inside_gd_ms": 78.33984,
+          "outside_gd_ms": 22.50624,
+          "paired_calls": 13,
+          "completed_bytes": 102400,
+          "chain_length": 1
+        },
+        {
+          "token_hex": "000006A5",
+          "lba_hex": "0004E761",
+          "sectors": 73,
+          "total_ms": 145.024,
+          "inside_gd_ms": 114.18112,
+          "outside_gd_ms": 30.84288,
+          "paired_calls": 18,
+          "completed_bytes": 149504,
+          "chain_length": 1
+        },
+        {
+          "token_hex": "000006FC",
+          "lba_hex": "0004E7AA",
+          "sectors": 50,
+          "total_ms": 100.84736,
+          "inside_gd_ms": 78.44992,
+          "outside_gd_ms": 22.39744,
+          "paired_calls": 13,
+          "completed_bytes": 102400,
+          "chain_length": 1
+        },
+        {
+          "token_hex": "00000738",
+          "lba_hex": "0004E7DC",
+          "sectors": 73,
+          "total_ms": 145.03168,
+          "inside_gd_ms": 114.3872,
+          "outside_gd_ms": 30.64448,
+          "paired_calls": 18,
+          "completed_bytes": 149504,
+          "chain_length": 1
+        },
+        {
+          "token_hex": "0000078E",
+          "lba_hex": "0004E825",
+          "sectors": 50,
+          "total_ms": 100.84608,
+          "inside_gd_ms": 78.55104,
+          "outside_gd_ms": 22.29504,
+          "paired_calls": 13,
+          "completed_bytes": 102400,
+          "chain_length": 1
+        },
+        {
+          "token_hex": "000007CA",
+          "lba_hex": "0004E857",
+          "sectors": 73,
+          "total_ms": 145.02528,
+          "inside_gd_ms": 114.37184,
+          "outside_gd_ms": 30.65344,
+          "paired_calls": 18,
+          "completed_bytes": 149504,
+          "chain_length": 1
+        },
+        {
+          "token_hex": "00000821",
+          "lba_hex": "0004E8A0",
+          "sectors": 50,
+          "total_ms": 100.77696,
+          "inside_gd_ms": 78.54592,
+          "outside_gd_ms": 22.23104,
+          "paired_calls": 13,
+          "completed_bytes": 102400,
+          "chain_length": 1
+        }
+      ],
+      "all_eight_reads_contiguous": true,
+      "read_sector_total": 492,
+      "read_byte_total": 1007616,
+      "read_sectors_alternate": [
+        73,
+        50
+      ],
+      "read_request_total_seconds": 0.98322944,
+      "read_request_inside_gd_seconds": 0.77057152,
+      "reader_maple_gap_max_ms": 23.4816,
+      "reader_complete_request_max_ms": 144.98688,
+      "vmu_submit_max_ms": 0.09216,
+      "vmu_complete_max_ms": 0.0832,
+      "hardware": {
+        "original_caller_sr_hex": "60000160",
+        "sampled_imask": 6,
+        "iprb_hex": "00000010",
+        "sampled_sci_priority": 1,
+        "entry_vbr_hex": "8C00F400",
+        "exit_vbr_hex": "8CFF0300",
+        "entry_ssr_hex": [
+          "A4",
+          "A4",
+          "A6",
+          "A6"
+        ],
+        "exit_ssr_hex": [
+          "86",
+          "86",
+          "84",
+          "86"
+        ],
+        "entry_orer_set": true,
+        "exit_orer_set": false,
+        "chcr_hex": "00004911",
+        "chcr_de_set": true,
+        "chcr_te_set": false,
+        "dmaor_hex": "00008201",
+        "dmaor_low_enable_bits_hex": "00000001",
+        "packed_state_entry_hex": "00110702",
+        "packed_state_exit_hex": "00110F02",
+        "repair_count": 48,
+        "irq_entries": 0,
+        "sci_level_rearms": 0
+      }
+    },
+    "collector_accounting_review": {
+      "bin_event_identity_passed": true,
+      "all_read_inside_plus_outside_equal_total": true,
+      "all_read_bytes_equal_sectors_times_2048": true,
+      "all_four_raw_counter_differences_equal_reported_call_ticks": true,
+      "single_clock_epoch": true,
+      "invalid_unmatched_overflow_saturation_all_zero": true,
+      "accounting_error_found": false
+    },
+    "interpretation": [
+      "Measured GD work clusters every approximately five seconds, matching the reported recurrence, but the bins contain about 0.852 seconds of measured GD time across approximately twenty seconds. No measured call exceeded 6.860 milliseconds; this capture does not show a one-second continuous GD call.",
+      "All eight reads are adjacent on disc, alternate 73 and50 sectors, and each completed request remains a chain of one under the33.334ms proximity rule. There is no evidence here that a repeated-LBA cache would remove this sequential workload.",
+      "Original SR at the four longest GD entries has IMASK6 while the sampled SCI priority is1, making SCI non-deliverable at those sampled entry contexts. Priority7 is a concrete discriminator for this mismatch, rather than another CHECK throughput throttle.",
+      "Entry SSR has ORER latched and exit SSR does not; the four sampled DMA transfers have DE set and TE clear. These are observations of incomplete transfer/repair during a GD call, not proof that this causes the full movement freeze."
+    ],
+    "evidence_limits": [
+      "The video shows static report pages after capture. It provides no synchronized frame-submit, movement-update or render-completion witness; Maple count and audio continuity cannot measure game simulation progress.",
+      "Caller SR is sampled only at GD entry. It does not establish the interrupt mask, BL state, execution context or VBR throughout all outside-GD time.",
+      "VBR changes from the SDK value at entry to the retained reader value at exit. The zero VBR-total/rearm/IRQ counters do not by themselves prove the game never restores its SDK vector between calls.",
+      "Outside-GD request duration is observed wall span minus paired GD intervals, not CPU idle time. A chain is a proximity grouping, not a frame-stall witness.",
+      "Timing includes diagnostic work and excludes uninstrumented instructions outside the begin/end callbacks. No invalid profile or counter discontinuity was observed, but endpoint validation cannot exclude unobserved timer stops or resets.",
+      "The32 bins span a nominal20 seconds; the final bin is partial. The independent profile wall duration is19.95673984 seconds and is an approximately matching denominator, not an exact first/last timeline interval.",
+      "Changing SCI to priority7 is a forward experiment. It may restore interrupt opportunities where BL is clear and IMASK is6, but delivery also depends on vector ownership and masking elsewhere. No console performance improvement for that candidate is claimed."
+    ]
+  },
+  "next_experiment": {
+    "change": "Use a single shared SCI priority7 constant in the native timeline IRQ-rearm C and assembly paths. Preserve the default priority1 path for every other build.",
+    "discriminator": "Observe whether SCI IRQ entries become nonzero and completed reads progress outside GD catchup at sampled game IMASK6; compare actual FMV/movement behavior.",
+    "console_result": "not yet tested"
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "schema": "kui.evolution1-known-good-baseline-comparison.v1",
+  "date": "2026-10-26",
+  "production_changed": false,
+  "known_good": {
+    "commit": "897ee7223b35c9b29ade09547e60c10fd1e72a46",
+    "console_confirmed": [
+      "Launch",
+      "Virtual-card save",
+      "Reboot/load"
+    ],
+    "reader": "Standard",
+    "virtual_slot": "A1",
+    "reservation_bytes": 196608,
+    "source_evidence": [
+      "docs/vmu-native-evolution-trace-test.md",
+      "docs/evidence/native-evolution2-extent-2026-10-23.json",
+      "docs/vmu-hardware-observations.json: evolution1_native_virtual_card_save_reload_reported"
+    ]
+  },
+  "accumulated_corrections": [
+    {
+      "commit": "f04a7045a384",
+      "change": "Cached P1 runtime stack and checked-reader inlining; retained."
+    },
+    {
+      "commit": "f7f4ac7027e9",
+      "change": "Publish original SDK lock-pointer and adjacent flag cache lines with ordered OCBP before uncached TAS acquires the lock; retained."
+    },
+    {
+      "commit": "897ee7223b35",
+      "change": "Move PC-relative MOV.W out of uniform SDK gateway jump delay slot; preserved original replay state. Retained."
+    }
+  ],
+  "unchanged_complete_files": [
+    {
+      "path": "src/loader/vmu_native_sdk_coherence.S",
+      "same_complete_source": true,
+      "sha256": "8d1fadfbde04dab12827d941cf1cc47b52135e0936e9bed0d62cc23b56902e4f"
+    },
+    {
+      "path": "src/loader/vmu_native_passive_hooks.S",
+      "same_complete_source": true,
+      "sha256": "79fdf675ab576275356767facec6b586432a5f02dee8e305b5a33e5facb01156"
+    },
+    {
+      "path": "src/loader/vmu_native_performance.ld",
+      "same_complete_source": true,
+      "sha256": "70b9ed13fbb56d0e5636075c6f84efc6a7aea79301c6ebb92b938916c5877cf0"
+    }
+  ],
+  "coherence_c_delta": "Only additional admission of infile layout version for Evolution2; Evolution1 retains the original layout version.",
+  "current_console_result": {
+    "commit": "8adf1a039035abcbcaa95f8bfa8f417fe6e714b8",
+    "reader": "New (X)",
+    "diagnostics": "NORMAL/off",
+    "owner_report": "It gets to the failure point faster but still fails.",
+    "status": "Evolution compatibility failure remains; generic polling optimization did not establish a fix."
+  },
+  "current_captured_location": "f158 PROFILE capture validated interrupted context at 0x8c1f362c/362e, a later live video-mode scanline-zero wait, with advancing SDK video counter. No current NORMAL register snapshot is inferred.",
+  "current_route_differences": [
+    "Virtual A2 with physical A1 passthrough",
+    "384KiB bottom reservation",
+    "Background reader and SDK SCI/read-ahead integration"
+  ],
+  "valid_existing_build_control": {
+    "selector": "Legacy (Y), Background On, same8adf NORMAL installation",
+    "retained": [
+      "Same retail-native-dual.kui module",
+      "Same VMU worker",
+      "Same virtual A2",
+      "Same384KiB bottom reservation"
+    ],
+    "changed": "Selected low reader engine and its typed callback bindings",
+    "result": "Owner reports Legacy boots past the prior failure but immediately says \"A memory card is required\". Virtual-card detection/readiness fails, so this is not a working-VMU control.",
+    "followup_evidence": "docs/evidence/native-evolution1-legacy-memory-card-2026-10-26.json"
+  },
+  "invalid_same_card_control": {
+    "selector": "Background Off",
+    "reason": "Frontend selects KUI/apps/games/retail-boot.kui; current dual installer does not update that file. It could be ordinary no-VMU or a separately personalized older module, so it does not establish same current A2 behavior."
+  },
+  "review_correction": "The earlier investigation cited failed lease-only/active-hook comparisons but missed the subsequent confirmed working897ee baseline. Future comparisons must preserve that success as the regression anchor.",
+  "matched_current_standard_control": {
+    "runtime_commit": "9956562f91d6be4721e25676d2edf6ed3f421c15",
+    "reader": "Standard / Background Off",
+    "virtual_address": "A2",
+    "reservation_bytes": 393216,
+    "placement": "bottom",
+    "owner_report": "VMU-only passed; reader-only failed",
+    "result_scope": "Pass reported for the requested test; individual save/load coverage not separately stated",
+    "followup_evidence": "docs/evidence/native-evolution1-isolation-console-followup-2026-10-26.json"
+  }
+}

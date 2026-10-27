@@ -19,6 +19,11 @@ SECTIONS {
  .armada_bind_stage_contract : { KEEP(*(.armada_bind_stage_contract)) } :image
  .armada_excerpt_seed : { KEEP(*(.armada_excerpt_seed)) } :image
  .armada_excerpt_stage_contract : { KEEP(*(.armada_excerpt_stage_contract)) } :image
+ .maple_hook_blob : { KEEP(*(.maple_hook_blob)) } :image
+ .maple_bridge_blob : { KEEP(*(.maple_bridge_blob)) } :image
+ .armada_maple_hook_stage_contract : { KEEP(*(.armada_maple_hook_stage_contract)) } :image
+ ASSERT(SIZEOF(.maple_hook_blob)==0 || DEFINED(_kui_armada_ce_maple_hook_stage_contract),
+        "Maple hook requires its pre-NK reservation and relay installer")
  ASSERT(SIZEOF(.armada_bind_blob)==0 || DEFINED(_kui_armada_ce_bind_stage_contract),
         "Armada binding blob requires the admitted C stage installer")
  . = ALIGN(4);
@@ -33,5 +38,7 @@ SECTIONS {
  ASSERT(.<=0x8cfe0000,"retail stage overlaps high stack")
  ASSERT(!DEFINED(_kui_armada_ce_excerpt_stage_contract) || .<0x8cf50000,
         "Armada excerpt stage/BSS overlaps reserved PCM pool")
+ ASSERT(!DEFINED(_kui_armada_ce_maple_hook_stage_contract) || .<0x8cfcf000,
+        "Maple hook stage/BSS overlaps reserved recorder page")
  /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) }
 }

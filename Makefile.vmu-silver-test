@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Isolated scalar host fixtures; no owner executable is required or embedded.
+BUILD ?= build/vmu-silver-test
+HOST_CC ?= cc
+HOST_SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie
+HOST_FLAGS := -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic
+PROFILE_FLAGS := -DKUI_VMU_MAPLE_PROFILE=2 -DKUI_VMU_READONLY_PROOF=0
+READONLY_SOURCES := src/core/vmu_readonly.c src/core/vmu_emulation.c src/core/vmu_image.c \
+    src/loader/vmu_readonly_overlay.c
+SD_SOURCES := src/loader/sd_reader.c src/loader/vmu_backing.c src/core/vmu_sd_profile.c \
+    src/core/hash.c src/core/retail_image.c
+PERSIST_SOURCES := src/core/vmu_durable.c src/core/vmu_store.c src/core/vmu_emulation.c \
+    src/core/vmu_image.c src/loader/vmu_readonly_overlay.c src/loader/vmu_volatile_chain.c \
+    src/loader/sd_reader.c src/loader/vmu_backing.c src/dreamcast/sci_sd_storage.c \
+    src/core/hash.c src/core/retail_image.c src/core/data.c
+HEADERS := include/kui/vmu_maple_observe.h include/kui/vmu_maple_observe_profile.h \
+    include/kui/vmu_silver_observe_admission.h include/kui/retail_image.h
+.DEFAULT_GOAL := host-test
+.PHONY: host-test host-tests proof-mode-refusals
+
+$(BUILD)/test-observer-worker: tests/test_vmu_silver_observe_worker.c src/loader/vmu_maple_observe_worker.c $(HEADERS)
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude -Isrc/loader $(PROFILE_FLAGS) \
+	    -DKUI_VMU_MAPLE_OBSERVE_HOST_TEST=1 src/loader/vmu_maple_observe_worker.c $< -o $@
+
+$(BUILD)/test-observer-admission: tests/test_vmu_silver_observe_admission.c $(HEADERS)
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude $(PROFILE_FLAGS) $< -o $@
+
+$(BUILD)/test-readonly-worker: tests/test_vmu_silver_readonly_worker.c src/loader/vmu_maple_observe_worker.c $(READONLY_SOURCES) $(HEADERS) include/kui/vmu_readonly_overlay.h include/kui/vmu_readonly.h include/kui/vmu_image.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -Iinclude -Isrc/loader \
+	    -DKUI_VMU_MAPLE_PROFILE=2 -DKUI_VMU_READONLY_PROOF=1 -DKUI_VMU_MAPLE_OBSERVE_HOST_TEST=1 \
+	    src/loader/vmu_maple_observe_worker.c $(READONLY_SOURCES) $< -o $@
+
+$(BUILD)/test-sd-readonly-worker: tests/test_vmu_silver_sd_worker.c tests/test_vmu_silver_readonly_worker.c src/loader/vmu_maple_observe_worker.c $(READONLY_SOURCES) $(SD_SOURCES) $(HEADERS) include/kui/vmu_sd_profile.h include/kui/vmu_backing.h include/kui/vmu_readonly_overlay.h include/kui/vmu_readonly.h include/kui/vmu_image.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -ffunction-sections -fdata-sections -Wl,--gc-sections \
+	    -Iinclude -Isrc/loader -DKUI_VMU_MAPLE_PROFILE=2 -DKUI_VMU_READONLY_PROOF=2 \
+	    -DKUI_VMU_MAPLE_OBSERVE_HOST_TEST=1 -DKUI_VMU_EXPERIMENTAL=0 \
+	    src/loader/vmu_maple_observe_worker.c $(READONLY_SOURCES) $(SD_SOURCES) $< -o $@
+
+$(BUILD)/test-persist-worker: tests/test_vmu_silver_persist_worker.c tests/vmu_sd_model.h src/loader/vmu_maple_observe_worker.c $(PERSIST_SOURCES) $(HEADERS) include/kui/vmu_durable.h include/kui/vmu_store.h
+	@mkdir -p $(@D)
+	$(HOST_CC) $(HOST_FLAGS) $(HOST_SANITIZERS) -ffunction-sections -fdata-sections -Wl,--gc-sections \
+	    -Iinclude -Isrc/loader -DKUI_VMU_MAPLE_PROFILE=2 -DKUI_VMU_READONLY_PROOF=4 \
+	    -DKUI_VMU_MAPLE_OBSERVE_HOST_TEST=1 -DKUI_VMU_EXPERIMENTAL=0 \
+	    src/loader/vmu_maple_observe_worker.c $(PERSIST_SOURCES) $< -o $@
+
+proof-mode-refusals:
+	@mkdir -p $(BUILD)
+	@for mode in 3; do \
+	    if printf '#include "kui/vmu_maple_observe_profile.h"\n' | \
+	        $(HOST_CC) $(HOST_FLAGS) -Iinclude -DKUI_VMU_MAPLE_PROFILE=2 \
+	        -DKUI_VMU_READONLY_PROOF=$$mode -x c -fsyntax-only - \
+	        >$(BUILD)/proof-mode-$$mode.log 2>&1; then \
+	        echo "Silver unexpectedly accepted proof mode $$mode"; exit 1; \
+	    fi; \
+	    if ! rg -q 'Silver admits passive mode' $(BUILD)/proof-mode-$$mode.log; then \
+	        cat $(BUILD)/proof-mode-$$mode.log; exit 1; \
+	    fi; \
+	done
+
+host-test host-tests: $(BUILD)/test-observer-worker $(BUILD)/test-readonly-worker $(BUILD)/test-sd-readonly-worker $(BUILD)/test-observer-admission $(BUILD)/test-persist-worker proof-mode-refusals
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-observer-worker
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-readonly-worker
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-sd-readonly-worker
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-observer-admission
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-persist-worker
+	python3 tests/test_vmu_silver_package.py

@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Current New reader, cache and support-hook schedule, with no virtual card.
+# This deliberately retains the proved Maple hooks that drive read-ahead TICK;
+# it isolates virtual-card publication/IO, not the overhead of those hooks.
+BUILD ?= build/native-isolation-reader
+include Makefile.vmu-native-dual-readers
+FLAGS += -DKUI_NATIVE_READER_ONLY_ISOLATION=1
+NATIVE_FLAGS += -DKUI_NATIVE_READER_ONLY_ISOLATION=1
+ISOLATION_READER_HOST_FLAGS = $(filter-out -fsanitize=%,$(PASSIVE_HOST_FLAGS)) \
+ -fsanitize=undefined -fno-sanitize-recover=all -mcmodel=large \
+ -fno-asynchronous-unwind-tables -fno-unwind-tables
+
+.PHONY: isolation-reader-host-tests
+isolation-reader-host-tests:
+	@mkdir -p $(BUILD)
+	python3 tests/test_native_dual_readers.py --reader-only
+	$(HOST_CC) $(ISOLATION_READER_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 \
+	 $(ISOLATION_READER_TEST_FLAGS) \
+	 tests/test_vmu_native_reader_only.c $(COMPAT_WORKER_HOST_SRC) \
+	 -Wl,--gc-sections -Wl,--section-start=.isolation_tick=0x8c722000 \
+	 -o $(BUILD)/test-reader-only
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-reader-only

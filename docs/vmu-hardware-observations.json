@@ -1,0 +1,1616 @@
+{
+  "schema_version": 1,
+  "scope": "Scoped Maple/VMU experiments, physical import and durable-save observations, plus automatic native SDK-family owner reports; no general compatibility claim",
+  "captures": [
+    {
+      "build": "87140926efd1",
+      "date": "2026-10-17",
+      "outcome": "image_io_failure",
+      "function": "0x2",
+      "command": "0x11",
+      "reject": "0x0",
+      "caller_pr": "0x8c08d55a",
+      "source_images": [
+        "62747.jpg",
+        "image-1792274965306.jpg"
+      ],
+      "cause": "unresolved"
+    },
+    {
+      "build": "87140926efd1",
+      "date": "2026-10-17",
+      "outcome": "planned_observer_stop",
+      "pages_present": [
+        0,
+        2,
+        3
+      ],
+      "duplicate_page": 2,
+      "missing_page": 1,
+      "source_images": [
+        "image-1792275455414.jpg",
+        "image-1792275462022.jpg",
+        "image-1792275468908.jpg",
+        "image-1792275476791.jpg"
+      ]
+    },
+    {
+      "build": "e17a57de4252",
+      "date": "2026-10-17",
+      "outcome": "planned_observer_stop",
+      "pages_present": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "source_images": [
+        "image-1792276009571.jpg",
+        "image-1792276017302.jpg",
+        "image-1792276029227.jpg",
+        "image-1792276039024.jpg"
+      ],
+      "starts": 1200,
+      "descriptors": 4800,
+      "descriptors_max": 4,
+      "stop_after": 1200,
+      "ports": [
+        1200,
+        1200,
+        1200,
+        1200
+      ],
+      "units": [
+        4800,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "commands": [
+        0,
+        3601,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1199,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "malformed": 0,
+      "unsupported": 0,
+      "stack_fault": 0,
+      "incomplete": 0,
+      "rx_bad": 0,
+      "source_min": "0x0c0ec0a0",
+      "source_max": "0x0c0ef0a0",
+      "source_last": "0x0c0ef0a0",
+      "source_changes": 1199,
+      "source_first_four": [
+        "0x0c0ec0a0",
+        "0x0c0ef0a0",
+        "0x0c0ec0a0",
+        "0x0c0ef0a0"
+      ],
+      "rx_min": "0x0c0ea080",
+      "rx_max": "0x0c0ea380",
+      "main_devinfo_requests": 3601,
+      "fingerprint": "0xb77a217c",
+      "last_control": "0x80030000",
+      "last_rx": "0x0c0ea380",
+      "last_header": "0x00c0e001",
+      "trigger_last": 0,
+      "trigger_other": 0,
+      "enable_last": 1,
+      "enable_other": 0,
+      "busy_last": 0,
+      "busy_active": 0,
+      "entry_sr_last": "0x60000161",
+      "entry_masks": "0x40",
+      "manager_last": "0xa05f6c00",
+      "manager_other": 0,
+      "limits": [
+        "The final counted schedule is intentionally not submitted.",
+        "No completion consumer or virtual saving is exercised.",
+        "No subunit requests were observed.",
+        "This run does not establish the cause of earlier image I/O failures.",
+        "Settings were requested as SCI/Standard/background off/CD music off/RAM patches off; the user supplied photographs without a separate settings confirmation."
+      ]
+    },
+    {
+      "build": "83bf9649d565",
+      "date": "2026-10-17",
+      "outcome": "unsafe_schedule_stop_before_second_submit",
+      "pages_present": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "source_images": [
+        "image-1792277431419.jpg",
+        "image-1792277438708.jpg",
+        "image-1792277446930.jpg",
+        "image-1792277456549.jpg"
+      ],
+      "starts": 2,
+      "descriptors": 5,
+      "descriptors_max": 4,
+      "stop_after": 18000,
+      "ports": [
+        2,
+        1,
+        1,
+        1
+      ],
+      "units": [
+        5,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "commands": [
+        0,
+        4,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "malformed": 0,
+      "unsupported": 1,
+      "stack_fault": 0,
+      "incomplete": 1,
+      "rx_bad": 0,
+      "source_min": "0x0c0ec0a0",
+      "source_max": "0x0c0ef0a0",
+      "source_last": "0x0c0ef0a0",
+      "source_changes": 1,
+      "rx_min": "0x0c0e0080",
+      "rx_max": "0x0c0e6080",
+      "main_devinfo_requests": 4,
+      "completion_calls": 1,
+      "completion_matched": 1,
+      "completion_orphan": 0,
+      "completion_overwritten": 0,
+      "completion_pending": 0,
+      "completion_busy": 0,
+      "completion_bad_mask": 0,
+      "completion_rx_headers": 4,
+      "completion_sr_last": "0x600001f1",
+      "completion_masks": "0x8000",
+      "main_a_response": "0x1c210005",
+      "main_a_rx": "0x0c0e0080",
+      "completion_bad_context": 0,
+      "completion_guard_flags": 0,
+      "completion_source": "0x0c0ec0a0",
+      "completion_pr_last": "0x8c0b5362",
+      "first_subunit_start": 0,
+      "first_card_start": 0,
+      "post_after": 1200,
+      "subunit_requests": 0,
+      "stop_reason": 1,
+      "entry_sr_last": "0x60000161",
+      "entry_masks": "0x40",
+      "trigger_last": 0,
+      "trigger_other": 0,
+      "enable_last": 1,
+      "enable_other": 0,
+      "busy_last": 0,
+      "busy_active": 0,
+      "manager_last": "0xa05f6c00",
+      "manager_other": 0,
+      "limits": [
+        "The rejected control and its cursor were not retained; exact 00000700 padding is supported by independent owner SDK analysis, not recovered from these photographs.",
+        "The first normal completion matched four headers and the controller advertised a subunit; no subunit request or card read was recorded.",
+        "The second counted schedule was deliberately not submitted. No virtual replies or saving were exercised.",
+        "Settings and physical-card placement were requested in the preceding test instructions but not separately confirmed by the user."
+      ]
+    },
+    {
+      "build": "d8788a9c8e86",
+      "date": "2026-10-17",
+      "outcome": "planned_memory_card_window_stop",
+      "pages_present": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "source_images": [
+        "62762.jpg",
+        "62763.jpg",
+        "62764.jpg",
+        "62765.jpg"
+      ],
+      "starts": 1228,
+      "descriptors": 4940,
+      "descriptors_max": 5,
+      "stop_after": 18000,
+      "ports": [
+        1256,
+        1228,
+        1228,
+        1228
+      ],
+      "units": [
+        4912,
+        28,
+        0,
+        0,
+        0,
+        0
+      ],
+      "commands": [
+        0,
+        3686,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1227,
+        1,
+        25,
+        1,
+        0,
+        0,
+        0
+      ],
+      "malformed": 0,
+      "unsupported": 0,
+      "stack_fault": 0,
+      "incomplete": 0,
+      "rx_bad": 0,
+      "source_min": "0x0c0ec0a0",
+      "source_max": "0x0c0ef0a0",
+      "source_last": "0x0c0ef0a0",
+      "source_changes": 1227,
+      "rx_min": "0x0c0e0080",
+      "rx_max": "0x0c0ea880",
+      "main_devinfo_requests": 3685,
+      "completion_calls": 1227,
+      "completion_matched": 1227,
+      "completion_orphan": 0,
+      "completion_overwritten": 0,
+      "completion_pending": 0,
+      "completion_busy": 0,
+      "completion_bad_mask": 0,
+      "completion_rx_headers": 4936,
+      "completion_sr_last": "0x600001f1",
+      "completion_masks": "0x8000",
+      "main_a_response": "0x1c210005",
+      "main_a_rx": "0x0c0e0080",
+      "completion_bad_context": 0,
+      "completion_guard_flags": 0,
+      "completion_source": "0x0c0ec0a0",
+      "completion_pr_last": "0x8c0b5362",
+      "subunit_request": "0x0200010b",
+      "subunit_response": "0x82010008",
+      "subunit_ordinal": 4420,
+      "first_subunit_start": 2,
+      "first_card_start": 28,
+      "post_after": 1200,
+      "subunit_requests": 28,
+      "stop_reason": 3,
+      "first_subunit_records": [
+        {
+          "ordinal": 6,
+          "header": "0x00000101",
+          "payload0": "0x0",
+          "payload1": "0x0"
+        },
+        {
+          "ordinal": 106,
+          "header": "0x3200010c",
+          "payload0": "0x04000000",
+          "payload1": "0x0"
+        },
+        {
+          "ordinal": 111,
+          "header": "0x0200010a",
+          "payload0": "0x02000000",
+          "payload1": "0x0"
+        },
+        {
+          "ordinal": 116,
+          "header": "0x0200010b",
+          "payload0": "0x02000000",
+          "payload1": "0xff000000"
+        }
+      ],
+      "last_read_blocks": [
+        135,
+        134,
+        133,
+        68
+      ],
+      "limits": [
+        "One CMD12 packet targets LCD function 04000000; it is not a storage write. No storage write or synchronization was recorded.",
+        "Only response headers were sampled; block contents and package/filesystem checksums were not observed.",
+        "The final four main-unit packets were counted but not submitted.",
+        "Some fine-grained RX addresses and inherited pre-submit SR digits are omitted from this transcription rather than inferred from photograph pixels.",
+        "This is physical-card traffic and passive completion evidence, not virtual-card enumeration or persistence."
+      ]
+    },
+    {
+      "build": "aed8f76c54f5",
+      "date": "2026-10-17",
+      "outcome": "planned_synthetic_virtual_card_read_window_stop",
+      "pages_present": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "source_images": [
+        "image-1792279949922.jpg",
+        "image-1792279957232.jpg",
+        "image-1792279966119.jpg",
+        "image-1792279976437.jpg"
+      ],
+      "starts": 1228,
+      "descriptors": 4929,
+      "descriptors_max": 5,
+      "ports": [
+        1245,
+        1228,
+        1228,
+        1228
+      ],
+      "units": [
+        4912,
+        17,
+        0,
+        0,
+        0,
+        0
+      ],
+      "commands": [
+        0,
+        3686,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1227,
+        1,
+        15,
+        0,
+        0,
+        0,
+        0
+      ],
+      "malformed": 0,
+      "unsupported": 0,
+      "stack_fault": 0,
+      "incomplete": 0,
+      "rx_bad": 0,
+      "completion_calls": 1227,
+      "completion_matched": 1227,
+      "completion_orphan": 0,
+      "completion_overwritten": 0,
+      "completion_pending": 0,
+      "completion_busy": 0,
+      "completion_bad_mask": 0,
+      "completion_rx_headers": 4925,
+      "completion_bad_context": 0,
+      "completion_guard_flags": 0,
+      "first_subunit_start": 2,
+      "first_card_start": 28,
+      "post_after": 1200,
+      "subunit_requests": 17,
+      "stop_reason": 3,
+      "proof_mode": 1,
+      "proof_prepared": 1227,
+      "proof_completed": 1227,
+      "proof_parents": 1227,
+      "proof_replies": 17,
+      "proof_info": 1,
+      "proof_media": 1,
+      "proof_reads": 15,
+      "proof_conflicts": 0,
+      "proof_refused": 0,
+      "proof_bank_fail": 0,
+      "proof_flags": 0,
+      "proof_last_block": 241,
+      "proof_bytes": 8008,
+      "proof_commit_attempts": 0,
+      "main_a_response": "0x1c210005",
+      "subunit_request": "0x0200010b",
+      "subunit_response": "0x82010008",
+      "subunit_rx": "0x0c0e6480",
+      "subunit_ordinal": 176,
+      "limits": [
+        "The synthetic permanently blank card supplies17replies; no SD-backed VMU data or durable saving is exercised.",
+        "No memory-card write, synchronization or LCD update was requested; no commit callback was called.",
+        "The final four main-unit requests were deliberately not submitted.",
+        "The photographs contain diagnostic pages only; the game menu itself is not shown.",
+        "The proof last-request/RX fields are overwritten by later controller-only polls while last-response remains the previous virtual reply; use last-subunit fields on page3 for the correlated virtual request/reply."
+      ]
+    },
+    {
+      "build": "399d10269c83",
+      "date": "2026-10-17",
+      "outcome": "profile_export_ready",
+      "source_images": [
+        "image-1792284340017.jpg"
+      ],
+      "storage_transport": "SCI",
+      "filesystem": "exFAT",
+      "partition_first": 2048,
+      "probe": "p0001",
+      "latest_persisted_save_matches": true,
+      "clean_checkpoint": true,
+      "raw_profile_verified": true,
+      "profile_bytes": 1536,
+      "extent_count": 1,
+      "image_sha256": "4edbef747fb15d17755a0d5053076457553e9152e6c727bd7ada45251c5ec1b1",
+      "profile_sha256": "2d72e4b4fbac3764e807b992241cbbedf8f3540c2622ebf989e99fcd053c1704",
+      "limits": [
+        "A physical power cycle before Y was not explicitly reported; the screen makes restart-persistence evidence conditional on it.",
+        "This prepares metadata; no game-time SD-backed VMU read or save is shown."
+      ]
+    },
+    {
+      "build": "34279291cb07",
+      "date": "2026-10-17",
+      "outcome": "sd_read_proof_then_first_write_refused_before_submit",
+      "pages_present": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "source_images": [
+        "image-1792286642469.jpg",
+        "image-1792286648890.jpg",
+        "image-1792286656012.jpg",
+        "image-1792286664634.jpg"
+      ],
+      "starts": 1224,
+      "descriptors": 4914,
+      "descriptors_max": 5,
+      "stop_after": 18000,
+      "ports": [
+        1242,
+        1224,
+        1224,
+        1224
+      ],
+      "units": [
+        4896,
+        18,
+        0,
+        0,
+        0,
+        0
+      ],
+      "commands": [
+        0,
+        3674,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1223,
+        1,
+        15,
+        1,
+        0,
+        0,
+        0
+      ],
+      "malformed": 0,
+      "unsupported": 0,
+      "stack_fault": 0,
+      "incomplete": 0,
+      "rx_bad": 0,
+      "source_min": "0x0c0ec0a0",
+      "source_max": "0x0c0ef0a0",
+      "source_last": "0x0c0ef0a0",
+      "source_changes": 1223,
+      "rx_min": "0x0c0e0080",
+      "rx_max": "0x0c0ea880",
+      "main_devinfo_requests": 3673,
+      "completion_calls": 1223,
+      "completion_matched": 1223,
+      "completion_orphan": 0,
+      "completion_overwritten": 0,
+      "completion_pending": 0,
+      "completion_busy": 0,
+      "completion_bad_mask": 0,
+      "completion_rx_headers": 4909,
+      "completion_sr_last": "0x600000f1",
+      "completion_masks": "0x8000",
+      "main_a_response": "0x1c210005",
+      "main_a_rx": "0x0c0e0080",
+      "completion_bad_context": 0,
+      "completion_guard_flags": 0,
+      "completion_source": "0x0c0ec0a0",
+      "completion_pr_last": "0x8c0b5362",
+      "first_subunit_start": 2,
+      "first_card_start": 28,
+      "post_after": 1200,
+      "subunit_requests": 18,
+      "stop_reason": 6,
+      "proof_mode": 2,
+      "proof_prepared": 1223,
+      "proof_completed": 1223,
+      "proof_parents": 1223,
+      "proof_replies": 17,
+      "proof_info": 1,
+      "proof_media": 1,
+      "proof_reads": 15,
+      "proof_conflicts": 0,
+      "proof_refused": 1,
+      "proof_bank_fail": 0,
+      "proof_flags": "0x10",
+      "proof_last_request": "0x2200010c",
+      "proof_last_response": "0x0",
+      "proof_last_rx": "0x0c0e6480",
+      "proof_last_block": 241,
+      "proof_bytes": 8008,
+      "proof_commit_attempts": 0,
+      "subunit_request": "0x0200010b",
+      "subunit_response": "0x82010008",
+      "subunit_rx": "0x0c0e6480",
+      "subunit_ordinal": 165,
+      "sd_reads": 15,
+      "sd_busy": 0,
+      "sd_faults": 0,
+      "sd_last_result": 0,
+      "sd_crc_expected": "0xb2aa7578",
+      "sd_crc_actual": "0xb2aa7578",
+      "sd_cid_checks": 15,
+      "limits": [
+        "The first CMD0C request has34payload words and is intentionally refused before MDST; no block write or synchronization completes.",
+        "All15SD reads completed with per-block CRC verification and successful shared-lease release; the photographed last CRC also matches block241 in the supplied profile.",
+        "The photographs show diagnostics only; no game menu, save slot or successful game save is shown.",
+        "This establishes read-only SCI sharing in this run, not durable saving, broad title compatibility or all timing conditions.",
+        "Absolute physical SD LBA and card CID are omitted from this repository record."
+      ]
+    },
+    {
+      "build": "906eb3e3ce83",
+      "date": "2026-10-17",
+      "outcome": "retail_volatile_write_read_delete_reported",
+      "pages_present": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "source_images": [
+        "image-1792288733145.jpg",
+        "image-1792288740873.jpg",
+        "image-1792288747705.jpg",
+        "image-1792288756835.jpg",
+        "image-1792288766655.jpg"
+      ],
+      "starts": 5247,
+      "descriptors": 21143,
+      "descriptors_max": 5,
+      "stop_after": 36000,
+      "ports": [
+        5402,
+        5247,
+        5247,
+        5247
+      ],
+      "units": [
+        20988,
+        155,
+        0,
+        0,
+        0,
+        0
+      ],
+      "commands": [
+        0,
+        15743,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        5246,
+        1,
+        53,
+        80,
+        20,
+        0,
+        0
+      ],
+      "malformed": 0,
+      "unsupported": 0,
+      "stack_fault": 0,
+      "incomplete": 0,
+      "rx_bad": 0,
+      "source_min": "0x0c0ec0a0",
+      "source_max": "0x0c0ef0a0",
+      "source_last": "0x0c0ec0a0",
+      "source_changes": 5246,
+      "rx_min": "0x0c0e0080",
+      "rx_max": "0x0c0ea880",
+      "main_devinfo_requests": 15742,
+      "completion_calls": 5247,
+      "completion_matched": 5247,
+      "completion_orphan": 0,
+      "completion_overwritten": 0,
+      "completion_pending": 0,
+      "completion_busy": 0,
+      "completion_bad_mask": 0,
+      "completion_rx_headers": 21143,
+      "completion_sr_last": "0x600000f1",
+      "completion_masks": "0x8000",
+      "main_a_response": "0x1c210005",
+      "main_a_rx": "0x0c0e0080",
+      "completion_bad_context": 0,
+      "completion_guard_flags": 0,
+      "completion_source": "0x0cfdaea0",
+      "completion_pr_last": "0x8c0b5362",
+      "first_subunit_start": 2,
+      "first_card_start": 28,
+      "post_after": 18000,
+      "subunit_requests": 155,
+      "stop_reason": 5,
+      "proof_mode": 3,
+      "proof_prepared": 5247,
+      "proof_completed": 5247,
+      "proof_parents": 5247,
+      "proof_replies": 155,
+      "proof_info": 1,
+      "proof_media": 1,
+      "proof_reads": 53,
+      "proof_conflicts": 0,
+      "proof_refused": 0,
+      "proof_bank_fail": 0,
+      "proof_flags": 0,
+      "proof_last_request": "0x01002009",
+      "proof_last_response": "0x03210008",
+      "proof_last_rx": "0x0c0e0080",
+      "proof_last_block": 188,
+      "proof_bytes": 28320,
+      "proof_commit_attempts": 0,
+      "subunit_request": "0x0200010b",
+      "subunit_response": "0x82010008",
+      "subunit_rx": "0x0c0e0480",
+      "subunit_ordinal": 14523,
+      "sd_reads": 15,
+      "sd_busy": 0,
+      "sd_faults": 0,
+      "sd_last_result": 0,
+      "sd_crc_expected": "0xb2aa7578",
+      "sd_crc_actual": "0xb2aa7578",
+      "sd_cid_checks": 15,
+      "ram_write_phases": 80,
+      "ram_commits": 20,
+      "ram_blocks": 14,
+      "ram_reads": 38,
+      "ram_refused": 0,
+      "ram_full": 0,
+      "ram_last_block": 254,
+      "ram_faults": 0,
+      "chain_prepared": 5247,
+      "chain_switched": 5247,
+      "chain_restored": 5247,
+      "chain_bytes": 52,
+      "chain_physical": "0x0cfdaea0",
+      "chain_crc": "0x085b9681",
+      "chain_faults": 0,
+      "chain_state": 3,
+      "user_report": {
+        "different_named_saves_created": true,
+        "same_session_load_appeared_successful": true,
+        "saves_deleted": true
+      },
+      "limits": [
+        "WHY5 identifies owner terminal/reset-return reporting with no preceding VMU stop reason; it does not identify the controller input.",
+        "80write phases and20sync commands produced20actual512-byte RAM copies across14distinct blocks; repeated metadata blocks account for additional commits.",
+        "38cache-hit block reads plus15SD reads account for all53virtual block reads. Telemetry does not independently compare payload bytes with earlier writes.",
+        "The user reports different named saves, apparent same-session loads and deletion; no game menu photograph or restart persistence is provided.",
+        "The SD base remained read-only by construction. Power-off intentionally discards every RAM change.",
+        "Absolute physical SD LBA and card CID are omitted from this repository record."
+      ]
+    },
+    {
+      "build": "3b9617257eb1",
+      "date": "2026-10-17",
+      "outcome": "persistent_preparation_filesystem_refusal",
+      "source_images": [
+        "image-1792290937236.jpg"
+      ],
+      "storage": "SCI",
+      "filesystem": "exFAT",
+      "cluster_bytes": 131072,
+      "failure_phase": "source allocation / exclusive ownership",
+      "status": -4,
+      "detail": 15,
+      "profile_exported": false,
+      "cause": "individual exFAT boot-field condition not captured",
+      "limits": [
+        "The refusal occurs before source snapshot collection and create-new profile output.",
+        "The old console message combines several exFAT boot-field checks and truncates the LBA at the right edge.",
+        "Code review found that PartitionOffset=0 was incorrectly rejected and backup VolumeFlags were incorrectly treated as current; this photograph does not identify either as the actual cause.",
+        "Probe image, journal and identity should be preserved. Retail SD saving remains disabled."
+      ]
+    },
+    {
+      "build": "941ea939c1bb",
+      "date": "2026-10-17",
+      "outcome": "persistent_preparation_dirty_volume_refusal",
+      "source_images": [
+        "image-1792291869788.jpg"
+      ],
+      "failure_phase": "source allocation / exclusive ownership",
+      "status": -4,
+      "detail": 15,
+      "reads": 2,
+      "last_lba": "0x00000800",
+      "boot": {
+        "flags": "0x0002",
+        "revision": "0x0100",
+        "zero_or": 0,
+        "sector_shift": 9,
+        "cluster_shift": 8,
+        "fat_count": 1,
+        "partition_offset": 2048,
+        "partition_expected": 2048,
+        "volume_sectors": 249997312,
+        "volume_expected": 249997312,
+        "reject_mask": "0x20"
+      },
+      "profile_exported": false,
+      "cause": "main exFAT VolumeDirty flag; all other captured boot gate fields match",
+      "limits": [
+        "This preparation attempt refused before output creation and does not set or clear VolumeFlags.",
+        "Subsequent read-only fsck.exfat 1.4.3 reported two unattached secondary records in /KUI despite its clean summary.",
+        "A user-supplied 1024-byte metadata dump identifies a deleted primary and active secondary remnants for tosec.db, recording zero length and cluster zero; origin and time of the inconsistent deletion are unknown.",
+        "Interactive repair of those two records was recommended, with source VMU files preserved and follow-up verification before retry."
+      ]
+    },
+    {
+      "build": "941ea939c1bb",
+      "date": "2026-10-17",
+      "outcome": "persistent_preparation_incoming_fat_refusal",
+      "source_images": [
+        "image-1792292664153.jpg"
+      ],
+      "failure_phase": "source allocation / exclusive ownership",
+      "status": -9,
+      "detail": 110,
+      "reads": 1175,
+      "last_lba": "0x0000320f",
+      "boot": {
+        "flags": "0x0000",
+        "revision": "0x0100",
+        "zero_or": 0,
+        "sector_shift": 9,
+        "cluster_shift": 8,
+        "fat_count": 1,
+        "partition_offset": 2048,
+        "volume_sectors": 249997312,
+        "reject_mask": "0x00"
+      },
+      "profile_exported": false,
+      "cause": "unexpected incoming raw FAT word targeting an owned VMU allocation; source ownership not captured",
+      "limits": [
+        "Boot admission now passes with the main dirty flag cleared.",
+        "The earlier guard conservatively treats external stale exFAT FAT words as possible incoming links.",
+        "This photograph does not identify whether this particular source word belongs to a live chain, an unused cluster, or a NoFatChain allocation.",
+        "The replacement proof must inspect every live FAT-chain owner and retain bitmap, exact-tail and target-overlap protection; no SD runtime writer is enabled."
+      ]
+    },
+    {
+      "build": "482122bf7a8a",
+      "date": "2026-10-17",
+      "outcome": "persistent_preparation_ready",
+      "source_images": [
+        "image-1792293756847.jpg"
+      ],
+      "transport": "SCI",
+      "filesystem": "exFAT",
+      "pair_path": "/KUI/vmu-test/p0001",
+      "profile_exported": true,
+      "profile_file": "retail-persistent-profile-0001.bin",
+      "profile_bytes": 4096,
+      "profile_sha256": "4590e0d6aa0109c743576d64d557c3481c644d55ea431e365ed75b30957731c5",
+      "base_sha256": "4edbef747fb15d17755a0d5053076457553e9152e6c727bd7ada45251c5ec1b1",
+      "image_extents": 1,
+      "journal_extents": 1,
+      "validation": [
+        "Independent Python canonical P2 decoder passed.",
+        "Native C P2 decoder and exact re-encoding passed.",
+        "Console reached PROFILE / READY after final current-ownership and source-snapshot recheck."
+      ],
+      "limits": [
+        "Preparation descriptor only; no retail SD writer is enabled.",
+        "Future recovery must use this real physical binding after a fresh filesystem ownership scan.",
+        "CID and raw profile bytes are deliberately not included in repository evidence."
+      ]
+    },
+    {
+      "build": "1100516b4411",
+      "date": "2026-10-17",
+      "outcome": "physical_journal_commit_and_reopen_passed",
+      "source_images": [
+        "image-1792295683917.jpg",
+        "image-1792295721133.jpg"
+      ],
+      "transport": "SCI",
+      "filesystem": "exFAT",
+      "pair_path": "/KUI/vmu-test/p0001",
+      "generation_before": "00",
+      "generation_after": "01",
+      "reopened_generation": "01",
+      "committed_base_sha256_prefix": "75a42e93ded7d958",
+      "reopened_base_sha256_prefix": "75a42e93ded7d958",
+      "commit_passes": [
+        "Fresh live filesystem ownership and physical journal binding.",
+        "VMU filesystem and test package CRC16.",
+        "One-block physical journal commit and exact base readback.",
+        "Final checked SCI release and READY."
+      ],
+      "reopen_passes": [
+        "Fresh live ownership and matching real journal recovery binding.",
+        "Stored generation01 with matching image hash prefix.",
+        "VMU filesystem/package CRC16 and READY."
+      ],
+      "limits": [
+        "User supplied the two requested A/X test screens following the power-cycle instructions; photographs alone do not independently measure removal of power.",
+        "This tests the owned KUIPROOF fixture in Card tools; no retail-game SD writer was enabled in this build.",
+        "The valid physical redo record remains bound to this image/journal pair; the old synthetic A/X recovery must not reopen it."
+      ]
+    },
+    {
+      "build": "fc05c8e259e2",
+      "date": "2026-10-17",
+      "outcome": "retail_toy_named_profile_survived_user_reported_reboot",
+      "source_images": [
+        "image-1792298257262.jpg"
+      ],
+      "transport": "SCI",
+      "pair_path": "/KUI/vmu-test/p0001",
+      "proof_mode": 4,
+      "profile_name": "ABC",
+      "user_report": "I created a profile ABC and on reboot it was there.",
+      "observed_screen": "Toy Commander Selecting Save Files lists ABC and New Game.",
+      "validation": [
+        "User reports creating the named profile and finding it after reboot.",
+        "Photograph shows ABC listed in the game save selector.",
+        "The delivered fc05c8e259e2 artifact passed host and native CI, strict P2 personalization, native PIO/stack/memory audits and exact saved-byte verification."
+      ],
+      "limits": [
+        "Reboot timing is user-reported; the photograph itself shows the post-reboot save selector.",
+        "This proves reported named-profile persistence for the exact Toy SCI Standard experiment, not other games or reader modes.",
+        "No selected-profile gameplay/progress load, deliberate torn-write recovery, imported physical save, or general card-selection UI is claimed.",
+        "The active image, physical journal and identity remain one bound pair; do not replace card.vmd alone."
+      ]
+    },
+    {
+      "build": "60a8caa629e3",
+      "date": "2026-10-18",
+      "outcome": "physical_import_capture_io_refusal",
+      "source_slot": "A1",
+      "capture_status": -3,
+      "image_status": 0,
+      "sd_files_created": false,
+      "source_images": [
+        "image-1792327970637.jpg"
+      ],
+      "cause": "unresolved; photo does not distinguish frame busy, timeout, framing, source identity or double-read mismatch",
+      "limits": "No physical copy or imported-game loading established. Status/image combination locates refusal before semantic image validation."
+    },
+    {
+      "build": "8a87ca0088c1",
+      "date": "2026-10-18",
+      "outcome": "physical_black_source_duplicate_reads_differ",
+      "source_slot": "A1",
+      "source_kind": "official black Sega VMU, user-confirmed",
+      "source_images": [
+        "image-1792333801725.jpg"
+      ],
+      "capture_status": -3,
+      "image_status": 0,
+      "read_block": 0,
+      "read_pass": 0,
+      "read_reason": 5,
+      "first_difference": {
+        "offset": 18,
+        "count": 1,
+        "first_byte_hex": "95",
+        "second_byte_hex": "9d"
+      },
+      "first_crc32": "8ab2666a",
+      "second_crc32": "f07cc314",
+      "raw_before_raw_after_copy_agree_each_read": true,
+      "sd_files_created": false,
+      "limits": [
+        "Difference exists by each read first raw receive-payload CRC; this does not identify VMU, controller, link, DMA or earlier host mutation.",
+        "The same black VMU was used for earlier copy/delete testing; no causal connection is established.",
+        "User also reports duplicate-read refusal in A2."
+      ]
+    },
+    {
+      "build": "8a87ca0088c1",
+      "date": "2026-10-18",
+      "outcome": "physical_white_geometry_refusal",
+      "source_slot": "A1",
+      "source_kind": "white VMU, user reports same result alone after cold boot",
+      "source_images": [
+        "image-1792334399919.jpg"
+      ],
+      "capture_status": -5,
+      "image_status": -4,
+      "sd_files_created": false,
+      "validation": [
+        "The code reaches this geometry status only after complete digest and checked source validation reads.",
+        "Root compatibility correction removes only formatter-value requirements on opaque root bytes."
+      ],
+      "limits": [
+        "This screen does not reveal which root byte violated the old predicate."
+      ]
+    },
+    {
+      "build": "acef57cdf110",
+      "date": "2026-10-18",
+      "outcome": "physical_white_import_ready_new_p0002",
+      "source_slot": "A1",
+      "source_kind": "white VMU following requested single-source cold boot",
+      "source_images": [
+        "image-1792335771730.jpg",
+        "image-1792335834710.jpg"
+      ],
+      "transport": "SCI",
+      "filesystem": "exFAT",
+      "pair_path": "/KUI/vmu-test/p0002",
+      "save_count": 13,
+      "used_blocks": 196,
+      "free_blocks": 4,
+      "clone_bytes": 131072,
+      "preview_sha256_prefix": "0085e1c864b03bc3",
+      "base_sha256": "0085e1c864b03bc3bce279f692976e4376dcebf5cba3e5fe29dae27a41bae79f",
+      "profile_file": "retail-persistent-profile-0002.bin",
+      "profile_bytes": 4096,
+      "profile_sha256": "0fba12a72e79b045c305f1e44821ffd91fad6e8c420d1c689c165ae3c723c8ec",
+      "listed_preview_names": [
+        "_SILVER_.SYS",
+        "_SILVER_.001",
+        "_SILVER_.002",
+        "TIME_STK.001"
+      ],
+      "validation": [
+        "Preview and completed import display the same exact-clone SHA prefix.",
+        "Canonical Python and actual C profile decode/re-encode both pass for the uploaded P2.",
+        "Profile contains an empty physical journal, clean marker and matching identity digest.",
+        "Import path verifies exact clone readback and exports the freshly admitted new pair; no physical VMU write is enabled."
+      ],
+      "limits": [
+        "The actual card.vmd was not uploaded; the remaining save names and payload bytes cannot be reconstructed from its profile.",
+        "This establishes import preparation and SD-clone evidence, not loading those saves in retail games.",
+        "Retail loader remained bound to p0001 during import; current native experiment supports only exact Toy Commander.",
+        "Preparation alone does not establish current off-console filesystem ownership or restart persistence of this imported card.",
+        "Owner CID and image identity bytes are deliberately excluded from repository evidence."
+      ]
+    },
+    {
+      "build": "0438c2feb0c5",
+      "date": "2026-10-18",
+      "outcome": "physical_black_free_block_cadence_unstable_metadata_stable",
+      "source_slot": "A1",
+      "source_kind": "official black Sega VMU, user-confirmed",
+      "source_images": [
+        "62813.jpg",
+        "62814.jpg",
+        "62815.jpg"
+      ],
+      "source_image_sha256": {
+        "62813.jpg": "a04affd7d93e78104b3122f20deebfffaa8941e3193f6206672fb0f85c0fd908",
+        "62814.jpg": "f8e2370548c6f1879754e60188ae06ad19291f0d430c94078eb0f4e55226e210",
+        "62815.jpg": "13263f246321e9d35ee01123957fe9d295ec347dd6e25f5607fa086ffea58353"
+      },
+      "capture_complete": true,
+      "rounds_per_cadence": 32,
+      "attempted_helper_calls_per_cadence": 96,
+      "successful_helper_calls": 288,
+      "reader_failures": 0,
+      "source_guard_failures": 0,
+      "baseline_block0_crc32": "e0a84bee",
+      "baseline_fat254_crc32": "86e43a4c",
+      "baseline_root255_crc32": "0d4b0f69",
+      "first_sample_fat_entry0_hex": "fffc",
+      "fat254_successes": 96,
+      "fat254_baseline_differences": 0,
+      "fat254_local_transitions": 0,
+      "root255_successes": 96,
+      "root255_baseline_differences": 0,
+      "root255_local_transitions": 0,
+      "cadences": [
+        {
+          "requested_gap_ms": 0,
+          "block0_baseline_differences": 20,
+          "block0_local_transitions": 25,
+          "aggregate_differing_bytes": 26,
+          "aggregate_differing_bits": 30,
+          "aggregate_byte_xor": "00",
+          "first_changed_round": 3,
+          "first_changed_at_ms": 180,
+          "first_changed_bytes": 1,
+          "first_changed_bits": 1,
+          "first_changed_byte_xor": "04",
+          "last_block0_crc32": "e0a84bee",
+          "first_two_offsets": [
+            {
+              "offset": 49,
+              "baseline_hex": "41",
+              "sample_hex": "45",
+              "xor_hex": "04"
+            }
+          ]
+        },
+        {
+          "requested_gap_ms": 20,
+          "block0_baseline_differences": 26,
+          "block0_local_transitions": 26,
+          "aggregate_differing_bytes": 39,
+          "aggregate_differing_bits": 43,
+          "aggregate_byte_xor": "08",
+          "first_changed_round": 2,
+          "first_changed_at_ms": 2211,
+          "first_changed_bytes": 2,
+          "first_changed_bits": 2,
+          "first_changed_byte_xor": "0c",
+          "last_block0_crc32": "c69592f6",
+          "first_two_offsets": [
+            {
+              "offset": 18,
+              "baseline_hex": "9d",
+              "sample_hex": "95",
+              "xor_hex": "08"
+            },
+            {
+              "offset": 49,
+              "baseline_hex": "41",
+              "sample_hex": "45",
+              "xor_hex": "04"
+            }
+          ]
+        },
+        {
+          "requested_gap_ms": 100,
+          "block0_baseline_differences": 24,
+          "block0_local_transitions": 24,
+          "aggregate_differing_bytes": 33,
+          "aggregate_differing_bits": 36,
+          "aggregate_byte_xor": "84",
+          "first_changed_round": 1,
+          "first_changed_at_ms": 7205,
+          "first_changed_bytes": 1,
+          "first_changed_bits": 1,
+          "first_changed_byte_xor": "04",
+          "last_block0_crc32": "e0a84bee",
+          "first_two_offsets": [
+            {
+              "offset": 49,
+              "baseline_hex": "41",
+              "sample_hex": "45",
+              "xor_hex": "04"
+            }
+          ]
+        }
+      ],
+      "visible_frozen_raw_before_after_copy_crc_agree": true,
+      "physical_writes_enabled": false,
+      "sd_access_enabled": false,
+      "interpretation": [
+        "Nonzero cadence-local transitions establish continuing changes within each requested gap, independently of the original baseline.",
+        "The 100 ms requested gap does not stabilize block 0 in this run.",
+        "All sampled FAT and root bytes stay identical; FAT entry 0 marks block 0 free.",
+        "The first changed sample in the 100 ms cadence is also that page first frozen diagnostic, with matching raw-before/raw-after/copy CRC c69592f6."
+      ],
+      "limits": [
+        "Only blocks 0,254,255 are sampled; no allocated save-data block has been tested by this probe.",
+        "Aggregate bytes/bits count repeated differences from the global baseline, not distinct faulty offsets; zero XOR can cancel.",
+        "Counters count bounded-reader calls, not any internal KOS AGAIN wire resubmissions.",
+        "No attribution to the physical VMU, controller, link, DMA path or earlier copy/delete tool follows from these photos.",
+        "A free block remains required by the exact raw-clone policy; no normalization or skipped-free-block capture is enabled.",
+        "Changes views and full per-read table are not included in this upload."
+      ]
+    },
+    {
+      "build": "7c0cd589610e",
+      "date": "2026-10-18",
+      "outcome": "silver_stale_bootstrap_handoff_screen_reported_freeze",
+      "game": "SILVER",
+      "product": "T15108N",
+      "source": "owner text report and last-screen clarification",
+      "last_visible_line": "ENTERING OWNER BOOTSTRAP 2",
+      "freeze_reported": true,
+      "elapsed_wait_unknown": true,
+      "limits": [
+        "The native base relay has no success redraw, so this last line cannot distinguish bootstrap from post-relay admission or native startup.",
+        "Static comparison of the exact owner IP, final relocation and memory ranges found no concrete early loader defect.",
+        "No claim is made that VMU hooks had installed or that the root cause was established."
+      ],
+      "next_diagnostic": "Silver-only relay, admission and heap checkpoints; 64KiB SHA/reference-scan progress; all exact guards and cache policy retained."
+    },
+    {
+      "build": "7c0cd589610e",
+      "date": "2026-10-18",
+      "outcome": "silver_passive_no_card_baseline_completed",
+      "game": "SILVER",
+      "product": "T15108N",
+      "source_images": [
+        "image-1792368691120.jpg",
+        "image-1792368697086.jpg",
+        "image-1792368704374.jpg",
+        "image-1792368714432.jpg",
+        "image-1792368724770.jpg"
+      ],
+      "source_image_sha256": {
+        "image-1792368691120.jpg": "b37593b6ef1aaf97b646c3b7bf8f77047e4cb5c6ca52fec9518d109557bc38f0",
+        "image-1792368697086.jpg": "dcea21cafc32a99ef699e0097d73ef60de0395d7e3109191da672a07b3b84961",
+        "image-1792368704374.jpg": "92fdc2decb0f6158c157e95195ccc46e06148dd580e894c165a66d3bf556dccc",
+        "image-1792368714432.jpg": "4d7c82ba34118900dc912cad0636d8b6340295f585b51d6895722074874fa2a8",
+        "image-1792368724770.jpg": "90b539894044cce25670df95f318ffb9fb65188e7d14f4c9da53dc90e2be9136"
+      },
+      "pages_present": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "duplicate_page": 0,
+      "owner_correction": "Did not freeze; took a really long time.",
+      "startup_wait_seconds": null,
+      "starts": 3600,
+      "descriptors": 14400,
+      "malformed": 0,
+      "descriptors_max": 4,
+      "stop_after": 3600,
+      "stop_reason": 2,
+      "stack_fault": 0,
+      "incomplete": 0,
+      "source_min_hex": "0c1c9940",
+      "source_max_hex": "0c1cc940",
+      "source_last_hex": "0c1cc940",
+      "source_changes": 3599,
+      "ports": [
+        3600,
+        3600,
+        3600,
+        3600
+      ],
+      "rx_min_hex": "0c1bd920",
+      "rx_max_hex": "0c1c8120",
+      "rx_bad": 0,
+      "main_devinfo": 10801,
+      "commands_hex_index": {
+        "1": 10801,
+        "9": 3599
+      },
+      "other_commands": 0,
+      "main_unit_requests": 14400,
+      "subunit_requests": 0,
+      "unsupported": 0,
+      "completion_calls": 3599,
+      "completion_matched": 3540,
+      "completion_orphan": 0,
+      "completion_overwritten": 59,
+      "completion_pending": 0,
+      "completion_busy": 0,
+      "completion_bad_mask": 59,
+      "completion_rx_headers": 14160,
+      "entry_sr_hex": "60000161",
+      "entry_masks_hex": "00000040",
+      "completion_sr_last_hex": "600000f1",
+      "completion_masks_hex": "00008040",
+      "main_a_info_header_hex": "1c200005",
+      "main_a_rx_hex": "0c1bd920",
+      "completion_bad_context": 0,
+      "completion_guard_flags_hex": "00000008",
+      "completion_source_hex": "0c1c9940",
+      "completion_pr_last_hex": "8c12b7a6",
+      "trigger": 0,
+      "enable": 1,
+      "busy": 0,
+      "manager_base_hex": "a05f6c00",
+      "manager_other": 0,
+      "post_after": 600,
+      "virtual_vmu_enabled": false,
+      "storage_writes_enabled": false,
+      "interpretation": [
+        "The exact earlier build reached its planned 3600-start hard stop; owner retracts freeze diagnosis.",
+        "3540 matched completions supplied 14160 header reads, exactly four per matched schedule.",
+        "59 mask refusals and59 pending overwrites account for3599 minus3540 completions; inheritedmaskbitmap contains only6and15.",
+        "Only main-unit discovery/controller traffic is captured; no subunit-card command is present, consistent with the instructed no-VMU baseline."
+      ],
+      "limits": [
+        "No physical or virtual VMU save load, payload integrity, virtual reply or persistence is tested.",
+        "Full live table/chain completion admission is skipped at mask6 by this passive version; mask6 cannot be treated as fully admitted solely from these counters.",
+        "No timing measurement distinguishes slow bootstrap from uncached post-bootstrap executable admission.",
+        "Any later use of mask6 for virtual replies needs an explicit title-scoped concurrency proof and all live guards."
+      ]
+    },
+    {
+      "build": "efa1f3885c5e",
+      "date": "2026-10-18",
+      "outcome": "silver_synthetic_blank_card_reads_completed_post_window_stop",
+      "game": "SILVER",
+      "product": "T15108N",
+      "source_images": [
+        "image-1792371371271.jpg",
+        "image-1792371375703.jpg",
+        "image-1792371383667.jpg",
+        "image-1792371393741.jpg"
+      ],
+      "source_image_sha256": {
+        "image-1792371371271.jpg": "1a76db3eb6fc7feb68b1d31085bf37370411c4eb24f7a8a3e29353ef1343e061",
+        "image-1792371375703.jpg": "26123a713b1ec991fa12754253090f24bf0541a21f16b0edfa16bbb91c4fec24",
+        "image-1792371383667.jpg": "0c92f96c3ee0e38d1dc9694309eb4dc63d1a629068894431831dda2cfd940ef8",
+        "image-1792371393741.jpg": "41809396c2fc13dec89e622085b3df20ed93eaeb024c00a8f013f913f4cc9d88"
+      },
+      "pages_present": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "owner_report": "Did not get to the loading screen.",
+      "starts": 733,
+      "descriptors": 2949,
+      "malformed": 0,
+      "descriptors_max": 5,
+      "stop_after": 3600,
+      "stop_reason": 3,
+      "first_subunit_start": 2,
+      "first_card_start": 133,
+      "post_after": 600,
+      "stack_fault": 0,
+      "incomplete": 0,
+      "rx_bad": 0,
+      "unsupported": 0,
+      "source_min_hex": "0c1c9940",
+      "source_max_hex": "0c1cc940",
+      "source_last_hex": "0c1c9940",
+      "source_changes": 732,
+      "ports": [
+        750,
+        733,
+        733,
+        733
+      ],
+      "rx_min_hex": "0c1bd920",
+      "rx_max_hex": "0c1c8120",
+      "main_devinfo": 2201,
+      "commands_hex_index": {
+        "1": 2201,
+        "9": 732,
+        "a": 1,
+        "b": 15
+      },
+      "other_commands": 0,
+      "main_unit_requests": 2932,
+      "subunit_requests": 17,
+      "completion_calls": 732,
+      "completion_matched": 732,
+      "completion_orphan": 0,
+      "completion_overwritten": 0,
+      "completion_pending": 0,
+      "completion_busy": 0,
+      "completion_bad_mask": 0,
+      "completion_rx_headers": 2945,
+      "entry_sr_hex": "60000161",
+      "entry_masks_hex": "00000040",
+      "completion_sr_last_hex": "600000f1",
+      "completion_masks_hex": "00008040",
+      "main_a_info_header_hex": "1c210005",
+      "main_a_rx_hex": "0c1bd920",
+      "completion_bad_context": 0,
+      "completion_guard_flags_hex": "00000000",
+      "completion_source_hex": "0c1cc940",
+      "completion_pr_last_hex": "8c12b7a6",
+      "virtual_replies": 17,
+      "virtual_info_replies": 1,
+      "virtual_media_replies": 1,
+      "virtual_read_replies": 15,
+      "virtual_parent_patches": 732,
+      "virtual_conflicts": 0,
+      "virtual_refused": 0,
+      "proof_bank_fail": 0,
+      "proof_flags_hex": "00000000",
+      "virtual_last_block": 241,
+      "virtual_reply_bytes": 8008,
+      "sd_commits": 0,
+      "proof_mode": 1,
+      "proof_prepared": 732,
+      "proof_completed": 732,
+      "virtual_vmu_enabled": true,
+      "storage_writes_enabled": false,
+      "interpretation": [
+        "The planned card-window stop is exact: first card start133 plus600 equals733; final counted schedule was not submitted.",
+        "All732 submitted schedules completed and matched; no orphan, overwrite, mask, busy, context, bank or proof refusal is reported.",
+        "Silver requested and received virtual device information, media information and15 block reads; reply byte count reconciles to116+32+15*524=8008.",
+        "The test reached its report before the owner could reach the loading screen, so its post-card duration was too short for that requested observation."
+      ],
+      "limits": [
+        "This is synthetic empty-card discovery and read evidence, not imported-save loading, saving, formatting or persistence.",
+        "Actual wall-clock duration is unknown; only SDK start counts were captured.",
+        "The game reaching the load menu and displaying its empty-card result remains untested."
+      ]
+    },
+    {
+      "build": "0cdd543d8e4f",
+      "date": "2026-10-18",
+      "outcome": "silver_readonly_write_guard_stopped_after_main_menu_start",
+      "game": "SILVER",
+      "product": "T15108N",
+      "source_images": [
+        "image-1792371920845.jpg",
+        "image-1792371929606.jpg",
+        "image-1792371939683.jpg",
+        "image-1792371949736.jpg"
+      ],
+      "source_image_sha256": {
+        "image-1792371920845.jpg": "c9214ce9220201709242d6a4ababfaca49d767056928dd3c02bbf232de08cd94",
+        "image-1792371929606.jpg": "e42471bc6d563ddd9d8a3f154ab4521e03a5bd4f42823988d11e5b7384b590f1",
+        "image-1792371939683.jpg": "b9b81cecc29c23138735a9b031663faf7ef46dbd8ddf1052f47a88c970091fbd",
+        "image-1792371949736.jpg": "b69bccd8469b1ea477e890996421c48670ec4724cf040e43382206917db0994b"
+      },
+      "pages_present": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "owner_report": "Happened when I hit start by accident in the main menu.",
+      "starts": 1674,
+      "descriptors": 6710,
+      "malformed": 0,
+      "descriptors_max": 5,
+      "stop_after": 36000,
+      "stop_reason": 6,
+      "first_subunit_start": 2,
+      "first_card_start": 133,
+      "post_after": 18000,
+      "stack_fault": 0,
+      "incomplete": 0,
+      "rx_bad": 0,
+      "unsupported": 0,
+      "source_min_hex": "0c1c9940",
+      "source_max_hex": "0c1cc940",
+      "source_last_hex": "0c1cc940",
+      "source_changes": 1673,
+      "ports": [
+        1691,
+        1673,
+        1673,
+        1673
+      ],
+      "rx_min_hex": "0c1bd920",
+      "rx_max_hex": "0c1c8120",
+      "main_devinfo": 5020,
+      "commands_hex_index": {
+        "1": 5021,
+        "9": 1672,
+        "a": 1,
+        "b": 15,
+        "c": 1
+      },
+      "other_commands": 0,
+      "main_unit_requests": 6692,
+      "subunit_requests": 17,
+      "completion_calls": 1673,
+      "completion_matched": 1673,
+      "completion_orphan": 0,
+      "completion_overwritten": 0,
+      "completion_pending": 0,
+      "completion_busy": 0,
+      "completion_bad_mask": 0,
+      "completion_rx_headers": 6709,
+      "entry_sr_hex": "60000161",
+      "entry_masks_hex": "00000040",
+      "completion_sr_last_hex": "600000f1",
+      "completion_masks_hex": "00008040",
+      "main_a_info_header_hex": "1c210005",
+      "main_a_rx_hex": "0c1bd920",
+      "completion_bad_context": 0,
+      "completion_guard_flags_hex": "00000000",
+      "completion_source_hex": "0c1c9940",
+      "completion_pr_last_hex": "8c12b7a6",
+      "virtual_replies": 17,
+      "virtual_info_replies": 1,
+      "virtual_media_replies": 1,
+      "virtual_read_replies": 15,
+      "virtual_parent_patches": 1673,
+      "virtual_conflicts": 0,
+      "virtual_refused": 0,
+      "proof_bank_fail": 0,
+      "proof_flags_hex": "08000000",
+      "virtual_last_block": 241,
+      "virtual_reply_bytes": 8008,
+      "sd_commits": 0,
+      "proof_mode": 1,
+      "proof_prepared": 1673,
+      "proof_completed": 1673,
+      "virtual_vmu_enabled": true,
+      "storage_writes_enabled": false,
+      "interpretation": [
+        "The user reports reaching the main menu and pressing Start accidentally.",
+        "One command0x0c BLOCKWRITE was counted; stop reason6 and flag08000000 identify the unsupported-shape pre-submission guard.",
+        "All1673 previous batches completed; the final18thA1 descriptor was counted but not recorded or submitted, leaving17 successful virtual replies and zero commits.",
+        "The real report loop does not return to the original MDST store; unsupported writes are refused before payload capture. No new runtime fix is indicated."
+      ],
+      "limits": [
+        "The purpose of the attempted write cannot be determined from these summary pages; no payload was captured.",
+        "This is synthetic empty-card discovery/read and write-refusal evidence; imported saves, saving, formatting and persistence remain outside this test.",
+        "The user reached the main menu; a Load Game menu result is still not supplied."
+      ],
+      "a1_descriptors_counted": 18
+    },
+    {
+      "date": "2026-10-18",
+      "build": "0cdd543d8e4f",
+      "build_identification": "Same ongoing test per conversation; build label is not visible on game screen.",
+      "outcome": "silver_load_menu_expected_empty_virtual_card",
+      "game": "SILVER",
+      "product": "T15108N",
+      "source_images": [
+        "image-1792372458523.jpg"
+      ],
+      "source_image_sha256": {
+        "image-1792372458523.jpg": "f262f5e80d0ca93561637df018fdd4d15633351ea47dac4a8cae1911daaaa612"
+      },
+      "screen_title": "Load",
+      "visible_message": "NO SILVER DATA FOUND ON THE VISUAL MEMORY LOCATED IN SLOT A (EXPANSION SOCKET 1). PLEASE INSERT A NEW VISUAL MEMORY CONTAINING SILVER DATA.",
+      "virtual_vmu_enabled": true,
+      "storage_writes_enabled": false,
+      "interpretation": [
+        "Silver reached its Load screen and displays an empty save list with the expected no-Silver-data message for the synthetic blank A1 image.",
+        "Together with the earlier device/media/15-block reply reports, this supplies the previously missing empty-card user-interface observation."
+      ],
+      "limits": [
+        "The screenshot alone does not identify the runtime build or contain diagnostic counters.",
+        "It does not demonstrate imported-save loading, writes or persistence."
+      ]
+    },
+    {
+      "date": "2026-10-18",
+      "build": "e5f8f76e8923",
+      "build_identification": "Owner reply to the immediately preceding personalized imported-card test; no new screenshot or report pages.",
+      "outcome": "silver_imported_both_saves_loaded_owner_report",
+      "game": "SILVER",
+      "product": "T15108N",
+      "owner_report": "It loaded my save and it worked. I last played maybe 25 years ago so I don't remember anything about the game, but both saves work",
+      "saves_loaded": 2,
+      "source_pair": "/KUI/vmu-test/p0002",
+      "image_sha256": "0085e1c864b03bc3bce279f692976e4376dcebf5cba3e5fe29dae27a41bae79f",
+      "profile_sha256": "3ccb6e632d284a4b0eb43f393ad9028b2bcc6bb65d98633eb4fdabf157096a95",
+      "virtual_vmu_enabled": true,
+      "storage_writes_enabled": false,
+      "interpretation": [
+        "Owner reports that both existing Silver saves on the full imported white-card image load and work through the virtual read-only A1 card."
+      ],
+      "limits": [
+        "No new diagnostic counters, timing or gameplay screenshots were supplied.",
+        "This does not establish Silver save updates, new saves, deletion, formatting, crash recovery or restart persistence after a new write."
+      ]
+    },
+    {
+      "build": "897ee7223b35",
+      "date": "2026-10-23",
+      "outcome": "evolution1_native_virtual_card_save_reload_reported",
+      "game": "Evolution: The World of Sacred Device",
+      "product": "T17706N",
+      "version": "V1.290",
+      "region": "U",
+      "source": "Owner report recorded in docs/evidence/native-evolution2-extent-2026-10-23.json",
+      "virtual_slot": "A1",
+      "virtual_vmu_enabled": true,
+      "storage_writes_enabled": true,
+      "accepted_scope": [
+        "Owner confirmed launch, save and reboot/load on this native adapter."
+      ],
+      "limits": [
+        "This earlier A1 result does not establish the new A2 transport, physical A1 coexistence or the Background reader.",
+        "No measured frame rate or FMV equivalence is inferred from save/load success."
+      ]
+    },
+    {
+      "build": "df035a8cae47",
+      "date": "2026-10-24",
+      "outcome": "evolution2_native_virtual_card_save_load_reported",
+      "game": "Evolution 2: Far Off Promise",
+      "product": "T1711N",
+      "version": "V1.000",
+      "region": "U",
+      "source": "Owner follow-up after the Evolution 2 extent-correction candidate",
+      "owner_report": "VMU seems to work for Evolution2 but I thought we were specifically doing A2 to keep A1 port free",
+      "accepted_scope": [
+        "Owner reports the Evolution 2 virtual card/save-load path working after the extent correction."
+      ],
+      "performance_report": "Owner reports the same slowdown compared with the older 2.0 FMV baseline.",
+      "requested_arrangement": "Keep physical A1 free for the real VMU, including the Skies LCD, and present the virtual card as A2.",
+      "virtual_slot": "A1",
+      "virtual_vmu_enabled": true,
+      "storage_writes_enabled": true,
+      "power_cycle_explicitly_confirmed": false,
+      "a2_console_verified": false,
+      "background_console_verified": false,
+      "limits": [
+        "The report accepts the extent-corrected A1 card path; the new A2/Background package has no console confirmation.",
+        "The supplied message does not separately describe a full power-off/reload sequence or provide timing measurements.",
+        "Save/load success does not accept the reported FMV slowdown."
+      ]
+    },
+    {
+      "build": "d55fd228e049",
+      "game": "Evolution 2: Far Off Promise",
+      "source": "Owner photo and report on 2026-10-24",
+      "result": "Background launch failed at first contended virtual READ; Background Off also failed with a different, unpictured error.",
+      "captured_failure": {
+        "detail": "17",
+        "overlay": "fffffff8",
+        "reply": "000200fc",
+        "sd_busy": 1,
+        "sd_faults": 0,
+        "commits": 0
+      },
+      "ordinary_fmv_route_correction": "Owner states earlier edf20f0f11a3 smooth-FMV result used regular loading.",
+      "limits": [
+        "Only one of the two error screens was supplied.",
+        "No hardware result for the retry correction yet."
+      ]
+    },
+    {
+      "date": "2026-10-25",
+      "build": "f2410c316f25",
+      "outcome": "skies_boot_confirmed_rayman_lodoss_remain_failed",
+      "source": "Owner report and attached 63393.mp4 / 63394.mp4; docs/evidence/native-console-followup-f241-2026-10-25.json",
+      "results": {
+        "Skies of Arcadia": "Boots normally per owner; save/load not separately reported",
+        "Rayman 2": "Passes previous bootstrap stop; stalls at Ubisoft logo",
+        "Record of Lodoss War": "Opening video absent; very slow audio remains"
+      },
+      "capture_summary": "Both captures contain1200 valid fast controller pairs and zero VMU storage calls. Rayman performs no new read work; Lodoss continues reading data without reported read-ahead failure or CRC fault. One underlying Lodoss SD token error is not tied to the symptom.",
+      "limits": [
+        "Console results do not establish universal VMU compatibility or new A2 persistence.",
+        "No interrupted game PC was captured for either title."
+      ],
+      "next_test": "Same build with Background On / Legacy (Y), preserving prepared A2 and384KiB reservation."
+    }
+  ]
+}

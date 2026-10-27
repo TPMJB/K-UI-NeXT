@@ -1,0 +1,78 @@
+{
+  "schema": "kui.native.uniform-root-family.v1",
+  "date": "2026-10-23",
+  "scope": "Immutable SDK caller decoding and independent SH/live-state models. No new console execution or save-persistence claim.",
+  "change": "Uniform contiguous initializer roots may use R0, R2 or R3 for their sampled indirect target. The unchanged argument roles are R4=0, R5=RX and R6=TX. All literal reads remain inside the immutable executable; each assignment is unique, target known before JSR, and branches/unknown inherited state are refused.",
+  "unchanged": [
+    "Layout wire version and fields",
+    "Uniform initializer and constructor witnesses",
+    "Lock and upper-wrapper witnesses",
+    "Live manager/RX/TX binding, every receive slot and blocked-range checks",
+    "Runtime worker lifetime and save-storage policy"
+  ],
+  "tests": {
+    "full_public_layout_asan_ubsan_checks": 6824,
+    "public_inputs": [
+      "ps2",
+      "skies",
+      "sa2",
+      "ct2",
+      "pso",
+      "recv"
+    ],
+    "actual_SH_transport": "Original code executes from root through upper wrapper, IRQ-masked lock wrapper and SDK initializer/constructor; unrelated calls adversarially clobber caller-saved registers.",
+    "live_binding": "CT2 and PSO pass reconstructed live manager, RX/TX and all48-slot binding. RECV still refuses executable-buffer overlap.",
+    "authored_root_permutations": 360,
+    "all_single_16_bit_instruction_replacements": 1179648,
+    "root_test_assertions": 3589,
+    "root_semantically_verified_admissions": 1014,
+    "mutation_scope": "Every accepted instruction replacement is independently executed and must reproduce the decoded target, argument values and literal provenance. Refused candidates are not counted as independent test assertions.",
+    "negative_cases": [
+      "Target literal moved into JSR delay slot",
+      "Unsupported target register or target/argument alias",
+      "Unknown instruction or control flow",
+      "Duplicate/missing argument assignment",
+      "Truncated executable or literal pool",
+      "Invalid target address",
+      "Existing corrupted wrapper/initializer/constructor and live binding mutations"
+    ]
+  },
+  "new_layout_candidates": [
+    {
+      "input": "ct2",
+      "title": "Crazy Taxi 2",
+      "executable_bytes": 1452148,
+      "sha256": "8057a8e37636ad78b1fc70ee590bd314686546b13ffe100623d86b572aec53c1",
+      "target_register": 2,
+      "root_call": "0x8c01ab2c",
+      "raw_rx": "0x0c1a6054",
+      "raw_tx": "0x0c1b2074",
+      "immutable_layout": true,
+      "independent_transport_model": "passed",
+      "live_binding_model": "passed"
+    },
+    {
+      "input": "pso",
+      "title": "Phantasy Star Online",
+      "executable_bytes": 3783264,
+      "sha256": "11dc59ee0278675decf5e0bf1fa30646f889a0e5a7f10251f3c3a697e42a28e5",
+      "target_register": 0,
+      "root_call": "0x8c02b1ae",
+      "raw_rx": "0x8c3e7ad4",
+      "raw_tx": "0x8c3dbab4",
+      "immutable_layout": true,
+      "independent_transport_model": "passed",
+      "live_binding_model": "passed"
+    }
+  ],
+  "remaining_refusals": [
+    {
+      "input": "evolution2",
+      "reason": "Two complete TMU1/TMU2 dispatch families name separate callback pairs. Selecting one without root reachability or overlay lifetime proof would drop a real ownership witness; uniqueness refusal retained."
+    },
+    {
+      "input": "jgr",
+      "reason": "Uniform initializer, lock wrapper and upper wrapper pass, but no immutable pointer or direct BSR/BRA reference to the matched upper wrapper was found. Root transport remains unproved; R0/R2/R3 extension alone does not admit it."
+    }
+  ]
+}

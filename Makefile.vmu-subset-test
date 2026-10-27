@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Standalone host constructor tests. Not included by a console/runtime target.
+BUILD ?= build/vmu-subset-test
+HOST_CC ?= cc
+HOST_SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie
+SOURCES := tests/test_vmu_image_subset.c src/core/vmu_image_subset.c src/core/vmu_image.c
+.DEFAULT_GOAL := host-test
+.PHONY: host-test
+$(BUILD)/test-vmu-image-subset: $(SOURCES) include/kui/vmu_image_subset.h include/kui/vmu_image.h
+	@mkdir -p $(@D)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic $(HOST_SANITIZERS) \
+	    -Iinclude $(SOURCES) -o $@
+host-test: $(BUILD)/test-vmu-image-subset
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-vmu-image-subset

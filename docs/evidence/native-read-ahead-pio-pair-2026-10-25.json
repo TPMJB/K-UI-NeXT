@@ -1,0 +1,134 @@
+{
+  "schema": "kui.native.read-ahead.pio-pair-candidate.v1",
+  "date": "2026-10-25",
+  "purpose": "Test whether more reliable prefetch removes the small remaining pauses without excessive serialized heartbeat work.",
+  "motivating_source_commit": "04e204a26cfb7d5c777f40764e0b5ea14bd405e8",
+  "motivating_capture": {
+    "name": "63370.mp4",
+    "bytes": 90269457,
+    "sha256": "18906a448fca5d657a440622df50e45dc7541c54f22a00b336eadd4fe606bf61",
+    "seconds": 95.417322,
+    "width": 1280,
+    "height": 720,
+    "frame_rate": "30000/1001",
+    "applicable_report_pages": 15,
+    "all_applicable_pages_present": true,
+    "no_first_last_failure_pages_because_failures_zero": true,
+    "cycle_seconds_approx": 66
+  },
+  "user_report": "Stutters are almost imperceptible; remaining stutters are very small.",
+  "measured_control": {
+    "pio_checked_blocks": 1156,
+    "heartbeats": 1200,
+    "active_demand_skips": 44,
+    "abandoned": 0,
+    "crc_errors": 0,
+    "token_errors": 0,
+    "clock_bad": 0,
+    "max_single_block_ticks": 1129,
+    "max_single_block_milliseconds": 1.44512,
+    "cache_full": 0,
+    "nominal_producer_kib_per_second": 28.9,
+    "recent_raw_backing_kib_per_second": 56.503125
+  },
+  "policy": {
+    "hard_maximum_new_blocks_per_heartbeat": 2,
+    "entry": "Existing serialized controller-completion TICK only, never GD DELIVER or SCI IRQ.",
+    "first_block": "Existing fresh-PAUSED512B PIO fetch(next,256,true), existing CRC take and complete cache append.",
+    "before_second_block": [
+      "First block completed and passed CRC/cache publication",
+      "Repeat current event, interrupt, quiesce, abandonment, seed, loan, demand/service, reader/port, busy/deferred/speculation, cache/full/extent, stream position and DMA admission checks",
+      "Read the existing timer again after repeated guards",
+      "Require positive clock-valid elapsed time no greater than1144ticks from producer start"
+    ],
+    "soft_window_ticks": 2344,
+    "next_block_reserve_ticks": 1200,
+    "second_start_limit_ticks": 1144,
+    "ticks_per_second": 781250,
+    "soft_window_milliseconds": 3.00032,
+    "reserve_milliseconds": 1.536,
+    "second_start_limit_milliseconds": 1.46432,
+    "never_abort_started_block": true,
+    "guaranteed_elapsed_time_limit": false,
+    "maximum_token_and_data_byte_calls_two_successful_blocks": 1540,
+    "no_crc_copy_or_low_transport_optimization": true
+  },
+  "metrics": {
+    "location": "Existing diagnostics.stage_result[NONE][0..6]; public/context/record layouts stay656/904/148bytes.",
+    "PIO WORK MAX BAD": [
+      "Total attempted blocks",
+      "Largest whole producer visit with valid timing, including one or two blocks and inter-block checks",
+      "Invalid per-block timing samples"
+    ],
+    "SECOND SKIP ONE MAX OVER": [
+      "Second-block attempts",
+      "Otherwise-eligible second blocks refused by time/profile admission",
+      "Largest valid single-block operation",
+      "Whole valid producer visits strictly exceeding2344ticks"
+    ],
+    "invalid_interval": "Bad endpoint clock profile, zero elapsed or unsigned delta at least0x80000000; each invalid attempted block increments BAD once. Invalid admission clock prevents block2 and suppresses whole-visit maximum.",
+    "threshold_boundaries": "Elapsed1144admits block2;1145refuses. Whole2344does not count as overrun;2345does.",
+    "capture_reset": "Existing gesture resets all metrics and failure counters, preserving valid cache."
+  },
+  "preserved": {
+    "low_demand_dma_reader": true,
+    "sci_priority": 1,
+    "sdk_vbr_callback_route": true,
+    "single_erasure_and_lifetime_repair_guards": true,
+    "ce_cdda_paths": true,
+    "exact_evolution2_admission": true,
+    "physical_a1_virtual_a2": true,
+    "cache_bytes": 196608,
+    "lease_bytes": 393216,
+    "public_bytes": 656,
+    "context_bytes": 904,
+    "failure_record_bytes": 148,
+    "guard_counter_offset": 64,
+    "auxiliary_private_stack_bytes": 4096
+  },
+  "software_validation": {
+    "asan_ubsan_checks": 2269327,
+    "actual_sci_card_dma_fixture": true,
+    "actual_checked_32_heartbeat_64_block_test": true,
+    "optional_dmac_register_writes": 0,
+    "same_repeated_overrun_injections_remain_armed": true,
+    "second_stage_guards_mutated_after_first_cache_publication": 18,
+    "second_crc_or_token_fault_preserves_first_checked_block_and_guest_request": true,
+    "one_remaining_cache_slot_or_extent_block_clips_to_one": true,
+    "exact_clock_and_window_boundary_cases": true,
+    "cold50sector_then_warm73rawsector_bytes_match": true,
+    "actual_display_harness_passed": true,
+    "display_metrics_in_order": 7,
+    "cache_page_body_rows": 15,
+    "complete_linked_model_and_clean_original_startup_audits_required_before_delivery": true,
+    "actual_linked_producer_cases": 305,
+    "actual_linked_instruction_truth_cases": 84,
+    "auxiliary_code_bytes": 6144,
+    "auxiliary_code_sha256": "13f3a6ee0841966d919723d68dff8909cc1326e450d63fe9d9a6f8e7f445f246",
+    "auxiliary_closed_stack_bytes": 472,
+    "prototype_full_persistent_self_test_and_evolution1_startup_passed": true,
+    "old_one_block_pins_preserved": true
+  },
+  "hardware_test": {
+    "always_profile_runtime": true,
+    "settings": "SCI / Background On / Normal / Auto / CD music Off / RAM patches Off",
+    "workload": "Same Evolution2 in-engine opening and movement area; also check FMVs.",
+    "capture": "Both triggers plus B for about1second; release and move until intentional approximately20second stop; record one complete report cycle from CRC VALIDATED PHYSICAL READ AHEAD until that same heading returns, including all request timing pages.",
+    "discriminators": [
+      "How many second blocks are admitted and completed?",
+      "Do checked production and foreground/request timings improve?",
+      "What are largest whole and single operation durations, invalid samples and soft-window exceedances?",
+      "Do subjective remaining stutters improve without harming FMVs?"
+    ],
+    "console_boot_verified": false,
+    "console_performance_verified": false
+  },
+  "limits": [
+    "The3ms window guides admission and is not a worst-case duration guarantee. A started block may be slower than its reserve.",
+    "Doubling the measured1.44512ms maximum projects2.89024ms, not a guarantee. Longer IMASK15 occupancy can worsen responsiveness even if demand stalls shrink.",
+    "At60Hz ideal production is60KiB/s; applying the previous eligible fraction projects57.8KiB/s, narrowly above the retained workload56.5KiB/s.",
+    "Full-cache, extent, timing and demand skips reduce that ceiling.",
+    "No synchronized frame witness establishes the cause of every remaining tiny stutter.",
+    "Counters are diagnostic and include sampling overhead; compare the same workload."
+  ]
+}
