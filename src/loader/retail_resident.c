@@ -363,7 +363,7 @@ static void install_hook(void) {
 #endif
     __asm__ __volatile__("" : : : "memory");
 }
-#if defined(KUI_RETAIL_ASYNC) && !KUI_VMU_NATIVE_BACKGROUND
+#if defined(KUI_RETAIL_ASYNC) && !KUI_VMU_NATIVE_BACKGROUND && !KUI_NATIVE_STANDALONE_READER
 /* Counter rows for both screens; every counter is a uint32_t in order. */
 #ifdef KUI_RETAIL_CE
 _Static_assert(sizeof(struct kui_sci_stream_stats) == 21u * 4u, "CE stream counters");
@@ -455,7 +455,7 @@ static void capture_native_fault(uint32_t function, uint32_t current_param) {
 }
 #endif
 #endif
-#if KUI_VMU_NATIVE_BACKGROUND
+#if KUI_VMU_NATIVE_BACKGROUND || KUI_NATIVE_STANDALONE_READER
 /* The separate VMU reader keeps compact terminal fields in its unchanged
  * low reservation; the worker owns the detailed VMU report. No counters or
  * labels on this terminal-only path participate in game read scheduling. */
@@ -558,7 +558,7 @@ static void report_fault(const char *reason, uint32_t function) {
     for(;;) __asm__ volatile("nop");
 }
 #endif
-#if KUI_VMU_NATIVE_BACKGROUND
+#if KUI_VMU_NATIVE_BACKGROUND || KUI_NATIVE_STANDALONE_READER
 #define report_fault(reason, function, current_param) report_fault((function))
 #elif defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_ASYNC)
 /* Current R5 is a standard-native terminal field. Keep the other readers'
@@ -658,7 +658,7 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack
     (void)command; /* Assembly reaches this only for menu return command 1. */
     (void)caller; (void)stack;
 #endif
-#if KUI_VMU_NATIVE_BACKGROUND
+#if KUI_VMU_NATIVE_BACKGROUND || KUI_NATIVE_STANDALONE_READER
     native_reader_report(
 #if KUI_NATIVE_SDK_SCI_STRUCTURAL
         "RET"

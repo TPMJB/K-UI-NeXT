@@ -184,7 +184,7 @@ _Static_assert(sizeof(struct kui_retail_async_shared) <= 0x1e0u, "shared fits ga
 #endif
 #endif
 typedef struct kui_retail_async_region kui_retail_async_region_type;
-#if KUI_VMU_NATIVE_BACKGROUND
+#if KUI_VMU_NATIVE_BACKGROUND || KUI_NATIVE_STANDALONE_READER
 /* The stage supplies the initial protected workspace; the native allocator
  * binder moves the complete idle region into the already owned lease tail. */
 extern kui_retail_async_region_type *kui_retail_async_region_storage;

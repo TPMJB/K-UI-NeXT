@@ -1,0 +1,139 @@
+{
+  "schema": "kui.doa2.new-reader-original-sdk-callback.v1",
+  "source_sha256": "105056d9ffef86bf5e470fa28dc5907443156f9ab1c6bc009f73661d9c047a85",
+  "resident_sha256": "cb3e60139cb6f995955be22033c42513f7e79fc307d98a3ec9b64dec11ec7a91",
+  "result": {
+    "owner_digest": "105056d9ffef86bf5e470fa28dc5907443156f9ab1c6bc009f73661d9c047a85",
+    "game": "doa2-expansion-input",
+    "owner_program_bytes": 1815864,
+    "original_sdk_owner_contract": {
+      "family": "full-fpu",
+      "game": "doa2-expansion-input",
+      "load": 2348875776,
+      "vector": 2350071832,
+      "event": 2350072752,
+      "default": 2350071528,
+      "helper": 2350114900,
+      "commons": [
+        2350071972,
+        2350072332
+      ],
+      "table_init": 2350003170,
+      "table_stop": 2350003200,
+      "frame_pairs": [
+        [
+          2350071974,
+          2350072274
+        ],
+        [
+          2350072370,
+          2350072680
+        ]
+      ],
+      "dispatches": [
+        2350072104,
+        2350072500
+      ],
+      "continuations": [
+        2350072148,
+        2350072544
+      ],
+      "source_bytes": 1815864,
+      "source_sha256": "105056d9ffef86bf5e470fa28dc5907443156f9ab1c6bc009f73661d9c047a85",
+      "program_bytes": 1815864,
+      "program_sha256": "105056d9ffef86bf5e470fa28dc5907443156f9ab1c6bc009f73661d9c047a85",
+      "digest": "105056d9ffef86bf5e470fa28dc5907443156f9ab1c6bc009f73661d9c047a85",
+      "dispatch": 2350072500,
+      "continuation": 2350072544,
+      "vbr": 2348872704,
+      "eri_slot": 2348873308,
+      "rxi_slot": 2348873312
+    },
+    "original_sdk_owner_execution": {
+      "game": "doa2-expansion-input",
+      "source_bytes": 1815864,
+      "program_bytes": 1815864,
+      "source_sha256": "105056d9ffef86bf5e470fa28dc5907443156f9ab1c6bc009f73661d9c047a85",
+      "program_sha256": "105056d9ffef86bf5e470fa28dc5907443156f9ab1c6bc009f73661d9c047a85",
+      "actual_table_initializer_cases": 16,
+      "actual_control_frame_roundtrip_cases": 32,
+      "callback_argument_register": "r4",
+      "callback_return": "RTS to original JSR continuation",
+      "owner_vbr": "0x8c00f400",
+      "eri_slot": "0x8c00f65c",
+      "rxi_slot": "0x8c00f660",
+      "default": "0x8c133ee8",
+      "dispatch": "0x8c1342b4",
+      "event": "0x8c1343b0",
+      "continuation": "0x8c1342e0",
+      "full_fpu_prologue_modelled": false,
+      "console_execution_verified": false
+    },
+    "original_sci_default_helper_execution": {
+      "game": "doa2-expansion-input",
+      "helper": "0x8c13e854",
+      "actual_sci_return_cases": 32,
+      "events": [
+        "0x4e0",
+        "0x500"
+      ],
+      "masks": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
+      ],
+      "maximum_own_frame_bytes": 44,
+      "external_code_data_mmio_reads": 0,
+      "writes_outside_own_frame": 0,
+      "unrelated_debug_print_paths_executed": false
+    },
+    "structural_family": "full-fpu",
+    "actual_sdk_integer_dispatch_to_linked_callback_cases": 1280,
+    "both_original_common_modes_executed": true,
+    "dynamic_vbrs": [
+      "0x8c00f400",
+      "0x8cc80000"
+    ],
+    "actual_sdk_event_table_lookup_and_jsr_executed": true,
+    "raw_u0_default_and_continuation_preserved": false,
+    "production_extent_and_structural_source_live_models_checked": true,
+    "source_identity_freshly_hashed": true,
+    "full_sdk_fpu_prologue_and_epilogue_executed": false,
+    "console_performance_verified": false
+  },
+  "standalone_reader_built": false,
+  "console_compatibility_proved": false,
+  "limitations": [
+    "The existing New callback bridge is executed against the original DOA2 SDK owner contract. Reader C dispatch is an explicitly adversarial ABI substitute.",
+    "This report does not prove standalone reader placement, first route installation, resource lifecycle, SD hardware or gameplay."
+  ],
+  "repository_commit_at_proof": "44f51379cd772117d98fb7a4f7f74ce53bb73d3e",
+  "runtime_build": "6be76940ccc94166b2f14708702d6d08bcbde4d1",
+  "proof_sources_sha256": {
+    "tools/prove_native_sdk_sci_structural_runtime.py": "47bcd3304b852141577a7e9166281d411b6a44bb23509a7d5ef47d5ced3adbd3",
+    "tools/check_vmu_native_sdk_sci_route.py": "0d6b2965bfa6871e90b6884946960fbdfad5859777b16d3980283525cb8c272a",
+    "tests/test_native_sdk_sci_owner_contract.py": "c92b0260bf417bc8e75eb4dfba5571e568c523d127d107cb8df0ee0275718ef2",
+    "tests/test_native_sdk_sci_helper_contract.py": "d62b40b7a3f33638185bdde2eef1730125fd27fa4a653a96170203f470b6c084",
+    "src/core/native_sdk_sci_route.c": "76d6461f469a41b8b1adbfb0bf17057391dfa23f828ab54786df3d4dede3fbad",
+    "src/loader/retail_resident.S": "343a4b306abdf57dc87db3e8f87532b3633462ab4e9348c7c18b6955588a2297"
+  },
+  "reproduction": {
+    "repository": "/workspace/scratch/04d42b036255/recovered/maple-bypass/restored-source",
+    "startup": "original owner-supplied DOA2 1ST_READ.BIN with source_sha256 recorded above",
+    "resident": "build/native-isolation-split-controller-final/resident-sci.elf",
+    "python_api": "prove_native_sdk_sci_structural_runtime.original_dispatch(check_vmu_native_worker_gateway.read_elf(resident), startup)"
+  }
+}

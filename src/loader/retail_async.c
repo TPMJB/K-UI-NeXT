@@ -142,6 +142,9 @@ static void wr16(uint32_t a, uint16_t v) { *(volatile uint16_t *)(uintptr_t)a = 
 
 #if KUI_VMU_NATIVE_BACKGROUND
 kui_retail_async_region_type *kui_retail_async_region_storage;
+#elif KUI_NATIVE_STANDALONE_READER
+static kui_retail_async_region_type standalone_reader_region __attribute__((aligned(32)));
+kui_retail_async_region_type *kui_retail_async_region_storage=&standalone_reader_region;
 #else
 struct kui_retail_async_region kui_retail_async_region __attribute__((aligned(32)));
 #endif
@@ -151,6 +154,9 @@ struct kui_retail_async_region kui_retail_async_region __attribute__((aligned(32
 static bool native_loan_blocked(void) {
     return e.native_loan_state!=KUI_VMU_NATIVE_ASYNC_LOAN_IDLE;
 }
+#elif KUI_NATIVE_STANDALONE_READER
+extern volatile uint32_t kui_retail_hook_active;
+static bool native_loan_blocked(void) {return false;}
 #endif
 #ifdef KUI_RETAIL_CE
 void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
