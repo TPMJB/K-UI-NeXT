@@ -14,7 +14,7 @@
  * games-probe-loading, games-image-probe, games-image-probe-loading,
  * games-retail, games-retail-loading, games-retail-invalid, games-ce-probe, games-list-art,
  * games-retail-cd-plain, games-retail-cd-scrambled,
- * games-compact, games-gallery, games-scan, games-detail-art, home-files, home-ripper,
+ * games-compact, games-gallery, games-gallery-turning, games-gallery-turn-unheld, games-scan, games-detail-art, home-files, home-ripper,
  * files, files-root, files-actions, files-actions-locked, files-pick,
  * files-copy, files-delete, files-refused, files-info, files-info-file,
  * files-view, files-copying, files-keyboard, network, ftp-starting, ftp-ready,
@@ -373,6 +373,14 @@ int main(int argc,char **argv) {
     }
     else if(!strcmp(argv[1],"games-compact")) library(&shell,KUI_GAMES_VIEW_COMPACT);
     else if(!strcmp(argv[1],"games-gallery")) {library(&shell,KUI_GAMES_VIEW_GALLERY);shell.games_selected=5;}
+    else if(!strcmp(argv[1],"games-gallery-turning") || !strcmp(argv[1],"games-gallery-turn-unheld")) {
+        /* A turn to page 2 in flight. Held, it draws exactly the page being
+         * left; unheld (the old behaviour), its number and highlight move early. */
+        library(&shell,KUI_GAMES_VIEW_GALLERY);shell.games_selected=5;
+        shell.games_turning=!strcmp(argv[1],"games-gallery-turning");
+        shell.games_shown_page=0;shell.games_shown_selected=5;
+        shell.games_page=1;shell.games_selected=4;shell.games_loading=true;
+    }
     else if(!strcmp(argv[1],"games-scan")) {
         shell.page=KUI_SHELL_GAMES;shell.games_scanning=true;view.busy=true;view.app_status=&status;
         status=(struct kui_app_status){.done=11,.total=43,.line_count=5};

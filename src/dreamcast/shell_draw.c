@@ -1410,12 +1410,19 @@ static void placeholder(struct paint *p,unsigned x,unsigned y,unsigned edge,bool
     round_spot(p,x+edge/2,y+edge/2,edge/10,PANEL);
     round_spot(p,x+edge/2,y+edge/2,edge/30+1,EDGE);
 }
+/* During a page turn the page being left stays on screen unchanged. */
+static unsigned shown_page(const struct kui_shell *s) {
+    return s->games_turning?s->games_shown_page:s->games_page;
+}
+static unsigned shown_selected(const struct kui_shell *s) {
+    return s->games_turning?s->games_shown_selected:s->games_selected;
+}
 static const char *entry_text(const struct kui_games_entry *e) {
     return e->title[0]?e->title:e->name;
 }
 static const uint16_t *entry_cover(const struct kui_shell *s,const struct kui_shell_view *v,unsigned i) {
     const struct kui_games_page *l=&s->games_listing;
-    if(i!=s->games_selected || i>=l->count || !l->entries[i].cover || l->view!=kui_shell_games_view(s)) return NULL;
+    if(i!=shown_selected(s) || i>=l->count || !l->entries[i].cover || l->view!=kui_shell_games_view(s)) return NULL;
     return v->game_selected_cover?v->game_selected_cover:v->game_covers?v->game_covers[i]:NULL;
 }
 static void entry_art(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v,
@@ -1446,13 +1453,14 @@ static void games(struct paint *p,const struct kui_shell *s,const struct kui_she
     char line[180];snprintf(line,sizeof(line),"SD: %s",s->games_path);
     words(p,150,116,392,CYAN,line,false);
     unsigned pages=l->total?(l->total+KUI_GAMES_ROWS-1)/KUI_GAMES_ROWS:0;
-    if(pages) snprintf(line,sizeof(line),"Page %u of %u   %u items",s->games_page+1,
-        pages>s->games_page?pages:s->games_page+1,l->total);
-    else snprintf(line,sizeof(line),"Page %u%s",s->games_page+1,l->has_more?" +":"");
+    unsigned page=shown_page(s);
+    if(pages) snprintf(line,sizeof(line),"Page %u of %u   %u items",page+1,
+        pages>page?pages:page+1,l->total);
+    else snprintf(line,sizeof(line),"Page %u%s",page+1,l->has_more?" +":"");
     unsigned width=kui_shell_font_width(line,false);
     words(p,width<196?600-width:404,116,608,MUTED,line,false);
     if(s->games_scanning && v->busy) {games_scan(p,v);return;}
-    unsigned chosen=s->games_selected<count?s->games_selected:0;
+    unsigned chosen=shown_selected(s)<count?shown_selected(s):0;
     for(unsigned i=0;i<count;i++) {
         const struct kui_games_entry *e=&l->entries[i];
         uint16_t ink=e->disabled?AMBER:i==chosen?WHITE:MUTED;

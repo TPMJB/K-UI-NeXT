@@ -414,7 +414,7 @@ void kui_shell_set_games_listing(struct kui_shell *s,const struct kui_games_page
        !memchr(page->root,0,sizeof(page->root)) || strcmp(page->root,s->games_path)) return;
     clear_game_choice(s);
     s->games_listing=*page;
-    s->games_loading=false;s->games_art_loading=false;
+    s->games_loading=false;s->games_art_loading=false;s->games_turning=false;
     s->games_scanning=false;
     if(page->view<KUI_GAMES_VIEW_COUNT) s->games_view=page->view;
     if(s->games_listing.count>KUI_GAMES_ROWS) s->games_listing.count=KUI_GAMES_ROWS;
@@ -725,9 +725,18 @@ static enum kui_shell_action list_games(struct kui_shell *s,bool first) {
     s->games_refresh=false;
     ++s->games_generation;s->games_loading=true;s->games_art_loading=false;
     if(first) s->games_page=0;
+    if(!s->games_turning || first) {
+        s->games_turning=false;
+        snprintf(s->games_listing.message,sizeof(s->games_listing.message),"Reading SD directory...");
+    }
     s->games_selected=0;
-    snprintf(s->games_listing.message,sizeof(s->games_listing.message),"Reading SD directory...");
     return KUI_SHELL_GAMES_LIST;
+}
+/* Before a page turn: remember the page on screen. Repeated turns before the
+ * rows arrive keep the page that is actually still drawn. */
+static void games_turn_from(struct kui_shell *s) {
+    if(!s->games_turning) {s->games_shown_page=s->games_page;s->games_shown_selected=s->games_selected;}
+    s->games_turning=true;
 }
 static unsigned move_count(unsigned selected, unsigned buttons,unsigned count);
 static enum kui_shell_action game_patch_input(struct kui_shell *s,unsigned buttons) {
@@ -785,10 +794,10 @@ static enum kui_shell_action game_patch_input(struct kui_shell *s,unsigned butto
 static enum kui_shell_action turn_games_page(struct kui_shell *s,bool forward,unsigned select) {
     if(forward) {
         if(!s->games_listing.has_more || s->games_page>=UINT_MAX/KUI_GAMES_ROWS) return KUI_SHELL_NONE;
-        ++s->games_page;
+        games_turn_from(s);++s->games_page;
     } else {
         if(!s->games_page) return KUI_SHELL_NONE;
-        --s->games_page;
+        games_turn_from(s);--s->games_page;
     }
     enum kui_shell_action action=list_games(s,false);
     s->games_selected=select;
@@ -1886,11 +1895,11 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                 if(action!=KUI_SHELL_NONE) return action;
             } else {
                 if((buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT))==KUI_SHELL_LEFT && s->games_page) {
-                    --s->games_page;return list_games(s,false);
+                    games_turn_from(s);--s->games_page;return list_games(s,false);
                 }
                 if((buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT))==KUI_SHELL_RIGHT &&
                    s->games_listing.has_more && s->games_page<UINT_MAX/KUI_GAMES_ROWS) {
-                    ++s->games_page;return list_games(s,false);
+                    games_turn_from(s);++s->games_page;return list_games(s,false);
                 }
                 s->games_selected=move_count(s->games_selected,buttons,s->games_listing.count);
             }

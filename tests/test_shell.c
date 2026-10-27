@@ -945,10 +945,16 @@ static void games_controls(void) {
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES);
     assert(s.games_selected==1 && s.games_listing.count==2);
     detail.valid=true;kui_shell_set_games_detail(&s,&detail);assert(!s.games_detail.valid);
+    char shown_message[sizeof(s.games_listing.message)];
+    strcpy(shown_message,s.games_listing.message);
     assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_GAMES_LIST && s.games_page==1);
     assert(!s.games_refresh);
     assert(s.games_listing.count==2 && !s.games_selected && s.games_loading);
+    /* The page being left stays drawn, message included, until rows arrive. */
+    assert(s.games_turning && !s.games_shown_page && s.games_shown_selected==1);
+    assert(!strcmp(s.games_listing.message,shown_message));
     assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_GAMES_LIST && !s.games_page);
+    assert(s.games_turning && !s.games_shown_page && s.games_shown_selected==1);
     assert(!s.games_refresh);
     assert(press(KUI_SHELL_X,false)==KUI_SHELL_GAMES_LIST);
     assert(s.games_refresh);
@@ -2423,7 +2429,8 @@ static void games_views(void) {
     assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.games_selected==2); /* First page. */
     s.games_selected=6;
     assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_GAMES_LIST && s.games_page==1 && s.games_selected==2);
-    games_page(3,false,KUI_GAMES_VIEW_COMPACT);assert(s.games_selected==2);
+    assert(s.games_turning && !s.games_shown_page && s.games_shown_selected==6);
+    games_page(3,false,KUI_GAMES_VIEW_COMPACT);assert(s.games_selected==2 && !s.games_turning);
     assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.games_page==1); /* Last page; no cell. */
     assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_GAMES_LIST && !s.games_page && s.games_selected==6);
     games_page(8,true,KUI_GAMES_VIEW_COMPACT);

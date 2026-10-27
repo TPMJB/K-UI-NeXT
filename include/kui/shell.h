@@ -170,6 +170,10 @@ struct kui_shell {
     unsigned games_view;
     unsigned games_generation;
     bool games_loading,games_art_loading;
+    /* A page turn keeps drawing the page it left, with its page number and
+     * selection, until the new rows arrive; then everything changes at once. */
+    bool games_turning;
+    unsigned games_shown_page,games_shown_selected;
     bool games_scanning; /* The box art scan runs; a listing ends it. */
     /* Explicit refresh rebuilds worker-owned directory discovery; entering,
      * page and view changes reuse its read-only snapshot. */
