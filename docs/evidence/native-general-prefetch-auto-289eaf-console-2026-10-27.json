@@ -1,0 +1,21 @@
+{
+  "schema": "kui.native.owner-console-result.v1",
+  "date": "2026-10-27",
+  "runtime_source_commit": "289eafeabba4",
+  "package": "K-UI-Native-General-Prefetch-Auto-289eafeabba4.zip",
+  "package_sha256": "20feeec88b99f759556b059066e92759fa10b80da8f79a5f8dac95f12c134604",
+  "result": "PASS",
+  "owner_observation": "Well it wasn't a regression at least. It seemed to make the intro FMV of Evolution a little more in sync. However I apparently misspoke because the intros for both sonic and shadow in SA2 are rendered in-game. Not sure why Shadow's intro is so bad. It effectively didn't change with this change. Not going to worry about it right now - gameplay is tight.",
+  "reported_checks": {
+    "regression_against_prefetch_on": "NONE REPORTED",
+    "evolution1_intro_fmv": "Slightly better A/V sync than with prefetch always on",
+    "sonic_adventure_2_gameplay": "Tight",
+    "sonic_adventure_2_shadow_intro": "Still poor; owner clarifies it is rendered in-game, not an FMV, and it did not change with the stream guard"
+  },
+  "runtime_mode": {"split_controller": true, "virtual_a2": true, "prefetch": "auto (paused above 96 blocks per 32 controller frames)"},
+  "interpretation": [
+    "The stream guard is accepted as the prefetch mode for virtual-A2 games.",
+    "The SA2 Shadow intro is in-game rendering, so the earlier FMV attribution was mistaken; its cause is unknown and the owner deferred it."
+  ],
+  "not_established": ["The cause of the poor SA2 Shadow intro", "Whether that intro is better with prefetch off"]
+}
