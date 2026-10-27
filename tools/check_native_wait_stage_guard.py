@@ -19,6 +19,7 @@ from check_vmu_native_worker_gateway import read_elf
 
 SCHEMA = 'kui.native.evolution1.wait-capture-stage-guard.v1'
 DELAY_SCHEMA = 'kui.native.evolution1.maple-delay-stage-guard.v1'
+METADATA_SCHEMA = 'kui.native.evolution1.metadata-cache-stage-guard.v1'
 SOURCES = ('tools/check_native_wait_stage_guard.py', 'tools/check_native_bottom_heap.py',
     'tools/profile_vmu_native_release_sh.py', 'tests/test_vmu_native_heap_execution.py',
     'tools/check_vmu_native_worker_gateway.py', 'tools/sh4_delay_slots.py',
@@ -129,18 +130,26 @@ def run_case(baseline, wire, name, mutation=None, mode=0, accept=False, expected
         first_copy=cpu.first_copy, stop=cpu.stop, writes=len(cpu.writes))
 
 
-def check(build, startup, record, maple_delay=False):
+def check(build, startup, record, maple_delay=False, cached_metadata=False):
+    require(not(maple_delay and cached_metadata), 'Select one stage-guard diagnostic')
     build = build.resolve()
     artifacts = {p.name: sha(p) for p in sorted(build.iterdir())
                  if p.suffix in ('.elf', '.bin', '.reloc') and p.is_file()}
     for file, role in (('stage.elf', 'stage'), ('native-worker.elf', 'worker')):
         symbols = read_elf(build/file)[4]
-        marker = '__kui_native_maple_delay_isolation_' if maple_delay else '__kui_native_e1_wait_capture_'
+        marker = ('__kui_native_metadata_cache_isolation_' if cached_metadata else
+                  '__kui_native_maple_delay_isolation_' if maple_delay else '__kui_native_e1_wait_capture_')
         require(symbols.get(marker + role) == ABSOLUTE_ONE,
                 'Frozen artifact lacks the selected diagnostic marker: ' + file)
         if maple_delay:
             require('__kui_native_e1_wait_capture_' + role not in symbols,
                     'Maple delay artifact includes incompatible wait capture')
+        if cached_metadata:
+            require(symbols.get('__kui_native_ra_tick_off_isolation_'+role) == ABSOLUTE_ONE and
+                    all('__kui_native_'+other+role not in symbols for other in
+                        ('reader_only_isolation_', 'standard_vmu_isolation_',
+                         'maple_bypass_isolation_', 'maple_delay_isolation_', 'e1_wait_capture_')),
+                    'Cached metadata requires real callbacks, TICK off, and no other isolation mode')
     provenance = json.loads((build/'entry.compile.json').read_text())
     require(provenance.get('source_dirty') is False and
             provenance.get('elf_sha256') == artifacts['entry.elf'],
@@ -158,16 +167,19 @@ def check(build, startup, record, maple_delay=False):
     mutations = [('digest-byte-' + str(i), (72+i, 1, wire[136+i] ^ 1)) for i in range(32)]
     mutations += [('image-bytes', (12, 4, len(baseline.image)-4)),
                   ('load-address', (16, 4, 0x8c010004))]
-    identity_message = 'MAPLE DELAY NEEDS EVOLUTION 1' if maple_delay else None
+    identity_message = ('METADATA CACHE NEEDS EVOLUTION 1' if cached_metadata else
+                        'MAPLE DELAY NEEDS EVOLUTION 1' if maple_delay else None)
     negatives = [run_case(baseline, wire, name, mutation, expected_message=identity_message)
                  for name,mutation in mutations]
     negatives += [run_case(baseline, wire, 'non-normal-mode-' + str(mode), mode=mode,
                   expected_message=('BACKGROUND VMU REQUIRES LIVE WORKER RESERVATION'
-                    if mode in (1, 3) else 'MAPLE DELAY NEEDS NORMAL MODE') if maple_delay else None)
+                    if mode in (1, 3) else
+                    'METADATA CACHE NEEDS NORMAL MODE' if cached_metadata else
+                    'MAPLE DELAY NEEDS NORMAL MODE') if maple_delay or cached_metadata else None)
                   for mode in range(1, 7)]
     require(all(sha(build/name) == digest for name,digest in artifacts.items()),
             'Frozen runtime artifact changed during guard proof')
-    return dict(schema=DELAY_SCHEMA if maple_delay else SCHEMA,
+    return dict(schema=METADATA_SCHEMA if cached_metadata else DELAY_SCHEMA if maple_delay else SCHEMA,
         status='PASS', source_commit=provenance['commit'],
         scope=__doc__.strip(), build=str(build), enabledmarker=True,
         artifact_sha256=artifacts, source_sha256={name:sha(ROOT/name) for name in SOURCES},
@@ -184,8 +196,10 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--maple-delay', action='store_true',
                         help='Check the timed Maple-delay marker and its exact guard refusals')
+    parser.add_argument('--cached-metadata',action='store_true',
+                        help='Check the combined metadata-cache marker and exact E1/NORMAL guard')
     args = parser.parse_args()
-    report = check(args.build, args.startup, args.record, args.maple_delay)
+    report = check(args.build, args.startup, args.record, args.maple_delay, args.cached_metadata)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(dict(schema=report['schema'], status=report['status'],

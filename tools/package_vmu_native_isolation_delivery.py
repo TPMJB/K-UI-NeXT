@@ -38,6 +38,7 @@ PREVIOUS_ARCHIVE_SHA = 'cd6d51767788f4222fffd3c6299024bb8700f8407fe623d6664ef922
 DEMAND_BUILD = '3f51ded6973f'
 WAIT_BUILD = '5fa97d6729c8'
 BYPASS_BUILD = 'cec542aefa8a'
+DELAY_BUILD = '1b2d79400abd'
 KNOWN_PREVIOUS = {
     PREVIOUS_BUILD: (PREVIOUS_ARCHIVE_SHA, PREVIOUS_METADATA_SHA),
     DEMAND_BUILD: ('2ff9b0c356b535bdf3fa1083b9c65d1fd8b8bf346170b8f2eae6ecd42e2b673f',
@@ -46,6 +47,8 @@ KNOWN_PREVIOUS = {
                  '64b9b858409599c2a6380c0aa0d93647a0455c136c83ab2dace2085a0860a21c'),
     BYPASS_BUILD: ('c0515ebb1ab6a30d0d76c533b3d7f8e9799d7036d5f2e8a56fdaeccc8c658f5d',
                    'abc31c8ee2a5cc810ce70dc2bfebed2b712fd63d4b0e213255c464b8bf57964e'),
+    DELAY_BUILD: ('ccceb1172ee21107b00a619e28bbc28245417c3074103821bb5492ffdc7414f8',
+                  '605cd998ca41d27c6ca53834ce2d6389bd8f0ae3fede3cc3f020d37abf955ce7'),
 }
 
 
@@ -74,11 +77,13 @@ def embedded(image, begin, end, data, base, binary):
 
 
 def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_capture=False,
-                 maple_bypass=False, maple_delay=False):
+                 maple_bypass=False, maple_delay=False, cached_metadata=False):
     require(not wait_capture or demand_only, 'Wait capture requires the demand-only control')
     require(not maple_bypass or (demand_only and not wait_capture),
             'Maple bypass requires demand-only and excludes wait capture')
     require(not maple_delay or maple_bypass, 'Maple delay requires Maple C bypass')
+    require(not cached_metadata or (demand_only and not wait_capture and not maple_bypass and not maple_delay),
+            'Cached metadata requires demand-only real callbacks without other diagnostics')
     artifacts = {key: sha((build/key).read_bytes()) for key in REQUIRED_ARTIFACTS}
     require(all(proof['artifact_sha256'].get(key) == value for key, value in artifacts.items()),
             'Linked execution report differs from final artifacts: '+name)
@@ -105,11 +110,11 @@ def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_cap
     require(generate(worker[0], raw_worker, 0x8c100000, 0x20000) == reloc,
             'Worker relocation table differs from actual linked pointers: '+name)
     loads = validate_loads(worker[0], raw_worker, 0x8c100000, 0x20000)
-    stem = 'reader_only' if name == 'reader-only' else 'standard_vmu'
-    other = 'standard_vmu' if name == 'reader-only' else 'reader_only'
+    stem = ('metadata_cache' if cached_metadata else 'reader_only') if name == 'reader-only' else 'standard_vmu'
     for image, side in ((stage, 'stage'), (worker, 'worker')):
         require(image[4].get('__kui_native_'+stem+'_isolation_'+side) == ABSOLUTE_ONE and
-                '__kui_native_'+other+'_isolation_'+side not in image[4] and
+                all('__kui_native_'+other+'_isolation_'+side not in image[4]
+                    for other in {'reader_only','standard_vmu','metadata_cache'}-{stem}) and
                 image[4].get('__kui_native_isolation_lease_bytes') == (393216, 0, 0, 0xfff1) and
                 image[4].get('__kui_native_bottom_heap_'+side) == ABSOLUTE_ONE,
                 'Variant lacks its exact isolated bottom-reservation capabilities: '+name)
@@ -133,6 +138,11 @@ def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_cap
             'Linked execution report Maple C-gateway bypass setting differs: '+name)
     require(proof.get('maple_delay',False) is (maple_delay and name=='reader-only'),
             'Linked execution report Maple delay setting differs: '+name)
+    require(proof.get('cached_metadata',False) is (cached_metadata and name=='reader-only'),
+            'Linked execution report cached-metadata setting differs: '+name)
+    if cached_metadata:
+        require(proof.get('virtual_a2') is True and proof.get('maple_c_callbacks_enabled') is True,
+                'Combined report lacks real VMU callbacks: '+name)
     if name == 'reader-only':
         require(worker[4].get('__kui_native_readahead_worker') == ABSOLUTE_ONE and
                 worker[4].get('__kui_native_dual_readers_worker') == ABSOLUTE_ONE,
@@ -184,6 +194,9 @@ def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_cap
                   maple_delay=maple_delay and name=='reader-only',
                   maple_delay_ticks=dict(submit=59,complete=76) if maple_delay and name=='reader-only' else None,
                   maple_c_callbacks_enabled=not(maple_bypass and name=='reader-only'),
+                  cached_metadata=cached_metadata and name=='reader-only',
+                  public_variant='combined' if cached_metadata and name=='reader-only' else name,
+                  virtual_a2=name=='vmu-only' or cached_metadata,
                   heap_reclaim_coherence_guards_retained=True,
                   canonical_disjoint_personalization=manifest)
     files['variant-layout.json'] = wire(layout)
@@ -253,6 +266,8 @@ def passed_bypass_bridge(path, metadata, files):
 def extracted_install_check(files, previous_archive=None, origin_archive=None):
     sys.path.insert(0, str(ROOT/'tests'))
     from test_personalize_vmu_native_persistent import pair
+    combined = json.loads(files['isolation.json']).get('cached_metadata',False)
+    selected = 'combined' if combined else 'reader-only'
     with tempfile.TemporaryDirectory(prefix='kui-native-isolation-cli-') as directory:
         root = Path(directory)
         package, card = root/'package', root/'card'
@@ -270,14 +285,14 @@ def extracted_install_check(files, previous_archive=None, origin_archive=None):
         settings = card/'KUI/apps/games/launch-settings-a.bin';settings.write_bytes(b'preserved launch settings')
         before = {str(path.relative_to(card)): path.read_bytes() for path in card.rglob('*') if path.is_file()}
         argv = [sys.executable, str(package/'install.py'), str(card), '--profile', str(profile.relative_to(card))]
-        for variant in ('reader-only', 'reader-only', 'vmu-only', 'reader-only', 'restore', 'restore'):
+        for variant in (selected, selected, 'vmu-only', selected, 'restore', 'restore'):
             result = subprocess.run([*argv, '--variant', variant], cwd=root, text=True, capture_output=True)
             require(result.returncode == 0, 'Extracted isolation installer failed: '+result.stderr)
             after = {str(path.relative_to(card)): path.read_bytes() for path in card.rglob('*') if path.is_file()}
             require(all(after[key] == value for key, value in before.items() if key not in map(str, MODULES.values())),
                     'Isolation installer changed GUI, profile, settings or prepared saves')
             for name, path in MODULES.items():
-                if variant == name:
+                if ('reader-only' if variant=='combined' else variant) == name:
                     manifest = json.loads(files['variants/'+name+'/base/native-persistent-personalization.json'])
                     data = after[str(path)]
                     require(verify(data)['build'] == manifest['build'] and
@@ -319,7 +334,7 @@ def extracted_install_check(files, previous_archive=None, origin_archive=None):
                 baseline = {p.name: p.read_bytes() for p in (card/BACKUP_PARENT/'backup').iterdir()}
                 require(not inherited_backup or baseline == origin_baseline,
                         'Intermediate isolation migration rewrote the original995 backups')
-                for variant in ('reader-only', 'vmu-only', 'restore'):
+                for variant in (selected, 'vmu-only', 'restore'):
                     result = subprocess.run([*argv, '--variant', variant], cwd=root, text=True, capture_output=True)
                     require(result.returncode == 0, 'Extracted pinned-package migration failed: '+result.stderr)
                     require({p.name: p.read_bytes() for p in (card/BACKUP_PARENT/'backup').iterdir()} == baseline,
@@ -331,8 +346,8 @@ def extracted_install_check(files, previous_archive=None, origin_archive=None):
         if 'passed-bypass/install.py' in files:
             backup_before = {p.name:p.read_bytes() for p in (card/BACKUP_PARENT/'backup').iterdir()}
             new_metadata = json.loads(files['isolation.json'])
-            sequence = ((False,'reader-only'),(True,'reader-only'),(False,'reader-only'),
-                        (True,'reader-only'),(True,'restore'),(False,'reader-only'),(False,'restore'))
+            sequence = ((False,selected),(True,'reader-only'),(False,selected),
+                        (True,'reader-only'),(True,'restore'),(False,selected),(False,'restore'))
             for passed, variant in sequence:
                 script = package/'passed-bypass/install.py' if passed else package/'install.py'
                 result = subprocess.run([sys.executable,str(script),str(card),'--profile',
@@ -346,7 +361,7 @@ def extracted_install_check(files, previous_archive=None, origin_archive=None):
                             if key not in map(str,MODULES.values())),
                         'Return bridge changed GUI, prepared profile/card/journal or launch settings')
                 for name,destination in MODULES.items():
-                    if variant != name:
+                    if ('reader-only' if variant=='combined' else variant) != name:
                         require(after[str(destination)]==before[str(destination)],
                                 'Return bridge did not restore exact inactive/original module')
                         continue
@@ -365,7 +380,9 @@ def extracted_install_check(files, previous_archive=None, origin_archive=None):
                             'Return bridge changed the pinned module beyond profile personalization')
     return dict(extracted_cli_runs=6, both_variants_switch_and_restore=True,
                 passed_bypass_bridge_cli_runs=bridge_runs,
-                bidirectional_delay_bypass_switch_and_restore=bridge_runs==7,
+                bidirectional_delay_bypass_switch_and_restore=bridge_runs==7 and not combined,
+                bidirectional_combined_bypass_switch_and_restore=bridge_runs==7 and combined,
+                public_combined_variant_executed=combined,
                 passed_bypass_bridge_keeps_exact_cec_modules=bridge_runs==7,
                 previous_package_migration_cli_runs=8 if previous_archive is not None else 0,
                 inherited995_origin_migration_cli_runs=10 if origin_archive is not None else 0,
@@ -457,11 +474,12 @@ def validate_maple_delay_receipt(gateways,execution,runtime_commit,reader_build)
             'Compiled Maple delay receipt differs from final artifacts')
 
 
-def validate_maple_delay_guard(guard,runtime_commit,reader_build):
+def validate_maple_delay_guard(guard,runtime_commit,reader_build,
+    schema='kui.native.evolution1.maple-delay-stage-guard.v1',label='Maple-delay'):
     positive=guard.get('positive_case',{});refusals=guard.get('refusal_cases',[])
     expected={'digest-byte-'+str(i) for i in range(32)} | {'image-bytes','load-address'} | {
         'non-normal-mode-'+str(i) for i in range(1,7)}
-    require(guard.get('schema')=='kui.native.evolution1.maple-delay-stage-guard.v1' and
+    require(guard.get('schema')==schema and
             guard.get('status')=='PASS' and guard.get('source_commit')==runtime_commit and
             guard.get('enabledmarker') is True and positive.get('mode')==0 and
             positive.get('admitted_before_copy') is True and positive.get('first_copy') is not None and
@@ -473,11 +491,114 @@ def validate_maple_delay_guard(guard,runtime_commit,reader_build):
             all(guard.get('artifact_sha256',{}).get(name)==sha((reader_build/name).read_bytes())
                 for name in ('stage.elf','stage.bin','entry.elf','native-worker.elf',
                              'native-worker.bin','resident-sci.elf')),
-            'Exact Evolution/NORMAL Maple-delay stage guard differs from final artifacts')
+            'Exact Evolution/NORMAL '+label+' stage guard differs from final artifacts')
     for path,digest in guard['source_sha256'].items():
         relative=Path(path)
         require(not relative.is_absolute() and '..' not in relative.parts and
-                sha((ROOT/relative).read_bytes())==digest,'Maple delay stage proof source changed: '+path)
+                sha((ROOT/relative).read_bytes())==digest,label+' stage proof source changed: '+path)
+
+
+def validate_cached_metadata_publication(report,runtime_commit,reader_build):
+    publication=report.get('cache_publication',{})
+    layout=report.get('metadata_layout',{})
+    require(report.get('schema')=='kui.native.metadata-cache-publication.v1' and
+            report.get('status')=='PASS' and report.get('source_commit')==runtime_commit and
+            report.get('paired_markers') is True and
+            isinstance(layout,dict) and set(layout)=={'config','live','lifetime','hooks'} and
+            all(report.get(key) is True for key in ('whole_cache_line_isolation',
+                'read_only_p1_views','no_p1_metadata_stores','coherent_live_witnesses')) and
+            all(publication.get(key) is True for key in ('ocbi_only','no_ocbp','exact_range',
+                'ready_after_all_invalidations','published_after_live_prepare')) and
+            all(report.get('artifact_sha256',{}).get(name)==sha((reader_build/name).read_bytes())
+                for name in ('entry.elf','stage.elf','native-worker.elf',
+                             'native-worker.bin','native-worker.reloc')),
+            'Metadata cache publication proof differs from final artifacts or cache contract')
+    spans=[]
+    for name,item in layout.items():
+        require(isinstance(item,dict) and all(type(item.get(key)) is int and item[key]>0
+                for key in ('object_bytes','padded_bytes','cache_lines')) and
+                all(isinstance(item.get(key),str) for key in
+                    ('canonical_p2','cached_p1','p2_begin','p2_end')),
+                'Metadata cache layout lacks typed bounds: '+name)
+        canonical,cached,begin,end=(int(item[key],16) for key in
+                                  ('canonical_p2','cached_p1','p2_begin','p2_end'))
+        require(0<=begin<end<=0xffffffff and canonical==begin and begin&0xe0000000==0xa0000000 and
+                cached==(canonical&0x1fffffff|0x80000000) and not begin&31 and not end&31 and
+                end-begin==item['padded_bytes']==32*item['cache_lines'] and
+                0<=item['padded_bytes']-item['object_bytes']<32 and
+                all(end<=first or begin>=last for first,last in spans),
+                'Metadata cache objects do not own disjoint whole P1/P2 cache lines: '+name)
+        spans.append((begin,end))
+    sources=report.get('source_sha256',{})
+    require({'src/loader/vmu_native_metadata_cache.inc','tools/check_native_metadata_cache.py'}<=set(sources),
+            'Metadata cache publication proof omits the implementation or auditor source')
+    for path,digest in sources.items():
+        relative=Path(path)
+        require(not relative.is_absolute() and '..' not in relative.parts and
+                sha((ROOT/relative).read_bytes())==digest,'Metadata cache proof source changed: '+path)
+
+
+def validate_cached_metadata_execution(report):
+    packets=report.get('forced_packets',[])
+    metadata={row.get('command'):row for row in packets if row.get('command') in (1,2,10)}
+    reads=[row for row in packets if row.get('command')==11]
+    stats=report.get('final_overlay',{})
+    require(report.get('variant')=='metadata_cache' and report.get('cached_metadata') is True and
+            report.get('virtual_a2') is True and report.get('maple_c_callbacks_enabled') is True and
+            report.get('controller_tick_off') is True and report.get('tick_calls')==0 and
+            report.get('maple_bypass') is False and report.get('maple_delay') is False and
+            report.get('e1_wait_capture') is False and
+            report.get('actual_maple_c_callbacks')==dict(submit=8,complete=8) and
+            len(report.get('natural_rounds',[]))==8 and
+            all(stats.get(key,0)>0 for key in ('advertisements','backend_calls','devinfo')) and
+            set(metadata)=={1,2,10} and len(packets)==4 and
+            all(int(metadata[command].get('reply','0'),16)&255==reply and
+                metadata[command].get('overlay',{}).get('backend_calls',0)>0 and
+                metadata[command].get('storage_boundary_reached') is False
+                for command,reply in ((1,5),(2,6),(10,8))) and
+            len(reads)==1 and reads[0].get('storage_boundary_reached') is True and
+            reads[0].get('success_or_ack_substituted') is False and
+            reads[0].get('rx_unpublished') is True and
+            reads[0].get('calls',{}).get('actual_low_sd_loan_boundary')==1 and
+            report.get('sd_loan_boundary',{}).get('reader')=='New (X)' and
+            report.get('worker_helpers_substituted') is False and
+            report.get('original_game_or_sdk_functions_substituted') is False,
+            'Combined linked SDK proof lacks real callbacks, VMU metadata, or the New SD-loan boundary')
+
+
+def validate_cached_metadata_traffic(report,runtime_commit,reader_build):
+    require(report.get('schema')=='kui.native.metadata-cache-traffic.v1' and
+            report.get('status')=='PASS' and report.get('source_commit')==runtime_commit and
+            report.get('real_virtual_a2') is True and report.get('real_c_callbacks') is True and
+            report.get('controller_tick_calls')==0 and report.get('targeted_cold_metadata_eviction') is True and
+            len(report.get('rounds',[]))>=2 and
+            all(report.get('artifact_sha256',{}).get(name)==sha((reader_build/name).read_bytes())
+                for name in ('entry.elf','stage.elf','native-worker.elf',
+                             'native-worker.bin','native-worker.reloc')),
+            'Metadata cache traffic proof differs from final VMU/New artifacts')
+    for row in report['rounds']:
+        variants=row.get('variants',{})
+        require(set(variants)=={'canonical_p2','warm_p1','cold_p1'} and
+                all(row.get(key) is True for key in ('identical_live_read_order',
+                    'identical_live_store_order','identical_sdk_vmu_packets')),
+                'Metadata traffic proof lost its matching live SDK workload')
+        baseline=variants['canonical_p2']
+        for name in ('warm_p1','cold_p1'):
+            candidate=variants[name]
+            require(candidate.get('counts',{}).get('metadata_p2_reads',0)<
+                        baseline.get('counts',{}).get('metadata_p2_reads',0) and
+                    candidate.get('counts',{}).get('metadata_p1_reads',0)>0 and
+                    all(candidate.get(key)==baseline.get(key) for key in
+                        ('live_read_events','live_read_sha256','live_write_events',
+                         'live_write_sha256','rx_sha256','tx_sha256')),
+                    'Cached metadata traffic did not preserve the live SDK reads, stores and packets')
+    sources=report.get('source_sha256',{})
+    require('tools/check_native_metadata_traffic.py' in sources,
+            'Metadata cache traffic proof omits its auditor source')
+    for path,digest in sources.items():
+        relative=Path(path)
+        require(not relative.is_absolute() and '..' not in relative.parts and
+                sha((ROOT/relative).read_bytes())==digest,'Metadata traffic proof source changed: '+path)
 
 
 def package(args):
@@ -485,8 +606,12 @@ def package(args):
     require(not args.maple_bypass or (args.demand_only and not args.wait_capture),
             '--maple-bypass requires --demand-only and excludes --wait-capture')
     require(not args.maple_delay or args.maple_bypass, '--maple-delay requires --maple-bypass')
+    require(not args.cached_metadata or (args.demand_only and not args.wait_capture and
+                not args.maple_bypass and not args.maple_delay),
+            '--cached-metadata requires --demand-only and excludes wait capture, bypass, and delay')
     if args.previous_package is None:
-        filename = ('K-UI-Evolution-Maple-Bypass-cec542aefa8a.zip' if args.maple_delay else
+        filename = ('K-UI-Evolution-Maple-Delay-1b2d79400abd.zip' if args.cached_metadata else
+                    'K-UI-Evolution-Maple-Bypass-cec542aefa8a.zip' if args.maple_delay else
                     'K-UI-Evolution-Wait-Capture-5fa97d6729c8.zip' if args.maple_bypass else
                     'K-UI-Evolution-New-Demand-3f51ded6973f.zip' if args.wait_capture else
                     'K-UI-Evolution-Isolation-9956562f91d6.zip')
@@ -508,41 +633,59 @@ def package(args):
         require(not relative.is_absolute() and '..' not in relative.parts and sha((ROOT/relative).read_bytes()) == digest,
                 'Linked isolation auditor/source binding changed: '+path)
     proofs = {row['variant']: row for row in linked['variants']}
-    require(set(proofs) == {'reader_only', 'standard_vmu'} and len(linked['variants']) == 2,
+    reader_proof = 'metadata_cache' if args.cached_metadata else 'reader_only'
+    require(set(proofs) == {reader_proof, 'standard_vmu'} and len(linked['variants']) == 2,
             'Isolation execution report lacks both variants')
     gui = args.gui.read_bytes()
     require(sha(gui) == GUI_SHA and verify(gui)['build'] == GUI_BUILD, 'Wrong preserved 8adf Games UI')
     metadata = dict(schema='kui.native.isolation.delivery.v1', source_commit=runtime_commit,
                     runtime_source_commit=runtime_commit, delivery_source_commit=delivery_commit,
                     build=runtime_commit[:12], gui=dict(build=GUI_BUILD, sha256=GUI_SHA), variants={})
-    files = {'install.py': (ROOT/'tools/install_vmu_native_isolation.py').read_bytes(),
+    if args.cached_metadata:
+        metadata.update(cached_metadata=True,public_variant='combined')
+    installer = 'install_vmu_native_cached_metadata.py' if args.cached_metadata else 'install_vmu_native_isolation.py'
+    files = {'install.py': (ROOT/'tools'/installer).read_bytes(),
              'personalize.py': (ROOT/'tools/personalize_vmu_native_persistent.py').read_bytes(),
              'baseline/runtime.kui': gui, 'evidence/isolation-linked-sdk.json': linked_raw,
              'evidence/host-tests.log': args.host_log.read_bytes(),
              'LICENSE': (ROOT/'LICENSE').read_bytes(), 'THIRD_PARTY.md': (ROOT/'THIRD_PARTY.md').read_bytes()}
     if args.demand_only:
-        prior_build = (BYPASS_BUILD if args.maple_delay else WAIT_BUILD if args.maple_bypass else
+        prior_build = (DELAY_BUILD if args.cached_metadata else BYPASS_BUILD if args.maple_delay else WAIT_BUILD if args.maple_bypass else
                        DEMAND_BUILD if args.wait_capture else PREVIOUS_BUILD)
         compatible, previous_raw = previous_package(args.previous_package, prior_build)
         metadata['compatible_packages'] = {**json.loads(previous_raw).get('compatible_packages', {}),
                                            prior_build: compatible}
         files['evidence/previous-isolation.json'] = previous_raw
-        if args.wait_capture or args.maple_bypass:
+        if args.wait_capture or args.maple_bypass or args.cached_metadata:
             origin, origin_raw = previous_package(args.backup_origin_package)
             require(metadata['compatible_packages'].get(PREVIOUS_BUILD) == origin,
                     'Intermediate package backup origin differs from the pinned995 pair')
             files['evidence/backup-origin-isolation.json'] = origin_raw
     extra_proofs = EXTRA_PROOFS + (('standard-control-comparison.json',)
         if args.demand_only else ()) + (('tick-off-stack-mapping-negatives.json',)
-        if args.demand_only and not args.wait_capture and not args.maple_bypass else ()) + (
+        if args.demand_only and not args.wait_capture and not args.maple_bypass and not args.cached_metadata else ()) + (
         ('e1-wait-capture-collector.json', 'e1-wait-capture-image-guard.json',
          'original-frame-proof.json') if args.wait_capture else ()) + (
         ('maple-delay-gateways.json','maple-delay-stage-guard.json') if args.maple_delay else
-        ('maple-bypass-gateways.json',) if args.maple_bypass else ())
+        ('maple-bypass-gateways.json',) if args.maple_bypass else ()) + (
+        ('metadata-cache-publication.json','metadata-cache-stage-guard.json',
+         'metadata-cache-traffic.json') if args.cached_metadata else ())
     for filename in extra_proofs:
         data = (args.linked_report.parent/filename).read_bytes()
         json.loads(data)
         files['evidence/'+filename] = data
+    if args.cached_metadata:
+        validate_cached_metadata_execution(proofs[reader_proof])
+        validate_cached_metadata_publication(json.loads(files['evidence/metadata-cache-publication.json']),
+                                             runtime_commit,args.reader_build)
+        validate_cached_metadata_traffic(json.loads(files['evidence/metadata-cache-traffic.json']),
+                                         runtime_commit,args.reader_build)
+        validate_maple_delay_guard(json.loads(files['evidence/metadata-cache-stage-guard.json']),
+            runtime_commit,args.reader_build,'kui.native.evolution1.metadata-cache-stage-guard.v1','Metadata-cache')
+        files['evidence/native-evolution1-cec542-console-pass-2026-10-26.json']=(
+            ROOT/'docs/evidence/native-evolution1-cec542-console-pass-2026-10-26.json').read_bytes()
+        files['evidence/native-evolution1-1b2d-delay-console-failure-2026-10-26.json']=(
+            ROOT/'docs/evidence/native-evolution1-1b2d-delay-console-failure-2026-10-26.json').read_bytes()
     if args.wait_capture:
         collector = json.loads(files['evidence/e1-wait-capture-collector.json'])
         require(collector.get('schema') == 'kui.native.e1-wait-capture-collector.v1' and
@@ -635,16 +778,19 @@ def package(args):
     for filename in ('runtime_package.py', 'vmu_persist_profile.py', 'vmu_native_cache_seed.py',
                      'vmu_native_mode.py', 'install_vmu_native_dual.py'):
         files['tools/'+filename] = (ROOT/'tools'/filename).read_bytes()
-    for name, build, proof_name in (('reader-only', args.reader_build, 'reader_only'),
+    if args.cached_metadata:
+        files['tools/install_vmu_native_isolation.py'] = (ROOT/'tools/install_vmu_native_isolation.py').read_bytes()
+    for name, build, proof_name in (('reader-only', args.reader_build, reader_proof),
                                      ('vmu-only', args.vmu_build, 'standard_vmu')):
         proof = proofs[proof_name]
         require(proof['lease_bytes'] == 393216 and proof['worker_bytes'] == 131072 and proof['placement'] == 'bottom',
                 'Isolation controls do not retain the matching memory reservation')
         variant_files, manifest, layout = bind_variant(name, build.resolve(), proof, runtime_commit,
-                                                       args.demand_only, args.wait_capture,args.maple_bypass,args.maple_delay)
+                                                       args.demand_only, args.wait_capture,args.maple_bypass,args.maple_delay,
+                                                       args.cached_metadata)
         files.update({'variants/'+name+'/'+path: data for path, data in variant_files.items()})
         metadata['variants'][name] = dict(directory='variants/'+name, destination=str(MODULES[name]),
-            module_sha256=manifest['module_sha256'], virtual_a2=name == 'vmu-only',
+            module_sha256=manifest['module_sha256'], virtual_a2=name == 'vmu-only' or args.cached_metadata,
             reader='New (X)' if name == 'reader-only' else 'Standard', lease_bytes=393216,
             support_hooks_retained=not(args.maple_bypass and name=='reader-only'),
             prefetch_enabled=name == 'reader-only' and not args.demand_only,
@@ -654,15 +800,19 @@ def package(args):
             maple_delay=args.maple_delay and name=='reader-only',
             maple_delay_ticks=dict(submit=59,complete=76) if args.maple_delay and name=='reader-only' else None,
             maple_c_callbacks_enabled=not(args.maple_bypass and name=='reader-only'),
+            cached_metadata=args.cached_metadata and name=='reader-only',
+            public_variant='combined' if args.cached_metadata and name=='reader-only' else name,
             heap_reclaim_coherence_guards_retained=True,
             linked_layout_sha256=sha(wire(layout)))
     files['isolation.json'] = wire(metadata)
     passed_recovery = None
-    if args.maple_delay:
-        bridge,passed_recovery = passed_bypass_bridge(args.previous_package,metadata,files)
+    if args.maple_delay or args.cached_metadata:
+        bridge,passed_recovery = passed_bypass_bridge(
+            args.passed_bypass_package if args.cached_metadata else args.previous_package,metadata,files)
         files.update(bridge)
         files['evidence/passed-bypass-recovery.json'] = wire(passed_recovery)
-    guide_path = ('docs/native-isolation-maple-delay-test.md' if args.maple_delay else
+    guide_path = ('docs/native-isolation-cached-metadata-test.md' if args.cached_metadata else
+                  'docs/native-isolation-maple-delay-test.md' if args.maple_delay else
                   'docs/native-isolation-maple-bypass-test.md' if args.maple_bypass else
                   'docs/native-isolation-wait-test.md' if args.wait_capture else
                   'docs/native-isolation-demand-test.md' if args.demand_only else 'docs/native-isolation-test.md')
@@ -670,7 +820,7 @@ def package(args):
         '@RUNTIME_COMMIT@', runtime_commit).replace('@DELIVERY_COMMIT@', delivery_commit).encode()
     files['README-FIRST.md'] = guide
     delivery_checks = extracted_install_check(files, args.previous_package if args.demand_only else None,
-                                               args.backup_origin_package if args.wait_capture or args.maple_bypass else None)
+                                               args.backup_origin_package if args.wait_capture or args.maple_bypass or args.cached_metadata else None)
     with tempfile.TemporaryDirectory(prefix='kui-isolation-source-') as directory:
         bundle = Path(directory)/'native-source-full.bundle'
         subprocess.run(['git', 'bundle', 'create', str(bundle), 'HEAD'], cwd=ROOT, check=True, capture_output=True)
@@ -685,6 +835,8 @@ def package(args):
                      e1_wait_capture=args.wait_capture,
                      maple_bypass=args.maple_bypass,
                      maple_delay=args.maple_delay,
+                     cached_metadata=args.cached_metadata,
+                     public_variant='combined' if args.cached_metadata else None,
                      passed_bypass_recovery=passed_recovery,
                      preserved_gui_build=GUI_BUILD, preserved_gui_sha256=GUI_SHA,
                      evidence_sha256={name: sha(data) for name, data in files.items()
@@ -726,8 +878,13 @@ def main():
                         help='Require the diagnostic Maple C-call bypass; needs --demand-only and excludes wait capture')
     parser.add_argument('--maple-delay',action='store_true',
                         help='Require read-only 59/76 tick delay addback; needs --maple-bypass')
+    parser.add_argument('--cached-metadata',action='store_true',
+                        help='Require the combined real-callback VMU/New metadata-cache candidate; needs --demand-only')
     parser.add_argument('--previous-package', type=Path,
-                        help='Pinned earlier archive; defaults to995,3f51 for wait capture,5fa97 for bypass,cec542 for delay')
+                        help='Pinned earlier archive; defaults to995,3f51 for capture,5fa97 for bypass,cec542 for delay,1b2d for cached metadata')
+    parser.add_argument('--passed-bypass-package',type=Path,
+                        default=ROOT.parent/'K-UI-Evolution-Maple-Bypass-cec542aefa8a.zip',
+                        help='Pinned passing cec542 archive for the cached-metadata direct return bridge')
     parser.add_argument('--backup-origin-package', type=Path,
                         default=ROOT.parent/'K-UI-Evolution-Isolation-9956562f91d6.zip',
                         help='Pinned995 archive for inherited backup-chain extraction checks')

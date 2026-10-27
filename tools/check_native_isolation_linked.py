@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Execute the two explicit native isolation workers against the original SDK.
+"""Execute native isolation workers against the original SDK.
 
 No production pin is changed. Actual linked C guards, packet filters, protocol
 and owner-supplied SDK instructions execute in flat coherent RAM. Only the
 Maple hardware, the auxiliary ABI boundary, and assembly save/restore bridges
-are modeled. A Standard block read stops at its real low SD-loan entry, before
+are modeled. A VMU-enabled block read stops at its real low SD-loan entry, before
 hardware or an acknowledgement; no successful storage result is substituted.
 """
 import argparse
@@ -39,7 +39,7 @@ SOURCE_FILES = ('tools/check_native_isolation_linked.py',
     'tests/test_vmu_native_sdk_poll_execution.py',
     'src/loader/vmu_native_passive.c', 'src/loader/vmu_native_reader_capture.inc',
     'src/loader/vmu_native_phase.inc', 'src/loader/vmu_native_wait_capture.inc',
-    'src/loader/vmu_native_maple_delay.inc',
+    'src/loader/vmu_native_maple_delay.inc', 'src/loader/vmu_native_metadata_cache.inc',
     'src/loader/vmu_native_passive_hooks.S',
     'src/loader/vmu_readonly_overlay.c', 'include/kui/native_isolation.h')
 
@@ -55,20 +55,33 @@ class LoanBoundary(Exception): pass
 
 class IsolationWorker(RecordWorker):
     def __init__(self, startup, build, handoff, record, variant, tick_off=False, wait_capture=False,
-                 maple_bypass=False, maple_delay=False):
+                 maple_bypass=False, maple_delay=False, cached_metadata=False):
         self.variant = variant
         self.tick_off = tick_off
         self.wait_capture = wait_capture
         self.maple_bypass = maple_bypass
         self.maple_delay = maple_delay
+        self.cached_metadata = cached_metadata
+        self.flat_ocbi = []
         self.low = read_elf(build/'resident-sci.elf')
         self.sd_entry = self.low[4]['_kui_vmu_observe_sd_lease'][0]
+        sd_symbol = self.low[4]['_kui_vmu_observe_sd_lease']
+        require(sd_symbol[2] == 2 and sd_symbol[3] < len(self.low[3]),
+                'SD loan boundary lacks a typed resident ELF entry')
+        sd_section = self.low[3][sd_symbol[3]]
+        require(sd_section[1] == 1 and sd_section[2]&6 == 6 and
+                sd_section[3] <= self.sd_entry < self.sd_entry+2 <= sd_section[3]+sd_section[5],
+                'SD loan boundary escaped its actual executable resident section')
         self.calls, self.tick_calls = Counter(), 0
+        self.c_callback_calls = Counter()
         self.tick_entry = None
         self.inject_command, self.injected_rx = None, None
         self.last_aux_arguments = None
+        self.loan_boundary = None
         super().__init__(startup, build, handoff, record)
         stage, worker = read_elf(build/'stage.elf'), read_elf(build/'native-worker.elf')
+        require(cached_metadata is (variant == 'metadata_cache'),
+                'Cached metadata must use its explicit combined variant')
         marker = '__kui_native_'+variant+'_isolation_'
         for image, role in ((stage,'stage'),(worker,'worker')):
             require(image[4].get(marker+role) == ONE, 'Isolation marker differs: '+role)
@@ -76,11 +89,17 @@ class IsolationWorker(RecordWorker):
                     (LEASE,0,0,0xfff1), 'Isolation lease is not exact compiled384KiB')
             require(image[4].get('__kui_native_bottom_heap_'+role) == ONE,
                     'Isolation lacks current bottom placement: '+role)
+            for other in {'reader_only', 'standard_vmu', 'metadata_cache'} - {variant}:
+                require('__kui_native_'+other+'_isolation_'+role not in image[4],
+                        'Conflicting isolation marker: '+other+'/'+role)
         for image, role in ((stage,'stage'),(worker,'worker')):
             tick_marker = image[4].get('__kui_native_ra_tick_off_isolation_'+role)
             require(tick_marker == ONE if tick_off else tick_marker is None,
                     'Controller TICK isolation marker differs: '+role)
-        require(not tick_off or variant == 'reader_only', 'TICK isolation belongs only to reader-only')
+        require(not tick_off or variant in ('reader_only', 'metadata_cache'),
+                'TICK isolation belongs only to a New reader variant')
+        require(not cached_metadata or (tick_off and not wait_capture and not maple_bypass and not maple_delay),
+                'Cached metadata requires real callbacks with TICK off and no other diagnostic')
         for image, role in ((stage,'stage'),(worker,'worker')):
             capture_marker=image[4].get('__kui_native_e1_wait_capture_'+role)
             require(capture_marker == ONE if wait_capture else capture_marker is None,
@@ -103,6 +122,8 @@ class IsolationWorker(RecordWorker):
         self.lease_geometry_source = 'Paired actual absolute isolation lease and bottom markers'
         self.build_inputs['stage.elf'] = (build/'stage.elf').read_bytes()
         self.tracked_entries = {self.symbols[name][0]:name for name in BACKENDS if name in self.symbols}
+        self.callback_entries = {self.symbols['_kui_vmu_native_passive_'+name][0]:name
+                                 for name in ('submit','complete')}
         if variant == 'standard_vmu':
             for name in ('__kui_native_readahead_worker','__kui_native_dual_readers_worker'):
                 require(name not in worker[4], 'Standard isolation contains background worker capability')
@@ -111,7 +132,7 @@ class IsolationWorker(RecordWorker):
         else:
             require(worker[4].get('__kui_native_readahead_worker') == ONE and
                     worker[4].get('__kui_native_dual_readers_worker') == ONE,
-                    'Reader-only isolation lost its complete New reader worker')
+                    'New reader isolation lost its complete reader worker')
 
     def worker(self, name, args):
         if name == '_kui_vmu_native_passive_arm':
@@ -120,18 +141,37 @@ class IsolationWorker(RecordWorker):
             self.write(args[0]+2236, self.sd_entry)
         return super().worker(name,args)
 
+    def plain(self, op, pc):
+        if op&0xf0ff == 0x0093:  # OCBI; this replay deliberately has coherent flat RAM.
+            require(self.cached_metadata, 'Unexpected cache invalidation outside the combined variant')
+            address = self.r[op>>8&15]
+            require(address&0xe0000000 == 0x80000000 and not address&31,
+                    'Metadata cache invalidation lacks its aligned P1 line')
+            self.flat_ocbi.append(dict(pc=hex(pc),address=hex(address),coherent_memory_noop=True))
+            self.executing=pc;self.instructions+=1
+            return
+        return super().plain(op,pc)
+
     def step(self):
         if getattr(self,'inside_worker',False):
+            if self.pc in getattr(self,'callback_entries',{}):
+                self.c_callback_calls[self.callback_entries[self.pc]]+=1
             if self.pc in getattr(self,'tracked_entries',{}):
                 name=self.tracked_entries[self.pc];self.calls[name]+=1
                 require(self.variant!='reader_only',
                         'Reader-only isolation reached VMU/storage backend: '+name)
             if self.pc == self.sd_entry:
-                require(self.variant == 'standard_vmu', 'Reader-only isolation reached SD loan')
+                require(self.variant in ('standard_vmu', 'metadata_cache'),
+                        'Reader-only isolation reached SD loan')
+                require(self.r[4]==self.symbols['_kui_vmu_native_persistent_sd_transaction'][0] and
+                        self.r[5]==self.symbols['_durable_card'][0] and self.sr&0xf0==0xf0,
+                        'Actual SD-loan call lost its typed transaction/context or masked scope')
+                self.loan_boundary=dict(entry=hex(self.pc),callback=hex(self.r[4]),
+                                        context=hex(self.r[5]),imask15=True)
                 self.calls['actual_low_sd_loan_boundary']+=1
                 raise LoanBoundary
             if self.tick_entry is not None and self.pc == self.tick_entry:
-                require(self.variant=='reader_only', 'Standard isolation called auxiliary code')
+                require(self.variant in ('reader_only','metadata_cache'), 'Standard isolation called auxiliary code')
                 require(self.r[4:8] == [2,0,self.tick_region,0], 'New reader TICK arguments differ')
                 require(self.sr&0xf0 == 0xf0, 'New reader TICK escaped masked worker scope')
                 self.tick_calls+=1;self.last_aux_arguments=self.r[4:8].copy()
@@ -142,7 +182,7 @@ class IsolationWorker(RecordWorker):
         return super().step()
 
     def seed_tick_boundary(self):
-        require(self.variant=='reader_only', 'Only New reader has an auxiliary boundary')
+        require(self.variant in ('reader_only','metadata_cache'), 'Only New reader has an auxiliary boundary')
         lease=self.actual_heap_payload&0x1fffffff|0x80000000
         manifest=lease+0x20000;region=lease+0x20400;aux=(lease+0x21000)|0x20000000
         self.tick_region=region;self.tick_entry=lease+0x22000
@@ -328,15 +368,16 @@ def poll(cpu, consume=True):
 
 
 def run_variant(startup, record_path, build, variant, tick_off=False, wait_capture=False,
-                maple_bypass=False,maple_delay=False):
+                maple_bypass=False,maple_delay=False,cached_metadata=False):
     source,image,extent=fresh_verify(startup,record_path)
     record=Record(record_path.read_bytes(),image,source)
     cls=BypassWorker if maple_bypass else IsolationWorker
-    cpu=cls(startup,build,make_handoff(),record,variant,tick_off,wait_capture,maple_bypass,maple_delay)
+    cpu=cls(startup,build,make_handoff(),record,variant,tick_off,wait_capture,maple_bypass,maple_delay,
+            cached_metadata)
     cpu.prepare();initializer=cpu.initialize_sdk()
     cpu.calls.clear()
     pristine=copy.deepcopy(cpu)
-    if variant=='reader_only':cpu.seed_tick_boundary()
+    if variant in ('reader_only','metadata_cache'):cpu.seed_tick_boundary()
     rounds=[poll(cpu) for _ in range(8)]
     pre_gesture=None
     if wait_capture:
@@ -349,6 +390,9 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
         pre_gesture=dict(polls=8,capture_attempts=attempts,captured_contexts=valid,
                          capture_ready=ready,controller_tick_calls=cpu.tick_calls,normal_diagnostics=normal)
     stats=cpu.overlay_stats()
+    if not maple_bypass:
+        require(cpu.c_callback_calls==dict(submit=8,complete=8),
+                'Original SDK polling did not execute both real Maple C callbacks eight times')
     if variant=='reader_only':
         require(not any(stats[key] for key in ('advertisements','replies','backend_calls','devinfo','allinfo','media','reads')),
                 'Reader-only SDK enumeration exposed virtual storage')
@@ -359,25 +403,30 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
                 'Reader-only hardware model unexpectedly contained virtual attachment')
     else:
         require(stats['advertisements']>0 and stats['devinfo']>0 and stats['backend_calls']>0,
-                'Standard VMU did not execute actual virtual INFO enumeration')
+                'Virtual VMU did not execute actual virtual INFO enumeration')
         require(cpu.tick_calls==0 and cpu.calls['_persistent_handler']>0,
-                'Standard VMU backend/TICK separation differs')
+                'Virtual VMU backend/TICK separation differs')
+        require(all((int(header,16)>>16)&2 != 0
+                    for row in rounds for header in row['actual_parent_response_headers']),
+                'Virtual VMU did not advertise A2 through the original parent response')
     forced=[]
     for command in (() if maple_bypass else (1,2,10,11)):
         trial=copy.deepcopy(pristine)
-        if variant=='reader_only':trial.seed_tick_boundary()
+        if variant in ('reader_only','metadata_cache'):trial.seed_tick_boundary()
         trial.inject_command=command
         try:
             result=poll(trial,consume=False)
         except LoanBoundary:
-            require(variant=='standard_vmu' and command==11 and trial.calls['actual_low_sd_loan_boundary']==1,
+            require(variant in ('standard_vmu','metadata_cache') and command==11 and
+                    trial.calls['actual_low_sd_loan_boundary']==1,
                     'Unexpected storage boundary')
             require(trial.block(trial.injected_rx,4)==bytes([0xa5])*4,
                     'Block read published RX before storage completion')
             forced.append(dict(command=command,storage_boundary_reached=True,
-                               success_or_ack_substituted=False,rx_unpublished=True,calls=dict(trial.calls)))
+                               success_or_ack_substituted=False,rx_unpublished=True,calls=dict(trial.calls),
+                               loan_boundary=trial.loan_boundary))
             continue
-        require(command!=11 or variant=='reader_only', 'Standard block read did not reach storage loan')
+        require(command!=11 or variant=='reader_only', 'Virtual VMU block read did not reach storage loan')
         reply=trial.read(trial.injected_rx)
         s=trial.overlay_stats()
         if variant=='reader_only':
@@ -385,7 +434,7 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
                     'Reader-only forced packet reached storage or advertised a virtual device')
         else:
             require(reply&255=={1:5,2:6,10:8}[command] and s['backend_calls']>0,
-                    'Standard metadata packet lacks actual backend reply')
+                    'Virtual VMU metadata packet lacks actual backend reply')
         forced.append(dict(command=command,reply=hex(reply),overlay=s,calls=dict(trial.calls),
                            storage_boundary_reached=False,tick_calls=trial.tick_calls))
     cpu.check_build_unchanged()
@@ -409,6 +458,8 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
                           timer_writes=cpu.delay_timer_writes,
                           timer_model='Valid read-only TMU0; counter advances one tick per TCNT read, no CPU timing')
     return dict(variant=variant,controller_tick_off=tick_off,e1_wait_capture=wait_capture,
+                cached_metadata=cached_metadata,virtual_a2=variant!='reader_only',
+                maple_c_callbacks_enabled=not maple_bypass,
                 maple_bypass=maple_bypass,maple_delay=maple_delay,maple_bypass_execution=bypass,
                 normal_pre_gesture=pre_gesture,artifact_sha256={name:sha((build/name).read_bytes()) for name in
                     ('entry.elf','stage.elf','native-worker.elf','native-worker.bin','native-worker.reloc','resident-sci.elf','resident-sci.bin')},
@@ -416,6 +467,11 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
                 lease_bytes=cpu.lease_bytes,worker_bytes=0x20000,placement='bottom',heap_calls=cpu.heap_calls,
                 sdk_initializer=initializer,natural_rounds=rounds,final_overlay=stats,
                 natural_backend_calls=dict(cpu.calls),tick_calls=cpu.tick_calls,
+                actual_maple_c_callbacks=dict(cpu.c_callback_calls),
+                metadata_cache_invalidations=cpu.flat_ocbi,
+                sd_loan_boundary=dict(symbol='_kui_vmu_observe_sd_lease',address=hex(cpu.sd_entry),
+                    resident_sha256=sha((build/'resident-sci.elf').read_bytes()),
+                    reader='New (X)' if variant in ('reader_only','metadata_cache') else 'Standard'),
                 forced_packets=forced,worker_helpers_substituted=False,
                 auxiliary_boundary_substituted=variant=='reader_only' and not maple_bypass,
                 original_game_or_sdk_functions_substituted=False,
@@ -441,6 +497,8 @@ def main():
                         help='Execute the paired diagnostic Maple gateways with their C calls omitted')
     parser.add_argument('--maple-delay',action='store_true',
                         help='Execute the read-only 59/76 tick delays while real Maple C calls stay off')
+    parser.add_argument('--cached-metadata',action='store_true',
+                        help='Execute the real-callback combined VMU/New metadata-cache variant; requires TICK off')
     args=parser.parse_args()
     require(__debug__, 'Assertions must remain enabled')
     require(not args.wait_capture or (args.reader_tick_off and args.collector_output),
@@ -450,13 +508,17 @@ def main():
     require(not args.maple_bypass or (args.reader_tick_off and not args.wait_capture),
             'Maple bypass requires TICK-off and is mutually exclusive with wait capture')
     require(not args.maple_delay or args.maple_bypass, 'Maple delay requires Maple C bypass')
+    require(not args.cached_metadata or (args.reader_tick_off and not args.wait_capture and
+                not args.maple_bypass and not args.maple_delay),
+            'Cached metadata requires TICK-off and excludes wait capture, bypass, and delay')
     require(len(args.source_commit)==40 and all(c in '0123456789abcdef' for c in args.source_commit),
             'Expected exact runtime freeze commit')
     for build in (args.reader_build,args.standard_build):
         require(args.source_commit[:12].encode() in (build/'entry.elf').read_bytes(),
                 'Actual linked entry does not contain runtime freeze build identifier')
-    reports=[run_variant(args.startup,args.record,args.reader_build,'reader_only',args.reader_tick_off,
-                         args.wait_capture,args.maple_bypass,args.maple_delay),
+    reports=[run_variant(args.startup,args.record,args.reader_build,
+                         'metadata_cache' if args.cached_metadata else 'reader_only',args.reader_tick_off,
+                         args.wait_capture,args.maple_bypass,args.maple_delay,args.cached_metadata),
              run_variant(args.startup,args.record,args.standard_build,'standard_vmu')]
     report=dict(schema='kui.native.isolation-linked-sdk.v1',status='PASS',
                 source_commit=args.source_commit,build=args.source_commit[:12],variants=reports,
@@ -465,9 +527,9 @@ def main():
                     'Flat coherent RAM and synchronous authored Maple hardware; no bus latency, IRQ schedule, cache, full game, FMV or timing model. Completion stops at the original consumer return, before the remaining SDK IRQ tail.',
                     ('Reader bypass executes the actual patched SDK, complete assembly gateways, original resume and consumer tail; the two Maple C callbacks are forbidden. Standard executes its existing linked C path.' if args.maple_bypass else
                      'Assembly save/restore bridges use executed original SDK register contexts; all linked worker C guards and packet/protocol helpers execute.'),
-                    'Reader TICK dispatch executes to an authored auxiliary ABI boundary; auxiliary producer instructions are covered by the separate reader audit.',
+                    'On TICK-enabled reader controls dispatch executes to an authored auxiliary ABI boundary; TICK-off controls must never reach it. Auxiliary producer instructions are covered by the separate reader audit.',
                     'Injected A2 requests on C-enabled variants are authored in original SDK-owned TX/RX memory; the bypass reader is tested with unmodified original SDK packets and physical A2 absent.',
-                    'Standard block read stops at the actual configured low ELF SD-loan entry. No SD hardware or success response is modeled.',
+                    'Every VMU-enabled block read stops at the actual configured low ELF SD-loan entry. No SD hardware or success response is modeled.',
                     'Original allocator performs the current384KiB bottom sequence; the cold stage C installer requires its separate audit.'])
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(report,indent=2)+'\n')

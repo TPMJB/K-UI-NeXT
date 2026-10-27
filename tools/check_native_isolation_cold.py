@@ -72,6 +72,14 @@ def check(build, variant, row):
         require(symbols.get('__kui_native_bottom_heap_' + role) == ABSOLUTE_ONE and
                 symbols.get('__kui_native_isolation_lease_bytes') ==
                 (LEASE_BYTES, 0, 0, 0xfff1), 'Wrong compiled bottom lease geometry')
+        require(all('__kui_native_'+other+'_isolation_'+role not in symbols
+                    for other in {'reader_only','standard_vmu','metadata_cache'}-{variant}),
+                'Conflicting compiled isolation mode')
+        if variant == 'metadata_cache':
+            require(symbols.get('__kui_native_ra_tick_off_isolation_'+role) == ABSOLUTE_ONE and
+                    all('__kui_native_'+other+role not in symbols for other in
+                        ('maple_bypass_isolation_','maple_delay_isolation_','e1_wait_capture_')),
+                    'Combined cold control requires real callbacks with TICK off')
     standard_low = actual_low(build) if variant == 'standard_vmu' else None
     reader = 0 if standard_low else 1
     positive, negative = [], []
@@ -129,6 +137,8 @@ def main():
     parser.add_argument('--startup', type=Path, required=True)
     parser.add_argument('--record', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--cached-metadata',action='store_true',
+                        help='Require the combined VMU/New metadata-cache isolation markers')
     args = parser.parse_args()
     row = dict(slug='evolution1', startup=str(args.startup.resolve()),
                record=str(args.record.resolve()))
@@ -137,7 +147,7 @@ def main():
         lease_bytes=LEASE_BYTES, inputs={name: dict(path=row[name], sha256=sha(row[name]))
             for name in ('startup', 'record')},
         source_sha256={name: sha(ROOT / name) for name in SOURCES},
-        results=[check(args.reader_build, 'reader_only', row),
+        results=[check(args.reader_build, 'metadata_cache' if args.cached_metadata else 'reader_only', row),
                  check(args.standard_build, 'standard_vmu', row)])
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n')
