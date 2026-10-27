@@ -27,6 +27,8 @@ def main():
     p.add_argument('--startup', type=Path, required=True)
     p.add_argument('--objdump', required=True)
     p.add_argument('--output', type=Path, required=True)
+    p.add_argument('--split-controller', action='store_true',
+                   help='Audit the NORMAL-only split-controller integration candidate')
     a = p.parse_args()
     a.output.mkdir(parents=True, exist_ok=True)
     sys.path[:0] = [str(a.repo/'tools'), str(a.repo/'tests')]
@@ -144,14 +146,21 @@ def main():
     # This explicit NORMAL-only integration build removes PROFILE capture
     # call roots. The independent stage/arm guards bind exact E1/NORMAL;
     # stack analysis below walks actual retained C and all authored callbacks.
-    require(worker[4].get('__kui_native_metadata_cache_isolation_worker') == (1,0,0,0xfff1) and
-            read_elf(a.reader/'stage.elf')[4].get('__kui_native_metadata_cache_isolation_stage') == (1,0,0,0xfff1),
-            'requires the exact paired metadata-cache integration markers')
+    integration = 'split_controller' if a.split_controller else 'metadata_cache'
+    require(worker[4].get('__kui_native_'+integration+'_isolation_worker') == (1,0,0,0xfff1) and
+            read_elf(a.reader/'stage.elf')[4].get('__kui_native_'+integration+'_isolation_stage') == (1,0,0,0xfff1),
+            'requires the exact paired integration markers: '+integration)
+    if a.split_controller:
+        require('__kui_native_metadata_cache_isolation_worker' not in worker[4] and
+                '_native_metadata_publish' not in worker[4],
+                'split candidate unexpectedly enables metadata-cache publication')
     require('_diagnostic_complete' not in worker[4] and '_diagnostic_pair_begin' not in worker[4],
             'unsupported PROFILE capture roots remain linked')
     closure_provenance = dict(method='PROFILE capture compiled out in explicit NORMAL-only integration control',
-        paired_metadata_cache_markers=True, absent_profile_capture_roots=True,
+        paired_integration_markers=integration, absent_profile_capture_roots=True,
         actual_retained_callgraphs_walked=True)
+    if not a.split_controller:
+        closure_provenance['paired_metadata_cache_markers'] = True
     terminal_cases = 0
     for destination in (P2, 0xac38a880, 0xac700000):
         blob = relocated(binary, wire, destination)
@@ -165,10 +174,15 @@ def main():
                           read_ahead_proof=read_ahead)
 
     reader['normal_only_integration'] = dict(
+        variant=integration,
         metadata_cache_publication_function_retained='_native_metadata_publish' in worker[4],
         profile_capture_roots_absent=True,
         actual_retained_worker_roots_walked=True,
         bss_stack_margin=worker[4]['__vmu_native_worker_stack_bottom'][0]-worker[4]['__vmu_native_worker_bss_end'][0])
+    if a.split_controller:
+        require('kui_vmu_native_passive_split_submit' in reader['callgraph']['paths'],
+                'actual split submit callgraph root was not walked')
+        reader['normal_only_integration']['actual_split_submit_root_walked'] = True
     reader['targeted_boundary_proof'] = dict(read_ahead=read_ahead,
         low_stack=low_stack, current_terminal_gateway_cases=terminal_cases,
         profile_capture=closure_provenance)

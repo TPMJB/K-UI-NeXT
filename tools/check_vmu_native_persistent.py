@@ -2935,10 +2935,17 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
         visiting.remove(name)
         memo[name] = (frames[name] + best[0], [name + "(" + str(frames[name]) + ")"] + best[1])
         return memo[name]
-    for root in ("kui_vmu_native_passive_arm", "kui_vmu_native_passive_submit",
+    roots = ("kui_vmu_native_passive_arm", "kui_vmu_native_passive_submit",
                  "kui_vmu_native_passive_complete", "kui_vmu_native_readonly_release_check",
                  "kui_vmu_native_passive_report", "kui_vmu_native_runtime_fault",
-                 "kui_vmu_native_trace_game"):
+                 "kui_vmu_native_trace_game")
+    split_marker = worker[4].get('__kui_native_split_controller_isolation_worker')
+    if split_marker is not None:
+        require(split_marker == (1,0,0,0xfff1) and
+                read_elf(directory/'stage.elf')[4].get('__kui_native_split_controller_isolation_stage') == split_marker,
+                'split submit stack root requires exact paired variant markers')
+        roots += ('kui_vmu_native_passive_split_submit',)
+    for root in roots:
         answer = max((depth(node) for node in resolve("worker", root)), key=lambda item: item[0])
         # Keep a full256B untouched border above the stack-bottom canaries,
         # plus the existing80B assembly/library-call allowance. Runtime

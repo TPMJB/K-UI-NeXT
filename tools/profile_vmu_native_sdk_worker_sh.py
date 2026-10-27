@@ -80,7 +80,8 @@ class WorkerSH(PollSH):
  def worker(self,name,args):
   self.sr=0x600000f0
   release.STACK=self.symbols['__vmu_native_worker_stack_top'][0]-32
-  if self.cached_stack and name in ('_kui_vmu_native_passive_submit','_kui_vmu_native_passive_complete'):
+  if self.cached_stack and name in ('_kui_vmu_native_passive_submit','_kui_vmu_native_passive_complete',
+                                   '_kui_vmu_native_passive_split_submit'):
    release.STACK=(release.STACK&0x1fffffff)|0x80000000
   self.inside_worker=True
   self.access_reads=Counter();self.access_writes=Counter();self.p1_stack_reads=self.p1_stack_writes=0

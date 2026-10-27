@@ -264,7 +264,8 @@ class RecordWorker(WorkerSH):
     def execute_worker(self, name, args):
         self.pc, self.pr = self.symbols[name][0], RETURN
         stack = self.symbols['__vmu_native_worker_stack_top'][0] - 32
-        if name in ('_kui_vmu_native_passive_submit', '_kui_vmu_native_passive_complete'):
+        if name in ('_kui_vmu_native_passive_submit', '_kui_vmu_native_passive_complete',
+                    '_kui_vmu_native_passive_split_submit'):
             stack = stack & 0x1fffffff | 0x80000000
         saved = self.r[8:15]
         self.r[15] = stack

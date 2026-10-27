@@ -14,6 +14,66 @@ import check_native_wait_stage_guard as stage
 
 
 class CompletionDelayModeTests(unittest.TestCase):
+    def test_split_controller_selector_requires_its_own_ticked_off_combined_mode(self):
+        cases=[dict(tick_off=False)]
+        cases += [{name:True} for name in ('wait_capture','maple_bypass','maple_delay',
+                   'cached_metadata','completion_delay','submission_delay','post_start_delay')]
+        for change in cases:
+            with self.subTest(change=change):
+                options=dict(tick_off=True,split_controller=True)
+                options.update(change)
+                with self.assertRaisesRegex(ValueError,'Split controller requires TICK off'):
+                    linked.run_variant(None,None,None,'split_controller',**options)
+        with self.assertRaisesRegex(ValueError,'explicit combined variant'):
+            linked.run_variant(None,None,None,'reader_only',tick_off=True,split_controller=True)
+        with self.assertRaisesRegex(ValueError,'explicit combined variant'):
+            linked.run_variant(None,None,None,'split_controller',tick_off=True)
+        for name in ('maple_delay','cached_metadata','completion_delay','submission_delay','post_start_delay'):
+            with self.subTest(stage_mode=name):
+                with self.assertRaisesRegex(ValueError,'excludes other diagnostic modes'):
+                    stage.check(None,None,None,split_controller=True,**{name:True})
+
+    def test_split_submit_bridge_uses_the_owner_frame_and_restores_owner_context(self):
+        cpu=linked.IsolationWorker.__new__(linked.IsolationWorker)
+        cpu.split_controller=True;cpu.inject_command=None
+        cpu.r=list(range(16));cpu.pr=0x8c123456;cpu.sr=0x600000f1
+        cpu.pc=0x8c1dae38;cpu.macl=0x12345678;cpu.instructions=999;cpu.submit_callbacks=0
+        original=(cpu.r.copy(),cpu.pr,cpu.sr,cpu.pc,cpu.macl,cpu.instructions)
+        calls=[]
+        def frame(kind):
+            calls.append((kind,cpu.r.copy(),cpu.pr,cpu.sr))
+            cpu.frame_address=0x8c00dfb4
+        def worker(name,args):
+            calls.append((name,args))
+            cpu.r=[0]*16;cpu.pr=0;cpu.sr=0;cpu.pc=0;cpu.macl=0;cpu.instructions=0
+            return dict(instructions=11)
+        cpu.frame=frame;cpu.worker=worker
+        cpu.bridge_submit()
+        self.assertEqual(calls[0],('submit',original[0],original[1],original[2]))
+        self.assertEqual(calls[1],('_kui_vmu_native_passive_split_submit',[0x8c00dfb4]))
+        self.assertEqual((cpu.r,cpu.pr,cpu.sr,cpu.pc,cpu.macl,cpu.instructions),original)
+        self.assertEqual(cpu.submit_callbacks,1)
+        self.assertEqual(cpu.submit_counts,dict(instructions=11))
+        cpu.split_controller=False
+        with patch.object(linked.RecordWorker,'bridge_submit',return_value=17) as ordinary:
+            self.assertEqual(cpu.bridge_submit(),17)
+        ordinary.assert_called_once_with()
+
+    def test_stage_split_marker_requires_explicit_selection_and_typed_absolute_one(self):
+        with tempfile.TemporaryDirectory() as directory:
+            build=Path(directory)
+            key='__kui_native_split_controller_isolation_stage'
+            for marker in (None,1,(0,0,0,0xfff1)):
+                with self.subTest(marker=marker):
+                    symbols={}
+                    if marker is not None:symbols[key]=marker
+                    with patch.object(stage,'read_elf',return_value=(None,None,None,None,symbols)):
+                        with self.assertRaisesRegex(ValueError,'split-controller marker differs'):
+                            stage.check(build,None,None,split_controller=True)
+            with patch.object(stage,'read_elf',return_value=(None,None,None,None,{key:stage.ABSOLUTE_ONE})):
+                with self.assertRaisesRegex(ValueError,'split-controller marker differs'):
+                    stage.check(build,None,None)
+
     def test_side_selection_requires_delay_before_artifact_access(self):
         for side in ('completion','submission'):
             with self.subTest(side=side):

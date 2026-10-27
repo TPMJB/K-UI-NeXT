@@ -42,6 +42,7 @@ DELAY_BUILD = '1b2d79400abd'
 CACHED_BUILD = '5e4663cdaeeb'
 COMPLETION_BUILD = '629e7fe96c08'
 SUBMISSION_BUILD = '9815e3ed62c4'
+POST_START_BUILD = '99b2046f3235'
 KNOWN_PREVIOUS = {
     PREVIOUS_BUILD: (PREVIOUS_ARCHIVE_SHA, PREVIOUS_METADATA_SHA),
     DEMAND_BUILD: ('2ff9b0c356b535bdf3fa1083b9c65d1fd8b8bf346170b8f2eae6ecd42e2b673f',
@@ -58,6 +59,8 @@ KNOWN_PREVIOUS = {
                        '337149e2d81b81592a40ac491fc1db2afd6239e96ac2e9907711065900a86aa9'),
     SUBMISSION_BUILD: ('61d81134c2a968172247f82ce24866f408c696ea438c32195869ba6450325c1f',
                        '9da2855b6f35d0f985d3496133a0f7545b1bc8372b1eaa613c0a5a373b6e180b'),
+    POST_START_BUILD: ('e4c532d0e8958c82aa6da3e4bb64fe9541725223bcff803202041faf39f40cdc',
+                       '1239bde583f6b55958c1ef7caea27e2962348b4739e1e68067ebc6dcec9ba50e'),
 }
 
 
@@ -87,7 +90,7 @@ def embedded(image, begin, end, data, base, binary):
 
 def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_capture=False,
                  maple_bypass=False, maple_delay=False, cached_metadata=False,completion_delay=False,
-                 submission_delay=False,post_start_delay=False):
+                 submission_delay=False,post_start_delay=False,split_controller=False):
     require(not wait_capture or demand_only, 'Wait capture requires the demand-only control')
     require(not maple_bypass or (demand_only and not wait_capture),
             'Maple bypass requires demand-only and excludes wait capture')
@@ -98,6 +101,9 @@ def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_cap
     require(not(completion_delay and submission_delay),'Select one delayed gateway')
     require(not cached_metadata or (demand_only and not wait_capture and not maple_bypass and not maple_delay),
             'Cached metadata requires demand-only real callbacks without other diagnostics')
+    require(not split_controller or (demand_only and not any((cached_metadata,wait_capture,maple_bypass,
+                maple_delay,completion_delay,submission_delay,post_start_delay))),
+            'Split controller requires demand-only real callbacks without another isolation control')
     artifacts = {key: sha((build/key).read_bytes()) for key in REQUIRED_ARTIFACTS}
     require(all(proof['artifact_sha256'].get(key) == value for key, value in artifacts.items()),
             'Linked execution report differs from final artifacts: '+name)
@@ -124,11 +130,12 @@ def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_cap
     require(generate(worker[0], raw_worker, 0x8c100000, 0x20000) == reloc,
             'Worker relocation table differs from actual linked pointers: '+name)
     loads = validate_loads(worker[0], raw_worker, 0x8c100000, 0x20000)
-    stem = ('metadata_cache' if cached_metadata else 'reader_only') if name == 'reader-only' else 'standard_vmu'
+    stem = ('split_controller' if split_controller else 'metadata_cache' if cached_metadata else
+            'reader_only') if name == 'reader-only' else 'standard_vmu'
     for image, side in ((stage, 'stage'), (worker, 'worker')):
         require(image[4].get('__kui_native_'+stem+'_isolation_'+side) == ABSOLUTE_ONE and
                 all('__kui_native_'+other+'_isolation_'+side not in image[4]
-                    for other in {'reader_only','standard_vmu','metadata_cache'}-{stem}) and
+                    for other in {'reader_only','standard_vmu','metadata_cache','split_controller'}-{stem}) and
                 image[4].get('__kui_native_isolation_lease_bytes') == (393216, 0, 0, 0xfff1) and
                 image[4].get('__kui_native_bottom_heap_'+side) == ABSOLUTE_ONE,
                 'Variant lacks its exact isolated bottom-reservation capabilities: '+name)
@@ -163,6 +170,8 @@ def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_cap
             'Linked execution report Maple delay setting differs: '+name)
     require(proof.get('cached_metadata',False) is (cached_metadata and name=='reader-only'),
             'Linked execution report cached-metadata setting differs: '+name)
+    require(proof.get('split_controller',False) is (split_controller and name=='reader-only'),
+            'Linked execution report split-controller setting differs: '+name)
     require(proof.get('completion_delay',False) is (completion_delay and name=='reader-only'),
             'Linked execution report completion-only delay setting differs: '+name)
     require(proof.get('submission_delay',False) is (submission_delay and name=='reader-only'),
@@ -174,7 +183,7 @@ def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_cap
                 proof.get('maple_bypass_execution',{}).get('post_start_immediate_completion_cases') and
                 isinstance(proof.get('post_start_immediate_completion_cases'),list),
                 'Post-start row and execution immediate-completion receipts differ')
-    if cached_metadata:
+    if cached_metadata or split_controller:
         require(proof.get('virtual_a2') is True and proof.get('maple_c_callbacks_enabled') is True,
                 'Combined report lacks real VMU callbacks: '+name)
     if name == 'reader-only':
@@ -232,9 +241,11 @@ def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_cap
                   submission_delay=submission_delay and name=='reader-only',
                   post_start_delay=post_start_delay and name=='reader-only',
                   maple_c_callbacks_enabled=not(maple_bypass and name=='reader-only'),
+                  support_hooks_retained=not(maple_bypass and name=='reader-only'),
                   cached_metadata=cached_metadata and name=='reader-only',
-                  public_variant='combined' if cached_metadata and name=='reader-only' else name,
-                  virtual_a2=name=='vmu-only' or cached_metadata,
+                  split_controller=split_controller and name=='reader-only',
+                  public_variant='combined' if (cached_metadata or split_controller) and name=='reader-only' else name,
+                  virtual_a2=name=='vmu-only' or cached_metadata or split_controller,
                   heap_reclaim_coherence_guards_retained=True,
                   canonical_disjoint_personalization=manifest)
     files['variant-layout.json'] = wire(layout)
@@ -304,7 +315,8 @@ def passed_bypass_bridge(path, metadata, files):
 def extracted_install_check(files, previous_archive=None, origin_archive=None):
     sys.path.insert(0, str(ROOT/'tests'))
     from test_personalize_vmu_native_persistent import pair
-    combined = json.loads(files['isolation.json']).get('cached_metadata',False)
+    package_metadata=json.loads(files['isolation.json'])
+    combined = package_metadata.get('cached_metadata',False) or package_metadata.get('split_controller',False)
     selected = 'combined' if combined else 'reader-only'
     with tempfile.TemporaryDirectory(prefix='kui-native-isolation-cli-') as directory:
         root = Path(directory)
@@ -347,7 +359,8 @@ def extracted_install_check(files, previous_archive=None, origin_archive=None):
                 for name in archive.namelist():
                     if name in ('install.py', 'personalize.py', 'isolation.json') or name.startswith(('tools/', 'variants/')):
                         path = previous/name;path.parent.mkdir(parents=True, exist_ok=True);path.write_bytes(archive.read(name))
-            previous_combined=json.loads((previous/'isolation.json').read_text()).get('cached_metadata',False)
+            previous_metadata=json.loads((previous/'isolation.json').read_text())
+            previous_combined=previous_metadata.get('cached_metadata',False) or previous_metadata.get('split_controller',False)
             origin = root/'origin-package'
             if origin_archive is not None:
                 with zipfile.ZipFile(origin_archive) as archive:
@@ -773,6 +786,92 @@ def validate_cached_metadata_traffic(report,runtime_commit,reader_build):
                 sha((ROOT/relative).read_bytes())==digest,'Metadata traffic proof source changed: '+path)
 
 
+def validate_split_controller_execution(report,linked,runtime_commit,reader_build):
+    polls=report.get('polls',[])
+    captured=[row for row in polls if row.get('captured') is True]
+    fallback=report.get('virtual_fallback_cases',[])
+    mutations=report.get('mutation_refusals',[])
+    allinfo=report.get('authored_cold_allinfo',{})
+    categories={'capture','source','context','hooks','heap','tx_metadata','rx_slot','cold_slot'}
+    require(report.get('schema')=='kui.native.split-controller-execution.v1' and
+            report.get('status')=='PASS' and report.get('source_commit')==runtime_commit and
+            report.get('split_controller') is True and report.get('cached_metadata') is False and
+            report.get('real_virtual_a2') is True and report.get('real_c_callbacks') is True and
+            report.get('controller_tick_calls')==0 and
+            all(report.get(key) is True for key in ('cold_info_captured_without_full_submit',
+                'prefix_reduced','rx_equivalence','physical_packet_equivalence',
+                'parent_byte_only_on_captured_polls')) and len(polls)>=8 and
+            polls[0].get('cold') is True and polls[0].get('captured') is True and
+            polls[0].get('full_submit_fallback_calls')==0 and
+            any(row.get('cold') is False for row in captured) and
+            all(row.get('rx_equal') is True and row.get('physical_packets_equal') is True for row in polls) and
+            all(row.get('tiny_submit_calls')==1 and row.get('full_submit_fallback_calls')==0 and
+                type(row.get('candidate_submit_instructions')) is int and
+                type(row.get('baseline_submit_instructions')) is int and
+                0<row['candidate_submit_instructions']<row['baseline_submit_instructions']
+                for row in captured) and len(fallback)==256 and
+            {row.get('command') for row in fallback}==set(range(256)) and
+            all(row.get('actual_full_submit_entry') is True and row.get('raw_capture_committed') is False and
+                row.get('before_mdst') is True and row.get('storage_success_substituted') is False for row in fallback) and
+            categories<={row.get('category') for row in mutations} and
+            all(row.get('refused') is True and row.get('before_parent_store') is True and
+                row.get('rx_unchanged') is True and row.get('actual_c_refusal') is True and
+                (row.get('category')!='cold_slot' or row.get('before_mdst') is True) for row in mutations) and
+            allinfo.get('authored_packet') is True and allinfo.get('natural_sdk_producer_command') is False and
+            allinfo.get('command')==2 and allinfo.get('tiny_submit_calls')==1 and
+            allinfo.get('full_submit_fallback_calls')==0 and allinfo.get('complete_calls')==1 and
+            allinfo.get('submit_capture_tag')==2 and allinfo.get('live_ready_before_submit')==0 and
+            allinfo.get('live_ready_after_submit')==0 and
+            type(allinfo.get('live_ready_after_complete')) is int and allinfo['live_ready_after_complete']!=0 and
+            type(allinfo.get('candidate_submit_instructions')) is int and
+            type(allinfo.get('baseline_submit_instructions')) is int and
+            0<allinfo['candidate_submit_instructions']<allinfo['baseline_submit_instructions'] and
+            allinfo.get('rx_equal') is True and allinfo.get('physical_packets_equal') is True and
+            allinfo.get('parent_byte_only') is True and isinstance(allinfo.get('rx_sha256'),str) and
+            len(allinfo['rx_sha256'])==64 and all(c in '0123456789abcdef' for c in allinfo['rx_sha256']) and
+            all(report.get('artifact_sha256',{}).get(name)==sha((reader_build/name).read_bytes())
+                for name in ('entry.elf','stage.elf','native-worker.elf','native-worker.bin',
+                             'native-worker.reloc','resident-sci.elf')),
+            'Split-controller execution proof lacks bound capture, checked completion, or pre-MDST fallback')
+    sources=report.get('source_sha256',{})
+    require({'tools/check_native_split_controller.py','tools/check_native_isolation_linked.py',
+             'src/loader/vmu_native_passive.c','src/loader/vmu_native_split_controller.inc'}<=set(sources),
+            'Split-controller execution proof omits its auditor or implementation source')
+    for path,digest in sources.items():
+        relative=Path(path)
+        require(not relative.is_absolute() and '..' not in relative.parts and
+                sha((ROOT/relative).read_bytes())==digest,'Split-controller proof source changed: '+path)
+    packets=linked.get('forced_packets',[])
+    metadata={row.get('command'):row for row in packets if row.get('command') in (1,2,10)}
+    reads=[row for row in packets if row.get('command')==11]
+    stats=linked.get('final_overlay',{})
+    execution=linked.get('split_controller_execution',{})
+    cold=execution.get('cold_first_info',{})
+    require(linked.get('variant')=='split_controller' and linked.get('split_controller') is True and
+            linked.get('cached_metadata') is False and linked.get('virtual_a2') is True and
+            linked.get('maple_c_callbacks_enabled') is True and linked.get('controller_tick_off') is True and
+            linked.get('tick_calls')==0 and
+            all(linked.get(key,False) is False for key in ('e1_wait_capture','maple_bypass','maple_delay',
+                'completion_delay','submission_delay','post_start_delay')) and
+            execution.get('tiny_submit_calls')==execution.get('complete_calls')==8 and
+            cold.get('live_ready_before_submit')==0 and cold.get('live_ready_after_complete')==0x4e4c5031 and
+            cold.get('actual_original_a_info') is True and cold.get('advertisements',0)>0 and
+            len(linked.get('natural_rounds',[]))==8 and
+            all(stats.get(key,0)>0 for key in ('advertisements','backend_calls','devinfo')) and
+            set(metadata)=={1,2,10} and len(packets)==4 and
+            all(int(metadata[command].get('reply','0'),16)&255==reply and
+                metadata[command].get('overlay',{}).get('backend_calls',0)>0 and
+                metadata[command].get('storage_boundary_reached') is False
+                for command,reply in ((1,5),(2,6),(10,8))) and
+            len(reads)==1 and reads[0].get('storage_boundary_reached') is True and
+            reads[0].get('success_or_ack_substituted') is False and reads[0].get('rx_unpublished') is True and
+            reads[0].get('calls',{}).get('actual_low_sd_loan_boundary')==1 and
+            linked.get('sd_loan_boundary',{}).get('reader')=='New (X)' and
+            linked.get('worker_helpers_substituted') is False and
+            linked.get('original_game_or_sdk_functions_substituted') is False,
+            'Split-controller linked SDK proof lacks real VMU metadata or the New SD-loan boundary')
+
+
 def package(args):
     require(not args.wait_capture or args.demand_only, '--wait-capture requires --demand-only')
     require(not args.maple_bypass or (args.demand_only and not args.wait_capture),
@@ -785,8 +884,12 @@ def package(args):
     require(not args.cached_metadata or (args.demand_only and not args.wait_capture and
                 not args.maple_bypass and not args.maple_delay),
             '--cached-metadata requires --demand-only and excludes wait capture, bypass, and delay')
+    require(not args.split_controller or (args.demand_only and not any((args.cached_metadata,args.wait_capture,
+                args.maple_bypass,args.maple_delay,args.completion_delay,args.submission_delay,args.post_start_delay))),
+            '--split-controller requires --demand-only and excludes other isolation controls')
     if args.previous_package is None:
-        filename = ('K-UI-Evolution-Submission-Delay-9815e3ed62c4.zip' if args.post_start_delay else
+        filename = ('K-UI-Evolution-Post-Start-Delay-99b2046f3235.zip' if args.split_controller else
+                    'K-UI-Evolution-Submission-Delay-9815e3ed62c4.zip' if args.post_start_delay else
                     'K-UI-Evolution-Completion-Delay-629e7fe96c08.zip' if args.submission_delay else
                     'K-UI-Evolution-VMU-New-5e4663cdaeeb.zip' if args.completion_delay else
                     'K-UI-Evolution-Maple-Delay-1b2d79400abd.zip' if args.cached_metadata else
@@ -812,7 +915,7 @@ def package(args):
         require(not relative.is_absolute() and '..' not in relative.parts and sha((ROOT/relative).read_bytes()) == digest,
                 'Linked isolation auditor/source binding changed: '+path)
     proofs = {row['variant']: row for row in linked['variants']}
-    reader_proof = 'metadata_cache' if args.cached_metadata else 'reader_only'
+    reader_proof = 'split_controller' if args.split_controller else 'metadata_cache' if args.cached_metadata else 'reader_only'
     require(set(proofs) == {reader_proof, 'standard_vmu'} and len(linked['variants']) == 2,
             'Isolation execution report lacks both variants')
     gui = args.gui.read_bytes()
@@ -822,27 +925,30 @@ def package(args):
                     build=runtime_commit[:12], gui=dict(build=GUI_BUILD, sha256=GUI_SHA), variants={})
     if args.cached_metadata:
         metadata.update(cached_metadata=True,public_variant='combined')
-    installer = 'install_vmu_native_cached_metadata.py' if args.cached_metadata else 'install_vmu_native_isolation.py'
+    if args.split_controller:
+        metadata.update(split_controller=True,cached_metadata=False,public_variant='combined')
+    installer = ('install_vmu_native_split_controller.py' if args.split_controller else
+                 'install_vmu_native_cached_metadata.py' if args.cached_metadata else 'install_vmu_native_isolation.py')
     files = {'install.py': (ROOT/'tools'/installer).read_bytes(),
              'personalize.py': (ROOT/'tools/personalize_vmu_native_persistent.py').read_bytes(),
              'baseline/runtime.kui': gui, 'evidence/isolation-linked-sdk.json': linked_raw,
              'evidence/host-tests.log': args.host_log.read_bytes(),
              'LICENSE': (ROOT/'LICENSE').read_bytes(), 'THIRD_PARTY.md': (ROOT/'THIRD_PARTY.md').read_bytes()}
     if args.demand_only:
-        prior_build = (SUBMISSION_BUILD if args.post_start_delay else COMPLETION_BUILD if args.submission_delay else CACHED_BUILD if args.completion_delay else DELAY_BUILD if args.cached_metadata else BYPASS_BUILD if args.maple_delay else WAIT_BUILD if args.maple_bypass else
+        prior_build = (POST_START_BUILD if args.split_controller else SUBMISSION_BUILD if args.post_start_delay else COMPLETION_BUILD if args.submission_delay else CACHED_BUILD if args.completion_delay else DELAY_BUILD if args.cached_metadata else BYPASS_BUILD if args.maple_delay else WAIT_BUILD if args.maple_bypass else
                        DEMAND_BUILD if args.wait_capture else PREVIOUS_BUILD)
         compatible, previous_raw = previous_package(args.previous_package, prior_build)
         metadata['compatible_packages'] = {**json.loads(previous_raw).get('compatible_packages', {}),
                                            prior_build: compatible}
         files['evidence/previous-isolation.json'] = previous_raw
-        if args.wait_capture or args.maple_bypass or args.cached_metadata:
+        if args.wait_capture or args.maple_bypass or args.cached_metadata or args.split_controller:
             origin, origin_raw = previous_package(args.backup_origin_package)
             require(metadata['compatible_packages'].get(PREVIOUS_BUILD) == origin,
                     'Intermediate package backup origin differs from the pinned995 pair')
             files['evidence/backup-origin-isolation.json'] = origin_raw
     extra_proofs = EXTRA_PROOFS + (('standard-control-comparison.json',)
         if args.demand_only else ()) + (('tick-off-stack-mapping-negatives.json',)
-        if args.demand_only and not args.wait_capture and not args.maple_bypass and not args.cached_metadata else ()) + (
+        if args.demand_only and not args.wait_capture and not args.maple_bypass and not args.cached_metadata and not args.split_controller else ()) + (
         ('e1-wait-capture-collector.json', 'e1-wait-capture-image-guard.json',
          'original-frame-proof.json') if args.wait_capture else ()) + (
         ('maple-post-start-delay-gateways.json','maple-post-start-delay-stage-guard.json',
@@ -854,11 +960,36 @@ def package(args):
         ('maple-delay-gateways.json','maple-delay-stage-guard.json') if args.maple_delay else
         ('maple-bypass-gateways.json',) if args.maple_bypass else ()) + (
         ('metadata-cache-publication.json','metadata-cache-stage-guard.json',
-         'metadata-cache-traffic.json') if args.cached_metadata else ())
+         'metadata-cache-traffic.json') if args.cached_metadata else ()) + (
+        ('split-controller-execution.json','split-controller-stage-guard.json',
+         'split-controller-independent-review.json') if args.split_controller else ())
     for filename in extra_proofs:
         data = (args.linked_report.parent/filename).read_bytes()
         json.loads(data)
         files['evidence/'+filename] = data
+    if args.split_controller:
+        validate_split_controller_execution(json.loads(files['evidence/split-controller-execution.json']),
+                                             proofs[reader_proof],runtime_commit,args.reader_build)
+        guard=json.loads(files['evidence/split-controller-stage-guard.json'])
+        require(guard.get('split_controller') is True, 'Stage proof is not the combined split-controller control')
+        validate_maple_delay_guard(guard,runtime_commit,args.reader_build,
+            'kui.native.evolution1.split-controller-stage-guard.v1','Split-controller')
+        review=json.loads(files['evidence/split-controller-independent-review.json'])
+        require(review.get('schema')=='kui.native.split-controller.independent-review.v1' and
+                review.get('status')=='PASS' and review.get('source_commit')==runtime_commit and
+                review.get('paired_markers') is True and
+                all(review.get('artifact_sha256',{}).get(name)==sha((args.reader_build/name).read_bytes())
+                    for name in ('stage.elf','entry.elf','native-worker.elf','native-worker.bin',
+                                 'native-worker.reloc','resident-sci.elf')),
+                'Independent split review differs from final artifacts')
+        for filename in ('native-evolution1-cec542-console-pass-2026-10-26.json',
+                         'native-evolution1-1b2d-delay-console-failure-2026-10-26.json',
+                         'native-evolution1-5e466-cache-console-failure-2026-10-26.json',
+                         'native-evolution1-629e7-completion-delay-console-pass-2026-10-26.json',
+                         'native-evolution1-9815e-submit-delay-console-failure-2026-10-26.json'):
+            files['evidence/'+filename]=(ROOT/'docs/evidence'/filename).read_bytes()
+        for path in sorted((ROOT/'docs/evidence').glob('native-evolution1-*99b*.json')):
+            files['evidence/'+path.name]=path.read_bytes()
     if args.cached_metadata:
         validate_cached_metadata_execution(proofs[reader_proof])
         validate_cached_metadata_publication(json.loads(files['evidence/metadata-cache-publication.json']),
@@ -1011,7 +1142,7 @@ def package(args):
     for filename in ('runtime_package.py', 'vmu_persist_profile.py', 'vmu_native_cache_seed.py',
                      'vmu_native_mode.py', 'install_vmu_native_dual.py'):
         files['tools/'+filename] = (ROOT/'tools'/filename).read_bytes()
-    if args.cached_metadata:
+    if args.cached_metadata or args.split_controller:
         files['tools/install_vmu_native_isolation.py'] = (ROOT/'tools/install_vmu_native_isolation.py').read_bytes()
     for name, build, proof_name in (('reader-only', args.reader_build, reader_proof),
                                      ('vmu-only', args.vmu_build, 'standard_vmu')):
@@ -1021,10 +1152,10 @@ def package(args):
         variant_files, manifest, layout = bind_variant(name, build.resolve(), proof, runtime_commit,
                                                        args.demand_only, args.wait_capture,args.maple_bypass,args.maple_delay,
                                                        args.cached_metadata,args.completion_delay,args.submission_delay,
-                                                       args.post_start_delay)
+                                                       args.post_start_delay,args.split_controller)
         files.update({'variants/'+name+'/'+path: data for path, data in variant_files.items()})
         metadata['variants'][name] = dict(directory='variants/'+name, destination=str(MODULES[name]),
-            module_sha256=manifest['module_sha256'], virtual_a2=name == 'vmu-only' or args.cached_metadata,
+            module_sha256=manifest['module_sha256'], virtual_a2=name == 'vmu-only' or args.cached_metadata or args.split_controller,
             reader='New (X)' if name == 'reader-only' else 'Standard', lease_bytes=393216,
             support_hooks_retained=not(args.maple_bypass and name=='reader-only'),
             prefetch_enabled=name == 'reader-only' and not args.demand_only,
@@ -1039,18 +1170,20 @@ def package(args):
             post_start_delay=args.post_start_delay and name=='reader-only',
             maple_c_callbacks_enabled=not(args.maple_bypass and name=='reader-only'),
             cached_metadata=args.cached_metadata and name=='reader-only',
-            public_variant='combined' if args.cached_metadata and name=='reader-only' else name,
+            split_controller=args.split_controller and name=='reader-only',
+            public_variant='combined' if (args.cached_metadata or args.split_controller) and name=='reader-only' else name,
             heap_reclaim_coherence_guards_retained=True,
             linked_layout_sha256=sha(wire(layout)))
     files['isolation.json'] = wire(metadata)
     passed_recovery = None
-    if args.maple_delay or args.cached_metadata:
+    if args.maple_delay or args.cached_metadata or args.split_controller:
         bridge,passed_recovery = passed_bypass_bridge(
-            args.passed_bypass_package if args.cached_metadata or args.completion_delay or args.submission_delay
+            args.passed_bypass_package if args.cached_metadata or args.split_controller or args.completion_delay or args.submission_delay
                 else args.previous_package,metadata,files)
         files.update(bridge)
         files['evidence/passed-bypass-recovery.json'] = wire(passed_recovery)
-    guide_path = ('docs/native-isolation-maple-post-start-delay-test.md' if args.post_start_delay else
+    guide_path = ('docs/native-isolation-split-controller-test.md' if args.split_controller else
+                  'docs/native-isolation-maple-post-start-delay-test.md' if args.post_start_delay else
                   'docs/native-isolation-maple-submission-delay-test.md' if args.submission_delay else
                   'docs/native-isolation-maple-completion-delay-test.md' if args.completion_delay else
                   'docs/native-isolation-cached-metadata-test.md' if args.cached_metadata else
@@ -1062,7 +1195,7 @@ def package(args):
         '@RUNTIME_COMMIT@', runtime_commit).replace('@DELIVERY_COMMIT@', delivery_commit).encode()
     files['README-FIRST.md'] = guide
     delivery_checks = extracted_install_check(files, args.previous_package if args.demand_only else None,
-                                               args.backup_origin_package if args.wait_capture or args.maple_bypass or args.cached_metadata else None)
+                                               args.backup_origin_package if args.wait_capture or args.maple_bypass or args.cached_metadata or args.split_controller else None)
     with tempfile.TemporaryDirectory(prefix='kui-isolation-source-') as directory:
         bundle = Path(directory)/'native-source-full.bundle'
         subprocess.run(['git', 'bundle', 'create', str(bundle), 'HEAD'], cwd=ROOT, check=True, capture_output=True)
@@ -1081,7 +1214,8 @@ def package(args):
                      submission_delay=args.submission_delay,
                      post_start_delay=args.post_start_delay,
                      cached_metadata=args.cached_metadata,
-                     public_variant='combined' if args.cached_metadata else None,
+                     split_controller=args.split_controller,
+                     public_variant='combined' if args.cached_metadata or args.split_controller else None,
                      passed_bypass_recovery=passed_recovery,
                      preserved_gui_build=GUI_BUILD, preserved_gui_sha256=GUI_SHA,
                      evidence_sha256={name: sha(data) for name, data in files.items()
@@ -1132,6 +1266,8 @@ def main():
                         help='Place the59-tick helper after the original MDST software start; needs --submission-delay')
     parser.add_argument('--cached-metadata',action='store_true',
                         help='Require the combined real-callback VMU/New metadata-cache candidate; needs --demand-only')
+    parser.add_argument('--split-controller',action='store_true',
+                        help='Require combined VMU/New with assembly submit capture and checked completion; needs --demand-only')
     parser.add_argument('--previous-package', type=Path,
                         help='Pinned earlier archive; defaults to995,3f51 for capture,5fa97 for bypass,cec542 for delay,1b2d for cached metadata')
     parser.add_argument('--passed-bypass-package',type=Path,

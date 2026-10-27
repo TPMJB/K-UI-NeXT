@@ -56,7 +56,7 @@ class LoanBoundary(Exception): pass
 class IsolationWorker(RecordWorker):
     def __init__(self, startup, build, handoff, record, variant, tick_off=False, wait_capture=False,
                  maple_bypass=False, maple_delay=False, cached_metadata=False, completion_delay=False,
-                 submission_delay=False, post_start_delay=False):
+                 submission_delay=False, post_start_delay=False, split_controller=False):
         self.variant = variant
         self.tick_off = tick_off
         self.wait_capture = wait_capture
@@ -65,6 +65,10 @@ class IsolationWorker(RecordWorker):
         self.completion_delay = completion_delay
         self.submission_delay = submission_delay
         self.post_start_delay = post_start_delay
+        self.split_controller = split_controller
+        require(not split_controller or (tick_off and not any((wait_capture,maple_bypass,maple_delay,
+                    cached_metadata,completion_delay,submission_delay,post_start_delay))),
+                'Split controller requires TICK off and real callbacks without other diagnostics')
         require(not(completion_delay and submission_delay), 'Select only one Maple delay side')
         require(not post_start_delay or submission_delay, 'Post-start delay requires submission delay')
         self.cached_metadata = cached_metadata
@@ -88,6 +92,8 @@ class IsolationWorker(RecordWorker):
         stage, worker = read_elf(build/'stage.elf'), read_elf(build/'native-worker.elf')
         require(cached_metadata is (variant == 'metadata_cache'),
                 'Cached metadata must use its explicit combined variant')
+        require(split_controller is (variant == 'split_controller'),
+                'Split controller must use its explicit combined variant')
         marker = '__kui_native_'+variant+'_isolation_'
         for image, role in ((stage,'stage'),(worker,'worker')):
             require(image[4].get(marker+role) == ONE, 'Isolation marker differs: '+role)
@@ -95,14 +101,14 @@ class IsolationWorker(RecordWorker):
                     (LEASE,0,0,0xfff1), 'Isolation lease is not exact compiled384KiB')
             require(image[4].get('__kui_native_bottom_heap_'+role) == ONE,
                     'Isolation lacks current bottom placement: '+role)
-            for other in {'reader_only', 'standard_vmu', 'metadata_cache'} - {variant}:
+            for other in {'reader_only', 'standard_vmu', 'metadata_cache', 'split_controller'} - {variant}:
                 require('__kui_native_'+other+'_isolation_'+role not in image[4],
                         'Conflicting isolation marker: '+other+'/'+role)
         for image, role in ((stage,'stage'),(worker,'worker')):
             tick_marker = image[4].get('__kui_native_ra_tick_off_isolation_'+role)
             require(tick_marker == ONE if tick_off else tick_marker is None,
                     'Controller TICK isolation marker differs: '+role)
-        require(not tick_off or variant in ('reader_only', 'metadata_cache'),
+        require(not tick_off or variant in ('reader_only', 'metadata_cache','split_controller'),
                 'TICK isolation belongs only to a New reader variant')
         require(not cached_metadata or (tick_off and not wait_capture and not maple_bypass and not maple_delay),
                 'Cached metadata requires real callbacks with TICK off and no other diagnostic')
@@ -142,6 +148,8 @@ class IsolationWorker(RecordWorker):
         self.tracked_entries = {self.symbols[name][0]:name for name in BACKENDS if name in self.symbols}
         self.callback_entries = {self.symbols['_kui_vmu_native_passive_'+name][0]:name
                                  for name in ('submit','complete')}
+        if split_controller:
+            self.callback_entries[self.symbols['_kui_vmu_native_passive_split_submit'][0]]='split_submit'
         if variant == 'standard_vmu':
             for name in ('__kui_native_readahead_worker','__kui_native_dual_readers_worker'):
                 require(name not in worker[4], 'Standard isolation contains background worker capability')
@@ -179,7 +187,7 @@ class IsolationWorker(RecordWorker):
                 require(self.variant!='reader_only',
                         'Reader-only isolation reached VMU/storage backend: '+name)
             if self.pc == self.sd_entry:
-                require(self.variant in ('standard_vmu', 'metadata_cache'),
+                require(self.variant in ('standard_vmu', 'metadata_cache','split_controller'),
                         'Reader-only isolation reached SD loan')
                 require(self.r[4]==self.symbols['_kui_vmu_native_persistent_sd_transaction'][0] and
                         self.r[5]==self.symbols['_durable_card'][0] and self.sr&0xf0==0xf0,
@@ -189,7 +197,8 @@ class IsolationWorker(RecordWorker):
                 self.calls['actual_low_sd_loan_boundary']+=1
                 raise LoanBoundary
             if self.tick_entry is not None and self.pc == self.tick_entry:
-                require(self.variant in ('reader_only','metadata_cache'), 'Standard isolation called auxiliary code')
+                require(self.variant in ('reader_only','metadata_cache','split_controller'),
+                        'Standard isolation called auxiliary code')
                 require(self.r[4:8] == [2,0,self.tick_region,0], 'New reader TICK arguments differ')
                 require(self.sr&0xf0 == 0xf0, 'New reader TICK escaped masked worker scope')
                 self.tick_calls+=1;self.last_aux_arguments=self.r[4:8].copy()
@@ -200,7 +209,8 @@ class IsolationWorker(RecordWorker):
         return super().step()
 
     def seed_tick_boundary(self):
-        require(self.variant in ('reader_only','metadata_cache'), 'Only New reader has an auxiliary boundary')
+        require(self.variant in ('reader_only','metadata_cache','split_controller'),
+                'Only New reader has an auxiliary boundary')
         lease=self.actual_heap_payload&0x1fffffff|0x80000000
         manifest=lease+0x20000;region=lease+0x20400;aux=(lease+0x21000)|0x20000000
         self.tick_region=region;self.tick_entry=lease+0x22000
@@ -217,7 +227,17 @@ class IsolationWorker(RecordWorker):
         if self.inject_command is not None:
             self.inject_packet(self.inject_command)
             self.inject_command=None
-        return super().bridge_submit()
+        if not self.split_controller:return super().bridge_submit()
+        before=self.r.copy(),self.pr,self.sr,self.pc,self.macl,self.instructions
+        self.frame('submit')
+        self.submit_counts=self.worker('_kui_vmu_native_passive_split_submit',[self.frame_address])
+        self.submit_callbacks+=1
+        self.r,self.pr,self.sr,self.pc,self.macl,self.instructions=before
+
+    def split_callback_counts(self):
+        return dict(tiny_submit_calls=self.c_callback_calls['split_submit'],
+                    full_submit_fallback_calls=self.c_callback_calls['submit'],
+                    complete_calls=self.c_callback_calls['complete'])
 
     def inject_packet(self, command):
         # Add one independently authored virtual packet to an otherwise real
@@ -479,7 +499,12 @@ def poll(cpu, consume=True):
 
 def run_variant(startup, record_path, build, variant, tick_off=False, wait_capture=False,
                 maple_bypass=False,maple_delay=False,cached_metadata=False,completion_delay=False,
-                submission_delay=False,post_start_delay=False):
+                submission_delay=False,post_start_delay=False,split_controller=False):
+    require(not split_controller or (tick_off and not any((wait_capture,maple_bypass,maple_delay,
+                cached_metadata,completion_delay,submission_delay,post_start_delay))),
+            'Split controller requires TICK off and real callbacks without other diagnostics')
+    require(split_controller is (variant=='split_controller'),
+            'Split controller must use its explicit combined variant')
     require(not(completion_delay and submission_delay), 'Select only one Maple delay side')
     require(not completion_delay or maple_delay, 'Completion delay requires Maple delay')
     require(not submission_delay or maple_delay, 'Submission delay requires Maple delay')
@@ -488,12 +513,23 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
     record=Record(record_path.read_bytes(),image,source)
     cls=BypassWorker if maple_bypass else IsolationWorker
     cpu=cls(startup,build,make_handoff(),record,variant,tick_off,wait_capture,maple_bypass,maple_delay,
-            cached_metadata,completion_delay,submission_delay,post_start_delay)
+            cached_metadata,completion_delay,submission_delay,post_start_delay,split_controller)
     cpu.prepare();initializer=cpu.initialize_sdk()
     cpu.calls.clear()
     pristine=copy.deepcopy(cpu)
-    if variant in ('reader_only','metadata_cache'):cpu.seed_tick_boundary()
-    rounds=[poll(cpu) for _ in range(8)]
+    if variant in ('reader_only','metadata_cache','split_controller'):cpu.seed_tick_boundary()
+    rounds=[]
+    for _ in range(8):
+        if split_controller:
+            before=cpu.split_callback_counts()
+            ready=cpu.read(cpu.symbols['_live_plan'][0]+4)
+        row=poll(cpu)
+        if split_controller:
+            after=cpu.split_callback_counts()
+            row.update(split_controller_callbacks={key:after[key]-before[key] for key in after},
+                live_ready_before_submit=ready,
+                live_ready_after_complete=cpu.read(cpu.symbols['_live_plan'][0]+4))
+        rounds.append(row)
     pre_gesture=None
     if wait_capture:
         capture=cpu.symbols['_diagnostic_phase'][0]+24
@@ -505,7 +541,10 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
         pre_gesture=dict(polls=8,capture_attempts=attempts,captured_contexts=valid,
                          capture_ready=ready,controller_tick_calls=cpu.tick_calls,normal_diagnostics=normal)
     stats=cpu.overlay_stats()
-    if not maple_bypass:
+    if split_controller:
+        require(cpu.c_callback_calls['split_submit']==cpu.c_callback_calls['complete']==8,
+                'Original SDK polling did not execute split submit and real completion eight times')
+    elif not maple_bypass:
         require(cpu.c_callback_calls==dict(submit=8,complete=8),
                 'Original SDK polling did not execute both real Maple C callbacks eight times')
     if variant=='reader_only':
@@ -527,12 +566,12 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
     forced=[]
     for command in (() if maple_bypass else (1,2,10,11)):
         trial=copy.deepcopy(pristine)
-        if variant in ('reader_only','metadata_cache'):trial.seed_tick_boundary()
+        if variant in ('reader_only','metadata_cache','split_controller'):trial.seed_tick_boundary()
         trial.inject_command=command
         try:
             result=poll(trial,consume=False)
         except LoanBoundary:
-            require(variant in ('standard_vmu','metadata_cache') and command==11 and
+            require(variant in ('standard_vmu','metadata_cache','split_controller') and command==11 and
                     trial.calls['actual_low_sd_loan_boundary']==1,
                     'Unexpected storage boundary')
             require(trial.block(trial.injected_rx,4)==bytes([0xa5])*4,
@@ -540,6 +579,7 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
             forced.append(dict(command=command,storage_boundary_reached=True,
                                success_or_ack_substituted=False,rx_unpublished=True,calls=dict(trial.calls),
                                loan_boundary=trial.loan_boundary))
+            if split_controller:forced[-1]['split_controller_callbacks']=trial.split_callback_counts()
             continue
         require(command!=11 or variant=='reader_only', 'Virtual VMU block read did not reach storage loan')
         reply=trial.read(trial.injected_rx)
@@ -552,6 +592,7 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
                     'Virtual VMU metadata packet lacks actual backend reply')
         forced.append(dict(command=command,reply=hex(reply),overlay=s,calls=dict(trial.calls),
                            storage_boundary_reached=False,tick_calls=trial.tick_calls))
+        if split_controller:forced[-1]['split_controller_callbacks']=trial.split_callback_counts()
     cpu.check_build_unchanged()
     post_start_cases=[]
     if post_start_delay:
@@ -616,7 +657,7 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
                 metadata_cache_invalidations=cpu.flat_ocbi,
                 sd_loan_boundary=dict(symbol='_kui_vmu_observe_sd_lease',address=hex(cpu.sd_entry),
                     resident_sha256=sha((build/'resident-sci.elf').read_bytes()),
-                    reader='New (X)' if variant in ('reader_only','metadata_cache') else 'Standard'),
+                    reader='New (X)' if variant in ('reader_only','metadata_cache','split_controller') else 'Standard'),
                 forced_packets=forced,worker_helpers_substituted=False,
                 auxiliary_boundary_substituted=variant=='reader_only' and not maple_bypass,
                 original_game_or_sdk_functions_substituted=False,
@@ -626,6 +667,20 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
     if submission_delay:report['submission_delay']=True
     if post_start_delay:
         report.update(post_start_delay=True,post_start_immediate_completion_cases=post_start_cases)
+    if split_controller:
+        first=rounds[0]
+        require(first['live_ready_before_submit']==0 and first['live_ready_after_complete']==0x4e4c5031 and
+                first['split_controller_callbacks']['tiny_submit_calls']==1 and
+                first['split_controller_callbacks']['complete_calls']==1 and
+                any(int(row['header'],16)&0xffff==0x2001 for row in first['physical_packets']) and
+                first['overlay']['advertisements']>0,
+                'Cold first A INFO did not execute split submission and lazy completion binding')
+        cold=dict(natural_poll=1,live_ready_before_submit=first['live_ready_before_submit'],
+            live_ready_after_complete=first['live_ready_after_complete'],
+            callbacks=first['split_controller_callbacks'],actual_original_a_info=True,
+            advertisements=first['overlay']['advertisements'],backend_calls=first['overlay']['backend_calls'])
+        report.update(split_controller=True,
+            split_controller_execution=dict(**cpu.split_callback_counts(),cold_first_info=cold))
     return report
 
 
@@ -656,6 +711,8 @@ def main():
                         help='Require the 59-tick submit helper after the original MDST start; needs --submission-delay')
     parser.add_argument('--cached-metadata',action='store_true',
                         help='Execute the real-callback combined VMU/New metadata-cache variant; requires TICK off')
+    parser.add_argument('--split-controller',action='store_true',
+                        help='Execute the combined tiny-submit/full-completion controller variant; requires TICK off')
     args=parser.parse_args()
     require(__debug__, 'Assertions must remain enabled')
     require(not args.wait_capture or (args.reader_tick_off and args.collector_output),
@@ -671,15 +728,20 @@ def main():
     require(not args.cached_metadata or (args.reader_tick_off and not args.wait_capture and
                 not args.maple_bypass and not args.maple_delay),
             'Cached metadata requires TICK-off and excludes wait capture, bypass, and delay')
+    require(not args.split_controller or (args.reader_tick_off and not any((args.cached_metadata,
+                args.wait_capture,args.maple_bypass,args.maple_delay,args.completion_delay,
+                args.submission_delay,args.post_start_delay))),
+            'Split controller requires TICK off and real callbacks without other diagnostics')
     require(len(args.source_commit)==40 and all(c in '0123456789abcdef' for c in args.source_commit),
             'Expected exact runtime freeze commit')
     for build in (args.reader_build,args.standard_build):
         require(args.source_commit[:12].encode() in (build/'entry.elf').read_bytes(),
                 'Actual linked entry does not contain runtime freeze build identifier')
     reports=[run_variant(args.startup,args.record,args.reader_build,
+                         'split_controller' if args.split_controller else
                          'metadata_cache' if args.cached_metadata else 'reader_only',args.reader_tick_off,
                          args.wait_capture,args.maple_bypass,args.maple_delay,args.cached_metadata,args.completion_delay,
-                         args.submission_delay,args.post_start_delay),
+                         args.submission_delay,args.post_start_delay,args.split_controller),
              run_variant(args.startup,args.record,args.standard_build,'standard_vmu')]
     report=dict(schema='kui.native.isolation-linked-sdk.v1',status='PASS',
                 source_commit=args.source_commit,build=args.source_commit[:12],variants=reports,

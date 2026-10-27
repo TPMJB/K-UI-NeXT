@@ -23,6 +23,7 @@ COMPLETION_DELAY_SCHEMA = 'kui.native.evolution1.maple-completion-delay-stage-gu
 SUBMISSION_DELAY_SCHEMA = 'kui.native.evolution1.maple-submission-delay-stage-guard.v1'
 POST_START_DELAY_SCHEMA = 'kui.native.evolution1.maple-post-start-delay-stage-guard.v1'
 METADATA_SCHEMA = 'kui.native.evolution1.metadata-cache-stage-guard.v1'
+SPLIT_CONTROLLER_SCHEMA = 'kui.native.evolution1.split-controller-stage-guard.v1'
 SOURCES = ('tools/check_native_wait_stage_guard.py', 'tools/check_native_bottom_heap.py',
     'tools/profile_vmu_native_release_sh.py', 'tests/test_vmu_native_heap_execution.py',
     'tools/check_vmu_native_worker_gateway.py', 'tools/sh4_delay_slots.py',
@@ -134,7 +135,10 @@ def run_case(baseline, wire, name, mutation=None, mode=0, accept=False, expected
 
 
 def check(build, startup, record, maple_delay=False, cached_metadata=False, completion_delay=False,
-          submission_delay=False,post_start_delay=False):
+          submission_delay=False,post_start_delay=False,split_controller=False):
+    require(not split_controller or not any((maple_delay,cached_metadata,completion_delay,
+                submission_delay,post_start_delay)),
+            'Split controller stage guard excludes other diagnostic modes')
     require(not(maple_delay and cached_metadata), 'Select one stage-guard diagnostic')
     require(not(completion_delay and submission_delay), 'Select only one Maple delay side')
     require(not completion_delay or maple_delay, 'Completion delay requires Maple delay')
@@ -145,7 +149,11 @@ def check(build, startup, record, maple_delay=False, cached_metadata=False, comp
                  if p.suffix in ('.elf', '.bin', '.reloc') and p.is_file()}
     for file, role in (('stage.elf', 'stage'), ('native-worker.elf', 'worker')):
         symbols = read_elf(build/file)[4]
-        marker = ('__kui_native_metadata_cache_isolation_' if cached_metadata else
+        split_marker=symbols.get('__kui_native_split_controller_isolation_'+role)
+        require(split_marker==ABSOLUTE_ONE if split_controller else split_marker is None,
+                'Frozen artifact split-controller marker differs: '+file)
+        marker = ('__kui_native_split_controller_isolation_' if split_controller else
+                  '__kui_native_metadata_cache_isolation_' if cached_metadata else
                   '__kui_native_maple_delay_isolation_' if maple_delay else '__kui_native_e1_wait_capture_')
         require(symbols.get(marker + role) == ABSOLUTE_ONE,
                 'Frozen artifact lacks the selected diagnostic marker: ' + file)
@@ -172,6 +180,12 @@ def check(build, startup, record, maple_delay=False, cached_metadata=False, comp
                         ('reader_only_isolation_', 'standard_vmu_isolation_',
                          'maple_bypass_isolation_', 'maple_delay_isolation_', 'e1_wait_capture_')),
                     'Cached metadata requires real callbacks, TICK off, and no other isolation mode')
+        if split_controller:
+            require(symbols.get('__kui_native_ra_tick_off_isolation_'+role)==ABSOLUTE_ONE and
+                    all('__kui_native_'+other+role not in symbols for other in
+                        ('reader_only_isolation_','standard_vmu_isolation_','metadata_cache_isolation_',
+                         'maple_bypass_isolation_','maple_delay_isolation_','e1_wait_capture_')),
+                    'Split controller requires real VMU callbacks, TICK off, and no other isolation mode')
     provenance = json.loads((build/'entry.compile.json').read_text())
     require(provenance.get('source_dirty') is False and
             provenance.get('elf_sha256') == artifacts['entry.elf'],
@@ -189,19 +203,22 @@ def check(build, startup, record, maple_delay=False, cached_metadata=False, comp
     mutations = [('digest-byte-' + str(i), (72+i, 1, wire[136+i] ^ 1)) for i in range(32)]
     mutations += [('image-bytes', (12, 4, len(baseline.image)-4)),
                   ('load-address', (16, 4, 0x8c010004))]
-    identity_message = ('METADATA CACHE NEEDS EVOLUTION 1' if cached_metadata else
+    identity_message = ('SPLIT CONTROLLER NEEDS EVOLUTION 1' if split_controller else
+                        'METADATA CACHE NEEDS EVOLUTION 1' if cached_metadata else
                         'MAPLE DELAY NEEDS EVOLUTION 1' if maple_delay else None)
     negatives = [run_case(baseline, wire, name, mutation, expected_message=identity_message)
                  for name,mutation in mutations]
     negatives += [run_case(baseline, wire, 'non-normal-mode-' + str(mode), mode=mode,
                   expected_message=('BACKGROUND VMU REQUIRES LIVE WORKER RESERVATION'
                     if mode in (1, 3) else
+                    'SPLIT CONTROLLER NEEDS NORMAL MODE' if split_controller else
                     'METADATA CACHE NEEDS NORMAL MODE' if cached_metadata else
-                    'MAPLE DELAY NEEDS NORMAL MODE') if maple_delay or cached_metadata else None)
+                    'MAPLE DELAY NEEDS NORMAL MODE') if maple_delay or cached_metadata or split_controller else None)
                   for mode in range(1, 7)]
     require(all(sha(build/name) == digest for name,digest in artifacts.items()),
             'Frozen runtime artifact changed during guard proof')
-    report=dict(schema=POST_START_DELAY_SCHEMA if post_start_delay else
+    report=dict(schema=SPLIT_CONTROLLER_SCHEMA if split_controller else
+        POST_START_DELAY_SCHEMA if post_start_delay else
         COMPLETION_DELAY_SCHEMA if completion_delay else
         SUBMISSION_DELAY_SCHEMA if submission_delay else
         METADATA_SCHEMA if cached_metadata else DELAY_SCHEMA if maple_delay else SCHEMA,
@@ -214,6 +231,7 @@ def check(build, startup, record, maple_delay=False, cached_metadata=False, comp
     if completion_delay:report['completion_delay']=True
     if submission_delay:report['submission_delay']=True
     if post_start_delay:report['post_start_delay']=True
+    if split_controller:report['split_controller']=True
     return report
 
 
@@ -234,9 +252,11 @@ def main():
                         help='Require the post-MDST submit delay marker; needs --submission-delay')
     parser.add_argument('--cached-metadata',action='store_true',
                         help='Check the combined metadata-cache marker and exact E1/NORMAL guard')
+    parser.add_argument('--split-controller',action='store_true',
+                        help='Check paired split-controller/TICK-off markers and exact E1/NORMAL guard')
     args = parser.parse_args()
     report = check(args.build, args.startup, args.record, args.maple_delay,args.cached_metadata,
-                   args.completion_delay,args.submission_delay,args.post_start_delay)
+                   args.completion_delay,args.submission_delay,args.post_start_delay,args.split_controller)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(dict(schema=report['schema'], status=report['status'],

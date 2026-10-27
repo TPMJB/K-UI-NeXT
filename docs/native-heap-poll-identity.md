@@ -58,3 +58,29 @@ validation.
 Reader counts describe algorithmic work, not SH-4 time or hardware performance.
 Save/load and controller latency still need hardware confirmation for each
 new release.
+
+## Split controller pilot
+
+The explicit `KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION` NORMAL-mode pilot treats
+bounded physical-controller capture separately from virtual RX publication.
+Arm proves the expected RX spans exclude the entire worker lease and header,
+both TX banks, and the SDK's critical manager and routing cells. The short
+submit path checks the current manager, lock, software-DMA state, source bank,
+return target and exact physical packet shape before the original SDK starts
+its unchanged DMA. It neither changes MDSTAR nor follows an RX pointer.
+
+Fresh installed-hook, heap-identity, initializer-input, callback, source and
+response checks run at completion before the pilot changes the parent A2
+attachment byte. This changes the fault boundary for that physical pass-through
+path: a hook or heap-identity fault can be reported after original physical
+DMA has started, but before any virtual publication. It relies on the same
+continuous allocator and no-unobserved-control-write contract above; it is
+not a new allocator-corruption detector.
+
+Unpublished snapshot scratch may change while the short parser considers a
+batch. An unsupported batch leaves the pending tag, source/bank commitment,
+pair counters and overlay unchanged and uses the existing full submit path.
+The accepted capture tag is published last under IMASK15. Completion renews
+authority and reparses the captured transaction independently; it cannot
+fall back after accepting a capture. Virtual, accessory, storage and mixed
+requests retain the full pre-start filtering and storage checks.
