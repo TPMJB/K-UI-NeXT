@@ -86,6 +86,10 @@ __asm__(".global __kui_native_split_controller_general_worker\n"
 __asm__(".global __kui_native_split_controller_prefetch_worker\n"
         ".set __kui_native_split_controller_prefetch_worker,1\n");
 #endif
+#if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
+__asm__(".global __kui_native_split_controller_stream_guard_worker\n"
+        ".set __kui_native_split_controller_stream_guard_worker,1\n");
+#endif
 #if KUI_NATIVE_METADATA_CACHE_ISOLATION
 __asm__(".global __kui_native_metadata_cache_isolation_worker\n"
         ".set __kui_native_metadata_cache_isolation_worker,1\n");

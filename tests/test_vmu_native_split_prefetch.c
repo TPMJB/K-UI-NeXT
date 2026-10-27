@@ -70,9 +70,46 @@ static void prefetch_suite(void) {
     tick_case(split_full_fallback,0u);
     tick_case(split_warm_tag_refusals,2u);    /* Only each first, proved completion. */
 }
+#if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
+/* One proved split completion after the game received `blocks` more blocks. */
+static void guard_frame(unsigned blocks) {
+    observed_region.engine.stats.call_blocks+=blocks;
+    split_batch(0u,0u,0u);split_submit_ok();split_done(0u,0u,0x01000000u);complete_return();
+    CHECK(live_plan.ready && controller_pair.pending==NATIVE_CONTROLLER_IDLE);
+}
+static unsigned guard_run(unsigned frames,unsigned blocks) {
+    const unsigned before=tick_visits;
+    for(unsigned i=0u;i<frames;i++) guard_frame(blocks);
+    return tick_visits-before;
+}
+/* Exact, from the 32-frame window and its 96-block limit: light reading
+ * keeps prefetch; a sustained stream pauses it after five frames; it returns
+ * twenty frames after the stream ends. A counter that starts again from zero
+ * is a new count, never a stream. */
+static unsigned stream_guard_suite(void) {
+    reader_bind();split_setup();memset(&reader_stream,0,sizeof(reader_stream));
+    CHECK(guard_run(1u,0u)==1u);
+    CHECK(guard_run(64u,2u)==64u);                     /* ~60 KB/s: music-like */
+    CHECK(guard_run(64u,8u)==5u);                      /* ~240 KB/s: FMV-like */
+    CHECK(reader_stream.sum>READER_STREAM_BLOCKS);
+    CHECK(guard_run(32u,0u)==13u);                     /* Visits from frame 20. */
+    CHECK(guard_run(32u,0u)==32u && reader_stream.sum==0u);
+    CHECK(guard_run(8u,25u)==3u);                      /* A load burst pauses too. */
+    observed_region.engine.stats.call_blocks=0u;       /* A new count, not a stream. */
+    observed_region.engine.stats.irq_blocks=0u;
+    CHECK(guard_run(40u,0u)==12u);                     /* Only the burst drains. */
+    return 1u;
+}
+#endif
 int main(void) {
     map_exact(UINT32_C(0x8c720000),4096u);
     map_exact(UINT32_C(0xac721000),4096u);
+#if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
+    const unsigned guard_before=tick_visits;
+    CHECK(stream_guard_suite());
+    const unsigned guard_visits=tick_visits-guard_before;
+    tick_visits=guard_before;
+#endif
     prefetch_suite();
     split_other_identity=true;prefetch_suite();split_other_identity=false;
     for(unsigned mode=KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE;
@@ -81,7 +118,12 @@ int main(void) {
         CHECK(kui_vmu_native_passive_arm(&input,NULL)==-2 && !state.armed);
     }
     CHECK(tick_visits==20u);
+#if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
+    printf("Split controller stream guard host checks: %u; %u TICK visits, none after a refusal; "
+        "%u guarded-frame visits, paused while streaming\n",checks,tick_visits,guard_visits);
+#else
     printf("Split controller prefetch host checks: %u; %u TICK visits, none after a refusal\n",
         checks,tick_visits);
+#endif
     return 0;
 }

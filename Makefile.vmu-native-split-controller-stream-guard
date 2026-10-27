@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The general split controller with restored prefetch that pauses while the
+# game streams heavily (an FMV). The read-ahead engine itself is unchanged.
+BUILD ?= build/native-split-controller-stream-guard
+include Makefile.vmu-native-split-controller-prefetch
+FLAGS += -DKUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD=1
+NATIVE_FLAGS += -DKUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD=1
+
+.PHONY: split-controller-stream-guard-host-tests
+split-controller-stream-guard-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(SPLIT_PREFETCH_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 \
+	 -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -DKUI_VMU_NATIVE_CACHED_CODE=1 \
+	 -DKUI_NATIVE_DUAL_READERS=1 -DKUI_NATIVE_SPLIT_CONTROLLER_ISOLATION=1 \
+	 -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1 -DKUI_NATIVE_SPLIT_CONTROLLER_PREFETCH=1 \
+	 -DKUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD=1 \
+	 tests/test_vmu_native_split_prefetch.c $(COMPAT_WORKER_HOST_SRC) \
+	 -Wl,--gc-sections -Wl,--section-start=.isolation_tick=0x8c722000 \
+	 -o $(BUILD)/test-split-controller-stream-guard
+	$(BUILD)/test-split-controller-stream-guard

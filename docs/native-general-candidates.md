@@ -52,6 +52,27 @@ Standalone games cannot use prefetch. The read-ahead cache lives in the
 standalone reader has neither. Those games gain prefetch when they gain
 virtual VMU admission.
 
+## Prefetch that pauses while the game streams
+
+On the console, prefetch removed the residual gameplay lag in Evolution 1
+but made Sonic Adventure 2's FMVs much worse, with video out of sync with
+audio. A TICK spends up to one PIO window of masked CPU in its controller
+frame. Between bursts of reads that buys cached blocks for the next read;
+during an FMV the game streams continuously, so the same cost recurs every
+frame for little data, and the decoder loses that time.
+
+`Makefile.vmu-native-split-controller-stream-guard`
+(`KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD`) keeps the restored prefetch but
+skips the TICK in any controller frame where the game received more than 96
+blocks (48 KiB) over the last 32 controller frames, about 90 KB/s at 60 Hz.
+Every block the game receives, from the card or the read-ahead cache,
+increments the engine's block counters, so the guard needs no clock of its
+own. Stereo ADX music streams at about 50 KB/s and keeps prefetch; video
+streams well above the limit. A sustained stream pauses prefetch after five
+frames, and it returns twenty frames after the stream ends. The read-ahead
+engine itself is unchanged; the stage banner reads
+**PREFETCH AUTO / SPLIT CONTROLLER ALL**.
+
 ## Structural New reader
 
 The DOA2 pilot admits one executable by SHA-256, binds five DOA2 constants,

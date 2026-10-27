@@ -189,9 +189,38 @@ static void __attribute__((noipa)) reader_window_clock(struct kui_vmu_native_pro
 #endif
 }
 #endif
+#if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
+/* A TICK may spend up to one PIO window of masked CPU in this controller
+ * frame. That pays off between bursts of reads, not while the game streams
+ * (an FMV): there it adds little data and takes time from the decoder.
+ * Every block the game receives, from the card or the read-ahead cache,
+ * increments the engine's block counters; controller frames are the clock. */
+#define READER_STREAM_FRAMES 32u
+#define READER_STREAM_BLOCKS 96u
+static struct {
+    uint32_t last,sum;uint8_t blocks[READER_STREAM_FRAMES];uint8_t at,primed;
+} reader_stream;
+static bool __attribute__((noipa)) reader_streaming(void) {
+    const kui_retail_async_region_type *r=reader_capture_region();
+    if(!r)return false;
+    uint32_t total=r->engine.stats.irq_blocks+r->engine.stats.call_blocks;
+    /* The counters only grow during a launch; a lower value is a new count. */
+    uint32_t delta=reader_stream.primed && total>=reader_stream.last?total-reader_stream.last:0u;
+    reader_stream.last=total;reader_stream.primed=1u;
+    if(delta>255u)delta=255u;
+    reader_stream.sum+=delta-reader_stream.blocks[reader_stream.at];
+    reader_stream.blocks[reader_stream.at]=(uint8_t)delta;
+    reader_stream.at=(uint8_t)((reader_stream.at+1u)&(READER_STREAM_FRAMES-1u));
+    return reader_stream.sum>READER_STREAM_BLOCKS;
+}
+#endif
 static void __attribute__((noipa)) reader_cooperative_service(void) {
 #if KUI_NATIVE_READAHEAD && !KUI_NATIVE_RA_TICK_OFF_ISOLATION
+#if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
+    if(!reader_streaming() && !durable_card.inflight && !durable_card.handling)
+#else
     if(!durable_card.inflight && !durable_card.handling)
+#endif
         reader_readahead_visit(KUI_NATIVE_RA_TICK);
 #endif
 #if KUI_NATIVE_PACED_CHECK || KUI_NATIVE_IRQ_REARM

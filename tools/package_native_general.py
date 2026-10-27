@@ -27,8 +27,13 @@ MODE_CHOICES = {'normal': 0, 'profile': 2, 'hooks-only': 4, 'raw-chain': 5, 'evo
 # DOA2 pilot 921318c3d9cb installed into retail-boot.kui. Its own installer
 # needs the 8adf UI to restore it, so install refuses while it is present.
 DOA2_PILOT_MODULE = 'a871670e929866a994b69f2772424b6163f4cd474a64c423f2cb70cfb4634e78'
-PREFETCH_BANNERS = {False: b'PREFETCH OFF / SPLIT CONTROLLER ALL\0',
-                    True: b'PREFETCH ON / SPLIT CONTROLLER ALL\0'}
+# Each split-controller build states its prefetch mode in its stage banner.
+PREFETCH = {'off': ('build/native-isolation-split-controller-general', 'K-UI-Native-General-',
+                    b'PREFETCH OFF / SPLIT CONTROLLER ALL\0'),
+            'on': ('build/native-split-controller-prefetch', 'K-UI-Native-General-Prefetch-',
+                   b'PREFETCH ON / SPLIT CONTROLLER ALL\0'),
+            'auto': ('build/native-split-controller-stream-guard', 'K-UI-Native-General-Prefetch-Auto-',
+                     b'PREFETCH AUTO / SPLIT CONTROLLER ALL\0')}
 PACKAGE_TOOLS = ('runtime_package.py', 'vmu_persist_profile.py', 'vmu_native_cache_seed.py', 'vmu_native_mode.py')
 
 
@@ -66,8 +71,8 @@ def personalization_manifest(module, source_commit):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--dual', type=Path, help='Default: the selected split-controller build')
-    parser.add_argument('--prefetch', action='store_true',
-                        help='Package the split controller with controller prefetch TICK restored')
+    parser.add_argument('--prefetch', choices=sorted(PREFETCH), default='off',
+                        help='Split-controller prefetch: off, on, or auto (paused while the game streams)')
     parser.add_argument('--standalone', type=Path, default=ROOT/'build/native-standalone-general/retail-native-standalone.kui')
     parser.add_argument('--gui', type=Path, required=True, help='runtime.kui built from the same source commit')
     parser.add_argument('--evidence', type=Path, action='append', default=[], help='Evidence file to include')
@@ -75,19 +80,16 @@ def main():
     parser.add_argument('--output', type=Path, required=True, help='Directory receiving the package folder and ZIP')
     args = parser.parse_args()
     if args.dual is None:
-        args.dual = ROOT/('build/native-split-controller-prefetch' if args.prefetch else
-                          'build/native-isolation-split-controller-general')/'retail-native-dual.kui'
+        args.dual = ROOT/PREFETCH[args.prefetch][0]/'retail-native-dual.kui'
     source_commit = git('rev-parse', 'HEAD')
     require(not git('status', '--porcelain', '--untracked-files=no'), 'Commit all source changes before packaging')
     build = source_commit[:12]
     dual, standalone, gui = (path.read_bytes() for path in (args.dual, args.standalone, args.gui))
     for name, data in (('dual', dual), ('standalone', standalone), ('gui', gui)):
         require(verify(data)['build'] == build, name+' module was not built from '+build)
-    # The stage banner is the module's own statement of its prefetch mode.
-    banner = PREFETCH_BANNERS[args.prefetch]
-    require(dual.count(banner) == 1 and PREFETCH_BANNERS[not args.prefetch] not in dual,
+    require(all(dual.count(banner) == (mode == args.prefetch) for mode, (_, _, banner) in PREFETCH.items()),
             'Split-controller module prefetch mode differs from --prefetch')
-    name = ('K-UI-Native-General-Prefetch-' if args.prefetch else 'K-UI-Native-General-')+build
+    name = PREFETCH[args.prefetch][1]+build
     folder = args.output/name
     require(not folder.exists(), 'Output folder already exists: '+str(folder))
     (folder/'dual/base/KUI/apps/games').mkdir(parents=True)
@@ -112,8 +114,8 @@ def main():
     metadata = dict(schema=SCHEMA, build=build, source_commit=source_commit,
                     gui=dict(build=build, sha256=sha(gui)),
                     dual=dict(build=build, sha256=sha(dual), split_controller_general=True,
-                              virtual_a2=True, controller_tick_off=not args.prefetch,
-                              prefetch_enabled=args.prefetch),
+                              virtual_a2=True, controller_tick_off=args.prefetch == 'off',
+                              prefetch_enabled=args.prefetch != 'off', prefetch_mode=args.prefetch),
                     standalone=dict(build=build, sha256=sha(standalone), virtual_vmu=False,
                                     game_ram_reservation=False),
                     refuse_ordinary_sha256=[DOA2_PILOT_MODULE],
