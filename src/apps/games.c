@@ -3,6 +3,7 @@
 #include "kui/game_image.h"
 #include "kui/game_metadata.h"
 #include "kui/games_cdda_status.h"
+#include "kui/games_storage.h"
 #include "kui/hash.h"
 #include "kui/retail_image.h"
 #include "kui/storage.h"
@@ -413,8 +414,9 @@ static bool list_with(const char *root,unsigned offset,struct kui_games_page *ou
         if(!ok) {out->count=0;out->has_more=false;}
         return ok;
     }
-    if(!kui_sd_connect()) {kui_games_cache_clear();snprintf(out->message,sizeof(out->message),"SD card unavailable");return false;}
-    FATFS fs;DIR dir;bool opened=false,ok=false;
+    enum kui_games_storage_result storage=kui_games_storage_open(log);
+    if(storage==KUI_GAMES_STORAGE_NO_CARD) {kui_games_cache_clear();snprintf(out->message,sizeof(out->message),"SD card unavailable");return false;}
+    DIR dir;bool opened=false,ok=false;
     struct variant *pairs=NULL;unsigned pair_count=0;
     struct selector_index *selectors=NULL;
     struct cached_entry *draft=NULL;unsigned draft_capacity=0,draft_count=0;bool bounded=false,retry=false;
@@ -423,7 +425,7 @@ static bool list_with(const char *root,unsigned offset,struct kui_games_page *ou
     struct cached_entry wanted={0};if(find) strcpy(wanted.name,find);
     const char *problem="Cannot mount SD card";
     char path[KUI_DEST_ROOT_CAP+3];snprintf(path,sizeof(path),"0:%s",out->root);
-    if(!kui_mount(&fs,log)) goto done;
+    if(storage!=KUI_GAMES_STORAGE_OK) goto done;
     if(cached) {
         if(!cached_page(offset,out,cancel)) {problem="Games browse stopped";goto done;}
         ok=true;goto done;
@@ -535,8 +537,8 @@ done:
     if(opened && f_closedir(&dir)!=FR_OK) {ok=false;problem="Cannot close Games folder";}
     if(ok && mounted) mounted(ctx,log,cancel);
     if(stopped(cancel)) {ok=false;problem="Games browse stopped";}
-    if(f_mount(NULL,"0:",0)!=FR_OK) {ok=false;problem="Cannot release SD filesystem";}
-    kui_sd_disconnect();
+    /* A stop leaves the filesystem consistent; any other failure reconnects. */
+    if(!kui_games_storage_done(ok || stopped(cancel))) {ok=false;problem="Cannot release SD filesystem";}
     if(ok && !cached && !bounded && !retry) {
         catalogue_room(draft_capacity);
         listing_cache.entries=draft;draft=NULL;listing_cache.count=listed;
@@ -899,10 +901,11 @@ bool kui_games_inspect_with_codec(const char *path,enum kui_zso_codec codec,stru
         snprintf(out->message,sizeof(out->message),"ZSO codec choice does not match this image");return false;
     }
     if(stopped(cancel)) {out->stopped=true;snprintf(out->message,sizeof(out->message),"Games inspection stopped");return false;}
-    if(!kui_sd_connect()) {snprintf(out->message,sizeof(out->message),"SD card unavailable");return false;}
-    FATFS fs;struct kui_game_image *image=NULL;bool mounted_card=false;
+    enum kui_games_storage_result storage=kui_games_storage_open(log);
+    if(storage==KUI_GAMES_STORAGE_NO_CARD) {snprintf(out->message,sizeof(out->message),"SD card unavailable");return false;}
+    struct kui_game_image *image=NULL;bool mounted_card=false;
     const char *problem="Cannot mount SD card";
-    if(!kui_mount(&fs,log)) goto done;
+    if(storage!=KUI_GAMES_STORAGE_OK) goto done;
     mounted_card=true;
     if(extension(descriptor,".cso") || extension(descriptor,".chd")) {
         problem="Compressed image requires offline import; direct launch unavailable";goto done;
@@ -982,8 +985,8 @@ bool kui_games_inspect_with_codec(const char *path,enum kui_zso_codec codec,stru
 done:
     if(stopped(cancel)) {out->valid=false;out->stopped=true;problem="Games inspection stopped";}
     if(mounted_card && mounted && !out->stopped) mounted(ctx,log,cancel);
-    if(f_mount(NULL,"0:",0)!=FR_OK) {out->valid=false;problem="Cannot release SD filesystem";}
-    kui_sd_disconnect();free(image);
+    if(!kui_games_storage_done(out->valid || out->stopped)) {out->valid=false;problem="Cannot release SD filesystem";}
+    free(image);
     snprintf(out->message,sizeof(out->message),"%s",problem);
     if(log) {
         log("Games inspect: %s",out->path);

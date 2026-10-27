@@ -24,6 +24,7 @@
 #include "kui/games_image_probe.h"
 #include "kui/games_retail.h"
 #include "kui/games_covers.h"
+#include "kui/games_storage.h"
 #include "kui/image_loader_layout.h"
 #include <arch/exec.h>
 #include "kui/splash.h"
@@ -402,13 +403,9 @@ static bool game_launch_settings_load(const char *path,
     if(kui_cancelled()) return false;
     bool ok=false;
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
-    if(kui_sd_connect()) {
-        FATFS fs;
-        if(kui_mount(&fs,kui_log)) {
-            if(!kui_cancelled()) ok=kui_game_launch_settings_lookup(path,value,found,kui_log);
-            if(f_mount(NULL,"0:",0)!=FR_OK) ok=false;
-        }
-        kui_sd_disconnect();
+    if(kui_games_storage_open(kui_log)==KUI_GAMES_STORAGE_OK) {
+        if(!kui_cancelled()) ok=kui_game_launch_settings_lookup(path,value,found,kui_log);
+        if(!kui_games_storage_done(ok || kui_cancelled())) ok=false;
     }
     if(!ok) {kui_game_launch_settings_default(value);*found=false;}
     return ok;
@@ -416,15 +413,12 @@ static bool game_launch_settings_load(const char *path,
 static bool game_launch_settings_write(const char *path,const struct kui_game_launch_settings *value) {
     bool ok=false;
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
-    if(!kui_cancelled() && kui_game_launch_settings_valid(value) && kui_sd_connect()) {
-        FATFS fs;
-        if(kui_mount(&fs,kui_log)) {
-            /* Once begun, the bounded save finishes sync, close and verify
-             * before the worker admits another storage operation. */
-            if(!kui_cancelled()) ok=kui_game_launch_settings_save(path,value,kui_log);
-            if(f_mount(NULL,"0:",0)!=FR_OK) ok=false;
-        }
-        kui_sd_disconnect();
+    if(!kui_cancelled() && kui_game_launch_settings_valid(value) &&
+       kui_games_storage_open(kui_log)==KUI_GAMES_STORAGE_OK) {
+        /* Once begun, the bounded save finishes sync, close and verify
+         * before the worker admits another storage operation. */
+        if(!kui_cancelled()) ok=kui_game_launch_settings_save(path,value,kui_log);
+        if(!kui_games_storage_done(ok || kui_cancelled())) ok=false;
     }
     return ok;
 }
@@ -494,6 +488,7 @@ static void music_idle_work(void) {
     unsigned generation=music_request_generation;
     mutex_unlock(&lock);
     if(wanted>=0) {
+        (void)kui_games_storage_release();
         bool ok=kui_music_cache_menu((unsigned)wanted,music_preload_cancelled);
         if(!music_preload_cancelled()) {
             mutex_lock(&lock);
@@ -511,6 +506,7 @@ static void music_idle_work(void) {
         for(unsigned index=0;index<KUI_MUSIC_TRACKS;index++) {
             unsigned bit=1u<<index;
             if((status.cached_mask|music_cache_attempted)&bit) continue;
+            (void)kui_games_storage_release();
             bool ok=kui_music_cache_menu(index,music_preload_cancelled);
             if(ok || !music_preload_cancelled()) music_cache_attempted|=bit;
             break;
@@ -1607,6 +1603,7 @@ static bool games_page(enum kui_shell_page page) {
         page==KUI_SHELL_GAMES_PATCHES || page==KUI_SHELL_GAMES_CODEC || page==KUI_SHELL_GAMES_CHECK;
 }
 static void games_cache_invalidate(void) {
+    (void)kui_games_storage_release();
     kui_games_cache_clear();kui_games_covers_cache_clear();games_warm_done=false;
     mutex_lock(&lock);
     games_art_done_valid=false;games_art_result_ready=false;
@@ -1641,13 +1638,8 @@ static bool games_idle_cancelled(void) {
 static void games_selection_startup(void) {
     struct kui_games_selection last;kui_games_selection_default(&last);
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
-    if(kui_sd_connect()) {
-        FATFS fs;if(kui_mount(&fs,kui_log)) {
-            (void)kui_games_selection_load(&last,kui_log);
-            (void)f_mount(NULL,"0:",0);
-        }
-        kui_sd_disconnect();
-    }
+    if(kui_games_storage_open(kui_log)==KUI_GAMES_STORAGE_OK)
+        (void)kui_games_storage_done(kui_games_selection_load(&last,kui_log));
     mutex_lock(&lock);
     games_selection_loaded=games_selection_requested=last;++games_selection_generation;
     games_selection_saved=games_selection_request;
@@ -1662,13 +1654,8 @@ static bool games_selection_store(bool force) {
     mutex_unlock(&lock);
     if(!wanted)return false;
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
-    if(kui_sd_connect()) {
-        FATFS fs;if(kui_mount(&fs,kui_log)) {
-            (void)kui_games_selection_save(&last,kui_log);
-            (void)f_mount(NULL,"0:",0);
-        }
-        kui_sd_disconnect();
-    }
+    if(kui_games_storage_open(kui_log)==KUI_GAMES_STORAGE_OK)
+        (void)kui_games_storage_done(kui_games_selection_save(&last,kui_log));
     /* One failed background save must not retry every frame on read-only media. */
     mutex_lock(&lock);games_selection_saved=generation;mutex_unlock(&lock);
     return true;
@@ -1713,6 +1700,24 @@ static bool games_warm_cancelled(void) {
     mutex_unlock(&lock);
     return stop;
 }
+/* Only Games browsing (listing, inspection and its launch settings) shares
+ * the held storage session. Every other job connects and mounts for itself,
+ * so it starts with the card released. */
+static bool games_session_action(unsigned action) {
+    return action==54 || action==55 || action==76;
+}
+/* Release the held session when the owner leaves Games or browsing has done
+ * no storage work for a while; the next browsing job connects again. */
+#define GAMES_STORAGE_IDLE_MS 15000u
+static void games_storage_idle(void) {
+    static unsigned seen;static uint64_t last;
+    uint64_t now=timer_ms_gettime64();
+    unsigned jobs=kui_games_storage_jobs();
+    if(jobs!=seen || !last) {seen=jobs;last=now;}
+    if(!kui_games_storage_active()) return;
+    mutex_lock(&lock);bool browsing=games_page(shell.page);mutex_unlock(&lock);
+    if(!browsing || now-last>=GAMES_STORAGE_IDLE_MS) (void)kui_games_storage_release();
+}
 static void games_warm_idle_work(void) {
     if(games_warm_done || kui_cd_audio_owns_drive() || games_warm_cancelled()) return;
     struct kui_music_status music;kui_music_status_copy(&music);
@@ -1729,6 +1734,9 @@ static void games_warm_idle_work(void) {
 #endif
 static void *worker(void *unused) {
     (void)unused;
+#ifdef KUI_SD_RUNTIME
+    kui_games_storage_hold(true);
+#endif
     for(;;) {
         mutex_lock(&lock);
         unsigned action = pending;
@@ -1739,6 +1747,7 @@ static void *worker(void *unused) {
 #endif
         mutex_unlock(&lock);
 #ifdef KUI_SD_RUNTIME
+        if(action && !games_session_action(action)) (void)kui_games_storage_release();
         /* The worker exclusively owns cached discovery and artwork. */
         games_storage_observe();
         if(clear_games_cache) games_cache_invalidate();
@@ -1778,6 +1787,7 @@ static void *worker(void *unused) {
                 mutex_unlock(&lock);
             }
             if(!action) {
+                games_storage_idle();
                 if(idle && !games_art_idle_work() && !games_selection_store(false)) {music_idle_work();games_warm_idle_work();}
                 thd_sleep(16);continue;
             }

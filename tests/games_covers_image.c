@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #define _DEFAULT_SOURCE
 #include "kui/games_covers.h"
+#include "kui/games_storage.h"
 #include "kui/game_launch_settings.h"
 #include "kui/media.h"
 #include "kui/storage.h"
@@ -394,7 +395,77 @@ static void check_selected_cache(void) {
     puts("PASS selected artwork failures/cancellation, negative refresh and bounded positive eviction");
 }
 
+/* Held browsing: one connect and mount serve the listing, every row's box
+ * art, an inspection and a view change. A stop keeps the session; a storage
+ * error releases it and the next job reconnects; release and unheld jobs
+ * connect and disconnect per job exactly as before. */
+static void check_session(void) {
+    struct kui_games_scan_counts counts;scan(&counts,true);
+    kui_games_cache_clear();kui_games_covers_cache_clear();
+    const unsigned connects=test.connects,disconnects=test.disconnects;
+    kui_games_storage_hold(true);
+    struct kui_games_page page;
+    assert(kui_games_list_rows("/Games",0,KUI_GAMES_VIEW_LIST,&page,log_line,cancel) && page.count==7);
+    assert(test.connects==connects+1u && test.connected && kui_games_storage_active());
+    unsigned covers=0,jobs=kui_games_storage_jobs();
+    for(unsigned row=0;row<page.count;row++) {
+        const struct kui_games_entry *e=&page.entries[row];
+        if(e->directory || e->disabled) continue;
+        struct kui_games_cover_result result;
+        assert(kui_games_selected_cover(e,KUI_COVER_SIZE_LARGE,pixels[row],&result,log_line,cancel));
+        covers+=result.cover;
+    }
+    assert(covers && kui_games_storage_jobs()>jobs);
+    unsigned row;const struct kui_games_entry *base=entry(&page,"Twiddled Game",&row);
+    struct kui_games_detail detail;static uint16_t large[KUI_COVER_PIXELS];
+    assert(kui_games_inspect_cover_codec(base->path,KUI_ZSO_LZ4,&detail,large,log_line,cancel) && detail.valid);
+    struct kui_games_page other;
+    assert(kui_games_list_rows("/Games",0,KUI_GAMES_VIEW_GALLERY,&other,log_line,cancel));
+    assert(test.connects==connects+1u && test.disconnects==disconnects && test.connected && !test.files);
+    struct kui_games_cover_result result;
+    kui_games_covers_cache_clear();test.art_cancel_open=true;
+    assert(!kui_games_selected_cover(base,KUI_COVER_SIZE_LARGE,pixels[0],&result,log_line,cancel));
+    assert(result.stopped && test.connected && test.connects==connects+1u);
+    test.cancelled=false;
+    kui_games_covers_cache_clear();test.art_open_fail=true;
+    assert(!kui_games_selected_cover(base,KUI_COVER_SIZE_LARGE,pixels[0],&result,log_line,cancel));
+    assert(!test.connected && !kui_games_storage_active() && test.disconnects==disconnects+1u);
+    assert(kui_games_selected_cover(base,KUI_COVER_SIZE_LARGE,pixels[0],&result,log_line,cancel) && result.cover);
+    assert(test.connected && test.connects==connects+2u);
+    /* Another job that mounts, unmounts and disconnects clears the session's
+     * work area; the next browsing job reconnects rather than use it. */
+    FATFS reused;test.active=false;
+    assert(f_mount(&reused,"0:",1)==FR_OK && f_mount(NULL,"0:",0)==FR_OK);
+    kui_sd_disconnect();test.active=true;kui_games_covers_cache_clear();
+    assert(kui_games_selected_cover(base,KUI_COVER_SIZE_LARGE,pixels[0],&result,log_line,cancel) && result.cover);
+    assert(test.connected && kui_games_storage_active() && test.connects==connects+3u);
+    assert(kui_games_storage_release() && !test.connected && !kui_games_storage_active());
+    assert(kui_games_storage_release() && test.disconnects==disconnects+3u);
+    kui_games_storage_hold(false);kui_games_covers_cache_clear();
+    assert(kui_games_selected_cover(base,KUI_COVER_SIZE_LARGE,pixels[0],&result,log_line,cancel) && result.cover);
+    assert(!test.connected && test.connects==connects+4u && test.disconnects==disconnects+4u);
+    /* The same browsing, unheld and then held, from cold caches. */
+    unsigned cost[2][2];
+    for(unsigned held=0;held<2;held++) {
+        kui_games_cache_clear();kui_games_covers_cache_clear();kui_games_storage_hold(held);
+        const unsigned c0=test.connects,r0=test.block_reads;
+        assert(kui_games_list_rows("/Games",0,KUI_GAMES_VIEW_LIST,&page,log_line,cancel));
+        for(unsigned i=0;i<page.count;i++) if(!page.entries[i].directory && !page.entries[i].disabled)
+            assert(kui_games_selected_cover(&page.entries[i],KUI_COVER_SIZE_LARGE,pixels[i],&result,log_line,cancel));
+        assert(kui_games_inspect_cover_codec(base->path,KUI_ZSO_LZ4,&detail,large,log_line,cancel));
+        assert(kui_games_list_rows("/Games",0,held?KUI_GAMES_VIEW_LIST:KUI_GAMES_VIEW_GALLERY,&other,log_line,cancel));
+        assert(kui_games_storage_release());
+        cost[held][0]=test.connects-c0;cost[held][1]=test.block_reads-r0;
+    }
+    kui_games_storage_hold(false);
+    assert(cost[1][0]==1u && cost[0][0]>cost[1][0] && cost[0][1]>cost[1][1]);
+    printf("Browse sequence: unheld %u connects, %u block reads; held %u connect, %u block reads\n",
+        cost[0][0],cost[0][1],cost[1][0],cost[1][1]);
+    puts("PASS held Games storage session: one connect for listing, art, inspection and view; stop keeps, error releases");
+}
+
 static void check(const char *host) {
+    if(!strcmp(test.fault,"session")) {check_session();return;}
     if(!strcmp(test.fault,"selected-cache")) {check_selected_cache();return;}
     if(!strncmp(test.fault,"format-",7)) {
         struct kui_games_scan_counts c;scan(&c,true);

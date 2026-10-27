@@ -4,6 +4,7 @@
 #include "kui/game_image.h"
 #include "kui/game_launch_settings.h"
 #include "kui/game_metadata.h"
+#include "kui/games_storage.h"
 #include "kui/pvr_texture.h"
 #include "kui/retail_image.h"
 #include "platform.h"
@@ -189,12 +190,13 @@ bool kui_games_selected_cover(const struct kui_games_entry *entry,enum kui_cover
     }
     char key[KUI_COVER_PATH_CAP],path[PATH_CAP];
     if(!kui_cover_key(entry->name,key) || !record_path(key,".kcv",path)) return false;
-    bool connected=false,mounted=false,opened=false,ok=false,observed=false,exists=false;
-    FATFS fs;FIL file;
+    bool mounted=false,opened=false,ok=false,observed=false,exists=false;
+    FIL file;
     const char *problem="SD card unavailable";
-    if(!(connected=kui_sd_connect())) goto done;
+    enum kui_games_storage_result storage=kui_games_storage_open(log);
+    if(storage==KUI_GAMES_STORAGE_NO_CARD) goto done;
     problem="Cannot mount SD card";
-    if(!(mounted=kui_mount(&fs,log))) goto done;
+    if(!(mounted=storage==KUI_GAMES_STORAGE_OK)) goto done;
     if(stopped(cancel)) goto done;
     if(!artwork_known) {
         FILINFO info;FRESULT r=f_stat(KUI_GAMES_COVERS_FOLDER,&info);
@@ -220,8 +222,7 @@ bool kui_games_selected_cover(const struct kui_games_entry *entry,enum kui_cover
     ok=true;
 done:
     if(opened && f_close(&file)!=FR_OK) ok=false;
-    if(mounted && f_mount(NULL,"0:",0)!=FR_OK) ok=false;
-    if(connected) kui_sd_disconnect();
+    if(mounted && !kui_games_storage_done(ok || stopped(cancel))) ok=false;
     if(stopped(cancel)) {ok=false;out->stopped=true;}
     if(ok) {
         if(observed) {artwork_known=true;artwork_exists=exists;}
