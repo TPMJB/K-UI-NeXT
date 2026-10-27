@@ -141,7 +141,7 @@ C(kui_vmu_native_passive_complete_hook):
 #if KUI_VMU_NATIVE_READONLY_PROBE
     mov.l r4,@-r15
 #endif
-#if KUI_NATIVE_MAPLE_DELAY_ISOLATION
+#if KUI_NATIVE_MAPLE_DELAY_ISOLATION && !KUI_NATIVE_MAPLE_DELAY_SUBMIT_ONLY_ISOLATION
     mov.l .Lcomplete_delay_visit,r0
     jsr @r0
 #else
@@ -195,7 +195,7 @@ C(kui_vmu_native_passive_complete_hook):
     .align 2
 .Lcomplete_stack: .long RUNTIME_STACK_TOP
 .Lcomplete_visit: .long C(kui_vmu_native_passive_complete)
-#if KUI_NATIVE_MAPLE_DELAY_ISOLATION
+#if KUI_NATIVE_MAPLE_DELAY_ISOLATION && !KUI_NATIVE_MAPLE_DELAY_SUBMIT_ONLY_ISOLATION
 .Lcomplete_delay_visit: .long C(kui_vmu_native_maple_delay_complete)
 #endif
 #if KUI_VMU_NATIVE_READONLY_PROBE

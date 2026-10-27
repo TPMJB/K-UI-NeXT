@@ -454,6 +454,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #if KUI_NATIVE_MAPLE_DELAY_COMPLETE_ONLY_ISOLATION
     retail_display_line("TIMED DELAY / COMPLETE ONLY");
     retail_display_line("0 SUBMIT / 76 COMPLETE TICKS");
+#elif KUI_NATIVE_MAPLE_DELAY_SUBMIT_ONLY_ISOLATION
+    retail_display_line("TIMED DELAY / SUBMIT ONLY");
+    retail_display_line("59 SUBMIT / 0 COMPLETE TICKS");
 #else
     retail_display_line("TIMED DELAY / 59 AND 76 TICKS");
 #endif

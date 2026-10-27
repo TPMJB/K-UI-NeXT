@@ -66,6 +66,10 @@ __asm__(".global __kui_native_maple_delay_isolation_worker\n"
 __asm__(".global __kui_native_maple_delay_complete_only_isolation_worker\n"
         ".set __kui_native_maple_delay_complete_only_isolation_worker,1\n");
 #endif
+#if KUI_NATIVE_MAPLE_DELAY_SUBMIT_ONLY_ISOLATION
+__asm__(".global __kui_native_maple_delay_submit_only_isolation_worker\n"
+        ".set __kui_native_maple_delay_submit_only_isolation_worker,1\n");
+#endif
 #if KUI_NATIVE_METADATA_CACHE_ISOLATION
 __asm__(".global __kui_native_metadata_cache_isolation_worker\n"
         ".set __kui_native_metadata_cache_isolation_worker,1\n");
@@ -935,7 +939,7 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
     memset(&lifetime_plan,0,sizeof(lifetime_plan));
     hook_witness_ready=0u;hook_witness_count=0u;
     if(config.diagnostics>KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE) {memset(&config,0,sizeof(config));return -2;}
-#if KUI_NATIVE_E1_WAIT_CAPTURE || KUI_NATIVE_METADATA_CACHE_ISOLATION || KUI_NATIVE_MAPLE_DELAY_COMPLETE_ONLY_ISOLATION
+#if KUI_NATIVE_E1_WAIT_CAPTURE || KUI_NATIVE_METADATA_CACHE_ISOLATION || KUI_NATIVE_MAPLE_DELAY_COMPLETE_ONLY_ISOLATION || KUI_NATIVE_MAPLE_DELAY_SUBMIT_ONLY_ISOLATION
     if(config.diagnostics!=KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL ||
        !native_phase_image(config.driver.image_bytes,config.driver.load_address,config.driver.image_sha256)) {
         memset(&config,0,sizeof(config));return -2;
