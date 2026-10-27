@@ -260,6 +260,9 @@ static bool sdk_sci_ready(void) {
 static uint32_t sdk_sci_level(void) {
     return sdk_sci_ready()?SCI_LEVEL:0u;
 }
+#if KUI_NATIVE_STANDALONE_READER
+#include "native_standalone_reader.inc"
+#endif
 static void hook(void) {
     uint16_t b=rd16(IPRB);uint32_t level=sdk_sci_level();
     if(!e.hooked) {e.release.sci=b&SCI_FIELD;e.hooked=1u;}
@@ -612,7 +615,7 @@ deliver_work(uint32_t wait) {
             else ++e.stats.call_blocks;
             if(e.cursor.done == e.cursor.count) {
                 e.active = 0;
-#if KUI_NATIVE_REQUEST_TIMING
+#if KUI_NATIVE_REQUEST_TIMING && !KUI_NATIVE_STANDALONE_READER
                 uint32_t elapsed=e.stats.hooks-rd32(UINT32_C(0xffd8000c));
                 if(elapsed>e.stats.releases) {
                     e.stats.releases=elapsed;
@@ -721,7 +724,7 @@ static bool reads(uint32_t command) {
 static void start(void) {
     struct kui_retail_gd *s = &R.shared.service;
     e.token = s->token;
-#if KUI_NATIVE_REQUEST_TIMING
+#if KUI_NATIVE_REQUEST_TIMING && !KUI_NATIVE_STANDALONE_READER
     e.stats.hooks=rd32(UINT32_C(0xffd8000c));
 #endif
     e.failed = 0; e.retries = 0; e.active = 0;
@@ -996,6 +999,9 @@ enum kui_armada_ce_vmu_loan_result kui_retail_async_vmu_loan_end(bool healthy) {
 }
 #endif
 void kui_retail_async_call(uint32_t function) {
+#if KUI_NATIVE_STANDALONE_READER
+    kui_native_standalone_bind();
+#endif
 #if KUI_VMU_NATIVE_BACKGROUND
     if(native_loan_blocked()) return;
 #endif
@@ -1033,7 +1039,7 @@ void kui_retail_async_call(uint32_t function) {
     deliver(wait);
     report();
 }
-#if KUI_NATIVE_LOADER_TIMELINE
+#if KUI_NATIVE_LOADER_TIMELINE && !KUI_NATIVE_STANDALONE_READER
 /* Installed only after retained-region binding from the typed immutable
  * worker descriptor. Bootstrap workspace and normal mode keep this zero. */
 void __attribute__((noipa)) kui_retail_async_trace(uint32_t exit,uint32_t function) {

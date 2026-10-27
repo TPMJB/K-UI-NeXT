@@ -20,15 +20,22 @@
 #ifndef KUI_NATIVE_STANDALONE_READER
 #define KUI_NATIVE_STANDALONE_READER 0
 #endif
-#if KUI_NATIVE_STANDALONE_READER != 0 && KUI_NATIVE_STANDALONE_READER != 1
-#error "Standalone reader fit selector must be exactly zero or one"
+#ifndef KUI_NATIVE_STANDALONE_STAGE
+#define KUI_NATIVE_STANDALONE_STAGE 0
+#endif
+#if (KUI_NATIVE_STANDALONE_READER != 0 && KUI_NATIVE_STANDALONE_READER != 1) || \
+    (KUI_NATIVE_STANDALONE_STAGE != 0 && KUI_NATIVE_STANDALONE_STAGE != 1)
+#error "Standalone reader selectors must be exactly zero or one"
+#endif
+#if KUI_NATIVE_STANDALONE_STAGE && !KUI_NATIVE_STANDALONE_READER
+#error "Standalone stage requires its matching standalone reader"
 #endif
 #if KUI_NATIVE_STANDALONE_READER && \
     (!KUI_NATIVE_SDK_SCI_ROUTE || !KUI_NATIVE_SDK_SCI_STRUCTURAL || \
-     !KUI_RETAIL_LOW_RESIDENT || !KUI_RETAIL_ASYNC || \
+     !KUI_RETAIL_LOW_RESIDENT || (!KUI_RETAIL_ASYNC && !KUI_NATIVE_STANDALONE_STAGE) || \
      KUI_VMU_NATIVE_BACKGROUND || KUI_NATIVE_READAHEAD || \
      KUI_VMU_NATIVE_PERSISTENT_PROBE || defined(KUI_RETAIL_CE))
-#error "Standalone reader fit requires native low SDK SCI without VMU or read-ahead"
+#error "Standalone reader requires native low SDK SCI without VMU or read-ahead"
 #endif
 #if KUI_NATIVE_SDK_SCI_ROUTE
 #if !KUI_NATIVE_LOADER_TIMELINE || !KUI_NATIVE_IRQ_REARM || \
