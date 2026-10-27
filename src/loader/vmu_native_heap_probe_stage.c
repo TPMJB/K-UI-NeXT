@@ -31,7 +31,7 @@ static enum kui_loader_sd_result native_persist_storage_init(struct kui_retail_s
 #define kui_retail_stage_relay kui_native_heap_base_relay
 #include "retail_stage.c"
 #undef kui_retail_stage_relay
-#if KUI_NATIVE_STANDARD_VMU_ISOLATION || KUI_NATIVE_READER_ONLY_ISOLATION || KUI_NATIVE_METADATA_CACHE_ISOLATION
+#if KUI_NATIVE_STANDARD_VMU_ISOLATION || KUI_NATIVE_READER_ONLY_ISOLATION || KUI_NATIVE_METADATA_CACHE_ISOLATION || KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
 _Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x60000),
     "Native isolation variants retain the complete current lease");
 __asm__(".global __kui_native_isolation_lease_bytes\n"
@@ -76,6 +76,10 @@ __asm__(".global __kui_native_maple_delay_post_start_isolation_stage\n"
 #if KUI_NATIVE_METADATA_CACHE_ISOLATION
 __asm__(".global __kui_native_metadata_cache_isolation_stage\n"
         ".set __kui_native_metadata_cache_isolation_stage,1\n");
+#endif
+#if KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
+__asm__(".global __kui_native_split_controller_isolation_stage\n"
+        ".set __kui_native_split_controller_isolation_stage,1\n");
 #endif
 #if KUI_NATIVE_CURRENT_BOTTOM_HEAP
 #define KUI_NATIVE_COLD_PROGRESS_STAGE 1

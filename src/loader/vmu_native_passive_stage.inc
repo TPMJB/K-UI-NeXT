@@ -220,11 +220,13 @@ static void __attribute__((noipa)) native_passive_lease_only(
 }
 #endif
 static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
-#if KUI_NATIVE_E1_WAIT_CAPTURE || KUI_NATIVE_MAPLE_DELAY_ISOLATION || KUI_NATIVE_METADATA_CACHE_ISOLATION
+#if KUI_NATIVE_E1_WAIT_CAPTURE || KUI_NATIVE_MAPLE_DELAY_ISOLATION || KUI_NATIVE_METADATA_CACHE_ISOLATION || KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
     /* These controls have exact Evolution contracts. Check the complete
      * independently verified identity before publishing any worker hooks. */
     if(!kui_vmu_native_trace_image(&native_driver))
-#if KUI_NATIVE_METADATA_CACHE_ISOLATION
+#if KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
+        stopped("SPLIT CONTROLLER NEEDS EVOLUTION 1",native_driver.image_bytes);
+#elif KUI_NATIVE_METADATA_CACHE_ISOLATION
         stopped("METADATA CACHE NEEDS EVOLUTION 1",native_driver.image_bytes);
 #elif KUI_NATIVE_MAPLE_DELAY_ISOLATION
         stopped("MAPLE DELAY NEEDS EVOLUTION 1",native_driver.image_bytes);
@@ -232,7 +234,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
         stopped("WAIT CAPTURE NEEDS EVOLUTION 1",native_driver.image_bytes);
 #endif
     if(native_runtime_mode()!=KUI_VMU_NATIVE_MODE_NORMAL)
-#if KUI_NATIVE_METADATA_CACHE_ISOLATION
+#if KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
+        stopped("SPLIT CONTROLLER NEEDS NORMAL MODE",native_runtime_mode());
+#elif KUI_NATIVE_METADATA_CACHE_ISOLATION
         stopped("METADATA CACHE NEEDS NORMAL MODE",native_runtime_mode());
 #elif KUI_NATIVE_MAPLE_DELAY_ISOLATION
         stopped("MAPLE DELAY NEEDS NORMAL MODE",native_runtime_mode());
@@ -468,6 +472,10 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #else
     retail_display_line("READER SUPPORT HOOKS RETAINED");
 #endif
+#elif KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
+    retail_display_line("NEW READER / VIRTUAL A2 ON");
+    retail_display_line("PREFETCH OFF / SPLIT CONTROLLER");
+    retail_display_line("REAL MAPLE CALLBACKS ON");
 #elif KUI_NATIVE_METADATA_CACHE_ISOLATION
     retail_display_line("NEW READER / VIRTUAL A2 ON");
     retail_display_line("PREFETCH OFF / METADATA CACHE");

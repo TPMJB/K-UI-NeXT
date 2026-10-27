@@ -175,7 +175,11 @@ C(kui_vmu_native_passive_submit_hook):
     mov.l @r15+,r2
     .align 2
 .Lsubmit_stack: .long RUNTIME_STACK_TOP
+#if KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
+.Lsubmit_visit: .long C(kui_vmu_native_passive_split_submit)
+#else
 .Lsubmit_visit: .long C(kui_vmu_native_passive_submit)
+#endif
 #if KUI_NATIVE_MAPLE_DELAY_ISOLATION && !KUI_NATIVE_MAPLE_DELAY_COMPLETE_ONLY_ISOLATION
 .Lsubmit_delay_visit: .long C(kui_vmu_native_maple_delay_submit)
 #endif

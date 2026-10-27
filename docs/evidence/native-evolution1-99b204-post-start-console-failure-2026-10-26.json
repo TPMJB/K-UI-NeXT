@@ -1,0 +1,35 @@
+{
+  "schema": "kui.native.owner-console-result.v1",
+  "date": "2026-10-26",
+  "game": "Evolution: The World of Sacred Device",
+  "runtime_source_commit": "99b2046f32351ba1f97823cf4e65664153862d08",
+  "delivery_source_commit": "43bf6819c8db39fdf863e09b90c1b7e0cab39585",
+  "package": "K-UI-Evolution-Post-Start-Delay-99b2046f3235.zip",
+  "package_sha256": "e4c532d0e8958c82aa6da3e4bb64fe9541725223bcff803202041faf39f40cdc",
+  "result": "FAIL",
+  "owner_observation": "Didn't work :/",
+  "symptom_detail": "Not supplied for this run",
+  "diagnostic_refusal_excluded": false,
+  "clarification": "An optional same-black-screen versus error-page question returned no answer. No additional test is requested to classify this result.",
+  "runtime_mode": {
+    "virtual_a2": false,
+    "real_maple_c_callbacks": false,
+    "new_demand_reader": true,
+    "controller_tick": false,
+    "prefetch": false,
+    "submit_prestart_ticks": 0,
+    "submit_poststart_ticks": 59,
+    "complete_delay_ticks": 0
+  },
+  "interpretation": [
+    "The owner did not obtain a passing build from the post-start control.",
+    "The exact stopped context and clock/mask admission are not confirmed for this hardware run.",
+    "The existing pre-start59 failure, completion-only76 pass, and measured original submit work motivate a real split-controller candidate independently of this unclassified failure."
+  ],
+  "not_established": [
+    "The post-start control reached the same original scanline wait",
+    "Clock or mask refusal did not occur",
+    "DMA/completion phase is excluded as a contributing factor",
+    "An exact interrupt-residency threshold or scanline-zero starvation proof"
+  ]
+}
