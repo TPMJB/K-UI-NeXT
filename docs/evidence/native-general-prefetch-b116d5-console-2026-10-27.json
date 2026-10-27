@@ -1,0 +1,33 @@
+{
+  "schema": "kui.native.owner-console-result.v1",
+  "date": "2026-10-27",
+  "runtime_source_commit": "b116d540b382b251e6a6bd516ab168c10dfe43c4",
+  "delivery_source_commit": "b116d540b382b251e6a6bd516ab168c10dfe43c4",
+  "package": "K-UI-Native-General-Prefetch-b116d540b382.zip",
+  "package_sha256": "46a4948e5da415874d4dea05d6c98a31130ea5577e6abaf56a7d84c79eb4d434",
+  "result": "MIXED",
+  "owner_observation": "So Rayman and Lodoss isn't where I noticed the lag, but Evolution was. That lag seems to be gone now. Sonic Adventure 2, the prefetch seems to make FMVs much worse and the video is very mismatched with the audio...it might make the gameplay better though?",
+  "reported_checks": {
+    "evolution1_with_prefetch": "PASS; boots and plays, and the residual gameplay lag reported on f5a503e71796 is gone",
+    "rayman2_lodoss": "No lag noticed on either build; not where the residual lag was seen",
+    "sonic_adventure_2_fmv": "REGRESSION; FMVs much worse than without prefetch, video badly out of sync with audio",
+    "sonic_adventure_2_gameplay": "Possibly better; owner unsure"
+  },
+  "runtime_mode": {
+    "split_controller": true,
+    "virtual_a2": true,
+    "new_demand_reader": true,
+    "controller_tick": true,
+    "prefetch": true
+  },
+  "interpretation": [
+    "The split controller tolerates the controller prefetch TICK in Evolution 1, the game whose controller timing failed before.",
+    "Prefetch removes the residual gameplay lag the owner saw in Evolution 1.",
+    "Each TICK performs up to two synchronous 512-byte PIO blocks inside the masked Maple completion hook. During continuous FMV streaming that work recurs every controller frame while adding little data relative to the stream; the SA2 regression is consistent with that cost, but its cause is not measured."
+  ],
+  "not_established": [
+    "The measured cause of the SA2 FMV desynchronization",
+    "Whether SA2 gameplay improves",
+    "Results for other virtual-A2 games with prefetch"
+  ]
+}
