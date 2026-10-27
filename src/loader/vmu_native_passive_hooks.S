@@ -54,7 +54,8 @@ C(kui_vmu_native_passive_submit_hook):
     and #0xf0,r0
     cmp/eq #0x60,r0
     bt .Lsubmit_post_start_mask_ok
-    cmp/eq #0xf0,r0
+    xor #0xf0,r0
+    tst r0,r0
     bt .Lsubmit_post_start_mask_ok
     mov.l .Lsubmit_post_start_refused,r0
     jmp @r0
