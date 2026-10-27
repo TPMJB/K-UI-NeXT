@@ -1,6 +1,6 @@
 {
   "schema": "kui.doa2.standalone-reader-source-progress.v1",
-  "date": "2026-10-27",
+  "date": "2026-10-26",
   "status": "SOURCE FIT EXPERIMENT ONLY \u2014 NOT LAUNCHABLE",
   "launchable": false,
   "runtime_admission_enabled": false,
@@ -46,7 +46,7 @@
     "terminal_reporting": "Existing compact terminal reporter reused; no terminal/report callbacks into worker"
   },
   "fit_receipt": {
-    "path": "docs/evidence/native-standalone-reader-fit-2026-10-27.json",
+    "path": "docs/evidence/native-standalone-reader-fit-2026-10-26.json",
     "sha256": "f6406d2e6a04b1e5e05b505e2fd82fd2bd6e8f644fc5e2c6b99213a0019bc00a",
     "artifact_sha256": {
       "build/standalone-fit/resident.elf": "79b4f7b90b82e44a7897b8d74e95bc7141f0ad183eda888dbb84fde37e6e5796",
@@ -166,7 +166,7 @@
     }
   },
   "sdk_model": {
-    "path": "docs/evidence/native-doa2-sdk-callback-model-2026-10-27.json",
+    "path": "docs/evidence/native-doa2-sdk-callback-model-2026-10-26.json",
     "sha256": "a36d1371678127c4f2d6115ebe8e95836acef8f29adb556a8be51144e42af7e5",
     "scope": "Original DOA2 SDK table initializer/control frames/integer dispatch/default return execute against existing6be New callback; deep reader C dispatch is an explicit ABI adversary. This model is separate from the standalone fit ELF.",
     "cases": {
@@ -192,5 +192,7 @@
     "No first-install, firmware memory lifetime, SCI bus, gameplay, or console result follows from fit.",
     "No promise that full current New read-ahead/cache behavior is retained; the proposal preserves the demand engine with SDK routing.",
     "The passing Evolution build and shared source branch remain separate."
-  ]
+  ],
+  "date_timezone": "America/Chicago",
+  "host_build_date_utc": "2026-10-27"
 }
