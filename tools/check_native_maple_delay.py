@@ -12,20 +12,22 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
 import struct
 import subprocess
 import tempfile
 
-from check_native_maple_bypass import BypassGateway, OriginalSubmit, sha
+from check_native_maple_bypass import BypassGateway, OriginalSubmit, sha, call_site as bypass_call_site
 from check_native_bottom_heap import ABSOLUTE_ONE, require
 from check_vmu_native_readonly import ReadonlyGateway, relocated
-from check_vmu_native_worker_gateway import P2, read_elf
+from check_vmu_native_worker_gateway import P2, read_elf, symbol_bytes
 from test_armada_ce_maple_hook import CPU, MASK
 from test_vmu_native_heap_execution import verified_program_image
 import profile_vmu_native_release_sh as release
 
 ROOT=Path(__file__).resolve().parents[1]
 SCHEMA='kui.native.maple-delay.linked-gateways.v1'
+COMPLETION_SCHEMA='kui.native.maple-completion-delay.linked-gateways.v1'
 TARGETS={'submit':59,'complete':76}
 SOURCES=('tools/check_native_maple_delay.py','tools/check_native_maple_bypass.py',
     'tools/check_vmu_native_persistent.py','tools/check_vmu_native_readonly.py',
@@ -42,7 +44,7 @@ class DelayGateway(BypassGateway):
     def __init__(self,*args):
         super().__init__(*args)
         self.original_c={self.visit,self.complete}
-        self.visit=self.symbols['_kui_vmu_native_maple_delay_submit']
+        self.visit=self.symbols.get('_kui_vmu_native_maple_delay_submit',self.visit)
         self.complete=self.symbols['_kui_vmu_native_maple_delay_complete']
 
     def code(self,address,size):
@@ -174,10 +176,10 @@ class DelayBody(release.ReleaseSH):
                     elapsed_ticks=TARGETS[self.role]+1,timer_writes=0)
 
 
-def helper_cases(build):
+def helper_cases(build,completion_delay=False):
     rows=[]
     path=build/'native-worker.elf'
-    for role in TARGETS:
+    for role in (('complete',) if completion_delay else TARGETS):
         for start in (10000,0,1):
             row=DelayBody(path,role,start=start).execute()
             require(not row['refused'],'Advancing/wrapping timer was refused')
@@ -237,7 +239,68 @@ def flag_zero_comparison():
     return dict(prior_runtime='cec542aefa8ad907ed063a6b8b471d7151eef38c',normal_equal=True,bypass_equal=True)
 
 
-def check(build,startup,record):
+def completion_submit_comparison(worker):
+    """Bind the final submit body to the exact compiled passing CEC body."""
+    cc=ROOT/'.deps/sh-elf/bin/sh-elf-gcc'
+    prior='cec542aefa8ad907ed063a6b8b471d7151eef38c'
+    original=subprocess.check_output(['git','show',prior+':src/loader/vmu_native_passive_hooks.S'],cwd=ROOT)
+    flags=['-x','assembler-with-cpp','-c','-DKUI_VMU_NATIVE_CACHED_CODE=1',
+           '-DKUI_VMU_NATIVE_READONLY_PROBE=1','-DKUI_VMU_NATIVE_PERSISTENT_PROBE=1',
+           '-DKUI_NATIVE_MAPLE_BYPASS_ISOLATION=1']
+    name='_kui_vmu_native_passive_submit_hook'
+    with tempfile.TemporaryDirectory(prefix='kui-completion-submit-') as directory:
+        path=Path(directory);old=path/'cec.S';old.write_bytes(original)
+        rows=[]
+        for index,source in enumerate((old,ROOT/'src/loader/vmu_native_passive_hooks.S')):
+            obj=path/(str(index)+'.o')
+            mode=['-DKUI_NATIVE_MAPLE_DELAY_ISOLATION=1',
+                  '-DKUI_NATIVE_MAPLE_DELAY_COMPLETE_ONLY_ISOLATION=1'] if index else []
+            subprocess.run([str(cc),*flags,*mode,str(source),'-o',str(obj)],check=True,capture_output=True)
+            # gcc -c produces ET_REL with no program headers. Keep the strict
+            # ET_EXEC reader for the final linked worker; extract this one
+            # compiler-owned object range from its typed nm symbol instead.
+            symbols=subprocess.check_output([str(cc.with_name('sh-elf-nm')),'-S','--defined-only',str(obj)],text=True)
+            matches=[line.split() for line in symbols.splitlines() if line.split()[-1:]==[name]]
+            require(len(matches)==1 and len(matches[0])==4 and matches[0][2] in ('T','t'),
+                    'CEC reference object lacks its unique typed submit function')
+            address,size=(int(value,16) for value in matches[0][:2])
+            raw=path/(str(index)+'.text')
+            subprocess.run([str(cc.with_name('sh-elf-objcopy')),'--dump-section','.text='+str(raw),str(obj)],
+                           check=True,capture_output=True)
+            text_bytes=raw.read_bytes()
+            require(size>0 and address+size<=len(text_bytes),'CEC reference submit escaped .text')
+            body=text_bytes[address:address+size]
+            text=subprocess.check_output([str(cc.with_name('sh-elf-objdump')),'-r','-j','.text',str(obj)],text=True)
+            reloc=[]
+            for line in text.splitlines():
+                match=re.match(r'^([0-9a-fA-F]+)\s+(R_SH_\w+)\s+(\S+)',line)
+                if match and address<=int(match[1],16)<address+len(body):
+                    reloc.append((int(match[1],16)-address,match[2],match[3]))
+            rows.append((body,reloc))
+        require(rows[0]==rows[1], 'Completion-only submit differs from the exact CEC object body/relocations')
+    _,linked,_=symbol_bytes(worker,name,2)
+    body,relocations=rows[0];normalized=bytearray(linked)
+    require(len(linked)==len(body) and relocations,'Completion-only linked submit size/relocations differ')
+    bindings=[]
+    for offset,kind,target in relocations:
+        require(kind=='R_SH_DIR32','Unexpected submit relocation kind')
+        match=re.fullmatch(r'([_A-Za-z0-9]+)(?:([+-])0x([0-9a-fA-F]+))?',target)
+        require(match is not None and match[1] in worker[4], 'Unknown submit relocation target: '+target)
+        # SH ET_REL uses the literal word itself as R_SH_DIR32's addend.
+        # objdump may omit that raw addend from its target column.
+        addend=struct.unpack_from('<I',body,offset)[0]
+        expected=(worker[4][match[1]][0]+addend)&MASK
+        require(struct.unpack_from('<I',linked,offset)[0]==expected,'Linked submit target differs: '+target)
+        normalized[offset:offset+4]=body[offset:offset+4]
+        bindings.append(dict(offset=offset,target=target,address=hex(expected)))
+    require(bytes(normalized)==body,'Linked submit changed beyond exact CEC relocation targets')
+    return dict(prior_runtime=prior,prior_source_sha256=sha(original),
+        object_body_and_relocations_equal=True,linked_body_equal_after_exact_relocations=True,
+        bytes=len(body),canonical_body_sha256=sha(body),relocation_bindings=bindings,
+        no_submit_helper_call=True)
+
+
+def check(build,startup,record,completion_delay=False):
     build,startup,record=map(lambda p:Path(p).resolve(),(build,startup,record))
     source,image,extent=verified_program_image(startup,record)
     driver=struct.unpack_from('<18I',record.read_bytes(),64)
@@ -246,9 +309,17 @@ def check(build,startup,record):
         for marker in ('maple_delay','maple_bypass','reader_only','ra_tick_off'):
             require(elf[4].get('__kui_native_'+marker+'_isolation_'+role)==ABSOLUTE_ONE,'Missing paired marker: '+marker)
         require('__kui_native_e1_wait_capture_'+role not in elf[4],'Delay includes wait capture')
+        marker=elf[4].get('__kui_native_maple_delay_complete_only_isolation_'+role)
+        require(marker==ABSOLUTE_ONE if completion_delay else marker is None,
+                'Completion-only paired marker differs: '+role)
+        require('__kui_native_metadata_cache_isolation_'+role not in elf[4],
+                'Delay includes incompatible cached metadata')
     symbols={name:value[0] for name,value in worker[4].items()}
     binary,wire=(build/'native-worker.bin').read_bytes(),(build/'native-worker.reloc').read_bytes()
-    sites={role:call_site(binary,symbols,role) for role in TARGETS}
+    roles=('complete',) if completion_delay else TARGETS
+    sites={role:call_site(binary,symbols,role) for role in roles}
+    submit_site=bypass_call_site(binary,symbols,'submit') if completion_delay else None
+    submit_comparison=completion_submit_comparison(worker) if completion_delay else None
     cases=0;writes=dict(submit_mdst=0,complete_mdst=0)
     for destination in (P2,0xac35e220,0xac700000):
         blob=relocated(binary,wire,destination)
@@ -258,7 +329,8 @@ def check(build,startup,record):
                 for mask in range(16):
                     for t in (0,1):
                         for role in TARGETS:
-                            cpu=DelayGateway(seed,mask,destination,blob,mapped,role,alias,t,driver).verify(image,driver)
+                            cls=BypassGateway if completion_delay and role=='submit' else DelayGateway
+                            cpu=cls(seed,mask,destination,blob,mapped,role,alias,t,driver).verify(image,driver)
                             cases+=1;writes[role+'_mdst']+=cpu.writes.count(0xa05f6c18)
     mutations=[]
     for role,site in sites.items():
@@ -269,14 +341,22 @@ def check(build,startup,record):
             try:DelayGateway(0,0,P2,bytes(changed),symbols,role,0x80000000,0,driver).verify(image,driver)
             except (AssertionError,ValueError) as error:mutations.append(dict(name=role+'-'+kind,reason=str(error)))
             else:raise ValueError('Delay call mutation was accepted')
-    helpers=helper_cases(build)
+    if completion_delay:
+        changed=bytearray(binary);struct.pack_into('<H',changed,submit_site,0x400b)
+        try:BypassGateway(0,0,P2,bytes(changed),symbols,'submit',0x80000000,0,driver).verify(image,driver)
+        except (AssertionError,ValueError) as error:
+            mutations.append(dict(name='submit-original-C-restored',reason=str(error)))
+        else:raise ValueError('Completion-only restored submit C call was accepted')
+    helpers=helper_cases(build,completion_delay)
     artifacts={p.name:sha(p.read_bytes()) for p in build.iterdir() if p.suffix in ('.elf','.bin','.reloc') and p.is_file()}
     provenance=json.loads((build/'entry.compile.json').read_text())
     require(provenance['source_dirty'] is False and provenance['elf_sha256']==artifacts['entry.elf'],'Unbound runtime provenance')
-    return dict(schema=SCHEMA,status='PASS',source_commit=provenance['commit'],
+    return dict(schema=COMPLETION_SCHEMA if completion_delay else SCHEMA,status='PASS',source_commit=provenance['commit'],
         artifact_sha256=artifacts,source_sha256={name:sha((ROOT/name).read_bytes()) for name in SOURCES},
         inputs=dict(startup_sha256=sha(source),record_sha256=sha(record.read_bytes()),extent=extent),
-        C_calls=0,delay_ticks=TARGETS,actual_delay_helper_executed=True,timer_writes=0,
+        C_calls=0,delay_ticks=dict(submit=0,complete=76) if completion_delay else TARGETS,
+        completion_delay=completion_delay,submit_cec_equivalence=submit_comparison,
+        actual_delay_helper_executed=True,timer_writes=0,
         instruction_cases=cases,gateway_callee_model='adversarial ABI-compatible delay callee',
         delay_helper_cases=helpers,actual_helper_case_count=len(helpers),
         exact_original_submit_replay=True,inherited_registers_PR_SR_SP_preserved=True,
@@ -288,10 +368,12 @@ def check(build,startup,record):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     for name in ('build','startup','record','output'):parser.add_argument('--'+name,type=Path,required=True)
-    args=parser.parse_args();report=check(args.build,args.startup,args.record)
+    parser.add_argument('--completion-delay',action='store_true',
+                        help='Require exact CEC submit and only the existing76-tick completion helper')
+    args=parser.parse_args();report=check(args.build,args.startup,args.record,args.completion_delay)
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(report,indent=2)+'\n')
-    print(json.dumps(dict(schema=SCHEMA,status='PASS',gateway_cases=report['instruction_cases'],
+    print(json.dumps(dict(schema=report['schema'],status='PASS',gateway_cases=report['instruction_cases'],
         helper_cases=report['actual_helper_case_count'],output=str(args.output))))
 
 

@@ -149,6 +149,14 @@ def main():
     require(worker[4].get('__kui_native_maple_delay_isolation_worker') == (1,0,0,0xfff1) and
             read_elf(a.reader/'stage.elf')[4].get('__kui_native_maple_delay_isolation_stage') == (1,0,0,0xfff1),
             'delay closure normalization requires exact paired delay markers')
+    complete_marker = worker[4].get('__kui_native_maple_delay_complete_only_isolation_worker')
+    require(complete_marker in (None, (1,0,0,0xfff1)) and
+            read_elf(a.reader/'stage.elf')[4].get('__kui_native_maple_delay_complete_only_isolation_stage') == complete_marker,
+            'completion-only selector requires exact paired markers')
+    complete_only = complete_marker is not None
+    if complete_only:
+        require('_kui_vmu_native_maple_delay_submit' not in worker[4],
+                'unused submit delay helper remains in completion-only worker')
     ro_records = [r for r in persistent.prepared_symbol_records(worker) if r[0] == '.rodata']
     require(len(ro_records) == 1, 'delay worker lacks unique immutable .rodata owner')
     _, ro_at, ro_count, _, ro_owner = ro_records[0]
@@ -192,8 +200,9 @@ def main():
                           terminal_proof=refusal, terminal_gateway_cases=terminal_cases,
                           read_ahead_proof=read_ahead)
 
-    # The new assembly JSRs enter two different C roots. Walk their emitted
-    # call closures as well as the pre-existing passive worker roots above.
+    # Walk the helper roots actually retained by the selected assembly JSRs,
+    # as well as the pre-existing passive worker roots above. Completion-only
+    # deliberately omits the submit call and its garbage-collected helper.
     reports = sorted((a.reader/'native').rglob('*.ci'))
     frames, calls = load(reports, qualified=True)
     live = {_function_base(n) for n in worker[4]}
@@ -225,7 +234,9 @@ def main():
                     best = candidate
         return frames[name]+best[0], [name+'('+str(frames[name])+')']+best[1]
     delay = {}
-    for root in ('kui_vmu_native_maple_delay_submit', 'kui_vmu_native_maple_delay_complete'):
+    helper_roots = ('kui_vmu_native_maple_delay_complete',) if complete_only else (
+        'kui_vmu_native_maple_delay_submit', 'kui_vmu_native_maple_delay_complete')
+    for root in helper_roots:
         candidates = resolve(root)
         require(len(candidates) == 1, 'duplicate delay helper root')
         count, path = depth(candidates[0])
@@ -245,6 +256,9 @@ def main():
         actual_linked_terminal_gateway_cases=terminal_cases,
         actual_linked_terminal_gateway_cases_provenance='current relocated terminal assembly executed at three relocation bases,160 seeds and all16 IMASKs')
     reader['delay_helper_current_compiled_call_paths'] = delay
+    if complete_only:
+        reader['completion_only_delay'] = dict(paired_markers=True,
+            submit_helper_absent=True, retained_helper_roots=list(helper_roots))
     reader['diagnostic_complete_known_literal_placement_proof'] = closure_provenance
     reader['current_su_frame_bindings'] = bindings
     save('stack-reader.json', reader)

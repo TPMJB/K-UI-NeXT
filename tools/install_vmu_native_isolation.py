@@ -169,9 +169,13 @@ def validate_variant_metadata(metadata):
         require(type(bypass) is bool, 'Maple-bypass metadata must be a boolean')
         delay = entry.get('maple_delay', False)
         require(type(delay) is bool, 'Maple-delay metadata must be a boolean')
+        completion = entry.get('completion_delay', False)
+        require(type(completion) is bool, 'Completion-delay metadata must be a boolean')
+        require(not completion or delay, 'Completion-only delay requires Maple delay')
         if delay:
-            require(bypass is True and entry.get('maple_delay_ticks') == dict(submit=59, complete=76),
-                    'Maple delay requires the bypass control and exact 59/76 tick budgets')
+            require(bypass is True and entry.get('maple_delay_ticks') ==
+                    dict(submit=0 if completion else 59, complete=76),
+                    'Maple delay requires the bypass control and exact selected tick budgets')
         if bypass:
             require(name == 'reader-only' and entry.get('prefetch_enabled') is False and
                     entry.get('controller_tick_off') is True and
@@ -189,6 +193,8 @@ def install(root, package, variant, profile=None):
     validate_variant_metadata(metadata)
     maple_bypass = metadata['variants'].get(variant, {}).get('maple_bypass', False)
     maple_delay = metadata['variants'].get(variant, {}).get('maple_delay', False)
+    completion_delay = metadata['variants'].get(variant, {}).get('completion_delay', False)
+    completion_receipt = dict(completion_delay=True) if completion_delay else {}
     gui = p.read_regular(root/GUI, root, maximum=LIMIT)
     require(sha(gui) == metadata['gui']['sha256'] and verify(gui)['build'] == metadata['gui']['build'],
             'This test requires the existing 8adf Games UI; it was not replaced. Restore/install that candidate first.')
@@ -223,7 +229,8 @@ def install(root, package, variant, profile=None):
                 state.get('build') in {metadata['build'], *metadata.get('compatible_packages', {})} and
                 set(state.get('allowed', {})) == set(MODULES) and
                 type(state.get('maple_bypass', False)) is bool and
-                type(state.get('maple_delay', False)) is bool,
+                type(state.get('maple_delay', False)) is bool and
+                type(state.get('completion_delay', False)) is bool,
                 'Invalid isolation recovery receipt')
     for name, data in current.items():
         allowed = state['allowed'][name] if state is not None else [fingerprint(original[name])]
@@ -238,14 +245,15 @@ def install(root, package, variant, profile=None):
     changes = [(name, current[name], desired[name]) for name in MODULES if current[name] != desired[name]]
     receipt = dict(schema='kui.native.isolation.state.v1', build=metadata['build'], variant=variant,
                    pending=False, maple_bypass=maple_bypass, maple_delay=maple_delay,
-                   allowed={name: [fingerprint(desired[name])] for name in MODULES})
+                   allowed={name: [fingerprint(desired[name])] for name in MODULES},**completion_receipt)
     if not changes and state == receipt:
         require(protected_snapshot(p, root, selected) == before_protected, 'Read-only files changed during inspection')
         return dict(variant=variant, build=metadata['build'], already_installed=True, gui_unchanged=True,
                     maple_bypass=maple_bypass, maple_delay=maple_delay,
                     prepared_card_unchanged=True, changed_modules=[],
                     prefetch_enabled=metadata['variants'].get(variant, {}).get('prefetch_enabled'),
-                    e1_wait_capture=metadata['variants'].get(variant, {}).get('e1_wait_capture', False))
+                    e1_wait_capture=metadata['variants'].get(variant, {}).get('e1_wait_capture', False),
+                    **completion_receipt)
     pending = dict(receipt, pending=True, allowed={name: list(dict.fromkeys(
         [fingerprint(current[name]), fingerprint(desired[name])])) for name in MODULES})
     published = []
@@ -275,7 +283,7 @@ def install(root, package, variant, profile=None):
                 prefetch_enabled=metadata['variants'].get(variant, {}).get('prefetch_enabled'),
                 e1_wait_capture=metadata['variants'].get(variant, {}).get('e1_wait_capture', False),
                 prepared_card_unchanged=True, changed_modules=[str(MODULES[name]) for name, _, _ in changes],
-                backup=str(BACKUP), restored_exact_original_modules=variant == 'restore')
+                backup=str(BACKUP), restored_exact_original_modules=variant == 'restore',**completion_receipt)
 
 
 def main():
@@ -297,7 +305,11 @@ def main():
             if result.get('prefetch_enabled') is False:
                 print('Controller read-ahead is OFF; New demand reads and SDK SCI remain enabled.')
             if result.get('maple_delay'):
-                print('Timing control: real Maple C callbacks remain OFF; read-only delays are 59/76 TMU0 ticks.')
+                if result.get('completion_delay'):
+                    print('Timing control: real Maple C callbacks remain OFF; only completion waits76 TMU0 ticks.')
+                    print('Submit retains the passing CEC no-call path; no submit delay helper runs.')
+                else:
+                    print('Timing control: real Maple C callbacks remain OFF; read-only delays are 59/76 TMU0 ticks.')
                 print('Check only the same Evolution transition. No capture gesture or new diagnostic photos are required.')
             if result.get('e1_wait_capture'):
                 print('At the black-screen wait, hold both triggers + B for 30 controller polls, then release.')

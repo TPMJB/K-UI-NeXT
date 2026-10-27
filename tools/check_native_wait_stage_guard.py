@@ -19,6 +19,7 @@ from check_vmu_native_worker_gateway import read_elf
 
 SCHEMA = 'kui.native.evolution1.wait-capture-stage-guard.v1'
 DELAY_SCHEMA = 'kui.native.evolution1.maple-delay-stage-guard.v1'
+COMPLETION_DELAY_SCHEMA = 'kui.native.evolution1.maple-completion-delay-stage-guard.v1'
 METADATA_SCHEMA = 'kui.native.evolution1.metadata-cache-stage-guard.v1'
 SOURCES = ('tools/check_native_wait_stage_guard.py', 'tools/check_native_bottom_heap.py',
     'tools/profile_vmu_native_release_sh.py', 'tests/test_vmu_native_heap_execution.py',
@@ -130,8 +131,9 @@ def run_case(baseline, wire, name, mutation=None, mode=0, accept=False, expected
         first_copy=cpu.first_copy, stop=cpu.stop, writes=len(cpu.writes))
 
 
-def check(build, startup, record, maple_delay=False, cached_metadata=False):
+def check(build, startup, record, maple_delay=False, cached_metadata=False, completion_delay=False):
     require(not(maple_delay and cached_metadata), 'Select one stage-guard diagnostic')
+    require(not completion_delay or maple_delay, 'Completion delay requires Maple delay')
     build = build.resolve()
     artifacts = {p.name: sha(p) for p in sorted(build.iterdir())
                  if p.suffix in ('.elf', '.bin', '.reloc') and p.is_file()}
@@ -141,9 +143,17 @@ def check(build, startup, record, maple_delay=False, cached_metadata=False):
                   '__kui_native_maple_delay_isolation_' if maple_delay else '__kui_native_e1_wait_capture_')
         require(symbols.get(marker + role) == ABSOLUTE_ONE,
                 'Frozen artifact lacks the selected diagnostic marker: ' + file)
+        completion_marker=symbols.get('__kui_native_maple_delay_complete_only_isolation_'+role)
+        require(completion_marker==ABSOLUTE_ONE if completion_delay else completion_marker is None,
+                'Frozen artifact completion-only delay marker differs: '+file)
         if maple_delay:
             require('__kui_native_e1_wait_capture_' + role not in symbols,
                     'Maple delay artifact includes incompatible wait capture')
+        if completion_delay:
+            require(all(symbols.get('__kui_native_'+other+'_isolation_'+role)==ABSOLUTE_ONE
+                        for other in ('reader_only','maple_bypass','ra_tick_off')) and
+                    '__kui_native_metadata_cache_isolation_'+role not in symbols,
+                    'Completion delay requires reader-only bypass with TICK off')
         if cached_metadata:
             require(symbols.get('__kui_native_ra_tick_off_isolation_'+role) == ABSOLUTE_ONE and
                     all('__kui_native_'+other+role not in symbols for other in
@@ -179,13 +189,16 @@ def check(build, startup, record, maple_delay=False, cached_metadata=False):
                   for mode in range(1, 7)]
     require(all(sha(build/name) == digest for name,digest in artifacts.items()),
             'Frozen runtime artifact changed during guard proof')
-    return dict(schema=METADATA_SCHEMA if cached_metadata else DELAY_SCHEMA if maple_delay else SCHEMA,
+    report=dict(schema=COMPLETION_DELAY_SCHEMA if completion_delay else
+        METADATA_SCHEMA if cached_metadata else DELAY_SCHEMA if maple_delay else SCHEMA,
         status='PASS', source_commit=provenance['commit'],
         scope=__doc__.strip(), build=str(build), enabledmarker=True,
         artifact_sha256=artifacts, source_sha256={name:sha(ROOT/name) for name in SOURCES},
         inputs={name:dict(path=row[name], sha256=sha(row[name])) for name in ('startup','record')},
         baseline_cold=dict(original_calls=baseline.owner_calls, payload=hex(baseline.published)),
         positive_case=positive, refusal_cases=negatives, refusal_count=len(negatives))
+    if completion_delay:report['completion_delay']=True
+    return report
 
 
 def main():
@@ -196,10 +209,13 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--maple-delay', action='store_true',
                         help='Check the timed Maple-delay marker and its exact guard refusals')
+    parser.add_argument('--completion-delay',action='store_true',
+                        help='Require the completion-only paired marker; needs --maple-delay')
     parser.add_argument('--cached-metadata',action='store_true',
                         help='Check the combined metadata-cache marker and exact E1/NORMAL guard')
     args = parser.parse_args()
-    report = check(args.build, args.startup, args.record, args.maple_delay, args.cached_metadata)
+    report = check(args.build, args.startup, args.record, args.maple_delay,args.cached_metadata,
+                   args.completion_delay)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(dict(schema=report['schema'], status=report['status'],
