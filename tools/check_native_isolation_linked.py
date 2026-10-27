@@ -20,7 +20,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT/'tools'), str(ROOT/'tests')]
 from profile_vmu_native_record_worker_sh import (
-    RecordWorker, Record, fresh_verify, make_handoff, CFG, MDSTAR, MASK)
+    RecordWorker, Record, fresh_verify, make_handoff, CFG, MDSTAR, MDST, MASK)
 from check_vmu_native_worker_gateway import read_elf
 from test_vmu_native_sdk_poll_execution import PollSH
 from profile_vmu_native_record_worker_sh import OWNER_STACK, RETURN
@@ -56,7 +56,7 @@ class LoanBoundary(Exception): pass
 class IsolationWorker(RecordWorker):
     def __init__(self, startup, build, handoff, record, variant, tick_off=False, wait_capture=False,
                  maple_bypass=False, maple_delay=False, cached_metadata=False, completion_delay=False,
-                 submission_delay=False):
+                 submission_delay=False, post_start_delay=False):
         self.variant = variant
         self.tick_off = tick_off
         self.wait_capture = wait_capture
@@ -64,7 +64,9 @@ class IsolationWorker(RecordWorker):
         self.maple_delay = maple_delay
         self.completion_delay = completion_delay
         self.submission_delay = submission_delay
+        self.post_start_delay = post_start_delay
         require(not(completion_delay and submission_delay), 'Select only one Maple delay side')
+        require(not post_start_delay or submission_delay, 'Post-start delay requires submission delay')
         self.cached_metadata = cached_metadata
         self.flat_ocbi = []
         self.low = read_elf(build/'resident-sci.elf')
@@ -130,6 +132,9 @@ class IsolationWorker(RecordWorker):
             marker=image[4].get('__kui_native_maple_delay_submit_only_isolation_'+role)
             require(marker == ONE if submission_delay else marker is None,
                     'Maple submission-only delay marker differs: '+role)
+            marker=image[4].get('__kui_native_maple_delay_post_start_isolation_'+role)
+            require(marker == ONE if post_start_delay else marker is None,
+                    'Maple post-start delay marker differs: '+role)
         self.lease_bytes = LEASE
         self.worker_physical_high = self.worker_physical_low+LEASE
         self.lease_geometry_source = 'Paired actual absolute isolation lease and bottom markers'
@@ -249,6 +254,7 @@ class BypassWorker(IsolationWorker):
     The linked save/mask/private-stack/restore/replay/tail instructions execute.
     """
     def __init__(self,*args,**kwargs):
+        self.post_start_current=None;self.post_start_submissions=[]
         super().__init__(*args,**kwargs)
         require(self.maple_bypass,'Actual bypass runner requires paired explicit markers')
         self.bypass_running=False
@@ -273,6 +279,39 @@ class BypassWorker(IsolationWorker):
                 if symbol in self.symbols:
                     self.forbidden_maple_entries[self.symbols[symbol][0]]=name+' delay helper'
 
+    def post_start_clock_read(self,address):
+        trace=self.post_start_current
+        if not self.post_start_delay or trace is None or trace['first_clock_read'] is not None:return
+        require(len(trace['mdst_writes'])==1,
+                'Post-start first clock read did not follow exactly one MDST write')
+        trace['mdst_writes_before_first_clock_read']=len(trace['mdst_writes'])
+        trace['first_clock_read']=dict(address=hex(address),pc=hex(self.pc),instruction=self.instructions)
+
+    def post_start_tail_state(self):
+        manager=self.read(self.record.driver[9])
+        lock=self.read(self.record.driver[11])
+        return dict(fc0=self.read(manager+0xfc0),lockbyte=self.read(lock,1))
+
+    def post_start_pending_observe(self):
+        trace=self.post_start_current
+        if not self.post_start_delay or trace is None or not trace['pending_bit12']:return
+        imask=(self.sr>>4)&15
+        state=self.post_start_tail_state()
+        ready=state['fc0']==state['lockbyte']==0
+        trace['pending_instruction_samples']+=1
+        trace['min_imask']=min(trace['min_imask'],imask)
+        if not ready and imask<4:
+            trace['premature_dispatches']+=1
+            raise ValueError('Pending Maple priority4 became eligible before SDK tail publication')
+        if ready and trace['first_publication'] is None:
+            trace['first_publication']=dict(pc=hex(self.pc),instruction=self.instructions,**state)
+
+    def dma(self):
+        super().dma()
+        if self.post_start_delay and self.post_start_current is not None:
+            require(self.mmio[MDST]==0,'Instant-completion model did not retire MDST')
+            self.post_start_current['pending_bit12']=True
+
     def read(self,address,count=4):
         if getattr(self,'bypass_running',False) and self.maple_delay:
             # Author only the existing read-only clock profile. Each TCNT read
@@ -280,10 +319,12 @@ class BypassWorker(IsolationWorker):
             clock={0xffc00000:(2,0xe0a),0xffd80008:(4,0xffffffff),
                    0xffd80010:(2,2),0xffd80004:(1,1)}
             if address in clock:
+                self.post_start_clock_read(address)
                 width,value=clock[address]
                 require(count==width,'Delay clock read width differs')
                 return value
             if address==0xffd8000c:
+                self.post_start_clock_read(address)
                 require(count==4,'Delay TCNT read width differs')
                 value=self.delay_counter;self.delay_counter=(value-1)&MASK
                 self.delay_counter_reads+=1
@@ -293,6 +334,11 @@ class BypassWorker(IsolationWorker):
         return super().read(address,count)
 
     def write(self,address,value,count=4):
+        if (getattr(self,'bypass_running',False) and self.post_start_delay and
+                self.post_start_current is not None and address==MDST):
+            require(count==4,'Post-start MDST write used the wrong width')
+            self.post_start_current['mdst_writes'].append(
+                dict(pc=hex(self.pc),instruction=self.instructions,value=hex(value&MASK)))
         if getattr(self,'bypass_running',False) and self.maple_delay:
             require(address not in (0xffc00000,0xffd80008,0xffd80010,0xffd80004,0xffd8000c),
                     'Delay helper wrote a clock register')
@@ -315,6 +361,19 @@ class BypassWorker(IsolationWorker):
 
     def step(self):
         if not getattr(self,'bypass_running',False):return super().step()
+        self.post_start_pending_observe()
+        trace=self.post_start_current
+        sr_op=None
+        if self.post_start_delay and trace is not None:
+            if self.pc==self.gateway_ranges['submit'][0]:
+                trace['inherited_imask']=(self.sr>>4)&15
+                trace['gateway_inherited_sr']=hex(self.sr)
+                trace['gateway_entry_observed']=True
+                require(trace['inherited_imask'] in (6,15),
+                        'Post-start actual gateway inherited an unadmitted interrupt mask')
+            op=self.read(self.pc,2)
+            if op&0xf0ff in (0x0002,0x4003,0x400e,0x4007):
+                sr_op=dict(pc=hex(self.pc),opcode=hex(op),sr_before=hex(self.sr))
         if self.delay_active is not None and self.pc==self.delay_active['return_pc']:
             visit=self.delay_active
             visit['counter_reads']=self.delay_counter_reads-visit.pop('first_counter_read')
@@ -340,18 +399,44 @@ class BypassWorker(IsolationWorker):
         before=self.instructions
         super().step()
         if name:self.gateway_counts[name]+=self.instructions-before
+        if sr_op is not None:
+            trace['sr_instructions'].append(dict(sr_op,sr_after=hex(self.sr)))
+        self.post_start_pending_observe()
 
     def bridge_submit(self):
         raise ValueError('Bypass runner must execute the actual patched submit gateway')
 
     def submit(self):
         r=self.record;before=self.gateway_counts['submit']
+        if self.post_start_delay:
+            imask=(self.owner_sr>>4)&15
+            require(imask in (6,15),'Post-start SDK trial requires admitted inherited IMASK6 or15')
+            self.post_start_current=dict(inherited_imask=imask,caller_imask=imask,gateway_entry_observed=False,
+                mdst_writes=[],first_clock_read=None,
+                mdst_writes_before_first_clock_read=0,pending_bit12=False,pending_instruction_samples=0,
+                min_imask=15,premature_dispatches=0,first_publication=None,sr_instructions=[])
         self.pc,self.pr,self.r[15],self.sr=r.submit_caller,RETURN,OWNER_STACK,self.owner_sr
         self.bypass_running=True
         try:
             self.until(r.submit_entry)
             steps=self.until(r.submit_caller+6)
         finally:self.bypass_running=False
+        if self.post_start_delay:
+            trace=self.post_start_current
+            final=self.post_start_tail_state()
+            require(len(trace['mdst_writes'])==1 and trace['first_clock_read'] is not None and
+                    trace['mdst_writes_before_first_clock_read']==1 and trace['gateway_entry_observed'] and
+                    trace['inherited_imask']==trace['caller_imask'],
+                    'Post-start submit did not execute exactly one MDST before its clock helper')
+            require(trace['pending_bit12'] and self.mmio[MDST]==0 and
+                    final['fc0']==final['lockbyte']==0 and trace['first_publication'] is not None and
+                    trace['premature_dispatches']==0 and trace['min_imask']>=4,
+                    'Post-start pending IRQ escaped the bounded SDK tail publication proof')
+            trace.update(mdst_write_events=trace['mdst_writes'],mdst_writes=len(trace['mdst_writes']),
+                first_clock_address=trace['first_clock_read']['address'],MDST=self.mmio[MDST],
+                maple_irq_priority=4,sdk_tail_published=True,final_sdk_state=final)
+            self.post_start_submissions.append(trace)
+            self.post_start_current=None
         count=self.gateway_counts['submit']-before
         require(count>0 and self.r[0]==0,'Original submit did not execute and return through the compiled gateway')
         self.submit_counts=dict(instructions=count,original_sdk_instructions=steps)
@@ -394,15 +479,16 @@ def poll(cpu, consume=True):
 
 def run_variant(startup, record_path, build, variant, tick_off=False, wait_capture=False,
                 maple_bypass=False,maple_delay=False,cached_metadata=False,completion_delay=False,
-                submission_delay=False):
+                submission_delay=False,post_start_delay=False):
     require(not(completion_delay and submission_delay), 'Select only one Maple delay side')
     require(not completion_delay or maple_delay, 'Completion delay requires Maple delay')
     require(not submission_delay or maple_delay, 'Submission delay requires Maple delay')
+    require(not post_start_delay or submission_delay, 'Post-start delay requires submission delay')
     source,image,extent=fresh_verify(startup,record_path)
     record=Record(record_path.read_bytes(),image,source)
     cls=BypassWorker if maple_bypass else IsolationWorker
     cpu=cls(startup,build,make_handoff(),record,variant,tick_off,wait_capture,maple_bypass,maple_delay,
-            cached_metadata,completion_delay,submission_delay)
+            cached_metadata,completion_delay,submission_delay,post_start_delay)
     cpu.prepare();initializer=cpu.initialize_sdk()
     cpu.calls.clear()
     pristine=copy.deepcopy(cpu)
@@ -467,6 +553,21 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
         forced.append(dict(command=command,reply=hex(reply),overlay=s,calls=dict(trial.calls),
                            storage_boundary_reached=False,tick_calls=trial.tick_calls))
     cpu.check_build_unchanged()
+    post_start_cases=[]
+    if post_start_delay:
+        for imask in (6,15):
+            trial=copy.deepcopy(pristine)
+            trial.owner_sr=(trial.owner_sr&~0xf0)|(imask<<4)
+            trial.seed_tick_boundary()
+            poll(trial)
+            require(len(trial.post_start_submissions)==1 and not trial.calls and not trial.tick_calls,
+                    'Post-start immediate-completion case reached backend/TICK or missed its submit')
+            require(trial.delay_calls==dict(submit=1),
+                    'Post-start immediate-completion case did not execute only its59-tick submit helper')
+            case=dict(trial.post_start_submissions[0],original_completion_wrapper_executed=True,
+                original_consumer_tail_executed=True,delay_calls=dict(submit=1,complete=0))
+            post_start_cases.append(case)
+            trial.check_build_unchanged()
     bypass=None
     if maple_bypass:
         state=cpu.symbols['_state'][0]
@@ -491,6 +592,16 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
                           timer_model='Valid read-only TMU0; counter advances one tick per TCNT read, no CPU timing')
             if completion_delay:bypass.update(completion_delay=True,submit_gateway_no_calls=True)
             if submission_delay:bypass.update(submission_delay=True,complete_gateway_no_calls=True)
+            if post_start_delay:
+                require(len(cpu.post_start_submissions)==8 and
+                        all(row['mdst_writes_before_first_clock_read']==row['mdst_writes']==1
+                            for row in cpu.post_start_submissions),
+                        'Post-start natural SDK polls lost their MDST-before-clock order')
+                bypass.update(post_start_delay=True,mdst_before_first_clock_read=True,
+                    post_start_submissions=cpu.post_start_submissions,
+                    post_start_immediate_completion_cases=post_start_cases,
+                    pending_irq_model='Synchronous MDST0 plus pending normal IRQ bit12 at Maple priority4; '
+                        'instruction-boundary eligibility through SDK publication only, no outer RTE or IRQ dispatcher')
     report=dict(variant=variant,controller_tick_off=tick_off,e1_wait_capture=wait_capture,
                 cached_metadata=cached_metadata,virtual_a2=variant!='reader_only',
                 maple_c_callbacks_enabled=not maple_bypass,
@@ -513,6 +624,8 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
                 sh4_delay_slot_legality_enforced=True)
     if completion_delay:report['completion_delay']=True
     if submission_delay:report['submission_delay']=True
+    if post_start_delay:
+        report.update(post_start_delay=True,post_start_immediate_completion_cases=post_start_cases)
     return report
 
 
@@ -539,6 +652,8 @@ def main():
                         help='Select only the 76-tick completion helper; requires --maple-delay')
     delay_side.add_argument('--submission-delay',action='store_true',
                         help='Select only the 59-tick submit helper; requires --maple-delay')
+    parser.add_argument('--post-start-delay',action='store_true',
+                        help='Require the 59-tick submit helper after the original MDST start; needs --submission-delay')
     parser.add_argument('--cached-metadata',action='store_true',
                         help='Execute the real-callback combined VMU/New metadata-cache variant; requires TICK off')
     args=parser.parse_args()
@@ -552,6 +667,7 @@ def main():
     require(not args.maple_delay or args.maple_bypass, 'Maple delay requires Maple C bypass')
     require(not args.completion_delay or args.maple_delay, 'Completion delay requires Maple delay')
     require(not args.submission_delay or args.maple_delay, 'Submission delay requires Maple delay')
+    require(not args.post_start_delay or args.submission_delay, 'Post-start delay requires submission delay')
     require(not args.cached_metadata or (args.reader_tick_off and not args.wait_capture and
                 not args.maple_bypass and not args.maple_delay),
             'Cached metadata requires TICK-off and excludes wait capture, bypass, and delay')
@@ -563,7 +679,7 @@ def main():
     reports=[run_variant(args.startup,args.record,args.reader_build,
                          'metadata_cache' if args.cached_metadata else 'reader_only',args.reader_tick_off,
                          args.wait_capture,args.maple_bypass,args.maple_delay,args.cached_metadata,args.completion_delay,
-                         args.submission_delay),
+                         args.submission_delay,args.post_start_delay),
              run_variant(args.startup,args.record,args.standard_build,'standard_vmu')]
     report=dict(schema='kui.native.isolation-linked-sdk.v1',status='PASS',
                 source_commit=args.source_commit,build=args.source_commit[:12],variants=reports,

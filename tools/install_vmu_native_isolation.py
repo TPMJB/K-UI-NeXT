@@ -173,9 +173,12 @@ def validate_variant_metadata(metadata):
         require(type(completion) is bool, 'Completion-delay metadata must be a boolean')
         submission = entry.get('submission_delay', False)
         require(type(submission) is bool, 'Submission-delay metadata must be a boolean')
+        post_start = entry.get('post_start_delay', False)
+        require(type(post_start) is bool, 'Post-start-delay metadata must be a boolean')
         require(not(completion and submission),'Select one delayed gateway')
         require(not completion or delay, 'Completion-only delay requires Maple delay')
         require(not submission or delay, 'Submission-only delay requires Maple delay')
+        require(not post_start or submission, 'Post-start delay requires submission-only Maple delay')
         if delay:
             require(bypass is True and entry.get('maple_delay_ticks') ==
                     dict(submit=0 if completion else 59, complete=0 if submission else 76),
@@ -199,8 +202,11 @@ def install(root, package, variant, profile=None):
     maple_delay = metadata['variants'].get(variant, {}).get('maple_delay', False)
     completion_delay = metadata['variants'].get(variant, {}).get('completion_delay', False)
     submission_delay = metadata['variants'].get(variant, {}).get('submission_delay', False)
+    post_start_delay = metadata['variants'].get(variant, {}).get('post_start_delay', False)
     completion_receipt = (dict(submission_delay=True) if submission_delay else
                           dict(completion_delay=True) if completion_delay else {})
+    if post_start_delay:
+        completion_receipt['post_start_delay'] = True
     gui = p.read_regular(root/GUI, root, maximum=LIMIT)
     require(sha(gui) == metadata['gui']['sha256'] and verify(gui)['build'] == metadata['gui']['build'],
             'This test requires the existing 8adf Games UI; it was not replaced. Restore/install that candidate first.')
@@ -238,7 +244,11 @@ def install(root, package, variant, profile=None):
                 type(state.get('maple_delay', False)) is bool and
                 type(state.get('completion_delay', False)) is bool and
                 type(state.get('submission_delay', False)) is bool and
-                not(state.get('completion_delay',False) and state.get('submission_delay',False)),
+                type(state.get('post_start_delay', False)) is bool and
+                not(state.get('completion_delay',False) and state.get('submission_delay',False)) and
+                (not state.get('post_start_delay',False) or
+                 (state.get('submission_delay') is True and state.get('maple_delay') is True and
+                  state.get('maple_bypass') is True)),
                 'Invalid isolation recovery receipt')
     for name, data in current.items():
         allowed = state['allowed'][name] if state is not None else [fingerprint(original[name])]
@@ -313,7 +323,10 @@ def main():
             if result.get('prefetch_enabled') is False:
                 print('Controller read-ahead is OFF; New demand reads and SDK SCI remain enabled.')
             if result.get('maple_delay'):
-                if result.get('submission_delay'):
+                if result.get('post_start_delay'):
+                    print('Timing control: real Maple C callbacks remain OFF; submit waits59 TMU0 ticks after the original MDST software start.')
+                    print('The bounded delay stays masked before the SDK publication tail; no completion delay helper runs.')
+                elif result.get('submission_delay'):
                     print('Timing control: real Maple C callbacks remain OFF; only submit waits59 TMU0 ticks.')
                     print('Completion retains the passing CEC no-call path; no completion delay helper runs.')
                 elif result.get('completion_delay'):
@@ -321,7 +334,10 @@ def main():
                     print('Submit retains the passing CEC no-call path; no submit delay helper runs.')
                 else:
                     print('Timing control: real Maple C callbacks remain OFF; read-only delays are 59/76 TMU0 ticks.')
-                print('Check only the same Evolution transition. No capture gesture or new diagnostic photos are required.')
+                if result.get('post_start_delay'):
+                    print('Check SD activity and the same Sofdec transition. Photograph any CLOCK REFUSED or MASK REFUSED page.')
+                else:
+                    print('Check only the same Evolution transition. No capture gesture or new diagnostic photos are required.')
             if result.get('e1_wait_capture'):
                 print('At the black-screen wait, hold both triggers + B for 30 controller polls, then release.')
                 print('Photograph both short CPU/reader-state pages. NORMAL mode remains selected.')

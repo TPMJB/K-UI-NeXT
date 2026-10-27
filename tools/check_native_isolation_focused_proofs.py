@@ -160,6 +160,13 @@ def main():
             'submission-only selector requires exact paired markers')
     submit_only = submit_marker is not None
     require(not (complete_only and submit_only), 'single-phase delay selectors are mutually exclusive')
+    post_marker = worker[4].get('__kui_native_maple_delay_post_start_isolation_worker')
+    require(post_marker in (None, (1,0,0,0xfff1)) and
+            read_elf(a.reader/'stage.elf')[4].get('__kui_native_maple_delay_post_start_isolation_stage') == post_marker,
+            'post-start selector requires exact paired markers')
+    post_start = post_marker is not None
+    require(not post_start or (submit_only and not complete_only),
+            'post-start delay requires the submission-only control')
     if complete_only:
         require('_kui_vmu_native_maple_delay_submit' not in worker[4],
                 'unused submit delay helper remains in completion-only worker')
@@ -246,7 +253,8 @@ def main():
     helper_roots = (('kui_vmu_native_maple_delay_complete',) if complete_only else
         ('kui_vmu_native_maple_delay_submit',) if submit_only else
         ('kui_vmu_native_maple_delay_submit', 'kui_vmu_native_maple_delay_complete'))
-    for root in helper_roots:
+    failure_roots = ('kui_vmu_native_maple_post_start_refused',) if post_start else ()
+    for root in helper_roots + failure_roots:
         candidates = resolve(root)
         require(len(candidates) == 1, 'duplicate delay helper root')
         count, path = depth(candidates[0])
@@ -272,6 +280,10 @@ def main():
     if submit_only:
         reader['submission_only_delay'] = dict(paired_markers=True,
             complete_helper_absent=True, retained_helper_roots=list(helper_roots))
+    if post_start:
+        reader['post_start_delay'] = dict(paired_markers=True,
+            sequential_owner_frames=True, simultaneous_private_parked_pointers=1,
+            mask_refusal_roots=list(failure_roots), all_failure_roots_walked=True)
     reader['diagnostic_complete_known_literal_placement_proof'] = closure_provenance
     reader['current_su_frame_bindings'] = bindings
     save('stack-reader.json', reader)

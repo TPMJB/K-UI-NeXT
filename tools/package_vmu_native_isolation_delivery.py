@@ -41,6 +41,7 @@ BYPASS_BUILD = 'cec542aefa8a'
 DELAY_BUILD = '1b2d79400abd'
 CACHED_BUILD = '5e4663cdaeeb'
 COMPLETION_BUILD = '629e7fe96c08'
+SUBMISSION_BUILD = '9815e3ed62c4'
 KNOWN_PREVIOUS = {
     PREVIOUS_BUILD: (PREVIOUS_ARCHIVE_SHA, PREVIOUS_METADATA_SHA),
     DEMAND_BUILD: ('2ff9b0c356b535bdf3fa1083b9c65d1fd8b8bf346170b8f2eae6ecd42e2b673f',
@@ -55,6 +56,8 @@ KNOWN_PREVIOUS = {
                    'ae3064403230ec391186f4207b4077c8e781901ab06019e840672321cb2f1af2'),
     COMPLETION_BUILD: ('578185b88272dc469beb5e0b7625fd023e00db95ddfaf9386fe91f66780ff52c',
                        '337149e2d81b81592a40ac491fc1db2afd6239e96ac2e9907711065900a86aa9'),
+    SUBMISSION_BUILD: ('61d81134c2a968172247f82ce24866f408c696ea438c32195869ba6450325c1f',
+                       '9da2855b6f35d0f985d3496133a0f7545b1bc8372b1eaa613c0a5a373b6e180b'),
 }
 
 
@@ -84,13 +87,14 @@ def embedded(image, begin, end, data, base, binary):
 
 def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_capture=False,
                  maple_bypass=False, maple_delay=False, cached_metadata=False,completion_delay=False,
-                 submission_delay=False):
+                 submission_delay=False,post_start_delay=False):
     require(not wait_capture or demand_only, 'Wait capture requires the demand-only control')
     require(not maple_bypass or (demand_only and not wait_capture),
             'Maple bypass requires demand-only and excludes wait capture')
     require(not maple_delay or maple_bypass, 'Maple delay requires Maple C bypass')
     require(not completion_delay or maple_delay,'Completion-only delay requires Maple delay')
     require(not submission_delay or maple_delay,'Submission-only delay requires Maple delay')
+    require(not post_start_delay or submission_delay,'Post-start delay requires submission-only delay')
     require(not(completion_delay and submission_delay),'Select one delayed gateway')
     require(not cached_metadata or (demand_only and not wait_capture and not maple_bypass and not maple_delay),
             'Cached metadata requires demand-only real callbacks without other diagnostics')
@@ -146,6 +150,9 @@ def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_cap
         submit_marker = '__kui_native_maple_delay_submit_only_isolation_'+side
         require(image[4].get(submit_marker)==ABSOLUTE_ONE if submission_delay and name=='reader-only' else
                 submit_marker not in image[4], 'Variant submission-only delay marker differs: '+name)
+        post_marker = '__kui_native_maple_delay_post_start_isolation_'+side
+        require(image[4].get(post_marker)==ABSOLUTE_ONE if post_start_delay and name=='reader-only' else
+                post_marker not in image[4], 'Variant post-start delay marker differs: '+name)
     require(proof.get('controller_tick_off', False) is (demand_only and name == 'reader-only'),
             'Linked execution report controller-prefetch setting differs: '+name)
     require(proof.get('e1_wait_capture', False) is (wait_capture and name == 'reader-only'),
@@ -160,6 +167,13 @@ def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_cap
             'Linked execution report completion-only delay setting differs: '+name)
     require(proof.get('submission_delay',False) is (submission_delay and name=='reader-only'),
             'Linked execution report submission-only delay setting differs: '+name)
+    require(proof.get('post_start_delay',False) is (post_start_delay and name=='reader-only'),
+            'Linked execution report post-start delay setting differs: '+name)
+    if post_start_delay and name=='reader-only':
+        require(proof.get('post_start_immediate_completion_cases')==
+                proof.get('maple_bypass_execution',{}).get('post_start_immediate_completion_cases') and
+                isinstance(proof.get('post_start_immediate_completion_cases'),list),
+                'Post-start row and execution immediate-completion receipts differ')
     if cached_metadata:
         require(proof.get('virtual_a2') is True and proof.get('maple_c_callbacks_enabled') is True,
                 'Combined report lacks real VMU callbacks: '+name)
@@ -216,6 +230,7 @@ def bind_variant(name, build, proof, runtime_commit, demand_only=False, wait_cap
                     if maple_delay and name=='reader-only' else None,
                   completion_delay=completion_delay and name=='reader-only',
                   submission_delay=submission_delay and name=='reader-only',
+                  post_start_delay=post_start_delay and name=='reader-only',
                   maple_c_callbacks_enabled=not(maple_bypass and name=='reader-only'),
                   cached_metadata=cached_metadata and name=='reader-only',
                   public_variant='combined' if cached_metadata and name=='reader-only' else name,
@@ -464,8 +479,112 @@ def validate_maple_bypass_receipt(gateways,runtime_commit,reader_build):
             'Compiled Maple bypass gateway receipt differs from final artifacts')
 
 
+def validate_post_start_delay_receipt(gateways,execution,runtime_commit,reader_build):
+    visits=execution.get('delay_visits',[])
+    submissions=execution.get('post_start_submissions',[])
+    immediate=execution.get('post_start_immediate_completion_cases',[])
+    clock_addresses={0xffc00000,0xffd80004,0xffd80008,0xffd8000c,0xffd80010}
+    require(execution.get('post_start_delay') is True and execution.get('submission_delay') is True and
+            execution.get('completion_delay',False) is False and
+            execution.get('actual_delay_helper_executed') is True and
+            execution.get('delay_calls')==dict(submit=8,complete=0) and
+            execution.get('delay_ticks')==dict(submit=59,complete=0) and execution.get('timer_writes')==0 and
+            execution.get('complete_gateway_no_calls') is True and
+            execution.get('mdst_before_first_clock_read') is True and len(visits)==8 and
+            all(v.get('kind')=='submit' and v.get('target_ticks')==59 and v.get('counter_reads')==61
+                for v in visits) and len(submissions)==8 and
+            all(row.get('mdst_writes')==row.get('mdst_writes_before_first_clock_read')==1 and
+                isinstance(row.get('first_clock_address'),str) and
+                int(row['first_clock_address'],16) in clock_addresses and row.get('inherited_imask')==15
+                for row in submissions) and len(immediate)==2 and
+            {row.get('inherited_imask') for row in immediate}=={6,15} and
+            all(row.get('MDST')==0 and row.get('pending_bit12') is True and
+                row.get('maple_irq_priority')==4 and
+                row.get('sdk_tail_published') is True and row.get('premature_dispatches')==0 and
+                row.get('final_sdk_state',{}).get('fc0')==0 and
+                row.get('final_sdk_state',{}).get('lockbyte')==0 and
+                type(row.get('min_imask')) is int and row['min_imask']>=4
+                for row in (*submissions,*immediate)) and
+            all(row.get('original_completion_wrapper_executed') is True and
+                row.get('original_consumer_tail_executed') is True and
+                row.get('delay_calls')==dict(submit=1,complete=0) for row in immediate),
+            'Post-start SDK execution lacks a unique kick before the actual helper or protected SDK tail')
+    contract=gateways.get('post_start_gateway',{})
+    expected=dict(admitted_inherited_imasks=[6,15],successful_submit_cases=72,refused_submit_cases=504,
+        successful_completion_cases=576,fresh_owner_frames=2,saved_owner_words=38,private_park_words=2,
+        owner_stack_writes=39,owner_stack_reads=40,sr_loads=4,
+        unique_mdst_before_helper=True,mask_refusal_before_mdst_and_helper=True)
+    comparison=gateways.get('complete_cec_equivalence',{})
+    require(gateways.get('schema')=='kui.native.maple-post-start-delay.linked-gateways.v1' and
+            gateways.get('status')=='PASS' and gateways.get('source_commit')==runtime_commit and
+            gateways.get('post_start_delay') is True and gateways.get('submission_delay') is True and
+            gateways.get('instruction_cases')==1152 and gateways.get('successful_instruction_cases')==648 and
+            gateways.get('C_calls')==0 and gateways.get('delay_ticks')==dict(submit=59,complete=0) and
+            gateways.get('actual_delay_helper_executed') is True and gateways.get('timer_writes')==0 and
+            gateways.get('exact_original_submit_replay') is True and
+            gateways.get('inherited_registers_PR_SR_SP_preserved') is True and
+            gateways.get('gateway_frames_and_stack_traffic_retained') is True and
+            gateways.get('all_imasks_and_T') is True and
+            gateways.get('mdst_store_counts')==dict(submit_mdst=72,complete_mdst=0) and
+            all(contract.get(key)==value and (type(contract.get(key)) is bool if type(value) is bool else True)
+                for key,value in expected.items()) and
+            len(gateways.get('post_start_mask_refusals',[]))==504 and
+            len(gateways.get('post_start_refusal_body_cases',[]))==28 and
+            {(row.get('mask'),row.get('T')) for row in gateways['post_start_refusal_body_cases']}==
+                {(mask,t) for mask in range(16) if mask not in (6,15) for t in (0,1)} and
+            all(row.get('actual_terminal_code')==78 and row.get('original_sr_preserved') is True and
+                row.get('timer_reads')==0 for row in gateways['post_start_refusal_body_cases']) and
+            gateways.get('actual_helper_case_count')==len(gateways.get('delay_helper_cases',[]))==103 and
+            sum(row.get('refused') is False for row in gateways['delay_helper_cases'])==3 and
+            sum(row.get('refused') is True for row in gateways['delay_helper_cases'])==100 and
+            gateways.get('flag_zero_assembly',{}).get('normal_equal') is True and
+            gateways.get('flag_zero_assembly',{}).get('bypass_equal') is True and
+            {row.get('name') for row in gateways.get('mutation_refusals',[])}==
+                {'submit-call-omitted','submit-original-C-restored','complete-original-C-restored'} and
+            len(gateways.get('mutation_refusals',[]))==3 and
+            all(row.get('reason') for row in gateways['mutation_refusals']) and
+            comparison.get('prior_runtime')=='cec542aefa8ad907ed063a6b8b471d7151eef38c' and
+            all(comparison.get(key) is True for key in ('object_body_and_relocations_equal',
+                'linked_body_equal_after_exact_relocations','no_complete_helper_call')) and
+            all(gateways.get('artifact_sha256',{}).get(name)==sha((reader_build/name).read_bytes())
+                for name in ('stage.elf','native-worker.elf','native-worker.bin','native-worker.reloc')),
+            'Post-start gateway proof differs from final artifacts, fresh frames, mask gate or CEC completion')
+
+
+def validate_post_start_delay_review(review,runtime_commit,reader_build):
+    gate=review.get('post_start_gate',{});helper=review.get('submission_helper',{})
+    routing=review.get('routing',{})
+    keys=('complete_has_no_call_or_timer_access',
+        'complete_frame_mask_restore_consumer_sequence_equal_passing_cec',
+        'first_frame_fully_consumed_before_mdst','fresh_post_mdst_frame','mdst_once_before_helper',
+        'inherited_sr_restored','real_c_callbacks_bypassed','vmu_and_prefetch_tick_off')
+    require(review.get('schema')=='kui.native.maple-post-start-delay.independent-review.v1' and
+            review.get('status')=='PASS' and review.get('source_commit')==runtime_commit and
+            review.get('paired_markers') is True and all(review.get('review',{}).get(key) is True for key in keys) and
+            gate.get('saved_sr_offset')==68 and gate.get('admitted_imasks')==[6,15] and
+            gate.get('rejected_imasks')==[i for i in range(16) if i not in (6,15)] and
+            gate.get('before_mdst') is True and gate.get('actual_gate_instructions_executed') is True and
+            helper.get('phase')==0 and helper.get('target_ticks')==59 and
+            helper.get('first_clock_after_mdst') is True and helper.get('fresh_second_frame_bytes')==76 and
+            helper.get('complete_helper_absent') is True and
+            routing.get('normal_bit')==12 and routing.get('mask_register')=='0xa05f6920' and
+            routing.get('irl')==11 and routing.get('event')=='0x360' and routing.get('priority')==4 and
+            routing.get('blocked_by_imasks')==[6,15] and routing.get('original_windows') and
+            all(review.get('artifact_sha256',{}).get(name)==sha((reader_build/name).read_bytes())
+                for name in ('entry.elf','stage.elf','native-worker.elf','native-worker.bin','native-worker.reloc')),
+            'Post-start independent review differs from final artifacts or admitted interrupt contract')
+    require(review.get('source_sha256'), 'Post-start independent review omits source bindings')
+    for path,digest in review['source_sha256'].items():
+        relative=Path(path)
+        require(not relative.is_absolute() and '..' not in relative.parts and
+                sha((ROOT/relative).read_bytes())==digest,'Post-start review source changed: '+path)
+
+
 def validate_maple_delay_receipt(gateways,execution,runtime_commit,reader_build,completion_delay=False,
-                               submission_delay=False):
+                               submission_delay=False,post_start_delay=False):
+    if post_start_delay:
+        require(submission_delay and not completion_delay, 'Post-start receipt requires submission-only delay')
+        return validate_post_start_delay_receipt(gateways,execution,runtime_commit,reader_build)
     require(not(completion_delay and submission_delay),'Select one delayed gateway receipt')
     single=completion_delay or submission_delay
     ticks=dict(submit=0 if completion_delay else 59,complete=0 if submission_delay else 76)
@@ -661,12 +780,14 @@ def package(args):
     require(not args.maple_delay or args.maple_bypass, '--maple-delay requires --maple-bypass')
     require(not args.completion_delay or args.maple_delay,'--completion-delay requires --maple-delay')
     require(not args.submission_delay or args.maple_delay,'--submission-delay requires --maple-delay')
+    require(not args.post_start_delay or args.submission_delay,'--post-start-delay requires --submission-delay')
     require(not(args.completion_delay and args.submission_delay),'Select one delayed gateway')
     require(not args.cached_metadata or (args.demand_only and not args.wait_capture and
                 not args.maple_bypass and not args.maple_delay),
             '--cached-metadata requires --demand-only and excludes wait capture, bypass, and delay')
     if args.previous_package is None:
-        filename = ('K-UI-Evolution-Completion-Delay-629e7fe96c08.zip' if args.submission_delay else
+        filename = ('K-UI-Evolution-Submission-Delay-9815e3ed62c4.zip' if args.post_start_delay else
+                    'K-UI-Evolution-Completion-Delay-629e7fe96c08.zip' if args.submission_delay else
                     'K-UI-Evolution-VMU-New-5e4663cdaeeb.zip' if args.completion_delay else
                     'K-UI-Evolution-Maple-Delay-1b2d79400abd.zip' if args.cached_metadata else
                     'K-UI-Evolution-Maple-Bypass-cec542aefa8a.zip' if args.maple_delay else
@@ -708,7 +829,7 @@ def package(args):
              'evidence/host-tests.log': args.host_log.read_bytes(),
              'LICENSE': (ROOT/'LICENSE').read_bytes(), 'THIRD_PARTY.md': (ROOT/'THIRD_PARTY.md').read_bytes()}
     if args.demand_only:
-        prior_build = (COMPLETION_BUILD if args.submission_delay else CACHED_BUILD if args.completion_delay else DELAY_BUILD if args.cached_metadata else BYPASS_BUILD if args.maple_delay else WAIT_BUILD if args.maple_bypass else
+        prior_build = (SUBMISSION_BUILD if args.post_start_delay else COMPLETION_BUILD if args.submission_delay else CACHED_BUILD if args.completion_delay else DELAY_BUILD if args.cached_metadata else BYPASS_BUILD if args.maple_delay else WAIT_BUILD if args.maple_bypass else
                        DEMAND_BUILD if args.wait_capture else PREVIOUS_BUILD)
         compatible, previous_raw = previous_package(args.previous_package, prior_build)
         metadata['compatible_packages'] = {**json.loads(previous_raw).get('compatible_packages', {}),
@@ -724,6 +845,8 @@ def package(args):
         if args.demand_only and not args.wait_capture and not args.maple_bypass and not args.cached_metadata else ()) + (
         ('e1-wait-capture-collector.json', 'e1-wait-capture-image-guard.json',
          'original-frame-proof.json') if args.wait_capture else ()) + (
+        ('maple-post-start-delay-gateways.json','maple-post-start-delay-stage-guard.json',
+         'post-start-independent-review.json') if args.post_start_delay else
         ('maple-submission-delay-gateways.json','maple-submission-delay-stage-guard.json',
          'submission-only-independent-review.json') if args.submission_delay else
         ('maple-completion-delay-gateways.json','maple-completion-delay-stage-guard.json',
@@ -805,14 +928,23 @@ def package(args):
                 set(execution.get('gateway_instructions',{}))=={'submit','complete'} and
                 all(value>0 for value in execution['gateway_instructions'].values()),
                 'Bypass report did not execute the actual SDK through both compiled assembly gateways')
-        gateways=json.loads(files['evidence/'+('maple-submission-delay-gateways.json' if args.submission_delay else
+        gateways=json.loads(files['evidence/'+('maple-post-start-delay-gateways.json' if args.post_start_delay else
+                                              'maple-submission-delay-gateways.json' if args.submission_delay else
                                               'maple-completion-delay-gateways.json' if args.completion_delay else
                                               'maple-delay-gateways.json' if args.maple_delay else
                                               'maple-bypass-gateways.json')])
         if args.maple_delay:
             validate_maple_delay_receipt(gateways,execution,runtime_commit,args.reader_build,args.completion_delay,
-                                         args.submission_delay)
-            if args.completion_delay or args.submission_delay:
+                                         args.submission_delay,args.post_start_delay)
+            if args.post_start_delay:
+                guard=json.loads(files['evidence/maple-post-start-delay-stage-guard.json'])
+                require(guard.get('post_start_delay') is True and guard.get('submission_delay') is True,
+                        'Stage proof is not post-start submission delay')
+                validate_maple_delay_guard(guard,runtime_commit,args.reader_build,
+                    'kui.native.evolution1.maple-post-start-delay-stage-guard.v1','Maple post-start-delay')
+                validate_post_start_delay_review(json.loads(files['evidence/post-start-independent-review.json']),
+                                                 runtime_commit,args.reader_build)
+            elif args.completion_delay or args.submission_delay:
                 selected='submission' if args.submission_delay else 'completion'
                 guard=json.loads(files['evidence/maple-'+selected+'-delay-stage-guard.json'])
                 require(guard.get(selected+'_delay') is True,'Stage proof is not '+selected+'-only delay')
@@ -858,6 +990,9 @@ def package(args):
         if args.submission_delay:
             filename='native-evolution1-629e7-completion-delay-console-pass-2026-10-26.json'
             files['evidence/'+filename]=(ROOT/'docs/evidence'/filename).read_bytes()
+        if args.post_start_delay:
+            filename='native-evolution1-9815e-submit-delay-console-failure-2026-10-26.json'
+            files['evidence/'+filename]=(ROOT/'docs/evidence'/filename).read_bytes()
     if args.demand_only:
         standard = json.loads(files['evidence/standard-control-comparison.json'])
         require(standard.get('old_build') == PREVIOUS_BUILD and
@@ -885,7 +1020,8 @@ def package(args):
                 'Isolation controls do not retain the matching memory reservation')
         variant_files, manifest, layout = bind_variant(name, build.resolve(), proof, runtime_commit,
                                                        args.demand_only, args.wait_capture,args.maple_bypass,args.maple_delay,
-                                                       args.cached_metadata,args.completion_delay,args.submission_delay)
+                                                       args.cached_metadata,args.completion_delay,args.submission_delay,
+                                                       args.post_start_delay)
         files.update({'variants/'+name+'/'+path: data for path, data in variant_files.items()})
         metadata['variants'][name] = dict(directory='variants/'+name, destination=str(MODULES[name]),
             module_sha256=manifest['module_sha256'], virtual_a2=name == 'vmu-only' or args.cached_metadata,
@@ -900,6 +1036,7 @@ def package(args):
                 if args.maple_delay and name=='reader-only' else None,
             completion_delay=args.completion_delay and name=='reader-only',
             submission_delay=args.submission_delay and name=='reader-only',
+            post_start_delay=args.post_start_delay and name=='reader-only',
             maple_c_callbacks_enabled=not(args.maple_bypass and name=='reader-only'),
             cached_metadata=args.cached_metadata and name=='reader-only',
             public_variant='combined' if args.cached_metadata and name=='reader-only' else name,
@@ -913,7 +1050,8 @@ def package(args):
                 else args.previous_package,metadata,files)
         files.update(bridge)
         files['evidence/passed-bypass-recovery.json'] = wire(passed_recovery)
-    guide_path = ('docs/native-isolation-maple-submission-delay-test.md' if args.submission_delay else
+    guide_path = ('docs/native-isolation-maple-post-start-delay-test.md' if args.post_start_delay else
+                  'docs/native-isolation-maple-submission-delay-test.md' if args.submission_delay else
                   'docs/native-isolation-maple-completion-delay-test.md' if args.completion_delay else
                   'docs/native-isolation-cached-metadata-test.md' if args.cached_metadata else
                   'docs/native-isolation-maple-delay-test.md' if args.maple_delay else
@@ -941,6 +1079,7 @@ def package(args):
                      maple_delay=args.maple_delay,
                      completion_delay=args.completion_delay,
                      submission_delay=args.submission_delay,
+                     post_start_delay=args.post_start_delay,
                      cached_metadata=args.cached_metadata,
                      public_variant='combined' if args.cached_metadata else None,
                      passed_bypass_recovery=passed_recovery,
@@ -989,6 +1128,8 @@ def main():
                         help='Use exact CEC submit and only the76-tick completion helper; needs --maple-delay')
     selection.add_argument('--submission-delay',action='store_true',
                         help='Use exact CEC completion and only the59-tick submit helper; needs --maple-delay')
+    parser.add_argument('--post-start-delay',action='store_true',
+                        help='Place the59-tick helper after the original MDST software start; needs --submission-delay')
     parser.add_argument('--cached-metadata',action='store_true',
                         help='Require the combined real-callback VMU/New metadata-cache candidate; needs --demand-only')
     parser.add_argument('--previous-package', type=Path,

@@ -21,6 +21,7 @@ SCHEMA = 'kui.native.evolution1.wait-capture-stage-guard.v1'
 DELAY_SCHEMA = 'kui.native.evolution1.maple-delay-stage-guard.v1'
 COMPLETION_DELAY_SCHEMA = 'kui.native.evolution1.maple-completion-delay-stage-guard.v1'
 SUBMISSION_DELAY_SCHEMA = 'kui.native.evolution1.maple-submission-delay-stage-guard.v1'
+POST_START_DELAY_SCHEMA = 'kui.native.evolution1.maple-post-start-delay-stage-guard.v1'
 METADATA_SCHEMA = 'kui.native.evolution1.metadata-cache-stage-guard.v1'
 SOURCES = ('tools/check_native_wait_stage_guard.py', 'tools/check_native_bottom_heap.py',
     'tools/profile_vmu_native_release_sh.py', 'tests/test_vmu_native_heap_execution.py',
@@ -133,11 +134,12 @@ def run_case(baseline, wire, name, mutation=None, mode=0, accept=False, expected
 
 
 def check(build, startup, record, maple_delay=False, cached_metadata=False, completion_delay=False,
-          submission_delay=False):
+          submission_delay=False,post_start_delay=False):
     require(not(maple_delay and cached_metadata), 'Select one stage-guard diagnostic')
     require(not(completion_delay and submission_delay), 'Select only one Maple delay side')
     require(not completion_delay or maple_delay, 'Completion delay requires Maple delay')
     require(not submission_delay or maple_delay, 'Submission delay requires Maple delay')
+    require(not post_start_delay or submission_delay, 'Post-start delay requires submission delay')
     build = build.resolve()
     artifacts = {p.name: sha(p) for p in sorted(build.iterdir())
                  if p.suffix in ('.elf', '.bin', '.reloc') and p.is_file()}
@@ -153,6 +155,9 @@ def check(build, startup, record, maple_delay=False, cached_metadata=False, comp
         submission_marker=symbols.get('__kui_native_maple_delay_submit_only_isolation_'+role)
         require(submission_marker==ABSOLUTE_ONE if submission_delay else submission_marker is None,
                 'Frozen artifact submission-only delay marker differs: '+file)
+        post_start_marker=symbols.get('__kui_native_maple_delay_post_start_isolation_'+role)
+        require(post_start_marker==ABSOLUTE_ONE if post_start_delay else post_start_marker is None,
+                'Frozen artifact post-start delay marker differs: '+file)
         if maple_delay:
             require('__kui_native_e1_wait_capture_' + role not in symbols,
                     'Maple delay artifact includes incompatible wait capture')
@@ -196,7 +201,8 @@ def check(build, startup, record, maple_delay=False, cached_metadata=False, comp
                   for mode in range(1, 7)]
     require(all(sha(build/name) == digest for name,digest in artifacts.items()),
             'Frozen runtime artifact changed during guard proof')
-    report=dict(schema=COMPLETION_DELAY_SCHEMA if completion_delay else
+    report=dict(schema=POST_START_DELAY_SCHEMA if post_start_delay else
+        COMPLETION_DELAY_SCHEMA if completion_delay else
         SUBMISSION_DELAY_SCHEMA if submission_delay else
         METADATA_SCHEMA if cached_metadata else DELAY_SCHEMA if maple_delay else SCHEMA,
         status='PASS', source_commit=provenance['commit'],
@@ -207,6 +213,7 @@ def check(build, startup, record, maple_delay=False, cached_metadata=False, comp
         positive_case=positive, refusal_cases=negatives, refusal_count=len(negatives))
     if completion_delay:report['completion_delay']=True
     if submission_delay:report['submission_delay']=True
+    if post_start_delay:report['post_start_delay']=True
     return report
 
 
@@ -223,11 +230,13 @@ def main():
                         help='Require the completion-only paired marker; needs --maple-delay')
     delay_side.add_argument('--submission-delay',action='store_true',
                         help='Require the submission-only paired marker; needs --maple-delay')
+    parser.add_argument('--post-start-delay',action='store_true',
+                        help='Require the post-MDST submit delay marker; needs --submission-delay')
     parser.add_argument('--cached-metadata',action='store_true',
                         help='Check the combined metadata-cache marker and exact E1/NORMAL guard')
     args = parser.parse_args()
     report = check(args.build, args.startup, args.record, args.maple_delay,args.cached_metadata,
-                   args.completion_delay,args.submission_delay)
+                   args.completion_delay,args.submission_delay,args.post_start_delay)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(dict(schema=report['schema'], status=report['status'],

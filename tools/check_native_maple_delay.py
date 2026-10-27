@@ -29,6 +29,7 @@ ROOT=Path(__file__).resolve().parents[1]
 SCHEMA='kui.native.maple-delay.linked-gateways.v1'
 COMPLETION_SCHEMA='kui.native.maple-completion-delay.linked-gateways.v1'
 SUBMISSION_SCHEMA='kui.native.maple-submission-delay.linked-gateways.v1'
+POST_START_SCHEMA='kui.native.maple-post-start-delay.linked-gateways.v1'
 TARGETS={'submit':59,'complete':76}
 SOURCES=('tools/check_native_maple_delay.py','tools/check_native_maple_bypass.py',
     'tools/check_vmu_native_persistent.py','tools/check_vmu_native_readonly.py',
@@ -91,6 +92,116 @@ class DelayGateway(BypassGateway):
         require(len(owner_writes)==len(owner_reads)==20 and
                 len(private_writes)==len(private_reads)==1,
                 'Gateway frame traffic differs around the modeled delay call')
+        return self
+
+
+class PostStartMaskRefused(Exception): pass
+
+
+class PostStartGateway(BypassGateway):
+    """Execute both fresh frames and model only the helper's ABI clobbers."""
+    def __init__(self,*args):
+        super().__init__(*args)
+        self.original_c={self.visit,self.complete}
+        self.visit=self.symbols['_kui_vmu_native_maple_delay_submit']
+        self.refusal=self.symbols['_kui_vmu_native_maple_post_start_refused']
+        self.kick_context=None
+        self.kick_owner_writes=0
+
+    def code(self,address,size):
+        require(address not in self.original_c,'Post-start gateway reached an original Maple C callback')
+        return super().code(address,size)
+
+    def plain(self,word,pc):
+        if word&0xff00==0x8800:  # CMP/EQ #imm,R0 sign-extends the immediate.
+            immediate=(word&255)-256 if word&128 else word&255
+            self.executed.append(pc);self.t(self.r[0]==(immediate&MASK));return
+        if word&0xff00==0xca00:  # XOR #imm,R0 zero-extends.
+            self.executed.append(pc);self.r[0]^=word&255;return
+        if word&0xff00==0xc800:
+            self.executed.append(pc);self.t(not(self.r[0]&(word&255)));return
+        if word&0xf00f==0x2008:  # TST Rm,Rn.
+            self.executed.append(pc)
+            self.t(not(self.r[word>>8&15]&self.r[word>>4&15]));return
+        if word&0xf0ff==0x400e:
+            self.executed.append(pc);self.sr_loads+=1
+            if self.sr_loads in (2,4):
+                require(self.r[15]==self.start_sp and self.r[word>>8&15]==self.initial[5] and
+                        self.code(pc+2,8)==struct.pack('<4H',9,9,9,9),
+                        'Post-start inherited SR restored before its complete fresh frame/latency')
+            else:
+                require(self.sr_loads in (1,3) and self.r[15]==self.start_sp-8 and
+                        self.r[word>>8&15]==self.initial[5]|0xf0,
+                        'Post-start masking lost the fresh owner SR scope')
+            self.sr=self.r[word>>8&15];return
+        return super().plain(word,pc)
+
+    def write(self,address,value):
+        if address==0xa05f6c18:
+            require(value==1 and self.kick_context is None and not self.called and
+                    self.sr_loads==2 and self.r[15]==self.start_sp,
+                    'MDST was repeated, delayed, or preceded by a helper')
+            self.kick_context=(self.r.copy(),self.pr,self.mach,self.macl,self.gbr,
+                               self.sr,self.fpscr,self.fr.copy())
+            self.kick_owner_writes=sum(self.start_sp-96<=a<self.start_sp for a in self.writes)
+        return super().write(address,value)
+
+    def callback(self,target):
+        require(target==self.visit and self.kick_context is not None and
+                self.writes.count(0xa05f6c18)==1 and self.sr_loads==3 and not self.called,
+                'Post-start delay was called before the unique original kick/fresh frame')
+        owner_writes=sum(self.start_sp-96<=a<self.start_sp for a in self.writes)
+        require(owner_writes-self.kick_owner_writes==19,
+                'Post-start helper reused an old frame instead of saving19 fresh words')
+        initial=self.initial;self.initial=self.kick_context
+        mark=len(self.reads)
+        try:ReadonlyGateway.callback(self,target)
+        finally:self.initial=initial
+        del self.reads[mark:]
+
+    def run(self):
+        for _ in range(400):
+            if self.pc==self.resume:return self
+            if self.pc==self.refusal:
+                require(not self.writes.count(0xa05f6c18) and not self.called and self.sr_loads==1,
+                        'Invalid inherited mask reached MDST/helper before refusal')
+                raise PostStartMaskRefused
+            pc=self.pc;word=struct.unpack('<H',self.code(pc,2))[0]
+            if word>>8 in (0x89,0x8b):
+                taken=bool(self.sr&1)==(word>>8==0x89)
+                displacement=(word&255)-256 if word&128 else word&255
+                self.executed.append(pc);self.pc=pc+4+2*displacement if taken else pc+2
+            elif word>>12 in (0xa,0xb) or word&0xf0ff in (0x400b,0x402b) or word==0xb:
+                if word>>12 in (0xa,0xb):
+                    displacement=word&4095;displacement-=4096 if displacement&2048 else 0
+                    target=(pc+4+2*displacement)&MASK
+                    if word>>12==0xb:self.pr=pc+4
+                elif word&0xf0ff in (0x400b,0x402b):
+                    target=self.r[word>>8&15]
+                    if word&0xf0ff==0x400b:self.pr=pc+4
+                else:target=self.pr
+                self.plain(struct.unpack('<H',self.code(pc+2,2))[0],pc+2)
+                if target==self.visit:self.callback(target)
+                else:self.pc=target
+            else:self.plain(word,pc);self.pc=pc+2
+        raise ValueError('Post-start gateway exceeded its bounded instruction path')
+
+    def verify(self,image,driver):
+        self.run()
+        original=OriginalSubmit(image,self.initial,self.manager).execute(driver[6],driver[7])
+        require(self.pc==driver[7] and self.r==original.r and
+                self.writes.count(0xa05f6c18)==1 and self.mem[0xa05f6c18]==original.mem[0xa05f6c18],
+                'Post-start submit changed the original replay/result or MDST count')
+        require((self.pr,self.mach,self.macl,self.gbr,self.sr,self.fpscr,self.fr)==self.initial[1:] and
+                self.called==[self.visit] and self.sr_loads==4,
+                'Post-start submit changed inherited state or its two SR scopes')
+        owner_writes=[a for a in self.writes if self.start_sp-96<=a<self.start_sp]
+        owner_reads=[a for a in self.reads if self.start_sp-96<=a<self.start_sp]
+        private_writes=[a for a in self.writes if self.private_top-256<=a<self.private_top]
+        private_reads=[a for a in self.reads if self.private_top-256<=a<self.private_top]
+        require(len(owner_writes)==39 and len(owner_reads)==40 and
+                len(private_writes)==len(private_reads)==2,
+                'Post-start traffic lost a fresh frame, preflight SR read, or private park')
         return self
 
 
@@ -203,11 +314,11 @@ def helper_cases(build,completion_delay=False,submission_delay=False):
     return rows
 
 
-def call_site(binary,symbols,role):
+def call_site(binary,symbols,role,span=128):
     start=symbols['_kui_vmu_native_passive_'+role+'_hook']
     target=symbols['_kui_vmu_native_maple_delay_'+role]
     matches=[]
-    for pc in range(start,start+128,2):
+    for pc in range(start,start+span,2):
         at=(pc&0x1fffffff)-(P2&0x1fffffff)
         word=struct.unpack_from('<H',binary,at)[0]
         if word>>8!=0xd0:continue
@@ -240,7 +351,7 @@ def flag_zero_comparison():
     return dict(prior_runtime='cec542aefa8ad907ed063a6b8b471d7151eef38c',normal_equal=True,bypass_equal=True)
 
 
-def completion_submit_comparison(worker,submission_delay=False):
+def completion_submit_comparison(worker,submission_delay=False,post_start_delay=False):
     """Bind the non-delayed gateway to its exact compiled passing CEC body."""
     cc=ROOT/'.deps/sh-elf/bin/sh-elf-gcc'
     prior='cec542aefa8ad907ed063a6b8b471d7151eef38c'
@@ -258,6 +369,7 @@ def completion_submit_comparison(worker,submission_delay=False):
             mode=['-DKUI_NATIVE_MAPLE_DELAY_ISOLATION=1',
                   '-DKUI_NATIVE_MAPLE_DELAY_'+('SUBMIT' if submission_delay else 'COMPLETE')+
                   '_ONLY_ISOLATION=1'] if index else []
+            if index and post_start_delay:mode.append('-DKUI_NATIVE_MAPLE_DELAY_POST_START_ISOLATION=1')
             subprocess.run([str(cc),*flags,*mode,str(source),'-o',str(obj)],check=True,capture_output=True)
             # gcc -c produces ET_REL with no program headers. Keep the strict
             # ET_EXEC reader for the final linked worker; extract this one
@@ -303,8 +415,28 @@ def completion_submit_comparison(worker,submission_delay=False):
         **{'no_'+role+'_helper_call':True})
 
 
-def check(build,startup,record,completion_delay=False,submission_delay=False):
+def post_start_refusal_bodies(build):
+    rows=[]
+    for mask in range(16):
+        if mask in (6,15):continue
+        for t in (0,1):
+            cpu=DelayBody(build/'native-worker.elf','submit')
+            frame=0x8c00ec00;original_sr=0x60000000|(mask<<4)|t
+            cpu.enforce=False;cpu.store_block(frame,bytes(76));cpu.write(frame+68,original_sr);cpu.enforce=True
+            release.STACK=(cpu.stack_high|0x80000000)-4;cpu.sr=0x600000f0
+            try:cpu.call('_kui_vmu_native_maple_post_start_refused',[frame])
+            except AssertionError as error:
+                require(str(error)=='Actual worker refused with code 0x4e' and
+                        cpu.read(cpu.state+76)==original_sr and not cpu.counter_reads and not cpu.profiles,
+                        'Post-start mask refusal lost its actual C4e witness or read a timer')
+            else:raise ValueError('Post-start mask refusal returned')
+            rows.append(dict(mask=mask,T=t,actual_terminal_code=0x4e,original_sr_preserved=True,timer_reads=0))
+    return rows
+
+
+def check(build,startup,record,completion_delay=False,submission_delay=False,post_start_delay=False):
     require(not(completion_delay and submission_delay),'Select only one delayed gateway')
+    require(not post_start_delay or submission_delay,'Post-start delay requires submission-only mode')
     build,startup,record=map(lambda p:Path(p).resolve(),(build,startup,record))
     source,image,extent=verified_program_image(startup,record)
     driver=struct.unpack_from('<18I',record.read_bytes(),64)
@@ -319,16 +451,20 @@ def check(build,startup,record,completion_delay=False,submission_delay=False):
         marker=elf[4].get('__kui_native_maple_delay_submit_only_isolation_'+role)
         require(marker==ABSOLUTE_ONE if submission_delay else marker is None,
                 'Submission-only paired marker differs: '+role)
+        marker=elf[4].get('__kui_native_maple_delay_post_start_isolation_'+role)
+        require(marker==ABSOLUTE_ONE if post_start_delay else marker is None,
+                'Post-start paired marker differs: '+role)
         require('__kui_native_metadata_cache_isolation_'+role not in elf[4],
                 'Delay includes incompatible cached metadata')
     symbols={name:value[0] for name,value in worker[4].items()}
     binary,wire=(build/'native-worker.bin').read_bytes(),(build/'native-worker.reloc').read_bytes()
     roles=('submit',) if submission_delay else ('complete',) if completion_delay else TARGETS
-    sites={role:call_site(binary,symbols,role) for role in roles}
+    sites={role:call_site(binary,symbols,role,
+        worker[4]['_kui_vmu_native_passive_'+role+'_hook'][1] if post_start_delay else 128) for role in roles}
     bypass_role='complete' if submission_delay else 'submit' if completion_delay else None
     bypass_site=bypass_call_site(binary,symbols,bypass_role) if bypass_role else None
-    cec_comparison=completion_submit_comparison(worker,submission_delay) if bypass_role else None
-    cases=0;writes=dict(submit_mdst=0,complete_mdst=0)
+    cec_comparison=completion_submit_comparison(worker,submission_delay,post_start_delay) if bypass_role else None
+    cases=0;successful=0;refusals=[];writes=dict(submit_mdst=0,complete_mdst=0)
     for destination in (P2,0xac35e220,0xac700000):
         blob=relocated(binary,wire,destination)
         mapped={name:address+destination-P2 for name,address in symbols.items()}
@@ -338,15 +474,27 @@ def check(build,startup,record,completion_delay=False,submission_delay=False):
                     for t in (0,1):
                         for role in TARGETS:
                             cls=BypassGateway if role==bypass_role else DelayGateway
-                            cpu=cls(seed,mask,destination,blob,mapped,role,alias,t,driver).verify(image,driver)
-                            cases+=1;writes[role+'_mdst']+=cpu.writes.count(0xa05f6c18)
+                            if post_start_delay and role=='submit':cls=PostStartGateway
+                            cpu=cls(seed,mask,destination,blob,mapped,role,alias,t,driver)
+                            cases+=1
+                            try:cpu.verify(image,driver)
+                            except PostStartMaskRefused:
+                                require(post_start_delay and role=='submit' and mask not in (6,15),
+                                        'An admitted post-start mask was refused')
+                                refusals.append(dict(mask=mask,T=t,seed=seed,destination=hex(destination),
+                                    owner_alias=hex(alias),before_mdst_and_helper=True))
+                                continue
+                            require(not(post_start_delay and role=='submit' and mask not in (6,15)),
+                                    'Post-start gateway admitted a forbidden inherited mask')
+                            successful+=1;writes[role+'_mdst']+=cpu.writes.count(0xa05f6c18)
     mutations=[]
     for role,site in sites.items():
         for kind in ('call-omitted','original-C-restored'):
             changed=bytearray(binary)
             if kind=='call-omitted':struct.pack_into('<H',changed,site['instruction_offset'],9)
             else:struct.pack_into('<I',changed,site['literal_offset'],symbols['_kui_vmu_native_passive_'+role])
-            try:DelayGateway(0,0,P2,bytes(changed),symbols,role,0x80000000,0,driver).verify(image,driver)
+            cls=PostStartGateway if post_start_delay and role=='submit' else DelayGateway
+            try:cls(0,6 if post_start_delay else 0,P2,bytes(changed),symbols,role,0x80000000,0,driver).verify(image,driver)
             except (AssertionError,ValueError) as error:mutations.append(dict(name=role+'-'+kind,reason=str(error)))
             else:raise ValueError('Delay call mutation was accepted')
     if bypass_role:
@@ -356,10 +504,20 @@ def check(build,startup,record,completion_delay=False,submission_delay=False):
             mutations.append(dict(name=bypass_role+'-original-C-restored',reason=str(error)))
         else:raise ValueError('Completion-only restored submit C call was accepted')
     helpers=helper_cases(build,completion_delay,submission_delay)
+    if post_start_delay:
+        require(cases==1152 and successful==648 and len(refusals)==504 and
+                writes==dict(submit_mdst=72,complete_mdst=0),
+                'Post-start all-mask admission/MDST matrix differs')
+    post_start=dict(post_start_delay=True,successful_instruction_cases=successful,
+        post_start_gateway=dict(admitted_inherited_imasks=[6,15],successful_submit_cases=72,
+            refused_submit_cases=len(refusals),successful_completion_cases=576,fresh_owner_frames=2,
+            saved_owner_words=38,private_park_words=2,owner_stack_writes=39,owner_stack_reads=40,
+            sr_loads=4,unique_mdst_before_helper=True,mask_refusal_before_mdst_and_helper=True),
+        post_start_mask_refusals=refusals,post_start_refusal_body_cases=post_start_refusal_bodies(build)) if post_start_delay else {}
     artifacts={p.name:sha(p.read_bytes()) for p in build.iterdir() if p.suffix in ('.elf','.bin','.reloc') and p.is_file()}
     provenance=json.loads((build/'entry.compile.json').read_text())
     require(provenance['source_dirty'] is False and provenance['elf_sha256']==artifacts['entry.elf'],'Unbound runtime provenance')
-    return dict(schema=SUBMISSION_SCHEMA if submission_delay else COMPLETION_SCHEMA if completion_delay else SCHEMA,
+    return dict(schema=POST_START_SCHEMA if post_start_delay else SUBMISSION_SCHEMA if submission_delay else COMPLETION_SCHEMA if completion_delay else SCHEMA,
         status='PASS',source_commit=provenance['commit'],
         artifact_sha256=artifacts,source_sha256={name:sha((ROOT/name).read_bytes()) for name in SOURCES},
         inputs=dict(startup_sha256=sha(source),record_sha256=sha(record.read_bytes()),extent=extent),
@@ -367,6 +525,7 @@ def check(build,startup,record,completion_delay=False,submission_delay=False):
             dict(submit=0,complete=76) if completion_delay else TARGETS,
         completion_delay=completion_delay,submit_cec_equivalence=cec_comparison if completion_delay else None,
         **(dict(submission_delay=True,complete_cec_equivalence=cec_comparison) if submission_delay else {}),
+        **post_start,
         actual_delay_helper_executed=True,timer_writes=0,
         instruction_cases=cases,gateway_callee_model='adversarial ABI-compatible delay callee',
         delay_helper_cases=helpers,actual_helper_case_count=len(helpers),
@@ -384,7 +543,10 @@ def main():
                         help='Require exact CEC submit and only the existing76-tick completion helper')
     selection.add_argument('--submission-delay',action='store_true',
                         help='Require exact CEC completion and only the existing59-tick submit helper')
-    args=parser.parse_args();report=check(args.build,args.startup,args.record,args.completion_delay,args.submission_delay)
+    parser.add_argument('--post-start-delay',action='store_true',
+                        help='Run the59-tick submit helper after the original MDST; requires --submission-delay')
+    args=parser.parse_args();report=check(args.build,args.startup,args.record,args.completion_delay,args.submission_delay,
+                                        args.post_start_delay)
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(dict(schema=report['schema'],status='PASS',gateway_cases=report['instruction_cases'],
