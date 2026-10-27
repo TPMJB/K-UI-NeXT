@@ -44,9 +44,26 @@ C(kui_vmu_native_passive_submit_hook):
     mov r15,r4
     mov.l .Lsubmit_stack,r15
     mov.l r4,@-r15
+#if KUI_NATIVE_MAPLE_DELAY_POST_START_ISOLATION
+    /* A completed Maple DMA remains masked during the original SDK tail
+     * only for the admitted inherited IMASK6/15 contract. Refuse before
+     * starting hardware, while the complete first frame is still live. */
+    mov r4,r0
+    add #68,r0
+    mov.l @r0,r0
+    and #0xf0,r0
+    cmp/eq #0x60,r0
+    bt .Lsubmit_post_start_mask_ok
+    cmp/eq #0xf0,r0
+    bt .Lsubmit_post_start_mask_ok
+    mov.l .Lsubmit_post_start_refused,r0
+    jmp @r0
+    nop
+.Lsubmit_post_start_mask_ok:
+#endif
     /* Retain the original unused target literal in the delay control so
      * linking does not discard the bypassed C body or its private state. */
-#if KUI_NATIVE_MAPLE_DELAY_ISOLATION && !KUI_NATIVE_MAPLE_DELAY_COMPLETE_ONLY_ISOLATION
+#if KUI_NATIVE_MAPLE_DELAY_ISOLATION && !KUI_NATIVE_MAPLE_DELAY_COMPLETE_ONLY_ISOLATION && !KUI_NATIVE_MAPLE_DELAY_POST_START_ISOLATION
     mov.l .Lsubmit_delay_visit,r0
     jsr @r0
 #else
@@ -89,6 +106,65 @@ C(kui_vmu_native_passive_submit_hook):
     mov.l @r14,r3
     mov.l @(r0,r3),r2
     mov.l r12,@(24,r2)
+#if KUI_NATIVE_MAPLE_DELAY_POST_START_ISOLATION
+    /* The original MDST store above has already launched the unchanged
+     * chain. Save a fresh submit frame before the timer call. R0 is dead:
+     * the original pending-offset load below overwrites it immediately. */
+    mov.l r1,@-r15
+    stc sr,r1
+    mov.l r1,@-r15
+    mov r1,r0
+    or #0xf0,r0
+    ldc r0,sr
+    mov.l r2,@-r15
+    mov.l r3,@-r15
+    mov.l r4,@-r15
+    mov.l r5,@-r15
+    mov.l r6,@-r15
+    mov.l r7,@-r15
+    mov.l r8,@-r15
+    mov.l r9,@-r15
+    mov.l r10,@-r15
+    mov.l r11,@-r15
+    mov.l r12,@-r15
+    mov.l r13,@-r15
+    mov.l r14,@-r15
+    sts.l pr,@-r15
+    sts.l mach,@-r15
+    sts.l macl,@-r15
+    stc.l gbr,@-r15
+    mov r15,r4
+    mov.l .Lsubmit_stack,r15
+    mov.l r4,@-r15
+    mov.l .Lsubmit_delay_visit,r0
+    jsr @r0
+    nop
+    mov.l @r15,r15
+    ldc.l @r15+,gbr
+    lds.l @r15+,macl
+    lds.l @r15+,mach
+    lds.l @r15+,pr
+    mov.l @r15+,r14
+    mov.l @r15+,r13
+    mov.l @r15+,r12
+    mov.l @r15+,r11
+    mov.l @r15+,r10
+    mov.l @r15+,r9
+    mov.l @r15+,r8
+    mov.l @r15+,r7
+    mov.l @r15+,r6
+    mov.l @r15+,r5
+    mov.l @r15+,r4
+    mov.l @r15+,r3
+    mov.l @r15+,r2
+    mov.l @r15+,r0
+    mov.l @r15+,r1
+    ldc r0,sr
+    nop
+    nop
+    nop
+    nop
+#endif
     mov.l .Lpending_offset,r0
     mov.l @r14,r3
     mov.l r2,@-r15
@@ -101,6 +177,9 @@ C(kui_vmu_native_passive_submit_hook):
 .Lsubmit_visit: .long C(kui_vmu_native_passive_submit)
 #if KUI_NATIVE_MAPLE_DELAY_ISOLATION && !KUI_NATIVE_MAPLE_DELAY_COMPLETE_ONLY_ISOLATION
 .Lsubmit_delay_visit: .long C(kui_vmu_native_maple_delay_submit)
+#endif
+#if KUI_NATIVE_MAPLE_DELAY_POST_START_ISOLATION
+.Lsubmit_post_start_refused: .long C(kui_vmu_native_maple_post_start_refused)
 #endif
 .Lregister_offset: .long 0x10f4
 .Lpending_offset: .long 0x0fd8

@@ -69,6 +69,10 @@ __asm__(".global __kui_native_maple_delay_complete_only_isolation_stage\n"
 __asm__(".global __kui_native_maple_delay_submit_only_isolation_stage\n"
         ".set __kui_native_maple_delay_submit_only_isolation_stage,1\n");
 #endif
+#if KUI_NATIVE_MAPLE_DELAY_POST_START_ISOLATION
+__asm__(".global __kui_native_maple_delay_post_start_isolation_stage\n"
+        ".set __kui_native_maple_delay_post_start_isolation_stage,1\n");
+#endif
 #if KUI_NATIVE_METADATA_CACHE_ISOLATION
 __asm__(".global __kui_native_metadata_cache_isolation_stage\n"
         ".set __kui_native_metadata_cache_isolation_stage,1\n");

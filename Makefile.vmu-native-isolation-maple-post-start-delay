@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Exact Evolution1 NORMAL control: preserve the original DMA start, then
+# run the unchanged bounded 59-tick submit helper in a fresh saved frame.
+BUILD ?= build/native-isolation-maple-post-start-delay
+include Makefile.vmu-native-isolation-maple-submit-delay
+FLAGS += -DKUI_NATIVE_MAPLE_DELAY_POST_START_ISOLATION=1
+NATIVE_FLAGS += -DKUI_NATIVE_MAPLE_DELAY_POST_START_ISOLATION=1

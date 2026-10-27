@@ -1,0 +1,39 @@
+{
+  "schema": "kui.native.owner-console-result.v1",
+  "date": "2026-10-26",
+  "game": "Evolution: The World of Sacred Device",
+  "runtime_source_commit": "9815e3ed62c41c46d583bb0d15321166bcd520cc",
+  "delivery_source_commit": "f5ac02c8edf298f5919c5142b525e032bcba8611",
+  "package": "K-UI-Evolution-Submission-Delay-9815e3ed62c4.zip",
+  "package_sha256": "61d81134c2a968172247f82ce24866f408c696ea438c32195869ba6450325c1f",
+  "result": "FAIL",
+  "scope": "Requested Sofdec transition and opening FMV control",
+  "owner_observation": "No. Dice. Got the flash before Sofdec and then it went out",
+  "runtime_mode": {
+    "virtual_a2": false,
+    "real_maple_c_callbacks": false,
+    "new_demand_reader": true,
+    "controller_tick": false,
+    "prefetch": false,
+    "submit_delay_ticks": 59,
+    "complete_delay_ticks": 0
+  },
+  "matched_controls": [
+    {"build": "cec542aefa8a", "submit_ticks": 0, "complete_ticks": 0, "result": "PASS"},
+    {"build": "1b2d79400abd", "submit_ticks": 59, "complete_ticks": 76, "result": "FAIL"},
+    {"build": "629e7fe96c08", "submit_ticks": 0, "complete_ticks": 76, "result": "PASS"},
+    {"build": "9815e3ed62c4", "submit_ticks": 59, "complete_ticks": 0, "result": "FAIL"}
+  ],
+  "interpretation": [
+    "The tested delay before the original MDST store is sufficient to reproduce the failure without real VMU C callback or packet behavior.",
+    "The same failure does not require adding delay to completion; the larger completion-only reference delay passed.",
+    "The result implicates occupation before DMA start or the resulting shift of DMA and its completion relative to the game and video events.",
+    "An initial SD flash followed by inactivity is the owner's recurring failure indicator, not a direct capture of accepted-request or loan state."
+  ],
+  "not_established": [
+    "Submission callback residency itself covers every scanline-zero opportunity",
+    "Changing completion phase is the unique cause",
+    "Real virtual-VMU completion behavior is compatible",
+    "The reference delay is the exact NORMAL callback duration"
+  ]
+}

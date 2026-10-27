@@ -70,6 +70,10 @@ __asm__(".global __kui_native_maple_delay_complete_only_isolation_worker\n"
 __asm__(".global __kui_native_maple_delay_submit_only_isolation_worker\n"
         ".set __kui_native_maple_delay_submit_only_isolation_worker,1\n");
 #endif
+#if KUI_NATIVE_MAPLE_DELAY_POST_START_ISOLATION
+__asm__(".global __kui_native_maple_delay_post_start_isolation_worker\n"
+        ".set __kui_native_maple_delay_post_start_isolation_worker,1\n");
+#endif
 #if KUI_NATIVE_METADATA_CACHE_ISOLATION
 __asm__(".global __kui_native_metadata_cache_isolation_worker\n"
         ".set __kui_native_metadata_cache_isolation_worker,1\n");
@@ -895,6 +899,12 @@ static void fail(uint32_t code) {state.error=code;
     state.proof=0u;
 #endif
     report();}
+#if KUI_NATIVE_MAPLE_DELAY_POST_START_ISOLATION
+void __attribute__((noreturn)) kui_vmu_native_maple_post_start_refused(
+    const struct kui_vmu_native_passive_frame *f) {
+    state.runtime_result=f->sr;fail(0x4eu);__builtin_unreachable();
+}
+#endif
 void kui_vmu_native_passive_report(void) {if(!state.error) state.error=UINT32_C(0x100);
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
     state.proof=0u;

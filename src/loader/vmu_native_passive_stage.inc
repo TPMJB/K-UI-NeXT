@@ -451,7 +451,10 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #if KUI_NATIVE_MAPLE_BYPASS_ISOLATION
     retail_display_line("MAPLE C CALLBACKS OFF");
 #if KUI_NATIVE_MAPLE_DELAY_ISOLATION
-#if KUI_NATIVE_MAPLE_DELAY_COMPLETE_ONLY_ISOLATION
+#if KUI_NATIVE_MAPLE_DELAY_POST_START_ISOLATION
+    retail_display_line("TIMED DELAY / AFTER DMA START");
+    retail_display_line("59 SUBMIT / 0 COMPLETE TICKS");
+#elif KUI_NATIVE_MAPLE_DELAY_COMPLETE_ONLY_ISOLATION
     retail_display_line("TIMED DELAY / COMPLETE ONLY");
     retail_display_line("0 SUBMIT / 76 COMPLETE TICKS");
 #elif KUI_NATIVE_MAPLE_DELAY_SUBMIT_ONLY_ISOLATION
