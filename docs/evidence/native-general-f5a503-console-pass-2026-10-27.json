@@ -1,0 +1,62 @@
+{
+  "schema": "kui.native.owner-console-result.v1",
+  "date": "2026-10-27",
+  "games": [
+    "Rayman 2: The Great Escape",
+    "Record of Lodoss War",
+    "Evolution: The World of Sacred Device",
+    "Dead or Alive 2",
+    "Crazy Taxi 2",
+    "Jet Grind Radio"
+  ],
+  "runtime_source_commit": "f5a503e71796b002899596866b7e03f582b6079f",
+  "delivery_source_commit": "f5a503e71796b002899596866b7e03f582b6079f",
+  "package": "K-UI-Native-General-f5a503e71796.zip",
+  "package_sha256": "7f258773927edbaec751092ad755706e7dcc564f6e51c4173242b61733e23954",
+  "result": "PASS",
+  "owner_runs": 1,
+  "accepted_without_repeat": true,
+  "scope": "The five proposed console checks in docs/native-general-candidates.md: general split controller with virtual A2 on Rayman 2, Lodoss and Evolution 1; structural New reader without virtual VMU on DOA2, Crazy Taxi 2 and Jet Grind Radio through the launcher's New (X) fallback",
+  "owner_observation": "Okay, I did all those tests and they all work. Gameplay has a tiny bit of lag left, but we're talkin milliseconds so I'm not sure it's worth hunting down. True it will be worse than the disc experience, but barely. Saving of course isn't enabled in Crazy Taxi 2 or Jet Grind Radio",
+  "reported_checks": {
+    "rayman2_existing_save_new_save_power_cycle_reload": "PASS",
+    "lodoss_gameplay": "PASS",
+    "evolution1_boot": "PASS",
+    "doa2_new_x_fight": "PASS",
+    "crazy_taxi_2_boot_fmv_play": "PASS",
+    "jet_grind_radio_boot_fmv_play": "PASS",
+    "saving_in_standalone_games": "NOT AVAILABLE (the structural reader has no virtual VMU, as designed)"
+  },
+  "residual_latency": {
+    "reported": true,
+    "owner_estimate": "milliseconds; slightly worse than the disc, but barely",
+    "measured": false,
+    "games_named": false
+  },
+  "runtime_mode": {
+    "general_split": {
+      "split_controller": true,
+      "virtual_a2": true,
+      "new_demand_reader": true,
+      "controller_tick": false,
+      "prefetch": false
+    },
+    "structural_standalone": {
+      "new_demand_reader": true,
+      "virtual_vmu": false,
+      "game_ram_reservation": false,
+      "prefetch": false
+    }
+  },
+  "interpretation": [
+    "The split controller passes outside Evolution 1, including a save written and reloaded across a power cycle in Rayman 2.",
+    "The structural binder runs DOA2 at its live VBR and runs two games that no earlier build admitted, reached through the launcher's New (X) fallback.",
+    "The remaining owner-visible difference from the disc is small gameplay latency; prefetch is off in both modules."
+  ],
+  "not_established": [
+    "Which games show the residual latency, its size, or its cause",
+    "Saving in games the virtual-A2 module refuses",
+    "Separate confirmation of each stage banner and launch-report line",
+    "Compatibility with other untested games, and Code Veronica, which still refuses in the stage"
+  ]
+}
