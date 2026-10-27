@@ -2,12 +2,22 @@
 #include "kui/native_standalone_reader.h"
 
 static void standalone_publish(uint32_t address) {
+#ifdef KUI_RETAIL_ASYNC_TEST
+    extern void kui_native_standalone_test_publish(uint32_t);
+    kui_native_standalone_test_publish(address);
+#else
     __asm__ volatile("ocbp @%0"::"r"(address&~UINT32_C(31)):"memory");
+#endif
 }
 void __attribute__((noipa)) kui_native_standalone_bind(void) {
     const volatile struct kui_native_standalone_source *source=
         (const void *)R.vector100;
+#ifdef KUI_RETAIL_ASYNC_TEST
+    extern uint32_t kui_native_standalone_test_sr(void);
+    uint32_t sr=kui_native_standalone_test_sr();
+#else
     uint32_t sr;__asm__ volatile("stc sr,%0":"=r"(sr)::"memory");
+#endif
     /* Before SDK initialization bootstrap reads remain foreground-only.
      * Once a route has been installed, a changed/reset route is never
      * overwritten: sdk_sci_ready disables our SCI delivery on loss. */
