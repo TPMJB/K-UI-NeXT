@@ -1,0 +1,36 @@
+{
+  "schema": "kui.native.ct2-heap-finding.v1",
+  "date": "2026-10-27",
+  "production_changed": false,
+  "retail_byte_payloads_embedded": false,
+  "input": {
+    "title": "Crazy Taxi 2",
+    "owner_input": "US MK-51136 V1.004",
+    "sha256": "8057a8e37636ad78b1fc70ee590bd314686546b13ffe100623d86b572aec53c1",
+    "bytes": 1452148,
+    "load": "0x8c010000"
+  },
+  "refusal": "heap initializer_slot (and initializer_call): no image word names the reviewed tail32 initializer",
+  "findings": {
+    "sdk_heap": {
+      "initializer": "0x8c14a674",
+      "allocate": "0x8c14a756 (+0xe2)",
+      "release": "0x8c14a824 (+0x1b0)",
+      "dispatch_cell": "0x8c2cf514",
+      "references": "No aligned or unaligned image word, BSR or BRA names the initializer. Its dispatch setter (0x8c14a6ba) is reached only by a BSR inside the initializer, and the dispatch cell is read only by the allocator's own trampolines.",
+      "users": "The allocate/release trampolines are referenced only by one library start/stop pair (0x8c07edea/0x8c07ee94), which calls them only when its caller supplies no buffer (0x4000 and 0xac8 bytes).",
+      "conclusion": "Nothing in the image starts the SDK heap. The reviewed lease, a chunk the game's own allocator hands out from that heap, has no counterpart in this game."
+    },
+    "memory_map": {
+      "bss": "0x8c173500-0x8c2cee20 cleared by words, 0x8c2cee20-0x8c309e80 by bytes; _end 0x8c309e80",
+      "stack": "Boot stack 0x8c00c000-0x8c00f400; the C start fills it with SEGA and does not move r15",
+      "main_fill": "main (0x8c01b214) writes 0xffffffff to 0x8c310000-0x8cd10000 (0x280000 words) before the game starts",
+      "fixed_buffers": "The code names fixed RAM addresses throughout 0x8c310000-0x8cc90000 and above it at 0x8cce4c08, 0x8cd6e05c, 0x8ce90000, 0x8ce98000, 0x8cea0000 and 0x8ceb8000",
+      "sparse": "0x8cd10000-0x8ce90000 (1.5 MiB) has no aligned literal and is outside the main fill; static absence of literals does not prove it unused"
+    }
+  },
+  "next": [
+    "A lease for this game needs its own proof that a 384 KiB interval stays unused for the whole session, for example a console sentinel run over the sparse interval, with that evidence reviewed before any reservation is admitted.",
+    "Without that, the game keeps the background New reader without saves."
+  ]
+}
