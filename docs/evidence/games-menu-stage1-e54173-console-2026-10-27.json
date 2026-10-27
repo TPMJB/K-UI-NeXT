@@ -1,0 +1,15 @@
+{
+  "schema": "kui.native.owner-console-result.v1",
+  "date": "2026-10-27",
+  "runtime_source_commit": "e54173096b5b",
+  "package": "K-UI-Native-General-Prefetch-Auto-e54173096b5b.zip",
+  "package_sha256": "cfd0bb3315e0e70151f97cf11a7c0e22b5966c0ec0b56a377437a76c2808c711",
+  "result": "PASS",
+  "owner_observation": "Seems marginally better I guess.",
+  "reported_checks": {"games_menu_speed": "Marginally better than 289eafeabba4", "regressions": "None reported"},
+  "interpretation": [
+    "Stage 1 (held storage session, held page turns, background titles/art/neighbour preparation) runs on the console without a reported regression.",
+    "The owner perceives only a small speed-up, so the remaining delay is probably elsewhere than card start-up; it has not been measured on the console."
+  ],
+  "not_established": ["Where the remaining Games menu time goes on the console", "Per-step timings on hardware"]
+}
