@@ -46,7 +46,7 @@ C(kui_vmu_native_passive_submit_hook):
     mov.l r4,@-r15
     /* Retain the original unused target literal in the delay control so
      * linking does not discard the bypassed C body or its private state. */
-#if KUI_NATIVE_MAPLE_DELAY_ISOLATION
+#if KUI_NATIVE_MAPLE_DELAY_ISOLATION && !KUI_NATIVE_MAPLE_DELAY_COMPLETE_ONLY_ISOLATION
     mov.l .Lsubmit_delay_visit,r0
     jsr @r0
 #else
@@ -99,7 +99,7 @@ C(kui_vmu_native_passive_submit_hook):
     .align 2
 .Lsubmit_stack: .long RUNTIME_STACK_TOP
 .Lsubmit_visit: .long C(kui_vmu_native_passive_submit)
-#if KUI_NATIVE_MAPLE_DELAY_ISOLATION
+#if KUI_NATIVE_MAPLE_DELAY_ISOLATION && !KUI_NATIVE_MAPLE_DELAY_COMPLETE_ONLY_ISOLATION
 .Lsubmit_delay_visit: .long C(kui_vmu_native_maple_delay_submit)
 #endif
 .Lregister_offset: .long 0x10f4
