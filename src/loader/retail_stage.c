@@ -1219,7 +1219,15 @@ void kui_retail_stage_main(const uint8_t *wire) {
     if(!kui_retail_observe_admit(&manifest)) stopped("14 TOY SCI MAP REFUSED",manifest.gdi_crc32);
     retail_display_line("14 TOY RESOURCE OBSERVATION / NO CDDA");
 #endif
-#if KUI_NATIVE_STANDALONE_READER
+#if KUI_NATIVE_STANDALONE_STRUCTURAL
+    if(!kui_native_standalone_descriptor_valid(&kui_native_standalone_reader_capability,
+           sizeof(kui_native_standalone_reader_capability)))
+        stopped("STANDALONE CAPABILITY INVALID",0u);
+    if(!kui_native_standalone_launch_prepare(&manifest))
+        stopped("NEW STANDALONE NEEDS SCI AND NEW READER",manifest.reader);
+    retail_display_line("NEW STANDALONE DEMAND READER");
+    retail_display_line("NO VIRTUAL VMU / NO GAME RAM RESERVATION");
+#elif KUI_NATIVE_STANDALONE_READER
     if(!kui_native_standalone_launch_prepare(&manifest))
         stopped("DOA2 PILOT NEEDS SCI AND BACKGROUND OFF",manifest.reader);
     retail_display_line("DOA2 NEW STANDALONE DEMAND READER");

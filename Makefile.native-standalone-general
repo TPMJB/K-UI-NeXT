@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Structural New standalone reader: any executable with the reviewed SDK SCI
+# family, no virtual VMU and no game-RAM reservation. It installs separately
+# as KUI/apps/games/retail-native-standalone.kui and is selected only by the
+# launcher's New route when the combined VMU module's complete proof refuses.
+BUILD ?= build/native-standalone-general
+include Makefile.native-standalone-doa2
+FLAGS += -DKUI_NATIVE_STANDALONE_STRUCTURAL=1
+FAMILY_OBJ = $(BUILD)/stage/src/core/native_sdk_sci_family.o
+STAGE_SRC += src/core/native_sdk_sci_family.c
+.DEFAULT_GOAL := $(BUILD)/retail-native-standalone.kui
+$(FAMILY_OBJ): $(BUILD)/config
+$(BUILD)/stage.elf: $(FAMILY_OBJ)
+$(BUILD)/retail-native-standalone.kui: $(BUILD)/entry.elf
+	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
+	python3 tools/runtime_package.py verify $@
+-include $(FAMILY_OBJ:.o=.d)
+
+HOST_CC ?= cc
+.PHONY: standalone-structural-host-tests
+standalone-structural-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+	 -fsanitize=address,undefined -fno-sanitize-recover=all -Iinclude \
+	 -DKUI_NATIVE_STANDALONE_STRUCTURAL=1 tests/test_native_standalone_structural.c \
+	 src/core/native_standalone_admission.c src/core/native_sdk_sci_family.c \
+	 src/core/hash.c src/core/data.c -o $(BUILD)/test-standalone-structural
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-standalone-structural
+	python3 tools/run_native_standalone_demand.py --structural --output $(abspath $(BUILD))/demand

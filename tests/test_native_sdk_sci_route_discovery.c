@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Original owner bytes are supplied externally; none are embedded here. */
 #include "kui/native_sdk_sci_route.h"
+#include "kui/native_sdk_sci_family.h"
 #include "kui/hash.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,9 +37,28 @@ static bool read_word(void *context,uint32_t address,uint32_t *out) {
     if(address<LOAD || address-LOAD>bytes || bytes-(address-LOAD)<4u)return false;
     *out=word(live+address-LOAD);return true;
 }
+/* Every admission also runs the image-only family finder: it must agree with
+ * each image refusal and name the same roles whenever the live route admits.
+ * Live-only refusals legitimately leave the image family found. */
 static int discover(struct kui_native_sdk_sci_route_plan *out) {
-    return kui_native_sdk_sci_route_discover(image,bytes,LOAD,vbr,
+    int result=kui_native_sdk_sci_route_discover(image,bytes,LOAD,vbr,
         UINT32_C(0x600000f0),CALLBACK,read_word,live,out);
+    if(!out || (const void *)out==(const void *)image)return result;
+    struct kui_native_sdk_sci_family family;unsigned before=reads;
+    int found=kui_native_sdk_sci_family_find(image,bytes,LOAD,&family);
+    CHECK(reads==before);
+    if(result==1) {
+        uint32_t vector=LOAD+(uint32_t)vector_at;
+        CHECK(found==1 && family.vector==vector && family.original==out->previous &&
+            family.normal==(((vector+0x8cu)&UINT32_C(0x1fffffff))|owner_area) &&
+            family.fpu==(((vector+fpu_delta)&UINT32_C(0x1fffffff))|owner_area) &&
+            (out->common==family.normal || out->common==family.fpu));
+    } else if(found!=1) {
+        CHECK(found==result);
+        const uint8_t *p=(const void *)&family;
+        for(size_t i=0u;i<sizeof(family);i++)CHECK(!p[i]);
+    }
+    return result;
 }
 static void zero(const struct kui_native_sdk_sci_route_plan *out) {
     const uint8_t *p=(const void *)out;

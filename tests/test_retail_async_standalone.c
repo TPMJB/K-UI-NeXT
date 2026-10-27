@@ -9,6 +9,22 @@
 #include "kui/native_standalone_reader.h"
 #include "kui/native_sdk_sci_runtime.h"
 
+#if KUI_NATIVE_STANDALONE_STRUCTURAL
+/* Another owner than DOA2: its own VBR and source vector, compact FPU
+ * geometry and U0 raw pointers, as the image-only family finder returns. */
+#define TEST_VBR UINT32_C(0x8c0c4000)
+#define TEST_VECTOR UINT32_C(0x8c0a0040)
+#define TEST_NORMAL ((TEST_VECTOR+0x8cu)&UINT32_C(0x1fffffff))
+#define TEST_FPU (TEST_NORMAL+0x138u)
+#define TEST_DEFAULT UINT32_C(0x0c09ff10)
+#else
+#define TEST_VBR KUI_NATIVE_STANDALONE_SOURCE_VBR
+#define TEST_VECTOR KUI_NATIVE_STANDALONE_SOURCE_VECTOR
+#define TEST_NORMAL KUI_NATIVE_STANDALONE_SOURCE_NORMAL
+#define TEST_FPU KUI_NATIVE_STANDALONE_SOURCE_FPU
+#define TEST_DEFAULT KUI_NATIVE_STANDALONE_SOURCE_DEFAULT
+#endif
+
 static uint32_t host_sr=UINT32_C(0x600000f0);
 static unsigned publication_visits;
 #ifdef KUI_STANDALONE_DEMAND_ASAN
@@ -25,9 +41,9 @@ uint32_t kui_retail_async_test_read32(uint32_t address) {
     if((address&UINT32_C(0xe0000000))==UINT32_C(0xa0000000))
         address-=UINT32_C(0x20000000);
 #ifdef KUI_STANDALONE_DEMAND_ASAN
-    assert(address==KUI_NATIVE_STANDALONE_SOURCE_VBR+KUI_NATIVE_SDK_SCI_ERI_SLOT_OFFSET ||
-        address==KUI_NATIVE_STANDALONE_SOURCE_VBR+KUI_NATIVE_SDK_SCI_RXI_SLOT_OFFSET);
-    return modeled_slots[(address-(KUI_NATIVE_STANDALONE_SOURCE_VBR+
+    assert(address==TEST_VBR+KUI_NATIVE_SDK_SCI_ERI_SLOT_OFFSET ||
+        address==TEST_VBR+KUI_NATIVE_SDK_SCI_RXI_SLOT_OFFSET);
+    return modeled_slots[(address-(TEST_VBR+
         KUI_NATIVE_SDK_SCI_ERI_SLOT_OFFSET))/4u];
 #else
     assert(address>=UINT32_C(0x8c000000) &&
@@ -48,19 +64,20 @@ enum kui_loader_sd_result kui_sci_sd_acquire(void) {
 }
 static unsigned requests_verified,irq_entries,pio_bound_entries;
 static unsigned loss_cases,cancel_cases,source_cases;
-static volatile uint32_t *slots(void) {
+static volatile uint32_t *slots_at(uint32_t owner) {
 #ifdef KUI_STANDALONE_DEMAND_ASAN
-    return modeled_slots;
+    (void)owner;return modeled_slots;
 #else
-    return (void *)(uintptr_t)(KUI_NATIVE_STANDALONE_SOURCE_VBR+
+    return (void *)(uintptr_t)(owner+
         KUI_NATIVE_SDK_SCI_ERI_SLOT_OFFSET);
 #endif
 }
+static volatile uint32_t *slots(void) {return slots_at(TEST_VBR);}
 static uint32_t callback(void) {return (uint32_t)(uintptr_t)kui_retail_sdk_sci_entry;}
-static void source_context(bool initialized) {
+static void source_context_at(uint32_t owner,bool initialized) {
     const struct kui_native_standalone_source descriptor={
-        KUI_NATIVE_STANDALONE_SOURCE_VECTOR,KUI_NATIVE_STANDALONE_SOURCE_NORMAL,
-        KUI_NATIVE_STANDALONE_SOURCE_FPU,KUI_NATIVE_STANDALONE_SOURCE_DEFAULT,
+        TEST_VECTOR,TEST_NORMAL,
+        TEST_FPU,TEST_DEFAULT,
         KUI_NATIVE_STANDALONE_SOURCE_MAGIC};
     memcpy(R.vector100,&descriptor,sizeof(descriptor));
     R.vector600[KUI_NATIVE_SDK_SCI_DEFAULT_INDEX]=descriptor.original;
@@ -68,12 +85,12 @@ static void source_context(bool initialized) {
     /* ASAN reserves the SH P1 addresses as host shadow. Its demand-only
      * run starts after the independently checked publication, so the real
      * binder takes its first-install refusal before dereferencing P1. */
-    R.vector600[KUI_NATIVE_SDK_SCI_VBR_INDEX]=KUI_NATIVE_STANDALONE_SOURCE_VBR;
+    R.vector600[KUI_NATIVE_SDK_SCI_VBR_INDEX]=owner;
     R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX]=initialized?KUI_NATIVE_SDK_SCI_COOKIE:0u;
     slots()[0]=slots()[1]=(uint32_t)(uintptr_t)kui_retail_sdk_sci_entry;
 #else
     volatile uint32_t *original=(void *)(uintptr_t)descriptor.vector;
-    volatile uint32_t *copy=(void *)(uintptr_t)(KUI_NATIVE_STANDALONE_SOURCE_VBR+0x600u);
+    volatile uint32_t *copy=(void *)(uintptr_t)(owner+0x600u);
     /* Synthetic vector words represent the prior stage admission. The
      * original DOA2 instructions are independently executed by SH proof. */
     for(unsigned i=0u;i<24u;++i)original[i]=UINT32_C(0x90000000)+i;
@@ -81,18 +98,19 @@ static void source_context(bool initialized) {
     for(unsigned i=0u;i<24u;++i)copy[i]=initialized?original[i]:0u;
     copy[20]=UINT32_C(0x11223344); /* Original SDK's allowed R0 scratch. */
     if(initialized)copy[22]=descriptor.fpu; /* Independent reviewed common mode. */
-    slots()[0]=slots()[1]=initialized?descriptor.original:0u;
+    slots_at(owner)[0]=slots_at(owner)[1]=initialized?descriptor.original:0u;
 #endif
 }
+static void source_context(bool initialized) {source_context_at(TEST_VBR,initialized);}
 static void setup_standalone(bool cooked,bool ready,bool scattered) {
     cooked_fixture=cooked;
-    setup(KUI_NATIVE_STANDALONE_SOURCE_VBR,X,48u,scattered);
+    setup(TEST_VBR,X,48u,scattered);
     publication_visits=0u;kui_retail_hook_active=1u;kui_retail_hook_fault=0u;
     host_sr=UINT32_C(0x600000f0);
     source_context(ready);mode(2048u);
     if(ready) {
         CHECK(R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX]==KUI_NATIVE_SDK_SCI_COOKIE);
-        CHECK(R.vector600[KUI_NATIVE_SDK_SCI_VBR_INDEX]==KUI_NATIVE_STANDALONE_SOURCE_VBR);
+        CHECK(R.vector600[KUI_NATIVE_SDK_SCI_VBR_INDEX]==TEST_VBR);
         CHECK(slots()[0]==callback() && slots()[1]==callback());
         CHECK(publication_visits==
 #ifdef KUI_STANDALONE_DEMAND_ASAN
@@ -122,7 +140,7 @@ static void complete_standalone(int32_t token,uint32_t lba,unsigned count,bool i
             CHECK(get(STATUS+8u)==count*R.shared.service.sector_bytes && !get(STATUS+4u));
             compare(lba,count,OUTPUT);++requests_verified;
             CHECK(!R.engine.active && !R.engine.hooked && !R.engine.release.armed);
-            CHECK(!hw.vbr_sets && hw.vbr==KUI_NATIVE_STANDALONE_SOURCE_VBR);
+            CHECK(!hw.vbr_sets && hw.vbr==TEST_VBR);
             return;
         }
         CHECK(status==KUI_GD_PROCESSING && round<1999u);
@@ -197,10 +215,10 @@ static void route_loss(void) {
         }
         uint32_t slot0=slots()[0],slot1=slots()[1];
         unsigned progress=R.engine.cursor.done;
-        CHECK(sci_irq(0x4e0u)==KUI_NATIVE_STANDALONE_SOURCE_DEFAULT);
+        CHECK(sci_irq(0x4e0u)==TEST_DEFAULT);
         CHECK(!R.engine.release.armed && hw.iprb==0x5a0fu);
         CHECK(R.engine.cursor.done==progress);
-        hw.vbr=KUI_NATIVE_STANDALONE_SOURCE_VBR;
+        hw.vbr=TEST_VBR;
         complete_standalone(token,45001u,64u,false);
         CHECK(hw.iprb==0x5a9fu && slots()[0]==slot0 && slots()[1]==slot1);
         CHECK(publication_visits==
@@ -239,11 +257,52 @@ static void source_refusal(void) {
         R.vector100[field]^=1u;
         (void)gd(KUI_GD_DRIVE,STATUS,0u);
         CHECK(!publication_visits && !R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX]);
-        CHECK(slots()[0]==KUI_NATIVE_STANDALONE_SOURCE_DEFAULT &&
-            slots()[1]==KUI_NATIVE_STANDALONE_SOURCE_DEFAULT);++source_cases;
+        CHECK(slots()[0]==TEST_DEFAULT &&
+            slots()[1]==TEST_DEFAULT);++source_cases;
     }
 }
+#if KUI_NATIVE_STANDALONE_STRUCTURAL && !defined(KUI_STANDALONE_DEMAND_ASAN)
+/* The structural binder takes the game's live VBR and published roles. An
+ * owner below the IP image or off its 256-byte alignment, and a source vector
+ * outside the loaded program, refuse before any publication even when a
+ * matching copy and default slots exist there. Another owner binds alike. */
+static void structural_owner_checks(void) {
+    static const uint32_t owners[]={UINT32_C(0x8c007f00),UINT32_C(0x8c004000),
+        TEST_VBR+4u,TEST_VBR+0x80u};
+    for(unsigned i=0u;i<sizeof(owners)/sizeof(owners[0]);++i) {
+        setup_standalone(true,false,false);source_context_at(owners[i],true);hw.vbr=owners[i];
+        (void)gd(KUI_GD_DRIVE,STATUS,0u);
+        CHECK(!publication_visits && !R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX] &&
+            !R.vector600[KUI_NATIVE_SDK_SCI_VBR_INDEX]);
+        CHECK(slots_at(owners[i])[0]==TEST_DEFAULT && slots_at(owners[i])[1]==TEST_DEFAULT);
+        ++source_cases;
+    }
+    static const uint32_t vectors[]={UINT32_C(0x8c00fffc),UINT32_C(0x8cc0ffa4),TEST_VECTOR+2u};
+    for(unsigned i=0u;i<sizeof(vectors)/sizeof(vectors[0]);++i) {
+        setup_standalone(true,false,false);source_context(true);R.vector100[0]=vectors[i];
+        (void)gd(KUI_GD_DRIVE,STATUS,0u);
+        CHECK(!publication_visits && !R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX]);
+        CHECK(slots()[0]==TEST_DEFAULT && slots()[1]==TEST_DEFAULT);++source_cases;
+    }
+    const uint32_t other=UINT32_C(0x8c180000);
+    setup_standalone(true,false,false);source_context_at(other,true);hw.vbr=other;
+    (void)gd(KUI_GD_DRIVE,STATUS,0u);
+    CHECK(R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX]==KUI_NATIVE_SDK_SCI_COOKIE &&
+        R.vector600[KUI_NATIVE_SDK_SCI_VBR_INDEX]==other && publication_visits==4u);
+    CHECK(slots_at(other)[0]==callback() && slots_at(other)[1]==callback());
+    CHECK(!slots()[0] && !slots()[1] && !hw.vbr_sets); /* The unused owner is untouched. */
+    hw.iprb=0x5a9fu;(void)request(45001u,64u,OUTPUT);
+    CHECK(hw.iprb==0x5a1fu && R.engine.release.armed==0x10u);
+}
+#endif
 int main(void) {
+#if KUI_NATIVE_STANDALONE_STRUCTURAL && !defined(KUI_STANDALONE_DEMAND_ASAN)
+    void *structural=mmap((void *)(uintptr_t)UINT32_C(0x8c000000),UINT32_C(0x200000),
+        PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0);
+    CHECK(structural==(void *)(uintptr_t)UINT32_C(0x8c000000));
+    structural_owner_checks();
+    CHECK(!munmap(structural,UINT32_C(0x200000)));
+#endif
 #ifndef KUI_STANDALONE_DEMAND_ASAN
     void *mapped=mmap((void *)(uintptr_t)UINT32_C(0x8c000000),UINT32_C(0x200000),
         PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0);

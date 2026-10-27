@@ -29,7 +29,10 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,default=ROOT/'build/standalone-demand')
     parser.add_argument('--cc',default='cc')
+    parser.add_argument('--structural',action='store_true',
+        help='Build the structural SDK-family binder instead of the exact DOA2 pilot')
     args=parser.parse_args();out=args.output.resolve();out.mkdir(parents=True,exist_ok=True)
+    definitions=[*DEFINITIONS,*(['KUI_NATIVE_STANDALONE_STRUCTURAL=1'] if args.structural else [])]
     flags=['-std=c11','-O1','-g','-Wall','-Wextra','-Werror','-fno-omit-frame-pointer',
            '-fno-pie','-no-pie','-fno-sanitize-recover=all',
            '-ffunction-sections','-fdata-sections','-Iinclude','-Isrc/loader','-Itests']
@@ -38,7 +41,7 @@ def main():
         exe=out/('test-standalone-demand-'+mode)
         sanitize='undefined' if mode=='ubsan' else 'address,undefined'
         command=[args.cc,*flags,'-fsanitize='+sanitize,
-                 *['-D'+d for d in DEFINITIONS],
+                 *['-D'+d for d in definitions],
                  *(['-DKUI_STANDALONE_DEMAND_ASAN=1'] if mode=='asan-ubsan' else []),
                  *SOURCES,'-Wl,--gc-sections','-o',str(exe)]
         built=subprocess.run(command,cwd=ROOT,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
@@ -64,6 +67,7 @@ def main():
            'include/kui/native_standalone_reader.h','include/kui/native_sdk_sci_runtime.h',
            'tools/run_native_standalone_demand.py']
     receipt=dict(schema='kui.native.standalone-reader-demand-model.v1',result='PASS',
+        **({'binder':'structural SDK family'} if args.structural else {}),
         transport='Explicit byte/card/SCI/DMA register model; no SD hardware',
         modes=results,source_sha256={name:sha(ROOT/name) for name in bound},
         production_sources_execute=['standalone binder','retail_async demand/IRQ delivery',

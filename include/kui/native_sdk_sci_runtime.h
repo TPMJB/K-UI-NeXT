@@ -27,6 +27,17 @@
     (KUI_NATIVE_STANDALONE_STAGE != 0 && KUI_NATIVE_STANDALONE_STAGE != 1)
 #error "Standalone reader selectors must be exactly zero or one"
 #endif
+/* Admit any executable with the reviewed SDK SCI family instead of the exact
+ * DOA2 pilot. The binder then takes the game's live VBR, not DOA2's. */
+#ifndef KUI_NATIVE_STANDALONE_STRUCTURAL
+#define KUI_NATIVE_STANDALONE_STRUCTURAL 0
+#endif
+#if KUI_NATIVE_STANDALONE_STRUCTURAL != 0 && KUI_NATIVE_STANDALONE_STRUCTURAL != 1
+#error "KUI_NATIVE_STANDALONE_STRUCTURAL must be exactly zero or one"
+#endif
+#if KUI_NATIVE_STANDALONE_STRUCTURAL && !KUI_NATIVE_STANDALONE_READER
+#error "Structural standalone admission requires the standalone reader"
+#endif
 #if KUI_NATIVE_STANDALONE_STAGE && !KUI_NATIVE_STANDALONE_READER
 #error "Standalone stage requires its matching standalone reader"
 #endif
