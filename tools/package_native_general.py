@@ -97,6 +97,7 @@ def main():
         shutil.copyfile(path, folder/'evidence'/path.name)
     shutil.copyfile(args.readme, folder/'README-FIRST.md')
     shutil.copyfile(ROOT/'LICENSE', folder/'LICENSE')
+    shutil.copyfile(ROOT/'THIRD_PARTY.md', folder/'THIRD_PARTY.md')
     metadata = dict(schema=SCHEMA, build=build, source_commit=source_commit,
                     gui=dict(build=build, sha256=sha(gui)),
                     dual=dict(build=build, sha256=sha(dual), split_controller_general=True,
