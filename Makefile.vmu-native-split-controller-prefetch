@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The general split controller with the controller prefetch TICK restored.
+# Only the TICK-off selector is removed; the split capture/completion, its
+# checks and the existing read-ahead engine and lease are unchanged.
+BUILD ?= build/native-split-controller-prefetch
+include Makefile.vmu-native-isolation-split-controller-general
+SPLIT_TICK_OFF := -DKUI_NATIVE_RA_TICK_OFF_ISOLATION=1
+FLAGS := $(filter-out $(SPLIT_TICK_OFF),$(FLAGS)) -DKUI_NATIVE_SPLIT_CONTROLLER_PREFETCH=1
+NATIVE_FLAGS := $(filter-out $(SPLIT_TICK_OFF),$(NATIVE_FLAGS)) -DKUI_NATIVE_SPLIT_CONTROLLER_PREFETCH=1
+# The bound TICK entry sits at a fixed host address, as in the reader-only
+# test; ASan's shadow mapping cannot coexist with it, so UBSan runs alone.
+SPLIT_PREFETCH_HOST_FLAGS = $(filter-out -fsanitize=%,$(PASSIVE_HOST_FLAGS)) \
+ -fsanitize=undefined -fno-sanitize-recover=all -mcmodel=large \
+ -fno-asynchronous-unwind-tables -fno-unwind-tables
+
+.PHONY: split-controller-prefetch-host-tests
+split-controller-prefetch-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(SPLIT_PREFETCH_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 \
+	 -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -DKUI_VMU_NATIVE_CACHED_CODE=1 \
+	 -DKUI_NATIVE_DUAL_READERS=1 -DKUI_NATIVE_SPLIT_CONTROLLER_ISOLATION=1 \
+	 -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1 -DKUI_NATIVE_SPLIT_CONTROLLER_PREFETCH=1 \
+	 tests/test_vmu_native_split_prefetch.c $(COMPAT_WORKER_HOST_SRC) \
+	 -Wl,--gc-sections -Wl,--section-start=.isolation_tick=0x8c722000 \
+	 -o $(BUILD)/test-split-controller-prefetch
+	$(BUILD)/test-split-controller-prefetch

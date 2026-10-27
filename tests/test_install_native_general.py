@@ -106,6 +106,34 @@ class GeneralInstallTests(unittest.TestCase):
         self.run_install(restore=True)
         self.assert_original()
 
+    def test_later_package_replaces_installed_candidate(self):
+        """A later candidate installs over an earlier one and back again;
+        restore still returns the files from before the first install."""
+        self.run_install()
+        first = {name: (self.card/path).read_bytes() for name, path in installer.FILES.items()}
+        later = Path(self.temp.name)/'later'
+        shutil.copytree(self.package, later)
+        gui = envelope(b'\x0a\x00'*96, 192, COMMIT[:12])
+        standalone = envelope(b'\x0c\x00'*80, 160, COMMIT[:12])
+        (later/'gui/runtime.kui').write_bytes(gui)
+        (later/'standalone/retail-native-standalone.kui').write_bytes(standalone)
+        (later/'general.json').write_text(json.dumps(dict(
+            self.metadata, gui=dict(build=COMMIT[:12], sha256=sha(gui)),
+            standalone=dict(build=COMMIT[:12], sha256=sha(standalone)))))
+        profile = self.profile.relative_to(self.card)
+        result = installer.run(self.card, later, False, profile)
+        self.assertEqual(sorted(result['changed']),
+                         sorted(str(installer.FILES[name]) for name in ('gui', 'standalone')))
+        self.assertEqual((self.card/installer.FILES['gui']).read_bytes(), gui)
+        self.assertEqual((self.card/installer.FILES['standalone']).read_bytes(), standalone)
+        self.assertEqual((self.card/installer.FILES['dual']).read_bytes(), first['dual'])
+        self.assert_protected()
+        self.run_install()
+        self.assertEqual({name: (self.card/path).read_bytes() for name, path in installer.FILES.items()}, first)
+        installer.run(self.card, later, False, profile)
+        installer.run(self.card, later, True)
+        self.assert_original()
+
     def test_doa2_pilot_refuses_before_writes(self):
         (self.card/installer.ORDINARY).write_bytes(self.pilot)
         self.before = self.snapshot()

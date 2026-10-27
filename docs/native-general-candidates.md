@@ -24,6 +24,34 @@ NORMAL mode, lifetime, layout, packet, response and storage checks remain.
 The stage banner reads **SPLIT CONTROLLER ALL**. Like `6be7`, it keeps
 prefetch and controller TICK off.
 
+## General split controller with prefetch
+
+`Makefile.vmu-native-split-controller-prefetch` builds the general split
+controller with the controller prefetch TICK restored
+(`KUI_NATIVE_SPLIT_CONTROLLER_PREFETCH`). TICK was turned off only to
+isolate Evolution 1: the TICK-off control (`3f51ded`) still failed at the
+same black screen, and the split controller then passed with TICK still off.
+The two were never tested together.
+
+TICK is the read-ahead engine's only producer heartbeat. It runs in the
+Maple completion hook after a proved controller completion is published;
+each visit fetches at most two 512-byte blocks within a 2344-tick window
+(about 3 ms). `f158ba5e24f9` ran it beside the full controller path, and the
+owner reported flawless FMVs and gameplay in Rayman 2 and Lodoss. Evolution 1
+tolerated 76 ticks of extra completion work on the console; a full TICK
+window is longer, so Evolution 1 is the case to watch.
+
+Only two compile units differ from the general build: the worker (the TICK
+call and a marker) and the stage (a marker and the banner
+**PREFETCH ON / SPLIT CONTROLLER ALL**). `split-controller-prefetch-host-tests`
+runs the split suite with a bound auxiliary entry: one TICK per proved split
+completion and none after any refusal. Compiled with TICK off, it fails.
+
+Standalone games cannot use prefetch. The read-ahead cache lives in the
+384 KiB game-RAM lease and its heartbeat is the controller hook; the
+standalone reader has neither. Those games gain prefetch when they gain
+virtual VMU admission.
+
 ## Structural New reader
 
 The DOA2 pilot admits one executable by SHA-256, binds five DOA2 constants,

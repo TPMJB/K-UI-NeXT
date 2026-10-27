@@ -175,7 +175,10 @@ static void split_identity(void) {
 #endif
     split_other_identity=false;
 }
-int main(void) {
+#ifndef KUI_SPLIT_CONTROLLER_TEST_MAIN
+#define KUI_SPLIT_CONTROLLER_TEST_MAIN main
+#endif
+int KUI_SPLIT_CONTROLLER_TEST_MAIN(void) {
     split_success();split_geometry_refusals();split_deferred_refusals();split_full_fallback();
     split_warm_tag_refusals();split_identity();
     printf("Split controller host checks: %u\n",checks);return 0;

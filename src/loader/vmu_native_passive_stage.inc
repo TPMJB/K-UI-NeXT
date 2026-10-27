@@ -477,7 +477,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #endif
 #elif KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
     retail_display_line("NEW READER / VIRTUAL A2 ON");
-#if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
+#if KUI_NATIVE_SPLIT_CONTROLLER_PREFETCH
+    retail_display_line("PREFETCH ON / SPLIT CONTROLLER ALL");
+#elif KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
     retail_display_line("PREFETCH OFF / SPLIT CONTROLLER ALL");
 #else
     retail_display_line("PREFETCH OFF / SPLIT CONTROLLER");
