@@ -488,6 +488,8 @@ def audit(args):
     require(owner['digest']=='105056d9ffef86bf5e470fa28dc5907443156f9ab1c6bc009f73661d9c047a85',
             'Standalone execution proof requires exact reviewed DOA2 source')
     syms=resident[4];end=syms['__retail_resident_bss_end'][0];bottom=syms['__retail_hook_stack_bottom'][0]
+    require(syms.get('__kui_native_standalone_reader_resident')==(1,0,0,0xfff1),
+            'Standalone low resident capability marker differs')
     require(syms['_start'][0]==0x8c004000 and bottom==0x8c007ba0 and end<=bottom,
             'Standalone reader escaped the existing low reservation')
     require(syms['_standalone_reader_region'][1]==0x760 and syms['_manifest'][1]==1020,

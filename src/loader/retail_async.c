@@ -5,6 +5,10 @@
 #include "retail_async.h"
 #include "kui/native_sci_priority.h"
 #include "kui/native_sdk_sci_runtime.h"
+#if KUI_NATIVE_STANDALONE_READER
+__asm__(".global __kui_native_standalone_reader_resident\n"
+        ".set __kui_native_standalone_reader_resident,1\n");
+#endif
 #if KUI_NATIVE_READAHEAD && (!KUI_NATIVE_SDK_SCI_ROUTE || !KUI_VMU_NATIVE_BACKGROUND || defined(KUI_RETAIL_CE))
 #error "Native read-ahead requires the separate SDK SCI route and retained native lease"
 #endif
