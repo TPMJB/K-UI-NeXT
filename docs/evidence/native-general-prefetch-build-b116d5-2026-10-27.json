@@ -1,0 +1,354 @@
+{
+  "schema": "kui.native.general.prefetch-build-audit.v1",
+  "status": "PASS",
+  "source_commit": "b116d540b382b251e6a6bd516ab168c10dfe43c4",
+  "toolchain": {
+    "kos": "fcfa7d8 (kos-chain)",
+    "gcc": "15.2.0",
+    "binutils": "2.45.1",
+    "newlib": "4.6.0.20260123",
+    "ui_kos_banner": "pinned to the accepted 8adf UI banner text so only K-UI sources differ"
+  },
+  "artifacts": {
+    "retail-native-dual.kui": "ea6994158159506b1245f85deabf048fdbf73de92974f29cdd3ad69e22b2c04b",
+    "retail-native-standalone.kui": "48338a032bc09a0e8d22f4b30dd80ce8652410dbab25b7adf865182d83c6d68a",
+    "runtime.kui": "d504089da5de0479431fd04d6ce4fe79771cd51ce0f8cf8e5a830780fc04d765"
+  },
+  "components": {
+    "split/resident-sci.bin": "cc13af8367d59de2a5a4fa1c910c01d09f155d3ea5580a90541188e4bf1dc201",
+    "split/resident-legacy.bin": "c63f3e10a68f8b9347c6aa2147a73ae3e6b98f660e0025e9c60b21d7249762e5",
+    "split/native-worker.bin": "045c27555493033a33fadbbd60a0ad90a0eed78d9ecc03f65e343a72f045e132",
+    "split/stage.bin": "ba5d0eb148a554f640e4b87804cc5ad5fcac725af880fab4c962ac025803fecf",
+    "split/native-ra-aux.bin": "61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974",
+    "standalone/resident-sci.bin": "480e89afdf684337d02f218545558cf171e6e8be8accde72c29f517bec43b139",
+    "standalone/stage.bin": "0c530ecd47ce19f2646c30c52f7ea5db8038093640ac4d663e5bd8cced9647c7"
+  },
+  "accepted_reproduction": {
+    "doa2_standalone_921318c3d9cb": {
+      "sha256": "a871670e929866a994b69f2772424b6163f4cd474a64c423f2cb70cfb4634e78",
+      "byte_identical": true,
+      "built_from": "921318c and this branch with BUILD_ID=921318c3d9cb"
+    },
+    "evolution1_split_6be76940ccc9": {
+      "sha256": "8ef15cb00eea24ae0e300be253dd40a516f84efafcaecd71fc7a82d533551f4b",
+      "byte_identical": true,
+      "built_from": "6be7694 and this branch with BUILD_ID=6be76940ccc9"
+    },
+    "games_ui_8adf1a039035": {
+      "sha256": "57b9584ba789b425c8924a63f955aeefa104b3bb0bf9a2fab74d02d320c91a22",
+      "byte_identical": true,
+      "built_from": "8adf1a0 with KOS banner pinned to the delivered text and games_retail.o compiled under BUILD_ID cd3318f0f457 (the delivered UI was an incremental build; games_retail.c is unchanged between cd3318f and 8adf1a0)"
+    }
+  },
+  "instruction_audit": {
+    "policy": "No illegal delay slots; no FPU use except the stage bootstrap FPSCR setup",
+    "decoded": {
+      "split": {
+        "resident-sci": 6401,
+        "native-worker": 23480,
+        "stage": 41216,
+        "entry": 16
+      },
+      "accepted_split": {
+        "resident-sci": 6401,
+        "native-worker": 23393,
+        "stage": 41226,
+        "entry": 16
+      },
+      "standalone": {
+        "resident-sci": 5181,
+        "stage": 9475,
+        "entry": 16
+      },
+      "accepted_standalone": {
+        "resident-sci": 5179,
+        "stage": 8649,
+        "entry": 16
+      }
+    }
+  },
+  "split_checkers": {
+    "check_native_dual_callbacks": {
+      "general": {
+        "returncode": 0,
+        "last_line": "}"
+      },
+      "accepted_6be7": {
+        "returncode": 0,
+        "last_line": "}"
+      }
+    },
+    "check_vmu_native_stage_stack": {
+      "general": {
+        "returncode": 0,
+        "last_line": "}"
+      },
+      "accepted_6be7": {
+        "returncode": 0,
+        "last_line": "}"
+      }
+    },
+    "check_native_dual_readers": {
+      "general": {
+        "returncode": 2,
+        "last_line": "Dual native reader audit refused: dual stage immutable instructions/targets changed: _select_resident"
+      },
+      "accepted_6be7": {
+        "returncode": 2,
+        "last_line": "Dual native reader audit refused: dual stage immutable instructions/targets changed: _select_resident"
+      }
+    },
+    "check_native_bottom_heap_worker": {
+      "general": {
+        "returncode": 2,
+        "last_line": "Bottom worker heap audit refused: Worker heap guard instruction/literal pin differs: _index@vmu_native_heap.c"
+      },
+      "accepted_6be7": {
+        "returncode": 2,
+        "last_line": "Bottom worker heap audit refused: Worker heap guard instruction/literal pin differs: _index@vmu_native_heap.c"
+      }
+    }
+  },
+  "split_markers": {
+    "general_stage": true,
+    "general_worker": true,
+    "stage_strings": [
+      "PREFETCH ON / SPLIT CONTROLLER ALL",
+      "SPLIT CONTROLLER NEEDS NORMAL MODE"
+    ],
+    "accepted_stage_strings": [
+      "PREFETCH OFF / SPLIT CONTROLLER",
+      "SPLIT CONTROLLER NEEDS EVOLUTION 1",
+      "SPLIT CONTROLLER NEEDS NORMAL MODE"
+    ]
+  },
+  "personalization": {
+    "module_bytes": 267676,
+    "profile_module_offset": 102304,
+    "profile_bytes": 4096,
+    "runtime_mode_module_offset": 102272,
+    "runtime_mode_bytes": 32
+  },
+  "structural_private_stack": {
+    "structural": {
+      "worst_bytes": 220,
+      "margin": 64,
+      "available_bytes": 304,
+      "paths": {
+        "kui_retail_resident_dispatch": {
+          "bytes": 216,
+          "path": "kui_retail_resident_dispatch(48) -> deliver(80) -> kui_sci_stream_fetch.constprop.0(44) -> command(20) -> byte(0) -> transfer(24)"
+        },
+        "kui_retail_async_irq": {
+          "bytes": 220,
+          "path": "kui_retail_async_irq(8) -> deliver(80) -> kui_sci_stream_fetch.constprop.0(44) -> command(20) -> byte(0) -> transfer(24)"
+        },
+        "kui_retail_menu_return": {
+          "bytes": 156,
+          "path": "kui_retail_menu_return(8) -> native_reader_report(20) -> retail_display_values(76) -> retail_display_line(52)"
+        }
+      }
+    },
+    "accepted_doa2": {
+      "worst_bytes": 220,
+      "margin": 64,
+      "available_bytes": 304,
+      "paths": {
+        "kui_retail_resident_dispatch": {
+          "bytes": 216,
+          "path": "kui_retail_resident_dispatch(48) -> deliver(80) -> kui_sci_stream_fetch.constprop.0(44) -> command(20) -> byte(0) -> transfer(24)"
+        },
+        "kui_retail_async_irq": {
+          "bytes": 220,
+          "path": "kui_retail_async_irq(8) -> deliver(80) -> kui_sci_stream_fetch.constprop.0(44) -> command(20) -> byte(0) -> transfer(24)"
+        },
+        "kui_retail_menu_return": {
+          "bytes": 156,
+          "path": "kui_retail_menu_return(8) -> native_reader_report(20) -> retail_display_values(76) -> retail_display_line(52)"
+        }
+      }
+    }
+  },
+  "structural_geometry": {
+    "structural": {
+      "start": "0x8c004000",
+      "bss_end": "0x8c007b20",
+      "stack_bottom": "0x8c007ba0",
+      "spare_bytes": 128,
+      "resident_marker": true,
+      "region_bytes": 1888,
+      "manifest_bytes": 1020,
+      "vmu_or_readahead_symbols": [],
+      "stage_markers": [
+        "__kui_native_standalone_reader_stage",
+        "__kui_native_standalone_structural_stage"
+      ]
+    },
+    "accepted_doa2": {
+      "start": "0x8c004000",
+      "bss_end": "0x8c007b40",
+      "stack_bottom": "0x8c007ba0",
+      "spare_bytes": 96,
+      "resident_marker": true,
+      "region_bytes": 1888,
+      "manifest_bytes": 1020,
+      "vmu_or_readahead_symbols": [],
+      "stage_markers": [
+        "__kui_native_standalone_doa2_stage",
+        "__kui_native_standalone_reader_stage"
+      ]
+    }
+  },
+  "package_headers": {
+    "structural": {
+      "magic": "KUIRBT01",
+      "stage_bytes": 37640,
+      "resident": "0x8c004000",
+      "limit": "0x8c007800",
+      "rest": [
+        "0x1",
+        "0x40",
+        "0x1000",
+        "0x1000",
+        "0x8ce00000",
+        "0x8ce00000",
+        "0x8c010000",
+        "0xc00000",
+        "0x8cff0000",
+        "0x2000",
+        "0x8c004000",
+        "0x8c007800",
+        "0x0"
+      ]
+    },
+    "accepted_doa2": {
+      "magic": "KUIRBT01",
+      "stage_bytes": 35236,
+      "resident": "0x8c004000",
+      "limit": "0x8c007800",
+      "rest": [
+        "0x1",
+        "0x40",
+        "0x1000",
+        "0x1000",
+        "0x8ce00000",
+        "0x8ce00000",
+        "0x8c010000",
+        "0xc00000",
+        "0x8cff0000",
+        "0x2000",
+        "0x8c004000",
+        "0x8c007800",
+        "0x0"
+      ]
+    }
+  },
+  "launcher_descriptor_finders": {
+    "structural": {
+      "standalone": 1,
+      "standalone_offset": 32076,
+      "dual": 0
+    },
+    "general_split": {
+      "standalone": 0,
+      "standalone_offset": 0,
+      "dual": 1
+    },
+    "accepted_doa2": {
+      "standalone": 0,
+      "standalone_offset": 0,
+      "dual": 0
+    },
+    "accepted_6be7": {
+      "standalone": 0,
+      "standalone_offset": 0,
+      "dual": 1
+    }
+  },
+  "games_ui_compile_units": [
+    "sources 140 141 only old [] only new ['src/core/native_sdk_sci_family.c']",
+    "differing ['src/apps/games_retail.c']"
+  ],
+  "host_tests": {
+    "split_controller": "12974",
+    "structural_launch_capability_family": "69808",
+    "structural_demand_ubsan": "12187",
+    "structural_demand_asan_ubsan": "10468",
+    "native_cache": "38961",
+    "games_retail_pass": 346,
+    "games_retail_fail": 0,
+    "games_retail_standalone_cases": 10,
+    "installer": "8 tests OK"
+  },
+  "not_run": [
+    "check_native_split_controller.py and check_native_standalone_reader.py execute the linked code against original Evolution 1 and DOA2 startup RAM; no retail executable is available here.",
+    "tests/test_native_sdk_sci_route_discovery.c positive cases need the original executables."
+  ],
+  "console_compatibility_verified": false,
+  "hardware_executed": false,
+  "prefetch": {
+    "variant": "general split controller with controller prefetch TICK restored",
+    "compared_with": {
+      "general_split_build": "f5a503e71796",
+      "accepted_6be7_build": "6be76940ccc9"
+    },
+    "markers": {
+      "prefetch_stage": true,
+      "prefetch_worker": true,
+      "ra_tick_off_worker": false,
+      "general_build_ra_tick_off_worker": true,
+      "general_build_prefetch_markers": false
+    },
+    "stage_banner": [
+      "PREFETCH ON / SPLIT CONTROLLER ALL"
+    ],
+    "read_ahead_engine": {
+      "prefetch": "61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974",
+      "general": "61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974",
+      "accepted_6be7": "61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974",
+      "reloc_prefetch": "87ceef2187655c6c0bbe70d6844067785426f10afacabbab568fcf1c83cc9dfa",
+      "reloc_accepted_6be7": "87ceef2187655c6c0bbe70d6844067785426f10afacabbab568fcf1c83cc9dfa"
+    },
+    "residents_identical_to_general_except_build_id": {
+      "resident-sci.bin": true,
+      "resident-legacy.bin": true
+    },
+    "worker_stack": {
+      "general": {
+        "complete_entry_bytes": 1580,
+        "cooperative_frame": 0,
+        "cooperative_calls": []
+      },
+      "prefetch": {
+        "complete_entry_bytes": 1580,
+        "cooperative_frame": 4,
+        "cooperative_calls": [
+          "__indirect_call",
+          "reader_capture_region"
+        ]
+      },
+      "note": "The TICK path adds the cooperative frame plus the auxiliary gateway, which parks 20 bytes on the worker stack and switches to its private stack before C; the completion entry worst case is unchanged."
+    },
+    "compile_units_differing_from_general": [
+      "native/src/loader/vmu_native_passive.o",
+      "stage/src/loader/vmu_native_heap_probe_stage.o"
+    ],
+    "existing_builds_preprocess_identically": {
+      "Makefile.vmu-native-isolation-split-controller": "103/103",
+      "Makefile.vmu-native-isolation-split-controller-general": "103/103",
+      "Makefile.vmu-native-dual-readers": "103/103",
+      "Makefile.native-standalone-doa2": "25/25",
+      "Makefile.native-standalone-general": "26/26"
+    },
+    "host_prefetch": "Split controller prefetch host checks: 13107; 20 TICK visits, none after a refusal",
+    "host_split_exact": "Split controller host checks: 6382",
+    "negative_control": "The prefetch host test compiled with TICK off fails its TICK count.",
+    "console_risk": "Evolution 1 tolerated 76 ticks of extra completion work; one TICK window is up to 2344 ticks."
+  },
+  "package": {
+    "name": "K-UI-Native-General-Prefetch-b116d540b382.zip",
+    "bytes": 31689165,
+    "sha256": "46a4948e5da415874d4dea05d6c98a31130ea5577e6abaf56a7d84c79eb4d434",
+    "install_rehearsal": "Extracted ZIP verified by SHA256SUMS. On a simulated card holding the accepted 8adf UI and 6be7 module: installed f5a503e71796, then this package over it (all three files changed; split module personalized; protected files unchanged), switched back to f5a503e71796 exactly, reinstalled, and --restore returned every original file byte for byte."
+  }
+}
