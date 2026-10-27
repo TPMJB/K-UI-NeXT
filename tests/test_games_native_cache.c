@@ -152,8 +152,10 @@ static unsigned seed_cache(const uint8_t *boot,size_t bytes,bool actual) {
 }
 static enum native_cache_result prepare(bool native,uint32_t options,bool patches,const char *source) {
     source_proof=(struct native_cache_source_proof){true,UINT32_MAX};
-    enum native_cache_result result=native_cache_prepare(&game,&map,native,options,patches,&package,source,logger,cancelled,&source_proof);
+    bool standalone=true;
+    enum native_cache_result result=native_cache_prepare(&game,&map,native,options,patches,&package,source,logger,cancelled,&source_proof,&standalone);
     CHECK(io.opens==io.closed);
+    CHECK(!standalone); /* No fixture executable carries the SDK SCI family. */
     if(source_proof.complete) {
         CHECK(io.reads==(io.bytes+2047u)/2048u);
         CHECK(source_proof.crc32==kui_crc32(0u,io.boot,io.bytes));

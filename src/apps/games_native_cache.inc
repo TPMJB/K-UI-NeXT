@@ -6,6 +6,7 @@
 #include "kui/vmu_native_cache_seed.h"
 #include "kui/vmu_native_resolution_cache.h"
 #include "kui/vmu_native_program.h"
+#include "kui/native_sdk_sci_family.h"
 #include "kui/hash.h"
 #include "kui/core.h"
 
@@ -85,8 +86,9 @@ static bool native_cache_file_publish(const char *path,const uint8_t wire[1024],
 static enum native_cache_result native_cache_prepare(const struct kui_game_image *image,
     const struct kui_retail_manifest *map,bool native,uint32_t options,bool patched,
     struct kui_runtime_image *package,const char *source_root,kui_log_fn log,kui_cancel_fn cancel,
-    struct native_cache_source_proof *source_proof) {
+    struct native_cache_source_proof *source_proof,bool *standalone) {
     if(source_proof)*source_proof=(struct native_cache_source_proof){0};
+    if(standalone)*standalone=false;
     const bool dual=map && package && package->data &&
         kui_native_dual_reader_valid(map->reader,map->storage_transport) &&
         options==map->reader &&
@@ -148,7 +150,15 @@ static enum native_cache_result native_cache_prepare(const struct kui_game_image
         if(native_cache_cancelled(cancel)) {result=NATIVE_CACHE_CANCELLED;goto finished;}
         if(log)log("Native VMU mapping: scanning SDK families");
         if(!kui_vmu_native_resolution_cache_build(boot,program_bytes,KUI_RETAIL_EXEC_ADDRESS,
-            work->wire,sizeof(work->wire),&work->resolution)) goto finished;
+            work->wire,sizeof(work->wire),&work->resolution)) {
+            /* The combined module's stage refuses this executable. Only then
+             * may New use the reader-only module, if its SDK family exists. */
+            struct kui_native_sdk_sci_family family;
+            if(standalone && map->reader==KUI_RETAIL_READER_ASYNC &&
+               kui_native_sdk_sci_family_find(boot,map->boot_bytes,KUI_RETAIL_EXEC_ADDRESS,&family)==1)
+                *standalone=true;
+            goto finished;
+        }
         if(native_cache_cancelled(cancel)) {result=NATIVE_CACHE_CANCELLED;goto finished;}
         if(disk && !native_cache_file_publish(path,work->wire,work->compare,cancel)) {
             if(native_cache_cancelled(cancel)) {result=NATIVE_CACHE_CANCELLED;goto finished;}

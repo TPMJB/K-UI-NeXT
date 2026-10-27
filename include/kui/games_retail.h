@@ -7,6 +7,10 @@
 /* Native SCI Background X/Y with generic virtual A2. Standard and the
  * separate CE/CDDA/compressed routes retain their existing packages. */
 #define KUI_GAMES_RETAIL_NATIVE_DUAL_PACKAGE "0:/KUI/apps/games/retail-native-dual.kui"
+/* Optional New reader without virtual VMU or game-RAM reservation. A New (X)
+ * launch uses it only when the combined module's complete executable proof
+ * refuses and the executable has the reviewed SDK SCI family. */
+#define KUI_GAMES_RETAIL_NATIVE_STANDALONE_PACKAGE "0:/KUI/apps/games/retail-native-standalone.kui"
 /* Installing an optional exact-title module opts its supported original GDI
  * into persistent virtual A1. Other games keep the ordinary package. */
 #define KUI_GAMES_RETAIL_VMU_SILVER_PACKAGE "0:/KUI/apps/games/vmu-silver.kui"

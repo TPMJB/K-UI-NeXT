@@ -46,8 +46,15 @@ NATIVE_DUAL_CASES = ("native-dual-x", "native-dual-y", "native-dual-x-report", "
     "native-dual-cancel", "native-dual-absent", "native-dual-cap-absent", "native-dual-cap-duplicate",
     "native-dual-cap-malformed", "native-dual-cap-unrelated", "native-dual-cap-truncated",
     "native-dual-scif", "native-dual-too-many", "native-dual-patches",
-    "native-dual-fallback-report", "native-dual-retry-report", "native-dual-x-cooked-report", "native-dual-cancel-source")
-NATIVE_DUAL_SUCCESS = NATIVE_DUAL_CASES[:4] + ("native-dual-fallback-report", "native-dual-retry-report", "native-dual-x-cooked-report")
+    "native-dual-fallback-report", "native-dual-retry-report", "native-dual-x-cooked-report", "native-dual-cancel-source",
+    "native-dual-standalone-report", "native-dual-standalone-y-report", "native-dual-standalone-absent-report",
+    "native-dual-standalone-nofamily-report", "native-dual-standalone-badcap")
+# Only the first standalone case is a New launch whose combined proof refuses,
+# whose executable has the SDK family and whose standalone module is installed.
+NATIVE_STANDALONE_SELECTED = "native-dual-standalone-report"
+NATIVE_DUAL_SUCCESS = NATIVE_DUAL_CASES[:4] + ("native-dual-fallback-report", "native-dual-retry-report", "native-dual-x-cooked-report",
+    "native-dual-standalone-report", "native-dual-standalone-y-report", "native-dual-standalone-absent-report",
+    "native-dual-standalone-nofamily-report")
 MANY_TRACKS = {"native-dual-too-many": 99, "tracks-31": 31, "tracks-99": 99, "async-tracks-31": 31, "async-tracks-40": 40}
 AUDIO_UNMAPPED = ("tracks-99", "async-tracks-40")
 FORMAT_CASES = (
@@ -176,9 +183,15 @@ def dual_package(case):
     if case == "native-dual-cap-malformed": cap = cap[:8] + struct.pack("<I", 2) + cap[12:]
     if case == "native-dual-cap-unrelated": cap = b"Unrelated stage data".ljust(32, b"x")
     if case == "native-dual-cap-truncated": cap = cap[:16]
-    if (case in NATIVE_DUAL_SUCCESS and case != "native-dual-fallback-report") or case == "native-dual-cancel-source":
+    if (case in NATIVE_DUAL_SUCCESS and case != "native-dual-fallback-report") or case == "native-dual-cancel-source" or "-standalone" in case:
         from vmu_native_cache_seed import template_seed
         cap += template_seed()
+    return synthetic_package(dual=cap)
+
+
+def standalone_package(case):
+    cap = struct.pack("<8I", 0x3153444B, 0x454E4F4C, 1, 32, 1, 0, 0, 0)
+    if case == "native-dual-standalone-badcap": cap = cap[:16] + struct.pack("<I", 2) + cap[20:]
     return synthetic_package(dual=cap)
 
 
@@ -265,6 +278,8 @@ def make_retail_fixture(folder, case):
         ram_seed=case in LAUNCH_CASES and case != "launch-patch-old-package"))
     (folder / "ce-probe.kui").write_bytes(synthetic_package(ce=True))
     (folder / "retail-native-dual.kui").write_bytes(dual_package(case))
+    if "-standalone" in case and "-absent" not in case:
+        (folder / "retail-native-standalone.kui").write_bytes(standalone_package(case))
 
 
 def check_launch_outputs(folder, case):
@@ -419,26 +434,32 @@ def main():
                     if case in NATIVE_DUAL_CASES:
                         reasons = {"native-dual-absent": "module missing or unreadable",
                             "native-dual-scif": "require SCI microSD", "native-dual-too-many": "map exceeds 64 slots",
-                            "native-dual-patches": "requires RAM patches Off", "native-dual-cancel": "cancelled"}
+                            "native-dual-patches": "requires RAM patches Off", "native-dual-cancel": "cancelled",
+                            "native-dual-standalone-badcap": "standalone New module unreadable or capability missing"}
                         if "-cap-" in case: assert "module capability missing or ambiguous" in output
                         if case in reasons: assert reasons[case] in output
+                        selected = case == NATIVE_STANDALONE_SELECTED
+                        module = "retail-native-standalone.kui" if selected else "retail-native-dual.kui"
                         if case in NATIVE_DUAL_SUCCESS:
-                            assert "Native dual prepared:" in output
+                            assert f"Native dual prepared: package={module}" in output
+                            assert ("using standalone New without virtual VMU" in output) == selected
                             payload = (fixture / "dual-payload.bin").read_bytes()
-                            original = (fixture / "retail-native-dual.kui").read_bytes()[64:]
+                            original = (fixture / module).read_bytes()[64:]
                             assert payload[:0x1000] == original[:0x1000] and payload[0x2000:] == original[0x2000:]
                             assert struct.unpack_from("<I", payload, 0x1000 + 264)[0] == (2 if "-y" in case else 1)
                         if case.endswith("-report"):
                             count = re.search(r"Native dual exact source: (\d+) raw/cooked reads; max (\d+) bytes", output)
                             assert count and tuple(map(int, count.groups())) == (4 if case == "native-dual-retry-report" else 2, 2048 if "cooked" in case else 2352)
                             print(f"Native source I/O {kind} {case}: reads={count[1]}, max={count[2]} bytes", flush=True)
-                            for name in ("retail-boot.kui", "ce-probe.kui", "retail-native-dual.kui", "disc.gdi", "track01.bin", "music track02.raw", "track03.bin"):
+                            names = ["retail-boot.kui", "ce-probe.kui", "retail-native-dual.kui", "disc.gdi", "track01.bin", "music track02.raw", "track03.bin"]
+                            if "-standalone" in case and "-absent" not in case: names.append("retail-native-standalone.kui")
+                            for name in names:
                                 assert (fixture / ("after-" + name)).read_bytes() == (fixture / name).read_bytes()
                             data = (fixture / "after-last-launch-a.txt").read_bytes()
                             body, footer = data.rsplit(b"crc32: ", 1)
                             assert int(footer, 16) == zlib.crc32(body)
                             fields = dict(line.split(": ", 1) for line in body.decode().splitlines()[1:])
-                            assert fields["package"] == "/kui/apps/games/retail-native-dual.kui"
+                            assert fields["package"] == "/kui/apps/games/" + module
                             assert fields["storage"] == "SCI microSD"
                             stride, header = (2048, 0) if "cooked" in case else (2352, 16)
                             source = (fixture / "track03.bin").read_bytes()
@@ -446,7 +467,8 @@ def main():
                             expected_crc = zlib.crc32(logical[21 * 2048:21 * 2048 + 3001])
                             assert struct.unpack_from("<I", payload, 0x1000 + 256)[0] == expected_crc
                             assert int(fields["source executable crc32"], 16) == expected_crc
-                            assert fields["reader"] == ("Background Legacy (Y)" if "-y" in case else "Background New (X)")
+                            assert fields["reader"] == ("Background New (X), no virtual VMU" if selected else
+                                "Background Legacy (Y)" if "-y" in case else "Background New (X)")
                         else:
                             assert digest(image) == before, "native X/Y prep changed card"
                         check_fs(image, base / "check-volume.img", kind, partitioned)

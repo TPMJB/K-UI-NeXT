@@ -16,6 +16,7 @@
 #include "kui/retail_loader_layout.h"
 #include "kui/vmu_launch_package.h"
 #include "kui/native_dual_reader.h"
+#include "kui/native_standalone_capability.h"
 #include "kui/media.h"
 #include "../core/games_cdda_profile.h"
 #include "platform.h"
@@ -846,10 +847,35 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         launch_package=vmu_package;
         log("Virtual card: separate persistent A1 module selected; startup will show its card path");
     }
-    struct native_cache_source_proof source_proof;
+    struct native_cache_source_proof source_proof;bool standalone_candidate=false;
     if(native_cache_prepare(image,map,!ce && metadata.native_gd,requested_options,patched,
-       package,files.root,log,cancel,defer_boot_crc?&source_proof:NULL)==NATIVE_CACHE_CANCELLED) {
+       package,files.root,log,cancel,defer_boot_crc?&source_proof:NULL,
+       native_dual?&standalone_candidate:NULL)==NATIVE_CACHE_CANCELLED) {
         problem="cancelled during native executable mapping";goto done;
+    }
+    /* New only: the combined module would refuse this executable, which has
+     * the SDK SCI family. An installed reader-only module runs it instead;
+     * without one the combined module reports its refusal as before. */
+    bool native_standalone=false;
+    if(standalone_candidate) {
+        FILINFO optional;
+        FRESULT present=f_stat(KUI_GAMES_RETAIL_NATIVE_STANDALONE_PACKAGE,&optional);
+        if(present!=FR_OK && present!=FR_NO_FILE && present!=FR_NO_PATH) {
+            problem="cannot inspect the standalone New module; launch refused";goto done;
+        }
+        if(present==FR_OK) {
+            struct kui_runtime_image candidate={0};
+            rr=(optional.fattrib&AM_DIR)?KUI_RUNTIME_IO:
+                kui_runtime_read(KUI_GAMES_RETAIL_NATIVE_STANDALONE_PACKAGE,&candidate,log,cancel);
+            if(rr!=KUI_RUNTIME_OK || !layout(&candidate,false) ||
+               kui_native_standalone_descriptor_find(candidate.data,candidate.info.payload_bytes,NULL)!=1) {
+                kui_runtime_free(&candidate);
+                problem="standalone New module unreadable or capability missing; reinstall it";goto done;
+            }
+            kui_runtime_free(package);*package=candidate;
+            launch_package=KUI_GAMES_RETAIL_NATIVE_STANDALONE_PACKAGE;native_standalone=true;
+            log("New reader: virtual-A2 module cannot admit this executable; using standalone New without virtual VMU");
+        }
     }
     if(defer_boot_crc) {
         if(source_proof.complete)map->boot_crc32=source_proof.crc32;
@@ -882,7 +908,8 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     if(reporting && report_safe && !stopped(&files)) {
         struct kui_game_launch_report report={
             .version=KUI_VERSION,.build_id=KUI_BUILD_ID,.image_path=path,
-            .reader=native_dual?(map->reader==KUI_RETAIL_READER_ASYNC?"Background New (X)":"Background Legacy (Y)"):
+            .reader=native_standalone?"Background New (X), no virtual VMU":
+                native_dual?(map->reader==KUI_RETAIL_READER_ASYNC?"Background New (X)":"Background Legacy (Y)"):
                 map->reader==KUI_RETAIL_READER_ASYNC?"Background":
                 map->reader==KUI_RETAIL_READER_ASYNC_EAGER?"Background (more work)":"Standard",
             .storage=map->storage_transport==KUI_STORAGE_SCIF?"SCIF microSD":

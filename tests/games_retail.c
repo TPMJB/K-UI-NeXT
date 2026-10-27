@@ -8,6 +8,8 @@
 #include "kui/game_launch_report.h"
 #include "kui/retail_zso.h"
 #include "kui/native_dual_reader.h"
+#include "kui/native_standalone_capability.h"
+#include "kui/native_sdk_sci_family.h"
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -26,6 +28,7 @@ static struct {
     unsigned writes, connects, disconnects, files, read_calls, physical_reads;
     unsigned hash_phase,hash_reads[2],hash_max[2],between_read_cancel_checks;
     unsigned vmu_package_opens,dual_package_opens,ordinary_package_opens;
+    unsigned standalone_package_opens,family_calls;
     uint64_t hash_begin[2],hash_end[2];
     bool hash_bounded;
     uint32_t first_sector;
@@ -40,6 +43,10 @@ static const char *const package = "0:/KUI/apps/games/retail-boot.kui";
 static const char *const dual_package = "0:/KUI/apps/games/retail-native-dual.kui";
 static bool native_dual_case(void) {return !strncmp(test.fault,"native-dual-",12);}
 static bool native_dual_report(void) {return native_dual_case() && strstr(test.fault,"-report");}
+static const char *const standalone_package = KUI_GAMES_RETAIL_NATIVE_STANDALONE_PACKAGE;
+static bool native_standalone_case(void) {return native_dual_case() && strstr(test.fault,"-standalone");}
+/* Only this case's New launch is expected to run on the standalone module. */
+static bool native_standalone_selected(void) {return !strcmp(test.fault,"native-dual-standalone-report");}
 static const char *const ce_package = "0:/KUI/apps/games/ce-probe.kui";
 static const char *const names[] = {"track01.bin", "music track02.raw", "track03.bin", "music track04.raw"};
 static const uint32_t starts[] = {0, 4, 45000, 45064};
@@ -176,6 +183,7 @@ FRESULT __wrap_f_open(FIL *file, const TCHAR *path, BYTE flags) {
     if(test.active && result == FR_OK) {
         ++test.files;
         if(!strcmp(path,dual_package))++test.dual_package_opens;
+        if(!strcmp(path,standalone_package))++test.standalone_package_opens;
         if(!strcmp(path,package))++test.ordinary_package_opens;
         if(!strcmp(path,KUI_GAMES_RETAIL_VMU_SILVER_PACKAGE)) ++test.vmu_package_opens;
         if(writes) {assert(!test.report_write);test.report_write=file;}
@@ -276,6 +284,17 @@ FRESULT __real_f_unlink(const TCHAR *);
 FRESULT __wrap_f_unlink(const TCHAR *path) { assert(!test.active); return __real_f_unlink(path); }
 FRESULT __real_f_rename(const TCHAR *, const TCHAR *);
 FRESULT __wrap_f_rename(const TCHAR *a, const TCHAR *b) { assert(!test.active); return __real_f_rename(a, b); }
+/* Synthetic fixture executables never carry the reviewed SDK SCI family and
+ * the real finder must say so. Standalone cases then model a found family. */
+int __real_kui_native_sdk_sci_family_find(const void *,size_t,uint32_t,struct kui_native_sdk_sci_family *);
+int __wrap_kui_native_sdk_sci_family_find(const void *image,size_t bytes,uint32_t load,
+    struct kui_native_sdk_sci_family *out) {
+    int result=__real_kui_native_sdk_sci_family_find(image,bytes,load,out);
+    assert(!result && test.active);++test.family_calls;
+    if(!native_standalone_case() || strstr(test.fault,"-nofamily"))return result;
+    *out=(struct kui_native_sdk_sci_family){0x8c0a0040u,0x8c0a00ccu,0x8c0a0204u,0x8c09ff10u};
+    return 1;
+}
 
 static uint8_t *host_file(const char *directory, const char *name, size_t *bytes) {
     char path[1024]; struct stat st;
@@ -382,6 +401,10 @@ static void seed(const char *directory) {
     if(strcmp(test.fault,"native-dual-absent")) {
         data=host_file(directory,"retail-native-dual.kui",&size);
         write_file(dual_package,data,size);free(data);
+    }
+    if(native_standalone_case() && !strstr(test.fault,"-absent")) {
+        data=host_file(directory,"retail-native-standalone.kui",&size);
+        write_file(standalone_package,data,size);free(data);
     }
     if(zso_case()) {seed_zso(directory);return;}
     if(format_case()) {
@@ -735,6 +758,8 @@ static void export_launch_files(const char *directory) {
     export_file(directory,package,"after-retail-boot.kui",false);
     export_file(directory,ce_package,"after-ce-probe.kui",false);
     if(native_dual_case())export_file(directory,dual_package,"after-retail-native-dual.kui",false);
+    if(native_standalone_case() && !strstr(test.fault,"-absent"))
+        export_file(directory,standalone_package,"after-retail-native-standalone.kui",false);
     char gdi_path[256];assert(snprintf(gdi_path,sizeof(gdi_path),"%s/disc.gdi",game_root())<(int)sizeof(gdi_path));
     export_file(directory,gdi_path,"after-disc.gdi",false);
     for(unsigned i=0;i<3;i++) {
@@ -896,6 +921,7 @@ static void check_native_dual(const char *directory) {
     test.hash_begin[0]=0u;test.hash_end[0]=16u*track_stride(2);
     test.hash_begin[1]=21u*track_stride(2);test.hash_end[1]=23u*track_stride(2);test.hash_bounded=true;
     const bool success=!strcmp(test.fault,"native-dual-x") || !strcmp(test.fault,"native-dual-y") || native_dual_report();
+    const bool standalone=native_standalone_selected();
     uint32_t request=strstr(test.fault,"-y")?KUI_RETAIL_READER_ASYNC_EAGER:KUI_RETAIL_READER_ASYNC;
     struct kui_runtime_image image={0};struct kui_game_ram_patches patches={0};
     if(fault("native-dual-patches"))patches.entries[0]=(struct kui_game_ram_patch){0x8c010004u,1u,true};
@@ -903,14 +929,27 @@ static void check_native_dual(const char *directory) {
         kui_games_retail_prepare_launch(selected,request,&patches,&image,log_line,cancel):
         kui_games_retail_prepare_reader(selected,request,&image,log_line,cancel);
     assert(result==success && !test.ordinary_package_opens);
-    if(result) {
+    /* Synthetic executables always fail the combined proof, so each New launch
+     * that reached it asks once for the family; Legacy never does. */
+    if(native_standalone_case() && !fault("native-dual-standalone-badcap"))
+        assert(test.family_calls==(request==KUI_RETAIL_READER_ASYNC?1u:0u));
+    if(request!=KUI_RETAIL_READER_ASYNC)assert(!test.family_calls);
+    assert(test.standalone_package_opens==(standalone || fault("native-dual-standalone-badcap")?1u:0u));
+    if(result && standalone) {
+        assert(test.dual_package_opens==1u &&
+            kui_native_standalone_descriptor_find(image.data,image.info.payload_bytes,NULL)==1 &&
+            !kui_native_dual_descriptor_find(image.data,image.info.payload_bytes,NULL));
+    } else if(result) {
         assert(test.dual_package_opens==1u && kui_native_dual_descriptor_find(image.data,image.info.payload_bytes,NULL)==1);
+    }
+    if(result) {
         if(native_dual_report()) {
             assert(test.hash_reads[0]==16u && test.hash_reads[1]==(fault("native-dual-retry-report")?4u:2u));
             printf("Native dual exact source: %u raw/cooked reads; max %u bytes; CRC plus native proof share source when available\n",test.hash_reads[1],test.hash_max[1]);
         }
         check_mapping(directory,&image);host_write(directory,"dual-payload.bin",image.data,image.info.payload_bytes);
-        printf("Native dual prepared: package=retail-native-dual.kui reader=%u\n",request);
+        printf("Native dual prepared: package=%s reader=%u\n",
+            standalone?"retail-native-standalone.kui":"retail-native-dual.kui",request);
     } else assert(!image.data && !image.info.payload_bytes && !test.writes);
     if(fault("native-dual-cancel") || fault("native-dual-patches"))assert(!test.connects && !test.read_calls);
     if(fault("native-dual-cancel-source"))assert(test.cancelled && test.injected && test.hash_reads[1]==2u);
