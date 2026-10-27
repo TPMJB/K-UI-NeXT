@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The accepted Evolution 1 split controller (6be76940ccc9) without its exact
+# Evolution 1 identity gates. Every structural, lifetime, layout, packet and
+# response check remains; other admitted native games use the same split path.
+BUILD ?= build/native-isolation-split-controller-general
+include Makefile.vmu-native-isolation-split-controller
+FLAGS += -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1
+NATIVE_FLAGS += -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1
+
+.PHONY: split-controller-general-host-tests
+split-controller-general-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 \
+	 -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -DKUI_VMU_NATIVE_CACHED_CODE=1 \
+	 -DKUI_NATIVE_DUAL_READERS=1 -DKUI_NATIVE_RA_TICK_OFF_ISOLATION=1 \
+	 -DKUI_NATIVE_SPLIT_CONTROLLER_ISOLATION=1 -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1 \
+	 tests/test_vmu_native_split_controller.c \
+	 $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-split-controller-general
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-split-controller-general

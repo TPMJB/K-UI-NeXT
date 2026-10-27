@@ -222,7 +222,9 @@ static void __attribute__((noipa)) native_passive_lease_only(
 static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #if KUI_NATIVE_E1_WAIT_CAPTURE || KUI_NATIVE_MAPLE_DELAY_ISOLATION || KUI_NATIVE_METADATA_CACHE_ISOLATION || KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
     /* These controls have exact Evolution contracts. Check the complete
-     * independently verified identity before publishing any worker hooks. */
+     * independently verified identity before publishing any worker hooks.
+     * The general split build keeps every structural/live check instead. */
+#if !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
     if(!kui_vmu_native_trace_image(&native_driver))
 #if KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
         stopped("SPLIT CONTROLLER NEEDS EVOLUTION 1",native_driver.image_bytes);
@@ -232,6 +234,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
         stopped("MAPLE DELAY NEEDS EVOLUTION 1",native_driver.image_bytes);
 #else
         stopped("WAIT CAPTURE NEEDS EVOLUTION 1",native_driver.image_bytes);
+#endif
 #endif
     if(native_runtime_mode()!=KUI_VMU_NATIVE_MODE_NORMAL)
 #if KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
@@ -474,7 +477,11 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #endif
 #elif KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
     retail_display_line("NEW READER / VIRTUAL A2 ON");
+#if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
+    retail_display_line("PREFETCH OFF / SPLIT CONTROLLER ALL");
+#else
     retail_display_line("PREFETCH OFF / SPLIT CONTROLLER");
+#endif
     retail_display_line("REAL MAPLE CALLBACKS ON");
 #elif KUI_NATIVE_METADATA_CACHE_ISOLATION
     retail_display_line("NEW READER / VIRTUAL A2 ON");

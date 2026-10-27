@@ -81,6 +81,10 @@ __asm__(".global __kui_native_metadata_cache_isolation_stage\n"
 __asm__(".global __kui_native_split_controller_isolation_stage\n"
         ".set __kui_native_split_controller_isolation_stage,1\n");
 #endif
+#if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
+__asm__(".global __kui_native_split_controller_general_stage\n"
+        ".set __kui_native_split_controller_general_stage,1\n");
+#endif
 #if KUI_NATIVE_CURRENT_BOTTOM_HEAP
 #define KUI_NATIVE_COLD_PROGRESS_STAGE 1
 __asm__(".global __kui_native_cold_progress_stage\n"

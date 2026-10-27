@@ -5,12 +5,16 @@
 #include "test_vmu_native_persistent.c"
 #undef main
 
-static void split_setup(void) {
+/* Any complete identity other than Evolution 1's: the general build admits it
+ * through the same structural/live checks, the exact build refuses it. */
+static bool split_other_identity;
+static void split_prepare(void) {
     static const uint8_t digest[32]={
         0xff,0xb5,0xa8,0xe5,0xff,0x55,0x47,0x02,0x6d,0x93,0x64,0x9e,0x1f,0x90,0x58,0xb7,
         0xee,0x5e,0x29,0xd8,0xd0,0xff,0x8a,0x89,0x33,0x57,0x01,0xf7,0xe9,0x64,0x7f,0x35};
     model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
     input.driver.image_bytes=2143652u;memcpy(input.driver.image_sha256,digest,sizeof(digest));
+    if(split_other_identity) input.driver.image_sha256[31]^=1u;
     input.exits.image_bytes=input.driver.image_bytes;
     input.lease.owner.image_bytes=input.driver.image_bytes;
     input.lease.heap_bytes=0xb0000u;input.lease.lease_bytes=0x60000u;input.lease.units=0x3001u;
@@ -18,7 +22,10 @@ static void split_setup(void) {
     put(input.lease.header+4u,4u,input.lease.units);
     input.runtime.lease_bytes=input.runtime.required_lease_bytes=0x60000u;
     lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
-    release_saw_unpublished=false;arm();install_hooks();
+    release_saw_unpublished=false;
+}
+static void split_setup(void) {
+    split_prepare();arm();install_hooks();
     CHECK(split_controller_geometry() && !live_plan.ready && !state.pending);
     memset(&measured_work,0,sizeof(measured_work));
 }
@@ -152,8 +159,24 @@ static void split_warm_tag_refusals(void) {
         for(unsigned port=0u;port<4u;port++) CHECK(!memcmp(before[port],rx_bytes(port*6u),1024u));
     }
 }
-int main(void) {
+static void split_identity(void) {
+    split_other_identity=true;
+#if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
     split_success();split_geometry_refusals();split_deferred_refusals();split_full_fallback();
     split_warm_tag_refusals();
+    for(unsigned mode=KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE;
+        mode<=KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE;mode++) {
+        split_prepare();input.diagnostics=mode;
+        CHECK(kui_vmu_native_passive_arm(&input,NULL)==-2 && !state.armed);
+    }
+#else
+    split_prepare();
+    CHECK(kui_vmu_native_passive_arm(&input,NULL)==-2 && !state.armed);
+#endif
+    split_other_identity=false;
+}
+int main(void) {
+    split_success();split_geometry_refusals();split_deferred_refusals();split_full_fallback();
+    split_warm_tag_refusals();split_identity();
     printf("Split controller host checks: %u\n",checks);return 0;
 }
