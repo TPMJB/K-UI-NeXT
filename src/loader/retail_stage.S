@@ -893,7 +893,7 @@ C(kui_retail_startup_gd_return):
 .Lstartup_gd_after: .long C(kui_retail_startup_gd_after)+0x20000000
 #endif
 #endif
-#if KUI_RETAIL_TOY_PILOT || KUI_RETAIL_ZSO
+#if KUI_RETAIL_TOY_PILOT || KUI_RETAIL_ZSO || KUI_NATIVE_STANDALONE_READER
     /* The Toy pilot and separate ZSO build have one synchronous SCI resident. Keep the ordinary
      * selector's symbols as aliases, without embedding four identical copies.
      * Its stage rejects unsupported launch options before selecting a blob. */
@@ -907,7 +907,9 @@ __retail_resident_scif_blob_start:
 __retail_resident_sci_blob_start:
 __retail_resident_ide_blob_start:
 __retail_resident_scia_blob_start:
-#if KUI_RETAIL_ZSO
+#if KUI_NATIVE_STANDALONE_READER
+    .incbin KUI_NATIVE_STANDALONE_RESIDENT_BIN
+#elif KUI_RETAIL_ZSO
 #ifndef KUI_RETAIL_ZSO_RESIDENT_BIN
 #define KUI_RETAIL_ZSO_RESIDENT_BIN "build/retail-zso/resident-sci.bin"
 #endif

@@ -421,13 +421,20 @@ static void startup_gd_install(void);
 #endif
 
 static void stopped(const char *message,uint32_t detail) __attribute__((noreturn));
+#if KUI_NATIVE_STANDALONE_READER
+#include "native_standalone_reader_stage.inc"
+#endif
 static void
 #if KUI_NATIVE_DUAL_READERS
 __attribute__((noipa))
 #endif
 select_resident(void) {
     resident_limit=KUI_RETAIL_STANDARD_LIMIT;
-#if KUI_NATIVE_DUAL_READERS
+#if KUI_NATIVE_STANDALONE_READER
+    resident_blob=__retail_resident_sci_blob_start;
+    resident_bytes=(size_t)(__retail_resident_sci_blob_end-resident_blob);
+    resident_limit=KUI_RETAIL_LOW_ASYNC_LIMIT;
+#elif KUI_NATIVE_DUAL_READERS
     /* The ordinary module remains the Standard/CE/CDDA path. This module
      * owns two separately linked native SCI engines and never substitutes
      * a Standard reader for an unsupported Background map. */
@@ -1212,6 +1219,12 @@ void kui_retail_stage_main(const uint8_t *wire) {
     if(!kui_retail_observe_admit(&manifest)) stopped("14 TOY SCI MAP REFUSED",manifest.gdi_crc32);
     retail_display_line("14 TOY RESOURCE OBSERVATION / NO CDDA");
 #endif
+#if KUI_NATIVE_STANDALONE_READER
+    if(!kui_native_standalone_launch_prepare(&manifest))
+        stopped("DOA2 PILOT NEEDS SCI AND BACKGROUND OFF",manifest.reader);
+    retail_display_line("DOA2 NEW STANDALONE DEMAND READER");
+    retail_display_line("NO VIRTUAL VMU / NO GAME RAM RESERVATION");
+#endif
     select_resident();
     if(manifest.boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES ||
        manifest.boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES ||
@@ -1225,7 +1238,9 @@ void kui_retail_stage_main(const uint8_t *wire) {
 #else
     if(manifest.reader!=KUI_RETAIL_READER_STANDARD)
         retail_display_line(manifest.reader==KUI_RETAIL_READER_ASYNC_EAGER?
-#if KUI_NATIVE_DUAL_READERS
+#if KUI_NATIVE_STANDALONE_READER
+            "UNSUPPORTED STANDALONE VARIANT":"NEW SDK SCI DEMAND DELIVERY");
+#elif KUI_NATIVE_DUAL_READERS
             "BACKGROUND Y - LEGACY / 25":"BACKGROUND X - SDK SCI / PIO CACHE");
 #else
             "BACKGROUND READER Y - 25 PER CALL":"BACKGROUND READER X - 20 PER CALL");
@@ -1312,6 +1327,9 @@ void kui_retail_stage_main(const uint8_t *wire) {
         stopped("SCRAMBLED WINDOWS CE BOOT IS UNSUPPORTED",0);
 #endif
     boot_crc=kui_retail_crc32(0,boot,exec_bytes);
+#if KUI_NATIVE_STANDALONE_READER
+    standalone_source_check();
+#endif
     if((size_t)(__retail_trampoline_end-__retail_trampoline_start)!=sizeof(original_entry))
         stopped("INVALID ENTRY TRAMPOLINE",0);
     memcpy(original_entry,boot,ENTRY_PATCH_BYTES);
@@ -2172,6 +2190,10 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     }
 #if KUI_NATIVE_STAGE_FAST_CRC
     retail_display_line("ENTIRE RESIDENT VERIFIED");
+#endif
+#if KUI_NATIVE_STANDALONE_READER
+    standalone_source_check();
+    standalone_source_publish();
 #endif
 #if KUI_ARMADA_CE_RAM_BIND_STAGE
     /* Bootstrap 2 has completed; caches are clean and disabled here. Prove
