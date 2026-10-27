@@ -456,6 +456,22 @@ bool kui_shell_set_games_rows(struct kui_shell *s,const struct kui_games_page *p
     kui_shell_set_games_listing(s,page);
     return true;
 }
+bool kui_shell_set_games_titles(struct kui_shell *s,const struct kui_games_page *page,unsigned offset) {
+    if(!s || !page || s->page!=KUI_SHELL_GAMES || s->games_loading ||
+       s->games_page>UINT_MAX/KUI_GAMES_ROWS || s->games_page*KUI_GAMES_ROWS!=offset ||
+       !memchr(page->root,0,sizeof(page->root)) || strcmp(page->root,s->games_listing.root)) return false;
+    bool changed=false;
+    for(unsigned i=0;i<s->games_listing.count && i<page->count && i<KUI_GAMES_ROWS;i++) {
+        struct kui_games_entry *e=&s->games_listing.entries[i];
+        const struct kui_games_entry *found=&page->entries[i];
+        if(e->disabled || e->directory || !memchr(found->name,0,sizeof(found->name)) ||
+           !memchr(found->path,0,sizeof(found->path)) || !memchr(found->title,0,sizeof(found->title)) ||
+           strcmp(e->name,found->name) || strcmp(e->path,found->path) ||
+           !found->title[0] || !strcmp(e->title,found->title)) continue;
+        memcpy(e->title,found->title,sizeof(e->title));changed=true;
+    }
+    return changed;
+}
 bool kui_shell_set_games_found_rows(struct kui_shell *s,const struct kui_games_page *page,
     unsigned generation,unsigned offset,unsigned view,unsigned selected) {
     char root[KUI_DEST_ROOT_CAP];

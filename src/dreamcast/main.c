@@ -182,6 +182,10 @@ static bool games_warm_done;
 static unsigned games_storage_observed=KUI_STORAGE_AUTO;
 static struct kui_shell_games_art_key games_art_requested,games_art_running,games_art_published,games_art_done;
 static bool games_art_request_valid,games_art_result_ready,games_art_done_valid;
+/* Background titles for the rows on screen, applied by the UI thread. */
+static struct kui_games_page games_titles_page;
+static unsigned games_titles_offset;
+static bool games_titles_ready;
 static struct kui_games_entry games_art_entry,games_art_running_entry;
 static struct kui_games_cover_result games_art_result;
 static struct kui_app_status games_scan_status;
@@ -1602,11 +1606,20 @@ static bool games_page(enum kui_shell_page page) {
         page==KUI_SHELL_GAMES_EXTRA_OPTIONS || page==KUI_SHELL_GAMES_TESTS || page==KUI_SHELL_GAMES_INFO ||
         page==KUI_SHELL_GAMES_PATCHES || page==KUI_SHELL_GAMES_CODEC || page==KUI_SHELL_GAMES_CHECK;
 }
+/* Background preparation of the Games page on screen: its rows' titles, then
+ * their box art at the view's size, then the folders and titles of the pages
+ * either side, nearest first. One step per idle pass; input, an art request
+ * or an action stops it, and it resumes at the same step. */
+#define GAMES_PREFETCH_DONE 6u
+static struct {char root[KUI_DEST_ROOT_CAP];unsigned page,view,step;bool valid;} games_prefetch;
+static uint16_t games_prefetch_pixels[KUI_COVER_PIXELS];
+static void games_prefetch_reset(void) {games_prefetch.valid=false;}
 static void games_cache_invalidate(void) {
     (void)kui_games_storage_release();
     kui_games_cache_clear();kui_games_covers_cache_clear();games_warm_done=false;
+    games_prefetch_reset();
     mutex_lock(&lock);
-    games_art_done_valid=false;games_art_result_ready=false;
+    games_art_done_valid=false;games_art_result_ready=false;games_titles_ready=false;
     mutex_unlock(&lock);
 }
 static void games_storage_observe(void) {
@@ -1718,6 +1731,79 @@ static void games_storage_idle(void) {
     mutex_lock(&lock);bool browsing=games_page(shell.page);mutex_unlock(&lock);
     if(!browsing || now-last>=GAMES_STORAGE_IDLE_MS) (void)kui_games_storage_release();
 }
+/* Requires the lock. True while the page the work began on is still the one
+ * shown, settled, with its selected art done. */
+static bool games_prefetch_current(void) {
+    return shell.page==KUI_SHELL_GAMES && !shell.games_loading && !shell.games_scanning &&
+        games_prefetch.valid && shell.games_page==games_prefetch.page &&
+        kui_shell_games_view(&shell)==games_prefetch.view && !strcmp(shell.games_path,games_prefetch.root) &&
+        !strcmp(shell.games_path,shell.games_listing.root) &&
+        (!games_art_request_valid ||
+         (games_art_done_valid && kui_shell_games_art_same(&games_art_requested,&games_art_done)));
+}
+static bool games_prefetch_cancelled(void) {
+    if(games_idle_cancelled()) return true;
+    mutex_lock(&lock);bool stop=!games_prefetch_current();mutex_unlock(&lock);
+    return stop;
+}
+/* List one page for background work. A stop resumes the step later; a
+ * storage failure ends the work for this page, so a failing card is not
+ * reread on every idle pass. */
+static bool games_prefetch_rows(unsigned offset,struct kui_games_page *rows) {
+    if(kui_games_list_rows(games_prefetch.root,offset,games_prefetch.view,rows,kui_log,
+       games_prefetch_cancelled)) return true;
+    if(!games_prefetch_cancelled()) games_prefetch.step=GAMES_PREFETCH_DONE;
+    return false;
+}
+static bool games_prefetch_idle_work(void) {
+    if(kui_cd_audio_owns_drive() || games_idle_cancelled()) return false;
+    mutex_lock(&lock);
+    bool showing=shell.page==KUI_SHELL_GAMES && !shell.games_loading && !shell.games_scanning &&
+        !strcmp(shell.games_path,shell.games_listing.root);
+    if(showing && (!games_prefetch.valid || shell.games_page!=games_prefetch.page ||
+       kui_shell_games_view(&shell)!=games_prefetch.view || strcmp(shell.games_path,games_prefetch.root))) {
+        snprintf(games_prefetch.root,sizeof(games_prefetch.root),"%s",shell.games_path);
+        games_prefetch.page=shell.games_page;games_prefetch.view=kui_shell_games_view(&shell);
+        games_prefetch.step=0;games_prefetch.valid=true;
+    }
+    bool wanted=showing && games_prefetch_current() && games_prefetch.step<GAMES_PREFETCH_DONE;
+    unsigned total=shell.games_listing.total;bool more=shell.games_listing.has_more;
+    mutex_unlock(&lock);
+    if(!wanted) return false;
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    const unsigned page=games_prefetch.page,view=games_prefetch.view,offset=page*KUI_GAMES_ROWS;
+    struct kui_games_page rows;
+    if(games_prefetch.step==0) {
+        /* Titles of the rows on screen, from record headers alone. */
+        if(!games_prefetch_rows(offset,&rows)) return true;
+        (void)kui_games_prefetch_titles(&rows,kui_log,games_prefetch_cancelled);
+        if(games_prefetch_cancelled() || !games_prefetch_rows(offset,&rows)) return true;
+        mutex_lock(&lock);
+        games_titles_page=rows;games_titles_offset=offset;games_titles_ready=true;
+        mutex_unlock(&lock);
+        games_prefetch.step=1;return true;
+    }
+    if(games_prefetch.step==1) {
+        /* Box art of every row on screen, so moving the selection shows it. */
+        if(!games_prefetch_rows(offset,&rows)) return true;
+        for(unsigned row=0;row<rows.count;row++) {
+            struct kui_games_cover_result result;
+            (void)kui_games_selected_cover(&rows.entries[row],kui_games_view_size(view),
+                games_prefetch_pixels,&result,kui_log,games_prefetch_cancelled);
+            if(games_prefetch_cancelled()) return true;
+        }
+        games_prefetch.step=2;return true;
+    }
+    /* Pages either side, nearest first: resolve their folders, read titles. */
+    static const int near[4]={1,-1,2,-2};
+    int target=(int)page+near[games_prefetch.step-2u];
+    if(target<0 || (target>(int)page && !more) ||
+       (total && (unsigned)target*KUI_GAMES_ROWS>=total)) {++games_prefetch.step;return true;}
+    if(!games_prefetch_rows((unsigned)target*KUI_GAMES_ROWS,&rows)) return true;
+    (void)kui_games_prefetch_titles(&rows,kui_log,games_prefetch_cancelled);
+    if(!games_prefetch_cancelled()) ++games_prefetch.step;
+    return true;
+}
 static void games_warm_idle_work(void) {
     if(games_warm_done || kui_cd_audio_owns_drive() || games_warm_cancelled()) return;
     struct kui_music_status music;kui_music_status_copy(&music);
@@ -1788,7 +1874,9 @@ static void *worker(void *unused) {
             }
             if(!action) {
                 games_storage_idle();
-                if(idle && !games_art_idle_work() && !games_selection_store(false)) {music_idle_work();games_warm_idle_work();}
+                if(idle && !games_art_idle_work() && !games_selection_store(false)) {
+                    music_idle_work();games_warm_idle_work();(void)games_prefetch_idle_work();
+                }
                 thd_sleep(16);continue;
             }
 #else
@@ -3101,6 +3189,10 @@ int main(void) {
                 games_ui_changed=true;
             }
             games_art_result_ready=false;
+        }
+        if(games_titles_ready) {
+            if(kui_shell_set_games_titles(&shell,&games_titles_page,games_titles_offset)) games_ui_changed=true;
+            games_titles_ready=false;
         }
         if(seen_files_result!=files_result_generation) {
             kui_shell_set_files_status(&shell,&files_result);seen_files_result=files_result_generation;

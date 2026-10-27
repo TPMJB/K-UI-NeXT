@@ -2405,6 +2405,25 @@ static void games_page(unsigned count,bool more,unsigned view) {
     }
     kui_shell_set_games_listing(&s,&page);
 }
+/* Background titles reach only the rows on screen that still show the same
+ * image; a turned page, another folder or a loading page takes none. */
+static void games_background_titles(void) {
+    reset(KUI_SHELL_HOME);
+    s.home_selected=home_index(KUI_SHELL_GAMES);assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST);
+    games_page(4,true,KUI_GAMES_VIEW_LIST);s.games_selected=2;
+    struct kui_games_page found=s.games_listing;
+    snprintf(found.entries[1].title,sizeof(found.entries[1].title),"GAME ONE");
+    snprintf(found.entries[3].title,sizeof(found.entries[3].title),"GAME THREE");
+    strcpy(found.entries[3].path,"/Games/Other/disc.gdi");          /* Not the image shown. */
+    assert(!kui_shell_set_games_titles(&s,&found,KUI_GAMES_ROWS));    /* Another page. */
+    char root[sizeof(found.root)];strcpy(root,found.root);strcpy(found.root,"/Games/Fighting");
+    assert(!kui_shell_set_games_titles(&s,&found,0));strcpy(found.root,root);
+    s.games_loading=true;assert(!kui_shell_set_games_titles(&s,&found,0));s.games_loading=false;
+    assert(kui_shell_set_games_titles(&s,&found,0));
+    assert(!strcmp(s.games_listing.entries[1].title,"GAME ONE") && !s.games_listing.entries[3].title[0]);
+    assert(s.games_selected==2 && s.games_listing.count==4 && !s.games_loading);
+    assert(!kui_shell_set_games_titles(&s,&found,0));                 /* Nothing new. */
+}
 static void games_views(void) {
     reset(KUI_SHELL_HOME);
     assert(s.games_view==KUI_GAMES_VIEW_SAVED && kui_shell_games_view(&s)==KUI_GAMES_VIEW_LIST);
@@ -4260,7 +4279,7 @@ int main(int argc,char **argv) {
     vmu_continuous_scrolling();vmu_catalog_scrolling();vmu_scroll_rendering();small_tools_controls();small_tools_rendering();
     vmu_copy_all_controls();vmu_import_controls();vmu_bulk_import_rendering();
     vmu_collection_copy_controls();vmu_collection_controls();vmu_collection_rendering();
-    games_remembered_selection(); games_controls(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_cdda_compatibility_status(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_zso_controls(); games_codec_controls(); games_check_baseline_controls(); games_variant_controls();
+    games_remembered_selection(); games_controls(); games_background_titles(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_cdda_compatibility_status(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_zso_controls(); games_codec_controls(); games_check_baseline_controls(); games_variant_controls();
     if(argc==2 && !strcmp(argv[1],"--games-controls")) { puts("PASS Games navigation and launch controls"); return 0; }
     games_rendering(); games_native_reader_choices(); games_new_reader_defaults(); games_patch_rendering(); games_zso_rendering(); games_selected_art_rendering(); games_variant_rendering();
     if(argc==2 && !strcmp(argv[1],"--games")) { puts("PASS Games navigation, launch eligibility and rendering"); return 0; }

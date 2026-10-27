@@ -322,6 +322,9 @@ bool kui_shell_games_selection(const struct kui_shell *,struct kui_games_selecti
 bool kui_shell_set_games_found_rows(struct kui_shell *,const struct kui_games_page *,
     unsigned generation,unsigned offset,unsigned view,unsigned selected);
 /* Worker publications must match the request that is still on screen. */
+/* Titles that background reads found for the rows on screen at `offset`.
+ * Only rows still showing the same image take one; nothing else changes. */
+bool kui_shell_set_games_titles(struct kui_shell *,const struct kui_games_page *,unsigned offset);
 bool kui_shell_set_games_rows(struct kui_shell *,const struct kui_games_page *,
     unsigned generation,unsigned offset,unsigned requested_view);
 void kui_shell_set_games_detail(struct kui_shell *shell, const struct kui_games_detail *detail);

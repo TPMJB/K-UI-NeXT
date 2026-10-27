@@ -13,7 +13,7 @@ from zso_fixture import lzo_block
 
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = str(ROOT / "build/games-covers-image")
-CASES = ("scan", "selected-cache", "session", "cancel", "write-fail", "missing-root", "format-iso", "format-cue",
+CASES = ("scan", "selected-cache", "session", "titles", "cancel", "write-fail", "missing-root", "format-iso", "format-cue",
          "format-cdi", "format-zso-lzo", "format-compressed", "format-legacy-empty", "format-payloads")
 
 
@@ -190,7 +190,7 @@ def main():
                 output = run(BINARY, str(image), str(selected_fixture), "check", case)
                 assert f"PASS Games covers check {case}" in output
                 for line in output.splitlines():
-                    if line.startswith("Browse sequence:"):
+                    if line.startswith(("Browse sequence:", "Title prefetch:")):
                         print(f"{kind} {line}", flush=True)
                 run("fsck.fat" if kind == "fat32" else "fsck.exfat", "-n", str(image))
                 image.unlink()

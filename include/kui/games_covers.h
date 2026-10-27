@@ -40,6 +40,10 @@ struct kui_games_cover_result {
 bool kui_games_selected_cover(const struct kui_games_entry *entry, enum kui_cover_size size,
     uint16_t pixels[KUI_COVER_PIXELS], struct kui_games_cover_result *out,
     kui_log_fn log, kui_cancel_fn cancel);
+/* Titles of a page's rows from their box-art record headers alone (no
+ * pixels), for rows with no cached title or artwork; a later listing of
+ * those rows shows them without I/O. True if it read any. Worker only. */
+bool kui_games_prefetch_titles(const struct kui_games_page *page, kui_log_fn log, kui_cancel_fn cancel);
 void kui_games_covers_cache_clear(void);
 /* Compatibility wrapper: the page contains rows only; pixels is untouched.
  * All views load artwork separately for their selected entry. */

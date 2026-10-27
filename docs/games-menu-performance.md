@@ -42,6 +42,32 @@ measurement.
    covers in idle time, nearest pages first, so later page turns need no I/O.
 4. Read `/Games` once on the first listing instead of three times.
 
+### Stage 1 as built
+
+1. **Storage session** (`kui_games_storage_*`). Listing, find, inspection, the
+   selected cover, the remembered selection and a game's launch settings
+   share one connection and mount while the worker holds it. The worker
+   releases it before any other action, before music preloads, on Refresh
+   or a storage change, on leaving Games and after 15 s without browsing
+   I/O. A storage error releases it; a stop does not. Another mount or
+   unmount clears FatFs's `fs_type` for the session's work area, and the next
+   job reconnects. On the host fixture a cold listing, every row's art, one
+   inspection and a view change take 8 card connects unheld and 1 held.
+2. **Held page turns.** The shell remembers the page and selection on screen
+   when a turn starts and draws exactly those until the new rows arrive; a
+   rendered turn in flight is byte-identical to the page being left.
+3. **Background preparation.** After the selected art is done, one step per
+   idle pass: titles of the rows on screen from record headers alone
+   (`kui_games_prefetch_titles`, about five block reads a row), applied with
+   `kui_shell_set_games_titles`; box art of every row at the view's size;
+   then folders and titles of the pages either side, nearest first. Input,
+   an art request or an action stops it; it resumes at the same step. A
+   storage failure ends it for that page.
+4. **Not done: one `/Games` pass.** The first listing runs once per boot,
+   in the background warm-up. Merging the payload and variant passes would
+   save one directory read of that listing but reworks the filtering that
+   hides track files and pairs 2048-byte copies, so it is left as it is.
+
 ### Stage 2: a scrolling browser
 
 - One continuous list over the in-RAM catalogue (up to 1024 sorted entries

@@ -464,8 +464,37 @@ static void check_session(void) {
     puts("PASS held Games storage session: one connect for listing, art, inspection and view; stop keeps, error releases");
 }
 
+/* Titles come from record headers alone; a later listing shows them with no
+ * media reads; a second pass reads nothing; artwork reads still work. */
+static void check_titles(void) {
+    struct kui_games_scan_counts counts;scan(&counts,true);
+    kui_games_cache_clear();kui_games_covers_cache_clear();kui_games_storage_hold(true);
+    struct kui_games_page page;
+    assert(kui_games_list_rows("/Games",0,KUI_GAMES_VIEW_LIST,&page,log_line,cancel) && page.count==7);
+    unsigned row;assert(strcmp(entry(&page,"Twiddled Game",&row)->title,"TWIDDLED GAME"));
+    unsigned reads=test.block_reads,opens=test.record_opens,rows=0;
+    for(unsigned i=0;i<page.count;i++) rows+=!page.entries[i].directory && !page.entries[i].disabled;
+    assert(kui_games_prefetch_titles(&page,log_line,cancel));
+    assert(test.record_opens-opens<=rows && test.connected && !test.files);
+    const unsigned header_reads=test.block_reads-reads;
+    reads=test.block_reads;opens=test.record_opens;
+    assert(!kui_games_prefetch_titles(&page,log_line,cancel));
+    assert(reads==test.block_reads && opens==test.record_opens);
+    struct kui_games_page again;
+    assert(kui_games_list_rows("/Games",0,KUI_GAMES_VIEW_LIST,&again,log_line,cancel));
+    assert(reads==test.block_reads && !strcmp(entry(&again,"Twiddled Game",&row)->title,"TWIDDLED GAME"));
+    for(unsigned i=0;i<again.count;i++) assert(again.entries[i].title[0] && !again.entries[i].cover);
+    struct kui_games_cover_result result;
+    assert(kui_games_selected_cover(entry(&again,"Twiddled Game",&row),KUI_COVER_SIZE_LARGE,pixels[0],
+        &result,log_line,cancel) && result.cover && test.block_reads-reads>header_reads/rows);
+    assert(kui_games_storage_release());kui_games_storage_hold(false);
+    printf("Title prefetch: %u rows, %u block reads for headers\n",rows,header_reads);
+    puts("PASS title prefetch: headers only, later rows need no I/O, repeat reads nothing");
+}
+
 static void check(const char *host) {
     if(!strcmp(test.fault,"session")) {check_session();return;}
+    if(!strcmp(test.fault,"titles")) {check_titles();return;}
     if(!strcmp(test.fault,"selected-cache")) {check_selected_cache();return;}
     if(!strncmp(test.fault,"format-",7)) {
         struct kui_games_scan_counts c;scan(&c,true);
