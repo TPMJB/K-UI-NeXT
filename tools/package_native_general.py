@@ -35,6 +35,11 @@ PREFETCH = {'off': ('build/native-isolation-split-controller-general', 'K-UI-Nat
             'auto': ('build/native-split-controller-stream-guard', 'K-UI-Native-General-Prefetch-Auto-',
                      b'PREFETCH AUTO / SPLIT CONTROLLER ALL\0')}
 PACKAGE_TOOLS = ('runtime_package.py', 'vmu_persist_profile.py', 'vmu_native_cache_seed.py', 'vmu_native_mode.py')
+# The standalone RAM-map test build (Makefile.native-standalone-ram-map)
+# announces itself on the stage screen; the structural build never does.
+RAM_MAP_BANNER = b'RAM MAP TEST - FREE PAGES MARKED\0'
+STANDALONE_VARIANTS = {'structural': ('build/native-standalone-general', ''),
+                       'ram-map': ('build/native-standalone-ram-map', 'RamMap-')}
 
 
 def require(value, message):
@@ -73,7 +78,9 @@ def main():
     parser.add_argument('--dual', type=Path, help='Default: the selected split-controller build')
     parser.add_argument('--prefetch', choices=sorted(PREFETCH), default='off',
                         help='Split-controller prefetch: off, on, or auto (paused while the game streams)')
-    parser.add_argument('--standalone', type=Path, default=ROOT/'build/native-standalone-general/retail-native-standalone.kui')
+    parser.add_argument('--standalone', type=Path, help='Default: the selected standalone build')
+    parser.add_argument('--standalone-variant', choices=sorted(STANDALONE_VARIANTS), default='structural',
+                        help='Standalone New reader: structural, or the console RAM-map test')
     parser.add_argument('--gui', type=Path, required=True, help='runtime.kui built from the same source commit')
     parser.add_argument('--evidence', type=Path, action='append', default=[], help='Evidence file to include')
     parser.add_argument('--readme', type=Path, required=True)
@@ -81,6 +88,9 @@ def main():
     args = parser.parse_args()
     if args.dual is None:
         args.dual = ROOT/PREFETCH[args.prefetch][0]/'retail-native-dual.kui'
+    if args.standalone is None:
+        args.standalone = ROOT/STANDALONE_VARIANTS[args.standalone_variant][0]/'retail-native-standalone.kui'
+    ram_map = args.standalone_variant == 'ram-map'
     source_commit = git('rev-parse', 'HEAD')
     require(not git('status', '--porcelain', '--untracked-files=no'), 'Commit all source changes before packaging')
     build = source_commit[:12]
@@ -89,7 +99,9 @@ def main():
         require(verify(data)['build'] == build, name+' module was not built from '+build)
     require(all(dual.count(banner) == (mode == args.prefetch) for mode, (_, _, banner) in PREFETCH.items()),
             'Split-controller module prefetch mode differs from --prefetch')
-    name = PREFETCH[args.prefetch][1]+build
+    require(standalone.count(RAM_MAP_BANNER) == ram_map and not dual.count(RAM_MAP_BANNER),
+            'Standalone module variant differs from --standalone-variant')
+    name = PREFETCH[args.prefetch][1]+STANDALONE_VARIANTS[args.standalone_variant][1]+build
     folder = args.output/name
     require(not folder.exists(), 'Output folder already exists: '+str(folder))
     (folder/'dual/base/KUI/apps/games').mkdir(parents=True)
@@ -117,7 +129,7 @@ def main():
                               virtual_a2=True, controller_tick_off=args.prefetch == 'off',
                               prefetch_enabled=args.prefetch != 'off', prefetch_mode=args.prefetch),
                     standalone=dict(build=build, sha256=sha(standalone), virtual_vmu=False,
-                                    game_ram_reservation=False),
+                                    game_ram_reservation=False, ram_map_test=ram_map),
                     refuse_ordinary_sha256=[DOA2_PILOT_MODULE],
                     console_compatibility_verified=False)
     (folder/'general.json').write_text(json.dumps(metadata, indent=2)+'\n')

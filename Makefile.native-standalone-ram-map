@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Console RAM-map test: the structural New standalone reader, plus a pattern
+# the stage writes over free upper RAM before the game starts and a per-page
+# report of what the game left untouched on its menu-return screen. It
+# installs as retail-native-standalone.kui in place of the structural build.
+BUILD ?= build/native-standalone-ram-map
+include Makefile.native-standalone-general
+FLAGS += -DKUI_NATIVE_RAM_MAP=1
+
+# Executes the linked fill and report on a RAM and write-back cache model.
+.PHONY: ram-map-host-tests
+ram-map-host-tests: $(BUILD)/stage.elf $(BUILD)/resident-sci.elf
+	$(HOST_CC) -std=c11 -O2 -Wall -Wextra -Werror -Wpedantic tests/test_native_ram_map_exec.c \
+	 -o $(BUILD)/test-ram-map
+	$(BUILD)/test-ram-map $(BUILD)/stage.elf $(BUILD)/resident-sci.elf

@@ -456,6 +456,30 @@ static void capture_native_fault(uint32_t function, uint32_t current_param) {
 #endif
 #endif
 #if KUI_VMU_NATIVE_BACKGROUND || KUI_NATIVE_STANDALONE_READER
+#if KUI_NATIVE_RAM_MAP
+#include "kui/native_ram_map.h"
+__asm__(".global __kui_native_ram_map_resident\n"
+        ".set __kui_native_ram_map_resident,1\n");
+/* Terminal only: the game has asked to leave, or its GD call stopped, and
+ * nothing resumes. A bit stays set only while every word of its 128 KiB page
+ * still holds the stage's pattern. OCBP first writes back any line the game
+ * left dirty, so the uncached read sees what the game finally stored. */
+static void __attribute__((noinline)) ram_map_report(void) {
+    uint32_t unused[KUI_NATIVE_RAM_MAP_WORDS],*out=unused,word=0u,bit=1u;
+    uint32_t a=KUI_NATIVE_RAM_MAP_BEGIN;
+    do {
+        uint32_t same=bit;
+        do {
+            __asm__ volatile("ocbp @%0"::"r"(a):"memory");
+            if(*(volatile const uint32_t *)(uintptr_t)(a|0x20000000u)!=kui_native_ram_map_word(a))
+                same=0u;
+        } while((a+=4u)&(KUI_NATIVE_RAM_MAP_PAGE_BYTES-1u));
+        word|=same;
+        if(!(bit<<=1)) {*out++=word;word=0u;bit=1u;}
+    } while(a!=KUI_RETAIL_RAM_END);
+    retail_display_values("RAM UNUSED",unused,KUI_NATIVE_RAM_MAP_WORDS);
+}
+#endif
 /* The separate VMU reader keeps compact terminal fields in its unchanged
  * low reservation; the worker owns the detailed VMU report. No counters or
  * labels on this terminal-only path participate in game read scheduling. */
@@ -464,6 +488,9 @@ static void __attribute__((noinline)) native_reader_report(const char *label) {
     retail_display_line(label);
     retail_display_values("FN CMD",&service.diag.last_function,2u);
     retail_display_values("LBA COUNT DEST",&service.diag.last_lba,3u);
+#if KUI_NATIVE_RAM_MAP
+    ram_map_report();
+#endif
 }
 static void report_fault(uint32_t function) {
     (void)function;

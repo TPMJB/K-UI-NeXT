@@ -424,6 +424,9 @@ static void stopped(const char *message,uint32_t detail) __attribute__((noreturn
 #if KUI_NATIVE_STANDALONE_READER
 #include "native_standalone_reader_stage.inc"
 #endif
+#if KUI_NATIVE_RAM_MAP
+#include "native_ram_map_stage.inc"
+#endif
 static void
 #if KUI_NATIVE_DUAL_READERS
 __attribute__((noipa))
@@ -2274,6 +2277,9 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     retail_display_line("IF IT STOPS PHOTOGRAPH THE LAST SCREEN");
     retail_display_line("POWER OFF AND ON TO RETURN");
     retail_display_line("A RESET NOW MEANS WINDOWS CE ITSELF FAILED");
+#endif
+#if KUI_NATIVE_RAM_MAP
+    ram_map_fill();
 #endif
     /* Preserve the existing read-only frame delay for this isolated video
      * comparison. CPU/cache restoration remains entirely in the assembly. */
