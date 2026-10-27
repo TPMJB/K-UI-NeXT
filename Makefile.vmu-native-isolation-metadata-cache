@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Restore real controller/VMU callbacks with immutable private metadata read
+# through clean P1 views; retain every coherent live SDK/heap/MMIO witness.
+BUILD ?= build/native-isolation-metadata-cache
+include Makefile.vmu-native-dual-readers
+NATIVE_LAYOUT := src/loader/vmu_native_metadata_cache.ld
+FLAGS += -DKUI_NATIVE_METADATA_CACHE_ISOLATION=1 -DKUI_NATIVE_RA_TICK_OFF_ISOLATION=1
+NATIVE_FLAGS += -DKUI_NATIVE_METADATA_CACHE_ISOLATION=1 -DKUI_NATIVE_RA_TICK_OFF_ISOLATION=1
+$(BUILD)/native-worker.elf: src/loader/vmu_native_metadata_cache.ld
