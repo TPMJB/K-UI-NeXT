@@ -301,27 +301,32 @@ def apply(root, shared, rows, write=print):
         if len(bound) > 1:
             write(f'{key}: several cards claim this game ({", ".join(bound)}); skipped')
             continue
-        if bound:
-            card, _ = read_pair(parent / bound[0])
-            if explain(card)['files']:
-                write(f'{key}: its card {bound[0]} already holds saves; skipped')
-                continue
-        content = subset(image, slots)
-        if bound:
-            # Never let two pairs claim one game: the empty card goes first.
-            retire(parent / bound[0])
-            write(f'{key}: removed the empty card {bound[0]}')
-        number = next(n for n in range(2, 10000) if f'p{n:04d}' not in used)
-        name = f'p{number:04d}'
-        used.add(name)
-        folder = parent / name
-        folder.mkdir(parents=True)
-        for leaf, data in (('card.vmd', content), ('card.journal', bytes(JOURNAL_BYTES)),
-                           ('identity.bin', identity()), ('game.bin', binding(key))):
-            with (folder / leaf).open('xb') as out:
-                out.write(data)
-                out.flush()
-                os.fsync(out.fileno())
+        try:
+            if bound:
+                card, _ = read_pair(parent / bound[0])
+                if explain(card)['files']:
+                    write(f'{key}: its card {bound[0]} already holds saves; skipped')
+                    continue
+            content = subset(image, slots)
+            if bound:
+                # Never let two pairs claim one game: the empty card goes first.
+                retire(parent / bound[0])
+                write(f'{key}: removed the empty card {bound[0]}')
+            number = next(n for n in range(2, 10000) if f'p{n:04d}' not in used)
+            name = f'p{number:04d}'
+            used.add(name)
+            folder = parent / name
+            folder.mkdir(parents=True)
+            # game.bin goes last: a folder left without it binds no game.
+            for leaf, data in (('card.vmd', content), ('card.journal', bytes(JOURNAL_BYTES)),
+                               ('identity.bin', identity()), ('game.bin', binding(key))):
+                with (folder / leaf).open('xb') as out:
+                    out.write(data)
+                    out.flush()
+                    os.fsync(out.fileno())
+        except (OSError, ValueError) as error:
+            write(f'{key}: not copied ({error}); its saves stay on the shared card')
+            continue
         created[key] = name
         write(f'{key}: {name} holds {len(slots)} save(s)')
     return created
@@ -335,7 +340,7 @@ def identity():
 
 
 def retire(folder):
-    """Remove an empty game card K-UI made, after its replacement exists."""
+    """Remove an empty game card K-UI made, before its replacement is made."""
     for path in folder.iterdir():
         if path.is_file() and not path.is_symlink():
             path.unlink()

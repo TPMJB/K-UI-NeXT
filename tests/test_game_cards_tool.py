@@ -219,6 +219,13 @@ class GameCardsTool(unittest.TestCase):
         sonic = (parent / 'p0002' / 'card.vmd').read_bytes()
         self.assertEqual(sonic[self.replayed * 512:self.replayed * 512 + 512], bytes([0x77]) * 512)
         self.assertEqual(self.shared_hashes(), before)
+        # One game's unreadable card does not stop the others.
+        (parent / 'p0004' / 'card.journal').write_bytes(journal_record(bytes(16), 3, bytes(512), self.profile))
+        messages.clear()
+        rows = [dict(r, game='T-15112N') if r['name'] == 'MYSTERY.SAV' else r for r in proposal['saves']]
+        created = cards.apply(self.sd, Path('KUI/vmu-test/p0001'), rows, write=messages.append)
+        self.assertTrue(any(m.startswith('T-15112N: not copied') for m in messages), messages)
+        self.assertEqual(sorted(created), [])
         # A shared card that changed after planning is refused.
         image = bytearray((parent / 'p0001' / 'card.vmd').read_bytes())
         add_file(image, 5, 'LATE.SAV', 1, 'LATE', 'Later', 0x66)
