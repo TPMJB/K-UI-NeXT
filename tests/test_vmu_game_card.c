@@ -69,14 +69,13 @@ static void bindings(void) {
 }
 static void identities(void) {
     char a[KUI_VMU_GAME_CARD_KEY_BYTES],b[KUI_VMU_GAME_CARD_KEY_BYTES];
-    uint8_t cid[16]={1,2,3},salt[16]={9},one[16],two[16];
+    uint8_t salt[16]={9},one[16],two[16];
     CHECK(kui_vmu_game_card_key("MK-51136",a) && kui_vmu_game_card_key("MK-51058",b));
-    kui_vmu_game_card_identity(a,12u,cid,salt,one);
-    kui_vmu_game_card_identity(a,12u,cid,salt,two);CHECK(!memcmp(one,two,16u));
-    kui_vmu_game_card_identity(b,12u,cid,salt,two);CHECK(memcmp(one,two,16u));
-    kui_vmu_game_card_identity(a,13u,cid,salt,two);CHECK(memcmp(one,two,16u));
-    salt[15]=1;kui_vmu_game_card_identity(a,12u,cid,salt,two);CHECK(memcmp(one,two,16u));
-    cid[15]=1;kui_vmu_game_card_identity(a,12u,cid,salt,two);CHECK(memcmp(one,two,16u));
+    kui_vmu_game_card_identity(a,12u,salt,one);
+    kui_vmu_game_card_identity(a,12u,salt,two);CHECK(!memcmp(one,two,16u));
+    kui_vmu_game_card_identity(b,12u,salt,two);CHECK(memcmp(one,two,16u));
+    kui_vmu_game_card_identity(a,13u,salt,two);CHECK(memcmp(one,two,16u));
+    salt[15]=1;kui_vmu_game_card_identity(a,12u,salt,two);CHECK(memcmp(one,two,16u));
     unsigned any=0;for(unsigned i=0;i<16u;i++) any|=one[i];
     CHECK(any);
 }

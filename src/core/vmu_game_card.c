@@ -72,14 +72,14 @@ bool kui_vmu_game_card_template(const uint8_t cid[16]) {
     return cid && !memcmp(cid,game_card_template_cid,16u);
 }
 void kui_vmu_game_card_identity(const char key[KUI_VMU_GAME_CARD_KEY_BYTES],unsigned pair,
-    const uint8_t cid[16],const uint8_t salt[16],uint8_t out[16]) {
+    const uint8_t salt[16],uint8_t out[16]) {
     static const char label[]="K-UI game card identity v1";
     uint8_t number[4],digest[32];struct kui_sha256 hash;
     game_card_put32(number,pair);kui_sha256_init(&hash);
     kui_sha256_update(&hash,label,sizeof(label)-1u);
     kui_sha256_update(&hash,key,KUI_VMU_GAME_CARD_KEY_BYTES);
     kui_sha256_update(&hash,number,sizeof(number));
-    kui_sha256_update(&hash,cid,16u);kui_sha256_update(&hash,salt,16u);
+    kui_sha256_update(&hash,salt,16u);
     kui_sha256_digest(&hash,digest);
     unsigned any=0;for(unsigned i=0;i<16u;i++) any|=digest[i];
     if(!any) digest[0]=1u;

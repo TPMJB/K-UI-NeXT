@@ -33,10 +33,10 @@ size_t kui_vmu_game_card_profile_slot(const void *payload,size_t bytes);
 /* True when a decoded profile is the public build template, never a card. */
 bool kui_vmu_game_card_template(const uint8_t cid[16]);
 /* Nonzero pair identity: the first 16 bytes of SHA-256 over a label, the
- * key, the pair number, the card CID and a caller salt (time or counter),
- * so a recreated pair never reuses an earlier identity. */
+ * key, the pair number and a caller salt (clock and counter), so a
+ * recreated pair never reuses an earlier identity. */
 void kui_vmu_game_card_identity(const char key[KUI_VMU_GAME_CARD_KEY_BYTES],unsigned pair,
-    const uint8_t cid[16],const uint8_t salt[16],uint8_t out[16]);
+    const uint8_t salt[16],uint8_t out[16]);
 /* Canonical pair number of "pNNNN" (0001..9999), else 0. */
 unsigned kui_vmu_game_card_pair_number(const char *name);
 #endif
