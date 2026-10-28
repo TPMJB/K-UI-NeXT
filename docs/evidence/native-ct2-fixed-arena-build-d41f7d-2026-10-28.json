@@ -1,0 +1,354 @@
+{
+  "schema": "kui.native.ct2-fixed-arena-build-audit.v1",
+  "status": "PASS",
+  "source_commit": "d41f7d5717a34ccffd7260bac54c16236618f44e",
+  "toolchain": {
+    "kos": "fcfa7d8 (kos-chain)",
+    "gcc": "15.2.0",
+    "binutils": "2.45.1",
+    "newlib": "4.6.0.20260123",
+    "ui_kos_banner": "pinned to the accepted 8adf UI banner text so only K-UI sources differ"
+  },
+  "artifacts": {
+    "retail-native-dual.kui": "f82f9afa4d52156890f4dbe7304113fdcc3d55a1b9cb71fba8fc644e8f285a76",
+    "retail-native-standalone.kui": "54e4cb77c03dec9c24174420985a3835a5f12f9b88859ca92bcf046a987a2e32",
+    "runtime.kui": "219b48273167416dc688659850428ee0b1b413e65e07b61c218de98925724c9d"
+  },
+  "components": {
+    "split/resident-sci.bin": "93ef7347afdcd3e1a73b793fe139d918f44f044a05fd1333ce362552017a9777",
+    "split/resident-legacy.bin": "c45b0ed02c02168ada0b3076e0134aa7a11dc1698fdec68c0726769ef1f1f0e3",
+    "split/native-worker.bin": "769bb94cca2f76158af9a28e6d02c26f56d1b721f77ce653d27afc83f8869c2a",
+    "split/stage.bin": "87c255970f4821ef01a04707da744c14a1a0108e7ca955b848db68d8390c80c6",
+    "split/native-ra-aux.bin": "61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974",
+    "standalone/resident-sci.bin": "05727b633a6e75c9f066c6a14f44c879490875a642b270c610097f27dcc24a0f",
+    "standalone/stage.bin": "b69edd23cfc92bfbcae0e9fb9ce0caf5eedb347471148004d5b3cd047e7d5b52"
+  },
+  "accepted_reproduction": {
+    "doa2_standalone_921318c3d9cb": {
+      "sha256": "a871670e929866a994b69f2772424b6163f4cd474a64c423f2cb70cfb4634e78",
+      "byte_identical": true,
+      "built_from": "921318c and this branch with BUILD_ID=921318c3d9cb"
+    },
+    "evolution1_split_6be76940ccc9": {
+      "sha256": "8ef15cb00eea24ae0e300be253dd40a516f84efafcaecd71fc7a82d533551f4b",
+      "byte_identical": true,
+      "built_from": "6be7694 and this branch with BUILD_ID=6be76940ccc9"
+    },
+    "games_ui_8adf1a039035": {
+      "sha256": "57b9584ba789b425c8924a63f955aeefa104b3bb0bf9a2fab74d02d320c91a22",
+      "byte_identical": true,
+      "built_from": "8adf1a0 with KOS banner pinned to the delivered text and games_retail.o compiled under BUILD_ID cd3318f0f457 (the delivered UI was an incremental build; games_retail.c is unchanged between cd3318f and 8adf1a0)"
+    }
+  },
+  "instruction_audit": {
+    "policy": "No illegal delay slots; no FPU use except the stage bootstrap FPSCR setup",
+    "decoded": {
+      "split": {
+        "resident-sci": 6401,
+        "native-worker": 23538,
+        "stage": 42182,
+        "entry": 16
+      },
+      "accepted_split": {
+        "resident-sci": 6401,
+        "native-worker": 23393,
+        "stage": 41226,
+        "entry": 16
+      },
+      "standalone": {
+        "resident-sci": 5181,
+        "stage": 9475,
+        "entry": 16
+      },
+      "accepted_standalone": {
+        "resident-sci": 5179,
+        "stage": 8649,
+        "entry": 16
+      }
+    }
+  },
+  "split_checkers": {
+    "check_native_dual_callbacks": {
+      "general": {
+        "returncode": 0,
+        "last_line": "}"
+      },
+      "accepted_6be7": {
+        "returncode": 0,
+        "last_line": "}"
+      }
+    },
+    "check_vmu_native_stage_stack": {
+      "general": {
+        "returncode": 0,
+        "last_line": "}"
+      },
+      "accepted_6be7": {
+        "returncode": 0,
+        "last_line": "}"
+      }
+    },
+    "check_native_dual_readers": {
+      "general": {
+        "returncode": 2,
+        "last_line": "Dual native reader audit refused: dual stage immutable instructions/targets changed: _select_resident"
+      },
+      "accepted_6be7": {
+        "returncode": 2,
+        "last_line": "Dual native reader audit refused: dual stage immutable instructions/targets changed: _select_resident"
+      }
+    },
+    "check_native_bottom_heap_worker": {
+      "general": {
+        "returncode": 2,
+        "last_line": "Bottom worker heap audit refused: Worker heap guard instruction/literal pin differs: _index@vmu_native_heap.c"
+      },
+      "accepted_6be7": {
+        "returncode": 2,
+        "last_line": "Bottom worker heap audit refused: Worker heap guard instruction/literal pin differs: _index@vmu_native_heap.c"
+      }
+    },
+    "check_native_fixed_arena": {
+      "general": {
+        "returncode": 0,
+        "last_line": "}"
+      },
+      "accepted_6be7": {
+        "returncode": 0,
+        "last_line": "}"
+      },
+      "general_self_test": {
+        "cases": {
+          "armed": 6,
+          "refused": 150,
+          "entered": 6
+        },
+        "relay_dispatch": [
+          "initializer",
+          "fixed"
+        ],
+        "mutants_rejected": 14,
+        "equivalent_forced_outcomes": [
+          {
+            "offset": "0x88",
+            "forced_t": 0
+          }
+        ],
+        "trampoline": {
+          "address": "0x8ce00060",
+          "return_address": "0x8ce0007c",
+          "bytes": 52,
+          "sha256": "46d0ca66967abf099e35e1d0ccd6f38f52d55373ce99756c40c6d8ae38b5e52b"
+        }
+      }
+    }
+  },
+  "split_markers": {
+    "general_stage": true,
+    "general_worker": true,
+    "stage_strings": [
+      "PREFETCH AUTO / SPLIT CONTROLLER ALL",
+      "SPLIT CONTROLLER NEEDS NORMAL MODE"
+    ],
+    "accepted_stage_strings": [
+      "PREFETCH OFF / SPLIT CONTROLLER",
+      "SPLIT CONTROLLER NEEDS EVOLUTION 1",
+      "SPLIT CONTROLLER NEEDS NORMAL MODE"
+    ]
+  },
+  "personalization": {
+    "module_bytes": 270116,
+    "profile_module_offset": 104480,
+    "profile_bytes": 4096,
+    "runtime_mode_module_offset": 104448,
+    "runtime_mode_bytes": 32
+  },
+  "structural_private_stack": {
+    "structural": {
+      "worst_bytes": 220,
+      "margin": 64,
+      "available_bytes": 304,
+      "paths": {
+        "kui_retail_resident_dispatch": {
+          "bytes": 216,
+          "path": "kui_retail_resident_dispatch(48) -> deliver(80) -> kui_sci_stream_fetch.constprop.0(44) -> command(20) -> byte(0) -> transfer(24)"
+        },
+        "kui_retail_async_irq": {
+          "bytes": 220,
+          "path": "kui_retail_async_irq(8) -> deliver(80) -> kui_sci_stream_fetch.constprop.0(44) -> command(20) -> byte(0) -> transfer(24)"
+        },
+        "kui_retail_menu_return": {
+          "bytes": 156,
+          "path": "kui_retail_menu_return(8) -> native_reader_report(20) -> retail_display_values(76) -> retail_display_line(52)"
+        }
+      }
+    },
+    "accepted_doa2": {
+      "worst_bytes": 220,
+      "margin": 64,
+      "available_bytes": 304,
+      "paths": {
+        "kui_retail_resident_dispatch": {
+          "bytes": 216,
+          "path": "kui_retail_resident_dispatch(48) -> deliver(80) -> kui_sci_stream_fetch.constprop.0(44) -> command(20) -> byte(0) -> transfer(24)"
+        },
+        "kui_retail_async_irq": {
+          "bytes": 220,
+          "path": "kui_retail_async_irq(8) -> deliver(80) -> kui_sci_stream_fetch.constprop.0(44) -> command(20) -> byte(0) -> transfer(24)"
+        },
+        "kui_retail_menu_return": {
+          "bytes": 156,
+          "path": "kui_retail_menu_return(8) -> native_reader_report(20) -> retail_display_values(76) -> retail_display_line(52)"
+        }
+      }
+    }
+  },
+  "structural_geometry": {
+    "structural": {
+      "start": "0x8c004000",
+      "bss_end": "0x8c007b20",
+      "stack_bottom": "0x8c007ba0",
+      "spare_bytes": 128,
+      "resident_marker": true,
+      "region_bytes": 1888,
+      "manifest_bytes": 1020,
+      "vmu_or_readahead_symbols": [],
+      "stage_markers": [
+        "__kui_native_standalone_reader_stage",
+        "__kui_native_standalone_structural_stage"
+      ]
+    },
+    "accepted_doa2": {
+      "start": "0x8c004000",
+      "bss_end": "0x8c007b40",
+      "stack_bottom": "0x8c007ba0",
+      "spare_bytes": 96,
+      "resident_marker": true,
+      "region_bytes": 1888,
+      "manifest_bytes": 1020,
+      "vmu_or_readahead_symbols": [],
+      "stage_markers": [
+        "__kui_native_standalone_doa2_stage",
+        "__kui_native_standalone_reader_stage"
+      ]
+    }
+  },
+  "package_headers": {
+    "structural": {
+      "magic": "KUIRBT01",
+      "stage_bytes": 37640,
+      "resident": "0x8c004000",
+      "limit": "0x8c007800",
+      "rest": [
+        "0x1",
+        "0x40",
+        "0x1000",
+        "0x1000",
+        "0x8ce00000",
+        "0x8ce00000",
+        "0x8c010000",
+        "0xc00000",
+        "0x8cff0000",
+        "0x2000",
+        "0x8c004000",
+        "0x8c007800",
+        "0x0"
+      ]
+    },
+    "accepted_doa2": {
+      "magic": "KUIRBT01",
+      "stage_bytes": 35236,
+      "resident": "0x8c004000",
+      "limit": "0x8c007800",
+      "rest": [
+        "0x1",
+        "0x40",
+        "0x1000",
+        "0x1000",
+        "0x8ce00000",
+        "0x8ce00000",
+        "0x8c010000",
+        "0xc00000",
+        "0x8cff0000",
+        "0x2000",
+        "0x8c004000",
+        "0x8c007800",
+        "0x0"
+      ]
+    }
+  },
+  "launcher_descriptor_finders": {
+    "structural": {
+      "standalone": 1,
+      "standalone_offset": 32076,
+      "dual": 0
+    },
+    "general_split": {
+      "standalone": 0,
+      "standalone_offset": 0,
+      "dual": 1
+    },
+    "accepted_doa2": {
+      "standalone": 0,
+      "standalone_offset": 0,
+      "dual": 0
+    },
+    "accepted_6be7": {
+      "standalone": 0,
+      "standalone_offset": 0,
+      "dual": 1
+    }
+  },
+  "games_ui_compile_units": [
+    "sources 140 142 only old [] only new ['src/apps/games_storage.c', 'src/core/native_sdk_sci_family.c']",
+    "differing ['src/apps/games.c', 'src/apps/games_covers.c', 'src/apps/games_retail.c', 'src/core/shell.c', 'src/core/vmu_native_cache_seed.c', 'src/core/vmu_native_exit.c', 'src/core/vmu_native_heap.c', 'src/core/vmu_native_layout.c', 'src/core/vmu_native_program.c', 'src/core/vmu_native_resolution_cache.c', 'src/dreamcast/main.c', 'src/dreamcast/shell_draw.c']"
+  ],
+  "host_tests": {
+    "split_controller": "12974",
+    "structural_launch_capability_family": "69808",
+    "structural_demand_ubsan": "12187",
+    "structural_demand_asan_ubsan": "10468",
+    "native_cache": "39043",
+    "games_retail_pass": 346,
+    "games_retail_fail": 0,
+    "games_retail_standalone_cases": 10,
+    "installer": "8 tests OK",
+    "fixed_arena_artifact": "OK"
+  },
+  "not_run": [
+    "check_native_split_controller.py and check_native_standalone_reader.py execute the linked code against original Evolution 1 and DOA2 startup RAM; no retail executable is available here.",
+    "tests/test_native_sdk_sci_route_discovery.c positive cases need the original executables."
+  ],
+  "console_compatibility_verified": false,
+  "hardware_executed": false,
+  "ct2_fixed_arena": {
+    "admission_record": "docs/evidence/native-ct2-fixed-arena-2026-10-28.json",
+    "stage_bss_end": "0x8ce8d3a8",
+    "corpus": "crazy-taxi-2: structural models passed as a fixed_arena row (combined resolution, 384 KiB placement, transport and live bind); jet-grind-radio unchanged",
+    "original_allocator": "CT2 initializer over 0x8cf00000 + 0x80000 in the SH model: bottom lease 0x8cf00020-0x8cf60020, 9 alias/SR cases, 12 minimum-arena cases, 251 later original operations",
+    "linked_route": "tools/check_native_fixed_arena.py: 6 arms, 150 refusals, 6 trampoline entries, both relay routes, 14 mutants rejected"
+  },
+  "ui_header_only_differences": {
+    "src/core/vmu_native_cache_seed.c": "the four kui_vmu_native_heap_fixed_plan declaration lines from include/kui/vmu_native_heap.h",
+    "src/core/vmu_native_exit.c": "the four kui_vmu_native_heap_fixed_plan declaration lines from include/kui/vmu_native_heap.h",
+    "src/core/vmu_native_program.c": "the four kui_vmu_native_heap_fixed_plan declaration lines from include/kui/vmu_native_heap.h"
+  },
+  "modules_compared_with_e4cc4914bc6a": {
+    "dual": "resident-sci, resident-legacy, native-worker, native-ra-aux, worker and the profile identical apart from the build ID; stage.bin grows 260224 -> 261860 bytes with the fixed-arena plan, arm and trampoline",
+    "structural_standalone": "resident-sci.bin and stage.bin identical apart from the build ID; packaged again in place of the RAM-map test variant",
+    "gui": "launcher: kind-2 records only for the combined module, and the shared record codec and plan finder"
+  },
+  "package": {
+    "name": "K-UI-Native-General-Prefetch-Auto-d41f7d5717a3.zip",
+    "bytes": 31779498,
+    "sha256": "f02881cea4776dd5a0447cdd8f18ffe0eb8469d026c2097d4090cfc7bdd21050",
+    "prefetch_mode": "auto",
+    "standalone_variant": "structural",
+    "rehearsal": [
+      "SHA256SUMS.txt verified",
+      "installed over e4cc4914bc6a with the p0005 profile; virtual card files unchanged",
+      "reinstalling e4cc4914bc6a restores its files exactly",
+      "--restore returns the files from before any general candidate"
+    ]
+  }
+}

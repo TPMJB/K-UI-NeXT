@@ -1,0 +1,135 @@
+{
+  "schema": "kui.native.ct2-fixed-arena.v1",
+  "date": "2026-10-28",
+  "source_commit": "d41f7d5717a3",
+  "production_changed": true,
+  "retail_byte_payloads_embedded": false,
+  "console_compatibility_verified": false,
+  "hardware_executed": false,
+  "input": {
+    "title": "Crazy Taxi 2",
+    "owner_input": "US MK-51136 V1.004",
+    "sha256": "8057a8e37636ad78b1fc70ee590bd314686546b13ffe100623d86b572aec53c1",
+    "bytes": 1452148,
+    "load": "0x8c010000"
+  },
+  "why": {
+    "finding": "docs/evidence/native-ct2-heap-finding-2026-10-27.json: the SDK allocator is linked but never started, so no word names its initializer",
+    "ram_maps": "docs/evidence/native-ct2-ram-map-jgr-console-2026-10-28.json: two console sessions left 0x8cee0000-0x8cfdffff (1 MiB) unwritten; no code names that interval",
+    "owner_menu_return": "Each RAM-map bit can only clear. The extra trip through the game's own main menu adds writes, never hides one, so both maps bound every write of their sessions."
+  },
+  "plan": {
+    "borrowed_call": {
+      "load": "0x8c145afe",
+      "call": "0x8c145b00",
+      "return_pr": "0x8c145b04",
+      "literal": "0x8c145c30",
+      "target_main": "0x0c01b214",
+      "shape": "MOV.L @(0x8c145c30),R2; JSR @R2; NOP, the C start's single call into main"
+    },
+    "arena": {
+      "begin": "0x8cf00000",
+      "bytes": "0x80000",
+      "end": "0x8cf80000",
+      "inside_unused_interval": "0x8cee0000-0x8cfdffff",
+      "margin_below": "0x20000",
+      "margin_above": "0x60000"
+    },
+    "identity": "exact bytes and SHA-256 select the plan; nothing else does",
+    "static_checks": [
+      "the literal has one PC-relative consumer in the image and no aligned word holds its address",
+      "the arena is 32-byte aligned, inside RAM, outside the image, the allocator control cells and its dispatch table",
+      "no patch window (driver submit, initializer, release, the three terminal exits 0x8c14b694/0x8c14b6ca/0x8c08010c, BIOS literal 0x8c14b6f8) touches the borrowed call or its literal",
+      "the child-pool budget proof finds no pool shape after the borrowed call and returns NONE without a read"
+    ],
+    "startup": "The entry jumps to the C start (0x8c145ae0) on the boot stack; it fills 0x8c00c000-0x8c00f400 with SEGA, clears BSS, runs one init call, then calls main. The trampoline pushes five words, so the low heap hook enters at SP = boot SP - 28, inside its owner-stack window [0x0c008100, 0x0c00f400]."
+  },
+  "route": {
+    "stage": "Only the combined New + virtual-A2 stage binds a fixed plan. native_arm_fixed_main gives the literal the trampoline (0x8ce00060) and the low hook the arena and the trampoline return (0x8ce0007c). The trampoline writes the low heap hook into the literal and purges its line, calls the hook with the arena, then jumps to main with the C start's R4-R7, SP and PR.",
+    "record": "Resolution record kind 2 (header word 20). Older readers accept only kind 1, so they treat it as a cache miss.",
+    "launcher": "native_cache_prepare seeds a kind-2 record only into the combined module; single-reader modules keep their earlier refusal.",
+    "unchanged": "native_arm_heap_hook, the worker, the read-ahead auxiliary and both low readers are byte-identical apart from the build ID."
+  },
+  "original_allocator_proof": {
+    "tool": "tools/prove_vmu_native_bottom_corpus_heap.py on the release stage (BSS end 0x8ce8d3a8)",
+    "initializer_instructions": 107,
+    "arena_begin": "0x8cf00000",
+    "arena_bytes": "0x80000",
+    "lease_header": "0x8cf00000",
+    "lease_payload": "0x8cf00020",
+    "lease_end": "0x8cf60020",
+    "remaining_free_units": 4095,
+    "remaining_free_bytes": 131040,
+    "allocation_instructions": 159,
+    "allocation_writes": 12,
+    "later_original_operations": 251,
+    "maximum_free_nodes": 32,
+    "alias_sr_cases": 9,
+    "minimum_arena_cases": 12,
+    "production_live_allocator_proof": {
+      "production_full_free_list_validations": 485,
+      "production_release_admissions": 125,
+      "coherent_word_reads": 22678,
+      "actual_metadata_placement_cases": 5,
+      "wrong_payload_and_reinitializer_count_refused": true,
+      "lease_self_release_refused": true,
+      "bottom_transition_checks": 3,
+      "complete_allocator_code_checks": 2,
+      "intermediate_phase_not_runtime_owned": true,
+      "allocated_placeholder_full_release_admission": true
+    }
+  },
+  "structural_corpus": {
+    "tool": "tools/audit_vmu_native_corpus.py",
+    "crazy_taxi_2": {
+      "fixed_arena": true,
+      "initializer_slot": false,
+      "initializer_call": false,
+      "combined_resolution": true,
+      "placement_384k": true,
+      "transport_execution": true,
+      "transport_checks": 981,
+      "live_bind_384k": true,
+      "structural_384k_models_passed": true,
+      "record_sha256": "e3fa5b37cc99b506dc1f76463aa7277400da6b8ac2df9b7f75e4f60d544d7850"
+    },
+    "jet_grind_radio_control": {
+      "fixed_arena": false,
+      "initializer_slot": true,
+      "initializer_call": true,
+      "combined_resolution": true,
+      "placement_384k": true,
+      "structural_384k_models_passed": true
+    }
+  },
+  "linked_route_audit": {
+    "tool": "tools/check_native_fixed_arena.py --self-test",
+    "cases": {
+      "armed": 6,
+      "refused": 150,
+      "entered": 6
+    },
+    "relay_dispatch": [
+      "initializer",
+      "fixed"
+    ],
+    "mutants_rejected": 14,
+    "equivalent_forced_outcomes": [
+      {
+        "offset": "0x88",
+        "forced_t": 0
+      }
+    ],
+    "trampoline": {
+      "address": "0x8ce00060",
+      "return_address": "0x8ce0007c",
+      "bytes": 52,
+      "sha256": "46d0ca66967abf099e35e1d0ccd6f38f52d55373ce99756c40c6d8ae38b5e52b"
+    }
+  },
+  "limits": [
+    "RAM maps bound the writes of two sessions, not every path through the game. A later mode or event could still write the arena.",
+    "The original allocator runs in an integer SH model; caches, DMA and the game itself are not modeled.",
+    "Console save, load and play are untested; back up the virtual card folder first."
+  ]
+}
