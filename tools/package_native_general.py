@@ -34,7 +34,10 @@ PREFETCH = {'off': ('build/native-isolation-split-controller-general', 'K-UI-Nat
                    b'PREFETCH ON / SPLIT CONTROLLER ALL\0'),
             'auto': ('build/native-split-controller-stream-guard', 'K-UI-Native-General-Prefetch-Auto-',
                      b'PREFETCH AUTO / SPLIT CONTROLLER ALL\0')}
-PACKAGE_TOOLS = ('runtime_package.py', 'vmu_persist_profile.py', 'vmu_native_cache_seed.py', 'vmu_native_mode.py')
+PACKAGE_TOOLS = ('runtime_package.py', 'vmu_persist_profile.py', 'vmu_native_cache_seed.py', 'vmu_native_mode.py',
+                 # The owner's PC tools: per-game card migration and the library sweep.
+                 'kui-game-cards.py', 'explain_vmu_image.py', 'kui-library-startup-bundle.py',
+                 'kui-native-startup-bundle.py', 'kui-library-startup-bundle-README.md')
 # The standalone RAM-map test build (Makefile.native-standalone-ram-map)
 # announces itself on the stage screen; the structural build never does.
 RAM_MAP_BANNER = b'RAM MAP TEST - FREE PAGES MARKED\0'
