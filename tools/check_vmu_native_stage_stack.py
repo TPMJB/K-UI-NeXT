@@ -277,6 +277,10 @@ class ArmRoute(Machine):
                          manifest + 52: 0})
         for name, count in (("_native_heap", 18), ("_native_call", 5), ("_native_driver", 26)):
             self.mem.update({self.symbols[name][0] + 4 * i: 0 for i in range(count)})
+        # An initializer-call record leaves the fixed-arena flag clear; that
+        # route is executed by check_native_fixed_arena.py.
+        if "_native_fixed" in self.symbols:
+            self.mem[self.symbols["_native_fixed"][0]] = 0
         heap, call = self.symbols["_native_heap"][0], self.symbols["_native_call"][0]
         self.mem.update({heap + 24: self.original, heap + 28: self.slot, heap + 32: self.original,
                          call + 8: 0x8C0100C6, call + 12: 0x8CC00000, call + 16: 0x00400000})

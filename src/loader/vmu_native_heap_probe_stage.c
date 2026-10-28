@@ -232,6 +232,55 @@ static void native_report(uint32_t phase,uint32_t detail) {
     }
     stopped(phase==7u?"ALLOCATION VERIFIED - PHOTO THEN POWER OFF":"PROBE REFUSED - PHOTO THEN POWER OFF",phase);
 }
+#if KUI_NATIVE_DUAL_READERS
+/* A reviewed fixed arena (a kind 2 record) borrows the C start's call into
+ * main instead of an initializer pointer; the heap record then names the
+ * borrowed literal as its initializer slot. The trampoline below runs once,
+ * on the game's stack. It first gives the literal the low heap hook, as an
+ * armed initializer slot holds it, so a second call through the literal
+ * stops at the terminal and the worker witnesses the usual hook. It then
+ * calls that hook with the arena as the initializer's arguments: the hook
+ * initializes the game's own, otherwise unused allocator there and runs the
+ * installer. Last, it enters main with the C start's arguments and return. */
+static struct kui_vmu_native_heap_fixed_hook native_fixed_hook;
+static uint32_t native_fixed;
+struct native_fixed_main {uint32_t heap_hook,begin,bytes,target,slot;};
+struct native_fixed_main native_fixed_main __attribute__((used));
+extern const char kui_native_fixed_main_hook[] __asm__("_kui_native_fixed_main_hook");
+extern const char kui_native_fixed_main_return[] __asm__("_kui_native_fixed_main_return");
+__asm__(".section .text.native_fixed_main,\"ax\"\n.align 2\n"
+    ".global _kui_native_fixed_main_hook\n.type _kui_native_fixed_main_hook,@function\n"
+    "_kui_native_fixed_main_hook:\n"
+    "mov.l r4,@-r15\nmov.l r5,@-r15\nmov.l r6,@-r15\nmov.l r7,@-r15\nsts.l pr,@-r15\n"
+    "mov.l 1f,r0\nmov.l @r0,r1\nmov.l @(16,r0),r2\nmov.l r1,@r2\nocbp @r2\n"
+    "mov.l @(4,r0),r4\nmov.l @(8,r0),r5\njsr @r1\nnop\n"
+    ".global _kui_native_fixed_main_return\n_kui_native_fixed_main_return:\n"
+    "lds.l @r15+,pr\nmov.l @r15+,r7\nmov.l @r15+,r6\nmov.l @r15+,r5\nmov.l @r15+,r4\n"
+    "mov.l 1f,r0\nmov.l @(12,r0),r0\njmp @r0\nnop\n"
+    ".align 2\n1: .long _native_fixed_main+0x20000000\n"
+    ".size _kui_native_fixed_main_hook,.-_kui_native_fixed_main_hook\n.previous\n");
+/* Select the reviewed plan for this exact image; a replayed record must
+ * name exactly the planned call and arena. */
+static bool __attribute__((noipa)) native_fixed_plan_bind(bool replayed) {
+    struct kui_vmu_native_heap_call planned;
+    if(native_heap.initializer_slot || native_heap.initializer_target ||
+       !kui_vmu_native_heap_fixed_plan((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,exec_bytes,
+           native_driver.image_sha256,&native_heap,&planned,&native_fixed_hook) ||
+       (replayed && memcmp(&planned,&native_call,sizeof(planned)))) return false;
+    native_call=planned;
+    native_heap.initializer_slot=native_fixed_hook.slot;
+    native_heap.initializer_target=native_heap.initializer;
+    native_fixed=1u;return true;
+}
+/* The low heap hook returns into the trampoline for a fixed arena. */
+static uint32_t native_hook_return(void) {
+    return native_fixed?(uint32_t)(uintptr_t)kui_native_fixed_main_return&UINT32_C(0x1fffffff):
+        native_call.return_pr&UINT32_C(0x1fffffff);
+}
+#else
+/* Single-reader modules keep the initializer path only. */
+#define native_hook_return() (native_call.return_pr&0x1fffffffu)
+#endif
 #if KUI_VMU_NATIVE_WORKER_PROBE
 #include "vmu_native_worker_stage.inc"
 #elif KUI_VMU_NATIVE_PASSIVE_PROBE
@@ -320,7 +369,7 @@ void kui_vmu_observe_stage_install(void) {
            KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES,&lease))
         native_report(4u,begin);
     uint32_t pr=c->original_pr&0x1fffffffu,sp=c->entry_sp&0x1fffffffu;
-    if((c->original_pr&1u) || pr!=(native_call.return_pr&0x1fffffffu) ||
+    if((c->original_pr&1u) || pr!=native_hook_return() ||
        (sp&3u) || sp<KUI_VMU_NATIVE_OWNER_STACK_LOW || sp>KUI_VMU_NATIVE_OWNER_STACK_HIGH ||
        !kui_vmu_native_heap_preallocate(&lease,native_read,NULL,1u))
         native_report(5u,c->entry_sp);
@@ -375,6 +424,34 @@ static void __attribute__((noipa)) native_arm_heap_hook(const uint32_t *frame) {
     native_publish(native_heap.initializer_slot);
     if(native_word(native_heap.initializer_slot|UINT32_C(0x20000000))!=low->heap_hook)
         native_report(2u,native_heap.initializer_slot);
+    ((uint32_t *)(uintptr_t)frame)[5]=low->return_hook;
+}
+/* native_arm_heap_hook's counterpart for a fixed arena. The borrowed literal
+ * holds main; it receives the trampoline, and the low heap hook returns into
+ * the trampoline rather than to the C start. */
+static void __attribute__((noipa)) native_arm_fixed_main(const uint32_t *frame) {
+    const struct native_low_bindings *low=native_low_bindings();
+    volatile struct kui_vmu_observe_boot_control *c=(void *)(uintptr_t)
+        (low->control+UINT32_C(0x20000000));
+    for(unsigned i=0;i<sizeof(*c)/4u;i++)
+        if(((volatile uint32_t *)c)[i]) native_report(2u,low->control+4u*i);
+    volatile uint32_t *original=(volatile uint32_t *)(uintptr_t)
+        (low->heap_original+UINT32_C(0x20000000));
+    for(unsigned i=0;i<8u;i++) if(original[i]) native_report(2u,low->heap_original+4u*i);
+    uint32_t slot=native_heap.initializer_slot,hook=(uint32_t)(uintptr_t)kui_native_fixed_main_hook;
+    if(!native_fixed || native_word(slot)!=native_fixed_hook.target) native_report(2u,slot);
+    retail_display_line("FIXED RAM ARENA FROM REVIEWED RAM MAP");
+    *original=native_heap.initializer_target;
+    original[1]=native_call.entry_begin;original[2]=native_call.entry_bytes;
+    original[3]=native_hook_return();
+    native_fixed_main=(struct native_fixed_main){low->heap_hook,native_call.entry_begin,
+        native_call.entry_bytes,native_fixed_hook.target,slot};
+    c->installer=(uint32_t)(uintptr_t)kui_vmu_observe_stage_install;
+    c->stage_stack=(uint32_t)(uintptr_t)(native_installer_stack+sizeof(native_installer_stack)-32u);
+    c->status=KUI_VMU_OBS_BOOT_ARMED;
+    *(volatile uint32_t *)(uintptr_t)slot=hook;
+    native_publish(slot);
+    if(native_word(slot|UINT32_C(0x20000000))!=hook) native_report(2u,slot);
     ((uint32_t *)(uintptr_t)frame)[5]=low->return_hook;
 }
 #endif
@@ -463,11 +540,20 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #endif
     int heap=kui_vmu_native_heap_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
         exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_heap);
+#if KUI_NATIVE_DUAL_READERS
+    if(driver!=KUI_VMU_NATIVE_RESOLVED || heap!=KUI_VMU_NATIVE_HEAP_FOUND)
+        native_report(2u,heap==KUI_VMU_NATIVE_HEAP_FOUND?0u:(uint32_t)heap);
+    if(!(native_heap.initializer_slot?kui_vmu_native_heap_call_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+         exec_bytes,&native_heap,&native_call):native_fixed_plan_bind(false)) ||
+       !allocation_safe(native_call.entry_begin,native_call.entry_bytes))
+        native_report(2u,native_heap.initializer_slot);
+#else
     if(driver!=KUI_VMU_NATIVE_RESOLVED || heap!=KUI_VMU_NATIVE_HEAP_FOUND ||
        !native_heap.initializer_slot) native_report(2u,heap==KUI_VMU_NATIVE_HEAP_FOUND?0u:(uint32_t)heap);
     if(!kui_vmu_native_heap_call_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
        exec_bytes,&native_heap,&native_call) || !allocation_safe(native_call.entry_begin,native_call.entry_bytes))
         native_report(2u,native_heap.initializer_slot);
+#endif
 #if KUI_VMU_NATIVE_PASSIVE_PROBE
     /* Layout already shares the driver's one fresh immutable-image pass. */
     retail_display_line("CHECKING DISPLACED INSTRUCTION WINDOW");
@@ -484,7 +570,8 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     retail_display_line("NATIVE DISCOVERY COMPLETE - ARMING HOOK");
 #endif
 #if KUI_NATIVE_DUAL_READERS
-    native_arm_heap_hook(frame);
+    if(native_fixed) native_arm_fixed_main(frame);
+    else native_arm_heap_hook(frame);
 #else
     volatile struct kui_vmu_observe_boot_control *c=control();
     for(unsigned i=0;i<sizeof(*c)/4u;i++)

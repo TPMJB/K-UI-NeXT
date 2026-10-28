@@ -12,6 +12,12 @@ _Static_assert(sizeof(struct kui_vmu_native_heap)==72u,"Update cache codec/schem
 _Static_assert(sizeof(struct kui_vmu_native_heap_call)==20u,"Update cache codec/schema for call changes");
 _Static_assert(sizeof(struct kui_vmu_native_exit)==48u,"Update cache codec/schema for exit changes");
 static const uint8_t magic[8]={'K','U','I','N','V','R','0','1'};
+/* Header word 20 names the proof's kind. Kind 2, a reviewed fixed arena,
+ * is new: older readers accept only kind 1 and treat it as a cache miss. */
+enum {KIND_INITIALIZER_CALL=1u,KIND_FIXED_ARENA=2u};
+static uint32_t kind(const struct kui_vmu_native_resolution *r) {
+    return r->heap.initializer_slot?KIND_INITIALIZER_CALL:KIND_FIXED_ARENA;
+}
 static uint32_t physical(uint32_t a) {return a&UINT32_C(0x1fffffff);}
 static bool ram_span(uintptr_t address,size_t bytes,uint32_t *p) {
 #if UINTPTR_MAX>UINT32_MAX
@@ -96,6 +102,8 @@ static bool schema(const struct kui_vmu_native_resolution *r) {
         r->heap.version==KUI_VMU_NATIVE_HEAP_VERSION && r->heap.bytes==sizeof(r->heap) &&
         r->heap.family==KUI_VMU_NATIVE_HEAP_TAIL32 && r->heap.layout==KUI_VMU_NATIVE_HEAP_DISPATCH2 &&
         r->heap.load==d->load_address && r->heap.image_bytes==d->image_bytes &&
+        (r->heap.initializer_slot || (!r->heap.initializer_target &&
+         r->call.return_pr==r->call.call+4u && r->call.entry_bytes)) &&
         r->exits.version==KUI_VMU_NATIVE_EXIT_VERSION && r->exits.bytes==sizeof(r->exits) &&
         r->exits.load==d->load_address && r->exits.image_bytes==d->image_bytes &&
         (((r->exits.family==KUI_VMU_NATIVE_EXIT_FAMILY || r->exits.family==KUI_VMU_NATIVE_EXIT_PVR_CLEAR ||
@@ -110,12 +118,14 @@ static bool decode(const void *wire,size_t n,struct kui_vmu_native_resolution *r
     const uint8_t *p=wire;
     if(memcmp(p,magic,sizeof(magic)) || get32(p+8u)!=KUI_VMU_NATIVE_RESOLUTION_CACHE_VERSION ||
        get32(p+12u)!=KUI_VMU_NATIVE_RESOLUTION_CACHE_BYTES ||
-       get32(p+16u)!=KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH || get32(p+20u)!=1u) return false;
+       get32(p+16u)!=KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH ||
+       (get32(p+20u)!=KIND_INITIALIZER_CALL && get32(p+20u)!=KIND_FIXED_ARENA)) return false;
     for(size_t i=CACHE_PAYLOAD_END;i<CACHE_DIGEST_OFFSET;i++) if(p[i]) return false;
     hash(p,CACHE_DIGEST_OFFSET,digest);
     if(memcmp(digest,p+CACHE_DIGEST_OFFSET,32u)) return false;
     memset(r,0,sizeof(*r));struct cursor c={.in=p,.at=CACHE_HEADER_BYTES};
-    if(codec(&c,r)!=CACHE_PAYLOAD_END || !schema(r) || get32(p+24u)!=r->driver.image_bytes ||
+    if(codec(&c,r)!=CACHE_PAYLOAD_END || !schema(r) || get32(p+20u)!=kind(r) ||
+       get32(p+24u)!=r->driver.image_bytes ||
        get32(p+28u)!=r->driver.load_address || memcmp(p+32u,r->driver.image_sha256,32u)) return false;
     return true;
 }
@@ -125,7 +135,7 @@ bool kui_vmu_native_resolution_cache_encode(const struct kui_vmu_native_resoluti
     struct kui_vmu_native_resolution copy=*r;
     uint8_t result[KUI_VMU_NATIVE_RESOLUTION_CACHE_BYTES]={0};memcpy(result,magic,sizeof(magic));
     put32(result+8u,KUI_VMU_NATIVE_RESOLUTION_CACHE_VERSION);put32(result+12u,sizeof(result));
-    put32(result+16u,KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH);put32(result+20u,1u);
+    put32(result+16u,KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH);put32(result+20u,kind(r));
     put32(result+24u,r->driver.image_bytes);put32(result+28u,r->driver.load_address);
     memcpy(result+32u,r->driver.image_sha256,32u);
     struct cursor c={.out=result,.at=CACHE_HEADER_BYTES};
@@ -154,7 +164,8 @@ static bool discover(const void *image,size_t n,uint32_t load,struct kui_vmu_nat
     memset(r,0,sizeof(*r));
     if(!kui_vmu_native_discover_layout(image,n,load,&r->driver,&r->layout) ||
        kui_vmu_native_heap_discover(image,n,load,&r->heap)!=KUI_VMU_NATIVE_HEAP_FOUND ||
-       !r->heap.initializer_slot || !kui_vmu_native_heap_call_discover(image,n,&r->heap,&r->call) ||
+       (r->heap.initializer_slot?!kui_vmu_native_heap_call_discover(image,n,&r->heap,&r->call):
+        !kui_vmu_native_heap_fixed_plan(image,n,r->driver.image_sha256,&r->heap,&r->call,NULL)) ||
        ((r->heap.initializer|r->heap.release)&3u) || !release_window(image,n,load,r->heap.release)) return false;
     const struct kui_vmu_native_patch_window windows[]={
         {r->driver.submit,12u},{r->heap.initializer,12u},{r->heap.release,20u}};

@@ -250,6 +250,28 @@ static void dual_gates_and_hits(void) {
     CHECK(prepare(true,KUI_RETAIL_READER_ASYNC,false,"/Games/Unknown")==NATIVE_CACHE_SKIPPED);
     CHECK(source_proof.complete && io.reads==3u && io.builds==1u && !io.writes);
 }
+/* A fixed-arena record (kind 2) needs the combined module's trampoline. A
+ * single-reader module is never seeded with one, even from a cache hit; the
+ * combined module receives it for either background reader. */
+static void fixed_arena_needs_dual(void) {
+    uint8_t boot[1024];for(unsigned i=0;i<sizeof(boot);i++)boot[i]=(uint8_t)(i*29u+7u);
+    const struct kui_native_dual_capability cap={KUI_NATIVE_DUAL_MAGIC0,KUI_NATIVE_DUAL_MAGIC1,
+        1u,KUI_NATIVE_DUAL_CAPABILITY_BYTES,KUI_RETAIL_READER_ASYNC,
+        KUI_RETAIL_READER_ASYNC_EAGER,KUI_NATIVE_DUAL_LEASE_BYTES,0u};
+    for(unsigned reader=KUI_RETAIL_READER_STANDARD;reader<=KUI_RETAIL_READER_ASYNC_EAGER;reader++) {
+        setup(boot,sizeof(boot));map.reader=reader;
+        if(reader!=KUI_RETAIL_READER_STANDARD) memcpy(module+3072u,&cap,sizeof(cap));
+        memcpy(before,module,sizeof(module));
+        char path[120];cache_path(path,boot,sizeof(boot));unsigned n=node_add(path,false);
+        struct kui_vmu_native_resolution source;mock(boot,sizeof(boot),&source);
+        source.heap.initializer_slot=0u;source.heap.initializer_target=0u;source.call.return_pr=source.call.call+4u;
+        CHECK(kui_vmu_native_resolution_cache_encode(&source,disk[n].data,1024u));
+        CHECK(get32(disk[n].data+20u)==2u);disk[n].size=1024u;
+        CHECK(prepare(true,reader,false,"/Games/Fixed")==
+            (reader==KUI_RETAIL_READER_STANDARD?NATIVE_CACHE_SKIPPED:NATIVE_CACHE_READY));
+        CHECK(io.reads==1u && io.replays==1u && !io.builds && !io.writes && !io.renames);
+    }
+}
 static void actual_frontend(const char *path) {
     FILE *f=fopen(path,"rb");CHECK(f && !fseek(f,0,SEEK_END));long length=ftell(f);CHECK(length>128 && length<=0xc00000);rewind(f);
     size_t bytes=(size_t)length;uint8_t *boot=malloc(bytes);CHECK(boot && fread(boot,1,bytes,f)==bytes && !fclose(f));
@@ -318,6 +340,7 @@ static void actual_frontend(const char *path) {
 }
 int main(int argc,char **argv) {
     CHECK(argc>=1 && argc<=3);codec_and_trust_tests();gates_and_hits();dual_gates_and_hits();
+    fixed_arena_needs_dual();
     for(int i=1;i<argc;i++) actual_frontend(argv[i]);
     printf("Native launcher cache: %u checks passed%s\n",checks,argc>1?" including actual-image rebuild/publication faults":"");return 0;
 }

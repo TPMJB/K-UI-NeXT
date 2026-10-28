@@ -178,7 +178,11 @@ static bool __attribute__((noipa)) native_resolution_replay(void) {
     native_driver=native_cached_resolution.driver;passive_layout=native_cached_resolution.layout;
     native_heap=native_cached_resolution.heap;native_call=native_cached_resolution.call;
     native_exits=native_cached_resolution.exits;
-    if(((native_heap.initializer|native_heap.release)&3u) || !readonly_release_replay_valid() ||
+    if(
+#if KUI_NATIVE_DUAL_READERS
+       (!native_heap.initializer_slot && !native_fixed_plan_bind(true)) ||
+#endif
+       ((native_heap.initializer|native_heap.release)&3u) || !readonly_release_replay_valid() ||
        !allocation_safe(native_call.entry_begin,native_call.entry_bytes) ||
        !native_sdk_coherence_cached_admit()) return false;
     native_passive_capture_windows();return true;

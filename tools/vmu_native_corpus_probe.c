@@ -9,9 +9,9 @@
 #include "kui/vmu_native_stage_placement.h"
 #include "kui/hash.h"
 
-static void digest(const void *p,size_t bytes,char text[65]) {
+static void digest(const void *p,size_t bytes,char text[65],uint8_t out[32]) {
     static const char hex[]="0123456789abcdef";
-    struct kui_sha256 state;uint8_t out[32];
+    struct kui_sha256 state;
     kui_sha256_init(&state);kui_sha256_update(&state,p,bytes);kui_sha256_digest(&state,out);
     for(unsigned i=0;i<32u;i++) {text[2u*i]=hex[out[i]>>4];text[2u*i+1u]=hex[out[i]&15u];}
     text[64]=0;
@@ -47,7 +47,13 @@ int main(int argc,char **argv) {
     int driver_result=kui_vmu_native_discover(image,n,load,&driver);
     bool found_layout=driver_result==KUI_VMU_NATIVE_RESOLVED && kui_vmu_native_layout_discover(image,n,&driver,&layout);
     int heap_result=kui_vmu_native_heap_discover(image,n,load,&heap);
+    char source_hash[65],image_hash[65];uint8_t source_sha[32],image_sha[32];
+    digest(image,bytes,source_hash,source_sha);digest(image,n,image_hash,image_sha);
     bool found_call=heap_result==KUI_VMU_NATIVE_HEAP_FOUND && kui_vmu_native_heap_call_discover(image,n,&heap,&call);
+    /* A reviewed fixed arena stands in for the initializer slot and call,
+     * for its exact image only. */
+    bool fixed=heap_result==KUI_VMU_NATIVE_HEAP_FOUND && !heap.initializer_slot &&
+        kui_vmu_native_heap_fixed_plan(image,n,image_sha,&heap,&call,NULL);
     bool found_exits=kui_vmu_native_exit_discover(image,n,load,&exits),found_guarded=false;
     bool aligned=heap_result==KUI_VMU_NATIVE_HEAP_FOUND && !((heap.initializer|heap.release)&3u);
     bool release=heap_result==KUI_VMU_NATIVE_HEAP_FOUND && release_shape(image,n,heap.release);
@@ -56,20 +62,19 @@ int main(int argc,char **argv) {
         found_guarded=kui_vmu_native_exit_discover_guarded(image,n,load,windows,3u,&guarded_exits);
     }
     bool complete=extent && kui_vmu_native_resolution_cache_build(image,n,load,wire,sizeof(wire),&resolution);
-    bool placement=found_call && kui_vmu_native_stage_allocation_safe(&heap,(uint32_t)n,
+    bool placement=(found_call || fixed) && kui_vmu_native_stage_allocation_safe(&heap,(uint32_t)n,
         (uint32_t)first,(uint32_t)last,call.entry_begin,call.entry_bytes);
-    uint32_t payload=found_call?physical(call.entry_begin)+call.entry_bytes-lease_bytes:0u;
-    char source_hash[65],image_hash[65];digest(image,bytes,source_hash);digest(image,n,image_hash);
+    uint32_t payload=found_call || fixed?physical(call.entry_begin)+call.entry_bytes-lease_bytes:0u;
     printf("{\"detector_epoch\":%u,\"source_bytes\":%zu,\"source_sha256\":\"%s\",\"extent\":%s,\"image_bytes\":%zu,"
         "\"image_sha256\":\"%s\",\"discarded_suffix_bytes\":%zu,\"driver\":%d,\"layout\":%s,"
-        "\"heap\":%d,\"initializer_slot\":%s,\"initializer_call\":%s,\"aligned_hook_entries\":%s,"
+        "\"heap\":%d,\"initializer_slot\":%s,\"initializer_call\":%s,\"fixed_arena\":%s,\"aligned_hook_entries\":%s,"
         "\"release_hook_shape\":%s,\"exits\":%s,\"guarded_exits\":%s,\"combined_resolution\":%s,"
         "\"placement_384k\":%s,\"lease_payload\":%u,\"driver_submit\":%u,\"driver_initializer\":%u,"
         "\"completion_call\":%u,\"layout_initializer\":%u,\"layout_wrapper\":%u,\"layout_call\":%u,"
         "\"rx_layout\":%u,\"layout_version\":%u,\"heap_initializer\":%u,\"heap_allocate\":%u,"
         "\"heap_release\":%u,\"heap_slot\":%u,\"heap_begin\":%u,\"heap_bytes\":%u,\"exit_family\":%u",
         KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH,bytes,source_hash,extent?"true":"false",n,image_hash,extent?bytes-n:0u,driver_result,found_layout?"true":"false",
-        heap_result,heap.initializer_slot?"true":"false",found_call?"true":"false",aligned?"true":"false",
+        heap_result,heap.initializer_slot?"true":"false",found_call?"true":"false",fixed?"true":"false",aligned?"true":"false",
         release?"true":"false",found_exits?"true":"false",found_guarded?"true":"false",complete?"true":"false",
         placement?"true":"false",payload,driver.submit,driver.initializer,driver.completion_call,layout.initializer,
         layout.initializer_wrapper,layout.initializer_call,layout.rx_layout,layout.version,heap.initializer,
@@ -80,7 +85,7 @@ int main(int argc,char **argv) {
         printf("\"");
     }
     printf("}\n");fflush(stdout);
-    if(found_layout && found_call && placement) {
+    if(found_layout && (found_call || fixed) && placement) {
         memory=calloc(1u,0x1000000u);CHECK(memory);
         transport_model(image,n,&driver,&layout);
         struct kui_vmu_native_runtime_config runtime={.version=1u,.bytes=sizeof(runtime),

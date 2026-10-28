@@ -36,6 +36,21 @@ struct kui_vmu_native_heap_call {uint32_t load,call,return_pr,entry_begin,entry_
  * Unknown state or multiple complete calls cannot authorize a hook. */
 bool kui_vmu_native_heap_call_discover(const void *,size_t,
     const struct kui_vmu_native_heap *,struct kui_vmu_native_heap_call *);
+/* Some executables carry the reviewed allocator but never initialize it, so
+ * no pointer names its initializer. For such an exact executable (bytes and
+ * SHA-256), a reviewed plan names one startup call the installer borrows and
+ * an arena that console RAM maps showed the game never writes. The installer
+ * then initializes the game's own allocator over that arena before the
+ * borrowed call proceeds, and every ordinary lease check applies unchanged.
+ * The call record names the borrowed site (load, call, return) and the arena
+ * (entry_begin/entry_bytes); hook receives the borrowed literal's address and
+ * original target. The site, its single PC-relative consumer and the absence
+ * of any immutable address-of-slot word are checked here, as for an
+ * initializer call. RAM-map evidence is not a whole-program proof. */
+struct kui_vmu_native_heap_fixed_hook {uint32_t slot,target;};
+bool kui_vmu_native_heap_fixed_plan(const void *image,size_t n,const uint8_t sha256[32],
+    const struct kui_vmu_native_heap *,struct kui_vmu_native_heap_call *,
+    struct kui_vmu_native_heap_fixed_hook *hook);
 
 /* The caller must exclude allocator mutation across the entire check; the
  * reader must return cached owner state coherently, without changing it.

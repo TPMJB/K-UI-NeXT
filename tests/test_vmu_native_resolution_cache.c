@@ -164,6 +164,31 @@ static void codec_and_trust_tests(void) {
     CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
     source.exits.entries[2]=load;source.exits.terminal_dispatch.table=0u;
     CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    /* A reviewed fixed arena has no initializer pointer: kind 2. It needs a
+     * borrowed call with its own return and a nonempty arena. A record never
+     * changes kind, and a kind-1 reader's single accepted value refuses it. */
+    mock(image,sizeof(image),&source);
+    source.heap.initializer_slot=0u;source.heap.initializer_target=0u;source.call.return_pr=source.call.call+4u;
+    CHECK(source.call.entry_bytes);
+    CHECK(kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));CHECK(get32(wire+20u)==2u);
+    memcpy(original,wire,sizeof(wire));
+    CHECK(kui_vmu_native_resolution_cache_record_digest(wire,sizeof(wire),pin));
+    CHECK(replay(image,sizeof(image),load,wire,sizeof(wire),pin,&out));CHECK(!memcmp(&source,&out,sizeof(out)));
+    CHECK(!strict(image,sizeof(image),load,wire,sizeof(wire),&out));
+    for(uint32_t kind=0u;kind<4u;kind++) {
+        if(kind==2u) continue;
+        memcpy(wire,original,sizeof(wire));wire[20]=(uint8_t)kind;seal(wire);
+        CHECK(!kui_vmu_native_resolution_cache_record_digest(wire,sizeof(wire),changed));
+        CHECK(!replay(image,sizeof(image),load,wire,sizeof(wire),pin,&out));
+    }
+    mock(image,sizeof(image),&source);CHECK(kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    wire[20]=2u;seal(wire);CHECK(!kui_vmu_native_resolution_cache_record_digest(wire,sizeof(wire),changed));
+    mock(image,sizeof(image),&source);source.heap.initializer_slot=0u;source.call.return_pr=source.call.call+4u;
+    CHECK(source.heap.initializer_target);CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    source.heap.initializer_target=0u;source.call.return_pr+=2u;
+    CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    source.call.return_pr=source.call.call+4u;source.call.entry_bytes=0u;
+    CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
 }
 static void actual_tests(const char *path) {
     FILE *f=fopen(path,"rb");CHECK(f);CHECK(!fseek(f,0,SEEK_END));long length=ftell(f);CHECK(length>0 && length<=0xc00000);rewind(f);

@@ -293,6 +293,72 @@ bool kui_vmu_native_heap_call_discover(const void *image,size_t n,
     const struct kui_vmu_native_heap *h,struct kui_vmu_native_heap_call *out) {
     return call_discover(image,n,h,out)==1;
 }
+struct fixed_plan {
+    uint32_t image_bytes;uint8_t sha256[32];
+    uint32_t load,call,slot,target,begin,bytes;
+};
+static const struct fixed_plan fixed_plans[]={
+    /* Crazy Taxi 2, US MK-51136 V1.004: the C start's call into main, and
+     * an arena inside the 1 MiB both console RAM maps left unused
+     * (docs/evidence/native-ct2-ram-map-jgr-console-2026-10-28.json). */
+    {1452148u,{0x80,0x57,0xa8,0xe3,0x76,0x36,0xad,0x78,0xb1,0xfc,0x70,0xee,0x59,0x0b,0xd3,0x14,
+               0x68,0x65,0x46,0xb1,0x3f,0xfe,0x10,0x06,0x23,0xd8,0x6b,0x57,0x2a,0xec,0x53,0xc1},
+     UINT32_C(0x8c145afe),UINT32_C(0x8c145b00),UINT32_C(0x8c145c30),UINT32_C(0x0c01b214),
+     UINT32_C(0x8cf00000),UINT32_C(0x00080000)},
+#ifdef KUI_VMU_NATIVE_HEAP_TEST_FIXED_PLAN
+    KUI_VMU_NATIVE_HEAP_TEST_FIXED_PLAN,
+#endif
+};
+/* An even code address inside the image with need bytes from it. */
+static bool code(uint32_t a,uint32_t base,size_t n,size_t need,size_t *at) {
+    uint32_t p=phys(a),b=phys(base);
+    if((a&1u) || !span(a,2u) || p<b || p-b>n || need>n-(p-b)) return false;
+    *at=p-b;return true;
+}
+bool kui_vmu_native_heap_fixed_plan(const void *image,size_t n,const uint8_t sha256[32],
+    const struct kui_vmu_native_heap *h,struct kui_vmu_native_heap_call *out,
+    struct kui_vmu_native_heap_fixed_hook *hook) {
+    if(!image || !sha256 || !out || !metadata(h) || h->initializer_slot || h->initializer_target ||
+       n!=h->image_bytes || overlaps((uintptr_t)image,n,(uintptr_t)out,sizeof(*out)) ||
+       (hook && (overlaps((uintptr_t)image,n,(uintptr_t)hook,sizeof(*hook)) ||
+                 overlaps((uintptr_t)out,sizeof(*out),(uintptr_t)hook,sizeof(*hook))))) return false;
+    const struct fixed_plan *plan=NULL;
+    for(unsigned i=0;i<sizeof(fixed_plans)/sizeof(fixed_plans[0]);i++)
+        if(fixed_plans[i].image_bytes==n && !memcmp(fixed_plans[i].sha256,sha256,32u)) plan=&fixed_plans[i];
+    if(!plan) return false;
+    const uint8_t *p=image;size_t load,call,inside;
+    /* The borrowed call: MOV.L @(disp,PC),Rn; JSR @Rn; NOP, reading exactly
+     * the planned literal, which still names the planned target, itself
+     * code in the image. */
+    if(!code(plan->load,h->load,n,6u,&load) || !code(plan->call,h->load,n,4u,&call) ||
+       call!=load+2u || !index(plan->slot,h->load,n,4u,&inside) ||
+       !code(plan->target,h->load,n,2u,&inside)) return false;
+    uint16_t op=h16(p+load);unsigned reg=(op>>8)&15u;uint32_t value;
+    if((op&0xf000u)!=0xd000u || phys(((h->load+(uint32_t)load+4u)&~3u)+4u*(op&255u))!=phys(plan->slot) ||
+       !literal(p,n,h->load,load,reg,&value) || value!=plan->target ||
+       h16(p+call)!=(0x400bu|(reg<<8)) || h16(p+call+2u)!=0x0009u) return false;
+    /* As for an initializer slot: one encoded consumer across the image and
+     * no immutable word holding the slot's address. */
+    unsigned consumers=0u;
+    for(size_t at=0;at<n && n-at>=2u;at+=2u) {
+        if(!(at&3u) && n-at>=4u && span(h32(p+at),4u) && phys(h32(p+at))==phys(plan->slot)) return false;
+        uint16_t word=h16(p+at);
+        if((word&0xf000u)!=0xd000u ||
+           phys(((h->load+(uint32_t)at+4u)&~3u)+4u*(word&255u))!=phys(plan->slot)) continue;
+        if(at!=load || ++consumers>1u) return false;
+    }
+    /* The arena lies in RAM outside the image and the allocator's control
+     * cells and dispatch table; stage placement is checked separately. */
+    uint32_t begin=phys(plan->begin),image_begin=phys(h->load),control=phys(h->sentinel)-4u;
+    if(consumers!=1u || ((plan->begin|plan->bytes)&31u) || plan->bytes<128u ||
+       !span(plan->begin,plan->bytes) ||
+       (begin<image_begin+(uint32_t)n && image_begin<begin+plan->bytes) ||
+       (begin<control+0x34u && control<begin+plan->bytes) ||
+       (begin<phys(h->dispatch_table)+8u && phys(h->dispatch_table)<begin+plan->bytes)) return false;
+    *out=(struct kui_vmu_native_heap_call){plan->load,plan->call,plan->call+4u,plan->begin,plan->bytes};
+    if(hook) *hook=(struct kui_vmu_native_heap_fixed_hook){plan->slot,plan->target};
+    return true;
+}
 static bool read_is(kui_vmu_native_heap_read read,void *ctx,uint32_t at,uint32_t expected) {
     uint32_t value;return read && !(at&3u) && span(at,4u) && read(ctx,at,&value) && value==expected;
 }

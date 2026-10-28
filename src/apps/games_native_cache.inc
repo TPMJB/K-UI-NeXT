@@ -166,6 +166,13 @@ static enum native_cache_result native_cache_prepare(const struct kui_game_image
         }
     }
     if(native_cache_cancelled(cancel)) {result=NATIVE_CACHE_CANCELLED;goto finished;}
+    /* A reviewed fixed arena (no initializer slot) borrows a startup call
+     * that only the combined module's stage redirects. Other modules are
+     * never seeded with one; their stage refuses the game as before. */
+    if(!dual && !work->resolution.heap.initializer_slot) {
+        if(log) log("Native VMU mapping: this executable's fixed arena needs the New virtual-A2 module");
+        goto finished;
+    }
     if(kui_vmu_native_cache_seed_fill((uint8_t *)package->data+slot,
         KUI_VMU_NATIVE_CACHE_SEED_BYTES,work->wire,sizeof(work->wire))) {
         result=NATIVE_CACHE_READY;

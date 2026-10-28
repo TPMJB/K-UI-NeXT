@@ -31,6 +31,13 @@ PROOF_FILES=(*SOURCES,"tests/test_vmu_native_layout.c","tools/audit_vmu_native_c
 GATES=("extent","driver","layout","heap","initializer_slot","initializer_call",
        "aligned_hook_entries","release_hook_shape","exits","guarded_exits",
        "combined_resolution","placement_384k","transport_execution","live_bind_384k")
+# A reviewed fixed arena (exact image, console RAM maps) stands in for these.
+FIXED_ARENA_GATES=("initializer_slot","initializer_call")
+
+
+def gate_passed(row,name):
+    if name in FIXED_ARENA_GATES and row.get("fixed_arena") is True:return True
+    return row.get(name)==(1 if name in ("driver","heap") else True)
 
 
 def input_pair(value):
@@ -60,7 +67,7 @@ def audit(inputs,stage_begin,stage_end,records=None):
                 destination=records/(slug+".nvr")
                 destination.write_bytes(bytes.fromhex(wire));row["record_sha256"]=hashlib.sha256(destination.read_bytes()).hexdigest()
             if run.returncode:row["probe_diagnostic"]=run.stderr.strip()
-            row["first_refusal"]=next((name for name in GATES if row.get(name)!=(1 if name in ("driver","heap") else True)),None)
+            row["first_refusal"]=next((name for name in GATES if not gate_passed(row,name)),None)
             row["structural_384k_models_passed"]=not row["first_refusal"] and not run.returncode
             row["sci_route_admission"]="independent_required"
             row["console_compatibility"]="not_tested_by_this_probe"
@@ -77,6 +84,7 @@ def audit(inputs,stage_begin,stage_end,records=None):
             "The original transport interpreter supplies adversarial ABI returns for unrelated helper calls; it is not a complete game emulator.",
             "Live layout binding uses the original initializer's modeled RAM result, not observations from the console.",
             "Original allocator execution, retained live ownership, SDK SCI route, full cache/DMA integration and console save/load require separate proofs.",
+            "A fixed_arena row has no initializer call; its arena rests on reviewed console RAM maps, not a whole-program proof.",
             "A generated NVR record is immutable discovery metadata and grants no live allocation or storage authority."])
 
 

@@ -23,6 +23,7 @@ static void mock_wire(uint8_t wire[1024]) {
     r.layout.version=1u;r.layout.bytes=sizeof(r.layout);r.layout.rx_layout=1u;r.layout.inputs=12u;
     r.heap.version=1u;r.heap.bytes=sizeof(r.heap);r.heap.family=1u;r.heap.layout=1u;
     r.heap.image_bytes=r.driver.image_bytes;r.heap.load=r.driver.load_address;
+    r.heap.initializer_slot=UINT32_C(0x8c010100);  /* Kind 1: an initializer call record. */
     r.exits.version=1u;r.exits.bytes=sizeof(r.exits);r.exits.family=1u;
     r.exits.image_bytes=r.driver.image_bytes;r.exits.load=r.driver.load_address;r.exits.count=3u;
     CHECK(kui_vmu_native_resolution_cache_encode(&r,wire,1024u));
