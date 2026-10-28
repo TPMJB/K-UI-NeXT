@@ -96,10 +96,36 @@ The source already contains substantially more than a blank-card creator.
 | --- | --- | --- |
 | `src/apps/vmu_collection.inc` | Reads a physical card without writing it; pins device/metadata; reads allocated payload twice; previews and packs a selected save or all saves into a canonical image | Present this as a normal Games/VMU workflow and keep companion saves together |
 | `kui_vmu_collection_publish` | Creates a new verified card under `/KUI/vmu/cards/vNNNN`; writes the readiness marker last; never overwrites a previous or partial entry | A catalog card is a management snapshot, not an active resident backing pair |
-| `src/experimental/vmu_import_prep/main.c` | Creates a separate persistent `pNNNN` pair, checks card identity/allocation ownership, exports and verifies the profile | Factor the service out of the experimental app; remove its dependency on an existing active p0001 anchor from the final user flow |
+| `src/experimental/vmu_import_prep/main.c` | Creates a separate persistent `pNNNN` pair, checks card identity/allocation ownership, exports and verifies the profile | Its preparation now also runs in the launcher (`src/core/vmu_game_card_service.c`) for each game's own card; the import app remains the physical-VMU capture path |
 | `src/apps/vmu.c`, `src/apps/vmu_import.c` | Existing VMU Manager, backup/restore operations and independently authored VMS/VMI/DCI parsing with preview/confirm pinning | Reuse input formats and error reporting without asking the owner to run an installer or personalization script |
 | `include/kui/shell.h`, `src/dreamcast/main.c` | Paginated collection state, worker actions, preview/commit generations and progress routing | Compose asynchronous wizard steps; avoid a blocking full scan in the render/input thread |
-| Games launch and native cache integration | Final module routing, mounted-filesystem preparation and cache publication | Pass a dynamically selected, freshly admitted persistent profile into the generic native launch route |
+| Games launch and native cache integration | Final module routing, mounted-filesystem preparation and cache publication | Done for game cards: `src/apps/games_vmu_card.inc` fills the virtual-A2 module's profile slot with the game's own pair before handoff |
+
+## Game cards
+
+Each game now gets its own standard 200-block card without PC
+personalization (`include/kui/vmu_game_card.h`,
+`include/kui/vmu_game_card_service.h`). A card is an ordinary
+`/KUI/vmu-test/pNNNN` pair plus `game.bin`, a CRC-checked binding naming the
+IP product number; discs of one release share it, other regions get their
+own. When the combined module will run a game, the launcher finds its pair or
+creates one (a verified blank image, zero journal, fresh identity and
+`game.bin` last, only after every existing pair's clusters still read as
+allocated), builds the P2 profile with the import tool's raw ownership scan
+the first time, saves it beside the pair, and on later launches reuses it
+after a FatFs fast-seek check that the files have not moved. The profile
+fills the module's slot in memory; the stage admits the pair exactly as an
+installed one. A product number that binds no card keeps the installed
+card. `tools/kui-game-cards.py` copies saves from a shared pair onto game
+cards on a PC, replaying the shared journal and leaving that pair untouched.
+
+Card admission also stopped refusing descriptive fields games write: names,
+duplicates, entry bytes 0x1c-0x1f and the root's color and icon, as with the
+copy-protect byte. Structure (geometry, FAT system area, chains, sizes,
+types) is still checked.
+
+Remaining: choosing among several save sets for one game, copying saves
+between cards on the console, and showing game cards in the VMU collection.
 
 The catalog and persistent pair serve different purposes. Publishing a card
 snapshot does not arm runtime writes. Activation must create or reopen the
