@@ -1,0 +1,108 @@
+{
+  "schema": "kui.native.ct2-fixed-arena.v2",
+  "date": "2026-10-28",
+  "source_commit": "97959129b827",
+  "supersedes": "docs/evidence/native-ct2-fixed-arena-2026-10-28.json (d41f7d5717a3, borrowed the C start's call into main)",
+  "console_basis": "docs/evidence/native-ct2-fixed-arena-console-2026-10-28.json: d41f7d5717a3 reached the lease (payload 0x0cf00020) and refused at the SDK SCI route because the SDK vector was not yet installed",
+  "production_changed": true,
+  "retail_byte_payloads_embedded": false,
+  "console_compatibility_verified": false,
+  "hardware_executed": false,
+  "input": {
+    "title": "Crazy Taxi 2",
+    "owner_input": "US MK-51136 V1.004",
+    "sha256": "8057a8e37636ad78b1fc70ee590bd314686546b13ffe100623d86b572aec53c1",
+    "bytes": 1452148,
+    "load": "0x8c010000"
+  },
+  "plan": {
+    "borrowed_call": {
+      "load": "0x8c01aa8a",
+      "call": "0x8c01aa8c",
+      "return_pr": "0x8c01aa90",
+      "literal": "0x8c01aaf8",
+      "target": "0x0c14b128 (SDK hardware init)",
+      "caller": "0x8c01aa64 (game init, called once from main's body at 0x8c01b082)",
+      "shape": "MOV.L @(0x8c01aaf8),R1; JSR @R1; NOP"
+    },
+    "order": "The trampoline retires the literal to the low heap hook, makes the borrowed call with the caller's R4-R7, keeps its R0/R1, calls the low heap hook with the arena, then returns to 0x8c01aa90. The hook therefore runs where SDK titles call their allocator initializer: after the hardware init has copied the SDK vector (0x8c166218) to VBR 0x8c00f400 and defaulted the callback table.",
+    "arena": {
+      "begin": "0x8cf00000",
+      "bytes": "0x80000",
+      "end": "0x8cf80000",
+      "inside_unused_interval": "0x8cee0000-0x8cfdffff",
+      "margin_below": "0x20000",
+      "margin_above": "0x60000"
+    },
+    "static_checks": [
+      "the literal has one PC-relative reader and no aligned word holds its address; no other word names the hardware init",
+      "no patch window (driver submit, initializer, release, the three terminal exits, BIOS literal) touches the borrowed call or its literal",
+      "the child-pool budget proof finds no pool shape after the borrowed call and returns NONE without a read",
+      "the hardware init takes no stack arguments",
+      "CT2's SDK SCI family (vector 0x8c166218, table initializer 0x8c15c14a) is the reviewed full-FPU family; later handler registrations name chain events 0x900 and 0xa60 only, so nothing after the hardware init writes the SCI slots at VBR+0x25c/0x260"
+    ],
+    "stack": "The game init's frame and the trampoline's three words put the low heap hook entry about 128 bytes below the boot stack top, inside its owner-stack window [0x0c008100, 0x0c00f400]."
+  },
+  "original_allocator_proof": {
+    "tool": "tools/prove_vmu_native_bottom_corpus_heap.py on the release stage (BSS end 0x8ce8d3a8)",
+    "initializer_instructions": 107,
+    "lease_header": "0x8cf00000",
+    "lease_payload": "0x8cf00020",
+    "lease_end": "0x8cf60020",
+    "remaining_free_bytes": 131040,
+    "later_original_operations": 251,
+    "maximum_free_nodes": 32,
+    "alias_sr_cases": 9,
+    "minimum_arena_cases": 12,
+    "console_payload_agrees": "0x0cf00020 on the d41f7d5717a3 console run"
+  },
+  "structural_corpus": {
+    "crazy_taxi_2": {
+      "fixed_arena": true,
+      "combined_resolution": true,
+      "placement_384k": true,
+      "transport_execution": true,
+      "transport_checks": 981,
+      "live_bind_384k": true,
+      "structural_384k_models_passed": true,
+      "record_sha256": "60e5ac67d0c1567cf009cf6910af88645518811f8d76b6e7d952fe10517247ef"
+    },
+    "jet_grind_radio_control": {
+      "fixed_arena": false,
+      "initializer_slot": true,
+      "initializer_call": true,
+      "combined_resolution": true,
+      "structural_384k_models_passed": true
+    }
+  },
+  "linked_route_audit": {
+    "tool": "tools/check_native_fixed_arena.py --self-test",
+    "cases": {
+      "armed": 6,
+      "refused": 150,
+      "entered": 6
+    },
+    "relay_dispatch": [
+      "initializer",
+      "fixed"
+    ],
+    "mutants_rejected": 15,
+    "equivalent_forced_outcomes": [
+      {
+        "offset": "0x88",
+        "forced_t": 0
+      }
+    ],
+    "trampoline": {
+      "address": "0x8ce00060",
+      "return_address": "0x8ce00082",
+      "bytes": 48,
+      "sha256": "c281fe60df509e63ee3c98d4aee7e3e44ff08ca836efe55d0387deaa574b3dcb"
+    }
+  },
+  "limits": [
+    "RAM maps bound the writes of two sessions, not every path through the game.",
+    "The SDK SCI route admission itself runs only on the console; its live checks decide.",
+    "Console save, load and play are untested."
+  ]
+}
