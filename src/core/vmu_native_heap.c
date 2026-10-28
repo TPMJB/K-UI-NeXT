@@ -298,12 +298,13 @@ struct fixed_plan {
     uint32_t load,call,slot,target,begin,bytes;
 };
 static const struct fixed_plan fixed_plans[]={
-    /* Crazy Taxi 2, US MK-51136 V1.004: the C start's call into main, and
-     * an arena inside the 1 MiB both console RAM maps left unused
+    /* Crazy Taxi 2, US MK-51136 V1.004: the game's init calls the SDK
+     * hardware init once, which installs the interrupt vector the SCI route
+     * needs; an arena inside the 1 MiB both console RAM maps left unused
      * (docs/evidence/native-ct2-ram-map-jgr-console-2026-10-28.json). */
     {1452148u,{0x80,0x57,0xa8,0xe3,0x76,0x36,0xad,0x78,0xb1,0xfc,0x70,0xee,0x59,0x0b,0xd3,0x14,
                0x68,0x65,0x46,0xb1,0x3f,0xfe,0x10,0x06,0x23,0xd8,0x6b,0x57,0x2a,0xec,0x53,0xc1},
-     UINT32_C(0x8c145afe),UINT32_C(0x8c145b00),UINT32_C(0x8c145c30),UINT32_C(0x0c01b214),
+     UINT32_C(0x8c01aa8a),UINT32_C(0x8c01aa8c),UINT32_C(0x8c01aaf8),UINT32_C(0x0c14b128),
      UINT32_C(0x8cf00000),UINT32_C(0x00080000)},
 #ifdef KUI_VMU_NATIVE_HEAP_TEST_FIXED_PLAN
     KUI_VMU_NATIVE_HEAP_TEST_FIXED_PLAN,

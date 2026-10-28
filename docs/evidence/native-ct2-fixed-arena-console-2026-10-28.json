@@ -1,0 +1,42 @@
+{
+  "schema": "kui.native.ct2-fixed-arena-console.v1",
+  "date": "2026-10-28",
+  "build": "d41f7d5717a3",
+  "title": "Crazy Taxi 2",
+  "reader": "New (X), combined virtual-A2 module",
+  "owner_report": "No dice on Crazy Taxi 2 (one photo of the refusal screen)",
+  "screen": {
+    "header": "HYBRID / BUILD D41F7D5717A3 / NATIVE",
+    "probe": "AUTOMATIC NATIVE ALLOCATOR PROBE",
+    "phase": "0x0000000a",
+    "detail": "0x00000007",
+    "sdk_submit": "0x8c166e64",
+    "initializer": "0x8c14a674",
+    "initializer_slot": "0x8c145c30",
+    "allocate": "0x0c14a756",
+    "entry_heap_begin": "0x8cf00000",
+    "entry_heap_bytes": "0x00080000",
+    "allocated_payload": "0x0cf00020",
+    "original_return": "0x8ce0007c",
+    "result": "PROBE REFUSED - PHOTO THEN POWER OFF, DETAIL 0000000A",
+    "storage": "STORAGE WAS READ ONLY"
+  },
+  "interpretation": {
+    "reached": [
+      "the stage armed the borrowed main literal (slot 0x8c145c30) with the trampoline",
+      "the trampoline called the low heap hook with the arena; the hook accepted its arguments, the trampoline return 0x8ce0007c and the owner stack",
+      "the game's own initializer ran over 0x8cf00000 + 0x80000 and the bottom transaction placed the 384 KiB lease payload at 0x0cf00020, as the SH model predicted",
+      "the installer reached the SDK SCI route bind (phase 10)"
+    ],
+    "refusal": "Phase 10 detail 7: the SDK SCI route found no copied SDK vector. The C start calls main before the game's init runs the SDK hardware init (0x8c14b128), which copies the vector to VBR 0x8c00f400 and defaults the callback table. SDK titles start their allocator after that init, so the route is ready when the installer runs.",
+    "storage": "The refusal happened before any card write; the virtual card was not modified."
+  },
+  "next": {
+    "change": "Borrow the game init's single call into the SDK hardware init (load 0x8c01aa8a, literal 0x8c01aaf8, target 0x0c14b128) and run the heap hook after it returns.",
+    "static_basis": [
+      "CT2 init 0x8c01aa64 is called once, from main's body at 0x8c01b082",
+      "only the literal at 0x8c01aaf8 names the SDK hardware init; it has one PC-relative reader and no word holds its address",
+      "later CT2 handler registrations name chain events 0x900 and 0xa60 only; nothing after the hardware init writes the SCI ERI/RXI slots at VBR+0x25c/0x260"
+    ]
+  }
+}

@@ -3,14 +3,15 @@
 """Execute the linked fixed-arena route of a dual native stage.
 
 A reviewed fixed arena (a kind 2 resolution record) has no initializer
-pointer. The stage borrows the C start's call into main instead:
-native_arm_fixed_main gives the borrowed literal the trampoline, and the
-trampoline gives it the selected reader's low heap hook, calls that hook
-with the arena as the initializer's arguments, then enters main with the
-C start's own arguments and return. This audit runs the actual compiled
-code of the relay's dispatch, the arm and the trampoline. It proves writes
-and register flow only; console compatibility and the RAM-map evidence that
-selected the arena are separate.
+pointer. The stage borrows one startup call that follows the SDK hardware
+init instead: native_arm_fixed_call gives the borrowed literal the
+trampoline. The trampoline gives the literal the selected reader's low heap
+hook, makes the borrowed call with the caller's arguments, then calls that
+hook with the arena as the initializer's arguments and returns the call's
+results to its caller. This audit runs the actual compiled code of the
+relay's dispatch, the arm and the trampoline. It proves writes and register
+flow only; console compatibility and the RAM-map evidence that selected the
+arena are separate.
 """
 import argparse
 import hashlib
@@ -28,37 +29,41 @@ from check_native_dual_callbacks import (CallbackCPU, Refused, SELECTOR, expecte
 import check_vmu_native_stage_stack as stage_stack
 
 SCHEMA = 'kui.native.fixed-arena-route.audit.v1'
-ARM = '_native_arm_fixed_main'
-HOOK = '_kui_native_fixed_main_hook'
-RETURN_LABEL = '_kui_native_fixed_main_return'
-FLAG, PLAN_HOOK, MAIN_DATA = '_native_fixed', '_native_fixed_hook', '_native_fixed_main'
+ARM = '_native_arm_fixed_call'
+HOOK = '_kui_native_fixed_call_hook'
+RETURN_LABEL = '_kui_native_fixed_call_return'
+FLAG, PLAN_HOOK, CALL_DATA = '_native_fixed', '_native_fixed_hook', '_native_fixed_call'
 MASK = 0xffffffff
-# Synthetic owner values: a borrowed literal mid-line, main, the allocator
-# initializer and an arena. No retail bytes are read.
-SLOT, MAIN, INITIALIZER = 0x8c145c30, 0x0c01b214, 0x8c14a674
-BEGIN, BYTES, C_START_RETURN = 0x8cf00000, 0x00080000, 0x8c145b04
-OWNER_SP = 0x8c00f3f8
+# Synthetic owner values: a borrowed literal mid-line, its target (a U0
+# alias, as the game holds it), the allocator initializer and an arena. No
+# retail bytes are read.
+SLOT, TARGET, INITIALIZER = 0x8c01aaf8, 0x0c14b128, 0x8c14a674
+BEGIN, BYTES, CALL_RETURN = 0x8cf00000, 0x00080000, 0x8c01aa90
+OWNER_SP = 0x8c00f38c
+RESULTS = (0x52455330, 0x52455331)
 
 
 def trampoline_words(stage):
     """The trampoline is hand-written; pin every word and its one literal."""
     address, body, section = symbol_bytes(stage, HOOK, 2)
     back = stage[4][RETURN_LABEL][0]
-    require(section[2]&7 == 6 and not address&3 and back == address+0x1c,
+    require(section[2]&7 == 6 and not address&3 and back == address+0x22,
             'Fixed-arena trampoline is not its exact immutable code')
-    data = stage[4][MAIN_DATA]
-    require(data[1] == 20 and not data[0]&3, 'Fixed-arena main record is not five words')
-    require(len(body) == 0x34, 'Fixed-arena trampoline is not its exact extent')
+    data = stage[4][CALL_DATA]
+    require(data[1] == 20 and not data[0]&3, 'Fixed-arena call record is not five words')
+    require(len(body) == 0x30, 'Fixed-arena trampoline is not its exact extent')
     code = body
-    expected = (0x2f46, 0x2f56, 0x2f66, 0x2f76, 0x4f22, 0xd009, 0x6102, 0x5204,
-                0x2212, 0x02a3, 0x5401, 0x5502, 0x410b, 0x0009,
-                0x4f26, 0x67f6, 0x66f6, 0x65f6, 0x64f6, 0xd002, 0x5003, 0x402b, 0x0009, 0x0009)
-    require(struct.unpack_from('<24H', code) == expected,
+    # Retire the literal and publish it; make the borrowed call; keep R0/R1;
+    # call the low heap hook with the arena; restore R1, R0 and PR; return.
+    expected = (0x4f22, 0xd00a, 0x6102, 0x5204, 0x2212, 0x02a3, 0x5003, 0x400b, 0x0009,
+                0x2f06, 0x2f16, 0xd005, 0x6102, 0x5401, 0x5502, 0x410b, 0x0009,
+                0x61f6, 0x60f6, 0x4f26, 0x000b, 0x0009)
+    require(struct.unpack_from('<22H', code) == expected,
             'Fixed-arena trampoline instructions changed')
-    literal = struct.unpack_from('<I', code, 0x30)[0]
+    literal = struct.unpack_from('<I', code, 0x2c)[0]
     require(literal == ((data[0]&0x1fffffff)|0xa0000000),
             'Fixed-arena trampoline does not read its record through P2')
-    return dict(address=hex(address), return_address=hex(back), bytes=0x34,
+    return dict(address=hex(address), return_address=hex(back), bytes=0x30,
                 sha256=hashlib.sha256(code).hexdigest())
 
 
@@ -97,7 +102,7 @@ class FixedCPU(CallbackCPU):
         super().callee()
 
 
-def setup_arm(cpu, stage, low, *, flag=1, slot_value=MAIN):
+def setup_arm(cpu, stage, low, *, flag=1, slot_value=TARGET):
     control, original = low[2]|0x20000000, low[3]|0x20000000
     for i in range(14):
         cpu.write(control+4*i, 0)
@@ -109,16 +114,16 @@ def setup_arm(cpu, stage, low, *, flag=1, slot_value=MAIN):
     cpu.write(heap+24, INITIALIZER)
     cpu.write(heap+28, SLOT)
     cpu.write(heap+32, INITIALIZER)
-    cpu.write(call, C_START_RETURN-6)
-    cpu.write(call+4, C_START_RETURN-4)
-    cpu.write(call+8, C_START_RETURN)
+    cpu.write(call, CALL_RETURN-6)
+    cpu.write(call+4, CALL_RETURN-4)
+    cpu.write(call+8, CALL_RETURN)
     cpu.write(call+12, BEGIN)
     cpu.write(call+16, BYTES)
     cpu.write(stage[4][FLAG][0], flag)
     cpu.write(stage[4][PLAN_HOOK][0], SLOT)
-    cpu.write(stage[4][PLAN_HOOK][0]+4, MAIN)
+    cpu.write(stage[4][PLAN_HOOK][0]+4, TARGET)
     for i in range(5):
-        cpu.write(stage[4][MAIN_DATA][0]+4*i, 0)
+        cpu.write(stage[4][CALL_DATA][0]+4*i, 0)
     cpu.write(SLOT, slot_value)
     return control, original
 
@@ -155,7 +160,7 @@ def arm_case(resident, stage, expected, reader, *, seed=0, bank=1, variant='ok',
     before = cpu.snapshot()
     cpu.writes = []
     trampoline, back = stage[4][HOOK][0], stage[4][RETURN_LABEL][0]
-    record = stage[4][MAIN_DATA][0]
+    record = stage[4][CALL_DATA][0]
     try:
         cpu.run_symbol(ARM)
     except Refused:
@@ -176,8 +181,8 @@ def arm_case(resident, stage, expected, reader, *, seed=0, bank=1, variant='ok',
     require(tuple(cpu.read(original+4*i) for i in range(8)) ==
             (INITIALIZER, BEGIN, BYTES, back&0x1fffffff, 0, 0, 0, 0),
             'Fixed arm did not name the initializer, arena and trampoline return')
-    require(tuple(cpu.read(record+4*i) for i in range(5)) == (low[0], BEGIN, BYTES, MAIN, SLOT),
-            'Fixed arm did not give the trampoline its reader hook, arena, main and literal')
+    require(tuple(cpu.read(record+4*i) for i in range(5)) == (low[0], BEGIN, BYTES, TARGET, SLOT),
+            'Fixed arm did not give the trampoline its reader hook, arena, target and literal')
     wanted = pattern.copy()
     wanted[5] = low[1]
     require(cpu.read(SLOT) == trampoline and [cpu.read(frame+4*i) for i in range(8)] == wanted,
@@ -196,40 +201,43 @@ def arm_case(resident, stage, expected, reader, *, seed=0, bank=1, variant='ok',
 class TrampolineCPU(FixedCPU):
     def __init__(self, resident, stage, reader, low, seed):
         super().__init__(resident, stage, reader, (HOOK,), seed=seed, bank=1)
-        self.low = low
         self.heap_hook = low[0]
-        self.hook_calls = 0
-        self.entered_main = None
-        self.targets = {self.heap_hook, MAIN|0x80000000, MAIN}
+        self.hook_calls = self.target_calls = 0
+        self.targets = {self.heap_hook, TARGET|0x80000000, TARGET}
         self.back = stage[4][RETURN_LABEL][0]
+        self.after_call = stage[4][HOOK][0]+0x12
+
+    def clobber(self, seed):
+        for i in range(8):
+            self.r[i] = (seed+i*0x2222223)&MASK
+        self.mach ^= 0x33333333
+        self.macl ^= 0xcccccccc
+        self.sr ^= 1
+        continuation = self.pr
+        self.pr ^= 0x0f0f0f0e
+        self.pc = continuation
 
     def callee(self):
-        if self.pc == self.heap_hook:
-            self.hook_calls += 1
-            require(self.hook_calls == 1, 'Trampoline called the low heap hook twice')
+        if self.pc in (TARGET, TARGET|0x80000000):
+            self.target_calls += 1
+            require(self.pc == TARGET and self.target_calls == 1 and not self.hook_calls,
+                    'Trampoline did not make the borrowed call once, first')
             require(self.read(SLOT) == self.heap_hook and self.flushes == [SLOT&~31],
-                    'Literal did not name the low heap hook, published, before the hook ran')
-            require(self.r[4:6] == [BEGIN, BYTES] and self.pr == self.back and
-                    self.r[15] == self.entry_sp-20,
-                    'Low heap hook did not receive the arena and the trampoline return')
-            self.hook_sp = self.r[15]
-            continuation = self.pr
-            for i in range(8):
-                self.r[i] = (0x7654321f+i*0x2222223)&MASK
-            self.mach ^= 0x33333333
-            self.macl ^= 0xcccccccc
-            self.sr ^= 1
-            self.pr ^= 0x0f0f0f0e
-            self.pc = continuation
+                    'Literal did not name the low heap hook, published, before the borrowed call')
+            require(self.r[4:8] == self.arguments and self.r[15] == self.entry_sp-4 and
+                    self.pr == self.after_call,
+                    'Borrowed call did not receive the caller\'s arguments')
+            self.clobber(0x13572468)
+            self.r[0:2] = list(RESULTS)
             return
-        require(self.pc in (MAIN, MAIN|0x80000000), 'Unexpected trampoline target')
-        self.entered_main = (self.pc, self.r.copy(), self.pr)
-        self.pc = self.stop
-
-    def run(self):
-        self.stop = 0x8c00a000
-        self.run_to(self.symbols[HOOK][0], self.stop)
-        return self
+        require(self.pc == self.heap_hook, 'Unexpected trampoline target')
+        self.hook_calls += 1
+        require(self.hook_calls == 1 and self.target_calls == 1,
+                'Trampoline called the low heap hook before the borrowed call or twice')
+        require(self.r[4:6] == [BEGIN, BYTES] and self.pr == self.back and
+                self.r[15] == self.entry_sp-12,
+                'Low heap hook did not receive the arena and the trampoline return')
+        self.clobber(0x7654321f)
 
 
 def trampoline_case(resident, stage, expected, reader, *, seed=0, body=None):
@@ -237,25 +245,24 @@ def trampoline_case(resident, stage, expected, reader, *, seed=0, body=None):
         stage = (body, *stage[1:])
     low = expected[reader-1]
     cpu = TrampolineCPU(resident, stage, reader, low, seed)
-    record = stage[4][MAIN_DATA][0]
-    for i, value in enumerate((low[0], BEGIN, BYTES, MAIN, SLOT)):
+    record = stage[4][CALL_DATA][0]
+    for i, value in enumerate((low[0], BEGIN, BYTES, TARGET, SLOT)):
         cpu.write(record+4*i, value)
     cpu.write(SLOT, stage[4][HOOK][0])
     cpu.initializer_slot = SLOT
     cpu.r[15] = cpu.entry_sp = OWNER_SP
-    cpu.pr = C_START_RETURN
-    arguments = cpu.r[4:8].copy()
+    cpu.pr = CALL_RETURN
+    cpu.arguments = cpu.r[4:8].copy()
     callee_saved = cpu.r[8:15].copy()
     cpu.writes = []
-    cpu.run()
-    require(cpu.hook_calls == 1 and cpu.entered_main is not None,
-            'Trampoline did not run the hook once and then enter main')
-    target, registers, pr = cpu.entered_main
-    require(target == MAIN and registers[4:8] == arguments and registers[8:15] == callee_saved and
-            registers[15] == OWNER_SP and pr == C_START_RETURN,
-            'main did not receive the C start\'s arguments, stack and return')
+    cpu.run_to(stage[4][HOOK][0], CALL_RETURN)
+    require(cpu.target_calls == 1 and cpu.hook_calls == 1,
+            'Trampoline did not make the borrowed call and then run the hook once')
+    require(cpu.r[0:2] == list(RESULTS) and cpu.r[8:15] == callee_saved and
+            cpu.r[15] == OWNER_SP and cpu.pr == CALL_RETURN,
+            'Caller did not get the borrowed call\'s results, its stack and its return')
     require(cpu.line_flushes == [SLOT&~31], 'Trampoline published another cache line')
-    frame = set(range(OWNER_SP-20, OWNER_SP, 4))
+    frame = {OWNER_SP-4, OWNER_SP-8, OWNER_SP-12}
     require(all((at == SLOT and count == 4) or at in frame for _, at, _, count in cpu.writes),
             'Trampoline wrote outside the borrowed literal and its own frame')
     require(cpu.read(SLOT) == low[0], 'Borrowed literal does not keep the low heap hook')
@@ -293,8 +300,8 @@ def mutants(resident, stage, expected):
     rejected = 0
     address, _, section = symbol_bytes(stage, HOOK, 2)
     start = section[4]+address-section[3]
-    for offset, replacement, label in ((0x12, 0x0009, 'publication'), (0x10, 0x0009, 'retire'),
-                                       (0x14, 0x5402, 'arena begin')):
+    for offset, replacement, label in ((0x0a, 0x0009, 'publication'), (0x08, 0x0009, 'retire'),
+                                       (0x1a, 0x5402, 'arena begin'), (0x12, 0x0009, 'result save')):
         data = bytearray(stage[0])
         struct.pack_into('<H', data, start+offset, replacement)
         try:
@@ -367,7 +374,7 @@ def check(directory, *, self_test=False):
                  trampoline=pin, cases=cases, relay_dispatch=routes,
                  arm_bytes=len(symbol_bytes(stage, ARM, 2)[1]),
                  limits=['Synthetic owner addresses; the reviewed plan and its RAM-map evidence are checked elsewhere.',
-                         'The low heap hook, the installer and main are modeled as calls.'])
+                         'The borrowed call, the low heap hook and the installer are modeled as calls.'])
     if self_test:
         proof['mutants_rejected'] = mutants(resident, stage, expected)
         proof['equivalent_forced_outcomes'] = mutants.equivalent

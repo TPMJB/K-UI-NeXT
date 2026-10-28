@@ -29,10 +29,10 @@ class FixedArenaArtifact(unittest.TestCase):
         # Both readers, three seeds: one accepted arm and 25 refusals each.
         self.assertEqual(proof["cases"], {"armed": 6, "refused": 150, "entered": 6})
         self.assertEqual(proof["relay_dispatch"], ["initializer", "fixed"])
-        self.assertEqual(proof["trampoline"]["bytes"], 0x34)
+        self.assertEqual(proof["trampoline"]["bytes"], 0x30)
 
     def test_mutants(self):
-        self.assertGreaterEqual(self.proof["mutants_rejected"], 14)
+        self.assertGreaterEqual(self.proof["mutants_rejected"], 15)
         # Only the inlined trampoline-return test forced to its one reachable outcome.
         self.assertLessEqual(len(self.proof["equivalent_forced_outcomes"]), 1)
 

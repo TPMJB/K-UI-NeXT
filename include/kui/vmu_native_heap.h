@@ -39,9 +39,11 @@ bool kui_vmu_native_heap_call_discover(const void *,size_t,
 /* Some executables carry the reviewed allocator but never initialize it, so
  * no pointer names its initializer. For such an exact executable (bytes and
  * SHA-256), a reviewed plan names one startup call the installer borrows and
- * an arena that console RAM maps showed the game never writes. The installer
- * then initializes the game's own allocator over that arena before the
- * borrowed call proceeds, and every ordinary lease check applies unchanged.
+ * an arena that console RAM maps showed the game never writes. Once that call
+ * returns, the installer initializes the game's own allocator over the arena,
+ * and every ordinary lease check applies unchanged. The call is chosen to
+ * follow the SDK hardware init, as an SDK allocator initializer would; its
+ * target takes no stack arguments.
  * The call record names the borrowed site (load, call, return) and the arena
  * (entry_begin/entry_bytes); hook receives the borrowed literal's address and
  * original target. The site, its single PC-relative consumer and the absence
