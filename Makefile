@@ -1126,8 +1126,9 @@ build/test-vmu-lcd: tests/test_vmu_lcd.c src/core/vmu_lcd.c src/dreamcast/vmu_lc
 
 # Experimental VMU components are kept outside the ordinary retail resident.
 .PHONY: test-vmu-prototype
-test-vmu-prototype: build/test-vmu-emulation build/test-vmu-image build/test-vmu-store build/test-vmu-maple-dma build/test-vmu-backing build/test-vmu-backing-read-only build/test-vmu-integration build/test-vmu-service build/test-vmu-sci-bus build/test-sci-sd-storage
+test-vmu-prototype: build/test-vmu-emulation build/test-vmu-image build/test-vmu-store build/test-vmu-maple-dma build/test-vmu-backing build/test-vmu-backing-read-only build/test-vmu-integration build/test-vmu-service build/test-vmu-sci-bus build/test-sci-sd-storage build/test-vmu-game-card build/vmu-template-profile.bin
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-emulation
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-game-card build/vmu-template-profile.bin
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-image
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-store
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-maple-dma
@@ -1144,6 +1145,13 @@ build/test-vmu-emulation: tests/test_vmu_emulation.c src/core/vmu_emulation.c in
 build/test-vmu-store: tests/test_vmu_store.c src/core/vmu_store.c src/core/retail_image.c include/kui/vmu_store.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_vmu_store.c src/core/vmu_store.c src/core/retail_image.c -o $@
+build/vmu-template-profile.bin: tools/vmu_persist_profile.py
+	@mkdir -p $(@D)
+	python3 tools/vmu_persist_profile.py --template $@ > /dev/null
+VMU_GAME_CARD_SOURCES = src/core/vmu_game_card.c src/core/vmu_persist_profile.c src/core/retail_image.c src/core/hash.c src/core/data.c
+build/test-vmu-game-card: tests/test_vmu_game_card.c $(VMU_GAME_CARD_SOURCES) include/kui/vmu_game_card.h include/kui/vmu_persist_profile.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_vmu_game_card.c $(VMU_GAME_CARD_SOURCES) -o $@
 build/test-vmu-image: tests/test_vmu_image.c src/core/vmu_image.c include/kui/vmu_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_vmu_image.c src/core/vmu_image.c -o $@
